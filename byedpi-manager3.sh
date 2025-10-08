@@ -21,7 +21,11 @@ WORKDIR="/tmp/byedpi"
 # ==========================================
 # Определение архитектуры, версии, статуса
 # ==========================================
+# ==========================================
+# Определение архитектуры, версий и статусов
+# ==========================================
 get_versions() {
+    # --- ByeDPI ---
     INSTALLED_VER=$(opkg list-installed | grep '^byedpi ' | awk '{print $3}')
     [ -z "$INSTALLED_VER" ] && INSTALLED_VER="не найдена"
 
@@ -34,24 +38,15 @@ get_versions() {
         opkg install curl >/dev/null 2>&1
     }
 
-    API_URL="https://api.github.com/repos/DPITrickster/ByeDPI-OpenWrt/releases"
-    RELEASE_DATA=$(curl -s "$API_URL")
+    API_BYEDPI="https://api.github.com/repos/DPITrickster/ByeDPI-OpenWrt/releases"
+    RELEASE_BYEDPI=$(curl -s "$API_BYEDPI")
 
-    LATEST_URL=$(echo "$RELEASE_DATA" | grep browser_download_url | grep "$LOCAL_ARCH.ipk" | head -n1 | cut -d'"' -f4)
-    PREV_URL=$(echo "$RELEASE_DATA" | grep browser_download_url | grep "$LOCAL_ARCH.ipk" | sed -n '2p' | cut -d'"' -f4)
-
+    LATEST_URL=$(echo "$RELEASE_BYEDPI" | grep browser_download_url | grep "$LOCAL_ARCH.ipk" | head -n1 | cut -d'"' -f4)
     if [ -n "$LATEST_URL" ]; then
         LATEST_FILE=$(basename "$LATEST_URL")
         LATEST_VER=$(echo "$LATEST_FILE" | sed -E 's/^byedpi_([0-9]+\.[0-9]+\.[0-9]+-[^_]+)_.*/\1/')
     else
         LATEST_VER="не найдена"
-    fi
-
-    if [ -n "$PREV_URL" ]; then
-        PREV_FILE=$(basename "$PREV_URL")
-        PREV_VER=$(echo "$PREV_FILE" | sed -E 's/^byedpi_([0-9]+\.[0-9]+\.[0-9]+-[^_]+)_.*/\1/')
-    else
-        PREV_VER="не найдена"
     fi
 
     if [ -f /etc/init.d/byedpi ]; then
@@ -63,6 +58,25 @@ get_versions() {
     else
         BYEDPI_STATUS="${RED}не установлен${NC}"
     fi
+
+    # --- Podkop ---
+    PODKOP_INSTALLED_VER=$(opkg list-installed | grep '^podkop ' | awk '{print $3}')
+    [ -z "$PODKOP_INSTALLED_VER" ] && PODKOP_INSTALLED_VER="не найдена"
+
+    API_PODKOP="https://api.github.com/repos/itdoginfo/podkop/releases/latest"
+    PODKOP_LATEST_VER=$(curl -s "$API_PODKOP" | grep '"tag_name":' | head -n1 | cut -d '"' -f4 | sed 's/^v//')
+    [ -z "$PODKOP_LATEST_VER" ] && PODKOP_LATEST_VER="не найдена"
+
+    if [ -f /etc/init.d/podkop ]; then
+        if /etc/init.d/podkop status 2>/dev/null | grep -qi "running"; then
+            PODKOP_STATUS="${GREEN}запущен${NC}"
+        else
+            PODKOP_STATUS="${RED}остановлен${NC}"
+        fi
+    else
+        PODKOP_STATUS="${RED}не установлен${NC}"
+    fi
+}
 }
 
 # ==========================================
@@ -187,10 +201,12 @@ echo -e "                    ██████╔╝   ██║   ████
 echo -e "                    ╚═════╝    ╚═╝   ╚══════╝╚═════╝ ╚═╝     ╚═╝"
 echo -e "                  https://github.com/DPITrickster/ByeDPI-OpenWrt"
 echo -e "Manager by StressOzz\n"
-echo -e "${YELLOW}Архитектура:${NC} $LOCAL_ARCH"
-echo -e "${YELLOW}Установлена версия:${NC} $INSTALLED_VER"
-echo -e "${YELLOW}Последняя версия:${NC} $LATEST_VER"
 echo -e "${YELLOW}Статус службы:${NC} $BYEDPI_STATUS\n"
+echo -e "${MAGENTA}Podkop:${NC}"
+echo -e "${YELLOW}  Установлена версия:${NC} $PODKOP_INSTALLED_VER"
+echo -e "${YELLOW}  Последняя версия:${NC} $PODKOP_LATEST_VER"
+echo -e "${YELLOW}  Статус службы:${NC} $PODKOP_STATUS\n"
+echo -e ""
 
     echo -e "${GREEN}1) Установить / обновить ByeDPI${NC}"
     echo -e "${GREEN}2) Удалить ByeDPI${NC}"
