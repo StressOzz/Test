@@ -257,8 +257,8 @@ show_menu() {
     echo -e "${GREEN}4) Исправить стратегию ByeDPI${NC}"
     echo -e "${GREEN}5) Установить / обновить Podkop${NC}"
 	echo -e "${GREEN}6) Установить ByeDPI + Podkop + Интеграция${NC}"
-    echo -ne "Выберите пункт: "
 	echo -e "${GREEN}7) Выход${NC}\n"
+    echo -ne "Выберите пункт: "
     read choice
 
     case "$choice" in
