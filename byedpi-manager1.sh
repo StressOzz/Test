@@ -114,61 +114,6 @@ install_update() {
 }
 
 # ==========================================
-# Выбор версии (последние 10)
-# ==========================================
-choose_version() {
-    clear
-    echo -e "\n${MAGENTA}Выбор версии ByeDPI${NC}\n"
-
-    API_URL="https://api.github.com/repos/DPITrickster/ByeDPI-OpenWrt/releases"
-    RELEASE_DATA=$(curl -s "$API_URL")
-    VERSIONS=$(echo "$RELEASE_DATA" | grep -Eo '"tag_name":\s*"[0-9]+\.[0-9]+\.[0-9]+[^"]*"' | head -n 10 | awk -F'"' '{print $4}')
-
-    i=1
-    echo "$VERSIONS" | while read ver; do
-        echo -e "${GREEN}$i)${NC} $ver"
-        i=$((i+1))
-    done
-
-    echo -n "\nВведите номер версии для установки (Enter для выхода): "
-    read num
-    [ -z "$num" ] && return
-
-    SELECTED=$(echo "$VERSIONS" | sed -n "${num}p")
-    [ -z "$SELECTED" ] && { echo -e "${RED}Неверный выбор${NC}"; sleep 2; return; }
-
-    TARGET_URL=$(echo "$RELEASE_DATA" | grep browser_download_url | grep "$SELECTED" | grep "$LOCAL_ARCH.ipk" | cut -d'"' -f4 | head -n1)
-    [ -z "$TARGET_URL" ] && { echo -e "${RED}Не найден пакет для вашей архитектуры${NC}"; read -p "Enter..." dummy; return; }
-
-    TARGET_FILE=$(basename "$TARGET_URL")
-    TARGET_VER="$SELECTED"
-
-    echo -e "${CYAN}Выбрана версия:${NC} $TARGET_VER"
-    mkdir -p "$WORKDIR"
-    cd "$WORKDIR" || return
-
-    echo -e "${CYAN}Скачиваем пакет...${NC}"
-    curl -L -s -o "$TARGET_FILE" "$TARGET_URL" || {
-        echo -e "${RED}Ошибка загрузки ${NC}$TARGET_FILE"
-        read -p "Enter..." dummy
-        return
-    }
-
-    echo -e "${CYAN}Устанавливаем...${NC}"
-    opkg install --force-reinstall "$TARGET_FILE" >/dev/null 2>&1
-
-    rm -rf "$WORKDIR"
-
-    [ -f /etc/init.d/byedpi ] && {
-        /etc/init.d/byedpi enable >/dev/null 2>&1
-        /etc/init.d/byedpi restart >/dev/null 2>&1
-    }
-
-    echo -e "\n${GREEN}ByeDPI ${TARGET_VER} установлена!${NC}\n"
-    read -p "Enter..." dummy
-}
-
-# ==========================================
 # Полное удаление ByeDPI
 # ==========================================
 uninstall_byedpi() {
@@ -207,26 +152,28 @@ echo -e "                    ██╔══██╗  ╚██╔╝  ██�
 echo -e "                    ██████╔╝   ██║   ███████╗██████╔╝██║     ██║"
 echo -e "                    ╚═════╝    ╚═╝   ╚══════╝╚═════╝ ╚═╝     ╚═╝"
 echo -e "                  https://github.com/DPITrickster/ByeDPI-OpenWrt"
-    echo -e "         ${MAGENTA}Manager by StressOzz${NC}"
-    echo -e "     ${GRAY}https://github.com/DPITrickster/ByeDPI-OpenWrt${NC}\n"
+echo -e "Manager by StressOzz"
+echo -e ""
     echo -e "${YELLOW}Архитектура:${NC} $LOCAL_ARCH"
+    echo -e ""
     echo -e "${YELLOW}Установлена версия:${NC} $INSTALLED_VER"
+    echo -e ""
     echo -e "${YELLOW}Последняя версия:${NC} $LATEST_VER"
+    echo -e ""
     echo -e "${YELLOW}Статус службы:${NC} $BYEDPI_STATUS\n"
-
+echo -e ""
     echo -e "${GREEN}1) Установить / обновить ByeDPI${NC}"
-    echo -e "${GREEN}2) Установить конкретную версию${NC}"
-    echo -e "${GREEN}3) Удалить ByeDPI${NC}"
-    echo -e "${GREEN}4) Перезапустить службу${NC}"
-    echo -e "${GREEN}5) Выход${NC}"
+    echo -e "${GREEN}2) Удалить ByeDPI${NC}"
+    echo -e "${GREEN}3) Перезапустить службу${NC}"
+    echo -e "${GREEN}4) Выход${NC}"
+    echo -e ""
     echo -ne "\nВыберите пункт: "
     read choice
 
     case "$choice" in
         1) install_update ;;
-        2) choose_version ;;
-        3) uninstall_byedpi ;;
-        4)
+        2) uninstall_byedpi ;;
+        3)
             if [ -f /etc/init.d/byedpi ]; then
                 /etc/init.d/byedpi restart
                 echo -e "${GREEN}Служба перезапущена.${NC}"
