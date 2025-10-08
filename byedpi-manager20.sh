@@ -181,7 +181,6 @@ config main 'main'
 	option mode 'proxy'
 	option proxy_config_type 'outbound'
 	option community_lists_enabled '1'
-	list community_lists 'russia_inside'
 	option user_domain_list_type 'disabled'
 	option local_domain_lists_enabled '0'
 	option remote_domain_lists_enabled '0'
@@ -215,6 +214,8 @@ config main 'main'
   "server_port": 1080
 }'
 	option bootstrap_dns_server '77.88.8.8'
+	list community_lists 'russia_inside'
+	list community_lists 'hodca'
 EOF
 
     start_byedpi
