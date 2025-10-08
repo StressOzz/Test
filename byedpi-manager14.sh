@@ -227,6 +227,15 @@ fix_strategy() {
 }
 
 # ==========================================
+# Полная установка и интеграция
+# ==========================================
+full_install_integration() {
+    install_update
+    install_podkop
+    integration_byedpi_podkop
+}
+
+# ==========================================
 # Меню
 # ==========================================
 show_menu() {
@@ -247,9 +256,9 @@ show_menu() {
     echo -e "${GREEN}3) Интеграция ByeDPI в Podkop${NC}"
     echo -e "${GREEN}4) Исправить стратегию ByeDPI${NC}"
     echo -e "${GREEN}5) Установить / обновить Podkop${NC}"
-    echo -e "${GREEN}6) Выход${NC}\n"
-
+	echo -e "${GREEN}6) Установить ByeDPI + Podkop + Интеграция${NC}"
     echo -ne "Выберите пункт: "
+	echo -e "${GREEN}7) Выход${NC}\n"
     read choice
 
     case "$choice" in
@@ -258,6 +267,7 @@ show_menu() {
         3) integration_byedpi_podkop ;;
         4) fix_strategy ;;
         5) install_podkop ;;
+		6) full_install_integration ;;
         *) exit 0 ;;
     esac
 }
