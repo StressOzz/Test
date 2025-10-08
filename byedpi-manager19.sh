@@ -21,6 +21,28 @@ start_byedpi() {
     /etc/init.d/byedpi start
 }
 
+# ==========================================
+# Запуск Podkop
+# ==========================================
+
+start_podkop_full() {
+    echo -e "\nЗапуск Podkop...\n"
+
+    echo -e ""Включаем автозапуск..."
+    podkop enable >/dev/null 2>&1
+
+    echo -e ""Применяем конфигурацию..."
+    podkop reload >/dev/null 2>&1
+
+    echo -e " "Перезапускаем сервис..."
+    podkop restart >/dev/null 2>&1
+
+    echo "Обновляем списки..."
+    podkop list_update >/dev/null 2>&1
+
+    echo -e "\n Podkop готов к работе.\n"
+}
+
 
 # ==========================================
 # Определение версий
@@ -131,6 +153,7 @@ install_podkop() {
         chmod +x install.sh
         sh install.sh
         echo -e "\n${GREEN}Podkop установлен / обновлён.${NC}\n"
+		start_podkop_full
     else
         echo -e "${RED}Ошибка загрузки установочного скрипта Podkop.${NC}\n"
     fi
@@ -196,6 +219,7 @@ config main 'main'
 EOF
 
     start_byedpi
+	start_podkop_full
     echo -e "${GREEN}ByeDPI интегрирован в Podkop.${NC}"
     echo -ne "Нужно обязательно перезагрузить роутер. Перезагрузить сейчас? [y/N]: "
     read REBOOT_CHOICE
