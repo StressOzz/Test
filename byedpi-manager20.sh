@@ -153,7 +153,6 @@ install_podkop() {
         chmod +x install.sh
         sh install.sh
         echo -e "\n${GREEN}Podkop установлен / обновлён.${NC}\n"
-		start_podkop_full
     else
         echo -e "${RED}Ошибка загрузки установочного скрипта Podkop.${NC}\n"
     fi
