@@ -1,7 +1,6 @@
 #!/bin/sh
 # ==========================================
 # ByeDPI & Podkop Manager by StressOzz
-# Скрипт для OpenWRT
 # ==========================================
 
 # Цвета
@@ -15,7 +14,17 @@ NC="\033[0m"
 WORKDIR="/tmp/byedpi"
 
 # ==========================================
-# Определение версий и статусов
+# Запуск ByeDPI
+# ==========================================
+start_byedpi() {
+    [ -f /etc/init.d/byedpi ] && {
+        /etc/init.d/byedpi enable >/dev/null 2>&1
+        /etc/init.d/byedpi start >/dev/null 2>&1
+    }
+}
+
+# ==========================================
+# Определение версий
 # ==========================================
 get_versions() {
     # --- ByeDPI ---
@@ -31,7 +40,7 @@ get_versions() {
         opkg install curl >/dev/null 2>&1
     }
 
-    # --- ByeDPI ---
+    # --- Получаем версии ByeDPI ---
     API_URL="https://api.github.com/repos/DPITrickster/ByeDPI-OpenWrt/releases"
     RELEASE_DATA=$(curl -s "$API_URL")
     LATEST_URL=$(echo "$RELEASE_DATA" | grep browser_download_url | grep "$LOCAL_ARCH.ipk" | head -n1 | cut -d'"' -f4)
@@ -42,26 +51,13 @@ get_versions() {
         LATEST_VER="не найдена"
     fi
 
-    if [ -f /etc/init.d/byedpi ]; then
-        if /etc/init.d/byedpi status 2>/dev/null | grep -qi "running"; then
-            BYEDPI_STATUS="${GREEN}запущен${NC}"
-        else
-            BYEDPI_STATUS="${RED}остановлен${NC}"
-        fi
-    else
-        BYEDPI_STATUS="${RED}не установлен${NC}"
-    fi
-
     # --- Podkop ---
-    if [ -f /usr/bin/podkop ]; then
-        PODKOP_VER=$(podkop show_version 2>/dev/null | head -n1)
+    if command -v podkop >/dev/null 2>&1; then
+        PODKOP_VER=$(podkop show_version 2>/dev/null)
         [ -z "$PODKOP_VER" ] && PODKOP_VER="установлен (версия не определена)"
-        PODKOP_STATUS=$(podkop get_status 2>/dev/null | grep -qi "running" && echo "${GREEN}запущен${NC}" || echo "${RED}остановлен${NC}")
     else
         PODKOP_VER="не установлен"
-        PODKOP_STATUS="${RED}отсутствует${NC}"
     fi
-
     PODKOP_API_URL="https://api.github.com/repos/itdoginfo/podkop/releases/latest"
     PODKOP_LATEST_VER=$(curl -s "$PODKOP_API_URL" | grep '"tag_name"' | head -n1 | cut -d'"' -f4)
     [ -z "$PODKOP_LATEST_VER" ] && PODKOP_LATEST_VER="не найдена"
@@ -75,9 +71,14 @@ install_update() {
     echo -e "\n${MAGENTA}Установка / обновление ByeDPI${NC}\n"
     get_versions
 
-    [ -z "$LATEST_URL" ] && { echo -e "${RED}Нет пакета для архитектуры: ${NC}$LOCAL_ARCH"; read -p "Enter..." dummy; return; }
+    [ -z "$LATEST_URL" ] && {
+        echo -e "${RED}Нет пакета для архитектуры: ${NC}$LOCAL_ARCH\n"
+        read -p "Enter..." dummy
+        return
+    }
+
     if [ "$INSTALLED_VER" = "$LATEST_VER" ]; then
-        echo -e "${YELLOW}Уже установлена последняя версия (${CYAN}$INSTALLED_VER${YELLOW})${NC}"
+        echo -e "${YELLOW}Уже установлена последняя версия (${CYAN}$INSTALLED_VER${YELLOW})${NC}\n"
         read -p "Enter..." dummy
         return
     fi
@@ -85,13 +86,17 @@ install_update() {
     echo -e "${CYAN}Скачиваем пакет: ${NC}$LATEST_FILE"
     mkdir -p "$WORKDIR"
     cd "$WORKDIR" || return
-    curl -L -s -o "$LATEST_FILE" "$LATEST_URL" || { echo -e "${RED}Ошибка загрузки ${NC}$LATEST_FILE"; read -p "Enter..." dummy; return; }
+    curl -L -s -o "$LATEST_FILE" "$LATEST_URL" || {
+        echo -e "${RED}Ошибка загрузки ${NC}$LATEST_FILE"
+        read -p "Enter..." dummy
+        return
+    }
 
     echo -e "${CYAN}Устанавливаем пакет...${NC}"
     opkg install --force-reinstall "$LATEST_FILE" >/dev/null 2>&1
     rm -rf "$WORKDIR"
 
-    [ -f /etc/init.d/byedpi ] && { /etc/init.d/byedpi enable >/dev/null 2>&1; /etc/init.d/byedpi restart >/dev/null 2>&1; }
+    start_byedpi
 
     echo -e "\n${GREEN}ByeDPI ${LATEST_VER} успешно установлена!${NC}\n"
     read -p "Enter..." dummy
@@ -103,7 +108,10 @@ install_update() {
 uninstall_byedpi() {
     clear
     echo -e "\n${MAGENTA}Удаление ByeDPI${NC}\n"
-    [ -f /etc/init.d/byedpi ] && { /etc/init.d/byedpi stop >/dev/null 2>&1; /etc/init.d/byedpi disable >/dev/null 2>&1; }
+    [ -f /etc/init.d/byedpi ] && {
+        /etc/init.d/byedpi stop >/dev/null 2>&1
+        /etc/init.d/byedpi disable >/dev/null 2>&1
+    }
     opkg remove --force-removal-of-dependent-packages byedpi >/dev/null 2>&1
     rm -rf /etc/init.d/byedpi /opt/byedpi /etc/config/byedpi
     echo -e "${GREEN}ByeDPI удалена полностью.${NC}\n"
@@ -121,15 +129,13 @@ install_podkop() {
     mkdir -p "$TMPDIR"
     cd "$TMPDIR" || return
 
-    echo -e "${CYAN}Скачиваем официальный инсталлятор Podkop...${NC}"
+    echo -e "${CYAN}Скачиваем официальный инсталлятор Podkop...${NC}\n"
     if curl -fsSL -o install.sh "https://raw.githubusercontent.com/itdoginfo/podkop/main/install.sh"; then
-        echo -e "${GREEN}Инсталлятор успешно загружен.${NC}"
         chmod +x install.sh
-        echo -e "${CYAN}Запуск установки...${NC}"
         sh install.sh
-        echo -e "${GREEN}Установка Podkop завершена.${NC}"
+        echo -e "\n${GREEN}Podkop установлен / обновлён.${NC}\n"
     else
-        echo -e "${RED}Ошибка загрузки установочного скрипта Podkop.${NC}"
+        echo -e "${RED}Ошибка загрузки установочного скрипта Podkop.${NC}\n"
     fi
     rm -rf "$TMPDIR"
     read -p "Enter..." dummy
@@ -138,27 +144,20 @@ install_podkop() {
 # ==========================================
 # Интеграция ByeDPI в Podkop
 # ==========================================
-integrate_byedpi_podkop() {
+integration_byedpi_podkop() {
     clear
     echo -e "\n${MAGENTA}Интеграция ByeDPI в Podkop${NC}\n"
 
-    echo -e "${CYAN}Настройка dnsmasq...${NC}"
     uci set dhcp.@dnsmasq[0].localuse='0'
     uci commit dhcp
-    echo -e "${GREEN}Настройки dnsmasq применены.${NC}\n"
 
-    BYEDPI_CONFIG="/etc/config/byedpi"
-    if [ -f "$BYEDPI_CONFIG" ]; then
-        echo -e "${CYAN}Обновляем cmd_opts в $BYEDPI_CONFIG...${NC}"
-        sed -i "s|option cmd_opts .*|    option cmd_opts '-o 2 --auto=t,r,a,s -d 2'|" "$BYEDPI_CONFIG"
-        echo -e "${GREEN}Опции cmd_opts обновлены.${NC}\n"
-    else
-        echo -e "${RED}$BYEDPI_CONFIG не найден.${NC}\n"
+    # Меняем стратегию ByeDPI на интеграционную
+    if [ -f /etc/config/byedpi ]; then
+        sed -i "s|option cmd_opts .*|    option cmd_opts '-o 2 --auto=t,r,a,s -d 2'|" /etc/config/byedpi
     fi
 
-    PODKOP_CONFIG="/etc/config/podkop"
-    echo -e "${CYAN}Обновляем конфигурацию Podkop...${NC}"
-    cat > "$PODKOP_CONFIG" <<'EOF'
+    # Создаём / меняем /etc/config/podkop
+    cat <<EOF >/etc/config/podkop
 config main 'main'
 	option mode 'proxy'
 	option proxy_config_type 'outbound'
@@ -198,30 +197,26 @@ config main 'main'
 }'
 	option bootstrap_dns_server '77.88.8.8'
 EOF
-    echo -e "${GREEN}Конфигурация Podkop обновлена.${NC}\n"
+
+    start_byedpi
+    echo -e "\n${GREEN}ByeDPI интегрирован в Podkop.${NC}\n"
     read -p "Enter..." dummy
 }
 
 # ==========================================
-# Исправить стратегию ByeDPI
+# Ручная смена стратегии ByeDPI
 # ==========================================
-fix_byedpi_strategy() {
+fix_strategy() {
     clear
-    BYEDPI_CONFIG="/etc/config/byedpi"
-    if [ ! -f "$BYEDPI_CONFIG" ]; then
-        echo -e "${RED}$BYEDPI_CONFIG не найден.${NC}\n"
-        read -p "Enter..." dummy
-        return
+    echo -e "\n${MAGENTA}Исправить стратегию ByeDPI${NC}\n"
+    read -p "Введите новую стратегию для option cmd_opts: " NEW_STRATEGY
+    if [ -f /etc/config/byedpi ]; then
+        sed -i "s|option cmd_opts .*|    option cmd_opts '$NEW_STRATEGY'|" /etc/config/byedpi
+        start_byedpi
+        echo -e "${GREEN}Стратегия изменена на: $NEW_STRATEGY${NC}"
+    else
+        echo -e "${RED}/etc/config/byedpi не найден${NC}"
     fi
-
-    echo -e "\n${MAGENTA}Исправление стратегии ByeDPI${NC}\n"
-    echo -e "${CYAN}Введите новую стратегию для option cmd_opts:${NC}"
-    read -r NEW_STRATEGY
-    sed -i "s|option cmd_opts .*|    option cmd_opts '$NEW_STRATEGY'|" "$BYEDPI_CONFIG"
-    echo -e "${GREEN}Стратегия обновлена на:${NC} $NEW_STRATEGY"
-
-    [ -f /etc/init.d/byedpi ] && /etc/init.d/byedpi restart
-    echo -e "${GREEN}ByeDPI перезапущена.${NC}\n"
     read -p "Enter..." dummy
 }
 
@@ -235,31 +230,28 @@ show_menu() {
 
     echo -e "${MAGENTA}--- ByeDPI ---${NC}"
     echo -e "${YELLOW}Установлена версия:${NC} $INSTALLED_VER"
-    echo -e "${YELLOW}Последняя версия:${NC} $LATEST_VER"
-    echo -e "${YELLOW}Статус службы:${NC} $BYEDPI_STATUS\n"
+    echo -e "${YELLOW}Последняя версия:${NC} $LATEST_VER\n"
 
     echo -e "${MAGENTA}--- Podkop ---${NC}"
     echo -e "${YELLOW}Установлена версия:${NC} $PODKOP_VER"
-    echo -e "${YELLOW}Последняя версия:${NC} $PODKOP_LATEST_VER"
-    echo -e "${YELLOW}Статус службы:${NC} $PODKOP_STATUS\n"
+    echo -e "${YELLOW}Последняя версия:${NC} $PODKOP_LATEST_VER\n"
 
     echo -e "${GREEN}1) Установить / обновить ByeDPI${NC}"
     echo -e "${GREEN}2) Удалить ByeDPI${NC}"
-    echo -e "${GREEN}3) Перезапустить ByeDPI${NC}"
-    echo -e "${GREEN}4) Установить / обновить Podkop${NC}"
-    echo -e "${GREEN}5) Выход${NC}"
-    echo -e "${GREEN}6) Интеграция ByeDPI в Podkop${NC}"
-    echo -e "${GREEN}7) Исправить стратегию ByeDPI${NC}\n"
+    echo -e "${GREEN}3) Интеграция ByeDPI в Podkop${NC}"
+    echo -e "${GREEN}4) Исправить стратегию ByeDPI${NC}"
+    echo -e "${GREEN}5) Установить / обновить Podkop${NC}"
+    echo -e "${GREEN}6) Выход${NC}\n"
 
     echo -ne "Выберите пункт: "
     read choice
+
     case "$choice" in
         1) install_update ;;
         2) uninstall_byedpi ;;
-        3) [ -f /etc/init.d/byedpi ] && /etc/init.d/byedpi restart && echo -e "${GREEN}ByeDPI перезапущена.${NC}" || echo -e "${RED}ByeDPI не установлена.${NC}"; sleep 2 ;;
-        4) install_podkop ;;
-        6) integrate_byedpi_podkop ;;
-        7) fix_byedpi_strategy ;;
+        3) integration_byedpi_podkop ;;
+        4) fix_strategy ;;
+        5) install_podkop ;;
         *) exit 0 ;;
     esac
 }
