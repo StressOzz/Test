@@ -22,52 +22,57 @@ WORKDIR="/tmp/zapret-update"  # Временная папка для загру�
 # Функция получения информации о версиях, архитектуре и статусе
 # ==========================================
 get_versions() {
-    INSTALLED_VER=$(opkg list-installed | grep '^zapret ' | awk '{print $3}')
+    INSTALLED_VER=$(opkg list-installed | grep '^byedpi ' | awk '{print $3}')
     [ -z "$INSTALLED_VER" ] && INSTALLED_VER="не найдена"
+
     LOCAL_ARCH=$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release)
     [ -z "$LOCAL_ARCH" ] && LOCAL_ARCH=$(opkg print-architecture | grep -v "noarch" | sort -k3 -n | tail -n1 | awk '{print $2}')
 
     command -v curl >/dev/null 2>&1 || {
         clear
         echo -e ""
-        echo -e "${MAGENTA}ZAPRET on remittor Manager by StressOzz${NC}"
+        echo -e "${MAGENTA}ByeDPI Manager by StressOzz${NC}"
         echo -e ""
         echo -e "${GREEN}🔴 ${CYAN}Устанавливаем${NC} curl ${CYAN}для загрузки информации с ${NC}GitHub"
         opkg update >/dev/null 2>&1
         opkg install curl >/dev/null 2>&1
     }
 
-    LATEST_URL=$(curl -s https://api.github.com/repos/remittor/zapret-openwrt/releases/latest \
-        | grep browser_download_url | grep "$LOCAL_ARCH.zip" | cut -d '"' -f 4)
-    PREV_URL=$(curl -s https://api.github.com/repos/remittor/zapret-openwrt/releases \
-        | grep browser_download_url | grep "$LOCAL_ARCH.zip" | sed -n '2p' | cut -d '"' -f 4)
+    # Получаем URL последнего релиза
+    LATEST_URL=$(curl -s https://api.github.com/repos/DPITrickster/ByeDPI-OpenWrt/releases/latest \
+        | grep browser_download_url | grep "$LOCAL_ARCH.ipk" | cut -d '"' -f 4 | head -n1)
 
-    if [ -n "$LATEST_URL" ] && echo "$LATEST_URL" | grep -q '\.zip$'; then
+    # Получаем URL предыдущего релиза
+    PREV_URL=$(curl -s https://api.github.com/repos/DPITrickster/ByeDPI-OpenWrt/releases \
+        | grep browser_download_url | grep "$LOCAL_ARCH.ipk" | sed -n '2p' | cut -d '"' -f 4)
+
+    if [ -n "$LATEST_URL" ] && echo "$LATEST_URL" | grep -q '\.ipk$'; then
         LATEST_FILE=$(basename "$LATEST_URL")
-        LATEST_VER=$(echo "$LATEST_FILE" | sed -E 's/.*zapret_v([0-9]+\.[0-9]+)_.*\.zip/\1/')
+        LATEST_VER=$(echo "$LATEST_FILE" | sed -E 's/^byedpi_([0-9]+\.[0-9]+\.[0-9]+-[^_]+)_.*/\1/')
         USED_ARCH="$LOCAL_ARCH"
     else
         LATEST_VER="не найдена"
         USED_ARCH="нет пакета для вашей архитектуры"
     fi
 
-    if [ -n "$PREV_URL" ] && echo "$PREV_URL" | grep -q '\.zip$'; then
+    if [ -n "$PREV_URL" ] && echo "$PREV_URL" | grep -q '\.ipk$'; then
         PREV_FILE=$(basename "$PREV_URL")
-        PREV_VER=$(echo "$PREV_FILE" | sed -E 's/.*zapret_v([0-9]+\.[0-9]+)_.*\.zip/\1/')
+        PREV_VER=$(echo "$PREV_FILE" | sed -E 's/^byedpi_([0-9]+\.[0-9]+\.[0-9]+-[^_]+)_.*/\1/')
     else
         PREV_VER="не найдена"
     fi
 
-    if [ -f /etc/init.d/zapret ]; then
-        if /etc/init.d/zapret status 2>/dev/null | grep -qi "running"; then
-            ZAPRET_STATUS="${GREEN}запущен${NC}"
+    if [ -f /etc/init.d/byedpi ]; then
+        if /etc/init.d/byedpi status 2>/dev/null | grep -qi "running"; then
+            BYEDPI_STATUS="${GREEN}запущен${NC}"
         else
-            ZAPRET_STATUS="${RED}остановлен${NC}"
+            BYEDPI_STATUS="${RED}остановлен${NC}"
         fi
     else
-        ZAPRET_STATUS=""
+        BYEDPI_STATUS=""
     fi
 }
+
 
 # ==========================================
 # Установка или обновление Zapret (обычная)
