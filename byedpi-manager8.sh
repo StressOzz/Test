@@ -136,10 +136,10 @@ get_versions() {
     fi
 
     # --- Podkop ---
-    if [ -f /etc/init.d/podkop ]; then
-        PODKOP_VER=$(/etc/init.d/podkop version 2>/dev/null | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+' | head -n1)
-        [ -z "$PODKOP_VER" ] && PODKOP_VER="установлен (версия не определена)"
-        PODKOP_STATUS=$(/etc/init.d/podkop status 2>/dev/null | grep -qi "running" && echo "${GREEN}запущен${NC}" || echo "${RED}остановлен${NC}")
+    if command -v podkop >/dev/null 2>&1; then
+        PODKOP_VER=$(podkop show_version 2>/dev/null)
+        [ -z "$PODKOP_VER" ] && PODKOP_VER="не определена"
+        PODKOP_STATUS=$(podkop get_status 2>/dev/null | grep -qi "running" && echo "${GREEN}запущен${NC}" || echo "${RED}остановлен${NC}")
     else
         PODKOP_VER="не установлен"
         PODKOP_STATUS="${RED}отсутствует${NC}"
