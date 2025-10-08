@@ -46,7 +46,8 @@ get_versions() {
     LATEST_URL=$(echo "$RELEASE_DATA" | grep browser_download_url | grep "$LOCAL_ARCH.ipk" | head -n1 | cut -d'"' -f4)
     if [ -n "$LATEST_URL" ]; then
         LATEST_FILE=$(basename "$LATEST_URL")
-        LATEST_VER=$(echo "$LATEST_FILE" | sed -E 's/^byedpi_([0-9]+\.[0-9]+\.[0-9]+-[^_]+)_.*/\1/')
+        LATEST_VER=$(echo "$LATEST_FILE" | sed -E 's/^byedpi_([0-9]+\.[0-9]+\.[0-9]+)(-r[0-9]+)?_.*/\1/')
+
     else
         LATEST_VER="не найдена"
     fi
@@ -59,7 +60,7 @@ get_versions() {
         PODKOP_VER="не установлен"
     fi
     PODKOP_API_URL="https://api.github.com/repos/itdoginfo/podkop/releases/latest"
-    PODKOP_LATEST_VER=$(curl -s "$PODKOP_API_URL" | grep '"tag_name"' | head -n1 | cut -d'"' -f4)
+	PODKOP_LATEST_VER=$(curl -s "$PODKOP_API_URL" | grep '"tag_name"' | head -n1 | cut -d'"' -f4 | sed 's/-r[0-9]\+$//')
     [ -z "$PODKOP_LATEST_VER" ] && PODKOP_LATEST_VER="не найдена"
 }
 
