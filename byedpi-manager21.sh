@@ -169,6 +169,7 @@ integration_byedpi_podkop() {
 
     uci set dhcp.@dnsmasq[0].localuse='0'
     uci commit dhcp
+	/etc/init.d/dnsmasq restart
 
     # Меняем стратегию ByeDPI на интеграционную
     if [ -f /etc/config/byedpi ]; then
@@ -241,7 +242,7 @@ fix_strategy() {
     echo -e "${MAGENTA}Исправить стратегию ByeDPI${NC}"
     read -p "Введите новую стратегию для option cmd_opts: " NEW_STRATEGY
     if [ -f /etc/config/byedpi ]; then
-        sed -i "s|option cmd_opts .*|    option cmd_opts '$NEW_STRATEGY'|" /etc/config/byedpi
+        sed -i "s|option cmd_opts .*| option cmd_opts '$NEW_STRATEGY'|" /etc/config/byedpi
         start_byedpi
         echo -e "${GREEN}Стратегия изменена на: $NEW_STRATEGY${NC}"
     else
