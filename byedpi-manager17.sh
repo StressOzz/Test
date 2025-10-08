@@ -17,11 +17,10 @@ WORKDIR="/tmp/byedpi"
 # Запуск ByeDPI
 # ==========================================
 start_byedpi() {
-    [ -f /etc/init.d/byedpi ] && {
-        /etc/init.d/byedpi enable >/dev/null 2>&1
-        /etc/init.d/byedpi start >/dev/null 2>&1
-    }
+    /etc/init.d/byedpi enable
+    /etc/init.d/byedpi start
 }
+
 
 # ==========================================
 # Определение версий
@@ -95,9 +94,7 @@ install_update() {
     echo -e "${CYAN}Устанавливаем пакет...${NC}"
     opkg install --force-reinstall "$LATEST_FILE" >/dev/null 2>&1
     rm -rf "$WORKDIR"
-
-    start_byedpi
-
+	
     echo -e "\n${GREEN}ByeDPI ${LATEST_VER} успешно установлена!${NC}\n"
     read -p "Enter..." dummy
 }
@@ -153,7 +150,7 @@ integration_byedpi_podkop() {
 
     # Меняем стратегию ByeDPI на интеграционную
     if [ -f /etc/config/byedpi ]; then
-        sed -i "s|option cmd_opts .*|    option cmd_opts '-o 2 --auto=t,r,a,s -d 2'|" /etc/config/byedpi
+        sed -i "s|option cmd_opts .*| option cmd_opts '-o 2 --auto=t,r,a,s -d 2'|" /etc/config/byedpi
     fi
 
     # Создаём / меняем /etc/config/podkop
@@ -199,12 +196,12 @@ config main 'main'
 EOF
 
     start_byedpi
-    echo -e "\n${GREEN}ByeDPI интегрирован в Podkop.${NC}\n"
+    echo -e "${GREEN}ByeDPI интегрирован в Podkop.${NC}"
     echo -ne "Нужно обязательно перезагрузить роутер. Перезагрузить сейчас? [y/N]: "
     read REBOOT_CHOICE
     case "$REBOOT_CHOICE" in
         y|Y) reboot ;;
-        *) echo -e "${YELLOW}Необходимость перезагрузки отложена.${NC}\n" ;;
+        *) echo -e "${YELLOW}Необходимость перезагрузки отложена.${NC}" ;;
     esac
     read -p "Enter..." dummy
 }
@@ -214,7 +211,7 @@ EOF
 # ==========================================
 fix_strategy() {
     clear
-    echo -e "\n${MAGENTA}Исправить стратегию ByeDPI${NC}\n"
+    echo -e "${MAGENTA}Исправить стратегию ByeDPI${NC}"
     read -p "Введите новую стратегию для option cmd_opts: " NEW_STRATEGY
     if [ -f /etc/config/byedpi ]; then
         sed -i "s|option cmd_opts .*|    option cmd_opts '$NEW_STRATEGY'|" /etc/config/byedpi
@@ -241,15 +238,15 @@ full_install_integration() {
 show_menu() {
     get_versions
     clear
-    echo -e "${YELLOW}Архитектура:${NC} $LOCAL_ARCH\n"
+    echo -e "${YELLOW}Архитектура:${NC} $LOCAL_ARCH"
 
     echo -e "${MAGENTA}--- ByeDPI ---${NC}"
     echo -e "${YELLOW}Установлена версия:${NC} $INSTALLED_VER"
-    echo -e "${YELLOW}Последняя версия:${NC} $LATEST_VER\n"
+    echo -e "${YELLOW}Последняя версия:${NC} $LATEST_VER"
 
     echo -e "${MAGENTA}--- Podkop ---${NC}"
     echo -e "${YELLOW}Установлена версия:${NC} $PODKOP_VER"
-    echo -e "${YELLOW}Последняя версия:${NC} $PODKOP_LATEST_VER\n"
+    echo -e "${YELLOW}Последняя версия:${NC} $PODKOP_LATEST_VER"
 
     echo -e "${GREEN}1) Установить / обновить ByeDPI${NC}"
     echo -e "${GREEN}2) Удалить ByeDPI${NC}"
@@ -257,7 +254,7 @@ show_menu() {
     echo -e "${GREEN}4) Исправить стратегию ByeDPI${NC}"
     echo -e "${GREEN}5) Установить / обновить Podkop${NC}"
 	echo -e "${GREEN}6) Установить ByeDPI + Podkop + Интеграция${NC}"
-	echo -e "${GREEN}7) Выход${NC}\n"
+	echo -e "${GREEN}7) Выход${NC}"
     echo -ne "Выберите пункт: "
     read choice
 
