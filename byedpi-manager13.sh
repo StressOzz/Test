@@ -28,7 +28,7 @@ start_byedpi() {
 # ==========================================
 get_versions() {
     # --- ByeDPI ---
-    INSTALLED_VER=$(opkg list-installed | grep '^byedpi ' | awk '{print $3}')
+    INSTALLED_VER=$(opkg list-installed | grep '^byedpi ' | awk '{print $3}' | sed 's/-r[0-9]\+$//')
     [ -z "$INSTALLED_VER" ] && INSTALLED_VER="не найдена"
 
     LOCAL_ARCH=$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release)
@@ -47,20 +47,19 @@ get_versions() {
     if [ -n "$LATEST_URL" ]; then
         LATEST_FILE=$(basename "$LATEST_URL")
         LATEST_VER=$(echo "$LATEST_FILE" | sed -E 's/^byedpi_([0-9]+\.[0-9]+\.[0-9]+)(-r[0-9]+)?_.*/\1/')
-
     else
         LATEST_VER="не найдена"
     fi
 
     # --- Podkop ---
     if command -v podkop >/dev/null 2>&1; then
-        PODKOP_VER=$(podkop show_version 2>/dev/null)
+        PODKOP_VER=$(podkop show_version 2>/dev/null | sed 's/-r[0-9]\+$//')
         [ -z "$PODKOP_VER" ] && PODKOP_VER="установлен (версия не определена)"
     else
         PODKOP_VER="не установлен"
     fi
     PODKOP_API_URL="https://api.github.com/repos/itdoginfo/podkop/releases/latest"
-	PODKOP_LATEST_VER=$(curl -s "$PODKOP_API_URL" | grep '"tag_name"' | head -n1 | cut -d'"' -f4 | sed 's/-r[0-9]\+$//')
+    PODKOP_LATEST_VER=$(curl -s "$PODKOP_API_URL" | grep '"tag_name"' | head -n1 | cut -d'"' -f4 | sed 's/-r[0-9]\+$//')
     [ -z "$PODKOP_LATEST_VER" ] && PODKOP_LATEST_VER="не найдена"
 }
 
@@ -201,6 +200,12 @@ EOF
 
     start_byedpi
     echo -e "\n${GREEN}ByeDPI интегрирован в Podkop.${NC}\n"
+    echo -ne "Нужно обязательно перезагрузить роутер. Перезагрузить сейчас? [y/N]: "
+    read REBOOT_CHOICE
+    case "$REBOOT_CHOICE" in
+        y|Y) reboot ;;
+        *) echo -e "${YELLOW}Необходимость перезагрузки отложена.${NC}\n" ;;
+    esac
     read -p "Enter..." dummy
 }
 
