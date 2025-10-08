@@ -70,6 +70,9 @@ get_versions() {
 # ==========================================
 install_update() {
     clear
+
+
+    
     echo -e "\n${MAGENTA}Установка / обновление ByeDPI${NC}\n"
     get_versions
 
@@ -133,6 +136,37 @@ uninstall_byedpi() {
 }
 
 # ==========================================
+# Установка Podkop
+# ==========================================
+install_podkop() {
+    clear
+    echo -e "\n${MAGENTA}Установка Podkop${NC}\n"
+
+    if [ -f "/etc/init.d/podkop" ]; then
+        echo -e "${YELLOW}Podkop уже установлен. Будет выполнено обновление...${NC}\n"
+    fi
+
+    TMPDIR="/tmp/podkop_installer"
+    rm -rf "$TMPDIR"
+    mkdir -p "$TMPDIR"
+    cd "$TMPDIR" || return
+
+    echo -e "${CYAN}Скачиваем официальный инсталлятор Podkop...${NC}\n"
+    if curl -fsSL -o install.sh "https://raw.githubusercontent.com/itdoginfo/podkop/main/install.sh"; then
+        echo -e "${GREEN}Инсталлятор успешно загружен.${NC}\n"
+        chmod +x install.sh
+        echo -e "${CYAN}Запуск установки...${NC}\n"
+        sh install.sh
+        echo -e "\n${GREEN}Установка Podkop завершена.${NC}\n"
+    else
+        echo -e "${RED}Ошибка загрузки установочного скрипта Podkop.${NC}\n"
+    fi
+
+    rm -rf "$TMPDIR"
+    read -p "Нажмите Enter, чтобы вернуться в меню..." dummy
+}
+
+# ==========================================
 # Меню
 # ==========================================
 show_menu() {
@@ -152,22 +186,18 @@ echo -e "                    ██╔══██╗  ╚██╔╝  ██�
 echo -e "                    ██████╔╝   ██║   ███████╗██████╔╝██║     ██║"
 echo -e "                    ╚═════╝    ╚═╝   ╚══════╝╚═════╝ ╚═╝     ╚═╝"
 echo -e "                  https://github.com/DPITrickster/ByeDPI-OpenWrt"
-echo -e "Manager by StressOzz"
-echo -e ""
-    echo -e "${YELLOW}Архитектура:${NC} $LOCAL_ARCH"
-    echo -e ""
-    echo -e "${YELLOW}Установлена версия:${NC} $INSTALLED_VER"
-    echo -e ""
-    echo -e "${YELLOW}Последняя версия:${NC} $LATEST_VER"
-    echo -e ""
-    echo -e "${YELLOW}Статус службы:${NC} $BYEDPI_STATUS\n"
-echo -e ""
+echo -e "Manager by StressOzz\n"
+echo -e "${YELLOW}Архитектура:${NC} $LOCAL_ARCH"
+echo -e "${YELLOW}Установлена версия:${NC} $INSTALLED_VER"
+echo -e "${YELLOW}Последняя версия:${NC} $LATEST_VER"
+echo -e "${YELLOW}Статус службы:${NC} $BYEDPI_STATUS\n"
+
     echo -e "${GREEN}1) Установить / обновить ByeDPI${NC}"
     echo -e "${GREEN}2) Удалить ByeDPI${NC}"
-    echo -e "${GREEN}3) Перезапустить службу${NC}"
-    echo -e "${GREEN}4) Выход${NC}"
-    echo -e ""
-    echo -ne "\nВыберите пункт: "
+    echo -e "${GREEN}3) Перезапустить службу ByeDPI${NC}"
+    echo -e "${GREEN}4) Установить Podkop${NC}"
+    echo -e "${GREEN}5) Выход${NC}\n"
+    echo -ne "Выберите пункт: "
     read choice
 
     case "$choice" in
@@ -176,15 +206,23 @@ echo -e ""
         3)
             if [ -f /etc/init.d/byedpi ]; then
                 /etc/init.d/byedpi restart
-                echo -e "${GREEN}Служба перезапущена.${NC}"
+                echo -e "${GREEN}Служба ByeDPI перезапущена.${NC}"
             else
                 echo -e "${RED}ByeDPI не установлена.${NC}"
             fi
             sleep 2
             ;;
+        4) install_podkop ;;
         *) exit 0 ;;
     esac
 }
+
+# ==========================================
+# Запуск
+# ==========================================
+while true; do
+    show_menu
+done
 
 # ==========================================
 # Запуск
