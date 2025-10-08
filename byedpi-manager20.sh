@@ -26,21 +26,21 @@ start_byedpi() {
 # ==========================================
 
 start_podkop_full() {
-    echo -e "\nЗапуск Podkop...\n"
-
-    echo -e ""Включаем автозапуск..."
+    echo -e "Запуск Podkop..."
+echo -e ""
+    echo -e "Включаем автозапуск..."
     podkop enable >/dev/null 2>&1
-
-    echo -e ""Применяем конфигурацию..."
+echo -e ""
+    echo -e "Применяем конфигурацию..."
     podkop reload >/dev/null 2>&1
-
-    echo -e " "Перезапускаем сервис..."
+echo -e ""
+    echo -e "Перезапускаем сервис..."
     podkop restart >/dev/null 2>&1
-
-    echo "Обновляем списки..."
+echo -e ""
+    echo -e "Обновляем списки..."
     podkop list_update >/dev/null 2>&1
-
-    echo -e "\n Podkop готов к работе.\n"
+echo -e ""
+    echo -e "Podkop готов к работе."
 }
 
 
@@ -221,12 +221,15 @@ EOF
     start_byedpi
 	start_podkop_full
     echo -e "${GREEN}ByeDPI интегрирован в Podkop.${NC}"
+	echo -e ""
     echo -ne "Нужно обязательно перезагрузить роутер. Перезагрузить сейчас? [y/N]: "
+	echo -e ""
     read REBOOT_CHOICE
     case "$REBOOT_CHOICE" in
         y|Y) reboot ;;
         *) echo -e "${YELLOW}Необходимость перезагрузки отложена.${NC}" ;;
     esac
+	echo -e ""
     read -p "Enter..." dummy
 }
 
@@ -267,11 +270,11 @@ show_menu() {
     echo -e "${MAGENTA}--- ByeDPI ---${NC}"
     echo -e "${YELLOW}Установлена версия:${NC} $INSTALLED_VER"
     echo -e "${YELLOW}Последняя версия:${NC} $LATEST_VER"
-
+	echo -e ""
     echo -e "${MAGENTA}--- Podkop ---${NC}"
     echo -e "${YELLOW}Установлена версия:${NC} $PODKOP_VER"
     echo -e "${YELLOW}Последняя версия:${NC} $PODKOP_LATEST_VER"
-
+	echo -e ""
     echo -e "${GREEN}1) Установить / обновить ByeDPI${NC}"
     echo -e "${GREEN}2) Удалить ByeDPI${NC}"
     echo -e "${GREEN}3) Интеграция ByeDPI в Podkop${NC}"
@@ -279,6 +282,7 @@ show_menu() {
     echo -e "${GREEN}5) Установить / обновить Podkop${NC}"
 	echo -e "${GREEN}6) Установить ByeDPI + Podkop + Интеграция${NC}"
 	echo -e "${GREEN}7) Выход${NC}"
+	echo -e ""
     echo -ne "Выберите пункт: "
     read choice
 
