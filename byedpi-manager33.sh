@@ -293,7 +293,7 @@ fix_strategy() {
         fi
     else
 		echo -e ""
-        echo -e "$${YELLOW}ByeDPI не установлен.${NC}"
+        echo -e "${YELLOW}ByeDPI не установлен.${NC}"
     fi
     echo -e ""
     read -p "Нажмите Enter..." dummy
