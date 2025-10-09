@@ -315,9 +315,6 @@ fix_strategy() {
     read -p "Нажмите Enter..." dummy
 }
 
-
-
-
 # ==========================================
 # Полная установка и интеграция
 # ==========================================
@@ -350,42 +347,34 @@ fi
 
 	clear
 
-echo " ███████████               █████ █████                           ";
-echo "░░███░░░░░███             ░░███ ░░███                            ";
-echo " ░███    ░███  ██████   ███████  ░███ █████  ██████  ████████    ";
-echo " ░██████████  ███░░███ ███░░███  ░███░░███  ███░░███░░███░░███   ";
-echo " ░███░░░░░░  ░███ ░███░███ ░███  ░██████░  ░███ ░███ ░███ ░███   ";
-echo " ░███        ░███ ░███░███ ░███  ░███░░███ ░███ ░███ ░███ ░███   ";
-echo " █████       ░░██████ ░░████████ ████ █████░░██████  ░███████    ";
-echo "░░░░░         ░░░░░░   ░░░░░░░░ ░░░░ ░░░░░  ░░░░░░   ░███░░░     ";
-echo "                        ███                          ░███        ";
-echo "                       ░███                          █████       ";
-echo "                   ███████████                      ░░░░░        ";
-echo "                   ░░░░░███░░░                                   ";
-echo " ███████████           ░███       ██████████   ███████████  █████";
-echo "░░███░░░░░███          ░░░       ░░███░░░░███ ░░███░░░░░███░░███ ";
-echo " ░███    ░███ █████ ████  ██████  ░███   ░░███ ░███    ░███ ░███ ";
-echo " ░██████████ ░░███ ░███  ███░░███ ░███    ░███ ░██████████  ░███ ";
-echo " ░███░░░░░███ ░███ ░███ ░███████  ░███    ░███ ░███░░░░░░   ░███ ";
-echo " ░███    ░███ ░███ ░███ ░███░░░   ░███    ███  ░███         ░███ ";
-echo " ███████████  ░░███████ ░░██████  ██████████   █████        █████";
-echo "░░░░░░░░░░░    ░░░░░███  ░░░░░░  ░░░░░░░░░░   ░░░░░        ░░░░░ ";
-echo "               ███ ░███                                          ";
-echo "              ░░██████                                           ";
-echo "               ░░░░░░                                            ";
-
+echo -e ""
+echo -e "${CYAN}╔═══════════════════════════════════════════════╗${NC}"
+echo -e "${CYAN}║${NC}               ${YELLOW}Благодарности${NC}                   ${CYAN}║${NC}"
+echo -e "${CYAN}╠═══════════════════════════════════════════════╣${NC}"
+echo -e "${WHITE}║ Podkop${NC}                by ${GREEN}ITDog${NC}             "
+echo -e "${WHITE}║${NC}   https://github.com/itdoginfo/              "
+echo -e "${WHITE}║ ByeDPI${NC}               by ${GREEN}hufrea${NC}             "
+echo -e "${WHITE}║${NC}   https://github.com/hufrea/                 "
+echo -e "${WHITE}║ ByeDPI-OpenWrt${NC}       by ${GREEN}DPITrickster${NC}      "
+echo -e "${WHITE}║${NC}   https://github.com/DPITrickster/           "
+echo -e "${WHITE}║ Instructions${NC}          by ${GREEN}Vita Pubentes${NC}     "
+echo -e "${WHITE}║${NC}   https://t.me/web_freebooter                "
+echo -e "${WHITE}║ Podkop+ByeDPI Manager${NC} by ${GREEN}StressOzz${NC}        "
+echo -e "${WHITE}║${NC}   https://github.com/StressOzz/              "
+echo -e "${CYAN}╚═══════════════════════════════════════════════╝${NC}"
+echo -e ""
 
 
 	
 	echo -e ""
     echo -e "${MAGENTA}--- ByeDPI ---${NC}"
     echo -e "${YELLOW}Установлена версия:${NC} $INSTALLED_VER"
-    echo -e "${YELLOW}Последняя версия:${NC} $LATEST_VER"
+    echo -e "${YELLOW}Последняя версия:${NC} ${CYAN}$LATEST_VER${NC}"
 	echo -e "${YELLOW}Текущая стратегия:${NC} ${WHITE}$CURRENT_STRATEGY${NC}"
 	echo -e ""
     echo -e "${MAGENTA}--- Podkop ---${NC}"
     echo -e "${YELLOW}Установлена версия:${NC} $PODKOP_VER"
-    echo -e "${YELLOW}Последняя версия:${NC} $PODKOP_LATEST_VER"
+    echo -e "${YELLOW}Последняя версия:${NC} ${CYAN}$PODKOP_LATEST_VER${NC}"
 	echo -e ""
 	echo -e "${YELLOW}Модель и архитектура роутера:${NC} $MODEL / $LOCAL_ARCH"
 	echo -e ""
