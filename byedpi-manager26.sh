@@ -10,6 +10,7 @@ CYAN="\033[1;36m"
 YELLOW="\033[1;33m"
 MAGENTA="\033[1;35m"
 NC="\033[0m"
+WHITE="\033[1;37m"
 
 WORKDIR="/tmp/byedpi"
 
@@ -244,17 +245,17 @@ fix_strategy() {
         CURRENT_STRATEGY=$(grep "option cmd_opts" /etc/config/byedpi | sed -E "s/.*'(.+)'/\1/")
         [ -z "$CURRENT_STRATEGY" ] && CURRENT_STRATEGY="(не задана)"
         echo -e ""
-        echo -e "${CYAN}Текущая стратегия:${NC} ${YELLOW}$CURRENT_STRATEGY${NC}"
+        echo -e "${CYAN}Текущая стратегия:${NC} ${WHITE}$CURRENT_STRATEGY${NC}"
         echo -e ""
         read -p "Введите новую стратегию (Enter — оставить текущую): " NEW_STRATEGY
         echo -e ""
         if [ -z "$NEW_STRATEGY" ]; then
-            echo -e "${YELLOW}Стратегия не изменена. Оставлена текущая:${NC} ${YELLOW}$CURRENT_STRATEGY${NC}"
+            echo -e "${YELLOW}Стратегия не изменена. Оставлена текущая:${NC} ${WHITE}$CURRENT_STRATEGY${NC}"
         else
             sed -i "s|option cmd_opts .*|    option cmd_opts '$NEW_STRATEGY'|" /etc/config/byedpi
             start_byedpi
             echo -e ""
-            echo -e "${GREEN}Стратегия изменена на:${NC} ${YELLOW}$NEW_STRATEGY${NC}"
+            echo -e "${GREEN}Стратегия изменена на:${NC} ${WHITE}$NEW_STRATEGY${NC}"
         fi
     else
         echo -e "${RED}/etc/config/byedpi не найден${NC}"
@@ -296,7 +297,7 @@ fi
     echo -e "${MAGENTA}--- ByeDPI ---${NC}"
     echo -e "${YELLOW}Установлена версия:${NC} $INSTALLED_VER"
     echo -e "${YELLOW}Последняя версия:${NC} $LATEST_VER"
-	echo -e "${YELLOW}Текущая стратегия:${NC} $CURRENT_STRATEGY"
+	echo -e "${YELLOW}Текущая стратегия:${NC} ${WHITE}$CURRENT_STRATEGY${NC}"
 	echo -e ""
     echo -e "${MAGENTA}--- Podkop ---${NC}"
     echo -e "${YELLOW}Установлена версия:${NC} $PODKOP_VER"
