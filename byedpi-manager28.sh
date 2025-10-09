@@ -300,7 +300,6 @@ fi
 	clear
 	echo -e ""
 	echo -e "${YELLOW}Модель и архитектура роутера:${NC} $MODEL / $LOCAL_ARCH"
-	echo -e "${YELLOW}Архитектура роутера:\t${NC}$LOCAL_ARCH"
 	echo -e ""
     echo -e "${MAGENTA}--- ByeDPI ---${NC}"
     echo -e "${YELLOW}Установлена версия:${NC} $INSTALLED_VER"
