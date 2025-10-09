@@ -83,9 +83,9 @@ get_versions() {
 # --- Podkop ---
     if command -v podkop >/dev/null 2>&1; then
         PODKOP_VER=$(podkop show_version 2>/dev/null | sed 's/-r[0-9]\+$//')
-        [ -z "$PODKOP_VER" ] && PODKOP_VER="установлен (версия не определена)"
+        [ -z "$PODKOP_VER" ] && PODKOP_VER="не найдена"
     else
-        PODKOP_VER="не установлен"
+        PODKOP_VER="не найдена"
     fi
     PODKOP_API_URL="https://api.github.com/repos/itdoginfo/podkop/releases/latest"
     PODKOP_LATEST_VER=$(curl -s "$PODKOP_API_URL" | grep '"tag_name"' | head -n1 | cut -d'"' -f4 | sed 's/-r[0-9]\+$//')
@@ -378,12 +378,12 @@ fi
 	echo -e "${BLUE}--- Podkop+ByeDPI Manager ---${NC}"
 	echo -e ""
     echo -e "${MAGENTA}--- ByeDPI ---${NC}"
-    echo -e "${YELLOW}Установлена версия:${NC} $INSTALLED_VER"
+    echo -e "${YELLOW}Установленная версия:${NC} $INSTALLED_VER"
     echo -e "${YELLOW}Последняя версия:${NC} ${CYAN}$LATEST_VER${NC}"
 	echo -e "${YELLOW}Текущая стратегия:${NC} ${WHITE}$CURRENT_STRATEGY${NC}"
 	echo -e ""
     echo -e "${MAGENTA}--- Podkop ---${NC}"
-    echo -e "${YELLOW}Установлена версия:${NC} $PODKOP_VER"
+    echo -e "${YELLOW}Установленная версия:${NC} $PODKOP_VER"
     echo -e "${YELLOW}Последняя версия:${NC} ${CYAN}$PODKOP_LATEST_VER${NC}"
 	echo -e ""
 	echo -e "${YELLOW}Модель и архитектура роутера:${NC} $MODEL / $LOCAL_ARCH"
