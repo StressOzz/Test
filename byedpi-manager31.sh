@@ -138,7 +138,7 @@ install_update() {
 uninstall_byedpi() {
     clear
 	echo -e ""
-    echo -e "\n${MAGENTA}Удаление ByeDPI${NC}\n"
+    echo -e "${MAGENTA}Удаление ByeDPI${NC}"
     [ -f /etc/init.d/byedpi ] && {
         /etc/init.d/byedpi stop >/dev/null 2>&1
         /etc/init.d/byedpi disable >/dev/null 2>&1
@@ -157,13 +157,14 @@ uninstall_byedpi() {
 install_podkop() {
     clear
 	echo -e ""
-    echo -e "\n${MAGENTA}Установка / обновление Podkop${NC}\n"
+    echo -e "${MAGENTA}Установка / обновление Podkop${NC}"
     TMPDIR="/tmp/podkop_installer"
     rm -rf "$TMPDIR"
     mkdir -p "$TMPDIR"
     cd "$TMPDIR" || return
 	echo -e ""
     echo -e "${CYAN}Скачиваем и запускаем официальный инсталлятор Podkop...${NC}"
+	echo -e ""
     if curl -fsSL -o install.sh "https://raw.githubusercontent.com/itdoginfo/podkop/main/install.sh"; then
         chmod +x install.sh
         sh install.sh
@@ -184,7 +185,16 @@ install_podkop() {
 integration_byedpi_podkop() {
     clear
 	echo -e ""
-    echo -e "\n${MAGENTA}Интеграция ByeDPI в Podkop${NC}\n"
+    echo -e "${MAGENTA}Интеграция ByeDPI в Podkop${NC}"
+
+	# Проверяем установлен ли ByeDPI
+    if ! command -v byedpi >/dev/null 2>&1 && [ ! -f /etc/init.d/byedpi ]; then
+        echo -e ""
+		echo -e "${YELLOW}ByeDPI не установлен. Сначала установите ByeDPI.${NC}"
+		echo -e ""
+        read -p "Нажмите Enter..." dummy
+        return
+    fi
 
     uci set dhcp.@dnsmasq[0].localuse='0'
     uci commit dhcp
