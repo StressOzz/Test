@@ -171,12 +171,19 @@ install_podkop() {
     if curl -fsSL -o install.sh "https://raw.githubusercontent.com/itdoginfo/podkop/main/install.sh"; then
         chmod +x install.sh
 
-        # фильтруем шум, но оставляем важное
+        # 🔧 правим install.sh на лету — убираем лишний шум от opkg update
+        sed -i '/opkg update/d' install.sh
+        sed -i '/echo/!s/opkg/opkg -q/g' install.sh   # подавляем вывод от opkg, но сохраняем ошибки
+
+        echo -e "${CYAN}▶ Устанавливаем Podkop...${NC}"
+        echo -e ""
+
+        # исполняем с фильтрацией основных сообщений
         sh install.sh 2>&1 | grep -E --color=never \
-            -E "Router model|Download|Installing|Upgraded|Package|Русский язык|Podkop|luci|done|OK|ошибка|error"
+            -E "Router model|Download|Installing|Upgraded|Package|Русский язык|Podkop|done|OK|ошибка|error"
 
         echo -e ""
-        echo -e "${GREEN}Podkop установлен / обновлён.${NC}"
+        echo -e "${GREEN}✔ Podkop установлен / обновлён.${NC}"
     else
         echo -e ""
         echo -e "${RED}Ошибка загрузки установочного скрипта Podkop.${NC}"
