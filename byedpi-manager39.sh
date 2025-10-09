@@ -158,42 +158,28 @@ uninstall_byedpi() {
 # ==========================================
 install_podkop() {
     clear
-    echo -e ""
+	echo -e ""
     echo -e "${MAGENTA}Установка / обновление Podkop${NC}"
     TMPDIR="/tmp/podkop_installer"
     rm -rf "$TMPDIR"
     mkdir -p "$TMPDIR"
     cd "$TMPDIR" || return
-    echo -e ""
+	echo -e ""
     echo -e "${CYAN}Скачиваем и запускаем официальный инсталлятор Podkop...${NC}"
-    echo -e ""
-
+	echo -e ""
     if curl -fsSL -o install.sh "https://raw.githubusercontent.com/itdoginfo/podkop/main/install.sh"; then
         chmod +x install.sh
-
-        # 🔧 правим install.sh на лету — убираем лишний шум от opkg update
-        sed -i '/opkg update/d' install.sh
-        sed -i '/echo/!s/opkg/opkg -q/g' install.sh   # подавляем вывод от opkg, но сохраняем ошибки
-
-        echo -e "${CYAN}▶ Устанавливаем Podkop...${NC}"
-        echo -e ""
-
-        # исполняем с фильтрацией основных сообщений
-        sh install.sh 2>&1 | grep -E --color=never \
-            -E "Router model|Download|Installing|Upgraded|Package|Русский язык|Podkop|done|OK|ошибка|error"
-
-        echo -e ""
-        echo -e "${GREEN}✔ Podkop установлен / обновлён.${NC}"
+        sh install.sh
+		echo -e ""
+        echo -e "${GREEN}Podkop установлен / обновлён.${NC}"
     else
-        echo -e ""
+		echo -e ""
         echo -e "${RED}Ошибка загрузки установочного скрипта Podkop.${NC}"
     fi
-
     rm -rf "$TMPDIR"
-    echo -e ""
+	echo -e ""
     read -p "Нажмите Enter..." dummy
 }
-
 # ==========================================
 # Интеграция ByeDPI в Podkop
 # ==========================================
