@@ -100,7 +100,7 @@ install_update() {
 
     [ -z "$LATEST_URL" ] && {
         echo -e ""
-		echo -e "${RED}Нет пакета для архитектуры: ${NC}$LOCAL_ARCH"
+		echo -e "${RED}Последняя версия ByeDPI не найдена. Установка пропущена."
         echo -e ""
 		read -p "Нажмите Enter..." dummy
         return
