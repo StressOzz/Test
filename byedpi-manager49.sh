@@ -328,6 +328,21 @@ fix_strategy() {
 }
 
 # ==========================================
+# Удаление Podkop
+# ==========================================
+uninstall_podkop() {
+    clear
+    echo -e ""
+    echo -e "${MAGENTA}Удаление Podkop${NC}"
+    opkg remove luci-i18n-podkop-ru luci-app-podkop podkop --autoremove 2>/dev/null || true
+    rm -rf /etc/config/podkop /tmp/podkop_installer
+    echo -e ""
+    echo -e "${GREEN}Podkop удалён полностью.${NC}"
+    echo -e ""
+    read -p "Нажмите Enter..." dummy
+}
+
+# ==========================================
 # Полная установка и интеграция
 # ==========================================
 full_install_integration() {
@@ -377,8 +392,9 @@ fi
     echo -e "${GREEN}3) Интеграция ByeDPI в Podkop${NC}"
     echo -e "${GREEN}4) Изменить стратегию ByeDPI${NC}"
     echo -e "${GREEN}5) Установить / обновить Podkop${NC}"
-	echo -e "${GREEN}6) Установить ByeDPI + Podkop + Интеграция${NC}"
-	echo -e "${GREEN}7) Выход (Enter)${NC}"
+	echo -e "${GREEN}6) Удалить Podkop${NC}"
+	echo -e "${GREEN}7) Установить ByeDPI + Podkop + Интеграция${NC}"
+	echo -e "${GREEN}8) Выход (Enter)${NC}"
 	echo -e ""
     echo -ne "Выберите пункт: "
     read choice
@@ -389,7 +405,8 @@ fi
         3) integration_byedpi_podkop ;;
         4) fix_strategy ;;
         5) install_podkop ;;
-		6) full_install_integration ;;
+		6) uninstall_podkop ;;
+		7) full_install_integration ;;
         *) exit 0 ;;
     esac
 }
