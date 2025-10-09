@@ -127,7 +127,7 @@ install_update() {
     opkg install --force-reinstall "$LATEST_FILE" >/dev/null 2>&1
     rm -rf "$WORKDIR"
 	echo -e ""
-    echo -e "${GREEN}ByeDPI ${LATEST_VER} успешно установлена!${NC}"
+    echo -e "${GREEN}ByeDPI успешно установлен!${NC}"
 	echo -e ""
     read -p "Нажмите Enter..." dummy
 }
@@ -146,7 +146,7 @@ uninstall_byedpi() {
     opkg remove --force-removal-of-dependent-packages byedpi >/dev/null 2>&1
     rm -rf /etc/init.d/byedpi /opt/byedpi /etc/config/byedpi
 	echo -e ""
-    echo -e "${GREEN}ByeDPI удалена полностью.${NC}"
+    echo -e "${GREEN}ByeDPI удалён полностью.${NC}"
 	echo -e ""
     read -p "Нажмите Enter..." dummy
 }
@@ -186,10 +186,10 @@ integration_byedpi_podkop() {
     clear
 	echo -e ""
     echo -e "${MAGENTA}Интеграция ByeDPI в Podkop${NC}"
+	echo -e ""
 
 	# Проверяем установлен ли ByeDPI
     if ! command -v byedpi >/dev/null 2>&1 && [ ! -f /etc/init.d/byedpi ]; then
-        echo -e ""
 		echo -e "${YELLOW}ByeDPI не установлен. Сначала установите ByeDPI.${NC}"
 		echo -e ""
         read -p "Нажмите Enter..." dummy
@@ -250,15 +250,20 @@ EOF
 	echo -e ""
     echo -e "${GREEN}ByeDPI интегрирован в Podkop.${NC}"
 	echo -e ""
-    echo -ne "Нужно обязательно перезагрузить роутер. Перезагрузить сейчас? [y/N]: "
+    echo -ne "Нужно ${RED}обязательно${NC} перезагрузить роутер. Перезагрузить сейчас? [y/N]: "
 	echo -e ""
     read REBOOT_CHOICE
     case "$REBOOT_CHOICE" in
-        y|Y) reboot ;;
-        *) echo -e "${YELLOW}Необходимость перезагрузки отложена.${NC}" ;;
-    esac
-	echo -e ""
-    read -p "Нажмите Enter..." dummy
+	y|Y) 
+        echo -e "${GREEN}Перезагрузка роутера...${NC}"
+        reboot
+        ;;
+    *) 
+        echo -e "${YELLOW}Необходимость перезагрузки отложена.${NC}" 
+        ;;
+esac
+echo -e ""
+read -p "Нажмите Enter..." dummy
 }
 
 # ==========================================
@@ -288,7 +293,7 @@ fix_strategy() {
         fi
     else
 		echo -e ""
-        echo -e "${RED}/etc/config/byedpi не найден${NC}"
+        echo -e "$${YELLOW}ByeDPI не установлен.${NC}"
     fi
     echo -e ""
     read -p "Нажмите Enter..." dummy
@@ -343,7 +348,7 @@ fi
     echo -e "${GREEN}1) Установить / обновить ByeDPI${NC}"
     echo -e "${GREEN}2) Удалить ByeDPI${NC}"
     echo -e "${GREEN}3) Интеграция ByeDPI в Podkop${NC}"
-    echo -e "${GREEN}4) Исправить стратегию ByeDPI${NC}"
+    echo -e "${GREEN}4) Изменить стратегию ByeDPI${NC}"
     echo -e "${GREEN}5) Установить / обновить Podkop${NC}"
 	echo -e "${GREEN}6) Установить ByeDPI + Podkop + Интеграция${NC}"
 	echo -e "${GREEN}7) Выход (Enter)${NC}"
