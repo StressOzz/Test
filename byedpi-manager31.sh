@@ -346,7 +346,7 @@ fi
     echo -e "${GREEN}4) Исправить стратегию ByeDPI${NC}"
     echo -e "${GREEN}5) Установить / обновить Podkop${NC}"
 	echo -e "${GREEN}6) Установить ByeDPI + Podkop + Интеграция${NC}"
-	echo -e "${GREEN}7) Выход${NC}"
+	echo -e "${GREEN}7) Выход (Enter)${NC}"
 	echo -e ""
     echo -ne "Выберите пункт: "
     read choice
