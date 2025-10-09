@@ -236,17 +236,29 @@ EOF
 # ==========================================
 fix_strategy() {
     clear
+	echo -e ""
     echo -e "${MAGENTA}Исправить стратегию ByeDPI${NC}"
-    read -p "Введите новую стратегию для option cmd_opts: " NEW_STRATEGY
+	echo -e ""
     if [ -f /etc/config/byedpi ]; then
+        # Получаем текущую стратегию
+        CURRENT_STRATEGY=$(grep "option cmd_opts" /etc/config/byedpi | sed -E "s/.*'(.+)'/\1/")
+        [ -z "$CURRENT_STRATEGY" ] && CURRENT_STRATEGY="(не задана)"
+
+        echo -e "${CYAN}Текущая стратегия:${NC} $CURRENT_STRATEGY"
+        echo -e ""
+        read -p "Введите новую стратегию: " NEW_STRATEGY
+
+        # Применяем новую стратегию
         sed -i "s|option cmd_opts .*| option cmd_opts '$NEW_STRATEGY'|" /etc/config/byedpi
         start_byedpi
-        echo -e "${GREEN}Стратегия изменена на: $NEW_STRATEGY${NC}"
+		echo -e ""
+        echo -e "${GREEN}Стратегия изменена на:${NC} $NEW_STRATEGY"
     else
         echo -e "${RED}/etc/config/byedpi не найден${NC}"
     fi
     read -p "Enter..." dummy
 }
+
 
 # ==========================================
 # Полная установка и интеграция
@@ -263,8 +275,9 @@ full_install_integration() {
 show_menu() {
     get_versions
     clear
+	echo -e ""
     echo -e "${YELLOW}Архитектура:${NC} $LOCAL_ARCH"
-
+	echo -e ""
     echo -e "${MAGENTA}--- ByeDPI ---${NC}"
     echo -e "${YELLOW}Установлена версия:${NC} $INSTALLED_VER"
     echo -e "${YELLOW}Последняя версия:${NC} $LATEST_VER"
