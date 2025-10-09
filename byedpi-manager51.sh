@@ -282,7 +282,8 @@ EOF
 	echo -e ""
     read REBOOT_CHOICE
     case "$REBOOT_CHOICE" in
-	y|Y) 
+	y|Y)
+		echo -e ""
         echo -e "${GREEN}Перезагрузка роутера...${NC}"
         reboot
         ;;
