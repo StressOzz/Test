@@ -238,26 +238,31 @@ fix_strategy() {
     clear
 	echo -e ""
     echo -e "${MAGENTA}Исправить стратегию ByeDPI${NC}"
-	echo -e ""
+
     if [ -f /etc/config/byedpi ]; then
         # Получаем текущую стратегию
         CURRENT_STRATEGY=$(grep "option cmd_opts" /etc/config/byedpi | sed -E "s/.*'(.+)'/\1/")
         [ -z "$CURRENT_STRATEGY" ] && CURRENT_STRATEGY="(не задана)"
-
+		echo -e ""
         echo -e "${CYAN}Текущая стратегия:${NC} $CURRENT_STRATEGY"
         echo -e ""
-        read -p "Введите новую стратегию: " NEW_STRATEGY
-
-        # Применяем новую стратегию
-        sed -i "s|option cmd_opts .*| option cmd_opts '$NEW_STRATEGY'|" /etc/config/byedpi
-        start_byedpi
+        read -p "Введите новую стратегию (Enter — оставить текущую): " NEW_STRATEGY
 		echo -e ""
-        echo -e "${GREEN}Стратегия изменена на:${NC} $NEW_STRATEGY"
+        if [ -z "$NEW_STRATEGY" ]; then
+            echo -e "${YELLOW}Стратегия не изменена. Оставлена текущая:${NC} $CURRENT_STRATEGY"
+        else
+            sed -i "s|option cmd_opts .*|    option cmd_opts '$NEW_STRATEGY'|" /etc/config/byedpi
+            start_byedpi
+			echo -e ""
+            echo -e "${GREEN}Стратегия изменена на:${NC} $NEW_STRATEGY"
+        fi
     else
         echo -e "${RED}/etc/config/byedpi не найден${NC}"
     fi
+	echo -e ""
     read -p "Enter..." dummy
 }
+
 
 
 # ==========================================
@@ -274,6 +279,15 @@ full_install_integration() {
 # ==========================================
 show_menu() {
     get_versions
+	
+	# Получаем текущую стратегию ByeDPI
+if [ -f /etc/config/byedpi ]; then
+    CURRENT_STRATEGY=$(grep "option cmd_opts" /etc/config/byedpi | sed -E "s/.*'(.+)'/\1/")
+    [ -z "$CURRENT_STRATEGY" ] && CURRENT_STRATEGY="(не задана)"
+else
+    CURRENT_STRATEGY="(файл не найден)"
+fi
+
     clear
 	echo -e ""
     echo -e "${YELLOW}Архитектура:${NC} $LOCAL_ARCH"
@@ -281,6 +295,7 @@ show_menu() {
     echo -e "${MAGENTA}--- ByeDPI ---${NC}"
     echo -e "${YELLOW}Установлена версия:${NC} $INSTALLED_VER"
     echo -e "${YELLOW}Последняя версия:${NC} $LATEST_VER"
+	echo -e "${YELLOW}Текущая стратегия:${NC} $CURRENT_STRATEGY"
 	echo -e ""
     echo -e "${MAGENTA}--- Podkop ---${NC}"
     echo -e "${YELLOW}Установлена версия:${NC} $PODKOP_VER"
