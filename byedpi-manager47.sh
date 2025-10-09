@@ -172,10 +172,20 @@ install_podkop() {
         return
     fi
 
+    # Проверяем, не актуальна ли уже установленная версия
+    if [ "$PODKOP_VER" = "$PODKOP_LATEST_VER" ]; then
+        echo -e ""
+        echo -e "${YELLOW}Уже установлена последняя версия Podkop (${CYAN}$PODKOP_VER${YELLOW}).${NC}"
+        echo -e ""
+        read -p "Нажмите Enter..." dummy
+        return
+    fi
+
     TMPDIR="/tmp/podkop_installer"
     rm -rf "$TMPDIR"
     mkdir -p "$TMPDIR"
     cd "$TMPDIR" || return
+
     echo -e ""
     echo -e "${CYAN}Скачиваем и запускаем официальный инсталлятор Podkop...${NC}"
     echo -e ""
@@ -194,7 +204,6 @@ install_podkop() {
     echo -e ""
     read -p "Нажмите Enter..." dummy
 }
-
 # ==========================================
 # Интеграция ByeDPI в Podkop
 # ==========================================
@@ -346,26 +355,6 @@ fi
 	[ -z "$MODEL" ] && MODEL="не определено"
 
 	clear
-
-echo -e ""
-echo -e "╔═════════════════════════════════════╗"
-echo -e "║            Благодарности            ║"
-echo -e "╠═════════════════════════════════════╣"
-echo -e "║ Podkop by ITDog                     ║"
-echo -e "║ https://github.com/itdoginfo/       ║"
-echo -e "║ ByeDPI by hufrea                    ║"
-echo -e "║ https://github.com/hufrea/          ║"
-echo -e "║ ByeDPI-OpenWrt by DPITrickster      ║"
-echo -e "║ https://github.com/DPITrickster/    ║"
-echo -e "║ Instructions by Vita Pubentes       ║"
-echo -e "║ https://t.me/web_freebooter         ║"
-echo -e "║ Podkop+ByeDPI Manager by StressOzz  ║"
-echo -e "║ https://github.com/StressOzz/       ║"
-echo -e "╚═════════════════════════════════════╝"
-echo -e ""
-
-
-	
 	echo -e ""
     echo -e "${MAGENTA}--- ByeDPI ---${NC}"
     echo -e "${YELLOW}Установлена версия:${NC} $INSTALLED_VER"
