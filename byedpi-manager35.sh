@@ -167,7 +167,7 @@ install_podkop() {
 	echo -e ""
     if curl -fsSL -o install.sh "https://raw.githubusercontent.com/itdoginfo/podkop/main/install.sh"; then
         chmod +x install.sh
-        sh install.sh
+        sh install.sh >/tmp/podkop_install.log 2>&1
 		echo -e ""
         echo -e "${GREEN}Podkop установлен / обновлён.${NC}"
     else
@@ -190,7 +190,7 @@ integration_byedpi_podkop() {
 
 	# Проверяем установлен ли ByeDPI
     if ! command -v byedpi >/dev/null 2>&1 && [ ! -f /etc/init.d/byedpi ]; then
-		echo -e "${YELLOW}ByeDPI не установлен. Сначала установите ByeDPI.${NC}"
+		echo -e "${YELLOW}ByeDPI не установлен.${NC}"
 		echo -e ""
         read -p "Нажмите Enter..." dummy
         return
@@ -202,7 +202,7 @@ integration_byedpi_podkop() {
 
     # Меняем стратегию ByeDPI на интеграционную
     if [ -f /etc/config/byedpi ]; then
-        sed -i "s|option cmd_opts .*| option cmd_opts '-o 2 --auto=t,r,a,s -d 2'|" /etc/config/byedpi
+        sed -i "s|option cmd_opts .*| option cmd_opts '-o2 --auto=t,r,a,s -d2'|" /etc/config/byedpi
     fi
 
     # Создаём / меняем /etc/config/podkop
