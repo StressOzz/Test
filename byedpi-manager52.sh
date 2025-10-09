@@ -103,7 +103,7 @@ install_update() {
 
     [ -z "$LATEST_URL" ] && {
         echo -e ""
-		echo -e "${RED}Последняя версия ByeDPI не найдена. Установка пропущена."
+		echo -e "${RED}Последняя версия ByeDPI не найдена. Установка пропущена.${NC}"
         echo -e ""
 		read -p "Нажмите Enter..." dummy
         return
