@@ -11,6 +11,9 @@ YELLOW="\033[1;33m"
 MAGENTA="\033[1;35m"
 NC="\033[0m"
 WHITE="\033[1;37m"
+BLUE="\033[0;34m"
+GRAY='\033[38;5;239m'
+DGRAY='\033[38;5;236m'
 
 WORKDIR="/tmp/byedpi"
 
@@ -355,6 +358,8 @@ fi
 	[ -z "$MODEL" ] && MODEL="не определено"
 
 	clear
+	echo -e ""
+	echo -e "${BLUE}--- Podkop+ByeDPI Manager ---${NC}"
 	echo -e ""
     echo -e "${MAGENTA}--- ByeDPI ---${NC}"
     echo -e "${YELLOW}Установлена версия:${NC} $INSTALLED_VER"
