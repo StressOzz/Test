@@ -375,7 +375,9 @@ fi
 
 	clear
 	echo -e ""
-	echo -e "${BLUE}--- Podkop+ByeDPI Manager ---${NC}"
+	echo -e "╔═════════════════════════════════════╗"
+	echo -e "║        ${BLUE}Podkop+ByeDPI Manager${NC}        ║"
+	echo -e "╚═════════════════════════════════════╝"
 	echo -e ""
     echo -e "${MAGENTA}--- ByeDPI ---${NC}"
     echo -e "${YELLOW}Установленная версия:${NC} $INSTALLED_VER"
