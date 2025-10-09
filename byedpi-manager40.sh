@@ -158,28 +158,43 @@ uninstall_byedpi() {
 # ==========================================
 install_podkop() {
     clear
-	echo -e ""
+    echo -e ""
     echo -e "${MAGENTA}Установка / обновление Podkop${NC}"
+
+    # Получаем актуальные версии перед установкой
+    get_versions
+
+    if [ "$PODKOP_LATEST_VER" = "не найдена" ]; then
+        echo -e ""
+        echo -e "${RED}Последняя версия Podkop не найдена. Установка пропущена.${NC}"
+        echo -e ""
+        read -p "Нажмите Enter..." dummy
+        return
+    fi
+
     TMPDIR="/tmp/podkop_installer"
     rm -rf "$TMPDIR"
     mkdir -p "$TMPDIR"
     cd "$TMPDIR" || return
-	echo -e ""
+    echo -e ""
     echo -e "${CYAN}Скачиваем и запускаем официальный инсталлятор Podkop...${NC}"
-	echo -e ""
+    echo -e ""
+
     if curl -fsSL -o install.sh "https://raw.githubusercontent.com/itdoginfo/podkop/main/install.sh"; then
         chmod +x install.sh
         sh install.sh
-		echo -e ""
+        echo -e ""
         echo -e "${GREEN}Podkop установлен / обновлён.${NC}"
     else
-		echo -e ""
+        echo -e ""
         echo -e "${RED}Ошибка загрузки установочного скрипта Podkop.${NC}"
     fi
+
     rm -rf "$TMPDIR"
-	echo -e ""
+    echo -e ""
     read -p "Нажмите Enter..." dummy
 }
+
 # ==========================================
 # Интеграция ByeDPI в Podkop
 # ==========================================
