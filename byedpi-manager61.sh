@@ -318,9 +318,8 @@ fix_strategy() {
         if [ -z "$NEW_STRATEGY" ]; then
             echo -e "${YELLOW}Стратегия не изменена. Оставлена текущая:${NC} ${WHITE}$CURRENT_STRATEGY${NC}"
         else
-            sed -i "s|option cmd_opts .*|    option cmd_opts '$NEW_STRATEGY'|" /etc/config/byedpi
+            sed -i "s|option cmd_opts .*| option cmd_opts '$NEW_STRATEGY'|" /etc/config/byedpi
             start_byedpi
-            echo -e ""
             echo -e "${GREEN}Стратегия изменена на:${NC} ${WHITE}$NEW_STRATEGY${NC}"
         fi
     else
