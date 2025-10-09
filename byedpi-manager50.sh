@@ -334,7 +334,7 @@ uninstall_podkop() {
     clear
     echo -e ""
     echo -e "${MAGENTA}Удаление Podkop${NC}"
-    opkg remove luci-i18n-podkop-ru luci-app-podkop podkop --autoremove 2>/dev/null || true
+    opkg remove luci-i18n-podkop-ru luci-app-podkop podkop --autoremove >/dev/null 2>&1 || true
     rm -rf /etc/config/podkop /tmp/podkop_installer
     echo -e ""
     echo -e "${GREEN}Podkop удалён полностью.${NC}"
