@@ -18,6 +18,8 @@ WORKDIR="/tmp/byedpi"
 # Запуск ByeDPI
 # ==========================================
 start_byedpi() {
+echo -e "Запуск ByeDPI..."
+echo -e ""
     /etc/init.d/byedpi enable
     /etc/init.d/byedpi start
 }
