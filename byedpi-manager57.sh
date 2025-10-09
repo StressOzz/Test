@@ -226,6 +226,7 @@ integration_byedpi_podkop() {
 	echo -e "Отключаем локальный DNS..."
 	echo -e ""
 	echo -e "Перезапускаем dnsmasq..${NC}"
+	echo -e ""
     uci set dhcp.@dnsmasq[0].localuse='0'
     uci commit dhcp
 	/etc/init.d/dnsmasq restart >/dev/null 2>&1
