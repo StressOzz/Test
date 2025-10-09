@@ -158,26 +158,32 @@ uninstall_byedpi() {
 # ==========================================
 install_podkop() {
     clear
-	echo -e ""
+    echo -e ""
     echo -e "${MAGENTA}Установка / обновление Podkop${NC}"
     TMPDIR="/tmp/podkop_installer"
     rm -rf "$TMPDIR"
     mkdir -p "$TMPDIR"
     cd "$TMPDIR" || return
-	echo -e ""
+    echo -e ""
     echo -e "${CYAN}Скачиваем и запускаем официальный инсталлятор Podkop...${NC}"
-	echo -e ""
+    echo -e ""
+
     if curl -fsSL -o install.sh "https://raw.githubusercontent.com/itdoginfo/podkop/main/install.sh"; then
         chmod +x install.sh
-        sh install.sh >/tmp/podkop_install.log 2>&1
-		echo -e ""
+
+        # фильтруем шум, но оставляем важное
+        sh install.sh 2>&1 | grep -E --color=never \
+            -E "Router model|Download|Installing|Upgraded|Package|Русский язык|Podkop|luci|done|OK|ошибка|error"
+
+        echo -e ""
         echo -e "${GREEN}Podkop установлен / обновлён.${NC}"
     else
-		echo -e ""
+        echo -e ""
         echo -e "${RED}Ошибка загрузки установочного скрипта Podkop.${NC}"
     fi
+
     rm -rf "$TMPDIR"
-	echo -e ""
+    echo -e ""
     read -p "Нажмите Enter..." dummy
 }
 
