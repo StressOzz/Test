@@ -236,32 +236,33 @@ EOF
 # ==========================================
 fix_strategy() {
     clear
-	echo -e ""
+    echo -e ""
     echo -e "${MAGENTA}Исправить стратегию ByeDPI${NC}"
 
     if [ -f /etc/config/byedpi ]; then
         # Получаем текущую стратегию
         CURRENT_STRATEGY=$(grep "option cmd_opts" /etc/config/byedpi | sed -E "s/.*'(.+)'/\1/")
         [ -z "$CURRENT_STRATEGY" ] && CURRENT_STRATEGY="(не задана)"
-		echo -e ""
-        echo -e "${CYAN}Текущая стратегия:${NC} $CURRENT_STRATEGY"
+        echo -e ""
+        echo -e "${CYAN}Текущая стратегия:${NC} ${YELLOW}$CURRENT_STRATEGY${NC}"
         echo -e ""
         read -p "Введите новую стратегию (Enter — оставить текущую): " NEW_STRATEGY
-		echo -e ""
+        echo -e ""
         if [ -z "$NEW_STRATEGY" ]; then
-            echo -e "${YELLOW}Стратегия не изменена. Оставлена текущая:${NC} $CURRENT_STRATEGY"
+            echo -e "${YELLOW}Стратегия не изменена. Оставлена текущая:${NC} ${YELLOW}$CURRENT_STRATEGY${NC}"
         else
             sed -i "s|option cmd_opts .*|    option cmd_opts '$NEW_STRATEGY'|" /etc/config/byedpi
             start_byedpi
-			echo -e ""
-            echo -e "${GREEN}Стратегия изменена на:${NC} $NEW_STRATEGY"
+            echo -e ""
+            echo -e "${GREEN}Стратегия изменена на:${NC} ${YELLOW}$NEW_STRATEGY${NC}"
         fi
     else
         echo -e "${RED}/etc/config/byedpi не найден${NC}"
     fi
-	echo -e ""
+    echo -e ""
     read -p "Enter..." dummy
 }
+
 
 
 
