@@ -378,7 +378,8 @@ fi
 	echo -e "╔═══════════════════════════════╗"
 	echo -e "║     ${BLUE}Podkop+ByeDPI Manager${NC}     ║"
 	echo -e "╚═══════════════════════════════╝"
-	echo -e ""
+	echo -e "                             ${DGRAY}v1.2${NC}"
+
     echo -e "${MAGENTA}--- ByeDPI ---${NC}"
     echo -e "${YELLOW}Установленная версия:${NC} $INSTALLED_VER"
     echo -e "${YELLOW}Последняя версия:${NC} ${CYAN}$LATEST_VER${NC}"
