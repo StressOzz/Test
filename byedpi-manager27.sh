@@ -281,18 +281,26 @@ full_install_integration() {
 # ==========================================
 show_menu() {
     get_versions
-	
-	# Получаем текущую стратегию ByeDPI
+
+# ==========================================	
+# Получаем текущую стратегию ByeDPI
+# ==========================================
 if [ -f /etc/config/byedpi ]; then
     CURRENT_STRATEGY=$(grep "option cmd_opts" /etc/config/byedpi | sed -E "s/.*'(.+)'/\1/")
     [ -z "$CURRENT_STRATEGY" ] && CURRENT_STRATEGY="(не задана)"
 else
     CURRENT_STRATEGY="(файл не найден)"
 fi
+# ==========================================
+# Получаем модель роутера
+# ==========================================
+	MODEL=$(cat /tmp/sysinfo/model 2>/dev/null)
+	[ -z "$MODEL" ] && MODEL="не определено"
 
-    clear
+	clear
 	echo -e ""
-    echo -e "${YELLOW}Архитектура:${NC} $LOCAL_ARCH"
+	echo -e "${YELLOW}Модель и архитектура роутера:${NC} $MODEL / $LOCAL_ARCH"
+	echo -e "${YELLOW}Архитектура роутера:\t${NC}$LOCAL_ARCH"
 	echo -e ""
     echo -e "${MAGENTA}--- ByeDPI ---${NC}"
     echo -e "${YELLOW}Установлена версия:${NC} $INSTALLED_VER"
