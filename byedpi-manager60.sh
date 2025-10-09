@@ -370,18 +370,12 @@ if [ -f /etc/config/byedpi ]; then
 else
     CURRENT_STRATEGY="не найдена"
 fi
-# ==========================================
-# Получаем модель роутера
-# ==========================================
-	MODEL=$(cat /tmp/sysinfo/model 2>/dev/null)
-	[ -z "$MODEL" ] && MODEL="не определено"
-
 	clear
 	echo -e ""
 	echo -e "╔═══════════════════════════════╗"
 	echo -e "║     ${BLUE}Podkop+ByeDPI Manager${NC}     ║"
 	echo -e "╚═══════════════════════════════╝"
-	echo -e "                             ${DGRAY}v1.2${NC}"
+	echo -e "                             ${DGRAY}v1.6${NC}"
 
     echo -e "${MAGENTA}--- ByeDPI ---${NC}"
     echo -e "${YELLOW}Установленная версия:${NC} $INSTALLED_VER"
@@ -392,7 +386,7 @@ fi
     echo -e "${YELLOW}Установленная версия:${NC} $PODKOP_VER"
     echo -e "${YELLOW}Последняя версия:${NC} ${CYAN}$PODKOP_LATEST_VER${NC}"
 	echo -e ""
-	echo -e "${YELLOW}Модель и архитектура роутера:${NC} $MODEL / $LOCAL_ARCH"
+	echo -e "${YELLOW}Архитектура устройства:${NC} $LOCAL_ARCH"
 	echo -e ""
     echo -e "${GREEN}1) Установить / обновить ByeDPI${NC}"
     echo -e "${GREEN}2) Удалить ByeDPI${NC}"
