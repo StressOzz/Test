@@ -210,78 +210,12 @@ uninstall_byedpi() {
 install_podkop() {
     clear
     echo -e ""
-    echo -e "${MAGENTA}Установка / обновление Podkop (последняя версия с GitHub)${NC}"
-
-    # Проверяем curl
-    command -v curl >/dev/null 2>&1 || {
-        echo -e "${CYAN}Устанавливаем curl...${NC}"
-        opkg update >/dev/null 2>&1
-        opkg install curl >/dev/null 2>&1
-    }
-
+    echo -e "${MAGENTA}Установка / обновление Podkop${NC}"
+    
     TMPDIR="/tmp/podkop_installer"
     rm -rf "$TMPDIR"
     mkdir -p "$TMPDIR"
     cd "$TMPDIR" || return
-
-    # Получаем последнюю версию Podkop с GitHub
-    PODKOP_API_URL="https://api.github.com/repos/itdoginfo/podkop/releases/latest"
-    RELEASE_JSON=$(curl -s "$PODKOP_API_URL")
-
-    if [ -z "$RELEASE_JSON" ]; then
-        echo -e "${RED}Не удалось получить данные с GitHub.${NC}"
-        read -p "Нажмите Enter..." dummy
-        return
-    fi
-
-    LATEST_VER=$(echo "$RELEASE_JSON" | grep '"tag_name"' | head -n1 | cut -d'"' -f4 | sed 's/^v//')
-    if [ -z "$LATEST_VER" ]; then
-        echo -e "${RED}Не удалось определить последнюю версию Podkop.${NC}"
-        read -p "Нажмите Enter..." dummy
-        return
-    fi
-
-    PKG_PODKOP="podkop-v${LATEST_VER}-r1-all.ipk"
-    PKG_LUCI_APP="luci-app-podkop-v${LATEST_VER}-r1-all.ipk"
-    PKG_LUCI_RU="luci-i18n-podkop-ru-v${LATEST_VER}.ipk"
-
-    echo -e ""
-    echo -e "${CYAN}Скачиваем Podkop и luci-app...${NC}"
-    curl -L -s -O "https://github.com/itdoginfo/podkop/releases/download/v${LATEST_VER}/${PKG_PODKOP}" || {
-        echo -e "${RED}Ошибка загрузки $PKG_PODKOP${NC}"
-        read -p "Нажмите Enter..." dummy
-        return
-    }
-    curl -L -s -O "https://github.com/itdoginfo/podkop/releases/download/v${LATEST_VER}/${PKG_LUCI_APP}" || {
-        echo -e "${RED}Ошибка загрузки $PKG_LUCI_APP${NC}"
-        read -p "Нажмите Enter..." dummy
-        return
-    }
-
-    echo -ne "Установить русский интерфейс Podkop? [y/N]: "
-    read RU_CHOICE
-
-    echo -e ""
-    echo -e "${CYAN}Устанавливаем пакеты...${NC}"
-    opkg install --force-reinstall "$PKG_PODKOP" "$PKG_LUCI_APP" >/dev/null 2>&1
-
-    if [ "$RU_CHOICE" = "y" ] || [ "$RU_CHOICE" = "Y" ]; then
-        echo -e "${CYAN}Скачиваем и устанавливаем русский интерфейс...${NC}"
-        curl -L -s -O "https://github.com/itdoginfo/podkop/releases/download/v${LATEST_VER}/${PKG_LUCI_RU}" || {
-            echo -e "${RED}Ошибка загрузки $PKG_LUCI_RU${NC}"
-            read -p "Нажмите Enter..." dummy
-            return
-        }
-        opkg install --force-reinstall "$PKG_LUCI_RU" >/dev/null 2>&1
-    fi
-
-    rm -rf "$TMPDIR"
-
-    echo -e ""
-    echo -e "${GREEN}Podkop успешно установлен / обновлён до версии $LATEST_VER!${NC}"
-    echo -e ""
-    read -p "Нажмите Enter..." dummy
-}
 
     # ==========================================
     # Получаем последнюю версию Podkop с GitHub
