@@ -158,16 +158,8 @@ install_update() {
         return
     }
 
-    if [ "$INSTALLED_VER" = "$LATEST_VER" ]; then
-        echo -e ""
-		echo -e "${YELLOW}Уже установлена последняя версия (${CYAN}$INSTALLED_VER${YELLOW})${NC}"
-        echo -e ""
-		read -p "Нажмите Enter..." dummy
-        return
-    fi
-
     echo -e ""
-	echo -e "${CYAN}Скачиваем пакет: ${NC}${WHITE}$LATEST_FILE${NC}"
+	echo -e "${GREEN}Скачиваем пакет: ${NC}${WHITE}$LATEST_FILE${NC}"
     mkdir -p "$WORKDIR"
     cd "$WORKDIR" || return
     curl -L -s -o "$LATEST_FILE" "$LATEST_URL" || {
@@ -580,7 +572,7 @@ fi
 	echo -e ""
     echo -e "${CYAN}1) ${GREEN}Установить / обновить ${NC}ByeDPI"
     echo -e "${CYAN}2) ${GREEN}Удалить ${NC}ByeDPI"
-    echo -e "${CYAN}3) ${GREEN}Интегрировать ${NC}ByeDPI ${GREEN}}в ${NC}Podkop${NC}"
+    echo -e "${CYAN}3) ${GREEN}Интегрировать ${NC}ByeDPI ${GREEN}в ${NC}Podkop${NC}"
     echo -e "${CYAN}4) ${GREEN}Изменить текущую стратегию ${NC}ByeDPI"
     echo -e "${CYAN}5) ${GREEN}Установить / обновить ${NC}Podkop"
 	echo -e "${CYAN}6) ${GREEN}Удалить ${NC}Podkop"
