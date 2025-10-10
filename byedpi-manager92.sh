@@ -580,7 +580,7 @@ fi
 	echo -e ""
     echo -e "${CYAN}1) ${GREEN}Установить / обновить ${NC}ByeDPI"
     echo -e "${CYAN}2) ${GREEN}Удалить ${NC}ByeDPI"
-    echo -e "${CYAN}3) ${GREEN}Интегрировать ${NC}ByeDPI ${${GREEN}}в ${NC}Podkop${NC}"
+    echo -e "${CYAN}3) ${GREEN}Интегрировать ${NC}ByeDPI ${GREEN}}в ${NC}Podkop${NC}"
     echo -e "${CYAN}4) ${GREEN}Изменить текущую стратегию ${NC}ByeDPI"
     echo -e "${CYAN}5) ${GREEN}Установить / обновить ${NC}Podkop"
 	echo -e "${CYAN}6) ${GREEN}Удалить ${NC}Podkop"
