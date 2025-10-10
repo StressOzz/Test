@@ -61,9 +61,8 @@ curl_install() {
         opkg install curl >/dev/null 2>&1
     }
 }
-
 # ==========================================
-# Определение версий
+# Подготовка статусов и версий
 # ==========================================
 get_versions() {
     # --- ByeDPI ---
@@ -73,24 +72,12 @@ get_versions() {
     LOCAL_ARCH=$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release)
     [ -z "$LOCAL_ARCH" ] && LOCAL_ARCH=$(opkg print-architecture | grep -v "noarch" | tail -n1 | awk '{print $2}')
 
-	curl_install
-
     # --- Получаем последнюю версию ByeDPI ---
-    BYEDPI_API_URL="https://api.github.com/repos/DPITrickster/ByeDPI-OpenWrt/releases"
-    RELEASE_DATA=$(curl -s "$BYEDPI_API_URL")
-    BYEDPI_URL=$(echo "$RELEASE_DATA" | grep browser_download_url | grep "$LOCAL_ARCH.ipk" | head -n1 | cut -d'"' -f4)
-    if [ -n "$BYEDPI_URL" ]; then
-        BYEDPI_FILE=$(basename "$BYEDPI_URL")
-        BYEDPI_LATEST_VER=$(echo "$BYEDPI_FILE" | sed -E 's/^byedpi_([0-9]+\.[0-9]+\.[0-9]+)(-r[0-9]+)?_.*/\1/')
-        LATEST_VER="$BYEDPI_LATEST_VER"
-        LATEST_URL="$BYEDPI_URL"
-        LATEST_FILE="$BYEDPI_FILE"
-    else
-        BYEDPI_LATEST_VER="не найдена"
-        LATEST_VER=""
-        LATEST_URL=""
-        LATEST_FILE=""
-    fi
+    curl -sL "https://api.github.com/repos/DPITrickster/ByeDPI-OpenWrt/releases" | \
+    grep browser_download_url | grep "$LOCAL_ARCH.ipk" | head -n1 | cut -d'"' -f4 | \
+    { read BYEDPI_URL; BYEDPI_FILE=$(basename "$BYEDPI_URL"); BYEDPI_LATEST_VER=$(echo "$BYEDPI_FILE" | sed -E 's/^byedpi_([0-9]+\.[0-9]+\.[0-9]+).*/\1/'); }
+
+    [ -z "$BYEDPI_LATEST_VER" ] && BYEDPI_LATEST_VER="не найдена"
 
     # --- Podkop ---
     if command -v podkop >/dev/null 2>&1; then
@@ -100,34 +87,44 @@ get_versions() {
         PODKOP_VER="не установлен"
     fi
 
-    PODKOP_API_URL="https://api.github.com/repos/itdoginfo/podkop/releases/latest"
-    PODKOP_LATEST_VER=$(curl -s "$PODKOP_API_URL" | grep '"tag_name"' | head -n1 | cut -d'"' -f4 | sed 's/^v//')
+    PODKOP_LATEST_VER=$(curl -sL "https://api.github.com/repos/itdoginfo/podkop/releases/latest" | grep '"tag_name"' | head -n1 | cut -d'"' -f4 | sed 's/^v//')
     [ -z "$PODKOP_LATEST_VER" ] && PODKOP_LATEST_VER="не найдена"
+
+    CURRENT_STRATEGY=$(grep 'cmd_opts' /etc/config/byedpi 2>/dev/null | cut -d"'" -f2)
+    [ -z "$CURRENT_STRATEGY" ] && CURRENT_STRATEGY="не задана"
 }
 
 # ==========================================
-# Проверка версий с подсветкой
+# Проверка статусов
 # ==========================================
-check_podkop_status() {
-    if [ "$PODKOP_VER" = "не найдена" ] || [ "$PODKOP_VER" = "не установлен" ]; then
-        PODKOP_STATUS="${RED}$PODKOP_VER${NC}"
-    elif [ "$PODKOP_LATEST_VER" != "не найдена" ] && [ "$PODKOP_VER" != "$PODKOP_LATEST_VER" ]; then
-        PODKOP_STATUS="${RED}$PODKOP_VER${NC}"
-    else
-        PODKOP_STATUS="${GREEN}$PODKOP_VER${NC}"
-    fi
-}
-
 check_byedpi_status() {
     if [ "$BYEDPI_VER" = "не найдена" ] || [ "$BYEDPI_VER" = "не установлен" ]; then
         BYEDPI_STATUS="${RED}$BYEDPI_VER${NC}"
-    elif [ "$BYEDPI_LATEST_VER" != "не найдена" ] && [ "$BYEDPI_VER" != "$BYEDPI_LATEST_VER" ]; then
+    elif [ "$BYEDPI_VER" != "$BYEDPI_LATEST_VER" ]; then
         BYEDPI_STATUS="${RED}$BYEDPI_VER${NC}"
     else
         BYEDPI_STATUS="${GREEN}$BYEDPI_VER${NC}"
     fi
 }
 
+check_podkop_status() {
+    if [ "$PODKOP_VER" = "не найден" ] || [ "$PODKOP_VER" = "не установлен" ]; then
+        PODKOP_STATUS="${RED}$PODKOP_VER${NC}"
+    elif [ "$PODKOP_VER" != "$PODKOP_LATEST_VER" ]; then
+        PODKOP_STATUS="${RED}$PODKOP_VER${NC}"
+    else
+        PODKOP_STATUS="${GREEN}$PODKOP_VER${NC}"
+    fi
+}
+
+# ==========================================
+# Полная установка + интеграция
+# ==========================================
+full_install_integration() {
+    install_update
+    install_podkop
+    integration_byedpi_podkop
+}
 # ==========================================
 # Установка / обновление ByeDPI
 # ==========================================
@@ -320,38 +317,57 @@ uninstall_podkop() {
 }
 
 # ==========================================
-# Меню
+# Главное меню
 # ==========================================
 show_menu() {
     clear
-    get_versions
-    check_byedpi_status
-    check_podkop_status
+    echo -e ""
+    echo -e "╔═══════════════════════════════╗"
+    echo -e "║     ${BLUE}Podkop+ByeDPI Manager${NC}     ║"
+    echo -e "╚═══════════════════════════════╝"
+    echo -e "                             ${DGRAY}v1.7${NC}"
 
-    echo -e "${MAGENTA}===== ByeDPI & Podkop Manager =====${NC}"
-    echo -e "${CYAN}1.${NC} Установить / обновить ByeDPI (${BYEDPI_STATUS})"
-    echo -e "${CYAN}2.${NC} Установить / обновить Podkop (${PODKOP_STATUS})"
-    echo -e "${CYAN}3.${NC} Интеграция ByeDPI ↔ Podkop"
-    echo -e "${CYAN}4.${NC} Сменить стратегию ByeDPI"
-    echo -e "${CYAN}5.${NC} Удалить ByeDPI"
-    echo -e "${CYAN}6.${NC} Удалить Podkop"
-    echo -e "${CYAN}0.${NC} Выход"
-    echo -ne "${YELLOW}Выберите пункт: ${NC}"
-    read opt
-    case $opt in
+    get_versions
+    check_podkop_status
+    check_byedpi_status
+
+    echo -e "${MAGENTA}--- ByeDPI ---${NC}"
+    echo -e "${YELLOW}Установленная версия:${NC} $BYEDPI_STATUS"
+    echo -e "${YELLOW}Последняя версия:${NC} ${CYAN}$BYEDPI_LATEST_VER${NC}"
+    echo -e "${YELLOW}Текущая стратегия:${NC} ${WHITE}$CURRENT_STRATEGY${NC}"
+    echo -e ""
+    echo -e "${MAGENTA}--- Podkop ---${NC}"
+    echo -e "${YELLOW}Установленная версия:${NC} $PODKOP_STATUS"
+    echo -e "${YELLOW}Последняя версия:${NC} ${CYAN}$PODKOP_LATEST_VER${NC}"
+    echo -e ""
+    echo -e "${YELLOW}Архитектура устройства:${NC} $LOCAL_ARCH"
+    echo -e ""
+    echo -e "${GREEN}1) Установить / обновить ByeDPI${NC}"
+    echo -e "${GREEN}2) Удалить ByeDPI${NC}"
+    echo -e "${GREEN}3) Интеграция ByeDPI в Podkop${NC}"
+    echo -e "${GREEN}4) Изменить стратегию ByeDPI${NC}"
+    echo -e "${GREEN}5) Установить / обновить Podkop${NC}"
+    echo -e "${GREEN}6) Удалить Podkop${NC}"
+    echo -e "${GREEN}7) Установить ByeDPI + Podkop + Интеграция${NC}"
+    echo -e "${GREEN}8) Выход (Enter)${NC}"
+    echo -e ""
+    echo -ne "Выберите пункт: "
+    read choice
+
+    case "$choice" in
         1) install_update ;;
-        2) install_podkop ;;
+        2) uninstall_byedpi ;;
         3) integration_byedpi_podkop ;;
         4) fix_strategy ;;
-        5) uninstall_byedpi ;;
+        5) install_podkop ;;
         6) uninstall_podkop ;;
-        0) exit 0 ;;
-        *) echo -e "${RED}Неверный выбор${NC}" ; read -p "Enter..." dummy ;;
+        7) full_install_integration ;;
+        *) exit 0 ;;
     esac
 }
 
 # ==========================================
-# Запуск меню
+# Цикл
 # ==========================================
 while true; do
     show_menu
