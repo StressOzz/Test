@@ -167,7 +167,7 @@ install_update() {
     fi
 
     echo -e ""
-	echo -e "${CYAN}Скачиваем пакет: ${NC}$LATEST_FILE"
+	echo -e "${CYAN}Скачиваем пакет: ${NC}${WHITE}$LATEST_FILE${NC}"
     mkdir -p "$WORKDIR"
     cd "$WORKDIR" || return
     curl -L -s -o "$LATEST_FILE" "$LATEST_URL" || {
@@ -177,7 +177,7 @@ install_update() {
     }
 
     echo -e ""
-	echo -e "${CYAN}Устанавливаем пакет...${NC}"
+	echo -e "${GREEN}Устанавливаем пакет...${NC}"
     opkg install --force-reinstall "$LATEST_FILE" >/dev/null 2>&1
     rm -rf "$WORKDIR"
 	echo -e ""
@@ -208,7 +208,6 @@ uninstall_byedpi() {
 # ==========================================
 # Установка / обновление Podkop
 # ==========================================
-
 install_podkop() {
     clear
     echo -e ""
@@ -381,7 +380,6 @@ pkg_list_update || {
     # Очистка
     rm -rf "$DOWNLOAD_DIR"
 
-    echo -e ""
     echo -e "${GREEN}Podkop успешно установлен / обновлён!${NC}"
     echo -e ""
     read -p "Нажмите Enter..." dummy
@@ -564,7 +562,7 @@ fi
 	echo -e "╔═══════════════════════════════╗"
 	echo -e "║     ${BLUE}Podkop+ByeDPI Manager${NC}     ║"
 	echo -e "╚═══════════════════════════════╝"
-	echo -e "                             ${DGRAY}v2.0${NC}"
+	echo -e "                             ${DGRAY}v2.1${NC}"
 
 	check_podkop_status
 	check_byedpi_status
@@ -580,16 +578,16 @@ fi
 	echo -e ""
 	echo -e "${YELLOW}Архитектура устройства:${NC} $LOCAL_ARCH"
 	echo -e ""
-    echo -e "${GREEN}1) Установить / обновить ByeDPI${NC}"
-    echo -e "${GREEN}2) Удалить ByeDPI${NC}"
-    echo -e "${GREEN}3) Интеграция ByeDPI в Podkop${NC}"
-    echo -e "${GREEN}4) Изменить стратегию ByeDPI${NC}"
-    echo -e "${GREEN}5) Установить / обновить Podkop${NC}"
-	echo -e "${GREEN}6) Удалить Podkop${NC}"
-	echo -e "${GREEN}7) Установить ByeDPI + Podkop + Интеграция${NC}"
-	echo -e "${GREEN}8) Выход (Enter)${NC}"
+    echo -e "${CYAN}1) Установить / обновить ${NC}ByeDPI"
+    echo -e "${CYAN}2) Удалить ${NC}ByeDPI"
+    echo -e "${CYAN}3) Интегрировать ${NC}ByeDPI ${CYAN}в ${NC}Podkop${NC}"
+    echo -e "${CYAN}4) Изменить текущую стратегию ${NC}ByeDPI"
+    echo -e "${CYAN}5) Установить / обновить ${NC}Podkop"
+	echo -e "${CYAN}6) Удалить ${NC}Podkop"
+	echo -e "${CYAN}7) Установить ByeDPI + Podkop + Интеграция${NC}"
+	echo -e "${CYAN}8) Выход (Enter)${NC}"
 	echo -e ""
-    echo -ne "Выберите пункт: "
+    echo -ne "${YELLOW}Выберите пункт: "
     read choice
 
     case "$choice" in
