@@ -56,7 +56,7 @@ curl_install() {
     command -v curl >/dev/null 2>&1 || {
 		clear 
 		echo -e ""
-        echo -e "${CYAN}Устанавливаем${NC} curl ${CYAN}для загрузки информации с ${NC}GitHub""
+        echo -e "${CYAN}Устанавливаем${NC} curl ${CYAN}для загрузки информации с ${NC}GitHub"
 		echo -e ""
         opkg update >/dev/null 2>&1
         opkg install curl >/dev/null 2>&1
