@@ -2,7 +2,6 @@
 
 REPO="https://api.github.com/repos/itdoginfo/podkop/releases/latest"
 DOWNLOAD_DIR="/tmp/podkop"
-COUNT=3
 
 PKG_IS_APK=0
 command -v apk >/dev/null 2>&1 && PKG_IS_APK=1
@@ -10,8 +9,18 @@ command -v apk >/dev/null 2>&1 && PKG_IS_APK=1
 rm -rf "$DOWNLOAD_DIR"
 mkdir -p "$DOWNLOAD_DIR"
 
+# Цвета
+GREEN="\033[32;1m"
+WHITE="\033[37;1m"
+NC="\033[0m"
+
 msg() {
-    printf "\033[32;1m%s\033[0m\n" "$1"
+    # $1 — действие, $2 — название пакета/объекта (необязательное)
+    if [ -n "$2" ]; then
+        printf "${GREEN}%s ${WHITE}%s${NC}\n" "$1" "$2"
+    else
+        printf "${GREEN}%s${NC}\n" "$1"
+    fi
 }
 
 pkg_is_installed () {
@@ -25,7 +34,7 @@ pkg_is_installed () {
 
 pkg_remove() {
     local pkg_name="$1"
-    msg "Удаляем $pkg_name..."
+    msg "Удаляем" "$pkg_name..."
     if [ "$PKG_IS_APK" -eq 1 ]; then
         apk del "$pkg_name" >/dev/null 2>&1
     else
@@ -44,7 +53,7 @@ pkg_list_update() {
 
 pkg_install() {
     local pkg_file="$1"
-    msg "Устанавливаем $(basename "$pkg_file")..."
+    msg "Устанавливаем" "$(basename "$pkg_file")"
     if [ "$PKG_IS_APK" -eq 1 ]; then
         apk add --allow-untrusted "$pkg_file" >/dev/null 2>&1
     else
@@ -54,7 +63,7 @@ pkg_install() {
 
 check_system() {
     MODEL=$(cat /tmp/sysinfo/model)
-    msg "Модель роутера: $MODEL"
+    msg "Модель роутера:" "$MODEL"
 
     openwrt_version=$(grep DISTRIB_RELEASE /etc/openwrt_release | cut -d"'" -f2 | cut -d'.' -f1)
     [ "$openwrt_version" = "23" ] && {
@@ -69,7 +78,7 @@ check_system() {
     nslookup google.com >/dev/null 2>&1 || { msg "DNS не работает"; exit 1; }
 
     if pkg_is_installed https-dns-proxy; then
-        msg "Обнаружен конфликтный пакет https-dns-proxy. Удаляем..."
+        msg "Обнаружен конфликтный пакет" "https-dns-proxy. Удаляем..."
         pkg_remove luci-app-https-dns-proxy
         pkg_remove https-dns-proxy
         pkg_remove luci-i18n-https-dns-proxy*
@@ -118,23 +127,20 @@ main() {
         grep_url_pattern='https://[^"[:space:]]*\.ipk'
     fi
 
-    # Цикл скачивания
+    # Упрощённое скачивание (один раз)
     download_success=0
     urls=$(wget -qO- "$REPO" 2>/dev/null | grep -o "$grep_url_pattern")
     for url in $urls; do
         filename=$(basename "$url")
         filepath="$DOWNLOAD_DIR/$filename"
-        attempt=0
-        while [ $attempt -lt $COUNT ]; do
-            msg "Скачиваем $filename (попытка $((attempt+1)))..."
-            if wget -q -O "$filepath" "$url" >/dev/null 2>&1; then
-                [ -s "$filepath" ] && { msg "$filename скачан"; download_success=1; break; }
-            fi
-            msg "Ошибка скачивания, повтор..."
-            rm -f "$filepath"
-            attempt=$((attempt+1))
-        done
-        [ $attempt -eq $COUNT ] && msg "Не удалось скачать $filename после $COUNT попыток"
+
+        msg "Скачиваем" "$filename..."
+        if wget -q -O "$filepath" "$url" >/dev/null 2>&1 && [ -s "$filepath" ]; then
+            msg "Скачано" "$filename"
+            download_success=1
+        else
+            msg "Ошибка скачивания" "$filename"
+        fi
     done
 
     [ $download_success -eq 0 ] && { msg "Нет успешно скачанных пакетов"; exit 1; }
@@ -145,24 +151,23 @@ main() {
         [ -n "$file" ] && pkg_install "$DOWNLOAD_DIR/$file"
     done
 
-# Русский интерфейс
-ru=$(ls "$DOWNLOAD_DIR" | grep "luci-i18n-podkop-ru" | head -n 1)
-if [ -n "$ru" ]; then
-    if pkg_is_installed luci-i18n-podkop-ru; then
-        msg "Обновляем русский язык..."
-        pkg_remove luci-i18n-podkop* >/dev/null 2>&1
-        pkg_install "$DOWNLOAD_DIR/$ru"
-    else
-        msg "Установить русский интерфейс? y/N"
-        read -r RUS
-        case "$RUS" in
-            y|Y) pkg_install "$DOWNLOAD_DIR/$ru" ;;
-            n|N|"") break ;;
-            *) exit 0 ;;
-        esac
+    # Русский интерфейс
+    ru=$(ls "$DOWNLOAD_DIR" | grep "luci-i18n-podkop-ru" | head -n 1)
+    if [ -n "$ru" ]; then
+        if pkg_is_installed luci-i18n-podkop-ru; then
+            msg "Обновляем русский язык..." "$ru"
+            pkg_remove luci-i18n-podkop* >/dev/null 2>&1
+            pkg_install "$DOWNLOAD_DIR/$ru"
+        else
+            msg "Установить русский интерфейс? y/N (Enter = Нет)"
+            read -r RUS
+            case "$RUS" in
+                y|Y) pkg_install "$DOWNLOAD_DIR/$ru" ;;
+                n|N|"") break ;;
+                *) exit 0 ;;
+            esac
+        fi
     fi
-fi
-
 
     # Очистка временных файлов
     find "$DOWNLOAD_DIR" -type f -name '*podkop*' -exec rm -f {} \;
