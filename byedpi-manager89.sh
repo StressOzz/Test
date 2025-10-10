@@ -274,9 +274,21 @@ install_podkop() {
     MODEL=$(cat /tmp/sysinfo/model 2>/dev/null || echo "не определено")
     AVAILABLE_SPACE=$(df /overlay | awk 'NR==2 {print $4}')
     REQUIRED_SPACE=15360
-    [ "$AVAILABLE_SPACE" -lt "$REQUIRED_SPACE" ] && { msg "Недостаточно свободного места"; read -p "Нажмите Enter..." dummy; return; }
+	
+[ "$AVAILABLE_SPACE" -lt "$REQUIRED_SPACE" ] && { 
+    msg "Недостаточно свободного места"
+    echo ""
+    read -p "Нажмите Enter..." dummy
+    return
+}
 
-    nslookup google.com >/dev/null 2>&1 || { msg "DNS не работает"; read -p "Нажмите Enter..." dummy; return; }
+nslookup google.com >/dev/null 2>&1 || { 
+    msg "DNS не работает"
+    echo ""
+    read -p "Нажмите Enter..." dummy
+    return
+}
+
 
     if pkg_is_installed https-dns-proxy; then
         msg "Обнаружен конфликтный пакет" "https-dns-proxy. Удаляем..."
@@ -298,13 +310,19 @@ install_podkop() {
 
     /usr/sbin/ntpd -q -p 194.190.168.1 -p 216.239.35.0 -p 216.239.35.4 -p 162.159.200.1 -p 162.159.200.123 >/dev/null 2>&1
 
-    pkg_list_update || { msg "Не удалось обновить список пакетов"; read -p "Нажмите Enter..." dummy; return; }
+pkg_list_update || { 
+    msg "Не удалось обновить список пакетов"
+    echo ""
+    read -p "Нажмите Enter..." dummy
+    return
+}
 
     # Проверка GitHub API
     if command -v curl >/dev/null 2>&1; then
         check_response=$(curl -s "$REPO")
         if echo "$check_response" | grep -q 'API rate limit '; then
             msg "Превышен лимит запросов GitHub. Повторите позже."
+			echo ""
             read -p "Нажмите Enter..." dummy
             return
         fi
@@ -330,7 +348,12 @@ install_podkop() {
         fi
     done
 
-    [ $download_success -eq 0 ] && { msg "Нет успешно скачанных пакетов"; read -p "Нажмите Enter..." dummy; return; }
+[ $download_success -eq 0 ] && { 
+    msg "Нет успешно скачанных пакетов"
+    echo ""
+    read -p "Нажмите Enter..." dummy
+    return
+}
 
     # Установка пакетов
     for pkg in podkop luci-app-podkop; do
