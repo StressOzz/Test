@@ -93,6 +93,34 @@ get_versions() {
 }
 
 # ==========================================
+# Проверка версии Podkop с подсветкой
+# ==========================================
+check_podkop_status() {
+    if [ "$PODKOP_VER" = "не найдена" ] || [ "$PODKOP_VER" = "не установлен" ]; then
+        PODKOP_STATUS="${RED}$PODKOP_VER${NC}"
+    elif [ "$PODKOP_LATEST_VER" != "не найдена" ] && [ "$PODKOP_VER" != "$PODKOP_LATEST_VER" ]; then
+        PODKOP_STATUS="${RED}$PODKOP_VER${NC}"
+    else
+        PODKOP_STATUS="${GREEN}$PODKOP_VER${NC}"
+    fi
+}
+
+# ==========================================
+# Проверка версии ByeDPI с подсветкой
+# ==========================================
+check_byedpi_status() {
+    if [ "$BYEDPI_VER" = "не найдена" ] || [ "$BYEDPI_VER" = "не установлен" ]; then
+        BYEDPI_STATUS="${RED}$BYEDPI_VER${NC}"
+    elif [ "$BYEDPI_LATEST_VER" != "не найдена" ] && [ "$BYEDPI_VER" != "$BYEDPI_LATEST_VER" ]; then
+        BYEDPI_STATUS="${RED}$BYEDPI_VER${NC}"
+    else
+        BYEDPI_STATUS="${GREEN}$BYEDPI_VER${NC}"
+    fi
+}
+
+
+
+# ==========================================
 # Установка / обновление ByeDPI
 # ==========================================
 install_update() {
@@ -376,14 +404,16 @@ fi
 	echo -e "╚═══════════════════════════════╝"
 	echo -e "                             ${DGRAY}v1.6${NC}"
 
-    echo -e "${MAGENTA}--- ByeDPI ---${NC}"
-    echo -e "${YELLOW}Установленная версия:${NC} $INSTALLED_VER"
-    echo -e "${YELLOW}Последняя версия:${NC} ${CYAN}$LATEST_VER${NC}"
-	echo -e "${YELLOW}Текущая стратегия:${NC} ${WHITE}$CURRENT_STRATEGY${NC}"
-	echo -e ""
-    echo -e "${MAGENTA}--- Podkop ---${NC}"
-    echo -e "${YELLOW}Установленная версия:${NC} $PODKOP_VER"
-    echo -e "${YELLOW}Последняя версия:${NC} ${CYAN}$PODKOP_LATEST_VER${NC}"
+	check_podkop_status
+	check_byedpi_status
+
+	echo -e "${MAGENTA}--- Podkop ---${NC}"
+	echo -e "${YELLOW}Установленная версия:${NC} $PODKOP_STATUS"
+	echo -e "${YELLOW}Последняя версия:${NC} ${CYAN}$PODKOP_LATEST_VER${NC}"
+
+	echo -e "${MAGENTA}--- ByeDPI ---${NC}"
+	echo -e "${YELLOW}Установленная версия:${NC} $BYEDPI_STATUS"
+	echo -e "${YELLOW}Последняя версия:${NC} ${CYAN}$BYEDPI_LATEST_VER${NC}"
 	echo -e ""
 	echo -e "${YELLOW}Архитектура устройства:${NC} $LOCAL_ARCH"
 	echo -e ""
