@@ -212,21 +212,32 @@ install_podkop() {
     echo -e ""
     echo -e "${MAGENTA}Установка / обновление Podkop (последняя версия с GitHub)${NC}"
 
+    # Проверяем curl
+    command -v curl >/dev/null 2>&1 || {
+        echo -e "${CYAN}Устанавливаем curl...${NC}"
+        opkg update >/dev/null 2>&1
+        opkg install curl >/dev/null 2>&1
+    }
+
     TMPDIR="/tmp/podkop_installer"
     rm -rf "$TMPDIR"
     mkdir -p "$TMPDIR"
     cd "$TMPDIR" || return
 
-    # ==========================================
     # Получаем последнюю версию Podkop с GitHub
-    # ==========================================
-    curl_install  # если ещё не установлено
     PODKOP_API_URL="https://api.github.com/repos/itdoginfo/podkop/releases/latest"
-    LATEST_VER=$(curl -s "$PODKOP_API_URL" | grep '"tag_name"' | head -n1 | cut -d'"' -f4 | sed 's/^v//')
+    RELEASE_JSON=$(curl -s "$PODKOP_API_URL")
 
+    # Проверка ответа
+    if [ -z "$RELEASE_JSON" ]; then
+        echo -e "${RED}Не удалось получить данные с GitHub.${NC}"
+        read -p "Нажмите Enter..." dummy
+        return
+    fi
+
+    LATEST_VER=$(echo "$RELEASE_JSON" | grep '"tag_name"' | head -n1 | cut -d'"' -f4 | sed 's/^v//')
     if [ -z "$LATEST_VER" ]; then
-        echo -e ""
-        echo -e "${RED}Не удалось получить последнюю версию Podkop.${NC}"
+        echo -e "${RED}Не удалось определить последнюю версию Podkop.${NC}"
         read -p "Нажмите Enter..." dummy
         return
     fi
@@ -258,7 +269,6 @@ install_podkop() {
     echo -e ""
     read -p "Нажмите Enter..." dummy
 }
-
 
     # ==========================================
     # Получаем последнюю версию Podkop с GitHub
