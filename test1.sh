@@ -7,7 +7,8 @@ TMP_DIR="/tmp/podkop_install"
 rm -rf "$TMP_DIR"
 mkdir -p "$TMP_DIR"
 
-LATEST_TAG=$(wget -qO- "https://api.github.com/repos/$REPO/releases/latest" | grep -Po '"tag_name": "\K.*?(?=")')
+# Получаем последний тег без -P
+LATEST_TAG=$(wget -qO- "https://api.github.com/repos/$REPO/releases/latest" | grep '"tag_name":' | head -n1 | cut -d'"' -f4)
 
 FILES=(
     "luci-app-podkop-${LATEST_TAG}-all.ipk"
@@ -22,3 +23,4 @@ done
 opkg install "$TMP_DIR"/*.ipk
 
 rm -rf "$TMP_DIR"
+
