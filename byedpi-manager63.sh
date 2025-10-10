@@ -55,30 +55,31 @@ echo -e ""
 # ==========================================
 get_versions() {
     # --- ByeDPI ---
-    INSTALLED_VER=$(opkg list-installed | grep '^byedpi ' | awk '{print $3}' | sed 's/-r[0-9]\+$//')
-    [ -z "$INSTALLED_VER" ] && INSTALLED_VER="не найдена"
+    BYEDPI_VER=$(opkg list-installed | grep '^byedpi ' | awk '{print $3}' | sed 's/-r[0-9]\+$//')
+    [ -z "$BYEDPI_VER" ] && BYEDPI_VER="не найдена"
 
     LOCAL_ARCH=$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release)
     [ -z "$LOCAL_ARCH" ] && LOCAL_ARCH=$(opkg print-architecture | grep -v "noarch" | tail -n1 | awk '{print $2}')
 
     command -v curl >/dev/null 2>&1 || {
         clear
-		echo -e ""
-		echo -e "${CYAN}Устанавливаем curl...${NC}"
+        echo -e ""
+        echo -e "${CYAN}Устанавливаем curl...${NC}"
         opkg update >/dev/null 2>&1
         opkg install curl >/dev/null 2>&1
     }
 
-# --- Получаем версии ByeDPI ---
-    API_URL="https://api.github.com/repos/DPITrickster/ByeDPI-OpenWrt/releases"
-    RELEASE_DATA=$(curl -s "$API_URL")
-    LATEST_URL=$(echo "$RELEASE_DATA" | grep browser_download_url | grep "$LOCAL_ARCH.ipk" | head -n1 | cut -d'"' -f4)
-    if [ -n "$LATEST_URL" ]; then
-        LATEST_FILE=$(basename "$LATEST_URL")
-        LATEST_VER=$(echo "$LATEST_FILE" | sed -E 's/^byedpi_([0-9]+\.[0-9]+\.[0-9]+)(-r[0-9]+)?_.*/\1/')
+    # --- Получаем последнюю версию ByeDPI ---
+    BYEDPI_API_URL="https://api.github.com/repos/DPITrickster/ByeDPI-OpenWrt/releases"
+    RELEASE_DATA=$(curl -s "$BYEDPI_API_URL")
+    BYEDPI_URL=$(echo "$RELEASE_DATA" | grep browser_download_url | grep "$LOCAL_ARCH.ipk" | head -n1 | cut -d'"' -f4)
+    if [ -n "$BYEDPI_URL" ]; then
+        BYEDPI_FILE=$(basename "$BYEDPI_URL")
+        BYEDPI_LATEST_VER=$(echo "$BYEDPI_FILE" | sed -E 's/^byedpi_([0-9]+\.[0-9]+\.[0-9]+)(-r[0-9]+)?_.*/\1/')
     else
-        LATEST_VER="не найдена"
+        BYEDPI_LATEST_VER="не найдена"
     fi
+
 
 # --- Podkop ---
     if command -v podkop >/dev/null 2>&1; then
