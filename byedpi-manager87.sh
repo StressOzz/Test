@@ -212,7 +212,8 @@ install_podkop() {
     clear
     echo -e ""
     echo -e "${MAGENTA}Установка / обновление Podkop${NC}"
-
+	echo -e ""
+	
 REPO="https://api.github.com/repos/itdoginfo/podkop/releases/latest"
 DOWNLOAD_DIR="/tmp/podkop"
 
@@ -384,6 +385,11 @@ main() {
 }
 
 main
+
+    echo -e ""
+    echo -e "${GREEN}Podkop успешно установлен / обновлён!${NC}"
+    echo -e ""
+    read -p "Нажмите Enter..." dummy
 }
 # ==========================================
 # Интеграция ByeDPI в Podkop
