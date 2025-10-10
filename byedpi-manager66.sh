@@ -83,9 +83,9 @@ get_versions() {
     # --- Podkop ---
     if command -v podkop >/dev/null 2>&1; then
         PODKOP_VER=$(podkop show_version 2>/dev/null | sed 's/-r[0-9]\+$//')
-        [ -z "$PODKOP_VER" ] && PODKOP_VER="установлен (версия не определена)"
+        [ -z "$PODKOP_VER" ] && PODKOP_VER="не найдена"
     else
-        PODKOP_VER="не установлен"
+        PODKOP_VER="не найдена"
     fi
 
     PODKOP_API_URL="https://api.github.com/repos/itdoginfo/podkop/releases/latest"
@@ -98,8 +98,6 @@ get_versions() {
     BYEDPI_VER=$(echo "$BYEDPI_VER" | sed 's/^v//')
     BYEDPI_LATEST_VER=$(echo "$BYEDPI_LATEST_VER" | sed 's/^v//')
 }
-
-
 
 # --- Podkop ---
     if command -v podkop >/dev/null 2>&1; then
