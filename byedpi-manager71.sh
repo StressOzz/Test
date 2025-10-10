@@ -61,7 +61,6 @@ curl_install() {
         opkg update >/dev/null 2>&1
         opkg install curl >/dev/null 2>&1
     }
-}
 
 # ==========================================
 # Определение версий
