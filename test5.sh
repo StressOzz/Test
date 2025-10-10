@@ -23,5 +23,3 @@ wget -q -P "$TMP_DIR" "$URL_BASE/luci-i18n-podkop-ru-${LATEST_TAG}.ipk"
 [ -f "$TMP_DIR/luci-app-podkop-${LATEST_TAG}-all.ipk" ] && opkg install "$TMP_DIR/luci-app-podkop-${LATEST_TAG}-all.ipk"
 [ -f "$TMP_DIR/luci-i18n-podkop-ru-${LATEST_TAG}.ipk" ] && opkg install "$TMP_DIR/luci-i18n-podkop-ru-${LATEST_TAG}.ipk"
 
-# Очистка
-rm -rf "$TMP_DIR"
