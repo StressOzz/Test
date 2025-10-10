@@ -52,82 +52,6 @@ pkg_install() {
     fi
 }
 
-main() {
-    check_system
-    sing_box
-
-    msg "Syncing time..."
-    /usr/sbin/ntpd -q -p 194.190.168.1 -p 216.239.35.0 -p 216.239.35.4 -p 162.159.200.1 -p 162.159.200.123 >/dev/null 2>&1
-
-    pkg_list_update || { msg "Package list update failed"; exit 1; }
-
-    if [ -f "/etc/init.d/podkop" ]; then
-        msg "Podkop already installed. Upgrading..."
-    else
-        msg "Installing podkop..."
-    fi
-
-    if command -v curl >/dev/null 2>&1; then
-        check_response=$(curl -s "$REPO")
-        if echo "$check_response" | grep -q 'API rate limit '; then
-            msg "GitHub API rate limit reached. Retry later."
-            exit 1
-        fi
-    fi
-
-    local grep_url_pattern
-    if [ "$PKG_IS_APK" -eq 1 ]; then
-        grep_url_pattern='https://[^"[:space:]]*\.apk'
-    else
-        grep_url_pattern='https://[^"[:space:]]*\.ipk'
-    fi
-
-    download_success=0
-    while read -r url; do
-        filename=$(basename "$url")
-        filepath="$DOWNLOAD_DIR/$filename"
-        attempt=0
-        while [ $attempt -lt $COUNT ]; do
-            msg "Downloading $filename (attempt $((attempt+1)))..."
-            if wget -q -O "$filepath" "$url"; then
-                [ -s "$filepath" ] && { msg "$filename downloaded"; download_success=1; break; }
-            fi
-            msg "Download failed, retrying..."
-            rm -f "$filepath"
-            attempt=$((attempt+1))
-        done
-        [ $attempt -eq $COUNT ] && msg "Failed to download $filename after $COUNT attempts"
-    done < <(wget -qO- "$REPO" | grep -o "$grep_url_pattern")
-
-    [ $download_success -eq 0 ] && { msg "No packages downloaded"; exit 1; }
-
-    for pkg in podkop luci-app-podkop; do
-        file=$(ls "$DOWNLOAD_DIR" | grep "^$pkg" | head -n 1)
-        [ -n "$file" ] && pkg_install "$DOWNLOAD_DIR/$file"
-    done
-
-    ru=$(ls "$DOWNLOAD_DIR" | grep "luci-i18n-podkop-ru" | head -n 1)
-    if [ -n "$ru" ]; then
-        if pkg_is_installed luci-i18n-podkop-ru; then
-            msg "Upgrading Russian translation..."
-            pkg_remove luci-i18n-podkop* >/dev/null 2>&1
-            pkg_install "$DOWNLOAD_DIR/$ru"
-        else
-            msg "Русский интерфейс? y/n"
-            while true; do
-                read -r RUS
-                case $RUS in
-                    y) pkg_install "$DOWNLOAD_DIR/$ru"; break ;;
-                    n) break ;;
-                    *) msg "Введите y или n" ;;
-                esac
-            done
-        fi
-    fi
-
-    find "$DOWNLOAD_DIR" -type f -name '*podkop*' -exec rm -f {} \;
-}
-
 check_system() {
     MODEL=$(cat /tmp/sysinfo/model)
     msg "Router model: $MODEL"
@@ -161,6 +85,88 @@ sing_box() {
         service podkop stop >/dev/null 2>&1
         pkg_remove sing-box
     fi
+}
+
+main() {
+    check_system
+    sing_box
+
+    msg "Syncing time..."
+    /usr/sbin/ntpd -q -p 194.190.168.1 -p 216.239.35.0 -p 216.239.35.4 -p 162.159.200.1 -p 162.159.200.123 >/dev/null 2>&1
+
+    pkg_list_update || { msg "Package list update failed"; exit 1; }
+
+    if [ -f "/etc/init.d/podkop" ]; then
+        msg "Podkop already installed. Upgrading..."
+    else
+        msg "Installing podkop..."
+    fi
+
+    # Проверка GitHub API
+    if command -v curl >/dev/null 2>&1; then
+        check_response=$(curl -s "$REPO")
+        if echo "$check_response" | grep -q 'API rate limit '; then
+            msg "GitHub API rate limit reached. Retry later."
+            exit 1
+        fi
+    fi
+
+    # Шаблон для поиска пакета
+    if [ "$PKG_IS_APK" -eq 1 ]; then
+        grep_url_pattern='https://[^"[:space:]]*\.apk'
+    else
+        grep_url_pattern='https://[^"[:space:]]*\.ipk'
+    fi
+
+    # Цикл скачивания
+    download_success=0
+    urls=$(wget -qO- "$REPO" 2>/dev/null | grep -o "$grep_url_pattern")
+    for url in $urls; do
+        filename=$(basename "$url")
+        filepath="$DOWNLOAD_DIR/$filename"
+        attempt=0
+        while [ $attempt -lt $COUNT ]; do
+            msg "Downloading $filename (attempt $((attempt+1)))..."
+            if wget -q -O "$filepath" "$url" >/dev/null 2>&1; then
+                [ -s "$filepath" ] && { msg "$filename downloaded"; download_success=1; break; }
+            fi
+            msg "Download failed, retrying..."
+            rm -f "$filepath"
+            attempt=$((attempt+1))
+        done
+        [ $attempt -eq $COUNT ] && msg "Failed to download $filename after $COUNT attempts"
+    done
+
+    [ $download_success -eq 0 ] && { msg "No packages downloaded"; exit 1; }
+
+    # Установка основных пакетов
+    for pkg in podkop luci-app-podkop; do
+        file=$(ls "$DOWNLOAD_DIR" | grep "^$pkg" | head -n 1)
+        [ -n "$file" ] && pkg_install "$DOWNLOAD_DIR/$file"
+    done
+
+    # Русский интерфейс
+    ru=$(ls "$DOWNLOAD_DIR" | grep "luci-i18n-podkop-ru" | head -n 1)
+    if [ -n "$ru" ]; then
+        if pkg_is_installed luci-i18n-podkop-ru; then
+            msg "Upgrading Russian translation..."
+            pkg_remove luci-i18n-podkop* >/dev/null 2>&1
+            pkg_install "$DOWNLOAD_DIR/$ru"
+        else
+            msg "Русский интерфейс? y/n"
+            while true; do
+                read -r RUS
+                case $RUS in
+                    y) pkg_install "$DOWNLOAD_DIR/$ru"; break ;;
+                    n) break ;;
+                    *) msg "Введите y или n" ;;
+                esac
+            done
+        fi
+    fi
+
+    # Очистка временных файлов
+    find "$DOWNLOAD_DIR" -type f -name '*podkop*' -exec rm -f {} \;
 }
 
 main
