@@ -61,6 +61,7 @@ get_versions() {
     LOCAL_ARCH=$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release)
     [ -z "$LOCAL_ARCH" ] && LOCAL_ARCH=$(opkg print-architecture | grep -v "noarch" | tail -n1 | awk '{print $2}')
 
+    # Проверка curl
     command -v curl >/dev/null 2>&1 || {
         clear
         echo -e ""
@@ -85,7 +86,7 @@ get_versions() {
         PODKOP_VER=$(podkop show_version 2>/dev/null | sed 's/-r[0-9]\+$//')
         [ -z "$PODKOP_VER" ] && PODKOP_VER="не найдена"
     else
-        PODKOP_VER="не найдена"
+        PODKOP_VER="не установлен"
     fi
 
     PODKOP_API_URL="https://api.github.com/repos/itdoginfo/podkop/releases/latest"
