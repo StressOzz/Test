@@ -63,8 +63,6 @@ get_versions() {
 
     # Проверка curl
     command -v curl >/dev/null 2>&1 || {
-        clear
-        echo -e ""
         echo -e "${CYAN}Устанавливаем curl...${NC}"
         opkg update >/dev/null 2>&1
         opkg install curl >/dev/null 2>&1
@@ -77,8 +75,14 @@ get_versions() {
     if [ -n "$BYEDPI_URL" ]; then
         BYEDPI_FILE=$(basename "$BYEDPI_URL")
         BYEDPI_LATEST_VER=$(echo "$BYEDPI_FILE" | sed -E 's/^byedpi_([0-9]+\.[0-9]+\.[0-9]+)(-r[0-9]+)?_.*/\1/')
+        LATEST_VER="$BYEDPI_LATEST_VER"      # добавляем для install_update
+        LATEST_URL="$BYEDPI_URL"            # добавляем для install_update
+        LATEST_FILE="$BYEDPI_FILE"          # добавляем для install_update
     else
         BYEDPI_LATEST_VER="не найдена"
+        LATEST_VER=""
+        LATEST_URL=""
+        LATEST_FILE=""
     fi
 
     # --- Podkop ---
@@ -93,7 +97,7 @@ get_versions() {
     PODKOP_LATEST_VER=$(curl -s "$PODKOP_API_URL" | grep '"tag_name"' | head -n1 | cut -d'"' -f4 | sed 's/-r[0-9]\+$//')
     [ -z "$PODKOP_LATEST_VER" ] && PODKOP_LATEST_VER="не найдена"
 
-    # --- Нормализация версий для корректного сравнения ---
+    # --- Нормализация версий ---
     PODKOP_VER=$(echo "$PODKOP_VER" | sed 's/^v//')
     PODKOP_LATEST_VER=$(echo "$PODKOP_LATEST_VER" | sed 's/^v//')
     BYEDPI_VER=$(echo "$BYEDPI_VER" | sed 's/^v//')
