@@ -419,13 +419,14 @@ fi
 	check_podkop_status
 	check_byedpi_status
 
-	echo -e "${MAGENTA}--- Podkop ---${NC}"
-	echo -e "${YELLOW}Установленная версия:${NC} $PODKOP_STATUS"
-	echo -e "${YELLOW}Последняя версия:${NC} ${CYAN}$PODKOP_LATEST_VER${NC}"
-	echo -e ""
 	echo -e "${MAGENTA}--- ByeDPI ---${NC}"
 	echo -e "${YELLOW}Установленная версия:${NC} $BYEDPI_STATUS"
 	echo -e "${YELLOW}Последняя версия:${NC} ${CYAN}$BYEDPI_LATEST_VER${NC}"
+	echo -e "${YELLOW}Текущая стратегия:${NC} ${WHITE}$CURRENT_STRATEGY${NC}"
+	echo -e ""
+	echo -e "${MAGENTA}--- Podkop ---${NC}"
+	echo -e "${YELLOW}Установленная версия:${NC} $PODKOP_STATUS"
+	echo -e "${YELLOW}Последняя версия:${NC} ${CYAN}$PODKOP_LATEST_VER${NC}"
 	echo -e ""
 	echo -e "${YELLOW}Архитектура устройства:${NC} $LOCAL_ARCH"
 	echo -e ""
