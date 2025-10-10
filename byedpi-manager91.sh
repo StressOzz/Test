@@ -587,7 +587,7 @@ fi
 	echo -e "${CYAN}7) ${GREEN}Установить ByeDPI + Podkop + Интеграция${NC}"
 	echo -e "${CYAN}8) ${GREEN}Выход (Enter)${NC}"
 	echo -e ""
-    echo -ne "${YELLOW}Выберите пункт: "
+    echo -ne "${YELLOW}Выберите пункт:${NC} "
     read choice
 
     case "$choice" in
