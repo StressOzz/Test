@@ -228,7 +228,6 @@ install_podkop() {
     PODKOP_API_URL="https://api.github.com/repos/itdoginfo/podkop/releases/latest"
     RELEASE_JSON=$(curl -s "$PODKOP_API_URL")
 
-    # Проверка ответа
     if [ -z "$RELEASE_JSON" ]; then
         echo -e "${RED}Не удалось получить данные с GitHub.${NC}"
         read -p "Нажмите Enter..." dummy
@@ -244,6 +243,7 @@ install_podkop() {
 
     PKG_PODKOP="podkop-v${LATEST_VER}-r1-all.ipk"
     PKG_LUCI_APP="luci-app-podkop-v${LATEST_VER}-r1-all.ipk"
+    PKG_LUCI_RU="luci-i18n-podkop-ru-v${LATEST_VER}.ipk"
 
     echo -e ""
     echo -e "${CYAN}Скачиваем Podkop и luci-app...${NC}"
@@ -258,9 +258,22 @@ install_podkop() {
         return
     }
 
+    echo -ne "Установить русский интерфейс Podkop? [y/N]: "
+    read RU_CHOICE
+
     echo -e ""
     echo -e "${CYAN}Устанавливаем пакеты...${NC}"
     opkg install --force-reinstall "$PKG_PODKOP" "$PKG_LUCI_APP" >/dev/null 2>&1
+
+    if [ "$RU_CHOICE" = "y" ] || [ "$RU_CHOICE" = "Y" ]; then
+        echo -e "${CYAN}Скачиваем и устанавливаем русский интерфейс...${NC}"
+        curl -L -s -O "https://github.com/itdoginfo/podkop/releases/download/v${LATEST_VER}/${PKG_LUCI_RU}" || {
+            echo -e "${RED}Ошибка загрузки $PKG_LUCI_RU${NC}"
+            read -p "Нажмите Enter..." dummy
+            return
+        }
+        opkg install --force-reinstall "$PKG_LUCI_RU" >/dev/null 2>&1
+    fi
 
     rm -rf "$TMPDIR"
 
