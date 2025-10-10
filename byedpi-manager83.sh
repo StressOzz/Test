@@ -212,54 +212,50 @@ install_podkop() {
     echo -e ""
     echo -e "${MAGENTA}Установка / обновление Podkop${NC}"
 
-    REPO="https://api.github.com/repos/itdoginfo/podkop/releases/latest"
-    DOWNLOAD_DIR="/tmp/podkop"
-    COUNT=3
+    WORKDIR="/tmp/podkop"
+REPO="https://api.github.com/repos/itdoginfo/podkop/releases/latest"
+COUNT=3
 
-    rm -rf "$DOWNLOAD_DIR"
-    mkdir -p "$DOWNLOAD_DIR"
+PKG_IS_APK=0
+command -v apk >/dev/null 2>&1 && PKG_IS_APK=1
 
-    PKG_IS_APK=0
-    command -v apk >/dev/null 2>&1 && PKG_IS_APK=1
+mkdir -p "$WORKDIR"
 
-    pkg_install() {
-        if [ "$PKG_IS_APK" -eq 1 ]; then
-            apk add --allow-untrusted "$1"
-        else
-            opkg install "$1"
-        fi
-    }
-
-    download_file() {
-        local url="$1"
-        local file="$DOWNLOAD_DIR/$(basename "$url")"
-        for i in $(seq 1 $COUNT); do
-            wget -q -O "$file" "$url" && [ -s "$file" ] && return 0
-            rm -f "$file"
-        done
-        return 1
-    }
-
-    main() {
-        RELEASE_JSON=$(curl -s "$REPO")
-        
-        for pkg in podkop luci-app-podkop luci-i18n-podkop-ru; do
-            URL=$(echo "$RELEASE_JSON" | grep -o "https://[^\" ]*${pkg}[^\" ]*\.ipk" | head -n1)
-            [ -n "$URL" ] && download_file "$URL" && pkg_install "$DOWNLOAD_DIR/$(basename "$URL")"
-        done
-
-        rm -rf "$DOWNLOAD_DIR"
-    }
-
-    # <- ВАЖНО: вызываем main
-    main
-
-    echo -e ""
-    echo -e "${GREEN}Podkop успешно установлен / обновлён!${NC}"
-    echo -e ""
-    read -p "Нажмите Enter..." dummy
+pkg_install() {
+    if [ "$PKG_IS_APK" -eq 1 ]; then
+        apk add --allow-untrusted "$1"
+    else
+        opkg install "$1"
+    fi
 }
 
+download_file() {
+    local url="$1"
+    local file="$WORKDIR/$(basename "$url")"
+    for i in $(seq 1 $COUNT); do
+        echo "Downloading $(basename "$url") (attempt $i)..."
+        wget -q -O "$file" "$url" && [ -s "$file" ] && return 0
+        rm -f "$file"
+    done
+    echo "Failed to download $(basename "$url")"
+    return 1
+}
+
+install_podkop() {
+    RELEASE_JSON=$(curl -s "$REPO")
+
+    for pkg in podkop luci-app-podkop luci-i18n-podkop-ru; do
+        URL=$(echo "$RELEASE_JSON" | grep -o "https://[^\" ]*${pkg}[^\" ]*-all\.ipk" | head -n1)
+        if [ -n "$URL" ]; then
+            download_file "$URL" && pkg_install "$WORKDIR/$(basename "$URL")"
+        else
+            echo "Package $pkg not found in release."
+        fi
+    done
+
+    rm -rf "$WORKDIR"
+    echo "Podkop успешно установлен / обновлён!"
+}
 # ==========================================
 # Интеграция ByeDPI в Podkop
 # ==========================================
