@@ -49,6 +49,19 @@ echo -e ""
     echo -e "Podkop готов к работе."
 }
 
+# ==========================================
+# Функция проверки и установки curl
+# ==========================================
+curl_install() {
+    command -v curl >/dev/null 2>&1 || {
+		clear 
+		echo -e ""
+        echo -e "${CYAN}Устанавливаем${NC} curl ${CYAN}для загрузки информации с ${NC}GitHub""
+		echo -e ""
+        opkg update >/dev/null 2>&1
+        opkg install curl >/dev/null 2>&1
+    }
+}
 
 # ==========================================
 # Определение версий
@@ -61,12 +74,7 @@ get_versions() {
     LOCAL_ARCH=$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release)
     [ -z "$LOCAL_ARCH" ] && LOCAL_ARCH=$(opkg print-architecture | grep -v "noarch" | tail -n1 | awk '{print $2}')
 
-    # Проверка curl
-    command -v curl >/dev/null 2>&1 || {
-        echo -e "${CYAN}Устанавливаем curl...${NC}"
-        opkg update >/dev/null 2>&1
-        opkg install curl >/dev/null 2>&1
-    }
+	curl_install
 
     # --- Получаем последнюю версию ByeDPI ---
     BYEDPI_API_URL="https://api.github.com/repos/DPITrickster/ByeDPI-OpenWrt/releases"
@@ -414,7 +422,7 @@ fi
 	echo -e "╔═══════════════════════════════╗"
 	echo -e "║     ${BLUE}Podkop+ByeDPI Manager${NC}     ║"
 	echo -e "╚═══════════════════════════════╝"
-	echo -e "                             ${DGRAY}v1.6${NC}"
+	echo -e "                             ${DGRAY}v1.7${NC}"
 
 	check_podkop_status
 	check_byedpi_status
