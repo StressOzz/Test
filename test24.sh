@@ -63,7 +63,6 @@ pkg_install() {
 
 check_system() {
     MODEL=$(cat /tmp/sysinfo/model)
-    msg "Модель роутера:" "$MODEL"
 
     openwrt_version=$(grep DISTRIB_RELEASE /etc/openwrt_release | cut -d"'" -f2 | cut -d'.' -f1)
     [ "$openwrt_version" = "23" ] && {
@@ -136,7 +135,6 @@ main() {
 
         msg "Скачиваем" "$filename..."
         if wget -q -O "$filepath" "$url" >/dev/null 2>&1 && [ -s "$filepath" ]; then
-            msg "Скачано" "$filename"
             download_success=1
         else
             msg "Ошибка скачивания" "$filename"
