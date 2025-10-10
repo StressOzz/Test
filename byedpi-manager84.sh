@@ -211,51 +211,89 @@ install_podkop() {
     clear
     echo -e ""
     echo -e "${MAGENTA}Установка / обновление Podkop${NC}"
+    
+    TMPDIR="/tmp/podkop_installer"
+    rm -rf "$TMPDIR"
+    mkdir -p "$TMPDIR"
+    cd "$TMPDIR" || return
 
-    WORKDIR="/tmp/podkop"
-REPO="https://api.github.com/repos/itdoginfo/podkop/releases/latest"
-COUNT=3
-
-PKG_IS_APK=0
-command -v apk >/dev/null 2>&1 && PKG_IS_APK=1
-
-mkdir -p "$WORKDIR"
-
-pkg_install() {
-    if [ "$PKG_IS_APK" -eq 1 ]; then
-        apk add --allow-untrusted "$1"
-    else
-        opkg install "$1"
+    # ==========================================
+    # Получаем последнюю версию Podkop с GitHub
+    # ==========================================
+    curl_install()  # если ещё не установлено
+    PODKOP_API_URL="https://api.github.com/repos/itdoginfo/podkop/releases/latest"
+    LATEST_VER=$(curl -s "$PODKOP_API_URL" | grep '"tag_name"' | head -n1 | cut -d'"' -f4 | sed 's/^v//')
+    
+    if [ -z "$LATEST_VER" ]; then
+        echo -e ""
+        echo -e "${RED}Не удалось получить последнюю версию Podkop.${NC}"
+        read -p "Нажмите Enter..." dummy
+        return
     fi
+
+    # ==========================================
+    # Формируем имена пакетов
+    # ==========================================
+    PKG_PODKOP="podkop-v${LATEST_VER}-r1-all.ipk"
+    PKG_LUCI_APP="luci-app-podkop-v${LATEST_VER}-r1-all.ipk"
+    PKG_LUCI_RU="luci-i18n-podkop-ru-v${LATEST_VER}.ipk"
+
+    echo -e ""
+    echo -ne "Установить русский интерфейс Podkop? [y/N]: "
+    read RU_CHOICE
+
+    INSTALL_RU=0
+    case "$RU_CHOICE" in
+        y|Y) INSTALL_RU=1 ;;
+    esac
+
+    # ==========================================
+    # Скачиваем пакеты
+    # ==========================================
+    echo -e ""
+    echo -e "${CYAN}Скачиваем Podkop и luci-app...${NC}"
+    curl -L -s -O "https://github.com/itdoginfo/podkop/releases/download/v${LATEST_VER}/${PKG_PODKOP}" || {
+        echo -e "${RED}Ошибка загрузки $PKG_PODKOP${NC}"
+        read -p "Нажмите Enter..." dummy
+        return
+    }
+    curl -L -s -O "https://github.com/itdoginfo/podkop/releases/download/v${LATEST_VER}/${PKG_LUCI_APP}" || {
+        echo -e "${RED}Ошибка загрузки $PKG_LUCI_APP${NC}"
+        read -p "Нажмите Enter..." dummy
+        return
+    }
+
+    if [ "$INSTALL_RU" -eq 1 ]; then
+        echo -e "${CYAN}Скачиваем русский интерфейс...${NC}"
+        curl -L -s -O "https://github.com/itdoginfo/podkop/releases/download/v${LATEST_VER}/${PKG_LUCI_RU}" || {
+            echo -e "${RED}Ошибка загрузки $PKG_LUCI_RU${NC}"
+            read -p "Нажмите Enter..." dummy
+            return
+        }
+    fi
+
+    # ==========================================
+    # Установка пакетов
+    # ==========================================
+    echo -e ""
+    echo -e "${CYAN}Устанавливаем пакеты...${NC}"
+    opkg install --force-reinstall "$PKG_PODKOP" "$PKG_LUCI_APP" >/dev/null 2>&1
+
+    if [ "$INSTALL_RU" -eq 1 ]; then
+        opkg install --force-reinstall "$PKG_LUCI_RU" >/dev/null 2>&1
+    fi
+
+    # ==========================================
+    # Очистка
+    # ==========================================
+    rm -rf "$TMPDIR"
+
+    echo -e ""
+    echo -e "${GREEN}Podkop успешно установлен / обновлён!${NC}"
+    echo -e ""
+    read -p "Нажмите Enter..." dummy
 }
 
-download_file() {
-    local url="$1"
-    local file="$WORKDIR/$(basename "$url")"
-    for i in $(seq 1 $COUNT); do
-        echo "Downloading $(basename "$url") (attempt $i)..."
-        wget -q -O "$file" "$url" && [ -s "$file" ] && return 0
-        rm -f "$file"
-    done
-    echo "Failed to download $(basename "$url")"
-    return 1
-}
-
-install_podkop() {
-    RELEASE_JSON=$(curl -s "$REPO")
-
-    for pkg in podkop luci-app-podkop luci-i18n-podkop-ru; do
-        URL=$(echo "$RELEASE_JSON" | grep -o "https://[^\" ]*${pkg}[^\" ]*-all\.ipk" | head -n1)
-        if [ -n "$URL" ]; then
-            download_file "$URL" && pkg_install "$WORKDIR/$(basename "$URL")"
-        else
-            echo "Package $pkg not found in release."
-        fi
-    done
-
-    rm -rf "$WORKDIR"
-    echo "Podkop успешно установлен / обновлён!"
-}
 # ==========================================
 # Интеграция ByeDPI в Podkop
 # ==========================================
