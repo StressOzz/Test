@@ -25,7 +25,7 @@ pkg_is_installed () {
 
 pkg_remove() {
     local pkg_name="$1"
-    msg "Removing $pkg_name..."
+    msg "Удаляем $pkg_name..."
     if [ "$PKG_IS_APK" -eq 1 ]; then
         apk del "$pkg_name" >/dev/null 2>&1
     else
@@ -34,7 +34,7 @@ pkg_remove() {
 }
 
 pkg_list_update() {
-    msg "Updating package list..."
+    msg "Обновляем список пакетов..."
     if [ "$PKG_IS_APK" -eq 1 ]; then
         apk update >/dev/null 2>&1
     else
@@ -44,7 +44,7 @@ pkg_list_update() {
 
 pkg_install() {
     local pkg_file="$1"
-    msg "Installing $(basename "$pkg_file")..."
+    msg "Устанавливаем $(basename "$pkg_file")..."
     if [ "$PKG_IS_APK" -eq 1 ]; then
         apk add --allow-untrusted "$pkg_file" >/dev/null 2>&1
     else
@@ -54,22 +54,22 @@ pkg_install() {
 
 check_system() {
     MODEL=$(cat /tmp/sysinfo/model)
-    msg "Router model: $MODEL"
+    msg "Модель роутера: $MODEL"
 
     openwrt_version=$(grep DISTRIB_RELEASE /etc/openwrt_release | cut -d"'" -f2 | cut -d'.' -f1)
     [ "$openwrt_version" = "23" ] && {
-        msg "OpenWrt 23.05 не поддерживается начиная с podkop 0.5.0"
+        msg "OpenWrt 23.05 не поддерживается начиная с Podkop 0.5.0"
         exit 1
     }
 
     AVAILABLE_SPACE=$(df /overlay | awk 'NR==2 {print $4}')
     REQUIRED_SPACE=15360
-    [ "$AVAILABLE_SPACE" -lt "$REQUIRED_SPACE" ] && { msg "Недостаточно места в памяти"; exit 1; }
+    [ "$AVAILABLE_SPACE" -lt "$REQUIRED_SPACE" ] && { msg "Недостаточно свободного места"; exit 1; }
 
     nslookup google.com >/dev/null 2>&1 || { msg "DNS не работает"; exit 1; }
 
     if pkg_is_installed https-dns-proxy; then
-        msg "Конфликт пакета https-dns-proxy. Удаляем..."
+        msg "Обнаружен конфликтный пакет https-dns-proxy. Удаляем..."
         pkg_remove luci-app-https-dns-proxy
         pkg_remove https-dns-proxy
         pkg_remove luci-i18n-https-dns-proxy*
@@ -91,22 +91,22 @@ main() {
     check_system
     sing_box
 
-    msg "Syncing time..."
+    msg "Синхронизация времени..."
     /usr/sbin/ntpd -q -p 194.190.168.1 -p 216.239.35.0 -p 216.239.35.4 -p 162.159.200.1 -p 162.159.200.123 >/dev/null 2>&1
 
-    pkg_list_update || { msg "Package list update failed"; exit 1; }
+    pkg_list_update || { msg "Не удалось обновить список пакетов"; exit 1; }
 
     if [ -f "/etc/init.d/podkop" ]; then
-        msg "Podkop already installed. Upgrading..."
+        msg "Podkop уже установлен. Обновляем..."
     else
-        msg "Installing podkop..."
+        msg "Устанавливаем Podkop..."
     fi
 
     # Проверка GitHub API
     if command -v curl >/dev/null 2>&1; then
         check_response=$(curl -s "$REPO")
         if echo "$check_response" | grep -q 'API rate limit '; then
-            msg "GitHub API rate limit reached. Retry later."
+            msg "Превышен лимит запросов GitHub. Повторите позже."
             exit 1
         fi
     fi
@@ -126,18 +126,18 @@ main() {
         filepath="$DOWNLOAD_DIR/$filename"
         attempt=0
         while [ $attempt -lt $COUNT ]; do
-            msg "Downloading $filename (attempt $((attempt+1)))..."
+            msg "Скачиваем $filename (попытка $((attempt+1)))..."
             if wget -q -O "$filepath" "$url" >/dev/null 2>&1; then
-                [ -s "$filepath" ] && { msg "$filename downloaded"; download_success=1; break; }
+                [ -s "$filepath" ] && { msg "$filename скачан"; download_success=1; break; }
             fi
-            msg "Download failed, retrying..."
+            msg "Ошибка скачивания, повтор..."
             rm -f "$filepath"
             attempt=$((attempt+1))
         done
-        [ $attempt -eq $COUNT ] && msg "Failed to download $filename after $COUNT attempts"
+        [ $attempt -eq $COUNT ] && msg "Не удалось скачать $filename после $COUNT попыток"
     done
 
-    [ $download_success -eq 0 ] && { msg "No packages downloaded"; exit 1; }
+    [ $download_success -eq 0 ] && { msg "Нет успешно скачанных пакетов"; exit 1; }
 
     # Установка основных пакетов
     for pkg in podkop luci-app-podkop; do
@@ -145,25 +145,24 @@ main() {
         [ -n "$file" ] && pkg_install "$DOWNLOAD_DIR/$file"
     done
 
-    # Русский интерфейс
-    ru=$(ls "$DOWNLOAD_DIR" | grep "luci-i18n-podkop-ru" | head -n 1)
-    if [ -n "$ru" ]; then
-        if pkg_is_installed luci-i18n-podkop-ru; then
-            msg "Upgrading Russian translation..."
-            pkg_remove luci-i18n-podkop* >/dev/null 2>&1
-            pkg_install "$DOWNLOAD_DIR/$ru"
-        else
-            msg "Русский интерфейс? y/n"
-            while true; do
-                read -r RUS
-                case $RUS in
-                    y) pkg_install "$DOWNLOAD_DIR/$ru"; break ;;
-                    n) break ;;
-                    *) msg "Введите y или n" ;;
-                esac
-            done
-        fi
+# Русский интерфейс
+ru=$(ls "$DOWNLOAD_DIR" | grep "luci-i18n-podkop-ru" | head -n 1)
+if [ -n "$ru" ]; then
+    if pkg_is_installed luci-i18n-podkop-ru; then
+        msg "Обновляем русский язык..."
+        pkg_remove luci-i18n-podkop* >/dev/null 2>&1
+        pkg_install "$DOWNLOAD_DIR/$ru"
+    else
+        msg "Установить русский интерфейс? y/N"
+        read -r RUS
+        case "$RUS" in
+            y|Y) pkg_install "$DOWNLOAD_DIR/$ru" ;;
+            n|N|"") break ;;
+            *) exit 0 ;;
+        esac
     fi
+fi
+
 
     # Очистка временных файлов
     find "$DOWNLOAD_DIR" -type f -name '*podkop*' -exec rm -f {} \;
