@@ -24,8 +24,8 @@ WORKDIR="/tmp/byedpi"
 start_byedpi() {
 echo -e "Запуск ByeDPI..."
 echo -e ""
-    /etc/init.d/byedpi enable
-    /etc/init.d/byedpi start
+    /etc/init.d/byedpi enable >/dev/null 2>&1
+    /etc/init.d/byedpi start >/dev/null 2>&1
 }
 
 # ==========================================
@@ -173,6 +173,8 @@ install_update() {
     opkg install --force-reinstall "$LATEST_FILE" >/dev/null 2>&1
     rm -rf "$WORKDIR"
 	echo -e ""
+	/etc/init.d/byedpi enable >/dev/null 2>&1
+    /etc/init.d/byedpi start >/dev/null 2>&1
     echo -e "${GREEN}ByeDPI успешно установлен!${NC}"
 	echo -e ""
     read -p "Нажмите Enter..." dummy
@@ -462,7 +464,7 @@ EOF
         reboot
         ;;
     *) 
-        echo -e "${YELLOW}Необходимость перезагрузки отложена.${NC}" 
+        echo -e "${YELLOW}Перезагрузка отложена.${NC}" 
         ;;
 esac
 echo -e ""
@@ -470,7 +472,7 @@ read -p "Нажмите Enter..." dummy
 }
 
 # ==========================================
-# Измениние стратегии ByeDP
+# Измениние стратегии ByeDPI
 # ==========================================
 fix_strategy() {
     clear
@@ -576,7 +578,7 @@ fi
     echo -e "${CYAN}4) ${GREEN}Изменить текущую стратегию ${NC}ByeDPI"
     echo -e "${CYAN}5) ${GREEN}Установить / обновить ${NC}Podkop"
 	echo -e "${CYAN}6) ${GREEN}Удалить ${NC}Podkop"
-	echo -e "${CYAN}7) ${GREEN}Установить ByeDPI + Podkop + Интеграция${NC}"
+	echo -e "${CYAN}7) ${GREEN}Установить ${NC}ByeDPI ${GREEN}+ ${NC}Podkop ${GREEN}+ ${NC}Интеграция${NC}"
 	echo -e "${CYAN}8) ${GREEN}Выход (Enter)${NC}"
 	echo -e ""
     echo -ne "${YELLOW}Выберите пункт:${NC} "
