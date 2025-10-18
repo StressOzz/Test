@@ -213,7 +213,7 @@ enable_discord_calls() {
     local NO_PAUSE=$1
     [ "$NO_PAUSE" != "1" ] && clear
     [ "$NO_PAUSE" != "1" ] && echo -e ""
-    echo -e "${MAGENTA}Меню настройки Discord и звонков в TG/WA${NC}"
+    [ "$NO_PAUSE" != "1" ] && echo -e "${MAGENTA}Меню настройки Discord и звонков в TG/WA${NC}"
     echo -e ""
 
     if [ ! -f /etc/init.d/zapret ]; then
@@ -310,6 +310,9 @@ enable_discord_calls() {
     fi
 
 	echo -e ""
+		chmod +x /opt/zapret/sync_config.sh
+		/opt/zapret/sync_config.sh
+		/etc/init.d/zapret restart >/dev/null 2>&1
     read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
 
@@ -508,6 +511,7 @@ fi
 		uninstall_zapret "1"
 		install_update "1" "latest"
 		fix_default "1"
+		echo -e "${MAGENTA}Включаем Discord и звонки в TG и WA${NC}"
 		enable_discord_calls "1"
 		echo -e "Zapret ${GREEN}установлен и настроен !${NC}"
 		echo -e ""
