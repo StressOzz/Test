@@ -75,7 +75,7 @@ get_versions() {
 install_update() {
 local NO_PAUSE=$1
     [ "$NO_PAUSE" != "1" ] && clear
-    echo -e ""
+    [ "$NO_PAUSE" != "1" ] && echo -e ""
     if [ "$INSTALLED_VER" != "не найдена" ]; then
         echo -e "${MAGENTA}Устанваливаем ZAPRET${NC}"
         ACTION="update"
@@ -179,7 +179,7 @@ local NO_PAUSE=$1
 fix_default() {
 local NO_PAUSE=$1
     [ "$NO_PAUSE" != "1" ] && clear
-    echo -e ""
+    [ "$NO_PAUSE" != "1" ] && echo -e ""
     echo -e "${MAGENTA}Редактируем стратегию по умолчанию${NC}"
     echo -e ""
 
@@ -212,7 +212,7 @@ local NO_PAUSE=$1
 enable_discord_calls() {
     local NO_PAUSE=$1
     [ "$NO_PAUSE" != "1" ] && clear
-    echo -e ""
+    [ "$NO_PAUSE" != "1" ] && echo -e ""
     echo -e "${MAGENTA}Включаем Discord и звонки в TG и WA${NC}"
     echo -e ""
 
@@ -220,7 +220,7 @@ enable_discord_calls() {
     if [ ! -f /etc/init.d/zapret ]; then
         echo -e "${RED}Zapret не установлен !${NC}"
         echo -e ""
-        [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
+		read -p "Нажмите Enter для выхода в главное меню..." dummy
         return
     fi
 
@@ -238,8 +238,8 @@ enable_discord_calls() {
         fi
     fi
 
-    echo -e "${YELLOW}Текущий установленный скрипт:${NC} $CURRENT_SCRIPT"
-    echo -e ""
+    [ "$NO_PAUSE" != "1" ] && echo -e "${YELLOW}Текущий установленный скрипт:${NC} $CURRENT_SCRIPT"
+    [ "$NO_PAUSE" != "1" ] && echo -e ""
 
     # Определяем выбранный скрипт
     if [ "$NO_PAUSE" = "1" ]; then
@@ -298,7 +298,7 @@ enable_discord_calls() {
             echo -e ""
             echo -e "${RED}Ошибка при скачивании скрипта !${NC}"
             echo -e ""
-            [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для продолжения..." dummy
+            read -p "Нажмите Enter для продолжения..." dummy
             return
         fi
     fi
@@ -318,7 +318,7 @@ enable_discord_calls() {
     /opt/zapret/sync_config.sh
     /etc/init.d/zapret restart >/dev/null 2>&1
 
-    read -p "Нажмите Enter для продолжения..." dummy
+    read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
 
 
