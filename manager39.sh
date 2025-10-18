@@ -351,9 +351,9 @@ zapret_key(){
         enable_discord_calls "1"
 
         if [ -f /etc/init.d/zapret ]; then
-            echo -e "Zapret ${GREEN}установлен и настроен !${NC}"
+            echo -e "${BLUE}🔴 ${GREEN}Zapret ${GREEN}установлен и настроен !${NC}"
         else
-            echo -e "Zapret ${RED}не установлен !${NC}"
+            echo -e "${RED}Zapret не установлен !${NC}"
         fi
 
         echo -e ""
