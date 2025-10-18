@@ -245,7 +245,7 @@ enable_discord_calls() {
     else
         echo -e "${CYAN}1) ${GREEN}Установить скрипт ${NC}50-stun4all"
         echo -e "${CYAN}2) ${GREEN}Установить скрипт ${NC}50-quic4all"
-        echo -e "${CYAN}3) ${GREEN}Выключить скрипт${NC}"
+        echo -e "${CYAN}3) ${GREEN}Удалить скрипт${NC}"
         echo -e "${CYAN}0) ${GREEN}Выход в главное меню (Enter)${NC}"
         echo -e ""
         echo -ne "${YELLOW}Выберите пункт:${NC} "
@@ -310,7 +310,7 @@ enable_discord_calls() {
     fi
 
 	echo -e ""
-    read -p "Нажмите Enter для возврата в меню..." dummy
+    read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
 
 
