@@ -331,8 +331,11 @@ enable_discord_calls() {
 # Zapret под ключ
 # ==========================================
 zapret_key(){
-		clear
-    	get_versions
+	clear
+	echo -e ""
+    echo -e "${MAGENTA}Удаление, установка и настройка Zapret${NC}"
+    echo -e ""
+    get_versions
 
     if [ "$LIMIT_REACHED" -eq 1 ]; then
         echo -e ""
