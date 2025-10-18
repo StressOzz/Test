@@ -37,26 +37,37 @@ get_versions() {
         opkg install curl >/dev/null 2>&1
     }
 
-    LATEST_URL=$(curl -s https://api.github.com/repos/remittor/zapret-openwrt/releases/latest \
-        | grep browser_download_url | grep "$LOCAL_ARCH.zip" | cut -d '"' -f 4)
-    PREV_URL=$(curl -s https://api.github.com/repos/remittor/zapret-openwrt/releases \
-        | grep browser_download_url | grep "$LOCAL_ARCH.zip" | sed -n '2p' | cut -d '"' -f 4)
-
-    if [ -n "$LATEST_URL" ] && echo "$LATEST_URL" | grep -q '\.zip$'; then
-        LATEST_FILE=$(basename "$LATEST_URL")
-        LATEST_VER=$(echo "$LATEST_FILE" | sed -E 's/.*zapret_v([0-9]+\.[0-9]+)_.*\.zip/\1/')
+    # ===== Проверка лимита GitHub API =====
+    API_RESPONSE=$(curl -s https://api.github.com/repos/remittor/zapret-openwrt/releases/latest)
+    if echo "$API_RESPONSE" | grep -q 'API rate limit exceeded'; then
+        LATEST_VER="${RED}Достигнут лимит GitHub API. Подождите 5-15 минут.${NC}"
+        PREV_VER=""
         USED_ARCH="$LOCAL_ARCH"
+        LATEST_URL=""
+        PREV_URL=""
     else
-        LATEST_VER="не найдена"
-        USED_ARCH="нет пакета для вашей архитектуры"
-    fi
+        # Получаем ссылки на последние релизы
+        LATEST_URL=$(echo "$API_RESPONSE" | grep browser_download_url | grep "$LOCAL_ARCH.zip" | cut -d '"' -f 4)
+        PREV_URL=$(curl -s https://api.github.com/repos/remittor/zapret-openwrt/releases \
+                    | grep browser_download_url | grep "$LOCAL_ARCH.zip" | sed -n '2p' | cut -d '"' -f 4)
 
-    if [ -n "$PREV_URL" ] && echo "$PREV_URL" | grep -q '\.zip$'; then
-        PREV_FILE=$(basename "$PREV_URL")
-        PREV_VER=$(echo "$PREV_FILE" | sed -E 's/.*zapret_v([0-9]+\.[0-9]+)_.*\.zip/\1/')
-    else
-        PREV_VER="не найдена"
+        if [ -n "$LATEST_URL" ] && echo "$LATEST_URL" | grep -q '\.zip$'; then
+            LATEST_FILE=$(basename "$LATEST_URL")
+            LATEST_VER=$(echo "$LATEST_FILE" | sed -E 's/.*zapret_v([0-9]+\.[0-9]+)_.*\.zip/\1/')
+            USED_ARCH="$LOCAL_ARCH"
+        else
+            LATEST_VER="не найдена"
+            USED_ARCH="нет пакета для вашей архитектуры"
+        fi
+
+        if [ -n "$PREV_URL" ] && echo "$PREV_URL" | grep -q '\.zip$'; then
+            PREV_FILE=$(basename "$PREV_URL")
+            PREV_VER=$(echo "$PREV_FILE" | sed -E 's/.*zapret_v([0-9]+\.[0-9]+)_.*\.zip/\1/')
+        else
+            PREV_VER="не найдена"
+        fi
     fi
+    # =======================================
 
     if [ -f /etc/init.d/zapret ]; then
         if /etc/init.d/zapret status 2>/dev/null | grep -qi "running"; then
@@ -68,6 +79,7 @@ get_versions() {
         ZAPRET_STATUS=""
     fi
 }
+
 
 # ==========================================
 # Установка Zapret
@@ -375,10 +387,6 @@ local NO_PAUSE=$1
 # ==========================================
 show_menu() {
     get_versions  # Получаем версии, архитектуру и статус службы
-
-	clear
-	echo -e ""
-	echo -e "${YELLOW}Модель и архитектура роутера:${NC} $MODEL / $LOCAL_ARCH"
     
     clear
 	echo -e ""
