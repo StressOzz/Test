@@ -87,20 +87,13 @@ install_update() {
     [ "$NO_PAUSE" != "1" ] && clear
     [ "$NO_PAUSE" != "1" ] && echo -e ""
 
-    if [ "$INSTALLED_VER" != "не найдена" ]; then
-        echo -e "${MAGENTA}Устанавливаем ZAPRET${NC}"
-        ACTION="update"
-    else
-        echo -e "${MAGENTA}Устанавливаем ZAPRET${NC}"
-        ACTION="install"
-    fi
+    echo -e "${MAGENTA}Устанавливаем ZAPRET${NC}"
     echo -e ""
 
     get_versions
 
     # Проверка лимита API
     if [ "$LIMIT_REACHED" -eq 1 ]; then
-        echo -e ""
         echo -e "$LATEST_VER"  # Покажет предупреждение
         echo -e ""
         [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
@@ -182,11 +175,7 @@ install_update() {
     }
 
     echo -e ""
-    if [ "$ACTION" = "update" ]; then
-        echo -e "${BLUE}🔴 ${GREEN}Zapret успешно обновлён !${NC}"
-    else
-        echo -e "${BLUE}🔴 ${GREEN}Zapret успешно установлен !${NC}"
-    fi
+    echo -e "${BLUE}🔴 ${GREEN}Zapret успешно установлен !${NC}"
     echo -e ""
     [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
