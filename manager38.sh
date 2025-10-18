@@ -334,7 +334,6 @@ zapret_key(){
 	clear
 	echo -e ""
     echo -e "${MAGENTA}Удаление, установка и настройка Zapret${NC}"
-    echo -e ""
     get_versions
 
     if [ "$LIMIT_REACHED" -eq 1 ]; then
