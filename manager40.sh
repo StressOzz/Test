@@ -487,17 +487,35 @@ local NO_PAUSE=$1
 }
 
 # ==========================================
+# Проверка Flow Offloading (программного и аппаратного)
+# ==========================================
+check_flow_offloading() {
+    local FLOW_STATE=$(uci get firewall.@defaults[0].flow_offloading 2>/dev/null)
+    local HW_FLOW_STATE=$(uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null)
+
+    if [ "$FLOW_STATE" = "1" ] || [ "$HW_FLOW_STATE" = "1" ]; then
+        FLOW_WARNING="${RED} Flow Offloading включён !${NC}"
+    else
+        FLOW_WARNING=""
+    fi
+}
+
+
+
+# ==========================================
 # Главное меню
 # ==========================================
 show_menu() {
     get_versions
-    
+    check_flow_offloading
     clear
 	echo -e ""
 	echo -e "╔════════════════════════════════════╗"
 	echo -e "║     ${BLUE}Zapret on remittor Manager${NC}     ║"
 	echo -e "╚════════════════════════════════════╝"
 	echo -e "                                  ${DGRAY}v2.9${NC}"
+
+[ -n "$FLOW_WARNING" ] && echo -e "$FLOW_WARNING\n"
 
     # Определяем актуальная/устарела
 if [ "$LIMIT_REACHED" -eq 1 ]; then
