@@ -214,7 +214,7 @@ enable_discord_calls() {
     [ "$NO_PAUSE" != "1" ] && clear
     [ "$NO_PAUSE" != "1" ] && echo -e ""
     [ "$NO_PAUSE" != "1" ] && echo -e "${MAGENTA}Меню настройки Discord и звонков в TG/WA${NC}"
-    echo -e ""
+    [ "$NO_PAUSE" != "1" ] && echo -e ""
 
     if [ ! -f /etc/init.d/zapret ]; then
         echo -e "${RED}Zapret не установлен !${NC}"
@@ -313,7 +313,7 @@ enable_discord_calls() {
 		chmod +x /opt/zapret/sync_config.sh
 		/opt/zapret/sync_config.sh
 		/etc/init.d/zapret restart >/dev/null 2>&1
-    read -p "Нажмите Enter для выхода в главное меню..." dummy
+    [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
 
 
@@ -382,7 +382,7 @@ show_menu() {
 	echo -e "╔════════════════════════════════════╗"
 	echo -e "║     ${BLUE}Zapret on remittor Manager${NC}     ║"
 	echo -e "╚════════════════════════════════════╝"
-	echo -e "                                  ${DGRAY}v2.4${NC}"
+	echo -e "                                  ${DGRAY}v2.5${NC}"
 
     # Определяем актуальная/устарела
 if [ "$INSTALLED_VER" = "$LATEST_VER" ] && [ "$LATEST_VER" != "не найдена" ]; then
@@ -497,6 +497,9 @@ fi
             if [ -f /etc/init.d/zapret ]; then
                 echo -e "${GREEN}🔴 ${CYAN}Запускаем сервис ${NC}Zapret"
                 /etc/init.d/zapret start >/dev/null 2>&1
+		chmod +x /opt/zapret/sync_config.sh
+		/opt/zapret/sync_config.sh
+		/etc/init.d/zapret restart >/dev/null 2>&1
                 echo -e ""
                 echo -e "${BLUE}🔴 ${GREEN}Zapret запущен !${NC}"
             else
@@ -509,7 +512,7 @@ fi
 		7) enable_discord_calls ;;
 		8) 
 		uninstall_zapret "1"
-		install_update "1" "latest"
+		install_update "1"
 		fix_default "1"
 		echo -e "${MAGENTA}Включаем Discord и звонки в TG и WA${NC}"
 		enable_discord_calls "1"
