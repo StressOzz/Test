@@ -297,7 +297,7 @@ enable_discord_calls() {
     else
         mkdir -p "$CUSTOM_DIR"
         if curl -fsSLo "$CUSTOM_DIR/50-script.sh" "$URL"; then
-			echo -e ""
+			[ "$NO_PAUSE" != "1" ] && echo -e ""
             echo -e "${GREEN}🔴 ${CYAN}Скрипт ${NC}$SELECTED${CYAN} успешно установлен !${NC}"
             chmod +x /opt/zapret/sync_config.sh
             /opt/zapret/sync_config.sh
@@ -307,7 +307,7 @@ enable_discord_calls() {
         else
             echo -e "${RED}Ошибка при скачивании скрипта !${NC}"
 			echo -e ""
-            read -p "Нажмите Enter для выхода в главное меню..." dummy
+            [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
             return
         fi
     fi
@@ -319,7 +319,7 @@ enable_discord_calls() {
         echo "'" >> /etc/config/zapret
     fi
 
-	[ "$NO_PAUSE" != "1" ] && echo -e ""
+	echo -e ""
 		chmod +x /opt/zapret/sync_config.sh
 		/opt/zapret/sync_config.sh
 		/etc/init.d/zapret restart >/dev/null 2>&1
