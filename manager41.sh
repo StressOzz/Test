@@ -17,6 +17,7 @@ DGRAY="\033[38;5;236m"
 
 # Рабочая директория для скачивания и распаковки
 WORKDIR="/tmp/zapret-update"
+check_flow_offloading
 
 # ==========================================
 # Функция получения информации о версиях, архитектуре и статусе
@@ -494,20 +495,16 @@ check_flow_offloading() {
     local HW_FLOW_STATE=$(uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null)
 
     if [ "$FLOW_STATE" = "1" ] || [ "$HW_FLOW_STATE" = "1" ]; then
-        FLOW_WARNING="${RED} Flow Offloading включён !${NC}"
+        FLOW_WARNING="${RED}ВНИМАНИЕ:${NC} обнаружено включённое аппаратное ускорение пакетов (Flow Offloading) !${NC}"
     else
         FLOW_WARNING=""
     fi
 }
 
-
-
 # ==========================================
 # Главное меню
 # ==========================================
 show_menu() {
-    get_versions
-    check_flow_offloading
     clear
 	echo -e ""
 	echo -e "╔════════════════════════════════════╗"
@@ -515,7 +512,9 @@ show_menu() {
 	echo -e "╚════════════════════════════════════╝"
 	echo -e "                                  ${DGRAY}v2.9${NC}"
 
-[ -n "$FLOW_WARNING" ] && echo -e "$FLOW_WARNING\n"
+	get_versions
+
+[ -n "$FLOW_WARNING" ] && echo -e "$FLOW_WARNING"
 
     # Определяем актуальная/устарела
 if [ "$LIMIT_REACHED" -eq 1 ]; then
