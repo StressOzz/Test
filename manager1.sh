@@ -213,7 +213,7 @@ enable_discord_calls() {
     local NO_PAUSE=$1
     [ "$NO_PAUSE" != "1" ] && clear
     [ "$NO_PAUSE" != "1" ] && echo -e ""
-    echo -e "${MAGENTA}Включаем Discord и звонки в TG и WA${NC}"
+    echo -e "${MAGENTA}Меню настройки Discord и звонков в TG/WA${NC}"
     echo -e ""
 
     # Проверка, установлен ли Zapret
@@ -266,7 +266,13 @@ enable_discord_calls() {
                 URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-quic4all"
                 ;;
 			3) 
-				rm -f /opt/zapret/init.d/openwrt/custom.d/50-script.sh 2>/dev/null
+                echo -e ""
+                echo -e "${GREEN}Скрипт удалён !${NC}"
+		rm -f /opt/zapret/init.d/openwrt/custom.d/50-script.sh 2>/dev/null
+		chmod +x /opt/zapret/sync_config.sh
+    	/opt/zapret/sync_config.sh
+   		/etc/init.d/zapret restart >/dev/null 2>&1
+		sleep 1
 				enable_discord_calls
 				;;
             *) 
