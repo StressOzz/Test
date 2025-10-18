@@ -24,6 +24,7 @@ WORKDIR="/tmp/zapret-update"  # Временная папка для загру�
 get_versions() {
     INSTALLED_VER=$(opkg list-installed | grep '^zapret ' | awk '{print $3}')
     [ -z "$INSTALLED_VER" ] && INSTALLED_VER="не найдена"
+
     LOCAL_ARCH=$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release)
     [ -z "$LOCAL_ARCH" ] && LOCAL_ARCH=$(opkg print-architecture | grep -v "noarch" | sort -k3 -n | tail -n1 | awk '{print $2}')
 
@@ -38,19 +39,13 @@ get_versions() {
     }
 
     # ===== Проверка лимита GitHub API =====
-    API_RESPONSE=$(curl -s https://api.github.com/repos/remittor/zapret-openwrt/releases/latest)
-    if echo "$API_RESPONSE" | grep -q 'API rate limit exceeded'; then
+    LIMIT_REACHED=0
+    LIMIT_CHECK=$(curl -s "https://api.github.com/repos/remittor/zapret-openwrt/releases/latest")
+    if echo "$LIMIT_CHECK" | grep -q 'API rate limit exceeded'; then
         LATEST_VER="${RED}Достигнут лимит GitHub API. Подождите 5-15 минут.${NC}"
-        PREV_VER=""
-        USED_ARCH="$LOCAL_ARCH"
-        LATEST_URL=""
-        PREV_URL=""
+        LIMIT_REACHED=1
     else
-        # Получаем ссылки на последние релизы
-        LATEST_URL=$(echo "$API_RESPONSE" | grep browser_download_url | grep "$LOCAL_ARCH.zip" | cut -d '"' -f 4)
-        PREV_URL=$(curl -s https://api.github.com/repos/remittor/zapret-openwrt/releases \
-                    | grep browser_download_url | grep "$LOCAL_ARCH.zip" | sed -n '2p' | cut -d '"' -f 4)
-
+        LATEST_URL=$(echo "$LIMIT_CHECK" | grep browser_download_url | grep "$LOCAL_ARCH.zip" | cut -d '"' -f 4)
         if [ -n "$LATEST_URL" ] && echo "$LATEST_URL" | grep -q '\.zip$'; then
             LATEST_FILE=$(basename "$LATEST_URL")
             LATEST_VER=$(echo "$LATEST_FILE" | sed -E 's/.*zapret_v([0-9]+\.[0-9]+)_.*\.zip/\1/')
@@ -59,16 +54,19 @@ get_versions() {
             LATEST_VER="не найдена"
             USED_ARCH="нет пакета для вашей архитектуры"
         fi
-
-        if [ -n "$PREV_URL" ] && echo "$PREV_URL" | grep -q '\.zip$'; then
-            PREV_FILE=$(basename "$PREV_URL")
-            PREV_VER=$(echo "$PREV_FILE" | sed -E 's/.*zapret_v([0-9]+\.[0-9]+)_.*\.zip/\1/')
-        else
-            PREV_VER="не найдена"
-        fi
     fi
-    # =======================================
 
+    # Предыдущая версия
+    PREV_URL=$(curl -s https://api.github.com/repos/remittor/zapret-openwrt/releases \
+        | grep browser_download_url | grep "$LOCAL_ARCH.zip" | sed -n '2p' | cut -d '"' -f 4)
+    if [ -n "$PREV_URL" ] && echo "$PREV_URL" | grep -q '\.zip$'; then
+        PREV_FILE=$(basename "$PREV_URL")
+        PREV_VER=$(echo "$PREV_FILE" | sed -E 's/.*zapret_v([0-9]+\.[0-9]+)_.*\.zip/\1/')
+    else
+        PREV_VER="не найдена"
+    fi
+
+    # Статус службы
     if [ -f /etc/init.d/zapret ]; then
         if /etc/init.d/zapret status 2>/dev/null | grep -qi "running"; then
             ZAPRET_STATUS="${GREEN}запущен${NC}"
@@ -393,10 +391,13 @@ show_menu() {
 	echo -e "╔════════════════════════════════════╗"
 	echo -e "║     ${BLUE}Zapret on remittor Manager${NC}     ║"
 	echo -e "╚════════════════════════════════════╝"
-	echo -e "                                  ${DGRAY}v2.5${NC}"
+	echo -e "                                  ${DGRAY}v2.6${NC}"
 
     # Определяем актуальная/устарела
-if [ "$INSTALLED_VER" = "$LATEST_VER" ] && [ "$LATEST_VER" != "не найдена" ]; then
+if [ "$LIMIT_REACHED" -eq 1 ]; then
+    INST_COLOR=$CYAN
+    INSTALLED_DISPLAY="$INSTALLED_VER"
+elif [ "$INSTALLED_VER" = "$LATEST_VER" ] && [ "$LATEST_VER" != "не найдена" ]; then
     INST_COLOR=$GREEN
     INSTALLED_DISPLAY="$INSTALLED_VER (актуальная)"
 elif [ "$LATEST_VER" = "не найдена" ]; then
@@ -409,7 +410,6 @@ else
     INST_COLOR=$RED
     INSTALLED_DISPLAY="$INSTALLED_VER"
 fi
-
 
     # Вывод информации о версиях и архитектуре
     echo -e ""
