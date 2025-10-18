@@ -266,15 +266,16 @@ enable_discord_calls() {
                 URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-quic4all"
                 ;;
 			3) 
-                echo -e ""
-                echo -e "${GREEN}Скрипт удалён !${NC}"
-		rm -f /opt/zapret/init.d/openwrt/custom.d/50-script.sh 2>/dev/null
-		chmod +x /opt/zapret/sync_config.sh
-    	/opt/zapret/sync_config.sh
-   		/etc/init.d/zapret restart >/dev/null 2>&1
-		sleep 1
-				enable_discord_calls
-				;;
+    			echo -e ""
+    			echo -e "${GREEN}Скрипт удалён !${NC}"
+    			rm -f /opt/zapret/init.d/openwrt/custom.d/50-script.sh 2>/dev/null
+				chmod +x /opt/zapret/sync_config.sh
+				/opt/zapret/sync_config.sh
+				/etc/init.d/zapret restart >/dev/null 2>&1
+    			sleep 1
+    			enable_discord_calls 1
+    			return
+    			;;
   			  *)
         			echo -e ""
        				echo -e "${GREEN}Выходим в главное меню...${NC}"
