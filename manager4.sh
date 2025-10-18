@@ -74,7 +74,7 @@ get_versions() {
 # ==========================================
 install_update() {
 local NO_PAUSE=$1
-    clear
+    [ "$NO_PAUSE" != "1" ] && clear
     echo -e ""
     if [ "$INSTALLED_VER" != "не найдена" ]; then
         echo -e "${MAGENTA}Устанваливаем ZAPRET${NC}"
@@ -178,7 +178,7 @@ local NO_PAUSE=$1
 # ==========================================
 fix_default() {
 local NO_PAUSE=$1
-    clear
+    [ "$NO_PAUSE" != "1" ] && clear
     echo -e ""
     echo -e "${MAGENTA}Редактируем стратегию по умолчанию${NC}"
     echo -e ""
@@ -210,7 +210,8 @@ local NO_PAUSE=$1
 # Включение Discord и звонков в TG и WA
 # ==========================================
 enable_discord_calls() {
-    clear
+local NO_PAUSE=$1
+    [ "$NO_PAUSE" != "1" ] && clear
     echo -e ""
     echo -e "${MAGENTA}Включаем Discord и звонки в TG и WA${NC}"
     echo -e ""
@@ -317,7 +318,7 @@ enable_discord_calls() {
 # ==========================================
 uninstall_zapret() {
 local NO_PAUSE=$1
-    clear
+    [ "$NO_PAUSE" != "1" ] && clear
     echo -e ""
     echo -e "${MAGENTA}Удаляем ZAPRET${NC}"
     echo -e ""
