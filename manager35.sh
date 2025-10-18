@@ -495,7 +495,7 @@ show_menu() {
 	echo -e "╔════════════════════════════════════╗"
 	echo -e "║     ${BLUE}Zapret on remittor Manager${NC}     ║"
 	echo -e "╚════════════════════════════════════╝"
-	echo -e "                                  ${DGRAY}v2.7${NC}"
+	echo -e "                                  ${DGRAY}v2.8${NC}"
 
     # Определяем актуальная/устарела
 if [ "$LIMIT_REACHED" -eq 1 ]; then
