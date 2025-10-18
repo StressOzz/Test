@@ -250,7 +250,8 @@ enable_discord_calls() {
         # Меню выбора
         echo -e "${CYAN}1) ${GREEN}Установить скрипт ${NC}50-stun4all"
         echo -e "${CYAN}2) ${GREEN}Установить скрипт ${NC}50-quic4all"
-        echo -e "${CYAN}3) ${GREEN}Выход в главное меню (Enter)${NC}"
+		echo -e "${CYAN}3) ${GREEN}Выключить скрипт${NC}"
+        echo -e "${CYAN}0) ${GREEN}Выход в главное меню (Enter)${NC}"
         echo -e ""
         echo -ne "${YELLOW}Выберите пункт:${NC} "
         read choice
@@ -264,14 +265,14 @@ enable_discord_calls() {
                 SELECTED="50-quic4all"
                 URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-quic4all"
                 ;;
-            3|"")
+			3) 
+				rm -f /opt/zapret/init.d/openwrt/custom.d/50-script.sh 2>/dev/null
+				enable_discord_calls
+				;;
+            *) 
                 echo -e ""
-                echo -e "${GREEN}Выходим в главное меню${NC}"
-                return
-                ;;
-            *)
-                echo -e ""
-                echo -e "${GREEN}Выходим в главное меню${NC}"
+                echo -e "${GREEN}Выходим в главное меню...${NC}"
+				sleep 1
                 return
                 ;;
         esac
@@ -441,7 +442,7 @@ fi
     echo -e "${CYAN}4) ${GREEN}Остановить ${NC}Zapret"
     echo -e "${CYAN}5) ${GREEN}Запустить ${NC}Zapret"
     echo -e "${CYAN}6) ${GREEN}Удалить ${NC}Zapret"
-	echo -e "${CYAN}7) ${GREEN}Включить ${NC}Discord${GREEN} и звонки в ${NC}TG${GREEN} и ${NC}WA"
+	echo -e "${CYAN}7) ${GREEN}Меню настройки ${NC}Discord${GREEN} и звонков в ${NC}TG${GREEN}/${NC}WA"
 	echo -e "${CYAN}8) ${GREEN}Удалить / Установить / Настроить${NC} Zapret"
     echo -e "${CYAN}0) ${GREEN}Выход (Enter)${NC}"
     echo -e ""
