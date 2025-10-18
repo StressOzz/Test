@@ -442,7 +442,7 @@ start_zapret() {
 # ==========================================
 uninstall_zapret() {
 local NO_PAUSE=$1
-	clear
+	[ "$NO_PAUSE" != "1" ] && clear
     echo -e ""
     echo -e "${MAGENTA}Удаляем ZAPRET${NC}"
     echo -e ""
