@@ -42,7 +42,7 @@ get_versions() {
     LIMIT_REACHED=0
     LIMIT_CHECK=$(curl -s "https://api.github.com/repos/remittor/zapret-openwrt/releases/latest")
     if echo "$LIMIT_CHECK" | grep -q 'API rate limit exceeded'; then
-        LATEST_VER="${RED}Достигнут лимит GitHub API. Подождите 5-15 минут.${NC}"
+        LATEST_VER="${RED}Достигнут лимит GitHub API. Подождите 15 минут.${NC}"
         LIMIT_REACHED=1
     else
         LATEST_URL=$(echo "$LIMIT_CHECK" | grep browser_download_url | grep "$LOCAL_ARCH.zip" | cut -d '"' -f 4)
@@ -212,7 +212,7 @@ local NO_PAUSE=$1
 	/etc/init.d/zapret restart >/dev/null 2>&1
 
     echo -e "${BLUE}🔴 ${GREEN}Стратегия по умолчанию отредактирована !${NC}"
-    echo -e ""
+    [ "$NO_PAUSE" != "1" ] &&echo -e ""
 	[ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
 
@@ -319,7 +319,7 @@ enable_discord_calls() {
         echo "'" >> /etc/config/zapret
     fi
 
-	echo -e ""
+	[ "$NO_PAUSE" != "1" ] && echo -e ""
 		chmod +x /opt/zapret/sync_config.sh
 		/opt/zapret/sync_config.sh
 		/etc/init.d/zapret restart >/dev/null 2>&1
