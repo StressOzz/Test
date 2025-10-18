@@ -216,19 +216,17 @@ enable_discord_calls() {
     echo -e "${MAGENTA}Меню настройки Discord и звонков в TG/WA${NC}"
     echo -e ""
 
-    # Проверка, установлен ли Zapret
     if [ ! -f /etc/init.d/zapret ]; then
         echo -e "${RED}Zapret не установлен !${NC}"
         echo -e ""
-		read -p "Нажмите Enter для выхода в главное меню..." dummy
+        read -p "Нажмите Enter для выхода в главное меню..." dummy
         return
     fi
 
-    # Проверяем текущий установленный кастомный скрипт
     CUSTOM_DIR="/opt/zapret/init.d/openwrt/custom.d/"
     CURRENT_SCRIPT="не установлен"
     if [ -f "$CUSTOM_DIR/50-script.sh" ]; then
-        FIRST_LINE=$(sed -n '1p' "$CUSTOM_DIR/50-script.sh")  # первая строка
+        FIRST_LINE=$(sed -n '1p' "$CUSTOM_DIR/50-script.sh")
         if echo "$FIRST_LINE" | grep -q "QUIC"; then
             CURRENT_SCRIPT="50-quic4all"
         elif echo "$FIRST_LINE" | grep -q "stun"; then
@@ -241,16 +239,13 @@ enable_discord_calls() {
     [ "$NO_PAUSE" != "1" ] && echo -e "${YELLOW}Текущий установленный скрипт:${NC} $CURRENT_SCRIPT"
     [ "$NO_PAUSE" != "1" ] && echo -e ""
 
-    # Определяем выбранный скрипт
     if [ "$NO_PAUSE" = "1" ]; then
-        # Без меню: сразу ставим stun
         SELECTED="50-stun4all"
         URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-stun4all"
     else
-        # Меню выбора
         echo -e "${CYAN}1) ${GREEN}Установить скрипт ${NC}50-stun4all"
         echo -e "${CYAN}2) ${GREEN}Установить скрипт ${NC}50-quic4all"
-		echo -e "${CYAN}3) ${GREEN}Выключить скрипт${NC}"
+        echo -e "${CYAN}3) ${GREEN}Выключить скрипт${NC}"
         echo -e "${CYAN}0) ${GREEN}Выход в главное меню (Enter)${NC}"
         echo -e ""
         echo -ne "${YELLOW}Выберите пункт:${NC} "
@@ -265,69 +260,55 @@ enable_discord_calls() {
                 SELECTED="50-quic4all"
                 URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-quic4all"
                 ;;
-			3) 
-    			echo -e ""
-    			echo -e "${GREEN}Скрипт удалён !${NC}"
-    			rm -f /opt/zapret/init.d/openwrt/custom.d/50-script.sh 2>/dev/null
-				chmod +x /opt/zapret/sync_config.sh
-				/opt/zapret/sync_config.sh
-				/etc/init.d/zapret restart >/dev/null 2>&1
-    			sleep 1
-    			enable_discord_calls
-    			return
-    			;;
-  			  *)
-        			echo -e ""
-       				echo -e "${GREEN}Выходим в главное меню...${NC}"
-        			sleep 1
-        			show_menu
-        			;;
-esac
+            3)
+                echo -e ""
+                echo -e "${GREEN}Скрипт удалён !${NC}"
+                rm -f "$CUSTOM_DIR/50-script.sh" 2>/dev/null
+                chmod +x /opt/zapret/sync_config.sh
+                /opt/zapret/sync_config.sh
+                /etc/init.d/zapret restart >/dev/null 2>&1
+                sleep 1
+                enable_discord_calls
+                return
+                ;;
+            *)
+                echo -e ""
+                echo -e "${GREEN}Выходим в главное меню...${NC}"
+                sleep 1
+                show_menu
+                return
+                ;;
+        esac
     fi
 
-    # Если выбранный уже установлен, не скачиваем
     if [ "$CURRENT_SCRIPT" = "$SELECTED" ]; then
         echo -e ""
         echo -e "${RED}Выбранный скрипт уже установлен !${NC}"
     else
         mkdir -p "$CUSTOM_DIR"
         if curl -fsSLo "$CUSTOM_DIR/50-script.sh" "$URL"; then
-            [ "$NO_PAUSE" != "1" ] && echo -e ""
             echo -e "${GREEN}🔴 ${CYAN}Скрипт ${NC}$SELECTED${CYAN} успешно установлен !${NC}"
             chmod +x /opt/zapret/sync_config.sh
             /opt/zapret/sync_config.sh
             /etc/init.d/zapret restart >/dev/null 2>&1
-            echo -e ""
-	chmod +x /opt/zapret/sync_config.sh
-    /opt/zapret/sync_config.sh
-    /etc/init.d/zapret restart >/dev/null 2>&1
             echo -e "${BLUE}🔴 ${GREEN}Звонки и Discord включены !${NC}"
         else
-            echo -e ""
             echo -e "${RED}Ошибка при скачивании скрипта !${NC}"
-            echo -e ""
             read -p "Нажмите Enter для выхода в главное меню..." dummy
             return
         fi
     fi
 
-    # Добавляем блок UDP, если его нет
     if ! grep -q -- "--filter-udp=50000-50099" /etc/config/zapret; then
-        if ! grep -q '50000-50099' /etc/config/zapret; then
-            sed -i "s/option NFQWS_PORTS_UDP '443'/option NFQWS_PORTS_UDP '443,50000-50099'/" /etc/config/zapret
-        fi
+        sed -i "s/option NFQWS_PORTS_UDP '443'/option NFQWS_PORTS_UDP '443,50000-50099'/" /etc/config/zapret
         sed -i "/^'$/d" /etc/config/zapret
         printf -- '--new\n--filter-udp=50000-50099\n--filter-l7=discord,stun\n--dpi-desync=fake\n' >> /etc/config/zapret
         echo "'" >> /etc/config/zapret
     fi
 
-    # Синхронизация и перезапуск Zapret
-    chmod +x /opt/zapret/sync_config.sh
-    /opt/zapret/sync_config.sh
-    /etc/init.d/zapret restart >/dev/null 2>&1
-
-	echo -e ""
-    [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
+    # Возврат в меню после установки или если уже установлен
+    read -p "Нажмите Enter для возврата в меню..." dummy
+    enable_discord_calls
 }
 
 
