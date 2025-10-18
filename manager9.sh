@@ -284,7 +284,7 @@ enable_discord_calls() {
     else
         mkdir -p "$CUSTOM_DIR"
         if curl -fsSLo "$CUSTOM_DIR/50-script.sh" "$URL"; then
-            echo -e ""
+            [ "$NO_PAUSE" != "1" ] && echo -e ""
             echo -e "${GREEN}🔴 ${CYAN}Скрипт ${NC}$SELECTED${CYAN} успешно установлен !${NC}"
             chmod +x /opt/zapret/sync_config.sh
             /opt/zapret/sync_config.sh
@@ -318,7 +318,8 @@ enable_discord_calls() {
     /opt/zapret/sync_config.sh
     /etc/init.d/zapret restart >/dev/null 2>&1
 
-    read -p "Нажмите Enter для выхода в главное меню..." dummy
+	echo -e ""
+    [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
 
 
@@ -512,7 +513,16 @@ fi
             ;;
         6) uninstall_zapret ;;  # Полное удаление Zapret
 		7) enable_discord_calls ;;
-		8) uninstall_zapret "1" ;install_update "1" "latest"; fix_default "1"; enable_discord_calls "1" ;;
+		8) 
+		uninstall_zapret "1"
+		install_update "1" "latest"
+		fix_default "1"
+		enable_discord_calls "1"
+		echo -e ""
+		echo -e "Zapret ${GREEN}установлен и настроен !${NC}"
+		echo -e ""
+        read -p "Нажмите Enter для выхода в главное меню..." dummy
+		;;
         *) exit 0 ;;  # Выход по Enter или любой другой невалидной опции
     esac
 }
