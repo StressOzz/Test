@@ -275,15 +275,9 @@ enable_discord_calls() {
 		sleep 1
 				enable_discord_calls
 				;;
-  			  0|"")
+  			  *)
         			echo -e ""
        				echo -e "${GREEN}Выходим в главное меню...${NC}"
-        			sleep 1
-        			show_menu
-        			;;
-    		*)
-        			echo -e ""
-        			echo -e "${RED}Неверный выбор. Возврат в главное меню.${NC}"
         			sleep 1
         			show_menu
         			;;
