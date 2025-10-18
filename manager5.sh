@@ -242,6 +242,10 @@ local NO_PAUSE=$1
     echo -e ""
 
 # Предлагаем выбор скрипта для установки
+    if [ "$NO_PAUSE" = "1" ]; then
+        SELECTED="50-stun4all"
+        URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-stun4all"
+    else
     echo -e "${CYAN}1) ${GREEN}Установить скрипт ${NC}50-stun4all"
     echo -e "${CYAN}2) ${GREEN}Установить скрипт ${NC}50-quic4all"
     echo -e "${CYAN}3) ${GREEN}Выход в главное меню (Enter)${NC}"
@@ -318,7 +322,7 @@ local NO_PAUSE=$1
 # ==========================================
 uninstall_zapret() {
 local NO_PAUSE=$1
-    [ "$NO_PAUSE" != "1" ] && clear
+	clear
     echo -e ""
     echo -e "${MAGENTA}Удаляем ZAPRET${NC}"
     echo -e ""
