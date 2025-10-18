@@ -273,7 +273,7 @@ enable_discord_calls() {
 				/opt/zapret/sync_config.sh
 				/etc/init.d/zapret restart >/dev/null 2>&1
     			sleep 1
-    			enable_discord_calls 1
+    			enable_discord_calls
     			return
     			;;
   			  *)
