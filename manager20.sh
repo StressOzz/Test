@@ -95,6 +95,14 @@ local NO_PAUSE=$1
     fi
     echo -e ""
     get_versions
+	# Проверка лимита API
+if [ "$LIMIT_REACHED" -eq 1 ]; then
+    echo -e ""
+    echo -e "$LATEST_VER"  # Покажет предупреждение
+    echo -e ""
+    [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
+    return
+fi
 
     TARGET="$1"
     if [ "$TARGET" = "prev" ]; then
@@ -131,9 +139,11 @@ local NO_PAUSE=$1
         fi
     fi
 
-    mkdir -p "$WORKDIR" && cd "$WORKDIR" || return
-    echo -e "${GREEN}🔴 ${CYAN}Скачиваем архив ${NC}$TARGET_FILE"
-    wget -q "$TARGET_URL" -O "$TARGET_FILE" || {
+	mkdir -p "$WORKDIR"
+	rm -f "$WORKDIR"/* 2>/dev/null   # ← очистка старых файлов
+	cd "$WORKDIR" || return
+	echo -e "${GREEN}🔴 ${CYAN}Скачиваем архив ${NC}$TARGET_FILE"
+	wget -q "$TARGET_URL" -O "$TARGET_FILE" || {
     echo -e "${RED}Не удалось скачать ${NC}$TARGET_FILE"
     read -p "Нажмите Enter для выхода в главное меню..." dummy
     return
