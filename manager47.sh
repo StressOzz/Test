@@ -489,15 +489,12 @@ local NO_PAUSE=$1
 # Проверка Flow Offloading (программного и аппаратного)
 # ==========================================
 check_flow_offloading() {
-	BLINK="\033[5m"
-	BOLD="\033[1m"
     local FLOW_STATE=$(uci get firewall.@defaults[0].flow_offloading 2>/dev/null)
     local HW_FLOW_STATE=$(uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null)
-
     if [ "$FLOW_STATE" = "1" ] || [ "$HW_FLOW_STATE" = "1" ]; then
-FLOW_WARNING="${RED}==============================================${NC}\n\
-${RED}${BOLD}⚠ ВНИМАНИЕ:${NC}${RED} включено ускорение пакетов (Flow Offloading)!${NC}\n\
-${RED}==============================================${NC}"
+FLOW_WARNING="${RED}========================================================${NC}\n\
+${RED}ВНИМАНИЕ: включено ускорение пакетов (Flow Offloading) !${NC}\n\
+${RED}========================================================${NC}"
     else
         FLOW_WARNING=""
     fi
