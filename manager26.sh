@@ -194,7 +194,7 @@ local NO_PAUSE=$1
     if [ ! -f /etc/init.d/zapret ]; then
         echo -e "${RED}Zapret не установлен !${NC}"
         echo -e ""
-        read -p "Нажмите Enter для выхода в главное меню..." dummy
+        [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
         return
     fi
 
