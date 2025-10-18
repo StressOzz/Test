@@ -196,6 +196,9 @@ local NO_PAUSE=$1
 
 # Удаляем конкретный блок строк
 	sed -i '/--filter-tcp=80 <HOSTLIST>/,/--new/d' /etc/config/zapret
+	
+# Все --dpi-desync-repeats=11 заменены на 6
+	sed -i 's/--dpi-desync-repeats=11/--dpi-desync-repeats=6/g' /etc/config/zapret
 
 	chmod +x /opt/zapret/sync_config.sh
 	/opt/zapret/sync_config.sh
