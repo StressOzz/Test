@@ -275,11 +275,11 @@ enable_discord_calls() {
 		sleep 1
 				enable_discord_calls
 				;;
-            *) 
+            *)
                 echo -e ""
                 echo -e "${GREEN}Выходим в главное меню...${NC}"
 				sleep 1
-                return
+                exit 0 
                 ;;
         esac
     fi
