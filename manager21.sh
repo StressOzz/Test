@@ -83,37 +83,34 @@ get_versions() {
 # Установка Zapret
 # ==========================================
 install_update() {
-local NO_PAUSE=$1
+    local NO_PAUSE=$1
     [ "$NO_PAUSE" != "1" ] && clear
     [ "$NO_PAUSE" != "1" ] && echo -e ""
+
     if [ "$INSTALLED_VER" != "не найдена" ]; then
-        echo -e "${MAGENTA}Устанваливаем ZAPRET${NC}"
+        echo -e "${MAGENTA}Устанавливаем ZAPRET${NC}"
         ACTION="update"
     else
-        echo -e "${MAGENTA}Устанваливаем ZAPRET${NC}"
+        echo -e "${MAGENTA}Устанавливаем ZAPRET${NC}"
         ACTION="install"
     fi
     echo -e ""
-    get_versions
-	# Проверка лимита API
-if [ "$LIMIT_REACHED" -eq 1 ]; then
-    echo -e ""
-    echo -e "$LATEST_VER"  # Покажет предупреждение
-    echo -e ""
-    [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
-    return
-fi
 
-    TARGET="$1"
-    if [ "$TARGET" = "prev" ]; then
-        TARGET_URL="$PREV_URL"
-        TARGET_FILE="$PREV_FILE"
-        TARGET_VER="$PREV_VER"
-    else
-        TARGET_URL="$LATEST_URL"
-        TARGET_FILE="$LATEST_FILE"
-        TARGET_VER="$LATEST_VER"
+    get_versions
+
+    # Проверка лимита API
+    if [ "$LIMIT_REACHED" -eq 1 ]; then
+        echo -e ""
+        echo -e "$LATEST_VER"  # Покажет предупреждение
+        echo -e ""
+        [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
+        return
     fi
+
+    # Всегда последняя версия
+    TARGET_URL="$LATEST_URL"
+    TARGET_FILE="$LATEST_FILE"
+    TARGET_VER="$LATEST_VER"
 
     [ "$USED_ARCH" = "нет пакета для вашей архитектуры" ] && {
         echo -e "${RED}Нет доступного пакета для вашей архитектуры: ${NC}$LOCAL_ARCH"
@@ -125,7 +122,7 @@ fi
     if [ "$INSTALLED_VER" = "$TARGET_VER" ]; then
         echo -e "${BLUE}🔴 ${GREEN}Эта версия уже установлена !${NC}"
         echo -e ""
-        read -p "Нажмите Enter для выхода в главное меню..." dummy
+        [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
         return
     fi
 
@@ -139,15 +136,16 @@ fi
         fi
     fi
 
-	mkdir -p "$WORKDIR"
-	rm -f "$WORKDIR"/* 2>/dev/null   # ← очистка старых файлов
-	cd "$WORKDIR" || return
-	echo -e "${GREEN}🔴 ${CYAN}Скачиваем архив ${NC}$TARGET_FILE"
-	wget -q "$TARGET_URL" -O "$TARGET_FILE" || {
-    echo -e "${RED}Не удалось скачать ${NC}$TARGET_FILE"
-    read -p "Нажмите Enter для выхода в главное меню..." dummy
-    return
-}
+    mkdir -p "$WORKDIR"
+    rm -f "$WORKDIR"/* 2>/dev/null
+    cd "$WORKDIR" || return
+
+    echo -e "${GREEN}🔴 ${CYAN}Скачиваем архив ${NC}$TARGET_FILE"
+    wget -q "$TARGET_URL" -O "$TARGET_FILE" || {
+        echo -e "${RED}Не удалось скачать ${NC}$TARGET_FILE"
+        [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
+        return
+    }
 
     command -v unzip >/dev/null 2>&1 || { 
         echo -e "${GREEN}🔴 ${CYAN}Устанавливаем${NC} unzip ${CYAN}для распаковки архива${NC}"
@@ -463,7 +461,7 @@ fi
     echo -ne "${YELLOW}Выберите пункт:${NC} "
     read choice
     case "$choice" in
-        1) install_update "latest" ;;  # Установка/обновление до последней версии
+        1) install_update ;;  # Установка/обновление до последней версии
         2) fix_default ;;
         3)
             clear
