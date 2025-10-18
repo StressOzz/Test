@@ -331,7 +331,8 @@ enable_discord_calls() {
 # Zapret под ключ
 # ==========================================
 zapret_key(){
-    get_versions
+		clear
+    	get_versions
 
     if [ "$LIMIT_REACHED" -eq 1 ]; then
         echo -e ""
