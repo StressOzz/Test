@@ -236,7 +236,7 @@ enable_discord_calls() {
         fi
     fi
 
-    [ "$NO_PAUSE" != "1" ] && echo -e "${YELLOW}Текущий установленный скрипт:${NC} $CURRENT_SCRIPT"
+    [ "$NO_PAUSE" != "1" ] && echo -e "${YELLOW}Установленный скрипт:${NC} $CURRENT_SCRIPT"
     [ "$NO_PAUSE" != "1" ] && echo -e ""
 
     if [ "$NO_PAUSE" = "1" ]; then
