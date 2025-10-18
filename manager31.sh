@@ -272,7 +272,7 @@ enable_discord_calls() {
                 ;;
             3)
                 echo -e ""
-                echo -e "${GREEN}Скрипт удалён !${NC}"
+                echo -e "${BLUE}🔴 ${GREEN}Скрипт удалён !${NC}"
                 rm -f "$CUSTOM_DIR/50-script.sh" 2>/dev/null
                 chmod +x /opt/zapret/sync_config.sh
                 /opt/zapret/sync_config.sh
