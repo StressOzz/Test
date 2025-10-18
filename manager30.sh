@@ -113,7 +113,7 @@ install_update() {
     }
 
     if [ "$INSTALLED_VER" = "$TARGET_VER" ]; then
-        echo -e "${BLUE}🔴 ${GREEN}Эта версия уже установлена !${NC}"
+        echo -e "${BLUE}🔴 ${GREEN}Последняя версия уже установлена !${NC}"
         echo -e ""
         [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
         return
@@ -277,8 +277,9 @@ enable_discord_calls() {
                 chmod +x /opt/zapret/sync_config.sh
                 /opt/zapret/sync_config.sh
                 /etc/init.d/zapret restart >/dev/null 2>&1
-                sleep 1
-                enable_discord_calls
+				echo -e ""
+				read -p "Нажмите Enter для выхода в главное меню..." dummy
+                show_menu
                 return
                 ;;
             *)
@@ -388,7 +389,7 @@ show_menu() {
 	echo -e "╔════════════════════════════════════╗"
 	echo -e "║     ${BLUE}Zapret on remittor Manager${NC}     ║"
 	echo -e "╚════════════════════════════════════╝"
-	echo -e "                                  ${DGRAY}v2.6${NC}"
+	echo -e "                                  ${DGRAY}v2.7${NC}"
 
     # Определяем актуальная/устарела
 if [ "$LIMIT_REACHED" -eq 1 ]; then
