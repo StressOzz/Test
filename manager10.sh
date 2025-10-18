@@ -298,7 +298,7 @@ enable_discord_calls() {
             echo -e ""
             echo -e "${RED}Ошибка при скачивании скрипта !${NC}"
             echo -e ""
-            read -p "Нажмите Enter для продолжения..." dummy
+            read -p "Нажмите Enter для выхода в главное меню..." dummy
             return
         fi
     fi
@@ -518,7 +518,6 @@ fi
 		install_update "1" "latest"
 		fix_default "1"
 		enable_discord_calls "1"
-		echo -e ""
 		echo -e "Zapret ${GREEN}установлен и настроен !${NC}"
 		echo -e ""
         read -p "Нажмите Enter для выхода в главное меню..." dummy
