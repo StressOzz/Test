@@ -290,6 +290,9 @@ enable_discord_calls() {
             /opt/zapret/sync_config.sh
             /etc/init.d/zapret restart >/dev/null 2>&1
             echo -e ""
+	chmod +x /opt/zapret/sync_config.sh
+    /opt/zapret/sync_config.sh
+    /etc/init.d/zapret restart >/dev/null 2>&1
             echo -e "${BLUE}🔴 ${GREEN}Звонки и Discord включены !${NC}"
         else
             echo -e ""
@@ -315,7 +318,7 @@ enable_discord_calls() {
     /opt/zapret/sync_config.sh
     /etc/init.d/zapret restart >/dev/null 2>&1
 
-    [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для продолжения..." dummy
+    read -p "Нажмите Enter для продолжения..." dummy
 }
 
 
