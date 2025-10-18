@@ -229,7 +229,7 @@ enable_discord_calls() {
     if [ ! -f /etc/init.d/zapret ]; then
         echo -e "${RED}Zapret не установлен !${NC}"
         echo -e ""
-        read -p "Нажмите Enter для выхода в главное меню..." dummy
+        [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
         return
     fi
 
@@ -526,7 +526,11 @@ fi
 		echo -e "${MAGENTA}Включаем Discord и звонки в TG и WA${NC}"
 		echo -e ""
 		enable_discord_calls "1"
-		echo -e "Zapret ${GREEN}установлен и настроен !${NC}"
+		if [ -f /etc/init.d/zapret ]; then
+    	echo -e "Zapret ${GREEN}установлен и настроен !${NC}"
+		else
+    	echo -e "Zapret ${RED}не установлен !${NC}"
+		fi
 		echo -e ""
         read -p "Нажмите Enter для выхода в главное меню..." dummy
 		;;
