@@ -73,6 +73,7 @@ get_versions() {
 # Установка Zapret
 # ==========================================
 install_update() {
+local NO_PAUSE=$1
     clear
     echo -e ""
     if [ "$INSTALLED_VER" != "не найдена" ]; then
@@ -169,13 +170,14 @@ install_update() {
         echo -e "${BLUE}🔴 ${GREEN}Zapret успешно установлен !${NC}"
     fi
     echo -e ""
-    read -p "Нажмите Enter для выхода в главное меню..." dummy
+    [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
 
 # ==========================================
 # Чиним дефолтную стратегию
 # ==========================================
 fix_default() {
+local NO_PAUSE=$1
     clear
     echo -e ""
     echo -e "${MAGENTA}Редактируем стратегию по умолчанию${NC}"
@@ -201,7 +203,7 @@ fix_default() {
 
     echo -e "${BLUE}🔴 ${GREEN}Стратегия по умолчанию отредактирована !${NC}"
     echo -e ""
-	read -p "Нажмите Enter для выхода в главное меню..." dummy
+	[ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
 
 # ==========================================
@@ -307,13 +309,14 @@ enable_discord_calls() {
         /opt/zapret/sync_config.sh
         /etc/init.d/zapret restart >/dev/null 2>&1
     echo -e ""
-    read -p "Нажмите Enter для продолжения..." dummy
+	read -p "Нажмите Enter для продолжения..." dummy
 }
 
 # ==========================================
 # Полное удаление Zapret
 # ==========================================
 uninstall_zapret() {
+local NO_PAUSE=$1
     clear
     echo -e ""
     echo -e "${MAGENTA}Удаляем ZAPRET${NC}"
@@ -356,176 +359,8 @@ uninstall_zapret() {
     echo -e ""
     echo -e "${BLUE}🔴 ${GREEN}Zapret полностью удалён !${NC}"
     echo -e ""
-    read -p "Нажмите Enter для выхода в главное меню..." dummy
+    [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
-
-# ==========================================
-# Установка Zapret под ключ
-# ==========================================
-install_zapret_full() {
-    echo -e ""
-    echo -e "${MAGENTA}🚀 Установка Zapret под ключ${NC}"
-    echo -e ""
-
-    
-clear
-
-echo -e ""
-    echo -e "${MAGENTA}Удаляем ZAPRET${NC}"
-    echo -e ""
-
-    [ -f /etc/init.d/zapret ] && {
-        echo -e "${GREEN}🔴 ${CYAN}Останавливаем сервис ${NC}zapret"
-        /etc/init.d/zapret stop >/dev/null 2>&1
-    }
-
-    PIDS=$(pgrep -f /opt/zapret)
-    if [ -n "$PIDS" ]; then
-        echo -e "${GREEN}🔴 ${CYAN}Убиваем все процессы ${NC}zapret"
-        for pid in $PIDS; do kill -9 "$pid" >/dev/null 2>&1; done
-    fi
-
-    echo -e "${GREEN}🔴 ${CYAN}Удаляем пакеты${NC} zapret ${CYAN}и ${NC}luci-app-zapret"
-    opkg remove --force-removal-of-dependent-packages zapret luci-app-zapret >/dev/null 2>&1
-
-    echo -e "${GREEN}🔴 ${CYAN}Удаляем конфигурации и рабочие папки${NC}"
-    for path in /opt/zapret /etc/config/zapret /etc/firewall.zapret; do [ -e "$path" ] && rm -rf "$path"; done
-
-    if crontab -l >/dev/null 2>&1; then
-        crontab -l | grep -v -i "zapret" | crontab -
-        echo -e "${GREEN}🔴 ${CYAN}Очищаем${NC} crontab ${CYAN}задания${NC}"
-    fi
-
-    echo -e "${GREEN}🔴 ${CYAN}Удаляем${NC} ipset"
-    for set in $(ipset list -n 2>/dev/null | grep -i zapret); do ipset destroy "$set" >/dev/null 2>&1; done
-
-    echo -e "${GREEN}🔴 ${CYAN}Удаляем временные файлы${NC}"
-    rm -f /tmp/*zapret* /var/run/*zapret* 2>/dev/null
-
-    echo -e "${GREEN}🔴 ${CYAN}Удаляем цепочки и таблицы${NC} nftables"
-    for table in $(nft list tables 2>/dev/null | awk '{print $2}'); do
-        chains=$(nft list table "$table" 2>/dev/null | grep zapret)
-        [ -n "$chains" ] && nft delete table "$table" >/dev/null 2>&1
-    done
-
-    echo -e ""
-
-echo -e "${BLUE}🔴 ${GREEN}Zapret полностью удалён !${NC}"
-
-
-    echo -e ""
-
-echo -e "${MAGENTA}Устанваливаем ZAPRET${NC}"
-
-	echo -e ""
-
-    get_versions
-
-    TARGET="$1"
-    if [ "$TARGET" = "prev" ]; then
-        TARGET_URL="$PREV_URL"
-        TARGET_FILE="$PREV_FILE"
-        TARGET_VER="$PREV_VER"
-    else
-        TARGET_URL="$LATEST_URL"
-        TARGET_FILE="$LATEST_FILE"
-        TARGET_VER="$LATEST_VER"
-    fi
-
-
-    mkdir -p "$WORKDIR" && cd "$WORKDIR" || return
-    echo -e "${GREEN}🔴 ${CYAN}Скачиваем архив ${NC}$TARGET_FILE"
-    wget -q "$TARGET_URL" -O "$TARGET_FILE" || {
-    echo -e "${RED}Не удалось скачать ${NC}$TARGET_FILE"
-    read -p "Нажмите Enter для выхода в главное меню..." dummy
-    return
-}
-
-    command -v unzip >/dev/null 2>&1 || { 
-        echo -e "${GREEN}🔴 ${CYAN}Устанавливаем${NC} unzip ${CYAN}для распаковки архива${NC}"
-        opkg update >/dev/null 2>&1
-        opkg install unzip >/dev/null 2>&1
-    }
-
-    echo -e "${GREEN}🔴 ${CYAN}Распаковываем архив${NC}"
-    unzip -o "$TARGET_FILE" >/dev/null
-
-    PIDS=$(pgrep -f /opt/zapret)
-    if [ -n "$PIDS" ]; then
-        echo -e "${GREEN}🔴 ${CYAN}Убиваем все процессы ${NC}zapret"
-        for pid in $PIDS; do kill -9 "$pid" >/dev/null 2>&1; done
-    fi
-
-    for PKG in zapret_*.ipk luci-app-zapret_*.ipk; do
-        [ -f "$PKG" ] && {
-            echo -e "${GREEN}🔴 ${CYAN}Устанавливаем пакет ${NC}$PKG"
-            opkg install --force-reinstall "$PKG" >/dev/null 2>&1
-        }
-    done
-
-    echo -e "${GREEN}🔴 ${CYAN}Удаляем временные файлы и пакеты${NC}"
-    cd /
-    rm -rf "$WORKDIR"
-    rm -f /tmp/*.ipk /tmp/*.zip /tmp/*zapret* 2>/dev/null
-
-    [ -f /etc/init.d/zapret ] && {
-        echo -e "${GREEN}🔴 ${CYAN}Перезапуск службы ${NC}zapret"
-        chmod +x /opt/zapret/sync_config.sh
-        /opt/zapret/sync_config.sh
-        /etc/init.d/zapret restart >/dev/null 2>&1
-    }
-
-    echo -e ""
-        echo -e "${BLUE}🔴 ${GREEN}Zapret успешно установлен !${NC}"
-
-}
-
-echo -e ""
-    echo -e "${MAGENTA}Редактируем стратегию по умолчанию${NC}"
-    echo -e ""
-
-# Проверка, установлен ли Zapret
-    if [ ! -f /etc/init.d/zapret ]; then
-        echo -e "${RED}Zapret не установлен !${NC}"
-        echo -e ""
-        read -p "Нажмите Enter для выхода в главное меню..." dummy
-        return
-    fi
-
-# Убираем все вхождения fake,
-	sed -i 's/fake,//g' /etc/config/zapret
-
-# Удаляем конкретный блок строк
-	sed -i '/--filter-tcp=80 <HOSTLIST>/,/--new/d' /etc/config/zapret
-
-	chmod +x /opt/zapret/sync_config.sh
-	/opt/zapret/sync_config.sh
-	/etc/init.d/zapret restart >/dev/null 2>&1
-
-    echo -e "${BLUE}🔴 ${GREEN}Стратегия по умолчанию отредактирована !${NC}"
-}
-
-# ==========================================
-# Включение Discord и звонков в TG и WA
-# ==========================================
-
-
-mkdir -p /opt/zapret/init.d/openwrt/custom.d/
-curl -fsSLo /opt/zapret/init.d/openwrt/custom.d/50-script.sh \
-    https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-stun4all
-
-chmod +x /opt/zapret/sync_config.sh
-/opt/zapret/sync_config.sh
-
-sed -i "s/option NFQWS_PORTS_UDP '443'/option NFQWS_PORTS_UDP '443,50000-50099'/" /etc/config/zapret
-sed -i "/^'$/d" /etc/config/zapret
-printf -- '--new\n--filter-udp=50000-50099\n--filter-l7=discord,stun\n--dpi-desync=fake\n' >> /etc/config/zapret
-echo "'" >> /etc/config/zapret
-
-/etc/init.d/zapret restart >/dev/null 2>&1
-echo -e "${BLUE}🔴 ${GREEN}Discord и звонки включены!${NC}\n"
-
-
 
 # ==========================================
 # Главное меню
@@ -595,8 +430,8 @@ fi
     echo -e "${CYAN}4) ${GREEN}Остановить ${NC}Zapret"
     echo -e "${CYAN}5) ${GREEN}Запустить ${NC}Zapret"
     echo -e "${CYAN}6) ${GREEN}Удалить ${NC}Zapret"
-	  echo -e "${CYAN}7) ${GREEN}Включить ${NC}Discord${GREEN} и звонки в ${NC}TG${GREEN} и ${NC}WA ${RED}(test)${NC}"
-    echo -e "${CYAN}8) ${GREEN}Установка Zapret под ключ${NC}"
+	echo -e "${CYAN}7) ${GREEN}Включить ${NC}Discord${GREEN} и звонки в ${NC}TG${GREEN} и ${NC}WA ${RED}(test)${NC}"
+	echo -e "${CYAN}8) ${GREEN}Zapret${NC}"
     echo -e "${CYAN}0) ${GREEN}Выход (Enter)${NC}"
     echo -e ""
     echo -ne "${YELLOW}Выберите пункт:${NC} "
@@ -666,8 +501,8 @@ fi
             read -p "Нажмите Enter для выхода в главное меню..." dummy
             ;;
         6) uninstall_zapret ;;  # Полное удаление Zapret
-		    7) enable_discord_calls ;;
-        8) install_zapret_full ;;
+		7) enable_discord_calls ;;
+		8) uninstall_zapret "1" ;install_update "1" "latest"; fix_default "1"; enable_discord_calls "1" ;;
         *) exit 0 ;;  # Выход по Enter или любой другой невалидной опции
     esac
 }
