@@ -573,7 +573,7 @@ fi
 	echo -e "${CYAN}7) ${GREEN}Меню настройки ${NC}Discord${GREEN} и звонков в ${NC}TG${GREEN}/${NC}WA"
 	echo -e "${CYAN}8) ${GREEN}Удалить / Установить / Настроить${NC} Zapret"
 if [ -n "$FLOW_WARNING" ]; then
-    echo -e "${CYAN}9) ${RED}Отключить Flow Offloading !${NC}"
+    echo -e "${CYAN}9) ${RED}Отключить Flow Offloading${NC}"
 fi
     echo -e "${CYAN}0) ${GREEN}Выход (Enter)${NC}"
     echo -e ""
@@ -595,7 +595,7 @@ fi
             uci commit firewall
             /etc/init.d/firewall restart
 			echo -e ""
-            echo -e "${BLUE}🔴 ${GREEN}Flow Offloading отключён!${NC}"
+            echo -e "${BLUE}🔴 ${GREEN}Flow Offloading отключён !${NC}"
 			echo -e ""
             sleep 3
         fi
