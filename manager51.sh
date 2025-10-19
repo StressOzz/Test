@@ -572,6 +572,9 @@ fi
     echo -e "${CYAN}6) ${GREEN}Удалить ${NC}Zapret"
 	echo -e "${CYAN}7) ${GREEN}Меню настройки ${NC}Discord${GREEN} и звонков в ${NC}TG${GREEN}/${NC}WA"
 	echo -e "${CYAN}8) ${GREEN}Удалить / Установить / Настроить${NC} Zapret"
+if [ -n "$FLOW_WARNING" ]; then
+    echo -e "${CYAN}9) ${RED}Отключить Flow Offloading !${NC}"
+fi
     echo -e "${CYAN}0) ${GREEN}Выход (Enter)${NC}"
     echo -e ""
     echo -ne "${YELLOW}Выберите пункт:${NC} "
@@ -585,6 +588,16 @@ fi
         6) uninstall_zapret ;;
 		7) enable_discord_calls ;;
 		8) zapret_key ;;
+		9)
+		if [ -n "$FLOW_WARNING" ]; then
+            uci set firewall.@defaults[0].flow_offloading='0'
+            uci set firewall.@defaults[0].flow_offloading_hw='0'
+            uci commit firewall
+            /etc/init.d/firewall restart
+            echo -e "${GREEN}Flow Offloading отключён!${NC}"
+            sleep 2
+        fi
+		;;
         *) exit 0 ;;
     esac
 }
