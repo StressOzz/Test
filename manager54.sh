@@ -492,13 +492,11 @@ check_flow_offloading() {
     local FLOW_STATE=$(uci get firewall.@defaults[0].flow_offloading 2>/dev/null)
     local HW_FLOW_STATE=$(uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null)
     if [ "$FLOW_STATE" = "1" ] || [ "$HW_FLOW_STATE" = "1" ]; then
-FLOW_WARNING="
-${RED}
-===============!!! ВНИМАНИЕ !!!===============\n\
+FLOW_WARNING="${RED}===============!!! ВНИМАНИЕ !!!===============\n\
 Включено ускорение пакетов (Flow Offloading) !\n\
-Для работы Zapret рекомендуется отключить !\n\
-${GREEN}Нажмите ${NC}9 ${GREEN}для отключения !\n\
-${RED}=======================================================${NC}"
+  Для работы Zapret рекомендуется отключить !\n\
+${GREEN}    Нажмите ${NC}9 ${GREEN}для отключения !    \n\
+${RED}==============================================${NC}"
     else
         FLOW_WARNING=""
     fi
