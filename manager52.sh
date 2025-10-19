@@ -492,11 +492,12 @@ check_flow_offloading() {
     local FLOW_STATE=$(uci get firewall.@defaults[0].flow_offloading 2>/dev/null)
     local HW_FLOW_STATE=$(uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null)
     if [ "$FLOW_STATE" = "1" ] || [ "$HW_FLOW_STATE" = "1" ]; then
-FLOW_WARNING="${RED}=======================================================\n\
-ВНИМАНИЕ: включено ускорение пакетов (Flow Offloading)!\n\
-Для корректной работы Zapret, рекомендуется отключить:\n\
-LuCI → Network → Firewall → Flow offloading type → None\n\
-=======================================================${NC}"
+FLOW_WARNING="
+${RED}=======================================================\n\
+ВНИМАНИЕ: включено ускорение пакетов (Flow Offloading) !\n\
+Для работы Zapret рекомендуется отключить !\n\
+${GREEN}Нажмите ${NC}9 для отключения !${GREEN}\n\
+${RED}=======================================================${NC}"
     else
         FLOW_WARNING=""
     fi
@@ -594,8 +595,10 @@ fi
             uci set firewall.@defaults[0].flow_offloading_hw='0'
             uci commit firewall
             /etc/init.d/firewall restart
-            echo -e "${GREEN}Flow Offloading отключён!${NC}"
-            sleep 2
+			echo -e ""
+            echo -e "${BLUE}🔴 ${GREEN}Flow Offloading отключён!${NC}"
+			echo -e ""
+            sleep 3
         fi
 		;;
         *) exit 0 ;;
