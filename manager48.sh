@@ -492,9 +492,11 @@ check_flow_offloading() {
     local FLOW_STATE=$(uci get firewall.@defaults[0].flow_offloading 2>/dev/null)
     local HW_FLOW_STATE=$(uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null)
     if [ "$FLOW_STATE" = "1" ] || [ "$HW_FLOW_STATE" = "1" ]; then
-FLOW_WARNING="${RED}========================================================${NC}\n\
-${RED}ВНИМАНИЕ: включено ускорение пакетов (Flow Offloading) !${NC}\n\
-${RED}========================================================${NC}"
+FLOW_WARNING="${RED}========================================================\n\
+ВНИМАНИЕ: включено ускорение пакетов (Flow Offloading) !\n\
+Рекомендуется отключить:\n\
+LuCI → Network → Firewall → Flow offloading type → None\n\
+=======================================================${NC}"
     else
         FLOW_WARNING=""
     fi
