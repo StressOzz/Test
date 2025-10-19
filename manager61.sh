@@ -29,7 +29,7 @@ get_versions() {
 
     command -v curl >/dev/null 2>&1 || {
         clear
-        echo -e ""
+        
         echo -e "${MAGENTA}ZAPRET on remittor Manager by StressOzz${NC}"
         echo -e ""
         echo -e "${GREEN}🔴 ${CYAN}Устанавливаем${NC} curl ${CYAN}для загрузки информации с ${NC}GitHub"
@@ -84,7 +84,6 @@ get_versions() {
 install_update() {
     local NO_PAUSE=$1
     [ "$NO_PAUSE" != "1" ] && clear
-    [ "$NO_PAUSE" != "1" ] && echo -e ""
 
     echo -e "${MAGENTA}Устанавливаем ZAPRET${NC}"
     echo -e ""
@@ -185,7 +184,7 @@ install_update() {
 fix_default() {
 local NO_PAUSE=$1
     [ "$NO_PAUSE" != "1" ] && clear
-    [ "$NO_PAUSE" != "1" ] && echo -e ""
+	
     echo -e "${MAGENTA}Редактируем стратегию по умолчанию${NC}"
     echo -e ""
 
@@ -221,7 +220,7 @@ local NO_PAUSE=$1
 enable_discord_calls() {
     local NO_PAUSE=$1
     [ "$NO_PAUSE" != "1" ] && clear
-    [ "$NO_PAUSE" != "1" ] && echo -e ""
+
     [ "$NO_PAUSE" != "1" ] && echo -e "${MAGENTA}Меню настройки Discord и звонков в TG/WA${NC}"
     [ "$NO_PAUSE" != "1" ] && echo -e ""
 
@@ -331,7 +330,7 @@ enable_discord_calls() {
 # ==========================================
 zapret_key(){
 	clear
-	echo -e ""
+
     echo -e "${MAGENTA}Удаление, установка и настройка Zapret${NC}"
     get_versions
 
@@ -365,7 +364,7 @@ zapret_key(){
 # ==========================================
 comeback_def () {
             clear
-            echo -e ""
+
             echo -e "${MAGENTA}Возвращаем настройки по умолчанию${NC}"
             echo -e ""
             # Проверка скрипта восстановления и его запуск
@@ -390,7 +389,7 @@ comeback_def () {
 # ==========================================
 stop_zapret() {
 			clear
-            echo -e ""
+
             echo -e "${MAGENTA}Останавливаем Zapret${NC}"
             echo -e ""
             # Остановка службы через init.d и убийство процессов
@@ -416,7 +415,7 @@ stop_zapret() {
 # ==========================================
 start_zapret() {
 			clear
-            echo -e ""
+
             echo -e "${MAGENTA}Запускаем Zapret${NC}"
             echo -e ""
             # Запуск службы через init.d
@@ -441,7 +440,7 @@ start_zapret() {
 uninstall_zapret() {
 local NO_PAUSE=$1
 	[ "$NO_PAUSE" != "1" ] && clear
-    echo -e ""
+
     echo -e "${MAGENTA}Удаляем ZAPRET${NC}"
     echo -e ""
 
@@ -507,7 +506,7 @@ ${RED}==============================================${NC}"
 # ==========================================
 show_menu() {
     clear
-	echo -e ""
+
 	echo -e "╔════════════════════════════════════╗"
 	echo -e "║     ${BLUE}Zapret on remittor Manager${NC}     ║"
 	echo -e "╚════════════════════════════════════╝"
