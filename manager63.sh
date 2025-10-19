@@ -332,6 +332,7 @@ zapret_key(){
 	clear
 
     echo -e "${MAGENTA}Удаление, установка и настройка Zapret${NC}"
+	echo -e ""
     get_versions
 
     if [ "$LIMIT_REACHED" -eq 1 ]; then
@@ -510,7 +511,7 @@ show_menu() {
 	echo -e "╔════════════════════════════════════╗"
 	echo -e "║     ${BLUE}Zapret on remittor Manager${NC}     ║"
 	echo -e "╚════════════════════════════════════╝"
-	echo -e "                                  ${DGRAY}v3.0${NC}"
+	echo -e "                                  ${DGRAY}v3.1${NC}"
 
 	get_versions
 	check_flow_offloading
