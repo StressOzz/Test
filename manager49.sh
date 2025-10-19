@@ -511,7 +511,7 @@ show_menu() {
 	echo -e "╔════════════════════════════════════╗"
 	echo -e "║     ${BLUE}Zapret on remittor Manager${NC}     ║"
 	echo -e "╚════════════════════════════════════╝"
-	echo -e "                                  ${DGRAY}v2.9${NC}"
+	echo -e "                                  ${DGRAY}v3.0${NC}"
 
 	get_versions
 	check_flow_offloading
