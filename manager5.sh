@@ -22,6 +22,7 @@ WORKDIR="/tmp/zapret-update"
 # Функция получения информации о версиях, архитектуре и статусе
 # ==========================================
 get_versions() {
+    get_versions() {
     INSTALLED_VER=$(opkg list-installed | grep '^zapret ' | awk '{print $3}')
     [ -z "$INSTALLED_VER" ] && INSTALLED_VER="не найдена"
 
@@ -30,15 +31,12 @@ get_versions() {
 
     command -v curl >/dev/null 2>&1 || {
         clear
-        
-        echo -e "${MAGENTA}ZAPRET on remittor Manager by StressOzz${NC}"
-        echo -e ""
+        echo -e "${MAGENTA}ZAPRET on remittor Manager by StressOzz${NC}\n"
         echo -e "${GREEN}🔴 ${CYAN}Устанавливаем${NC} curl ${CYAN}для загрузки информации с ${NC}GitHub"
         opkg update >/dev/null 2>&1
         opkg install curl >/dev/null 2>&1
     }
 
-    # ===== Проверка лимита GitHub API =====
     LIMIT_REACHED=0
     LIMIT_CHECK=$(curl -s "https://api.github.com/repos/remittor/zapret-openwrt/releases/latest")
     if echo "$LIMIT_CHECK" | grep -q 'API rate limit exceeded'; then
@@ -47,8 +45,7 @@ get_versions() {
     else
         LATEST_URL=$(echo "$LIMIT_CHECK" | grep browser_download_url | grep "$LOCAL_ARCH.zip" | cut -d '"' -f 4)
         if [ -n "$LATEST_URL" ] && echo "$LATEST_URL" | grep -q '\.zip$'; then
-            LATEST_FILE=$(basename "$LATEST_URL")
-            LATEST_VER=$(echo "$LATEST_FILE" | sed -E 's/.*zapret_v([0-9]+\.[0-9]+)_.*\.zip/\1/')
+            LATEST_VER=$(basename "$LATEST_URL" | sed -E 's/.*zapret_v([0-9]+\.[0-9]+)_.*\.zip/\1/')
             USED_ARCH="$LOCAL_ARCH"
         else
             LATEST_VER="не найдена"
@@ -56,7 +53,6 @@ get_versions() {
         fi
     fi
 
-    # Статус службы
     if [ -f /etc/init.d/zapret ]; then
         if /etc/init.d/zapret status 2>/dev/null | grep -qi "running"; then
             ZAPRET_STATUS="${GREEN}запущен${NC}"
@@ -75,37 +71,32 @@ install_update() {
     local NO_PAUSE=$1
     [ "$NO_PAUSE" != "1" ] && clear
 
-    echo -e "${MAGENTA}Устанавливаем ZAPRET${NC}"
-    echo -e ""
+    echo -e "${MAGENTA}Устанавливаем ZAPRET${NC}\n"
 
-    # Получаем версии и архитектуру
     get_versions
 
-    # Проверка лимита GitHub API
+    # Проверка лимита API
     if [ "$LIMIT_REACHED" -eq 1 ]; then
-        echo -e "$LATEST_VER"  # Покажет предупреждение
-        echo -e ""
+        echo -e "$LATEST_VER\n"
         [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
         return
     fi
 
-    # Проверка доступности пакета для архитектуры
+    # Проверка доступности пакета
     if [ "$USED_ARCH" = "нет пакета для вашей архитектуры" ]; then
-        echo -e "${RED}Нет доступного пакета для вашей архитектуры: ${NC}$LOCAL_ARCH"
-        echo -e ""
+        echo -e "${RED}Нет доступного пакета для вашей архитектуры: ${NC}$LOCAL_ARCH\n"
         [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
         return
     fi
 
     # Проверка уже установленной версии
     if [ "$INSTALLED_VER" = "$LATEST_VER" ]; then
-        echo -e "${BLUE}🔴 ${GREEN}Последняя версия уже установлена !${NC}"
-        echo -e ""
+        echo -e "${BLUE}🔴 ${GREEN}Последняя версия уже установлена !${NC}\n"
         [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
         return
     fi
 
-    # Остановка сервиса, если установлен
+    # Остановка сервиса и старых процессов
     if [ -f /etc/init.d/zapret ]; then
         echo -e "${GREEN}🔴 ${CYAN}Останавливаем сервис ${NC}zapret"
         /etc/init.d/zapret stop >/dev/null 2>&1
@@ -113,12 +104,11 @@ install_update() {
         [ -n "$PIDS" ] && for pid in $PIDS; do kill -9 "$pid" >/dev/null 2>&1; done
     fi
 
-    # Создание временной директории
+    # Подготовка временной директории
     mkdir -p "$WORKDIR"
     rm -f "$WORKDIR"/* 2>/dev/null
     cd "$WORKDIR" || return
 
-    # Скачивание последней версии
     FILE_NAME=$(basename "$LATEST_URL")
     echo -e "${GREEN}🔴 ${CYAN}Скачиваем архив ${NC}$FILE_NAME"
     wget -q "$LATEST_URL" -O "$FILE_NAME" || {
@@ -127,8 +117,7 @@ install_update() {
         return
     }
 
-    # Проверка и установка unzip
-    command -v unzip >/dev/null 2>&1 || { 
+    command -v unzip >/dev/null 2>&1 || {
         echo -e "${GREEN}🔴 ${CYAN}Устанавливаем${NC} unzip ${CYAN}для распаковки архива${NC}"
         opkg update >/dev/null 2>&1
         opkg install unzip >/dev/null 2>&1
@@ -137,11 +126,10 @@ install_update() {
     echo -e "${GREEN}🔴 ${CYAN}Распаковываем архив${NC}"
     unzip -o "$FILE_NAME" >/dev/null
 
-    # Убиваем старые процессы
     PIDS=$(pgrep -f /opt/zapret)
     [ -n "$PIDS" ] && for pid in $PIDS; do kill -9 "$pid" >/dev/null 2>&1; done
 
-    # Установка ipk пакетов из архива
+    # Установка пакетов
     for PKG in zapret_*.ipk luci-app-zapret_*.ipk; do
         [ -f "$PKG" ] && {
             echo -e "${GREEN}🔴 ${CYAN}Устанавливаем пакет ${NC}$PKG"
@@ -149,7 +137,7 @@ install_update() {
         }
     done
 
-    # Очистка временных файлов
+    # Очистка
     echo -e "${GREEN}🔴 ${CYAN}Удаляем временные файлы и пакеты${NC}"
     cd /
     rm -rf "$WORKDIR" /tmp/*.ipk /tmp/*.zip /tmp/*zapret* 2>/dev/null
@@ -161,12 +149,9 @@ install_update() {
         /etc/init.d/zapret restart >/dev/null 2>&1
     fi
 
-    echo -e ""
-    echo -e "${BLUE}🔴 ${GREEN}Zapret успешно установлен !${NC}"
-    echo -e ""
+    echo -e "\n${BLUE}🔴 ${GREEN}Zapret успешно установлен !${NC}\n"
     [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
-
 # ==========================================
 # Чиним дефолтную стратегию
 # ==========================================
