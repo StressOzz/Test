@@ -95,6 +95,9 @@ install_update() {
         return
     fi
 
+        echo -e "${GREEN}🔴 ${CYAN}Обновляем список пакетов${NC}"
+        opkg update >/dev/null 2>&1
+
     # Остановка сервиса и старых процессов
     if [ -f /etc/init.d/zapret ]; then
         echo -e "${GREEN}🔴 ${CYAN}Останавливаем сервис ${NC}zapret"
@@ -118,7 +121,6 @@ install_update() {
 
     command -v unzip >/dev/null 2>&1 || {
         echo -e "${GREEN}🔴 ${CYAN}Устанавливаем${NC} unzip ${CYAN}для распаковки архива${NC}"
-        opkg update >/dev/null 2>&1
         opkg install unzip >/dev/null 2>&1
     }
 
