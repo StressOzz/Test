@@ -435,7 +435,7 @@ echo -e "${GREEN}🔴 ${CYAN}Убиваем все процессы ${NC}zapret"
  
     # Удаляем конфиги, рабочие папки и кастомные скрипты
 echo -e "${GREEN}🔴 ${CYAN}Удаляем конфигурации и рабочие папки${NC}"
-    for path in /opt/zapret /etc/config/zapret /etc/firewall.zapret /opt/zapret/init.d/openwrt/custom.d; do
+    for path in /opt/zapret /etc/config/zapret /etc/firewall.zapret; do
         [ -e "$path" ] && rm -rf "$path"
     done
 
@@ -467,7 +467,7 @@ echo -e "${GREEN}🔴 ${CYAN}Удаляем ${NC}zapret${CYAN} из ${NC}init.d"
     [ -f /etc/init.d/zapret ] && rm -f /etc/init.d/zapret
 
     echo -e ""
-    echo -e "${BLUE}🔴 ${GREEN}Zapret полностью удалён, без следов !${NC}"
+    echo -e "${BLUE}🔴 ${GREEN}Zapret полностью удалён !${NC}"
     echo -e ""
     [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
