@@ -22,7 +22,6 @@ WORKDIR="/tmp/zapret-update"
 # Функция получения информации о версиях, архитектуре и статусе
 # ==========================================
 get_versions() {
-    get_versions() {
     INSTALLED_VER=$(opkg list-installed | grep '^zapret ' | awk '{print $3}')
     [ -z "$INSTALLED_VER" ] && INSTALLED_VER="не найдена"
 
