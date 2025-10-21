@@ -504,10 +504,10 @@ show_menu() {
 	echo -e "                                  ${DGRAY}v3.1${NC}"
 
     # ===== Показ временной надписи =====
-    echo -ne "Проверка версии... "
+    echo -e "\nПроверка версии... "
     get_versions
     # ===== Стираем строку с надписью =====
-    echo -ne "\r\033[K"
+    echo -e "\r\033[K"
 
 	check_flow_offloading
 [ -n "$FLOW_WARNING" ] && echo -e "$FLOW_WARNING"
