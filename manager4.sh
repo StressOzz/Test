@@ -213,7 +213,6 @@ EOF
 # Перезаписываем файл исключений
     mkdir -p /opt/zapret/ipset
     cat <<EOF >/opt/zapret/ipset/zapret-hosts-user-exclude.txt
-# вставляем сюда
 gosuslugi.ru
 nalog.ru
 EOF
