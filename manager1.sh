@@ -171,9 +171,11 @@ local NO_PAUSE=$1
         return
     fi
 
-# Проверяем наличие блока option NFQWS_OPT
-    if ! grep -q "^option NFQWS_OPT" /etc/config/zapret; then
+# Проверяем наличие блока option NFQWS_OPT (с учётом возможных пробелов)
+    if ! grep -q "^[[:space:]]*option NFQWS_OPT" /etc/config/zapret; then
+	echo -e ""
         echo -e "${RED}Не найден блок 'option NFQWS_OPT' в /etc/config/zapret!${NC}"
+	echo -e ""
         [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода..." dummy
         return
     fi
@@ -204,11 +206,12 @@ read -r -d '' NEW_OPTS <<'EOF'
 EOF
 
 # Вставляем блок внутрь option NFQWS_OPT ' ... '
-    sed -i "/^option NFQWS_OPT /,/^'/c\option NFQWS_OPT '\n${NEW_OPTS}\n'" /etc/config/zapret
+    sed -i "/^[[:space:]]*option NFQWS_OPT /,/^[[:space:]]*'/c\\\toption NFQWS_OPT '\n${NEW_OPTS}\n'" /etc/config/zapret
 
 # Перезаписываем файл исключений
     mkdir -p /opt/zapret/ipset
     cat <<EOF >/opt/zapret/ipset/zapret-hosts-user-exclude.txt
+# вставляем сюда
 gosuslugi.ru
 nalog.ru
 EOF
@@ -222,6 +225,7 @@ EOF
     [ "$NO_PAUSE" != "1" ] && echo -e ""
     [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
+
 
 # ==========================================
 # Включение Discord и звонков в TG и WA
