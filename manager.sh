@@ -150,7 +150,7 @@ install_update() {
         /etc/init.d/zapret restart >/dev/null 2>&1
     fi
 
-    echo -e "\n${BLUE}🔴 ${GREEN}Zapret успешно установлен !${NC}\n"
+    echo -e "\n${BLUE}🔴 ${GREEN}Zapret установлен !${NC}\n"
     [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
 # ==========================================
@@ -159,34 +159,68 @@ install_update() {
 fix_default() {
 local NO_PAUSE=$1
     [ "$NO_PAUSE" != "1" ] && clear
-	
+
     echo -e "${MAGENTA}Редактируем стратегию по умолчанию${NC}"
     echo -e ""
 
 # Проверка, установлен ли Zapret
     if [ ! -f /etc/init.d/zapret ]; then
-        echo -e "${RED}Zapret не установлен !${NC}"
+        echo -e "${RED}Zapret не установлен!${NC}"
         [ "$NO_PAUSE" != "1" ] && echo -e ""
         [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
         return
     fi
 
-# Убираем все вхождения fake,
-	sed -i 's/fake,//g' /etc/config/zapret
+# Проверяем наличие блока option NFQWS_OPT
+    if ! grep -q "^option NFQWS_OPT" /etc/config/zapret; then
+        echo -e "${RED}Не найден блок 'option NFQWS_OPT' в /etc/config/zapret!${NC}"
+        [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода..." dummy
+        return
+    fi
 
-# Удаляем конкретный блок строк
-	sed -i '/--filter-tcp=80 <HOSTLIST>/,/--new/d' /etc/config/zapret
-	
-# Все --dpi-desync-repeats=11 заменены на 6
-	sed -i 's/--dpi-desync-repeats=11/--dpi-desync-repeats=6/g' /etc/config/zapret
+# Формируем новый блок опций
+read -r -d '' NEW_OPTS <<'EOF'
+--filter-tcp=443
+--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt
+--dpi-desync=multidisorder
+--dpi-desync-split-pos=1,midsld
+--dpi-desync-repeats=4
+--dpi-desync-fooling=badsum
+--dpi-desync-fake-tls-mod=rnd,dupsid,sni=www.google.com
+--new
+--filter-udp=443
+--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt
+--dpi-desync=fake
+--dpi-desync-repeats=4
+--dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin
+--new
+--filter-tcp=443
+--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt
+--dpi-desync=fake
+--dpi-desync-fake-tls-mod=none
+--dpi-desync-repeats=6
+--dpi-desync-fooling=badseq
+--dpi-desync-badseq-increment=2
+EOF
 
-	chmod +x /opt/zapret/sync_config.sh
-	/opt/zapret/sync_config.sh
-	/etc/init.d/zapret restart >/dev/null 2>&1
+# Вставляем блок внутрь option NFQWS_OPT ' ... '
+    sed -i "/^option NFQWS_OPT /,/^'/c\option NFQWS_OPT '\n${NEW_OPTS}\n'" /etc/config/zapret
 
-    echo -e "${BLUE}🔴 ${GREEN}Стратегия по умолчанию отредактирована !${NC}"
-    [ "$NO_PAUSE" != "1" ] &&echo -e ""
-	[ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
+# Перезаписываем файл исключений
+    mkdir -p /opt/zapret/ipset
+    cat <<EOF >/opt/zapret/ipset/zapret-hosts-user-exclude.txt
+gosuslugi.ru
+nalog.ru
+EOF
+
+# Применяем конфиг
+    chmod +x /opt/zapret/sync_config.sh
+    /opt/zapret/sync_config.sh
+    /etc/init.d/zapret restart >/dev/null 2>&1
+
+    echo -e "${BLUE}🔴 ${GREEN}Стратегия по умолчанию отредактирована!${NC}"
+    [ "$NO_PAUSE" != "1" ] && echo -e ""
+    [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
 
 # ==========================================
@@ -417,7 +451,7 @@ uninstall_zapret() {
     local NO_PAUSE=$1
     [ "$NO_PAUSE" != "1" ] && clear
 
-    echo -e "${MAGENTA}Удаляем ZAPRET полностью${NC}"
+    echo -e "${MAGENTA}Удаляем ZAPRET${NC}"
     echo -e ""
 
     # Остановка службы
@@ -467,7 +501,7 @@ echo -e "${GREEN}🔴 ${CYAN}Удаляем ${NC}zapret${CYAN} из ${NC}init.d"
     [ -f /etc/init.d/zapret ] && rm -f /etc/init.d/zapret
 
     echo -e ""
-    echo -e "${BLUE}🔴 ${GREEN}Zapret полностью удалён !${NC}"
+    echo -e "${BLUE}🔴 ${GREEN}Zapret удалён !${NC}"
     echo -e ""
     [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
@@ -493,14 +527,15 @@ ${RED}==============================================${NC}"
 # Главное меню
 # ==========================================
 show_menu() {
-    clear
 
+	get_versions
+	
+	clear
+	
 	echo -e "╔════════════════════════════════════╗"
 	echo -e "║     ${BLUE}Zapret on remittor Manager${NC}     ║"
 	echo -e "╚════════════════════════════════════╝"
-	echo -e "                                  ${DGRAY}v3.2${NC}"
-
-    get_versions
+	echo -e "                                  ${DGRAY}v3.3${NC}"
 
 	check_flow_offloading
 [ -n "$FLOW_WARNING" ] && echo -e "$FLOW_WARNING"
