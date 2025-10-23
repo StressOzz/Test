@@ -180,8 +180,12 @@ local NO_PAUSE=$1
         return
     fi
 
-# Формируем новый блок опций
-read -r -d '' NEW_OPTS <<'EOF'
+# Удаляем всё, что идёт ниже строки с option NFQWS_OPT '
+sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" /etc/config/zapret
+
+# Вставляем новый блок сразу после строки option NFQWS_OPT '
+cat <<'EOF' >> /etc/config/zapret
+	option NFQWS_OPT '
 --filter-tcp=443
 --hostlist=/opt/zapret/ipset/zapret-hosts-google.txt
 --dpi-desync=multidisorder
@@ -203,10 +207,8 @@ read -r -d '' NEW_OPTS <<'EOF'
 --dpi-desync-repeats=6
 --dpi-desync-fooling=badseq
 --dpi-desync-badseq-increment=2
+'
 EOF
-
-# Вставляем блок внутрь option NFQWS_OPT ' ... '
-    sed -i "/^[[:space:]]*option NFQWS_OPT /,/^[[:space:]]*'/c\\\toption NFQWS_OPT '\n${NEW_OPTS}\n'" /etc/config/zapret
 
 # Перезаписываем файл исключений
     mkdir -p /opt/zapret/ipset
