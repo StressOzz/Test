@@ -138,17 +138,21 @@ install_update() {
         }
     done
 
+[ "$NO_PAUSE" = "1" ] && { /etc/init.d/zapret stop >/dev/null 2>&1 || pkill -9 -f /opt/zapret >/dev/null 2>&1; }
+
     # Очистка
     echo -e "${GREEN}🔴 ${CYAN}Удаляем временные файлы и пакеты${NC}"
     cd /
     rm -rf "$WORKDIR" /tmp/*.ipk /tmp/*.zip /tmp/*zapret* 2>/dev/null
 
     # Перезапуск службы
+[ "$NO_PAUSE" != "1" ] && {
     if [ -f /etc/init.d/zapret ]; then
         chmod +x /opt/zapret/sync_config.sh
         /opt/zapret/sync_config.sh
         /etc/init.d/zapret restart >/dev/null 2>&1
     fi
+}
 
     echo -e "\n${BLUE}🔴 ${GREEN}Zapret установлен !${NC}\n"
     [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
@@ -171,36 +175,22 @@ local NO_PAUSE=$1
         return
     fi
 
-# Проверяем наличие блока option NFQWS_OPT (с учётом возможных пробелов)
-    if ! grep -q "^[[:space:]]*option NFQWS_OPT" /etc/config/zapret; then
-	echo -e ""
-        echo -e "${RED}Не найден блок 'option NFQWS_OPT' в /etc/config/zapret!${NC}"
-	echo -e ""
-        [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода..." dummy
-        return
-    fi
-
-# Удаляем всё, что идёт ниже строки с option NFQWS_OPT '
+# Удаляем строку и всё, что идёт ниже строки с option NFQWS_OPT '
 sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" /etc/config/zapret
 
 # Вставляем новый блок сразу после строки option NFQWS_OPT '
 cat <<'EOF' >> /etc/config/zapret
 	option NFQWS_OPT '
 --filter-tcp=443
---hostlist=/opt/zapret/ipset/zapret-hosts-google.txt
---dpi-desync=multidisorder
---dpi-desync-split-pos=1,midsld
---dpi-desync-repeats=4
---dpi-desync-fooling=badsum
---dpi-desync-fake-tls-mod=rnd,dupsid,sni=www.google.com
---new
---filter-tcp=443
 --hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt
---dpi-desync=fake
---dpi-desync-fake-tls-mod=none
---dpi-desync-repeats=6
+--dpi-desync=fake,multidisorder
+--dpi-desync-split-seqovl=681
+--dpi-desync-split-pos=1
 --dpi-desync-fooling=badseq
---dpi-desync-badseq-increment=2
+--dpi-desync-badseq-increment=10000000
+--dpi-desync-repeats=2
+--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/quic_initial_www_google_com.bin
+--dpi-desync-fake-tls-mod=rnd,dupsid,sni=fonts.google.com
 --new
 --filter-udp=443
 --dpi-desync=fake
@@ -213,19 +203,78 @@ EOF
     mkdir -p /opt/zapret/ipset
     cat <<EOF >/opt/zapret/ipset/zapret-hosts-user-exclude.txt
 gosuslugi.ru
-nalog.ru
+api.steampowered.com
+cdn.akamai.steamstatic.com
+cdn.cloudflare.steamstatic.com
+checkout.steampowered.com
+client-download.steampowered.com
+community.cloudflare.steamstatic.com
+cs.steampowered.com
+help.steampowered.com
+login.steampowered.com
+media.steampowered.com
+partner.steampowered.com
+s.team
+steam.tv
+steambroadcast.akamaized.net
+steambroadcast.com
+steamcdn-a.akamaihd.net
+steamcdn-a.akamaihd.net
+steamchat.com
+steam-chat.com
+steamcommunity.akamaized.net
+steamcommunity.com
+steamcommunity-a.akamaihd.net
+steamcontent.com
+steamdeck.com
+steamdeckcdn.akamaized.net
+steamdeckusercontent.com
+steamgames.com
+steampowered.com
+steamserver.net
+steamstat.us
+steamstatic.akamaized.net
+steamstatic.com
+steamusercontent.com
+steamuserimages-a.akamaihd.net
+store.cloudflare.steamstatic.com
+store.steampowered.com
+support.steampowered.com
+workshop.steampowered.com
+EOF
+
+	cat >> /opt/zapret/ipset/zapret-hosts-google.txt <<'EOF'
+cdn.youtube.com
+fonts.googleapis.com
+fonts.gstatic.com
+ggpht.com
+googleapis.com
+googleusercontent.com
+i.ytimg.com
+i9.ytimg.com
+kids.youtube.com
+m.youtube.com
+manifest.googlevideo.com
+music.youtube.com
+nhacmp3youtube.com
+returnyoutubedislikeapi.com
+s.ytimg.com
+signaler-pa.youtube.com
+studio.youtube.com
+tv.youtube.com
+yt3.googleusercontent.com
+yting.com
 EOF
 
 # Применяем конфиг
-    chmod +x /opt/zapret/sync_config.sh
-    /opt/zapret/sync_config.sh
-    /etc/init.d/zapret restart >/dev/null 2>&1
+    [ "$NO_PAUSE" != "1" ] && chmod +x /opt/zapret/sync_config.sh
+    [ "$NO_PAUSE" != "1" ] && /opt/zapret/sync_config.sh
+    [ "$NO_PAUSE" != "1" ] && /etc/init.d/zapret restart >/dev/null 2>&1
 
     echo -e "${BLUE}🔴 ${GREEN}Стратегия по умолчанию отредактирована!${NC}"
     [ "$NO_PAUSE" != "1" ] && echo -e ""
     [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
-
 
 # ==========================================
 # Включение Discord и звонков в TG и WA
@@ -323,13 +372,13 @@ enable_discord_calls() {
             return
         fi
     fi
-
-    if ! grep -q -- "--filter-udp=50000-50099" /etc/config/zapret; then
-        sed -i "s/option NFQWS_PORTS_UDP '443'/option NFQWS_PORTS_UDP '443,50000-50099'/" /etc/config/zapret
-        sed -i "/^'$/d" /etc/config/zapret
-        printf -- '--new\n--filter-udp=50000-50099\n--filter-l7=discord,stun\n--dpi-desync=fake\n' >> /etc/config/zapret
-        echo "'" >> /etc/config/zapret
-    fi
+#  Пока отключил добавление портов 50000–50099 — обработка звонков выполняется внутри скрипта
+#   if ! grep -q -- "--filter-udp=50000-50099" /etc/config/zapret; then
+#       sed -i "s/option NFQWS_PORTS_UDP '443'/option NFQWS_PORTS_UDP '443,50000-50099'/" /etc/config/zapret
+#       sed -i "/^'$/d" /etc/config/zapret
+#       printf -- '--new\n--filter-udp=50000-50099\n--filter-l7=discord,stun\n--dpi-desync=fake\n' >> /etc/config/zapret
+#       echo "'" >> /etc/config/zapret
+#   fi
 
 	echo -e ""
 		chmod +x /opt/zapret/sync_config.sh
@@ -539,7 +588,7 @@ show_menu() {
 	echo -e "╔════════════════════════════════════╗"
 	echo -e "║     ${BLUE}Zapret on remittor Manager${NC}     ║"
 	echo -e "╚════════════════════════════════════╝"
-	echo -e "                                  ${DGRAY}v3.3${NC}"
+	echo -e "                                  ${DGRAY}v3.4${NC}"
 
 	check_flow_offloading
 [ -n "$FLOW_WARNING" ] && echo -e "$FLOW_WARNING"
