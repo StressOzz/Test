@@ -389,15 +389,12 @@ enable_discord_calls() {
 
 
 #####################################################################################################################################
-append_udp_block() {
-    # Проверяем, что конфиг существует
+append_udp_range() {
     CONF="/etc/config/zapret"
     [ ! -f "$CONF" ] && { echo "Конфиг не найден"; return; }
 
-    # Удаляем последний символ одинарной кавычки в option NFQWS_OPT
-    sed -i '/option NFQWS_OPT /s/\'\'$//' "$CONF"
-
-    # Добавляем новый блок
+    # === 1. Добавляем UDP-блок в конец NFQWS_OPT ===
+    sed -i "/option NFQWS_OPT /s/'$//" "$CONF"  # убираем последнюю '
     cat <<'EOF' >> "$CONF"
 --new
 --filter-udp=20000-22000
@@ -408,7 +405,10 @@ append_udp_block() {
 '
 EOF
 
-    echo "Блок UDP добавлен в конец option NFQWS_OPT"
+    # === 2. Добавляем диапазон портов в NFQWS_PORTS_UDP ===
+    sed -i "/option NFQWS_PORTS_UDP /s/'$/\,20000-22000'/" "$CONF"
+
+    echo "UDP-блок добавлен и диапазон портов обновлён"
 }
 
 
@@ -688,7 +688,7 @@ fi
         5) start_zapret ;;
         6) uninstall_zapret ;;
 		7) enable_discord_calls ;;
-		8) append_udp_block ;;
+		8) append_udp_range ;;
 		9)
 		if [ -n "$FLOW_WARNING" ]; then
             uci set firewall.@defaults[0].flow_offloading='0'
