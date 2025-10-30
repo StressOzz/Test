@@ -387,6 +387,31 @@ enable_discord_calls() {
     [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
 
+
+
+append_udp_range() {
+    CONF="/etc/config/zapret"
+    [ ! -f "$CONF" ] && { echo "Конфиг не найден"; return; }
+
+    # === 1. Добавляем UDP-блок в конец NFQWS_OPT ===
+    sed -i "/option NFQWS_OPT /s/'$//" "$CONF"  # убираем последнюю '
+    cat <<'EOF' >> "$CONF"
+--new
+--filter-udp=20000-22000
+--dpi-desync=fake
+--dpi-desync-cutoff=d2
+--dpi-desync-any-protocol
+--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/quic_initial_www_google_com.bin
+'
+EOF
+
+    # === 2. Добавляем диапазон портов в NFQWS_PORTS_UDP ===
+    sed -i "/option NFQWS_PORTS_UDP /s/'$/\,20000-22000'/" "$CONF"
+
+    echo "UDP-блок добавлен и диапазон портов обновлён"
+}
+
+
 # ==========================================
 # Zapret под ключ
 # ==========================================
@@ -663,7 +688,7 @@ fi
         5) start_zapret ;;
         6) uninstall_zapret ;;
 		7) enable_discord_calls ;;
-		8) zapret_key ;;
+		8) append_udp_range ;;
 		9)
 		if [ -n "$FLOW_WARNING" ]; then
             uci set firewall.@defaults[0].flow_offloading='0'
