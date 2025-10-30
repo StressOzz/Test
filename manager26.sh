@@ -403,6 +403,13 @@ clear
         return
 	fi
 
+    if grep -q "option NFQWS_PORTS_UDP.*20000-22000" /etc/config/zapret; then
+        echo -e "${RED}Стратегия уже изменена !${NC}"
+		echo -e ""
+        read -p "Нажмите Enter для выхода в главное меню..." dummy
+        return
+    fi
+
 	echo -e "${GREEN}🔴 ${CYAN}Добавляем в стратегию блок для игры${NC}"
 	
     last_line=$(grep -n "'" "$CONF" | tail -n1 | cut -d: -f1)
