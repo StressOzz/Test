@@ -688,7 +688,7 @@ fi
         5) start_zapret ;;
         6) uninstall_zapret ;;
 		7) enable_discord_calls ;;
-		8) append_udp_range ;;
+		8) append_udp_block ;;
 		9)
 		if [ -n "$FLOW_WARNING" ]; then
             uci set firewall.@defaults[0].flow_offloading='0'
