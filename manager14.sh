@@ -393,10 +393,19 @@ fix_REDSEC() {
     CONF="/etc/config/zapret"
     [ ! -f "$CONF" ] && { echo "Конфиг не найден"; return; }
 
-    # Удаляем последний апостроф ' после option NFQWS_OPT (учитывая переносы)
-    sed -i '/option NFQWS_OPT /{:a;N;/\x27$/!ba;s/\x27$/ /}' "$CONF"
+    # Находим последнюю кавычку ' с конца файла
+    LAST_QUOTE_LINE=$(tac "$CONF" | grep -nm1 "'" | cut -d: -f1)
+    if [ -z "$LAST_QUOTE_LINE" ]; then
+        echo "Символ ' не найден"
+        return
+    fi
 
-    # Добавляем блок UDP в конец
+    # Удаляем всё от этой кавычки до конца файла
+    TOTAL_LINES=$(wc -l < "$CONF")
+    DELETE_FROM=$((TOTAL_LINES - LAST_QUOTE_LINE + 1))
+    head -n $((DELETE_FROM - 1)) "$CONF" > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"
+
+    # Добавляем нужный блок
     cat <<'EOF' >> "$CONF"
 --new
 --filter-udp=20000-22000
@@ -407,15 +416,13 @@ fix_REDSEC() {
 '
 EOF
 
-    # Обновляем строку option NFQWS_PORTS_UDP 'число', добавляя ,20000-22000 перед последним '
-    sed -i "s/\(option NFQWS_PORTS_UDP '[0-9]\+\)/\1,20000-22000/" "$CONF"
+    # Обновляем option NFQWS_PORTS_UDP (добавляем диапазон UDP)
+    sed -i "s/\(option NFQWS_PORTS_UDP '[0-9]*\)'/\1,20000-22000'/" "$CONF"
 
-    echo "Блок UDP добавлен и порты обновлены в $CONF"
-
-    # Пауза на любую клавишу
-    echo "Нажмите любую клавишу для продолжения..."
-    read -n1 -s
-    echo
+    # Пауза: ждём нажатия любого символа
+    read -n1 -r -p "Нажмите любой символ для продолжения..." key
+    echo ""
+    echo "fix_REDSEC выполнен!"
 }
 
 
