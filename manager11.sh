@@ -389,7 +389,7 @@ enable_discord_calls() {
 
 
 #####################################################################################################################################
-append_udp_block() {
+fix_REDSEC() {
     CONF="/etc/config/zapret"
     [ ! -f "$CONF" ] && { echo "Конфиг не найден"; return; }
 
@@ -694,7 +694,7 @@ fi
         5) start_zapret ;;
         6) uninstall_zapret ;;
 		7) enable_discord_calls ;;
-		8) append_udp_range ;;
+		8) fix_REDSEC ;;
 		9)
 		if [ -n "$FLOW_WARNING" ]; then
             uci set firewall.@defaults[0].flow_offloading='0'
