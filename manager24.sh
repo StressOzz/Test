@@ -427,10 +427,12 @@ echo -e "${GREEN}🔴 ${CYAN}Применяем настройки${NC}"
 		chmod +x /opt/zapret/sync_config.sh
 		/opt/zapret/sync_config.sh
 		/etc/init.d/zapret restart >/dev/null 2>&1
+		
+echo -e ""
+echo -e "${BLUE}🔴 ${GREEN}Zapret ${GREEN}настроен для игры ${NC}Battlefield REDSEC !"
 
-	echo "fix_REDSEC выполнен!"
-    read -n1 -r -p "Нажмите любой символ для продолжения..." key
-    echo ""
+        echo -e ""
+        read -p "Нажмите Enter для выхода в главное меню..." dummy
 
 }
 
