@@ -411,12 +411,13 @@ fix_REDSEC() {
 EOF
 
     # Обновляем option NFQWS_PORTS_UDP
-    sed -i "s/\(option NFQWS_PORTS_UDP '[0-9]*\)'/\1,20000-22000'/" "$CONF"
+sed -i "/^option NFQWS_PORTS_UDP '/s/'$/,20000-22000'/" /etc/config/zapret
 
     # Пауза: ждём нажатия любого символа
+	echo "fix_REDSEC выполнен!"
     read -n1 -r -p "Нажмите любой символ для продолжения..." key
     echo ""
-    echo "fix_REDSEC выполнен!"
+
 }
 
 # ==========================================
