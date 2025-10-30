@@ -388,18 +388,24 @@ enable_discord_calls() {
 }
 
 
-#####################################################################################################################################
+# ==========================================
+# FIX Battlefield REDSEC
+# ==========================================
 fix_REDSEC() {
+clear
     CONF="/etc/config/zapret"
-    [ ! -f "$CONF" ] && { echo "Конфиг не найден"; return; }
+    [ ! -f "$CONF" ] && { echo -e "${RED}Zapret не установлен !${NC}"; return; }
 
-    # Удаляем всё от последней кавычки ' до конца файла
+
+	echo -e "${MAGENTA}Настраиваем стратегию для игры Battlefield REDSEC${NC}\n"
+
+	echo -e "${GREEN}🔴 ${CYAN}Добавляем в стратегию блок для игры${NC}"
+	
     last_line=$(grep -n "'" "$CONF" | tail -n1 | cut -d: -f1)
     if [ -n "$last_line" ]; then
         sed -i "${last_line},\$d" "$CONF"
     fi
 
-    # Добавляем новый блок в конец
     cat <<'EOF' >> "$CONF"
 --new
 --filter-udp=20000-22000
@@ -410,10 +416,14 @@ fix_REDSEC() {
 '
 EOF
 
-    # Обновляем option NFQWS_PORTS_UDP
 sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'$/,20000-22000'/" /etc/config/zapret
 
-    # Пауза: ждём нажатия любого символа
+echo -e "${GREEN}🔴 ${CYAN}Применяем настройки${NC}"
+
+		chmod +x /opt/zapret/sync_config.sh
+		/opt/zapret/sync_config.sh
+		/etc/init.d/zapret restart >/dev/null 2>&1
+
 	echo "fix_REDSEC выполнен!"
     read -n1 -r -p "Нажмите любой символ для продолжения..." key
     echo ""
