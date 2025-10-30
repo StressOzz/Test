@@ -394,7 +394,8 @@ append_udp_range() {
     [ ! -f "$CONF" ] && { echo "Конфиг не найден"; return; }
 
     # === 1. Добавляем UDP-блок в конец NFQWS_OPT ===
-    sed -i "/option NFQWS_OPT /s/'$//" "$CONF"  # убираем последнюю '
+    sed -i ':a;$!{N;ba};s/[[:space:]]*'\''[[:space:]]*$//' "$CONF"
+	
     cat <<'EOF' >> "$CONF"
 --new
 --filter-udp=20000-22000
