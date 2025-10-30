@@ -609,44 +609,21 @@ ${RED}==============================================${NC}"
     fi
 }
 
-####################################################################################################################
 # ==========================================
 # Запустить/Остановить Zapret
 # ==========================================
 startstop_zpr() {
     clear
-    if [ ! -f /etc/init.d/zapret ]; then
-        echo -e "${RED}Zapret не установлен !${NC}"
-        read -p "Нажмите Enter для выхода в главное меню..." dummy
-        return
-    fi
 
-    # Проверяем, запущен ли процесс
-    PIDS=$(pgrep -f /opt/zapret)
-    if [ -n "$PIDS" ]; then
-        # Если запущен — останавливаем
-        echo -e "${MAGENTA}Останавливаем Zapret${NC}\n"
-        echo -e "${GREEN}🔴 ${CYAN}Останавливаем сервис ${NC}Zapret"
-        /etc/init.d/zapret stop >/dev/null 2>&1
-        echo -e "${GREEN}🔴 ${CYAN}Убиваем все процессы ${NC}Zapret"
-        for pid in $PIDS; do kill -9 "$pid" >/dev/null 2>&1; done
-        echo -e "\n${BLUE}🔴 ${GREEN}Zapret остановлен !${NC}"
+    # Проверяем, запущен ли Zapret
+    if pgrep -f /opt/zapret >/dev/null 2>&1; then
+        # Если запущен — вызываем stop_zapret
+        stop_zapret
     else
-        # Если не запущен — запускаем
-        echo -e "${MAGENTA}Запускаем Zapret${NC}\n"
-        echo -e "${GREEN}🔴 ${CYAN}Запускаем сервис ${NC}Zapret"
-        /etc/init.d/zapret start >/dev/null 2>&1
-        chmod +x /opt/zapret/sync_config.sh
-        /opt/zapret/sync_config.sh
-        /etc/init.d/zapret restart >/dev/null 2>&1
-        echo -e "\n${BLUE}🔴 ${GREEN}Zapret запущен !${NC}"
+        # Если не запущен — вызываем start_zapret
+        start_zapret
     fi
-
-    echo -e ""
-    read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
-
-
 
 # ==========================================
 # Главное меню
@@ -715,9 +692,9 @@ fi
     echo -e "${CYAN}1) ${GREEN}Установить последнюю версию${NC}"
     echo -e "${CYAN}2) ${GREEN}Оптимизировать стратегию по умолчанию${NC}"
     echo -e "${CYAN}3) ${GREEN}Вернуть настройки по умолчанию${NC}"
-    echo -e "${CYAN}4) ${GREEN}Остановить ${NC}Zapret"
-    echo -e "${CYAN}5) ${GREEN}Запустить ${NC}Zapret"
-    echo -e "${CYAN}6) ${GREEN}Удалить ${NC}Zapret"
+    echo -e "${CYAN}4) ${GREEN}Остановить / Запустить ${NC}Zapret"
+    echo -e "${CYAN}5) ${GREEN}Удалить ${NC}Zapret"
+    echo -e "${CYAN}6) ${GREEN}Поченить ${NC}Battlefield REDSEC"
 	echo -e "${CYAN}7) ${GREEN}Меню настройки ${NC}Discord${GREEN} и звонков в ${NC}TG${GREEN}/${NC}WA"
 	echo -e "${CYAN}8) ${GREEN}Удалить / Установить / Настроить${NC} Zapret"
 if [ -n "$FLOW_WARNING" ]; then
@@ -732,10 +709,10 @@ fi
         2) fix_default ;;
         3) comeback_def ;;
         4) startstop_zpr ;;
-        5) start_zapret ;;
-        6) uninstall_zapret ;;
+        5) uninstall_zapret;;
+        6) fix_REDSEC  ;;
 		7) enable_discord_calls ;;
-		8) fix_REDSEC ;;
+		8) zapret_key ;;
 		9)
 		if [ -n "$FLOW_WARNING" ]; then
             uci set firewall.@defaults[0].flow_offloading='0'
