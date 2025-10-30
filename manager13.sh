@@ -393,10 +393,10 @@ fix_REDSEC() {
     CONF="/etc/config/zapret"
     [ ! -f "$CONF" ] && { echo "Конфиг не найден"; return; }
 
-    # Удаляем последнюю строку, которая содержит только ' с возможными пробелами/табами
-     sed -i '/option NFQWS_OPT /s/\'\'$//' "$CONF"
+    # Удаляем последний апостроф ' после option NFQWS_OPT (учитывая переносы)
+    sed -i '/option NFQWS_OPT /{:a;N;/\x27$/!ba;s/\x27$/ /}' "$CONF"
 
-    # Добавляем новый блок
+    # Добавляем блок UDP в конец
     cat <<'EOF' >> "$CONF"
 --new
 --filter-udp=20000-22000
@@ -407,14 +407,15 @@ fix_REDSEC() {
 '
 EOF
 
-    echo "Блок UDP добавлен в конец option NFQWS_OPT"
-    # === 2. Добавляем диапазон портов в NFQWS_PORTS_UDP ===
-    sed -i "/option NFQWS_PORTS_UDP /s/'$/\,20000-22000'/" "$CONF"
+    # Обновляем строку option NFQWS_PORTS_UDP 'число', добавляя ,20000-22000 перед последним '
+    sed -i "s/\(option NFQWS_PORTS_UDP '[0-9]\+\)/\1,20000-22000/" "$CONF"
 
-    echo "UDP-блок добавлен и диапазон портов обновлён"
-	echo "Нажмите любую клавишу для продолжения..."
-read -n1 -s
-	
+    echo "Блок UDP добавлен и порты обновлены в $CONF"
+
+    # Пауза на любую клавишу
+    echo "Нажмите любую клавишу для продолжения..."
+    read -n1 -s
+    echo
 }
 
 
