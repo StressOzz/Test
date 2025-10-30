@@ -344,7 +344,7 @@ enable_discord_calls() {
                 ;;
             *)
                 echo -e ""
-                echo -e "${GREEN}Выходим в главное меню...${NC}"
+                echo -e "Выходим в главное меню..."
                 sleep 1
                 show_menu
                 return
