@@ -393,11 +393,14 @@ enable_discord_calls() {
 # ==========================================
 fix_REDSEC() {
 clear
-    CONF="/etc/config/zapret"
-    [ ! -f "$CONF" ] && { echo -e "${RED}Zapret не установлен !${NC}"; return; }
-
-
 	echo -e "${MAGENTA}Настраиваем стратегию для игры Battlefield REDSEC${NC}\n"
+	
+    CONF="/etc/config/zapret"
+    if [ ! -f /etc/init.d/zapret ]; then
+        echo -e "${RED}Zapret не установлен!${NC}"
+		echo -e ""
+		read -p "Нажмите Enter для выхода в главное меню..." dummy
+        return
 
 	echo -e "${GREEN}🔴 ${CYAN}Добавляем в стратегию блок для игры${NC}"
 	
