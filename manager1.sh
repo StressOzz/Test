@@ -388,13 +388,12 @@ enable_discord_calls() {
 }
 
 
+#####################################################################################################################################
+append_udp_block() {
+    # Удаляем последний символ одинарной кавычки в option NFQWS_OPT
+    sed -i '/option NFQWS_OPT /s/\'\'$//' "$CONF"
 
-append_udp_range() {
-    CONF="/etc/config/zapret"
-    [ ! -f "$CONF" ] && { echo "Конфиг не найден"; return; }
-
-    # === 1. Добавляем UDP-блок в конец NFQWS_OPT ===
-    sed -i "/option NFQWS_OPT /s/'$//" "$CONF"  # убираем последнюю '
+    # Добавляем новый блок
     cat <<'EOF' >> "$CONF"
 --new
 --filter-udp=20000-22000
@@ -405,7 +404,9 @@ append_udp_range() {
 '
 EOF
 
-    # === 2. Добавляем диапазон портов в NFQWS_PORTS_UDP ===
+    echo "Блок UDP добавлен в конец option NFQWS_OPT"
+}
+
     sed -i "/option NFQWS_PORTS_UDP /s/'$/\,20000-22000'/" "$CONF"
 
     echo "UDP-блок добавлен и диапазон портов обновлён"
