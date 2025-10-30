@@ -609,6 +609,45 @@ ${RED}==============================================${NC}"
     fi
 }
 
+####################################################################################################################
+# ==========================================
+# Запустить/Остановить Zapret
+# ==========================================
+startstop_zpr() {
+    clear
+    if [ ! -f /etc/init.d/zapret ]; then
+        echo -e "${RED}Zapret не установлен !${NC}"
+        read -p "Нажмите Enter для выхода в главное меню..." dummy
+        return
+    fi
+
+    # Проверяем, запущен ли процесс
+    PIDS=$(pgrep -f /opt/zapret)
+    if [ -n "$PIDS" ]; then
+        # Если запущен — останавливаем
+        echo -e "${MAGENTA}Останавливаем Zapret${NC}\n"
+        echo -e "${GREEN}🔴 ${CYAN}Останавливаем сервис ${NC}Zapret"
+        /etc/init.d/zapret stop >/dev/null 2>&1
+        echo -e "${GREEN}🔴 ${CYAN}Убиваем все процессы ${NC}Zapret"
+        for pid in $PIDS; do kill -9 "$pid" >/dev/null 2>&1; done
+        echo -e "\n${BLUE}🔴 ${GREEN}Zapret остановлен !${NC}"
+    else
+        # Если не запущен — запускаем
+        echo -e "${MAGENTA}Запускаем Zapret${NC}\n"
+        echo -e "${GREEN}🔴 ${CYAN}Запускаем сервис ${NC}Zapret"
+        /etc/init.d/zapret start >/dev/null 2>&1
+        chmod +x /opt/zapret/sync_config.sh
+        /opt/zapret/sync_config.sh
+        /etc/init.d/zapret restart >/dev/null 2>&1
+        echo -e "\n${BLUE}🔴 ${GREEN}Zapret запущен !${NC}"
+    fi
+
+    echo -e ""
+    read -p "Нажмите Enter для выхода в главное меню..." dummy
+}
+
+
+
 # ==========================================
 # Главное меню
 # ==========================================
@@ -692,7 +731,7 @@ fi
         1) install_update ;;
         2) fix_default ;;
         3) comeback_def ;;
-        4) stop_zapret ;;
+        4) startstop_zpr ;;
         5) start_zapret ;;
         6) uninstall_zapret ;;
 		7) enable_discord_calls ;;
