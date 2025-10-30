@@ -393,12 +393,13 @@ fix_REDSEC() {
     CONF="/etc/config/zapret"
     [ ! -f "$CONF" ] && { echo "Конфиг не найден"; return; }
 
-    # Удаляем всё после последней кавычки ' с конца и саму кавычку
-    ed -s "$CONF" <<'EOF'
-?'.'?,$d
-EOF
+    # Удаляем всё от последней кавычки ' до конца файла
+    last_line=$(grep -n "'" "$CONF" | tail -n1 | cut -d: -f1)
+    if [ -n "$last_line" ]; then
+        sed -i "${last_line},\$d" "$CONF"
+    fi
 
-    # Добавляем новый блок
+    # Добавляем новый блок в конец
     cat <<'EOF' >> "$CONF"
 --new
 --filter-udp=20000-22000
@@ -409,7 +410,7 @@ EOF
 '
 EOF
 
-    # Обновляем option NFQWS_PORTS_UDP (добавляем диапазон UDP)
+    # Обновляем option NFQWS_PORTS_UDP
     sed -i "s/\(option NFQWS_PORTS_UDP '[0-9]*\)'/\1,20000-22000'/" "$CONF"
 
     # Пауза: ждём нажатия любого символа
