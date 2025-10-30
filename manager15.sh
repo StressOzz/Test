@@ -393,19 +393,12 @@ fix_REDSEC() {
     CONF="/etc/config/zapret"
     [ ! -f "$CONF" ] && { echo "Конфиг не найден"; return; }
 
-    # Находим последнюю кавычку ' с конца файла
-    LAST_QUOTE_LINE=$(tac "$CONF" | grep -nm1 "'" | cut -d: -f1)
-    if [ -z "$LAST_QUOTE_LINE" ]; then
-        echo "Символ ' не найден"
-        return
-    fi
+    # Удаляем всё после последней кавычки ' с конца и саму кавычку
+    ed -s "$CONF" <<'EOF'
+?'.'?,$d
+EOF
 
-    # Удаляем всё от этой кавычки до конца файла
-    TOTAL_LINES=$(wc -l < "$CONF")
-    DELETE_FROM=$((TOTAL_LINES - LAST_QUOTE_LINE + 1))
-    head -n $((DELETE_FROM - 1)) "$CONF" > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"
-
-    # Добавляем нужный блок
+    # Добавляем новый блок
     cat <<'EOF' >> "$CONF"
 --new
 --filter-udp=20000-22000
@@ -424,7 +417,6 @@ EOF
     echo ""
     echo "fix_REDSEC выполнен!"
 }
-
 
 # ==========================================
 # Zapret под ключ
