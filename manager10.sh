@@ -415,27 +415,16 @@ fix_REDSEC() {
         return
 	fi
 
-    # Проверяем диапазон портов в NFQWS_PORTS_UDP
-    if grep -q "option NFQWS_PORTS_UDP.*20000-22000" "$CONF"; then	
-        echo -e "${YELLOW}Диапазон портов 20000-22000 уже присутствует${NC}"
-    else
-        echo -e "${GREEN}Добавляем диапазон портов 20000-22000${NC}"
+    if ! grep -q "option NFQWS_PORTS_UDP.*20000-22000" "$CONF"; then
         sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'$/,20000-22000'/" "$CONF"
     fi
 
-    # Проверяем, есть ли уже --filter-udp=20000-22000
-    if grep -q -- "--filter-udp=20000-22000" "$CONF"; then
-        echo -e "${YELLOW}Стратегия для Battlefield REDSEC уже присутствует, обновление не требуется${NC}\n"
-    else
-        echo -e "${GREEN}🔴 ${CYAN}Добавляем/восстанавливаем блок стратегии для Battlefield REDSEC${NC}"
-
-        # Удаляем старый блок после последней одинокой кавычки
+    if ! grep -q -- "--filter-udp=20000-22000" "$CONF"; then
         last_line=$(grep -n "^'$" "$CONF" | tail -n1 | cut -d: -f1)
         if [ -n "$last_line" ]; then
             sed -i "${last_line},\$d" "$CONF"
         fi
 
-        # Добавляем новый блок
         cat <<'EOF' >> "$CONF"
 --new
 --filter-udp=20000-22000
@@ -446,7 +435,6 @@ fix_REDSEC() {
 '
 EOF
 
-        echo -e "${GREEN}🔴 ${CYAN}Применяем настройки${NC}"
         chmod +x /opt/zapret/sync_config.sh
         /opt/zapret/sync_config.sh
         /etc/init.d/zapret restart >/dev/null 2>&1
@@ -456,7 +444,6 @@ EOF
     echo -e ""
     read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
-
 
 # ==========================================
 # Zapret под ключ
