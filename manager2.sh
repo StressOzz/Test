@@ -344,7 +344,7 @@ fi
 				;;
 			4)
 				SELECTED="50-discord"
-				URL="https://raw.githubusercontent.com/bol-van/zapret/refs/tags/v70.5/init.d/custom.d.examples.linux/50-discord"
+				URL="https://raw.githubusercontent.com/bol-van/zapret/v70.5/init.d/custom.d.examples.linux/50-discord"
 				;;
             5)
                 echo -e ""
@@ -380,13 +380,18 @@ fi
             /opt/zapret/sync_config.sh
             /etc/init.d/zapret restart >/dev/null 2>&1
 			echo -e ""
+                    if [ "$SELECTED" = "50-quic4all" ] || [ "$SELECTED" = "50-stun4all" ]; then
             echo -e "${BLUE}🔴 ${GREEN}Звонки и Discord включены !${NC}"
+        elif [ "$SELECTED" = "50-discord-media" ] || [ "$SELECTED" = "50-discord" ]; then
+            echo -e "${BLUE}🔴 ${GREEN}Discord включён !${NC}"
         else
-            echo -e "${RED}Ошибка при скачивании скрипта !${NC}"
-			echo -e ""
-            [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
-            return
+            echo -e "${BLUE}🔴 ${GREEN}Скрипт активирован !${NC}"
         fi
+    else
+        echo -e "${RED}Ошибка при скачивании скрипта !${NC}"
+        echo -e ""
+        [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
+        return
     fi
 
 	echo -e ""
