@@ -405,7 +405,8 @@ fi
 # FIX Battlefield REDSEC
 # ==========================================
 fix_REDSEC() {
-	clear
+	local NO_PAUSE=$1
+	[ "$NO_PAUSE" != "1" ] && clear
 	echo -e "${MAGENTA}Настраиваем стратегию для игры Battlefield REDSEC${NC}\n"
 	
     CONF="/etc/config/zapret"
@@ -480,8 +481,9 @@ zapret_key(){
         echo -e "${MAGENTA}Включаем Discord и звонки в TG и WA${NC}"
         echo -e ""
         enable_discord_calls "1"
+		fix_REDSEC "1"
 
-        if [ -f /etc/init.d/zapret ]; then
+		if [ -f /etc/init.d/zapret ]; then
             echo -e "${BLUE}🔴 ${GREEN}Zapret ${GREEN}установлен и настроен !${NC}"
         else
             echo -e "${RED}Zapret не установлен !${NC}"
