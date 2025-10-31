@@ -266,6 +266,17 @@ yt3.googleusercontent.com
 yting.com
 EOF
 
+cat <<'EOF' >> /etc/hosts
+130.255.77.28 ntc.party
+57.144.222.34 instagram.com www.instagram.com
+173.245.58.219 rutor.info d.rutor.info
+193.46.255.29 rutor.info
+157.240.9.174 instagram.com www.instagram.com
+EOF
+
+/etc/init.d/dnsmasq restart >/dev/null 2>&1
+
+
 # Применяем конфиг
     [ "$NO_PAUSE" != "1" ] && chmod +x /opt/zapret/sync_config.sh
     [ "$NO_PAUSE" != "1" ] && /opt/zapret/sync_config.sh
