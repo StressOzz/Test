@@ -441,16 +441,17 @@ fix_REDSEC() {
 --dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/quic_initial_www_google_com.bin
 '
 EOF
+fi
+
 echo -e "${GREEN}🔴 ${CYAN}Добавляем в стратегию блок необходимый для игры${NC}"
 sleep 0.5
 echo -e "${GREEN}🔴 ${CYAN}Применяем настройки${NC}"
         chmod +x /opt/zapret/sync_config.sh
         /opt/zapret/sync_config.sh
         /etc/init.d/zapret restart >/dev/null 2>&1
-    fi
 
 	echo -e ""
-    echo -e "${BLUE}🔴 ${GREEN}Zapret настроен для игры Battlefield REDSEC !"
+    echo -e "${BLUE}🔴 ${GREEN}Zapret настроен для игры Battlefield REDSEC !${NC}"
     echo -e ""
     read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
