@@ -164,12 +164,12 @@ fix_default() {
 local NO_PAUSE=$1
     [ "$NO_PAUSE" != "1" ] && clear
 
-    echo -e "${MAGENTA}Редактируем стратегию по умолчанию${NC}"
+    echo -e "${MAGENTA}Редактируем стратегию${NC}"
     echo -e ""
 
 # Проверка, установлен ли Zapret
     if [ ! -f /etc/init.d/zapret ]; then
-        echo -e "${RED}Zapret не установлен!${NC}"
+        echo -e "${RED}Zapret не установлен !${NC}"
         [ "$NO_PAUSE" != "1" ] && echo -e ""
         [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
         return
@@ -271,7 +271,7 @@ EOF
     [ "$NO_PAUSE" != "1" ] && /opt/zapret/sync_config.sh
     [ "$NO_PAUSE" != "1" ] && /etc/init.d/zapret restart >/dev/null 2>&1
 
-    echo -e "${BLUE}🔴 ${GREEN}Стратегия по умолчанию отредактирована!${NC}"
+    echo -e "${BLUE}🔴 ${GREEN}Стратегия отредактирована !${NC}"
     [ "$NO_PAUSE" != "1" ] && echo -e ""
     [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
@@ -660,7 +660,7 @@ show_menu() {
 	echo -e "╔════════════════════════════════════╗"
 	echo -e "║     ${BLUE}Zapret on remittor Manager${NC}     ║"
 	echo -e "╚════════════════════════════════════╝"
-	echo -e "                                  ${DGRAY}v3.4${NC}"
+	echo -e "                                  ${DGRAY}v4.0${NC}"
 
 	check_flow_offloading
 [ -n "$FLOW_WARNING" ] && echo -e "$FLOW_WARNING"
@@ -713,7 +713,7 @@ fi
 
     # Вывод пунктов меню
     echo -e "${CYAN}1) ${GREEN}Установить последнюю версию${NC}"
-    echo -e "${CYAN}2) ${GREEN}Оптимизировать стратегию по умолчанию${NC}"
+    echo -e "${CYAN}2) ${GREEN}Оптимизировать стратегию${NC}"
     echo -e "${CYAN}3) ${GREEN}Вернуть настройки по умолчанию${NC}"
     echo -e "${CYAN}4) ${GREEN}Остановить / Запустить ${NC}Zapret"
     echo -e "${CYAN}5) ${GREEN}Удалить ${NC}Zapret"
