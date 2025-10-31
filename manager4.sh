@@ -405,55 +405,67 @@ fi
 # FIX Battlefield REDSEC
 # ==========================================
 fix_REDSEC() {
-clear
+	clear
 	echo -e "${MAGENTA}Настраиваем стратегию для игры Battlefield REDSEC${NC}\n"
 	
     CONF="/etc/config/zapret"
     if [ ! -f /etc/init.d/zapret ]; then
-        echo -e "${RED}Zapret не установлен!${NC}"
-		echo -e ""
+        echo -e "${RED}Zapret не установлен!${NC}\n"
 		read -p "Нажмите Enter для выхода в главное меню..." dummy
         return
 	fi
 
-    if grep -q "option NFQWS_PORTS_UDP.*20000-22000" /etc/config/zapret; then
-        echo -e "${RED}Стратегия уже изменена !${NC}"
-		echo -e ""
-        read -p "Нажмите Enter для выхода в главное меню..." dummy
-        return
-    fi
+	# Проверяем наличие диапазона портов 20000-22000
+	has_udp_port=$(grep -E "option[[:space:]]+NFQWS_PORTS_UDP.*20000-22000" "$CONF")
 
-	echo -e "${GREEN}🔴 ${CYAN}Добавляем в стратегию блок для игры${NC}"
-	
-    last_line=$(grep -n "'" "$CONF" | tail -n1 | cut -d: -f1)
-    if [ -n "$last_line" ]; then
-        sed -i "${last_line},\$d" "$CONF"
-    fi
+	# Проверяем наличие всех нужных опций
+	check_all_opts() {
+		grep -q -- "--filter-udp=20000-22000" "$CONF" &&
+		grep -q -- "--dpi-desync=fake" "$CONF" &&
+		grep -q -- "--dpi-desync-cutoff=d2" "$CONF" &&
+		grep -q -- "--dpi-desync-any-protocol" "$CONF" &&
+		grep -q -- "--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/quic_initial_www_google_com.bin" "$CONF"
+	}
 
-    cat <<'EOF' >> "$CONF"
---new
---filter-udp=20000-22000
---dpi-desync=fake
---dpi-desync-cutoff=d2
---dpi-desync-any-protocol
---dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/quic_initial_www_google_com.bin
-'
-EOF
+	if [ -n "$has_udp_port" ] && check_all_opts; then
+		echo -e "${RED}Стратегия уже изменена!${NC}\n"
+		read -p "Нажмите Enter для выхода в главное меню..." dummy
+		return
+	fi
 
-sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'$/,20000-22000'/" /etc/config/zapret
+	echo -e "${GREEN}🔴 ${CYAN}Добавляем или восстанавливаем стратегию для игры${NC}"
 
-echo -e "${GREEN}🔴 ${CYAN}Применяем настройки${NC}"
+	# Добавляем порт, если его нет
+	if [ -z "$has_udp_port" ]; then
+		sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'$/,20000-22000'/" "$CONF"
+	fi
 
-		chmod +x /opt/zapret/sync_config.sh
-		/opt/zapret/sync_config.sh
-		/etc/init.d/zapret restart >/dev/null 2>&1
-		
-echo -e ""
-echo -e "${BLUE}🔴 ${GREEN}Zapret ${GREEN}настроен для игры ${NC}Battlefield REDSEC !"
+	# Добавляем недостающие параметры, если нужно
+	for opt in \
+		"--filter-udp=20000-22000" \
+		"--dpi-desync=fake" \
+		"--dpi-desync-cutoff=d2" \
+		"--dpi-desync-any-protocol" \
+		"--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/quic_initial_www_google_com.bin"
+	do
+		if ! grep -q -- "$opt" "$CONF"; then
+			echo "$opt" >> "$CONF"
+		fi
+	done
 
-        echo -e ""
-        read -p "Нажмите Enter для выхода в главное меню..." dummy
+	# Проверяем наличие завершающей кавычки, добавляем если нужно
+	if ! tail -n 1 "$CONF" | grep -q "^'$"; then
+		echo "'" >> "$CONF"
+	fi
 
+	echo -e "${GREEN}🔴 ${CYAN}Применяем настройки${NC}"
+	chmod +x /opt/zapret/sync_config.sh
+	/opt/zapret/sync_config.sh
+	/etc/init.d/zapret restart >/dev/null 2>&1
+
+	echo -e "\n${BLUE}🔴 ${GREEN}Zapret настроен для игры ${NC}Battlefield REDSEC!"
+	echo -e ""
+	read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
 
 # ==========================================
