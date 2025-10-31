@@ -410,10 +410,17 @@ fix_REDSEC() {
 	
     CONF="/etc/config/zapret"
     if [ ! -f /etc/init.d/zapret ]; then
-        echo -e "${RED}Zapret не установлен!${NC}\n"
+        echo -e "${RED}Zapret не установлен !${NC}\n"
 		read -p "Нажмите Enter для выхода в главное меню..." dummy
         return
 	fi
+
+    if grep -q "option NFQWS_PORTS_UDP.*20000-22000" "$CONF" && grep -q -- "--filter-udp=20000-22000" "$CONF"; then
+        echo -e "${RED}Стратегия для Battlefield REDSEC уже применена !${NC}"
+		echo -e ""
+		read -p "Нажмите Enter для выхода в главное меню..." dummy
+        return
+    fi
 
     if ! grep -q "option NFQWS_PORTS_UDP.*20000-22000" "$CONF"; then
         sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'$/,20000-22000'/" "$CONF"
@@ -434,16 +441,20 @@ fix_REDSEC() {
 --dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/quic_initial_www_google_com.bin
 '
 EOF
-
+echo -e "${GREEN}🔴 ${CYAN}Добавляем в стратегию блок необходимый для игры${NC}"
+sleep 0.5
+echo -e "${GREEN}🔴 ${CYAN}Применяем настройки${NC}"
         chmod +x /opt/zapret/sync_config.sh
         /opt/zapret/sync_config.sh
         /etc/init.d/zapret restart >/dev/null 2>&1
     fi
 
-    echo -e "\n${BLUE}🔴 ${GREEN}Zapret настроен для игры ${NC}Battlefield REDSEC!"
+	echo -e ""
+    echo -e "${BLUE}🔴 ${GREEN}Zapret настроен для игры Battlefield REDSEC !"
     echo -e ""
     read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
+
 
 # ==========================================
 # Zapret под ключ
