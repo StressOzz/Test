@@ -731,7 +731,7 @@ fi
 
 CONF="/etc/config/zapret"
 if grep -q "option NFQWS_PORTS_UDP.*20000-22000" "$CONF" && grep -q -- "--filter-udp=20000-22000" "$CONF"; then
-    echo -e "\n${YELLOW}Стратегия для Battlefield REDSEC: ${NC}активна"
+    echo -e "\n${YELLOW}Стратегия для Battlefield REDSEC активна${NC}"
 fi
 
     echo -e ""
