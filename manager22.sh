@@ -484,6 +484,7 @@ zapret_key(){
 		fix_REDSEC "1"
 
 		if [ -f /etc/init.d/zapret ]; then
+			echo -e ""
             echo -e "${BLUE}🔴 ${GREEN}Zapret ${GREEN}установлен и настроен !${NC}"
         else
             echo -e "${RED}Zapret не установлен !${NC}"
