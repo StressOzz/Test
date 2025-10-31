@@ -520,6 +520,15 @@ comeback_def () {
             if [ -f /opt/zapret/restore-def-cfg.sh ]; then
 				rm -f /opt/zapret/init.d/openwrt/custom.d/50-script.sh
                 [ -f /etc/init.d/zapret ] && /etc/init.d/zapret stop >/dev/null 2>&1
+
+				IPSET_DIR="/opt/zapret/ipset"
+    			mkdir -p "$IPSET_DIR"
+    			FILES="zapret-hosts-google.txt zapret-hosts-user-exclude.txt"
+    			URL_BASE="https://raw.githubusercontent.com/remittor/zapret-openwrt/master/zapret/ipset"
+   				for f in $FILES; do
+				curl -fsSLo "$IPSET_DIR/$f" "$URL_BASE/$f"
+    			done
+				
                 chmod +x /opt/zapret/restore-def-cfg.sh
                 /opt/zapret/restore-def-cfg.sh
                 chmod +x /opt/zapret/sync_config.sh
