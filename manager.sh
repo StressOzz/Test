@@ -295,16 +295,22 @@ enable_discord_calls() {
 
     CUSTOM_DIR="/opt/zapret/init.d/openwrt/custom.d/"
     CURRENT_SCRIPT="не установлен"
-    if [ -f "$CUSTOM_DIR/50-script.sh" ]; then
-        FIRST_LINE=$(sed -n '1p' "$CUSTOM_DIR/50-script.sh")
-        if echo "$FIRST_LINE" | grep -q "QUIC"; then
-            CURRENT_SCRIPT="50-quic4all"
-        elif echo "$FIRST_LINE" | grep -q "stun"; then
-            CURRENT_SCRIPT="50-stun4all"
-        else
-            CURRENT_SCRIPT="неизвестный"
-        fi
+	
+if [ -f "$CUSTOM_DIR/50-script.sh" ]; then
+    FIRST_LINE=$(sed -n '1p' "$CUSTOM_DIR/50-script.sh")
+
+    if echo "$FIRST_LINE" | grep -q "QUIC"; then
+        CURRENT_SCRIPT="50-quic4all"
+    elif echo "$FIRST_LINE" | grep -q "stun"; then
+        CURRENT_SCRIPT="50-stun4all"
+    elif echo "$FIRST_LINE" | grep -q "discord media"; then
+        CURRENT_SCRIPT="50-discord-media"
+    elif echo "$FIRST_LINE" | grep -q "discord subnets"; then
+        CURRENT_SCRIPT="50-discord"
+    else
+        CURRENT_SCRIPT="неизвестный"
     fi
+fi
 
     [ "$NO_PAUSE" != "1" ] && echo -e "${YELLOW}Установленный скрипт:${NC} $CURRENT_SCRIPT"
     [ "$NO_PAUSE" != "1" ] && echo -e ""
@@ -313,9 +319,11 @@ enable_discord_calls() {
         SELECTED="50-stun4all"
         URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-stun4all"
     else
-        echo -e "${CYAN}1) ${GREEN}Установить скрипт ${NC}50-stun4all"
-        echo -e "${CYAN}2) ${GREEN}Установить скрипт ${NC}50-quic4all"
-        echo -e "${CYAN}3) ${GREEN}Удалить скрипт${NC}"
+        echo -e "${CYAN}1) ${GREEN}Установить скрипт ${NC}50-stun4all ${GREEN}для${NC} Discord ${GREEN}и${NC} звонков"
+        echo -e "${CYAN}2) ${GREEN}Установить скрипт ${NC}50-quic4all ${GREEN}для${NC} Discord ${GREEN}и${NC} звонков"
+		echo -e "${CYAN}3) ${GREEN}Установить скрипт ${NC}50-discord-media ${GREEN}для${NC} Discord"
+		echo -e "${CYAN}4) ${GREEN}Установить скрипт ${NC}50-discord ${GREEN}для${NC} Discord"
+        echo -e "${CYAN}5) ${GREEN}Удалить скрипт${NC}"
         echo -e "${CYAN}0) ${GREEN}Выход в главное меню (Enter)${NC}"
         echo -e ""
         echo -ne "${YELLOW}Выберите пункт:${NC} "
@@ -330,7 +338,15 @@ enable_discord_calls() {
                 SELECTED="50-quic4all"
                 URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-quic4all"
                 ;;
-            3)
+			3)
+				SELECTED="50-discord-media"
+				URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-discord-media"
+				;;
+			4)
+				SELECTED="50-discord"
+				URL="https://raw.githubusercontent.com/bol-van/zapret/refs/tags/v70.5/init.d/custom.d.examples.linux/50-discord"
+				;;
+            5)
                 echo -e ""
                 echo -e "${BLUE}🔴 ${GREEN}Скрипт удалён !${NC}"
                 rm -f "$CUSTOM_DIR/50-script.sh" 2>/dev/null
@@ -372,13 +388,6 @@ enable_discord_calls() {
             return
         fi
     fi
-#  Пока отключил добавление портов 50000–50099 — обработка звонков выполняется внутри скрипта
-#   if ! grep -q -- "--filter-udp=50000-50099" /etc/config/zapret; then
-#       sed -i "s/option NFQWS_PORTS_UDP '443'/option NFQWS_PORTS_UDP '443,50000-50099'/" /etc/config/zapret
-#       sed -i "/^'$/d" /etc/config/zapret
-#       printf -- '--new\n--filter-udp=50000-50099\n--filter-l7=discord,stun\n--dpi-desync=fake\n' >> /etc/config/zapret
-#       echo "'" >> /etc/config/zapret
-#   fi
 
 	echo -e ""
 		chmod +x /opt/zapret/sync_config.sh
@@ -386,7 +395,6 @@ enable_discord_calls() {
 		/etc/init.d/zapret restart >/dev/null 2>&1
     [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
-
 
 # ==========================================
 # FIX Battlefield REDSEC
