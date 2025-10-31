@@ -537,7 +537,7 @@ echo -e "${GREEN}🔴 ${CYAN}Возвращаем настройки, страт
                 chmod +x /opt/zapret/sync_config.sh
                 /opt/zapret/sync_config.sh
                 [ -f /etc/init.d/zapret ] && /etc/init.d/zapret restart >/dev/null 2>&1
-                echo -e "${BLUE}🔴 ${GREEN}Настройки возвращены, сервис перезапущен !${NC}"
+                echo -e "${BLUE}🔴 ${GREEN}Настройки по умолчанию возвращены !${NC}"
             else
                 echo -e "${RED}Zapret не установлен !${NC}"
             fi
@@ -759,9 +759,10 @@ fi
 
 
 CONF="/etc/config/zapret"
-if grep -q "option NFQWS_PORTS_UDP.*20000-22000" "$CONF" && grep -q -- "--filter-udp=20000-22000" "$CONF"; then
+if [ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*20000-22000" "$CONF" && grep -q -- "--filter-udp=20000-22000" "$CONF"; then
     echo -e "\n${YELLOW}Стратегия для Battlefield REDSEC: ${NC}активна${NC}"
 fi
+
 
     echo -e ""
 
