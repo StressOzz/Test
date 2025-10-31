@@ -729,6 +729,11 @@ fi
 # Если скрипт найден, выводим строку
 [ -n "$CURRENT_SCRIPT" ] && echo -e "\n${YELLOW}Установлен скрипт: ${NC}$CURRENT_SCRIPT"
 
+CONF="/etc/config/zapret"
+if grep -q "option NFQWS_PORTS_UDP.*20000-22000" "$CONF" && grep -q -- "--filter-udp=20000-22000" "$CONF"; then
+    echo -e "\n${YELLOW}Стратегия для Battlefield REDSEC: ${NC}активна"
+fi
+
     echo -e ""
 
     # Вывод пунктов меню
