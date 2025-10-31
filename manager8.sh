@@ -417,16 +417,17 @@ fix_REDSEC() {
 
     # Проверяем диапазон портов в NFQWS_PORTS_UDP
     if grep -q "option NFQWS_PORTS_UDP.*20000-22000" "$CONF"; then	
-
+        sleep 0.1
     else
-
+        sleep 0.1
         sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'$/,20000-22000'/" "$CONF"
     fi
 
     # Проверяем, есть ли уже --filter-udp=20000-22000
     if grep -q -- "--filter-udp=20000-22000" "$CONF"; then
-
+        sleep 0.1
     else
+        sleep 0.1
 
         # Удаляем старый блок после последней одинокой кавычки
         last_line=$(grep -n "^'$" "$CONF" | tail -n1 | cut -d: -f1)
