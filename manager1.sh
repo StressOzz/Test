@@ -711,6 +711,12 @@ if [ -f "$CUSTOM_DIR/50-script.sh" ]; then
         CURRENT_SCRIPT="50-quic4all"
     elif echo "$FIRST_LINE" | grep -q "stun"; then
         CURRENT_SCRIPT="50-stun4all"
+    elif echo "$FIRST_LINE" | grep -q "discord media"; then
+        CURRENT_SCRIPT="50-discord-media"
+    elif echo "$FIRST_LINE" | grep -q "discord subnets"; then
+        CURRENT_SCRIPT="50-discord"
+    else
+        CURRENT_SCRIPT="неизвестный"
     fi
 fi
 
