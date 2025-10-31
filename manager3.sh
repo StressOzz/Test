@@ -393,7 +393,7 @@ fi
         [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
         return
     fi
-
+fi
 	echo -e ""
 		chmod +x /opt/zapret/sync_config.sh
 		/opt/zapret/sync_config.sh
