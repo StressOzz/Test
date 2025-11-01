@@ -152,31 +152,21 @@ echo -e "\n${BLUE}🔴 ${GREEN}Zapret установлен !${NC}\n"
 # Чиним дефолтную стратегию
 # ==========================================
 fix_default() {
-    local NO_PAUSE=$1
-    [ "$NO_PAUSE" != "1" ] && clear
-    echo -e "${MAGENTA}Редактируем стратегию${NC}\n"
-
-    # Проверка, установлен ли Zapret
-    if [ ! -f /etc/init.d/zapret ]; then
-        echo -e "${RED}Zapret не установлен !${NC}"
-        [ "$NO_PAUSE" != "1" ] && echo -e ""
-        [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
-        return
-    fi
-
-    echo -e "${GREEN}🔴 ${CYAN}Меняем стратегию и редактируем ${NC}host\n"
-
-    # Проверка и добавление блока NFQWS_OPT
-    if ! awk '
-        $0=="--filter-tcp=443"{a=1;next}
-        a && $0=="--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt"{a++;next}
-        a && $0=="--dpi-desync=fake,multidisorder"{a++}
-        END{exit a==3?0:1}
-    ' /etc/config/zapret; then
-        # Удаляем старый блок начиная с option NFQWS_OPT '
-        sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" /etc/config/zapret
-        # Вставляем новый блок
-        cat <<'EOF' >> /etc/config/zapret
+local NO_PAUSE=$1
+[ "$NO_PAUSE" != "1" ] && clear
+echo -e "${MAGENTA}Редактируем стратегию${NC}\n"
+# Проверка, установлен ли Zapret
+if [ ! -f /etc/init.d/zapret ]; then
+echo -e "${RED}Zapret не установлен !${NC}"
+[ "$NO_PAUSE" != "1" ] && echo -e ""
+[ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
+return
+fi
+echo -e "${GREEN}🔴 ${CYAN}Меняем стратегию и редактируем ${NC}host\n"
+# Удаляем строку и всё, что идёт ниже строки с option NFQWS_OPT '
+sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" /etc/config/zapret
+# Вставляем новый блок сразу после строки option NFQWS_OPT '
+cat <<'EOF' >> /etc/config/zapret
 option NFQWS_OPT '
 --filter-tcp=443
 --hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt
@@ -195,12 +185,10 @@ option NFQWS_OPT '
 --dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin
 '
 EOF
-    fi
-
-    # Проверка и перезапись файла исключений пользователей
-    if ! grep -Fq "gosuslugi.ru" /opt/zapret/ipset/zapret-hosts-user-exclude.txt; then
-        mkdir -p /opt/zapret/ipset
-        cat <<EOF >/opt/zapret/ipset/zapret-hosts-user-exclude.txt
+# Проверка и перезапись файла исключений пользователей
+if ! grep -Fq "ut-public-service-prod10.ol.epicgames.com" /opt/zapret/ipset/zapret-hosts-user-exclude.txt; then
+mkdir -p /opt/zapret/ipset
+cat <<EOF >/opt/zapret/ipset/zapret-hosts-user-exclude.txt
 gosuslugi.ru
 api.steampowered.com
 cdn.akamai.steamstatic.com
@@ -273,11 +261,10 @@ api.epicgames.dev
 metrics.ol.epicgames.com
 et.epicgames.com
 EOF
-    fi
-
-    # Проверка и добавление YouTube hostlist
-    if ! grep -Fq "cdn.youtube.com" /opt/zapret/ipset/zapret-hosts-google.txt; then
-        cat >> /opt/zapret/ipset/zapret-hosts-google.txt <<'EOF'
+fi
+# Проверка и добавление YouTube hostlist
+if ! grep -Fq "signaler-pa.youtube.com" /opt/zapret/ipset/zapret-hosts-google.txt; then
+cat >> /opt/zapret/ipset/zapret-hosts-google.txt <<'EOF'
 cdn.youtube.com
 fonts.googleapis.com
 fonts.gstatic.com
@@ -299,31 +286,26 @@ tv.youtube.com
 yt3.googleusercontent.com
 yting.com
 EOF
-    fi
-
-    # Проверка и добавление hosts
-    if ! grep -Fq "130.255.77.28 ntc.party" /etc/hosts; then
-        cat <<'EOF' >> /etc/hosts
+fi
+# Проверка и добавление hosts
+if ! grep -Fq "173.245.58.219 rutor.info d.rutor.info" /etc/hosts; then
+cat <<'EOF' >> /etc/hosts
 130.255.77.28 ntc.party
 57.144.222.34 instagram.com www.instagram.com
 173.245.58.219 rutor.info d.rutor.info
 193.46.255.29 rutor.info
 157.240.9.174 instagram.com www.instagram.com
 EOF
-        /etc/init.d/dnsmasq restart >/dev/null 2>&1
-    fi
-
-    # Применяем конфиг
-    [ "$NO_PAUSE" != "1" ] && chmod +x /opt/zapret/sync_config.sh
-    [ "$NO_PAUSE" != "1" ] && /opt/zapret/sync_config.sh
-    [ "$NO_PAUSE" != "1" ] && /etc/init.d/zapret restart >/dev/null 2>&1
-
-    echo -e "${BLUE}🔴 ${GREEN}Стратегия отредактирована !${NC}"
-    [ "$NO_PAUSE" != "1" ] && echo -e ""
-    [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
+/etc/init.d/dnsmasq restart >/dev/null 2>&1
+fi
+# Применяем конфиг
+[ "$NO_PAUSE" != "1" ] && chmod +x /opt/zapret/sync_config.sh
+[ "$NO_PAUSE" != "1" ] && /opt/zapret/sync_config.sh
+[ "$NO_PAUSE" != "1" ] && /etc/init.d/zapret restart >/dev/null 2>&1
+echo -e "${BLUE}🔴 ${GREEN}Стратегия отредактирована !${NC}"
+[ "$NO_PAUSE" != "1" ] && echo -e ""
+[ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
-
-
 # ==========================================
 # Включение Discord и звонков в TG и WA
 # ==========================================
