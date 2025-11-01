@@ -20,11 +20,11 @@ WORKDIR="/tmp/zapret-update"
 get_versions() {
 if opkg list-installed | grep -q "byedpi"; then
 clear
-echo -e "${RED}У Вас установлен ${NC}ByeDPI${RED} !${NC}\n"
+echo -e "${RED}Найден ${NC}ByeDPI${RED} !${NC}\n"
 echo -e "${NC}Zapret${RED} не может работать совместно с ${NC}ByeDPI${RED} !${NC}\n"
 read -p $'\033[1;32mХотите удалить \033[0mByeDPI\033[1;32m сейчас ?\033[0m [y/N] ' answer
 case "$answer" in
-[Yy]* ) opkg remove -y byedpi >/dev/null 2>&1; echo -e "\n${BLUE}🔴 ${GREEN}ByeDPI удалён !${NC}"; sleep 3;;
+[Yy]* ) opkg remove byedpi >/dev/null 2>&1; echo -e "\n${BLUE}🔴 ${GREEN}ByeDPI удалён !${NC}"; sleep 3;;
 * ) echo -e "\n${RED}Скрипт остановлен ! Удалите ${NC}ByeDPI ${RED}!${NC}\n"; exit 1;;
 esac
 fi
