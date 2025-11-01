@@ -14,6 +14,7 @@ GRAY="\033[38;5;239m"
 DGRAY="\033[38;5;236m"
 # Рабочая директория для скачивания и распаковки
 WORKDIR="/tmp/zapret-update"
+dpi_yublk_detect
 # ==========================================
 # Функция получения информации о версиях, архитектуре и статусе
 # ==========================================
@@ -633,6 +634,20 @@ start_zapret
 fi
 }
 # ==========================================
+# Проверка ByeDPI и youtubeUnblock
+# ==========================================
+dpi_yublk_detect() {
+Проверка ByeDPI
+if command -v byedpi >/dev/null 2>&1 || pgrep -f "[bB]ye[Dd][Pp][Ii]" >/dev/null 2>&1; then
+echo "${RED}Найдена установка или процесс ByeDPI !{NC}"
+exit
+fi
+if command -v youtubeUnblock >/dev/null 2>&1 || pgrep -f "youtubeUnblock" >/dev/null 2>&1; then
+echo "${RED}Найдена установка или процесс youtubeUnblock !{NC}"
+exit
+fi
+}
+# ==========================================
 # Главное меню
 # ==========================================
 show_menu() {
@@ -641,7 +656,7 @@ clear
 echo -e "╔════════════════════════════════════╗"
 echo -e "║     ${BLUE}Zapret on remittor Manager${NC}     ║"
 echo -e "╚════════════════════════════════════╝"
-echo -e "                     ${DGRAY}by StressOzz v4.5${NC}"
+echo -e "                     ${DGRAY}by StressOzz v4.6${NC}"
 check_flow_offloading
 [ -n "$FLOW_WARNING" ] && echo -e "$FLOW_WARNING"
 # Определяем актуальная/устарела
