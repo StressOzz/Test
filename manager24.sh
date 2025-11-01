@@ -23,9 +23,8 @@ clear
 echo -e "${RED}У Вас установлен ByeDPI! Zapret не может работать совместно с ByeDPI!${NC}"
 exit 1
 fi
-if opkg list-installed | grep -q "^youtubeUnblock -"; then
-clear
-echo -e "${RED}У Вас установлен youtubeUnblock ! Zapret не может работать совместно с youtubeUnblock!${NC}"
+if [ -f /usr/local/bin/youtubeUnblock ] || [ -f /usr/bin/youtubeUnblock ] || pgrep -x youtubeUnblock >/dev/null 2>&1; then
+echo -e "${RED}Найден youtubeUnblock!${NC}"
 exit 1
 fi
 INSTALLED_VER=$(opkg list-installed | grep '^zapret ' | awk '{print $3}')
