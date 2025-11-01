@@ -39,65 +39,79 @@ case "$answer" in
 * ) echo -e "\n${RED}Скрипт остановлен ! Удалите ${NC}youtubeUnblock ${RED}!${NC}\n"; exit 1;;
 esac
 fi
-
 # Проверка Flow Offloading (программного и аппаратного)
 local FLOW_STATE=$(uci get firewall.@defaults[0].flow_offloading 2>/dev/null)
 local HW_FLOW_STATE=$(uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null)
 if [ "$FLOW_STATE" = "1" ] || [ "$HW_FLOW_STATE" = "1" ]; then
-    clear
-    echo -e "${RED}Включён ${NC}Flow Offloading ${RED}!${NC}\n"
-    echo -e "${NC}Zapret${RED} не может работать с включённым ${NC}Flow Offloading${RED} !${NC}\n"
-    read -p $'\033[1;32mОтключить \033[0mFlow Offloading\033[1;32m ?\033[0m [y/N] ' answer
-
-    case "$answer" in
-        [Yy]* )
-            uci set firewall.@defaults[0].flow_offloading='0'
-            uci set firewall.@defaults[0].flow_offloading_hw='0'
-            uci commit firewall
-            /etc/init.d/firewall restart
-            echo -e "\n${BLUE}🔴 ${GREEN}Flow Offloading отключён !${NC}\n"
-            sleep 3
-        ;;
-        * )
-            echo -e "\n${RED}Скрипт остановлен ! Отключите ${NC}Flow Offloading ${RED}!${NC}\n"
-            exit 1
-        ;;
-    esac
+clear
+echo -e "${RED}Включён ${NC}Flow Offloading ${RED}!${NC}\n"
+echo -e "${NC}Zapret${RED} не может работать с включённым ${NC}Flow Offloading${RED} !${NC}\n"
+read -p $'\033[1;32mОтключить \033[0mFlow Offloading\033[1;32m ?\033[0m [y/N] ' answer
+case "$answer" in
+[Yy]* )
+uci set firewall.@defaults[0].flow_offloading='0'
+uci set firewall.@defaults[0].flow_offloading_hw='0'
+uci commit firewall
+/etc/init.d/firewall restart
+echo -e "\n${BLUE}🔴 ${GREEN}Flow Offloading отключён !${NC}\n"
+sleep 3
+;;
+* )
+echo -e "\n${RED}Скрипт остановлен ! Отключите ${NC}Flow Offloading ${RED}!${NC}\n"
+exit 1
+;;
+esac
 fi
-
-
-
-
-
-
 INSTALLED_VER=$(opkg list-installed | grep '^zapret ' | awk '{print $3}')
 [ -z "$INSTALLED_VER" ] && INSTALLED_VER="не найдена"
 LOCAL_ARCH=$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release)
 [ -z "$LOCAL_ARCH" ] && LOCAL_ARCH=$(opkg print-architecture | grep -v "noarch" | sort -k3 -n | tail -n1 | awk '{print $2}')
+
+
 command -v curl >/dev/null 2>&1 || {
-clear
-echo -e "${MAGENTA}ZAPRET on remittor Manager by StressOzz${NC}\n"
-echo -e "${GREEN}🔴 ${CYAN}Устанавливаем${NC} curl ${CYAN}для загрузки информации с ${NC}GitHub"    
-local attempt=1
-while [ $attempt -le 3 ]; do
-echo -e "${GREEN}🔴 ${CYAN}Попытка установки ${NC}curl${CYAN} № ${NC}${attempt}"
-opkg update >/dev/null 2>&1
-opkg install curl >/dev/null 2>&1
-if command -v curl >/dev/null 2>&1; then
-echo -e "\n${BLUE}🔴 ${GREEN}Curl успешно установлен !${NC}"
-sleep 2
-break
-fi
-echo -e "\n${RED}Curl не найден после установки !${NC}"
-attempt=$((attempt + 1))
-sleep 2
-done
-if ! command -v curl >/dev/null 2>&1; then
-echo -e "\n${RED}Не удалось установить ${NC}curl${RED} после ${NC}3${RED} попыток !${NC}\n"
-echo -e "${YELLOW}Установите вручную, выполнив команду:${NC}opkg update && opkg install curl\n"
-exit 1
-fi
+    clear
+    echo -e "${MAGENTA}ZAPRET on remittor Manager by StressOzz${NC}\n"
+    echo -e "${GREEN}🔴 ${CYAN}Устанавливаем${NC} curl ${CYAN}для загрузки информации с ${NC}GitHub${NC}\n"
+
+    local attempt=1
+    local MAX_ATTEMPTS=3
+    local first_fail=false
+
+    while [ $attempt -le $MAX_ATTEMPTS ]; do
+        # Показываем сообщение о попытке только после первой неудачи
+        if [ "$first_fail" = true ]; then
+            echo -e "${GREEN}🔴 ${CYAN}Попытка установки ${NC}curl${CYAN} № ${NC}${attempt}${NC}\n"
+        fi
+
+        opkg update >/dev/null 2>&1
+        opkg install curl >/dev/null 2>&1
+
+        if command -v curl >/dev/null 2>&1; then
+            echo -e "\n${BLUE}🔴 ${GREEN}Curl успешно установлен !${NC}\n"
+            sleep 2
+            break
+        fi
+
+        # После первой неудачи включаем отображение попыток
+        first_fail=true
+        attempt=$((attempt + 1))
+        [ $attempt -le $MAX_ATTEMPTS ] && {
+            echo -e "\n${RED}Curl не найден после установки !${NC}\n"
+            sleep 2
+        }
+    done
+
+    if ! command -v curl >/dev/null 2>&1; then
+        echo -e "${RED}Не удалось установить ${NC}curl${RED} после ${NC}${MAX_ATTEMPTS}${RED} попыток !${NC}\n"
+        echo -e "${YELLOW}Установите вручную, выполнив команду: ${CYAN}opkg update && opkg install curl${NC}\n"
+        exit 1
+    fi
 }
+
+
+
+
+
 LIMIT_REACHED=0
 LIMIT_CHECK=$(curl -s "https://api.github.com/repos/remittor/zapret-openwrt/releases/latest")
 if echo "$LIMIT_CHECK" | grep -q 'API rate limit exceeded'; then
