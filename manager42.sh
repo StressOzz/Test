@@ -205,8 +205,6 @@ option NFQWS_OPT '
 --dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin
 '
 EOF
-
-
 # Проверка и перезапись файла исключений пользователей
 file="/opt/zapret/ipset/zapret-hosts-user-exclude.txt"
 cat <<'EOF' | grep -Fxv -f "$file" >> "$file"
@@ -282,8 +280,6 @@ api.epicgames.dev
 metrics.ol.epicgames.com
 et.epicgames.com
 EOF
-
-
 # Проверка и добавление YouTube hostlist
 file="/opt/zapret/ipset/zapret-hosts-google.txt"
 cat <<'EOF' | grep -Fxv -f "$file" 2>/dev/null >> "$file"
@@ -308,9 +304,6 @@ tv.youtube.com
 yt3.googleusercontent.com
 yting.com
 EOF
-
-
-
 # Проверка и добавление hosts
 file="/etc/hosts"
 cat <<'EOF' | grep -Fxv -f "$file" 2>/dev/null >> "$file"
@@ -321,7 +314,6 @@ cat <<'EOF' | grep -Fxv -f "$file" 2>/dev/null >> "$file"
 157.240.9.174 instagram.com www.instagram.com
 EOF
 /etc/init.d/dnsmasq restart >/dev/null 2>&1
-
 # Применяем конфиг
 [ "$NO_PAUSE" != "1" ] && chmod +x /opt/zapret/sync_config.sh
 [ "$NO_PAUSE" != "1" ] && /opt/zapret/sync_config.sh
@@ -473,6 +465,27 @@ cat <<'EOF' >> "$CONF"
 EOF
 fi
 echo -e "${GREEN}🔴 ${CYAN}Добавляем в стратегию блок необходимый для игры${NC}"
+file="/opt/zapret/ipset/zapret-hosts-user-exclude.txt"
+cat <<'EOF' | grep -Fxv -f "$file" >> "$file"
+playstation.net
+np.playstation.net
+akadns.net
+akamai.net
+akamaiedge.net
+akamaihd.net
+edgekey.net
+edgesuite.net
+ea.com
+data.ea.com
+grpc.ea.com
+blaze.ea.com
+blazeredirector.ea.com
+ops.dice.se
+dice.se
+amazonaws.com
+awsglobalaccelerator.com
+elb.amazonaws.com
+EOF
 chmod +x /opt/zapret/sync_config.sh
 /opt/zapret/sync_config.sh
 /etc/init.d/zapret restart >/dev/null 2>&1
