@@ -23,7 +23,7 @@ if opkg list-installed | grep -q "byedpi"; then
 clear
 echo -e "${RED}Найден установленный ${NC}ByeDPI${RED} !${NC}\n"
 echo -e "${NC}Zapret${RED} не может работать совместно с ${NC}ByeDPI${RED} !${NC}\n"
-read -p $'\033[1;32mХотите удалить \033[0mByeDPI\033[1;32m сейчас ?\033[0m [y/N] ' answer
+read -p $'\033[1;32mУдалить \033[0mByeDPI\033[1;32m сейчас ?\033[0m [y/N] ' answer
 case "$answer" in
 [Yy]* ) opkg --force-removal-of-dependent-packages --autoremove remove byedpi >/dev/null 2>&1; echo -e "\n${BLUE}🔴 ${GREEN}ByeDPI удалён !${NC}"; sleep 3;;
 * ) echo -e "\n${RED}Скрипт остановлен ! Удалите ${NC}ByeDPI ${RED}!${NC}\n"; exit 1;;
@@ -33,7 +33,7 @@ if opkg list-installed | grep -q "youtubeUnblock"; then
 clear
 echo -e "${RED}Найден установленный ${NC}youtubeUnblock${RED} !${NC}\n"
 echo -e "${NC}Zapret${RED} не может работать совместно с ${NC}youtubeUnblock${RED} !${NC}\n"
-read -p $'\033[1;32mХотите удалить \033[0myoutubeUnblock\033[1;32m сейчас ?\033[0m [y/N] ' answer
+read -p $'\033[1;32mУдалить \033[0myoutubeUnblock\033[1;32m сейчас ?\033[0m [y/N] ' answer
 case "$answer" in
 [Yy]* ) opkg --force-removal-of-dependent-packages --autoremove remove youtubeUnblock luci-app-youtubeUnblock >/dev/null 2>&1; echo -e "\n${BLUE}🔴 ${GREEN}youtubeUnblock удалён !${NC}"; sleep 3;;
 * ) echo -e "\n${RED}Скрипт остановлен ! Удалите ${NC}youtubeUnblock ${RED}!${NC}\n"; exit 1;;
@@ -47,7 +47,7 @@ if [ "$FLOW_STATE" = "1" ] || [ "$HW_FLOW_STATE" = "1" ]; then
     clear
     echo -e "${RED}Включён ${NC}Flow Offloading ${RED}!${NC}\n"
     echo -e "${NC}Zapret${RED} не может работать с включённым ${NC}Flow Offloading${RED} !${NC}\n"
-    read -p $'\033[1;32mХотите отключить \033[0mFlow Offloading\033[1;32m сейчас ?\033[0m [y/N] ' answer
+    read -p $'\033[1;32mОтключить \033[0mFlow Offloading\033[1;32m сейчас ?\033[0m [y/N] ' answer
 
     case "$answer" in
         [Yy]* )
