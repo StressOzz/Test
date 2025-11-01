@@ -167,9 +167,9 @@ fix_default() {
     echo -e "${GREEN}🔴 ${CYAN}Меняем стратегию и редактируем ${NC}host\n"
 
     # --- /etc/config/zapret ---
-    if ! grep -qFz -- "--dpi-desync-split-pos=1
---dpi-desync-fooling=badseq
---dpi-desync-badseq-increment=10000000" /etc/config/zapret 2>/dev/null; then
+    if ! grep -qFz -- "--filter-tcp=443
+--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt
+--dpi-desync=fake,multidisorder" /etc/config/zapret 2>/dev/null; then
         sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" /etc/config/zapret
         cat <<'EOF' >> /etc/config/zapret
 option NFQWS_OPT '
@@ -193,9 +193,9 @@ EOF
     fi
 
     # --- /opt/zapret/ipset/zapret-hosts-user-exclude.txt ---
-    if ! grep -qFz -- "gosuslugi.ru
-api.steampowered.com
-cdn.akamai.steamstatic.com" /opt/zapret/ipset/zapret-hosts-user-exclude.txt 2>/dev/null; then
+    if ! grep -qFz -- "epicgames.com
+store.epicgames.com
+accounts.epicgames.com" /opt/zapret/ipset/zapret-hosts-user-exclude.txt 2>/dev/null; then
         mkdir -p /opt/zapret/ipset
         cat <<EOF >/opt/zapret/ipset/zapret-hosts-user-exclude.txt
 gosuslugi.ru
@@ -323,6 +323,7 @@ EOF
     [ "$NO_PAUSE" != "1" ] && echo -e ""
     [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
+
 # ==========================================
 # Включение Discord и звонков в TG и WA
 # ==========================================
