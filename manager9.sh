@@ -496,6 +496,27 @@ echo -e "${RED}Zapret не установлен !${NC}\n"
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 return
 fi
+file="/opt/zapret/ipset/zapret-hosts-user-exclude.txt"
+cat <<'EOF' | grep -Fxv -f "$file" >> "$file"
+playstation.net
+np.playstation.net
+akadns.net
+akamai.net
+akamaiedge.net
+akamaihd.net
+edgekey.net
+edgesuite.net
+ea.com
+data.ea.com
+grpc.ea.com
+blaze.ea.com
+blazeredirector.ea.com
+ops.dice.se
+dice.se
+amazonaws.com
+awsglobalaccelerator.com
+elb.amazonaws.com
+EOF
 if grep -q "option NFQWS_PORTS_UDP.*20000-22000" "$CONF" && grep -q -- "--filter-udp=20000-22000" "$CONF"; then
 echo -e "${RED}Стратегия для Battlefield REDSEC уже применена !${NC}\n"
 read -p "Нажмите Enter для выхода в главное меню..." dummy
@@ -520,27 +541,6 @@ cat <<'EOF' >> "$CONF"
 EOF
 fi
 echo -e "${GREEN}🔴 ${CYAN}Добавляем в стратегию блок необходимый для игры${NC}"
-file="/opt/zapret/ipset/zapret-hosts-user-exclude.txt"
-cat <<'EOF' | grep -Fxv -f "$file" >> "$file"
-playstation.net
-np.playstation.net
-akadns.net
-akamai.net
-akamaiedge.net
-akamaihd.net
-edgekey.net
-edgesuite.net
-ea.com
-data.ea.com
-grpc.ea.com
-blaze.ea.com
-blazeredirector.ea.com
-ops.dice.se
-dice.se
-amazonaws.com
-awsglobalaccelerator.com
-elb.amazonaws.com
-EOF
 chmod +x /opt/zapret/sync_config.sh
 /opt/zapret/sync_config.sh
 /etc/init.d/zapret restart >/dev/null 2>&1
