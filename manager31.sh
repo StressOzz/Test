@@ -22,22 +22,20 @@ if opkg list-installed | grep -q "byedpi"; then
     clear
     echo -e "${RED}У Вас установлен ${NC}ByeDPI${RED} !${NC}\n"
     echo -e "${NC}Zapret${RED} не может работать совместно с ${NC}ByeDPI${RED} !${NC}\n"
-    read -p "Хотите удалить ByeDPI сейчас? [y/N] " answer
+    read -p "${GREEN}Хотите удалить ${NC}ByeDPI ${GREEN}сейчас ?${NC} [y/N] " answer
     case "$answer" in
-        [Yy]* ) opkg remove byedpi; echo -e "${GREEN}ByeDPI удалён${NC}";;
-        * ) echo -e "${RED}Скрипт остановлен, удалите ByeDPI вручную${NC}"; exit 1;;
+        [Yy]* ) opkg remove -y byedpi >/dev/null 2>&1; echo -e "${BLUE}🔴 ${GREEN}ByeDPI удалён !${NC}"; sleep 2;;
+        * ) echo -e "\n${RED}Скрипт остановлен, удалите ${NC}ByeDPI ${RED}!${NC}\n"; exit 1;;
     esac
 fi
-
-# Проверка youtubeUnblock
 if opkg list-installed | grep -q "youtubeUnblock"; then
     clear
     echo -e "${RED}Найден ${NC}youtubeUnblock${RED} !${NC}\n"
     echo -e "${NC}Zapret${RED} не может работать совместно с ${NC}youtubeUnblock${NC} !${NC}\n"
-    read -p "Хотите удалить youtubeUnblock сейчас? [y/N] " answer
+    read -p "${GREEN}Хотите удалить ${NC}youtubeUnblock${GREEN} сейчас ?${NC} [y/N] " answer
     case "$answer" in
-        [Yy]* ) opkg remove youtubeUnblock luci-app-youtubeUnblock; echo -e "${GREEN}youtubeUnblock и luci-app-youtubeUnblock удалены${NC}";;
-        * ) echo -e "${RED}Скрипт остановлен, удалите youtubeUnblock вручную${NC}"; exit 1;;
+        [Yy]* ) opkg remove -y youtubeUnblock luci-app-youtubeUnblock >/dev/null 2>&1; echo -e "${BLUE}🔴 ${GREEN}youtubeUnblock удалён !${NC}"; sleep 2;;
+        * ) echo -e "\n${RED}Скрипт остановлен, удалите ${NC}youtubeUnblock ${RED}!${NC}\n"; exit 1;;
     esac
 fi
 INSTALLED_VER=$(opkg list-installed | grep '^zapret ' | awk '{print $3}')
