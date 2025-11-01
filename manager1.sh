@@ -18,6 +18,7 @@ WORKDIR="/tmp/zapret-update"
 # Функция получения информации о версиях, архитектуре и статусе
 # ==========================================
 get_versions() {
+# Проверка byedpi и youtubeUnbloc
 if opkg list-installed | grep -q "byedpi"; then
 clear
 echo -e "${RED}Найден установленный ${NC}ByeDPI${RED} !${NC}\n"
@@ -38,6 +39,37 @@ case "$answer" in
 * ) echo -e "\n${RED}Скрипт остановлен ! Удалите ${NC}youtubeUnblock ${RED}!${NC}\n"; exit 1;;
 esac
 fi
+
+# Проверка Flow Offloading (программного и аппаратного)
+local FLOW_STATE=$(uci get firewall.@defaults[0].flow_offloading 2>/dev/null)
+local HW_FLOW_STATE=$(uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null)
+if [ "$FLOW_STATE" = "1" ] || [ "$HW_FLOW_STATE" = "1" ]; then
+    clear
+    echo -e "${RED}Включено ${NC}Flow Offloading ${RED}!${NC}\n"
+    echo -e "${NC}Zapret${RED} не может работать совместно с ${NC}Flow Offloading${RED} !${NC}\n"
+    read -p $'\033[1;32mХотите отключить \033[0mFlow Offloading\033[1;32m сейчас? [y/N] \033[0m' answer
+
+    case "$answer" in
+        [Yy]* )
+            uci set firewall.@defaults[0].flow_offloading='0'
+            uci set firewall.@defaults[0].flow_offloading_hw='0'
+            uci commit firewall
+            /etc/init.d/firewall restart
+            echo -e "\n${BLUE}🔴 ${GREEN}Flow Offloading отключён!${NC}\n"
+            sleep 3
+        ;;
+        * )
+            echo -e "\n${RED}Скрипт остановлен !${NC} Отключите ${NC}Flow Offloading ${RED}!${NC}\n"
+            exit 1
+        ;;
+    esac
+fi
+
+
+
+
+
+
 INSTALLED_VER=$(opkg list-installed | grep '^zapret ' | awk '{print $3}')
 [ -z "$INSTALLED_VER" ] && INSTALLED_VER="не найдена"
 LOCAL_ARCH=$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release)
@@ -639,22 +671,6 @@ echo -e "\n${BLUE}🔴 ${GREEN}Zapret удалён !${NC}\n"
 [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
 # ==========================================
-# Проверка Flow Offloading (программного и аппаратного)
-# ==========================================
-check_flow_offloading() {
-local FLOW_STATE=$(uci get firewall.@defaults[0].flow_offloading 2>/dev/null)
-local HW_FLOW_STATE=$(uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null)
-if [ "$FLOW_STATE" = "1" ] || [ "$HW_FLOW_STATE" = "1" ]; then
-FLOW_WARNING="${RED}===============!!! ${MAGENTA}ВНИМАНИЕ${RED} !!!===============\n\
-Включено ускорение пакетов (Flow Offloading) !\n\
-Для работы Zapret рекомендуется отключить !\n\
-${GREEN}          Нажмите ${NC}9 ${GREEN}для отключения !\n\
-${RED}==============================================${NC}"
-else
-FLOW_WARNING=""
-fi
-}
-# ==========================================
 # Запустить/Остановить Zapret
 # ==========================================
 startstop_zpr() {
@@ -678,8 +694,6 @@ echo -e "╔══════════════════════�
 echo -e "║     ${BLUE}Zapret on remittor Manager${NC}     ║"
 echo -e "╚════════════════════════════════════╝"
 echo -e "                     ${DGRAY}by StressOzz v5.0${NC}"
-check_flow_offloading
-[ -n "$FLOW_WARNING" ] && echo -e "$FLOW_WARNING"
 # Определяем актуальная/устарела
 if [ "$LIMIT_REACHED" -eq 1 ]; then
 INST_COLOR=$CYAN
@@ -751,16 +765,6 @@ case "$choice" in
 6) fix_REDSEC  ;;
 7) enable_discord_calls ;;
 8) zapret_key ;;
-9)
-if [ -n "$FLOW_WARNING" ]; then
-uci set firewall.@defaults[0].flow_offloading='0'
-uci set firewall.@defaults[0].flow_offloading_hw='0'
-uci commit firewall
-/etc/init.d/firewall restart
-echo -e "\n${BLUE}🔴 ${GREEN}Flow Offloading отключён !${NC}\n"
-sleep 3
-fi
-;;
 *) exit 0 ;;
 esac
 }
