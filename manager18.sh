@@ -17,20 +17,16 @@ WORKDIR="/tmp/zapret-update"
 # ==========================================
 # Проверка ByeDPI и youtubeUnblock
 # ==========================================
-dpi_yublk_detect() {
-    # Проверка ByeDPI
-    if command -v byedpi >/dev/null 2>&1 || pgrep -f "[bB]ye[Dd][Pp][Ii]" >/dev/null 2>&1; then
-        echo "Найдена установка или процесс ByeDPI!"
-        exit
-    fi
+if [ -f /usr/bin/ciadpi ] || opkg list-installed | grep -q "^byedpi -"; then
+    echo "${RED}У Вас установлен ByeDPI ! Zapret не может работать совместно с ByeDPI !${NC}"
+    exit
+fi
 
-    # Проверка youtubeUnblock
-    if command -v youtubeUnblock >/dev/null 2>&1 || pgrep -f "youtubeUnblock" >/dev/null 2>&1; then
-        echo "Найдена установка или процесс youtubeUnblock!"
-        exit
-    fi
-}
-dpi_yublk_detect
+# Проверка youtubeUnblock
+if [ -f /usr/local/bin/youtubeUnblock ] || pgrep -x youtubeUnblock >/dev/null 2>&1; then
+    echo "${RED}У Вас установлен youtubeUnblock ! Скрипт не может работать совместно с youtubeUnblock ! !${NC}"
+    exit
+fi
 # ==========================================
 # Функция получения информации о версиях, архитектуре и статусе
 # ==========================================
