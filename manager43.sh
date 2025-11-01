@@ -225,7 +225,6 @@ steam.tv
 steambroadcast.akamaized.net
 steambroadcast.com
 steamcdn-a.akamaihd.net
-steamcdn-a.akamaihd.net
 steamchat.com
 steam-chat.com
 steamcommunity.akamaized.net
