@@ -205,28 +205,11 @@ option NFQWS_OPT '
 --dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin
 '
 EOF
+
+
 # Проверка и перезапись файла исключений пользователей
-if ! grep -Fq "ut-public-service-prod10.ol.epicgames.com" /opt/zapret/ipset/zapret-hosts-user-exclude.txt; then
-mkdir -p /opt/zapret/ipset
-cat <<EOF >/opt/zapret/ipset/zapret-hosts-user-exclude.txt
-playstation.net
-np.playstation.net
-akadns.net
-akamai.net
-akamaiedge.net
-akamaihd.net
-edgekey.net
-edgesuite.net
-ea.com
-data.ea.com
-grpc.ea.com
-blaze.ea.com
-blazeredirector.ea.com
-ops.dice.se
-dice.se
-amazonaws.com
-awsglobalaccelerator.com
-elb.amazonaws.com
+file="/opt/zapret/ipset/zapret-hosts-user-exclude.txt"
+cat <<'EOF' | grep -Fxv -f "$file" >> "$file"
 gosuslugi.ru
 api.steampowered.com
 cdn.akamai.steamstatic.com
@@ -299,10 +282,11 @@ api.epicgames.dev
 metrics.ol.epicgames.com
 et.epicgames.com
 EOF
-fi
+
+
 # Проверка и добавление YouTube hostlist
-if ! grep -Fq "signaler-pa.youtube.com" /opt/zapret/ipset/zapret-hosts-google.txt; then
-cat >> /opt/zapret/ipset/zapret-hosts-google.txt <<'EOF'
+file="/opt/zapret/ipset/zapret-hosts-google.txt"
+cat <<'EOF' | grep -Fxv -f "$file" 2>/dev/null >> "$file"
 cdn.youtube.com
 fonts.googleapis.com
 fonts.gstatic.com
@@ -324,10 +308,12 @@ tv.youtube.com
 yt3.googleusercontent.com
 yting.com
 EOF
-fi
+
+
+
 # Проверка и добавление hosts
-if ! grep -Fq "173.245.58.219 rutor.info d.rutor.info" /etc/hosts; then
-cat <<'EOF' >> /etc/hosts
+file="/etc/hosts"
+cat <<'EOF' | grep -Fxv -f "$file" 2>/dev/null >> "$file"
 130.255.77.28 ntc.party
 57.144.222.34 instagram.com www.instagram.com
 173.245.58.219 rutor.info d.rutor.info
@@ -335,7 +321,7 @@ cat <<'EOF' >> /etc/hosts
 157.240.9.174 instagram.com www.instagram.com
 EOF
 /etc/init.d/dnsmasq restart >/dev/null 2>&1
-fi
+
 # Применяем конфиг
 [ "$NO_PAUSE" != "1" ] && chmod +x /opt/zapret/sync_config.sh
 [ "$NO_PAUSE" != "1" ] && /opt/zapret/sync_config.sh
