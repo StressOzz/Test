@@ -18,7 +18,7 @@ WORKDIR="/tmp/zapret-update"
 # Функция получения информации о версиях, архитектуре и статусе
 # ==========================================
 get_versions() {
-# Проверка byedpi и youtubeUnbloc
+# Проверка byedpi и youtubeUnblock
 if opkg list-installed | grep -q "byedpi"; then
 clear
 echo -e "${RED}Найден установленный ${NC}ByeDPI${RED} !${NC}\n"
@@ -59,7 +59,7 @@ if [ "$FLOW_STATE" = "1" ] || [ "$HW_FLOW_STATE" = "1" ]; then
             sleep 3
         ;;
         * )
-            echo -e "\n${RED}Скрипт остановлен !${NC} Отключите ${NC}Flow Offloading ${RED}!${NC}\n"
+            echo -e "\n${RED}Скрипт остановлен ! Отключите ${NC}Flow Offloading ${RED}!${NC}\n"
             exit 1
         ;;
     esac
