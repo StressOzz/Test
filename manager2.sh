@@ -441,8 +441,6 @@ cat <<'EOF' >> "$CONF"
 EOF
 fi
 echo -e "${GREEN}🔴 ${CYAN}Добавляем в стратегию блок необходимый для игры${NC}"
-sleep 0.5
-echo -e "${GREEN}🔴 ${CYAN}Применяем настройки${NC}"
 chmod +x /opt/zapret/sync_config.sh
 /opt/zapret/sync_config.sh
 /etc/init.d/zapret restart >/dev/null 2>&1
