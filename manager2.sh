@@ -47,7 +47,7 @@ if [ "$FLOW_STATE" = "1" ] || [ "$HW_FLOW_STATE" = "1" ]; then
     clear
     echo -e "${RED}Включено ${NC}Flow Offloading ${RED}!${NC}\n"
     echo -e "${NC}Zapret${RED} не может работать совместно с ${NC}Flow Offloading${RED} !${NC}\n"
-    read -p $'\033[1;32mХотите отключить \033[0mFlow Offloading\033[1;32m сейчас? [y/N] \033[0m' answer
+    read -p $'\033[1;32mХотите отключить \033[0mFlow Offloading\033[1;32m сейчас ?\033[0m [y/N] ' answer
 
     case "$answer" in
         [Yy]* )
