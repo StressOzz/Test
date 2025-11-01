@@ -45,8 +45,8 @@ local FLOW_STATE=$(uci get firewall.@defaults[0].flow_offloading 2>/dev/null)
 local HW_FLOW_STATE=$(uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null)
 if [ "$FLOW_STATE" = "1" ] || [ "$HW_FLOW_STATE" = "1" ]; then
     clear
-    echo -e "${RED}Включено ${NC}Flow Offloading ${RED}!${NC}\n"
-    echo -e "${NC}Zapret${RED} не может работать совместно с ${NC}Flow Offloading${RED} !${NC}\n"
+    echo -e "${RED}Включён ${NC}Flow Offloading ${RED}!${NC}\n"
+    echo -e "${NC}Zapret${RED} не может работать с включённым ${NC}Flow Offloading${RED} !${NC}\n"
     read -p $'\033[1;32mХотите отключить \033[0mFlow Offloading\033[1;32m сейчас ?\033[0m [y/N] ' answer
 
     case "$answer" in
@@ -55,7 +55,7 @@ if [ "$FLOW_STATE" = "1" ] || [ "$HW_FLOW_STATE" = "1" ]; then
             uci set firewall.@defaults[0].flow_offloading_hw='0'
             uci commit firewall
             /etc/init.d/firewall restart
-            echo -e "\n${BLUE}🔴 ${GREEN}Flow Offloading отключён!${NC}\n"
+            echo -e "\n${BLUE}🔴 ${GREEN}Flow Offloading отключён !${NC}\n"
             sleep 3
         ;;
         * )
