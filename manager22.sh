@@ -12,21 +12,22 @@ BLUE="\033[0;34m"
 NC="\033[0m"
 GRAY="\033[38;5;239m"
 DGRAY="\033[38;5;236m"
+if opkg list-installed | grep -q "^byedpi -"; then
+clear
+echo -e "${RED}У Вас установлен ByeDPI! Zapret не может работать совместно с ByeDPI!${NC}"
+exit 1
+fi
+if opkg list-installed | grep -q "^youtubeUnblock -"; then
+clear
+echo -e "${RED}У Вас установлен youtubeUnblock! Zapret не может работать совместно с youtubeUnblock!${NC}"
+exit 1
+fi
 # Рабочая директория для скачивания и распаковки
 WORKDIR="/tmp/zapret-update"
 # ==========================================
 # Функция получения информации о версиях, архитектуре и статусе
 # ==========================================
 get_versions() {
-if opkg list-installed | grep -q "^byedpi -"; then
-    echo -e "${RED}У Вас установлен ByeDPI! Zapret не может работать совместно с ByeDPI!${NC}"
-    exit 1
-fi
-
-if opkg list-installed | grep -q "^youtubeUnblock -"; then
-    echo -e "${RED}У Вас установлен youtubeUnblock! Zapret не может работать совместно с youtubeUnblock!${NC}"
-    exit 1
-fi
 INSTALLED_VER=$(opkg list-installed | grep '^zapret ' | awk '{print $3}')
 [ -z "$INSTALLED_VER" ] && INSTALLED_VER="не найдена"
 LOCAL_ARCH=$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release)
