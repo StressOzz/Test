@@ -637,17 +637,29 @@ fi
 # Проверка ByeDPI и youtubeUnblock
 # ==========================================
 dpi_yublk_detect() {
-    for pkg in byedpi youtubeUnblock; do
-        if opkg list-installed | grep -q "^${pkg} "; then
-            echo -e "${RED}Найдена установка пакета ${pkg}!${NC}"
-            exit
-        fi
-        if pgrep -f "${pkg}" >/dev/null 2>&1; then
-            echo -e "${RED}Найден запущенный процесс ${pkg}!${NC}"
-            exit
-        fi
-    done
+    # Проверка процесса ByeDPI (любое написание с учетом регистра)
+    if pgrep -f "[bB]ye[Dd][Pp][Ii]" >/dev/null 2>&1; then
+        echo -e "${RED}Найден запущенный процесс ByeDPI!${NC}"
+        exit
+    fi
+
+    # Проверка пакета через opkg list-installed (любой суффикс версии)
+    if opkg list-installed | grep -iq "^byedpi"; then
+        echo -e "${RED}Найдена установка пакета ByeDPI!${NC}"
+        exit
+    fi
+
+    # Проверка youtubeUnblock
+    if pgrep -f "youtubeUnblock" >/dev/null 2>&1; then
+        echo -e "${RED}Найден запущенный процесс youtubeUnblock!${NC}"
+        exit
+    fi
+    if opkg list-installed | grep -iq "^youtubeUnblock"; then
+        echo -e "${RED}Найдена установка пакета youtubeUnblock!${NC}"
+        exit
+    fi
 }
+
 # ==========================================
 # Главное меню
 # ==========================================
