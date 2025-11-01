@@ -166,11 +166,16 @@ fix_default() {
 
     echo -e "${GREEN}🔴 ${CYAN}Меняем стратегию и редактируем ${NC}host\n"
 
-    # --- /etc/config/zapret ---
-    if ! grep -qFz -- "--filter-tcp=443
---hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt
---dpi-desync=fake,multidisorder" /etc/config/zapret 2>/dev/null; then
+    # Проверка и добавление блока NFQWS_OPT
+    if ! awk '
+        $0=="--filter-tcp=443"{a=1;next}
+        a && $0=="--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt"{a++;next}
+        a && $0=="--dpi-desync=fake,multidisorder"{a++}
+        END{exit a==3?0:1}
+    ' /etc/config/zapret; then
+        # Удаляем старый блок начиная с option NFQWS_OPT '
         sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" /etc/config/zapret
+        # Вставляем новый блок
         cat <<'EOF' >> /etc/config/zapret
 option NFQWS_OPT '
 --filter-tcp=443
@@ -192,10 +197,8 @@ option NFQWS_OPT '
 EOF
     fi
 
-    # --- /opt/zapret/ipset/zapret-hosts-user-exclude.txt ---
-    if ! grep -qFz -- "epicgames.com
-store.epicgames.com
-accounts.epicgames.com" /opt/zapret/ipset/zapret-hosts-user-exclude.txt 2>/dev/null; then
+    # Проверка и перезапись файла исключений пользователей
+    if ! grep -Fq "gosuslugi.ru" /opt/zapret/ipset/zapret-hosts-user-exclude.txt; then
         mkdir -p /opt/zapret/ipset
         cat <<EOF >/opt/zapret/ipset/zapret-hosts-user-exclude.txt
 gosuslugi.ru
@@ -272,10 +275,8 @@ et.epicgames.com
 EOF
     fi
 
-    # --- /opt/zapret/ipset/zapret-hosts-google.txt ---
-    if ! grep -qFz -- "cdn.youtube.com
-fonts.googleapis.com
-fonts.gstatic.com" /opt/zapret/ipset/zapret-hosts-google.txt 2>/dev/null; then
+    # Проверка и добавление YouTube hostlist
+    if ! grep -Fq "cdn.youtube.com" /opt/zapret/ipset/zapret-hosts-google.txt; then
         cat >> /opt/zapret/ipset/zapret-hosts-google.txt <<'EOF'
 cdn.youtube.com
 fonts.googleapis.com
@@ -300,10 +301,8 @@ yting.com
 EOF
     fi
 
-    # --- /etc/hosts ---
-    if ! grep -qFz -- "130.255.77.28 ntc.party
-57.144.222.34 instagram.com www.instagram.com
-173.245.58.219 rutor.info d.rutor.info" /etc/hosts 2>/dev/null; then
+    # Проверка и добавление hosts
+    if ! grep -Fq "130.255.77.28 ntc.party" /etc/hosts; then
         cat <<'EOF' >> /etc/hosts
 130.255.77.28 ntc.party
 57.144.222.34 instagram.com www.instagram.com
@@ -314,7 +313,7 @@ EOF
         /etc/init.d/dnsmasq restart >/dev/null 2>&1
     fi
 
-    # --- Применяем конфиг ---
+    # Применяем конфиг
     [ "$NO_PAUSE" != "1" ] && chmod +x /opt/zapret/sync_config.sh
     [ "$NO_PAUSE" != "1" ] && /opt/zapret/sync_config.sh
     [ "$NO_PAUSE" != "1" ] && /etc/init.d/zapret restart >/dev/null 2>&1
@@ -323,6 +322,7 @@ EOF
     [ "$NO_PAUSE" != "1" ] && echo -e ""
     [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
+
 
 # ==========================================
 # Включение Discord и звонков в TG и WA
