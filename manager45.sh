@@ -24,7 +24,7 @@ echo -e "${RED}Найден установленный ${NC}ByeDPI${RED} !${NC}\
 echo -e "${NC}Zapret${RED} не может работать совместно с ${NC}ByeDPI${RED} !${NC}\n"
 read -p $'\033[1;32mХотите удалить \033[0mByeDPI\033[1;32m сейчас ?\033[0m [y/N] ' answer
 case "$answer" in
-[Yy]* ) opkg remove byedpi >/dev/null 2>&1; echo -e "\n${BLUE}🔴 ${GREEN}ByeDPI удалён !${NC}"; sleep 3;;
+[Yy]* ) opkg --force-removal-of-dependent-packages --autoremove remove byedpi >/dev/null 2>&1; echo -e "\n${BLUE}🔴 ${GREEN}ByeDPI удалён !${NC}"; sleep 3;;
 * ) echo -e "\n${RED}Скрипт остановлен ! Удалите ${NC}ByeDPI ${RED}!${NC}\n"; exit 1;;
 esac
 fi
@@ -34,7 +34,7 @@ echo -e "${RED}Найден установленный ${NC}youtubeUnblock${RED}
 echo -e "${NC}Zapret${RED} не может работать совместно с ${NC}youtubeUnblock${RED} !${NC}\n"
 read -p $'\033[1;32mХотите удалить \033[0myoutubeUnblock\033[1;32m сейчас ?\033[0m [y/N] ' answer
 case "$answer" in
-[Yy]* ) opkg remove youtubeUnblock luci-app-youtubeUnblock >/dev/null 2>&1; echo -e "\n${BLUE}🔴 ${GREEN}youtubeUnblock удалён !${NC}"; sleep 3;;
+[Yy]* ) opkg --force-removal-of-dependent-packages --autoremove remove youtubeUnblock luci-app-youtubeUnblock >/dev/null 2>&1; echo -e "\n${BLUE}🔴 ${GREEN}youtubeUnblock удалён !${NC}"; sleep 3;;
 * ) echo -e "\n${RED}Скрипт остановлен ! Удалите ${NC}youtubeUnblock ${RED}!${NC}\n"; exit 1;;
 esac
 fi
@@ -677,7 +677,7 @@ clear
 echo -e "╔════════════════════════════════════╗"
 echo -e "║     ${BLUE}Zapret on remittor Manager${NC}     ║"
 echo -e "╚════════════════════════════════════╝"
-echo -e "                     ${DGRAY}by StressOzz v4.6${NC}"
+echo -e "                     ${DGRAY}by StressOzz v5.0${NC}"
 check_flow_offloading
 [ -n "$FLOW_WARNING" ] && echo -e "$FLOW_WARNING"
 # Определяем актуальная/устарела
