@@ -210,6 +210,24 @@ EOF
 if ! grep -Fq "ut-public-service-prod10.ol.epicgames.com" /opt/zapret/ipset/zapret-hosts-user-exclude.txt; then
 mkdir -p /opt/zapret/ipset
 cat <<EOF >/opt/zapret/ipset/zapret-hosts-user-exclude.txt
+playstation.net
+np.playstation.net
+akadns.net
+akamai.net
+akamaiedge.net
+akamaihd.net
+edgekey.net
+edgesuite.net
+ea.com
+data.ea.com
+grpc.ea.com
+blaze.ea.com
+blazeredirector.ea.com
+ops.dice.se
+dice.se
+amazonaws.com
+awsglobalaccelerator.com
+elb.amazonaws.com
 gosuslugi.ru
 api.steampowered.com
 cdn.akamai.steamstatic.com
