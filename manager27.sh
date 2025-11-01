@@ -20,11 +20,12 @@ WORKDIR="/tmp/zapret-update"
 get_versions() {
 if opkg list-installed | grep -q "byedpi"; then
 clear
-echo -e "${RED}У Вас установлен ByeDPI ! Zapret не может работать совместно с ByeDPI !${NC}"
+echo -e "${RED}У Вас установлен ${NC}ByeDPI${RED} ! ${NC}Zapret${RED} не может работать совместно с ${NC}ByeDPI${RED} !${NC}"
 exit 1
 fi
 if opkg list-installed | grep -q "youtubeUnblock"; then
-echo -e "${RED}Найден youtubeUnblock ! Zapret не может работать совместно с youtubeUnblock!${NC}"
+clear
+echo -e "${RED}Найден ${NC}youtubeUnblock${RED} ! ${NC}Zapret${RED} не может работать совместно с ${NC}youtubeUnblock${NC} !${NC}"
 exit 1
 fi
 INSTALLED_VER=$(opkg list-installed | grep '^zapret ' | awk '{print $3}')
