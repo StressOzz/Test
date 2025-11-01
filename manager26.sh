@@ -18,14 +18,14 @@ WORKDIR="/tmp/zapret-update"
 # Функция получения информации о версиях, архитектуре и статусе
 # ==========================================
 get_versions() {
-if opkg list-installed | grep -q "^byedpi -"; then
+if opkg list-installed | grep -q "byedpi"; then
 clear
-echo -e "${RED}У Вас установлен ByeDPI! Zapret не может работать совместно с ByeDPI!${NC}"
+echo -e "${RED}У Вас установлен ByeDPI ! Zapret не может работать совместно с ByeDPI !${NC}"
 exit 1
 fi
-if opkg list-installed | grep -q "^luci-app-youtubeUnblock "; then
-    echo -e "${RED}Найден luci-app-youtubeUnblock! Zapret не может работать совместно с ним!${NC}"
-    exit 1
+if opkg list-installed | grep -q "youtubeUnblock"; then
+echo -e "${RED}Найден youtubeUnblock ! Zapret не может работать совместно с youtubeUnblock!${NC}"
+exit 1
 fi
 INSTALLED_VER=$(opkg list-installed | grep '^zapret ' | awk '{print $3}')
 [ -z "$INSTALLED_VER" ] && INSTALLED_VER="не найдена"
