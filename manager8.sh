@@ -66,52 +66,40 @@ INSTALLED_VER=$(opkg list-installed | grep '^zapret ' | awk '{print $3}')
 [ -z "$INSTALLED_VER" ] && INSTALLED_VER="не найдена"
 LOCAL_ARCH=$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release)
 [ -z "$LOCAL_ARCH" ] && LOCAL_ARCH=$(opkg print-architecture | grep -v "noarch" | sort -k3 -n | tail -n1 | awk '{print $2}')
-
-
+# Проверка установлен ли curl
 command -v curl >/dev/null 2>&1 || {
-    clear
-    echo -e "${MAGENTA}ZAPRET on remittor Manager by StressOzz${NC}\n"
-    echo -e "${GREEN}🔴 ${CYAN}Устанавливаем${NC} curl ${CYAN}для загрузки информации с ${NC}GitHub${NC}\n"
-
-    local attempt=1
-    local MAX_ATTEMPTS=3
-    local first_fail=false
-
-    while [ $attempt -le $MAX_ATTEMPTS ]; do
-        # Показываем сообщение о попытке только после первой неудачи
-        if [ "$first_fail" = true ]; then
-            echo -e "${GREEN}🔴 ${CYAN}Попытка установки ${NC}curl${CYAN} № ${NC}${attempt}${NC}\n"
-        fi
-
-        opkg update >/dev/null 2>&1
-        opkg install curl >/dev/null 2>&1
-
-        if command -v curl >/dev/null 2>&1; then
-            echo -e "\n${BLUE}🔴 ${GREEN}Curl успешно установлен !${NC}\n"
-            sleep 2
-            break
-        fi
-
-        # После первой неудачи включаем отображение попыток
-        first_fail=true
-        attempt=$((attempt + 1))
-        [ $attempt -le $MAX_ATTEMPTS ] && {
-            echo -e "\n${RED}Curl не найден после установки !${NC}\n"
-            sleep 2
-        }
-    done
-
-    if ! command -v curl >/dev/null 2>&1; then
-        echo -e "${RED}Не удалось установить ${NC}curl${RED} после ${NC}${MAX_ATTEMPTS}${RED} попыток !${NC}\n"
-        echo -e "${YELLOW}Установите вручную, выполнив команду: ${CYAN}opkg update && opkg install curl${NC}\n"
-        exit 1
-    fi
+clear
+echo -e "${MAGENTA}ZAPRET on remittor Manager by StressOzz${NC}\n"
+echo -e "${GREEN}🔴 ${CYAN}Устанавливаем${NC} curl ${CYAN}для загрузки информации с ${NC}GitHub${NC}\n"
+local attempt=1
+local MAX_ATTEMPTS=3
+local first_fail=false
+while [ $attempt -le $MAX_ATTEMPTS ]; do
+# Показываем сообщение о попытке только после первой неудачи
+if [ "$first_fail" = true ]; then
+echo -e "${GREEN}🔴 ${CYAN}Попытка установки ${NC}curl${CYAN} № ${NC}${attempt}${NC}\n"
+fi
+opkg update >/dev/null 2>&1
+opkg install curl >/dev/null 2>&1
+if command -v curl >/dev/null 2>&1; then
+echo -e "${BLUE}🔴 ${GREEN}Curl успешно установлен !${NC}\n"
+sleep 2
+break
+fi
+# После первой неудачи включаем отображение попыток
+first_fail=true
+attempt=$((attempt + 1))
+[ $attempt -le $MAX_ATTEMPTS ] && {
+echo -e "\n${RED}Curl не найден после установки !${NC}\n"
+sleep 2
 }
-
-
-
-
-
+done
+if ! command -v curl >/dev/null 2>&1; then
+echo -e "${RED}Не удалось установить ${NC}curl${RED} после ${NC}${MAX_ATTEMPTS}${RED} попыток !${NC}\n"
+echo -e "${YELLOW}Установите вручную, выполнив команду: ${CYAN}opkg update && opkg install curl${NC}\n"
+exit 1
+fi
+}
 LIMIT_REACHED=0
 LIMIT_CHECK=$(curl -s "https://api.github.com/repos/remittor/zapret-openwrt/releases/latest")
 if echo "$LIMIT_CHECK" | grep -q 'API rate limit exceeded'; then
@@ -334,8 +322,10 @@ fonts.gstatic.com
 ggpht.com
 googleapis.com
 googleusercontent.com
+googlevideo.com
 i.ytimg.com
 i9.ytimg.com
+jnn-pa.googleapis.com
 kids.youtube.com
 m.youtube.com
 manifest.googlevideo.com
@@ -346,8 +336,28 @@ s.ytimg.com
 signaler-pa.youtube.com
 studio.youtube.com
 tv.youtube.com
+wide-youtube.l.google.com
+withyoutube.com
+youtu.be
+youtube.com
+youtube.googleapis.com
+youtubeeducation.com
+youtubeembeddedplayer.googleapis.com
+youtubefanfest.com
+youtubegaming.com
+youtubei.googleapis.com
+youtubekids.com
+youtubemobilesupport.com
+youtube-nocookie.com
+youtube-ui.l.google.com
+yt.be
+yt3.ggpht.com
 yt3.googleusercontent.com
+yt4.ggpht.com
+ytimg.com
+ytimg.l.google.com
 yting.com
+yt-video-upload.l.google.com
 EOF
 # Проверка и добавление hosts
 file="/etc/hosts"
