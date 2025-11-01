@@ -637,7 +637,6 @@ fi
 # Проверка ByeDPI и youtubeUnblock
 # ==========================================
 dpi_yublk_detect() {
-Проверка ByeDPI
 if command -v byedpi >/dev/null 2>&1 || pgrep -f "[bB]ye[Dd][Pp][Ii]" >/dev/null 2>&1; then
 echo "${RED}Найдена установка или процесс ByeDPI !{NC}"
 exit
