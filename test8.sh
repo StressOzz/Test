@@ -626,13 +626,16 @@ uninstall_zapret() {
 local NO_PAUSE=$1
 [ "$NO_PAUSE" != "1" ] && clear
 echo -e "${MAGENTA}Удаляем ZAPRET${NC}\n"
-echo -e "${GREEN}🔴 ${CYAN}Останавливаем сервис, убиваем процессы, удаляем пакеты, чистим конфиги и временные файлы${NC}"
+echo -e "${GREEN}🔴 ${CYAN}Останавливаем сервис${NC}"
+echo -e "${GREEN}🔴 ${CYAN}Убиваем процессы${NC}"
 /etc/init.d/zapret stop 2>/dev/null
 for pid in $(pgrep -f /opt/zapret 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done
+echo -e "${GREEN}🔴 ${CYAN}Удаляем пакеты${NC}"
 opkg --force-removal-of-dependent-packages --autoremove remove zapret luci-app-zapret >/dev/null 2>&1
+echo -e "${GREEN}🔴 ${CYAN}Чистим конфиги и временные файлы${NC}"
 rm -rf /opt/zapret /etc/config/zapret /etc/firewall.zapret /etc/init.d/zapret /tmp/*zapret* /var/run/*zapret* /tmp/*.ipk /tmp/*.zip 2>/dev/null
 crontab -l 2>/dev/null | grep -v -i "zapret" | crontab - 2>/dev/null
-nft list tables 2>/dev/null | awk '{print $2}' | while read -r t; do nft list table "$t" 2>/dev/null | grep -q zapret && nft delete table "$t" >/dev/null 2>&1; done
+nft list tables 2>/dev/null | awk '{print $2}' | while read -r t; do nft list table "$t" 2>/dev/null | grep -q zapret && nft delete table "$t" &>/dev/null; done
 echo -e "\n${BLUE}🔴 ${GREEN}Zapret полностью удалён !${NC}\n"
 [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
