@@ -105,7 +105,7 @@ echo -e "${GREEN}Архитектура: $LOCAL_ARCH${NC}"
 LIMIT_REACHED=0
 echo -e "${YELLOW}Проверяем последнюю версию на GitHub...${NC}"
 
-LIMIT_CHECK=$(curl -s -4 --connect-timeout 10 --retry 2 \
+LIMIT_CHECK=$(curl -s -4 --connect-timeout 5 --retry 2 \
     "https://api.github.com/repos/remittor/zapret-openwrt/releases/latest")
 
 if [ -z "$LIMIT_CHECK" ]; then
@@ -130,10 +130,14 @@ else
             USED_ARCH="$LOCAL_ARCH"
             echo -e "${GREEN}Последняя версия: $LATEST_VER${NC}"
             echo -e "${GREEN}Архитектура пакета: $USED_ARCH${NC}"
+echo -e ""
+read -p "Нажмите Enter для продолжения..." dummy
         else
             LATEST_VER="ошибка определения версии"
             USED_ARCH="$LOCAL_ARCH"
             echo -e "${RED}Не удалось определить версию из URL: $LATEST_URL${NC}"
+echo -e ""
+read -p "Нажмите Enter для продолжения..." dummy
         fi
     else
         LATEST_VER="не найдена"
@@ -143,6 +147,8 @@ else
         # Дополнительно: покажем какие архитектуры доступны
         echo -e "${YELLOW}Доступные архитектуры:${NC}"
         echo "$LIMIT_CHECK" | grep browser_download_url | grep -o 'zapret_v[^_]*_[^_]*\.zip' | sed 's/\.zip//' | sort -u
+echo -e ""
+read -p "Нажмите Enter для продолжения..." dummy
     fi
 fi
 # --- Проверяем состояние сервиса zapret
