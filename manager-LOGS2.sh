@@ -155,6 +155,8 @@ fi
 else
 ZAPRET_STATUS=""
 fi
+echo -e ""
+read -p "Нажмите Enter для продолжения..." dummy
 }
 # ==========================================
 # Установка Zapret
