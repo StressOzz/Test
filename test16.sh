@@ -86,38 +86,42 @@ done
 echo -e "${BLUE}🔴 ${GREEN}Установленно !${NC}"
 sleep 2
 fi
-# --- Получаем текущую установленную версию zapret
-INSTALLED_VER=$(opkg list-installed | grep '^zapret ' | awk '{print $3}')
+
+# --- Определяем текущую установленную версию zapret
+INSTALLED_VER=$(opkg list-installed | awk '/^zapret / {print $3}')
 [ -z "$INSTALLED_VER" ] && INSTALLED_VER="не найдена"
+
 # --- Определяем архитектуру устройства
 LOCAL_ARCH=$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release)
 [ -z "$LOCAL_ARCH" ] && LOCAL_ARCH=$(opkg print-architecture | grep -v "noarch" | sort -k3 -n | tail -n1 | awk '{print $2}')
-# --- Проверяем лимит GitHub API и доступность
 
+# --- Проверка лимита GitHub API и доступности
 LIMIT_REACHED=0
 LIMIT_CHECK=$(curl -s -4 --connect-timeout 5 "https://api.github.com/repos/remittor/zapret-openwrt/releases/latest" 2>/dev/null)
 
 if [ -z "$LIMIT_CHECK" ]; then
-echo -e "api.github.com ${RED}недоступен !${NC}\nСкрипт остановлен !\n"
-exit 1
+    echo -e "api.github.com ${RED}недоступен!${NC}\nСкрипт остановлен!\n"
+    exit 1
 fi
 
 if echo "$LIMIT_CHECK" | grep -q 'API rate limit exceeded'; then
-LATEST_VER="${RED}Достигнут лимит GitHub API. Подождите 15 минут.${NC}"
-LIMIT_REACHED=1
+    LATEST_VER="${RED}Достигнут лимит GitHub API. Подождите 15 минут.${NC}"
+    LIMIT_REACHED=1
 else
+    # --- Получаем ссылку на архив нужной архитектуры
+    LATEST_URL=$(echo "$LIMIT_CHECK" | grep -oP '"browser_download_url":\s*"\K[^"]+' | grep "$LOCAL_ARCH\.zip" || true)
+
+    if [ -n "$LATEST_URL" ]; then
+        # --- Извлекаем версию из имени архива
+        LATEST_VER=$(basename "$LATEST_URL" | sed -E 's/.*zapret_v([0-9]+\.[0-9]+)_.*\.zip/\1/')
+        USED_ARCH="$LOCAL_ARCH"
+    else
+        LATEST_VER="не найдена"
+        USED_ARCH="нет пакета для вашей архитектуры"
+    fi
+fi
 
 
-# --- Извлекаем номер версии из имени архива
-LATEST_URL=$(echo "$LIMIT_CHECK" | grep browser_download_url | grep "$LOCAL_ARCH.zip" | cut -d '"' -f 4)
-if [ -n "$LATEST_URL" ] && echo "$LATEST_URL" | grep -q '\.zip$'; then
-LATEST_VER=$(basename "$LATEST_URL" | sed -E 's/.*zapret_v([0-9]+\.[0-9]+)_.*\.zip/\1/')
-USED_ARCH="$LOCAL_ARCH"
-else
-LATEST_VER="не найдена"
-USED_ARCH="нет пакета для вашей архитектуры"
-fi
-fi
 # --- Проверяем состояние сервиса zapret
 if [ -f /etc/init.d/zapret ]; then
 if /etc/init.d/zapret status 2>/dev/null | grep -qi "running"; then
