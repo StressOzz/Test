@@ -416,12 +416,11 @@ URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.exa
 SELECTED="50-discord"
 URL="https://raw.githubusercontent.com/bol-van/zapret/v70.5/init.d/custom.d.examples.linux/50-discord" ;;
 5)
-echo -e "\n${BLUE}🔴 ${GREEN}Скрипт удалён !${NC}"
+echo -e "\n${BLUE}🔴 ${GREEN}Скрипт удалён !${NC}\n"
 rm -f "$CUSTOM_DIR/50-script.sh" 2>/dev/null
 chmod +x /opt/zapret/sync_config.sh
 /opt/zapret/sync_config.sh
 /etc/init.d/zapret restart >/dev/null 2>&1
-echo -e ""
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 show_menu
 return ;;
@@ -522,8 +521,7 @@ echo -e "${GREEN}🔴 ${CYAN}Добавляем в стратегию блок �
 chmod +x /opt/zapret/sync_config.sh
 /opt/zapret/sync_config.sh
 /etc/init.d/zapret restart >/dev/null 2>&1
-echo -e "\n${BLUE}🔴 ${GREEN}Zapret настроен для игры Battlefield REDSEC !${NC}"
-[ "$NO_PAUSE" != "1" ] && echo -e ""
+echo -e "\n${BLUE}🔴 ${GREEN}Zapret настроен для игры Battlefield REDSEC !${NC}\n"
 [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
 # ==========================================
@@ -544,11 +542,10 @@ echo -e "\n${MAGENTA}Включаем Discord и звонки в TG и WA${NC}\n
 enable_discord_calls "1"
 fix_REDSEC "1"
 if [ -f /etc/init.d/zapret ]; then
-echo -e "\n${BLUE}🔴 ${GREEN}Zapret ${GREEN}установлен и настроен !${NC}"
+echo -e "${BLUE}🔴 ${GREEN}Zapret ${GREEN}установлен и настроен !${NC}\n"
 else
-echo -e "${RED}Zapret не установлен !${NC}"
+echo -e "${RED}Zapret не установлен !${NC}\n"
 fi
-echo -e ""
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 fi
 }
@@ -575,11 +572,10 @@ chmod +x /opt/zapret/restore-def-cfg.sh
 chmod +x /opt/zapret/sync_config.sh
 /opt/zapret/sync_config.sh
 [ -f /etc/init.d/zapret ] && /etc/init.d/zapret restart >/dev/null 2>&1
-echo -e "${BLUE}🔴 ${GREEN}Настройки по умолчанию возвращены !${NC}"
+echo -e "${BLUE}🔴 ${GREEN}Настройки по умолчанию возвращены !${NC}\n"
 else
-echo -e "${RED}Zapret не установлен !${NC}"
+echo -e "${RED}Zapret не установлен !${NC}\n"
 fi
-echo -e ""
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 show_menu
 }
@@ -598,11 +594,10 @@ if [ -n "$PIDS" ]; then
 echo -e "${GREEN}🔴 ${CYAN}Убиваем все процессы ${NC}Zapret"
 for pid in $PIDS; do kill -9 "$pid" >/dev/null 2>&1; done
 fi
-echo -e "\n${BLUE}🔴 ${GREEN}Zapret остановлен !${NC}"
+echo -e "\n${BLUE}🔴 ${GREEN}Zapret остановлен !${NC}\n"
 else
-echo -e "${RED}Zapret не установлен !${NC}"
+echo -e "${RED}Zapret не установлен !${NC}\n"
 fi
-echo -e ""
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
 # ==========================================
@@ -618,11 +613,10 @@ echo -e "${GREEN}🔴 ${CYAN}Запускаем сервис ${NC}Zapret"
 chmod +x /opt/zapret/sync_config.sh
 /opt/zapret/sync_config.sh
 /etc/init.d/zapret restart >/dev/null 2>&1
-echo -e "\n${BLUE}🔴 ${GREEN}Zapret запущен !${NC}"
+echo -e "\n${BLUE}🔴 ${GREEN}Zapret запущен !${NC}\n"
 else
-echo -e "${RED}Zapret не установлен !${NC}"
+echo -e "${RED}Zapret не установлен !${NC}\n"
 fi
-echo -e ""
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
 # ==========================================
