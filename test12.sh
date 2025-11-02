@@ -67,22 +67,22 @@ command -v unzip >/dev/null 2>&1 || TO_INSTALL="$TO_INSTALL unzip"
 if [ -n "$TO_INSTALL" ]; then
     clear
     echo -e "${MAGENTA}ZAPRET on remittor Manager by StressOzz${NC}\n"
-    
- echo -e "${GREEN}🔴 ${CYAN}Устанавливаем:${NC}$TO_INSTALL${NC}\n"
+    echo -e "${GREEN}🔴 ${CYAN}Устанавливаем:${NC}$TO_INSTALL${NC}\n"
     opkg update >/dev/null 2>&1
     for pkg in $TO_INSTALL; do
         for i in 1 2 3; do
             command -v $pkg >/dev/null 2>&1 && break
             opkg install $pkg >/dev/null 2>&1
-            [ $i -lt 3 ] && echo -e "${RED}Попытка $i установки $pkg не удалась, пробуем снова...${NC}\n"; sleep 1
+            [ $i -lt 3 ] && { echo -e "${RED}Попытка ${NC}$i${RED} установки ${NC}$pkg${RED} не удалась, пробуем снова...${NC}\n"; sleep 1; }
         done
         command -v $pkg >/dev/null 2>&1 || { 
-            echo -e "${RED}Не удалось установить $pkg после 3 попыток!${NC}\nУстановите вручную: opkg install $pkg\n"; 
+            echo -e "${RED}Не удалось установить ${NC}$pkg${RED} !${NC}\nУстановите вручную: ${NC}opkg install $pkg\n"; 
             exit 1 
         }
     done
-    echo -e "${BLUE}🔴 ${GREEN}Все пакеты установлены успешно !${NC}\n"
+    echo -e "${BLUE}🔴 ${GREEN}Все пакеты установлены !${NC}\n"
 fi
+
 
 # --- Получаем текущую установленную версию zapret
 INSTALLED_VER=$(opkg list-installed | grep '^zapret ' | awk '{print $3}')
