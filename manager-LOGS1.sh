@@ -659,7 +659,7 @@ opkg --force-removal-of-dependent-packages --autoremove remove zapret luci-app-z
 echo -e "${GREEN}🔴 ${CYAN}Чистим конфиги и временные файлы${NC}"
 rm -rf /opt/zapret /etc/config/zapret /etc/firewall.zapret /etc/init.d/zapret /tmp/*zapret* /var/run/*zapret* /tmp/*.ipk /tmp/*.zip
 crontab -l | grep -v -i "zapret" | crontab -
-nft list tables | awk '{print $2}' | while read -r t; do nft list table "$t" | grep -q zapret && nft delete table "$t"; done
+nft list tables | awk '{print $2}' | grep -E '(zapret|ZAPRET)' | while read t; do [ -n "$t" ] && nft delete table "$t"; done
 echo -e "\n${BLUE}🔴 ${GREEN}Zapret полностью удалён !${NC}\n"
 [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
