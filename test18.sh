@@ -86,64 +86,32 @@ done
 echo -e "${BLUE}🔴 ${GREEN}Установленно !${NC}"
 sleep 2
 fi
-
-# --- Получаем установленную версию Zapret
-INSTALLED_VER=$(opkg list-installed 2>/dev/null | grep '^zapret ' | awk '{print $3}')
+# --- Получаем текущую установленную версию zapret
+INSTALLED_VER=$(opkg list-installed | grep '^zapret ' | awk '{print $3}')
 [ -z "$INSTALLED_VER" ] && INSTALLED_VER="не найдена"
-
-echo -e "${GREEN}Установленная версия: $INSTALLED_VER${NC}"
-
 # --- Определяем архитектуру устройства
-LOCAL_ARCH=$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release 2>/dev/null)
-if [ -z "$LOCAL_ARCH" ]; then
-    LOCAL_ARCH=$(opkg print-architecture 2>/dev/null | awk '!/noarch/ {arch=$2} END {print arch}')
-fi
-
-echo -e "${GREEN}Архитектура: $LOCAL_ARCH${NC}"
-
+LOCAL_ARCH=$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release)
+[ -z "$LOCAL_ARCH" ] && LOCAL_ARCH=$(opkg print-architecture | grep -v "noarch" | sort -k3 -n | tail -n1 | awk '{print $2}')
 # --- Проверяем лимит GitHub API и доступность
 LIMIT_REACHED=0
-echo -e "${YELLOW}Проверяем последнюю версию на GitHub...${NC}"
-
-LIMIT_CHECK=$(curl -s -4 --connect-timeout 10 --retry 2 \
-    "https://api.github.com/repos/remittor/zapret-openwrt/releases/latest" 2>/dev/null)
-
+LIMIT_CHECK=$(curl -s -4 --connect-timeout 5 "https://api.github.com/repos/remittor/zapret-openwrt/releases/latest" 2>/dev/null)
 if [ -z "$LIMIT_CHECK" ]; then
-    echo -e "${RED}Ошибка: api.github.com недоступен!${NC}"
-    echo -e "Скрипт остановлен!\n"
-    exit 1
+echo -e "api.github.com ${RED}недоступен !${NC}\nСкрипт остановлен !\n"
+exit 1
 fi
-
 if echo "$LIMIT_CHECK" | grep -q 'API rate limit exceeded'; then
-    LATEST_VER="${RED}Достигнут лимит GitHub API. Подождите 15 минут.${NC}"
-    LIMIT_REACHED=1
-    echo -e "$LATEST_VER"
+LATEST_VER="${RED}Достигнут лимит GitHub API. Подождите 15 минут.${NC}"
+LIMIT_REACHED=1
 else
-    # --- Извлекаем номер версии из имени архива
-    LATEST_URL=$(echo "$LIMIT_CHECK" | grep browser_download_url | grep "$LOCAL_ARCH.zip" | cut -d '"' -f 4)
-    
-    if [ -n "$LATEST_URL" ] && echo "$LATEST_URL" | grep -q '\.zip$'; then
-        LATEST_VER=$(basename "$LATEST_URL" | sed -E 's/.*zapret_v([0-9]+\.[0-9]+)_.*\.zip/\1/')
-        
-        # Проверяем корректность извлеченной версии
-        if echo "$LATEST_VER" | grep -qE '^[0-9]+\.[0-9]+$'; then
-            USED_ARCH="$LOCAL_ARCH"
-            echo -e "${GREEN}Последняя версия: $LATEST_VER${NC}"
-            echo -e "${GREEN}Архитектура пакета: $USED_ARCH${NC}"
-        else
-            LATEST_VER="ошибка определения версии"
-            USED_ARCH="$LOCAL_ARCH"
-            echo -e "${RED}Не удалось определить версию из URL: $LATEST_URL${NC}"
-        fi
-    else
-        LATEST_VER="не найдена"
-        USED_ARCH="нет пакета для архитектуры $LOCAL_ARCH"
-        echo -e "${YELLOW}Внимание: $USED_ARCH${NC}"
-        
-        # Дополнительно: покажем какие архитектуры доступны
-        echo -e "${YELLOW}Доступные архитектуры:${NC}"
-        echo "$LIMIT_CHECK" | grep browser_download_url | grep -o 'zapret_v[^_]*_[^_]*\.zip' | sed 's/\.zip//' | sort -u
-    fi
+# --- Извлекаем номер версии из имени архива
+LATEST_URL=$(echo "$LIMIT_CHECK" | grep browser_download_url | grep "$LOCAL_ARCH.zip" | cut -d '"' -f 4)
+if [ -n "$LATEST_URL" ] && echo "$LATEST_URL" | grep -q '\.zip$'; then
+LATEST_VER=$(basename "$LATEST_URL" | sed -E 's/.*zapret_v([0-9]+\.[0-9]+)_.*\.zip/\1/')
+USED_ARCH="$LOCAL_ARCH"
+else
+LATEST_VER="не найдена"
+USED_ARCH="нет пакета для вашей архитектуры"
+fi
 fi
 # --- Проверяем состояние сервиса zapret
 if [ -f /etc/init.d/zapret ]; then
@@ -159,7 +127,7 @@ fi
 # ==========================================
 # Установка Zapret
 # ==========================================
-install_update() {
+install_Zapret() {
 local NO_PAUSE=$1
 [ "$NO_PAUSE" != "1" ] && clear
 echo -e "${MAGENTA}Устанавливаем ZAPRET${NC}\n"
@@ -184,9 +152,9 @@ return
 fi
 # --- Обновление списка пакетов
 echo -e "${GREEN}🔴 ${CYAN}Обновляем список пакетов${NC}"
-    opkg update >/dev/null 2>&1 || { 
-        echo -e "\n${RED}Ошибка при обновлении списка пакетов !${NC}\n"; exit 1; 
-    }
+opkg update >/dev/null 2>&1 || { 
+echo -e "\n${RED}Ошибка при обновлении списка пакетов !${NC}\n"; exit 1; 
+}
 # --- Остановка сервиса и старых процессов Zapret
 if [ -f /etc/init.d/zapret ]; then
 echo -e "${GREEN}🔴 ${CYAN}Останавливаем сервис ${NC}zapret"
@@ -560,7 +528,7 @@ echo -e "\n${RED}Достигнут лимит GitHub API. Подождите 15
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 else
 uninstall_zapret "1"
-install_update "1"
+install_Zapret "1"
 fix_default "1"
 echo -e "\n${MAGENTA}Включаем Discord и звонки в TG и WA${NC}\n"
 enable_discord_calls "1"
@@ -659,7 +627,7 @@ opkg --force-removal-of-dependent-packages --autoremove remove zapret luci-app-z
 echo -e "${GREEN}🔴 ${CYAN}Чистим конфиги и временные файлы${NC}"
 rm -rf /opt/zapret /etc/config/zapret /etc/firewall.zapret /etc/init.d/zapret /tmp/*zapret* /var/run/*zapret* /tmp/*.ipk /tmp/*.zip 2>/dev/null
 crontab -l 2>/dev/null | grep -v -i "zapret" | crontab - 2>/dev/null
-nft list tables 2>/dev/null | awk '{print $2}' | while read -r t; do nft list table "$t" 2>/dev/null | grep -q zapret && nft delete table "$t" &>/dev/null; done
+nft list tables 2>/dev/null | awk '{print $2}' | while read -r t; do nft list table "$t" 2>/dev/null | grep -q zapret && nft delete table "$t" >/dev/null 2>&1; done
 echo -e "\n${BLUE}🔴 ${GREEN}Zapret полностью удалён !${NC}\n"
 [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
@@ -683,20 +651,20 @@ clear
 echo -e "╔════════════════════════════════════╗"
 echo -e "║     ${BLUE}Zapret on remittor Manager${NC}     ║"
 echo -e "╚════════════════════════════════════╝"
-echo -e "                     ${DGRAY}by StressOzz v5.0${NC}"
+echo -e "                     ${DGRAY}by StressOzz v5.1${NC}"
 # Определяем актуальная/устарела
 if [ "$LIMIT_REACHED" -eq 1 ] || [ "$LATEST_VER" = "не найдена" ]; then
-    INST_COLOR=$CYAN
-    INSTALLED_DISPLAY="$INSTALLED_VER"
+INST_COLOR=$CYAN
+INSTALLED_DISPLAY="$INSTALLED_VER"
 elif [ "$INSTALLED_VER" = "$LATEST_VER" ]; then
-    INST_COLOR=$GREEN
-    INSTALLED_DISPLAY="$INSTALLED_VER (актуальная)"
+INST_COLOR=$GREEN
+INSTALLED_DISPLAY="$INSTALLED_VER (актуальная)"
 elif [ "$INSTALLED_VER" != "не найдена" ]; then
-    INST_COLOR=$RED
-    INSTALLED_DISPLAY="$INSTALLED_VER (устарела)"
+INST_COLOR=$RED
+INSTALLED_DISPLAY="$INSTALLED_VER (устарела)"
 else
-    INST_COLOR=$RED
-    INSTALLED_DISPLAY="$INSTALLED_VER"
+INST_COLOR=$RED
+INSTALLED_DISPLAY="$INSTALLED_VER"
 fi
 # Вывод информации о версиях и архитектуре
 echo -e "\n${YELLOW}Установленная версия: ${INST_COLOR}$INSTALLED_DISPLAY${NC}\n"
@@ -736,7 +704,7 @@ echo -e "${CYAN}0) ${GREEN}Выход (Enter)${NC}\n"
 echo -ne "${YELLOW}Выберите пункт:${NC} "
 read choice
 case "$choice" in
-1) install_update ;;
+1) install_Zapret ;;
 2) fix_default ;;
 3) comeback_def ;;
 4) startstop_zpr ;;
