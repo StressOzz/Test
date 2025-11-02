@@ -59,19 +59,31 @@ echo -e "\n${RED}Скрипт остановлен ! Отключите ${NC}Flo
 exit 1 ;;
 esac
 fi
-# --- Проверка наличия curl
-if ! command -v curl >/dev/null 2>&1; then
-clear
-echo -e "${MAGENTA}ZAPRET on remittor Manager by StressOzz${NC}\n"
-echo -e "${GREEN}🔴 ${CYAN}Устанавливаем ${NC}curl\n"
-for i in 1 2 3; do
-opkg update >/dev/null 2>&1
-opkg install curl >/dev/null 2>&1
-command -v curl >/dev/null 2>&1 && { echo -e "${BLUE}🔴 ${GREEN}Curl успешно установлен!${NC}\n"; break; }
-[ $i -lt 3 ] && echo -e "${RED}Попытка $i не удалась, пробуем снова...${NC}"; sleep 2
-done
-! command -v curl >/dev/null 2>&1 && { echo -e "${RED}Не удалось установить curl !${NC}\nУстановите вручную: ${NC}opkg update && opkg install curl\n"; exit 1; }
+# --- Проверка наличия curl и unzip
+TO_INSTALL=""
+command -v curl >/dev/null 2>&1 || TO_INSTALL="$TO_INSTALL curl"
+command -v unzip >/dev/null 2>&1 || TO_INSTALL="$TO_INSTALL unzip"
+
+if [ -n "$TO_INSTALL" ]; then
+    clear
+    echo -e "${MAGENTA}ZAPRET on remittor Manager by StressOzz${NC}\n"
+    
+ echo -e "${GREEN}🔴 ${CYAN}Устанавливаем:${NC}$TO_INSTALL${NC}\n"
+    opkg update >/dev/null 2>&1
+    for pkg in $TO_INSTALL; do
+        for i in 1 2 3; do
+            command -v $pkg >/dev/null 2>&1 && break
+            opkg install $pkg >/dev/null 2>&1
+            [ $i -lt 3 ] && echo -e "${RED}Попытка $i установки $pkg не удалась, пробуем снова...${NC}\n"; sleep 1
+        done
+        command -v $pkg >/dev/null 2>&1 || { 
+            echo -e "${RED}Не удалось установить $pkg после 3 попыток!${NC}\nУстановите вручную: opkg install $pkg\n"; 
+            exit 1 
+        }
+    done
+    echo -e "${BLUE}🔴 ${GREEN}Все пакеты установлены успешно !${NC}\n"
 fi
+
 # --- Получаем текущую установленную версию zapret
 INSTALLED_VER=$(opkg list-installed | grep '^zapret ' | awk '{print $3}')
 [ -z "$INSTALLED_VER" ] && INSTALLED_VER="не найдена"
