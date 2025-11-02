@@ -632,44 +632,14 @@ uninstall_zapret() {
 local NO_PAUSE=$1
 [ "$NO_PAUSE" != "1" ] && clear
 echo -e "${MAGENTA}Удаляем ZAPRET${NC}\n"
-# Остановка службы
-echo -e "${GREEN}🔴 ${CYAN}Останавливаем сервис ${NC}zapret"
-[ -f /etc/init.d/zapret ] && /etc/init.d/zapret stop >/dev/null 2>&1
-# Убиваем все процессы
-echo -e "${GREEN}🔴 ${CYAN}Убиваем все процессы ${NC}zapret"
-PIDS=$(pgrep -f /opt/zapret)
-[ -n "$PIDS" ] && for pid in $PIDS; do kill -9 "$pid" >/dev/null 2>&1; done
-# Удаляем пакеты с автозависимостями
-echo -e "${GREEN}🔴 ${CYAN}Удаляем пакеты${NC} zapret ${CYAN}и ${NC}luci-app-zapret"
+echo -e "${GREEN}🔴 ${CYAN}Останавливаем сервис, убиваем процессы, удаляем пакеты, чистим конфиги и временные файлы${NC}"
+/etc/init.d/zapret stop 2>/dev/null
+for pid in $(pgrep -f /opt/zapret 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done
 opkg --force-removal-of-dependent-packages --autoremove remove zapret luci-app-zapret >/dev/null 2>&1
-# Удаляем конфиги, рабочие папки и кастомные скрипты
-echo -e "${GREEN}🔴 ${CYAN}Удаляем конфигурации и рабочие папки${NC}"
-for path in /opt/zapret /etc/config/zapret /etc/firewall.zapret; do
-[ -e "$path" ] && rm -rf "$path"
-done
-# Очищаем crontab от любых записей Zapret
-echo -e "${GREEN}🔴 ${CYAN}Очищаем${NC} crontab ${CYAN}задания${NC}"
-if crontab -l >/dev/null 2>&1; then
-crontab -l | grep -v -i "zapret" | crontab -
-fi
-# Удаляем ipset
-echo -e "${GREEN}🔴 ${CYAN}Удаляем${NC} ipset"
-for set in $(ipset list -n 2>/dev/null | grep -i zapret); do
-ipset destroy "$set" >/dev/null 2>&1
-done
-# Удаляем все цепочки и таблицы nftables, связанные с Zapret
-echo -e "${GREEN}🔴 ${CYAN}Удаляем цепочки и таблицы${NC} nftables"
-for table in $(nft list tables 2>/dev/null | awk '{print $2}'); do
-chains=$(nft list table "$table" 2>/dev/null | grep zapret)
-[ -n "$chains" ] && nft delete table "$table" >/dev/null 2>&1
-done
-# Удаляем все временные файлы и остатки
-echo -e "${GREEN}🔴 ${CYAN}Удаляем временные файлы${NC}"
-rm -f /tmp/*zapret* /var/run/*zapret* /tmp/*.ipk /tmp/*.zip 2>/dev/null
-# Проверяем и удаляем init.d скрипт, если остался
-echo -e "${GREEN}🔴 ${CYAN}Удаляем ${NC}zapret${CYAN} из ${NC}init.d"
-[ -f /etc/init.d/zapret ] && rm -f /etc/init.d/zapret
-echo -e "\n${BLUE}🔴 ${GREEN}Zapret удалён !${NC}\n"
+rm -rf /opt/zapret /etc/config/zapret /etc/firewall.zapret /etc/init.d/zapret /tmp/*zapret* /var/run/*zapret* /tmp/*.ipk /tmp/*.zip 2>/dev/null
+crontab -l 2>/dev/null | grep -v -i "zapret" | crontab - 2>/dev/null
+nft list tables 2>/dev/null | awk '{print $2}' | while read -r t; do nft list table "$t" 2>/dev/null | grep -q zapret && nft delete table "$t" >/dev/null 2>&1; done
+echo -e "\n${BLUE}🔴 ${GREEN}Zapret полностью удалён !${NC}\n"
 [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
 # ==========================================
@@ -677,12 +647,9 @@ echo -e "\n${BLUE}🔴 ${GREEN}Zapret удалён !${NC}\n"
 # ==========================================
 startstop_zpr() {
 clear
-# Проверяем, запущен ли Zapret
 if pgrep -f /opt/zapret >/dev/null 2>&1; then
-# Если запущен — вызываем stop_zapret
 stop_zapret
 else
-# Если не запущен — вызываем start_zapret
 start_zapret
 fi
 }
