@@ -60,40 +60,32 @@ exit 1 ;;
 esac
 fi
 # --- Проверка наличия curl и unzip
-
-
 TO_INSTALL=""
 command -v curl >/dev/null 2>&1 || TO_INSTALL="$TO_INSTALL curl"
 command -v unzip >/dev/null 2>&1 || TO_INSTALL="$TO_INSTALL unzip"
-
 if [ -n "$TO_INSTALL" ]; then
-    clear
-    echo -e "${MAGENTA}ZAPRET on remittor Manager by StressOzz${NC}\n"
-    echo -e "${GREEN}🔴 ${CYAN}Устанавливаем ${NC}$TO_INSTALL${NC}\n"
-
-    opkg update >/dev/null 2>&1 || { 
-        echo -e "${RED}Ошибка при обновлении списка пакетов !${NC}\n"; exit 1; 
-    }
-
-    for pkg in $TO_INSTALL; do
-        pkg_installed=0
-        for i in 1 2 3; do
-            command -v "$pkg" >/dev/null 2>&1 && { pkg_installed=1; break; }
-            opkg install "$pkg" >/dev/null 2>&1 && { pkg_installed=1; break; }
-            sleep 1
-        done
-
-        if [ $pkg_installed -eq 0 ]; then
-            echo -e "${RED}Не удалось установить ${NC}$pkg${RED} после 3 попыток!${NC}"
-            echo -e "Установите вручную: ${CYAN}opkg install $pkg${NC}\n"
-            exit 1
-        fi
-    done
-
-    echo -e "${BLUE}🔴 ${GREEN}Установленно !${NC}"
-    sleep 2
+clear
+echo -e "${MAGENTA}ZAPRET on remittor Manager by StressOzz${NC}\n"
+echo -e "${GREEN}🔴 ${CYAN}Устанавливаем${NC}$TO_INSTALL${NC}\n"
+opkg update >/dev/null 2>&1 || { 
+echo -e "${RED}Ошибка при обновлении списка пакетов !${NC}\n"; exit 1; 
+}
+for pkg in $TO_INSTALL; do
+pkg_installed=0
+for i in 1 2 3; do
+command -v "$pkg" >/dev/null 2>&1 && { pkg_installed=1; break; }
+opkg install "$pkg" >/dev/null 2>&1 && { pkg_installed=1; break; }
+sleep 1
+done
+if [ $pkg_installed -eq 0 ]; then
+echo -e "${RED}Не удалось установить ${NC}$pkg${RED} после ${NC}3${RED} попыток !${NC}"
+echo -e "Установите вручную: ${CYAN}opkg install $pkg${NC}\n"
+exit 1
 fi
-
+done
+echo -e "${BLUE}🔴 ${GREEN}Установленно !${NC}"
+sleep 2
+fi
 # --- Получаем текущую установленную версию zapret
 INSTALLED_VER=$(opkg list-installed | grep '^zapret ' | awk '{print $3}')
 [ -z "$INSTALLED_VER" ] && INSTALLED_VER="не найдена"
@@ -182,11 +174,6 @@ wget -q "$LATEST_URL" -O "$FILE_NAME" || {
 echo -e "${RED}Не удалось скачать ${NC}$FILE_NAME"
 [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 return
-}
-# --- Проверка наличия unzip
-command -v unzip >/dev/null 2>&1 || {
-echo -e "${GREEN}🔴 ${CYAN}Устанавливаем${NC} unzip ${CYAN}для распаковки архива${NC}"
-opkg install unzip >/dev/null 2>&1
 }
 # --- Распаковка архива
 echo -e "${GREEN}🔴 ${CYAN}Распаковываем архив${NC}"
