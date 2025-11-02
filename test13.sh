@@ -60,6 +60,8 @@ exit 1 ;;
 esac
 fi
 # --- Проверка наличия curl и unzip
+
+
 TO_INSTALL=""
 command -v curl >/dev/null 2>&1 || TO_INSTALL="$TO_INSTALL curl"
 command -v unzip >/dev/null 2>&1 || TO_INSTALL="$TO_INSTALL unzip"
@@ -67,22 +69,30 @@ command -v unzip >/dev/null 2>&1 || TO_INSTALL="$TO_INSTALL unzip"
 if [ -n "$TO_INSTALL" ]; then
     clear
     echo -e "${MAGENTA}ZAPRET on remittor Manager by StressOzz${NC}\n"
-    echo -e "${GREEN}🔴 ${CYAN}Устанавливаем:${NC}$TO_INSTALL${NC}\n"
-    opkg update >/dev/null 2>&1
-    for pkg in $TO_INSTALL; do
-        for i in 1 2 3; do
-            command -v $pkg >/dev/null 2>&1 && break
-            opkg install $pkg >/dev/null 2>&1
-            [ $i -lt 3 ] && { echo -e "${RED}Попытка ${NC}$i${RED} установки ${NC}$pkg${RED} не удалась, пробуем снова...${NC}\n"; sleep 1; }
-        done
-        command -v $pkg >/dev/null 2>&1 || { 
-            echo -e "${RED}Не удалось установить ${NC}$pkg${RED} !${NC}\nУстановите вручную: ${NC}opkg install $pkg\n"; 
-            exit 1 
-        }
-    done
-    echo -e "${BLUE}🔴 ${GREEN}Все пакеты установлены !${NC}\n"
-fi
+    echo -e "${GREEN}🔴 ${CYAN}Устанавливаем ${NC}$TO_INSTALL${NC}\n"
 
+    opkg update >/dev/null 2>&1 || { 
+        echo -e "${RED}Ошибка при обновлении списка пакетов !${NC}\n"; exit 1; 
+    }
+
+    for pkg in $TO_INSTALL; do
+        pkg_installed=0
+        for i in 1 2 3; do
+            command -v "$pkg" >/dev/null 2>&1 && { pkg_installed=1; break; }
+            opkg install "$pkg" >/dev/null 2>&1 && { pkg_installed=1; break; }
+            sleep 1
+        done
+
+        if [ $pkg_installed -eq 0 ]; then
+            echo -e "${RED}Не удалось установить ${NC}$pkg${RED} после 3 попыток!${NC}"
+            echo -e "Установите вручную: ${CYAN}opkg install $pkg${NC}\n"
+            exit 1
+        fi
+    done
+
+    echo -e "${BLUE}🔴 ${GREEN}Установленно !${NC}"
+    sleep 2
+fi
 
 # --- Получаем текущую установленную версию zapret
 INSTALLED_VER=$(opkg list-installed | grep '^zapret ' | awk '{print $3}')
@@ -150,7 +160,9 @@ return
 fi
 # --- Обновление списка пакетов
 echo -e "${GREEN}🔴 ${CYAN}Обновляем список пакетов${NC}"
-opkg update >/dev/null 2>&1
+    opkg update >/dev/null 2>&1 || { 
+        echo -e "\n${RED}Ошибка при обновлении списка пакетов !${NC}\n"; exit 1; 
+    }
 # --- Остановка сервиса и старых процессов Zapret
 if [ -f /etc/init.d/zapret ]; then
 echo -e "${GREEN}🔴 ${CYAN}Останавливаем сервис ${NC}zapret"
