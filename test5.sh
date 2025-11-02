@@ -1,7 +1,6 @@
 #!/bin/sh
 # ==========================================
 # Zapret on remittor Manager by StressOzz
-# Скрипт для установки, обновления и полного удаления Zapret на OpenWRT
 # ==========================================
 GREEN="\033[1;32m"
 RED="\033[1;31m"
@@ -54,12 +53,10 @@ uci set firewall.@defaults[0].flow_offloading_hw='0'
 uci commit firewall
 /etc/init.d/firewall restart
 echo -e "\n${BLUE}🔴 ${GREEN}Flow Offloading отключён !${NC}\n"
-sleep 3
-;;
+sleep 3 ;;
 * )
 echo -e "\n${RED}Скрипт остановлен ! Отключите ${NC}Flow Offloading ${RED}!${NC}\n"
-exit 1
-;;
+exit 1 ;;
 esac
 fi
 # --- Проверка наличия curl
@@ -100,21 +97,17 @@ INSTALLED_VER=$(opkg list-installed | grep '^zapret ' | awk '{print $3}')
 # --- Определяем архитектуру устройства
 LOCAL_ARCH=$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release)
 [ -z "$LOCAL_ARCH" ] && LOCAL_ARCH=$(opkg print-architecture | grep -v "noarch" | sort -k3 -n | tail -n1 | awk '{print $2}')
-
-
-    # --- Проверяем лимит GitHub API и доступность
-    LIMIT_REACHED=0
-    LIMIT_CHECK=$(curl -s -4 --connect-timeout 5 "https://api.github.com/repos/remittor/zapret-openwrt/releases/latest" 2>/dev/null)
-    if [ -z "$LIMIT_CHECK" ]; then
-        echo -e "api.github.com ${RED}недоступен !${NC}\nСкрипт остановлен !\n"
-        exit 1
-    fi
-    if echo "$LIMIT_CHECK" | grep -q 'API rate limit exceeded'; then
-        LATEST_VER="${RED}Достигнут лимит GitHub API. Подождите 15 минут.${NC}"
-        LIMIT_REACHED=1
-    else
-
-    
+# --- Проверяем лимит GitHub API и доступность
+LIMIT_REACHED=0
+LIMIT_CHECK=$(curl -s -4 --connect-timeout 5 "https://api.github.com/repos/remittor/zapret-openwrt/releases/latest" 2>/dev/null)
+if [ -z "$LIMIT_CHECK" ]; then
+echo -e "api.github.com ${RED}недоступен !${NC}\nСкрипт остановлен !\n"
+exit 1
+fi
+if echo "$LIMIT_CHECK" | grep -q 'API rate limit exceeded'; then
+LATEST_VER="${RED}Достигнут лимит GitHub API. Подождите 15 минут.${NC}"
+LIMIT_REACHED=1
+else
 # --- Извлекаем номер версии из имени архива
 LATEST_URL=$(echo "$LIMIT_CHECK" | grep browser_download_url | grep "$LOCAL_ARCH.zip" | cut -d '"' -f 4)
 if [ -n "$LATEST_URL" ] && echo "$LATEST_URL" | grep -q '\.zip$'; then
@@ -217,8 +210,12 @@ chmod +x /opt/zapret/sync_config.sh
 /etc/init.d/zapret restart >/dev/null 2>&1
 fi
 }
-# --- Сообщение об успешной установке
+# --- Сообщение об успешной установке или нет
+if [ -f /etc/init.d/zapret ]; then
 echo -e "\n${BLUE}🔴 ${GREEN}Zapret установлен !${NC}\n"
+else
+echo -e "\n${RED}Zapret не был установлен ! Попробуйте ещё раз !${NC}\n"
+fi
 [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
 # ==========================================
@@ -253,6 +250,7 @@ option NFQWS_OPT '
 --dpi-desync-fake-tls-mod=rnd,dupsid,sni=fonts.google.com
 --new
 --filter-udp=443
+--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt
 --dpi-desync=fake
 --dpi-desync-repeats=4
 --dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin
@@ -345,52 +343,6 @@ api.epicgames.dev
 metrics.ol.epicgames.com
 et.epicgames.com
 EOF
-# Проверка и добавление YouTube hostlist
-file="/opt/zapret/ipset/zapret-hosts-google.txt"
-cat <<'EOF' | grep -Fxv -f "$file" 2>/dev/null >> "$file"
-cdn.youtube.com
-fonts.googleapis.com
-fonts.gstatic.com
-ggpht.com
-googleapis.com
-googleusercontent.com
-googlevideo.com
-i.ytimg.com
-i9.ytimg.com
-jnn-pa.googleapis.com
-kids.youtube.com
-m.youtube.com
-manifest.googlevideo.com
-music.youtube.com
-nhacmp3youtube.com
-returnyoutubedislikeapi.com
-s.ytimg.com
-signaler-pa.youtube.com
-studio.youtube.com
-tv.youtube.com
-wide-youtube.l.google.com
-withyoutube.com
-youtu.be
-youtube.com
-youtube.googleapis.com
-youtubeeducation.com
-youtubeembeddedplayer.googleapis.com
-youtubefanfest.com
-youtubegaming.com
-youtubei.googleapis.com
-youtubekids.com
-youtubemobilesupport.com
-youtube-nocookie.com
-youtube-ui.l.google.com
-yt.be
-yt3.ggpht.com
-yt3.googleusercontent.com
-yt4.ggpht.com
-ytimg.com
-ytimg.l.google.com
-yting.com
-yt-video-upload.l.google.com
-EOF
 # Проверка и добавление hosts
 file="/etc/hosts"
 cat <<'EOF' | grep -Fxv -f "$file" 2>/dev/null >> "$file"
@@ -453,20 +405,16 @@ read choice
 case "$choice" in
 1)
 SELECTED="50-stun4all"
-URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-stun4all"
-;;
+URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-stun4all" ;;
 2)
 SELECTED="50-quic4all"
-URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-quic4all"
-;;
+URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-quic4all" ;;
 3)
 SELECTED="50-discord-media"
-URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-discord-media"
-;;
+URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-discord-media" ;;
 4)
 SELECTED="50-discord"
-URL="https://raw.githubusercontent.com/bol-van/zapret/v70.5/init.d/custom.d.examples.linux/50-discord"
-;;
+URL="https://raw.githubusercontent.com/bol-van/zapret/v70.5/init.d/custom.d.examples.linux/50-discord" ;;
 5)
 echo -e "\n${BLUE}🔴 ${GREEN}Скрипт удалён !${NC}"
 rm -f "$CUSTOM_DIR/50-script.sh" 2>/dev/null
@@ -476,14 +424,12 @@ chmod +x /opt/zapret/sync_config.sh
 echo -e ""
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 show_menu
-return
-;;
+return ;;
 *)
 echo -e "\nВыходим в главное меню..."
 sleep 1
 show_menu
-return
-;;
+return ;;
 esac
 fi
 if [ "$CURRENT_SCRIPT" = "$SELECTED" ]; then
@@ -774,13 +720,13 @@ echo -e "\n${YELLOW}Архитектура устройства:${NC} $LOCAL_ARC
 CUSTOM_DIR="/opt/zapret/init.d/openwrt/custom.d/"
 SCRIPT_FILE="$CUSTOM_DIR/50-script.sh"
 CURRENT_SCRIPT=$(
-    [ -f "$SCRIPT_FILE" ] && case "$(head -n1 "$SCRIPT_FILE")" in
-        *QUIC*) echo "50-quic4all" ;;
-        *stun*) echo "50-stun4all" ;;
-        *discord\ media*) echo "50-discord-media" ;;
-        *discord\ subnets*) echo "50-discord" ;;
-        *) echo "неизвестный" ;;
-    esac
+[ -f "$SCRIPT_FILE" ] && case "$(head -n1 "$SCRIPT_FILE")" in
+*QUIC*) echo "50-quic4all" ;;
+*stun*) echo "50-stun4all" ;;
+*discord\ media*) echo "50-discord-media" ;;
+*discord\ subnets*) echo "50-discord" ;;
+*) echo "неизвестный" ;;
+esac
 )
 # Если скрипт найден, выводим строку
 [ -n "$CURRENT_SCRIPT" ] && echo -e "\n${YELLOW}Установлен скрипт: ${NC}$CURRENT_SCRIPT"
