@@ -93,16 +93,21 @@ INSTALLED_VER=$(opkg list-installed | grep '^zapret ' | awk '{print $3}')
 LOCAL_ARCH=$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release)
 [ -z "$LOCAL_ARCH" ] && LOCAL_ARCH=$(opkg print-architecture | grep -v "noarch" | sort -k3 -n | tail -n1 | awk '{print $2}')
 # --- Проверяем лимит GitHub API и доступность
+
 LIMIT_REACHED=0
 LIMIT_CHECK=$(curl -s -4 --connect-timeout 5 "https://api.github.com/repos/remittor/zapret-openwrt/releases/latest" 2>/dev/null)
+
 if [ -z "$LIMIT_CHECK" ]; then
 echo -e "api.github.com ${RED}недоступен !${NC}\nСкрипт остановлен !\n"
 exit 1
 fi
+
 if echo "$LIMIT_CHECK" | grep -q 'API rate limit exceeded'; then
 LATEST_VER="${RED}Достигнут лимит GitHub API. Подождите 15 минут.${NC}"
 LIMIT_REACHED=1
 else
+
+
 # --- Извлекаем номер версии из имени архива
 LATEST_URL=$(echo "$LIMIT_CHECK" | grep browser_download_url | grep "$LOCAL_ARCH.zip" | cut -d '"' -f 4)
 if [ -n "$LATEST_URL" ] && echo "$LATEST_URL" | grep -q '\.zip$'; then
