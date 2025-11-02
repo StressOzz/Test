@@ -628,7 +628,7 @@ local NO_PAUSE=$1
 echo -e "${MAGENTA}Удаляем ZAPRET${NC}\n"
 echo -e "${GREEN}🔴 ${CYAN}Останавливаем сервис${NC}"
 echo -e "${GREEN}🔴 ${CYAN}Убиваем процессы${NC}"
-/etc/init.d/zapret stop 2>/dev/null
+/etc/init.d/zapret stop >/dev/null 2>&1
 for pid in $(pgrep -f /opt/zapret 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done
 echo -e "${GREEN}🔴 ${CYAN}Удаляем пакеты${NC}"
 opkg --force-removal-of-dependent-packages --autoremove remove zapret luci-app-zapret >/dev/null 2>&1
