@@ -60,37 +60,18 @@ exit 1 ;;
 esac
 fi
 # --- Проверка наличия curl
-command -v curl >/dev/null 2>&1 || {
-clear
-echo -e "${MAGENTA}ZAPRET on remittor Manager by StressOzz${NC}\n"
-echo -e "${GREEN}🔴 ${CYAN}Устанавливаем${NC} curl ${CYAN}для загрузки информации с ${NC}GitHub${NC}\n"
-local attempt=1
-local MAX_ATTEMPTS=3
-local first_fail=false
-while [ $attempt -le $MAX_ATTEMPTS ]; do
-if [ "$first_fail" = true ]; then
-echo -e "${GREEN}🔴 ${CYAN}Попытка установки ${NC}curl${CYAN} № ${NC}${attempt}${NC}\n"
-fi
-opkg update >/dev/null 2>&1
-opkg install curl >/dev/null 2>&1
-if command -v curl >/dev/null 2>&1; then
-echo -e "${BLUE}🔴 ${GREEN}Curl успешно установлен !${NC}\n"
-sleep 2
-break
-fi
-first_fail=true
-attempt=$((attempt + 1))
-[ $attempt -le $MAX_ATTEMPTS ] && {
-echo -e "\n${RED}Curl не найден после установки !${NC}\n"
-sleep 2
-}
-done
 if ! command -v curl >/dev/null 2>&1; then
-echo -e "${RED}Не удалось установить ${NC}curl${RED} после ${NC}${MAX_ATTEMPTS}${RED} попыток !${NC}\n"
-echo -e "${YELLOW}Установите вручную, выполнив команду: ${CYAN}opkg update && opkg install curl${NC}\n"
-exit 1
+    clear
+    echo -e "${MAGENTA}ZAPRET on remittor Manager by StressOzz${NC}\n"
+    echo -e "${GREEN}🔴 ${CYAN}Устанавливаем ${NC}curl\n"
+    for i in 1 2 3; do
+        opkg update >/dev/null 2>&1
+        opkg install curl >/dev/null 2>&1
+        command -v curl >/dev/null 2>&1 && { echo -e "${BLUE}🔴 ${GREEN}Curl успешно установлен!${NC}\n"; break; }
+        [ $i -lt 3 ] && echo -e "${RED}Попытка $i не удалась, пробуем снова...${NC}"; sleep 1
+    done
+    ! command -v curl >/dev/null 2>&1 && { echo -e "${RED}Не удалось установить curl !${NC}\nУстановите вручную: ${NC}opkg update && opkg install curl\n"; exit 1; }
 fi
-}
 # --- Получаем текущую установленную версию zapret
 INSTALLED_VER=$(opkg list-installed | grep '^zapret ' | awk '{print $3}')
 [ -z "$INSTALLED_VER" ] && INSTALLED_VER="не найдена"
