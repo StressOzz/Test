@@ -130,8 +130,6 @@ else
             USED_ARCH="$LOCAL_ARCH"
             echo -e "${GREEN}Последняя версия: $LATEST_VER${NC}"
             echo -e "${GREEN}Архитектура пакета: $USED_ARCH${NC}"
-echo -e ""
-read -p "Нажмите Enter для продолжения..." dummy
         else
             LATEST_VER="ошибка определения версии"
             USED_ARCH="$LOCAL_ARCH"
