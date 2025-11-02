@@ -104,7 +104,7 @@ LOCAL_ARCH=$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release)
 
     # --- Проверяем лимит GitHub API и доступность
     LIMIT_REACHED=0
-    LIMIT_CHECK=$(curl -s -4 --connect-timeout 1 "https://api.github.com/repos/remittor/zapret-openwrt/releases/latest" 2>/dev/null)
+    LIMIT_CHECK=$(curl -s -4 --connect-timeout 5 "https://api.github.com/repos/remittor/zapret-openwrt/releases/latest" 2>/dev/null)
     if [ -z "$LIMIT_CHECK" ]; then
         echo -e "api.github.com ${RED}недоступен !${NC}\nСкрипт остановлен !\n"
         exit 1
