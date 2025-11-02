@@ -102,12 +102,17 @@ LOCAL_ARCH=$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release)
 [ -z "$LOCAL_ARCH" ] && LOCAL_ARCH=$(opkg print-architecture | grep -v "noarch" | sort -k3 -n | tail -n1 | awk '{print $2}')
 # --- Проверяем лимит GitHub API
 LIMIT_REACHED=0
-if ping6 -c1 -W1 api.github.com >/dev/null 2>&1; then
-  CURL="curl -s"
+# Проверка IPv6/IPv4 и выбор curl
+if curl -s --head --connect-timeout 1 -6 https://api.github.com >/dev/null 2>&1; then
+CURL="curl -s"
+elif curl -s --head --connect-timeout 1 -4 https://api.github.com >/dev/null 2>&1; then
+CURL="curl -s -4"
 else
-  CURL="curl -s -4"
+echo -e "api.github.com ${RED}недоступен ни по IPv6, ни по IPv4!${NC}\nСкрипт остановлен!\n"
+exit 1
 fi
-LIMIT_CHECK=$($CURL "https://api.github.com/repos/remittor/zapret-openwrt/releases/latest")
+# Используем выбранный curl с безопасным таймаутом для запроса
+LIMIT_CHECK=$($CURL --connect-timeout 2 "https://api.github.com/repos/remittor/zapret-openwrt/releases/latest")
 if echo "$LIMIT_CHECK" | grep -q 'API rate limit exceeded'; then
 LATEST_VER="${RED}Достигнут лимит GitHub API. Подождите 15 минут.${NC}"
 LIMIT_REACHED=1
