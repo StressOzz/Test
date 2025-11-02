@@ -102,7 +102,12 @@ LOCAL_ARCH=$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release)
 [ -z "$LOCAL_ARCH" ] && LOCAL_ARCH=$(opkg print-architecture | grep -v "noarch" | sort -k3 -n | tail -n1 | awk '{print $2}')
 # Проверяем лимит GitHub API
 LIMIT_REACHED=0
-LIMIT_CHECK=$(curl -s "https://api.github.com/repos/remittor/zapret-openwrt/releases/latest")
+if ping6 -c1 -W1 api.github.com >/dev/null 2>&1; then
+  CURL="curl -s"
+else
+  CURL="curl -s -4"
+fi
+LIMIT_CHECK=$($CURL "https://api.github.com/repos/remittor/zapret-openwrt/releases/latest")
 if echo "$LIMIT_CHECK" | grep -q 'API rate limit exceeded'; then
 LATEST_VER="${RED}Достигнут лимит GitHub API. Подождите 15 минут.${NC}"
 LIMIT_REACHED=1
