@@ -751,21 +751,18 @@ echo -e "║     ${BLUE}Zapret on remittor Manager${NC}     ║"
 echo -e "╚════════════════════════════════════╝"
 echo -e "                     ${DGRAY}by StressOzz v5.0${NC}"
 # Определяем актуальная/устарела
-if [ "$LIMIT_REACHED" -eq 1 ]; then
-INST_COLOR=$CYAN
-INSTALLED_DISPLAY="$INSTALLED_VER"
-elif [ "$INSTALLED_VER" = "$LATEST_VER" ] && [ "$LATEST_VER" != "не найдена" ]; then
-INST_COLOR=$GREEN
-INSTALLED_DISPLAY="$INSTALLED_VER (актуальная)"
-elif [ "$LATEST_VER" = "не найдена" ]; then
-INST_COLOR=$CYAN
-INSTALLED_DISPLAY="$INSTALLED_VER"
+if [ "$LIMIT_REACHED" -eq 1 ] || [ "$LATEST_VER" = "не найдена" ]; then
+    INST_COLOR=$CYAN
+    INSTALLED_DISPLAY="$INSTALLED_VER"
+elif [ "$INSTALLED_VER" = "$LATEST_VER" ]; then
+    INST_COLOR=$GREEN
+    INSTALLED_DISPLAY="$INSTALLED_VER (актуальная)"
 elif [ "$INSTALLED_VER" != "не найдена" ]; then
-INST_COLOR=$RED
-INSTALLED_DISPLAY="$INSTALLED_VER (устарела)"
+    INST_COLOR=$RED
+    INSTALLED_DISPLAY="$INSTALLED_VER (устарела)"
 else
-INST_COLOR=$RED
-INSTALLED_DISPLAY="$INSTALLED_VER"
+    INST_COLOR=$RED
+    INSTALLED_DISPLAY="$INSTALLED_VER"
 fi
 # Вывод информации о версиях и архитектуре
 echo -e "\n${YELLOW}Установленная версия: ${INST_COLOR}$INSTALLED_DISPLAY${NC}\n"
@@ -775,21 +772,16 @@ echo -e "\n${YELLOW}Архитектура устройства:${NC} $LOCAL_ARC
 [ -n "$ZAPRET_STATUS" ] && echo -e "\n${YELLOW}Статус Zapret: ${NC}$ZAPRET_STATUS"
 # Проверяем, установлен ли кастомный скрипт
 CUSTOM_DIR="/opt/zapret/init.d/openwrt/custom.d/"
-CURRENT_SCRIPT=""
-if [ -f "$CUSTOM_DIR/50-script.sh" ]; then
-FIRST_LINE=$(sed -n '1p' "$CUSTOM_DIR/50-script.sh")
-if echo "$FIRST_LINE" | grep -q "QUIC"; then
-CURRENT_SCRIPT="50-quic4all"
-elif echo "$FIRST_LINE" | grep -q "stun"; then
-CURRENT_SCRIPT="50-stun4all"
-elif echo "$FIRST_LINE" | grep -q "discord media"; then
-CURRENT_SCRIPT="50-discord-media"
-elif echo "$FIRST_LINE" | grep -q "discord subnets"; then
-CURRENT_SCRIPT="50-discord"
-else
-CURRENT_SCRIPT="неизвестный"
-fi
-fi
+SCRIPT_FILE="$CUSTOM_DIR/50-script.sh"
+CURRENT_SCRIPT=$(
+    [ -f "$SCRIPT_FILE" ] && case "$(head -n1 "$SCRIPT_FILE")" in
+        *QUIC*) echo "50-quic4all" ;;
+        *stun*) echo "50-stun4all" ;;
+        *discord\ media*) echo "50-discord-media" ;;
+        *discord\ subnets*) echo "50-discord" ;;
+        *) echo "неизвестный" ;;
+    esac
+)
 # Если скрипт найден, выводим строку
 [ -n "$CURRENT_SCRIPT" ] && echo -e "\n${YELLOW}Установлен скрипт: ${NC}$CURRENT_SCRIPT"
 CONF="/etc/config/zapret"
