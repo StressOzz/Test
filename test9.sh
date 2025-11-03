@@ -625,7 +625,7 @@ uninstall_zapret() {
 local NO_PAUSE=$1
 [ "$NO_PAUSE" != "1" ] && clear
 echo -e "${MAGENTA}Удаляем ZAPRET${NC}\n"
-if ! [[ "$LATEST_VER" =~ 7[0-9] ]]; then
+if ! [[ "$LATEST_VER" =~ 6[0-9] ]]; then
 echo -e "${RED}Внимание! Версия для установки не найдена!${NC}\n"
 echo -e "После удаления, установка возможна только в ручном режиме!\n"
 read -p "Продолжить удаление? [y/N]: " answer
