@@ -619,15 +619,14 @@ local NO_PAUSE=$1
 [ "$NO_PAUSE" != "1" ] && clear
 echo -e "${MAGENTA}Удаляем ZAPRET${NC}\n"
 
-    if [[ ! "$LATEST_VER" == *72* && ! "$LATEST_VER" == *73* && ! "$LATEST_VER" == *74* ]] || [ "$LIMIT_REACHED" -eq 1 ]; then
+    if ! [[ "$LATEST_VER" =~ 7[0-9] ]]; then
         echo -e "${RED}Внимание!${NC}\n"
-        [ "$LIMIT_REACHED" -eq 1 ] && echo -e "Достигнут лимит API, после удаления установка возможна только в ручном режиме !\n"
-        [[ ! "$LATEST_VER" == *72* && ! "$LATEST_VER" == *73* && ! "$LATEST_VER" == *74* ]] && echo -e "Версия для установки не найдена !\nПосле удаления установка возможна только в ручном режиме !\n"
+        echo -e "Версия для установки не найдена!\nПосле удаления установка возможна только в ручном режиме!\n"
 
         read -p "Продолжить удаление? [y/N]: " answer
         case "$answer" in
-            [yY]) echo "";;
-            *) echo -e "Удаление отменено !"; 
+            [yY]) ;;  # продолжаем удаление
+            *) echo -e "Удаление отменено!"
                read -p "Нажмите Enter для выхода в главное меню..." dummy
                return;;
         esac
