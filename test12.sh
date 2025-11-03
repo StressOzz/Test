@@ -535,7 +535,10 @@ echo -e "${RED}Внимание! Версия для установки не н�
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 return
 fi
-uninstall_zapret "1"; [ $? -ne 0 ] && return
+uninstall_zapret "1"
+if [ $? -ne 0 ]; then
+    return
+fi
 install_Zapret "1"
 fix_default "1"
 echo -e "\n${MAGENTA}Включаем Discord и звонки в TG и WA${NC}\n"
@@ -633,7 +636,7 @@ case "$answer" in
 [yY]) echo -e "";;  # продолжаем удаление
 *) echo -e "\n${GREEN}Удаление отменено!${NC}\n"
 echo -e "Выходим в главное меню..."
-sleep 3
+sleep 1
 return 1;;
 esac
 fi
@@ -732,7 +735,7 @@ case "$choice" in
 7) enable_discord_calls ;;
 8) zapret_key ;;
 *) 
-echo -e "${RED}Выход${NC}\n"
+echo -e ""
 exit 0 ;;
 esac
 }
