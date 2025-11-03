@@ -523,10 +523,21 @@ zapret_key(){
 clear
 echo -e "${MAGENTA}Удаление, установка и настройка Zapret${NC}\n"
 get_versions
-if [ "$LIMIT_REACHED" -eq 1 ]; then
-echo -e "${RED}Достигнут лимит GitHub API. Подождите 15 минут.${NC}\n"
-read -p "Нажмите Enter для выхода в главное меню..." dummy
-else
+    # Проверка лимита API
+    if [ "$LIMIT_REACHED" -eq 1 ]; then
+        echo -e "${RED}Достигнут лимит GitHub API!\n${NC}Подождите 15 минут.\n"
+        read -p "Нажмите Enter для выхода в главное меню..." dummy
+        return
+    fi
+
+    # Проверка версии
+if ! [[ "$LATEST_VER" =~ 7[0-9] ]]; then
+    echo -e "${RED}Внимание!${NC}\n"
+    echo -e "Версия для установки не найдена!\n"
+    read -p "Нажмите Enter для выхода в главное меню..." dummy
+    return  # возвращаемся в меню
+fi
+
 uninstall_zapret "1"
 install_Zapret "1"
 fix_default "1"
