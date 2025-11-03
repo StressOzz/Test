@@ -636,7 +636,7 @@ case "$answer" in
 [yY]) echo -e "";;  # продолжаем удаление
 *) echo -e "\n${GREEN}Удаление отменено!${NC}\n"
 echo -e "Выходим в главное меню..."
-sleep 1
+sleep 2
 return 1;;
 esac
 fi
