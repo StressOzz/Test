@@ -525,7 +525,7 @@ echo -e "${MAGENTA}Удаление, установка и настройка Za
 get_versions
 # Проверка лимита API
 if [ "$LIMIT_REACHED" -eq 1 ]; then
-echo -e "${RED}Достигнут лимит GitHub API! Подождите 15 минут.\n"
+echo -e "${RED}Достигнут лимит GitHub API! Подождите 15 минут.${NC}\n"
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 return
 fi
