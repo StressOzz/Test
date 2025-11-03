@@ -418,7 +418,7 @@ show_menu
 return ;;
 *)
 echo -e "\nВыходим в главное меню..."
-sleep 1
+sleep 2
 show_menu
 return ;;
 esac
@@ -531,7 +531,7 @@ return
 fi
 # Проверка версии
 if ! [[ "$LATEST_VER" =~ 7[0-9] ]]; then
-echo -e "${RED}Внимание! Версия для установки не найдена!\n"
+echo -e "${RED}Внимание! Версия для установки не найдена!${NC}\n"
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 return
 fi
@@ -632,6 +632,7 @@ read -p "Продолжить удаление? [y/N]: " answer
 case "$answer" in
 [yY]) ;;  # продолжаем удаление
 *) echo -e "\n${GREEN}Удаление отменено!${NC}\n"
+echo -e "Выходим в главное меню..."
 sleep 3
 return;;
 esac
