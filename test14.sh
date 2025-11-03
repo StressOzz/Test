@@ -530,15 +530,12 @@ read -p "Нажмите Enter для выхода в главное меню..."
 return
 fi
 # Проверка версии
-if ! [[ "$LATEST_VER" =~ 7[0-9] ]]; then
+if ! [[ "$LATEST_VER" =~ 6[0-9] ]]; then
 echo -e "${RED}Внимание! Версия для установки не найдена!${NC}\n"
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 return
 fi
 uninstall_zapret "1"
-if [ $? -ne 0 ]; then
-    return
-fi
 install_Zapret "1"
 fix_default "1"
 echo -e "\n${MAGENTA}Включаем Discord и звонки в TG и WA${NC}\n"
@@ -637,7 +634,7 @@ case "$answer" in
 *) echo -e "\n${GREEN}Удаление отменено!${NC}\n"
 echo -e "Выходим в главное меню..."
 sleep 2
-return 1;;
+return;;
 esac
 fi
 echo -e "${GREEN}🔴 ${CYAN}Останавливаем сервис${NC}"
