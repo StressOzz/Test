@@ -731,7 +731,9 @@ case "$choice" in
 6) fix_REDSEC  ;;
 7) enable_discord_calls ;;
 8) zapret_key ;;
-*) exit 0 ;;
+*) 
+echo -e "${RED}Выход${NC}\n"
+exit 0 ;;
 esac
 }
 # ==========================================
