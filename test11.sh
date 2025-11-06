@@ -230,7 +230,7 @@ echo -e "${RED}Zapret не установлен!${NC}"
 [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 return
 fi
-echo -e "${GREEN}🔴 ${CYAN}Меняем стратегию и редактируем ${NC}host\n"
+echo -e "${GREEN}🔴 ${CYAN}Меняем стратегию, добавляем домены в ${NC}hosts${CYAN} и редактируем ${NC}/etc/hosts\n"
 # Удаляем строку и всё, что идёт ниже строки с option NFQWS_OPT '
 sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" /etc/config/zapret
 # Вставляем новый блок сразу после строки option NFQWS_OPT '
@@ -255,7 +255,19 @@ option NFQWS_OPT '
 '
 EOF
 # Проверка и перезапись файла исключений пользователей
-: > /opt/zapret/ipset/zapret-hosts-user-exclude.txt
+sed -i \
+'/^play\.google\.com$/d; \
+/^android\.com$/d; \
+/^google-analytics\.com$/d; \
+/^googleusercontent\.com$/d; \
+/^gstatic\.com$/d; \
+/^gvt1\.com$/d; \
+/^ggpht\.com$/d; \
+/^dl\.google\.com$/d; \
+/^dl-ssl\.google\.com$/d; \
+/^android\.clients\.google\.com$/d; \
+/^gvt2\.com$/d; \
+/^gvt3\.com$/d' /opt/zapret/ipset/zapret-hosts-user-exclude.txt
 file="/opt/zapret/ipset/zapret-hosts-user-exclude.txt"
 cat <<'EOF' | grep -Fxv -f "$file" >> "$file"
 gosuslugi.ru
@@ -460,8 +472,8 @@ local NO_PAUSE=$1
 echo -e "${MAGENTA}Настраиваем стратегию для игры Battlefield REDSEC${NC}\n"
 CONF="/etc/config/zapret"
 if [ ! -f /etc/init.d/zapret ]; then
-echo -e "${RED}Zapret не установлен!${NC}\n"
-read -p "Нажмите Enter для выхода в главное меню..." dummy
+[ "$NO_PAUSE" != "1" ] && echo -e "${RED}Zapret не установлен!${NC}\n"
+[ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 return
 fi
 file="/opt/zapret/ipset/zapret-hosts-user-exclude.txt"
@@ -537,7 +549,7 @@ install_Zapret "1"
 fix_default "1"
 echo -e "\n${MAGENTA}Включаем Discord и звонки в TG и WA${NC}\n"
 enable_discord_calls "1"
-# fix_REDSEC "1" - пока убрал, т.к. BF 6 работает без Zapret
+fix_REDSEC "1"
 if [ -f /etc/init.d/zapret ]; then
 echo -e "${BLUE}🔴 ${GREEN}Zapret ${GREEN}установлен и настроен!${NC}\n"
 else
