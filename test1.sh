@@ -66,7 +66,7 @@ case "$choice" in
     sleep 2
     ;;
 *)
-echo -e "\n${RED}Скрипт остановлен! Отключите ${NC}Flow Offloading${RED}!${NC}\n"
+echo -e "\n${RED}Скрипт остановлен!\n"
 exit 1 ;;
 esac
 fi
