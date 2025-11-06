@@ -24,7 +24,7 @@ echo -e "${RED}Найден установленный ${NC}ByeDPI${RED}!${NC}\n
 echo -e "${NC}Zapret${RED} не может работать совместно с ${NC}ByeDPI${RED}!${NC}\n"
 read -p $'\033[1;32mУдалить \033[0mByeDPI\033[1;32m ?\033[0m [y/N] ' answer
 case "$answer" in
-[Yy]* ) opkg --force-removal-of-dependent-packages --autoremove remove byedpi >/dev/null 2>&1; echo -e "\n${BLUE}🔴 ${GREEN}ByeDPI удалён!${NC}"; sleep 3;;
+[Yy]* ) opkg --force-removal-of-dependent-packages --autoremove remove byedpi; echo -e "\n${BLUE}🔴 ${GREEN}ByeDPI удалён!${NC}"; sleep 3;;
 * ) echo -e "\n${RED}Скрипт остановлен! Удалите ${NC}ByeDPI${RED}!${NC}\n"; exit 1;;
 esac
 fi
@@ -34,13 +34,13 @@ echo -e "${RED}Найден установленный ${NC}youtubeUnblock${RED}
 echo -e "${NC}Zapret${RED} не может работать совместно с ${NC}youtubeUnblock${RED}!${NC}\n"
 read -p $'\033[1;32mУдалить \033[0myoutubeUnblock\033[1;32m ?\033[0m [y/N] ' answer
 case "$answer" in
-[Yy]* ) opkg --force-removal-of-dependent-packages --autoremove remove youtubeUnblock luci-app-youtubeUnblock >/dev/null 2>&1; echo -e "\n${BLUE}🔴 ${GREEN}youtubeUnblock удалён!${NC}"; sleep 3;;
+[Yy]* ) opkg --force-removal-of-dependent-packages --autoremove remove youtubeUnblock luci-app-youtubeUnblock; echo -e "\n${BLUE}🔴 ${GREEN}youtubeUnblock удалён!${NC}"; sleep 3;;
 * ) echo -e "\n${RED}Скрипт остановлен! Удалите ${NC}youtubeUnblock ${RED}!${NC}\n"; exit 1;;
 esac
 fi
 # --- Проверка Flow Offloading (программного и аппаратного)
-local FLOW_STATE=$(uci get firewall.@defaults[0].flow_offloading 2>/dev/null)
-local HW_FLOW_STATE=$(uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null)
+local FLOW_STATE=$(uci get firewall.@defaults[0].flow_offloading)
+local HW_FLOW_STATE=$(uci get firewall.@defaults[0].flow_offloading_hw)
 if [ "$FLOW_STATE" = "1" ] || [ "$HW_FLOW_STATE" = "1" ]; then
 if ! grep -q 'meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc; then
 clear
@@ -56,11 +56,11 @@ case "$choice" in
 uci set firewall.@defaults[0].flow_offloading='0'
 uci set firewall.@defaults[0].flow_offloading_hw='0'
 uci commit firewall
-/etc/init.d/firewall restart          
+/etc/init.d/firewall restart
 sleep 2 ;;
 2) echo -e "\n${GREEN}Фикс успешно применён!${NC}"
 sed -i 's/meta l4proto { tcp, udp } flow offload @ft;/meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;/' /usr/share/firewall4/templates/ruleset.uc
-fw4 restart >/dev/null 2>&1            
+fw4 restart
 sleep 2 ;;
 *) echo -e "\n${RED}Скрипт остановлен! Отключите или примените фикс!${NC}\n"
 exit 1 ;;
@@ -69,20 +69,20 @@ fi
 fi
 # --- Проверка наличия curl и unzip
 TO_INSTALL=""
-command -v curl >/dev/null 2>&1 || TO_INSTALL="$TO_INSTALL curl"
-command -v unzip >/dev/null 2>&1 || TO_INSTALL="$TO_INSTALL unzip"
+command -v curl || TO_INSTALL="$TO_INSTALL curl"
+command -v unzip || TO_INSTALL="$TO_INSTALL unzip"
 if [ -n "$TO_INSTALL" ]; then
 clear
 echo -e "${MAGENTA}ZAPRET on remittor Manager by StressOzz${NC}\n"
 echo -e "${GREEN}🔴 ${CYAN}Устанавливаем${NC}$TO_INSTALL${NC}\n"
-opkg update >/dev/null 2>&1 || { 
+opkg update || { 
 echo -e "${RED}Ошибка при обновлении списка пакетов!${NC}\n"; exit 1; 
 }
 for pkg in $TO_INSTALL; do
 pkg_installed=0
 for i in 1 2 3; do
-command -v "$pkg" >/dev/null 2>&1 && { pkg_installed=1; break; }
-opkg install "$pkg" >/dev/null 2>&1 && { pkg_installed=1; break; }
+command -v "$pkg" && { pkg_installed=1; break; }
+opkg install "$pkg" && { pkg_installed=1; break; }
 sleep 1
 done
 if [ $pkg_installed -eq 0 ]; then
@@ -102,7 +102,7 @@ LOCAL_ARCH=$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release)
 [ -z "$LOCAL_ARCH" ] && LOCAL_ARCH=$(opkg print-architecture | grep -v "noarch" | sort -k3 -n | tail -n1 | awk '{print $2}')
 # --- Проверяем лимит GitHub API и доступность
 LIMIT_REACHED=0
-LIMIT_CHECK=$(curl -s -4 --connect-timeout 5 "https://api.github.com/repos/remittor/zapret-openwrt/releases/latest" 2>/dev/null)
+LIMIT_CHECK=$(curl -s -4 --connect-timeout 5 "https://api.github.com/repos/remittor/zapret-openwrt/releases/latest")
 if [ -z "$LIMIT_CHECK" ]; then
 echo -e "api.github.com ${RED}недоступен!${NC}\nСкрипт остановлен!\n"
 exit 1
@@ -123,7 +123,7 @@ fi
 fi
 # --- Проверяем состояние сервиса zapret
 if [ -f /etc/init.d/zapret ]; then
-if /etc/init.d/zapret status 2>/dev/null | grep -qi "running"; then
+if /etc/init.d/zapret status | grep -qi "running"; then
 ZAPRET_STATUS="${GREEN}запущен${NC}"
 else
 ZAPRET_STATUS="${RED}остановлен${NC}"
@@ -160,19 +160,19 @@ return
 fi
 # --- Обновление списка пакетов
 echo -e "${GREEN}🔴 ${CYAN}Обновляем список пакетов${NC}"
-opkg update >/dev/null 2>&1 || { 
+opkg update || { 
 echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; exit 1; 
 }
 # --- Остановка сервиса и старых процессов Zapret
 if [ -f /etc/init.d/zapret ]; then
 echo -e "${GREEN}🔴 ${CYAN}Останавливаем сервис ${NC}zapret"
-/etc/init.d/zapret stop >/dev/null 2>&1
+/etc/init.d/zapret stop
 PIDS=$(pgrep -f /opt/zapret)
-[ -n "$PIDS" ] && for pid in $PIDS; do kill -9 "$pid" >/dev/null 2>&1; done
+[ -n "$PIDS" ] && for pid in $PIDS; do kill -9 "$pid"; done
 fi
 # --- Подготовка временной директории для загрузки и распаковки
 mkdir -p "$WORKDIR"
-rm -f "$WORKDIR"/* 2>/dev/null
+rm -f "$WORKDIR"/*
 cd "$WORKDIR" || return
 # --- Получаем имя архива
 FILE_NAME=$(basename "$LATEST_URL")
@@ -185,27 +185,27 @@ return
 }
 # --- Распаковка архива
 echo -e "${GREEN}🔴 ${CYAN}Распаковываем архив${NC}"
-unzip -o "$FILE_NAME" >/dev/null
+unzip -o "$FILE_NAME"
 # --- Убиваем старые процессы
 PIDS=$(pgrep -f /opt/zapret)
-[ -n "$PIDS" ] && for pid in $PIDS; do kill -9 "$pid" >/dev/null 2>&1; done
+[ -n "$PIDS" ] && for pid in $PIDS; do kill -9 "$pid"; done
 # --- Установка пакетов
 for PKG in zapret_*.ipk luci-app-zapret_*.ipk; do
 [ -f "$PKG" ] && {
 echo -e "${GREEN}🔴 ${CYAN}Устанавливаем пакет ${NC}$PKG"
-opkg install --force-reinstall "$PKG" >/dev/null 2>&1
+opkg install --force-reinstall "$PKG"
 }
 done
 # --- Остановка сервиса при фоновом режиме
-[ "$NO_PAUSE" = "1" ] && { /etc/init.d/zapret stop >/dev/null 2>&1 || pkill -9 -f /opt/zapret >/dev/null 2>&1; }
+[ "$NO_PAUSE" = "1" ] && { /etc/init.d/zapret stop || pkill -9 -f /opt/zapret; }
 # --- Очистка временных файлов и пакетов
 echo -e "${GREEN}🔴 ${CYAN}Удаляем временные файлы и пакеты${NC}"
 cd /
-rm -rf "$WORKDIR" /tmp/*.ipk /tmp/*.zip /tmp/*zapret* 2>/dev/null
+rm -rf "$WORKDIR" /tmp/*.ipk /tmp/*.zip /tmp/*zapret*
 # --- Перезапуск службы Zapret
 [ "$NO_PAUSE" != "1" ] && {
 if [ -f /etc/init.d/zapret ]; then
-chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart >/dev/null 2>&1
+chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart
 fi
 }
 # --- Сообщение об успешной установке или нет
@@ -363,16 +363,16 @@ et.epicgames.com
 EOF
 # Проверка и добавление hosts
 file="/etc/hosts"
-cat <<'EOF' | grep -Fxv -f "$file" 2>/dev/null >> "$file"
+cat <<'EOF' | grep -Fxv -f "$file" >> "$file"
 130.255.77.28 ntc.party
 57.144.222.34 instagram.com www.instagram.com
 173.245.58.219 rutor.info d.rutor.info
 193.46.255.29 rutor.info
 157.240.9.174 instagram.com www.instagram.com
 EOF
-/etc/init.d/dnsmasq restart >/dev/null 2>&1
+/etc/init.d/dnsmasq restart
 # Применяем конфиг
-[ "$NO_PAUSE" != "1" ] && { chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart >/dev/null 2>&1; }
+[ "$NO_PAUSE" != "1" ] && { chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart; }
 echo -e "${BLUE}🔴 ${GREEN}Стратегия отредактирована!${NC}"
 [ "$NO_PAUSE" != "1" ] && echo -e ""
 [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
@@ -426,8 +426,8 @@ SELECTED="50-discord"
 URL="https://raw.githubusercontent.com/bol-van/zapret/v70.5/init.d/custom.d.examples.linux/50-discord" ;;
 5)
 echo -e "\n${BLUE}🔴 ${GREEN}Скрипт удалён!${NC}\n"
-rm -f "$CUSTOM_DIR/50-script.sh" 2>/dev/null
-chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart >/dev/null 2>&1
+rm -f "$CUSTOM_DIR/50-script.sh"
+chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 show_menu
 return ;;
@@ -445,7 +445,7 @@ mkdir -p "$CUSTOM_DIR"
 if curl -fsSLo "$CUSTOM_DIR/50-script.sh" "$URL"; then
 [ "$NO_PAUSE" != "1" ] && 
 echo -e "\n${GREEN}🔴 ${CYAN}Скрипт ${NC}$SELECTED${CYAN} успешно установлен!${NC}\n"
-chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart >/dev/null 2>&1
+chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart
 if [ "$SELECTED" = "50-quic4all" ] || [ "$SELECTED" = "50-stun4all" ]; then
 echo -e "${BLUE}🔴 ${GREEN}Звонки и Discord включены!${NC}"
 elif [ "$SELECTED" = "50-discord-media" ] || [ "$SELECTED" = "50-discord" ]; then
@@ -460,7 +460,7 @@ return
 fi
 fi
 echo -e ""
-chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart >/dev/null 2>&1
+chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart
 [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
 # ==========================================
@@ -521,7 +521,7 @@ cat <<'EOF' >> "$CONF"
 EOF
 fi
 echo -e "${GREEN}🔴 ${CYAN}Добавляем в стратегию блок необходимый для игры${NC}"
-chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart >/dev/null 2>&1
+chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart
 echo -e "\n${BLUE}🔴 ${GREEN}Zapret настроен для игры Battlefield REDSEC!${NC}\n"
 [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
@@ -566,7 +566,7 @@ echo -e "${MAGENTA}Возвращаем настройки по умолчани
 # Проверка скрипта восстановления и его запуск
 if [ -f /opt/zapret/restore-def-cfg.sh ]; then
 rm -f /opt/zapret/init.d/openwrt/custom.d/50-script.sh
-[ -f /etc/init.d/zapret ] && /etc/init.d/zapret stop >/dev/null 2>&1
+[ -f /etc/init.d/zapret ] && /etc/init.d/zapret stop
 echo -e "${GREEN}🔴 ${CYAN}Возвращаем ${NC}настройки${CYAN}, ${NC}стратегию${CYAN} и ${NC}hostlist${CYAN} к значениям по умолчанию${NC}\n"
 IPSET_DIR="/opt/zapret/ipset"
 mkdir -p "$IPSET_DIR"
@@ -576,7 +576,7 @@ for f in $FILES; do
 curl -fsSLo "$IPSET_DIR/$f" "$URL_BASE/$f"
 done
 chmod +x /opt/zapret/restore-def-cfg.sh && /opt/zapret/restore-def-cfg.sh && chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh
-[ -f /etc/init.d/zapret ] && /etc/init.d/zapret restart >/dev/null 2>&1
+[ -f /etc/init.d/zapret ] && /etc/init.d/zapret restart
 echo -e "${BLUE}🔴 ${GREEN}Настройки по умолчанию возвращены!${NC}\n"
 else
 echo -e "${RED}Zapret не установлен!${NC}\n"
@@ -593,11 +593,11 @@ echo -e "${MAGENTA}Останавливаем Zapret${NC}\n"
 # Остановка службы через init.d и убийство процессов
 if [ -f /etc/init.d/zapret ]; then
 echo -e "${GREEN}🔴 ${CYAN}Останавливаем сервис ${NC}Zapret"
-/etc/init.d/zapret stop >/dev/null 2>&1
+/etc/init.d/zapret stop
 PIDS=$(pgrep -f /opt/zapret)
 if [ -n "$PIDS" ]; then
 echo -e "${GREEN}🔴 ${CYAN}Убиваем все процессы ${NC}Zapret"
-for pid in $PIDS; do kill -9 "$pid" >/dev/null 2>&1; done
+for pid in $PIDS; do kill -9 "$pid"; done
 fi
 echo -e "\n${BLUE}🔴 ${GREEN}Zapret остановлен!${NC}\n"
 else
@@ -614,8 +614,8 @@ echo -e "${MAGENTA}Запускаем Zapret${NC}\n"
 # Запуск службы через init.d
 if [ -f /etc/init.d/zapret ]; then
 echo -e "${GREEN}🔴 ${CYAN}Запускаем сервис ${NC}Zapret"
-/etc/init.d/zapret start >/dev/null 2>&1
-chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart >/dev/null 2>&1
+/etc/init.d/zapret start
+chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart
 echo -e "\n${BLUE}🔴 ${GREEN}Zapret запущен!${NC}\n"
 else
 echo -e "${RED}Zapret не установлен!${NC}\n"
@@ -643,14 +643,14 @@ esac
 fi
 echo -e "${GREEN}🔴 ${CYAN}Останавливаем сервис${NC}"
 echo -e "${GREEN}🔴 ${CYAN}Убиваем процессы${NC}"
-/etc/init.d/zapret stop >/dev/null 2>&1
-for pid in $(pgrep -f /opt/zapret 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done
+/etc/init.d/zapret stop
+for pid in $(pgrep -f /opt/zapret); do kill -9 "$pid"; done
 echo -e "${GREEN}🔴 ${CYAN}Удаляем пакеты${NC}"
-opkg --force-removal-of-dependent-packages --autoremove remove zapret luci-app-zapret >/dev/null 2>&1
+opkg --force-removal-of-dependent-packages --autoremove remove zapret luci-app-zapret
 echo -e "${GREEN}🔴 ${CYAN}Чистим конфиги и временные файлы${NC}"
-rm -rf /opt/zapret /etc/config/zapret /etc/firewall.zapret /etc/init.d/zapret /tmp/*zapret* /var/run/*zapret* /tmp/*.ipk /tmp/*.zip 2>/dev/null
-crontab -l 2>/dev/null | grep -v -i "zapret" | crontab - 2>/dev/null
-nft list tables 2>/dev/null | awk '{print $2}' | grep -E '(zapret|ZAPRET)' | while read t; do [ -n "$t" ] && nft delete table "$t" 2>/dev/null; done
+rm -rf /opt/zapret /etc/config/zapret /etc/firewall.zapret /etc/init.d/zapret /tmp/*zapret* /var/run/*zapret* /tmp/*.ipk /tmp/*.zip
+crontab -l | grep -v -i "zapret" | crontab -
+nft list tables | awk '{print $2}' | grep -E '(zapret|ZAPRET)' | while read t; do [ -n "$t" ] && nft delete table "$t"; done
 echo -e "\n${BLUE}🔴 ${GREEN}Zapret полностью удалён!${NC}\n"
 [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
@@ -659,7 +659,7 @@ echo -e "\n${BLUE}🔴 ${GREEN}Zapret полностью удалён!${NC}\n"
 # ==========================================
 startstop_zpr() {
 clear
-if pgrep -f /opt/zapret >/dev/null 2>&1; then
+if pgrep -f /opt/zapret; then
 stop_zapret
 else
 start_zapret
