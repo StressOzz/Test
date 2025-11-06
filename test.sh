@@ -268,39 +268,59 @@ gosuslugi.ru
 api.steampowered.com
 cdn.akamai.steamstatic.com
 cdn.cloudflare.steamstatic.com
+cdn.steamcommunity.com
+cdn.steamstatic.com
 checkout.steampowered.com
 client-download.steampowered.com
 community.cloudflare.steamstatic.com
+community.steampowered.com
 cs.steampowered.com
 help.steampowered.com
 login.steampowered.com
 media.steampowered.com
+partner.steamgames.com
 partner.steampowered.com
 s.team
+scontent.steamusercontent.com
 steam.tv
 steambroadcast.akamaized.net
 steambroadcast.com
+steamcdn.com
+steamcdn.net
 steamcdn-a.akamaihd.net
+steamcdn-a.akamaihd.net.edgesuite.net
+steamcdn-a.akamaized.net
 steamchat.com
 steam-chat.com
 steamcommunity.akamaized.net
+steamcommunity.cloudflare.steamstatic.com
 steamcommunity.com
 steamcommunity-a.akamaihd.net
+steamcommunity-a.akamaized.net
 steamcontent.com
+steamcontent-a.akamaihd.net
 steamdeck.com
 steamdeckcdn.akamaized.net
 steamdeckusercontent.com
 steamgames.com
+steamgames.net
 steampowered.com
 steamserver.net
 steamstat.us
 steamstatic.akamaized.net
 steamstatic.com
+steamstore-a.akamaihd.net
 steamusercontent.com
 steamuserimages-a.akamaihd.net
+store.akamai.steamstatic.com
 store.cloudflare.steamstatic.com
 store.steampowered.com
 support.steampowered.com
+valve.net
+valvecdn.com
+valvecontent.com
+valvesoftware.com
+valvesoftware.net
 workshop.steampowered.com
 epicgames.com
 store.epicgames.com
@@ -540,7 +560,7 @@ install_Zapret "1"
 fix_default "1"
 echo -e "\n${MAGENTA}Включаем Discord и звонки в TG и WA${NC}\n"
 enable_discord_calls "1"
-fix_REDSEC "1"
+# fix_REDSEC "1" - пока убрал, т.к. BF 6 работает без Zapret
 if [ -f /etc/init.d/zapret ]; then
 echo -e "${BLUE}🔴 ${GREEN}Zapret ${GREEN}установлен и настроен!${NC}\n"
 else
@@ -670,7 +690,7 @@ clear
 echo -e "╔════════════════════════════════════╗"
 echo -e "║     ${BLUE}Zapret on remittor Manager${NC}     ║"
 echo -e "╚════════════════════════════════════╝"
-echo -e "                     ${DGRAY}by StressOzz v5.1${NC}"
+echo -e "                     ${DGRAY}by StressOzz v5.2${NC}"
 # Определяем актуальная/устарела
 if [ "$LIMIT_REACHED" -eq 1 ] || [ "$LATEST_VER" = "не найдена" ]; then
 INST_COLOR=$CYAN
