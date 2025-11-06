@@ -87,7 +87,7 @@ opkg install "$pkg" >/dev/null 2>&1 && { pkg_installed=1; break; }
 sleep 1
 done
 if [ $pkg_installed -eq 0 ]; then
-echo -e "${RED}Не удалось установить ${NC}$pkg${RED} после ${NC}3${RED} попыток!${NC}"
+echo -e "${RED}Не удалось установить ${NC}$pkg${RED} после ${NC}3${RED} попыток!${NC}\n"
 echo -e "Установите вручную: ${CYAN}opkg install $pkg${NC}\n"
 exit 1
 fi
