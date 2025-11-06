@@ -66,7 +66,7 @@ case "$choice" in
     sleep 2
     ;;
 *)
-echo -e "\n${RED}Скрипт остановлен!\n"
+echo -e "\n${RED}Скрипт остановлен!${NC}\n"
 exit 1 ;;
 esac
 fi
@@ -422,7 +422,7 @@ echo -e "${CYAN}2) ${GREEN}Установить скрипт ${NC}50-quic4all ${
 echo -e "${CYAN}3) ${GREEN}Установить скрипт ${NC}50-discord-media ${GREEN}для${NC} Discord"
 echo -e "${CYAN}4) ${GREEN}Установить скрипт ${NC}50-discord ${GREEN}для${NC} Discord"
 echo -e "${CYAN}5) ${GREEN}Удалить скрипт${NC}"
-echo -e "${CYAN}0) ${GREEN}Выход в главное меню (Enter)${NC}\n"
+echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n"
 echo -ne "${YELLOW}Выберите пункт:${NC} "
 read choice
 case "$choice" in
@@ -750,7 +750,7 @@ echo -e "${CYAN}5) ${GREEN}Удалить ${NC}Zapret"
 echo -e "${CYAN}6) ${GREEN}Добавить в стратегию блок для ${NC}Battlefield REDSEC"
 echo -e "${CYAN}7) ${GREEN}Меню настройки ${NC}Discord${GREEN} и звонков в ${NC}TG${GREEN}/${NC}WA"
 echo -e "${CYAN}8) ${GREEN}Удалить / Установить / Настроить${NC} Zapret"
-echo -e "${CYAN}0) ${GREEN}Выход (Enter)${NC}\n"
+echo -e "${CYAN}Enter) ${GREEN}Выход${NC}\n"
 echo -ne "${YELLOW}Выберите пункт:${NC} "
 read choice
 case "$choice" in
