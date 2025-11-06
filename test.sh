@@ -45,16 +45,27 @@ if [ "$FLOW_STATE" = "1" ] || [ "$HW_FLOW_STATE" = "1" ]; then
 clear
 echo -e "${RED}Включён ${NC}Flow Offloading ${RED}!${NC}\n"
 echo -e "${NC}Zapret${RED} не может работать с включённым ${NC}Flow Offloading${RED}!${NC}\n"
-read -p $'\033[1;32mОтключить \033[0mFlow Offloading\033[1;32m ?\033[0m [y/N] ' answer
-case "$answer" in
-[Yy]* )
-uci set firewall.@defaults[0].flow_offloading='0'
-uci set firewall.@defaults[0].flow_offloading_hw='0'
-uci commit firewall
-/etc/init.d/firewall restart
-echo -e "\n${BLUE}🔴 ${GREEN}Flow Offloading отключён!${NC}\n"
-sleep 3 ;;
-* )
+echo -e "${CYAN}1) ${GREEN}Отключить ${NC}Flow Offloading"
+echo -e "${CYAN}2) ${GREEN}Применить фикс для работы ${NC}Zapret${GREEN} с включённым ${NC}Flow Offloading"
+echo -e "${CYAN}Enter) ${GREEN}Выход\n"
+echo -ne "${YELLOW}Выберите пункт:${NC} "
+read choice
+case "$choice" in
+1)
+    uci set firewall.@defaults[0].flow_offloading='0'
+    uci set firewall.@defaults[0].flow_offloading_hw='0'
+    uci commit firewall
+    /etc/init.d/firewall restart
+    echo -e "\n${GREEN}Flow Offloading успешно отключён!${NC}"
+    sleep 2
+    ;;
+2)
+    sed -i 's/meta l4proto { tcp, udp } flow offload @ft;/meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;/' /usr/share/firewall4/templates/ruleset.uc
+    fw4 restart >/dev/null 2>&1
+    echo -e "\n${GREEN}Фикс успешно применён!${NC}"
+    sleep 2
+    ;;
+*)
 echo -e "\n${RED}Скрипт остановлен! Отключите ${NC}Flow Offloading${RED}!${NC}\n"
 exit 1 ;;
 esac
