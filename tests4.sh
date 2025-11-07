@@ -1,8 +1,9 @@
 #!/bin/sh
 # smart_check_openwrt.sh
 # Двухэтапная проверка сайтов с Zapret на OpenWRT
+# Автоматически скачивает список сайтов
 
-SITE_FILE="/mnt/data/site.txt"   # файл со списком сайтов
+SITE_FILE="/tmp/site.txt"
 TMP_OK="/tmp/sites_ok.txt"
 TMP_AFTER="/tmp/sites_after.txt"
 
@@ -11,10 +12,19 @@ RED="\033[1;31m"
 NC="\033[0m"
 
 # ----------------------------
+# Скачиваем список сайтов, если его нет
+# ----------------------------
+if [ ! -f "$SITE_FILE" ]; then
+    echo "Скачиваем список сайтов..."
+    wget -O "$SITE_FILE" https://raw.githubusercontent.com/StressOzz/Test/refs/heads/main/site.txt
+    if [ ! -f "$SITE_FILE" ]; then
+        echo -e "${RED}Ошибка: не удалось скачать список сайтов${NC}"
+        exit 1
+    fi
+fi
+
+# ----------------------------
 # Функция проверки сайтов
-# $1 = файл со списком сайтов
-# $2 = файл для записи доступных сайтов
-# $3 = показывать статус (1 = да)
 # ----------------------------
 check_sites() {
     INPUT_FILE="$1"
