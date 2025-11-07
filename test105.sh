@@ -270,18 +270,25 @@ sed -i \
 /^gvt3\.com$/d' /opt/zapret/ipset/zapret-hosts-user-exclude.txt
 # Скачиваем список доменов и добавляем
 echo -e "${GREEN}🔴 ${CYAN}Добавляем домены в ${NC}hostlist${CYAN} и редактируем ${NC}/etc/hosts\n"
+
 local exclude_file="/opt/zapret/ipset/zapret-hosts-user-exclude.txt"
 local remote_url="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/exclude-list.txt"
+
 tmpfile=$(mktemp)
+
 if ! curl -fsSL "$remote_url" -o "$tmpfile"; then
-echo -e "${RED}Не удалось загрузить список с GitHub!${NC}\n"
-read -p "Нажмите Enter для выхода в главное меню..." dummy
+    echo -e "${RED}Не удалось загрузить список с GitHub!${NC}\n"
+    read -p "Нажмите Enter для выхода в главное меню..." dummy
 else
-grep -v '^[[:space:]]*$' "$tmpfile" | grep -v '^#' | while read -r domain; do
-grep -Fxq "$domain" "$exclude_file" || echo "$domain" >> "$exclude_file"
-done
+    while read -r domain; do
+        # пропускаем пустые строки и строки с #
+        [[ -z "$domain" || "$domain" == \#* ]] && continue
+        grep -Fxq "$domain" "$exclude_file" || echo "$domain" >> "$exclude_file"
+    done < "$tmpfile"
 fi
+
 rm -f "$tmpfile"
+
 # Проверка и добавление hosts
 file="/etc/hosts"
 cat <<'EOF' | grep -Fxv -f "$file" 2>/dev/null >> "$file"
@@ -574,7 +581,7 @@ clear
 echo -e "╔════════════════════════════════════╗"
 echo -e "║     ${BLUE}Zapret on remittor Manager${NC}     ║"
 echo -e "╚════════════════════════════════════╝"
-echo -e "                     ${DGRAY}by StressOzz v5.3${NC}"
+echo -e "                     ${DGRAY}by StressOzz v5.5${NC}"
 # Определяем актуальная/устарела
 if [ "$LIMIT_REACHED" -eq 1 ] || [ "$LATEST_VER" = "не найдена" ]; then
 INST_COLOR=$CYAN; INSTALLED_DISPLAY="$INSTALLED_VER"
