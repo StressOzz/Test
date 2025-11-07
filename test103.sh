@@ -230,7 +230,7 @@ echo -e "${RED}Zapret не установлен!${NC}"
 [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 return
 fi
-echo -e "${GREEN}🔴 ${CYAN}Меняем стратегию, добавляем домены в ${NC}hostlist${CYAN} и редактируем ${NC}/etc/hosts\n"
+echo -e "${GREEN}🔴 ${CYAN}Меняем стратегию${NC}\n"
 # Удаляем строку и всё, что идёт ниже строки с option NFQWS_OPT '
 sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" /etc/config/zapret
 # Вставляем новый блок сразу после строки option NFQWS_OPT '
@@ -268,21 +268,18 @@ sed -i \
 /^android\.clients\.google\.com$/d; \
 /^gvt2\.com$/d; \
 /^gvt3\.com$/d' /opt/zapret/ipset/zapret-hosts-user-exclude.txt
-
-# Скачиваем временный файл и проверяем
+# Скачиваем список доменов и добавляем
+echo -e "${GREEN}🔴 ${CYAN}Добавляем домены в ${NC}hostlist${CYAN} и редактируем ${NC}/etc/hosts\n"
 local exclude_file="/opt/zapret/ipset/zapret-hosts-user-exclude.txt"
 local remote_url="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/exclude-list.txt"
-# Скачиваем временный файл и проверяем
 tmpfile=$(mktemp)
-if curl -fsSL "$remote_url" -o "$tmpfile"; then
-mkdir -p /opt/zapret/ipset
-touch "$exclude_file"
+if ! curl -fsSL "$remote_url" -o "$tmpfile"; then
+echo -e "${RED}Не удалось загрузить список с GitHub!${NC}\n"
+read -p "Нажмите Enter для выхода в главное меню..." dummy
+else
 grep -v '^[[:space:]]*$' "$tmpfile" | grep -v '^#' | while read -r domain; do
 grep -Fxq "$domain" "$exclude_file" || echo "$domain" >> "$exclude_file"
 done
-echo -e ""
-else
-echo -e "${RED}Не удалось загрузить список с GitHub!${NC}"
 fi
 rm -f "$tmpfile"
 # Проверка и добавление hosts
