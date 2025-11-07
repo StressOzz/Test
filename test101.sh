@@ -244,7 +244,7 @@ option NFQWS_OPT '
 --dpi-desync-fooling=badseq
 --dpi-desync-badseq-increment=10000000
 --dpi-desync-repeats=2
---dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/quic_initial_www_google_com.bin
+--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin
 --dpi-desync-fake-tls-mod=rnd,dupsid,sni=fonts.google.com
 --new
 --filter-udp=443
@@ -268,99 +268,23 @@ sed -i \
 /^android\.clients\.google\.com$/d; \
 /^gvt2\.com$/d; \
 /^gvt3\.com$/d' /opt/zapret/ipset/zapret-hosts-user-exclude.txt
-file="/opt/zapret/ipset/zapret-hosts-user-exclude.txt"
-cat <<'EOF' | grep -Fxv -f "$file" >> "$file"
-gosuslugi.ru
-api.steampowered.com
-cdn.akamai.steamstatic.com
-cdn.cloudflare.steamstatic.com
-cdn.steamcommunity.com
-cdn.steamstatic.com
-checkout.steampowered.com
-client-download.steampowered.com
-community.cloudflare.steamstatic.com
-community.steampowered.com
-cs.steampowered.com
-help.steampowered.com
-login.steampowered.com
-media.steampowered.com
-partner.steamgames.com
-partner.steampowered.com
-s.team
-scontent.steamusercontent.com
-steam.tv
-steambroadcast.akamaized.net
-steambroadcast.com
-steamcdn.com
-steamcdn.net
-steamcdn-a.akamaihd.net
-steamcdn-a.akamaihd.net.edgesuite.net
-steamcdn-a.akamaized.net
-steamchat.com
-steam-chat.com
-steamcommunity.akamaized.net
-steamcommunity.cloudflare.steamstatic.com
-steamcommunity.com
-steamcommunity-a.akamaihd.net
-steamcommunity-a.akamaized.net
-steamcontent.com
-steamcontent-a.akamaihd.net
-steamdeck.com
-steamdeckcdn.akamaized.net
-steamdeckusercontent.com
-steamgames.com
-steamgames.net
-steampowered.com
-steamserver.net
-steamstat.us
-steamstatic.akamaized.net
-steamstatic.com
-steamstore-a.akamaihd.net
-steamusercontent.com
-steamuserimages-a.akamaihd.net
-store.akamai.steamstatic.com
-store.cloudflare.steamstatic.com
-store.steampowered.com
-support.steampowered.com
-valve.net
-valvecdn.com
-valvecontent.com
-valvesoftware.com
-valvesoftware.net
-workshop.steampowered.com
-epicgames.com
-store.epicgames.com
-accounts.epicgames.com
-account-public-service-prod03.ol.epicgames.com
-accountportal-website-prod07.ol.epicgames.com
-launcher-public-service-prod06.ol.epicgames.com
-launcherwaitingroom-public-service-prod06.ol.epicgames.com
-launcher-website-prod07.ol.epicgames.com
-tracking.epicgames.com
-catalog-public-service-prod06.ol.epicgames.com
-entitlement-public-service-prod08.ol.epicgames.com
-lightswitch-public-service-prod06.ol.epicgames.com
-friends-public-service-prod06.ol.epicgames.com
-orderprocessor-public-service-ecomprod01.ol.epicgames.com
-ut-public-service-prod10.ol.epicgames.com
-library-service.live.use1a.on.epicgames.com
-datastorage-public-service-liveegs.live.use1a.on.epicgames.com
-cdn1.unrealengine.com
-cdn2.unrealengine.com
-download.epicgames.com
-download2.epicgames.com
-download3.epicgames.com
-download4.epicgames.com
-fastly-download.epicgames.com
-static-assets-prod.epicgames.com
-store-site-backend-static.ak.epicgames.com
-store-content.ak.epicgames.com
-datarouter.ol.epicgames.com
-epicgames-download1.akamaized.net
-api.epicgames.dev
-metrics.ol.epicgames.com
-et.epicgames.com
-EOF
+
+# Скачиваем временный файл и проверяем
+local exclude_file="/opt/zapret/ipset/zapret-hosts-user-exclude.txt"
+local remote_url="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/exclude-list.txt"
+# Скачиваем временный файл и проверяем
+tmpfile=$(mktemp)
+if curl -fsSL "$remote_url" -o "$tmpfile"; then
+mkdir -p /opt/zapret/ipset
+touch "$exclude_file"
+grep -v '^[[:space:]]*$' "$tmpfile" | grep -v '^#' | while read -r domain; do
+grep -Fxq "$domain" "$exclude_file" || echo "$domain" >> "$exclude_file"
+done
+echo -e ""
+else
+echo -e "${RED}Не удалось загрузить список с GitHub!${NC}"
+fi
+rm -f "$tmpfile"
 # Проверка и добавление hosts
 file="/etc/hosts"
 cat <<'EOF' | grep -Fxv -f "$file" 2>/dev/null >> "$file"
@@ -511,6 +435,12 @@ zapret_key(){
 clear
 echo -e "${MAGENTA}Удаление, установка и настройка Zapret${NC}\n"
 get_versions
+# Проверка лимита API
+if [ "$LIMIT_REACHED" -eq 1 ]; then
+echo -e "${RED}Достигнут лимит GitHub API! Подождите 15 минут.${NC}\n"
+read -p "Нажмите Enter для выхода в главное меню..." dummy
+return
+fi
 # Проверка версии
 if ! [[ "$LATEST_VER" =~ 7 ]]; then
 echo -e "${RED}Внимание! Версия для установки не найдена!${NC}\n"
