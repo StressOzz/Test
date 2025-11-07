@@ -20,44 +20,52 @@ get_versions() {
 # --- Проверка byedpi и youtubeUnblock
 if opkg list-installed | grep -q "byedpi"; then
 clear
-echo -e "${RED}Найден установленный ${NC}ByeDPI${RED} !${NC}\n"
-echo -e "${NC}Zapret${RED} не может работать совместно с ${NC}ByeDPI${RED} !${NC}\n"
+echo -e "${RED}Найден установленный ${NC}ByeDPI${RED}!${NC}\n"
+echo -e "${NC}Zapret${RED} не может работать совместно с ${NC}ByeDPI${RED}!${NC}\n"
 read -p $'\033[1;32mУдалить \033[0mByeDPI\033[1;32m ?\033[0m [y/N] ' answer
 case "$answer" in
-[Yy]* ) opkg --force-removal-of-dependent-packages --autoremove remove byedpi; echo -e "\n${BLUE}🔴 ${GREEN}ByeDPI удалён !${NC}"; sleep 3;;
-* ) echo -e "\n${RED}Скрипт остановлен ! Удалите ${NC}ByeDPI ${RED}!${NC}\n"; exit 1;;
+[Yy]* ) opkg --force-removal-of-dependent-packages --autoremove remove byedpi; echo -e "\n${BLUE}🔴 ${GREEN}ByeDPI удалён!${NC}"; sleep 3;;
+* ) echo -e "\n${RED}Скрипт остановлен! Удалите ${NC}ByeDPI${RED}!${NC}\n"; exit 1;;
 esac
 fi
 if opkg list-installed | grep -q "youtubeUnblock"; then
 clear
-echo -e "${RED}Найден установленный ${NC}youtubeUnblock${RED} !${NC}\n"
-echo -e "${NC}Zapret${RED} не может работать совместно с ${NC}youtubeUnblock${RED} !${NC}\n"
+echo -e "${RED}Найден установленный ${NC}youtubeUnblock${RED}!${NC}\n"
+echo -e "${NC}Zapret${RED} не может работать совместно с ${NC}youtubeUnblock${RED}!${NC}\n"
 read -p $'\033[1;32mУдалить \033[0myoutubeUnblock\033[1;32m ?\033[0m [y/N] ' answer
 case "$answer" in
-[Yy]* ) opkg --force-removal-of-dependent-packages --autoremove remove youtubeUnblock luci-app-youtubeUnblock; echo -e "\n${BLUE}🔴 ${GREEN}youtubeUnblock удалён !${NC}"; sleep 3;;
-* ) echo -e "\n${RED}Скрипт остановлен ! Удалите ${NC}youtubeUnblock ${RED}!${NC}\n"; exit 1;;
+[Yy]* ) opkg --force-removal-of-dependent-packages --autoremove remove youtubeUnblock luci-app-youtubeUnblock; echo -e "\n${BLUE}🔴 ${GREEN}youtubeUnblock удалён!${NC}"; sleep 3;;
+* ) echo -e "\n${RED}Скрипт остановлен! Удалите ${NC}youtubeUnblock ${RED}!${NC}\n"; exit 1;;
 esac
 fi
 # --- Проверка Flow Offloading (программного и аппаратного)
 local FLOW_STATE=$(uci get firewall.@defaults[0].flow_offloading)
 local HW_FLOW_STATE=$(uci get firewall.@defaults[0].flow_offloading_hw)
 if [ "$FLOW_STATE" = "1" ] || [ "$HW_FLOW_STATE" = "1" ]; then
+if ! grep -q 'meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc; then
 clear
 echo -e "${RED}Включён ${NC}Flow Offloading ${RED}!${NC}\n"
-echo -e "${NC}Zapret${RED} не может работать с включённым ${NC}Flow Offloading${RED} !${NC}\n"
-read -p $'\033[1;32mОтключить \033[0mFlow Offloading\033[1;32m ?\033[0m [y/N] ' answer
-case "$answer" in
-[Yy]* )
+echo -e "${NC}Zapret${RED} не может работать с включённым ${NC}Flow Offloading${RED}!\n"
+echo -e "${CYAN}1) ${GREEN}Отключить ${NC}Flow Offloading"
+echo -e "${CYAN}2) ${GREEN}Применить фикс для работы ${NC}Zapret${GREEN} с включённым ${NC}Flow Offloading"
+echo -e "${CYAN}Enter) ${GREEN}Выход\n"
+echo -ne "${YELLOW}Выберите пункт:${NC} "
+read choice
+case "$choice" in
+1) echo -e "\n${GREEN}Flow Offloading успешно отключён!${NC}"
 uci set firewall.@defaults[0].flow_offloading='0'
 uci set firewall.@defaults[0].flow_offloading_hw='0'
 uci commit firewall
 /etc/init.d/firewall restart
-echo -e "\n${BLUE}🔴 ${GREEN}Flow Offloading отключён !${NC}\n"
-sleep 3 ;;
-* )
-echo -e "\n${RED}Скрипт остановлен ! Отключите ${NC}Flow Offloading ${RED}!${NC}\n"
+sleep 2 ;;
+2) echo -e "\n${GREEN}Фикс успешно применён!${NC}"
+sed -i 's/meta l4proto { tcp, udp } flow offload @ft;/meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;/' /usr/share/firewall4/templates/ruleset.uc
+fw4 restart
+sleep 2 ;;
+*) echo -e "\n${RED}Скрипт остановлен! Отключите или примените фикс!${NC}\n"
 exit 1 ;;
 esac
+fi
 fi
 # --- Проверка наличия curl и unzip
 TO_INSTALL=""
@@ -68,7 +76,7 @@ clear
 echo -e "${MAGENTA}ZAPRET on remittor Manager by StressOzz${NC}\n"
 echo -e "${GREEN}🔴 ${CYAN}Устанавливаем${NC}$TO_INSTALL${NC}\n"
 opkg update || { 
-echo -e "${RED}Ошибка при обновлении списка пакетов !${NC}\n"; exit 1; 
+echo -e "${RED}Ошибка при обновлении списка пакетов!${NC}\n"; exit 1; 
 }
 for pkg in $TO_INSTALL; do
 pkg_installed=0
@@ -78,76 +86,40 @@ opkg install "$pkg" && { pkg_installed=1; break; }
 sleep 1
 done
 if [ $pkg_installed -eq 0 ]; then
-echo -e "${RED}Не удалось установить ${NC}$pkg${RED} после ${NC}3${RED} попыток !${NC}"
+echo -e "${RED}Не удалось установить ${NC}$pkg${RED} после ${NC}3${RED} попыток!${NC}"
 echo -e "Установите вручную: ${CYAN}opkg install $pkg${NC}\n"
 exit 1
 fi
 done
-echo -e "${BLUE}🔴 ${GREEN}Установленно !${NC}"
+echo -e "${BLUE}🔴 ${GREEN}Установленно!${NC}"
 sleep 2
 fi
-
-# --- Получаем установленную версию Zapret
+# --- Получаем текущую установленную версию zapret
 INSTALLED_VER=$(opkg list-installed | grep '^zapret ' | awk '{print $3}')
 [ -z "$INSTALLED_VER" ] && INSTALLED_VER="не найдена"
-
-echo -e "${GREEN}Установленная версия: $INSTALLED_VER${NC}"
-
 # --- Определяем архитектуру устройства
 LOCAL_ARCH=$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release)
-if [ -z "$LOCAL_ARCH" ]; then
-    LOCAL_ARCH=$(opkg print-architecture | awk '!/noarch/ {arch=$2} END {print arch}')
-fi
-
-echo -e "${GREEN}Архитектура: $LOCAL_ARCH${NC}"
-
+[ -z "$LOCAL_ARCH" ] && LOCAL_ARCH=$(opkg print-architecture | grep -v "noarch" | sort -k3 -n | tail -n1 | awk '{print $2}')
 # --- Проверяем лимит GitHub API и доступность
 LIMIT_REACHED=0
-echo -e "${YELLOW}Проверяем последнюю версию на GitHub...${NC}"
-
-LIMIT_CHECK=$(curl -s -4 --connect-timeout 5 --retry 2 \
-    "https://api.github.com/repos/remittor/zapret-openwrt/releases/latest")
-
+LIMIT_CHECK=$(curl -s -4 --connect-timeout 5 "https://api.github.com/repos/remittor/zapret-openwrt/releases/latest")
 if [ -z "$LIMIT_CHECK" ]; then
-    echo -e "${RED}Ошибка: api.github.com недоступен!${NC}"
-    echo -e "Скрипт остановлен!\n"
-    exit 1
+echo -e "api.github.com ${RED}недоступен!${NC}\nСкрипт остановлен!\n"
+exit 1
 fi
-
 if echo "$LIMIT_CHECK" | grep -q 'API rate limit exceeded'; then
-    LATEST_VER="${RED}Достигнут лимит GitHub API. Подождите 15 минут.${NC}"
-    LIMIT_REACHED=1
-    echo -e "$LATEST_VER"
+LATEST_VER="${RED}Достигнут лимит GitHub API! Подождите 15 минут.${NC}"
+LIMIT_REACHED=1
 else
-    # --- Извлекаем номер версии из имени архива
-    LATEST_URL=$(echo "$LIMIT_CHECK" | grep browser_download_url | grep "$LOCAL_ARCH.zip" | cut -d '"' -f 4)
-    
-    if [ -n "$LATEST_URL" ] && echo "$LATEST_URL" | grep -q '\.zip$'; then
-        LATEST_VER=$(basename "$LATEST_URL" | sed -E 's/.*zapret_v([0-9]+\.[0-9]+)_.*\.zip/\1/')
-        
-        # Проверяем корректность извлеченной версии
-        if echo "$LATEST_VER" | grep -qE '^[0-9]+\.[0-9]+$'; then
-            USED_ARCH="$LOCAL_ARCH"
-            echo -e "${GREEN}Последняя версия: $LATEST_VER${NC}"
-            echo -e "${GREEN}Архитектура пакета: $USED_ARCH${NC}"
-        else
-            LATEST_VER="ошибка определения версии"
-            USED_ARCH="$LOCAL_ARCH"
-            echo -e "${RED}Не удалось определить версию из URL: $LATEST_URL${NC}"
-echo -e ""
-read -p "Нажмите Enter для продолжения..." dummy
-        fi
-    else
-        LATEST_VER="не найдена"
-        USED_ARCH="нет пакета для архитектуры $LOCAL_ARCH"
-        echo -e "${YELLOW}Внимание: $USED_ARCH${NC}"
-        
-        # Дополнительно: покажем какие архитектуры доступны
-        echo -e "${YELLOW}Доступные архитектуры:${NC}"
-        echo "$LIMIT_CHECK" | grep browser_download_url | grep -o 'zapret_v[^_]*_[^_]*\.zip' | sed 's/\.zip//' | sort -u
-echo -e ""
-read -p "Нажмите Enter для продолжения..." dummy
-    fi
+# --- Извлекаем номер версии из имени архива
+LATEST_URL=$(echo "$LIMIT_CHECK" | grep browser_download_url | grep "$LOCAL_ARCH.zip" | cut -d '"' -f 4)
+if [ -n "$LATEST_URL" ] && echo "$LATEST_URL" | grep -q '\.zip$'; then
+LATEST_VER=$(basename "$LATEST_URL" | sed -E 's/.*zapret_v([0-9]+\.[0-9]+)_.*\.zip/\1/')
+USED_ARCH="$LOCAL_ARCH"
+else
+LATEST_VER="не найдена"
+USED_ARCH="нет пакета для вашей архитектуры"
+fi
 fi
 # --- Проверяем состояние сервиса zapret
 if [ -f /etc/init.d/zapret ]; then
@@ -159,13 +131,11 @@ fi
 else
 ZAPRET_STATUS=""
 fi
-echo -e ""
-read -p "Нажмите Enter для продолжения..." dummy
 }
 # ==========================================
 # Установка Zapret
 # ==========================================
-install_update() {
+install_Zapret() {
 local NO_PAUSE=$1
 [ "$NO_PAUSE" != "1" ] && clear
 echo -e "${MAGENTA}Устанавливаем ZAPRET${NC}\n"
@@ -184,15 +154,15 @@ return
 fi
 # --- Проверка уже установленной версии
 if [ "$INSTALLED_VER" = "$LATEST_VER" ]; then
-echo -e "${BLUE}🔴 ${GREEN}Последняя версия уже установлена !${NC}\n"
+echo -e "${BLUE}🔴 ${GREEN}Последняя версия уже установлена!${NC}\n"
 [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 return
 fi
 # --- Обновление списка пакетов
 echo -e "${GREEN}🔴 ${CYAN}Обновляем список пакетов${NC}"
-    opkg update || { 
-        echo -e "\n${RED}Ошибка при обновлении списка пакетов !${NC}\n"; exit 1; 
-    }
+opkg update || { 
+echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; exit 1; 
+}
 # --- Остановка сервиса и старых процессов Zapret
 if [ -f /etc/init.d/zapret ]; then
 echo -e "${GREEN}🔴 ${CYAN}Останавливаем сервис ${NC}zapret"
@@ -235,16 +205,14 @@ rm -rf "$WORKDIR" /tmp/*.ipk /tmp/*.zip /tmp/*zapret*
 # --- Перезапуск службы Zapret
 [ "$NO_PAUSE" != "1" ] && {
 if [ -f /etc/init.d/zapret ]; then
-chmod +x /opt/zapret/sync_config.sh
-/opt/zapret/sync_config.sh
-/etc/init.d/zapret restart
+chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart
 fi
 }
 # --- Сообщение об успешной установке или нет
 if [ -f /etc/init.d/zapret ]; then
-echo -e "\n${BLUE}🔴 ${GREEN}Zapret установлен !${NC}\n"
+echo -e "\n${BLUE}🔴 ${GREEN}Zapret установлен!${NC}\n"
 else
-echo -e "\n${RED}Zapret не был установлен ! Попробуйте ещё раз !${NC}\n"
+echo -e "\n${RED}Zapret не был установлен! Попробуйте ещё раз!${NC}\n"
 fi
 [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
@@ -257,12 +225,12 @@ local NO_PAUSE=$1
 echo -e "${MAGENTA}Редактируем стратегию${NC}\n"
 # Проверка, установлен ли Zapret
 if [ ! -f /etc/init.d/zapret ]; then
-echo -e "${RED}Zapret не установлен !${NC}"
+echo -e "${RED}Zapret не установлен!${NC}"
 [ "$NO_PAUSE" != "1" ] && echo -e ""
 [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 return
 fi
-echo -e "${GREEN}🔴 ${CYAN}Меняем стратегию и редактируем ${NC}host\n"
+echo -e "${GREEN}🔴 ${CYAN}Меняем стратегию${NC}"
 # Удаляем строку и всё, что идёт ниже строки с option NFQWS_OPT '
 sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" /etc/config/zapret
 # Вставляем новый блок сразу после строки option NFQWS_OPT '
@@ -276,7 +244,7 @@ option NFQWS_OPT '
 --dpi-desync-fooling=badseq
 --dpi-desync-badseq-increment=10000000
 --dpi-desync-repeats=2
---dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/quic_initial_www_google_com.bin
+--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin
 --dpi-desync-fake-tls-mod=rnd,dupsid,sni=fonts.google.com
 --new
 --filter-udp=443
@@ -300,79 +268,22 @@ sed -i \
 /^android\.clients\.google\.com$/d; \
 /^gvt2\.com$/d; \
 /^gvt3\.com$/d' /opt/zapret/ipset/zapret-hosts-user-exclude.txt
-file="/opt/zapret/ipset/zapret-hosts-user-exclude.txt"
-cat <<'EOF' | grep -Fxv -f "$file" >> "$file"
-gosuslugi.ru
-api.steampowered.com
-cdn.akamai.steamstatic.com
-cdn.cloudflare.steamstatic.com
-checkout.steampowered.com
-client-download.steampowered.com
-community.cloudflare.steamstatic.com
-cs.steampowered.com
-help.steampowered.com
-login.steampowered.com
-media.steampowered.com
-partner.steampowered.com
-s.team
-steam.tv
-steambroadcast.akamaized.net
-steambroadcast.com
-steamcdn-a.akamaihd.net
-steamchat.com
-steam-chat.com
-steamcommunity.akamaized.net
-steamcommunity.com
-steamcommunity-a.akamaihd.net
-steamcontent.com
-steamdeck.com
-steamdeckcdn.akamaized.net
-steamdeckusercontent.com
-steamgames.com
-steampowered.com
-steamserver.net
-steamstat.us
-steamstatic.akamaized.net
-steamstatic.com
-steamusercontent.com
-steamuserimages-a.akamaihd.net
-store.cloudflare.steamstatic.com
-store.steampowered.com
-support.steampowered.com
-workshop.steampowered.com
-epicgames.com
-store.epicgames.com
-accounts.epicgames.com
-account-public-service-prod03.ol.epicgames.com
-accountportal-website-prod07.ol.epicgames.com
-launcher-public-service-prod06.ol.epicgames.com
-launcherwaitingroom-public-service-prod06.ol.epicgames.com
-launcher-website-prod07.ol.epicgames.com
-tracking.epicgames.com
-catalog-public-service-prod06.ol.epicgames.com
-entitlement-public-service-prod08.ol.epicgames.com
-lightswitch-public-service-prod06.ol.epicgames.com
-friends-public-service-prod06.ol.epicgames.com
-orderprocessor-public-service-ecomprod01.ol.epicgames.com
-ut-public-service-prod10.ol.epicgames.com
-library-service.live.use1a.on.epicgames.com
-datastorage-public-service-liveegs.live.use1a.on.epicgames.com
-cdn1.unrealengine.com
-cdn2.unrealengine.com
-download.epicgames.com
-download2.epicgames.com
-download3.epicgames.com
-download4.epicgames.com
-fastly-download.epicgames.com
-static-assets-prod.epicgames.com
-store-site-backend-static.ak.epicgames.com
-store-content.ak.epicgames.com
-datarouter.ol.epicgames.com
-epicgames-download1.akamaized.net
-api.epicgames.dev
-metrics.ol.epicgames.com
-et.epicgames.com
-EOF
+# Скачиваем список доменов и добавляем
+echo -e "${GREEN}🔴 ${CYAN}Добавляем домены в ${NC}hostlist${CYAN} и редактируем ${NC}/etc/hosts\n"
+local exclude_file="/opt/zapret/ipset/zapret-hosts-user-exclude.txt"
+local remote_url="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/exclude-list.txt"
+tmpfile=$(mktemp)
+if ! curl -fsSL "$remote_url" -o "$tmpfile"; then
+echo -e "${RED}Не удалось загрузить список с GitHub!${NC}\n"
+read -p "Нажмите Enter для выхода в главное меню..." dummy
+else
+while read -r domain; do
+# пропускаем пустые строки и строки с #
+[[ -z "$domain" || "$domain" == \#* ]] && continue
+grep -Fxq "$domain" "$exclude_file" || echo "$domain" >> "$exclude_file"
+done < "$tmpfile"
+fi
+rm -f "$tmpfile"
 # Проверка и добавление hosts
 file="/etc/hosts"
 cat <<'EOF' | grep -Fxv -f "$file" >> "$file"
@@ -384,10 +295,8 @@ cat <<'EOF' | grep -Fxv -f "$file" >> "$file"
 EOF
 /etc/init.d/dnsmasq restart
 # Применяем конфиг
-[ "$NO_PAUSE" != "1" ] && chmod +x /opt/zapret/sync_config.sh
-[ "$NO_PAUSE" != "1" ] && /opt/zapret/sync_config.sh
-[ "$NO_PAUSE" != "1" ] && /etc/init.d/zapret restart
-echo -e "${BLUE}🔴 ${GREEN}Стратегия отредактирована !${NC}"
+[ "$NO_PAUSE" != "1" ] && { chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart; }
+echo -e "${BLUE}🔴 ${GREEN}Стратегия отредактирована!${NC}"
 [ "$NO_PAUSE" != "1" ] && echo -e ""
 [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
@@ -399,7 +308,7 @@ local NO_PAUSE=$1
 [ "$NO_PAUSE" != "1" ] && clear
 [ "$NO_PAUSE" != "1" ] && echo -e "${MAGENTA}Меню настройки Discord и звонков в TG/WA${NC}\n"
 if [ ! -f /etc/init.d/zapret ]; then
-echo -e "${RED}Zapret не установлен !${NC}\n"
+echo -e "${RED}Zapret не установлен!${NC}\n"
 [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 return
 fi
@@ -429,7 +338,7 @@ echo -e "${CYAN}2) ${GREEN}Установить скрипт ${NC}50-quic4all ${
 echo -e "${CYAN}3) ${GREEN}Установить скрипт ${NC}50-discord-media ${GREEN}для${NC} Discord"
 echo -e "${CYAN}4) ${GREEN}Установить скрипт ${NC}50-discord ${GREEN}для${NC} Discord"
 echo -e "${CYAN}5) ${GREEN}Удалить скрипт${NC}"
-echo -e "${CYAN}0) ${GREEN}Выход в главное меню (Enter)${NC}\n"
+echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n"
 echo -ne "${YELLOW}Выберите пункт:${NC} "
 read choice
 case "$choice" in
@@ -446,7 +355,7 @@ URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.exa
 SELECTED="50-discord"
 URL="https://raw.githubusercontent.com/bol-van/zapret/v70.5/init.d/custom.d.examples.linux/50-discord" ;;
 5)
-echo -e "\n${BLUE}🔴 ${GREEN}Скрипт удалён !${NC}\n"
+echo -e "\n${BLUE}🔴 ${GREEN}Скрипт удалён!${NC}\n"
 rm -f "$CUSTOM_DIR/50-script.sh"
 chmod +x /opt/zapret/sync_config.sh
 /opt/zapret/sync_config.sh
@@ -456,30 +365,30 @@ show_menu
 return ;;
 *)
 echo -e "\nВыходим в главное меню..."
-sleep 1
+sleep 2
 show_menu
 return ;;
 esac
 fi
 if [ "$CURRENT_SCRIPT" = "$SELECTED" ]; then
-echo -e "\n${RED}Выбранный скрипт уже установлен !${NC}"
+echo -e "\n${RED}Выбранный скрипт уже установлен!${NC}"
 else
 mkdir -p "$CUSTOM_DIR"
 if curl -fsSLo "$CUSTOM_DIR/50-script.sh" "$URL"; then
 [ "$NO_PAUSE" != "1" ] && 
-echo -e "\n${GREEN}🔴 ${CYAN}Скрипт ${NC}$SELECTED${CYAN} успешно установлен !${NC}\n"
+echo -e "\n${GREEN}🔴 ${CYAN}Скрипт ${NC}$SELECTED${CYAN} успешно установлен!${NC}\n"
 chmod +x /opt/zapret/sync_config.sh
 /opt/zapret/sync_config.sh
 /etc/init.d/zapret restart
 if [ "$SELECTED" = "50-quic4all" ] || [ "$SELECTED" = "50-stun4all" ]; then
-echo -e "${BLUE}🔴 ${GREEN}Звонки и Discord включены !${NC}"
+echo -e "${BLUE}🔴 ${GREEN}Звонки и Discord включены!${NC}"
 elif [ "$SELECTED" = "50-discord-media" ] || [ "$SELECTED" = "50-discord" ]; then
-echo -e "${BLUE}🔴 ${GREEN}Discord включён !${NC}"
+echo -e "${BLUE}🔴 ${GREEN}Discord включён!${NC}"
 else
-echo -e "${BLUE}🔴 ${GREEN}Скрипт активирован !${NC}"
+echo -e "${BLUE}🔴 ${GREEN}Скрипт активирован!${NC}"
 fi
 else
-echo -e "${RED}Ошибка при скачивании скрипта !${NC}\n"
+echo -e "${RED}Ошибка при скачивании скрипта!${NC}\n"
 [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 return
 fi
@@ -499,33 +408,12 @@ local NO_PAUSE=$1
 echo -e "${MAGENTA}Настраиваем стратегию для игры Battlefield REDSEC${NC}\n"
 CONF="/etc/config/zapret"
 if [ ! -f /etc/init.d/zapret ]; then
-echo -e "${RED}Zapret не установлен !${NC}\n"
-read -p "Нажмите Enter для выхода в главное меню..." dummy
+[ "$NO_PAUSE" != "1" ] && echo -e "${RED}Zapret не установлен!${NC}\n"
+[ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 return
 fi
-file="/opt/zapret/ipset/zapret-hosts-user-exclude.txt"
-cat <<'EOF' | grep -Fxv -f "$file" >> "$file"
-playstation.net
-np.playstation.net
-akadns.net
-akamai.net
-akamaiedge.net
-akamaihd.net
-edgekey.net
-edgesuite.net
-ea.com
-data.ea.com
-grpc.ea.com
-blaze.ea.com
-blazeredirector.ea.com
-ops.dice.se
-dice.se
-amazonaws.com
-awsglobalaccelerator.com
-elb.amazonaws.com
-EOF
 if grep -q "option NFQWS_PORTS_UDP.*20000-22000" "$CONF" && grep -q -- "--filter-udp=20000-22000" "$CONF"; then
-echo -e "${RED}Стратегия для Battlefield REDSEC уже применена !${NC}\n"
+echo -e "${RED}Стратегия для Battlefield REDSEC уже применена!${NC}\n"
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 return
 fi
@@ -548,10 +436,8 @@ cat <<'EOF' >> "$CONF"
 EOF
 fi
 echo -e "${GREEN}🔴 ${CYAN}Добавляем в стратегию блок необходимый для игры${NC}"
-chmod +x /opt/zapret/sync_config.sh
-/opt/zapret/sync_config.sh
-/etc/init.d/zapret restart
-echo -e "\n${BLUE}🔴 ${GREEN}Zapret настроен для игры Battlefield REDSEC !${NC}\n"
+chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart
+echo -e "\n${BLUE}🔴 ${GREEN}Zapret настроен для игры Battlefield REDSEC!${NC}\n"
 [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
 # ==========================================
@@ -561,23 +447,30 @@ zapret_key(){
 clear
 echo -e "${MAGENTA}Удаление, установка и настройка Zapret${NC}\n"
 get_versions
+# Проверка лимита API
 if [ "$LIMIT_REACHED" -eq 1 ]; then
-echo -e "\n${RED}Достигнут лимит GitHub API. Подождите 15 минут.${NC}\n"
+echo -e "${RED}Достигнут лимит GitHub API! Подождите 15 минут.${NC}\n"
 read -p "Нажмите Enter для выхода в главное меню..." dummy
-else
+return
+fi
+# Проверка версии
+if ! [[ "$LATEST_VER" =~ 7 ]]; then
+echo -e "${RED}Внимание! Версия для установки не найдена!${NC}\n"
+read -p "Нажмите Enter для выхода в главное меню..." dummy
+return
+fi
 uninstall_zapret "1"
-install_update "1"
+install_Zapret "1"
 fix_default "1"
 echo -e "\n${MAGENTA}Включаем Discord и звонки в TG и WA${NC}\n"
 enable_discord_calls "1"
 fix_REDSEC "1"
 if [ -f /etc/init.d/zapret ]; then
-echo -e "${BLUE}🔴 ${GREEN}Zapret ${GREEN}установлен и настроен !${NC}\n"
+echo -e "${BLUE}🔴 ${GREEN}Zapret ${GREEN}установлен и настроен!${NC}\n"
 else
-echo -e "${RED}Zapret не установлен !${NC}\n"
+echo -e "${RED}Zapret не установлен!${NC}\n"
 fi
 read -p "Нажмите Enter для выхода в главное меню..." dummy
-fi
 }
 # ==========================================
 # Вернуть настройки по умолчанию
@@ -597,14 +490,11 @@ URL_BASE="https://raw.githubusercontent.com/remittor/zapret-openwrt/master/zapre
 for f in $FILES; do
 curl -fsSLo "$IPSET_DIR/$f" "$URL_BASE/$f"
 done
-chmod +x /opt/zapret/restore-def-cfg.sh
-/opt/zapret/restore-def-cfg.sh
-chmod +x /opt/zapret/sync_config.sh
-/opt/zapret/sync_config.sh
+chmod +x /opt/zapret/restore-def-cfg.sh && /opt/zapret/restore-def-cfg.sh && chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh
 [ -f /etc/init.d/zapret ] && /etc/init.d/zapret restart
-echo -e "${BLUE}🔴 ${GREEN}Настройки по умолчанию возвращены !${NC}\n"
+echo -e "${BLUE}🔴 ${GREEN}Настройки по умолчанию возвращены!${NC}\n"
 else
-echo -e "${RED}Zapret не установлен !${NC}\n"
+echo -e "${RED}Zapret не установлен!${NC}\n"
 fi
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 show_menu
@@ -624,9 +514,9 @@ if [ -n "$PIDS" ]; then
 echo -e "${GREEN}🔴 ${CYAN}Убиваем все процессы ${NC}Zapret"
 for pid in $PIDS; do kill -9 "$pid"; done
 fi
-echo -e "\n${BLUE}🔴 ${GREEN}Zapret остановлен !${NC}\n"
+echo -e "\n${BLUE}🔴 ${GREEN}Zapret остановлен!${NC}\n"
 else
-echo -e "${RED}Zapret не установлен !${NC}\n"
+echo -e "${RED}Zapret не установлен!${NC}\n"
 fi
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
@@ -640,12 +530,10 @@ echo -e "${MAGENTA}Запускаем Zapret${NC}\n"
 if [ -f /etc/init.d/zapret ]; then
 echo -e "${GREEN}🔴 ${CYAN}Запускаем сервис ${NC}Zapret"
 /etc/init.d/zapret start
-chmod +x /opt/zapret/sync_config.sh
-/opt/zapret/sync_config.sh
-/etc/init.d/zapret restart
-echo -e "\n${BLUE}🔴 ${GREEN}Zapret запущен !${NC}\n"
+chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart
+echo -e "\n${BLUE}🔴 ${GREEN}Zapret запущен!${NC}\n"
 else
-echo -e "${RED}Zapret не установлен !${NC}\n"
+echo -e "${RED}Zapret не установлен!${NC}\n"
 fi
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
@@ -656,6 +544,18 @@ uninstall_zapret() {
 local NO_PAUSE=$1
 [ "$NO_PAUSE" != "1" ] && clear
 echo -e "${MAGENTA}Удаляем ZAPRET${NC}\n"
+if ! [[ "$LATEST_VER" =~ 7 ]]; then
+echo -e "${RED}Внимание! Версия для установки не найдена!${NC}\n"
+echo -e "После удаления, установка возможна только в ручном режиме!\n"
+read -p "Продолжить удаление? [y/N]: " answer
+case "$answer" in
+[yY]) echo -e "";;  # продолжаем удаление
+*) echo -e "\n${GREEN}Удаление отменено!${NC}\n"
+echo -e "Выходим в главное меню..."
+sleep 2
+return;;
+esac
+fi
 echo -e "${GREEN}🔴 ${CYAN}Останавливаем сервис${NC}"
 echo -e "${GREEN}🔴 ${CYAN}Убиваем процессы${NC}"
 /etc/init.d/zapret stop
@@ -666,7 +566,7 @@ echo -e "${GREEN}🔴 ${CYAN}Чистим конфиги и временные �
 rm -rf /opt/zapret /etc/config/zapret /etc/firewall.zapret /etc/init.d/zapret /tmp/*zapret* /var/run/*zapret* /tmp/*.ipk /tmp/*.zip
 crontab -l | grep -v -i "zapret" | crontab -
 nft list tables | awk '{print $2}' | grep -E '(zapret|ZAPRET)' | while read t; do [ -n "$t" ] && nft delete table "$t"; done
-echo -e "\n${BLUE}🔴 ${GREEN}Zapret полностью удалён !${NC}\n"
+echo -e "\n${BLUE}🔴 ${GREEN}Zapret полностью удалён!${NC}\n"
 [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
 # ==========================================
@@ -689,20 +589,16 @@ clear
 echo -e "╔════════════════════════════════════╗"
 echo -e "║     ${BLUE}Zapret on remittor Manager${NC}     ║"
 echo -e "╚════════════════════════════════════╝"
-echo -e "                     ${DGRAY}by StressOzz v5.0${NC}"
+echo -e "                     ${DGRAY}by StressOzz v5.5${NC}"
 # Определяем актуальная/устарела
 if [ "$LIMIT_REACHED" -eq 1 ] || [ "$LATEST_VER" = "не найдена" ]; then
-    INST_COLOR=$CYAN
-    INSTALLED_DISPLAY="$INSTALLED_VER"
+INST_COLOR=$CYAN; INSTALLED_DISPLAY="$INSTALLED_VER"
 elif [ "$INSTALLED_VER" = "$LATEST_VER" ]; then
-    INST_COLOR=$GREEN
-    INSTALLED_DISPLAY="$INSTALLED_VER (актуальная)"
+INST_COLOR=$GREEN; INSTALLED_DISPLAY="$INSTALLED_VER (актуальная)"
 elif [ "$INSTALLED_VER" != "не найдена" ]; then
-    INST_COLOR=$RED
-    INSTALLED_DISPLAY="$INSTALLED_VER (устарела)"
+INST_COLOR=$RED; INSTALLED_DISPLAY="$INSTALLED_VER (устарела)"
 else
-    INST_COLOR=$RED
-    INSTALLED_DISPLAY="$INSTALLED_VER"
+INST_COLOR=$RED; INSTALLED_DISPLAY="$INSTALLED_VER"
 fi
 # Вывод информации о версиях и архитектуре
 echo -e "\n${YELLOW}Установленная версия: ${INST_COLOR}$INSTALLED_DISPLAY${NC}\n"
@@ -738,11 +634,11 @@ echo -e "${CYAN}5) ${GREEN}Удалить ${NC}Zapret"
 echo -e "${CYAN}6) ${GREEN}Добавить в стратегию блок для ${NC}Battlefield REDSEC"
 echo -e "${CYAN}7) ${GREEN}Меню настройки ${NC}Discord${GREEN} и звонков в ${NC}TG${GREEN}/${NC}WA"
 echo -e "${CYAN}8) ${GREEN}Удалить / Установить / Настроить${NC} Zapret"
-echo -e "${CYAN}0) ${GREEN}Выход (Enter)${NC}\n"
+echo -e "${CYAN}Enter) ${GREEN}Выход${NC}\n"
 echo -ne "${YELLOW}Выберите пункт:${NC} "
 read choice
 case "$choice" in
-1) install_update ;;
+1) install_Zapret ;;
 2) fix_default ;;
 3) comeback_def ;;
 4) startstop_zpr ;;
@@ -750,7 +646,9 @@ case "$choice" in
 6) fix_REDSEC  ;;
 7) enable_discord_calls ;;
 8) zapret_key ;;
-*) exit 0 ;;
+*) 
+echo -e ""
+exit 0 ;;
 esac
 }
 # ==========================================
