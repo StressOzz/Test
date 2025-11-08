@@ -402,21 +402,17 @@ fix_REDSEC() {
     local CONF="/etc/config/zapret"
     local STRATEGY_MARK="--filter-udp=1024-65535"
 
-    # Проверка установки zapret
     if [ ! -f /etc/init.d/zapret ]; then
         [ "$NO_PAUSE" != "1" ] && echo -e "${RED}Zapret не установлен!${NC}\n"
         [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
         return
     fi
 
-    # Проверка наличия стратегии
+    # Проверяем наличие стратегии
     if grep -Fq "$STRATEGY_MARK" "$CONF"; then
         echo -e "${RED}Стратегия для игр найдена — удаляем её${NC}\n"
-
-        # Удаляем блок стратегии, начиная с маркера
         sed -i "/$STRATEGY_MARK/,+6d" "$CONF"
 
-        # Синхронизация и перезапуск
         chmod +x /opt/zapret/sync_config.sh
         /opt/zapret/sync_config.sh
         /etc/init.d/zapret restart >/dev/null 2>&1
@@ -425,7 +421,7 @@ fix_REDSEC() {
     else
         echo -e "${GREEN}Стратегия для игр не найдена — устанавливаем${NC}\n"
 
-        # Добавляем 1024-65535 в option NFQWS_PORTS_UDP, если ещё нет
+        # Добавляем диапазон портов в NFQWS, если ещё нет
         if ! grep -Fq "option NFQWS_PORTS_UDP '1024-65535'" "$CONF"; then
             sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'$/,1024-65535'/" "$CONF"
         fi
@@ -440,7 +436,6 @@ fix_REDSEC() {
 --dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/quic_initial_www_google_com.bin
 EOF
 
-        # Синхронизация и перезапуск
         chmod +x /opt/zapret/sync_config.sh
         /opt/zapret/sync_config.sh
         /etc/init.d/zapret restart >/dev/null 2>&1
