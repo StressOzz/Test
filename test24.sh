@@ -400,44 +400,47 @@ fix_REDSEC() {
     echo -e "${MAGENTA}Настройка стратегии для игр (вкл/выкл)${NC}\n"
 
     local CONF="/etc/config/zapret"
-    local MARK_START="#REDSEC-STRATEGY-START"
-    local MARK_END="#REDSEC-STRATEGY-END"
+    local MARK="--filter-udp=1024-65535"   # уникальная строка блока
 
-    # Проверка установки zapret
     if [ ! -f /etc/init.d/zapret ]; then
         [ "$NO_PAUSE" != "1" ] && echo -e "${RED}Zapret не установлен!${NC}\n"
-        [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
+        [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода..." dummy
         return
     fi
 
-    # Если блок стратегии есть — удаляем только его
-    if grep -q "$MARK_START" "$CONF"; then
+    # Проверяем, есть ли блок
+    if grep -Fq "$MARK" "$CONF"; then
         echo -e "${RED}Стратегия для игр найдена — удаляем её${NC}\n"
-        sed -i "/$MARK_START/,/$MARK_END/d" "$CONF"
+        # Удаляем блок от --new до строки перед последней одинарной кавычкой
+        sed -i "/--new/,/--dpi-desync-fake-unknown-udp=/d" "$CONF"
+
+        # Проверяем, есть ли одна последняя кавычка, если нет — добавляем
+        if ! tail -n1 "$CONF" | grep -q "^'$"; then
+            echo "'" >> "$CONF"
+        fi
 
         chmod +x /opt/zapret/sync_config.sh
         /opt/zapret/sync_config.sh
         /etc/init.d/zapret restart >/dev/null 2>&1
 
-        echo -e "${GREEN}Стратегия для игр удалена${NC}\n"
+        echo -e "${GREEN}Стратегия для игр удалена, конфиг в порядке${NC}\n"
     else
         echo -e "${GREEN}Стратегия для игр не найдена — устанавливаем${NC}\n"
 
         # Добавляем диапазон портов, если ещё нет
-        if ! grep -q "option NFQWS_PORTS_UDP.*1024-65535" "$CONF"; then
+        if ! grep -Fq "option NFQWS_PORTS_UDP.*1024-65535" "$CONF"; then
             sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'$/,1024-65535'/" "$CONF"
         fi
 
-        # Добавляем блок стратегии с маркерами
-        cat <<EOF >> "$CONF"
-$MARK_START
+        # Добавляем блок стратегии с одинарной кавычкой в конце
+        cat <<'EOF' >> "$CONF"
 --new
 --filter-udp=1024-65535
 --dpi-desync=fake
 --dpi-desync-cutoff=d2
 --dpi-desync-any-protocol
 --dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/quic_initial_www_google_com.bin
-$MARK_END
+'
 EOF
 
         chmod +x /opt/zapret/sync_config.sh
@@ -447,8 +450,9 @@ EOF
         echo -e "${BLUE}Zapret настроен для игр!${NC}\n"
     fi
 
-    [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
+    [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода..." dummy
 }
+
 # ==========================================
 # Zapret под ключ
 # ==========================================
