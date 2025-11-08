@@ -400,19 +400,20 @@ fix_REDSEC() {
     echo -e "${MAGENTA}Настройка стратегии для игр (вкл/выкл)${NC}\n"
 
     local CONF="/etc/config/zapret"
-    local MARK="#REDSEC-STRATEGY-START"
+    local MARK_START="#REDSEC-STRATEGY-START"
     local MARK_END="#REDSEC-STRATEGY-END"
 
+    # Проверка установки zapret
     if [ ! -f /etc/init.d/zapret ]; then
         [ "$NO_PAUSE" != "1" ] && echo -e "${RED}Zapret не установлен!${NC}\n"
         [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
         return
     fi
 
-    # Проверяем, есть ли блок REDSEC
-    if grep -q "$MARK" "$CONF"; then
+    # Если блок стратегии есть — удаляем только его
+    if grep -q "$MARK_START" "$CONF"; then
         echo -e "${RED}Стратегия для игр найдена — удаляем её${NC}\n"
-        sed -i "/$MARK/,/$MARK_END/d" "$CONF"
+        sed -i "/$MARK_START/,/$MARK_END/d" "$CONF"
 
         chmod +x /opt/zapret/sync_config.sh
         /opt/zapret/sync_config.sh
@@ -422,14 +423,14 @@ fix_REDSEC() {
     else
         echo -e "${GREEN}Стратегия для игр не найдена — устанавливаем${NC}\n"
 
-        # Добавляем 1024-65535 в option NFQWS_PORTS_UDP, если ещё нет
-        if ! grep -q "option NFQWS_PORTS_UDP '1024-65535'" "$CONF"; then
+        # Добавляем диапазон портов, если ещё нет
+        if ! grep -q "option NFQWS_PORTS_UDP.*1024-65535" "$CONF"; then
             sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'$/,1024-65535'/" "$CONF"
         fi
 
-        # Добавляем блок стратегии с MARK
+        # Добавляем блок стратегии с маркерами
         cat <<EOF >> "$CONF"
-$MARK
+$MARK_START
 --new
 --filter-udp=1024-65535
 --dpi-desync=fake
@@ -448,7 +449,6 @@ EOF
 
     [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
-
 # ==========================================
 # Zapret под ключ
 # ==========================================
