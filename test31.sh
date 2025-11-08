@@ -395,49 +395,37 @@ chmod +x /opt/zapret/sync_config.sh
 # FIX GAME
 # ==========================================
 fix_REDSEC() {
-    local NO_PAUSE=$1
-    [ "$NO_PAUSE" != "1" ] && clear
-    echo -e "${MAGENTA}Настройка стратегии для игр (вкл/выкл)${NC}\n"
+local NO_PAUSE=$1
+[ "$NO_PAUSE" != "1" ] && clear
+echo -e "${MAGENTA}Настраиваем стратегию для игр${NC}\n"
+CONF="/etc/config/zapret"
+if [ ! -f /etc/init.d/zapret ]; then
+[ "$NO_PAUSE" != "1" ] && echo -e "${RED}Zapret не установлен!${NC}\n"
+[ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
+return
+fi
+if grep -q "option NFQWS_PORTS_UDP.*1024-65535" "$CONF" && grep -q -- "--filter-udp=1024-65535" "$CONF"; then
+echo -e "${RED}Стратегия для игр уже применена!${NC}\n"
+sed -i "\|--new|d" /etc/config/zapret
+sed -i "\|--filter-udp=1024-65535|d" /etc/config/zapret
+sed -i "\|--dpi-desync=fake|d" /etc/config/zapret
+sed -i "\|--dpi-desync-cutoff=d2|d" /etc/config/zapret
+sed -i "\|--dpi-desync-any-protocol|d" /etc/config/zapret
+sed -i "\|--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/quic_initial_www_google_com.bin|d" /etc/config/zapret
+sed -i "s/,1024-65535'/\'/" /etc/config/zapret
 
-    local CONF="/etc/config/zapret"
-    local BLOCK_MARK="--filter-udp=1024-65535"
-
-    # Проверка на наличие zapret
-    if [ ! -f /etc/init.d/zapret ]; then
-        [ "$NO_PAUSE" != "1" ] && echo -e "${RED}Zapret не установлен!${NC}\n"
-        [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода..." dummy
-        return
-    fi
-
-    # Если блок уже есть — удаляем
-    if grep -Fq "$BLOCK_MARK" "$CONF"; then
-        echo -e "${RED}Стратегия для игр найдена — удаляем её${NC}\n"
-
-        sed -i "\|--new|d" "$CONF"
-        sed -i "\|--filter-udp=1024-65535|d" "$CONF"
-        sed -i "\|--dpi-desync=fake|d" "$CONF"
-        sed -i "\|--dpi-desync-cutoff=d2|d" "$CONF"
-        sed -i "\|--dpi-desync-any-protocol|d" "$CONF"
-        sed -i "\|--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/quic_initial_www_google_com.bin|d" "$CONF"
-        sed -i "s/,1024-65535'/\'/" "$CONF"
-
-        chmod +x /opt/zapret/sync_config.sh
-        /opt/zapret/sync_config.sh
-        /etc/init.d/zapret restart >/dev/null 2>&1
-
-        echo -e "${GREEN}Стратегия для игр удалена${NC}\n"
-
-    else
-        # Если блока нет — добавляем
-        echo -e "${GREEN}Стратегия для игр не найдена — устанавливаем${NC}\n"
-
-        if ! grep -Fq "option NFQWS_PORTS_UDP" "$CONF"; then
-            echo "option NFQWS_PORTS_UDP '1024-65535'" >> "$CONF"
-        elif ! grep -Fq "1024-65535" "$CONF"; then
-            sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'$/,1024-65535'/" "$CONF"
-        fi
-
-        cat <<'EOF' >> "$CONF"
+read -p "Нажмите Enter для выхода в главное меню..." dummy
+return
+fi
+if ! grep -q "option NFQWS_PORTS_UDP.*1024-65535" "$CONF"; then
+sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'$/,1024-65535'/" "$CONF"
+fi
+if ! grep -q -- "--filter-udp=1024-65535" "$CONF"; then
+last_line=$(grep -n "^'$" "$CONF" | tail -n1 | cut -d: -f1)
+if [ -n "$last_line" ]; then
+sed -i "${last_line},\$d" "$CONF"
+fi
+cat <<'EOF' >> "$CONF"
 --new
 --filter-udp=1024-65535
 --dpi-desync=fake
@@ -446,18 +434,12 @@ fix_REDSEC() {
 --dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/quic_initial_www_google_com.bin
 '
 EOF
-
-        chmod +x /opt/zapret/sync_config.sh
-        /opt/zapret/sync_config.sh
-        /etc/init.d/zapret restart >/dev/null 2>&1
-
-        echo -e "${BLUE}Zapret настроен для игр${NC}\n"
-    fi
-
-    [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода..." dummy
+fi
+echo -e "${GREEN}🔴 ${CYAN}Добавляем в стратегию блок необходимый для игр${NC}"
+chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart >/dev/null 2>&1
+echo -e "\n${BLUE}🔴 ${GREEN}Zapret настроен для игр!${NC}\n"
+[ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
-
-
 # ==========================================
 # Zapret под ключ
 # ==========================================
