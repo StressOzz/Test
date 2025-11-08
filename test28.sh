@@ -397,26 +397,26 @@ chmod +x /opt/zapret/sync_config.sh
 fix_REDSEC() {
     local NO_PAUSE=$1
     [ "$NO_PAUSE" != "1" ] && clear
-    echo -e "${MAGENTA}Настройка стратегии для игр (вкл/выкл) на OpenWRT${NC}\n"
+    echo -e "${MAGENTA}Настройка стратегии для игр (вкл/выкл)${NC}\n"
 
     local CONF="/etc/config/zapret"
-    local BLOCK_MARK="--filter-udp=1024-65535"  # уникальная строка блока для поиска
+    local BLOCK_MARK="--filter-udp=1024-65535"  # уникальная строка блока
 
-    # Проверка установки zapret
+    # Проверка, установлен ли zapret
     if [ ! -f /etc/init.d/zapret ]; then
         [ "$NO_PAUSE" != "1" ] && echo -e "${RED}Zapret не установлен!${NC}\n"
         [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода..." dummy
         return
     fi
 
-    # Если блок есть — удаляем только его
+    # Если блок есть — удаляем
     if grep -Fq "$BLOCK_MARK" "$CONF"; then
         echo -e "${RED}Стратегия для игр найдена — удаляем её${NC}\n"
 
-        # Удаляем блок от --new до последней одинарной кавычки
+        # Удаляем блок от --new до строки с последней одинарной кавычкой
         sed -i "/--new/,/'$/d" "$CONF"
 
-        # Проверяем, есть ли в конце одинарная кавычка, если нет — добавляем
+        # Проверяем: если в конце нет одинарной кавычки, добавляем
         if ! tail -n1 "$CONF" | grep -Fq "'"; then
             echo "'" >> "$CONF"
         fi
@@ -425,17 +425,18 @@ fix_REDSEC() {
         /opt/zapret/sync_config.sh
         /etc/init.d/zapret restart >/dev/null 2>&1
 
-        echo -e "${GREEN}Стратегия для игр удалена, конфиг в порядке${NC}\n"
+        echo -e "${GREEN}Стратегия для игр удалена${NC}\n"
 
     else
+        # Если блока нет — добавляем
         echo -e "${GREEN}Стратегия для игр не найдена — устанавливаем${NC}\n"
 
-        # Добавляем диапазон портов в NFQWS, если ещё нет
+        # Добавляем диапазон портов в NFQWS, если его нет
         if ! grep -Fq "option NFQWS_PORTS_UDP.*1024-65535" "$CONF"; then
             sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'$/,1024-65535'/" "$CONF"
         fi
 
-        # Добавляем блок точно так, как нужно
+        # Добавляем блок стратегии с одинарной кавычкой
         cat <<'EOF' >> "$CONF"
 --new
 --filter-udp=1024-65535
@@ -450,7 +451,7 @@ EOF
         /opt/zapret/sync_config.sh
         /etc/init.d/zapret restart >/dev/null 2>&1
 
-        echo -e "${BLUE}Zapret настроен для игр!${NC}\n"
+        echo -e "${BLUE}Zapret настроен для игр${NC}\n"
     fi
 
     [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода..." dummy
