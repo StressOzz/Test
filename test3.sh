@@ -620,8 +620,8 @@ else
 INST_COLOR=$RED; INSTALLED_DISPLAY="$INSTALLED_VER"
 fi
 # Вывод информации о версиях и архитектуре
-echo -e "\n${YELLOW}Установленная версия: ${INST_COLOR}$INSTALLED_DISPLAY${NC}\n"
-# # # # # #echo -e "${YELLOW}Последняя версия на GitHub: ${CYAN}$LATEST_VER${NC}"
+echo -e "\n${YELLOW}Установленная версия: ${INST_COLOR}$INSTALLED_DISPLAY${NC}"
+# # # # # #echo -e "\n${YELLOW}Последняя версия на GitHub: ${CYAN}$LATEST_VER${NC}"
 # # # # # #echo -e "\n${YELLOW}Архитектура устройства:${NC} $LOCAL_ARCH"
 # Выводим статус службы zapret, если он известен
 [ -n "$ZAPRET_STATUS" ] && echo -e "\n${YELLOW}Статус Zapret: ${NC}$ZAPRET_STATUS"
