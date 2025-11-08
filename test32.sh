@@ -13,6 +13,7 @@ GRAY="\033[38;5;239m"
 DGRAY="\033[38;5;236m"
 # --- Рабочая директория для скачивания и распаковки
 WORKDIR="/tmp/zapret-update"
+CONF="/etc/config/zapret"
 # ==========================================
 # Функция получения информации о версиях, архитектуре и статусе
 # ==========================================
@@ -398,21 +399,28 @@ fix_REDSEC() {
 local NO_PAUSE=$1
 [ "$NO_PAUSE" != "1" ] && clear
 echo -e "${MAGENTA}Настраиваем стратегию для игр${NC}\n"
-CONF="/etc/config/zapret"
+
 if [ ! -f /etc/init.d/zapret ]; then
 [ "$NO_PAUSE" != "1" ] && echo -e "${RED}Zapret не установлен!${NC}\n"
 [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 return
 fi
 if grep -q "option NFQWS_PORTS_UDP.*1024-65535" "$CONF" && grep -q -- "--filter-udp=1024-65535" "$CONF"; then
-echo -e "${RED}Стратегия для игр уже применена!${NC}\n"
-sed -i "\|--new|d" /etc/config/zapret
-sed -i "\|--filter-udp=1024-65535|d" /etc/config/zapret
-sed -i "\|--dpi-desync=fake|d" /etc/config/zapret
-sed -i "\|--dpi-desync-cutoff=d2|d" /etc/config/zapret
-sed -i "\|--dpi-desync-any-protocol|d" /etc/config/zapret
-sed -i "\|--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/quic_initial_www_google_com.bin|d" /etc/config/zapret
-sed -i "s/,1024-65535'/\'/" /etc/config/zapret
+
+
+echo -e "${GREEN}🔴 ${CYAN}Удаляем из стратегию блок необходимый для игр${NC}"
+chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart >/dev/null 2>&1
+echo -e "\n${BLUE}🔴 ${GREEN}Блок для игр удалён!${NC}\n"
+
+
+sed -i "\|--new|d" "$CONF"
+sed -i "\|--filter-udp=1024-65535|d" "$CONF"
+sed -i "\|--dpi-desync=fake|d" "$CONF"
+sed -i "\|--dpi-desync-cutoff=d2|d" "$CONF"
+sed -i "\|--dpi-desync-any-protocol|d" "$CONF"
+sed -i "\|--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/quic_initial_www_google_com.bin|d" "$CONF"
+sed -i "s/,1024-65535'/\'/" "$CONF"
+
 
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 return
@@ -623,7 +631,7 @@ esac
 )
 # Если скрипт найден, выводим строку
 [ -n "$CURRENT_SCRIPT" ] && echo -e "\n${YELLOW}Установлен скрипт: ${NC}$CURRENT_SCRIPT"
-CONF="/etc/config/zapret"
+
 if [ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*1024-65535" "$CONF" && grep -q -- "--filter-udp=1024-65535" "$CONF"; then
 echo -e "\n${YELLOW}Стратегия для игр: ${NC}активна${NC}"
 fi
@@ -634,7 +642,7 @@ echo -e "${CYAN}2) ${GREEN}Оптимизировать стратегию${NC}"
 echo -e "${CYAN}3) ${GREEN}Вернуть настройки по умолчанию${NC}"
 echo -e "${CYAN}4) ${GREEN}Остановить / Запустить ${NC}Zapret"
 echo -e "${CYAN}5) ${GREEN}Удалить ${NC}Zapret"
-echo -e "${CYAN}6) ${GREEN}Добавить в стратегию блок для игр"
+echo -e "${CYAN}6) ${GREEN}Добавить / удалить в стратегию блок для игр"
 echo -e "${CYAN}7) ${GREEN}Меню настройки ${NC}Discord${GREEN} и звонков в ${NC}TG${GREEN}/${NC}WA"
 echo -e "${CYAN}8) ${GREEN}Удалить / Установить / Настроить${NC} Zapret"
 echo -e "${CYAN}Enter) ${GREEN}Выход${NC}\n"
