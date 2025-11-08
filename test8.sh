@@ -266,6 +266,7 @@ option NFQWS_OPT '
 --dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin
 '
 EOF
+# Редактируем /etc/hosts
 echo -e "${GREEN}🔴 ${CYAN}Редактируем ${NC}/etc/hosts"
 file="/etc/hosts"
 cat <<'EOF' | grep -Fxv -f "$file" 2>/dev/null >> "$file"
@@ -279,6 +280,43 @@ EOF
 # копируем tls_clienthello_t2_ru.bin
 echo -e "${GREEN}🔴 ${CYAN}Скачиваем ${NC}tls_clienthello_t2_ru.bin${CYAN}\n"
 curl -sLo /opt/zapret/files/fake/tls_clienthello_t2_ru.bin https://github.com/StressOzz/Zapret-Manager/raw/refs/heads/main/tls_clienthello_t2_ru.bin
+# добавляем домены Ютуб
+# Проверка и добавление YouTube hostlist
+file="/opt/zapret/ipset/zapret-hosts-google.txt"
+cat <<'EOF' | grep -Fxv -f "$file" 2>/dev/null >> "$file"
+android.clients.google.com
+beacons.gvt2.com
+connectivitycheck.gstatic.com
+googleplay.com
+gvt1.com
+lh3.googleusercontent.com
+play.google.com
+play.googleapis.com
+play-fe.googleapis.com
+play-games.googleusercontent.com
+play-lh.googleusercontent.com
+prod-lt-playstoregatewayadapter-pa.googleapis.com
+cdn.youtube.com
+fonts.googleapis.com
+fonts.gstatic.com
+ggpht.com
+googleapis.com
+googleusercontent.com
+i.ytimg.com
+i9.ytimg.com
+kids.youtube.com
+m.youtube.com
+manifest.googlevideo.com
+music.youtube.com
+nhacmp3youtube.com
+returnyoutubedislikeapi.com
+s.ytimg.com
+signaler-pa.youtube.com
+studio.youtube.com
+tv.youtube.com
+yt3.googleusercontent.com
+yting.com
+EOF
 # Применяем конфиг
 [ "$NO_PAUSE" != "1" ] && { chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart >/dev/null 2>&1; }
 echo -e "${BLUE}🔴 ${GREEN}Стратегия отредактирована!${NC}"
