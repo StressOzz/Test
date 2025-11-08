@@ -271,7 +271,7 @@ echo -e "${GREEN}🔴 ${CYAN}Скачиваем ${NC}tls_clienthello_t2_ru.bin"
 curl -sLo /opt/zapret/files/fake/tls_clienthello_t2_ru.bin https://github.com/StressOzz/Zapret-Manager/raw/refs/heads/main/tls_clienthello_t2_ru.bin
 # добавляем домены Ютуб
 # Проверка и добавление YouTube hostlist
-echo -e "${GREEN}🔴 ${CYAN}Добавляем домены для ${NC}Youtube"
+> /opt/zapret/ipset/zapret-hosts-user-exclude.txt
 file="/opt/zapret/ipset/zapret-hosts-user-exclude.txt"
 cat <<'EOF' | grep -Fxv -f "$file" 2>/dev/null >> "$file"
 archive.openwrt.org
