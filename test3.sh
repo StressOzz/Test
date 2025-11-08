@@ -620,11 +620,11 @@ else
 INST_COLOR=$RED; INSTALLED_DISPLAY="$INSTALLED_VER"
 fi
 # Вывод информации о версиях и архитектуре
-echo -e "\n${YELLOW}Установленная версия: ${INST_COLOR}$INSTALLED_DISPLAY${NC}"
-# # # # # #echo -e "\n${YELLOW}Последняя версия на GitHub: ${CYAN}$LATEST_VER${NC}"
-# # # # # #echo -e "\n${YELLOW}Архитектура устройства:${NC} $LOCAL_ARCH"
+echo -e "${YELLOW}Установленная версия: ${INST_COLOR}$INSTALLED_DISPLAY${NC}"
+echo -e "${YELLOW}Последняя версия на GitHub: ${CYAN}$LATEST_VER${NC}"
+echo -e "${YELLOW}Архитектура устройства:${NC} $LOCAL_ARCH"
 # Выводим статус службы zapret, если он известен
-[ -n "$ZAPRET_STATUS" ] && echo -e "\n${YELLOW}Статус Zapret: ${NC}$ZAPRET_STATUS"
+[ -n "$ZAPRET_STATUS" ] && echo -e "${YELLOW}Статус Zapret: ${NC}$ZAPRET_STATUS"
 # Проверяем, установлен ли кастомный скрипт
 CUSTOM_DIR="/opt/zapret/init.d/openwrt/custom.d/"
 SCRIPT_FILE="$CUSTOM_DIR/50-script.sh"
@@ -638,10 +638,10 @@ CURRENT_SCRIPT=$(
 esac
 )
 # Если скрипт найден, выводим строку
-[ -n "$CURRENT_SCRIPT" ] && echo -e "\n${YELLOW}Установлен скрипт: ${NC}$CURRENT_SCRIPT"
+[ -n "$CURRENT_SCRIPT" ] && echo -e "${YELLOW}Установлен скрипт: ${NC}$CURRENT_SCRIPT"
 CONF="/etc/config/zapret"
 if [ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*9000-13000,20000-22000" "$CONF" && grep -q -- "--filter-udp=9000-13000,20000-22000" "$CONF"; then
-echo -e "\n${YELLOW}Стратегия для игр: ${NC}активна${NC}"
+echo -e "${YELLOW}Стратегия для игр: ${NC}активна${NC}"
 fi
 echo -e ""
 # Вывод пунктов меню
