@@ -237,21 +237,10 @@ sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" /etc/config/zapret
 cat <<'EOF' >> /etc/config/zapret
 option NFQWS_OPT '
 --filter-tcp=443
---hostlist=/opt/zapret/ipset/zapret-hosts-google.txt
---dpi-desync=multidisorder
---dpi-desync-split-seqovl=681
---dpi-desync-split-pos=1
---dpi-desync-fooling=badseq
---dpi-desync-badseq-increment=10000000
---dpi-desync-repeats=2
---dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin
---dpi-desync-fake-tls-mod=rnd,dupsid,sni=fonts.google.com
---new
---filter-tcp=443
 --dpi-desync=fake,fakeddisorder
 --dpi-desync-split-pos=10,midsld
---dpi-desync-fake-tls=/opt/zapret/files/fake/tls_clienthello_t2_ru.bin
---dpi-desync-fake-tls-mod=rnd,dupsid,sni=m.ok.ru
+--dpi-desync-fake-tls=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin
+--dpi-desync-fake-tls-mod=rnd,dupsid,sni=fonts.google.com
 --dpi-desync-fake-tls=0x0F0F0F0F
 --dpi-desync-fake-tls-mod=none
 --dpi-desync-fakedsplit-pattern=/opt/zapret/files/fake/tls_clienthello_vk_com.bin
@@ -283,40 +272,20 @@ curl -sLo /opt/zapret/files/fake/tls_clienthello_t2_ru.bin https://github.com/St
 # добавляем домены Ютуб
 # Проверка и добавление YouTube hostlist
 echo -e "${GREEN}🔴 ${CYAN}Добавляем домены для ${NC}Youtube"
-file="/opt/zapret/ipset/zapret-hosts-google.txt"
+file="/opt/zapret/ipset/zapret-hosts-user-exclude.txt"
 cat <<'EOF' | grep -Fxv -f "$file" 2>/dev/null >> "$file"
-android.clients.google.com
-beacons.gvt2.com
-connectivitycheck.gstatic.com
-googleplay.com
-gvt1.com
-lh3.googleusercontent.com
-play.google.com
-play.googleapis.com
-play-fe.googleapis.com
-play-games.googleusercontent.com
-play-lh.googleusercontent.com
-prod-lt-playstoregatewayadapter-pa.googleapis.com
-cdn.youtube.com
-fonts.googleapis.com
-fonts.gstatic.com
-ggpht.com
-googleapis.com
-googleusercontent.com
-i.ytimg.com
-i9.ytimg.com
-kids.youtube.com
-m.youtube.com
-manifest.googlevideo.com
-music.youtube.com
-nhacmp3youtube.com
-returnyoutubedislikeapi.com
-s.ytimg.com
-signaler-pa.youtube.com
-studio.youtube.com
-tv.youtube.com
-yt3.googleusercontent.com
-yting.com
+archive.openwrt.org
+cdn.openwrt.org
+dev.openwrt.org
+downloads.openwrt.org
+forum.openwrt.org
+fwdownloads.openwrt.org
+gh.openwrt.org
+git.openwrt.org
+lede-project.org
+lists.openwrt.org
+openwrt.org
+wiki.openwrt.org
 EOF
 # Применяем конфиг
 echo -e "${GREEN}🔴 ${CYAN}Применяем новую стратегию и настройки\n"
