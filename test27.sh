@@ -397,25 +397,27 @@ chmod +x /opt/zapret/sync_config.sh
 fix_REDSEC() {
     local NO_PAUSE=$1
     [ "$NO_PAUSE" != "1" ] && clear
-    echo -e "${MAGENTA}Настройка стратегии для игр (вкл/выкл)${NC}\n"
+    echo -e "${MAGENTA}Настройка стратегии для игр (вкл/выкл) на OpenWRT${NC}\n"
 
     local CONF="/etc/config/zapret"
-    local MARK="--filter-udp=1024-65535"  # уникальная строка блока
+    local BLOCK_MARK="--filter-udp=1024-65535"  # уникальная строка блока для поиска
 
+    # Проверка установки zapret
     if [ ! -f /etc/init.d/zapret ]; then
         [ "$NO_PAUSE" != "1" ] && echo -e "${RED}Zapret не установлен!${NC}\n"
         [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода..." dummy
         return
     fi
 
-    # Проверка, есть ли блок
-    if grep -Fq "$MARK" "$CONF"; then
+    # Если блок есть — удаляем только его
+    if grep -Fq "$BLOCK_MARK" "$CONF"; then
         echo -e "${RED}Стратегия для игр найдена — удаляем её${NC}\n"
-        # Удаляем блок от --new до последней строки с одинарной кавычкой
+
+        # Удаляем блок от --new до последней одинарной кавычки
         sed -i "/--new/,/'$/d" "$CONF"
 
         # Проверяем, есть ли в конце одинарная кавычка, если нет — добавляем
-        if ! tail -n1 "$CONF" | grep -q "^'$"; then
+        if ! tail -n1 "$CONF" | grep -Fq "'"; then
             echo "'" >> "$CONF"
         fi
 
@@ -424,6 +426,7 @@ fix_REDSEC() {
         /etc/init.d/zapret restart >/dev/null 2>&1
 
         echo -e "${GREEN}Стратегия для игр удалена, конфиг в порядке${NC}\n"
+
     else
         echo -e "${GREEN}Стратегия для игр не найдена — устанавливаем${NC}\n"
 
