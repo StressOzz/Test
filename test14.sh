@@ -406,22 +406,22 @@ if [ ! -f /etc/init.d/zapret ]; then
 [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 return
 fi
-if grep -q "option NFQWS_PORTS_UDP.*9000-13000,20000-22000" "$CONF" && grep -q -- "--filter-udp=9000-13000,20000-22000" "$CONF"; then
-echo -e "${RED}Стратегия для Battlefield 6 & Apex Legends уже применена!${NC}\n"
+if grep -q "option NFQWS_PORTS_UDP.*1024-65535" "$CONF" && grep -q -- "--filter-udp=1024-65535" "$CONF"; then
+echo -e "${RED}Стратегия для игр уже применена!${NC}\n"
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 return
 fi
-if ! grep -q "option NFQWS_PORTS_UDP.*9000-13000,20000-22000" "$CONF"; then
-sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'$/,9000-13000,20000-22000'/" "$CONF"
+if ! grep -q "option NFQWS_PORTS_UDP.*1024-65535" "$CONF"; then
+sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'$/,1024-65535'/" "$CONF"
 fi
-if ! grep -q -- "--filter-udp=9000-13000,20000-22000" "$CONF"; then
+if ! grep -q -- "--filter-udp=1024-65535" "$CONF"; then
 last_line=$(grep -n "^'$" "$CONF" | tail -n1 | cut -d: -f1)
 if [ -n "$last_line" ]; then
 sed -i "${last_line},\$d" "$CONF"
 fi
 cat <<'EOF' >> "$CONF"
 --new
---filter-udp=9000-13000,20000-22000
+--filter-udp=1024-65535
 --dpi-desync=fake
 --dpi-desync-cutoff=d2
 --dpi-desync-any-protocol
@@ -618,7 +618,7 @@ esac
 # Если скрипт найден, выводим строку
 [ -n "$CURRENT_SCRIPT" ] && echo -e "\n${YELLOW}Установлен скрипт: ${NC}$CURRENT_SCRIPT"
 CONF="/etc/config/zapret"
-if [ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*9000-13000,20000-22000" "$CONF" && grep -q -- "--filter-udp=9000-13000,20000-22000" "$CONF"; then
+if [ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*1024-65535" "$CONF" && grep -q -- "--filter-udp=1024-65535" "$CONF"; then
 echo -e "\n${YELLOW}Стратегия для игр: ${NC}активна${NC}"
 fi
 echo -e ""
