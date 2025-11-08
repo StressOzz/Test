@@ -409,35 +409,34 @@ fix_REDSEC() {
         return
     fi
 
-    # Проверяем, есть ли уже блок
+    # Если блок уже есть — удаляем
     if grep -Fq "$BLOCK_MARK" "$CONF"; then
         echo -e "${RED}Стратегия для игр найдена — удаляем её${NC}\n"
 
-        # Удаляем только добавленный блок (от --new до закрывающей кавычки)
-        sed -i "/--new/,/'$/d" "$CONF"
-
-        # Если в конце нет одинарной кавычки — добавляем
-        if ! tail -n1 "$CONF" | grep -Fq "'"; then
-            echo "'" >> "$CONF"
-        fi
+        sed -i "\|--new|d" "$CONF"
+        sed -i "\|--filter-udp=1024-65535|d" "$CONF"
+        sed -i "\|--dpi-desync=fake|d" "$CONF"
+        sed -i "\|--dpi-desync-cutoff=d2|d" "$CONF"
+        sed -i "\|--dpi-desync-any-protocol|d" "$CONF"
+        sed -i "\|--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/quic_initial_www_google_com.bin|d" "$CONF"
+        sed -i "s/,1024-65535'/\'/" "$CONF"
 
         chmod +x /opt/zapret/sync_config.sh
         /opt/zapret/sync_config.sh
         /etc/init.d/zapret restart >/dev/null 2>&1
 
-        echo -e "${GREEN}Стратегия для игр успешно удалена${NC}\n"
+        echo -e "${GREEN}Стратегия для игр удалена${NC}\n"
 
     else
+        # Если блока нет — добавляем
         echo -e "${GREEN}Стратегия для игр не найдена — устанавливаем${NC}\n"
 
-        # Добавляем диапазон портов в NFQWS, если его нет
         if ! grep -Fq "option NFQWS_PORTS_UDP" "$CONF"; then
             echo "option NFQWS_PORTS_UDP '1024-65535'" >> "$CONF"
         elif ! grep -Fq "1024-65535" "$CONF"; then
             sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'$/,1024-65535'/" "$CONF"
         fi
 
-        # Добавляем стратегию
         cat <<'EOF' >> "$CONF"
 --new
 --filter-udp=1024-65535
@@ -452,7 +451,7 @@ EOF
         /opt/zapret/sync_config.sh
         /etc/init.d/zapret restart >/dev/null 2>&1
 
-        echo -e "${BLUE}Zapret успешно настроен для игр${NC}\n"
+        echo -e "${BLUE}Zapret настроен для игр${NC}\n"
     fi
 
     [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода..." dummy
