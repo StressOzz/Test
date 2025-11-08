@@ -297,7 +297,7 @@ EOF
 # # # # # #fi
 # # # # # #rm -f "$tmpfile"
 # # # # # #Проверка и добавление hosts
-echo -e "${GREEN}🔴 ${CYAN}Редактируем ${NC}/etc/hosts\n"
+echo -e "${GREEN}🔴 ${CYAN}Редактируем ${NC}/etc/hosts"
 file="/etc/hosts"
 cat <<'EOF' | grep -Fxv -f "$file" 2>/dev/null >> "$file"
 130.255.77.28 ntc.party
@@ -308,7 +308,7 @@ cat <<'EOF' | grep -Fxv -f "$file" 2>/dev/null >> "$file"
 EOF
 /etc/init.d/dnsmasq restart >/dev/null 2>&1
 # копируем tls_clienthello_t2_ru.bin
-echo -e "${GREEN}🔴 ${CYAN}Копируем ${NC}tls_clienthello_t2_ru.bin${CYAN} на роутер\n"
+echo -e "${GREEN}🔴 ${CYAN}Скачиваем ${NC}tls_clienthello_t2_ru.bin${CYAN}\n"
 curl -sLo /opt/zapret/files/fake/tls_clienthello_t2_ru.bin https://github.com/StressOzz/Zapret-Manager/raw/refs/heads/main/tls_clienthello_t2_ru.bin
 # Применяем конфиг
 [ "$NO_PAUSE" != "1" ] && { chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart >/dev/null 2>&1; }
@@ -621,8 +621,8 @@ INST_COLOR=$RED; INSTALLED_DISPLAY="$INSTALLED_VER"
 fi
 # Вывод информации о версиях и архитектуре
 echo -e "\n${YELLOW}Установленная версия: ${INST_COLOR}$INSTALLED_DISPLAY${NC}\n"
-echo -e "${YELLOW}Последняя версия на GitHub: ${CYAN}$LATEST_VER${NC}"
-echo -e "\n${YELLOW}Архитектура устройства:${NC} $LOCAL_ARCH"
+# # # # # #echo -e "${YELLOW}Последняя версия на GitHub: ${CYAN}$LATEST_VER${NC}"
+# # # # # #echo -e "\n${YELLOW}Архитектура устройства:${NC} $LOCAL_ARCH"
 # Выводим статус службы zapret, если он известен
 [ -n "$ZAPRET_STATUS" ] && echo -e "\n${YELLOW}Статус Zapret: ${NC}$ZAPRET_STATUS"
 # Проверяем, установлен ли кастомный скрипт
