@@ -406,13 +406,9 @@ if [ ! -f /etc/init.d/zapret ]; then
 return
 fi
 if grep -q "option NFQWS_PORTS_UDP.*1024-65535" "$CONF" && grep -q -- "--filter-udp=1024-65535" "$CONF"; then
-
-
-echo -e "${GREEN}🔴 ${CYAN}Удаляем из стратегию блок необходимый для игр${NC}"
+echo -e "${GREEN}🔴 ${CYAN}Удаляем из стратегии блок необходимый для игр${NC}"
 chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart >/dev/null 2>&1
 echo -e "\n${BLUE}🔴 ${GREEN}Блок для игр удалён!${NC}\n"
-
-
 sed -i "\|--new|d" "$CONF"
 sed -i "\|--filter-udp=1024-65535|d" "$CONF"
 sed -i "\|--dpi-desync=fake|d" "$CONF"
@@ -420,8 +416,6 @@ sed -i "\|--dpi-desync-cutoff=d2|d" "$CONF"
 sed -i "\|--dpi-desync-any-protocol|d" "$CONF"
 sed -i "\|--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/quic_initial_www_google_com.bin|d" "$CONF"
 sed -i "s/,1024-65535'/\'/" "$CONF"
-
-
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 return
 fi
@@ -600,7 +594,7 @@ clear
 echo -e "╔════════════════════════════════════╗"
 echo -e "║     ${BLUE}Zapret on remittor Manager${NC}     ║"
 echo -e "╚════════════════════════════════════╝"
-echo -e "                     ${DGRAY}by StressOzz v5.6${NC}"
+echo -e "                     ${DGRAY}by StressOzz v6.0${NC}"
 # Определяем актуальная/устарела
 if [ "$LIMIT_REACHED" -eq 1 ] || [ "$LATEST_VER" = "не найдена" ]; then
 INST_COLOR=$CYAN; INSTALLED_DISPLAY="$INSTALLED_VER"
