@@ -237,6 +237,7 @@ sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" /etc/config/zapret
 cat <<'EOF' >> /etc/config/zapret
 option NFQWS_OPT '
 --filter-tcp=443
+--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt
 --dpi-desync=fake,fakeddisorder
 --dpi-desync-split-pos=10,midsld
 --dpi-desync-fake-tls=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin
@@ -250,6 +251,7 @@ option NFQWS_OPT '
 --dpi-desync-badseq-increment=0
 --new
 --filter-udp=443
+--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt
 --dpi-desync=fake
 --dpi-desync-repeats=4
 --dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin
