@@ -278,11 +278,11 @@ cat <<'EOF' | grep -Fxv -f "$file" 2>/dev/null >> "$file"
 EOF
 /etc/init.d/dnsmasq restart >/dev/null 2>&1
 # копируем tls_clienthello_t2_ru.bin
-echo -e "${GREEN}🔴 ${CYAN}Скачиваем ${NC}tls_clienthello_t2_ru.bin\n"
+echo -e "${GREEN}🔴 ${CYAN}Скачиваем ${NC}tls_clienthello_t2_ru.bin"
 curl -sLo /opt/zapret/files/fake/tls_clienthello_t2_ru.bin https://github.com/StressOzz/Zapret-Manager/raw/refs/heads/main/tls_clienthello_t2_ru.bin
 # добавляем домены Ютуб
 # Проверка и добавление YouTube hostlist
-echo -e "${GREEN}🔴 ${CYAN}Добавляем домены для ${NC}Youtube\n"
+echo -e "${GREEN}🔴 ${CYAN}Добавляем домены для ${NC}Youtube"
 file="/opt/zapret/ipset/zapret-hosts-google.txt"
 cat <<'EOF' | grep -Fxv -f "$file" 2>/dev/null >> "$file"
 android.clients.google.com
