@@ -641,7 +641,7 @@ esac
 [ -n "$CURRENT_SCRIPT" ] && echo -e "\n${YELLOW}Установлен скрипт: ${NC}$CURRENT_SCRIPT"
 CONF="/etc/config/zapret"
 if [ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*9000-13000,20000-22000" "$CONF" && grep -q -- "--filter-udp=9000-13000,20000-22000" "$CONF"; then
-echo -e "\n${YELLOW}Стратегия для Battlefield 6 & Apex Legends: ${NC}активна${NC}"
+echo -e "\n${YELLOW}Стратегия для игр: ${NC}активна${NC}"
 fi
 echo -e ""
 # Вывод пунктов меню
