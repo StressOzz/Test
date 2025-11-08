@@ -266,11 +266,7 @@ cat <<'EOF' | grep -Fxv -f "$file" 2>/dev/null >> "$file"
 157.240.9.174 instagram.com www.instagram.com
 EOF
 /etc/init.d/dnsmasq restart >/dev/null 2>&1
-# копируем tls_clienthello_t2_ru.bin
-echo -e "${GREEN}🔴 ${CYAN}Скачиваем ${NC}tls_clienthello_t2_ru.bin"
-curl -sLo /opt/zapret/files/fake/tls_clienthello_t2_ru.bin https://github.com/StressOzz/Zapret-Manager/raw/refs/heads/main/tls_clienthello_t2_ru.bin
-# добавляем домены Ютуб
-# Проверка и добавление YouTube hostlist
+# добавление исключения
 > /opt/zapret/ipset/zapret-hosts-user-exclude.txt
 file="/opt/zapret/ipset/zapret-hosts-user-exclude.txt"
 cat <<'EOF' | grep -Fxv -f "$file" 2>/dev/null >> "$file"
