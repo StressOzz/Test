@@ -267,7 +267,7 @@ cat <<'EOF' | grep -Fxv -f "$file" 2>/dev/null >> "$file"
 EOF
 /etc/init.d/dnsmasq restart >/dev/null 2>&1
 # добавление исключения
-> /opt/zapret/ipset/zapret-hosts-user-exclude.txt
+# > /opt/zapret/ipset/zapret-hosts-user-exclude.txt
 file="/opt/zapret/ipset/zapret-hosts-user-exclude.txt"
 cat <<'EOF' | grep -Fxv -f "$file" 2>/dev/null >> "$file"
 archive.openwrt.org
