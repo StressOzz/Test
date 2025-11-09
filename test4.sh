@@ -625,18 +625,13 @@ menu_str() {
     mkdir -p "$STR_DIR" >/dev/null 2>&1
 
     case "$choice" in
-        1) FILE="Str1.sh" ;;
-        2) FILE="Str2.sh" ;;
-        3) FILE="Str3.sh" ;;
-        0)
-            echo -e "${RED}Отменено пользователем.${RESET}"
-            return 0
-            ;;
-        *)
-            echo -e "${RED}❌ Неверный выбор.${RESET}"
-            return 1
-            ;;
-    esac
+    1) source "$STR_DIR/Str1.sh" 1 ;;
+    2) source "$STR_DIR/Str2.sh" 1 ;;
+    3) source "$STR_DIR/Str3.sh" 1 ;;
+    0) echo -e "${RED}Отменено пользователем.${RESET}" ; return 0 ;;
+    *) echo -e "${RED}❌ Неверный выбор.${RESET}" ; return 1 ;;
+esac
+
 
     echo -e "${CYAN}Загрузка ${WHITE}${FILE}${RESET}..."
     curl -fsSL "${BASE_URL}/${FILE}" -o "${STR_DIR}/${FILE}" || {
