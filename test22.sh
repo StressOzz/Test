@@ -652,9 +652,6 @@ show_current_strategy() {
         echo -e "${RED}не определена${NC}"
     fi
 }
-
-
-
 # ==========================================
 # Главное меню
 # ==========================================
@@ -664,7 +661,7 @@ clear
 echo -e "╔════════════════════════════════════╗"
 echo -e "║     ${BLUE}Zapret on remittor Manager${NC}     ║"
 echo -e "╚════════════════════════════════════╝"
-echo -e "                     ${DGRAY}by StressOzz v6.0${NC}"
+echo -e "                     ${DGRAY}by StressOzz v6.5${NC}"
 # Определяем актуальная/устарела
 if [ "$LIMIT_REACHED" -eq 1 ] || [ "$LATEST_VER" = "не найдена" ]; then
 INST_COLOR=$CYAN; INSTALLED_DISPLAY="$INSTALLED_VER"
