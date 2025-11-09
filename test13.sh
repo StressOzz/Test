@@ -642,13 +642,13 @@ case "$choice" in
 show_current_strategy() {
     CONF="/etc/config/zapret"
 
-    if grep -Fxq "--dpi-desync-badseq-increment=10000000" "$CONF"; then
+    if grep -q "dpi-desync-badseq-increment=10000000" "$CONF"; then
         echo -e "${GREEN}Текущая стратегия: Str1${NC}"
-    elif grep -Fxq "--dpi-desync-split-seqovl=336" "$CONF"; then
+    elif grep -q "dpi-desync-split-seqovl=336" "$CONF"; then
         echo -e "${GREEN}Текущая стратегия: Str2${NC}"
-    elif grep -Fxq "--dpi-desync-split-seqovl=2108" "$CONF"; then
+    elif grep -q "dpi-desync-split-seqovl=2108" "$CONF"; then
         echo -e "${GREEN}Текущая стратегия: Str3${NC}"
-    elif grep -Fxq "--dpi-desync-split-pos=1,sniext+1,host+1,midsld-2,midsld,midsld+2,endhost-1" "$CONF"; then
+    elif grep -q "dpi-desync-split-pos=1,sniext+1,host+1,midsld-2,midsld,midsld+2,endhost-1" "$CONF"; then
         echo -e "${GREEN}Текущая стратегия: Default${NC}"
     else
         echo -e "${RED}Стратегия не определена${NC}"
