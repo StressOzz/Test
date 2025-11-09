@@ -619,18 +619,18 @@ echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n"
 echo -ne "${YELLOW}Выберите пункт:${NC} "
 read choice
 case "$choice" in
-        1) 
-        clear
-curl -sL https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Str1.sh | sh
-        #FILE="Str1.sh" ;;
-        2) 
-        clear
-curl -sL https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Str2.sh | sh
-        #FILE="Str2.sh" ;;
-        3) 
-        clear
-curl -sL https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Str3.sh | sh
-        #FILE="Str3.sh" ;;
+1) 
+    clear
+    curl -sL https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Str3.sh | sh || echo "Ошибка запуска стратегии 3"
+;;
+2) 
+    clear
+    curl -sL https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Str3.sh | sh || echo "Ошибка запуска стратегии 3"
+;;
+3) 
+    clear
+    curl -sL https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Str3.sh | sh || echo "Ошибка запуска стратегии 3"
+;;
         *)
           echo -e "\nВыходим в главное меню..."
           sleep 1
