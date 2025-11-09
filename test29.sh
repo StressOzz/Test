@@ -470,8 +470,7 @@ fi
 uninstall_zapret "1"
 install_Zapret "1"
 curl -sL https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Str3.sh | sh
-################################################################################################fix_default
-echo -e "\n${MAGENTA}Включаем Discord и звонки в TG и WA${NC}\n"
+echo -e "${MAGENTA}Включаем Discord и звонки в TG и WA${NC}\n"
 enable_discord_calls "1"
 fix_REDSEC "1"
 if [ -f /etc/init.d/zapret ]; then
@@ -609,29 +608,28 @@ echo -e "${RED}Zapret не установлен!${NC}"
 return
 fi
 
-echo -ne "${YELLOW}Активная стратегия:${NC} "
-show_current_strategy
-echo -e ""
-echo -e "${CYAN}1) ${GREEN}Установить стратегию${NC} 1"
-echo -e "${CYAN}2) ${GREEN}Установить стратегию${NC} 2"
-echo -e "${CYAN}3) ${GREEN}Установить стратегию${NC} 3"
+echo -e "${YELLOW}Cтратегия:${NC} $(show_current_strategy)\n"
+
+echo -e "${CYAN}1) ${GREEN}Установить стратегию${NC} v1"
+echo -e "${CYAN}2) ${GREEN}Установить стратегию${NC} v2"
+echo -e "${CYAN}3) ${GREEN}Установить стратегию${NC} v3"
 echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n"
 echo -ne "${YELLOW}Выберите пункт:${NC} "
 read choice
 case "$choice" in
 1) 
     clear
-    curl -sL https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Str1.sh | sh || echo "Ошибка запуска стратегии 3"
+    curl -sL https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Str1.sh | sh
     read -p "Нажмите Enter для выхода в главное меню..." dummy
 ;;
 2) 
     clear
-    curl -sL https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Str2.sh | sh || echo "Ошибка запуска стратегии 3"
+    curl -sL https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Str2.sh | sh
     read -p "Нажмите Enter для выхода в главное меню..." dummy
 ;;
 3) 
     clear
-    curl -sL https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Str3.sh | sh || echo "Ошибка запуска стратегии 3"
+    curl -sL https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Str3.sh | sh
     read -p "Нажмите Enter для выхода в главное меню..." dummy
 ;;
         *)
