@@ -651,7 +651,7 @@ show_current_strategy() {
     elif grep -q "dpi-desync-split-pos=1,sniext+1,host+1,midsld-2,midsld,midsld+2,endhost-1" "$CONFstr"; then
         echo -e "дефолтная"
     else
-        echo -e "${RED}Стратегия не определена${NC}"
+        echo -e "${RED}не определена${NC}"
     fi
 }
 
@@ -699,7 +699,7 @@ esac
 if [ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*1024-65535" "$CONF" && grep -q -- "--filter-udp=1024-65535" "$CONF"; then
 echo -e "\n${YELLOW}Стратегия для игр: ${NC}активна${NC}"
 fi
-echo -ne "${YELLOW}Активная стратегия:${NC} "
+echo -e "\n${YELLOW}Cтратегия:${NC} "
 show_current_strategy
 echo -e ""
 # Вывод пунктов меню
