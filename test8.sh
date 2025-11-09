@@ -606,16 +606,18 @@ fi
 # ==========================================
 # Выбор стратегий
 # ==========================================
-menu_str() {
-    local STR_DIR="/opt/zapret/scripts"
-    local BASE_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main"
-    local FILE
+STR_DIR="/opt/zapret/scripts"
+BASE_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main"
 
-    echo -e "\nВыбор стратегии DPI-обхода:"
-    echo "1) Универсальная (Str1.sh)"
-    echo "2) Игровая (Str2.sh)"
-    echo "3) Агрессивная (Str3.sh)"
-    echo "0) Отмена"
+menu_str() {
+    echo -e "\n${CYAN}═══════════════════════════════════════${RESET}"
+    echo -e "        ⚙️  ${WHITE}Выбор стратегии DPI-обхода${RESET}"
+    echo -e "${CYAN}═══════════════════════════════════════${RESET}"
+    echo -e "${GREEN}1)${WHITE} Универсальная (Str1.sh)${RESET}"
+    echo -e "${GREEN}2)${WHITE} Игровая (Str2.sh)${RESET}"
+    echo -e "${GREEN}3)${WHITE} Агрессивная (Str3.sh)${RESET}"
+    echo -e "${RED}0)${WHITE} Отмена${RESET}"
+    echo -e "${CYAN}───────────────────────────────────────${RESET}"
     read -rp "Выбери номер: " choice
     echo
 
@@ -625,19 +627,19 @@ menu_str() {
         1) FILE="Str1.sh" ;;
         2) FILE="Str2.sh" ;;
         3) FILE="Str3.sh" ;;
-        0) echo "Отменено."; return 0 ;;
-        *) echo "Неверный выбор."; return 1 ;;
+        0) echo -e "${RED}Отменено.${RESET}"; return 0 ;;
+        *) echo -e "${RED}Неверный выбор.${RESET}"; return 1 ;;
     esac
 
-    echo "Скачиваем $FILE..."
-    curl -fsSL "$BASE_URL/$FILE" -o "$STR_DIR/$FILE" || { echo "Ошибка загрузки $FILE"; return 1; }
+    echo -e "${CYAN}Загрузка ${WHITE}${FILE}${RESET}..."
+    curl -fsSL "$BASE_URL/$FILE" -o "$STR_DIR/$FILE" || { echo -e "${RED}Ошибка загрузки ${FILE}${RESET}"; return 1; }
 
     chmod +x "$STR_DIR/$FILE"
 
-    echo "Запускаем стратегию $FILE..."
-    bash "$STR_DIR/$FILE"
+    echo -e "${GREEN}Запускаем стратегию ${WHITE}${FILE}${RESET}...${RESET}"
+    sh "$STR_DIR/$FILE"
+    echo -e "${GREEN}✔️  Стратегия применена.${RESET}"
 }
-
 
 # ==========================================
 # Главное меню
