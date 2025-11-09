@@ -515,9 +515,7 @@ read -p "Нажмите Enter для выхода в главное меню..."
 return
 fi
 if [ -f /etc/init.d/zapret ]; then
-    echo -e "${YELLOW}Используемая стратегия:${NC} "
-    show_current_strategy
-    echo ""
+echo -e "${YELLOW}Используемая стратегия:${NC} $(show_current_strategy)\n"
 fi
 echo -e "${CYAN}1) ${GREEN}Установить стратегию${NC} v1"
 echo -e "${CYAN}2) ${GREEN}Установить стратегию${NC} v2"
@@ -545,7 +543,7 @@ return ;;
 esac
 }
 show_current_strategy() {
-CONFstr="/opt/zapret/zapret.conf"
+CONFstr="/etc/config/zapret"
 [ -f "$CONFstr" ] && {
 if grep -q "#v1" "$CONFstr"; then
 echo -e "v1"
