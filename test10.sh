@@ -221,14 +221,10 @@ fi
 # Чиним дефолтную стратегию
 # ==========================================
 fix_default() {
-local NO_PAUSE=$1
-[ "$NO_PAUSE" != "1" ] && clear
 echo -e "${MAGENTA}Оптимизируем стратегию${NC}\n"
 # Проверка, установлен ли Zapret
 if [ ! -f /etc/init.d/zapret ]; then
 echo -e "${RED}Zapret не установлен!${NC}"
-[ "$NO_PAUSE" != "1" ] && echo -e ""
-[ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 return
 fi
 echo -e "${GREEN}🔴 ${CYAN}Меняем стратегию${NC}"
@@ -314,10 +310,8 @@ echo -e "${GREEN}🔴 ${CYAN}Копируем ${NC}tls_clienthello_t2_ru.bin${CY
 curl -sLo /opt/zapret/files/fake/tls_clienthello_t2_ru.bin https://github.com/StressOzz/Zapret-Manager/raw/refs/heads/main/tls_clienthello_t2_ru.bin
 # Применяем конфиг
 echo -e "${GREEN}🔴 ${CYAN}Применяем новую стратегию и настройки${NC}\n"
-[ "$NO_PAUSE" != "1" ] && { chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart >/dev/null 2>&1; }
+chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart >/dev/null 2>&1;
 echo -e "${BLUE}🔴 ${GREEN}Стратегия отредактирована!${NC}"
-[ "$NO_PAUSE" != "1" ] && echo -e ""
-[ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
 # ==========================================
 # Включение Discord и звонков в TG и WA
@@ -610,8 +604,14 @@ menu_str() {
 STR_DIR="/opt/zapret/scripts"
 BASE_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main"
 mkdir -p "$STR_DIR" >/dev/null 2>&1
-
+clear
 echo -e "${MAGENTA}Меню выбора стратегии${NC}\n"
+
+# Проверка, установлен ли Zapret
+if [ ! -f /etc/init.d/zapret ]; then
+echo -e "${RED}Zapret не установлен!${NC}"
+return
+fi
 
 echo -e "${CYAN}1) ${GREEN}Установить стратегию${NC} 1"
 echo -e "${CYAN}2) ${GREEN}Установить стратегию${NC} 2"
@@ -630,7 +630,7 @@ case "$choice" in
           return ;;
     esac
     
-    curl -fsSL "$BASE_URL/$FILE" -o "$STR_DIR/$FILE" || { echo -e "${RED}Ошибка загрузки ${FILE}${RESET}"; return 1; }
+    curl -fsSL "$BASE_URL/$FILE" -o "$STR_DIR/$FILE" || { echo -e "${RED}Ошибка загрузки ${FILE}${NC}"; return 1; }
 
     chmod +x "$STR_DIR/$FILE"
     sh "$STR_DIR/$FILE"
