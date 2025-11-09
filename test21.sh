@@ -221,12 +221,8 @@ fi
 # Чиним дефолтную стратегию
 # ==========================================
 fix_default() {
+# ВСТАВИТЬ СЮДА СТРАТЕГИЮ, КОТОРАЯ БУДЕТ УСТАНАВЛИВАТЬСЯ ЧЕРЕЗ 8 ПУНКТ
 echo -e "${MAGENTA}Оптимизируем стратегию${NC}\n"
-# Проверка, установлен ли Zapret
-if [ ! -f /etc/init.d/zapret ]; then
-echo -e "${RED}Zapret не установлен!${NC}"
-return
-fi
 echo -e "${GREEN}🔴 ${CYAN}Меняем стратегию${NC}"
 # Удаляем строку и всё, что идёт ниже строки с option NFQWS_OPT '
 sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" /etc/config/zapret
@@ -245,8 +241,8 @@ cat <<'EOF' >> /etc/config/zapret
 --dpi-desync-fooling=badsum,badseq
 --new
 --filter-tcp=443
---dpi-desync=fake,fakeddisorder
 --hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt
+--dpi-desync=fake,fakeddisorder
 --dpi-desync-split-pos=10,midsld
 --dpi-desync-fake-tls=/opt/zapret/files/fake/tls_clienthello_t2_ru.bin
 --dpi-desync-fake-tls-mod=rnd,dupsid,sni=m.ok.ru
@@ -262,20 +258,11 @@ cat <<'EOF' >> /etc/config/zapret
 --dpi-desync=fake
 --dpi-desync-repeats=4
 --dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin
+#v3
 '
 EOF
-# Редактируем /etc/hosts
-echo -e "${GREEN}🔴 ${CYAN}Добавляем домены для ${NC}Youtube${CYAN} и редактируем ${NC}/etc/hosts"
-file="/etc/hosts"
-cat <<'EOF' | grep -Fxv -f "$file" 2>/dev/null >> "$file"
-130.255.77.28 ntc.party
-57.144.222.34 instagram.com www.instagram.com
-173.245.58.219 rutor.info d.rutor.info
-193.46.255.29 rutor.info
-157.240.9.174 instagram.com www.instagram.com
-EOF
-/etc/init.d/dnsmasq restart >/dev/null 2>&1
-# добавление исключения
+# Добавляем исключение и домены Youtube
+echo -e "${GREEN}🔴 ${CYAN}Добавляем домены для ${NC}Youtube"
 file="/opt/zapret/ipset/zapret-hosts-user-exclude.txt"
 rm -f "$file"
 cat <<'EOF' > "$file"
@@ -308,9 +295,20 @@ EOF
 # дкопируем tls_clienthello_t2_ru.bin
 echo -e "${GREEN}🔴 ${CYAN}Копируем ${NC}tls_clienthello_t2_ru.bin${CYAN} на устройство${NC}"
 curl -sLo /opt/zapret/files/fake/tls_clienthello_t2_ru.bin https://github.com/StressOzz/Zapret-Manager/raw/refs/heads/main/tls_clienthello_t2_ru.bin
+# Редактируем /etc/hosts
+echo -e "${GREEN}🔴 ${CYAN}Редактируем ${NC}/etc/hosts"
+file="/etc/hosts"
+cat <<'EOF' | grep -Fxv -f "$file" 2>/dev/null >> "$file"
+130.255.77.28 ntc.party
+57.144.222.34 instagram.com www.instagram.com
+173.245.58.219 rutor.info d.rutor.info
+193.46.255.29 rutor.info
+157.240.9.174 instagram.com www.instagram.com
+EOF
+/etc/init.d/dnsmasq restart >/dev/null 2>&1
 # Применяем конфиг
 echo -e "${GREEN}🔴 ${CYAN}Применяем новую стратегию и настройки${NC}\n"
-chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart >/dev/null 2>&1;
+chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart >/dev/null 2>&1
 echo -e "${BLUE}🔴 ${GREEN}Стратегия отредактирована!${NC}"
 }
 # ==========================================
@@ -471,7 +469,7 @@ return
 fi
 uninstall_zapret "1"
 install_Zapret "1"
-fix_default "1"
+fix_default
 echo -e "\n${MAGENTA}Включаем Discord и звонки в TG и WA${NC}\n"
 enable_discord_calls "1"
 fix_REDSEC "1"
