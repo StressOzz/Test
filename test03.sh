@@ -400,7 +400,7 @@ return
 fi
 if grep -q "option NFQWS_PORTS_UDP.*1024-65535" "$CONF" && grep -q -- "--filter-udp=1024-65535" "$CONF"; then
 echo -e "${GREEN}🔴 ${CYAN}Удаляем из стратегии настройки для игр${NC}"
-sed -i '0,/--new/{N;N;N;N;N;/--filter-udp=1024-65535\n--dpi-desync=fake\n--dpi-desync-cutoff=d2\n--dpi-desync-any-protocol\n--dpi-desync-fake-unknown-udp=\/opt\/zapret\/files\/fake\/quic_initial_www_google_com\.bin/d}' "$CONF"
+sed -i ':a;N;$!ba;s|--new\n--filter-udp=1024-65535\n--dpi-desync=fake\n--dpi-desync-cutoff=d2\n--dpi-desync-any-protocol\n--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/quic_initial_www_google_com\.bin||g' "$CONF"
 sed -i "s/,1024-65535'/\'/" "$CONF"
 chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart >/dev/null 2>&1
 echo -e "\n${BLUE}🔴 ${GREEN}Настройки для игр удалены!${NC}\n"
