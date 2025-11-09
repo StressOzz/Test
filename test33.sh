@@ -510,10 +510,13 @@ clear
 echo -e "${MAGENTA}Меню выбора стратегии${NC}\n"
 # Проверка, установлен ли Zapret
 if [ ! -f /etc/init.d/zapret ]; then
-echo -e "${RED}Zapret не установлен!${NC}"
+echo -e "${RED}Zapret не установлен!${NC}\n"
+read -p "Нажмите Enter для выхода в главное меню..." dummy
 return
 fi
-echo -e "${YELLOW}Используемая стратегия:${NC} $(show_current_strategy)\n"
+if [ -f /etc/init.d/zapret ]; then
+    echo -e "${YELLOW}Используемая стратегия:${NC} $(show_current_strategy)\n"
+fi
 echo -e "${CYAN}1) ${GREEN}Установить стратегию${NC} v1"
 echo -e "${CYAN}2) ${GREEN}Установить стратегию${NC} v2"
 echo -e "${CYAN}3) ${GREEN}Установить стратегию${NC} v3"
@@ -541,19 +544,18 @@ esac
 }
 show_current_strategy() {
 CONFstr="/opt/zapret/zapret.conf"
-
 [ -f "$CONFstr" ] && {
-    if grep -q "#v1" "$CONFstr"; then
-        echo -e "v1"
-    elif grep -q "#v2" "$CONFstr"; then
-        echo -e "v2"
-    elif grep -q "#v3" "$CONFstr"; then
-        echo -e "v3"
-    elif grep -q "dpi-desync-split-pos=1,sniext+1,host+1,midsld-2,midsld,midsld+2,endhost-1" "$CONFstr"; then
-        echo -e "дефолтная"
-    else
-        echo -e "${RED}не известная${NC}"
-    fi
+if grep -q "#v1" "$CONFstr"; then
+echo -e "v1"
+elif grep -q "#v2" "$CONFstr"; then
+echo -e "v2"
+elif grep -q "#v3" "$CONFstr"; then
+echo -e "v3"
+elif grep -q "dpi-desync-split-pos=1,sniext+1,host+1,midsld-2,midsld,midsld+2,endhost-1" "$CONFstr"; then
+echo -e "дефолтная"
+else
+echo -e "${RED}не известная${NC}"
+fi
 }
 }
 # ==========================================
@@ -598,7 +600,10 @@ esac
 if [ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*1024-65535" "$CONF" && grep -q -- "--filter-udp=1024-65535" "$CONF"; then
 echo -e "\n${YELLOW}Стратегия для игр: ${NC}активна${NC}"
 fi
-echo -e "\n${YELLOW}Используемая стратегия:${NC} $(show_current_strategy)"
+if [ -f /etc/init.d/zapret ]; then
+    echo -e "\n${YELLOW}Используемая стратегия:${NC} $(show_current_strategy)"
+fi
+
 echo -e ""
 # Вывод пунктов меню
 echo -e "${CYAN}1) ${GREEN}Установить последнюю версию${NC}"
