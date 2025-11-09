@@ -382,7 +382,7 @@ show_menu
 return ;;
 *)
 echo -e "\nВыходим в главное меню..."
-sleep 2
+sleep 1
 show_menu
 return ;;
 esac
@@ -625,7 +625,7 @@ case "$choice" in
         3) FILE="Str3.sh" ;;
         *)
           echo -e "\nВыходим в главное меню..."
-          sleep 2
+          sleep 1
           show_menu
           return ;;
     esac
