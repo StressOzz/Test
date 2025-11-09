@@ -600,9 +600,6 @@ fi
 # Выбор стратегий
 # ==========================================
 menu_str() {
-STR_DIR="/opt/zapret/scripts"
-BASE_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main"
-mkdir -p "$STR_DIR" >/dev/null 2>&1
 clear
 echo -e "${MAGENTA}Меню выбора стратегии${NC}\n"
 
@@ -622,31 +619,35 @@ echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n"
 echo -ne "${YELLOW}Выберите пункт:${NC} "
 read choice
 case "$choice" in
-        1) FILE="Str1.sh" ;;
-        2) FILE="Str2.sh" ;;
-        3) FILE="Str3.sh" ;;
+        1) 
+        clear
+curl -sL https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Str1.sh | sh
+        #FILE="Str1.sh" ;;
+        2) 
+        clear
+curl -sL https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Str2.sh | sh
+        #FILE="Str2.sh" ;;
+        3) 
+        clear
+curl -sL https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Str3.sh | sh
+        #FILE="Str3.sh" ;;
         *)
           echo -e "\nВыходим в главное меню..."
           sleep 1
           show_menu
           return ;;
     esac
-    
-    curl -fsSL "$BASE_URL/$FILE" -o "$STR_DIR/$FILE" || { echo -e "${RED}Ошибка загрузки ${FILE}${NC}"; return 1; }
-
-    chmod +x "$STR_DIR/$FILE"
-    sh "$STR_DIR/$FILE"
 }
 
 show_current_strategy() {
     CONFstr="/etc/config/zapret"
 
     if grep -q "#v1" "$CONFstr"; then
-        echo -e "1"
+        echo -e "v1"
     elif grep -q "#v2" "$CONFstr"; then
-        echo -e "2"
+        echo -e "v2"
     elif grep -q "#v3" "$CONFstr"; then
-        echo -e "3"
+        echo -e "v3"
     elif grep -q "dpi-desync-split-pos=1,sniext+1,host+1,midsld-2,midsld,midsld+2,endhost-1" "$CONFstr"; then
         echo -e "дефолтная"
     else
