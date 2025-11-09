@@ -310,7 +310,7 @@ yt3.googleusercontent.com
 yting.com
 EOF
 # дкопируем tls_clienthello_t2_ru.bin
-echo -e "${GREEN}🔴 ${CYAN}Копируем ${NC}tls_clienthello_t2_ru.bin${CYAN} на устройство${NC}\n"
+echo -e "${GREEN}🔴 ${CYAN}Копируем ${NC}tls_clienthello_t2_ru.bin${CYAN} на устройство${NC}"
 curl -sLo /opt/zapret/files/fake/tls_clienthello_t2_ru.bin https://github.com/StressOzz/Zapret-Manager/raw/refs/heads/main/tls_clienthello_t2_ru.bin
 # Применяем конфиг
 echo -e "${GREEN}🔴 ${CYAN}Применяем новую стратегию и настройки${NC}\n"
