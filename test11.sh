@@ -613,6 +613,9 @@ echo -e "${RED}Zapret не установлен!${NC}"
 return
 fi
 
+echo -ne "${YELLOW}Сейчас активна стратегия:${NC} "
+show_current_strategy
+echo -e ""
 echo -e "${CYAN}1) ${GREEN}Установить стратегию${NC} 1"
 echo -e "${CYAN}2) ${GREEN}Установить стратегию${NC} 2"
 echo -e "${CYAN}3) ${GREEN}Установить стратегию${NC} 3"
@@ -635,6 +638,24 @@ case "$choice" in
     chmod +x "$STR_DIR/$FILE"
     sh "$STR_DIR/$FILE"
 }
+
+show_current_strategy() {
+    CONF="/etc/config/zapret"
+
+    if grep -Fxq "--dpi-desync-badseq-increment=10000000" "$CONF"; then
+        echo -e "${GREEN}Текущая стратегия: Str1${NC}"
+    elif grep -Fxq "--dpi-desync-split-seqovl=336" "$CONF"; then
+        echo -e "${GREEN}Текущая стратегия: Str2${NC}"
+    elif grep -Fxq "--dpi-desync-split-seqovl=2108" "$CONF"; then
+        echo -e "${GREEN}Текущая стратегия: Str3${NC}"
+    elif grep -Fxq "--dpi-desync-split-pos=1,sniext+1,host+1,midsld-2,midsld,midsld+2,endhost-1" "$CONF"; then
+        echo -e "${GREEN}Текущая стратегия: Default${NC}"
+    else
+        echo -e "${RED}Стратегия не определена${NC}"
+    fi
+}
+
+
 
 # ==========================================
 # Главное меню
