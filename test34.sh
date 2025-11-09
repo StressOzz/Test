@@ -515,7 +515,9 @@ read -p "Нажмите Enter для выхода в главное меню..."
 return
 fi
 if [ -f /etc/init.d/zapret ]; then
-    echo -e "${YELLOW}Используемая стратегия:${NC} $(show_current_strategy)\n"
+    echo -e "${YELLOW}Используемая стратегия:${NC} "
+    show_current_strategy
+    echo ""
 fi
 echo -e "${CYAN}1) ${GREEN}Установить стратегию${NC} v1"
 echo -e "${CYAN}2) ${GREEN}Установить стратегию${NC} v2"
