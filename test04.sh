@@ -612,9 +612,7 @@ CURRENT_SCRIPT=$(
 *) echo "неизвестный" ;;
 esac
 )
-# Если скрипт найден, выводим строку
 [ -n "$CURRENT_SCRIPT" ] && echo -e "\n${YELLOW}Установлен скрипт: ${NC}$CURRENT_SCRIPT"
-
 if [ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*1024-65535" "$CONF" && grep -q -- "--filter-udp=1024-65535" "$CONF"; then
 echo -e "\n${YELLOW}Стратегия для игр: ${NC}активна${NC}"
 fi
