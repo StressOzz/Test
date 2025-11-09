@@ -699,8 +699,7 @@ esac
 if [ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*1024-65535" "$CONF" && grep -q -- "--filter-udp=1024-65535" "$CONF"; then
 echo -e "\n${YELLOW}Стратегия для игр: ${NC}активна${NC}"
 fi
-echo -e "\n${YELLOW}Cтратегия:${NC} "
-show_current_strategy
+echo -e "\n${YELLOW}Cтратегия:${NC} $(show_current_strategy)"
 echo -e ""
 # Вывод пунктов меню
 echo -e "${CYAN}1) ${GREEN}Установить последнюю версию${NC}"
