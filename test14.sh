@@ -613,7 +613,7 @@ echo -e "${RED}Zapret не установлен!${NC}"
 return
 fi
 
-echo -ne "${YELLOW}Сейчас активна стратегия:${NC} "
+echo -ne "${YELLOW}Активная стратегия:${NC} "
 show_current_strategy
 echo -e ""
 echo -e "${CYAN}1) ${GREEN}Установить стратегию${NC} 1"
@@ -643,13 +643,13 @@ show_current_strategy() {
     CONF="/etc/config/zapret"
 
     if grep -q "dpi-desync-badseq-increment=10000000" "$CONF"; then
-        echo -e "${GREEN}Текущая стратегия: Str1${NC}"
+        echo -e "1"
     elif grep -q "dpi-desync-split-seqovl=336" "$CONF"; then
-        echo -e "${GREEN}Текущая стратегия: Str2${NC}"
+        echo -e "2"
     elif grep -q "dpi-desync-split-seqovl=2108" "$CONF"; then
-        echo -e "${GREEN}Текущая стратегия: Str3${NC}"
+        echo -e "3"
     elif grep -q "dpi-desync-split-pos=1,sniext+1,host+1,midsld-2,midsld,midsld+2,endhost-1" "$CONF"; then
-        echo -e "${GREEN}Текущая стратегия: Default${NC}"
+        echo -e "дефолтная"
     else
         echo -e "${RED}Стратегия не определена${NC}"
     fi
@@ -699,6 +699,8 @@ esac
 if [ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*1024-65535" "$CONF" && grep -q -- "--filter-udp=1024-65535" "$CONF"; then
 echo -e "\n${YELLOW}Стратегия для игр: ${NC}активна${NC}"
 fi
+echo -ne "${YELLOW}Активная стратегия:${NC} "
+show_current_strategy
 echo -e ""
 # Вывод пунктов меню
 echo -e "${CYAN}1) ${GREEN}Установить последнюю версию${NC}"
