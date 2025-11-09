@@ -469,7 +469,8 @@ return
 fi
 uninstall_zapret "1"
 install_Zapret "1"
-fix_default
+curl -sL https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Str3.sh | sh
+################################################################################################fix_default
 echo -e "\n${MAGENTA}Включаем Discord и звонки в TG и WA${NC}\n"
 enable_discord_calls "1"
 fix_REDSEC "1"
