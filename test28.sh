@@ -621,15 +621,18 @@ read choice
 case "$choice" in
 1) 
     clear
-    curl -sL https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Str3.sh | sh || echo "Ошибка запуска стратегии 3"
+    curl -sL https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Str1.sh | sh || echo "Ошибка запуска стратегии 3"
+    read -p "Нажмите Enter для выхода в главное меню..." dummy
 ;;
 2) 
     clear
-    curl -sL https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Str3.sh | sh || echo "Ошибка запуска стратегии 3"
+    curl -sL https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Str2.sh | sh || echo "Ошибка запуска стратегии 3"
+    read -p "Нажмите Enter для выхода в главное меню..." dummy
 ;;
 3) 
     clear
     curl -sL https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Str3.sh | sh || echo "Ошибка запуска стратегии 3"
+    read -p "Нажмите Enter для выхода в главное меню..." dummy
 ;;
         *)
           echo -e "\nВыходим в главное меню..."
