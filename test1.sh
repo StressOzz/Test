@@ -285,7 +285,6 @@ rm -f "$file"
 cat <<'EOF' > "$file"
 gstatic.com
 EOF
-# добавление домены для ютуб
 # Проверка и добавление YouTube hostlist
 file="/opt/zapret/ipset/zapret-hosts-google.txt"
 cat <<'EOF' | grep -Fxv -f "$file" 2>/dev/null >> "$file"
@@ -310,8 +309,11 @@ tv.youtube.com
 yt3.googleusercontent.com
 yting.com
 EOF
+# дкопируем tls_clienthello_t2_ru.bin
+echo -e "${GREEN}🔴 ${CYAN}Копируем ${NC}tls_clienthello_t2_ru.bin${CYAN} на устройство${NC}\n"
+curl -sLo /opt/zapret/files/fake/tls_clienthello_t2_ru.bin https://github.com/StressOzz/Zapret-Manager/raw/refs/heads/main/tls_clienthello_t2_ru.bin
 # Применяем конфиг
-echo -e "${GREEN}🔴 ${CYAN}Применяем новую стратегию и настройки\n"
+echo -e "${GREEN}🔴 ${CYAN}Применяем новую стратегию и настройки${NC}\n"
 [ "$NO_PAUSE" != "1" ] && { chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart >/dev/null 2>&1; }
 echo -e "${BLUE}🔴 ${GREEN}Стратегия отредактирована!${NC}"
 [ "$NO_PAUSE" != "1" ] && echo -e ""
