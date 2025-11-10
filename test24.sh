@@ -159,21 +159,20 @@ elif echo "$line" | grep -q "discord media"; then
 echo -e "\n${YELLOW}Установлен скрипт: ${NC}50-discord-media"
 elif echo "$line" | grep -q "discord subnets"; then
 echo -e "\n${YELLOW}Установлен скрипт: ${NC}50-discord"
-    fi
+fi
 }
 show_current_strategy() {
-    CONFstr="/etc/config/zapret"
-    [ -f "$CONFstr" ] || return
-
-    if grep -q "#v1" "$CONFstr"; then
-        echo -e "${YELLOW}Используется стратегия: ${NC}v1"
-    elif grep -q "#v2" "$CONFstr"; then
-        echo -e "${YELLOW}Используется стратегия: ${NC}v2"
-    elif grep -q "#v3" "$CONFstr"; then
-        echo -e "${YELLOW}Используется стратегия: ${NC}v3"
-    elif grep -q "dpi-desync-split-pos=1,sniext+1,host+1,midsld-2,midsld,midsld+2,endhost-1" "$CONFstr"; then
-        echo -e "${YELLOW}Используется стратегия: ${NC}дефолтная"
-    fi
+CONFstr="/etc/config/zapret"
+[ -f "$CONFstr" ] || return
+if grep -q "#v1" "$CONFstr"; then
+echo -e "\n${YELLOW}Используется стратегия: ${NC}v1"
+elif grep -q "#v2" "$CONFstr"; then
+echo -e "\n${YELLOW}Используется стратегия: ${NC}v2"
+elif grep -q "#v3" "$CONFstr"; then
+echo -e "\n${YELLOW}Используется стратегия: ${NC}v3"
+elif grep -q "dpi-desync-split-pos=1,sniext+1,host+1,midsld-2,midsld,midsld+2,endhost-1" "$CONFstr"; then
+echo -e "\n${YELLOW}Используется стратегия: ${NC}дефолтная"
+fi
 }
 # ==========================================
 # Установка Zapret
@@ -520,11 +519,11 @@ startstop_zpr() { clear; pgrep -f /opt/zapret >/dev/null 2>&1 && stop_zapret || 
 # ==========================================
 menu_str() {
 clear
-echo -e "${MAGENTA}Меню выбора стратегии${NC}\n"
+echo -e "${MAGENTA}Меню выбора стратегии${NC}"
 # Проверка, установлен ли Zapret
 [ ! -f /etc/init.d/zapret ] && { echo -e "${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; return; }
 show_current_strategy
-echo -e "${CYAN}1) ${GREEN}Установить стратегию${NC} v1"
+echo -e "\n${CYAN}1) ${GREEN}Установить стратегию${NC} v1"
 echo -e "${CYAN}2) ${GREEN}Установить стратегию${NC} v2"
 echo -e "${CYAN}3) ${GREEN}Установить стратегию${NC} v3"
 echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n"
