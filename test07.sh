@@ -143,6 +143,9 @@ else
 INST_COLOR=$RED; INSTALLED_DISPLAY="$INSTALLED_VER"
 fi
 }
+# ==========================================
+# Проверка какой скрипт установлен
+# ==========================================
 script_50() {
 CUSTOM_DIR="/opt/zapret/init.d/openwrt/custom.d/"
 SCRIPT_FILE="$CUSTOM_DIR/50-script.sh"
@@ -254,7 +257,7 @@ echo -e "${RED}Zapret не установлен!${NC}\n"
 return
 fi
 script_50
-[ "$NO_PAUSE" != "1" ] && echo -e "${YELLOW}Установленный скрипт:${NC} $CURRENT_SCRIPT\n"
+[ "$NO_PAUSE" != "1" ] && [ -n "$CURRENT_SCRIPT" ] && echo -e "\n${YELLOW}Установлен скрипт: ${NC}$CURRENT_SCRIPT"
 if [ "$NO_PAUSE" = "1" ]; then
 SELECTED="50-stun4all"
 URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-stun4all"
