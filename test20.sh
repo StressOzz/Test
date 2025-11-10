@@ -509,7 +509,7 @@ clear
 echo -e "${MAGENTA}Меню выбора стратегии${NC}\n"
 # Проверка, установлен ли Zapret
 [ ! -f /etc/init.d/zapret ] && { echo -e "${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; return; }
-[ -f /etc/init.d/zapret ] && echo -e "${YELLOW}Используемая стратегия:${NC} $(show_current_strategy)\n"
+show_current_strategy
 echo -e "${CYAN}1) ${GREEN}Установить стратегию${NC} v1"
 echo -e "${CYAN}2) ${GREEN}Установить стратегию${NC} v2"
 echo -e "${CYAN}3) ${GREEN}Установить стратегию${NC} v3"
@@ -536,20 +536,18 @@ return ;;
 esac
 }
 show_current_strategy() {
-CONFstr="/etc/config/zapret"
-[ -f "$CONFstr" ] && {
-if grep -q "#v1" "$CONFstr"; then
-echo -e "v1"
-elif grep -q "#v2" "$CONFstr"; then
-echo -e "v2"
-elif grep -q "#v3" "$CONFstr"; then
-echo -e "v3"
-elif grep -q "dpi-desync-split-pos=1,sniext+1,host+1,midsld-2,midsld,midsld+2,endhost-1" "$CONFstr"; then
-echo -e "дефолтная"
-else
-echo -e "${RED}не известная${NC}"
-fi
-}
+    CONFstr="/etc/config/zapret"
+    [ -f "$CONFstr" ] || return
+    line=$(head -n1 "$CONFstr")  # читаем первую строку
+    if echo "$line" | grep -q "#v1"; then
+        echo -e "${YELLOW}Стратегия: ${NC}v1"
+    elif echo "$line" | grep -q "#v2"; then
+        echo -e "${YELLOW}Стратегия: ${NC}v2"
+    elif echo "$line" | grep -q "#v3"; then
+        echo -e "${YELLOW}Стратегия: ${NC}v3"
+    elif echo "$line" | grep -q "dpi-desync-split-pos=1,sniext+1,host+1,midsld-2,midsld,midsld+2,endhost-1"; then
+        echo -e "${YELLOW}Стратегия: ${NC}дефолтная"
+    fi
 }
 # ==========================================
 # Главное меню
@@ -568,7 +566,7 @@ echo -e "\n${YELLOW}Архитектура устройства:${NC} $LOCAL_ARC
 [ -n "$ZAPRET_STATUS" ] && echo -e "\n${YELLOW}Статус Zapret: ${NC}$ZAPRET_STATUS"
 show_script_50
 [ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*1024-65535" "$CONF" && grep -q -- "--filter-udp=1024-65535" "$CONF" && echo -e "\n${YELLOW}Стратегия для игр: ${NC}активна${NC}"
-[ -f /etc/init.d/zapret ] && echo -e "\n${YELLOW}Используемая стратегия:${NC} $(show_current_strategy)"
+show_current_strategy
 # Вывод пунктов меню
 echo -e "\n${CYAN}1) ${GREEN}Установить последнюю версию${NC}"
 echo -e "${CYAN}2) ${GREEN}Меню выбора стратегии${NC}"
