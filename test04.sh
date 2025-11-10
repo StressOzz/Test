@@ -143,7 +143,7 @@ else
 INST_COLOR=$RED; INSTALLED_DISPLAY="$INSTALLED_VER"
 fi
 }
-50_script() {
+script_50() {
   CUSTOM_DIR="/opt/zapret/init.d/openwrt/custom.d/"
   SCRIPT_FILE="$CUSTOM_DIR/50-script.sh"
   CURRENT_SCRIPT="не установлен"
@@ -254,7 +254,7 @@ echo -e "${RED}Zapret не установлен!${NC}\n"
 [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 return
 fi
-50_script
+script_50
 [ "$NO_PAUSE" != "1" ] && echo -e "${YELLOW}Установленный скрипт:${NC} $CURRENT_SCRIPT\n"
 if [ "$NO_PAUSE" = "1" ]; then
 SELECTED="50-stun4all"
@@ -568,7 +568,7 @@ echo -e "\n${YELLOW}Установленная версия: ${INST_COLOR}$INSTA
 echo -e "${YELLOW}Последняя версия на GitHub: ${CYAN}$LATEST_VER${NC}"
 echo -e "\n${YELLOW}Архитектура устройства:${NC} $LOCAL_ARCH"
 [ -n "$ZAPRET_STATUS" ] && echo -e "\n${YELLOW}Статус Zapret: ${NC}$ZAPRET_STATUS"
-50_script
+script_50
 [ -n "$CURRENT_SCRIPT" ] && echo -e "\n${YELLOW}Установлен скрипт: ${NC}$CURRENT_SCRIPT"
 [ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*1024-65535" "$CONF" && grep -q -- "--filter-udp=1024-65535" "$CONF" && echo -e "\n${YELLOW}Стратегия для игр: ${NC}активна${NC}"
 [ -f /etc/init.d/zapret ] && echo -e "\n${YELLOW}Используемая стратегия:${NC} $(show_current_strategy)"
