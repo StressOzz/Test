@@ -146,18 +146,22 @@ fi
 # ==========================================
 # Проверка какой скрипт установлен
 # ==========================================
-script_50() {
-CUSTOM_DIR="/opt/zapret/init.d/openwrt/custom.d/"
-SCRIPT_FILE="$CUSTOM_DIR/50-script.sh"
-CURRENT_SCRIPT=$(
-[ -f "$SCRIPT_FILE" ] && case "$(head -n1 "$SCRIPT_FILE")" in
-*QUIC*) echo "50-quic4all" ;;
-*stun*) echo "50-stun4all" ;;
-*discord\ media*) echo "50-discord-media" ;;
-*discord\ subnets*) echo "50-discord" ;;
-*) echo "неизвестный" ;;
-esac
-)
+show_script_50() {
+    SCRIPT_FILE="/opt/zapret/init.d/openwrt/custom.d/50-script.sh"
+    [ -f "$SCRIPT_FILE" ] || return
+
+    line=$(head -n1 "$SCRIPT_FILE")
+
+    if echo "$line" | grep -q "QUIC"; then
+        echo -e "\n${YELLOW}Установлен скрипт: ${NC}50-quic4all"
+    elif echo "$line" | grep -q "stun"; then
+        echo -e "\n${YELLOW}Установлен скрипт: ${NC}50-stun4all"
+    elif echo "$line" | grep -q "discord media"; then
+        echo -e "\n${YELLOW}Установлен скрипт: ${NC}50-discord-media"
+    elif echo "$line" | grep -q "discord subnets"; then
+        echo -e "\n${YELLOW}Установлен скрипт: ${NC}50-discord"
+    fi
+    # если не совпало ни одно — ничего не выводим
 }
 # ==========================================
 # Установка Zapret
@@ -256,8 +260,7 @@ echo -e "${RED}Zapret не установлен!${NC}\n"
 [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 return
 fi
-script_50
-[ "$NO_PAUSE" != "1" ] && [ -n "$CURRENT_SCRIPT" ] && echo -e "${YELLOW}Установлен скрипт: ${NC}$CURRENT_SCRIPT\n"
+show_script_50
 if [ "$NO_PAUSE" = "1" ]; then
 SELECTED="50-stun4all"
 URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-stun4all"
@@ -570,8 +573,7 @@ echo -e "\n${YELLOW}Установленная версия: ${INST_COLOR}$INSTA
 echo -e "${YELLOW}Последняя версия на GitHub: ${CYAN}$LATEST_VER${NC}"
 echo -e "\n${YELLOW}Архитектура устройства:${NC} $LOCAL_ARCH"
 [ -n "$ZAPRET_STATUS" ] && echo -e "\n${YELLOW}Статус Zapret: ${NC}$ZAPRET_STATUS"
-script_50
-[ -n "$CURRENT_SCRIPT" ] && echo -e "\n${YELLOW}Установлен скрипт: ${NC}$CURRENT_SCRIPT"
+show_script_50
 [ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*1024-65535" "$CONF" && grep -q -- "--filter-udp=1024-65535" "$CONF" && echo -e "\n${YELLOW}Стратегия для игр: ${NC}активна${NC}"
 [ -f /etc/init.d/zapret ] && echo -e "\n${YELLOW}Используемая стратегия:${NC} $(show_current_strategy)"
 echo -e ""
