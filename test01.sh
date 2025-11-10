@@ -132,7 +132,29 @@ fi
 else
 ZAPRET_STATUS=""
 fi
+# Определяем актуальная/устарела
+if [ "$LIMIT_REACHED" -eq 1 ] || [ "$LATEST_VER" = "не найдена" ]; then
+INST_COLOR=$CYAN; INSTALLED_DISPLAY="$INSTALLED_VER"
+elif [ "$INSTALLED_VER" = "$LATEST_VER" ]; then
+INST_COLOR=$GREEN; INSTALLED_DISPLAY="$INSTALLED_VER (актуальная)"
+elif [ "$INSTALLED_VER" != "не найдена" ]; then
+INST_COLOR=$RED; INSTALLED_DISPLAY="$INSTALLED_VER (устарела)"
+else
+INST_COLOR=$RED; INSTALLED_DISPLAY="$INSTALLED_VER"
+fi
 }
+50_script() {
+CUSTOM_DIR="/opt/zapret/init.d/openwrt/custom.d/"
+SCRIPT_FILE="$CUSTOM_DIR/50-script.sh"
+CURRENT_SCRIPT=$(
+[ -f "$SCRIPT_FILE" ] && case "$(head -n1 "$SCRIPT_FILE")" in
+*QUIC*) echo "50-quic4all" ;;
+*stun*) echo "50-stun4all" ;;
+*discord\ media*) echo "50-discord-media" ;;
+*discord\ subnets*) echo "50-discord" ;;
+*) echo "неизвестный" ;;
+esac
+)
 # ==========================================
 # Установка Zapret
 # ==========================================
@@ -224,27 +246,13 @@ enable_discord_calls() {
 local NO_PAUSE=$1
 [ "$NO_PAUSE" != "1" ] && clear
 [ "$NO_PAUSE" != "1" ] && echo -e "${MAGENTA}Меню настройки Discord и звонков в TG/WA${NC}\n"
+[ "$NO_PAUSE" = "1" ] && echo -e "${MAGENTA}Включаем Discord и звонки в TG и WA${NC}\n"
 if [ ! -f /etc/init.d/zapret ]; then
 echo -e "${RED}Zapret не установлен!${NC}\n"
 [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 return
 fi
-CUSTOM_DIR="/opt/zapret/init.d/openwrt/custom.d/"
-CURRENT_SCRIPT="не установлен"
-if [ -f "$CUSTOM_DIR/50-script.sh" ]; then
-FIRST_LINE=$(sed -n '1p' "$CUSTOM_DIR/50-script.sh")
-if echo "$FIRST_LINE" | grep -q "QUIC"; then
-CURRENT_SCRIPT="50-quic4all"
-elif echo "$FIRST_LINE" | grep -q "stun"; then
-CURRENT_SCRIPT="50-stun4all"
-elif echo "$FIRST_LINE" | grep -q "discord media"; then
-CURRENT_SCRIPT="50-discord-media"
-elif echo "$FIRST_LINE" | grep -q "discord subnets"; then
-CURRENT_SCRIPT="50-discord"
-else
-CURRENT_SCRIPT="неизвестный"
-fi
-fi
+50_script
 [ "$NO_PAUSE" != "1" ] && echo -e "${YELLOW}Установленный скрипт:${NC} $CURRENT_SCRIPT\n"
 if [ "$NO_PAUSE" = "1" ]; then
 SELECTED="50-stun4all"
@@ -313,7 +321,7 @@ chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d
 # ==========================================
 # FIX GAME
 # ==========================================
-fix_REDSEC() {
+fix_GAME() {
 local NO_PAUSE=$1
 [ "$NO_PAUSE" != "1" ] && clear
 echo -e "${MAGENTA}Настраиваем стратегию для игр${NC}\n"
@@ -376,9 +384,8 @@ fi
 uninstall_zapret "1"
 install_Zapret "1"
 curl -sL https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Str3.sh | sh
-echo -e "${MAGENTA}Включаем Discord и звонки в TG и WA${NC}\n"
 enable_discord_calls "1"
-fix_REDSEC "1"
+fix_GAME "1"
 if [ -f /etc/init.d/zapret ]; then
 echo -e "${BLUE}🔴 ${GREEN}Zapret ${GREEN}установлен и настроен!${NC}\n"
 else
@@ -493,14 +500,7 @@ echo -e "\n${BLUE}🔴 ${GREEN}Zapret полностью удалён!${NC}\n"
 # ==========================================
 # Запустить/Остановить Zapret
 # ==========================================
-startstop_zpr() {
-clear
-if pgrep -f /opt/zapret >/dev/null 2>&1; then
-stop_zapret
-else
-start_zapret
-fi
-}
+startstop_zpr() { clear; pgrep -f /opt/zapret >/dev/null 2>&1 && stop_zapret || start_zapret; }
 # ==========================================
 # Выбор стратегий
 # ==========================================
@@ -508,14 +508,8 @@ menu_str() {
 clear
 echo -e "${MAGENTA}Меню выбора стратегии${NC}\n"
 # Проверка, установлен ли Zapret
-if [ ! -f /etc/init.d/zapret ]; then
-echo -e "${RED}Zapret не установлен!${NC}\n"
-read -p "Нажмите Enter для выхода в главное меню..." dummy
-return
-fi
-if [ -f /etc/init.d/zapret ]; then
-echo -e "${YELLOW}Используемая стратегия:${NC} $(show_current_strategy)\n"
-fi
+[ ! -f /etc/init.d/zapret ] && { echo -e "${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; return; }
+[ -f /etc/init.d/zapret ] && echo -e "\n${YELLOW}Используемая стратегия:${NC} $(show_current_strategy)"
 echo -e "${CYAN}1) ${GREEN}Установить стратегию${NC} v1"
 echo -e "${CYAN}2) ${GREEN}Установить стратегию${NC} v2"
 echo -e "${CYAN}3) ${GREEN}Установить стратегию${NC} v3"
@@ -567,42 +561,15 @@ echo -e "╔══════════════════════�
 echo -e "║     ${BLUE}Zapret on remittor Manager${NC}     ║"
 echo -e "╚════════════════════════════════════╝"
 echo -e "                     ${DGRAY}by StressOzz v6.5${NC}"
-# Определяем актуальная/устарела
-if [ "$LIMIT_REACHED" -eq 1 ] || [ "$LATEST_VER" = "не найдена" ]; then
-INST_COLOR=$CYAN; INSTALLED_DISPLAY="$INSTALLED_VER"
-elif [ "$INSTALLED_VER" = "$LATEST_VER" ]; then
-INST_COLOR=$GREEN; INSTALLED_DISPLAY="$INSTALLED_VER (актуальная)"
-elif [ "$INSTALLED_VER" != "не найдена" ]; then
-INST_COLOR=$RED; INSTALLED_DISPLAY="$INSTALLED_VER (устарела)"
-else
-INST_COLOR=$RED; INSTALLED_DISPLAY="$INSTALLED_VER"
-fi
-# Вывод информации о версиях и архитектуре
+# Вывод информации
 echo -e "\n${YELLOW}Установленная версия: ${INST_COLOR}$INSTALLED_DISPLAY${NC}\n"
 echo -e "${YELLOW}Последняя версия на GitHub: ${CYAN}$LATEST_VER${NC}"
 echo -e "\n${YELLOW}Архитектура устройства:${NC} $LOCAL_ARCH"
-# Выводим статус службы zapret, если он известен
 [ -n "$ZAPRET_STATUS" ] && echo -e "\n${YELLOW}Статус Zapret: ${NC}$ZAPRET_STATUS"
-# Проверяем, установлен ли кастомный скрипт
-CUSTOM_DIR="/opt/zapret/init.d/openwrt/custom.d/"
-SCRIPT_FILE="$CUSTOM_DIR/50-script.sh"
-CURRENT_SCRIPT=$(
-[ -f "$SCRIPT_FILE" ] && case "$(head -n1 "$SCRIPT_FILE")" in
-*QUIC*) echo "50-quic4all" ;;
-*stun*) echo "50-stun4all" ;;
-*discord\ media*) echo "50-discord-media" ;;
-*discord\ subnets*) echo "50-discord" ;;
-*) echo "неизвестный" ;;
-esac
-)
+50_script
 [ -n "$CURRENT_SCRIPT" ] && echo -e "\n${YELLOW}Установлен скрипт: ${NC}$CURRENT_SCRIPT"
-if [ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*1024-65535" "$CONF" && grep -q -- "--filter-udp=1024-65535" "$CONF"; then
-echo -e "\n${YELLOW}Стратегия для игр: ${NC}активна${NC}"
-fi
-if [ -f /etc/init.d/zapret ]; then
-    echo -e "\n${YELLOW}Используемая стратегия:${NC} $(show_current_strategy)"
-fi
-
+[ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*1024-65535" "$CONF" && grep -q -- "--filter-udp=1024-65535" "$CONF" && echo -e "\n${YELLOW}Стратегия для игр: ${NC}активна${NC}"
+[ -f /etc/init.d/zapret ] && echo -e "\n${YELLOW}Используемая стратегия:${NC} $(show_current_strategy)"
 echo -e ""
 # Вывод пунктов меню
 echo -e "${CYAN}1) ${GREEN}Установить последнюю версию${NC}"
@@ -622,7 +589,7 @@ case "$choice" in
 3) comeback_def ;;
 4) startstop_zpr ;;
 5) uninstall_zapret;;
-6) fix_REDSEC  ;;
+6) fix_GAME  ;;
 7) enable_discord_calls ;;
 8) zapret_key ;;
 *) 
