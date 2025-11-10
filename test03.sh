@@ -144,17 +144,18 @@ INST_COLOR=$RED; INSTALLED_DISPLAY="$INSTALLED_VER"
 fi
 }
 50_script() {
-CUSTOM_DIR="/opt/zapret/init.d/openwrt/custom.d/"
-SCRIPT_FILE="$CUSTOM_DIR/50-script.sh"
-CURRENT_SCRIPT=$(
-[ -f "$SCRIPT_FILE" ] && case "$(head -n1 "$SCRIPT_FILE")" in
-*QUIC*) echo "50-quic4all" ;;
-*stun*) echo "50-stun4all" ;;
-*discord\ media*) echo "50-discord-media" ;;
-*discord\ subnets*) echo "50-discord" ;;
-*) echo "неизвестный" ;;
-esac
-)
+  CUSTOM_DIR="/opt/zapret/init.d/openwrt/custom.d/"
+  SCRIPT_FILE="$CUSTOM_DIR/50-script.sh"
+  CURRENT_SCRIPT="не установлен"
+  [ -f "$SCRIPT_FILE" ] && CURRENT_SCRIPT=$(
+    case "$(head -n1 "$SCRIPT_FILE")" in
+      *QUIC*) echo "50-quic4all" ;;
+      *stun*) echo "50-stun4all" ;;
+      *discord\ media*) echo "50-discord-media" ;;
+      *discord\ subnets*) echo "50-discord" ;;
+      *) echo "неизвестный" ;;
+    esac
+  )
 }
 # ==========================================
 # Установка Zapret
