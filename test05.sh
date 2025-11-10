@@ -511,7 +511,7 @@ clear
 echo -e "${MAGENTA}Меню выбора стратегии${NC}\n"
 # Проверка, установлен ли Zapret
 [ ! -f /etc/init.d/zapret ] && { echo -e "${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; return; }
-[ -f /etc/init.d/zapret ] && echo -e "\n${YELLOW}Используемая стратегия:${NC} $(show_current_strategy)"
+[ -f /etc/init.d/zapret ] && echo -e "${YELLOW}Используемая стратегия:${NC} $(show_current_strategy)\n"
 echo -e "${CYAN}1) ${GREEN}Установить стратегию${NC} v1"
 echo -e "${CYAN}2) ${GREEN}Установить стратегию${NC} v2"
 echo -e "${CYAN}3) ${GREEN}Установить стратегию${NC} v3"
