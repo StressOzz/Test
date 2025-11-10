@@ -174,7 +174,9 @@ show_current_strategy() {
         echo -e "${YELLOW}Стратегия: ${NC}v3"
     elif echo "$line" | grep -q "dpi-desync-split-pos=1,sniext+1,host+1,midsld-2,midsld,midsld+2,endhost-1"; then
         echo -e "${YELLOW}Стратегия: ${NC}дефолтная"
-    fi
+        else
+        echo -e "${RED}Стратегия: неизвестная${NC}"
+        fi
 }
 
 
