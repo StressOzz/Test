@@ -161,6 +161,26 @@ elif echo "$line" | grep -q "discord subnets"; then
 echo -e "\n${YELLOW}Установлен скрипт: ${NC}50-discord"
     fi
 }
+
+show_current_strategy() {
+    CONFstr="/etc/config/zapret"
+    [ -f "$CONFstr" ] || return
+    line=$(head -n1 "$CONFstr")  # читаем первую строку
+    if echo "$line" | grep -q "#v1"; then
+        echo -e "${YELLOW}Стратегия: ${NC}v1"
+    elif echo "$line" | grep -q "#v2"; then
+        echo -e "${YELLOW}Стратегия: ${NC}v2"
+    elif echo "$line" | grep -q "#v3"; then
+        echo -e "${YELLOW}Стратегия: ${NC}v3"
+    elif echo "$line" | grep -q "dpi-desync-split-pos=1,sniext+1,host+1,midsld-2,midsld,midsld+2,endhost-1"; then
+        echo -e "${YELLOW}Стратегия: ${NC}дефолтная"
+    fi
+}
+
+
+
+
+
 # ==========================================
 # Установка Zapret
 # ==========================================
@@ -534,20 +554,6 @@ sleep 1
 show_menu
 return ;;
 esac
-}
-show_current_strategy() {
-    CONFstr="/etc/config/zapret"
-    [ -f "$CONFstr" ] || return
-    line=$(head -n1 "$CONFstr")  # читаем первую строку
-    if echo "$line" | grep -q "#v1"; then
-        echo -e "${YELLOW}Стратегия: ${NC}v1"
-    elif echo "$line" | grep -q "#v2"; then
-        echo -e "${YELLOW}Стратегия: ${NC}v2"
-    elif echo "$line" | grep -q "#v3"; then
-        echo -e "${YELLOW}Стратегия: ${NC}v3"
-    elif echo "$line" | grep -q "dpi-desync-split-pos=1,sniext+1,host+1,midsld-2,midsld,midsld+2,endhost-1"; then
-        echo -e "${YELLOW}Стратегия: ${NC}дефолтная"
-    fi
 }
 # ==========================================
 # Главное меню
