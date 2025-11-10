@@ -10,12 +10,11 @@ MAGENTA="\033[1;35m"
 BLUE="\033[0;34m"
 NC="\033[0m"
 DGRAY="\033[38;5;236m"
-# --- Рабочая директория для скачивания и распаковки
 WORKDIR="/tmp/zapret-update"
 CONF="/etc/config/zapret"
 CUSTOM_DIR="/opt/zapret/init.d/openwrt/custom.d/"
 # ==========================================
-# Функция получения информации о версиях, архитектуре и статусе
+# Получение информации о версиях, архитектуре и статусе
 # ==========================================
 get_versions() {
 # --- Проверка byedpi и youtubeUnblock
@@ -145,36 +144,6 @@ INST_COLOR=$RED; INSTALLED_DISPLAY="$INSTALLED_VER"
 fi
 }
 # ==========================================
-# Проверка есть ли скрипт и какая стратегия
-# ==========================================
-show_script_50() {
-SCRIPT_FILE="/opt/zapret/init.d/openwrt/custom.d/50-script.sh"
-[ -f "$SCRIPT_FILE" ] || return
-line=$(head -n1 "$SCRIPT_FILE")
-if echo "$line" | grep -q "QUIC"; then
-echo -e "\n${YELLOW}Установлен скрипт: ${NC}50-quic4all"
-elif echo "$line" | grep -q "stun"; then
-echo -e "\n${YELLOW}Установлен скрипт: ${NC}50-stun4all"
-elif echo "$line" | grep -q "discord media"; then
-echo -e "\n${YELLOW}Установлен скрипт: ${NC}50-discord-media"
-elif echo "$line" | grep -q "discord subnets"; then
-echo -e "\n${YELLOW}Установлен скрипт: ${NC}50-discord"
-fi
-}
-show_current_strategy() {
-CONFstr="/etc/config/zapret"
-[ -f "$CONFstr" ] || return
-if grep -q "#v1" "$CONFstr"; then
-echo -e "\n${YELLOW}Используется стратегия: ${NC}v1"
-elif grep -q "#v2" "$CONFstr"; then
-echo -e "\n${YELLOW}Используется стратегия: ${NC}v2"
-elif grep -q "#v3" "$CONFstr"; then
-echo -e "\n${YELLOW}Используется стратегия: ${NC}v3"
-elif grep -q "dpi-desync-split-pos=1,sniext+1,host+1,midsld-2,midsld,midsld+2,endhost-1" "$CONFstr"; then
-echo -e "\n${YELLOW}Используется стратегия: ${NC}дефолтная"
-fi
-}
-# ==========================================
 # Установка Zapret
 # ==========================================
 install_Zapret() {
@@ -261,6 +230,20 @@ fi
 # ==========================================
 # Включение Discord и звонков в TG и WA
 # ==========================================
+show_script_50() {
+SCRIPT_FILE="/opt/zapret/init.d/openwrt/custom.d/50-script.sh"
+[ -f "$SCRIPT_FILE" ] || return
+line=$(head -n1 "$SCRIPT_FILE")
+if echo "$line" | grep -q "QUIC"; then
+echo -e "\n${YELLOW}Установлен скрипт: ${NC}50-quic4all"
+elif echo "$line" | grep -q "stun"; then
+echo -e "\n${YELLOW}Установлен скрипт: ${NC}50-stun4all"
+elif echo "$line" | grep -q "discord media"; then
+echo -e "\n${YELLOW}Установлен скрипт: ${NC}50-discord-media"
+elif echo "$line" | grep -q "discord subnets"; then
+echo -e "\n${YELLOW}Установлен скрипт: ${NC}50-discord"
+fi
+}
 enable_discord_calls() {
 local NO_PAUSE=$1
 [ "$NO_PAUSE" != "1" ] && clear
@@ -276,7 +259,6 @@ if [ "$NO_PAUSE" = "1" ]; then
 SELECTED="50-stun4all"
 URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-stun4all"
 else
-
 echo -e "\n${CYAN}1) ${GREEN}Установить скрипт ${NC}50-stun4all ${GREEN}для${NC} Discord ${GREEN}и${NC} звонков"
 echo -e "${CYAN}2) ${GREEN}Установить скрипт ${NC}50-quic4all ${GREEN}для${NC} Discord ${GREEN}и${NC} звонков"
 echo -e "${CYAN}3) ${GREEN}Установить скрипт ${NC}50-discord-media ${GREEN}для${NC} Discord"
@@ -286,27 +268,21 @@ echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n"
 echo -ne "${YELLOW}Выберите пункт:${NC} "
 read choice
 case "$choice" in
-1)
-SELECTED="50-stun4all"
+1) SELECTED="50-stun4all"
 URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-stun4all" ;;
-2)
-SELECTED="50-quic4all"
+2) SELECTED="50-quic4all"
 URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-quic4all" ;;
-3)
-SELECTED="50-discord-media"
+3) SELECTED="50-discord-media"
 URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-discord-media" ;;
-4)
-SELECTED="50-discord"
+4) SELECTED="50-discord"
 URL="https://raw.githubusercontent.com/bol-van/zapret/v70.5/init.d/custom.d.examples.linux/50-discord" ;;
-5)
-echo -e "\n${BLUE}🔴 ${GREEN}Скрипт удалён!${NC}\n"
+5) echo -e "\n${BLUE}🔴 ${GREEN}Скрипт удалён!${NC}\n"
 rm -f "$CUSTOM_DIR/50-script.sh" 2>/dev/null
 chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart >/dev/null 2>&1
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 show_menu
 return ;;
-*)
-echo -e "\nВыходим в главное меню..."
+*) echo -e "\nВыходим в главное меню..."
 sleep 1
 show_menu
 return ;;
@@ -517,6 +493,19 @@ startstop_zpr() { clear; pgrep -f /opt/zapret >/dev/null 2>&1 && stop_zapret || 
 # ==========================================
 # Выбор стратегий
 # ==========================================
+show_current_strategy() {
+CONFstr="/etc/config/zapret"
+[ -f "$CONFstr" ] || return
+if grep -q "#v1" "$CONFstr"; then
+echo -e "\n${YELLOW}Используется стратегия: ${NC}v1"
+elif grep -q "#v2" "$CONFstr"; then
+echo -e "\n${YELLOW}Используется стратегия: ${NC}v2"
+elif grep -q "#v3" "$CONFstr"; then
+echo -e "\n${YELLOW}Используется стратегия: ${NC}v3"
+elif grep -q "dpi-desync-split-pos=1,sniext+1,host+1,midsld-2,midsld,midsld+2,endhost-1" "$CONFstr"; then
+echo -e "\n${YELLOW}Используется стратегия: ${NC}дефолтная"
+fi
+}
 menu_str() {
 clear
 echo -e "${MAGENTA}Меню выбора стратегии${NC}"
