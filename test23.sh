@@ -145,7 +145,7 @@ INST_COLOR=$RED; INSTALLED_DISPLAY="$INSTALLED_VER"
 fi
 }
 # ==========================================
-# Проверка какой скрипт установлен
+# Проверка есть ли скрипт и какая стратегия
 # ==========================================
 show_script_50() {
 SCRIPT_FILE="/opt/zapret/init.d/openwrt/custom.d/50-script.sh"
@@ -161,28 +161,20 @@ elif echo "$line" | grep -q "discord subnets"; then
 echo -e "\n${YELLOW}Установлен скрипт: ${NC}50-discord"
     fi
 }
-
 show_current_strategy() {
     CONFstr="/etc/config/zapret"
     [ -f "$CONFstr" ] || return
-    line=$(head -n1 "$CONFstr")  # читаем первую строку
-    if echo "$line" | grep -q "#v1"; then
-        echo -e "${YELLOW}Стратегия: ${NC}v1"
-    elif echo "$line" | grep -q "#v2"; then
-        echo -e "${YELLOW}Стратегия: ${NC}v2"
-    elif echo "$line" | grep -q "#v3"; then
-        echo -e "${YELLOW}Стратегия: ${NC}v3"
-    elif echo "$line" | grep -q "dpi-desync-split-pos=1,sniext+1,host+1,midsld-2,midsld,midsld+2,endhost-1"; then
-        echo -e "${YELLOW}Стратегия: ${NC}дефолтная"
-        else
-        echo -e "${RED}Стратегия: неизвестная${NC}"
-        fi
+
+    if grep -q "#v1" "$CONFstr"; then
+        echo -e "${YELLOW}Используется стратегия: ${NC}v1"
+    elif grep -q "#v2" "$CONFstr"; then
+        echo -e "${YELLOW}Используется стратегия: ${NC}v2"
+    elif grep -q "#v3" "$CONFstr"; then
+        echo -e "${YELLOW}Используется стратегия: ${NC}v3"
+    elif grep -q "dpi-desync-split-pos=1,sniext+1,host+1,midsld-2,midsld,midsld+2,endhost-1" "$CONFstr"; then
+        echo -e "${YELLOW}Используется стратегия: ${NC}дефолтная"
+    fi
 }
-
-
-
-
-
 # ==========================================
 # Установка Zapret
 # ==========================================
