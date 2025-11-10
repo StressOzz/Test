@@ -105,7 +105,8 @@ LOCAL_ARCH=$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release)
 LIMIT_REACHED=0
 LIMIT_CHECK=$(curl -s -4 --connect-timeout 5 "https://api.github.com/repos/remittor/zapret-openwrt/releases/latest" 2>/dev/null)
 if [ -z "$LIMIT_CHECK" ]; then
-echo -e "api.github.com ${RED}недоступен!${NC}\nСкрипт остановлен!\n"
+echo -e "\napi.github.com ${RED}недоступен!${NC}"
+echo -e "\nСкрипт остановлен!\n"
 exit 1
 fi
 if echo "$LIMIT_CHECK" | grep -q 'API rate limit exceeded'; then
@@ -257,7 +258,7 @@ echo -e "${RED}Zapret не установлен!${NC}\n"
 return
 fi
 script_50
-[ "$NO_PAUSE" != "1" ] && [ -n "$CURRENT_SCRIPT" ] && echo -e "\n${YELLOW}Установлен скрипт: ${NC}$CURRENT_SCRIPT"
+[ "$NO_PAUSE" != "1" ] && [ -n "$CURRENT_SCRIPT" ] && echo -e "${YELLOW}Установлен скрипт: ${NC}$CURRENT_SCRIPT\n"
 if [ "$NO_PAUSE" = "1" ]; then
 SELECTED="50-stun4all"
 URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-stun4all"
