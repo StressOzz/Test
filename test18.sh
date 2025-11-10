@@ -152,13 +152,13 @@ SCRIPT_FILE="/opt/zapret/init.d/openwrt/custom.d/50-script.sh"
 [ -f "$SCRIPT_FILE" ] || return
 line=$(head -n1 "$SCRIPT_FILE")
 if echo "$line" | grep -q "QUIC"; then
-echo -e "${YELLOW}Установлен скрипт: ${NC}50-quic4all\n"
+echo -e "\n${YELLOW}Установлен скрипт: ${NC}50-quic4all"
 elif echo "$line" | grep -q "stun"; then
-echo -e "${YELLOW}Установлен скрипт: ${NC}50-stun4all\n"
+echo -e "\n${YELLOW}Установлен скрипт: ${NC}50-stun4all"
 elif echo "$line" | grep -q "discord media"; then
-echo -e "${YELLOW}Установлен скрипт: ${NC}50-discord-media\n"
+echo -e "\n${YELLOW}Установлен скрипт: ${NC}50-discord-media"
 elif echo "$line" | grep -q "discord subnets"; then
-echo -e "${YELLOW}Установлен скрипт: ${NC}50-discord\n"
+echo -e "\n${YELLOW}Установлен скрипт: ${NC}50-discord"
     fi
 }
 # ==========================================
@@ -561,8 +561,8 @@ echo -e "║     ${BLUE}Zapret on remittor Manager${NC}     ║"
 echo -e "╚════════════════════════════════════╝"
 echo -e "                     ${DGRAY}by StressOzz v6.5${NC}"
 # Вывод информации
-echo -e "\n${YELLOW}Установленная версия: ${INST_COLOR}$INSTALLED_DISPLAY${NC}\n"
-echo -e "${YELLOW}Последняя версия на GitHub: ${CYAN}$LATEST_VER${NC}"
+echo -e "\n${YELLOW}Установленная версия: ${INST_COLOR}$INSTALLED_DISPLAY${NC}"
+echo -e "\n${YELLOW}Последняя версия на GitHub: ${CYAN}$LATEST_VER${NC}"
 echo -e "\n${YELLOW}Архитектура устройства:${NC} $LOCAL_ARCH"
 [ -n "$ZAPRET_STATUS" ] && echo -e "\n${YELLOW}Статус Zapret: ${NC}$ZAPRET_STATUS"
 show_script_50
