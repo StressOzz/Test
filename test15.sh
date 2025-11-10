@@ -148,21 +148,18 @@ fi
 # Проверка какой скрипт установлен
 # ==========================================
 show_script_50() {
-    SCRIPT_FILE="/opt/zapret/init.d/openwrt/custom.d/50-script.sh"
-    [ -f "$SCRIPT_FILE" ] || return
-
-    line=$(head -n1 "$SCRIPT_FILE")
-
-    if echo "$line" | grep -q "QUIC"; then
-        echo -e "\n${YELLOW}Установлен скрипт: ${NC}50-quic4all"
-    elif echo "$line" | grep -q "stun"; then
-        echo -e "\n${YELLOW}Установлен скрипт: ${NC}50-stun4all"
-    elif echo "$line" | grep -q "discord media"; then
-        echo -e "\n${YELLOW}Установлен скрипт: ${NC}50-discord-media"
-    elif echo "$line" | grep -q "discord subnets"; then
-        echo -e "\n${YELLOW}Установлен скрипт: ${NC}50-discord"
+SCRIPT_FILE="/opt/zapret/init.d/openwrt/custom.d/50-script.sh"
+[ -f "$SCRIPT_FILE" ] || return
+line=$(head -n1 "$SCRIPT_FILE")
+if echo "$line" | grep -q "QUIC"; then
+echo -e "\n${YELLOW}Установлен скрипт: ${NC}50-quic4all"
+elif echo "$line" | grep -q "stun"; then
+echo -e "\n${YELLOW}Установлен скрипт: ${NC}50-stun4all"
+elif echo "$line" | grep -q "discord media"; then
+echo -e "\n${YELLOW}Установлен скрипт: ${NC}50-discord-media"
+elif echo "$line" | grep -q "discord subnets"; then
+echo -e "\n${YELLOW}Установлен скрипт: ${NC}50-discord"
     fi
-    # если не совпало ни одно — ничего не выводим
 }
 # ==========================================
 # Установка Zapret
@@ -301,14 +298,9 @@ show_menu
 return ;;
 esac
 fi
-if [ "$CURRENT_SCRIPT" = "$SELECTED" ]; then
-echo -e "\n${RED}Выбранный скрипт уже установлен!${NC}"
-else
-mkdir -p "$CUSTOM_DIR"
 if curl -fsSLo "$CUSTOM_DIR/50-script.sh" "$URL"; then
 [ "$NO_PAUSE" != "1" ] && 
 echo -e "\n${GREEN}🔴 ${CYAN}Скрипт ${NC}$SELECTED${CYAN} успешно установлен!${NC}\n"
-chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart >/dev/null 2>&1
 if [ "$SELECTED" = "50-quic4all" ] || [ "$SELECTED" = "50-stun4all" ]; then
 echo -e "${BLUE}🔴 ${GREEN}Звонки и Discord включены!${NC}"
 elif [ "$SELECTED" = "50-discord-media" ] || [ "$SELECTED" = "50-discord" ]; then
