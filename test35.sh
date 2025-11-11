@@ -471,7 +471,7 @@ local NO_PAUSE=$1
 echo -e "${MAGENTA}Удаляем ZAPRET${NC}\n"
 if ! [[ "$LATEST_VER" =~ 7 ]]; then
 echo -e "${RED}Внимание! Версия для установки не найдена!${NC}\n"
-echo -e "${YELLOW}После удаления, установка возможна только в ручном режиме!\n"
+echo -e "${YELLOW}После удаления, установка возможна только в ручном режиме!${NC}\n"
 read -p "Продолжить удаление? [y/N]: " answer
 case "$answer" in
 [yY]) echo -e "";;  # продолжаем удаление
@@ -521,7 +521,7 @@ menu_str() {
 clear
 echo -e "${MAGENTA}Меню выбора стратегии${NC}"
 # Проверка, установлен ли Zapret
-[ ! -f /etc/init.d/zapret ] && { echo -e "${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; return; }
+[ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; return; }
 show_current_strategy
 echo -e "\n${CYAN}1) ${GREEN}Установить стратегию${NC} v1"
 echo -e "${CYAN}2) ${GREEN}Установить стратегию${NC} v2"
