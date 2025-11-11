@@ -13,6 +13,10 @@ DGRAY="\033[38;5;236m"
 WORKDIR="/tmp/zapret-update"
 CONF="/etc/config/zapret"
 CUSTOM_DIR="/opt/zapret/init.d/openwrt/custom.d/"
+# ==========================================
+# Получение информации о версиях, архитектуре и статусе
+# ==========================================
+get_versions() {
 # --- Проверка byedpi и youtubeUnblock
 if opkg list-installed | grep -q "byedpi"; then
 clear
@@ -35,8 +39,8 @@ case "$answer" in
 esac
 fi
 # --- Проверка Flow Offloading (программного и аппаратного)
-FLOW_STATE=$(uci get firewall.@defaults[0].flow_offloading 2>/dev/null)
-HW_FLOW_STATE=$(uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null)
+local FLOW_STATE=$(uci get firewall.@defaults[0].flow_offloading 2>/dev/null)
+local HW_FLOW_STATE=$(uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null)
 if [ "$FLOW_STATE" = "1" ] || [ "$HW_FLOW_STATE" = "1" ]; then
 if ! grep -q 'meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc; then
 clear
@@ -82,7 +86,7 @@ opkg install "$pkg" >/dev/null 2>&1 && { pkg_installed=1; break; }
 sleep 1
 done
 if [ $pkg_installed -eq 0 ]; then
-echo -e "${RED}Не удалось установить ${NC}$pkg${RED} после ${NC}3${RED} попыток!${NC}\n"
+echo -e "${RED}Не удалось установить ${NC}$pkg${RED} после ${NC}3${RED} попыток!${NC}"
 echo -e "Установите вручную: ${CYAN}opkg install $pkg${NC}\n"
 exit 1
 fi
@@ -90,10 +94,6 @@ done
 echo -e "${BLUE}🔴 ${GREEN}Установленно!${NC}"
 sleep 2
 fi
-# ==========================================
-# Получение информации о версиях, архитектуре и статусе
-# ==========================================
-get_versions() {
 # --- Получаем текущую установленную версию zapret
 INSTALLED_VER=$(opkg list-installed | grep '^zapret ' | awk '{print $3}')
 [ -z "$INSTALLED_VER" ] && INSTALLED_VER="не найдена"
@@ -160,13 +160,13 @@ fi
 # --- Проверка доступности пакета для архитектуры
 if [ "$USED_ARCH" = "нет пакета для вашей архитектуры" ]; then
 echo -e "${RED}Нет доступного пакета для вашей архитектуры: ${NC}$LOCAL_ARCH\n"
-read -p "Нажмите Enter для выхода в главное меню..." dummy
+[ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 return
 fi
 # --- Проверка уже установленной версии
 if [ "$INSTALLED_VER" = "$LATEST_VER" ]; then
 echo -e "${BLUE}🔴 ${GREEN}Последняя версия уже установлена!${NC}\n"
-read -p "Нажмите Enter для выхода в главное меню..." dummy
+[ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 return
 fi
 # --- Остановка сервиса и старых процессов Zapret
