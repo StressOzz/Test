@@ -154,13 +154,13 @@ get_versions
 # --- Проверка лимита API GitHub
 if [ "$LIMIT_REACHED" -eq 1 ]; then
 echo -e "$LATEST_VER\n"
-[ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
+read -p "Нажмите Enter для выхода в главное меню..." dummy
 return
 fi
 # --- Проверка доступности пакета для архитектуры
 if [ "$USED_ARCH" = "нет пакета для вашей архитектуры" ]; then
 echo -e "${RED}Нет доступного пакета для вашей архитектуры: ${NC}$LOCAL_ARCH\n"
-[ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
+read -p "Нажмите Enter для выхода в главное меню..." dummy
 return
 fi
 # --- Проверка уже установленной версии
