@@ -35,8 +35,8 @@ case "$answer" in
 esac
 fi
 # --- Проверка Flow Offloading (программного и аппаратного)
-local FLOW_STATE=$(uci get firewall.@defaults[0].flow_offloading 2>/dev/null)
-local HW_FLOW_STATE=$(uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null)
+FLOW_STATE=$(uci get firewall.@defaults[0].flow_offloading 2>/dev/null)
+HW_FLOW_STATE=$(uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null)
 if [ "$FLOW_STATE" = "1" ] || [ "$HW_FLOW_STATE" = "1" ]; then
 if ! grep -q 'meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc; then
 clear
@@ -147,7 +147,7 @@ fi
 # Установка Zapret
 # ==========================================
 install_Zapret() {
-local NO_PAUSE=$1
+NO_PAUSE=$1
 [ "$NO_PAUSE" != "1" ] && clear
 echo -e "${MAGENTA}Устанавливаем ZAPRET${NC}\n"
 get_versions
@@ -249,7 +249,7 @@ echo -e "\n${YELLOW}Установлен скрипт: ${NC}50-discord"
 fi
 }
 enable_discord_calls() {
-local NO_PAUSE=$1
+NO_PAUSE=$1
 [ "$NO_PAUSE" != "1" ] && clear
 [ "$NO_PAUSE" != "1" ] && echo -e "${MAGENTA}Меню настройки Discord и звонков в TG/WA${NC}"
 [ "$NO_PAUSE" = "1" ] && echo -e "${MAGENTA}Включаем Discord и звонки в TG и WA${NC}\n"
@@ -315,7 +315,7 @@ chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d
 # FIX GAME
 # ==========================================
 fix_GAME() {
-local NO_PAUSE=$1
+NO_PAUSE=$1
 [ "$NO_PAUSE" != "1" ] && clear
 echo -e "${MAGENTA}Настраиваем стратегию для игр${NC}\n"
 if [ ! -f /etc/init.d/zapret ]; then
@@ -466,7 +466,7 @@ read -p "Нажмите Enter для выхода в главное меню..."
 # Полное удаление Zapret
 # ==========================================
 uninstall_zapret() {
-local NO_PAUSE=$1
+NO_PAUSE=$1
 [ "$NO_PAUSE" != "1" ] && clear
 echo -e "${MAGENTA}Удаляем ZAPRET${NC}\n"
 if ! [[ "$LATEST_VER" =~ 7 ]]; then
