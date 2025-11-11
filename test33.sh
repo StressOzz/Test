@@ -147,7 +147,7 @@ fi
 # Установка Zapret
 # ==========================================
 install_Zapret() {
-NO_PAUSE=$1
+local NO_PAUSE=$1
 [ "$NO_PAUSE" != "1" ] && clear
 echo -e "${MAGENTA}Устанавливаем ZAPRET${NC}\n"
 get_versions
@@ -249,7 +249,7 @@ echo -e "\n${YELLOW}Установлен скрипт: ${NC}50-discord"
 fi
 }
 enable_discord_calls() {
-NO_PAUSE=$1
+local NO_PAUSE=$1
 [ "$NO_PAUSE" != "1" ] && clear
 [ "$NO_PAUSE" != "1" ] && echo -e "${MAGENTA}Меню настройки Discord и звонков в TG/WA${NC}"
 [ "$NO_PAUSE" = "1" ] && echo -e "${MAGENTA}Включаем Discord и звонки в TG и WA${NC}\n"
@@ -315,7 +315,7 @@ chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d
 # FIX GAME
 # ==========================================
 fix_GAME() {
-NO_PAUSE=$1
+local NO_PAUSE=$1
 [ "$NO_PAUSE" != "1" ] && clear
 echo -e "${MAGENTA}Настраиваем стратегию для игр${NC}\n"
 if [ ! -f /etc/init.d/zapret ]; then
@@ -466,7 +466,7 @@ read -p "Нажмите Enter для выхода в главное меню..."
 # Полное удаление Zapret
 # ==========================================
 uninstall_zapret() {
-NO_PAUSE=$1
+local NO_PAUSE=$1
 [ "$NO_PAUSE" != "1" ] && clear
 echo -e "${MAGENTA}Удаляем ZAPRET${NC}\n"
 if ! [[ "$LATEST_VER" =~ 7 ]]; then
