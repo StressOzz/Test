@@ -199,9 +199,6 @@ return
 # --- Распаковка архива
 echo -e "${GREEN}🔴 ${CYAN}Распаковываем архив${NC}"
 unzip -o "$FILE_NAME" >/dev/null
-# --- Убиваем старые процессы
-PIDS=$(pgrep -f /opt/zapret)
-[ -n "$PIDS" ] && for pid in $PIDS; do kill -9 "$pid" >/dev/null 2>&1; done
 # --- Установка пакетов
 for PKG in zapret_*.ipk luci-app-zapret_*.ipk; do
 [ -f "$PKG" ] && {
@@ -209,18 +206,10 @@ echo -e "${GREEN}🔴 ${CYAN}Устанавливаем пакет ${NC}$PKG"
 opkg install --force-reinstall "$PKG" >/dev/null 2>&1
 }
 done
-# --- Остановка сервиса при фоновом режиме
-[ "$NO_PAUSE" = "1" ] && { /etc/init.d/zapret stop >/dev/null 2>&1 || pkill -9 -f /opt/zapret >/dev/null 2>&1; }
 # --- Очистка временных файлов и пакетов
 echo -e "${GREEN}🔴 ${CYAN}Удаляем временные файлы и пакеты${NC}"
 cd /
 rm -rf "$WORKDIR" /tmp/*.ipk /tmp/*.zip /tmp/*zapret* 2>/dev/null
-# --- Перезапуск службы Zapret
-[ "$NO_PAUSE" != "1" ] && {
-if [ -f /etc/init.d/zapret ]; then
-chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart >/dev/null 2>&1
-fi
-}
 # --- Сообщение об успешной установке или нет
 if [ -f /etc/init.d/zapret ]; then
 echo -e "\n${BLUE}🔴 ${GREEN}Zapret установлен!${NC}\n"
