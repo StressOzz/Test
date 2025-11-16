@@ -5,7 +5,6 @@ SUBTARGET=$(grep "^DISTRIB_TARGET=" /etc/openwrt_release | cut -d"'" -f2 | cut -
 BOARD=$(grep -o '"id": *"[^"]*"' /etc/board.json | cut -d'"' -f4)
 
 # Версия OpenWRT
-VERSION=$(grep "^DISTRIB_RELEASE=" /etc/openwrt_release | cut -d"'" -f2)
 
 if [ -z "$TARGET" ] || [ -z "$SUBTARGET" ] || [ -z "$BOARD" ]; then
     echo "Не удалось определить параметры устройства для Firmware Selector."
@@ -17,5 +16,5 @@ echo "SUBTARGET: $SUBTARGET"
 echo "BOARD ID: $BOARD"
 echo
 echo "Ссылка на Firmware Selector:"
-echo "https://firmware-selector.openwrt.org/?version=$VERSION&target=${TARGET}%2F${SUBTARGET}&id=$BOARD"
+echo "https://firmware-selector.openwrt.org/?version=24.10.4&target=${TARGET}_${SUBTARGET}&id=$BOARD"
 
