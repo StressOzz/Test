@@ -228,13 +228,13 @@ SCRIPT_FILE="/opt/zapret/init.d/openwrt/custom.d/50-script.sh"
 [ -f "$SCRIPT_FILE" ] || return
 line=$(head -n1 "$SCRIPT_FILE")
 if echo "$line" | grep -q "QUIC"; then
-echo -e "\n${YELLOW}Установлен скрипт: ${NC}50-quic4all"
+echo -e "${YELLOW}Установлен скрипт:${NC}         50-quic4all"
 elif echo "$line" | grep -q "stun"; then
-echo -e "\n${YELLOW}Установлен скрипт: ${NC}50-stun4all"
+echo -e "${YELLOW}Установлен скрипт:${NC}         50-stun4all"
 elif echo "$line" | grep -q "discord media"; then
-echo -e "\n${YELLOW}Установлен скрипт: ${NC}50-discord-media"
+echo -e "${YELLOW}Установлен скрипт:${NC}         50-discord-media"
 elif echo "$line" | grep -q "discord subnets"; then
-echo -e "\n${YELLOW}Установлен скрипт: ${NC}50-discord"
+echo -e "${YELLOW}Установлен скрипт:${NC}         50-discord"
 fi
 }
 enable_discord_calls() {
@@ -496,20 +496,20 @@ show_current_strategy() {
 CONFstr="/etc/config/zapret"
 [ -f "$CONFstr" ] || return
 if grep -q "#v1" "$CONFstr"; then
-echo -e "\n${YELLOW}Используется стратегия: ${NC}v1"
+echo -e "${YELLOW}Используется стратегия:${NC}     v1"
 elif grep -q "#v2" "$CONFstr"; then
-echo -e "\n${YELLOW}Используется стратегия: ${NC}v2"
+echo -e "${YELLOW}Используется стратегия:${NC}     v2"
 elif grep -q "#v3" "$CONFstr"; then
-echo -e "\n${YELLOW}Используется стратегия: ${NC}v3"
+echo -e "${YELLOW}Используется стратегия:${NC}     v3"
 elif grep -q "#v4" "$CONFstr"; then
-echo -e "\n${YELLOW}Используется стратегия: ${NC}v4"
+echo -e "${YELLOW}Используется стратегия:${NC}     v4"
 elif grep -q "dpi-desync-split-pos=1,sniext+1,host+1,midsld-2,midsld,midsld+2,endhost-1" "$CONFstr"; then
-echo -e "\n${YELLOW}Используется стратегия: ${NC}дефолтная"
+echo -e "${YELLOW}Используется стратегия: ${NC}дефолтная"
 fi
 }
 menu_str() {
 clear
-echo -e "${MAGENTA}Меню выбора стратегии${NC}"
+echo -e "${MAGENTA}Меню выбора стратегии${NC}\n"
 # Проверка, установлен ли Zapret
 [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; return; }
 show_current_strategy
@@ -614,12 +614,12 @@ echo -e "║     ${BLUE}Zapret on remittor Manager${NC}     ║"
 echo -e "╚════════════════════════════════════╝"
 echo -e "                     ${DGRAY}by StressOzz v6.6${NC}"
 # Вывод информации
-echo -e "\n${YELLOW}Установленная версия: ${INST_COLOR}$INSTALLED_DISPLAY${NC}"
-echo -e "\n${YELLOW}Последняя версия на GitHub: ${CYAN}$LATEST_VER${NC}"
-echo -e "\n${YELLOW}Архитектура устройства:${NC} $LOCAL_ARCH"
-[ -n "$ZAPRET_STATUS" ] && echo -e "\n${YELLOW}Статус Zapret: ${NC}$ZAPRET_STATUS"
+echo -e "\n${YELLOW}Установленная версия:       ${INST_COLOR}$INSTALLED_DISPLAY${NC}"
+echo -e "${YELLOW}Последняя версия на GitHub: ${CYAN}$LATEST_VER${NC}"
+echo -e "${YELLOW}Архитектура устройства:${NC}     $LOCAL_ARCH"
+[ -n "$ZAPRET_STATUS" ] && echo -e "${YELLOW}Статус Zapret:${NC}              $ZAPRET_STATUS"
 show_script_50
-[ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*1024-65535" "$CONF" && grep -q -- "--filter-udp=1024-65535" "$CONF" && echo -e "\n${YELLOW}Стратегия для игр: ${NC}активна${NC}"
+[ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*1024-65535" "$CONF" && grep -q -- "--filter-udp=1024-65535" "$CONF" && echo -e "${YELLOW}Стратегия для игр:${NC}          ${GREEN}активна${NC}"
 show_current_strategy
 # Вывод пунктов меню
 echo -e "\n${CYAN}1) ${GREEN}Установить последнюю версию${NC}"
