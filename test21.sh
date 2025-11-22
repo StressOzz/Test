@@ -1,3 +1,4 @@
+
 #!/bin/sh
 # ==========================================
 # Zapret on remittor Manager by StressOzz
@@ -39,8 +40,8 @@ case "$answer" in
 esac
 fi
 # --- Проверка Flow Offloading (программного и аппаратного)
-FLOW_STATE=$(uci get firewall.@defaults[0].flow_offloading 2>/dev/null)
-HW_FLOW_STATE=$(uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null)
+local FLOW_STATE=$(uci get firewall.@defaults[0].flow_offloading 2>/dev/null)
+local HW_FLOW_STATE=$(uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null)
 if [ "$FLOW_STATE" = "1" ] || [ "$HW_FLOW_STATE" = "1" ]; then
 if ! grep -q 'meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc; then
 clear
@@ -136,9 +137,9 @@ fi
 if [ "$LIMIT_REACHED" -eq 1 ] || [ "$LATEST_VER" = "не найдена" ]; then
 INST_COLOR=$CYAN; INSTALLED_DISPLAY="$INSTALLED_VER"
 elif [ "$INSTALLED_VER" = "$LATEST_VER" ]; then
-INST_COLOR=$GREEN; INSTALLED_DISPLAY="$INSTALLED_VER"
+INST_COLOR=$GREEN; INSTALLED_DISPLAY="$INSTALLED_VER (актуальная)"
 elif [ "$INSTALLED_VER" != "не найдена" ]; then
-INST_COLOR=$RED; INSTALLED_DISPLAY="$INSTALLED_VER"
+INST_COLOR=$RED; INSTALLED_DISPLAY="$INSTALLED_VER (устарела)"
 else
 INST_COLOR=$RED; INSTALLED_DISPLAY="$INSTALLED_VER"
 fi
@@ -147,7 +148,8 @@ fi
 # Установка Zapret
 # ==========================================
 install_Zapret() {
-clear
+local NO_PAUSE=$1
+[ "$NO_PAUSE" != "1" ] && clear
 echo -e "${MAGENTA}Устанавливаем ZAPRET${NC}\n"
 get_versions
 # --- Проверка лимита API GitHub
@@ -211,7 +213,7 @@ rm -rf "$WORKDIR" /tmp/*.ipk /tmp/*.zip /tmp/*zapret* 2>/dev/null
 # --- Сообщение об успешной установке или нет
 if [ -f /etc/init.d/zapret ]; then
 echo -e "\n${BLUE}🔴 ${GREEN}Zapret установлен!${NC}\n"
-read -p "Нажмите Enter для выхода в главное меню..." dummy
+[ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 else
 echo -e "\n${RED}Zapret не был установлен!${NC}\n"
 read -p "Нажмите Enter для выхода в главное меню..." dummy
@@ -234,14 +236,20 @@ case "$line" in
 esac
 }
 enable_discord_calls() {
-clear
-echo -e "${MAGENTA}Меню настройки Discord и звонков в TG/WA${NC}"
+local NO_PAUSE=$1
+[ "$NO_PAUSE" != "1" ] && clear
+[ "$NO_PAUSE" != "1" ] && echo -e "${MAGENTA}Меню настройки Discord и звонков в TG/WA${NC}"
+[ "$NO_PAUSE" = "1" ] && echo -e "${MAGENTA}Включаем Discord и звонки в TG и WA${NC}\n"
 if [ ! -f /etc/init.d/zapret ]; then
 echo -e "\n${RED}Zapret не установлен!${NC}\n"
-read -p "Нажмите Enter для выхода в главное меню..." dummy
+[ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 return
 fi
-show_script_50 && [ -n "$name" ] && echo -e "\n${YELLOW}Установлен скрипт:${NC} $name"
+[ "$NO_PAUSE" != "1" ] && show_script_50 && [ -n "$name" ] && echo -e "\n${YELLOW}Установлен скрипт:${NC} $name"
+if [ "$NO_PAUSE" = "1" ]; then
+SELECTED="50-stun4all"
+URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-stun4all"
+else
 echo -e "\n${CYAN}1) ${GREEN}Установить скрипт ${NC}50-stun4all ${GREEN}для${NC} Discord ${GREEN}и${NC} звонков"
 echo -e "${CYAN}2) ${GREEN}Установить скрипт ${NC}50-quic4all ${GREEN}для${NC} Discord ${GREEN}и${NC} звонков"
 echo -e "${CYAN}3) ${GREEN}Установить скрипт ${NC}50-discord-media ${GREEN}для${NC} Discord"
@@ -270,7 +278,9 @@ sleep 1
 show_menu
 return ;;
 esac
+fi
 if curl -fsSLo "$CUSTOM_DIR/50-script.sh" "$URL"; then
+[ "$NO_PAUSE" != "1" ] && 
 echo -e "\n${GREEN}🔴 ${CYAN}Скрипт ${NC}$SELECTED${CYAN} успешно установлен!${NC}\n"
 if [ "$SELECTED" = "50-quic4all" ] || [ "$SELECTED" = "50-stun4all" ]; then
 echo -e "${BLUE}🔴 ${GREEN}Звонки и Discord включены!${NC}"
@@ -281,24 +291,27 @@ echo -e "${BLUE}🔴 ${GREEN}Скрипт активирован!${NC}"
 fi
 else
 echo -e "${RED}Ошибка при скачивании скрипта!${NC}\n"
-read -p "Нажмите Enter для выхода в главное меню..." dummy
+[ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 return
 fi
 echo -e ""
 chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart >/dev/null 2>&1
-read -p "Нажмите Enter для выхода в главное меню..." dummy
+[ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
 # ==========================================
 # FIX GAME
 # ==========================================
 fix_GAME() {
+local NO_PAUSE=$1
+[ "$NO_PAUSE" != "1" ] && clear
+echo -e "${MAGENTA}Настраиваем стратегию для игр${NC}\n"
 if [ ! -f /etc/init.d/zapret ]; then
-echo -e "\n${RED}Zapret не установлен!${NC}\n"
-read -p "Нажмите Enter для выхода в главное меню..." dummy
+[ "$NO_PAUSE" != "1" ] && echo -e "${RED}Zapret не установлен!${NC}\n"
+[ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 return
 fi
 if grep -q "option NFQWS_PORTS_UDP.*1024-65535" "$CONF" && grep -q -- "--filter-udp=1024-65535" "$CONF"; then
-echo -e "\n${GREEN}🔴 ${CYAN}Удаляем из стратегии настройки для игр${NC}"
+echo -e "${GREEN}🔴 ${CYAN}Удаляем из стратегии настройки для игр${NC}"
 sed -i ':a;N;$!ba;s|--new\n--filter-udp=1024-65535\n--dpi-desync=fake\n--dpi-desync-cutoff=d2\n--dpi-desync-any-protocol\n--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/quic_initial_www_google_com\.bin\n*||g' "$CONF"
 sed -i "s/,1024-65535//" "$CONF"
 chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart >/dev/null 2>&1
@@ -324,20 +337,63 @@ cat <<'EOF' >> "$CONF"
 '
 EOF
 fi
-echo -e "\n${GREEN}🔴 ${CYAN}Добавляем в стратегию настройки для игр${NC}"
+echo -e "${GREEN}🔴 ${CYAN}Добавляем в стратегию настройки для игр${NC}"
 chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart >/dev/null 2>&1
 echo -e "\n${BLUE}🔴 ${GREEN}Игровые настройки добавлены!${NC}\n"
+[ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
+}
+# ==========================================
+# Zapret под ключ
+# ==========================================
+zapret_key(){
+clear
+echo -e "${MAGENTA}Удаление, установка и настройка Zapret${NC}\n"
+get_versions
+# Проверка лимита API
+if [ "$LIMIT_REACHED" -eq 1 ]; then
+echo -e "${RED}Достигнут лимит GitHub API! Подождите 15 минут.${NC}\n"
+read -p "Нажмите Enter для выхода в главное меню..." dummy
+return
+fi
+# Проверка версии
+if ! [[ "$LATEST_VER" =~ 7 ]]; then
+echo -e "${RED}Внимание! Версия для установки не найдена!${NC}\n"
+read -p "Нажмите Enter для выхода в главное меню..." dummy
+return
+fi
+uninstall_zapret "1"
+install_Zapret "1"
+[ ! -f /etc/init.d/zapret ] && return
+# Останавливаем zapret на случай если дефолтная стратегия ломает трафик
+echo -e "${MAGENTA}Останавливаем Zapret${NC}\n" && /etc/init.d/zapret stop >/dev/null 2>&1 && echo -e "${BLUE}🔴 ${GREEN}Zapret остановлен!${NC}\n"
+# ТУТ ПИШЕМ КАКАЯ СТРАТЕГИЯ БУДЕТ УСТАНАВЛИВАТЬСЯ ЧЕРЕЗ ПУНКТ 8
+curl -sL https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Str2.sh | sh
+if [ ! -f "$CONF" ]; then
+echo -e "\n${RED}Файл ${NC}$CONF${RED} не найден!${NC}\n"
+read -p "Нажмите Enter для выхода в главное меню..." dummy
+return
+fi
+if ! grep -q "#v" "$CONF"; then
+echo -e "\n${RED}Cтратегия не установлена!${NC}\n"
+read -p "Нажмите Enter для выхода в главное меню..." dummy
+return
+fi
+enable_discord_calls "1"
+fix_GAME "1"
+echo -e "${BLUE}🔴 ${GREEN}Zapret установлен и настроен!${NC}\n"
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
 # ==========================================
 # Вернуть настройки по умолчанию
 # ==========================================
 comeback_def () {
+clear
+echo -e "${MAGENTA}Возвращаем настройки по умолчанию${NC}\n"
 # Проверка скрипта восстановления и его запуск
 if [ -f /opt/zapret/restore-def-cfg.sh ]; then
 rm -f /opt/zapret/init.d/openwrt/custom.d/50-script.sh
 [ -f /etc/init.d/zapret ] && /etc/init.d/zapret stop >/dev/null 2>&1
-echo -e "\n${GREEN}🔴 ${CYAN}Возвращаем ${NC}настройки${CYAN}, ${NC}стратегию${CYAN} и ${NC}hostlist${CYAN} к значениям по умолчанию${NC}\n"
+echo -e "${GREEN}🔴 ${CYAN}Возвращаем ${NC}настройки${CYAN}, ${NC}стратегию${CYAN} и ${NC}hostlist${CYAN} к значениям по умолчанию${NC}\n"
 IPSET_DIR="/opt/zapret/ipset"
 mkdir -p "$IPSET_DIR"
 FILES="zapret-hosts-google.txt zapret-hosts-user-exclude.txt"
@@ -353,7 +409,7 @@ sed -i '/130\.255\.77\.28 ntc.party/d; /57\.144\.222\.34 instagram.com www.insta
 /157\.240\.9\.174 instagram.com www.instagram.com/d' /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1
 echo -e "${BLUE}🔴 ${GREEN}Настройки по умолчанию возвращены!${NC}\n"
 else
-echo -e "\n${RED}Zapret не установлен!${NC}\n"
+echo -e "${RED}Zapret не установлен!${NC}\n"
 fi
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 show_menu
@@ -362,8 +418,11 @@ show_menu
 # Остановить Zapret
 # ==========================================
 stop_zapret() {
+clear
+echo -e "${MAGENTA}Останавливаем Zapret${NC}\n"
+# Остановка службы через init.d и убийство процессов
 if [ -f /etc/init.d/zapret ]; then
-echo -e "\n${GREEN}🔴 ${CYAN}Останавливаем ${NC}Zapret" && /etc/init.d/zapret stop >/dev/null 2>&1
+echo -e "${GREEN}🔴 ${CYAN}Останавливаем ${NC}Zapret" && /etc/init.d/zapret stop >/dev/null 2>&1
 PIDS=$(pgrep -f /opt/zapret)
 if [ -n "$PIDS" ]; then
 echo -e "${GREEN}🔴 ${CYAN}Убиваем все процессы ${NC}Zapret"
@@ -371,7 +430,7 @@ for pid in $PIDS; do kill -9 "$pid" >/dev/null 2>&1; done
 fi
 echo -e "\n${BLUE}🔴 ${GREEN}Zapret остановлен!${NC}\n"
 else
-echo -e "\n${RED}Zapret не установлен!${NC}\n"
+echo -e "${RED}Zapret не установлен!${NC}\n"
 fi
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
@@ -379,14 +438,16 @@ read -p "Нажмите Enter для выхода в главное меню..."
 # Запустить Zapret
 # ==========================================
 start_zapret() {
+clear
+echo -e "${MAGENTA}Запускаем Zapret${NC}\n"
 # Запуск службы через init.d
 if [ -f /etc/init.d/zapret ]; then
-echo -e "\n${GREEN}🔴 ${CYAN}Запускаем ${NC}Zapret"
+echo -e "${GREEN}🔴 ${CYAN}Запускаем ${NC}Zapret"
 /etc/init.d/zapret start >/dev/null 2>&1
 chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart >/dev/null 2>&1
 echo -e "\n${BLUE}🔴 ${GREEN}Zapret запущен!${NC}\n"
 else
-echo -e "\n${RED}Zapret не установлен!${NC}\n"
+echo -e "${RED}Zapret не установлен!${NC}\n"
 fi
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
@@ -394,8 +455,11 @@ read -p "Нажмите Enter для выхода в главное меню..."
 # Полное удаление Zapret
 # ==========================================
 uninstall_zapret() {
+local NO_PAUSE=$1
+[ "$NO_PAUSE" != "1" ] && clear
+echo -e "${MAGENTA}Удаляем ZAPRET${NC}\n"
 if ! [[ "$LATEST_VER" =~ 7 ]]; then
-echo -e "\n${RED}Внимание! Версия для установки не найдена!${NC}\n"
+echo -e "${RED}Внимание! Версия для установки не найдена!${NC}\n"
 read -p "Продолжить удаление? [y/N]: " answer
 case "$answer" in
 [yY]) echo -e "";;  # продолжаем удаление
@@ -405,7 +469,7 @@ sleep 2
 return;;
 esac
 fi
-echo -e "\n${GREEN}🔴 ${CYAN}Останавливаем ${NC}zapret" && echo -e "${GREEN}🔴 ${CYAN}Убиваем процессы${NC}" && /etc/init.d/zapret stop >/dev/null 2>&1
+echo -e "${GREEN}🔴 ${CYAN}Останавливаем ${NC}zapret" && echo -e "${GREEN}🔴 ${CYAN}Убиваем процессы${NC}" && /etc/init.d/zapret stop >/dev/null 2>&1
 for pid in $(pgrep -f /opt/zapret 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done
 echo -e "${GREEN}🔴 ${CYAN}Удаляем пакеты${NC}"
 opkg --force-removal-of-dependent-packages --autoremove remove zapret luci-app-zapret >/dev/null 2>&1
@@ -417,12 +481,12 @@ sed -i '/130\.255\.77\.28 ntc.party/d; /57\.144\.222\.34 instagram.com www.insta
 /173\.245\.58\.219 rutor.info d.rutor.info/d; /193\.46\.255\.29 rutor.info/d; \
 /157\.240\.9\.174 instagram.com www.instagram.com/d' /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1
 echo -e "\n${BLUE}🔴 ${GREEN}Zapret полностью удалён!${NC}\n"
-read -p "Нажмите Enter для выхода в главное меню..." dummy
+[ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
 # ==========================================
 # Запустить/Остановить Zapret
 # ==========================================
-startstop_zpr() { pgrep -f /opt/zapret >/dev/null 2>&1 && stop_zapret || start_zapret; }
+startstop_zpr() { clear; pgrep -f /opt/zapret >/dev/null 2>&1 && stop_zapret || start_zapret; }
 # ==========================================
 # Выбор стратегий
 # ==========================================
@@ -487,7 +551,7 @@ clear
 echo -e "╔════════════════════════════════════╗"
 echo -e "║     ${BLUE}Zapret on remittor Manager${NC}     ║"
 echo -e "╚════════════════════════════════════╝"
-echo -e "                     ${DGRAY}by StressOzz v6.7${NC}"
+echo -e "                     ${DGRAY}by StressOzz v6.6${NC}"
 # Вывод информации
 echo -e "\n${YELLOW}Установленная версия:       ${INST_COLOR}$INSTALLED_DISPLAY${NC}"
 echo -e "${YELLOW}Последняя версия на GitHub: ${CYAN}$LATEST_VER${NC}"
@@ -504,6 +568,7 @@ echo -e "${CYAN}4) ${GREEN}Остановить / Запустить ${NC}Zapret
 echo -e "${CYAN}5) ${GREEN}Удалить ${NC}Zapret"
 echo -e "${CYAN}6) ${GREEN}Добавить / Удалить стратегию для игр"
 echo -e "${CYAN}7) ${GREEN}Меню настройки ${NC}Discord${GREEN} и звонков в ${NC}TG${GREEN}/${NC}WA"
+echo -e "${CYAN}8) ${GREEN}Удалить / Установить / Настроить${NC} Zapret"
 echo -e "${CYAN}Enter) ${GREEN}Выход${NC}\n"
 echo -ne "${YELLOW}Выберите пункт:${NC} "
 read choice
@@ -515,6 +580,7 @@ case "$choice" in
 5) uninstall_zapret;;
 6) fix_GAME  ;;
 7) enable_discord_calls ;;
+8) zapret_key ;;
 *) 
 echo -e ""
 exit 0 ;;
