@@ -1,4 +1,3 @@
-
 #!/bin/sh
 # ==========================================
 # Zapret on remittor Manager by StressOzz
@@ -226,9 +225,7 @@ fi
 show_script_50() {
 SCRIPT_FILE="/opt/zapret/init.d/openwrt/custom.d/50-script.sh"
 [ -f "$SCRIPT_FILE" ] || return
-
 line=$(head -n1 "$SCRIPT_FILE")
-
 case "$line" in
   *QUIC*)              name="50-quic4all" ;;
   *stun*)              name="50-stun4all" ;;
@@ -240,7 +237,7 @@ esac
 enable_discord_calls() {
 local NO_PAUSE=$1
 [ "$NO_PAUSE" != "1" ] && clear
-[ "$NO_PAUSE" != "1" ] && echo -e "${MAGENTA}Меню настройки Discord и звонков в TG/WA${NC}"
+[ "$NO_PAUSE" != "1" ] && echo -e "${MAGENTA}Меню настройки Discord и звонков в TG/WA${NC}\n"
 [ "$NO_PAUSE" = "1" ] && echo -e "${MAGENTA}Включаем Discord и звонки в TG и WA${NC}\n"
 if [ ! -f /etc/init.d/zapret ]; then
 echo -e "\n${RED}Zapret не установлен!${NC}\n"
@@ -493,19 +490,21 @@ startstop_zpr() { clear; pgrep -f /opt/zapret >/dev/null 2>&1 && stop_zapret || 
 # Выбор стратегий
 # ==========================================
 show_current_strategy() {
-CONFstr="/etc/config/zapret"
-[ -f "$CONFstr" ] || return
-if grep -q "#v1" "$CONFstr"; then
-echo -e "${YELLOW}Используется стратегия:${NC}     v1"
-elif grep -q "#v2" "$CONFstr"; then
-echo -e "${YELLOW}Используется стратегия:${NC}     v2"
-elif grep -q "#v3" "$CONFstr"; then
-echo -e "${YELLOW}Используется стратегия:${NC}     v3"
-elif grep -q "#v4" "$CONFstr"; then
-echo -e "${YELLOW}Используется стратегия:${NC}     v4"
-elif grep -q "dpi-desync-split-pos=1,sniext+1,host+1,midsld-2,midsld,midsld+2,endhost-1" "$CONFstr"; then
-echo -e "${YELLOW}Используется стратегия: ${NC}дефолтная"
-fi
+    local CONFstr="/etc/config/zapret"
+    [ -f "$CONFstr" ] || return
+    if   grep -q "#v1" "$CONFstr"; then
+         ver="v1"
+    elif grep -q "#v2" "$CONFstr"; then
+         ver="v2"
+    elif grep -q "#v3" "$CONFstr"; then
+         ver="v3"
+    elif grep -q "#v4" "$CONFstr"; then
+         ver="v4"
+    elif grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONFstr" \
+      && grep -q -- "--hostlist-exclude-domains=openwrt.org" "$CONFstr"; then
+         ver="дефолтная"
+    fi
+    [ -n "$ver" ] && echo -e "${YELLOW}Используется стратегия:${NC}     $ver"
 }
 menu_str() {
 clear
