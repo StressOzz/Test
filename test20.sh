@@ -39,8 +39,8 @@ case "$answer" in
 esac
 fi
 # --- Проверка Flow Offloading (программного и аппаратного)
-local FLOW_STATE=$(uci get firewall.@defaults[0].flow_offloading 2>/dev/null)
-local HW_FLOW_STATE=$(uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null)
+FLOW_STATE=$(uci get firewall.@defaults[0].flow_offloading 2>/dev/null)
+HW_FLOW_STATE=$(uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null)
 if [ "$FLOW_STATE" = "1" ] || [ "$HW_FLOW_STATE" = "1" ]; then
 if ! grep -q 'meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc; then
 clear
@@ -394,10 +394,8 @@ read -p "Нажмите Enter для выхода в главное меню..."
 # Полное удаление Zapret
 # ==========================================
 uninstall_zapret() {
-clear
-echo -e "${MAGENTA}Удаляем ZAPRET${NC}\n"
 if ! [[ "$LATEST_VER" =~ 7 ]]; then
-echo -e "${RED}Внимание! Версия для установки не найдена!${NC}\n"
+echo -e "\n${RED}Внимание! Версия для установки не найдена!${NC}\n"
 read -p "Продолжить удаление? [y/N]: " answer
 case "$answer" in
 [yY]) echo -e "";;  # продолжаем удаление
@@ -407,7 +405,7 @@ sleep 2
 return;;
 esac
 fi
-echo -e "${GREEN}🔴 ${CYAN}Останавливаем ${NC}zapret" && echo -e "${GREEN}🔴 ${CYAN}Убиваем процессы${NC}" && /etc/init.d/zapret stop >/dev/null 2>&1
+echo -e "\n${GREEN}🔴 ${CYAN}Останавливаем ${NC}zapret" && echo -e "${GREEN}🔴 ${CYAN}Убиваем процессы${NC}" && /etc/init.d/zapret stop >/dev/null 2>&1
 for pid in $(pgrep -f /opt/zapret 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done
 echo -e "${GREEN}🔴 ${CYAN}Удаляем пакеты${NC}"
 opkg --force-removal-of-dependent-packages --autoremove remove zapret luci-app-zapret >/dev/null 2>&1
@@ -429,7 +427,7 @@ startstop_zpr() { pgrep -f /opt/zapret >/dev/null 2>&1 && stop_zapret || start_z
 # Выбор стратегий
 # ==========================================
 show_current_strategy() {
-local CONFstr="/etc/config/zapret"
+CONFstr="/etc/config/zapret"
 [ -f "$CONFstr" ] || return
 if grep -q "#v1" "$CONFstr"; then
 ver="v1"
