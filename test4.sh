@@ -236,9 +236,6 @@ case "$line" in
   *"discord subnets"*) name="50-discord" ;;
   *)                   name="" ;;
 esac
-
-[ -n "$name" ] && echo -e "${YELLOW}Установлен скрипт:${NC}          $name"
-
 }
 enable_discord_calls() {
 local NO_PAUSE=$1
@@ -250,7 +247,7 @@ echo -e "\n${RED}Zapret не установлен!${NC}\n"
 [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 return
 fi
-[ "$NO_PAUSE" != "1" ] && show_script_50
+[ "$NO_PAUSE" != "1" ] && show_script_50 && [ -n "$name" ] && echo -e "${YELLOW}Установлен скрипт:${NC} $name"
 if [ "$NO_PAUSE" = "1" ]; then
 SELECTED="50-stun4all"
 URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-stun4all"
@@ -546,66 +543,6 @@ show_menu
 return ;;
 esac
 }
-#==========================================
-#  Обновление /etc/dnsmasq.hosts
-#==========================================
-update_dnsmasq_hosts() {
-    URL="https://raw.githubusercontent.com/ImMALWARE/dns.malw.link/refs/heads/master/hosts"
-    LOCAL="/etc/dnsmasq.hosts"
-    PATTERN="api\\.github|github|git|4pda"
-
-    TMP="/tmp/dnsmasq.hosts.new"
-    TMPF="/tmp/dnsmasq.hosts.filtered"
-
-    # скачать файл
-    if command -v wget >/dev/null 2>&1; then
-        wget -q -O "$TMP" "$URL" || { echo "Ошибка скачивания"; return 1; }
-    elif command -v curl >/dev/null 2>&1; then
-        curl -fsSL -o "$TMP" "$URL" || { echo "Ошибка скачивания"; return 1; }
-    else
-        echo "wget/curl отсутствуют"
-        return 1
-    fi
-
-    [ ! -s "$TMP" ] && { echo "Файл пуст"; return 1; }
-
-    # убрать CRLF если есть dos2unix
-    command -v dos2unix >/dev/null 2>&1 && dos2unix "$TMP" >/dev/null 2>&1
-
-    # фильтрация
-    awk -v pattern="$PATTERN" '
-    BEGIN { FS=OFS=" " }
-    {
-        # комментарии / пустые строки
-        if ($0 ~ /^[[:space:]]*#/ || $0 ~ /^[[:space:]]*$/) { print; next }
-
-        if (NF < 2) { print; next }
-
-        dom=""
-        for (i=2;i<=NF;i++) {
-            if (dom=="") dom=$i; else dom=dom" "$i
-        }
-
-        lc=tolower(dom)
-        if (lc ~ pattern) next
-
-        print
-    }
-    ' "$TMP" > "$TMPF" || { echo "Ошибка фильтрации"; return 1; }
-
-    # обновить если есть изменения
-    if ! cmp -s "$TMPF" "$LOCAL"; then
-        mv "$TMPF" "$LOCAL"
-        chmod 644 "$LOCAL"
-        /etc/init.d/dnsmasq restart >/dev/null 2>&1
-        echo "dnsmasq.hosts обновлён"
-    else
-        rm -f "$TMPF"
-        echo "Изменений нет"
-    fi
-
-    rm -f "$TMP"
-}
 # ==========================================
 # Главное меню
 # ==========================================
@@ -622,6 +559,7 @@ echo -e "${YELLOW}Последняя версия на GitHub: ${CYAN}$LATEST_VE
 echo -e "${YELLOW}Архитектура устройства:${NC}     $LOCAL_ARCH"
 [ -n "$ZAPRET_STATUS" ] && echo -e "${YELLOW}Статус Zapret:${NC}              $ZAPRET_STATUS"
 show_script_50
+[ -n "$name" ] && echo -e "${YELLOW}Установлен скрипт:${NC}          $name"
 [ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*1024-65535" "$CONF" && grep -q -- "--filter-udp=1024-65535" "$CONF" && echo -e "${YELLOW}Стратегия для игр:${NC}          ${GREEN}активна${NC}"
 show_current_strategy
 # Вывод пунктов меню
@@ -633,7 +571,6 @@ echo -e "${CYAN}5) ${GREEN}Удалить ${NC}Zapret"
 echo -e "${CYAN}6) ${GREEN}Добавить / Удалить стратегию для игр"
 echo -e "${CYAN}7) ${GREEN}Меню настройки ${NC}Discord${GREEN} и звонков в ${NC}TG${GREEN}/${NC}WA"
 echo -e "${CYAN}8) ${GREEN}Удалить / Установить / Настроить${NC} Zapret"
-echo -e "${CYAN}8) ${GREEN}update_dnsmasq_hosts"
 echo -e "${CYAN}Enter) ${GREEN}Выход${NC}\n"
 echo -ne "${YELLOW}Выберите пункт:${NC} "
 read choice
@@ -646,7 +583,6 @@ case "$choice" in
 6) fix_GAME  ;;
 7) enable_discord_calls ;;
 8) zapret_key ;;
-9) update_dnsmasq_hosts ;;
 *) 
 echo -e ""
 exit 0 ;;
