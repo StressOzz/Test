@@ -147,7 +147,6 @@ fi
 # Установка Zapret
 # ==========================================
 install_Zapret() {
-local NO_PAUSE=$1
 clear
 echo -e "${MAGENTA}Устанавливаем ZAPRET${NC}\n"
 get_versions
@@ -235,7 +234,6 @@ case "$line" in
 esac
 }
 enable_discord_calls() {
-local NO_PAUSE=$1
 clear
 echo -e "${MAGENTA}Меню настройки Discord и звонков в TG/WA${NC}"
 if [ ! -f /etc/init.d/zapret ]; then
@@ -294,16 +292,13 @@ read -p "Нажмите Enter для выхода в главное меню..."
 # FIX GAME
 # ==========================================
 fix_GAME() {
-local NO_PAUSE=$1
-clear
-echo -e "${MAGENTA}Настраиваем стратегию для игр${NC}\n"
 if [ ! -f /etc/init.d/zapret ]; then
-echo -e "${RED}Zapret не установлен!${NC}\n"
+echo -e "\n${RED}Zapret не установлен!${NC}\n"
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 return
 fi
 if grep -q "option NFQWS_PORTS_UDP.*1024-65535" "$CONF" && grep -q -- "--filter-udp=1024-65535" "$CONF"; then
-echo -e "${GREEN}🔴 ${CYAN}Удаляем из стратегии настройки для игр${NC}"
+echo -e "\n${GREEN}🔴 ${CYAN}Удаляем из стратегии настройки для игр${NC}"
 sed -i ':a;N;$!ba;s|--new\n--filter-udp=1024-65535\n--dpi-desync=fake\n--dpi-desync-cutoff=d2\n--dpi-desync-any-protocol\n--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/quic_initial_www_google_com\.bin\n*||g' "$CONF"
 sed -i "s/,1024-65535//" "$CONF"
 chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart >/dev/null 2>&1
@@ -329,7 +324,7 @@ cat <<'EOF' >> "$CONF"
 '
 EOF
 fi
-echo -e "${GREEN}🔴 ${CYAN}Добавляем в стратегию настройки для игр${NC}"
+echo -e "\n${GREEN}🔴 ${CYAN}Добавляем в стратегию настройки для игр${NC}"
 chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart >/dev/null 2>&1
 echo -e "\n${BLUE}🔴 ${GREEN}Игровые настройки добавлены!${NC}\n"
 read -p "Нажмите Enter для выхода в главное меню..." dummy
@@ -338,13 +333,11 @@ read -p "Нажмите Enter для выхода в главное меню..."
 # Вернуть настройки по умолчанию
 # ==========================================
 comeback_def () {
-clear
-echo -e "${MAGENTA}Возвращаем настройки по умолчанию${NC}\n"
 # Проверка скрипта восстановления и его запуск
 if [ -f /opt/zapret/restore-def-cfg.sh ]; then
 rm -f /opt/zapret/init.d/openwrt/custom.d/50-script.sh
 [ -f /etc/init.d/zapret ] && /etc/init.d/zapret stop >/dev/null 2>&1
-echo -e "${GREEN}🔴 ${CYAN}Возвращаем ${NC}настройки${CYAN}, ${NC}стратегию${CYAN} и ${NC}hostlist${CYAN} к значениям по умолчанию${NC}\n"
+echo -e "\n${GREEN}🔴 ${CYAN}Возвращаем ${NC}настройки${CYAN}, ${NC}стратегию${CYAN} и ${NC}hostlist${CYAN} к значениям по умолчанию${NC}\n"
 IPSET_DIR="/opt/zapret/ipset"
 mkdir -p "$IPSET_DIR"
 FILES="zapret-hosts-google.txt zapret-hosts-user-exclude.txt"
@@ -360,7 +353,7 @@ sed -i '/130\.255\.77\.28 ntc.party/d; /57\.144\.222\.34 instagram.com www.insta
 /157\.240\.9\.174 instagram.com www.instagram.com/d' /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1
 echo -e "${BLUE}🔴 ${GREEN}Настройки по умолчанию возвращены!${NC}\n"
 else
-echo -e "${RED}Zapret не установлен!${NC}\n"
+echo -e "\n${RED}Zapret не установлен!${NC}\n"
 fi
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 show_menu
@@ -401,7 +394,6 @@ read -p "Нажмите Enter для выхода в главное меню..."
 # Полное удаление Zapret
 # ==========================================
 uninstall_zapret() {
-local NO_PAUSE=$1
 clear
 echo -e "${MAGENTA}Удаляем ZAPRET${NC}\n"
 if ! [[ "$LATEST_VER" =~ 7 ]]; then
@@ -504,8 +496,8 @@ echo -e "${YELLOW}Последняя версия на GitHub: ${CYAN}$LATEST_VE
 echo -e "${YELLOW}Архитектура устройства:${NC}     $LOCAL_ARCH"
 [ -n "$ZAPRET_STATUS" ] && echo -e "${YELLOW}Статус Zapret:${NC}              $ZAPRET_STATUS"
 show_script_50 && [ -n "$name" ] && echo -e "${YELLOW}Установлен скрипт:${NC}          $name"
-[ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*1024-65535" "$CONF" && grep -q -- "--filter-udp=1024-65535" "$CONF" && echo -e "${YELLOW}Стратегия для игр:${NC}          ${GREEN}активна${NC}"
 show_current_strategy && [ -n "$ver" ] && echo -e "${YELLOW}Используется стратегия:${NC}     ${CYAN}$ver"
+[ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*1024-65535" "$CONF" && grep -q -- "--filter-udp=1024-65535" "$CONF" && echo -e "${YELLOW}Стратегия для игр:${NC}          ${GREEN}активна${NC}"
 # Вывод пунктов меню
 echo -e "\n${CYAN}1) ${GREEN}Установить последнюю версию${NC}"
 echo -e "${CYAN}2) ${GREEN}Меню выбора стратегии${NC}"
