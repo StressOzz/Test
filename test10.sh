@@ -342,47 +342,6 @@ echo -e "\n${BLUE}🔴 ${GREEN}Игровые настройки добавле�
 [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
 # ==========================================
-# Zapret под ключ
-# ==========================================
-zapret_key(){
-clear
-echo -e "${MAGENTA}Удаление, установка и настройка Zapret${NC}\n"
-get_versions
-# Проверка лимита API
-if [ "$LIMIT_REACHED" -eq 1 ]; then
-echo -e "${RED}Достигнут лимит GitHub API! Подождите 15 минут.${NC}\n"
-read -p "Нажмите Enter для выхода в главное меню..." dummy
-return
-fi
-# Проверка версии
-if ! [[ "$LATEST_VER" =~ 7 ]]; then
-echo -e "${RED}Внимание! Версия для установки не найдена!${NC}\n"
-read -p "Нажмите Enter для выхода в главное меню..." dummy
-return
-fi
-uninstall_zapret "1"
-install_Zapret "1"
-[ ! -f /etc/init.d/zapret ] && return
-# Останавливаем zapret на случай если дефолтная стратегия ломает трафик
-echo -e "${MAGENTA}Останавливаем Zapret${NC}\n" && /etc/init.d/zapret stop >/dev/null 2>&1 && echo -e "${BLUE}🔴 ${GREEN}Zapret остановлен!${NC}\n"
-# ТУТ ПИШЕМ КАКАЯ СТРАТЕГИЯ БУДЕТ УСТАНАВЛИВАТЬСЯ ЧЕРЕЗ ПУНКТ 8
-curl -sL https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Str2.sh | sh
-if [ ! -f "$CONF" ]; then
-echo -e "\n${RED}Файл ${NC}$CONF${RED} не найден!${NC}\n"
-read -p "Нажмите Enter для выхода в главное меню..." dummy
-return
-fi
-if ! grep -q "#v" "$CONF"; then
-echo -e "\n${RED}Cтратегия не установлена!${NC}\n"
-read -p "Нажмите Enter для выхода в главное меню..." dummy
-return
-fi
-enable_discord_calls "1"
-fix_GAME "1"
-echo -e "${BLUE}🔴 ${GREEN}Zapret установлен и настроен!${NC}\n"
-read -p "Нажмите Enter для выхода в главное меню..." dummy
-}
-# ==========================================
 # Вернуть настройки по умолчанию
 # ==========================================
 comeback_def () {
@@ -551,13 +510,13 @@ clear
 echo -e "╔════════════════════════════════════╗"
 echo -e "║     ${BLUE}Zapret on remittor Manager${NC}     ║"
 echo -e "╚════════════════════════════════════╝"
-echo -e "                     ${DGRAY}by StressOzz v6.6${NC}"
+echo -e "                     ${DGRAY}by StressOzz v6.7${NC}"
 # Вывод информации
 echo -e "\n${YELLOW}Установленная версия:       ${INST_COLOR}$INSTALLED_DISPLAY${NC}"
 echo -e "${YELLOW}Последняя версия на GitHub: ${CYAN}$LATEST_VER${NC}"
 echo -e "${YELLOW}Архитектура устройства:${NC}     $LOCAL_ARCH"
 [ -n "$ZAPRET_STATUS" ] && echo -e "${YELLOW}Статус Zapret:${NC}              $ZAPRET_STATUS"
-show_script_50 && [ -n "$name" ] && echo -e "\n${YELLOW}Установлен скрипт:${NC}          $name"
+show_script_50 && [ -n "$name" ] && echo -e "${YELLOW}Установлен скрипт:${NC}          $name"
 [ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*1024-65535" "$CONF" && grep -q -- "--filter-udp=1024-65535" "$CONF" && echo -e "${YELLOW}Стратегия для игр:${NC}          ${GREEN}активна${NC}"
 show_current_strategy
 [ -n "$ver" ] && echo -e "${YELLOW}Используется стратегия:${NC}     ${CYAN}$ver"
@@ -569,7 +528,6 @@ echo -e "${CYAN}4) ${GREEN}Остановить / Запустить ${NC}Zapret
 echo -e "${CYAN}5) ${GREEN}Удалить ${NC}Zapret"
 echo -e "${CYAN}6) ${GREEN}Добавить / Удалить стратегию для игр"
 echo -e "${CYAN}7) ${GREEN}Меню настройки ${NC}Discord${GREEN} и звонков в ${NC}TG${GREEN}/${NC}WA"
-echo -e "${CYAN}8) ${GREEN}Удалить / Установить / Настроить${NC} Zapret"
 echo -e "${CYAN}Enter) ${GREEN}Выход${NC}\n"
 echo -ne "${YELLOW}Выберите пункт:${NC} "
 read choice
@@ -581,7 +539,6 @@ case "$choice" in
 5) uninstall_zapret;;
 6) fix_GAME  ;;
 7) enable_discord_calls ;;
-8) zapret_key ;;
 *) 
 echo -e ""
 exit 0 ;;
