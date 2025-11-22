@@ -18,14 +18,6 @@ CUSTOM_DIR="/opt/zapret/init.d/openwrt/custom.d/"
 # ==========================================
 get_versions() {
 clear
-# --- Проверяем версию OpenWrt
-[ -f /etc/openwrt_release ] || exit 1
-. /etc/openwrt_release
-VERSION_NUMBER="${DISTRIB_RELEASE%%.*}"
-if [ "$VERSION_NUMBER" -lt 23 ]; then
-echo -e "\n${RED}Ваша версия OpenWrt — слишком старая.${NC}\n"
-exit 1
-fi
 # --- Проверка byedpi и youtubeUnblock
 if opkg list-installed | grep -q "byedpi"; then
 clear
