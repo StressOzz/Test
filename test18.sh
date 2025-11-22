@@ -238,7 +238,6 @@ enable_discord_calls() {
 local NO_PAUSE=$1
 clear
 echo -e "${MAGENTA}Меню настройки Discord и звонков в TG/WA${NC}"
-echo -e "${MAGENTA}Включаем Discord и звонки в TG и WA${NC}\n"
 if [ ! -f /etc/init.d/zapret ]; then
 echo -e "\n${RED}Zapret не установлен!${NC}\n"
 read -p "Нажмите Enter для выхода в главное меню..." dummy
