@@ -237,14 +237,14 @@ esac
 enable_discord_calls() {
 local NO_PAUSE=$1
 [ "$NO_PAUSE" != "1" ] && clear
-[ "$NO_PAUSE" != "1" ] && echo -e "${MAGENTA}Меню настройки Discord и звонков в TG/WA${NC}\n"
+[ "$NO_PAUSE" != "1" ] && echo -e "${MAGENTA}Меню настройки Discord и звонков в TG/WA${NC}"
 [ "$NO_PAUSE" = "1" ] && echo -e "${MAGENTA}Включаем Discord и звонки в TG и WA${NC}\n"
 if [ ! -f /etc/init.d/zapret ]; then
 echo -e "\n${RED}Zapret не установлен!${NC}\n"
 [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 return
 fi
-[ "$NO_PAUSE" != "1" ] && show_script_50 && [ -n "$name" ] && echo -e "${YELLOW}Установлен скрипт:${NC} $name"
+[ "$NO_PAUSE" != "1" ] && show_script_50 && [ -n "$name" ] && echo -e "\n${YELLOW}Установлен скрипт:${NC} $name"
 if [ "$NO_PAUSE" = "1" ]; then
 SELECTED="50-stun4all"
 URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-stun4all"
@@ -490,21 +490,20 @@ startstop_zpr() { clear; pgrep -f /opt/zapret >/dev/null 2>&1 && stop_zapret || 
 # Выбор стратегий
 # ==========================================
 show_current_strategy() {
-    local CONFstr="/etc/config/zapret"
-    [ -f "$CONFstr" ] || return
-    if   grep -q "#v1" "$CONFstr"; then
-         ver="v1"
-    elif grep -q "#v2" "$CONFstr"; then
-         ver="v2"
-    elif grep -q "#v3" "$CONFstr"; then
-         ver="v3"
-    elif grep -q "#v4" "$CONFstr"; then
-         ver="v4"
-    elif grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONFstr" \
-      && grep -q -- "--hostlist-exclude-domains=openwrt.org" "$CONFstr"; then
-         ver="дефолтная"
-    fi
-    [ -n "$ver" ] && echo -e "${YELLOW}Используется стратегия:${NC}     $ver"
+local CONFstr="/etc/config/zapret"
+[ -f "$CONFstr" ] || return
+if grep -q "#v1" "$CONFstr"; then
+ver="v1"
+elif grep -q "#v2" "$CONFstr"; then
+ver="v2"
+elif grep -q "#v3" "$CONFstr"; then
+ver="v3"
+elif grep -q "#v4" "$CONFstr"; then
+ver="v4"
+elif grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONFstr" \
+&& grep -q -- "--hostlist-exclude-domains=openwrt.org" "$CONFstr"; then
+ver="дефолтная"
+fi
 }
 menu_str() {
 clear
@@ -512,6 +511,7 @@ echo -e "${MAGENTA}Меню выбора стратегии${NC}\n"
 # Проверка, установлен ли Zapret
 [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; return; }
 show_current_strategy
+[ -n "$ver" ] && echo -e "${YELLOW}Используется стратегия:${NC} $ver"
 echo -e "\n${CYAN}1) ${GREEN}Установить стратегию${NC} v1"
 echo -e "${CYAN}2) ${GREEN}Установить стратегию${NC} v2"
 echo -e "${CYAN}3) ${GREEN}Установить стратегию${NC} v3"
@@ -561,6 +561,7 @@ show_script_50
 [ -n "$name" ] && echo -e "${YELLOW}Установлен скрипт:${NC}          $name"
 [ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*1024-65535" "$CONF" && grep -q -- "--filter-udp=1024-65535" "$CONF" && echo -e "${YELLOW}Стратегия для игр:${NC}          ${GREEN}активна${NC}"
 show_current_strategy
+[ -n "$ver" ] && echo -e "${YELLOW}Используется стратегия:${NC}     $ver"
 # Вывод пунктов меню
 echo -e "\n${CYAN}1) ${GREEN}Установить последнюю версию${NC}"
 echo -e "${CYAN}2) ${GREEN}Меню выбора стратегии${NC}"
