@@ -518,8 +518,7 @@ echo -e "${YELLOW}Архитектура устройства:${NC}     $LOCAL_A
 [ -n "$ZAPRET_STATUS" ] && echo -e "${YELLOW}Статус Zapret:${NC}              $ZAPRET_STATUS"
 show_script_50 && [ -n "$name" ] && echo -e "${YELLOW}Установлен скрипт:${NC}          $name"
 [ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*1024-65535" "$CONF" && grep -q -- "--filter-udp=1024-65535" "$CONF" && echo -e "${YELLOW}Стратегия для игр:${NC}          ${GREEN}активна${NC}"
-show_current_strategy
-[ -n "$ver" ] && echo -e "${YELLOW}Используется стратегия:${NC}     ${CYAN}$ver"
+show_current_strategy && [ -n "$ver" ] && echo -e "${YELLOW}Используется стратегия:${NC}     ${CYAN}$ver"
 # Вывод пунктов меню
 echo -e "\n${CYAN}1) ${GREEN}Установить последнюю версию${NC}"
 echo -e "${CYAN}2) ${GREEN}Меню выбора стратегии${NC}"
