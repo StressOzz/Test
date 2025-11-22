@@ -464,10 +464,10 @@ fi
 }
 menu_str() {
 clear
-echo -e "${MAGENTA}Меню выбора стратегии${NC}\n"
+echo -e "${MAGENTA}Меню выбора стратегии${NC}"
 # Проверка, установлен ли Zapret
 [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; return; }
-show_current_strategy && [ -n "$ver" ] && echo -e "${YELLOW}Используется стратегия:${NC} $ver"
+show_current_strategy && [ -n "$ver" ] && echo -e "\n${YELLOW}Используется стратегия:${NC} $ver"
 echo -e "\n${CYAN}1) ${GREEN}Установить стратегию${NC} v1"
 echo -e "${CYAN}2) ${GREEN}Установить стратегию${NC} v2"
 echo -e "${CYAN}3) ${GREEN}Установить стратегию${NC} v3"
