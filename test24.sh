@@ -17,7 +17,6 @@ CUSTOM_DIR="/opt/zapret/init.d/openwrt/custom.d/"
 # Получение информации о версиях, архитектуре и статусе
 # ==========================================
 get_versions() {
-clear
 # --- Проверка byedpi и youtubeUnblock
 if opkg list-installed | grep -q "byedpi"; then
 clear
