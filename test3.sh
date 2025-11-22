@@ -226,16 +226,19 @@ fi
 show_script_50() {
 SCRIPT_FILE="/opt/zapret/init.d/openwrt/custom.d/50-script.sh"
 [ -f "$SCRIPT_FILE" ] || return
+
 line=$(head -n1 "$SCRIPT_FILE")
-if echo "$line" | grep -q "QUIC"; then
-echo -e "${YELLOW}Установлен скрипт:${NC}          50-quic4all"
-elif echo "$line" | grep -q "stun"; then
-echo -e "${YELLOW}Установлен скрипт:${NC}          50-stun4all"
-elif echo "$line" | grep -q "discord media"; then
-echo -e "${YELLOW}Установлен скрипт:${NC}          50-discord-media"
-elif echo "$line" | grep -q "discord subnets"; then
-echo -e "${YELLOW}Установлен скрипт:${NC}          50-discord"
-fi
+
+case "$line" in
+  *QUIC*)              name="50-quic4all" ;;
+  *stun*)              name="50-stun4all" ;;
+  *"discord media"*)   name="50-discord-media" ;;
+  *"discord subnets"*) name="50-discord" ;;
+  *)                   name="" ;;
+esac
+
+[ -n "$name" ] && echo -e "${YELLOW}Установлен скрипт:${NC}          $name"
+
 }
 enable_discord_calls() {
 local NO_PAUSE=$1
