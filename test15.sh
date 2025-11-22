@@ -376,10 +376,8 @@ show_menu
 # Остановить Zapret
 # ==========================================
 stop_zapret() {
-echo -e "\n${MAGENTA}Останавливаем Zapret${NC}\n"
-# Остановка службы через init.d и убийство процессов
 if [ -f /etc/init.d/zapret ]; then
-echo -e "${GREEN}🔴 ${CYAN}Останавливаем ${NC}Zapret" && /etc/init.d/zapret stop >/dev/null 2>&1
+echo -e "\n${GREEN}🔴 ${CYAN}Останавливаем ${NC}Zapret" && /etc/init.d/zapret stop >/dev/null 2>&1
 PIDS=$(pgrep -f /opt/zapret)
 if [ -n "$PIDS" ]; then
 echo -e "${GREEN}🔴 ${CYAN}Убиваем все процессы ${NC}Zapret"
@@ -387,7 +385,7 @@ for pid in $PIDS; do kill -9 "$pid" >/dev/null 2>&1; done
 fi
 echo -e "\n${BLUE}🔴 ${GREEN}Zapret остановлен!${NC}\n"
 else
-echo -e "${RED}Zapret не установлен!${NC}\n"
+echo -e "\n${RED}Zapret не установлен!${NC}\n"
 fi
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
@@ -395,15 +393,14 @@ read -p "Нажмите Enter для выхода в главное меню..."
 # Запустить Zapret
 # ==========================================
 start_zapret() {
-echo -e "\n${MAGENTA}Запускаем Zapret${NC}\n"
 # Запуск службы через init.d
 if [ -f /etc/init.d/zapret ]; then
-echo -e "${GREEN}🔴 ${CYAN}Запускаем ${NC}Zapret"
+echo -e "\n${GREEN}🔴 ${CYAN}Запускаем ${NC}Zapret"
 /etc/init.d/zapret start >/dev/null 2>&1
 chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart >/dev/null 2>&1
 echo -e "\n${BLUE}🔴 ${GREEN}Zapret запущен!${NC}\n"
 else
-echo -e "${RED}Zapret не установлен!${NC}\n"
+echo -e "\n${RED}Zapret не установлен!${NC}\n"
 fi
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
