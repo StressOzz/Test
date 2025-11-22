@@ -273,7 +273,6 @@ sleep 1
 show_menu
 return ;;
 esac
-fi
 if curl -fsSLo "$CUSTOM_DIR/50-script.sh" "$URL"; then
 echo -e "\n${GREEN}🔴 ${CYAN}Скрипт ${NC}$SELECTED${CYAN} успешно установлен!${NC}\n"
 if [ "$SELECTED" = "50-quic4all" ] || [ "$SELECTED" = "50-stun4all" ]; then
