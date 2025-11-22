@@ -376,8 +376,7 @@ show_menu
 # Остановить Zapret
 # ==========================================
 stop_zapret() {
-clear
-echo -e "${MAGENTA}Останавливаем Zapret${NC}\n"
+echo -e "\n${MAGENTA}Останавливаем Zapret${NC}\n"
 # Остановка службы через init.d и убийство процессов
 if [ -f /etc/init.d/zapret ]; then
 echo -e "${GREEN}🔴 ${CYAN}Останавливаем ${NC}Zapret" && /etc/init.d/zapret stop >/dev/null 2>&1
@@ -396,8 +395,7 @@ read -p "Нажмите Enter для выхода в главное меню..."
 # Запустить Zapret
 # ==========================================
 start_zapret() {
-clear
-echo -e "${MAGENTA}Запускаем Zapret${NC}\n"
+echo -e "\n${MAGENTA}Запускаем Zapret${NC}\n"
 # Запуск службы через init.d
 if [ -f /etc/init.d/zapret ]; then
 echo -e "${GREEN}🔴 ${CYAN}Запускаем ${NC}Zapret"
