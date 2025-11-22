@@ -1,4 +1,3 @@
-
 #!/bin/sh
 # ==========================================
 # Zapret on remittor Manager by StressOzz
@@ -18,6 +17,15 @@ CUSTOM_DIR="/opt/zapret/init.d/openwrt/custom.d/"
 # Получение информации о версиях, архитектуре и статусе
 # ==========================================
 get_versions() {
+clear
+# --- Проверяем версию OpenWrt
+[ -f /etc/openwrt_release ] || exit 1
+. /etc/openwrt_release
+VERSION_NUMBER="${DISTRIB_RELEASE%%.*}"
+if [ "$VERSION_NUMBER" -lt 23 ]; then
+echo -e "\n${RED}Ваша версия OpenWrt — слишком старая.${NC}\n"
+exit 1
+fi
 # --- Проверка byedpi и youtubeUnblock
 if opkg list-installed | grep -q "byedpi"; then
 clear
@@ -137,7 +145,7 @@ fi
 if [ "$LIMIT_REACHED" -eq 1 ] || [ "$LATEST_VER" = "не найдена" ]; then
 INST_COLOR=$CYAN; INSTALLED_DISPLAY="$INSTALLED_VER"
 elif [ "$INSTALLED_VER" = "$LATEST_VER" ]; then
-INST_COLOR=$GREEN; INSTALLED_DISPLAY="$INSTALLED_VER (актуальная)"
+INST_COLOR=$GREEN; INSTALLED_DISPLAY="$INSTALLED_VER"
 elif [ "$INSTALLED_VER" != "не найдена" ]; then
 INST_COLOR=$RED; INSTALLED_DISPLAY="$INSTALLED_VER (устарела)"
 else
@@ -551,7 +559,7 @@ clear
 echo -e "╔════════════════════════════════════╗"
 echo -e "║     ${BLUE}Zapret on remittor Manager${NC}     ║"
 echo -e "╚════════════════════════════════════╝"
-echo -e "                     ${DGRAY}by StressOzz v6.6${NC}"
+echo -e "                     ${DGRAY}by StressOzz v6.7${NC}"
 # Вывод информации
 echo -e "\n${YELLOW}Установленная версия:       ${INST_COLOR}$INSTALLED_DISPLAY${NC}"
 echo -e "${YELLOW}Последняя версия на GitHub: ${CYAN}$LATEST_VER${NC}"
