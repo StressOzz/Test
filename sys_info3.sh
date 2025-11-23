@@ -69,10 +69,10 @@ nnmclub.to
 openwrt.org
 pornhub.com
 discord.com
-genderize.io
 x.com
 filmix.my
 flightradar24.com
+genderize.io
 # Можно добавлять комментарии
 # Пустые строки тоже ок
 EOF
@@ -84,9 +84,9 @@ echo "$SITES" | while IFS= read -r site; do
     case "$site" in ""|\#*) continue ;; esac
 
     if curl -Is --connect-timeout 1 --max-time 2 "https://$site" >/dev/null 2>&1; then
-        echo -e "  [${GREEN}OK${NC}]   $site"
+        echo -e "[${GREEN}OK${NC}]   $site"
     else
-        echo -e "  [${RED}FAIL${NC}] $site"
+        echo -e "[${RED}FAIL${NC}] $site"
     fi
 done
 
