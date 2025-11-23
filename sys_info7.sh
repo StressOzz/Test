@@ -51,7 +51,7 @@ else
 fi
 
 # ---- Вывод в одну строку ----
-echo -e "Flow Offload: SW:${sw:+on}${sw:-off} | HW:${hw:+on}${hw:-off} | Offloading FIX: ${dpi}"
+echo -e "SW:${sw:+on}${sw:-off} | HW:${hw:+on}${hw:-off} | FIX: ${dpi}"
 
 
 
@@ -71,6 +71,7 @@ rutracker.org
 epidemz.net.co
 nnmclub.to
 openwrt.org
+sxyprn.net
 pornhub.com
 discord.com
 x.com
@@ -82,7 +83,7 @@ genderize.io
 EOF
 )
 
-echo -e "${GREEN}===== Доступность сайтов =====${NC}"
+echo -e "\n${GREEN}===== Доступность сайтов =====${NC}"
 
 echo "$SITES" | while IFS= read -r site; do
     case "$site" in ""|\#*) continue ;; esac
@@ -95,5 +96,5 @@ echo "$SITES" | while IFS= read -r site; do
 done
 
 echo ""
-
 read -p "Нажмите Enter для выхода в главное меню..." dummy
+echo ""
