@@ -85,30 +85,28 @@ EOF
 
 echo -e "\n${GREEN}===== Доступность сайтов =====${NC}"
 
-# Сохраняем все сайты в массив
-sites_array=()
-while IFS= read -r site; do
-    case "$site" in ""|\#*) continue ;; esac
-    sites_array+=("$site")
-done <<< "$SITES"
+# Читаем все сайты в одну строку и считаем количество
+sites_clean=$(echo "$SITES" | grep -v '^#' | grep -v '^\s*$')
+sites_count=$(echo "$sites_clean" | wc -l)
+half=$(( (sites_count + 1) / 2 ))
 
-# Находим середину массива для второго столбца
-len=${#sites_array[@]}
-half=$(( (len + 1) / 2 ))
+# Переводим строки в обычный список для второго прохода
+left_list=$(echo "$sites_clean" | head -n $half)
+right_list=$(echo "$sites_clean" | tail -n +$((half + 1)))
 
-# Выводим в 2 столбца
-for i in $(seq 0 $((half - 1))); do
-    left="${sites_array[i]}"
-    right="${sites_array[i + half]:-}"
+# Создаём временные файлы для итерации
+i=1
+echo "$left_list" | while read left; do
+    right=$(echo "$right_list" | sed -n "${i}p")
 
-    # Проверяем доступность для левого
+    # Проверка левого
     if curl -Is --connect-timeout 1 --max-time 2 "https://$left" >/dev/null 2>&1; then
         left_status="[${GREEN}OK${NC}]"
     else
         left_status="[${RED}FAIL${NC}]"
     fi
 
-    # Проверяем доступность для правого (если есть)
+    # Проверка правого (если есть)
     if [ -n "$right" ]; then
         if curl -Is --connect-timeout 1 --max-time 2 "https://$right" >/dev/null 2>&1; then
             right_status="[${GREEN}OK${NC}]"
@@ -119,7 +117,10 @@ for i in $(seq 0 $((half - 1))); do
     else
         printf "%-30s\n" "$left_status $left"
     fi
+
+    i=$((i + 1))
 done
+
 
 echo ""
 read -p "Нажмите Enter для выхода в главное меню..." dummy
