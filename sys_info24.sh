@@ -67,6 +67,7 @@ themoviedb.org
 thetvdb.com
 thetvdb.com/tos
 support.thetvdb.com
+thetvdb.com/movies/1
 EOF
 )
 echo -e "\n${GREEN}===== Доступность сайтов =====${NC}"
