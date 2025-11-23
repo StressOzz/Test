@@ -65,6 +65,8 @@ play.google.com
 genderize.io
 themoviedb.org
 thetvdb.com
+thetvdb.com/tos
+support.thetvdb.com
 EOF
 )
 echo -e "\n${GREEN}===== Доступность сайтов =====${NC}"
