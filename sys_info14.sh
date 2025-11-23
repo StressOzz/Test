@@ -83,45 +83,46 @@ genderize.io
 EOF
 )
 
-echo -e "\n${GREEN}===== Доступность сайтов =====${NC}"
+echo -e "\n===== Доступность сайтов ====="
 
-# Чистим список сайтов, сразу в массив-like переменные (через while read)
-sites_clean=$(echo "$SITES" | grep -v '^#' | grep -v '^\s*$')
+# Создаём массив сайтов
+sites_array=""
+i=0
+for site in $SITES; do
+    case "$site" in ""|\#*) continue ;; esac
+    sites_array="$sites_array $site"
+    i=$((i+1))
+done
 
-# Разделяем на левый и правый «списки» в переменные через newline
-left_list=$(echo "$sites_clean" | awk "NR<=$(($(echo "$sites_clean" | wc -l)/2 + 1))")
-right_list=$(echo "$sites_clean" | awk "NR>$(($(echo "$sites_clean" | wc -l)/2 + 1))")
+# Разделяем на левый и правый
+len=$i
+half=$(( (len + 1) / 2 ))
 
-# Переводим в строки для итерации
-i=1
-echo "$left_list" | while IFS= read -r left; do
-    right=$(echo "$right_list" | sed -n "${i}p")
-
-    # Проверка левого
+# Цикл по индексам
+for idx in $(seq 1 $half); do
+    # левый
+    left=$(echo $sites_array | cut -d' ' -f$idx)
     if curl -Is --connect-timeout 1 --max-time 2 "https://$left" >/dev/null 2>&1; then
         left_status="${GREEN}OK${NC}"
     else
         left_status="${RED}FAIL${NC}"
     fi
 
-    # Проверка правого
+    # правый
+    right_idx=$((idx + half))
+    right=$(echo $sites_array | cut -d' ' -f$right_idx)
     if [ -n "$right" ]; then
         if curl -Is --connect-timeout 1 --max-time 2 "https://$right" >/dev/null 2>&1; then
             right_status="${GREEN}OK${NC}"
         else
             right_status="${RED}FAIL${NC}"
         fi
-        printf "%-35s %-35s\n" "[$left_status] $left" "[$right_status] $right"
+        # Вывод через printf, цвета отображаются корректно
+        printf "\033[0m%-35s %-35s\n" "[$left_status] $left" "[$right_status] $right"
     else
-        printf "%-35s\n" "[$left_status] $left"
+        printf "\033[0m%-35s\n" "[$left_status] $left"
     fi
-
-    i=$((i + 1))
 done
-
-
-
-
 echo ""
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 echo ""
