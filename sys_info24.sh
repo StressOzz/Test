@@ -63,11 +63,6 @@ filmix.my
 flightradar24.com
 play.google.com
 genderize.io
-themoviedb.org
-thetvdb.com
-thetvdb.com/tos
-support.thetvdb.com
-thetvdb.com/movies/1
 EOF
 )
 echo -e "\n${GREEN}===== Доступность сайтов =====${NC}"
