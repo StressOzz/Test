@@ -83,44 +83,21 @@ genderize.io
 EOF
 )
 
-echo -e "\n${GREEN}===== Доступность сайтов ====="
+echo -e "\n${GREEN}===== Доступность сайтов =====${NC}"
 
-# формируем массив сайтов
-sites_clean=$(echo "$SITES" | grep -v '^#' | grep -v '^\s*$')
-total=$(echo "$sites_clean" | wc -l)
-half=$(( (total + 1) / 2 ))
-sites_list=""
-for site in $sites_clean; do
-    sites_list="$sites_list $site"
-done
+echo "$SITES" | while IFS= read -r site; do
+    case "$site" in ""|\#*) continue ;; esac
 
-for idx in $(seq 1 $half); do
-    left=$(echo $sites_list | cut -d' ' -f$idx)
-    right_idx=$((idx + half))
-    right=$(echo $sites_list | cut -d' ' -f$right_idx)
-
-    # printf только задает отступы
-    left_pad=$(printf "%-25s" "$left")
-    right_pad=$(printf "%-25s" "$right")
-
-    # затем echo с цветом
-    if curl -Is --connect-timeout 1 --max-time 2 "https://$left" >/dev/null 2>&1; then
-        left_color="${GREEN}✓${NC}"
+    if curl -Is --connect-timeout 1 --max-time 2 "https://$site" >/dev/null 2>&1; then
+        echo -e "[${GREEN}OK${NC}]   $site"
     else
-        left_color="${RED}✗${NC}"
-    fi
-
-    if [ -n "$right" ]; then
-        if curl -Is --connect-timeout 1 --max-time 2 "https://$right" >/dev/null 2>&1; then
-            right_color="${GREEN}✓${NC}"
-        else
-            right_color="${RED}✗${NC}"
-        fi
-        echo -e "[$left_color] $left_pad [$right_color] $right_pad"
-    else
-        echo -e "[$left_color] $left_pad"
+        echo -e "[${RED}FAIL${NC}] $site"
     fi
 done
+
+echo ""
+read -p "Нажмите Enter для выхода в главное меню..." dummy
+echo ""
 
 echo ""
 read -p "Нажмите Enter для выхода в главное меню..." dummy
