@@ -542,7 +542,7 @@ esac
 sys_info() {
 clear
 echo -e "${GREEN}===== Model =====${NC}"; cat /tmp/sysinfo/model;
-echo -e "\n${GREEN}===== OpenWrt =====${NC}"; awk -F= '/DISTRIB_DESCRIPTION/ {print "Версия OpenWrt: "$2} /DISTRIB_ARCH/ {print "Процессор: "$2} /DISTRIB_TARGET/ {print "Платформа: "$2}' /etc/openwrt_release;
+echo -e "\n${GREEN}===== OpenWrt =====${NC}"; awk -F= '/DISTRIB_DESCRIPTION/ {gsub(/'\''/, ""); print "Версия OpenWrt: "$2} /DISTRIB_ARCH/ {gsub(/'\''/, ""); print "Процессор: "$2} /DISTRIB_TARGET/ {gsub(/'\''/, ""); print "Платформа: "$2}' /etc/openwrt_release;
 echo -e "\n${GREEN}===== User Packages =====${NC}"; awk '/^Package:/ {p=$2} /^Status: install user/ {print p}' /usr/lib/opkg/status;
 echo -e "\n${GREEN}===== Flow Offloading =====${NC}"; sw=$(uci -q get firewall.@defaults[0].flow_offloading); hw=$(uci -q get firewall.@defaults[0].flow_offloading_hw); echo -e "SW: ${sw:+on}${sw:-off} | HW: ${hw:+on}${hw:-off}";
 echo -e "\n${GREEN}===== GitHub API Rate Limit =====${NC}"; echo -e "Core remaining: $(curl -s https://api.github.com/rate_limit | sed -n 's/.*\"remaining\": \([0-9]*\).*/\1/p' | head -1)\n"
