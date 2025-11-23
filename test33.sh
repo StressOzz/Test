@@ -541,7 +541,7 @@ show_menu
 return ;;
 esac
 }
-sys_info ;;() {
+sys_info() {
 echo -e "\n${GREEN}===== Model =====${NC}"; cat /tmp/sysinfo/model;
 echo -e "\n${GREEN}===== OpenWrt =====${NC}"; cat /etc/openwrt_release;
 echo -e "\n${GREEN}===== User Packages =====${NC}"; awk '/^Package:/ {p=$2} /^Status: install user/ {print p}' /usr/lib/opkg/status;
