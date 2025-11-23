@@ -83,9 +83,32 @@ genderize.io
 EOF
 )
 
+# ---- Блок: Проверка сайтов ----
+SITES=$(cat <<'EOF'
+gosuslugi.ru
+esia.gosuslugi.ru/login
+rutube.ru
+youtube.com
+instagram.com
+rutor.info
+ntc.party
+rutracker.org
+epidemz.net.co
+nnmclub.to
+openwrt.org
+sxyprn.net
+pornhub.com
+discord.com
+x.com
+filmix.my
+flightradar24.com
+genderize.io
+EOF
+)
+
 echo -e "\n${GREEN}===== Доступность сайтов =====${NC}"
 
-# Чистим список сайтов
+# Чистим список и считаем количество
 sites_clean=$(echo "$SITES" | grep -v '^#' | grep -v '^\s*$')
 sites_count=$(echo "$sites_clean" | wc -l)
 half=$(( (sites_count + 1) / 2 ))
@@ -112,17 +135,13 @@ echo "$left_list" | while read left; do
         else
             right_status="${RED}FAIL${NC}"
         fi
-        # printf гарантирует правильные цвета
-        printf "%-30s %-30s\n" "[$left_status] $left" "[$right_status] $right"
+        printf "%-35s %-35s\n" "[$left_status] $left" "[$right_status] $right"
     else
-        printf "%-30s\n" "[$left_status] $left"
+        printf "%-35s\n" "[$left_status] $left"
     fi
 
     i=$((i + 1))
 done
-
-
-
 echo ""
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 echo ""
