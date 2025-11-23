@@ -85,44 +85,44 @@ EOF
 
 echo -e "\n===== Доступность сайтов ====="
 
-# Создаём массив сайтов
-sites_array=""
-i=0
-for site in $SITES; do
-    case "$site" in ""|\#*) continue ;; esac
-    sites_array="$sites_array $site"
-    i=$((i+1))
+# ===== Подготовка массива сайтов =====
+sites_clean=$(echo "$SITES" | grep -v '^#' | grep -v '^\s*$')
+total=$(echo "$sites_clean" | wc -l)
+half=$(( (total + 1) / 2 ))
+
+# ===== Формируем массив для удобного доступа =====
+sites_list=""
+for site in $sites_clean; do
+    sites_list="$sites_list $site"
 done
 
-# Разделяем на левый и правый
-len=$i
-half=$(( (len + 1) / 2 ))
-
-# Цикл по индексам
+# ===== Вывод двух столбцов с цветами =====
 for idx in $(seq 1 $half); do
-    # левый
-    left=$(echo $sites_array | cut -d' ' -f$idx)
+    left=$(echo $sites_list | cut -d' ' -f$idx)
+    right_idx=$((idx + half))
+    right=$(echo $sites_list | cut -d' ' -f$right_idx)
+
+    # Статус левого
     if curl -Is --connect-timeout 1 --max-time 2 "https://$left" >/dev/null 2>&1; then
-        left_status="${GREEN}OK${NC}"
+        left_code="${GREEN}[OK]${NC}"
     else
-        left_status="${RED}FAIL${NC}"
+        left_code="${RED}[FAIL]${NC}"
     fi
 
-    # правый
-    right_idx=$((idx + half))
-    right=$(echo $sites_array | cut -d' ' -f$right_idx)
+    # Статус правого
     if [ -n "$right" ]; then
         if curl -Is --connect-timeout 1 --max-time 2 "https://$right" >/dev/null 2>&1; then
-            right_status="${GREEN}OK${NC}"
+            right_code="${GREEN}[OK]${NC}"
         else
-            right_status="${RED}FAIL${NC}"
+            right_code="${RED}[FAIL]${NC}"
         fi
-        # Вывод через printf, цвета отображаются корректно
-        printf "\033[0m%-35s %-35s\n" "[$left_status] $left" "[$right_status] $right"
+        printf "%s %-30s %s %-30s\n" "$left_code" "$left" "$right_code" "$right"
     else
-        printf "\033[0m%-35s\n" "[$left_status] $left"
+        printf "%s %-30s\n" "$left_code" "$left"
     fi
 done
+
+
 echo ""
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 echo ""
