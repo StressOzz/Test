@@ -580,6 +580,12 @@ case "$choice" in
 6) fix_GAME  ;;
 7) enable_discord_calls ;;
 8) zapret_key ;;
+9) echo -e "\n===== Model ====="; cat /tmp/sysinfo/model;
+echo -e "\n===== OpenWrt ====="; cat /etc/openwrt_release;
+echo -e "\n===== User Packages ====="; awk '/^Package:/ {p=$2} /^Status: install user/ {print p}' /usr/lib/opkg/status;
+echo -e "\n===== Flow Offloading ====="; sw=$(uci -q get firewall.@defaults[0].flow_offloading); hw=$(uci -q get firewall.@defaults[0].flow_offloading_hw); echo -e "SW: ${sw:+on}${sw:-off} | HW: ${hw:+on}${hw:-off}";
+echo -e "\n===== GitHub API Rate Limit ====="; echo -e "Core remaining: $(curl -s https://api.github.com/rate_limit | sed -n 's/.*\"remaining\": \([0-9]*\).*/\1/p' | head -1)\n"
+read -p "Нажмите Enter для выхода в главное меню..." dummy ;;
 *) 
 echo -e ""
 exit 0 ;;
