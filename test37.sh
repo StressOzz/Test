@@ -363,9 +363,9 @@ fi
 uninstall_zapret "1"
 install_Zapret "1"
 [ ! -f /etc/init.d/zapret ] && return
-# Останавливаем zapret на случай если дефолтная стратегия ломает трафик
+# --- Останавливаем zapret на случай если дефолтная стратегия ломает трафик
 echo -e "${MAGENTA}Останавливаем Zapret${NC}\n" && /etc/init.d/zapret stop >/dev/null 2>&1 && echo -e "${BLUE}🔴 ${GREEN}Zapret остановлен!${NC}\n"
-# ТУТ ПИШЕМ КАКАЯ СТРАТЕГИЯ БУДЕТ УСТАНАВЛИВАТЬСЯ ЧЕРЕЗ ПУНКТ 8
+# --- ТУТ ПИШЕМ КАКАЯ СТРАТЕГИЯ БУДЕТ УСТАНАВЛИВАТЬСЯ ЧЕРЕЗ ПУНКТ 8
 curl -sL https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Str2.sh | sh
 if [ ! -f "$CONF" ]; then
 echo -e "\n${RED}Файл ${NC}$CONF${RED} не найден!${NC}\n"
@@ -419,7 +419,6 @@ show_menu
 stop_zapret() {
 clear
 echo -e "${MAGENTA}Останавливаем Zapret${NC}\n"
-# Остановка службы через init.d и убийство процессов
 if [ -f /etc/init.d/zapret ]; then
 echo -e "${GREEN}🔴 ${CYAN}Останавливаем ${NC}Zapret" && /etc/init.d/zapret stop >/dev/null 2>&1
 PIDS=$(pgrep -f /opt/zapret)
@@ -439,7 +438,6 @@ read -p "Нажмите Enter для выхода в главное меню..."
 start_zapret() {
 clear
 echo -e "${MAGENTA}Запускаем Zapret${NC}\n"
-# Запуск службы через init.d
 if [ -f /etc/init.d/zapret ]; then
 echo -e "${GREEN}🔴 ${CYAN}Запускаем ${NC}Zapret"
 /etc/init.d/zapret start >/dev/null 2>&1
