@@ -36,7 +36,7 @@ nnmclub.to
 openwrt.org
 pornhub.com
 discord.com
-genderize.io
+genderize.io/documentation
 x.com
 filmix.my
 # Можно добавлять комментарии
@@ -52,7 +52,7 @@ echo "$SITES" | while IFS= read -r site; do
         ""|\#*) continue ;;
     esac
 
-    if curl -Is --connect-timeout 3 --max-time 5 "https://$site" >/dev/null 2>&1; then
+    if curl -Is --connect-timeout 2 --max-time 3 "https://$site" >/dev/null 2>&1; then
         echo "[OK]   $site"
     else
         echo "[FAIL] $site"
