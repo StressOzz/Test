@@ -85,40 +85,37 @@ EOF
 
 echo -e "\n===== Доступность сайтов ====="
 
-# ===== Подготовка массива сайтов =====
+# формируем массив сайтов
 sites_clean=$(echo "$SITES" | grep -v '^#' | grep -v '^\s*$')
 total=$(echo "$sites_clean" | wc -l)
 half=$(( (total + 1) / 2 ))
-
-# ===== Формируем массив для удобного доступа =====
 sites_list=""
 for site in $sites_clean; do
     sites_list="$sites_list $site"
 done
 
-# ===== Вывод двух столбцов с цветами =====
 for idx in $(seq 1 $half); do
     left=$(echo $sites_list | cut -d' ' -f$idx)
     right_idx=$((idx + half))
     right=$(echo $sites_list | cut -d' ' -f$right_idx)
 
-    # Статус левого
+    # левый
     if curl -Is --connect-timeout 1 --max-time 2 "https://$left" >/dev/null 2>&1; then
-        left_code="${GREEN}[OK]${NC}"
+        left_code="${GREEN}OK${NC}"
     else
-        left_code="${RED}[FAIL]${NC}"
+        left_code="${RED}FAIL${NC}"
     fi
 
-    # Статус правого
+    # правый
     if [ -n "$right" ]; then
         if curl -Is --connect-timeout 1 --max-time 2 "https://$right" >/dev/null 2>&1; then
-            right_code="${GREEN}[OK]${NC}"
+            right_code="${GREEN}OK${NC}"
         else
-            right_code="${RED}[FAIL]${NC}"
+            right_code="${RED}FAIL${NC}"
         fi
-        printf "%s %-30s %s %-30s\n" "$left_code" "$left" "$right_code" "$right"
+        echo -e "[${left_code}] $left  [${right_code}] $right"
     else
-        printf "%s %-30s\n" "$left_code" "$left"
+        echo -e "[${left_code}] $left"
     fi
 done
 
