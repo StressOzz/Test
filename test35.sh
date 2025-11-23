@@ -543,7 +543,7 @@ esac
 }
 sys_info() {
 clear
-echo -e "\n${GREEN}===== Model =====${NC}"; cat /tmp/sysinfo/model;
+echo -e "${GREEN}===== Model =====${NC}"; cat /tmp/sysinfo/model;
 echo -e "\n${GREEN}===== OpenWrt =====${NC}"; cat /etc/openwrt_release;
 echo -e "\n${GREEN}===== User Packages =====${NC}"; awk '/^Package:/ {p=$2} /^Status: install user/ {print p}' /usr/lib/opkg/status;
 echo -e "\n${GREEN}===== Flow Offloading =====${NC}"; sw=$(uci -q get firewall.@defaults[0].flow_offloading); hw=$(uci -q get firewall.@defaults[0].flow_offloading_hw); echo -e "SW: ${sw:+on}${sw:-off} | HW: ${hw:+on}${hw:-off}";
