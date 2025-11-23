@@ -85,41 +85,42 @@ EOF
 
 echo -e "\n${GREEN}===== Доступность сайтов =====${NC}"
 
-# Читаем все сайты в одну строку и считаем количество
+# Чистим список сайтов
 sites_clean=$(echo "$SITES" | grep -v '^#' | grep -v '^\s*$')
 sites_count=$(echo "$sites_clean" | wc -l)
 half=$(( (sites_count + 1) / 2 ))
 
-# Переводим строки в обычный список для второго прохода
+# Делим на левый и правый столбцы
 left_list=$(echo "$sites_clean" | head -n $half)
 right_list=$(echo "$sites_clean" | tail -n +$((half + 1)))
 
-# Создаём временные файлы для итерации
 i=1
 echo "$left_list" | while read left; do
     right=$(echo "$right_list" | sed -n "${i}p")
 
     # Проверка левого
     if curl -Is --connect-timeout 1 --max-time 2 "https://$left" >/dev/null 2>&1; then
-        left_status="[${GREEN}OK${NC}]"
+        left_status="${GREEN}OK${NC}"
     else
-        left_status="[${RED}FAIL${NC}]"
+        left_status="${RED}FAIL${NC}"
     fi
 
-    # Проверка правого (если есть)
+    # Проверка правого
     if [ -n "$right" ]; then
         if curl -Is --connect-timeout 1 --max-time 2 "https://$right" >/dev/null 2>&1; then
-            right_status="[${GREEN}OK${NC}]"
+            right_status="${GREEN}OK${NC}"
         else
-            right_status="[${RED}FAIL${NC}]"
+            right_status="${RED}FAIL${NC}"
         fi
-        printf "%-30s %-30s\n" "$left_status $left" "$right_status $right"
+        # printf гарантирует правильные цвета
+        printf "%-30s %-30s\n" "[$left_status] $left" "[$right_status] $right"
     else
-        printf "%-30s\n" "$left_status $left"
+        printf "%-30s\n" "[$left_status] $left"
     fi
 
     i=$((i + 1))
 done
+
 
 
 echo ""
