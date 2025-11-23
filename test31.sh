@@ -541,6 +541,14 @@ show_menu
 return ;;
 esac
 }
+sys_info ;;() {
+echo -e "\n${GREEN}===== Model =====${NC}"; cat /tmp/sysinfo/model;
+echo -e "\n${GREEN}===== OpenWrt =====${NC}"; cat /etc/openwrt_release;
+echo -e "\n${GREEN}===== User Packages =====${NC}"; awk '/^Package:/ {p=$2} /^Status: install user/ {print p}' /usr/lib/opkg/status;
+echo -e "\n${GREEN}===== Flow Offloading =====${NC}"; sw=$(uci -q get firewall.@defaults[0].flow_offloading); hw=$(uci -q get firewall.@defaults[0].flow_offloading_hw); echo -e "SW: ${sw:+on}${sw:-off} | HW: ${hw:+on}${hw:-off}";
+echo -e "\n${GREEN}===== GitHub API Rate Limit =====${NC}"; echo -e "Core remaining: $(curl -s https://api.github.com/rate_limit | sed -n 's/.*\"remaining\": \([0-9]*\).*/\1/p' | head -1)\n"
+read -p "Нажмите Enter для выхода в главное меню..." dummy ;;
+}
 # ==========================================
 # Главное меню
 # ==========================================
@@ -557,8 +565,8 @@ echo -e "${YELLOW}Последняя версия на GitHub: ${CYAN}$LATEST_VE
 echo -e "${YELLOW}Архитектура устройства:${NC}     $LOCAL_ARCH"
 [ -n "$ZAPRET_STATUS" ] && echo -e "${YELLOW}Статус Zapret:${NC}              $ZAPRET_STATUS"
 show_script_50 && [ -n "$name" ] && echo -e "${YELLOW}Установлен скрипт:${NC}          $name"
-show_current_strategy && [ -n "$ver" ] && echo -e "${YELLOW}Используется стратегия:${NC}     ${CYAN}$ver"
 [ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*1024-65535" "$CONF" && grep -q -- "--filter-udp=1024-65535" "$CONF" && echo -e "${YELLOW}Стратегия для игр:${NC}          ${GREEN}активна${NC}"
+show_current_strategy && [ -n "$ver" ] && echo -e "${YELLOW}Используется стратегия:${NC}     ${CYAN}$ver"
 # Вывод пунктов меню
 echo -e "\n${CYAN}1) ${GREEN}Установить последнюю версию${NC}"
 echo -e "${CYAN}2) ${GREEN}Меню выбора стратегии${NC}"
@@ -580,12 +588,7 @@ case "$choice" in
 6) fix_GAME  ;;
 7) enable_discord_calls ;;
 8) zapret_key ;;
-9) echo -e "\n===== Model ====="; cat /tmp/sysinfo/model;
-echo -e "\n===== OpenWrt ====="; cat /etc/openwrt_release;
-echo -e "\n===== User Packages ====="; awk '/^Package:/ {p=$2} /^Status: install user/ {print p}' /usr/lib/opkg/status;
-echo -e "\n===== Flow Offloading ====="; sw=$(uci -q get firewall.@defaults[0].flow_offloading); hw=$(uci -q get firewall.@defaults[0].flow_offloading_hw); echo -e "SW: ${sw:+on}${sw:-off} | HW: ${hw:+on}${hw:-off}";
-echo -e "\n===== GitHub API Rate Limit ====="; echo -e "Core remaining: $(curl -s https://api.github.com/rate_limit | sed -n 's/.*\"remaining\": \([0-9]*\).*/\1/p' | head -1)\n"
-read -p "Нажмите Enter для выхода в главное меню..." dummy ;;
+9) sys_info ;;
 *) 
 echo -e ""
 exit 0 ;;
