@@ -61,9 +61,10 @@ discord.com
 x.com
 filmix.my
 flightradar24.com
+play.google.com
 genderize.io
-# Можно добавлять комментарии
-# Пустые строки тоже ок
+themoviedb.org
+thetvdb.com
 EOF
 )
 echo -e "\n${GREEN}===== Доступность сайтов =====${NC}"
