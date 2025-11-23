@@ -83,42 +83,18 @@ genderize.io
 EOF
 )
 
-# ---- Блок: Проверка сайтов ----
-SITES=$(cat <<'EOF'
-gosuslugi.ru
-esia.gosuslugi.ru/login
-rutube.ru
-youtube.com
-instagram.com
-rutor.info
-ntc.party
-rutracker.org
-epidemz.net.co
-nnmclub.to
-openwrt.org
-sxyprn.net
-pornhub.com
-discord.com
-x.com
-filmix.my
-flightradar24.com
-genderize.io
-EOF
-)
-
 echo -e "\n${GREEN}===== Доступность сайтов =====${NC}"
 
-# Чистим список и считаем количество
+# Чистим список сайтов, сразу в массив-like переменные (через while read)
 sites_clean=$(echo "$SITES" | grep -v '^#' | grep -v '^\s*$')
-sites_count=$(echo "$sites_clean" | wc -l)
-half=$(( (sites_count + 1) / 2 ))
 
-# Делим на левый и правый столбцы
-left_list=$(echo "$sites_clean" | head -n $half)
-right_list=$(echo "$sites_clean" | tail -n +$((half + 1)))
+# Разделяем на левый и правый «списки» в переменные через newline
+left_list=$(echo "$sites_clean" | awk "NR<=$(($(echo "$sites_clean" | wc -l)/2 + 1))")
+right_list=$(echo "$sites_clean" | awk "NR>$(($(echo "$sites_clean" | wc -l)/2 + 1))")
 
+# Переводим в строки для итерации
 i=1
-echo "$left_list" | while read left; do
+echo "$left_list" | while IFS= read -r left; do
     right=$(echo "$right_list" | sed -n "${i}p")
 
     # Проверка левого
@@ -142,6 +118,10 @@ echo "$left_list" | while read left; do
 
     i=$((i + 1))
 done
+
+
+
+
 echo ""
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 echo ""
