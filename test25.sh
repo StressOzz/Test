@@ -563,14 +563,12 @@ esac
 # ==========================================
 sys_info() {
 clear
-# Модель и архитектура
 echo -e "${GREEN}===== Модель и архитектура роутера =====${NC}"
 cat /tmp/sysinfo/model
 awk -F= '
 /DISTRIB_ARCH/   { gsub(/'\''/, ""); print $2 }
 /DISTRIB_TARGET/ { gsub(/'\''/, ""); print $2 }
 ' /etc/openwrt_release
-# Версия OpenWrt ----
 echo -e "\n${GREEN}===== Версия OpenWrt =====${NC}"
 awk -F= '
 /DISTRIB_DESCRIPTION/ {
@@ -578,29 +576,44 @@ gsub(/'\''|OpenWrt /, "")
 print $2
 }
 ' /etc/openwrt_release
-# Пользовательские пакеты
 echo -e "\n${GREEN}===== Пользовательские пакеты =====${NC}"
 awk '
 /^Package:/ { p=$2 }
 /^Status: install user/ { print p }
 ' /usr/lib/opkg/status
-# Flow Offloading
 echo -e "\n${GREEN}===== Flow Offloading =====${NC}"
+
 sw=$(uci -q get firewall.@defaults[0].flow_offloading)
 hw=$(uci -q get firewall.@defaults[0].flow_offloading_hw)
-dpi=$([ -n "$(grep -q 'ct original packets ge 30' /usr/share/firewall4/templates/ruleset.uc 2>/dev/null && echo yes)" ] \
-    && echo -e "${RED}yes${NC}" || echo -e "${GREEN}no${NC}")
+
+# Проверка FIX (DPI)
+if grep -q 'ct original packets ge 30' /usr/share/firewall4/templates/ruleset.uc 2>/dev/null; then
+    dpi="${RED}yes${NC}"
+else
+    dpi="${GREEN}no${NC}"
+fi
+
+# Формируем строку динамически
 out=""
-[ "$sw" = "1" ] && out+="SW: ${RED}on${NC} "
-[ "$hw" = "1" ] && out+="HW: ${RED}on${NC} "
-echo -e "${out}| FIX: ${dpi}"
+if [ "$sw" = "1" ]; then
+    out="SW: ${RED}on${NC}"
+fi
+if [ "$hw" = "1" ]; then
+    if [ -n "$out" ]; then
+        out="$out "
+    fi
+    out="$out HW: ${RED}on${NC}"
+fi
+
+# Вывод
+echo -e "${out} | FIX: ${dpi}"
+
 echo -e "\n${GREEN}===== Настройки запрет =====${NC}"
 echo -e "Установленная версия: ${INST_COLOR}$INSTALLED_DISPLAY${NC}"
 [ -n "$ZAPRET_STATUS" ] && echo -e "Статус Zapret: $ZAPRET_STATUS"
 show_script_50 && [ -n "$name" ] && echo -e "Установлен скрипт: ${GREEN}$name${NC}"
 [ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*1024-49999,50100-65535" "$CONF" && grep -q -- "--filter-udp=1024-49999,50100-65535" "$CONF" && echo -e "Стратегия для игр:${NC} ${GREEN}активна${NC}"
 show_current_strategy && [ -n "$ver" ] && echo -e "Используется стратегия: ${GREEN}$ver${NC}"
-# Проверка сайтов
 echo -e "\n${GREEN}===== Доступность сайтов =====${NC}"
 SITES=$(cat <<'EOF'
 gosuslugi.ru
