@@ -655,9 +655,9 @@ for idx in $(seq 1 $half); do
         else
             right_color="[${RED}FAIL${NC}] "
         fi
-        echo -e "[$left_color] $left_pad [$right_color] $right_pad"
+        echo -e "$left_color $left_pad $right_color $right_pad"
     else
-        echo -e "[$left_color] $left_pad"
+        echo -e "$left_color $left_pad"
     fi
 done
 echo ""
