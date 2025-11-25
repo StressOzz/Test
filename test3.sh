@@ -227,11 +227,11 @@ SCRIPT_FILE="/opt/zapret/init.d/openwrt/custom.d/50-script.sh"
 [ -f "$SCRIPT_FILE" ] || return
 line=$(head -n1 "$SCRIPT_FILE")
 case "$line" in
-  *QUIC*)              name="50-quic4all" ;;
-  *stun*)              name="50-stun4all" ;;
-  *"discord media"*)   name="50-discord-media" ;;
-  *"discord subnets"*) name="50-discord" ;;
-  *)                   name="" ;;
+*QUIC*) name="50-quic4all" ;;
+*stun*) name="50-stun4all" ;;
+*"discord media"*) name="50-discord-media" ;;
+*"discord subnets"*) name="50-discord" ;;
+*) name="" ;;
 esac
 }
 enable_discord_calls() {
@@ -325,26 +325,26 @@ if [ ! -f /etc/init.d/zapret ]; then
 [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 return
 fi
-if grep -q "option NFQWS_PORTS_UDP.*1024–49999,50100–65535" "$CONF" && grep -q -- "--filter-udp=1024–49999,50100–65535" "$CONF"; then
+if grep -q "option NFQWS_PORTS_UDP.*1024-49999,50100-65535" "$CONF" && grep -q -- "--filter-udp=1024-49999,50100-65535" "$CONF"; then
 echo -e "${GREEN}🔴 ${CYAN}Удаляем из стратегии настройки для игр${NC}"
-sed -i ':a;N;$!ba;s|--new\n--filter-udp=1024–49999,50100–65535\n--dpi-desync=fake\n--dpi-desync-cutoff=d2\n--dpi-desync-any-protocol=1\n--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/quic_initial_www_google_com\.bin\n*||g' "$CONF"
-sed -i "s/,1024–49999,50100–65535//" "$CONF"
+sed -i ':a;N;$!ba;s|--new\n--filter-udp=1024-49999,50100-65535\n--dpi-desync=fake\n--dpi-desync-cutoff=d2\n--dpi-desync-any-protocol=1\n--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/quic_initial_www_google_com\.bin\n*||g' "$CONF"
+sed -i "s/,1024-49999,50100-65535//" "$CONF"
 chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart >/dev/null 2>&1
 echo -e "\n${BLUE}🔴 ${GREEN}Настройки для игр удалены!${NC}\n"
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 return
 fi
-if ! grep -q "option NFQWS_PORTS_UDP.*1024–49999,50100–65535" "$CONF"; then
-sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'$/,1024–49999,50100–65535'/" "$CONF"
+if ! grep -q "option NFQWS_PORTS_UDP.*1024-49999,50100-65535" "$CONF"; then
+sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'$/,1024-49999,50100-65535'/" "$CONF"
 fi
-if ! grep -q -- "--filter-udp=1024–49999,50100–65535" "$CONF"; then
+if ! grep -q -- "--filter-udp=1024-49999,50100-65535" "$CONF"; then
 last_line=$(grep -n "^'$" "$CONF" | tail -n1 | cut -d: -f1)
 if [ -n "$last_line" ]; then
 sed -i "${last_line},\$d" "$CONF"
 fi
 cat <<'EOF' >> "$CONF"
 --new
---filter-udp=1024–49999,50100–65535
+--filter-udp=1024-49999,50100-65535
 --dpi-desync=fake
 --dpi-desync-cutoff=d2
 --dpi-desync-any-protocol=1
@@ -571,7 +571,7 @@ echo -e "${YELLOW}Последняя версия на GitHub: ${CYAN}$LATEST_VE
 [ -n "$ZAPRET_STATUS" ] && echo -e "${YELLOW}Статус Zapret:${NC}              $ZAPRET_STATUS"
 show_script_50 && [ -n "$name" ] && echo -e "${YELLOW}Установлен скрипт:${NC}          $name"
 show_current_strategy && [ -n "$ver" ] && echo -e "${YELLOW}Используется стратегия:${NC}     ${CYAN}$ver"
-[ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*1024–49999,50100–65535" "$CONF" && grep -q -- "--filter-udp=1024–49999,50100–65535" "$CONF" && echo -e "${YELLOW}Стратегия для игр:${NC}          ${GREEN}активна${NC}"
+[ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*1024-49999,50100-65535" "$CONF" && grep -q -- "--filter-udp=1024-49999,50100-65535" "$CONF" && echo -e "${YELLOW}Стратегия для игр:${NC}          ${GREEN}активна${NC}"
 # Вывод пунктов меню
 echo -e "\n${CYAN}1) ${GREEN}Установить последнюю версию${NC}"
 echo -e "${CYAN}2) ${GREEN}Меню выбора стратегии${NC}"
