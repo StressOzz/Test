@@ -588,20 +588,20 @@ echo -e "\n${GREEN}===== Flow Offloading =====${NC}"
 sw=$(uci -q get firewall.@defaults[0].flow_offloading)
 hw=$(uci -q get firewall.@defaults[0].flow_offloading_hw)
 if grep -q "ct original packets ge 30" /usr/share/firewall4/templates/ruleset.uc; then
-dpi="yes"
+dpi="${RED}yes${NC}"
 else
-dpi="no"
+dpi="${GREEN}no${NC}"
 fi
-echo -e "SW: ${sw:+on}${sw:-off} | HW: ${hw:+on}${hw:-off} | FIX: ${dpi}"
+echo -e "SW: ${RED}${sw:+on}${GREEN}${sw:-off}${NC} | HW: ${RED}${hw:+on}${GREEN}${hw:-off}${NC} | FIX: ${dpi}${NC}"
 
 
 
 echo -e "\n${GREEN}===== Настройки запрет =====${NC}"
-echo -e "\n${YELLOW}Установленная версия:       ${INST_COLOR}$INSTALLED_DISPLAY${NC}"
-[ -n "$ZAPRET_STATUS" ] && echo -e "${YELLOW}Статус Zapret:${NC}              $ZAPRET_STATUS"
-show_script_50 && [ -n "$name" ] && echo -e "${YELLOW}Установлен скрипт:${NC}          $name"
-[ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*1024-49999,50100-65535" "$CONF" && grep -q -- "--filter-udp=1024-49999,50100-65535" "$CONF" && echo -e "${YELLOW}Стратегия для игр:${NC}          ${GREEN}активна${NC}"
-show_current_strategy && [ -n "$ver" ] && echo -e "${YELLOW}Используется стратегия:${NC}     ${CYAN}$ver"
+echo -e "Установленная версия: ${INST_COLOR}$INSTALLED_DISPLAY${NC}"
+[ -n "$ZAPRET_STATUS" ] && echo -e "Статус Zapret:${NC} $ZAPRET_STATUS"
+show_script_50 && [ -n "$name" ] && echo -e "Установлен скрипт:${NC} $name"
+[ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*1024-49999,50100-65535" "$CONF" && grep -q -- "--filter-udp=1024-49999,50100-65535" "$CONF" && echo -e "Стратегия для игр:${NC} ${GREEN}активна${NC}"
+show_current_strategy && [ -n "$ver" ] && echo -e "Используется стратегия:${NC} ${CYAN}$ver"
 
 
 
