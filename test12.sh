@@ -619,32 +619,27 @@ EOF
 
 {
 echo "===== Доступность сайтов ====="
-echo "$SITES" | while IFS= read -r site; do
-    [ -z "$site" ] && continue
-    if curl -Is --connect-timeout 1 --max-time 2 "https://$site" >/dev/null 2>&1; then
-        printf "[OK]   %-30s\n" "$site"
-    else
-        printf "[FAIL] %-30s\n" "$site"
-    fi
+echo "$SITES" | while IFS= read -r s;do
+[ -z "$s" ]&&continue
+if curl -Is --connect-timeout 1 --max-time 2 "https://$s" >/dev/null 2>&1;then
+printf "[OK]   %-30s\n" "$s"
+else
+printf "[FAIL] %-30s\n" "$s"
+fi
 done
 } | awk '
-NR==1 { print; next }
-{
-    out[++i] = $0
+NR==1{print;next}
+{o[++i]=$0}
+END{
+c=3
+r=int((i+c-1)/c)
+for(x=1;x<=r;x++){
+l=""
+for(y=0;y<c;y++){
+p=x+y*r
+if(p<=i)l=l sprintf("%-40s",o[p])
 }
-END {
-    cols = 3
-    rows = int((i + cols - 1) / cols)
-    for (r = 1; r <= rows; r++) {
-        line = ""
-        for (c = 0; c < cols; c++) {
-            idx = r + c * rows
-            if (idx <= i) {
-                line = line sprintf("%-40s", out[idx])
-            }
-        }
-        print line
-    }
+print l
 }
 '
 echo ""
