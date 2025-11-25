@@ -63,7 +63,7 @@ sleep 2 ;;
 sed -i 's/meta l4proto { tcp, udp } flow offload @ft;/meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;/' /usr/share/firewall4/templates/ruleset.uc
 fw4 restart >/dev/null 2>&1
 sleep 2 ;;
-*) echo -e "\n${RED}Скрипт остановлен! Отключите или примените фикс!${NC}\n"
+*) echo -e "\n${RED}Скрипт остановлен!${NC}\n"
 exit 1 ;;
 esac
 fi
@@ -582,32 +582,22 @@ awk '
 /^Status: install user/ { print p }
 ' /usr/lib/opkg/status
 echo -e "\n${GREEN}===== Flow Offloading =====${NC}"
-
 sw=$(uci -q get firewall.@defaults[0].flow_offloading)
 hw=$(uci -q get firewall.@defaults[0].flow_offloading_hw)
-
-# DPI проверка — FIX всегда выводим
 if grep -q 'ct original packets ge 30' /usr/share/firewall4/templates/ruleset.uc 2>/dev/null; then
-    dpi="${RED}yes${NC}"
+dpi="${RED}yes${NC}"
 else
-    dpi="${GREEN}no${NC}"
+dpi="${GREEN}no${NC}"
 fi
-
-# Формируем вывод SW/HW
 if [ "$hw" = "1" ]; then
-    out="HW: ${RED}on${NC}"
+out="HW: ${RED}on${NC}"
 elif [ "$sw" = "1" ]; then
-    out="SW: ${RED}on${NC}"
+out="SW: ${RED}on${NC}"
 else
-    out="SW: ${GREEN}off${NC} | HW: ${GREEN}off${NC}"
+out="SW: ${GREEN}off${NC} | HW: ${GREEN}off${NC}"
 fi
-
-# Добавляем FIX всегда
 out="$out | FIX: ${dpi}"
-
 echo -e "$out"
-
-
 echo -e "\n${GREEN}===== Настройки запрет =====${NC}"
 echo -e "Установленная версия: ${INST_COLOR}$INSTALLED_DISPLAY${NC}"
 [ -n "$ZAPRET_STATUS" ] && echo -e "Статус Zapret: $ZAPRET_STATUS"
