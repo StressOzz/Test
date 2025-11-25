@@ -594,6 +594,12 @@ dpi="no"
 fi
 echo -e "SW: ${sw:+on}${sw:-off} | HW: ${hw:+on}${hw:-off} | FIX: ${dpi}"
 # Проверка сайтов
+#!/bin/sh
+
+GREEN="\033[1;32m"
+RED="\033[1;31m"
+NC="\033[0m"
+
 SITES=$(cat <<'EOF'
 gosuslugi.ru
 esia.gosuslugi.ru/login
@@ -612,36 +618,49 @@ discord.com
 x.com
 filmix.my
 flightradar24.com
-play.google.com
 genderize.io
 EOF
 )
 
-{
-echo "===== Доступность сайтов ====="
-echo "$SITES" | while IFS= read -r s;do
-[ -z "$s" ]&&continue
-if curl -Is --connect-timeout 1 --max-time 2 "https://$s" >/dev/null 2>&1;then
-printf "[OK]   %-30s\n" "$s"
-else
-printf "[FAIL] %-30s\n" "$s"
-fi
+echo -e "\n===== Доступность сайтов ====="
+
+# формируем массив сайтов
+sites_clean=$(echo "$SITES" | grep -v '^#' | grep -v '^\s*$')
+total=$(echo "$sites_clean" | wc -l)
+half=$(( (total + 1) / 2 ))
+sites_list=""
+for site in $sites_clean; do
+    sites_list="$sites_list $site"
 done
-} | awk '
-NR==1{print;next}
-{o[++i]=$0}
-END{
-c=3
-r=int((i+c-1)/c)
-for(x=1;x<=r;x++){
-l=""
-for(y=0;y<c;y++){
-p=x+y*r
-if(p<=i)l=l sprintf("%-40s",o[p])
-}
-print l
-}
-'
+
+for idx in $(seq 1 $half); do
+    left=$(echo $sites_list | cut -d' ' -f$idx)
+    right_idx=$((idx + half))
+    right=$(echo $sites_list | cut -d' ' -f$right_idx)
+
+    # printf только задает отступы
+    left_pad=$(printf "%-35s" "$left")
+    right_pad=$(printf "%-35s" "$right")
+
+    # затем echo с цветом
+    if curl -Is --connect-timeout 1 --max-time 2 "https://$left" >/dev/null 2>&1; then
+        left_color="${GREEN}OK${NC}"
+    else
+        left_color="${RED}FAIL${NC}"
+    fi
+
+    if [ -n "$right" ]; then
+        if curl -Is --connect-timeout 1 --max-time 2 "https://$right" >/dev/null 2>&1; then
+            right_color="${GREEN}OK${NC}"
+        else
+            right_color="${RED}FAIL${NC}"
+        fi
+        echo -e "[$left_color] $left_pad [$right_color] $right_pad"
+    else
+        echo -e "[$left_color] $left_pad"
+    fi
+done
+
 echo ""
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
