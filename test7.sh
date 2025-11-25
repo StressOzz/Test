@@ -268,7 +268,8 @@ URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.exa
 URL="https://raw.githubusercontent.com/bol-van/zapret/v70.5/init.d/custom.d.examples.linux/50-discord" ;;
 5) echo -e "\n${BLUE}🔴 ${GREEN}Скрипт удалён!${NC}\n"
 rm -f "$CUSTOM_DIR/50-script.sh" 2>/dev/null
-sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP /s/,50000-50099//" "$CONF"
+sed -i "s/,50000-50099//" "$CONF"
+sed -i ':a;N;$!ba;s|--new\n--filter-udp=50000-50099\n--filter-l7=discord,stun\n--dpi-desync=fake\n*||g' "$CONF"
 chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart >/dev/null 2>&1
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 show_menu
@@ -557,6 +558,76 @@ return ;;
 esac
 }
 # ==========================================
+# Системная информация
+# ==========================================
+sys_info() {
+clear
+# Модель и архитектура ----
+echo -e "${GREEN}===== Модель и архитектура роутера =====${NC}"
+cat /tmp/sysinfo/model
+awk -F= '
+/DISTRIB_ARCH/   { gsub(/'\''/, ""); print $2 }
+/DISTRIB_TARGET/ { gsub(/'\''/, ""); print $2 }
+' /etc/openwrt_release
+# Версия OpenWrt ----
+echo -e "\n${GREEN}===== Версия OpenWrt =====${NC}"
+awk -F= '
+/DISTRIB_DESCRIPTION/ {
+gsub(/'\''|OpenWrt /, "")
+print $2
+}
+' /etc/openwrt_release
+# Пользовательские пакеты ----
+echo -e "\n${GREEN}===== Пользовательские пакеты =====${NC}"
+awk '
+/^Package:/ { p=$2 }
+/^Status: install user/ { print p }
+' /usr/lib/opkg/status
+# Flow Offloading + DPI ----
+echo -e "\n${GREEN}===== Flow Offloading =====${NC}"
+sw=$(uci -q get firewall.@defaults[0].flow_offloading)
+hw=$(uci -q get firewall.@defaults[0].flow_offloading_hw)
+if grep -q "ct original packets ge 30" /usr/share/firewall4/templates/ruleset.uc; then
+dpi="yes"
+else
+dpi="no"
+fi
+echo -e "SW: ${sw:+on}${sw:-off} | HW: ${hw:+on}${hw:-off} | FIX: ${dpi}"
+# Проверка сайтов
+SITES=$(cat <<'EOF'
+gosuslugi.ru
+esia.gosuslugi.ru/login
+rutube.ru
+youtube.com
+instagram.com
+rutor.info
+ntc.party
+rutracker.org
+epidemz.net.co
+nnmclub.to
+openwrt.org
+sxyprn.net
+pornhub.com
+discord.com
+x.com
+filmix.my
+flightradar24.com
+play.google.com
+genderize.io
+EOF
+)
+echo -e "\n${GREEN}===== Доступность сайтов =====${NC}"
+echo "$SITES" | while IFS= read -r site; do
+case "$site" in ""|\#*) continue ;; esac
+if curl -Is --connect-timeout 1 --max-time 2 "https://$site" >/dev/null 2>&1; then
+echo -e "[${GREEN}OK${NC}]   $site"
+else
+echo -e "[${RED}FAIL${NC}] $site"
+fi
+done
+echo ""
+read -p "Нажмите Enter для выхода в главное меню..." dummy
+# ==========================================
 # Главное меню
 # ==========================================
 show_menu() {
@@ -595,6 +666,7 @@ case "$choice" in
 6) fix_GAME  ;;
 7) enable_discord_calls ;;
 8) zapret_key ;;
+9) sys_info ;;
 *) 
 echo -e ""
 exit 0 ;;
