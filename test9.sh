@@ -616,14 +616,38 @@ play.google.com
 genderize.io
 EOF
 )
-echo -e "\n${GREEN}===== Доступность сайтов =====${NC}"
+
+{
+echo "===== Доступность сайтов ====="
 echo "$SITES" | while IFS= read -r site; do
-case "$site" in ""|\#*) continue ;; esac
-if curl -Is --connect-timeout 1 --max-time 2 "https://$site" >/dev/null 2>&1; then
-echo -e "[${GREEN}OK${NC}]   $site"
-else
-echo -e "[${RED}FAIL${NC}] $site"
-fi
+    [ -z "$site" ] && continue
+    if curl -Is --connect-timeout 1 --max-time 2 "https://$site" >/dev/null 2>&1; then
+        printf "[OK]   %-30s\n" "$site"
+    else
+        printf "[FAIL] %-30s\n" "$site"
+    fi
+done
+} | awk '
+NR==1 { print; next }
+{
+    out[++i] = $0
+}
+END {
+    cols = 3
+    rows = int((i + cols - 1) / cols)
+    for (r = 1; r <= rows; r++) {
+        line = ""
+        for (c = 0; c < cols; c++) {
+            idx = r + c * rows
+            if (idx <= i) {
+                line = line sprintf("%-40s", out[idx])
+            }
+        }
+        print line
+    }
+}
+'
+
 done
 echo ""
 read -p "Нажмите Enter для выхода в главное меню..." dummy
