@@ -586,26 +586,22 @@ echo -e "\n${GREEN}===== Flow Offloading =====${NC}"
 sw=$(uci -q get firewall.@defaults[0].flow_offloading)
 hw=$(uci -q get firewall.@defaults[0].flow_offloading_hw)
 
-# Проверка FIX (DPI)
+# DPI проверка
 if grep -q 'ct original packets ge 30' /usr/share/firewall4/templates/ruleset.uc 2>/dev/null; then
     dpi="${RED}yes${NC}"
 else
     dpi="${GREEN}no${NC}"
 fi
 
-# Формируем строку динамически
 out=""
-if [ "$sw" = "1" ]; then
+
+# Если HW включён, показываем только его
+if [ "$hw" = "1" ]; then
+    out="HW: ${RED}on${NC}"
+elif [ "$sw" = "1" ]; then
     out="SW: ${RED}on${NC}"
 fi
-if [ "$hw" = "1" ]; then
-    if [ -n "$out" ]; then
-        out="$out "
-    fi
-    out="$out HW: ${RED}on${NC}"
-fi
 
-# Вывод
 echo -e "${out} | FIX: ${dpi}"
 
 echo -e "\n${GREEN}===== Настройки запрет =====${NC}"
