@@ -562,7 +562,7 @@ esac
 # ==========================================
 sys_info() {
 clear
-# Модель и архитектура ----
+# Модель и архитектура
 echo -e "${GREEN}===== Модель и архитектура роутера =====${NC}"
 cat /tmp/sysinfo/model
 awk -F= '
@@ -577,13 +577,13 @@ gsub(/'\''|OpenWrt /, "")
 print $2
 }
 ' /etc/openwrt_release
-# Пользовательские пакеты ----
+# Пользовательские пакеты
 echo -e "\n${GREEN}===== Пользовательские пакеты =====${NC}"
 awk '
 /^Package:/ { p=$2 }
 /^Status: install user/ { print p }
 ' /usr/lib/opkg/status
-# Flow Offloading + DPI ----
+# Flow Offloading + DPI
 echo -e "\n${GREEN}===== Flow Offloading =====${NC}"
 sw=$(uci -q get firewall.@defaults[0].flow_offloading)
 hw=$(uci -q get firewall.@defaults[0].flow_offloading_hw)
@@ -594,12 +594,6 @@ dpi="no"
 fi
 echo -e "SW: ${sw:+on}${sw:-off} | HW: ${hw:+on}${hw:-off} | FIX: ${dpi}"
 # Проверка сайтов
-#!/bin/sh
-
-GREEN="\033[1;32m"
-RED="\033[1;31m"
-NC="\033[0m"
-
 SITES=$(cat <<'EOF'
 gosuslugi.ru
 esia.gosuslugi.ru/login
@@ -621,9 +615,7 @@ flightradar24.com
 genderize.io
 EOF
 )
-
-echo -e "\n===== Доступность сайтов ====="
-
+echo -e "\n${GREEN}===== Доступность сайтов =====${NC}"
 # формируем массив сайтов
 sites_clean=$(echo "$SITES" | grep -v '^#' | grep -v '^\s*$')
 total=$(echo "$sites_clean" | wc -l)
@@ -643,14 +635,14 @@ for idx in $(seq 1 $half); do
     right_pad=$(printf "%-25s" "$right")
 
     # затем echo с цветом
-    if curl -Is --connect-timeout 1 --max-time 2 "https://$left" >/dev/null 2>&1; then
+    if curl -Is --connect-timeout 3 --max-time 4 "https://$left" >/dev/null 2>&1; then
         left_color="[${GREEN}OK${NC}]  "
     else
         left_color="[${RED}FAIL${NC}]"
     fi
 
     if [ -n "$right" ]; then
-        if curl -Is --connect-timeout 1 --max-time 2 "https://$right" >/dev/null 2>&1; then
+        if curl -Is --connect-timeout 3 --max-time 4 "https://$right" >/dev/null 2>&1; then
             right_color="[${GREEN}OK${NC}]  "
         else
             right_color="[${RED}FAIL${NC}]"
