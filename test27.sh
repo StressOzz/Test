@@ -586,23 +586,27 @@ echo -e "\n${GREEN}===== Flow Offloading =====${NC}"
 sw=$(uci -q get firewall.@defaults[0].flow_offloading)
 hw=$(uci -q get firewall.@defaults[0].flow_offloading_hw)
 
-# DPI проверка
+# DPI проверка — FIX всегда выводим
 if grep -q 'ct original packets ge 30' /usr/share/firewall4/templates/ruleset.uc 2>/dev/null; then
     dpi="${RED}yes${NC}"
 else
     dpi="${GREEN}no${NC}"
 fi
 
-out=""
-
-# Если HW включён, показываем только его
+# Формируем вывод SW/HW
 if [ "$hw" = "1" ]; then
     out="HW: ${RED}on${NC}"
 elif [ "$sw" = "1" ]; then
     out="SW: ${RED}on${NC}"
+else
+    out="SW: ${GREEN}off${NC} | HW: ${GREEN}off${NC}"
 fi
 
-echo -e "${out} | FIX: ${dpi}"
+# Добавляем FIX всегда
+out="$out | FIX: ${dpi}"
+
+echo -e "$out"
+
 
 echo -e "\n${GREEN}===== Настройки запрет =====${NC}"
 echo -e "Установленная версия: ${INST_COLOR}$INSTALLED_DISPLAY${NC}"
@@ -673,7 +677,7 @@ clear
 echo -e "╔════════════════════════════════════╗"
 echo -e "║     ${BLUE}Zapret on remittor Manager${NC}     ║"
 echo -e "╚════════════════════════════════════╝"
-echo -e "                    ${DGRAY}by StressOzz v$ZAPRET_MANAGER_VERSION${NC}"
+echo -e "                     ${DGRAY}by StressOzz v$ZAPRET_MANAGER_VERSION${NC}"
 # Вывод информации
 echo -e "\n${YELLOW}Установленная версия:       ${INST_COLOR}$INSTALLED_DISPLAY${NC}"
 echo -e "${YELLOW}Последняя версия на GitHub: ${CYAN}$LATEST_VER${NC}"
