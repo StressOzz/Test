@@ -593,7 +593,20 @@ else
 dpi="no"
 fi
 echo -e "SW: ${sw:+on}${sw:-off} | HW: ${hw:+on}${hw:-off} | FIX: ${dpi}"
+
+
+
+echo -e "\n${GREEN}===== Настройки запрет =====${NC}"
+echo -e "\n${YELLOW}Установленная версия:       ${INST_COLOR}$INSTALLED_DISPLAY${NC}"
+[ -n "$ZAPRET_STATUS" ] && echo -e "${YELLOW}Статус Zapret:${NC}              $ZAPRET_STATUS"
+show_script_50 && [ -n "$name" ] && echo -e "${YELLOW}Установлен скрипт:${NC}          $name"
+[ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*1024-49999,50100-65535" "$CONF" && grep -q -- "--filter-udp=1024-49999,50100-65535" "$CONF" && echo -e "${YELLOW}Стратегия для игр:${NC}          ${GREEN}активна${NC}"
+show_current_strategy && [ -n "$ver" ] && echo -e "${YELLOW}Используется стратегия:${NC}     ${CYAN}$ver"
+
+
+
 # Проверка сайтов
+echo -e "\n${GREEN}===== Доступность сайтов =====${NC}"
 SITES=$(cat <<'EOF'
 gosuslugi.ru
 esia.gosuslugi.ru/login
@@ -615,8 +628,6 @@ flightradar24.com
 genderize.io
 EOF
 )
-echo -e "\n${GREEN}===== Доступность сайтов =====${NC}"
-# формируем массив сайтов
 sites_clean=$(echo "$SITES" | grep -v '^#' | grep -v '^\s*$')
 total=$(echo "$sites_clean" | wc -l)
 half=$(( (total + 1) / 2 ))
