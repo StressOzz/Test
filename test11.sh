@@ -647,8 +647,6 @@ END {
     }
 }
 '
-
-done
 echo ""
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
