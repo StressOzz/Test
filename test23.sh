@@ -2,6 +2,7 @@
 # ==========================================
 # Zapret on remittor Manager by StressOzz
 # ==========================================
+ZAPRET_MANAGER_VERSION="6.8"
 GREEN="\033[1;32m"
 RED="\033[1;31m"
 CYAN="\033[1;36m"
@@ -583,22 +584,21 @@ awk '
 /^Package:/ { p=$2 }
 /^Status: install user/ { print p }
 ' /usr/lib/opkg/status
-# Flow Offloading + DPI
+# Flow Offloading
 echo -e "\n${GREEN}===== Flow Offloading =====${NC}"
 sw=$(uci -q get firewall.@defaults[0].flow_offloading)
 hw=$(uci -q get firewall.@defaults[0].flow_offloading_hw)
-if grep -q "ct original packets ge 30" /usr/share/firewall4/templates/ruleset.uc; then
-dpi="${RED}yes${NC}"
-else
-dpi="${GREEN}no${NC}"
-fi
-echo -e "SW: ${RED}${sw:+on}${GREEN}${sw:-off}${NC} | HW: ${RED}${hw:+on}${GREEN}${hw:-off}${NC} | FIX: ${dpi}${NC}"
+dpi=$([ -n "$(grep -q 'ct original packets ge 30' /usr/share/firewall4/templates/ruleset.uc 2>/dev/null && echo yes)" ] \
+&& echo -e "${RED}yes${NC}" || echo -e "${GREEN}no${NC}")
+sw_status=$([ "$sw" = "1" ] && echo -e "${RED}on${NC}" || echo -e "${GREEN}off${NC}")
+hw_status=$([ "$hw" = "1" ] && echo -e "${RED}on${NC}" || echo -e "${GREEN}off${NC}")
+echo -e "SW: ${sw_status} | HW: ${hw_status} | FIX: ${dpi}"
 echo -e "\n${GREEN}===== Настройки запрет =====${NC}"
 echo -e "Установленная версия: ${INST_COLOR}$INSTALLED_DISPLAY${NC}"
 [ -n "$ZAPRET_STATUS" ] && echo -e "Статус Zapret: $ZAPRET_STATUS"
 show_script_50 && [ -n "$name" ] && echo -e "Установлен скрипт: ${GREEN}$name${NC}"
 [ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*1024-49999,50100-65535" "$CONF" && grep -q -- "--filter-udp=1024-49999,50100-65535" "$CONF" && echo -e "Стратегия для игр:${NC} ${GREEN}активна${NC}"
-show_current_strategy && [ -n "$ver" ] && echo -e "Используется стратегия: ${CYAN}$ver"
+show_current_strategy && [ -n "$ver" ] && echo -e "Используется стратегия: ${GREEN}$ver${NC}"
 # Проверка сайтов
 echo -e "\n${GREEN}===== Доступность сайтов =====${NC}"
 SITES=$(cat <<'EOF'
@@ -663,14 +663,14 @@ clear
 echo -e "╔════════════════════════════════════╗"
 echo -e "║     ${BLUE}Zapret on remittor Manager${NC}     ║"
 echo -e "╚════════════════════════════════════╝"
-echo -e "                     ${DGRAY}by StressOzz v6.8${NC}"
+echo -e "                    ${DGRAY}by StressOzz v$ZAPRET_MANAGER_VERSION${NC}"
 # Вывод информации
 echo -e "\n${YELLOW}Установленная версия:       ${INST_COLOR}$INSTALLED_DISPLAY${NC}"
 echo -e "${YELLOW}Последняя версия на GitHub: ${CYAN}$LATEST_VER${NC}"
 [ -n "$ZAPRET_STATUS" ] && echo -e "${YELLOW}Статус Zapret:${NC}              $ZAPRET_STATUS"
 show_script_50 && [ -n "$name" ] && echo -e "${YELLOW}Установлен скрипт:${NC}          $name"
 [ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*1024-49999,50100-65535" "$CONF" && grep -q -- "--filter-udp=1024-49999,50100-65535" "$CONF" && echo -e "${YELLOW}Стратегия для игр:${NC}          ${GREEN}активна${NC}"
-show_current_strategy && [ -n "$ver" ] && echo -e "${YELLOW}Используется стратегия:${NC}     ${CYAN}$ver"
+show_current_strategy && [ -n "$ver" ] && echo -e "${YELLOW}Используется стратегия:${NC}     ${CYAN}$ver${NC}"
 # Вывод пунктов меню
 echo -e "\n${CYAN}1) ${GREEN}Установить последнюю версию${NC}"
 echo -e "${CYAN}2) ${GREEN}Меню выбора стратегии${NC}"
