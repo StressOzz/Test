@@ -593,18 +593,12 @@ else
 dpi="${GREEN}no${NC}"
 fi
 echo -e "SW: ${RED}${sw:+on}${GREEN}${sw:-off}${NC} | HW: ${RED}${hw:+on}${GREEN}${hw:-off}${NC} | FIX: ${dpi}${NC}"
-
-
-
 echo -e "\n${GREEN}===== Настройки запрет =====${NC}"
 echo -e "Установленная версия: ${INST_COLOR}$INSTALLED_DISPLAY${NC}"
-[ -n "$ZAPRET_STATUS" ] && echo -e "Статус Zapret:${NC} $ZAPRET_STATUS"
-show_script_50 && [ -n "$name" ] && echo -e "Установлен скрипт:${NC} $name"
+[ -n "$ZAPRET_STATUS" ] && echo -e "Статус Zapret: $ZAPRET_STATUS"
+show_script_50 && [ -n "$name" ] && echo -e "Установлен скрипт: ${GREEN}$name${NC}"
 [ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*1024-49999,50100-65535" "$CONF" && grep -q -- "--filter-udp=1024-49999,50100-65535" "$CONF" && echo -e "Стратегия для игр:${NC} ${GREEN}активна${NC}"
-show_current_strategy && [ -n "$ver" ] && echo -e "Используется стратегия:${NC} ${CYAN}$ver"
-
-
-
+show_current_strategy && [ -n "$ver" ] && echo -e "Используется стратегия: ${CYAN}$ver"
 # Проверка сайтов
 echo -e "\n${GREEN}===== Доступность сайтов =====${NC}"
 SITES=$(cat <<'EOF'
@@ -633,35 +627,29 @@ total=$(echo "$sites_clean" | wc -l)
 half=$(( (total + 1) / 2 ))
 sites_list=""
 for site in $sites_clean; do
-    sites_list="$sites_list $site"
+sites_list="$sites_list $site"
 done
-
 for idx in $(seq 1 $half); do
-    left=$(echo $sites_list | cut -d' ' -f$idx)
-    right_idx=$((idx + half))
-    right=$(echo $sites_list | cut -d' ' -f$right_idx)
-
-    # printf только задает отступы
-    left_pad=$(printf "%-25s" "$left")
-    right_pad=$(printf "%-25s" "$right")
-
-    # затем echo с цветом
-    if curl -Is --connect-timeout 3 --max-time 4 "https://$left" >/dev/null 2>&1; then
-        left_color="[${GREEN}OK${NC}]  "
-    else
-        left_color="[${RED}FAIL${NC}]"
-    fi
-
-    if [ -n "$right" ]; then
-        if curl -Is --connect-timeout 3 --max-time 4 "https://$right" >/dev/null 2>&1; then
-            right_color="[${GREEN}OK${NC}]  "
-        else
-            right_color="[${RED}FAIL${NC}]"
-        fi
-        echo -e "$left_color $left_pad $right_color $right_pad"
-    else
-        echo -e "$left_color $left_pad"
-    fi
+left=$(echo $sites_list | cut -d' ' -f$idx)
+right_idx=$((idx + half))
+right=$(echo $sites_list | cut -d' ' -f$right_idx)
+left_pad=$(printf "%-25s" "$left")
+right_pad=$(printf "%-25s" "$right")
+if curl -Is --connect-timeout 3 --max-time 4 "https://$left" >/dev/null 2>&1; then
+left_color="[${GREEN}OK${NC}]  "
+else
+left_color="[${RED}FAIL${NC}]"
+fi
+if [ -n "$right" ]; then
+if curl -Is --connect-timeout 3 --max-time 4 "https://$right" >/dev/null 2>&1; then
+right_color="[${GREEN}OK${NC}]  "
+else
+right_color="[${RED}FAIL${NC}]"
+fi
+echo -e "$left_color $left_pad $right_color $right_pad"
+else
+echo -e "$left_color $left_pad"
+fi
 done
 echo ""
 read -p "Нажмите Enter для выхода в главное меню..." dummy
@@ -675,7 +663,7 @@ clear
 echo -e "╔════════════════════════════════════╗"
 echo -e "║     ${BLUE}Zapret on remittor Manager${NC}     ║"
 echo -e "╚════════════════════════════════════╝"
-echo -e "                     ${DGRAY}by StressOzz v6.7${NC}"
+echo -e "                     ${DGRAY}by StressOzz v6.8${NC}"
 # Вывод информации
 echo -e "\n${YELLOW}Установленная версия:       ${INST_COLOR}$INSTALLED_DISPLAY${NC}"
 echo -e "${YELLOW}Последняя версия на GitHub: ${CYAN}$LATEST_VER${NC}"
