@@ -589,10 +589,11 @@ echo -e "\n${GREEN}===== Flow Offloading =====${NC}"
 sw=$(uci -q get firewall.@defaults[0].flow_offloading)
 hw=$(uci -q get firewall.@defaults[0].flow_offloading_hw)
 dpi=$([ -n "$(grep -q 'ct original packets ge 30' /usr/share/firewall4/templates/ruleset.uc 2>/dev/null && echo yes)" ] \
-&& echo -e "${RED}yes${NC}" || echo -e "${GREEN}no${NC}")
-sw_status=$([ "$sw" = "1" ] && echo -e "${RED}on${NC}" || echo -e "${GREEN}off${NC}")
-hw_status=$([ "$hw" = "1" ] && echo -e "${RED}on${NC}" || echo -e "${GREEN}off${NC}")
-echo -e "SW: ${sw_status} | HW: ${hw_status} | FIX: ${dpi}"
+    && echo -e "${RED}yes${NC}" || echo -e "${GREEN}no${NC}")
+out=""
+[ "$sw" = "1" ] && out+="SW: ${RED}on${NC} "
+[ "$hw" = "1" ] && out+="HW: ${RED}on${NC} "
+echo -e "${out}| FIX: ${dpi}"
 echo -e "\n${GREEN}===== Настройки запрет =====${NC}"
 echo -e "Установленная версия: ${INST_COLOR}$INSTALLED_DISPLAY${NC}"
 [ -n "$ZAPRET_STATUS" ] && echo -e "Статус Zapret: $ZAPRET_STATUS"
