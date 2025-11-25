@@ -644,16 +644,16 @@ for idx in $(seq 1 $half); do
 
     # затем echo с цветом
     if curl -Is --connect-timeout 1 --max-time 2 "https://$left" >/dev/null 2>&1; then
-        left_color="${GREEN}OK${NC}"
+        left_color="[${GREEN}OK${NC}]   "
     else
-        left_color="${RED}FAIL${NC}"
+        left_color="[${RED}FAIL${NC}] "
     fi
 
     if [ -n "$right" ]; then
         if curl -Is --connect-timeout 1 --max-time 2 "https://$right" >/dev/null 2>&1; then
-            right_color="${GREEN}OK${NC}"
+            right_color="[${GREEN}OK${NC}]   "
         else
-            right_color="${RED}FAIL${NC}"
+            right_color="[${RED}FAIL${NC}] "
         fi
         echo -e "[$left_color] $left_pad [$right_color] $right_pad"
     else
