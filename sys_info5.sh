@@ -11,7 +11,7 @@ clear
 ##########################################################################################################################
 CONF="/etc/config/zapret"
 
-echo -e "\n${GREEN}===== 50000-50099 =====${NC}"
+echo -e "\n${GREEN}===== 50000-50099 в стратегии и портах =====${NC}"
 
 # Проверка наличия filter-udp=50000-50099
 if grep -q "filter-udp=50000-50099" "$CONF"; then
@@ -30,20 +30,20 @@ fi
 echo ""
 
 
-echo -e "\n${GREEN}===== стратегия и порты =====${NC}"
-CONF="/etc/config/zapret"
-
-echo "UDP:"
-grep -E "^[[:space:]]*option[[:space:]]+NFQWS_PORTS_UDP[[:space:]]+'" "$CONF" \
-    | sed -nE "s/^[[:space:]]*option[[:space:]]+NFQWS_PORTS_UDP[[:space:]]+'([^']*)'.*/\1/p"
+echo -e "\n${GREEN}===== порты =====${NC}"
 
 echo "TCP:"
 grep -E "^[[:space:]]*option[[:space:]]+NFQWS_PORTS_TCP[[:space:]]+'" "$CONF" \
     | sed -nE "s/^[[:space:]]*option[[:space:]]+NFQWS_PORTS_TCP[[:space:]]+'([^']*)'.*/\1/p"
 
+echo "UDP:"
+grep -E "^[[:space:]]*option[[:space:]]+NFQWS_PORTS_UDP[[:space:]]+'" "$CONF" \
+    | sed -nE "s/^[[:space:]]*option[[:space:]]+NFQWS_PORTS_UDP[[:space:]]+'([^']*)'.*/\1/p"
 
 
 
+
+echo -e "\n${GREEN}===== стратегия =====${NC}"
 sed -n "
 /^[[:space:]]*option[[:space:]]\\+NFQWS_OPT[[:space:]]*'/,/'/{
     /^[[:space:]]*option[[:space:]]\\+NFQWS_OPT[[:space:]]*'/{
