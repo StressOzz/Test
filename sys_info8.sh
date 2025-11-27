@@ -11,34 +11,35 @@ clear
 ##########################################################################################################################
 CONF="/etc/config/zapret"
 
-echo -e "\n${GREEN}===== 50000-50099 в стратегии =====${NC}"
-
-# Проверка наличия filter-udp=50000-50099
-if grep -q "filter-udp=50000-50099" "$CONF"; then
-    echo "50000-50099 найден"
+INSTALLED_VER=$(opkg list-installed | grep '^zapret ' | awk '{print $3}')
+if /etc/init.d/zapret status 2>/dev/null | grep -qi "running"; then
+ZAPRET_STATUS="${GREEN}запущен${NC}"
 else
-    echo "50000-50099 отсутствует"
+ZAPRET_STATUS="${RED}остановлен${NC}"
 fi
+SCRIPT_FILE="/opt/zapret/init.d/openwrt/custom.d/50-script.sh"
+[ -f "$SCRIPT_FILE" ] || return
+line=$(head -n1 "$SCRIPT_FILE")
+case "$line" in
+*QUIC*) name="50-quic4all" ;;
+*stun*) name="50-stun4all" ;;
+*"discord media"*) name="50-discord-media" ;;
+*"discord subnets"*) name="50-discord" ;;
+*) name="" ;;
+esac
+echo -e "$INSTALLED_VER"
+echo -e "$ZAPRET_STATUS"
+echo -e "$name"
 
-echo ""
 
 
-echo -e "\n${GREEN}===== порты =====${NC}"
-
-
+echo -e "\n${GREEN}===== порты и стратегия =====${NC}"
 TCP_VAL=$(grep -E "^[[:space:]]*option NFQWS_PORTS_TCP[[:space:]]+'" "$CONF" \
     | sed "s/.*'\(.*\)'.*/\1/")
-
 UDP_VAL=$(grep -E "^[[:space:]]*option NFQWS_PORTS_UDP[[:space:]]+'" "$CONF" \
     | sed "s/.*'\(.*\)'.*/\1/")
+echo "TCP: ${GREEN}$TCP_VAL${NC}    UDP: ${GREEN}$UDP_VAL${NC}\n"
 
-echo "TCP: $TCP_VAL    UDP: $UDP_VAL"
-
-
-
-
-
-echo -e "\n${GREEN}===== стратегия =====${NC}"
 awk '
 /^[[:space:]]*option[[:space:]]+NFQWS_OPT[[:space:]]*'\''/ {flag=1; sub(/^[[:space:]]*option[[:space:]]+NFQWS_OPT[[:space:]]*'\''/, ""); next}
 flag {
