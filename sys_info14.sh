@@ -75,8 +75,8 @@ echo -e "\n${GREEN}===== Стратегия=====${NC}"
 awk '
 /^[[:space:]]*option[[:space:]]+NFQWS_OPT[[:space:]]*'\''/ {flag=1; sub(/^[[:space:]]*option[[:space:]]+NFQWS_OPT[[:space:]]*'\''/, ""); next}
 flag {
-    if (/'\''/) {sub(/'\''$/, ""); print; exit}
-    print
+if (/'\''/) {sub(/'\''$/, ""); print; exit}
+print
 }' "$CONF"
 echo -e "${GREEN}===== Доступность сайтов =====${NC}"
 SITES=$(cat <<'EOF'
@@ -129,39 +129,6 @@ else
 echo -e "$left_color $left_pad"
 fi
 done
-
-echo -e "\n${GREEN}===== Стратегия=====${NC}"
-    local site=$1
-    if curl -Is --connect-timeout 3 --max-time 4 "https://$site" >/dev/null 2>&1; then
-        echo "[${GREEN}OK${NC}]"
-    else
-        echo "[${RED}FAIL${NC}]"
-    fi
-}
-
-sites_clean=$(echo "$SITES" | grep -v -E '^\s*$|^#')
-mapfile -t sites_array <<< "$sites_clean"
-
-total=${#sites_array[@]}
-half=$(( (total + 1) / 2 ))
-
-for ((i=0; i<half; i++)); do
-    left=${sites_array[i]}
-    right=${sites_array[i+half]:-}
-
-    left_color=$(check_site "$left")
-    left_pad=$(printf "%-25s" "$left")
-
-    if [ -n "$right" ]; then
-        right_color=$(check_site "$right")
-        right_pad=$(printf "%-25s" "$right")
-        printf "%s %s %s %s\n" "$left_color" "$left_pad" "$right_color" "$right_pad"
-    else
-        printf "%s %s\n" "$left_color" "$left_pad"
-    fi
-done
-
-
 echo ""
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 echo ""
