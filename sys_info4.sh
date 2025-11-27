@@ -33,17 +33,13 @@ echo ""
 echo -e "\n${GREEN}===== стратегия и порты =====${NC}"
 CONF="/etc/config/zapret"
 
-CONF="/etc/config/zapret"
-
 echo "UDP:"
-grep -E "^[[:space:]]*option NFQWS_PORTS_UDP" "$CONF" \
-    | sed -nE "s/.*'([^']*)'.*/\1/p"
+grep -E "^[[:space:]]*option[[:space:]]+NFQWS_PORTS_UDP[[:space:]]+'" "$CONF" \
+    | sed -nE "s/^[[:space:]]*option[[:space:]]+NFQWS_PORTS_UDP[[:space:]]+'([^']*)'.*/\1/p"
 
 echo "TCP:"
-grep -E "^[[:space:]]*option NFQWS_PORTS_TCP" "$CONF" \
-    | sed -nE "s/.*'([^']*)'.*/\1/p"
-
-
+grep -E "^[[:space:]]*option[[:space:]]+NFQWS_PORTS_TCP[[:space:]]+'" "$CONF" \
+    | sed -nE "s/^[[:space:]]*option[[:space:]]+NFQWS_PORTS_TCP[[:space:]]+'([^']*)'.*/\1/p"
 
 
 
