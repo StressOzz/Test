@@ -69,7 +69,7 @@ TCP_VAL=$(grep -E "^[[:space:]]*option NFQWS_PORTS_TCP[[:space:]]+'" "$CONF" \
     | sed "s/.*'\(.*\)'.*/\1/")
 UDP_VAL=$(grep -E "^[[:space:]]*option NFQWS_PORTS_UDP[[:space:]]+'" "$CONF" \
     | sed "s/.*'\(.*\)'.*/\1/")
-echo -e "TCP: ${GREEN}$TCP_VAL${NC} | UDP: ${GREEN}$UDP_VAL${NC}\n"
+echo -e "TCP: ${GREEN}$TCP_VAL${NC} | UDP: ${GREEN}$UDP_VAL${NC}"
 echo -e "\n${GREEN}===== Стратегия=====${NC}"
 awk '
 /^[[:space:]]*option[[:space:]]+NFQWS_OPT[[:space:]]*'\''/ {flag=1; sub(/^[[:space:]]*option[[:space:]]+NFQWS_OPT[[:space:]]*'\''/, ""); next}
@@ -77,7 +77,7 @@ flag {
     if (/'\''/) {sub(/'\''$/, ""); print; exit}
     print
 }' "$CONF"
-echo -e "\n${GREEN}===== Доступность сайтов =====${NC}"
+echo -e "${GREEN}===== Доступность сайтов =====${NC}"
 SITES=$(cat <<'EOF'
 gosuslugi.ru
 esia.gosuslugi.ru/login
