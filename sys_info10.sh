@@ -10,7 +10,7 @@ DGRAY="\033[38;5;236m"
 clear
 ##########################################################################################################################
 CONF="/etc/config/zapret"
-echo -e "${GREEN}===== Модель и архитектура роутера =====${NC}"
+echo -e "\n${GREEN}===== Модель и архитектура роутера =====${NC}"
 cat /tmp/sysinfo/model
 awk -F= '
 /DISTRIB_ARCH/   { gsub(/'\''/, ""); print $2 }
@@ -64,31 +64,70 @@ case "$line" in
 esac
 echo -e "Версия: ${GREEN}$INSTALLED_VER${NC}"
 echo -e "Статус: $ZAPRET_STATUS"
-echo -e "Скрипт: ${GREEN}${NC}$name"
-
-
-
-echo -e "\n${GREEN}===== Стратегия и порты=====${NC}"
+echo -e "Скрипт: ${GREEN}$name${NC}"
 TCP_VAL=$(grep -E "^[[:space:]]*option NFQWS_PORTS_TCP[[:space:]]+'" "$CONF" \
     | sed "s/.*'\(.*\)'.*/\1/")
 UDP_VAL=$(grep -E "^[[:space:]]*option NFQWS_PORTS_UDP[[:space:]]+'" "$CONF" \
     | sed "s/.*'\(.*\)'.*/\1/")
-echo -e "TCP: ${GREEN}$TCP_VAL${NC}    UDP: ${GREEN}$UDP_VAL${NC}\n"
-
+echo -e "TCP: ${GREEN}$TCP_VAL${NC} | UDP: ${GREEN}$UDP_VAL${NC}\n"
+echo -e "\n${GREEN}===== Стратегия=====${NC}"
 awk '
 /^[[:space:]]*option[[:space:]]+NFQWS_OPT[[:space:]]*'\''/ {flag=1; sub(/^[[:space:]]*option[[:space:]]+NFQWS_OPT[[:space:]]*'\''/, ""); next}
 flag {
     if (/'\''/) {sub(/'\''$/, ""); print; exit}
     print
 }' "$CONF"
-
-TCP_VAL=$(grep -E "^[[:space:]]*option NFQWS_PORTS_TCP[[:space:]]+'" "$CONF" \
-    | sed "s/.*'\(.*\)'.*/\1/")
-UDP_VAL=$(grep -E "^[[:space:]]*option NFQWS_PORTS_UDP[[:space:]]+'" "$CONF" \
-    | sed "s/.*'\(.*\)'.*/\1/")
-echo -e "\nTCP: ${GREEN}$TCP_VAL${NC}    UDP: ${GREEN}$UDP_VAL${NC}\n"
-
-
+echo -e "\n${GREEN}===== Доступность сайтов =====${NC}"
+SITES=$(cat <<'EOF'
+gosuslugi.ru
+esia.gosuslugi.ru/login
+rutube.ru
+youtube.com
+instagram.com
+rutor.info
+ntc.party
+rutracker.org
+epidemz.net.co
+nnmclub.to
+openwrt.org
+sxyprn.net
+pornhub.com
+discord.com
+x.com
+filmix.my
+flightradar24.com
+genderize.io
+EOF
+)
+sites_clean=$(echo "$SITES" | grep -v '^#' | grep -v '^\s*$')
+total=$(echo "$sites_clean" | wc -l)
+half=$(( (total + 1) / 2 ))
+sites_list=""
+for site in $sites_clean; do
+sites_list="$sites_list $site"
+done
+for idx in $(seq 1 $half); do
+left=$(echo $sites_list | cut -d' ' -f$idx)
+right_idx=$((idx + half))
+right=$(echo $sites_list | cut -d' ' -f$right_idx)
+left_pad=$(printf "%-25s" "$left")
+right_pad=$(printf "%-25s" "$right")
+if curl -Is --connect-timeout 3 --max-time 4 "https://$left" >/dev/null 2>&1; then
+left_color="[${GREEN}OK${NC}]  "
+else
+left_color="[${RED}FAIL${NC}]"
+fi
+if [ -n "$right" ]; then
+if curl -Is --connect-timeout 3 --max-time 4 "https://$right" >/dev/null 2>&1; then
+right_color="[${GREEN}OK${NC}]  "
+else
+right_color="[${RED}FAIL${NC}]"
+fi
+echo -e "$left_color $left_pad $right_color $right_pad"
+else
+echo -e "$left_color $left_pad"
+fi
+done
 echo ""
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 echo ""
