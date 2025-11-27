@@ -62,14 +62,14 @@ case "$line" in
 *"discord subnets"*) name="50-discord" ;;
 *) name="" ;;
 esac
+TCP_VAL=$(grep -E "^[[:space:]]*option NFQWS_PORTS_TCP[[:space:]]+'" "$CONF" \
+| sed "s/.*'\(.*\)'.*/\1/")
+UDP_VAL=$(grep -E "^[[:space:]]*option NFQWS_PORTS_UDP[[:space:]]+'" "$CONF" \
+| sed "s/.*'\(.*\)'.*/\1/")
 echo -e "Версия: ${GREEN}$INSTALLED_VER${NC}"
 echo -e "Статус: $ZAPRET_STATUS"
 echo -e "Скрипт: ${GREEN}$name${NC}"
-TCP_VAL=$(grep -E "^[[:space:]]*option NFQWS_PORTS_TCP[[:space:]]+'" "$CONF" \
-    | sed "s/.*'\(.*\)'.*/\1/")
-UDP_VAL=$(grep -E "^[[:space:]]*option NFQWS_PORTS_UDP[[:space:]]+'" "$CONF" \
-    | sed "s/.*'\(.*\)'.*/\1/")
-echo -e "TCP: ${GREEN}$TCP_VAL${NC} | UDP: ${GREEN}$UDP_VAL${NC}"
+echo -e "Порты: TCP: ${GREEN}$TCP_VAL${NC} | UDP: ${GREEN}$UDP_VAL${NC}"
 echo -e "\n${GREEN}===== Стратегия=====${NC}"
 awk '
 /^[[:space:]]*option[[:space:]]+NFQWS_OPT[[:space:]]*'\''/ {flag=1; sub(/^[[:space:]]*option[[:space:]]+NFQWS_OPT[[:space:]]*'\''/, ""); next}
