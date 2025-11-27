@@ -74,6 +74,24 @@ else
 echo -e "[${RED}FAIL${NC}] $site"
 fi
 done
+echo -e "\n${GREEN}===== 50000-50099 =====${NC}"
+CONF="/etc/config/zapret"
+
+# Проверка наличия filter-udp=50000-50099
+if grep -q "filter-udp=50000-50099" "$CONF"; then
+    echo "filter-udp найден"
+else
+    echo "filter-udp отсутствует"
+fi
+
+# Проверка наличия 50000-50099 именно в строке option NFQWS_PORTS_UDP
+if grep -E "^\\s*option NFQWS_PORTS_UDP" "$CONF" | grep -q "50000-50099"; then
+    echo "диапазон в NFQWS_PORTS_UDP найден"
+else
+    echo "диапазон в NFQWS_PORTS_UDP отсутствует"
+fi
+
+
 echo ""
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 echo ""
