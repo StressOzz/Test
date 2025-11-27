@@ -9,8 +9,9 @@ NC="\033[0m"
 DGRAY="\033[38;5;236m"
 clear
 ##########################################################################################################################
-echo -e "\n${GREEN}===== 50000-50099 =====${NC}"
 CONF="/etc/config/zapret"
+
+echo -e "\n${GREEN}===== 50000-50099 =====${NC}"
 
 # Проверка наличия filter-udp=50000-50099
 if grep -q "filter-udp=50000-50099" "$CONF"; then
@@ -40,9 +41,24 @@ echo "TCP:"
 grep -E "^[[:space:]]*option NFQWS_PORTS_TCP" "$CONF" \
     | sed -E "s/^[[:space:]]*option NFQWS_PORTS_TCP[[:space:]]*'([^']*)'.*/\1/"
 
-echo "OPT:"
-grep -E "^[[:space:]]*option NFQWS_OPT" "$CONF" \
-    | sed -E "s/^[[:space:]]*option NFQWS_OPT[[:space:]]*'([^']*)'.*/\1/"
+
+
+
+
+sed -n "
+/^[[:space:]]*option[[:space:]]\\+NFQWS_OPT[[:space:]]*'/,/'/{
+    /^[[:space:]]*option[[:space:]]\\+NFQWS_OPT[[:space:]]*'/{
+        s/^[[:space:]]*option[[:space:]]\\+NFQWS_OPT[[:space:]]*'//; t pr
+        d
+    }
+    /'/{
+        s/'$//; p; q
+    }
+    :pr
+    p
+}
+" "$CONF"
+
 
 
 
