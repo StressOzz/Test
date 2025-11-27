@@ -7,10 +7,11 @@ MAGENTA="\033[1;35m"
 BLUE="\033[0;34m"
 NC="\033[0m"
 DGRAY="\033[38;5;236m"
+echo -e ""
 clear
 ##########################################################################################################################
 CONF="/etc/config/zapret"
-echo -e "\n${GREEN}===== Модель и архитектура роутера =====${NC}"
+echo -e "${GREEN}===== Модель и архитектура роутера =====${NC}"
 cat /tmp/sysinfo/model
 awk -F= '
 /DISTRIB_ARCH/   { gsub(/'\''/, ""); print $2 }
@@ -128,6 +129,39 @@ else
 echo -e "$left_color $left_pad"
 fi
 done
+
+echo -e "\n${GREEN}===== Стратегия=====${NC}"
+    local site=$1
+    if curl -Is --connect-timeout 3 --max-time 4 "https://$site" >/dev/null 2>&1; then
+        echo "[${GREEN}OK${NC}]"
+    else
+        echo "[${RED}FAIL${NC}]"
+    fi
+}
+
+sites_clean=$(echo "$SITES" | grep -v -E '^\s*$|^#')
+mapfile -t sites_array <<< "$sites_clean"
+
+total=${#sites_array[@]}
+half=$(( (total + 1) / 2 ))
+
+for ((i=0; i<half; i++)); do
+    left=${sites_array[i]}
+    right=${sites_array[i+half]:-}
+
+    left_color=$(check_site "$left")
+    left_pad=$(printf "%-25s" "$left")
+
+    if [ -n "$right" ]; then
+        right_color=$(check_site "$right")
+        right_pad=$(printf "%-25s" "$right")
+        printf "%s %s %s %s\n" "$left_color" "$left_pad" "$right_color" "$right_pad"
+    else
+        printf "%s %s\n" "$left_color" "$left_pad"
+    fi
+done
+
+
 echo ""
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 echo ""
