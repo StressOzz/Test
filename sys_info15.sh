@@ -43,10 +43,10 @@ echo -n "  IPv6: "
 curl -6 -Is --connect-timeout 3 https://github.com >/dev/null 2>&1 && echo -e "${GREEN}ok${NC}" || echo -e "${RED}fail${NC}"
 echo -n "GitHub API: "
 curl -Is --connect-timeout 3 https://api.github.com >/dev/null 2>&1 \
-&& echo -e "${GREEN}ok${NC}    Остаток: $RATE_OUT" \
+&& echo -e "${GREEN}ok${NC}   Остаток: $RATE_OUT" \
 || echo -e "${RED}fail${NC}   Остаток: $RATE_OUT"
+echo -e "\n${GREEN}===== Настройки Zapret =====${NC}"
 zpr_info() {
-echo -e "\n${GREEN}===== Настройки запрет =====${NC}"
 INSTALLED_VER=$(opkg list-installed | grep '^zapret ' | awk '{print $3}')
 if /etc/init.d/zapret status 2>/dev/null | grep -qi "running"; then
 ZAPRET_STATUS="${GREEN}запущен${NC}"
@@ -82,9 +82,8 @@ print
 if [ -f /etc/init.d/zapret ]; then
     zpr_info
 else
-    echo -e "\n${RED}Zapret не установлен${NC}"
+    echo -e "\n${RED}Zapret не установлен!${NC}\n"
 fi
-
 echo -e "${GREEN}===== Доступность сайтов =====${NC}"
 SITES=$(cat <<'EOF'
 gosuslugi.ru
