@@ -102,6 +102,7 @@ cat <<EOF >> /etc/config/zapret
 
 --filter-tcp=443
 --hostlist=/opt/zapret/ipset/zapret-hosts-user.txt
+--ipset=/opt/zapret/ipset/zapret-ip-user.txt
 --dpi-desync=fake,fakeddisorder
 --dpi-desync-split-pos=10,midsld
 --dpi-desync-fake-tls=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin
@@ -116,6 +117,7 @@ cat <<EOF >> /etc/config/zapret
 --new
 --filter-udp=443
 --hostlist=/opt/zapret/ipset/zapret-hosts-user.txt
+--ipset=/opt/zapret/ipset/zapret-ip-user.txt
 --dpi-desync=fake
 --dpi-desync-repeats=4
 --dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin
