@@ -28,7 +28,7 @@ https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Servic
 https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Services/youtube.lst
 "
 
-TARGET_1="/etc/domains.list"
+TARGET_1="/opt/zapret-hosts-user.txt"
 TMP_1="$(mktemp)"
 
 ##############################################
@@ -50,7 +50,7 @@ https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Subnet
 https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Subnets/IPv4/twitter.lst
 "
 
-TARGET_2="/etc/subnets.list"
+TARGET_2="/opt/zapret-ip-user.txt"
 TMP_2="$(mktemp)"
 
 ##############################################
