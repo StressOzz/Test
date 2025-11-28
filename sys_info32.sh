@@ -102,7 +102,8 @@ else
 echo -e "\n${RED}Zapret не установлен!${NC}\n"
 fi
 echo -e "${GREEN}===== Доступность сайтов =====${NC}"
-SITES=$(cat <<'EOF'
+
+SITES="
 gosuslugi.ru
 esia.gosuslugi.ru/login
 rutube.ru
@@ -120,36 +121,56 @@ discord.com
 x.com
 filmix.my
 flightradar24.com
+cdn77.com
+play.google.com
 genderize.io
-EOF
-)
-sites_clean=$(echo "$SITES" | grep -v '^#' | grep -v '^\s*$')
-total=$(echo "$sites_clean" | wc -l)
-half=$(( (total + 1) / 2 ))
-sites_list=""
-for site in $sites_clean; do
-sites_list="$sites_list $site"
+"
+
+sites_clean=$(echo "$SITES")
+count=$(echo "$sites_clean" | wc -w)
+half=$(( (count+1)/2 ))
+
+# массивы результатов
+i=0
+for s in $sites_clean; do
+    i=$((i+1))
+    site[$i]="$s"
+
+    (
+        curl -Is --connect-timeout 3 --max-time 4 "https://$s" >/dev/null 2>&1
+        [ $? -eq 0 ] && echo "OK $i" || echo "FAIL $i"
+    ) &
 done
-for idx in $(seq 1 $half); do
-left=$(echo $sites_list | cut -d' ' -f$idx)
-right_idx=$((idx + half))
-right=$(echo $sites_list | cut -d' ' -f$right_idx)
-left_pad=$(printf "%-25s" "$left")
-right_pad=$(printf "%-25s" "$right")
-if curl -Is --connect-timeout 3 --max-time 4 "https://$left" >/dev/null 2>&1; then
-left_color="[${GREEN}OK${NC}]  "
-else
-left_color="[${RED}FAIL${NC}]"
-fi
-if [ -n "$right" ]; then
-if curl -Is --connect-timeout 3 --max-time 4 "https://$right" >/dev/null 2>&1; then
-right_color="[${GREEN}OK${NC}]  "
-else
-right_color="[${RED}FAIL${NC}]"
-fi
-echo -e "$left_color $left_pad $right_color $right_pad"
-else
-echo -e "$left_color $left_pad"
-fi
+
+# ждём все фоновые процессы
+wait
+
+# собираем результаты
+for r in $(jobs -p >/dev/null 2>&1; echo); do :; done
+
+# создаём массив статусов
+for line in $(jobs -p >/dev/null 2>&1; echo); do :; done
+
+# читаем вывод фоновых процессов
+while read -r res idx; do
+    status[$idx]="$res"
+done < <(for s in $SITES; do :; done; wait)
+
+# отображение в 2 колонки
+for n in $(seq 1 $half); do
+    l=${site[$n]}
+    r=${site[$((n+half))]}
+    lp=$(printf "%-25s" "$l")
+    rp=$(printf "%-25s" "$r")
+
+    [ "${status[$n]}" = "OK" ] && lc="[${GREEN}OK${NC}]" || lc="[${RED}FAIL${NC}]"
+
+    if [ -n "$r" ]; then
+        [ "${status[$((n+half))]}" = "OK" ] && rc="[${GREEN}OK${NC}]" || rc="[${RED}FAIL${NC}]"
+        echo -e "$lc  $lp $rc  $rp"
+    else
+        echo -e "$lc  $lp"
+    fi
 done
-echo -e ""
+
+echo
