@@ -129,45 +129,56 @@ play.google.com
 genderize.io
 "
 
-TMPDIR="/tmp/checksites.$$"
-mkdir -p "$TMPDIR"
+# конвертируем в одну строку
+sites_line=$(echo "$SITES")
 
-i=0
-for s in $SITES; do
-    i=$((i+1))
-    echo "$s" > "$TMPDIR/site_$i"
-    (
-        curl -Is --connect-timeout 3 --max-time 4 "https://$s" >/dev/null 2>&1
-        [ $? -eq 0 ] && echo OK > "$TMPDIR/res_$i" || echo FAIL > "$TMPDIR/res_$i"
-    ) &
+# количество сайтов
+total=$(echo $sites_line | wc -w)
+half=$(( (total+1)/2 ))
+
+# проверяем сайты параллельно
+check_site() {
+    site=$1
+    curl -Is --connect-timeout 3 --max-time 4 "https://$site" >/dev/null 2>&1 && echo "OK $site" || echo "FAIL $site"
+}
+
+# собираем результаты в переменные
+results=""
+for site in $sites_line; do
+    check_site "$site" &
+done | while read line; do
+    results="$results
+$line"
 done
 
 wait
 
-TOTAL=$i
-HALF=$(( (TOTAL+1)/2 ))
+# выводим в две колонки
+n=0
+for site in $sites_line; do
+    n=$((n+1))
+    # ищем результат
+    for r in $results; do
+        echo "$r" | grep -q " $site$" && status=$r
+    done
 
-for n in $(seq 1 $HALF); do
-    L_SITE=$(cat "$TMPDIR/site_$n")
-    L_RES=$(cat "$TMPDIR/res_$n")
+    res=$(echo $status | cut -d' ' -f1)
+    [ "$res" = "OK" ] && L_COLOR="[${GREEN}OK${NC}]" || L_COLOR="[${RED}FAIL${NC}]"
+    L_PAD=$(printf "%-25s" "$site")
 
-    [ "$L_RES" = "OK" ] && L_COLOR="[${GREEN}OK${NC}]" || L_COLOR="[${RED}FAIL${NC}]"
-    L_PAD=$(printf "%-25s" "$L_SITE")
-
-    R_IDX=$((n+HALF))
-
-    if [ $R_IDX -le $TOTAL ]; then
-        R_SITE=$(cat "$TMPDIR/site_$R_IDX")
-        R_RES=$(cat "$TMPDIR/res_$R_IDX")
-
-        [ "$R_RES" = "OK" ] && R_COLOR="[${GREEN}OK${NC}]" || R_COLOR="[${RED}FAIL${NC}]"
-        R_PAD=$(printf "%-25s" "$R_SITE")
-
+    R_IDX=$((n+half))
+    if [ $R_IDX -le $total ]; then
+        rsite=$(echo $sites_line | cut -d' ' -f$R_IDX)
+        for r in $results; do
+            echo "$r" | grep -q " $rsite$" && rstatus=$r
+        done
+        rres=$(echo $rstatus | cut -d' ' -f1)
+        [ "$rres" = "OK" ] && R_COLOR="[${GREEN}OK${NC}]" || R_COLOR="[${RED}FAIL${NC}]"
+        R_PAD=$(printf "%-25s" "$rsite")
         echo -e "$L_COLOR  $L_PAD $R_COLOR  $R_PAD"
     else
         echo -e "$L_COLOR  $L_PAD"
     fi
 done
 
-rm -rf "$TMPDIR"
 echo
