@@ -10,9 +10,8 @@ TARGET=$(awk -F= '/DISTRIB_TARGET/ {gsub(/'\''/, "", $2); print $2}' /etc/openwr
 ARCH=$(awk -F= '/DISTRIB_ARCH/ {gsub(/'\''/, "", $2); print $2}' /etc/openwrt_release)
 OWRT=$(awk -F= '/DISTRIB_DESCRIPTION/ {gsub(/'\''|OpenWrt /, "", $2); print $2}' /etc/openwrt_release)
 echo -e "Роутер: ${GREEN}$MODEL${NC}"
-echo -e "Архитектура: ${GREEN}$ARCH$ | $TARGET{NC}"
+echo -e "Архитектура: ${GREEN}$ARCH${NC} | ${GREEN}$TARGET${NC}"
 echo -e "OpenWrt: ${GREEN}$OWRT${NC}"
-
 echo -e "\n${GREEN}===== Пользовательские пакеты =====${NC}"
 awk '
 /^Package:/ { p=$2 }
@@ -38,7 +37,7 @@ echo -e "$out"
 echo -e "\n${GREEN}===== Проверка GitHub =====${NC}"
 RATE=$(curl -s https://api.github.com/rate_limit | grep '"remaining"' | head -1 | awk '{print $2}' | tr -d ,)
 [ -n "$RATE" ] && RATE_OUT="${GREEN}${RATE}${NC}" || RATE_OUT="${RED}N/A${NC}"
-echo -n "GitHub: IPv4: "
+echo -n "GitHub IPv4: "
 curl -4 -Is --connect-timeout 3 https://github.com >/dev/null 2>&1 && echo -ne "${GREEN}ok${NC}" || echo -ne "${RED}fail${NC}"
 echo -n "  IPv6: "
 curl -6 -Is --connect-timeout 3 https://github.com >/dev/null 2>&1 && echo -e "${GREEN}ok${NC}" || echo -e "${RED}fail${NC}"
