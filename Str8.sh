@@ -101,7 +101,6 @@ cat <<EOF >> /etc/config/zapret
 #${version} УДАЛИТЕ ЭТУ СТРОЧКУ, ЕСЛИ ВНОСИТЕ ИЗМЕНЕНИЯ В СТРАТЕГИЮ !!!
 
 --filter-tcp=443
---hostlist=/opt/zapret/ipset/zapret-hosts-google.txt
 --hostlist=/opt/zapret/ipset/zapret-hosts-user.txt
 --dpi-desync=fake,fakeddisorder
 --dpi-desync-split-pos=10,midsld
@@ -116,6 +115,7 @@ cat <<EOF >> /etc/config/zapret
 --dpi-desync-badseq-increment=0
 --new
 --filter-udp=443
+--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt
 --dpi-desync=fake
 --dpi-desync-repeats=4
 --dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin
