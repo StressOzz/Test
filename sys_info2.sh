@@ -44,19 +44,11 @@ echo -e "$out"
 echo -e "\n${GREEN}===== Проверка GitHub =====${NC}"
 
 # 1. Проверка доступности github.com по IPv4 и IPv6
-echo -n "GitHub IPv4: "
-if curl -4 -Is --connect-timeout 3 https://github.com >/dev/null 2>&1; then
-echo -e "${GREEN}ok${NC}"
-else
-echo -e "${RED}fail${NC}"
-fi
+echo -n "GitHub: IPv4: "
+curl -4 -Is --connect-timeout 3 https://github.com >/dev/null 2>&1 && echo -ne "${GREEN}OK${NC}" || echo -ne "${RED}FAIL${NC}"
 
-echo -n "GitHub IPv6: "
-if curl -6 -Is --connect-timeout 3 https://github.com >/dev/null 2>&1; then
-echo -e "${GREEN}ok${NC}"
-else
-echo -e "${RED}fail${NC}"
-fi
+echo -n "  IPv6: "
+curl -6 -Is --connect-timeout 3 https://github.com >/dev/null 2>&1 && echo -e "${GREEN}OK${NC}" || echo -e "${RED}FAIL${NC}"
 
 # 2. Проверка доступности GitHub API
 echo -n "GitHub API: "
