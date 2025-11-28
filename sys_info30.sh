@@ -1,3 +1,4 @@
+
 #!/bin/sh
 GREEN="\033[1;32m"
 RED="\033[1;31m"
@@ -52,8 +53,10 @@ out="$out | FIX: ${dpi}"
 echo -e "$out"
 echo -e "\n${GREEN}===== Проверка GitHub =====${NC}"
 RATE=$(curl -s https://api.github.com/rate_limit | grep '"remaining"' | head -1 | awk '{print $2}' | tr -d ,)
-if [ -z "$RATE" ] || [ "$RATE" -eq 0 ]; then
+if [ -z "$RATE" ]; then
 RATE_OUT="${RED}N/A${NC}"
+elif [ "$RATE" -eq 0 ]; then
+RATE_OUT="${RED}0${NC}"
 else
 RATE_OUT="${GREEN}${RATE}${NC}"
 fi
@@ -83,7 +86,6 @@ case "$line" in
 *"discord subnets"*) name="50-discord" ;;
 *) name="" ;;
 esac
-[ -n "$name" ] && echo -e "Скрипт: ${GREEN}$name${NC}"
 fi
 TCP_VAL=$(grep -E "^[[:space:]]*option NFQWS_PORTS_TCP[[:space:]]+'" "$CONF" \
 | sed "s/.*'\(.*\)'.*/\1/")
