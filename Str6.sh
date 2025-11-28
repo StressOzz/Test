@@ -37,6 +37,7 @@ https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Servic
 https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Services/tiktok.lst
 https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Services/twitter.lst
 https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Services/youtube.lst
+https://raw.githubusercontent.com/StressOzz/Test/refs/heads/main/mylist.lst
 "
 
 TARGET_1="/opt/zapret/ipset/zapret-hosts-user.txt"
