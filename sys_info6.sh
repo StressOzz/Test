@@ -4,19 +4,15 @@ RED="\033[1;31m"
 NC="\033[0m"
 CONF="/etc/config/zapret"
 clear
-echo -e "\n${GREEN}===== Модель и архитектура роутера =====${NC}"
-cat /tmp/sysinfo/model
-awk -F= '
-/DISTRIB_ARCH/   { gsub(/'\''/, ""); print $2 }
-/DISTRIB_TARGET/ { gsub(/'\''/, ""); print $2 }
-' /etc/openwrt_release
-echo -e "\n${GREEN}===== Версия OpenWrt =====${NC}"
-awk -F= '
-/DISTRIB_DESCRIPTION/ {
-gsub(/'\''|OpenWrt /, "")
-print $2
-}
-' /etc/openwrt_release
+echo -e "\n${GREEN}===== Информация о системе =====${NC}"
+MODEL=$(cat /tmp/sysinfo/model)
+TARGET=$(awk -F= '/DISTRIB_TARGET/ {gsub(/'\''/, "", $2); print $2}' /etc/openwrt_release)
+ARCH=$(awk -F= '/DISTRIB_ARCH/ {gsub(/'\''/, "", $2); print $2}' /etc/openwrt_release)
+OWRT=$(awk -F= '/DISTRIB_DESCRIPTION/ {gsub(/'\''|OpenWrt /, "", $2); print $2}' /etc/openwrt_release)
+echo -e "Роутер: ${GREEN}$MODEL${NC}"
+echo -e "Архитектура: ${GREEN}$ARCH$ | $TARGET{NC}"
+echo -e "OpenWrt: ${GREEN}$OWRT${NC}"
+
 echo -e "\n${GREEN}===== Пользовательские пакеты =====${NC}"
 awk '
 /^Package:/ { p=$2 }
@@ -43,13 +39,13 @@ echo -e "\n${GREEN}===== Проверка GitHub =====${NC}"
 RATE=$(curl -s https://api.github.com/rate_limit | grep '"remaining"' | head -1 | awk '{print $2}' | tr -d ,)
 [ -n "$RATE" ] && RATE_OUT="${GREEN}${RATE}${NC}" || RATE_OUT="${RED}N/A${NC}"
 echo -n "GitHub: IPv4: "
-curl -4 -Is --connect-timeout 3 https://github.com >/dev/null 2>&1 && echo -ne "${GREEN}OK${NC}" || echo -ne "${RED}FAIL${NC}"
+curl -4 -Is --connect-timeout 3 https://github.com >/dev/null 2>&1 && echo -ne "${GREEN}ok${NC}" || echo -ne "${RED}fail${NC}"
 echo -n "  IPv6: "
-curl -6 -Is --connect-timeout 3 https://github.com >/dev/null 2>&1 && echo -e "${GREEN}OK${NC}" || echo -e "${RED}FAIL${NC}"
+curl -6 -Is --connect-timeout 3 https://github.com >/dev/null 2>&1 && echo -e "${GREEN}ok${NC}" || echo -e "${RED}fail${NC}"
 echo -n "GitHub API: "
 curl -Is --connect-timeout 3 https://api.github.com >/dev/null 2>&1 \
-&& echo -e "${GREEN}OK${NC}   Остаток: $RATE_OUT" \
-|| echo -e "${RED}FAIL${NC} Остаток: $RATE_OUT"
+&& echo -e "${GREEN}ok${NC}    Остаток: $RATE_OUT" \
+|| echo -e "${RED}fail${NC}   Остаток: $RATE_OUT"
 zpr_info() {
 echo -e "\n${GREEN}===== Настройки запрет =====${NC}"
 INSTALLED_VER=$(opkg list-installed | grep '^zapret ' | awk '{print $3}')
