@@ -3,6 +3,7 @@ GREEN="\033[1;32m"
 RED="\033[1;31m"
 NC="\033[0m"
 CONF="/etc/config/zapret"
+
 clear
 
 # ===== Функции =====
@@ -74,22 +75,36 @@ filmix.my
 flightradar24.com
 genderize.io
 "
-    sites=($SITES)
-    total=${#sites[@]}
+
+    # Чтение в строки и нумерация через eval
+    idx=0
+    for site in $(echo "$SITES" | grep -v '^#' | grep -v '^\s*$'); do
+        idx=$((idx + 1))
+        eval "site$idx='$site'"
+    done
+    total=$idx
     half=$(( (total + 1) / 2 ))
 
-    for idx in $(seq 0 $((half-1))); do
-        left=${sites[$idx]}
-        right_idx=$((idx + half))
-        right=${sites[$right_idx]}
+    for i in $(seq 1 $half); do
+        eval "left=\$site$i"
+        right_idx=$((i + half))
+        eval "right=\$site$right_idx"
 
-        # асинхронные проверки
-        { curl -Is --connect-timeout 3 --max-time 4 "https://$left" >/dev/null 2>&1 && lcol="[${GREEN}OK${NC}]" || lcol="[${RED}FAIL${NC}]"; echo "$lcol $left"; } &
+        pad_left=$(printf "%-25s" "$left")
+        pad_right=$(printf "%-25s" "$right")
+
+        # Проверка left
+        curl -Is --connect-timeout 3 --max-time 4 "https://$left" >/dev/null 2>&1 \
+            && lcol="[${GREEN}OK${NC}]" || lcol="[${RED}FAIL${NC}]"
+
         if [ -n "$right" ]; then
-            { curl -Is --connect-timeout 3 --max-time 4 "https://$right" >/dev/null 2>&1 && rcol="[${GREEN}OK${NC}]" || rcol="[${RED}FAIL${NC}]"; echo "$rcol $right"; } &
+            curl -Is --connect-timeout 3 --max-time 4 "https://$right" >/dev/null 2>&1 \
+                && rcol="[${GREEN}OK${NC}]" || rcol="[${RED}FAIL${NC}]"
+            echo -e "$lcol  $pad_left  $rcol  $pad_right"
+        else
+            echo -e "$lcol  $pad_left"
         fi
     done
-    wait
 }
 
 # ===== Сбор информации =====
@@ -106,6 +121,7 @@ echo -e "Роутер: ${GREEN}$MODEL${NC}"
 echo -e "Архитектура: ${GREEN}$ARCH${NC} | ${GREEN}$TARGET${NC}"
 echo -e "OpenWrt: ${GREEN}$OWRT${NC}"
 
+# ===== Пользовательские пакеты =====
 echo -e "\n${GREEN}===== Пользовательские пакеты =====${NC}"
 awk '/^Package:/ {p=$2} /^Status: install user/ {print p}' /usr/lib/opkg/status
 
