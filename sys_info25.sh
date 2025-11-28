@@ -80,14 +80,14 @@ case "$line" in
 *stun*) name="50-stun4all" ;;
 *"discord media"*) name="50-discord-media" ;;
 *"discord subnets"*) name="50-discord" ;;
-*) name="не известен" ;;
+*) name="" ;;
 esac
 TCP_VAL=$(grep -E "^[[:space:]]*option NFQWS_PORTS_TCP[[:space:]]+'" "$CONF" \
 | sed "s/.*'\(.*\)'.*/\1/")
 UDP_VAL=$(grep -E "^[[:space:]]*option NFQWS_PORTS_UDP[[:space:]]+'" "$CONF" \
 | sed "s/.*'\(.*\)'.*/\1/")
 echo -e "Версия: ${GREEN}$INSTALLED_VER${NC} | $ZAPRET_STATUS"
-echo -e "Скрипт: ${GREEN}$name${NC}"
+[ -n "$name" ] && echo -e "Скрипт: ${GREEN}$name${NC}"
 echo -e "Порты TCP: ${GREEN}$TCP_VAL${NC} | UDP: ${GREEN}$UDP_VAL${NC}"
 echo -e "\n${GREEN}===== Стратегия =====${NC}"
 awk '
