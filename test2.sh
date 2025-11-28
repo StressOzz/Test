@@ -1,52 +1,90 @@
 #!/bin/sh
 
-# URL-списки
-URLS="
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Russia/inside-kvas.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Categories/anime.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Categories/block.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Categories/geoblock.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Categories/hodca.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Categories/news.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Categories/porn.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Services/cloudflare.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Services/cloudfront.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Services/digitalocean.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Services/discord.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Services/google_ai.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Services/google_play.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Services/hdrezka.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Services/hetzner.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Services/meta.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Services/ovh.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Services/telegram.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Services/tiktok.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Services/twitter.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Services/youtube.lst
+BASE_DOMAINS="https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main"
+BASE_SUBNETS="https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Subnets/IPv4"
+
+##############################################
+# 1. Доменные списки → /etc/domains.list
+##############################################
+
+FILES_DOMAINS="
+inside-kvas.lst
+anime.lst
+block.lst
+geoblock.lst
+hodca.lst
+news.lst
+porn.lst
+cloudflare.lst
+cloudfront.lst
+digitalocean.lst
+discord.lst
+google_ai.lst
+google_play.lst
+hdrezka.lst
+hetzner.lst
+meta.lst
+ovh.lst
+telegram.lst
+tiktok.lst
+twitter.lst
+youtube.lst
 "
 
-TARGET="/opt/zapret-hosts-user.txt"   # куда собрать итог
-TMP="$(mktemp)"
+TARGET_DOMAINS="/etc/zapret-hosts-user.txt"
+TMP_DOMAINS="$(mktemp)"
 
-for url in $URLS; do
-    echo "Скачиваю $url …"
-    # используем curl, можно wget — если есть
-    curl -fsSL "$url" >> "$TMP" || {
-        echo "Ошибка при скачивании $url"
-    }
-    echo "" >> "$TMP"
-done
+##############################################
+# 2. IPv4 подсети → /etc/subnets.list
+##############################################
 
-# Фильтрация:
-#  - убираем пробелы по краям
-#  - убираем пустые строки
-#  - удаляем строки, начинающиеся с .
-#  - удаляем дубли
-sed 's/^[ \t]*//; s/[ \t]*$//' "$TMP" \
-    | grep -v '^$' \
-    | grep -v '^\.' \
-    | sort -u > "$TARGET"
+FILES_SUBNETS="
+Discord.lst
+Meta.lst
+Twitter.lst
+cloudflare.lst
+cloudfront.lst
+digitalocean.lst
+discord.lst
+hetzner.lst
+meta.lst
+ovh.lst
+telegram.lst
+twitter.lst
+"
 
-rm "$TMP"
+TARGET_SUBNETS="/etc/zapret-ip-user.txt"
+TMP_SUBNETS="$(mktemp)"
 
-echo "Готово — результат в $TARGET"
+##############################################
+# Функция скачивания и обработки файлов
+##############################################
+process_group() {
+    BASE="$1"
+    LIST="$2"
+    TMP="$3"
+    TARGET="$4"
+
+    for f in $LIST; do
+        echo "Скачиваю $f …"
+        curl -fsSL "$BASE/$f" >> "$TMP" || echo "Ошибка: $f"
+        echo "" >> "$TMP"
+    done
+
+    # Фильтрация
+    sed 's/^[ \t]*//; s/[ \t]*$//' "$TMP" \
+        | grep -v '^$' \
+        | grep -v '^\.' \
+        | sort -u > "$TARGET"
+
+    echo "Готово → $TARGET"
+}
+
+##############################################
+# Запуск
+##############################################
+
+process_group "$BASE_DOMAINS" "$FILES_DOMAINS" "$TMP_DOMAINS" "$TARGET_DOMAINS"
+process_group "$BASE_SUBNETS" "$FILES_SUBNETS" "$TMP_SUBNETS" "$TARGET_SUBNETS"
+
+rm "$TMP_DOMAINS" "$TMP_SUBNETS"
