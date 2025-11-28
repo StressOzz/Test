@@ -101,6 +101,9 @@ zpr_info
 else
 echo -e "\n${RED}Zapret не установлен!${NC}\n"
 fi
+
+
+
 echo -e "${GREEN}===== Доступность сайтов =====${NC}"
 
 SITES="
@@ -126,51 +129,45 @@ play.google.com
 genderize.io
 "
 
-sites_clean=$(echo "$SITES")
-count=$(echo "$sites_clean" | wc -w)
-half=$(( (count+1)/2 ))
+TMPDIR="/tmp/checksites.$$"
+mkdir -p "$TMPDIR"
 
-# массивы результатов
 i=0
-for s in $sites_clean; do
+for s in $SITES; do
     i=$((i+1))
-    site[$i]="$s"
-
+    echo "$s" > "$TMPDIR/site_$i"
     (
         curl -Is --connect-timeout 3 --max-time 4 "https://$s" >/dev/null 2>&1
-        [ $? -eq 0 ] && echo "OK $i" || echo "FAIL $i"
+        [ $? -eq 0 ] && echo OK > "$TMPDIR/res_$i" || echo FAIL > "$TMPDIR/res_$i"
     ) &
 done
 
-# ждём все фоновые процессы
 wait
 
-# собираем результаты
-for r in $(jobs -p >/dev/null 2>&1; echo); do :; done
+TOTAL=$i
+HALF=$(( (TOTAL+1)/2 ))
 
-# создаём массив статусов
-for line in $(jobs -p >/dev/null 2>&1; echo); do :; done
+for n in $(seq 1 $HALF); do
+    L_SITE=$(cat "$TMPDIR/site_$n")
+    L_RES=$(cat "$TMPDIR/res_$n")
 
-# читаем вывод фоновых процессов
-while read -r res idx; do
-    status[$idx]="$res"
-done < <(for s in $SITES; do :; done; wait)
+    [ "$L_RES" = "OK" ] && L_COLOR="[${GREEN}OK${NC}]" || L_COLOR="[${RED}FAIL${NC}]"
+    L_PAD=$(printf "%-25s" "$L_SITE")
 
-# отображение в 2 колонки
-for n in $(seq 1 $half); do
-    l=${site[$n]}
-    r=${site[$((n+half))]}
-    lp=$(printf "%-25s" "$l")
-    rp=$(printf "%-25s" "$r")
+    R_IDX=$((n+HALF))
 
-    [ "${status[$n]}" = "OK" ] && lc="[${GREEN}OK${NC}]" || lc="[${RED}FAIL${NC}]"
+    if [ $R_IDX -le $TOTAL ]; then
+        R_SITE=$(cat "$TMPDIR/site_$R_IDX")
+        R_RES=$(cat "$TMPDIR/res_$R_IDX")
 
-    if [ -n "$r" ]; then
-        [ "${status[$((n+half))]}" = "OK" ] && rc="[${GREEN}OK${NC}]" || rc="[${RED}FAIL${NC}]"
-        echo -e "$lc  $lp $rc  $rp"
+        [ "$R_RES" = "OK" ] && R_COLOR="[${GREEN}OK${NC}]" || R_COLOR="[${RED}FAIL${NC}]"
+        R_PAD=$(printf "%-25s" "$R_SITE")
+
+        echo -e "$L_COLOR  $L_PAD $R_COLOR  $R_PAD"
     else
-        echo -e "$lc  $lp"
+        echo -e "$L_COLOR  $L_PAD"
     fi
 done
 
+rm -rf "$TMPDIR"
 echo
