@@ -25,7 +25,7 @@ https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Servic
 https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Services/youtube.lst
 "
 
-TARGET="/opt/mylist.txt"   # куда собрать итог
+TARGET="/opt/zapret-hosts-user.txt"   # куда собрать итог
 TMP="$(mktemp)"
 
 for url in $URLS; do
@@ -37,11 +37,16 @@ for url in $URLS; do
     echo "" >> "$TMP"
 done
 
-# Чистим: убираем пустые строки, пробелы, дубли
-sed -e 's/^[ \t]*//; s/[ \t]*$//' "$TMP" \
+# Фильтрация:
+#  - убираем пробелы по краям
+#  - убираем пустые строки
+#  - удаляем строки, начинающиеся с .
+#  - удаляем дубли
+sed 's/^[ \t]*//; s/[ \t]*$//' "$TMP" \
     | grep -v '^$' \
+    | grep -v '^\.' \
     | sort -u > "$TARGET"
 
 rm "$TMP"
 
-echo "Сделано — итог в $TARGET"
+echo "Готово — результат в $TARGET"
