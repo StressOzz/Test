@@ -32,9 +32,9 @@ for i in $(seq 1 $half); do
     eval "left=\$pkg$i"
     right_idx=$((i + half))
     eval "right=\$pkg$right_idx"
-    left_pad=$(printf "%-30s" "$left")
+    left_pad=$(printf "%-20s" "$left")
     if [ -n "$right" ]; then
-        right_pad=$(printf "%-30s" "$right")
+        right_pad=$(printf "%-20s" "$right")
         echo "$left_pad $right_pad"
     else
         echo "$left_pad"
