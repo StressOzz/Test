@@ -46,21 +46,12 @@ echo -e "\n${GREEN}===== Проверка GitHub =====${NC}"
 # 1. Проверка доступности github.com по IPv4 и IPv6
 echo -n "GitHub: IPv4: "
 curl -4 -Is --connect-timeout 3 https://github.com >/dev/null 2>&1 && echo -ne "${GREEN}OK${NC}" || echo -ne "${RED}FAIL${NC}"
-
 echo -n "  IPv6: "
 curl -6 -Is --connect-timeout 3 https://github.com >/dev/null 2>&1 && echo -e "${GREEN}OK${NC}" || echo -e "${RED}FAIL${NC}"
 
 # 2. Проверка доступности GitHub API
-echo -n "GitHub API: "
-if curl -Is --connect-timeout 3 https://api.github.com >/dev/null 2>&1; then
-echo -e "${GREEN}ok${NC}"
-else
-echo -e "${RED}fail${NC}"
-fi
-
 # 3. Сколько осталось запросов (без токена — лимит маленький, но хоть что-то)
 RATE=$(curl -s https://api.github.com/rate_limit | grep '"remaining"' | head -1 | awk '{print $2}' | tr -d ,)
-
 
 echo -n "GitHub API: "
 if curl -Is --connect-timeout 3 https://api.github.com >/dev/null 2>&1; then
@@ -68,6 +59,29 @@ echo -e "${GREEN}ok${NC}   Остаток запросов: ${RATE:-не уда�
 else
 echo -e "${RED}fail${NC}  Остаток запросов: ${RATE:-не удалось получить}"
 fi
+
+
+
+echo -e "\n${GREEN}ЗЩЗШГРТ()*:И(*)Щ?:ИШ*?ЕИЩ*?ЕИ*ЩШ?ЕИ(*?:Е${NC}"
+
+# Получаем остаток запросов
+RATE=$(curl -s https://api.github.com/rate_limit | grep '"remaining"' | head -1 | awk '{print $2}' | tr -d ,)
+[ -n "$RATE" ] && RATE_OUT="${GREEN}${RATE}${NC}" || RATE_OUT="${RED}N/A${NC}"
+
+# GitHub IPv4/IPv6
+echo -n "GitHub: IPv4: "
+curl -4 -Is --connect-timeout 3 https://github.com >/dev/null 2>&1 && echo -ne "${GREEN}OK${NC}" || echo -ne "${RED}FAIL${NC}"
+echo -n "  IPv6: "
+curl -6 -Is --connect-timeout 3 https://github.com >/dev/null 2>&1 && echo -e "${GREEN}OK${NC}" || echo -e "${RED}FAIL${NC}"
+
+# GitHub API
+echo -n "GitHub API: "
+curl -Is --connect-timeout 3 https://api.github.com >/dev/null 2>&1 \
+    && echo -e "${GREEN}OK${NC}   Остаток: $RATE_OUT" \
+    || echo -e "${RED}FAIL${NC} Остаток: $RATE_OUT"
+
+
+
 
 
 
