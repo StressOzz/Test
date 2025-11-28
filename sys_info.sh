@@ -1,15 +1,9 @@
 #!/bin/sh
 GREEN="\033[1;32m"
 RED="\033[1;31m"
-CYAN="\033[1;36m"
-YELLOW="\033[1;33m"
-MAGENTA="\033[1;35m"
-BLUE="\033[0;34m"
 NC="\033[0m"
-DGRAY="\033[38;5;236m"
-clear
-##########################################################################################################################
 CONF="/etc/config/zapret"
+clear
 echo -e "\n${GREEN}===== Модель и архитектура роутера =====${NC}"
 cat /tmp/sysinfo/model
 awk -F= '
@@ -45,6 +39,42 @@ out="SW: ${GREEN}off${NC} | HW: ${GREEN}off${NC}"
 fi
 out="$out | FIX: ${dpi}"
 echo -e "$out"
+
+
+echo -e "\n${GREEN}===== Проверка GitHub =====${NC}"
+
+# 1. Проверка доступности github.com по IPv4 и IPv6
+echo -n "GitHub IPv4: "
+if curl -4 -Is --connect-timeout 3 https://github.com >/dev/null 2>&1; then
+    echo "OK"
+else
+    echo "FAIL"
+fi
+
+echo -n "GitHub IPv6: "
+if curl -6 -Is --connect-timeout 3 https://github.com >/dev/null 2>&1; then
+    echo "OK"
+else
+    echo "FAIL"
+fi
+
+# 2. Проверка доступности GitHub API
+echo -n "GitHub API: "
+if curl -Is --connect-timeout 3 https://api.github.com >/dev/null 2>&1; then
+    echo "OK"
+else
+    echo "FAIL"
+fi
+
+# 3. Сколько осталось запросов (без токена — лимит маленький, но хоть что-то)
+RATE=$(curl -s https://api.github.com/rate_limit | grep '"remaining"' | head -1 | awk '{print $2}' | tr -d ,)
+
+echo "Остаток GitHub API запросов: ${RATE:-не удалось получить}"
+
+
+
+
+zpr_info() {
 echo -e "\n${GREEN}===== Настройки запрет =====${NC}"
 INSTALLED_VER=$(opkg list-installed | grep '^zapret ' | awk '{print $3}')
 if /etc/init.d/zapret status 2>/dev/null | grep -qi "running"; then
@@ -77,6 +107,10 @@ flag {
 if (/'\''/) {sub(/'\''$/, ""); print; exit}
 print
 }' "$CONF"
+}
+if [ -f /etc/init.d/zapret ]; then
+zpr_info
+fi
 echo -e "${GREEN}===== Доступность сайтов =====${NC}"
 SITES=$(cat <<'EOF'
 gosuslugi.ru
@@ -128,6 +162,4 @@ else
 echo -e "$left_color $left_pad"
 fi
 done
-echo ""
-read -p "Нажмите Enter для выхода в главное меню..." dummy
-echo ""
+echo -e ""
