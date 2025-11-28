@@ -13,35 +13,26 @@ echo -e "Роутер: ${GREEN}$MODEL${NC}"
 echo -e "Архитектура: ${GREEN}$ARCH${NC} | ${GREEN}$TARGET${NC}"
 echo -e "OpenWrt: ${GREEN}$OWRT${NC}"
 echo -e "\n${GREEN}===== Пользовательские пакеты =====${NC}"
-
-# получаем список пакетов
 PKGS=$(awk '/^Package:/ {p=$2} /^Status: install user/ {print p}' /usr/lib/opkg/status | grep -v '^$')
-
-# считаем количество пакетов
 idx=0
 for pkg in $PKGS; do
-    idx=$((idx+1))
-    eval "pkg$idx='$pkg'"
+idx=$((idx+1))
+eval "pkg$idx='$pkg'"
 done
-
 total=$idx
 half=$(( (total + 1) / 2 ))
-
-# выводим в два столбца
 for i in $(seq 1 $half); do
-    eval "left=\$pkg$i"
-    right_idx=$((i + half))
-    eval "right=\$pkg$right_idx"
-    left_pad=$(printf "%-20s" "$left")
-    if [ -n "$right" ]; then
-        right_pad=$(printf "%-20s" "$right")
-        echo "$left_pad $right_pad"
-    else
-        echo "$left_pad"
-    fi
+eval "left=\$pkg$i"
+right_idx=$((i + half))
+eval "right=\$pkg$right_idx"
+left_pad=$(printf "%-20s" "$left")
+if [ -n "$right" ]; then
+right_pad=$(printf "%-20s" "$right")
+echo "$left_pad $right_pad"
+else
+echo "$left_pad"
+fi
 done
-
-
 echo -e "\n${GREEN}===== Flow Offloading =====${NC}"
 sw=$(uci -q get firewall.@defaults[0].flow_offloading)
 hw=$(uci -q get firewall.@defaults[0].flow_offloading_hw)
@@ -104,9 +95,9 @@ print
 }' "$CONF"
 }
 if [ -f /etc/init.d/zapret ]; then
-    zpr_info
+zpr_info
 else
-    echo -e "\n${RED}Zapret не установлен!${NC}\n"
+echo -e "\n${RED}Zapret не установлен!${NC}\n"
 fi
 echo -e "${GREEN}===== Доступность сайтов =====${NC}"
 SITES=$(cat <<'EOF'
