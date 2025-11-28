@@ -42,30 +42,48 @@ printf "API: "; curl -Is --connect-timeout 3 https://api.github.com >/dev/null 2
 
 echo -e "\n${GREEN}===== Настройки Zapret =====${NC}"
 zpr_info() {
+    # версия пакета
     INSTALLED_VER=$(opkg list-installed | awk '/^zapret /{print $3}')
+
+    # статус службы
     /etc/init.d/zapret status 2>/dev/null | grep -qi running && Z="${GREEN}запущен${NC}" || Z="${RED}остановлен${NC}"
 
+    # определяем скрипт
     SCRIPT="/opt/zapret/init.d/openwrt/custom.d/50-script.sh"
-    [ -f "$SCRIPT" ] && head -1 "$SCRIPT" | grep -qi quic && name="50-quic4all" \
-        || head -1 "$SCRIPT" | grep -qi stun && name="50-stun4all" \
-        || head -1 "$SCRIPT" | grep -qi "discord media" && name="50-discord-media" \
-        || head -1 "$SCRIPT" | grep -qi "discord subnets" && name="50-discord"
+    name=""
+    if [ -f "$SCRIPT" ]; then
+        line=$(head -1 "$SCRIPT")
+        case "$line" in
+            *quic*) name="50-quic4all" ;;
+            *stun*) name="50-stun4all" ;;
+            *"discord media"*) name="50-discord-media" ;;
+            *"discord subnets"*) name="50-discord" ;;
+        esac
+    fi
 
+    # TCP и UDP порты
     TCP_VAL=$(sed -n "s/.*NFQWS_PORTS_TCP'\(.*\)'.*/\1/p" "$CONF")
     UDP_VAL=$(sed -n "s/.*NFQWS_PORTS_UDP'\(.*\)'.*/\1/p" "$CONF")
 
+    # вывод основной информации
     echo -e "${GREEN}$INSTALLED_VER${NC} | $Z"
     [ -n "$name" ] && echo -e "${GREEN}$name${NC}"
     echo -e "TCP: ${GREEN}$TCP_VAL${NC} | UDP: ${GREEN}$UDP_VAL${NC}"
 
+    # стратегия
     echo -e "\n${GREEN}===== Стратегия =====${NC}"
-    awk '
-    /^[[:space:]]*option[[:space:]]+NFQWS_OPT/ {flag=1; sub(/.*'\''/, ""); next}
-    flag {print; if (/\'\'$/) exit}
-    ' "$CONF"
+    sed -n "/^[[:space:]]*option[[:space:]]\+NFQWS_OPT[[:space:]]*'/{
+        s/^[[:space:]]*option[[:space:]]\+NFQWS_OPT[[:space:]]*'//; 
+        :a; 
+        p; 
+        n; 
+        /'$/!ba
+    }" "$CONF" | sed "s/'\$//"
 }
 
+# вызов функции, если пакет установлен
 [ -f /etc/init.d/zapret ] && zpr_info || echo -e "${RED}Zapret не установлен!${NC}\n"
+
 
 echo -e "${GREEN}===== Доступность сайтов =====${NC}"
 SITES="
