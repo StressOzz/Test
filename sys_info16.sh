@@ -13,10 +13,26 @@ echo -e "Роутер: ${GREEN}$MODEL${NC}"
 echo -e "Архитектура: ${GREEN}$ARCH${NC} | ${GREEN}$TARGET${NC}"
 echo -e "OpenWrt: ${GREEN}$OWRT${NC}"
 echo -e "\n${GREEN}===== Пользовательские пакеты =====${NC}"
-awk '
-/^Package:/ { p=$2 }
-/^Status: install user/ { print p }
-' /usr/lib/opkg/status
+
+# получаем список пакетов
+PKGS=$(awk '/^Package:/ {p=$2} /^Status: install user/ {print p}' /usr/lib/opkg/status | grep -v '^$')
+
+# делим на два столбца
+left=""
+right=""
+count=0
+for pkg in $PKGS; do
+    count=$((count+1))
+    if [ $((count % 2)) -eq 1 ]; then
+        left="$left$pkg\n"
+    else
+        right="$right$pkg\n"
+    fi
+done
+
+# выводим построчно
+paste -d' ' <(echo -e "$left") <(echo -e "$right")
+
 echo -e "\n${GREEN}===== Flow Offloading =====${NC}"
 sw=$(uci -q get firewall.@defaults[0].flow_offloading)
 hw=$(uci -q get firewall.@defaults[0].flow_offloading_hw)
@@ -67,8 +83,7 @@ TCP_VAL=$(grep -E "^[[:space:]]*option NFQWS_PORTS_TCP[[:space:]]+'" "$CONF" \
 | sed "s/.*'\(.*\)'.*/\1/")
 UDP_VAL=$(grep -E "^[[:space:]]*option NFQWS_PORTS_UDP[[:space:]]+'" "$CONF" \
 | sed "s/.*'\(.*\)'.*/\1/")
-echo -e "Версия: ${GREEN}$INSTALLED_VER${NC}"
-echo -e "Статус: $ZAPRET_STATUS"
+echo -e "Версия: ${GREEN}$INSTALLED_VER${NC} | $ZAPRET_STATUS"
 echo -e "Скрипт: ${GREEN}$name${NC}"
 echo -e "Порты: TCP: ${GREEN}$TCP_VAL${NC} | UDP: ${GREEN}$UDP_VAL${NC}"
 echo -e "\n${GREEN}===== Стратегия=====${NC}"
