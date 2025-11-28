@@ -74,6 +74,7 @@ else
 ZAPRET_STATUS="${RED}остановлен${NC}"
 fi
 SCRIPT_FILE="/opt/zapret/init.d/openwrt/custom.d/50-script.sh"
+if [ -f "$SCRIPT_FILE" ]; then
 line=$(head -n1 "$SCRIPT_FILE")
 case "$line" in
 *QUIC*) name="50-quic4all" ;;
@@ -82,6 +83,8 @@ case "$line" in
 *"discord subnets"*) name="50-discord" ;;
 *) name="" ;;
 esac
+[ -n "$name" ] && echo -e "Скрипт: ${GREEN}$name${NC}"
+fi
 TCP_VAL=$(grep -E "^[[:space:]]*option NFQWS_PORTS_TCP[[:space:]]+'" "$CONF" \
 | sed "s/.*'\(.*\)'.*/\1/")
 UDP_VAL=$(grep -E "^[[:space:]]*option NFQWS_PORTS_UDP[[:space:]]+'" "$CONF" \
