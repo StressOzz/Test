@@ -129,51 +129,39 @@ play.google.com
 genderize.io
 "
 
-# конвертируем в одну строку
+# Конвертируем в строку
 sites_line=$(echo "$SITES")
-
-# количество сайтов
 total=$(echo $sites_line | wc -w)
 half=$(( (total+1)/2 ))
 
-# проверяем сайты параллельно
-check_site() {
-    site=$1
-    curl -Is --connect-timeout 3 --max-time 4 "https://$site" >/dev/null 2>&1 && echo "OK $site" || echo "FAIL $site"
-}
-
-# собираем результаты в переменные
+# Проверяем сайты параллельно и сохраняем статус в переменную
 results=""
 for site in $sites_line; do
-    check_site "$site" &
-done | while read line; do
-    results="$results
-$line"
+    (
+        curl -Is --connect-timeout 3 --max-time 4 "https://$site" >/dev/null 2>&1
+        if [ $? -eq 0 ]; then echo "OK $site"; else echo "FAIL $site"; fi
+    ) &
 done
-
 wait
 
-# выводим в две колонки
+# Собираем статусы в переменную
+results=$(for site in $sites_line; do
+    curl -Is --connect-timeout 3 --max-time 4 "https://$site" >/dev/null 2>&1 && echo "OK $site" || echo "FAIL $site"
+done)
+
+# Выводим в две колонки
 n=0
 for site in $sites_line; do
     n=$((n+1))
-    # ищем результат
-    for r in $results; do
-        echo "$r" | grep -q " $site$" && status=$r
-    done
-
-    res=$(echo $status | cut -d' ' -f1)
-    [ "$res" = "OK" ] && L_COLOR="[${GREEN}OK${NC}]" || L_COLOR="[${RED}FAIL${NC}]"
+    status=$(echo "$results" | grep " $site\$" | awk '{print $1}')
+    [ "$status" = "OK" ] && L_COLOR="[${GREEN}OK${NC}]" || L_COLOR="[${RED}FAIL${NC}]"
     L_PAD=$(printf "%-25s" "$site")
 
     R_IDX=$((n+half))
     if [ $R_IDX -le $total ]; then
         rsite=$(echo $sites_line | cut -d' ' -f$R_IDX)
-        for r in $results; do
-            echo "$r" | grep -q " $rsite$" && rstatus=$r
-        done
-        rres=$(echo $rstatus | cut -d' ' -f1)
-        [ "$rres" = "OK" ] && R_COLOR="[${GREEN}OK${NC}]" || R_COLOR="[${RED}FAIL${NC}]"
+        rstatus=$(echo "$results" | grep " $rsite\$" | awk '{print $1}')
+        [ "$rstatus" = "OK" ] && R_COLOR="[${GREEN}OK${NC}]" || R_COLOR="[${RED}FAIL${NC}]"
         R_PAD=$(printf "%-25s" "$rsite")
         echo -e "$L_COLOR  $L_PAD $R_COLOR  $R_PAD"
     else
