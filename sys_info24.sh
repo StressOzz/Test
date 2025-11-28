@@ -74,7 +74,6 @@ else
 ZAPRET_STATUS="${RED}остановлен${NC}"
 fi
 SCRIPT_FILE="/opt/zapret/init.d/openwrt/custom.d/50-script.sh"
-[ -f "$SCRIPT_FILE" ] || return
 line=$(head -n1 "$SCRIPT_FILE")
 case "$line" in
 *QUIC*) name="50-quic4all" ;;
