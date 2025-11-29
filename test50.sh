@@ -13,8 +13,7 @@ CUSTOM_DIR="/opt/zapret/init.d/openwrt/custom.d/"
 # Проверяем наличие byedpi, youtubeUnblock, Flow Offloading
 # ==========================================
 if opkg list-installed | grep -q "byedpi"; then
-clear
-echo -e "${RED}Найден установленный ${NC}ByeDPI${RED}!${NC}\n"
+clear && echo -e "${RED}Найден установленный ${NC}ByeDPI${RED}!${NC}\n"
 echo -e "${NC}Zapret${RED} не может работать совместно с ${NC}ByeDPI${RED}!${NC}\n"
 read -p $'\033[1;32mУдалить \033[0mByeDPI\033[1;32m ?\033[0m [y/N] ' answer
 case "$answer" in
@@ -23,8 +22,7 @@ case "$answer" in
 esac
 fi
 if opkg list-installed | grep -q "youtubeUnblock"; then
-clear
-echo -e "${RED}Найден установленный ${NC}youtubeUnblock${RED}!${NC}\n"
+clear && echo -e "${RED}Найден установленный ${NC}youtubeUnblock${RED}!${NC}\n"
 echo -e "${NC}Zapret${RED} не может работать совместно с ${NC}youtubeUnblock${RED}!${NC}\n"
 read -p $'\033[1;32mУдалить \033[0myoutubeUnblock\033[1;32m ?\033[0m [y/N] ' answer
 case "$answer" in
@@ -36,8 +34,7 @@ FLOW_STATE=$(uci get firewall.@defaults[0].flow_offloading 2>/dev/null)
 HW_FLOW_STATE=$(uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null)
 if [ "$FLOW_STATE" = "1" ] || [ "$HW_FLOW_STATE" = "1" ]; then
 if ! grep -q 'meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc; then
-clear
-echo -e "${RED}Включён ${NC}Flow Offloading ${RED}!${NC}\n"
+clear && echo -e "${RED}Включён ${NC}Flow Offloading ${RED}!${NC}\n"
 echo -e "${NC}Zapret${RED} не может работать с включённым ${NC}Flow Offloading${RED}!\n"
 echo -e "${CYAN}1) ${GREEN}Отключить ${NC}Flow Offloading"
 echo -e "${CYAN}2) ${GREEN}Применить фикс для работы ${NC}Zapret${GREEN} с включённым ${NC}Flow Offloading"
@@ -153,8 +150,7 @@ esac
 enable_discord_calls() {
 local NO_PAUSE=$1
 [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; return; }
-[ "$NO_PAUSE" != "1" ] && clear
-[ "$NO_PAUSE" != "1" ] && echo -e "${MAGENTA}Меню установки скриптов${NC}"
+[ "$NO_PAUSE" != "1" ] && clear && echo -e "${MAGENTA}Меню установки скриптов${NC}"
 [ "$NO_PAUSE" = "1" ] && echo -e "${MAGENTA}Устанавливаем скрипт${NC}"
 [ "$NO_PAUSE" != "1" ] && show_script_50 && [ -n "$name" ] && echo -e "\n${YELLOW}Установлен скрипт:${NC} $name"
 if [ "$NO_PAUSE" = "1" ]; then
@@ -261,8 +257,7 @@ echo -e "\n${BLUE}🔴 ${GREEN}Игровые настройки добавле�
 # Zapret под ключ
 # ==========================================
 zapret_key(){
-clear
-echo -e "${MAGENTA}Удаление, установка и настройка Zapret${NC}\n"
+clear && echo -e "${MAGENTA}Удаление, установка и настройка Zapret${NC}\n"
 get_versions; uninstall_zapret "1"; install_Zapret "1"
 [ ! -f /etc/init.d/zapret ] && return
 wget -qO- "https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Str${STR_VERSION_AUTOINSTALL}.sh" | sh
@@ -359,9 +354,8 @@ ver="дефолтная"
 fi
 }
 menu_str() {
-clear
 [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; return; }
-echo -e "${MAGENTA}Меню выбора стратегии${NC}"
+clear && echo -e "${MAGENTA}Меню выбора стратегии${NC}"
 show_current_strategy && [ -n "$ver" ] && echo -e "\n${YELLOW}Используется стратегия:${NC} $ver"
 echo -e "\n${CYAN}1) ${GREEN}Установить стратегию${NC} v1"
 echo -e "${CYAN}2) ${GREEN}Установить стратегию${NC} v2"
