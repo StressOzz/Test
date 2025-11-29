@@ -167,7 +167,7 @@ esac
 enable_discord_calls() {
 local NO_PAUSE=$1
 [ "$NO_PAUSE" != "1" ] && clear
-[ "$NO_PAUSE" != "1" ] && echo -e "${MAGENTA}Меню настройки Discord и звонков в TG/WA${NC}"
+[ "$NO_PAUSE" != "1" ] && echo -e "${MAGENTA}Меню установки скриптов${NC}"
 [ "$NO_PAUSE" = "1" ] && echo -e "${MAGENTA}Включаем Discord и звонки в TG и WA${NC}\n"
 if [ ! -f /etc/init.d/zapret ]; then
 echo -e "\n${RED}Zapret не установлен!${NC}\n"
@@ -179,10 +179,10 @@ if [ "$NO_PAUSE" = "1" ]; then
 SELECTED="50-stun4all"
 URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-stun4all"
 else
-echo -e "\n${CYAN}1) ${GREEN}Установить скрипт ${NC}50-stun4all ${GREEN}для${NC} Discord ${GREEN}и${NC} звонков"
-echo -e "${CYAN}2) ${GREEN}Установить скрипт ${NC}50-quic4all ${GREEN}для${NC} Discord ${GREEN}и${NC} звонков"
-echo -e "${CYAN}3) ${GREEN}Установить скрипт ${NC}50-discord-media ${GREEN}для${NC} Discord"
-echo -e "${CYAN}4) ${GREEN}Установить скрипт ${NC}50-discord ${GREEN}для${NC} Discord"
+echo -e "\n${CYAN}1) ${GREEN}Установить скрипт ${NC}50-stun4all"
+echo -e "${CYAN}2) ${GREEN}Установить скрипт ${NC}50-quic4all"
+echo -e "${CYAN}3) ${GREEN}Установить скрипт ${NC}50-discord-media"
+echo -e "${CYAN}4) ${GREEN}Установить скрипт ${NC}50-discord"
 echo -e "${CYAN}5) ${GREEN}Удалить скрипт${NC}"
 echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n"
 echo -ne "${YELLOW}Выберите пункт:${NC} "
@@ -207,15 +207,8 @@ return ;;
 esac
 fi
 if wget -qO "$CUSTOM_DIR/50-script.sh" "$URL"; then
-[ "$NO_PAUSE" != "1" ] && 
-echo -e "\n${GREEN}🔴 ${CYAN}Скрипт ${NC}$SELECTED${CYAN} успешно установлен!${NC}\n"
-if [ "$SELECTED" = "50-quic4all" ] || [ "$SELECTED" = "50-stun4all" ]; then
-echo -e "${BLUE}🔴 ${GREEN}Звонки и Discord включены!${NC}\n"
-elif [ "$SELECTED" = "50-discord-media" ] || [ "$SELECTED" = "50-discord" ]; then
-echo -e "${BLUE}🔴 ${GREEN}Discord включён!${NC}\n"
-else
-echo -e "${BLUE}🔴 ${GREEN}Скрипт активирован!${NC}\n"
-fi
+[ "$NO_PAUSE" != "1" ] && \
+echo -e "\n${GREEN}🔴 ${CYAN}Скрипт успешно установлен!${NC}\n"
 else
 echo -e "${RED}Ошибка при скачивании скрипта!${NC}\n"
 [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
@@ -461,7 +454,7 @@ echo -e "${CYAN}3) ${GREEN}Вернуть настройки по умолчан
 echo -e "${CYAN}4) ${GREEN}Остановить / Запустить ${NC}Zapret"
 echo -e "${CYAN}5) ${GREEN}Удалить ${NC}Zapret"
 echo -e "${CYAN}6) ${GREEN}Добавить / Удалить стратегию для игр"
-echo -e "${CYAN}7) ${GREEN}Меню настройки ${NC}Discord${GREEN} и звонков в ${NC}TG${GREEN}/${NC}WA"
+echo -e "${CYAN}7) ${GREEN}Меню установки скриптов${NC}"
 echo -e "${CYAN}8) ${GREEN}Удалить / Установить / Настроить${NC} Zapret"
 echo -e "${CYAN}9) ${GREEN}Системная информация${NC}"
 echo -e "${CYAN}Enter) ${GREEN}Выход${NC}\n"
