@@ -190,7 +190,7 @@ return ;;
 esac
 fi
 if wget -qO "$CUSTOM_DIR/50-script.sh" "$URL"; then
-[ "$NO_PAUSE" != "1" ] && \
+[ "$NO_PAUSE" != "1" ] &&
 echo -e "\n${GREEN}🔴 ${CYAN}Скрипт успешно установлен!${NC}\n"
 else
 echo -e "${RED}Ошибка при скачивании скрипта!${NC}\n"
@@ -268,7 +268,6 @@ clear
 echo -e "${MAGENTA}Удаление, установка и настройка Zapret${NC}\n"
 get_versions; uninstall_zapret "1"; install_Zapret "1"
 [ ! -f /etc/init.d/zapret ] && return
-echo -e "${MAGENTA}Останавливаем Zapret${NC}\n" && /etc/init.d/zapret stop >/dev/null 2>&1 && echo -e "${BLUE}🔴 ${GREEN}Zapret остановлен!${NC}\n"
 wget -qO- "https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Str${STR_VERSION_AUTOINSTALL}.sh" | sh
 if ! grep -q "#v" "$CONF"; then
 echo -e "\n${RED}Cтратегия не установлена!${NC}\n"
