@@ -19,7 +19,6 @@ CUSTOM_DIR="/opt/zapret/init.d/openwrt/custom.d/"
 # Получение версии и подготовка установки Zapret
 # ==========================================
 get_versions() {
-
 if opkg list-installed | grep -q "byedpi"; then
 clear
 echo -e "${RED}Найден установленный ${NC}ByeDPI${RED}!${NC}\n"
@@ -68,90 +67,75 @@ exit 1 ;;
 esac
 fi
 fi
-    LOCAL_ARCH=$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release)
-    [ -z "$LOCAL_ARCH" ] && LOCAL_ARCH=$(opkg print-architecture | grep -v "noarch" | sort -k3 -n | tail -n1 | awk '{print $2}')
-
-    USED_ARCH="$LOCAL_ARCH"
-    LATEST_URL="https://github.com/remittor/zapret-openwrt/releases/download/v${ZAPRET_VERSION}/zapret_v${ZAPRET_VERSION}_${LOCAL_ARCH}.zip"
-    INSTALLED_VER=$(opkg list-installed | grep '^zapret ' | awk '{print $3}')
-    [ -z "$INSTALLED_VER" ] && INSTALLED_VER="не найдена"
-
-    if [ -f /etc/init.d/zapret ]; then
-        if /etc/init.d/zapret status 2>/dev/null | grep -qi "running"; then
-            ZAPRET_STATUS="${GREEN}запущен${NC}"
-        else
-            ZAPRET_STATUS="${RED}остановлен${NC}"
-        fi
-    else
-        ZAPRET_STATUS=""
-    fi
-
-    if [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ]; then
-        INST_COLOR=$GREEN
-        INSTALLED_DISPLAY="$INSTALLED_VER"
-    elif [ "$INSTALLED_VER" != "не найдена" ]; then
-        INST_COLOR=$RED
-        INSTALLED_DISPLAY="$INSTALLED_VER (устарела)"
-    else
-        INST_COLOR=$RED
-        INSTALLED_DISPLAY="$INSTALLED_VER"
-    fi
+LOCAL_ARCH=$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release)
+[ -z "$LOCAL_ARCH" ] && LOCAL_ARCH=$(opkg print-architecture | grep -v "noarch" | sort -k3 -n | tail -n1 | awk '{print $2}')
+USED_ARCH="$LOCAL_ARCH"
+LATEST_URL="https://github.com/remittor/zapret-openwrt/releases/download/v${ZAPRET_VERSION}/zapret_v${ZAPRET_VERSION}_${LOCAL_ARCH}.zip"
+INSTALLED_VER=$(opkg list-installed | grep '^zapret ' | awk '{print $3}')
+[ -z "$INSTALLED_VER" ] && INSTALLED_VER="не найдена"
+if [ -f /etc/init.d/zapret ]; then
+if /etc/init.d/zapret status 2>/dev/null | grep -qi "running"; then
+ZAPRET_STATUS="${GREEN}запущен${NC}"
+else
+ZAPRET_STATUS="${RED}остановлен${NC}"
+fi
+else
+ZAPRET_STATUS=""
+fi
+if [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ]; then
+INST_COLOR=$GREEN
+INSTALLED_DISPLAY="$INSTALLED_VER"
+elif [ "$INSTALLED_VER" != "не найдена" ]; then
+INST_COLOR=$RED
+INSTALLED_DISPLAY="$INSTALLED_VER (устарела)"
+else
+INST_COLOR=$RED
+INSTALLED_DISPLAY="$INSTALLED_VER"
+fi
 }
-
 # ==========================================
 # Установка Zapret (без авто-поиска версии)
 # ==========================================
 install_Zapret() {
 local NO_PAUSE=$1
 [ "$NO_PAUSE" != "1" ] && clear
-    echo -e "${MAGENTA}Устанавливаем ZAPRET${NC}\n"
-
-    get_versions
-    if [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ]; then
-        echo -e "${BLUE}🔴 ${GREEN}Последняя версия уже установлена!${NC}\n"
-        read -p "Нажмите Enter для выхода..." dummy
-        return
-    fi
-
-    WORKDIR="/tmp/zapret"
-    mkdir -p "$WORKDIR"
-    rm -f "$WORKDIR"/* 2>/dev/null
-    cd "$WORKDIR" || return
-
-    FILE_NAME=$(basename "$LATEST_URL")
-    echo -e "${GREEN}🔴 ${CYAN}Скачиваем архив ${NC}$FILE_NAME"
-    wget -q "$LATEST_URL" -O "$FILE_NAME" || {
-        echo -e "${RED}Не удалось скачать ${NC}$FILE_NAME\n"
-        read -p "Нажмите Enter для выхода..." dummy
-        return
-    }
-
-    echo -e "${GREEN}🔴 ${CYAN}Распаковываем архив${NC}"
-    unzip -o "$FILE_NAME" >/dev/null
-
-    for PKG in zapret_*.ipk luci-app-zapret_*.ipk; do
-        [ -f "$PKG" ] && {
-            echo -e "${GREEN}🔴 ${CYAN}Устанавливаем пакет ${NC}$PKG"
-            opkg install --force-reinstall "$PKG" >/dev/null 2>&1
-        }
-    done
-
-    echo -e "${GREEN}🔴 ${CYAN}Удаляем временные файлы${NC}"
-    cd /
-    rm -rf "$WORKDIR" /tmp/*.ipk /tmp/*.zip /tmp/*zapret* 2>/dev/null
-
-    if [ -f /etc/init.d/zapret ]; then
-        echo -e "\n${BLUE}🔴 ${GREEN}Zapret установлен!${NC}\n"
-        [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода..." dummy
-    else
-        echo -e "\n${RED}Zapret не был установлен!${NC}\n"
-        read -p "Нажмите Enter для выхода..." dummy
-    fi
+echo -e "${MAGENTA}Устанавливаем ZAPRET${NC}\n"
+get_versions
+if [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ]; then
+echo -e "${BLUE}🔴 ${GREEN}Последняя версия уже установлена!${NC}\n"
+read -p "Нажмите Enter для выхода..." dummy
+return
+fi
+WORKDIR="/tmp/zapret"
+mkdir -p "$WORKDIR"
+rm -f "$WORKDIR"/* 2>/dev/null
+cd "$WORKDIR" || return
+FILE_NAME=$(basename "$LATEST_URL")
+echo -e "${GREEN}🔴 ${CYAN}Скачиваем архив ${NC}$FILE_NAME"
+wget -q "$LATEST_URL" -O "$FILE_NAME" || {
+echo -e "${RED}Не удалось скачать ${NC}$FILE_NAME\n"
+read -p "Нажмите Enter для выхода..." dummy
+return
 }
-
-
-
-
+echo -e "${GREEN}🔴 ${CYAN}Распаковываем архив${NC}"
+unzip -o "$FILE_NAME" >/dev/null
+for PKG in zapret_*.ipk luci-app-zapret_*.ipk; do
+[ -f "$PKG" ] && {
+echo -e "${GREEN}🔴 ${CYAN}Устанавливаем пакет ${NC}$PKG"
+opkg install --force-reinstall "$PKG" >/dev/null 2>&1
+}
+done
+echo -e "${GREEN}🔴 ${CYAN}Удаляем временные файлы${NC}"
+cd /
+rm -rf "$WORKDIR" /tmp/*.ipk /tmp/*.zip /tmp/*zapret* 2>/dev/null
+if [ -f /etc/init.d/zapret ]; then
+echo -e "\n${BLUE}🔴 ${GREEN}Zapret установлен!${NC}\n"
+[ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода..." dummy
+else
+echo -e "\n${RED}Zapret не был установлен!${NC}\n"
+read -p "Нажмите Enter для выхода..." dummy
+fi
+}
 # ==========================================
 # Включение Discord и звонков в TG и WA
 # ==========================================
