@@ -15,8 +15,9 @@ DGRAY="\033[38;5;236m"
 WORKDIR="/tmp/zapret-update"
 CONF="/etc/config/zapret"
 CUSTOM_DIR="/opt/zapret/init.d/openwrt/custom.d/"
-
-
+# ==========================================
+# Проверяем наличие byedpi, youtubeUnblock, Flow Offloading
+# ==========================================
 if opkg list-installed | grep -q "byedpi"; then
 clear
 echo -e "${RED}Найден установленный ${NC}ByeDPI${RED}!${NC}\n"
@@ -65,8 +66,6 @@ exit 1 ;;
 esac
 fi
 fi
-
-
 # ==========================================
 # Получение версии и подготовка установки Zapret
 # ==========================================
