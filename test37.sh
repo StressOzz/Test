@@ -98,17 +98,19 @@ read -p "Нажмите Enter для выхода..." dummy
 return
 fi
 if [ -f /etc/init.d/zapret ]; then
-echo -e "${GREEN}🔴 ${CYAN}Останавливаем ${NC}zapret"
-/etc/init.d/zapret stop >/dev/null 2>&1; pkill -f /opt/zapret >/dev/null 2>&1
+echo -e "${GREEN}🔴 ${CYAN}Останавливаем ${NC}zapret" && /etc/init.d/zapret stop >/dev/null 2>&1
+PIDS=$(pgrep -f /opt/zapret)
+[ -n "$PIDS" ] && for pid in $PIDS; do kill -9 "$pid" >/dev/null 2>&1; done
+fi
 echo -e "${GREEN}🔴 ${CYAN}Обновляем список пакетов${NC}"
-opkg update >/dev/null 2>&1 || {
-echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; sleep 7; return; }
-mkdir -p "$WORKDIR" && rm -f "$WORKDIR"/* 2>/dev/null && cd "$WORKDIR" || return
+opkg update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; sleep 7; return; }
+mkdir -p "$WORKDIR"
+rm -f "$WORKDIR"/* 2>/dev/null
+cd "$WORKDIR" || return
 FILE_NAME=$(basename "$LATEST_URL")
 if ! command -v unzip >/dev/null 2>&1; then
 echo -e "${GREEN}🔴 ${CYAN}Устанавливаем ${NC}unzip"
-opkg install unzip >/dev/null 2>&1 || {
-echo -e "\n${RED}Не удалось установить unzip!${NC}\n"; sleep 7; return; }
+opkg install unzip >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить unzip!${NC}\n"; sleep 7; return; }
 fi
 echo -e "${GREEN}🔴 ${CYAN}Скачиваем архив ${NC}$FILE_NAME"
 wget -q "$LATEST_URL" -O "$FILE_NAME" || {
@@ -120,10 +122,13 @@ echo -e "${GREEN}🔴 ${CYAN}Распаковываем архив${NC}"
 unzip -o "$FILE_NAME" >/dev/null
 for PKG in zapret_*.ipk luci-app-zapret_*.ipk; do
 [ -f "$PKG" ] && {
-echo -e "${GREEN}🔴 ${CYAN}Устанавливаем пакет ${NC}$PKG"; opkg install --force-reinstall "$PKG" >/dev/null 2>&1; }
+echo -e "${GREEN}🔴 ${CYAN}Устанавливаем пакет ${NC}$PKG"
+opkg install --force-reinstall "$PKG" >/dev/null 2>&1
+}
 done
 echo -e "${GREEN}🔴 ${CYAN}Удаляем временные файлы${NC}"
-cd / && rm -rf "$WORKDIR" /tmp/*.ipk /tmp/*.zip /tmp/*zapret* 2>/dev/null
+cd /
+rm -rf "$WORKDIR" /tmp/*.ipk /tmp/*.zip /tmp/*zapret* 2>/dev/null
 if [ -f /etc/init.d/zapret ]; then
 echo -e "\n${BLUE}🔴 ${GREEN}Zapret установлен!${NC}\n"
 [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода..." dummy
