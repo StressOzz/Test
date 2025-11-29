@@ -15,10 +15,8 @@ DGRAY="\033[38;5;236m"
 WORKDIR="/tmp/zapret-update"
 CONF="/etc/config/zapret"
 CUSTOM_DIR="/opt/zapret/init.d/openwrt/custom.d/"
-# ==========================================
-# Получение версии и подготовка установки Zapret
-# ==========================================
-get_versions() {
+
+
 if opkg list-installed | grep -q "byedpi"; then
 clear
 echo -e "${RED}Найден установленный ${NC}ByeDPI${RED}!${NC}\n"
@@ -67,6 +65,12 @@ exit 1 ;;
 esac
 fi
 fi
+
+
+# ==========================================
+# Получение версии и подготовка установки Zapret
+# ==========================================
+get_versions() {
 LOCAL_ARCH=$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release)
 [ -z "$LOCAL_ARCH" ] && LOCAL_ARCH=$(opkg print-architecture | grep -v "noarch" | sort -k3 -n | tail -n1 | awk '{print $2}')
 USED_ARCH="$LOCAL_ARCH"
@@ -106,14 +110,19 @@ echo -e "${BLUE}🔴 ${GREEN}Последняя версия уже устано
 read -p "Нажмите Enter для выхода..." dummy
 return
 fi
-WORKDIR="/tmp/zapret"
+if [ -f /etc/init.d/zapret ]; then
+echo -e "${GREEN}🔴 ${CYAN}Останавливаем ${NC}zapret" && /etc/init.d/zapret stop >/dev/null 2>&1
+PIDS=$(pgrep -f /opt/zapret)
+[ -n "$PIDS" ] && for pid in $PIDS; do kill -9 "$pid" >/dev/null 2>&1; done
+fi
+echo -e "${GREEN}🔴 ${CYAN}Обновляем список пакетов${NC}"
+opkg update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; sleep 7; return; }
 mkdir -p "$WORKDIR"
 rm -f "$WORKDIR"/* 2>/dev/null
 cd "$WORKDIR" || return
 FILE_NAME=$(basename "$LATEST_URL")
 if ! command -v unzip >/dev/null 2>&1; then
 echo -e "${GREEN}🔴 ${CYAN}Устанавливаем ${NC}unzip"
-opkg update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка обновления пакетов!${NC}\n"; sleep 7; return; }
 opkg install unzip >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить unzip!${NC}\n"; sleep 7; return; }
 fi
 echo -e "${GREEN}🔴 ${CYAN}Скачиваем архив ${NC}$FILE_NAME"
