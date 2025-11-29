@@ -2,7 +2,7 @@
 # ==========================================
 # Zapret on remittor Manager by StressOzz
 # ==========================================
-ZAPRET_MANAGER_VERSION="6.8"
+ZAPRET_MANAGER_VERSION="6.9"
 ZAPRET_VERSION="72.20251122"
 GREEN="\033[1;32m"
 RED="\033[1;31m"
@@ -111,6 +111,11 @@ mkdir -p "$WORKDIR"
 rm -f "$WORKDIR"/* 2>/dev/null
 cd "$WORKDIR" || return
 FILE_NAME=$(basename "$LATEST_URL")
+if ! command -v unzip >/dev/null 2>&1; then
+echo -e "${GREEN}🔴 ${CYAN}Устанавливаем ${NC}unzip"
+opkg update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка обновления пакетов!${NC}\n"; sleep 7; return; }
+opkg install unzip >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить unzip!${NC}\n"; sleep 7; return; }
+fi
 echo -e "${GREEN}🔴 ${CYAN}Скачиваем архив ${NC}$FILE_NAME"
 wget -q "$LATEST_URL" -O "$FILE_NAME" || {
 echo -e "${RED}Не удалось скачать ${NC}$FILE_NAME\n"
