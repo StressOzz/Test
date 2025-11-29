@@ -151,7 +151,7 @@ enable_discord_calls() {
 local NO_PAUSE=$1
 [ "$NO_PAUSE" != "1" ] && clear
 [ "$NO_PAUSE" != "1" ] && echo -e "${MAGENTA}Меню установки скриптов${NC}"
-[ "$NO_PAUSE" = "1" ] && echo -e "${MAGENTA}Включаем Discord и звонки в TG и WA${NC}\n"
+[ "$NO_PAUSE" = "1" ] && echo -e "${MAGENTA}Устанавливаем скрипт${NC}\n"
 if [ ! -f /etc/init.d/zapret ]; then
 echo -e "\n${RED}Zapret не установлен!${NC}\n"
 [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
@@ -270,17 +270,12 @@ get_versions; uninstall_zapret "1"; install_Zapret "1"
 [ ! -f /etc/init.d/zapret ] && return
 echo -e "${MAGENTA}Останавливаем Zapret${NC}\n" && /etc/init.d/zapret stop >/dev/null 2>&1 && echo -e "${BLUE}🔴 ${GREEN}Zapret остановлен!${NC}\n"
 wget -qO- "https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Str${STR_VERSION_AUTOINSTALL}.sh" | sh
-if [ ! -f "$CONF" ]; then
-echo -e "\n${RED}Файл ${NC}$CONF${RED} не найден!${NC}\n"
-read -p "Нажмите Enter для выхода в главное меню..." dummy
-return
-fi
 if ! grep -q "#v" "$CONF"; then
 echo -e "\n${RED}Cтратегия не установлена!${NC}\n"
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 return
 fi
-enable_discord_calls "1" && fix_GAME "1"
+enable_discord_calls "1"; fix_GAME "1"
 echo -e "${BLUE}🔴 ${GREEN}Zapret установлен и настроен!${NC}\n"
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
@@ -314,10 +309,10 @@ read -p "Нажмите Enter для выхода в главное меню..."
 # Остановить Zapret
 # ==========================================
 stop_zapret() {
-echo -e "\n${GREEN}🔴 ${CYAN}Останавливаем ${NC}Zapret"
+echo -e "\n${GREEN}🔴 ${CYAN}Останавливаем ${NC}Zapret\n"
 if [ -f /etc/init.d/zapret ]; then
 /etc/init.d/zapret stop >/dev/null 2>&1; pkill -f /opt/zapret >/dev/null 2>&1
-echo -e "\n${BLUE}🔴 ${GREEN}Zapret остановлен!${NC}\n"
+echo -e "${BLUE}🔴 ${GREEN}Zapret остановлен!${NC}\n"
 else
 echo -e "${RED}Zapret не установлен!${NC}\n"
 fi
@@ -327,11 +322,11 @@ read -p "Нажмите Enter для выхода в главное меню..."
 # Запустить Zapret
 # ==========================================
 start_zapret() {
-echo -e "\n${GREEN}🔴 ${CYAN}Запускаем ${NC}Zapret"
+echo -e "\n${GREEN}🔴 ${CYAN}Запускаем ${NC}Zapret\n"
 if [ -f /etc/init.d/zapret ]; then
 /etc/init.d/zapret start >/dev/null 2>&1
 chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart >/dev/null 2>&1
-echo -e "\n${BLUE}🔴 ${GREEN}Zapret запущен!${NC}\n"
+echo -e "${BLUE}🔴 ${GREEN}Zapret запущен!${NC}\n"
 else
 echo -e "${RED}Zapret не установлен!${NC}\n"
 fi
