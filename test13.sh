@@ -204,8 +204,7 @@ sed -i ':a;N;$!ba;s|--new\n--filter-udp=50000-50099\n--filter-l7=discord,stun\n-
 chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart >/dev/null 2>&1
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 return ;;
-*) echo -e "\nВыходим в главное меню..."
-return ;;
+*) return ;;
 esac
 fi
 if wget -qO "$CUSTOM_DIR/50-script.sh" "$URL"; then
@@ -445,8 +444,7 @@ read -p "Нажмите Enter для выхода в главное меню..."
 4) clear && wget -qO- https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Str4.sh | sh
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 ;;
-*) echo -e "\nВыходим в главное меню..."
-return ;;
+*) return ;;
 esac
 }
 # ==========================================
