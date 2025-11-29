@@ -330,7 +330,7 @@ read -p "Нажмите Enter для выхода в главное меню..."
 # ==========================================
 uninstall_zapret() {
 local NO_PAUSE=$1
-[ "$NO_PAUSE" = "1" ] echo -e "${MAGENTA}Удаляем ZAPRET${NC}"
+[ "$NO_PAUSE" = "1" ] && echo -e "${MAGENTA}Удаляем ZAPRET${NC}"
 echo -e "\n${GREEN}🔴 ${CYAN}Останавливаем ${NC}zapret" && echo -e "${GREEN}🔴 ${CYAN}Убиваем процессы${NC}"
 /etc/init.d/zapret stop >/dev/null 2>&1; pkill -f /opt/zapret >/dev/null 2>&1
 echo -e "${GREEN}🔴 ${CYAN}Удаляем пакеты${NC}"
