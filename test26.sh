@@ -316,7 +316,7 @@ read -p "Нажмите Enter для выхода в главное меню..."
 stop_zapret() {
 echo -e "\n${GREEN}🔴 ${CYAN}Останавливаем ${NC}Zapret"
 if [ -f /etc/init.d/zapret ]; then
-/etc/init.d/zapret stop >/dev/null 2>&1 && pkill -f /opt/zapret >/dev/null 2>&1
+/etc/init.d/zapret stop >/dev/null 2>&1; pkill -f /opt/zapret >/dev/null 2>&1
 echo -e "${BLUE}🔴 ${GREEN}Zapret остановлен!${NC}\n"
 else
 echo -e "${RED}Zapret не установлен!${NC}\n"
@@ -327,7 +327,6 @@ read -p "Нажмите Enter для выхода в главное меню..."
 # Запустить Zapret
 # ==========================================
 start_zapret() {
-clear
 echo -e "\n${GREEN}🔴 ${CYAN}Запускаем ${NC}Zapret"
 if [ -f /etc/init.d/zapret ]; then
 /etc/init.d/zapret start >/dev/null 2>&1
@@ -437,7 +436,7 @@ case "$choice" in
 1) install_Zapret ;;
 2) menu_str ;;
 3) comeback_def ;;
-4) clear; pgrep -f /opt/zapret >/dev/null 2>&1 && stop_zapret || start_zapret ;;
+4) pgrep -f /opt/zapret >/dev/null 2>&1 && stop_zapret || start_zapret ;;
 5) uninstall_zapret;;
 6) fix_GAME  ;;
 7) enable_discord_calls ;;
