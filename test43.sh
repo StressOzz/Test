@@ -89,14 +89,14 @@ fi
 # ==========================================
 install_Zapret() {
 local NO_PAUSE=$1
+if [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ]; then
+echo -e "\n${BLUE}🔴 ${GREEN}Последняя версия уже установлена!${NC}\n"
+read -p "Нажмите Enter для выхода в главное меню..." dummy
+return
+fi
 [ "$NO_PAUSE" != "1" ] && clear
 echo -e "${MAGENTA}Устанавливаем ZAPRET${NC}\n"
 get_versions
-if [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ]; then
-echo -e "${BLUE}🔴 ${GREEN}Последняя версия уже установлена!${NC}\n"
-read -p "Нажмите Enter для выхода..." dummy
-return
-fi
 if [ -f /etc/init.d/zapret ]; then
 echo -e "${GREEN}🔴 ${CYAN}Останавливаем ${NC}zapret"
 /etc/init.d/zapret stop >/dev/null 2>&1; pkill -f /opt/zapret >/dev/null 2>&1
@@ -114,7 +114,7 @@ fi
 echo -e "${GREEN}🔴 ${CYAN}Скачиваем архив ${NC}$FILE_NAME"
 wget -q "$LATEST_URL" -O "$FILE_NAME" || {
 echo -e "${RED}Не удалось скачать ${NC}$FILE_NAME\n"
-read -p "Нажмите Enter для выхода..." dummy
+read -p "Нажмите Enter для выхода в главное меню..." dummy
 return
 }
 echo -e "${GREEN}🔴 ${CYAN}Распаковываем архив${NC}"
@@ -130,10 +130,10 @@ cd /
 rm -rf "$WORKDIR" /tmp/*.ipk /tmp/*.zip /tmp/*zapret* 2>/dev/null
 if [ -f /etc/init.d/zapret ]; then
 echo -e "\n${BLUE}🔴 ${GREEN}Zapret установлен!${NC}\n"
-[ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода..." dummy
+[ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 else
 echo -e "\n${RED}Zapret не был установлен!${NC}\n"
-read -p "Нажмите Enter для выхода..." dummy
+read -p "Нажмите Enter для выхода в главное меню..." dummy
 fi
 }
 # ==========================================
