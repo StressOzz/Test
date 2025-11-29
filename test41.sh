@@ -224,10 +224,9 @@ chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d
 # ==========================================
 fix_GAME() {
 local NO_PAUSE=$1
-[ "$NO_PAUSE" != "1" ] && clear
-echo -e "${MAGENTA}Настраиваем стратегию для игр${NC}\n"
+[ "$NO_PAUSE" = "1" ] && echo -e "${MAGENTA}Настраиваем стратегию для игр${NC}\n"
 if [ ! -f /etc/init.d/zapret ]; then
-[ "$NO_PAUSE" != "1" ] && echo -e "${RED}Zapret не установлен!${NC}\n"
+[ "$NO_PAUSE" != "1" ] && echo -e "\n${RED}Zapret не установлен!${NC}\n"
 [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 return
 fi
@@ -311,11 +310,10 @@ read -p "Нажмите Enter для выхода в главное меню..."
 # Остановить Zapret
 # ==========================================
 stop_zapret() {
-[ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter для выхода..." dummy; return; }
-echo -e "\n${GREEN}🔴 ${CYAN}Останавливаем ${NC}Zapret"
+echo -e "\n${GREEN}🔴 ${CYAN}Останавливаем ${NC}Zapret\n"
 /etc/init.d/zapret stop >/dev/null 2>&1; pkill -f /opt/zapret >/dev/null 2>&1
 echo -e "${BLUE}🔴 ${GREEN}Zapret остановлен!${NC}\n"
-read -p "Нажмите Enter для выхода..." dummy
+read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
 # ==========================================
 # Запустить Zapret
