@@ -317,7 +317,7 @@ stop_zapret() {
 echo -e "\n${GREEN}🔴 ${CYAN}Останавливаем ${NC}Zapret"
 if [ -f /etc/init.d/zapret ]; then
 /etc/init.d/zapret stop >/dev/null 2>&1; pkill -f /opt/zapret >/dev/null 2>&1
-echo -e "${BLUE}🔴 ${GREEN}Zapret остановлен!${NC}\n"
+echo -e "\n${BLUE}🔴 ${GREEN}Zapret остановлен!${NC}\n"
 else
 echo -e "${RED}Zapret не установлен!${NC}\n"
 fi
