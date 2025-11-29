@@ -62,8 +62,7 @@ sleep 2 ;;
 sed -i 's/meta l4proto { tcp, udp } flow offload @ft;/meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;/' /usr/share/firewall4/templates/ruleset.uc
 fw4 restart >/dev/null 2>&1
 sleep 2 ;;
-*) echo -e "\n${RED}Скрипт остановлен!${NC}\n"
-exit 1 ;;
+*) echo -e "\n${RED}Скрипт остановлен!${NC}\n"; exit 1 ;;
 esac
 fi
 fi
@@ -486,9 +485,7 @@ case "$choice" in
 9) wget -qO- https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/sys_info.sh | sh
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 ;;
-*) 
-echo -e ""
-exit 0 ;;
+*) echo -e ""; exit 0 ;;
 esac
 }
 # ==========================================
