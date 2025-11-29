@@ -311,7 +311,8 @@ read -p "Нажмите Enter для выхода в главное меню..."
 # Остановить Zapret
 # ==========================================
 stop_zapret() {
-[ ! -f /etc/init.d/zapret ] && { echo -e "${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter для выхода..." dummy; return; }
+[ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter для выхода..." dummy; return; }
+echo -e "\n${GREEN}🔴 ${CYAN}Останавливаем ${NC}Zapret"
 /etc/init.d/zapret stop >/dev/null 2>&1; pkill -f /opt/zapret >/dev/null 2>&1
 echo -e "${BLUE}🔴 ${GREEN}Zapret остановлен!${NC}\n"
 read -p "Нажмите Enter для выхода..." dummy
@@ -320,7 +321,7 @@ read -p "Нажмите Enter для выхода..." dummy
 # Запустить Zapret
 # ==========================================
 start_zapret() {
-[ ! -f /etc/init.d/zapret ] && { echo -e "${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; return; }
+[ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; return; }
 echo -e "\n${GREEN}🔴 ${CYAN}Запускаем ${NC}Zapret\n"    
 /etc/init.d/zapret start >/dev/null 2>&1
 chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1
