@@ -202,7 +202,7 @@ show_menu
 return ;;
 esac
 fi
-if curl -fsSLo "$CUSTOM_DIR/50-script.sh" "$URL"; then
+if wget -qO "$CUSTOM_DIR/50-script.sh" "$URL"; then
 [ "$NO_PAUSE" != "1" ] && 
 echo -e "\n${GREEN}🔴 ${CYAN}Скрипт ${NC}$SELECTED${CYAN} успешно установлен!${NC}\n"
 if [ "$SELECTED" = "50-quic4all" ] || [ "$SELECTED" = "50-stun4all" ]; then
@@ -292,7 +292,7 @@ install_Zapret "1"
 [ ! -f /etc/init.d/zapret ] && return
 echo -e "${MAGENTA}Останавливаем Zapret${NC}\n" && /etc/init.d/zapret stop >/dev/null 2>&1 && echo -e "${BLUE}🔴 ${GREEN}Zapret остановлен!${NC}\n"
 # --- ТУТ ПИШЕМ КАКАЯ СТРАТЕГИЯ БУДЕТ УСТАНАВЛИВАТЬСЯ ЧЕРЕЗ ПУНКТ 8
-curl -sL https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Str2.sh | sh
+wget -qO- https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Str2.sh | sh
 if [ ! -f "$CONF" ]; then
 echo -e "\n${RED}Файл ${NC}$CONF${RED} не найден!${NC}\n"
 read -p "Нажмите Enter для выхода в главное меню..." dummy
@@ -324,7 +324,7 @@ mkdir -p "$IPSET_DIR"
 FILES="zapret-hosts-google.txt zapret-hosts-user-exclude.txt"
 URL_BASE="https://raw.githubusercontent.com/remittor/zapret-openwrt/master/zapret/ipset"
 for f in $FILES; do
-curl -fsSLo "$IPSET_DIR/$f" "$URL_BASE/$f"
+wget -qO "$IPSET_DIR/$f" "$URL_BASE/$f"
 done
 chmod +x /opt/zapret/restore-def-cfg.sh && /opt/zapret/restore-def-cfg.sh
 chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh
@@ -432,16 +432,16 @@ echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n"
 echo -ne "${YELLOW}Выберите пункт:${NC} "
 read choice
 case "$choice" in
-1) clear && curl -sL https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Str1.sh | sh
+1) clear && wget -qO- https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Str1.sh | sh
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 ;;
-2) clear && curl -sL https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Str2.sh | sh
+2) clear && wget -qO- https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Str2.sh | sh
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 ;;
-3) clear && curl -sL https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Str3.sh | sh
+3) clear && wget -qO- https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Str3.sh | sh
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 ;;
-4) clear && curl -sL https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Str4.sh | sh
+4) clear && wget -qO- https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Str4.sh | sh
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 ;;
 *) echo -e "\nВыходим в главное меню..."
@@ -486,7 +486,7 @@ case "$choice" in
 6) fix_GAME  ;;
 7) enable_discord_calls ;;
 8) zapret_key ;;
-9) curl -sL https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/sys_info.sh | sh
+9) wget -qO- https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/sys_info.sh | sh
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 ;;
 *) 
