@@ -190,11 +190,10 @@ return ;;
 esac
 fi
 if wget -qO "$CUSTOM_DIR/50-script.sh" "$URL"; then
-[ "$NO_PAUSE" != "1" ] &&
 echo -e "\n${GREEN}🔴 ${CYAN}Скрипт успешно установлен!${NC}\n"
 else
 echo -e "${RED}Ошибка при скачивании скрипта!${NC}\n"
-[ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
+read -p "Нажмите Enter для выхода в главное меню..." dummy
 return
 fi
 if ! grep -q "option NFQWS_PORTS_UDP.*50000-50099" "$CONF"; then
