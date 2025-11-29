@@ -5,16 +5,9 @@
 ZAPRET_MANAGER_VERSION="6.9"
 ZAPRET_VERSION="72.20251122"
 STR_VERSION_AUTOINSTALL="2"
-GREEN="\033[1;32m"
-RED="\033[1;31m"
-CYAN="\033[1;36m"
-YELLOW="\033[1;33m"
-MAGENTA="\033[1;35m"
-BLUE="\033[0;34m"
-NC="\033[0m"
-DGRAY="\033[38;5;236m"
-WORKDIR="/tmp/zapret-update"
-CONF="/etc/config/zapret"
+GREEN="\033[1;32m"; RED="\033[1;31m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"
+MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;236m"
+WORKDIR="/tmp/zapret-update"; CONF="/etc/config/zapret"
 CUSTOM_DIR="/opt/zapret/init.d/openwrt/custom.d/"
 # ==========================================
 # Проверяем наличие byedpi, youtubeUnblock, Flow Offloading
@@ -55,13 +48,11 @@ case "$choice" in
 1) echo -e "\n${GREEN}Flow Offloading успешно отключён!${NC}"
 uci set firewall.@defaults[0].flow_offloading='0'
 uci set firewall.@defaults[0].flow_offloading_hw='0'
-uci commit firewall
-/etc/init.d/firewall restart
+uci commit firewall && /etc/init.d/firewall restart
 sleep 2 ;;
 2) echo -e "\n${GREEN}Фикс успешно применён!${NC}"
 sed -i 's/meta l4proto { tcp, udp } flow offload @ft;/meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;/' /usr/share/firewall4/templates/ruleset.uc
-fw4 restart >/dev/null 2>&1
-sleep 2 ;;
+fw4 restart >/dev/null 2>&1 && sleep 2 ;;
 *) echo -e "\n${RED}Скрипт остановлен!${NC}\n"; exit 1 ;;
 esac
 fi
@@ -86,14 +77,11 @@ else
 ZAPRET_STATUS=""
 fi
 if [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ]; then
-INST_COLOR=$GREEN
-INSTALLED_DISPLAY="$INSTALLED_VER"
+INST_COLOR=$GREEN; INSTALLED_DISPLAY="$INSTALLED_VER"
 elif [ "$INSTALLED_VER" != "не найдена" ]; then
-INST_COLOR=$RED
-INSTALLED_DISPLAY="$INSTALLED_VER (устарела)"
+INST_COLOR=$RED; INSTALLED_DISPLAY="$INSTALLED_VER (устарела)"
 else
-INST_COLOR=$RED
-INSTALLED_DISPLAY="$INSTALLED_VER"
+INST_COLOR=$RED; INSTALLED_DISPLAY="$INSTALLED_VER"
 fi
 }
 # ==========================================
@@ -116,31 +104,26 @@ PIDS=$(pgrep -f /opt/zapret)
 fi
 echo -e "${GREEN}🔴 ${CYAN}Обновляем список пакетов${NC}"
 opkg update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; sleep 7; return; }
-mkdir -p "$WORKDIR"
-rm -f "$WORKDIR"/* 2>/dev/null
-cd "$WORKDIR" || return
+mkdir -p "$WORKDIR" && rm -f "$WORKDIR"/* 2>/dev/null && cd "$WORKDIR" || return
 FILE_NAME=$(basename "$LATEST_URL")
 if ! command -v unzip >/dev/null 2>&1; then
 echo -e "${GREEN}🔴 ${CYAN}Устанавливаем ${NC}unzip"
 opkg install unzip >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить unzip!${NC}\n"; sleep 7; return; }
 fi
 echo -e "${GREEN}🔴 ${CYAN}Скачиваем архив ${NC}$FILE_NAME"
-wget -q "$LATEST_URL" -O "$FILE_NAME" || {
-echo -e "${RED}Не удалось скачать ${NC}$FILE_NAME\n"
+wget -q "$LATEST_URL" -O "$FILE_NAME" || { echo -e "${RED}Не удалось скачать ${NC}$FILE_NAME\n"
 read -p "Нажмите Enter для выхода..." dummy
 return
 }
 echo -e "${GREEN}🔴 ${CYAN}Распаковываем архив${NC}"
 unzip -o "$FILE_NAME" >/dev/null
 for PKG in zapret_*.ipk luci-app-zapret_*.ipk; do
-[ -f "$PKG" ] && {
-echo -e "${GREEN}🔴 ${CYAN}Устанавливаем пакет ${NC}$PKG"
+[ -f "$PKG" ] && { echo -e "${GREEN}🔴 ${CYAN}Устанавливаем пакет ${NC}$PKG"
 opkg install --force-reinstall "$PKG" >/dev/null 2>&1
 }
 done
 echo -e "${GREEN}🔴 ${CYAN}Удаляем временные файлы${NC}"
-cd /
-rm -rf "$WORKDIR" /tmp/*.ipk /tmp/*.zip /tmp/*zapret* 2>/dev/null
+cd / && rm -rf "$WORKDIR" /tmp/*.ipk /tmp/*.zip /tmp/*zapret* 2>/dev/null
 if [ -f /etc/init.d/zapret ]; then
 echo -e "\n${BLUE}🔴 ${GREEN}Zapret установлен!${NC}\n"
 [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода..." dummy
@@ -283,9 +266,7 @@ echo -e "\n${BLUE}🔴 ${GREEN}Игровые настройки добавле�
 zapret_key(){
 clear
 echo -e "${MAGENTA}Удаление, установка и настройка Zapret${NC}\n"
-get_versions
-uninstall_zapret "1"
-install_Zapret "1"
+get_versions && uninstall_zapret "1" && install_Zapret "1"
 [ ! -f /etc/init.d/zapret ] && return
 echo -e "${MAGENTA}Останавливаем Zapret${NC}\n" && /etc/init.d/zapret stop >/dev/null 2>&1 && echo -e "${BLUE}🔴 ${GREEN}Zapret остановлен!${NC}\n"
 wget -qO- "https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Str${STR_VERSION_AUTOINSTALL}.sh" | sh
@@ -299,8 +280,7 @@ echo -e "\n${RED}Cтратегия не установлена!${NC}\n"
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 return
 fi
-enable_discord_calls "1"
-fix_GAME "1"
+enable_discord_calls "1" && fix_GAME "1"
 echo -e "${BLUE}🔴 ${GREEN}Zapret установлен и настроен!${NC}\n"
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
@@ -334,16 +314,10 @@ read -p "Нажмите Enter для выхода в главное меню..."
 # Остановить Zapret
 # ==========================================
 stop_zapret() {
-clear
-echo -e "${MAGENTA}Останавливаем Zapret${NC}\n"
+echo -e "\n${GREEN}🔴 ${CYAN}Останавливаем ${NC}Zapret"
 if [ -f /etc/init.d/zapret ]; then
-echo -e "${GREEN}🔴 ${CYAN}Останавливаем ${NC}Zapret" && /etc/init.d/zapret stop >/dev/null 2>&1
-PIDS=$(pgrep -f /opt/zapret)
-if [ -n "$PIDS" ]; then
-echo -e "${GREEN}🔴 ${CYAN}Убиваем все процессы ${NC}Zapret"
-for pid in $PIDS; do kill -9 "$pid" >/dev/null 2>&1; done
-fi
-echo -e "\n${BLUE}🔴 ${GREEN}Zapret остановлен!${NC}\n"
+/etc/init.d/zapret stop >/dev/null 2>&1 && pkill -f /opt/zapret >/dev/null 2>&1
+echo -e "${BLUE}🔴 ${GREEN}Zapret остановлен!${NC}\n"
 else
 echo -e "${RED}Zapret не установлен!${NC}\n"
 fi
@@ -354,9 +328,8 @@ read -p "Нажмите Enter для выхода в главное меню..."
 # ==========================================
 start_zapret() {
 clear
-echo -e "${MAGENTA}Запускаем Zapret${NC}\n"
+echo -e "\n${GREEN}🔴 ${CYAN}Запускаем ${NC}Zapret"
 if [ -f /etc/init.d/zapret ]; then
-echo -e "${GREEN}🔴 ${CYAN}Запускаем ${NC}Zapret"
 /etc/init.d/zapret start >/dev/null 2>&1
 chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart >/dev/null 2>&1
 echo -e "\n${BLUE}🔴 ${GREEN}Zapret запущен!${NC}\n"
