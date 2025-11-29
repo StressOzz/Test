@@ -92,12 +92,11 @@ echo -e "\n${BLUE}🔴 ${GREEN}Последняя версия уже устан
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 return
 fi
-[ "$NO_PAUSE" = "1" ] && echo -e "${MAGENTA}Устанавливаем ZAPRET${NC}"
+echo -e "\n${MAGENTA}Устанавливаем ZAPRET${NC}"
 if [ -f /etc/init.d/zapret ]; then
 echo -e "${GREEN}🔴 ${CYAN}Останавливаем ${NC}zapret"
 /etc/init.d/zapret stop >/dev/null 2>&1; pkill -f /opt/zapret >/dev/null 2>&1
 fi
-[ "$NO_PAUSE" != "1" ] && echo
 echo -e "${GREEN}🔴 ${CYAN}Обновляем список пакетов${NC}"
 opkg update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; sleep 7; return; }
 mkdir -p "$WORKDIR"
@@ -152,7 +151,7 @@ enable_discord_calls() {
 local NO_PAUSE=$1
 [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; return; }
 [ "$NO_PAUSE" != "1" ] && clear && echo -e "${MAGENTA}Меню установки скриптов${NC}"
-[ "$NO_PAUSE" = "1" ] && echo -e "${MAGENTA}Устанавливаем скрипт${NC}"
+echo -e "\n${MAGENTA}Устанавливаем скрипт${NC}"
 [ "$NO_PAUSE" != "1" ] && show_script_50 && [ -n "$name" ] && echo -e "\n${YELLOW}Установлен скрипт:${NC} $name"
 if [ "$NO_PAUSE" = "1" ]; then
 SELECTED="50-stun4all"
@@ -186,7 +185,6 @@ return ;;
 esac
 fi
 if wget -qO "$CUSTOM_DIR/50-script.sh" "$URL"; then
-[ "$NO_PAUSE" != "1" ] && echo
 echo -e "${BLUE}🔴 ${CYAN}Скрипт успешно установлен!${NC}\n"
 else
 echo -e "\n${RED}Ошибка при скачивании скрипта!${NC}\n"
@@ -217,13 +215,12 @@ chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d
 # ==========================================
 fix_GAME() {
 local NO_PAUSE=$1
-[ "$NO_PAUSE" = "1" ] && echo -e "${MAGENTA}Настраиваем стратегию для игр${NC}"
+echo -e "\n${MAGENTA}Настраиваем стратегию для игр${NC}"
 if [ ! -f /etc/init.d/zapret ]; then
 [ "$NO_PAUSE" != "1" ] && echo -e "\n${RED}Zapret не установлен!${NC}\n"
 [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 return
 fi
-[ "$NO_PAUSE" != "1" ] && echo
 if grep -q "option NFQWS_PORTS_UDP.*1024-49999,50100-65535" "$CONF" && grep -q -- "--filter-udp=1024-49999,50100-65535" "$CONF"; then
 echo -e "${GREEN}🔴 ${CYAN}Удаляем из стратегии настройки для игр${NC}"
 sed -i ':a;N;$!ba;s|--new\n--filter-udp=1024-49999,50100-65535\n--dpi-desync=fake\n--dpi-desync-cutoff=d2\n--dpi-desync-any-protocol=1\n--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/quic_initial_www_google_com\.bin\n*||g' "$CONF"
@@ -301,7 +298,7 @@ read -p "Нажмите Enter для выхода в главное меню..."
 # Остановить Zapret
 # ==========================================
 stop_zapret() {
-echo -e "\n${GREEN}🔴 ${CYAN}Останавливаем ${NC}Zapret\n"
+echo -e "\n${MAGENTA}Останавливаем Zapret\n"
 /etc/init.d/zapret stop >/dev/null 2>&1; pkill -f /opt/zapret >/dev/null 2>&1
 echo -e "${BLUE}🔴 ${GREEN}Zapret остановлен!${NC}\n"
 read -p "Нажмите Enter для выхода в главное меню..." dummy
@@ -311,7 +308,7 @@ read -p "Нажмите Enter для выхода в главное меню..."
 # ==========================================
 start_zapret() {
 [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; return; }
-echo -e "\n${GREEN}🔴 ${CYAN}Запускаем ${NC}Zapret\n"    
+echo -e "\n${MAGENTA}Запускаем Zapret\n"    
 /etc/init.d/zapret start >/dev/null 2>&1
 chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1
 echo -e "${BLUE}🔴 ${GREEN}Zapret запущен!${NC}\n"
@@ -322,8 +319,7 @@ read -p "Нажмите Enter для выхода в главное меню..."
 # ==========================================
 uninstall_zapret() {
 local NO_PAUSE=$1
-[ "$NO_PAUSE" = "1" ] && echo -e "${MAGENTA}Удаляем ZAPRET${NC}"
-[ "$NO_PAUSE" != "1" ] && echo
+[ "$NO_PAUSE" = "1" ] && echo -e "\n${MAGENTA}Удаляем ZAPRET${NC}"
 echo -e "${GREEN}🔴 ${CYAN}Останавливаем ${NC}zapret" && echo -e "${GREEN}🔴 ${CYAN}Убиваем процессы${NC}"
 /etc/init.d/zapret stop >/dev/null 2>&1; pkill -f /opt/zapret >/dev/null 2>&1
 echo -e "${GREEN}🔴 ${CYAN}Удаляем пакеты${NC}"
