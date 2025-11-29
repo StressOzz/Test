@@ -321,12 +321,10 @@ if [ -f /opt/zapret/restore-def-cfg.sh ]; then
 rm -f /opt/zapret/init.d/openwrt/custom.d/50-script.sh
 [ -f /etc/init.d/zapret ] && /etc/init.d/zapret stop >/dev/null 2>&1
 echo -e "${GREEN}🔴 ${CYAN}Возвращаем ${NC}настройки${CYAN}, ${NC}стратегию${CYAN} и ${NC}hostlist${CYAN} к значениям по умолчанию${NC}\n"
-IPSET_DIR="/opt/zapret/ipset"
-FILES="zapret-hosts-google.txt zapret-hosts-user-exclude.txt"
-URL_BASE="https://raw.githubusercontent.com/remittor/zapret-openwrt/master/zapret/ipset"
-for f in $FILES; do
-wget -qO "$IPSET_DIR/$f" "$URL_BASE/$f"
-done
+for f in zapret-hosts-google.txt zapret-hosts-user-exclude.txt zapret-ip-exclude.txt
+do wget -qO "/opt/zapret/ipset/$f" "https://raw.githubusercontent.com/remittor/zapret-openwrt/master/zapret/ipset/$f"; done
+for f in zapret-hosts-user-ipban.txt zapret-ip-user-ipban.txt zapret-hosts-user.txt zapret-ip-user.txt zapret-ip-user-exclude.txt
+do : > "/opt/zapret/ipset/$f"; done
 chmod +x /opt/zapret/restore-def-cfg.sh && /opt/zapret/restore-def-cfg.sh
 chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh
 /etc/init.d/zapret restart >/dev/null 2>&1
@@ -395,10 +393,6 @@ sed -i '/130\.255\.77\.28 ntc.party/d; /57\.144\.222\.34 instagram.com www.insta
 echo -e "\n${BLUE}🔴 ${GREEN}Zapret полностью удалён!${NC}\n"
 [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
-# ==========================================
-# Запустить/Остановить Zapret
-# ==========================================
-startstop_zpr() { clear; pgrep -f /opt/zapret >/dev/null 2>&1 && stop_zapret || start_zapret; }
 # ==========================================
 # Выбор стратегий
 # ==========================================
@@ -477,7 +471,7 @@ case "$choice" in
 1) install_Zapret ;;
 2) menu_str ;;
 3) comeback_def ;;
-4) startstop_zpr ;;
+4) clear; pgrep -f /opt/zapret >/dev/null 2>&1 && stop_zapret || start_zapret ;;
 5) uninstall_zapret;;
 6) fix_GAME  ;;
 7) enable_discord_calls ;;
