@@ -14,11 +14,7 @@ DGRAY="\033[38;5;236m"
 WORKDIR="/tmp/zapret-update"
 CONF="/etc/config/zapret"
 CUSTOM_DIR="/opt/zapret/init.d/openwrt/custom.d/"
-# ==========================================
-# Получение информации о версиях, архитектуре и статусе
-# ==========================================
-
-
+ZAPRET_VERSION="72.20251122"
 # ==========================================
 # Получение версии и подготовка установки Zapret
 # ==========================================
@@ -254,17 +250,6 @@ zapret_key(){
 clear
 echo -e "${MAGENTA}Удаление, установка и настройка Zapret${NC}\n"
 get_versions
-if [ "$LIMIT_REACHED" -eq 1 ]; then
-echo -e "${RED}Достигнут лимит GitHub API! Подождите 15 минут.${NC}\n"
-read -p "Нажмите Enter для выхода в главное меню..." dummy
-return
-fi
-# Проверка версии
-if ! [[ "$LATEST_VER" =~ 7 ]]; then
-echo -e "${RED}Внимание! Версия для установки не найдена!${NC}\n"
-read -p "Нажмите Enter для выхода в главное меню..." dummy
-return
-fi
 uninstall_zapret "1"
 install_Zapret "1"
 [ ! -f /etc/init.d/zapret ] && return
@@ -358,18 +343,6 @@ read -p "Нажмите Enter для выхода в главное меню..."
 uninstall_zapret() {
 local NO_PAUSE=$1
 [ "$NO_PAUSE" != "1" ] && clear
-echo -e "${MAGENTA}Удаляем ZAPRET${NC}\n"
-if ! [[ "$LATEST_VER" =~ 7 ]]; then
-echo -e "${RED}Внимание! Версия для установки не найдена!${NC}\n"
-read -p "Продолжить удаление? [y/N]: " answer
-case "$answer" in
-[yY]) echo -e "";;
-*) echo -e "\n${GREEN}Удаление отменено!${NC}\n"
-echo -e "Выходим в главное меню..."
-sleep 2
-return;;
-esac
-fi
 echo -e "${GREEN}🔴 ${CYAN}Останавливаем ${NC}zapret" && echo -e "${GREEN}🔴 ${CYAN}Убиваем процессы${NC}" && /etc/init.d/zapret stop >/dev/null 2>&1
 for pid in $(pgrep -f /opt/zapret 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done
 echo -e "${GREEN}🔴 ${CYAN}Удаляем пакеты${NC}"
@@ -450,7 +423,6 @@ echo -e "║     ${BLUE}Zapret on remittor Manager${NC}     ║"
 echo -e "╚════════════════════════════════════╝"
 echo -e "                     ${DGRAY}by StressOzz v$ZAPRET_MANAGER_VERSION${NC}"
 echo -e "\n${YELLOW}Установленная версия:       ${INST_COLOR}$INSTALLED_DISPLAY${NC}"
-echo -e "${YELLOW}Последняя версия на GitHub: ${CYAN}$LATEST_VER${NC}"
 [ -n "$ZAPRET_STATUS" ] && echo -e "${YELLOW}Статус Zapret:${NC}              $ZAPRET_STATUS"
 show_script_50 && [ -n "$name" ] && echo -e "${YELLOW}Установлен скрипт:${NC}          $name"
 [ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*1024-49999,50100-65535" "$CONF" && grep -q -- "--filter-udp=1024-49999,50100-65535" "$CONF" && echo -e "${YELLOW}Стратегия для игр:${NC}          ${GREEN}активна${NC}"
