@@ -205,7 +205,6 @@ chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 return ;;
 *) echo -e "\nВыходим в главное меню..."
-sleep 1
 return ;;
 esac
 fi
@@ -447,7 +446,6 @@ read -p "Нажмите Enter для выхода в главное меню..."
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 ;;
 *) echo -e "\nВыходим в главное меню..."
-sleep 1
 return ;;
 esac
 }
