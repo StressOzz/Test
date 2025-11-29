@@ -89,6 +89,7 @@ fi
 # ==========================================
 install_Zapret() {
 local NO_PAUSE=$1
+get_versions
 if [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ]; then
 echo -e "\n${BLUE}🔴 ${GREEN}Последняя версия уже установлена!${NC}\n"
 read -p "Нажмите Enter для выхода в главное меню..." dummy
