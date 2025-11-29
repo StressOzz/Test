@@ -95,14 +95,12 @@ echo -e "\n${BLUE}🔴 ${GREEN}Последняя версия уже устан
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 return
 fi
-[ "$NO_PAUSE" != "1" ] && clear
-echo -e "${MAGENTA}Устанавливаем ZAPRET${NC}\n"
-get_versions
+[ "$NO_PAUSE" = "1" ] echo -e "${MAGENTA}Устанавливаем ZAPRET${NC}"
 if [ -f /etc/init.d/zapret ]; then
-echo -e "${GREEN}🔴 ${CYAN}Останавливаем ${NC}zapret"
+echo -e "\n${GREEN}🔴 ${CYAN}Останавливаем ${NC}zapret"
 /etc/init.d/zapret stop >/dev/null 2>&1; pkill -f /opt/zapret >/dev/null 2>&1
 fi
-echo -e "${GREEN}🔴 ${CYAN}Обновляем список пакетов${NC}"
+echo -e "\n${GREEN}🔴 ${CYAN}Обновляем список пакетов${NC}"
 opkg update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; sleep 7; return; }
 mkdir -p "$WORKDIR"
 rm -f "$WORKDIR"/* 2>/dev/null
