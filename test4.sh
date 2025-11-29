@@ -3,6 +3,7 @@
 # Zapret on remittor Manager by StressOzz
 # ==========================================
 ZAPRET_MANAGER_VERSION="6.8"
+ZAPRET_VERSION="72.20251122"
 GREEN="\033[1;32m"
 RED="\033[1;31m"
 CYAN="\033[1;36m"
@@ -14,13 +15,59 @@ DGRAY="\033[38;5;236m"
 WORKDIR="/tmp/zapret-update"
 CONF="/etc/config/zapret"
 CUSTOM_DIR="/opt/zapret/init.d/openwrt/custom.d/"
-ZAPRET_VERSION="72.20251122"
 # ==========================================
 # Получение версии и подготовка установки Zapret
 # ==========================================
 get_versions() {
-    # Версия указывается вручную
-    ZAPRET_VERSION="72.20251122"
+
+if opkg list-installed | grep -q "byedpi"; then
+clear
+echo -e "${RED}Найден установленный ${NC}ByeDPI${RED}!${NC}\n"
+echo -e "${NC}Zapret${RED} не может работать совместно с ${NC}ByeDPI${RED}!${NC}\n"
+read -p $'\033[1;32mУдалить \033[0mByeDPI\033[1;32m ?\033[0m [y/N] ' answer
+case "$answer" in
+[Yy]* ) opkg --force-removal-of-dependent-packages --autoremove remove byedpi >/dev/null 2>&1; echo -e "\n${BLUE}🔴 ${GREEN}ByeDPI удалён!${NC}"; sleep 3;;
+* ) echo -e "\n${RED}Скрипт остановлен! Удалите ${NC}ByeDPI${RED}!${NC}\n"; exit 1;;
+esac
+fi
+if opkg list-installed | grep -q "youtubeUnblock"; then
+clear
+echo -e "${RED}Найден установленный ${NC}youtubeUnblock${RED}!${NC}\n"
+echo -e "${NC}Zapret${RED} не может работать совместно с ${NC}youtubeUnblock${RED}!${NC}\n"
+read -p $'\033[1;32mУдалить \033[0myoutubeUnblock\033[1;32m ?\033[0m [y/N] ' answer
+case "$answer" in
+[Yy]* ) opkg --force-removal-of-dependent-packages --autoremove remove youtubeUnblock luci-app-youtubeUnblock >/dev/null 2>&1; echo -e "\n${BLUE}🔴 ${GREEN}youtubeUnblock удалён!${NC}"; sleep 3;;
+* ) echo -e "\n${RED}Скрипт остановлен! Удалите ${NC}youtubeUnblock ${RED}!${NC}\n"; exit 1;;
+esac
+fi
+local FLOW_STATE=$(uci get firewall.@defaults[0].flow_offloading 2>/dev/null)
+local HW_FLOW_STATE=$(uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null)
+if [ "$FLOW_STATE" = "1" ] || [ "$HW_FLOW_STATE" = "1" ]; then
+if ! grep -q 'meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc; then
+clear
+echo -e "${RED}Включён ${NC}Flow Offloading ${RED}!${NC}\n"
+echo -e "${NC}Zapret${RED} не может работать с включённым ${NC}Flow Offloading${RED}!\n"
+echo -e "${CYAN}1) ${GREEN}Отключить ${NC}Flow Offloading"
+echo -e "${CYAN}2) ${GREEN}Применить фикс для работы ${NC}Zapret${GREEN} с включённым ${NC}Flow Offloading"
+echo -e "${CYAN}Enter) ${GREEN}Выход\n"
+echo -ne "${YELLOW}Выберите пункт:${NC} "
+read choice
+case "$choice" in
+1) echo -e "\n${GREEN}Flow Offloading успешно отключён!${NC}"
+uci set firewall.@defaults[0].flow_offloading='0'
+uci set firewall.@defaults[0].flow_offloading_hw='0'
+uci commit firewall
+/etc/init.d/firewall restart
+sleep 2 ;;
+2) echo -e "\n${GREEN}Фикс успешно применён!${NC}"
+sed -i 's/meta l4proto { tcp, udp } flow offload @ft;/meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;/' /usr/share/firewall4/templates/ruleset.uc
+fw4 restart >/dev/null 2>&1
+sleep 2 ;;
+*) echo -e "\n${RED}Скрипт остановлен!${NC}\n"
+exit 1 ;;
+esac
+fi
+fi
     LOCAL_ARCH=$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release)
     [ -z "$LOCAL_ARCH" ] && LOCAL_ARCH=$(opkg print-architecture | grep -v "noarch" | sort -k3 -n | tail -n1 | awk '{print $2}')
 
@@ -55,7 +102,8 @@ get_versions() {
 # Установка Zapret (без авто-поиска версии)
 # ==========================================
 install_Zapret() {
-    clear
+local NO_PAUSE=$1
+[ "$NO_PAUSE" != "1" ] && clear
     echo -e "${MAGENTA}Устанавливаем ZAPRET${NC}\n"
 
     get_versions
@@ -94,7 +142,7 @@ install_Zapret() {
 
     if [ -f /etc/init.d/zapret ]; then
         echo -e "\n${BLUE}🔴 ${GREEN}Zapret установлен!${NC}\n"
-        read -p "Нажмите Enter для выхода..." dummy
+        [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода..." dummy
     else
         echo -e "\n${RED}Zapret не был установлен!${NC}\n"
         read -p "Нажмите Enter для выхода..." dummy
