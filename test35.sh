@@ -116,9 +116,7 @@ return
 echo -e "${GREEN}🔴 ${CYAN}Распаковываем архив${NC}"
 unzip -o "$FILE_NAME" >/dev/null
 for PKG in zapret_*.ipk luci-app-zapret_*.ipk; do
-[ -f "$PKG" ] && { echo -e "${GREEN}🔴 ${CYAN}Устанавливаем пакет ${NC}$PKG"
-opkg install --force-reinstall "$PKG" >/dev/null 2>&1
-}
+[ -f "$PKG" ] && { echo -e "${GREEN}🔴 ${CYAN}Устанавливаем пакет ${NC}$PKG"; opkg install --force-reinstall "$PKG" >/dev/null 2>&1; }
 done
 echo -e "${GREEN}🔴 ${CYAN}Удаляем временные файлы${NC}"
 cd / && rm -rf "$WORKDIR" /tmp/*.ipk /tmp/*.zip /tmp/*zapret* 2>/dev/null
