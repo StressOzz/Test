@@ -94,9 +94,10 @@ return
 fi
 [ "$NO_PAUSE" = "1" ] && echo -e "${MAGENTA}Устанавливаем ZAPRET${NC}"
 if [ -f /etc/init.d/zapret ]; then
-echo -e "\n${GREEN}🔴 ${CYAN}Останавливаем ${NC}zapret"
+echo -e "${GREEN}🔴 ${CYAN}Останавливаем ${NC}zapret"
 /etc/init.d/zapret stop >/dev/null 2>&1; pkill -f /opt/zapret >/dev/null 2>&1
 fi
+[ "$NO_PAUSE" != "1" ] && echo
 echo -e "${GREEN}🔴 ${CYAN}Обновляем список пакетов${NC}"
 opkg update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; sleep 7; return; }
 mkdir -p "$WORKDIR"
@@ -322,6 +323,7 @@ read -p "Нажмите Enter для выхода в главное меню..."
 uninstall_zapret() {
 local NO_PAUSE=$1
 [ "$NO_PAUSE" = "1" ] && echo -e "${MAGENTA}Удаляем ZAPRET${NC}"
+[ "$NO_PAUSE" != "1" ] && echo
 echo -e "${GREEN}🔴 ${CYAN}Останавливаем ${NC}zapret" && echo -e "${GREEN}🔴 ${CYAN}Убиваем процессы${NC}"
 /etc/init.d/zapret stop >/dev/null 2>&1; pkill -f /opt/zapret >/dev/null 2>&1
 echo -e "${GREEN}🔴 ${CYAN}Удаляем пакеты${NC}"
