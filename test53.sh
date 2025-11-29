@@ -97,7 +97,7 @@ if [ -f /etc/init.d/zapret ]; then
 echo -e "\n${GREEN}🔴 ${CYAN}Останавливаем ${NC}zapret"
 /etc/init.d/zapret stop >/dev/null 2>&1; pkill -f /opt/zapret >/dev/null 2>&1
 fi
-echo -e "\n${GREEN}🔴 ${CYAN}Обновляем список пакетов${NC}"
+echo -e "${GREEN}🔴 ${CYAN}Обновляем список пакетов${NC}"
 opkg update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; sleep 7; return; }
 mkdir -p "$WORKDIR"
 rm -f "$WORKDIR"/* 2>/dev/null
@@ -125,7 +125,7 @@ echo -e "${GREEN}🔴 ${CYAN}Удаляем временные файлы${NC}"
 cd /
 rm -rf "$WORKDIR" /tmp/*.ipk /tmp/*.zip /tmp/*zapret* 2>/dev/null
 if [ -f /etc/init.d/zapret ]; then
-echo -e "\n${BLUE}🔴 ${GREEN}Zapret установлен!${NC}\n"
+echo -e "${BLUE}🔴 ${GREEN}Zapret установлен!${NC}\n"
 [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 else
 echo -e "\n${RED}Zapret не был установлен!${NC}\n"
@@ -185,7 +185,7 @@ return ;;
 esac
 fi
 if wget -qO "$CUSTOM_DIR/50-script.sh" "$URL"; then
-echo -e "\n${GREEN}🔴 ${CYAN}Скрипт успешно установлен!${NC}\n"
+echo -e "${BLUE}🔴 ${CYAN}Скрипт успешно установлен!${NC}\n"
 else
 echo -e "\n${RED}Ошибка при скачивании скрипта!${NC}\n"
 read -p "Нажмите Enter для выхода в главное меню..." dummy
@@ -222,7 +222,7 @@ if [ ! -f /etc/init.d/zapret ]; then
 return
 fi
 if grep -q "option NFQWS_PORTS_UDP.*1024-49999,50100-65535" "$CONF" && grep -q -- "--filter-udp=1024-49999,50100-65535" "$CONF"; then
-echo -e "\n${GREEN}🔴 ${CYAN}Удаляем из стратегии настройки для игр${NC}"
+echo -e "${GREEN}🔴 ${CYAN}Удаляем из стратегии настройки для игр${NC}"
 sed -i ':a;N;$!ba;s|--new\n--filter-udp=1024-49999,50100-65535\n--dpi-desync=fake\n--dpi-desync-cutoff=d2\n--dpi-desync-any-protocol=1\n--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/quic_initial_www_google_com\.bin\n*||g' "$CONF"
 sed -i "s/,1024-49999,50100-65535//" "$CONF"
 chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart >/dev/null 2>&1
