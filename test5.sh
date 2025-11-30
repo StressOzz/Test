@@ -299,12 +299,11 @@ read -p "Нажмите Enter для выхода в главное меню..."
 # Вернуть настройки по умолчанию
 # ==========================================
 comeback_def () {
-clear
-echo -e "${MAGENTA}Возвращаем настройки по умолчанию${NC}\n"
 if [ -f /opt/zapret/restore-def-cfg.sh ]; then
+echo -e "\n${MAGENTA}Возвращаем настройки по умолчанию${NC}\n"
 rm -f /opt/zapret/init.d/openwrt/custom.d/50-script.sh
 [ -f /etc/init.d/zapret ] && /etc/init.d/zapret stop >/dev/null 2>&1
-echo -e "${GREEN}🔴 ${CYAN}Возвращаем ${NC}настройки${CYAN}, ${NC}стратегию${CYAN} и ${NC}hostlist${CYAN} к значениям по умолчанию${NC}\n"
+echo -e "${GREEN}🔴 ${CYAN}Возвращаем ${NC}настройки${CYAN}, ${NC}стратегию${CYAN} и ${NC}hostlist${CYAN} к значениям по умолчанию${NC}"
 IPSET_DIR="/opt/zapret/ipset"
 FILES="zapret-hosts-google.txt zapret-hosts-user-exclude.txt"
 URL_BASE="https://raw.githubusercontent.com/remittor/zapret-openwrt/master/zapret/ipset"
@@ -319,7 +318,7 @@ sed -i '/130\.255\.77\.28 ntc.party/d; /57\.144\.222\.34 instagram.com www.insta
 /157\.240\.9\.174 instagram.com www.instagram.com/d' /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1
 echo -e "${BLUE}🔴 ${GREEN}Настройки по умолчанию возвращены!${NC}\n"
 else
-echo -e "${RED}Zapret не установлен!${NC}\n"
+echo -e "\n${RED}Zapret не установлен!${NC}\n"
 fi
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
