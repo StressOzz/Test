@@ -113,7 +113,7 @@ return
 echo -e "${CYAN}Распаковываем архив${NC}"
 unzip -o "$FILE_NAME" >/dev/null; for PKG in zapret_*.ipk luci-app-zapret_*.ipk; do
 [ -f "$PKG" ] && {
-echo -e "${CYAN}Устанавливаем пакет ${NC}$PKG"
+echo -e "${CYAN}Устанавливаем ${NC}$PKG"
 opkg install --force-reinstall "$PKG" >/dev/null 2>&1
 }
 done
