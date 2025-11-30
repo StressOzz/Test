@@ -2,7 +2,7 @@
 # ==========================================
 # Zapret on remittor Manager by StressOzz
 # ==========================================
-ZAPRET_MANAGER_VERSION="6.9"
+ZAPRET_MANAGER_VERSION="7.0"
 ZAPRET_VERSION="72.20251122"
 STR_VERSION_AUTOINSTALL="2"
 GREEN="\033[1;32m"; RED="\033[1;31m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"
@@ -260,11 +260,10 @@ echo -e "\n${MAGENTA}Возвращаем настройки по умолчан
 rm -f /opt/zapret/init.d/openwrt/custom.d/50-script.sh
 [ -f /etc/init.d/zapret ] && /etc/init.d/zapret stop >/dev/null 2>&1
 echo -e "${CYAN}Возвращаем ${NC}настройки${CYAN}, ${NC}стратегию${CYAN} и ${NC}hostlist${CYAN} к значениям по умолчанию${NC}"
-IPSET_DIR="/opt/zapret/ipset"; FILES="zapret-hosts-google.txt zapret-hosts-user-exclude.txt"
-URL_BASE="https://raw.githubusercontent.com/remittor/zapret-openwrt/master/zapret/ipset"
-for f in $FILES; do
-wget -qO "$IPSET_DIR/$f" "$URL_BASE/$f"
-done
+for f in zapret-hosts-google.txt zapret-hosts-user-exclude.txt zapret-ip-exclude.txt
+do wget -qO "/opt/zapret/ipset/$f" "https://raw.githubusercontent.com/remittor/zapret-openwrt/master/zapret/ipset/$f"; done
+for f in zapret-hosts-user-ipban.txt zapret-ip-user-ipban.txt zapret-hosts-user.txt zapret-ip-user.txt zapret-ip-user-exclude.txt
+do : > "/opt/zapret/ipset/$f"; done
 chmod +x /opt/zapret/restore-def-cfg.sh && /opt/zapret/restore-def-cfg.sh
 chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1
 sed -i '/130\.255\.77\.28 ntc.party/d; /57\.144\.222\.34 instagram.com www.instagram.com/d; \
@@ -323,10 +322,9 @@ echo -e "${GREEN}Zapret полностью удалён!${NC}\n"
 # Выбор стратегий
 # ==========================================
 show_current_strategy() {
-CONFstr="/etc/config/zapret"
-[ -f "$CONFstr" ] || return
-for v in v1 v2 v3 v4; do grep -q "#$v" "$CONFstr" && { ver="$v"; return; } done
-grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONFstr" && grep -q -- "--hostlist-exclude-domains=openwrt.org" "$CONFstr" && ver="дефолтная"
+[ -f "$CONF" ] || return
+for v in v1 v2 v3 v4; do grep -q "#$v" "$CONF" && { ver="$v"; return; } done
+grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONF" && grep -q -- "--hostlist-exclude-domains=openwrt.org" "$CONF" && ver="дефолтная"
 }
 menu_str() {
 [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; return; }
