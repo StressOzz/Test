@@ -97,10 +97,10 @@ local NO_PAUSE=$1
 get_versions
 if [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ]; then
 echo -e "\n${BLUE}🔴 ${GREEN}Последняя версия уже установлена!${NC}\n"
-read -p "Нажмите Enter для выхода..." dummy
+read -p "Нажмите Enter для выхода в главное меню..." dummy
 return
 fi
-echo -e "${MAGENTA}Устанавливаем ZAPRET${NC}"
+echo -e "\n${MAGENTA}Устанавливаем ZAPRET${NC}"
 if [ -f /etc/init.d/zapret ]; then
 echo -e "${GREEN}🔴 ${CYAN}Останавливаем ${NC}zapret" && /etc/init.d/zapret stop >/dev/null 2>&1
 PIDS=$(pgrep -f /opt/zapret)
@@ -108,9 +108,7 @@ PIDS=$(pgrep -f /opt/zapret)
 fi
 echo -e "${GREEN}🔴 ${CYAN}Обновляем список пакетов${NC}"
 opkg update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; sleep 7; return; }
-mkdir -p "$WORKDIR"
-rm -f "$WORKDIR"/* 2>/dev/null
-cd "$WORKDIR" || return
+mkdir -p "$WORKDIR"; rm -f "$WORKDIR"/* 2>/dev/null; cd "$WORKDIR" || return
 FILE_NAME=$(basename "$LATEST_URL")
 if ! command -v unzip >/dev/null 2>&1; then
 echo -e "${GREEN}🔴 ${CYAN}Устанавливаем ${NC}unzip"
@@ -119,7 +117,7 @@ fi
 echo -e "${GREEN}🔴 ${CYAN}Скачиваем архив ${NC}$FILE_NAME"
 wget -q "$LATEST_URL" -O "$FILE_NAME" || {
 echo -e "\n${RED}Не удалось скачать ${NC}$FILE_NAME\n"
-read -p "Нажмите Enter для выхода..." dummy
+read -p "Нажмите Enter для выхода в главное меню..." dummy
 return
 }
 echo -e "${GREEN}🔴 ${CYAN}Распаковываем архив${NC}"
@@ -135,10 +133,10 @@ cd /
 rm -rf "$WORKDIR" /tmp/*.ipk /tmp/*.zip /tmp/*zapret* 2>/dev/null
 if [ -f /etc/init.d/zapret ]; then
 echo -e "${BLUE}🔴 ${GREEN}Zapret установлен!${NC}\n"
-[ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода..." dummy
+[ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 else
 echo -e "\n${RED}Zapret не был установлен!${NC}\n"
-read -p "Нажмите Enter для выхода..." dummy
+read -p "Нажмите Enter для выхода в главное меню..." dummy
 fi
 }
 # ==========================================
