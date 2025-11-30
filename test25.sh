@@ -87,52 +87,50 @@ fi
 # ==========================================
 install_Zapret() {
 local NO_PAUSE=$1
-[ "$NO_PAUSE" != "1" ] && clear
-echo -e "${MAGENTA}Устанавливаем ZAPRET${NC}\n"
 get_versions
 if [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ]; then
-echo -e "${BLUE}🔴 ${GREEN}Последняя версия уже установлена!${NC}\n"
-read -p "Нажмите Enter для выхода..." dummy
+echo -e "\n${GREEN}Последняя версия уже установлена!${NC}\n"
+read -p "Нажмите Enter для выхода в главное меню..." dummy
 return
 fi
+[ "$NO_PAUSE" != "1" ] && echo
+echo -e "${MAGENTA}Устанавливаем ZAPRET${NC}"
 if [ -f /etc/init.d/zapret ]; then
-echo -e "${GREEN}🔴 ${CYAN}Останавливаем ${NC}zapret" && /etc/init.d/zapret stop >/dev/null 2>&1
+echo -e "${CYAN}Останавливаем ${NC}zapret" && /etc/init.d/zapret stop >/dev/null 2>&1
 PIDS=$(pgrep -f /opt/zapret)
 [ -n "$PIDS" ] && for pid in $PIDS; do kill -9 "$pid" >/dev/null 2>&1; done
 fi
-echo -e "${GREEN}🔴 ${CYAN}Обновляем список пакетов${NC}"
+echo -e "${CYAN}Обновляем список пакетов${NC}"
 opkg update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; sleep 7; return; }
-mkdir -p "$WORKDIR"
-rm -f "$WORKDIR"/* 2>/dev/null
-cd "$WORKDIR" || return
+mkdir -p "$WORKDIR"; rm -f "$WORKDIR"/* 2>/dev/null; cd "$WORKDIR" || return
 FILE_NAME=$(basename "$LATEST_URL")
 if ! command -v unzip >/dev/null 2>&1; then
-echo -e "${GREEN}🔴 ${CYAN}Устанавливаем ${NC}unzip"
+echo -e "${CYAN}Устанавливаем ${NC}unzip"
 opkg install unzip >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить unzip!${NC}\n"; sleep 7; return; }
 fi
-echo -e "${GREEN}🔴 ${CYAN}Скачиваем архив ${NC}$FILE_NAME"
+echo -e "${CYAN}Скачиваем архив ${NC}$FILE_NAME"
 wget -q "$LATEST_URL" -O "$FILE_NAME" || {
-echo -e "${RED}Не удалось скачать ${NC}$FILE_NAME\n"
-read -p "Нажмите Enter для выхода..." dummy
+echo -e "\n${RED}Не удалось скачать ${NC}$FILE_NAME\n"
+read -p "Нажмите Enter для выхода в главное меню..." dummy
 return
 }
-echo -e "${GREEN}🔴 ${CYAN}Распаковываем архив${NC}"
+echo -e "${CYAN}Распаковываем архив${NC}"
 unzip -o "$FILE_NAME" >/dev/null
 for PKG in zapret_*.ipk luci-app-zapret_*.ipk; do
 [ -f "$PKG" ] && {
-echo -e "${GREEN}🔴 ${CYAN}Устанавливаем пакет ${NC}$PKG"
+echo -e "${CYAN}Устанавливаем пакет ${NC}$PKG"
 opkg install --force-reinstall "$PKG" >/dev/null 2>&1
 }
 done
-echo -e "${GREEN}🔴 ${CYAN}Удаляем временные файлы${NC}"
+echo -e "${CYAN}Удаляем временные файлы${NC}"
 cd /
 rm -rf "$WORKDIR" /tmp/*.ipk /tmp/*.zip /tmp/*zapret* 2>/dev/null
 if [ -f /etc/init.d/zapret ]; then
-echo -e "\n${BLUE}🔴 ${GREEN}Zapret установлен!${NC}\n"
-[ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода..." dummy
+echo -e "${GREEN}Zapret установлен!${NC}\n"
+[ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 else
 echo -e "\n${RED}Zapret не был установлен!${NC}\n"
-read -p "Нажмите Enter для выхода..." dummy
+read -p "Нажмите Enter для выхода в главное меню..." dummy
 fi
 }
 # ==========================================
