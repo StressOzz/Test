@@ -151,20 +151,16 @@ esac
 enable_discord_calls() {
 local NO_PAUSE=$1
 [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; return; }
-[ "$NO_PAUSE" != "1" ] && clear
-[ "$NO_PAUSE" != "1" ] && echo -e "${MAGENTA}Меню установки скриптов${NC}"
+[ "$NO_PAUSE" != "1" ] && clear && echo -e "${MAGENTA}Меню установки скриптов${NC}"
 [ "$NO_PAUSE" = "1" ] && echo -e "${MAGENTA}Устанавливаем скрипт${NC}"
 [ "$NO_PAUSE" != "1" ] && show_script_50 && [ -n "$name" ] && echo -e "\n${YELLOW}Установлен скрипт:${NC} $name"
 if [ "$NO_PAUSE" = "1" ]; then
 SELECTED="50-stun4all"
 URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-stun4all"
 else
-echo -e "\n${CYAN}1) ${GREEN}Установить скрипт ${NC}50-stun4all"
-echo -e "${CYAN}2) ${GREEN}Установить скрипт ${NC}50-quic4all"
-echo -e "${CYAN}3) ${GREEN}Установить скрипт ${NC}50-discord-media"
-echo -e "${CYAN}4) ${GREEN}Установить скрипт ${NC}50-discord"
-echo -e "${CYAN}5) ${GREEN}Удалить скрипт${NC}"
-echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n"
+echo -e "\n${CYAN}1) ${GREEN}Установить скрипт ${NC}50-stun4all\n${CYAN}2) ${GREEN}Установить скрипт ${NC}50-quic4all"
+echo -e "${CYAN}3) ${GREEN}Установить скрипт ${NC}50-discord-media\n${CYAN}4) ${GREEN}Установить скрипт ${NC}50-discord"
+echo -e "${CYAN}5) ${GREEN}Удалить скрипт${NC}\n${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n"
 echo -ne "${YELLOW}Выберите пункт:${NC} "
 read choice
 case "$choice" in
@@ -332,7 +328,7 @@ echo -e "${MAGENTA}Удаляем ZAPRET${NC}\n${CYAN}Останавливаем
 /etc/init.d/zapret stop >/dev/null 2>&1; for pid in $(pgrep -f /opt/zapret 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done
 echo -e "${CYAN}Удаляем пакеты${NC}"
 opkg --force-removal-of-dependent-packages --autoremove remove zapret luci-app-zapret >/dev/null 2>&1
-echo -e "${CYAN}Чистим конфиги и временные файлы${NC}"
+echo -e "${CYAN}Удаляем временные файлы${NC}"
 rm -rf /opt/zapret /etc/config/zapret /etc/firewall.zapret /etc/init.d/zapret /tmp/*zapret* /var/run/*zapret* /tmp/*.ipk /tmp/*.zip 2>/dev/null
 crontab -l 2>/dev/null | grep -v -i "zapret" | crontab - 2>/dev/null
 nft list tables 2>/dev/null | awk '{print $2}' | grep -E '(zapret|ZAPRET)' | while read t; do [ -n "$t" ] && nft delete table "$t" 2>/dev/null; done
@@ -365,10 +361,8 @@ menu_str() {
 [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; return; }
 clear; echo -e "${MAGENTA}Меню выбора стратегии${NC}"
 show_current_strategy && [ -n "$ver" ] && echo -e "\n${YELLOW}Используется стратегия:${NC} $ver"
-echo -e "\n${CYAN}1) ${GREEN}Установить стратегию${NC} v1"
-echo -e "${CYAN}2) ${GREEN}Установить стратегию${NC} v2"
-echo -e "${CYAN}3) ${GREEN}Установить стратегию${NC} v3"
-echo -e "${CYAN}4) ${GREEN}Установить стратегию${NC} v4"
+echo -e "\n${CYAN}1) ${GREEN}Установить стратегию${NC} v1\n${CYAN}2) ${GREEN}Установить стратегию${NC} v2"
+echo -e "${CYAN}3) ${GREEN}Установить стратегию${NC} v3\n${CYAN}4) ${GREEN}Установить стратегию${NC} v4"
 echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n"
 echo -ne "${YELLOW}Выберите пункт:${NC} "
 read choice
@@ -402,16 +396,11 @@ echo -e "\n${YELLOW}Установленная версия:   ${INST_COLOR}$INS
 show_script_50 && [ -n "$name" ] && echo -e "${YELLOW}Установлен скрипт:${NC}      $name"
 [ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*1024-49999,50100-65535" "$CONF" && grep -q -- "--filter-udp=1024-49999,50100-65535" "$CONF" && echo -e "${YELLOW}Стратегия для игр:${NC}      ${GREEN}активна${NC}"
 show_current_strategy && [ -n "$ver" ] && echo -e "${YELLOW}Используется стратегия:${NC} ${CYAN}$ver${NC}"
-echo -e "\n${CYAN}1) ${GREEN}Установить последнюю версию${NC}"
-echo -e "${CYAN}2) ${GREEN}Меню выбора стратегии${NC}"
-echo -e "${CYAN}3) ${GREEN}Вернуть настройки по умолчанию${NC}"
-echo -e "${CYAN}4) ${GREEN}Остановить / Запустить ${NC}Zapret"
-echo -e "${CYAN}5) ${GREEN}Удалить ${NC}Zapret"
-echo -e "${CYAN}6) ${GREEN}Добавить / Удалить стратегию для игр"
-echo -e "${CYAN}7) ${GREEN}Меню установки скриптов${NC}"
-echo -e "${CYAN}8) ${GREEN}Удалить / Установить / Настроить${NC} Zapret"
-echo -e "${CYAN}9) ${GREEN}Системная информация${NC}"
-echo -e "${CYAN}Enter) ${GREEN}Выход${NC}\n"
+echo -e "\n${CYAN}1) ${GREEN}Установить последнюю версию${NC}\n${CYAN}2) ${GREEN}Меню выбора стратегии${NC}"
+echo -e "${CYAN}3) ${GREEN}Вернуть настройки по умолчанию${NC}\n${CYAN}4) ${GREEN}Остановить / Запустить ${NC}Zapret"
+echo -e "${CYAN}5) ${GREEN}Удалить ${NC}Zapret\n${CYAN}6) ${GREEN}Добавить / Удалить стратегию для игр"
+echo -e "${CYAN}7) ${GREEN}Меню установки скриптов${NC}\n${CYAN}8) ${GREEN}Удалить / Установить / Настроить${NC} Zapret"
+echo -e "${CYAN}9) ${GREEN}Системная информация${NC}\n${CYAN}Enter) ${GREEN}Выход${NC}\n"
 echo -ne "${YELLOW}Выберите пункт:${NC} "
 read choice
 case "$choice" in
@@ -432,6 +421,4 @@ esac
 # ==========================================
 # Старт скрипта (цикл)
 # ==========================================
-while true; do
-show_menu
-done
+while true; do show_menu; done
