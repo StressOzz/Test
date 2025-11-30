@@ -335,20 +335,15 @@ echo -e "${GREEN}Zapret полностью удалён!${NC}\n"
 # Выбор стратегий
 # ==========================================
 show_current_strategy() {
-CONFstr="/etc/config/zapret"
-[ -f "$CONFstr" ] || return
-if grep -q "#v1" "$CONFstr"; then
-ver="v1"
-elif grep -q "#v2" "$CONFstr"; then
-ver="v2"
-elif grep -q "#v3" "$CONFstr"; then
-ver="v3"
-elif grep -q "#v4" "$CONFstr"; then
-ver="v4"
-elif grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONFstr" \
-&& grep -q -- "--hostlist-exclude-domains=openwrt.org" "$CONFstr"; then
-ver="дефолтная"
-fi
+[ -f "/etc/config/zapret" ] || return
+case 1 in
+$(grep -q "#v1" "/etc/config/zapret" && echo 1)) ver="v1" ;;
+$(grep -q "#v2" "/etc/config/zapret" && echo 1)) ver="v2" ;;
+$(grep -q "#v3" "/etc/config/zapret" && echo 1)) ver="v3" ;;
+$(grep -q "#v4" "/etc/config/zapret" && echo 1)) ver="v4" ;;
+$(grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "/etc/config/zapret" \
+&& grep -q -- "--hostlist-exclude-domains=openwrt.org" "/etc/config/zapret" && echo 1)) ver="дефолтная" ;;
+esac
 }
 menu_str() {
 [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; return; }
