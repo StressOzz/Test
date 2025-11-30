@@ -18,7 +18,7 @@ echo -e "${RED}Найден установленный ${NC}ByeDPI${RED}!${NC}\n
 echo -e "${NC}Zapret${RED} не может работать совместно с ${NC}ByeDPI${RED}!${NC}\n"
 read -p $'\033[1;32mУдалить \033[0mByeDPI\033[1;32m ?\033[0m [y/N] ' answer
 case "$answer" in
-[Yy]* ) opkg --force-removal-of-dependent-packages --autoremove remove byedpi >/dev/null 2>&1; echo -e "\n${BLUE}🔴 ${GREEN}ByeDPI удалён!${NC}"; sleep 3;;
+[Yy]* ) opkg --force-removal-of-dependent-packages --autoremove remove byedpi >/dev/null 2>&1; echo -e "\n${GREEN}ByeDPI удалён!${NC}"; sleep 3;;
 * ) echo -e "\n${RED}Скрипт остановлен! Удалите ${NC}ByeDPI${RED}!${NC}\n"; exit 1;;
 esac
 fi
@@ -28,7 +28,7 @@ echo -e "${RED}Найден установленный ${NC}youtubeUnblock${RED}
 echo -e "${NC}Zapret${RED} не может работать совместно с ${NC}youtubeUnblock${RED}!${NC}\n"
 read -p $'\033[1;32mУдалить \033[0myoutubeUnblock\033[1;32m ?\033[0m [y/N] ' answer
 case "$answer" in
-[Yy]* ) opkg --force-removal-of-dependent-packages --autoremove remove youtubeUnblock luci-app-youtubeUnblock >/dev/null 2>&1; echo -e "\n${BLUE}🔴 ${GREEN}youtubeUnblock удалён!${NC}"; sleep 3;;
+[Yy]* ) opkg --force-removal-of-dependent-packages --autoremove remove youtubeUnblock luci-app-youtubeUnblock >/dev/null 2>&1; echo -e "\n${GREEN}youtubeUnblock удалён!${NC}"; sleep 3;;
 * ) echo -e "\n${RED}Скрипт остановлен! Удалите ${NC}youtubeUnblock ${RED}!${NC}\n"; exit 1;;
 esac
 fi
@@ -96,7 +96,7 @@ install_Zapret() {
 local NO_PAUSE=$1
 get_versions
 if [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ]; then
-echo -e "\n${BLUE}🔴 ${GREEN}Последняя версия уже установлена!${NC}\n"
+echo -e "\n${GREEN}Последняя версия уже установлена!${NC}\n"
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 return
 fi
@@ -132,7 +132,7 @@ echo -e "${CYAN}Удаляем временные файлы${NC}"
 cd /
 rm -rf "$WORKDIR" /tmp/*.ipk /tmp/*.zip /tmp/*zapret* 2>/dev/null
 if [ -f /etc/init.d/zapret ]; then
-echo -e "${BLUE}🔴 ${GREEN}Zapret установлен!${NC}\n"
+echo -e "${GREEN}Zapret установлен!${NC}\n"
 [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 else
 echo -e "\n${RED}Zapret не был установлен!${NC}\n"
@@ -182,7 +182,7 @@ URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.exa
 URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-discord-media" ;;
 4) SELECTED="50-discord"
 URL="https://raw.githubusercontent.com/bol-van/zapret/v70.5/init.d/custom.d.examples.linux/50-discord" ;;
-5) echo -e "\n${BLUE}🔴 ${GREEN}Скрипт удалён!${NC}\n"
+5) echo -e "\n${GREEN}Скрипт удалён!${NC}\n"
 rm -f "$CUSTOM_DIR/50-script.sh" 2>/dev/null
 sed -i "s/,50000-50099//" "$CONF"
 sed -i ':a;N;$!ba;s|--new\n--filter-udp=50000-50099\n--filter-l7=discord,stun\n--dpi-desync=fake\n*||g' "$CONF"
@@ -193,7 +193,7 @@ return ;;
 esac
 fi
 if wget -qO "$CUSTOM_DIR/50-script.sh" "$URL"; then
-echo -e "${BLUE}🔴 ${GREEN}Скрипт ${NC}$SELECTED${GREEN} успешно установлен!${NC}\n"
+echo -e "${GREEN}Скрипт ${NC}$SELECTED${GREEN} успешно установлен!${NC}\n"
 else
 echo -e "\n${RED}Ошибка при скачивании скрипта!${NC}\n"
 [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
@@ -231,7 +231,7 @@ echo -e "${CYAN}Удаляем из стратегии настройки для
 sed -i ':a;N;$!ba;s|--new\n--filter-udp=1024-49999,50100-65535\n--dpi-desync=fake\n--dpi-desync-cutoff=d2\n--dpi-desync-any-protocol=1\n--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/quic_initial_www_google_com\.bin\n*||g' "$CONF"
 sed -i "s/,1024-49999,50100-65535//" "$CONF"
 chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart >/dev/null 2>&1
-echo -e "${BLUE}🔴 ${GREEN}Настройки для игр удалены!${NC}\n"
+echo -e "${GREEN}Настройки для игр удалены!${NC}\n"
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 return
 fi
@@ -255,7 +255,7 @@ EOF
 fi
 echo -e "${CYAN}Добавляем в стратегию настройки для игр${NC}"
 chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart >/dev/null 2>&1
-echo -e "${BLUE}🔴 ${GREEN}Игровые настройки добавлены!${NC}\n"
+echo -e "${GREEN}Игровые настройки добавлены!${NC}\n"
 [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
 # ==========================================
@@ -268,7 +268,7 @@ get_versions
 uninstall_zapret "1"
 install_Zapret "1"
 [ ! -f /etc/init.d/zapret ] && return
-echo -e "${MAGENTA}Останавливаем Zapret${NC}" && /etc/init.d/zapret stop >/dev/null 2>&1 && echo -e "${BLUE}🔴 ${GREEN}Zapret остановлен!${NC}\n"
+echo -e "${MAGENTA}Останавливаем Zapret${NC}" && /etc/init.d/zapret stop >/dev/null 2>&1 && echo -e "${GREEN}Zapret остановлен!${NC}\n"
 wget -qO- "https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Str${STR_VERSION_AUTOINSTALL}.sh" | sh
 if [ ! -f "$CONF" ]; then
 echo -e "\n${RED}Файл ${NC}$CONF${RED} не найден!${NC}\n"
@@ -282,7 +282,7 @@ return
 fi
 enable_discord_calls "1"
 fix_GAME "1"
-echo -e "${BLUE}🔴 ${GREEN}Zapret установлен и настроен!${NC}\n"
+echo -e "${GREEN}Zapret установлен и настроен!${NC}\n"
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
 # ==========================================
@@ -306,7 +306,7 @@ chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh
 sed -i '/130\.255\.77\.28 ntc.party/d; /57\.144\.222\.34 instagram.com www.instagram.com/d; \
 /173\.245\.58\.219 rutor.info d.rutor.info/d; /193\.46\.255\.29 rutor.info/d; \
 /157\.240\.9\.174 instagram.com www.instagram.com/d' /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1
-echo -e "${BLUE}🔴 ${GREEN}Настройки по умолчанию возвращены!${NC}\n"
+echo -e "${GREEN}Настройки по умолчанию возвращены!${NC}\n"
 else
 echo -e "\n${RED}Zapret не установлен!${NC}\n"
 fi
@@ -324,7 +324,7 @@ if [ -n "$PIDS" ]; then
 echo -e "${CYAN}Убиваем все процессы ${NC}Zapret"
 for pid in $PIDS; do kill -9 "$pid" >/dev/null 2>&1; done
 fi
-echo -e "${BLUE}🔴 ${GREEN}Zapret остановлен!${NC}\n"
+echo -e "${GREEN}Zapret остановлен!${NC}\n"
 else
 echo -e "\n${RED}Zapret не установлен!${NC}\n"
 fi
@@ -339,7 +339,7 @@ echo -e "\n${MAGENTA}Запускаем Zapret${NC}"
 echo -e "${CYAN}Запускаем ${NC}Zapret"
 /etc/init.d/zapret start >/dev/null 2>&1
 chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart >/dev/null 2>&1
-echo -e "${BLUE}🔴 ${GREEN}Zapret запущен!${NC}\n"
+echo -e "${GREEN}Zapret запущен!${NC}\n"
 else
 echo -e "\n${RED}Zapret не установлен!${NC}\n"
 fi
@@ -363,7 +363,7 @@ nft list tables 2>/dev/null | awk '{print $2}' | grep -E '(zapret|ZAPRET)' | whi
 sed -i '/130\.255\.77\.28 ntc.party/d; /57\.144\.222\.34 instagram.com www.instagram.com/d; \
 /173\.245\.58\.219 rutor.info d.rutor.info/d; /193\.46\.255\.29 rutor.info/d; \
 /157\.240\.9\.174 instagram.com www.instagram.com/d' /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1
-echo -e "${BLUE}🔴 ${GREEN}Zapret полностью удалён!${NC}\n"
+echo -e "${GREEN}Zapret полностью удалён!${NC}\n"
 [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
 # ==========================================
