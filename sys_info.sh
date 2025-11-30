@@ -1,92 +1,106 @@
-#!/bin/sh
-GREEN="\033[1;32m"; RED="\033[1;31m"; NC="\033[0m"
-CONF="/etc/config/zapret"
-clear
 
+#!/bin/sh
+GREEN="\033[1;32m"
+RED="\033[1;31m"
+NC="\033[0m"
+CONF="/etc/config/zapret"
 echo -e "\n${GREEN}===== Информация о системе =====${NC}"
 MODEL=$(cat /tmp/sysinfo/model)
-TARGET=$(sed -n "s/.*TARGET='\(.*\)'/\1/p" /etc/openwrt_release)
 ARCH=$(sed -n "s/.*ARCH='\(.*\)'/\1/p" /etc/openwrt_release)
 OWRT=$(sed -n "s/.*OpenWrt \([0-9.]*\).*/\1/p" /etc/openwrt_release)
-echo -e "${GREEN}$MODEL${NC}"
-echo -e "${GREEN}$ARCH${NC} | ${GREEN}$TARGET${NC}"
-echo -e "${GREEN}$OWRT${NC}"
-
+echo -e "$MODEL"
+echo -e "$ARCH"
+echo -e "$OWRT"
 echo -e "\n${GREEN}===== Пользовательские пакеты =====${NC}"
-PKGS=$(awk '/^Package:/ {p=$2} /^Status: install user/ {print p}' /usr/lib/opkg/status)
-i=0; for p in $PKGS; do i=$((i+1)); eval "pkg$i='$p'"; done
-half=$(( (i+1)/2 ))
-for n in $(seq 1 $half); do
-    eval "l=\$pkg$n"; eval "r=\$pkg$((n+half))"
-    printf "%-20s %s\n" "$l" "$r"
+PKGS=$(awk '/^Package:/ {p=$2} /^Status: install user/ {print p}' /usr/lib/opkg/status | grep -v '^$')
+idx=0
+for pkg in $PKGS; do
+idx=$((idx+1))
+eval "pkg$idx='$pkg'"
 done
-
+total=$idx
+half=$(( (total + 1) / 2 ))
+for i in $(seq 1 $half); do
+eval "left=\$pkg$i"
+right_idx=$((i + half))
+eval "right=\$pkg$right_idx"
+left_pad=$(printf "%-25s" "$left")
+if [ -n "$right" ]; then
+right_pad=$(printf "%-25s" "$right")
+echo "$left_pad $right_pad"
+else
+echo "$left_pad"
+fi
+done
 echo -e "\n${GREEN}===== Flow Offloading =====${NC}"
 sw=$(uci -q get firewall.@defaults[0].flow_offloading)
 hw=$(uci -q get firewall.@defaults[0].flow_offloading_hw)
-grep -q 'ct original packets ge 30' /usr/share/firewall4/templates/ruleset.uc && dpi="${RED}yes${NC}" || dpi="${GREEN}no${NC}"
-[ "$hw" = 1 ] && out="HW: ${RED}on${NC}" || \
-[ "$sw" = 1 ] && out="SW: ${RED}on${NC}" || \
+if grep -q 'ct original packets ge 30' /usr/share/firewall4/templates/ruleset.uc 2>/dev/null; then
+dpi="${RED}yes${NC}"
+else
+dpi="${GREEN}no${NC}"
+fi
+if [ "$hw" = "1" ]; then
+out="HW: ${RED}on${NC}"
+elif [ "$sw" = "1" ]; then
+out="SW: ${RED}on${NC}"
+else
 out="SW: ${GREEN}off${NC} | HW: ${GREEN}off${NC}"
-echo -e "$out | FIX: $dpi"
-
+fi
+out="$out | FIX: ${dpi}"
+echo -e "$out"
 echo -e "\n${GREEN}===== Проверка GitHub =====${NC}"
-RATE=$(curl -s https://api.github.com/rate_limit | grep '"remaining"' | head -1 | tr -d '",' | awk '{print $2}')
-[ -z "$RATE" ] && RATE_OUT="${RED}N/A${NC}" || RATE_OUT=$([ "$RATE" -eq 0 ] && echo "${RED}0${NC}" || echo "${GREEN}$RATE${NC}")
-
-printf "IPv4: "; curl -4 -Is --connect-timeout 3 https://github.com >/dev/null 2>&1 && echo -ne "${GREEN}ok${NC}" || echo -ne "${RED}fail${NC}"
-printf "  IPv6: "; curl -6 -Is --connect-timeout 3 https://github.com >/dev/null 2>&1 && echo -e "${GREEN}ok${NC}" || echo -e "${RED}fail${NC}"
-printf "API: "; curl -Is --connect-timeout 3 https://api.github.com >/dev/null 2>&1 \
+RATE=$(wget -qO- -s https://api.github.com/rate_limit | grep '"remaining"' | head -1 | awk '{print $2}' | tr -d ,)
+[ -z "$RATE" ] && RATE_OUT="${RED}N/A${NC}" || RATE_OUT=$([ "$RATE" -eq 0 ] && echo -e "${RED}0${NC}" || echo -e "${GREEN}$RATE${NC}")
+echo -n "IPv4: "
+wget -4 --timeout=3 --server-response --spider https://github.com >/dev/null 2>&1 && echo -ne "${GREEN}ok${NC}" || echo -ne "${RED}fail${NC}"
+echo -n "  IPv6: "
+wget -6 --timeout=3 --server-response --spider https://github.com >/dev/null 2>&1 && echo -e "${GREEN}ok${NC}" || echo -e "${RED}fail${NC}"
+echo -n "API: "
+wget --timeout=3 --server-response --spider https://api.github.com >/dev/null 2>&1 \
 && echo -e "${GREEN}ok${NC}   Limit: $RATE_OUT" \
 || echo -e "${RED}fail${NC}   Limit: $RATE_OUT"
-
 echo -e "\n${GREEN}===== Настройки Zapret =====${NC}"
 zpr_info() {
-    # версия пакета
-    INSTALLED_VER=$(opkg list-installed | awk '/^zapret /{print $3}')
-
-    # статус службы
-    /etc/init.d/zapret status 2>/dev/null | grep -qi running && Z="${GREEN}запущен${NC}" || Z="${RED}остановлен${NC}"
-
-    # определяем скрипт
-    SCRIPT="/opt/zapret/init.d/openwrt/custom.d/50-script.sh"
-    name=""
-    if [ -f "$SCRIPT" ]; then
-        line=$(head -1 "$SCRIPT")
-        case "$line" in
-            *quic*) name="50-quic4all" ;;
-            *stun*) name="50-stun4all" ;;
-            *"discord media"*) name="50-discord-media" ;;
-            *"discord subnets"*) name="50-discord" ;;
-        esac
-    fi
-
-    # TCP и UDP порты
-    TCP_VAL=$(sed -n "s/.*NFQWS_PORTS_TCP'\(.*\)'.*/\1/p" "$CONF")
-    UDP_VAL=$(sed -n "s/.*NFQWS_PORTS_UDP'\(.*\)'.*/\1/p" "$CONF")
-
-    # вывод основной информации
-    echo -e "${GREEN}$INSTALLED_VER${NC} | $Z"
-    [ -n "$name" ] && echo -e "${GREEN}$name${NC}"
-    echo -e "TCP: ${GREEN}$TCP_VAL${NC} | UDP: ${GREEN}$UDP_VAL${NC}"
-
-    # стратегия
-    echo -e "\n${GREEN}===== Стратегия =====${NC}"
-    sed -n "/^[[:space:]]*option[[:space:]]\+NFQWS_OPT[[:space:]]*'/{
-        s/^[[:space:]]*option[[:space:]]\+NFQWS_OPT[[:space:]]*'//; 
-        :a; 
-        p; 
-        n; 
-        /'$/!ba
-    }" "$CONF" | sed "s/'\$//"
+INSTALLED_VER=$(opkg list-installed | grep '^zapret ' | awk '{print $3}')
+if /etc/init.d/zapret status 2>/dev/null | grep -qi "running"; then
+ZAPRET_STATUS="${GREEN}запущен${NC}"
+else
+ZAPRET_STATUS="${RED}остановлен${NC}"
+fi
+SCRIPT_FILE="/opt/zapret/init.d/openwrt/custom.d/50-script.sh"
+if [ -f "$SCRIPT_FILE" ]; then
+line=$(head -n1 "$SCRIPT_FILE")
+case "$line" in
+*QUIC*) name="50-quic4all" ;;
+*stun*) name="50-stun4all" ;;
+*"discord media"*) name="50-discord-media" ;;
+*"discord subnets"*) name="50-discord" ;;
+*) name="" ;;
+esac
+fi
+TCP_VAL=$(grep -E "^[[:space:]]*option NFQWS_PORTS_TCP[[:space:]]+'" "$CONF" \
+| sed "s/.*'\(.*\)'.*/\1/")
+UDP_VAL=$(grep -E "^[[:space:]]*option NFQWS_PORTS_UDP[[:space:]]+'" "$CONF" \
+| sed "s/.*'\(.*\)'.*/\1/")
+echo -e "${GREEN}$INSTALLED_VER${NC} | $ZAPRET_STATUS"
+[ -n "$name" ] && echo -e "${GREEN}$name${NC}"
+echo -e "TCP: ${GREEN}$TCP_VAL${NC} | UDP: ${GREEN}$UDP_VAL${NC}"
+echo -e "\n${GREEN}===== Стратегия =====${NC}"
+awk '
+/^[[:space:]]*option[[:space:]]+NFQWS_OPT[[:space:]]*'\''/ {flag=1; sub(/^[[:space:]]*option[[:space:]]+NFQWS_OPT[[:space:]]*'\''/, ""); next}
+flag {
+if (/'\''/) {sub(/'\''$/, ""); print; exit}
+print
+}' "$CONF"
 }
-
-# вызов функции, если пакет установлен
-[ -f /etc/init.d/zapret ] && zpr_info || echo -e "${RED}Zapret не установлен!${NC}\n"
-
-
+if [ -f /etc/init.d/zapret ]; then
+zpr_info
+else
+echo -e "${RED}Zapret не установлен!${NC}\n"
+fi
 echo -e "${GREEN}===== Доступность сайтов =====${NC}"
-SITES="
+SITES=$(cat <<'EOF'
 gosuslugi.ru
 esia.gosuslugi.ru/login
 rutube.ru
@@ -107,25 +121,34 @@ flightradar24.com
 cdn77.com
 play.google.com
 genderize.io
-"
-
-sites_clean=$(echo "$SITES")
-count=$(echo "$sites_clean" | wc -w)
-half=$(( (count+1)/2 ))
-
-for n in $(seq 1 $half); do
-    l=$(echo $sites_clean | cut -d" " -f$n)
-    r=$(echo $sites_clean | cut -d" " -f$((n+half)))
-    lp=$(printf "%-25s" "$l")
-    rp=$(printf "%-25s" "$r")
-
-    curl -Is --connect-timeout 3 --max-time 4 "https://$l" >/dev/null 2>&1 && lc="[${GREEN}OK${NC}]" || lc="[${RED}FAIL${NC}]"
-    if [ -n "$r" ]; then
-        curl -Is --connect-timeout 3 --max-time 4 "https://$r" >/dev/null 2>&1 && rc="[${GREEN}OK${NC}]" || rc="[${RED}FAIL${NC}]"
-        echo -e "$lc  $lp $rc  $rp"
-    else
-        echo -e "$lc  $lp"
-    fi
+EOF
+)
+sites_clean=$(echo "$SITES" | grep -v '^#' | grep -v '^\s*$')
+total=$(echo "$sites_clean" | wc -l)
+half=$(( (total + 1) / 2 ))
+sites_list=""
+for site in $sites_clean; do
+sites_list="$sites_list $site"
 done
-
-echo
+for idx in $(seq 1 $half); do
+left=$(echo $sites_list | cut -d' ' -f$idx)
+right_idx=$((idx + half))
+right=$(echo $sites_list | cut -d' ' -f$right_idx)
+left_pad=$(printf "%-25s" "$left")
+right_pad=$(printf "%-25s" "$right")
+if wget --timeout=4 --server-response --spider "https://$left" >/dev/null 2>&1; then
+left_color="[${GREEN}OK${NC}]  "
+else
+left_color="[${RED}FAIL${NC}]"
+fi
+if [ -n "$right" ]; then
+if wget --timeout=4 --server-response --spider "https://$right" >/dev/null 2>&1; then
+right_color="[${GREEN}OK${NC}]  "
+else
+right_color="[${RED}FAIL${NC}]"
+fi
+echo -e "$left_color $left_pad $right_color $right_pad"
+else
+echo -e "$left_color $left_pad"
+fi
+done
