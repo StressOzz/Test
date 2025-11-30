@@ -158,14 +158,10 @@ esac
 }
 enable_discord_calls() {
 local NO_PAUSE=$1
+[ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; return; }
 [ "$NO_PAUSE" != "1" ] && clear
 [ "$NO_PAUSE" != "1" ] && echo -e "${MAGENTA}Меню установки скриптов${NC}"
 [ "$NO_PAUSE" = "1" ] && echo -e "${MAGENTA}Устанавливаем скрипт${NC}"
-if [ ! -f /etc/init.d/zapret ]; then
-echo -e "\n${RED}Zapret не установлен!${NC}\n"
-[ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
-return
-fi
 [ "$NO_PAUSE" != "1" ] && show_script_50 && [ -n "$name" ] && echo -e "\n${YELLOW}Установлен скрипт:${NC} $name"
 if [ "$NO_PAUSE" = "1" ]; then
 SELECTED="50-stun4all"
@@ -229,11 +225,7 @@ chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d
 # ==========================================
 fix_GAME() {
 local NO_PAUSE=$1
-if [ ! -f /etc/init.d/zapret ]; then
-[ "$NO_PAUSE" != "1" ] && echo -e "\n${RED}Zapret не установлен!${NC}\n"
-[ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
-return
-fi
+[ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; return; }
 [ "$NO_PAUSE" != "1" ] && echo
 echo -e "${MAGENTA}Настраиваем стратегию для игр${NC}"
 if grep -q "option NFQWS_PORTS_UDP.*1024-49999,50100-65535" "$CONF" && grep -q -- "--filter-udp=1024-49999,50100-65535" "$CONF"; then
