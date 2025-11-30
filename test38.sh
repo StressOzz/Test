@@ -329,7 +329,7 @@ echo -e "${GREEN}Zapret полностью удалён!${NC}\n"
 show_current_strategy() {
 CONFstr="/etc/config/zapret"
 [ -f "$CONFstr" ] || return
-grep -q "#v1" "$CONFstr" && ver="v1" || grep -q "#v2" "$CONFstr" && ver="v2" || grep -q "#v3" "$CONFstr" && ver="v3" || grep -q "#v4" "$CONFstr" && ver="v4"
+for v in v1 v2 v3 v4; do grep -q "#$v" "$CONFstr" && { ver="$v"; return; } done
 grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONFstr" && grep -q -- "--hostlist-exclude-domains=openwrt.org" "$CONFstr" && ver="дефолтная"
 }
 menu_str() {
