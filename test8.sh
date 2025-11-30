@@ -102,33 +102,33 @@ return
 fi
 echo -e "\n${MAGENTA}Устанавливаем ZAPRET${NC}"
 if [ -f /etc/init.d/zapret ]; then
-echo -e "${GREEN}🔴 ${CYAN}Останавливаем ${NC}zapret" && /etc/init.d/zapret stop >/dev/null 2>&1
+echo -e "${CYAN}Останавливаем ${NC}zapret" && /etc/init.d/zapret stop >/dev/null 2>&1
 PIDS=$(pgrep -f /opt/zapret)
 [ -n "$PIDS" ] && for pid in $PIDS; do kill -9 "$pid" >/dev/null 2>&1; done
 fi
-echo -e "${GREEN}🔴 ${CYAN}Обновляем список пакетов${NC}"
+echo -e "${CYAN}Обновляем список пакетов${NC}"
 opkg update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; sleep 7; return; }
 mkdir -p "$WORKDIR"; rm -f "$WORKDIR"/* 2>/dev/null; cd "$WORKDIR" || return
 FILE_NAME=$(basename "$LATEST_URL")
 if ! command -v unzip >/dev/null 2>&1; then
-echo -e "${GREEN}🔴 ${CYAN}Устанавливаем ${NC}unzip"
+echo -e "${CYAN}Устанавливаем ${NC}unzip"
 opkg install unzip >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить unzip!${NC}\n"; sleep 7; return; }
 fi
-echo -e "${GREEN}🔴 ${CYAN}Скачиваем архив ${NC}$FILE_NAME"
+echo -e "${CYAN}Скачиваем архив ${NC}$FILE_NAME"
 wget -q "$LATEST_URL" -O "$FILE_NAME" || {
 echo -e "\n${RED}Не удалось скачать ${NC}$FILE_NAME\n"
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 return
 }
-echo -e "${GREEN}🔴 ${CYAN}Распаковываем архив${NC}"
+echo -e "${CYAN}Распаковываем архив${NC}"
 unzip -o "$FILE_NAME" >/dev/null
 for PKG in zapret_*.ipk luci-app-zapret_*.ipk; do
 [ -f "$PKG" ] && {
-echo -e "${GREEN}🔴 ${CYAN}Устанавливаем пакет ${NC}$PKG"
+echo -e "${CYAN}Устанавливаем пакет ${NC}$PKG"
 opkg install --force-reinstall "$PKG" >/dev/null 2>&1
 }
 done
-echo -e "${GREEN}🔴 ${CYAN}Удаляем временные файлы${NC}"
+echo -e "${CYAN}Удаляем временные файлы${NC}"
 cd /
 rm -rf "$WORKDIR" /tmp/*.ipk /tmp/*.zip /tmp/*zapret* 2>/dev/null
 if [ -f /etc/init.d/zapret ]; then
@@ -227,7 +227,7 @@ local NO_PAUSE=$1
 [ "$NO_PAUSE" != "1" ] && echo
 echo -e "${MAGENTA}Настраиваем стратегию для игр${NC}"
 if grep -q "option NFQWS_PORTS_UDP.*1024-49999,50100-65535" "$CONF" && grep -q -- "--filter-udp=1024-49999,50100-65535" "$CONF"; then
-echo -e "${GREEN}🔴 ${CYAN}Удаляем из стратегии настройки для игр${NC}"
+echo -e "${CYAN}Удаляем из стратегии настройки для игр${NC}"
 sed -i ':a;N;$!ba;s|--new\n--filter-udp=1024-49999,50100-65535\n--dpi-desync=fake\n--dpi-desync-cutoff=d2\n--dpi-desync-any-protocol=1\n--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/quic_initial_www_google_com\.bin\n*||g' "$CONF"
 sed -i "s/,1024-49999,50100-65535//" "$CONF"
 chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart >/dev/null 2>&1
@@ -253,7 +253,7 @@ cat <<'EOF' >> "$CONF"
 '
 EOF
 fi
-echo -e "${GREEN}🔴 ${CYAN}Добавляем в стратегию настройки для игр${NC}"
+echo -e "${CYAN}Добавляем в стратегию настройки для игр${NC}"
 chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart >/dev/null 2>&1
 echo -e "${BLUE}🔴 ${GREEN}Игровые настройки добавлены!${NC}\n"
 [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
@@ -290,10 +290,10 @@ read -p "Нажмите Enter для выхода в главное меню..."
 # ==========================================
 comeback_def () {
 if [ -f /opt/zapret/restore-def-cfg.sh ]; then
-echo -e "\n${MAGENTA}Возвращаем настройки по умолчанию${NC}\n"
+echo -e "\n${MAGENTA}Возвращаем настройки по умолчанию${NC}"
 rm -f /opt/zapret/init.d/openwrt/custom.d/50-script.sh
 [ -f /etc/init.d/zapret ] && /etc/init.d/zapret stop >/dev/null 2>&1
-echo -e "${GREEN}🔴 ${CYAN}Возвращаем ${NC}настройки${CYAN}, ${NC}стратегию${CYAN} и ${NC}hostlist${CYAN} к значениям по умолчанию${NC}"
+echo -e "${CYAN}Возвращаем ${NC}настройки${CYAN}, ${NC}стратегию${CYAN} и ${NC}hostlist${CYAN} к значениям по умолчанию${NC}"
 IPSET_DIR="/opt/zapret/ipset"
 FILES="zapret-hosts-google.txt zapret-hosts-user-exclude.txt"
 URL_BASE="https://raw.githubusercontent.com/remittor/zapret-openwrt/master/zapret/ipset"
@@ -318,10 +318,10 @@ read -p "Нажмите Enter для выхода в главное меню..."
 stop_zapret() {
 if [ -f /etc/init.d/zapret ]; then
 echo -e "\n${MAGENTA}Останавливаем Zapret${NC}"
-echo -e "${GREEN}🔴 ${CYAN}Останавливаем ${NC}Zapret" && /etc/init.d/zapret stop >/dev/null 2>&1
+echo -e "${CYAN}Останавливаем ${NC}Zapret" && /etc/init.d/zapret stop >/dev/null 2>&1
 PIDS=$(pgrep -f /opt/zapret)
 if [ -n "$PIDS" ]; then
-echo -e "${GREEN}🔴 ${CYAN}Убиваем все процессы ${NC}Zapret"
+echo -e "${CYAN}Убиваем все процессы ${NC}Zapret"
 for pid in $PIDS; do kill -9 "$pid" >/dev/null 2>&1; done
 fi
 echo -e "${BLUE}🔴 ${GREEN}Zapret остановлен!${NC}\n"
@@ -336,7 +336,7 @@ read -p "Нажмите Enter для выхода в главное меню..."
 start_zapret() {
 if [ -f /etc/init.d/zapret ]; then
 echo -e "\n${MAGENTA}Запускаем Zapret${NC}"
-echo -e "${GREEN}🔴 ${CYAN}Запускаем ${NC}Zapret"
+echo -e "${CYAN}Запускаем ${NC}Zapret"
 /etc/init.d/zapret start >/dev/null 2>&1
 chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart >/dev/null 2>&1
 echo -e "${BLUE}🔴 ${GREEN}Zapret запущен!${NC}\n"
@@ -352,11 +352,11 @@ uninstall_zapret() {
 local NO_PAUSE=$1
 [ "$NO_PAUSE" != "1" ] && echo
 echo -e "${MAGENTA}Удаляем ZAPRET${NC}"
-echo -e "${GREEN}🔴 ${CYAN}Останавливаем ${NC}zapret" && echo -e "${GREEN}🔴 ${CYAN}Убиваем процессы${NC}" && /etc/init.d/zapret stop >/dev/null 2>&1
+echo -e "${CYAN}Останавливаем ${NC}zapret" && echo -e "${CYAN}Убиваем процессы${NC}" && /etc/init.d/zapret stop >/dev/null 2>&1
 for pid in $(pgrep -f /opt/zapret 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done
-echo -e "${GREEN}🔴 ${CYAN}Удаляем пакеты${NC}"
+echo -e "${CYAN}Удаляем пакеты${NC}"
 opkg --force-removal-of-dependent-packages --autoremove remove zapret luci-app-zapret >/dev/null 2>&1
-echo -e "${GREEN}🔴 ${CYAN}Чистим конфиги и временные файлы${NC}"
+echo -e "${CYAN}Чистим конфиги и временные файлы${NC}"
 rm -rf /opt/zapret /etc/config/zapret /etc/firewall.zapret /etc/init.d/zapret /tmp/*zapret* /var/run/*zapret* /tmp/*.ipk /tmp/*.zip 2>/dev/null
 crontab -l 2>/dev/null | grep -v -i "zapret" | crontab - 2>/dev/null
 nft list tables 2>/dev/null | awk '{print $2}' | grep -E '(zapret|ZAPRET)' | while read t; do [ -n "$t" ] && nft delete table "$t" 2>/dev/null; done
