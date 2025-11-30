@@ -95,13 +95,13 @@ fi
 install_Zapret() {
 local NO_PAUSE=$1
 [ "$NO_PAUSE" != "1" ] && clear
-echo -e "${MAGENTA}Устанавливаем ZAPRET${NC}\n"
 get_versions
 if [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ]; then
 echo -e "${BLUE}🔴 ${GREEN}Последняя версия уже установлена!${NC}\n"
 read -p "Нажмите Enter для выхода..." dummy
 return
 fi
+echo -e "${MAGENTA}Устанавливаем ZAPRET${NC}"
 if [ -f /etc/init.d/zapret ]; then
 echo -e "${GREEN}🔴 ${CYAN}Останавливаем ${NC}zapret" && /etc/init.d/zapret stop >/dev/null 2>&1
 PIDS=$(pgrep -f /opt/zapret)
@@ -119,7 +119,7 @@ opkg install unzip >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось у�
 fi
 echo -e "${GREEN}🔴 ${CYAN}Скачиваем архив ${NC}$FILE_NAME"
 wget -q "$LATEST_URL" -O "$FILE_NAME" || {
-echo -e "${RED}Не удалось скачать ${NC}$FILE_NAME\n"
+echo -e "\n${RED}Не удалось скачать ${NC}$FILE_NAME\n"
 read -p "Нажмите Enter для выхода..." dummy
 return
 }
@@ -135,7 +135,7 @@ echo -e "${GREEN}🔴 ${CYAN}Удаляем временные файлы${NC}"
 cd /
 rm -rf "$WORKDIR" /tmp/*.ipk /tmp/*.zip /tmp/*zapret* 2>/dev/null
 if [ -f /etc/init.d/zapret ]; then
-echo -e "\n${BLUE}🔴 ${GREEN}Zapret установлен!${NC}\n"
+echo -e "${BLUE}🔴 ${GREEN}Zapret установлен!${NC}\n"
 [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода..." dummy
 else
 echo -e "\n${RED}Zapret не был установлен!${NC}\n"
@@ -200,9 +200,9 @@ return ;;
 esac
 fi
 if wget -qO "$CUSTOM_DIR/50-script.sh" "$URL"; then
-echo -e "\n${BLUE}🔴 ${GREEN}Скрипт ${NC}$SELECTED${CYAN} успешно установлен!${NC}\n"
+echo -e "${BLUE}🔴 ${GREEN}Скрипт ${NC}$SELECTED${GREEN} успешно установлен!${NC}\n"
 else
-echo -e "${RED}Ошибка при скачивании скрипта!${NC}\n"
+echo -e "\n${RED}Ошибка при скачивании скрипта!${NC}\n"
 [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 return
 fi
@@ -230,19 +230,18 @@ chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d
 # ==========================================
 fix_GAME() {
 local NO_PAUSE=$1
-[ "$NO_PAUSE" != "1" ] && clear
-echo -e "${MAGENTA}Настраиваем стратегию для игр${NC}\n"
 if [ ! -f /etc/init.d/zapret ]; then
-[ "$NO_PAUSE" != "1" ] && echo -e "${RED}Zapret не установлен!${NC}\n"
+[ "$NO_PAUSE" != "1" ] && echo -e "\n${RED}Zapret не установлен!${NC}\n"
 [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 return
 fi
+echo -e "\n${MAGENTA}Настраиваем стратегию для игр${NC}"
 if grep -q "option NFQWS_PORTS_UDP.*1024-49999,50100-65535" "$CONF" && grep -q -- "--filter-udp=1024-49999,50100-65535" "$CONF"; then
 echo -e "${GREEN}🔴 ${CYAN}Удаляем из стратегии настройки для игр${NC}"
 sed -i ':a;N;$!ba;s|--new\n--filter-udp=1024-49999,50100-65535\n--dpi-desync=fake\n--dpi-desync-cutoff=d2\n--dpi-desync-any-protocol=1\n--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/quic_initial_www_google_com\.bin\n*||g' "$CONF"
 sed -i "s/,1024-49999,50100-65535//" "$CONF"
 chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart >/dev/null 2>&1
-echo -e "\n${BLUE}🔴 ${GREEN}Настройки для игр удалены!${NC}\n"
+echo -e "${BLUE}🔴 ${GREEN}Настройки для игр удалены!${NC}\n"
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 return
 fi
@@ -266,7 +265,7 @@ EOF
 fi
 echo -e "${GREEN}🔴 ${CYAN}Добавляем в стратегию настройки для игр${NC}"
 chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart >/dev/null 2>&1
-echo -e "\n${BLUE}🔴 ${GREEN}Игровые настройки добавлены!${NC}\n"
+echo -e "${BLUE}🔴 ${GREEN}Игровые настройки добавлены!${NC}\n"
 [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
 # ==========================================
@@ -279,7 +278,7 @@ get_versions
 uninstall_zapret "1"
 install_Zapret "1"
 [ ! -f /etc/init.d/zapret ] && return
-echo -e "${MAGENTA}Останавливаем Zapret${NC}\n" && /etc/init.d/zapret stop >/dev/null 2>&1 && echo -e "${BLUE}🔴 ${GREEN}Zapret остановлен!${NC}\n"
+echo -e "${MAGENTA}Останавливаем Zapret${NC}" && /etc/init.d/zapret stop >/dev/null 2>&1 && echo -e "${BLUE}🔴 ${GREEN}Zapret остановлен!${NC}\n"
 wget -qO- "https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Str${STR_VERSION_AUTOINSTALL}.sh" | sh
 if [ ! -f "$CONF" ]; then
 echo -e "\n${RED}Файл ${NC}$CONF${RED} не найден!${NC}\n"
@@ -328,18 +327,17 @@ read -p "Нажмите Enter для выхода в главное меню..."
 # Остановить Zapret
 # ==========================================
 stop_zapret() {
-clear
-echo -e "${MAGENTA}Останавливаем Zapret${NC}\n"
 if [ -f /etc/init.d/zapret ]; then
+echo -e "${MAGENTA}Останавливаем Zapret${NC}"
 echo -e "${GREEN}🔴 ${CYAN}Останавливаем ${NC}Zapret" && /etc/init.d/zapret stop >/dev/null 2>&1
 PIDS=$(pgrep -f /opt/zapret)
 if [ -n "$PIDS" ]; then
 echo -e "${GREEN}🔴 ${CYAN}Убиваем все процессы ${NC}Zapret"
 for pid in $PIDS; do kill -9 "$pid" >/dev/null 2>&1; done
 fi
-echo -e "\n${BLUE}🔴 ${GREEN}Zapret остановлен!${NC}\n"
+echo -e "${BLUE}🔴 ${GREEN}Zapret остановлен!${NC}\n"
 else
-echo -e "${RED}Zapret не установлен!${NC}\n"
+echo -e "\n${RED}Zapret не установлен!${NC}\n"
 fi
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
@@ -347,15 +345,14 @@ read -p "Нажмите Enter для выхода в главное меню..."
 # Запустить Zapret
 # ==========================================
 start_zapret() {
-clear
-echo -e "${MAGENTA}Запускаем Zapret${NC}\n"
 if [ -f /etc/init.d/zapret ]; then
+echo -e "\n${MAGENTA}Запускаем Zapret${NC}"
 echo -e "${GREEN}🔴 ${CYAN}Запускаем ${NC}Zapret"
 /etc/init.d/zapret start >/dev/null 2>&1
 chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart >/dev/null 2>&1
-echo -e "\n${BLUE}🔴 ${GREEN}Zapret запущен!${NC}\n"
+echo -e "${BLUE}🔴 ${GREEN}Zapret запущен!${NC}\n"
 else
-echo -e "${RED}Zapret не установлен!${NC}\n"
+echo -e "\n${RED}Zapret не установлен!${NC}\n"
 fi
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
@@ -364,8 +361,8 @@ read -p "Нажмите Enter для выхода в главное меню..."
 # ==========================================
 uninstall_zapret() {
 local NO_PAUSE=$1
-[ "$NO_PAUSE" != "1" ] && clear
-echo -e "${MAGENTA}Удаляем ZAPRET${NC}\n"
+[ "$NO_PAUSE" != "1" ] && echo
+echo -e "${MAGENTA}Удаляем ZAPRET${NC}"
 echo -e "${GREEN}🔴 ${CYAN}Останавливаем ${NC}zapret" && echo -e "${GREEN}🔴 ${CYAN}Убиваем процессы${NC}" && /etc/init.d/zapret stop >/dev/null 2>&1
 for pid in $(pgrep -f /opt/zapret 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done
 echo -e "${GREEN}🔴 ${CYAN}Удаляем пакеты${NC}"
@@ -377,7 +374,7 @@ nft list tables 2>/dev/null | awk '{print $2}' | grep -E '(zapret|ZAPRET)' | whi
 sed -i '/130\.255\.77\.28 ntc.party/d; /57\.144\.222\.34 instagram.com www.instagram.com/d; \
 /173\.245\.58\.219 rutor.info d.rutor.info/d; /193\.46\.255\.29 rutor.info/d; \
 /157\.240\.9\.174 instagram.com www.instagram.com/d' /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1
-echo -e "\n${BLUE}🔴 ${GREEN}Zapret полностью удалён!${NC}\n"
+echo -e "${BLUE}🔴 ${GREEN}Zapret полностью удалён!${NC}\n"
 [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
 # ==========================================
