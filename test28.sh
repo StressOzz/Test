@@ -151,19 +151,14 @@ esac
 enable_discord_calls() {
 local NO_PAUSE=$1
 [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; return; }
-[ "$NO_PAUSE" != "1" ] && { clear; show_script_50; echo -e "${MAGENTA}Меню установки скриптов${NC}"; [ -n "$name" ] && echo -e "\n${YELLOW}Установлен скрипт:${NC} $name"; }
+[ "$NO_PAUSE" != "1" ] && clear
+[ "$NO_PAUSE" != "1" ] && echo -e "${MAGENTA}Меню установки скриптов${NC}"
 [ "$NO_PAUSE" = "1" ] && echo -e "${MAGENTA}Устанавливаем скрипт${NC}"
-[ "$NO_PAUSE" != "1" ] && {show_script_50 && [ -n "$name" ] && echo -e "\n${YELLOW}Установлен скрипт:${NC} $name"; }
+[ "$NO_PAUSE" != "1" ] && show_script_50 && [ -n "$name" ] && echo -e "\n${YELLOW}Установлен скрипт:${NC} $name"
 if [ "$NO_PAUSE" = "1" ]; then
 SELECTED="50-stun4all"
 URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-stun4all"
 else
-echo -e "\n${CYAN}1) ${GREEN}Установить скрипт ${NC}50-stun4all\n${CYAN}2) ${GREEN}Установить скрипт ${NC}50-quic4all"
-echo -e "${CYAN}3) ${GREEN}Установить скрипт ${NC}50-discord-media\n${CYAN}4) ${GREEN}Установить скрипт ${NC}50-discord"
-echo -e "${CYAN}5) ${GREEN}Удалить скрипт${NC}\n${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n"
-echo -ne "${YELLOW}Выберите пункт:${NC} "
-read choice
-case "$choice" in
 1) SELECTED="50-stun4all"
 URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-stun4all" ;;
 2) SELECTED="50-quic4all"
