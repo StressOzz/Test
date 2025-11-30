@@ -233,7 +233,7 @@ echo; enable_discord_calls "1"; fix_GAME "1"; echo -e "${GREEN}Zapret устан
 # ==========================================
 comeback_def () {
 if [ -f /opt/zapret/restore-def-cfg.sh ]; then
-echo -e "\n${MAGENTA}Возвращаем настройки по умолчанию${NC}"; rm -f /opt/zapret/init.d/openwrt/custom.d/50-script.sh; rm -f /opt/zapret/ipset/cust{1..4}.txt; 
+echo -e "\n${MAGENTA}Возвращаем настройки по умолчанию${NC}"; rm -f /opt/zapret/init.d/openwrt/custom.d/50-script.sh; for i in 1 2 3 4; do rm -f "/opt/zapret/ipset/cust$i.txt"; done
 [ -f /etc/init.d/zapret ] && /etc/init.d/zapret stop >/dev/null 2>&1; echo -e "${CYAN}Возвращаем ${NC}настройки${CYAN}, ${NC}стратегию${CYAN} и ${NC}hostlist${CYAN} к значениям по умолчанию${NC}"
 for f in zapret-hosts-google.txt zapret-hosts-user-exclude.txt zapret-ip-exclude.txt
 do wget -qO "/opt/zapret/ipset/$f" "https://raw.githubusercontent.com/remittor/zapret-openwrt/master/zapret/ipset/$f"; done
