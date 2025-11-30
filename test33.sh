@@ -133,10 +133,8 @@ fi
 # Включение Discord и звонков в TG и WA
 # ==========================================
 show_script_50() {
-SCRIPT_FILE="/opt/zapret/init.d/openwrt/custom.d/50-script.sh"
-[ -f "$SCRIPT_FILE" ] || return
-line=$(head -n1 "$SCRIPT_FILE")
-case "$line" in
+[ -f "/opt/zapret/init.d/openwrt/custom.d/50-script.sh" ] || return
+case "$(head -n1 /opt/zapret/init.d/openwrt/custom.d/50-script.sh)" in
 *QUIC*) name="50-quic4all" ;;
 *stun*) name="50-stun4all" ;;
 *"discord media"*) name="50-discord-media" ;;
