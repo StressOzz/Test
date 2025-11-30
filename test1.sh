@@ -161,7 +161,7 @@ enable_discord_calls() {
 local NO_PAUSE=$1
 [ "$NO_PAUSE" != "1" ] && clear
 [ "$NO_PAUSE" != "1" ] && echo -e "${MAGENTA}Меню установки скриптов${NC}"
-[ "$NO_PAUSE" = "1" ] && echo -e "${MAGENTA}Устанавливаем скрипт${NC}\n"
+[ "$NO_PAUSE" = "1" ] && echo -e "${MAGENTA}Устанавливаем скрипт${NC}"
 if [ ! -f /etc/init.d/zapret ]; then
 echo -e "\n${RED}Zapret не установлен!${NC}\n"
 [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
@@ -441,7 +441,7 @@ echo -e "╔══════════════════════�
 echo -e "║     ${BLUE}Zapret on remittor Manager${NC}     ║"
 echo -e "╚════════════════════════════════════╝"
 echo -e "                     ${DGRAY}by StressOzz v$ZAPRET_MANAGER_VERSION${NC}"
-echo -e "\n${YELLOW}Установленная версия:       ${INST_COLOR}$INSTALLED_DISPLAY${NC}"
+echo -e "\n${YELLOW}Установленная версия:   ${INST_COLOR}$INSTALLED_DISPLAY${NC}"
 [ -n "$ZAPRET_STATUS" ] && echo -e "${YELLOW}Статус Zapret:${NC}          $ZAPRET_STATUS"
 show_script_50 && [ -n "$name" ] && echo -e "${YELLOW}Установлен скрипт:${NC}      $name"
 [ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*1024-49999,50100-65535" "$CONF" && grep -q -- "--filter-udp=1024-49999,50100-65535" "$CONF" && echo -e "${YELLOW}Стратегия для игр:${NC}      ${GREEN}активна${NC}"
