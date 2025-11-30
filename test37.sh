@@ -327,9 +327,10 @@ echo -e "${GREEN}Zapret полностью удалён!${NC}\n"
 # Выбор стратегий
 # ==========================================
 show_current_strategy() {
-[ -f "$CONF" ] || return
-grep -q "#v1" "$CONF" && ver="v1" || grep -q "#v2" "$CONF" && ver="v2" || grep -q "#v3" "$CONF" && ver="v3" || grep -q "#v4" "$CONF" && ver="v4"
-grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONF" && grep -q -- "--hostlist-exclude-domains=openwrt.org" "$CONF" && ver="дефолтная"
+CONFstr="/etc/config/zapret"
+[ -f "$CONFstr" ] || return
+grep -q "#v1" "$CONFstr" && ver="v1" || grep -q "#v2" "$CONFstr" && ver="v2" || grep -q "#v3" "$CONFstr" && ver="v3" || grep -q "#v4" "$CONFstr" && ver="v4"
+grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONFstr" && grep -q -- "--hostlist-exclude-domains=openwrt.org" "$CONFstr" && ver="дефолтная"
 }
 menu_str() {
 [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; return; }
