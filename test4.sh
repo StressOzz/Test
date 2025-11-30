@@ -94,10 +94,9 @@ fi
 # ==========================================
 install_Zapret() {
 local NO_PAUSE=$1
-[ "$NO_PAUSE" != "1" ] && clear
 get_versions
 if [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ]; then
-echo -e "${BLUE}🔴 ${GREEN}Последняя версия уже установлена!${NC}\n"
+echo -e "\n${BLUE}🔴 ${GREEN}Последняя версия уже установлена!${NC}\n"
 read -p "Нажмите Enter для выхода..." dummy
 return
 fi
@@ -235,7 +234,8 @@ if [ ! -f /etc/init.d/zapret ]; then
 [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 return
 fi
-echo -e "\n${MAGENTA}Настраиваем стратегию для игр${NC}"
+[ "$NO_PAUSE" != "1" ] && echo
+echo -e "${MAGENTA}Настраиваем стратегию для игр${NC}"
 if grep -q "option NFQWS_PORTS_UDP.*1024-49999,50100-65535" "$CONF" && grep -q -- "--filter-udp=1024-49999,50100-65535" "$CONF"; then
 echo -e "${GREEN}🔴 ${CYAN}Удаляем из стратегии настройки для игр${NC}"
 sed -i ':a;N;$!ba;s|--new\n--filter-udp=1024-49999,50100-65535\n--dpi-desync=fake\n--dpi-desync-cutoff=d2\n--dpi-desync-any-protocol=1\n--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/quic_initial_www_google_com\.bin\n*||g' "$CONF"
@@ -328,7 +328,7 @@ read -p "Нажмите Enter для выхода в главное меню..."
 # ==========================================
 stop_zapret() {
 if [ -f /etc/init.d/zapret ]; then
-echo -e "${MAGENTA}Останавливаем Zapret${NC}"
+echo -e "\n${MAGENTA}Останавливаем Zapret${NC}"
 echo -e "${GREEN}🔴 ${CYAN}Останавливаем ${NC}Zapret" && /etc/init.d/zapret stop >/dev/null 2>&1
 PIDS=$(pgrep -f /opt/zapret)
 if [ -n "$PIDS" ]; then
@@ -378,10 +378,6 @@ echo -e "${BLUE}🔴 ${GREEN}Zapret полностью удалён!${NC}\n"
 [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
 # ==========================================
-# Запустить/Остановить Zapret
-# ==========================================
-startstop_zpr() { clear; pgrep -f /opt/zapret >/dev/null 2>&1 && stop_zapret || start_zapret; }
-# ==========================================
 # Выбор стратегий
 # ==========================================
 show_current_strategy() {
@@ -401,9 +397,9 @@ ver="дефолтная"
 fi
 }
 menu_str() {
+[ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; return; }
 clear
 echo -e "${MAGENTA}Меню выбора стратегии${NC}"
-[ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; return; }
 show_current_strategy && [ -n "$ver" ] && echo -e "\n${YELLOW}Используется стратегия:${NC} $ver"
 echo -e "\n${CYAN}1) ${GREEN}Установить стратегию${NC} v1"
 echo -e "${CYAN}2) ${GREEN}Установить стратегию${NC} v2"
@@ -459,7 +455,7 @@ case "$choice" in
 1) install_Zapret ;;
 2) menu_str ;;
 3) comeback_def ;;
-4) startstop_zpr ;;
+4) pgrep -f /opt/zapret >/dev/null 2>&1 && stop_zapret || start_zapret ;;
 5) uninstall_zapret;;
 6) fix_GAME  ;;
 7) enable_discord_calls ;;
