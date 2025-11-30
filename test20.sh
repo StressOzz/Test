@@ -83,7 +83,7 @@ INST_COLOR=$RED; INSTALLED_DISPLAY="$INSTALLED_VER"
 fi
 }
 # ==========================================
-# Установка Zapret (без авто-поиска версии)
+# Установка Zapret
 # ==========================================
 install_Zapret() {
 local NO_PAUSE=$1
@@ -423,4 +423,6 @@ esac
 # ==========================================
 # Старт скрипта (цикл)
 # ==========================================
-while true; do show_menu; done
+while true; do
+show_menu
+done
