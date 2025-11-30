@@ -100,7 +100,8 @@ echo -e "\n${GREEN}Последняя версия уже установлена
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 return
 fi
-echo -e "\n${MAGENTA}Устанавливаем ZAPRET${NC}"
+[ "$NO_PAUSE" != "1" ] && echo
+echo -e "${MAGENTA}Устанавливаем ZAPRET${NC}"
 if [ -f /etc/init.d/zapret ]; then
 echo -e "${CYAN}Останавливаем ${NC}zapret" && /etc/init.d/zapret stop >/dev/null 2>&1
 PIDS=$(pgrep -f /opt/zapret)
@@ -193,10 +194,11 @@ return ;;
 esac
 fi
 if wget -qO "$CUSTOM_DIR/50-script.sh" "$URL"; then
+[ "$NO_PAUSE" != "1" ] && echo
 echo -e "${GREEN}Скрипт ${NC}$SELECTED${GREEN} успешно установлен!${NC}\n"
 else
 echo -e "\n${RED}Ошибка при скачивании скрипта!${NC}\n"
-[ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
+read -p "Нажмите Enter для выхода в главное меню..." dummy
 return
 fi
 if ! grep -q "option NFQWS_PORTS_UDP.*50000-50099" "$CONF"; then
