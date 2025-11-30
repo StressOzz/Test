@@ -452,9 +452,9 @@ case "$choice" in
 7) enable_discord_calls ;;
 8) zapret_key ;;
 9) wget -qO- https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/sys_info.sh | sh
-read -p "Нажмите Enter для выхода в главное меню..." dummy
+echo; read -p "Нажмите Enter для выхода в главное меню..." dummy
 ;;
-*) echo -e ""; exit 0 ;;
+*) echo; exit 0 ;;
 esac
 }
 # ==========================================
