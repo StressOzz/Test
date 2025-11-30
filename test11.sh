@@ -282,7 +282,7 @@ echo -e "\n${RED}Cтратегия не установлена!${NC}\n"
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 return
 fi
-enable_discord_calls "1"
+echo; enable_discord_calls "1"
 fix_GAME "1"
 echo -e "${GREEN}Zapret установлен и настроен!${NC}\n"
 read -p "Нажмите Enter для выхода в главное меню..." dummy
@@ -400,17 +400,17 @@ echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n"
 echo -ne "${YELLOW}Выберите пункт:${NC} "
 read choice
 case "$choice" in
-1) clear && wget -qO- https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Str1.sh | sh
-read -p "Нажмите Enter для выхода в главное меню..." dummy
+1) echo; wget -qO- https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Str1.sh | sh
+echo; read -p "Нажмите Enter для выхода в главное меню..." dummy
 ;;
-2) clear && wget -qO- https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Str2.sh | sh
-read -p "Нажмите Enter для выхода в главное меню..." dummy
+2)echo; wget -qO- https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Str2.sh | sh
+echo; read -p "Нажмите Enter для выхода в главное меню..." dummy
 ;;
-3) clear && wget -qO- https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Str3.sh | sh
-read -p "Нажмите Enter для выхода в главное меню..." dummy
+3) echo; wget -qO- https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Str3.sh | sh
+echo; read -p "Нажмите Enter для выхода в главное меню..." dummy
 ;;
-4) clear && wget -qO- https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Str4.sh | sh
-read -p "Нажмите Enter для выхода в главное меню..." dummy
+4) echo; wget -qO- https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Str4.sh | sh
+echo; read -p "Нажмите Enter для выхода в главное меню..." dummy
 ;;
 *) return ;;
 esac
