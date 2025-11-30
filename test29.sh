@@ -159,6 +159,15 @@ if [ "$NO_PAUSE" = "1" ]; then
 SELECTED="50-stun4all"
 URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-stun4all"
 else
+echo -e "\n${CYAN}1) ${GREEN}Установить скрипт ${NC}50-stun4all"
+echo -e "${CYAN}2) ${GREEN}Установить скрипт ${NC}50-quic4all"
+echo -e "${CYAN}3) ${GREEN}Установить скрипт ${NC}50-discord-media"
+echo -e "${CYAN}4) ${GREEN}Установить скрипт ${NC}50-discord"
+echo -e "${CYAN}5) ${GREEN}Удалить скрипт${NC}"
+echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n"
+echo -ne "${YELLOW}Выберите пункт:${NC} "
+read choice
+case "$choice" in
 1) SELECTED="50-stun4all"
 URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-stun4all" ;;
 2) SELECTED="50-quic4all"
