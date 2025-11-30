@@ -107,22 +107,17 @@ echo -e "${CYAN}Устанавливаем ${NC}unzip"
 opkg install unzip >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить unzip!${NC}\n"; sleep 7; return; }
 fi
 echo -e "${CYAN}Скачиваем архив ${NC}$FILE_NAME"
-wget -q "$LATEST_URL" -O "$FILE_NAME" || {
-echo -e "\n${RED}Не удалось скачать ${NC}$FILE_NAME\n"
+wget -q "$LATEST_URL" -O "$FILE_NAME" || { echo -e "\n${RED}Не удалось скачать ${NC}$FILE_NAME\n"
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 return
 }
 echo -e "${CYAN}Распаковываем архив${NC}"
-unzip -o "$FILE_NAME" >/dev/null
-for PKG in zapret_*.ipk luci-app-zapret_*.ipk; do
+unzip -o "$FILE_NAME" >/dev/null; for PKG in zapret_*.ipk luci-app-zapret_*.ipk; do
 [ -f "$PKG" ] && {
-echo -e "${CYAN}Устанавливаем пакет ${NC}$PKG"
-opkg install --force-reinstall "$PKG" >/dev/null 2>&1
+echo -e "${CYAN}Устанавливаем пакет ${NC}$PKG"; opkg install --force-reinstall "$PKG" >/dev/null 2>&1
 }
 done
-echo -e "${CYAN}Удаляем временные файлы${NC}"
-cd /
-rm -rf "$WORKDIR" /tmp/*.ipk /tmp/*.zip /tmp/*zapret* 2>/dev/null
+echo -e "${CYAN}Удаляем временные файлы${NC}"; cd /; rm -rf "$WORKDIR" /tmp/*.ipk /tmp/*.zip /tmp/*zapret* 2>/dev/null
 if [ -f /etc/init.d/zapret ]; then
 echo -e "${GREEN}Zapret установлен!${NC}\n"
 [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
@@ -150,19 +145,16 @@ esac
 enable_discord_calls() {
 local NO_PAUSE=$1
 [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; return; }
-[ "$NO_PAUSE" != "1" ] clear && echo -e "${MAGENTA}Меню установки скриптов${NC}"
+[ "$NO_PAUSE" != "1" ] && clear; show_script_50; echo -e "${MAGENTA}Меню установки скриптов${NC}"; [ -n "$name" ] && echo -e "\n${YELLOW}Установлен скрипт:${NC} $name"
 [ "$NO_PAUSE" = "1" ] && echo -e "${MAGENTA}Устанавливаем скрипт${NC}"
 [ "$NO_PAUSE" != "1" ] && show_script_50 && [ -n "$name" ] && echo -e "\n${YELLOW}Установлен скрипт:${NC} $name"
 if [ "$NO_PAUSE" = "1" ]; then
 SELECTED="50-stun4all"
 URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-stun4all"
 else
-echo -e "\n${CYAN}1) ${GREEN}Установить скрипт ${NC}50-stun4all"
-echo -e "${CYAN}2) ${GREEN}Установить скрипт ${NC}50-quic4all"
-echo -e "${CYAN}3) ${GREEN}Установить скрипт ${NC}50-discord-media"
-echo -e "${CYAN}4) ${GREEN}Установить скрипт ${NC}50-discord"
-echo -e "${CYAN}5) ${GREEN}Удалить скрипт${NC}"
-echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n"
+echo -e "\n${CYAN}1) ${GREEN}Установить скрипт ${NC}50-stun4all\n${CYAN}2) ${GREEN}Установить скрипт ${NC}50-quic4all"
+echo -e "${CYAN}3) ${GREEN}Установить скрипт ${NC}50-discord-media\n${CYAN}4) ${GREEN}Установить скрипт ${NC}50-discord"
+echo -e "${CYAN}5) ${GREEN}Удалить скрипт${NC}\n${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n"
 echo -ne "${YELLOW}Выберите пункт:${NC} "
 read choice
 case "$choice" in
@@ -326,8 +318,7 @@ read -p "Нажмите Enter для выхода в главное меню..."
 uninstall_zapret() {
 local NO_PAUSE=$1
 [ "$NO_PAUSE" != "1" ] && echo
-echo -e "${MAGENTA}Удаляем ZAPRET${NC}"
-echo -e "${CYAN}Останавливаем ${NC}zapret" && echo -e "${CYAN}Убиваем процессы${NC}"
+echo -e "${MAGENTA}Удаляем ZAPRET${NC}\n${CYAN}Останавливаем ${NC}zapret\n${CYAN}Убиваем процессы${NC}"
 /etc/init.d/zapret stop >/dev/null 2>&1; for pid in $(pgrep -f /opt/zapret 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done
 echo -e "${CYAN}Удаляем пакеты${NC}"
 opkg --force-removal-of-dependent-packages --autoremove remove zapret luci-app-zapret >/dev/null 2>&1
@@ -431,4 +422,4 @@ esac
 # ==========================================
 # Старт скрипта (цикл)
 # ==========================================
-while true; do; show_menu; done
+while true; do show_menu; done
