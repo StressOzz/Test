@@ -134,14 +134,10 @@ fi
 # ==========================================
 show_script_50() {
 [ -f "/opt/zapret/init.d/openwrt/custom.d/50-script.sh" ] || return
-case "$(head -n1 /opt/zapret/init.d/openwrt/custom.d/50-script.sh)" in
-*QUIC*) name="50-quic4all" ;;
-*stun*) name="50-stun4all" ;;
-*"discord media"*) name="50-discord-media" ;;
-*"discord subnets"*) name="50-discord" ;;
-*) name="" ;;
-esac
+line=$(head -n1 /opt/zapret/init.d/openwrt/custom.d/50-script.sh)
+name=$(case "$line" in *QUIC*) echo "50-quic4all" ;; *stun*) echo "50-stun4all" ;; *"discord media"*) echo "50-discord-media" ;; *"discord subnets"*) echo "50-discord" ;; *) echo "" ;; esac)
 }
+
 enable_discord_calls() {
 local NO_PAUSE=$1
 [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; return; }
@@ -158,14 +154,10 @@ echo -e "${CYAN}5) ${GREEN}Удалить скрипт${NC}\n${CYAN}Enter) ${GRE
 echo -ne "${YELLOW}Выберите пункт:${NC} "
 read choice
 case "$choice" in
-1) SELECTED="50-stun4all"
-URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-stun4all" ;;
-2) SELECTED="50-quic4all"
-URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-quic4all" ;;
-3) SELECTED="50-discord-media"
-URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-discord-media" ;;
-4) SELECTED="50-discord"
-URL="https://raw.githubusercontent.com/bol-van/zapret/v70.5/init.d/custom.d.examples.linux/50-discord" ;;
+1) SELECTED="50-stun4all"; URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-stun4all" ;;
+2) SELECTED="50-quic4all"; URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-quic4all" ;;
+3) SELECTED="50-discord-media"; URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-discord-media" ;;
+4) SELECTED="50-discord"; URL="https://raw.githubusercontent.com/bol-van/zapret/v70.5/init.d/custom.d.examples.linux/50-discord" ;;
 5) echo -e "\n${GREEN}Скрипт удалён!${NC}\n"
 rm -f "$CUSTOM_DIR/50-script.sh" 2>/dev/null
 sed -i "s/,50000-50099//" "$CONF"
@@ -335,23 +327,16 @@ echo -e "${GREEN}Zapret полностью удалён!${NC}\n"
 # Выбор стратегий
 # ==========================================
 show_current_strategy() {
-[ -f "/etc/config/zapret" ] || return
-case 1 in
-$(grep -q "#v1" "/etc/config/zapret" && echo 1)) ver="v1" ;;
-$(grep -q "#v2" "/etc/config/zapret" && echo 1)) ver="v2" ;;
-$(grep -q "#v3" "/etc/config/zapret" && echo 1)) ver="v3" ;;
-$(grep -q "#v4" "/etc/config/zapret" && echo 1)) ver="v4" ;;
-$(grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "/etc/config/zapret" \
-&& grep -q -- "--hostlist-exclude-domains=openwrt.org" "/etc/config/zapret" && echo 1)) ver="дефолтная" ;;
-esac
+[ -f "$CONF" ] || return
+grep -q "#v1" "$CONF" && ver="v1" || grep -q "#v2" "$CONF" && ver="v2" || grep -q "#v3" "$CONF" && ver="v3" || grep -q "#v4" "$CONF" && ver="v4"
+grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONF" && grep -q -- "--hostlist-exclude-domains=openwrt.org" "$CONF" && ver="дефолтная"
 }
 menu_str() {
 [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; return; }
 clear; echo -e "${MAGENTA}Меню выбора стратегии${NC}"
 show_current_strategy && [ -n "$ver" ] && echo -e "\n${YELLOW}Используется стратегия:${NC} $ver"
 echo -e "\n${CYAN}1) ${GREEN}Установить стратегию${NC} v1\n${CYAN}2) ${GREEN}Установить стратегию${NC} v2"
-echo -e "${CYAN}3) ${GREEN}Установить стратегию${NC} v3\n${CYAN}4) ${GREEN}Установить стратегию${NC} v4"
-echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n"
+echo -e "${CYAN}3) ${GREEN}Установить стратегию${NC} v3\n${CYAN}4) ${GREEN}Установить стратегию${NC} v4\n${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n"
 echo -ne "${YELLOW}Выберите пункт:${NC} "
 read choice
 case "$choice" in
@@ -384,7 +369,7 @@ echo -e "\n${YELLOW}Установленная версия:   ${INST_COLOR}$INS
 show_script_50 && [ -n "$name" ] && echo -e "${YELLOW}Установлен скрипт:${NC}      $name"
 [ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*1024-49999,50100-65535" "$CONF" && grep -q -- "--filter-udp=1024-49999,50100-65535" "$CONF" && echo -e "${YELLOW}Стратегия для игр:${NC}      ${GREEN}активна${NC}"
 show_current_strategy && [ -n "$ver" ] && echo -e "${YELLOW}Используется стратегия:${NC} ${CYAN}$ver${NC}"
-echo -e "\n${CYAN}1) ${GREEN}Установить последнюю версию${NC}\n${CYAN}2) ${GREEN}Меню выбора стратегии${NC}"
+echo -e "\n${CYAN}1) ${GREEN}Установить последнюю версию${NC}\n${CYAN}2) ${GREEN}Меню выбора стратегий${NC}"
 echo -e "${CYAN}3) ${GREEN}Вернуть настройки по умолчанию${NC}\n${CYAN}4) ${GREEN}Остановить / Запустить ${NC}Zapret"
 echo -e "${CYAN}5) ${GREEN}Удалить ${NC}Zapret\n${CYAN}6) ${GREEN}Добавить / Удалить стратегию для игр"
 echo -e "${CYAN}7) ${GREEN}Меню установки скриптов${NC}\n${CYAN}8) ${GREEN}Удалить / Установить / Настроить${NC} Zapret"
@@ -400,8 +385,7 @@ case "$choice" in
 6) fix_GAME  ;;
 7) enable_discord_calls ;;
 8) zapret_key ;;
-9) wget -qO- https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/sys_info.sh | sh
-echo; read -p "Нажмите Enter для выхода в главное меню..." dummy
+9) wget -qO- https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/sys_info.sh | sh; echo; read -p "Нажмите Enter для выхода в главное меню..." dummy
 ;;
 *) echo; exit 0 ;;
 esac
