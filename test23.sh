@@ -255,10 +255,7 @@ echo -e "${GREEN}Игровые настройки добавлены!${NC}\n"
 zapret_key(){
 clear; echo -e "${MAGENTA}Удаление, установка и настройка Zapret${NC}\n"
 get_versions
-uninstall_zapret "1"
-sleep 5
-install_Zapret "1"
-sleep 5
+uninstall_zapret "1"; install_Zapret "1"
 [ ! -f /etc/init.d/zapret ] && return
 echo -e "${MAGENTA}Останавливаем Zapret${NC}" && /etc/init.d/zapret stop >/dev/null 2>&1 && echo -e "${GREEN}Zapret остановлен!${NC}\n"
 wget -qO- "https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Str${STR_VERSION_AUTOINSTALL}.sh" | sh
