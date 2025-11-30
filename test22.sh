@@ -96,8 +96,10 @@ fi
 [ "$NO_PAUSE" != "1" ] && echo
 echo -e "${MAGENTA}Устанавливаем ZAPRET${NC}"
 if [ -f /etc/init.d/zapret ]; then
-echo -e "${CYAN}Останавливаем ${NC}zapret"
-/etc/init.d/zapret stop >/dev/null 2>&1; for pid in $(pgrep -f /opt/zapret 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done
+echo -e "${CYAN}Останавливаем ${NC}zapret" && /etc/init.d/zapret stop >/dev/null 2>&1
+PIDS=$(pgrep -f /opt/zapret)
+[ -n "$PIDS" ] && for pid in $PIDS; do kill -9 "$pid" >/dev/null 2>&1; done
+fi
 echo -e "${CYAN}Обновляем список пакетов${NC}"
 opkg update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; sleep 7; return; }
 mkdir -p "$WORKDIR"; rm -f "$WORKDIR"/* 2>/dev/null; cd "$WORKDIR" || return
@@ -107,24 +109,28 @@ echo -e "${CYAN}Устанавливаем ${NC}unzip"
 opkg install unzip >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить unzip!${NC}\n"; sleep 7; return; }
 fi
 echo -e "${CYAN}Скачиваем архив ${NC}$FILE_NAME"
-wget -q "$LATEST_URL" -O "$FILE_NAME" || { echo -e "\n${RED}Не удалось скачать ${NC}$FILE_NAME\n"
+wget -q "$LATEST_URL" -O "$FILE_NAME" || {
+echo -e "\n${RED}Не удалось скачать ${NC}$FILE_NAME\n"
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 return
 }
 echo -e "${CYAN}Распаковываем архив${NC}"
-unzip -o "$FILE_NAME" >/dev/null; for PKG in zapret_*.ipk luci-app-zapret_*.ipk; do
+unzip -o "$FILE_NAME" >/dev/null
+for PKG in zapret_*.ipk luci-app-zapret_*.ipk; do
 [ -f "$PKG" ] && {
-echo -e "${CYAN}Устанавливаем пакет ${NC}$PKG"; opkg install --force-reinstall "$PKG" >/dev/null 2>&1
+echo -e "${CYAN}Устанавливаем пакет ${NC}$PKG"
+opkg install --force-reinstall "$PKG" >/dev/null 2>&1
 }
 done
-echo -e "${CYAN}Удаляем временные файлы${NC}"; cd /; rm -rf "$WORKDIR" /tmp/*.ipk /tmp/*.zip /tmp/*zapret* 2>/dev/null
+echo -e "${CYAN}Удаляем временные файлы${NC}"
+cd /
+rm -rf "$WORKDIR" /tmp/*.ipk /tmp/*.zip /tmp/*zapret* 2>/dev/null
 if [ -f /etc/init.d/zapret ]; then
 echo -e "${GREEN}Zapret установлен!${NC}\n"
 [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 else
 echo -e "\n${RED}Zapret не был установлен!${NC}\n"
 read -p "Нажмите Enter для выхода в главное меню..." dummy
-fi
 fi
 }
 # ==========================================
