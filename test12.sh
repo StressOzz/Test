@@ -13,7 +13,7 @@ if opkg list-installed | grep -q "byedpi"; then
 clear; echo -e "${RED}Найден установленный ${NC}ByeDPI${RED}!${NC}\n${NC}Zapret${RED} не может работать совместно с ${NC}ByeDPI${RED}!${NC}\n"
 read -p $'\033[1;32mУдалить \033[0mByeDPI\033[1;32m ?\033[0m [y/N] ' answer
 case "$answer" in
-[Yy]* ) opkg --force-removal-of-dependent-packages --autoremove remove byedpi >/dev/null 2>&1; echo -e "\n${GREEN}ByeDPI удалён!${NC}"; sleep 3;;
+[Yy]* ) opkg --force-removal-of-dependent-packages --autoremove remove byedpi >/dev/null 2>&1; echo -e "\n${GREEN}ByeDPI удалён!${NC}"; read -p "Нажмите Enter для выхода в главное меню..." dummy ;;
 * ) echo -e "\n${RED}Скрипт остановлен! Удалите ${NC}ByeDPI${RED}!${NC}\n"; exit 1;;
 esac
 fi
@@ -21,7 +21,7 @@ if opkg list-installed | grep -q "youtubeUnblock"; then
 clear; echo -e "${RED}Найден установленный ${NC}youtubeUnblock${RED}!${NC}\n${NC}Zapret${RED} не может работать совместно с ${NC}youtubeUnblock${RED}!${NC}\n"
 read -p $'\033[1;32mУдалить \033[0myoutubeUnblock\033[1;32m ?\033[0m [y/N] ' answer
 case "$answer" in
-[Yy]* ) opkg --force-removal-of-dependent-packages --autoremove remove youtubeUnblock luci-app-youtubeUnblock >/dev/null 2>&1; echo -e "\n${GREEN}youtubeUnblock удалён!${NC}"; sleep 3;;
+[Yy]* ) opkg --force-removal-of-dependent-packages --autoremove remove youtubeUnblock luci-app-youtubeUnblock >/dev/null 2>&1; echo -e "\n${GREEN}youtubeUnblock удалён!${NC}"; read -p "Нажмите Enter для выхода в главное меню..." dummy ;;
 * ) echo -e "\n${RED}Скрипт остановлен! Удалите ${NC}youtubeUnblock ${RED}!${NC}\n"; exit 1;;
 esac
 fi
@@ -35,10 +35,10 @@ echo -e "${CYAN}2) ${GREEN}Применить фикс для работы ${NC}
 echo -ne "${CYAN}Enter) ${GREEN}Выход\n\n${YELLOW}Выберите пункт:${NC} " && read choice
 case "$choice" in
 1) echo -e "\n${GREEN}Flow Offloading успешно отключён!${NC}"
-uci set firewall.@defaults[0].flow_offloading='0'; uci set firewall.@defaults[0].flow_offloading_hw='0'; uci commit firewall; /etc/init.d/firewall restart; sleep 2 ;;
+uci set firewall.@defaults[0].flow_offloading='0'; uci set firewall.@defaults[0].flow_offloading_hw='0'; uci commit firewall; /etc/init.d/firewall restart; read -p "Нажмите Enter для выхода в главное меню..." dummy ;;
 2) echo -e "\n${GREEN}Фикс успешно применён!${NC}"
 sed -i 's/meta l4proto { tcp, udp } flow offload @ft;/meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;/' /usr/share/firewall4/templates/ruleset.uc
-fw4 restart >/dev/null 2>&1; sleep 2 ;;
+fw4 restart >/dev/null 2>&1; read -p "Нажмите Enter для выхода в главное меню..." dummy ;;
 *) echo -e "\n${RED}Скрипт остановлен!${NC}\n"; exit 1 ;;
 esac
 fi
