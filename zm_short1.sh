@@ -183,14 +183,11 @@ menu_str() {
 clear; echo -e "${MAGENTA}Меню выбора стратегии${NC}"; show_current_strategy && [ -n "$ver" ] && echo -e "\n${YELLOW}Используется стратегия:${NC} $ver"
 echo -e "\n${CYAN}1) ${GREEN}Установить стратегию${NC} v1\n${CYAN}2) ${GREEN}Установить стратегию${NC} v2"
 echo -ne "${CYAN}3) ${GREEN}Установить стратегию${NC} v3\n${CYAN}4) ${GREEN}Установить стратегию${NC} v4\n${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read choice
-case "$choice" in
-1) echo; wget -qO- https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Str1.sh | sh; echo; read -p "Нажмите Enter для выхода в главное меню..." dummy ;;
+case "$choice" in 1) echo; wget -qO- https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Str1.sh | sh; echo; read -p "Нажмите Enter для выхода в главное меню..." dummy ;;
 2) echo; wget -qO- https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Str2.sh | sh; echo; read -p "Нажмите Enter для выхода в главное меню..." dummy ;;
 3) echo; wget -qO- https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Str3.sh | sh; echo; read -p "Нажмите Enter для выхода в главное меню..." dummy ;;
 4) echo; wget -qO- https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Str4.sh | sh; echo; read -p "Нажмите Enter для выхода в главное меню..." dummy ;;
-*) return ;;
-esac
-}
+*) return ;; esac; }
 show_menu() {
 get_versions; clear; echo -e "╔════════════════════════════════════╗\n║     ${BLUE}Zapret on remittor Manager${NC}     ║\n╚════════════════════════════════════╝\n                          ${DGRAY}by StressOzz${NC}"
 echo -e "\n${YELLOW}Установленная версия:   ${INST_COLOR}$INSTALLED_DISPLAY${NC}"; [ -n "$ZAPRET_STATUS" ] && echo -e "${YELLOW}Статус Zapret:${NC}          $ZAPRET_STATUS"
