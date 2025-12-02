@@ -51,12 +51,19 @@ LOCAL_ARCH=$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release)
 USED_ARCH="$LOCAL_ARCH"; LATEST_URL="https://github.com/remittor/zapret-openwrt/releases/download/v${ZAPRET_VERSION}/zapret_v${ZAPRET_VERSION}_${LOCAL_ARCH}.zip"
 INSTALLED_VER=$(opkg list-installed | grep '^zapret ' | awk '{print $3}')
 [ -z "$INSTALLED_VER" ] && INSTALLED_VER="не найдена"
-[ -f /etc/init.d/zapret ] && \
-/etc/init.d/zapret status 2>/dev/null | grep -qi running && \
-ZAPRET_STATUS="${GREEN}запущен${NC}" || ZAPRET_STATUS="${RED}остановлен${NC}"
-[ "$INSTALLED_VER" = "$ZAPRET_VERSION" ] && \
-{ INST_COLOR=$GREEN; INSTALLED_DISPLAY="$INSTALLED_VER"; } || \
-{ INST_COLOR=$RED; INSTALLED_DISPLAY=$([ "$INSTALLED_VER" != "не найдена" ] && echo "$INSTALLED_VER (устарела)" || echo "$INSTALLED_VER"); }
+# zapret status
+[ -f /etc/init.d/zapret ] &&
+    /etc/init.d/zapret status 2>/dev/null | grep -qi running \
+        && ZAPRET_STATUS="${GREEN}запущен${NC}" \
+        || ZAPRET_STATUS="${RED}остановлен${NC}"
+
+# version display
+[ "$INSTALLED_VER" = "$ZAPRET_VERSION" ] &&
+    INST_COLOR=$GREEN INSTALLED_DISPLAY="$INSTALLED_VER" ||
+    { INST_COLOR=$RED
+      INSTALLED_DISPLAY=$([ "$INSTALLED_VER" != "не найдена" ] &&
+            echo "$INSTALLED_VER (устарела)" || echo "$INSTALLED_VER"); }
+
 }
 # ==========================================
 # Установка Zapret
