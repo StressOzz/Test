@@ -9,22 +9,19 @@ WORKDIR="/tmp/zapret-update"; CONF="/etc/config/zapret"; CUSTOM_DIR="/opt/zapret
 # ==========================================
 # Проверяем наличие byedpi, youtubeUnblock, Flow Offloading
 # ==========================================
-if opkg list-installed | grep -q "byedpi"; then
-clear; echo -e "${RED}Найден установленный ${NC}ByeDPI${RED}!${NC}\n${NC}Zapret${RED} не может работать совместно с ${NC}ByeDPI${RED}!${NC}\n"
-read -p $'\033[1;32mУдалить \033[0mByeDPI\033[1;32m ?\033[0m [y/N] ' answer
-case "$answer" in
-[Yy]* ) opkg --force-removal-of-dependent-packages --autoremove remove byedpi >/dev/null 2>&1; echo -e "\n${GREEN}ByeDPI удалён!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy ;;
-* ) echo -e "\n${RED}Скрипт остановлен! Удалите ${NC}ByeDPI${RED}!${NC}\n"; exit 1;;
-esac
-fi
-if opkg list-installed | grep -q "youtubeUnblock"; then
-clear; echo -e "${RED}Найден установленный ${NC}youtubeUnblock${RED}!${NC}\n${NC}Zapret${RED} не может работать совместно с ${NC}youtubeUnblock${RED}!${NC}\n"
-read -p $'\033[1;32mУдалить \033[0myoutubeUnblock\033[1;32m ?\033[0m [y/N] ' answer
-case "$answer" in
-[Yy]* ) opkg --force-removal-of-dependent-packages --autoremove remove youtubeUnblock luci-app-youtubeUnblock >/dev/null 2>&1; echo -e "\n${GREEN}youtubeUnblock удалён!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy ;;
-* ) echo -e "\n${RED}Скрипт остановлен! Удалите ${NC}youtubeUnblock ${RED}!${NC}\n"; exit 1;;
-esac
-fi
+
+for pkg in byedpi youtubeUnblock; do
+  opkg list-installed | grep -q "$pkg" || continue
+  clear; echo -e "${RED}Найден установленный ${NC}$pkg${RED}!${NC}\n${NC}Zapret${RED} не может работать совместно с ${NC}$pkg${RED}!\n"
+  read -p $'\033[1;32mУдалить \033[0m'"$pkg"$'\033[1;32m ?\033[0m [y/N] ' answer
+  case "$answer" in
+    [Yy]* )
+      opkg --force-removal-of-dependent-packages --autoremove remove $([ "$pkg" = "byedpi" ] && echo "byedpi" || echo "youtubeUnblock luci-app-youtubeUnblock") >/dev/null 2>&1
+      echo -e "\n${GREEN}$pkg удалён!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy ;;
+    * ) echo -e "\n${RED}Скрипт остановлен! Удалите ${NC}$pkg${RED}!${NC}\n"; exit 1 ;;
+  esac
+done
+
 FLOW_STATE=$(uci get firewall.@defaults[0].flow_offloading 2>/dev/null)
 HW_FLOW_STATE=$(uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null)
 if [ "$FLOW_STATE" = "1" ] || [ "$HW_FLOW_STATE" = "1" ]; then
@@ -53,7 +50,6 @@ INSTALLED_VER=$(opkg list-installed | grep '^zapret ' | awk '{print $3}')
 [ -z "$INSTALLED_VER" ] && INSTALLED_VER="не найдена"
 ZAPRET_STATUS=$([ -f /etc/init.d/zapret ] && /etc/init.d/zapret status 2>/dev/null | grep -qi running && echo "${GREEN}запущен${NC}" || echo "${RED}остановлен${NC}"); [ -f /etc/init.d/zapret ] || ZAPRET_STATUS=""
 [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ] && INST_COLOR=$GREEN INSTALLED_DISPLAY="$INSTALLED_VER" || { INST_COLOR=$RED; INSTALLED_DISPLAY=$([ "$INSTALLED_VER" != "не найдена" ] && echo "$INSTALLED_VER (устарела)" || echo "$INSTALLED_VER"); }
-
 }
 # ==========================================
 # Установка Zapret
@@ -287,7 +283,7 @@ get_versions
 clear; echo -e "╔════════════════════════════════════╗"
 echo -e "║     ${BLUE}Zapret on remittor Manager${NC}     ║"
 echo -e "╚════════════════════════════════════╝"
-echo -e "                           ${DGRAY}by StressOzz${NC}"
+echo -e "                          ${DGRAY}by StressOzz${NC}"
 echo -e "\n${YELLOW}Установленная версия:   ${INST_COLOR}$INSTALLED_DISPLAY${NC}"
 [ -n "$ZAPRET_STATUS" ] && echo -e "${YELLOW}Статус Zapret:${NC}          $ZAPRET_STATUS"
 show_script_50 && [ -n "$name" ] && echo -e "${YELLOW}Установлен скрипт:${NC}      $name"
