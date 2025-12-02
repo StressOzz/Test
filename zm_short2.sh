@@ -174,10 +174,7 @@ sed -i '/130\.255\.77\.28 ntc.party/d; /57\.144\.222\.34 instagram.com www.insta
 [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
 show_current_strategy() {
-[ -f "$CONF" ] || return
-for v in v1 v2 v3 v4; do grep -q "#$v" "$CONF" && { ver="$v"; return; } done
-grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONF" && grep -q -- "--hostlist-exclude-domains=openwrt.org" "$CONF" && ver="дефолтная"
-}
+[ -f "$CONF" ] || return; for v in v1 v2 v3 v4; do grep -q "#$v" "$CONF" && { ver="$v"; return; } done; grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONF" && grep -q -- "--hostlist-exclude-domains=openwrt.org" "$CONF" && ver="дефолтная"; }
 menu_str() {
 [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; return; }
 clear; echo -e "${MAGENTA}Меню выбора стратегии${NC}"; show_current_strategy && [ -n "$ver" ] && echo -e "\n${YELLOW}Используется стратегия:${NC} $ver"
