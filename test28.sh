@@ -27,23 +27,16 @@ ZAPRET_STATUS=$([ -f /etc/init.d/zapret ] && /etc/init.d/zapret status 2>/dev/nu
 # Установка Zapret
 # ==========================================
 install_Zapret() {
-local NO_PAUSE=$1
-get_versions
-if [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ]; then
-echo -e "\n${GREEN}Последняя версия уже установлена!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; return
-fi
+local NO_PAUSE=$1; get_versions
+if [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ]; then echo -e "\n${GREEN}Последняя версия уже установлена!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; return; fi
 [ "$NO_PAUSE" != "1" ] && echo
 echo -e "${MAGENTA}Устанавливаем ZAPRET${NC}"
-if [ -f /etc/init.d/zapret ]; then
-echo -e "${CYAN}Останавливаем ${NC}zapret" && /etc/init.d/zapret stop >/dev/null 2>&1; for pid in $(pgrep -f /opt/zapret 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done
-fi
+if [ -f /etc/init.d/zapret ]; then echo -e "${CYAN}Останавливаем ${NC}zapret" && /etc/init.d/zapret stop >/dev/null 2>&1; for pid in $(pgrep -f /opt/zapret 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done; fi
 echo -e "${CYAN}Обновляем список пакетов${NC}"
 opkg update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; return; }
 mkdir -p "$WORKDIR"; rm -f "$WORKDIR"/* 2>/dev/null; cd "$WORKDIR" || return
 FILE_NAME=$(basename "$LATEST_URL")
-if ! command -v unzip >/dev/null 2>&1; then
-echo -e "${CYAN}Устанавливаем ${NC}unzip"; opkg install unzip >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить unzip!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; return; }
-fi
+if ! command -v unzip >/dev/null 2>&1; then echo -e "${CYAN}Устанавливаем ${NC}unzip"; opkg install unzip >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить unzip!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; return; }; fi
 echo -e "${CYAN}Скачиваем архив ${NC}$FILE_NAME"
 wget -q "$LATEST_URL" -O "$FILE_NAME" || { echo -e "\n${RED}Не удалось скачать ${NC}$FILE_NAME\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; return; }
 echo -e "${CYAN}Распаковываем архив${NC}"
@@ -54,12 +47,9 @@ opkg install --force-reinstall "$PKG" >/dev/null 2>&1
 }
 done
 echo -e "${CYAN}Удаляем временные файлы${NC}"; cd /; rm -rf "$WORKDIR" /tmp/*.ipk /tmp/*.zip /tmp/*zapret* 2>/dev/null
-if [ -f /etc/init.d/zapret ]; then
-echo -e "${GREEN}Zapret установлен!${NC}\n"
+if [ -f /etc/init.d/zapret ]; then echo -e "${GREEN}Zapret установлен!${NC}\n"
 [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
-else
-echo -e "\n${RED}Zapret не был установлен!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy
-fi
+else echo -e "\n${RED}Zapret не был установлен!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; fi
 }
 # ==========================================
 # Включение Discord и звонков в TG и WA
@@ -75,37 +65,24 @@ local NO_PAUSE=$1
 [ "$NO_PAUSE" != "1" ] && clear && echo -e "${MAGENTA}Меню установки скриптов${NC}"
 [ "$NO_PAUSE" = "1" ] && echo -e "${MAGENTA}Устанавливаем скрипт${NC}"
 [ "$NO_PAUSE" != "1" ] && show_script_50 && [ -n "$name" ] && echo -e "\n${YELLOW}Установлен скрипт:${NC} $name"
-if [ "$NO_PAUSE" = "1" ]; then
-SELECTED="50-stun4all"; URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-stun4all"
-else
+if [ "$NO_PAUSE" = "1" ]; then SELECTED="50-stun4all"; URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-stun4all"; else
 echo -e "\n${CYAN}1) ${GREEN}Установить скрипт ${NC}50-stun4all\n${CYAN}2) ${GREEN}Установить скрипт ${NC}50-quic4all"
 echo -e "${CYAN}3) ${GREEN}Установить скрипт ${NC}50-discord-media\n${CYAN}4) ${GREEN}Установить скрипт ${NC}50-discord"
 echo -ne "${CYAN}5) ${GREEN}Удалить скрипт${NC}\n${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read choice
 case "$choice" in
-1) SELECTED="50-stun4all"; URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-stun4all" ;;
-2) SELECTED="50-quic4all"; URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-quic4all" ;;
-3) SELECTED="50-discord-media"; URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-discord-media" ;;
-4) SELECTED="50-discord"; URL="https://raw.githubusercontent.com/bol-van/zapret/v70.5/init.d/custom.d.examples.linux/50-discord" ;;
+1) SELECTED="50-stun4all"; URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-stun4all" ;; 2) SELECTED="50-quic4all"; URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-quic4all" ;;
+3) SELECTED="50-discord-media"; URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-discord-media" ;; 4) SELECTED="50-discord"; URL="https://raw.githubusercontent.com/bol-van/zapret/v70.5/init.d/custom.d.examples.linux/50-discord" ;;
 5) echo -e "\n${GREEN}Скрипт удалён!${NC}\n"; rm -f "$CUSTOM_DIR/50-script.sh" 2>/dev/null
 sed -i "s/,50000-50099//" "$CONF"; sed -i ':a;N;$!ba;s|--new\n--filter-udp=50000-50099\n--filter-l7=discord,stun\n--dpi-desync=fake\n*||g' "$CONF"
 chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart >/dev/null 2>&1; read -p "Нажмите Enter для выхода в главное меню..." dummy; return ;;
-*) return ;;
-esac
-fi
+*) return ;; esac; fi
 if wget -qO "$CUSTOM_DIR/50-script.sh" "$URL"; then
 [ "$NO_PAUSE" != "1" ] && echo
 echo -e "${GREEN}Скрипт ${NC}$SELECTED${GREEN} успешно установлен!${NC}\n"
-else
-echo -e "\n${RED}Ошибка при скачивании скрипта!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; return
-fi
-if ! grep -q "option NFQWS_PORTS_UDP.*50000-50099" "$CONF"; then
-sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'$/,50000-50099'/" "$CONF"
-fi
-if ! grep -q -- "--filter-udp=50000-50099" "$CONF"; then
-last_line1=$(grep -n "^'$" "$CONF" | tail -n1 | cut -d: -f1)
-if [ -n "$last_line1" ]; then
-sed -i "${last_line1},\$d" "$CONF"
-fi
+else echo -e "\n${RED}Ошибка при скачивании скрипта!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; return; fi
+if ! grep -q "option NFQWS_PORTS_UDP.*50000-50099" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'$/,50000-50099'/" "$CONF"; fi
+if ! grep -q -- "--filter-udp=50000-50099" "$CONF"; then last_line1=$(grep -n "^'$" "$CONF" | tail -n1 | cut -d: -f1)
+if [ -n "$last_line1" ]; then sed -i "${last_line1},\$d" "$CONF"; fi
 cat <<'EOF' >> "$CONF"
 --new
 --filter-udp=50000-50099
@@ -125,8 +102,7 @@ local NO_PAUSE=$1
 [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; return; }
 [ "$NO_PAUSE" != "1" ] && echo
 echo -e "${MAGENTA}Настраиваем стратегию для игр${NC}"
-if grep -q "option NFQWS_PORTS_UDP.*1024-49999,50100-65535" "$CONF" && grep -q -- "--filter-udp=1024-49999,50100-65535" "$CONF"; then
-echo -e "${CYAN}Удаляем из стратегии настройки для игр${NC}"
+if grep -q "option NFQWS_PORTS_UDP.*1024-49999,50100-65535" "$CONF" && grep -q -- "--filter-udp=1024-49999,50100-65535" "$CONF"; then echo -e "${CYAN}Удаляем из стратегии настройки для игр${NC}"
 sed -i ':a;N;$!ba;s|--new\n--filter-udp=1024-49999,50100-65535\n--dpi-desync=fake\n--dpi-desync-cutoff=d2\n--dpi-desync-any-protocol=1\n--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/quic_initial_www_google_com\.bin\n*||g' "$CONF"
 sed -i "s/,1024-49999,50100-65535//" "$CONF"
 chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart >/dev/null 2>&1; echo -e "${GREEN}Настройки для игр удалены!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; return; fi
