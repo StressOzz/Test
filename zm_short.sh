@@ -1,4 +1,3 @@
-
 #!/bin/sh
 ZAPRET_VERSION="72.20251122"; STR_VERSION_AUTOINSTALL="2"; GREEN="\033[1;32m"; RED="\033[1;31m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"
 MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"; WORKDIR="/tmp/zapret-update"; CONF="/etc/config/zapret"; CUSTOM_DIR="/opt/zapret/init.d/openwrt/custom.d/"
@@ -202,6 +201,5 @@ echo -e "${CYAN}5) ${GREEN}Удалить ${NC}Zapret\n${CYAN}6) ${GREEN}Доб�
 echo -ne "${CYAN}7) ${GREEN}Меню установки скриптов${NC}\n${CYAN}8) ${GREEN}Удалить / Установить / Настроить${NC} Zapret\n${CYAN}9) ${GREEN}Системная информация${NC}\n${CYAN}Enter) ${GREEN}Выход${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read choice
 case "$choice" in 1) install_Zapret ;; 2) menu_str ;; 3) comeback_def ;; 4) pgrep -f /opt/zapret >/dev/null 2>&1 && stop_zapret || start_zapret ;;
 5) uninstall_zapret;; 6) fix_GAME  ;; 7) enable_discord_calls ;; 8) zapret_key ;; 9) wget -qO- https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/sys_info.sh | sh; echo; read -p "Нажмите Enter для выхода в главное меню..." dummy ;;
-*) echo; exit 0 ;; esac
-}
+*) echo; exit 0 ;; esac; }
 while true; do show_menu; done
