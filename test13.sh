@@ -13,7 +13,7 @@ if opkg list-installed | grep -q "byedpi"; then
 clear; echo -e "${RED}Найден установленный ${NC}ByeDPI${RED}!${NC}\n${NC}Zapret${RED} не может работать совместно с ${NC}ByeDPI${RED}!${NC}\n"
 read -p $'\033[1;32mУдалить \033[0mByeDPI\033[1;32m ?\033[0m [y/N] ' answer
 case "$answer" in
-[Yy]* ) opkg --force-removal-of-dependent-packages --autoremove remove byedpi >/dev/null 2>&1; echo -e "\n${GREEN}ByeDPI удалён!${NC}"; read -p "Нажмите Enter для выхода в главное меню..." dummy ;;
+[Yy]* ) opkg --force-removal-of-dependent-packages --autoremove remove byedpi >/dev/null 2>&1; echo -e "\n${GREEN}ByeDPI удалён!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy ;;
 * ) echo -e "\n${RED}Скрипт остановлен! Удалите ${NC}ByeDPI${RED}!${NC}\n"; exit 1;;
 esac
 fi
@@ -21,7 +21,7 @@ if opkg list-installed | grep -q "youtubeUnblock"; then
 clear; echo -e "${RED}Найден установленный ${NC}youtubeUnblock${RED}!${NC}\n${NC}Zapret${RED} не может работать совместно с ${NC}youtubeUnblock${RED}!${NC}\n"
 read -p $'\033[1;32mУдалить \033[0myoutubeUnblock\033[1;32m ?\033[0m [y/N] ' answer
 case "$answer" in
-[Yy]* ) opkg --force-removal-of-dependent-packages --autoremove remove youtubeUnblock luci-app-youtubeUnblock >/dev/null 2>&1; echo -e "\n${GREEN}youtubeUnblock удалён!${NC}"; read -p "Нажмите Enter для выхода в главное меню..." dummy ;;
+[Yy]* ) opkg --force-removal-of-dependent-packages --autoremove remove youtubeUnblock luci-app-youtubeUnblock >/dev/null 2>&1; echo -e "\n${GREEN}youtubeUnblock удалён!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy ;;
 * ) echo -e "\n${RED}Скрипт остановлен! Удалите ${NC}youtubeUnblock ${RED}!${NC}\n"; exit 1;;
 esac
 fi
@@ -34,10 +34,9 @@ echo -e "${NC}Zapret${RED} не может работать с включённ�
 echo -e "${CYAN}2) ${GREEN}Применить фикс для работы ${NC}Zapret${GREEN} с включённым ${NC}Flow Offloading"
 echo -ne "${CYAN}Enter) ${GREEN}Выход\n\n${YELLOW}Выберите пункт:${NC} " && read choice
 case "$choice" in
-1) echo -e "\n${GREEN}Flow Offloading успешно отключён!${NC}"
+1) echo -e "\n${GREEN}Flow Offloading успешно отключён!${NC}\n"
 uci set firewall.@defaults[0].flow_offloading='0'; uci set firewall.@defaults[0].flow_offloading_hw='0'; uci commit firewall; /etc/init.d/firewall restart; read -p "Нажмите Enter для выхода в главное меню..." dummy ;;
-2) echo -e "\n${GREEN}Фикс успешно применён!${NC}"
-sed -i 's/meta l4proto { tcp, udp } flow offload @ft;/meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;/' /usr/share/firewall4/templates/ruleset.uc
+2) echo -e "\n${GREEN}Фикс успешно применён!${NC}\n"; sed -i 's/meta l4proto { tcp, udp } flow offload @ft;/meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;/' /usr/share/firewall4/templates/ruleset.uc
 fw4 restart >/dev/null 2>&1; read -p "Нажмите Enter для выхода в главное меню..." dummy ;;
 *) echo -e "\n${RED}Скрипт остановлен!${NC}\n"; exit 1 ;;
 esac
@@ -52,22 +51,12 @@ LOCAL_ARCH=$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release)
 USED_ARCH="$LOCAL_ARCH"; LATEST_URL="https://github.com/remittor/zapret-openwrt/releases/download/v${ZAPRET_VERSION}/zapret_v${ZAPRET_VERSION}_${LOCAL_ARCH}.zip"
 INSTALLED_VER=$(opkg list-installed | grep '^zapret ' | awk '{print $3}')
 [ -z "$INSTALLED_VER" ] && INSTALLED_VER="не найдена"
-if [ -f /etc/init.d/zapret ]; then
-if /etc/init.d/zapret status 2>/dev/null | grep -qi "running"; then
-ZAPRET_STATUS="${GREEN}запущен${NC}"
-else
-ZAPRET_STATUS="${RED}остановлен${NC}"
-fi
-else
-ZAPRET_STATUS=""
-fi
-if [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ]; then
-INST_COLOR=$GREEN; INSTALLED_DISPLAY="$INSTALLED_VER"
-elif [ "$INSTALLED_VER" != "не найдена" ]; then
-INST_COLOR=$RED; INSTALLED_DISPLAY="$INSTALLED_VER (устарела)"
-else
-INST_COLOR=$RED; INSTALLED_DISPLAY="$INSTALLED_VER"
-fi
+[ -f /etc/init.d/zapret ] && \
+/etc/init.d/zapret status 2>/dev/null | grep -qi running && \
+ZAPRET_STATUS="${GREEN}запущен${NC}" || ZAPRET_STATUS="${RED}остановлен${NC}"
+[ "$INSTALLED_VER" = "$ZAPRET_VERSION" ] && \
+{ INST_COLOR=$GREEN; INSTALLED_DISPLAY="$INSTALLED_VER"; } || \
+{ INST_COLOR=$RED; INSTALLED_DISPLAY=$([ "$INSTALLED_VER" != "не найдена" ] && echo "$INSTALLED_VER (устарела)" || echo "$INSTALLED_VER"); }
 }
 # ==========================================
 # Установка Zapret
