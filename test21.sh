@@ -17,7 +17,7 @@ for pkg in byedpi youtubeUnblock; do
   case "$answer" in
     [Yy]* )
       opkg --force-removal-of-dependent-packages --autoremove remove $([ "$pkg" = "byedpi" ] && echo "byedpi" || echo "youtubeUnblock luci-app-youtubeUnblock") >/dev/null 2>&1
-      echo -e "\n${GREEN}$pkg удалён!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy ;;
+      echo -e "\n$pkg${GREEN} удалён!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy ;;
     * ) echo -e "\n${RED}Скрипт остановлен! Удалите ${NC}$pkg${RED}!${NC}\n"; exit 1 ;;
   esac
 done
