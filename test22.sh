@@ -9,32 +9,26 @@ WORKDIR="/tmp/zapret-update"; CONF="/etc/config/zapret"; CUSTOM_DIR="/opt/zapret
 # ==========================================
 # Проверяем наличие byedpi, youtubeUnblock, Flow Offloading
 # ==========================================
-
 for pkg in byedpi youtubeUnblock; do
-  opkg list-installed | grep -q "$pkg" || continue
-  clear; echo -e "${RED}Найден установленный ${NC}$pkg${RED}!${NC}\n${NC}Zapret${RED} не может работать совместно с ${NC}$pkg${RED}!\n"
-  read -p $'\033[1;32mУдалить \033[0m'"$pkg"$'\033[1;32m ?\033[0m [y/N] ' answer
-  case "$answer" in
-    [Yy]* )
-      opkg --force-removal-of-dependent-packages --autoremove remove $([ "$pkg" = "byedpi" ] && echo "byedpi" || echo "youtubeUnblock luci-app-youtubeUnblock") >/dev/null 2>&1
-      echo -e "\n$pkg${GREEN} удалён!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy ;;
-    * ) echo -e "\n${RED}Скрипт остановлен! Удалите ${NC}$pkg${RED}!${NC}\n"; exit 1 ;;
-  esac
+opkg list-installed | grep -q "$pkg" || continue
+clear; echo -e "${RED}Найден установленный ${NC}$pkg${RED}!${NC}\n${NC}Zapret${RED} не может работать совместно с ${NC}$pkg${RED}!\n"
+read -p $'\033[1;32mУдалить \033[0m'"$pkg"$'\033[1;32m ?\033[0m [y/N] ' answer
+case "$answer" in
+[Yy]* )
+opkg --force-removal-of-dependent-packages --autoremove remove $([ "$pkg" = "byedpi" ] && echo "byedpi" || echo "youtubeUnblock luci-app-youtubeUnblock") >/dev/null 2>&1
+echo -e "\n$pkg${GREEN} удалён!${NC}\n"; read -p "Нажмите Enter для продолжения..." dummy ;;
+* ) echo -e "\n${RED}Скрипт остановлен! Удалите ${NC}$pkg${RED}!${NC}\n"; exit 1 ;;
+esac
 done
-
-FLOW_STATE=$(uci get firewall.@defaults[0].flow_offloading 2>/dev/null)
-HW_FLOW_STATE=$(uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null)
+FLOW_STATE=$(uci get firewall.@defaults[0].flow_offloading 2>/dev/null); HW_FLOW_STATE=$(uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null)
 if [ "$FLOW_STATE" = "1" ] || [ "$HW_FLOW_STATE" = "1" ]; then
 if ! grep -q 'meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc; then
-clear; echo -e "${RED}Включён ${NC}Flow Offloading ${RED}!${NC}\n"
-echo -e "${NC}Zapret${RED} не может работать с включённым ${NC}Flow Offloading${RED}!\n${CYAN}1) ${GREEN}Отключить ${NC}Flow Offloading"
-echo -e "${CYAN}2) ${GREEN}Применить фикс для работы ${NC}Zapret${GREEN} с включённым ${NC}Flow Offloading"
-echo -ne "${CYAN}Enter) ${GREEN}Выход\n\n${YELLOW}Выберите пункт:${NC} " && read choice
+clear; echo -e "${RED}Включён ${NC}Flow Offloading ${RED}!${NC}\n${NC}Zapret${RED} не может работать с включённым ${NC}Flow Offloading${RED}!\n${CYAN}1) ${GREEN}Отключить ${NC}Flow Offloading"
+echo -ne "${CYAN}2) ${GREEN}Применить фикс для работы ${NC}Zapret${GREEN} с включённым ${NC}Flow Offloading${CYAN}Enter) ${GREEN}Выход\n\n${YELLOW}Выберите пункт:${NC} " && read choice
 case "$choice" in
-1) echo -e "\n${GREEN}Flow Offloading успешно отключён!${NC}\n"
-uci set firewall.@defaults[0].flow_offloading='0'; uci set firewall.@defaults[0].flow_offloading_hw='0'; uci commit firewall; /etc/init.d/firewall restart; read -p "Нажмите Enter для выхода в главное меню..." dummy ;;
+1) echo -e "\n${GREEN}Flow Offloading успешно отключён!${NC}\n"; uci set firewall.@defaults[0].flow_offloading='0'; uci set firewall.@defaults[0].flow_offloading_hw='0'; uci commit firewall; /etc/init.d/firewall restart; read -p "Нажмите Enter для продолжения..." dummy ;;
 2) echo -e "\n${GREEN}Фикс успешно применён!${NC}\n"; sed -i 's/meta l4proto { tcp, udp } flow offload @ft;/meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;/' /usr/share/firewall4/templates/ruleset.uc
-fw4 restart >/dev/null 2>&1; read -p "Нажмите Enter для выхода в главное меню..." dummy ;;
+fw4 restart >/dev/null 2>&1; read -p "Нажмите Enter для продолжения..." dummy ;;
 *) echo -e "\n${RED}Скрипт остановлен!${NC}\n"; exit 1 ;;
 esac
 fi
