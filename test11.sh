@@ -91,7 +91,7 @@ if ! command -v unzip >/dev/null 2>&1; then
 echo -e "${CYAN}Устанавливаем ${NC}unzip"; opkg install unzip >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить unzip!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; return; }
 fi
 echo -e "${CYAN}Скачиваем архив ${NC}$FILE_NAME"
-wget -q "$LATEST_URL" -O "$FILE_NAME" || { echo -e "\n${RED}Не удалось скачать ${NC}$FILE_NAME\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; return }
+wget -q "$LATEST_URL" -O "$FILE_NAME" || { echo -e "\n${RED}Не удалось скачать ${NC}$FILE_NAME\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; return; }
 echo -e "${CYAN}Распаковываем архив${NC}"
 unzip -o "$FILE_NAME" >/dev/null; for PKG in zapret_*.ipk luci-app-zapret_*.ipk; do
 [ -f "$PKG" ] && {
