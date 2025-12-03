@@ -2,12 +2,12 @@
 ZAPRET_VERSION="72.20251122"; STR_VERSION_AUTOINSTALL="2"; GREEN="\033[1;32m"; RED="\033[1;31m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"
 MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"; WORKDIR="/tmp/zapret-update"; CONF="/etc/config/zapret"; CUSTOM_DIR="/opt/zapret/init.d/openwrt/custom.d/"
 for pkg in byedpi youtubeUnblock; do opkg list-installed | grep -q "$pkg" || continue
-clear; echo -e "${RED}Найден установленный ${NC}$pkg${RED}!${NC}\n${NC}Zapret${RED} не может работать совместно с ${NC}$pkg${RED}!\n"; read -p $'\033[1;32mУдалить \033[0m'"$pkg"$'\033[1;32m ?\033[0m [y/N] ' answer; case "$answer" in [Yy]* )
+clear; echo -e "${RED}Найден установленный ${NC}$pkg${RED}!${NC}\n${NC}Zapret${RED} может не работать совместно с ${NC}$pkg${RED}!\n"; read -p $'\033[1;32mУдалить \033[0m'"$pkg"$'\033[1;32m ?\033[0m [y/N] ' answer; case "$answer" in [Yy]* )
 opkg --force-removal-of-dependent-packages --autoremove remove $([ "$pkg" = "byedpi" ] && echo "byedpi" || echo "youtubeUnblock luci-app-youtubeUnblock") >/dev/null 2>&1
 echo -e "\n$pkg${GREEN} удалён!${NC}\n"; read -p "Нажмите Enter для продолжения..." dummy ;; * ) echo -e "\n${RED}Скрипт остановлен! Удалите ${NC}$pkg${RED}!${NC}\n"; exit 1 ;; esac; done
 FLOW_STATE=$(uci get firewall.@defaults[0].flow_offloading 2>/dev/null); HW_FLOW_STATE=$(uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null)
 if [ "$FLOW_STATE" = "1" ] || [ "$HW_FLOW_STATE" = "1" ]; then if ! grep -q 'meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc; then
-clear; echo -e "${RED}Включён ${NC}Flow Offloading ${RED}!${NC}\n${NC}Zapret${RED} не может работать с включённым ${NC}Flow Offloading${RED}!\n\n${CYAN}1) ${GREEN}Отключить ${NC}Flow Offloading"
+clear; echo -e "${RED}Включён ${NC}Flow Offloading ${RED}!${NC}\n${NC}Zapret${RED} может не работать с включённым ${NC}Flow Offloading${RED}!\n\n${CYAN}1) ${GREEN}Отключить ${NC}Flow Offloading"
 echo -ne "${CYAN}2) ${GREEN}Применить фикс для работы ${NC}Zapret${GREEN} с включённым ${NC}Flow Offloading\n${CYAN}Enter) ${GREEN}Выход\n\n${YELLOW}Выберите пункт:${NC} " && read choice
 case "$choice" in 1) echo -e "\n${GREEN}Flow Offloading успешно отключён!${NC}\n"; uci set firewall.@defaults[0].flow_offloading='0'; uci set firewall.@defaults[0].flow_offloading_hw='0'; uci commit firewall; /etc/init.d/firewall restart; read -p "Нажмите Enter для продолжения..." dummy ;;
 2) echo -e "\n${GREEN}Фикс успешно применён!${NC}\n"; sed -i 's/meta l4proto { tcp, udp } flow offload @ft;/meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;/' /usr/share/firewall4/templates/ruleset.uc
@@ -35,8 +35,7 @@ echo -ne "${CYAN}5) ${GREEN}Удалить скрипт${NC}\n${CYAN}Enter) ${GR
 5) echo -e "\n${GREEN}Скрипт удалён!${NC}\n"; rm -f "$CUSTOM_DIR/50-script.sh" 2>/dev/null; sed -i "s/,50000-50099//" "$CONF"; sed -i ':a;N;$!ba;s|--new\n--filter-udp=50000-50099\n--filter-l7=discord,stun\n--dpi-desync=fake\n*||g' "$CONF"
 chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart >/dev/null 2>&1; read -p "Нажмите Enter для выхода в главное меню..." dummy; return ;; *) return ;; esac; fi
 if wget -qO "$CUSTOM_DIR/50-script.sh" "$URL"; then [ "$NO_PAUSE" != "1" ] && echo; echo -e "${GREEN}Скрипт ${NC}$SELECTED${GREEN} успешно установлен!${NC}\n"; else echo -e "\n${RED}Ошибка при скачивании скрипта!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; return; fi
-if ! grep -q "option NFQWS_PORTS_UDP.*50000-50099" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'$/,50000-50099'/" "$CONF"; fi
-if ! grep -q -- "--filter-udp=50000-50099" "$CONF"; then last_line1=$(grep -n "^'$" "$CONF" | tail -n1 | cut -d: -f1); if [ -n "$last_line1" ]; then sed -i "${last_line1},\$d" "$CONF"; fi
+if ! grep -q "option NFQWS_PORTS_UDP.*50000-50099" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'$/,50000-50099'/" "$CONF"; fi; if ! grep -q -- "--filter-udp=50000-50099" "$CONF"; then last_line1=$(grep -n "^'$" "$CONF" | tail -n1 | cut -d: -f1); if [ -n "$last_line1" ]; then sed -i "${last_line1},\$d" "$CONF"; fi
 cat <<'EOF' >> "$CONF"
 --new
 --filter-udp=50000-50099
@@ -65,10 +64,8 @@ EOF
 fi
 echo -e "${CYAN}Добавляем в стратегию настройки для игр${NC}"; chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart >/dev/null 2>&1; echo -e "${GREEN}Игровые настройки добавлены!${NC}\n"
 [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy; }
-zapret_key(){ clear; echo -e "${MAGENTA}Удаление, установка и настройка Zapret${NC}\n"
-get_versions; uninstall_zapret "1"; install_Zapret "1"; [ ! -f /etc/init.d/zapret ] && return; wget -qO- "https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Str${STR_VERSION_AUTOINSTALL}.sh" | sh
-if [ ! -f "$CONF" ]; then echo -e "\n${RED}Файл ${NC}$CONF${RED} не найден!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; return; fi
-if ! grep -q "#v" "$CONF"; then echo -e "\n${RED}Cтратегия не установлена!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; return; fi
+zapret_key(){ clear; echo -e "${MAGENTA}Удаление, установка и настройка Zapret${NC}\n"; get_versions; uninstall_zapret "1"; install_Zapret "1"; [ ! -f /etc/init.d/zapret ] && return; wget -qO- "https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Str${STR_VERSION_AUTOINSTALL}.sh" | sh
+if [ ! -f "$CONF" ]; then echo -e "\n${RED}Файл ${NC}$CONF${RED} не найден!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; return; fi; if ! grep -q "#v" "$CONF"; then echo -e "\n${RED}Cтратегия не установлена!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; return; fi
 echo; enable_discord_calls "1"; fix_GAME "1"; echo -e "${GREEN}Zapret установлен и настроен!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; }
 comeback_def () { if [ -f /opt/zapret/restore-def-cfg.sh ]; then echo -e "\n${MAGENTA}Возвращаем настройки по умолчанию${NC}"; rm -f /opt/zapret/init.d/openwrt/custom.d/50-script.sh; for i in 1 2 3 4; do rm -f "/opt/zapret/ipset/cust$i.txt"; done
 [ -f /etc/init.d/zapret ] && /etc/init.d/zapret stop >/dev/null 2>&1; echo -e "${CYAN}Возвращаем ${NC}настройки${CYAN}, ${NC}стратегию${CYAN} и ${NC}hostlist${CYAN} к значениям по умолчанию${NC}"
