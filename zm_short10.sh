@@ -39,7 +39,10 @@ if wget -qO "$CUSTOM_DIR/50-script.sh" "$URL"; then [ "$NO_PAUSE" != "1" ] && ec
 if ! grep -q "option NFQWS_PORTS_UDP.*50000-50099" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'$/,50000-50099'/" "$CONF"; fi
 if ! grep -q -- "--filter-udp=50000-50099" "$CONF"; then last_line1=$(grep -n "^'$" "$CONF" | tail -n1 | cut -d: -f1); if [ -n "$last_line1" ]; then sed -i "${last_line1},\$d" "$CONF"; fi
 cat <<'EOF' >> "$CONF"
---new --filter-udp=50000-50099 --filter-l7=discord,stun --dpi-desync=fake
+--new
+--filter-udp=50000-50099
+--filter-l7=discord,stun
+--dpi-desync=fake
 '
 EOF
 fi
@@ -54,7 +57,12 @@ sed -i "s/,1024-49999,50100-65535//" "$CONF"; chmod +x /opt/zapret/sync_config.s
 if ! grep -q "option NFQWS_PORTS_UDP.*1024-49999,50100-65535" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'$/,1024-49999,50100-65535'/" "$CONF"; fi
 if ! grep -q -- "--filter-udp=1024-49999,50100-65535" "$CONF"; then last_line=$(grep -n "^'$" "$CONF" | tail -n1 | cut -d: -f1); if [ -n "$last_line" ]; then sed -i "${last_line},\$d" "$CONF"; fi
 cat <<'EOF' >> "$CONF"
---new --filter-udp=1024-49999,50100-65535 --dpi-desync=fake --dpi-desync-cutoff=d2 --dpi-desync-any-protocol=1 --dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/quic_initial_www_google_com.bin
+--new
+--filter-udp=1024-49999,50100-65535
+--dpi-desync=fake
+--dpi-desync-cutoff=d2
+--dpi-desync-any-protocol=1
+--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/quic_initial_www_google_com.bin
 '
 EOF
 fi
