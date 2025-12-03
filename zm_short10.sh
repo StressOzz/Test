@@ -32,8 +32,7 @@ echo -e "\n${CYAN}1) ${GREEN}Установить скрипт ${NC}50-stun4all\
 echo -ne "${CYAN}5) ${GREEN}Удалить скрипт${NC}\n${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read choice; case "$choice" in
 1) SELECTED="50-stun4all"; URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-stun4all" ;; 2) SELECTED="50-quic4all"; URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-quic4all" ;;
 3) SELECTED="50-discord-media"; URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-discord-media" ;; 4) SELECTED="50-discord"; URL="https://raw.githubusercontent.com/bol-van/zapret/v70.5/init.d/custom.d.examples.linux/50-discord" ;;
-5) echo -e "\n${GREEN}Скрипт удалён!${NC}\n"; rm -f "$CUSTOM_DIR/50-script.sh" 2>/dev/null
-sed -i "s/,50000-50099//" "$CONF"; sed -i ':a;N;$!ba;s|--new\n--filter-udp=50000-50099\n--filter-l7=discord,stun\n--dpi-desync=fake\n*||g' "$CONF"
+5) echo -e "\n${GREEN}Скрипт удалён!${NC}\n"; rm -f "$CUSTOM_DIR/50-script.sh" 2>/dev/null; sed -i "s/,50000-50099//" "$CONF"; sed -i ':a;N;$!ba;s|--new\n--filter-udp=50000-50099\n--filter-l7=discord,stun\n--dpi-desync=fake\n*||g' "$CONF"
 chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart >/dev/null 2>&1; read -p "Нажмите Enter для выхода в главное меню..." dummy; return ;; *) return ;; esac; fi
 if wget -qO "$CUSTOM_DIR/50-script.sh" "$URL"; then [ "$NO_PAUSE" != "1" ] && echo; echo -e "${GREEN}Скрипт ${NC}$SELECTED${GREEN} успешно установлен!${NC}\n"; else echo -e "\n${RED}Ошибка при скачивании скрипта!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; return; fi
 if ! grep -q "option NFQWS_PORTS_UDP.*50000-50099" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'$/,50000-50099'/" "$CONF"; fi
@@ -45,11 +44,9 @@ cat <<'EOF' >> "$CONF"
 --dpi-desync=fake
 '
 EOF
-fi
-chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart >/dev/null 2>&1
+fi; chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart >/dev/null 2>&1
 [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy; }
-fix_GAME() {
-local NO_PAUSE=$1; [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; return; }
+fix_GAME() { local NO_PAUSE=$1; [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; return; }
 [ "$NO_PAUSE" != "1" ] && echo
 echo -e "${MAGENTA}Настраиваем стратегию для игр${NC}"; if grep -q "option NFQWS_PORTS_UDP.*1024-49999,50100-65535" "$CONF" && grep -q -- "--filter-udp=1024-49999,50100-65535" "$CONF"; then echo -e "${CYAN}Удаляем из стратегии настройки для игр${NC}"
 sed -i ':a;N;$!ba;s|--new\n--filter-udp=1024-49999,50100-65535\n--dpi-desync=fake\n--dpi-desync-cutoff=d2\n--dpi-desync-any-protocol=1\n--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/quic_initial_www_google_com\.bin\n*||g' "$CONF"
@@ -68,8 +65,7 @@ EOF
 fi
 echo -e "${CYAN}Добавляем в стратегию настройки для игр${NC}"; chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart >/dev/null 2>&1; echo -e "${GREEN}Игровые настройки добавлены!${NC}\n"
 [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy; }
-zapret_key(){
-clear; echo -e "${MAGENTA}Удаление, установка и настройка Zapret${NC}\n"
+zapret_key(){ clear; echo -e "${MAGENTA}Удаление, установка и настройка Zapret${NC}\n"
 get_versions; uninstall_zapret "1"; install_Zapret "1"; [ ! -f /etc/init.d/zapret ] && return; wget -qO- "https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Str${STR_VERSION_AUTOINSTALL}.sh" | sh
 if [ ! -f "$CONF" ]; then echo -e "\n${RED}Файл ${NC}$CONF${RED} не найден!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; return; fi
 if ! grep -q "#v" "$CONF"; then echo -e "\n${RED}Cтратегия не установлена!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; return; fi
@@ -97,10 +93,8 @@ sed -i '/130\.255\.77\.28 ntc.party/d; /57\.144\.222\.34 instagram.com www.insta
 /157\.240\.9\.174 instagram.com www.instagram.com/d' /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1; echo -e "${GREEN}Zapret полностью удалён!${NC}\n"
 [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy; }
 show_current_strategy() { [ -f "$CONF" ] || return; for v in v1 v2 v3 v4; do grep -q "#$v" "$CONF" && { ver="$v"; return; } done; grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONF" && grep -q -- "--hostlist-exclude-domains=openwrt.org" "$CONF" && ver="дефолтная"; }
-menu_str() {
-[ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; return; }
-clear; echo -e "${MAGENTA}Меню выбора стратегии${NC}"; show_current_strategy && [ -n "$ver" ] && echo -e "\n${YELLOW}Используется стратегия:${NC} $ver"
-echo -e "\n${CYAN}1) ${GREEN}Установить стратегию${NC} v1\n${CYAN}2) ${GREEN}Установить стратегию${NC} v2"
+menu_str() { [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; return; }
+clear; echo -e "${MAGENTA}Меню выбора стратегии${NC}"; show_current_strategy && [ -n "$ver" ] && echo -e "\n${YELLOW}Используется стратегия:${NC} $ver"; echo -e "\n${CYAN}1) ${GREEN}Установить стратегию${NC} v1\n${CYAN}2) ${GREEN}Установить стратегию${NC} v2"
 echo -ne "${CYAN}3) ${GREEN}Установить стратегию${NC} v3\n${CYAN}4) ${GREEN}Установить стратегию${NC} v4\n${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read choice
 case "$choice" in 1) echo; wget -qO- https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Str1.sh | sh; echo; read -p "Нажмите Enter для выхода в главное меню..." dummy ;;
 2) echo; wget -qO- https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Str2.sh | sh; echo; read -p "Нажмите Enter для выхода в главное меню..." dummy ;;
