@@ -76,7 +76,6 @@ if [ "$AWG_VERSION" = "2.0" ]; then
     else
         printf "${GREEN}Пропускаем установку русской локализации.${NC}\n"
     fi
-fi
 printf "${GREEN}===== Очистка временных файлов =====${NC}\n"
 rm -rf "$AWG_DIR"
 printf "${GREEN}===== Перезапускаем сеть =====${NC}\n"
