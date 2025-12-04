@@ -194,15 +194,6 @@ echo "Интерфейс $IF_NAME создан и активирован. Про
         fi
     fi
 
-    /usr/sbin/ntpd -q -p 194.190.168.1 -p 216.239.35.0 -p 216.239.35.4 -p 162.159.200.1 -p 162.159.200.123 >/dev/null 2>&1
-
-pkg_list_update || { 
-    msg "Не удалось обновить список пакетов"
-    echo ""
-    read -p "Нажмите Enter..." dummy
-    return
-}
-
     # Проверка GitHub API
     if command -v curl >/dev/null 2>&1; then
         check_response=$(curl -s "$REPO")
