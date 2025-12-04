@@ -114,7 +114,7 @@ echo "Интерфейс $IF_NAME создан и активирован. Про
 
 ##################################################################################################################
 
-    echo -e "${MAGENTA}Установка / обновление Podkop${NC}\n"
+echo -e "${MAGENTA}Установка / обновление Podkop${NC}\n"
 
     REPO="https://api.github.com/repos/itdoginfo/podkop/releases/latest"
     DOWNLOAD_DIR="/tmp/podkop"
@@ -152,6 +152,14 @@ echo "Интерфейс $IF_NAME создан и активирован. Про
         fi
     }
 
+    pkg_list_update() {
+        msg "Обновляем список пакетов..."
+        if [ "$PKG_IS_APK" -eq 1 ]; then
+            apk update >/dev/null 2>&1
+        else
+            opkg update >/dev/null 2>&1
+        fi
+    }
 
     pkg_install() {
         local pkg_file="$1"
@@ -175,6 +183,13 @@ echo "Интерфейс $IF_NAME создан и активирован. Про
     return
 }
 
+nslookup google.com >/dev/null 2>&1 || { 
+    msg "DNS не работает"
+    echo ""
+    read -p "Нажмите Enter..." dummy
+    return
+}
+
 
     if pkg_is_installed https-dns-proxy; then
         msg "Обнаружен конфликтный пакет" "https-dns-proxy. Удаляем..."
@@ -193,6 +208,15 @@ echo "Интерфейс $IF_NAME создан и активирован. Про
             pkg_remove sing-box
         fi
     fi
+
+    /usr/sbin/ntpd -q -p 194.190.168.1 -p 216.239.35.0 -p 216.239.35.4 -p 162.159.200.1 -p 162.159.200.123 >/dev/null 2>&1
+
+pkg_list_update || { 
+    msg "Не удалось обновить список пакетов"
+    echo ""
+    read -p "Нажмите Enter..." dummy
+    return
+}
 
     # Проверка GitHub API
     if command -v curl >/dev/null 2>&1; then
@@ -240,31 +264,24 @@ echo "Интерфейс $IF_NAME создан и активирован. Про
     done
 
     # Русский интерфейс
-ru=$(ls "$DOWNLOAD_DIR" | grep "luci-i18n-podkop-ru" | head -n 1)
-if [ -n "$ru" ]; then
-    msg "Устанавливаем/обновляем русский интерфейс..." "$ru"
-    # Сносим старые, если есть
-    pkg_remove luci-i18n-podkop* >/dev/null 2>&1
-    # Ставим новый
-    pkg_install "$DOWNLOAD_DIR/$ru"
-fi
+    ru=$(ls "$DOWNLOAD_DIR" | grep "luci-i18n-podkop-ru" | head -n 1)
+    if [ -n "$ru" ]; then
+        if pkg_is_installed luci-i18n-podkop-ru; then
+            msg "Обновляем русский язык..." "$ru"
+            pkg_remove luci-i18n-podkop* >/dev/null 2>&1
+            pkg_install "$DOWNLOAD_DIR/$ru"
+        else
+            msg "Установить русский интерфейс? y/N"
+            read -r RUS
+            case "$RUS" in
+                y|Y) pkg_install "$DOWNLOAD_DIR/$ru" ;;
+                *) ;;
+            esac
+        fi
+    fi
 
     # Очистка
     rm -rf "$DOWNLOAD_DIR"
 
     echo -e "Podkop ${GREEN}успешно установлен / обновлён!${NC}\n"
     read -p "Нажмите Enter..." dummy
-
-/etc/init.d/network restart
-/etc/init.d/firewall restart
-/etc/init.d/uhttpd restart
-
-wget -qO /etc/config/podkop https://raw.githubusercontent.com/StressOzz/Test/refs/heads/main/podkop
-	echo -e "${GREEN}Запуск ${NC}Podkop${GREEN}...${NC}"
-    podkop enable >/dev/null 2>&1
-    echo -e "${GREEN}Применяем конфигурацию...${NC}"
-    podkop reload >/dev/null 2>&1
-    echo -e "${GREEN}Перезапускаем сервис...${NC}"
-    podkop restart >/dev/null 2>&1
-    echo -e "${GREEN}Обновляем списки...${NC}"
-    podkop list_update >/dev/null 2>&1
