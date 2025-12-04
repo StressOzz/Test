@@ -74,3 +74,34 @@ rm -rf "$AWG_DIR"
 printf "${GREEN}===== Перезапускаем сеть =====${NC}\n"
 /etc/init.d/network restart
 printf "${GREEN}===== Скрипт завершен =====${NC}\n"
+
+##################################################################################################################
+
+# Имя интерфейса и протокол
+
+IF_NAME="AWG"
+PROTO="amneziawg"
+DEV_NAME="amneziawg0"
+
+# Проверяем, есть ли уже такой интерфейс
+
+if grep -q "config interface '$IF_NAME'" /etc/config/network; then
+echo "Интерфейс $IF_NAME уже существует"
+else
+echo "Добавляем интерфейс $IF_NAME..."
+uci batch <<EOF
+set network.$IF_NAME=interface
+set network.$IF_NAME.proto=$PROTO
+set network.$IF_NAME.device=$DEV_NAME
+commit network
+EOF
+fi
+
+# Перезапускаем сеть, firewall и веб-интерфейс LuCI
+
+/etc/init.d/network restart
+/etc/init.d/firewall restart
+/etc/init.d/uhttpd restart
+
+echo "Интерфейс $IF_NAME создан и активирован. Проверьте LuCI."
+
