@@ -11,8 +11,30 @@ BLUE="\033[0;34m"
 GRAY='\033[38;5;239m'
 DGRAY='\033[38;5;236m'
 
-WORKDIR="/tmp/byedpi"
+show_menu() {
 
+	clear
+	echo -e "╔═══════════════════════════════╗"
+	echo -e "║     ${BLUE}Podkop+AWG   Manager${NC}     ║"
+	echo -e "╚═══════════════════════════════╝"
+
+
+    echo -e "\n${CYAN}1) ${GREEN}Установить / обновить ${NC}Podkop"
+    echo -e "${CYAN}2) ${GREEN}Установить интерфэйс"
+    echo -ne "\n${YELLOW}Выберите пункт:${NC} "
+    read choice
+
+    case "$choice" in
+        1) install ;;
+        2) inter ;;
+        *) exit 0 ;;
+    esac
+}
+
+
+
+##################################################################################################################################################
+inter() {
 printf "${GREEN}===== Обновление списка пакетов =====${NC}\n"
 opkg update
 printf "${GREEN}===== Определяем архитектуру и версию OpenWrt =====${NC}\n"
@@ -111,9 +133,9 @@ fi
 /etc/init.d/uhttpd restart
 sleep 5
 echo "Интерфейс $IF_NAME создан и активирован. Проверьте LuCI."
-
+}
 ##################################################################################################################
-
+install() {
 echo -e "${MAGENTA}Установка / обновление Podkop${NC}\n"
 
     REPO="https://api.github.com/repos/itdoginfo/podkop/releases/latest"
@@ -285,3 +307,4 @@ pkg_list_update || {
 
     echo -e "Podkop ${GREEN}успешно установлен / обновлён!${NC}\n"
     read -p "Нажмите Enter..." dummy
+}
