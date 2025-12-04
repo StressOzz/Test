@@ -109,7 +109,7 @@ fi
 /etc/init.d/network restart
 /etc/init.d/firewall restart
 /etc/init.d/uhttpd restart
-sleep 3
+sleep 5
 echo "Интерфейс $IF_NAME создан и активирован. Проверьте LuCI."
 
 ##################################################################################################################
@@ -170,13 +170,6 @@ echo "Интерфейс $IF_NAME создан и активирован. Про
 	
 [ "$AVAILABLE_SPACE" -lt "$REQUIRED_SPACE" ] && { 
     msg "Недостаточно свободного места"
-    echo ""
-    read -p "Нажмите Enter..." dummy
-    return
-}
-
-nslookup google.com >/dev/null 2>&1 || { 
-    msg "DNS не работает"
     echo ""
     read -p "Нажмите Enter..." dummy
     return
