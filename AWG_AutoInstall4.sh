@@ -71,12 +71,8 @@ printf "${GREEN}===== Устанавливаем $LUCI_PACKAGE_NAME =====${NC}\n
 install_pkg "$LUCI_PACKAGE_NAME"
 # Русская локализация только для AWG 2.0
 if [ "$AWG_VERSION" = "2.0" ]; then
-    printf "${GREEN}Хотите установить русскую локализацию? (y/n) [n]: ${NC}"
-    read INSTALL_RU_LANG
-    INSTALL_RU_LANG=${INSTALL_RU_LANG:-n}
-    if [ "$INSTALL_RU_LANG" = "y" ] || [ "$INSTALL_RU_LANG" = "Y" ]; then
-        printf "${GREEN}===== Устанавливаем русскую локализацию =====${NC}\n"
-        install_pkg "luci-i18n-amneziawg-ru" || printf "${GREEN}Внимание: русская локализация не установлена (не критично)${NC}\n"
+    printf "${GREEN}===== Устанавливаем русскую локализацию =====${NC}\n"
+	install_pkg "luci-i18n-amneziawg-ru" || printf "${GREEN}Внимание: русская локализация не установлена (не критично)${NC}\n"
     else
         printf "${GREEN}Пропускаем установку русской локализации.${NC}\n"
     fi
@@ -114,8 +110,10 @@ fi
 /etc/init.d/network restart
 /etc/init.d/firewall restart
 /etc/init.d/uhttpd restart
-
+sleep 3
 echo "Интерфейс $IF_NAME создан и активирован. Проверьте LuCI."
+
+##################################################################################################################
 
     echo -e "${MAGENTA}Установка / обновление Podkop${NC}\n"
 
@@ -155,14 +153,6 @@ echo "Интерфейс $IF_NAME создан и активирован. Про
         fi
     }
 
-    pkg_list_update() {
-        msg "Обновляем список пакетов..."
-        if [ "$PKG_IS_APK" -eq 1 ]; then
-            apk update >/dev/null 2>&1
-        else
-            opkg update >/dev/null 2>&1
-        fi
-    }
 
     pkg_install() {
         local pkg_file="$1"
