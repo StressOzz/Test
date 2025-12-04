@@ -1,11 +1,8 @@
 #!/bin/sh
-
 GREEN="\033[32;1m"
 NC="\033[0m"
-
 printf "${GREEN}===== Обновление списка пакетов =====${NC}\n"
 opkg update
-
 printf "${GREEN}===== Определяем архитектуру и версию OpenWrt =====${NC}\n"
 PKGARCH=$(opkg print-architecture | awk 'BEGIN {max=0} {if ($3 > max) {max = $3; arch = $2}} END {print arch}')
 TARGET=$(ubus call system board | jsonfilter -e '@.release.target' | cut -d '/' -f1)
@@ -13,7 +10,6 @@ SUBTARGET=$(ubus call system board | jsonfilter -e '@.release.target' | cut -d '
 VERSION=$(ubus call system board | jsonfilter -e '@.release.version')
 PKGPOSTFIX="_v${VERSION}_${PKGARCH}_${TARGET}_${SUBTARGET}.ipk"
 BASE_URL="https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/"
-
 printf "${GREEN}===== Определяем версию AWG =====${NC}\n"
 MAJOR=$(echo "$VERSION" | cut -d '.' -f1)
 MINOR=$(echo "$VERSION" | cut -d '.' -f2)
@@ -29,10 +25,8 @@ else
     LUCI_PACKAGE_NAME="luci-app-amneziawg"
 fi
 printf "${GREEN}Detected AWG version: $AWG_VERSION${NC}\n"
-
 AWG_DIR="/tmp/amneziawg"
 mkdir -p "$AWG_DIR"
-
 install_pkg() {
     local pkgname=$1
     local filename="${pkgname}${PKGPOSTFIX}"
@@ -57,22 +51,17 @@ install_pkg() {
         exit 1
     fi
 }
-
 printf "${GREEN}===== Устанавливаем kmod-amneziawg =====${NC}\n"
 install_pkg "kmod-amneziawg"
-
 printf "${GREEN}===== Устанавливаем amneziawg-tools =====${NC}\n"
 install_pkg "amneziawg-tools"
-
 printf "${GREEN}===== Устанавливаем $LUCI_PACKAGE_NAME =====${NC}\n"
 install_pkg "$LUCI_PACKAGE_NAME"
-
 # Русская локализация только для AWG 2.0
 if [ "$AWG_VERSION" = "2.0" ]; then
     printf "${GREEN}Хотите установить русскую локализацию? (y/n) [n]: ${NC}"
     read INSTALL_RU_LANG
     INSTALL_RU_LANG=${INSTALL_RU_LANG:-n}
-
     if [ "$INSTALL_RU_LANG" = "y" ] || [ "$INSTALL_RU_LANG" = "Y" ]; then
         printf "${GREEN}===== Устанавливаем русскую локализацию =====${NC}\n"
         install_pkg "luci-i18n-amneziawg-ru" || printf "${GREEN}Внимание: русская локализация не установлена (не критично)${NC}\n"
@@ -80,8 +69,8 @@ if [ "$AWG_VERSION" = "2.0" ]; then
         printf "${GREEN}Пропускаем установку русской локализации.${NC}\n"
     fi
 fi
-
 printf "${GREEN}===== Очистка временных файлов =====${NC}\n"
 rm -rf "$AWG_DIR"
-
+printf "${GREEN}===== Перезапускаем сеть =====${NC}\n"
+/etc/init.d/network restart
 printf "${GREEN}===== Скрипт завершен =====${NC}\n"
