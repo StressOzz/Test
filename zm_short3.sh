@@ -54,7 +54,7 @@ comeback_def () { if [ -f /opt/zapret/restore-def-cfg.sh ]; then echo -e "\n${MA
 for f in zapret-hosts-google.txt zapret-hosts-user-exclude.txt zapret-ip-exclude.txt; do wget -qO "/opt/zapret/ipset/$f" "https://raw.githubusercontent.com/remittor/zapret-openwrt/master/zapret/ipset/$f"; done
 for f in zapret-hosts-user-ipban.txt zapret-ip-user-ipban.txt zapret-hosts-user.txt zapret-ip-user.txt zapret-ip-user-exclude.txt; do : > "/opt/zapret/ipset/$f"; done
 chmod +x /opt/zapret/restore-def-cfg.sh && /opt/zapret/restore-def-cfg.sh; chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1
-sed -i '/130\.255\.77\.28 ntc.party/d; /57\.144\.222\.34 instagram.com www.instagram.com/d; /173\.245\.58\.219 rutor.info d.rutor.info/d; /193\.46\.255\.29 rutor.info/d; /157\.240\.9\.174 instagram.com www.instagram.com/d' /etc/hosts
+sed -i '/130\.255\.77\.28 ntc.party/d; /193\.46\.255\.29 rutor.info/d; /173\.245\.58\.219 rutor.info d.rutor.info/d; /57\.144\.222\.34 instagram.com www.instagram.com/d; /157\.240\.9\.174 instagram.com www.instagram.com/d' /etc/hosts
 /etc/init.d/dnsmasq restart >/dev/null 2>&1; echo -e "${GREEN}Настройки по умолчанию возвращены!${NC}\n"; else echo -e "\n${RED}Zapret не установлен!${NC}\n"; fi; read -p "Нажмите Enter для выхода в главное меню..." dummy; }
 stop_zapret() { echo -e "\n${MAGENTA}Останавливаем Zapret${NC}\n${CYAN}Останавливаем ${NC}Zapret"; /etc/init.d/zapret stop >/dev/null 2>&1; for pid in $(pgrep -f /opt/zapret 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done
 echo -e "${GREEN}Zapret остановлен!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; }
@@ -64,7 +64,7 @@ uninstall_zapret() { local NO_PAUSE=$1; [ "$NO_PAUSE" != "1" ] && echo; echo -e 
 echo -e "${CYAN}Удаляем пакеты${NC}"; opkg --force-removal-of-dependent-packages --autoremove remove zapret luci-app-zapret >/dev/null 2>&1
 echo -e "${CYAN}Удаляем временные файлы${NC}"; rm -rf /opt/zapret /etc/config/zapret /etc/firewall.zapret /etc/init.d/zapret /tmp/*zapret* /var/run/*zapret* /tmp/*.ipk /tmp/*.zip 2>/dev/null
 crontab -l 2>/dev/null | grep -v -i "zapret" | crontab - 2>/dev/null; nft list tables 2>/dev/null | awk '{print $2}' | grep -E '(zapret|ZAPRET)' | while read t; do [ -n "$t" ] && nft delete table "$t" 2>/dev/null; done
-sed -i '/130\.255\.77\.28 ntc.party/d; /57\.144\.222\.34 instagram.com www.instagram.com/d; /173\.245\.58\.219 rutor.info d.rutor.info/d; /193\.46\.255\.29 rutor.info/d; /157\.240\.9\.174 instagram.com www.instagram.com/d' /etc/hosts/
+sed -i '/130\.255\.77\.28 ntc.party/d; /193\.46\.255\.29 rutor.info/d; /173\.245\.58\.219 rutor.info d.rutor.info/d; /57\.144\.222\.34 instagram.com www.instagram.com/d; /157\.240\.9\.174 instagram.com www.instagram.com/d' /etc/hosts
 etc/init.d/dnsmasq restart >/dev/null 2>&1; echo -e "${GREEN}Zapret полностью удалён!${NC}\n"; [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy; }
 show_current_strategy() { [ -f "$CONF" ] || return; for v in v1 v2 v3 v4; do grep -q "#$v" "$CONF" && { ver="$v"; return; } done; grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONF" && grep -q -- "--hostlist-exclude-domains=openwrt.org" "$CONF" && ver="дефолтная"; }
 menu_str() { [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; return; }
