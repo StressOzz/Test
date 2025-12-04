@@ -240,18 +240,6 @@ pkg_list_update || {
     return
 }
 
-    # Проверка GitHub API
-    if command -v curl >/dev/null 2>&1; then
-        check_response=$(curl -s "$REPO")
-        if echo "$check_response" | grep -q 'API rate limit '; then
-			echo ""
-            echo -e "${RED}Превышен лимит запросов GitHub. Повторите позже.${NC}"
-			echo ""
-            read -p "Нажмите Enter..." dummy
-            return
-        fi
-    fi
-
     # Шаблон скачивания
     if [ "$PKG_IS_APK" -eq 1 ]; then
         grep_url_pattern='https://[^"[:space:]]*\.apk'
