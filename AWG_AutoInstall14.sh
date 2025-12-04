@@ -131,8 +131,8 @@ fi
 /etc/init.d/network restart
 /etc/init.d/firewall restart
 /etc/init.d/uhttpd restart
-sleep 5
 echo "Интерфейс $IF_NAME создан и активирован. Проверьте LuCI."
+read -p "Нажмите Enter..." dummy
 }
 ##################################################################################################################
 install() {
@@ -200,13 +200,6 @@ echo -e "${MAGENTA}Установка / обновление Podkop${NC}\n"
 	
 [ "$AVAILABLE_SPACE" -lt "$REQUIRED_SPACE" ] && { 
     msg "Недостаточно свободного места"
-    echo ""
-    read -p "Нажмите Enter..." dummy
-    return
-}
-
-nslookup google.com >/dev/null 2>&1 || { 
-    msg "DNS не работает"
     echo ""
     read -p "Нажмите Enter..." dummy
     return
@@ -292,6 +285,22 @@ pkg_list_update || {
 
     # Очистка
     rm -rf "$DOWNLOAD_DIR"
+
+wget -qO /etc/config/podkop https://raw.githubusercontent.com/StressOzz/Test/refs/heads/main/podkop
+
+	echo -e "${GREEN}Запуск ${NC}Podkop${GREEN}...${NC}"
+    podkop enable >/dev/null 2>&1
+    echo -e "${GREEN}Применяем конфигурацию...${NC}"
+    podkop reload >/dev/null 2>&1
+    echo -e "${GREEN}Перезапускаем сервис...${NC}"
+    podkop restart >/dev/null 2>&1
+    echo -e "${GREEN}Обновляем списки...${NC}"
+    podkop list_update >/dev/null 2>&1
+    echo -e "${GREEN}Перезапускаем сервис...${NC}"
+    podkop restart >/dev/null 2>&1
+    echo -e "\nPodkop ${GREEN}готов к работе.${NC}"
+
+    echo -e "\nByeDPI ${GREEN}интегрирован в ${NC}Podkop${GREEN}.${NC}"
 
     echo -e "Podkop ${GREEN}успешно установлен / обновлён!${NC}\n"
     read -p "Нажмите Enter..." dummy
