@@ -127,3 +127,4 @@ for i in $(seq 1 $half); do
     curl -Is --connect-timeout 3 --max-time 4 "https://$left" >/dev/null 2>&1 || left_color="[${RED}FAIL${NC}]"
     [ -n "$right" ] && curl -Is --connect-timeout 3 --max-time 4 "https://$right" >/dev/null 2>&1 || right_color="[${RED}FAIL${NC}]"
     [ -n "$right" ] && echo "$left_color $left | $right_color $right" || echo "$left_color $left"
+done
