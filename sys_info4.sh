@@ -16,26 +16,32 @@ echo -e "$ARCH"
 echo -e "$OWRT"
 echo -e "\n${GREEN}===== Пользовательские пакеты =====${NC}"
 PKGS=$(awk '/^Package:/ {p=$2} /^Status: install user/ {print p}' /usr/lib/opkg/status | grep -v '^$')
+
 total=0
 for p in $PKGS; do
     total=$((total+1))
 done
+
 half=$(( (total + 1) / 2 ))
+
 idx=0
 for p in $PKGS; do
     idx=$((idx+1))
     eval "pkg$idx='$p'"
 done
+
 for i in $(seq 1 $half); do
     eval "left=\$pkg$i"
     right_idx=$((i + half))
     eval "right=\$pkg$right_idx"
+
     if [ -n "$right" ]; then
-        echo "$left  |  $right"
+        printf "%s\t|\t%s\n" "$left" "$right"
     else
-        echo "$left"
+        printf "%s\n" "$left"
     fi
 done
+
 echo -e "\n${GREEN}===== Flow Offloading =====${NC}"
 sw=$(uci -q get firewall.@defaults[0].flow_offloading)
 hw=$(uci -q get firewall.@defaults[0].flow_offloading_hw)
