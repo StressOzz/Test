@@ -92,6 +92,7 @@ else
 echo -e "${RED}Zapret не установлен!${NC}\n"
 fi
 echo -e "${GREEN}===== Доступность сайтов =====${NC}"
+
 SITES=$(cat <<'EOF'
 gosuslugi.ru
 esia.gosuslugi.ru/login
@@ -115,32 +116,30 @@ play.google.com
 genderize.io
 EOF
 )
-sites_clean=$(echo "$SITES" | grep -v '^#' | grep -v '^\s*$')
-total=$(echo "$sites_clean" | wc -l)
+
+total=$(echo "$SITES" | grep -v '^#' | grep -v '^\s*$' | wc -l)
 half=$(( (total + 1) / 2 ))
-sites_list=""
-for site in $sites_clean; do
-sites_list="$sites_list $site"
-done
-for idx in $(seq 1 $half); do
-left=$(echo $sites_list | cut -d' ' -f$idx)
-right_idx=$((idx + half))
-right=$(echo $sites_list | cut -d' ' -f$right_idx)
-left_pad=$(printf "%-25s" "$left")
-right_pad=$(printf "%-25s" "$right")
-if curl -Is --connect-timeout 3 --max-time 4 "https://$left" >/dev/null 2>&1; then
-left_color="[${GREEN}OK${NC}]  "
-else
-left_color="[${RED}FAIL${NC}]"
-fi
-if [ -n "$right" ]; then
-if curl -Is --connect-timeout 3 --max-time 4 "https://$right" >/dev/null 2>&1; then
-right_color="[${GREEN}OK${NC}]  "
-else
-right_color="[${RED}FAIL${NC}]"
-fi
-echo -e "$left_color $left_pad $right_color $right_pad"
-else
-echo -e "$left_color $left_pad"
-fi
+
+for i in $(seq 1 $half); do
+    left=$(echo "$SITES" | sed -n "${i}p")
+    right=$(echo "$SITES" | sed -n "$((i + half))p")
+
+    # Проверка левого
+    if curl -Is --connect-timeout 3 --max-time 4 "https://$left" >/dev/null 2>&1; then
+        left_color="[${GREEN}OK${NC}]"
+    else
+        left_color="[${RED}FAIL${NC}]"
+    fi
+
+    # Проверка правого
+    if [ -n "$right" ]; then
+        if curl -Is --connect-timeout 3 --max-time 4 "https://$right" >/dev/null 2>&1; then
+            right_color="[${GREEN}OK${NC}]"
+        else
+            right_color="[${RED}FAIL${NC}]"
+        fi
+        printf "%-8s %-30s | %-8s %-30s\n" "$left_color" "$left" "$right_color" "$right"
+    else
+        printf "%-8s %-30s\n" "$left_color" "$left"
+    fi
 done
