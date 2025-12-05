@@ -30,7 +30,7 @@ for p in $PKGS; do
     eval "pkg$idx='$p'"
 done
 
-NBSP=" "   # <- это не пробел, а NBSP (неразрывный)
+NBSP="   "   # <- это не пробел, а NBSP (неразрывный)
 
 for i in $(seq 1 $half); do
     eval "left=\$pkg$i"
