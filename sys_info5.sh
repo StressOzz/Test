@@ -30,17 +30,21 @@ for p in $PKGS; do
     eval "pkg$idx='$p'"
 done
 
+NBSP=" "   # <- это не пробел, а NBSP (неразрывный)
+
 for i in $(seq 1 $half); do
     eval "left=\$pkg$i"
     right_idx=$((i + half))
     eval "right=\$pkg$right_idx"
 
     if [ -n "$right" ]; then
-        printf "%s\t|\t%s\n" "$left" "$right"
+        # пробел + NBSP до и после |
+        echo "${left}${NBSP}|${NBSP}${right}"
     else
-        printf "%s\n" "$left"
+        echo "$left"
     fi
 done
+
 
 echo -e "\n${GREEN}===== Flow Offloading =====${NC}"
 sw=$(uci -q get firewall.@defaults[0].flow_offloading)
