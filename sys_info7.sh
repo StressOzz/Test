@@ -15,31 +15,34 @@ echo -e "$MODEL"
 echo -e "$ARCH"
 echo -e "$OWRT"
 echo -e "\n${GREEN}===== Пользовательские пакеты =====${NC}"
+
+# Собираем список пользовательских пакетов в обычный список
 PKGS=$(awk '/^Package:/ {p=$2} /^Status: install user/ {print p}' /usr/lib/opkg/status | grep -v '^$')
 
+# Считаем количество
 total=0
 for p in $PKGS; do
     total=$((total+1))
 done
 
+# Половина списка
 half=$(( (total + 1) / 2 ))
 
+# Перегоняем в "массив" переменных pkg1, pkg2, ...
 idx=0
 for p in $PKGS; do
     idx=$((idx+1))
     eval "pkg$idx='$p'"
 done
 
-NBSP="   "   # <- это не пробел, а NBSP (неразрывный)
-
+# Выводим в 2 столбца: пакет | пакет
 for i in $(seq 1 $half); do
     eval "left=\$pkg$i"
     right_idx=$((i + half))
     eval "right=\$pkg$right_idx"
 
     if [ -n "$right" ]; then
-        # пробел + NBSP до и после |
-        echo "${left}${NBSP}|${NBSP}${right}"
+        echo "$left | $right"
     else
         echo "$left"
     fi
