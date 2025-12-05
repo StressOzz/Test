@@ -124,22 +124,23 @@ for i in $(seq 1 $half); do
     left=$(echo "$SITES" | sed -n "${i}p")
     right=$(echo "$SITES" | sed -n "$((i + half))p")
 
-    # Проверка левого
+    # Проверка левого сайта
     if curl -Is --connect-timeout 3 --max-time 4 "https://$left" >/dev/null 2>&1; then
         left_color="[${GREEN}OK${NC}]"
     else
         left_color="[${RED}FAIL${NC}]"
     fi
 
-    # Проверка правого
+    # Проверка правого сайта
     if [ -n "$right" ]; then
         if curl -Is --connect-timeout 3 --max-time 4 "https://$right" >/dev/null 2>&1; then
             right_color="[${GREEN}OK${NC}]"
         else
             right_color="[${RED}FAIL${NC}]"
         fi
-        printf "%-8s %-30s | %-8s %-30s\n" "$left_color" "$left" "$right_color" "$right"
+        # Просто через пробел и |, без printf
+        echo "$left_color $left | $right_color $right"
     else
-        printf "%-8s %-30s\n" "$left_color" "$left"
+        echo "$left_color $left"
     fi
 done
