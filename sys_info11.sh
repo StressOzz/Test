@@ -117,30 +117,13 @@ genderize.io
 EOF
 )
 
-total=$(echo "$SITES" | grep -v '^#' | grep -v '^\s*$' | wc -l)
+total=$(echo "$SITES" | wc -l)
 half=$(( (total + 1) / 2 ))
 
 for i in $(seq 1 $half); do
     left=$(echo "$SITES" | sed -n "${i}p")
     right=$(echo "$SITES" | sed -n "$((i + half))p")
-
-    # Проверка левого сайта
-    if curl -Is --connect-timeout 3 --max-time 4 "https://$left" >/dev/null 2>&1; then
-        left_color="[${GREEN}OK${NC}]"
-    else
-        left_color="[${RED}FAIL${NC}]"
-    fi
-
-    # Проверка правого сайта
-    if [ -n "$right" ]; then
-        if curl -Is --connect-timeout 3 --max-time 4 "https://$right" >/dev/null 2>&1; then
-            right_color="[${GREEN}OK${NC}]"
-        else
-            right_color="[${RED}FAIL${NC}]"
-        fi
-        # Просто через пробел и |, без printf
-        echo "$left_color $left | $right_color $right"
-    else
-        echo "$left_color $left"
-    fi
-done
+    left_color="[${GREEN}OK${NC}]"; right_color="[${GREEN}OK${NC}]"
+    curl -Is --connect-timeout 3 --max-time 4 "https://$left" >/dev/null 2>&1 || left_color="[${RED}FAIL${NC}]"
+    [ -n "$right" ] && curl -Is --connect-timeout 3 --max-time 4 "https://$right" >/dev/null 2>&1 || right_color="[${RED}FAIL${NC}]"
+    [ -n "$right" ] && echo "$left_color $left | $right_color $right" || echo "$left_color $left"
