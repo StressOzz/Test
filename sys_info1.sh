@@ -1,4 +1,3 @@
-
 #!/bin/sh
 GREEN="\033[1;32m"
 RED="\033[1;31m"
@@ -12,22 +11,40 @@ echo -e "$MODEL"
 echo -e "$ARCH"
 echo -e "$OWRT"
 echo -e "\n${GREEN}===== Пользовательские пакеты =====${NC}"
+echo -e "\n${GREEN}===== Пользовательские пакеты =====${NC}"
+
+# Собираем список пользовательских пакетов в обычный список
 PKGS=$(awk '/^Package:/ {p=$2} /^Status: install user/ {print p}' /usr/lib/opkg/status | grep -v '^$')
 
-mapfile -t arr <<< "$PKGS"
+# Считаем количество
+total=0
+for p in $PKGS; do
+    total=$((total+1))
+done
 
-total=${#arr[@]}
+# Половина списка
 half=$(( (total + 1) / 2 ))
 
-for ((i=0; i<half; i++)); do
-    left="${arr[$i]}"
-    right="${arr[$((i + half))]}"
+# Перегоняем в "массив" переменных pkg1, pkg2, ...
+idx=0
+for p in $PKGS; do
+    idx=$((idx+1))
+    eval "pkg$idx='$p'"
+done
+
+# Выводим в 2 столбца: пакет | пакет
+for i in $(seq 1 $half); do
+    eval "left=\$pkg$i"
+    right_idx=$((i + half))
+    eval "right=\$pkg$right_idx"
+
     if [ -n "$right" ]; then
         echo "$left | $right"
     else
         echo "$left"
     fi
 done
+
 echo -e "\n${GREEN}===== Flow Offloading =====${NC}"
 sw=$(uci -q get firewall.@defaults[0].flow_offloading)
 hw=$(uci -q get firewall.@defaults[0].flow_offloading_hw)
