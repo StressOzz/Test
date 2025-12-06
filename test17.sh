@@ -18,5 +18,9 @@ read ttyd_login
     uci set ttyd.@ttyd[0].interface=''
     uci set ttyd.@ttyd[0].command="-p 17681 -W -a ${ttyd_login_have}"
 	uci commit ttyd
+
+	chmod +x /usr/bin/zm
+	chmod +x /zm
+	chmod +x /root/zm
 	/etc/init.d/ttyd enable
 	/etc/init.d/ttyd start
