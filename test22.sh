@@ -48,6 +48,7 @@ EOF
  elif [[ "$OSystem" == "WRT" ]]; then
 	echo -e "${yellow}Установка ttyd for WRT${plain}"
 	/etc/init.d/ttyd stop 2>/dev/null || true
+	opkg update
 	opkg install ttyd
     uci set ttyd.@ttyd[0].interface=''
     uci set ttyd.@ttyd[0].command="-p 17681 -W -a ${ttyd_login_have}"
