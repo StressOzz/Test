@@ -23,7 +23,7 @@ wget -O /usr/bin/ttyd "$URL" 2>/dev/null
 chmod +x /usr/bin/ttyd
 
 # Проверяем, что Zapret-Manager.sh существует
-if [ ! -f /root/Zapret-Manager.sh ]; then
+if [ ! -f /root/Zapret-Manager ]; then
     echo "Ошибка: /root/Zapret-Manager.sh не найден!"
     exit 1
 fi
