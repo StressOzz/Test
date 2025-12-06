@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 	echo -e "Установка ttyd for WRT"
 
 echo -n "Введите логин (0 — отключить логин): "
