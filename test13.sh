@@ -13,7 +13,7 @@ case "$ARCH" in
     *) echo "Неизвестная архитектура: $ARCH"; exit 1 ;;
 esac
 
-URL="https://github.com/tsl0922/ttyd/releases/latest/download/$BIN"
+URL="https://github.com/eastlondoner/ttyd/releases/latest/download/$BIN"
 
 echo "Архитектура: $ARCH"
 echo "Загрузка: $URL"
