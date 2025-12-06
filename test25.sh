@@ -13,7 +13,7 @@ read ttyd_login="root"
 
 printf "${yellow}Если вы открыли пункт через браузер - вас выкинет. Используйте SSH для установки${plain}\n"
 
-ttyd_login_have="-c "${ttyd_login}": bash z4r"
+ttyd_login_have="-c "${ttyd_login}": bash /root/z4r"
 if [ "$ttyd_login" = "0" ]; then
 echo "Отключение логина в веб. Перевод с z4r на CLI логин."
 ttyd_login_have="login"
