@@ -25,7 +25,7 @@ opkg install ttyd
 # Настройка через UCI
 
 uci set ttyd.@ttyd[0].interface=''
-uci set ttyd.@ttyd[0].command="-p 17681 -W -a -c : bash z4r"
+uci set ttyd.@ttyd[0].command="-p 17681 -W -a -c bash z4r"
 uci commit ttyd
 
 # Включение и запуск службы
