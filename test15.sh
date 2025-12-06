@@ -12,7 +12,8 @@ read ttyd_login
  fi
 
    
-	/etc/init.d/ttyd stop 2>/dev/null || true
+	/etc/init.d/ttyd stop
+	opkg update
 	opkg install ttyd
     uci set ttyd.@ttyd[0].interface=''
     uci set ttyd.@ttyd[0].command="-p 17681 -W -a ${ttyd_login_have}"
