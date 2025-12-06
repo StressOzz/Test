@@ -13,11 +13,6 @@ plain='\033[0m'
 
 # printf "${yellow}Если вы открыли пункт через браузер - вас выкинет. Используйте SSH для установки${plain}\n"
 
-ttyd_login_have="-c "root": bash z4r"
-
-
-echo -e "${yellow}Установка ttyd for WRT${plain}"
-
 # Остановка ttyd, если уже установлен
 
 /etc/init.d/ttyd stop 2>/dev/null || true
@@ -30,7 +25,7 @@ opkg install ttyd
 # Настройка через UCI
 
 uci set ttyd.@ttyd[0].interface=''
-uci set ttyd.@ttyd[0].command="-p 17681 -W -a -c : bash /root/Zapret-Manager.sh"
+uci set ttyd.@ttyd[0].command="-p 17681 -W -a -c : bash z4r"
 uci commit ttyd
 
 # Включение и запуск службы
@@ -38,14 +33,6 @@ uci commit ttyd
 /etc/init.d/ttyd enable
 /etc/init.d/ttyd start
 
-# Проверка порта
-
-sleep 1
-if netstat -tuln | grep -q ':17681'; then
-echo -e "${green}Порт 17681 для службы ttyd слушается${plain}"
-else
-echo -e "${red}Порт 17681 для службы ttyd не прослушивается${plain}"
-fi
 
 # Проверка работы процесса
 
