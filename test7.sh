@@ -13,7 +13,7 @@ case "$ARCH" in
     *) echo "Неизвестная архитектура: $ARCH"; exit 1 ;;
 esac
 
-URL="https://github.com/eastlondoner/ttyd/releases/latest/download/$BIN"
+URL="https://github.com/tsl0922/ttyd/releases/latest/download/$BIN"
 
 echo "Архитектура: $ARCH"
 echo "Загрузка: $URL"
@@ -36,7 +36,7 @@ USE_PROCD=1
 
 start_service() {
     procd_open_instance
-    procd_set_param command /usr/bin/ttyd -p 17681 -W -a root -- bash /root/Zapret-Manager
+    procd_set_param command /usr/bin/ttyd -p 17681 -W -a root -- bash /root/Zapret-Manager.sh
     procd_set_param respawn
     procd_close_instance
 }
@@ -50,7 +50,7 @@ chmod +x /etc/init.d/ttyd
 
 # Проверка
 if pidof ttyd >/dev/null; then
-    echo "Готово! Доступ: http://<IP-роутера>:17681 (логин: root, запускается Zapret-Manager.sh)"
+    echo "Готово! Доступ: http://<IP-роутера>:17681 (логин: root, запускается Zapret-Manager)"
 else
     echo "Ошибка: ttyd не запустился."
 fi
