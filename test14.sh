@@ -1,6 +1,9 @@
 #!/bin/sh
 	echo -e "Установка ttyd for WRT"
 
+echo -n "Введите логин (0 — отключить логин): "
+read ttyd_login
+
    ttyd_login_have="-c "${ttyd_login}": bash z4r"
    
  if [[ "$ttyd_login" == "0" ]]; then
