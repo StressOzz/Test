@@ -1,6 +1,6 @@
 #!/bin/sh
 
-echo "Установка универсального ttyd для OpenWrt..."
+echo "Установка универсального ttyd для OpenWrt с запуском Zapret-Manager.sh..."
 
 ARCH="$(uname -m)"
 
@@ -18,8 +18,15 @@ URL="https://github.com/tsl0922/ttyd/releases/latest/download/$BIN"
 echo "Архитектура: $ARCH"
 echo "Загрузка: $URL"
 
+# Скачиваем ttyd через wget
 wget -O /usr/bin/ttyd "$URL" 2>/dev/null
 chmod +x /usr/bin/ttyd
+
+# Проверяем, что Zapret-Manager.sh существует
+if [ ! -f /root/Zapret-Manager.sh ]; then
+    echo "Ошибка: /root/Zapret-Manager.sh не найден!"
+    exit 1
+fi
 
 # Создаем init-скрипт с запуском Zapret-Manager.sh
 cat << 'EOF' > /etc/init.d/ttyd
@@ -29,7 +36,7 @@ USE_PROCD=1
 
 start_service() {
     procd_open_instance
-    procd_set_param command /usr/bin/ttyd -p 17681 -W -a login -- bash /root/Zapret-Manager.sh
+    procd_set_param command /usr/bin/ttyd -p 17681 -W -a root -- bash /root/Zapret-Manager.sh
     procd_set_param respawn
     procd_close_instance
 }
@@ -43,7 +50,7 @@ chmod +x /etc/init.d/ttyd
 
 # Проверка
 if pidof ttyd >/dev/null; then
-    echo "Готово! Доступ: http://<IP-роутера>:17681"
+    echo "Готово! Доступ: http://<IP-роутера>:17681 (логин: root, запускается Zapret-Manager.sh)"
 else
     echo "Ошибка: ttyd не запустился."
 fi
