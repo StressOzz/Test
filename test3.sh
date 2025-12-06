@@ -19,38 +19,31 @@ echo "Архитектура: $ARCH"
 echo "Загрузка: $URL"
 
 wget -O /usr/bin/ttyd "$URL" 2>/dev/null
-if [ ! -s /usr/bin/ttyd ]; then
-    wget -O /usr/bin/ttyd "$URL"
-fi
-
-if [ ! -s /usr/bin/ttyd ]; then
-    echo "Ошибка: не удалось скачать ttyd."
-    exit 1
-fi
-
 chmod +x /usr/bin/ttyd
 
-# Создаем init-скрипт
+# Создаем init-скрипт с запуском Zapret-Manager.sh
 cat << 'EOF' > /etc/init.d/ttyd
 #!/bin/sh /etc/rc.common
 START=95
-
 USE_PROCD=1
+
 start_service() {
     procd_open_instance
-    procd_set_param command /usr/bin/ttyd -p 17681 -i br-lan /bin/login
+    procd_set_param command /usr/bin/ttyd -p 17681 -W -a login -- bash /root/Zapret-Manager.sh
+    procd_set_param respawn
     procd_close_instance
 }
 EOF
 
 chmod +x /etc/init.d/ttyd
 
+# Enable & restart
 /etc/init.d/ttyd enable
 /etc/init.d/ttyd restart
 
-if ! pgrep -f "ttyd" >/dev/null; then
+# Проверка
+if pidof ttyd >/dev/null; then
+    echo "Готово! Доступ: http://<IP-роутера>:17681"
+else
     echo "Ошибка: ttyd не запустился."
-    exit 1
 fi
-
-echo "Готово! Доступ: http://<IP-роутера>:17681"
