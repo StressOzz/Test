@@ -1,16 +1,13 @@
 #!/bin/bash
 
-if [ -d /opt/bin ]; then
-    if [ ! -f /opt/bin/z4r ] || ! grep -q 'opt/z4r.sh "$@"' /opt/bin/z4r; then
 		echo "Скачиваем /opt/bin/z4r"
         curl -L -o /opt/bin/z4r https://raw.githubusercontent.com/IndeecFOX/z4r/main/z4r
         chmod +x /opt/bin/z4r
-    fi
-elif [ ! -f /usr/bin/z4r ] || ! grep -q 'opt/z4r.sh "$@"' /usr/bin/z4r; then
+
 	echo "Скачиваем /usr/bin/z4r"
     curl -L -o /usr/bin/z4r https://raw.githubusercontent.com/IndeecFOX/z4r/main/z4r
     chmod +x /usr/bin/z4r
-fi
+
 
 	echo -e $'\033[33mВведите логин для доступа к zeefeer через браузер (0 - отказ от логина через web в z4r и переход на логин в ssh (может помочь в safari). Enter - пустой логин, \033[31mно не рекомендуется, панель может быть доступна из интернета!)\033[0m'
  read ttyd_login
