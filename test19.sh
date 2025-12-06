@@ -1,6 +1,6 @@
 #!/bin/sh
 
-echo "Установка универсального ttyd для OpenWrt с автозапуском z4r..."
+echo "Установка ttyd для OpenWrt с автозапуском Zapret-Manager.sh..."
 
 # Определяем архитектуру
 ARCH="$(uname -m)"
@@ -21,13 +21,13 @@ echo "Загрузка ttyd: $URL"
 wget -O /usr/bin/ttyd "$URL" 2>/dev/null
 chmod +x /usr/bin/ttyd
 
-# Проверяем наличие скрипта z4r
-if [ ! -f /root/z4r ]; then
-    echo "Ошибка: /root/z4r не найден!"
+# Проверка скрипта
+if [ ! -f /root/Zapret-Manager.sh ]; then
+    echo "Ошибка: /root/Zapret-Manager.sh не найден!"
     exit 1
 fi
 
-# Создаём init-скрипт для автозапуска ttyd
+# Создаём init-скрипт для OpenWrt
 cat << 'EOF' > /etc/init.d/ttyd
 #!/bin/sh /etc/rc.common
 START=95
@@ -35,8 +35,8 @@ USE_PROCD=1
 
 start_service() {
     procd_open_instance
-    # ttyd без логина, сразу запускаем z4r
-    procd_set_param command /usr/bin/ttyd -p 17681 -W -a "" -- bash /root/z4r
+    # ttyd с полноценным терминалом, сразу запускаем Zapret-Manager.sh
+    procd_set_param command /usr/bin/ttyd -p 17681 -W -t xterm-256color -- bash -i -c "/root/Zapret-Manager.sh"
     procd_set_param respawn
     procd_close_instance
 }
@@ -44,14 +44,14 @@ EOF
 
 chmod +x /etc/init.d/ttyd
 
-# Включаем и перезапускаем сервис
+# Enable & restart
 /etc/init.d/ttyd enable
 /etc/init.d/ttyd restart
 
 # Проверка
 if pidof ttyd >/dev/null; then
     echo "Готово! Доступ через браузер: http://<IP-роутера>:17681"
-    echo "При подключении сразу запускается z4r"
+    echo "При подключении сразу запускается Zapret-Manager.sh"
 else
     echo "Ошибка: ttyd не запустился."
 fi
