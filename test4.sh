@@ -36,7 +36,7 @@ USE_PROCD=1
 
 start_service() {
     procd_open_instance
-    procd_set_param command /usr/bin/ttyd -p 17681 -W -a root -- bash /root/Zapret-Manager.sh
+    procd_set_param command /usr/bin/ttyd -p 17681 -W -a root -- bash /root/Zapret-Manager
     procd_set_param respawn
     procd_close_instance
 }
