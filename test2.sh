@@ -7,17 +7,14 @@ plain='\033[0m'
 
 # Ввод логина
 
-printf "${yellow}Введите логин для доступа к zeefeer через браузер (0 - отказ от логина через web в z4r и переход на логин в ssh (может помочь в safari). Enter - пустой логин, ${red}но не рекомендуется, панель может быть доступна из интернета!)${plain}\n"
-printf "> "
-read ttyd_login
+# printf "${yellow}Введите логин для доступа к zeefeer через браузер (0 - отказ от логина через web в z4r и переход на логин в ssh (может помочь в safari). Enter - пустой логин, ${red}но не рекомендуется, панель может быть доступна из интернета!)${plain}\n"
+# printf "> "
+# read ttyd_login
 
-printf "${yellow}Если вы открыли пункт через браузер - вас выкинет. Используйте SSH для установки${plain}\n"
+# printf "${yellow}Если вы открыли пункт через браузер - вас выкинет. Используйте SSH для установки${plain}\n"
 
-ttyd_login_have="-c "${ttyd_login}": bash z4r"
-if [ "$ttyd_login" = "0" ]; then
-echo "Отключение логина в веб. Перевод с z4r на CLI логин."
-ttyd_login_have="login"
-fi
+ttyd_login_have="-c "root": bash z4r"
+
 
 echo -e "${yellow}Установка ttyd for WRT${plain}"
 
@@ -33,7 +30,7 @@ opkg install ttyd
 # Настройка через UCI
 
 uci set ttyd.@ttyd[0].interface=''
-uci set ttyd.@ttyd[0].command="-p 17681 -W -a ${ttyd_login_have}"
+uci set ttyd.@ttyd[0].command="-p 17681 -W -a -c : bash /root/Zapret-Manager.sh"
 uci commit ttyd
 
 # Включение и запуск службы
