@@ -7,13 +7,13 @@ plain='\033[0m'
 
 # Ввод логина
 
-printf "${yellow}Введите логин для доступа к zeefeer через браузер (0 - отказ от логина через web в z4r и переход на логин в ssh (может помочь в safari). Enter - пустой логин, ${red}но не рекомендуется, панель может быть доступна из интернета!)${plain}\n"
-printf "> "
-read ttyd_login
+# printf "${yellow}Введите логин для доступа к zeefeer через браузер (0 - отказ от логина через web в z4r и переход на логин в ssh (может помочь в safari). Enter - пустой логин, ${red}но не рекомендуется, панель может быть доступна из интернета!)${plain}\n"
+# printf "> "
+read ttyd_login="root"
 
 printf "${yellow}Если вы открыли пункт через браузер - вас выкинет. Используйте SSH для установки${plain}\n"
 
-ttyd_login_have="-c "${ttyd_login}": sh <(wget -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/main/Zapret-Manager.sh)"
+ttyd_login_have="-c "${ttyd_login}": bash z4r"
 if [ "$ttyd_login" = "0" ]; then
 echo "Отключение логина в веб. Перевод с z4r на CLI логин."
 ttyd_login_have="login"
