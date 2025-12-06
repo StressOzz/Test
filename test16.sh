@@ -4,7 +4,7 @@
 echo -n "Введите логин (0 — отключить логин): "
 read ttyd_login
 
-   ttyd_login_have="-c "${ttyd_login}": bash z4r"
+   ttyd_login_have="-c "${ttyd_login}": bash zm"
    
  if [[ "$ttyd_login" == "0" ]]; then
 	echo "Отключение логина в веб. Перевод с z4r на CLI логин."
