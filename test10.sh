@@ -1,6 +1,6 @@
 #!/bin/sh
 echo -e $'\033[33mВведите логин для доступа к zeefeer через браузер (0 - отказ от логина через web в Zapret-Manager и переход на логин в ssh (может помочь в safari). Enter - пустой логин, \033[31mно не рекомендуется, панель может быть доступна из интернета!)\033[0m'
- read -re -p '' ttyd_login
+ read ttyd_login
  echo -e "${yellow}Если вы открыли пункт через браузер - вас выкинет. Используйте SSH для установки${plain}"
  
  ttyd_login_have="-c "${ttyd_login}": bash Zapret-Manager"
