@@ -133,7 +133,7 @@ echo -e "${MAGENTA}Устанавливаем стратегию ${version}${NC}
 strategy_v1() {
 cat <<EOF
 --filter-tcp=443
---hostlist-exclude=${EXCLUDE_FILE}
+--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt
 --dpi-desync=fake,multidisorder
 --dpi-desync-split-seqovl=681
 --dpi-desync-split-pos=1
@@ -144,7 +144,7 @@ cat <<EOF
 --dpi-desync-fake-tls-mod=rnd,dupsid,sni=fonts.google.com
 --new
 --filter-udp=443
---hostlist-exclude=${EXCLUDE_FILE}
+--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt
 --dpi-desync=fake
 --dpi-desync-repeats=6
 --dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin
@@ -153,7 +153,7 @@ EOF
 strategy_v2() {
 cat <<EOF
 --filter-tcp=443
---hostlist-exclude=${EXCLUDE_FILE}
+--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt
 --dpi-desync=fake,fakeddisorder
 --dpi-desync-split-pos=10,midsld
 --dpi-desync-fake-tls=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin
@@ -167,6 +167,7 @@ cat <<EOF
 --dpi-desync-badseq-increment=0
 --new
 --filter-udp=443
+--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt
 --dpi-desync=fake
 --dpi-desync-repeats=6
 --dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin
@@ -183,7 +184,7 @@ cat <<EOF
 --dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin
 --new
 --filter-tcp=443
---hostlist-exclude=${EXCLUDE_FILE}
+--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt
 --dpi-desync=fake,fakeddisorder
 --dpi-desync-split-pos=10,midsld
 --dpi-desync-fake-tls=/opt/zapret/files/fake/tls_clienthello_t2_ru.bin
@@ -197,6 +198,7 @@ cat <<EOF
 --dpi-desync-badseq-increment=0
 --new
 --filter-udp=443
+--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt
 --dpi-desync=fake
 --dpi-desync-repeats=6
 --dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin
@@ -216,7 +218,7 @@ cat <<EOF
 --dpi-desync-fooling=badseq
 --new
 --filter-tcp=443
---hostlist-exclude=${EXCLUDE_FILE}
+--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt
 --dpi-desync-any-protocol=1
 --dpi-desync-cutoff=n5
 --dpi-desync=multisplit
@@ -225,7 +227,7 @@ cat <<EOF
 --dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/4pda.bin
 --new
 --filter-udp=443
---hostlist-exclude=${EXCLUDE_FILE}
+--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt
 --dpi-desync=fake
 --dpi-desync-repeats=6
 --dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin
@@ -254,7 +256,7 @@ cat <<EOF
 --dpi-desync-badseq-increment=0
 --new
 --filter-udp=443
---hostlist-exclude=${EXCLUDE_FILE}
+--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt
 --dpi-desync=fake
 --dpi-desync-repeats=6
 --dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin
@@ -283,26 +285,20 @@ echo -e "${GREEN}Стратегия ${NC}${version} ${GREEN}установлен
 # ==========================================
 show_menu() {
 get_versions
-clear; echo -e "╔════════════════════════════════════╗"
-echo -e "║     ${BLUE}Zapret on remittor Manager${NC}     ║"
-echo -e "╚════════════════════════════════════╝"
-echo -e "                     ${DGRAY}by StressOzz v$ZAPRET_MANAGER_VERSION${NC}"
+clear; echo -e "╔════════════════════════════════════╗\n║     ${BLUE}Zapret on remittor Manager${NC}     ║\n╚════════════════════════════════════╝\n                     ${DGRAY}by StressOzz v$ZAPRET_MANAGER_VERSION${NC}"
 echo -e "\n${YELLOW}Установленная версия:   ${INST_COLOR}$INSTALLED_DISPLAY${NC}"
 [ -n "$ZAPRET_STATUS" ] && echo -e "${YELLOW}Статус Zapret:${NC}          $ZAPRET_STATUS"
 show_script_50 && [ -n "$name" ] && echo -e "${YELLOW}Установлен скрипт:${NC}      $name"
 [ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*1024-49999,50100-65535" "$CONF" && grep -q -- "--filter-udp=1024-49999,50100-65535" "$CONF" && echo -e "${YELLOW}Стратегия для игр:${NC}      ${GREEN}активна${NC}"
 show_current_strategy && [ -n "$ver" ] && echo -e "${YELLOW}Используется стратегия:${NC} ${CYAN}$ver${NC}"
-echo -e "\n${CYAN}1) ${GREEN}Установить последнюю версию${NC}\n${CYAN}2) ${GREEN}Меню выбора стратегий${NC}"
-echo -e "${CYAN}3) ${GREEN}Вернуть настройки по умолчанию${NC}\n${CYAN}4) ${GREEN}Остановить / Запустить ${NC}Zapret"
-echo -e "${CYAN}5) ${GREEN}Удалить ${NC}Zapret\n${CYAN}6) ${GREEN}Добавить / Удалить стратегию для игр"
-echo -e "${CYAN}7) ${GREEN}Меню установки скриптов${NC}\n${CYAN}8) ${GREEN}Удалить / Установить / Настроить${NC} Zapret"
+echo -e "\n${CYAN}1) ${GREEN}Установить последнюю версию${NC}\n${CYAN}2) ${GREEN}Меню выбора стратегий${NC}\n${CYAN}3) ${GREEN}Вернуть настройки по умолчанию${NC}\n${CYAN}4) ${GREEN}Остановить / Запустить ${NC}Zapret"
+echo -e "${CYAN}5) ${GREEN}Удалить ${NC}Zapret\n${CYAN}6) ${GREEN}Добавить / Удалить стратегию для игр\n${CYAN}7) ${GREEN}Меню установки скриптов${NC}\n${CYAN}8) ${GREEN}Удалить / Установить / Настроить${NC} Zapret"
 echo -ne "${CYAN}9) ${GREEN}Системная информация${NC}\n${CYAN}Enter) ${GREEN}Выход${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read choice
 case "$choice" in
 1) install_Zapret ;; 2) menu_str ;; 3) comeback_def ;; 4) pgrep -f /opt/zapret >/dev/null 2>&1 && stop_zapret || start_zapret ;;
-5) uninstall_zapret;; 6) fix_GAME  ;; 7) enable_discord_calls ;; 8) zapret_key ;;
-9) wget -qO- https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/sys_info.sh | sh; echo; read -p "Нажмите Enter для выхода в главное меню..." dummy ;;
+5) uninstall_zapret;; 6) fix_GAME  ;; 7) enable_discord_calls ;; 8) zapret_key ;; 9) wget -qO- https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/sys_info.sh | sh; echo; read -p "Нажмите Enter для выхода в главное меню..." dummy ;;
 *) echo; exit 0 ;; esac; }
 # ==========================================
-# Старт скрипта (цикл)
+# Старт скрипта
 # ==========================================
 while true; do show_menu; done
