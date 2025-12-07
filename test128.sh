@@ -90,6 +90,7 @@ for f in zapret-hosts-google.txt zapret-hosts-user-exclude.txt zapret-ip-exclude
 for f in zapret-hosts-user-ipban.txt zapret-ip-user-ipban.txt zapret-hosts-user.txt zapret-ip-user.txt zapret-ip-user-exclude.txt; do : > "/opt/zapret/ipset/$f"; done
 chmod +x /opt/zapret/restore-def-cfg.sh && /opt/zapret/restore-def-cfg.sh; chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1
 sed -i '/130\.255\.77\.28 ntc.party/d; /193\.46\.255\.29 rutor.info/d; /173\.245\.58\.219 rutor.info d.rutor.info/d; /57\.144\.222\.34 instagram.com www.instagram.com/d; /157\.240\.9\.174 instagram.com www.instagram.com/d' /etc/hosts
+/etc/init.d/dnsmasq restart >/dev/null 2>&1; echo -e "${GREEN}Настройки по умолчанию возвращены!${NC}\n"; else echo -e "\n${RED}Zapret не установлен!${NC}\n"; fi; read -p "Нажмите Enter для выхода в главное меню..." dummy; }
 # ==========================================
 # Cтарт/стоп Zapret
 # ==========================================
