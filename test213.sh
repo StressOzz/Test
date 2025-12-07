@@ -326,8 +326,8 @@ case "$choice" in
                 if opkg list-installed | grep -q '^https-dns-proxy '; then
                     # Удаление
                      echo -e "\n${MAGENTA}Удаляем DNS over HTTPS${NC}"
-                    /etc/init.d/https-dns-proxy stop 2>/dev/null
-                    /etc/init.d/https-dns-proxy disable 2>/dev/null
+                    /etc/init.d/https-dns-proxy stop >/dev/null 2>&1
+                    /etc/init.d/https-dns-proxy disable >/dev/null 2>&1
                     opkg remove https-dns-proxy luci-app-https-dns-proxy --force-removal-of-dependent-packages >/dev/null 2>&1
                     rm -f /etc/config/https-dns-proxy
                     rm -f /etc/init.d/https-dns-proxy
@@ -364,8 +364,8 @@ config https-dns-proxy 'dns'
     option resolver_url 'https://dns.comss.one/dns-query'
 EOF
 
-                    /etc/init.d/https-dns-proxy enable
-                    /etc/init.d/https-dns-proxy restart
+                    /etc/init.d/https-dns-proxy enable >/dev/null 2>&1
+                    /etc/init.d/https-dns-proxy restart >/dev/null 2>&1
 
 echo -e "DNS over HTTPS${GREEN} установлен и настроен!${NC}\n"
                 fi
