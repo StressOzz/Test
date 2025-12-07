@@ -409,18 +409,15 @@ EOF
 # --- ОБНОВЛЕНИЕ ИСКЛЮЧЕНИЙ ---
 echo -e "${CYAN}Добавляем домены в исключения${NC}"
 rm -f "$EXCLUDE_FILE"
-curl -fsSL "$EXCLUDE_URL" -o "$EXCLUDE_FILE" || echo -e "\n${RED}Не удалось загрузить exclude файл${NC}\n"
+wget -q -O "$EXCLUDE_FILE" "$EXCLUDE_URL" || echo -e "\n${RED}Не удалось загрузить exclude файл${NC}\n"
 
 # --- ДОГРУЗКА BIN (если нужны) ---
-if [ "$version" = "v3" ]; then
-echo -e "${CYAN}Копируем ${NC}tls_clienthello_t2_ru.bin${CYAN} на устройство${NC}"
-  curl -sLo /opt/zapret/files/fake/tls_clienthello_t2_ru.bin https://github.com/StressOzz/Zapret-Manager/raw/refs/heads/main/tls_clienthello_t2_ru.bin
-fi
+case "$version" in
+  v3) echo -e "${CYAN}Копируем ${NC}tls_clienthello_t2_ru.bin${CYAN} на устройство${NC}"; file="tls_clienthello_t2_ru.bin" ;;
+  v4) echo -e "${CYAN}Копируем ${NC}4pda.bin${CYAN} на устройство${NC}"; file="4pda.bin" ;;
+esac
+[ -n "$file" ] && wget -q -O "/opt/zapret/files/fake/$file" "https://github.com/StressOzz/Zapret-Manager/raw/refs/heads/main/$file"
 
-if [ "$version" = "v4" ]; then
-echo -e "${CYAN}Копируем ${NC}4pda.bin${CYAN} на устройство${NC}"
-  curl -sLo /opt/zapret/files/fake/4pda.bin https://github.com/StressOzz/Zapret-Manager/raw/refs/heads/main/4pda.bin
-fi
 
 # --- HOSTS ---
 echo -e "${CYAN}Редактируем ${NC}/etc/hosts${NC}"
