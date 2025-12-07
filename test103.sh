@@ -1,4 +1,3 @@
-
 #!/bin/sh
 # ==========================================
 # Zapret on remittor Manager by StressOzz
@@ -444,7 +443,7 @@ chmod +x /opt/zapret/sync_config.sh
 /opt/zapret/sync_config.sh
 /etc/init.d/zapret restart >/dev/null 2>&1
 
-echo -e "${GREEN}Стратегия ${NC}${version} ${GREEN}установлена!${NC}"
+echo -e "${GREEN}Стратегия ${NC}${version} ${GREEN}установлена!${NC}\n"
 read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
 # ==========================================
