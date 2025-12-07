@@ -280,7 +280,7 @@ echo -e "${CYAN}1) ${GREEN}Установить стратегию${NC} v1"
 echo -e "${CYAN}2) ${GREEN}Установить стратегию${NC} v2"
 echo -e "${CYAN}3) ${GREEN}Установить стратегию${NC} v3"
 echo -e "${CYAN}4) ${GREEN}Установить стратегию${NC} v4"
-echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}"
+echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n"
 echo -ne "${YELLOW}Выберите пункт:${NC} " && read choice
 
 case "$choice" in
@@ -291,7 +291,7 @@ case "$choice" in
     *) echo -e "${RED}Неверный выбор.${NC}"; exit 1 ;;
 esac
 
-echo -e "${MAGENTA}Устанавливаем стратегию ${version}${NC}"
+echo -e "\n${MAGENTA}Устанавливаем стратегию ${version}${NC}"
 echo -e "${CYAN}Меняем стратегию${NC}"
 
 # --- ОЧИСТКА NFQWS_OPT ---
@@ -445,6 +445,7 @@ chmod +x /opt/zapret/sync_config.sh
 /etc/init.d/zapret restart >/dev/null 2>&1
 
 echo -e "${GREEN}Стратегия ${NC}${version} ${GREEN}установлена!${NC}"
+read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
 # ==========================================
 # Главное меню
