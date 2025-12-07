@@ -169,7 +169,7 @@ clear; echo -e "${MAGENTA}Меню выбора стратегии${NC}"
 show_current_strategy && [ -n "$ver" ] && echo -e "\n${YELLOW}Используется стратегия:${NC} $ver\n"
 echo -e "${CYAN}1) ${GREEN}Установить стратегию${NC} v1\n${CYAN}2) ${GREEN}Установить стратегию${NC} v2"
 echo -e "${CYAN}3) ${GREEN}Установить стратегию${NC} v3\n${CYAN}4) ${GREEN}Установить стратегию${NC} v4"
-echo -e "${CYAN}4) ${GREEN}Установить стратегию${NC} v5\n${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n"
+echo -e "${CYAN}5) ${GREEN}Установить стратегию${NC} v5\n${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n"
 echo -ne "${YELLOW}Выберите пункт:${NC} " && read choice
 
 case "$choice" in
