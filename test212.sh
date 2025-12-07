@@ -301,75 +301,6 @@ echo -e "${GREEN}Стратегия ${NC}${version} ${GREEN}установлен
 # ==========================================
 # Главное меню
 # ==========================================
-doh_menu() {
-    while true; do
-        clear
-echo -e "\n${MAGENTA}Меню DNS over HTTPS${NC}\n"
-        echo -e "${CYAN}1) ${GREEN}Установить и настроить ${NC}DNS over HTTPS\n${CYAN}2) ${GREEN}Удалить ${NC}DNS over HTTPS\n${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n"
-echo -ne "${YELLOW}Выберите пункт:${NC} " && read choiceDoH
-
-case "$choiceDoH" in
-1)
-echo -e "${CYAN}Обновляем список пакетов${NC}"
-opkg update >/dev/null 2>&1
-echo -e "${CYAN}Устанавливаем ${NC}DNS over HTTPS"
-opkg install https-dns-proxy >/dev/null 2>&1
-
-fileDoH="/etc/config/https-dns-proxy"
-
-echo -e "${CYAN}Настраиваем ${NC}Comss.one DNS"
-rm -f "$fileDoH"
-
-cat <<'EOF' > "$fileDoH"
-config main 'https-dns-proxy'
-	option canary_domains_icloud '1'
-	option canary_domains_mozilla '1'
-	option dnsmasq_config_update '*'
-	option force_dns '1'
-	list force_dns_port '53'
-	list force_dns_port '853'
-	list force_dns_src_interface 'lan'
-	option procd_trigger_wan6 '0'
-	option heartbeat_domain 'heartbeat.melmac.ca'
-	option heartbeat_sleep_timeout '10'
-	option heartbeat_wait_timeout '10'
-	option user 'nobody'
-	option group 'nogroup'
-	option listen_addr '127.0.0.1'
-
-config https-dns-proxy 'dns'
-	option resolver_url 'https://dns.comss.one/dns-query'
-EOF
-
-/etc/init.d/https-dns-proxy enable
-/etc/init.d/https-dns-proxy restart
-
-
-echo -e "DNS over HTTPS${GREEN} установлен и настроен${NC}\n"
-
-read -p "Нажмите Enter для выхода в главное меню..." dummy ;;
-            2)
-                echo -e "\n${CYAN}Удаляем ${NC}DNS over HTTPS"
-                /etc/init.d/https-dns-proxy stop 2>/dev/null
-                /etc/init.d/https-dns-proxy disable 2>/dev/null
-
-                opkg remove https-dns-proxy luci-app-https-dns-proxy --force-removal-of-dependent-packages >/dev/null 2>&1
-
-                # Удаление конфигов
-                rm -f /etc/config/https-dns-proxy
-                rm -f /etc/init.d/https-dns-proxy
-
-echo -e "DNS over HTTPS${GREEN} удалён${NC}\n"
-read -p "Нажмите Enter для выхода в главное меню..." dummy ;;
-
-            *) return ;;
-        esac
-    done
-}
-
-# ==========================================
-# Главное меню
-# ==========================================
 show_menu() { get_versions; clear
 echo -e "╔════════════════════════════════════╗\n║     ${BLUE}Zapret on remittor Manager${NC}     ║\n╚════════════════════════════════════╝\n                     ${DGRAY}by StressOzz v$ZAPRET_MANAGER_VERSION${NC}"
 echo -e "\n${YELLOW}Установленная версия:   ${INST_COLOR}$INSTALLED_DISPLAY${NC}"
@@ -394,7 +325,7 @@ case "$choice" in
 0)
                 if opkg list-installed | grep -q '^https-dns-proxy '; then
                     # Удаление
-                     echo -e "\n${CYAN}Удаляем ${NC}DNS over HTTPS"
+                     echo -e "\n${MAGENTA}Удаляем DNS over HTTPS${NC}"
                     /etc/init.d/https-dns-proxy stop 2>/dev/null
                     /etc/init.d/https-dns-proxy disable 2>/dev/null
                     opkg remove https-dns-proxy luci-app-https-dns-proxy --force-removal-of-dependent-packages >/dev/null 2>&1
@@ -403,7 +334,8 @@ case "$choice" in
                     echo -e "DNS over HTTPS${GREEN} удалён!${NC}\n"
                 else
                     # Установка
-echo -e "\n${CYAN}Обновляем список пакетов${NC}"
+echo -e "\n{MAGENTA}Устанавливаем DNS over HTTPS${NC}"
+echo -e "${CYAN}Обновляем список пакетов${NC}"
                     opkg update >/dev/null 2>&1
 echo -e "${CYAN}Устанавливаем ${NC}https-dns-proxy"
                     opkg install https-dns-proxy >/dev/null 2>&1
