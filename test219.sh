@@ -356,6 +356,7 @@ echo -e "${CYAN}Настраиваем ${NC}Comss.one DNS"
                     rm -f "$fileDoH"
 
                     cat <<'EOF' > "$fileDoH"
+                    
 config main 'https-dns-proxy'
     option canary_domains_icloud '1'
     option canary_domains_mozilla '1'
@@ -374,6 +375,8 @@ config main 'https-dns-proxy'
 
 config https-dns-proxy 'dns'
     option resolver_url 'https://dns.comss.one/dns-query'
+
+    
 EOF
 
                     /etc/init.d/https-dns-proxy enable >/dev/null 2>&1
