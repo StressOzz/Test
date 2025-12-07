@@ -313,14 +313,17 @@ doh_menu() {
 
         case "$opt" in
             1)
-                echo "Устанавливаем и настраиваем DoH..."
-                opkg update >/dev/null 2>&1
-                opkg install https-dns-proxy luci-app-https-dns-proxy >/dev/null 2>&1
+echo "Устанавливаем https-dns-proxy..."
+opkg update >/dev/null 2>&1
+opkg install https-dns-proxy >/dev/null 2>&1
 
 fileDoH="/etc/config/https-dns-proxy"
+
+echo "Создаём конфигурацию DoH..."
 rm -f "$fileDoH"
+
 cat <<'EOF' > "$fileDoH"
-config main 'config'
+config main 'https-dns-proxy'
 	option canary_domains_icloud '1'
 	option canary_domains_mozilla '1'
 	option dnsmasq_config_update '*'
@@ -336,16 +339,15 @@ config main 'config'
 	option group 'nogroup'
 	option listen_addr '127.0.0.1'
 
-config https-dns-proxy
+config https-dns-proxy 'dns'
 	option resolver_url 'https://dns.comss.one/dns-query'
 EOF
 
+/etc/init.d/https-dns-proxy enable
+/etc/init.d/https-dns-proxy restart
 
-                /etc/init.d/https-dns-proxy enable
-                /etc/init.d/https-dns-proxy restart
 
-                echo "DoH установлен и настроен (Cloudflare)."
-                read -r -p "Нажмите Enter..."
+echo "DoH установлен и настроен (dns.comss.one)."
             ;;
             2)
                 echo "Удаляем DoH..."
