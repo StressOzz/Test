@@ -443,13 +443,11 @@ esac
 echo -e "${CYAN}Редактируем ${NC}/etc/hosts${NC}"
 cat <<EOF | grep -Fxv -f /etc/hosts 2>/dev/null >> /etc/hosts
 130.255.77.28 ntc.party
-193.46.255.29 rutor.info
-185.87.51.182 4pda.to www.4pda.to
 173.245.58.219 rutor.info d.rutor.info
-31.13.72.36 instagram.com www.instagram.com
+193.46.255.29 rutor.info
 57.144.222.34 instagram.com www.instagram.com
 157.240.9.174 instagram.com www.instagram.com
-157.240.225.174 instagram.com www.instagram.com
+185.87.51.182 4pda.to www.4pda.to
 EOF
 
 /etc/init.d/dnsmasq restart >/dev/null 2>&1
