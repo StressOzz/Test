@@ -252,7 +252,7 @@ echo -e "${CYAN}Удаляем пакеты${NC}"; opkg --force-removal-of-depen
 echo -e "${CYAN}Удаляем временные файлы${NC}"; rm -rf /opt/zapret /etc/config/zapret /etc/firewall.zapret /etc/init.d/zapret /tmp/*zapret* /var/run/*zapret* /tmp/*.ipk /tmp/*.zip 2>/dev/null
 crontab -l 2>/dev/null | grep -v -i "zapret" | crontab - 2>/dev/null; nft list tables 2>/dev/null | awk '{print $2}' | grep -E '(zapret|ZAPRET)' | while read t; do [ -n "$t" ] && nft delete table "$t" 2>/dev/null; done
 sed -i '/130\.255\.77\.28 ntc\.party/d; /193\.46\.255\.29 rutor\.info/d; /185\.87\.51\.182 4pda\.to www\.4pda\.to/d; /173\.245\.58\.219 rutor\.info d\.rutor\.info/d; \
-/31\.13\.72\.36 instagram\.com www\.instagram\.com/d; /57\.144\.222\.34 instagram\.com www\.instagram\.com/d; /157\.240\.9\.174 instagram\.com www\.instagram\.com/d; /157\.240\.225\.174 instagram\.com www\.instagram\.com/d'/etc/hosts
+/31\.13\.72\.36 instagram\.com www\.instagram\.com/d; /57\.144\.222\.34 instagram\.com www\.instagram\.com/d; /157\.240\.9\.174 instagram\.com www\.instagram\.com/d; /157\.240\.225\.174 instagram\.com www\.instagram\.com/d' /etc/hosts
 /etc/init.d/dnsmasq restart >/dev/null 2>&1; echo -e "${GREEN}Zapret полностью удалён!${NC}\n"
 [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
@@ -479,7 +479,7 @@ chmod +x /opt/zapret/sync_config.sh
 /etc/init.d/zapret restart >/dev/null 2>&1
 
 echo -e "${GREEN}Стратегия ${NC}${version} ${GREEN}установлена!${NC}\n"
-read -p "Нажмите Enter для выхода в главное меню..." dummy
+[ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
 # ==========================================
 # Главное меню
