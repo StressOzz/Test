@@ -298,7 +298,7 @@ echo -e "${GREEN}Стратегия ${NC}${version} ${GREEN}установлен
 # ==========================================
 # Системная информация
 # ==========================================
-sys_info() { if ! command -v curl >/dev/null 2>&1; then printf "\n%sУстанавливаем %scurl\n" "$GREEN" "$NC"; opkg update >/dev/null 2>&1 && opkg install curl >/dev/null 2>&1; fi
+sys_info() { if ! command -v curl >/dev/null 2>&1; then echo -e "\n${GREEN}Устанавливаем ${NC}curl\n" "$NC"; opkg update >/dev/null 2>&1 && opkg install curl >/dev/null 2>&1; fi
 clear; echo -e "${GREEN}===== Информация о системе =====${NC}"; MODEL=$(cat /tmp/sysinfo/model); ARCH=$(sed -n "s/.*ARCH='\(.*\)'/\1/p" /etc/openwrt_release); OWRT=$(grep '^DISTRIB_RELEASE=' /etc/openwrt_release | cut -d"'" -f2)
 echo -e "$MODEL\n$ARCH\n$OWRT\n\n${GREEN}===== Пользовательские пакеты =====${NC}"; PKGS=$(awk '/^Package:/ {p=$2} /^Status: install user/ {print p}' /usr/lib/opkg/status); total=$(echo "$PKGS" | wc -l); half=$(( (total + 1) / 2 ))
 for i in $(seq 1 $half); do left=$(echo "$PKGS" | sed -n "${i}p"); right=$(echo "$PKGS" | sed -n "$((i + half))p"); [ -n "$right" ] && echo "$left | $right" || echo "$left"; done
