@@ -257,9 +257,9 @@ echo -e "${MAGENTA}Удаляем ZAPRET${NC}\n${CYAN}Останавливаем
 echo -e "${CYAN}Удаляем пакеты${NC}"; opkg --force-removal-of-dependent-packages --autoremove remove zapret luci-app-zapret >/dev/null 2>&1
 echo -e "${CYAN}Удаляем временные файлы${NC}"; rm -rf /opt/zapret /etc/config/zapret /etc/firewall.zapret /etc/init.d/zapret /tmp/*zapret* /var/run/*zapret* /tmp/*.ipk /tmp/*.zip 2>/dev/null
 crontab -l 2>/dev/null | grep -v -i "zapret" | crontab - 2>/dev/null; nft list tables 2>/dev/null | awk '{print $2}' | grep -E '(zapret|ZAPRET)' | while read t; do [ -n "$t" ] && nft delete table "$t" 2>/dev/null; done
-sed -i '/130\.255\.77\.28 ntc.party/d; /57\.144\.222\.34 instagram.com www.instagram.com/d; \
-/173\.245\.58\.219 rutor.info d.rutor.info/d; /193\.46\.255\.29 rutor.info/d; \
-/157\.240\.9\.174 instagram.com www.instagram.com/d' /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1; echo -e "${GREEN}Zapret полностью удалён!${NC}\n"
+sed -i '/130\.255\.77\.28 ntc\.party/d; /193\.46\.255\.29 rutor\.info/d; /185\.87\.51\.182 4pda\.to www\.4pda\.to/d; /173\.245\.58\.219 rutor\.info d\.rutor\.info/d; \
+/31\.13\.72\.36 instagram\.com www\.instagram\.com/d; /57\.144\.222\.34 instagram\.com www\.instagram\.com/d; /157\.240\.9\.174 instagram\.com www\.instagram\.com/d; /157\.240\.225\.174 instagram\.com www\.instagram\.com/d'
+/etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1; echo -e "${GREEN}Zapret полностью удалён!${NC}\n"
 [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
 # ==========================================
@@ -267,7 +267,7 @@ sed -i '/130\.255\.77\.28 ntc.party/d; /57\.144\.222\.34 instagram.com www.insta
 # ==========================================
 show_current_strategy() {
 [ -f "$CONF" ] || return
-for v in v1 v2 v3 v4; do grep -q "#$v" "$CONF" && { ver="$v"; return; } done
+for v in v1 v2 v3 v4 v5; do grep -q "#$v" "$CONF" && { ver="$v"; return; } done
 grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONF" && grep -q -- "--hostlist-exclude-domains=openwrt.org" "$CONF" && ver="дефолтная"
 }
 menu_str() {
@@ -279,6 +279,7 @@ echo -e "${CYAN}1) ${GREEN}Установить стратегию${NC} v1"
 echo -e "${CYAN}2) ${GREEN}Установить стратегию${NC} v2"
 echo -e "${CYAN}3) ${GREEN}Установить стратегию${NC} v3"
 echo -e "${CYAN}4) ${GREEN}Установить стратегию${NC} v4"
+echo -e "${CYAN}4) ${GREEN}Установить стратегию${NC} v5"
 echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n"
 echo -ne "${YELLOW}Выберите пункт:${NC} " && read choice
 
@@ -287,7 +288,8 @@ case "$choice" in
     2) version="v2" ;;
     3) version="v3" ;;
     4) version="v4" ;;
-    *) echo -e "${RED}Неверный выбор.${NC}"; exit 1 ;;
+    4) version="v5" ;;
+    *) return ;;
 esac
 
 echo -e "\n${MAGENTA}Устанавливаем стратегию ${version}${NC}"
@@ -402,6 +404,33 @@ cat <<EOF
 EOF
 }
 
+strategy_v5() {
+cat <<EOF
+--filter-tcp=443
+--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt
+--ip-id=zero
+--dpi-desync=multisplit
+--dpi-desync-split-seqovl=681
+--dpi-desync-split-pos=1
+--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin
+--new
+--filter-tcp=443
+--hostlist-exclude-domains=gstatic.com
+--dpi-desync=fake,fakeddisorder
+--dpi-desync-split-pos=10,midsld
+--dpi-desync-fake-tls=/opt/zapret/files/fake/max.bin
+--dpi-desync-fake-tls-mod=rnd,dupsid
+--dpi-desync-fake-tls=0x0F0F0F0F
+--dpi-desync-fake-tls-mod=none
+--dpi-desync-fakedsplit-pattern=/opt/zapret/files/fake/tls_clienthello_vk_com.bin
+--dpi-desync-split-seqovl=336
+--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_gosuslugi_ru.bin
+--dpi-desync-fooling=badseq,badsum
+--dpi-desync-badseq-increment=0
+EOF
+}
+
+
 # --- ЗАПИСЬ В КОНФИГ ---
 { echo "  option NFQWS_OPT '"; echo "#${version} УДАЛИТЕ ЭТУ СТРОЧКУ, ЕСЛИ ИЗМЕНЯЕТЕ СТРАТЕГИЮ !!!"; strategy_${version}; echo "'"; } >> "$CONF"
 
@@ -413,8 +442,9 @@ wget -q -O "$EXCLUDE_FILE" "$EXCLUDE_URL" || echo -e "\n${RED}Не удалос�
 
 # --- ДОГРУЗКА BIN (если нужны) ---
 case "$version" in
-  v3) echo -e "${CYAN}Копируем ${NC}tls_clienthello_t2_ru.bin${CYAN} на устройство${NC}"; file="tls_clienthello_t2_ru.bin" ;;
+  v3) echo -e "${CYAN}Копируем ${NC}t2.bin${CYAN} на устройство${NC}"; file="t2.bin" ;;
   v4) echo -e "${CYAN}Копируем ${NC}4pda.bin${CYAN} на устройство${NC}"; file="4pda.bin" ;;
+  v5) echo -e "${CYAN}Копируем ${NC}max.bin${CYAN} на устройство${NC}"; file="max.bin" ;;
 esac
 [ -n "$file" ] && wget -q -O "/opt/zapret/files/fake/$file" "https://github.com/StressOzz/Zapret-Manager/raw/refs/heads/main/$file"
 
