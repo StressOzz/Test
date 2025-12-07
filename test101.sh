@@ -7,6 +7,8 @@ ZAPRET_MANAGER_VERSION="7.0"; ZAPRET_VERSION="72.20251122"; STR_VERSION_AUTOINST
 GREEN="\033[1;32m"; RED="\033[1;31m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"
 MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
 WORKDIR="/tmp/zapret-update"; CONF="/etc/config/zapret"; CUSTOM_DIR="/opt/zapret/init.d/openwrt/custom.d/"
+EXCLUDE_FILE="/opt/zapret/ipset/zapret-hosts-user-exclude.txt"
+EXCLUDE_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/zapret-hosts-user-exclude.txt"
 # ==========================================
 # Проверяем наличие byedpi, youtubeUnblock, Flow Offloading
 # ==========================================
@@ -273,13 +275,14 @@ menu_str() {
 [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; return; }
 clear
 echo -e "${MAGENTA}Меню выбора стратегии${NC}"
-show_current_strategy && [ -n "$ver" ] && echo -e "\n${YELLOW}Используется стратегия:${NC} $ver"
+show_current_strategy && [ -n "$ver" ] && echo -e "\n${YELLOW}Используется стратегия:${NC} $ver\n"
 echo -e "${CYAN}1) ${GREEN}Установить стратегию${NC} v1"
 echo -e "${CYAN}2) ${GREEN}Установить стратегию${NC} v2"
 echo -e "${CYAN}3) ${GREEN}Установить стратегию${NC} v3"
 echo -e "${CYAN}4) ${GREEN}Установить стратегию${NC} v4"
 echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}"
 echo -ne "${YELLOW}Выберите пункт:${NC} " && read choice
+
 case "$choice" in
     1) version="v1" ;;
     2) version="v2" ;;
@@ -292,7 +295,7 @@ echo -e "${MAGENTA}Устанавливаем стратегию ${version}${NC}
 echo -e "${CYAN}Меняем стратегию${NC}"
 
 # --- ОЧИСТКА NFQWS_OPT ---
-sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$ZAPRET_CFG"
+sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
 
 # --- ФУНКЦИИ СТРАТЕГИЙ ---
 strategy_v1() {
@@ -401,7 +404,7 @@ EOF
 }
 
 # --- ЗАПИСЬ В КОНФИГ ---
-{ echo "  option NFQWS_OPT '"; echo "#${version} УДАЛИТЕ ЭТУ СТРОЧКУ, ЕСЛИ ИЗМЕНЯЕТЕ СТРАТЕГИЮ !!!"; strategy_${version}; echo "'"; } >> "$ZAPRET_CFG"
+{ echo "  option NFQWS_OPT '"; echo "#${version} УДАЛИТЕ ЭТУ СТРОЧКУ, ЕСЛИ ИЗМЕНЯЕТЕ СТРАТЕГИЮ !!!"; strategy_${version}; echo "'"; } >> "$CONF"
 
 
 # --- ОБНОВЛЕНИЕ ИСКЛЮЧЕНИЙ ---
