@@ -1,3 +1,4 @@
+
 #!/bin/sh
 # ==========================================
 # Zapret on remittor Manager by StressOzz
@@ -187,7 +188,7 @@ cat <<EOF
 --hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt
 --dpi-desync=fake,fakeddisorder
 --dpi-desync-split-pos=10,midsld
---dpi-desync-fake-tls=/opt/zapret/files/fake/tls_clienthello_t2_ru.bin
+--dpi-desync-fake-tls=/opt/zapret/files/fake/t2.bin
 --dpi-desync-fake-tls-mod=rnd,dupsid,sni=m.ok.ru
 --dpi-desync-fake-tls=0x0F0F0F0F
 --dpi-desync-fake-tls-mod=none
@@ -277,15 +278,79 @@ cat <<EOF | grep -Fxv -f /etc/hosts 2>/dev/null >> /etc/hosts
 157.240.9.174 instagram.com www.instagram.com
 EOF
 /etc/init.d/dnsmasq restart >/dev/null 2>&1
+
+fileGP="/opt/zapret/ipset/zapret-hosts-google.txt"
+cat <<'EOF' | grep -Fxv -f "$fileGP" 2>/dev/null >> "$fileGP"
+android.clients.google.com
+beacons.gvt2.com
+connectivitycheck.gstatic.com
+googleplay.com
+gvt1.com
+lh3.googleusercontent.com
+play.google.com
+play.googleapis.com
+play-fe.googleapis.com
+play-games.googleusercontent.com
+play-lh.googleusercontent.com
+prod-lt-playstoregatewayadapter-pa.googleapis.com
+EOF
+
 echo -e "${CYAN}Применяем новую стратегию и настройки${NC}"; chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1
 echo -e "${GREEN}Стратегия ${NC}${version} ${GREEN}установлена!${NC}"
 [ "$NO_PAUSE" != "1" ] && echo && read -p "Нажмите Enter для выхода в главное меню..." dummy; }
 # ==========================================
 # Главное меню
 # ==========================================
-show_menu() {
-get_versions
-clear; echo -e "╔════════════════════════════════════╗\n║     ${BLUE}Zapret on remittor Manager${NC}     ║\n╚════════════════════════════════════╝\n                     ${DGRAY}by StressOzz v$ZAPRET_MANAGER_VERSION${NC}"
+doh_menu() {
+    while true; do
+        clear
+        echo "===== DoH ====="
+        echo "1) Установить и настроить DoH"
+        echo "2) Удалить DoH"
+        echo "0) Назад"
+        printf "\nВыбор: "
+        read -r opt
+
+        case "$opt" in
+            1)
+                echo "Устанавливаем и настраиваем DoH..."
+                opkg update >/dev/null 2>&1
+                opkg install https-dns-proxy luci-app-https-dns-proxy >/dev/null 2>&1
+
+                /etc/init.d/https-dns-proxy enable
+                /etc/init.d/https-dns-proxy restart
+
+                echo "DoH установлен и настроен (Cloudflare)."
+                read -r -p "Нажмите Enter..."
+            ;;
+            2)
+                echo "Удаляем DoH..."
+                /etc/init.d/https-dns-proxy stop 2>/dev/null
+                /etc/init.d/https-dns-proxy disable 2>/dev/null
+
+                opkg remove https-dns-proxy luci-app-https-dns-proxy --force-removal-of-dependent-packages >/dev/null 2>&1
+
+                # Удаление конфигов
+                rm -f /etc/config/https-dns-proxy
+                rm -f /etc/init.d/https-dns-proxy
+
+                echo "DoH полностью удалён."
+                read -r -p "Нажмите Enter..."
+            ;;
+            0)
+                break
+            ;;
+            *)
+                echo "Неверный ввод"; sleep 1 ;;
+        esac
+    done
+}
+
+# ==========================================
+# Главное меню
+# ==========================================
+show_menu() { get_versions; clear
+echo -e "╔════════════════════════════════════╗\n║     ${BLUE}Zapret on remittor Manager${NC}     ║\n╚════════════════════════════════════╝\n                     ${DGRAY}by StressOzz v$ZAPRET_MANAGER_VERSION${NC}"
 echo -e "\n${YELLOW}Установленная версия:   ${INST_COLOR}$INSTALLED_DISPLAY${NC}"
 [ -n "$ZAPRET_STATUS" ] && echo -e "${YELLOW}Статус Zapret:${NC}          $ZAPRET_STATUS"
 show_script_50 && [ -n "$name" ] && echo -e "${YELLOW}Установлен скрипт:${NC}      $name"
@@ -293,11 +358,11 @@ show_script_50 && [ -n "$name" ] && echo -e "${YELLOW}Установлен ск�
 show_current_strategy && [ -n "$ver" ] && echo -e "${YELLOW}Используется стратегия:${NC} ${CYAN}$ver${NC}"
 echo -e "\n${CYAN}1) ${GREEN}Установить последнюю версию${NC}\n${CYAN}2) ${GREEN}Меню выбора стратегий${NC}\n${CYAN}3) ${GREEN}Вернуть настройки по умолчанию${NC}\n${CYAN}4) ${GREEN}Остановить / Запустить ${NC}Zapret"
 echo -e "${CYAN}5) ${GREEN}Удалить ${NC}Zapret\n${CYAN}6) ${GREEN}Добавить / Удалить стратегию для игр\n${CYAN}7) ${GREEN}Меню установки скриптов${NC}\n${CYAN}8) ${GREEN}Удалить / Установить / Настроить${NC} Zapret"
-echo -ne "${CYAN}9) ${GREEN}Системная информация${NC}\n${CYAN}Enter) ${GREEN}Выход${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read choice
+echo -ne "${CYAN}9) ${GREEN}Системная информация${NC}\n${CYAN}0) ${GREEN}Меню настройки ${NC}DNS over HTTPS\n${CYAN}Enter) ${GREEN}Выход${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read choice
 case "$choice" in
 1) install_Zapret ;; 2) menu_str ;; 3) comeback_def ;; 4) pgrep -f /opt/zapret >/dev/null 2>&1 && stop_zapret || start_zapret ;;
 5) uninstall_zapret;; 6) fix_GAME  ;; 7) enable_discord_calls ;; 8) zapret_key ;; 9) wget -qO- https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/sys_info.sh | sh; echo; read -p "Нажмите Enter для выхода в главное меню..." dummy ;;
-*) echo; exit 0 ;; esac; }
+0) doh_menu *) echo; exit 0 ;; esac; }
 # ==========================================
 # Старт скрипта
 # ==========================================
