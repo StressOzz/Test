@@ -133,7 +133,8 @@ echo -ne "${YELLOW}Выберите пункт:${NC} " && read choice
 case "$choice" in 1) version="v1" ;; 2) version="v2" ;; 3) version="v3" ;; 4) version="v4" ;; 5) version="v5" ;; *) return ;; esac; fi
 [ "$NO_PAUSE" != "1" ] && echo
 echo -e "${MAGENTA}Устанавливаем стратегию ${version}${NC}\n${CYAN}Меняем стратегию${NC}"; sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
-strategy_v1() { cat <<EOF
+strategy_v1() {
+cat <<EOF
 --filter-tcp=443
 --hostlist-exclude=${EXCLUDE_FILE}
 --dpi-desync=fake,multidisorder
@@ -150,8 +151,10 @@ strategy_v1() { cat <<EOF
 --dpi-desync=fake
 --dpi-desync-repeats=6
 --dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin
-EOF; }
-strategy_v2() { cat <<EOF
+EOF
+}
+strategy_v2() {
+cat <<EOF
 --filter-tcp=443
 --hostlist-exclude=${EXCLUDE_FILE}
 --dpi-desync=fake,fakeddisorder
@@ -170,8 +173,10 @@ strategy_v2() { cat <<EOF
 --dpi-desync=fake
 --dpi-desync-repeats=6
 --dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin
-EOF; }
-strategy_v3() { cat <<EOF
+EOF
+}
+strategy_v3() {
+cat <<EOF
 --filter-tcp=443
 --hostlist=/opt/zapret/ipset/zapret-hosts-google.txt
 --ip-id=zero
@@ -198,8 +203,10 @@ strategy_v3() { cat <<EOF
 --dpi-desync=fake
 --dpi-desync-repeats=6
 --dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin
-EOF; }
-strategy_v4() { cat <<EOF
+EOF
+}
+strategy_v4() {
+cat <<EOF
 --filter-tcp=443
 --hostlist=/opt/zapret/ipset/zapret-hosts-google.txt
 --dpi-desync=fake,multisplit
@@ -225,8 +232,10 @@ strategy_v4() { cat <<EOF
 --dpi-desync=fake
 --dpi-desync-repeats=6
 --dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin
-EOF; }
-strategy_v5() { cat <<EOF
+EOF
+}
+strategy_v5() {
+cat <<EOF
 --filter-tcp=443
 --hostlist=/opt/zapret/ipset/zapret-hosts-google.txt
 --ip-id=zero
@@ -252,7 +261,8 @@ strategy_v5() { cat <<EOF
 --dpi-desync=fake
 --dpi-desync-repeats=6
 --dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin
-EOF; }
+EOF
+}
 { echo "  option NFQWS_OPT '"; echo "#${version} УДАЛИТЕ ЭТУ СТРОЧКУ, ЕСЛИ ИЗМЕНЯЕТЕ СТРАТЕГИЮ !!!"; strategy_${version}; echo "'"; } >> "$CONF"
 echo -e "${CYAN}Добавляем домены в исключения${NC}"; rm -f "$EXCLUDE_FILE"; wget -q -O "$EXCLUDE_FILE" "$EXCLUDE_URL" || echo -e "\n${RED}Не удалось загрузить exclude файл${NC}\n"
 case "$version" in v3) echo -e "${CYAN}Копируем ${NC}t2.bin${CYAN} на устройство${NC}"; file="t2.bin" ;;
