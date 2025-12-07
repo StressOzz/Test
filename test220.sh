@@ -347,10 +347,9 @@ case "$choice" in
                 else
                     # Установка
 echo -e "\n${MAGENTA}Устанавливаем DNS over HTTPS${NC}"
-echo -e "${CYAN}Обновляем список пакетов${NC}"
-                    opkg update >/dev/null 2>&1
-echo -e "${CYAN}Устанавливаем ${NC}https-dns-proxy"
-opkg install https-dns-proxy luci-app-https-dns-proxy >/dev/null 2>&1
+echo -e "${CYAN}Обновляем список пакетов${NC}"; opkg update >/dev/null 2>&1
+echo -e "${CYAN}Устанавливаем ${NC}https-dns-proxy"; opkg install https-dns-proxy >/dev/null 2>&1
+echo -e "${CYAN}Устанавливаем ${NC}luci-app-https-dns-proxy"; opkg install luci-app-https-dns-proxy >/dev/null 2>&1
 echo -e "${CYAN}Настраиваем ${NC}Comss.one DNS"
                     fileDoH="/etc/config/https-dns-proxy"
                     rm -f "$fileDoH"
