@@ -400,7 +400,7 @@ case "$choice" in
                     opkg remove https-dns-proxy luci-app-https-dns-proxy --force-removal-of-dependent-packages >/dev/null 2>&1
                     rm -f /etc/config/https-dns-proxy
                     rm -f /etc/init.d/https-dns-proxy
-                    echo -e "DNS over HTTPS${GREEN} удалён${NC}\n"
+                    echo -e "DNS over HTTPS${GREEN} удалён!${NC}\n"
                 else
                     # Установка
 echo -e "\n${CYAN}Обновляем список пакетов${NC}"
@@ -435,7 +435,7 @@ EOF
                     /etc/init.d/https-dns-proxy enable
                     /etc/init.d/https-dns-proxy restart
 
-echo -e "DNS over HTTPS${GREEN} установлен и настроен${NC}\n"
+echo -e "DNS over HTTPS${GREEN} установлен и настроен!${NC}\n"
                 fi
 
 read -p "Нажмите Enter для выхода в главное меню..." dummy ;;
