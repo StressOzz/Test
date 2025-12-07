@@ -394,20 +394,20 @@ case "$choice" in
 0)
                 if opkg list-installed | grep -q '^https-dns-proxy '; then
                     # Удаление
-                    echo -e "\n${CYAN}Удаляем ${NC}DNS over HTTPS"
+                     echo -e "\n${CYAN}Удаляем ${NC}DNS over HTTPS"
                     /etc/init.d/https-dns-proxy stop 2>/dev/null
                     /etc/init.d/https-dns-proxy disable 2>/dev/null
                     opkg remove https-dns-proxy luci-app-https-dns-proxy --force-removal-of-dependent-packages >/dev/null 2>&1
                     rm -f /etc/config/https-dns-proxy
                     rm -f /etc/init.d/https-dns-proxy
-                    echo -e "\n${GREEN}Удалено${NC}"
+                    echo -e "DNS over HTTPS${GREEN} удалён${NC}\n"
                 else
                     # Установка
-                    echo -e "${CYAN}Обновляем пакеты${NC}"
+echo -e "\n${CYAN}Обновляем список пакетов${NC}"
                     opkg update >/dev/null 2>&1
-                    echo -e "${CYAN}Устанавливаем ${NC}https-dns-proxy"
+echo -e "${CYAN}Устанавливаем ${NC}https-dns-proxy"
                     opkg install https-dns-proxy >/dev/null 2>&1
-
+echo -e "${CYAN}Настраиваем ${NC}Comss.one DNS"
                     fileDoH="/etc/config/https-dns-proxy"
                     rm -f "$fileDoH"
 
@@ -435,11 +435,10 @@ EOF
                     /etc/init.d/https-dns-proxy enable
                     /etc/init.d/https-dns-proxy restart
 
-                    echo -e "\n${GREEN}Установлено и настроено${NC}"
+echo -e "DNS over HTTPS${GREEN} установлен и настроен${NC}\n"
                 fi
 
-                read -p "Нажмите Enter..." dummy
-            ;;
+read -p "Нажмите Enter для выхода в главное меню..." dummy ;;
 
 
 
