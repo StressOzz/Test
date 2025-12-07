@@ -26,33 +26,39 @@ echo -e "${GREEN}$INSTALLED_VER${NC} | $ZAPRET_STATUS"; [ -n "$name" ] && echo -
 echo -e "TCP: ${GREEN}$TCP_VAL${NC} | UDP: ${GREEN}$UDP_VAL${NC}"; echo -e "\n${GREEN}===== Стратегия =====${NC}"
 awk ' /^[[:space:]]*option[[:space:]]+NFQWS_OPT[[:space:]]*'\''/ {flag=1; sub(/^[[:space:]]*option[[:space:]]+NFQWS_OPT[[:space:]]*'\''/, ""); next}
 flag { if (/'\''/) {sub(/'\''$/, ""); print; exit} print }' "$CONF"; }
-if [ -f /etc/init.d/zapret ]; then zpr_info; else echo -e "${RED}Zapret не установлен!${NC}\n"; fi; echo -e "${GREEN}===== Доступность сайтов =====${NC}"
-SITES=$(cat <<'EOF'
-gosuslugi.ru
-esia.gosuslugi.ru
-rutube.ru
-youtube.com
-instagram.com
-rutor.info
-ntc.party
-rutracker.org
-epidemz.net.co
-nnmclub.to
-openwrt.org
-sxyprn.net
-pornhub.com
-discord.com
-x.com
-filmix.my
-flightradar24.com
-cdn77.com
-play.google.com
-genderize.io
-EOF
-)
-sites_clean=$(echo "$SITES" | grep -v '^#' | grep -v '^\s*$'); total=$(echo "$sites_clean" | wc -w); half=$(( (total + 1) / 2 )); sites_list=""
-for site in $sites_clean; do sites_list="$sites_list $site"; done
-for idx in $(seq 1 $half); do left=$(echo $sites_list | cut -d' ' -f$idx); right_idx=$((idx + half)); right=$(echo $sites_list | cut -d' ' -f$right_idx); left_pad=$(printf "%-25s" "$left")
-right_pad=$(printf "%-25s" "$right"); if curl -Is --connect-timeout 3 --max-time 4 "https://$left" >/dev/null 2>&1; then left_color="[${GREEN}OK${NC}]  "
-else left_color="[${RED}FAIL${NC}]"; fi; if [ -n "$right" ]; then if curl -Is --connect-timeout 3 --max-time 4 "https://$right" >/dev/null 2>&1; then right_color="[${GREEN}OK${NC}]  "
-else right_color="[${RED}FAIL${NC}]"; fi; echo -e "$left_color $left_pad $right_color $right_pad"; else echo -e "$left_color $left_pad"; fi; done
+if [ -f /etc/init.d/zapret ]; then zpr_info; else echo -e "${RED}Zapret не установлен!${NC}\n"; fi;
+echo -e "${GREEN}===== Доступность сайтов =====${NC}"
+
+SITES="gosuslugi.ru esia.gosuslugi.ru rutube.ru youtube.com instagram.com rutor.info ntc.party rutracker.org epidemz.net.co nnmclub.to openwrt.org sxyprn.net pornhub.com discord.com x.com filmix.my flightradar24.com cdn77.com play.google.com genderize.io"
+
+sites_clean="$SITES"
+
+total=$(echo "$sites_clean" | wc -w)
+half=$(( (total + 1) / 2 ))
+sites_list="$sites_clean"
+
+for idx in $(seq 1 $half); do
+    left=$(echo $sites_list | cut -d' ' -f$idx)
+    right_idx=$((idx + half))
+    right=$(echo $sites_list | cut -d' ' -f$right_idx)
+
+    left_pad=$(printf "%-25s" "$left")
+    right_pad=$(printf "%-25s" "$right")
+
+    if curl -Is --connect-timeout 3 --max-time 4 "https://$left" >/dev/null 2>&1; then
+        left_color="[${GREEN}OK${NC}]  "
+    else
+        left_color="[${RED}FAIL${NC}]"
+    fi
+
+    if [ -n "$right" ]; then
+        if curl -Is --connect-timeout 3 --max-time 4 "https://$right" >/dev/null 2>&1; then
+            right_color="[${GREEN}OK${NC}]  "
+        else
+            right_color="[${RED}FAIL${NC}]"
+        fi
+        echo -e "$left_color $left_pad $right_color $right_pad"
+    else
+        echo -e "$left_color $left_pad"
+    fi
+done
