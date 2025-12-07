@@ -2,7 +2,7 @@
 # ==========================================
 # Zapret on remittor Manager by StressOzz
 # ==========================================
-ZAPRET_MANAGER_VERSION="7.0"; ZAPRET_VERSION="72.20251122"; STR_VERSION_AUTOINSTALL="2"
+ZAPRET_MANAGER_VERSION="7.1"; ZAPRET_VERSION="72.20251122"; STR_VERSION_AUTOINSTALL="2"
 GREEN="\033[1;32m"; RED="\033[1;31m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"
 MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
 WORKDIR="/tmp/zapret-update"; CONF="/etc/config/zapret"; CUSTOM_DIR="/opt/zapret/init.d/openwrt/custom.d/"
@@ -194,15 +194,9 @@ zapret_key(){
 clear; echo -e "${MAGENTA}Удаление, установка и настройка Zapret${NC}\n"
 get_versions; uninstall_zapret "1"; install_Zapret "1"
 [ ! -f /etc/init.d/zapret ] && return
-wget -qO- "https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Str${STR_VERSION_AUTOINSTALL}.sh" | sh
-if [ ! -f "$CONF" ]; then
-echo -e "\n${RED}Файл ${NC}$CONF${RED} не найден!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy
-return
-fi
-if ! grep -q "#v" "$CONF"; then
-echo -e "\n${RED}Cтратегия не установлена!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy
-return
-fi
+
+menu_str "1"
+
 echo; enable_discord_calls "1"; fix_GAME "1"; echo -e "${GREEN}Zapret установлен и настроен!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
 # ==========================================
@@ -271,7 +265,14 @@ for v in v1 v2 v3 v4 v5; do grep -q "#$v" "$CONF" && { ver="$v"; return; } done
 grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONF" && grep -q -- "--hostlist-exclude-domains=openwrt.org" "$CONF" && ver="дефолтная"
 }
 menu_str() {
+local NO_PAUSE=$1
+
 [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; return; }
+
+if [ "$NO_PAUSE" = "1" ]; then
+version="v5"
+else
+
 clear
 echo -e "${MAGENTA}Меню выбора стратегии${NC}"
 show_current_strategy && [ -n "$ver" ] && echo -e "\n${YELLOW}Используется стратегия:${NC} $ver\n"
@@ -291,6 +292,7 @@ case "$choice" in
     5) version="v5" ;;
     *) return ;;
 esac
+fi
 
 echo -e "\n${MAGENTA}Устанавливаем стратегию ${version}${NC}"
 echo -e "${CYAN}Меняем стратегию${NC}"
