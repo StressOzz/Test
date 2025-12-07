@@ -288,7 +288,7 @@ case "$choice" in
     2) version="v2" ;;
     3) version="v3" ;;
     4) version="v4" ;;
-    4) version="v5" ;;
+    5) version="v5" ;;
     *) return ;;
 esac
 
