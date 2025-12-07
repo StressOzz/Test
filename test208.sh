@@ -310,8 +310,9 @@ echo -ne "${YELLOW}Выберите пункт:${NC} " && read choiceDoH
 
 case "$choiceDoH" in
 1)
-echo -e "\n${CYAN}Устанавливаем ${NC}DNS over HTTPS"
+echo -e "${CYAN}Обновляем список пакетов${NC}"
 opkg update >/dev/null 2>&1
+echo -e "${CYAN}Устанавливаем ${NC}DNS over HTTPS"
 opkg install https-dns-proxy >/dev/null 2>&1
 
 fileDoH="/etc/config/https-dns-proxy"
@@ -378,11 +379,71 @@ show_script_50 && [ -n "$name" ] && echo -e "${YELLOW}Установлен ск�
 show_current_strategy && [ -n "$ver" ] && echo -e "${YELLOW}Используется стратегия:${NC} ${CYAN}$ver${NC}"
 echo -e "\n${CYAN}1) ${GREEN}Установить последнюю версию${NC}\n${CYAN}2) ${GREEN}Меню выбора стратегий${NC}\n${CYAN}3) ${GREEN}Вернуть настройки по умолчанию${NC}\n${CYAN}4) ${GREEN}Остановить / Запустить ${NC}Zapret"
 echo -e "${CYAN}5) ${GREEN}Удалить ${NC}Zapret\n${CYAN}6) ${GREEN}Добавить / Удалить стратегию для игр\n${CYAN}7) ${GREEN}Меню установки скриптов${NC}\n${CYAN}8) ${GREEN}Удалить / Установить / Настроить${NC} Zapret"
-echo -ne "${CYAN}9) ${GREEN}Системная информация${NC}\n${CYAN}0) ${GREEN}Меню настройки ${NC}DNS over HTTPS\n${CYAN}Enter) ${GREEN}Выход${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read choice
+echo -e "${CYAN}9) ${GREEN}Системная информация${NC}"
+       if opkg list-installed | grep -q '^https-dns-proxy '; then
+            echo -e "${CYAN}0) ${GREEN}Удалить ${NC}DNS over HTTPS"
+        else
+            echo -e "${CYAN}0) ${GREEN}Установить и настроить ${NC}DNS over HTTPS"
+        fi
+
+
+echo -ne "${CYAN}Enter) ${GREEN}Выход${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read choice
 case "$choice" in
 1) install_Zapret ;; 2) menu_str ;; 3) comeback_def ;; 4) pgrep -f /opt/zapret >/dev/null 2>&1 && stop_zapret || start_zapret ;;
 5) uninstall_zapret ;; 6) fix_GAME ;; 7) enable_discord_calls ;; 8) zapret_key ;; 9) wget -qO- https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/sys_info.sh | sh; echo; read -p "Нажмите Enter для выхода в главное меню..." dummy ;;
-0) doh_menu ;; *) echo; exit 0 ;; esac; }
+0)
+                if opkg list-installed | grep -q '^https-dns-proxy '; then
+                    # Удаление
+                    echo -e "\n${CYAN}Удаляем ${NC}DNS over HTTPS"
+                    /etc/init.d/https-dns-proxy stop 2>/dev/null
+                    /etc/init.d/https-dns-proxy disable 2>/dev/null
+                    opkg remove https-dns-proxy luci-app-https-dns-proxy --force-removal-of-dependent-packages >/dev/null 2>&1
+                    rm -f /etc/config/https-dns-proxy
+                    rm -f /etc/init.d/https-dns-proxy
+                    echo -e "\n${GREEN}Удалено${NC}"
+                else
+                    # Установка
+                    echo -e "${CYAN}Обновляем пакеты${NC}"
+                    opkg update >/dev/null 2>&1
+                    echo -e "${CYAN}Устанавливаем ${NC}https-dns-proxy"
+                    opkg install https-dns-proxy >/dev/null 2>&1
+
+                    fileDoH="/etc/config/https-dns-proxy"
+                    rm -f "$fileDoH"
+
+                    cat <<'EOF' > "$fileDoH"
+config main 'https-dns-proxy'
+    option canary_domains_icloud '1'
+    option canary_domains_mozilla '1'
+    option dnsmasq_config_update '*'
+    option force_dns '1'
+    list force_dns_port '53'
+    list force_dns_port '853'
+    list force_dns_src_interface 'lan'
+    option procd_trigger_wan6 '0'
+    option heartbeat_domain 'heartbeat.melmac.ca'
+    option heartbeat_sleep_timeout '10'
+    option heartbeat_wait_timeout '10'
+    option user 'nobody'
+    option group 'nogroup'
+    option listen_addr '127.0.0.1'
+
+config https-dns-proxy 'dns'
+    option resolver_url 'https://dns.comss.one/dns-query'
+EOF
+
+                    /etc/init.d/https-dns-proxy enable
+                    /etc/init.d/https-dns-proxy restart
+
+                    echo -e "\n${GREEN}Установлено и настроено${NC}"
+                fi
+
+                read -p "Нажмите Enter..." dummy
+            ;;
+
+
+
+*) echo; exit 0 ;; esac; }
 # ==========================================
 # Старт скрипта
 # ==========================================
