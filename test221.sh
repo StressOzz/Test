@@ -355,27 +355,27 @@ echo -e "${CYAN}Настраиваем ${NC}Comss.one DNS"
                     rm -f "$fileDoH"
 
                     cat <<'EOF' > "$fileDoH"
-                    
-config main 'https-dns-proxy'
-    option canary_domains_icloud '1'
-    option canary_domains_mozilla '1'
-    option dnsmasq_config_update '*'
-    option force_dns '1'
-    list force_dns_port '53'
-    list force_dns_port '853'
-    list force_dns_src_interface 'lan'
-    option procd_trigger_wan6 '0'
-    option heartbeat_domain 'heartbeat.melmac.ca'
-    option heartbeat_sleep_timeout '10'
-    option heartbeat_wait_timeout '10'
-    option user 'nobody'
-    option group 'nogroup'
-    option listen_addr '127.0.0.1'
 
-config https-dns-proxy 'dns'
-    option resolver_url 'https://dns.comss.one/dns-query'
+config main 'config'
+	option canary_domains_icloud '1'
+	option canary_domains_mozilla '1'
+	option dnsmasq_config_update '*'
+	option force_dns '1'
+	list force_dns_port '53'
+	list force_dns_port '853'
+	list force_dns_src_interface 'lan'
+	option procd_trigger_wan6 '0'
+	option heartbeat_domain 'heartbeat.melmac.ca'
+	option heartbeat_sleep_timeout '10'
+	option heartbeat_wait_timeout '10'
+	option user 'nobody'
+	option group 'nogroup'
+	option listen_addr '127.0.0.1'
 
-    
+config https-dns-proxy
+	option resolver_url 'https://dns.comss.one/dns-query'
+
+  
 EOF
 
                     /etc/init.d/https-dns-proxy enable >/dev/null 2>&1
