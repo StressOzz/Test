@@ -26,29 +26,11 @@ fw4 restart >/dev/null 2>&1; read -p "Нажмите Enter для продолж
 # ==========================================
 # Получение версии и подготовка установки Zapret
 # ==========================================
-get_versions() {
-LOCAL_ARCH=$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release)
-[ -z "$LOCAL_ARCH" ] && LOCAL_ARCH=$(opkg print-architecture | grep -v "noarch" | sort -k3 -n | tail -n1 | awk '{print $2}')
+get_versions() { LOCAL_ARCH=$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release); [ -z "$LOCAL_ARCH" ] && LOCAL_ARCH=$(opkg print-architecture | grep -v "noarch" | sort -k3 -n | tail -n1 | awk '{print $2}')
 USED_ARCH="$LOCAL_ARCH"; LATEST_URL="https://github.com/remittor/zapret-openwrt/releases/download/v${ZAPRET_VERSION}/zapret_v${ZAPRET_VERSION}_${LOCAL_ARCH}.zip"
-INSTALLED_VER=$(opkg list-installed | grep '^zapret ' | awk '{print $3}')
-[ -z "$INSTALLED_VER" ] && INSTALLED_VER="не найдена"
-if [ -f /etc/init.d/zapret ]; then
-if /etc/init.d/zapret status 2>/dev/null | grep -qi "running"; then
-ZAPRET_STATUS="${GREEN}запущен${NC}"
-else
-ZAPRET_STATUS="${RED}остановлен${NC}"
-fi
-else
-ZAPRET_STATUS=""
-fi
-if [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ]; then
-INST_COLOR=$GREEN; INSTALLED_DISPLAY="$INSTALLED_VER"
-elif [ "$INSTALLED_VER" != "не найдена" ]; then
-INST_COLOR=$RED; INSTALLED_DISPLAY="$INSTALLED_VER (устарела)"
-else
-INST_COLOR=$RED; INSTALLED_DISPLAY="$INSTALLED_VER"
-fi
-}
+INSTALLED_VER=$(opkg list-installed | grep '^zapret ' | awk '{print $3}'); [ -z "$INSTALLED_VER" ] && INSTALLED_VER="не найдена"
+ZAPRET_STATUS=$([ -f /etc/init.d/zapret ] && /etc/init.d/zapret status 2>/dev/null | grep -qi running && echo "${GREEN}запущен${NC}" || echo "${RED}остановлен${NC}"); [ -f /etc/init.d/zapret ] || ZAPRET_STATUS=""
+[ "$INSTALLED_VER" = "$ZAPRET_VERSION" ] && INST_COLOR=$GREEN INSTALLED_DISPLAY="$INSTALLED_VER" || { INST_COLOR=$RED; INSTALLED_DISPLAY=$([ "$INSTALLED_VER" != "не найдена" ] && echo "$INSTALLED_VER (устарела)" || echo "$INSTALLED_VER"); }; }
 # ==========================================
 # Установка Zapret
 # ==========================================
@@ -478,8 +460,8 @@ chmod +x /opt/zapret/sync_config.sh
 /opt/zapret/sync_config.sh
 /etc/init.d/zapret restart >/dev/null 2>&1
 
-echo -e "${GREEN}Стратегия ${NC}${version} ${GREEN}установлена!${NC}\n"
-[ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy
+echo -e "${GREEN}Стратегия ${NC}${version} ${GREEN}установлена!${NC}"
+[ "$NO_PAUSE" != "1" ] && echo && read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
 # ==========================================
 # Главное меню
