@@ -271,20 +271,177 @@ grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONF" && grep 
 }
 menu_str() {
 [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; return; }
-clear; echo -e "${MAGENTA}Меню выбора стратегии${NC}"; show_current_strategy && [ -n "$ver" ] && echo -e "\n${YELLOW}Используется стратегия:${NC} $ver"
-echo -e "\n${CYAN}1) ${GREEN}Установить стратегию${NC} v1\n${CYAN}2) ${GREEN}Установить стратегию${NC} v2"
-echo -ne "${CYAN}3) ${GREEN}Установить стратегию${NC} v3\n${CYAN}4) ${GREEN}Установить стратегию${NC} v4\n${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read choice
+clear
+echo -e "${MAGENTA}Меню выбора стратегии${NC}"
+show_current_strategy && [ -n "$ver" ] && echo -e "\n${YELLOW}Используется стратегия:${NC} $ver"
+echo -e "${CYAN}1) ${GREEN}Установить стратегию${NC} v1"
+echo -e "${CYAN}2) ${GREEN}Установить стратегию${NC} v2"
+echo -e "${CYAN}3) ${GREEN}Установить стратегию${NC} v3"
+echo -e "${CYAN}4) ${GREEN}Установить стратегию${NC} v4"
+echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}"
+echo -ne "${YELLOW}Выберите пункт:${NC} " && read choice
 case "$choice" in
-1) echo; wget -qO- https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Str1.sh | sh; echo; read -p "Нажмите Enter для выхода в главное меню..." dummy
-;;
-2)echo; wget -qO- https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Str2.sh | sh; echo; read -p "Нажмите Enter для выхода в главное меню..." dummy
-;;
-3) echo; wget -qO- https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Str3.sh | sh; echo; read -p "Нажмите Enter для выхода в главное меню..." dummy
-;;
-4) echo; wget -qO- https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Str4.sh | sh; echo; read -p "Нажмите Enter для выхода в главное меню..." dummy
-;;
-*) return ;;
+    1) version="v1" ;;
+    2) version="v2" ;;
+    3) version="v3" ;;
+    4) version="v4" ;;
+    *) echo -e "${RED}Неверный выбор.${NC}"; exit 1 ;;
 esac
+
+echo -e "${MAGENTA}Устанавливаем стратегию ${version}${NC}"
+echo -e "${CYAN}Меняем стратегию${NC}"
+
+# --- ОЧИСТКА NFQWS_OPT ---
+sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$ZAPRET_CFG"
+
+# --- ФУНКЦИИ СТРАТЕГИЙ ---
+strategy_v1() {
+cat <<EOF
+--filter-tcp=443
+--hostlist-exclude=${EXCLUDE_FILE}
+--dpi-desync=fake,multidisorder
+--dpi-desync-split-seqovl=681
+--dpi-desync-split-pos=1
+--dpi-desync-fooling=badseq
+--dpi-desync-badseq-increment=10000000
+--dpi-desync-repeats=2
+--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin
+--dpi-desync-fake-tls-mod=rnd,dupsid,sni=fonts.google.com
+--new
+--filter-udp=443
+--hostlist-exclude=${EXCLUDE_FILE}
+--dpi-desync=fake
+--dpi-desync-repeats=4
+--dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin
+EOF
+}
+
+strategy_v2() {
+cat <<EOF
+--filter-tcp=443
+--hostlist-exclude=${EXCLUDE_FILE}
+--dpi-desync=fake,fakeddisorder
+--dpi-desync-split-pos=10,midsld
+--dpi-desync-fake-tls=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin
+--dpi-desync-fake-tls-mod=rnd,dupsid,sni=fonts.google.com
+--dpi-desync-fake-tls=0x0F0F0F0F
+--dpi-desync-fake-tls-mod=none
+--dpi-desync-fakedsplit-pattern=/opt/zapret/files/fake/tls_clienthello_vk_com.bin
+--dpi-desync-split-seqovl=336
+--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_gosuslugi_ru.bin
+--dpi-desync-fooling=badseq,badsum
+--dpi-desync-badseq-increment=0
+--new
+--filter-udp=443
+--dpi-desync=fake
+--dpi-desync-repeats=4
+--dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin
+EOF
+}
+
+strategy_v3() {
+cat <<EOF
+--filter-tcp=443
+--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt
+--ip-id=zero
+--dpi-desync=multisplit
+--dpi-desync-split-seqovl=681
+--dpi-desync-split-pos=1
+--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin
+--new
+--filter-tcp=443
+--hostlist-exclude=${EXCLUDE_FILE}
+--dpi-desync=fake,fakeddisorder
+--dpi-desync-split-pos=10,midsld
+--dpi-desync-fake-tls=/opt/zapret/files/fake/tls_clienthello_t2_ru.bin
+--dpi-desync-fake-tls-mod=rnd,dupsid,sni=m.ok.ru
+--dpi-desync-fake-tls=0x0F0F0F0F
+--dpi-desync-fake-tls-mod=none
+--dpi-desync-fakedsplit-pattern=/opt/zapret/files/fake/tls_clienthello_vk_com.bin
+--dpi-desync-split-seqovl=336
+--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_gosuslugi_ru.bin
+--dpi-desync-fooling=badseq,badsum
+--dpi-desync-badseq-increment=0
+--new
+--filter-udp=443
+--dpi-desync=fake
+--dpi-desync-repeats=4
+--dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin
+EOF
+}
+
+strategy_v4() {
+cat <<EOF
+--filter-tcp=443
+--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt
+--dpi-desync=fake,multisplit
+--dpi-desync-split-pos=2,sld
+--dpi-desync-fake-tls=0x0F0F0F0F
+--dpi-desync-fake-tls=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin
+--dpi-desync-fake-tls-mod=rnd,dupsid,sni=google.com
+--dpi-desync-split-seqovl=2108
+--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin
+--dpi-desync-fooling=badseq
+--new
+--filter-tcp=443
+--hostlist-exclude=${EXCLUDE_FILE}
+--dpi-desync-any-protocol=1
+--dpi-desync-cutoff=n5
+--dpi-desync=multisplit
+--dpi-desync-split-seqovl=582
+--dpi-desync-split-pos=1
+--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/4pda.bin
+--new
+--filter-udp=443
+--hostlist-exclude=${EXCLUDE_FILE}
+--dpi-desync=fake
+--dpi-desync-repeats=4
+--dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin
+EOF
+}
+
+# --- ЗАПИСЬ В КОНФИГ ---
+{ echo "  option NFQWS_OPT '"; echo "#${version} УДАЛИТЕ ЭТУ СТРОЧКУ, ЕСЛИ ИЗМЕНЯЕТЕ СТРАТЕГИЮ !!!"; strategy_${version}; echo "'"; } >> "$ZAPRET_CFG"
+
+
+# --- ОБНОВЛЕНИЕ ИСКЛЮЧЕНИЙ ---
+echo -e "${CYAN}Добавляем домены в исключения${NC}"
+rm -f "$EXCLUDE_FILE"
+curl -fsSL "$EXCLUDE_URL" -o "$EXCLUDE_FILE" || echo -e "\n${RED}Не удалось загрузить exclude файл${NC}\n"
+
+# --- ДОГРУЗКА BIN (если нужны) ---
+if [ "$version" = "v3" ]; then
+echo -e "${CYAN}Копируем ${NC}tls_clienthello_t2_ru.bin${CYAN} на устройство${NC}"
+  curl -sLo /opt/zapret/files/fake/tls_clienthello_t2_ru.bin https://github.com/StressOzz/Zapret-Manager/raw/refs/heads/main/tls_clienthello_t2_ru.bin
+fi
+
+if [ "$version" = "v4" ]; then
+echo -e "${CYAN}Копируем ${NC}4pda.bin${CYAN} на устройство${NC}"
+  curl -sLo /opt/zapret/files/fake/4pda.bin https://github.com/StressOzz/Zapret-Manager/raw/refs/heads/main/4pda.bin
+fi
+
+# --- HOSTS ---
+echo -e "${CYAN}Редактируем ${NC}/etc/hosts${NC}"
+cat <<EOF | grep -Fxv -f /etc/hosts 2>/dev/null >> /etc/hosts
+130.255.77.28 ntc.party
+193.46.255.29 rutor.info
+185.87.51.182 4pda.to www.4pda.to
+173.245.58.219 rutor.info d.rutor.info
+31.13.72.36 instagram.com www.instagram.com
+57.144.222.34 instagram.com www.instagram.com
+157.240.9.174 instagram.com www.instagram.com
+157.240.225.174 instagram.com www.instagram.com
+EOF
+
+/etc/init.d/dnsmasq restart >/dev/null 2>&1
+
+# --- ПРИМЕНЕНИЕ ---
+echo -e "${CYAN}Применяем новую стратегию и настройки${NC}"
+chmod +x /opt/zapret/sync_config.sh
+/opt/zapret/sync_config.sh
+/etc/init.d/zapret restart >/dev/null 2>&1
+
+echo -e "${GREEN}Стратегия ${NC}${version} ${GREEN}установлена!${NC}"
 }
 # ==========================================
 # Главное меню
