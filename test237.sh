@@ -156,12 +156,10 @@ echo -e "${CYAN}Добавляем домены в исключения${NC}"; r
 case "$version" in v3) echo -e "${CYAN}Копируем ${NC}t2.bin${CYAN} на устройство${NC}"; file="t2.bin" ;;
 v4) echo -e "${CYAN}Копируем ${NC}4pda.bin${CYAN} на устройство${NC}"; file="4pda.bin" ;; v5) echo -e "${CYAN}Копируем ${NC}max.bin${CYAN} на устройство${NC}"; file="max.bin" ;;
 esac; [ -n "$file" ] && wget -q -O "/opt/zapret/files/fake/$file" "https://github.com/StressOzz/Zapret-Manager/raw/refs/heads/main/$file"; echo -e "${CYAN}Редактируем ${NC}/etc/hosts${NC}"
-printf '%s\n' "130.255.77.28 ntc.party" "185.87.51.182 4pda.to www.4pda.to" "173.245.58.219 rutor.info d.rutor.info" "57.144.222.34 instagram.com www.instagram.com" "157.240.9.174 instagram.com www.instagram.com" | grep -Fxv -f /etc/hosts 2>/dev/null >> /etc/hosts; \
-/etc/init.d/dnsmasq restart >/dev/null 2>&1; \
-fileGP="/opt/zapret/ipset/zapret-hosts-google.txt"; printf '%s\n' "android.clients.google.com" "beacons.gvt2.com" "connectivitycheck.gstatic.com" "googleplay.com" "gvt1.com" "lh3.googleusercontent.com" "play.google.com" "play.googleapis.com" | grep -Fxv -f "$fileGP" 2>/dev/null >> "$fileGP"; \
+printf '%s\n' "130.255.77.28 ntc.party" "185.87.51.182 4pda.to www.4pda.to" "173.245.58.219 rutor.info d.rutor.info" "57.144.222.34 instagram.com www.instagram.com" "157.240.9.174 instagram.com www.instagram.com" | grep -Fxv -f /etc/hosts 2>/dev/null >> /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1;
+fileGP="/opt/zapret/ipset/zapret-hosts-google.txt"; printf '%s\n' "android.clients.google.com" "beacons.gvt2.com" "connectivitycheck.gstatic.com" "googleplay.com" "gvt1.com" "lh3.googleusercontent.com" "play.google.com" "play.googleapis.com" | grep -Fxv -f "$fileGP" 2>/dev/null >> "$fileGP"
 printf '%s\n' "play-fe.googleapis.com" "play-games.googleusercontent.com" "play-lh.googleusercontent.com" "prod-lt-playstoregatewayadapter-pa.googleapis.com" | grep -Fxv -f "$fileGP" 2>/dev/null >> "$fileGP"
-echo -e "${CYAN}Применяем новую стратегию и настройки${NC}"; chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1
-echo -e "${GREEN}Стратегия ${NC}${version} ${GREEN}установлена!${NC}"
+echo -e "${CYAN}Применяем новую стратегию и настройки${NC}"; chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1; echo -e "${GREEN}Стратегия ${NC}${version} ${GREEN}установлена!${NC}"
 [ "$NO_PAUSE" != "1" ] && echo && read -p "Нажмите Enter для выхода в главное меню..." dummy; }
 # ==========================================
 # DNS over HTTP
@@ -173,21 +171,18 @@ rm -f /etc/config/https-dns-proxy; rm -f /etc/init.d/https-dns-proxy; echo -e "D
 echo -e "\n${MAGENTA}Устанавливаем и настраиваем DNS over HTTPS\n${CYAN}Обновляем список пакетов${NC}"; opkg update >/dev/null 2>&1
 echo -e "${CYAN}Устанавливаем ${NC}https-dns-proxy"; opkg install https-dns-proxy >/dev/null 2>&1
 echo -e "${CYAN}Устанавливаем ${NC}luci-app-https-dns-proxy"; opkg install luci-app-https-dns-proxy >/dev/null 2>&1
-echo -e "${CYAN}Настраиваем ${NC}Comss.one DNS"; fileDoH="/etc/config/https-dns-proxy"
-fileDoH="/etc/config/https-dns-proxy"; rm -f "$fileDoH"; \
+echo -e "${CYAN}Настраиваем ${NC}Comss.one DNS"; fileDoH="/etc/config/https-dns-proxy"; rm -f "$fileDoH"
 printf '%s\n' "config main 'config'" "	option canary_domains_icloud '1'" "	option canary_domains_mozilla '1'" "	option dnsmasq_config_update '*'" "	option force_dns '1'" "	list force_dns_port '53'" "	list force_dns_port '853'" \
 "	list force_dns_src_interface 'lan'" "	option procd_trigger_wan6 '0'" "	option heartbeat_domain 'heartbeat.melmac.ca'" "	option heartbeat_sleep_timeout '10'" "	option heartbeat_wait_timeout '10'" "	option user 'nobody'" "	option group 'nogroup'" \
 "	option listen_addr '127.0.0.1'" "" "config https-dns-proxy" "	option resolver_url 'https://dns.comss.one/dns-query'" > "$fileDoH"
-/etc/init.d/https-dns-proxy enable >/dev/null 2>&1; /etc/init.d/https-dns-proxy restart >/dev/null 2>&1
-echo -e "DNS over HTTPS${GREEN} установлен и настроен!${NC}\n"; fi; read -p "Нажмите Enter для выхода в главное меню..." dummy; }
+/etc/init.d/https-dns-proxy enable >/dev/null 2>&1; /etc/init.d/https-dns-proxy restart >/dev/null 2>&1; echo -e "DNS over HTTPS${GREEN} установлен и настроен!${NC}\n"; fi; read -p "Нажмите Enter для выхода в главное меню..." dummy; }
 # ==========================================
 # Главное меню
 # ==========================================
 show_menu() { get_versions; clear
 echo -e "╔════════════════════════════════════╗\n║     ${BLUE}Zapret on remittor Manager${NC}     ║\n╚════════════════════════════════════╝\n                     ${DGRAY}by StressOzz v$ZAPRET_MANAGER_VERSION${NC}"
 echo -e "\n${YELLOW}Установленная версия:   ${INST_COLOR}$INSTALLED_DISPLAY${NC}"
-[ -n "$ZAPRET_STATUS" ] && echo -e "${YELLOW}Статус Zapret:${NC}          $ZAPRET_STATUS"
-show_script_50 && [ -n "$name" ] && echo -e "${YELLOW}Установлен скрипт:${NC}      $name"
+[ -n "$ZAPRET_STATUS" ] && echo -e "${YELLOW}Статус Zapret:${NC}          $ZAPRET_STATUS"; show_script_50 && [ -n "$name" ] && echo -e "${YELLOW}Установлен скрипт:${NC}      $name"
 [ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*1024-49999,50100-65535" "$CONF" && grep -q -- "--filter-udp=1024-49999,50100-65535" "$CONF" && echo -e "${YELLOW}Стратегия для игр:${NC}      ${GREEN}активирована${NC}"
 if opkg list-installed | grep -q '^https-dns-proxy '; then if grep -q 'dns.comss.one' /etc/config/https-dns-proxy 2>/dev/null; then echo -e "${YELLOW}DNS over HTTPS:         ${GREEN}установлен / настроен${NC}"
 else echo -e "${YELLOW}DNS over HTTPS:         ${GREEN}установлен${NC}"; fi; fi
