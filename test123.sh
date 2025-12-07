@@ -267,7 +267,8 @@ EOF
 echo -e "${CYAN}Добавляем домены в исключения${NC}"; rm -f "$EXCLUDE_FILE"; wget -q -O "$EXCLUDE_FILE" "$EXCLUDE_URL" || echo -e "\n${RED}Не удалось загрузить exclude файл${NC}\n"
 case "$version" in v3) echo -e "${CYAN}Копируем ${NC}t2.bin${CYAN} на устройство${NC}"; file="t2.bin" ;;
 v4) echo -e "${CYAN}Копируем ${NC}4pda.bin${CYAN} на устройство${NC}"; file="4pda.bin" ;; v5) echo -e "${CYAN}Копируем ${NC}max.bin${CYAN} на устройство${NC}"; file="max.bin" ;;
-esac [ -n "$file" ] && wget -q -O "/opt/zapret/files/fake/$file" "https://github.com/StressOzz/Zapret-Manager/raw/refs/heads/main/$file"
+esac
+[ -n "$file" ] && wget -q -O "/opt/zapret/files/fake/$file" "https://github.com/StressOzz/Zapret-Manager/raw/refs/heads/main/$file"
 echo -e "${CYAN}Редактируем ${NC}/etc/hosts${NC}"
 cat <<EOF | grep -Fxv -f /etc/hosts 2>/dev/null >> /etc/hosts
 130.255.77.28 ntc.party
