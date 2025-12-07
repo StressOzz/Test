@@ -294,7 +294,8 @@ case "$choice" in
 esac
 fi
 
-echo -e "\n${MAGENTA}Устанавливаем стратегию ${version}${NC}"
+[ "$NO_PAUSE" != "1" ] && echo
+echo -e "${MAGENTA}Устанавливаем стратегию ${version}${NC}"
 echo -e "${CYAN}Меняем стратегию${NC}"
 
 # --- ОЧИСТКА NFQWS_OPT ---
