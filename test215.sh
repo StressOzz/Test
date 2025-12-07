@@ -1,4 +1,3 @@
-
 #!/bin/sh
 # ==========================================
 # Zapret on remittor Manager by StressOzz
@@ -326,15 +325,17 @@ case "$choice" in
                 if opkg list-installed | grep -q '^https-dns-proxy '; then
                     # Удаление
                      echo -e "\n${MAGENTA}Удаляем DNS over HTTPS${NC}"
+                     echo -e "\n${CYAN}Удаляем DNS over ${NC}HTTPS"
                     /etc/init.d/https-dns-proxy stop >/dev/null 2>&1
                     /etc/init.d/https-dns-proxy disable >/dev/null 2>&1
                     opkg remove https-dns-proxy luci-app-https-dns-proxy --force-removal-of-dependent-packages >/dev/null 2>&1
+                    echo -e "\n${CYAN}Удаляем файлы конфигурации ${NC}"
                     rm -f /etc/config/https-dns-proxy
                     rm -f /etc/init.d/https-dns-proxy
                     echo -e "DNS over HTTPS${GREEN} удалён!${NC}\n"
                 else
                     # Установка
-echo -e "\n{MAGENTA}Устанавливаем DNS over HTTPS${NC}"
+echo -e "\n${MAGENTA}Устанавливаем DNS over HTTPS${NC}"
 echo -e "${CYAN}Обновляем список пакетов${NC}"
                     opkg update >/dev/null 2>&1
 echo -e "${CYAN}Устанавливаем ${NC}https-dns-proxy"
