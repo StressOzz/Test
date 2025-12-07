@@ -308,14 +308,14 @@ cat <<EOF
 --dpi-desync-split-pos=1
 --dpi-desync-fooling=badseq
 --dpi-desync-badseq-increment=10000000
---dpi-desync-repeats=2
+--dpi-desync-repeats=6
 --dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin
 --dpi-desync-fake-tls-mod=rnd,dupsid,sni=fonts.google.com
 --new
 --filter-udp=443
 --hostlist-exclude=${EXCLUDE_FILE}
 --dpi-desync=fake
---dpi-desync-repeats=4
+--dpi-desync-repeats=6
 --dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin
 EOF
 }
@@ -338,7 +338,7 @@ cat <<EOF
 --new
 --filter-udp=443
 --dpi-desync=fake
---dpi-desync-repeats=4
+--dpi-desync-repeats=6
 --dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin
 EOF
 }
@@ -369,7 +369,7 @@ cat <<EOF
 --new
 --filter-udp=443
 --dpi-desync=fake
---dpi-desync-repeats=4
+--dpi-desync-repeats=6
 --dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin
 EOF
 }
@@ -399,7 +399,7 @@ cat <<EOF
 --filter-udp=443
 --hostlist-exclude=${EXCLUDE_FILE}
 --dpi-desync=fake
---dpi-desync-repeats=4
+--dpi-desync-repeats=6
 --dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin
 EOF
 }
@@ -415,7 +415,7 @@ cat <<EOF
 --dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin
 --new
 --filter-tcp=443
---hostlist-exclude-domains=gstatic.com
+--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt
 --dpi-desync=fake,fakeddisorder
 --dpi-desync-split-pos=10,midsld
 --dpi-desync-fake-tls=/opt/zapret/files/fake/max.bin
@@ -427,9 +427,14 @@ cat <<EOF
 --dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_gosuslugi_ru.bin
 --dpi-desync-fooling=badseq,badsum
 --dpi-desync-badseq-increment=0
+--new
+--filter-udp=443
+--hostlist-exclude=${EXCLUDE_FILE}
+--dpi-desync=fake
+--dpi-desync-repeats=6
+--dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin
 EOF
 }
-
 
 # --- ЗАПИСЬ В КОНФИГ ---
 { echo "  option NFQWS_OPT '"; echo "#${version} УДАЛИТЕ ЭТУ СТРОЧКУ, ЕСЛИ ИЗМЕНЯЕТЕ СТРАТЕГИЮ !!!"; strategy_${version}; echo "'"; } >> "$CONF"
