@@ -309,11 +309,11 @@ show_script_50 && [ -n "$name" ] && echo -e "${YELLOW}Установлен ск�
 show_current_strategy && [ -n "$ver" ] && echo -e "${YELLOW}Используется стратегия:${NC} ${CYAN}$ver${NC}"
 echo -e "\n${CYAN}1) ${GREEN}Установить последнюю версию${NC}\n${CYAN}2) ${GREEN}Меню выбора стратегий${NC}\n${CYAN}3) ${GREEN}Вернуть настройки по умолчанию${NC}\n${CYAN}4) ${GREEN}Остановить / Запустить ${NC}Zapret"
 echo -e "${CYAN}5) ${GREEN}Удалить ${NC}Zapret\n${CYAN}6) ${GREEN}Добавить / Удалить стратегию для игр\n${CYAN}7) ${GREEN}Меню установки скриптов${NC}\n${CYAN}8) ${GREEN}Удалить / Установить / Настроить${NC} Zapret"
-echo -e "${CYAN}9) ${GREEN}Системная информация${NC}"
+echo -e "${CYAN}9) ${GREEN}Системная информация${NC}\n${CYAN}0) ${NC}"
        if opkg list-installed | grep -q '^https-dns-proxy '; then
-            echo -e "${CYAN}0) ${GREEN}Удалить ${NC}DNS over HTTPS"
+            echo -e "${GREEN}Удалить ${NC}DNS over HTTPS"
         else
-            echo -e "${CYAN}0) ${GREEN}Установить и настроить ${NC}DNS over HTTPS"
+            echo -e "${GREEN}Установить и настроить ${NC}DNS over HTTPS"
         fi
 
 
