@@ -17,7 +17,7 @@ curl -Is --connect-timeout 3 https://api.github.com >/dev/null 2>&1 && echo -e "
 zpr_info() { INSTALLED_VER=$(opkg list-installed | grep '^zapret ' | awk '{print $3}'); if /etc/init.d/zapret status 2>/dev/null | grep -qi "running"; then ZAPRET_STATUS="${GREEN}запущен${NC}"
 else ZAPRET_STATUS="${RED}остановлен${NC}"; fi; SCRIPT_FILE="/opt/zapret/init.d/openwrt/custom.d/50-script.sh"; if [ -f "$SCRIPT_FILE" ]; then line=$(head -n1 "$SCRIPT_FILE")
 case "$line" in *QUIC*) name="50-quic4all" ;; *stun*) name="50-stun4all" ;; *"discord media"*) name="50-discord-media" ;; *"discord subnets"*) name="50-discord" ;; *) name="" ;; esac fi
-TCP_VAL=$(grep -E "^[[:space:]]*option NFQWS_PORTS_TCP[[:space:]]+'" "$CONF" \ | sed "s/.*'\(.*\)'.*/\1/"); UDP_VAL=$(grep -E "^[[:space:]]*option NFQWS_PORTS_UDP[[:space:]]+'" "$CONF" \ | sed "s/.*'\(.*\)'.*/\1/")
+TCP_VAL=$(grep -E "^[[:space:]]*option NFQWS_PORTS_TCP[[:space:]]+'" "$CONF" | sed "s/.*'\(.*\)'.*/\1/"); UDP_VAL=$(grep -E "^[[:space:]]*option NFQWS_PORTS_UDP[[:space:]]+'" "$CONF" | sed "s/.*'\(.*\)'.*/\1/")
 echo -e "${GREEN}$INSTALLED_VER${NC} | $ZAPRET_STATUS"; [ -n "$name" ] && echo -e "${GREEN}$name${NC}"; echo -e "TCP: ${GREEN}$TCP_VAL${NC} | UDP: ${GREEN}$UDP_VAL${NC}"; echo -e "\n${GREEN}===== Стратегия =====${NC}"
 awk ' /^[[:space:]]*option[[:space:]]+NFQWS_OPT[[:space:]]*'\''/ {flag=1; sub(/^[[:space:]]*option[[:space:]]+NFQWS_OPT[[:space:]]*'\''/, ""); next}; flag { if (/'\''/) {sub(/'\''$/, ""); print; exit} print }' "$CONF"; }
 if [ -f /etc/init.d/zapret ]; then zpr_info; else echo -e "${RED}Zapret не установлен!${NC}\n"; fi; echo -e "${GREEN}===== Доступность сайтов =====${NC}"
