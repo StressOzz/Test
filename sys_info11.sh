@@ -298,7 +298,7 @@ echo -e "${GREEN}Стратегия ${NC}${version} ${GREEN}установлен
 # ==========================================
 # Системная информация
 # ==========================================
-sys_info() { if ! command -v curl >/dev/null 2>&1; then echo -e "\n${GREEN}Устанавливаем ${NC}curl\n"; opkg update >/dev/null 2>&1 && opkg install curl >/dev/null 2>&1; fi
+sys_info() { if ! command -v curl >/dev/null 2>&1; then printf "\n%sУстанавливаем %scurl\n" "$GREEN" "$NC"; opkg update >/dev/null 2>&1 && opkg install curl >/dev/null 2>&1; fi
 clear; echo -e "${GREEN}===== Информация о системе =====${NC}"; MODEL=$(cat /tmp/sysinfo/model); ARCH=$(sed -n "s/.*ARCH='\(.*\)'/\1/p" /etc/openwrt_release); OWRT=$(grep '^DISTRIB_RELEASE=' /etc/openwrt_release | cut -d"'" -f2)
 echo -e "$MODEL\n$ARCH\n$OWRT\n\n${GREEN}===== Пользовательские пакеты =====${NC}"; PKGS=$(awk '/^Package:/ {p=$2} /^Status: install user/ {print p}' /usr/lib/opkg/status); total=$(echo "$PKGS" | wc -l); half=$(( (total + 1) / 2 ))
 for i in $(seq 1 $half); do left=$(echo "$PKGS" | sed -n "${i}p"); right=$(echo "$PKGS" | sed -n "$((i + half))p"); [ -n "$right" ] && echo "$left | $right" || echo "$left"; done
@@ -325,11 +325,9 @@ echo -e "$left_color $left_pad $right_color $right_pad"; else echo -e "$left_col
 # ==========================================
 # Главное меню
 # ==========================================
-show_menu() {
-get_versions
+show_menu() { get_versions
 clear; echo -e "╔════════════════════════════════════╗\n║     ${BLUE}Zapret on remittor Manager${NC}     ║\n╚════════════════════════════════════╝\n                     ${DGRAY}by StressOzz v$ZAPRET_MANAGER_VERSION${NC}"
-echo -e "\n${YELLOW}Установленная версия:   ${INST_COLOR}$INSTALLED_DISPLAY${NC}"
-[ -n "$ZAPRET_STATUS" ] && echo -e "${YELLOW}Статус Zapret:${NC}          $ZAPRET_STATUS"
+echo -e "\n${YELLOW}Установленная версия:   ${INST_COLOR}$INSTALLED_DISPLAY${NC}"; [ -n "$ZAPRET_STATUS" ] && echo -e "${YELLOW}Статус Zapret:${NC}          $ZAPRET_STATUS"
 show_script_50 && [ -n "$name" ] && echo -e "${YELLOW}Установлен скрипт:${NC}      $name"
 [ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*1024-49999,50100-65535" "$CONF" && grep -q -- "--filter-udp=1024-49999,50100-65535" "$CONF" && echo -e "${YELLOW}Стратегия для игр:${NC}      ${GREEN}активна${NC}"
 show_current_strategy && [ -n "$ver" ] && echo -e "${YELLOW}Используется стратегия:${NC} ${CYAN}$ver${NC}"
