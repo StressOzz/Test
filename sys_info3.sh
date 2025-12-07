@@ -15,8 +15,7 @@ out="$out | FIX: ${dpi}"; echo -e "$out\n\n${GREEN}===== Проверка GitHub
 [ -z "$RATE" ] && RATE_OUT="${RED}N/A${NC}" || RATE_OUT=$([ "$RATE" -eq 0 ] && echo -e "${RED}0${NC}" || echo -e "${GREEN}$RATE${NC}"); echo -n "IPv4: "
 curl -4 -Is --connect-timeout 3 https://github.com >/dev/null 2>&1 && echo -ne "${GREEN}ok${NC}" || echo -ne "${RED}fail${NC}"; echo -n "  IPv6: "
 curl -6 -Is --connect-timeout 3 https://github.com >/dev/null 2>&1 && echo -e "${GREEN}ok${NC}" || echo -e "${RED}fail${NC}"; echo -n "API: "
-curl -Is --connect-timeout 3 https://api.github.com >/dev/null 2>&1 \ && echo -e "${GREEN}ok${NC}   Limit: $RATE_OUT" \ || echo -e "${RED}fail${NC}   Limit: $RATE_OUT"
-echo -e "\n${GREEN}===== Настройки Zapret =====${NC}"
+curl -Is --connect-timeout 3 https://api.github.com >/dev/null 2>&1 && echo -e "${GREEN}ok${NC}   Limit: $RATE_OUT" || echo -e "${RED}fail${NC}   Limit: $RATE_OUT"; echo -e "\n${GREEN}===== Настройки Zapret =====${NC}"
 zpr_info() { INSTALLED_VER=$(opkg list-installed | grep '^zapret ' | awk '{print $3}'); if /etc/init.d/zapret status 2>/dev/null | grep -qi "running"; then ZAPRET_STATUS="${GREEN}запущен${NC}"
 else ZAPRET_STATUS="${RED}остановлен${NC}"; fi
 SCRIPT_FILE="/opt/zapret/init.d/openwrt/custom.d/50-script.sh"; if [ -f "$SCRIPT_FILE" ]; then line=$(head -n1 "$SCRIPT_FILE")
@@ -29,26 +28,7 @@ awk ' /^[[:space:]]*option[[:space:]]+NFQWS_OPT[[:space:]]*'\''/ {flag=1; sub(/^
 flag { if (/'\''/) {sub(/'\''$/, ""); print; exit} print }' "$CONF"; }
 if [ -f /etc/init.d/zapret ]; then zpr_info; else echo -e "${RED}Zapret не установлен!${NC}\n"; fi; echo -e "${GREEN}===== Доступность сайтов =====${NC}"
 SITES=$(cat <<'EOF'
-gosuslugi.ru
-esia.gosuslugi.ru
-rutube.ru
-youtube.com
-instagram.com
-rutor.info
-ntc.party
-rutracker.org
-epidemz.net.co
-nnmclub.to
-openwrt.org
-sxyprn.net
-pornhub.com
-discord.com
-x.com
-filmix.my
-flightradar24.com
-cdn77.com
-play.google.com
-genderize.io
+gosuslugi.ru esia.gosuslugi.ru rutube.ru youtube.com instagram.com rutor.info ntc.party rutracker.org epidemz.net.co nnmclub.to openwrt.org sxyprn.net pornhub.com discord.com x.com filmix.my flightradar24.com cdn77.com play.google.com genderize.io
 EOF
 )
 sites_clean=$(echo "$SITES" | grep -v '^#' | grep -v '^\s*$'); total=$(echo "$sites_clean" | wc -l); half=$(( (total + 1) / 2 )); sites_list=""
