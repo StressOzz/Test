@@ -306,14 +306,25 @@ echo -e "\n${YELLOW}Установленная версия:   ${INST_COLOR}$INS
 [ -n "$ZAPRET_STATUS" ] && echo -e "${YELLOW}Статус Zapret:${NC}          $ZAPRET_STATUS"
 show_script_50 && [ -n "$name" ] && echo -e "${YELLOW}Установлен скрипт:${NC}      $name"
 [ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*1024-49999,50100-65535" "$CONF" && grep -q -- "--filter-udp=1024-49999,50100-65535" "$CONF" && echo -e "${YELLOW}Стратегия для игр:${NC}      ${GREEN}активна${NC}"
+if opkg list-installed | grep -q '^https-dns-proxy '; then
+    if grep -q 'dns.comss.one' /etc/config/https-dns-proxy 2>/dev/null; then
+        echo -e "${YELLOW}DNS over HTTPS:${NC}      установлен и настроен"
+    else
+        echo -e "${YELLOW}DNS over HTTPS:${NC}      установлен"
+    fi
+fi
+
+
+
+
 show_current_strategy && [ -n "$ver" ] && echo -e "${YELLOW}Используется стратегия:${NC} ${CYAN}$ver${NC}"
 echo -e "\n${CYAN}1) ${GREEN}Установить последнюю версию${NC}\n${CYAN}2) ${GREEN}Меню выбора стратегий${NC}\n${CYAN}3) ${GREEN}Вернуть настройки по умолчанию${NC}\n${CYAN}4) ${GREEN}Остановить / Запустить ${NC}Zapret"
 echo -e "${CYAN}5) ${GREEN}Удалить ${NC}Zapret\n${CYAN}6) ${GREEN}Добавить / Удалить стратегию для игр\n${CYAN}7) ${GREEN}Меню установки скриптов${NC}\n${CYAN}8) ${GREEN}Удалить / Установить / Настроить${NC} Zapret"
-echo -e "${CYAN}9) ${GREEN}Системная информация${NC}\n${CYAN}0) ${NC}"
+echo -e "${CYAN}9) ${GREEN}Системная информация${NC}"
        if opkg list-installed | grep -q '^https-dns-proxy '; then
-            echo -e "${GREEN}Удалить ${NC}DNS over HTTPS"
+            echo -e "${CYAN}0) ${GREEN}Удалить ${NC}DNS over HTTPS"
         else
-            echo -e "${GREEN}Установить и настроить ${NC}DNS over HTTPS"
+            echo -e "${CYAN}0) ${GREEN}Установить и настроить ${NC}DNS over HTTPS"
         fi
 
 
@@ -339,7 +350,7 @@ echo -e "\n${MAGENTA}Устанавливаем DNS over HTTPS${NC}"
 echo -e "${CYAN}Обновляем список пакетов${NC}"
                     opkg update >/dev/null 2>&1
 echo -e "${CYAN}Устанавливаем ${NC}https-dns-proxy"
-                    opkg install https-dns-proxy >/dev/null 2>&1
+opkg install https-dns-proxy luci-app-https-dns-proxy >/dev/null 2>&1
 echo -e "${CYAN}Настраиваем ${NC}Comss.one DNS"
                     fileDoH="/etc/config/https-dns-proxy"
                     rm -f "$fileDoH"
