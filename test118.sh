@@ -24,7 +24,7 @@ case "$choice" in
 2) echo -e "\n${GREEN}Фикс успешно применён!${NC}\n"; sed -i 's/meta l4proto { tcp, udp } flow offload @ft;/meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;/' /usr/share/firewall4/templates/ruleset.uc
 fw4 restart >/dev/null 2>&1; read -p "Нажмите Enter для продолжения..." dummy ;; *) echo -e "\n${RED}Скрипт остановлен!${NC}\n"; exit 1 ;; esac; fi; fi; 
 # ==========================================
-# Получение версии и подготовка установки Zapret
+# Получение версии
 # ==========================================
 get_versions() { LOCAL_ARCH=$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release); [ -z "$LOCAL_ARCH" ] && LOCAL_ARCH=$(opkg print-architecture | grep -v "noarch" | sort -k3 -n | tail -n1 | awk '{print $2}')
 USED_ARCH="$LOCAL_ARCH"; LATEST_URL="https://github.com/remittor/zapret-openwrt/releases/download/v${ZAPRET_VERSION}/zapret_v${ZAPRET_VERSION}_${LOCAL_ARCH}.zip"
@@ -408,8 +408,6 @@ cat <<EOF
 --dpi-desync-fake-tls=0x0F0F0F0F
 --dpi-desync-fake-tls-mod=none
 --dpi-desync-fakedsplit-pattern=/opt/zapret/files/fake/tls_clienthello_vk_com.bin
---dpi-desync-split-seqovl=336
---dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_gosuslugi_ru.bin
 --dpi-desync-fooling=badseq,badsum
 --dpi-desync-badseq-increment=0
 --new
