@@ -121,144 +121,35 @@ menu_str() { local NO_PAUSE=$1; [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RE
 if [ "$NO_PAUSE" = "1" ]; then version=$STR_VERSION_AUTOINSTALL
 else clear; echo -e "${MAGENTA}Меню выбора стратегии${NC}"
 show_current_strategy && [ -n "$ver" ] && echo -e "\n${YELLOW}Используется стратегия:${NC} $ver\n"
-echo -e "${CYAN}1) ${GREEN}Установить стратегию${NC} v1\n${CYAN}2) ${GREEN}Установить стратегию${NC} v2"
-echo -e "${CYAN}3) ${GREEN}Установить стратегию${NC} v3\n${CYAN}4) ${GREEN}Установить стратегию${NC} v4"
-echo -e "${CYAN}5) ${GREEN}Установить стратегию${NC} v5\n${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n"
-echo -ne "${YELLOW}Выберите пункт:${NC} " && read choice
+echo -e "${CYAN}1) ${GREEN}Установить стратегию${NC} v1\n${CYAN}2) ${GREEN}Установить стратегию${NC} v2\n${CYAN}3) ${GREEN}Установить стратегию${NC} v3\n${CYAN}4) ${GREEN}Установить стратегию${NC} v4"
+echo -ne "${CYAN}5) ${GREEN}Установить стратегию${NC} v5\n${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read choice
 case "$choice" in 1) version="v1" ;; 2) version="v2" ;; 3) version="v3" ;; 4) version="v4" ;; 5) version="v5" ;; *) return ;; esac; fi
 [ "$NO_PAUSE" != "1" ] && echo
 echo -e "${MAGENTA}Устанавливаем стратегию ${version}${NC}\n${CYAN}Меняем стратегию${NC}"; sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
-strategy_v1() {
-cat <<EOF
---filter-tcp=443
---hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt
---dpi-desync=fake,multidisorder
---dpi-desync-split-seqovl=681
---dpi-desync-split-pos=1
---dpi-desync-fooling=badseq
---dpi-desync-badseq-increment=10000000
---dpi-desync-repeats=6
---dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin
---dpi-desync-fake-tls-mod=rnd,dupsid,sni=fonts.google.com
---new
---filter-udp=443
---hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt
---dpi-desync=fake
---dpi-desync-repeats=6
---dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin
-EOF
+strategy_v1() { \
+printf '%s\n' "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake,multidisorder" "--dpi-desync-split-seqovl=681" "--dpi-desync-split-pos=1" "--dpi-desync-fooling=badseq" | cat; \
+printf '%s\n' "--dpi-desync-badseq-increment=10000000" "--dpi-desync-repeats=6" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin" "--dpi-desync-fake-tls-mod=rnd,dupsid,sni=fonts.google.com" "--new" | cat; \
+printf '%s\n' "--filter-udp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake" "--dpi-desync-repeats=6" "--dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin" | cat; \
 }
-strategy_v2() {
-cat <<EOF
---filter-tcp=443
---hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt
---dpi-desync=fake,fakeddisorder
---dpi-desync-split-pos=10,midsld
---dpi-desync-fake-tls=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin
---dpi-desync-fake-tls-mod=rnd,dupsid,sni=fonts.google.com
---dpi-desync-fake-tls=0x0F0F0F0F
---dpi-desync-fake-tls-mod=none
---dpi-desync-fakedsplit-pattern=/opt/zapret/files/fake/tls_clienthello_vk_com.bin
---dpi-desync-split-seqovl=336
---dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_gosuslugi_ru.bin
---dpi-desync-fooling=badseq,badsum
---dpi-desync-badseq-increment=0
---new
---filter-udp=443
---hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt
---dpi-desync=fake
---dpi-desync-repeats=6
---dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin
-EOF
+strategy_v2() { \
+printf '%s\n' "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake,fakeddisorder" "--dpi-desync-split-pos=10,midsld" "--dpi-desync-fake-tls=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin" "--dpi-desync-fake-tls-mod=rnd,dupsid,sni=fonts.google.com" | cat; \
+printf '%s\n' "--dpi-desync-fake-tls=0x0F0F0F0F" "--dpi-desync-fake-tls-mod=none" "--dpi-desync-fakedsplit-pattern=/opt/zapret/files/fake/tls_clienthello_vk_com.bin" "--dpi-desync-split-seqovl=336" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_gosuslugi_ru.bin" "--dpi-desync-fooling=badseq,badsum" | cat; \
+printf '%s\n' "--dpi-desync-badseq-increment=0" "--new" "--filter-udp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake" "--dpi-desync-repeats=6" "--dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin" | cat; \
 }
-strategy_v3() {
-cat <<EOF
---filter-tcp=443
---hostlist=/opt/zapret/ipset/zapret-hosts-google.txt
---ip-id=zero
---dpi-desync=multisplit
---dpi-desync-split-seqovl=681
---dpi-desync-split-pos=1
---dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin
---new
---filter-tcp=443
---hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt
---dpi-desync=fake,fakeddisorder
---dpi-desync-split-pos=10,midsld
---dpi-desync-fake-tls=/opt/zapret/files/fake/t2.bin
---dpi-desync-fake-tls-mod=rnd,dupsid,sni=m.ok.ru
---dpi-desync-fake-tls=0x0F0F0F0F
---dpi-desync-fake-tls-mod=none
---dpi-desync-fakedsplit-pattern=/opt/zapret/files/fake/tls_clienthello_vk_com.bin
---dpi-desync-split-seqovl=336
---dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_gosuslugi_ru.bin
---dpi-desync-fooling=badseq,badsum
---dpi-desync-badseq-increment=0
---new
---filter-udp=443
---hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt
---dpi-desync=fake
---dpi-desync-repeats=6
---dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin
-EOF
+strategy_v3() { \
+printf '%s\n' "--filter-tcp=443" "--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt" "--ip-id=zero" "--dpi-desync=multisplit" "--dpi-desync-split-seqovl=681" "--dpi-desync-split-pos=1" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin" "--new" "--filter-tcp=443" | cat; \
+printf '%s\n' "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake,fakeddisorder" "--dpi-desync-split-pos=10,midsld" "--dpi-desync-fake-tls=/opt/zapret/files/fake/t2.bin" "--dpi-desync-fake-tls-mod=rnd,dupsid,sni=m.ok.ru" "--dpi-desync-fake-tls=0x0F0F0F0F" "--dpi-desync-fake-tls-mod=none" "--dpi-desync-fakedsplit-pattern=/opt/zapret/files/fake/tls_clienthello_vk_com.bin" | cat; \
+printf '%s\n' "--dpi-desync-split-seqovl=336" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_gosuslugi_ru.bin" "--dpi-desync-fooling=badseq,badsum" "--dpi-desync-badseq-increment=0" "--new" "--filter-udp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake" "--dpi-desync-repeats=6" "--dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin" | cat; \
 }
-strategy_v4() {
-cat <<EOF
---filter-tcp=443
---hostlist=/opt/zapret/ipset/zapret-hosts-google.txt
---dpi-desync=fake,multisplit
---dpi-desync-split-pos=2,sld
---dpi-desync-fake-tls=0x0F0F0F0F
---dpi-desync-fake-tls=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin
---dpi-desync-fake-tls-mod=rnd,dupsid,sni=google.com
---dpi-desync-split-seqovl=2108
---dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin
---dpi-desync-fooling=badseq
---new
---filter-tcp=443
---hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt
---dpi-desync-any-protocol=1
---dpi-desync-cutoff=n5
---dpi-desync=multisplit
---dpi-desync-split-seqovl=582
---dpi-desync-split-pos=1
---dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/4pda.bin
---new
---filter-udp=443
---hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt
---dpi-desync=fake
---dpi-desync-repeats=6
---dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin
-EOF
+strategy_v4() { \
+printf '%s\n' "--filter-tcp=443" "--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt" "--dpi-desync=fake,multisplit" "--dpi-desync-split-pos=2,sld" "--dpi-desync-fake-tls=0x0F0F0F0F" "--dpi-desync-fake-tls=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin" "--dpi-desync-fake-tls-mod=rnd,dupsid,sni=google.com" | cat; \
+printf '%s\n' "--dpi-desync-split-seqovl=2108" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin" "--dpi-desync-fooling=badseq" "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync-any-protocol=1" "--dpi-desync-cutoff=n5" "--dpi-desync=multisplit" | cat; \
+printf '%s\n' "--dpi-desync-split-seqovl=582" "--dpi-desync-split-pos=1" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/4pda.bin" "--new" "--filter-udp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake" "--dpi-desync-repeats=6" "--dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin" | cat; \
 }
-strategy_v5() {
-cat <<EOF
---filter-tcp=443
---hostlist=/opt/zapret/ipset/zapret-hosts-google.txt
---ip-id=zero
---dpi-desync=multisplit
---dpi-desync-split-seqovl=681
---dpi-desync-split-pos=1
---dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin
---new
---filter-tcp=443
---hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt
---dpi-desync=fake,fakeddisorder
---dpi-desync-split-pos=10,midsld
---dpi-desync-fake-tls=/opt/zapret/files/fake/max.bin
---dpi-desync-fake-tls-mod=rnd,dupsid
---dpi-desync-fake-tls=0x0F0F0F0F
---dpi-desync-fake-tls-mod=none
---dpi-desync-fakedsplit-pattern=/opt/zapret/files/fake/tls_clienthello_vk_com.bin
---dpi-desync-fooling=badseq,badsum
---dpi-desync-badseq-increment=0
---new
---filter-udp=443
---hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt
---dpi-desync=fake
---dpi-desync-repeats=6
---dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin
-EOF
+strategy_v5() { \
+printf '%s\n' "--filter-tcp=443" "--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt" "--ip-id=zero" "--dpi-desync=multisplit" "--dpi-desync-split-seqovl=681" "--dpi-desync-split-pos=1" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin" "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" | cat; \
+printf '%s\n' "--dpi-desync=fake,fakeddisorder" "--dpi-desync-split-pos=10,midsld" "--dpi-desync-fake-tls=/opt/zapret/files/fake/max.bin" "--dpi-desync-fake-tls-mod=rnd,dupsid" "--dpi-desync-fake-tls=0x0F0F0F0F" "--dpi-desync-fake-tls-mod=none" "--dpi-desync-fakedsplit-pattern=/opt/zapret/files/fake/tls_clienthello_vk_com.bin" "--dpi-desync-fooling=badseq,badsum" | cat; \
+printf '%s\n' "--dpi-desync-badseq-increment=0" "--new" "--filter-udp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake" "--dpi-desync-repeats=6" "--dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin" | cat; \
 }
 { echo "  option NFQWS_OPT '"; echo "#${version} УДАЛИТЕ ЭТУ СТРОЧКУ, ЕСЛИ ИЗМЕНЯЕТЕ СТРАТЕГИЮ !!!"; strategy_${version}; echo "'"; } >> "$CONF"
 echo -e "${CYAN}Добавляем домены в исключения${NC}"; rm -f "$EXCLUDE_FILE"; wget -q -O "$EXCLUDE_FILE" "$EXCLUDE_URL" || echo -e "\n${RED}Не удалось загрузить exclude файл${NC}\n"
