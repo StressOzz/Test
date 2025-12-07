@@ -306,9 +306,9 @@ doh_menu() {
         clear
 echo -e "\n${MAGENTA}Меню DNS over HTTPS${NC}\n"
         echo -e "${CYAN}1) ${GREEN}Установить и настроить ${NC}DNS over HTTPS\n${CYAN}2) ${GREEN}Удалить ${NC}DNS over HTTPS\n${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n"
-echo -ne "${YELLOW}Выберите пункт:${NC} " && read choice
+echo -ne "${YELLOW}Выберите пункт:${NC} " && read choiceDoH
 
-        case "$opt" in
+case "$choiceDoH" in
 1)
 echo -e "\n${CYAN}Устанавливаем ${NC}DNS over HTTPS"
 opkg update >/dev/null 2>&1
@@ -346,10 +346,7 @@ EOF
 
 echo -e "DNS over HTTPS${GREEN} установлен и настроен${NC}\n"
 
-read -p "Нажмите Enter для выхода в главное меню..." dummy
-
-
-            ;;
+read -p "Нажмите Enter для выхода в главное меню..." dummy ;;
             2)
                 echo -e "\n${CYAN}Удаляем ${NC}DNS over HTTPS"
                 /etc/init.d/https-dns-proxy stop 2>/dev/null
