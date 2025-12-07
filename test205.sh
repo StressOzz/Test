@@ -304,22 +304,19 @@ echo -e "${GREEN}Стратегия ${NC}${version} ${GREEN}установлен
 doh_menu() {
     while true; do
         clear
-        echo "===== DoH ====="
-        echo "1) Установить и настроить DoH"
-        echo "2) Удалить DoH"
-        echo "0) Назад"
-        printf "\nВыбор: "
-        read -r opt
+echo -e "\n${MAGENTA}Меню DNS over HTTPS${NC}\n"
+        echo -e "${CYAN}1) ${GREEN}Установить и настроить ${NC}DNS over HTTPS\n${CYAN}2) ${GREEN}Удалить ${NC}DNS over HTTPS\n${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n"
+echo -ne "${YELLOW}Выберите пункт:${NC} " && read choice
 
         case "$opt" in
-            1)
-echo "Устанавливаем https-dns-proxy..."
+1)
+echo -e "\n${CYAN}Устанавливаем ${NC}DNS over HTTPS"
 opkg update >/dev/null 2>&1
 opkg install https-dns-proxy >/dev/null 2>&1
 
 fileDoH="/etc/config/https-dns-proxy"
 
-echo "Создаём конфигурацию DoH..."
+echo -e "${CYAN}Настраиваем ${NC}Comss.one DNS"
 rm -f "$fileDoH"
 
 cat <<'EOF' > "$fileDoH"
@@ -347,10 +344,14 @@ EOF
 /etc/init.d/https-dns-proxy restart
 
 
-echo "DoH установлен и настроен (dns.comss.one)."
+echo -e "DNS over HTTPS${GREEN} установлен и настроен${NC}\n"
+
+read -p "Нажмите Enter для выхода в главное меню..." dummy
+
+
             ;;
             2)
-                echo "Удаляем DoH..."
+                echo -e "\n${CYAN}Удаляем ${NC}DNS over HTTPS"
                 /etc/init.d/https-dns-proxy stop 2>/dev/null
                 /etc/init.d/https-dns-proxy disable 2>/dev/null
 
@@ -360,14 +361,10 @@ echo "DoH установлен и настроен (dns.comss.one)."
                 rm -f /etc/config/https-dns-proxy
                 rm -f /etc/init.d/https-dns-proxy
 
-                echo "DoH полностью удалён."
-                read -r -p "Нажмите Enter..."
-            ;;
-            0)
-                break
-            ;;
-            *)
-                echo "Неверный ввод"; sleep 1 ;;
+echo -e "DNS over HTTPS${GREEN} удалён${NC}\n"
+read -p "Нажмите Enter для выхода в главное меню..." dummy ;;
+
+            *) return ;;
         esac
     done
 }
