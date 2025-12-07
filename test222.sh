@@ -308,9 +308,9 @@ show_script_50 && [ -n "$name" ] && echo -e "${YELLOW}Установлен ск�
 [ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*1024-49999,50100-65535" "$CONF" && grep -q -- "--filter-udp=1024-49999,50100-65535" "$CONF" && echo -e "${YELLOW}Стратегия для игр:${NC}      ${GREEN}активна${NC}"
 if opkg list-installed | grep -q '^https-dns-proxy '; then
     if grep -q 'dns.comss.one' /etc/config/https-dns-proxy 2>/dev/null; then
-        echo -e "${YELLOW}DNS over HTTPS:${NC}      установлен и настроен"
+        echo -e "${YELLOW}DNS over HTTPS:            ${GREEN}установлен / настроен${NC}"
     else
-        echo -e "${YELLOW}DNS over HTTPS:${NC}      установлен"
+        echo -e "${YELLOW}DNS over HTTPS:            ${GREEN}установлен${NC}"
     fi
 fi
 
