@@ -47,7 +47,7 @@ echo -e "${CYAN}Удаляем временные файлы${NC}"; cd /; rm -rf
 # Установка скриптов
 # ==========================================
 show_script_50() { 
-    [ -f "/opt/zapret/init.d/openwrt/custom.d/50-script.sh" ] || { name="${RED}не !!!установлен${NC}"; return; }
+    [ -f "/opt/zapret/init.d/openwrt/custom.d/50-script.sh" ] || { name="${RED}не установлен${NC}"; return; }
     line=$(head -n1 /opt/zapret/init.d/openwrt/custom.d/50-script.sh)
     name=$(case "$line" in 
         *QUIC*) echo "50-quic4all" ;;
