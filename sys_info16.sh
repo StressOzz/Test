@@ -46,38 +46,16 @@ echo -e "\n${GREEN}===== Проверка GitHub =====${NC}"
 if /etc/init.d/https-dns-proxy status >/dev/null 2>&1; then
 echo -e "${RED}DNS over HTTPS запущен, проверка GitHub пропущена${NC}"
 else
-RATE=$(curl -s [https://api.github.com/rate_limit](https://api.github.com/rate_limit) | grep '"remaining"' | head -1 | awk '{print $2}' | tr -d ,)
-if [ -z "$RATE" ]; then
-RATE_OUT="${RED}N/A${NC}"
-elif [ "$RATE" -eq 0 ]; then
-RATE_OUT="${RED}0${NC}"
-else
-RATE_OUT="${GREEN}$RATE${NC}"
-fi
-
-```
+RATE=$(curl -s https://api.github.com/rate_limit | grep '"remaining"' | head -1 | awk '{print $2}' | tr -d ,)
+[ -z "$RATE" ] && RATE_OUT="${RED}N/A${NC}" || RATE_OUT=$([ "$RATE" -eq 0 ] && echo -e "${RED}0${NC}" || echo -e "${GREEN}$RATE${NC}")
 echo -n "IPv4: "
-if curl -4 -Is --connect-timeout 3 https://github.com >/dev/null 2>&1; then
-    echo -ne "${GREEN}ok${NC}"
-else
-    echo -ne "${RED}fail${NC}"
-fi
-
+curl -4 -Is --connect-timeout 3 https://github.com >/dev/null 2>&1 && echo -ne "${GREEN}ok${NC}" || echo -ne "${RED}fail${NC}"
 echo -n "  IPv6: "
-if curl -6 -Is --connect-timeout 3 https://github.com >/dev/null 2>&1; then
-    echo -e "${GREEN}ok${NC}"
-else
-    echo -e "${RED}fail${NC}"
-fi
-
+curl -6 -Is --connect-timeout 3 https://github.com >/dev/null 2>&1 && echo -e "${GREEN}ok${NC}" || echo -e "${RED}fail${NC}"
 echo -n "API: "
-if curl -Is --connect-timeout 3 https://api.github.com >/dev/null 2>&1; then
-    echo -e "${GREEN}ok${NC}   Limit: $RATE_OUT"
-else
-    echo -e "${RED}fail${NC}   Limit: $RATE_OUT"
-fi
-```
-
+curl -Is --connect-timeout 3 https://api.github.com >/dev/null 2>&1 \
+&& echo -e "${GREEN}ok${NC}   Limit: $RATE_OUT" \
+|| echo -e "${RED}fail${NC}   Limit: $RATE_OUT"
 fi
 
 echo -e "\n${GREEN}===== Настройки Zapret =====${NC}"
