@@ -185,7 +185,8 @@ show_menu() { get_versions; clear
 echo -e "╔════════════════════════════════════╗\n║     ${BLUE}Zapret on remittor Manager${NC}     ║\n╚════════════════════════════════════╝\n                     ${DGRAY}by StressOzz v$ZAPRET_MANAGER_VERSION${NC}"
 
 
-if grep -q "option NFQWS_PORTS_UDP.*1024-49999,50100-65535" "$CONF" && grep -q -- "--filter-udp=1024-49999,50100-65535" "$CONF"; then menu_game="Удалить стратегию для игр"; else menu_game="Добавить стратегию для игр"; fi
+[ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*1024-49999,50100-65535" "$CONF" && grep -q -- "--filter-udp=1024-49999,50100-65535" "$CONF" && menu_game="Удалить стратегию для игр" || menu_game="Добавить стратегию для игр"
+
 
 if opkg list-installed | grep -q '^https-dns-proxy '; then doh_menu="Удалить"; else doh_menu="Установить и настроить"; fi;
 
