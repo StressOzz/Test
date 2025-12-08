@@ -228,10 +228,14 @@ check_game_strategy
 check_doh
 show_current_strategy
 
-echo -e "${YELLOW}Установлен скрипт:${NC}      $name"
-echo -e "${YELLOW}Стратегия для игр:${NC}      $game_status"
+if [ -f "$CONF" ]; then
+    echo -e "${YELLOW}Установлен скрипт:${NC}      $name"
+    echo -e "${YELLOW}Стратегия для игр:${NC}      $game_status"
+fi
+
 echo -e "${YELLOW}DNS over HTTPS:${NC}         $doh_status"
-echo -e "${YELLOW}Используется стратегия:${NC} ${CYAN}$ver${NC}"
+
+if [ -f "$CONF" ]; then echo -e "${YELLOW}Используется стратегия:${NC} ${CYAN}$ver${NC}"; fi
 
 echo -e "\n${CYAN}1) ${GREEN}Установить последнюю версию${NC}\n${CYAN}2) ${GREEN}Меню выбора стратегий${NC}\n${CYAN}3) ${GREEN}Вернуть настройки по умолчанию${NC}\n${CYAN}4) ${GREEN}$str_stp_zpr ${NC}Zapret"
 echo -e "${CYAN}5) ${GREEN}Удалить ${NC}Zapret\n${CYAN}6) ${GREEN}$menu_game\n${CYAN}7) ${GREEN}Меню установки скриптов${NC}\n${CYAN}8) ${GREEN}Удалить → установить → настроить${NC} Zapret"
