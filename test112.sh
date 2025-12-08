@@ -223,6 +223,11 @@ menu_game=$( [ -f "$CONF" ] && grep -q "1024-49999,50100-65535" "$CONF" && echo 
 opkg list-installed | grep -q '^https-dns-proxy ' && doh_menu="Удалить" || doh_menu="Установить → настроить"; echo -e "\n${YELLOW}Установленная версия:   ${INST_COLOR}$INSTALLED_DISPLAY${NC}"
 [ -n "$ZAPRET_STATUS" ] && echo -e "${YELLOW}Статус Zapret:${NC}          $ZAPRET_STATUS"; 
 
+show_script_50
+check_game_strategy
+check_doh
+show_current_strategy
+
 echo -e "${YELLOW}Установлен скрипт:${NC}      $name"
 echo -e "${YELLOW}Стратегия для игр:${NC}      $game_status"
 echo -e "${YELLOW}DNS over HTTPS:${NC}         $doh_status"
