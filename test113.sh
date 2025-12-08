@@ -54,7 +54,7 @@ show_script_50() {
         *stun*) echo "50-stun4all" ;;
         *"discord media"*) echo "50-discord-media" ;;
         *"discord subnets"*) echo "50-discord" ;;
-        *) echo "не установлен" ;;
+        *) echo -e "${RED}не установлен${NC}" ;;
     esac)
 }
 enable_discord_calls() { local NO_PAUSE=$1; [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; return; }
@@ -138,7 +138,7 @@ show_current_strategy() {
         grep -q "#$v" "$CONF" && { ver="$v"; return; }
     done
     grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONF" && grep -q -- "--hostlist-exclude-domains=openwrt.org" "$CONF" && ver="дефолтная"
-    [ -z "$ver" ] && ver="не используется"
+    [ -z "$ver" ] && ver="кастомная"
 }
 
 menu_str() { local NO_PAUSE=$1; [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; return; }
