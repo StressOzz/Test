@@ -47,14 +47,14 @@ echo -e "${CYAN}Удаляем временные файлы${NC}"; cd /; rm -rf
 # Установка скриптов
 # ==========================================
 show_script_50() { 
-    [ -f "/opt/zapret/init.d/openwrt/custom.d/50-script.sh" ] || { name="не установлен"; return; }
+    [ -f "/opt/zapret/init.d/openwrt/custom.d/50-script.sh" ] || { name="${RED}не установлен${NC}"; return; }
     line=$(head -n1 /opt/zapret/init.d/openwrt/custom.d/50-script.sh)
     name=$(case "$line" in 
         *QUIC*) echo "50-quic4all" ;;
         *stun*) echo "50-stun4all" ;;
         *"discord media"*) echo "50-discord-media" ;;
         *"discord subnets"*) echo "50-discord" ;;
-        *) echo -e "${RED}не установлен${NC}" ;;
+        *) echo -e "${RED}не известный${NC}" ;;
     esac)
 }
 enable_discord_calls() { local NO_PAUSE=$1; [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; return; }
