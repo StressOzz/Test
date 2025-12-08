@@ -41,7 +41,7 @@ fi
 out="$out | FIX: ${dpi}"
 echo -e "$out"
 echo -e "\n${GREEN}===== Проверка GitHub =====${NC}"
-if pgrep -x https-dns-proxy >/dev/null 2>&1; then echo -e "${RED}DNS over HTTPS запущен, проверка GitHub пропущена${NC}"; else { RATE=$(curl -s [https://api.github.com/rate_limit](https://api.github.com/rate_limit) | grep '"remaining"' | head -1 | awk '{print $2}' | tr -d ,)
+if /etc/init.d/https-dns-proxy status >/dev/null 2>&1; then echo -e "${RED}DNS over HTTPS запущен, проверка GitHub пропущена${NC}"; else { RATE=$(curl -s [https://api.github.com/rate_limit](https://api.github.com/rate_limit) | grep '"remaining"' | head -1 | awk '{print $2}' | tr -d ,)
 [ -z "$RATE" ] && RATE_OUT="${RED}N/A${NC}" || RATE_OUT=$([ "$RATE" -eq 0 ] && echo -e "${RED}0${NC}" || echo -e "${GREEN}$RATE${NC}"); echo -n "IPv4: "
 curl -4 -Is --connect-timeout 3 [https://github.com](https://github.com) >/dev/null 2>&1 && echo -ne "${GREEN}ok${NC}" || echo -ne "${RED}fail${NC}"
 echo -n "  IPv6: "; curl -6 -Is --connect-timeout 3 [https://github.com](https://github.com) >/dev/null 2>&1 && echo -e "${GREEN}ok${NC}" || echo -e "${RED}fail${NC}"
