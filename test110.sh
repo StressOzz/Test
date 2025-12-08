@@ -183,16 +183,8 @@ printf '%s\n' "config main 'config'" "	option canary_domains_icloud '1'" "	optio
 # ==========================================
 show_menu() { get_versions; clear
 echo -e "╔════════════════════════════════════╗\n║     ${BLUE}Zapret on remittor Manager${NC}     ║\n╚════════════════════════════════════╝\n                     ${DGRAY}by StressOzz v$ZAPRET_MANAGER_VERSION${NC}"
-
-
-menu_game=$( [ -f "$CONF" ] && grep -q "1024-49999,50100-65535" "$CONF" && echo "Удалить стратегию для игр" || echo "Добавить стратегию для игр" )
-
-opkg list-installed | grep -q '^https-dns-proxy ' && doh_menu="Удалить" || doh_menu="Установить → настроить"
-
-pgrep -f "/opt/zapret" >/dev/null 2>&1 && str_stp_zpr="Остановить" || str_stp_zpr="Запустить"
-
-
-echo -e "\n${YELLOW}Установленная версия:   ${INST_COLOR}$INSTALLED_DISPLAY${NC}"
+menu_game=$( [ -f "$CONF" ] && grep -q "1024-49999,50100-65535" "$CONF" && echo "Удалить стратегию для игр" || echo "Добавить стратегию для игр" ); pgrep -f "/opt/zapret" >/dev/null 2>&1 && str_stp_zpr="Остановить" || str_stp_zpr="Запустить"
+opkg list-installed | grep -q '^https-dns-proxy ' && doh_menu="Удалить" || doh_menu="Установить → настроить"; echo -e "\n${YELLOW}Установленная версия:   ${INST_COLOR}$INSTALLED_DISPLAY${NC}"
 [ -n "$ZAPRET_STATUS" ] && echo -e "${YELLOW}Статус Zapret:${NC}          $ZAPRET_STATUS"; show_script_50 && [ -n "$name" ] && echo -e "${YELLOW}Установлен скрипт:${NC}      $name"
 [ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*1024-49999,50100-65535" "$CONF" && grep -q -- "--filter-udp=1024-49999,50100-65535" "$CONF" && echo -e "${YELLOW}Стратегия для игр:${NC}      ${GREEN}активирована${NC}"
 if opkg list-installed | grep -q '^https-dns-proxy '; then if grep -q 'dns.comss.one' /etc/config/https-dns-proxy 2>/dev/null; then echo -e "${YELLOW}DNS over HTTPS:         ${GREEN}установлен | настроен${NC}"
