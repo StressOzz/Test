@@ -1,5 +1,7 @@
 #!/bin/bash
 
+OSystem="WRT"
+
 if [ -d /opt/bin ]; then
     if [ ! -f /opt/bin/z4r ] || ! grep -q 'opt/z4r.sh "$@"' /opt/bin/z4r; then
 		echo "Скачиваем /opt/bin/z4r"
