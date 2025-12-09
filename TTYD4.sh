@@ -1,5 +1,5 @@
 #!/bin/sh
-echo -e 'sh <(wget -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/main/Zapret-Manager.sh)' > /usr/bin/zms
+clear; echo -e 'sh <(wget -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/main/Zapret-Manager.sh)' > /usr/bin/zms
 chmod +x /usr/bin/zms; echo -e "\n\033[1;32mУстановка \033[0mttyd"; opkg update >/dev/null 2>&1;opkg install ttyd >/dev/null 2>&1
 uci set ttyd.@ttyd[0].interface=''; uci set ttyd.@ttyd[0].command="-W -a sh /usr/bin/zms"; uci commit ttyd >/dev/null 2>&1
 /etc/init.d/ttyd enable >/dev/null 2>&1; /etc/init.d/ttyd start >/dev/null 2>&1
