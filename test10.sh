@@ -1,6 +1,6 @@
 #!/bin/sh
 
-echo -e '\033[1;32msh <(wget -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/main/Zapret-Manager.sh)\033[0m' > /usr/bin/zms
+echo -e 'sh <(wget -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/main/Zapret-Manager.sh)' > /usr/bin/zms
 chmod +x /usr/bin/zms
 
 echo -e "\033[1;36mУстановка ttyd for WRT\033[0m"
