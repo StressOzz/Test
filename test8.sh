@@ -3,7 +3,7 @@
 echo 'sh <(wget -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/main/Zapret-Manager.sh)' > /usr/bin/zms
 chmod +x /usr/bin/zms
 ttyd_login=""
- 
+ttyd_login_have="-c "${ttyd_login}": bash zms"
 	echo -e "Установка ttyd for WRT"
 	/etc/init.d/ttyd stop 2>/dev/null || true
 	
