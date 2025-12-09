@@ -1,0 +1,1 @@
+curl -o /opt/Zapret-Manager.sh https://raw.githubusercontent.com/StressOzz/Zapret-Manager/main/Zapret-Manager.sh && bash /opt/Zapret-Manager.sh "$@" && rm /opt/Zapret-Manager.sh
