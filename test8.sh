@@ -9,7 +9,7 @@ ttyd_login_have="-c "${ttyd_login}": bash zms"
 	
 	opkg update
 	
-	opkg install ttyd
+	opkg install ttyd bash
     uci set ttyd.@ttyd[0].interface=''
     uci set ttyd.@ttyd[0].command="-p 17681 -W -a ${ttyd_login_have}"
 	uci commit ttyd
@@ -18,8 +18,8 @@ ttyd_login_have="-c "${ttyd_login}": bash zms"
 
 
  if pidof ttyd >/dev/null; then
-	echo -e "Проверка...Служба ttyd запущена."
+	echo -e "Служба ttyd запущена."
  else
-	echo -e "Проверка...Служба ttyd не запущена! Если у вас Entware, то после перезагрузки роутера служба скорее всего заработает!"
+	echo -e "Служба ttyd не запущена! Если у вас Entware, то после перезагрузки роутера служба скорее всего заработает!"
  fi
  echo -e "Выполнение установки завершено. Доступ 192.168.1.1:17681 "
