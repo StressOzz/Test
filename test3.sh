@@ -2,8 +2,17 @@
 
 OSystem="WRT"
 
-wget -O /tmp/zms https://raw.githubusercontent.com/StressOzz/Zapret-Manager/main/Zapret-Manager.sh && chmod +x /tmp/zms && cp -f /tmp/zms /opt/bin/zms && cp -f /tmp/zms /usr/bin/zms
-
+if [ -d /opt/bin ]; then
+    if [ ! -f /opt/bin/zms ] || ! grep -q 'opt/zms.sh "$@"' /opt/bin/zms; then
+		echo "Скачиваем /opt/bin/zms"
+        curl -L -o /opt/bin/zms https://raw.githubusercontent.com/StressOzz/Test/refs/heads/main/zms
+        chmod +x /opt/bin/zms
+    fi
+elif [ ! -f /usr/bin/zms ] || ! grep -q 'opt/zms.sh "$@"' /usr/bin/zms; then
+	echo "Скачиваем /usr/bin/zms"
+    curl -L -o /usr/bin/zms https://raw.githubusercontent.com/IndeecFOX/zms/main/zms
+    chmod +x /usr/bin/zms
+fi
 
  echo -e $'\033[33mВведите логин для доступа к zeefeer через браузер (0 - отказ от логина через web в zms и переход на логин в ssh (может помочь в safari). Enter - пустой логин, \033[31mно не рекомендуется, панель может быть доступна из интернета!)\033[0m'
  read -re -p '' ttyd_login
