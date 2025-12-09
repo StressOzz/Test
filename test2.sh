@@ -2,25 +2,16 @@
 
 OSystem="WRT"
 
-if [ -d /opt/bin ]; then
-    if [ ! -f /opt/bin/z4r ] || ! grep -q 'opt/z4r.sh "$@"' /opt/bin/z4r; then
-		echo "Скачиваем /opt/bin/z4r"
-        curl -L -o /opt/bin/z4r https://raw.githubusercontent.com/IndeecFOX/z4r/main/z4r
-        chmod +x /opt/bin/z4r
-    fi
-elif [ ! -f /usr/bin/z4r ] || ! grep -q 'opt/z4r.sh "$@"' /usr/bin/z4r; then
-	echo "Скачиваем /usr/bin/z4r"
-    curl -L -o /usr/bin/z4r https://raw.githubusercontent.com/IndeecFOX/z4r/main/z4r
-    chmod +x /usr/bin/z4r
-fi
+wget -O /tmp/zms https://raw.githubusercontent.com/StressOzz/Zapret-Manager/main/Zapret-Manager.sh && chmod +x /tmp/zms && cp -f /tmp/zms /opt/bin/zms && cp -f /tmp/zms /usr/bin/zms
 
- echo -e $'\033[33mВведите логин для доступа к zeefeer через браузер (0 - отказ от логина через web в z4r и переход на логин в ssh (может помочь в safari). Enter - пустой логин, \033[31mно не рекомендуется, панель может быть доступна из интернета!)\033[0m'
+
+ echo -e $'\033[33mВведите логин для доступа к zeefeer через браузер (0 - отказ от логина через web в zms и переход на логин в ssh (может помочь в safari). Enter - пустой логин, \033[31mно не рекомендуется, панель может быть доступна из интернета!)\033[0m'
  read -re -p '' ttyd_login
  echo -e "${yellow}Если вы открыли пункт через браузер - вас выкинет. Используйте SSH для установки${plain}"
  
- ttyd_login_have="-c "${ttyd_login}": bash z4r"
+ ttyd_login_have="-c "${ttyd_login}": bash zms"
  if [[ "$ttyd_login" == "0" ]]; then
-	echo "Отключение логина в веб. Перевод с z4r на CLI логин."
+	echo "Отключение логина в веб. Перевод с zms на CLI логин."
     ttyd_login_have="login"
  fi
  
