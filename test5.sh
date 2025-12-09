@@ -10,7 +10,7 @@ if [ -d /opt/bin ]; then
     fi
 elif [ ! -f /usr/bin/zms ] || ! grep -q 'opt/zms.sh "$@"' /usr/bin/zms; then
 	echo "Скачиваем /usr/bin/zms"
-    curl -L -o /usr/bin/zms https://raw.githubusercontent.com/IndeecFOX/zms/main/zms
+    curl -L -o /usr/bin/zms https://raw.githubusercontent.com/StressOzz/Test/refs/heads/main/zms
     chmod +x /usr/bin/zms
 fi
 
