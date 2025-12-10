@@ -1,4 +1,3 @@
-
 #!/bin/sh
 # ==========================================
 # Zapret on remittor Manager by StressOzz
@@ -184,23 +183,22 @@ menu_doh() {
             action_text="Установить DNS over HTTPS"
         fi
 
-
         # Проверяем Comss
         if [ "$doh_status" = "установлен" ] && \
            grep -q 'dns.comss.one' /etc/config/https-dns-proxy 2>/dev/null; then
             doh_status="${doh_status} | Comss DNS"
         fi
 
-        echo -e "${YELLOW}DNS over HTTPS: ${GREEN}$doh_status${NC}"
-        echo
+        echo -e "${YELLOW}DNS over HTTPS: ${GREEN}$doh_status${NC}\n"
         echo -e "${CYAN}1) ${GREEN}$action_text${NC}"
         echo -e "${CYAN}2) ${GREEN}Настроить ${NC}Comss DNS"
         echo -e "${CYAN}3) ${GREEN}Вернуть настройки по умолчанию${NC}"
-        echo -e "${YELLOW}Enter) ${GREEN}Выход в главное меню${NC}"
-        echo -en "${YELLOW}Выберите пункт:${NC} " && read choice
-        read choiceDoH
+        echo -e "${YELLOW}Enter) ${GREEN}Выход в главное меню${NC}\n"
 
-        case "$choiceDoH" in
+        echo -en "${YELLOW}Выберите пункт:${NC} "
+        read choice
+
+        case "$choice" in
             1)
                 if opkg list-installed | grep -q '^https-dns-proxy '; then
                     echo -e "\n${MAGENTA}Удаляем DNS over HTTPS${NC}"
@@ -215,17 +213,18 @@ menu_doh() {
                     opkg install https-dns-proxy luci-app-https-dns-proxy >/dev/null 2>&1
                     echo -e "DNS over HTTPS ${GREEN}установлен!${NC}\n"
                 fi
-                read -p "Нажмите Enter для выхода в главное меню..." dummy ;;
+                read -p "Нажмите Enter для возврата..." ;;
             2)
                 if ! opkg list-installed | grep -q '^https-dns-proxy '; then
                     echo -e "\n${RED}DNS over HTTPS не установлен!${NC}"
-                    read -p "Нажмите Enter для выхода в главное меню..." dummy
+                    read -p "Нажмите Enter для возврата..." 
                     continue
                 fi
 
                 echo -e "\n${MAGENTA}Настраиваем Comss DNS${NC}"
                 fileDoH="/etc/config/https-dns-proxy"
                 rm -f "$fileDoH"
+
                 printf '%s\n' \
                     "config main 'config'" \
                     "	option canary_domains_icloud '1'" \
@@ -250,24 +249,25 @@ menu_doh() {
                 /etc/init.d/https-dns-proxy enable >/dev/null 2>&1
                 /etc/init.d/https-dns-proxy restart >/dev/null 2>&1
                 echo -e "Comss DNS ${GREEN}настроен!${NC}\n"
-                read -p "Enter для возврата..." ;;
+                read -p "Нажмите Enter для возврата..." ;;
             3)
                 if ! opkg list-installed | grep -q '^https-dns-proxy '; then
                     echo -e "\n${RED}DNS over HTTPS не установлен!${NC}\n"
-                    read -p "Нажмите Enter для выхода в главное меню..." dummy
+                    read -p "Нажмите Enter для возврата..."
                     continue
                 fi
 
                 echo -e "\n${MAGENTA}Возвращаем настройки по умолчанию${NC}"
                 rm -f /etc/config/https-dns-proxy
                 /etc/init.d/https-dns-proxy restart >/dev/null 2>&1 || true
-                echo -e "${GREEN}Настройки по умолчанию возвращены!${NC}\n"
-                read -p "Нажмите Enter для выхода в главное меню..." dummy ;;
+                echo -e "${GREEN}Настройки возвращены!${NC}\n"
+                read -p "Нажмите Enter для возврата..." ;;
             *)
                 return ;;
         esac
     done
 }
+
 
 
 # ==========================================
