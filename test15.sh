@@ -188,7 +188,7 @@ while true; do
 doh_st
 clear
         echo -e "${MAGENTA}Меню установки и настройки DNS over HTTPS${NC}\n"
-        echo -e "${YELLOW}DNS over HTTPS: ${GREEN}$doh_status${NC}\n"
+        if opkg list-installed | grep -q '^https-dns-proxy '; then echo -e "${YELLOW}DNS over HTTPS: ${GREEN}$doh_status${NC}\n"; fi
         echo -e "${CYAN}1) $action_text"
         echo -e "${CYAN}2) ${GREEN}Настроить ${NC}Comss DNS"
         echo -e "${CYAN}3) ${GREEN}Вернуть настройки по умолчанию${NC}"
