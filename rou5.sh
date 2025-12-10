@@ -661,8 +661,8 @@ stubby"
 URL="https://raw.githubusercontent.com/routerich/RouterichAX3000_configs/refs/heads/podkop07"
 
 # checkPackageAndInstall "luci-app-dns-failsafe-proxy" "1"
-checkPackageAndInstall "luci-i18n-stubby-ru" "1"
-checkPackageAndInstall "luci-i18n-doh-proxy-ru" "1"
+# checkPackageAndInstall "luci-i18n-stubby-ru" "1"
+# checkPackageAndInstall "luci-i18n-doh-proxy-ru" "1"
 
 #проверяем установлени ли пакет https-dns-proxy
 if opkg list-installed | grep -q https-dns-proxy; then
