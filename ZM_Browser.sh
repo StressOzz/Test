@@ -11,7 +11,7 @@ clear
 echo -e 'sh <(wget -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/main/Zapret-Manager.sh)' > /usr/bin/zms
 chmod +x /usr/bin/zms
 
-echo -e "${GREEN}Установка ttyd${NC}"
+echo -e "${GREEN}Установка${NC}"
 
 echo -e "${CYAN}Обновляем список пакетов${NC}"
 if ! opkg update >/dev/null 2>&1; then
@@ -37,7 +37,7 @@ sed -i "s#/bin/login#sh /usr/bin/zms#" /etc/config/ttyd
 /etc/init.d/ttyd restart >/dev/null 2>&1
 
 if pidof ttyd >/dev/null; then
-    echo -e "\n${GREEN}Служба запущена!${NC}\n${YELLOW}Доступ: ${NC}http://192.168.1.1:7681\n"
+    echo -e "${GREEN}Служба запущена!${NC}\n\n${YELLOW}Доступ: ${NC}http://192.168.1.1:7681\n"
 else
     echo -e "\n${RED}Ошибка! Служба не запущена!${NC}\n"
 fi
