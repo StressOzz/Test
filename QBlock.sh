@@ -23,4 +23,4 @@ if ! uci show firewall | grep -q "name='Block_UDP_443'"; then
     uci set firewall.@rule[-1].target='REJECT'
 fi
 
-uci commit firewall
+uci commit firewall >/dev/null 2>&1
