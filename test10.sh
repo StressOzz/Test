@@ -185,7 +185,7 @@ doh_st() {
         }
 menu_doh() {
 while true; do
-doh_status
+doh_st
 clear
         echo -e "${MAGENTA}Меню установки и настройки DNS over HTTPS${NC}\n"
         echo -e "${YELLOW}DNS over HTTPS: ${GREEN}$doh_status${NC}\n"
