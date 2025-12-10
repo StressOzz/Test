@@ -37,7 +37,7 @@ sed -i "s#/bin/login#sh /usr/bin/zms#" /etc/config/ttyd
 /etc/init.d/ttyd restart >/dev/null 2>&1
 
 if pidof ttyd >/dev/null; then
-    echo -e "${GREEN}Служба запущена!${NC}\n\n${YELLOW}Запуск Zapret-Manager из браузера: ${NC}http://192.168.1.1:7681\n"
+    echo -e "${GREEN}Служба запущена!${NC}\n\n${YELLOW}Запуск Zapret-Manager: ${NC}http://192.168.1.1:7681\n"
 else
     echo -e "\n${RED}Ошибка! Служба не запущена!${NC}\n"
 fi
