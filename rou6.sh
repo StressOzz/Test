@@ -758,75 +758,7 @@ then
   uci commit firewall
 fi
 
-printf "\033[32;1mCheck work zapret.\033[0m\n"
-#install_youtubeunblock_packages
-opkg upgrade zapret
-opkg upgrade luci-app-zapret
-manage_package "zapret" "enable" "start"
-wget -O "/etc/config/zapret" "$URL/config_files/zapret"
-wget -O "/opt/zapret/ipset/zapret-hosts-user.txt" "$URL/config_files/zapret-hosts-user.txt"
-wget -O "/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "$URL/config_files/zapret-hosts-user-exclude.txt"
-wget -O "/opt/zapret/init.d/openwrt/custom.d/50-stun4all" "$URL/config_files/50-stun4all"
-chmod +x "/opt/zapret/init.d/openwrt/custom.d/50-stun4all"
-sh /opt/zapret/sync_config.sh
 
-manage_package "podkop" "enable" "stop"
-manage_package "youtubeUnblock" "disable" "stop"
-service zapret restart
-
-isWorkZapret=0
-
-curl -f -o /dev/null -k --connect-to ::google.com -L -H "Host: mirror.gcr.io" --max-time 120 https://test.googlevideo.com/v2/cimg/android/blobs/sha256:2ab09b027e7f3a0c2e8bb1944ac46de38cebab7145f0bd6effebfe5492c818b6
-
-# Проверяем код выхода
-if [ $? -eq 0 ]; then
-	printf "\033[32;1mzapret well work...\033[0m\n"
-	cronTask="0 4 * * * service zapret restart"
-	str=$(grep -i "0 4 \* \* \* service zapret restart" /etc/crontabs/root)
-	if [ -z "$str" ] 
-	then
-		echo "Add cron task auto reboot service zapret..."
-		echo "$cronTask" >> /etc/crontabs/root
-	fi
-	str=$(grep -i "0 4 \* \* \* service youtubeUnblock restart" /etc/crontabs/root)
-	if [ ! -z "$str" ]
-	then
-		grep -v "0 4 \* \* \* service youtubeUnblock restart" /etc/crontabs/root > /etc/crontabs/temp
-		cp -f "/etc/crontabs/temp" "/etc/crontabs/root"
-		rm -f "/etc/crontabs/temp"
-	fi
-	isWorkZapret=1
-else
-	manage_package "zapret" "disable" "stop"
-	printf "\033[32;1mzapret not work...\033[0m\n"
-	isWorkZapret=0
-	str=$(grep -i "0 4 \* \* \* service youtubeUnblock restart" /etc/crontabs/root)
-	if [ ! -z "$str" ]
-	then
-		grep -v "0 4 \* \* \* service youtubeUnblock restart" /etc/crontabs/root > /etc/crontabs/temp
-		cp -f "/etc/crontabs/temp" "/etc/crontabs/root"
-		rm -f "/etc/crontabs/temp"
-	fi
-	str=$(grep -i "0 4 \* \* \* service zapret restart" /etc/crontabs/root)
-	if [ ! -z "$str" ]
-	then
-		grep -v "0 4 \* \* \* service zapret restart" /etc/crontabs/root > /etc/crontabs/temp
-		cp -f "/etc/crontabs/temp" "/etc/crontabs/root"
-		rm -f "/etc/crontabs/temp"
-	fi
-fi
-
-isWorkOperaProxy=0
-printf "\033[32;1mCheck opera proxy...\033[0m\n"
-service sing-box restart
-curl --proxy http://127.0.0.1:18080 ipinfo.io/ip
-if [ $? -eq 0 ]; then
-	printf "\033[32;1mOpera proxy well work...\033[0m\n"
-	isWorkOperaProxy=1
-else
-	printf "\033[32;1mOpera proxy not work...\033[0m\n"
-	isWorkOperaProxy=0
-fi
 
 #printf "\033[32;1mAutomatic generate config AmneziaWG WARP (n) or manual input parameters for AmneziaWG (y)...\033[0m\n"
 countRepeatAWGGen=2
