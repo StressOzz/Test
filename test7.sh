@@ -207,19 +207,25 @@ menu_doh() {
                     opkg remove https-dns-proxy luci-app-https-dns-proxy --force-removal-of-dependent-packages >/dev/null 2>&1
                     rm -f /etc/config/https-dns-proxy /etc/init.d/https-dns-proxy
                     echo -e "DNS over HTTPS ${GREEN}удалён!${NC}\n"
+                    return
                 else
+                    
                     echo -e "\n${MAGENTA}Устанавливаем DNS over HTTPS${NC}"
+                    echo -e "${CYAN}Обновляем список пакетов${NC}"
                     opkg update >/dev/null 2>&1
-                    opkg install https-dns-proxy luci-app-https-dns-proxy >/dev/null 2>&1
+echo -e "${CYAN}Устанавливаем ${NC}https-dns-proxy"; opkg install https-dns-proxy >/dev/null 2>&1
+echo -e "${CYAN}Устанавливаем ${NC}luci-app-https-dns-proxy"; opkg install luci-app-https-dns-proxy >/dev/null 2>&1;
                     echo -e "DNS over HTTPS ${GREEN}установлен!${NC}\n"
                 fi
-                read -p "Нажмите Enter для возврата..." ;;
+                read -p "Нажмите Enter для возврата..." 
+                return ;;
             2)
                 if ! opkg list-installed | grep -q '^https-dns-proxy '; then
-                    echo -e "\n${RED}DNS over HTTPS не установлен!${NC}"
+                    echo -e "\n${RED}DNS over HTTPS не установлен!${NC}\n"
                     read -p "Нажмите Enter для возврата..." 
                     continue
                 fi
+
 
                 echo -e "\n${MAGENTA}Настраиваем Comss DNS${NC}"
                 fileDoH="/etc/config/https-dns-proxy"
