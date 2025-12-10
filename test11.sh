@@ -206,7 +206,7 @@ clear
                     opkg remove https-dns-proxy luci-app-https-dns-proxy --force-removal-of-dependent-packages >/dev/null 2>&1
                     rm -f /etc/config/https-dns-proxy /etc/init.d/https-dns-proxy
                     echo -e "DNS over HTTPS ${GREEN}удалён!${NC}\n"
-                    
+                    read -p "Нажмите Enter для выхода в главное меню..." dummy 
                     return
                 else
                     
@@ -217,12 +217,12 @@ echo -e "${CYAN}Устанавливаем ${NC}https-dns-proxy"; opkg install h
 echo -e "${CYAN}Устанавливаем ${NC}luci-app-https-dns-proxy"; opkg install luci-app-https-dns-proxy >/dev/null 2>&1;
                     echo -e "DNS over HTTPS ${GREEN}установлен!${NC}\n"
                 fi
-                read -p "Нажмите Enter для возврата..." 
+                read -p "Нажмите Enter для выхода в главное меню..." dummy 
                 return ;;
             2)
                 if ! opkg list-installed | grep -q '^https-dns-proxy '; then
                     echo -e "\n${RED}DNS over HTTPS не установлен!${NC}\n"
-                    read -p "Нажмите Enter для возврата..." 
+                    read -p "Нажмите Enter для продолжения..." 
                     continue
                 fi
 
@@ -255,11 +255,12 @@ echo -e "${CYAN}Устанавливаем ${NC}luci-app-https-dns-proxy"; opkg 
                 /etc/init.d/https-dns-proxy enable >/dev/null 2>&1
                 /etc/init.d/https-dns-proxy restart >/dev/null 2>&1
                 echo -e "Comss DNS ${GREEN}настроен!${NC}\n"
-                read -p "Нажмите Enter для возврата..." ;;
+                read -p "Нажмите Enter для выхода в главное меню..." dummy
+                return ;;
             3)
                 if ! opkg list-installed | grep -q '^https-dns-proxy '; then
                     echo -e "\n${RED}DNS over HTTPS не установлен!${NC}\n"
-                    read -p "Нажмите Enter для возврата..."
+                    read -p "Нажмите Enter для продолжения..."
                     continue
                 fi
 
@@ -267,7 +268,8 @@ echo -e "${CYAN}Устанавливаем ${NC}luci-app-https-dns-proxy"; opkg 
                 rm -f /etc/config/https-dns-proxy
                 /etc/init.d/https-dns-proxy restart >/dev/null 2>&1 || true
                 echo -e "${GREEN}Настройки возвращены!${NC}\n"
-                read -p "Нажмите Enter для возврата..." ;;
+                read -p "Нажмите Enter для выхода в главное меню..." dummy
+                return ;;
             *)
                 return ;;
         esac
