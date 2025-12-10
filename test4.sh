@@ -184,8 +184,6 @@ menu_doh() {
             action_text="Установить DNS over HTTPS"
         fi
 
-${NC}
-
 
         # Проверяем Comss
         if [ "$doh_status" = "установлен" ] && \
