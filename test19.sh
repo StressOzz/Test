@@ -263,8 +263,6 @@ echo -e "${CYAN}Устанавливаем ${NC}luci-app-https-dns-proxy"; opkg 
                     read -p "Нажмите Enter для продолжения..."
                     continue
                 fi
-
-                echo -e "\n${MAGENTA}Возвращаем настройки по умолчанию${NC}"
                 echo -e "\n${MAGENTA}Возвращаем настройки по умолчанию${NC}"
 
     fileDoH="/etc/config/https-dns-proxy"
