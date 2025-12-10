@@ -265,8 +265,40 @@ echo -e "${CYAN}Устанавливаем ${NC}luci-app-https-dns-proxy"; opkg 
                 fi
 
                 echo -e "\n${MAGENTA}Возвращаем настройки по умолчанию${NC}"
-                rm -f /etc/config/https-dns-proxy
-                /etc/init.d/https-dns-proxy restart >/dev/null 2>&1 || true
+                echo -e "\n${MAGENTA}Возвращаем настройки по умолчанию${NC}"
+
+    fileDoH="/etc/config/https-dns-proxy"
+    rm -f "$fileDoH"
+
+    printf '%s\n' \
+        "config main 'config'" \
+        "	option canary_domains_icloud '1'" \
+        "	option canary_domains_mozilla '1'" \
+        "	option dnsmasq_config_update '*'" \
+        "	option force_dns '1'" \
+        "	list force_dns_port '53'" \
+        "	list force_dns_port '853'" \
+        "	list force_dns_src_interface 'lan'" \
+        "	option procd_trigger_wan6 '0'" \
+        "	option heartbeat_domain 'heartbeat.melmac.ca'" \
+        "	option heartbeat_sleep_timeout '10'" \
+        "	option heartbeat_wait_timeout '10'" \
+        "	option user 'nobody'" \
+        "	option group 'nogroup'" \
+        "	option listen_addr '127.0.0.1'" \
+        "" \
+        "config https-dns-proxy" \
+        "	option bootstrap_dns '1.1.1.1,1.0.0.1'" \
+        "	option resolver_url 'https://cloudflare-dns.com/dns-query'" \
+        "	option listen_port '5053'" \
+        "" \
+        "config https-dns-proxy" \
+        "	option bootstrap_dns '8.8.8.8,8.8.4.4'" \
+        "	option resolver_url 'https://dns.google/dns-query'" \
+        "	option listen_port '5054'" \
+        > "$fileDoH"
+
+    /etc/init.d/https-dns-proxy restart >/dev/null 2>&1 || true
                 echo -e "${GREEN}Настройки по умолчанию возвращены!${NC}\n"
                 read -p "Нажмите Enter для выхода в главное меню..." dummy
                 return ;;
