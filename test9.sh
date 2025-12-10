@@ -182,6 +182,7 @@ doh_st() {
            grep -q 'dns.comss.one' /etc/config/https-dns-proxy 2>/dev/null; then
             doh_status="${doh_status} | Comss DNS"
         fi
+        }
 menu_doh() {
 while true; do
 doh_status
