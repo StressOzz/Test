@@ -215,7 +215,14 @@ clear
                     opkg update >/dev/null 2>&1
 echo -e "${CYAN}Устанавливаем ${NC}https-dns-proxy"; opkg install https-dns-proxy >/dev/null 2>&1
 echo -e "${CYAN}Устанавливаем ${NC}luci-app-https-dns-proxy"; opkg install luci-app-https-dns-proxy >/dev/null 2>&1;
-                    echo -e "DNS over HTTPS ${GREEN}установлен!${NC}\n"
+
+
+if opkg list-installed | grep -q '^https-dns-proxy '; then
+    echo -e "DNS over HTTPS ${GREEN}установлен!${NC}\n"
+else
+    echo -e "\n${RED}DNS over HTTPS ${RED}не установлен!${NC}\n"
+fi
+
                 fi
                 read -p "Нажмите Enter для выхода в главное меню..." dummy 
                 return ;;
