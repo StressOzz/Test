@@ -53,7 +53,7 @@ enable_discord_calls() { local NO_PAUSE=$1; [ ! -f /etc/init.d/zapret ] && { ech
 [ "$NO_PAUSE" != "1" ] && clear && echo -e "${MAGENTA}Меню установки скриптов${NC}"; [ "$NO_PAUSE" = "1" ] && echo -e "${MAGENTA}Устанавливаем скрипт${NC}"; [ "$NO_PAUSE" != "1" ] && show_script_50 && [ -n "$name" ] && echo -e "\n${YELLOW}Установлен скрипт:${NC} $name"
 if [ "$NO_PAUSE" = "1" ]; then SELECTED="50-stun4all"; URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-stun4all"; else
 echo -e "\n${CYAN}1) ${GREEN}Установить скрипт ${NC}50-stun4all\n${CYAN}2) ${GREEN}Установить скрипт ${NC}50-quic4all\n${CYAN}3) ${GREEN}Установить скрипт ${NC}50-discord-media\n${CYAN}4) ${GREEN}Установить скрипт ${NC}50-discord"
-echo -ne "${CYAN}5) ${GREEN}Удалить скрипт${NC}\n${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read choice; case "$choice" in
+echo -ne "${CYAN}5) ${GREEN}Удалить скрипт${NC}\n${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read choiceSC; case "$choiceSC" in
 1) SELECTED="50-stun4all"; URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-stun4all" ;; 2) SELECTED="50-quic4all"; URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-quic4all" ;;
 3) SELECTED="50-discord-media"; URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-discord-media" ;; 4) SELECTED="50-discord"; URL="https://raw.githubusercontent.com/bol-van/zapret/v70.5/init.d/custom.d.examples.linux/50-discord" ;;
 5) echo -e "\n${GREEN}Скрипт удалён!${NC}\n"; rm -f "$CUSTOM_DIR/50-script.sh" 2>/dev/null; sed -i "s/,50000-50099//" "$CONF"; sed -i ':a;N;$!ba;s|--new\n--filter-udp=50000-50099\n--filter-l7=discord,stun\n--dpi-desync=fake\n*||g' "$CONF"
@@ -122,8 +122,8 @@ menu_str() { local NO_PAUSE=$1; [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RE
 if [ "$NO_PAUSE" = "1" ]; then version=$STR_VERSION_AUTOINSTALL
 else clear; echo -e "${MAGENTA}Меню выбора стратегии${NC}\n"; show_current_strategy && [ -n "$ver" ] && echo -e "${YELLOW}Используется стратегия:${NC} $ver\n"
 echo -e "${CYAN}1) ${GREEN}Установить стратегию${NC} v1\n${CYAN}2) ${GREEN}Установить стратегию${NC} v2\n${CYAN}3) ${GREEN}Установить стратегию${NC} v3\n${CYAN}4) ${GREEN}Установить стратегию${NC} v4"
-echo -ne "${CYAN}5) ${GREEN}Установить стратегию${NC} v5\n${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read choice
-case "$choice" in 1) version="v1" ;; 2) version="v2" ;; 3) version="v3" ;; 4) version="v4" ;; 5) version="v5" ;; *) return ;; esac; fi
+echo -ne "${CYAN}5) ${GREEN}Установить стратегию${NC} v5\n${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read choiceST
+case "$choiceST" in 1) version="v1" ;; 2) version="v2" ;; 3) version="v3" ;; 4) version="v4" ;; 5) version="v5" ;; *) return ;; esac; fi
 [ "$NO_PAUSE" != "1" ] && echo
 echo -e "${MAGENTA}Устанавливаем стратегию ${version}${NC}\n${CYAN}Меняем стратегию${NC}"; sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
 strategy_v1() { \
@@ -173,7 +173,7 @@ echo -e "${CYAN}Применяем новую стратегию и настро
 menu_doh() {
     while true; do
         clear
-        echo -e "\n===== Меню DNS over HTTPS =====\n"
+        echo -e "${MAGENTA}Меню установки и настройки DNS over HTTPS${NC}\n"
 
         # Проверяем установлен ли пакет
         if opkg list-installed | grep -q '^https-dns-proxy '; then
@@ -184,45 +184,48 @@ menu_doh() {
             action_text="Установить DNS over HTTPS"
         fi
 
+${NC}
+
+
         # Проверяем Comss
         if [ "$doh_status" = "установлен" ] && \
            grep -q 'dns.comss.one' /etc/config/https-dns-proxy 2>/dev/null; then
-            doh_status="${doh_status} (Comss DNS)"
+            doh_status="${doh_status} | Comss DNS"
         fi
 
-        echo "DNS over HTTPS: $doh_status"
+        echo -e "${YELLOW}DNS over HTTPS: ${GREEN}$doh_status${NC}"
         echo
-        echo "1) $action_text"
-        echo "2) Настроить Comss DNS"
-        echo "3) Вернуть настройки по умолчанию"
-        echo "Enter) Выход в главное меню"
-        echo
-        read -p 'Выберите пункт: ' choice
+        echo -e "${CYAN}1) ${GREEN}$action_text${NC}"
+        echo -e "${CYAN}2) ${GREEN}Настроить ${NC}Comss DNS"
+        echo -e "${CYAN}3) ${GREEN}Вернуть настройки по умолчанию${NC}"
+        echo -e "${YELLOW}Enter) ${GREEN}Выход в главное меню${NC}"
+        echo -en "${YELLOW}Выберите пункт:${NC} " && read choice
+        read choiceDoH
 
-        case "$choice" in
+        case "$choiceDoH" in
             1)
                 if opkg list-installed | grep -q '^https-dns-proxy '; then
-                    echo -e "\nУдаляем DNS over HTTPS..."
+                    echo -e "\n${MAGENTA}Удаляем DNS over HTTPS${NC}"
                     /etc/init.d/https-dns-proxy stop >/dev/null 2>&1
                     /etc/init.d/https-dns-proxy disable >/dev/null 2>&1
                     opkg remove https-dns-proxy luci-app-https-dns-proxy --force-removal-of-dependent-packages >/dev/null 2>&1
                     rm -f /etc/config/https-dns-proxy /etc/init.d/https-dns-proxy
-                    echo "Удалено."
+                    echo -e "DNS over HTTPS ${GREEN}удалён!${NC}\n"
                 else
-                    echo -e "\nУстанавливаем DNS over HTTPS..."
+                    echo -e "\n${MAGENTA}Устанавливаем DNS over HTTPS${NC}"
                     opkg update >/dev/null 2>&1
                     opkg install https-dns-proxy luci-app-https-dns-proxy >/dev/null 2>&1
-                    echo "Установлено."
+                    echo -e "DNS over HTTPS ${GREEN}установлен!${NC}\n"
                 fi
-                read -p "Enter для возврата..." ;;
+                read -p "Нажмите Enter для выхода в главное меню..." dummy ;;
             2)
                 if ! opkg list-installed | grep -q '^https-dns-proxy '; then
-                    echo -e "\nDNS over HTTPS не установлен."
-                    read -p "Enter для возврата..." 
+                    echo -e "\n${RED}DNS over HTTPS не установлен!${NC}"
+                    read -p "Нажмите Enter для выхода в главное меню..." dummy
                     continue
                 fi
 
-                echo -e "\nНастраиваем Comss DNS..."
+                echo -e "\n${MAGENTA}Настраиваем Comss DNS${NC}"
                 fileDoH="/etc/config/https-dns-proxy"
                 rm -f "$fileDoH"
                 printf '%s\n' \
@@ -248,20 +251,20 @@ menu_doh() {
 
                 /etc/init.d/https-dns-proxy enable >/dev/null 2>&1
                 /etc/init.d/https-dns-proxy restart >/dev/null 2>&1
-                echo "Comss DNS настроен."
+                echo -e "Comss DNS ${GREEN}настроен!${NC}\n"
                 read -p "Enter для возврата..." ;;
             3)
                 if ! opkg list-installed | grep -q '^https-dns-proxy '; then
-                    echo -e "\nDNS over HTTPS не установлен."
-                    read -p "Enter для возврата..." 
+                    echo -e "\n${RED}DNS over HTTPS не установлен!${NC}\n"
+                    read -p "Нажмите Enter для выхода в главное меню..." dummy
                     continue
                 fi
 
-                echo -e "\nВозвращаем настройки по умолчанию..."
+                echo -e "\n${MAGENTA}Возвращаем настройки по умолчанию${NC}"
                 rm -f /etc/config/https-dns-proxy
                 /etc/init.d/https-dns-proxy restart >/dev/null 2>&1 || true
-                echo "Вернул."
-                read -p "Enter для возврата..." ;;
+                echo -e "${GREEN}Настройки по умолчанию возвращены!${NC}\n"
+                read -p "Нажмите Enter для выхода в главное меню..." dummy ;;
             *)
                 return ;;
         esac
