@@ -168,17 +168,38 @@ echo -e "${CYAN}Применяем новую стратегию и настро
 # ==========================================
 # DNS over HTTP
 # ==========================================
-doh_st() { if opkg list-installed | grep -q '^https-dns-proxy '; then doh_status="установлен"; action_text="${GREEN}Удалить ${NC}DNS over HTTPS"
-else doh_status="не установлен"; action_text="${GREEN}Установить ${NC}DNS over HTTPS"; fi
-if [ "$doh_status" = "установлен" ] && grep -q 'dns.comss.one' /etc/config/https-dns-proxy 2>/dev/null; then doh_status="${doh_status} | Comss DNS"; fi; }
+doh_st() {
+    if opkg list-installed | grep -q '^https-dns-proxy '; then
+        doh_status="установлен"
+        action_text="${GREEN}Удалить ${NC}DNS over HTTPS"
+    else
+        doh_status="не установлен"
+        action_text="${GREEN}Установить ${NC}DNS over HTTPS"
+    fi
+
+    if [ "$doh_status" = "установлен" ] && grep -q 'dns.comss.one' /etc/config/https-dns-proxy 2>/dev/null; then
+        doh_status="${doh_status} | Comss DNS"
+        comss_active=1
+    else
+        comss_active=0
+    fi
+}
 
 menu_doh() {
     while true; do
         doh_st
         clear
         echo -e "${MAGENTA}Меню установки и настройки DNS over HTTPS${NC}\n"
+
         if opkg list-installed | grep -q '^https-dns-proxy '; then
             echo -e "${YELLOW}DNS over HTTPS: ${GREEN}$doh_status${NC}\n"
+        fi
+
+        # Пункт 2 — переключатель
+        if [ "$comss_active" = 1 ]; then
+            comss_text="Вернуть настройки по умолчанию"
+        else
+            comss_text="Настроить Comss DNS"
         fi
 
         echo -e "${CYAN}1) ${GREEN}$action_text${NC}"
@@ -189,17 +210,19 @@ menu_doh() {
         case "$choiceDoH" in
 
 1)
-# --- Установка/удаление ---
-if opkg list-installed | grep -q '^https-dns-proxy '; then
-    echo -e "\n${MAGENTA}Удаляем DNS over HTTPS${NC}"
-    /etc/init.d/https-dns-proxy stop >/dev/null 2>&1
-    /etc/init.d/https-dns-proxy disable >/dev/null 2>&1
-    opkg remove https-dns-proxy luci-app-https-dns-proxy --force-removal-of-dependent-packages >/dev/null 2>&1
-    rm -f /etc/config/https-dns-proxy /etc/init.d/https-dns-proxy
-    echo -e "DNS over HTTPS ${GREEN}удалён!${NC}\n"
-    read -p "Нажмите Enter..." dummy
-    return
-else
+    # УДАЛИТЬ
+    if opkg list-installed | grep -q '^https-dns-proxy '; then
+        echo -e "\n${MAGENTA}Удаляем DNS over HTTPS${NC}"
+        /etc/init.d/https-dns-proxy stop >/dev/null 2>&1
+        /etc/init.d/https-dns-proxy disable >/dev/null 2>&1
+        opkg remove https-dns-proxy luci-app-https-dns-proxy --force-removal-of-dependent-packages >/dev/null 2>&1
+        rm -f /etc/config/https-dns-proxy /etc/init.d/https-dns-proxy
+        echo -e "DNS over HTTPS ${GREEN}удалён!${NC}\n"
+        read -p "Нажмите Enter..." dummy
+        return
+    fi
+
+    # УСТАНОВИТЬ
     echo -e "\n${MAGENTA}Устанавливаем DNS over HTTPS${NC}"
     echo -e "${CYAN}Обновляем список пакетов${NC}"
     opkg update >/dev/null 2>&1 || {
@@ -207,27 +230,32 @@ else
         read -p "Нажмите Enter..." dummy
         return
     }
+
     opkg install https-dns-proxy luci-app-https-dns-proxy >/dev/null 2>&1
     echo -e "DNS over HTTPS ${GREEN}установлен!${NC}\n"
     read -p "Нажмите Enter..." dummy
     return
-fi
 ;;
 
 2)
-if ! opkg list-installed | grep -q '^https-dns-proxy '; then
-    echo -e "\n${RED}DNS over HTTPS не установлен!${NC}\n"
-    read -p "Нажмите Enter..." 
-    continue
-fi
+    if ! opkg list-installed | grep -q '^https-dns-proxy '; then
+        echo -e "\n${RED}DNS over HTTPS не установлен!${NC}\n"
+        read -p "Нажмите Enter..."
+        continue
+    fi
 
-fileDoH="/etc/config/https-dns-proxy"
+    fileDoH="/etc/config/https-dns-proxy"
 
-# --- Вариант 1: Настроить Comss ---
-if [ "$comss_active" = 0 ]; then
-    echo -e "\n${MAGENTA}Настраиваем Comss DNS${NC}"
-    rm -f "$fileDoH"
-    printf '%s\n' \
+    #
+    # Переключатель: Comss ↔ Default
+    #
+
+    # --- Включить Comss ---
+    if [ "$comss_active" = 0 ]; then
+        echo -e "\n${MAGENTA}Настраиваем Comss DNS${NC}"
+        rm -f "$fileDoH"
+
+        printf '%s\n' \
 "config main 'config'" \
 "	option canary_domains_icloud '1'" \
 "	option canary_domains_mozilla '1'" \
@@ -248,17 +276,18 @@ if [ "$comss_active" = 0 ]; then
 "	option resolver_url 'https://dns.comss.one/dns-query'" \
 > "$fileDoH"
 
-    /etc/init.d/https-dns-proxy enable >/dev/null 2>&1
-    /etc/init.d/https-dns-proxy restart >/dev/null 2>&1
+        /etc/init.d/https-dns-proxy enable >/dev/null 2>&1
+        /etc/init.d/https-dns-proxy restart >/dev/null 2>&1
 
-    echo -e "Comss DNS ${GREEN}настроен!${NC}\n"
-    read -p "Нажмите Enter..." dummy
-    return
+        echo -e "Comss DNS ${GREEN}настроен!${NC}\n"
+        read -p "Нажмите Enter..." dummy
+        return
+    fi
 
-# --- Вариант 2: Вернуть настройки по умолчанию ---
-else
+    # --- Вернуть дефолт ---
     echo -e "\n${MAGENTA}Возвращаем настройки по умолчанию${NC}"
     rm -f "$fileDoH"
+
     printf '%s\n' \
 "config main 'config'" \
 "	option canary_domains_icloud '1'" \
@@ -292,14 +321,15 @@ else
     echo -e "${GREEN}Настройки по умолчанию возвращены!${NC}\n"
     read -p "Нажмите Enter..." dummy
     return
-fi
 ;;
 
 *)
-return ;;
+    return
+;;
 esac
 done
 }
+
 
 # ==========================================
 # Главное меню
