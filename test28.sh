@@ -171,9 +171,7 @@ echo -e "${CYAN}Применяем новую стратегию и настро
 doh_st() { if opkg list-installed | grep -q '^https-dns-proxy '; then doh_status="установлен"; action_text="${GREEN}Удалить ${NC}DNS over HTTPS"
 else doh_status="не установлен"; action_text="${GREEN}Установить ${NC}DNS over HTTPS"; fi
 if [ "$doh_status" = "установлен" ] && grep -q 'dns.comss.one' /etc/config/https-dns-proxy 2>/dev/null; then doh_status="${doh_status} | Comss DNS"; fi; }
-menu_doh() {
-while true; do
-doh_st; clear; echo -e "${MAGENTA}Меню установки и настройки DNS over HTTPS${NC}\n"
+menu_doh() { while true; do; doh_st; clear; echo -e "${MAGENTA}Меню установки и настройки DNS over HTTPS${NC}\n"
 if opkg list-installed | grep -q '^https-dns-proxy '; then echo -e "${YELLOW}DNS over HTTPS: ${GREEN}$doh_status${NC}\n"; fi
 echo -e "${CYAN}1) $action_text\n${CYAN}2) ${GREEN}Настроить ${NC}Comss DNS\n${CYAN}3) ${GREEN}Вернуть настройки по умолчанию${NC}"
 echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read choiceDoH; case "$choiceDoH" in
@@ -200,7 +198,6 @@ echo -e "Comss DNS ${GREEN}настроен!${NC}\n"; read -p "Нажмите En
 3) if ! opkg list-installed | grep -q '^https-dns-proxy '; then echo -e "\n${RED}DNS over HTTPS не установлен!${NC}\n"
 read -p "Нажмите Enter для продолжения..."; continue; fi; echo -e "\n${MAGENTA}Возвращаем настройки по умолчанию${NC}"
 fileDoH="/etc/config/https-dns-proxy"; rm -f "$fileDoH"
-
 printf '%s\n' \
 "config main 'config'" "	option canary_domains_icloud '1'" "	option canary_domains_mozilla '1'" "	option dnsmasq_config_update '*'" \
 "	option force_dns '1'" "	list force_dns_port '53'" "	list force_dns_port '853'" "	list force_dns_src_interface 'lan'" "	option procd_trigger_wan6 '0'" \
