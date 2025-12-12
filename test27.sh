@@ -168,7 +168,6 @@ echo -e "${CYAN}Применяем новую стратегию и настро
 # ==========================================
 # DNS over HTTP
 # ==========================================
-
 doh_st() { if opkg list-installed | grep -q '^https-dns-proxy '; then doh_status="установлен"; action_text="${GREEN}Удалить ${NC}DNS over HTTPS"
 else doh_status="не установлен"; action_text="${GREEN}Установить ${NC}DNS over HTTPS"; fi
 if [ "$doh_status" = "установлен" ] && grep -q 'dns.comss.one' /etc/config/https-dns-proxy 2>/dev/null; then doh_status="${doh_status} | Comss DNS"; fi; }
@@ -177,7 +176,7 @@ while true; do
 doh_st; clear; echo -e "${MAGENTA}Меню установки и настройки DNS over HTTPS${NC}\n"
 if opkg list-installed | grep -q '^https-dns-proxy '; then echo -e "${YELLOW}DNS over HTTPS: ${GREEN}$doh_status${NC}\n"; fi
 echo -e "${CYAN}1) $action_text\n${CYAN}2) ${GREEN}Настроить ${NC}Comss DNS\n${CYAN}3) ${GREEN}Вернуть настройки по умолчанию${NC}"
-echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read choiceDoh; case "$choiceDoH" in
+echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read choiceDoH; case "$choiceDoH" in
 1) if opkg list-installed | grep -q '^https-dns-proxy '; then echo -e "\n${MAGENTA}Удаляем DNS over HTTPS${NC}"
 /etc/init.d/https-dns-proxy stop >/dev/null 2>&1; /etc/init.d/https-dns-proxy disable >/dev/null 2>&1
 opkg remove https-dns-proxy luci-app-https-dns-proxy --force-removal-of-dependent-packages >/dev/null 2>&1
