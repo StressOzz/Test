@@ -2,8 +2,7 @@
 # ==========================================
 # Zapret on remittor Manager by StressOzz
 # ==========================================
-ZAPRET_MANAGER_VERSION="7.3"; STR_VERSION_AUTOINSTALL="v5"
-ZAPRET_VERSION=$(wget -qO- https://github.com/remittor/zapret-openwrt/releases | sed -n 's|.*href="/remittor/zapret-openwrt/releases/tag/v\([0-9.]*\)".*|\1|p' | head -n1)
+ZAPRET_MANAGER_VERSION="7.3"; STR_VERSION_AUTOINSTALL="v5" ZAPRET_VERSION="72.20251212"
 GREEN="\033[1;32m"; RED="\033[1;31m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"
 MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
 WORKDIR="/tmp/zapret-update"; CONF="/etc/config/zapret"; CUSTOM_DIR="/opt/zapret/init.d/openwrt/custom.d/"
