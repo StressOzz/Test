@@ -259,23 +259,16 @@ menu_doh() {
     #
     if [ "$comss_active" = 0 ]; then
         echo -e "\n${MAGENTA}Настраиваем Comss DNS${NC}"
-        extra_block=$(cat << 'EOF'
-config https-dns-proxy
-    option resolver_url 'https://dns.comss.one/dns-query'
-EOF
-)
+		
+extra_block=$(printf "%s\n" "config https-dns-proxy" "\toption resolver_url 'https://dns.comss.one/dns-query'")
+
     else
         echo -e "\n${MAGENTA}Возвращаем настройки по умолчанию${NC}"
         
-extra_block="config https-dns-proxy
-	option bootstrap_dns '1.1.1.1,1.0.0.1'
-	option resolver_url 'https://cloudflare-dns.com/dns-query'
-	option listen_port '5053'
+extra_block=$(printf "%s\n" "config https-dns-proxy" "\toption bootstrap_dns '1.1.1.1,1.0.0.1'" "\toption resolver_url 'https://cloudflare-dns.com/dns-query'" \
+"\toption listen_port '5053'" "" "config https-dns-proxy" "\toption bootstrap_dns '8.8.8.8,8.8.4.4'" \
+"\toption resolver_url 'https://dns.google/dns-query'" "\toption listen_port '5054'")
 
-config https-dns-proxy
-	option bootstrap_dns '8.8.8.8,8.8.4.4'
-	option resolver_url 'https://dns.google/dns-query'
-	option listen_port '5054'"
 
     fi
     printf '%s\n' "config main 'config'" "	option canary_domains_icloud '1'" "	option canary_domains_mozilla '1'" "	option dnsmasq_config_update '*'" \
