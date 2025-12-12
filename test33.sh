@@ -234,7 +234,7 @@ menu_doh() {
     opkg install https-dns-proxy luci-app-https-dns-proxy >/dev/null 2>&1
     echo -e "DNS over HTTPS ${GREEN}установлен!${NC}\n"
     read -p "Нажмите Enter..." dummy
-    return
+    continue
 ;;
 
 2)
@@ -281,7 +281,7 @@ menu_doh() {
 
         echo -e "Comss DNS ${GREEN}настроен!${NC}\n"
         read -p "Нажмите Enter..." dummy
-        return
+        continue
     fi
 
     # --- Вернуть дефолт ---
@@ -320,7 +320,7 @@ menu_doh() {
 
     echo -e "${GREEN}Настройки по умолчанию возвращены!${NC}\n"
     read -p "Нажмите Enter..." dummy
-    return
+    continue
 ;;
 
 *)
