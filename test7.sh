@@ -1,5 +1,5 @@
 ZAPRET_VERSION=$(wget -qO- https://github.com/remittor/zapret-openwrt/releases \
-  | grep -m1 '/remittor/zapret-openwrt/releases/tag/' \
-  | sed 's|.*/tag/v\([0-9.]*\).*|\1|')
+  | sed -n 's|.*href="/remittor/zapret-openwrt/releases/tag/v\([0-9.]*\)".*|\1|p' \
+  | head -n1)
 
 echo "$ZAPRET_VERSION"
