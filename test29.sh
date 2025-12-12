@@ -171,7 +171,8 @@ echo -e "${CYAN}Применяем новую стратегию и настро
 doh_st() { if opkg list-installed | grep -q '^https-dns-proxy '; then doh_status="установлен"; action_text="${GREEN}Удалить ${NC}DNS over HTTPS"
 else doh_status="не установлен"; action_text="${GREEN}Установить ${NC}DNS over HTTPS"; fi
 if [ "$doh_status" = "установлен" ] && grep -q 'dns.comss.one' /etc/config/https-dns-proxy 2>/dev/null; then doh_status="${doh_status} | Comss DNS"; fi; }
-menu_doh() { while true; do; doh_st; clear; echo -e "${MAGENTA}Меню установки и настройки DNS over HTTPS${NC}\n"
+menu_doh() { while true; do
+doh_st; clear; echo -e "${MAGENTA}Меню установки и настройки DNS over HTTPS${NC}\n"
 if opkg list-installed | grep -q '^https-dns-proxy '; then echo -e "${YELLOW}DNS over HTTPS: ${GREEN}$doh_status${NC}\n"; fi
 echo -e "${CYAN}1) $action_text\n${CYAN}2) ${GREEN}Настроить ${NC}Comss DNS\n${CYAN}3) ${GREEN}Вернуть настройки по умолчанию${NC}"
 echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read choiceDoH; case "$choiceDoH" in
