@@ -267,9 +267,15 @@ EOF
     else
         echo -e "\n${MAGENTA}Возвращаем настройки по умолчанию${NC}"
         
-extra_block=$(printf "%s\n" "config https-dns-proxy" "	option bootstrap_dns '1.1.1.1,1.0.0.1'" "	option resolver_url 'https://cloudflare-dns.com/dns-query'" \
-"	option listen_port '5053'" "" "config https-dns-proxy" "	option bootstrap_dns '8.8.8.8,8.8.4.4'" "	option resolver_url 'https://dns.google/dns-query'" \
-"	option listen_port '5054'" )
+extra_block="config https-dns-proxy
+	option bootstrap_dns '1.1.1.1,1.0.0.1'
+	option resolver_url 'https://cloudflare-dns.com/dns-query'
+	option listen_port '5053'
+
+config https-dns-proxy
+	option bootstrap_dns '8.8.8.8,8.8.4.4'
+	option resolver_url 'https://dns.google/dns-query'
+	option listen_port '5054'"
 
     fi
     printf '%s\n' "config main 'config'" "	option canary_domains_icloud '1'" "	option canary_domains_mozilla '1'" "	option dnsmasq_config_update '*'" \
