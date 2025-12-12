@@ -230,49 +230,41 @@ echo -e "\n${RED}DNS over HTTPS ${RED}не установлен!${NC}\n"; fi; fi
     fi
 
     fileDoH="/etc/config/https-dns-proxy"
-
-    #
-    # Переключатель: Comss ↔ Default
-    #
-
-    # --- Включить Comss ---
-    if [ "$comss_active" = 0 ]; then
-        echo -e "\n${MAGENTA}Настраиваем Comss DNS${NC}"
-        rm -f "$fileDoH"
-
-        printf '%s\n' \
-"config main 'config'" \
-"	option canary_domains_icloud '1'" \
-"	option canary_domains_mozilla '1'" \
-"	option dnsmasq_config_update '*'" \
-"	option force_dns '1'" \
-"	list force_dns_port '53'" \
-"	list force_dns_port '853'" \
-"	list force_dns_src_interface 'lan'" \
-"	option procd_trigger_wan6 '0'" \
-"	option heartbeat_domain 'heartbeat.melmac.ca'" \
-"	option heartbeat_sleep_timeout '10'" \
-"	option heartbeat_wait_timeout '10'" \
-"	option user 'nobody'" \
-"	option group 'nogroup'" \
-"	option listen_addr '127.0.0.1'" \
-"" \
-"config https-dns-proxy" \
-"	option resolver_url 'https://dns.comss.one/dns-query'" \
-> "$fileDoH"
-
-        /etc/init.d/https-dns-proxy enable >/dev/null 2>&1
-        /etc/init.d/https-dns-proxy restart >/dev/null 2>&1
-
-        echo -e "Comss DNS ${GREEN}настроен!${NC}\n"
-        read -p "Нажмите Enter..." dummy
-        continue
-    fi
-
-    # --- Вернуть дефолт ---
-    echo -e "\n${MAGENTA}Возвращаем настройки по умолчанию${NC}"
     rm -f "$fileDoH"
 
+    if [ "$comss_active" = 0 ]; then
+        # ---------- Включить Comss ----------
+        echo -e "\n${MAGENTA}Настраиваем Comss DNS${NC}"
+
+        extra_block=$(
+cat << 'EOF'
+config https-dns-proxy
+	option resolver_url 'https://dns.comss.one/dns-query'
+EOF
+        )
+
+    else
+        # --------- Вернуть настройки по умолчанию ----------
+        echo -e "\n${MAGENTA}Возвращаем настройки по умолчанию${NC}"
+
+        extra_block=$(
+cat << 'EOF'
+config https-dns-proxy
+	option bootstrap_dns '1.1.1.1,1.0.0.1'
+	option resolver_url 'https://cloudflare-dns.com/dns-query'
+	option listen_port '5053'
+
+config https-dns-proxy
+	option bootstrap_dns '8.8.8.8,8.8.4.4'
+	option resolver_url 'https://dns.google/dns-query'
+	option listen_port '5054'
+EOF
+        )
+    fi
+
+    #
+    # ЕДИНЫЙ общий вывод конфига
+    #
     printf '%s\n' \
 "config main 'config'" \
 "	option canary_domains_icloud '1'" \
@@ -290,31 +282,21 @@ echo -e "\n${RED}DNS over HTTPS ${RED}не установлен!${NC}\n"; fi; fi
 "	option group 'nogroup'" \
 "	option listen_addr '127.0.0.1'" \
 "" \
-"config https-dns-proxy" \
-"	option bootstrap_dns '1.1.1.1,1.0.0.1'" \
-"	option resolver_url 'https://cloudflare-dns.com/dns-query'" \
-"	option listen_port '5053'" \
-"" \
-"config https-dns-proxy" \
-"	option bootstrap_dns '8.8.8.8,8.8.4.4'" \
-"	option resolver_url 'https://dns.google/dns-query'" \
-"	option listen_port '5054'" \
+"$extra_block" \
 > "$fileDoH"
 
     /etc/init.d/https-dns-proxy restart >/dev/null 2>&1 || true
 
-    echo -e "${GREEN}Настройки по умолчанию возвращены!${NC}\n"
+    if [ "$comss_active" = 0 ]; then
+        echo -e "Comss DNS ${GREEN}настроен!${NC}\n"
+    else
+        echo -e "${GREEN}Настройки по умолчанию возвращены!${NC}\n"
+    fi
+
     read -p "Нажмите Enter..." dummy
     continue
 ;;
-
-*)
-    return
-;;
-esac
-done
 }
-
 
 # ==========================================
 # Главное меню
