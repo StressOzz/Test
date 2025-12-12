@@ -217,8 +217,8 @@ menu_doh() {
         opkg remove https-dns-proxy luci-app-https-dns-proxy --force-removal-of-dependent-packages >/dev/null 2>&1
         rm -f /etc/config/https-dns-proxy /etc/init.d/https-dns-proxy
         echo -e "DNS over HTTPS ${GREEN}удалён!${NC}\n"
-        read -p "Нажмите Enter для выхода в главное меню..." dummy
-        return
+        read -p "Нажмите Enter..." dummy
+        continue
     else
         echo -e "\n${MAGENTA}Устанавливаем DNS over HTTPS${NC}\n${CYAN}Обновляем список пакетов${NC}"
         opkg update >/dev/null 2>&1 || {
@@ -279,28 +279,10 @@ config https-dns-proxy
 EOF
 )
     fi
-
-    #
-    # Общий блок конфигурации
-    #
-    printf '%s\n' \
-"config main 'config'" \
-"	option canary_domains_icloud '1'" \
-"	option canary_domains_mozilla '1'" \
-"	option dnsmasq_config_update '*'" \
-"	option force_dns '1'" \
-"	list force_dns_port '53'" \
-"	list force_dns_port '853'" \
-"	list force_dns_src_interface 'lan'" \
-"	option procd_trigger_wan6 '0'" \
-"	option heartbeat_domain 'heartbeat.melmac.ca'" \
-"	option heartbeat_sleep_timeout '10'" \
-"	option heartbeat_wait_timeout '10'" \
-"	option user 'nobody'" \
-"	option group 'nogroup'" \
-"	option listen_addr '127.0.0.1'" \
-"" \
-"$extra_block" \
+    printf '%s\n' "config main 'config'" "	option canary_domains_icloud '1'" "	option canary_domains_mozilla '1'" "	option dnsmasq_config_update '*'" \
+"	option force_dns '1'" "	list force_dns_port '53'" "	list force_dns_port '853'" "	list force_dns_src_interface 'lan'" "	option procd_trigger_wan6 '0'" \
+"	option heartbeat_domain 'heartbeat.melmac.ca'" "	option heartbeat_sleep_timeout '10'" "	option heartbeat_wait_timeout '10'" "	option user 'nobody'" \
+"	option group 'nogroup'" "	option listen_addr '127.0.0.1'" "" "$extra_block" \
 > "$fileDoH"
 
     /etc/init.d/https-dns-proxy restart >/dev/null 2>&1 || true
