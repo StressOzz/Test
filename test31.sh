@@ -168,24 +168,9 @@ echo -e "${CYAN}Применяем новую стратегию и настро
 # ==========================================
 # DNS over HTTP
 # ==========================================
-doh_st() {
-    if opkg list-installed | grep -q '^https-dns-proxy '; then
-        doh_status="установлен"
-        action_text="Удалить DNS over HTTPS"
-    else
-        doh_status="не установлен"
-        action_text="Установить DNS over HTTPS"
-    fi
-
-    # Проверяем установлен ли Comss
-    if [ "$doh_status" = "установлен" ] && grep -q 'dns.comss.one' /etc/config/https-dns-proxy 2>/dev/null; then
-        comss_active=1
-        comss_text="Вернуть настройки по умолчанию"
-    else
-        comss_active=0
-        comss_text="Настроить Comss DNS"
-    fi
-}
+doh_st() { if opkg list-installed | grep -q '^https-dns-proxy '; then doh_status="установлен"; action_text="${GREEN}Удалить ${NC}DNS over HTTPS"
+else doh_status="не установлен"; action_text="${GREEN}Установить ${NC}DNS over HTTPS"; fi
+if [ "$doh_status" = "установлен" ] && grep -q 'dns.comss.one' /etc/config/https-dns-proxy 2>/dev/null; then doh_status="${doh_status} | Comss DNS"; fi; }
 
 menu_doh() {
     while true; do
