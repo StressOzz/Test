@@ -169,152 +169,49 @@ echo -e "${CYAN}Применяем новую стратегию и настро
 # DNS over HTTP
 # ==========================================
 
-doh_st() {
-        # Проверяем установлен ли пакет
-        if opkg list-installed | grep -q '^https-dns-proxy '; then
-            doh_status="установлен"
-            action_text="${GREEN}Удалить ${NC}DNS over HTTPS"
-        else
-            doh_status="не установлен"
-            action_text="${GREEN}Установить ${NC}DNS over HTTPS"
-        fi
-        if [ "$doh_status" = "установлен" ] && \
-           grep -q 'dns.comss.one' /etc/config/https-dns-proxy 2>/dev/null; then
-            doh_status="${doh_status} | Comss DNS"
-        fi
-        }
+doh_st() { if opkg list-installed | grep -q '^https-dns-proxy '; then doh_status="установлен"; action_text="${GREEN}Удалить ${NC}DNS over HTTPS"
+else doh_status="не установлен"; action_text="${GREEN}Установить ${NC}DNS over HTTPS"; fi
+if [ "$doh_status" = "установлен" ] && grep -q 'dns.comss.one' /etc/config/https-dns-proxy 2>/dev/null; then doh_status="${doh_status} | Comss DNS"; fi; }
 menu_doh() {
 while true; do
-doh_st
-clear
-        echo -e "${MAGENTA}Меню установки и настройки DNS over HTTPS${NC}\n"
-        if opkg list-installed | grep -q '^https-dns-proxy '; then echo -e "${YELLOW}DNS over HTTPS: ${GREEN}$doh_status${NC}\n"; fi
-        echo -e "${CYAN}1) $action_text"
-        echo -e "${CYAN}2) ${GREEN}Настроить ${NC}Comss DNS"
-        echo -e "${CYAN}3) ${GREEN}Вернуть настройки по умолчанию${NC}"
-        echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n"
-
-        echo -en "${YELLOW}Выберите пункт:${NC} "
-        read choice
-
-        case "$choice" in
-            1)
-                if opkg list-installed | grep -q '^https-dns-proxy '; then
-                    echo -e "\n${MAGENTA}Удаляем DNS over HTTPS${NC}"
-                    /etc/init.d/https-dns-proxy stop >/dev/null 2>&1
-                    /etc/init.d/https-dns-proxy disable >/dev/null 2>&1
-                    opkg remove https-dns-proxy luci-app-https-dns-proxy --force-removal-of-dependent-packages >/dev/null 2>&1
-                    rm -f /etc/config/https-dns-proxy /etc/init.d/https-dns-proxy
-                    echo -e "DNS over HTTPS ${GREEN}удалён!${NC}\n"
-                    read -p "Нажмите Enter для выхода в главное меню..." dummy 
-                    return
-                else
-                    
-                    echo -e "\n${MAGENTA}Устанавливаем DNS over HTTPS${NC}"
-                    echo -e "${CYAN}Обновляем список пакетов${NC}"
-                    opkg update >/dev/null 2>&1
+doh_st; clear; echo -e "${MAGENTA}Меню установки и настройки DNS over HTTPS${NC}\n"
+if opkg list-installed | grep -q '^https-dns-proxy '; then echo -e "${YELLOW}DNS over HTTPS: ${GREEN}$doh_status${NC}\n"; fi
+echo -e "${CYAN}1) $action_text\n${CYAN}2) ${GREEN}Настроить ${NC}Comss DNS\n${CYAN}3) ${GREEN}Вернуть настройки по умолчанию${NC}"
+echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read choiceDoh; case "$choiceDoH" in
+1) if opkg list-installed | grep -q '^https-dns-proxy '; then echo -e "\n${MAGENTA}Удаляем DNS over HTTPS${NC}"
+/etc/init.d/https-dns-proxy stop >/dev/null 2>&1; /etc/init.d/https-dns-proxy disable >/dev/null 2>&1
+opkg remove https-dns-proxy luci-app-https-dns-proxy --force-removal-of-dependent-packages >/dev/null 2>&1
+rm -f /etc/config/https-dns-proxy /etc/init.d/https-dns-proxy; echo -e "DNS over HTTPS ${GREEN}удалён!${NC}\n"
+read -p "Нажмите Enter для выхода в главное меню..." dummy; return; else echo -e "\n${MAGENTA}Устанавливаем DNS over HTTPS${NC}\n${CYAN}Обновляем список пакетов${NC}"
+opkg update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; return; }
 echo -e "${CYAN}Устанавливаем ${NC}https-dns-proxy"; opkg install https-dns-proxy >/dev/null 2>&1
 echo -e "${CYAN}Устанавливаем ${NC}luci-app-https-dns-proxy"; opkg install luci-app-https-dns-proxy >/dev/null 2>&1;
+if opkg list-installed | grep -q '^https-dns-proxy '; then echo -e "DNS over HTTPS ${GREEN}установлен!${NC}\n"; else
+echo -e "\n${RED}DNS over HTTPS ${RED}не установлен!${NC}\n"; fi; fi; read -p "Нажмите Enter для выхода в главное меню..." dummy; return ;;
+2) if ! opkg list-installed | grep -q '^https-dns-proxy '; then echo -e "\n${RED}DNS over HTTPS не установлен!${NC}\n"
+read -p "Нажмите Enter для продолжения..."; continue; fi; echo -e "\n${MAGENTA}Настраиваем Comss DNS${NC}"
+fileDoH="/etc/config/https-dns-proxy"; rm -f "$fileDoH"
+printf '%s\n' "config main 'config'" "	option canary_domains_icloud '1'" "	option canary_domains_mozilla '1'" "	option dnsmasq_config_update '*'" "	option force_dns '1'" \
+"	list force_dns_port '53'" "	list force_dns_port '853'" "	list force_dns_src_interface 'lan'" "	option procd_trigger_wan6 '0'" "	option heartbeat_domain 'heartbeat.melmac.ca'" \
+"	option heartbeat_sleep_timeout '10'" "	option heartbeat_wait_timeout '10'" "	option user 'nobody'" "	option group 'nogroup'" "	option listen_addr '127.0.0.1'" "" \
+"config https-dns-proxy" "	option resolver_url 'https://dns.comss.one/dns-query'" \
+> "$fileDoH"
+/etc/init.d/https-dns-proxy enable >/dev/null 2>&1; /etc/init.d/https-dns-proxy restart >/dev/null 2>&1
+echo -e "Comss DNS ${GREEN}настроен!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; return ;;
+3) if ! opkg list-installed | grep -q '^https-dns-proxy '; then echo -e "\n${RED}DNS over HTTPS не установлен!${NC}\n"
+read -p "Нажмите Enter для продолжения..."; continue; fi; echo -e "\n${MAGENTA}Возвращаем настройки по умолчанию${NC}"
+fileDoH="/etc/config/https-dns-proxy"; rm -f "$fileDoH"
 
-
-if opkg list-installed | grep -q '^https-dns-proxy '; then
-    echo -e "DNS over HTTPS ${GREEN}установлен!${NC}\n"
-else
-    echo -e "\n${RED}DNS over HTTPS ${RED}не установлен!${NC}\n"
-fi
-
-                fi
-                read -p "Нажмите Enter для выхода в главное меню..." dummy 
-                return ;;
-            2)
-                if ! opkg list-installed | grep -q '^https-dns-proxy '; then
-                    echo -e "\n${RED}DNS over HTTPS не установлен!${NC}\n"
-                    read -p "Нажмите Enter для продолжения..." 
-                    continue
-                fi
-
-
-                echo -e "\n${MAGENTA}Настраиваем Comss DNS${NC}"
-                fileDoH="/etc/config/https-dns-proxy"
-                rm -f "$fileDoH"
-
-                printf '%s\n' \
-                    "config main 'config'" \
-                    "	option canary_domains_icloud '1'" \
-                    "	option canary_domains_mozilla '1'" \
-                    "	option dnsmasq_config_update '*'" \
-                    "	option force_dns '1'" \
-                    "	list force_dns_port '53'" \
-                    "	list force_dns_port '853'" \
-                    "	list force_dns_src_interface 'lan'" \
-                    "	option procd_trigger_wan6 '0'" \
-                    "	option heartbeat_domain 'heartbeat.melmac.ca'" \
-                    "	option heartbeat_sleep_timeout '10'" \
-                    "	option heartbeat_wait_timeout '10'" \
-                    "	option user 'nobody'" \
-                    "	option group 'nogroup'" \
-                    "	option listen_addr '127.0.0.1'" \
-                    "" \
-                    "config https-dns-proxy" \
-                    "	option resolver_url 'https://dns.comss.one/dns-query'" \
-                    > "$fileDoH"
-
-                /etc/init.d/https-dns-proxy enable >/dev/null 2>&1
-                /etc/init.d/https-dns-proxy restart >/dev/null 2>&1
-                echo -e "Comss DNS ${GREEN}настроен!${NC}\n"
-                read -p "Нажмите Enter для выхода в главное меню..." dummy
-                return ;;
-            3)
-                if ! opkg list-installed | grep -q '^https-dns-proxy '; then
-                    echo -e "\n${RED}DNS over HTTPS не установлен!${NC}\n"
-                    read -p "Нажмите Enter для продолжения..."
-                    continue
-                fi
-                echo -e "\n${MAGENTA}Возвращаем настройки по умолчанию${NC}"
-
-    fileDoH="/etc/config/https-dns-proxy"
-    rm -f "$fileDoH"
-
-    printf '%s\n' \
-        "config main 'config'" \
-        "	option canary_domains_icloud '1'" \
-        "	option canary_domains_mozilla '1'" \
-        "	option dnsmasq_config_update '*'" \
-        "	option force_dns '1'" \
-        "	list force_dns_port '53'" \
-        "	list force_dns_port '853'" \
-        "	list force_dns_src_interface 'lan'" \
-        "	option procd_trigger_wan6 '0'" \
-        "	option heartbeat_domain 'heartbeat.melmac.ca'" \
-        "	option heartbeat_sleep_timeout '10'" \
-        "	option heartbeat_wait_timeout '10'" \
-        "	option user 'nobody'" \
-        "	option group 'nogroup'" \
-        "	option listen_addr '127.0.0.1'" \
-        "" \
-        "config https-dns-proxy" \
-        "	option bootstrap_dns '1.1.1.1,1.0.0.1'" \
-        "	option resolver_url 'https://cloudflare-dns.com/dns-query'" \
-        "	option listen_port '5053'" \
-        "" \
-        "config https-dns-proxy" \
-        "	option bootstrap_dns '8.8.8.8,8.8.4.4'" \
-        "	option resolver_url 'https://dns.google/dns-query'" \
-        "	option listen_port '5054'" \
-        > "$fileDoH"
-
-    /etc/init.d/https-dns-proxy restart >/dev/null 2>&1 || true
-                echo -e "${GREEN}Настройки по умолчанию возвращены!${NC}\n"
-                read -p "Нажмите Enter для выхода в главное меню..." dummy
-                return ;;
-            *)
-                return ;;
-        esac
-    done
-}
-
-
-
+printf '%s\n' \
+"config main 'config'" "	option canary_domains_icloud '1'" "	option canary_domains_mozilla '1'" "	option dnsmasq_config_update '*'" \
+"	option force_dns '1'" "	list force_dns_port '53'" "	list force_dns_port '853'" "	list force_dns_src_interface 'lan'" "	option procd_trigger_wan6 '0'" \
+"	option heartbeat_domain 'heartbeat.melmac.ca'" "	option heartbeat_sleep_timeout '10'" "	option heartbeat_wait_timeout '10'" \
+"	option user 'nobody'" "	option group 'nogroup'" "	option listen_addr '127.0.0.1'""config https-dns-proxy" "	option bootstrap_dns '1.1.1.1,1.0.0.1'" \
+"	option resolver_url 'https://cloudflare-dns.com/dns-query'" "	option listen_port '5053'" "config https-dns-proxy" "	option bootstrap_dns '8.8.8.8,8.8.4.4'" \
+"	option resolver_url 'https://dns.google/dns-query'" "	option listen_port '5054'" \
+> "$fileDoH"
+/etc/init.d/https-dns-proxy restart >/dev/null 2>&1 || true
+echo -e "${GREEN}Настройки по умолчанию возвращены!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; return ;; *) return ;; esac; done; }
 # ==========================================
 # Главное меню
 # ==========================================
