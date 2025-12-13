@@ -18,50 +18,51 @@ web_is_enabled() {
 
 ### 2. Включить / удалить доступ через браузер
 toggle_web() {
-	clear
 
 	if web_is_enabled; then
-		echo -e "${YELLOW}Удаляем доступ через браузер${NC}"
-
-		sed -i "s#sh /usr/bin/zms#/bin/login#" /etc/config/ttyd 2>/dev/null
+		echo -e "${MAGENTA}Удаляем доступ через браузер${NC}"
 		opkg remove luci-app-ttyd ttyd >/dev/null 2>&1
+		rm -f /etc/config/ttyd
 		rm -f /usr/bin/zms
 
-		echo -e "${GREEN}Доступ удалён${NC}"
+		echo -e "${GREEN}Доступ удалён${NC}\n"
+
+		read -p "Нажмите Enter для выхода в главное меню..." dummy
 	else
-		echo -e "${GREEN}Установка${NC}"
-
-		echo -e "${CYAN}Обновляем список пакетов${NC}"
-		if ! opkg update >/dev/null 2>&1; then
-			echo -e "${RED}Ошибка при обновлении${NC}"
-			read
-			return
-		fi
-
-		echo -e "${CYAN}Устанавливаем ttyd${NC}"
-		if ! opkg install ttyd luci-app-ttyd >/dev/null 2>&1; then
-			echo -e "${RED}Ошибка установки ttyd${NC}"
-			read
-			return
-		fi
-
+	
 		echo 'sh <(wget -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/main/Zapret-Manager.sh)' > /usr/bin/zms
-		chmod +x /usr/bin/zms
+chmod +x /usr/bin/zms
 
-		echo -e "${CYAN}Настраиваем ttyd${NC}"
-		sed -i "s#/bin/login#sh /usr/bin/zms#" /etc/config/ttyd
+echo -e "${MAGENTA}Активируем доступ через браузер${NC}"
 
-		/etc/init.d/ttyd restart >/dev/null 2>&1
+echo -e "${CYAN}Обновляем список пакетов${NC}"
+if ! opkg update >/dev/null 2>&1; then
+    echo -e "\n${RED}Ошибка при обновлении!${NC}\n"
+    exit 1
+fi
 
-		if pidof ttyd >/dev/null; then
-			echo -e "${GREEN}Служба запущена${NC}"
-			echo -e "${YELLOW}Доступ:${NC} http://192.168.1.1:7681"
-		else
-			echo -e "${RED}Ошибка запуска ttyd${NC}"
-		fi
-	fi
+echo -e "${CYAN}Устанавливаем ${NC}ttyd"
+if ! opkg install ttyd >/dev/null 2>&1; then
+    echo -e "\n${RED}Ошибка при установке ttyd!${NC}\n"
+    exit 1
+fi
 
-	read -p "Enter — назад"
+echo -e "${CYAN}Устанавливаем ${NC}luci-app-ttyd"
+if ! opkg install luci-app-ttyd >/dev/null 2>&1; then
+    echo -e "\n${RED}Ошибка при установке luci-app-ttyd!${NC}\n"
+    exit 1
+fi
+
+echo -e "${CYAN}Настраиваем ${NC}ttyd"
+sed -i "s#/bin/login#sh /usr/bin/zms#" /etc/config/ttyd
+
+/etc/init.d/ttyd restart >/dev/null 2>&1
+
+if pidof ttyd >/dev/null; then
+    echo -e "${GREEN}Служба запущена!${NC}\n\n${YELLOW}Доступ: ${NC}http://192.168.1.1:7681\n"
+else
+    echo -e "\n${RED}Ошибка! Служба не запущена!${NC}\n"
+fi
 }
 
 ### Проверка: QUIC заблокирован?
