@@ -10,17 +10,17 @@ EXCLUDE_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/hea
 ### 1. Системная информация
 
 
-### Проверка: доступ через браузер активен?
+### Проверка: доступ из браузера активен?
 web_is_enabled() {
 	command -v ttyd >/dev/null 2>&1 \
 	&& uci -q get ttyd.@ttyd[0].command | grep -q "/usr/bin/zms"
 }
 
-### 2. Включить / удалить доступ через браузер
+### 2. Включить / удалить доступ из браузера
 toggle_web() {
 
 	if web_is_enabled; then
-		echo -e "\n${MAGENTA}Удаляем доступ через браузер${NC}"
+		echo -e "\n${MAGENTA}Удаляем доступ из браузера${NC}"
 		opkg remove luci-app-ttyd ttyd >/dev/null 2>&1
 		rm -f /etc/config/ttyd
 		rm -f /usr/bin/zms
@@ -30,7 +30,7 @@ toggle_web() {
 		read -p "Нажмите Enter..." dummy
 	else
 
-	echo -e "\n${MAGENTA}Активируем доступ через браузер${NC}"
+	echo -e "\n${MAGENTA}Активируем доступ из браузера${NC}"
 		echo 'sh <(wget -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/main/Zapret-Manager.sh)' > /usr/bin/zms
 chmod +x /usr/bin/zms
 
@@ -128,8 +128,8 @@ toggle_quic() {
 while true; do
 
 	web_is_enabled \
-		&& WEB_TEXT="Удалить доступ к скрипту через браузер" \
-		|| WEB_TEXT="Активировать доступ к скрипту через браузер"
+		&& WEB_TEXT="Удалить доступ к скрипту из браузера" \
+		|| WEB_TEXT="Активировать доступ к скрипту из браузера"
 
 	quic_is_blocked \
 		&& QUIC_TEXT="${GREEN}Отключить блокировку${NC} QUIC" \
