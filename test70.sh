@@ -178,9 +178,7 @@ if opkg list-installed | grep -q '^https-dns-proxy '; then echo -e "${YELLOW}DNS
 if [ "$comss_active" = 1 ]; then comss_text="${GREEN}Вернуть настройки по умолчанию${NC}"
 else comss_text="${GREEN}Настроить ${NC}Comss DNS"; fi
 echo -e "${CYAN}1) ${GREEN}$action_text${NC}\n${CYAN}2) $comss_text"
-echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read choiceDoH
-case "$choiceDoH" in
-
+echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read choiceDoH; case "$choiceDoH" in
 1) if opkg list-installed | grep -q '^https-dns-proxy '; then echo -e "\n${MAGENTA}Удаляем DNS over HTTPS${NC}"
 /etc/init.d/https-dns-proxy stop >/dev/null 2>&1; /etc/init.d/https-dns-proxy disable >/dev/null 2>&1
 opkg remove https-dns-proxy luci-app-https-dns-proxy --force-removal-of-dependent-packages >/dev/null 2>&1
@@ -190,59 +188,21 @@ opkg update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обнов
 echo -e "${CYAN}Устанавливаем ${NC}https-dns-proxy"; opkg install https-dns-proxy >/dev/null 2>&1; echo -e "${CYAN}Устанавливаем ${NC}luci-app-https-dns-proxy"
 opkg install luci-app-https-dns-proxy >/dev/null 2>&1; if opkg list-installed | grep -q '^https-dns-proxy '; then echo -e "DNS over HTTPS ${GREEN}установлен!${NC}\n"
 else echo -e "\n${RED}DNS over HTTPS не установлен!${NC}\n"; fi; fi; read -p "Нажмите Enter..." dummy; continue ;;
-
-2)
-    if ! opkg list-installed | grep -q '^https-dns-proxy '; then
-        echo -e "\n${RED}DNS over HTTPS не установлен!${NC}\n"
-        read -p "Нажмите Enter..."
-        continue
-    fi
-
-    fileDoH="/etc/config/https-dns-proxy"
-    rm -f "$fileDoH"
-
-    #
-    # Переключатель Comss ↔ Default
-    #
-    if [ "$comss_active" = 0 ]; then
-        echo -e "\n${MAGENTA}Настраиваем Comss DNS${NC}"
-		
+2) if ! opkg list-installed | grep -q '^https-dns-proxy '; then echo -e "\n${RED}DNS over HTTPS не установлен!${NC}\n"; read -p "Нажмите Enter..."; continue; fi
+fileDoH="/etc/config/https-dns-proxy"; rm -f "$fileDoH"; if [ "$comss_active" = 0 ]; then echo -e "\n${MAGENTA}Настраиваем Comss DNS${NC}"
 extra_block=$(printf "%s\n" "config https-dns-proxy" "	option resolver_url 'https://dns.comss.one/dns-query'")
-
-    else
-        echo -e "\n${MAGENTA}Возвращаем настройки по умолчанию${NC}"
-        
+else echo -e "\n${MAGENTA}Возвращаем настройки по умолчанию${NC}"   
 extra_block=$(printf "%s\n" "config https-dns-proxy" "	option bootstrap_dns '1.1.1.1,1.0.0.1'" "	option resolver_url 'https://cloudflare-dns.com/dns-query'" \
 "	option listen_port '5053'" "" "config https-dns-proxy" "	option bootstrap_dns '8.8.8.8,8.8.4.4'" "	option resolver_url 'https://dns.google/dns-query'" "	option listen_port '5054'")
-
-
-    fi
-    printf '%s\n' "config main 'config'" "	option canary_domains_icloud '1'" "	option canary_domains_mozilla '1'" "	option dnsmasq_config_update '*'" \
+fi
+printf '%s\n' "config main 'config'" "	option canary_domains_icloud '1'" "	option canary_domains_mozilla '1'" "	option dnsmasq_config_update '*'" \
 "	option force_dns '1'" "	list force_dns_port '53'" "	list force_dns_port '853'" "	list force_dns_src_interface 'lan'" "	option procd_trigger_wan6 '0'" \
 "	option heartbeat_domain 'heartbeat.melmac.ca'" "	option heartbeat_sleep_timeout '10'" "	option heartbeat_wait_timeout '10'" "	option user 'nobody'" \
 "	option group 'nogroup'" "	option listen_addr '127.0.0.1'" "" "$extra_block" \
 > "$fileDoH"
-
-    /etc/init.d/https-dns-proxy restart >/dev/null 2>&1
-
-    if [ "$comss_active" = 0 ]; then
-        echo -e "Comss DNS ${GREEN}настроен!${NC}\n"
-    else
-        echo -e "${GREEN}Настройки по умолчанию возвращены!${NC}\n"
-    fi
-
-    read -p "Нажмите Enter..." dummy
-    continue
-;;
-
-*)
-    return
-;;
-        esac
-    done
-}
-
-
+/etc/init.d/https-dns-proxy restart >/dev/null 2>&1; if [ "$comss_active" = 0 ]; then echo -e "Comss DNS ${GREEN}настроен!${NC}\n"
+else echo -e "${GREEN}Настройки по умолчанию возвращены!${NC}\n"; fi; read -p "Нажмите Enter..." dummy; continue ;;
+*) return ;; esac; done; }
 # ==========================================
 # Системная информация
 # ==========================================
