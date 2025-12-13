@@ -94,7 +94,7 @@ done
 		uci commit firewall >/dev/null 2>&1
 		/etc/init.d/firewall restart >/dev/null 2>&1
 
-		echo -e "${GREEN}Блокировка QUIC отключена${NC}\n"
+		echo -e "${GREEN}Блокировка ${NC}QUIC ${GREEN}отключена${NC}\n"
 		read -p "Нажмите Enter..." dummy
 	else
 		echo -e "\n${MAGENTA}Включаем блокировку QUIC${NC}"
@@ -120,7 +120,7 @@ done
 		uci commit firewall >/dev/null 2>&1
 		/etc/init.d/firewall restart >/dev/null 2>&1
 
-		echo -e "${GREEN}Блокировка QUIC включена${NC}\n"
+		echo -e "${GREEN}Блокировка ${NC}QUIC ${GREEN}включена${NC}\n"
 		read -p "Нажмите Enter..." dummy
 	fi
 
