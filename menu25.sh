@@ -134,7 +134,7 @@ while true; do
 		|| WEB_TEXT="Активировать доступ к скрипту из браузера"
 
 	quic_is_blocked \
-		&& QUIC_TEXT="${GREEN}Отключить блокировку${NC} QUIC ${GREEN}(UDP: 80,443)${NC}" || QUIC_TEXT="${GREEN}Включить блокировку${NC} QUIC ${GREEN}(UDP: 80,443)${NC}"
+		&& QUIC_TEXT="${GREEN}Отключить блокировку${NC} QUIC ${GREEN}(80,443)${NC}" || QUIC_TEXT="${GREEN}Включить блокировку${NC} QUIC ${GREEN}(80,443)${NC}"
 
 clear; echo -e "${MAGENTA}Системное меню${NC}\n"
 
