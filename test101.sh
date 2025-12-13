@@ -144,9 +144,10 @@ echo -e "${CYAN}Добавляем домены в исключения${NC}"; r
 case "$version" in v3) echo -e "${CYAN}Копируем ${NC}t2.bin${CYAN} на устройство${NC}"; file="t2.bin" ;;
 v4) echo -e "${CYAN}Копируем ${NC}4pda.bin${CYAN} на устройство${NC}"; file="4pda.bin" ;; v5) echo -e "${CYAN}Копируем ${NC}max.bin${CYAN} на устройство${NC}"; file="max.bin" ;;
 esac; [ -n "$file" ] && wget -q -O "/opt/zapret/files/fake/$file" "https://github.com/StressOzz/Zapret-Manager/raw/refs/heads/main/$file"; echo -e "${CYAN}Редактируем ${NC}/etc/hosts${NC}"
-printf '%s\n' "130.255.77.28 ntc.party" "30.255.77.28 ntc.party" "185.87.51.182 4pda.to www.4pda.to" "173.245.58.219 rutor.info d.rutor.info" "57.144.222.34 instagram.com www.instagram.com" "157.240.9.174 instagram.com www.instagram.com" "185.39.18.98 lib.rus.ec www.lib.rus.ec" | grep -Fxv -f /etc/hosts 2>/dev/null >> /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1;
-fileGP="/opt/zapret/ipset/zapret-hosts-google.txt"; printf '%s\n' "android.clients.google.com" "beacons.gvt2.com" "connectivitycheck.gstatic.com" "googleplay.com" "gvt1.com" "lh3.googleusercontent.com" "play.google.com" "play.googleapis.com" | grep -Fxv -f "$fileGP" 2>/dev/null >> "$fileGP"
-printf '%s\n' "play-fe.googleapis.com" "play-games.googleusercontent.com" "play-lh.googleusercontent.com" "prod-lt-playstoregatewayadapter-pa.googleapis.com" | grep -Fxv -f "$fileGP" 2>/dev/null >> "$fileGP"
+printf '%s\n' "130.255.77.28 ntc.party" "30.255.77.28 ntc.party" "185.87.51.182 4pda.to www.4pda.to" "173.245.58.219 rutor.info d.rutor.info" "57.144.222.34 instagram.com www.instagram.com" \
+"157.240.9.174 instagram.com www.instagram.com" "185.39.18.98 lib.rus.ec www.lib.rus.ec" | grep -Fxv -f /etc/hosts 2>/dev/null >> /etc/hosts;
+/etc/init.d/dnsmasq restart >/dev/null 2>&1; fileGP="/opt/zapret/ipset/zapret-hosts-google.txt"; printf '%s\n' "gvt1.com" "googleplay.com" "play.google.com" "beacons.gvt2.com" "play.googleapis.com" "play-fe.googleapis.com" \
+"lh3.googleusercontent.com" "android.clients.google.com" "connectivitycheck.gstatic.com" "play-lh.googleusercontent.com" "play-games.googleusercontent.com" "prod-lt-playstoregatewayadapter-pa.googleapis.com" | grep -Fxv -f "$fileGP" 2>/dev/null >> "$fileGP"
 echo -e "${CYAN}Применяем новую стратегию и настройки${NC}"; chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1; echo -e "${GREEN}Стратегия ${NC}${version} ${GREEN}установлена!${NC}"
 [ "$NO_PAUSE" != "1" ] && echo && read -p "Нажмите Enter..." dummy; [ "$NO_PAUSE" = "1" ] && break; done }
 # ==========================================
