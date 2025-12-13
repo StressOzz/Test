@@ -213,7 +213,9 @@ sys_menu(){ while true; do
 web_is_enabled && WEB_TEXT="Удалить доступ к скрипту из браузера" || WEB_TEXT="Активировать доступ к скрипту из браузера"
 quic_is_blocked && QUIC_TEXT="${GREEN}Отключить блокировку${NC} QUIC ${GREEN}(80,443)${NC}" || QUIC_TEXT="${GREEN}Включить блокировку${NC} QUIC ${GREEN}(80,443)${NC}"
 clear; echo -e "${MAGENTA}Системное меню${NC}\n"; if web_is_enabled; then echo -e "${YELLOW}Доступ из браузера:${NC} http://192.168.1.1:7681"; fi
-if ! quic_is_blocked; then echo -e "${YELLOW}Блокировка QUIC:${NC} ${GREEN}Отключена${NC}"; fi
+if quic_is_blocked; then
+    echo -e "${YELLOW}Блокировка QUIC:${NC} ${GREEN}Включена${NC}"
+fi
 # if quic_is_blocked; then echo -e "${YELLOW}Блокировка QUIC:${NC} ${GREEN}Включена${NC}"; else echo -e "${YELLOW}Блокировка QUIC:${NC} ${GREEN}Отключена${NC}"; fi
 echo -e "\n${CYAN}1) ${GREEN}Системная информация${NC}\n${CYAN}2) ${GREEN}$WEB_TEXT${NC}\n${CYAN}3) ${GREEN}$QUIC_TEXT${NC}\n${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n"
 echo -ne "${YELLOW}Выберите пункт:${NC} " && read -r choiceMN; case "$choiceMN" in
