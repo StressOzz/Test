@@ -6,7 +6,7 @@ ZAPRET_MANAGER_VERSION="7.3"; ZAPRET_VERSION="72.20251213"; STR_VERSION_AUTOINST
 GREEN="\033[1;32m"; RED="\033[1;31m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"
 MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
 WORKDIR="/tmp/zapret-update"; CONF="/etc/config/zapret"; CUSTOM_DIR="/opt/zapret/init.d/openwrt/custom.d/"
-EXCLUDE_FILE="/opt/zapret/ipset/zapret-hosts-user-exclude.txt"
+EXCLUDE_FILE="/opt/zapret/ipset/zapret-hosts-user-exclude.txt"; fileDoH="/etc/config/https-dns-proxy"
 EXCLUDE_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/zapret-hosts-user-exclude.txt"
 # ==========================================
 # Проверяем наличие byedpi, youtubeUnblock, Flow Offloading
@@ -158,12 +158,12 @@ if opkg list-installed | grep -q '^https-dns-proxy '; then echo -e "\n${MAGENTA}
 opkg remove https-dns-proxy luci-app-https-dns-proxy --force-removal-of-dependent-packages >/dev/null 2>&1; echo -e "${CYAN}Удаляем файлы конфигурации ${NC}"
 rm -f /etc/config/https-dns-proxy; rm -f /etc/init.d/https-dns-proxy; echo -e "DNS over HTTPS${GREEN} удалён!${NC}\n"; else echo -e "\n${MAGENTA}Устанавливаем и настраиваем DNS over HTTPS\n${CYAN}Обновляем список пакетов${NC}"
 opkg update >/dev/null 2>&1; echo -e "${CYAN}Устанавливаем ${NC}https-dns-proxy"; opkg install https-dns-proxy >/dev/null 2>&1
-echo -e "${CYAN}Устанавливаем ${NC}luci-app-https-dns-proxy"; opkg install luci-app-https-dns-proxy >/dev/null 2>&1; echo -e "${CYAN}Настраиваем ${NC}Comss.one DNS"; fileDoH="/etc/config/https-dns-proxy"; rm -f "$fileDoH"
+echo -e "${CYAN}Устанавливаем ${NC}luci-app-https-dns-proxy"; opkg install luci-app-https-dns-proxy >/dev/null 2>&1; echo -e "${CYAN}Настраиваем ${NC}Comss.one DNS"; rm -f "$fileDoH"
 printf '%s\n' "config main 'config'" "	option canary_domains_icloud '1'" "	option canary_domains_mozilla '1'" "	option dnsmasq_config_update '*'" "	option force_dns '1'" "	list force_dns_port '53'" "	list force_dns_port '853'" \
 "	list force_dns_src_interface 'lan'" "	option procd_trigger_wan6 '0'" "	option heartbeat_domain 'heartbeat.melmac.ca'" "	option heartbeat_sleep_timeout '10'" "	option heartbeat_wait_timeout '10'" "	option user 'nobody'" "	option group 'nogroup'" \
 "	option listen_addr '127.0.0.1'" "" "config https-dns-proxy" "	option resolver_url 'https://dns.comss.one/dns-query'" > "$fileDoH"
 /etc/init.d/https-dns-proxy enable >/dev/null 2>&1; /etc/init.d/https-dns-proxy restart >/dev/null 2>&1; echo -e "DNS over HTTPS${GREEN} установлен и настроен!${NC}\n"; fi; read -p "Нажмите Enter для выхода в главное меню..." dummy; }
-DoH_def(){ if [ -f /etc/init.d/https-dns-proxy ]; then echo -e "\n${MAGENTA}Возвращаем настройки по умолчанию${NC}"   
+DoH_def(){ if ! opkg list-installed | grep -q '^https-dns-proxy '; echo -e "\n${MAGENTA}Возвращаем настройки по умолчанию${NC}"   
 printf '%s\n' "config main 'config'" "	option canary_domains_icloud '1'" "	option canary_domains_mozilla '1'" "	option dnsmasq_config_update '*'" \
 "	option force_dns '1'" "	list force_dns_port '53'" "	list force_dns_port '853'" "	list force_dns_src_interface 'lan'" "	option procd_trigger_wan6 '0'" \
 "	option heartbeat_domain 'heartbeat.melmac.ca'" "	option heartbeat_sleep_timeout '10'" "	option heartbeat_wait_timeout '10'" "	option user 'nobody'" \
