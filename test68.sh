@@ -171,65 +171,25 @@ doh_st() { if opkg list-installed | grep -q '^https-dns-proxy '; then doh_status
 else doh_status="не установлен"; action_text="${GREEN}Установить ${NC}DNS over HTTPS"; fi
 if [ "$doh_status" = "установлен" ] && grep -q 'dns.comss.one' /etc/config/https-dns-proxy 2>/dev/null; then
 doh_status="${doh_status} | Comss DNS"; comss_active=1; else comss_active=0; fi; }
-
 menu_doh() {
-    while true; do
-        doh_st
-        clear
-        echo -e "${MAGENTA}Меню установки и настройки DNS over HTTPS${NC}\n"
+while true; do
+doh_st; clear; echo -e "${MAGENTA}Меню установки и настройки DNS over HTTPS${NC}\n"
+if opkg list-installed | grep -q '^https-dns-proxy '; then echo -e "${YELLOW}DNS over HTTPS: ${GREEN}$doh_status${NC}\n"; fi
+if [ "$comss_active" = 1 ]; then comss_text="${GREEN}Вернуть настройки по умолчанию${NC}"
+else comss_text="${GREEN}Настроить ${NC}Comss DNS"; fi
+echo -e "${CYAN}1) ${GREEN}$action_text${NC}\n${CYAN}2) $comss_text"
+echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read choiceDoH
+case "$choiceDoH" in
 
-        if opkg list-installed | grep -q '^https-dns-proxy '; then
-            echo -e "${YELLOW}DNS over HTTPS: ${GREEN}$doh_status${NC}\n"
-        fi
-
-        # Переключатель
-        if [ "$comss_active" = 1 ]; then
-            comss_text="${GREEN}Вернуть настройки по умолчанию${NC}"
-        else
-            comss_text="${GREEN}Настроить ${NC}Comss DNS"
-        fi
-
-        echo -e "${CYAN}1) ${GREEN}$action_text${NC}"
-        echo -e "${CYAN}2) $comss_text"
-        echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "
-
-        read choiceDoH
-        case "$choiceDoH" in
-
-1)
-    if opkg list-installed | grep -q '^https-dns-proxy '; then
-        echo -e "\n${MAGENTA}Удаляем DNS over HTTPS${NC}"
-        /etc/init.d/https-dns-proxy stop >/dev/null 2>&1
-        /etc/init.d/https-dns-proxy disable >/dev/null 2>&1
-        opkg remove https-dns-proxy luci-app-https-dns-proxy --force-removal-of-dependent-packages >/dev/null 2>&1
-        rm -f /etc/config/https-dns-proxy /etc/init.d/https-dns-proxy
-        echo -e "DNS over HTTPS ${GREEN}удалён!${NC}\n"
-        read -p "Нажмите Enter..." dummy
-        continue
-    else
-        echo -e "\n${MAGENTA}Устанавливаем DNS over HTTPS${NC}\n${CYAN}Обновляем список пакетов${NC}"
-        opkg update >/dev/null 2>&1 || {
-            echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"
-            read -p "Нажмите Enter..." dummy
-            continue
-        }
-
-        echo -e "${CYAN}Устанавливаем ${NC}https-dns-proxy"
-        opkg install https-dns-proxy >/dev/null 2>&1
-
-        echo -e "${CYAN}Устанавливаем ${NC}luci-app-https-dns-proxy"
-        opkg install luci-app-https-dns-proxy >/dev/null 2>&1
-
-        if opkg list-installed | grep -q '^https-dns-proxy '; then
-            echo -e "DNS over HTTPS ${GREEN}установлен!${NC}\n"
-        else
-            echo -e "\n${RED}DNS over HTTPS не установлен!${NC}\n"
-        fi
-    fi
-
-    read -p "Нажмите Enter..." dummy
-    continue
-;;
+1) if opkg list-installed | grep -q '^https-dns-proxy '; then echo -e "\n${MAGENTA}Удаляем DNS over HTTPS${NC}"
+/etc/init.d/https-dns-proxy stop >/dev/null 2>&1; /etc/init.d/https-dns-proxy disable >/dev/null 2>&1
+opkg remove https-dns-proxy luci-app-https-dns-proxy --force-removal-of-dependent-packages >/dev/null 2>&1
+rm -f /etc/config/https-dns-proxy /etc/init.d/https-dns-proxy; echo -e "DNS over HTTPS ${GREEN}удалён!${NC}\n"
+read -p "Нажмите Enter..." dummy; continue; else echo -e "\n${MAGENTA}Устанавливаем DNS over HTTPS${NC}\n${CYAN}Обновляем список пакетов${NC}"
+opkg update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; read -p "Нажмите Enter..." dummy; continue; }
+echo -e "${CYAN}Устанавливаем ${NC}https-dns-proxy"; opkg install https-dns-proxy >/dev/null 2>&1; echo -e "${CYAN}Устанавливаем ${NC}luci-app-https-dns-proxy"
+opkg install luci-app-https-dns-proxy >/dev/null 2>&1; if opkg list-installed | grep -q '^https-dns-proxy '; then echo -e "DNS over HTTPS ${GREEN}установлен!${NC}\n"
+else echo -e "\n${RED}DNS over HTTPS не установлен!${NC}\n"; fi; fi; read -p "Нажмите Enter..." dummy; continue ;;
 
 2)
     if ! opkg list-installed | grep -q '^https-dns-proxy '; then
