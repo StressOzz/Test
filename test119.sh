@@ -163,11 +163,19 @@ printf '%s\n' "config main 'config'" "	option canary_domains_icloud '1'" "	optio
 "	list force_dns_src_interface 'lan'" "	option procd_trigger_wan6 '0'" "	option heartbeat_domain 'heartbeat.melmac.ca'" "	option heartbeat_sleep_timeout '10'" "	option heartbeat_wait_timeout '10'" "	option user 'nobody'" "	option group 'nogroup'" \
 "	option listen_addr '127.0.0.1'" "" "config https-dns-proxy" "	option resolver_url 'https://dns.comss.one/dns-query'" > "$fileDoH"
 /etc/init.d/https-dns-proxy enable >/dev/null 2>&1; /etc/init.d/https-dns-proxy restart >/dev/null 2>&1; echo -e "DNS over HTTPS${GREEN} установлен и настроен!${NC}\n"; fi; read -p "Нажмите Enter для выхода в главное меню..." dummy; }
-DoH_def(){ 
+
+
+doh_st() { if opkg list-installed | grep -q '^https-dns-proxy '; then doh_status="установлен"; action_text="${GREEN}Удалить ${NC}DNS over HTTPS"
+else doh_status="не установлен"; action_text="${GREEN}Установить ${NC}DNS over HTTPS"; fi
+if [ "$doh_status" = "установлен" ] && grep -q 'dns.comss.one' /etc/config/https-dns-proxy 2>/dev/null; then
+doh_status="${doh_status} | Comss DNS"; comss_active=1; else comss_active=0; fi; 
 if [ "$comss_active" = 1 ]; then comss_text="${GREEN}Вернуть настройки по умолчанию${NC}"
 else comss_text="${GREEN}Настроить ${NC}Comss DNS"; fi
+}
+
+DoH_def(){ doh_st
 if ! opkg list-installed | grep -q '^https-dns-proxy '; then echo -e "\n${RED}DNS over HTTPS не установлен!${NC}\n"; read -p "Нажмите Enter..."; continue; fi
-fileDoH="/etc/config/https-dns-proxy"; rm -f "$fileDoH"; if [ "$comss_active" = 0 ]; then echo -e "\n${MAGENTA}Настраиваем Comss DNS${NC}"
+rm -f "$fileDoH"; if [ "$comss_active" = 0 ]; then echo -e "\n${MAGENTA}Настраиваем Comss DNS${NC}"
 extra_block=$(printf "%s\n" "config https-dns-proxy" "	option resolver_url 'https://dns.comss.one/dns-query'")
 else echo -e "\n${MAGENTA}Возвращаем настройки по умолчанию${NC}"   
 extra_block=$(printf "%s\n" "config https-dns-proxy" "	option bootstrap_dns '1.1.1.1,1.0.0.1'" "	option resolver_url 'https://cloudflare-dns.com/dns-query'" \
@@ -178,6 +186,8 @@ fi; printf '%s\n' "config main 'config'" "	option canary_domains_icloud '1'" "	o
 "	option group 'nogroup'" "	option listen_addr '127.0.0.1'" "" "$extra_block" > "$fileDoH"
 /etc/init.d/https-dns-proxy restart >/dev/null 2>&1; if [ "$comss_active" = 0 ]; then echo -e "Comss DNS ${GREEN}настроен!${NC}\n"
 else echo -e "${GREEN}Настройки по умолчанию возвращены!${NC}\n"; fi; read -p "Нажмите Enter..." dummy; }
+
+
 # ==========================================
 # Системное меню
 # ==========================================
@@ -193,6 +203,9 @@ echo -e "\n${RED}Ошибка! Служба не запущена!${NC}\n"; read
 quic_is_blocked(){ uci show firewall | grep -q "name='Block_UDP_80'" && uci show firewall | grep -q "name='Block_UDP_443'"; }
 toggle_quic() {	if quic_is_blocked; then echo -e "\n${MAGENTA}Отключаем блокировку QUIC${NC}"; for RULE in Block_UDP_80 Block_UDP_443; do
 while true; do
+
+
+doh_st
 IDX=$(uci show firewall | grep "name='$RULE'" | cut -d. -f2 | cut -d= -f1 | head -n1); [ -z "$IDX" ] && break; uci delete firewall.$IDX >/dev/null 2>&1; done; done
 uci commit firewall >/dev/null 2>&1; /etc/init.d/firewall restart >/dev/null 2>&1; echo -e "${GREEN}Блокировка ${NC}QUIC ${GREEN}отключена${NC}\n"
 read -p "Нажмите Enter..." dummy; else echo -e "\n${MAGENTA}Включаем блокировку QUIC${NC}"
