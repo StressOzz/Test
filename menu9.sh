@@ -135,10 +135,7 @@ while true; do
 
 clear; echo -e "${MAGENTA}Меню выбора стратегии${NC}\n"
 
-	if web_is_enabled; then
-		echo -e "${YELLOW}Доступ из браузера:${NC} http://192.168.1.1:7681\n"
-		echo
-	fi
+	if web_is_enabled; then echo -e "${YELLOW}Доступ из браузера:${NC} http://192.168.1.1:7681\n"; fi
 
 
 echo -e "${CYAN}1) ${GREEN}Системная информация${NC}"
