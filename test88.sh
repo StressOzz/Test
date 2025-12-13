@@ -75,10 +75,8 @@ echo -e "${CYAN}Добавляем в стратегию настройки дл
 # ==========================================
 # Zapret под ключ
 # ==========================================
-zapret_key(){ clear; echo -e "${MAGENTA}Удаление, установка и настройка Zapret${NC}\n"
-get_versions; uninstall_zapret "1"; install_Zapret "1"
-[ ! -f /etc/init.d/zapret ] && return
-menu_str "1"; echo; scrypt_install "1"; fix_GAME "1"; echo -e "${GREEN}Zapret установлен и настроен!${NC}\n"; read -p "Нажмите Enter..." dummy; }
+zapret_key(){ clear; echo -e "${MAGENTA}Удаление, установка и настройка Zapret${NC}\n"; get_versions; uninstall_zapret "1"; install_Zapret "1"
+[ ! -f /etc/init.d/zapret ] && return; menu_str "1"; echo; scrypt_install "1"; fix_GAME "1"; echo -e "${GREEN}Zapret установлен и настроен!${NC}\n"; read -p "Нажмите Enter..." dummy; }
 # ==========================================
 # Вернуть настройки по умолчанию
 # ==========================================
@@ -211,41 +209,15 @@ uci set firewall.@rule[-1].dest='wan' >/dev/null 2>&1; uci set firewall.@rule[-1
 uci add firewall rule >/dev/null 2>&1; uci set firewall.@rule[-1].name='Block_UDP_443' >/dev/null 2>&1; uci add_list firewall.@rule[-1].proto='udp' >/dev/null 2>&1; uci set firewall.@rule[-1].src='lan' >/dev/null 2>&1
 uci set firewall.@rule[-1].dest='wan' >/dev/null 2>&1; uci set firewall.@rule[-1].dest_port='443' >/dev/null 2>&1; uci set firewall.@rule[-1].target='REJECT' >/dev/null 2>&1
 uci commit firewall >/dev/null 2>&1; /etc/init.d/firewall restart >/dev/null 2>&1;	echo -e "${GREEN}Блокировка ${NC}QUIC ${GREEN}включена${NC}\n";	read -p "Нажмите Enter..." dummy; fi; }
-
-### Главное меню
-sys_menu(){
-while true; do
-
-	web_is_enabled \
-		&& WEB_TEXT="Удалить доступ к скрипту из браузера" \
-		|| WEB_TEXT="Активировать доступ к скрипту из браузера"
-
-	quic_is_blocked \
-		&& QUIC_TEXT="${GREEN}Отключить блокировку${NC} QUIC ${GREEN}(80,443)${NC}" || QUIC_TEXT="${GREEN}Включить блокировку${NC} QUIC ${GREEN}(80,443)${NC}"
-
-clear; echo -e "${MAGENTA}Системное меню${NC}\n"
-
-	if web_is_enabled; then echo -e "${YELLOW}Доступ из браузера:${NC} http://192.168.1.1:7681"; fi
-
-if quic_is_blocked; then
-    echo -e "${YELLOW}Блокировка QUIC:${NC} ${GREEN}Включена${NC}"
-else
-    echo -e "${YELLOW}Блокировка QUIC:${NC} ${GREEN}Отключена${NC}"
-fi
-
-echo -e "\n${CYAN}1) ${GREEN}Системная информация${NC}"
-echo -e "${CYAN}2) ${GREEN}$WEB_TEXT${NC}"
-echo -e "${CYAN}3) ${GREEN}$QUIC_TEXT${NC}"
-echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n"
-
-echo -ne "${YELLOW}Выберите пункт:${NC} " && read -r choiceMN
-
-	case "$choiceMN" in
-		1) wget -qO- https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/sys_info.sh | sh; echo; read -p "Нажмите Enter..." dummy ;;
-		2) toggle_web ;;
-		3) toggle_quic ;;
-		*) echo; return ;; esac; done
-}
+sys_menu(){ while true; do
+web_is_enabled && WEB_TEXT="Удалить доступ к скрипту из браузера" || WEB_TEXT="Активировать доступ к скрипту из браузера"
+quic_is_blocked && QUIC_TEXT="${GREEN}Отключить блокировку${NC} QUIC ${GREEN}(80,443)${NC}" || QUIC_TEXT="${GREEN}Включить блокировку${NC} QUIC ${GREEN}(80,443)${NC}"
+clear; echo -e "${MAGENTA}Системное меню${NC}\n"; if web_is_enabled; then echo -e "${YELLOW}Доступ из браузера:${NC} http://192.168.1.1:7681"; fi
+if quic_is_blocked; then echo -e "${YELLOW}Блокировка QUIC:${NC} ${GREEN}Включена${NC}"; else echo -e "${YELLOW}Блокировка QUIC:${NC} ${GREEN}Отключена${NC}"; fi
+echo -e "\n${CYAN}1) ${GREEN}Системная информация${NC}\n${CYAN}2) ${GREEN}$WEB_TEXT${NC}\n${CYAN}3) ${GREEN}$QUIC_TEXT${NC}\n${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n"
+echo -ne "${YELLOW}Выберите пункт:${NC} " && read -r choiceMN; case "$choiceMN" in
+1) wget -qO- https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/sys_info.sh | sh; echo; read -p "Нажмите Enter..." dummy ;;
+2) toggle_web ;; 3) toggle_quic ;; *) echo; return ;; esac; done; }
 # ==========================================
 # Главное меню
 # ==========================================
