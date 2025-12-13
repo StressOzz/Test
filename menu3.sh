@@ -137,8 +137,7 @@ echo -e "${CYAN}2) ${GREEN}$WEB_TEXT${NC}"
 echo -e "${CYAN}3) ${GREEN}$QUIC_TEXT${NC}"
 echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}"
 
-	printf "Выбор: "
-	read -r choiceMN
+echo -ne "${YELLOW}Выберите пункт:${NC}" && read -r choiceMN
 
 	case "$choiceMN" in
 		1) wget -qO- https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/sys_info.sh | sh; echo; read -p "Нажмите Enter для выхода в главное меню..." dummy ;;
