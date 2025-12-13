@@ -200,63 +200,17 @@ echo -e "${CYAN}Устанавливаем ${NC}luci-app-ttyd"; if ! opkg instal
 echo -e "${CYAN}Настраиваем ${NC}ttyd"; sed -i "s#/bin/login#sh /usr/bin/zms#" /etc/config/ttyd; /etc/init.d/ttyd restart >/dev/null 2>&1
 if pidof ttyd >/dev/null; then echo -e "${GREEN}Служба запущена!${NC}\n\n${YELLOW}Доступ: ${NC}http://192.168.1.1:7681\n"; read -p "Нажмите Enter..." dummy; else
 echo -e "\n${RED}Ошибка! Служба не запущена!${NC}\n"; read -p "Нажмите Enter..." dummy; fi; fi; }
-
-### Проверка: QUIC заблокирован?
-quic_is_blocked() {
-	uci show firewall | grep -q "name='Block_UDP_80'" \
-	&& uci show firewall | grep -q "name='Block_UDP_443'"
-}
-
-### 3. Включить / отключить блокировку QUIC
-toggle_quic() {
-
-	if quic_is_blocked; then
-		echo -e "\n${MAGENTA}Отключаем блокировку QUIC${NC}"
-
-for RULE in Block_UDP_80 Block_UDP_443; do
-    while true; do
-        IDX=$(uci show firewall | grep "name='$RULE'" | cut -d. -f2 | cut -d= -f1 | head -n1)
-        [ -z "$IDX" ] && break
-        uci delete firewall.$IDX >/dev/null 2>&1
-    done
-done
-
-
-
-		uci commit firewall >/dev/null 2>&1
-		/etc/init.d/firewall restart >/dev/null 2>&1
-
-		echo -e "${GREEN}Блокировка ${NC}QUIC ${GREEN}отключена${NC}\n"
-		read -p "Нажмите Enter..." dummy
-	else
-		echo -e "\n${MAGENTA}Включаем блокировку QUIC${NC}"
-
-		# UDP 80
-		uci add firewall rule >/dev/null 2>&1
-		uci set firewall.@rule[-1].name='Block_UDP_80' >/dev/null 2>&1
-		uci add_list firewall.@rule[-1].proto='udp' >/dev/null 2>&1
-		uci set firewall.@rule[-1].src='lan' >/dev/null 2>&1
-		uci set firewall.@rule[-1].dest='wan' >/dev/null 2>&1
-		uci set firewall.@rule[-1].dest_port='80' >/dev/null 2>&1
-		uci set firewall.@rule[-1].target='REJECT' >/dev/null 2>&1
-
-		# UDP 443
-		uci add firewall rule >/dev/null 2>&1
-		uci set firewall.@rule[-1].name='Block_UDP_443' >/dev/null 2>&1
-		uci add_list firewall.@rule[-1].proto='udp' >/dev/null 2>&1
-		uci set firewall.@rule[-1].src='lan' >/dev/null 2>&1
-		uci set firewall.@rule[-1].dest='wan' >/dev/null 2>&1
-		uci set firewall.@rule[-1].dest_port='443' >/dev/null 2>&1
-		uci set firewall.@rule[-1].target='REJECT' >/dev/null 2>&1
-
-		uci commit firewall >/dev/null 2>&1
-		/etc/init.d/firewall restart >/dev/null 2>&1
-
-		echo -e "${GREEN}Блокировка ${NC}QUIC ${GREEN}включена${NC}\n"
-		read -p "Нажмите Enter..." dummy
-	fi
-
-}
+quic_is_blocked(){ uci show firewall | grep -q "name='Block_UDP_80'" && uci show firewall | grep -q "name='Block_UDP_443'"; }
+toggle_quic() {	if quic_is_blocked; then echo -e "\n${MAGENTA}Отключаем блокировку QUIC${NC}"; for RULE in Block_UDP_80 Block_UDP_443; do
+while true; do
+IDX=$(uci show firewall | grep "name='$RULE'" | cut -d. -f2 | cut -d= -f1 | head -n1); [ -z "$IDX" ] && break; uci delete firewall.$IDX >/dev/null 2>&1; done; done
+uci commit firewall >/dev/null 2>&1; /etc/init.d/firewall restart >/dev/null 2>&1; echo -e "${GREEN}Блокировка ${NC}QUIC ${GREEN}отключена${NC}\n"
+read -p "Нажмите Enter..." dummy; else echo -e "\n${MAGENTA}Включаем блокировку QUIC${NC}"
+uci add firewall rule >/dev/null 2>&1; uci set firewall.@rule[-1].name='Block_UDP_80' >/dev/null 2>&1; uci add_list firewall.@rule[-1].proto='udp' >/dev/null 2>&1; uci set firewall.@rule[-1].src='lan' >/dev/null 2>&1
+uci set firewall.@rule[-1].dest='wan' >/dev/null 2>&1; uci set firewall.@rule[-1].dest_port='80' >/dev/null 2>&1; uci set firewall.@rule[-1].target='REJECT' >/dev/null 2>&1
+uci add firewall rule >/dev/null 2>&1; uci set firewall.@rule[-1].name='Block_UDP_443' >/dev/null 2>&1; uci add_list firewall.@rule[-1].proto='udp' >/dev/null 2>&1; uci set firewall.@rule[-1].src='lan' >/dev/null 2>&1
+uci set firewall.@rule[-1].dest='wan' >/dev/null 2>&1; uci set firewall.@rule[-1].dest_port='443' >/dev/null 2>&1; uci set firewall.@rule[-1].target='REJECT' >/dev/null 2>&1
+uci commit firewall >/dev/null 2>&1; /etc/init.d/firewall restart >/dev/null 2>&1;	echo -e "${GREEN}Блокировка ${NC}QUIC ${GREEN}включена${NC}\n";	read -p "Нажмите Enter..." dummy; fi; }
 
 ### Главное меню
 sys_menu(){
