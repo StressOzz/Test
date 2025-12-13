@@ -84,11 +84,6 @@ toggle_quic() {
 		uci delete firewall.@rule[Block_UDP_80] >/dev/null 2>&1
 		uci delete firewall.@rule[Block_UDP_443] >/dev/null 2>&1
 
-		# надёжное удаление по имени
-		for i in $(uci show firewall | grep Block_UDP | cut -d. -f2 | cut -d= -f1); do
-			uci delete firewall.$i
-		done
-
 		uci commit firewall >/dev/null 2>&1
 		/etc/init.d/firewall restart >/dev/null 2>&1
 
@@ -98,22 +93,22 @@ toggle_quic() {
 		echo -e "\n${MAGENTA}Включаем блокировку QUIC${NC}"
 
 		# UDP 80
-		uci add firewall rule
-		uci set firewall.@rule[-1].name='Block_UDP_80'
-		uci add_list firewall.@rule[-1].proto='udp'
-		uci set firewall.@rule[-1].src='lan'
-		uci set firewall.@rule[-1].dest='wan'
-		uci set firewall.@rule[-1].dest_port='80'
-		uci set firewall.@rule[-1].target='REJECT'
+		uci add firewall rule >/dev/null 2>&1
+		uci set firewall.@rule[-1].name='Block_UDP_80' >/dev/null 2>&1
+		uci add_list firewall.@rule[-1].proto='udp' >/dev/null 2>&1
+		uci set firewall.@rule[-1].src='lan' >/dev/null 2>&1
+		uci set firewall.@rule[-1].dest='wan' >/dev/null 2>&1
+		uci set firewall.@rule[-1].dest_port='80' >/dev/null 2>&1
+		uci set firewall.@rule[-1].target='REJECT' >/dev/null 2>&1
 
 		# UDP 443
-		uci add firewall rule
-		uci set firewall.@rule[-1].name='Block_UDP_443'
-		uci add_list firewall.@rule[-1].proto='udp'
-		uci set firewall.@rule[-1].src='lan'
-		uci set firewall.@rule[-1].dest='wan'
-		uci set firewall.@rule[-1].dest_port='443'
-		uci set firewall.@rule[-1].target='REJECT'
+		uci add firewall rule >/dev/null 2>&1
+		uci set firewall.@rule[-1].name='Block_UDP_443' >/dev/null 2>&1
+		uci add_list firewall.@rule[-1].proto='udp' >/dev/null 2>&1
+		uci set firewall.@rule[-1].src='lan' >/dev/null 2>&1
+		uci set firewall.@rule[-1].dest='wan' >/dev/null 2>&1
+		uci set firewall.@rule[-1].dest_port='443' >/dev/null 2>&1
+		uci set firewall.@rule[-1].target='REJECT' >/dev/null 2>&1
 
 		uci commit firewall >/dev/null 2>&1
 		/etc/init.d/firewall restart >/dev/null 2>&1
