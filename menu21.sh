@@ -81,7 +81,7 @@ toggle_quic() {
 	if quic_is_blocked; then
 		echo -e "\n${MAGENTA}Отключаем блокировку QUIC${NC}"
 
-for i in $(uci show firewall | grep "name='Block_UDP_80'\|name='Block_UDP_443'" | cut -d. -f2 | cut -d= -f1); do
+for i in $(uci show firewall | grep "name='Block_UDP_80'\|name='Block_UDP_443'" | cut -d. -f2 | cut -d= -f1 | sort -r); do
     uci delete firewall.$i >/dev/null 2>&1
 done
 
