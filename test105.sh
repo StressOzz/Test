@@ -205,7 +205,7 @@ opkg list-installed | grep -q '^https-dns-proxy ' && doh_menu="Удалить" |
 [ -n "$ZAPRET_STATUS" ] && echo -e "${YELLOW}Статус Zapret:${NC}          $ZAPRET_STATUS"; show_script_50 && [ -n "$name" ] && echo -e "${YELLOW}Установлен скрипт:${NC}      $name"
 [ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*1024-49999,50100-65535" "$CONF" && grep -q -- "--filter-udp=1024-49999,50100-65535" "$CONF" && echo -e "${YELLOW}Стратегия для игр:${NC}      ${GREEN}активирована${NC}"
 if opkg list-installed | grep -q '^https-dns-proxy '; then if grep -q 'dns.comss.one' /etc/config/https-dns-proxy 2>/dev/null; then echo -e "${YELLOW}DNS over HTTPS:         ${GREEN}установлен | настроен${NC}"
-else echo -e "${YELLOW}DNS over HTTPS:         ${GREEN}установлен${NC}"; fi; fi; fi; web_is_enabled && if web_is_enabled; then echo -e "${YELLOW}Доступ из браузера:${NC}     http://192.168.1.1:7681"; fi
+else echo -e "${YELLOW}DNS over HTTPS:         ${GREEN}установлен${NC}"; fi; fi; web_is_enabled && if web_is_enabled; then echo -e "${YELLOW}Доступ из браузера:${NC}     http://192.168.1.1:7681"; fi
 quic_is_blocked && if quic_is_blocked; then echo -e "${YELLOW}Блокировка QUIC:${NC}        ${GREEN}включена${NC}"; fi; show_current_strategy && [ -n "$ver" ] && echo -e "${YELLOW}Используется стратегия:${NC} ${CYAN}$ver${NC}"
 echo -e "\n${CYAN}1) ${GREEN}Установить последнюю версию${NC}\n${CYAN}2) ${GREEN}Меню выбора стратегий${NC}\n${CYAN}3) ${GREEN}Вернуть настройки по умолчанию${NC}\n${CYAN}4) ${GREEN}$str_stp_zpr ${NC}Zapret"
 echo -e "${CYAN}5) ${GREEN}Удалить ${NC}Zapret\n${CYAN}6) ${GREEN}$menu_game\n${CYAN}7) ${GREEN}Меню установки скриптов${NC}\n${CYAN}8) ${GREEN}Удалить → установить → настроить${NC} Zapret"
