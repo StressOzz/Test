@@ -63,6 +63,7 @@ if pidof ttyd >/dev/null; then
 else
     echo -e "\n${RED}Ошибка! Служба не запущена!${NC}\n"
 fi
+fi
 }
 
 ### Проверка: QUIC заблокирован?
