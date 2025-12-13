@@ -84,6 +84,11 @@ toggle_quic() {
 		uci delete firewall.@rule[Block_UDP_80] >/dev/null 2>&1
 		uci delete firewall.@rule[Block_UDP_443] >/dev/null 2>&1
 
+		for i in $(uci show firewall | grep Block_UDP | cut -d. -f2 | cut -d= -f1); do
+			uci delete firewall.$i >/dev/null 2>&1
+		done
+
+
 		uci commit firewall >/dev/null 2>&1
 		/etc/init.d/firewall restart >/dev/null 2>&1
 
