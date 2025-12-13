@@ -201,63 +201,15 @@ else echo -e "${GREEN}Настройки по умолчанию возвращ�
 # ==========================================
 # Системная информация
 # ==========================================
-web_is_enabled() {
-	command -v ttyd >/dev/null 2>&1 \
-	&& uci -q get ttyd.@ttyd[0].command | grep -q "/usr/bin/zms"
-}
-
-### 2. Включить / удалить доступ из браузера
-toggle_web() {
-
-	if web_is_enabled; then
-		echo -e "\n${MAGENTA}Удаляем доступ из браузера${NC}"
-		opkg remove luci-app-ttyd ttyd >/dev/null 2>&1
-		rm -f /etc/config/ttyd
-		rm -f /usr/bin/zms
-
-		echo -e "${GREEN}Доступ удалён${NC}\n"
-
-		read -p "Нажмите Enter..." dummy
-	else
-
-	echo -e "\n${MAGENTA}Активируем доступ из браузера${NC}"
-		echo 'sh <(wget -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/main/Zapret-Manager.sh)' > /usr/bin/zms
-chmod +x /usr/bin/zms
-
-echo -e "${CYAN}Обновляем список пакетов${NC}"
-if ! opkg update >/dev/null 2>&1; then
-    echo -e "\n${RED}Ошибка при обновлении!${NC}\n"
-    return
-fi
-
-echo -e "${CYAN}Устанавливаем ${NC}ttyd"
-if ! opkg install ttyd >/dev/null 2>&1; then
-    echo -e "\n${RED}Ошибка при установке ttyd!${NC}\n"
-	read -p "Нажмите Enter..." dummy
-    return
-fi
-
-echo -e "${CYAN}Устанавливаем ${NC}luci-app-ttyd"
-if ! opkg install luci-app-ttyd >/dev/null 2>&1; then
-    echo -e "\n${RED}Ошибка при установке luci-app-ttyd!${NC}\n"
-	read -p "Нажмите Enter..." dummy
-    return
-fi
-
-echo -e "${CYAN}Настраиваем ${NC}ttyd"
-sed -i "s#/bin/login#sh /usr/bin/zms#" /etc/config/ttyd
-
-/etc/init.d/ttyd restart >/dev/null 2>&1
-
-if pidof ttyd >/dev/null; then
-    echo -e "${GREEN}Служба запущена!${NC}\n\n${YELLOW}Доступ: ${NC}http://192.168.1.1:7681\n"
-	read -p "Нажмите Enter..." dummy
-else
-    echo -e "\n${RED}Ошибка! Служба не запущена!${NC}\n"
-	read -p "Нажмите Enter..." dummy
-fi
-fi
-}
+web_is_enabled() { command -v ttyd >/dev/null 2>&1 && uci -q get ttyd.@ttyd[0].command | grep -q "/usr/bin/zms" }
+toggle_web() { if web_is_enabled; then echo -e "\n${MAGENTA}Удаляем доступ из браузера${NC}"; opkg remove luci-app-ttyd ttyd >/dev/null 2>&1
+rm -f /etc/config/ttyd;	rm -f /usr/bin/zms;	echo -e "${GREEN}Доступ удалён${NC}\n";	read -p "Нажмите Enter..." dummy; else
+echo -e "\n${MAGENTA}Активируем доступ из браузера${NC}"; echo 'sh <(wget -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/main/Zapret-Manager.sh)' > /usr/bin/zms
+chmod +x /usr/bin/zms; echo -e "${CYAN}Обновляем список пакетов${NC}"; if ! opkg update >/dev/null 2>&1; then echo -e "\n${RED}Ошибка при обновлении!${NC}\n"; return; fi
+echo -e "${CYAN}Устанавливаем ${NC}ttyd"; if ! opkg install ttyd >/dev/null 2>&1; then echo -e "\n${RED}Ошибка при установке ttyd!${NC}\n";	read -p "Нажмите Enter..." dummy; return; fi
+echo -e "${CYAN}Устанавливаем ${NC}luci-app-ttyd"; if ! opkg install luci-app-ttyd >/dev/null 2>&1; then echo -e "\n${RED}Ошибка при установке luci-app-ttyd!${NC}\n"; read -p "Нажмите Enter..." dummy; return; fi
+echo -e "${CYAN}Настраиваем ${NC}ttyd"; sed -i "s#/bin/login#sh /usr/bin/zms#" /etc/config/ttyd; /etc/init.d/ttyd restart >/dev/null 2>&1; if pidof ttyd >/dev/null; then echo -e "${GREEN}Служба запущена!${NC}\n\n${YELLOW}Доступ: ${NC}http://192.168.1.1:7681\n"
+read -p "Нажмите Enter..." dummy; else echo -e "\n${RED}Ошибка! Служба не запущена!${NC}\n"; read -p "Нажмите Enter..." dummy; fi; fi; }
 
 ### Проверка: QUIC заблокирован?
 quic_is_blocked() {
