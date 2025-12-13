@@ -81,9 +81,7 @@ zapret_key(){ clear; echo -e "${MAGENTA}Удаление, установка и 
 # Вернуть настройки по умолчанию
 # ==========================================
 comeback_def () { if [ -f /opt/zapret/restore-def-cfg.sh ]; then echo -e "\n${MAGENTA}Возвращаем настройки по умолчанию${NC}"; rm -f /opt/zapret/init.d/openwrt/custom.d/50-script.sh; for i in 1 2 3 4; do rm -f "/opt/zapret/ipset/cust$i.txt"; done
-[ -f /etc/init.d/zapret ] && /etc/init.d/zapret stop >/dev/null 2>&1; echo -e "${CYAN}Возвращаем ${NC}настройки${CYAN}, ${NC}стратегию${CYAN} и ${NC}hostlist${CYAN} к значениям по умолчанию${NC}"
-for f in zapret-hosts-google.txt zapret-hosts-user-exclude.txt zapret-ip-exclude.txt; do wget -qO "/opt/zapret/ipset/$f" "https://raw.githubusercontent.com/remittor/zapret-openwrt/master/zapret/ipset/$f"; done
-for f in zapret-hosts-user-ipban.txt zapret-ip-user-ipban.txt zapret-hosts-user.txt zapret-ip-user.txt zapret-ip-user-exclude.txt; do : > "/opt/zapret/ipset/$f"; done
+[ -f /etc/init.d/zapret ] && /etc/init.d/zapret stop >/dev/null 2>&1; echo -e "${CYAN}Возвращаем ${NC}настройки${CYAN}, ${NC}стратегию${CYAN} и ${NC}hostlist${CYAN} к значениям по умолчанию${NC}"; cp -f /opt/zapret/ipset_def/* /opt/zapret/ipset/
 chmod +x /opt/zapret/restore-def-cfg.sh && /opt/zapret/restore-def-cfg.sh; chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1
 sed -i '/185\.87\.51\.182 4pda\.to www\.4pda\.to/d; /130\.255\.77\.28 ntc\.party/d; /30\.255\.77\.28 ntc\.party/d; /173\.245\.58\.219 rutor\.info d\.rutor\.info/d; /57\.144\.222\.34 instagram\.com www\.instagram\.com/d; /157\.240\.9\.174 instagram\.com www\.instagram\.com/d; /185\.39\.18\.98 lib\.rus\.ec www\.lib\.rus\.ec/d' /etc/hosts
 /etc/init.d/dnsmasq restart >/dev/null 2>&1; echo -e "${GREEN}Настройки по умолчанию возвращены!${NC}\n"; else echo -e "\n${RED}Zapret не установлен!${NC}\n"; fi; read -p "Нажмите Enter..." dummy; }
