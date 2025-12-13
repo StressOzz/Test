@@ -61,6 +61,7 @@ sed -i "s#/bin/login#sh /usr/bin/zms#" /etc/config/ttyd
 
 if pidof ttyd >/dev/null; then
     echo -e "${GREEN}Служба запущена!${NC}\n\n${YELLOW}Доступ: ${NC}http://192.168.1.1:7681\n"
+	read -p "Нажмите Enter для выхода в главное меню..." dummy
 else
     echo -e "\n${RED}Ошибка! Служба не запущена!${NC}\n"
 	read -p "Нажмите Enter для выхода в главное меню..." dummy
@@ -119,9 +120,9 @@ toggle_quic() {
 		/etc/init.d/firewall restart >/dev/null 2>&1
 
 		echo -e "${GREEN}Блокировка QUIC включена${NC}"
+		read -p "Нажмите Enter для выхода в главное меню..." dummy
 	fi
 
-read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
 
 ### Главное меню
@@ -135,7 +136,7 @@ while true; do
 		&& QUIC_TEXT="${GREEN}Отключить блокировку${NC} QUIC" \
 		|| QUIC_TEXT="${GREEN}Включить блокировку${NC} QUIC"
 
-clear; echo -e "${MAGENTA}Меню выбора стратегии${NC}\n"
+clear; echo -e "${MAGENTA}Системное меню${NC}\n"
 
 	if web_is_enabled; then echo -e "${YELLOW}Доступ из браузера:${NC} http://192.168.1.1:7681\n"; fi
 
