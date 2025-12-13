@@ -326,7 +326,7 @@ chmod +x /usr/bin/zms
 echo -e "${CYAN}Обновляем список пакетов${NC}"
 if ! opkg update >/dev/null 2>&1; then
     echo -e "\n${RED}Ошибка при обновлении!${NC}\n"
-    exit 1
+    return
 fi
 
 echo -e "${CYAN}Устанавливаем ${NC}ttyd"
@@ -442,7 +442,7 @@ echo -ne "${YELLOW}Выберите пункт:${NC} " && read -r choiceMN
 		1) wget -qO- https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/sys_info.sh | sh; echo; read -p "Нажмите Enter..." dummy ;;
 		2) toggle_web ;;
 		3) toggle_quic ;;
-		*) echo; exit 0 ;; esac; done
+		*) echo; return ;; esac; done
 }
 # ==========================================
 # Главное меню
