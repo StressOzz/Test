@@ -61,7 +61,7 @@ chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d
 if wget -qO "$CUSTOM_DIR/50-script.sh" "$URL"; then [ "$NO_PAUSE" != "1" ] && echo; echo -e "${GREEN}Скрипт ${NC}$SELECTED${GREEN} успешно установлен!${NC}\n"; else echo -e "\n${RED}Ошибка при скачивании скрипта!${NC}\n"; read -p "Нажмите Enter..." dummy; continue; fi
 if ! grep -q "option NFQWS_PORTS_UDP.*50000-50099" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'$/,50000-50099'/" "$CONF"; fi; if ! grep -q -- "--filter-udp=50000-50099" "$CONF"; then last_line1=$(grep -n "^'$" "$CONF" | tail -n1 | cut -d: -f1)
 if [ -n "$last_line1" ]; then sed -i "${last_line1},\$d" "$CONF"; fi; printf "%s\n" "--new" "--filter-udp=50000-50099" "--filter-l7=discord,stun" "--dpi-desync=fake" "'" >> "$CONF"; fi; 
-sed -i "/DISABLE_CUSTOM/s/'1'/'0'/" /etc/config/zapret; chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart >/dev/null 2>&1; [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter..." dummy; done }
+sed -i "/DISABLE_CUSTOM/s/'1'/'0'/" /etc/config/zapret; chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart >/dev/null 2>&1; [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter..." dummy; [ "$NO_PAUSE" = "1" ] && break; done }
 # ==========================================
 # FIX GAME
 # ==========================================
@@ -163,7 +163,7 @@ printf '%s\n' "130.255.77.28 ntc.party" "185.87.51.182 4pda.to www.4pda.to" "173
 fileGP="/opt/zapret/ipset/zapret-hosts-google.txt"; printf '%s\n' "android.clients.google.com" "beacons.gvt2.com" "connectivitycheck.gstatic.com" "googleplay.com" "gvt1.com" "lh3.googleusercontent.com" "play.google.com" "play.googleapis.com" | grep -Fxv -f "$fileGP" 2>/dev/null >> "$fileGP"
 printf '%s\n' "play-fe.googleapis.com" "play-games.googleusercontent.com" "play-lh.googleusercontent.com" "prod-lt-playstoregatewayadapter-pa.googleapis.com" | grep -Fxv -f "$fileGP" 2>/dev/null >> "$fileGP"
 echo -e "${CYAN}Применяем новую стратегию и настройки${NC}"; chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1; echo -e "${GREEN}Стратегия ${NC}${version} ${GREEN}установлена!${NC}"
-[ "$NO_PAUSE" != "1" ] && echo && read -p "Нажмите Enter..." dummy; done }
+[ "$NO_PAUSE" != "1" ] && echo && read -p "Нажмите Enter..." dummy; [ "$NO_PAUSE" = "1" ] && break; done }
 # ==========================================
 # DNS over HTTP
 # ==========================================
