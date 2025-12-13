@@ -426,10 +426,11 @@ while true; do
 
 clear; echo -e "${MAGENTA}Системное меню${NC}\n"
 
-	if web_is_enabled; then echo -e "${YELLOW}Доступ из браузера:${NC} http://192.168.1.1:7681\n"; fi
+	if web_is_enabled; then echo -e "${YELLOW}Доступ из браузера:${NC} http://192.168.1.1:7681"; fi
 
+	if quic_is_blocked; then echo -e "${YELLOW}Блокировка QUIC:${NC} ${GREEN}Включена${NC}"; fi
 
-echo -e "${CYAN}1) ${GREEN}Системная информация${NC}"
+echo -e "\n${CYAN}1) ${GREEN}Системная информация${NC}"
 echo -e "${CYAN}2) ${GREEN}$WEB_TEXT${NC}"
 echo -e "${CYAN}3) ${GREEN}$QUIC_TEXT${NC}"
 echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n"
