@@ -43,13 +43,15 @@ fi
 echo -e "${CYAN}Устанавливаем ${NC}ttyd"
 if ! opkg install ttyd >/dev/null 2>&1; then
     echo -e "\n${RED}Ошибка при установке ttyd!${NC}\n"
-    exit 1
+	read -p "Нажмите Enter для выхода в главное меню..." dummy
+    return
 fi
 
 echo -e "${CYAN}Устанавливаем ${NC}luci-app-ttyd"
 if ! opkg install luci-app-ttyd >/dev/null 2>&1; then
     echo -e "\n${RED}Ошибка при установке luci-app-ttyd!${NC}\n"
-    exit 1
+	read -p "Нажмите Enter для выхода в главное меню..." dummy
+    return
 fi
 
 echo -e "${CYAN}Настраиваем ${NC}ttyd"
@@ -61,9 +63,9 @@ if pidof ttyd >/dev/null; then
     echo -e "${GREEN}Служба запущена!${NC}\n\n${YELLOW}Доступ: ${NC}http://192.168.1.1:7681\n"
 else
     echo -e "\n${RED}Ошибка! Служба не запущена!${NC}\n"
+	read -p "Нажмите Enter для выхода в главное меню..." dummy
 fi
 fi
-read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
 
 ### Проверка: QUIC заблокирован?
