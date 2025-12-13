@@ -165,9 +165,10 @@ printf '%s\n' "config main 'config'" "	option canary_domains_icloud '1'" "	optio
 /etc/init.d/https-dns-proxy enable >/dev/null 2>&1; /etc/init.d/https-dns-proxy restart >/dev/null 2>&1; echo -e "DNS over HTTPS${GREEN} установлен и настроен!${NC}\n"; fi; read -p "Нажмите Enter для выхода в главное меню..." dummy; }
 
 
-doh_st() { if [ "$comss_active" = 1 ]; then comss_text="${GREEN}Вернуть настройки по умолчанию${NC}"
-else comss_text="${GREEN}Настроить ${NC}Comss DNS"; fi
-}
+doh_st() { if opkg list-installed | grep -q '^https-dns-proxy '; then doh_status="установлен"; action_text="${GREEN}Удалить ${NC}DNS over HTTPS"
+else doh_status="не установлен"; action_text="${GREEN}Установить ${NC}DNS over HTTPS"; fi
+if [ "$doh_status" = "установлен" ] && grep -q 'dns.comss.one' /etc/config/https-dns-proxy 2>/dev/null; then
+doh_status="${doh_status} | Comss DNS"; comss_active=1; else comss_active=0; fi; }
 
 DoH_def(){ doh_st
 if ! opkg list-installed | grep -q '^https-dns-proxy '; then echo -e "\n${RED}DNS over HTTPS не установлен!${NC}\n"; read -p "Нажмите Enter..."; continue; fi
