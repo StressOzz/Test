@@ -133,7 +133,7 @@ while true; do
 clear; echo -e "${MAGENTA}Меню выбора стратегии${NC}\n"
 
 echo -e "${CYAN}1) ${GREEN}Системная информация${NC}"
-echo -e "${CYAN}2) ${NC} $WEB_TEXT"
+echo -e "${CYAN}2) ${GREEN}$WEB_TEXT${NC}"
 echo -e "${CYAN}3) ${GREEN}$QUIC_TEXT${NC}"
 echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}"
 
