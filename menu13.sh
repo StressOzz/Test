@@ -27,7 +27,7 @@ toggle_web() {
 
 		echo -e "${GREEN}Доступ удалён${NC}\n"
 
-		read -p "Нажмите Enter для выхода в главное меню..." dummy
+		read -p "Нажмите Enter..." dummy
 	else
 
 	echo -e "\n${MAGENTA}Активируем доступ через браузер${NC}"
@@ -43,14 +43,14 @@ fi
 echo -e "${CYAN}Устанавливаем ${NC}ttyd"
 if ! opkg install ttyd >/dev/null 2>&1; then
     echo -e "\n${RED}Ошибка при установке ttyd!${NC}\n"
-	read -p "Нажмите Enter для выхода в главное меню..." dummy
+	read -p "Нажмите Enter..." dummy
     return
 fi
 
 echo -e "${CYAN}Устанавливаем ${NC}luci-app-ttyd"
 if ! opkg install luci-app-ttyd >/dev/null 2>&1; then
     echo -e "\n${RED}Ошибка при установке luci-app-ttyd!${NC}\n"
-	read -p "Нажмите Enter для выхода в главное меню..." dummy
+	read -p "Нажмите Enter..." dummy
     return
 fi
 
@@ -61,10 +61,10 @@ sed -i "s#/bin/login#sh /usr/bin/zms#" /etc/config/ttyd
 
 if pidof ttyd >/dev/null; then
     echo -e "${GREEN}Служба запущена!${NC}\n\n${YELLOW}Доступ: ${NC}http://192.168.1.1:7681\n"
-	read -p "Нажмите Enter для выхода в главное меню..." dummy
+	read -p "Нажмите Enter..." dummy
 else
     echo -e "\n${RED}Ошибка! Служба не запущена!${NC}\n"
-	read -p "Нажмите Enter для выхода в главное меню..." dummy
+	read -p "Нажмите Enter..." dummy
 fi
 fi
 }
@@ -94,7 +94,7 @@ toggle_quic() {
 		/etc/init.d/firewall restart >/dev/null 2>&1
 
 		echo -e "${GREEN}Блокировка QUIC отключена${NC}"
-		read -p "Нажмите Enter для выхода в главное меню..." dummy
+		read -p "Нажмите Enter..." dummy
 	else
 		echo -e "${GREEN}Включаем блокировку QUIC${NC}"
 
@@ -120,7 +120,7 @@ toggle_quic() {
 		/etc/init.d/firewall restart >/dev/null 2>&1
 
 		echo -e "${GREEN}Блокировка QUIC включена${NC}"
-		read -p "Нажмите Enter для выхода в главное меню..." dummy
+		read -p "Нажмите Enter..." dummy
 	fi
 
 }
@@ -149,7 +149,7 @@ echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n"
 echo -ne "${YELLOW}Выберите пункт:${NC} " && read -r choiceMN
 
 	case "$choiceMN" in
-		1) wget -qO- https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/sys_info.sh | sh; echo; read -p "Нажмите Enter для выхода в главное меню..." dummy ;;
+		1) wget -qO- https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/sys_info.sh | sh; echo; read -p "Нажмите Enter..." dummy ;;
 		2) toggle_web ;;
 		3) toggle_quic ;;
 		*) echo; exit 0 ;; esac; done
