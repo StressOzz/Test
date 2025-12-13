@@ -201,7 +201,7 @@ else echo -e "${GREEN}Настройки по умолчанию возвращ�
 # ==========================================
 # Системная информация
 # ==========================================
-web_is_enabled() { command -v ttyd >/dev/null 2>&1 && uci -q get ttyd.@ttyd[0].command | grep -q "/usr/bin/zms" }
+web_is_enabled(){ command -v ttyd >/dev/null 2>&1 && uci -q get ttyd.@ttyd[0].command | grep -q "/usr/bin/zms"; }
 
 toggle_web() {
 
