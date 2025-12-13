@@ -48,7 +48,7 @@ echo -e "${CYAN}Удаляем временные файлы${NC}"; cd /; rm -rf
 # ==========================================
 show_script_50() { [ -f "/opt/zapret/init.d/openwrt/custom.d/50-script.sh" ] || return; line=$(head -n1 /opt/zapret/init.d/openwrt/custom.d/50-script.sh)
 name=$(case "$line" in *QUIC*) echo "50-quic4all" ;; *stun*) echo "50-stun4all" ;; *"discord media"*) echo "50-discord-media" ;; *"discord subnets"*) echo "50-discord" ;; *) echo "" ;; esac); }
-enable_discord_calls() { local NO_PAUSE=$1; [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter..." dummy; return; }
+scrypt_install() { local NO_PAUSE=$1; [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter..." dummy; return; }
 [ "$NO_PAUSE" != "1" ] && clear && echo -e "${MAGENTA}Меню установки скриптов${NC}"; [ "$NO_PAUSE" = "1" ] && echo -e "${MAGENTA}Устанавливаем скрипт${NC}"; [ "$NO_PAUSE" != "1" ] && show_script_50 && [ -n "$name" ] && echo -e "\n${YELLOW}Установлен скрипт:${NC} $name"
 if [ "$NO_PAUSE" = "1" ]; then SELECTED="50-stun4all"; URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-stun4all"; else
 echo -e "\n${CYAN}1) ${GREEN}Установить скрипт ${NC}50-stun4all\n${CYAN}2) ${GREEN}Установить скрипт ${NC}50-quic4all\n${CYAN}3) ${GREEN}Установить скрипт ${NC}50-discord-media\n${CYAN}4) ${GREEN}Установить скрипт ${NC}50-discord"
@@ -73,14 +73,14 @@ if [ -n "$last_line" ]; then sed -i "${last_line},\$d" "$CONF"; fi; printf "%s\n
 echo -e "${CYAN}Добавляем в стратегию настройки для игр${NC}"; chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart >/dev/null 2>&1; echo -e "${GREEN}Игровые настройки добавлены!${NC}\n";[ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter для выхода в главное меню..." dummy; }
 zapret_key(){ clear; echo -e "${MAGENTA}Удаление, установка и настройка Zapret${NC}\n"; get_versions; uninstall_zapret "1"; install_Zapret "1"; [ ! -f /etc/init.d/zapret ] && return; wget -qO- "https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Str${STR_VERSION_AUTOINSTALL}.sh" | sh
 if [ ! -f "$CONF" ]; then echo -e "\n${RED}Файл ${NC}$CONF${RED} не найден!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; return; fi; if ! grep -q "#v" "$CONF"; then echo -e "\n${RED}Cтратегия не установлена!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; return; fi
-echo; enable_discord_calls "1"; fix_GAME "1"; echo -e "${GREEN}Zapret установлен и настроен!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; }
+echo; scrypt_install "1"; fix_GAME "1"; echo -e "${GREEN}Zapret установлен и настроен!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; }
 # ==========================================
 # Zapret под ключ
 # ==========================================
 zapret_key(){ clear; echo -e "${MAGENTA}Удаление, установка и настройка Zapret${NC}\n"
 get_versions; uninstall_zapret "1"; install_Zapret "1"
 [ ! -f /etc/init.d/zapret ] && return
-menu_str "1"; echo; enable_discord_calls "1"; fix_GAME "1"; echo -e "${GREEN}Zapret установлен и настроен!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; }
+menu_str "1"; echo; scrypt_install "1"; fix_GAME "1"; echo -e "${GREEN}Zapret установлен и настроен!${NC}\n"; read -p "Нажмите Enter для выхода в главное меню..." dummy; }
 # ==========================================
 # Вернуть настройки по умолчанию
 # ==========================================
@@ -456,7 +456,7 @@ if opkg list-installed | grep -q '^https-dns-proxy '; then doh_st; echo -e "${YE
 echo -e "\n${CYAN}1) ${GREEN}Установить последнюю версию${NC}\n${CYAN}2) ${GREEN}Меню выбора стратегий${NC}\n${CYAN}3) ${GREEN}Вернуть настройки по умолчанию${NC}\n${CYAN}4) ${GREEN}$str_stp_zpr ${NC}Zapret"
 echo -e "${CYAN}5) ${GREEN}Удалить ${NC}Zapret\n${CYAN}6) ${GREEN}$menu_game\n${CYAN}7) ${GREEN}Меню установки скриптов${NC}\n${CYAN}8) ${GREEN}Удалить → установить → настроить${NC} Zapret"
 echo -e "${CYAN}9) ${GREEN}Меню установки и настройки ${NC}DNS over HTTPS\n${CYAN}0) ${GREEN}Системое меню${NC}" ; echo -ne "${CYAN}Enter) ${GREEN}Выход${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read choice
-case "$choice" in 1) install_Zapret ;; 2) menu_str ;; 3) comeback_def ;; 4) pgrep -f /opt/zapret >/dev/null 2>&1 && stop_zapret || start_zapret ;; 5) uninstall_zapret ;; 6) fix_GAME ;; 7) enable_discord_calls ;; 8) zapret_key ;;
+case "$choice" in 1) install_Zapret ;; 2) menu_str ;; 3) comeback_def ;; 4) pgrep -f /opt/zapret >/dev/null 2>&1 && stop_zapret || start_zapret ;; 5) uninstall_zapret ;; 6) fix_GAME ;; 7) scrypt_install ;; 8) zapret_key ;;
 9) menu_doh ;; 0) sys_menu ;; *) echo; exit 0 ;; esac; }
 # ==========================================
 # Старт скрипта
