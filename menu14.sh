@@ -77,13 +77,12 @@ quic_is_blocked() {
 
 ### 3. Включить / отключить блокировку QUIC
 toggle_quic() {
-	clear
 
 	if quic_is_blocked; then
-		echo -e "${YELLOW}Отключаем блокировку QUIC${NC}"
+		echo -e "${MAGENTA}Отключаем блокировку QUIC${NC}"
 
-		uci delete firewall.@rule[Block_UDP_80] 2>/dev/null
-		uci delete firewall.@rule[Block_UDP_443] 2>/dev/null
+		uci delete firewall.@rule[Block_UDP_80] >/dev/null 2>&1
+		uci delete firewall.@rule[Block_UDP_443] >/dev/null 2>&1
 
 		# надёжное удаление по имени
 		for i in $(uci show firewall | grep Block_UDP | cut -d. -f2 | cut -d= -f1); do
@@ -96,7 +95,7 @@ toggle_quic() {
 		echo -e "${GREEN}Блокировка QUIC отключена${NC}"
 		read -p "Нажмите Enter..." dummy
 	else
-		echo -e "${GREEN}Включаем блокировку QUIC${NC}"
+		echo -e "${MAGENTA}Включаем блокировку QUIC${NC}"
 
 		# UDP 80
 		uci add firewall rule
@@ -116,7 +115,7 @@ toggle_quic() {
 		uci set firewall.@rule[-1].dest_port='443'
 		uci set firewall.@rule[-1].target='REJECT'
 
-		uci commit firewall
+		uci commit firewall >/dev/null 2>&1
 		/etc/init.d/firewall restart >/dev/null 2>&1
 
 		echo -e "${GREEN}Блокировка QUIC включена${NC}"
