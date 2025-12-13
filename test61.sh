@@ -275,7 +275,7 @@ extra_block=$(printf "%s\n" "config https-dns-proxy" "	option bootstrap_dns '1.1
 "	option group 'nogroup'" "	option listen_addr '127.0.0.1'" "" "$extra_block" \
 > "$fileDoH"
 
-    /etc/init.d/https-dns-proxy restart >/dev/null 2>&1 || true
+    /etc/init.d/https-dns-proxy restart >/dev/null 2>&1
 
     if [ "$comss_active" = 0 ]; then
         echo -e "Comss DNS ${GREEN}настроен!${NC}\n"
