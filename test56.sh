@@ -163,8 +163,7 @@ printf '%s\n' "130.255.77.28 ntc.party" "185.87.51.182 4pda.to www.4pda.to" "173
 fileGP="/opt/zapret/ipset/zapret-hosts-google.txt"; printf '%s\n' "android.clients.google.com" "beacons.gvt2.com" "connectivitycheck.gstatic.com" "googleplay.com" "gvt1.com" "lh3.googleusercontent.com" "play.google.com" "play.googleapis.com" | grep -Fxv -f "$fileGP" 2>/dev/null >> "$fileGP"
 printf '%s\n' "play-fe.googleapis.com" "play-games.googleusercontent.com" "play-lh.googleusercontent.com" "prod-lt-playstoregatewayadapter-pa.googleapis.com" | grep -Fxv -f "$fileGP" 2>/dev/null >> "$fileGP"
 echo -e "${CYAN}Применяем новую стратегию и настройки${NC}"; chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1; echo -e "${GREEN}Стратегия ${NC}${version} ${GREEN}установлена!${NC}"
-[ "$NO_PAUSE" != "1" ] && echo && read -p "Нажмите Enter для выхода в главное меню..." dummy
-continue; }
+[ "$NO_PAUSE" != "1" ] && echo && read -p "Нажмите Enter для выхода в главное меню..." dummy; }
 # ==========================================
 # DNS over HTTP
 # ==========================================
