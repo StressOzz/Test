@@ -101,8 +101,7 @@ echo -e "${GREEN}Zapret запущен!${NC}\n"; else echo -e "\n${RED}Zapret н
 # Полное удаление Zapret
 # ==========================================
 uninstall_zapret() { local NO_PAUSE=$1
-[ "$NO_PAUSE" != "1" ] && echo
-echo -e "${MAGENTA}Удаляем ZAPRET${NC}\n${CYAN}Останавливаем ${NC}zapret\n${CYAN}Убиваем процессы${NC}"
+[ "$NO_PAUSE" != "1" ] && echo; echo -e "${MAGENTA}Удаляем ZAPRET${NC}\n${CYAN}Останавливаем ${NC}zapret\n${CYAN}Убиваем процессы${NC}"
 /etc/init.d/zapret stop >/dev/null 2>&1; for pid in $(pgrep -f /opt/zapret 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done
 echo -e "${CYAN}Удаляем пакеты${NC}"; opkg --force-removal-of-dependent-packages --autoremove remove zapret luci-app-zapret >/dev/null 2>&1
 echo -e "${CYAN}Удаляем временные файлы${NC}"; rm -rf /opt/zapret /etc/config/zapret /etc/firewall.zapret /etc/init.d/zapret /tmp/*zapret* /var/run/*zapret* /tmp/*.ipk /tmp/*.zip 2>/dev/null
@@ -194,15 +193,12 @@ extra_block=$(printf "%s\n" "config https-dns-proxy" "	option resolver_url 'http
 else echo -e "\n${MAGENTA}Возвращаем настройки по умолчанию${NC}"   
 extra_block=$(printf "%s\n" "config https-dns-proxy" "	option bootstrap_dns '1.1.1.1,1.0.0.1'" "	option resolver_url 'https://cloudflare-dns.com/dns-query'" \
 "	option listen_port '5053'" "" "config https-dns-proxy" "	option bootstrap_dns '8.8.8.8,8.8.4.4'" "	option resolver_url 'https://dns.google/dns-query'" "	option listen_port '5054'")
-fi
-printf '%s\n' "config main 'config'" "	option canary_domains_icloud '1'" "	option canary_domains_mozilla '1'" "	option dnsmasq_config_update '*'" \
+fi; printf '%s\n' "config main 'config'" "	option canary_domains_icloud '1'" "	option canary_domains_mozilla '1'" "	option dnsmasq_config_update '*'" \
 "	option force_dns '1'" "	list force_dns_port '53'" "	list force_dns_port '853'" "	list force_dns_src_interface 'lan'" "	option procd_trigger_wan6 '0'" \
 "	option heartbeat_domain 'heartbeat.melmac.ca'" "	option heartbeat_sleep_timeout '10'" "	option heartbeat_wait_timeout '10'" "	option user 'nobody'" \
-"	option group 'nogroup'" "	option listen_addr '127.0.0.1'" "" "$extra_block" \
-> "$fileDoH"
+"	option group 'nogroup'" "	option listen_addr '127.0.0.1'" "" "$extra_block" > "$fileDoH"
 /etc/init.d/https-dns-proxy restart >/dev/null 2>&1; if [ "$comss_active" = 0 ]; then echo -e "Comss DNS ${GREEN}настроен!${NC}\n"
-else echo -e "${GREEN}Настройки по умолчанию возвращены!${NC}\n"; fi; read -p "Нажмите Enter..." dummy; continue ;;
-*) return ;; esac; done; }
+else echo -e "${GREEN}Настройки по умолчанию возвращены!${NC}\n"; fi; read -p "Нажмите Enter..." dummy; continue ;; *) return ;; esac; done; }
 # ==========================================
 # Системная информация
 # ==========================================
