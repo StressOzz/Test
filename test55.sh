@@ -116,6 +116,7 @@ sed -i '/185\.87\.51\.182 4pda\.to www\.4pda\.to/d; /130\.255\.77\.28 ntc\.party
 show_current_strategy() { [ -f "$CONF" ] || return; for v in v1 v2 v3 v4 v5; do grep -q "#$v" "$CONF" && { ver="$v"; return; } done
 grep -q -- "--hostlist-auto=/opt/zapret/ipset/zapret-hosts-auto.txt" "$CONF" && ver="дефолтная"; }
 menu_str() { local NO_PAUSE=$1; [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter..." dummy; return; }
+while true; do
 if [ "$NO_PAUSE" = "1" ]; then version=$STR_VERSION_AUTOINSTALL
 else clear; echo -e "${MAGENTA}Меню выбора стратегии${NC}\n"; show_current_strategy && [ -n "$ver" ] && echo -e "${YELLOW}Используется стратегия:${NC} $ver\n"
 echo -e "${CYAN}1) ${GREEN}Установить стратегию${NC} v1\n${CYAN}2) ${GREEN}Установить стратегию${NC} v2\n${CYAN}3) ${GREEN}Установить стратегию${NC} v3\n${CYAN}4) ${GREEN}Установить стратегию${NC} v4"
@@ -162,7 +163,8 @@ printf '%s\n' "130.255.77.28 ntc.party" "185.87.51.182 4pda.to www.4pda.to" "173
 fileGP="/opt/zapret/ipset/zapret-hosts-google.txt"; printf '%s\n' "android.clients.google.com" "beacons.gvt2.com" "connectivitycheck.gstatic.com" "googleplay.com" "gvt1.com" "lh3.googleusercontent.com" "play.google.com" "play.googleapis.com" | grep -Fxv -f "$fileGP" 2>/dev/null >> "$fileGP"
 printf '%s\n' "play-fe.googleapis.com" "play-games.googleusercontent.com" "play-lh.googleusercontent.com" "prod-lt-playstoregatewayadapter-pa.googleapis.com" | grep -Fxv -f "$fileGP" 2>/dev/null >> "$fileGP"
 echo -e "${CYAN}Применяем новую стратегию и настройки${NC}"; chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1; echo -e "${GREEN}Стратегия ${NC}${version} ${GREEN}установлена!${NC}"
-[ "$NO_PAUSE" != "1" ] && echo && read -p "Нажмите Enter для выхода в главное меню..." dummy; }
+[ "$NO_PAUSE" != "1" ] && echo && read -p "Нажмите Enter для выхода в главное меню..." dummy
+continue; }
 # ==========================================
 # DNS over HTTP
 # ==========================================
