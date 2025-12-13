@@ -431,7 +431,7 @@ clear; echo -e "${MAGENTA}Системное меню${NC}\n"
 if quic_is_blocked; then
     echo -e "${YELLOW}Блокировка QUIC:${NC} ${GREEN}Включена${NC}"
 else
-    echo -e "${YELLOW}Блокировка QUIC:${NC} ${RED}Отключена${NC}"
+    echo -e "${YELLOW}Блокировка QUIC:${NC} ${GREEN}Отключена${NC}"
 fi
 
 echo -e "\n${CYAN}1) ${GREEN}Системная информация${NC}"
