@@ -208,16 +208,8 @@ chmod +x /usr/bin/zms; echo -e "${CYAN}Обновляем список паке�
 if ! opkg install ttyd >/dev/null 2>&1; then echo -e "\n${RED}Ошибка при установке ttyd!${NC}\n"; read -p "Нажмите Enter..." dummy; return; fi
 echo -e "${CYAN}Устанавливаем ${NC}luci-app-ttyd"; if ! opkg install luci-app-ttyd >/dev/null 2>&1; then echo -e "\n${RED}Ошибка при установке luci-app-ttyd!${NC}\n"; read -p "Нажмите Enter..." dummy; return; fi
 echo -e "${CYAN}Настраиваем ${NC}ttyd"; sed -i "s#/bin/login#sh /usr/bin/zms#" /etc/config/ttyd; /etc/init.d/ttyd restart >/dev/null 2>&1
-
-if pidof ttyd >/dev/null; then
-    echo -e "${GREEN}Служба запущена!${NC}\n\n${YELLOW}Доступ: ${NC}http://192.168.1.1:7681\n"
-	read -p "Нажмите Enter..." dummy
-else
-    echo -e "\n${RED}Ошибка! Служба не запущена!${NC}\n"
-	read -p "Нажмите Enter..." dummy
-fi
-fi
-}
+if pidof ttyd >/dev/null; then echo -e "${GREEN}Служба запущена!${NC}\n\n${YELLOW}Доступ: ${NC}http://192.168.1.1:7681\n"; read -p "Нажмите Enter..." dummy; else
+echo -e "\n${RED}Ошибка! Служба не запущена!${NC}\n"; read -p "Нажмите Enter..." dummy; fi; fi; }
 
 ### Проверка: QUIC заблокирован?
 quic_is_blocked() {
