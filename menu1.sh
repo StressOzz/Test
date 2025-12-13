@@ -1,25 +1,14 @@
 #!/bin/sh
 
-GREEN="\033[1;32m"
-RED="\033[1;31m"
-CYAN="\033[1;36m"
-YELLOW="\033[1;33m"
-NC="\033[0m"
+ZAPRET_MANAGER_VERSION="7.3"; STR_VERSION_AUTOINSTALL="v5" ZAPRET_VERSION="72.20251213"
+GREEN="\033[1;32m"; RED="\033[1;31m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"
+MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
+WORKDIR="/tmp/zapret-update"; CONF="/etc/config/zapret"; CUSTOM_DIR="/opt/zapret/init.d/openwrt/custom.d/"
+EXCLUDE_FILE="/opt/zapret/ipset/zapret-hosts-user-exclude.txt"
+EXCLUDE_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/zapret-hosts-user-exclude.txt"
 
 ### 1. Системная информация
-show_sysinfo() {
-	clear
-	echo "=== Системная информация ==="
-	echo
-	echo "Хост: $(hostname)"
-	uptime
-	echo
-	free -h
-	echo
-	df -h /
-	echo
-	read -p "Enter — назад"
-}
+
 
 ### Проверка: доступ через браузер активен?
 web_is_enabled() {
@@ -132,31 +121,27 @@ toggle_quic() {
 
 ### Главное меню
 while true; do
-	clear
 
 	web_is_enabled \
 		&& WEB_TEXT="Удалить доступ к скрипту через браузер" \
 		|| WEB_TEXT="Активировать доступ к скрипту через браузер"
 
 	quic_is_blocked \
-		&& QUIC_TEXT="Отключить блокировку QUIC" \
-		|| QUIC_TEXT="Включить блокировку QUIC"
+		&& QUIC_TEXT="${GREEN}Отключить блокировку${NC} QUIC" \
+		|| QUIC_TEXT="${GREEN}Включить блокировку${NC} QUIC"
 
-	echo "=========== МЕНЮ ==========="
-	echo "1) Системная информация"
-	echo "2) $WEB_TEXT"
-	echo "3) $QUIC_TEXT"
-	echo
-	echo "Enter) Выход в главное меню"
-	echo
+clear; echo -e "${MAGENTA}Меню выбора стратегии${NC}\n"
+
+echo -e "${CYAN}1) ${GREEN}Системная информация${NC}"
+echo -e "${CYAN}2) ${NC} $WEB_TEXT"
+echo -e "${CYAN}3) ${GREEN}$QUIC_TEXT${NC}"
+echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}"
+
 	printf "Выбор: "
-	read -r choice
+	read -r choiceMN
 
-	case "$choice" in
-		1) show_sysinfo ;;
+	case "$choiceMN" in
+		1) wget -qO- https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/sys_info.sh | sh; echo; read -p "Нажмите Enter для выхода в главное меню..." dummy ;;
 		2) toggle_web ;;
 		3) toggle_quic ;;
-		"") break ;;
-		*) echo "Мимо. Enter — продолжить"; read ;;
-	esac
-done
+		*) echo; exit 0 ;; esac; done
