@@ -150,6 +150,16 @@ printf '%s\n' "130.255.77.28 ntc.party" "30.255.77.28 ntc.party" "185.87.51.182 
 "lh3.googleusercontent.com" "android.clients.google.com" "connectivitycheck.gstatic.com" "play-lh.googleusercontent.com" "play-games.googleusercontent.com" "prod-lt-playstoregatewayadapter-pa.googleapis.com" | grep -Fxv -f "$fileGP" 2>/dev/null >> "$fileGP"
 echo -e "${CYAN}Применяем новую стратегию и настройки${NC}"; chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1; echo -e "${GREEN}Стратегия ${NC}${version} ${GREEN}установлена!${NC}"
 [ "$NO_PAUSE" != "1" ] && echo && read -p "Нажмите Enter..." dummy; [ "$NO_PAUSE" = "1" ] && break; done }
+DoH_def(){
+echo -e "\n${MAGENTA}Возвращаем настройки по умолчанию${NC}"   
+extra_block=$(printf "%s\n" "config https-dns-proxy" "	option bootstrap_dns '1.1.1.1,1.0.0.1'" "	option resolver_url 'https://cloudflare-dns.com/dns-query'" \
+"	option listen_port '5053'" "" "config https-dns-proxy" "	option bootstrap_dns '8.8.8.8,8.8.4.4'" "	option resolver_url 'https://dns.google/dns-query'" "	option listen_port '5054'")
+fi; printf '%s\n' "config main 'config'" "	option canary_domains_icloud '1'" "	option canary_domains_mozilla '1'" "	option dnsmasq_config_update '*'" \
+"	option force_dns '1'" "	list force_dns_port '53'" "	list force_dns_port '853'" "	list force_dns_src_interface 'lan'" "	option procd_trigger_wan6 '0'" \
+"	option heartbeat_domain 'heartbeat.melmac.ca'" "	option heartbeat_sleep_timeout '10'" "	option heartbeat_wait_timeout '10'" "	option user 'nobody'" \
+"	option group 'nogroup'" "	option listen_addr '127.0.0.1'" "" "$extra_block" > "$fileDoH"
+/etc/init.d/https-dns-proxy restart >/dev/null 2>&1; if [ "$comss_active" = 0 ]; then echo -e "Comss DNS ${GREEN}настроен!${NC}\n"
+else echo -e "${GREEN}Настройки по умолчанию возвращены!${NC}\n"; fi; read -p "Нажмите Enter..." dummy;}
 # ==========================================
 # DNS over HTTP
 # ==========================================
@@ -191,8 +201,8 @@ web_is_enabled && WEB_TEXT="Удалить доступ к скрипту из �
 quic_is_blocked && QUIC_TEXT="${GREEN}Отключить блокировку${NC} QUIC ${GREEN}(80,443)${NC}" || QUIC_TEXT="${GREEN}Включить блокировку${NC} QUIC ${GREEN}(80,443)${NC}"
 clear; echo -e "${MAGENTA}Системное меню${NC}\n"; if web_is_enabled; then echo -e "${YELLOW}Доступ из браузера:${NC} http://192.168.1.1:7681"; fi
 if quic_is_blocked; then echo -e "${YELLOW}Блокировка QUIC:${NC}    ${GREEN}включена${NC}"; fi
-echo -e "\n${CYAN}1) ${GREEN}Системная информация${NC}\n${CYAN}2) ${GREEN}$WEB_TEXT${NC}\n${CYAN}3) ${GREEN}$QUIC_TEXT${NC}\n${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n"
-echo -ne "${YELLOW}Выберите пункт:${NC} " && read -r choiceMN; case "$choiceMN" in
+echo -e "\n${CYAN}1) ${GREEN}Системная информация${NC}\n${CYAN}2) ${GREEN}$WEB_TEXT${NC}\n${CYAN}3) ${GREEN}$QUIC_TEXT${NC}\n${CYAN}4) ${GREEN}Вернуть ${NC}DNS over HTTPS${GREEN}настрйки по умолчанию.${NC}"
+echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read -r choiceMN; case "$choiceMN" in
 1) wget -qO- https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/sys_info.sh | sh; echo; read -p "Нажмите Enter..." dummy ;;
 2) toggle_web ;; 3) toggle_quic ;; *) echo; return ;; esac; done; }
 # ==========================================
