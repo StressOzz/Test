@@ -300,8 +300,11 @@ extra_block=$(printf "%s\n" "config https-dns-proxy" "\toption bootstrap_dns '1.
 # ==========================================
 # Системная информация
 # ==========================================
-web_is_enabled() {	command -v ttyd >/dev/null 2>&1 && uci -q get ttyd.@ttyd[0].command | grep -q "/usr/bin/zms" }
-toggle_web() { if web_is_enabled; then echo -e "\n${MAGENTA}Удаляем доступ из браузера${NC}"; opkg remove luci-app-ttyd ttyd >/dev/null 2>&1
+web_is_enabled() {
+command -v ttyd >/dev/null 2>&1 && uci -q get ttyd.@ttyd[0].command | grep -q "/usr/bin/zms"
+}
+toggle_web() {
+if web_is_enabled; then echo -e "\n${MAGENTA}Удаляем доступ из браузера${NC}"; opkg remove luci-app-ttyd ttyd >/dev/null 2>&1
 rm -f /etc/config/ttyd; rm -f /usr/bin/zms;	echo -e "${GREEN}Доступ удалён${NC}\n";	read -p "Нажмите Enter..." dummy
 else echo -e "\n${MAGENTA}Активируем доступ из браузера${NC}"
 echo 'sh <(wget -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/main/Zapret-Manager.sh)' > /usr/bin/zms
@@ -313,7 +316,8 @@ echo -e "${CYAN}Устанавливаем ${NC}luci-app-ttyd"; if ! opkg instal
 echo -e "\n${RED}Ошибка при установке luci-app-ttyd!${NC}\n"; read -p "Нажмите Enter..." dummy; return; fi
 echo -e "${CYAN}Настраиваем ${NC}ttyd"; sed -i "s#/bin/login#sh /usr/bin/zms#" /etc/config/ttyd; /etc/init.d/ttyd restart >/dev/null 2>&1
 if pidof ttyd >/dev/null; then echo -e "${GREEN}Служба запущена!${NC}\n\n${YELLOW}Доступ: ${NC}http://192.168.1.1:7681\n"; read -p "Нажмите Enter..." dummy
-else echo -e "\n${RED}Ошибка! Служба не запущена!${NC}\n"; read -p "Нажмите Enter..." dummy; fi; fi; }
+else echo -e "\n${RED}Ошибка! Служба не запущена!${NC}\n"; read -p "Нажмите Enter..." dummy; fi; fi;
+}
 quic_is_blocked() {	uci show firewall | grep -q "name='Block_UDP_80'" && uci show firewall | grep -q "name='Block_UDP_443'" }
 toggle_quic() {	if quic_is_blocked; then echo -e "\n${MAGENTA}Отключаем блокировку QUIC${NC}"
 for RULE in Block_UDP_80 Block_UDP_443; do
