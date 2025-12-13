@@ -20,7 +20,7 @@ web_is_enabled() {
 toggle_web() {
 
 	if web_is_enabled; then
-		echo -e "${MAGENTA}Удаляем доступ через браузер${NC}"
+		echo -e "\n${MAGENTA}Удаляем доступ через браузер${NC}"
 		opkg remove luci-app-ttyd ttyd >/dev/null 2>&1
 		rm -f /etc/config/ttyd
 		rm -f /usr/bin/zms
@@ -29,11 +29,10 @@ toggle_web() {
 
 		read -p "Нажмите Enter для выхода в главное меню..." dummy
 	else
-	
+
+	echo -e "\n${MAGENTA}Активируем доступ через браузер${NC}"
 		echo 'sh <(wget -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/main/Zapret-Manager.sh)' > /usr/bin/zms
 chmod +x /usr/bin/zms
-
-echo -e "${MAGENTA}Активируем доступ через браузер${NC}"
 
 echo -e "${CYAN}Обновляем список пакетов${NC}"
 if ! opkg update >/dev/null 2>&1; then
@@ -64,6 +63,7 @@ else
     echo -e "\n${RED}Ошибка! Служба не запущена!${NC}\n"
 fi
 fi
+read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
 
 ### Проверка: QUIC заблокирован?
@@ -91,6 +91,7 @@ toggle_quic() {
 		/etc/init.d/firewall restart >/dev/null 2>&1
 
 		echo -e "${GREEN}Блокировка QUIC отключена${NC}"
+		read -p "Нажмите Enter для выхода в главное меню..." dummy
 	else
 		echo -e "${GREEN}Включаем блокировку QUIC${NC}"
 
@@ -118,7 +119,7 @@ toggle_quic() {
 		echo -e "${GREEN}Блокировка QUIC включена${NC}"
 	fi
 
-	read -p "Enter — назад"
+read -p "Нажмите Enter для выхода в главное меню..." dummy
 }
 
 ### Главное меню
@@ -134,12 +135,18 @@ while true; do
 
 clear; echo -e "${MAGENTA}Меню выбора стратегии${NC}\n"
 
+	if web_is_enabled; then
+		echo -e "\n${YELLOW}Доступ из браузера:${NC} http://192.168.1.1:7681\n"
+		echo
+	fi
+
+
 echo -e "${CYAN}1) ${GREEN}Системная информация${NC}"
 echo -e "${CYAN}2) ${GREEN}$WEB_TEXT${NC}"
 echo -e "${CYAN}3) ${GREEN}$QUIC_TEXT${NC}"
-echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}"
+echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n"
 
-echo -ne "${YELLOW}Выберите пункт:${NC}" && read -r choiceMN
+echo -ne "${YELLOW}Выберите пункт:${NC} " && read -r choiceMN
 
 	case "$choiceMN" in
 		1) wget -qO- https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/sys_info.sh | sh; echo; read -p "Нажмите Enter для выхода в главное меню..." dummy ;;
