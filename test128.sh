@@ -167,12 +167,13 @@ printf '%s\n' "config main 'config'" "	option canary_domains_icloud '1'" "	optio
 doh_st() {
     if grep -q 'dns.comss.one' /etc/config/https-dns-proxy 2>/dev/null; then
         comss_active=1
-        comss_text="${GREEN}Вернуть настройки по умолчанию${NC}"
+        comss_text="${GREEN}Вернуть в ${NC}DNS over HTTPS ${GREEN}настройки по умолчанию${NC}"
     else
         comss_active=0
-        comss_text="${GREEN}Настроить ${NC}Comss DNS"
+        comss_text="${GREEN}Настроить ${NC}Comss DNS ${GREEN}в ${NC}DNS over HTTPS"
     fi
 }
+
 
 DoH_def(){ doh_st
 if ! opkg list-installed | grep -q '^https-dns-proxy '; then echo -e "\n${RED}DNS over HTTPS не установлен!${NC}\n"; read -p "Нажмите Enter..."; continue; fi
@@ -185,7 +186,7 @@ fi; printf '%s\n' "config main 'config'" "	option canary_domains_icloud '1'" "	o
 "	option force_dns '1'" "	list force_dns_port '53'" "	list force_dns_port '853'" "	list force_dns_src_interface 'lan'" "	option procd_trigger_wan6 '0'" \
 "	option heartbeat_domain 'heartbeat.melmac.ca'" "	option heartbeat_sleep_timeout '10'" "	option heartbeat_wait_timeout '10'" "	option user 'nobody'" \
 "	option group 'nogroup'" "	option listen_addr '127.0.0.1'" "" "$extra_block" > "$fileDoH"
-/etc/init.d/https-dns-proxy enable >/dev/null 2>&1; /etc/init.d/https-dns-proxy restart >/dev/null 2>&1; if [ "$comss_active" = 0 ]; then echo -e "Comss DNS ${GREEN}настроен!${NC}\n"
+/etc/init.d/https-dns-proxy stop >/dev/null 2>&1; /etc/init.d/https-dns-proxy start >/dev/null 2>&1; if [ "$comss_active" = 0 ]; then echo -e "Comss DNS ${GREEN}настроен!${NC}\n"
 else echo -e "${GREEN}Настройки по умолчанию возвращены!${NC}\n"; fi; read -p "Нажмите Enter..." dummy; }
 
 # ==========================================
@@ -217,7 +218,7 @@ quic_is_blocked && QUIC_TEXT="${GREEN}Отключить блокировку${N
 clear; echo -e "${MAGENTA}Системное меню${NC}\n"; if web_is_enabled; then echo -e "${YELLOW}Доступ из браузера:${NC} http://192.168.1.1:7681"; fi
 if quic_is_blocked; then echo -e "${YELLOW}Блокировка QUIC:${NC}    ${GREEN}включена${NC}"; fi
 echo -e "\n${CYAN}1) ${GREEN}Системная информация${NC}\n${CYAN}2) ${GREEN}$WEB_TEXT${NC}\n${CYAN}3) ${GREEN}$QUIC_TEXT${NC}"
-opkg list-installed | grep -q '^https-dns-proxy' && echo -e "4) $comss_text"
+opkg list-installed | grep -q '^https-dns-proxy' && echo -e "${CYAN}4) $comss_text"
 echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read -r choiceMN; case "$choiceMN" in
 1) wget -qO- https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/sys_info.sh | sh; echo; read -p "Нажмите Enter..." dummy ;;
 2) toggle_web ;; 3) toggle_quic ;; 4) DoH_def ;; *) echo; return ;; esac; done; }
