@@ -10,7 +10,6 @@ clear
 
 echo -e "${MAGENTA}Устанавливаем AWG + интерфейс${NC}"
 echo -e "${GREEN}Обновляем список пакетов${NC}"
-echo -e "${GREEN}Обновляем список пакетов...${NC}"
 if ! opkg update >/dev/null 2>&1; then
 echo -e "${RED}Ошибка: не удалось обновить список пакетов${NC}"
 exit 1
