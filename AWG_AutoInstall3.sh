@@ -76,6 +76,7 @@ AWG_INSTALL() {
     /etc/init.d/network restart >/dev/null 2>&1
 
     echo "AmneziaWG установлен."
+	read -p "Нажмите Enter..." dummy
 
 ##################################################################################################################
 
@@ -138,6 +139,8 @@ PODKOP_INSTALL() {
     rm -rf "$TMP"
 
     echo "Podkop v$PODKOP_VER установлен и работает."
+read -p "Нажмите Enter..." dummy
+	
 }
 
 
