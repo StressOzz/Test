@@ -166,7 +166,7 @@ printf '%s\n' "config main 'config'" "	option canary_domains_icloud '1'" "	optio
 doh_st() { if grep -q 'dns.comss.one' /etc/config/https-dns-proxy 2>/dev/null; then comss_active=1; comss_text="${GREEN}Вернуть ${NC}DNS over HTTPS ${GREEN}настройки по умолчанию${NC}"; else comss_active=0; comss_text="${GREEN}Настроить ${NC}DNS over HTTPS"; fi; }
 DoH_def(){ doh_st
 if ! opkg list-installed | grep -q '^https-dns-proxy '; then echo -e "\n${RED}DNS over HTTPS не установлен!${NC}\n"; read -p "Нажмите Enter..."; continue; fi
-rm -f "$fileDoH"; if [ "$comss_active" = 0 ]; then echo -e "\n${MAGENTA}Настраиваем DNS over HTTPS${NC}\n${CYAN}Настраиваем ${NC}Comss.one DNS\n${CYAN}Применяем новые настройки"
+rm -f "$fileDoH"; if [ "$comss_active" = 0 ]; then echo -e "\n${MAGENTA}Настраиваем DNS over HTTPS${NC}\n${CYAN}Настраиваем ${NC}Comss.one DNS\n${CYAN}Применяем новые настройки${NC}"
 extra_block=$(printf "%s\n" "config https-dns-proxy" "	option resolver_url 'https://dns.comss.one/dns-query'")
 else echo -e "\n${MAGENTA}Возвращаем настройки по умолчанию${NC}\n${CYAN}Возвращаем настройки к значениям по умолчанию${NC}"
 extra_block=$(printf "%s\n" "config https-dns-proxy" "	option bootstrap_dns '1.1.1.1,1.0.0.1'" "	option resolver_url 'https://cloudflare-dns.com/dns-query'" \
@@ -205,8 +205,8 @@ doh_st; web_is_enabled && WEB_TEXT="Удалить доступ к скрипт�
 quic_is_blocked && QUIC_TEXT="${GREEN}Отключить блокировку${NC} QUIC ${GREEN}(80,443)${NC}" || QUIC_TEXT="${GREEN}Включить блокировку${NC} QUIC ${GREEN}(80,443)${NC}"
 clear; echo -e "${MAGENTA}Системное меню${NC}\n"; if web_is_enabled; then echo -e "${YELLOW}Доступ из браузера:${NC} http://192.168.1.1:7681"; fi
 if quic_is_blocked; then echo -e "${YELLOW}Блокировка QUIC:${NC}    ${GREEN}включена${NC}"; fi
-if grep -q 'dns.comss.one' /etc/config/https-dns-proxy 2>/dev/null; then echo -e "Настройки DNS over HTTPS: Comss DNS"
-elif grep -q 'cloudflare-dns.com' /etc/config/https-dns-proxy 2>/dev/null && grep -q 'dns.google' /etc/config/https-dns-proxy 2>/dev/null; then echo -e "Настройки DNS over HTTPS: по умолчанию"; fi
+if grep -q 'dns.comss.one' /etc/config/https-dns-proxy 2>/dev/null; then echo -e "${YELLOW}DNS over HTTPS:${NC} Comss DNS"
+elif grep -q 'cloudflare-dns.com' /etc/config/https-dns-proxy 2>/dev/null && grep -q 'dns.google' /etc/config/https-dns-proxy 2>/dev/null; then echo -e "${YELLOW}DNS over HTTPS:${NC} по умолчанию"; fi
 echo -e "\n${CYAN}1) ${GREEN}Системная информация${NC}\n${CYAN}2) ${GREEN}$WEB_TEXT${NC}\n${CYAN}3) ${GREEN}$QUIC_TEXT${NC}"
 opkg list-installed | grep -q '^https-dns-proxy' && echo -e "${CYAN}4) $comss_text"
 echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read -r choiceMN; case "$choiceMN" in
