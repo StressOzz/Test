@@ -51,7 +51,7 @@ echo -e "AmneziaWG ${GREEN}установлен!${NC}"
 
 ##################################################################################################################
 
-echo -e "${MAGENTA}Устанавливаем новый интерфейс AWG${NC}"
+echo -e "${MAGENTA}Устанавливаем интерфейс AWG${NC}"
 IF_NAME="AWG"
 PROTO="amneziawg"
 DEV_NAME="amneziawg0"
@@ -123,4 +123,4 @@ echo -e "${GREEN}Обновляем списки${NC}"
 podkop list_update >/dev/null 2>&1
 echo -e "${GREEN}Перезапускаем сервис${NC}"
 podkop restart >/dev/null 2>&1
-echo -e "Podkop ${GREEN}готов к работе!${NC}"
+echo -e "Podkop ${GREEN}готов к работе!${NC}\n"
