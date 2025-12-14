@@ -44,7 +44,7 @@ show_menu() {
 ##################################################################################################################################################
 AWG_INSTALL() {
 printf "${GREEN}===== Обновление списка пакетов =====${NC}\n"
-opkg update
+opkg update >/dev/null 2>&1
 printf "${GREEN}===== Определяем архитектуру и версию OpenWrt =====${NC}\n"
 PKGARCH=$(opkg print-architecture | awk 'BEGIN {max=0} {if ($3 > max) {max = $3; arch = $2}} END {print arch}')
 TARGET=$(ubus call system board | jsonfilter -e '@.release.target' | cut -d '/' -f1)
@@ -74,15 +74,15 @@ install_pkg() {
     local filename="${pkgname}${PKGPOSTFIX}"
     local url="${BASE_URL}v${VERSION}/${filename}"
 
-    if opkg list-installed | grep -q "$pkgname"; then
+    if opkg list-installed >/dev/null 2>&1 | grep -q "$pkgname"; then
         printf "${GREEN}$pkgname уже установлен${NC}\n"
         return
     fi
 
     printf "${GREEN}===== Скачиваем $pkgname =====${NC}\n"
-    if wget -O "$AWG_DIR/$filename" "$url"; then
+    if wget -O "$AWG_DIR/$filename" "$url" >/dev/null 2>&1 ; then
         printf "${GREEN}===== Устанавливаем $pkgname =====${NC}\n"
-        if opkg install "$AWG_DIR/$filename"; then
+        if opkg install "$AWG_DIR/$filename" >/dev/null 2>&1 ; then
             printf "${GREEN}$pkgname установлен успешно${NC}\n"
         else
             printf "${GREEN}Ошибка установки $pkgname. Установите вручную.${NC}\n"
@@ -94,22 +94,22 @@ install_pkg() {
     fi
 }
 printf "${GREEN}===== Устанавливаем kmod-amneziawg =====${NC}\n"
-install_pkg "kmod-amneziawg"
+install_pkg "kmod-amneziawg" >/dev/null 2>&1
 printf "${GREEN}===== Устанавливаем amneziawg-tools =====${NC}\n"
-install_pkg "amneziawg-tools"
+install_pkg "amneziawg-tools" >/dev/null 2>&1
 printf "${GREEN}===== Устанавливаем $LUCI_PACKAGE_NAME =====${NC}\n"
-install_pkg "$LUCI_PACKAGE_NAME"
+install_pkg "$LUCI_PACKAGE_NAME" >/dev/null 2>&1
 # Русская локализация только для AWG 2.0
 if [ "$AWG_VERSION" = "2.0" ]; then
     printf "${GREEN}===== Устанавливаем русскую локализацию =====${NC}\n"
-	install_pkg "luci-i18n-amneziawg-ru" || printf "${GREEN}Внимание: русская локализация не установлена (не критично)${NC}\n"
+	install_pkg "luci-i18n-amneziawg-ru" >/dev/null 2>&1 || printf "${GREEN}Внимание: русская локализация не установлена (не критично)${NC}\n"
     else
         printf "${GREEN}Пропускаем установку русской локализации.${NC}\n"
     fi
 printf "${GREEN}===== Очистка временных файлов =====${NC}\n"
 rm -rf "$AWG_DIR"
 printf "${GREEN}===== Перезапускаем сеть =====${NC}\n"
-/etc/init.d/network restart
+/etc/init.d/network restart >/dev/null 2>&1
 printf "${GREEN}===== Скрипт завершен =====${NC}\n"
     echo "AmneziaWG установлен."
 	read -p "Нажмите Enter..." dummy
@@ -315,8 +315,6 @@ pkg_list_update || {
     # Очистка
     rm -rf "$DOWNLOAD_DIR"
 
-    echo -e "Podkop ${GREEN}успешно установлен / обновлён!${NC}\n"
-    read -p "Нажмите Enter..." dummy
 
 wget -qO /etc/config/podkop https://raw.githubusercontent.com/StressOzz/Test/refs/heads/main/podkop
 echo -e "\nAWG ${GREEN}интегрирован в ${NC}Podkop${GREEN}.${NC}"
