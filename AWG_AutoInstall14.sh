@@ -39,9 +39,9 @@ show_menu() {
 
 ##################################################################################################################################################
 AWG_INSTALL() {
-printf "${GREEN}Обновляем список пакетов${NC}\n"
+echo -e "${GREEN}Обновляем список пакетов${NC}"
 opkg update >/dev/null 2>&1
-printf "${GREEN}Определяем архитектуру и версию OpenWrt${NC}\n"
+echo -e "${GREEN}Определяем архитектуру и версию OpenWrt${NC}"
 PKGARCH=$(opkg print-architecture | awk 'BEGIN {max=0} {if ($3 > max) {max = $3; arch = $2}} END {print arch}')
 TARGET=$(ubus call system board | jsonfilter -e '@.release.target' | cut -d '/' -f1)
 SUBTARGET=$(ubus call system board | jsonfilter -e '@.release.target' | cut -d '/' -f2)
@@ -61,7 +61,7 @@ if [ "$MAJOR" -gt 24 ] || \
 else
     LUCI_PACKAGE_NAME="luci-app-amneziawg"
 fi
-printf "${GREEN}AWG версия: ${NC}$AWG_VERSION"
+echo -e "${GREEN}AWG версия: ${NC}$AWG_VERSION"
 AWG_DIR="/tmp/amneziawg"
 mkdir -p "$AWG_DIR"
 install_pkg() {
@@ -70,21 +70,21 @@ install_pkg() {
     local url="${BASE_URL}v${VERSION}/${filename}"
 
     if opkg list-installed >/dev/null 2>&1 | grep -q "$pkgname"; then
-        printf "${GREEN}$pkgname уже установлен${NC}"
+        echo -e "${GREEN}$pkgname уже установлен${NC}"
         return
     fi
 
-    printf "${GREEN}Скачиваем ${NC}$pkgname\n"
+    echo -e "${GREEN}Скачиваем ${NC}$pkgname"
     if wget -O "$AWG_DIR/$filename" "$url" >/dev/null 2>&1 ; then
-        printf "${GREEN}Устанавливаем ${NC}$pkgname\n"
+        echo -e "${GREEN}Устанавливаем ${NC}$pkgname"
         if opkg install "$AWG_DIR/$filename" >/dev/null 2>&1 ; then
-            printf "$pkgname ${GREEN}установлен успешно${NC}"
+            echo -e "$pkgname ${GREEN}установлен успешно${NC}"
         else
-            printf "\n${RED}Ошибка установки $pkgname!${NC}"
+            echo -e "\n${RED}Ошибка установки $pkgname!${NC}"
             exit 1
         fi
     else
-        printf "\n${RED}Ошибка установки $pkgname!${NC}"
+        echo -e "\n${RED}Ошибка установки $pkgname!${NC}"
         exit 1
     fi
 }
@@ -93,16 +93,16 @@ install_pkg "amneziawg-tools"
 install_pkg "$LUCI_PACKAGE_NAME"
 # Русская локализация только для AWG 2.0
 if [ "$AWG_VERSION" = "2.0" ]; then
-    printf "${GREEN}Устанавливаем русскую локализацию${NC}"
-	install_pkg "luci-i18n-amneziawg-ru" >/dev/null 2>&1 || printf "${GREEN}Внимание: русская локализация не установлена (не критично)${NC}"
+    echo -e "${GREEN}Устанавливаем русскую локализацию${NC}"
+	install_pkg "luci-i18n-amneziawg-ru" >/dev/null 2>&1 || echo -e "${GREEN}Внимание: русская локализация не установлена (не критично)${NC}"
     else
-        printf "${GREEN}Пропускаем установку русской локализации.${NC}"
+        echo -e "${GREEN}Пропускаем установку русской локализации.${NC}"
     fi
-printf "${GREEN}Очистка временных файлов${NC}"
+echo -e "${GREEN}Очистка временных файлов${NC}"
 rm -rf "$AWG_DIR"
-printf "${GREEN}Перезапускаем сеть${NC}"
+echo -e "${GREEN}Перезапускаем сеть${NC}"
 /etc/init.d/network restart >/dev/null 2>&1
-	printf "${GREEN}AmneziaWG установлен!${NC}\n"
+	echo -e "${GREEN}AmneziaWG установлен!${NC}"
 	read -p "Нажмите Enter..." dummy
 
 ##################################################################################################################
@@ -112,11 +112,11 @@ printf "${GREEN}Перезапускаем сеть${NC}"
 IF_NAME="AWG"
 PROTO="amneziawg"
 DEV_NAME="amneziawg0"
-printf "${MAGENTA}Устанавливаем новый интерфейс${NC}"
+echo -e "${MAGENTA}Устанавливаем новый интерфейс${NC}"
 if grep -q "config interface '$IF_NAME'" /etc/config/network; then
-printf "${RED}Интерфейс $IF_NAME уже существует${NC}"
+echo -e "${RED}Интерфейс $IF_NAME уже существует${NC}"
 else
-printf "${GREEN}Добавляем интерфейс ${NC}$IF_NAME"
+echo -e "${GREEN}Добавляем интерфейс ${NC}$IF_NAME"
 uci batch <<EOF
 set network.$IF_NAME=interface
 set network.$IF_NAME.proto=$PROTO
@@ -124,16 +124,16 @@ set network.$IF_NAME.device=$DEV_NAME
 commit network
 EOF
 fi
-printf "${GREEN}Перезапускаем сеть${NC}"
+echo -e "${GREEN}Перезапускаем сеть${NC}"
 /etc/init.d/network restart
 /etc/init.d/firewall restart
 /etc/init.d/uhttpd restart
-printf "${GREEN}Интерфейс ${NC}$IF_NAME${GREEN} создан и активирован."
+echo -e "${GREEN}Интерфейс ${NC}$IF_NAME${GREEN} создан и активирован."
 read -p "Нажмите Enter..." dummy
 }
 ##################################################################################################################
 PODKOP_INSTALL() {
-echo -e "${MAGENTA}Установка / обновление Podkop${NC}\n"
+echo -e "${MAGENTA}Установка / обновление Podkop${NC}"
 
     REPO="https://api.github.com/repos/itdoginfo/podkop/releases/latest"
     DOWNLOAD_DIR="/tmp/podkop"
@@ -146,9 +146,9 @@ echo -e "${MAGENTA}Установка / обновление Podkop${NC}\n"
 
     msg() {
         if [ -n "$2" ]; then
-            printf "\033[32;1m%s \033[37;1m%s\033[0m\n" "$1" "$2"
+            echo -e "\033[32;1m%s \033[37;1m%s\033[0m\n" "$1" "$2"
         else
-            printf "\033[32;1m%s\033[0m\n" "$1"
+            echo -e "\033[32;1m%s\033[0m\n" "$1"
         fi
     }
 
