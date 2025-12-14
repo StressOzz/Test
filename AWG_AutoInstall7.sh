@@ -151,6 +151,9 @@ echo -e "${MAGENTA}Установка / обновление Podkop${NC}\n"
     REPO="https://api.github.com/repos/itdoginfo/podkop/releases/latest"
     DOWNLOAD_DIR="/tmp/podkop"
 
+    PKG_IS_APK=0
+    command -v apk >/dev/null 2>&1 && PKG_IS_APK=1
+
     rm -rf "$DOWNLOAD_DIR"
     mkdir -p "$DOWNLOAD_DIR"
 
@@ -164,26 +167,40 @@ echo -e "${MAGENTA}Установка / обновление Podkop${NC}\n"
 
     pkg_is_installed () {
         local pkg_name="$1"
-
+        if [ "$PKG_IS_APK" -eq 1 ]; then
+            apk list --installed | grep -q "$pkg_name"
+        else
             opkg list-installed | grep -q "$pkg_name"
-
+        fi
     }
 
     pkg_remove() {
         local pkg_name="$1"
         msg "Удаляем" "$pkg_name..."
+        if [ "$PKG_IS_APK" -eq 1 ]; then
+            apk del "$pkg_name" >/dev/null 2>&1
+        else
             opkg remove --force-depends "$pkg_name" >/dev/null 2>&1
-
+        fi
     }
 
     pkg_list_update() {
         msg "Обновляем список пакетов..."
+        if [ "$PKG_IS_APK" -eq 1 ]; then
+            apk update >/dev/null 2>&1
+        else
             opkg update >/dev/null 2>&1
+        fi
     }
 
     pkg_install() {
         local pkg_file="$1"
         msg "Устанавливаем" "$(basename "$pkg_file")"
+        if [ "$PKG_IS_APK" -eq 1 ]; then
+            apk add --allow-untrusted "$pkg_file" >/dev/null 2>&1
+        else
+            opkg install "$pkg_file" >/dev/null 2>&1
+        fi
     }
 
     # Проверка системы
@@ -193,6 +210,13 @@ echo -e "${MAGENTA}Установка / обновление Podkop${NC}\n"
 	
 [ "$AVAILABLE_SPACE" -lt "$REQUIRED_SPACE" ] && { 
     msg "Недостаточно свободного места"
+    echo ""
+    read -p "Нажмите Enter..." dummy
+    return
+}
+
+nslookup google.com >/dev/null 2>&1 || { 
+    msg "DNS не работает"
     echo ""
     read -p "Нажмите Enter..." dummy
     return
@@ -226,9 +250,24 @@ pkg_list_update || {
     return
 }
 
-    # Шаблон скачивания
-        grep_url_pattern='https://[^"[:space:]]*\.ipk'
+    # Проверка GitHub API
+    if command -v curl >/dev/null 2>&1; then
+        check_response=$(curl -s "$REPO")
+        if echo "$check_response" | grep -q 'API rate limit '; then
+			echo ""
+            echo -e "${RED}Превышен лимит запросов GitHub. Повторите позже.${NC}"
+			echo ""
+            read -p "Нажмите Enter..." dummy
+            return
+        fi
+    fi
 
+    # Шаблон скачивания
+    if [ "$PKG_IS_APK" -eq 1 ]; then
+        grep_url_pattern='https://[^"[:space:]]*\.apk'
+    else
+        grep_url_pattern='https://[^"[:space:]]*\.ipk'
+    fi
 
     download_success=0
     urls=$(wget -qO- "$REPO" 2>/dev/null | grep -o "$grep_url_pattern")
@@ -256,13 +295,28 @@ pkg_list_update || {
         [ -n "$file" ] && pkg_install "$DOWNLOAD_DIR/$file"
     done
 
-
+    # Русский интерфейс
+    ru=$(ls "$DOWNLOAD_DIR" | grep "luci-i18n-podkop-ru" | head -n 1)
+    if [ -n "$ru" ]; then
+        if pkg_is_installed luci-i18n-podkop-ru; then
             msg "Обновляем русский язык..." "$ru"
             pkg_remove luci-i18n-podkop* >/dev/null 2>&1
             pkg_install "$DOWNLOAD_DIR/$ru"
-  
+        else
+            msg "Установить русский интерфейс? y/N"
+            read -r RUS
+            case "$RUS" in
+                y|Y) pkg_install "$DOWNLOAD_DIR/$ru" ;;
+                *) ;;
+            esac
+        fi
+    fi
+
     # Очистка
     rm -rf "$DOWNLOAD_DIR"
+
+    echo -e "Podkop ${GREEN}успешно установлен / обновлён!${NC}\n"
+    read -p "Нажмите Enter..." dummy
 
 wget -qO /etc/config/podkop https://raw.githubusercontent.com/StressOzz/Test/refs/heads/main/podkop
 echo -e "\nAWG ${GREEN}интегрирован в ${NC}Podkop${GREEN}.${NC}"
