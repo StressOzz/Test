@@ -102,8 +102,7 @@ echo -e "${GREEN}Очистка временных файлов${NC}"
 rm -rf "$AWG_DIR"
 echo -e "${GREEN}Перезапускаем сеть${NC}"
 /etc/init.d/network restart >/dev/null 2>&1
-	echo -e "${GREEN}AmneziaWG установлен!${NC}"
-	read -p "Нажмите Enter..." dummy
+echo -e "AmneziaWG ${GREEN}установлен!${NC}"
 
 ##################################################################################################################
 
@@ -128,7 +127,7 @@ echo -e "${GREEN}Перезапускаем сеть${NC}"
 /etc/init.d/network restart
 /etc/init.d/firewall restart
 /etc/init.d/uhttpd restart
-echo -e "${GREEN}Интерфейс ${NC}$IF_NAME${GREEN} создан и активирован."
+echo -e "${GREEN}Интерфейс ${NC}$IF_NAME${GREEN} создан и активирован.${NC}"
 read -p "Нажмите Enter..." dummy
 }
 ##################################################################################################################
@@ -144,13 +143,6 @@ echo -e "${MAGENTA}Установка / обновление Podkop${NC}"
     rm -rf "$DOWNLOAD_DIR"
     mkdir -p "$DOWNLOAD_DIR"
 
-    msg() {
-        if [ -n "$2" ]; then
-            echo -e "\033[32;1m%s \033[37;1m%s\033[0m\n" "$1" "$2"
-        else
-            echo -e "\033[32;1m%s\033[0m\n" "$1"
-        fi
-    }
 
     pkg_is_installed () {
         local pkg_name="$1"
@@ -163,7 +155,7 @@ echo -e "${MAGENTA}Установка / обновление Podkop${NC}"
 
     pkg_remove() {
         local pkg_name="$1"
-        msg "Удаляем" "$pkg_name..."
+        echo -e "Удаляем" "$pkg_name..."
         if [ "$PKG_IS_APK" -eq 1 ]; then
             apk del "$pkg_name" >/dev/null 2>&1
         else
@@ -172,7 +164,7 @@ echo -e "${MAGENTA}Установка / обновление Podkop${NC}"
     }
 
     pkg_list_update() {
-        msg "Обновляем список пакетов..."
+        echo -e "Обновляем список пакетов..."
         if [ "$PKG_IS_APK" -eq 1 ]; then
             apk update >/dev/null 2>&1
         else
@@ -182,7 +174,7 @@ echo -e "${MAGENTA}Установка / обновление Podkop${NC}"
 
     pkg_install() {
         local pkg_file="$1"
-        msg "Устанавливаем" "$(basename "$pkg_file")"
+        echo -e "Устанавливаем" "$(basename "$pkg_file")"
         if [ "$PKG_IS_APK" -eq 1 ]; then
             apk add --allow-untrusted "$pkg_file" >/dev/null 2>&1
         else
@@ -196,14 +188,14 @@ echo -e "${MAGENTA}Установка / обновление Podkop${NC}"
     REQUIRED_SPACE=26000
 	
 [ "$AVAILABLE_SPACE" -lt "$REQUIRED_SPACE" ] && { 
-    msg "Недостаточно свободного места"
+    echo -e "Недостаточно свободного места"
     echo ""
     read -p "Нажмите Enter..." dummy
     return
 }
 
 nslookup google.com >/dev/null 2>&1 || { 
-    msg "DNS не работает"
+    echo -e "DNS не работает"
     echo ""
     read -p "Нажмите Enter..." dummy
     return
@@ -211,7 +203,7 @@ nslookup google.com >/dev/null 2>&1 || {
 
 
     if pkg_is_installed https-dns-proxy; then
-        msg "Обнаружен конфликтный пакет" "https-dns-proxy. Удаляем..."
+        echo -e "Обнаружен конфликтный пакет" "https-dns-proxy. Удаляем..."
         pkg_remove luci-app-https-dns-proxy
         pkg_remove https-dns-proxy
         pkg_remove luci-i18n-https-dns-proxy*
@@ -222,7 +214,7 @@ nslookup google.com >/dev/null 2>&1 || {
         sing_box_version=$(sing-box version | head -n 1 | awk '{print $3}')
         required_version="1.12.4"
         if [ "$(echo -e "$sing_box_version\n$required_version" | sort -V | head -n 1)" != "$required_version" ]; then
-            msg "sing-box устарел. Удаляем..."
+            echo -e "sing-box устарел. Удаляем..."
             service podkop stop >/dev/null 2>&1
             pkg_remove sing-box
         fi
@@ -231,7 +223,7 @@ nslookup google.com >/dev/null 2>&1 || {
     /usr/sbin/ntpd -q -p 194.190.168.1 -p 216.239.35.0 -p 216.239.35.4 -p 162.159.200.1 -p 162.159.200.123 >/dev/null 2>&1
 
 pkg_list_update || { 
-    msg "Не удалось обновить список пакетов"
+    echo -e "Не удалось обновить список пакетов"
     echo ""
     read -p "Нажмите Enter..." dummy
     return
@@ -261,16 +253,16 @@ pkg_list_update || {
     for url in $urls; do
         filename=$(basename "$url")
         filepath="$DOWNLOAD_DIR/$filename"
-        msg "Скачиваем" "$filename"
+        echo -e "Скачиваем" "$filename"
         if wget -q -O "$filepath" "$url" >/dev/null 2>&1 && [ -s "$filepath" ]; then
             download_success=1
         else
-            msg "Ошибка скачивания" "$filename"
+            echo -e "Ошибка скачивания" "$filename"
         fi
     done
 
 [ $download_success -eq 0 ] && { 
-    msg "Нет успешно скачанных пакетов"
+    echo -e "Нет успешно скачанных пакетов"
     echo ""
     read -p "Нажмите Enter..." dummy
     return
@@ -283,21 +275,10 @@ pkg_list_update || {
     done
 
     # Русский интерфейс
-    ru=$(ls "$DOWNLOAD_DIR" | grep "luci-i18n-podkop-ru" | head -n 1)
-    if [ -n "$ru" ]; then
-        if pkg_is_installed luci-i18n-podkop-ru; then
-            msg "Обновляем русский язык..." "$ru"
+
+            echo -e "Обновляем русский язык..."
             pkg_remove luci-i18n-podkop* >/dev/null 2>&1
             pkg_install "$DOWNLOAD_DIR/$ru"
-        else
-            msg "Установить русский интерфейс? y/N"
-            read -r RUS
-            case "$RUS" in
-                y|Y) pkg_install "$DOWNLOAD_DIR/$ru" ;;
-                *) ;;
-            esac
-        fi
-    fi
 
     # Очистка
     rm -rf "$DOWNLOAD_DIR"
