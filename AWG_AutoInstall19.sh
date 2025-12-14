@@ -15,18 +15,18 @@ show_menu() {
 
 	clear
 	
-    echo -e "${CYAN}1) ${GREEN}Установить AWG интерфэйс${NC}"
-    echo -e "\n${CYAN}2) ${GREEN}Установить / обновить ${NC}Podkop"
-	echo -e "${CYAN}3) ${GREEN}Под КЛЮЧ${NC}"
+    echo -e "${CYAN}1) ${GREEN}Установить ${NC}AWG ${GREEN}+ ${NC}интерфейс"
+    echo -e "${CYAN}2) ${GREEN}Установить ${NC}Podkop"
+	echo -e "${CYAN}3) ${GREEN}Установить ${NC}AWG ${GREEN}+ ${NC}интерфейс ${GREEN}+ ${NC}Podkop${NC}"
     echo -ne "\n${YELLOW}Выберите пункт:${NC} "
     read choice
 
     case "$choice" in
-        1) PODKOP_INSTALL ;;
-        2) AWG_INSTALL ;;
+        1) AWG_INSTALL ;;
+        2) PODKOP_INSTALL ;;
 		3) AWG_INSTALL; 
 
-		echo -e "\n${BLUE}Вставьте рабочий конфиг в Interfaces и нажмите ENTER ${NC}\n"
+		echo -e "\n${BLUE}Вставьте рабочий конфиг в Interfaces (Интерфейс) и нажмите Enter ${NC}\n"
 		read -p "Нажмите Enter..." dummy
 		
 		PODKOP_INSTALL ;;
@@ -132,19 +132,19 @@ read -p "Нажмите Enter..." dummy
 }
 ##################################################################################################################
 PODKOP_INSTALL() {
-    echo "Устанавливаем Podkop..."
 
+echo -e "${MAGENTA}Устанавливаем Podkop${NC}"
     TMP="/tmp/podkop"
     rm -rf "$TMP"
     mkdir -p "$TMP"
     cd "$TMP" || return
 
-  wget -q -O podkop.ipk https://github.com/itdoginfo/podkop/releases/download/0.7.10/podkop-v0.7.10-r1-all.ipk
+echo -e "${GREEN}Скачиваем${NC}"
+wget -q -O podkop.ipk https://github.com/itdoginfo/podkop/releases/download/0.7.10/podkop-v0.7.10-r1-all.ipk
+wget -q -O luci-app-podkop.ipk https://github.com/itdoginfo/podkop/releases/download/0.7.10/luci-app-podkop-v0.7.10-r1-all.ipk
+wget -q -O luci-i18n-podkop-ru.ipk https://github.com/itdoginfo/podkop/releases/download/0.7.10/luci-i18n-podkop-ru-0.7.10.ipk
 
-    wget -q -O luci-app-podkop.ipk https://github.com/itdoginfo/podkop/releases/download/0.7.10/luci-app-podkop-v0.7.10-r1-all.ipk
-
-    wget -q -O luci-i18n-podkop-ru.ipk https://github.com/itdoginfo/podkop/releases/download/0.7.10/luci-i18n-podkop-ru-0.7.10.ipk
-
+echo -e "${GREEN}Устанавливаем${NC}"
     opkg update
     opkg install ./*.ipk 
 
@@ -156,17 +156,17 @@ PODKOP_INSTALL() {
 
 wget -qO /etc/config/podkop https://raw.githubusercontent.com/StressOzz/Test/refs/heads/main/podkop
 echo -e "\nAWG ${GREEN}интегрирован в ${NC}Podkop${GREEN}.${NC}"
-	echo -e "${GREEN}Запуск ${NC}Podkop${GREEN}...${NC}"
+	echo -e "${GREEN}Запускаем ${NC}Podkop${NC}"
     podkop enable >/dev/null 2>&1
-    echo -e "${GREEN}Применяем конфигурацию...${NC}"
+    echo -e "${GREEN}Применяем конфигурацию${NC}"
     podkop reload >/dev/null 2>&1
-    echo -e "${GREEN}Перезапускаем сервис...${NC}"
+    echo -e "${GREEN}Перезапускаем сервис${NC}"
     podkop restart >/dev/null 2>&1
-    echo -e "${GREEN}Обновляем списки...${NC}"
+    echo -e "${GREEN}Обновляем списки${NC}"
     podkop list_update >/dev/null 2>&1
-    echo -e "${GREEN}Перезапускаем сервис...${NC}"
+    echo -e "${GREEN}Перезапускаем сервис${NC}"
     podkop restart >/dev/null 2>&1
-    echo -e "\nPodkop ${GREEN}готов к работе.${NC}"
+    echo -e "\nPodkop ${GREEN}готов к работе${NC}"
     read -p "Нажмите Enter..." dummy
 }
 
