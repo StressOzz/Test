@@ -146,39 +146,139 @@ read -p "Нажмите Enter..." dummy
 }
 ##################################################################################################################
 PODKOP_INSTALL() {
-    PODKOP_VER="0.7.10"
+echo -e "${MAGENTA}Установка / обновление Podkop${NC}\n"
 
-    echo "Устанавливаем Podkop v$PODKOP_VER..."
+    REPO="https://api.github.com/repos/itdoginfo/podkop/releases/latest"
+    DOWNLOAD_DIR="/tmp/podkop"
 
-    TMP="/tmp/podkop"
-    BASE_URL="https://github.com/itdoginfo/podkop/releases/download/$PODKOP_VER"
+    rm -rf "$DOWNLOAD_DIR"
+    mkdir -p "$DOWNLOAD_DIR"
 
-    rm -rf "$TMP"
-    mkdir -p "$TMP"
-    cd "$TMP" || return
+    msg() {
+        if [ -n "$2" ]; then
+            printf "\033[32;1m%s \033[37;1m%s\033[0m\n" "$1" "$2"
+        else
+            printf "\033[32;1m%s\033[0m\n" "$1"
+        fi
+    }
 
-    wget -q "$BASE_URL/podkop-v$PODKOP_VER-r1-all.ipk"
-    wget -q "$BASE_URL/luci-app-podkop-v$PODKOP_VER-r1-all.ipk"
-    wget -q "$BASE_URL/luci-i18n-podkop-ru-$PODKOP_VER.ipk"
+    pkg_is_installed () {
+        local pkg_name="$1"
 
-    opkg update >/dev/null 2>&1
-    opkg install ./*.ipk >/dev/null 2>&1
+            opkg list-installed | grep -q "$pkg_name"
 
-    wget -qO /etc/config/podkop \
-        https://raw.githubusercontent.com/StressOzz/Test/refs/heads/main/podkop
+    }
 
-    podkop enable >/dev/null 2>&1
-    podkop restart >/dev/null 2>&1
-    podkop list_update >/dev/null 2>&1
+    pkg_remove() {
+        local pkg_name="$1"
+        msg "Удаляем" "$pkg_name..."
+            opkg remove --force-depends "$pkg_name" >/dev/null 2>&1
 
-    cd /
-    rm -rf "$TMP"
+    }
 
-    echo "Podkop v$PODKOP_VER установлен и работает."
-read -p "Нажмите Enter..." dummy
+    pkg_list_update() {
+        msg "Обновляем список пакетов..."
+            opkg update >/dev/null 2>&1
+    }
+
+    pkg_install() {
+        local pkg_file="$1"
+        msg "Устанавливаем" "$(basename "$pkg_file")"
+    }
+
+    # Проверка системы
+    MODEL=$(cat /tmp/sysinfo/model 2>/dev/null || echo "не определено")
+    AVAILABLE_SPACE=$(df /overlay | awk 'NR==2 {print $4}')
+    REQUIRED_SPACE=26000
 	
+[ "$AVAILABLE_SPACE" -lt "$REQUIRED_SPACE" ] && { 
+    msg "Недостаточно свободного места"
+    echo ""
+    read -p "Нажмите Enter..." dummy
+    return
 }
 
+
+    if pkg_is_installed https-dns-proxy; then
+        msg "Обнаружен конфликтный пакет" "https-dns-proxy. Удаляем..."
+        pkg_remove luci-app-https-dns-proxy
+        pkg_remove https-dns-proxy
+        pkg_remove luci-i18n-https-dns-proxy*
+    fi
+
+    # Проверка sing-box
+    if pkg_is_installed "^sing-box"; then
+        sing_box_version=$(sing-box version | head -n 1 | awk '{print $3}')
+        required_version="1.12.4"
+        if [ "$(echo -e "$sing_box_version\n$required_version" | sort -V | head -n 1)" != "$required_version" ]; then
+            msg "sing-box устарел. Удаляем..."
+            service podkop stop >/dev/null 2>&1
+            pkg_remove sing-box
+        fi
+    fi
+
+    /usr/sbin/ntpd -q -p 194.190.168.1 -p 216.239.35.0 -p 216.239.35.4 -p 162.159.200.1 -p 162.159.200.123 >/dev/null 2>&1
+
+pkg_list_update || { 
+    msg "Не удалось обновить список пакетов"
+    echo ""
+    read -p "Нажмите Enter..." dummy
+    return
+}
+
+    # Шаблон скачивания
+        grep_url_pattern='https://[^"[:space:]]*\.ipk'
+
+
+    download_success=0
+    urls=$(wget -qO- "$REPO" 2>/dev/null | grep -o "$grep_url_pattern")
+    for url in $urls; do
+        filename=$(basename "$url")
+        filepath="$DOWNLOAD_DIR/$filename"
+        msg "Скачиваем" "$filename"
+        if wget -q -O "$filepath" "$url" >/dev/null 2>&1 && [ -s "$filepath" ]; then
+            download_success=1
+        else
+            msg "Ошибка скачивания" "$filename"
+        fi
+    done
+
+[ $download_success -eq 0 ] && { 
+    msg "Нет успешно скачанных пакетов"
+    echo ""
+    read -p "Нажмите Enter..." dummy
+    return
+}
+
+    # Установка пакетов
+    for pkg in podkop luci-app-podkop; do
+        file=$(ls "$DOWNLOAD_DIR" | grep "^$pkg" | head -n 1)
+        [ -n "$file" ] && pkg_install "$DOWNLOAD_DIR/$file"
+    done
+
+
+            msg "Обновляем русский язык..." "$ru"
+            pkg_remove luci-i18n-podkop* >/dev/null 2>&1
+            pkg_install "$DOWNLOAD_DIR/$ru"
+  
+    # Очистка
+    rm -rf "$DOWNLOAD_DIR"
+
+wget -qO /etc/config/podkop https://raw.githubusercontent.com/StressOzz/Test/refs/heads/main/podkop
+echo -e "\nAWG ${GREEN}интегрирован в ${NC}Podkop${GREEN}.${NC}"
+	echo -e "${GREEN}Запуск ${NC}Podkop${GREEN}...${NC}"
+    podkop enable >/dev/null 2>&1
+    echo -e "${GREEN}Применяем конфигурацию...${NC}"
+    podkop reload >/dev/null 2>&1
+    echo -e "${GREEN}Перезапускаем сервис...${NC}"
+    podkop restart >/dev/null 2>&1
+    echo -e "${GREEN}Обновляем списки...${NC}"
+    podkop list_update >/dev/null 2>&1
+    echo -e "${GREEN}Перезапускаем сервис...${NC}"
+    podkop restart >/dev/null 2>&1
+    echo -e "\nPodkop ${GREEN}готов к работе.${NC}"
+    read -p "Нажмите Enter..." dummy
+}
 
 
 # ==========================================
