@@ -43,39 +43,74 @@ show_menu() {
 
 ##################################################################################################################################################
 AWG_INSTALL() {
-    echo "Устанавливаем AmneziaWG..."
+printf "${GREEN}===== Обновление списка пакетов =====${NC}\n"
+opkg update
+printf "${GREEN}===== Определяем архитектуру и версию OpenWrt =====${NC}\n"
+PKGARCH=$(opkg print-architecture | awk 'BEGIN {max=0} {if ($3 > max) {max = $3; arch = $2}} END {print arch}')
+TARGET=$(ubus call system board | jsonfilter -e '@.release.target' | cut -d '/' -f1)
+SUBTARGET=$(ubus call system board | jsonfilter -e '@.release.target' | cut -d '/' -f2)
+VERSION=$(ubus call system board | jsonfilter -e '@.release.version')
+PKGPOSTFIX="_v${VERSION}_${PKGARCH}_${TARGET}_${SUBTARGET}.ipk"
+BASE_URL="https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/"
+printf "${GREEN}===== Определяем версию AWG =====${NC}\n"
+MAJOR=$(echo "$VERSION" | cut -d '.' -f1)
+MINOR=$(echo "$VERSION" | cut -d '.' -f2)
+PATCH=$(echo "$VERSION" | cut -d '.' -f3)
+AWG_VERSION="1.0"
+if [ "$MAJOR" -gt 24 ] || \
+   [ "$MAJOR" -eq 24 -a "$MINOR" -gt 10 ] || \
+   [ "$MAJOR" -eq 24 -a "$MINOR" -eq 10 -a "$PATCH" -ge 3 ] || \
+   [ "$MAJOR" -eq 23 -a "$MINOR" -eq 5 -a "$PATCH" -ge 6 ]; then
+    AWG_VERSION="2.0"
+    LUCI_PACKAGE_NAME="luci-proto-amneziawg"
+else
+    LUCI_PACKAGE_NAME="luci-app-amneziawg"
+fi
+printf "${GREEN}Detected AWG version: $AWG_VERSION${NC}\n"
+AWG_DIR="/tmp/amneziawg"
+mkdir -p "$AWG_DIR"
+install_pkg() {
+    local pkgname=$1
+    local filename="${pkgname}${PKGPOSTFIX}"
+    local url="${BASE_URL}v${VERSION}/${filename}"
 
-    TMP="/tmp/amneziawg"
-    BASE_URL="https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v24.10.4"
+    if opkg list-installed | grep -q "$pkgname"; then
+        printf "${GREEN}$pkgname уже установлен${NC}\n"
+        return
+    fi
 
-    rm -rf "$TMP"
-    mkdir -p "$TMP"
-    cd "$TMP" || return
-
-    opkg update >/dev/null 2>&1
-
-    ARCH=$(opkg print-architecture | awk '{print $2}' | tail -n1)
-    TARGET=$(ubus call system board | jsonfilter -e '@.release.target')
-
-    SUFFIX="_v24.10.4_${ARCH}_${TARGET}.ipk"
-
-    install() {
-        pkg="$1"
-        file="${pkg}${SUFFIX}"
-        opkg list-installed | grep -q "$pkg" && return
-        wget -q "$BASE_URL/$file" && opkg install "$file"
-    }
-
-    install kmod-amneziawg
-    install amneziawg-tools
-    install luci-proto-amneziawg
-    install luci-i18n-amneziawg-ru
-
-    cd /
-    rm -rf "$TMP"
-
-    /etc/init.d/network restart >/dev/null 2>&1
-
+    printf "${GREEN}===== Скачиваем $pkgname =====${NC}\n"
+    if wget -O "$AWG_DIR/$filename" "$url"; then
+        printf "${GREEN}===== Устанавливаем $pkgname =====${NC}\n"
+        if opkg install "$AWG_DIR/$filename"; then
+            printf "${GREEN}$pkgname установлен успешно${NC}\n"
+        else
+            printf "${GREEN}Ошибка установки $pkgname. Установите вручную.${NC}\n"
+            exit 1
+        fi
+    else
+        printf "${GREEN}Ошибка скачивания $pkgname. Установите вручную.${NC}\n"
+        exit 1
+    fi
+}
+printf "${GREEN}===== Устанавливаем kmod-amneziawg =====${NC}\n"
+install_pkg "kmod-amneziawg"
+printf "${GREEN}===== Устанавливаем amneziawg-tools =====${NC}\n"
+install_pkg "amneziawg-tools"
+printf "${GREEN}===== Устанавливаем $LUCI_PACKAGE_NAME =====${NC}\n"
+install_pkg "$LUCI_PACKAGE_NAME"
+# Русская локализация только для AWG 2.0
+if [ "$AWG_VERSION" = "2.0" ]; then
+    printf "${GREEN}===== Устанавливаем русскую локализацию =====${NC}\n"
+	install_pkg "luci-i18n-amneziawg-ru" || printf "${GREEN}Внимание: русская локализация не установлена (не критично)${NC}\n"
+    else
+        printf "${GREEN}Пропускаем установку русской локализации.${NC}\n"
+    fi
+printf "${GREEN}===== Очистка временных файлов =====${NC}\n"
+rm -rf "$AWG_DIR"
+printf "${GREEN}===== Перезапускаем сеть =====${NC}\n"
+/etc/init.d/network restart
+printf "${GREEN}===== Скрипт завершен =====${NC}\n"
     echo "AmneziaWG установлен."
 	read -p "Нажмите Enter..." dummy
 
