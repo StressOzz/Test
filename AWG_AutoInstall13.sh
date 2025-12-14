@@ -14,13 +14,9 @@ DGRAY='\033[38;5;236m'
 show_menu() {
 
 	clear
-	echo -e "╔═══════════════════════════════╗"
-	echo -e "║     ${BLUE}Podkop+AWG   Manager${NC}     ║"
-	echo -e "╚═══════════════════════════════╝"
-
-
-    echo -e "\n${CYAN}1) ${GREEN}Установить / обновить ${NC}Podkop"
-    echo -e "${CYAN}2) ${GREEN}Установить AWG интерфэйс${NC}"
+	
+    echo -e "${CYAN}1) ${GREEN}Установить AWG интерфэйс${NC}"
+    echo -e "\n${CYAN}2) ${GREEN}Установить / обновить ${NC}Podkop"
 	echo -e "${CYAN}3) ${GREEN}Под КЛЮЧ${NC}"
     echo -ne "\n${YELLOW}Выберите пункт:${NC} "
     read choice
@@ -30,7 +26,7 @@ show_menu() {
         2) AWG_INSTALL ;;
 		3) AWG_INSTALL; 
 
-		echo -e "${GREEN}Вставьте рабочий конфиг в Interfaces и нажмите ENTER ${NC}"
+		echo -e "\n${BLUE}Вставьте рабочий конфиг в Interfaces и нажмите ENTER ${NC}\n"
 		read -p "Нажмите Enter..." dummy
 		
 		PODKOP_INSTALL ;;
@@ -65,7 +61,7 @@ if [ "$MAJOR" -gt 24 ] || \
 else
     LUCI_PACKAGE_NAME="luci-app-amneziawg"
 fi
-printf "${GREEN}AWG версия: ${NC}$AWG_VERSION\n"
+printf "${GREEN}AWG версия: ${NC}$AWG_VERSION"
 AWG_DIR="/tmp/amneziawg"
 mkdir -p "$AWG_DIR"
 install_pkg() {
@@ -74,7 +70,7 @@ install_pkg() {
     local url="${BASE_URL}v${VERSION}/${filename}"
 
     if opkg list-installed >/dev/null 2>&1 | grep -q "$pkgname"; then
-        printf "${GREEN}$pkgname уже установлен${NC}\n"
+        printf "${GREEN}$pkgname уже установлен${NC}"
         return
     fi
 
@@ -82,35 +78,31 @@ install_pkg() {
     if wget -O "$AWG_DIR/$filename" "$url" >/dev/null 2>&1 ; then
         printf "${GREEN}Устанавливаем ${NC}$pkgname\n"
         if opkg install "$AWG_DIR/$filename" >/dev/null 2>&1 ; then
-            printf "$pkgname ${GREEN}установлен успешно${NC}\n"
+            printf "$pkgname ${GREEN}установлен успешно${NC}"
         else
-            printf "\n${RED}Ошибка установки $pkgname!${NC}\n"
+            printf "\n${RED}Ошибка установки $pkgname!${NC}"
             exit 1
         fi
     else
-        printf "\n${RED}Ошибка установки $pkgname!${NC}\n"
+        printf "\n${RED}Ошибка установки $pkgname!${NC}"
         exit 1
     fi
 }
-printf "${GREEN}===== Устанавливаем kmod-amneziawg =====${NC}\n"
 install_pkg "kmod-amneziawg"
-printf "${GREEN}===== Устанавливаем amneziawg-tools =====${NC}\n"
 install_pkg "amneziawg-tools"
-printf "${GREEN}===== Устанавливаем $LUCI_PACKAGE_NAME =====${NC}\n"
 install_pkg "$LUCI_PACKAGE_NAME"
 # Русская локализация только для AWG 2.0
 if [ "$AWG_VERSION" = "2.0" ]; then
-    printf "${GREEN}===== Устанавливаем русскую локализацию =====${NC}\n"
-	install_pkg "luci-i18n-amneziawg-ru" >/dev/null 2>&1 || printf "${GREEN}Внимание: русская локализация не установлена (не критично)${NC}\n"
+    printf "${GREEN}Устанавливаем русскую локализацию${NC}"
+	install_pkg "luci-i18n-amneziawg-ru" >/dev/null 2>&1 || printf "${GREEN}Внимание: русская локализация не установлена (не критично)${NC}"
     else
-        printf "${GREEN}Пропускаем установку русской локализации.${NC}\n"
+        printf "${GREEN}Пропускаем установку русской локализации.${NC}"
     fi
-printf "${GREEN}===== Очистка временных файлов =====${NC}\n"
+printf "${GREEN}Очистка временных файлов${NC}"
 rm -rf "$AWG_DIR"
-printf "${GREEN}===== Перезапускаем сеть =====${NC}\n"
+printf "${GREEN}Перезапускаем сеть${NC}"
 /etc/init.d/network restart >/dev/null 2>&1
-printf "${GREEN}===== Скрипт завершен =====${NC}\n"
-    echo "AmneziaWG установлен."
+	printf "${GREEN}AmneziaWG установлен!${NC}\n"
 	read -p "Нажмите Enter..." dummy
 
 ##################################################################################################################
@@ -120,13 +112,11 @@ printf "${GREEN}===== Скрипт завершен =====${NC}\n"
 IF_NAME="AWG"
 PROTO="amneziawg"
 DEV_NAME="amneziawg0"
-
-# Проверяем, есть ли уже такой интерфейс
-
+printf "${MAGENTA}Устанавливаем новый интерфейс${NC}"
 if grep -q "config interface '$IF_NAME'" /etc/config/network; then
-echo "Интерфейс $IF_NAME уже существует"
+printf "${RED}Интерфейс $IF_NAME уже существует${NC}"
 else
-echo "Добавляем интерфейс $IF_NAME..."
+printf "${GREEN}Добавляем интерфейс ${NC}$IF_NAME"
 uci batch <<EOF
 set network.$IF_NAME=interface
 set network.$IF_NAME.proto=$PROTO
@@ -134,13 +124,11 @@ set network.$IF_NAME.device=$DEV_NAME
 commit network
 EOF
 fi
-
-# Перезапускаем сеть, firewall и веб-интерфейс LuCI
-
+printf "${GREEN}Перезапускаем сеть${NC}"
 /etc/init.d/network restart
 /etc/init.d/firewall restart
 /etc/init.d/uhttpd restart
-echo "Интерфейс $IF_NAME создан и активирован. Проверьте LuCI."
+printf "${GREEN}Интерфейс ${NC}$IF_NAME${GREEN} создан и активирован."
 read -p "Нажмите Enter..." dummy
 }
 ##################################################################################################################
