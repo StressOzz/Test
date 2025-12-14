@@ -148,9 +148,6 @@ echo -e "${MAGENTA}Установка / обновление Podkop${NC}\n"
     REPO="https://api.github.com/repos/itdoginfo/podkop/releases/latest"
     DOWNLOAD_DIR="/tmp/podkop"
 
-    PKG_IS_APK=0
-    command -v apk >/dev/null 2>&1 && PKG_IS_APK=1
-
     rm -rf "$DOWNLOAD_DIR"
     mkdir -p "$DOWNLOAD_DIR"
 
@@ -164,40 +161,26 @@ echo -e "${MAGENTA}Установка / обновление Podkop${NC}\n"
 
     pkg_is_installed () {
         local pkg_name="$1"
-        if [ "$PKG_IS_APK" -eq 1 ]; then
-            apk list --installed | grep -q "$pkg_name"
-        else
+
             opkg list-installed | grep -q "$pkg_name"
-        fi
+
     }
 
     pkg_remove() {
         local pkg_name="$1"
         msg "Удаляем" "$pkg_name..."
-        if [ "$PKG_IS_APK" -eq 1 ]; then
-            apk del "$pkg_name" >/dev/null 2>&1
-        else
             opkg remove --force-depends "$pkg_name" >/dev/null 2>&1
-        fi
+
     }
 
     pkg_list_update() {
         msg "Обновляем список пакетов..."
-        if [ "$PKG_IS_APK" -eq 1 ]; then
-            apk update >/dev/null 2>&1
-        else
             opkg update >/dev/null 2>&1
-        fi
     }
 
     pkg_install() {
         local pkg_file="$1"
         msg "Устанавливаем" "$(basename "$pkg_file")"
-        if [ "$PKG_IS_APK" -eq 1 ]; then
-            apk add --allow-untrusted "$pkg_file" >/dev/null 2>&1
-        else
-            opkg install "$pkg_file" >/dev/null 2>&1
-        fi
     }
 
     # Проверка системы
@@ -241,11 +224,8 @@ pkg_list_update || {
 }
 
     # Шаблон скачивания
-    if [ "$PKG_IS_APK" -eq 1 ]; then
-        grep_url_pattern='https://[^"[:space:]]*\.apk'
-    else
         grep_url_pattern='https://[^"[:space:]]*\.ipk'
-    fi
+
 
     download_success=0
     urls=$(wget -qO- "$REPO" 2>/dev/null | grep -o "$grep_url_pattern")
@@ -294,7 +274,7 @@ pkg_list_update || {
     rm -rf "$DOWNLOAD_DIR"
 
 wget -qO /etc/config/podkop https://raw.githubusercontent.com/StressOzz/Test/refs/heads/main/podkop
-
+echo -e "\nAWG ${GREEN}интегрирован в ${NC}Podkop${GREEN}.${NC}"
 	echo -e "${GREEN}Запуск ${NC}Podkop${GREEN}...${NC}"
     podkop enable >/dev/null 2>&1
     echo -e "${GREEN}Применяем конфигурацию...${NC}"
@@ -306,10 +286,6 @@ wget -qO /etc/config/podkop https://raw.githubusercontent.com/StressOzz/Test/ref
     echo -e "${GREEN}Перезапускаем сервис...${NC}"
     podkop restart >/dev/null 2>&1
     echo -e "\nPodkop ${GREEN}готов к работе.${NC}"
-
-    echo -e "\nByeDPI ${GREEN}интегрирован в ${NC}Podkop${GREEN}.${NC}"
-
-    echo -e "Podkop ${GREEN}успешно установлен / обновлён!${NC}\n"
     read -p "Нажмите Enter..." dummy
 }
 
