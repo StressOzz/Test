@@ -76,7 +76,7 @@ echo -e "${CYAN}Добавляем в стратегию настройки дл
 # Zapret под ключ
 # ==========================================
 zapret_key(){ clear; echo -e "${MAGENTA}Удаление, установка и настройка Zapret${NC}\n"; get_versions; uninstall_zapret "1"; install_Zapret "1"
-[ ! -f /etc/init.d/zapret ] && return; menu_str "1"; echo; scrypt_install "1"; fix_GAME "1"; echo -e "${GREEN}Zapret установлен и настроен!${NC}\n"; read -p "Нажмите Enter..." dummy; }
+[ ! -f /etc/init.d/zapret ] && return; menu_str "1"; echo; scrypt_install "1"; fix_GAME "1"; echo -e "${GREEN}Zapret установлен и !${NC}\n"; read -p "Нажмите Enter..." dummy; }
 # ==========================================
 # Вернуть настройки по умолчанию
 # ==========================================
@@ -162,7 +162,7 @@ echo -e "${CYAN}Устанавливаем ${NC}luci-app-https-dns-proxy"; opkg 
 printf '%s\n' "config main 'config'" "	option canary_domains_icloud '1'" "	option canary_domains_mozilla '1'" "	option dnsmasq_config_update '*'" "	option force_dns '1'" "	list force_dns_port '53'" "	list force_dns_port '853'" \
 "	list force_dns_src_interface 'lan'" "	option procd_trigger_wan6 '0'" "	option heartbeat_domain 'heartbeat.melmac.ca'" "	option heartbeat_sleep_timeout '10'" "	option heartbeat_wait_timeout '10'" "	option user 'nobody'" "	option group 'nogroup'" \
 "	option listen_addr '127.0.0.1'" "" "config https-dns-proxy" "	option resolver_url 'https://dns.comss.one/dns-query'" > "$fileDoH"
-/etc/init.d/https-dns-proxy enable >/dev/null 2>&1; /etc/init.d/https-dns-proxy restart >/dev/null 2>&1; echo -e "DNS over HTTPS${GREEN} установлен и настроен!${NC}\n"; fi; read -p "Нажмите Enter для выхода в главное меню..." dummy; }
+/etc/init.d/https-dns-proxy enable >/dev/null 2>&1; /etc/init.d/https-dns-proxy restart >/dev/null 2>&1; echo -e "DNS over HTTPS${GREEN} установлен и !${NC}\n"; fi; read -p "Нажмите Enter для выхода в главное меню..." dummy; }
 doh_st() { if grep -q 'dns.comss.one' /etc/config/https-dns-proxy 2>/dev/null; then comss_active=1; comss_text="${GREEN}Вернуть ${NC}DNS over HTTPS ${GREEN}настройки по умолчанию${NC}"; else comss_active=0; comss_text="${GREEN}Настроить ${NC}DNS over HTTPS"; fi; }
 DoH_def(){ doh_st
 if ! opkg list-installed | grep -q '^https-dns-proxy '; then echo -e "\n${RED}DNS over HTTPS не установлен!${NC}\n"; read -p "Нажмите Enter..."; continue; fi
@@ -219,7 +219,7 @@ menu_game=$( [ -f "$CONF" ] && grep -q "1024-49999,50100-65535" "$CONF" && echo 
 opkg list-installed | grep -q '^https-dns-proxy ' && doh_menu="Удалить" || doh_menu="Установить → настроить"; echo -e "\n${YELLOW}Установленная версия:   ${INST_COLOR}$INSTALLED_DISPLAY${NC}"
 [ -n "$ZAPRET_STATUS" ] && echo -e "${YELLOW}Статус Zapret:${NC}          $ZAPRET_STATUS"; show_script_50 && [ -n "$name" ] && echo -e "${YELLOW}Установлен скрипт:${NC}      $name"
 [ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*1024-49999,50100-65535" "$CONF" && grep -q -- "--filter-udp=1024-49999,50100-65535" "$CONF" && echo -e "${YELLOW}Стратегия для игр:${NC}      ${GREEN}активирована${NC}"
-if opkg list-installed | grep -q '^https-dns-proxy '; then if grep -q 'dns.comss.one' /etc/config/https-dns-proxy 2>/dev/null; then echo -e "${YELLOW}DNS over HTTPS:         ${GREEN}установлен | настроен${NC}"
+if opkg list-installed | grep -q '^https-dns-proxy '; then if grep -q 'dns.comss.one' /etc/config/https-dns-proxy 2>/dev/null; then echo -e "${YELLOW}DNS over HTTPS:         ${GREEN}установлен | Comss DNS${NC}"
 else echo -e "${YELLOW}DNS over HTTPS:         ${GREEN}установлен${NC}"; fi; fi; web_is_enabled && if web_is_enabled; then echo -e "${YELLOW}Доступ из браузера:${NC}     http://192.168.1.1:7681"; fi
 quic_is_blocked && if quic_is_blocked; then echo -e "${YELLOW}Блокировка QUIC:${NC}        ${GREEN}включена${NC}"; fi; show_current_strategy && [ -n "$ver" ] && echo -e "${YELLOW}Используется стратегия:${NC} ${CYAN}$ver${NC}"
 echo -e "\n${CYAN}1) ${GREEN}Установить последнюю версию${NC}\n${CYAN}2) ${GREEN}Меню выбора стратегий${NC}\n${CYAN}3) ${GREEN}Вернуть настройки по умолчанию${NC}\n${CYAN}4) ${GREEN}$str_stp_zpr ${NC}Zapret"
