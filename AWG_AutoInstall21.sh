@@ -23,20 +23,7 @@ SUBTARGET=$(ubus call system board | jsonfilter -e '@.release.target' | cut -d '
 VERSION=$(ubus call system board | jsonfilter -e '@.release.version')
 PKGPOSTFIX="_v${VERSION}_${PKGARCH}_${TARGET}_${SUBTARGET}.ipk"
 BASE_URL="https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/"
-MAJOR=$(echo "$VERSION" | cut -d '.' -f1)
-MINOR=$(echo "$VERSION" | cut -d '.' -f2)
-PATCH=$(echo "$VERSION" | cut -d '.' -f3)
-AWG_VERSION="1.0"
-if [ "$MAJOR" -gt 24 ] || \
-   [ "$MAJOR" -eq 24 -a "$MINOR" -gt 10 ] || \
-   [ "$MAJOR" -eq 24 -a "$MINOR" -eq 10 -a "$PATCH" -ge 3 ] || \
-   [ "$MAJOR" -eq 23 -a "$MINOR" -eq 5 -a "$PATCH" -ge 6 ]; then
-    AWG_VERSION="2.0"
-    LUCI_PACKAGE_NAME="luci-proto-amneziawg"
-else
-    LUCI_PACKAGE_NAME="luci-app-amneziawg"
-fi
-echo -e "${GREEN}AWG версия: ${NC}$AWG_VERSION"
+
 AWG_DIR="/tmp/amneziawg"
 mkdir -p "$AWG_DIR"
 install_pkg() {
@@ -65,14 +52,11 @@ install_pkg() {
 }
 install_pkg "kmod-amneziawg"
 install_pkg "amneziawg-tools"
-install_pkg "$LUCI_PACKAGE_NAME"
-# Русская локализация только для AWG 2.0
-if [ "$AWG_VERSION" = "2.0" ]; then
+install_pkg "luci-proto-amneziawg"
+
     echo -e "${GREEN}Устанавливаем русскую локализацию${NC}"
-	install_pkg "luci-i18n-amneziawg-ru" >/dev/null 2>&1 || echo -e "${GREEN}Внимание: русская локализация не установлена (не критично)${NC}"
-    else
-        echo -e "${GREEN}Пропускаем установку русской локализации.${NC}"
-    fi
+	install_pkg "luci-i18n-amneziawg-ru" >/dev/null 2>&1 || echo -e "${RED}Внимание: русская локализация не установлена (не критично)${NC}"
+
 echo -e "${GREEN}Очистка временных файлов${NC}"
 rm -rf "$AWG_DIR"
 echo -e "${GREEN}Перезапускаем сеть${NC}"
@@ -114,20 +98,22 @@ echo -e "${MAGENTA}Устанавливаем Podkop${NC}"
     TMP="/tmp/podkop"
     rm -rf "$TMP"
     mkdir -p "$TMP"
-    cd "$TMP" || return
-
-echo -e "${GREEN}Обновляем список пакетов${NC}"
-opkg update >/dev/null 2>&1
-
+    cd "$TMP"
+	
 echo -e "${GREEN}Скачиваем пакеты${NC}"
 wget -q -O podkop.ipk https://github.com/itdoginfo/podkop/releases/download/0.7.10/podkop-v0.7.10-r1-all.ipk
 wget -q -O luci-app-podkop.ipk https://github.com/itdoginfo/podkop/releases/download/0.7.10/luci-app-podkop-v0.7.10-r1-all.ipk
 wget -q -O luci-i18n-podkop-ru.ipk https://github.com/itdoginfo/podkop/releases/download/0.7.10/luci-i18n-podkop-ru-0.7.10.ipk
 
-	echo -e "${GREEN}Устанавливаем ${NC}Podkop"
-    opkg install ./*.ipk >/dev/null 2>&1
 
+echo -e "${GREEN}Устанавливаем ${NC}podkop-v0.7.10-r1-all.ipk"
+opkg install podkop.ipk >/dev/null 2>&1
 
+echo -e "${GREEN}Устанавливаем ${NC}luci-app-podkop-v0.7.10-r1-all.ipk"
+opkg install luci-app-podkop.ipk >/dev/null 2>&1
+
+echo -e "${GREEN}Устанавливаем ${NC}luci-i18n-podkop-ru-0.7.10.ipk"
+opkg install luci-i18n-podkop-ru.ipk >/dev/null 2>&1
 
     cd /
     rm -rf "$TMP"
