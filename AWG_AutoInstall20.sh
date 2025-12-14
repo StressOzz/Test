@@ -11,34 +11,7 @@ BLUE="\033[0;34m"
 GRAY='\033[38;5;239m'
 DGRAY='\033[38;5;236m'
 
-show_menu() {
-
-	clear
-	
-    echo -e "${CYAN}1) ${GREEN}Установить ${NC}AWG ${GREEN}+ ${NC}интерфейс"
-    echo -e "${CYAN}2) ${GREEN}Установить ${NC}Podkop"
-	echo -e "${CYAN}3) ${GREEN}Установить ${NC}AWG ${GREEN}+ ${NC}интерфейс ${GREEN}+ ${NC}Podkop${NC}"
-    echo -ne "\n${YELLOW}Выберите пункт:${NC} "
-    read choice
-
-    case "$choice" in
-        1) AWG_INSTALL ;;
-        2) PODKOP_INSTALL ;;
-		3) AWG_INSTALL; 
-
-		echo -e "\n${BLUE}Вставьте рабочий конфиг в Interfaces (Интерфейс) и нажмите Enter ${NC}\n"
-		read -p "Нажмите Enter..." dummy
-		
-		PODKOP_INSTALL ;;
-		
-        *) exit 0 ;;
-    esac
-}
-
-
-
-##################################################################################################################################################
-AWG_INSTALL() {
+clear
 
 echo -e "${MAGENTA}Устанавливаем AWG + интерфейс${NC}"
 echo -e "${GREEN}Обновляем список пакетов${NC}"
@@ -113,7 +86,7 @@ echo -e "AmneziaWG ${GREEN}установлен!${NC}"
 IF_NAME="AWG"
 PROTO="amneziawg"
 DEV_NAME="amneziawg0"
-echo -e "${MAGENTA}Устанавливаем новый интерфейс${NC}"
+echo -e "${MAGENTA}Устанавливаем новый интерфейс AWG${NC}"
 if grep -q "config interface '$IF_NAME'" /etc/config/network; then
 echo -e "${RED}Интерфейс $IF_NAME уже существует${NC}"
 else
@@ -130,10 +103,12 @@ echo -e "${GREEN}Перезапускаем сеть${NC}"
 /etc/init.d/firewall restart
 /etc/init.d/uhttpd restart
 echo -e "${GREEN}Интерфейс ${NC}$IF_NAME${GREEN} создан и активирован!${NC}"
-read -p "Нажмите Enter..." dummy
-}
-##################################################################################################################
-PODKOP_INSTALL() {
+
+
+		echo -e "\n${BLUE}Вставьте рабочий конфиг в Interfaces (Интерфейс) и нажмите Enter ${NC}\n"
+		read -p "Нажмите Enter..." dummy
+		
+
 
 echo -e "${MAGENTA}Устанавливаем Podkop${NC}"
     TMP="/tmp/podkop"
@@ -141,13 +116,14 @@ echo -e "${MAGENTA}Устанавливаем Podkop${NC}"
     mkdir -p "$TMP"
     cd "$TMP" || return
 
-echo -e "${GREEN}Скачиваем${NC}"
+echo -e "${GREEN}Обновляем список пакетов${NC}"
+opkg update >/dev/null 2>&1
+
+echo -e "${GREEN}Скачиваем пакеты${NC}"
 wget -q -O podkop.ipk https://github.com/itdoginfo/podkop/releases/download/0.7.10/podkop-v0.7.10-r1-all.ipk
 wget -q -O luci-app-podkop.ipk https://github.com/itdoginfo/podkop/releases/download/0.7.10/luci-app-podkop-v0.7.10-r1-all.ipk
 wget -q -O luci-i18n-podkop-ru.ipk https://github.com/itdoginfo/podkop/releases/download/0.7.10/luci-i18n-podkop-ru-0.7.10.ipk
 
-echo -e "${GREEN}Обновляем список пакетов${NC}"
-opkg update >/dev/null 2>&1
 	echo -e "${GREEN}Устанавливаем ${NC}Podkop"
     opkg install ./*.ipk >/dev/null 2>&1
 
@@ -158,7 +134,7 @@ opkg update >/dev/null 2>&1
 
 
 wget -qO /etc/config/podkop https://raw.githubusercontent.com/StressOzz/Test/refs/heads/main/podkop
-echo -e "\nAWG ${GREEN}интегрирован в ${NC}Podkop${GREEN}.${NC}"
+echo -e "AWG ${GREEN}интегрирован в ${NC}Podkop${GREEN}.${NC}"
 	echo -e "${GREEN}Запускаем ${NC}Podkop${NC}"
     podkop enable >/dev/null 2>&1
     echo -e "${GREEN}Применяем конфигурацию${NC}"
@@ -170,12 +146,3 @@ echo -e "\nAWG ${GREEN}интегрирован в ${NC}Podkop${GREEN}.${NC}"
     podkop restart >/dev/null 2>&1
     echo -e "\nPodkop ${GREEN}готов к работе!${NC}"
     read -p "Нажмите Enter..." dummy
-}
-
-
-# ==========================================
-# Запуск
-# ==========================================
-while true; do
-    show_menu
-done
