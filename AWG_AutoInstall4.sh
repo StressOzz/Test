@@ -89,7 +89,7 @@ echo -e "${GREEN}Скачиваем пакеты${NC}"
 download() {
 local url="$1"
 local file="$2"
-echo -e "${GREEN}Скачиваем ${NC}$file$"
+echo -e "${GREEN}Скачиваем ${NC}$file"
 if ! wget -q -O "$file" "$url"; then
 echo -e "\n${RED}Ошибка! Не удалось скачать $file${NC}\n"
 exit 1
