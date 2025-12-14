@@ -39,6 +39,8 @@ show_menu() {
 
 ##################################################################################################################################################
 AWG_INSTALL() {
+
+echo -e "${MAGENTA}Устанавливаем AWG + интерфейс${NC}"
 echo -e "${GREEN}Обновляем список пакетов${NC}"
 opkg update >/dev/null 2>&1
 echo -e "${GREEN}Определяем архитектуру и версию OpenWrt${NC}"
@@ -127,7 +129,7 @@ echo -e "${GREEN}Перезапускаем сеть${NC}"
 /etc/init.d/network restart
 /etc/init.d/firewall restart
 /etc/init.d/uhttpd restart
-echo -e "${GREEN}Интерфейс ${NC}$IF_NAME${GREEN} создан и активирован.${NC}"
+echo -e "${GREEN}Интерфейс ${NC}$IF_NAME${GREEN} создан и активирован!${NC}"
 read -p "Нажмите Enter..." dummy
 }
 ##################################################################################################################
@@ -144,9 +146,10 @@ wget -q -O podkop.ipk https://github.com/itdoginfo/podkop/releases/download/0.7.
 wget -q -O luci-app-podkop.ipk https://github.com/itdoginfo/podkop/releases/download/0.7.10/luci-app-podkop-v0.7.10-r1-all.ipk
 wget -q -O luci-i18n-podkop-ru.ipk https://github.com/itdoginfo/podkop/releases/download/0.7.10/luci-i18n-podkop-ru-0.7.10.ipk
 
-echo -e "${GREEN}Устанавливаем${NC}"
-    opkg update
-    opkg install ./*.ipk 
+echo -e "${GREEN}Обновляем список пакетов${NC}"
+opkg update >/dev/null 2>&1
+	echo -e "${GREEN}Устанавливаем ${NC}Podkop"
+    opkg install ./*.ipk >/dev/null 2>&1
 
 
 
@@ -160,13 +163,12 @@ echo -e "\nAWG ${GREEN}интегрирован в ${NC}Podkop${GREEN}.${NC}"
     podkop enable >/dev/null 2>&1
     echo -e "${GREEN}Применяем конфигурацию${NC}"
     podkop reload >/dev/null 2>&1
-    echo -e "${GREEN}Перезапускаем сервис${NC}"
     podkop restart >/dev/null 2>&1
     echo -e "${GREEN}Обновляем списки${NC}"
     podkop list_update >/dev/null 2>&1
     echo -e "${GREEN}Перезапускаем сервис${NC}"
     podkop restart >/dev/null 2>&1
-    echo -e "\nPodkop ${GREEN}готов к работе${NC}"
+    echo -e "\nPodkop ${GREEN}готов к работе!${NC}"
     read -p "Нажмите Enter..." dummy
 }
 
