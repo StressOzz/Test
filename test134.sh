@@ -166,7 +166,7 @@ printf '%s\n' "config main 'config'" "	option canary_domains_icloud '1'" "	optio
 doh_st() { if grep -q 'dns.comss.one' /etc/config/https-dns-proxy 2>/dev/null; then comss_active=1; comss_text="${GREEN}Вернуть ${NC}DNS over HTTPS ${GREEN}настройки по умолчанию${NC}"; else comss_active=0; comss_text="${GREEN}Настроить ${NC}DNS over HTTPS"; fi; }
 DoH_def(){ doh_st
 if ! opkg list-installed | grep -q '^https-dns-proxy '; then echo -e "\n${RED}DNS over HTTPS не установлен!${NC}\n"; read -p "Нажмите Enter..."; continue; fi
-rm -f "$fileDoH"; if [ "$comss_active" = 0 ]; then echo -e "\n${MAGENTA}Настраиваем Comss DNS${NC}\n${CYAN}Применяем новые настройки"
+rm -f "$fileDoH"; if [ "$comss_active" = 0 ]; then echo -e "\n${MAGENTA}Настраиваем DNS over HTTPS${NC}\n${CYAN}Настраиваем ${NC}Comss.one DNS\n${CYAN}Применяем новые настройки"
 extra_block=$(printf "%s\n" "config https-dns-proxy" "	option resolver_url 'https://dns.comss.one/dns-query'")
 else echo -e "\n${MAGENTA}Возвращаем настройки по умолчанию${NC}\n${CYAN}Возвращаем настройки к значениям по умолчанию${NC}"
 extra_block=$(printf "%s\n" "config https-dns-proxy" "	option bootstrap_dns '1.1.1.1,1.0.0.1'" "	option resolver_url 'https://cloudflare-dns.com/dns-query'" \
@@ -175,7 +175,7 @@ fi; printf '%s\n' "config main 'config'" "	option canary_domains_icloud '1'" "	o
 "	option force_dns '1'" "	list force_dns_port '53'" "	list force_dns_port '853'" "	list force_dns_src_interface 'lan'" "	option procd_trigger_wan6 '0'" \
 "	option heartbeat_domain 'heartbeat.melmac.ca'" "	option heartbeat_sleep_timeout '10'" "	option heartbeat_wait_timeout '10'" "	option user 'nobody'" \
 "	option group 'nogroup'" "	option listen_addr '127.0.0.1'" "" "$extra_block" > "$fileDoH"
-/etc/init.d/https-dns-proxy stop >/dev/null 2>&1; /etc/init.d/https-dns-proxy start >/dev/null 2>&1; if [ "$comss_active" = 0 ]; then echo -e "Comss DNS ${GREEN}настроен!${NC}\n"
+/etc/init.d/https-dns-proxy stop >/dev/null 2>&1; /etc/init.d/https-dns-proxy start >/dev/null 2>&1; if [ "$comss_active" = 0 ]; then echo -e "DNS over HTTP ${GREEN}настроен!${NC}\n"
 else echo -e "${GREEN}Настройки по умолчанию возвращены!${NC}\n"; fi; read -p "Нажмите Enter..." dummy; }
 # ==========================================
 # Системное меню
