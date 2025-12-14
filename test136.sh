@@ -162,7 +162,7 @@ echo -e "${CYAN}Устанавливаем ${NC}luci-app-https-dns-proxy"; opkg 
 printf '%s\n' "config main 'config'" "	option canary_domains_icloud '1'" "	option canary_domains_mozilla '1'" "	option dnsmasq_config_update '*'" "	option force_dns '1'" "	list force_dns_port '53'" "	list force_dns_port '853'" \
 "	list force_dns_src_interface 'lan'" "	option procd_trigger_wan6 '0'" "	option heartbeat_domain 'heartbeat.melmac.ca'" "	option heartbeat_sleep_timeout '10'" "	option heartbeat_wait_timeout '10'" "	option user 'nobody'" "	option group 'nogroup'" \
 "	option listen_addr '127.0.0.1'" "" "config https-dns-proxy" "	option resolver_url 'https://dns.comss.one/dns-query'" > "$fileDoH"
-/etc/init.d/https-dns-proxy enable >/dev/null 2>&1; /etc/init.d/https-dns-proxy restart >/dev/null 2>&1; echo -e "DNS over HTTPS${GREEN} установлен и !${NC}\n"; fi; read -p "Нажмите Enter для выхода в главное меню..." dummy; }
+/etc/init.d/https-dns-proxy enable >/dev/null 2>&1; /etc/init.d/https-dns-proxy restart >/dev/null 2>&1; echo -e "DNS over HTTPS${GREEN} установлен и !${NC}\n"; fi; read -p "Нажмите Enter..." dummy; }
 doh_st() { if grep -q 'dns.comss.one' /etc/config/https-dns-proxy 2>/dev/null; then comss_active=1; comss_text="${GREEN}Вернуть ${NC}DNS over HTTPS ${GREEN}настройки по умолчанию${NC}"; else comss_active=0; comss_text="${GREEN}Настроить ${NC}DNS over HTTPS"; fi; }
 DoH_def(){ doh_st
 if ! opkg list-installed | grep -q '^https-dns-proxy '; then echo -e "\n${RED}DNS over HTTPS не установлен!${NC}\n"; read -p "Нажмите Enter..."; continue; fi
@@ -205,8 +205,8 @@ doh_st; web_is_enabled && WEB_TEXT="Удалить доступ к скрипт�
 quic_is_blocked && QUIC_TEXT="${GREEN}Отключить блокировку${NC} QUIC ${GREEN}(80,443)${NC}" || QUIC_TEXT="${GREEN}Включить блокировку${NC} QUIC ${GREEN}(80,443)${NC}"
 clear; echo -e "${MAGENTA}Системное меню${NC}\n"; if web_is_enabled; then echo -e "${YELLOW}Доступ из браузера:${NC} http://192.168.1.1:7681"; fi
 if quic_is_blocked; then echo -e "${YELLOW}Блокировка QUIC:${NC}    ${GREEN}включена${NC}"; fi
-if grep -q 'dns.comss.one' /etc/config/https-dns-proxy 2>/dev/null; then echo -e "${YELLOW}DNS over HTTPS:${NC} Comss DNS"
-elif grep -q 'cloudflare-dns.com' /etc/config/https-dns-proxy 2>/dev/null && grep -q 'dns.google' /etc/config/https-dns-proxy 2>/dev/null; then echo -e "${YELLOW}DNS over HTTPS:${NC} по умолчанию"; fi
+if grep -q 'dns.comss.one' /etc/config/https-dns-proxy 2>/dev/null; then echo -e "${YELLOW}DNS over HTTPS:${NC}     ${GREEN}Comss DNS${NC}"
+elif grep -q 'cloudflare-dns.com' /etc/config/https-dns-proxy 2>/dev/null && grep -q 'dns.google' /etc/config/https-dns-proxy 2>/dev/null; then echo -e "${YELLOW}DNS over HTTPS:${NC}     ${GREEN}по умолчанию${NC}"; fi
 echo -e "\n${CYAN}1) ${GREEN}Системная информация${NC}\n${CYAN}2) ${GREEN}$WEB_TEXT${NC}\n${CYAN}3) ${GREEN}$QUIC_TEXT${NC}"
 opkg list-installed | grep -q '^https-dns-proxy' && echo -e "${CYAN}4) $comss_text"
 echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read -r choiceMN; case "$choiceMN" in
