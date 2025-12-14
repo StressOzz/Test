@@ -3,6 +3,7 @@ GREEN="\033[1;32m"
 RED="\033[1;31m"
 YELLOW="\033[1;33m"
 MAGENTA="\033[1;35m"
+CYAN="\033[1;36m"
 NC="\033[0m"
 clear
 
@@ -24,9 +25,9 @@ install_pkg() {
 local pkgname=$1
 local filename="${pkgname}${PKGPOSTFIX}"
 local url="${BASE_URL}v${VERSION}/${filename}"
-echo -e "${GREEN}Скачиваем ${NC}$pkgname"
+echo -e "${CYAN}Скачиваем ${NC}$pkgname"
 if wget -O "$AWG_DIR/$filename" "$url" >/dev/null 2>&1 ; then
-echo -e "${GREEN}Устанавливаем ${NC}$pkgname"
+echo -e "${CYAN}Устанавливаем ${NC}$pkgname"
 if opkg install "$AWG_DIR/$filename" >/dev/null 2>&1 ; then
 echo -e "$pkgname ${GREEN}установлен успешно${NC}"
 else
@@ -41,11 +42,11 @@ fi
 install_pkg "kmod-amneziawg"
 install_pkg "amneziawg-tools"
 install_pkg "luci-proto-amneziawg"
-echo -e "${GREEN}Устанавливаем русскую локализацию${NC}"
+echo -e "${CYAN}Устанавливаем русскую локализацию${NC}"
 install_pkg "luci-i18n-amneziawg-ru" >/dev/null 2>&1 || echo -e "${RED}Внимание: русская локализация не установлена (не критично)${NC}"
-echo -e "${GREEN}Очистка временных файлов${NC}"
+echo -e "${CYAN}Очистка временных файлов${NC}"
 rm -rf "$AWG_DIR"
-echo -e "${GREEN}Перезапускаем сеть${NC}"
+echo -e "${CYAN}Перезапускаем сеть${NC}"
 /etc/init.d/network restart >/dev/null 2>&1
 echo -e "AmneziaWG ${GREEN}установлен!${NC}"
 
@@ -58,7 +59,7 @@ DEV_NAME="amneziawg0"
 if grep -q "config interface '$IF_NAME'" /etc/config/network; then
 echo -e "${RED}Интерфейс ${NC}$IF_NAME${RED} уже существует${NC}"
 else
-echo -e "${GREEN}Добавляем интерфейс ${NC}$IF_NAME"
+echo -e "${CYAN}Добавляем интерфейс ${NC}$IF_NAME"
 uci batch <<EOF
 set network.$IF_NAME=interface
 set network.$IF_NAME.proto=$PROTO
@@ -66,7 +67,7 @@ set network.$IF_NAME.device=$DEV_NAME
 commit network
 EOF
 fi
-echo -e "${GREEN}Перезапускаем сеть${NC}"
+echo -e "${CYAN}Перезапускаем сеть${NC}"
 /etc/init.d/network restart
 /etc/init.d/firewall restart
 /etc/init.d/uhttpd restart
@@ -85,11 +86,10 @@ TMP="/tmp/podkop"
 rm -rf "$TMP"
 mkdir -p "$TMP"
 cd "$TMP"
-echo -e "${GREEN}Скачиваем пакеты${NC}"
 download() {
 local url="$1"
 local file="$2"
-echo -e "${GREEN}Скачиваем ${NC}$file"
+echo -e "${CYAN}Скачиваем ${NC}$file"
 if ! wget -q -O "$file" "$url"; then
 echo -e "\n${RED}Ошибка! Не удалось скачать $file${NC}\n"
 exit 1
@@ -101,7 +101,7 @@ download https://github.com/itdoginfo/podkop/releases/download/0.7.10/luci-i18n-
 install_pkg() {
 local file="$1"
 local name="$2"
-echo -e "${GREEN}Устанавливаем ${NC}${name}"
+echo -e "${CYAN}Устанавливаем ${NC}${name}"
 if ! opkg install "$file" >/dev/null 2>&1; then
 echo -e "\n${RED}Ошибка! Не удалось установить ${name}${NC}\n"
 exit 1
@@ -114,13 +114,13 @@ cd /
 rm -rf "$TMP"
 wget -qO /etc/config/podkop https://raw.githubusercontent.com/StressOzz/Test/refs/heads/main/podkop
 echo -e "AWG ${GREEN}интегрирован в ${NC}Podkop${GREEN}.${NC}"
-echo -e "${GREEN}Запускаем ${NC}Podkop${NC}"
+echo -e "${CYAN}Запускаем ${NC}Podkop${NC}"
 podkop enable >/dev/null 2>&1
-echo -e "${GREEN}Применяем конфигурацию${NC}"
+echo -e "${CYAN}Применяем конфигурацию${NC}"
 podkop reload >/dev/null 2>&1
 podkop restart >/dev/null 2>&1
-echo -e "${GREEN}Обновляем списки${NC}"
+echo -e "${CYAN}Обновляем списки${NC}"
 podkop list_update >/dev/null 2>&1
-echo -e "${GREEN}Перезапускаем сервис${NC}"
+echo -e "${CYAN}Перезапускаем сервис${NC}"
 podkop restart >/dev/null 2>&1
 echo -e "Podkop ${GREEN}готов к работе!${NC}\n"
