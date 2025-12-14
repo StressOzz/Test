@@ -21,7 +21,7 @@ show_menu() {
 
     echo -e "\n${CYAN}1) ${GREEN}Установить / обновить ${NC}Podkop"
     echo -e "${CYAN}2) ${GREEN}Установить AWG интерфэйс${NC}"
-	echo -e "${CYAN}2) ${GREEN}Под КЛЮЧ${NC}"
+	echo -e "${CYAN}3) ${GREEN}Под КЛЮЧ${NC}"
     echo -ne "\n${YELLOW}Выберите пункт:${NC} "
     read choice
 
@@ -34,6 +34,7 @@ show_menu() {
 		read -p "Нажмите Enter..." dummy
 		
 		PODKOP_INSTALL ;;
+		
         *) exit 0 ;;
     esac
 }
