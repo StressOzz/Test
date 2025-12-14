@@ -56,7 +56,6 @@ echo -e "${MAGENTA}Устанавливаем новый интерфейс AWG$
 IF_NAME="AWG"
 PROTO="amneziawg"
 DEV_NAME="amneziawg0"
-echo -e "${MAGENTA}Устанавливаем новый интерфейс AWG${NC}"
 if grep -q "config interface '$IF_NAME'" /etc/config/network; then
 echo -e "${RED}Интерфейс $IF_NAME уже существует${NC}"
 else
