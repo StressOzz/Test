@@ -20,13 +20,20 @@ show_menu() {
 
 
     echo -e "\n${CYAN}1) ${GREEN}Установить / обновить ${NC}Podkop"
-    echo -e "${CYAN}2) ${GREEN}Установить интерфэйс"
+    echo -e "${CYAN}2) ${GREEN}Установить AWG интерфэйс${NC}"
+	echo -e "${CYAN}2) ${GREEN}Под КЛЮЧ${NC}"
     echo -ne "\n${YELLOW}Выберите пункт:${NC} "
     read choice
 
     case "$choice" in
-        1) install ;;
-        2) inter ;;
+        1) PODKOP_INSTALL ;;
+        2) AWG_INSTALL ;;
+		3) AWG_INSTALL; 
+
+		echo -e "${GREEN}Вставьте рабочий конфиг в Interfaces и нажмите ENTER ${NC}"
+		read -p "Нажмите Enter..." dummy
+		
+		PODKOP_INSTALL ;;
         *) exit 0 ;;
     esac
 }
@@ -34,7 +41,7 @@ show_menu() {
 
 
 ##################################################################################################################################################
-inter() {
+AWG_INSTALL() {
 printf "${GREEN}===== Обновление списка пакетов =====${NC}\n"
 opkg update
 printf "${GREEN}===== Определяем архитектуру и версию OpenWrt =====${NC}\n"
