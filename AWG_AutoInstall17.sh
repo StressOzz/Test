@@ -139,9 +139,11 @@ PODKOP_INSTALL() {
     mkdir -p "$TMP"
     cd "$TMP" || return
 
-    wget -q https://github.com/itdoginfo/podkop/releases/download/0.7.10/podkop-v0.7.10-r1-all.ipk
-    wget -q https://github.com/itdoginfo/podkop/releases/download/0.7.10/luci-app-podkop-v0.7.10-r1-all.ipk
-    wget -q https://github.com/itdoginfo/podkop/releases/download/0.7.10/luci-i18n-podkop-ru-0.7.10.ipk
+  wget -q -O podkop.ipk https://github.com/itdoginfo/podkop/releases/download/0.7.10/podkop-v0.7.10-r1-all.ipk
+
+    wget -q -O luci-app-podkop.ipk https://github.com/itdoginfo/podkop/releases/download/0.7.10/luci-app-podkop-v0.7.10-r1-all.ipk
+
+    wget -q -O luci-i18n-podkop-ru.ipk https://github.com/itdoginfo/podkop/releases/download/0.7.10/luci-i18n-podkop-ru-0.7.10.ipk
 
     opkg update
     opkg install ./*.ipk 
