@@ -10,10 +10,7 @@ clear
 
 echo -e "${MAGENTA}Устанавливаем AWG + интерфейс${NC}"
 echo -e "${GREEN}Обновляем список пакетов${NC}"
-if ! opkg update >/dev/null 2>&1; then
-echo -e "${RED}Ошибка: не удалось обновить список пакетов${NC}"
-exit 1
-fi
+opkg update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; exit 1; }
 echo -e "${GREEN}Определяем архитектуру и версию OpenWrt${NC}"
 PKGARCH=$(opkg print-architecture | awk 'BEGIN {max=0} {if ($3 > max) {max = $3; arch = $2}} END {print arch}')
 TARGET=$(ubus call system board | jsonfilter -e '@.release.target' | cut -d '/' -f1)
@@ -33,7 +30,7 @@ echo -e "${GREEN}Устанавливаем ${NC}$pkgname"
 if opkg install "$AWG_DIR/$filename" >/dev/null 2>&1 ; then
 echo -e "$pkgname ${GREEN}установлен успешно${NC}"
 else
-echo -e "\n${RED}Ошибка установки $pkgname!${NC}"
+echo -e "\n${RED}Ошибка установки $pkgname!${NC}\n"
 exit 1
 fi
 else
