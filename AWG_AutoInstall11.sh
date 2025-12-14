@@ -93,11 +93,11 @@ install_pkg() {
     fi
 }
 printf "${GREEN}===== Устанавливаем kmod-amneziawg =====${NC}\n"
-install_pkg "kmod-amneziawg" >/dev/null 2>&1
+install_pkg "kmod-amneziawg"
 printf "${GREEN}===== Устанавливаем amneziawg-tools =====${NC}\n"
-install_pkg "amneziawg-tools" >/dev/null 2>&1
+install_pkg "amneziawg-tools"
 printf "${GREEN}===== Устанавливаем $LUCI_PACKAGE_NAME =====${NC}\n"
-install_pkg "$LUCI_PACKAGE_NAME" >/dev/null 2>&1
+install_pkg "$LUCI_PACKAGE_NAME"
 # Русская локализация только для AWG 2.0
 if [ "$AWG_VERSION" = "2.0" ]; then
     printf "${GREEN}===== Устанавливаем русскую локализацию =====${NC}\n"
