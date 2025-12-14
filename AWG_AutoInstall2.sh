@@ -253,23 +253,11 @@ pkg_list_update || {
         [ -n "$file" ] && pkg_install "$DOWNLOAD_DIR/$file"
     done
 
-    # Русский интерфейс
-    ru=$(ls "$DOWNLOAD_DIR" | grep "luci-i18n-podkop-ru" | head -n 1)
-    if [ -n "$ru" ]; then
-        if pkg_is_installed luci-i18n-podkop-ru; then
+
             msg "Обновляем русский язык..." "$ru"
             pkg_remove luci-i18n-podkop* >/dev/null 2>&1
             pkg_install "$DOWNLOAD_DIR/$ru"
-        else
-            msg "Установить русский интерфейс? y/N"
-            read -r RUS
-            case "$RUS" in
-                y|Y) pkg_install "$DOWNLOAD_DIR/$ru" ;;
-                *) ;;
-            esac
-        fi
-    fi
-
+  
     # Очистка
     rm -rf "$DOWNLOAD_DIR"
 
