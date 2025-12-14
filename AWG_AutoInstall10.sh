@@ -43,16 +43,15 @@ show_menu() {
 
 ##################################################################################################################################################
 AWG_INSTALL() {
-printf "${GREEN}===== Обновление списка пакетов =====${NC}\n"
+printf "${GREEN}Обновляем список пакетов${NC}\n"
 opkg update >/dev/null 2>&1
-printf "${GREEN}===== Определяем архитектуру и версию OpenWrt =====${NC}\n"
+printf "${GREEN}Определяем архитектуру и версию OpenWrt${NC}\n"
 PKGARCH=$(opkg print-architecture | awk 'BEGIN {max=0} {if ($3 > max) {max = $3; arch = $2}} END {print arch}')
 TARGET=$(ubus call system board | jsonfilter -e '@.release.target' | cut -d '/' -f1)
 SUBTARGET=$(ubus call system board | jsonfilter -e '@.release.target' | cut -d '/' -f2)
 VERSION=$(ubus call system board | jsonfilter -e '@.release.version')
 PKGPOSTFIX="_v${VERSION}_${PKGARCH}_${TARGET}_${SUBTARGET}.ipk"
 BASE_URL="https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/"
-printf "${GREEN}===== Определяем версию AWG =====${NC}\n"
 MAJOR=$(echo "$VERSION" | cut -d '.' -f1)
 MINOR=$(echo "$VERSION" | cut -d '.' -f2)
 PATCH=$(echo "$VERSION" | cut -d '.' -f3)
@@ -66,7 +65,7 @@ if [ "$MAJOR" -gt 24 ] || \
 else
     LUCI_PACKAGE_NAME="luci-app-amneziawg"
 fi
-printf "${GREEN}Detected AWG version: $AWG_VERSION${NC}\n"
+printf "${GREEN}AWG версия: ${NC}$AWG_VERSION\n"
 AWG_DIR="/tmp/amneziawg"
 mkdir -p "$AWG_DIR"
 install_pkg() {
@@ -79,17 +78,17 @@ install_pkg() {
         return
     fi
 
-    printf "${GREEN}===== Скачиваем $pkgname =====${NC}\n"
+    printf "${GREEN}Скачиваем ${NC}$pkgname\n"
     if wget -O "$AWG_DIR/$filename" "$url" >/dev/null 2>&1 ; then
-        printf "${GREEN}===== Устанавливаем $pkgname =====${NC}\n"
+        printf "${GREEN}Устанавливаем ${NC}$pkgname\n"
         if opkg install "$AWG_DIR/$filename" >/dev/null 2>&1 ; then
-            printf "${GREEN}$pkgname установлен успешно${NC}\n"
+            printf "$pkgname ${GREEN}установлен успешно${NC}\n"
         else
-            printf "${GREEN}Ошибка установки $pkgname. Установите вручную.${NC}\n"
+            printf "\n${RED}Ошибка установки $pkgname!${NC}\n"
             exit 1
         fi
     else
-        printf "${GREEN}Ошибка скачивания $pkgname. Установите вручную.${NC}\n"
+        printf "\n${RED}Ошибка установки $pkgname!${NC}\n"
         exit 1
     fi
 }
