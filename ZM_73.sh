@@ -148,6 +148,8 @@ printf '%s\n' "130.255.77.28 ntc.party" "30.255.77.28 ntc.party" "185.87.51.182 
 "157.240.9.174 instagram.com www.instagram.com" "185.39.18.98 lib.rus.ec www.lib.rus.ec" | grep -Fxv -f /etc/hosts 2>/dev/null >> /etc/hosts;
 /etc/init.d/dnsmasq restart >/dev/null 2>&1; fileGP="/opt/zapret/ipset/zapret-hosts-google.txt"; printf '%s\n' "gvt1.com" "googleplay.com" "play.google.com" "beacons.gvt2.com" "play.googleapis.com" "play-fe.googleapis.com" \
 "lh3.googleusercontent.com" "android.clients.google.com" "connectivitycheck.gstatic.com" "play-lh.googleusercontent.com" "play-games.googleusercontent.com" "prod-lt-playstoregatewayadapter-pa.googleapis.com" | grep -Fxv -f "$fileGP" 2>/dev/null >> "$fileGP"
+if ! grep -q "option NFQWS_PORTS_UDP.*50000-50099" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'$/,50000-50099'/" "$CONF"; fi; if ! grep -q -- "--filter-udp=50000-50099" "$CONF"; then last_line1=$(grep -n "^'$" "$CONF" | tail -n1 | cut -d: -f1)
+if [ -n "$last_line1" ]; then sed -i "${last_line1},\$d" "$CONF"; fi; printf "%s\n" "--new" "--filter-udp=50000-50099" "--filter-l7=discord,stun" "--dpi-desync=fake" "'" >> "$CONF"; fi;
 echo -e "${CYAN}Применяем новую стратегию и настройки${NC}"; chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1; echo -e "${GREEN}Стратегия ${NC}${version} ${GREEN}установлена!${NC}"
 [ "$NO_PAUSE" != "1" ] && echo && read -p "Нажмите Enter..." dummy; [ "$NO_PAUSE" = "1" ] && break; done }
 # ==========================================
