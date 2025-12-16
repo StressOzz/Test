@@ -9,16 +9,6 @@ WORKDIR="/tmp/zapret-update"; CONF="/etc/config/zapret"; CUSTOM_DIR="/opt/zapret
 EXCLUDE_FILE="/opt/zapret/ipset/zapret-hosts-user-exclude.txt"; fileDoH="/etc/config/https-dns-proxy"
 EXCLUDE_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/zapret-hosts-user-exclude.txt"
 # ==========================================
-# Проверяем наличие byedpi, youtubeUnblock, Flow Offloading
-# ==========================================
-Flow_Offloading() { {FLOW_STATE=$(uci get firewall.@defaults[0].flow_offloading 2>/dev/null); HW_FLOW_STATE=$(uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null)
-if [ "$FLOW_STATE" = "1" ] || [ "$HW_FLOW_STATE" = "1" ]; then if ! grep -q 'meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc; then
-clear; echo -e "${RED}Включён ${NC}Flow Offloading ${RED}!${NC}\n${NC}Zapret${RED} может не работать с включённым ${NC}Flow Offloading${RED}!\n\n${CYAN}1) ${GREEN}Отключить ${NC}Flow Offloading"
-echo -ne "${CYAN}2) ${GREEN}Применить фикс для работы ${NC}Zapret${GREEN} с включённым ${NC}Flow Offloading\n${CYAN}Enter) ${GREEN}Выход\n\n${YELLOW}Выберите пункт:${NC} " && read choice
-case "$choice" in 1) echo -e "\n${GREEN}Flow Offloading успешно отключён!${NC}\n"; uci set firewall.@defaults[0].flow_offloading='0'; uci set firewall.@defaults[0].flow_offloading_hw='0'; uci commit firewall; /etc/init.d/firewall restart; read -p "Нажмите Enter..." dummy ;;
-2) echo -e "\n${GREEN}Фикс успешно применён!${NC}\n"; sed -i 's/meta l4proto { tcp, udp } flow offload @ft;/meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;/' /usr/share/firewall4/templates/ruleset.uc
-fw4 restart >/dev/null 2>&1; read -p "Нажмите Enter..." dummy ;; *) echo -e "\n${RED}Скрипт остановлен!${NC}\n"; exit 1 ;; esac; fi; fi; }
-# ==========================================
 # Получение версии
 # ==========================================
 get_versions() { LOCAL_ARCH=$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release); [ -z "$LOCAL_ARCH" ] && LOCAL_ARCH=$(opkg print-architecture | grep -v "noarch" | sort -k3 -n | tail -n1 | awk '{print $2}')
@@ -199,9 +189,14 @@ elif grep -q 'cloudflare-dns.com' /etc/config/https-dns-proxy 2>/dev/null && gre
 echo -e "${YELLOW}DNS over HTTPS:${NC}     ${GREEN}по умолчанию${NC}"; printed=1; fi; [ "$printed" -eq 1 ] && echo
 echo -e "${CYAN}1) ${GREEN}Системная информация${NC}\n${CYAN}2) ${GREEN}$WEB_TEXT${NC}\n${CYAN}3) ${GREEN}$QUIC_TEXT${NC}"
 opkg list-installed | grep -q '^https-dns-proxy' && echo -e "${CYAN}4) $comss_text"
+FLOW_STATE=$(uci get firewall.@defaults[0].flow_offloading 2>/dev/null); HW_FLOW_STATE=$(uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null)
+if [ "$FLOW_STATE" = "1" ] || [ "$HW_FLOW_STATE" = "1" ]; then if ! grep -q 'meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc; then
+echo -e "${CYAN}5) ${GREEN}Применить фикс для работы ${NC}Zapret${GREEN} с включённым ${NC}Flow Offloading\n${CYAN}"
 echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read -r choiceMN; case "$choiceMN" in
 1) wget -qO- https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/sys_info.sh | sh; echo; read -p "Нажмите Enter..." dummy ;;
-2) toggle_web ;; 3) toggle_quic ;; 4) DoH_def ;; *) echo; return ;; esac; done; }
+2) toggle_web ;; 3) toggle_quic ;; 4) DoH_def ;; 
+5) sed -i 's/meta l4proto { tcp, udp } flow offload @ft;/meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;/' /usr/share/firewall4/templates/ruleset.uc; fw4 restart >/dev/null 2>&1; read -p "Нажмите Enter..." dummy ;;
+*) echo; return ;; esac; done; }
 # ==========================================
 # Главное меню
 # ==========================================
