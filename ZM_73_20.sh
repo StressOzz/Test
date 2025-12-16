@@ -15,7 +15,8 @@ for pkg in byedpi youtubeUnblock; do
 	opkg list-installed | grep -q "$pkg" || continue
 	clear
 	echo -e "${RED}Найден установленный ${NC}$pkg${RED}!${NC}\n${NC}Zapret${RED} может не работать совместно с ${NC}$pkg${RED}!\n"
-	read -p $'\033[1;32mУдалить \033[0m'"$pkg"$'\033[1;32m (y) / продолжить (c)?\033[0m [y/c/N] ' answer
+echo -ne "Удалить ${GREEN}$pkg${NC} (y) / продолжить (c)? [y/c/N] "
+read answer
 	case "$answer" in
 		[Yy]*)
 			opkg --force-removal-of-dependent-packages --autoremove remove \
