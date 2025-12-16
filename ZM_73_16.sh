@@ -160,7 +160,7 @@ doh_st() { if grep -q 'dns.comss.one' /etc/config/https-dns-proxy 2>/dev/null; t
 DoH_def(){ doh_st; rm -f "$fileDoH"; if [ "$comss_active" = 0 ]; then echo -e "\n${MAGENTA}Настраиваем DNS over HTTPS${NC}\n${CYAN}Настраиваем ${NC}Comss.one DNS\n${CYAN}Применяем новые настройки${NC}"
 printf '%s\n' "$doh_set" "$doh_comss" > "$fileDoH"; doh_restart; echo -e "DNS over HTTP ${GREEN}настроен!${NC}\n"; else echo -e "\n${MAGENTA}Возвращаем DNS over HTTPS настройки по умолчанию${NC}\n${CYAN}Возвращаем настройки к значениям по умолчанию${NC}\n${CYAN}Применяем новые настройки${NC}"
 printf '%s\n' "$doh_set" "$doh_18" > "$fileDoH"; doh_restart; echo -e "${GREEN}Настройки по умолчанию возвращены!${NC}\n"; fi; read -p "Нажмите Enter..." dummy; }
-doh_restart() { /etc/init.d/https-dns-proxy stop >/dev/null 2>&1; /etc/init.d/https-dns-proxy start >/dev/null 2>&1; /etc/init.d/https-dns-proxy restart >/dev/null 2>&1; }
+doh_restart() { /etc/init.d/https-dns-proxy reload >/dev/null 2>&1; /etc/init.d/https-dns-proxy restart >/dev/null 2>&1; }
 doh_set=$(printf "%s\n" "config main 'config'" "	option canary_domains_icloud '1'" "	option canary_domains_mozilla '1'" "	option dnsmasq_config_update '*'" "	option force_dns '1'" "	list force_dns_port '53'" "	list force_dns_port '853'" \
 "	list force_dns_src_interface 'lan'" "	option procd_trigger_wan6 '0'" "	option heartbeat_domain 'heartbeat.melmac.ca'" "	option heartbeat_sleep_timeout '10'" "	option heartbeat_wait_timeout '10'" "	option user 'nobody'" "	option group 'nogroup'" \
 "	option listen_addr '127.0.0.1'"); doh_comss=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://dns.comss.one/dns-query'")
