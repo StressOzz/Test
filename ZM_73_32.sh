@@ -191,8 +191,8 @@ echo -e "${YELLOW}DNS over HTTPS:${NC}     ${GREEN}по умолчанию${NC}"
 echo -e "${CYAN}1) ${GREEN}Системная информация${NC}\n${CYAN}2) ${GREEN}$WEB_TEXT${NC}\n${CYAN}3) ${GREEN}$QUIC_TEXT${NC}"
 opkg list-installed | grep -q '^https-dns-proxy' && echo -e "${CYAN}4) $comss_text"
 
-if [ "$(uci get firewall.@defaults[0].flow_offloading 2>/dev/null)" = "1" ] || \
-   [ "$(uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null)" = "1" ]; then
+if uci get firewall.@defaults[0].flow_offloading 2>/dev/null | grep -q '^1$' || \
+   uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null | grep -q '^1$'; then
     echo -e "${CYAN}5) ${GREEN}Применить фикс для работы ${NC}Zapret${GREEN} с включённым ${NC}Flow Offloading${NC}"
 fi
 
