@@ -11,33 +11,6 @@ EXCLUDE_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/hea
 # ==========================================
 # Проверяем наличие byedpi, youtubeUnblock, Flow Offloading
 # ==========================================
-for pkg in byedpi youtubeUnblock; do
-	opkg list-installed | grep -q "$pkg" || continue
-	clear
-	echo -e "${RED}Найден установленный ${NC}$pkg${RED}!${NC}\n${NC}Zapret${RED} может не работать совместно с ${NC}$pkg${RED}!\n"
-printf "\033[1;32mУдалить %s (y) / продолжить (c)?\033[0m [y/c/N] " "$pkg"
-read answer </dev/tty
-	case "$answer" in
-		[Yy]*)
-			opkg --force-removal-of-dependent-packages --autoremove remove \
-				$([ "$pkg" = "byedpi" ] && echo "byedpi" || echo "youtubeUnblock luci-app-youtubeUnblock") \
-				>/dev/null 2>&1
-			echo -e "\n$pkg${GREEN} удалён!${NC}\n"
-			read -p "Нажмите Enter..." dummy
-			;;
-		[Cc]*)
-			continue
-			;;
-		*)
-			echo -e "\n${RED}Скрипт остановлен! Удалите ${NC}$pkg${RED}!${NC}\n"
-			exit 1
-			;;
-	esac
-done
-
-
-
-
 FLOW_STATE=$(uci get firewall.@defaults[0].flow_offloading 2>/dev/null); HW_FLOW_STATE=$(uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null)
 if [ "$FLOW_STATE" = "1" ] || [ "$HW_FLOW_STATE" = "1" ]; then if ! grep -q 'meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc; then
 clear; echo -e "${RED}Включён ${NC}Flow Offloading ${RED}!${NC}\n${NC}Zapret${RED} может не работать с включённым ${NC}Flow Offloading${RED}!\n\n${CYAN}1) ${GREEN}Отключить ${NC}Flow Offloading"
