@@ -194,7 +194,7 @@ echo -e "${CYAN}5) ${GREEN}Применить фикс для работы ${NC}
 echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read -r choiceMN; case "$choiceMN" in
 1) wget -qO- https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/sys_info.sh | sh; echo; read -p "Нажмите Enter..." dummy ;;
 2) toggle_web ;; 3) toggle_quic ;; 4) DoH_def ;; 5) sed -i 's/meta l4proto { tcp, udp } flow offload @ft;/meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;/'
-/usr/share/firewall4/templates/ruleset.uc; fw4 restart >/dev/null 2>&1; echo -e "\n${GREEN}Фикс успешно применён!${NC}\n"; read -p "Нажмите Enter..." dummy ;; *) echo; return ;; esac; done; }
+/usr/share/firewall4/templates/ruleset.uc; fw4 restart >/dev/null 2>&1; echo -e "\n${MAGENTA}Применяем FIX для Flow Offloading${NC}\n${GREEN}Фикс успешно применён!${NC}\n"; read -p "Нажмите Enter..." dummy ;; *) echo; return ;; esac; done; }
 # ==========================================
 # Главное меню
 # ==========================================
@@ -203,7 +203,7 @@ echo -e "╔══════════════════════�
 for pkg in byedpi youtubeUnblock; do if opkg list-installed | grep -q "^$pkg"; then echo -e "\n${RED}Найден установленный ${NC}$pkg${RED}!${NC}\nZapret${RED} может работать некорректно совместно с ${NC}$pkg${RED}!${NC}"; fi; done
 
 if uci get firewall.@defaults[0].flow_offloading 2>/dev/null | grep -q '^1$' || uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null | grep -q '^1$'; 
-then if ! grep -q 'meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc; then echo -e "${RED}Включён ${NC}Flow Offloading ${RED}!${NC}\n${NC}Zapret${RED} может работать некорректно совместно с включённым ${NC}Flow Offloading${RED}"; fi; fi
+then if ! grep -q 'meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc; then echo -e "\n${RED}Включён ${NC}Flow Offloading${RED}!${NC}\n${NC}Zapret${RED} может работать некорректно совместно с включённым ${NC}Flow Offloading${RED}"; fi; fi
 
 menu_game=$( [ -f "$CONF" ] && grep -q "1024-49999,50100-65535" "$CONF" && echo "Удалить стратегию для игр" || echo "Добавить стратегию для игр" ); pgrep -f "/opt/zapret" >/dev/null 2>&1 && str_stp_zpr="Остановить" || str_stp_zpr="Запустить"
 opkg list-installed | grep -q '^https-dns-proxy ' && doh_menu="Удалить" || doh_menu="Установить → настроить"; echo -e "\n${YELLOW}Установленная версия:   ${INST_COLOR}$INSTALLED_DISPLAY${NC}"
