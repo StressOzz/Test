@@ -192,9 +192,9 @@ echo -e "${CYAN}1) ${GREEN}Системная информация${NC}\n${CYAN}
 opkg list-installed | grep -q '^https-dns-proxy' && echo -e "${CYAN}4) $comss_text"
 
 if uci get firewall.@defaults[0].flow_offloading 2>/dev/null | grep -q '^1$' || \
-   uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null | grep -q '^1$'; then
+   uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null | grep -q '^1$'; then if ! grep -q 'meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc; then
     echo -e "${CYAN}5) ${GREEN}Применить фикс для работы ${NC}Zapret${GREEN} с включённым ${NC}Flow Offloading${NC}"
-fi
+fi; fi
 
 echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read -r choiceMN; case "$choiceMN" in
 1) wget -qO- https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/sys_info.sh | sh; echo; read -p "Нажмите Enter..." dummy ;;
