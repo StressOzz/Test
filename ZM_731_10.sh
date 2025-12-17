@@ -180,7 +180,7 @@ uci commit firewall $ShowLogs; /etc/init.d/firewall restart $ShowLogs;	echo -e "
 # Системное меню
 # ==========================================
 
-LOGS=0   # 0 — без логов, 1 — с логами
+LOGS=1   # 0 — без логов, 1 — с логами
 
 # функция для применения режима логов
 apply_logs() { 
