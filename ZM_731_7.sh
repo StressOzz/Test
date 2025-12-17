@@ -180,12 +180,29 @@ uci commit firewall >/dev/null 2>&1; /etc/init.d/firewall restart >/dev/null 2>&
 # Системное меню
 # ==========================================
 
-
 LOGS=0   # 0 — без логов, 1 — с логами
 
-apply_logs() { [ "$LOGS" = "0" ] && QREDIR=">/dev/null 2>&1" || QREDIR=""; }
+# функция для применения режима логов
+apply_logs() { 
+    [ "$LOGS" = "0" ] && QREDIR=">/dev/null 2>&1" || QREDIR=""
+}
 
-toggle_logs() { if [ "$LOGS" = "1" ]; then LOGS=0; echo "Логи: ВЫКЛ"; else LOGS=1; echo "Логи: ВКЛ"; fi; apply_logs; }
+# функция переключения логов
+toggle_logs() { 
+    if [ "$LOGS" = "1" ]; then 
+        LOGS=0
+        echo "Логи: ВЫКЛ"
+    else 
+        LOGS=1
+        echo "Логи: ВКЛ"
+    fi
+    apply_logs
+}
+
+# функция для получения текста пункта меню
+logs_text() {
+    [ "$LOGS" = "1" ] && echo "Выключить вывод команд" || echo "Включить вывод команд"
+}
 
 
 sys_menu(){ while true; do
@@ -198,7 +215,7 @@ elif grep -q 'cloudflare-dns.com' /etc/config/https-dns-proxy 2>/dev/null && gre
 echo -e "${YELLOW}DNS over HTTPS:${NC}     ${GREEN}по умолчанию${NC}"; printed=1; fi; [ "$printed" -eq 1 ] && echo
 echo -e "${CYAN}1) ${GREEN}Системная информация${NC}\n${CYAN}2) ${GREEN}$WEB_TEXT${NC}\n${CYAN}3) ${GREEN}$QUIC_TEXT${NC}"
 
-echo -e "${CYAN}4) $toggle_logs"
+echo -e "${CYAN}4) ${GREEN}$(logs_text)${NC}"
 
 opkg list-installed | grep -q '^https-dns-proxy' && echo -e "${CYAN}5) $comss_text";
 
