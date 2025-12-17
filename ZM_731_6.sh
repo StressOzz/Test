@@ -198,7 +198,7 @@ elif grep -q 'cloudflare-dns.com' /etc/config/https-dns-proxy 2>/dev/null && gre
 echo -e "${YELLOW}DNS over HTTPS:${NC}     ${GREEN}по умолчанию${NC}"; printed=1; fi; [ "$printed" -eq 1 ] && echo
 echo -e "${CYAN}1) ${GREEN}Системная информация${NC}\n${CYAN}2) ${GREEN}$WEB_TEXT${NC}\n${CYAN}3) ${GREEN}$QUIC_TEXT${NC}"
 
-echo -e "${CYAN}4) $toggle_logs
+echo -e "${CYAN}4) $toggle_logs"
 
 opkg list-installed | grep -q '^https-dns-proxy' && echo -e "${CYAN}5) $comss_text";
 
