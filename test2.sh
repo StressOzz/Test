@@ -131,7 +131,7 @@ dis_str; echo -e "${CYAN}Применяем новую стратегию и н�
 [ "$NO_PAUSE" != "1" ] && echo && read -p "Нажмите Enter..." dummy; [ "$NO_PAUSE" = "1" ] && break; done }
 
 dis_str() {
-    if ! grep -q "option NFQWS_PORTS_UDP.*19294-19344,50000-50101" "$CONF"; then
+    if ! grep -q "option NFQWS_PORTS_UDP.*19294-19344,50000-50100" "$CONF"; then
         sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'$/,19294-19344,50000-50101'/" "$CONF"
     fi
   if ! grep -q "option NFQWS_PORTS_TCP.*2053,2083,2087,2096,8443" "$CONF"; then
@@ -140,7 +140,7 @@ dis_str() {
 
 
 
-    if ! grep -q -- "--filter-udp=19294-19344,50000-50101" "$CONF"; then
+    if ! grep -q -- "--filter-udp=19294-19344,50000-50100" "$CONF"; then
         last_line1=$(grep -n "^'$" "$CONF" | tail -n1 | cut -d: -f1)
         if [ -n "$last_line1" ]; then
             sed -i "${last_line1},\$d" "$CONF"
@@ -148,7 +148,7 @@ dis_str() {
 
 printf "%s\n" \
 "--new" \
-"--filter-udp=19294-19344,50000-50101" \
+"--filter-udp=19294-19344,50000-50100" \
 "--filter-l7=discord,stun" \
 "--dpi-desync=fake" \
 "--dpi-desync-repeats=6" \
