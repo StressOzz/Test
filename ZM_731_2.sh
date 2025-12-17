@@ -187,6 +187,7 @@ toggle_logs() { if [ "$LOGS" = "1" ]; then LOGS=0; echo -e "${GREEN}Логи: В
 
 sys_menu() {
     while true; do
+        # Обновляем статусы
         doh_st
         web_is_enabled && WEB_TEXT="Удалить доступ к скрипту из браузера" || WEB_TEXT="Активировать доступ к скрипту из браузера"
         quic_is_blocked && QUIC_TEXT="${GREEN}Отключить блокировку${NC} QUIC ${GREEN}(80,443)${NC}" || QUIC_TEXT="${GREEN}Включить блокировку${NC} QUIC ${GREEN}(80,443)${NC}"
@@ -195,26 +196,41 @@ sys_menu() {
         echo -e "${MAGENTA}Системное меню${NC}\n"
 
         printed=0
-        if web_is_enabled; then echo -e "${YELLOW}Доступ из браузера:${NC} http://192.168.1.1:7681"; printed=1; fi
-        if quic_is_blocked; then echo -e "${YELLOW}Блокировка QUIC:${NC}    ${GREEN}включена${NC}"; printed=1; fi
+        if web_is_enabled; then
+            echo -e "${YELLOW}Доступ из браузера:${NC} http://192.168.1.1:7681"
+            printed=1
+        fi
+        if quic_is_blocked; then
+            echo -e "${YELLOW}Блокировка QUIC:${NC}    ${GREEN}включена${NC}"
+            printed=1
+        fi
         if grep -q 'dns.comss.one' /etc/config/https-dns-proxy 2>/dev/null; then
-            echo -e "${YELLOW}DNS over HTTPS:${NC}     ${GREEN}Comss DNS${NC}"; printed=1
+            echo -e "${YELLOW}DNS over HTTPS:${NC}     ${GREEN}Comss DNS${NC}"
+            printed=1
         elif grep -q 'cloudflare-dns.com' /etc/config/https-dns-proxy 2>/dev/null && grep -q 'dns.google' /etc/config/https-dns-proxy 2>/dev/null; then
-            echo -e "${YELLOW}DNS over HTTPS:${NC}     ${GREEN}по умолчанию${NC}"; printed=1
+            echo -e "${YELLOW}DNS over HTTPS:${NC}     ${GREEN}по умолчанию${NC}"
+            printed=1
         fi
         [ "$printed" -eq 1 ] && echo
 
+        # --- очищаем старые пункты меню ---
+        i=1
+        while true; do
+            var="MENU_$i"
+            [ -z "$(eval echo \$$var)" ] && break
+            unset "$var"
+            i=$((i+1))
+        done
+
         # --- динамическое меню ---
         i=1
-        unset MENU_*
-
         add_item() {
             echo -e "${CYAN}${i}) ${GREEN}$1${NC}"
             eval "MENU_${i}=\"$2\""
             i=$((i+1))
         }
 
-        add_item "Системная информация" "wget -qO- https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/sys_info.sh | sh; read -p 'Нажмите Enter...' dummy"
+        add_item "Системная информация" "wget -qO- https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/sys_info.sh | sh; echo; read -p 'Нажмите Enter...' dummy"
         add_item "$WEB_TEXT" "toggle_web"
         add_item "$QUIC_TEXT" "toggle_quic"
         add_item "$LOGS_TEXT" "DoH_def"
@@ -246,6 +262,7 @@ sys_menu() {
         fi
     done
 }
+
 
 # ==========================================
 # Главное меню
