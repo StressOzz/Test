@@ -192,9 +192,11 @@ toggle_logs() {
     if [ "$LOGS" = "1" ]; then 
         LOGS=0
         echo "Логи: ВЫКЛ"
+        read -p "Нажмите Enter..." dummy
     else 
         LOGS=1
         echo "Логи: ВКЛ"
+        read -p "Нажмите Enter..." dummy
     fi
     apply_logs
 }
@@ -213,6 +215,7 @@ if quic_is_blocked; then echo -e "${YELLOW}Блокировка QUIC:${NC}    ${
 if grep -q 'dns.comss.one' /etc/config/https-dns-proxy 2>/dev/null; then echo -e "${YELLOW}DNS over HTTPS:${NC}     ${GREEN}Comss DNS${NC}"; printed=1
 elif grep -q 'cloudflare-dns.com' /etc/config/https-dns-proxy 2>/dev/null && grep -q 'dns.google' /etc/config/https-dns-proxy 2>/dev/null; then
 echo -e "${YELLOW}DNS over HTTPS:${NC}     ${GREEN}по умолчанию${NC}"; printed=1; fi; [ "$printed" -eq 1 ] && echo
+echo -e "$LOGS"
 echo -e "${CYAN}1) ${GREEN}Системная информация${NC}\n${CYAN}2) ${GREEN}$WEB_TEXT${NC}\n${CYAN}3) ${GREEN}$QUIC_TEXT${NC}"
 
 echo -e "${CYAN}4) ${GREEN}$(logs_text)${NC}"
