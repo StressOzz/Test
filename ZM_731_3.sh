@@ -191,10 +191,12 @@ sys_menu() {
         doh_st
         web_is_enabled && WEB_TEXT="Удалить доступ к скрипту из браузера" || WEB_TEXT="Активировать доступ к скрипту из браузера"
         quic_is_blocked && QUIC_TEXT="${GREEN}Отключить блокировку${NC} QUIC ${GREEN}(80,443)${NC}" || QUIC_TEXT="${GREEN}Включить блокировку${NC} QUIC ${GREEN}(80,443)${NC}"
+        LOGS_TEXT="Показывать вывод команд"  # исправлено, чтобы пункт 4 не был пустым
 
         clear
         echo -e "${MAGENTA}Системное меню${NC}\n"
 
+        # --- вывод текущих статусов ---
         printed=0
         if web_is_enabled; then
             echo -e "${YELLOW}Доступ из браузера:${NC} http://192.168.1.1:7681"
@@ -222,7 +224,7 @@ sys_menu() {
             i=$((i+1))
         done
 
-        # --- динамическое меню ---
+        # --- функция добавления пункта ---
         i=1
         add_item() {
             echo -e "${CYAN}${i}) ${GREEN}$1${NC}"
@@ -230,10 +232,11 @@ sys_menu() {
             i=$((i+1))
         }
 
+        # --- добавляем пункты меню ---
         add_item "Системная информация" "wget -qO- https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/sys_info.sh | sh; echo; read -p 'Нажмите Enter...' dummy"
         add_item "$WEB_TEXT" "toggle_web"
         add_item "$QUIC_TEXT" "toggle_quic"
-        add_item "$LOGS_TEXT" "DoH_def"
+        [ -n "$LOGS_TEXT" ] && add_item "$LOGS_TEXT" "DoH_def"
 
         if opkg list-installed | grep -q '^https-dns-proxy'; then
             add_item "$comss_text" "toggle_comss"
@@ -262,6 +265,7 @@ sys_menu() {
         fi
     done
 }
+
 
 
 # ==========================================
