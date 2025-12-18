@@ -138,13 +138,9 @@ printf "%s\n" "--new" "--filter-udp=19294-19344,50000-50100" "--filter-l7=discor
 # ==========================================
 DoH_menu() {
 while true; do
-clear; echo -e "${MAGENTA}Меню выбора стратегии${NC}\n"
+get_doh_status; clear; echo -e "${MAGENTA}Меню выбора стратегии${NC}\n"
 
-if grep -q 'dns.comss.one' /etc/config/https-dns-proxy 2>/dev/null; then echo -e "${GREEN}Comss DNS${NC}"; fi
-if grep -q 'xbox-dns.ru' /etc/config/https-dns-proxy 2>/dev/null; then echo -e "${GREEN}Xbox DNS${NC}"; fi
-if grep -q 'dns.malw.link' /etc/config/https-dns-proxy 2>/dev/null; then echo -e "${GREEN}dns.malw.link${NC}"; fi
-if grep -q '5u35p8m9i7.cloudflare-gateway.com' /etc/config/https-dns-proxy 2>/dev/null; then echo -e "${GREEN}dns.malw.link (Cloudflare Gateway)${NC}"; fi
-if grep -q 'cloudflare-dns.com' /etc/config/https-dns-proxy 2>/dev/null && grep -q 'dns.google' /etc/config/https-dns-proxy 2>/dev/null; then echo -e "${GREEN}по умолчанию${NC}"; fi
+[ -n "$DOH_STATUS" ] && echo -e "${YELLOW}DNS over HTTPS:${GREEN}$DOH_STATUS${NC}\n"
 
 
 
@@ -196,11 +192,26 @@ printf '%s\n' "$doh_set" "$doh_def" > "$fileDoH"; doh_restart; echo -e "${GREEN}
 }
 
 
+get_doh_status() {
+    DOH_STATUS=""
 
-if opkg list-installed | grep -q '^https-dns-proxy '; then if grep -q 'dns.comss.one' /etc/config/https-dns-proxy 2>/dev/null; then echo -e "${YELLOW}DNS over HTTPS:         ${GREEN}установлен | Comss DNS${NC}"
-else echo -e "${YELLOW}DNS over HTTPS:         ${GREEN}установлен${NC}"; fi; fi; 
+    # если DoH не установлен — пусто
+    [ ! -f "$fileDoH" ] && return
 
-
+    if grep -q "dns.comss.one" "$fileDoH"; then
+        DOH_STATUS="Comss DNS"
+    elif grep -q "xbox-dns.ru" "$fileDoH"; then
+        DOH_STATUS="Xbox DNS"
+    elif grep -q "5u35p8m9i7.cloudflare-gateway.com" "$fileDoH"; then
+        DOH_STATUS="dns.malw.link (Cloudflare Gateway)"
+    elif grep -q "dns.malw.link" "$fileDoH"; then
+        DOH_STATUS="dns.malw.link"
+    elif grep -q "cloudflare-dns.com" "$fileDoH" && grep -q "dns.google" "$fileDoH"; then
+        DOH_STATUS="по умолчанию"
+    else
+        DOH_STATUS="DNS over HTTPS установлен"
+    fi
+}
 
 
 doh_restart() { /etc/init.d/https-dns-proxy reload >/dev/null 2>&1; /etc/init.d/https-dns-proxy restart >/dev/null 2>&1; }
