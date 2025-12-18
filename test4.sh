@@ -140,6 +140,15 @@ DoH_menu() {
 while true; do
 clear; echo -e "${MAGENTA}Меню выбора стратегии${NC}\n"
 
+if grep -q 'dns.comss.one' /etc/config/https-dns-proxy 2>/dev/null; then echo -e "${GREEN}Comss DNS${NC}"; fi
+if grep -q 'xbox-dns.ru' /etc/config/https-dns-proxy 2>/dev/null; then echo -e "${GREEN}Xbox DNS${NC}"; fi
+if grep -q 'dns.malw.link' /etc/config/https-dns-proxy 2>/dev/null; then echo -e "${GREEN}dns.malw.link${NC}"; fi
+if grep -q '5u35p8m9i7.cloudflare-gateway.com' /etc/config/https-dns-proxy 2>/dev/null; then echo -e "${GREEN}dns.malw.link (Cloudflare Gateway)${NC}"; fi
+if grep -q 'cloudflare-dns.com' /etc/config/https-dns-proxy 2>/dev/null && grep -q 'dns.google' /etc/config/https-dns-proxy 2>/dev/null; then echo -e "${GREEN}по умолчанию${NC}"; fi
+
+
+
+
 
 echo -e "${CYAN}1)${GREEN} Установить ${NC}DNS over HTTPS"
 echo -e "${CYAN}2)${GREEN} Удалить ${NC}DNS over HTTPS"
@@ -183,7 +192,16 @@ echo -e "\n${MAGENTA}Настраиваем DNS over HTTPS${NC}\n${CYAN}Наст
 echo -e "\n${MAGENTA}Возвращаем DNS over HTTPS настройки по умолчанию${NC}\n${CYAN}Возвращаем настройки к значениям по умолчанию${NC}\n${CYAN}Применяем новые настройки${NC}"
 printf '%s\n' "$doh_set" "$doh_def" > "$fileDoH"; doh_restart; echo -e "${GREEN}Настройки по умолчанию возвращены!${NC}\n"; read -p "Нажмите Enter..." dummy ;;
 
-*) echo; return ;; esac; done; }
+*) echo; return ;; esac; done; 
+}
+
+
+
+if opkg list-installed | grep -q '^https-dns-proxy '; then if grep -q 'dns.comss.one' /etc/config/https-dns-proxy 2>/dev/null; then echo -e "${YELLOW}DNS over HTTPS:         ${GREEN}установлен | Comss DNS${NC}"
+else echo -e "${YELLOW}DNS over HTTPS:         ${GREEN}установлен${NC}"; fi; fi; 
+
+
+
 
 doh_restart() { /etc/init.d/https-dns-proxy reload >/dev/null 2>&1; /etc/init.d/https-dns-proxy restart >/dev/null 2>&1; }
 doh_comss=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://dns.comss.one/dns-query'")
@@ -231,10 +249,7 @@ web_is_enabled && WEB_TEXT="Удалить доступ к скрипту из �
 quic_is_blocked && QUIC_TEXT="${GREEN}Отключить блокировку${NC} QUIC ${GREEN}(80,443)${NC}" || QUIC_TEXT="${GREEN}Включить блокировку${NC} QUIC ${GREEN}(80,443)${NC}"
 clear; echo -e "${MAGENTA}Системное меню${NC}\n"; printed=0; if web_is_enabled; then echo -e "${YELLOW}Доступ из браузера:${NC} http://192.168.1.1:7681"; printed=1; fi
 if quic_is_blocked; then echo -e "${YELLOW}Блокировка QUIC:${NC}    ${GREEN}включена${NC}"; printed=1; fi
-if grep -q 'dns.comss.one' /etc/config/https-dns-proxy 2>/dev/null; then echo -e "${YELLOW}DNS over HTTPS:${NC}     ${GREEN}Comss DNS${NC}"; printed=1
-elif grep -q 'cloudflare-dns.com' /etc/config/https-dns-proxy 2>/dev/null && grep -q 'dns.google' /etc/config/https-dns-proxy 2>/dev/null; then
-echo -e "${YELLOW}DNS over HTTPS:${NC}     ${GREEN}по умолчанию${NC}"; printed=1; fi; [ "$printed" -eq 1 ] && echo
-echo -e "${CYAN}1) ${GREEN}Системная информация${NC}\n${CYAN}2) ${GREEN}$WEB_TEXT${NC}\n${CYAN}3) ${GREEN}$QUIC_TEXT${NC}"
+[ "$printed" -eq 1 ] && echo; echo -e "${CYAN}1) ${GREEN}Системная информация${NC}\n${CYAN}2) ${GREEN}$WEB_TEXT${NC}\n${CYAN}3) ${GREEN}$QUIC_TEXT${NC}"
 if uci get firewall.@defaults[0].flow_offloading 2>/dev/null | grep -q '^1$' || uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null | grep -q '^1$'
 then if ! grep -q 'meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc; then
 echo -e "${CYAN}4) ${GREEN}Применить ${NC}FIX${GREEN} для работы ${NC}Zapret${GREEN} с включённым ${NC}Flow Offloading${NC}"; fi; fi
@@ -256,8 +271,6 @@ echo -e "\n${YELLOW}Установленная версия:   ${INST_COLOR}$INS
 [ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*1024-19293,19345-49999,50101-65535" "$CONF" && grep -q -- "--filter-udp=1024-19293,19345-49999,50101-65535" "$CONF" && echo -e "${YELLOW}Стратегия для игр:${NC}      ${GREEN}активирована${NC}"
 
 
-if opkg list-installed | grep -q '^https-dns-proxy '; then if grep -q 'dns.comss.one' /etc/config/https-dns-proxy 2>/dev/null; then echo -e "${YELLOW}DNS over HTTPS:         ${GREEN}установлен | Comss DNS${NC}"
-else echo -e "${YELLOW}DNS over HTTPS:         ${GREEN}установлен${NC}"; fi; fi; 
 
 
 web_is_enabled && if web_is_enabled; then echo -e "${YELLOW}Доступ из браузера:${NC}     http://192.168.1.1:7681"; fi
