@@ -156,7 +156,7 @@ echo -e "${CYAN}7)${GREEN} Вернуть настройки по умолчан
 echo -ne "\n${YELLOW}Выберите пункт:${NC} " && read choiceDOH
 case "$choiceDOH" in
 
-1) 
+1) doh_install
 echo -e "\n${MAGENTA}Устанавливаем DNS over HTTPS\n${CYAN}Обновляем список пакетов${NC}"
 opkg update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; read -p "Нажмите Enter..." dummy; return; }; echo -e "${CYAN}Устанавливаем ${NC}https-dns-proxy"
 opkg install https-dns-proxy >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при установки!${NC}\n"; read -p "Нажмите Enter..." dummy; return; }; echo -e "${CYAN}Устанавливаем ${NC}luci-app-https-dns-proxy"
@@ -170,21 +170,20 @@ opkg remove https-dns-proxy luci-app-https-dns-proxy --force-removal-of-dependen
 rm -f /etc/config/https-dns-proxy; rm -f /etc/init.d/https-dns-proxy; echo -e "DNS over HTTPS${GREEN} удалён!${NC}\n"; read -p "Нажмите Enter..." dummy ;;
 
 
-3)
-
+3) doh_install
 echo -e "\n${MAGENTA}Настраиваем DNS over HTTPS${NC}\n${CYAN}Настраиваем ${NC}Comss.one DNS\n${CYAN}Применяем новые настройки${NC}"; rm -f "$fileDoH"; printf '%s\n' "$doh_set" "$doh_comss" > "$fileDoH"; doh_restart; echo -e "DNS over HTTP ${GREEN}настроен!${NC}\n"; read -p "Нажмите Enter..." dummy ;;
 
-4)
+4) doh_install
 echo -e "\n${MAGENTA}Настраиваем DNS over HTTPS${NC}\n${CYAN}Настраиваем ${NC}Xbox DNS\n${CYAN}Применяем новые настройки${NC}"; rm -f "$fileDoH"; printf '%s\n' "$doh_set" "$doh_xbox" > "$fileDoH"; doh_restart; echo -e "DNS over HTTP ${GREEN}настроен!${NC}\n"; read -p "Нажмите Enter..." dummy ;;
 
-5)
+5) doh_install
 echo -e "\n${MAGENTA}Настраиваем DNS over HTTPS${NC}\n${CYAN}Настраиваем ${NC}dns.malw.link\n${CYAN}Применяем новые настройки${NC}"; rm -f "$fileDoH"; printf '%s\n' "$doh_set" "$doh_query" > "$fileDoH"; doh_restart; echo -e "DNS over HTTP ${GREEN}настроен!${NC}\n"; read -p "Нажмите Enter..." dummy ;;
 
-6)
+6) doh_install
 echo -e "\n${MAGENTA}Настраиваем DNS over HTTPS${NC}\n${CYAN}Настраиваем ${NC}dns.malw.link (Cloudflare Gateway)\n${CYAN}Применяем новые настройки${NC}"; rm -f "$fileDoH"; printf '%s\n' "$doh_set" "$doh_queryCF" > "$fileDoH"; doh_restart; echo -e "DNS over HTTP ${GREEN}настроен!${NC}\n"; read -p "Нажмите Enter..." dummy ;;
 
 
-7)
+7) doh_install
 echo -e "\n${MAGENTA}Возвращаем DNS over HTTPS настройки по умолчанию${NC}\n${CYAN}Возвращаем настройки к значениям по умолчанию${NC}\n${CYAN}Применяем новые настройки${NC}"
 printf '%s\n' "$doh_set" "$doh_def" > "$fileDoH"; doh_restart; echo -e "${GREEN}Настройки по умолчанию возвращены!${NC}\n"; read -p "Нажмите Enter..." dummy ;;
 
@@ -212,6 +211,8 @@ get_doh_status() {
         DOH_STATUS="DNS over HTTPS установлен"
     fi
 }
+
+doh_install() { [ ! -f /etc/config/https-dns-proxy ] && { echo -e "\n${RED}DNS over HTTPS не установлен!${NC}\n"; read -p "Нажмите Enter..." dummy; return; }
 
 
 doh_restart() { /etc/init.d/https-dns-proxy reload >/dev/null 2>&1; /etc/init.d/https-dns-proxy restart >/dev/null 2>&1; }
