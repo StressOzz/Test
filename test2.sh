@@ -183,7 +183,7 @@ echo -e "\n${MAGENTA}Настраиваем DNS over HTTPS${NC}\n${CYAN}Наст
 echo -e "\n${MAGENTA}Возвращаем DNS over HTTPS настройки по умолчанию${NC}\n${CYAN}Возвращаем настройки к значениям по умолчанию${NC}\n${CYAN}Применяем новые настройки${NC}"
 printf '%s\n' "$doh_set" "$doh_def" > "$fileDoH"; doh_restart; echo -e "${GREEN}Настройки по умолчанию возвращены!${NC}\n"; read -p "Нажмите Enter..." dummy ;;
 
-}
+esac; done; }
 
 doh_restart() { /etc/init.d/https-dns-proxy reload >/dev/null 2>&1; /etc/init.d/https-dns-proxy restart >/dev/null 2>&1; }
 doh_comss=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://dns.comss.one/dns-query'")
