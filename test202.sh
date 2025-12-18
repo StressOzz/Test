@@ -168,6 +168,7 @@ HOSTS_LIST="185.87.51.182 4pda.to www.4pda.to app.4pda.to appbk.4pda.to|130.255.
 hosts_clear(){ for line in $(echo "$HOSTS_LIST" | tr '|' '\n'); do sed -i "\|$line|d" /etc/hosts; done; /etc/init.d/dnsmasq restart >/dev/null 2>&1; }
 hosts_add(){ for line in $(echo "$HOSTS_LIST" | tr '|' '\n'); do sed -i "\$a\\$line" /etc/hosts; done; /etc/init.d/dnsmasq restart >/dev/null 2>&1; }
 
+
 # ==========================================
 # Доступ из браузера
 # ==========================================
