@@ -140,63 +140,49 @@ DoH_menu() {
 while true; do
 get_doh_status; clear; echo -e "${MAGENTA}Меню выбора стратегии${NC}\n"
 
+opkg list-installed | grep -q '^https-dns-proxy ' && doh_st="Удалить" || doh_st="Установить → настроить"
+
 [ -n "$DOH_STATUS" ] && echo -e "${YELLOW}DNS over HTTPS: ${GREEN}$DOH_STATUS${NC}\n"
 
 
 
 
 
-echo -e "${CYAN}1)${GREEN} Установить ${NC}DNS over HTTPS"
-echo -e "${CYAN}2)${GREEN} Удалить ${NC}DNS over HTTPS"
-echo -e "${CYAN}3)${GREEN} Настроить ${NC}Comss DNS"
-echo -e "${CYAN}4)${GREEN} Настроить ${NC}Xbox DNS"
-echo -e "${CYAN}5)${GREEN} Настроить ${NC}dns.malw.link"
-echo -e "${CYAN}6)${GREEN} Настроить ${NC}dns.malw.link (Cloudflare Gateway)"
-echo -e "${CYAN}7)${GREEN} Вернуть настройки по умолчанию"
+echo -e "${CYAN}1)${GREEN} $doh_st ${NC}DNS over HTTPS"
+echo -e "${CYAN}2)${GREEN} Настроить ${NC}Comss DNS"
+echo -e "${CYAN}3)${GREEN} Настроить ${NC}Xbox DNS"
+echo -e "${CYAN}4)${GREEN} Настроить ${NC}dns.malw.link"
+echo -e "${CYAN}5)${GREEN} Настроить ${NC}dns.malw.link (Cloudflare Gateway)"
+echo -e "${CYAN}6)${GREEN} Вернуть настройки по умолчанию"
 echo -ne "\n${YELLOW}Выберите пункт:${NC} " && read choiceDOH
 case "$choiceDOH" in
 
-1) 
+1) D_o_H ;;
 
-opkg status https-dns-proxy >/dev/null 2>&1 && {
-    echo -e "\n${GREEN}DNS over HTTPS уже установлен!${NC}\n"
-    read -p "Нажмите Enter..." dummy
-} || {
-echo -e "\n${MAGENTA}Устанавливаем DNS over HTTPS\n${CYAN}Обновляем список пакетов${NC}"
-opkg update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; read -p "Нажмите Enter..." dummy; return; }; echo -e "${CYAN}Устанавливаем ${NC}https-dns-proxy"
-opkg install https-dns-proxy >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при установки!${NC}\n"; read -p "Нажмите Enter..." dummy; return; }; echo -e "${CYAN}Устанавливаем ${NC}luci-app-https-dns-proxy"
-opkg install luci-app-https-dns-proxy >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при установки!${NC}\n"; read -p "Нажмите Enter..." dummy; return; }
-echo -e "DNS over HTTPS${GREEN} установлен и настроен!${NC}\n"; read -p "Нажмите Enter..." dummy; } ;;
 
 
 2)
-echo -e "\n${MAGENTA}Удаляем DNS over HTTPS\n${CYAN}Удаляем пакеты${NC}"; /etc/init.d/https-dns-proxy stop >/dev/null 2>&1; /etc/init.d/https-dns-proxy disable >/dev/null 2>&1
-opkg remove https-dns-proxy luci-app-https-dns-proxy --force-removal-of-dependent-packages >/dev/null 2>&1; echo -e "${CYAN}Удаляем файлы конфигурации ${NC}"
-rm -f /etc/config/https-dns-proxy; rm -f /etc/init.d/https-dns-proxy; echo -e "DNS over HTTPS${GREEN} удалён!${NC}\n"; read -p "Нажмите Enter..." dummy ;;
-
-
-3)
 if [ ! -f /etc/config/https-dns-proxy ]; then
     echo -e "\n${RED}DNS over HTTPS не установлен!${NC}\n"
     read -p "Нажмите Enter..." dummy
 else
 echo -e "\n${MAGENTA}Настраиваем DNS over HTTPS${NC}\n${CYAN}Настраиваем ${NC}Comss.one DNS\n${CYAN}Применяем новые настройки${NC}"; rm -f "$fileDoH"; printf '%s\n' "$doh_set" "$doh_comss" > "$fileDoH"; doh_restart; echo -e "DNS over HTTP ${GREEN}настроен!${NC}\n"; read -p "Нажмите Enter..." dummy ; fi ;;
 
-4)
+3)
 if [ ! -f /etc/config/https-dns-proxy ]; then
     echo -e "\n${RED}DNS over HTTPS не установлен!${NC}\n"
     read -p "Нажмите Enter..." dummy
 else
 echo -e "\n${MAGENTA}Настраиваем DNS over HTTPS${NC}\n${CYAN}Настраиваем ${NC}Xbox DNS\n${CYAN}Применяем новые настройки${NC}"; rm -f "$fileDoH"; printf '%s\n' "$doh_set" "$doh_xbox" > "$fileDoH"; doh_restart; echo -e "DNS over HTTP ${GREEN}настроен!${NC}\n"; read -p "Нажмите Enter..." dummy ; fi ;;
 
-5)
+4)
 if [ ! -f /etc/config/https-dns-proxy ]; then
     echo -e "\n${RED}DNS over HTTPS не установлен!${NC}\n"
     read -p "Нажмите Enter..." dummy
 else
 echo -e "\n${MAGENTA}Настраиваем DNS over HTTPS${NC}\n${CYAN}Настраиваем ${NC}dns.malw.link\n${CYAN}Применяем новые настройки${NC}"; rm -f "$fileDoH"; printf '%s\n' "$doh_set" "$doh_query" > "$fileDoH"; doh_restart; echo -e "DNS over HTTP ${GREEN}настроен!${NC}\n"; read -p "Нажмите Enter..." dummy ; fi ;;
 
-6)
+5)
 if [ ! -f /etc/config/https-dns-proxy ]; then
     echo -e "\n${RED}DNS over HTTPS не установлен!${NC}\n"
     read -p "Нажмите Enter..." dummy
@@ -204,7 +190,7 @@ else
 echo -e "\n${MAGENTA}Настраиваем DNS over HTTPS${NC}\n${CYAN}Настраиваем ${NC}dns.malw.link (Cloudflare Gateway)\n${CYAN}Применяем новые настройки${NC}"; rm -f "$fileDoH"; printf '%s\n' "$doh_set" "$doh_queryCF" > "$fileDoH"; doh_restart; echo -e "DNS over HTTP ${GREEN}настроен!${NC}\n"; read -p "Нажмите Enter..." dummy ; fi ;;
 
 
-7)
+6)
 if [ ! -f /etc/config/https-dns-proxy ]; then
     echo -e "\n${RED}DNS over HTTPS не установлен!${NC}\n"
     read -p "Нажмите Enter..." dummy
@@ -237,7 +223,14 @@ get_doh_status() {
     fi
 }
 
-# doh_install() { [ ! -f /etc/config/https-dns-proxy ] && { echo -e "\n${RED}DNS over HTTPS не установлен!${NC}\n"; read -p "Нажмите Enter..." dummy; return; }; }
+D_o_H() { if opkg list-installed | grep -q '^https-dns-proxy '; then echo -e "\n${MAGENTA}Удаляем DNS over HTTPS\n${CYAN}Удаляем пакеты${NC}"; /etc/init.d/https-dns-proxy stop >/dev/null 2>&1; /etc/init.d/https-dns-proxy disable >/dev/null 2>&1
+opkg remove https-dns-proxy luci-app-https-dns-proxy --force-removal-of-dependent-packages >/dev/null 2>&1; echo -e "${CYAN}Удаляем файлы конфигурации ${NC}"
+rm -f /etc/config/https-dns-proxy; rm -f /etc/init.d/https-dns-proxy; echo -e "DNS over HTTPS${GREEN} удалён!${NC}\n"; else echo -e "\n${MAGENTA}Устанавливаем DNS over HTTPS\n${CYAN}Обновляем список пакетов${NC}"
+opkg update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; read -p "Нажмите Enter..." dummy; return; }; echo -e "${CYAN}Устанавливаем ${NC}https-dns-proxy"
+opkg install https-dns-proxy >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при установки!${NC}\n"; read -p "Нажмите Enter..." dummy; return; }; echo -e "${CYAN}Устанавливаем ${NC}luci-app-https-dns-proxy"; opkg install luci-app-https-dns-proxy >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при установки!${NC}\n"; read -p "Нажмите Enter..." dummy; return; }
+echo -e "DNS over HTTPS${GREEN} установлен!${NC}\n"; fi; read -p "Нажмите Enter..." dummy; }
+
+
 
 doh_install() { [ -f "$fileDoH" ] && return 0; echo -e "\n${RED}DNS over HTTPS не установлен!${NC}\n"; read -p "Нажмите Enter..." dummy; return 1; }
 
