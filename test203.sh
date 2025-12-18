@@ -163,12 +163,16 @@ doh_18=$(printf "%s\n" "" "config https-dns-proxy" "	option bootstrap_dns '1.1.1
 # ==========================================
 # hosts
 # ==========================================
-HOSTS_LIST="185.87.51.182 4pda.to www.4pda.to app.4pda.to appbk.4pda.to|130.255.77.28 ntc.party|30.255.77.28 ntc.party|173.245.58.219 rutor.info d.rutor.info|57.144.222.34 instagram.com www.instagram.com|157.240.9.174 instagram.com www.instagram.com|157.240.245.174 instagram.com www.instagram.com|185.39.18.98 lib.rus.ec www.lib.rus.ec"
-
-hosts_clear(){ for line in $(echo "$HOSTS_LIST" | tr '|' '\n'); do sed -i "\|$line|d" /etc/hosts; done; /etc/init.d/dnsmasq restart >/dev/null 2>&1; }
-hosts_add(){ for line in $(echo "$HOSTS_LIST" | tr '|' '\n'); do sed -i "\$a\\$line" /etc/hosts; done; /etc/init.d/dnsmasq restart >/dev/null 2>&1; }
-
-
+HOSTS_LIST="185.87.51.182 4pda.to www.4pda.to app.4pda.to appbk.4pda.to
+130.255.77.28 ntc.party
+30.255.77.28 ntc.party
+173.245.58.219 rutor.info d.rutor.info
+57.144.222.34 instagram.com www.instagram.com
+157.240.9.174 instagram.com www.instagram.com
+157.240.245.174 instagram.com www.instagram.com
+185.39.18.98 lib.rus.ec www.lib.rus.ec"
+hosts_clear() { sed -i "$(echo "$HOSTS_LIST" | sed 's|^|/|; s|$|/d|')" /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1; }
+hosts_add() { sed -i "$(echo "$HOSTS_LIST" | sed 's|^|$a\\|')" /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1; }
 # ==========================================
 # Доступ из браузера
 # ==========================================
