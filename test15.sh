@@ -173,39 +173,39 @@ rm -f /etc/config/https-dns-proxy; rm -f /etc/init.d/https-dns-proxy; echo -e "D
 3)
 if [ ! -f /etc/config/https-dns-proxy ]; then
     echo -e "\n${RED}DNS over HTTPS не установлен!${NC}\n"
-    read -p "Нажмите Enter..." dummy ;;
+    read -p "Нажмите Enter..." dummy
 else
-echo -e "\n${MAGENTA}Настраиваем DNS over HTTPS${NC}\n${CYAN}Настраиваем ${NC}Comss.one DNS\n${CYAN}Применяем новые настройки${NC}"; rm -f "$fileDoH"; printf '%s\n' "$doh_set" "$doh_comss" > "$fileDoH"; doh_restart; echo -e "DNS over HTTP ${GREEN}настроен!${NC}\n"; read -p "Нажмите Enter..." dummy ;; fi
+echo -e "\n${MAGENTA}Настраиваем DNS over HTTPS${NC}\n${CYAN}Настраиваем ${NC}Comss.one DNS\n${CYAN}Применяем новые настройки${NC}"; rm -f "$fileDoH"; printf '%s\n' "$doh_set" "$doh_comss" > "$fileDoH"; doh_restart; echo -e "DNS over HTTP ${GREEN}настроен!${NC}\n"; read -p "Нажмите Enter..." dummy ; fi ;;
 
 4)
 if [ ! -f /etc/config/https-dns-proxy ]; then
     echo -e "\n${RED}DNS over HTTPS не установлен!${NC}\n"
-    read -p "Нажмите Enter..." dummy ;;
+    read -p "Нажмите Enter..." dummy
 else
-echo -e "\n${MAGENTA}Настраиваем DNS over HTTPS${NC}\n${CYAN}Настраиваем ${NC}Xbox DNS\n${CYAN}Применяем новые настройки${NC}"; rm -f "$fileDoH"; printf '%s\n' "$doh_set" "$doh_xbox" > "$fileDoH"; doh_restart; echo -e "DNS over HTTP ${GREEN}настроен!${NC}\n"; read -p "Нажмите Enter..." dummy ;; fi
+echo -e "\n${MAGENTA}Настраиваем DNS over HTTPS${NC}\n${CYAN}Настраиваем ${NC}Xbox DNS\n${CYAN}Применяем новые настройки${NC}"; rm -f "$fileDoH"; printf '%s\n' "$doh_set" "$doh_xbox" > "$fileDoH"; doh_restart; echo -e "DNS over HTTP ${GREEN}настроен!${NC}\n"; read -p "Нажмите Enter..." dummy ; fi ;;
 
 5)
 if [ ! -f /etc/config/https-dns-proxy ]; then
     echo -e "\n${RED}DNS over HTTPS не установлен!${NC}\n"
-    read -p "Нажмите Enter..." dummy ;;
+    read -p "Нажмите Enter..." dummy
 else
-echo -e "\n${MAGENTA}Настраиваем DNS over HTTPS${NC}\n${CYAN}Настраиваем ${NC}dns.malw.link\n${CYAN}Применяем новые настройки${NC}"; rm -f "$fileDoH"; printf '%s\n' "$doh_set" "$doh_query" > "$fileDoH"; doh_restart; echo -e "DNS over HTTP ${GREEN}настроен!${NC}\n"; read -p "Нажмите Enter..." dummy ;; fi
+echo -e "\n${MAGENTA}Настраиваем DNS over HTTPS${NC}\n${CYAN}Настраиваем ${NC}dns.malw.link\n${CYAN}Применяем новые настройки${NC}"; rm -f "$fileDoH"; printf '%s\n' "$doh_set" "$doh_query" > "$fileDoH"; doh_restart; echo -e "DNS over HTTP ${GREEN}настроен!${NC}\n"; read -p "Нажмите Enter..." dummy ; fi ;;
 
 6)
 if [ ! -f /etc/config/https-dns-proxy ]; then
     echo -e "\n${RED}DNS over HTTPS не установлен!${NC}\n"
-    read -p "Нажмите Enter..." dummy ;;
+    read -p "Нажмите Enter..." dummy
 else
-echo -e "\n${MAGENTA}Настраиваем DNS over HTTPS${NC}\n${CYAN}Настраиваем ${NC}dns.malw.link (Cloudflare Gateway)\n${CYAN}Применяем новые настройки${NC}"; rm -f "$fileDoH"; printf '%s\n' "$doh_set" "$doh_queryCF" > "$fileDoH"; doh_restart; echo -e "DNS over HTTP ${GREEN}настроен!${NC}\n"; read -p "Нажмите Enter..." dummy ;; fi
+echo -e "\n${MAGENTA}Настраиваем DNS over HTTPS${NC}\n${CYAN}Настраиваем ${NC}dns.malw.link (Cloudflare Gateway)\n${CYAN}Применяем новые настройки${NC}"; rm -f "$fileDoH"; printf '%s\n' "$doh_set" "$doh_queryCF" > "$fileDoH"; doh_restart; echo -e "DNS over HTTP ${GREEN}настроен!${NC}\n"; read -p "Нажмите Enter..." dummy ; fi ;;
 
 
 7)
 if [ ! -f /etc/config/https-dns-proxy ]; then
     echo -e "\n${RED}DNS over HTTPS не установлен!${NC}\n"
-    read -p "Нажмите Enter..." dummy ;; fi
+    read -p "Нажмите Enter..." dummy
 else
 echo -e "\n${MAGENTA}Возвращаем DNS over HTTPS настройки по умолчанию${NC}\n${CYAN}Возвращаем настройки к значениям по умолчанию${NC}\n${CYAN}Применяем новые настройки${NC}"
-printf '%s\n' "$doh_set" "$doh_def" > "$fileDoH"; doh_restart; echo -e "${GREEN}Настройки по умолчанию возвращены!${NC}\n"; read -p "Нажмите Enter..." dummy ;; fi
+printf '%s\n' "$doh_set" "$doh_def" > "$fileDoH"; doh_restart; echo -e "${GREEN}Настройки по умолчанию возвращены!${NC}\n"; read -p "Нажмите Enter..." dummy ; fi ;;
 
 *) echo; return ;; esac; done; 
 }
