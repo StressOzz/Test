@@ -143,11 +143,11 @@ get_doh_status; clear; echo -e "${MAGENTA}Меню выбора стратеги
 
 opkg list-installed | grep -q '^https-dns-proxy ' && doh_st="Удалить" || doh_st="Установить"
 
-[ -n "$DOH_STATUS" ] && echo -e "${YELLOW}DNS over HTTPS: ${GREEN}$DOH_STATUS${NC}\n"
-
-
-
-
+if [ -n "$DOH_STATUS" ]; then
+    echo -e "${YELLOW}DNS over HTTPS: ${GREEN}$DOH_STATUS${NC}\n"
+else
+    echo -e "${YELLOW}DNS over HTTPS: ${RED}не установлен${NC}\n"
+fi
 
 echo -e "${CYAN}1)${GREEN} $doh_st ${NC}DNS over HTTPS"
 echo -e "${CYAN}2)${GREEN} Настроить ${NC}Comss DNS"
@@ -159,8 +159,6 @@ echo -ne "\n${YELLOW}Выберите пункт:${NC} " && read choiceDOH
 case "$choiceDOH" in
 
 1) D_o_H ;;
-
-
 
 2)
 if [ ! -f /etc/config/https-dns-proxy ]; then
@@ -199,8 +197,7 @@ else
 echo -e "\n${MAGENTA}Возвращаем DNS over HTTPS настройки по умолчанию${NC}\n${CYAN}Возвращаем настройки к значениям по умолчанию${NC}\n${CYAN}Применяем новые настройки${NC}"
 printf '%s\n' "$doh_set" "$doh_def" > "$fileDoH"; doh_restart; echo -e "${GREEN}Настройки по умолчанию возвращены!${NC}\n"; read -p "Нажмите Enter..." dummy ; fi ;;
 
-*) echo; return ;; esac; done; 
-}
+*) echo; return ;; esac; done; }
 
 
 get_doh_status() {
@@ -217,8 +214,6 @@ get_doh_status() {
         DOH_STATUS="dns.malw.link (Cloudflare Gateway)"
     elif grep -q "dns.malw.link" "$fileDoH"; then
         DOH_STATUS="dns.malw.link"
-    elif grep -q "cloudflare-dns.com" "$fileDoH" && grep -q "dns.google" "$fileDoH"; then
-        DOH_STATUS="по умолчанию"
     else
         DOH_STATUS="установлен"
     fi
