@@ -123,25 +123,8 @@ printf '%s\n' "--dpi-desync-fake-tls=0x0F0F0F0F" "--dpi-desync-fake-tls-mod=none
 printf '%s\n' "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake" "--dpi-desync-repeats=6" "--dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin" | cat; }
 { echo "  option NFQWS_OPT '"; echo "#${version} УДАЛИТЕ ЭТУ СТРОЧКУ, ЕСЛИ ИЗМЕНЯЕТЕ СТРАТЕГИЮ !!!"; strategy_${version}; echo "'"; } >> "$CONF"
 echo -e "${CYAN}Добавляем домены в исключения${NC}"; rm -f "$EXCLUDE_FILE"; wget -q -O "$EXCLUDE_FILE" "$EXCLUDE_URL" || echo -e "\n${RED}Не удалось загрузить exclude файл${NC}\n"
-
-
-case "$version" in 
-  v3) file="t2.bin" ;;
-  v4) file="4pda.bin" ;;
-  v5) file="max.bin" ;;
-  *) file=""
-esac
-
-if [ -n "$file" ]; then
-    if ! wget -q -O "/opt/zapret/files/fake/$file" "https://github.com/StressOzz/Zapret-Manager/raw/refs/heads/main/$file"; then
-        echo -e "\n${RED}Не удалось загрузить $file${NC}\n"
-    fi
-fi
-
-
-
-echo -e "${CYAN}Редактируем ${NC}/etc/hosts${NC}"; hosts_add
-fileGP="/opt/zapret/ipset/zapret-hosts-google.txt"; printf '%s\n' "gvt1.com" "googleplay.com" "play.google.com" "beacons.gvt2.com" "play.googleapis.com" "play-fe.googleapis.com" \
+case "$version" in v3) file="t2.bin" ;; v4) file="4pda.bin" ;; v5) file="max.bin" ;; *) file="" ; esac; if [ -n "$file" ]; then if ! wget -q -O "/opt/zapret/files/fake/$file" "https://github.com/StressOzz/Zapret-Manager/raw/refs/heads/main/$file"; then
+echo -e "\n${RED}Не удалось загрузить $file${NC}\n"; fi; fi; echo -e "${CYAN}Редактируем ${NC}/etc/hosts${NC}"; hosts_add; fileGP="/opt/zapret/ipset/zapret-hosts-google.txt"; printf '%s\n' "gvt1.com" "googleplay.com" "play.google.com" "beacons.gvt2.com" "play.googleapis.com" "play-fe.googleapis.com" \
 "lh3.googleusercontent.com" "android.clients.google.com" "connectivitycheck.gstatic.com" "play-lh.googleusercontent.com" "play-games.googleusercontent.com" "prod-lt-playstoregatewayadapter-pa.googleapis.com" | grep -Fxv -f "$fileGP" 2>/dev/null >> "$fileGP"
 dis_str; echo -e "${CYAN}Применяем новую стратегию и настройки${NC}"; chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1; echo -e "${GREEN}Стратегия ${NC}${version} ${GREEN}установлена!${NC}"
 sed -i "s/,1024-19293,19345-49999,50101-65535//" "$CONF"; [ "$NO_PAUSE" != "1" ] && echo && read -p "Нажмите Enter..." dummy; [ "$NO_PAUSE" = "1" ] && break; done }
