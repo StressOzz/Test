@@ -141,14 +141,14 @@ while true; do
 clear; echo -e "${MAGENTA}Меню выбора стратегии${NC}\n"
 
 
-echo -e "1) Установить DNS over HTTPS"
-echo -e "2) Удалить DNS over HTTPS"
-echo -e "3) Настроить Comss DNS"
-echo -e "4) Настроить Xbox DNS"
-echo -e "5) Настроить dns.malw.link"
-echo -e "6) Настроить dns.malw.link (Cloudflare Gateway)"
-echo -e "7) Вернуть настройки по умолчанию"
-echo -ne "${YELLOW}Выберите пункт:${NC} " && read choiceDOH
+echo -e "${CYAN}1)${GREEN} Установить ${NC}DNS over HTTPS"
+echo -e "${CYAN}2)${GREEN} Удалить ${NC}DNS over HTTPS"
+echo -e "${CYAN}3)${GREEN} Настроить ${NC}Comss DNS"
+echo -e "${CYAN}4)${GREEN} Настроить ${NC}Xbox DNS"
+echo -e "${CYAN}5)${GREEN} Настроить ${NC}dns.malw.link"
+echo -e "${CYAN}6)${GREEN} Настроить ${NC}dns.malw.link (Cloudflare Gateway)"
+echo -e "${CYAN}7)${GREEN} Вернуть настройки по умолчанию"
+echo -ne "\n${YELLOW}Выберите пункт:${NC} " && read choiceDOH
 case "$choiceDOH" in
 
 1) 
@@ -162,7 +162,7 @@ echo -e "DNS over HTTPS${GREEN} установлен и настроен!${NC}\n
 2)
 echo -e "\n${MAGENTA}Удаляем DNS over HTTPS\n${CYAN}Удаляем пакеты${NC}"; /etc/init.d/https-dns-proxy stop >/dev/null 2>&1; /etc/init.d/https-dns-proxy disable >/dev/null 2>&1
 opkg remove https-dns-proxy luci-app-https-dns-proxy --force-removal-of-dependent-packages >/dev/null 2>&1; echo -e "${CYAN}Удаляем файлы конфигурации ${NC}"
-rm -f /etc/config/https-dns-proxy; rm -f /etc/init.d/https-dns-proxy; echo -e "DNS over HTTPS${GREEN} удалён!${NC}\n" ;;
+rm -f /etc/config/https-dns-proxy; rm -f /etc/init.d/https-dns-proxy; echo -e "DNS over HTTPS${GREEN} удалён!${NC}\n"; read -p "Нажмите Enter..." dummy ;;
 
 
 3)
@@ -183,7 +183,7 @@ echo -e "\n${MAGENTA}Настраиваем DNS over HTTPS${NC}\n${CYAN}Наст
 echo -e "\n${MAGENTA}Возвращаем DNS over HTTPS настройки по умолчанию${NC}\n${CYAN}Возвращаем настройки к значениям по умолчанию${NC}\n${CYAN}Применяем новые настройки${NC}"
 printf '%s\n' "$doh_set" "$doh_def" > "$fileDoH"; doh_restart; echo -e "${GREEN}Настройки по умолчанию возвращены!${NC}\n"; read -p "Нажмите Enter..." dummy ;;
 
-esac; done; }
+*) echo; return ;; esac; done; }
 
 doh_restart() { /etc/init.d/https-dns-proxy reload >/dev/null 2>&1; /etc/init.d/https-dns-proxy restart >/dev/null 2>&1; }
 doh_comss=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://dns.comss.one/dns-query'")
@@ -264,7 +264,7 @@ web_is_enabled && if web_is_enabled; then echo -e "${YELLOW}Доступ из б
 quic_is_blocked && if quic_is_blocked; then echo -e "${YELLOW}Блокировка QUIC:${NC}        ${GREEN}включена${NC}"; fi; show_current_strategy && [ -n "$ver" ] && echo -e "${YELLOW}Используется стратегия:${NC} ${CYAN}$ver${NC}"
 echo -e "\n${CYAN}1) ${GREEN}Установить последнюю версию${NC}\n${CYAN}2) ${GREEN}Меню выбора стратегий${NC}\n${CYAN}3) ${GREEN}Вернуть настройки по умолчанию${NC}\n${CYAN}4) ${GREEN}$str_stp_zpr ${NC}Zapret"
 echo -e "${CYAN}5) ${GREEN}Удалить ${NC}Zapret\n${CYAN}6) ${GREEN}$menu_game\n${CYAN}7) ${GREEN}Меню установки скриптов${NC}\n${CYAN}8) ${GREEN}Удалить → установить → настроить${NC} Zapret"
-echo -e "${CYAN}9) ${GREEN}Меню  ${NC}DNS over HTTPS\n${CYAN}0) ${GREEN}Системное меню${NC}" ; echo -ne "${CYAN}Enter) ${GREEN}Выход${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read choice
+echo -e "${CYAN}9) ${GREEN}Меню ${NC}DNS over HTTPS\n${CYAN}0) ${GREEN}Системное меню${NC}" ; echo -ne "${CYAN}Enter) ${GREEN}Выход${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read choice
 case "$choice" in 1) install_Zapret ;; 2) menu_str ;; 3) comeback_def ;; 4) pgrep -f /opt/zapret >/dev/null 2>&1 && stop_zapret || start_zapret ;; 5) uninstall_zapret ;; 6) fix_GAME ;; 7) scrypt_install ;; 8) zapret_key ;;
 9) DoH_menu ;; 0) sys_menu ;; *) echo; exit 0 ;; esac; }
 # ==========================================
