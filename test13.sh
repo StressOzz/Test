@@ -170,20 +170,20 @@ opkg remove https-dns-proxy luci-app-https-dns-proxy --force-removal-of-dependen
 rm -f /etc/config/https-dns-proxy; rm -f /etc/init.d/https-dns-proxy; echo -e "DNS over HTTPS${GREEN} удалён!${NC}\n"; read -p "Нажмите Enter..." dummy ;;
 
 
-3) doh_install || break
+3) doh_install || { return; }
 echo -e "\n${MAGENTA}Настраиваем DNS over HTTPS${NC}\n${CYAN}Настраиваем ${NC}Comss.one DNS\n${CYAN}Применяем новые настройки${NC}"; rm -f "$fileDoH"; printf '%s\n' "$doh_set" "$doh_comss" > "$fileDoH"; doh_restart; echo -e "DNS over HTTP ${GREEN}настроен!${NC}\n"; read -p "Нажмите Enter..." dummy ;;
 
-4) doh_install || break
+4) doh_install || { return; }
 echo -e "\n${MAGENTA}Настраиваем DNS over HTTPS${NC}\n${CYAN}Настраиваем ${NC}Xbox DNS\n${CYAN}Применяем новые настройки${NC}"; rm -f "$fileDoH"; printf '%s\n' "$doh_set" "$doh_xbox" > "$fileDoH"; doh_restart; echo -e "DNS over HTTP ${GREEN}настроен!${NC}\n"; read -p "Нажмите Enter..." dummy ;;
 
-5) doh_install || break
+5) doh_install || { return; }
 echo -e "\n${MAGENTA}Настраиваем DNS over HTTPS${NC}\n${CYAN}Настраиваем ${NC}dns.malw.link\n${CYAN}Применяем новые настройки${NC}"; rm -f "$fileDoH"; printf '%s\n' "$doh_set" "$doh_query" > "$fileDoH"; doh_restart; echo -e "DNS over HTTP ${GREEN}настроен!${NC}\n"; read -p "Нажмите Enter..." dummy ;;
 
-6) doh_install || break
+6) doh_install || { return; }
 echo -e "\n${MAGENTA}Настраиваем DNS over HTTPS${NC}\n${CYAN}Настраиваем ${NC}dns.malw.link (Cloudflare Gateway)\n${CYAN}Применяем новые настройки${NC}"; rm -f "$fileDoH"; printf '%s\n' "$doh_set" "$doh_queryCF" > "$fileDoH"; doh_restart; echo -e "DNS over HTTP ${GREEN}настроен!${NC}\n"; read -p "Нажмите Enter..." dummy ;;
 
 
-7) doh_install || break
+7) doh_install || { return; }
 echo -e "\n${MAGENTA}Возвращаем DNS over HTTPS настройки по умолчанию${NC}\n${CYAN}Возвращаем настройки к значениям по умолчанию${NC}\n${CYAN}Применяем новые настройки${NC}"
 printf '%s\n' "$doh_set" "$doh_def" > "$fileDoH"; doh_restart; echo -e "${GREEN}Настройки по умолчанию возвращены!${NC}\n"; read -p "Нажмите Enter..." dummy ;;
 
