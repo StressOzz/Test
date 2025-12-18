@@ -11,7 +11,7 @@
 
 - [1. Подготовка системы](#-1-подготовка-системы)
 - [2. Запуск менеджера](#-2-запуск-менеджера)
-- [3. Быстрый старт](#-3-быстрый-старт)
+- [3. Быстрый старт и пункты меню](#-3-быстрый-старт)
 - [4. Cтратегии для Youtube](#-4-стратегии-для-youtube)
 - [5. Cтратегии используемые в скрипте](#-5-стратегии-используемые-в-скрипте)
 - [Благодарности](#благодарности)
@@ -68,29 +68,65 @@ wget -O /tmp/Zapret-Manager.sh https://raw.githubusercontent.com/StressOzz/Zapre
 - Заработает **Discord** (возможно придётся подобрать скрипт через **пункт 7**)
 - Заработают сетевые режимы в играх, включая **Battlefield 6**, **Apex Legend**, **Roblox** и в других...
 
-> [!IMPORTANT]
-> Весь трафик пойдёт через Zapret !!!
-
 **Пункт 9** - **Меню DNS over HTTPS**
 
-1) Удалить DNS over HTTPS
-2) Настроить Comss DNS
-3) Настроить Xbox DNS
-4) Настроить dns.malw.link
-5) Настроить dns.malw.link (Cloudflare Gateway)
-6) Вернуть настройки по умолчанию
+**1) Установить или Удалить DNS over HTTPS**
 
+**2) Настроить Comss DNS**
 
+https://www.comss.ru/page.php?id=7315
 
-**Comss.one DNS**
-- предоставляет доступ к популярным сайтам и сервисам. В частности, вы можете пользоваться ИИ-сервисами (ChatGPT и Sora, Microsoft Copilot, GitHub Copilot, xAI Grok, Google Gemini и Claude AI), или устанавливать обновления антивирусов, инсайдерские сборки и обновления Windows, а также играть в Brawl Stars и сетевые режимы Doom Eternal в России.
-- блокировка фишинга, рекламных, отслеживающих и вредоносных доменов осуществляется с использованием фильтров Adguard DNS и AdAway.
+Comss.one DNS построен на базе современного решение для управления интернет-трафиком и DNS-запросами PowerDNS. Используются мощные серверы с защитой от DDoS атак.
+  
+Такое сочетание позволяет эффективно блокировать рекламу и трекинг на сетевом уровне, и обеспечивает быстрый и безопасный веб-серфинг в Интернете.
+Функции безопасности Comss.one DNS
+  
+Блокировка рекламы, отслеживания, вредоносных и фишинговых сайтов
+Блокировка фишинга, рекламных, отслеживающих и вредоносных доменов осуществляется с использованием фильтров Adguard DNS и AdAway.
+  
+Шифрование DNS-запросов. DNS-серверы Comss.one поддерживают работу по DNS-over-HTTPS/3, DNS-over-TLS и DNS-over-QUICс применением следующих технологий безопасности:
+DNSSEC – протокол, позволяющий минимизировать атаки, связанные с подменой DNS-адреса. TLS 1.2, TLS 1.3 – актуальные версии протокола TLS для защищенной передачи данных.
+  
+Comss.one DNS также предоставляет доступ к популярным сайтам и сервисам. В частности, вы можете пользоваться ИИ-сервисами (ChatGPT и Sora, Microsoft Copilot, GitHub Copilot, xAI Grok, Google Gemini и Claude AI), или устанавливать обновления антивирусов, инсайдерские сборки и обновления Windows, а также играть в Brawl Stars и сетевые режимы Doom Eternal в России.
+
+**3) Настроить Xbox DNS**
+
+https://xbox-dns.ru/
+
+XBox DNS
+Доступ к играм и сервисам без границ
+Столкнулись с ошибкой 0x80a40401 и региональными ограничениями? Наш DNS — это лучший способ получить мгновенный доступ к играм и сервисам по всему миру. Без установки ПО и потери скорости.
+
+Игры - Забудьте об ошибках доступа. Играйте в Battlefield 6, Call of Duty, Destiny 2, Stumble Guys, игры от EA, Supercell и многие другие.
+
+AI-сервисы - Раскройте потенциал ведущих AI-платформ. Получите мгновенный доступ к ChatGPT, Gemini, Claude, Sora, DeepL, NotebookLM и другим нейросетям.
+
+Работа и IT - Оставайтесь продуктивными. Обеспечиваем стабильную работу ключевых инструментов: от обновлений JetBrains и GitHub Copilot до проектов в Notion и Framer.
+
+Медиа - Смотрите Twitch-трансляции в максимальном качестве, слушайте Spotify без ограничений и пользуйтесь облачным геймингом без задержек.
+
+**4) Настроить dns.malw.link**
+
+https://info.dns.malw.link/
+
+Разблокирует недоступные сайты, блокирует мусор, поддержка доменов OpenNIC
+
+| Разблокировано | Заблокировано |
+|----------------|---------------|
+| Anthropic API, Augmentcode, Bing Rewards, Brawl Stars, Broadcom, Canva, ChatGPT, Clash of Clans, Clash Royale, Claude, ClickUp, Codeium, DeepL, Deezer, DELL, Dyson, easydmarc.com, ElevenLabs, ElevenReader, FitBit (Google Pixel Watch), Framer, Gemini API, Gemini, Genspark.ai, GitHub Copilot, Google AI Studio, Google Jules, Google Stitch, Grok, Hume.ai, Hybrid-analysis, Imgur (загрузка изображений), Intel, JetBrains Datalore, Linear.app, m3u.in, Manus.im, Microsoft Copilot, MongoDB, NotebookLM, Notion, NVIDIA GeForce Now, OpenAI API, Parsec, Pixabay, PostHog, Qwant, Sora, SoundCloud, Spotify, Strava, Supercell Store, Tidal, TikTok (браузер), Trae.ai, Tria.ge, Twitch, Weather.com, Web.archive.org, WikiDot, Windsurf, Xbox (консоли), Xbox Cloud Gaming, Плагины JetBrains IDE | Adcolony (реклама), Amazon AWS Analytics (слежка), Bugsnag (слежка), Byteoversea (слежка), doubleclick.net (реклама), Freshmarketer (слежка), Google Ads (реклама), googlesyndication.com (реклама), Hotjar (слежка), iplogger.org, Luckyorange (слежка), media.net (реклама), Mouseflow (слежка), samsungads.com (реклама), Sentry (слежка), Реклама Unity, Реклама/слежка Apple, Huawei, Oppo, Pinterest, Realme, TikTok, Xiaomi, Yahoo, Слежка LinkedIn, Reddit, Яндекс Метрика |
+
+**5) Настроить dns.malw.link (Cloudflare Gateway)**
+
+Тот же dns.malw.link на серверах Cloudflare. Значительно быстрее и стабильнее.
+
+Cloudflare блокируется некоторыми провайдерами
+
+**6) Вернуть настройки по умолчанию**
 
 **Пункт 0** - **Системное меню**
 - Системная информация
 - Активировать доступ к скрипту из браузера - скрипт по адресу **http://192.168.1.1:7681** или в **LuCI** → **Services** → **Terminal**
 - Включить блокировку **QUIC** - добавит правило в **Firewall** → **Traffic Rules** которое блокирует **QUIC** на портах **80**, **443**
-- Вернуть **DNS over HTTPS** настройки по умолчанию (или включить Comss DNS)
 - Применить фикс для работы **Zapret** с включённым **Flow Offloading** (появится если включён FO и не применён FIX)
 
 ---
