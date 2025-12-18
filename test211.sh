@@ -8,7 +8,7 @@ MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
 WORKDIR="/tmp/zapret-update"; CONF="/etc/config/zapret"; CUSTOM_DIR="/opt/zapret/init.d/openwrt/custom.d/"
 EXCLUDE_FILE="/opt/zapret/ipset/zapret-hosts-user-exclude.txt"; fileDoH="/etc/config/https-dns-proxy"
 EXCLUDE_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/zapret-hosts-user-exclude.txt"
-HOSTS_LIST="||185.87.51.182 4pda.to www.4pda.to app.4pda.to appbk.4pda.to|130.255.77.28 ntc.party|30.255.77.28 ntc.party|173.245.58.219 rutor.info d.rutor.info
+HOSTS_LIST="185.87.51.182 4pda.to www.4pda.to app.4pda.to appbk.4pda.to|130.255.77.28 ntc.party|30.255.77.28 ntc.party|173.245.58.219 rutor.info d.rutor.info
 57.144.222.34 instagram.com www.instagram.com|157.240.9.174 instagram.com www.instagram.com|157.240.245.174 instagram.com www.instagram.com|185.39.18.98 lib.rus.ec www.lib.rus.ec"
 hosts_add(){ echo "$HOSTS_LIST" | tr '|' '\n' | grep -Fxv -f /etc/hosts >> /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1; }
 hosts_clear(){ echo "$HOSTS_LIST" | tr '|' '\n' | while IFS= read -r line; do [ -n "$line" ] && sed -i "\|$line|d" /etc/hosts; done; /etc/init.d/dnsmasq restart >/dev/null 2>&1; }
@@ -123,9 +123,24 @@ printf '%s\n' "--dpi-desync-fake-tls=0x0F0F0F0F" "--dpi-desync-fake-tls-mod=none
 printf '%s\n' "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake" "--dpi-desync-repeats=6" "--dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin" | cat; }
 { echo "  option NFQWS_OPT '"; echo "#${version} УДАЛИТЕ ЭТУ СТРОЧКУ, ЕСЛИ ИЗМЕНЯЕТЕ СТРАТЕГИЮ !!!"; strategy_${version}; echo "'"; } >> "$CONF"
 echo -e "${CYAN}Добавляем домены в исключения${NC}"; rm -f "$EXCLUDE_FILE"; wget -q -O "$EXCLUDE_FILE" "$EXCLUDE_URL" || echo -e "\n${RED}Не удалось загрузить exclude файл${NC}\n"
-case "$version" in v3) echo -e "${CYAN}Копируем ${NC}t2.bin${CYAN} на устройство${NC}"; file="t2.bin" ;;
-v4) echo -e "${CYAN}Копируем ${NC}4pda.bin${CYAN} на устройство${NC}"; file="4pda.bin" ;; v5) echo -e "${CYAN}Копируем ${NC}max.bin${CYAN} на устройство${NC}"; file="max.bin" ;;
-esac; [ -n "$file" ] && wget -q -O "/opt/zapret/files/fake/$file" "https://github.com/StressOzz/Zapret-Manager/raw/refs/heads/main/$file" || echo -e "\n${RED}Не удалось загрузить234234234234234 $file${NC}\n"; echo -e "${CYAN}Редактируем ${NC}/etc/hosts${NC}"; hosts_add
+
+
+case "$version" in 
+  v3) file="t2.bin" ;;
+  v4) file="4pda.bin" ;;
+  v5) file="max.bin" ;;
+  *) file=""
+esac
+
+if [ -n "$file" ]; then
+    if ! wget -q -O "/opt/zapret/files/fake/$file" "https://github.com/StressOzz/Zapret-Manager/raw/refs/heads/main/$file"; then
+        echo -e "\n${RED}Не удалось загрузить $file${NC}\n"
+    fi
+fi
+
+
+
+echo -e "${CYAN}Редактируем ${NC}/etc/hosts${NC}"; hosts_add
 fileGP="/opt/zapret/ipset/zapret-hosts-google.txt"; printf '%s\n' "gvt1.com" "googleplay.com" "play.google.com" "beacons.gvt2.com" "play.googleapis.com" "play-fe.googleapis.com" \
 "lh3.googleusercontent.com" "android.clients.google.com" "connectivitycheck.gstatic.com" "play-lh.googleusercontent.com" "play-games.googleusercontent.com" "prod-lt-playstoregatewayadapter-pa.googleapis.com" | grep -Fxv -f "$fileGP" 2>/dev/null >> "$fileGP"
 dis_str; echo -e "${CYAN}Применяем новую стратегию и настройки${NC}"; chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1; echo -e "${GREEN}Стратегия ${NC}${version} ${GREEN}установлена!${NC}"
