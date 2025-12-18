@@ -187,7 +187,7 @@ read -p "Нажмите Enter..." dummy
 }
 
 
-check_doh_tcp() {
+check_doh() {
     host="$1"
     name="$2"
 
