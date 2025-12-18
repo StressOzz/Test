@@ -156,7 +156,7 @@ printf '%s\n' "$doh_set" "$doh_queryCF" > "$fileDoH"; doh_restart; echo -e "DNS 
 6) if [ ! -f /etc/config/https-dns-proxy ]; then echo -e "\n${RED}DNS over HTTPS не установлен!${NC}\n"; read -p "Нажмите Enter..." dummy; else
 echo -e "\n${MAGENTA}Возвращаем DNS over HTTPS настройки по умолчанию${NC}\n${CYAN}Возвращаем настройки к значениям по умолчанию${NC}\n${CYAN}Применяем новые настройки${NC}"
 printf '%s\n' "$doh_set" "$doh_def" > "$fileDoH"; doh_restart; echo -e "${GREEN}Настройки по умолчанию возвращены!${NC}\n"; read -p "Нажмите Enter..." dummy ; fi ;; 
-0) check_doh;; *) echo; return ;; esac; done; }
+0) check_doh_dis;; *) echo; return ;; esac; done; }
 get_doh_status() { DOH_STATUS=""; [ ! -f "$fileDoH" ] && return; if grep -q "dns.comss.one" "$fileDoH"; then DOH_STATUS="Comss DNS"; elif grep -q "xbox-dns.ru" "$fileDoH"; then DOH_STATUS="Xbox DNS"
 elif grep -q "5u35p8m9i7.cloudflare-gateway.com" "$fileDoH"; then  DOH_STATUS="dns.malw.link (Cloudflare Gateway)"; elif grep -q "dns.malw.link" "$fileDoH"; then DOH_STATUS="dns.malw.link"; else DOH_STATUS="установлен"; fi; }
 D_o_H() { if opkg list-installed | grep -q '^https-dns-proxy '; then echo -e "\n${MAGENTA}Удаляем DNS over HTTPS\n${CYAN}Удаляем пакеты${NC}"; /etc/init.d/https-dns-proxy stop >/dev/null 2>&1; /etc/init.d/https-dns-proxy disable >/dev/null 2>&1
@@ -175,6 +175,17 @@ doh_def=$(printf "%s\n" "" "config https-dns-proxy" "	option bootstrap_dns '1.1.
 doh_set=$(printf "%s\n" "config main 'config'" "	option canary_domains_icloud '1'" "	option canary_domains_mozilla '1'" "	option dnsmasq_config_update '*'" "	option force_dns '1'" "	list force_dns_port '53'" "	list force_dns_port '853'" \
 "	list force_dns_src_interface 'lan'" "	option procd_trigger_wan6 '0'" "	option heartbeat_domain 'heartbeat.melmac.ca'" "	option heartbeat_sleep_timeout '10'" "	option heartbeat_wait_timeout '10'" "	option user 'nobody'" "	option group 'nogroup'" \
 "	option listen_addr '127.0.0.1'")
+
+check_doh_dis() {
+echo -e "\n${MAGENTA}Статус серверов DNS${NC}\n"
+check_doh dns.comss.one "Comss DNS"
+check_doh xbox-dns.ru "Xbox DNS"
+check_doh dns.malw.link "dns.malw.link"
+check_doh 5u35p8m9i7.cloudflare-gateway.com "Cloudflare Gateway"
+echo
+read -p "Нажмите Enter..." dummy
+}
+
 
 check_doh() {
     host="$1"
