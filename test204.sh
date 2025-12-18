@@ -66,7 +66,7 @@ comeback_def () { if [ -f /opt/zapret/restore-def-cfg.sh ]; then echo -e "\n${MA
 [ -f /etc/init.d/zapret ] && /etc/init.d/zapret stop >/dev/null 2>&1; echo -e "${CYAN}Возвращаем ${NC}настройки${CYAN}, ${NC}стратегию${CYAN} и ${NC}hostlist${CYAN} к значениям по умолчанию${NC}"; cp -f /opt/zapret/ipset_def/* /opt/zapret/ipset/
 chmod +x /opt/zapret/restore-def-cfg.sh && /opt/zapret/restore-def-cfg.sh; chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1
 
-hosts_clear
+sed -i '/185.87.51.182 4pda.to www.4pda.to app.4pda.to appbk.4pda.to/d;/130.255.77.28 ntc.party/d;/30.255.77.28 ntc.party/d;/173.245.58.219 rutor.info d.rutor.info/d;/57.144.222.34 instagram.com www.instagram.com/d;/157.240.9.174 instagram.com www.instagram.com/d;/157.240.245.174 instagram.com www.instagram.com/d;/185.39.18.98 lib.rus.ec www.lib.rus.ec/d' /etc/hosts && /etc/init.d/dnsmasq restart >/dev/null 2>&1
 
 echo -e "${GREEN}Настройки по умолчанию возвращены!${NC}\n"; else echo -e "\n${RED}Zapret не установлен!${NC}\n"; fi; read -p "Нажмите Enter..." dummy; }
 # ==========================================
@@ -87,7 +87,7 @@ echo -e "${CYAN}Удаляем пакеты${NC}"; opkg --force-removal-of-depen
 echo -e "${CYAN}Удаляем временные файлы${NC}"; rm -rf /opt/zapret /etc/config/zapret /etc/firewall.zapret /etc/init.d/zapret /tmp/*zapret* /var/run/*zapret* /tmp/*.ipk /tmp/*.zip 2>/dev/null
 crontab -l 2>/dev/null | grep -v -i "zapret" | crontab - 2>/dev/null; nft list tables 2>/dev/null | awk '{print $2}' | grep -E '(zapret|ZAPRET)' | while read t; do [ -n "$t" ] && nft delete table "$t" 2>/dev/null; done
 
-hosts_clear
+sed -i '/185.87.51.182 4pda.to www.4pda.to app.4pda.to appbk.4pda.to/d;/130.255.77.28 ntc.party/d;/30.255.77.28 ntc.party/d;/173.245.58.219 rutor.info d.rutor.info/d;/57.144.222.34 instagram.com www.instagram.com/d;/157.240.9.174 instagram.com www.instagram.com/d;/157.240.245.174 instagram.com www.instagram.com/d;/185.39.18.98 lib.rus.ec www.lib.rus.ec/d' /etc/hosts && /etc/init.d/dnsmasq restart >/dev/null 2>&1
 
 echo -e "Zapret ${GREEN}полностью удалён!${NC}\n"; [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter..." dummy; }
 # ==========================================
@@ -129,7 +129,7 @@ case "$version" in v3) echo -e "${CYAN}Копируем ${NC}t2.bin${CYAN} на 
 v4) echo -e "${CYAN}Копируем ${NC}4pda.bin${CYAN} на устройство${NC}"; file="4pda.bin" ;; v5) echo -e "${CYAN}Копируем ${NC}max.bin${CYAN} на устройство${NC}"; file="max.bin" ;;
 esac; [ -n "$file" ] && wget -q -O "/opt/zapret/files/fake/$file" "https://github.com/StressOzz/Zapret-Manager/raw/refs/heads/main/$file" || echo -e "\n${RED}Не удалось загрузить $file${NC}\n"; echo -e "${CYAN}Редактируем ${NC}/etc/hosts${NC}"
 
-hosts_add
+sed -i '$a\185.87.51.182 4pda.to www.4pda.to app.4pda.to appbk.4pda.to\130.255.77.28 ntc.party\30.255.77.28 ntc.party\173.245.58.219 rutor.info d.rutor.info\57.144.222.34 instagram.com www.instagram.com\157.240.9.174 instagram.com www.instagram.com\157.240.245.174 instagram.com www.instagram.com\185.39.18.98 lib.rus.ec www.lib.rus.ec' /etc/hosts && /etc/init.d/dnsmasq restart >/dev/null 2>&1
 
 fileGP="/opt/zapret/ipset/zapret-hosts-google.txt"; printf '%s\n' "gvt1.com" "googleplay.com" "play.google.com" "beacons.gvt2.com" "play.googleapis.com" "play-fe.googleapis.com" \
 "lh3.googleusercontent.com" "android.clients.google.com" "connectivitycheck.gstatic.com" "play-lh.googleusercontent.com" "play-games.googleusercontent.com" "prod-lt-playstoregatewayadapter-pa.googleapis.com" | grep -Fxv -f "$fileGP" 2>/dev/null >> "$fileGP"
@@ -139,8 +139,7 @@ dis_str() { if ! grep -q "option NFQWS_PORTS_UDP.*19294-19344,50000-50100" "$CON
 if ! grep -q "option NFQWS_PORTS_TCP.*2053,2083,2087,2096,8443" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_TCP '/s/'$/,2053,2083,2087,2096,8443'/" "$CONF"; fi
 if ! grep -q -- "--filter-udp=19294-19344,50000-50100" "$CONF"; then last_line1=$(grep -n "^'$" "$CONF" | tail -n1 | cut -d: -f1); if [ -n "$last_line1" ]; then sed -i "${last_line1},\$d" "$CONF"; fi
 printf "%s\n" "--new" "--filter-udp=19294-19344,50000-50100" "--filter-l7=discord,stun" "--dpi-desync=fake" "--dpi-desync-repeats=6" "--new" "--filter-tcp=2053,2083,2087,2096,8443" "--hostlist-domains=discord.media" \
-"--dpi-desync=multisplit" "--dpi-desync-split-seqovl=652" "--dpi-desync-split-pos=2" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin" "'" >> "$CONF"
-fi; }
+"--dpi-desync=multisplit" "--dpi-desync-split-seqovl=652" "--dpi-desync-split-pos=2" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin" "'" >> "$CONF"; fi; }
 # ==========================================
 # DNS over HTTP
 # ==========================================
@@ -160,19 +159,6 @@ doh_set=$(printf "%s\n" "config main 'config'" "	option canary_domains_icloud '1
 "	option listen_addr '127.0.0.1'"); doh_comss=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://dns.comss.one/dns-query'")
 doh_18=$(printf "%s\n" "" "config https-dns-proxy" "	option bootstrap_dns '1.1.1.1,1.0.0.1'" "	option resolver_url 'https://cloudflare-dns.com/dns-query'" \
 "	option listen_port '5053'" "" "config https-dns-proxy" "	option bootstrap_dns '8.8.8.8,8.8.4.4'" "	option resolver_url 'https://dns.google/dns-query'" "	option listen_port '5054'")
-# ==========================================
-# hosts
-# ==========================================
-HOSTS_LIST="185.87.51.182 4pda.to www.4pda.to app.4pda.to appbk.4pda.to
-130.255.77.28 ntc.party
-30.255.77.28 ntc.party
-173.245.58.219 rutor.info d.rutor.info
-57.144.222.34 instagram.com www.instagram.com
-157.240.9.174 instagram.com www.instagram.com
-157.240.245.174 instagram.com www.instagram.com
-185.39.18.98 lib.rus.ec www.lib.rus.ec"
-hosts_clear() { sed -i "$(echo "$HOSTS_LIST" | sed 's|^|/|; s|$|/d|')" /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1; }
-hosts_add() { sed -i "$(echo "$HOSTS_LIST" | sed 's|^|$a\\|')" /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1; }
 # ==========================================
 # Доступ из браузера
 # ==========================================
