@@ -166,7 +166,7 @@ echo -e "\n${MAGENTA}Устанавливаем DNS over HTTPS\n${CYAN}Обно�
 opkg update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; read -p "Нажмите Enter..." dummy; return; }; echo -e "${CYAN}Устанавливаем ${NC}https-dns-proxy"
 opkg install https-dns-proxy >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при установки!${NC}\n"; read -p "Нажмите Enter..." dummy; return; }; echo -e "${CYAN}Устанавливаем ${NC}luci-app-https-dns-proxy"
 opkg install luci-app-https-dns-proxy >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при установки!${NC}\n"; read -p "Нажмите Enter..." dummy; return; }
-echo -e "DNS over HTTPS${GREEN} установлен и настроен!${NC}\n"; read -p "Нажмите Enter..." dummy ;; }
+echo -e "DNS over HTTPS${GREEN} установлен и настроен!${NC}\n"; read -p "Нажмите Enter..." dummy } ;;
 
 
 2)
