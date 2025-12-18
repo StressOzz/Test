@@ -157,11 +157,16 @@ echo -ne "\n${YELLOW}Выберите пункт:${NC} " && read choiceDOH
 case "$choiceDOH" in
 
 1) 
+
+opkg status https-dns-proxy >/dev/null 2>&1 && {
+    echo -e "\n${GREEN}DNS over HTTPS уже установлен!${NC}\n"
+    read -p "Нажмите Enter..." dummy
+} || {
 echo -e "\n${MAGENTA}Устанавливаем DNS over HTTPS\n${CYAN}Обновляем список пакетов${NC}"
 opkg update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; read -p "Нажмите Enter..." dummy; return; }; echo -e "${CYAN}Устанавливаем ${NC}https-dns-proxy"
 opkg install https-dns-proxy >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при установки!${NC}\n"; read -p "Нажмите Enter..." dummy; return; }; echo -e "${CYAN}Устанавливаем ${NC}luci-app-https-dns-proxy"
 opkg install luci-app-https-dns-proxy >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при установки!${NC}\n"; read -p "Нажмите Enter..." dummy; return; }
-echo -e "DNS over HTTPS${GREEN} установлен и настроен!${NC}\n"; read -p "Нажмите Enter..." dummy ;;
+echo -e "DNS over HTTPS${GREEN} установлен и настроен!${NC}\n"; read -p "Нажмите Enter..." dummy ;; }
 
 
 2)
