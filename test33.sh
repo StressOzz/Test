@@ -187,25 +187,20 @@ read -p "Нажмите Enter..." dummy
 }
 
 
-check_doh() {
+check_doh_tcp() {
     host="$1"
     name="$2"
 
-    # Ping (если доступен)
+    # Ping
     ping_ms=$(ping -c 1 -W 2 "$host" 2>/dev/null | sed -n 's/.*time=\([0-9.]* ms\).*/\1/p')
     [ -z "$ping_ms" ] && ping_ms="—"
 
-    # DoH: через локальный https-dns-proxy если есть
-    if [ -f /etc/config/https-dns-proxy ]; then
-        # Проверяем, что прокси может резолвить через этот хост
-        nslookup test.$host 127.0.0.1 >/dev/null 2>&1 && doh="OK" || doh="FAIL"
-    else
-        # fallback: проверка TCP 443
-        nc -z -w 3 "$host" 443 >/dev/null 2>&1 && doh="OK" || doh="FAIL"
-    fi
+    # TCP 443
+    nc -z -w 3 "$host" 443 >/dev/null 2>&1 && tcp_status="OK" || tcp_status="FAIL"
 
-    echo "$name: ping $ping_ms | DoH $doh"
+    echo "$name: ping $ping_ms | TCP 443 $tcp_status"
 }
+
 
 
 
