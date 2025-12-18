@@ -140,7 +140,7 @@ DoH_menu() {
 while true; do
 get_doh_status; clear; echo -e "${MAGENTA}Меню выбора стратегии${NC}\n"
 
-[ -n "$DOH_STATUS" ] && echo -e "${YELLOW}DNS over HTTPS:${GREEN}$DOH_STATUS${NC}\n"
+[ -n "$DOH_STATUS" ] && echo -e "${YELLOW}DNS over HTTPS: ${GREEN}$DOH_STATUS${NC}\n"
 
 
 
