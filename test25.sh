@@ -137,9 +137,8 @@ printf "%s\n" "--new" "--filter-udp=19294-19344,50000-50100" "--filter-l7=discor
 # DNS over HTTPS
 # ==========================================
 DoH_menu() { while true; do
-get_doh_status; clear; echo -e "${MAGENTA}Меню выбора стратегии${NC}\n"; opkg list-installed | grep -q '^https-dns-proxy ' && doh_st="Удалить" || doh_st="Установить"
-if [ -n "$DOH_STATUS" ]; then echo -e "${YELLOW}DNS over HTTPS: ${GREEN}$DOH_STATUS${NC}\n"; else echo -e "${YELLOW}DNS over HTTPS: ${RED}не установлен${NC}\n"; fi
-echo -e "${CYAN}1)${GREEN} $doh_st ${NC}DNS over HTTPS\n${CYAN}2)${GREEN} Настроить ${NC}Comss DNS\n${CYAN}3)${GREEN} Настроить ${NC}Xbox DNS"
+get_doh_status; clear; echo -e "${MAGENTA}Меню DNS over HTTPS${NC}\n"; opkg list-installed | grep -q '^https-dns-proxy ' && doh_st="Удалить" || doh_st="Установить"
+[ -n "$DOH_STATUS" ] && echo -e "${GREEN}$DOH_STATUS${NC}"; echo -e "${CYAN}1)${GREEN} $doh_st ${NC}DNS over HTTPS\n${CYAN}2)${GREEN} Настроить ${NC}Comss DNS\n${CYAN}3)${GREEN} Настроить ${NC}Xbox DNS"
 echo -e "${CYAN}4)${GREEN} Настроить ${NC}dns.malw.link\n${CYAN}5)${GREEN} Настроить ${NC}dns.malw.link (Cloudflare Gateway)\n${CYAN}6)${GREEN} Вернуть настройки по умолчанию"
 echo -ne "\n${YELLOW}Выберите пункт:${NC} " && read choiceDOH; case "$choiceDOH" in 1) D_o_H ;; 2) if [ ! -f /etc/config/https-dns-proxy ]; then echo -e "\n${RED}DNS over HTTPS не установлен!${NC}\n"
 read -p "Нажмите Enter..." dummy; else echo -e "\n${MAGENTA}Настраиваем DNS over HTTPS${NC}\n${CYAN}Настраиваем ${NC}Comss.one DNS\n${CYAN}Применяем новые настройки${NC}"
