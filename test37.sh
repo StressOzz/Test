@@ -141,6 +141,7 @@ DoH_menu() {
         get_doh_status
         clear
         echo -e "${MAGENTA}Меню DNS over HTTPS${NC}\n"
+
         opkg list-installed | grep -q '^https-dns-proxy ' && doh_st="Удалить" || doh_st="Установить"
         [ -n "$DOH_STATUS" ] && echo -e "${YELLOW}DNS over HTTPS: ${GREEN}$DOH_STATUS${NC}\n"
 
@@ -151,16 +152,18 @@ DoH_menu() {
         echo -e "${CYAN}5)${GREEN} Настроить ${NC}dns.malw.link (CloudFlare)"
         echo -e "${CYAN}6)${GREEN} Вернуть настройки по умолчанию${NC}"
 
-        echo -ne "\n${YELLOW}Выберите пункт:${NC} "
-        read choiceDOH
+        echo -ne "\n${YELLOW}Выберите пункт (Enter для выхода):${NC} "
+        read -r choiceDOH
+        [ -z "$choiceDOH" ] && return
+
         case "$choiceDOH" in
             1) D_o_H ;;
-            2) doh_install && { setup_doh "$doh_comss" "Comss.one DNS"; } ;;
-            3) doh_install && { setup_doh "$doh_xbox" "Xbox DNS"; } ;;
-            4) doh_install && { setup_doh "$doh_query" "dns.malw.link"; } ;;
-            5) doh_install && { setup_doh "$doh_queryCF" "dns.malw.link (CloudFlare)"; } ;;
-            6) doh_install && { setup_doh "$doh_def" "Настройки по умолчанию"; } ;;
-            *) echo; return ;;
+            2) doh_install && setup_doh "$doh_comss" "Comss.one DNS" ;;
+            3) doh_install && setup_doh "$doh_xbox" "Xbox DNS" ;;
+            4) doh_install && setup_doh "$doh_query" "dns.malw.link" ;;
+            5) doh_install && setup_doh "$doh_queryCF" "dns.malw.link (CloudFlare)" ;;
+            6) doh_install && setup_doh "$doh_def" "Настройки по умолчанию" ;;
+            *) return ;;
         esac
     done
 }
@@ -201,6 +204,7 @@ D_o_H() {
         echo -e "${CYAN}Удаляем файлы конфигурации ${NC}"
         rm -f /etc/config/https-dns-proxy /etc/init.d/https-dns-proxy
         echo -e "DNS over HTTPS${GREEN} удалён!${NC}\n"
+        read -p "Нажмите Enter..." dummy
     else
         echo -e "\n${MAGENTA}Устанавливаем DNS over HTTPS\n${CYAN}Обновляем список пакетов${NC}"
         opkg update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; read -p "Нажмите Enter..." dummy; return; }
@@ -209,8 +213,8 @@ D_o_H() {
         echo -e "${CYAN}Устанавливаем ${NC}luci-app-https-dns-proxy"
         opkg install luci-app-https-dns-proxy >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при установки!${NC}\n"; read -p "Нажмите Enter..." dummy; return; }
         echo -e "DNS over HTTPS${GREEN} установлен!${NC}\n"
+        read -p "Нажмите Enter..." dummy
     fi
-    read -p "Нажмите Enter..." dummy
 }
 
 doh_install() { [ -f "$fileDoH" ] && return 0; echo -e "\n${RED}DNS over HTTPS не установлен!${NC}\n"; read -p "Нажмите Enter..." dummy; return 1; }
