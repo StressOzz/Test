@@ -212,7 +212,7 @@ get_doh_status() {
     fi
 }
 
-doh_install() { [ ! -f /etc/config/https-dns-proxy ] && { echo -e "\n${RED}DNS over HTTPS не установлен!${NC}\n"; read -p "Нажмите Enter..." dummy; return; }
+doh_install() { [ ! -f /etc/config/https-dns-proxy ] && { echo -e "\n${RED}DNS over HTTPS не установлен!${NC}\n"; read -p "Нажмите Enter..." dummy; return; }; }
 
 
 doh_restart() { /etc/init.d/https-dns-proxy reload >/dev/null 2>&1; /etc/init.d/https-dns-proxy restart >/dev/null 2>&1; }
