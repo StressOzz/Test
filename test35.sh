@@ -191,15 +191,19 @@ check_doh() {
     host="$1"
     name="$2"
 
-    # Ping
+    # Ping, вывод только цифра + ms
     ping_ms=$(ping -c 1 -W 2 "$host" 2>/dev/null | sed -n 's/.*time=\([0-9.]* ms\).*/\1/p')
     [ -z "$ping_ms" ] && ping_ms="—"
 
-    # TCP 443
-    nc -z -w 3 "$host" 443 >/dev/null 2>&1 && tcp_status="OK" || tcp_status="FAIL"
-
-    echo "$name: ping $ping_ms | TCP 443 $tcp_status"
+    echo "$name: $ping_ms"
 }
+
+# Проверка всех сервисов
+check_ping dns.comss.one "Comss DNS"
+check_ping xbox-dns.ru "Xbox DNS"
+check_ping dns.malw.link "dns.malw.link"
+check_ping 5u35p8m9i7.cloudflare-gateway.com "Cloudflare Gateway"
+
 
 
 
