@@ -24,8 +24,8 @@ curl_install() {
     command -v curl >/dev/null 2>&1 || {
 		clear 
         echo -e "${CYAN}Устанавливаем${NC} ${WHITE}curl ${CYAN}для загрузки информации с ${WHITE}GitHub${NC}\n"
-        opkg update >/dev/null 2>&1
-        opkg install curl >/dev/null 2>&1
+		opkg update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; read -p "Нажмите Enter..." dummy; }
+		opkg install curl >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить unzip!${NC}\n"; read -p "Нажмите Enter..." dummy; }
     }
 }
 # ==========================================
