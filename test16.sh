@@ -619,12 +619,11 @@ else
     echo -e "${YELLOW}AWG: ${RED}не установлен${NC}"
 fi
 
-if uci show network | grep -q "=interface" | grep -q "AWG"; then
+if uci -q get network.AWG >/dev/null; then
     echo -e "${YELLOW}Интерфейс AWG: ${GREEN}установлен${NC}"
 else
     echo -e "${YELLOW}Интерфейс AWG: ${RED}не установлен${NC}"
 fi
-
 
 
 	
