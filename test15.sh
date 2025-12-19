@@ -611,6 +611,23 @@ fi
 	echo -e "${MAGENTA}--- Podkop ---${NC}"
 	echo -e "${YELLOW}Установленная версия:${NC} $PODKOP_STATUS"
 	echo -e "${YELLOW}Последняя версия:${NC} ${CYAN}$PODKOP_LATEST_VER${NC}"
+
+	echo -e "${MAGENTA}--- AWG ---${NC}"
+if command -v amneziawg >/dev/null 2>&1 || opkg list-installed | grep -q "^amneziawg-tools"; then
+    echo -e "${YELLOW}AWG: ${GREEN}установлен${NC}"
+else
+    echo -e "${YELLOW}AWG: ${RED}не установлен${NC}"
+fi
+
+if uci show network | grep -q "=interface" | grep -q "AWG"; then
+    echo -e "${YELLOW}Интерфейс AWG: ${GREEN}установлен${NC}"
+else
+    echo -e "${YELLOW}Интерфейс AWG: ${RED}не установлен${NC}"
+fi
+
+
+
+	
   echo -e "\n${CYAN}1) ${GREEN}Установить / обновить ${NC}ByeDPI"
     echo -e "${CYAN}2) ${GREEN}Удалить ${NC}ByeDPI"
  	echo -e "${CYAN}3) ${GREEN}Установить / обновить ${NC}Podkop"
