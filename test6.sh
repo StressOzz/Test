@@ -581,7 +581,7 @@ fi
 	echo -e "╔═══════════════════════════════╗"
 	echo -e "║         ${BLUE}Podkop Manager${NC}        ║"
 	echo -e "╚═══════════════════════════════╝"
-	echo -e "                             ${DGRAY}v2.3${NC}"
+	echo -e "                             ${DGRAY}v2.4${NC}"
 
 	check_podkop_status
 	check_byedpi_status
@@ -601,7 +601,7 @@ fi
     echo -e "${CYAN}5) ${GREEN}Интегрировать ${NC}ByeDPI ${GREEN}в ${NC}Podkop"
     echo -e "${CYAN}6) ${GREEN}Изменить текущую стратегию ${NC}ByeDPI"
 
-	echo -e "${CYAN}7) ${GREEN}Устанавливаем AWG + интерфейс${NC}"
+	echo -e "${CYAN}7) ${GREEN}Установить ${NC}AWG ${GREEN}+${NC} интерфейс"
 	echo -e "${CYAN}8) ${GREEN}Интегрировать ${NC}AWG ${GREEN}в ${NC}Podkop"
 
 	echo -e "${CYAN}0) ${GREEN}Перезагрузить устройство${NC}"
