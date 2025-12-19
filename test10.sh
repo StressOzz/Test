@@ -232,8 +232,7 @@ check_byedpi_status() {
 # Установка / обновление ByeDPI
 # ==========================================
 install_ByeDPI() {
-    clear
-    echo -e "${MAGENTA}Установка / обновление ByeDPI${NC}"
+    echo -e "\n${MAGENTA}Установка / обновление ByeDPI${NC}"
     get_versions
 
     [ -z "$LATEST_URL" ] && {
@@ -242,7 +241,7 @@ install_ByeDPI() {
         return
     }
 
-	echo -e "\n${GREEN}Скачиваем ${NC}${WHITE}$LATEST_FILE${NC}"
+	echo -e "${GREEN}Скачиваем ${NC}${WHITE}$LATEST_FILE${NC}"
     mkdir -p "$WORKDIR"
     cd "$WORKDIR" || return
     curl -L -s -o "$LATEST_FILE" "$LATEST_URL" || {
@@ -256,7 +255,7 @@ install_ByeDPI() {
     rm -rf "$WORKDIR"
 	/etc/init.d/byedpi enable >/dev/null 2>&1
     /etc/init.d/byedpi start >/dev/null 2>&1
-    echo -e "\nByeDPI ${GREEN}успешно установлен / обновлён!${NC}\n"
+    echo -e "ByeDPI ${GREEN}успешно установлен / обновлён!${NC}\n"
     read -p "Нажмите Enter..." dummy
 }
 
@@ -264,15 +263,14 @@ install_ByeDPI() {
 # Удаление ByeDPI
 # ==========================================
 uninstall_byedpi() {
-    clear
-    echo -e "${MAGENTA}Удаление ByeDPI${NC}"
+    echo -e "\n${MAGENTA}Удаление ByeDPI${NC}"
     [ -f /etc/init.d/byedpi ] && {
         /etc/init.d/byedpi stop >/dev/null 2>&1
         /etc/init.d/byedpi disable >/dev/null 2>&1
     }
     opkg remove --force-removal-of-dependent-packages byedpi >/dev/null 2>&1
     rm -rf /etc/init.d/byedpi /opt/byedpi /etc/config/byedpi
-    echo -e "\n${GREEN}ByeDPI удалён полностью.${NC}\n"
+    echo -e "${GREEN}ByeDPI удалён!${NC}\n"
     read -p "Нажмите Enter..." dummy
 }
 
@@ -280,8 +278,7 @@ uninstall_byedpi() {
 # Установка / обновление Podkop
 # ==========================================
 install_podkop() {
-    clear
-    echo -e "${MAGENTA}Установка / обновление Podkop${NC}\n"
+    echo -e "\n${MAGENTA}Установка / обновление Podkop${NC}\n"
 
     REPO="https://api.github.com/repos/itdoginfo/podkop/releases/latest"
     DOWNLOAD_DIR="/tmp/podkop"
@@ -438,11 +435,7 @@ pkg_list_update || {
             pkg_remove luci-i18n-podkop* >/dev/null 2>&1
             pkg_install "$DOWNLOAD_DIR/$ru"
         else
-            msg "Установить русский интерфейс? y/N"
-            read -r RUS
-            case "$RUS" in
-                y|Y) pkg_install "$DOWNLOAD_DIR/$ru" ;;
-                *) ;;
+			pkg_install "$DOWNLOAD_DIR/$ru" ;;
             esac
         fi
     fi
@@ -458,8 +451,7 @@ pkg_list_update || {
 # Интеграция ByeDPI в Podkop
 # ==========================================
 integration_byedpi_podkop() {
-    clear
-    echo -e "${MAGENTA}Интеграция ByeDPI в Podkop${NC}\n"
+    echo -e "\n${MAGENTA}Интеграция ByeDPI в Podkop${NC}\n"
 
 	# Проверяем установлен ли ByeDPI
     if ! command -v byedpi >/dev/null 2>&1 && [ ! -f /etc/init.d/byedpi ]; then
@@ -579,8 +571,7 @@ fix_strategy() {
 # Удаление Podkop
 # ==========================================
 uninstall_podkop() {
-    clear
-    echo -e "${MAGENTA}Удаление Podkop${NC}"
+    echo -e "\n${MAGENTA}Удаление Podkop${NC}"
     
     # Удаляем пакеты
     opkg remove luci-i18n-podkop-ru luci-app-podkop podkop --autoremove >/dev/null 2>&1 || true
@@ -591,7 +582,7 @@ uninstall_podkop() {
     # Удаляем все файлы в /etc/config с именем содержащим podkop
     rm -f /etc/config/*podkop* >/dev/null 2>&1
 
-    echo -e "\n${GREEN}Podkop удалён полностью.${NC}\n"
+    echo -e "Podkop ${GREEN}удалён полностью.${NC}\n"
     read -p "Нажмите Enter..." dummy
 }
 
@@ -626,7 +617,6 @@ fi
 	echo -e "\n${MAGENTA}--- Podkop ---${NC}"
 	echo -e "${YELLOW}Установленная версия:${NC} $PODKOP_STATUS"
 	echo -e "${YELLOW}Последняя версия:${NC} ${CYAN}$PODKOP_LATEST_VER${NC}"
-	echo -e "\n${YELLOW}Архитектура устройства:${NC} $LOCAL_ARCH"
   echo -e "\n${CYAN}1) ${GREEN}Установить / обновить ${NC}ByeDPI"
     echo -e "${CYAN}2) ${GREEN}Удалить ${NC}ByeDPI"
  	echo -e "${CYAN}3) ${GREEN}Установить / обновить ${NC}Podkop"
