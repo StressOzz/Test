@@ -32,6 +32,7 @@ curl_install() {
 # AWG
 # ==========================================
 get_AWG() {
+clear
 echo -e "${MAGENTA}Устанавливаем AWG + интерфейс${NC}"
 echo -e "${GREEN}Обновляем список пакетов${NC}"
 opkg update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; exit 1; }
