@@ -579,7 +579,7 @@ else
 fi
 	clear
 	echo -e "╔═══════════════════════════════╗"
-	echo -e "║     ${BLUE}Podkop+ByeDPI Manager${NC}     ║"
+	echo -e "║         ${BLUE}Podkop+ByeDPI${NC}         ║"
 	echo -e "╚═══════════════════════════════╝"
 	echo -e "                             ${DGRAY}v2.3${NC}"
 
