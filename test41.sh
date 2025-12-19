@@ -69,7 +69,7 @@ zapret_key(){ clear; echo -e "${MAGENTA}Удаление, установка и 
 comeback_def () { if [ -f /opt/zapret/restore-def-cfg.sh ]; then echo -e "\n${MAGENTA}Возвращаем настройки по умолчанию${NC}"; rm -f /opt/zapret/init.d/openwrt/custom.d/50-script.sh; for i in 1 2 3 4; do rm -f "/opt/zapret/ipset/cust$i.txt"; done
 [ -f /etc/init.d/zapret ] && /etc/init.d/zapret stop >/dev/null 2>&1; echo -e "${CYAN}Возвращаем ${NC}настройки${CYAN}, ${NC}стратегию${CYAN} и ${NC}hostlist${CYAN} к значениям по умолчанию${NC}"; cp -f /opt/zapret/ipset_def/* /opt/zapret/ipset/
 chmod +x /opt/zapret/restore-def-cfg.sh && /opt/zapret/restore-def-cfg.sh; chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1
-hosts_clear; echo -e "${GREEN}Настройки по умолчанию возвращены!${NC}\n"; else echo -e "\n${RED}Zapret не установлен!${NC}\n"; fi; read -p "Нажмите Enter..." dummy; }
+hosts_clear; echo -e "Настройки по умолчанию ${GREEN}возвращены!${NC}\n"; else echo -e "\n${RED}Zapret не установлен!${NC}\n"; fi; read -p "Нажмите Enter..." dummy; }
 # ==========================================
 # Cтарт/стоп Zapret
 # ==========================================
@@ -150,11 +150,10 @@ echo -e "${CYAN}2)${GREEN} Настроить ${NC}Comss DNS"
 echo -e "${CYAN}3)${GREEN} Настроить ${NC}Xbox DNS"
 echo -e "${CYAN}4)${GREEN} Настроить ${NC}dns.malw.link"
 echo -e "${CYAN}5)${GREEN} Настроить ${NC}dns.malw.link (CloudFlare)"
-echo -e "${CYAN}6)${GREEN} Вернуть настройки по умолчанию${NC}"
-
-echo -ne "\n${YELLOW}Выберите пункт (Enter для выхода):${NC} "
+echo -e "${CYAN}6)${GREEN} Вернуть ${NC}настройки по умолчанию"
+echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "
 read -r choiceDOH
-[ -z "$choiceDOH" ] && return
+# [ -z "$choiceDOH" ] && return
 
 case "$choiceDOH" in
 1) D_o_H ;;
@@ -162,7 +161,7 @@ case "$choiceDOH" in
 3) doh_install && setup_doh "$doh_xbox" "Xbox DNS" ;;
 4) doh_install && setup_doh "$doh_query" "dns.malw.link" ;;
 5) doh_install && setup_doh "$doh_queryCF" "dns.malw.link (CloudFlare)" ;;
-6) doh_install && setup_doh "$doh_def" "Настройки по умолчанию" ;;
+6) doh_install && setup_doh "$doh_def" "настройки по умолчанию" ;;
 *) return ;;
 esac
 done
@@ -171,7 +170,7 @@ done
 setup_doh() {
 local config="$1"
 local name="$2"
-echo -e "\n${MAGENTA}Настраиваем DNS over HTTPS${NC}\n${CYAN}$name\nПрименяем новые настройки${NC}"
+echo -e "\n${MAGENTA}Настраиваем DNS over HTTPS${NC}\n${CYAN}Настраиваем ${NC}$name\n${CYAN}Применяем новые настройки${NC}"
 rm -f "$fileDoH"
 printf '%s\n' "$doh_set" "$config" > "$fileDoH"
 doh_restart
@@ -198,9 +197,9 @@ fi
 D_o_H() {
 if opkg list-installed | grep -q '^https-dns-proxy '; then
 echo -e "\n${MAGENTA}Удаляем DNS over HTTPS\n${CYAN}Удаляем пакеты${NC}"
-/etc/init.d/https-dns-proxy stop >/dev/null 2>&1
-/etc/init.d/https-dns-proxy disable >/dev/null 2>&1
-opkg remove https-dns-proxy luci-app-https-dns-proxy --force-removal-of-dependent-packages >/dev/null 2>&1
+opkg --force-removal-of-dependent-packages --autoremove remove https-dns-proxy luci-app-https-dns-proxy >/dev/null 2>&1
+
+
 echo -e "${CYAN}Удаляем файлы конфигурации ${NC}"
 rm -f /etc/config/https-dns-proxy /etc/init.d/https-dns-proxy
 echo -e "DNS over HTTPS${GREEN} удалён!${NC}\n"
@@ -291,7 +290,7 @@ echo -e "\n${YELLOW}Установленная версия:   ${INST_COLOR}$INS
 [ -n "$DOH_STATUS" ] && echo -e "${YELLOW}DNS over HTTPS:${NC}         ${GREEN}$DOH_STATUS${NC}"
 web_is_enabled && if web_is_enabled; then echo -e "${YELLOW}Доступ из браузера:${NC}     http://192.168.1.1:7681"; fi
 quic_is_blocked && if quic_is_blocked; then echo -e "${YELLOW}Блокировка QUIC:${NC}        ${GREEN}включена${NC}"; fi; show_current_strategy && [ -n "$ver" ] && echo -e "${YELLOW}Используется стратегия:${NC} ${CYAN}$ver${NC}"
-echo -e "\n${CYAN}1) ${GREEN}Установить${NC} Zapret\n${CYAN}2) ${GREEN}Меню выбора стратегий${NC}\n${CYAN}3) ${GREEN}Вернуть настройки по умолчанию${NC}\n${CYAN}4) ${GREEN}$str_stp_zpr ${NC}Zapret"
+echo -e "\n${CYAN}1) ${GREEN}Установить${NC} Zapret\n${CYAN}2) ${GREEN}Меню выбора стратегий${NC}\n${CYAN}3) ${GREEN}Вернуть ${NC}настройки по умолчанию\n${CYAN}4) ${GREEN}$str_stp_zpr ${NC}Zapret"
 echo -e "${CYAN}5) ${GREEN}Удалить ${NC}Zapret\n${CYAN}6) ${GREEN}$menu_game\n${CYAN}7) ${GREEN}Меню установки скриптов${NC}\n${CYAN}8) ${GREEN}Удалить → установить → настроить${NC} Zapret"
 echo -e "${CYAN}9) ${GREEN}Меню ${NC}DNS over HTTPS\n${CYAN}0) ${GREEN}Системное меню${NC}" ; echo -ne "${CYAN}Enter) ${GREEN}Выход${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read choice
 case "$choice" in 1) install_Zapret ;; 2) menu_str ;; 3) comeback_def ;; 4) pgrep -f /opt/zapret >/dev/null 2>&1 && stop_zapret || start_zapret ;; 5) uninstall_zapret ;; 6) fix_GAME ;; 7) scrypt_install ;; 8) zapret_key ;;
