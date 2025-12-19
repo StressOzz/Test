@@ -23,9 +23,9 @@ WORKDIR="/tmp/byedpi"
 curl_install() {
     command -v curl >/dev/null 2>&1 || {
 		clear 
-        echo -e "${CYAN}Устанавливаем${NC} ${WHITE}curl ${CYAN}для загрузки информации с ${WHITE}GitHub${NC}\n"
+        echo -e "${CYAN}Устанавливаем${NC} ${WHITE}curl ${CYAN}для загрузки информации с ${WHITE}GitHub${NC}"
 		opkg update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; read -p "Нажмите Enter..." dummy; }
-		opkg install curl >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить unzip!${NC}\n"; read -p "Нажмите Enter..." dummy; }
+		opkg install curl >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить curl!${NC}\n"; read -p "Нажмите Enter..." dummy; }
     }
 }
 # ==========================================
@@ -102,11 +102,44 @@ read -p "Нажмите Enter..." dummy
 # ==========================================
 
 integration_AWG() {
-wget -qO /etc/config/podkop https://raw.githubusercontent.com/StressOzz/Test/refs/heads/main/podkop
+
 
 echo -e "\n${MAGENTA}Интегрируем AWG в Podkop${NC}"
+
+echo -e "${GREEN}Меняем конфигурацию в ${NC}Podkop${GREEN}...${NC}"
+    # Создаём / меняем /etc/config/podkop
+    cat <<EOF >/etc/config/podkop
+config settings 'settings'
+	option dns_type 'udp'
+	option dns_server '8.8.8.8'
+	option bootstrap_dns_server '77.88.8.8'
+	option dns_rewrite_ttl '60'
+	list source_network_interfaces 'br-lan'
+	option enable_output_network_interface '0'
+	option enable_badwan_interface_monitoring '0'
+	option enable_yacd '0'
+	option disable_quic '0'
+	option update_interval '1d'
+	option download_lists_via_proxy '0'
+	option dont_touch_dhcp '0'
+	option config_path '/etc/sing-box/config.json'
+	option cache_path '/tmp/sing-box/cache.db'
+	option exclude_ntp '0'
+	option shutdown_correctly '0'
+
+config section 'main'
+	option connection_type 'vpn'
+	option interface 'AWG'
+	option domain_resolver_enabled '0'
+	option user_domain_list_type 'disabled'
+	option user_subnet_list_type 'disabled'
+	option mixed_proxy_enabled '0'
+	list community_lists 'hodca'
+	list community_lists 'russia_inside'
+	list community_lists 'meta'
+EOF
+
 echo -e "AWG ${GREEN}интегрирован в ${NC}Podkop${GREEN}.${NC}"
-wget -qO /etc/config/podkop https://raw.githubusercontent.com/StressOzz/Test/refs/heads/main/podkop
 echo -e "${CYAN}Запускаем ${NC}Podkop${NC}"
 podkop enable >/dev/null 2>&1
 echo -e "${CYAN}Применяем конфигурацию${NC}"
