@@ -436,7 +436,7 @@ pkg_list_update || {
             pkg_install "$DOWNLOAD_DIR/$ru"
         else
 			pkg_install "$DOWNLOAD_DIR/$ru"
-            esac
+
         fi
     fi
 
