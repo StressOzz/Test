@@ -1,216 +1,619 @@
 #!/bin/sh
 # ==========================================
-# Zapret on remittor Manager by StressOzz
-# =========================================
-ZAPRET_MANAGER_VERSION="7.5"; ZAPRET_VERSION="72.20251217"; STR_VERSION_AUTOINSTALL="v5"
-GREEN="\033[1;32m"; RED="\033[1;31m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"
-MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
-WORKDIR="/tmp/zapret-update"; CONF="/etc/config/zapret"; CUSTOM_DIR="/opt/zapret/init.d/openwrt/custom.d/"
-EXCLUDE_FILE="/opt/zapret/ipset/zapret-hosts-user-exclude.txt"; fileDoH="/etc/config/https-dns-proxy"
-EXCLUDE_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/zapret-hosts-user-exclude.txt"
-HOSTS_LIST="185.87.51.182 4pda.to www.4pda.to app.4pda.to appbk.4pda.to|130.255.77.28 ntc.party|30.255.77.28 ntc.party|173.245.58.219 rutor.info d.rutor.info
-57.144.222.34 instagram.com www.instagram.com|157.240.9.174 instagram.com www.instagram.com|157.240.245.174 instagram.com www.instagram.com|185.39.18.98 lib.rus.ec www.lib.rus.ec"
-hosts_add(){ echo "$HOSTS_LIST" | tr '|' '\n' | grep -Fxv -f /etc/hosts >> /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1; }
-hosts_clear(){ echo "$HOSTS_LIST" | tr '|' '\n' | while IFS= read -r line; do [ -n "$line" ] && sed -i "\|$line|d" /etc/hosts; done; /etc/init.d/dnsmasq restart >/dev/null 2>&1; }
+# ByeDPI & Podkop Manager by StressOzz
 # ==========================================
-# Получение версии
+
+# Цвета
+GREEN="\033[1;32m"
+RED="\033[1;31m"
+CYAN="\033[1;36m"
+YELLOW="\033[1;33m"
+MAGENTA="\033[1;35m"
+NC="\033[0m"
+WHITE="\033[1;37m"
+BLUE="\033[0;34m"
+GRAY='\033[38;5;239m'
+DGRAY='\033[38;5;236m'
+
+WORKDIR="/tmp/byedpi"
+
 # ==========================================
-get_versions() { LOCAL_ARCH=$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release); [ -z "$LOCAL_ARCH" ] && LOCAL_ARCH=$(opkg print-architecture | grep -v "noarch" | sort -k3 -n | tail -n1 | awk '{print $2}')
-USED_ARCH="$LOCAL_ARCH"; LATEST_URL="https://github.com/remittor/zapret-openwrt/releases/download/v${ZAPRET_VERSION}/zapret_v${ZAPRET_VERSION}_${LOCAL_ARCH}.zip"
-INSTALLED_VER=$(opkg list-installed zapret | awk '{sub(/-r[0-9]+$/, "", $3); print $3}'); [ -z "$INSTALLED_VER" ] && INSTALLED_VER="не найдена"
-ZAPRET_STATUS=$([ -f /etc/init.d/zapret ] && /etc/init.d/zapret status 2>/dev/null | grep -qi running && echo "${GREEN}запущен${NC}" || echo "${RED}остановлен${NC}"); [ -f /etc/init.d/zapret ] || ZAPRET_STATUS=""
-[ "$INSTALLED_VER" = "$ZAPRET_VERSION" ] && INST_COLOR=$GREEN INSTALLED_DISPLAY="$INSTALLED_VER" || { INST_COLOR=$RED; INSTALLED_DISPLAY=$([ "$INSTALLED_VER" != "не найдена" ] && echo "$INSTALLED_VER" || echo "$INSTALLED_VER"); }; }
+# Функция проверки и установки curl
 # ==========================================
-# Установка Zapret
+curl_install() {
+    command -v curl >/dev/null 2>&1 || {
+		clear 
+        echo -e "\n${CYAN}Устанавливаем${NC} ${WHITE}curl ${CYAN}для загрузки информации с ${WHITE}GitHub${NC}\n"
+        opkg update >/dev/null 2>&1
+        opkg install curl >/dev/null 2>&1
+    }
+}
 # ==========================================
-install_Zapret() { local NO_PAUSE=$1; get_versions; if [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ]; then echo -e "\nZapret ${GREEN}уже установлен!${NC}\n"; read -p "Нажмите Enter..." dummy; return; fi
-[ "$NO_PAUSE" != "1" ] && echo; echo -e "${MAGENTA}Устанавливаем ZAPRET${NC}"; if [ -f /etc/init.d/zapret ]; then echo -e "${CYAN}Останавливаем ${NC}zapret" && /etc/init.d/zapret stop >/dev/null 2>&1; for pid in $(pgrep -f /opt/zapret 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done; fi
-echo -e "${CYAN}Обновляем список пакетов${NC}"; opkg update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; read -p "Нажмите Enter..." dummy; return; }
-mkdir -p "$WORKDIR"; rm -f "$WORKDIR"/* 2>/dev/null; cd "$WORKDIR" || return; FILE_NAME=$(basename "$LATEST_URL"); if ! command -v unzip >/dev/null 2>&1; then
-echo -e "${CYAN}Устанавливаем ${NC}unzip" && opkg install unzip >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить unzip!${NC}\n"; read -p "Нажмите Enter..." dummy; return; }; fi
-echo -e "${CYAN}Скачиваем архив ${NC}$FILE_NAME"; wget -q "$LATEST_URL" -O "$FILE_NAME" || { echo -e "\n${RED}Не удалось скачать ${NC}$FILE_NAME\n"; read -p "Нажмите Enter..." dummy; return; }
-echo -e "${CYAN}Распаковываем архив${NC}"; unzip -o "$FILE_NAME" >/dev/null; for PKG in zapret_*.ipk luci-app-zapret_*.ipk; do [ -f "$PKG" ] && echo -e "${CYAN}Устанавливаем ${NC}$PKG" && opkg install --force-reinstall "$PKG" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить $PKG!${NC}\n"
-read -p "Нажмите Enter..." dummy; return; } ; done; echo -e "${CYAN}Удаляем временные файлы${NC}"; cd /; rm -rf "$WORKDIR" /tmp/*.ipk /tmp/*.zip /tmp/*zapret* 2>/dev/null; if [ -f /etc/init.d/zapret ]; then echo -e "Zapret ${GREEN}установлен!${NC}\n"
-[ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter..." dummy; else echo -e "\n${RED}Zapret не был установлен!${NC}\n"; read -p "Нажмите Enter..." dummy; fi; }
+# AWG
 # ==========================================
-# Установка скриптов
+get_AWG() {
+echo -e "${MAGENTA}Устанавливаем AWG + интерфейс${NC}"
+echo -e "${GREEN}Обновляем список пакетов${NC}"
+opkg update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; exit 1; }
+echo -e "${GREEN}Определяем архитектуру и версию OpenWrt${NC}"
+PKGARCH=$(opkg print-architecture | awk 'BEGIN {max=0} {if ($3 > max) {max = $3; arch = $2}} END {print arch}')
+TARGET=$(ubus call system board | jsonfilter -e '@.release.target' | cut -d '/' -f1)
+SUBTARGET=$(ubus call system board | jsonfilter -e '@.release.target' | cut -d '/' -f2)
+VERSION=$(ubus call system board | jsonfilter -e '@.release.version')
+PKGPOSTFIX="_v${VERSION}_${PKGARCH}_${TARGET}_${SUBTARGET}.ipk"
+BASE_URL="https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/"
+AWG_DIR="/tmp/amneziawg"
+mkdir -p "$AWG_DIR"
+install_pkg() {
+local pkgname=$1
+local filename="${pkgname}${PKGPOSTFIX}"
+local url="${BASE_URL}v${VERSION}/${filename}"
+echo -e "${CYAN}Скачиваем ${NC}$pkgname"
+if wget -O "$AWG_DIR/$filename" "$url" >/dev/null 2>&1 ; then
+echo -e "${CYAN}Устанавливаем ${NC}$pkgname"
+if opkg install "$AWG_DIR/$filename" >/dev/null 2>&1 ; then
+echo -e "$pkgname ${GREEN}установлен успешно${NC}"
+else
+echo -e "\n${RED}Ошибка установки $pkgname!${NC}\n"
+exit 1
+fi
+else
+echo -e "\n${RED}Ошибка! Не удалось скачать $file${NC}\n"
+exit 1
+fi
+}
+install_pkg "kmod-amneziawg"
+install_pkg "amneziawg-tools"
+install_pkg "luci-proto-amneziawg"
+echo -e "${CYAN}Устанавливаем русскую локализацию${NC}"
+install_pkg "luci-i18n-amneziawg-ru" >/dev/null 2>&1 || echo -e "${RED}Внимание: русская локализация не установлена (не критично)${NC}"
+echo -e "${CYAN}Очистка временных файлов${NC}"
+rm -rf "$AWG_DIR"
+echo -e "${CYAN}Перезапускаем сеть${NC}"
+/etc/init.d/network restart >/dev/null 2>&1
+echo -e "AmneziaWG ${GREEN}установлен!${NC}"
+
+echo -e "${MAGENTA}Устанавливаем интерфейс AWG${NC}"
+IF_NAME="AWG"
+PROTO="amneziawg"
+DEV_NAME="amneziawg0"
+if grep -q "config interface '$IF_NAME'" /etc/config/network; then
+echo -e "${RED}Интерфейс ${NC}$IF_NAME${RED} уже существует${NC}"
+else
+echo -e "${CYAN}Добавляем интерфейс ${NC}$IF_NAME"
+uci batch <<EOF
+set network.$IF_NAME=interface
+set network.$IF_NAME.proto=$PROTO
+set network.$IF_NAME.device=$DEV_NAME
+commit network
+EOF
+fi
+echo -e "${CYAN}Перезапускаем сеть${NC}"
+/etc/init.d/network restart
+/etc/init.d/firewall restart
+/etc/init.d/uhttpd restart
+echo -e "${GREEN}Интерфейс ${NC}$IF_NAME${GREEN} создан и активирован!${NC}\n"
+read -p "Нажмите Enter..." dummy
+}
+
+
+
 # ==========================================
-show_script_50() { [ -f "/opt/zapret/init.d/openwrt/custom.d/50-script.sh" ] || return; line=$(head -n1 /opt/zapret/init.d/openwrt/custom.d/50-script.sh)
-name=$(case "$line" in *QUIC*) echo "50-quic4all" ;; *stun*) echo "50-stun4all" ;; *"discord media"*) echo "50-discord-media" ;; *"discord subnets"*) echo "50-discord" ;; *) echo "" ;; esac); }
-scrypt_install() { local NO_PAUSE=$1; [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter..." dummy; return; }
-while true; do [ "$NO_PAUSE" != "1" ] && clear && echo -e "${MAGENTA}Меню установки скриптов${NC}"; [ "$NO_PAUSE" != "1" ] && show_script_50 && [ -n "$name" ] && echo -e "\n${YELLOW}Установлен скрипт:${NC} $name"
-if [ "$NO_PAUSE" = "1" ]; then SELECTED="50-stun4all"; URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-stun4all"; else
-echo -e "\n${CYAN}1) ${GREEN}Установить скрипт ${NC}50-stun4all\n${CYAN}2) ${GREEN}Установить скрипт ${NC}50-quic4all\n${CYAN}3) ${GREEN}Установить скрипт ${NC}50-discord-media\n${CYAN}4) ${GREEN}Установить скрипт ${NC}50-discord"
-echo -ne "${CYAN}5) ${GREEN}Удалить скрипт${NC}\n${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read choiceSC; case "$choiceSC" in
-1) SELECTED="50-stun4all"; URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-stun4all" ;; 2) SELECTED="50-quic4all"; URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-quic4all" ;;
-3) SELECTED="50-discord-media"; URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-discord-media" ;; 4) SELECTED="50-discord"; URL="https://raw.githubusercontent.com/bol-van/zapret/v70.5/init.d/custom.d.examples.linux/50-discord" ;;
-5) echo -e "\n${MAGENTA}Удаляем скрипт${NC}"; rm -f "$CUSTOM_DIR/50-script.sh" 2>/dev/null;chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart >/dev/null 2>&1; echo -e "${GREEN}Скрипт удалён!${NC}\n"; read -p "Нажмите Enter..." dummy; continue ;; *) return ;; esac; fi
-if wget -qO "$CUSTOM_DIR/50-script.sh" "$URL"; then [ "$NO_PAUSE" != "1" ] && echo; echo -e "${MAGENTA}Устанавливаем скрипт${NC}\n${GREEN}Скрипт ${NC}$SELECTED${GREEN} успешно установлен!${NC}\n"; else echo -e "\n${RED}Ошибка при скачивании скрипта!${NC}\n"; read -p "Нажмите Enter..." dummy; continue; fi
-sed -i "/DISABLE_CUSTOM/s/'1'/'0'/" /etc/config/zapret; chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart >/dev/null 2>&1; [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter..." dummy; [ "$NO_PAUSE" = "1" ] && break; done }
+# Определение версий
 # ==========================================
-# FIX GAME
+get_versions() {
+    # --- ByeDPI ---
+    BYEDPI_VER=$(opkg list-installed | grep '^byedpi ' | awk '{print $3}' | sed 's/-r[0-9]\+$//')
+    [ -z "$BYEDPI_VER" ] && BYEDPI_VER="не найдена"
+
+    LOCAL_ARCH=$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release)
+    [ -z "$LOCAL_ARCH" ] && LOCAL_ARCH=$(opkg print-architecture | grep -v "noarch" | tail -n1 | awk '{print $2}')
+
+	curl_install
+
+    # --- Получаем последнюю версию ByeDPI ---
+    BYEDPI_API_URL="https://api.github.com/repos/DPITrickster/ByeDPI-OpenWrt/releases"
+    RELEASE_DATA=$(curl -s "$BYEDPI_API_URL")
+    BYEDPI_URL=$(echo "$RELEASE_DATA" | grep browser_download_url | grep "$LOCAL_ARCH.ipk" | head -n1 | cut -d'"' -f4)
+    if [ -n "$BYEDPI_URL" ]; then
+        BYEDPI_FILE=$(basename "$BYEDPI_URL")
+        BYEDPI_LATEST_VER=$(echo "$BYEDPI_FILE" | sed -E 's/^byedpi_([0-9]+\.[0-9]+\.[0-9]+)(-r[0-9]+)?_.*/\1/')
+        LATEST_VER="$BYEDPI_LATEST_VER"      # добавляем для install_update
+        LATEST_URL="$BYEDPI_URL"            # добавляем для install_update
+        LATEST_FILE="$BYEDPI_FILE"          # добавляем для install_update
+    else
+        BYEDPI_LATEST_VER="не найдена"
+        LATEST_VER=""
+        LATEST_URL=""
+        LATEST_FILE=""
+    fi
+
+    # --- Podkop ---
+    if command -v podkop >/dev/null 2>&1; then
+        PODKOP_VER=$(podkop show_version 2>/dev/null | sed 's/-r[0-9]\+$//')
+        [ -z "$PODKOP_VER" ] && PODKOP_VER="не найдена"
+    else
+        PODKOP_VER="не установлен"
+    fi
+
+    PODKOP_API_URL="https://api.github.com/repos/itdoginfo/podkop/releases/latest"
+    PODKOP_LATEST_VER=$(curl -s "$PODKOP_API_URL" | grep '"tag_name"' | head -n1 | cut -d'"' -f4 | sed 's/-r[0-9]\+$//')
+    [ -z "$PODKOP_LATEST_VER" ] && PODKOP_LATEST_VER="не найдена"
+
+    # --- Нормализация версий ---
+    PODKOP_VER=$(echo "$PODKOP_VER" | sed 's/^v//')
+    PODKOP_LATEST_VER=$(echo "$PODKOP_LATEST_VER" | sed 's/^v//')
+    BYEDPI_VER=$(echo "$BYEDPI_VER" | sed 's/^v//')
+    BYEDPI_LATEST_VER=$(echo "$BYEDPI_LATEST_VER" | sed 's/^v//')
+}
+
 # ==========================================
-fix_GAME() { local NO_PAUSE=$1; [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter..." dummy; return; }
-[ "$NO_PAUSE" != "1" ] && echo; echo -e "${MAGENTA}Настраиваем стратегию для игр${NC}"; if grep -q "option NFQWS_PORTS_UDP.*1024-19293,19345-49999,50101-65535" "$CONF" && grep -q -- "--filter-udp=1024-19293,19345-49999,50101-65535" "$CONF"; then echo -e "${CYAN}Удаляем из стратегии настройки для игр${NC}"
-sed -i ':a;N;$!ba;s|--new\n--filter-udp=1024-19293,19345-49999,50101-65535\n--dpi-desync=fake\n--dpi-desync-cutoff=d2\n--dpi-desync-any-protocol=1\n--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/quic_initial_www_google_com\.bin\n*||g' "$CONF"
-sed -i "s/,1024-19293,19345-49999,50101-65535//" "$CONF"; chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart >/dev/null 2>&1; echo -e "${GREEN}Настройки для игр удалены!${NC}\n"; read -p "Нажмите Enter..." dummy; return; fi
-if ! grep -q "option NFQWS_PORTS_UDP.*1024-19293,19345-49999,50101-65535" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'$/,1024-19293,19345-49999,50101-65535'/" "$CONF"; fi; if ! grep -q -- "--filter-udp=1024-19293,19345-49999,50101-65535" "$CONF"; then last_line=$(grep -n "^'$" "$CONF" | tail -n1 | cut -d: -f1)
-if [ -n "$last_line" ]; then sed -i "${last_line},\$d" "$CONF"; fi; printf "%s\n" "--new" "--filter-udp=1024-19293,19345-49999,50101-65535" "--dpi-desync=fake" "--dpi-desync-cutoff=d2" "--dpi-desync-any-protocol=1" "--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/quic_initial_www_google_com.bin" "'" >> "$CONF"; fi
-echo -e "${CYAN}Добавляем в стратегию настройки для игр${NC}"; chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart >/dev/null 2>&1; echo -e "${GREEN}Игровые настройки добавлены!${NC}\n";[ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter..." dummy; }
+# Проверка версии Podkop с подсветкой
 # ==========================================
-# Zapret под ключ
+check_podkop_status() {
+    if [ "$PODKOP_VER" = "не найдена" ] || [ "$PODKOP_VER" = "не установлен" ]; then
+        PODKOP_STATUS="${RED}$PODKOP_VER${NC}"
+    elif [ "$PODKOP_LATEST_VER" != "не найдена" ] && [ "$PODKOP_VER" != "$PODKOP_LATEST_VER" ]; then
+        PODKOP_STATUS="${RED}$PODKOP_VER${NC}"
+    else
+        PODKOP_STATUS="${GREEN}$PODKOP_VER${NC}"
+    fi
+}
+
 # ==========================================
-zapret_key(){ clear; echo -e "${MAGENTA}Удаление, установка и настройка Zapret${NC}\n"; get_versions; uninstall_zapret "1"; install_Zapret "1"
-[ ! -f /etc/init.d/zapret ] && return; menu_str "1"; echo; scrypt_install "1"; fix_GAME "1"; echo -e "Zapret ${GREEN}установлен и настроен!${NC}\n"; read -p "Нажмите Enter..." dummy; }
+# Проверка версии ByeDPI с подсветкой
 # ==========================================
-# Вернуть настройки по умолчанию
+check_byedpi_status() {
+    if [ "$BYEDPI_VER" = "не найдена" ] || [ "$BYEDPI_VER" = "не установлен" ]; then
+        BYEDPI_STATUS="${RED}$BYEDPI_VER${NC}"
+    elif [ "$BYEDPI_LATEST_VER" != "не найдена" ] && [ "$BYEDPI_VER" != "$BYEDPI_LATEST_VER" ]; then
+        BYEDPI_STATUS="${RED}$BYEDPI_VER${NC}"
+    else
+        BYEDPI_STATUS="${GREEN}$BYEDPI_VER${NC}"
+    fi
+}
+
 # ==========================================
-comeback_def () { if [ -f /opt/zapret/restore-def-cfg.sh ]; then echo -e "\n${MAGENTA}Возвращаем настройки по умолчанию${NC}"; rm -f /opt/zapret/init.d/openwrt/custom.d/50-script.sh; for i in 1 2 3 4; do rm -f "/opt/zapret/ipset/cust$i.txt"; done
-[ -f /etc/init.d/zapret ] && /etc/init.d/zapret stop >/dev/null 2>&1; echo -e "${CYAN}Возвращаем ${NC}настройки${CYAN}, ${NC}стратегию${CYAN} и ${NC}hostlist${CYAN} к значениям по умолчанию${NC}"; cp -f /opt/zapret/ipset_def/* /opt/zapret/ipset/
-chmod +x /opt/zapret/restore-def-cfg.sh && /opt/zapret/restore-def-cfg.sh; chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1
-hosts_clear; echo -e "Настройки по умолчанию ${GREEN}возвращены!${NC}\n"; else echo -e "\n${RED}Zapret не установлен!${NC}\n"; fi; read -p "Нажмите Enter..." dummy; }
+# Установка / обновление ByeDPI
 # ==========================================
-# Cтарт/стоп Zapret
+install_update() {
+    clear
+    echo -e "${MAGENTA}Установка / обновление ByeDPI${NC}"
+    get_versions
+
+    [ -z "$LATEST_URL" ] && {
+		echo -e "\n${RED}Последняя версия ByeDPI не найдена. Установка пропущена.${NC}\n"
+		read -p "Нажмите Enter..." dummy
+        return
+    }
+
+	echo -e "\n${GREEN}Скачиваем ${NC}${WHITE}$LATEST_FILE${NC}"
+    mkdir -p "$WORKDIR"
+    cd "$WORKDIR" || return
+    curl -L -s -o "$LATEST_FILE" "$LATEST_URL" || {
+        echo -e "${RED}Ошибка загрузки ${NC}$LATEST_FILE"
+        read -p "Нажмите Enter..." dummy
+        return
+    }
+
+	echo -e "${GREEN}Устанавливаем${NC} ${WHITE}$LATEST_FILE${NC}"
+    opkg install --force-reinstall "$LATEST_FILE" >/dev/null 2>&1
+    rm -rf "$WORKDIR"
+	/etc/init.d/byedpi enable >/dev/null 2>&1
+    /etc/init.d/byedpi start >/dev/null 2>&1
+    echo -e "\nByeDPI ${GREEN}успешно установлен / обновлён!${NC}\n"
+    read -p "Нажмите Enter..." dummy
+}
+
 # ==========================================
-stop_zapret() { echo -e "\n${MAGENTA}Останавливаем Zapret${NC}\n${CYAN}Останавливаем ${NC}Zapret"; /etc/init.d/zapret stop >/dev/null 2>&1
-for pid in $(pgrep -f /opt/zapret 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done; echo -e "Zapret ${GREEN}остановлен!${NC}\n"; read -p "Нажмите Enter..." dummy; }
-start_zapret() { if [ -f /etc/init.d/zapret ]; then echo -e "\n${MAGENTA}Запускаем Zapret${NC}"; echo -e "${CYAN}Запускаем ${NC}Zapret";
-/etc/init.d/zapret start >/dev/null 2>&1; chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh && /etc/init.d/zapret restart >/dev/null 2>&1
-echo -e "Zapret ${GREEN}запущен!${NC}\n"; else echo -e "\n${RED}Zapret не установлен!${NC}\n"; fi; read -p "Нажмите Enter..." dummy; }
+# Удаление ByeDPI
 # ==========================================
-# Полное удаление Zapret
+uninstall_byedpi() {
+    clear
+    echo -e "${MAGENTA}Удаление ByeDPI${NC}"
+    [ -f /etc/init.d/byedpi ] && {
+        /etc/init.d/byedpi stop >/dev/null 2>&1
+        /etc/init.d/byedpi disable >/dev/null 2>&1
+    }
+    opkg remove --force-removal-of-dependent-packages byedpi >/dev/null 2>&1
+    rm -rf /etc/init.d/byedpi /opt/byedpi /etc/config/byedpi
+    echo -e "\n${GREEN}ByeDPI удалён полностью.${NC}\n"
+    read -p "Нажмите Enter..." dummy
+}
+
 # ==========================================
-uninstall_zapret() { local NO_PAUSE=$1; [ "$NO_PAUSE" != "1" ] && echo; echo -e "${MAGENTA}Удаляем ZAPRET${NC}\n${CYAN}Останавливаем ${NC}zapret\n${CYAN}Убиваем процессы${NC}"
-/etc/init.d/zapret stop >/dev/null 2>&1; for pid in $(pgrep -f /opt/zapret 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done
-echo -e "${CYAN}Удаляем пакеты${NC}"; opkg --force-removal-of-dependent-packages --autoremove remove zapret luci-app-zapret >/dev/null 2>&1
-echo -e "${CYAN}Удаляем временные файлы${NC}"; rm -rf /opt/zapret /etc/config/zapret /etc/firewall.zapret /etc/init.d/zapret /tmp/*zapret* /var/run/*zapret* /tmp/*.ipk /tmp/*.zip 2>/dev/null
-crontab -l 2>/dev/null | grep -v -i "zapret" | crontab - 2>/dev/null; nft list tables 2>/dev/null | awk '{print $2}' | grep -E '(zapret|ZAPRET)' | while read t; do [ -n "$t" ] && nft delete table "$t" 2>/dev/null; done
-hosts_clear; echo -e "Zapret ${GREEN}полностью удалён!${NC}\n"; [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter..." dummy; }
+# Установка / обновление Podkop
 # ==========================================
-# Выбор стратегий
+install_podkop() {
+    clear
+    echo -e "${MAGENTA}Установка / обновление Podkop${NC}\n"
+
+    REPO="https://api.github.com/repos/itdoginfo/podkop/releases/latest"
+    DOWNLOAD_DIR="/tmp/podkop"
+
+    PKG_IS_APK=0
+    command -v apk >/dev/null 2>&1 && PKG_IS_APK=1
+
+    rm -rf "$DOWNLOAD_DIR"
+    mkdir -p "$DOWNLOAD_DIR"
+
+    msg() {
+        if [ -n "$2" ]; then
+            printf "\033[32;1m%s \033[37;1m%s\033[0m\n" "$1" "$2"
+        else
+            printf "\033[32;1m%s\033[0m\n" "$1"
+        fi
+    }
+
+    pkg_is_installed () {
+        local pkg_name="$1"
+        if [ "$PKG_IS_APK" -eq 1 ]; then
+            apk list --installed | grep -q "$pkg_name"
+        else
+            opkg list-installed | grep -q "$pkg_name"
+        fi
+    }
+
+    pkg_remove() {
+        local pkg_name="$1"
+        msg "Удаляем" "$pkg_name..."
+        if [ "$PKG_IS_APK" -eq 1 ]; then
+            apk del "$pkg_name" >/dev/null 2>&1
+        else
+            opkg remove --force-depends "$pkg_name" >/dev/null 2>&1
+        fi
+    }
+
+    pkg_list_update() {
+        msg "Обновляем список пакетов..."
+        if [ "$PKG_IS_APK" -eq 1 ]; then
+            apk update >/dev/null 2>&1
+        else
+            opkg update >/dev/null 2>&1
+        fi
+    }
+
+    pkg_install() {
+        local pkg_file="$1"
+        msg "Устанавливаем" "$(basename "$pkg_file")"
+        if [ "$PKG_IS_APK" -eq 1 ]; then
+            apk add --allow-untrusted "$pkg_file" >/dev/null 2>&1
+        else
+            opkg install "$pkg_file" >/dev/null 2>&1
+        fi
+    }
+
+    # Проверка системы
+    MODEL=$(cat /tmp/sysinfo/model 2>/dev/null || echo "не определено")
+    AVAILABLE_SPACE=$(df /overlay | awk 'NR==2 {print $4}')
+    REQUIRED_SPACE=26000
+	
+[ "$AVAILABLE_SPACE" -lt "$REQUIRED_SPACE" ] && { 
+    msg "Недостаточно свободного места"
+    echo ""
+    read -p "Нажмите Enter..." dummy
+    return
+}
+
+nslookup google.com >/dev/null 2>&1 || { 
+    msg "DNS не работает"
+    echo ""
+    read -p "Нажмите Enter..." dummy
+    return
+}
+
+
+    if pkg_is_installed https-dns-proxy; then
+        msg "Обнаружен конфликтный пакет" "https-dns-proxy. Удаляем..."
+        pkg_remove luci-app-https-dns-proxy
+        pkg_remove https-dns-proxy
+        pkg_remove luci-i18n-https-dns-proxy*
+    fi
+
+    # Проверка sing-box
+    if pkg_is_installed "^sing-box"; then
+        sing_box_version=$(sing-box version | head -n 1 | awk '{print $3}')
+        required_version="1.12.4"
+        if [ "$(echo -e "$sing_box_version\n$required_version" | sort -V | head -n 1)" != "$required_version" ]; then
+            msg "sing-box устарел. Удаляем..."
+            service podkop stop >/dev/null 2>&1
+            pkg_remove sing-box
+        fi
+    fi
+
+    /usr/sbin/ntpd -q -p 194.190.168.1 -p 216.239.35.0 -p 216.239.35.4 -p 162.159.200.1 -p 162.159.200.123 >/dev/null 2>&1
+
+pkg_list_update || { 
+    msg "Не удалось обновить список пакетов"
+    echo ""
+    read -p "Нажмите Enter..." dummy
+    return
+}
+
+    # Проверка GitHub API
+    if command -v curl >/dev/null 2>&1; then
+        check_response=$(curl -s "$REPO")
+        if echo "$check_response" | grep -q 'API rate limit '; then
+			echo ""
+            echo -e "${RED}Превышен лимит запросов GitHub. Повторите позже.${NC}"
+			echo ""
+            read -p "Нажмите Enter..." dummy
+            return
+        fi
+    fi
+
+    # Шаблон скачивания
+    if [ "$PKG_IS_APK" -eq 1 ]; then
+        grep_url_pattern='https://[^"[:space:]]*\.apk'
+    else
+        grep_url_pattern='https://[^"[:space:]]*\.ipk'
+    fi
+
+    download_success=0
+    urls=$(wget -qO- "$REPO" 2>/dev/null | grep -o "$grep_url_pattern")
+    for url in $urls; do
+        filename=$(basename "$url")
+        filepath="$DOWNLOAD_DIR/$filename"
+        msg "Скачиваем" "$filename"
+        if wget -q -O "$filepath" "$url" >/dev/null 2>&1 && [ -s "$filepath" ]; then
+            download_success=1
+        else
+            msg "Ошибка скачивания" "$filename"
+        fi
+    done
+
+[ $download_success -eq 0 ] && { 
+    msg "Нет успешно скачанных пакетов"
+    echo ""
+    read -p "Нажмите Enter..." dummy
+    return
+}
+
+    # Установка пакетов
+    for pkg in podkop luci-app-podkop; do
+        file=$(ls "$DOWNLOAD_DIR" | grep "^$pkg" | head -n 1)
+        [ -n "$file" ] && pkg_install "$DOWNLOAD_DIR/$file"
+    done
+
+    # Русский интерфейс
+    ru=$(ls "$DOWNLOAD_DIR" | grep "luci-i18n-podkop-ru" | head -n 1)
+    if [ -n "$ru" ]; then
+        if pkg_is_installed luci-i18n-podkop-ru; then
+            msg "Обновляем русский язык..." "$ru"
+            pkg_remove luci-i18n-podkop* >/dev/null 2>&1
+            pkg_install "$DOWNLOAD_DIR/$ru"
+        else
+            msg "Установить русский интерфейс? y/N"
+            read -r RUS
+            case "$RUS" in
+                y|Y) pkg_install "$DOWNLOAD_DIR/$ru" ;;
+                *) ;;
+            esac
+        fi
+    fi
+
+    # Очистка
+    rm -rf "$DOWNLOAD_DIR"
+
+    echo -e "Podkop ${GREEN}успешно установлен / обновлён!${NC}\n"
+    read -p "Нажмите Enter..." dummy
+}
+
 # ==========================================
-show_current_strategy() { [ -f "$CONF" ] || return; for v in v1 v2 v3 v4 v5; do grep -q "#$v" "$CONF" && { ver="$v"; return; } done; grep -q -- "--hostlist-auto=/opt/zapret/ipset/zapret-hosts-auto.txt" "$CONF" && ver="дефолтная"; }
-menu_str() { local NO_PAUSE=$1; [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter..." dummy; return; }
-while true; do if [ "$NO_PAUSE" = "1" ]; then version=$STR_VERSION_AUTOINSTALL; else clear; echo -e "${MAGENTA}Меню выбора стратегии${NC}\n"; show_current_strategy && [ -n "$ver" ] && echo -e "${YELLOW}Используется стратегия:${NC} $ver\n"
-echo -e "${CYAN}1) ${GREEN}Установить стратегию${NC} v1\n${CYAN}2) ${GREEN}Установить стратегию${NC} v2\n${CYAN}3) ${GREEN}Установить стратегию${NC} v3\n${CYAN}4) ${GREEN}Установить стратегию${NC} v4"
-echo -ne "${CYAN}5) ${GREEN}Установить стратегию${NC} v5\n${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read choiceST
-case "$choiceST" in 1) version="v1" ;; 2) version="v2" ;; 3) version="v3" ;; 4) version="v4" ;; 5) version="v5" ;; *) return ;; esac; fi
-[ "$NO_PAUSE" != "1" ] && echo; echo -e "${MAGENTA}Устанавливаем стратегию ${version}${NC}\n${CYAN}Меняем стратегию${NC}"; sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
-strategy_v1() { printf '%s\n' "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake,multidisorder" "--dpi-desync-split-seqovl=681" "--dpi-desync-split-pos=1" "--dpi-desync-fooling=badseq" | cat; \
-printf '%s\n' "--dpi-desync-badseq-increment=10000000" "--dpi-desync-repeats=6" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin" "--dpi-desync-fake-tls-mod=rnd,dupsid,sni=fonts.google.com" "--new" | cat; \
-printf '%s\n' "--filter-udp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake" "--dpi-desync-repeats=6" "--dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin" | cat; }
-strategy_v2() { printf '%s\n' "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake,fakeddisorder" "--dpi-desync-split-pos=10,midsld" "--dpi-desync-fake-tls=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin" | cat; \
-printf '%s\n' "--dpi-desync-fake-tls-mod=rnd,dupsid,sni=fonts.google.com" "--dpi-desync-fake-tls=0x0F0F0F0F" "--dpi-desync-fake-tls-mod=none" "--dpi-desync-fakedsplit-pattern=/opt/zapret/files/fake/tls_clienthello_vk_com.bin" "--dpi-desync-split-seqovl=336" | cat; \
-printf '%s\n' "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_gosuslugi_ru.bin" "--dpi-desync-fooling=badseq,badsum" "--dpi-desync-badseq-increment=0" "--new" "--filter-udp=443" | cat; \
-printf '%s\n' "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake" "--dpi-desync-repeats=6" "--dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin" | cat; }
-strategy_v3() { printf '%s\n' "--filter-tcp=443" "--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt" "--ip-id=zero" "--dpi-desync=multisplit" "--dpi-desync-split-seqovl=681" "--dpi-desync-split-pos=1" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin" | cat; \
-printf '%s\n' "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake,fakeddisorder" "--dpi-desync-split-pos=10,midsld" "--dpi-desync-fake-tls=/opt/zapret/files/fake/t2.bin" | cat; \
-printf '%s\n' "--dpi-desync-fake-tls-mod=rnd,dupsid,sni=m.ok.ru" "--dpi-desync-fake-tls=0x0F0F0F0F" "--dpi-desync-fake-tls-mod=none" "--dpi-desync-fakedsplit-pattern=/opt/zapret/files/fake/tls_clienthello_vk_com.bin" | cat; \
-printf '%s\n' "--dpi-desync-split-seqovl=336" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_gosuslugi_ru.bin" "--dpi-desync-fooling=badseq,badsum" "--dpi-desync-badseq-increment=0" | cat; \
-printf '%s\n' "--new" "--filter-udp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake" "--dpi-desync-repeats=6" "--dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin" | cat; }
-strategy_v4() { printf '%s\n' "--filter-tcp=443" "--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt" "--dpi-desync=fake,multisplit" "--dpi-desync-split-pos=2,sld" "--dpi-desync-fake-tls=0x0F0F0F0F" "--dpi-desync-fake-tls=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin" | cat; \
-printf '%s\n' "--dpi-desync-fake-tls-mod=rnd,dupsid,sni=google.com" "--dpi-desync-split-seqovl=2108" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin" "--dpi-desync-fooling=badseq" "--new" "--filter-tcp=443" | cat; \
-printf '%s\n' "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync-any-protocol=1" "--dpi-desync-cutoff=n5" "--dpi-desync=multisplit" "--dpi-desync-split-seqovl=582" "--dpi-desync-split-pos=1" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/4pda.bin" | cat; \
-printf '%s\n' "--new" "--filter-udp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake" "--dpi-desync-repeats=6" "--dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin" | cat; }
-strategy_v5() { printf '%s\n' "--filter-tcp=443" "--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt" "--ip-id=zero" "--dpi-desync=multisplit" "--dpi-desync-split-seqovl=681" "--dpi-desync-split-pos=1" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin" | cat; \
-printf '%s\n' "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake,fakeddisorder" "--dpi-desync-split-pos=10,midsld" "--dpi-desync-fake-tls=/opt/zapret/files/fake/max.bin" "--dpi-desync-fake-tls-mod=rnd,dupsid" | cat; \
-printf '%s\n' "--dpi-desync-fake-tls=0x0F0F0F0F" "--dpi-desync-fake-tls-mod=none" "--dpi-desync-fakedsplit-pattern=/opt/zapret/files/fake/tls_clienthello_vk_com.bin" "--dpi-desync-fooling=badseq,badsum" "--dpi-desync-badseq-increment=0" "--new" "--filter-udp=443" | cat; \
-printf '%s\n' "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake" "--dpi-desync-repeats=6" "--dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin" | cat; }
-{ echo "  option NFQWS_OPT '"; echo "#${version} УДАЛИТЕ ЭТУ СТРОЧКУ, ЕСЛИ ИЗМЕНЯЕТЕ СТРАТЕГИЮ !!!"; strategy_${version}; echo "'"; } >> "$CONF"
-echo -e "${CYAN}Добавляем домены в исключения${NC}"; rm -f "$EXCLUDE_FILE"; wget -q -O "$EXCLUDE_FILE" "$EXCLUDE_URL" || echo -e "\n${RED}Не удалось загрузить exclude файл${NC}\n"
-case "$version" in v3) file="t2.bin" ;; v4) file="4pda.bin" ;; v5) file="max.bin" ;; *) file="" ; esac; if [ -n "$file" ]; then if ! wget -q -O "/opt/zapret/files/fake/$file" "https://github.com/StressOzz/Zapret-Manager/raw/refs/heads/main/$file"; then
-echo -e "\n${RED}Не удалось загрузить $file${NC}\n"; fi; fi; echo -e "${CYAN}Редактируем ${NC}/etc/hosts${NC}"; hosts_add; fileGP="/opt/zapret/ipset/zapret-hosts-google.txt"; printf '%s\n' "gvt1.com" "googleplay.com" "play.google.com" "beacons.gvt2.com" "play.googleapis.com" "play-fe.googleapis.com" \
-"lh3.googleusercontent.com" "android.clients.google.com" "connectivitycheck.gstatic.com" "play-lh.googleusercontent.com" "play-games.googleusercontent.com" "prod-lt-playstoregatewayadapter-pa.googleapis.com" | grep -Fxv -f "$fileGP" 2>/dev/null >> "$fileGP"
-dis_str; echo -e "${CYAN}Применяем новую стратегию и настройки${NC}"; chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1; echo -e "${GREEN}Стратегия ${NC}${version} ${GREEN}установлена!${NC}"
-sed -i "s/,1024-19293,19345-49999,50101-65535//" "$CONF"; [ "$NO_PAUSE" != "1" ] && echo && read -p "Нажмите Enter..." dummy; [ "$NO_PAUSE" = "1" ] && break; done }
-dis_str() { if ! grep -q "option NFQWS_PORTS_UDP.*19294-19344,50000-50100" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'$/,19294-19344,50000-50100'/" "$CONF"; fi
-if ! grep -q "option NFQWS_PORTS_TCP.*2053,2083,2087,2096,8443" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_TCP '/s/'$/,2053,2083,2087,2096,8443'/" "$CONF"; fi
-if ! grep -q -- "--filter-udp=19294-19344,50000-50100" "$CONF"; then last_line1=$(grep -n "^'$" "$CONF" | tail -n1 | cut -d: -f1); if [ -n "$last_line1" ]; then sed -i "${last_line1},\$d" "$CONF"; fi
-printf "%s\n" "--new" "--filter-udp=19294-19344,50000-50100" "--filter-l7=discord,stun" "--dpi-desync=fake" "--dpi-desync-repeats=6" "--new" "--filter-tcp=2053,2083,2087,2096,8443" "--hostlist-domains=discord.media" \
-"--dpi-desync=multisplit" "--dpi-desync-split-seqovl=652" "--dpi-desync-split-pos=2" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin" "'" >> "$CONF"; fi; }
+# Интеграция ByeDPI в Podkop
 # ==========================================
-# DNS over HTTPS
+integration_byedpi_podkop() {
+    clear
+    echo -e "${MAGENTA}Интеграция ByeDPI в Podkop${NC}\n"
+
+	# Проверяем установлен ли ByeDPI
+    if ! command -v byedpi >/dev/null 2>&1 && [ ! -f /etc/init.d/byedpi ]; then
+		echo -e "${YELLOW}ByeDPI не установлен.${NC}\n"
+        read -p "Нажмите Enter..." dummy
+        return
+    fi
+	echo -e "${GREEN}Отключаем локальный ${NC}DNS${GREEN}...${NC}"
+	uci set dhcp.@dnsmasq[0].localuse='0'
+    uci commit dhcp
+	echo -e "${GREEN}Перезапускаем ${NC}dnsmasq${GREEN}...${NC}"
+	/etc/init.d/dnsmasq restart >/dev/null 2>&1
+
+    # Меняем стратегию ByeDPI на интеграционную
+	echo -e "${GREEN}Меняем стратегию ${NC}ByeDPI${GREEN} на рабочую...${NC}"
+    if [ -f /etc/config/byedpi ]; then
+        sed -i "s|option cmd_opts .*| option cmd_opts '-o2 --auto=t,r,a,s -d2'|" /etc/config/byedpi
+    fi
+echo -e "${GREEN}Меняем конфигурацию в ${NC}Podkop${GREEN}...${NC}"
+    # Создаём / меняем /etc/config/podkop
+    cat <<EOF >/etc/config/podkop
+config settings 'settings'
+	option dns_type 'udp'
+	option dns_server '8.8.8.8'
+	option bootstrap_dns_server '77.88.8.8'
+	option dns_rewrite_ttl '60'
+	list source_network_interfaces 'br-lan'
+	option enable_output_network_interface '0'
+	option enable_badwan_interface_monitoring '0'
+	option enable_yacd '0'
+	option disable_quic '0'
+	option update_interval '1d'
+	option download_lists_via_proxy '0'
+	option dont_touch_dhcp '0'
+	option config_path '/etc/sing-box/config.json'
+	option cache_path '/tmp/sing-box/cache.db'
+	option exclude_ntp '0'
+	option shutdown_correctly '0'
+
+config section 'main'
+	option connection_type 'proxy'
+	option proxy_config_type 'outbound'
+	option enable_udp_over_tcp '0'
+	option outbound_json '{
+  "type": "socks",
+  "server": "127.0.0.1",
+  "server_port": 1080
+}'
+	option user_domain_list_type 'disabled'
+	option user_subnet_list_type 'disabled'
+	option mixed_proxy_enabled '0'
+	list community_lists 'youtube'
+EOF
+
+    echo -e "${GREEN}Запуск ${NC}ByeDPI${GREEN}...${NC}"
+    /etc/init.d/byedpi enable >/dev/null 2>&1
+    /etc/init.d/byedpi start >/dev/null 2>&1
+	echo -e "${GREEN}Запуск ${NC}Podkop${GREEN}...${NC}"
+    podkop enable >/dev/null 2>&1
+    echo -e "${GREEN}Применяем конфигурацию...${NC}"
+    podkop reload >/dev/null 2>&1
+    echo -e "${GREEN}Перезапускаем сервис...${NC}"
+    podkop restart >/dev/null 2>&1
+    echo -e "${GREEN}Обновляем списки...${NC}"
+    podkop list_update >/dev/null 2>&1
+
+    echo -e "\nPodkop ${GREEN}готов к работе.${NC}"
+
+    echo -e "\nByeDPI ${GREEN}интегрирован в ${NC}Podkop${GREEN}.${NC}"
+    echo -ne "\nНужно ${RED}обязательно${NC} перезагрузить роутер. Перезагрузить сейчас? [y/N]: \n"
+    read REBOOT_CHOICE
+    case "$REBOOT_CHOICE" in
+	y|Y)
+
+        echo -e "\n${GREEN}Перезагрузка роутера...${NC}"
+        sleep 1
+        reboot
+        ;;
+    *)
+        echo -e "${YELLOW}Перезагрузка отложена.${NC}\n"
+		read -p "Нажмите Enter..." dummy
+        ;;
+esac
+}
+
 # ==========================================
-DoH_menu() { while true; do get_doh_status; clear; echo -e "${MAGENTA}Меню DNS over HTTPS${NC}\n"; opkg list-installed | grep -q '^https-dns-proxy ' && doh_st="Удалить" || doh_st="Установить"
-[ -n "$DOH_STATUS" ] && opkg list-installed | grep -q '^https-dns-proxy ' && echo -e "${YELLOW}DNS over HTTPS: ${GREEN}$DOH_STATUS${NC}\n"
-echo -e "${CYAN}1)${GREEN} $doh_st ${NC}DNS over HTTPS\n${CYAN}2)${GREEN} Настроить ${NC}Comss DNS\n${CYAN}3)${GREEN} Настроить ${NC}Xbox DNS\n${CYAN}4)${GREEN} Настроить ${NC}dns.malw.link"
-echo -ne "${CYAN}5)${GREEN} Настроить ${NC}dns.malw.link (CloudFlare)\n${CYAN}6)${GREEN} Вернуть ${NC}настройки по умолчанию\n${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "
-read -r choiceDOH; [ -z "$choiceDOH" ] && return; case "$choiceDOH" in 1) D_o_H ;; 2) doh_install && setup_doh "$doh_comss" "Comss.one DNS" ;; 3) doh_install && setup_doh "$doh_xbox" "Xbox DNS" ;; 4) doh_install && setup_doh "$doh_query" "dns.malw.link" ;;
-5) doh_install && setup_doh "$doh_queryCF" "dns.malw.link (CloudFlare)" ;; 6) doh_install && setup_doh "$doh_def" "настройки по умолчанию" ;; *) return ;; esac; done; }
-setup_doh() { local config="$1"; local name="$2"; echo -e "\n${MAGENTA}Настраиваем DNS over HTTPS${NC}\n${CYAN}Настраиваем ${NC}$name\n${CYAN}Применяем новые настройки${NC}"; rm -f "$fileDoH"; printf '%s\n' "$doh_set" "$config" > "$fileDoH"
-/etc/init.d/https-dns-proxy reload >/dev/null 2>&1; /etc/init.d/https-dns-proxy restart >/dev/null 2>&1; echo -e "DNS over HTTP ${GREEN}настроен!${NC}\n"; read -p "Нажмите Enter..." dummy; }
-get_doh_status() { DOH_STATUS=""; [ ! -f "$fileDoH" ] && return; if grep -q "dns.comss.one" "$fileDoH"; then DOH_STATUS="Comss DNS"; elif grep -q "xbox-dns.ru" "$fileDoH"; then DOH_STATUS="Xbox DNS"; elif grep -q "5u35p8m9i7.cloudflare-gateway.com" "$fileDoH"; then
-DOH_STATUS="dns.malw.link (CloudFlare)"; elif grep -q "dns.malw.link" "$fileDoH"; then DOH_STATUS="dns.malw.link"; else DOH_STATUS="установлен"; fi; }
-D_o_H() { if opkg list-installed | grep -q '^https-dns-proxy '; then echo -e "\n${MAGENTA}Удаляем DNS over HTTPS\n${CYAN}Удаляем пакеты${NC}"; opkg --force-removal-of-dependent-packages --autoremove remove https-dns-proxy luci-app-https-dns-proxy >/dev/null 2>&1
-echo -e "${CYAN}Удаляем файлы конфигурации ${NC}"; rm -f /etc/config/https-dns-proxy /etc/init.d/https-dns-proxy; echo -e "DNS over HTTPS${GREEN} удалён!${NC}\n"; read -p "Нажмите Enter..." dummy; else
-echo -e "\n${MAGENTA}Устанавливаем DNS over HTTPS\n${CYAN}Обновляем список пакетов${NC}"; opkg update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; read -p "Нажмите Enter..." dummy; return; }
-echo -e "${CYAN}Устанавливаем ${NC}https-dns-proxy"; opkg install https-dns-proxy >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при установки!${NC}\n"; read -p "Нажмите Enter..." dummy; return; }
-echo -e "${CYAN}Устанавливаем ${NC}luci-app-https-dns-proxy"; opkg install luci-app-https-dns-proxy >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при установки!${NC}\n"; read -p "Нажмите Enter..." dummy; return; }
-echo -e "DNS over HTTPS${GREEN} установлен!${NC}\n"; read -p "Нажмите Enter..." dummy; fi; }; doh_install() { [ -f "$fileDoH" ] && return 0; echo -e "\n${RED}DNS over HTTPS не установлен!${NC}\n"; read -p "Нажмите Enter..." dummy; return 1; }
-doh_set=$(printf "%s\n" "config main 'config'" "	option canary_domains_icloud '1'" "	option canary_domains_mozilla '1'" "	option dnsmasq_config_update '*'" "	option force_dns '1'" "	list force_dns_port '53'" "	list force_dns_port '853'" "	list force_dns_src_interface 'lan'" \
-"	option procd_trigger_wan6 '0'" "	option heartbeat_domain 'heartbeat.melmac.ca'" "	option heartbeat_sleep_timeout '10'" "	option heartbeat_wait_timeout '10'" "	option user 'nobody'" "	option group 'nogroup'" "	option listen_addr '127.0.0.1'")
-doh_def=$(printf "%s\n" "" "config https-dns-proxy" "	option bootstrap_dns '1.1.1.1,1.0.0.1'" "	option resolver_url 'https://cloudflare-dns.com/dns-query'" \
-"	option listen_port '5053'" "" "config https-dns-proxy" "	option bootstrap_dns '8.8.8.8,8.8.4.4'" "	option resolver_url 'https://dns.google/dns-query'" "	option listen_port '5054'")
-doh_comss=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://dns.comss.one/dns-query'"); doh_xbox=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://xbox-dns.ru/dns-query'")
-doh_query=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://dns.malw.link/dns-query'"); doh_queryCF=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://5u35p8m9i7.cloudflare-gateway.com/dns-query'")
+# Изменение стратегии ByeDPI
 # ==========================================
-# Доступ из браузера
+fix_strategy() {
+    clear
+    echo -e "${MAGENTA}Изменение стратегии ByeDPI${NC}"
+
+    if [ -f /etc/config/byedpi ]; then
+        # Получаем текущую стратегию
+        CURRENT_STRATEGY=$(grep "option cmd_opts" /etc/config/byedpi | sed -E "s/.*'(.+)'/\1/")
+        [ -z "$CURRENT_STRATEGY" ] && CURRENT_STRATEGY="(не задана)"
+        echo -e "\n${GREEN}Текущая стратегия:${NC} ${WHITE}$CURRENT_STRATEGY${NC}"
+        echo -ne "\n${YELLOW}Введите новую стратегию (Enter — оставить текущую):${NC} "
+		read NEW_STRATEGY
+        echo -e ""
+        if [ -z "$NEW_STRATEGY" ]; then
+            echo -e "${GREEN}Стратегия не изменена.${NC}"
+        else
+            sed -i "s|option cmd_opts .*| option cmd_opts '$NEW_STRATEGY'|" /etc/config/byedpi
+			/etc/init.d/byedpi enable >/dev/null 2>&1
+			/etc/init.d/byedpi start >/dev/null 2>&1
+            echo -e "${GREEN}Стратегия изменена на:${NC} ${WHITE}$NEW_STRATEGY${NC}"
+        fi
+    else
+        echo -e "\n${YELLOW}ByeDPI не установлен.${NC}"
+    fi
+    echo -e ""
+    read -p "Нажмите Enter..." dummy
+}
+
 # ==========================================
-web_is_enabled(){ command -v ttyd >/dev/null 2>&1 && uci -q get ttyd.@ttyd[0].command | grep -q "/usr/bin/zms"; }
-toggle_web() { if web_is_enabled; then echo -e "\n${MAGENTA}Удаляем доступ из браузера${NC}";opkg remove luci-app-ttyd ttyd >/dev/null 2>&1; rm -f /etc/config/ttyd; rm -f /usr/bin/zms
-echo -e "${GREEN}Доступ удалён!${NC}\n"; read -p "Нажмите Enter..." dummy; else echo -e "\n${MAGENTA}Активируем доступ из браузера${NC}"; echo 'sh <(wget -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/main/Zapret-Manager.sh)' > /usr/bin/zms
-chmod +x /usr/bin/zms; echo -e "${CYAN}Обновляем список пакетов${NC}"; if ! opkg update >/dev/null 2>&1; then echo -e "\n${RED}Ошибка при обновлении!${NC}\n"; return; fi; echo -e "${CYAN}Устанавливаем ${NC}ttyd"
-if ! opkg install ttyd >/dev/null 2>&1; then echo -e "\n${RED}Ошибка при установке ttyd!${NC}\n"; read -p "Нажмите Enter..." dummy; return; fi
-echo -e "${CYAN}Устанавливаем ${NC}luci-app-ttyd"; if ! opkg install luci-app-ttyd >/dev/null 2>&1; then echo -e "\n${RED}Ошибка при установке luci-app-ttyd!${NC}\n"; read -p "Нажмите Enter..." dummy; return; fi
-echo -e "${CYAN}Настраиваем ${NC}ttyd"; sed -i 's#/bin/login#-t fontSize=15 sh /usr/bin/zms#' /etc/config/ttyd; /etc/init.d/ttyd restart >/dev/null 2>&1; if pidof ttyd >/dev/null
-then echo -e "${GREEN}Служба запущена!${NC}\n\n${YELLOW}Доступ: ${NC}http://192.168.1.1:7681\n"; read -p "Нажмите Enter..." dummy; else echo -e "\n${RED}Ошибка! Служба не запущена!${NC}\n"; read -p "Нажмите Enter..." dummy; fi; fi; }
+# Удаление Podkop
 # ==========================================
-# Вкл/Выкл QUIC
+uninstall_podkop() {
+    clear
+    echo -e "${MAGENTA}Удаление Podkop${NC}"
+    
+    # Удаляем пакеты
+    opkg remove luci-i18n-podkop-ru luci-app-podkop podkop --autoremove >/dev/null 2>&1 || true
+
+    # Удаляем конфиги и временные папки
+    rm -rf /etc/config/podkop /tmp/podkop_installer
+
+    # Удаляем все файлы в /etc/config с именем содержащим podkop
+    rm -f /etc/config/*podkop* >/dev/null 2>&1
+
+    echo -e "\n${GREEN}Podkop удалён полностью.${NC}\n"
+    read -p "Нажмите Enter..." dummy
+}
+
+
 # ==========================================
-quic_is_blocked(){ uci show firewall | grep -q "name='Block_UDP_80'" && uci show firewall | grep -q "name='Block_UDP_443'"; }
-toggle_quic() {	if quic_is_blocked; then echo -e "\n${MAGENTA}Отключаем блокировку QUIC${NC}"; for RULE in Block_UDP_80 Block_UDP_443; do
-while true; do IDX=$(uci show firewall | grep "name='$RULE'" | cut -d. -f2 | cut -d= -f1 | head -n1); [ -z "$IDX" ] && break; uci delete firewall.$IDX >/dev/null 2>&1; done; done
-uci commit firewall >/dev/null 2>&1; /etc/init.d/firewall restart >/dev/null 2>&1; echo -e "${GREEN}Блокировка ${NC}QUIC ${GREEN}отключена${NC}\n"; read -p "Нажмите Enter..." dummy; else echo -e "\n${MAGENTA}Включаем блокировку QUIC${NC}"
-uci add firewall rule >/dev/null 2>&1; uci set firewall.@rule[-1].name='Block_UDP_80' >/dev/null 2>&1; uci add_list firewall.@rule[-1].proto='udp' >/dev/null 2>&1; uci set firewall.@rule[-1].src='lan' >/dev/null 2>&1
-uci set firewall.@rule[-1].dest='wan' >/dev/null 2>&1; uci set firewall.@rule[-1].dest_port='80' >/dev/null 2>&1; uci set firewall.@rule[-1].target='REJECT' >/dev/null 2>&1
-uci add firewall rule >/dev/null 2>&1; uci set firewall.@rule[-1].name='Block_UDP_443' >/dev/null 2>&1; uci add_list firewall.@rule[-1].proto='udp' >/dev/null 2>&1; uci set firewall.@rule[-1].src='lan' >/dev/null 2>&1
-uci set firewall.@rule[-1].dest='wan' >/dev/null 2>&1; uci set firewall.@rule[-1].dest_port='443' >/dev/null 2>&1; uci set firewall.@rule[-1].target='REJECT' >/dev/null 2>&1
-uci commit firewall >/dev/null 2>&1; /etc/init.d/firewall restart >/dev/null 2>&1;	echo -e "${GREEN}Блокировка ${NC}QUIC ${GREEN}включена${NC}\n";	read -p "Нажмите Enter..." dummy; fi; }
+# Полная установка и интеграция
 # ==========================================
-# Системное меню
+full_install_integration() {
+    install_update
+    install_podkop
+    integration_byedpi_podkop
+}
+
 # ==========================================
-sys_menu(){ while true; do web_is_enabled && WEB_TEXT="Удалить доступ к скрипту из браузера" || WEB_TEXT="Активировать доступ к скрипту из браузера"
-quic_is_blocked && QUIC_TEXT="${GREEN}Отключить блокировку${NC} QUIC ${GREEN}(80,443)${NC}" || QUIC_TEXT="${GREEN}Включить блокировку${NC} QUIC ${GREEN}(80,443)${NC}"
-clear; echo -e "${MAGENTA}Системное меню${NC}\n"; printed=0; if web_is_enabled; then echo -e "${YELLOW}Доступ из браузера:${NC} http://192.168.1.1:7681"; printed=1; fi
-if quic_is_blocked; then echo -e "${YELLOW}Блокировка QUIC:${NC}    ${GREEN}включена${NC}"; printed=1; fi
-[ "$printed" -eq 1 ] && echo; echo -e "${CYAN}1) ${GREEN}Системная информация${NC}\n${CYAN}2) ${GREEN}$WEB_TEXT${NC}\n${CYAN}3) ${GREEN}$QUIC_TEXT${NC}"
-if uci get firewall.@defaults[0].flow_offloading 2>/dev/null | grep -q '^1$' || uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null | grep -q '^1$'
-then if ! grep -q 'meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc; then
-echo -e "${CYAN}4) ${GREEN}Применить ${NC}FIX${GREEN} для работы ${NC}Zapret${GREEN} с включённым ${NC}Flow Offloading${NC}"; fi; fi
-echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read -r choiceMN; case "$choiceMN" in
-1) wget -qO- https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/sys_info.sh | sh; echo; read -p "Нажмите Enter..." dummy ;;
-2) toggle_web ;; 3) toggle_quic ;; 4) if uci get firewall.@defaults[0].flow_offloading 2>/dev/null | grep -q '^1$' || uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null | grep -q '^1$'; then
-if ! grep -q 'meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc; then echo -e "\n${MAGENTA}Применяем FIX для Flow Offloading${NC}"
-sed -i 's/meta l4proto { tcp, udp } flow offload @ft;/meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;/' /usr/share/firewall4/templates/ruleset.uc; fw4 restart >/dev/null 2>&1
-echo -e "FIX ${GREEN}успешно применён!${NC}\n"; read -p "Нажмите Enter..." dummy; fi; else break; fi ;; *) echo; return ;; esac; done; }
+# Меню
 # ==========================================
-# Главное меню
+show_menu() {
+    get_versions
+
+# ==========================================	
+# Получаем текущую стратегию ByeDPI
 # ==========================================
-show_menu() { get_versions; get_doh_status; clear; echo -e "╔════════════════════════════════════╗\n║     ${BLUE}Zapret on remittor Manager${NC}     ║\n╚════════════════════════════════════╝\n                     ${DGRAY}by StressOzz v$ZAPRET_MANAGER_VERSION${NC}"
-for pkg in byedpi youtubeUnblock; do if opkg list-installed | grep -q "^$pkg"; then echo -e "\n${RED}Найден установленный ${NC}$pkg${RED}!${NC}\nZapret${RED} может работать некорректно с ${NC}$pkg${RED}!${NC}"; fi; done
-if uci get firewall.@defaults[0].flow_offloading 2>/dev/null | grep -q '^1$' || uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null | grep -q '^1$'; 
-then if ! grep -q 'meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc; then echo -e "\n${RED}Включён ${NC}Flow Offloading${RED}!${NC}\n${NC}Zapret${RED} некорректно работает с включённым ${NC}Flow Offloading${RED}!\nПримените ${NC}FIX${RED} в системном меню!${NC}"
-fi; fi; menu_game=$( [ -f "$CONF" ] && grep -q "1024-19293,19345-49999,50101-65535" "$CONF" && echo "Удалить стратегию для игр" || echo "Добавить стратегию для игр" ); pgrep -f "/opt/zapret" >/dev/null 2>&1 && str_stp_zpr="Остановить" || str_stp_zpr="Запустить"
-echo -e "\n${YELLOW}Установленная версия:   ${INST_COLOR}$INSTALLED_DISPLAY${NC}"; [ -n "$ZAPRET_STATUS" ] && echo -e "${YELLOW}Статус Zapret:${NC}          $ZAPRET_STATUS"; show_script_50 && [ -n "$name" ] && echo -e "${YELLOW}Установлен скрипт:${NC}      $name"
-[ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*1024-19293,19345-49999,50101-65535" "$CONF" && grep -q -- "--filter-udp=1024-19293,19345-49999,50101-65535" "$CONF" && echo -e "${YELLOW}Стратегия для игр:${NC}      ${GREEN}активирована${NC}"
-[ -n "$DOH_STATUS" ] && opkg list-installed | grep -q '^https-dns-proxy ' && echo -e "${YELLOW}DNS over HTTPS:         ${GREEN}$DOH_STATUS${NC}"; web_is_enabled && if web_is_enabled; then echo -e "${YELLOW}Доступ из браузера:${NC}     http://192.168.1.1:7681"; fi
-quic_is_blocked && if quic_is_blocked; then echo -e "${YELLOW}Блокировка QUIC:${NC}        ${GREEN}включена${NC}"; fi; show_current_strategy && [ -n "$ver" ] && echo -e "${YELLOW}Используется стратегия:${NC} ${CYAN}$ver${NC}"
-echo -e "\n${CYAN}1) ${GREEN}Установить${NC} Zapret\n${CYAN}2) ${GREEN}Меню выбора стратегий${NC}\n${CYAN}3) ${GREEN}Вернуть ${NC}настройки по умолчанию\n${CYAN}4) ${GREEN}$str_stp_zpr ${NC}Zapret"
-echo -e "${CYAN}5) ${GREEN}Удалить ${NC}Zapret\n${CYAN}6) ${GREEN}$menu_game\n${CYAN}7) ${GREEN}Меню установки скриптов${NC}\n${CYAN}8) ${GREEN}Удалить → установить → настроить${NC} Zapret"
-echo -e "${CYAN}9) ${GREEN}Меню ${NC}DNS over HTTPS\n${CYAN}0) ${GREEN}Системное меню${NC}" ; echo -ne "${CYAN}Enter) ${GREEN}Выход${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read choice
-case "$choice" in 1) install_Zapret ;; 2) menu_str ;; 3) comeback_def ;; 4) pgrep -f /opt/zapret >/dev/null 2>&1 && stop_zapret || start_zapret ;; 5) uninstall_zapret ;; 6) fix_GAME ;; 7) scrypt_install ;; 8) zapret_key ;;
-9) DoH_menu ;; 0) sys_menu ;; *) echo; exit 0 ;; esac; }
+if [ -f /etc/config/byedpi ]; then
+    CURRENT_STRATEGY=$(grep "option cmd_opts" /etc/config/byedpi | sed -E "s/.*'(.+)'/\1/")
+    [ -z "$CURRENT_STRATEGY" ] && CURRENT_STRATEGY="(не задана)"
+else
+    CURRENT_STRATEGY="не найдена"
+fi
+	clear
+	echo -e "╔═══════════════════════════════╗"
+	echo -e "║     ${BLUE}Podkop+ByeDPI Manager${NC}     ║"
+	echo -e "╚═══════════════════════════════╝"
+	echo -e "                             ${DGRAY}v2.3${NC}"
+
+	check_podkop_status
+	check_byedpi_status
+
+	echo -e "${MAGENTA}--- ByeDPI ---${NC}"
+	echo -e "${YELLOW}Установленная версия:${NC} $BYEDPI_STATUS"
+	echo -e "${YELLOW}Последняя версия:${NC} ${CYAN}$BYEDPI_LATEST_VER${NC}"
+	echo -e "${YELLOW}Текущая стратегия:${NC} ${WHITE}$CURRENT_STRATEGY${NC}"
+	echo -e "\n${MAGENTA}--- Podkop ---${NC}"
+	echo -e "${YELLOW}Установленная версия:${NC} $PODKOP_STATUS"
+	echo -e "${YELLOW}Последняя версия:${NC} ${CYAN}$PODKOP_LATEST_VER${NC}"
+	echo -e "\n${YELLOW}Архитектура устройства:${NC} $LOCAL_ARCH"
+    echo -e "\n${CYAN}1) ${GREEN}Установить / обновить ${NC}ByeDPI"
+    echo -e "${CYAN}2) ${GREEN}Удалить ${NC}ByeDPI"
+    echo -e "${CYAN}3) ${GREEN}Интегрировать ${NC}ByeDPI ${GREEN}в ${NC}Podkop"
+    echo -e "${CYAN}4) ${GREEN}Изменить текущую стратегию ${NC}ByeDPI"
+    echo -e "${CYAN}5) ${GREEN}Установить / обновить ${NC}Podkop"
+	echo -e "${CYAN}6) ${GREEN}Удалить ${NC}Podkop"
+	echo -e "${CYAN}7) ${GREEN}Установить ${NC}ByeDPI ${GREEN}+ ${NC}Podkop ${GREEN}+ ${NC}Интеграция"
+	echo -e "${CYAN}8) ${GREEN}Перезагрузить устройство${NC}"
+	echo -e "${CYAN}9) ${GREEN}Выход (Enter)${NC}"
+    echo -ne "\n${YELLOW}Выберите пункт:${NC} "
+    read choice
+
+    case "$choice" in
+        1) install_update ;;
+        2) uninstall_byedpi ;;
+        3) integration_byedpi_podkop ;;
+        4) fix_strategy ;;
+        5) install_podkop ;;
+		6) uninstall_podkop ;;
+		7) full_install_integration ;;
+		8) 
+		echo -e "\n${RED}Перезагрузка${NC}\n"
+        sleep 1
+        reboot
+		;;
+        *) exit 0 ;;
+    esac
+}
+
 # ==========================================
-# Старт скрипта
+# Запуск
 # ==========================================
-while true; do show_menu; done
+while true; do
+    show_menu
+done
