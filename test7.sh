@@ -23,7 +23,7 @@ WORKDIR="/tmp/byedpi"
 curl_install() {
     command -v curl >/dev/null 2>&1 || {
 		clear 
-        echo -e "\n${CYAN}Устанавливаем${NC} ${WHITE}curl ${CYAN}для загрузки информации с ${WHITE}GitHub${NC}\n"
+        echo -e "${CYAN}Устанавливаем${NC} ${WHITE}curl ${CYAN}для загрузки информации с ${WHITE}GitHub${NC}\n"
         opkg update >/dev/null 2>&1
         opkg install curl >/dev/null 2>&1
     }
