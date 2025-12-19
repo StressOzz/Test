@@ -614,7 +614,7 @@ fi
 	echo -e "${YELLOW}Установленная версия:${NC} $BYEDPI_STATUS"
 	echo -e "${YELLOW}Последняя версия:${NC} ${CYAN}$BYEDPI_LATEST_VER${NC}"
 	echo -e "${YELLOW}Текущая стратегия:${NC} ${WHITE}$CURRENT_STRATEGY${NC}"
-	echo -e "\n${MAGENTA}--- Podkop ---${NC}"
+	echo -e "${MAGENTA}--- Podkop ---${NC}"
 	echo -e "${YELLOW}Установленная версия:${NC} $PODKOP_STATUS"
 	echo -e "${YELLOW}Последняя версия:${NC} ${CYAN}$PODKOP_LATEST_VER${NC}"
   echo -e "\n${CYAN}1) ${GREEN}Установить / обновить ${NC}ByeDPI"
