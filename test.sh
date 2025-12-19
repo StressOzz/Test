@@ -562,16 +562,6 @@ uninstall_podkop() {
     read -p "Нажмите Enter..." dummy
 }
 
-
-# ==========================================
-# Полная установка и интеграция
-# ==========================================
-full_install_integration() {
-    install_ByeDPI
-    install_podkop
-    integration_byedpi_podkop
-}
-
 # ==========================================
 # Меню
 # ==========================================
@@ -614,8 +604,6 @@ fi
 	echo -e "${CYAN}7) ${GREEN}Устанавливаем AWG + интерфейс${NC}"
 	echo -e "${CYAN}8) ${GREEN}Интегрировать ${NC}AWG ${GREEN}в ${NC}Podkop"
 
-	echo -e "${CYAN}9) ${GREEN}Установить ${NC}ByeDPI${GREEN} + ${NC}Podkop${GREEN} + ${NC}AWG${GREEN} + ${NC}Интеграция"
-
 	echo -e "${CYAN}0) ${GREEN}Перезагрузить устройство${NC}"
 	echo -e "${CYAN}Enter) ${GREEN}Выход (Enter)${NC}"
     echo -ne "\n${YELLOW}Выберите пункт:${NC} "
@@ -629,11 +617,9 @@ fi
 		5) integration_byedpi_podkop ;;
         6) fix_strategy ;;
 		7) install_AWG ;;
-		8) 
+		8) integration_AWG ;;
 
 
-
-		) full_install_integration ;;
 		0) echo -e "\n${RED}Перезагрузка${NC}\n"
         sleep 1
         reboot
