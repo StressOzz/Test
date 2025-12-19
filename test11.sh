@@ -435,7 +435,7 @@ pkg_list_update || {
             pkg_remove luci-i18n-podkop* >/dev/null 2>&1
             pkg_install "$DOWNLOAD_DIR/$ru"
         else
-			pkg_install "$DOWNLOAD_DIR/$ru" ;;
+			pkg_install "$DOWNLOAD_DIR/$ru"
             esac
         fi
     fi
