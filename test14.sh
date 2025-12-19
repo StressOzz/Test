@@ -536,8 +536,8 @@ esac
 # Изменение стратегии ByeDPI
 # ==========================================
 fix_strategy() {
-    clear
-    echo -e "${MAGENTA}Изменение стратегии ByeDPI${NC}"
+
+    echo -e "\n${MAGENTA}Изменение стратегии ByeDPI${NC}"
 
     if [ -f /etc/config/byedpi ]; then
         # Получаем текущую стратегию
@@ -546,19 +546,18 @@ fix_strategy() {
         echo -e "\n${GREEN}Текущая стратегия:${NC} ${WHITE}$CURRENT_STRATEGY${NC}"
         echo -ne "\n${YELLOW}Введите новую стратегию (Enter — оставить текущую):${NC} "
 		read NEW_STRATEGY
-        echo -e ""
+        echo
         if [ -z "$NEW_STRATEGY" ]; then
-            echo -e "${GREEN}Стратегия не изменена.${NC}"
+            echo -e "${GREEN}Стратегия не изменена.${NC}\n"
         else
             sed -i "s|option cmd_opts .*| option cmd_opts '$NEW_STRATEGY'|" /etc/config/byedpi
 			/etc/init.d/byedpi enable >/dev/null 2>&1
 			/etc/init.d/byedpi start >/dev/null 2>&1
-            echo -e "${GREEN}Стратегия изменена на:${NC} ${WHITE}$NEW_STRATEGY${NC}"
+            echo -e "${GREEN}Стратегия изменена на:${NC} ${WHITE}$NEW_STRATEGY${NC}\n"
         fi
     else
-        echo -e "\n${YELLOW}ByeDPI не установлен.${NC}"
+        echo -e "\n${YELLOW}ByeDPI не установлен.${NC}\n"
     fi
-    echo -e ""
     read -p "Нажмите Enter..." dummy
 }
 
