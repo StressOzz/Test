@@ -32,8 +32,7 @@ curl_install() {
 # AWG
 # ==========================================
 install_AWG() {
-clear
-echo -e "${MAGENTA}Устанавливаем AWG + интерфейс${NC}"
+echo -e "\n${MAGENTA}Устанавливаем AWG + интерфейс${NC}"
 echo -e "${GREEN}Обновляем список пакетов${NC}"
 opkg update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; exit 1; }
 echo -e "${GREEN}Определяем архитектуру и версию OpenWrt${NC}"
@@ -66,11 +65,9 @@ fi
 install_pkg "kmod-amneziawg"
 install_pkg "amneziawg-tools"
 install_pkg "luci-proto-amneziawg"
-echo -e "${CYAN}Устанавливаем русскую локализацию${NC}"
+echo -e "${GREEN}Русская локализацию установлена${NC}"
 install_pkg "luci-i18n-amneziawg-ru" >/dev/null 2>&1 || echo -e "${RED}Внимание: русская локализация не установлена (не критично)${NC}"
-echo -e "${CYAN}Очистка временных файлов${NC}"
 rm -rf "$AWG_DIR"
-echo -e "${CYAN}Перезапускаем сеть${NC}"
 /etc/init.d/network restart >/dev/null 2>&1
 echo -e "AmneziaWG ${GREEN}установлен!${NC}"
 
@@ -100,9 +97,7 @@ read -p "Нажмите Enter..." dummy
 # ==========================================
 # Интеграция AWG
 # ==========================================
-
 integration_AWG() {
-
 
 echo -e "\n${MAGENTA}Интегрируем AWG в Podkop${NC}"
 
@@ -278,7 +273,7 @@ uninstall_byedpi() {
 # Установка / обновление Podkop
 # ==========================================
 install_podkop() {
-    echo -e "\n${MAGENTA}Установка / обновление Podkop${NC}\n"
+    echo -e "\n${MAGENTA}Установка / обновление Podkop${NC}"
 
     REPO="https://api.github.com/repos/itdoginfo/podkop/releases/latest"
     DOWNLOAD_DIR="/tmp/podkop"
@@ -451,7 +446,7 @@ pkg_list_update || {
 # Интеграция ByeDPI в Podkop
 # ==========================================
 integration_byedpi_podkop() {
-    echo -e "\n${MAGENTA}Интеграция ByeDPI в Podkop${NC}\n"
+    echo -e "\n${MAGENTA}Интеграция ByeDPI в Podkop${NC}"
 
 	# Проверяем установлен ли ByeDPI
     if ! command -v byedpi >/dev/null 2>&1 && [ ! -f /etc/init.d/byedpi ]; then
@@ -518,9 +513,9 @@ EOF
     echo -e "${GREEN}Обновляем списки...${NC}"
     podkop list_update >/dev/null 2>&1
 
-    echo -e "\nPodkop ${GREEN}готов к работе.${NC}"
+    echo -e "Podkop ${GREEN}готов к работе.${NC}"
 
-    echo -e "\nByeDPI ${GREEN}интегрирован в ${NC}Podkop${GREEN}.${NC}"
+    echo -e "ByeDPI ${GREEN}интегрирован в ${NC}Podkop${GREEN}.${NC}"
     echo -ne "\nНужно ${RED}обязательно${NC} перезагрузить роутер. Перезагрузить сейчас? [y/N]: \n"
     read REBOOT_CHOICE
     case "$REBOOT_CHOICE" in
