@@ -31,7 +31,7 @@ curl_install() {
 # ==========================================
 # AWG
 # ==========================================
-get_AWG() {
+install_AWG() {
 clear
 echo -e "${MAGENTA}Устанавливаем AWG + интерфейс${NC}"
 echo -e "${GREEN}Обновляем список пакетов${NC}"
@@ -97,7 +97,28 @@ echo -e "${GREEN}Интерфейс ${NC}$IF_NAME${GREEN} создан и акт
 read -p "Нажмите Enter..." dummy
 }
 
+# ==========================================
+# Интеграция AWG
+# ==========================================
 
+integration_AWG() {
+wget -qO /etc/config/podkop https://raw.githubusercontent.com/StressOzz/Test/refs/heads/main/podkop
+
+echo -e "\n${MAGENTA}Интегрируем AWG в Podkop${NC}"
+echo -e "AWG ${GREEN}интегрирован в ${NC}Podkop${GREEN}.${NC}"
+wget -qO /etc/config/podkop https://raw.githubusercontent.com/StressOzz/Test/refs/heads/main/podkop
+echo -e "${CYAN}Запускаем ${NC}Podkop${NC}"
+podkop enable >/dev/null 2>&1
+echo -e "${CYAN}Применяем конфигурацию${NC}"
+podkop reload >/dev/null 2>&1
+podkop restart >/dev/null 2>&1
+echo -e "${CYAN}Обновляем списки${NC}"
+podkop list_update >/dev/null 2>&1
+echo -e "${CYAN}Перезапускаем сервис${NC}"
+podkop restart >/dev/null 2>&1
+echo -e "Podkop ${GREEN}готов к работе!${NC}\n"
+read -p "Нажмите Enter..." dummy
+}
 
 # ==========================================
 # Определение версий
@@ -119,9 +140,9 @@ get_versions() {
     if [ -n "$BYEDPI_URL" ]; then
         BYEDPI_FILE=$(basename "$BYEDPI_URL")
         BYEDPI_LATEST_VER=$(echo "$BYEDPI_FILE" | sed -E 's/^byedpi_([0-9]+\.[0-9]+\.[0-9]+)(-r[0-9]+)?_.*/\1/')
-        LATEST_VER="$BYEDPI_LATEST_VER"      # добавляем для install_update
-        LATEST_URL="$BYEDPI_URL"            # добавляем для install_update
-        LATEST_FILE="$BYEDPI_FILE"          # добавляем для install_update
+        LATEST_VER="$BYEDPI_LATEST_VER"
+        LATEST_URL="$BYEDPI_URL"
+        LATEST_FILE="$BYEDPI_FILE"
     else
         BYEDPI_LATEST_VER="не найдена"
         LATEST_VER=""
@@ -177,7 +198,7 @@ check_byedpi_status() {
 # ==========================================
 # Установка / обновление ByeDPI
 # ==========================================
-install_update() {
+install_ByeDPI() {
     clear
     echo -e "${MAGENTA}Установка / обновление ByeDPI${NC}"
     get_versions
@@ -546,7 +567,7 @@ uninstall_podkop() {
 # Полная установка и интеграция
 # ==========================================
 full_install_integration() {
-    install_update
+    install_ByeDPI
     install_podkop
     integration_byedpi_podkop
 }
@@ -583,28 +604,37 @@ fi
 	echo -e "${YELLOW}Установленная версия:${NC} $PODKOP_STATUS"
 	echo -e "${YELLOW}Последняя версия:${NC} ${CYAN}$PODKOP_LATEST_VER${NC}"
 	echo -e "\n${YELLOW}Архитектура устройства:${NC} $LOCAL_ARCH"
-    echo -e "\n${CYAN}1) ${GREEN}Установить / обновить ${NC}ByeDPI"
+  echo -e "\n${CYAN}1) ${GREEN}Установить / обновить ${NC}ByeDPI"
     echo -e "${CYAN}2) ${GREEN}Удалить ${NC}ByeDPI"
-    echo -e "${CYAN}3) ${GREEN}Интегрировать ${NC}ByeDPI ${GREEN}в ${NC}Podkop"
-    echo -e "${CYAN}4) ${GREEN}Изменить текущую стратегию ${NC}ByeDPI"
-    echo -e "${CYAN}5) ${GREEN}Установить / обновить ${NC}Podkop"
-	echo -e "${CYAN}6) ${GREEN}Удалить ${NC}Podkop"
-	echo -e "${CYAN}7) ${GREEN}Установить ${NC}ByeDPI ${GREEN}+ ${NC}Podkop ${GREEN}+ ${NC}Интеграция"
-	echo -e "${CYAN}8) ${GREEN}Перезагрузить устройство${NC}"
-	echo -e "${CYAN}9) ${GREEN}Выход (Enter)${NC}"
+ 	echo -e "${CYAN}3) ${GREEN}Установить / обновить ${NC}Podkop"
+	echo -e "${CYAN}4) ${GREEN}Удалить ${NC}Podkop"
+    echo -e "${CYAN}5) ${GREEN}Интегрировать ${NC}ByeDPI ${GREEN}в ${NC}Podkop"
+    echo -e "${CYAN}6) ${GREEN}Изменить текущую стратегию ${NC}ByeDPI"
+
+	echo -e "${CYAN}7) ${GREEN}Устанавливаем AWG + интерфейс${NC}"
+	echo -e "${CYAN}8) ${GREEN}Интегрировать ${NC}AWG ${GREEN}в ${NC}Podkop"
+
+	echo -e "${CYAN}9) ${GREEN}Установить ${NC}ByeDPI${GREEN} + ${NC}Podkop${GREEN} + ${NC}AWG${GREEN} + ${NC}Интеграция"
+
+	echo -e "${CYAN}0) ${GREEN}Перезагрузить устройство${NC}"
+	echo -e "${CYAN}Enter) ${GREEN}Выход (Enter)${NC}"
     echo -ne "\n${YELLOW}Выберите пункт:${NC} "
     read choice
 
     case "$choice" in
-        1) install_update ;;
+        1) install_ByeDPI ;;
         2) uninstall_byedpi ;;
-        3) integration_byedpi_podkop ;;
-        4) fix_strategy ;;
-        5) install_podkop ;;
-		6) uninstall_podkop ;;
-		7) full_install_integration ;;
+        3) install_podkop ;;
+		4) uninstall_podkop ;;
+		5) integration_byedpi_podkop ;;
+        6) fix_strategy ;;
+		7) install_AWG ;;
 		8) 
-		echo -e "\n${RED}Перезагрузка${NC}\n"
+
+
+
+		) full_install_integration ;;
+		0) echo -e "\n${RED}Перезагрузка${NC}\n"
         sleep 1
         reboot
 		;;
