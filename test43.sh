@@ -143,21 +143,9 @@ echo -e "${CYAN}1)${GREEN} $doh_st ${NC}DNS over HTTPS\n${CYAN}2)${GREEN} Нас
 echo -ne "${CYAN}5)${GREEN} Настроить ${NC}dns.malw.link (CloudFlare)\n${CYAN}6)${GREEN} Вернуть ${NC}настройки по умолчанию\n${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "
 read -r choiceDOH; case "$choiceDOH" in 1) D_o_H ;; 2) doh_install && setup_doh "$doh_comss" "Comss.one DNS" ;; 3) doh_install && setup_doh "$doh_xbox" "Xbox DNS" ;; 4) doh_install && setup_doh "$doh_query" "dns.malw.link" ;;
 5) doh_install && setup_doh "$doh_queryCF" "dns.malw.link (CloudFlare)" ;; 6) doh_install && setup_doh "$doh_def" "настройки по умолчанию" ;; *) return ;; esac; done; }
-
-setup_doh() {
-local config="$1"
-local name="$2"
-echo -e "\n${MAGENTA}Настраиваем DNS over HTTPS${NC}\n${CYAN}Настраиваем ${NC}$name\n${CYAN}Применяем новые настройки${NC}"
-rm -f "$fileDoH"
-printf '%s\n' "$doh_set" "$config" > "$fileDoH"
-doh_restart
-echo -e "DNS over HTTP ${GREEN}настроен!${NC}\n"
-read -p "Нажмите Enter..." dummy
-}
-
-get_doh_status() {
-DOH_STATUS=""
-[ ! -f "$fileDoH" ] && return
+setup_doh() { local config="$1"; local name="$2"; echo -e "\n${MAGENTA}Настраиваем DNS over HTTPS${NC}\n${CYAN}Настраиваем ${NC}$name\n${CYAN}Применяем новые настройки${NC}"; rm -f "$fileDoH"
+printf '%s\n' "$doh_set" "$config" > "$fileDoH"; doh_restart; echo -e "DNS over HTTP ${GREEN}настроен!${NC}\n"; read -p "Нажмите Enter..." dummy; }
+get_doh_status() { DOH_STATUS="";
 if grep -q "dns.comss.one" "$fileDoH"; then
 DOH_STATUS="Comss DNS"
 elif grep -q "xbox-dns.ru" "$fileDoH"; then
@@ -194,14 +182,7 @@ fi
 }
 
 doh_install() { [ -f "$fileDoH" ] && return 0; echo -e "\n${RED}DNS over HTTPS не установлен!${NC}\n"; read -p "Нажмите Enter..." dummy; return 1; }
-
-doh_restart() {
-/etc/init.d/https-dns-proxy reload >/dev/null 2>&1
-/etc/init.d/https-dns-proxy restart >/dev/null 2>&1
-}
-
-fileDoH="/etc/config/https-dns-proxy"
-
+doh_restart() { /etc/init.d/https-dns-proxy reload >/dev/null 2>&1; /etc/init.d/https-dns-proxy restart >/dev/null 2>&1; }; fileDoH="/etc/config/https-dns-proxy"
 doh_set=$(printf "%s\n" "config main 'config'" "	option canary_domains_icloud '1'" "	option canary_domains_mozilla '1'" "	option dnsmasq_config_update '*'" "	option force_dns '1'" "	list force_dns_port '53'" "	list force_dns_port '853'" "	list force_dns_src_interface 'lan'" \
 "	option procd_trigger_wan6 '0'" "	option heartbeat_domain 'heartbeat.melmac.ca'" "	option heartbeat_sleep_timeout '10'" "	option heartbeat_wait_timeout '10'" "	option user 'nobody'" "	option group 'nogroup'" "	option listen_addr '127.0.0.1'")
 doh_def=$(printf "%s\n" "" "config https-dns-proxy" "	option bootstrap_dns '1.1.1.1,1.0.0.1'" "	option resolver_url 'https://cloudflare-dns.com/dns-query'" \
