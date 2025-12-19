@@ -138,34 +138,11 @@ printf "%s\n" "--new" "--filter-udp=19294-19344,50000-50100" "--filter-l7=discor
 # ==========================================
 DoH_menu() {
 while true; do
-get_doh_status
-clear
-echo -e "${MAGENTA}Меню DNS over HTTPS${NC}\n"
-
-opkg list-installed | grep -q '^https-dns-proxy ' && doh_st="Удалить" || doh_st="Установить"
-[ -n "$DOH_STATUS" ] && echo -e "${YELLOW}DNS over HTTPS: ${GREEN}$DOH_STATUS${NC}\n"
-
-echo -e "${CYAN}1)${GREEN} $doh_st ${NC}DNS over HTTPS"
-echo -e "${CYAN}2)${GREEN} Настроить ${NC}Comss DNS"
-echo -e "${CYAN}3)${GREEN} Настроить ${NC}Xbox DNS"
-echo -e "${CYAN}4)${GREEN} Настроить ${NC}dns.malw.link"
-echo -e "${CYAN}5)${GREEN} Настроить ${NC}dns.malw.link (CloudFlare)"
-echo -e "${CYAN}6)${GREEN} Вернуть ${NC}настройки по умолчанию"
-echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "
-read -r choiceDOH
-# [ -z "$choiceDOH" ] && return
-
-case "$choiceDOH" in
-1) D_o_H ;;
-2) doh_install && setup_doh "$doh_comss" "Comss.one DNS" ;;
-3) doh_install && setup_doh "$doh_xbox" "Xbox DNS" ;;
-4) doh_install && setup_doh "$doh_query" "dns.malw.link" ;;
-5) doh_install && setup_doh "$doh_queryCF" "dns.malw.link (CloudFlare)" ;;
-6) doh_install && setup_doh "$doh_def" "настройки по умолчанию" ;;
-*) return ;;
-esac
-done
-}
+get_doh_status; clear; echo -e "${MAGENTA}Меню DNS over HTTPS${NC}\n"; opkg list-installed | grep -q '^https-dns-proxy ' && doh_st="Удалить" || doh_st="Установить"; [ -n "$DOH_STATUS" ] && echo -e "${YELLOW}DNS over HTTPS: ${GREEN}$DOH_STATUS${NC}\n"
+echo -e "${CYAN}1)${GREEN} $doh_st ${NC}DNS over HTTPS\n${CYAN}2)${GREEN} Настроить ${NC}Comss DNS\n${CYAN}3)${GREEN} Настроить ${NC}Xbox DNS\n${CYAN}4)${GREEN} Настроить ${NC}dns.malw.link"
+echo -ne "${CYAN}5)${GREEN} Настроить ${NC}dns.malw.link (CloudFlare)\n${CYAN}6)${GREEN} Вернуть ${NC}настройки по умолчанию\n${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "
+read -r choiceDOH; case "$choiceDOH" in 1) D_o_H ;; 2) doh_install && setup_doh "$doh_comss" "Comss.one DNS" ;; 3) doh_install && setup_doh "$doh_xbox" "Xbox DNS" ;; 4) doh_install && setup_doh "$doh_query" "dns.malw.link" ;;
+5) doh_install && setup_doh "$doh_queryCF" "dns.malw.link (CloudFlare)" ;; 6) doh_install && setup_doh "$doh_def" "настройки по умолчанию" ;; *) return ;; esac; done; }
 
 setup_doh() {
 local config="$1"
