@@ -79,9 +79,10 @@ echo -e "\n${YELLOW}Вставьте рабочий конфиг в Interfaces (
 read -p "" dummy
 echo -e "${YELLOW}Podkop будет установлен / обновлён!\nВсе настройки Podkop будут сброшены!\nPodkop будет настроен для работы с AWG!${NC}"
 read -p "Нажмите Enter..." dummy
+
 ##################################################################################################################
 
-echo -e "${MAGENTA}Устанавливаем Podkop${NC}"
+echo -e "\n${MAGENTA}Устанавливаем Podkop${NC}"
 TMP="/tmp/podkop"
 rm -rf "$TMP"
 mkdir -p "$TMP"
