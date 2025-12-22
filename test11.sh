@@ -8,8 +8,6 @@ MODEL=$(cat /tmp/sysinfo/model); ARCH=$(sed -n "s/.*ARCH='\(.*\)'/\1/p" /etc/ope
 OWRT=$(grep '^DISTRIB_RELEASE=' /etc/openwrt_release | cut -d"'" -f2); echo -e "$MODEL\n$ARCH\n$OWRT"
 echo -e "\n${GREEN}===== Пользовательские пакеты =====${NC}"
 
-
-
 awk '
 /^Package:/ {p=$2}
 /^Status: install user/ {
@@ -18,7 +16,7 @@ awk '
     grp[k]=grp[k] ? grp[k] "\n" p : p
 }
 END {
-    # 1. сначала группы (>=2)
+    # 1. сначала все группы (>=2)
     for (k in grp) {
         n=split(grp[k],a,"\n")
         if (n < 2) continue
@@ -47,7 +45,15 @@ END {
             }
 
     # вывод одиночек парами
-    for(i=1;i<=int((s+1)/2);i++) {
+    half=int((s+1)/2)
+    for(i=1;i<=half;i++) {
+        j=s-i+1
+        if(i<j) print single[i]" | "single[j]
+        else print single[i]
+    }
+}
+' /usr/lib/opkg/status
+
 
 
 
