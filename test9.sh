@@ -12,27 +12,22 @@ awk '
 /^Status: install user/ {
     k=p
     sub(/^(luci-(app|mod|proto|theme)-|kmod-|lib|ucode-mod-)/,"",k)
-    g[k]=g[k] ? g[k] "\n" p : p
+    grp[k]=grp[k] ? grp[k] "\n" p : p
 }
 END {
-    for (k in g) {
-        print "\n[" k "]"
-        n=split(g[k],a,"\n")
-
-        # сортировка внутри группы
+    for (k in grp) {
+        n=split(grp[k],a,"\n")
         for(i=1;i<=n;i++)
             for(j=i+1;j<=n;j++)
                 if(a[i]>a[j]){t=a[i];a[i]=a[j];a[j]=t}
 
-        # вывод парами, с выравниванием
         for(i=1;i<=n;i+=2)
-            if(i+1<=n)
-                printf "%-25s | %s\n", a[i], a[i+1]
-            else
-                print a[i]
+            if(i+1<=n) print a[i]" | "a[i+1]
+            else print a[i]
     }
 }
 ' /usr/lib/opkg/status
+
 
 echo -e "\n${GREEN}===== Flow Offloading =====${NC}"
 sw=$(uci -q get firewall.@defaults[0].flow_offloading); hw=$(uci -q get firewall.@defaults[0].flow_offloading_hw)
