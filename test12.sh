@@ -8,6 +8,7 @@ MODEL=$(cat /tmp/sysinfo/model); ARCH=$(sed -n "s/.*ARCH='\(.*\)'/\1/p" /etc/ope
 OWRT=$(grep '^DISTRIB_RELEASE=' /etc/openwrt_release | cut -d"'" -f2); echo -e "$MODEL\n$ARCH\n$OWRT"
 echo -e "\n${GREEN}===== Пользовательские пакеты =====${NC}"
 
+
 awk '
 /^Package:/ {p=$2}
 /^Status: install user/ {
@@ -16,7 +17,7 @@ awk '
     grp[k]=grp[k] ? grp[k] "\n" p : p
 }
 END {
-    # 1. сначала все группы (>=2)
+    # 1. сначала группы (>=2)
     for (k in grp) {
         n=split(grp[k],a,"\n")
         if (n < 2) continue
@@ -25,12 +26,16 @@ END {
             for(j=i+1;j<=n;j++)
                 if(a[i]>a[j]){t=a[i];a[i]=a[j];a[j]=t}
 
-        for(i=1;i<=n;i+=2)
-            if(i+1<=n) print a[i]" | "a[i+1]
-            else print a[i]
+        for(i=1;i<=n;i+=2) {
+            if(i+1<=n) {
+                L=a[i]; R=a[i+1]
+                if (L ~ /^luci-/ && R !~ /^luci-/) {t=L;L=R;R=t}
+                print L" | "R
+            } else print a[i]
+        }
     }
 
-    # 2. собираем одиночки
+    # 2. одиночки
     for (k in grp) {
         n=split(grp[k],a,"\n")
         if (n == 1) single[++s]=a[1]
@@ -44,12 +49,15 @@ END {
                 t=single[i];single[i]=single[j];single[j]=t
             }
 
-    # вывод одиночек парами
+    # вывод одиночек парами (luci справа)
     half=int((s+1)/2)
     for(i=1;i<=half;i++) {
         j=s-i+1
-        if(i<j) print single[i]" | "single[j]
-        else print single[i]
+        if(i<j) {
+            L=single[i]; R=single[j]
+            if (L ~ /^luci-/ && R !~ /^luci-/) {t=L;L=R;R=t}
+            print L" | "R
+        } else print single[i]
     }
 }
 ' /usr/lib/opkg/status
