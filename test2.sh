@@ -9,30 +9,28 @@ OWRT=$(grep '^DISTRIB_RELEASE=' /etc/openwrt_release | cut -d"'" -f2); echo -e "
 echo -e "\n${GREEN}===== Пользовательские пакеты =====${NC}"
 awk '
 /^Package:/ {p=$2}
-/^Status: install user/ {pkgs[p]=length(p)}
-END {
-    n=0
-    for (p in pkgs) {
-        names[++n]=p
-        lens[p]=pkgs[p]
-    }
+/^Status: install user/ {pkgs[++n]=p}
 
-    # сортировка по длине
+END {
+    # сортировка: длина ↓, внутри — алфавит ↑
     for (i=1;i<=n;i++)
         for (j=i+1;j<=n;j++)
-            if (length(names[i]) < length(names[j])) {
-                t=names[i]; names[i]=names[j]; names[j]=t
+            if ( length(pkgs[i]) < length(pkgs[j]) ||
+                (length(pkgs[i]) == length(pkgs[j]) && pkgs[i] > pkgs[j]) ) {
+                t=pkgs[i]; pkgs[i]=pkgs[j]; pkgs[j]=t
             }
 
-    for (i=1;i<=int((n+1)/2);i++) {
-        j=n-i+1
-        if (i<j)
-            print names[i] " | " names[j]
+    half = int((n+1)/2)
+    for (i=1;i<=half;i++) {
+        j = n - i + 1
+        if (i < j)
+            print pkgs[i] " | " pkgs[j]
         else
-            print names[i]
+            print pkgs[i]
     }
 }
 ' /usr/lib/opkg/status
+
 
 echo -e "\n${GREEN}===== Flow Offloading =====${NC}"
 sw=$(uci -q get firewall.@defaults[0].flow_offloading); hw=$(uci -q get firewall.@defaults[0].flow_offloading_hw)
