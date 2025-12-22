@@ -7,6 +7,9 @@ clear; echo -e "${GREEN}===== Информация о системе =====${NC}"
 MODEL=$(cat /tmp/sysinfo/model); ARCH=$(sed -n "s/.*ARCH='\(.*\)'/\1/p" /etc/openwrt_release)
 OWRT=$(grep '^DISTRIB_RELEASE=' /etc/openwrt_release | cut -d"'" -f2); echo -e "$MODEL\n$ARCH\n$OWRT"
 echo -e "\n${GREEN}===== Пользовательские пакеты =====${NC}"
+
+
+
 awk '
 /^Package:/ {p=$2}
 /^Status: install user/ {
@@ -15,8 +18,11 @@ awk '
     grp[k]=grp[k] ? grp[k] "\n" p : p
 }
 END {
+    # 1. сначала группы (>=2)
     for (k in grp) {
         n=split(grp[k],a,"\n")
+        if (n < 2) continue
+
         for(i=1;i<=n;i++)
             for(j=i+1;j<=n;j++)
                 if(a[i]>a[j]){t=a[i];a[i]=a[j];a[j]=t}
@@ -25,8 +31,24 @@ END {
             if(i+1<=n) print a[i]" | "a[i+1]
             else print a[i]
     }
-}
-' /usr/lib/opkg/status
+
+    # 2. собираем одиночки
+    for (k in grp) {
+        n=split(grp[k],a,"\n")
+        if (n == 1) single[++s]=a[1]
+    }
+
+    # сортировка одиночек: длина ↓, потом алфавит
+    for(i=1;i<=s;i++)
+        for(j=i+1;j<=s;j++)
+            if(length(single[i]) < length(single[j]) ||
+              (length(single[i])==length(single[j]) && single[i]>single[j])){
+                t=single[i];single[i]=single[j];single[j]=t
+            }
+
+    # вывод одиночек парами
+    for(i=1;i<=int((s+1)/2);i++) {
+
 
 
 echo -e "\n${GREEN}===== Flow Offloading =====${NC}"
