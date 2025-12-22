@@ -28,7 +28,7 @@ install_Zapret() { local NO_PAUSE=$1; get_versions; if [ "$INSTALLED_VER" = "$ZA
 echo -e "${CYAN}Обновляем список пакетов${NC}"; opkg update || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; read -p "Нажмите Enter..." dummy; return; }
 mkdir -p "$WORKDIR"; rm -f "$WORKDIR"/* 2>/dev/null; cd "$WORKDIR" || return; FILE_NAME=$(basename "$LATEST_URL"); if ! command -v unzip; then
 echo -e "${CYAN}Устанавливаем ${NC}unzip" && opkg install unzip || { echo -e "\n${RED}Не удалось установить unzip!${NC}\n"; read -p "Нажмите Enter..." dummy; return; }; fi
-echo -e "${CYAN}Скачиваем архив ${NC}$FILE_NAME"; wget -q "$LATEST_URL" -O "$FILE_NAME" || { echo -e "\n${RED}Не удалось скачать ${NC}$FILE_NAME\n"; read -p "Нажмите Enter..." dummy; return; }
+echo -e "${CYAN}Скачиваем архив ${NC}$FILE_NAME"; wget "$LATEST_URL" -O "$FILE_NAME" || { echo -e "\n${RED}Не удалось скачать ${NC}$FILE_NAME\n"; read -p "Нажмите Enter..." dummy; return; }
 echo -e "${CYAN}Распаковываем архив${NC}"; unzip -o "$FILE_NAME" >/dev/null; for PKG in zapret_*.ipk luci-app-zapret_*.ipk; do [ -f "$PKG" ] && echo -e "${CYAN}Устанавливаем ${NC}$PKG" && opkg install --force-reinstall "$PKG" || { echo -e "\n${RED}Не удалось установить $PKG!${NC}\n"
 read -p "Нажмите Enter..." dummy; return; } ; done; echo -e "${CYAN}Удаляем временные файлы${NC}"; cd /; rm -rf "$WORKDIR" /tmp/*.ipk /tmp/*.zip /tmp/*zapret* 2>/dev/null; if [ -f /etc/init.d/zapret ]; then echo -e "Zapret ${GREEN}установлен!${NC}\n"
 [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter..." dummy; else echo -e "\n${RED}Zapret не был установлен!${NC}\n"; read -p "Нажмите Enter..." dummy; fi; }
@@ -51,10 +51,10 @@ sed -i "/DISABLE_CUSTOM/s/'1'/'0'/" /etc/config/zapret; chmod +x /opt/zapret/syn
 # FIX GAME
 # ==========================================
 fix_GAME() { local NO_PAUSE=$1; [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter..." dummy; return; }
-[ "$NO_PAUSE" != "1" ] && echo; echo -e "${MAGENTA}Настраиваем стратегию для игр${NC}"; if grep -q "option NFQWS_PORTS_UDP.*1024-19293,19345-49999,50101-65535" "$CONF" && grep -q -- "--filter-udp=1024-19293,19345-49999,50101-65535" "$CONF"; then echo -e "${CYAN}Удаляем из стратегии настройки для игр${NC}"
+[ "$NO_PAUSE" != "1" ] && echo; echo -e "${MAGENTA}Настраиваем стратегию для игр${NC}"; if grep "option NFQWS_PORTS_UDP.*1024-19293,19345-49999,50101-65535" "$CONF" && grep -- "--filter-udp=1024-19293,19345-49999,50101-65535" "$CONF"; then echo -e "${CYAN}Удаляем из стратегии настройки для игр${NC}"
 sed -i ':a;N;$!ba;s|--new\n--filter-udp=1024-19293,19345-49999,50101-65535\n--dpi-desync=fake\n--dpi-desync-cutoff=d2\n--dpi-desync-any-protocol=1\n--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/quic_initial_www_google_com\.bin\n*||g' "$CONF"
 sed -i "s/,1024-19293,19345-49999,50101-65535//" "$CONF"; chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart; echo -e "${GREEN}Настройки для игр удалены!${NC}\n"; read -p "Нажмите Enter..." dummy; return; fi
-if ! grep -q "option NFQWS_PORTS_UDP.*1024-19293,19345-49999,50101-65535" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'$/,1024-19293,19345-49999,50101-65535'/" "$CONF"; fi; if ! grep -q -- "--filter-udp=1024-19293,19345-49999,50101-65535" "$CONF"; then last_line=$(grep -n "^'$" "$CONF" | tail -n1 | cut -d: -f1)
+if ! grep "option NFQWS_PORTS_UDP.*1024-19293,19345-49999,50101-65535" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'$/,1024-19293,19345-49999,50101-65535'/" "$CONF"; fi; if ! grep -- "--filter-udp=1024-19293,19345-49999,50101-65535" "$CONF"; then last_line=$(grep -n "^'$" "$CONF" | tail -n1 | cut -d: -f1)
 if [ -n "$last_line" ]; then sed -i "${last_line},\$d" "$CONF"; fi; printf "%s\n" "--new" "--filter-udp=1024-19293,19345-49999,50101-65535" "--dpi-desync=fake" "--dpi-desync-cutoff=d2" "--dpi-desync-any-protocol=1" "--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/quic_initial_www_google_com.bin" "'" >> "$CONF"; fi
 echo -e "${CYAN}Добавляем в стратегию настройки для игр${NC}"; chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart; echo -e "${GREEN}Игровые настройки добавлены!${NC}\n";[ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter..." dummy; }
 # ==========================================
@@ -89,7 +89,7 @@ hosts_clear; echo -e "Zapret ${GREEN}полностью удалён!${NC}\n"; [
 # ==========================================
 # Выбор стратегий
 # ==========================================
-show_current_strategy() { [ -f "$CONF" ] || return; for v in v1 v2 v3 v4 v5; do grep -q "#$v" "$CONF" && { ver="$v"; return; } done; grep -q -- "--hostlist-auto=/opt/zapret/ipset/zapret-hosts-auto.txt" "$CONF" && ver="дефолтная"; }
+show_current_strategy() { [ -f "$CONF" ] || return; for v in v1 v2 v3 v4 v5; do grep "#$v" "$CONF" && { ver="$v"; return; } done; grep -- "--hostlist-auto=/opt/zapret/ipset/zapret-hosts-auto.txt" "$CONF" && ver="дефолтная"; }
 menu_str() { local NO_PAUSE=$1; [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter..." dummy; return; }
 while true; do if [ "$NO_PAUSE" = "1" ]; then version=$STR_VERSION_AUTOINSTALL; else clear; echo -e "${MAGENTA}Меню выбора стратегии${NC}\n"; show_current_strategy && [ -n "$ver" ] && echo -e "${YELLOW}Используется стратегия:${NC} $ver\n"
 echo -e "${CYAN}1) ${GREEN}Установить стратегию${NC} v1\n${CYAN}2) ${GREEN}Установить стратегию${NC} v2\n${CYAN}3) ${GREEN}Установить стратегию${NC} v3\n${CYAN}4) ${GREEN}Установить стратегию${NC} v4"
@@ -117,31 +117,31 @@ printf '%s\n' "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/z
 printf '%s\n' "--dpi-desync-fake-tls=0x0F0F0F0F" "--dpi-desync-fake-tls-mod=none" "--dpi-desync-fakedsplit-pattern=/opt/zapret/files/fake/tls_clienthello_vk_com.bin" "--dpi-desync-fooling=badseq,badsum" "--dpi-desync-badseq-increment=0" "--new" "--filter-udp=443" | cat; \
 printf '%s\n' "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake" "--dpi-desync-repeats=6" "--dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin" | cat; }
 { echo "  option NFQWS_OPT '"; echo "#${version} УДАЛИТЕ ЭТУ СТРОЧКУ, ЕСЛИ ИЗМЕНЯЕТЕ СТРАТЕГИЮ !!!"; strategy_${version}; echo "'"; } >> "$CONF"
-echo -e "${CYAN}Добавляем домены в исключения${NC}"; rm -f "$EXCLUDE_FILE"; wget -q -O "$EXCLUDE_FILE" "$EXCLUDE_URL" || echo -e "\n${RED}Не удалось загрузить exclude файл${NC}\n"
-case "$version" in v3) file="t2.bin" ;; v4) file="4pda.bin" ;; v5) file="max.bin" ;; *) file="" ; esac; if [ -n "$file" ]; then if ! wget -q -O "/opt/zapret/files/fake/$file" "https://github.com/StressOzz/Zapret-Manager/raw/refs/heads/main/$file"; then
+echo -e "${CYAN}Добавляем домены в исключения${NC}"; rm -f "$EXCLUDE_FILE"; wget -O "$EXCLUDE_FILE" "$EXCLUDE_URL" || echo -e "\n${RED}Не удалось загрузить exclude файл${NC}\n"
+case "$version" in v3) file="t2.bin" ;; v4) file="4pda.bin" ;; v5) file="max.bin" ;; *) file="" ; esac; if [ -n "$file" ]; then if ! wget -O "/opt/zapret/files/fake/$file" "https://github.com/StressOzz/Zapret-Manager/raw/refs/heads/main/$file"; then
 echo -e "\n${RED}Не удалось загрузить $file${NC}\n"; fi; fi; echo -e "${CYAN}Редактируем ${NC}/etc/hosts${NC}"; hosts_add; fileGP="/opt/zapret/ipset/zapret-hosts-google.txt"; printf '%s\n' "gvt1.com" "googleplay.com" "play.google.com" "beacons.gvt2.com" "play.googleapis.com" "play-fe.googleapis.com" \
 "lh3.googleusercontent.com" "android.clients.google.com" "connectivitycheck.gstatic.com" "play-lh.googleusercontent.com" "play-games.googleusercontent.com" "prod-lt-playstoregatewayadapter-pa.googleapis.com" | grep -Fxv -f "$fileGP" 2>/dev/null >> "$fileGP"
 dis_str; echo -e "${CYAN}Применяем новую стратегию и настройки${NC}"; chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart; echo -e "${GREEN}Стратегия ${NC}${version} ${GREEN}установлена!${NC}"
 sed -i "s/,1024-19293,19345-49999,50101-65535//" "$CONF"; [ "$NO_PAUSE" != "1" ] && echo && read -p "Нажмите Enter..." dummy; [ "$NO_PAUSE" = "1" ] && break; done }
-dis_str() { if ! grep -q "option NFQWS_PORTS_UDP.*19294-19344,50000-50100" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'$/,19294-19344,50000-50100'/" "$CONF"; fi
-if ! grep -q "option NFQWS_PORTS_TCP.*2053,2083,2087,2096,8443" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_TCP '/s/'$/,2053,2083,2087,2096,8443'/" "$CONF"; fi
-if ! grep -q -- "--filter-udp=19294-19344,50000-50100" "$CONF"; then last_line1=$(grep -n "^'$" "$CONF" | tail -n1 | cut -d: -f1); if [ -n "$last_line1" ]; then sed -i "${last_line1},\$d" "$CONF"; fi
+dis_str() { if ! grep "option NFQWS_PORTS_UDP.*19294-19344,50000-50100" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'$/,19294-19344,50000-50100'/" "$CONF"; fi
+if ! grep "option NFQWS_PORTS_TCP.*2053,2083,2087,2096,8443" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_TCP '/s/'$/,2053,2083,2087,2096,8443'/" "$CONF"; fi
+if ! grep -- "--filter-udp=19294-19344,50000-50100" "$CONF"; then last_line1=$(grep -n "^'$" "$CONF" | tail -n1 | cut -d: -f1); if [ -n "$last_line1" ]; then sed -i "${last_line1},\$d" "$CONF"; fi
 printf "%s\n" "--new" "--filter-udp=19294-19344,50000-50100" "--filter-l7=discord,stun" "--dpi-desync=fake" "--dpi-desync-repeats=6" "--new" "--filter-tcp=2053,2083,2087,2096,8443" "--hostlist-domains=discord.media" \
 "--dpi-desync=multisplit" "--dpi-desync-split-seqovl=652" "--dpi-desync-split-pos=2" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin" "'" >> "$CONF"; fi; }
 # ==========================================
 # DNS over HTTPS
 # ==========================================
-DoH_menu() { while true; do get_doh_status; clear; echo -e "${MAGENTA}Меню DNS over HTTPS${NC}\n"; opkg list-installed | grep -q '^https-dns-proxy ' && doh_st="Удалить" || doh_st="Установить"
-[ -n "$DOH_STATUS" ] && opkg list-installed | grep -q '^https-dns-proxy ' && echo -e "${YELLOW}DNS over HTTPS: ${NC}$DOH_STATUS\n"
+DoH_menu() { while true; do get_doh_status; clear; echo -e "${MAGENTA}Меню DNS over HTTPS${NC}\n"; opkg list-installed | grep '^https-dns-proxy ' && doh_st="Удалить" || doh_st="Установить"
+[ -n "$DOH_STATUS" ] && opkg list-installed | grep '^https-dns-proxy ' && echo -e "${YELLOW}DNS over HTTPS: ${NC}$DOH_STATUS\n"
 echo -e "${CYAN}1)${GREEN} $doh_st ${NC}DNS over HTTPS\n${CYAN}2)${GREEN} Настроить ${NC}Comss DNS\n${CYAN}3)${GREEN} Настроить ${NC}Xbox DNS\n${CYAN}4)${GREEN} Настроить ${NC}dns.malw.link"
 echo -ne "${CYAN}5)${GREEN} Настроить ${NC}dns.malw.link (CloudFlare)\n${CYAN}6)${GREEN} Вернуть ${NC}настройки по умолчанию\n${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "
 read -r choiceDOH; [ -z "$choiceDOH" ] && return; case "$choiceDOH" in 1) D_o_H ;; 2) doh_install && setup_doh "$doh_comss" "Comss.one DNS" ;; 3) doh_install && setup_doh "$doh_xbox" "Xbox DNS" ;; 4) doh_install && setup_doh "$doh_query" "dns.malw.link" ;;
 5) doh_install && setup_doh "$doh_queryCF" "dns.malw.link (CloudFlare)" ;; 6) doh_install && setup_doh "$doh_def" "настройки по умолчанию" ;; *) return ;; esac; done; }
 setup_doh() { local config="$1"; local name="$2"; echo -e "\n${MAGENTA}Настраиваем DNS over HTTPS${NC}\n${CYAN}Настраиваем ${NC}$name\n${CYAN}Применяем новые настройки${NC}"; rm -f "$fileDoH"; printf '%s\n' "$doh_set" "$config" > "$fileDoH"
 /etc/init.d/https-dns-proxy reload; /etc/init.d/https-dns-proxy restart; echo -e "DNS over HTTP ${GREEN}настроен!${NC}\n"; read -p "Нажмите Enter..." dummy; }
-get_doh_status() { DOH_STATUS=""; [ ! -f "$fileDoH" ] && return; if grep -q "dns.comss.one" "$fileDoH"; then DOH_STATUS="Comss DNS"; elif grep -q "xbox-dns.ru" "$fileDoH"; then DOH_STATUS="Xbox DNS"; elif grep -q "5u35p8m9i7.cloudflare-gateway.com" "$fileDoH"; then
-DOH_STATUS="dns.malw.link (CloudFlare)"; elif grep -q "dns.malw.link" "$fileDoH"; then DOH_STATUS="dns.malw.link"; else DOH_STATUS="установлен"; fi; }
-D_o_H() { if opkg list-installed | grep -q '^https-dns-proxy '; then echo -e "\n${MAGENTA}Удаляем DNS over HTTPS\n${CYAN}Удаляем пакеты${NC}"; opkg --force-removal-of-dependent-packages --autoremove remove https-dns-proxy luci-app-https-dns-proxy
+get_doh_status() { DOH_STATUS=""; [ ! -f "$fileDoH" ] && return; if grep "dns.comss.one" "$fileDoH"; then DOH_STATUS="Comss DNS"; elif grep "xbox-dns.ru" "$fileDoH"; then DOH_STATUS="Xbox DNS"; elif grep "5u35p8m9i7.cloudflare-gateway.com" "$fileDoH"; then
+DOH_STATUS="dns.malw.link (CloudFlare)"; elif grep "dns.malw.link" "$fileDoH"; then DOH_STATUS="dns.malw.link"; else DOH_STATUS="установлен"; fi; }
+D_o_H() { if opkg list-installed | grep '^https-dns-proxy '; then echo -e "\n${MAGENTA}Удаляем DNS over HTTPS\n${CYAN}Удаляем пакеты${NC}"; opkg --force-removal-of-dependent-packages --autoremove remove https-dns-proxy luci-app-https-dns-proxy
 echo -e "${CYAN}Удаляем файлы конфигурации ${NC}"; rm -f /etc/config/https-dns-proxy /etc/init.d/https-dns-proxy; echo -e "DNS over HTTPS${GREEN} удалён!${NC}\n"; read -p "Нажмите Enter..." dummy; else
 echo -e "\n${MAGENTA}Устанавливаем DNS over HTTPS\n${CYAN}Обновляем список пакетов${NC}"; opkg update || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; read -p "Нажмите Enter..." dummy; return; }
 echo -e "${CYAN}Устанавливаем ${NC}https-dns-proxy"; opkg install https-dns-proxy || { echo -e "\n${RED}Ошибка при установки!${NC}\n"; read -p "Нажмите Enter..." dummy; return; }
@@ -156,7 +156,7 @@ doh_query=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'htt
 # ==========================================
 # Доступ из браузера
 # ==========================================
-web_is_enabled(){ command -v ttyd && uci -q get ttyd.@ttyd[0].command | grep -q "/usr/bin/zms"; }
+web_is_enabled(){ command -v ttyd && uci get ttyd.@ttyd[0].command | grep "/usr/bin/zms"; }
 toggle_web() { if web_is_enabled; then echo -e "\n${MAGENTA}Удаляем доступ из браузера${NC}";opkg remove luci-app-ttyd ttyd; rm -f /etc/config/ttyd; rm -f /usr/bin/zms
 echo -e "${GREEN}Доступ удалён!${NC}\n"; read -p "Нажмите Enter..." dummy; else echo -e "\n${MAGENTA}Активируем доступ из браузера${NC}"; echo 'sh <(wget -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/main/Zapret-Manager.sh)' > /usr/bin/zms
 chmod +x /usr/bin/zms; echo -e "${CYAN}Обновляем список пакетов${NC}"; if ! opkg update; then echo -e "\n${RED}Ошибка при обновлении!${NC}\n"; return; fi; echo -e "${CYAN}Устанавливаем ${NC}ttyd"
@@ -167,7 +167,7 @@ then echo -e "${GREEN}Служба запущена!${NC}\n\n${YELLOW}Досту
 # ==========================================
 # Вкл/Выкл QUIC
 # ==========================================
-quic_is_blocked(){ uci show firewall | grep -q "name='Block_UDP_80'" && uci show firewall | grep -q "name='Block_UDP_443'"; }
+quic_is_blocked(){ uci show firewall | grep "name='Block_UDP_80'" && uci show firewall | grep "name='Block_UDP_443'"; }
 toggle_quic() {	if quic_is_blocked; then echo -e "\n${MAGENTA}Отключаем блокировку QUIC${NC}"; for RULE in Block_UDP_80 Block_UDP_443; do
 while true; do IDX=$(uci show firewall | grep "name='$RULE'" | cut -d. -f2 | cut -d= -f1 | head -n1); [ -z "$IDX" ] && break; uci delete firewall.$IDX; done; done
 uci commit firewall; /etc/init.d/firewall restart; echo -e "${GREEN}Блокировка ${NC}QUIC ${GREEN}отключена${NC}\n"; read -p "Нажмите Enter..." dummy; else echo -e "\n${MAGENTA}Включаем блокировку QUIC${NC}"
@@ -184,26 +184,26 @@ quic_is_blocked && QUIC_TEXT="${GREEN}Отключить блокировку${N
 clear; echo -e "${MAGENTA}Системное меню${NC}\n"; printed=0; if web_is_enabled; then echo -e "${YELLOW}Доступ из браузера:${NC} http://192.168.1.1:7681"; printed=1; fi
 if quic_is_blocked; then echo -e "${YELLOW}Блокировка QUIC:${NC}    ${GREEN}включена${NC}"; printed=1; fi
 [ "$printed" -eq 1 ] && echo; echo -e "${CYAN}1) ${GREEN}Системная информация${NC}\n${CYAN}2) ${GREEN}$WEB_TEXT${NC}\n${CYAN}3) ${GREEN}$QUIC_TEXT${NC}"
-if uci get firewall.@defaults[0].flow_offloading 2>/dev/null | grep -q '^1$' || uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null | grep -q '^1$'
-then if ! grep -q 'meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc; then
+if uci get firewall.@defaults[0].flow_offloading 2>/dev/null | grep '^1$' || uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null | grep '^1$'
+then if ! grep 'meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc; then
 echo -e "${CYAN}4) ${GREEN}Применить ${NC}FIX${GREEN} для работы ${NC}Zapret${GREEN} с включённым ${NC}Flow Offloading${NC}"; fi; fi
 echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read -r choiceMN; case "$choiceMN" in
 1) wget -qO- https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/sys_info.sh | sh; echo; read -p "Нажмите Enter..." dummy ;;
-2) toggle_web ;; 3) toggle_quic ;; 4) if uci get firewall.@defaults[0].flow_offloading 2>/dev/null | grep -q '^1$' || uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null | grep -q '^1$'; then
-if ! grep -q 'meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc; then echo -e "\n${MAGENTA}Применяем FIX для Flow Offloading${NC}"
+2) toggle_web ;; 3) toggle_quic ;; 4) if uci get firewall.@defaults[0].flow_offloading 2>/dev/null | grep '^1$' || uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null | grep '^1$'; then
+if ! grep 'meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc; then echo -e "\n${MAGENTA}Применяем FIX для Flow Offloading${NC}"
 sed -i 's/meta l4proto { tcp, udp } flow offload @ft;/meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;/' /usr/share/firewall4/templates/ruleset.uc; fw4 restart
 echo -e "FIX ${GREEN}успешно применён!${NC}\n"; read -p "Нажмите Enter..." dummy; fi; else break; fi ;; *) echo; return ;; esac; done; }
 # ==========================================
 # Главное меню
 # ==========================================
 show_menu() { get_versions; get_doh_status; clear; echo -e "╔════════════════════════════════════╗\n║     ${BLUE}Zapret on remittor Manager${NC}     ║\n╚════════════════════════════════════╝\n                     ${DGRAY}by StressOzz v$ZAPRET_MANAGER_VERSION${NC}"
-for pkg in byedpi youtubeUnblock; do if opkg list-installed | grep -q "^$pkg"; then echo -e "\n${RED}Найден установленный ${NC}$pkg${RED}!${NC}\nZapret${RED} может работать некорректно с ${NC}$pkg${RED}!${NC}"; fi; done
-if uci get firewall.@defaults[0].flow_offloading 2>/dev/null | grep -q '^1$' || uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null | grep -q '^1$'; 
-then if ! grep -q 'meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc; then echo -e "\n${RED}Включён ${NC}Flow Offloading${RED}!${NC}\n${NC}Zapret${RED} некорректно работает с включённым ${NC}Flow Offloading${RED}!\nПримените ${NC}FIX${RED} в системном меню!${NC}"
-fi; fi; menu_game=$( [ -f "$CONF" ] && grep -q "1024-19293,19345-49999,50101-65535" "$CONF" && echo "Удалить стратегию для игр" || echo "Добавить стратегию для игр" ); pgrep -f "/opt/zapret" && str_stp_zpr="Остановить" || str_stp_zpr="Запустить"
+for pkg in byedpi youtubeUnblock; do if opkg list-installed | grep "^$pkg"; then echo -e "\n${RED}Найден установленный ${NC}$pkg${RED}!${NC}\nZapret${RED} может работать некорректно с ${NC}$pkg${RED}!${NC}"; fi; done
+if uci get firewall.@defaults[0].flow_offloading 2>/dev/null | grep '^1$' || uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null | grep '^1$'; 
+then if ! grep 'meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc; then echo -e "\n${RED}Включён ${NC}Flow Offloading${RED}!${NC}\n${NC}Zapret${RED} некорректно работает с включённым ${NC}Flow Offloading${RED}!\nПримените ${NC}FIX${RED} в системном меню!${NC}"
+fi; fi; menu_game=$( [ -f "$CONF" ] && grep "1024-19293,19345-49999,50101-65535" "$CONF" && echo "Удалить стратегию для игр" || echo "Добавить стратегию для игр" ); pgrep -f "/opt/zapret" && str_stp_zpr="Остановить" || str_stp_zpr="Запустить"
 echo -e "\n${YELLOW}Установленная версия:   ${INST_COLOR}$INSTALLED_DISPLAY${NC}"; [ -n "$ZAPRET_STATUS" ] && echo -e "${YELLOW}Статус Zapret:${NC}          $ZAPRET_STATUS"; show_script_50 && [ -n "$name" ] && echo -e "${YELLOW}Установлен скрипт:${NC}      $name"
-[ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*1024-19293,19345-49999,50101-65535" "$CONF" && grep -q -- "--filter-udp=1024-19293,19345-49999,50101-65535" "$CONF" && echo -e "${YELLOW}Стратегия для игр:${NC}      ${GREEN}активирована${NC}"
-[ -n "$DOH_STATUS" ] && opkg list-installed | grep -q '^https-dns-proxy ' && echo -e "${YELLOW}DNS over HTTPS:${NC}         $DOH_STATUS"; web_is_enabled && if web_is_enabled; then echo -e "${YELLOW}Доступ из браузера:${NC}     http://192.168.1.1:7681"; fi
+[ -f "$CONF" ] && grep "option NFQWS_PORTS_UDP.*1024-19293,19345-49999,50101-65535" "$CONF" && grep -- "--filter-udp=1024-19293,19345-49999,50101-65535" "$CONF" && echo -e "${YELLOW}Стратегия для игр:${NC}      ${GREEN}активирована${NC}"
+[ -n "$DOH_STATUS" ] && opkg list-installed | grep '^https-dns-proxy ' && echo -e "${YELLOW}DNS over HTTPS:${NC}         $DOH_STATUS"; web_is_enabled && if web_is_enabled; then echo -e "${YELLOW}Доступ из браузера:${NC}     http://192.168.1.1:7681"; fi
 quic_is_blocked && if quic_is_blocked; then echo -e "${YELLOW}Блокировка QUIC:${NC}        ${GREEN}включена${NC}"; fi; show_current_strategy && [ -n "$ver" ] && echo -e "${YELLOW}Используется стратегия:${NC} ${CYAN}$ver${NC}"
 echo -e "\n${CYAN}1) ${GREEN}Установить${NC} Zapret\n${CYAN}2) ${GREEN}Меню выбора стратегий${NC}\n${CYAN}3) ${GREEN}Вернуть ${NC}настройки по умолчанию\n${CYAN}4) ${GREEN}$str_stp_zpr ${NC}Zapret"
 echo -e "${CYAN}5) ${GREEN}Удалить ${NC}Zapret\n${CYAN}6) ${GREEN}$menu_game\n${CYAN}7) ${GREEN}Меню установки скриптов${NC}\n${CYAN}8) ${GREEN}Удалить → установить → настроить${NC} Zapret"
