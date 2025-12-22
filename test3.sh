@@ -7,31 +7,9 @@ clear; echo -e "${GREEN}===== Информация о системе =====${NC}"
 MODEL=$(cat /tmp/sysinfo/model); ARCH=$(sed -n "s/.*ARCH='\(.*\)'/\1/p" /etc/openwrt_release)
 OWRT=$(grep '^DISTRIB_RELEASE=' /etc/openwrt_release | cut -d"'" -f2); echo -e "$MODEL\n$ARCH\n$OWRT"
 echo -e "\n${GREEN}===== Пользовательские пакеты =====${NC}"
-awk '
-/^Package:/ {p=$2}
-/^Status: install user/ {pkgs[++n]=p}
-
-END {
-    # сортировка: длина ↓, внутри — алфавит ↑
-    for (i=1;i<=n;i++)
-        for (j=i+1;j<=n;j++)
-            if ( length(pkgs[i]) < length(pkgs[j]) ||
-                (length(pkgs[i]) == length(pkgs[j]) && pkgs[i] > pkgs[j]) ) {
-                t=pkgs[i]; pkgs[i]=pkgs[j]; pkgs[j]=t
-            }
-
-    half = int((n+1)/2)
-    for (i=1;i<=half;i++) {
-        j = n - i + 1
-        if (i < j)
-            print pkgs[i] " | " pkgs[j]
-        else
-            print pkgs[i]
-    }
-}
-' /usr/lib/opkg/status
-
-
+awk '/^Package:/{p=$2}/^Status: install user/{a[++n]=p}
+END{for(i=1;i<=n;i++)for(j=i+1;j<=n;j++)if(length(a[i])<length(a[j])||(length(a[i])==length(a[j])&&a[i]>a[j])){t=a[i];a[i]=a[j];a[j]=t}
+h=int((n+1)/2);for(i=1;i<=h;i++){j=n-i+1;print i<j?a[i]" | "a[j]:a[i]}}' /usr/lib/opkg/status
 echo -e "\n${GREEN}===== Flow Offloading =====${NC}"
 sw=$(uci -q get firewall.@defaults[0].flow_offloading); hw=$(uci -q get firewall.@defaults[0].flow_offloading_hw)
 if grep -q 'ct original packets ge 30' /usr/share/firewall4/templates/ruleset.uc 2>/dev/null; then
