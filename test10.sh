@@ -546,8 +546,8 @@ uninstall_podkop() {
 uninstall_AWG() {
 echo -e "\n${MAGENTA}Удаление AWG + интерфейс${NC}"
 opkg remove luci-i18n-amneziawg-ru luci-proto-amneziawg amneziawg-tools kmod-amneziawg >/dev/null 2>&1
-echo -e "AWG ${GREEN}удалён.${NC}\n"
-echo -e "${CYAN}Удаляем интерфейс AWG${NC}"
+echo -e "AWG ${GREEN}удалён.${NC}"
+echo -e "${MAGENTA}Удаляем интерфейс AWG${NC}"
 uci -q delete network.AWG
 uci commit network
 /etc/init.d/network reload >/dev/null 2>&1
@@ -594,34 +594,32 @@ else
     echo -e "${YELLOW}Интерфейс AWG: ${RED}не установлен${NC}"
 fi
 
-	echo -e "\n${CYAN}1) ${GREEN}Установить / обновить ${NC}ByeDPI"
-    echo -e "${CYAN}2) ${GREEN}Удалить ${NC}ByeDPI"
- 	echo -e "${CYAN}3) ${GREEN}Установить / обновить ${NC}Podkop"
-	echo -e "${CYAN}4) ${GREEN}Удалить ${NC}Podkop"
+
+ 	echo -e "\n${CYAN}1) ${GREEN}Установить / обновить ${NC}Podkop"
+	echo -e "${CYAN}2) ${GREEN}Удалить ${NC}Podkop"
+	echo -e "${CYAN}3) ${GREEN}Установить / обновить ${NC}ByeDPI"
+    echo -e "${CYAN}4) ${GREEN}Удалить ${NC}ByeDPI"
     echo -e "${CYAN}5) ${GREEN}Интегрировать ${NC}ByeDPI ${GREEN}в ${NC}Podkop"
     echo -e "${CYAN}6) ${GREEN}Изменить текущую стратегию ${NC}ByeDPI"
 	echo -e "${CYAN}7) ${GREEN}Установить ${NC}AWG ${GREEN}+${NC} интерфейс"
-	echo -e "${CYAN}8) ${GREEN}Интегрировать ${NC}AWG ${GREEN}в ${NC}Podkop"
-	echo -e "${CYAN}9) ${GREEN}Удалить ${NC}AWG"
+	echo -e "${CYAN}8) ${GREEN}Удалить ${NC}AWG ${GREEN}+${NC} интерфейс"
+	echo -e "${CYAN}9) ${GREEN}Интегрировать ${NC}AWG ${GREEN}в ${NC}Podkop"
 	echo -e "${CYAN}0) ${GREEN}Перезагрузить устройство${NC}"
 	echo -e "${CYAN}Enter) ${GREEN}Выход${NC}"
     echo -ne "\n${YELLOW}Выберите пункт:${NC} "
     read choice
 
     case "$choice" in
-        1) install_ByeDPI ;;
-        2) uninstall_byedpi ;;
-        3) install_podkop ;;
-		4) uninstall_podkop ;;
+        1) install_podkop ;;
+		2) uninstall_podkop ;;
+        3) install_ByeDPI ;;
+        4) uninstall_byedpi ;;
 		5) integration_byedpi_podkop ;;
         6) fix_strategy ;;
 		7) install_AWG ;;
-		8) integration_AWG ;;
-		9) uninstall_AWG ;;
-		0) echo -e "\n${RED}Перезагрузка${NC}\n"
-        sleep 1
-        reboot
-		;;
+		8) uninstall_AWG ;;
+		9) integration_AWG ;;
+		0) echo -e "\n${RED}Перезагрузка${NC}\n"; reboot ;;
         *) exit 0 ;;
     esac
 }
