@@ -192,10 +192,10 @@ get_versions() {
 	
 }
 # ==========================================
-# Установка / обновление ByeDPI
+# Установка  ByeDPI
 # ==========================================
 install_ByeDPI() {
-    echo -e "\n${MAGENTA}Установка / обновление ByeDPI${NC}"
+    echo -e "\n${MAGENTA}Установка ByeDPI${NC}"
 
     BYEDPI_VER="0.17.3-r1"
     BYEDPI_ARCH="$LOCAL_ARCH"
@@ -219,7 +219,7 @@ install_ByeDPI() {
     /etc/init.d/byedpi enable >/dev/null 2>&1
     /etc/init.d/byedpi start >/dev/null 2>&1
 
-    echo -e "ByeDPI ${GREEN}успешно установлен / обновлён!${NC}\n"
+    echo -e "ByeDPI ${GREEN}успешно установлен!${NC}\n"
     read -p "Нажмите Enter..." dummy
 }
 
@@ -239,10 +239,10 @@ uninstall_byedpi() {
 }
 
 # ==========================================
-# Установка / обновление Podkop
+# Установка
 # ==========================================
 install_podkop() {
-    echo -e "\n${MAGENTA}Установка / обновление Podkop${NC}"
+    echo -e "\n${MAGENTA}Установка Podkop${NC}"
 
     REPO="https://api.github.com/repos/itdoginfo/podkop/releases/latest"
     DOWNLOAD_DIR="/tmp/podkop"
@@ -396,7 +396,7 @@ pkg_list_update || {
     # Очистка
     rm -rf "$DOWNLOAD_DIR"
 
-    echo -e "Podkop ${GREEN}успешно установлен / обновлён!${NC}\n"
+    echo -e "Podkop ${GREEN}успешно установлен!${NC}\n"
     read -p "Нажмите Enter..." dummy
 }
 
@@ -595,9 +595,9 @@ else
 fi
 
 
- 	echo -e "\n${CYAN}1) ${GREEN}Установить / обновить ${NC}Podkop"
+ 	echo -e "\n${CYAN}1) ${GREEN}Установить ${NC}Podkop"
 	echo -e "${CYAN}2) ${GREEN}Удалить ${NC}Podkop"
-	echo -e "${CYAN}3) ${GREEN}Установить / обновить ${NC}ByeDPI"
+	echo -e "${CYAN}3) ${GREEN}Установить ${NC}ByeDPI"
     echo -e "${CYAN}4) ${GREEN}Удалить ${NC}ByeDPI"
     echo -e "${CYAN}5) ${GREEN}Интегрировать ${NC}ByeDPI ${GREEN}в ${NC}Podkop"
     echo -e "${CYAN}6) ${GREEN}Изменить текущую стратегию ${NC}ByeDPI"
