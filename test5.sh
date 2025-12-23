@@ -19,6 +19,12 @@ WORKDIR="/tmp/byedpi"
 
 PODKOP_LATEST_VER="0.7.10"
 
+BYEDPI_VER="0.17.3-r1"
+BYEDPI_ARCH="$LOCAL_ARCH"
+BYEDPI_FILE="byedpi_${BYEDPI_VER}_${BYEDPI_ARCH}.ipk"
+BYEDPI_URL="https://github.com/DPITrickster/ByeDPI-OpenWrt/releases/download/v0.17.3-24.10/${BYEDPI_FILE}"
+
+
 # ==========================================
 # AWG
 # ==========================================
@@ -143,31 +149,17 @@ read -p "Нажмите Enter..." dummy
 # Определение версий
 # ==========================================
 get_versions() {
-    # --- ByeDPI ---
+
+ # --- ByeDPI установленная версия ---
     BYEDPI_VER=$(opkg list-installed | grep '^byedpi ' | awk '{print $3}' | sed 's/-r[0-9]\+$//')
     [ -z "$BYEDPI_VER" ] && BYEDPI_VER="не найдена"
 
+    # --- Архитектура ---
     LOCAL_ARCH=$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release)
-    [ -z "$LOCAL_ARCH" ] && LOCAL_ARCH=$(opkg print-architecture | grep -v "noarch" | tail -n1 | awk '{print $2}')
+    [ -z "$LOCAL_ARCH" ] && LOCAL_ARCH=$(opkg print-architecture | grep -v noarch | tail -n1 | awk '{print $2}')
 
-
-    # --- Получаем последнюю версию ByeDPI ---
-
-    BYEDPI_URL=$(echo "0.17.3-r1" | grep browser_download_url | grep "$LOCAL_ARCH.ipk" | head -n1 | cut -d'"' -f4)
-    if [ -n "$BYEDPI_URL" ]; then
-        BYEDPI_FILE=$(basename "$BYEDPI_URL")
-        BYEDPI_LATEST_VER="0.17.3"
-        LATEST_VER="$BYEDPI_LATEST_VER"
-        LATEST_URL="$BYEDPI_URL"
-        LATEST_FILE="$BYEDPI_FILE"
-    else
-        BYEDPI_LATEST_VER="не найдена"
-        LATEST_VER=""
-        LATEST_URL=""
-        LATEST_FILE=""
-    fi
-
-
+    # --- Последняя версия (фиксированная) ---
+    BYEDPI_LATEST_VER="0.17.3"
 
     # --- Podkop ---
     if command -v podkop >/dev/null 2>&1; then
@@ -205,13 +197,12 @@ check_podkop_status() {
 check_byedpi_status() {
     if [ "$BYEDPI_VER" = "не найдена" ] || [ "$BYEDPI_VER" = "не установлен" ]; then
         BYEDPI_STATUS="${RED}$BYEDPI_VER${NC}"
-    elif [ "$BYEDPI_LATEST_VER" != "не найдена" ] && [ "$BYEDPI_VER" != "$BYEDPI_LATEST_VER" ]; then
+    elif [ "$BYEDPI_VER" != "$BYEDPI_LATEST_VER" ]; then
         BYEDPI_STATUS="${RED}$BYEDPI_VER${NC}"
     else
         BYEDPI_STATUS="${GREEN}$BYEDPI_VER${NC}"
     fi
 }
-
 # ==========================================
 # Установка / обновление ByeDPI
 # ==========================================
@@ -563,7 +554,9 @@ uninstall_podkop() {
 # Меню
 # ==========================================
 show_menu() {
-    get_versions
+get_versions
+check_byedpi_status
+
 
 # ==========================================	
 # Получаем текущую стратегию ByeDPI
@@ -585,11 +578,9 @@ fi
 
 	echo -e "${MAGENTA}--- ByeDPI ---${NC}"
 	echo -e "${YELLOW}Установленная версия:${NC} $BYEDPI_STATUS"
-	echo -e "${YELLOW}Последняя версия:${NC} ${CYAN}$BYEDPI_LATEST_VER${NC}"
 	echo -e "${YELLOW}Текущая стратегия:${NC} ${WHITE}$CURRENT_STRATEGY${NC}"
 	echo -e "${MAGENTA}--- Podkop ---${NC}"
 	echo -e "${YELLOW}Установленная версия:${NC} $PODKOP_STATUS"
-	echo -e "${YELLOW}Последняя версия:${NC} ${CYAN}$PODKOP_LATEST_VER${NC}"
 
 	echo -e "${MAGENTA}--- AWG ---${NC}"
 if command -v amneziawg >/dev/null 2>&1 || opkg list-installed | grep -q "^amneziawg-tools"; then
