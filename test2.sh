@@ -17,17 +17,8 @@ DGRAY="\033[38;5;244m"
 
 WORKDIR="/tmp/byedpi"
 
-# ==========================================
-# Функция проверки и установки curl
-# ==========================================
-curl_install() {
-    command -v curl >/dev/null 2>&1 || {
-		clear 
-        echo -e "${CYAN}Устанавливаем${NC} ${WHITE}curl ${CYAN}для загрузки информации с ${WHITE}GitHub${NC}"
-		opkg update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; read -p "Нажмите Enter..." dummy; }
-		opkg install curl >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить curl!${NC}\n"; read -p "Нажмите Enter..." dummy; }
-    }
-}
+PODKOP_LATEST_VER="0.7.10"
+
 # ==========================================
 # AWG
 # ==========================================
@@ -159,7 +150,6 @@ get_versions() {
     LOCAL_ARCH=$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release)
     [ -z "$LOCAL_ARCH" ] && LOCAL_ARCH=$(opkg print-architecture | grep -v "noarch" | tail -n1 | awk '{print $2}')
 
-	curl_install
 
     # --- Получаем последнюю версию ByeDPI ---
 
@@ -177,6 +167,8 @@ get_versions() {
         LATEST_FILE=""
     fi
 
+
+
     # --- Podkop ---
     if command -v podkop >/dev/null 2>&1; then
         PODKOP_VER=$(podkop show_version 2>/dev/null | sed 's/-r[0-9]\+$//')
@@ -184,10 +176,6 @@ get_versions() {
     else
         PODKOP_VER="не установлен"
     fi
-
-    
-    PODKOP_LATEST_VER="0.7.10"
-
 	
     [ -z "$PODKOP_LATEST_VER" ] && PODKOP_LATEST_VER="не найдена"
 
@@ -237,14 +225,15 @@ install_ByeDPI() {
         return
     }
 
-	echo -e "${GREEN}Скачиваем ${NC}${WHITE}$LATEST_FILE${NC}"
-    mkdir -p "$WORKDIR"
-    cd "$WORKDIR" || return
-    curl -L -s -o "$LATEST_FILE" "$LATEST_URL" || {
-        echo -e "${RED}Ошибка загрузки ${NC}$LATEST_FILE"
-        read -p "Нажмите Enter..." dummy
-        return
-    }
+echo -e "${GREEN}Скачиваем ${NC}${WHITE}$LATEST_FILE${NC}"
+mkdir -p "$WORKDIR"
+cd "$WORKDIR" || return
+wget -q -U "Mozilla/5.0" -O "$LATEST_FILE" "$LATEST_URL" || {
+    echo -e "${RED}Ошибка загрузки ${NC}$LATEST_FILE"
+    read -p "Нажмите Enter..." dummy
+    return
+}
+
 
 	echo -e "${GREEN}Устанавливаем${NC} ${WHITE}$LATEST_FILE${NC}"
     opkg install --force-reinstall "$LATEST_FILE" >/dev/null 2>&1
@@ -378,17 +367,6 @@ pkg_list_update || {
     return
 }
 
-    # Проверка GitHub API
-    if command -v curl >/dev/null 2>&1; then
-        check_response=$(curl -s "$REPO")
-        if echo "$check_response" | grep -q 'API rate limit '; then
-			echo ""
-            echo -e "${RED}Превышен лимит запросов GitHub. Повторите позже.${NC}"
-			echo ""
-            read -p "Нажмите Enter..." dummy
-            return
-        fi
-    fi
 
     # Шаблон скачивания
     if [ "$PKG_IS_APK" -eq 1 ]; then
