@@ -539,6 +539,18 @@ uninstall_podkop() {
     read -p "Нажмите Enter..." dummy
 }
 
+
+
+# ==========================================
+# uninstall_AWG
+# ==========================================
+uninstall_AWG() {
+echo -e "\n${MAGENTA}Удаление AWG${NC}"
+opkg remove luci-i18n-amneziawg-ru luci-proto-amneziawg amneziawg-tools kmod-amneziawg >/dev/null 2>&1
+    echo -e "AWG ${GREEN}удалён.${NC}\n"
+    read -p "Нажмите Enter..." dummy
+}
+
 # ==========================================
 # Меню
 # ==========================================
@@ -586,6 +598,7 @@ fi
     echo -e "${CYAN}6) ${GREEN}Изменить текущую стратегию ${NC}ByeDPI"
 	echo -e "${CYAN}7) ${GREEN}Установить ${NC}AWG ${GREEN}+${NC} интерфейс"
 	echo -e "${CYAN}8) ${GREEN}Интегрировать ${NC}AWG ${GREEN}в ${NC}Podkop"
+	echo -e "${CYAN}9) ${GREEN}Удалить ${NC}AWG"
 	echo -e "${CYAN}0) ${GREEN}Перезагрузить устройство${NC}"
 	echo -e "${CYAN}Enter) ${GREEN}Выход${NC}"
     echo -ne "\n${YELLOW}Выберите пункт:${NC} "
@@ -600,6 +613,7 @@ fi
         6) fix_strategy ;;
 		7) install_AWG ;;
 		8) integration_AWG ;;
+		9) uninstall_AWG ;;
 		0) echo -e "\n${RED}Перезагрузка${NC}\n"
         sleep 1
         reboot
