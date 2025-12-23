@@ -87,7 +87,8 @@ echo -e "${CYAN}Перезапускаем сеть${NC}"
 /etc/init.d/network restart
 /etc/init.d/firewall restart
 /etc/init.d/uhttpd restart
-echo -e "${GREEN}Интерфейс ${NC}$IF_NAME${GREEN} создан и активирован!${NC}\n"
+echo -e "${GREEN}Интерфейс ${NC}$IF_NAME${GREEN} создан и активирован!${NC}"
+echo -e "${YELLOW}Вставьте рабочий конфиг в Interfaces (Интерфейс) AWG!${NC}\n"
 read -p "Нажмите Enter..." dummy
 }
 
@@ -176,25 +177,7 @@ get_versions() {
     PODKOP_LATEST_VER=$(echo "$PODKOP_LATEST_VER" | sed 's/^v//')
     BYEDPI_VER=$(echo "$BYEDPI_VER" | sed 's/^v//')
     BYEDPI_LATEST_VER=$(echo "$BYEDPI_LATEST_VER" | sed 's/^v//')
-}
 
-# ==========================================
-# Проверка версии Podkop с подсветкой
-# ==========================================
-check_podkop_status() {
-    if [ "$PODKOP_VER" = "не найдена" ] || [ "$PODKOP_VER" = "не установлен" ]; then
-        PODKOP_STATUS="${RED}$PODKOP_VER${NC}"
-    elif [ "$PODKOP_LATEST_VER" != "не найдена" ] && [ "$PODKOP_VER" != "$PODKOP_LATEST_VER" ]; then
-        PODKOP_STATUS="${RED}$PODKOP_VER${NC}"
-    else
-        PODKOP_STATUS="${GREEN}$PODKOP_VER${NC}"
-    fi
-}
-
-# ==========================================
-# Проверка версии ByeDPI с подсветкой
-# ==========================================
-check_byedpi_status() {
     if [ "$BYEDPI_VER" = "не найдена" ] || [ "$BYEDPI_VER" = "не установлен" ]; then
         BYEDPI_STATUS="${RED}$BYEDPI_VER${NC}"
     elif [ "$BYEDPI_VER" != "$BYEDPI_LATEST_VER" ]; then
@@ -202,6 +185,15 @@ check_byedpi_status() {
     else
         BYEDPI_STATUS="${GREEN}$BYEDPI_VER${NC}"
     fi
+
+    if [ "$PODKOP_VER" = "не найдена" ] || [ "$PODKOP_VER" = "не установлен" ]; then
+        PODKOP_STATUS="${RED}$PODKOP_VER${NC}"
+    elif [ "$PODKOP_LATEST_VER" != "не найдена" ] && [ "$PODKOP_VER" != "$PODKOP_LATEST_VER" ]; then
+        PODKOP_STATUS="${RED}$PODKOP_VER${NC}"
+    else
+        PODKOP_STATUS="${GREEN}$PODKOP_VER${NC}"
+    fi
+	
 }
 # ==========================================
 # Установка / обновление ByeDPI
@@ -555,26 +547,20 @@ uninstall_podkop() {
 # ==========================================
 show_menu() {
 get_versions
-check_byedpi_status
 
-
-# ==========================================	
-# Получаем текущую стратегию ByeDPI
-# ==========================================
 if [ -f /etc/config/byedpi ]; then
     CURRENT_STRATEGY=$(grep "option cmd_opts" /etc/config/byedpi | sed -E "s/.*'(.+)'/\1/")
     [ -z "$CURRENT_STRATEGY" ] && CURRENT_STRATEGY="(не задана)"
 else
     CURRENT_STRATEGY="не найдена"
 fi
+
+
 	clear
 	echo -e "╔═══════════════════════════════╗"
 	echo -e "║         ${BLUE}Podkop Manager${NC}        ║"
 	echo -e "╚═══════════════════════════════╝"
 	echo -e "                ${DGRAY}by StressOzz v2.4${NC}"
-
-	check_podkop_status
-	check_byedpi_status
 
 	echo -e "${MAGENTA}--- ByeDPI ---${NC}"
 	echo -e "${YELLOW}Установленная версия:${NC} $BYEDPI_STATUS"
