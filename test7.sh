@@ -31,8 +31,7 @@ BYEDPI_URL="https://github.com/DPITrickster/ByeDPI-OpenWrt/releases/download/v0.
 install_AWG() {
 echo -e "\n${MAGENTA}Устанавливаем AWG + интерфейс${NC}"
 echo -e "${GREEN}Обновляем список пакетов${NC}"
-opkg update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; exit 1; }
-echo -e "${GREEN}Определяем архитектуру и версию OpenWrt${NC}"
+opkg update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; read -p "Нажмите Enter..." dummy; return; }
 PKGARCH=$(opkg print-architecture | awk 'BEGIN {max=0} {if ($3 > max) {max = $3; arch = $2}} END {print arch}')
 TARGET=$(ubus call system board | jsonfilter -e '@.release.target' | cut -d '/' -f1)
 SUBTARGET=$(ubus call system board | jsonfilter -e '@.release.target' | cut -d '/' -f2)
@@ -46,25 +45,23 @@ local pkgname=$1
 local filename="${pkgname}${PKGPOSTFIX}"
 local url="${BASE_URL}v${VERSION}/${filename}"
 echo -e "${CYAN}Скачиваем ${NC}$pkgname"
-if wget -O "$AWG_DIR/$filename" "$url" >/dev/null 2>&1 ; then
-echo -e "${CYAN}Устанавливаем ${NC}$pkgname"
-if opkg install "$AWG_DIR/$filename" >/dev/null 2>&1 ; then
-echo -e "$pkgname ${GREEN}установлен успешно${NC}"
-else
-echo -e "\n${RED}Ошибка установки $pkgname!${NC}\n"
-exit 1
-fi
-else
-echo -e "\n${RED}Ошибка! Не удалось скачать $file${NC}\n"
-exit 1
-fi
+    if wget -O "$AWG_DIR/$filename" "$url" >/dev/null 2>&1 ; then
+        echo -e "${CYAN}Устанавливаем ${NC}$pkgname"
+        if ! opkg install "$AWG_DIR/$filename" >/dev/null 2>&1 ; then
+            echo -e "\n${RED}Ошибка установки $pkgname!${NC}\n"
+            read -p "Нажмите Enter..." dummy; return
+        fi
+    else
+        echo -e "\n${RED}Ошибка! Не удалось скачать $filename${NC}\n"
+        read -p "Нажмите Enter..." dummy; return
+    fi
 }
 install_pkg "kmod-amneziawg"
 install_pkg "amneziawg-tools"
 install_pkg "luci-proto-amneziawg"
-echo -e "${GREEN}Русская локализацию установлена${NC}"
 install_pkg "luci-i18n-amneziawg-ru" >/dev/null 2>&1 || echo -e "${RED}Внимание: русская локализация не установлена (не критично)${NC}"
 rm -rf "$AWG_DIR"
+echo -e "${YELLOW}Перезапускаем сеть! Подождите...${NC}"
 /etc/init.d/network restart >/dev/null 2>&1
 echo -e "AmneziaWG ${GREEN}установлен!${NC}"
 
