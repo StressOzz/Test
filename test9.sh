@@ -44,7 +44,6 @@ install_pkg() {
 local pkgname=$1
 local filename="${pkgname}${PKGPOSTFIX}"
 local url="${BASE_URL}v${VERSION}/${filename}"
-echo -e "${CYAN}Скачиваем ${NC}$pkgname"
     if wget -O "$AWG_DIR/$filename" "$url" >/dev/null 2>&1 ; then
         echo -e "${CYAN}Устанавливаем ${NC}$pkgname"
         if ! opkg install "$AWG_DIR/$filename" >/dev/null 2>&1 ; then
