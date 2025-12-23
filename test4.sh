@@ -217,29 +217,29 @@ check_byedpi_status() {
 # ==========================================
 install_ByeDPI() {
     echo -e "\n${MAGENTA}Установка / обновление ByeDPI${NC}"
-    get_versions
 
-    [ -z "$LATEST_URL" ] && {
-		echo -e "\n${RED}Последняя версия ByeDPI не найдена. Установка пропущена.${NC}\n"
-		read -p "Нажмите Enter..." dummy
+    BYEDPI_VER="0.17.3-r1"
+    BYEDPI_ARCH="$LOCAL_ARCH"
+    BYEDPI_FILE="byedpi_${BYEDPI_VER}_${BYEDPI_ARCH}.ipk"
+    BYEDPI_URL="https://github.com/DPITrickster/ByeDPI-OpenWrt/releases/download/v0.17.3-24.10/${BYEDPI_FILE}"
+
+    echo -e "${GREEN}Скачиваем ${NC}${WHITE}$BYEDPI_FILE${NC}"
+    mkdir -p "$WORKDIR"
+    cd "$WORKDIR" || return
+
+    wget -q -U "Mozilla/5.0" -O "$BYEDPI_FILE" "$BYEDPI_URL" || {
+        echo -e "${RED}Ошибка загрузки ${NC}$BYEDPI_FILE"
+        read -p "Нажмите Enter..." dummy
         return
     }
 
-echo -e "${GREEN}Скачиваем ${NC}${WHITE}$LATEST_FILE${NC}"
-mkdir -p "$WORKDIR"
-cd "$WORKDIR" || return
-wget -q -U "Mozilla/5.0" -O "$LATEST_FILE" "$LATEST_URL" || {
-    echo -e "${RED}Ошибка загрузки ${NC}$LATEST_FILE"
-    read -p "Нажмите Enter..." dummy
-    return
-}
+    echo -e "${GREEN}Устанавливаем${NC} ${WHITE}$BYEDPI_FILE${NC}"
+    opkg install --force-reinstall "$BYEDPI_FILE" >/dev/null 2>&1
 
-
-	echo -e "${GREEN}Устанавливаем${NC} ${WHITE}$LATEST_FILE${NC}"
-    opkg install --force-reinstall "$LATEST_FILE" >/dev/null 2>&1
     rm -rf "$WORKDIR"
-	/etc/init.d/byedpi enable >/dev/null 2>&1
+    /etc/init.d/byedpi enable >/dev/null 2>&1
     /etc/init.d/byedpi start >/dev/null 2>&1
+
     echo -e "ByeDPI ${GREEN}успешно установлен / обновлён!${NC}\n"
     read -p "Нажмите Enter..." dummy
 }
