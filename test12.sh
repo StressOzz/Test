@@ -123,9 +123,8 @@ config section 'main'
 	option user_domain_list_type 'disabled'
 	option user_subnet_list_type 'disabled'
 	option mixed_proxy_enabled '0'
-	list community_lists 'hodca'
 	list community_lists 'russia_inside'
-	list community_lists 'meta'
+	list community_lists 'hodca'
 EOF
 
 echo -e "AWG ${GREEN}интегрирован в ${NC}Podkop${GREEN}.${NC}"
@@ -545,7 +544,7 @@ uninstall_podkop() {
 # ==========================================
 uninstall_AWG() {
 echo -e "\n${MAGENTA}Удаление AWG + интерфейс${NC}"
-opkg remove luci-i18n-amneziawg-ru luci-proto-amneziawg amneziawg-tools kmod-amneziawg >/dev/null 2>&1
+opkg remove --force-removal-of-dependent-packages luci-i18n-amneziawg-ru luci-proto-amneziawg amneziawg-tools kmod-amneziawg >/dev/null 2>&1
 echo -e "AWG ${GREEN}удалён.${NC}"
 echo -e "${MAGENTA}Удаляем интерфейс AWG${NC}"
 uci -q delete network.AWG
@@ -573,7 +572,7 @@ fi
 	echo -e "╔═══════════════════════════════╗"
 	echo -e "║         ${BLUE}Podkop Manager${NC}        ║"
 	echo -e "╚═══════════════════════════════╝"
-	echo -e "                ${DGRAY}by StressOzz v2.4${NC}"
+	echo -e "                ${DGRAY}by StressOzz v2.5${NC}"
 
 	echo -e "${MAGENTA}--- ByeDPI ---${NC}"
 	echo -e "${YELLOW}Установленная версия:${NC} $BYEDPI_STATUS"
