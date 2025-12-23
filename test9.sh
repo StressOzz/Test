@@ -545,10 +545,15 @@ uninstall_podkop() {
 # uninstall_AWG
 # ==========================================
 uninstall_AWG() {
-echo -e "\n${MAGENTA}Удаление AWG${NC}"
+echo -e "\n${MAGENTA}Удаление AWG + интерфейс${NC}"
 opkg remove luci-i18n-amneziawg-ru luci-proto-amneziawg amneziawg-tools kmod-amneziawg >/dev/null 2>&1
-    echo -e "AWG ${GREEN}удалён.${NC}\n"
-    read -p "Нажмите Enter..." dummy
+echo -e "AWG ${GREEN}удалён.${NC}\n"
+echo -e "${CYAN}Удаляем интерфейс AWG${NC}"
+uci -q delete network.AWG
+uci commit network
+/etc/init.d/network reload >/dev/null 2>&1
+echo -e "AWG ${GREEN}удалён.${NC}\n"
+read -p "Нажмите Enter..." dummy
 }
 
 # ==========================================
