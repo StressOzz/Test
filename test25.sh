@@ -179,12 +179,14 @@ hijack_disable() {
 toggle_hijack() {
     if uci show firewall | grep -q "name='DNS Hijack'"; then
         echo -e "\n${MAGENTA}Выключаем DNS Hijacking${NC}"
+        echo -e "${CYAN}Удаляем правило из ${NC}Firewall"
         hijack_disable
         
-echo -e "${CYAN}Добавляем правило в ${NC}Firewall"
+
         ACTION="${RED}выключен${NC}"
     else
         echo -e "\n${MAGENTA}Включаем DNS Hijacking${NC}"
+        echo -e "${CYAN}Добавляем правило в ${NC}Firewall"
         hijack_disable
         uci add firewall redirect >/dev/null 2>&1
         uci set firewall.@redirect[-1].name='DNS Hijack'
@@ -196,7 +198,6 @@ echo -e "${CYAN}Добавляем правило в ${NC}Firewall"
         uci set firewall.@redirect[-1].proto='tcp udp'
         ACTION="${GREEN}включён${NC}"
     fi
-    echo -e "${CYAN}Удаляем правило из ${NC}Firewall"
     echo -e "${CYAN}Применяем новые настройки${NC}"
 
     uci commit firewall >/dev/null 2>&1
