@@ -134,7 +134,7 @@ printf "%s\n" "--new" "--filter-udp=19294-19344,50000-50100" "--filter-l7=discor
 DoH_menu() { while true; do get_doh_status; clear; echo -e "${MAGENTA}Меню DNS over HTTPS${NC}\n"; opkg list-installed | grep -q '^https-dns-proxy ' && doh_st="Удалить" || doh_st="Установить"
 [ -n "$DOH_STATUS" ] && opkg list-installed | grep -q '^https-dns-proxy ' && echo -e "${YELLOW}DNS over HTTPS: ${NC}$DOH_STATUS"
 
-echo -e "${YELLOW}DNS Hijack: ${GREEN}$(hijack_status)"
+hijack_status_top
 
 echo -e "\n${CYAN}1)${GREEN} $doh_st ${NC}DNS over HTTPS\n${CYAN}2)${GREEN} Настроить ${NC}Comss DNS\n${CYAN}3)${GREEN} Настроить ${NC}Xbox DNS\n${CYAN}4)${GREEN} Настроить ${NC}dns.malw.link"
 echo -ne "${CYAN}5)${GREEN} Настроить ${NC}dns.malw.link (CloudFlare)\n${CYAN}6)${GREEN} Вернуть ${NC}настройки по умолчанию\n${CYAN}0) ${NC}$(hijack_status)${NC}\n${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "
@@ -151,23 +151,22 @@ echo -e "${CYAN}Устанавливаем ${NC}https-dns-proxy"; opkg install h
 echo -e "${CYAN}Устанавливаем ${NC}luci-app-https-dns-proxy"; opkg install luci-app-https-dns-proxy >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при установки!${NC}\n"; read -p "Нажмите Enter..." dummy; return; }
 echo -e "DNS over HTTPS${GREEN} установлен!${NC}\n"; read -p "Нажмите Enter..." dummy; fi; }; doh_install() { [ -f "$fileDoH" ] && return 0; echo -e "\n${RED}DNS over HTTPS не установлен!${NC}\n"; read -p "Нажмите Enter..." dummy; return 1; }
 
-# тихое удаление всех правил DNS Hijack
-hijack_disable_quiet() {
+
+hijack_disable() {
     while uci show firewall | grep -q "name='DNS Hijack'"; do
         RULE=$(uci show firewall | grep "name='DNS Hijack'" | head -n1 | cut -d[ -f2 | cut -d] -f1)
         uci -q delete firewall.@redirect[$RULE]
     done
 }
 
-# toggle DNS Hijack
 toggle_hijack() {
     if uci show firewall | grep -q "name='DNS Hijack'"; then
         echo -e "\n${MAGENTA}Выключаем DNS Hijacking${NC}"
-        hijack_disable_quiet
+        hijack_disable
         ACTION="${RED}выключен${NC}"
     else
         echo -e "\n${MAGENTA}Включаем DNS Hijacking${NC}"
-        hijack_disable_quiet    # чистим старые правила
+        hijack_disable
         uci add firewall redirect
         uci set firewall.@redirect[-1].name='DNS Hijack'
         uci set firewall.@redirect[-1].src='lan'
@@ -189,12 +188,17 @@ toggle_hijack() {
     read -p "Нажмите Enter..." dummy
 }
 
-# функция статуса для показа рядом с пунктом меню
 hijack_status() {
     uci show firewall | grep -q "name='DNS Hijack'" && echo -e "${GREEN}Выключить${NC} DNS Hijack" || echo -e "${GREEN}Включить${NC} DNS Hijack"
 }
 
-
+hijack_status_top() {
+    if uci show firewall | grep -q "name='DNS Hijack'"; then
+        echo -e "${YELLOW}DNS Hijack: ${GREEN}включён${NC}"
+    else
+        echo -e "${YELLOW}DNS Hijack: ${RED}выключен${NC}"
+    fi
+}
 
 
 doh_set=$(printf "%s\n" "config main 'config'" "	option canary_domains_icloud '1'" "	option canary_domains_mozilla '1'" "	option dnsmasq_config_update '*'" "	option force_dns '1'" "	list force_dns_port '53'" "	list force_dns_port '853'" "	list force_dns_src_interface 'lan'" \
