@@ -150,7 +150,15 @@ echo -e "${CYAN}Устанавливаем ${NC}https-dns-proxy"; opkg install h
 echo -e "${CYAN}Устанавливаем ${NC}luci-app-https-dns-proxy"; opkg install luci-app-https-dns-proxy >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при установки!${NC}\n"; read -p "Нажмите Enter..." dummy; return; }
 echo -e "DNS over HTTPS${GREEN} установлен!${NC}\n"; read -p "Нажмите Enter..." dummy; fi; }; doh_install() { [ -f "$fileDoH" ] && return 0; echo -e "\n${RED}DNS over HTTPS не установлен!${NC}\n"; read -p "Нажмите Enter..." dummy; return 1; }
 
-hijack_status() { uci show firewall | grep -q "DNS Hijack" && echo -e "${GREEN}Выключить${NC} DNS Hijack" || echo -e "${GREEN}Включить${NC} DNS Hijack"; }
+hijack_status() {
+    # проверяем реально ли есть redirect с именем DNS Hijack
+    if uci show firewall | grep -E '^firewall.@redirect=.*name=.*DNS Hijack' >/dev/null 2>&1; then
+        echo -e "${GREEN}Выключить${NC} DNS Hijack"
+    else
+        echo -e "${GREEN}Включить${NC} DNS Hijack"
+    fi
+}
+
 
 toggle_hijack() {
     # проверяем есть ли хотя бы одно правило DNS Hijack
