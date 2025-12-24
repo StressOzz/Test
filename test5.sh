@@ -136,7 +136,7 @@ DoH_menu() { while true; do get_doh_status; clear; echo -e "${MAGENTA}Меню D
 uci show firewall | grep -q "DNS Hijack" && echo -e "${YELLOW}DNS Hijack: ${GREEN}включён"
 
 echo -e "\n${CYAN}1)${GREEN} $doh_st ${NC}DNS over HTTPS\n${CYAN}2)${GREEN} Настроить ${NC}Comss DNS\n${CYAN}3)${GREEN} Настроить ${NC}Xbox DNS\n${CYAN}4)${GREEN} Настроить ${NC}dns.malw.link"
-echo -ne "${CYAN}5)${GREEN} Настроить ${NC}dns.malw.link (CloudFlare)\n${CYAN}6)${GREEN} Вернуть ${NC}настройки по умолчанию\n${CYAN}0) ${NC}hijack_status\n${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "
+echo -ne "${CYAN}5)${GREEN} Настроить ${NC}dns.malw.link (CloudFlare)\n${CYAN}6)${GREEN} Вернуть ${NC}настройки по умолчанию\n${CYAN}0) ${NC}$hijack_status\n${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "
 read -r choiceDOH; [ -z "$choiceDOH" ] && return; case "$choiceDOH" in 1) D_o_H ;; 2) doh_install && setup_doh "$doh_comss" "Comss.one DNS" ;; 3) doh_install && setup_doh "$doh_xbox" "Xbox DNS" ;; 4) doh_install && setup_doh "$doh_query" "dns.malw.link" ;;
 5) doh_install && setup_doh "$doh_queryCF" "dns.malw.link (CloudFlare)" ;; 6) doh_install && setup_doh "$doh_def" "настройки по умолчанию" ;; 0) toggle_hijack ;; *) return ;; esac; done; }
 setup_doh() { local config="$1"; local name="$2"; echo -e "\n${MAGENTA}Настраиваем DNS over HTTPS${NC}\n${CYAN}Настраиваем ${NC}$name\n${CYAN}Применяем новые настройки${NC}"; rm -f "$fileDoH"; printf '%s\n' "$doh_set" "$config" > "$fileDoH"
@@ -161,9 +161,9 @@ echo -e "\n${MAGENTA}Включаем DNS Hijacking${NC}"
         uci delete firewall.@redirect[$RULE_ID]
         
 echo -e "${CYAN}Применяем новые настройки${NC}"
-  
 hijack_reload
-echo -e "DNS Hijacking ${GREEN}включён${NC}"
+echo -e "DNS Hijacking ${GREEN}включён${NC}\n"
+read -p "Нажмите Enter..." dummy
 
     else
     echo -e "${MAGENTA}Выключаем DNS Hijacking${NC}"
@@ -178,12 +178,9 @@ echo -e "DNS Hijacking ${GREEN}включён${NC}"
 
 echo -e "${CYAN}Применяем новые настройки${NC}"
 hijack_reload
-echo -e "DNS Hijacking ${GREEN}выключён${NC}"
+echo -e "DNS Hijacking ${GREEN}выключён${NC}\n"
+read -p "Нажмите Enter..." dummy
     fi
-
-
-reload_Hijack() { uci commit firewall >/dev/null 2>&1; /etc/init.d/firewall restart >/dev/null 2>&1; /etc/init.d/dnsmasq restart >/dev/null 2>&1
-/etc/init.d/https-dns-proxy reload >/dev/null 2>&1; /etc/init.d/https-dns-proxy restart >/dev/null 2>&1; }
 
 
 }
