@@ -150,29 +150,20 @@ echo -e "${CYAN}Устанавливаем ${NC}https-dns-proxy"; opkg install h
 echo -e "${CYAN}Устанавливаем ${NC}luci-app-https-dns-proxy"; opkg install luci-app-https-dns-proxy >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при установки!${NC}\n"; read -p "Нажмите Enter..." dummy; return; }
 echo -e "DNS over HTTPS${GREEN} установлен!${NC}\n"; read -p "Нажмите Enter..." dummy; fi; }; doh_install() { [ -f "$fileDoH" ] && return 0; echo -e "\n${RED}DNS over HTTPS не установлен!${NC}\n"; read -p "Нажмите Enter..." dummy; return 1; }
 
-hijack_disable() {
-    echo -e "\n${MAGENTA}Выключаем DNS Hijacking${NC}"
-
-    # удаляем все правила с именем DNS Hijack
+# отключение без паузы
+hijack_disable_quiet() {
     while uci show firewall | grep -q "name='DNS Hijack'"; do
         RULE=$(uci show firewall | grep "name='DNS Hijack'" | head -n1 | cut -d[ -f2 | cut -d] -f1)
         uci -q delete firewall.@redirect[$RULE]
     done
-
-    # применяем настройки
-    uci commit firewall >/dev/null 2>&1
-    /etc/init.d/firewall restart >/dev/null 2>&1
-    /etc/init.d/dnsmasq restart >/dev/null 2>&1
-    /etc/init.d/https-dns-proxy restart >/dev/null 2>&1
-
-    echo -e "DNS Hijacking ${GREEN}выключен${NC}\n"
-    read -p "Нажмите Enter..." dummy
 }
+
+# функция включения
 hijack_enable() {
     echo -e "\n${MAGENTA}Включаем DNS Hijacking${NC}"
 
-    # удаляем старые правила, чтобы не было дубликатов
-    hijack_disable >/dev/null 2>&1
+    # удаляем старые правила без паузы
+    hijack_disable_quiet
 
     # создаём новое правило
     uci add firewall redirect
@@ -193,6 +184,19 @@ hijack_enable() {
     echo -e "DNS Hijacking ${GREEN}включён${NC}\n"
     read -p "Нажмите Enter..." dummy
 }
+
+# функция выключения с паузой
+hijack_disable() {
+    echo -e "\n${MAGENTA}Выключаем DNS Hijacking${NC}"
+    hijack_disable_quiet
+    uci commit firewall >/dev/null 2>&1
+    /etc/init.d/firewall restart >/dev/null 2>&1
+    /etc/init.d/dnsmasq restart >/dev/null 2>&1
+    /etc/init.d/https-dns-proxy restart >/dev/null 2>&1
+    echo -e "DNS Hijacking ${RED}выключен${NC}\n"
+    read -p "Нажмите Enter..." dummy
+}
+
 hijack_status() {
     uci show firewall | grep -q "name='DNS Hijack'" && echo -e "${GREEN}Включен${NC}" || echo -e "${RED}Выключен${NC}"
 }
