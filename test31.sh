@@ -181,7 +181,7 @@ toggle_hijack() {
         echo -e "\n${MAGENTA}Выключаем DNS Hijacking${NC}"
         echo -e "${CYAN}Удаляем правило из ${NC}Firewall"
         hijack_disable
-        ACTION="выключен"
+        ACTION="выключен!"
     else
         echo -e "\n${MAGENTA}Включаем DNS Hijacking${NC}"
         echo -e "${CYAN}Добавляем правило в ${NC}Firewall"
@@ -194,7 +194,7 @@ toggle_hijack() {
         uci set firewall.@redirect[-1].dest_ip='127.0.0.1'
         uci set firewall.@redirect[-1].dest_port='53'
         uci set firewall.@redirect[-1].proto='tcp udp'
-        ACTION="включён"
+        ACTION="включён!"
     fi
     echo -e "${CYAN}Применяем новые настройки${NC}"
     uci commit firewall >/dev/null 2>&1
