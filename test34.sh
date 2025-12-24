@@ -168,17 +168,11 @@ hijack_status_top() {
     fi
 }
 
-
-hijack_disable() {
-    uci -q del firewall.dns_hijack
-}
-
-
 toggle_hijack() {
     if uci -q show firewall.dns_hijack >/dev/null; then
         echo -e "\n${MAGENTA}Выключаем DNS Hijacking${NC}"
         echo -e "${CYAN}Удаляем правило из Firewall${NC}"
-        hijack_disable
+        uci -q del firewall.dns_hijack
         ACTION="выключен!"
     else
         echo -e "\n${MAGENTA}Включаем DNS Hijacking${NC}"
