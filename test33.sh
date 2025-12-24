@@ -161,22 +161,21 @@ print_doh_status() {
 }
 
 hijack_status_top() {
-    if uci show firewall | grep -q "name='DNS Hijack'"; then
+    if uci -q show firewall.dns_hijack >/dev/null; then
         echo -e "${YELLOW}DNS Hijacking: ${GREEN}включён${NC}"
     else
         echo -e "${YELLOW}DNS Hijacking: ${RED}выключен${NC}"
     fi
 }
 
+
 hijack_disable() {
-    while uci show firewall | grep -q "name='DNS Hijack'"; do
-        RULE=$(uci show firewall | grep "name='DNS Hijack'" | head -n1 | cut -d[ -f2 | cut -d] -f1)
-        uci -q delete firewall.@redirect[$RULE]
-    done
+    uci -q del firewall.dns_hijack
 }
 
+
 toggle_hijack() {
-    if uci show firewall | grep -q "name='DNS Hijack'"; then
+    if uci -q show firewall.dns_hijack >/dev/null; then
         echo -e "\n${MAGENTA}Выключаем DNS Hijacking${NC}"
         echo -e "${CYAN}Удаляем правило из Firewall${NC}"
         hijack_disable
@@ -185,16 +184,15 @@ toggle_hijack() {
         echo -e "\n${MAGENTA}Включаем DNS Hijacking${NC}"
         echo -e "${CYAN}Добавляем правило в Firewall${NC}"
 
-        hijack_disable
-
-        uci add firewall redirect >/dev/null 2>&1
-        uci set firewall.@redirect[-1].name='DNS Hijack'
-        uci set firewall.@redirect[-1].family='any'
-        uci set firewall.@redirect[-1].proto='tcp udp'
-        uci set firewall.@redirect[-1].src='lan'
-        uci set firewall.@redirect[-1].src_dport='53'
-        uci set firewall.@redirect[-1].dest_port='53'
-        uci set firewall.@redirect[-1].target='DNAT'
+        uci -q del firewall.dns_hijack
+        uci set firewall.dns_hijack="redirect"
+        uci set firewall.dns_hijack.name="DNS Hijack"
+        uci set firewall.dns_hijack.family="any"
+        uci set firewall.dns_hijack.proto="tcp udp"
+        uci set firewall.dns_hijack.src="lan"
+        uci set firewall.dns_hijack.src_dport="53"
+        uci set firewall.dns_hijack.dest_port="53"
+        uci set firewall.dns_hijack.target="DNAT"
 
         ACTION="включён!"
     fi
@@ -208,12 +206,13 @@ toggle_hijack() {
 }
 
 hijack_status() {
-    if uci show firewall | grep -q "name='DNS Hijack'"; then
+    if uci -q show firewall.dns_hijack >/dev/null; then
         echo -e "${GREEN}Выключить${NC} DNS Hijacking"
     else
         echo -e "${GREEN}Включить${NC} DNS Hijacking"
     fi
 }
+
 
 
 doh_set=$(printf "%s\n" "config main 'config'" "	option canary_domains_icloud '1'" "	option canary_domains_mozilla '1'" "	option dnsmasq_config_update '*'" "	option force_dns '1'" "	list force_dns_port '53'" "	list force_dns_port '853'" "	list force_dns_src_interface 'lan'" \
