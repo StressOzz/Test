@@ -153,16 +153,18 @@ echo -e "DNS over HTTPS${GREEN} установлен!${NC}\n"; read -p "Нажм
 hijack_status() { uci show firewall | grep -q "DNS Hijack" && echo -e "${GREEN}Выключить${NC} DNS Hijack" || echo -e "${GREEN}Включить${NC} DNS Hijack"; }
 
 toggle_hijack() {
-    # проверяем, есть ли правило Hijack
-    RULE_ID=$(uci show firewall | grep "=redirect" | grep "DNS Hijack" | cut -d[ -f2 | cut -d] -f1)
+    # ищем все правила с именем DNS Hijack
+    RULES=$(uci show firewall | grep "=redirect" | grep "DNS Hijack" | cut -d[ -f2 | cut -d] -f1)
 
-    if [ -n "$RULE_ID" ]; then
-        # правило есть → выключаем
+    if [ -n "$RULES" ]; then
+        # есть хотя бы одно правило → выключаем все
         echo -e "\n${MAGENTA}Выключаем DNS Hijacking${NC}"
-        uci delete firewall.@redirect[$RULE_ID]
+        for ID in $RULES; do
+            uci delete firewall.@redirect[$ID]
+        done
         ACTION="выключён"
     else
-        # правила нет → включаем
+        # правил нет → включаем
         echo -e "\n${MAGENTA}Включаем DNS Hijacking${NC}"
         uci add firewall redirect
         uci set firewall.@redirect[-1].name='DNS Hijack'
@@ -175,21 +177,16 @@ toggle_hijack() {
         ACTION="включён"
     fi
 
-    # Применяем новые настройки
+    # Применяем настройки
     echo -e "${CYAN}Применяем новые настройки${NC}"
     uci commit firewall >/dev/null 2>&1
     /etc/init.d/firewall restart >/dev/null 2>&1
     /etc/init.d/dnsmasq restart >/dev/null 2>&1
     /etc/init.d/https-dns-proxy restart >/dev/null 2>&1
 
-    # Финальное сообщение
     echo -e "DNS Hijacking ${GREEN}${ACTION}${NC}\n"
     read -p "Нажмите Enter..." dummy
 }
-
-
-
-
 
 
 
