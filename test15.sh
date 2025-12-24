@@ -133,12 +133,12 @@ printf "%s\n" "--new" "--filter-udp=19294-19344,50000-50100" "--filter-l7=discor
 # ==========================================
 DoH_menu() { while true; do get_doh_status; clear; echo -e "${MAGENTA}Меню DNS over HTTPS${NC}\n"; opkg list-installed | grep -q '^https-dns-proxy ' && doh_st="Удалить" || doh_st="Установить"
 [ -n "$DOH_STATUS" ] && opkg list-installed | grep -q '^https-dns-proxy ' && echo -e "${YELLOW}DNS over HTTPS: ${NC}$DOH_STATUS"
-uci show firewall | grep -q "DNS Hijack" && echo -e "${YELLOW}DNS Hijack: ${GREEN}включён"
+echo -e "${YELLOW}DNS Hijack: ${GREEN}$(hijack_status)"
 
 echo -e "\n${CYAN}1)${GREEN} $doh_st ${NC}DNS over HTTPS\n${CYAN}2)${GREEN} Настроить ${NC}Comss DNS\n${CYAN}3)${GREEN} Настроить ${NC}Xbox DNS\n${CYAN}4)${GREEN} Настроить ${NC}dns.malw.link"
-echo -ne "${CYAN}5)${GREEN} Настроить ${NC}dns.malw.link (CloudFlare)\n${CYAN}6)${GREEN} Вернуть ${NC}настройки по умолчанию\n${CYAN}0) hijack${NC} $hijack_status \n${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "
+echo -ne "${CYAN}5)${GREEN} Настроить ${NC}dns.malw.link (CloudFlare)\n${CYAN}6)${GREEN} Вернуть ${NC}настройки по умолчанию\n${CYAN}9) hijack ON \n${CYAN}0) hijack OFF${NC}\n${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "
 read -r choiceDOH; [ -z "$choiceDOH" ] && return; case "$choiceDOH" in 1) D_o_H ;; 2) doh_install && setup_doh "$doh_comss" "Comss.one DNS" ;; 3) doh_install && setup_doh "$doh_xbox" "Xbox DNS" ;; 4) doh_install && setup_doh "$doh_query" "dns.malw.link" ;;
-5) doh_install && setup_doh "$doh_queryCF" "dns.malw.link (CloudFlare)" ;; 6) doh_install && setup_doh "$doh_def" "настройки по умолчанию" ;; 0) toggle_hijack ;; *) return ;; esac; done; }
+5) doh_install && setup_doh "$doh_queryCF" "dns.malw.link (CloudFlare)" ;; 6) doh_install && setup_doh "$doh_def" "настройки по умолчанию" ;; 9) hijack_enable ;; 0) hijack_disable ;; *) return ;; esac; done; }
 setup_doh() { local config="$1"; local name="$2"; echo -e "\n${MAGENTA}Настраиваем DNS over HTTPS${NC}\n${CYAN}Настраиваем ${NC}$name\n${CYAN}Применяем новые настройки${NC}"; rm -f "$fileDoH"; printf '%s\n' "$doh_set" "$config" > "$fileDoH"
 /etc/init.d/https-dns-proxy reload >/dev/null 2>&1; /etc/init.d/https-dns-proxy restart >/dev/null 2>&1; echo -e "DNS over HTTP ${GREEN}настроен!${NC}\n"; read -p "Нажмите Enter..." dummy; }
 get_doh_status() { DOH_STATUS=""; [ ! -f "$fileDoH" ] && return; if grep -q "dns.comss.one" "$fileDoH"; then DOH_STATUS="Comss DNS"; elif grep -q "xbox-dns.ru" "$fileDoH"; then DOH_STATUS="Xbox DNS"; elif grep -q "5u35p8m9i7.cloudflare-gateway.com" "$fileDoH"; then
@@ -150,34 +150,14 @@ echo -e "${CYAN}Устанавливаем ${NC}https-dns-proxy"; opkg install h
 echo -e "${CYAN}Устанавливаем ${NC}luci-app-https-dns-proxy"; opkg install luci-app-https-dns-proxy >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при установки!${NC}\n"; read -p "Нажмите Enter..." dummy; return; }
 echo -e "DNS over HTTPS${GREEN} установлен!${NC}\n"; read -p "Нажмите Enter..." dummy; fi; }; doh_install() { [ -f "$fileDoH" ] && return 0; echo -e "\n${RED}DNS over HTTPS не установлен!${NC}\n"; read -p "Нажмите Enter..." dummy; return 1; }
 
-hijack_status() {
-    # если правило есть — показываем "Включён", иначе пусто
-    uci show firewall | grep -qE '^firewall.@redirect=.*name=.*DNS Hijack' && echo "[включён]"
-}
-toggle_hijack() {
-    echo -e "\nПереключаем DNS Hijacking..."
+hijack_disable() {
+    echo -e "\n${MAGENTA}Выключаем DNS Hijacking${NC}"
 
-    # пока есть правило DNS Hijack — удаляем все подряд
-    while uci show firewall | grep -qE '^firewall.@redirect=.*name=.*DNS Hijack'; do
-        RULE=$(uci show firewall | grep -E '^firewall.@redirect=.*name=.*DNS Hijack' | head -n1 | cut -d[ -f2 | cut -d] -f1)
-        uci delete firewall.@redirect[$RULE]
+    # удаляем все правила с именем DNS Hijack
+    while uci show firewall | grep -q "name='DNS Hijack'"; do
+        RULE=$(uci show firewall | grep "name='DNS Hijack'" | head -n1 | cut -d[ -f2 | cut -d] -f1)
+        uci -q delete firewall.@redirect[$RULE]
     done
-
-    # если правила были — значит выключаем, иначе включаем новое
-    if [ -z "$(uci show firewall | grep -E '^firewall.@redirect=.*name=.*DNS Hijack')" ]; then
-        # включаем одно правило
-        uci add firewall redirect
-        uci set firewall.@redirect[-1].name='DNS Hijack'
-        uci set firewall.@redirect[-1].src='lan'
-        uci set firewall.@redirect[-1].src_dport='53'
-        uci set firewall.@redirect[-1].dest='lan'
-        uci set firewall.@redirect[-1].dest_ip='127.0.0.1'
-        uci set firewall.@redirect[-1].dest_port='53'
-        uci set firewall.@redirect[-1].proto='tcp udp'
-        ACTION="включён"
-    else
-        ACTION="выключён"
-    fi
 
     # применяем настройки
     uci commit firewall >/dev/null 2>&1
@@ -185,9 +165,38 @@ toggle_hijack() {
     /etc/init.d/dnsmasq restart >/dev/null 2>&1
     /etc/init.d/https-dns-proxy restart >/dev/null 2>&1
 
-    echo -e "DNS Hijacking ${ACTION}\n"
+    echo -e "DNS Hijacking ${GREEN}выключен${NC}\n"
     read -p "Нажмите Enter..." dummy
 }
+hijack_enable() {
+    echo -e "\n${MAGENTA}Включаем DNS Hijacking${NC}"
+
+    # удаляем старые правила, чтобы не было дубликатов
+    hijack_disable >/dev/null 2>&1
+
+    # создаём новое правило
+    uci add firewall redirect
+    uci set firewall.@redirect[-1].name='DNS Hijack'
+    uci set firewall.@redirect[-1].src='lan'
+    uci set firewall.@redirect[-1].src_dport='53'
+    uci set firewall.@redirect[-1].dest='lan'
+    uci set firewall.@redirect[-1].dest_ip='127.0.0.1'
+    uci set firewall.@redirect[-1].dest_port='53'
+    uci set firewall.@redirect[-1].proto='tcp udp'
+
+    # применяем настройки
+    uci commit firewall >/dev/null 2>&1
+    /etc/init.d/firewall restart >/dev/null 2>&1
+    /etc/init.d/dnsmasq restart >/dev/null 2>&1
+    /etc/init.d/https-dns-proxy restart >/dev/null 2>&1
+
+    echo -e "DNS Hijacking ${GREEN}включён${NC}\n"
+    read -p "Нажмите Enter..." dummy
+}
+hijack_status() {
+    uci show firewall | grep -q "name='DNS Hijack'" && echo -e "${GREEN}Включен${NC}" || echo -e "${RED}Выключен${NC}"
+}
+
 
 
 
