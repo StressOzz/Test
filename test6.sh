@@ -151,23 +151,21 @@ echo -e "${CYAN}Устанавливаем ${NC}luci-app-https-dns-proxy"; opkg 
 echo -e "DNS over HTTPS${GREEN} установлен!${NC}\n"; read -p "Нажмите Enter..." dummy; fi; }; doh_install() { [ -f "$fileDoH" ] && return 0; echo -e "\n${RED}DNS over HTTPS не установлен!${NC}\n"; read -p "Нажмите Enter..." dummy; return 1; }
 
 hijack_status() { uci show firewall | grep -q "DNS Hijack" && echo -e "${GREEN}Выключить${NC} DNS Hijack" || echo -e "${GREEN}Включить${NC} DNS Hijack"; }
-hijack_reload() { uci commit firewall >/dev/null 2>&1; /etc/init.d/firewall restart >/dev/null 2>&1; /etc/init.d/dnsmasq restart >/dev/null 2>&1
 /etc/init.d/https-dns-proxy reload >/dev/null 2>&1; /etc/init.d/https-dns-proxy restart >/dev/null 2>&1; }
 
 toggle_hijack() {
-echo -e "\n${MAGENTA}Включаем DNS Hijacking${NC}"
+    # проверяем, есть ли правило Hijack
     RULE_ID=$(uci show firewall | grep "=redirect" | grep "DNS Hijack" | cut -d[ -f2 | cut -d] -f1)
-    if [ -n "$RULE_ID" ]; then
-        uci delete firewall.@redirect[$RULE_ID]
-        
-echo -e "${CYAN}Применяем новые настройки${NC}"
-hijack_reload
-echo -e "DNS Hijacking ${GREEN}включён${NC}\n"
-read -p "Нажмите Enter..." dummy
 
+    if [ -n "$RULE_ID" ]; then
+        # правило есть → выключаем
+        echo -e "\n${MAGENTA}Выключаем DNS Hijacking${NC}"
+        uci delete firewall.@redirect[$RULE_ID]
+        ACTION="выключён"
     else
-    echo -e "${MAGENTA}Выключаем DNS Hijacking${NC}"
-        uci add firewall redirect >/dev/null 2>&1
+        # правила нет → включаем
+        echo -e "\n${MAGENTA}Включаем DNS Hijacking${NC}"
+        uci add firewall redirect
         uci set firewall.@redirect[-1].name='DNS Hijack'
         uci set firewall.@redirect[-1].src='lan'
         uci set firewall.@redirect[-1].src_dport='53'
@@ -175,15 +173,21 @@ read -p "Нажмите Enter..." dummy
         uci set firewall.@redirect[-1].dest_ip='127.0.0.1'
         uci set firewall.@redirect[-1].dest_port='53'
         uci set firewall.@redirect[-1].proto='tcp udp'
-
-echo -e "${CYAN}Применяем новые настройки${NC}"
-hijack_reload
-echo -e "DNS Hijacking ${GREEN}выключён${NC}\n"
-read -p "Нажмите Enter..." dummy
+        ACTION="включён"
     fi
 
+    # Применяем новые настройки
+    echo -e "${CYAN}Применяем новые настройки${NC}"
+    uci commit firewall >/dev/null 2>&1
+    /etc/init.d/firewall restart >/dev/null 2>&1
+    /etc/init.d/dnsmasq restart >/dev/null 2>&1
+    /etc/init.d/https-dns-proxy restart >/dev/null 2>&1
 
+    # Финальное сообщение
+    echo -e "DNS Hijacking ${GREEN}${ACTION}${NC}\n"
+    read -p "Нажмите Enter..." dummy
 }
+
 
 
 
