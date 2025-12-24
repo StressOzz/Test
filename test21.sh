@@ -154,9 +154,17 @@ echo -e "DNS over HTTPS${GREEN} установлен!${NC}\n"; read -p "Нажм
 print_doh_status() {
     get_doh_status
     if ! opkg list-installed | grep -q '^https-dns-proxy '; then
-        echo -e "DNS over HTTPS: ${RED}не установлен${NC}"
+        echo -e "${YELLOW}DNS over HTTPS: ${RED}не установлен${NC}"
     else
-        echo -e "DNS over HTTPS: ${YELLOW}${DOH_STATUS}${NC}"
+        echo -e "${YELLOW}DNS over HTTPS: ${NC}${DOH_STATUS}"
+    fi
+}
+
+hijack_status_top() {
+    if uci show firewall | grep -q "name='DNS Hijack'"; then
+        echo -e "${YELLOW}DNS Hijack: ${GREEN}включён${NC}"
+    else
+        echo -e "${YELLOW}DNS Hijack: ${RED}выключен${NC}"
     fi
 }
 
@@ -172,11 +180,13 @@ toggle_hijack() {
     if uci show firewall | grep -q "name='DNS Hijack'"; then
         echo -e "\n${MAGENTA}Выключаем DNS Hijacking${NC}"
         hijack_disable
+        
+echo -e "${CYAN}Добавляем правило в ${NC}Firewall"
         ACTION="${RED}выключен${NC}"
     else
         echo -e "\n${MAGENTA}Включаем DNS Hijacking${NC}"
         hijack_disable
-        uci add firewall redirect
+        uci add firewall redirect >/dev/null 2>&1
         uci set firewall.@redirect[-1].name='DNS Hijack'
         uci set firewall.@redirect[-1].src='lan'
         uci set firewall.@redirect[-1].src_dport='53'
@@ -186,8 +196,9 @@ toggle_hijack() {
         uci set firewall.@redirect[-1].proto='tcp udp'
         ACTION="${GREEN}включён${NC}"
     fi
+    echo -e "${CYAN}Удаляем правило из ${NC}Firewall"
+    echo -e "${CYAN}Применяем новые настройки${NC}"
 
-    # применяем настройки
     uci commit firewall >/dev/null 2>&1
     /etc/init.d/firewall restart >/dev/null 2>&1
     /etc/init.d/dnsmasq restart >/dev/null 2>&1
@@ -201,13 +212,6 @@ hijack_status() {
     uci show firewall | grep -q "name='DNS Hijack'" && echo -e "${GREEN}Выключить${NC} DNS Hijack" || echo -e "${GREEN}Включить${NC} DNS Hijack"
 }
 
-hijack_status_top() {
-    if uci show firewall | grep -q "name='DNS Hijack'"; then
-        echo -e "${YELLOW}DNS Hijack: ${GREEN}включён${NC}"
-    else
-        echo -e "${YELLOW}DNS Hijack: ${RED}выключен${NC}"
-    fi
-}
 
 
 doh_set=$(printf "%s\n" "config main 'config'" "	option canary_domains_icloud '1'" "	option canary_domains_mozilla '1'" "	option dnsmasq_config_update '*'" "	option force_dns '1'" "	list force_dns_port '53'" "	list force_dns_port '853'" "	list force_dns_src_interface 'lan'" \
