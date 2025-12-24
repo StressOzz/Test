@@ -162,9 +162,9 @@ print_doh_status() {
 
 hijack_status_top() {
     if uci show firewall | grep -q "name='DNS Hijack'"; then
-        echo -e "${YELLOW}DNS Hijack:     ${GREEN}включён!${NC}"
+        echo -e "${YELLOW}DNS Hijack:     ${GREEN}включён${NC}"
     else
-        echo -e "${YELLOW}DNS Hijack:     ${GREEN}выключен!${NC}"
+        echo -e "${YELLOW}DNS Hijack:     ${RED}выключен${NC}"
     fi
 }
 
@@ -181,9 +181,7 @@ toggle_hijack() {
         echo -e "\n${MAGENTA}Выключаем DNS Hijacking${NC}"
         echo -e "${CYAN}Удаляем правило из ${NC}Firewall"
         hijack_disable
-        
-
-        ACTION="${RED}выключен${NC}"
+        ACTION="выключен"
     else
         echo -e "\n${MAGENTA}Включаем DNS Hijacking${NC}"
         echo -e "${CYAN}Добавляем правило в ${NC}Firewall"
@@ -196,16 +194,14 @@ toggle_hijack() {
         uci set firewall.@redirect[-1].dest_ip='127.0.0.1'
         uci set firewall.@redirect[-1].dest_port='53'
         uci set firewall.@redirect[-1].proto='tcp udp'
-        ACTION="${GREEN}включён${NC}"
+        ACTION="включён"
     fi
     echo -e "${CYAN}Применяем новые настройки${NC}"
-
     uci commit firewall >/dev/null 2>&1
     /etc/init.d/firewall restart >/dev/null 2>&1
     /etc/init.d/dnsmasq restart >/dev/null 2>&1
     /etc/init.d/https-dns-proxy restart >/dev/null 2>&1
-
-    echo -e "DNS Hijacking ${ACTION}\n"
+    echo -e "DNS Hijacking ${GREEN}${ACTION}${NC}\n"
     read -p "Нажмите Enter..." dummy
 }
 
