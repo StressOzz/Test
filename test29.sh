@@ -162,9 +162,9 @@ print_doh_status() {
 
 hijack_status_top() {
     if uci show firewall | grep -q "name='DNS Hijack'"; then
-        echo -e "${YELLOW}DNS Hijack:     ${GREEN}включён${NC}"
+        echo -e "${YELLOW}DNS Hijacking:   ${GREEN}включён${NC}"
     else
-        echo -e "${YELLOW}DNS Hijack:     ${RED}выключен${NC}"
+        echo -e "${YELLOW}DNS Hijacking:   ${RED}выключен${NC}"
     fi
 }
 
@@ -206,7 +206,7 @@ toggle_hijack() {
 }
 
 hijack_status() {
-    uci show firewall | grep -q "name='DNS Hijack'" && echo -e "${GREEN}Выключить${NC} DNS Hijack" || echo -e "${GREEN}Включить${NC} DNS Hijack"
+    uci show firewall | grep -q "name='DNS Hijack'" && echo -e "${GREEN}Выключить${NC} DNS Hijacking" || echo -e "${GREEN}Включить${NC} DNS Hijacking"
 }
 
 
