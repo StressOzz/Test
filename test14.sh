@@ -136,7 +136,7 @@ DoH_menu() { while true; do get_doh_status; clear; echo -e "${MAGENTA}Меню D
 uci show firewall | grep -q "DNS Hijack" && echo -e "${YELLOW}DNS Hijack: ${GREEN}включён"
 
 echo -e "\n${CYAN}1)${GREEN} $doh_st ${NC}DNS over HTTPS\n${CYAN}2)${GREEN} Настроить ${NC}Comss DNS\n${CYAN}3)${GREEN} Настроить ${NC}Xbox DNS\n${CYAN}4)${GREEN} Настроить ${NC}dns.malw.link"
-echo -ne "${CYAN}5)${GREEN} Настроить ${NC}dns.malw.link (CloudFlare)\n${CYAN}6)${GREEN} Вернуть ${NC}настройки по умолчанию\n${CYAN}0) ${NC} $hijack_status \n${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "
+echo -ne "${CYAN}5)${GREEN} Настроить ${NC}dns.malw.link (CloudFlare)\n${CYAN}6)${GREEN} Вернуть ${NC}настройки по умолчанию\n${CYAN}0) hijack${NC} $hijack_status \n${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "
 read -r choiceDOH; [ -z "$choiceDOH" ] && return; case "$choiceDOH" in 1) D_o_H ;; 2) doh_install && setup_doh "$doh_comss" "Comss.one DNS" ;; 3) doh_install && setup_doh "$doh_xbox" "Xbox DNS" ;; 4) doh_install && setup_doh "$doh_query" "dns.malw.link" ;;
 5) doh_install && setup_doh "$doh_queryCF" "dns.malw.link (CloudFlare)" ;; 6) doh_install && setup_doh "$doh_def" "настройки по умолчанию" ;; 0) toggle_hijack ;; *) return ;; esac; done; }
 setup_doh() { local config="$1"; local name="$2"; echo -e "\n${MAGENTA}Настраиваем DNS over HTTPS${NC}\n${CYAN}Настраиваем ${NC}$name\n${CYAN}Применяем новые настройки${NC}"; rm -f "$fileDoH"; printf '%s\n' "$doh_set" "$config" > "$fileDoH"
@@ -157,14 +157,15 @@ hijack_status() {
 toggle_hijack() {
     echo -e "\nПереключаем DNS Hijacking..."
 
-    # удаляем все старые правила с именем DNS Hijack
-    for RULE in $(uci show firewall | grep -E '^firewall.@redirect=.*name=.*DNS Hijack' | cut -d[ -f2 | cut -d] -f1); do
+    # пока есть правило DNS Hijack — удаляем все подряд
+    while uci show firewall | grep -qE '^firewall.@redirect=.*name=.*DNS Hijack'; do
+        RULE=$(uci show firewall | grep -E '^firewall.@redirect=.*name=.*DNS Hijack' | head -n1 | cut -d[ -f2 | cut -d] -f1)
         uci delete firewall.@redirect[$RULE]
     done
 
-    # проверяем — было ли включено
+    # если правила были — значит выключаем, иначе включаем новое
     if [ -z "$(uci show firewall | grep -E '^firewall.@redirect=.*name=.*DNS Hijack')" ]; then
-        # если нет — включаем одно правило
+        # включаем одно правило
         uci add firewall redirect
         uci set firewall.@redirect[-1].name='DNS Hijack'
         uci set firewall.@redirect[-1].src='lan'
