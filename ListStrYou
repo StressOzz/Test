@@ -1,4 +1,4 @@
-YT01
+Yv01
 --filter-tcp=443
 --hostlist=/opt/zapret/ipset/zapret-hosts-google.txt
 --ip-id=zero
@@ -6,13 +6,13 @@ YT01
 --dpi-desync-split-seqovl=681
 --dpi-desync-split-pos=1
 --dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin
-YT02
+Yv02
 --filter-tcp=443
 --hostlist=/opt/zapret/ipset/zapret-hosts-google.txt
 --dpi-desync=multisplit
 --dpi-desync-split-pos=1,sniext+1
 --dpi-desync-split-seqovl=1
-YT03
+Yv03
 --filter-tcp=443
 --hostlist=/opt/zapret/ipset/zapret-hosts-google.txt
 --dpi-desync=multisplit
@@ -24,13 +24,13 @@ YT03
 --dpi-desync=fake
 --dpi-desync-repeats=2
 --dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin
-YT04
+Yv04
 --filter-tcp=443
 --hostlist=/opt/zapret/ipset/zapret-hosts-google.txt
 --dpi-desync=split2
 --dpi-desync-split-seqovl=681
 --dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin
-YT05
+Yv05
 --filter-tcp=443
 --hostlist=/opt/zapret/ipset/zapret-hosts-google.txt
 --dpi-desync=fake,fakeddisorder
@@ -50,7 +50,7 @@ YT05
 --dpi-desync=fake
 --dpi-desync-repeats=4
 --dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin
-YT06
+Yv06
 --filter-tcp=443
 --hostlist=/opt/zapret/ipset/zapret-hosts-google.txt
 --dpi-desync=multidisorder
@@ -66,7 +66,7 @@ YT06
 --dpi-desync=fake
 --dpi-desync-repeats=8
 --dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin
-YT07
+Yv07
 --filter-tcp=443
 --hostlist=/opt/zapret/ipset/zapret-hosts-google.txt
 --dpi-desync=multidisorder
@@ -81,7 +81,7 @@ YT07
 --dpi-desync-repeats=1
 --dpi-desync-cutoff=d3
 --dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin
-YT08
+Yv08
 --filter-tcp=443
 --hostlist=/opt/zapret/ipset/zapret-hosts-google.txt
 --dpi-desync=fake,multisplit
@@ -97,7 +97,7 @@ YT08
 --dpi-desync=fake
 --dpi-desync-repeats=11
 --dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin
-YT09
+Yv09
 --filter-tcp=443
 --hostlist=/opt/zapret/ipset/zapret-hosts-google.txt
 --dpi-desync-repeats=6
@@ -113,7 +113,7 @@ YT09
 --dpi-desync-repeats=8
 --dpi-desync-fooling=datanoack
 --dpi-desync-fake-tls=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin
-YT10
+Yv10
 --filter-tcp=443
 --hostlist=/opt/zapret/ipset/zapret-hosts-google.txt
 --dpi-desync=multisplit
@@ -121,12 +121,12 @@ YT10
 --dpi-desync-split-seqovl=4
 --dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin
 --dpi-desync-fake-tls-mod=rnd,dupsid,sni=www.google.com
-YT11
+Yv11
 --filter-tcp=443
 --hostlist=/opt/zapret/ipset/zapret-hosts-google.txt
 --dpi-desync=multidisorder
 --dpi-desync-split-pos=2,5,105,host+5,sld-1,endsld-5,endsld
-YT12
+Yv12
 --filter-tcp=443
 --hostlist=/opt/zapret/ipset/zapret-hosts-google.txt
 --dpi-desync=multidisorder
@@ -138,7 +138,7 @@ YT12
 --dpi-desync=fake
 --dpi-desync-fooling=datanoack
 --dpi-desync-cutoff=d3
-YT13
+Yv13
 --filter-tcp=443
 --hostlist=/opt/zapret/ipset/zapret-hosts-google.txt
 --dpi-desync=fake,multidisorder
@@ -155,7 +155,7 @@ YT13
 --dpi-desync=fake
 --dpi-desync-repeats=4
 --dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin
-YT14
+Yv14
 --filter-tcp=443
 --hostlist=/opt/zapret/ipset/zapret-hosts-google.txt
 --dpi-desync=fake,multidisorder
@@ -167,7 +167,7 @@ YT14
 --dpi-desync-split-seqovl=336
 --dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin
 --dpi-desync-fooling=badseq
-YT15
+Yv15
 --filter-tcp=443
 --hostlist=/opt/zapret/ipset/zapret-hosts-google.txt
 --dpi-desync=fake,multisplit
