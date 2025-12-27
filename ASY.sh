@@ -8,7 +8,6 @@ SAVED_STR="/opt/StrYou"
 TEST_HOST="https://rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com"
 TIMEOUT=3
 
-
 # Скачать список стратегий
 curl -fsSL "$STR_URL" -o "$TMP_LIST" || { echo "Не удалось скачать список"; exit 1; }
 
@@ -19,17 +18,6 @@ echo
 CURRENT_NAME=""
 CURRENT_BODY=""
 COUNT=0
-
-progress_bar() {
-    done="$1"
-    total="$2"
-    BAR_LEN=15
-    FILLED=$(( BAR_LEN * done / total ))
-    EMPTY=$(( BAR_LEN - FILLED ))
-    BAR=$(printf '■%.0s' $(seq 1 $FILLED))
-    BAR="$BAR$(printf '□%.0s' $(seq 1 $EMPTY))"
-    echo "[$BAR] $done/$total"
-}
 
 apply_strategy() {
     NAME="$1"
@@ -49,26 +37,23 @@ apply_strategy() {
 }
 
 check_access() {
-    curl -I -s --connect-timeout "$TIMEOUT" -m "$TIMEOUT" -o /dev/null -w "%{http_code}" "$TEST_HOST"
+    curl -s --connect-timeout "$TIMEOUT" -m "$TIMEOUT" "$TEST_HOST" >/dev/null && echo "ok" || echo "fail"
 }
 
 while IFS= read -r LINE || [ -n "$LINE" ]; do
     if echo "$LINE" | grep -q '^Yv[0-9]\+'; then
         if [ -n "$CURRENT_NAME" ]; then
             COUNT=$((COUNT + 1))
-            echo "[ZAPRET] ▶ Применяем стратегию: $CURRENT_NAME ($COUNT/$TOTAL)"
-            progress_bar "$COUNT" "$TOTAL"
+            echo "[ZAPRET] Применяем стратегию: $CURRENT_NAME ($COUNT/$TOTAL)"
             apply_strategy "$CURRENT_NAME" "$CURRENT_BODY"
 
-
-            CODE=$(check_access)
-            if echo "$CODE" | grep -Eq '^[2-4][0-9]{2}$'; then
-                echo "✅ Доступ есть (HTTP $CODE)"
+            STATUS=$(check_access)
+            if [ "$STATUS" = "ok" ]; then
+                echo "✅ Доступ есть"
                 echo "Проверьте видео в браузере"
                 echo "Enter — оставить стратегию, N — продолжить перебор"
                 read -r ANSWER </dev/tty
                 if [ -z "$ANSWER" ]; then
-                    # Сохраняем рабочую стратегию в StrYou
                     {
                         echo "#$CURRENT_NAME"
                         printf "%b\n" "$CURRENT_BODY"
@@ -77,7 +62,7 @@ while IFS= read -r LINE || [ -n "$LINE" ]; do
                     exit 0
                 fi
             else
-                echo "❌ Нет доступа (HTTP $CODE)"
+                echo "❌ Нет доступа"
             fi
         fi
         CURRENT_NAME="$LINE"
@@ -91,18 +76,15 @@ done < "$TMP_LIST"
 if [ -n "$CURRENT_NAME" ]; then
     COUNT=$((COUNT + 1))
     echo "[ZAPRET] ▶ Применяем стратегию: $CURRENT_NAME ($COUNT/$TOTAL)"
-    progress_bar "$COUNT" "$TOTAL"
     apply_strategy "$CURRENT_NAME" "$CURRENT_BODY"
 
-
-    CODE=$(check_access)
-    if echo "$CODE" | grep -Eq '^[2-4][0-9]{2}$'; then
-        echo "✅ Доступ есть (HTTP $CODE)"
+    STATUS=$(check_access)
+    if [ "$STATUS" = "ok" ]; then
+        echo "✅ Доступ есть"
         echo "Проверьте видео в браузере"
         echo "Enter — оставить стратегию, N — продолжить перебор"
         read -r ANSWER </dev/tty
         if [ -z "$ANSWER" ]; then
-            # Сохраняем рабочую стратегию в StrYou
             {
                 echo "#$CURRENT_NAME"
                 printf "%b\n" "$CURRENT_BODY"
@@ -111,7 +93,7 @@ if [ -n "$CURRENT_NAME" ]; then
             exit 0
         fi
     else
-        echo "❌ Нет доступа (HTTP $CODE)"
+        echo "❌ Нет доступа"
     fi
 fi
 
