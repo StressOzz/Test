@@ -44,7 +44,7 @@ while IFS= read -r LINE || [ -n "$LINE" ]; do
     if echo "$LINE" | grep -q '^Yv[0-9]\+'; then
         if [ -n "$CURRENT_NAME" ]; then
             COUNT=$((COUNT + 1))
-            echo "[ZAPRET] ▶ Применяем стратегию: $CURRENT_NAME ($COUNT/$TOTAL)"
+            echo "[ZAPRET] Применяем стратегию: $CURRENT_NAME ($COUNT/$TOTAL)"
             apply_strategy "$CURRENT_NAME" "$CURRENT_BODY"
 
             STATUS=$(check_access)
