@@ -13,7 +13,7 @@ WAIT_AFTER_APPLY=3
 if [ -f "$SAVED_STR" ]; then
     STRATEGY_NAME=$(head -n1 "$SAVED_STR")
     echo "[ZAPRET] Используем сохранённую стратегию: $STRATEGY_NAME"
-    exit 0  # или можно сразу применить, если нужно
+    exit 0
 fi
 
 # Скачать список стратегий
@@ -41,6 +41,7 @@ progress_bar() {
 apply_strategy() {
     NAME="$1"
     BODY="$2"
+    # Очищаем предыдущую стратегию
     sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$ZAPRET_CONF"
     {
         echo "  option NFQWS_OPT '"
@@ -48,6 +49,9 @@ apply_strategy() {
         printf "%b\n" "$BODY"
         echo "'"
     } >> "$ZAPRET_CONF"
+    # Применяем с нужной последовательностью
+    chmod +x /opt/zapret/sync_config.sh
+    /opt/zapret/sync_config.sh
     /etc/init.d/zapret restart >/dev/null 2>&1
 }
 
