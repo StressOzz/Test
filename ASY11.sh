@@ -20,17 +20,6 @@ CURRENT_NAME=""
 CURRENT_BODY=""
 COUNT=0
 
-progress_bar() {
-    done="$1"
-    total="$2"
-    BAR_LEN=15
-    FILLED=$(( BAR_LEN * done / total ))
-    EMPTY=$(( BAR_LEN - FILLED ))
-    BAR=$(printf '■%.0s' $(seq 1 $FILLED))
-    BAR="$BAR$(printf '□%.0s' $(seq 1 $EMPTY))"
-    echo "[$BAR] $done/$total"
-}
-
 apply_strategy() {
     NAME="$1"
     BODY="$2"
@@ -57,7 +46,6 @@ while IFS= read -r LINE || [ -n "$LINE" ]; do
         if [ -n "$CURRENT_NAME" ]; then
             COUNT=$((COUNT + 1))
             echo "[ZAPRET] ▶ Применяем стратегию: $CURRENT_NAME ($COUNT/$TOTAL)"
-            progress_bar "$COUNT" "$TOTAL"
             apply_strategy "$CURRENT_NAME" "$CURRENT_BODY"
 
 
@@ -91,7 +79,6 @@ done < "$TMP_LIST"
 if [ -n "$CURRENT_NAME" ]; then
     COUNT=$((COUNT + 1))
     echo "[ZAPRET] ▶ Применяем стратегию: $CURRENT_NAME ($COUNT/$TOTAL)"
-    progress_bar "$COUNT" "$TOTAL"
     apply_strategy "$CURRENT_NAME" "$CURRENT_BODY"
 
 
