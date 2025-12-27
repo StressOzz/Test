@@ -6,8 +6,8 @@ TMP_LIST="/tmp/zapret_yt_list.txt"
 SAVED_STR="/opt/StrYou"
 
 TEST_HOST="https://rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com"
-TIMEOUT=5
-WAIT_AFTER_APPLY=3
+TIMEOUT=3
+
 
 # Скачать список стратегий
 curl -fsSL "$STR_URL" -o "$TMP_LIST" || { echo "Не удалось скачать список"; exit 1; }
@@ -59,7 +59,7 @@ while IFS= read -r LINE || [ -n "$LINE" ]; do
             echo "[ZAPRET] ▶ Применяем стратегию: $CURRENT_NAME ($COUNT/$TOTAL)"
             progress_bar "$COUNT" "$TOTAL"
             apply_strategy "$CURRENT_NAME" "$CURRENT_BODY"
-            sleep "$WAIT_AFTER_APPLY"
+
 
             CODE=$(check_access)
             if echo "$CODE" | grep -Eq '^[2-4][0-9]{2}$'; then
@@ -93,7 +93,7 @@ if [ -n "$CURRENT_NAME" ]; then
     echo "[ZAPRET] ▶ Применяем стратегию: $CURRENT_NAME ($COUNT/$TOTAL)"
     progress_bar "$COUNT" "$TOTAL"
     apply_strategy "$CURRENT_NAME" "$CURRENT_BODY"
-    sleep "$WAIT_AFTER_APPLY"
+
 
     CODE=$(check_access)
     if echo "$CODE" | grep -Eq '^[2-4][0-9]{2}$'; then
