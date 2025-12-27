@@ -90,107 +90,103 @@ hosts_clear; echo -e "Zapret ${GREEN}полностью удалён!${NC}\n"; [
 # Подбор стратегии для Ютуб
 # ==========================================
 auto_stryou() {
-ZAPRET_CONF="/etc/config/zapret"
-STR_URL="https://raw.githubusercontent.com/StressOzz/Test/refs/heads/main/ListStrYou"
-TMP_LIST="/tmp/zapret_yt_list.txt"
-SAVED_STR="/opt/StrYou"
+    ZAPRET_CONF="/etc/config/zapret"
+    STR_URL="https://raw.githubusercontent.com/StressOzz/Test/refs/heads/main/ListStrYou"
+    TMP_LIST="/tmp/zapret_yt_list.txt"
+    SAVED_STR="/opt/StrYou"
 
-TEST_HOST="https://rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com"
-TIMEOUT=3
+    TEST_HOST="https://rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com"
+    TIMEOUT=3
 
-# Скачать список стратегий
-curl -fsSL "$STR_URL" -o "$TMP_LIST" || { echo "Не удалось скачать список"; exit 1; }
-echo
-TOTAL=$(grep -c '^Yv[0-9]\+' "$TMP_LIST")
-echo "[ZAPRET] Найдено стратегий: $TOTAL"
-echo
+    # Скачать список стратегий
+    curl -fsSL "$STR_URL" -o "$TMP_LIST" || { echo "Не удалось скачать список"; return 1; }
 
-CURRENT_NAME=""
-CURRENT_BODY=""
-COUNT=0
+    TOTAL=$(grep -c '^Yv[0-9]\+' "$TMP_LIST")
+    echo "[ZAPRET] Найдено стратегий: $TOTAL"
+    echo
 
-apply_strategy() {
-    NAME="$1"
-    BODY="$2"
-    # Очищаем предыдущую стратегию
-    sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$ZAPRET_CONF"
-    {
-        echo "  option NFQWS_OPT '"
-        echo "#AUTO $NAME"
-        printf "%b\n" "$BODY"
-        echo "'"
-    } >> "$ZAPRET_CONF"
-    # Применяем стратегию
-    chmod +x /opt/zapret/sync_config.sh
-    /opt/zapret/sync_config.sh
-    /etc/init.d/zapret restart >/dev/null 2>&1
-}
+    CURRENT_NAME=""
+    CURRENT_BODY=""
+    COUNT=0
 
-check_access() {
-    curl -s --connect-timeout "$TIMEOUT" -m "$TIMEOUT" "$TEST_HOST" >/dev/null && echo "ok" || echo "fail"
-}
+    apply_strategy() {
+        NAME="$1"
+        BODY="$2"
+        sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$ZAPRET_CONF"
+        {
+            echo "  option NFQWS_OPT '"
+            echo "#AUTO $NAME"
+            printf "%b\n" "$BODY"
+            echo "'"
+        } >> "$ZAPRET_CONF"
+        chmod +x /opt/zapret/sync_config.sh
+        /opt/zapret/sync_config.sh
+        /etc/init.d/zapret restart >/dev/null 2>&1
+    }
 
-while IFS= read -r LINE || [ -n "$LINE" ]; do
-    if echo "$LINE" | grep -q '^Yv[0-9]\+'; then
-        if [ -n "$CURRENT_NAME" ]; then
-            COUNT=$((COUNT + 1))
-            echo "[ZAPRET] Применяем стратегию: $CURRENT_NAME ($COUNT/$TOTAL)"
-            apply_strategy "$CURRENT_NAME" "$CURRENT_BODY"
+    check_access() {
+        curl -s --connect-timeout "$TIMEOUT" -m "$TIMEOUT" "$TEST_HOST" >/dev/null && echo "ok" || echo "fail"
+    }
 
-            STATUS=$(check_access)
-            if [ "$STATUS" = "ok" ]; then
-                echo "✅ Доступ есть"
-                echo "Проверьте видео в браузере"
-                echo "Enter — оставить стратегию, N — продолжить перебор"
-                read -r ANSWER </dev/tty
-                if [ -z "$ANSWER" ]; then
-                    {
-                        echo "#$CURRENT_NAME"
-                        printf "%b\n" "$CURRENT_BODY"
-                    } > "$SAVED_STR"
-                    echo "🏁 Рабочая стратегия: $CURRENT_NAME сохранена в $SAVED_STR"
-echo && read -p "Нажмите Enter..." dummy; return
+    while IFS= read -r LINE || [ -n "$LINE" ]; do
+        if echo "$LINE" | grep -q '^Yv[0-9]\+'; then
+            if [ -n "$CURRENT_NAME" ]; then
+                COUNT=$((COUNT + 1))
+                echo "[ZAPRET] Применяем стратегию: $CURRENT_NAME ($COUNT/$TOTAL)"
+                apply_strategy "$CURRENT_NAME" "$CURRENT_BODY"
+
+                STATUS=$(check_access)
+                if [ "$STATUS" = "ok" ]; then
+                    echo "✅ Доступ есть"
+                    echo "Проверьте видео в браузере"
+                    echo "Enter — оставить стратегию, N — продолжить перебор"
+                    read -r ANSWER </dev/tty
+                    if [ -z "$ANSWER" ]; then
+                        {
+                            echo "#$CURRENT_NAME"
+                            printf "%b\n" "$CURRENT_BODY"
+                        } > "$SAVED_STR"
+                        echo "🏁 Рабочая стратегия: $CURRENT_NAME сохранена в $SAVED_STR"
+                        return 0
+                    fi
+                else
+                    echo "❌ Нет доступа"
                 fi
-            else
-                echo "❌ Нет доступа"
-echo && read -p "Нажмите Enter..." dummy; return
             fi
+            CURRENT_NAME="$LINE"
+            CURRENT_BODY=""
+        else
+            [ -n "$LINE" ] && CURRENT_BODY="${CURRENT_BODY}${LINE}\n"
         fi
-        CURRENT_NAME="$LINE"
-        CURRENT_BODY=""
-    else
-        [ -n "$LINE" ] && CURRENT_BODY="${CURRENT_BODY}${LINE}\n"
-    fi
-done < "$TMP_LIST"
+    done < "$TMP_LIST"
 
-# Последняя стратегия
-if [ -n "$CURRENT_NAME" ]; then
-    COUNT=$((COUNT + 1))
-    echo "[ZAPRET] ▶ Применяем стратегию: $CURRENT_NAME ($COUNT/$TOTAL)"
-    apply_strategy "$CURRENT_NAME" "$CURRENT_BODY"
+    # Последняя стратегия
+    if [ -n "$CURRENT_NAME" ]; then
+        COUNT=$((COUNT + 1))
+        echo "[ZAPRET] ▶ Применяем стратегию: $CURRENT_NAME ($COUNT/$TOTAL)"
+        apply_strategy "$CURRENT_NAME" "$CURRENT_BODY"
 
-    STATUS=$(check_access)
-    if [ "$STATUS" = "ok" ]; then
-        echo "✅ Доступ есть"
-        echo "Проверьте видео в браузере"
-        echo "Enter — оставить стратегию, N — продолжить перебор"
-        read -r ANSWER </dev/tty
-        if [ -z "$ANSWER" ]; then
-            {
-                echo "#$CURRENT_NAME"
-                printf "%b\n" "$CURRENT_BODY"
-            } > "$SAVED_STR"
-            echo "🏁 Рабочая стратегия: $CURRENT_NAME сохранена в $SAVED_STR"
-echo && read -p "Нажмите Enter..." dummy; return
+        STATUS=$(check_access)
+        if [ "$STATUS" = "ok" ]; then
+            echo "✅ Доступ есть"
+            echo "Проверьте видео в браузере"
+            echo "Enter — оставить стратегию, N — продолжить перебор"
+            read -r ANSWER </dev/tty
+            if [ -z "$ANSWER" ]; then
+                {
+                    echo "#$CURRENT_NAME"
+                    printf "%b\n" "$CURRENT_BODY"
+                } > "$SAVED_STR"
+                echo "🏁 Рабочая стратегия: $CURRENT_NAME сохранена в $SAVED_STR"
+                return 0
+            fi
+        else
+            echo "❌ Нет доступа"
         fi
-    else
-        echo "❌ Нет доступа"
-echo && read -p "Нажмите Enter..." dummy; return
     fi
-fi
 
-echo "🚫 Рабочая стратегия не найдена"
-echo && read -p "Нажмите Enter..." dummy; return
+    echo "🚫 Рабочая стратегия не найдена"
+    return 1
 }
 # ==========================================
 # Выбор стратегий
