@@ -8,7 +8,6 @@ SAVED_STR="/opt/StrYou"
 TEST_HOST="https://rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com"
 TIMEOUT=3
 
-
 # Скачать список стратегий
 curl -fsSL "$STR_URL" -o "$TMP_LIST" || { echo "Не удалось скачать список"; exit 1; }
 
@@ -38,7 +37,7 @@ apply_strategy() {
 }
 
 check_access() {
-    curl -I -s --connect-timeout "$TIMEOUT" -m "$TIMEOUT" -o /dev/null -w "%{http_code}" "$TEST_HOST"
+    curl -s --connect-timeout "$TIMEOUT" -m "$TIMEOUT" "$TEST_HOST" >/dev/null && echo "ok" || echo "fail"
 }
 
 while IFS= read -r LINE || [ -n "$LINE" ]; do
@@ -48,15 +47,13 @@ while IFS= read -r LINE || [ -n "$LINE" ]; do
             echo "[ZAPRET] ▶ Применяем стратегию: $CURRENT_NAME ($COUNT/$TOTAL)"
             apply_strategy "$CURRENT_NAME" "$CURRENT_BODY"
 
-
-            CODE=$(check_access)
-            if echo "$CODE" | grep -Eq '^[2-4][0-9]{2}$'; then
-                echo "✅ Доступ есть (HTTP $CODE)"
+            STATUS=$(check_access)
+            if [ "$STATUS" = "ok" ]; then
+                echo "✅ Доступ есть"
                 echo "Проверьте видео в браузере"
                 echo "Enter — оставить стратегию, N — продолжить перебор"
                 read -r ANSWER </dev/tty
                 if [ -z "$ANSWER" ]; then
-                    # Сохраняем рабочую стратегию в StrYou
                     {
                         echo "#$CURRENT_NAME"
                         printf "%b\n" "$CURRENT_BODY"
@@ -65,7 +62,7 @@ while IFS= read -r LINE || [ -n "$LINE" ]; do
                     exit 0
                 fi
             else
-                echo "❌ Нет доступа (HTTP $CODE)"
+                echo "❌ Нет доступа"
             fi
         fi
         CURRENT_NAME="$LINE"
@@ -81,15 +78,13 @@ if [ -n "$CURRENT_NAME" ]; then
     echo "[ZAPRET] ▶ Применяем стратегию: $CURRENT_NAME ($COUNT/$TOTAL)"
     apply_strategy "$CURRENT_NAME" "$CURRENT_BODY"
 
-
-    CODE=$(check_access)
-    if echo "$CODE" | grep -Eq '^[2-4][0-9]{2}$'; then
-        echo "✅ Доступ есть (HTTP $CODE)"
+    STATUS=$(check_access)
+    if [ "$STATUS" = "ok" ]; then
+        echo "✅ Доступ есть"
         echo "Проверьте видео в браузере"
         echo "Enter — оставить стратегию, N — продолжить перебор"
         read -r ANSWER </dev/tty
         if [ -z "$ANSWER" ]; then
-            # Сохраняем рабочую стратегию в StrYou
             {
                 echo "#$CURRENT_NAME"
                 printf "%b\n" "$CURRENT_BODY"
@@ -98,7 +93,7 @@ if [ -n "$CURRENT_NAME" ]; then
             exit 0
         fi
     else
-        echo "❌ Нет доступа (HTTP $CODE)"
+        echo "❌ Нет доступа"
     fi
 fi
 
