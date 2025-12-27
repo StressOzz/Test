@@ -99,7 +99,7 @@ auto_stryou() {
     TIMEOUT=3
 
     # Скачать список стратегий
-    curl -fsSL "$STR_URL" -o "$TMP_LIST" || { echo "Не удалось скачать список"; return 1; }
+    curl -fsSL "$STR_URL" -o "$TMP_LIST" || { echo "Не удалось скачать список"; read -p "Нажмите Enter..." dummy; return 1; }
 
     TOTAL=$(grep -c '^Yv[0-9]\+' "$TMP_LIST")
     echo "[ZAPRET] Найдено стратегий: $TOTAL"
@@ -147,7 +147,18 @@ auto_stryou() {
                             printf "%b\n" "$CURRENT_BODY"
                         } > "$SAVED_STR"
                         echo "🏁 Рабочая стратегия: $CURRENT_NAME сохранена в $SAVED_STR"
-                        read -p "Нажмите Enter..." dummy; return 0
+
+                        # Добавляем домены Google в /etc/hosts
+                        fileGP="/opt/zapret/ipset/zapret-hosts-google.txt"
+                        printf '%s\n' \
+                        "gvt1.com" "googleplay.com" "play.google.com" "beacons.gvt2.com" \
+                        "play.googleapis.com" "play-fe.googleapis.com" "lh3.googleusercontent.com" \
+                        "android.clients.google.com" "connectivitycheck.gstatic.com" \
+                        "play-lh.googleusercontent.com" "play-games.googleusercontent.com" \
+                        "prod-lt-playstoregatewayadapter-pa.googleapis.com" | grep -Fxv -f "$fileGP" >> "$fileGP"
+
+                        read -p "Нажмите Enter, чтобы вернуться в меню..." dummy
+                        return 0
                     fi
                 else
                     echo "❌ Нет доступа"
@@ -177,8 +188,19 @@ auto_stryou() {
                     echo "#$CURRENT_NAME"
                     printf "%b\n" "$CURRENT_BODY"
                 } > "$SAVED_STR"
+
+                # Добавляем домены Google в /etc/hosts
+                fileGP="/opt/zapret/ipset/zapret-hosts-google.txt"
+                printf '%s\n' \
+                "gvt1.com" "googleplay.com" "play.google.com" "beacons.gvt2.com" \
+                "play.googleapis.com" "play-fe.googleapis.com" "lh3.googleusercontent.com" \
+                "android.clients.google.com" "connectivitycheck.gstatic.com" \
+                "play-lh.googleusercontent.com" "play-games.googleusercontent.com" \
+                "prod-lt-playstoregatewayadapter-pa.googleapis.com" | grep -Fxv -f "$fileGP" >> "$fileGP"
+
                 echo "🏁 Рабочая стратегия: $CURRENT_NAME сохранена в $SAVED_STR"
-                read -p "Нажмите Enter..." dummy; return 0
+                read -p "Нажмите Enter, чтобы вернуться в меню..." dummy
+                return 0
             fi
         else
             echo "❌ Нет доступа"
@@ -186,34 +208,95 @@ auto_stryou() {
     fi
 
     echo "🚫 Рабочая стратегия не найдена"
-    read -p "Нажмите Enter..." dummy; return 1
+    read -p "Нажмите Enter, чтобы вернуться в меню..." dummy
+    return 1
 }
+
 # ==========================================
 # Выбор стратегий
 # ==========================================
 show_current_strategy() { [ -f "$CONF" ] || return; for v in v1 v2; do grep -q "#$v" "$CONF" && { ver="$v"; return; } done; }
-menu_str() { local NO_PAUSE=$1; [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter..." dummy; return; }
-while true; do if [ "$NO_PAUSE" = "1" ]; then version=$STR_VERSION_AUTOINSTALL; else clear; echo -e "${MAGENTA}Меню стратегии${NC}\n"; show_current_strategy && [ -n "$ver" ] && echo -e "${YELLOW}Используется стратегия:${NC} $ver\n"
-echo -e "${CYAN}1) ${GREEN}Установить стратегию${NC} v1\n${CYAN}2) ${GREEN}Установить стратегию${NC} v2"
-echo -ne "${CYAN}0) ${GREEN}Подобрать стратегию для ${NC}YouTube\n${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read choiceST
-case "$choiceST" in 1) version="v1" ;; 2) version="v2" ;; 0) auto_stryou ;; *) return ;; esac; fi
-[ "$NO_PAUSE" != "1" ] && echo; echo -e "${MAGENTA}Устанавливаем стратегию ${version}${NC}\n${CYAN}Меняем стратегию${NC}"; sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
-strategy_v1() { printf '%s\n' "--filter-tcp=443" "--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt" "--dpi-desync=multisplit" "--dpi-desync-split-pos=1,sniext+1" "--dpi-desync-split-seqovl=1" "--new" | cat; \
-printf '%s\n' "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=hostfakesplit" "--dpi-desync-hostfakesplit-mod=host=rzd.ru" "--dpi-desync-hostfakesplit-midhost=host-2" "--dpi-desync-split-seqovl=726" "--dpi-desync-fooling=badsum,badseq" "--dpi-desync-badseq-increment=0" | cat; }
-strategy_v2() { printf '%s\n' "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=hostfakesplit" "--dpi-desync-hostfakesplit-mod=host=m.ok.ru" cat; \
-printf '%s\n' "--dpi-desync-hostfakesplit-midhost=host-2" "--dpi-desync-split-seqovl=1" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/TLS_ClientHello_rkn_gov_ru.bin" "--dpi-desync-fooling=badsum,badseq" "--dpi-desync-badseq-increment=0" | cat; }
 
-{ echo "  option NFQWS_OPT '"; echo "#${version} УДАЛИТЕ ЭТУ СТРОЧКУ, ЕСЛИ ИЗМЕНЯЕТЕ СТРАТЕГИЮ !!!"; strategy_${version}; echo "'"; } >> "$CONF"
-# echo -e "${CYAN}Добавляем домены в исключения${NC}"; rm -f "$EXCLUDE_FILE"; wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL" || echo -e "\n${RED}Не удалось загрузить exclude файл${NC}\n"
-echo -e "${CYAN}Редактируем ${NC}/etc/hosts${NC}"; hosts_add; fileGP="/opt/zapret/ipset/zapret-hosts-google.txt"; printf '%s\n' "gvt1.com" "googleplay.com" "play.google.com" "beacons.gvt2.com" "play.googleapis.com" "play-fe.googleapis.com" \
-"lh3.googleusercontent.com" "android.clients.google.com" "connectivitycheck.gstatic.com" "play-lh.googleusercontent.com" "play-games.googleusercontent.com" "prod-lt-playstoregatewayadapter-pa.googleapis.com" | grep -Fxv -f "$fileGP" 2>/dev/null >> "$fileGP"
-dis_str; echo -e "${CYAN}Применяем новую стратегию и настройки${NC}"; chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1; echo -e "${GREEN}Стратегия ${NC}${version} ${GREEN}установлена!${NC}"
-sed -i "s/,1024-19293,19345-49999,50101-65535//" "$CONF"; [ "$NO_PAUSE" != "1" ] && echo && read -p "Нажмите Enter..." dummy; [ "$NO_PAUSE" = "1" ] && break; done }
-dis_str() { if ! grep -q "option NFQWS_PORTS_UDP.*19294-19344,50000-50100" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'$/,19294-19344,50000-50100'/" "$CONF"; fi
-if ! grep -q "option NFQWS_PORTS_TCP.*2053,2083,2087,2096,8443" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_TCP '/s/'$/,2053,2083,2087,2096,8443'/" "$CONF"; fi
-if ! grep -q -- "--filter-udp=19294-19344,50000-50100" "$CONF"; then last_line1=$(grep -n "^'$" "$CONF" | tail -n1 | cut -d: -f1); if [ -n "$last_line1" ]; then sed -i "${last_line1},\$d" "$CONF"; fi
-printf "%s\n" "--new" "--filter-udp=19294-19344,50000-50100" "--filter-l7=discord,stun" "--dpi-desync=fake" "--dpi-desync-repeats=6" "--new" "--filter-tcp=2053,2083,2087,2096,8443" "--hostlist-domains=discord.media" \
-"--dpi-desync=multisplit" "--dpi-desync-split-seqovl=652" "--dpi-desync-split-pos=2" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin" "'" >> "$CONF"; fi; }
+strategy_v1() {
+    printf '%s\n' "--filter-tcp=443" "--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt" "--dpi-desync=multisplit" "--dpi-desync-split-pos=1,sniext+1" "--dpi-desync-split-seqovl=1" "--new"
+    printf '%s\n' "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=hostfakesplit" "--dpi-desync-hostfakesplit-mod=host=rzd.ru" "--dpi-desync-hostfakesplit-midhost=host-2" "--dpi-desync-split-seqovl=726" "--dpi-desync-fooling=badsum,badseq" "--dpi-desync-badseq-increment=0"
+}
+
+strategy_v2() {
+    printf '%s\n' "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=hostfakesplit" "--dpi-desync-hostfakesplit-mod=host=m.ok.ru"
+    printf '%s\n' "--dpi-desync-hostfakesplit-midhost=host-2" "--dpi-desync-split-seqovl=1" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/TLS_ClientHello_rkn_gov_ru.bin" "--dpi-desync-fooling=badsum,badseq" "--dpi-desync-badseq-increment=0"
+}
+
+dis_str() {
+    if ! grep -q "option NFQWS_PORTS_UDP.*19294-19344,50000-50100" "$CONF"; then
+        sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'$/,19294-19344,50000-50100'/"
+    fi
+    if ! grep -q "option NFQWS_PORTS_TCP.*2053,2083,2087,2096,8443" "$CONF"; then
+        sed -i "/^[[:space:]]*option NFQWS_PORTS_TCP '/s/'$/,2053,2083,2087,2096,8443'/"
+    fi
+    if ! grep -q -- "--filter-udp=19294-19344,50000-50100" "$CONF"; then
+        last_line1=$(grep -n "^'$" "$CONF" | tail -n1 | cut -d: -f1)
+        [ -n "$last_line1" ] && sed -i "${last_line1},\$d" "$CONF"
+        printf "%s\n" \
+            "--new" \
+            "--filter-udp=19294-19344,50000-50100" \
+            "--filter-l7=discord,stun" \
+            "--dpi-desync=fake" \
+            "--dpi-desync-repeats=6" \
+            "--new" \
+            "--filter-tcp=2053,2083,2087,2096,8443" \
+            "--hostlist-domains=discord.media" \
+            "--dpi-desync=multisplit" \
+            "--dpi-desync-split-seqovl=652" \
+            "--dpi-desync-split-pos=2" \
+            "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin" \
+            "'" >> "$CONF"
+    fi
+}
+
+menu_str() {
+    local NO_PAUSE=$1
+    [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter..." dummy; return; }
+
+    while true; do
+        clear
+        echo -e "${MAGENTA}Меню стратегии${NC}"
+        show_current_strategy
+        [ -n "$ver" ] && echo -e "${YELLOW}Используется стратегия:${NC} $ver"
+        echo
+        echo -e "${CYAN}1) ${GREEN}Установить стратегию${NC} v1"
+        echo -e "${CYAN}2) ${GREEN}Установить стратегию${NC} v2"
+        echo -e "${CYAN}0) ${GREEN}Подобрать стратегию для ${NC}YouTube"
+        echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "
+        read choiceST
+
+        case "$choiceST" in
+            1)
+                version="v1"
+                sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
+                { echo "  option NFQWS_OPT '"; echo "#$version"; strategy_v1; echo "'"; } >> "$CONF"
+                dis_str
+                echo -e "${GREEN}Стратегия v1 установлена!${NC}"
+                read -p "Нажмите Enter..." dummy
+                ;;
+            2)
+                version="v2"
+                sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
+                { echo "  option NFQWS_OPT '"; echo "#$version"; strategy_v2; echo "'"; } >> "$CONF"
+                dis_str
+                echo -e "${GREEN}Стратегия v2 установлена!${NC}"
+                read -p "Нажмите Enter..." dummy
+                ;;
+            0)
+                auto_stryou
+                ;;
+            *)
+                return
+                ;;
+        esac
+    done
+}
+
 # ==========================================
 # DNS over HTTPS
 # ==========================================
