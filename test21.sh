@@ -276,15 +276,14 @@ menu_str() {
                 sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
                 { echo "  option NFQWS_OPT '"; echo "#$version"; strategy_v1; echo "'"; } >> "$CONF"
                 dis_str
-                echo -e "${GREEN}Стратегия v1 установлена!${NC}"
+dis_str; echo -e "${CYAN}Применяем новую стратегию и настройки${NC}"; chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1; echo -e "${GREEN}Стратегия ${NC}${version} ${GREEN}установлена!${NC}"
                 read -p "Нажмите Enter..." dummy
                 ;;
             2)
                 version="v2"
                 sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
                 { echo "  option NFQWS_OPT '"; echo "#$version"; strategy_v2; echo "'"; } >> "$CONF"
-                dis_str
-                echo -e "${GREEN}Стратегия v2 установлена!${NC}"
+dis_str; echo -e "${CYAN}Применяем новую стратегию и настройки${NC}"; chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1; echo -e "${GREEN}Стратегия ${NC}${version} ${GREEN}установлена!${NC}"
                 read -p "Нажмите Enter..." dummy
                 ;;
             0)
