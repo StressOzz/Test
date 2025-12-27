@@ -147,8 +147,7 @@ auto_stryou() {
                             printf "%b\n" "$CURRENT_BODY"
                         } > "$SAVED_STR"
                         echo "🏁 Рабочая стратегия: $CURRENT_NAME сохранена в $SAVED_STR"
-                        read -p "Нажмите Enter..." dummy
-                        return 0
+                        read -p "Нажмите Enter..." dummy; return 0
                     fi
                 else
                     echo "❌ Нет доступа"
@@ -179,8 +178,7 @@ auto_stryou() {
                     printf "%b\n" "$CURRENT_BODY"
                 } > "$SAVED_STR"
                 echo "🏁 Рабочая стратегия: $CURRENT_NAME сохранена в $SAVED_STR"
-                read -p "Нажмите Enter..." dummy
-                return 0
+                read -p "Нажмите Enter..." dummy; return 0
             fi
         else
             echo "❌ Нет доступа"
@@ -188,8 +186,7 @@ auto_stryou() {
     fi
 
     echo "🚫 Рабочая стратегия не найдена"
-    read -p "Нажмите Enter..." dummy
-    return 1
+    read -p "Нажмите Enter..." dummy; return 1
 }
 # ==========================================
 # Выбор стратегий
