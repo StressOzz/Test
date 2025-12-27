@@ -101,7 +101,7 @@ TIMEOUT=3
 
 # Скачать список стратегий
 curl -fsSL "$STR_URL" -o "$TMP_LIST" || { echo "Не удалось скачать список"; exit 1; }
-
+echo
 TOTAL=$(grep -c '^Yv[0-9]\+' "$TMP_LIST")
 echo "[ZAPRET] Найдено стратегий: $TOTAL"
 echo
@@ -196,35 +196,18 @@ echo && read -p "Нажмите Enter..." dummy; return
 # ==========================================
 # Выбор стратегий
 # ==========================================
-show_current_strategy() { [ -f "$CONF" ] || return; for v in v1 v2 v3 v4 v5 v6; do grep -q "#$v" "$CONF" && { ver="$v"; return; } done; }
+show_current_strategy() { [ -f "$CONF" ] || return; for v in v1 v2; do grep -q "#$v" "$CONF" && { ver="$v"; return; } done; }
 menu_str() { local NO_PAUSE=$1; [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter..." dummy; return; }
-while true; do if [ "$NO_PAUSE" = "1" ]; then version=$STR_VERSION_AUTOINSTALL; else clear; echo -e "${MAGENTA}Меню выбора стратегии${NC}\n"; show_current_strategy && [ -n "$ver" ] && echo -e "${YELLOW}Используется стратегия:${NC} $ver\n"
-echo -e "${CYAN}1) ${GREEN}Установить стратегию${NC} v1\n${CYAN}2) ${GREEN}Установить стратегию${NC} v2\n${CYAN}3) ${GREEN}Установить стратегию${NC} v3\n${CYAN}4) ${GREEN}Установить стратегию${NC} v4"
-echo -ne "${CYAN}5) ${GREEN}Установить стратегию${NC} v5\n${CYAN}6) ${GREEN}Установить стратегию${NC} v6 (27.12 TEST)\n${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read choiceST
-case "$choiceST" in 1) version="v1" ;; 2) version="v2" ;; 3) version="v3" ;; 4) version="v4" ;; 5) version="v5" ;; 6) version="v6" ;; *) return ;; esac; fi
+while true; do if [ "$NO_PAUSE" = "1" ]; then version=$STR_VERSION_AUTOINSTALL; else clear; echo -e "${MAGENTA}Меню стратегии${NC}\n"; show_current_strategy && [ -n "$ver" ] && echo -e "${YELLOW}Используется стратегия:${NC} $ver\n"
+echo -e "${CYAN}1) ${GREEN}Установить стратегию${NC} v1\n${CYAN}2) ${GREEN}Установить стратегию${NC} v2"
+echo -ne "${CYAN}0) ${GREEN}Подобрать стратегию для ${NC}YouTube\n${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read choiceST
+case "$choiceST" in 1) version="v1" ;; 2) version="v2" ;; 0) auto_stryou ;; *) return ;; esac; fi
 [ "$NO_PAUSE" != "1" ] && echo; echo -e "${MAGENTA}Устанавливаем стратегию ${version}${NC}\n${CYAN}Меняем стратегию${NC}"; sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
-strategy_v1() { printf '%s\n' "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake,multidisorder" "--dpi-desync-split-seqovl=681" "--dpi-desync-split-pos=1" "--dpi-desync-fooling=badseq" | cat; \
-printf '%s\n' "--dpi-desync-badseq-increment=10000000" "--dpi-desync-repeats=6" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin" "--dpi-desync-fake-tls-mod=rnd,dupsid,sni=fonts.google.com" "--new" | cat; \
-printf '%s\n' "--filter-udp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake" "--dpi-desync-repeats=6" "--dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin" | cat; }
-strategy_v2() { printf '%s\n' "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake,fakeddisorder" "--dpi-desync-split-pos=10,midsld" "--dpi-desync-fake-tls=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin" | cat; \
-printf '%s\n' "--dpi-desync-fake-tls-mod=rnd,dupsid,sni=fonts.google.com" "--dpi-desync-fake-tls=0x0F0F0F0F" "--dpi-desync-fake-tls-mod=none" "--dpi-desync-fakedsplit-pattern=/opt/zapret/files/fake/tls_clienthello_vk_com.bin" "--dpi-desync-split-seqovl=336" | cat; \
-printf '%s\n' "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_gosuslugi_ru.bin" "--dpi-desync-fooling=badseq,badsum" "--dpi-desync-badseq-increment=0" "--new" "--filter-udp=443" | cat; \
-printf '%s\n' "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake" "--dpi-desync-repeats=6" "--dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin" | cat; }
-strategy_v3() { printf '%s\n' "--filter-tcp=443" "--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt" "--ip-id=zero" "--dpi-desync=multisplit" "--dpi-desync-split-seqovl=681" "--dpi-desync-split-pos=1" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin" | cat; \
-printf '%s\n' "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake,fakeddisorder" "--dpi-desync-split-pos=10,midsld" "--dpi-desync-fake-tls=/opt/zapret/files/fake/t2.bin" | cat; \
-printf '%s\n' "--dpi-desync-fake-tls-mod=rnd,dupsid,sni=m.ok.ru" "--dpi-desync-fake-tls=0x0F0F0F0F" "--dpi-desync-fake-tls-mod=none" "--dpi-desync-fakedsplit-pattern=/opt/zapret/files/fake/tls_clienthello_vk_com.bin" | cat; \
-printf '%s\n' "--dpi-desync-split-seqovl=336" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_gosuslugi_ru.bin" "--dpi-desync-fooling=badseq,badsum" "--dpi-desync-badseq-increment=0" | cat; \
-printf '%s\n' "--new" "--filter-udp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake" "--dpi-desync-repeats=6" "--dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin" | cat; }
-strategy_v4() { printf '%s\n' "--filter-tcp=443" "--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt" "--dpi-desync=fake,multisplit" "--dpi-desync-split-pos=2,sld" "--dpi-desync-fake-tls=0x0F0F0F0F" "--dpi-desync-fake-tls=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin" | cat; \
-printf '%s\n' "--dpi-desync-fake-tls-mod=rnd,dupsid,sni=google.com" "--dpi-desync-split-seqovl=2108" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin" "--dpi-desync-fooling=badseq" "--new" "--filter-tcp=443" | cat; \
-printf '%s\n' "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync-any-protocol=1" "--dpi-desync-cutoff=n5" "--dpi-desync=multisplit" "--dpi-desync-split-seqovl=582" "--dpi-desync-split-pos=1" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/4pda.bin" | cat; \
-printf '%s\n' "--new" "--filter-udp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake" "--dpi-desync-repeats=6" "--dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin" | cat; }
-strategy_v5() { printf '%s\n' "--filter-tcp=443" "--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt" "--ip-id=zero" "--dpi-desync=multisplit" "--dpi-desync-split-seqovl=681" "--dpi-desync-split-pos=1" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin" | cat; \
-printf '%s\n' "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake,fakeddisorder" "--dpi-desync-split-pos=10,midsld" "--dpi-desync-fake-tls=/opt/zapret/files/fake/max.bin" "--dpi-desync-fake-tls-mod=rnd,dupsid" | cat; \
-printf '%s\n' "--dpi-desync-fake-tls=0x0F0F0F0F" "--dpi-desync-fake-tls-mod=none" "--dpi-desync-fakedsplit-pattern=/opt/zapret/files/fake/tls_clienthello_vk_com.bin" "--dpi-desync-fooling=badseq,badsum" "--dpi-desync-badseq-increment=0" "--new" "--filter-udp=443" | cat; \
-printf '%s\n' "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake" "--dpi-desync-repeats=6" "--dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin" | cat; }
-strategy_v6() { printf '%s\n' "--filter-tcp=443" "--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt" "--dpi-desync=multisplit" "--dpi-desync-split-pos=1,sniext+1" "--dpi-desync-split-seqovl=1" "--new" | cat; \
+strategy_v1() { printf '%s\n' "--filter-tcp=443" "--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt" "--dpi-desync=multisplit" "--dpi-desync-split-pos=1,sniext+1" "--dpi-desync-split-seqovl=1" "--new" | cat; \
 printf '%s\n' "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=hostfakesplit" "--dpi-desync-hostfakesplit-mod=host=rzd.ru" "--dpi-desync-hostfakesplit-midhost=host-2" "--dpi-desync-split-seqovl=726" "--dpi-desync-fooling=badsum,badseq" "--dpi-desync-badseq-increment=0" | cat; }
+strategy_v2() { printf '%s\n' "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=hostfakesplit" "--dpi-desync-hostfakesplit-mod=host=m.ok.ru" cat; \
+printf '%s\n' "--dpi-desync-hostfakesplit-midhost=host-2" "--dpi-desync-split-seqovl=1" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/TLS_ClientHello_rkn_gov_ru.bin" "--dpi-desync-fooling=badsum,badseq" "--dpi-desync-badseq-increment=0" | cat; }
+
 { echo "  option NFQWS_OPT '"; echo "#${version} УДАЛИТЕ ЭТУ СТРОЧКУ, ЕСЛИ ИЗМЕНЯЕТЕ СТРАТЕГИЮ !!!"; strategy_${version}; echo "'"; } >> "$CONF"
 # echo -e "${CYAN}Добавляем домены в исключения${NC}"; rm -f "$EXCLUDE_FILE"; wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL" || echo -e "\n${RED}Не удалось загрузить exclude файл${NC}\n"
 echo -e "${CYAN}Редактируем ${NC}/etc/hosts${NC}"; hosts_add; fileGP="/opt/zapret/ipset/zapret-hosts-google.txt"; printf '%s\n' "gvt1.com" "googleplay.com" "play.google.com" "beacons.gvt2.com" "play.googleapis.com" "play-fe.googleapis.com" \
@@ -313,7 +296,7 @@ echo -e "\n${YELLOW}Установленная версия:   ${INST_COLOR}$INS
 [ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*1024-19293,19345-49999,50101-65535" "$CONF" && grep -q -- "--filter-udp=1024-19293,19345-49999,50101-65535" "$CONF" && echo -e "${YELLOW}Стратегия для игр:${NC}      ${GREEN}активирована${NC}"
 [ -n "$DOH_STATUS" ] && opkg list-installed | grep -q '^https-dns-proxy ' && echo -e "${YELLOW}DNS over HTTPS:${NC}         $DOH_STATUS"; web_is_enabled && if web_is_enabled; then echo -e "${YELLOW}Доступ из браузера:${NC}     http://192.168.1.1:7681"; fi
 quic_is_blocked && if quic_is_blocked; then echo -e "${YELLOW}Блокировка QUIC:${NC}        ${GREEN}включена${NC}"; fi; show_current_strategy && [ -n "$ver" ] && echo -e "${YELLOW}Используется стратегия:${NC} ${CYAN}$ver${NC}"
-echo -e "\n${CYAN}1) ${GREEN}Установить${NC} Zapret\n${CYAN}2) ${GREEN}Меню выбора стратегий${NC}\n${CYAN}3) ${GREEN}Вернуть ${NC}настройки по умолчанию\n${CYAN}4) ${GREEN}$str_stp_zpr ${NC}Zapret"
+echo -e "\n${CYAN}1) ${GREEN}Установить${NC} Zapret\n${CYAN}2) ${GREEN}Меню стратегий${NC}\n${CYAN}3) ${GREEN}Вернуть ${NC}настройки по умолчанию\n${CYAN}4) ${GREEN}$str_stp_zpr ${NC}Zapret"
 echo -e "${CYAN}5) ${GREEN}Удалить ${NC}Zapret\n${CYAN}6) ${GREEN}$menu_game\n${CYAN}7) ${GREEN}Меню установки скриптов${NC}\n${CYAN}8) ${GREEN}Удалить → установить → настроить${NC} Zapret"
 echo -e "${CYAN}9) ${GREEN}Меню ${NC}DNS over HTTPS\n${CYAN}0) ${GREEN}Системное меню${NC}" ; echo -ne "${CYAN}Enter) ${GREEN}Выход${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read choice
 case "$choice" in 1) install_Zapret ;; 2) menu_str ;; 3) comeback_def ;; 4) pgrep -f /opt/zapret && stop_zapret || start_zapret ;; 5) uninstall_zapret ;; 6) fix_GAME ;; 7) scrypt_install ;; 8) zapret_key ;;
