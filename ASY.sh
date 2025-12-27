@@ -12,7 +12,7 @@ TIMEOUT=3
 # Скачать список стратегий
 curl -fsSL "$STR_URL" -o "$TMP_LIST" || { echo "Не удалось скачать список"; exit 1; }
 
-TOTAL=$(grep -c '^YT[0-9]\+' "$TMP_LIST")
+TOTAL=$(grep -c '^Yv[0-9]\+' "$TMP_LIST")
 echo "[ZAPRET] Найдено стратегий: $TOTAL"
 echo
 
@@ -53,7 +53,7 @@ check_access() {
 }
 
 while IFS= read -r LINE || [ -n "$LINE" ]; do
-    if echo "$LINE" | grep -q '^YT[0-9]\+'; then
+    if echo "$LINE" | grep -q '^Yv[0-9]\+'; then
         if [ -n "$CURRENT_NAME" ]; then
             COUNT=$((COUNT + 1))
             echo "[ZAPRET] ▶ Применяем стратегию: $CURRENT_NAME ($COUNT/$TOTAL)"
