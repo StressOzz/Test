@@ -44,7 +44,7 @@ apply_strategy() {
         printf "%b\n" "$BODY"
         echo "'"
     } >> "$ZAPRET_CONF"
-    /etc/init.d/zapret restart >/dev/null 2>&1
+    chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1;
 }
 
 # Проверка доступа
