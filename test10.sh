@@ -88,6 +88,112 @@ echo -e "${CYAN}Удаляем временные файлы${NC}"; rm -rf /opt/
 crontab -l 2>/dev/null | grep -v -i "zapret" | crontab - 2>/dev/null; nft list tables 2>/dev/null | awk '{print $2}' | grep -E '(zapret|ZAPRET)' | while read t; do [ -n "$t" ] && nft delete table "$t" 2>/dev/null; done
 hosts_clear; echo -e "Zapret ${GREEN}полностью удалён!${NC}\n"; [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter..." dummy; }
 # ==========================================
+# Подбор стратегии для Ютуб
+# ==========================================
+auto_stryou() {
+ZAPRET_CONF="/etc/config/zapret"
+STR_URL="https://raw.githubusercontent.com/StressOzz/Test/refs/heads/main/ListStrYou"
+TMP_LIST="/tmp/zapret_yt_list.txt"
+SAVED_STR="/opt/StrYou"
+
+TEST_HOST="https://rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com"
+TIMEOUT=3
+
+# Скачать список стратегий
+curl -fsSL "$STR_URL" -o "$TMP_LIST" || { echo "Не удалось скачать список"; exit 1; }
+
+TOTAL=$(grep -c '^Yv[0-9]\+' "$TMP_LIST")
+echo "[ZAPRET] Найдено стратегий: $TOTAL"
+echo
+
+CURRENT_NAME=""
+CURRENT_BODY=""
+COUNT=0
+
+apply_strategy() {
+    NAME="$1"
+    BODY="$2"
+    # Очищаем предыдущую стратегию
+    sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$ZAPRET_CONF"
+    {
+        echo "  option NFQWS_OPT '"
+        echo "#AUTO $NAME"
+        printf "%b\n" "$BODY"
+        echo "'"
+    } >> "$ZAPRET_CONF"
+    # Применяем стратегию
+    chmod +x /opt/zapret/sync_config.sh
+    /opt/zapret/sync_config.sh
+    /etc/init.d/zapret restart >/dev/null 2>&1
+}
+
+check_access() {
+    curl -s --connect-timeout "$TIMEOUT" -m "$TIMEOUT" "$TEST_HOST" >/dev/null && echo "ok" || echo "fail"
+}
+
+while IFS= read -r LINE || [ -n "$LINE" ]; do
+    if echo "$LINE" | grep -q '^Yv[0-9]\+'; then
+        if [ -n "$CURRENT_NAME" ]; then
+            COUNT=$((COUNT + 1))
+            echo "[ZAPRET] Применяем стратегию: $CURRENT_NAME ($COUNT/$TOTAL)"
+            apply_strategy "$CURRENT_NAME" "$CURRENT_BODY"
+
+            STATUS=$(check_access)
+            if [ "$STATUS" = "ok" ]; then
+                echo "✅ Доступ есть"
+                echo "Проверьте видео в браузере"
+                echo "Enter — оставить стратегию, N — продолжить перебор"
+                read -r ANSWER </dev/tty
+                if [ -z "$ANSWER" ]; then
+                    {
+                        echo "#$CURRENT_NAME"
+                        printf "%b\n" "$CURRENT_BODY"
+                    } > "$SAVED_STR"
+                    echo "🏁 Рабочая стратегия: $CURRENT_NAME сохранена в $SAVED_STR"
+echo && read -p "Нажмите Enter..." dummy; return
+                fi
+            else
+                echo "❌ Нет доступа"
+echo && read -p "Нажмите Enter..." dummy; return
+            fi
+        fi
+        CURRENT_NAME="$LINE"
+        CURRENT_BODY=""
+    else
+        [ -n "$LINE" ] && CURRENT_BODY="${CURRENT_BODY}${LINE}\n"
+    fi
+done < "$TMP_LIST"
+
+# Последняя стратегия
+if [ -n "$CURRENT_NAME" ]; then
+    COUNT=$((COUNT + 1))
+    echo "[ZAPRET] ▶ Применяем стратегию: $CURRENT_NAME ($COUNT/$TOTAL)"
+    apply_strategy "$CURRENT_NAME" "$CURRENT_BODY"
+
+    STATUS=$(check_access)
+    if [ "$STATUS" = "ok" ]; then
+        echo "✅ Доступ есть"
+        echo "Проверьте видео в браузере"
+        echo "Enter — оставить стратегию, N — продолжить перебор"
+        read -r ANSWER </dev/tty
+        if [ -z "$ANSWER" ]; then
+            {
+                echo "#$CURRENT_NAME"
+                printf "%b\n" "$CURRENT_BODY"
+            } > "$SAVED_STR"
+            echo "🏁 Рабочая стратегия: $CURRENT_NAME сохранена в $SAVED_STR"
+echo && read -p "Нажмите Enter..." dummy; return
+        fi
+    else
+        echo "❌ Нет доступа"
+echo && read -p "Нажмите Enter..." dummy; return
+    fi
+fi
+
+echo "🚫 Рабочая стратегия не найдена"
+echo && read -p "Нажмите Enter..." dummy; return
+}
+# ==========================================
 # Выбор стратегий
 # ==========================================
 show_current_strategy() { [ -f "$CONF" ] || return; for v in v1 v2 v3 v4 v5 v6; do grep -q "#$v" "$CONF" && { ver="$v"; return; } done; }
