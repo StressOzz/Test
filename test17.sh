@@ -148,7 +148,7 @@ auto_stryou() {
                         } > "$SAVED_STR"
                         echo "🏁 Рабочая стратегия: $CURRENT_NAME сохранена в $SAVED_STR"
                         read -p "Нажмите Enter..." dummy
-                        return 0   # возвращаемся в menu_str
+                        return 0
                     fi
                 else
                     echo "❌ Нет доступа"
@@ -179,6 +179,7 @@ auto_stryou() {
                     printf "%b\n" "$CURRENT_BODY"
                 } > "$SAVED_STR"
                 echo "🏁 Рабочая стратегия: $CURRENT_NAME сохранена в $SAVED_STR"
+                read -p "Нажмите Enter..." dummy
                 return 0
             fi
         else
