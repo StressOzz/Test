@@ -9,13 +9,6 @@ TEST_HOST="https://rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com"
 TIMEOUT=5
 WAIT_AFTER_APPLY=3
 
-# Проверяем, есть ли сохранённая стратегия
-if [ -f "$SAVED_STR" ]; then
-    STRATEGY_NAME=$(head -n1 "$SAVED_STR")
-    echo "[ZAPRET] Используем сохранённую стратегию: $STRATEGY_NAME"
-    exit 0
-fi
-
 # Скачать список стратегий
 curl -fsSL "$STR_URL" -o "$TMP_LIST" || { echo "Не удалось скачать список"; exit 1; }
 
@@ -49,7 +42,7 @@ apply_strategy() {
         printf "%b\n" "$BODY"
         echo "'"
     } >> "$ZAPRET_CONF"
-    # Применяем с нужной последовательностью
+    # Применяем стратегию
     chmod +x /opt/zapret/sync_config.sh
     /opt/zapret/sync_config.sh
     /etc/init.d/zapret restart >/dev/null 2>&1
@@ -75,6 +68,7 @@ while IFS= read -r LINE || [ -n "$LINE" ]; do
                 echo "Enter — оставить стратегию, N — продолжить перебор"
                 read -r ANSWER </dev/tty
                 if [ -z "$ANSWER" ]; then
+                    # Сохраняем рабочую стратегию в StrYou
                     {
                         echo "#$CURRENT_NAME"
                         printf "%b\n" "$CURRENT_BODY"
@@ -108,6 +102,7 @@ if [ -n "$CURRENT_NAME" ]; then
         echo "Enter — оставить стратегию, N — продолжить перебор"
         read -r ANSWER </dev/tty
         if [ -z "$ANSWER" ]; then
+            # Сохраняем рабочую стратегию в StrYou
             {
                 echo "#$CURRENT_NAME"
                 printf "%b\n" "$CURRENT_BODY"
