@@ -147,7 +147,8 @@ auto_stryou() {
                             printf "%b\n" "$CURRENT_BODY"
                         } > "$SAVED_STR"
                         echo "🏁 Рабочая стратегия: $CURRENT_NAME сохранена в $SAVED_STR"
-                        return 0
+                        read -p "Нажмите Enter..." dummy
+                        return 0   # возвращаемся в menu_str
                     fi
                 else
                     echo "❌ Нет доступа"
@@ -186,6 +187,7 @@ auto_stryou() {
     fi
 
     echo "🚫 Рабочая стратегия не найдена"
+    read -p "Нажмите Enter..." dummy
     return 1
 }
 # ==========================================
@@ -196,7 +198,7 @@ menu_str() { local NO_PAUSE=$1; [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RE
 while true; do if [ "$NO_PAUSE" = "1" ]; then version=$STR_VERSION_AUTOINSTALL; else clear; echo -e "${MAGENTA}Меню стратегии${NC}\n"; show_current_strategy && [ -n "$ver" ] && echo -e "${YELLOW}Используется стратегия:${NC} $ver\n"
 echo -e "${CYAN}1) ${GREEN}Установить стратегию${NC} v1\n${CYAN}2) ${GREEN}Установить стратегию${NC} v2"
 echo -ne "${CYAN}0) ${GREEN}Подобрать стратегию для ${NC}YouTube\n${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read choiceST
-case "$choiceST" in 1) version="v1" ;; 2) version="v2" ;; 0) auto_stryou && return ;; *) return ;; esac; fi
+case "$choiceST" in 1) version="v1" ;; 2) version="v2" ;; 0) auto_stryou ;; *) return ;; esac; fi
 [ "$NO_PAUSE" != "1" ] && echo; echo -e "${MAGENTA}Устанавливаем стратегию ${version}${NC}\n${CYAN}Меняем стратегию${NC}"; sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
 strategy_v1() { printf '%s\n' "--filter-tcp=443" "--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt" "--dpi-desync=multisplit" "--dpi-desync-split-pos=1,sniext+1" "--dpi-desync-split-seqovl=1" "--new" | cat; \
 printf '%s\n' "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=hostfakesplit" "--dpi-desync-hostfakesplit-mod=host=rzd.ru" "--dpi-desync-hostfakesplit-midhost=host-2" "--dpi-desync-split-seqovl=726" "--dpi-desync-fooling=badsum,badseq" "--dpi-desync-badseq-increment=0" | cat; }
