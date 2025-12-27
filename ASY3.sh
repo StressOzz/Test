@@ -21,6 +21,7 @@ CURRENT_NAME=""
 CURRENT_BODY=""
 COUNT=0
 
+# Прогресс-бар
 progress_bar() {
     done="$1"
     total="$2"
@@ -32,6 +33,7 @@ progress_bar() {
     echo "[$BAR] $done/$total"
 }
 
+# Применение стратегии
 apply_strategy() {
     NAME="$1"
     BODY="$2"
@@ -45,6 +47,7 @@ apply_strategy() {
     /etc/init.d/zapret restart >/dev/null 2>&1
 }
 
+# Проверка доступа
 check_access() {
     curl -I -s --connect-timeout "$TIMEOUT" -m "$TIMEOUT" -o /dev/null -w "%{http_code}" "$TEST_HOST"
 }
@@ -62,9 +65,8 @@ while IFS= read -r LINE || [ -n "$LINE" ]; do
             if echo "$CODE" | grep -Eq '^[2-4][0-9]{2}$'; then
                 echo "✅ Доступ есть (HTTP $CODE)"
                 echo "Проверьте видео в браузере"
-                echo "Enter — оставить стратегию"
-                echo "N — продолжить перебор"
-                read -r ANSWER
+                echo "Enter — оставить стратегию, N — продолжить перебор"
+                read -r ANSWER </dev/tty
                 if [ -z "$ANSWER" ]; then
                     echo "🏁 Рабочая стратегия: $CURRENT_NAME"
                     echo "$CURRENT_NAME" > "$RESULT_FILE"
@@ -93,9 +95,8 @@ if [ -n "$CURRENT_NAME" ]; then
     if echo "$CODE" | grep -Eq '^[2-4][0-9]{2}$'; then
         echo "✅ Доступ есть (HTTP $CODE)"
         echo "Проверьте видео в браузере"
-        echo "Enter — оставить стратегию"
-        echo "N — продолжить перебор"
-        read -r ANSWER
+        echo "Enter — оставить стратегию, N — продолжить перебор"
+        read -r ANSWER </dev/tty
         if [ -z "$ANSWER" ]; then
             echo "🏁 Рабочая стратегия: $CURRENT_NAME"
             echo "$CURRENT_NAME" > "$RESULT_FILE"
