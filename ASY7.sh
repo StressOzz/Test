@@ -75,7 +75,10 @@ while IFS= read -r LINE || [ -n "$LINE" ]; do
                 echo "Enter — оставить стратегию, N — продолжить перебор"
                 read -r ANSWER </dev/tty
                 if [ -z "$ANSWER" ]; then
-                    echo "$CURRENT_NAME" > "$SAVED_STR"
+                    {
+                        echo "#$CURRENT_NAME"
+                        printf "%b\n" "$CURRENT_BODY"
+                    } > "$SAVED_STR"
                     echo "🏁 Рабочая стратегия: $CURRENT_NAME сохранена в $SAVED_STR"
                     exit 0
                 fi
@@ -105,7 +108,10 @@ if [ -n "$CURRENT_NAME" ]; then
         echo "Enter — оставить стратегию, N — продолжить перебор"
         read -r ANSWER </dev/tty
         if [ -z "$ANSWER" ]; then
-            echo "$CURRENT_NAME" > "$SAVED_STR"
+            {
+                echo "#$CURRENT_NAME"
+                printf "%b\n" "$CURRENT_BODY"
+            } > "$SAVED_STR"
             echo "🏁 Рабочая стратегия: $CURRENT_NAME сохранена в $SAVED_STR"
             exit 0
         fi
