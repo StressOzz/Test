@@ -311,11 +311,16 @@ menu_str() {
         echo -e "${MAGENTA}Меню стратегии${NC}\n"
         show_current_strategy
 
-current_ver="$( [ -n "$ver" ] && echo "$ver" )"
-current_yv="$(grep -m1 '^#Yv[0-9]\+' "$CONF" | tr -d '#')"
+current_ver="$ver"
+current_yv=$(grep -m1 '^#Yv[0-9]\+' "$CONF" | tr -d '#')
 
-[ -n "$current_ver$⁠current_yv" ] && echo -e "${YELLOW}Используется стратегия:${NC} ${current_ver}${current_ver:+ / }${current_yv}\n"
-
+if [ -n "$current_ver" ] && [ -n "$current_yv" ]; then
+    echo -e "${YELLOW}Используется стратегия:${NC} $current_ver / $current_yv\n"
+elif [ -n "$current_ver" ]; then
+    echo -e "${YELLOW}Используется стратегия:${NC} $current_ver\n"
+elif [ -n "$current_yv" ]; then
+    echo -e "${YELLOW}Используется стратегия:${NC} $current_yv\n"
+fi
         
 # ver_str=""
 # [ -n "$ver" ] && ver_str="$ver"
