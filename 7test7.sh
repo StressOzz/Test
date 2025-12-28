@@ -91,7 +91,7 @@ hosts_clear; echo -e "Zapret ${GREEN}полностью удалён!${NC}\n"; [
 # ==========================================
 auto_stryou() { CONF="/etc/config/zapret"; STR_URL="https://raw.githubusercontent.com/StressOzz/Test/refs/heads/main/ListStrYou"; TMP_LIST="/tmp/zapret_yt_list.txt"; SAVED_STR="/opt/StrYou"; OLD_STR="/opt/StrOLD"
 TEST_HOST="https://rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com"; TIMEOUT=4; awk '/^[[:space:]]*option NFQWS_OPT '\''/{flag=1} flag{print}' "$CONF" > "$OLD_STR"; curl -fsSL "$STR_URL" -o "$TMP_LIST" || { echo "Не удалось скачать список"
-read -p "Нажмите Enter..." dummy </dev/tty; return 1; }; TOTAL=$(grep -c '^Yv[0-9]\+' "$TMP_LIST"); echo -e "\n${MAGENTA}Подбираем стратегию для ${NC}YouTube${NC}"; echo -e "${CYAN}Найдено стратегий: ${NC}$TOTAL"; CURRENT_NAME=""
+read -p "Нажмите Enter..." dummy </dev/tty; return 1; }; TOTAL=$(grep -c '^Yv[0-9]\+' "$TMP_LIST"); echo -e "\n${MAGENTA}Подбираем стратегию для ${NC}YouTube${NC}"; echo -e "${CYAN}Найдено ${NC}$TOTAL${CYAN} стратегий${NC}"; CURRENT_NAME=""
 CURRENT_BODY=""; COUNT=0; apply_strategy() { NAME="$1"; BODY="$2"; sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; { echo "  option NFQWS_OPT '"; echo "#AUTO $NAME"; printf "%b\n" "$BODY"; echo "'"; } >> "$CONF"
 chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1; }; check_access() { curl -s --connect-timeout "$TIMEOUT" -m "$TIMEOUT" "$TEST_HOST" >/dev/null && echo "ok" || echo "fail"; }
 while IFS= read -r LINE || [ -n "$LINE" ]; do if echo "$LINE" | grep -q '^Yv[0-9]\+'; then if [ -n "$CURRENT_NAME" ]; then COUNT=$((COUNT + 1)); echo -e "\n${CYAN}Применяем стратегию: ${NC}$CURRENT_NAME ($COUNT/$TOTAL)"
@@ -110,8 +110,6 @@ chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zap
 # ==========================================
 # Выбор стратегий
 # ==========================================
-show_current_strategy() {
-[ -f "$CONF" ] || return; ver=""; for i in $(seq 1 7); do grep -q "#v$i" "$CONF" && { ver="v$i"; break; }; done; yv_ver=""; for i in $(seq -w 1 15); do grep -q "#Yv$i" "$CONF" && { yv_ver="Yv$i"; break; }; done; }
 strategy_v1() { printf '%s\n' "#v1" "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake,multidisorder" "--dpi-desync-split-seqovl=681" "--dpi-desync-split-pos=1" "--dpi-desync-fooling=badseq" | cat; \
 printf '%s\n' "--dpi-desync-badseq-increment=10000000" "--dpi-desync-repeats=6" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin" "--dpi-desync-fake-tls-mod=rnd,dupsid,sni=fonts.google.com" "--new" | cat; \
 printf '%s\n' "--filter-udp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake" "--dpi-desync-repeats=6" "--dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin" | cat; }
@@ -136,6 +134,7 @@ strategy_v6() { printf '%s\n' "#Yv02" "--filter-tcp=443" "--hostlist=/opt/zapret
 printf '%s\n' "#v6" "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=hostfakesplit" "--dpi-desync-hostfakesplit-mod=host=max.ru" "--dpi-desync-hostfakesplit-midhost=host-2" "--dpi-desync-split-seqovl=726" "--dpi-desync-fooling=badsum,badseq" "--dpi-desync-badseq-increment=0" | cat; }
 strategy_v7() { printf '%s\n' "#v7" "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=hostfakesplit" "--dpi-desync-hostfakesplit-mod=host=m.ok.ru" | cat; \
 printf '%s\n' "--dpi-desync-hostfakesplit-midhost=host-2" "--dpi-desync-split-seqovl=1" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/TLS_ClientHello_rkn_gov_ru.bin" "--dpi-desync-fooling=badsum,badseq" "--dpi-desync-badseq-increment=0" | cat; }
+show_current_strategy() { [ -f "$CONF" ] || return; ver=""; for i in $(seq 1 7); do grep -q "#v$i" "$CONF" && { ver="v$i"; break; }; done; yv_ver=""; for i in $(seq -w 1 15); do grep -q "#Yv$i" "$CONF" && { yv_ver="Yv$i"; break; }; done; }
 dis_str() { if ! grep -q "option NFQWS_PORTS_UDP.*19294-19344,50000-50100" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'$/,19294-19344,50000-50100'/" "$CONF"; fi
 if ! grep -q "option NFQWS_PORTS_TCP.*2053,2083,2087,2096,8443" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_TCP '/s/'$/,2053,2083,2087,2096,8443'/" "$CONF"; fi
 if ! grep -q -- "--filter-udp=19294-19344,50000-50100" "$CONF"; then last_line1=$(grep -n "^'$" "$CONF" | tail -n1 | cut -d: -f1); if [ -n "$last_line1" ]; then sed -i "${last_line1},\$d" "$CONF"; fi
