@@ -176,19 +176,31 @@ auto_StrYOU() {
 
 if ! grep -q '^#Yv' /opt/StrNEW; then
     awk '
-        BEGIN { del=0 }
-        /^[[:space:]]*--filter-tcp=443[[:space:]]*$/ {
-            del=1
-            next
-        }
-        del && /^[[:space:]]*--hostlist=\/opt\/zapret\/ipset\/zapret-hosts-google\.txt[[:space:]]*$/ {
-            next
-        }
-        del && (/--new/ || /^[[:space:]]*'\''[[:space:]]*$/) {
+        BEGIN { del=0; prev="" }
+
+        del && /^[[:space:]]*--new[[:space:]]*$/ {
             del=0
+            print
             next
         }
-        !del
+
+        del { next }
+
+        prev ~ /^[[:space:]]*--filter-tcp=443[[:space:]]*$/ &&
+        /^[[:space:]]*--hostlist=\/opt\/zapret\/ipset\/zapret-hosts-google\.txt[[:space:]]*$/ {
+            del=1
+            prev=""
+            next
+        }
+
+        {
+            if (prev != "") print prev
+            prev=$0
+        }
+
+        END {
+            if (prev != "") print prev
+        }
     ' /opt/StrNEW > /opt/StrNEW.tmp && mv /opt/StrNEW.tmp /opt/StrNEW
 fi
 
@@ -251,19 +263,31 @@ fi
 
 if ! grep -q '^#Yv' /opt/StrNEW; then
     awk '
-        BEGIN { del=0 }
-        /^[[:space:]]*--filter-tcp=443[[:space:]]*$/ {
-            del=1
-            next
-        }
-        del && /^[[:space:]]*--hostlist=\/opt\/zapret\/ipset\/zapret-hosts-google\.txt[[:space:]]*$/ {
-            next
-        }
-        del && (/--new/ || /^[[:space:]]*'\''[[:space:]]*$/) {
+        BEGIN { del=0; prev="" }
+
+        del && /^[[:space:]]*--new[[:space:]]*$/ {
             del=0
+            print
             next
         }
-        !del
+
+        del { next }
+
+        prev ~ /^[[:space:]]*--filter-tcp=443[[:space:]]*$/ &&
+        /^[[:space:]]*--hostlist=\/opt\/zapret\/ipset\/zapret-hosts-google\.txt[[:space:]]*$/ {
+            del=1
+            prev=""
+            next
+        }
+
+        {
+            if (prev != "") print prev
+            prev=$0
+        }
+
+        END {
+            if (prev != "") print prev
+        }
     ' /opt/StrNEW > /opt/StrNEW.tmp && mv /opt/StrNEW.tmp /opt/StrNEW
 fi
 
