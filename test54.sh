@@ -234,10 +234,10 @@ show_current_strategy() {
     [ -f "$CONF" ] || return
 
     # обычные стратегии v1–v7
-    ver=""
-    for v in v1 v2 v3 v4 v5 v6 v7; do
-        grep -q "#$v" "$CONF" && { ver="$v"; break; }
-    done
+ver=""
+for i in $(seq 1 7); do
+    grep -q "#v$i" "$CONF" && { ver="v$i"; break; }
+done
 
     # YouTube стратегии Yv01–Yv15
     yv_ver=""
@@ -324,8 +324,15 @@ menu_str() {
     while true; do
         clear
         echo -e "${MAGENTA}Меню стратегии${NC}\n"
+
+
+show_current_strategy
+[ -n "$ver" ] && [ -n "$yv_ver" ] && echo -e "${YELLOW}Используется стратегия:${NC} $ver / $yv_ver"
+[ -n "$ver" ] && [ -z "$yv_ver" ] && echo -e "${YELLOW}Используется стратегия:${NC} $ver"
+[ -z "$ver" ] && [ -n "$yv_ver" ] && echo -e "${YELLOW}Используется стратегия:${NC} $yv_ver"
+
         
-show_current_strategy; if [ -n "$ver" ] && [ -n "$yv_ver" ]; then echo -e "${YELLOW}Используется стратегия:${NC} $ver / $yv_ver"; elif [ -n "$ver" ]; then echo -e "${YELLOW}Используется стратегия:${NC} $ver"; elif [ -n "$yv_ver" ]; then echo -e "${YELLOW}Используется стратегия:${NC} $yv_ver"; fi
+# show_current_strategy; if [ -n "$ver" ] && [ -n "$yv_ver" ]; then echo -e "${YELLOW}Используется стратегия:${NC} $ver / $yv_ver\n"; elif [ -n "$ver" ]; then echo -e "${YELLOW}Используется стратегия:${NC} $ver\n"; elif [ -n "$yv_ver" ]; then echo -e "${YELLOW}Используется стратегия:${NC} $yv_ver\n"; fi
 
 
 
