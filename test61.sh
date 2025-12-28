@@ -139,14 +139,14 @@ echo -e "${MAGENTA}Подобираем стратегию для ${NC}YouTube${
         if echo "$LINE" | grep -q '^Yv[0-9]\+'; then
             if [ -n "$CURRENT_NAME" ]; then
                 COUNT=$((COUNT + 1))
-    echo -e "${CYAN}Применяем стратегию: ${NC}$CURRENT_NAME ($COUNT/$TOTAL)"
+    echo -e "\n${CYAN}Применяем стратегию: ${NC}$CURRENT_NAME ($COUNT/$TOTAL)"
     
                 apply_strategy "$CURRENT_NAME" "$CURRENT_BODY"
 
                 STATUS=$(check_access)
                 if [ "$STATUS" = "ok" ]; then
     echo -e "${GREEN}Видео на ПК открывается!${NC}\n${YELLOW}Проверьте работу ${NC}YouTube${YELLOW} на других устройствах!${NC}"
-echo -en "${CYAN} Enter - ${GREEN}применить стратегию, ${CYAN} N - ${GREEN}продолжить подбор:${NC}"
+echo -en "Enter - ${GREEN}применить стратегию, n${NC}N - ${GREEN}продолжить подбор:${NC}"
                     read -r ANSWER </dev/tty
                     if [ -z "$ANSWER" ]; then
                         # Сохраняем рабочую стратегию
@@ -185,13 +185,13 @@ echo -en "${CYAN} Enter - ${GREEN}применить стратегию, ${CYAN}
     # Последняя стратегия
     if [ -n "$CURRENT_NAME" ]; then
         COUNT=$((COUNT + 1))
-    echo -e "${CYAN}Применяем стратегию: ${NC}$CURRENT_NAME ($COUNT/$TOTAL)"
+    echo -e "\n${CYAN}Применяем стратегию: ${NC}$CURRENT_NAME ($COUNT/$TOTAL)"
         apply_strategy "$CURRENT_NAME" "$CURRENT_BODY"
 
         STATUS=$(check_access)
         if [ "$STATUS" = "ok" ]; then
 cho -e "${GREEN}Видео на ПК открывается!${NC}\n${YELLOW}Проверьте работу ${NC}YouTube${YELLOW} на других устройствах!${NC}"
-echo -en "${CYAN} Enter - ${GREEN}применить стратегию, ${CYAN} N - ${GREEN}продолжить подбор:${NC}"
+echo -en "Enter - ${GREEN}применить стратегию, n${NC}N - ${GREEN}продолжить подбор:${NC}"
             read -r ANSWER </dev/tty
             if [ -z "$ANSWER" ]; then
                 # Сохраняем рабочую стратегию
