@@ -89,47 +89,12 @@ hosts_clear; echo -e "Zapret ${GREEN}полностью удалён!${NC}\n"; [
 # ==========================================
 # Подбор стратегии для Ютуб
 # ==========================================
-auto_stryou() {
-    CONF="/etc/config/zapret"
-    STR_URL="https://raw.githubusercontent.com/StressOzz/Test/refs/heads/main/ListStrYou"
-    TMP_LIST="/tmp/zapret_yt_list.txt"
-    SAVED_STR="/opt/StrYou"
-    OLD_STR="/opt/StrOLD"
-
-    TEST_HOST="https://rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com"
-    TIMEOUT=4
-
-    # Сохраняем текущее состояние после строки option NFQWS_OPT '
-    awk '/^[[:space:]]*option NFQWS_OPT '\''/{flag=1} flag{print}' "$CONF" > "$OLD_STR"
-
-    # Скачать список стратегий
-    curl -fsSL "$STR_URL" -o "$TMP_LIST" || { echo "Не удалось скачать список"; read -p "Нажмите Enter..." dummy </dev/tty; return 1; }
-
-    TOTAL=$(grep -c '^Yv[0-9]\+' "$TMP_LIST")
-
-echo -e "\n${MAGENTA}Подбираем стратегию для ${NC}YouTube${NC}"
-
-    echo -e "${CYAN}Найдено стратегий: ${NC}$TOTAL"
-
-
-    CURRENT_NAME=""
-    CURRENT_BODY=""
-    COUNT=0
-
-    apply_strategy() {
-        NAME="$1"
-        BODY="$2"
-        sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
-        {
-            echo "  option NFQWS_OPT '"
-            echo "#AUTO $NAME"
-            printf "%b\n" "$BODY"
-            echo "'"
-        } >> "$CONF"
-        chmod +x /opt/zapret/sync_config.sh
-        /opt/zapret/sync_config.sh
-        /etc/init.d/zapret restart >/dev/null 2>&1
-    }
+auto_stryou() { STR_URL="https://raw.githubusercontent.com/StressOzz/Test/refs/heads/main/ListStrYou"; TMP_LIST="/tmp/zapret_yt_list.txt"; SAVED_STR="/opt/StrYou"; OLD_STR="/opt/StrOLD"
+TEST_HOST="https://rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com"; TIMEOUT=4; awk '/^[[:space:]]*option NFQWS_OPT '\''/{flag=1} flag{print}' "$CONF" > "$OLD_STR"
+curl -fsSL "$STR_URL" -o "$TMP_LIST" || { echo "Не удалось скачать список"; read -p "Нажмите Enter..." dummy </dev/tty; return 1; }; TOTAL=$(grep -c '^Yv[0-9]\+' "$TMP_LIST")
+echo -e "\n${MAGENTA}Подбираем стратегию для ${NC}YouTube${NC}"; echo -e "${CYAN}Найдено стратегий: ${NC}$TOTAL"; CURRENT_NAME=""; CURRENT_BODY=""; COUNT=0
+apply_strategy() { NAME="$1"; BODY="$2"; sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; { echo "  option NFQWS_OPT '"; echo "#AUTO $NAME"; printf "%b\n" "$BODY"; echo "'" } >> "$CONF"
+chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1; }
 
     check_access() {
         curl -s --connect-timeout "$TIMEOUT" -m "$TIMEOUT" "$TEST_HOST" >/dev/null && echo "ok" || echo "fail"
