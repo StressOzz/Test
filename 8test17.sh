@@ -91,73 +91,43 @@ hosts_clear; echo -e "Zapret ${GREEN}полностью удалён!${NC}\n"; [
 # ==========================================
 
 auto_stryou() {
-
     CONF="/etc/config/zapret"
     STR_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ListStrYou"
     TMP_LIST="/tmp/zapret_yt_list.txt"
     SAVED_STR="/opt/StrYou"
     OLD_STR="/opt/StrOLD"
-    NEW_STR="/opt/StrNEW"
-    TMP_COMBINED="/opt/StrTMP"
-
     TEST_HOST="https://rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com"
     TIMEOUT=4
 
-    # Сохраняем текущий NFQWS_OPT
+    # Сохраняем текущие настройки начиная с option NFQWS_OPT
     awk '/^[[:space:]]*option NFQWS_OPT '\''/{flag=1} flag{print}' "$CONF" > "$OLD_STR"
 
-    # Подчищаем Google-блок, если нет #Yv
-    if grep -q '^#Yv' "$OLD_STR"; then
-        cp "$OLD_STR" "$NEW_STR"
-    else
-        awk '
-        BEGIN { del=0; seen_filter=0 }
-        /^--filter-tcp=443$/ { seen_filter=1; next }
-        seen_filter && /^--hostlist=\/opt\/zapret\/ipset\/zapret-hosts-google.txt$/ { del=1; seen_filter=0; next }
-        del {
-            if (/^--new/ || /^\047$/) { del=0; print; next }
-            next
-        }
-        { seen_filter=0; print }
-        ' "$OLD_STR" > "$NEW_STR"
-    fi
-
     # Скачиваем список стратегий
-    curl -fsSL "$STR_URL" -o "$TMP_LIST" || {
-        echo "Не удалось скачать список"
-        read -p "Нажмите Enter..." dummy </dev/tty
-        return 1
-    }
+    curl -fsSL "$STR_URL" -o "$TMP_LIST" || { echo "Не удалось скачать список"; read -p "Нажмите Enter..." dummy </dev/tty; return 1; }
 
     TOTAL=$(grep -c '^Yv[0-9]\+' "$TMP_LIST")
     echo -e "\n${MAGENTA}Подбираем стратегию для ${NC}YouTube${NC}"
     echo -e "${CYAN}Найдено ${NC}$TOTAL${CYAN} стратегий${NC}"
 
-    CURRENT_NAME=""
-    CURRENT_BODY=""
-    COUNT=0
-
+    # Функция применения стратегии
     apply_strategy() {
         NAME="$1"
         BODY="$2"
-
         sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
-
-        {
-            echo "  option NFQWS_OPT '"
-            echo "#AUTO $NAME"
-            printf "%b\n" "$BODY"
-            echo "'"
-        } >> "$CONF"
-
+        { echo "  option NFQWS_OPT '"; echo "#AUTO $NAME"; printf "%b\n" "$BODY"; echo "'"; } >> "$CONF"
         chmod +x /opt/zapret/sync_config.sh
         /opt/zapret/sync_config.sh
         /etc/init.d/zapret restart >/dev/null 2>&1
     }
 
+    # Проверка доступа
     check_access() {
         curl -s --connect-timeout "$TIMEOUT" -m "$TIMEOUT" "$TEST_HOST" >/dev/null && echo "ok" || echo "fail"
     }
+
+    CURRENT_NAME=""
+    CURRENT_BODY=""
+    COUNT=0
 
     while IFS= read -r LINE || [ -n "$LINE" ]; do
         if echo "$LINE" | grep -q '^Yv[0-9]\+'; then
@@ -166,33 +136,26 @@ auto_stryou() {
                 echo -e "\n${CYAN}Применяем стратегию: ${NC}$CURRENT_NAME ($COUNT/$TOTAL)"
                 apply_strategy "$CURRENT_NAME" "$CURRENT_BODY"
                 STATUS=$(check_access)
-
                 if [ "$STATUS" = "ok" ]; then
-                    echo -e "${GREEN}Видео на ПК открывается!${NC}"
-                    echo -e "${YELLOW}Проверьте работу ${NC}YouTube${YELLOW} на других устройствах!${NC}"
-                    echo -en "Enter ${GREEN}- применить стратегию, ${NC}N ${GREEN}- продолжить подбор:${NC}"
+                    echo -e "${GREEN}Видео на ПК открывается!${NC}\n${YELLOW}Проверьте работу ${NC}YouTube${YELLOW} на других устройствах!${NC}"
+                    echo -en "Enter ${GREEN}- применить стратегию, ${NC}N ${GREEN}- продолжить подбор:${NC} "
                     read -r ANSWER </dev/tty
-
                     if [ -z "$ANSWER" ]; then
-                        {
-                            cat "$NEW_STR"
-                            echo "#$CURRENT_NAME"
-                            printf "%b\n" "$CURRENT_BODY"
-                        } > "$TMP_COMBINED"
-
+                        { echo "#$CURRENT_NAME"; printf "%b\n" "$CURRENT_BODY"; } > "$SAVED_STR"
+                        echo -e "${CYAN}Применяем стратегию и перезапускаем Zapret${NC}"
+                        # Чистим StrOLD по новым правилам
+                        sed -i '/^#Yv.*/d' "$OLD_STR"
+                        awk '{
+                          if ($0=="--filter-tcp=443") {f=1; next}
+                          if (f && $0=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt") {f=2; next}
+                          if (f==2 && $0 ~ /--new$/) {f=0; next}
+                          if (!f) print
+                        }' "$OLD_STR" > /opt/StrNEW
                         sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
-                        cat "$TMP_COMBINED" >> "$CONF"
-
+                        cat /opt/StrNEW >> "$CONF"
                         chmod +x /opt/zapret/sync_config.sh
                         /opt/zapret/sync_config.sh
                         /etc/init.d/zapret restart >/dev/null 2>&1
-
-                        # Сохраняем рабочую стратегию отдельно
-                        {
-                            echo "#$CURRENT_NAME"
-                            printf "%b\n" "$CURRENT_BODY"
-                        } > "$SAVED_STR"
-
                         echo -e "${GREEN}Стратегия применена!${NC}\n"
                         read -p "Нажмите Enter..." dummy </dev/tty
                         return 0
@@ -208,39 +171,31 @@ auto_stryou() {
         fi
     done < "$TMP_LIST"
 
-    # Последняя стратегия
+    # Обработка последней стратегии
     if [ -n "$CURRENT_NAME" ]; then
         COUNT=$((COUNT + 1))
         echo -e "\n${CYAN}Применяем стратегию: ${NC}$CURRENT_NAME ($COUNT/$TOTAL)"
         apply_strategy "$CURRENT_NAME" "$CURRENT_BODY"
         STATUS=$(check_access)
-
         if [ "$STATUS" = "ok" ]; then
-            echo -e "${GREEN}Видео на ПК открывается!${NC}"
-            echo -e "${YELLOW}Проверьте работу ${NC}YouTube${YELLOW} на других устройствах!${NC}"
-            echo -en "Enter ${GREEN}- применить стратегию,${NC} N ${GREEN}- продолжить подбор:${NC}"
+            echo -e "${GREEN}Видео на ПК открывается!${NC}\n${YELLOW}Проверьте работу ${NC}YouTube${YELLOW} на других устройствах!${NC}"
+            echo -en "Enter ${GREEN}- применить стратегию,${NC} N ${GREEN}- продолжить подбор:${NC} "
             read -r ANSWER </dev/tty
-
             if [ -z "$ANSWER" ]; then
-                {
-                    cat "$NEW_STR"
-                    echo "#$CURRENT_NAME"
-                    printf "%b\n" "$CURRENT_BODY"
-                } > "$TMP_COMBINED"
-
+                { echo "#$CURRENT_NAME"; printf "%b\n" "$CURRENT_BODY"; } > "$SAVED_STR"
+                echo -e "${CYAN}Применяем стратегию и перезапускаем Zapret${NC}"
+                sed -i '/^#Yv.*/d' "$OLD_STR"
+                awk '{
+                  if ($0=="--filter-tcp=443") {f=1; next}
+                  if (f && $0=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt") {f=2; next}
+                  if (f==2 && $0 ~ /--new$/) {f=0; next}
+                  if (!f) print
+                }' "$OLD_STR" > /opt/StrNEW
                 sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
-                cat "$TMP_COMBINED" >> "$CONF"
-
+                cat /opt/StrNEW >> "$CONF"
                 chmod +x /opt/zapret/sync_config.sh
                 /opt/zapret/sync_config.sh
                 /etc/init.d/zapret restart >/dev/null 2>&1
-
-                # Сохраняем рабочую стратегию
-                {
-                    echo "#$CURRENT_NAME"
-                    printf "%b\n" "$CURRENT_BODY"
-                } > "$SAVED_STR"
-
                 echo -e "${GREEN}Стратегия применена!${NC}\n"
                 read -p "Нажмите Enter..." dummy </dev/tty
                 return 0
@@ -250,18 +205,16 @@ auto_stryou() {
         fi
     fi
 
-    # Восстанавливаем старое состояние, если ни одна стратегия не подошла
+    # Если рабочая стратегия не найдена
     sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
     cat "$OLD_STR" >> "$CONF"
     chmod +x /opt/zapret/sync_config.sh
     /opt/zapret/sync_config.sh
     /etc/init.d/zapret restart >/dev/null 2>&1
-
     echo -e "\n${RED}Рабочая стратегия для YouTube не найдена!${NC}\n"
     read -p "Нажмите Enter..." dummy </dev/tty
     return 1
 }
-
 
 
 
