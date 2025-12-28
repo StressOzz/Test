@@ -161,6 +161,7 @@ auto_stryou() {
                                     next
                                 }
                             }
+                            # удаляем только #Yv без пробела после #
                             if ($0 ~ /^[[:space:]]*#Yv/) next
                             print
                         }' "$OLD_STR" > /opt/StrNEW
@@ -220,6 +221,7 @@ auto_stryou() {
                             next
                         }
                     }
+                    # удаляем только #Yv без пробела после #
                     if ($0 ~ /^[[:space:]]*#Yv/) next
                     print
                 }' "$OLD_STR" > /opt/StrNEW
@@ -249,7 +251,6 @@ auto_stryou() {
     read -p "Нажмите Enter..." dummy </dev/tty
     return 1
 }
-
 
 
 # ==========================================
