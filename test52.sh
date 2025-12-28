@@ -233,26 +233,17 @@ auto_stryou() {
 show_current_strategy() {
     [ -f "$CONF" ] || return
 
-    # ищем обычные стратегии v1–v7
+    # обычные стратегии v1–v7
     ver=""
     for v in v1 v2 v3 v4 v5 v6 v7; do
         grep -q "#$v" "$CONF" && { ver="$v"; break; }
     done
 
-    # ищем YouTube стратегии Yv01–Yv07
+    # YouTube стратегии Yv01–Yv15
     yv_ver=""
-    for yv in Yv01 Yv02 Yv03 Yv04 Yv05 Yv06 Yv07; do
-        grep -q "#$yv" "$CONF" && { yv_ver="$yv"; break; }
+    for i in $(seq -w 1 15); do
+        grep -q "#Yv$i" "$CONF" && { yv_ver="Yv$i"; break; }
     done
-
-    # формируем и выводим результат
-    if [ -n "$ver" ] && [ -n "$yv_ver" ]; then
-        echo -e "${YELLOW}Используется стратегия:${NC} $ver / $yv_ver\n"
-    elif [ -n "$ver" ]; then
-        echo -e "${YELLOW}Используется стратегия:${NC} $ver\n"
-    elif [ -n "$yv_ver" ]; then
-        echo -e "${YELLOW}Используется стратегия:${NC} $yv_ver\n"
-    fi
 }
 
 
@@ -335,7 +326,14 @@ menu_str() {
         echo -e "${MAGENTA}Меню стратегии${NC}\n"
         
         show_current_strategy
-
+        
+    if [ -n "$ver" ] && [ -n "$yv_ver" ]; then
+        echo -e "${YELLOW}Используется стратегия:${NC} $ver / $yv_ver\n"
+    elif [ -n "$ver" ]; then
+        echo -e "${YELLOW}Используется стратегия:${NC} $ver\n"
+    elif [ -n "$yv_ver" ]; then
+        echo -e "${YELLOW}Используется стратегия:${NC} $yv_ver\n"
+    fi
 
 
 
