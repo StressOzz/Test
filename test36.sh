@@ -100,7 +100,7 @@ auto_stryou() {
     TIMEOUT=3
 
     # Сохраняем текущее состояние после строки option NFQWS_OPT '
-    awk '/^[[:space:]]*option NFQWS_OPT '\''/{flag=1} flag{print}' "$CONF" > "$OLD_STR"
+    sed -n "/^[[:space:]]*option NFQWS_OPT '/,\$p" "$CONF" | sed '1d' > "$OLD_STR"
 
     # Скачать список стратегий
     curl -fsSL "$STR_URL" -o "$TMP_LIST" || { echo "Не удалось скачать список"; read -p "Нажмите Enter..." dummy; return 1; }
