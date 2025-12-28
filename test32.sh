@@ -232,7 +232,7 @@ strategy_v1() {
 }
 
 strategy_v2() {
-    printf '%s\n' "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=hostfakesplit" "--dpi-desync-hostfakesplit-mod=host=m.ok.ru"
+    printf '%s\n' "v2" "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=hostfakesplit" "--dpi-desync-hostfakesplit-mod=host=m.ok.ru"
     printf '%s\n' "--dpi-desync-hostfakesplit-midhost=host-2" "--dpi-desync-split-seqovl=1" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/TLS_ClientHello_rkn_gov_ru.bin" "--dpi-desync-fooling=badsum,badseq" "--dpi-desync-badseq-increment=0"
 }
 
