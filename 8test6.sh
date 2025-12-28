@@ -89,12 +89,12 @@ hosts_clear; echo -e "Zapret ${GREEN}полностью удалён!${NC}\n"; [
 # ==========================================
 # Подбор стратегии для Ютуб
 # ==========================================
-auto_stryou() {
+auto_StrYOU() {
 
     CONF="/etc/config/zapret"
     STR_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ListStrYou"
     TMP_LIST="/tmp/zapret_yt_list.txt"
-    SAVED_STR="/opt/StrYou"
+    SAVED_STR="/opt/StrYOU"
     OLD_STR="/opt/StrOLD"
 
     TEST_HOST="https://rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com"
@@ -169,7 +169,7 @@ auto_stryou() {
                         echo -e "${CYAN}Применяем стратегию и перезапускаем Zapret${NC}"
 
                         awk '
-                            NR==1{print;system("cat /opt/StrYou");next}
+                            NR==1{print;system("cat /opt/StrYOU");next}
                             /^#Yv/{skip=1;next}
                             /^#v/{skip=0}
                             !skip{print}
@@ -244,7 +244,7 @@ auto_stryou() {
                 echo -e "${CYAN}Применяем стратегию и перезапускаем Zapret${NC}"
 
                 awk '
-                    NR==1{print;system("cat /opt/StrYou");next}
+                    NR==1{print;system("cat /opt/StrYOU");next}
                     /^#Yv/{skip=1;next}
                     /^#v/{skip=0}
                     !skip{print}
