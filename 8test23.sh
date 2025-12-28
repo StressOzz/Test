@@ -92,37 +92,23 @@ hosts_clear; echo -e "Zapret ${GREEN}полностью удалён!${NC}\n"; [
 
 auto_stryou() {
     CONF="/etc/config/zapret"
-    STR_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ListStrYou"
+    STR_URL="https://raw.githubusercontent.com/StressOzz/Test/refs/heads/main/ListStrYou"
     TMP_LIST="/tmp/zapret_yt_list.txt"
     SAVED_STR="/opt/StrYou"
-    OLD_STR="/opt/StrOld"
-    OLDEDIT="/opt/StrOldEdit"
-    NEW="/opt/StrNew"
+    OLD_STR="/opt/StrOLD"
 
     TEST_HOST="https://rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com"
-    TIMEOUT=4
+    TIMEOUT=3
 
-    # Создаём пустой StrYou, если его нет
-    [ ! -f "$SAVED_STR" ] && touch "$SAVED_STR"
+    # Сохраняем текущее состояние после строки option NFQWS_OPT '
+    awk '/^[[:space:]]*option NFQWS_OPT '\''/{flag=1} flag{print}' "$CONF" > "$OLD_STR"
 
-    # Сохраняем всё ниже "option NFQWS_OPT '"
-    awk '/^[[:space:]]*option NFQWS_OPT '\''/{flag=1; next} flag{print}' "$CONF" > "$OLD_STR"
-
-    # Создаём копию для редактирования
-    cp "$OLD_STR" "$OLDEDIT"
-
-    # Удаляем строку, начинающуюся с #Yn
-    sed -i '/^#Yn.*/d' "$OLDEDIT"
-
-    # Удаляем блок между --filter-tcp=443 и --new
-    sed -i '/^--filter-tcp=443$/,/^--new$/d' "$OLDEDIT"
-
-    # Скачиваем список стратегий
-    curl -fsSL "$STR_URL" -o "$TMP_LIST" || { echo "Не удалось скачать список"; read -p "Нажмите Enter..." dummy </dev/tty; return 1; }
+    # Скачать список стратегий
+    curl -fsSL "$STR_URL" -o "$TMP_LIST" || { echo "Не удалось скачать список"; read -p "Нажмите Enter..." dummy; return 1; }
 
     TOTAL=$(grep -c '^Yv[0-9]\+' "$TMP_LIST")
-    echo -e "\n${MAGENTA}Подбираем стратегию для ${NC}YouTube${NC}"
-    echo -e "${CYAN}Найдено ${NC}$TOTAL${CYAN} стратегий${NC}"
+    echo "[ZAPRET] Найдено стратегий: $TOTAL"
+    echo
 
     CURRENT_NAME=""
     CURRENT_BODY=""
@@ -131,8 +117,14 @@ auto_stryou() {
     apply_strategy() {
         NAME="$1"
         BODY="$2"
+        # Удаляем старую стратегию
         sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
-        { echo "  option NFQWS_OPT '"; echo "#AUTO $NAME"; printf "%b\n" "$BODY"; echo "'"; } >> "$CONF"
+        {
+            echo "  option NFQWS_OPT '"
+            echo "#AUTO $NAME"
+            printf "%b\n" "$BODY"
+            echo "'"
+        } >> "$CONF"
         chmod +x /opt/zapret/sync_config.sh
         /opt/zapret/sync_config.sh
         /etc/init.d/zapret restart >/dev/null 2>&1
@@ -146,33 +138,34 @@ auto_stryou() {
         if echo "$LINE" | grep -q '^Yv[0-9]\+'; then
             if [ -n "$CURRENT_NAME" ]; then
                 COUNT=$((COUNT + 1))
-                echo -e "\n${CYAN}Применяем стратегию: ${NC}$CURRENT_NAME ($COUNT/$TOTAL)"
+                echo "[ZAPRET] Применяем стратегию: $CURRENT_NAME ($COUNT/$TOTAL)"
                 apply_strategy "$CURRENT_NAME" "$CURRENT_BODY"
+
                 STATUS=$(check_access)
                 if [ "$STATUS" = "ok" ]; then
-                    echo -e "${GREEN}Видео на ПК открывается!${NC}\n${YELLOW}Проверьте работу ${NC}YouTube${YELLOW} на других устройствах!${NC}"
-                    echo -en "Enter ${GREEN}- применить стратегию, ${NC}N ${GREEN}- продолжить подбор:${NC}"
+                    echo "✅ Доступ есть"
+                    echo "Проверьте видео в браузере"
+                    echo "Enter — оставить стратегию, N — продолжить перебор"
                     read -r ANSWER </dev/tty
                     if [ -z "$ANSWER" ]; then
-                        # Формируем StrNew с учетом редактирования
-                        if [ -f "$SAVED_STR" ]; then
-                            cat "$SAVED_STR" > "$NEW"
-                        else
-                            > "$NEW"
-                        fi
-                        cat "$OLDEDIT" >> "$NEW"
+                        {
+                            echo "#$CURRENT_NAME"
+                            printf "%b\n" "$CURRENT_BODY"
+                        } > "$SAVED_STR"
+                        echo "🏁 Рабочая стратегия: $CURRENT_NAME сохранена в $SAVED_STR"
 
+                        # Восстанавливаем старое состояние конфигурации
                         sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
-                        cat "$NEW" >> "$CONF"
+                        cat "$OLD_STR" >> "$CONF"
                         chmod +x /opt/zapret/sync_config.sh
                         /opt/zapret/sync_config.sh
                         /etc/init.d/zapret restart >/dev/null 2>&1
-                        echo -e "${GREEN}Стратегия применена!${NC}\n"
-                        read -p "Нажмите Enter..." dummy </dev/tty
+
+                        read -p "Нажмите Enter, чтобы вернуться в меню..." dummy
                         return 0
                     fi
                 else
-                    echo -e "${RED}Видео не открывается, продолжаем подбор...${NC}"
+                    echo "❌ Нет доступа"
                 fi
             fi
             CURRENT_NAME="$LINE"
@@ -182,45 +175,43 @@ auto_stryou() {
         fi
     done < "$TMP_LIST"
 
-    # Обработка последней стратегии
+    # Последняя стратегия
     if [ -n "$CURRENT_NAME" ]; then
         COUNT=$((COUNT + 1))
-        echo -e "\n${CYAN}Применяем стратегию: ${NC}$CURRENT_NAME ($COUNT/$TOTAL)"
+        echo "[ZAPRET] ▶ Применяем стратегию: $CURRENT_NAME ($COUNT/$TOTAL)"
         apply_strategy "$CURRENT_NAME" "$CURRENT_BODY"
+
         STATUS=$(check_access)
         if [ "$STATUS" = "ok" ]; then
-            echo -e "${GREEN}Видео на ПК открывается!${NC}\n${YELLOW}Проверьте работу ${NC}YouTube${YELLOW} на других устройствах!${NC}"
-            echo -en "Enter ${GREEN}- применить стратегию, ${NC}N ${GREEN}- продолжить подбор:${NC}"
+            echo "✅ Доступ есть"
+            echo "Проверьте видео в браузере"
+            echo "Enter — оставить стратегию, N — продолжить перебор"
             read -r ANSWER </dev/tty
             if [ -z "$ANSWER" ]; then
-                if [ -f "$SAVED_STR" ]; then
-                    cat "$SAVED_STR" > "$NEW"
-                else
-                    > "$NEW"
-                fi
-                cat "$OLDEDIT" >> "$NEW"
+                {
+                    echo "#$CURRENT_NAME"
+                    printf "%b\n" "$CURRENT_BODY"
+                } > "$SAVED_STR"
+
+                echo "🏁 Рабочая стратегия: $CURRENT_NAME сохранена в $SAVED_STR"
+
+                # Восстанавливаем старое состояние конфигурации
                 sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
-                cat "$NEW" >> "$CONF"
+                cat "$OLD_STR" >> "$CONF"
                 chmod +x /opt/zapret/sync_config.sh
                 /opt/zapret/sync_config.sh
                 /etc/init.d/zapret restart >/dev/null 2>&1
-                echo -e "${GREEN}Стратегия применена!${NC}\n"
-                read -p "Нажмите Enter..." dummy </dev/tty
+
+                read -p "Нажмите Enter, чтобы вернуться в меню..." dummy
                 return 0
             fi
         else
-            echo -e "${RED}Видео не открывается...${NC}\n"
+            echo "❌ Нет доступа"
         fi
     fi
 
-    # Если ничего не подошло — возвращаем старое содержимое
-    sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
-    cat "$OLD_STR" >> "$CONF"
-    chmod +x /opt/zapret/sync_config.sh
-    /opt/zapret/sync_config.sh
-    /etc/init.d/zapret restart >/dev/null 2>&1
-    echo -e "\n${RED}Рабочая стратегия для YouTube не найдена!${NC}\n"
-    read -p "Нажмите Enter..." dummy </dev/tty
+    echo "🚫 Рабочая стратегия не найдена"
+    read -p "Нажмите Enter, чтобы вернуться в меню..." dummy
     return 1
 }
 
