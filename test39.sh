@@ -100,10 +100,10 @@ auto_stryou() {
     TIMEOUT=3
 
     # Сохраняем текущее состояние после строки option NFQWS_OPT '
-awk '/^[[:space:]]*option NFQWS_OPT '\''/{flag=1} flag{print}' "$CONF" > "$OLD_STR"
+    awk '/^[[:space:]]*option NFQWS_OPT '\''/{flag=1} flag{print}' "$CONF" > "$OLD_STR"
 
     # Скачать список стратегий
-    curl -fsSL "$STR_URL" -o "$TMP_LIST" || { echo "Не удалось скачать список"; read -p "Нажмите Enter..." dummy; return 1; }
+    curl -fsSL "$STR_URL" -o "$TMP_LIST" || { echo "Не удалось скачать список"; read -p "Нажмите Enter..." dummy </dev/tty; return 1; }
 
     TOTAL=$(grep -c '^Yv[0-9]\+' "$TMP_LIST")
     echo "[ZAPRET] Найдено стратегий: $TOTAL"
@@ -147,20 +147,21 @@ awk '/^[[:space:]]*option NFQWS_OPT '\''/{flag=1} flag{print}' "$CONF" > "$OLD_S
                     echo "Enter — оставить стратегию, N — продолжить перебор"
                     read -r ANSWER </dev/tty
                     if [ -z "$ANSWER" ]; then
+                        # Сохраняем рабочую стратегию
                         {
                             echo "#$CURRENT_NAME"
                             printf "%b\n" "$CURRENT_BODY"
                         } > "$SAVED_STR"
                         echo "🏁 Рабочая стратегия: $CURRENT_NAME сохранена в $SAVED_STR"
 
-                        # Восстанавливаем старое состояние конфигурации
+                        # Применяем StrNEW в конфиг
                         sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
-                        cat "$OLD_STR" >> "$CONF"
+                        cat /opt/StrNEW >> "$CONF"
                         chmod +x /opt/zapret/sync_config.sh
                         /opt/zapret/sync_config.sh
                         /etc/init.d/zapret restart >/dev/null 2>&1
 
-read -p "Нажмите Enter, чтобы вернуться в меню..." dummy </dev/tty
+                        read -p "Нажмите Enter, чтобы вернуться в меню..." dummy </dev/tty
                         return 0
                     fi
                 else
@@ -187,21 +188,21 @@ read -p "Нажмите Enter, чтобы вернуться в меню..." dum
             echo "Enter — оставить стратегию, N — продолжить перебор"
             read -r ANSWER </dev/tty
             if [ -z "$ANSWER" ]; then
+                # Сохраняем рабочую стратегию
                 {
                     echo "#$CURRENT_NAME"
                     printf "%b\n" "$CURRENT_BODY"
                 } > "$SAVED_STR"
-
                 echo "🏁 Рабочая стратегия: $CURRENT_NAME сохранена в $SAVED_STR"
 
-                # Восстанавливаем старое состояние конфигурации
+                # Применяем StrNEW в конфиг
                 sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
-                cat "$OLD_STR" >> "$CONF"
+                cat /opt/StrNEW >> "$CONF"
                 chmod +x /opt/zapret/sync_config.sh
                 /opt/zapret/sync_config.sh
                 /etc/init.d/zapret restart >/dev/null 2>&1
 
-read -p "Нажмите Enter, чтобы вернуться в меню..." dummy </dev/tty
+                read -p "Нажмите Enter, чтобы вернуться в меню..." dummy </dev/tty
                 return 0
             fi
         else
@@ -209,17 +210,18 @@ read -p "Нажмите Enter, чтобы вернуться в меню..." dum
         fi
     fi
 
-# Восстанавливаем старое состояние конфигурации
-sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
-cat "$OLD_STR" >> "$CONF"
-chmod +x /opt/zapret/sync_config.sh
-/opt/zapret/sync_config.sh
-/etc/init.d/zapret restart >/dev/null 2>&1
-                        
+    # Восстанавливаем старое состояние конфигурации, если стратегия не подошла
+    sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
+    cat "$OLD_STR" >> "$CONF"
+    chmod +x /opt/zapret/sync_config.sh
+    /opt/zapret/sync_config.sh
+    /etc/init.d/zapret restart >/dev/null 2>&1
+
     echo "🚫 Рабочая стратегия не найдена"
-read -p "Нажмите Enter, чтобы вернуться в меню..." dummy </dev/tty
+    read -p "Нажмите Enter, чтобы вернуться в меню..." dummy </dev/tty
     return 1
 }
+
 
 # ==========================================
 # Выбор стратегий
