@@ -231,20 +231,7 @@ auto_stryou() {
 # Выбор стратегий
 # ==========================================
 show_current_strategy() {
-    [ -f "$CONF" ] || return
-
-    # обычные стратегии v1–v7
-ver=""
-for i in $(seq 1 7); do
-    grep -q "#v$i" "$CONF" && { ver="v$i"; break; }
-done
-
-    # YouTube стратегии Yv01–Yv15
-    yv_ver=""
-    for i in $(seq -w 1 15); do
-        grep -q "#Yv$i" "$CONF" && { yv_ver="Yv$i"; break; }
-    done
-}
+[ -f "$CONF" ] || return; ver=""; for i in $(seq 1 7); do grep -q "#v$i" "$CONF" && { ver="v$i"; break; }; done; yv_ver=""; for i in $(seq -w 1 15); do grep -q "#Yv$i" "$CONF" && { yv_ver="Yv$i"; break; }; done; }
 
 
 strategy_v1() { 
@@ -325,32 +312,9 @@ menu_str() {
         clear
         echo -e "${MAGENTA}Меню стратегии${NC}\n"
 
-show_current_strategy; current="$ver$( [ -n "$ver" ] && [ -n "$yv_ver" ] && echo " / " )$yv_ver"; [ -n "$current" ] && echo -e "${YELLOW}Используется стратегия:${NC} $current"
-
-# show_current_strategy; [ -n "$ver" ] && [ -n "$yv_ver" ] && echo -e "${YELLOW}Используется стратегия:${NC} $ver / $yv_ver"; [ -n "$ver" ] && [ -z "$yv_ver" ] && echo -e "${YELLOW}Используется стратегия:${NC} $ver"; [ -z "$ver" ] && [ -n "$yv_ver" ] && echo -e "${YELLOW}Используется стратегия:${NC} $yv_ver"
-
-        
-# show_current_strategy; if [ -n "$ver" ] && [ -n "$yv_ver" ]; then echo -e "${YELLOW}Используется стратегия:${NC} $ver / $yv_ver\n"; elif [ -n "$ver" ]; then echo -e "${YELLOW}Используется стратегия:${NC} $ver\n"; elif [ -n "$yv_ver" ]; then echo -e "${YELLOW}Используется стратегия:${NC} $yv_ver\n"; fi
+show_current_strategy; current="$ver$( [ -n "$ver" ] && [ -n "$yv_ver" ] && echo " / " )$yv_ver"; [ -n "$current" ] && echo -e "${YELLOW}Используется стратегия:${NC} $current\n"
 
 
-
-
-# current_ver="$ver"
-# current_yv=$(grep -m1 '^#Yv[0-9]\+' "$CONF" | tr -d '#')
-
-# if [ -n "$current_ver" ] && [ -n "$current_yv" ]; then
-#     echo -e "${YELLOW}Используется стратегия:${NC} $current_ver / $current_yv\n"
-# elif [ -n "$current_ver" ]; then
-#     echo -e "${YELLOW}Используется стратегия:${NC} $current_ver\n"
-# elif [ -n "$current_yv" ]; then
-#     echo -e "${YELLOW}Используется стратегия:${NC} $current_yv\n"
-# fi
-        
-# ver_str=""
-# [ -n "$ver" ] && ver_str="$ver"
-# current_yv=$(grep -m1 '^#Yv[0-9]\+' "$CONF" | tr -d '#')
-# [ -n "$current_yv" ] && { [ -n "$ver_str" ] && ver_str="$ver_str / $current_yv" || ver_str="$current_yv"; }
-# [ -n "$ver_str" ] && echo -e "${YELLOW}Используется стратегия:${NC} $ver_str\n"
 
         echo -e "${CYAN}1) ${GREEN}Установить стратегию${NC} v1"
         echo -e "${CYAN}2) ${GREEN}Установить стратегию${NC} v2"
@@ -497,8 +461,7 @@ fi; fi; menu_game=$( [ -f "$CONF" ] && grep -q "1024-19293,19345-49999,50101-655
 echo -e "\n${YELLOW}Установленная версия:   ${INST_COLOR}$INSTALLED_DISPLAY${NC}"; [ -n "$ZAPRET_STATUS" ] && echo -e "${YELLOW}Статус Zapret:${NC}          $ZAPRET_STATUS"; show_script_50 && [ -n "$name" ] && echo -e "${YELLOW}Установлен скрипт:${NC}      $name"
 [ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*1024-19293,19345-49999,50101-65535" "$CONF" && grep -q -- "--filter-udp=1024-19293,19345-49999,50101-65535" "$CONF" && echo -e "${YELLOW}Стратегия для игр:${NC}      ${GREEN}активирована${NC}"
 [ -n "$DOH_STATUS" ] && opkg list-installed | grep -q '^https-dns-proxy ' && echo -e "${YELLOW}DNS over HTTPS:${NC}         $DOH_STATUS"; web_is_enabled && if web_is_enabled; then echo -e "${YELLOW}Доступ из браузера:${NC}     http://192.168.1.1:7681"; fi
-quic_is_blocked && if quic_is_blocked; then echo -e "${YELLOW}Блокировка QUIC:${NC}        ${GREEN}включена${NC}"; fi
-show_current_strategy; if [ -n "$ver" ] && [ -n "$yv_ver" ]; then echo -e "${YELLOW}Используется стратегия:${NC} $ver / $yv_ver"; elif [ -n "$ver" ]; then echo -e "${YELLOW}Используется стратегия:${NC} $ver"; elif [ -n "$yv_ver" ]; then echo -e "${YELLOW}Используется стратегия:${NC} $yv_ver"; fi
+quic_is_blocked && if quic_is_blocked; then echo -e "${YELLOW}Блокировка QUIC:${NC}        ${GREEN}включена${NC}"; fi; show_current_strategy; current="$ver$( [ -n "$ver" ] && [ -n "$yv_ver" ] && echo " / " )$yv_ver"; [ -n "$current" ] && echo -e "${YELLOW}Используется стратегия: ${CYAN}$current${NC}"
 echo -e "\n${CYAN}1) ${GREEN}Установить${NC} Zapret\n${CYAN}2) ${GREEN}Меню выбора стратегий${NC}\n${CYAN}3) ${GREEN}Вернуть ${NC}настройки по умолчанию\n${CYAN}4) ${GREEN}$str_stp_zpr ${NC}Zapret"
 echo -e "${CYAN}5) ${GREEN}Удалить ${NC}Zapret\n${CYAN}6) ${GREEN}$menu_game\n${CYAN}7) ${GREEN}Меню установки скриптов${NC}\n${CYAN}8) ${GREEN}Удалить → установить → настроить${NC} Zapret"
 echo -e "${CYAN}9) ${GREEN}Меню ${NC}DNS over HTTPS\n${CYAN}0) ${GREEN}Системное меню${NC}" ; echo -ne "${CYAN}Enter) ${GREEN}Выход${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read choice
