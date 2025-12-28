@@ -136,8 +136,6 @@ strategy_v6() { printf '%s\n' "#Yv02" "--filter-tcp=443" "--hostlist=/opt/zapret
 printf '%s\n' "#v6" "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=hostfakesplit" "--dpi-desync-hostfakesplit-mod=host=max.ru" "--dpi-desync-hostfakesplit-midhost=host-2" "--dpi-desync-split-seqovl=726" "--dpi-desync-fooling=badsum,badseq" "--dpi-desync-badseq-increment=0" | cat; }
 strategy_v7() { printf '%s\n' "#v7" "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=hostfakesplit" "--dpi-desync-hostfakesplit-mod=host=m.ok.ru" | cat; \
 printf '%s\n' "--dpi-desync-hostfakesplit-midhost=host-2" "--dpi-desync-split-seqovl=1" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/TLS_ClientHello_rkn_gov_ru.bin" "--dpi-desync-fooling=badsum,badseq" "--dpi-desync-badseq-increment=0" | cat; }
-
-
 dis_str() { if ! grep -q "option NFQWS_PORTS_UDP.*19294-19344,50000-50100" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'$/,19294-19344,50000-50100'/"; fi
 if ! grep -q "option NFQWS_PORTS_TCP.*2053,2083,2087,2096,8443" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_TCP '/s/'$/,2053,2083,2087,2096,8443'/"; fi
 if ! grep -q -- "--filter-udp=19294-19344,50000-50100" "$CONF"; then last_line1=$(grep -n "^'$" "$CONF" | tail -n1 | cut -d: -f1); [ -n "$last_line1" ] && sed -i "${last_line1},\$d" "$CONF"
@@ -157,88 +155,19 @@ if ! grep -q -- "--filter-udp=19294-19344,50000-50100" "$CONF"; then last_line1=
             "'" >> "$CONF"
     fi
 }
-
-menu_str() { [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter..." dummy; return; }
-
-    while true; do
-        clear
-        echo -e "${MAGENTA}Меню стратегии${NC}\n"
-
-show_current_strategy; current="$ver$( [ -n "$ver" ] && [ -n "$yv_ver" ] && echo " / " )$yv_ver"; [ -n "$current" ] && echo -e "${YELLOW}Используется стратегия:${NC} $current\n"
-
-
-
-        echo -e "${CYAN}1) ${GREEN}Установить стратегию${NC} v1"
-        echo -e "${CYAN}2) ${GREEN}Установить стратегию${NC} v2"
-echo -e "${CYAN}3) ${GREEN}Установить стратегию${NC} v3"
-echo -e "${CYAN}4) ${GREEN}Установить стратегию${NC} v4"
-echo -e "${CYAN}5) ${GREEN}Установить стратегию${NC} v5"
-echo -e "${CYAN}6) ${GREEN}Установить стратегию${NC} v6"
-echo -e "${CYAN}7) ${GREEN}Установить стратегию${NC} v7"
-        echo -e "${CYAN}0) ${GREEN}Подобрать стратегию для ${NC}YouTube"
-        echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "
-
-        read choiceST
-
-        case "$choiceST" in
-            1) install_strategy v1 ;;
-            2) install_strategy v2 ;;
-3) install_strategy v3 ;;
-4) install_strategy v4 ;;
-5) install_strategy v5 ;;
-6) install_strategy v6 ;;
-7) install_strategy v7 ;;       
-            0) auto_stryou ;;
-            *) return ;;
-        esac
-    done
-}
-
-install_strategy() {
-    local version="$1"
-    local fileGP="/opt/zapret/ipset/zapret-hosts-google.txt"
-
-    echo -e "\n${MAGENTA}Устанавливаем стратегию ${version}${NC}\n${CYAN}Меняем стратегию${NC}"
-
-    sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
-    {
-        echo "  option NFQWS_OPT '"
-        strategy_"$version"
-        echo "'"
-    } >> "$CONF"
-
-    cat <<'EOF' | grep -Fxv -f "$fileGP" 2>/dev/null >> "$fileGP"
-gvt1.com
-googleplay.com
-play.google.com
-beacons.gvt2.com
-play.googleapis.com
-play-fe.googleapis.com
-lh3.googleusercontent.com
-android.clients.google.com
-connectivitycheck.gstatic.com
-play-lh.googleusercontent.com
-play-games.googleusercontent.com
-prod-lt-playstoregatewayadapter-pa.googleapis.com
-EOF
-
-    echo -e "${CYAN}Редактируем ${NC}/etc/hosts${NC}"
-    hosts_add
-
-# echo -e "${CYAN}Добавляем домены в исключения${NC}"; rm -f "$EXCLUDE_FILE"; wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL" || echo -e "\n${RED}Не удалось загрузить exclude файл${NC}\n"
-
-    dis_str
-    echo -e "${CYAN}Применяем новую стратегию и настройки${NC}"
-
-    chmod +x /opt/zapret/sync_config.sh
-    /opt/zapret/sync_config.sh
-    /etc/init.d/zapret restart >/dev/null 2>&1
-
-    echo -e "${GREEN}Стратегия ${NC}${version} ${GREEN}установлена!${NC}\n"
-    read -p "Нажмите Enter..." dummy
-}
-
-
+menu_str(){ [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter..." dummy; return; }; while true; do clear
+echo -e "${MAGENTA}Меню стратегии${NC}\n"; show_current_strategy; current="$ver$( [ -n "$ver" ] && [ -n "$yv_ver" ] && echo " / " )$yv_ver"; [ -n "$current" ] && echo -e "${YELLOW}Используется стратегия:${NC} $current\n"
+echo -e "${CYAN}1) ${GREEN}Установить стратегию${NC} v1\n${CYAN}2) ${GREEN}Установить стратегию${NC} v2\n${CYAN}3) ${GREEN}Установить стратегию${NC} v3\n${CYAN}4) ${GREEN}Установить стратегию${NC} v4"
+echo -e "${CYAN}5) ${GREEN}Установить стратегию${NC} v5\n${CYAN}6) ${GREEN}Установить стратегию${NC} v6\n${CYAN}7) ${GREEN}Установить стратегию${NC} v7\n${CYAN}0) ${GREEN}Подобрать стратегию для ${NC}YouTube"
+echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read choiceST; case "$choiceST" in 1) install_strategy v1 ;; 2) install_strategy v2 ;; 3) install_strategy v3 ;;
+4) install_strategy v4 ;; 5) install_strategy v5 ;; 6) install_strategy v6 ;; 7) install_strategy v7 ;; 0) auto_stryou ;; *) return ;; esac; done }
+install_strategy(){ local version="$1"; local fileGP="/opt/zapret/ipset/zapret-hosts-google.txt"; echo -e "\n${MAGENTA}Устанавливаем стратегию ${version}${NC}\n${CYAN}Меняем стратегию${NC}"
+sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; { echo "  option NFQWS_OPT '"; strategy_"$version"; echo "'"; } >> "$CONF"; fileGP="/opt/zapret/ipset/zapret-hosts-google.txt"
+printf '%s\n' "gvt1.com" "googleplay.com" "play.google.com" "beacons.gvt2.com" "play.googleapis.com" "play-fe.googleapis.com" "lh3.googleusercontent.com" "android.clients.google.com" "connectivitycheck.gstatic.com" \
+"play-lh.googleusercontent.com" "play-games.googleusercontent.com" "prod-lt-playstoregatewayadapter-pa.googleapis.com" | grep -Fxv -f "$fileGP" 2>/dev/null >> "$fileGP"; echo -e "${CYAN}Редактируем ${NC}/etc/hosts${NC}"; hosts_add
+echo -e "${CYAN}Добавляем домены в исключения${NC}"; rm -f "$EXCLUDE_FILE"; wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL" || echo -e "\n${RED}Не удалось загрузить exclude файл${NC}\n"
+dis_str; echo -e "${CYAN}Применяем новую стратегию и настройки${NC}"; chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1
+echo -e "${GREEN}Стратегия ${NC}${version} ${GREEN}установлена!${NC}\n"; read -p "Нажмите Enter..." dummy; }
 # ==========================================
 # DNS over HTTPS
 # ==========================================
