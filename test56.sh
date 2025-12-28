@@ -325,9 +325,7 @@ menu_str() {
         clear
         echo -e "${MAGENTA}Меню стратегии${NC}\n"
 
-show_current_strategy
-current="$ver${ver:+ /}$yv_ver"
-[ -n "$current" ] && echo -e "${YELLOW}Используется стратегия:${NC} $current"
+show_current_strategy; current="$ver$( [ -n "$ver" ] && [ -n "$yv_ver" ] && echo " / " )$yv_ver"; [ -n "$current" ] && echo -e "${YELLOW}Используется стратегия:${NC} $current"
 
 # show_current_strategy; [ -n "$ver" ] && [ -n "$yv_ver" ] && echo -e "${YELLOW}Используется стратегия:${NC} $ver / $yv_ver"; [ -n "$ver" ] && [ -z "$yv_ver" ] && echo -e "${YELLOW}Используется стратегия:${NC} $ver"; [ -z "$ver" ] && [ -n "$yv_ver" ] && echo -e "${YELLOW}Используется стратегия:${NC} $yv_ver"
 
