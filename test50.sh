@@ -230,7 +230,31 @@ auto_stryou() {
 # ==========================================
 # Выбор стратегий
 # ==========================================
-show_current_strategy() { [ -f "$CONF" ] || return; for v in v1 v2 v3 v4 v5 v6; do grep -q "#$v" "$CONF" && { ver="$v"; return; } done; }
+show_current_strategy() {
+    [ -f "$CONF" ] || return
+
+    # ищем обычные стратегии v1–v7
+    ver=""
+    for v in v1 v2 v3 v4 v5 v6 v7; do
+        grep -q "#$v" "$CONF" && { ver="$v"; break; }
+    done
+
+    # ищем YouTube стратегии Yv01–Yv07
+    yv_ver=""
+    for yv in Yv01 Yv02 Yv03 Yv04 Yv05 Yv06 Yv07; do
+        grep -q "#$yv" "$CONF" && { yv_ver="$yv"; break; }
+    done
+
+    # формируем и выводим результат
+    if [ -n "$ver" ] && [ -n "$yv_ver" ]; then
+        echo -e "${YELLOW}Используется стратегия:${NC} $ver / $yv_ver\n"
+    elif [ -n "$ver" ]; then
+        echo -e "${YELLOW}Используется стратегия:${NC} $ver\n"
+    elif [ -n "$yv_ver" ]; then
+        echo -e "${YELLOW}Используется стратегия:${NC} $yv_ver\n"
+    fi
+}
+
 
 strategy_v1() { 
 printf '%s\n' "#v1" "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake,multidisorder" "--dpi-desync-split-seqovl=681" "--dpi-desync-split-pos=1" "--dpi-desync-fooling=badseq" | cat; \
@@ -309,18 +333,22 @@ menu_str() {
     while true; do
         clear
         echo -e "${MAGENTA}Меню стратегии${NC}\n"
+        
         show_current_strategy
 
-current_ver="$ver"
-current_yv=$(grep -m1 '^#Yv[0-9]\+' "$CONF" | tr -d '#')
 
-if [ -n "$current_ver" ] && [ -n "$current_yv" ]; then
-    echo -e "${YELLOW}Используется стратегия:${NC} $current_ver / $current_yv\n"
-elif [ -n "$current_ver" ]; then
-    echo -e "${YELLOW}Используется стратегия:${NC} $current_ver\n"
-elif [ -n "$current_yv" ]; then
-    echo -e "${YELLOW}Используется стратегия:${NC} $current_yv\n"
-fi
+
+
+# current_ver="$ver"
+# current_yv=$(grep -m1 '^#Yv[0-9]\+' "$CONF" | tr -d '#')
+
+# if [ -n "$current_ver" ] && [ -n "$current_yv" ]; then
+#     echo -e "${YELLOW}Используется стратегия:${NC} $current_ver / $current_yv\n"
+# elif [ -n "$current_ver" ]; then
+#     echo -e "${YELLOW}Используется стратегия:${NC} $current_ver\n"
+# elif [ -n "$current_yv" ]; then
+#     echo -e "${YELLOW}Используется стратегия:${NC} $current_yv\n"
+# fi
         
 # ver_str=""
 # [ -n "$ver" ] && ver_str="$ver"
