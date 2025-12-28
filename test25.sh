@@ -262,7 +262,6 @@ menu_str() {
         echo -e "${MAGENTA}Меню стратегии${NC}\n"
         show_current_strategy
         [ -n "$ver" ] && echo -e "${YELLOW}Используется стратегия:${NC} $ver\n"
-        echo
         echo -e "${CYAN}1) ${GREEN}Установить стратегию${NC} v1"
         echo -e "${CYAN}2) ${GREEN}Установить стратегию${NC} v2"
         echo -e "${CYAN}0) ${GREEN}Подобрать стратегию для ${NC}YouTube"
