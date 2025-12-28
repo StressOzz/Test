@@ -333,7 +333,7 @@ echo -e "${MAGENTA}Меню стратегии${NC}\n"; show_current_strategy; c
 echo -e "${CYAN}1) ${GREEN}Установить стратегию${NC} v1\n${CYAN}2) ${GREEN}Установить стратегию${NC} v2\n${CYAN}3) ${GREEN}Установить стратегию${NC} v3\n${CYAN}4) ${GREEN}Установить стратегию${NC} v4"
 echo -e "${CYAN}5) ${GREEN}Установить стратегию${NC} v5\n${CYAN}6) ${GREEN}Установить стратегию${NC} v6\n${CYAN}0) ${GREEN}Подобрать стратегию для ${NC}YouTube"
 echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read choiceST; case "$choiceST" in 1) install_strategy v1 ;; 2) install_strategy v2 ;; 3) install_strategy v3 ;;
-4) install_strategy v4 ;; 5) install_strategy v5 ;; 6) install_strategy v6 ;; 0) auto_StrYOU ;; *) return ;; esac; done }
+4) install_strategy v4 ;; 5) install_strategy v5 ;; 6) install_strategy v6 ;; 0) auto_StrYou ;; *) return ;; esac; done }
 install_strategy(){ local version="$1"; local NO_PAUSE="${2:-0}"; local fileGP="/opt/zapret/ipset/zapret-hosts-google.txt"; [ "$NO_PAUSE" != "1" ] && echo
 echo -e "${MAGENTA}Устанавливаем стратегию ${version}${NC}\n${CYAN}Меняем стратегию${NC}"; sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; { echo "  option NFQWS_OPT '"; strategy_"$version"; echo "'"; } >> "$CONF"
 printf '%s\n' "gvt1.com" "googleplay.com" "play.google.com" "beacons.gvt2.com" "play.googleapis.com" "play-fe.googleapis.com" "lh3.googleusercontent.com" "android.clients.google.com" "connectivitycheck.gstatic.com" \
