@@ -89,7 +89,8 @@ hosts_clear; echo -e "Zapret ${GREEN}полностью удалён!${NC}\n"; [
 # ==========================================
 # Подбор стратегии для Ютуб
 # ==========================================
-auto_StrYOU() {
+auto_stryou() {
+
     CONF="/etc/config/zapret"
     STR_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ListStrYou"
     TMP_LIST="/tmp/zapret_yt_list.txt"
@@ -174,35 +175,23 @@ auto_StrYOU() {
                             !skip{print}
                         ' "$OLD_STR" > /opt/StrNEW
 
-if ! grep -q '^#Yv' /opt/StrNEW; then
-    awk '
-        BEGIN { del=0; prev="" }
-
-        del && /^[[:space:]]*--new[[:space:]]*$/ {
-            del=0
-            print
-            next
-        }
-
-        del { next }
-
-        prev ~ /^[[:space:]]*--filter-tcp=443[[:space:]]*$/ &&
-        /^[[:space:]]*--hostlist=\/opt\/zapret\/ipset\/zapret-hosts-google\.txt[[:space:]]*$/ {
-            del=1
-            prev=""
-            next
-        }
-
-        {
-            if (prev != "") print prev
-            prev=$0
-        }
-
-        END {
-            if (prev != "") print prev
-        }
-    ' /opt/StrNEW > /opt/StrNEW.tmp && mv /opt/StrNEW.tmp /opt/StrNEW
-fi
+                        if ! grep -q '^#Yv' /opt/StrNEW; then
+                            awk '
+                                BEGIN { del=0 }
+                                /--filter-tcp=443/ {
+                                    getline n
+                                    if (n == "--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt") {
+                                        del=1
+                                        next
+                                    }
+                                    print
+                                    print n
+                                    next
+                                }
+                                del && (/--new/ || /^'\''$/) { del=0 }
+                                !del
+                            ' /opt/StrNEW > /opt/StrNEW.tmp && mv /opt/StrNEW.tmp /opt/StrNEW
+                        fi
 
                         sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
                         cat /opt/StrNEW >> "$CONF"
@@ -261,35 +250,23 @@ fi
                     !skip{print}
                 ' "$OLD_STR" > /opt/StrNEW
 
-if ! grep -q '^#Yv' /opt/StrNEW; then
-    awk '
-        BEGIN { del=0; prev="" }
-
-        del && /^[[:space:]]*--new[[:space:]]*$/ {
-            del=0
-            print
-            next
-        }
-
-        del { next }
-
-        prev ~ /^[[:space:]]*--filter-tcp=443[[:space:]]*$/ &&
-        /^[[:space:]]*--hostlist=\/opt\/zapret\/ipset\/zapret-hosts-google\.txt[[:space:]]*$/ {
-            del=1
-            prev=""
-            next
-        }
-
-        {
-            if (prev != "") print prev
-            prev=$0
-        }
-
-        END {
-            if (prev != "") print prev
-        }
-    ' /opt/StrNEW > /opt/StrNEW.tmp && mv /opt/StrNEW.tmp /opt/StrNEW
-fi
+                if ! grep -q '^#Yv' /opt/StrNEW; then
+                    awk '
+                        BEGIN { del=0 }
+                        /--filter-tcp=443/ {
+                            getline n
+                            if (n == "--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt") {
+                                del=1
+                                next
+                            }
+                            print
+                            print n
+                            next
+                        }
+                        del && (/--new/ || /^'\''$/) { del=0 }
+                        !del
+                    ' /opt/StrNEW > /opt/StrNEW.tmp && mv /opt/StrNEW.tmp /opt/StrNEW
+                fi
 
                 sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
                 cat /opt/StrNEW >> "$CONF"
@@ -319,7 +296,6 @@ fi
     return 1
 }
 
-давай в строчку не чего не меняя
 
 # ==========================================
 # Выбор стратегий
