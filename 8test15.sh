@@ -105,8 +105,10 @@ auto_stryou() {
     # Сохраняем текущий NFQWS_OPT
     awk '/^[[:space:]]*option NFQWS_OPT '\''/{flag=1} flag{print}' "$CONF" > "$OLD_STR"
 
-    # Подчищаем блок Google, если нет #Yv
-    if ! grep -q '^#Yv' "$OLD_STR"; then
+    # Подчищаем Google-блок только если нет #Yv
+    if grep -q '^#Yv' "$OLD_STR"; then
+        cp "$OLD_STR" "$NEW_STR"
+    else
         awk '
         BEGIN { del=0; seen_filter=0 }
         /^--filter-tcp=443$/ { seen_filter=1; next }
@@ -117,8 +119,6 @@ auto_stryou() {
         }
         { seen_filter=0; print }
         ' "$OLD_STR" > "$NEW_STR"
-    else
-        cp "$OLD_STR" "$NEW_STR"
     fi
 
     # Скачиваем список стратегий
@@ -179,14 +179,19 @@ auto_stryou() {
                         } > "$SAVED_STR"
 
                         echo -e "${CYAN}Применяем стратегию и перезапускаем Zapret${NC}"
-                        awk '
-                            NR==1{print;system("cat /opt/StrYou");next}
-                            /^#Yv/{skip=1;next}
-                            /^#v/{skip=0}
-                            !skip{print}
-                        ' "$NEW_STR" > /opt/StrTMP
-                        sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
-                        cat /opt/StrTMP >> "$CONF"
+
+                        if grep -q '^#Yv' "$OLD_STR"; then
+                            # Есть Yv — просто добавляем
+                            cat "$SAVED_STR" >> "$CONF"
+                        else
+                            # Нет Yv — объединяем с подчищенным Google-блоком
+                            awk '
+                                NR==1{print;system("cat /opt/StrYou");next}
+                                !/^#Yv/ && !/^#v/{print}
+                            ' "$NEW_STR" > /opt/StrTMP
+                            sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
+                            cat /opt/StrTMP >> "$CONF"
+                        fi
 
                         chmod +x /opt/zapret/sync_config.sh
                         /opt/zapret/sync_config.sh
@@ -226,14 +231,17 @@ auto_stryou() {
                 } > "$SAVED_STR"
 
                 echo -e "${CYAN}Применяем стратегию и перезапускаем Zapret${NC}"
-                awk '
-                    NR==1{print;system("cat /opt/StrYou");next}
-                    /^#Yv/{skip=1;next}
-                    /^#v/{skip=0}
-                    !skip{print}
-                ' "$NEW_STR" > /opt/StrTMP
-                sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
-                cat /opt/StrTMP >> "$CONF"
+
+                if grep -q '^#Yv' "$OLD_STR"; then
+                    cat "$SAVED_STR" >> "$CONF"
+                else
+                    awk '
+                        NR==1{print;system("cat /opt/StrYou");next}
+                        !/^#Yv/ && !/^#v/{print}
+                    ' "$NEW_STR" > /opt/StrTMP
+                    sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
+                    cat /opt/StrTMP >> "$CONF"
+                fi
 
                 chmod +x /opt/zapret/sync_config.sh
                 /opt/zapret/sync_config.sh
@@ -259,6 +267,7 @@ auto_stryou() {
     read -p "Нажмите Enter..." dummy </dev/tty
     return 1
 }
+
 
 
 # ==========================================
