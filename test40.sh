@@ -116,7 +116,6 @@ auto_stryou() {
     apply_strategy() {
         NAME="$1"
         BODY="$2"
-        # Удаляем старую стратегию
         sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
         {
             echo "  option NFQWS_OPT '"
@@ -154,7 +153,7 @@ auto_stryou() {
                         } > "$SAVED_STR"
                         echo "🏁 Рабочая стратегия: $CURRENT_NAME сохранена в $SAVED_STR"
 
-                        # Применяем StrNEW в конфиг
+                        # Применяем готовый StrNEW
                         sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
                         cat /opt/StrNEW >> "$CONF"
                         chmod +x /opt/zapret/sync_config.sh
@@ -195,7 +194,7 @@ auto_stryou() {
                 } > "$SAVED_STR"
                 echo "🏁 Рабочая стратегия: $CURRENT_NAME сохранена в $SAVED_STR"
 
-                # Применяем StrNEW в конфиг
+                # Применяем готовый StrNEW
                 sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
                 cat /opt/StrNEW >> "$CONF"
                 chmod +x /opt/zapret/sync_config.sh
@@ -221,7 +220,6 @@ auto_stryou() {
     read -p "Нажмите Enter, чтобы вернуться в меню..." dummy </dev/tty
     return 1
 }
-
 
 # ==========================================
 # Выбор стратегий
