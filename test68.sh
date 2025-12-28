@@ -8,8 +8,6 @@ MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
 WORKDIR="/tmp/zapret-update"; CONF="/etc/config/zapret"; CUSTOM_DIR="/opt/zapret/init.d/openwrt/custom.d/"
 EXCLUDE_FILE="/opt/zapret/ipset/zapret-hosts-user-exclude.txt"; fileDoH="/etc/config/https-dns-proxy"
 EXCLUDE_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/zapret-hosts-user-exclude.txt"
-STR_URL="https://raw.githubusercontent.com/StressOzz/Test/refs/heads/main/ListStrYou"; TIMEOUT=4
-TMP_LIST="/tmp/zapret_yt_list.txt"; SAVED_STR="/opt/StrYou"; OLD_STR="/opt/StrOLD"; TEST_HOST="https://rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com"
 HOSTS_LIST="185.87.51.182 4pda.to www.4pda.to app.4pda.to appbk.4pda.to|130.255.77.28 ntc.party|30.255.77.28 ntc.party|173.245.58.219 rutor.info d.rutor.info|185.39.18.98 lib.rus.ec www.lib.rus.ec
 57.144.222.34 instagram.com www.instagram.com|157.240.9.174 instagram.com www.instagram.com|157.240.245.174 instagram.com www.instagram.com|157.240.205.174 instagram.com www.instagram.com"
 hosts_add(){ echo "$HOSTS_LIST" | tr '|' '\n' | grep -Fxv -f /etc/hosts >> /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1; }
@@ -91,12 +89,51 @@ hosts_clear; echo -e "Zapret ${GREEN}полностью удалён!${NC}\n"; [
 # ==========================================
 # Подбор стратегии для Ютуб
 # ==========================================
-auto_stryou() { awk '/^[[:space:]]*option NFQWS_OPT '\''/{flag=1} flag{print}' "$CONF" > "$OLD_STR"; curl -fsSL "$STR_URL" -o "$TMP_LIST" || { echo "Не удалось скачать список"; read -p "Нажмите Enter..." dummy </dev/tty; return 1; }
-apply_strategy() { NAME="$1"; BODY="$2"; sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; { echo "  option NFQWS_OPT '"; echo "#AUTO $NAME"; printf "%b\n" "$BODY"; echo "'"; } >> "$CONF"; chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1; }
-check_access() { curl -s --connect-timeout "$TIMEOUT" -m "$TIMEOUT" "$TEST_HOST" >/dev/null && echo "ok" || echo "fail" }
+auto_stryou() {
+    CONF="/etc/config/zapret"
+    STR_URL="https://raw.githubusercontent.com/StressOzz/Test/refs/heads/main/ListStrYou"
+    TMP_LIST="/tmp/zapret_yt_list.txt"
+    SAVED_STR="/opt/StrYou"
+    OLD_STR="/opt/StrOLD"
 
-TOTAL=$(grep -c '^Yv[0-9]\+' "$TMP_LIST"); echo -e "\n${MAGENTA}Подбираем стратегию для ${NC}YouTube${NC}"; echo -e "${CYAN}Найдено стратегий: ${NC}$TOTAL"
-CURRENT_NAME=""; CURRENT_BODY=""; COUNT=0
+    TEST_HOST="https://rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com"
+    TIMEOUT=4
+
+    # Сохраняем текущее состояние после строки option NFQWS_OPT '
+    awk '/^[[:space:]]*option NFQWS_OPT '\''/{flag=1} flag{print}' "$CONF" > "$OLD_STR"
+
+    # Скачать список стратегий
+    curl -fsSL "$STR_URL" -o "$TMP_LIST" || { echo "Не удалось скачать список"; read -p "Нажмите Enter..." dummy </dev/tty; return 1; }
+
+    TOTAL=$(grep -c '^Yv[0-9]\+' "$TMP_LIST")
+
+echo -e "\n${MAGENTA}Подбираем стратегию для ${NC}YouTube${NC}"
+
+    echo -e "${CYAN}Найдено стратегий: ${NC}$TOTAL"
+
+
+    CURRENT_NAME=""
+    CURRENT_BODY=""
+    COUNT=0
+
+    apply_strategy() {
+        NAME="$1"
+        BODY="$2"
+        sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
+        {
+            echo "  option NFQWS_OPT '"
+            echo "#AUTO $NAME"
+            printf "%b\n" "$BODY"
+            echo "'"
+        } >> "$CONF"
+        chmod +x /opt/zapret/sync_config.sh
+        /opt/zapret/sync_config.sh
+        /etc/init.d/zapret restart >/dev/null 2>&1
+    }
+
+    check_access() {
+        curl -s --connect-timeout "$TIMEOUT" -m "$TIMEOUT" "$TEST_HOST" >/dev/null && echo "ok" || echo "fail"
+    }
 
     while IFS= read -r LINE || [ -n "$LINE" ]; do
         if echo "$LINE" | grep -q '^Yv[0-9]\+'; then
