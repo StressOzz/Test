@@ -161,7 +161,7 @@ auto_stryou() {
                                     next
                                 }
                             }
-                            if ($0 ~ /^#Yv/) next
+                            if ($0 ~ /^[[:space:]]*#Yv/) next
                             print
                         }' "$OLD_STR" > /opt/StrNEW
 
@@ -220,7 +220,7 @@ auto_stryou() {
                             next
                         }
                     }
-                    if ($0 ~ /^#Yv/) next
+                    if ($0 ~ /^[[:space:]]*#Yv/) next
                     print
                 }' "$OLD_STR" > /opt/StrNEW
 
@@ -249,7 +249,6 @@ auto_stryou() {
     read -p "Нажмите Enter..." dummy </dev/tty
     return 1
 }
-
 
 
 
