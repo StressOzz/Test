@@ -61,7 +61,7 @@ echo -e "${CYAN}Добавляем в стратегию настройки дл
 # Zapret под ключ
 # ==========================================
 zapret_key(){ clear; echo -e "${MAGENTA}Удаление, установка и настройка Zapret${NC}\n"; get_versions; uninstall_zapret "1"; install_Zapret "1"
-[ ! -f /etc/init.d/zapret ] && return; install_strategy v6; echo; scrypt_install "1"; fix_GAME "1"; echo -e "Zapret ${GREEN}установлен и настроен!${NC}\n"; read -p "Нажмите Enter..." dummy; }
+[ ! -f /etc/init.d/zapret ] && return; install_strategy v6 "1"; echo; scrypt_install "1"; fix_GAME "1"; echo -e "Zapret ${GREEN}установлен и настроен!${NC}\n"; read -p "Нажмите Enter..." dummy; }
 # ==========================================
 # Вернуть настройки по умолчанию
 # ==========================================
