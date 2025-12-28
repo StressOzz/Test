@@ -144,17 +144,26 @@ auto_stryou() {
                         echo -e "${CYAN}Применяем стратегию и перезапускаем Zapret${NC}"
 
                         # формируем StrNEW с безопасным удалением блоков
-                        awk 'NR==1{print;system("cat /opt/StrYou");next}
-                        /^#Yv/ {next}
-                        # буфер для проверки последовательности
-                        /^--filter-tcp=443$/ {buf[0]=$0; next}
-                        /^--hostlist=\/opt\/zapret\/ipset\/zapret-hosts-google.txt$/ && length(buf)>0 {buf[1]=$0; skip=1; next}
-                        skip {
-                            if (/^--new$/) {skip=0; next} 
-                            next
-                        }
-                        length(buf)==1 {print buf[0]; delete buf[0]}
-                        {print}' "$OLD_STR" > /opt/StrNEW
+                        awk '
+                        {
+                            if (skip) {
+                                if ($0 == "--new") { skip=0; next }
+                                next
+                            }
+                            if ($0 == "--filter-tcp=443") {
+                                getline next_line
+                                if (next_line == "--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt") {
+                                    skip=1
+                                    next
+                                } else {
+                                    print $0
+                                    print next_line
+                                    next
+                                }
+                            }
+                            if ($0 ~ /^#Yv/) next
+                            print
+                        }' "$OLD_STR" > /opt/StrNEW
 
                         sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
                         cat /opt/StrNEW >> "$CONF"
@@ -190,16 +199,26 @@ auto_stryou() {
                 { echo "#$CURRENT_NAME"; printf "%b\n" "$CURRENT_BODY"; } > "$SAVED_STR"
                 echo -e "${CYAN}Применяем стратегию и перезапускаем Zapret${NC}"
 
-                awk 'NR==1{print;system("cat /opt/StrYou");next}
-                /^#Yv/ {next}
-                /^--filter-tcp=443$/ {buf[0]=$0; next}
-                /^--hostlist=\/opt\/zapret\/ipset\/zapret-hosts-google.txt$/ && length(buf)>0 {buf[1]=$0; skip=1; next}
-                skip {
-                    if (/^--new$/) {skip=0; next} 
-                    next
-                }
-                length(buf)==1 {print buf[0]; delete buf[0]}
-                {print}' "$OLD_STR" > /opt/StrNEW
+                awk '
+                {
+                    if (skip) {
+                        if ($0 == "--new") { skip=0; next }
+                        next
+                    }
+                    if ($0 == "--filter-tcp=443") {
+                        getline next_line
+                        if (next_line == "--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt") {
+                            skip=1
+                            next
+                        } else {
+                            print $0
+                            print next_line
+                            next
+                        }
+                    }
+                    if ($0 ~ /^#Yv/) next
+                    print
+                }' "$OLD_STR" > /opt/StrNEW
 
                 sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
                 cat /opt/StrNEW >> "$CONF"
@@ -219,13 +238,11 @@ auto_stryou() {
     sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
     cat "$OLD_STR" >> "$CONF"
     chmod +x /opt/zapret/sync_config.sh
-    /opt/zapret/sync_config.sh
     /etc/init.d/zapret restart >/dev/null 2>&1
     echo -e "\n${RED}Рабочая стратегия для YouTube не найдена!${NC}\n"
     read -p "Нажмите Enter..." dummy </dev/tty
     return 1
 }
-
 
 
 
