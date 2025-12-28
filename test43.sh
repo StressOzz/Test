@@ -230,7 +230,7 @@ auto_stryou() {
 # ==========================================
 # Выбор стратегий
 # ==========================================
-show_current_strategy() { [ -f "$CONF" ] || return; for v in v1 v2; do grep -q "#$v" "$CONF" && { ver="$v"; return; } done; }
+show_current_strategy() { [ -f "$CONF" ] || return; for v in v1 v2 v3 v4 v5 v6; do grep -q "#$v" "$CONF" && { ver="$v"; return; } done; }
 
 strategy_v1() { 
 printf '%s\n' "#v1" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake,multidisorder" "--dpi-desync-split-seqovl=681" "--dpi-desync-split-pos=1" "--dpi-desync-fooling=badseq" | cat; \
@@ -308,9 +308,17 @@ menu_str() {
         echo -e "${MAGENTA}Меню стратегии${NC}\n"
         show_current_strategy
         [ -n "$ver" ] && echo -e "${YELLOW}Используется стратегия:${NC} $ver\n"
+        
+current_yv=$(grep -m1 '^#Yv[0-9]\+' "$CONF") 
+[ -n "$current_yv" ] && echo -e "${YELLOW}Используется стратегия YouTube:${NC} $current_yv\n"
 
         echo -e "${CYAN}1) ${GREEN}Установить стратегию${NC} v1"
         echo -e "${CYAN}2) ${GREEN}Установить стратегию${NC} v2"
+echo -e "${CYAN}3) ${GREEN}Установить стратегию${NC} v3"
+echo -e "${CYAN}4) ${GREEN}Установить стратегию${NC} v4"
+echo -e "${CYAN}5) ${GREEN}Установить стратегию${NC} v5"
+echo -e "${CYAN}6) ${GREEN}Установить стратегию${NC} v6"
+        
         echo -e "${CYAN}0) ${GREEN}Подобрать стратегию для ${NC}YouTube"
         echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "
 
