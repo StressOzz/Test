@@ -89,6 +89,7 @@ hosts_clear; echo -e "Zapret ${GREEN}полностью удалён!${NC}\n"; [
 # ==========================================
 # Подбор стратегии для Ютуб
 # ==========================================
+
 auto_stryou() {
 
     CONF="/etc/config/zapret"
@@ -96,42 +97,31 @@ auto_stryou() {
     TMP_LIST="/tmp/zapret_yt_list.txt"
     SAVED_STR="/opt/StrYou"
     OLD_STR="/opt/StrOLD"
+    NEW_STR="/opt/StrNEW"
 
     TEST_HOST="https://rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com"
     TIMEOUT=4
 
-    # сохраняем текущий NFQWS_OPT
+    # Сохраняем текущий NFQWS_OPT
     awk '/^[[:space:]]*option NFQWS_OPT '\''/{flag=1} flag{print}' "$CONF" > "$OLD_STR"
 
-    # чистим StrOLD: удаляем google-блок до --new (сам --new оставляем)
-    awk '
-        BEGIN { del=0; prev="" }
-
-        del && /^[[:space:]]*--new[[:space:]]*$/ {
-            del=0
-            print
+    # Подчищаем блок Google, если нет #Yv
+    if ! grep -q '^#Yv' "$OLD_STR"; then
+        awk '
+        BEGIN { del=0; seen_filter=0 }
+        /^--filter-tcp=443$/ { seen_filter=1; next }
+        seen_filter && /^--hostlist=\/opt\/zapret\/ipset\/zapret-hosts-google.txt$/ { del=1; seen_filter=0; next }
+        del {
+            if (/^--new/ || /^\047$/) { del=0; print; next }
             next
         }
+        { seen_filter=0; print }
+        ' "$OLD_STR" > "$NEW_STR"
+    else
+        cp "$OLD_STR" "$NEW_STR"
+    fi
 
-        del { next }
-
-        prev ~ /^[[:space:]]*--filter-tcp=443[[:space:]]*$/ &&
-        /^[[:space:]]*--hostlist=\/opt\/zapret\/ipset\/zapret-hosts-google\.txt[[:space:]]*$/ {
-            del=1
-            prev=""
-            next
-        }
-
-        {
-            if (prev != "") print prev
-            prev=$0
-        }
-
-        END {
-            if (prev != "") print prev
-        }
-    ' "$OLD_STR" > "$OLD_STR.tmp" && mv "$OLD_STR.tmp" "$OLD_STR"
-
+    # Скачиваем список стратегий
     curl -fsSL "$STR_URL" -o "$TMP_LIST" || {
         echo "Не удалось скачать список"
         read -p "Нажмите Enter..." dummy </dev/tty
@@ -170,49 +160,39 @@ auto_stryou() {
     }
 
     while IFS= read -r LINE || [ -n "$LINE" ]; do
-
         if echo "$LINE" | grep -q '^Yv[0-9]\+'; then
-
             if [ -n "$CURRENT_NAME" ]; then
-
                 COUNT=$((COUNT + 1))
                 echo -e "\n${CYAN}Применяем стратегию: ${NC}$CURRENT_NAME ($COUNT/$TOTAL)"
-
                 apply_strategy "$CURRENT_NAME" "$CURRENT_BODY"
                 STATUS=$(check_access)
 
                 if [ "$STATUS" = "ok" ]; then
-
                     echo -e "${GREEN}Видео на ПК открывается!${NC}"
                     echo -e "${YELLOW}Проверьте работу ${NC}YouTube${YELLOW} на других устройствах!${NC}"
-
                     echo -en "Enter ${GREEN}- применить стратегию, ${NC}N ${GREEN}- продолжить подбор:${NC}"
                     read -r ANSWER </dev/tty
-
                     if [ -z "$ANSWER" ]; then
-
                         {
                             echo "#$CURRENT_NAME"
                             printf "%b\n" "$CURRENT_BODY"
                         } > "$SAVED_STR"
 
                         echo -e "${CYAN}Применяем стратегию и перезапускаем Zapret${NC}"
-
                         awk '
                             NR==1{print;system("cat /opt/StrYou");next}
                             /^#Yv/{skip=1;next}
                             /^#v/{skip=0}
                             !skip{print}
-                        ' "$OLD_STR" > /opt/StrNEW
-
+                        ' "$NEW_STR" > /opt/StrTMP
                         sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
-                        cat /opt/StrNEW >> "$CONF"
+                        cat /opt/StrTMP >> "$CONF"
 
                         chmod +x /opt/zapret/sync_config.sh
                         /opt/zapret/sync_config.sh
                         /etc/init.d/zapret restart >/dev/null 2>&1
 
-                        echo -e "${GREEN}Стратегия примененна!${NC}\n"
+                        echo -e "${GREEN}Стратегия применена!${NC}\n"
                         read -p "Нажмите Enter..." dummy </dev/tty
                         return 0
                     fi
@@ -220,19 +200,57 @@ auto_stryou() {
                     echo -e "${RED}Видео не открывается, продолжаем подбор...${NC}"
                 fi
             fi
-
             CURRENT_NAME="$LINE"
             CURRENT_BODY=""
-
         else
             [ -n "$LINE" ] && CURRENT_BODY="${CURRENT_BODY}${LINE}\n"
         fi
-
     done < "$TMP_LIST"
 
+    # Последняя стратегия
+    if [ -n "$CURRENT_NAME" ]; then
+        COUNT=$((COUNT + 1))
+        echo -e "\n${CYAN}Применяем стратегию: ${NC}$CURRENT_NAME ($COUNT/$TOTAL)"
+        apply_strategy "$CURRENT_NAME" "$CURRENT_BODY"
+        STATUS=$(check_access)
+
+        if [ "$STATUS" = "ok" ]; then
+            echo -e "${GREEN}Видео на ПК открывается!${NC}"
+            echo -e "${YELLOW}Проверьте работу ${NC}YouTube${YELLOW} на других устройствах!${NC}"
+            echo -en "Enter ${GREEN}- применить стратегию,${NC} N ${GREEN}- продолжить подбор:${NC}"
+            read -r ANSWER </dev/tty
+            if [ -z "$ANSWER" ]; then
+                {
+                    echo "#$CURRENT_NAME"
+                    printf "%b\n" "$CURRENT_BODY"
+                } > "$SAVED_STR"
+
+                echo -e "${CYAN}Применяем стратегию и перезапускаем Zapret${NC}"
+                awk '
+                    NR==1{print;system("cat /opt/StrYou");next}
+                    /^#Yv/{skip=1;next}
+                    /^#v/{skip=0}
+                    !skip{print}
+                ' "$NEW_STR" > /opt/StrTMP
+                sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
+                cat /opt/StrTMP >> "$CONF"
+
+                chmod +x /opt/zapret/sync_config.sh
+                /opt/zapret/sync_config.sh
+                /etc/init.d/zapret restart >/dev/null 2>&1
+
+                echo -e "${GREEN}Стратегия применена!${NC}\n"
+                read -p "Нажмите Enter..." dummy </dev/tty
+                return 0
+            fi
+        else
+            echo -e "${RED}Видео не открывается...${NC}\n"
+        fi
+    fi
+
+    # Восстанавливаем старое состояние
     sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
     cat "$OLD_STR" >> "$CONF"
-
     chmod +x /opt/zapret/sync_config.sh
     /opt/zapret/sync_config.sh
     /etc/init.d/zapret restart >/dev/null 2>&1
