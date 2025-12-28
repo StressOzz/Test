@@ -98,6 +98,7 @@ auto_stryou() {
     SAVED_STR="/opt/StrYou"
     OLD_STR="/opt/StrOLD"
     NEW_STR="/opt/StrNEW"
+    TMP_COMBINED="/opt/StrTMP"
 
     TEST_HOST="https://rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com"
     TIMEOUT=4
@@ -105,7 +106,7 @@ auto_stryou() {
     # Сохраняем текущий NFQWS_OPT
     awk '/^[[:space:]]*option NFQWS_OPT '\''/{flag=1} flag{print}' "$CONF" > "$OLD_STR"
 
-    # Подчищаем Google-блок только если нет #Yv
+    # Подчищаем Google-блок, если нет #Yv
     if grep -q '^#Yv' "$OLD_STR"; then
         cp "$OLD_STR" "$NEW_STR"
     else
@@ -129,7 +130,6 @@ auto_stryou() {
     }
 
     TOTAL=$(grep -c '^Yv[0-9]\+' "$TMP_LIST")
-
     echo -e "\n${MAGENTA}Подбираем стратегию для ${NC}YouTube${NC}"
     echo -e "${CYAN}Найдено ${NC}$TOTAL${CYAN} стратегий${NC}"
 
@@ -172,30 +172,26 @@ auto_stryou() {
                     echo -e "${YELLOW}Проверьте работу ${NC}YouTube${YELLOW} на других устройствах!${NC}"
                     echo -en "Enter ${GREEN}- применить стратегию, ${NC}N ${GREEN}- продолжить подбор:${NC}"
                     read -r ANSWER </dev/tty
+
                     if [ -z "$ANSWER" ]; then
                         {
+                            cat "$NEW_STR"
                             echo "#$CURRENT_NAME"
                             printf "%b\n" "$CURRENT_BODY"
-                        } > "$SAVED_STR"
+                        } > "$TMP_COMBINED"
 
-                        echo -e "${CYAN}Применяем стратегию и перезапускаем Zapret${NC}"
-
-                        if grep -q '^#Yv' "$OLD_STR"; then
-                            # Есть Yv — просто добавляем
-                            cat "$SAVED_STR" >> "$CONF"
-                        else
-                            # Нет Yv — объединяем с подчищенным Google-блоком
-                            awk '
-                                NR==1{print;system("cat /opt/StrYou");next}
-                                !/^#Yv/ && !/^#v/{print}
-                            ' "$NEW_STR" > /opt/StrTMP
-                            sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
-                            cat /opt/StrTMP >> "$CONF"
-                        fi
+                        sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
+                        cat "$TMP_COMBINED" >> "$CONF"
 
                         chmod +x /opt/zapret/sync_config.sh
                         /opt/zapret/sync_config.sh
                         /etc/init.d/zapret restart >/dev/null 2>&1
+
+                        # Сохраняем рабочую стратегию отдельно
+                        {
+                            echo "#$CURRENT_NAME"
+                            printf "%b\n" "$CURRENT_BODY"
+                        } > "$SAVED_STR"
 
                         echo -e "${GREEN}Стратегия применена!${NC}\n"
                         read -p "Нажмите Enter..." dummy </dev/tty
@@ -224,28 +220,26 @@ auto_stryou() {
             echo -e "${YELLOW}Проверьте работу ${NC}YouTube${YELLOW} на других устройствах!${NC}"
             echo -en "Enter ${GREEN}- применить стратегию,${NC} N ${GREEN}- продолжить подбор:${NC}"
             read -r ANSWER </dev/tty
+
             if [ -z "$ANSWER" ]; then
                 {
+                    cat "$NEW_STR"
                     echo "#$CURRENT_NAME"
                     printf "%b\n" "$CURRENT_BODY"
-                } > "$SAVED_STR"
+                } > "$TMP_COMBINED"
 
-                echo -e "${CYAN}Применяем стратегию и перезапускаем Zapret${NC}"
-
-                if grep -q '^#Yv' "$OLD_STR"; then
-                    cat "$SAVED_STR" >> "$CONF"
-                else
-                    awk '
-                        NR==1{print;system("cat /opt/StrYou");next}
-                        !/^#Yv/ && !/^#v/{print}
-                    ' "$NEW_STR" > /opt/StrTMP
-                    sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
-                    cat /opt/StrTMP >> "$CONF"
-                fi
+                sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
+                cat "$TMP_COMBINED" >> "$CONF"
 
                 chmod +x /opt/zapret/sync_config.sh
                 /opt/zapret/sync_config.sh
                 /etc/init.d/zapret restart >/dev/null 2>&1
+
+                # Сохраняем рабочую стратегию
+                {
+                    echo "#$CURRENT_NAME"
+                    printf "%b\n" "$CURRENT_BODY"
+                } > "$SAVED_STR"
 
                 echo -e "${GREEN}Стратегия применена!${NC}\n"
                 read -p "Нажмите Enter..." dummy </dev/tty
@@ -256,7 +250,7 @@ auto_stryou() {
         fi
     fi
 
-    # Восстанавливаем старое состояние
+    # Восстанавливаем старое состояние, если ни одна стратегия не подошла
     sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
     cat "$OLD_STR" >> "$CONF"
     chmod +x /opt/zapret/sync_config.sh
@@ -267,6 +261,7 @@ auto_stryou() {
     read -p "Нажмите Enter..." dummy </dev/tty
     return 1
 }
+
 
 
 
