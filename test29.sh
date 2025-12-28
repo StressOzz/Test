@@ -112,9 +112,7 @@ auto_stryou() {
     apply_strategy() {
         NAME="$1"
         BODY="$2"
-        # Удаляем старые #Yv блоки после option NFQWS_OPT '
-        sed -i "/^[[:space:]]*option NFQWS_OPT '/,/^#v/d" "$CONF"
-        # Вставляем новую стратегию
+        sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
         {
             echo "  option NFQWS_OPT '"
             echo "#AUTO $NAME"
@@ -149,6 +147,7 @@ auto_stryou() {
                             printf "%b\n" "$CURRENT_BODY"
                         } > "$SAVED_STR"
                         echo "🏁 Рабочая стратегия: $CURRENT_NAME сохранена в $SAVED_STR"
+
                         read -p "Нажмите Enter, чтобы вернуться в меню..." dummy
                         return 0
                     fi
