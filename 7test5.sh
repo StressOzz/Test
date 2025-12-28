@@ -189,9 +189,9 @@ install_strategy() {
     /opt/zapret/sync_config.sh
     /etc/init.d/zapret restart >/dev/null 2>&1
 
-    echo -e "${GREEN}Стратегия ${version} установлена!${NC}\n"
+    echo -e "${GREEN}Стратегия ${version} установлена!${NC}"
 
-    [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter..." dummy
+    [ "$NO_PAUSE" != "1" ] && echo && read -p "Нажмите Enter..." dummy
 }
 
 # ==========================================
