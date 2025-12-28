@@ -147,7 +147,7 @@ auto_stryou() {
                         awk '
                         {
                             if (skip) {
-                                if ($0 == "--new") { skip=0; print; next }
+                                if ($0 == "--new" || $0 ~ /'\''/) { skip=0; print; next }
                                 next
                             }
                             if ($0 == "--filter-tcp=443") {
@@ -211,7 +211,7 @@ auto_stryou() {
                 awk '
                 {
                     if (skip) {
-                        if ($0 == "--new") { skip=0; print; next }
+                        if ($0 == "--new" || $0 ~ /'\''/) { skip=0; print; next }
                         next
                     }
                     if ($0 == "--filter-tcp=443") {
