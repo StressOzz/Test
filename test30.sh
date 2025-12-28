@@ -209,6 +209,13 @@ auto_stryou() {
         fi
     fi
 
+# Восстанавливаем старое состояние конфигурации
+sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
+cat "$OLD_STR" >> "$CONF"
+chmod +x /opt/zapret/sync_config.sh
+/opt/zapret/sync_config.sh
+/etc/init.d/zapret restart >/dev/null 2>&1
+                        
     echo "🚫 Рабочая стратегия не найдена"
     read -p "Нажмите Enter, чтобы вернуться в меню..." dummy
     return 1
