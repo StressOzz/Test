@@ -90,7 +90,7 @@ hosts_clear; echo -e "Zapret ${GREEN}полностью удалён!${NC}\n"; [
 # Подбор стратегии для Ютуб
 # ==========================================
 auto_stryou() {
-    ZAPRET_CONF="/etc/config/zapret"
+    CONF="/etc/config/zapret"
     STR_URL="https://raw.githubusercontent.com/StressOzz/Test/refs/heads/main/ListStrYou"
     TMP_LIST="/tmp/zapret_yt_list.txt"
     SAVED_STR="/opt/StrYou"
@@ -112,13 +112,13 @@ auto_stryou() {
     apply_strategy() {
         NAME="$1"
         BODY="$2"
-        sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$ZAPRET_CONF"
+        sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
         {
             echo "  option NFQWS_OPT '"
             echo "#AUTO $NAME"
             printf "%b\n" "$BODY"
             echo "'"
-        } >> "$ZAPRET_CONF"
+        } >> "$CONF"
         chmod +x /opt/zapret/sync_config.sh
         /opt/zapret/sync_config.sh
         /etc/init.d/zapret restart >/dev/null 2>&1
@@ -147,15 +147,6 @@ auto_stryou() {
                             printf "%b\n" "$CURRENT_BODY"
                         } > "$SAVED_STR"
                         echo "🏁 Рабочая стратегия: $CURRENT_NAME сохранена в $SAVED_STR"
-
-                        # Добавляем домены Google в /etc/hosts
-                        fileGP="/opt/zapret/ipset/zapret-hosts-google.txt"
-                        printf '%s\n' \
-                        "gvt1.com" "googleplay.com" "play.google.com" "beacons.gvt2.com" \
-                        "play.googleapis.com" "play-fe.googleapis.com" "lh3.googleusercontent.com" \
-                        "android.clients.google.com" "connectivitycheck.gstatic.com" \
-                        "play-lh.googleusercontent.com" "play-games.googleusercontent.com" \
-                        "prod-lt-playstoregatewayadapter-pa.googleapis.com" | grep -Fxv -f "$fileGP" >> "$fileGP"
 
                         read -p "Нажмите Enter, чтобы вернуться в меню..." dummy
                         return 0
@@ -188,16 +179,7 @@ auto_stryou() {
                     echo "#$CURRENT_NAME"
                     printf "%b\n" "$CURRENT_BODY"
                 } > "$SAVED_STR"
-
-                # Добавляем домены Google в /etc/hosts
-                fileGP="/opt/zapret/ipset/zapret-hosts-google.txt"
-                printf '%s\n' \
-                "gvt1.com" "googleplay.com" "play.google.com" "beacons.gvt2.com" \
-                "play.googleapis.com" "play-fe.googleapis.com" "lh3.googleusercontent.com" \
-                "android.clients.google.com" "connectivitycheck.gstatic.com" \
-                "play-lh.googleusercontent.com" "play-games.googleusercontent.com" \
-                "prod-lt-playstoregatewayadapter-pa.googleapis.com" | grep -Fxv -f "$fileGP" >> "$fileGP"
-
+                
                 echo "🏁 Рабочая стратегия: $CURRENT_NAME сохранена в $SAVED_STR"
                 read -p "Нажмите Enter, чтобы вернуться в меню..." dummy
                 return 0
@@ -271,9 +253,11 @@ menu_str() {
         case "$choiceST" in
             1)
                 version="v1"
-echo -e "\n${MAGENTA}Устанавливаем стратегию ${version}${NC}\n${CYAN}Меняем стратегию${NC}"               
+echo -e "\n${MAGENTA}Устанавливаем стратегию ${version}${NC}\n${CYAN}Меняем стратегию${NC}"
 sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
 { echo "  option NFQWS_OPT '"; echo "#$version"; strategy_$version; echo "'"; } >> "$CONF"
+fileGP="/opt/zapret/ipset/zapret-hosts-google.txt"; printf '%s\n' "gvt1.com" "googleplay.com" "play.google.com" "beacons.gvt2.com" "play.googleapis.com" "play-fe.googleapis.com" \
+"lh3.googleusercontent.com" "android.clients.google.com" "connectivitycheck.gstatic.com" "play-lh.googleusercontent.com" "play-games.googleusercontent.com" "prod-lt-playstoregatewayadapter-pa.googleapis.com" | grep -Fxv -f "$fileGP" 2>/dev/null >> "$fileGP"
 echo -e "${CYAN}Редактируем ${NC}/etc/hosts${NC}"; hosts_add
 dis_str; echo -e "${CYAN}Применяем новую стратегию и настройки${NC}"; chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1; echo -e "${GREEN}Стратегия ${NC}${version} ${GREEN}установлена!${NC}\n"
 read -p "Нажмите Enter..." dummy
@@ -283,6 +267,8 @@ read -p "Нажмите Enter..." dummy
 echo -e "\n${MAGENTA}Устанавливаем стратегию ${version}${NC}\n${CYAN}Меняем стратегию${NC}"
 sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
 { echo "  option NFQWS_OPT '"; echo "#$version"; strategy_$version; echo "'"; } >> "$CONF"
+fileGP="/opt/zapret/ipset/zapret-hosts-google.txt"; printf '%s\n' "gvt1.com" "googleplay.com" "play.google.com" "beacons.gvt2.com" "play.googleapis.com" "play-fe.googleapis.com" \
+"lh3.googleusercontent.com" "android.clients.google.com" "connectivitycheck.gstatic.com" "play-lh.googleusercontent.com" "play-games.googleusercontent.com" "prod-lt-playstoregatewayadapter-pa.googleapis.com" | grep -Fxv -f "$fileGP" 2>/dev/null >> "$fileGP"
 echo -e "${CYAN}Редактируем ${NC}/etc/hosts${NC}"; hosts_add
 dis_str; echo -e "${CYAN}Применяем новую стратегию и настройки${NC}"; chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1; echo -e "${GREEN}Стратегия ${NC}${version} ${GREEN}установлена!${NC}\n"
 read -p "Нажмите Enter..." dummy
