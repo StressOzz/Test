@@ -111,11 +111,13 @@ auto_stryou() {
     # Удаляем все строки, начинающиеся с #Yn
     sed -i '/^#Yn.*/d' "$OLD_EDIT"
 
-    # Удаляем блоки между --filter-tcp=443 и --new (включительно)
+    # Удаляем блоки между --filter-tcp=443 или --hostlist=/opt/zapret/ipset/zapret-hosts-google.txt и --new включительно
     awk '
-        /^--filter-tcp=443/ {skip=1} 
-        skip && /^--new/ {skip=0; next} 
-        !skip {print}' "$OLD_EDIT" > "${OLD_EDIT}.tmp" && mv "${OLD_EDIT}.tmp" "$OLD_EDIT"
+    /^--filter-tcp=443$/ {skip=1} 
+    /^--hostlist=\/opt\/zapret\/ipset\/zapret-hosts-google\.txt$/ {skip=1} 
+    skip && /^--new$/ {skip=0; next} 
+    !skip {print}
+    ' "$OLD_EDIT" > "${OLD_EDIT}.tmp" && mv "${OLD_EDIT}.tmp" "$OLD_EDIT"
 
     # Скачиваем новые стратегии
     curl -fsSL "$STR_URL" -o "$TMP_LIST" || { echo "Не удалось скачать список"; read -p "Нажмите Enter..." dummy </dev/tty; return 1; }
@@ -131,7 +133,6 @@ auto_stryou() {
     apply_strategy() {
         NAME="$1"
         BODY="$2"
-        # Удаляем старый блок и добавляем новый
         sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
         {
             echo "  option NFQWS_OPT '"
@@ -161,13 +162,18 @@ auto_stryou() {
                     echo -en "Enter ${GREEN}- применить стратегию, ${NC}N ${GREEN}- продолжить подбор:${NC}"
                     read -r ANSWER </dev/tty
                     if [ -z "$ANSWER" ]; then
-                        # Создаём StrNEW: сначала StrYou, потом StrOldEdit
-                        awk 'NR==1{print;system("cat /opt/StrYou");next}1' "$OLD_EDIT" > "$NEW_STR"
+                        # Создаём StrNEW: сначала StrYou (если есть), потом StrOldEdit
+                        > "$NEW_STR"
+                        [ -f "$SAVED_STR" ] && cat "$SAVED_STR" >> "$NEW_STR"
+                        [ -f "$OLD_EDIT" ] && cat "$OLD_EDIT" >> "$NEW_STR"
+
                         sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
                         cat "$NEW_STR" >> "$CONF"
+
                         chmod +x /opt/zapret/sync_config.sh
                         /opt/zapret/sync_config.sh
                         /etc/init.d/zapret restart >/dev/null 2>&1
+
                         echo -e "${GREEN}Стратегия применена!${NC}\n"
                         read -p "Нажмите Enter..." dummy </dev/tty
                         return 0
@@ -183,7 +189,7 @@ auto_stryou() {
         fi
     done < "$TMP_LIST"
 
-    # Если последняя стратегия сработала
+    # Последняя стратегия
     if [ -n "$CURRENT_NAME" ]; then
         COUNT=$((COUNT + 1))
         echo -e "\n${CYAN}Применяем стратегию: ${NC}$CURRENT_NAME ($COUNT/$TOTAL)"
@@ -194,12 +200,17 @@ auto_stryou() {
             echo -en "Enter ${GREEN}- применить стратегию,${NC} N ${GREEN}- продолжить подбор:${NC}"
             read -r ANSWER </dev/tty
             if [ -z "$ANSWER" ]; then
-                awk 'NR==1{print;system("cat /opt/StrYou");next}1' "$OLD_EDIT" > "$NEW_STR"
+                > "$NEW_STR"
+                [ -f "$SAVED_STR" ] && cat "$SAVED_STR" >> "$NEW_STR"
+                [ -f "$OLD_EDIT" ] && cat "$OLD_EDIT" >> "$NEW_STR"
+
                 sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
                 cat "$NEW_STR" >> "$CONF"
+
                 chmod +x /opt/zapret/sync_config.sh
                 /opt/zapret/sync_config.sh
                 /etc/init.d/zapret restart >/dev/null 2>&1
+
                 echo -e "${GREEN}Стратегия применена!${NC}\n"
                 read -p "Нажмите Enter..." dummy </dev/tty
                 return 0
@@ -215,6 +226,7 @@ auto_stryou() {
     chmod +x /opt/zapret/sync_config.sh
     /opt/zapret/sync_config.sh
     /etc/init.d/zapret restart >/dev/null 2>&1
+
     echo -e "\n${RED}Рабочая стратегия для YouTube не найдена!${NC}\n"
     read -p "Нажмите Enter..." dummy </dev/tty
     return 1
