@@ -373,6 +373,8 @@ EOF
     echo -e "${CYAN}Редактируем ${NC}/etc/hosts${NC}"
     hosts_add
 
+# echo -e "${CYAN}Добавляем домены в исключения${NC}"; rm -f "$EXCLUDE_FILE"; wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL" || echo -e "\n${RED}Не удалось загрузить exclude файл${NC}\n"
+
     dis_str
     echo -e "${CYAN}Применяем новую стратегию и настройки${NC}"
 
