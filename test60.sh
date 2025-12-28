@@ -97,7 +97,7 @@ auto_stryou() {
     OLD_STR="/opt/StrOLD"
 
     TEST_HOST="https://rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com"
-    TIMEOUT=3
+    TIMEOUT=4
 
     # Сохраняем текущее состояние после строки option NFQWS_OPT '
     awk '/^[[:space:]]*option NFQWS_OPT '\''/{flag=1} flag{print}' "$CONF" > "$OLD_STR"
@@ -106,8 +106,11 @@ auto_stryou() {
     curl -fsSL "$STR_URL" -o "$TMP_LIST" || { echo "Не удалось скачать список"; read -p "Нажмите Enter..." dummy </dev/tty; return 1; }
 
     TOTAL=$(grep -c '^Yv[0-9]\+' "$TMP_LIST")
-    echo "[ZAPRET] Найдено стратегий: $TOTAL"
-    echo
+
+echo -e "${MAGENTA}Подобираем стратегию для ${NC}YouTube${NC}"
+
+    echo -e "${CYAN}Найдено стратегий: ${NC}$TOTAL"
+
 
     CURRENT_NAME=""
     CURRENT_BODY=""
@@ -136,14 +139,14 @@ auto_stryou() {
         if echo "$LINE" | grep -q '^Yv[0-9]\+'; then
             if [ -n "$CURRENT_NAME" ]; then
                 COUNT=$((COUNT + 1))
-                echo "[ZAPRET] Применяем стратегию: $CURRENT_NAME ($COUNT/$TOTAL)"
+    echo -e "${CYAN}Применяем стратегию: ${NC}$CURRENT_NAME ($COUNT/$TOTAL)"
+    
                 apply_strategy "$CURRENT_NAME" "$CURRENT_BODY"
 
                 STATUS=$(check_access)
                 if [ "$STATUS" = "ok" ]; then
-                    echo "✅ Доступ есть"
-                    echo "Проверьте видео в браузере"
-                    echo "Enter — оставить стратегию, N — продолжить перебор"
+    echo -e "${GREEN}Видео на ПК открывается!${NC}\n${YELLOW}Проверьте работу ${NC}YouTube${YELLOW} на других устройствах!${NC}"
+echo -en "${CYAN} Enter - ${GREEN}применить стратегию, ${CYAN} N - ${GREEN}продолжить подбор:${NC}"
                     read -r ANSWER </dev/tty
                     if [ -z "$ANSWER" ]; then
                         # Сохраняем рабочую стратегию
@@ -151,7 +154,7 @@ auto_stryou() {
                             echo "#$CURRENT_NAME"
                             printf "%b\n" "$CURRENT_BODY"
                         } > "$SAVED_STR"
-                        echo "🏁 Рабочая стратегия: $CURRENT_NAME сохранена в $SAVED_STR"
+    echo -e "${CYAN}Применяем стратегию и перезапускаем Zapret${NC}"
 
                         # Генерируем StrNEW на лету
                         awk 'NR==1{print;system("cat /opt/StrYou");next}/^#Yv/{skip=1;next}/^#v/{skip=0}!skip{print}' "$OLD_STR" > /opt/StrNEW
@@ -162,12 +165,14 @@ auto_stryou() {
                         chmod +x /opt/zapret/sync_config.sh
                         /opt/zapret/sync_config.sh
                         /etc/init.d/zapret restart >/dev/null 2>&1
-
-                        read -p "Нажмите Enter, чтобы вернуться в меню..." dummy </dev/tty
+                        
+  echo -e "${GREEN}Стратегия примененна!${NC}\n"
+  
+                        read -p "Нажмите Enter..." dummy </dev/tty
                         return 0
                     fi
                 else
-                    echo "❌ Нет доступа"
+                    echo -e "${RED}Видео не открывается...Продолжаем перебор...${NC}"
                 fi
             fi
             CURRENT_NAME="$LINE"
@@ -180,14 +185,13 @@ auto_stryou() {
     # Последняя стратегия
     if [ -n "$CURRENT_NAME" ]; then
         COUNT=$((COUNT + 1))
-        echo "[ZAPRET] ▶ Применяем стратегию: $CURRENT_NAME ($COUNT/$TOTAL)"
+    echo -e "${CYAN}Применяем стратегию: ${NC}$CURRENT_NAME ($COUNT/$TOTAL)"
         apply_strategy "$CURRENT_NAME" "$CURRENT_BODY"
 
         STATUS=$(check_access)
         if [ "$STATUS" = "ok" ]; then
-            echo "✅ Доступ есть"
-            echo "Проверьте видео в браузере"
-            echo "Enter — оставить стратегию, N — продолжить перебор"
+cho -e "${GREEN}Видео на ПК открывается!${NC}\n${YELLOW}Проверьте работу ${NC}YouTube${YELLOW} на других устройствах!${NC}"
+echo -en "${CYAN} Enter - ${GREEN}применить стратегию, ${CYAN} N - ${GREEN}продолжить подбор:${NC}"
             read -r ANSWER </dev/tty
             if [ -z "$ANSWER" ]; then
                 # Сохраняем рабочую стратегию
@@ -195,7 +199,7 @@ auto_stryou() {
                     echo "#$CURRENT_NAME"
                     printf "%b\n" "$CURRENT_BODY"
                 } > "$SAVED_STR"
-                echo "🏁 Рабочая стратегия: $CURRENT_NAME сохранена в $SAVED_STR"
+    echo -e "${CYAN}Применяем стратегию и перезапускаем Zapret${NC}"
 
                 # Генерируем StrNEW на лету
                 awk 'NR==1{print;system("cat /opt/StrYou");next}/^#Yv/{skip=1;next}/^#v/{skip=0}!skip{print}' "$OLD_STR" > /opt/StrNEW
@@ -206,12 +210,12 @@ auto_stryou() {
                 chmod +x /opt/zapret/sync_config.sh
                 /opt/zapret/sync_config.sh
                 /etc/init.d/zapret restart >/dev/null 2>&1
-
-                read -p "Нажмите Enter, чтобы вернуться в меню..." dummy </dev/tty
+      echo -e "${GREEN}Стратегия примененна!${NC}\n"
+                read -p "Нажмите Enter..." dummy </dev/tty
                 return 0
             fi
         else
-            echo "❌ Нет доступа"
+                    echo -e "${RED}Видео не открывается...${NC}\n"
         fi
     fi
 
@@ -222,8 +226,8 @@ auto_stryou() {
     /opt/zapret/sync_config.sh
     /etc/init.d/zapret restart >/dev/null 2>&1
 
-    echo "🚫 Рабочая стратегия не найдена"
-    read -p "Нажмите Enter, чтобы вернуться в меню..." dummy </dev/tty
+echo -e "${RED}Рабочая стратегия для YouTube не найдена!${NC}\n"
+    read -p "Нажмите Enter..." dummy </dev/tty
     return 1
 }
 
