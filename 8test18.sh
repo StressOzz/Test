@@ -109,7 +109,6 @@ auto_stryou() {
     echo -e "\n${MAGENTA}Подбираем стратегию для ${NC}YouTube${NC}"
     echo -e "${CYAN}Найдено ${NC}$TOTAL${CYAN} стратегий${NC}"
 
-    # Функция применения стратегии
     apply_strategy() {
         NAME="$1"
         BODY="$2"
@@ -120,7 +119,6 @@ auto_stryou() {
         /etc/init.d/zapret restart >/dev/null 2>&1
     }
 
-    # Проверка доступа
     check_access() {
         curl -s --connect-timeout "$TIMEOUT" -m "$TIMEOUT" "$TEST_HOST" >/dev/null && echo "ok" || echo "fail"
     }
@@ -143,20 +141,14 @@ auto_stryou() {
                     if [ -z "$ANSWER" ]; then
                         { echo "#$CURRENT_NAME"; printf "%b\n" "$CURRENT_BODY"; } > "$SAVED_STR"
                         echo -e "${CYAN}Применяем стратегию и перезапускаем Zapret${NC}"
-                        # Чистим StrOLD по новым правилам
+                        # Чистим StrOLD только по новым правилам
                         sed -i '/^#Yv.*/d' "$OLD_STR"
                         awk '{
                           if ($0=="--filter-tcp=443") {f=1; next}
                           if (f && $0=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt") {f=2; next}
                           if (f==2 && $0 ~ /--new$/) {f=0; next}
                           if (!f) print
-                        }' "$OLD_STR" > /opt/StrNEW
-                        sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
-                        cat /opt/StrNEW >> "$CONF"
-                        chmod +x /opt/zapret/sync_config.sh
-                        /opt/zapret/sync_config.sh
-                        /etc/init.d/zapret restart >/dev/null 2>&1
-                        echo -e "${GREEN}Стратегия применена!${NC}\n"
+                        }' "$OLD_STR" > "$OLD_STR.tmp" && mv "$OLD_STR.tmp" "$OLD_STR"
                         read -p "Нажмите Enter..." dummy </dev/tty
                         return 0
                     fi
@@ -183,20 +175,14 @@ auto_stryou() {
             read -r ANSWER </dev/tty
             if [ -z "$ANSWER" ]; then
                 { echo "#$CURRENT_NAME"; printf "%b\n" "$CURRENT_BODY"; } > "$SAVED_STR"
-                echo -e "${CYAN}Применяем стратегию и перезапускаем Zapret${NC}"
+                echo -e "${CYAN}Стратегия применена!${NC}"
                 sed -i '/^#Yv.*/d' "$OLD_STR"
                 awk '{
                   if ($0=="--filter-tcp=443") {f=1; next}
                   if (f && $0=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt") {f=2; next}
                   if (f==2 && $0 ~ /--new$/) {f=0; next}
                   if (!f) print
-                }' "$OLD_STR" > /opt/StrNEW
-                sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
-                cat /opt/StrNEW >> "$CONF"
-                chmod +x /opt/zapret/sync_config.sh
-                /opt/zapret/sync_config.sh
-                /etc/init.d/zapret restart >/dev/null 2>&1
-                echo -e "${GREEN}Стратегия применена!${NC}\n"
+                }' "$OLD_STR" > "$OLD_STR.tmp" && mv "$OLD_STR.tmp" "$OLD_STR"
                 read -p "Нажмите Enter..." dummy </dev/tty
                 return 0
             fi
@@ -205,7 +191,7 @@ auto_stryou() {
         fi
     fi
 
-    # Если рабочая стратегия не найдена
+    # Если рабочая стратегия не найдена — восстанавливаем StrOLD
     sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
     cat "$OLD_STR" >> "$CONF"
     chmod +x /opt/zapret/sync_config.sh
@@ -215,7 +201,6 @@ auto_stryou() {
     read -p "Нажмите Enter..." dummy </dev/tty
     return 1
 }
-
 
 
 # ==========================================
