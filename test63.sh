@@ -107,7 +107,7 @@ auto_stryou() {
 
     TOTAL=$(grep -c '^Yv[0-9]\+' "$TMP_LIST")
 
-echo -e "${MAGENTA}Подобираем стратегию для ${NC}YouTube${NC}"
+echo -e "\n${MAGENTA}Подбираем стратегию для ${NC}YouTube${NC}"
 
     echo -e "${CYAN}Найдено стратегий: ${NC}$TOTAL"
 
@@ -147,7 +147,7 @@ echo -e "${MAGENTA}Подобираем стратегию для ${NC}YouTube${
                 STATUS=$(check_access)
                 if [ "$STATUS" = "ok" ]; then
     echo -e "${GREEN}Видео на ПК открывается!${NC}\n${YELLOW}Проверьте работу ${NC}YouTube${YELLOW} на других устройствах!${NC}"
-echo -en "Enter - ${GREEN}применить стратегию, ${NC}N - ${GREEN}продолжить подбор:${NC}"
+echo -en "Enter ${GREEN}- применить стратегию, ${NC}N ${GREEN}- продолжить подбор:${NC}"
                     read -r ANSWER </dev/tty
                     if [ -z "$ANSWER" ]; then
                         # Сохраняем рабочую стратегию
@@ -173,7 +173,7 @@ echo -en "Enter - ${GREEN}применить стратегию, ${NC}N - ${GREE
                         return 0
                     fi
                 else
-                    echo -e "${RED}Видео не открывается...Продолжаем перебор...${NC}"
+                    echo -e "${RED}Видео не открывается, продолжаем подбор...${NC}"
                 fi
             fi
             CURRENT_NAME="$LINE"
@@ -192,7 +192,7 @@ echo -en "Enter - ${GREEN}применить стратегию, ${NC}N - ${GREE
         STATUS=$(check_access)
         if [ "$STATUS" = "ok" ]; then
 encho -e "${GREEN}Видео на ПК открывается!${NC}\n${YELLOW}Проверьте работу ${NC}YouTube${YELLOW} на других устройствах!${NC}"
-echo -en "Enter - ${GREEN}применить стратегию, ${NC}N - ${GREEN}продолжить подбор:${NC}"
+echo -en "Enter ${GREEN}- применить стратегию, ${NC}N ${GREEN}- продолжить подбор:${NC}"
             read -r ANSWER </dev/tty
             if [ -z "$ANSWER" ]; then
                 # Сохраняем рабочую стратегию
