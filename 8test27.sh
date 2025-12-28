@@ -147,8 +147,8 @@ auto_stryou() {
                         awk '
                         {
                             if (skip) {
-                                if ($0 == "--new") { skip=0; next }
-                                next
+                                if ($0 == "--new") { skip=0; print; next }   # конец блока, печатаем --new
+                                next                                          # пропускаем строки внутри блока
                             }
                             if ($0 == "--filter-tcp=443") {
                                 getline next_line
@@ -202,7 +202,7 @@ auto_stryou() {
                 awk '
                 {
                     if (skip) {
-                        if ($0 == "--new") { skip=0; next }
+                        if ($0 == "--new") { skip=0; print; next }
                         next
                     }
                     if ($0 == "--filter-tcp=443") {
@@ -243,6 +243,7 @@ auto_stryou() {
     read -p "Нажмите Enter..." dummy </dev/tty
     return 1
 }
+
 
 
 
