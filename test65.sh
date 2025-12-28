@@ -140,7 +140,6 @@ echo -e "\n${MAGENTA}Подбираем стратегию для ${NC}YouTube${
             if [ -n "$CURRENT_NAME" ]; then
                 COUNT=$((COUNT + 1))
     echo -e "\n${CYAN}Применяем стратегию: ${NC}$CURRENT_NAME ($COUNT/$TOTAL)"
-        echo -e "n
     
                 apply_strategy "$CURRENT_NAME" "$CURRENT_BODY"
 
@@ -192,7 +191,7 @@ echo -en "Enter ${GREEN}- применить стратегию, ${NC}N ${GREEN}
         STATUS=$(check_access)
         if [ "$STATUS" = "ok" ]; then
 echo -e "${GREEN}Видео на ПК открывается!${NC}\n${YELLOW}Проверьте работу ${NC}YouTube${YELLOW} на других устройствах!${NC}"
-echo -en "Enter ${GREEN}- применить стратегию, ${NC}N ${GREEN}- продолжить подбор:${NC}"
+echo -en "Enter ${GREEN}- применить стратегию,${NC} N ${GREEN}- продолжить подбор:${NC}"
             read -r ANSWER </dev/tty
             if [ -z "$ANSWER" ]; then
                 # Сохраняем рабочую стратегию
