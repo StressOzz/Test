@@ -307,12 +307,18 @@ menu_str() {
         clear
         echo -e "${MAGENTA}Меню стратегии${NC}\n"
         show_current_strategy
+
+current_ver="$( [ -n "$ver" ] && echo "$ver" )"
+current_yv="$(grep -m1 '^#Yv[0-9]\+' "$CONF" | tr -d '#')"
+
+[ -n "$current_ver$⁠current_yv" ] && echo -e "${YELLOW}Используется стратегия:${NC} ${current_ver}${current_ver:+ / }${current_yv}\n"
+
         
-ver_str=""
-[ -n "$ver" ] && ver_str="$ver"
-current_yv=$(grep -m1 '^#Yv[0-9]\+' "$CONF" | tr -d '#')
-[ -n "$current_yv" ] && { [ -n "$ver_str" ] && ver_str="$ver_str / $current_yv" || ver_str="$current_yv"; }
-[ -n "$ver_str" ] && echo -e "${YELLOW}Используется стратегия:${NC} $ver_str\n"
+# ver_str=""
+# [ -n "$ver" ] && ver_str="$ver"
+# current_yv=$(grep -m1 '^#Yv[0-9]\+' "$CONF" | tr -d '#')
+# [ -n "$current_yv" ] && { [ -n "$ver_str" ] && ver_str="$ver_str / $current_yv" || ver_str="$current_yv"; }
+# [ -n "$ver_str" ] && echo -e "${YELLOW}Используется стратегия:${NC} $ver_str\n"
 
         echo -e "${CYAN}1) ${GREEN}Установить стратегию${NC} v1"
         echo -e "${CYAN}2) ${GREEN}Установить стратегию${NC} v2"
