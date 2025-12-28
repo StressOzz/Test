@@ -264,51 +264,76 @@ dis_str() {
 }
 
 menu_str() {
-    [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter..." dummy; return; }
+    [ ! -f /etc/init.d/zapret ] && {
+        echo -e "\n${RED}Zapret не установлен!${NC}\n"
+        read -p "Нажмите Enter..." dummy
+        return
+    }
 
     while true; do
         clear
         echo -e "${MAGENTA}Меню стратегии${NC}\n"
         show_current_strategy
         [ -n "$ver" ] && echo -e "${YELLOW}Используется стратегия:${NC} $ver\n"
+
         echo -e "${CYAN}1) ${GREEN}Установить стратегию${NC} v1"
         echo -e "${CYAN}2) ${GREEN}Установить стратегию${NC} v2"
         echo -e "${CYAN}0) ${GREEN}Подобрать стратегию для ${NC}YouTube"
         echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "
+
         read choiceST
 
         case "$choiceST" in
-            1)
-                version="v1"
-echo -e "\n${MAGENTA}Устанавливаем стратегию ${version}${NC}\n${CYAN}Меняем стратегию${NC}"
-sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
-{ echo "  option NFQWS_OPT '"; strategy_$version; echo "'"; } >> "$CONF"
-fileGP="/opt/zapret/ipset/zapret-hosts-google.txt"; printf '%s\n' "gvt1.com" "googleplay.com" "play.google.com" "beacons.gvt2.com" "play.googleapis.com" "play-fe.googleapis.com" \
-"lh3.googleusercontent.com" "android.clients.google.com" "connectivitycheck.gstatic.com" "play-lh.googleusercontent.com" "play-games.googleusercontent.com" "prod-lt-playstoregatewayadapter-pa.googleapis.com" | grep -Fxv -f "$fileGP" 2>/dev/null >> "$fileGP"
-echo -e "${CYAN}Редактируем ${NC}/etc/hosts${NC}"; hosts_add
-dis_str; echo -e "${CYAN}Применяем новую стратегию и настройки${NC}"; chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1; echo -e "${GREEN}Стратегия ${NC}${version} ${GREEN}установлена!${NC}\n"
-read -p "Нажмите Enter..." dummy
-                ;;
-            2)
-                version="v2"
-echo -e "\n${MAGENTA}Устанавливаем стратегию ${version}${NC}\n${CYAN}Меняем стратегию${NC}"
-sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
-{ echo "  option NFQWS_OPT '"; strategy_$version; echo "'"; } >> "$CONF"
-fileGP="/opt/zapret/ipset/zapret-hosts-google.txt"; printf '%s\n' "gvt1.com" "googleplay.com" "play.google.com" "beacons.gvt2.com" "play.googleapis.com" "play-fe.googleapis.com" \
-"lh3.googleusercontent.com" "android.clients.google.com" "connectivitycheck.gstatic.com" "play-lh.googleusercontent.com" "play-games.googleusercontent.com" "prod-lt-playstoregatewayadapter-pa.googleapis.com" | grep -Fxv -f "$fileGP" 2>/dev/null >> "$fileGP"
-echo -e "${CYAN}Редактируем ${NC}/etc/hosts${NC}"; hosts_add
-dis_str; echo -e "${CYAN}Применяем новую стратегию и настройки${NC}"; chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1; echo -e "${GREEN}Стратегия ${NC}${version} ${GREEN}установлена!${NC}\n"
-read -p "Нажмите Enter..." dummy
-                ;;
-            0)
-                auto_stryou
-                ;;
-            *)
-                return
-                ;;
+            1) install_strategy v1 ;;
+            2) install_strategy v2 ;;
+            0) auto_stryou ;;
+            *) return ;;
         esac
     done
 }
+
+install_strategy() {
+    local version="$1"
+    local fileGP="/opt/zapret/ipset/zapret-hosts-google.txt"
+
+    echo -e "\n${MAGENTA}Устанавливаем стратегию ${version}${NC}\n${CYAN}Меняем стратегию${NC}"
+
+    sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
+    {
+        echo "  option NFQWS_OPT '"
+        strategy_"$version"
+        echo "'"
+    } >> "$CONF"
+
+    cat <<'EOF' | grep -Fxv -f "$fileGP" 2>/dev/null >> "$fileGP"
+gvt1.com
+googleplay.com
+play.google.com
+beacons.gvt2.com
+play.googleapis.com
+play-fe.googleapis.com
+lh3.googleusercontent.com
+android.clients.google.com
+connectivitycheck.gstatic.com
+play-lh.googleusercontent.com
+play-games.googleusercontent.com
+prod-lt-playstoregatewayadapter-pa.googleapis.com
+EOF
+
+    echo -e "${CYAN}Редактируем ${NC}/etc/hosts${NC}"
+    hosts_add
+
+    dis_str
+    echo -e "${CYAN}Применяем новую стратегию и настройки${NC}"
+
+    chmod +x /opt/zapret/sync_config.sh
+    /opt/zapret/sync_config.sh
+    /etc/init.d/zapret restart >/dev/null 2>&1
+
+    echo -e "${GREEN}Стратегия ${NC}${version} ${GREEN}установлена!${NC}\n"
+    read -p "Нажмите Enter..." dummy
+}
+
 
 # ==========================================
 # DNS over HTTPS
