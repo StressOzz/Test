@@ -143,12 +143,12 @@ auto_stryou() {
                         { echo "#$CURRENT_NAME"; printf "%b\n" "$CURRENT_BODY"; } > "$SAVED_STR"
                         echo -e "${CYAN}Применяем стратегию и перезапускаем Zapret${NC}"
 
-                        # формируем StrNEW с безопасным удалением блоков
+                        # формируем StrNEW без ненужных блоков, сохраняем --new
                         awk '
                         {
                             if (skip) {
-                                if ($0 == "--new") { skip=0; print; next }   # конец блока, печатаем --new
-                                next                                          # пропускаем строки внутри блока
+                                if ($0 == "--new") { skip=0; print; next }
+                                next
                             }
                             if ($0 == "--filter-tcp=443") {
                                 getline next_line
@@ -165,8 +165,12 @@ auto_stryou() {
                             print
                         }' "$OLD_STR" > /opt/StrNEW
 
+                        # вставляем StrYou после первой строки
+                        awk 'NR==1{print; system("cat /opt/StrYou"); next}1' /opt/StrNEW > /opt/StrFINAL
+
+                        # применяем итоговый файл в конфиг
                         sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
-                        cat /opt/StrNEW >> "$CONF"
+                        cat /opt/StrFINAL >> "$CONF"
                         chmod +x /opt/zapret/sync_config.sh
                         /opt/zapret/sync_config.sh
                         /etc/init.d/zapret restart >/dev/null 2>&1
@@ -220,8 +224,10 @@ auto_stryou() {
                     print
                 }' "$OLD_STR" > /opt/StrNEW
 
+                awk 'NR==1{print; system("cat /opt/StrYou"); next}1' /opt/StrNEW > /opt/StrFINAL
+
                 sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
-                cat /opt/StrNEW >> "$CONF"
+                cat /opt/StrFINAL >> "$CONF"
                 chmod +x /opt/zapret/sync_config.sh
                 /opt/zapret/sync_config.sh
                 /etc/init.d/zapret restart >/dev/null 2>&1
