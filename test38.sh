@@ -160,7 +160,7 @@ awk '/^[[:space:]]*option NFQWS_OPT '\''/{flag=1} flag{print}' "$CONF" > "$OLD_S
                         /opt/zapret/sync_config.sh
                         /etc/init.d/zapret restart >/dev/null 2>&1
 
-                        read -p "Нажмите Enter, чтобы вернуться в меню..." dummy
+read -p "Нажмите Enter, чтобы вернуться в меню..." dummy </dev/tty
                         return 0
                     fi
                 else
@@ -201,7 +201,7 @@ awk '/^[[:space:]]*option NFQWS_OPT '\''/{flag=1} flag{print}' "$CONF" > "$OLD_S
                 /opt/zapret/sync_config.sh
                 /etc/init.d/zapret restart >/dev/null 2>&1
 
-                read -p "Нажмите Enter, чтобы вернуться в меню..." dummy
+read -p "Нажмите Enter, чтобы вернуться в меню..." dummy </dev/tty
                 return 0
             fi
         else
@@ -217,7 +217,7 @@ chmod +x /opt/zapret/sync_config.sh
 /etc/init.d/zapret restart >/dev/null 2>&1
                         
     echo "🚫 Рабочая стратегия не найдена"
-    read -p "Нажмите Enter, чтобы вернуться в меню..." dummy
+read -p "Нажмите Enter, чтобы вернуться в меню..." dummy </dev/tty
     return 1
 }
 
