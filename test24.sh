@@ -255,14 +255,13 @@ dis_str() {
 }
 
 menu_str() {
-    local NO_PAUSE=$1
     [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter..." dummy; return; }
 
     while true; do
         clear
-        echo -e "${MAGENTA}Меню стратегии${NC}"
+        echo -e "${MAGENTA}Меню стратегии${NC}\n"
         show_current_strategy
-        [ -n "$ver" ] && echo -e "${YELLOW}Используется стратегия:${NC} $ver"
+        [ -n "$ver" ] && echo -e "${YELLOW}Используется стратегия:${NC} $ver\n"
         echo
         echo -e "${CYAN}1) ${GREEN}Установить стратегию${NC} v1"
         echo -e "${CYAN}2) ${GREEN}Установить стратегию${NC} v2"
@@ -273,19 +272,21 @@ menu_str() {
         case "$choiceST" in
             1)
                 version="v1"
+echo -e "\n${MAGENTA}Устанавливаем стратегию ${version}${NC}\n${CYAN}Меняем стратегию${NC}"               
 sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
 { echo "  option NFQWS_OPT '"; echo "#$version"; strategy_$version; echo "'"; } >> "$CONF"
-dis_str; echo -e "${CYAN}Применяем новую стратегию и настройки${NC}"; chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1; echo -e "${GREEN}Стратегия ${NC}${version} ${GREEN}установлена!${NC}"
 echo -e "${CYAN}Редактируем ${NC}/etc/hosts${NC}"; hosts_add
-                read -p "Нажмите Enter..." dummy
+dis_str; echo -e "${CYAN}Применяем новую стратегию и настройки${NC}"; chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1; echo -e "${GREEN}Стратегия ${NC}${version} ${GREEN}установлена!${NC}\n"
+read -p "Нажмите Enter..." dummy
                 ;;
             2)
                 version="v2"
+echo -e "\n${MAGENTA}Устанавливаем стратегию ${version}${NC}\n${CYAN}Меняем стратегию${NC}"
 sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
 { echo "  option NFQWS_OPT '"; echo "#$version"; strategy_$version; echo "'"; } >> "$CONF"
-dis_str; echo -e "${CYAN}Применяем новую стратегию и настройки${NC}"; chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1; echo -e "${GREEN}Стратегия ${NC}${version} ${GREEN}установлена!${NC}"
 echo -e "${CYAN}Редактируем ${NC}/etc/hosts${NC}"; hosts_add
-                read -p "Нажмите Enter..." dummy
+dis_str; echo -e "${CYAN}Применяем новую стратегию и настройки${NC}"; chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1; echo -e "${GREEN}Стратегия ${NC}${version} ${GREEN}установлена!${NC}\n"
+read -p "Нажмите Enter..." dummy
                 ;;
             0)
                 auto_stryou
