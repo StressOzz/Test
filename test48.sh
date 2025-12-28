@@ -266,7 +266,10 @@ strategy_v6() {
 printf '%s\n' "#Yv02" "--filter-tcp=443" "--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt" "--dpi-desync=multisplit" "--dpi-desync-split-pos=1,sniext+1" "--dpi-desync-split-seqovl=1" | cat; \
 printf '%s\n' "#v6" "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=hostfakesplit" "--dpi-desync-hostfakesplit-mod=host=rzd.ru" "--dpi-desync-hostfakesplit-midhost=host-2" "--dpi-desync-split-seqovl=726" "--dpi-desync-fooling=badsum,badseq" "--dpi-desync-badseq-increment=0" | cat; }
 
-
+strategy_v7() {
+    printf '%s\n' "#v7" "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=hostfakesplit" "--dpi-desync-hostfakesplit-mod=host=m.ok.ru"
+    printf '%s\n' "--dpi-desync-hostfakesplit-midhost=host-2" "--dpi-desync-split-seqovl=1" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/TLS_ClientHello_rkn_gov_ru.bin" "--dpi-desync-fooling=badsum,badseq" "--dpi-desync-badseq-increment=0"
+}
 
 
 dis_str() {
@@ -326,7 +329,7 @@ echo -e "${CYAN}3) ${GREEN}Установить стратегию${NC} v3"
 echo -e "${CYAN}4) ${GREEN}Установить стратегию${NC} v4"
 echo -e "${CYAN}5) ${GREEN}Установить стратегию${NC} v5"
 echo -e "${CYAN}6) ${GREEN}Установить стратегию${NC} v6"
-        
+echo -e "${CYAN}7) ${GREEN}Установить стратегию${NC} v7"
         echo -e "${CYAN}0) ${GREEN}Подобрать стратегию для ${NC}YouTube"
         echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "
 
@@ -339,7 +342,7 @@ echo -e "${CYAN}6) ${GREEN}Установить стратегию${NC} v6"
 4) install_strategy v4 ;;
 5) install_strategy v5 ;;
 6) install_strategy v6 ;;
-            
+7) install_strategy v7 ;;       
             0) auto_stryou ;;
             *) return ;;
         esac
