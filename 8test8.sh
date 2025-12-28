@@ -174,23 +174,23 @@ auto_StrYOU() {
                             !skip{print}
                         ' "$OLD_STR" > /opt/StrNEW
 
-                        if ! grep -q '^#Yv' /opt/StrNEW; then
-                            awk '
-                                BEGIN { del=0 }
-                                /--filter-tcp=443/ {
-                                    getline n
-                                    if (n == "--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt") {
-                                        del=1
-                                        next
-                                    }
-                                    print
-                                    print n
-                                    next
-                                }
-                                del && (/--new/ || /^'\''$/) { del=0 }
-                                !del
-                            ' /opt/StrNEW > /opt/StrNEW.tmp && mv /opt/StrNEW.tmp /opt/StrNEW
-                        fi
+if ! grep -q '^#Yv' /opt/StrNEW; then
+    awk '
+        BEGIN { del=0 }
+        /^[[:space:]]*--filter-tcp=443[[:space:]]*$/ {
+            del=1
+            next
+        }
+        del && /^[[:space:]]*--hostlist=\/opt\/zapret\/ipset\/zapret-hosts-google\.txt[[:space:]]*$/ {
+            next
+        }
+        del && (/--new/ || /^[[:space:]]*'\''[[:space:]]*$/) {
+            del=0
+            next
+        }
+        !del
+    ' /opt/StrNEW > /opt/StrNEW.tmp && mv /opt/StrNEW.tmp /opt/StrNEW
+fi
 
                         sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
                         cat /opt/StrNEW >> "$CONF"
@@ -249,23 +249,23 @@ auto_StrYOU() {
                     !skip{print}
                 ' "$OLD_STR" > /opt/StrNEW
 
-                if ! grep -q '^#Yv' /opt/StrNEW; then
-                    awk '
-                        BEGIN { del=0 }
-                        /--filter-tcp=443/ {
-                            getline n
-                            if (n == "--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt") {
-                                del=1
-                                next
-                            }
-                            print
-                            print n
-                            next
-                        }
-                        del && (/--new/ || /^'\''$/) { del=0 }
-                        !del
-                    ' /opt/StrNEW > /opt/StrNEW.tmp && mv /opt/StrNEW.tmp /opt/StrNEW
-                fi
+if ! grep -q '^#Yv' /opt/StrNEW; then
+    awk '
+        BEGIN { del=0 }
+        /^[[:space:]]*--filter-tcp=443[[:space:]]*$/ {
+            del=1
+            next
+        }
+        del && /^[[:space:]]*--hostlist=\/opt\/zapret\/ipset\/zapret-hosts-google\.txt[[:space:]]*$/ {
+            next
+        }
+        del && (/--new/ || /^[[:space:]]*'\''[[:space:]]*$/) {
+            del=0
+            next
+        }
+        !del
+    ' /opt/StrNEW > /opt/StrNEW.tmp && mv /opt/StrNEW.tmp /opt/StrNEW
+fi
 
                 sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
                 cat /opt/StrNEW >> "$CONF"
