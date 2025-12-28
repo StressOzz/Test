@@ -166,8 +166,12 @@ auto_stryou() {
                             print
                         }' "$OLD_STR" > /opt/StrNEW
 
-                        # вставляем StrYou после первой строки
-                        awk 'NR==1{print; system("cat /opt/StrYou"); next}1' /opt/StrNEW > /opt/StrFINAL
+                        # вставляем StrYou перед первой строкой --new
+                        awk '
+                        BEGIN { inserted=0 }
+                        /^--new/ && !inserted { system("cat /opt/StrYou"); inserted=1 }
+                        { print }
+                        ' /opt/StrNEW > /opt/StrFINAL
 
                         # применяем итоговый файл в конфиг
                         sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
@@ -221,12 +225,15 @@ auto_stryou() {
                             next
                         }
                     }
-                    # удаляем только #Yv без пробела после #
                     if ($0 ~ /^[[:space:]]*#Yv/) next
                     print
                 }' "$OLD_STR" > /opt/StrNEW
 
-                awk 'NR==1{print; system("cat /opt/StrYou"); next}1' /opt/StrNEW > /opt/StrFINAL
+                awk '
+                BEGIN { inserted=0 }
+                /^--new/ && !inserted { system("cat /opt/StrYou"); inserted=1 }
+                { print }
+                ' /opt/StrNEW > /opt/StrFINAL
 
                 sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
                 cat /opt/StrFINAL >> "$CONF"
