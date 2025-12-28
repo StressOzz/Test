@@ -140,13 +140,14 @@ echo -e "${MAGENTA}Подобираем стратегию для ${NC}YouTube${
             if [ -n "$CURRENT_NAME" ]; then
                 COUNT=$((COUNT + 1))
     echo -e "\n${CYAN}Применяем стратегию: ${NC}$CURRENT_NAME ($COUNT/$TOTAL)"
+        echo -e "n
     
                 apply_strategy "$CURRENT_NAME" "$CURRENT_BODY"
 
                 STATUS=$(check_access)
                 if [ "$STATUS" = "ok" ]; then
     echo -e "${GREEN}Видео на ПК открывается!${NC}\n${YELLOW}Проверьте работу ${NC}YouTube${YELLOW} на других устройствах!${NC}"
-echo -en "Enter - ${GREEN}применить стратегию, n${NC}N - ${GREEN}продолжить подбор:${NC}"
+echo -en "Enter - ${GREEN}применить стратегию, ${NC}N - ${GREEN}продолжить подбор:${NC}"
                     read -r ANSWER </dev/tty
                     if [ -z "$ANSWER" ]; then
                         # Сохраняем рабочую стратегию
@@ -190,8 +191,8 @@ echo -en "Enter - ${GREEN}применить стратегию, n${NC}N - ${GRE
 
         STATUS=$(check_access)
         if [ "$STATUS" = "ok" ]; then
-cho -e "${GREEN}Видео на ПК открывается!${NC}\n${YELLOW}Проверьте работу ${NC}YouTube${YELLOW} на других устройствах!${NC}"
-echo -en "Enter - ${GREEN}применить стратегию, n${NC}N - ${GREEN}продолжить подбор:${NC}"
+encho -e "${GREEN}Видео на ПК открывается!${NC}\n${YELLOW}Проверьте работу ${NC}YouTube${YELLOW} на других устройствах!${NC}"
+echo -en "Enter - ${GREEN}применить стратегию, ${NC}N - ${GREEN}продолжить подбор:${NC}"
             read -r ANSWER </dev/tty
             if [ -z "$ANSWER" ]; then
                 # Сохраняем рабочую стратегию
@@ -226,7 +227,7 @@ echo -en "Enter - ${GREEN}применить стратегию, n${NC}N - ${GRE
     /opt/zapret/sync_config.sh
     /etc/init.d/zapret restart >/dev/null 2>&1
 
-echo -e "${RED}Рабочая стратегия для YouTube не найдена!${NC}\n"
+echo -e "\n${RED}Рабочая стратегия для YouTube не найдена!${NC}\n"
     read -p "Нажмите Enter..." dummy </dev/tty
     return 1
 }
