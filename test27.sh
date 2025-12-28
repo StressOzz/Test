@@ -112,13 +112,33 @@ auto_stryou() {
     apply_strategy() {
         NAME="$1"
         BODY="$2"
-        sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
-        {
-            echo "  option NFQWS_OPT '"
-            echo "#AUTO $NAME"
-            printf "%b\n" "$BODY"
-            echo "'"
-        } >> "$CONF"
+
+        # Ищем начало блока NFQWS_OPT
+        START_LINE=$(grep -n "^[[:space:]]*option NFQWS_OPT '" "$CONF" | cut -d: -f1)
+        if [ -n "$START_LINE" ]; then
+            # Есть ли блок #Yv после этой строки
+            END_LINE=$(sed -n "$START_LINE,\$p" "$CONF" | grep -n "^#v" | head -n1 | cut -d: -f1)
+            if [ -n "$END_LINE" ]; then
+                # Удаляем старый блок #Yv до #v
+                END_LINE=$((START_LINE + END_LINE - 1))
+                sed -i "${START_LINE},${END_LINE}d" "$CONF"
+            fi
+            # Вставляем новый блок сразу после option NFQWS_OPT '
+            LINE_TO_INSERT=$((START_LINE))
+            sed -i "${LINE_TO_INSERT}i\\
+#AUTO $NAME\\
+$BODY" "$CONF"
+        else
+            # Если строки option NFQWS_OPT ' нет — создаём блок в конце файла
+            {
+                echo "  option NFQWS_OPT '"
+                echo "#AUTO $NAME"
+                printf "%b\n" "$BODY"
+                echo "'"
+            } >> "$CONF"
+        fi
+
+        # Применяем конфиг
         chmod +x /opt/zapret/sync_config.sh
         /opt/zapret/sync_config.sh
         /etc/init.d/zapret restart >/dev/null 2>&1
@@ -147,7 +167,6 @@ auto_stryou() {
                             printf "%b\n" "$CURRENT_BODY"
                         } > "$SAVED_STR"
                         echo "🏁 Рабочая стратегия: $CURRENT_NAME сохранена в $SAVED_STR"
-
                         read -p "Нажмите Enter, чтобы вернуться в меню..." dummy
                         return 0
                     fi
@@ -179,7 +198,6 @@ auto_stryou() {
                     echo "#$CURRENT_NAME"
                     printf "%b\n" "$CURRENT_BODY"
                 } > "$SAVED_STR"
-                
                 echo "🏁 Рабочая стратегия: $CURRENT_NAME сохранена в $SAVED_STR"
                 read -p "Нажмите Enter, чтобы вернуться в меню..." dummy
                 return 0
