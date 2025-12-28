@@ -94,9 +94,13 @@ auto_stryou() {
     STR_URL="https://raw.githubusercontent.com/StressOzz/Test/refs/heads/main/ListStrYou"
     TMP_LIST="/tmp/zapret_yt_list.txt"
     SAVED_STR="/opt/StrYou"
+    OLD_STR="/opt/StrOLD"
 
     TEST_HOST="https://rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com"
     TIMEOUT=3
+
+    # Сохраняем текущее состояние после строки option NFQWS_OPT '
+    awk '/^[[:space:]]*option NFQWS_OPT '\''/{flag=1} flag{print}' "$CONF" > "$OLD_STR"
 
     # Скачать список стратегий
     curl -fsSL "$STR_URL" -o "$TMP_LIST" || { echo "Не удалось скачать список"; read -p "Нажмите Enter..." dummy; return 1; }
@@ -112,6 +116,7 @@ auto_stryou() {
     apply_strategy() {
         NAME="$1"
         BODY="$2"
+        # Удаляем старую стратегию
         sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
         {
             echo "  option NFQWS_OPT '"
@@ -148,6 +153,13 @@ auto_stryou() {
                         } > "$SAVED_STR"
                         echo "🏁 Рабочая стратегия: $CURRENT_NAME сохранена в $SAVED_STR"
 
+                        # Восстанавливаем старое состояние конфигурации
+                        sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
+                        cat "$OLD_STR" >> "$CONF"
+                        chmod +x /opt/zapret/sync_config.sh
+                        /opt/zapret/sync_config.sh
+                        /etc/init.d/zapret restart >/dev/null 2>&1
+
                         read -p "Нажмите Enter, чтобы вернуться в меню..." dummy
                         return 0
                     fi
@@ -179,8 +191,16 @@ auto_stryou() {
                     echo "#$CURRENT_NAME"
                     printf "%b\n" "$CURRENT_BODY"
                 } > "$SAVED_STR"
-                
+
                 echo "🏁 Рабочая стратегия: $CURRENT_NAME сохранена в $SAVED_STR"
+
+                # Восстанавливаем старое состояние конфигурации
+                sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
+                cat "$OLD_STR" >> "$CONF"
+                chmod +x /opt/zapret/sync_config.sh
+                /opt/zapret/sync_config.sh
+                /etc/init.d/zapret restart >/dev/null 2>&1
+
                 read -p "Нажмите Enter, чтобы вернуться в меню..." dummy
                 return 0
             fi
