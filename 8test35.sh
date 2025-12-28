@@ -89,177 +89,18 @@ hosts_clear; echo -e "Zapret ${GREEN}полностью удалён!${NC}\n"; [
 # ==========================================
 # Подбор стратегии для Ютуб
 # ==========================================
-
-auto_stryou() {
-    CONF="/etc/config/zapret"
-    STR_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ListStrYou"
-    TMP_LIST="/tmp/zapret_yt_list.txt"
-    SAVED_STR="/opt/StrYou"
-    OLD_STR="/opt/StrOLD"
-
-    TEST_HOST="https://rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com"
-    TIMEOUT=4
-
-    # сохраняем текущие настройки после option NFQWS_OPT
-    awk '/^[[:space:]]*option NFQWS_OPT '\''/{flag=1} flag{print}' "$CONF" > "$OLD_STR"
-
-    # скачиваем список стратегий
-    curl -fsSL "$STR_URL" -o "$TMP_LIST" || { echo "Не удалось скачать список"; read -p "Нажмите Enter..." dummy </dev/tty; return 1; }
-
-    TOTAL=$(grep -c '^Yv[0-9]\+' "$TMP_LIST")
-    echo -e "\n${MAGENTA}Подбираем стратегию для ${NC}YouTube${NC}"
-    echo -e "${CYAN}Найдено ${NC}$TOTAL${CYAN} стратегий${NC}"
-
-    CURRENT_NAME=""
-    CURRENT_BODY=""
-    COUNT=0
-
-    apply_strategy() {
-        NAME="$1"
-        BODY="$2"
-        sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
-        { echo "  option NFQWS_OPT '"; echo "#AUTO $NAME"; printf "%b\n" "$BODY"; echo "'"; } >> "$CONF"
-        chmod +x /opt/zapret/sync_config.sh
-        /opt/zapret/sync_config.sh
-        /etc/init.d/zapret restart >/dev/null 2>&1
-    }
-
-    check_access() {
-        curl -s --connect-timeout "$TIMEOUT" -m "$TIMEOUT" "$TEST_HOST" >/dev/null && echo "ok" || echo "fail"
-    }
-
-    while IFS= read -r LINE || [ -n "$LINE" ]; do
-        if echo "$LINE" | grep -q '^Yv[0-9]\+'; then
-            if [ -n "$CURRENT_NAME" ]; then
-                COUNT=$((COUNT + 1))
-                echo -e "\n${CYAN}Применяем стратегию: ${NC}$CURRENT_NAME ($COUNT/$TOTAL)"
-                apply_strategy "$CURRENT_NAME" "$CURRENT_BODY"
-                STATUS=$(check_access)
-                if [ "$STATUS" = "ok" ]; then
-                    echo -e "${GREEN}Видео на ПК открывается!${NC}\n${YELLOW}Проверьте работу ${NC}YouTube${YELLOW} на других устройствах!${NC}"
-                    echo -en "Enter ${GREEN}- применить стратегию, ${NC}N ${GREEN}- продолжить подбор:${NC}"
-                    read -r ANSWER </dev/tty
-                    if [ -z "$ANSWER" ]; then
-                        { echo "#$CURRENT_NAME"; printf "%b\n" "$CURRENT_BODY"; } > "$SAVED_STR"
-                        echo -e "${CYAN}Применяем стратегию и перезапускаем Zapret${NC}"
-
-                        # формируем StrNEW без ненужных блоков, сохраняем --new
-                        awk '
-                        {
-                            if (skip) {
-                                if ($0 == "--new" || $0 ~ /'\''/) { skip=0; print; next }
-                                next
-                            }
-                            if ($0 == "--filter-tcp=443") {
-                                getline next_line
-                                if (next_line == "--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt") {
-                                    skip=1
-                                    next
-                                } else {
-                                    print $0
-                                    print next_line
-                                    next
-                                }
-                            }
-                            # удаляем только #Yv без пробела после #
-                            if ($0 ~ /^[[:space:]]*#Yv/) next
-                            print
-                        }' "$OLD_STR" > /opt/StrNEW
-
-                        # вставляем StrYou перед первой строкой --new
-                        awk '
-                        BEGIN { inserted=0 }
-                        /^--new/ && !inserted { system("cat /opt/StrYou"); inserted=1 }
-                        { print }
-                        ' /opt/StrNEW > /opt/StrFINAL
-
-                        # применяем итоговый файл в конфиг
-                        sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
-                        cat /opt/StrFINAL >> "$CONF"
-                        chmod +x /opt/zapret/sync_config.sh
-                        /opt/zapret/sync_config.sh
-                        /etc/init.d/zapret restart >/dev/null 2>&1
-                        echo -e "${GREEN}Стратегия применена!${NC}\n"
-                        read -p "Нажмите Enter..." dummy </dev/tty
-                        return 0
-                    fi
-                else
-                    echo -e "${RED}Видео не открывается, продолжаем подбор...${NC}"
-                fi
-            fi
-            CURRENT_NAME="$LINE"
-            CURRENT_BODY=""
-        else
-            [ -n "$LINE" ] && CURRENT_BODY="${CURRENT_BODY}${LINE}\n"
-        fi
-    done < "$TMP_LIST"
-
-    # проверка последней стратегии
-    if [ -n "$CURRENT_NAME" ]; then
-        COUNT=$((COUNT + 1))
-        echo -e "\n${CYAN}Применяем стратегию: ${NC}$CURRENT_NAME ($COUNT/$TOTAL)"
-        apply_strategy "$CURRENT_NAME" "$CURRENT_BODY"
-        STATUS=$(check_access)
-        if [ "$STATUS" = "ok" ]; then
-            echo -e "${GREEN}Видео на ПК открывается!${NC}\n${YELLOW}Проверьте работу ${NC}YouTube${YELLOW} на других устройствах!${NC}"
-            echo -en "Enter ${GREEN}- применить стратегию,${NC} N ${GREEN}- продолжить подбор:${NC}"
-            read -r ANSWER </dev/tty
-            if [ -z "$ANSWER" ]; then
-                { echo "#$CURRENT_NAME"; printf "%b\n" "$CURRENT_BODY"; } > "$SAVED_STR"
-                echo -e "${CYAN}Применяем стратегию и перезапускаем Zapret${NC}"
-
-                awk '
-                {
-                    if (skip) {
-                        if ($0 == "--new" || $0 ~ /'\''/) { skip=0; print; next }
-                        next
-                    }
-                    if ($0 == "--filter-tcp=443") {
-                        getline next_line
-                        if (next_line == "--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt") {
-                            skip=1
-                            next
-                        } else {
-                            print $0
-                            print next_line
-                            next
-                        }
-                    }
-                    if ($0 ~ /^[[:space:]]*#Yv/) next
-                    print
-                }' "$OLD_STR" > /opt/StrNEW
-
-                awk '
-                BEGIN { inserted=0 }
-                /^--new/ && !inserted { system("cat /opt/StrYou"); inserted=1 }
-                { print }
-                ' /opt/StrNEW > /opt/StrFINAL
-
-                sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
-                cat /opt/StrFINAL >> "$CONF"
-                chmod +x /opt/zapret/sync_config.sh
-                /opt/zapret/sync_config.sh
-                /etc/init.d/zapret restart >/dev/null 2>&1
-                echo -e "${GREEN}Стратегия применена!${NC}\n"
-                read -p "Нажмите Enter..." dummy </dev/tty
-                return 0
-            fi
-        else
-            echo -e "${RED}Видео не открывается...${NC}\n"
-        fi
-    fi
-
-    # если рабочая стратегия не найдена
-    sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
-    cat "$OLD_STR" >> "$CONF"
-    chmod +x /opt/zapret/sync_config.sh
-    /etc/init.d/zapret restart >/dev/null 2>&1
-    echo -e "\n${RED}Рабочая стратегия для YouTube не найдена!${NC}\n"
-    read -p "Нажмите Enter..." dummy </dev/tty
-    return 1
-}
-
-
+auto_stryou() { CONF="/etc/config/zapret"; STR_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ListStrYou"; TMP_LIST="/tmp/zapret_yt_list.txt"; SAVED_STR="/opt/StrYou"; OLD_STR="/opt/StrOLD"; TEST_HOST="https://rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com"
+TIMEOUT=4; awk '/^[[:space:]]*option NFQWS_OPT '\''/{flag=1} flag{print}' "$CONF" > "$OLD_STR"; curl -fsSL "$STR_URL" -o "$TMP_LIST" || { echo "Не удалось скачать список"; read -p "Нажмите Enter..." dummy </dev/tty; return 1; }; TOTAL=$(grep -c '^Yv[0-9]\+' "$TMP_LIST")
+echo -e "\n${MAGENTA}Подбираем стратегию для ${NC}YouTube${NC}"; echo -e "${CYAN}Найдено ${NC}$TOTAL${CYAN} стратегий${NC}"; CURRENT_NAME=""; CURRENT_BODY=""; COUNT=0; apply_strategy() { local NAME="$1"; local BODY="$2"; sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; { echo "  option NFQWS_OPT '"; echo "#AUTO $NAME"; printf "%b\n" "$BODY"; echo "'"; } >> "$CONF"; }
+prepare_final_strategy() { awk '{ if(skip){if($0=="--new" || $0 ~ /'\''/){skip=0; print; next} next} if($0=="--filter-tcp=443"){getline l; if(l=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt"){skip=1; next} else{print $0; print l; next}} if($0~/^[[:space:]]*#Yv/) next; print }' "$OLD_STR" > /opt/StrNEW
+awk 'BEGIN{inserted=0}/^--new/&&!inserted{system("cat /opt/StrYou"); inserted=1}{print}' /opt/StrNEW > /opt/StrFINAL; }; finalize_strategy() { sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; cat /opt/StrFINAL >> "$CONF"; chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1
+echo -e "${GREEN}Стратегия применена!${NC}\n"; read -p "Нажмите Enter..." dummy </dev/tty; }; check_access() { curl -s --connect-timeout "$TIMEOUT" -m "$TIMEOUT" "$TEST_HOST" >/dev/null && echo "ok" || echo "fail"; }; while IFS= read -r LINE || [ -n "$LINE" ]; do if [[ $LINE =~ ^Yv[0-9]+ ]]; then if [ -n "$CURRENT_NAME" ]; then COUNT=$((COUNT+1))
+echo -e "\n${CYAN}Применяем стратегию: ${NC}$CURRENT_NAME ($COUNT/$TOTAL)"; apply_strategy "$CURRENT_NAME" "$CURRENT_BODY"; if [ "$(check_access)" = "ok" ]; then echo -e "${GREEN}Видео на ПК открывается!${NC}\n${YELLOW}Проверьте работу ${NC}YouTube${YELLOW} на других устройствах!${NC}"
+echo -en "Enter ${GREEN}- применить стратегию, ${NC}N ${GREEN}- продолжить подбор:${NC}"; read -r ANSWER </dev/tty; if [ -z "$ANSWER" ]; then { echo "#$CURRENT_NAME"; printf "%b\n" "$CURRENT_BODY"; } > "$SAVED_STR"; prepare_final_strategy; finalize_strategy; return 0; fi; else echo -e "${RED}Видео не открывается, продолжаем подбор...${NC}"; fi; fi
+CURRENT_NAME="$LINE"; CURRENT_BODY=""; else CURRENT_BODY="${CURRENT_BODY}${LINE}\n"; fi; done < "$TMP_LIST"; if [ -n "$CURRENT_NAME" ]; then COUNT=$((COUNT+1)); echo -e "\n${CYAN}Применяем стратегию: ${NC}$CURRENT_NAME ($COUNT/$TOTAL)"
+apply_strategy "$CURRENT_NAME" "$CURRENT_BODY"; if [ "$(check_access)" = "ok" ]; then echo -e "${GREEN}Видео на ПК открывается!${NC}\n${YELLOW}Проверьте работу ${NC}YouTube${YELLOW} на других устройствах!${NC}"; echo -en "Enter ${GREEN}- применить стратегию, ${NC}N ${GREEN}- продолжить подбор:${NC}"
+read -r ANSWER </dev/tty; if [ -z "$ANSWER" ]; then { echo "#$CURRENT_NAME"; printf "%b\n" "$CURRENT_BODY"; } > "$SAVED_STR"; prepare_final_strategy; finalize_strategy; return 0; fi; else echo -e "${RED}Видео не открывается...${NC}\n"; fi; fi
+sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; cat "$OLD_STR" >> "$CONF"; chmod +x /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1; echo -e "\n${RED}Рабочая стратегия для YouTube не найдена!${NC}\n"; read -p "Нажмите Enter..." dummy </dev/tty; return 1; }
 # ==========================================
 # Выбор стратегий
 # ==========================================
