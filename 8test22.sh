@@ -102,6 +102,9 @@ auto_stryou() {
     TEST_HOST="https://rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com"
     TIMEOUT=4
 
+    # Создаём пустой StrYou, если его нет
+    [ ! -f "$SAVED_STR" ] && touch "$SAVED_STR"
+
     # Сохраняем всё ниже "option NFQWS_OPT '"
     awk '/^[[:space:]]*option NFQWS_OPT '\''/{flag=1; next} flag{print}' "$CONF" > "$OLD_STR"
 
@@ -152,7 +155,13 @@ auto_stryou() {
                     read -r ANSWER </dev/tty
                     if [ -z "$ANSWER" ]; then
                         # Формируем StrNew с учетом редактирования
-                        cat "$SAVED_STR" "$OLDEDIT" > "$NEW"
+                        if [ -f "$SAVED_STR" ]; then
+                            cat "$SAVED_STR" > "$NEW"
+                        else
+                            > "$NEW"
+                        fi
+                        cat "$OLDEDIT" >> "$NEW"
+
                         sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
                         cat "$NEW" >> "$CONF"
                         chmod +x /opt/zapret/sync_config.sh
@@ -184,7 +193,12 @@ auto_stryou() {
             echo -en "Enter ${GREEN}- применить стратегию, ${NC}N ${GREEN}- продолжить подбор:${NC}"
             read -r ANSWER </dev/tty
             if [ -z "$ANSWER" ]; then
-                cat "$SAVED_STR" "$OLDEDIT" > "$NEW"
+                if [ -f "$SAVED_STR" ]; then
+                    cat "$SAVED_STR" > "$NEW"
+                else
+                    > "$NEW"
+                fi
+                cat "$OLDEDIT" >> "$NEW"
                 sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
                 cat "$NEW" >> "$CONF"
                 chmod +x /opt/zapret/sync_config.sh
