@@ -100,7 +100,37 @@ auto_stryou() {
     TEST_HOST="https://rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com"
     TIMEOUT=4
 
+    # сохраняем текущий NFQWS_OPT
     awk '/^[[:space:]]*option NFQWS_OPT '\''/{flag=1} flag{print}' "$CONF" > "$OLD_STR"
+
+    # чистим StrOLD: удаляем google-блок до --new (сам --new оставляем)
+    awk '
+        BEGIN { del=0; prev="" }
+
+        del && /^[[:space:]]*--new[[:space:]]*$/ {
+            del=0
+            print
+            next
+        }
+
+        del { next }
+
+        prev ~ /^[[:space:]]*--filter-tcp=443[[:space:]]*$/ &&
+        /^[[:space:]]*--hostlist=\/opt\/zapret\/ipset\/zapret-hosts-google\.txt[[:space:]]*$/ {
+            del=1
+            prev=""
+            next
+        }
+
+        {
+            if (prev != "") print prev
+            prev=$0
+        }
+
+        END {
+            if (prev != "") print prev
+        }
+    ' "$OLD_STR" > "$OLD_STR.tmp" && mv "$OLD_STR.tmp" "$OLD_STR"
 
     curl -fsSL "$STR_URL" -o "$TMP_LIST" || {
         echo "Не удалось скачать список"
@@ -175,24 +205,6 @@ auto_stryou() {
                             !skip{print}
                         ' "$OLD_STR" > /opt/StrNEW
 
-                        if ! grep -q '^#Yv' /opt/StrNEW; then
-                            awk '
-                                BEGIN { del=0 }
-                                /--filter-tcp=443/ {
-                                    getline n
-                                    if (n == "--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt") {
-                                        del=1
-                                        next
-                                    }
-                                    print
-                                    print n
-                                    next
-                                }
-                                del && (/--new/ || /^'\''$/) { del=0 }
-                                !del
-                            ' /opt/StrNEW > /opt/StrNEW.tmp && mv /opt/StrNEW.tmp /opt/StrNEW
-                        fi
-
                         sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
                         cat /opt/StrNEW >> "$CONF"
 
@@ -217,72 +229,6 @@ auto_stryou() {
         fi
 
     done < "$TMP_LIST"
-
-    if [ -n "$CURRENT_NAME" ]; then
-
-        COUNT=$((COUNT + 1))
-        echo -e "\n${CYAN}Применяем стратегию: ${NC}$CURRENT_NAME ($COUNT/$TOTAL)"
-
-        apply_strategy "$CURRENT_NAME" "$CURRENT_BODY"
-        STATUS=$(check_access)
-
-        if [ "$STATUS" = "ok" ]; then
-
-            echo -e "${GREEN}Видео на ПК открывается!${NC}"
-            echo -e "${YELLOW}Проверьте работу ${NC}YouTube${YELLOW} на других устройствах!${NC}"
-
-            echo -en "Enter ${GREEN}- применить стратегию,${NC} N ${GREEN}- продолжить подбор:${NC}"
-            read -r ANSWER </dev/tty
-
-            if [ -z "$ANSWER" ]; then
-
-                {
-                    echo "#$CURRENT_NAME"
-                    printf "%b\n" "$CURRENT_BODY"
-                } > "$SAVED_STR"
-
-                echo -e "${CYAN}Применяем стратегию и перезапускаем Zapret${NC}"
-
-                awk '
-                    NR==1{print;system("cat /opt/StrYou");next}
-                    /^#Yv/{skip=1;next}
-                    /^#v/{skip=0}
-                    !skip{print}
-                ' "$OLD_STR" > /opt/StrNEW
-
-                if ! grep -q '^#Yv' /opt/StrNEW; then
-                    awk '
-                        BEGIN { del=0 }
-                        /--filter-tcp=443/ {
-                            getline n
-                            if (n == "--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt") {
-                                del=1
-                                next
-                            }
-                            print
-                            print n
-                            next
-                        }
-                        del && (/--new/ || /^'\''$/) { del=0 }
-                        !del
-                    ' /opt/StrNEW > /opt/StrNEW.tmp && mv /opt/StrNEW.tmp /opt/StrNEW
-                fi
-
-                sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
-                cat /opt/StrNEW >> "$CONF"
-
-                chmod +x /opt/zapret/sync_config.sh
-                /opt/zapret/sync_config.sh
-                /etc/init.d/zapret restart >/dev/null 2>&1
-
-                echo -e "${GREEN}Стратегия примененна!${NC}\n"
-                read -p "Нажмите Enter..." dummy </dev/tty
-                return 0
-            fi
-        else
-            echo -e "${RED}Видео не открывается...${NC}\n"
-        fi
-    fi
 
     sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
     cat "$OLD_STR" >> "$CONF"
