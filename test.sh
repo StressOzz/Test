@@ -3,9 +3,12 @@
 # Zapret on remittor Manager by StressOzz
 # =========================================
 ZAPRET_MANAGER_VERSION="7.7"; ZAPRET_VERSION="72.20251227"; STR_VERSION_AUTOINSTALL="v6"
+TEST_HOST="https://rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com"
 GREEN="\033[1;32m"; RED="\033[1;31m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"
 MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
 WORKDIR="/tmp/zapret-update"; CONF="/etc/config/zapret"; CUSTOM_DIR="/opt/zapret/init.d/openwrt/custom.d/"
+STR_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ListStrYou"
+TMP_LIST="/tmp/zapret_yt_list.txt"; SAVED_STR="/opt/StrYou"; OLD_STR="/opt/StrOLD"
 EXCLUDE_FILE="/opt/zapret/ipset/zapret-hosts-user-exclude.txt"; fileDoH="/etc/config/https-dns-proxy"
 EXCLUDE_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/zapret-hosts-user-exclude.txt"
 HOSTS_LIST="185.87.51.182 4pda.to www.4pda.to app.4pda.to appbk.4pda.to|130.255.77.28 ntc.party|30.255.77.28 ntc.party|173.245.58.219 rutor.info d.rutor.info|185.39.18.98 lib.rus.ec www.lib.rus.ec
@@ -89,11 +92,10 @@ hosts_clear; echo -e "Zapret ${GREEN}полностью удалён!${NC}\n"; [
 # ==========================================
 # Подбор стратегии для Ютуб
 # ==========================================
-auto_stryou() { CONF="/etc/config/zapret"; STR_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ListStrYou"; TMP_LIST="/tmp/zapret_yt_list.txt"; SAVED_STR="/opt/StrYou"; OLD_STR="/opt/StrOLD"
-TEST_HOST="https://rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com"; TIMEOUT=4; awk '/^[[:space:]]*option NFQWS_OPT '\''/{flag=1} flag{print}' "$CONF" > "$OLD_STR"; curl -fsSL "$STR_URL" -o "$TMP_LIST" || { echo "Не удалось скачать список"; read -p "Нажмите Enter..." dummy </dev/tty; return 1; }
+auto_stryou() { awk '/^[[:space:]]*option NFQWS_OPT '\''/{flag=1} flag{print}' "$CONF" > "$OLD_STR"; curl -fsSL "$STR_URL" -o "$TMP_LIST" || { echo "Не удалось скачать список"; read -p "Нажмите Enter..." dummy </dev/tty; return 1; }
 TOTAL=$(grep -c '^Yv[0-9]\+' "$TMP_LIST"); echo -e "\n${MAGENTA}Подбираем стратегию для ${NC}YouTube${NC}"; echo -e "${CYAN}Найдено ${NC}$TOTAL${CYAN} стратегий${NC}"; CURRENT_NAME=""; CURRENT_BODY=""; COUNT=0; apply_strategy() { NAME="$1"; BODY="$2"
 sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; { echo "  option NFQWS_OPT '"; echo "#AUTO $NAME"; printf "%b\n" "$BODY"; echo "'"; } >> "$CONF"; chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1; }
-check_access() { curl -s --connect-timeout "$TIMEOUT" -m "$TIMEOUT" "$TEST_HOST" >/dev/null && echo "ok" || echo "fail"; }; while IFS= read -r LINE || [ -n "$LINE" ]; do if echo "$LINE" | grep -q '^Yv[0-9]\+'; then if [ -n "$CURRENT_NAME" ]; then COUNT=$((COUNT + 1))
+check_access() { curl -s --connect-timeout 4 -m 4 "$TEST_HOST" >/dev/null && echo "ok" || echo "fail"; }; while IFS= read -r LINE || [ -n "$LINE" ]; do if echo "$LINE" | grep -q '^Yv[0-9]\+'; then if [ -n "$CURRENT_NAME" ]; then COUNT=$((COUNT + 1))
 echo -e "\n${CYAN}Применяем стратегию: ${NC}$CURRENT_NAME ($COUNT/$TOTAL)"; apply_strategy "$CURRENT_NAME" "$CURRENT_BODY"; STATUS=$(check_access); if [ "$STATUS" = "ok" ]; then echo -e "${GREEN}Видео на ПК открывается!${NC}\n${YELLOW}Проверьте работу ${NC}YouTube${YELLOW} на других устройствах!${NC}"
 echo -en "Enter ${GREEN}- применить стратегию, ${NC}N ${GREEN}- продолжить подбор:${NC}"; read -r ANSWER </dev/tty; if [ -z "$ANSWER" ]; then { echo "#$CURRENT_NAME"; printf "%b\n" "$CURRENT_BODY"; } > "$SAVED_STR"; echo -e "${CYAN}Применяем стратегию и перезапускаем Zapret${NC}"
 awk '{ if(skip) { if($0=="--new" || $0 ~ /'\''/) { skip=0; print; next } next } if($0=="--filter-tcp=443") { getline next_line; if(next_line=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt") { skip=1; next } else { print $0; print next_line; next } } if($0~/^[[:space:]]*#Yv/) next; print }' "$OLD_STR" > /opt/StrNEW
@@ -138,8 +140,8 @@ printf "%s\n" "--new" "--filter-udp=19294-19344,50000-50100" "--filter-l7=discor
 "--dpi-desync=multisplit" "--dpi-desync-split-seqovl=652" "--dpi-desync-split-pos=2" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin" "'" >> "$CONF"; fi; }
 menu_str(){ [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter..." dummy; return; }; while true; do clear
 echo -e "${MAGENTA}Меню стратегии${NC}\n"; show_current_strategy; current="$ver$( [ -n "$ver" ] && [ -n "$yv_ver" ] && echo " / " )$yv_ver"; [ -n "$current" ] && echo -e "${YELLOW}Используется стратегия:${NC} $current\n"
-echo -e "${CYAN}1) ${GREEN}Установить стратегию${NC} v1\n${CYAN}2) ${GREEN}Установить стратегию${NC} v2\n${CYAN}3) ${GREEN}Установить стратегию${NC} v3\n${CYAN}4) ${GREEN}Установить стратегию${NC} v4"
-echo -e "${CYAN}5) ${GREEN}Установить стратегию${NC} v5\n${CYAN}6) ${GREEN}Установить стратегию${NC} v6\n${CYAN}0) ${GREEN}Подобрать стратегию для ${NC}YouTube"
+echo -e "${CYAN}1) ${GREEN}Установить стратегию${NC} v1${RED}(27.12 не работает)${NC}\n${CYAN}2) ${GREEN}Установить стратегию${NC} v2${RED}(27.12 не работает)${NC}\n${CYAN}3) ${GREEN}Установить стратегию${NC} v3${RED}(27.12 не работает)${NC}\n${CYAN}4) ${GREEN}Установить стратегию${NC} v4${RED}(27.12 не работает)${NC}"
+echo -e "${CYAN}5) ${GREEN}Установить стратегию${NC} v5${RED}(27.12 не работает)${NC}\n${CYAN}6) ${GREEN}Установить стратегию${NC} v6\n${CYAN}0) ${GREEN}Подобрать стратегию для ${NC}YouTube"
 echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read choiceST; case "$choiceST" in 1) install_strategy v1 ;; 2) install_strategy v2 ;; 3) install_strategy v3 ;;
 4) install_strategy v4 ;; 5) install_strategy v5 ;; 6) install_strategy v6 ;; 0) auto_stryou ;; *) return ;; esac; done }
 install_strategy(){ local version="$1"; local NO_PAUSE="${2:-0}"; local fileGP="/opt/zapret/ipset/zapret-hosts-google.txt"; [ "$NO_PAUSE" != "1" ] && echo
