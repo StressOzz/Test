@@ -162,12 +162,12 @@ show_current_strategy(){
 }
 
 RKN_Check(){
-    # Проверка наличия <HOSTLIST> в конфиге
-    grep -q '<HOSTLIST>' /etc/config/zapret
+    # Проверка наличия ˂HOSTLIST˃ в конфиге
+    grep -Fq '˂HOSTLIST˃' /etc/config/zapret
     RES1=$?
 
     # Проверка размера файла
-    SIZE=$(wc -c < /opt/zapret/ipset/zapret-hosts-user.txt | tr -d ' ')
+    SIZE=$(wc -c < /opt/zapret/ipset/zapret-hosts-user.txt | tr -d '[:space:]')
 
     # Условие: оба условия должны быть выполнены
     if [ $RES1 -eq 0 ] && [ "$SIZE" -gt 1638400 ]; then
