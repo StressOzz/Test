@@ -293,6 +293,7 @@ quic_is_blocked && if quic_is_blocked; then echo -e "${YELLOW}Блокировк
 RKN_Check        # сначала проверяем, РКН ли
 show_current_strategy  # потом собираем стратегию
 
+# Вывод текущей стратегии
 if [ -n "$RKN_STATUS" ]; then
     echo -e "${YELLOW}Используется стратегия:${NC} РКН\n"
 else
