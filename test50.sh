@@ -165,9 +165,12 @@ show_current_strategy(){
 }
 
 RKN_Check(){
-    # Проверка наличия ˂HOSTLIST˃ или строки --hostlist=/opt/zapret/ipset/zapret-hosts-user.txt в конфиге
-    grep -Fq '˂HOSTLIST˃' /etc/config/zapret || grep -Fq '--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt' /etc/config/zapret
-    RES1=$?
+    # Проверка наличия ˂HOSTLIST˃ или строки с hostlist в конфиге
+    if grep -Fq '˂HOSTLIST˃' /etc/config/zapret || grep -Fq '/opt/zapret/ipset/zapret-hosts-user.txt' /etc/config/zapret; then
+        RES1=0
+    else
+        RES1=1
+    fi
 
     # Проверка размера файла
     SIZE=$(wc -c < /opt/zapret/ipset/zapret-hosts-user.txt | tr -d '[:space:]')
@@ -181,6 +184,7 @@ RKN_Check(){
         MENU_TEXT="${GREEN}Включить обход по спискам${NC} РКН"
     fi
 }
+
 
 
 
