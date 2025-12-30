@@ -39,8 +39,8 @@ read -p "Нажмите Enter..." dummy; return; } ; done; echo -e "${CYAN}Уд�
 # Установка скриптов
 # ==========================================
 show_script_50() { [ -f "/opt/zapret/init.d/openwrt/custom.d/50-script.sh" ] || return; line=$(head -n1 /opt/zapret/init.d/openwrt/custom.d/50-script.sh)
-toggle_finland_hosts() { if grep -q '104\.25\.158\.178 finland[0-9]\{5\}\.discord\.media' /etc/hosts; then sed -i '/104\.25\.158\.178 finland[0-9]\{5\}\.discord\.media/d' /etc/hosts; echo "Финские IP удалены"
-else seq 10000 10199 | awk '{print "104.25.158.178 finland"$1".discord.media"}' | grep -vxFf /etc/hosts >> /etc/hosts; echo "Финские IP добавлены"; fi; /etc/init.d/dnsmasq restart 2>/dev/null; }
+toggle_finland_hosts() { if grep -q '104\.25\.158\.178 finland[0-9]\{5\}\.discord\.media' /etc/hosts; then sed -i '/104\.25\.158\.178 finland[0-9]\{5\}\.discord\.media/d' /etc/hosts; echo -e "${MAGENTA}Удаляем Финские IP${NC}"; /etc/init.d/dnsmasq restart 2>/dev/null; "${GREEN}Финские IP удалены${NC}\n"
+else seq 10000 10199 | awk '{print "104.25.158.178 finland"$1".discord.media"}' | grep -vxFf /etc/hosts >> /etc/hosts; echo -e "${MAGENTA}Добавляем Финские IP${NC}"; /etc/init.d/dnsmasq restart 2>/dev/null; echo -e "${GREEN}Финские IP добавлены${NC}\n"; fi; read -p "Нажмите Enter..." dummy; }
 
 
 name=$(case "$line" in *QUIC*) echo "50-quic4all" ;; *stun*) echo "50-stun4all" ;; *"discord media"*) echo "50-discord-media" ;; *"discord subnets"*) echo "50-discord" ;; *) echo "" ;; esac); }
@@ -141,9 +141,36 @@ printf '%s\n' "--dpi-desync-fake-tls=0x0F0F0F0F" "--dpi-desync-fake-tls-mod=none
 printf '%s\n' "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake" "--dpi-desync-repeats=6" "--dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin"; }
 strategy_v6() { printf '%s\n' "#v6" "#Yv02" "--filter-tcp=443" "--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt" "--dpi-desync=multisplit" "--dpi-desync-split-pos=1,sniext+1" "--dpi-desync-split-seqovl=1"
 printf '%s\n' "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=hostfakesplit" "--dpi-desync-hostfakesplit-mod=host=max.ru" "--dpi-desync-hostfakesplit-midhost=host-2" "--dpi-desync-split-seqovl=726" "--dpi-desync-fooling=badsum,badseq" "--dpi-desync-badseq-increment=0"; }
-strategy_v7() { printf '%s\n' "#v7 (v6+списки)" "#Yv03" "--filter-tcp=443" "--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt" "--dpi-desync=fake,multisplit" "--dpi-desync-split-pos=2,sld" "--dpi-desync-fake-tls=0x0F0F0F0F" "--dpi-desync-fake-tls=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin"
-printf '%s\n' "--dpi-desync-fake-tls-mod=rnd,dupsid,sni=ggpht.com" "--dpi-desync-split-seqovl=620" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin" "--dpi-desync-fooling=badsum,badseq"
-printf '%s\n' "--new" "--filter-tcp=443" "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "--dpi-desync=hostfakesplit" "--dpi-desync-hostfakesplit-mod=host=max.ru" "--dpi-desync-hostfakesplit-midhost=host-2" "--dpi-desync-split-seqovl=726" "--dpi-desync-fooling=badsum,badseq" "--dpi-desync-badseq-increment=0"; }
+
+
+toggle_rkn_bypass() {
+    $CONF="/opt/zapret/init.d/openwrt/strategy.sh"
+
+    if grep -q -- "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "$CONF"; then
+    
+        # Сейчас выключен обход РКН, включаем
+        sed -i 's|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt|' "$CONF"
+        curl -fsSL https://raw.githubusercontent.com/IndeecFOX/zapret4rocket/refs/heads/master/extra_strats/TCP/RKN/List.txt -o /opt/zapret/ipset/zapret-hosts-user.txt
+        echo -e "${CYAN}Добавляем домены в ${NC}zapret-hosts-user.txt"
+        echo "Обход по спискам РКН включен"
+    elif grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONF"; then
+    
+        # Сейчас включен обход РКН, выключаем
+        sed -i 's|--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|' "$CONF"
+        > /opt/zapret/ipset/zapret-hosts-user.txt
+        echo "Обход по спискам РКН выключен"
+    else
+        echo "Не найдена строчка с обходом РКН в стратегии"
+    fi
+
+    # Перезапуск Zapret
+    chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1
+}
+
+
+
+
+
 show_current_strategy() { [ -f "$CONF" ] || return; ver=""; for i in $(seq 1 20); do grep -q "#v$i" "$CONF" && { ver="v$i"; break; }; done; yv_ver=""; for i in $(seq -w 1 50); do grep -q "#Yv$i" "$CONF" && { yv_ver="Yv$i"; break; }; done; }
 discord_str_add() { if ! grep -q "option NFQWS_PORTS_UDP.*19294-19344,50000-50100" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'$/,19294-19344,50000-50100'/" "$CONF"; fi
 if ! grep -q "option NFQWS_PORTS_TCP.*2053,2083,2087,2096,8443" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_TCP '/s/'$/,2053,2083,2087,2096,8443'/" "$CONF"; fi
@@ -151,18 +178,29 @@ if ! grep -q -- "--filter-udp=19294-19344,50000-50100" "$CONF"; then last_line1=
 printf "%s\n" "--new" "--filter-udp=19294-19344,50000-50100" "--filter-l7=discord,stun" "--dpi-desync=fake" "--dpi-desync-repeats=6" "--new" "--filter-tcp=2053,2083,2087,2096,8443" "--hostlist-domains=discord.media" \
 "--dpi-desync=multisplit" "--dpi-desync-split-seqovl=652" "--dpi-desync-split-pos=2" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin" "'" >> "$CONF"; fi; }
 menu_str(){ [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter..." dummy; return; }; while true; do clear
+  
+    if grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONF"; then
+        STATUS="${GREEN}Включен${NC}"
+        MENU_TEXT="Выключить обход по спискам РКН"
+    else
+        STATUS="${RED}Выключен${NC}"
+        MENU_TEXT="Включить обход по спискам РКН"
+    fi
+
+
 echo -e "${MAGENTA}Меню стратегии${NC}\n"; show_current_strategy; current="$ver$( [ -n "$ver" ] && [ -n "$yv_ver" ] && echo " / " )$yv_ver"; [ -n "$current" ] && echo -e "${YELLOW}Используется стратегия:${NC} $current\n"
 echo -e "${CYAN}1) ${GREEN}Установить стратегию${NC} v1${RED}(27.12 не работает)${NC}\n${CYAN}2) ${GREEN}Установить стратегию${NC} v2${RED}(27.12 не работает)${NC}\n${CYAN}3) ${GREEN}Установить стратегию${NC} v3${RED}(27.12 не работает)${NC}\n${CYAN}4) ${GREEN}Установить стратегию${NC} v4${RED}(27.12 не работает)${NC}"
-echo -e "${CYAN}5) ${GREEN}Установить стратегию${NC} v5${RED}(27.12 не работает)${NC}\n${CYAN}6) ${GREEN}Установить стратегию${NC} v6\n${CYAN}7) ${GREEN}Установить стратегию${NC} v7 (v6 по спискам)\n${CYAN}0) ${GREEN}Подобрать стратегию для ${NC}YouTube"
+echo -e "${CYAN}5) ${GREEN}Установить стратегию${NC} v5${RED}(27.12 не работает)${NC}\n${CYAN}6) ${GREEN}Установить стратегию${NC} v6\n${CYAN}9) $MENU_TEXT\n${CYAN}0) ${GREEN}Подобрать стратегию для ${NC}YouTube"
 echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read choiceST; case "$choiceST" in 1) install_strategy v1 ;; 2) install_strategy v2 ;; 3) install_strategy v3 ;;
-4) install_strategy v4 ;; 5) install_strategy v5 ;; 6) install_strategy v6 ;; 7) install_strategy v7 ;; 0) auto_stryou ;; *) return ;; esac; done }
+4) install_strategy v4 ;; 5) install_strategy v5 ;; 6) install_strategy v6 ;; 9) toggle_rkn_bypass; continue ;; 0) auto_stryou ;; *) return ;; esac; done }
 install_strategy(){ local version="$1"; local NO_PAUSE="${2:-0}"; local fileGP="/opt/zapret/ipset/zapret-hosts-google.txt"; [ "$NO_PAUSE" != "1" ] && echo
 echo -e "${MAGENTA}Устанавливаем стратегию ${version}${NC}\n${CYAN}Меняем стратегию${NC}"; sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; { echo "  option NFQWS_OPT '"; strategy_"$version"; echo "'"; } >> "$CONF"
 printf '%s\n' "gvt1.com" "googleplay.com" "play.google.com" "beacons.gvt2.com" "play.googleapis.com" "play-fe.googleapis.com" "lh3.googleusercontent.com" "android.clients.google.com" "connectivitycheck.gstatic.com" \
 "play-lh.googleusercontent.com" "play-games.googleusercontent.com" "prod-lt-playstoregatewayadapter-pa.googleapis.com" | grep -Fxv -f "$fileGP" 2>/dev/null >> "$fileGP"; echo -e "${CYAN}Редактируем ${NC}/etc/hosts${NC}"; hosts_add
 echo -e "${CYAN}Добавляем домены в исключения${NC}"; rm -f "$EXCLUDE_FILE"; wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL" || echo -e "\n${RED}Не удалось загрузить exclude файл${NC}\n"
-> /opt/zapret/ipset/zapret-hosts-user.txt
-[ "$version" = "v7" ] && echo -e "${CYAN}Добавляем домены в ${NC}zapret-hosts-user.txt" && curl -fsSL https://raw.githubusercontent.com/IndeecFOX/zapret4rocket/refs/heads/master/extra_strats/TCP/RKN/List.txt -o /opt/zapret/ipset/zapret-hosts-user.txt
+
+
+
 discord_str_add; echo -e "${CYAN}Применяем новую стратегию и настройки${NC}"; chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1
 echo -e "${GREEN}Стратегия ${NC}${version}${GREEN} установлена!${NC}"; [ "$NO_PAUSE" != "1" ] && echo && read -p "Нажмите Enter..." dummy; }
 # ==========================================
