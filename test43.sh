@@ -162,16 +162,15 @@ show_current_strategy(){
 }
 
 RKN_Check(){
-    # Проверяем наличие строки <HOSTLIST> в /etc/config/zapret
+    # Проверка наличия <HOSTLIST> в конфиге
     grep -q '<HOSTLIST>' /etc/config/zapret
     RES1=$?
 
-    # Проверяем наличие строки /opt/zapret/ipset/zapret-hosts-user.txt в /etc/config/zapret
-    grep -q '/opt/zapret/ipset/zapret-hosts-user.txt' /etc/config/zapret
-    RES2=$?
+    # Проверка размера файла
+    SIZE=$(wc -c < /opt/zapret/ipset/zapret-hosts-user.txt | tr -d ' ')
 
-    # Если хотя бы одна строка найдена → РКН
-    if [ $RES1 -eq 0 ] || [ $RES2 -eq 0 ]; then
+    # Условие: оба условия должны быть выполнены
+    if [ $RES1 -eq 0 ] && [ "$SIZE" -gt 1638400 ]; then
         RKN_STATUS="/ РКН"
         MENU_TEXT="${GREEN}Выключить обход по спискам${NC} РКН"
     else
@@ -179,6 +178,8 @@ RKN_Check(){
         MENU_TEXT="${GREEN}Включить обход по спискам${NC} РКН"
     fi
 }
+
+
 
 
 
@@ -281,10 +282,11 @@ echo -e "\n${YELLOW}Установленная версия:   ${INST_COLOR}$INS
 [ -n "$DOH_STATUS" ] && opkg list-installed | grep -q '^https-dns-proxy ' && echo -e "${YELLOW}DNS over HTTPS:${NC}         $DOH_STATUS"; web_is_enabled && if web_is_enabled; then echo -e "${YELLOW}Доступ из браузера:${NC}     http://192.168.1.1:7681"; fi
 quic_is_blocked && if quic_is_blocked; then echo -e "${YELLOW}Блокировка QUIC:${NC}        ${GREEN}включена${NC}"; fi; 
 
-# Использование
+# Выполнение
 RKN_Check
 show_current_strategy
 
+# Вывод
 if [ -n "$RKN_STATUS" ]; then
     echo -e "${YELLOW}Используется стратегия:${NC} РКН\n"
 else
