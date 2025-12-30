@@ -39,8 +39,8 @@ read -p "Нажмите Enter..." dummy; return; } ; done; echo -e "${CYAN}Уд�
 # Установка скриптов
 # ==========================================
 show_script_50() { [ -f "/opt/zapret/init.d/openwrt/custom.d/50-script.sh" ] || return; line=$(head -n1 /opt/zapret/init.d/openwrt/custom.d/50-script.sh)
-toggle_finland_hosts() { if grep -q '104\.25\.158\.178 finland[0-9]\{5\}\.discord\.media' /etc/hosts; then sed -i '/104\.25\.158\.178 finland[0-9]\{5\}\.discord\.media/d' /etc/hosts; echo "Финские IP удалены"; return
-else seq 10000 10199 | awk '{print "104.25.158.178 finland"$1".discord.media"}' | grep -vxFf /etc/hosts >> /etc/hosts; echo "Финские IP добавлены"; fi; /etc/init.d/dnsmasq restart 2>/dev/null; return; }
+toggle_finland_hosts() { if grep -q '104\.25\.158\.178 finland[0-9]\{5\}\.discord\.media' /etc/hosts; then sed -i '/104\.25\.158\.178 finland[0-9]\{5\}\.discord\.media/d' /etc/hosts; echo "Финские IP удалены"
+else seq 10000 10199 | awk '{print "104.25.158.178 finland"$1".discord.media"}' | grep -vxFf /etc/hosts >> /etc/hosts; echo "Финские IP добавлены"; fi; /etc/init.d/dnsmasq restart 2>/dev/null; }
 
 
 name=$(case "$line" in *QUIC*) echo "50-quic4all" ;; *stun*) echo "50-stun4all" ;; *"discord media"*) echo "50-discord-media" ;; *"discord subnets"*) echo "50-discord" ;; *) echo "" ;; esac); }
@@ -56,7 +56,7 @@ echo -ne "${CYAN}6) $FIN_TXT\n${CYAN}Enter) ${GREEN}Выход в главное
 1) SELECTED="50-stun4all"; URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-stun4all" ;; 2) SELECTED="50-quic4all"; URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-quic4all" ;;
 3) SELECTED="50-discord-media"; URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-discord-media" ;; 4) SELECTED="50-discord"; URL="https://raw.githubusercontent.com/bol-van/zapret/v70.5/init.d/custom.d.examples.linux/50-discord" ;;
 5) echo -e "\n${MAGENTA}Удаляем скрипт${NC}"; rm -f "$CUSTOM_DIR/50-script.sh" 2>/dev/null;chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart >/dev/null 2>&1; echo -e "${GREEN}Скрипт удалён!${NC}\n"; read -p "Нажмите Enter..." dummy; continue ;; 
-6) toggle_finland_hosts ;; *) return ;; esac; fi
+6) toggle_finland_hosts; break ;; *) return ;; esac; fi
 if wget -q -U "Mozilla/5.0" -O "$CUSTOM_DIR/50-script.sh" "$URL"; then [ "$NO_PAUSE" != "1" ] && echo; echo -e "${MAGENTA}Устанавливаем скрипт${NC}\n${GREEN}Скрипт ${NC}$SELECTED${GREEN} успешно установлен!${NC}\n"; else echo -e "\n${RED}Ошибка при скачивании скрипта!${NC}\n"; read -p "Нажмите Enter..." dummy; continue; fi
 sed -i "/DISABLE_CUSTOM/s/'1'/'0'/" /etc/config/zapret; chmod +x /opt/zapret/sync_config.sh && /opt/zapret/sync_config.sh && /etc/init.d/zapret restart >/dev/null 2>&1; [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter..." dummy; [ "$NO_PAUSE" = "1" ] && break; done }
 # ==========================================
