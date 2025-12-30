@@ -289,18 +289,13 @@ quic_is_blocked && if quic_is_blocked; then echo -e "${YELLOW}Блокировк
 RKN_Check
 show_current_strategy
 
-# Формируем логичный вывод
 output=""
-[ -n "$ver" ] && output="$output$ver"
-[ -n "$yv_ver" ] && output="$output$( [ -n "$output" ] && echo " / " )$yv_ver"
-[ -n "$RKN_STATUS" ] && output="$output$( [ -n "$output" ] && echo " / " )$RKN_STATUS"
 
-if [ -n "$output" ]; then
-    echo -e "${YELLOW}Используется стратегия:${NC} $output\n"
-else
-    echo -e "${YELLOW}Стратегия не найдена${NC}\n"
-fi
+[ -n "$ver" ] && output="$ver"
+[ -n "$yv_ver" ] && { [ -n "$output" ] && output="$output / "; output="$output$yv_ver"; }
+[ -n "$RKN_STATUS" ] && { [ -n "$output" ] && output="$output / "; output="$output$RKN_STATUS"; }
 
+[ -n "$output" ] && echo -e "${YELLOW}Используется стратегия:${NC} $output\n"
 
 echo -e "\n${CYAN}1) ${GREEN}Установить${NC} Zapret\n${CYAN}2) ${GREEN}Меню стратегий${NC}\n${CYAN}3) ${GREEN}Вернуть ${NC}настройки по умолчанию\n${CYAN}4) ${GREEN}$str_stp_zpr ${NC}Zapret"
 echo -e "${CYAN}5) ${GREEN}Удалить ${NC}Zapret\n${CYAN}6) ${GREEN}$menu_game\n${CYAN}7) ${GREEN}Меню настройки ${NC}Discord\n${CYAN}8) ${GREEN}Удалить → установить → настроить${NC} Zapret"
