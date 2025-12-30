@@ -161,20 +161,17 @@ show_current_strategy(){
     done
 }
 
-# Проверка РКН
 RKN_Check(){
-    RES1=1
-    RES2=1
+    # Проверяем наличие строки <HOSTLIST> в /etc/config/zapret
+    grep -q '<HOSTLIST>' /etc/config/zapret
+    RES1=$?
 
-    # Проверяем наличие каждой строки в конфиге
-    grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONF" && RES1=0
-    grep -q -- "--filter-tcp=443 <HOSTLIST>" "$CONF" && RES2=0
+    # Проверяем наличие строки /opt/zapret/ipset/zapret-hosts-user.txt в /etc/config/zapret
+    grep -q '/opt/zapret/ipset/zapret-hosts-user.txt' /etc/config/zapret
+    RES2=$?
 
-    # Получаем размер файла без пробелов
-    SIZE=$(wc -c < /opt/zapret/ipset/zapret-hosts-user.txt | tr -d ' ')
-
-    # Если файл > 1.6 МБ и есть хотя бы одна строка → РКН
-    if [ "$SIZE" -gt 1638400 ] && { [ $RES1 -eq 0 ] || [ $RES2 -eq 0 ]; }; then
+    # Если хотя бы одна строка найдена → РКН
+    if [ $RES1 -eq 0 ] || [ $RES2 -eq 0 ]; then
         RKN_STATUS="/ РКН"
         MENU_TEXT="${GREEN}Выключить обход по спискам${NC} РКН"
     else
@@ -183,17 +180,7 @@ RKN_Check(){
     fi
 }
 
-# --- Выполнение ---
-RKN_Check
-show_current_strategy
 
-# Вывод
-if [ -n "$RKN_STATUS" ]; then
-    echo -e "${YELLOW}Используется стратегия:${NC} РКН\n"
-else
-    current="$ver$( [ -n "$ver" ] && [ -n "$yv_ver" ] && echo " / " )$yv_ver"
-    [ -n "$current" ] && echo -e "${YELLOW}Используется стратегия:${NC} $current\n"
-fi
 
 
 
@@ -294,10 +281,10 @@ echo -e "\n${YELLOW}Установленная версия:   ${INST_COLOR}$INS
 [ -n "$DOH_STATUS" ] && opkg list-installed | grep -q '^https-dns-proxy ' && echo -e "${YELLOW}DNS over HTTPS:${NC}         $DOH_STATUS"; web_is_enabled && if web_is_enabled; then echo -e "${YELLOW}Доступ из браузера:${NC}     http://192.168.1.1:7681"; fi
 quic_is_blocked && if quic_is_blocked; then echo -e "${YELLOW}Блокировка QUIC:${NC}        ${GREEN}включена${NC}"; fi; 
 
+# Использование
 RKN_Check
 show_current_strategy
 
-# Вывод
 if [ -n "$RKN_STATUS" ]; then
     echo -e "${YELLOW}Используется стратегия:${NC} РКН\n"
 else
