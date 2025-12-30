@@ -142,22 +142,7 @@ printf '%s\n' "--dpi-desync-fake-tls=0x0F0F0F0F" "--dpi-desync-fake-tls-mod=none
 printf '%s\n' "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake" "--dpi-desync-repeats=6" "--dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin"; }
 strategy_v6() { printf '%s\n' "#v6" "#Yv02" "--filter-tcp=443" "--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt" "--dpi-desync=multisplit" "--dpi-desync-split-pos=1,sniext+1" "--dpi-desync-split-seqovl=1"
 printf '%s\n' "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=hostfakesplit" "--dpi-desync-hostfakesplit-mod=host=max.ru" "--dpi-desync-hostfakesplit-midhost=host-2" "--dpi-desync-split-seqovl=726" "--dpi-desync-fooling=badsum,badseq" "--dpi-desync-badseq-increment=0"; }
-show_current_strategy(){
-    [ -f "$CONF" ] || return
-
-    # Ищем v
-    ver=""
-    for i in $(seq 1 20); do
-        grep -q "#v$i" "$CONF" && { ver="v$i"; break; }
-    done
-
-    # Ищем Yv
-    yv_ver=""
-    for i in $(seq -w 1 50); do
-        grep -q "#Yv$i" "$CONF" && { yv_ver="Yv$i"; break; }
-    done
-}
-
+CONF="/etc/config/zapret"
 RKN_LIST="https://raw.githubusercontent.com/IndeecFOX/zapret4rocket/refs/heads/master/extra_strats/TCP/RKN/List.txt"
 RKN_FILE="/opt/zapret/ipset/zapret-hosts-user.txt"
 
@@ -165,29 +150,14 @@ toggle_rkn_bypass(){
     [ -f "$CONF" ] || { echo -e "\n${RED}Конфиг не найден!${NC}\n"; return; }
 
     # Включаем обход
-    if grep -Fq '˂HOSTLIST˃' "$CONF"; then
-        echo -e "\n${MAGENTA}Включаем списки ${NC}РКН (˂HOSTLIST˃)"
+    if grep -Fq '˂HOSTLIST˃' "$CONF" || grep -Fq '--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt' "$CONF"; then
+        echo -e "\n${MAGENTA}Включаем списки ${NC}РКН"
 
-        # Переписываем список
+        grep -Fq '--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt' "$CONF" && \
+            sed -i 's|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt|' "$CONF"
+
         curl -fsSL "$RKN_LIST" -o "$RKN_FILE"
 
-        # Применяем изменения
-        chmod +x /opt/zapret/sync_config.sh
-        /opt/zapret/sync_config.sh
-        /etc/init.d/zapret restart >/dev/null 2>&1
-
-        echo -e "${GREEN}Обход по спискам ${NC}РКН включен${NC}\n"
-
-    elif grep -Fq '--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt' "$CONF"; then
-        echo -e "\n${MAGENTA}Включаем списки ${NC}РКН (hostlist-exclude → hostlist)"
-
-        # Меняем на hostlist
-        sed -i 's|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt|' "$CONF"
-
-        # Переписываем список
-        curl -fsSL "$RKN_LIST" -o "$RKN_FILE"
-
-        # Применяем изменения
         chmod +x /opt/zapret/sync_config.sh
         /opt/zapret/sync_config.sh
         /etc/init.d/zapret restart >/dev/null 2>&1
@@ -195,21 +165,11 @@ toggle_rkn_bypass(){
         echo -e "${GREEN}Обход по спискам ${NC}РКН включен${NC}\n"
 
     # Выключаем обход
-    elif grep -Fq '˂HOSTLIST˃' "$CONF"; then
-        echo -e "\n${MAGENTA}Выключаем списки ${NC}РКН (˂HOSTLIST˃)"
+    elif grep -Fq '˂HOSTLIST˃' "$CONF" || grep -Fq '--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt' "$CONF"; then
+        echo -e "\n${MAGENTA}Выключаем списки ${NC}РКН"
 
-        > "$RKN_FILE"
-
-        chmod +x /opt/zapret/sync_config.sh
-        /opt/zapret/sync_config.sh
-        /etc/init.d/zapret restart >/dev/null 2>&1
-
-        echo -e "${GREEN}Обход по спискам ${NC}РКН выключен${NC}\n"
-
-    elif grep -Fq '--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt' "$CONF"; then
-        echo -e "\n${MAGENTA}Выключаем списки ${NC}РКН (hostlist → hostlist-exclude)"
-
-        sed -i 's|--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|' "$CONF"
+        grep -Fq '--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt' "$CONF" && \
+            sed -i 's|--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|' "$CONF"
 
         > "$RKN_FILE"
 
@@ -222,14 +182,9 @@ toggle_rkn_bypass(){
     else
         echo -e "\n${RED}Стратегия не подходит (установите v6)${NC}"
     fi
-
-    read -p "Нажмите Enter..." dummy
 }
 
 RKN_Check(){
-    CONF="/etc/config/zapret"
-    RKN_FILE="/opt/zapret/ipset/zapret-hosts-user.txt"
-
     # Проверка наличия ˂HOSTLIST˃ или строки hostlist в конфиге
     if grep -Fq '˂HOSTLIST˃' "$CONF" || grep -Fq '--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt' "$CONF"; then
         RES1=0
@@ -237,11 +192,9 @@ RKN_Check(){
         RES1=1
     fi
 
-    # Проверка размера файла
     SIZE=$(wc -c < "$RKN_FILE" | tr -d '[:space:]')
 
-    # Если оба условия выполнены, ставим РКН
-    if [ $RES1 -eq 0 ] && [ "$SIZE" -gt 1782579 ]; then  # 1.7 МБ
+    if [ $RES1 -eq 0 ] && [ "$SIZE" -gt 1782579 ]; then
         RKN_STATUS="РКН"
         MENU_TEXT="${GREEN}Выключить обход по спискам${NC} РКН"
     else
@@ -249,6 +202,21 @@ RKN_Check(){
         MENU_TEXT="${GREEN}Включить обход по спискам${NC} РКН"
     fi
 }
+
+show_current_strategy(){
+    [ -f "$CONF" ] || return
+
+    ver=""
+    for i in $(seq 1 20); do
+        grep -q "#v$i" "$CONF" && { ver="v$i"; break; }
+    done
+
+    yv_ver=""
+    for i in $(seq -w 1 50); do
+        grep -q "#Yv$i" "$CONF" && { yv_ver="Yv$i"; break; }
+    done
+}
+
 
 
 
@@ -356,15 +324,14 @@ echo -e "\n${YELLOW}Установленная версия:   ${INST_COLOR}$INS
 quic_is_blocked && if quic_is_blocked; then echo -e "${YELLOW}Блокировка QUIC:${NC}        ${GREEN}включена${NC}"; fi; 
 
 # Выполнение
+toggle_rkn_bypass
 RKN_Check
 show_current_strategy
 
 output=""
-
 [ -n "$ver" ] && output="$ver"
 [ -n "$yv_ver" ] && { [ -n "$output" ] && output="$output / "; output="$output$yv_ver"; }
 [ -n "$RKN_STATUS" ] && { [ -n "$output" ] && output="$output / "; output="$output$RKN_STATUS"; }
-
 [ -n "$output" ] && echo -e "${YELLOW}Используется стратегия:${NC} $output\n"
 
 
