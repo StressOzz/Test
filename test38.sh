@@ -306,7 +306,6 @@ else
 fi
 
 
-
 echo -e "\n${CYAN}1) ${GREEN}Установить${NC} Zapret\n${CYAN}2) ${GREEN}Меню стратегий${NC}\n${CYAN}3) ${GREEN}Вернуть ${NC}настройки по умолчанию\n${CYAN}4) ${GREEN}$str_stp_zpr ${NC}Zapret"
 echo -e "${CYAN}5) ${GREEN}Удалить ${NC}Zapret\n${CYAN}6) ${GREEN}$menu_game\n${CYAN}7) ${GREEN}Меню настройки ${NC}Discord\n${CYAN}8) ${GREEN}Удалить → установить → настроить${NC} Zapret"
 echo -e "${CYAN}9) ${GREEN}Меню ${NC}DNS over HTTPS\n${CYAN}0) ${GREEN}Системное меню${NC}" ; echo -ne "${CYAN}Enter) ${GREEN}Выход${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read choice
