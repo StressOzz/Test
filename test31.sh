@@ -246,8 +246,8 @@ echo -e "\n${YELLOW}Установленная версия:   ${INST_COLOR}$INS
 [ -n "$DOH_STATUS" ] && opkg list-installed | grep -q '^https-dns-proxy ' && echo -e "${YELLOW}DNS over HTTPS:${NC}         $DOH_STATUS"; web_is_enabled && if web_is_enabled; then echo -e "${YELLOW}Доступ из браузера:${NC}     http://192.168.1.1:7681"; fi
 quic_is_blocked && if quic_is_blocked; then echo -e "${YELLOW}Блокировка QUIC:${NC}        ${GREEN}включена${NC}"; fi; 
 
-show_current_strategy
-RKN_Check
+RKN_Check        # сначала проверяем, РКН ли
+show_current_strategy  # потом собираем стратегию
 
 if [ -n "$RKN_STATUS" ]; then
     echo -e "${YELLOW}Используется стратегия:${NC} РКН\n"
