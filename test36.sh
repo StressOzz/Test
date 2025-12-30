@@ -148,6 +148,7 @@ chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zap
 sed -i 's|--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|' "$CONF"; > /opt/zapret/ipset/zapret-hosts-user.txt; chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1
 echo -e "${GREEN}Обход по спискам ${NC}РКН${GREEN} выключен${NC}\n"; else echo -e "\n${RED}Установите стратегию v6\n${NC}"; fi; read -p "Нажмите Enter..." dummy; }
 
+# Проверка текущей стратегии
 show_current_strategy(){
     [ -f "$CONF" ] || return
     ver=""
@@ -160,6 +161,7 @@ show_current_strategy(){
     done
 }
 
+# Проверка, включён ли РКН
 RKN_Check(){
     # Проверяем наличие любой из двух строк в конфиге
     grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONF"
@@ -178,21 +180,18 @@ RKN_Check(){
     fi
 }
 
-
-# Проверка РКН
+# Выполняем проверку РКН
 RKN_Check
-# Сбор информации о стратегии
+# Собираем информацию о стратегии
 show_current_strategy
 
-# Вывод
+# Вывод текущей стратегии
 if [ -n "$RKN_STATUS" ]; then
     echo -e "${YELLOW}Используется стратегия:${NC} РКН\n"
 else
     current="$ver$( [ -n "$ver" ] && [ -n "$yv_ver" ] && echo " / " )$yv_ver"
     [ -n "$current" ] && echo -e "${YELLOW}Используется стратегия:${NC} $current\n"
 fi
-
-
 
 
 discord_str_add() { if ! grep -q "option NFQWS_PORTS_UDP.*19294-19344,50000-50100" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'$/,19294-19344,50000-50100'/" "$CONF"; fi
