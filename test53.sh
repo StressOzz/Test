@@ -142,51 +142,6 @@ printf '%s\n' "--dpi-desync-fake-tls=0x0F0F0F0F" "--dpi-desync-fake-tls-mod=none
 printf '%s\n' "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake" "--dpi-desync-repeats=6" "--dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin"; }
 strategy_v6() { printf '%s\n' "#v6" "#Yv02" "--filter-tcp=443" "--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt" "--dpi-desync=multisplit" "--dpi-desync-split-pos=1,sniext+1" "--dpi-desync-split-seqovl=1"
 printf '%s\n' "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=hostfakesplit" "--dpi-desync-hostfakesplit-mod=host=max.ru" "--dpi-desync-hostfakesplit-midhost=host-2" "--dpi-desync-split-seqovl=726" "--dpi-desync-fooling=badsum,badseq" "--dpi-desync-badseq-increment=0"; }
-toggle_rkn_bypass(){
-    [ -f "$CONF" ] || { echo -e "\n${RED}Конфиг не найден!${NC}\n"; return; }
-
-    # Проверка текущего состояния обхода РКН
-    if grep -Fq 'hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt' "$CONF" || grep -Fq '˂HOSTLIST˃' /etc/config/zapret; then
-        echo -e "\n${MAGENTA}Включаем списки ${NC}РКН"
-
-        # Меняем строку hostlist-exclude, если есть
-        grep -Fq 'hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt' "$CONF" && \
-        sed -i 's|hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|hostlist=/opt/zapret/ipset/zapret-hosts-user.txt|' "$CONF"
-
-        # Загружаем актуальный список
-        curl -fsSL https://raw.githubusercontent.com/IndeecFOX/zapret4rocket/refs/heads/master/extra_strats/TCP/RKN/List.txt -o /opt/zapret/ipset/zapret-hosts-user.txt
-
-        # Применяем изменения
-        chmod +x /opt/zapret/sync_config.sh
-        /opt/zapret/sync_config.sh
-        /etc/init.d/zapret restart >/dev/null 2>&1
-
-        echo -e "${GREEN}Обход по спискам ${NC}РКН${GREEN} включен${NC}\n"
-
-    elif grep -Fq 'hostlist=/opt/zapret/ipset/zapret-hosts-user.txt' "$CONF"; then
-        echo -e "\n${MAGENTA}Выключаем списки ${NC}РКН"
-
-        # Меняем строку обратно
-        sed -i 's|hostlist=/opt/zapret/ipset/zapret-hosts-user.txt|hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|' "$CONF"
-
-        # Очищаем файл
-        > /opt/zapret/ipset/zapret-hosts-user.txt
-
-        # Применяем изменения
-        chmod +x /opt/zapret/sync_config.sh
-        /opt/zapret/sync_config.sh
-        /etc/init.d/zapret restart >/dev/null 2>&1
-
-        echo -e "${GREEN}Обход по спискам ${NC}РКН${GREEN} выключен${NC}\n"
-
-    else
-        echo -e "\n${RED}Установите стратегию v6\n${NC}"
-    fi
-
-    read -p "Нажмите Enter..." dummy
-}
-
-
 show_current_strategy(){
     [ -f "$CONF" ] || return
 
@@ -203,19 +158,90 @@ show_current_strategy(){
     done
 }
 
+RKN_LIST="https://raw.githubusercontent.com/IndeecFOX/zapret4rocket/refs/heads/master/extra_strats/TCP/RKN/List.txt"
+RKN_FILE="/opt/zapret/ipset/zapret-hosts-user.txt"
+
+toggle_rkn_bypass(){
+    [ -f "$CONF" ] || { echo -e "\n${RED}Конфиг не найден!${NC}\n"; return; }
+
+    # Включаем обход
+    if grep -Fq '˂HOSTLIST˃' "$CONF"; then
+        echo -e "\n${MAGENTA}Включаем списки ${NC}РКН (˂HOSTLIST˃)"
+
+        # Переписываем список
+        curl -fsSL "$RKN_LIST" -o "$RKN_FILE"
+
+        # Применяем изменения
+        chmod +x /opt/zapret/sync_config.sh
+        /opt/zapret/sync_config.sh
+        /etc/init.d/zapret restart >/dev/null 2>&1
+
+        echo -e "${GREEN}Обход по спискам ${NC}РКН включен${NC}\n"
+
+    elif grep -Fq '--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt' "$CONF"; then
+        echo -e "\n${MAGENTA}Включаем списки ${NC}РКН (hostlist-exclude → hostlist)"
+
+        # Меняем на hostlist
+        sed -i 's|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt|' "$CONF"
+
+        # Переписываем список
+        curl -fsSL "$RKN_LIST" -o "$RKN_FILE"
+
+        # Применяем изменения
+        chmod +x /opt/zapret/sync_config.sh
+        /opt/zapret/sync_config.sh
+        /etc/init.d/zapret restart >/dev/null 2>&1
+
+        echo -e "${GREEN}Обход по спискам ${NC}РКН включен${NC}\n"
+
+    # Выключаем обход
+    elif grep -Fq '˂HOSTLIST˃' "$CONF"; then
+        echo -e "\n${MAGENTA}Выключаем списки ${NC}РКН (˂HOSTLIST˃)"
+
+        > "$RKN_FILE"
+
+        chmod +x /opt/zapret/sync_config.sh
+        /opt/zapret/sync_config.sh
+        /etc/init.d/zapret restart >/dev/null 2>&1
+
+        echo -e "${GREEN}Обход по спискам ${NC}РКН выключен${NC}\n"
+
+    elif grep -Fq '--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt' "$CONF"; then
+        echo -e "\n${MAGENTA}Выключаем списки ${NC}РКН (hostlist → hostlist-exclude)"
+
+        sed -i 's|--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|' "$CONF"
+
+        > "$RKN_FILE"
+
+        chmod +x /opt/zapret/sync_config.sh
+        /opt/zapret/sync_config.sh
+        /etc/init.d/zapret restart >/dev/null 2>&1
+
+        echo -e "${GREEN}Обход по спискам ${NC}РКН выключен${NC}\n"
+
+    else
+        echo -e "\n${RED}Стратегия не подходит (установите v6)${NC}"
+    fi
+
+    read -p "Нажмите Enter..." dummy
+}
+
 RKN_Check(){
-    # Проверка наличия ˂HOSTLIST˃ или строки с hostlist в конфиге
-    if grep -Fq '˂HOSTLIST˃' /etc/config/zapret || grep -Fq '/opt/zapret/ipset/zapret-hosts-user.txt' /etc/config/zapret; then
+    CONF="/etc/config/zapret"
+    RKN_FILE="/opt/zapret/ipset/zapret-hosts-user.txt"
+
+    # Проверка наличия ˂HOSTLIST˃ или строки hostlist в конфиге
+    if grep -Fq '˂HOSTLIST˃' "$CONF" || grep -Fq '--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt' "$CONF"; then
         RES1=0
     else
         RES1=1
     fi
 
     # Проверка размера файла
-    SIZE=$(wc -c < /opt/zapret/ipset/zapret-hosts-user.txt | tr -d '[:space:]')
+    SIZE=$(wc -c < "$RKN_FILE" | tr -d '[:space:]')
 
-    # Условие: оба условия должны быть выполнены
-    if [ $RES1 -eq 0 ] && [ "$SIZE" -gt 1638400 ]; then
+    # Если оба условия выполнены, ставим РКН
+    if [ $RES1 -eq 0 ] && [ "$SIZE" -gt 1782579 ]; then  # 1.7 МБ
         RKN_STATUS="РКН"
         MENU_TEXT="${GREEN}Выключить обход по спискам${NC} РКН"
     else
@@ -223,8 +249,6 @@ RKN_Check(){
         MENU_TEXT="${GREEN}Включить обход по спискам${NC} РКН"
     fi
 }
-
-
 
 
 
