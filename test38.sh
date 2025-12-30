@@ -163,15 +163,18 @@ show_current_strategy(){
 
 # Проверка, включён ли РКН
 RKN_Check(){
-    # Проверяем наличие любой из двух строк в конфиге
-    grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONF"
-    RES1=$?
-    grep -q -- "--filter-tcp=443 <HOSTLIST>" "$CONF"
-    RES2=$?
+    RES1=1
+    RES2=1
 
-    SIZE=$(wc -c < /opt/zapret/ipset/zapret-hosts-user.txt)
+    # Проверяем наличие строк в конфиге
+    grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONF" && RES1=0
+    grep -q -- "--filter-tcp=443 <HOSTLIST>" "$CONF" && RES2=0
 
-    if { [ $RES1 -eq 0 ] || [ $RES2 -eq 0 ]; } && [ "$SIZE" -gt 1638400 ]; then
+    # Размер файла без пробелов
+    SIZE=$(wc -c < /opt/zapret/ipset/zapret-hosts-user.txt | tr -d ' ')
+
+    # Условие: файл строго больше 1.6 МБ и есть хотя бы одна строка
+    if [ "$SIZE" -gt 1638400 ] && { [ $RES1 -eq 0 ] || [ $RES2 -eq 0 ]; }; then
         RKN_STATUS="/ РКН"
         MENU_TEXT="${GREEN}Выключить обход по спискам${NC} РКН"
     else
@@ -192,6 +195,7 @@ else
     current="$ver$( [ -n "$ver" ] && [ -n "$yv_ver" ] && echo " / " )$yv_ver"
     [ -n "$current" ] && echo -e "${YELLOW}Используется стратегия:${NC} $current\n"
 fi
+
 
 
 discord_str_add() { if ! grep -q "option NFQWS_PORTS_UDP.*19294-19344,50000-50100" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'$/,19294-19344,50000-50100'/" "$CONF"; fi
