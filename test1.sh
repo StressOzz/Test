@@ -133,7 +133,7 @@ printf '%s\n' "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.tx
 strategy_v6() { printf '%s\n' "#v6" "#Yv02" "--filter-tcp=443" "--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt" "--dpi-desync=multisplit" "--dpi-desync-split-pos=1,sniext+1" "--dpi-desync-split-seqovl=1"
 printf '%s\n' "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=hostfakesplit" "--dpi-desync-hostfakesplit-mod=host=max.ru" "--dpi-desync-hostfakesplit-midhost=host-2" "--dpi-desync-split-seqovl=726" "--dpi-desync-fooling=badsum,badseq" "--dpi-desync-badseq-increment=0"; }
 strategy_v7() { printf '%s\n' "#v6 списки" "#Yv03" "--filter-tcp=443" "--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt" "--dpi-desync=fake,multisplit" "--dpi-desync-split-pos=2,sld" "--dpi-desync-fake-tls=0x0F0F0F0F" "--dpi-desync-fake-tls=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin"
-"--dpi-desync-fake-tls-mod=rnd,dupsid,sni=ggpht.com" "--dpi-desync-split-seqovl=620" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin" "--dpi-desync-fooling=badsum,badseq"
+printf '%s\n' "--dpi-desync-fake-tls-mod=rnd,dupsid,sni=ggpht.com" "--dpi-desync-split-seqovl=620" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin" "--dpi-desync-fooling=badsum,badseq"
 printf '%s\n' "--new" "--filter-tcp=443" "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "--dpi-desync=hostfakesplit" "--dpi-desync-hostfakesplit-mod=host=max.ru" "--dpi-desync-hostfakesplit-midhost=host-2" "--dpi-desync-split-seqovl=726" "--dpi-desync-fooling=badsum,badseq" "--dpi-desync-badseq-increment=0"; }
 show_current_strategy() { [ -f "$CONF" ] || return; ver=""; for i in $(seq 1 20); do grep -q "#v$i" "$CONF" && { ver="v$i"; break; }; done; yv_ver=""; for i in $(seq -w 1 50); do grep -q "#Yv$i" "$CONF" && { yv_ver="Yv$i"; break; }; done; }
 dis_str() { if ! grep -q "option NFQWS_PORTS_UDP.*19294-19344,50000-50100" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'$/,19294-19344,50000-50100'/" "$CONF"; fi
@@ -154,7 +154,7 @@ printf '%s\n' "gvt1.com" "googleplay.com" "play.google.com" "beacons.gvt2.com" "
 echo -e "${CYAN}Добавляем домены в исключения${NC}"; rm -f "$EXCLUDE_FILE"; wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL" || echo -e "\n${RED}Не удалось загрузить exclude файл${NC}\n"
 [ "$version" = "v7" ] && echo -e "${CYAN}Добавляем домены в ${NC}zapret-hosts-user.txt"; curl -fsSL https://raw.githubusercontent.com/IndeecFOX/zapret4rocket/refs/heads/master/extra_strats/TCP/RKN/List.txt -o /opt/zapret/ipset/zapret-hosts-user.txt
 dis_str; echo -e "${CYAN}Применяем новую стратегию и настройки${NC}"; chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1
-echo -e "${GREEN}Стратегия ${version} установлена!${NC}"; [ "$NO_PAUSE" != "1" ] && echo && read -p "Нажмите Enter..." dummy; }
+echo -e "${GREEN}Стратегия ${NC}${version}${GREEN} установлена!${NC}"; [ "$NO_PAUSE" != "1" ] && echo && read -p "Нажмите Enter..." dummy; }
 # ==========================================
 # DNS over HTTPS
 # ==========================================
