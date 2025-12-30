@@ -142,16 +142,16 @@ printf '%s\n' "--dpi-desync-fake-tls=0x0F0F0F0F" "--dpi-desync-fake-tls-mod=none
 printf '%s\n' "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake" "--dpi-desync-repeats=6" "--dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin"; }
 strategy_v6() { printf '%s\n' "#v6" "#Yv02" "--filter-tcp=443" "--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt" "--dpi-desync=multisplit" "--dpi-desync-split-pos=1,sniext+1" "--dpi-desync-split-seqovl=1"
 printf '%s\n' "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=hostfakesplit" "--dpi-desync-hostfakesplit-mod=host=max.ru" "--dpi-desync-hostfakesplit-midhost=host-2" "--dpi-desync-split-seqovl=726" "--dpi-desync-fooling=badsum,badseq" "--dpi-desync-badseq-increment=0"; }
-toggle_rkn_bypass() {
+toggle_rkn_bypass(){
     [ -f "$CONF" ] || { echo -e "\n${RED}Конфиг не найден!${NC}\n"; return; }
 
-    # Проверяем текущее состояние обхода РКН
-    if grep -Fq '--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt' "$CONF" || grep -Fq '˂HOSTLIST˃' /etc/config/zapret; then
+    # Проверка текущего состояния обхода РКН
+    if grep -Fq 'hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt' "$CONF" || grep -Fq '˂HOSTLIST˃' /etc/config/zapret; then
         echo -e "\n${MAGENTA}Включаем списки ${NC}РКН"
 
-        # Меняем строку в конфиге, если есть hostlist-exclude
-        grep -Fq '--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt' "$CONF" && \
-        sed -i 's|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt|' "$CONF"
+        # Меняем строку hostlist-exclude, если есть
+        grep -Fq 'hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt' "$CONF" && \
+        sed -i 's|hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|hostlist=/opt/zapret/ipset/zapret-hosts-user.txt|' "$CONF"
 
         # Загружаем актуальный список
         curl -fsSL https://raw.githubusercontent.com/IndeecFOX/zapret4rocket/refs/heads/master/extra_strats/TCP/RKN/List.txt -o /opt/zapret/ipset/zapret-hosts-user.txt
@@ -163,13 +163,13 @@ toggle_rkn_bypass() {
 
         echo -e "${GREEN}Обход по спискам ${NC}РКН${GREEN} включен${NC}\n"
 
-    elif grep -Fq '--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt' "$CONF"; then
+    elif grep -Fq 'hostlist=/opt/zapret/ipset/zapret-hosts-user.txt' "$CONF"; then
         echo -e "\n${MAGENTA}Выключаем списки ${NC}РКН"
 
-        # Меняем строку в конфиге обратно
-        sed -i 's|--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|' "$CONF"
+        # Меняем строку обратно
+        sed -i 's|hostlist=/opt/zapret/ipset/zapret-hosts-user.txt|hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|' "$CONF"
 
-        # Очищаем список
+        # Очищаем файл
         > /opt/zapret/ipset/zapret-hosts-user.txt
 
         # Применяем изменения
@@ -180,8 +180,12 @@ toggle_rkn_bypass() {
         echo -e "${GREEN}Обход по спискам ${NC}РКН${GREEN} выключен${NC}\n"
 
     else
-        echo -e "\n${RED}Установите стратегию v6${NC}"
-    fi; }
+        echo -e "\n${RED}Установите стратегию v6\n${NC}"
+    fi
+
+    read -p "Нажмите Enter..." dummy
+}
+
 
 show_current_strategy(){
     [ -f "$CONF" ] || return
