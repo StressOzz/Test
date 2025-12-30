@@ -187,7 +187,7 @@ menu_str(){ [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не уст
     fi
 
 
-echo -e "${MAGENTA}Меню стратегии${NC}\n"; show_current_strategy; echo "$RKN_STATUS"; current="$ver$( [ -n "$ver" ] && [ -n "$yv_ver" ] && echo " / " )$yv_ver"; [ -n "$current" ] && echo -e "${YELLOW}Используется стратегия:${NC} $current\n"
+echo -e "${MAGENTA}Меню стратегии${NC}\n"; show_current_strategy; current="$ver$( [ -n "$ver" ] && [ -n "$yv_ver" ] && echo " / " )$yv_ver"; [ -n "$current" ] && echo -e "${YELLOW}Используется стратегия:${NC} $currentecho$RKN_STATUS\n"
 echo -e "${CYAN}1) ${GREEN}Установить стратегию${NC} v1${RED}(27.12 не работает)${NC}\n${CYAN}2) ${GREEN}Установить стратегию${NC} v2${RED}(27.12 не работает)${NC}\n${CYAN}3) ${GREEN}Установить стратегию${NC} v3${RED}(27.12 не работает)${NC}\n${CYAN}4) ${GREEN}Установить стратегию${NC} v4${RED}(27.12 не работает)${NC}"
 echo -e "${CYAN}5) ${GREEN}Установить стратегию${NC} v5${RED}(27.12 не работает)${NC}\n${CYAN}6) ${GREEN}Установить стратегию${NC} v6\n${CYAN}9) $MENU_TEXT\n${CYAN}0) ${GREEN}Подобрать стратегию для ${NC}YouTube"
 echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read choiceST; case "$choiceST" in 1) install_strategy v1 ;; 2) install_strategy v2 ;; 3) install_strategy v3 ;;
