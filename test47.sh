@@ -165,8 +165,8 @@ show_current_strategy(){
 }
 
 RKN_Check(){
-    # Проверка наличия ˂HOSTLIST˃ в конфиге
-    grep -Fq '˂HOSTLIST˃' /etc/config/zapret
+    # Проверка наличия ˂HOSTLIST˃ или /opt/zapret/ipset/zapret-hosts-user.txt в конфиге
+    grep -Fq '˂HOSTLIST˃' /etc/config/zapret || grep -Fq '--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt' /etc/config/zapret
     RES1=$?
 
     # Проверка размера файла
