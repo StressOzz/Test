@@ -165,7 +165,7 @@ show_current_strategy(){
 }
 
 RKN_Check(){
-    # Проверка наличия ˂HOSTLIST˃ или /opt/zapret/ipset/zapret-hosts-user.txt в конфиге
+    # Проверка наличия ˂HOSTLIST˃ или строки --hostlist=/opt/zapret/ipset/zapret-hosts-user.txt в конфиге
     grep -Fq '˂HOSTLIST˃' /etc/config/zapret || grep -Fq '--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt' /etc/config/zapret
     RES1=$?
 
@@ -181,6 +181,7 @@ RKN_Check(){
         MENU_TEXT="${GREEN}Включить обход по спискам${NC} РКН"
     fi
 }
+
 
 
 
