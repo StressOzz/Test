@@ -148,8 +148,22 @@ chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zap
 sed -i 's|--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|' "$CONF"; > /opt/zapret/ipset/zapret-hosts-user.txt; chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1
 echo -e "${GREEN}Обход по спискам ${NC}РКН${GREEN} выключен${NC}\n"; else echo -e "\n${RED}Установите стратегию v6\n${NC}"; fi; read -p "Нажмите Enter..." dummy; }
 show_current_strategy() { [ -f "$CONF" ] || return; ver=""; for i in $(seq 1 20); do grep -q "#v$i" "$CONF" && { ver="v$i"; break; }; done; yv_ver=""; for i in $(seq -w 1 50); do grep -q "#Yv$i" "$CONF" && { yv_ver="Yv$i"; break; }; done; }
-RKN_Check(){ if { grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONF" || grep -q -- "--filter-tcp=443 <HOSTLIST>" "$CONF"; } && [ "$(wc -c < /opt/zapret/ipset/zapret-hosts-user.txt)" -gt 1800000 ]; then RKN_STATUS="/ РКН"
-MENU_TEXT="${GREEN}Выключить обход по спискам${NC} РКН"; else RKN_STATUS=""; MENU_TEXT="${GREEN}Включить обход по спискам${NC} РКН"; fi; }
+
+RKN_Check(){
+    # Проверяем наличие любой из двух строк в конфиге
+    if ( grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONF" \
+         || grep -q -- "--filter-tcp=443 HOSTLIST" "$CONF" ) \
+       && [ "$(wc -c < /opt/zapret/ipset/zapret-hosts-user.txt)" -gt 1638400 ]; then
+        RKN_STATUS="/ РКН"
+        MENU_TEXT="${GREEN}Выключить обход по спискам${NC} РКН"
+    else
+        RKN_STATUS=""
+        MENU_TEXT="${GREEN}Включить обход по спискам${NC} РКН"
+    fi
+}
+
+
+
 discord_str_add() { if ! grep -q "option NFQWS_PORTS_UDP.*19294-19344,50000-50100" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'$/,19294-19344,50000-50100'/" "$CONF"; fi
 if ! grep -q "option NFQWS_PORTS_TCP.*2053,2083,2087,2096,8443" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_TCP '/s/'$/,2053,2083,2087,2096,8443'/" "$CONF"; fi
 if ! grep -q -- "--filter-udp=19294-19344,50000-50100" "$CONF"; then last_line1=$(grep -n "^'$" "$CONF" | tail -n1 | cut -d: -f1); if [ -n "$last_line1" ]; then sed -i "${last_line1},\$d" "$CONF"; fi
