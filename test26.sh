@@ -160,7 +160,7 @@ echo -e "\n${MAGENTA}Включаем списки ${NC}РКН"
 
     elif grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONF"; then
     
-echo -e "${MAGENTA}Выключаем списки ${NC}РКН"
+echo -e "\n${MAGENTA}Выключаем списки ${NC}РКН"
 
         sed -i 's|--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|' "$CONF"
         > /opt/zapret/ipset/zapret-hosts-user.txt
@@ -172,7 +172,6 @@ echo -e "${GREEN}Обход по спискам ${NC}РКН${GREEN} выключ
         read -p "Нажмите Enter..." dummy;
     fi
 
-    # Перезапуск Zapret
     read -p "Нажмите Enter..." dummy; }
 
 
@@ -188,7 +187,7 @@ printf "%s\n" "--new" "--filter-udp=19294-19344,50000-50100" "--filter-l7=discor
 menu_str(){ [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter..." dummy; return; }; while true; do clear
   
     if grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONF"; then
-        RKN_STATUS="/ RKN"
+        RKN_STATUS="/ РКН"
         MENU_TEXT="${GREEN}Выключить обход по спискам${NC} РКН"
     else
         RKN_STATUS=""
@@ -280,7 +279,7 @@ echo -e "FIX ${GREEN}успешно применён!${NC}\n"; read -p "Нажм
 # Главное меню
 # ==========================================
 show_menu() { get_versions; get_doh_status; clear; echo -e "╔════════════════════════════════════╗\n║     ${BLUE}Zapret on remittor Manager${NC}     ║\n╚════════════════════════════════════╝\n                     ${DGRAY}by StressOzz v$ZAPRET_MANAGER_VERSION${NC}"
-if grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONF"; then RKN_STATUS="/ RKN"; else RKN_STATUS=""; fi
+if grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONF"; then RKN_STATUS="/ РКН"; else RKN_STATUS=""; fi
 for pkg in byedpi youtubeUnblock; do if opkg list-installed | grep -q "^$pkg"; then echo -e "\n${RED}Найден установленный ${NC}$pkg${RED}!${NC}\nZapret${RED} может работать некорректно с ${NC}$pkg${RED}!${NC}"; fi; done
 if uci get firewall.@defaults[0].flow_offloading 2>/dev/null | grep -q '^1$' || uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null | grep -q '^1$'; 
 then if ! grep -q 'meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc; then echo -e "\n${RED}Включён ${NC}Flow Offloading${RED}!${NC}\n${NC}Zapret${RED} некорректно работает с включённым ${NC}Flow Offloading${RED}!\nПримените ${NC}FIX${RED} в системном меню!${NC}"
