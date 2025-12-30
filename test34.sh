@@ -147,9 +147,21 @@ sed -i 's|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|--h
 chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1; echo -e "${GREEN}Обход по спискам ${NC}РКН${GREEN} включен${NC}\n"; elif grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONF"; then echo -e "\n${MAGENTA}Выключаем списки ${NC}РКН"
 sed -i 's|--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|' "$CONF"; > /opt/zapret/ipset/zapret-hosts-user.txt; chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1
 echo -e "${GREEN}Обход по спискам ${NC}РКН${GREEN} выключен${NC}\n"; else echo -e "\n${RED}Установите стратегию v6\n${NC}"; fi; read -p "Нажмите Enter..." dummy; }
-show_current_strategy() { [ -f "$CONF" ] || return; ver=""; for i in $(seq 1 20); do grep -q "#v$i" "$CONF" && { ver="v$i"; break; }; done; yv_ver=""; for i in $(seq -w 1 50); do grep -q "#Yv$i" "$CONF" && { yv_ver="Yv$i"; break; }; done; }
+
+show_current_strategy(){
+    [ -f "$CONF" ] || return
+    ver=""
+    for i in $(seq 1 20); do
+        grep -q "#v$i" "$CONF" && { ver="v$i"; break; }
+    done
+    yv_ver=""
+    for i in $(seq -w 1 50); do
+        grep -q "#Yv$i" "$CONF" && { yv_ver="Yv$i"; break; }
+    done
+}
 
 RKN_Check(){
+    # Проверяем наличие любой из двух строк в конфиге
     grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONF"
     RES1=$?
     grep -q -- "--filter-tcp=443 HOSTLIST" "$CONF"
@@ -165,6 +177,19 @@ RKN_Check(){
         MENU_TEXT="${GREEN}Включить обход по спискам${NC} РКН"
     fi
 }
+
+# Проверка РКН
+RKN_Check
+# Сбор информации о стратегии
+show_current_strategy
+
+# Вывод
+if [ -n "$RKN_STATUS" ]; then
+    echo -e "${YELLOW}Используется стратегия:${NC} РКН\n"
+else
+    current="$ver$( [ -n "$ver" ] && [ -n "$yv_ver" ] && echo " / " )$yv_ver"
+    [ -n "$current" ] && echo -e "${YELLOW}Используется стратегия:${NC} $current\n"
+fi
 
 
 
