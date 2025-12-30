@@ -150,10 +150,14 @@ echo -e "${GREEN}Обход по спискам ${NC}РКН${GREEN} выключ
 show_current_strategy() { [ -f "$CONF" ] || return; ver=""; for i in $(seq 1 20); do grep -q "#v$i" "$CONF" && { ver="v$i"; break; }; done; yv_ver=""; for i in $(seq -w 1 50); do grep -q "#Yv$i" "$CONF" && { yv_ver="Yv$i"; break; }; done; }
 
 RKN_Check(){
-    # Проверяем наличие любой из двух строк в конфиге
-    if ( grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONF" \
-         || grep -q -- "--filter-tcp=443 HOSTLIST" "$CONF" ) \
-       && [ "$(wc -c < /opt/zapret/ipset/zapret-hosts-user.txt)" -gt 1638400 ]; then
+    grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONF"
+    RES1=$?
+    grep -q -- "--filter-tcp=443 HOSTLIST" "$CONF"
+    RES2=$?
+
+    SIZE=$(wc -c < /opt/zapret/ipset/zapret-hosts-user.txt)
+
+    if { [ $RES1 -eq 0 ] || [ $RES2 -eq 0 ]; } && [ "$SIZE" -gt 1638400 ]; then
         RKN_STATUS="/ РКН"
         MENU_TEXT="${GREEN}Выключить обход по спискам${NC} РКН"
     else
@@ -161,6 +165,7 @@ RKN_Check(){
         MENU_TEXT="${GREEN}Включить обход по спискам${NC} РКН"
     fi
 }
+
 
 
 
