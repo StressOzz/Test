@@ -142,97 +142,14 @@ printf '%s\n' "--dpi-desync-fake-tls=0x0F0F0F0F" "--dpi-desync-fake-tls-mod=none
 printf '%s\n' "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake" "--dpi-desync-repeats=6" "--dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin"; }
 strategy_v6() { printf '%s\n' "#v6" "#Yv02" "--filter-tcp=443" "--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt" "--dpi-desync=multisplit" "--dpi-desync-split-pos=1,sniext+1" "--dpi-desync-split-seqovl=1"
 printf '%s\n' "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=hostfakesplit" "--dpi-desync-hostfakesplit-mod=host=max.ru" "--dpi-desync-hostfakesplit-midhost=host-2" "--dpi-desync-split-seqovl=726" "--dpi-desync-fooling=badsum,badseq" "--dpi-desync-badseq-increment=0"; }
-
-RKN_LIST="https://raw.githubusercontent.com/IndeecFOX/zapret4rocket/refs/heads/master/extra_strats/TCP/RKN/List.txt"
-RKN_FILE="/opt/zapret/ipset/zapret-hosts-user.txt"
-
-toggle_rkn_bypass(){
-    [ -f "$CONF" ] || { echo -e "\n${RED}Конфиг не найден!${NC}\n"; return; }
-
-    # Включаем обход
-    if grep -Fq '˂HOSTLIST˃' "$CONF" || grep -Fq 'hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt' "$CONF"; then
-        echo -e "\n${MAGENTA}Включаем списки ${NC}РКН"
-
-        # Если есть hostlist-exclude, меняем на hostlist
-        grep -Fq 'hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt' "$CONF" && \
-        sed -i 's|hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|hostlist=/opt/zapret/ipset/zapret-hosts-user.txt|' "$CONF"
-
-        # Загружаем актуальный список
-        curl -fsSL "$RKN_LIST" -o "$RKN_FILE"
-
-        # Применяем изменения
-        chmod +x /opt/zapret/sync_config.sh
-        /opt/zapret/sync_config.sh
-        /etc/init.d/zapret restart >/dev/null 2>&1
-
-        echo -e "${GREEN}Обход по спискам ${NC}РКН включен${NC}\n"
-
-    # Выключаем обход
-    elif grep -Fq '˂HOSTLIST˃' "$CONF" || grep -Fq 'hostlist=/opt/zapret/ipset/zapret-hosts-user.txt' "$CONF"; then
-        echo -e "\n${MAGENTA}Выключаем списки ${NC}РКН"
-
-        # Если есть hostlist, меняем на hostlist-exclude
-        grep -Fq 'hostlist=/opt/zapret/ipset/zapret-hosts-user.txt' "$CONF" && \
-        sed -i 's|hostlist=/opt/zapret/ipset/zapret-hosts-user.txt|hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|' "$CONF"
-
-        # Очищаем файл
-        > "$RKN_FILE"
-
-        # Применяем изменения
-        chmod +x /opt/zapret/sync_config.sh
-        /opt/zapret/sync_config.sh
-        /etc/init.d/zapret restart >/dev/null 2>&1
-
-        echo -e "${GREEN}Обход по спискам ${NC}РКН выключен${NC}\n"
-
-    else
-        echo -e "\n${RED}Стратегия не подходит (установите v6)${NC}\n"
-    fi
-}
-
-RKN_Check(){
-    # Проверка наличия ˂HOSTLIST˃ или строки hostlist в конфиге
-    if grep -Fq '˂HOSTLIST˃' "$CONF" || grep -Fq '--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt' "$CONF"; then
-        RES1=0
-    else
-        RES1=1
-    fi
-
-    SIZE=$(wc -c < "$RKN_FILE" | tr -d '[:space:]')
-
-    if [ $RES1 -eq 0 ] && [ "$SIZE" -gt 1782579 ]; then
-        RKN_STATUS="РКН"
-        MENU_TEXT="${GREEN}Выключить обход по спискам${NC} РКН"
-    else
-        RKN_STATUS=""
-        MENU_TEXT="${GREEN}Включить обход по спискам${NC} РКН"
-    fi
-}
-
-show_current_strategy(){
-    [ -f "$CONF" ] || return
-
-    ver=""
-    for i in $(seq 1 20); do
-        grep -q "#v$i" "$CONF" && { ver="v$i"; break; }
-    done
-
-    yv_ver=""
-    for i in $(seq -w 1 50); do
-        grep -q "#Yv$i" "$CONF" && { yv_ver="Yv$i"; break; }
-    done
-}
-
-
-
-
-
-
-
-
-
-
-
+toggle_rkn_bypass(){ if grep -q -- "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt"  "$CONF"; then echo -e "\n${MAGENTA}Включаем списки ${NC}РКН"; chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1
+sed -i 's|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt|' "$CONF"; curl -fsSL https://raw.githubusercontent.com/IndeecFOX/zapret4rocket/refs/heads/master/extra_strats/TCP/RKN/List.txt -o /opt/zapret/ipset/zapret-hosts-user.txt
+chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1; echo -e "${GREEN}Обход по спискам ${NC}РКН${GREEN} включен${NC}\n"; elif grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONF"; then echo -e "\n${MAGENTA}Выключаем списки ${NC}РКН"
+sed -i 's|--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|' "$CONF"; > /opt/zapret/ipset/zapret-hosts-user.txt; chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1
+echo -e "${GREEN}Обход по спискам ${NC}РКН${GREEN} выключен${NC}\n"; else echo -e "\n${RED}Установите стратегию v6\n${NC}"; fi; read -p "Нажмите Enter..." dummy; }
+show_current_strategy() { [ -f "$CONF" ] || return; ver=""; for i in $(seq 1 20); do grep -q "#v$i" "$CONF" && { ver="v$i"; break; }; done; yv_ver=""; for i in $(seq -w 1 50); do grep -q "#Yv$i" "$CONF" && { yv_ver="Yv$i"; break; }; done; }
+RKN_Check(){ if { grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONF" || grep -q -- "--filter-tcp=443 <HOSTLIST>" "$CONF"; } && [ "$(wc -c < /opt/zapret/ipset/zapret-hosts-user.txt)" -gt 1800000 ]; then RKN_STATUS="/ РКН"
+MENU_TEXT="${GREEN}Выключить обход по спискам${NC} РКН"; else RKN_STATUS=""; MENU_TEXT="${GREEN}Включить обход по спискам${NC} РКН"; fi; }
 discord_str_add() { if ! grep -q "option NFQWS_PORTS_UDP.*19294-19344,50000-50100" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'$/,19294-19344,50000-50100'/" "$CONF"; fi
 if ! grep -q "option NFQWS_PORTS_TCP.*2053,2083,2087,2096,8443" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_TCP '/s/'$/,2053,2083,2087,2096,8443'/" "$CONF"; fi
 if ! grep -q -- "--filter-udp=19294-19344,50000-50100" "$CONF"; then last_line1=$(grep -n "^'$" "$CONF" | tail -n1 | cut -d: -f1); if [ -n "$last_line1" ]; then sed -i "${last_line1},\$d" "$CONF"; fi
@@ -327,23 +244,7 @@ fi; fi; menu_game=$( [ -f "$CONF" ] && grep -q "88,500,1024-19293,19345-49999,50
 echo -e "\n${YELLOW}Установленная версия:   ${INST_COLOR}$INSTALLED_DISPLAY${NC}"; [ -n "$ZAPRET_STATUS" ] && echo -e "${YELLOW}Статус Zapret:${NC}          $ZAPRET_STATUS"; show_script_50 && [ -n "$name" ] && echo -e "${YELLOW}Установлен скрипт:${NC}      $name"
 [ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*88,500,1024-19293,19345-49999,50101-65535" "$CONF" && grep -q -- "--filter-udp=88,500,1024-19293,19345-49999,50101-65535" "$CONF" && echo -e "${YELLOW}Стратегия для игр:${NC}      ${GREEN}активирована${NC}"
 [ -n "$DOH_STATUS" ] && opkg list-installed | grep -q '^https-dns-proxy ' && echo -e "${YELLOW}DNS over HTTPS:${NC}         $DOH_STATUS"; web_is_enabled && if web_is_enabled; then echo -e "${YELLOW}Доступ из браузера:${NC}     http://192.168.1.1:7681"; fi
-quic_is_blocked && if quic_is_blocked; then echo -e "${YELLOW}Блокировка QUIC:${NC}        ${GREEN}включена${NC}"; fi; 
-
-# Выполнение
-toggle_rkn_bypass
-RKN_Check
-show_current_strategy
-
-output=""
-[ -n "$ver" ] && output="$ver"
-[ -n "$yv_ver" ] && { [ -n "$output" ] && output="$output / "; output="$output$yv_ver"; }
-[ -n "$RKN_STATUS" ] && { [ -n "$output" ] && output="$output / "; output="$output$RKN_STATUS"; }
-[ -n "$output" ] && echo -e "${YELLOW}Используется стратегия:${NC} $output\n"
-
-
-
-
-
+quic_is_blocked && if quic_is_blocked; then echo -e "${YELLOW}Блокировка QUIC:${NC}        ${GREEN}включена${NC}"; fi; show_current_strategy; RKN_Check; [ -f "$CONF" ] && { current="$ver$( [ -n "$ver" ] && [ -n "$yv_ver" ] && echo " / " )$yv_ver"; [ -n "$current" ] && echo -e "${YELLOW}Используется стратегия: ${CYAN}$current $RKN_STATUS${NC}"; }
 echo -e "\n${CYAN}1) ${GREEN}Установить${NC} Zapret\n${CYAN}2) ${GREEN}Меню стратегий${NC}\n${CYAN}3) ${GREEN}Вернуть ${NC}настройки по умолчанию\n${CYAN}4) ${GREEN}$str_stp_zpr ${NC}Zapret"
 echo -e "${CYAN}5) ${GREEN}Удалить ${NC}Zapret\n${CYAN}6) ${GREEN}$menu_game\n${CYAN}7) ${GREEN}Меню настройки ${NC}Discord\n${CYAN}8) ${GREEN}Удалить → установить → настроить${NC} Zapret"
 echo -e "${CYAN}9) ${GREEN}Меню ${NC}DNS over HTTPS\n${CYAN}0) ${GREEN}Системное меню${NC}" ; echo -ne "${CYAN}Enter) ${GREEN}Выход${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read choice
