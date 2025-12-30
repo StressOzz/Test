@@ -148,13 +148,16 @@ chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zap
 sed -i 's|--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|' "$CONF"; > /opt/zapret/ipset/zapret-hosts-user.txt; chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1
 echo -e "${GREEN}Обход по спискам ${NC}РКН${GREEN} выключен${NC}\n"; else echo -e "\n${RED}Установите стратегию v6\n${NC}"; fi; read -p "Нажмите Enter..." dummy; }
 
-# Сбор информации о текущей стратегии
 show_current_strategy(){
     [ -f "$CONF" ] || return
+
+    # Ищем v
     ver=""
     for i in $(seq 1 20); do
         grep -q "#v$i" "$CONF" && { ver="v$i"; break; }
     done
+
+    # Ищем Yv
     yv_ver=""
     for i in $(seq -w 1 50); do
         grep -q "#Yv$i" "$CONF" && { yv_ver="Yv$i"; break; }
@@ -171,7 +174,7 @@ RKN_Check(){
 
     # Условие: оба условия должны быть выполнены
     if [ $RES1 -eq 0 ] && [ "$SIZE" -gt 1638400 ]; then
-        RKN_STATUS="/ РКН"
+        RKN_STATUS="РКН"
         MENU_TEXT="${GREEN}Выключить обход по спискам${NC} РКН"
     else
         RKN_STATUS=""
@@ -286,12 +289,16 @@ quic_is_blocked && if quic_is_blocked; then echo -e "${YELLOW}Блокировк
 RKN_Check
 show_current_strategy
 
-# Вывод
-if [ -n "$RKN_STATUS" ]; then
-    echo -e "${YELLOW}Используется стратегия:${NC} РКН\n"
+# Формируем логичный вывод
+output=""
+[ -n "$ver" ] && output="$output$ver"
+[ -n "$yv_ver" ] && output="$output$( [ -n "$output" ] && echo " / " )$yv_ver"
+[ -n "$RKN_STATUS" ] && output="$output$( [ -n "$output" ] && echo " / " )$RKN_STATUS"
+
+if [ -n "$output" ]; then
+    echo -e "${YELLOW}Используется стратегия:${NC} $output\n"
 else
-    current="$ver$( [ -n "$ver" ] && [ -n "$yv_ver" ] && echo " / " )$yv_ver"
-    [ -n "$current" ] && echo -e "${YELLOW}Используется стратегия:${NC} $current\n"
+    echo -e "${YELLOW}Стратегия не найдена${NC}\n"
 fi
 
 
