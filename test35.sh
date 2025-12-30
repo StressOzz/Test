@@ -164,7 +164,7 @@ RKN_Check(){
     # Проверяем наличие любой из двух строк в конфиге
     grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONF"
     RES1=$?
-    grep -q -- "--filter-tcp=443 HOSTLIST" "$CONF"
+    grep -q -- "--filter-tcp=443 <HOSTLIST>" "$CONF"
     RES2=$?
 
     SIZE=$(wc -c < /opt/zapret/ipset/zapret-hosts-user.txt)
@@ -177,6 +177,7 @@ RKN_Check(){
         MENU_TEXT="${GREEN}Включить обход по спискам${NC} РКН"
     fi
 }
+
 
 # Проверка РКН
 RKN_Check
