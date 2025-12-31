@@ -111,10 +111,11 @@ if [ -z "$ANSWER" ]; then { echo "#$CURRENT_NAME"; printf "%b\n" "$CURRENT_BODY"
 # SAVED_STR — файл с новой стратегией
 # CONF — конфиг, который редактируем
 
-# 1. Очистка старого блока (вместе со старой --new)
+# 1. Очистка старого блока (вместе с пустыми строками и нижней --new)
 awk '{
     if(skip) {
-        if($0=="--new" || $0 ~ /\047/) { skip=0; next }  # не печатаем нижнюю --new
+        if($0=="--new" || $0 ~ /\047/) { skip=0; next }       # не печатаем --new
+        if($0 ~ /^[[:space:]]*$/) next                       # пропускаем пустые строки
         next
     }
 
@@ -130,7 +131,7 @@ awk '{
     print
 }' "$OLD_STR" > "$NEW_STR"
 
-# 2. Вставка новой стратегии через getline (без system())
+# 2. Вставка новой стратегии через getline (без system(), безопасно на старом AWK)
 awk '
 BEGIN { inserted=0; has_google=0 }
 
@@ -138,7 +139,7 @@ $0=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt" { has_google=1 }
 
 # Основной сценарий — вставка перед существующей --new
 $0=="--new" && !inserted {
-    while((getline line < "'"$SAVED_STR"'") > 0) print line  # вставка стратегии
+    while((getline line < "'"$SAVED_STR"'") > 0) if(line !~ /^[[:space:]]*$/) print line  # вставка стратегии, пропуск пустых строк
     print "--new"
     inserted=1
     next
@@ -147,7 +148,7 @@ $0=="--new" && !inserted {
 # Запасной сценарий — если google hostlist нет
 $0 ~ /^[[:space:]]*option NFQWS_OPT \047$/ && !has_google && !inserted {
     print
-    while((getline line < "'"$SAVED_STR"'") > 0) print line  # вставка стратегии
+    while((getline line < "'"$SAVED_STR"'") > 0) if(line !~ /^[[:space:]]*$/) print line  # вставка стратегии
     print "--new"
     inserted=1
     next
@@ -168,7 +169,6 @@ awk '{
     else print
     prev=$0
 }' "$CONF" > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"
-
 
 
 
