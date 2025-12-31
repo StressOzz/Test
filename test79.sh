@@ -123,11 +123,32 @@ echo -e "\n${RED}Рабочая стратегия для YouTube не найд�
 strategy_v6() { printf '%s\n' "#v6" "#Yv03" "--filter-tcp=443" "--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt" "--dpi-desync=fake,multisplit" "--dpi-desync-split-pos=2,sld" "--dpi-desync-fake-tls=0x0F0F0F0F" "--dpi-desync-fake-tls=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin"
 printf '%s\n' "--dpi-desync-fake-tls-mod=rnd,dupsid,sni=ggpht.com" "--dpi-desync-split-seqovl=620" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin" "--dpi-desync-fooling=badsum,badseq"
 printf '%s\n' "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=hostfakesplit" "--dpi-desync-hostfakesplit-mod=host=max.ru" "--dpi-desync-hostfakesplit-midhost=host-2" "--dpi-desync-split-seqovl=726" "--dpi-desync-fooling=badsum,badseq" "--dpi-desync-badseq-increment=0"; }
-toggle_rkn_bypass(){ if grep -q -- "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "$CONF" && grep -q "#v6" "$CONF"; then echo -e "\n${MAGENTA}Включаем списки ${NC}РКН"; chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1
-sed -i 's|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt|' "$CONF"; curl -fsSL https://raw.githubusercontent.com/IndeecFOX/zapret4rocket/refs/heads/master/extra_strats/TCP/RKN/List.txt -o /opt/zapret/ipset/zapret-hosts-user.txt
-chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1; echo -e "${GREEN}Обход по спискам ${NC}РКН${GREEN} включен${NC}\n"; elif grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONF"; then echo -e "\n${MAGENTA}Выключаем списки ${NC}РКН"
-sed -i 's|--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|' "$CONF"; > /opt/zapret/ipset/zapret-hosts-user.txt; chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1
-echo -e "${GREEN}Обход по спискам ${NC}РКН${GREEN} выключен${NC}\n"; else echo -e "\n${RED}Установите стратегию v6\n${NC}"; fi; read -p "Нажмите Enter..." dummy; }
+toggle_rkn_bypass(){ 
+if grep -q -- "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "$CONF" && grep -q "#v6" "$CONF"; then 
+echo -e "\n${MAGENTA}Включаем списки ${NC}РКН"
+
+[ -f /opt/zapret/ipset/zapret-hosts-user.txt ] && cp /opt/zapret/ipset/zapret-hosts-user.txt /opt/hosts-user.txt
+
+chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1
+sed -i 's|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt|' "$CONF"
+curl -fsSL https://raw.githubusercontent.com/IndeecFOX/zapret4rocket/refs/heads/master/extra_strats/TCP/RKN/List.txt -o /opt/zapret/ipset/zapret-hosts-user.txt
+chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1
+echo -e "${GREEN}Обход по спискам ${NC}РКН${GREEN} включен${NC}\n"
+echo -e "${GREEN}Пока включон список РКН не меняйте ${NC}\n"
+elif grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONF"; then 
+echo -e "\n${MAGENTA}Выключаем списки ${NC}РКН"
+
+sed -i 's|--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|' "$CONF"
+[ -f /opt/hosts-user.txt ] && cp /opt/hosts-user.txt /opt/zapret/ipset/zapret-hosts-user.txt || : > /opt/zapret/ipset/zapret-hosts-user.txt
+chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1
+echo -e "${GREEN}Обход по спискам ${NC}РКН${GREEN} выключен${NC}\n"
+
+else 
+echo -e "\n${RED}Установите стратегию v6\n${NC}"
+fi
+read -p "Нажмите Enter..." dummy
+}
+
 show_current_strategy() { [ -f "$CONF" ] || return; ver=""; for i in $(seq 1 20); do grep -q "#v$i" "$CONF" && { ver="v$i"; break; }; done; yv_ver=""; for i in $(seq -w 1 50); do grep -q "#Yv$i" "$CONF" && { yv_ver="Yv$i"; break; }; done; }
 RKN_Check(){ if grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONF" >/dev/null 2>&1 && [ "$(wc -c < /opt/zapret/ipset/zapret-hosts-user.txt)" -gt 1800000 ]; then RKN_STATUS="/ РКН"; MENU_TEXT="${GREEN}Выключить обход по спискам${NC} РКН"; else RKN_STATUS=""; MENU_TEXT="${GREEN}Включить обход по спискам${NC} РКН"; fi; }
 discord_str_add() { if ! grep -q "option NFQWS_PORTS_UDP.*19294-19344,50000-50100" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'$/,19294-19344,50000-50100'/" "$CONF"; fi
@@ -143,7 +164,7 @@ install_strategy(){ local version="$1"; local NO_PAUSE="${2:-0}"; local fileGP="
 echo -e "${MAGENTA}Устанавливаем стратегию ${version}${NC}\n${CYAN}Меняем стратегию${NC}"; sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; { echo "  option NFQWS_OPT '"; strategy_"$version"; echo "'"; } >> "$CONF"
 printf '%s\n' "gvt1.com" "googleplay.com" "play.google.com" "beacons.gvt2.com" "play.googleapis.com" "play-fe.googleapis.com" "lh3.googleusercontent.com" "android.clients.google.com" "connectivitycheck.gstatic.com" \
 "play-lh.googleusercontent.com" "play-games.googleusercontent.com" "prod-lt-playstoregatewayadapter-pa.googleapis.com" | grep -Fxv -f "$fileGP" 2>/dev/null >> "$fileGP"; echo -e "${CYAN}Редактируем ${NC}/etc/hosts${NC}"; hosts_add
-echo -e "${CYAN}Добавляем домены в исключения${NC}"; rm -f "$EXCLUDE_FILE"; wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL" || echo -e "\n${RED}Не удалось загрузить exclude файл${NC}\n"; > /opt/zapret/ipset/zapret-hosts-user.txt
+echo -e "${CYAN}Добавляем домены в исключения${NC}"; rm -f "$EXCLUDE_FILE"; wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL" || echo -e "\n${RED}Не удалось загрузить exclude файл${NC}\n"
 discord_str_add; echo -e "${CYAN}Применяем новую стратегию и настройки${NC}"; chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1
 echo -e "${GREEN}Стратегия ${NC}${version}${GREEN} установлена!${NC}"; [ "$NO_PAUSE" != "1" ] && echo && read -p "Нажмите Enter..." dummy; }
 # ==========================================
