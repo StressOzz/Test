@@ -107,7 +107,7 @@ if [ -z "$ANSWER" ]; then { echo "#$CURRENT_NAME"; printf "%b\n" "$CURRENT_BODY"
 
 awk '{
     if(skip) {
-        if($0=="--new" || $0 ~ /'\''/) {
+        if($0=="--new" || $0 ~ /\047/) {
             skip=0
             print
             next
@@ -148,7 +148,7 @@ $0=="--new" && !inserted {
 }
 END {
     if(!inserted && !has_google){
-        print "option NFQWS_OPT '\''
+        print "option NFQWS_OPT \047"
         system("cat '"$SAVED_STR"'")
         print "--new"
     }
@@ -157,8 +157,6 @@ END {
 
 sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
 cat "$FINAL_STR" >> "$CONF"
-
-
 
 
 
