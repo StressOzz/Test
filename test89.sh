@@ -105,22 +105,57 @@ echo -e "\n${CYAN}Применяем стратегию: ${NC}$CURRENT_NAME ($CO
 echo -en "Enter${GREEN} - применить стратегию, ${NC}S/s${GREEN} - остановить, ${NC}N/n${GREEN} - продолжить подбор:${NC} "; read -r ANSWER </dev/tty
 if [ -z "$ANSWER" ]; then { echo "#$CURRENT_NAME"; printf "%b\n" "$CURRENT_BODY"; } > "$SAVED_STR"; echo -e "${CYAN}Применяем стратегию и перезапускаем ${NC}Zapret"
 
-awk '{ 
-    if(skip) { 
-        if($0=="--new" || $0 ~ /'\''/) { skip=0; print; next } 
-        next 
-    } 
-    if($0=="--filter-tcp=443") { 
-        getline next_line; 
-        if(next_line=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt") { 
-            skip=1; next 
-        } else { 
-            print $0; print next_line; next 
-        } 
-    } 
-    if($0~/^[[:space:]]*#Yv/) next; 
-    print 
+awk '{
+    if(skip) {
+        if($0=="--new" || $0 ~ /'\''/) {
+            skip=0
+            print
+            next
+        }
+        next
+    }
+
+    if($0=="--filter-tcp=443") {
+        getline next_line
+        if(next_line=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt") {
+            skip=1
+            next
+        } else {
+            print $0
+            print next_line
+            next
+        }
+    }
+
+    if($0=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt") has_google=1
+    if($0~/^[[:space:]]*#Yv/) next
+
+    print
 }' "$OLD_STR" > "$NEW_STR"
+
+awk '
+BEGIN { inserted=0; has_google=0 }
+
+$0=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt" { has_google=1 }
+
+$0=="--new" && !inserted && has_google {
+    system("cat '"$SAVED_STR"'")
+    inserted=1
+}
+
+{
+    print
+    if(!has_google && !inserted && $0 ~ /^[[:space:]]*option NFQWS_OPT '\''$/){
+        system("cat '"$SAVED_STR"'")
+        print "--new"
+        inserted=1
+    }
+}
+' "$NEW_STR" > "$FINAL_STR"
+
+sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
+cat "$FINAL_STR" >> "$CONF"
+
 
 
 
