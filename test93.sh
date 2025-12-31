@@ -107,7 +107,7 @@ if [ -z "$ANSWER" ]; then { echo "#$CURRENT_NAME"; printf "%b\n" "$CURRENT_BODY"
 
 awk '{
     if(skip) {
-        if($0=="--new" || $0 ~ /'\''/) {
+        if($0=="--new" || $0 ~ /\047/) {
             skip=0
             print
             next
@@ -138,23 +138,26 @@ BEGIN { inserted=0; has_google=0 }
 
 $0=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt" { has_google=1 }
 
-$0=="--new" && !inserted && has_google {
+$0=="--new" && !inserted {
     system("cat '"$SAVED_STR"'")
     inserted=1
 }
 
 {
     print
-    if(!has_google && !inserted && $0 ~ /^[[:space:]]*option NFQWS_OPT '\''$/){
+}
+END {
+    if(!inserted && !has_google){
+        print "option NFQWS_OPT \047"
         system("cat '"$SAVED_STR"'")
         print "--new"
-        inserted=1
     }
 }
 ' "$NEW_STR" > "$FINAL_STR"
 
 sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
 cat "$FINAL_STR" >> "$CONF"
+
 
 
 chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1
