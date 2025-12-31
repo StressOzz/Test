@@ -130,25 +130,25 @@ awk '{
     print
 }' "$OLD_STR" > "$NEW_STR"
 
-# 2. Вставка новой стратегии через -v (без ENVIRON)
-awk -v STRFILE="$SAVED_STR" '
+# 2. Вставка новой стратегии через getline (без system())
+awk '
 BEGIN { inserted=0; has_google=0 }
 
 $0=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt" { has_google=1 }
 
 # Основной сценарий — вставка перед существующей --new
 $0=="--new" && !inserted {
-    system("cat " STRFILE)   # вставка стратегии
-    print "--new"            # сразу после стратегии
+    while((getline line < "'"$SAVED_STR"'") > 0) print line  # вставка стратегии
+    print "--new"
     inserted=1
     next
 }
 
 # Запасной сценарий — если google hostlist нет
 $0 ~ /^[[:space:]]*option NFQWS_OPT \047$/ && !has_google && !inserted {
-    print                    # печатаем option NFQWS_OPT '
-    system("cat " STRFILE)   # вставка стратегии
-    print "--new"            # сразу --new
+    print
+    while((getline line < "'"$SAVED_STR"'") > 0) print line  # вставка стратегии
+    print "--new"
     inserted=1
     next
 }
