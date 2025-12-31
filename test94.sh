@@ -105,6 +105,7 @@ echo -e "\n${CYAN}Применяем стратегию: ${NC}$CURRENT_NAME ($CO
 echo -en "Enter${GREEN} - применить стратегию, ${NC}S/s${GREEN} - остановить, ${NC}N/n${GREEN} - продолжить подбор:${NC} "; read -r ANSWER </dev/tty
 if [ -z "$ANSWER" ]; then { echo "#$CURRENT_NAME"; printf "%b\n" "$CURRENT_BODY"; } > "$SAVED_STR"; echo -e "${CYAN}Применяем стратегию и перезапускаем ${NC}Zapret"
 
+
 awk '{
     if(skip) {
         if($0=="--new" || $0 ~ /\047/) {
@@ -138,25 +139,31 @@ BEGIN { inserted=0; has_google=0 }
 
 $0=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt" { has_google=1 }
 
+# ОСНОВНОЙ СЦЕНАРИЙ — КАК РАНЬШЕ
 $0=="--new" && !inserted {
     system("cat '"$SAVED_STR"'")
     inserted=1
+    print
+    next
+}
+
+# ЗАПАСНОЙ СЦЕНАРИЙ — НЕТ google hostlist
+$0 ~ /^[[:space:]]*option NFQWS_OPT \047$/ && !has_google && !inserted {
+    print
+    system("cat '"$SAVED_STR"'")
+    print "--new"
+    inserted=1
+    next
 }
 
 {
     print
 }
-END {
-    if(!inserted && !has_google){
-        print "option NFQWS_OPT \047"
-        system("cat '"$SAVED_STR"'")
-        print "--new"
-    }
-}
 ' "$NEW_STR" > "$FINAL_STR"
 
 sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
 cat "$FINAL_STR" >> "$CONF"
+
 
 
 
