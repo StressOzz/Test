@@ -160,6 +160,9 @@ $0 ~ /^[[:space:]]*option NFQWS_OPT \047$/ && !has_google && !inserted {
     print
 }
 ' "$NEW_STR" > "$FINAL_STR"
+sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
+cat "$FINAL_STR" >> "$CONF"
+
 
 
 
