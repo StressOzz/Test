@@ -164,6 +164,14 @@ $0 ~ /^[[:space:]]*option NFQWS_OPT \047$/ && !has_google && !inserted {
 sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
 cat "$FINAL_STR" >> "$CONF"
 
+awk -i inplace '{
+    if($0=="--new"){
+        if(prev!="--new") print
+    } else {
+        print
+    }
+    prev=$0
+}' "$CONF"
 
 
 
