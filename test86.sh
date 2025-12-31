@@ -219,9 +219,9 @@ echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${
 2) toggle_web ;; 3) toggle_quic ;; 4) if uci get firewall.@defaults[0].flow_offloading 2>/dev/null | grep -q '^1$' || uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null | grep -q '^1$'; then
 if ! grep -q 'meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc; then echo -e "\n${MAGENTA}Применяем FIX для Flow Offloading${NC}"
 sed -i 's/meta l4proto { tcp, udp } flow offload @ft;/meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;/' /usr/share/firewall4/templates/ruleset.uc; fw4 restart >/dev/null 2>&1
-echo -e "FIX ${GREEN}успешно применён!${NC}\n"; read -p "Нажмите Enter..." dummy; fi; else break; fi ;; 
-5) sh <(wget -O - https://raw.githubusercontent.com/StressOzz/Test/main/Zapret-Manager_v7.6.sh); exit 0 ;;
-6) get_versions; uninstall_zapret "1"; ZAPRET_VERSION="72.20251022"; install_Zapret "1" ; ZAPRET_VERSION="72.20251227" ;;
+echo -e "FIX ${GREEN}успешно применён!${NC}\n"; read -p "Нажмите Enter..." dummy; fi; else break; fi ;;
+5) echo; uninstall_zapret "1"; ZAPRET_VERSION="72.20251022"; install_Zapret "1"; ZAPRET_VERSION="72.20251227" ;;
+6) sh <(wget -O - https://raw.githubusercontent.com/StressOzz/Test/main/Zapret-Manager_v7.6.sh); exit 0 ;;
 *) echo; return ;; esac; done; }
 # ==========================================
 # Главное меню
