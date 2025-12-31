@@ -109,18 +109,17 @@ if [ -z "$ANSWER" ]; then { echo "#$CURRENT_NAME"; printf "%b\n" "$CURRENT_BODY"
 awk '{
     if(skip) {
         if($0=="--new" || $0 ~ /\047/) {
-            skip=0
-            print
-            next
+            skip=0  # снимаем skip
+            next    # НЕ печатаем строку
         }
-        next
+        next        # пропускаем все строки блока
     }
 
     if($0=="--filter-tcp=443") {
         getline next_line
         if(next_line=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt") {
             skip=1
-            next
+            next    # НЕ печатаем --filter и hostlist
         } else {
             print $0
             print next_line
