@@ -106,25 +106,17 @@ echo -en "Enter${GREEN} - применить стратегию, ${NC}S/s${GREEN
 if [ -z "$ANSWER" ]; then { echo "#$CURRENT_NAME"; printf "%b\n" "$CURRENT_BODY"; } > "$SAVED_STR"; echo -e "${CYAN}Применяем стратегию и перезапускаем ${NC}Zapret"
 
 
+# 1. Очистка старого блока (вместе со старой --new)
 awk '{
     if(skip) {
-        if($0=="--new" || $0 ~ /\047/) {
-            skip=0  # снимаем skip
-            next    # НЕ печатаем строку
-        }
-        next        # пропускаем все строки блока
+        if($0=="--new" || $0 ~ /\047/) { skip=0; next }  # не печатаем нижнюю --new
+        next
     }
 
     if($0=="--filter-tcp=443") {
         getline next_line
-        if(next_line=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt") {
-            skip=1
-            next    # НЕ печатаем --filter и hostlist
-        } else {
-            print $0
-            print next_line
-            next
-        }
+        if(next_line=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt") { skip=1; next }
+        else { print $0; print next_line; next }
     }
 
     if($0=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt") has_google=1
@@ -133,43 +125,45 @@ awk '{
     print
 }' "$OLD_STR" > "$NEW_STR"
 
+# 2. Вставка новой стратегии
 awk '
 BEGIN { inserted=0; has_google=0 }
 
 $0=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt" { has_google=1 }
 
-# ОСНОВНОЙ СЦЕНАРИЙ — КАК РАНЬШЕ
+# Основной сценарий — вставка перед существующей --new
 $0=="--new" && !inserted {
-    system("cat '"$SAVED_STR"'")
+    system("cat '"$SAVED_STR"'")   # вставка стратегии
+    print "--new"                  # сразу после стратегии
     inserted=1
-    print
-    next
+    next                           # не делаем лишний print
 }
 
-# ЗАПАСНОЙ СЦЕНАРИЙ — НЕТ google hostlist
+# Запасной сценарий — если google hostlist нет
 $0 ~ /^[[:space:]]*option NFQWS_OPT \047$/ && !has_google && !inserted {
-    print
-    system("cat '"$SAVED_STR"'")
-    print "--new"
+    print                          # печатаем option NFQWS_OPT '
+    system("cat '"$SAVED_STR"'")   # вставка стратегии
+    print "--new"                  # сразу --new
     inserted=1
     next
 }
 
-{
-    print
-}
+{ print }
 ' "$NEW_STR" > "$FINAL_STR"
+
+# 3. Удаляем старый блок option NFQWS_OPT ' из конфига
 sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
+
+# 4. Добавляем новую стратегию
 cat "$FINAL_STR" >> "$CONF"
 
-
-
-
+# 5. Убираем дубликаты подряд идущих --new
 awk '{
     if($0=="--new"){ if(prev!="--new") print } 
     else print
     prev=$0
 }' "$CONF" > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"
+
 
 
 chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1
