@@ -161,17 +161,17 @@ $0 ~ /^[[:space:]]*option NFQWS_OPT \047$/ && !has_google && !inserted {
 }
 ' "$NEW_STR" > "$FINAL_STR"
 
-sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
-cat "$FINAL_STR" >> "$CONF"
 
-awk -i inplace '{
+
+awk '{
     if($0=="--new"){
         if(prev!="--new") print
     } else {
         print
     }
     prev=$0
-}' "$CONF"
+}' "$CONF" | tee "$CONF" >/dev/null
+
 
 
 
