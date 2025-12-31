@@ -44,11 +44,8 @@ else seq 10000 10199 | awk '{print "104.25.158.178 finland"$1".discord.media"}' 
 name=$(case "$line" in *QUIC*) echo "50-quic4all" ;; *stun*) echo "50-stun4all" ;; *"discord media"*) echo "50-discord-media" ;; *"discord subnets"*) echo "50-discord" ;; *) echo "" ;; esac); }
 scrypt_install() { local NO_PAUSE=$1; [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter..." dummy; return; }
 while true; do [ "$NO_PAUSE" != "1" ] && clear && echo -e "${MAGENTA}Меню настройки Discord${NC}";
-for i in $(seq 10000 10199); do
-  if grep -q "104\.25\.158\.178 finland$i\.discord\.media" /etc/hosts; then
-    echo "Запись для finland$i есть в /etc/hosts"
-  fi
-done
+
+grep -q "104\.25\.158\.178" /etc/hosts && echo "Запись с IP 104.25.158.178 есть в /etc/hosts"
 
 [ "$NO_PAUSE" != "1" ] && show_script_50 && [ -n "$name" ] && echo -e "\n${YELLOW}Установлен скрипт:${NC} $name"
 if [ "$NO_PAUSE" = "1" ]; then SELECTED="50-stun4all"; URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-stun4all"; else
