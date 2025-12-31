@@ -106,6 +106,9 @@ echo -en "Enter${GREEN} - применить стратегию, ${NC}S/s${GREEN
 if [ -z "$ANSWER" ]; then { echo "#$CURRENT_NAME"; printf "%b\n" "$CURRENT_BODY"; } > "$SAVED_STR"; echo -e "${CYAN}Применяем стратегию и перезапускаем ${NC}Zapret"
 
 
+# 0. Экспортируем переменную стратегии, чтобы awk мог её использовать через ENVIRON
+export SAVED_STR="$SAVED_STR"
+
 # 1. Очистка старого блока (вместе со старой --new)
 awk '{
     if(skip) {
@@ -125,7 +128,7 @@ awk '{
     print
 }' "$OLD_STR" > "$NEW_STR"
 
-# 2. Вставка новой стратегии
+# 2. Вставка новой стратегии через ENVIRON
 awk '
 BEGIN { inserted=0; has_google=0 }
 
@@ -133,17 +136,17 @@ $0=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt" { has_google=1 }
 
 # Основной сценарий — вставка перед существующей --new
 $0=="--new" && !inserted {
-    system("cat '"$SAVED_STR"'")   # вставка стратегии
-    print "--new"                  # сразу после стратегии
+    system("cat " ENVIRON["SAVED_STR"])   # вставка стратегии
+    print "--new"                          # сразу после стратегии
     inserted=1
-    next                           # не делаем лишний print
+    next
 }
 
 # Запасной сценарий — если google hostlist нет
 $0 ~ /^[[:space:]]*option NFQWS_OPT \047$/ && !has_google && !inserted {
-    print                          # печатаем option NFQWS_OPT '
-    system("cat '"$SAVED_STR"'")   # вставка стратегии
-    print "--new"                  # сразу --new
+    print                                  # печатаем option NFQWS_OPT '
+    system("cat " ENVIRON["SAVED_STR"])   # вставка стратегии
+    print "--new"                          # сразу --new
     inserted=1
     next
 }
@@ -163,6 +166,7 @@ awk '{
     else print
     prev=$0
 }' "$CONF" > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"
+
 
 
 
