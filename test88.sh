@@ -104,8 +104,27 @@ check_access() { curl -s --connect-timeout 4 -m 4 "$TEST_HOST" >/dev/null && ech
 echo -e "\n${CYAN}Применяем стратегию: ${NC}$CURRENT_NAME ($COUNT/$TOTAL)"; apply_strategy "$CURRENT_NAME" "$CURRENT_BODY"; STATUS=$(check_access); if [ "$STATUS" = "ok" ]; then echo -e "${GREEN}Видео на ПК открывается!${NC}\n${YELLOW}Проверьте работу ${NC}YouTube${YELLOW} на других устройствах!${NC}"
 echo -en "Enter${GREEN} - применить стратегию, ${NC}S/s${GREEN} - остановить, ${NC}N/n${GREEN} - продолжить подбор:${NC} "; read -r ANSWER </dev/tty
 if [ -z "$ANSWER" ]; then { echo "#$CURRENT_NAME"; printf "%b\n" "$CURRENT_BODY"; } > "$SAVED_STR"; echo -e "${CYAN}Применяем стратегию и перезапускаем ${NC}Zapret"
-awk '{ if(skip) { if($0=="--new" || $0 ~ /'\''/) { skip=0; print; next } next } if($0=="--filter-tcp=443") { getline next_line; if(next_line=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt") { skip=1; next } else { print $0; print next_line; next } } if($0~/^[[:space:]]*#Yv/) next; print }' "$OLD_STR" > $NEW_STR
-awk 'BEGIN { inserted=0 } /^--new/ && !inserted { system("cat '"$SAVED_STR"'"); inserted=1 } { print }' $NEW_STR > $FINAL_STR; sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; cat $FINAL_STR >> "$CONF"; chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1
+
+awk '{ 
+    if(skip) { 
+        if($0=="--new" || $0 ~ /'\''/) { skip=0; print; next } 
+        next 
+    } 
+    if($0=="--filter-tcp=443") { 
+        getline next_line; 
+        if(next_line=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt") { 
+            skip=1; next 
+        } else { 
+            print $0; print next_line; next 
+        } 
+    } 
+    if($0~/^[[:space:]]*#Yv/) next; 
+    print 
+}' "$OLD_STR" > "$NEW_STR"
+
+
+
+chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1
 echo -e "${GREEN}Стратегия применена!${NC}\n"; read -p "Нажмите Enter..." dummy </dev/tty; return 0; elif [[ "$ANSWER" =~ ^[Ss]$ ]]; then
 sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; cat "$OLD_STR" >> "$CONF"; chmod +x /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1
 echo -e "\n${YELLOW}Подбор остановлен. Предыдущая стратегия восстановлена.${NC}\n"; read -p "Нажмите Enter..." dummy </dev/tty; return 1; fi; else echo -e "${RED}Видео не открывается, продолжаем подбор...${NC}"; fi; fi; CURRENT_NAME="$LINE"; CURRENT_BODY=""; else [ -n "$LINE" ] && CURRENT_BODY="${CURRENT_BODY}${LINE}\n"; fi; done < "$TMP_LIST"
