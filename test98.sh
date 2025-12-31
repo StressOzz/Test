@@ -167,15 +167,10 @@ cat "$FINAL_STR" >> "$CONF"
 
 
 awk '{
-    if($0=="--new"){
-        if(prev!="--new") print
-    } else {
-        print
-    }
+    if($0=="--new"){ if(prev!="--new") print } 
+    else print
     prev=$0
-}' "$CONF" | tee "$CONF" >/dev/null
-
-
+}' "$CONF" > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"
 
 
 chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1
