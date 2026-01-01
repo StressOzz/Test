@@ -12,6 +12,7 @@ TMP_LIST="/opt/zapret_yt_list.txt"; SAVED_STR="/opt/StrYou"; OLD_STR="/opt/StrOL
 BACKUP_FILE="/opt/hosts_temp.txt"; HOSTLIST_FILE="/opt/zapret/ipset/zapret-hosts-user.txt"
 HOSTLIST_MIN_SIZE=1800000; FINAL_STR="/opt/StrFINAL"; NEW_STR="/opt/StrNEW"; HOSTS_USER="/opt/hosts-user.txt"
 EXCLUDE_FILE="/opt/zapret/ipset/zapret-hosts-user-exclude.txt"; fileDoH="/etc/config/https-dns-proxy"
+RKN_URL="https://raw.githubusercontent.com/IndeecFOX/zapret4rocket/refs/heads/master/extra_strats/TCP/RKN/List.txt"
 EXCLUDE_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/zapret-hosts-user-exclude.txt"
 HOSTS_LIST="185.87.51.182 4pda.to www.4pda.to|130.255.77.28 ntc.party|30.255.77.28 ntc.party|173.245.58.219 rutor.info d.rutor.info|185.39.18.98 lib.rus.ec www.lib.rus.ec
 57.144.222.34 instagram.com www.instagram.com|157.240.9.174 instagram.com www.instagram.com|157.240.245.174 instagram.com www.instagram.com|157.240.205.174 instagram.com www.instagram.com"
@@ -133,7 +134,7 @@ echo -e "\n${RED}Рабочая стратегия для YouTube не найд�
 # РКН список ВКЛ / ВЫКЛ
 # ==========================================
 enable_rkn() { echo -e "\n${MAGENTA}Включаем списки РКН${NC}"; [ -f "$HOSTLIST_FILE" ] && cp "$HOSTLIST_FILE" $BACKUP_FILE && cp "$HOSTLIST_FILE" $HOSTS_USER
-curl -fsSL https://raw.githubusercontent.com/IndeecFOX/zapret4rocket/refs/heads/master/extra_strats/TCP/RKN/List.txt -o "$HOSTLIST_FILE" || { echo -e "\n${RED}Не удалось скачать список РКН${NC}\n"; read -p "Нажмите Enter..." dummy; return; }
+curl -fsSL "$RKN_URL" -o "$HOSTLIST_FILE" || { echo -e "\n${RED}Не удалось скачать список РКН${NC}\n"; read -p "Нажмите Enter..." dummy; return; }
 apply_sync; sed -i 's|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt|' "$CONF"; echo -e "${GREEN}Обход по спискам ${NC}РКН${GREEN} включен${NC}\n"; }
 disable_rkn() { echo -e "\n${MAGENTA}Выключаем списки РКН${NC}"; sed -i 's|--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|' "$CONF"
 if [ -s $BACKUP_FILE ]; then cp $BACKUP_FILE "$HOSTLIST_FILE"; else : > "$HOSTLIST_FILE"; fi; rm -f $HOSTS_USER $BACKUP_FILE; apply_sync; echo -e "${GREEN}Обход по спискам ${NC}РКН${GREEN} выключен${NC}\n"; }
