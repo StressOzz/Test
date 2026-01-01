@@ -123,13 +123,117 @@ echo -e "\n${RED}Рабочая стратегия для YouTube не найд�
 # ==========================================
 # РКН список ВКЛ / ВЫКЛ
 # ==========================================
-toggle_rkn_bypass(){ if grep -q -- "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "$CONF" && grep -qE "#v[1-6]" "$CONF"; then echo -e "\n${MAGENTA}Включаем списки ${NC}РКН"
-[ -f /opt/zapret/ipset/zapret-hosts-user.txt ] && cp /opt/zapret/ipset/zapret-hosts-user.txt /opt/hosts_temp.txt && cp /opt/zapret/ipset/zapret-hosts-user.txt /opt/hosts-user.txt; chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1
-sed -i 's|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt|' "$CONF"; curl -fsSL https://raw.githubusercontent.com/IndeecFOX/zapret4rocket/refs/heads/master/extra_strats/TCP/RKN/List.txt -o /opt/zapret/ipset/zapret-hosts-user.txt
-chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1; echo -e "${GREEN}Обход по спискам ${NC}РКН${GREEN} включен${NC}\n"; elif grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONF"; then echo -e "\n${MAGENTA}Выключаем списки ${NC}РКН"
-sed -i 's|--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|' "$CONF"; if [ -s /opt/hosts_temp.txt ]; then cp /opt/hosts_temp.txt /opt/zapret/ipset/zapret-hosts-user.txt; else : > /opt/zapret/ipset/zapret-hosts-user.txt; fi
-chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1; rm -f /opt/hosts-user.txt /opt/hosts_temp.txt; echo -e "${GREEN}Обход по спискам ${NC}РКН${GREEN} выключен${NC}\n"; else echo -e "\n${RED}Установите стратегию v1-v6\n${NC}"; fi; read -p "Нажмите Enter..." dummy; }
-RKN_Check() { if grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONF" >/dev/null 2>&1 && [ "$(wc -c < /opt/zapret/ipset/zapret-hosts-user.txt)" -gt 1800000 ]; then RKN_STATUS="/ РКН"; MENU_TEXT="${GREEN}Выключить обход по спискам${NC} РКН"; else RKN_STATUS=""; MENU_TEXT="${GREEN}Включить обход по спискам${NC} РКН"; fi; }
+toggle_rkn_bypass(){
+
+HOSTLIST_FILE="/opt/zapret/ipset/zapret-hosts-user.txt"
+HOSTLIST_MIN_SIZE=1800000
+
+# ===== РЕЖИМ <HOSTLIST> =====
+if grep -q -- "--filter-tcp=443 <HOSTLIST>" "$CONF"; then
+    echo -e "\n${MAGENTA}Обнаружен режим ${NC}<HOSTLIST>"
+
+    if [ -f "$HOSTLIST_FILE" ] && [ "$(wc -c < "$HOSTLIST_FILE")" -gt "$HOSTLIST_MIN_SIZE" ]; then
+        echo -e "${MAGENTA}Выключаем списки ${NC}РКН"
+
+        : > "$HOSTLIST_FILE"
+
+        chmod +x /opt/zapret/sync_config.sh
+        /opt/zapret/sync_config.sh
+        /etc/init.d/zapret restart >/dev/null 2>&1
+
+        echo -e "${GREEN}Обход по спискам ${NC}РКН${GREEN} выключен${NC}\n"
+    else
+        echo -e "${MAGENTA}Включаем списки ${NC}РКН"
+
+        curl -fsSL https://raw.githubusercontent.com/IndeecFOX/zapret4rocket/refs/heads/master/extra_strats/TCP/RKN/List.txt \
+        -o "$HOSTLIST_FILE"
+
+        chmod +x /opt/zapret/sync_config.sh
+        /opt/zapret/sync_config.sh
+        /etc/init.d/zapret restart >/dev/null 2>&1
+
+        echo -e "${GREEN}Обход по спискам ${NC}РКН${GREEN} включен${NC}\n"
+    fi
+
+    read -p "Нажмите Enter..." dummy
+    return
+fi
+
+# ===== ОБЫЧНЫЙ РЕЖИМ v1–v6 =====
+if grep -q -- "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "$CONF" && grep -qE "#v[1-6]" "$CONF"; then
+    echo -e "\n${MAGENTA}Включаем списки ${NC}РКН"
+
+    [ -f "$HOSTLIST_FILE" ] && \
+    cp "$HOSTLIST_FILE" /opt/hosts_temp.txt && \
+    cp "$HOSTLIST_FILE" /opt/hosts-user.txt
+
+    chmod +x /opt/zapret/sync_config.sh
+    /opt/zapret/sync_config.sh
+    /etc/init.d/zapret restart >/dev/null 2>&1
+
+    sed -i 's|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt|' "$CONF"
+
+    curl -fsSL https://raw.githubusercontent.com/IndeecFOX/zapret4rocket/refs/heads/master/extra_strats/TCP/RKN/List.txt \
+    -o "$HOSTLIST_FILE"
+
+    chmod +x /opt/zapret/sync_config.sh
+    /opt/zapret/sync_config.sh
+    /etc/init.d/zapret restart >/dev/null 2>&1
+
+    echo -e "${GREEN}Обход по спискам ${NC}РКН${GREEN} включен${NC}\n"
+
+elif grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONF"; then
+    echo -e "\n${MAGENTA}Выключаем списки ${NC}РКН"
+
+    sed -i 's|--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|' "$CONF"
+
+    if [ -s /opt/hosts_temp.txt ]; then
+        cp /opt/hosts_temp.txt "$HOSTLIST_FILE"
+    else
+        : > "$HOSTLIST_FILE"
+    fi
+
+    chmod +x /opt/zapret/sync_config.sh
+    /opt/zapret/sync_config.sh
+    /etc/init.d/zapret restart >/dev/null 2>&1
+
+    rm -f /opt/hosts-user.txt /opt/hosts_temp.txt
+
+    echo -e "${GREEN}Обход по спискам ${NC}РКН${GREEN} выключен${NC}\n"
+
+else
+    echo -e "\n${RED}Установите стратегию v1-v6\n${NC}"
+fi
+
+read -p "Нажмите Enter..." dummy
+}
+RKN_Check() {
+    HOSTLIST_FILE="/opt/zapret/ipset/zapret-hosts-user.txt"
+    HOSTLIST_MIN_SIZE=1800000
+
+    if grep -q -- "--filter-tcp=443 <HOSTLIST>" "$CONF" >/dev/null 2>&1; then
+        if [ -f "$HOSTLIST_FILE" ] && [ "$(wc -c < "$HOSTLIST_FILE")" -gt "$HOSTLIST_MIN_SIZE" ]; then
+            RKN_STATUS="/ РКН"
+            MENU_TEXT="${GREEN}Выключить обход по спискам${NC} РКН"
+        else
+            RKN_STATUS=""
+            MENU_TEXT="${GREEN}Включить обход по спискам${NC} РКН"
+        fi
+
+    elif grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONF" >/dev/null 2>&1 \
+    && [ -f "$HOSTLIST_FILE" ] && [ "$(wc -c < "$HOSTLIST_FILE")" -gt "$HOSTLIST_MIN_SIZE" ]; then
+        RKN_STATUS="/ РКН"
+        MENU_TEXT="${GREEN}Выключить обход по спискам${NC} РКН"
+
+    else
+        RKN_STATUS=""
+        MENU_TEXT="${GREEN}Включить обход по спискам${NC} РКН"
+    fi
+}
+
+
+
+
 # ==========================================
 # Меню стратегий
 # ==========================================
