@@ -172,7 +172,7 @@ printf '%s\n' "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/z
 # ==========================================
 menu_str() { [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter..." dummy; return; }; while true; do show_current_strategy; RKN_Check; clear
 echo -e "${MAGENTA}Меню стратегий${NC}\n"; current="$ver$( [ -n "$ver" ] && [ -n "$yv_ver" ] && echo " / " )$yv_ver"; if [ -n "$current" ]; then echo -e "${YELLOW}Используется стратегия:${NC} $current $RKN_STATUS\n"; elif [ -n "$RKN_STATUS" ]; then echo -e "${YELLOW}Используется стратегия:${NC} РКН\n"; fi
-echo -e "${CYAN}1) ${GREEN}Установить стратегию${NC} v6\n${CYAN}2) $MENU_TEXT\n${CYAN}3) ${GREEN}Подобрать стратегию для ${NC}YouTube\n${CYAN}4) ${GREEN}Выбрать версию стратегии для установки (1-5) ${NC}"
+echo -e "${CYAN}1) ${GREEN}Установить стратегию${NC} v6\n${CYAN}2) $MENU_TEXT\n${CYAN}3) ${GREEN}Подобрать стратегию для ${NC}YouTube\n${CYAN}4) ${GREEN}Выбрать версию стратегии для установки ${NC}v1-v5"
 echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read choiceST; case "$choiceST" in 1) install_strategy v6 ;; 2) toggle_rkn_bypass; continue ;; 3) auto_stryou ;; 4) strategy_OLD ;; *) return ;; esac; done }
 strategy_OLD () { echo -ne "\n${YELLOW}Выберите версию стратегии для установки (1-5):${NC} "; read -r choice; if [[ "$choice" =~ ^[1-5]$ ]]; then install_strategy "v$choice"; fi; }
 show_current_strategy() { [ -f "$CONF" ] || return; ver=""; for i in $(seq 1 20); do grep -q "#v$i" "$CONF" && { ver="v$i"; break; }; done; yv_ver=""; for i in $(seq -w 1 50); do grep -q "#Yv$i" "$CONF" && { yv_ver="Yv$i"; break; }; done; }
