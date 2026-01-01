@@ -8,7 +8,7 @@ GREEN="\033[1;32m"; RED="\033[1;31m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"
 MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
 WORKDIR="/tmp/zapret-update"; CONF="/etc/config/zapret"; CUSTOM_DIR="/opt/zapret/init.d/openwrt/custom.d/"
 STR_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ListStrYou"
-TMP_LIST="/tmp/zapret_yt_list.txt"; SAVED_STR="/opt/StrYou"; OLD_STR="/opt/StrOLD"
+TMP_LIST="/opt/zapret_yt_list.txt"; SAVED_STR="/opt/StrYou"; OLD_STR="/opt/StrOLD"
 BACKUP_FILE="/opt/hosts_temp.txt"; HOSTLIST_FILE="/opt/zapret/ipset/zapret-hosts-user.txt"
 HOSTLIST_MIN_SIZE=1800000; FINAL_STR="/opt/StrFINAL"; NEW_STR="/opt/StrNEW"
 EXCLUDE_FILE="/opt/zapret/ipset/zapret-hosts-user-exclude.txt"; fileDoH="/etc/config/https-dns-proxy"
@@ -94,7 +94,7 @@ uninstall_zapret() { local NO_PAUSE=$1; [ "$NO_PAUSE" != "1" ] && echo; echo -e 
 echo -e "${CYAN}Удаляем пакеты${NC}"; opkg --force-removal-of-dependent-packages --autoremove remove zapret luci-app-zapret >/dev/null 2>&1
 echo -e "${CYAN}Удаляем временные файлы${NC}"; rm -rf /opt/zapret /etc/config/zapret /etc/firewall.zapret /etc/init.d/zapret /tmp/*zapret* /var/run/*zapret* /tmp/*.ipk /tmp/*.zip 2>/dev/null
 crontab -l 2>/dev/null | grep -v -i "zapret" | crontab - 2>/dev/null; nft list tables 2>/dev/null | awk '{print $2}' | grep -E '(zapret|ZAPRET)' | while read t; do [ -n "$t" ] && nft delete table "$t" 2>/dev/null; done
-rm -f "$FINAL_STR" "$NEW_STR" "$OLD_STR" "$SAVED_STR" /opt/hosts-user.txt; hosts_clear; echo -e "Zapret ${GREEN}полностью удалён!${NC}\n"; [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter..." dummy; }
+rm -f "$FINAL_STR" "$NEW_STR" "$OLD_STR" "$SAVED_STR" "$TMP_LIST" /opt/hosts-user.txt; hosts_clear; echo -e "Zapret ${GREEN}полностью удалён!${NC}\n"; [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter..." dummy; }
 # ==========================================
 # Подбор стратегии для Ютуб
 # ==========================================
@@ -124,92 +124,62 @@ echo -e "\n${RED}Рабочая стратегия для YouTube не найд�
 # ==========================================
 # РКН список ВКЛ / ВЫКЛ
 # ==========================================
-toggle_rkn_bypass(){
+apply_sync() {
+        chmod +x /opt/zapret/sync_config.sh
+        /opt/zapret/sync_config.sh
+        /etc/init.d/zapret restart >/dev/null 2>&1
+    }
 
-if grep -q -- "--filter-tcp=443 ˂HOSTLIST˃" "$CONF"; then
+    enable_rkn() {
+        echo -e "\n${MAGENTA}Включаем списки РКН${NC}"
+        [ -f "$HOSTLIST_FILE" ] && cp "$HOSTLIST_FILE" /opt/hosts_temp.txt && cp "$HOSTLIST_FILE" /opt/hosts-user.txt
+        curl -fsSL https://raw.githubusercontent.com/IndeecFOX/zapret4rocket/refs/heads/master/extra_strats/TCP/RKN/List.txt -o "$HOSTLIST_FILE"
+        apply_sync
+        sed -i 's|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt|' "$CONF"
+        echo -e "${GREEN}Обход по спискам ${NC}РКН${GREEN} включен${NC}\n"
+    }
 
-
-    if [ -f "$HOSTLIST_FILE" ] && [ "$(wc -c < "$HOSTLIST_FILE")" -gt "$HOSTLIST_MIN_SIZE" ]; then
-        echo -e "${MAGENTA}Выключаем списки РКН"
-
-        if [ -s "$BACKUP_FILE" ]; then
-            cp "$BACKUP_FILE" "$HOSTLIST_FILE"
-            rm -f "$BACKUP_FILE"
+ disable_rkn() {
+        echo -e "\n${MAGENTA}Выключаем списки РКН${NC}"
+        sed -i 's|--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|' "$CONF"
+        if [ -s /opt/hosts_temp.txt ]; then
+            cp /opt/hosts_temp.txt "$HOSTLIST_FILE"
         else
             : > "$HOSTLIST_FILE"
         fi
-
-        chmod +x /opt/zapret/sync_config.sh
-        /opt/zapret/sync_config.sh
-        /etc/init.d/zapret restart >/dev/null 2>&1
-
+        rm -f /opt/hosts-user.txt /opt/hosts_temp.txt
+        apply_sync
         echo -e "${GREEN}Обход по спискам ${NC}РКН${GREEN} выключен${NC}\n"
+    }
+
+
+toggle_rkn_bypass() {
+    
+
+
+
+    if grep -q -- "--filter-tcp=443 ˂HOSTLIST˃" "$CONF"; then
+        if [ -f "$HOSTLIST_FILE" ] && [ "$(wc -c < "$HOSTLIST_FILE")" -gt "$HOSTLIST_MIN_SIZE" ]; then
+            disable_rkn
+        else
+            [ -f "$HOSTLIST_FILE" ] && cp "$HOSTLIST_FILE" "$BACKUP_FILE"
+            enable_rkn
+        fi
+        read -p "Нажмите Enter..." dummy
+        return
+    fi
+
+    if grep -q -- "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "$CONF" && grep -qE "#v[1-6]" "$CONF"; then
+        enable_rkn
+    elif grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONF"; then
+        disable_rkn
     else
-         echo -e "\n${MAGENTA}Включаем списки РКН${NC}"
-
-        [ -f "$HOSTLIST_FILE" ] && cp "$HOSTLIST_FILE" "$BACKUP_FILE"
-
-        curl -fsSL https://raw.githubusercontent.com/IndeecFOX/zapret4rocket/refs/heads/master/extra_strats/TCP/RKN/List.txt \
-        -o "$HOSTLIST_FILE"
-
-        chmod +x /opt/zapret/sync_config.sh
-        /opt/zapret/sync_config.sh
-        /etc/init.d/zapret restart >/dev/null 2>&1
-
-        echo -e "${GREEN}Обход по спискам ${NC}РКН${GREEN} включен${NC}\n"
+        echo -e "\n${RED}Стратегия не подходит для списков РКН\n${NC}"
     fi
 
     read -p "Нажмите Enter..." dummy
-    return
-fi
-
-if grep -q -- "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "$CONF" && grep -qE "#v[1-6]" "$CONF"; then
-    echo -e "\n${MAGENTA}Включаем списки РКН${NC}"
-
-    [ -f "$HOSTLIST_FILE" ] && \
-    cp "$HOSTLIST_FILE" /opt/hosts_temp.txt && \
-    cp "$HOSTLIST_FILE" /opt/hosts-user.txt
-
-    chmod +x /opt/zapret/sync_config.sh
-    /opt/zapret/sync_config.sh
-    /etc/init.d/zapret restart >/dev/null 2>&1
-
-    sed -i 's|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt|' "$CONF"
-
-    curl -fsSL https://raw.githubusercontent.com/IndeecFOX/zapret4rocket/refs/heads/master/extra_strats/TCP/RKN/List.txt \
-    -o "$HOSTLIST_FILE"
-
-    chmod +x /opt/zapret/sync_config.sh
-    /opt/zapret/sync_config.sh
-    /etc/init.d/zapret restart >/dev/null 2>&1
-
-    echo -e "${GREEN}Обход по спискам ${NC}РКН${GREEN} включен${NC}\n"
-
-elif grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONF"; then
-    echo -e "\n${MAGENTA}Выключаем списки ${NC}РКН"
-
-    sed -i 's|--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|' "$CONF"
-
-    if [ -s /opt/hosts_temp.txt ]; then
-        cp /opt/hosts_temp.txt "$HOSTLIST_FILE"
-    else
-        : > "$HOSTLIST_FILE"
-    fi
-
-    chmod +x /opt/zapret/sync_config.sh
-    /opt/zapret/sync_config.sh
-    /etc/init.d/zapret restart >/dev/null 2>&1
-
-    rm -f /opt/hosts-user.txt /opt/hosts_temp.txt
-
-    echo -e "${GREEN}Обход по спискам ${NC}РКН${GREEN} выключен${NC}\n"
-
-else
-    echo -e "\n${RED}Стратегия не подходит для списков РКН\n${NC}"
-fi
-
-read -p "Нажмите Enter..." dummy
 }
+
 RKN_Check() { if (grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONF" >/dev/null 2>&1 || grep -q -- "--filter-tcp=443 ˂HOSTLIST˃" "$CONF" >/dev/null 2>&1) && [ "$(wc -c < /opt/zapret/ipset/zapret-hosts-user.txt)" -gt 1800000 ]; then RKN_STATUS="/ РКН"; MENU_TEXT="${GREEN}Выключить обход по спискам${NC} РКН"; else RKN_STATUS=""; MENU_TEXT="${GREEN}Включить обход по спискам${NC} РКН"; fi; }
 
 # ==========================================
