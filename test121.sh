@@ -124,17 +124,30 @@ echo -e "\n${RED}Рабочая стратегия для YouTube не найд�
 # РКН список ВКЛ / ВЫКЛ
 # ==========================================
 toggle_rkn_bypass() {
-if awk 'NR==1{prev=$0; gsub(/^[ \t]+|[ \t]+$/,"",prev); next} {line=$0; gsub(/^[ \t]+|[ \t]+$/,"",line); if(prev=="--filter-tcp=443" && line=="--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt") found=1; prev=line} END{exit !found}' "$CONF" && grep -q "#v6" "$CONF"; then
+# Проверяем, есть ли последовательность --filter-tcp=443 + --hostlist-exclude... в любом месте файла
+if awk '{gsub(/^[ \t]+|[ \t]+$/,"",$0); lines[NR]=$0}
+        END{
+            for(i=1;i<NR;i++){
+                if(lines[i]=="--filter-tcp=443" && lines[i+1]=="--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt"){
+                    exit 0
+                }
+            }
+            exit 1
+        }' "$CONF" && grep -q "#v6" "$CONF"; then
+
     echo -e "\n${MAGENTA}Включаем списки ${NC}РКН"
     [ -f /opt/zapret/ipset/zapret-hosts-user.txt ] && cp /opt/zapret/ipset/zapret-hosts-user.txt /opt/hosts-user.txt
     chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh
     /etc/init.d/zapret restart >/dev/null 2>&1
-    # меняем только следующую строку после --filter-tcp=443
+
+    # Меняем только следующую строку после всех вхождений --filter-tcp=443 с нужной строкой
     sed -i '/--filter-tcp=443/{n;s|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt|}' "$CONF"
+
     curl -fsSL https://raw.githubusercontent.com/IndeecFOX/zapret4rocket/refs/heads/master/extra_strats/TCP/RKN/List.txt -o /opt/zapret/ipset/zapret-hosts-user.txt
     chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh
     /etc/init.d/zapret restart >/dev/null 2>&1
     echo -e "${GREEN}Обход по спискам ${NC}РКН${GREEN} включен${NC}\n"
+
 elif grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONF"; then
     echo -e "\n${MAGENTA}Выключаем списки ${NC}РКН"
     sed -i '/--filter-tcp=443/{n;s|--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|}' "$CONF"
@@ -142,11 +155,14 @@ elif grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONF"; th
     chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh
     /etc/init.d/zapret restart >/dev/null 2>&1
     echo -e "${GREEN}Обход по спискам ${NC}РКН${GREEN} выключен${NC}\n"
+
 else
     echo -e "\n${RED}Установите стратегию v6\n${NC}"
 fi
+
 read -p "Нажмите Enter..." dummy
 }
+
 
 RKN_Check() { if grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONF" >/dev/null 2>&1 && [ "$(wc -c < /opt/zapret/ipset/zapret-hosts-user.txt)" -gt 1800000 ]; then RKN_STATUS="/ РКН"; MENU_TEXT="${GREEN}Выключить обход по спискам${NC} РКН"; else RKN_STATUS=""; MENU_TEXT="${GREEN}Включить обход по спискам${NC} РКН"; fi; }
 # ==========================================
