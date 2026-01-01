@@ -95,6 +95,103 @@ echo -e "${CYAN}Удаляем временные файлы${NC}"; rm -rf /opt/
 crontab -l 2>/dev/null | grep -v -i "zapret" | crontab - 2>/dev/null; nft list tables 2>/dev/null | awk '{print $2}' | grep -E '(zapret|ZAPRET)' | while read t; do [ -n "$t" ] && nft delete table "$t" 2>/dev/null; done
 rm -f "$FINAL_STR" "$NEW_STR" "$OLD_STR" "$SAVED_STR" /opt/hosts-user.txt; hosts_clear; echo -e "Zapret ${GREEN}полностью удалён!${NC}\n"; [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter..." dummy; }
 # ==========================================
+# Подбор основной стратегии
+# ==========================================
+
+auto_main_strategy() {
+    OLD_STR="/tmp/old_strategy.conf"
+    TMP_LIST="/tmp/liststr.txt"
+    SAVED_STR="/tmp/saved_strategy.conf"
+    NEW_STR="/tmp/new_strategy.tmp"
+    FINAL_STR="/tmp/final_strategy.tmp"
+
+    # сохраняем старую стратегию
+    awk '/^[[:space:]]*option NFQWS_OPT '\''/{flag=1} flag{print}' "$CONF" > "$OLD_STR"
+
+    # скачиваем список
+    curl -fsSL "https://raw.githubusercontent.com/StressOzz/Test/refs/heads/main/ListStr" -o "$TMP_LIST" || {
+        echo -e "\n${RED}Не удалось скачать список${NC}\n"
+        read -p "Нажмите Enter..." dummy </dev/tty
+        return 1
+    }
+
+    TOTAL=$(grep -c '^v[0-9]\+' "$TMP_LIST")
+    echo -e "\n${MAGENTA}Подбираем основную стратегию${NC}"
+    echo -e "${CYAN}Найдено ${NC}$TOTAL${CYAN} стратегий${NC}"
+
+    CURRENT_NAME=""
+    CURRENT_BODY=""
+    COUNT=0
+
+    apply_strategy() {
+        NAME="$1"
+        BODY="$2"
+        # удаляем старую стратегию
+        sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
+        # вставляем новую
+        { echo "  option NFQWS_OPT '"; echo "#AUTO $NAME"; printf "%b\n" "$BODY"; echo "'"; } >> "$CONF"
+        chmod +x /opt/zapret/sync_config.sh
+        /opt/zapret/sync_config.sh
+        /etc/init.d/zapret restart >/dev/null 2>&1
+    }
+
+    while IFS= read -r LINE || [ -n "$LINE" ]; do
+        if echo "$LINE" | grep -q '^v[0-9]\+'; then
+            if [ -n "$CURRENT_NAME" ]; then
+                COUNT=$((COUNT + 1))
+                echo -e "\n${CYAN}Применяем стратегию: ${NC}$CURRENT_NAME ($COUNT/$TOTAL)"
+                apply_strategy "$CURRENT_NAME" "$CURRENT_BODY"
+
+                echo -en "Enter${GREEN} - оставить стратегию, ${NC}N/n${GREEN} - продолжить подбор:${NC} "
+                read -r ANSWER </dev/tty
+                if [ -z "$ANSWER" ]; then
+                    echo -e "${GREEN}Стратегия оставлена!${NC}\n"
+                    read -p "Нажмите Enter..." dummy </dev/tty
+                    return 0
+                else
+                    echo -e "${YELLOW}Продолжаем подбор...${NC}"
+                fi
+            fi
+            CURRENT_NAME="$LINE"
+            CURRENT_BODY=""
+        else
+            [ -n "$LINE" ] && CURRENT_BODY="${CURRENT_BODY}${LINE}\n"
+        fi
+    done < "$TMP_LIST"
+
+    # проверка последней стратегии
+    if [ -n "$CURRENT_NAME" ]; then
+        COUNT=$((COUNT + 1))
+        echo -e "\n${CYAN}Применяем стратегию: ${NC}$CURRENT_NAME ($COUNT/$TOTAL)"
+        apply_strategy "$CURRENT_NAME" "$CURRENT_BODY"
+
+        echo -en "Enter${GREEN} - оставить стратегию, ${NC}N/n${GREEN} - продолжить подбор:${NC} "
+        read -r ANSWER </dev/tty
+        if [ -z "$ANSWER" ]; then
+            echo -e "${GREEN}Стратегия оставлена!${NC}\n"
+            read -p "Нажмите Enter..." dummy </dev/tty
+            return 0
+        else
+            echo -e "${RED}Рабочая стратегия не выбрана.${NC}\n"
+        fi
+    fi
+
+    # если ничего не подошло — восстанавливаем старую стратегию
+    sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
+    cat "$OLD_STR" >> "$CONF"
+    chmod +x /opt/zapret/sync_config.sh
+    /etc/init.d/zapret restart >/dev/null 2>&1
+    echo -e "\n${RED}Рабочая стратегия не найдена, старая восстановлена!${NC}\n"
+    read -p "Нажмите Enter..." dummy </dev/tty
+    return 1
+}
+
+
+
+
+
+
+# ==========================================
 # Подбор стратегии для Ютуб
 # ==========================================
 auto_stryou() { awk '/^[[:space:]]*option NFQWS_OPT '\''/{flag=1} flag{print}' "$CONF" > "$OLD_STR"; curl -fsSL "$STR_URL" -o "$TMP_LIST" || { echo -e "\n${RED}Не удалось скачать список${NC}\n"; read -p "Нажмите Enter..." dummy </dev/tty; return 1; }
@@ -135,7 +232,7 @@ chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zap
 echo -e "\n${RED}Установите стратегию v6\n${NC}"; fi; read -p "Нажмите Enter..." dummy; }
 RKN_Check() { if grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONF" >/dev/null 2>&1 && [ "$(wc -c < /opt/zapret/ipset/zapret-hosts-user.txt)" -gt 1800000 ]; then RKN_STATUS="/ РКН"; MENU_TEXT="${GREEN}Выключить обход по спискам${NC} РКН"; else RKN_STATUS=""; MENU_TEXT="${GREEN}Включить обход по спискам${NC} РКН"; fi; }
 # ==========================================
-# Выбор стратегий
+# Меню стратегий
 # ==========================================
 strategy_v6() { printf '%s\n' "#v6" "#Yv03" "--filter-tcp=443" "--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt" "--dpi-desync=fake,multisplit" "--dpi-desync-split-pos=2,sld" "--dpi-desync-fake-tls=0x0F0F0F0F" "--dpi-desync-fake-tls=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin"
 printf '%s\n' "--dpi-desync-fake-tls-mod=rnd,dupsid,sni=ggpht.com" "--dpi-desync-split-seqovl=620" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin" "--dpi-desync-fooling=badsum,badseq"
@@ -148,8 +245,8 @@ printf "%s\n" "--new" "--filter-udp=19294-19344,50000-50100" "--filter-l7=discor
 "--dpi-desync=multisplit" "--dpi-desync-split-seqovl=652" "--dpi-desync-split-pos=2" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin" "'" >> "$CONF"; fi; }
 menu_str() { [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter..." dummy; return; }; while true; do clear
 RKN_Check; echo -e "${MAGENTA}Меню стратегий${NC}\n"; show_current_strategy; current="$ver$( [ -n "$ver" ] && [ -n "$yv_ver" ] && echo " / " )$yv_ver"; [ -n "$current" ] && echo -e "${YELLOW}Используется стратегия:${NC} $current $RKN_STATUS\n"
-echo -e "${CYAN}1) ${GREEN}Установить стратегию${NC} v6\n${CYAN}2) $MENU_TEXT\n${CYAN}3) ${GREEN}Подобрать стратегию для ${NC}YouTube"
-echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read choiceST; case "$choiceST" in 1) install_strategy v6 ;; 2) toggle_rkn_bypass; continue ;; 3) auto_stryou ;; *) return ;; esac; done }
+echo -e "${CYAN}1) ${GREEN}Установить стратегию${NC} v6\n${CYAN}2) $MENU_TEXT\n${CYAN}3) ${GREEN}Подобрать стратегию для ${NC}YouTube\n${CYAN}4) ${GREEN}Подобрать основную стратегию${NC}"
+echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read choiceST; case "$choiceST" in 1) install_strategy v6 ;; 2) toggle_rkn_bypass; continue ;; 3) auto_stryou ;; 4) auto_main_strategy ;;*) return ;; esac; done }
 install_strategy() { local version="$1"; local NO_PAUSE="${2:-0}"; local fileGP="/opt/zapret/ipset/zapret-hosts-google.txt"; [ "$NO_PAUSE" != "1" ] && echo
 echo -e "${MAGENTA}Устанавливаем стратегию ${version}${NC}\n${CYAN}Меняем стратегию${NC}"; sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; { echo "  option NFQWS_OPT '"; strategy_"$version"; echo "'"; } >> "$CONF"
 printf '%s\n' "gvt1.com" "googleplay.com" "play.google.com" "beacons.gvt2.com" "play.googleapis.com" "play-fe.googleapis.com" "lh3.googleusercontent.com" "android.clients.google.com" "connectivitycheck.gstatic.com" \
