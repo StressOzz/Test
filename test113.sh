@@ -8,7 +8,8 @@ GREEN="\033[1;32m"; RED="\033[1;31m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"
 MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
 WORKDIR="/tmp/zapret-update"; CONF="/etc/config/zapret"; CUSTOM_DIR="/opt/zapret/init.d/openwrt/custom.d/"
 STR_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ListStrYou"
-TMP_LIST="/tmp/zapret_yt_list.txt"; SAVED_STR="/opt/StrYou"; OLD_STR="/opt/StrOLD"
+STR_URL_MAIN=https://raw.githubusercontent.com/StressOzz/Test/refs/heads/main/ListStr
+TMP_LIST="/tmp/zapret_str_list.txt"; SAVED_STR="/opt/Str"; OLD_STR="/opt/StrOLD"
 FINAL_STR="/opt/StrFINAL"; NEW_STR="/opt/StrNEW"
 EXCLUDE_FILE="/opt/zapret/ipset/zapret-hosts-user-exclude.txt"; fileDoH="/etc/config/https-dns-proxy"
 EXCLUDE_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/zapret-hosts-user-exclude.txt"
@@ -99,17 +100,13 @@ rm -f "$FINAL_STR" "$NEW_STR" "$OLD_STR" "$SAVED_STR" /opt/hosts-user.txt; hosts
 # ==========================================
 
 auto_main_strategy() {
-    OLD_STR="/tmp/old_strategy.conf"
-    TMP_LIST="/tmp/liststr.txt"
-    SAVED_STR="/tmp/saved_strategy.conf"
-    NEW_STR="/tmp/new_strategy.tmp"
-    FINAL_STR="/tmp/final_strategy.tmp"
+
 
     # сохраняем старую стратегию
     awk '/^[[:space:]]*option NFQWS_OPT '\''/{flag=1} flag{print}' "$CONF" > "$OLD_STR"
 
     # скачиваем список
-    curl -fsSL "https://raw.githubusercontent.com/StressOzz/Test/refs/heads/main/ListStr" -o "$TMP_LIST" || {
+    curl -fsSL "$STR_URL_MAIN" -o "$TMP_LIST" || {
         echo -e "\n${RED}Не удалось скачать список${NC}\n"
         read -p "Нажмите Enter..." dummy </dev/tty
         return 1
@@ -123,7 +120,7 @@ auto_main_strategy() {
     CURRENT_BODY=""
     COUNT=0
 
-    apply_strategy() {
+ apply_strategy() {
         NAME="$1"
         BODY="$2"
         # удаляем старую стратегию
@@ -142,12 +139,20 @@ auto_main_strategy() {
                 echo -e "\n${CYAN}Применяем стратегию: ${NC}$CURRENT_NAME ($COUNT/$TOTAL)"
                 apply_strategy "$CURRENT_NAME" "$CURRENT_BODY"
 
-                echo -en "Enter${GREEN} - оставить стратегию, ${NC}N/n${GREEN} - продолжить подбор:${NC} "
+                echo -en "Enter${GREEN} - применить стратегию, ${NC}S/s${GREEN} - остановить, ${NC}N/n${GREEN} - продолжить подбор:${NC} "
                 read -r ANSWER </dev/tty
                 if [ -z "$ANSWER" ]; then
-                    echo -e "${GREEN}Стратегия оставлена!${NC}\n"
+                    echo -e "${GREEN}Стратегия применена и сохранена!${NC}\n"
                     read -p "Нажмите Enter..." dummy </dev/tty
                     return 0
+                elif [[ "$ANSWER" =~ ^[Ss]$ ]]; then
+                    sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
+                    cat "$OLD_STR" >> "$CONF"
+                    chmod +x /opt/zapret/sync_config.sh
+                    /etc/init.d/zapret restart >/dev/null 2>&1
+                    echo -e "\n${YELLOW}Подбор остановлен. Предыдущая стратегия восстановлена.${NC}\n"
+                    read -p "Нажмите Enter..." dummy </dev/tty
+                    return 1
                 else
                     echo -e "${YELLOW}Продолжаем подбор...${NC}"
                 fi
@@ -165,14 +170,22 @@ auto_main_strategy() {
         echo -e "\n${CYAN}Применяем стратегию: ${NC}$CURRENT_NAME ($COUNT/$TOTAL)"
         apply_strategy "$CURRENT_NAME" "$CURRENT_BODY"
 
-        echo -en "Enter${GREEN} - оставить стратегию, ${NC}N/n${GREEN} - продолжить подбор:${NC} "
+        echo -en "Enter${GREEN} - применить стратегию, ${NC}S/s${GREEN} - остановить, ${NC}N/n${GREEN} - продолжить подбор:${NC} "
         read -r ANSWER </dev/tty
         if [ -z "$ANSWER" ]; then
-            echo -e "${GREEN}Стратегия оставлена!${NC}\n"
+            echo -e "${GREEN}Стратегия применена и сохранена!${NC}\n"
             read -p "Нажмите Enter..." dummy </dev/tty
             return 0
+        elif [[ "$ANSWER" =~ ^[Ss]$ ]]; then
+            sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
+            cat "$OLD_STR" >> "$CONF"
+            chmod +x /opt/zapret/sync_config.sh
+            /etc/init.d/zapret restart >/dev/null 2>&1
+            echo -e "\n${YELLOW}Подбор остановлен. Предыдущая стратегия восстановлена.${NC}\n"
+            read -p "Нажмите Enter..." dummy </dev/tty
+            return 1
         else
-            echo -e "${RED}Рабочая стратегия не выбрана.${NC}\n"
+            echo -e "${RED}Рабочая стратегия не выбрана, подбор завершен.${NC}\n"
         fi
     fi
 
@@ -185,11 +198,6 @@ auto_main_strategy() {
     read -p "Нажмите Enter..." dummy </dev/tty
     return 1
 }
-
-
-
-
-
 
 # ==========================================
 # Подбор стратегии для Ютуб
