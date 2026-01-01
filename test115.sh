@@ -8,8 +8,7 @@ GREEN="\033[1;32m"; RED="\033[1;31m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"
 MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
 WORKDIR="/tmp/zapret-update"; CONF="/etc/config/zapret"; CUSTOM_DIR="/opt/zapret/init.d/openwrt/custom.d/"
 STR_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ListStrYou"
-STR_URL_MAIN=https://raw.githubusercontent.com/StressOzz/Test/refs/heads/main/ListStr
-TMP_LIST="/tmp/zapret_str_list.txt"; SAVED_STR="/opt/Str"; OLD_STR="/opt/StrOLD"
+TMP_LIST="/tmp/zapret_yt_list.txt"; SAVED_STR="/opt/StrYou"; OLD_STR="/opt/StrOLD"
 FINAL_STR="/opt/StrFINAL"; NEW_STR="/opt/StrNEW"
 EXCLUDE_FILE="/opt/zapret/ipset/zapret-hosts-user-exclude.txt"; fileDoH="/etc/config/https-dns-proxy"
 EXCLUDE_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/zapret-hosts-user-exclude.txt"
@@ -96,111 +95,6 @@ echo -e "${CYAN}Удаляем временные файлы${NC}"; rm -rf /opt/
 crontab -l 2>/dev/null | grep -v -i "zapret" | crontab - 2>/dev/null; nft list tables 2>/dev/null | awk '{print $2}' | grep -E '(zapret|ZAPRET)' | while read t; do [ -n "$t" ] && nft delete table "$t" 2>/dev/null; done
 rm -f "$FINAL_STR" "$NEW_STR" "$OLD_STR" "$SAVED_STR" /opt/hosts-user.txt; hosts_clear; echo -e "Zapret ${GREEN}полностью удалён!${NC}\n"; [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter..." dummy; }
 # ==========================================
-# Подбор основной стратегии
-# ==========================================
-
-auto_main_strategy() {
-
-
-    # сохраняем старую стратегию
-    awk '/^[[:space:]]*option NFQWS_OPT '\''/{flag=1} flag{print}' "$CONF" > "$OLD_STR"
-
-    # скачиваем список
-    curl -fsSL "$STR_URL_MAIN" -o "$TMP_LIST" || {
-        echo -e "\n${RED}Не удалось скачать список${NC}\n"
-        read -p "Нажмите Enter..." dummy </dev/tty
-        return 1
-    }
-
-    TOTAL=$(grep -c '^v[0-9]\+' "$TMP_LIST")
-    echo -e "\n${MAGENTA}Подбираем основную стратегию${NC}"
-    echo -e "${CYAN}Найдено ${NC}$TOTAL${CYAN} стратегий${NC}"
-
-    CURRENT_NAME=""
-    CURRENT_BODY=""
-    COUNT=0
-
- apply_strategy() {
-        NAME="$1"
-        BODY="$2"
-        # удаляем старую стратегию
-        sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
-        # вставляем новую
-        { echo "  option NFQWS_OPT '"; echo "#$NAME"; printf "%b\n" "$BODY"; echo "'"; } >> "$CONF"
-        chmod +x /opt/zapret/sync_config.sh
-        /opt/zapret/sync_config.sh
-        /etc/init.d/zapret restart >/dev/null 2>&1
-    }
-
-    while IFS= read -r LINE || [ -n "$LINE" ]; do
-        if echo "$LINE" | grep -q '^v[0-9]\+'; then
-            if [ -n "$CURRENT_NAME" ]; then
-                COUNT=$((COUNT + 1))
-                echo -e "\n${CYAN}Применяем стратегию: ${NC}$CURRENT_NAME ($COUNT/$TOTAL)"
-                apply_strategy "$CURRENT_NAME" "$CURRENT_BODY"
-
-                echo -en "Enter${GREEN} - применить стратегию, ${NC}S/s${GREEN} - остановить, ${NC}N/n${GREEN} - продолжить подбор:${NC} "
-                read -r ANSWER </dev/tty
-                if [ -z "$ANSWER" ]; then
-                    echo -e "${GREEN}Стратегия применена и сохранена!${NC}\n"
-                    read -p "Нажмите Enter..." dummy </dev/tty
-                    return 0
-                elif [[ "$ANSWER" =~ ^[Ss]$ ]]; then
-                    sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
-                    cat "$OLD_STR" >> "$CONF"
-                    chmod +x /opt/zapret/sync_config.sh
-                    /etc/init.d/zapret restart >/dev/null 2>&1
-                    echo -e "\n${YELLOW}Подбор остановлен. Предыдущая стратегия восстановлена.${NC}\n"
-                    read -p "Нажмите Enter..." dummy </dev/tty
-                    return 1
-                else
-                    echo -e "${YELLOW}Продолжаем подбор...${NC}"
-                fi
-            fi
-            CURRENT_NAME="$LINE"
-            CURRENT_BODY=""
-        else
-            [ -n "$LINE" ] && CURRENT_BODY="${CURRENT_BODY}${LINE}\n"
-        fi
-    done < "$TMP_LIST"
-
-    # проверка последней стратегии
-    if [ -n "$CURRENT_NAME" ]; then
-        COUNT=$((COUNT + 1))
-        echo -e "\n${CYAN}Применяем стратегию: ${NC}$CURRENT_NAME ($COUNT/$TOTAL)"
-        apply_strategy "$CURRENT_NAME" "$CURRENT_BODY"
-
-        echo -en "Enter${GREEN} - применить стратегию, ${NC}S/s${GREEN} - остановить, ${NC}N/n${GREEN} - продолжить подбор:${NC} "
-        read -r ANSWER </dev/tty
-        if [ -z "$ANSWER" ]; then
-            echo -e "${GREEN}Стратегия применена и сохранена!${NC}\n"
-            read -p "Нажмите Enter..." dummy </dev/tty
-            return 0
-        elif [[ "$ANSWER" =~ ^[Ss]$ ]]; then
-            sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
-            cat "$OLD_STR" >> "$CONF"
-            chmod +x /opt/zapret/sync_config.sh
-            /etc/init.d/zapret restart >/dev/null 2>&1
-            echo -e "\n${YELLOW}Подбор остановлен. Предыдущая стратегия восстановлена.${NC}\n"
-            read -p "Нажмите Enter..." dummy </dev/tty
-            return 1
-        else
-        
-            echo -e "${RED}Рабочая стратегия не выбрана, подбор завершен.${NC}\n"
-        fi
-    fi
-
-    # если ничего не подошло — восстанавливаем старую стратегию
-    sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
-    cat "$OLD_STR" >> "$CONF"
-    chmod +x /opt/zapret/sync_config.sh
-    /etc/init.d/zapret restart >/dev/null 2>&1
-    echo -e "\n${RED}Стратегия не найдена!${NC}\n"
-    read -p "Нажмите Enter..." dummy </dev/tty
-    return 1
-}
-
-# ==========================================
 # Подбор стратегии для Ютуб
 # ==========================================
 auto_stryou() { awk '/^[[:space:]]*option NFQWS_OPT '\''/{flag=1} flag{print}' "$CONF" > "$OLD_STR"; curl -fsSL "$STR_URL" -o "$TMP_LIST" || { echo -e "\n${RED}Не удалось скачать список${NC}\n"; read -p "Нажмите Enter..." dummy </dev/tty; return 1; }
@@ -254,8 +148,8 @@ printf "%s\n" "--new" "--filter-udp=19294-19344,50000-50100" "--filter-l7=discor
 "--dpi-desync=multisplit" "--dpi-desync-split-seqovl=652" "--dpi-desync-split-pos=2" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin" "'" >> "$CONF"; fi; }
 menu_str() { [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter..." dummy; return; }; while true; do clear
 RKN_Check; echo -e "${MAGENTA}Меню стратегий${NC}\n"; show_current_strategy; current="$ver$( [ -n "$ver" ] && [ -n "$yv_ver" ] && echo " / " )$yv_ver"; [ -n "$current" ] && echo -e "${YELLOW}Используется стратегия:${NC} $current $RKN_STATUS\n"
-echo -e "${CYAN}1) ${GREEN}Установить стратегию${NC} v6\n${CYAN}2) $MENU_TEXT\n${CYAN}3) ${GREEN}Подобрать стратегию для ${NC}YouTube\n${CYAN}4) ${GREEN}Подобрать основную стратегию${NC}"
-echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read choiceST; case "$choiceST" in 1) install_strategy v6 ;; 2) toggle_rkn_bypass; continue ;; 3) auto_stryou ;; 4) auto_main_strategy ;;*) return ;; esac; done }
+echo -e "${CYAN}1) ${GREEN}Установить стратегию${NC} v6\n${CYAN}2) $MENU_TEXT\n${CYAN}3) ${GREEN}Подобрать стратегию для ${NC}YouTube"
+echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read choiceST; case "$choiceST" in 1) install_strategy v6 ;; 2) toggle_rkn_bypass; continue ;; 3) auto_stryou ;; *) return ;; esac; done }
 install_strategy() { local version="$1"; local NO_PAUSE="${2:-0}"; local fileGP="/opt/zapret/ipset/zapret-hosts-google.txt"; [ "$NO_PAUSE" != "1" ] && echo
 echo -e "${MAGENTA}Устанавливаем стратегию ${version}${NC}\n${CYAN}Меняем стратегию${NC}"; sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; { echo "  option NFQWS_OPT '"; strategy_"$version"; echo "'"; } >> "$CONF"
 printf '%s\n' "gvt1.com" "googleplay.com" "play.google.com" "beacons.gvt2.com" "play.googleapis.com" "play-fe.googleapis.com" "lh3.googleusercontent.com" "android.clients.google.com" "connectivitycheck.gstatic.com" \
@@ -317,14 +211,13 @@ sys_menu() { while true; do web_is_enabled && WEB_TEXT="Удалить дост�
 quic_is_blocked && QUIC_TEXT="${GREEN}Отключить блокировку${NC} QUIC ${GREEN}(80,443)${NC}" || QUIC_TEXT="${GREEN}Включить блокировку${NC} QUIC ${GREEN}(80,443)${NC}"
 clear; echo -e "${MAGENTA}Системное меню${NC}\n"; printed=0; if web_is_enabled; then echo -e "${YELLOW}Доступ из браузера:${NC} http://192.168.1.1:7681"; printed=1; fi
 if quic_is_blocked; then echo -e "${YELLOW}Блокировка QUIC:${NC}    ${GREEN}включена${NC}"; printed=1; fi
-[ "$printed" -eq 1 ] && echo; echo -e "${CYAN}1) ${GREEN}Системная информация${NC}\n${CYAN}2) ${GREEN}$WEB_TEXT${NC}\n${CYAN}3) ${GREEN}$QUIC_TEXT${NC}\n${CYAN}4) ${GREEN}Уставновить ${NC}Zapret v72.20251022"
+[ "$printed" -eq 1 ] && echo; echo -e "${CYAN}1) ${GREEN}Системная информация${NC}\n${CYAN}2) ${GREEN}$WEB_TEXT${NC}\n${CYAN}3) ${GREEN}$QUIC_TEXT${NC}"
 if uci get firewall.@defaults[0].flow_offloading 2>/dev/null | grep -q '^1$' || uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null | grep -q '^1$'
 then if ! grep -q 'meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc; then
 echo -e "${CYAN}0) ${GREEN}Применить ${NC}FIX${GREEN} для работы ${NC}Zapret${GREEN} с включённым ${NC}Flow Offloading${NC}"; fi; fi
 echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read -r choiceMN; case "$choiceMN" in
 1) wget -q -U "Mozilla/5.0" -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/sys_info.sh | sh; echo; read -p "Нажмите Enter..." dummy ;;
-2) toggle_web ;; 3) toggle_quic ;; 4) echo; uninstall_zapret "1"; ZAPRET_VERSION="72.20251022"; install_Zapret "1"; ZAPRET_VERSION="72.20251227"; echo; read -p "Нажмите Enter..." dummy ;;
-0) if uci get firewall.@defaults[0].flow_offloading 2>/dev/null | grep -q '^1$' || uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null | grep -q '^1$'; then
+2) toggle_web ;; 3) toggle_quic ;; 0) if uci get firewall.@defaults[0].flow_offloading 2>/dev/null | grep -q '^1$' || uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null | grep -q '^1$'; then
 if ! grep -q 'meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc; then echo -e "\n${MAGENTA}Применяем FIX для Flow Offloading${NC}"
 sed -i 's/meta l4proto { tcp, udp } flow offload @ft;/meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;/' /usr/share/firewall4/templates/ruleset.uc; fw4 restart >/dev/null 2>&1
 echo -e "FIX ${GREEN}успешно применён!${NC}\n"; read -p "Нажмите Enter..." dummy; fi; else break; fi ;; *) echo; return ;; esac; done; }
