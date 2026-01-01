@@ -124,11 +124,12 @@ echo -e "\n${RED}Рабочая стратегия для YouTube не найд�
 # РКН список ВКЛ / ВЫКЛ
 # ==========================================
 toggle_rkn_bypass() {
-if awk 'NR==1{prev=$0; next} prev=="--filter-tcp=443" && $0=="--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt"{found=1} {prev=$0} END{exit !found}' "$CONF" && grep -q "#v6" "$CONF"; then
+if awk 'NR==1{prev=$0; gsub(/^[ \t]+|[ \t]+$/,"",prev); next} {line=$0; gsub(/^[ \t]+|[ \t]+$/,"",line); if(prev=="--filter-tcp=443" && line=="--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt") found=1; prev=line} END{exit !found}' "$CONF" && grep -q "#v6" "$CONF"; then
     echo -e "\n${MAGENTA}Включаем списки ${NC}РКН"
     [ -f /opt/zapret/ipset/zapret-hosts-user.txt ] && cp /opt/zapret/ipset/zapret-hosts-user.txt /opt/hosts-user.txt
     chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh
     /etc/init.d/zapret restart >/dev/null 2>&1
+    # меняем только следующую строку после --filter-tcp=443
     sed -i '/--filter-tcp=443/{n;s|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt|}' "$CONF"
     curl -fsSL https://raw.githubusercontent.com/IndeecFOX/zapret4rocket/refs/heads/master/extra_strats/TCP/RKN/List.txt -o /opt/zapret/ipset/zapret-hosts-user.txt
     chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh
@@ -142,7 +143,7 @@ elif grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONF"; th
     /etc/init.d/zapret restart >/dev/null 2>&1
     echo -e "${GREEN}Обход по спискам ${NC}РКН${GREEN} выключен${NC}\n"
 else
-    echo -e "\n${RED}Установите стратегию v1-v6\n${NC}"
+    echo -e "\n${RED}Установите стратегию v6\n${NC}"
 fi
 read -p "Нажмите Enter..." dummy
 }
