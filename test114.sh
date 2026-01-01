@@ -126,7 +126,7 @@ auto_main_strategy() {
         # удаляем старую стратегию
         sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
         # вставляем новую
-        { echo "  option NFQWS_OPT '"; echo "#AUTO $NAME"; printf "%b\n" "$BODY"; echo "'"; } >> "$CONF"
+        { echo "  option NFQWS_OPT '"; echo "#$NAME"; printf "%b\n" "$BODY"; echo "'"; } >> "$CONF"
         chmod +x /opt/zapret/sync_config.sh
         /opt/zapret/sync_config.sh
         /etc/init.d/zapret restart >/dev/null 2>&1
@@ -185,6 +185,7 @@ auto_main_strategy() {
             read -p "Нажмите Enter..." dummy </dev/tty
             return 1
         else
+        
             echo -e "${RED}Рабочая стратегия не выбрана, подбор завершен.${NC}\n"
         fi
     fi
@@ -194,7 +195,7 @@ auto_main_strategy() {
     cat "$OLD_STR" >> "$CONF"
     chmod +x /opt/zapret/sync_config.sh
     /etc/init.d/zapret restart >/dev/null 2>&1
-    echo -e "\n${RED}Рабочая стратегия не найдена, старая восстановлена!${NC}\n"
+    echo -e "\n${RED}Стратегия не найдена!${NC}\n"
     read -p "Нажмите Enter..." dummy </dev/tty
     return 1
 }
