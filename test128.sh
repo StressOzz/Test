@@ -132,10 +132,19 @@ HOSTLIST_MIN_SIZE=1800000
 if grep -q -- "--filter-tcp=443 ˂HOSTLIST˃" "$CONF"; then
     echo -e "\n${MAGENTA}Обнаружен режим ${NC}<HOSTLIST>"
 
+    BACKUP_FILE="/opt/hosts_temp.txt"
+    HOSTLIST_FILE="/opt/zapret/ipset/zapret-hosts-user.txt"
+    HOSTLIST_MIN_SIZE=1800000
+
     if [ -f "$HOSTLIST_FILE" ] && [ "$(wc -c < "$HOSTLIST_FILE")" -gt "$HOSTLIST_MIN_SIZE" ]; then
         echo -e "${MAGENTA}Выключаем списки ${NC}РКН"
 
-        : > "$HOSTLIST_FILE"
+        if [ -s "$BACKUP_FILE" ]; then
+            cp "$BACKUP_FILE" "$HOSTLIST_FILE"
+            rm -f "$BACKUP_FILE"
+        else
+            : > "$HOSTLIST_FILE"
+        fi
 
         chmod +x /opt/zapret/sync_config.sh
         /opt/zapret/sync_config.sh
@@ -144,6 +153,9 @@ if grep -q -- "--filter-tcp=443 ˂HOSTLIST˃" "$CONF"; then
         echo -e "${GREEN}Обход по спискам ${NC}РКН${GREEN} выключен${NC}\n"
     else
         echo -e "${MAGENTA}Включаем списки ${NC}РКН"
+
+        # сохраняем текущий список, если есть
+        [ -f "$HOSTLIST_FILE" ] && cp "$HOSTLIST_FILE" "$BACKUP_FILE"
 
         curl -fsSL https://raw.githubusercontent.com/IndeecFOX/zapret4rocket/refs/heads/master/extra_strats/TCP/RKN/List.txt \
         -o "$HOSTLIST_FILE"
@@ -158,6 +170,7 @@ if grep -q -- "--filter-tcp=443 ˂HOSTLIST˃" "$CONF"; then
     read -p "Нажмите Enter..." dummy
     return
 fi
+
 
 # ===== ОБЫЧНЫЙ РЕЖИМ v1–v6 =====
 if grep -q -- "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "$CONF" && grep -qE "#v[1-6]" "$CONF"; then
