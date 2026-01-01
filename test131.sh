@@ -220,32 +220,7 @@ fi
 
 read -p "Нажмите Enter..." dummy
 }
-RKN_Check() {
-    HOSTLIST_FILE="/opt/zapret/ipset/zapret-hosts-user.txt"
-    HOSTLIST_MIN_SIZE=1800000
-
-    if grep -q -- "--filter-tcp=443 ˂HOSTLIST˃" "$CONF" >/dev/null 2>&1 \
-    && [ -f "$HOSTLIST_FILE" ] && [ "$(wc -c < "$HOSTLIST_FILE")" -gt "$HOSTLIST_MIN_SIZE" ]; then
-            RKN_STATUS="/ РКН"
-            MENU_TEXT="${GREEN}Выключить обход по спискам${NC} РКН"
-        else
-            RKN_STATUS=""
-            MENU_TEXT="${GREEN}Включить обход по спискам${NC} РКН"
-        fi
-
-    elif grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONF" >/dev/null 2>&1 \
-    && [ -f "$HOSTLIST_FILE" ] && [ "$(wc -c < "$HOSTLIST_FILE")" -gt "$HOSTLIST_MIN_SIZE" ]; then
-        RKN_STATUS="/ РКН"
-        MENU_TEXT="${GREEN}Выключить обход по спискам${NC} РКН"
-
-    else
-        RKN_STATUS=""
-        MENU_TEXT="${GREEN}Включить обход по спискам${NC} РКН"
-    fi
-}
-
-
-
+RKN_Check() { if (grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONF" >/dev/null 2>&1 || grep -q -- "--filter-tcp=443 ˂HOSTLIST˃" "$CONF" >/dev/null 2>&1) && [ "$(wc -c < /opt/zapret/ipset/zapret-hosts-user.txt)" -gt 1800000 ]; then RKN_STATUS="/ РКН"; MENU_TEXT="${GREEN}Выключить обход по спискам${NC} РКН"; else RKN_STATUS=""; MENU_TEXT="${GREEN}Включить обход по спискам${NC} РКН"; fi; }
 
 # ==========================================
 # Меню стратегий
