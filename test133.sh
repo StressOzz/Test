@@ -258,9 +258,20 @@ printf "%s\n" "--new" "--filter-udp=19294-19344,50000-50100" "--filter-l7=discor
 menu_str() { [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter..." dummy; return; }; while true; do clear
 
 
-RKN_Check
+RKN_Check; echo -e "${MAGENTA}Меню стратегий${NC}\n"; show_current_strategy; 
+
+
+RKN_Check  # обновляет RKN_STATUS
+
 current="$ver$( [ -n "$ver" ] && [ -n "$yv_ver" ] && echo " / " )$yv_ver"
-[ -n "$current" ] && echo -e "${YELLOW}Используется стратегия:${NC} $current $RKN_STATUS\n"
+
+if [ -n "$current" ]; then
+    # Есть версия стратегии
+    echo -e "${YELLOW}Используется стратегия:${NC} $current $RKN_STATUS\n"
+elif [ -n "$RKN_STATUS" ]; then
+    # Версии нет, но РКН включён
+    echo -e "${YELLOW}Используется стратегия:${NC} $RKN_STATUS\n"
+fi
 
 
 echo -e "${CYAN}1) ${GREEN}Установить стратегию${NC} v6\n${CYAN}2) $MENU_TEXT\n${CYAN}3) ${GREEN}Подобрать стратегию для ${NC}YouTube\n${CYAN}4) ${GREEN}Выбрать версию стратегии для установки (1-5) ${NC}"
