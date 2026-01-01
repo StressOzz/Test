@@ -256,7 +256,13 @@ if ! grep -q -- "--filter-udp=19294-19344,50000-50100" "$CONF"; then last_line1=
 printf "%s\n" "--new" "--filter-udp=19294-19344,50000-50100" "--filter-l7=discord,stun" "--dpi-desync=fake" "--dpi-desync-repeats=6" "--new" "--filter-tcp=2053,2083,2087,2096,8443" "--hostlist-domains=discord.media" \
 "--dpi-desync=multisplit" "--dpi-desync-split-seqovl=652" "--dpi-desync-split-pos=2" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin" "'" >> "$CONF"; fi; }
 menu_str() { [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter..." dummy; return; }; while true; do clear
-RKN_Check; echo -e "${MAGENTA}Меню стратегий${NC}\n"; show_current_strategy; current="$ver$( [ -n "$ver" ] && [ -n "$yv_ver" ] && echo " / " )$yv_ver"; [ -n "$current" ] && echo -e "${YELLOW}Используется стратегия:${NC} $current $RKN_STATUS\n"
+
+
+RKN_Check
+current="$ver$( [ -n "$ver" ] && [ -n "$yv_ver" ] && echo " / " )$yv_ver"
+[ -n "$current" ] && echo -e "${YELLOW}Используется стратегия:${NC} $current $RKN_STATUS\n"
+
+
 echo -e "${CYAN}1) ${GREEN}Установить стратегию${NC} v6\n${CYAN}2) $MENU_TEXT\n${CYAN}3) ${GREEN}Подобрать стратегию для ${NC}YouTube\n${CYAN}4) ${GREEN}Выбрать версию стратегии для установки (1-5) ${NC}"
 echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read choiceST; case "$choiceST" in 1) install_strategy v6 ;; 2) toggle_rkn_bypass; continue ;; 3) auto_stryou ;; 4) strategy_OLD ;; *) return ;; esac; done }
 install_strategy() { local version="$1"; local NO_PAUSE="${2:-0}"; local fileGP="/opt/zapret/ipset/zapret-hosts-google.txt"; [ "$NO_PAUSE" != "1" ] && echo
