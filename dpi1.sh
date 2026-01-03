@@ -1,6 +1,6 @@
 #!/bin/sh
 # Менеджер обхода блокировок для OpenWRT
-# Управление byedpi + hev-socks5-tunnel + DNS-over-HTTPS
+
 
 set -e
 
@@ -69,13 +69,6 @@ install_bypass() {
         success "hev-socks5-tunnel уже установлен"
     fi
     
-    step "Установка https-dns-proxy..."
-    if ! opkg list-installed | grep -q "^https-dns-proxy "; then
-        opkg install https-dns-proxy > /dev/null 2>&1
-        success "https-dns-proxy установлен"
-    else
-        success "https-dns-proxy уже установлен"
-    fi
     
     step "Настройка byedpi..."
     cat > /etc/config/byedpi << 'EOFUCI'
@@ -162,25 +155,10 @@ EOFYAML
     uci commit hev-socks5-tunnel
     success "hev-socks5-tunnel настроен и включен"
     
-    step "Настройка DNS-over-HTTPS..."
-    uci delete https-dns-proxy.@https-dns-proxy[0] > /dev/null 2>&1 || true
-    uci delete https-dns-proxy.@https-dns-proxy[0] > /dev/null 2>&1 || true
-    
-    uci add https-dns-proxy https-dns-proxy
-    uci set https-dns-proxy.@https-dns-proxy[-1].resolver_url='https://cloudflare-dns.com/dns-query'
-    uci set https-dns-proxy.@https-dns-proxy[-1].listen_port='5053'
-    
-    uci add https-dns-proxy https-dns-proxy
-    uci set https-dns-proxy.@https-dns-proxy[-1].resolver_url='https://1.1.1.1/dns-query'
-    uci set https-dns-proxy.@https-dns-proxy[-1].listen_port='5054'
-    
-    uci commit https-dns-proxy
-    success "DNS-over-HTTPS настроен"
     
     step "Включение автозапуска..."
     /etc/init.d/byedpi enable > /dev/null 2>&1
     /etc/init.d/hev-socks5-tunnel enable > /dev/null 2>&1
-    /etc/init.d/https-dns-proxy enable > /dev/null 2>&1
     success "Автозапуск включен"
     
     step "Запуск byedpi..."
@@ -193,11 +171,7 @@ EOFYAML
         error "byedpi не запустился"
     fi
     
-    step "Запуск https-dns-proxy..."
-    /etc/init.d/https-dns-proxy restart > /dev/null 2>&1
-    sleep 2
-    success "https-dns-proxy запущен"
-    
+ 
     step "Запуск hev-socks5-tunnel..."
     # Ждем, пока byedpi полностью запустится
     sleep 2
@@ -315,7 +289,7 @@ check_status() {
     
     # Проверка пакетов
     echo "📦 Пакеты:"
-    for pkg in byedpi hev-socks5-tunnel https-dns-proxy; do
+    for pkg in byedpi hev-socks5-tunnel; do
         if opkg list-installed | grep -q "^${pkg} "; then
             VERSION=$(opkg list-installed | grep "^${pkg} " | awk '{print $3}')
             success "  ${pkg} (${VERSION})"
@@ -338,13 +312,6 @@ check_status() {
     # Проверка сервисов
     echo ""
     echo "🔄 Сервисы:"
-    for svc in byedpi hev-socks5-tunnel https-dns-proxy; do
-        if /etc/init.d/${svc} status > /dev/null 2>&1; then
-            success "  ${svc} - запущен"
-        else
-            error "  ${svc} - не запущен"
-        fi
-    done
     
     # Проверка портов
     echo ""
@@ -355,12 +322,7 @@ check_status() {
         error "  byedpi не слушает на порту 1080"
     fi
     
-    DOH_PORTS=$(netstat -tlnp 2>/dev/null | grep -E ':(5053|5054) ' | wc -l)
-    if [ "$DOH_PORTS" -ge 2 ]; then
-        success "  https-dns-proxy слушает на портах 5053, 5054"
-    else
-        error "  https-dns-proxy не слушает на портах 5053, 5054"
-    fi
+
     
     # Проверка TUN интерфейса
     echo ""
@@ -381,62 +343,15 @@ check_status() {
     else
         error "  Правила не настроены"
     fi
+
     
-    # Проверка DNS
-    echo ""
-    echo "🔍 DNS:"
-    if uci get dhcp.@dnsmasq[0].noresolv 2>/dev/null | grep -q "1"; then
-        success "  dnsmasq использует DoH (noresolv=1)"
-    else
-        error "  dnsmasq не использует DoH"
-    fi
     
-    DOH_SERVERS=$(uci get dhcp.@dnsmasq[0].server 2>/dev/null | grep -o '127.0.0.1#505' | wc -l)
-    if [ "$DOH_SERVERS" -ge 2 ]; then
-        success "  DoH серверы настроены: ${DOH_SERVERS}"
-    else
-        error "  DoH серверы не настроены"
-    fi
-    
-    # Тест DNS запросов
-    echo ""
-    echo "🌍 Тест DNS запросов:"
-    for domain in cloudflare.com google.com steamdb.info; do
-        if nslookup ${domain} 127.0.0.1 > /dev/null 2>&1; then
-            IP=$(nslookup ${domain} 127.0.0.1 2>/dev/null | grep -A 1 "Name:" | grep "Address" | head -1 | awk '{print $2}')
-            success "  ${domain} -> ${IP}"
-        else
-            error "  ${domain} - не разрешается"
-        fi
-    done
+
     
     # Тест доступности сети
     echo ""
     echo "📡 Тест доступности сети:"
-    if ping -c 1 -W 2 8.8.8.8 > /dev/null 2>&1; then
-        success "  Пинг 8.8.8.8 - OK"
-    else
-        error "  Пинг 8.8.8.8 - FAIL"
-    fi
-    
-    if ping -c 1 -W 2 1.1.1.1 > /dev/null 2>&1; then
-        success "  Пинг 1.1.1.1 - OK"
-    else
-        error "  Пинг 1.1.1.1 - FAIL"
-    fi
-    
-    # Тест доменов
-    echo ""
-    echo "🌐 Тест доменов:"
-    for domain in google.com cloudflare.com steamdb.info; do
-        if ping -c 1 -W 2 ${domain} > /dev/null 2>&1; then
-            success "  ${domain} - доступен"
-        else
-            error "  ${domain} - недоступен"
-        fi
-    done
-    
-    echo ""
+
 }
 
 # Функция удаления обхода
@@ -453,13 +368,13 @@ remove_bypass() {
     step "Остановка сервисов..."
     /etc/init.d/byedpi stop > /dev/null 2>&1
     /etc/init.d/hev-socks5-tunnel stop > /dev/null 2>&1
-    /etc/init.d/https-dns-proxy stop > /dev/null 2>&1
+
     success "Сервисы остановлены"
     
     step "Отключение автозапуска..."
     /etc/init.d/byedpi disable > /dev/null 2>&1
     /etc/init.d/hev-socks5-tunnel disable > /dev/null 2>&1
-    /etc/init.d/https-dns-proxy disable > /dev/null 2>&1
+
     /etc/init.d/apply-proxy-rules disable > /dev/null 2>&1
     success "Автозапуск отключен"
     
@@ -469,7 +384,7 @@ remove_bypass() {
     success "Правила удалены"
     
     step "Удаление пакетов..."
-    for pkg in byedpi hev-socks5-tunnel https-dns-proxy; do
+    for pkg in byedpi hev-socks5-tunnel; do
         if opkg list-installed | grep -q "^${pkg} "; then
             opkg remove ${pkg} > /dev/null 2>&1
             success "  ${pkg} удален"
@@ -490,9 +405,6 @@ remove_bypass() {
     rm -rf /etc/config/byedpi /etc/config/byedpi.hosts
     rm -rf /etc/hev-socks5-tunnel
     rm -f /etc/init.d/apply-proxy-rules
-    uci delete https-dns-proxy.@https-dns-proxy[0] > /dev/null 2>&1 || true
-    uci delete https-dns-proxy.@https-dns-proxy[0] > /dev/null 2>&1 || true
-    uci commit https-dns-proxy > /dev/null 2>&1 || true
     success "Конфигурации удалены"
     
     echo ""
