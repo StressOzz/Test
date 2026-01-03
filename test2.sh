@@ -42,11 +42,11 @@ read -p "Нажмите Enter..." dummy; return; } ; done; echo -e "${CYAN}Уд�
 # ==========================================
 # Меню настройки Discord
 # ==========================================
-pattern="104\.25\.158\.178 finland[0-9]\{5\}\.discord\.media"
+Fin_IP_Dis="104\.25\.158\.178 finland[0-9]\{5\}\.discord\.media"
 scrypt_install() { local NO_PAUSE=$1; while true; do [ "$NO_PAUSE" != "1" ] && clear && echo -e "${MAGENTA}Меню настройки Discord${NC}\n"; output_shown=false
 [ "$NO_PAUSE" != "1" ] && show_script_50 && [ -n "$name" ] && echo -e "${YELLOW}Установлен скрипт:${NC} $name" && output_shown=true
-grep -q "$pattern" /etc/hosts && echo -e "${YELLOW}Финские IP для Discord: ${GREEN}включены${NC}" && output_shown=true
-toggle_finland_hosts() { if grep -q "$pattern" /etc/hosts; then sed -i "/$pattern/d" /etc/hosts
+grep -q "$Fin_IP_Dis" /etc/hosts && echo -e "${YELLOW}Финские IP для Discord: ${GREEN}включены${NC}" && output_shown=true
+toggle_finland_hosts() { if grep -q "$Fin_IP_Dis" /etc/hosts; then sed -i "/$Fin_IP_Dis/d" /etc/hosts
 echo -e "\n${MAGENTA}Удаляем Финские IP${NC}"; /etc/init.d/dnsmasq restart 2>/dev/null; echo -e "${GREEN}Финские IP удалены${NC}\n"
 else seq 10000 10199 | awk '{print "104.25.158.178 finland"$1".discord.media"}' | grep -vxFf /etc/hosts >> /etc/hosts
 echo -e "\n${MAGENTA}Добавляем Финские IP${NC}"; /etc/init.d/dnsmasq restart 2>/dev/null; echo -e "${GREEN}Финские IP добавлены${NC}\n"; fi; read -p "Нажмите Enter..." dummy; }; $output_shown && echo
@@ -91,18 +91,16 @@ hosts_clear; echo -e "Настройки по умолчанию ${GREEN}воз�
 # ==========================================
 stop_zapret() { echo -e "\n${MAGENTA}Останавливаем Zapret${NC}\n${CYAN}Останавливаем ${NC}Zapret"; /etc/init.d/zapret stop >/dev/null 2>&1
 for pid in $(pgrep -f /opt/zapret 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done; echo -e "Zapret ${GREEN}остановлен!${NC}\n"; read -p "Нажмите Enter..." dummy; }
-start_zapret() { if [ -f /etc/init.d/zapret ]; then echo -e "\n${MAGENTA}Запускаем Zapret${NC}"; echo -e "${CYAN}Запускаем ${NC}Zapret";
-/etc/init.d/zapret start >/dev/null 2>&1; ZAPRET_RESTART
+start_zapret() { if [ -f /etc/init.d/zapret ]; then echo -e "\n${MAGENTA}Запускаем Zapret${NC}"; echo -e "${CYAN}Запускаем ${NC}Zapret"; /etc/init.d/zapret start >/dev/null 2>&1; ZAPRET_RESTART
 echo -e "Zapret ${GREEN}запущен!${NC}\n"; else echo -e "\n${RED}Zapret не установлен!${NC}\n"; fi; read -p "Нажмите Enter..." dummy; }
 # ==========================================
 # Полное удаление Zapret
 # ==========================================
 uninstall_zapret() { local NO_PAUSE=$1; [ "$NO_PAUSE" != "1" ] && echo; echo -e "${MAGENTA}Удаляем ZAPRET${NC}\n${CYAN}Останавливаем ${NC}zapret\n${CYAN}Убиваем процессы${NC}"
-/etc/init.d/zapret stop >/dev/null 2>&1; for pid in $(pgrep -f /opt/zapret 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done
-echo -e "${CYAN}Удаляем пакеты${NC}"; opkg --force-removal-of-dependent-packages --autoremove remove zapret luci-app-zapret >/dev/null 2>&1
-echo -e "${CYAN}Удаляем временные файлы${NC}"; rm -rf /opt/zapret /etc/config/zapret /etc/firewall.zapret /etc/init.d/zapret /tmp/*zapret* /var/run/*zapret* /tmp/*.ipk /tmp/*.zip 2>/dev/null
-crontab -l 2>/dev/null | grep -v -i "zapret" | crontab - 2>/dev/null; nft list tables 2>/dev/null | awk '{print $2}' | grep -E '(zapret|ZAPRET)' | while read t; do [ -n "$t" ] && nft delete table "$t" 2>/dev/null; done
-rm -f "$FINAL_STR" "$NEW_STR" "$OLD_STR" "$SAVED_STR" "$TMP_LIST" $HOSTS_USER $BACKUP_FILE; hosts_clear; echo -e "Zapret ${GREEN}полностью удалён!${NC}\n"; [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter..." dummy; }
+/etc/init.d/zapret stop >/dev/null 2>&1; for pid in $(pgrep -f /opt/zapret 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done; echo -e "${CYAN}Удаляем пакеты${NC}"; opkg --force-removal-of-dependent-packages --autoremove remove zapret luci-app-zapret >/dev/null 2>&1
+echo -e "${CYAN}Удаляем временные файлы${NC}"; rm -rf /opt/zapret /etc/config/zapret /etc/firewall.zapret /etc/init.d/zapret /tmp/*zapret* /var/run/*zapret* /tmp/*.ipk /tmp/*.zip 2>/dev/null; crontab -l 2>/dev/null | grep -v -i "zapret" | crontab - 2>/dev/null
+nft list tables 2>/dev/null | awk '{print $2}' | grep -E '(zapret|ZAPRET)' | while read t; do [ -n "$t" ] && nft delete table "$t" 2>/dev/null; done;  rm -f "$FINAL_STR" "$NEW_STR" "$OLD_STR" "$SAVED_STR" "$TMP_LIST" $HOSTS_USER $BACKUP_FILE
+hosts_clear; echo -e "Zapret ${GREEN}полностью удалён!${NC}\n"; [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter..." dummy; }
 # ==========================================
 # Подбор стратегии для Ютуб
 # ==========================================
@@ -116,17 +114,13 @@ if [ -z "$ANSWER" ]; then { echo "#$CURRENT_NAME"; printf "%b\n" "$CURRENT_BODY"
 awk '{if(skip){if($0=="--new"||$0~/\047/){skip=0;next}if($0~/^[[:space:]]*$/)next;next}if($0=="--filter-tcp=443"){getline n;if(n=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt"){skip=1;next}else{print $0;print n;next}}if($0=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt")has_google=1;if($0~/^[[:space:]]*#Yv/)next;print}' "$OLD_STR" > "$NEW_STR"
 awk 'BEGIN{inserted=0;has_google=0}$0=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt"{has_google=1}$0=="--new"&&!inserted{while((getline l<"'"$SAVED_STR"'")>0)if(l!~/^[[:space:]]*$/)print l;print "--new";inserted=1;next}$0~/^[[:space:]]*option NFQWS_OPT \047$/&&!has_google&&!inserted{print;while((getline l<"'"$SAVED_STR"'")>0)if(l!~/^[[:space:]]*$/)print l;print "--new";inserted=1;next}{print}' "$NEW_STR" > "$FINAL_STR"
 sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; cat "$FINAL_STR" >> "$CONF"; awk '{if($0=="--new"){if(prev!="--new")print}else print;prev=$0}' "$CONF" > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"
-grep -q "^[[:space:]]*' *\$" "$CONF" || echo "'" >> "$CONF"; ZAPRET_RESTART
-echo -e "${GREEN}Стратегия применена!${NC}\n"; read -p "Нажмите Enter..." dummy </dev/tty; return 0; elif [[ "$ANSWER" =~ ^[Ss]$ ]]; then
-sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; cat "$OLD_STR" >> "$CONF"; ZAPRET_RESTART
+grep -q "^[[:space:]]*' *\$" "$CONF" || echo "'" >> "$CONF"; ZAPRET_RESTART; echo -e "${GREEN}Стратегия применена!${NC}\n"; read -p "Нажмите Enter..." dummy </dev/tty; return 0; elif [[ "$ANSWER" =~ ^[Ss]$ ]]; then sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; cat "$OLD_STR" >> "$CONF"; ZAPRET_RESTART
 echo -e "\n${YELLOW}Подбор остановлен. Стратегия восстановлена.${NC}\n"; read -p "Нажмите Enter..." dummy </dev/tty; return 1; fi; else echo -e "${RED}Видео не открывается, продолжаем подбор...${NC}"; fi; fi; CURRENT_NAME="$LINE"; CURRENT_BODY=""; else [ -n "$LINE" ] && CURRENT_BODY="${CURRENT_BODY}${LINE}\n"; fi; done < "$TMP_LIST"
 if [ -n "$CURRENT_NAME" ]; then COUNT=$((COUNT + 1)); echo -e "\n${CYAN}Применяем стратегию: ${NC}$CURRENT_NAME ($COUNT/$TOTAL)"; apply_strategy "$CURRENT_NAME" "$CURRENT_BODY"; STATUS=$(check_access); if [ "$STATUS" = "ok" ]; then echo -e "${GREEN}Видео на ПК открывается!${NC}\n${YELLOW}Проверьте работу ${NC}YouTube${YELLOW} на других устройствах!${NC}"
-echo -en "Enter${GREEN} - применить стратегию, ${NC}S/s${GREEN} - остановить, ${NC}N/n${GREEN} - продолжить подбор:${NC} "; read -r ANSWER </dev/tty
-if [ -z "$ANSWER" ]; then { echo "#$CURRENT_NAME"; printf "%b\n" "$CURRENT_BODY"; } > "$SAVED_STR"; echo -e "${CYAN}Применяем стратегию и перезапускаем ${NC}Zapret"
+echo -en "Enter${GREEN} - применить стратегию, ${NC}S/s${GREEN} - остановить, ${NC}N/n${GREEN} - продолжить подбор:${NC} "; read -r ANSWER </dev/tty; if [ -z "$ANSWER" ]; then { echo "#$CURRENT_NAME"; printf "%b\n" "$CURRENT_BODY"; } > "$SAVED_STR"; echo -e "${CYAN}Применяем стратегию и перезапускаем ${NC}Zapret"
 awk '{ if(skip) { if($0=="--new" || $0 ~ /'\''/) { skip=0; print; next } next } if($0=="--filter-tcp=443") { getline next_line; if(next_line=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt") { skip=1; next } else { print $0; print next_line; next } } if($0~/^[[:space:]]*#Yv/) next; print }' "$OLD_STR" > $NEW_STR
 awk 'BEGIN { inserted=0 } /^--new/ && !inserted { system("cat '"$SAVED_STR"'"); inserted=1 } { print }' $NEW_STR > $FINAL_STR; sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; cat $FINAL_STR >> "$CONF"; ZAPRET_RESTART
-echo -e "${GREEN}Стратегия применена!${NC}\n"; read -p "Нажмите Enter..." dummy </dev/tty; return 0; elif [[ "$ANSWER" =~ ^[Ss]$ ]]; then
-sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; cat "$OLD_STR" >> "$CONF"; ZAPRET_RESTART
+echo -e "${GREEN}Стратегия применена!${NC}\n"; read -p "Нажмите Enter..." dummy </dev/tty; return 0; elif [[ "$ANSWER" =~ ^[Ss]$ ]]; then sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; cat "$OLD_STR" >> "$CONF"; ZAPRET_RESTART
 echo -e "\n${YELLOW}Подбор остановлен. Cтратегия восстановлена.${NC}\n"; read -p "Нажмите Enter..." dummy </dev/tty; return 1; fi; else echo -e "${RED}Видео не открывается...${NC}\n"; fi; fi; sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; cat "$OLD_STR" >> "$CONF"; ZAPRET_RESTART
 echo -e "\n${RED}Рабочая стратегия для YouTube не найдена!${NC}\n"; read -p "Нажмите Enter..." dummy </dev/tty; return 1; }
 # ==========================================
@@ -261,7 +255,7 @@ if uci get firewall.@defaults[0].flow_offloading 2>/dev/null | grep -q '^1$' || 
 then echo -e "\n${RED}Включён ${NC}Flow Offloading${RED}!${NC}\n${NC}Zapret${RED} некорректно работает с включённым ${NC}Flow Offloading${RED}!\nПримените ${NC}FIX${RED} в системном меню!${NC}"; fi; fi
 menu_game=$( [ -f "$CONF" ] && grep -q "88,500,1024-19293,19345-49999,50101-65535" "$CONF" && echo "Удалить стратегию для игр" || echo "Добавить стратегию для игр" ); pgrep -f "/opt/zapret" >/dev/null 2>&1 && str_stp_zpr="Остановить" || str_stp_zpr="Запустить"
 echo -e "\n${YELLOW}Установленная версия:   ${INST_COLOR}$INSTALLED_DISPLAY${NC}"; [ -n "$ZAPRET_STATUS" ] && echo -e "${YELLOW}Статус Zapret:${NC}          $ZAPRET_STATUS"
-show_script_50 && [ -n "$name" ] && echo -e "${YELLOW}Установлен скрипт:${NC}      $name"; grep -q "$pattern" /etc/hosts && echo -e "${YELLOW}Финские IP для Discord: ${GREEN}включены${NC}"
+show_script_50 && [ -n "$name" ] && echo -e "${YELLOW}Установлен скрипт:${NC}      $name"; grep -q "$Fin_IP_Dis" /etc/hosts && echo -e "${YELLOW}Финские IP для Discord: ${GREEN}включены${NC}"
 [ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*88,500,1024-19293,19345-49999,50101-65535" "$CONF" && grep -q -- "--filter-udp=88,500,1024-19293,19345-49999,50101-65535" "$CONF" && echo -e "${YELLOW}Стратегия для игр:${NC}      ${GREEN}активирована${NC}"
 [ -n "$DOH_STATUS" ] && opkg list-installed | grep -q '^https-dns-proxy ' && echo -e "${YELLOW}DNS over HTTPS:${NC}         $DOH_STATUS"; web_is_enabled && if web_is_enabled; then echo -e "${YELLOW}Доступ из браузера:${NC}     http://$LAN_IP:7681"; fi
 quic_is_blocked && if quic_is_blocked; then echo -e "${YELLOW}Блокировка QUIC:${NC}        ${GREEN}включена${NC}"; fi; if [ -f "$CONF" ]; then current="$ver$( [ -n "$ver" ] && [ -n "$yv_ver" ] && echo " / " )$yv_ver"; if [ -n "$current" ]
