@@ -1,5 +1,5 @@
 #!/bin/sh
-# DPI bypass manager OpenWrt 24+ (nftables, split-proxy)
+# DPI bypass manager OpenWrt 24+ (nftables + split-proxy)
 
 set -e
 
@@ -14,7 +14,9 @@ error() { echo -e "${RED}✗${NC} $1"; }
 step() { echo -e "${YELLOW}→${NC} $1"; }
 info() { echo -e "${BLUE}ℹ${NC} $1"; }
 
-SITES="googlevideo.com
+# ===== САЙТЫ ДЛЯ SPLIT-PROXY (В СТОЛБИК) =====
+SITES="
+googlevideo.com
 jnn-pa.googleapis.com
 wide-youtube.l.google.com
 withyoutube.com
@@ -35,7 +37,8 @@ yt3.ggpht.com
 yt4.ggpht.com
 ytimg.com
 ytimg.l.google.com
-yt-video-upload.l.google.com"
+yt-video-upload.l.google.com
+"
 
 install_bypass() {
     echo ""
@@ -47,7 +50,7 @@ install_bypass() {
     success "Список пакетов обновлен"
 
     step "Установка модулей ядра..."
-    opkg install kmod-tun kmod-nf-nat kmod-nf-conntrack > /dev/null 2>&1 || true
+    opkg install kmod-tun kmod-nf-nat kmod-nf-conntrack nftables > /dev/null 2>&1 || true
     success "Модули установлены"
 
     step "Установка byedpi..."
@@ -85,7 +88,7 @@ EOF
     uci set hev-socks5-tunnel.config.conffile='/etc/hev-socks5-tunnel/main.yml'
     uci set hev-socks5-tunnel.config.enabled='1'
     uci commit hev-socks5-tunnel
-    success "hev-socks5-tunnel настроен и включен"
+    success "hev-socks5-tunnel настроен"
 
     step "Включение автозапуска..."
     /etc/init.d/byedpi enable
@@ -96,36 +99,43 @@ EOF
     /etc/init.d/byedpi restart
     sleep 2
     /etc/init.d/hev-socks5-tunnel restart
-    sleep 3
+    sleep 2
     success "Сервисы запущены"
 
     step "Настройка nftables (split-proxy)..."
     LAN_NET=$(uci get network.lan.ipaddr | cut -d. -f1-3).0/24
-
     mkdir -p /etc/nftables.d
 
-    cat > /etc/nftables.d/90-bypass.nft <<EOF
+    cat > /etc/nftables.d/90-bypass.nft <<'EOF'
 table inet bypass {
+    set proxy_dst {
+        type ipv4_addr
+        flags interval
+    }
+
     chain prerouting {
         type nat hook prerouting priority dstnat;
-        # split-proxy: только для указанных сайтов
-EOF
-
-    for host in $SITES; do
-        IPs=$(nslookup $host | awk '/^Address: / {print $2}')
-        for ip in $IPs; do
-            [ -n "$ip" ] && echo "        ip saddr $LAN_NET ip daddr $ip tcp dport {80,443} redirect to :1080" >> /etc/nftables.d/90-bypass.nft
-        done
-    done
-
-    cat >> /etc/nftables.d/90-bypass.nft <<'EOF'
+        ip saddr __LAN__ ip daddr @proxy_dst tcp dport {80,443} redirect to :1080
     }
 }
 EOF
 
-    # Применяем сразу
+    sed -i "s#__LAN__#$LAN_NET#g" /etc/nftables.d/90-bypass.nft
+
     nft -f /etc/nftables.d/90-bypass.nft
-    success "nftables настроены, split-proxy для LAN готов"
+
+    for host in $SITES; do
+        nslookup "$host" 2>/dev/null | awk '/^Address: / {print $2}' | while read ip; do
+            nft add element inet bypass proxy_dst { $ip } 2>/dev/null || true
+        done
+    done
+
+    step "Подключение к firewall4..."
+    uci set firewall.@defaults[0].nftables_include='/etc/nftables.d/*.nft'
+    uci commit firewall
+    /etc/init.d/firewall restart
+
+    success "ГОТОВО. Split-proxy работает, nftables активен"
 }
 
 remove_bypass() {
@@ -141,9 +151,10 @@ remove_bypass() {
 
     opkg remove byedpi hev-socks5-tunnel > /dev/null 2>&1 || true
     rm -rf /etc/config/byedpi /etc/hev-socks5-tunnel
-
     rm -f /etc/nftables.d/90-bypass.nft
+
     nft delete table inet bypass 2>/dev/null || true
+    /etc/init.d/firewall restart
 
     success "Удалено"
 }
