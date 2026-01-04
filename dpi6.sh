@@ -37,7 +37,15 @@ install_bypass() {
     step "Обновление списка пакетов..."
     opkg update > /dev/null 2>&1
     success "Список пакетов обновлен"
-      
+    
+    step "Установка модулей ядра..."
+    for pkg in kmod-tun kmod-ipt-nat iptables-nft; do
+        if ! opkg list-installed | grep -q "^${pkg} "; then
+            opkg install ${pkg} > /dev/null 2>&1
+        fi
+    done
+    success "Модули установлены"
+    
     step "Установка byedpi..."
     if ! opkg list-installed | grep -q "^byedpi "; then
         BYEDPI_URL="https://github.com/DPITrickster/ByeDPI-OpenWrt/releases/download/v0.17.3-24.10/byedpi_0.17.3-r1_aarch64_cortex-a53.ipk"
@@ -75,20 +83,70 @@ googlevideo.com
 googleapis.com
 ytimg.com
 ggpht.com
+dis.gd
+discord.co
+discord.com
+discord.design
+discord.dev
+discord.gg
+discord.gift
+discord.gifts
+discord.media
+discord.new
+discord.store
+discord.tools
+discordapp.com
+discordapp.net
+discordmerch.com
+discordpartygames.com
+discord-activities.com
+discordactivities.com
+discordsays.com
 youtube.com
+instagram.com
+cdninstagram.com
+facebook.com
+ig.me
+instagr.am
+igsonar.com
+rustorka.com
+rutor.info
+rutor.org
+rutracker.org
+nnmclub.to
+flibusta.is
+x.com
+twimg.com
+steamdb.info
+speedtest.net
+ntc.party
 EOFHOSTS
     success "byedpi настроен"
     
     step "Настройка hev-socks5-tunnel..."
     mkdir -p /etc/hev-socks5-tunnel
     cat > /etc/hev-socks5-tunnel/main.yml << 'EOFYAML'
+tunnel:
+  name: tun0
+  mtu: 8500
+  multi-queue: false
+  ipv4: 198.18.0.1
+  ipv6: 'fc00::1'
+
 socks5:
   port: 1080
   address: 127.0.0.1
   udp: 'udp'
+
+misc:
+  log-level: info
+  log-file: /var/log/hev-socks5-tunnel.log
+  connect-timeout: 10000
+  tcp-read-write-timeout: 300000
+  udp-read-write-timeout: 60000
+  limit-nofile: 65535
 EOFYAML
-  
-	# Создаем или обновляем конфигурацию UCI
+    # Создаем или обновляем конфигурацию UCI
     if ! uci get hev-socks5-tunnel.config > /dev/null 2>&1; then
         uci add hev-socks5-tunnel config
     fi
@@ -120,7 +178,106 @@ EOFYAML
     /etc/init.d/hev-socks5-tunnel restart > /dev/null 2>&1
     sleep 5
     # Проверка, что TUN интерфейс создан (может потребоваться больше времени)
+    TUN_CREATED=0
+    for i in 1 2 3 4 5 6 7 8 9 10; do
+        if ip link show tun0 > /dev/null 2>&1; then
+            TUN_IP=$(ip addr show tun0 2>/dev/null | grep 'inet ' | awk '{print $2}' | head -1)
+            success "hev-socks5-tunnel запущен, TUN интерфейс создан (${TUN_IP})"
+            TUN_CREATED=1
+            break
+        fi
+        sleep 1
+    done
+    if [ $TUN_CREATED -eq 0 ]; then
+        # Проверяем статус сервиса
+        if /etc/init.d/hev-socks5-tunnel status > /dev/null 2>&1; then
+            info "hev-socks5-tunnel запущен, но TUN интерфейс еще не создан (может потребоваться время)"
+        else
+            error "hev-socks5-tunnel не запустился, проверьте логи"
+        fi
+    fi
+    
+    step "Настройка правил iptables..."
+    LAN_NET=$(uci get network.lan.ipaddr | cut -d. -f1-3).0/24
+    
+    # Создаем init.d скрипт с использованием procd triggers
+    cat > /etc/init.d/apply-proxy-rules << 'EOFINIT'
+#!/bin/sh /etc/rc.common
+# Скрипт применения правил iptables для прокси
 
+USE_PROCD=1
+START=96
+STOP=15
+
+apply_rules() {
+    # Ждем готовности сети
+    sleep 3
+    # Ждем, пока byedpi запустится
+    for i in 1 2 3 4 5 6 7 8 9 10; do
+        if /etc/init.d/byedpi status > /dev/null 2>&1; then
+            break
+        fi
+        sleep 1
+    done
+    
+    # Применяем правила
+    LAN_NET=$(uci get network.lan.ipaddr 2>/dev/null | cut -d. -f1-3).0/24
+    if [ -n "$LAN_NET" ] && [ "$LAN_NET" != ".0/24" ]; then
+        # Удаляем старые правила
+        iptables-nft -t nat -D PREROUTING -s $LAN_NET -p tcp --dport 80 -j REDIRECT --to-port 1080 2>/dev/null || true
+        iptables-nft -t nat -D PREROUTING -s $LAN_NET -p tcp --dport 443 -j REDIRECT --to-port 1080 2>/dev/null || true
+        
+        # Добавляем новые правила
+        iptables-nft -t nat -A PREROUTING -s $LAN_NET -p tcp --dport 80 -j REDIRECT --to-port 1080 2>/dev/null || true
+        iptables-nft -t nat -A PREROUTING -s $LAN_NET -p tcp --dport 443 -j REDIRECT --to-port 1080 2>/dev/null || true
+    fi
+}
+
+start_service() {
+    apply_rules
+    # Используем procd trigger для применения правил после запуска byedpi
+    procd_add_reload_trigger byedpi
+}
+
+reload_service() {
+    apply_rules
+}
+
+service_triggers() {
+    procd_add_reload_trigger byedpi
+    procd_add_config_trigger "network" "lan" apply_rules
+}
+
+stop_service() {
+    LAN_NET=$(uci get network.lan.ipaddr 2>/dev/null | cut -d. -f1-3).0/24
+    if [ -n "$LAN_NET" ] && [ "$LAN_NET" != ".0/24" ]; then
+        iptables-nft -t nat -D PREROUTING -s $LAN_NET -p tcp --dport 80 -j REDIRECT --to-port 1080 2>/dev/null || true
+        iptables-nft -t nat -D PREROUTING -s $LAN_NET -p tcp --dport 443 -j REDIRECT --to-port 1080 2>/dev/null || true
+    fi
+}
+EOFINIT
+    chmod +x /etc/init.d/apply-proxy-rules
+    /etc/init.d/apply-proxy-rules enable > /dev/null 2>&1
+    
+    # Также добавляем простой скрипт в rc.local как резервный вариант
+    # Удаляем старые записи
+    sed -i '/apply-proxy-rules/d' /etc/rc.local 2>/dev/null || true
+    sed -i '/^sleep 10$/d' /etc/rc.local 2>/dev/null || true
+    if ! grep -q "apply-proxy-rules" /etc/rc.local 2>/dev/null; then
+        sed -i '/^exit 0$/d' /etc/rc.local 2>/dev/null || true
+        cat >> /etc/rc.local << 'EOFRC'
+# Применение правил iptables для прокси
+(sleep 15 && /etc/init.d/apply-proxy-rules start) &
+exit 0
+EOFRC
+    fi
+    
+    # Применяем правила напрямую сейчас
+    iptables-nft -t nat -A PREROUTING -s ${LAN_NET} -p tcp --dport 80 -j REDIRECT --to-port 1080 2>/dev/null || true
+    iptables-nft -t nat -A PREROUTING -s ${LAN_NET} -p tcp --dport 443 -j REDIRECT --to-port 1080 2>/dev/null || true
+    success "Правила iptables настроены и будут применяться при загрузке"
+    
+    echo ""
     success "Установка завершена!"
 }
 
