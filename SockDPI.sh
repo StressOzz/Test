@@ -1,5 +1,6 @@
 #!/bin/sh
 # DPI bypass manager OpenWrt 24+ (nftables)
+# ONLY YouTube via byedpi + SOCKS5
 
 set -e
 
@@ -16,7 +17,7 @@ info() { echo -e "${BLUE}ℹ${NC} $1"; }
 
 install_bypass() {
     echo ""
-    echo "=== Установка обхода (nftables) ==="
+    echo "=== Установка обхода (ТОЛЬКО YouTube, nftables) ==="
     echo ""
 
     step "Обновление пакетов..."
@@ -64,6 +65,32 @@ EOF
     uci commit hev-socks5-tunnel
     success "hev-socks5-tunnel настроен и включен"
 
+    step "Список доменов YouTube..."
+    cat > /etc/youtube_domains.conf << 'EOF'
+youtube.com
+www.youtube.com
+m.youtube.com
+youtubei.googleapis.com
+ytimg.com
+googlevideo.com
+youtu.be
+EOF
+    success "Домены YouTube созданы"
+
+    step "Настройка dnsmasq → ipset youtube..."
+    cat > /etc/dnsmasq.d/youtube-ipset.conf << 'EOF'
+ipset=/youtube.com/youtube
+ipset=/www.youtube.com/youtube
+ipset=/m.youtube.com/youtube
+ipset=/youtubei.googleapis.com/youtube
+ipset=/ytimg.com/youtube
+ipset=/googlevideo.com/youtube
+ipset=/youtu.be/youtube
+EOF
+
+    /etc/init.d/dnsmasq restart
+    success "dnsmasq настроен (ipset youtube)"
+
     step "Включение автозапуска..."
     /etc/init.d/byedpi enable
     /etc/init.d/hev-socks5-tunnel enable
@@ -76,17 +103,18 @@ EOF
     sleep 3
     success "Сервисы запущены"
 
-    step "Настройка nftables..."
-    LAN_NET=$(uci get network.lan.ipaddr | cut -d. -f1-3).0/24
-
+    step "Настройка nftables (ТОЛЬКО YouTube)..."
     nft flush ruleset || true
 
     nft add table inet proxy
     nft 'add chain inet proxy prerouting { type nat hook prerouting priority 0 ; }'
-    nft "add rule inet proxy prerouting ip saddr $LAN_NET tcp dport {80,443} redirect to :1080"
+
+    nft add set inet proxy youtube { type ipv4_addr\; flags interval\; }
+
+    nft add rule inet proxy prerouting ip daddr @youtube tcp dport {80,443} redirect to :1080
 
     nft list ruleset
-    success "nftables настроены, прозрачный SOCKS5 для LAN готов"
+    success "Готово: через обход идет только YouTube"
 }
 
 remove_bypass() {
@@ -101,18 +129,24 @@ remove_bypass() {
     /etc/init.d/hev-socks5-tunnel disable
 
     opkg remove byedpi hev-socks5-tunnel > /dev/null 2>&1 || true
-    rm -rf /etc/config/byedpi /etc/hev-socks5-tunnel
+
+    rm -f /etc/config/byedpi
+    rm -rf /etc/hev-socks5-tunnel
+    rm -f /etc/dnsmasq.d/youtube-ipset.conf
+    rm -f /etc/youtube_domains.conf
+
+    /etc/init.d/dnsmasq restart
 
     nft flush ruleset || true
-    nft delete table inet proxy || true
+    nft delete table inet proxy 2>/dev/null || true
 
-    success "Удалено"
+    success "Удалено без следов"
 }
 
 main_menu() {
     while true; do
         echo ""
-        echo "1) Установить обход (nftables)"
+        echo "1) Установить обход (ТОЛЬКО YouTube)"
         echo "2) Удалить обход"
         echo "3) Выход"
         read -p "> " c
