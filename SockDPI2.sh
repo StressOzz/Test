@@ -63,25 +63,10 @@ EOFUCI
     step "Настройка hev-socks5-tunnel..."
     mkdir -p /etc/hev-socks5-tunnel
     cat > /etc/hev-socks5-tunnel/main.yml << 'EOFYAML'
-tunnel:
-  name: tun0
-  mtu: 8500
-  multi-queue: false
-  ipv4: 198.18.0.1
-  ipv6: 'fc00::1'
-
 socks5:
   port: 1080
   address: 127.0.0.1
   udp: 'udp'
-
-misc:
-  log-level: info
-  log-file: /var/log/hev-socks5-tunnel.log
-  connect-timeout: 10000
-  tcp-read-write-timeout: 300000
-  udp-read-write-timeout: 60000
-  limit-nofile: 65535
 EOFYAML
 
     uci set hev-socks5-tunnel.config.conffile='/etc/hev-socks5-tunnel/main.yml'
@@ -113,9 +98,6 @@ EOFYAML
 main_menu() {
     while true; do
         echo ""
-        echo "╔════════════════════════╗"
-        echo "║ Менеджер обхода блокировок ║"
-        echo "╚════════════════════════╝"
         echo "1) Установить обход"
         echo "2) Выход"
         read -p "Выберите действие [1-2]: " choice
