@@ -1,5 +1,7 @@
 #!/bin/sh
-# DPI bypass manager OpenWrt 24+ (firewall4 + nftables)
+# DPI bypass manager OpenWrt 24+ (nftables)
+
+
 
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -12,11 +14,9 @@ error() { echo -e "${RED}✗${NC} $1"; }
 step() { echo -e "${YELLOW}→${NC} $1"; }
 info() { echo -e "${BLUE}ℹ${NC} $1"; }
 
-NFT_FILE="/etc/nftables.d/90-dpi-bypass.nft"
-
 install_bypass() {
     echo ""
-    echo "=== Установка обхода (firewall4) ==="
+    echo "=== Установка обхода (nftables) ==="
     echo ""
 
     step "Обновление пакетов..."
@@ -70,22 +70,6 @@ EOF
     /etc/init.d/hev-socks5-tunnel enable
     success "Автозапуск включен"
 
-    step "Создание постоянных nftables правил (firewall4)..."
-    LAN_NET="$(uci get network.lan.ipaddr | cut -d. -f1-3).0/24"
-
-    cat > "$NFT_FILE" << EOF
-chain dpi_prerouting {
-    type nat hook prerouting priority dstnat; policy accept;
-    ip saddr $LAN_NET tcp dport { 80, 443 } redirect to :1080
-}
-EOF
-
-    success "nftables правила сохранены"
-
-    step "Перезапуск firewall4..."
-    /etc/init.d/firewall restart
-    success "firewall4 применил правила"
-
     step "Запуск сервисов..."
     /etc/init.d/byedpi restart
     sleep 2
@@ -93,7 +77,17 @@ EOF
     sleep 3
     success "Сервисы запущены"
 
-    info "После перезагрузки всё останется работать. Да, именно так."
+    step "Настройка nftables..."
+    LAN_NET=$(uci get network.lan.ipaddr | cut -d. -f1-3).0/24
+
+    nft flush ruleset
+
+    nft add table inet proxy
+    nft 'add chain inet proxy prerouting { type nat hook prerouting priority 0 ; }'
+    nft "add rule inet proxy prerouting ip saddr $LAN_NET tcp dport {80,443} redirect to :1080"
+
+    nft list ruleset
+    success "nftables настроены, прозрачный SOCKS5 для LAN готов"
 }
 
 remove_bypass() {
@@ -109,16 +103,17 @@ remove_bypass() {
 
     opkg remove byedpi hev-socks5-tunnel > /dev/null 2>&1
     rm -rf /etc/config/byedpi /etc/hev-socks5-tunnel
-    rm -f "$NFT_FILE"
 
-    /etc/init.d/firewall restart
-    success "Удалено полностью"
+    nft flush ruleset
+    nft delete table inet proxy
+
+    success "Удалено"
 }
 
 main_menu() {
     while true; do
         echo ""
-        echo "1) Установить обход (firewall4)"
+        echo "1) Установить обход (nftables)"
         echo "2) Удалить обход"
         echo "3) Выход"
         read -p "> " c
