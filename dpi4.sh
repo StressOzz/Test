@@ -37,15 +37,7 @@ install_bypass() {
     step "Обновление списка пакетов..."
     opkg update > /dev/null 2>&1
     success "Список пакетов обновлен"
-    
-    step "Установка модулей ядра..."
-    for pkg in kmod-tun kmod-ipt-nat iptables-nft; do
-        if ! opkg list-installed | grep -q "^${pkg} "; then
-            opkg install ${pkg} > /dev/null 2>&1
-        fi
-    done
-    success "Модули установлены"
-    
+        
     step "Установка byedpi..."
     if ! opkg list-installed | grep -q "^byedpi "; then
         BYEDPI_URL="https://github.com/DPITrickster/ByeDPI-OpenWrt/releases/download/v0.17.3-24.10/byedpi_0.17.3-r1_aarch64_cortex-a53.ipk"
@@ -83,25 +75,6 @@ googlevideo.com
 googleapis.com
 ytimg.com
 ggpht.com
-dis.gd
-discord.co
-discord.com
-discord.design
-discord.dev
-discord.gg
-discord.gift
-discord.gifts
-discord.media
-discord.new
-discord.store
-discord.tools
-discordapp.com
-discordapp.net
-discordmerch.com
-discordpartygames.com
-discord-activities.com
-discordactivities.com
-discordsays.com
 youtube.com
 instagram.com
 cdninstagram.com
@@ -109,22 +82,15 @@ facebook.com
 ig.me
 instagr.am
 igsonar.com
-rustorka.com
 rutor.info
-rutor.org
 rutracker.org
 nnmclub.to
-flibusta.is
-x.com
-twimg.com
-steamdb.info
 speedtest.net
 ntc.party
 EOFHOSTS
     success "byedpi настроен"
     
     step "Настройка hev-socks5-tunnel..."
-    mkdir -p /etc/hev-socks5-tunnel
     cat > /etc/hev-socks5-tunnel/main.yml << 'EOFYAML'
 socks5:
   port: 1080
@@ -182,40 +148,6 @@ EOFYAML
         fi
     fi
     
-    step "Настройка правил iptables..."
-    LAN_NET=$(uci get network.lan.ipaddr | cut -d. -f1-3).0/24
-    
-    # Создаем init.d скрипт с использованием procd triggers
-    cat > /etc/init.d/apply-proxy-rules << 'EOFINIT'
-#!/bin/sh /etc/rc.common
-# Скрипт применения правил iptables для прокси
-
-USE_PROCD=1
-START=96
-STOP=15
-
-apply_rules() {
-    # Ждем готовности сети
-    sleep 3
-    # Ждем, пока byedpi запустится
-    for i in 1 2 3 4 5 6 7 8 9 10; do
-        if /etc/init.d/byedpi status > /dev/null 2>&1; then
-            break
-        fi
-        sleep 1
-    done
-    
-    # Применяем правила
-    LAN_NET=$(uci get network.lan.ipaddr 2>/dev/null | cut -d. -f1-3).0/24
-    if [ -n "$LAN_NET" ] && [ "$LAN_NET" != ".0/24" ]; then
-        # Удаляем старые правила
-        iptables-nft -t nat -D PREROUTING -s $LAN_NET -p tcp --dport 80 -j REDIRECT --to-port 1080 2>/dev/null || true
-        iptables-nft -t nat -D PREROUTING -s $LAN_NET -p tcp --dport 443 -j REDIRECT --to-port 1080 2>/dev/null || true
-        
-        # Добавляем новые правила
-        iptables-nft -t nat -A PREROUTING -s $LAN_NET -p tcp --dport 80 -j REDIRECT --to-port 1080 2>/dev/null || true
-        iptables-nft -t nat -A PREROUTING -s $LAN_NET -p tcp --dport 443 -j REDIRECT --to-port 1080 2>/dev/null || true
-    fi
 }
 
 start_service() {
@@ -374,26 +306,21 @@ configure_byedpi() {
 # Главное меню
 main_menu() {
     while true; do
-        echo ""
-        echo "╔════════════════════════════════════╗"
-        echo "║    Менеджер обхода блокировок      ║"
-        echo "╚════════════════════════════════════╝"
-        echo ""
         echo "1) Установить обход"
         echo "2) Удалить обход"
         echo "3) Конфигурация byedpi"
         echo ""
-        read -p "Выберите действие [1-5]: " choice
+        read -p "Выберите действие: " choice
         
         case $choice in
             1)
                 install_bypass
                 ;;
 
-            3)
+            2)
                 remove_bypass
                 ;;
-            4)
+            3)
                 configure_byedpi
                 ;;
             *)
