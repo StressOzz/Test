@@ -14,7 +14,28 @@ error() { echo -e "${RED}✗${NC} $1"; }
 step() { echo -e "${YELLOW}→${NC} $1"; }
 info() { echo -e "${BLUE}ℹ${NC} $1"; }
 
-SITES="google.com googlevideo.com discord.com youtube.com instagram.com facebook.com"
+SITES="googlevideo.com
+jnn-pa.googleapis.com
+wide-youtube.l.google.com
+withyoutube.com
+youtu.be
+youtube.com
+youtube.googleapis.com
+youtubeeducation.com
+youtubeembeddedplayer.googleapis.com
+youtubefanfest.com
+youtubegaming.com
+youtubei.googleapis.com
+youtubekids.com
+youtubemobilesupport.com
+youtube-nocookie.com
+youtube-ui.l.google.com
+yt.be
+yt3.ggpht.com
+yt4.ggpht.com
+ytimg.com
+ytimg.l.google.com
+yt-video-upload.l.google.com"
 
 install_bypass() {
     echo ""
