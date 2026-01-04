@@ -1,5 +1,5 @@
 #!/bin/sh
-# DPI bypass manager OpenWrt 24+ (nftables)
+# DPI bypass manager OpenWrt 24+ (nftables, split-proxy)
 
 set -e
 
@@ -14,9 +14,11 @@ error() { echo -e "${RED}✗${NC} $1"; }
 step() { echo -e "${YELLOW}→${NC} $1"; }
 info() { echo -e "${BLUE}ℹ${NC} $1"; }
 
+SITES="google.com googlevideo.com discord.com youtube.com instagram.com facebook.com"
+
 install_bypass() {
     echo ""
-    echo "=== Установка обхода (nftables) ==="
+    echo "=== Установка обхода (nftables + split-proxy) ==="
     echo ""
 
     step "Обновление пакетов..."
@@ -76,17 +78,33 @@ EOF
     sleep 3
     success "Сервисы запущены"
 
-    step "Настройка nftables..."
+    step "Настройка nftables (split-proxy)..."
     LAN_NET=$(uci get network.lan.ipaddr | cut -d. -f1-3).0/24
 
-    nft flush ruleset || true
+    mkdir -p /etc/nftables.d
 
-    nft add table inet proxy
-    nft 'add chain inet proxy prerouting { type nat hook prerouting priority 0 ; }'
-    nft "add rule inet proxy prerouting ip saddr $LAN_NET tcp dport {80,443} redirect to :1080"
+    cat > /etc/nftables.d/90-bypass.nft <<EOF
+table inet bypass {
+    chain prerouting {
+        type nat hook prerouting priority dstnat;
+        # split-proxy: только для указанных сайтов
+EOF
 
-    nft list ruleset
-    success "nftables настроены, прозрачный SOCKS5 для LAN готов"
+    for host in $SITES; do
+        IPs=$(nslookup $host | awk '/^Address: / {print $2}')
+        for ip in $IPs; do
+            [ -n "$ip" ] && echo "        ip saddr $LAN_NET ip daddr $ip tcp dport {80,443} redirect to :1080" >> /etc/nftables.d/90-bypass.nft
+        done
+    done
+
+    cat >> /etc/nftables.d/90-bypass.nft <<'EOF'
+    }
+}
+EOF
+
+    # Применяем сразу
+    nft -f /etc/nftables.d/90-bypass.nft
+    success "nftables настроены, split-proxy для LAN готов"
 }
 
 remove_bypass() {
@@ -103,8 +121,8 @@ remove_bypass() {
     opkg remove byedpi hev-socks5-tunnel > /dev/null 2>&1 || true
     rm -rf /etc/config/byedpi /etc/hev-socks5-tunnel
 
-    nft flush ruleset || true
-    nft delete table inet proxy || true
+    rm -f /etc/nftables.d/90-bypass.nft
+    nft delete table inet bypass 2>/dev/null || true
 
     success "Удалено"
 }
@@ -112,7 +130,7 @@ remove_bypass() {
 main_menu() {
     while true; do
         echo ""
-        echo "1) Установить обход (nftables)"
+        echo "1) Установить обход (split-proxy)"
         echo "2) Удалить обход"
         echo "3) Выход"
         read -p "> " c
