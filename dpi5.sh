@@ -1,5 +1,5 @@
 #!/bin/sh
-# DPI bypass manager OpenWrt 24+ (nftables)
+# DPI bypass manager OpenWrt 24+ (firewall4 + nftables)
 
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -16,7 +16,7 @@ NFT_FILE="/etc/nftables.d/90-dpi-bypass.nft"
 
 install_bypass() {
     echo ""
-    echo "=== Установка обхода (nftables) ==="
+    echo "=== Установка обхода (firewall4) ==="
     echo ""
 
     step "Обновление пакетов..."
@@ -70,19 +70,17 @@ EOF
     /etc/init.d/hev-socks5-tunnel enable
     success "Автозапуск включен"
 
-    step "Создание постоянных nftables правил..."
-    LAN_NET=$(uci get network.lan.ipaddr | cut -d. -f1-3).0/24
+    step "Создание постоянных nftables правил (firewall4)..."
+    LAN_NET="$(uci get network.lan.ipaddr | cut -d. -f1-3).0/24"
 
     cat > "$NFT_FILE" << EOF
-table inet dpi_proxy {
-    chain prerouting {
-        type nat hook prerouting priority 0;
-        ip saddr $LAN_NET tcp dport { 80, 443 } redirect to :1080
-    }
+chain dpi_prerouting {
+    type nat hook prerouting priority dstnat; policy accept;
+    ip saddr $LAN_NET tcp dport { 80, 443 } redirect to :1080
 }
 EOF
 
-    success "nftables правила сохранены в $NFT_FILE"
+    success "nftables правила сохранены"
 
     step "Перезапуск firewall4..."
     /etc/init.d/firewall restart
@@ -95,7 +93,7 @@ EOF
     sleep 3
     success "Сервисы запущены"
 
-    info "Теперь всё переживает перезагрузку. Магии нет — просто сделано правильно."
+    info "После перезагрузки всё останется работать. Да, именно так."
 }
 
 remove_bypass() {
@@ -114,14 +112,13 @@ remove_bypass() {
     rm -f "$NFT_FILE"
 
     /etc/init.d/firewall restart
-
-    success "Удалено без следов"
+    success "Удалено полностью"
 }
 
 main_menu() {
     while true; do
         echo ""
-        echo "1) Установить обход (nftables)"
+        echo "1) Установить обход (firewall4)"
         echo "2) Удалить обход"
         echo "3) Выход"
         read -p "> " c
