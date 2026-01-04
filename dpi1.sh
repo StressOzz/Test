@@ -549,22 +549,38 @@ configure_byedpi() {
 main_menu() {
     while true; do
         echo ""
-        echo "1) Установить обход"
-        echo "2) Удалить обход"
+        echo "╔════════════════════════════════════╗"
+        echo "║   Менеджер обхода блокировок      ║"
+        echo "╚════════════════════════════════════╝"
         echo ""
-        read -p "Выберите действие: " choice
+        echo "1) Установить обход"
+        echo "2) Статус обхода"
+        echo "3) Удалить обход"
+        echo "4) Конфигурация byedpi"
+        echo "5) Выход"
+        echo ""
+        read -p "Выберите действие [1-5]: " choice
         
         case $choice in
             1)
                 install_bypass
                 ;;
             2)
+                check_status
+                ;;
+            3)
                 remove_bypass
-
-            *)
+                ;;
+            4)
+                configure_byedpi
+                ;;
+            5)
                 echo ""
                 info "Выход"
                 exit 0
+                ;;
+            *)
+                error "Неверный выбор"
                 ;;
         esac
     done
