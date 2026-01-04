@@ -75,7 +75,7 @@ install_bypass() {
 config byedpi 'main'
 	option enabled '1'
 	option cmd_opts '-E -s12+s -d18+s -r6+s -a4 -An'
-	option hosts 'googlevideo.com jnn-pa.googleapis.com wide-youtube.l.google.com withyoutube.com youtu.be youtube.com youtube.googleapis.com youtubeeducation.com youtubeembeddedplayer.googleapis.com youtubefanfest.com youtubegaming.com youtubei.googleapis.com youtubekids.com youtubemobilesupport.com youtube-nocookie.com youtube-ui.l.google.com yt.be yt3.ggpht.com yt4.ggpht.com ytimg.com ytimg.l.google.com yt-video-upload.l.google.com'
+	option hosts '/etc/config/byedpi.txt'
 EOFUCI
 
     cat > /etc/config/byedpi.hosts << 'EOFHOSTS'
