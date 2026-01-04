@@ -126,25 +126,10 @@ EOFHOSTS
     step "Настройка hev-socks5-tunnel..."
     mkdir -p /etc/hev-socks5-tunnel
     cat > /etc/hev-socks5-tunnel/main.yml << 'EOFYAML'
-tunnel:
-  name: tun0
-  mtu: 8500
-  multi-queue: false
-  ipv4: 198.18.0.1
-  ipv6: 'fc00::1'
-
 socks5:
   port: 1080
   address: 127.0.0.1
   udp: 'udp'
-
-misc:
-  log-level: info
-  log-file: /var/log/hev-socks5-tunnel.log
-  connect-timeout: 10000
-  tcp-read-write-timeout: 300000
-  udp-read-write-timeout: 60000
-  limit-nofile: 65535
 EOFYAML
     # Создаем или обновляем конфигурацию UCI
     if ! uci get hev-socks5-tunnel.config > /dev/null 2>&1; then
@@ -282,77 +267,6 @@ EOFRC
 }
 
 # Функция проверки статуса
-check_status() {
-    echo ""
-    echo "=== Статус обхода ==="
-    echo ""
-    
-    # Проверка пакетов
-    echo "📦 Пакеты:"
-    for pkg in byedpi hev-socks5-tunnel; do
-        if opkg list-installed | grep -q "^${pkg} "; then
-            VERSION=$(opkg list-installed | grep "^${pkg} " | awk '{print $3}')
-            success "  ${pkg} (${VERSION})"
-        else
-            error "  ${pkg} не установлен"
-        fi
-    done
-    
-    # Проверка модулей
-    echo ""
-    echo "🔧 Модули ядра:"
-    for mod in kmod-tun kmod-ipt-nat iptables-nft; do
-        if opkg list-installed | grep -q "^${mod} "; then
-            success "  ${mod}"
-        else
-            error "  ${mod} не установлен"
-        fi
-    done
-    
-    # Проверка сервисов
-    echo ""
-    echo "🔄 Сервисы:"
-    
-    # Проверка портов
-    echo ""
-    echo "🔌 Порты:"
-    if netstat -tlnp 2>/dev/null | grep -q ":1080 "; then
-        success "  byedpi слушает на порту 1080"
-    else
-        error "  byedpi не слушает на порту 1080"
-    fi
-    
-
-    
-    # Проверка TUN интерфейса
-    echo ""
-    echo "🌐 Интерфейсы:"
-    if ip link show tun0 > /dev/null 2>&1; then
-        TUN_IP=$(ip addr show tun0 2>/dev/null | grep 'inet ' | awk '{print $2}' | head -1)
-        success "  TUN интерфейс tun0 создан (${TUN_IP})"
-    else
-        error "  TUN интерфейс tun0 не создан"
-    fi
-    
-    # Проверка правил iptables
-    echo ""
-    echo "🛡️  Правила iptables:"
-    RULES_COUNT=$(iptables-nft -t nat -L PREROUTING -n 2>/dev/null | grep -E '(80|443|1080)' | wc -l)
-    if [ "$RULES_COUNT" -ge 2 ]; then
-        success "  Настроено правил: ${RULES_COUNT}"
-    else
-        error "  Правила не настроены"
-    fi
-
-    
-    
-
-    
-    # Тест доступности сети
-    echo ""
-    echo "📡 Тест доступности сети:"
-
-}
 
 # Функция удаления обхода
 remove_bypass() {
@@ -466,10 +380,8 @@ main_menu() {
         echo "╚════════════════════════════════════╝"
         echo ""
         echo "1) Установить обход"
-        echo "2) Статус обхода"
-        echo "3) Удалить обход"
-        echo "4) Конфигурация byedpi"
-        echo "5) Выход"
+        echo "2) Удалить обход"
+        echo "3) Конфигурация byedpi"
         echo ""
         read -p "Выберите действие [1-5]: " choice
         
@@ -477,23 +389,19 @@ main_menu() {
             1)
                 install_bypass
                 ;;
-            2)
-                check_status
-                ;;
+
             3)
                 remove_bypass
                 ;;
             4)
                 configure_byedpi
                 ;;
-            5)
+            *)
                 echo ""
                 info "Выход"
                 exit 0
                 ;;
-            *)
-                error "Неверный выбор"
-                ;;
+
         esac
     done
 }
