@@ -18,7 +18,7 @@ install_bypass() {
     echo ""
 
     step "Обновление пакетов..."
-    opkg update > /dev/null 2>&1
+    opkg update
 
     step "Установка необходимых пакетов..."
     opkg install \
@@ -28,7 +28,7 @@ install_bypass() {
         kmod-nf-tproxy \
         kmod-nft-socket \
         ip-full \
-        nftables > /dev/null 2>&1 || error "Ошибка установки пакетов"
+        nftables || error "Ошибка установки пакетов"
     success "Пакеты установлены"
 
     step "Настройка byedpi..."
@@ -104,7 +104,7 @@ remove_bypass() {
     ip rule del fwmark 1 lookup tproxy 2>/dev/null
     ip route flush table tproxy 2>/dev/null
 
-    opkg remove byedpi hev-socks5-tunnel > /dev/null 2>&1
+    opkg remove byedpi hev-socks5-tunnel
 
     /etc/init.d/firewall restart
     success "Удалено полностью"
