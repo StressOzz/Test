@@ -2,6 +2,61 @@
 # ==========================================
 # Zapret on remittor Manager by StressOzz
 # =========================================
+
+switch_strategy() {
+
+    # Узнаём текущую стратегию
+    CURRENT=$(grep -o 'Dv=[12]' "$CONF" | cut -d= -f2)
+    [ -z "$CURRENT" ] && CURRENT=1
+
+    if [ "$CURRENT" = "1" ]; then
+        NEW_STRAT="$STRAT2"
+        NEW_NUM=2
+    else
+        NEW_STRAT="$STRAT1"
+        NEW_NUM=1
+    fi
+
+    # Проверка, есть ли блок
+    grep -q '^--filter-tcp=2053,2083,2087,2096,8443$' "$CONF" || {
+        echo "ERROR: strategy block not found" >&2
+        return 1
+    }
+
+    # Меняем блок через sed
+    # sed в BusyBox умеет inline с -i
+    awk_block=$(echo "$NEW_STRAT" | sed 's/[&/\]/\\&/g') # экранируем спецсимволы
+
+    # Находим начало блока
+    START=$(grep -n '^--filter-tcp=2053,2083,2087,2096,8443$' "$CONF" | cut -d: -f1)
+    # Находим конец блока (--new или ')
+    END=$(tail -n +"$START" "$CONF" | grep -n -m1 -E '^--new$|^'\''$' | cut -d: -f1)
+    END=$((START + END -1))
+
+    # Удаляем старый блок (от START до END-1)
+    sed -i "${START},$((END-1))d" "$CONF"
+    # Вставляем новую стратегию перед END
+    sed -i "${START}i$awk_block" "$CONF"
+
+    # Обновляем маркер стратегии
+    if grep -q '^# Dv=' "$CONF"; then
+        sed -i "s/^# Dv=[12]/# Dv=$NEW_NUM/" "$CONF"
+    else
+        sed -i "1i# Dv=$NEW_NUM" "$CONF"
+    fi
+
+    echo "OK: strategy switched to $NEW_NUM"
+}
+
+
+
+
+
+
+
+
+
+
 ZAPRET_MANAGER_VERSION="7.9"; ZAPRET_VERSION="72.20251227"; STR_VERSION_AUTOINSTALL="v6"
 TEST_HOST="https://rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com"; LAN_IP=$(uci get network.lan.ipaddr)
 GREEN="\033[1;32m"; RED="\033[1;31m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"
@@ -271,51 +326,6 @@ STRAT2="--filter-tcp=2053,2083,2087,2096,8443
 --dpi-desync-split-pos=2
 --dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin"
 
-switch_strategy() {
-
-    CURRENT=$(grep -o 'Dv=[12]' "$CONF" | cut -d= -f2)
-    [ -z "$CURRENT" ] && CURRENT=1
-
-    if [ "$CURRENT" = "1" ]; then
-        NEW_STRAT="$STRAT2"
-        NEW_NUM=2
-    else
-        NEW_STRAT="$STRAT1"
-        NEW_NUM=1
-    fi
-
-    awk -i inplace -v new="$NEW_STRAT" '
-        BEGIN { inblock=0; found=0 }
-        {
-            if ($0 ~ /^--filter-tcp=2053,2083,2087,2096,8443$/) {
-                print new
-                inblock=1
-                found=1
-                next
-            }
-            if (inblock && ($0 == "--new" || $0 == "'\''")) {
-                inblock=0
-                print $0
-                next
-            }
-            if (!inblock) print $0
-        }
-        END {
-            if (!found) {
-                print "ERROR: strategy block not found" > "/dev/stderr"
-                exit 1
-            }
-        }
-    ' "$CONF" || exit 1
-
-    if grep -q '^# Dv=' "$CONF"; then
-        sed -i "s/^# Dv=[12]/# Dv=$NEW_NUM/" "$CONF"
-    else
-        sed -i "1i# Dv=$NEW_NUM" "$CONF"
-    fi
-
-    echo "OK: strategy switched to $NEW_NUM"
-}
 
 
 
