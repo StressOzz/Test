@@ -316,8 +316,7 @@ echo -e "FIX ${GREEN}отключён!${NC}\n"; else echo -e "\n${MAGENTA}При
 fw4 restart >/dev/null 2>&1; echo -e "FIX ${GREEN}успешно применён!${NC}\n"; fi; read -p "Нажмите Enter..." dummy; fi ;; *) echo; return ;; esac; done; }
 
 
-STRAT1="#Dv2
---filter-tcp=2053,2083,2087,2096,8443
+STRAT1="--filter-tcp=2053,2083,2087,2096,8443
 --hostlist-domains=discord.media
 --dpi-desync=fake,multisplit
 --dpi-desync-split-seqovl=681
@@ -327,8 +326,7 @@ STRAT1="#Dv2
 --dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin
 --dpi-desync-fake-tls-mod=rnd,dupsid,sni=www.google.com"
 
-STRAT2="#Dv1
---filter-tcp=2053,2083,2087,2096,8443
+STRAT2="--filter-tcp=2053,2083,2087,2096,8443
 --hostlist-domains=discord.media
 --dpi-desync=multisplit
 --dpi-desync-split-seqovl=652
