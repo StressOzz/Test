@@ -165,9 +165,10 @@ printf '%s\n' "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/z
 # Меню стратегий
 # ==========================================
 menu_str() { [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter..." dummy; return; }; while true; do show_current_strategy; RKN_Check; clear
-echo -e "${MAGENTA}Меню стратегий${NC}\n"; current="$ver$( [ -n "$ver" ] && [ -n "$yv_ver" ] && echo " / " )$yv_ver"; if [ -n "$current" ]; then echo -e "${YELLOW}Используется стратегия:${NC} $current $RKN_STATUS\n"; elif [ -n "$RKN_STATUS" ]; then echo -e "${YELLOW}Используется стратегия:${NC} РКН\n"; fi
-[ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*88,500,1024-19293,19345-49999,50101-65535" "$CONF" && grep -q -- "--filter-udp=88,500,1024-19293,19345-49999,50101-65535" "$CONF" && echo -e "${YELLOW}Стратегия для игр:${NC}       ${GREEN}включена${NC}"
+echo -e "${MAGENTA}Меню стратегий${NC}\n"; print=0; current="$ver$( [ -n "$ver" ] && [ -n "$yv_ver" ] && echo " / " )$yv_ver"; if [ -n "$current" ]; then echo -e "${YELLOW}Используется стратегия:${NC} $current $RKN_STATUS"; elif [ -n "$RKN_STATUS" ]; then echo -e "${YELLOW}Используется стратегия:${NC} РКН"; print=1; fi
+[ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*88,500,1024-19293,19345-49999,50101-65535" "$CONF" && grep -q -- "--filter-udp=88,500,1024-19293,19345-49999,50101-65535" "$CONF" && echo -e "${YELLOW}Стратегия для игр:${NC}       ${GREEN}включена${NC}" && print=1
 menu_game=$( [ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*88,500,1024-19293,19345-49999,50101-65535" "$CONF" && grep -q -- "--filter-udp=88,500,1024-19293,19345-49999,50101-65535" "$CONF" && echo "Удалить стратегию для игр" || echo "Добавить стратегию для игр" )
+[ "$printed" -eq 1 ] && echo
 echo -e "${CYAN}1) ${GREEN}Выбрать стратегию для установки ${NC}v1-v7\n${CYAN}2) ${GREEN}$menu_game\n${CYAN}3) $MENU_TEXT\n${CYAN}4) ${GREEN}Подобрать стратегию для ${NC}YouTube"
 echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read choiceST; case "$choiceST" in 1) strategy_CHOUSE ;; 2) toggle_rkn_bypass; continue ;; 3) auto_stryou ;; *) return ;; esac; done }
 strategy_CHOUSE () { echo -ne "\n${YELLOW}Введите версию стратегии для установки (1-7):${NC} "; read -r choice; if [[ "$choice" =~ ^[1-7]$ ]]; then install_strategy "v$choice"; fi; }
@@ -266,10 +267,9 @@ if grep -q 'ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/te
 if [ -f "$CONF" ]; then current="$ver$( [ -n "$ver" ] && [ -n "$yv_ver" ] && echo " / " )$yv_ver"; if [ -n "$current" ]
 then echo -e "${YELLOW}Используется стратегия:${NC}  ${CYAN}$current $RKN_STATUS${NC}"; elif [ -n "$RKN_STATUS" ]; then echo -e "${YELLOW}Используется стратегия:${NC}${CYAN}  РКН${NC}"; fi; fi
 echo -e "\n${CYAN}1) ${GREEN}Установить${NC} Zapret\n${CYAN}2) ${GREEN}Меню стратегий${NC}\n${CYAN}3) ${GREEN}Вернуть ${NC}настройки по умолчанию\n${CYAN}4) ${GREEN}$str_stp_zpr ${NC}Zapret"
-echo -e "${CYAN}5) ${GREEN}Удалить ${NC}Zapret\n${CYAN}6) ${GREEN}$menu_game\n${CYAN}7) ${GREEN}Меню настройки ${NC}Discord\n${CYAN}8) ${GREEN}Удалить → установить → настроить${NC} Zapret"
-echo -e "${CYAN}9) ${GREEN}Меню ${NC}DNS over HTTPS\n${CYAN}0) ${GREEN}Системное меню${NC}" ; echo -ne "${CYAN}Enter) ${GREEN}Выход${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read choice
-case "$choice" in 1) install_Zapret ;; 2) menu_str ;; 3) comeback_def ;; 4) pgrep -f /opt/zapret >/dev/null 2>&1 && stop_zapret || start_zapret ;; 5) uninstall_zapret ;; 6) fix_GAME ;; 7) scrypt_install ;; 8) zapret_key ;;
-9) DoH_menu ;; 0) sys_menu ;; *) echo; exit 0 ;; esac; }
+echo -e "${CYAN}5) ${GREEN}Удалить ${NC}Zapret\n${CYAN}6) ${GREEN}Меню настройки ${NC}Discord${CYAN}7) ${GREEN}Меню ${NC}DNS over HTTPS\n${CYAN}8) ${GREEN}Удалить → установить → настроить${NC} Zapret\n${CYAN}0) ${GREEN}Системное меню${NC}" ; echo -ne "${CYAN}Enter) ${GREEN}Выход${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read choice
+case "$choice" in 1) install_Zapret ;; 2) menu_str ;; 3) comeback_def ;; 4) pgrep -f /opt/zapret >/dev/null 2>&1 && stop_zapret || start_zapret ;; 5) uninstall_zapret ;; 6) scrypt_install ;; 7) DoH_menu ;; 8) zapret_key ;;
+0) sys_menu ;; *) echo; exit 0 ;; esac; }
 # ==========================================
 # Старт скрипта
 # ==========================================
