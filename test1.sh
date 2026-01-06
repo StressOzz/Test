@@ -268,7 +268,7 @@ then
     fi
     read -p "Нажмите Enter..." dummy
 fi
-
+;;
 
 *) echo; return ;; esac; done; }
 # ==========================================
