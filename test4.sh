@@ -6,7 +6,7 @@
 switch_strategy() {
 
     # Узнаём текущую стратегию
-    CURRENT=$(grep -o 'Dv=[12]' "$CONF" | cut -d= -f2)
+    CURRENT=$(grep -o '#Dv[12]' "$CONF" | cut -d= -f2)
     [ -z "$CURRENT" ] && CURRENT=1
 
     if [ "$CURRENT" = "1" ]; then
