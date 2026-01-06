@@ -17,14 +17,11 @@ switch_strategy() {
         NEW_NUM=1
     fi
 
-    # Проверка, есть ли блок (игнорируем пробелы в начале строки)
+    # Проверка, есть ли блок
     grep -q -E '^[[:space:]]*--filter-tcp=2053,2083,2087,2096,8443' "$CONF" || {
         echo "ERROR: strategy block not found" >&2
         return 1
     }
-
-    # Экранируем спецсимволы для sed
-    awk_block=$(echo "$NEW_STRAT" | sed 's/[&/\]/\\&/g')
 
     # Находим начало блока
     START=$(grep -n -E '^[[:space:]]*--filter-tcp=2053,2083,2087,2096,8443' "$CONF" | cut -d: -f1)
@@ -32,10 +29,15 @@ switch_strategy() {
     END=$(tail -n +"$START" "$CONF" | grep -n -m1 -E '^--new$|^'\''$' | cut -d: -f1)
     END=$((START + END -1))
 
-    # Удаляем старый блок (от START до END-1)
+    # Удаляем старый блок
     sed -i "${START},$((END-1))d" "$CONF"
-    # Вставляем новую стратегию перед END
-    sed -i "${START}i$awk_block" "$CONF"
+
+    # Вставляем новую стратегию построчно
+    LINE=$START
+    echo "$NEW_STRAT" | while IFS= read -r l; do
+        sed -i "${LINE}i$l" "$CONF"
+        LINE=$((LINE + 1))
+    done
 
     # Обновляем маркер стратегии
     if grep -q -E '^#[[:space:]]*Dv' "$CONF"; then
@@ -46,6 +48,7 @@ switch_strategy() {
 
     echo "OK: strategy switched to $NEW_NUM"
 }
+
 
 
 
