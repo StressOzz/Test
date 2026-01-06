@@ -39,21 +39,18 @@ switch_Dv() {
         LINE=$((LINE + 1))
     done
 
-    # Обновляем маркер стратегии
+    # Обновляем или вставляем маркер стратегии
     if grep -q -E '^#[[:space:]]*Dv' "$CONF"; then
+        # Если есть, заменяем
         sed -i "s/^#[[:space:]]*Dv[12]/#Dv$NEW_NUM/" "$CONF"
     else
-        sed -i "1i#Dv$NEW_NUM" "$CONF"
+        # Если нет, вставляем **перед блоком**, который только что вставили
+        sed -i "$START i#Dv$NEW_NUM" "$CONF"
     fi
 
     echo "OK: strategy switched to $NEW_NUM"
     read -p "Нажмите Enter..." dummy
 }
-
-
-
-
-
 
 
 
