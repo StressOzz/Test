@@ -108,25 +108,136 @@ hosts_clear; echo -e "Zapret ${GREEN}полностью удалён!${NC}\n"; [
 # ==========================================
 # Подбор стратегии для Ютуб
 # ==========================================
-auto_stryou() { awk '/^[[:space:]]*option NFQWS_OPT '\''/{flag=1} flag{print}' "$CONF" > "$OLD_STR"; curl -fsSL "$STR_URL" -o "$TMP_LIST" || { echo -e "\n${RED}Не удалось скачать список${NC}\n"; read -p "Нажмите Enter..." dummy </dev/tty; return 1; }
-TOTAL=$(grep -c '^Yv[0-9]\+' "$TMP_LIST"); echo -e "\n${MAGENTA}Подбираем стратегию для ${NC}YouTube${NC}"; echo -e "${CYAN}Найдено ${NC}$TOTAL${CYAN} стратегий${NC}"; CURRENT_NAME=""; CURRENT_BODY=""; COUNT=0; apply_strategy() { NAME="$1"; BODY="$2"
-sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; { echo "  option NFQWS_OPT '"; echo "#AUTO $NAME"; printf "%b\n" "$BODY"; echo "'"; } >> "$CONF"; ZAPRET_RESTART; }
-check_access() { curl -s --connect-timeout 4 -m 4 "$TEST_HOST" >/dev/null && echo "ok" || echo "fail"; }; while IFS= read -r LINE || [ -n "$LINE" ]; do if echo "$LINE" | grep -q '^Yv[0-9]\+'; then if [ -n "$CURRENT_NAME" ]; then COUNT=$((COUNT + 1))
-echo -e "\n${CYAN}Проверяем стратегию: ${NC}$CURRENT_NAME ($COUNT/$TOTAL)"; apply_strategy "$CURRENT_NAME" "$CURRENT_BODY"; STATUS=$(check_access); if [ "$STATUS" = "ok" ]; then echo -e "${GREEN}Видео на ПК открывается!${NC}\n${YELLOW}Проверьте работу ${NC}YouTube${YELLOW} на других устройствах!${NC}"
-echo -en "Enter${GREEN} - применить стратегию, ${NC}S/s${GREEN} - остановить, ${NC}N/n${GREEN} - продолжить подбор:${NC} "; read -r ANSWER </dev/tty
-if [ -z "$ANSWER" ]; then { echo "#$CURRENT_NAME"; printf "%b\n" "$CURRENT_BODY"; } > "$SAVED_STR"; echo -e "${CYAN}Применяем стратегию и перезапускаем ${NC}Zapret"
-awk '{if(skip){if($0=="--new"||$0~/\047/){skip=0;next}if($0~/^[[:space:]]*$/)next;next}if($0=="--filter-tcp=443"){getline n;if(n=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt"){skip=1;next}else{print $0;print n;next}}if($0=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt")has_google=1;if($0~/^[[:space:]]*#Yv/)next;print}' "$OLD_STR" > "$NEW_STR"
-awk 'BEGIN{inserted=0;has_google=0}$0=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt"{has_google=1}$0=="--new"&&!inserted{while((getline l<"'"$SAVED_STR"'")>0)if(l!~/^[[:space:]]*$/)print l;print "--new";inserted=1;next}$0~/^[[:space:]]*option NFQWS_OPT \047$/&&!has_google&&!inserted{print;while((getline l<"'"$SAVED_STR"'")>0)if(l!~/^[[:space:]]*$/)print l;print "--new";inserted=1;next}{print}' "$NEW_STR" > "$FINAL_STR"
-sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; cat "$FINAL_STR" >> "$CONF"; awk '{if($0=="--new"){if(prev!="--new")print}else print;prev=$0}' "$CONF" > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"
-grep -q "^[[:space:]]*' *\$" "$CONF" || echo "'" >> "$CONF"; ZAPRET_RESTART; echo -e "${GREEN}Стратегия применена!${NC}\n"; read -p "Нажмите Enter..." dummy </dev/tty; return 0; elif [[ "$ANSWER" =~ ^[Ss]$ ]]; then sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; cat "$OLD_STR" >> "$CONF"; ZAPRET_RESTART
-echo -e "\n${YELLOW}Подбор остановлен. Стратегия восстановлена.${NC}\n"; read -p "Нажмите Enter..." dummy </dev/tty; return 1; fi; else echo -e "${RED}Видео не открывается, продолжаем подбор...${NC}"; fi; fi; CURRENT_NAME="$LINE"; CURRENT_BODY=""; else [ -n "$LINE" ] && CURRENT_BODY="${CURRENT_BODY}${LINE}\n"; fi; done < "$TMP_LIST"
-if [ -n "$CURRENT_NAME" ]; then COUNT=$((COUNT + 1)); echo -e "\n${CYAN}Проверяем стратегию: ${NC}$CURRENT_NAME ($COUNT/$TOTAL)"; apply_strategy "$CURRENT_NAME" "$CURRENT_BODY"; STATUS=$(check_access); if [ "$STATUS" = "ok" ]; then echo -e "${GREEN}Видео на ПК открывается!${NC}\n${YELLOW}Проверьте работу ${NC}YouTube${YELLOW} на других устройствах!${NC}"
-echo -en "Enter${GREEN} - применить стратегию, ${NC}S/s${GREEN} - остановить, ${NC}N/n${GREEN} - продолжить подбор:${NC} "; read -r ANSWER </dev/tty; if [ -z "$ANSWER" ]; then { echo "#$CURRENT_NAME"; printf "%b\n" "$CURRENT_BODY"; } > "$SAVED_STR"; echo -e "${CYAN}Применяем стратегию и перезапускаем ${NC}Zapret"
-awk '{ if(skip) { if($0=="--new" || $0 ~ /'\''/) { skip=0; print; next } next } if($0=="--filter-tcp=443") { getline next_line; if(next_line=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt") { skip=1; next } else { print $0; print next_line; next } } if($0~/^[[:space:]]*#Yv/) next; print }' "$OLD_STR" > $NEW_STR
-awk 'BEGIN { inserted=0 } /^--new/ && !inserted { system("cat '"$SAVED_STR"'"); inserted=1 } { print }' $NEW_STR > $FINAL_STR; sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; cat $FINAL_STR >> "$CONF"; ZAPRET_RESTART
-echo -e "${GREEN}Стратегия применена!${NC}\n"; read -p "Нажмите Enter..." dummy </dev/tty; return 0; elif [[ "$ANSWER" =~ ^[Ss]$ ]]; then sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; cat "$OLD_STR" >> "$CONF"; ZAPRET_RESTART
-echo -e "\n${YELLOW}Подбор остановлен. Cтратегия восстановлена.${NC}\n"; read -p "Нажмите Enter..." dummy </dev/tty; return 1; fi; else echo -e "${RED}Видео не открывается...${NC}\n"; fi; fi; sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; cat "$OLD_STR" >> "$CONF"; ZAPRET_RESTART
-echo -e "\n${RED}Рабочая стратегия для YouTube не найдена!${NC}\n"; read -p "Нажмите Enter..." dummy </dev/tty; return 1; }
+auto_stryou() {
+    # Сохраняем старый конфиг
+    awk '/^[[:space:]]*option NFQWS_OPT '\''/{flag=1} flag{print}' "$CONF" > "$OLD_STR"
+
+    # Скачиваем список стратегий
+    curl -fsSL "$STR_URL" -o "$TMP_LIST" || {
+        echo -e "\n${RED}Не удалось скачать список${NC}\n"
+        read -p "Нажмите Enter..." dummy </dev/tty
+        return 1
+    }
+
+    TOTAL=$(grep -c '^Yv[0-9]\+' "$TMP_LIST")
+    echo -e "\n${MAGENTA}Подбираем стратегию для ${NC}YouTube${NC}"
+    echo -e "${CYAN}Найдено ${NC}$TOTAL${CYAN} стратегий${NC}"
+
+    CURRENT_NAME=""
+    CURRENT_BODY=""
+    COUNT=0
+
+    # Функция проверки доступа
+    check_access() {
+        curl -s --connect-timeout 4 -m 4 "$TEST_HOST" >/dev/null && echo "ok" || echo "fail"
+    }
+
+    # Функция для обновления блока в конфиге
+    update_strategy() {
+        local name="$1"
+        local body="$2"
+        local tmp="$(mktemp)"
+
+        awk -v name="$name" -v body="$body" '
+        BEGIN { in_block=0; replaced=0; }
+        /^[[:space:]]*option NFQWS_OPT '\''/ { in_block=1; print; next }
+        in_block && /^[[:space:]]*#Yv[0-9]+/ {
+            print "#" name
+            split(body,b,"\n")
+            for(i in b) if(b[i]!="") print b[i]
+            replaced=1
+            next
+        }
+        in_block && /^'\''/ { in_block=0; print; next }
+        { print }
+        END { if(!replaced) { print "#" name; split(body,b,"\n"); for(i in b) if(b[i]!="") print b[i] } }
+        ' "$CONF" > "$tmp"
+
+        mv "$tmp" "$CONF"
+        ZAPRET_RESTART
+    }
+
+    # Перебор всех стратегий из списка
+    while IFS= read -r LINE || [ -n "$LINE" ]; do
+        if echo "$LINE" | grep -q '^Yv[0-9]\+'; then
+            if [ -n "$CURRENT_NAME" ]; then
+                COUNT=$((COUNT + 1))
+                echo -e "\n${CYAN}Проверяем стратегию: ${NC}$CURRENT_NAME ($COUNT/$TOTAL)"
+                update_strategy "$CURRENT_NAME" "$CURRENT_BODY"
+                STATUS=$(check_access)
+
+                if [ "$STATUS" = "ok" ]; then
+                    echo -e "${GREEN}Видео на ПК открывается!${NC}\n${YELLOW}Проверьте работу ${NC}YouTube${YELLOW} на других устройствах!${NC}"
+                    echo -en "Enter${GREEN} - применить стратегию, ${NC}S/s${GREEN} - остановить, ${NC}N/n${GREEN} - продолжить подбор:${NC} "
+                    read -r ANSWER </dev/tty
+
+                    if [ -z "$ANSWER" ]; then
+                        # Сохраняем выбранную стратегию
+                        { echo "#$CURRENT_NAME"; printf "%b\n" "$CURRENT_BODY"; } > "$SAVED_STR"
+                        update_strategy "$CURRENT_NAME" "$CURRENT_BODY"
+                        echo -e "${GREEN}Стратегия применена!${NC}\n"
+                        read -p "Нажмите Enter..." dummy </dev/tty
+                        return 0
+                    elif [[ "$ANSWER" =~ ^[Ss]$ ]]; then
+                        # Откат к старому конфигу
+                        sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
+                        cat "$OLD_STR" >> "$CONF"
+                        ZAPRET_RESTART
+                        echo -e "\n${YELLOW}Подбор остановлен. Стратегия восстановлена.${NC}\n"
+                        read -p "Нажмите Enter..." dummy </dev/tty
+                        return 1
+                    fi
+                else
+                    echo -e "${RED}Видео не открывается, продолжаем подбор...${NC}"
+                fi
+            fi
+            CURRENT_NAME="$LINE"
+            CURRENT_BODY=""
+        else
+            [ -n "$LINE" ] && CURRENT_BODY="${CURRENT_BODY}${LINE}\n"
+        fi
+    done < "$TMP_LIST"
+
+    # Последняя стратегия, если список закончился
+    if [ -n "$CURRENT_NAME" ]; then
+        COUNT=$((COUNT + 1))
+        echo -e "\n${CYAN}Проверяем стратегию: ${NC}$CURRENT_NAME ($COUNT/$TOTAL)"
+        update_strategy "$CURRENT_NAME" "$CURRENT_BODY"
+        STATUS=$(check_access)
+
+        if [ "$STATUS" = "ok" ]; then
+            echo -e "${GREEN}Видео на ПК открывается!${NC}\n${YELLOW}Проверьте работу ${NC}YouTube${YELLOW} на других устройствах!${NC}"
+            echo -en "Enter${GREEN} - применить стратегию, ${NC}S/s${GREEN} - остановить, ${NC}N/n${GREEN} - продолжить подбор:${NC} "
+            read -r ANSWER </dev/tty
+
+            if [ -z "$ANSWER" ]; then
+                { echo "#$CURRENT_NAME"; printf "%b\n" "$CURRENT_BODY"; } > "$SAVED_STR"
+                update_strategy "$CURRENT_NAME" "$CURRENT_BODY"
+                echo -e "${GREEN}Стратегия применена!${NC}\n"
+                read -p "Нажмите Enter..." dummy </dev/tty
+                return 0
+            elif [[ "$ANSWER" =~ ^[Ss]$ ]]; then
+                sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
+                cat "$OLD_STR" >> "$CONF"
+                ZAPRET_RESTART
+                echo -e "\n${YELLOW}Подбор остановлен. Стратегия восстановлена.${NC}\n"
+                read -p "Нажмите Enter..." dummy </dev/tty
+                return 1
+            fi
+        else
+            echo -e "${RED}Видео не открывается...${NC}\n"
+        fi
+    fi
+
+    # Если ничего не подошло — откат
+    sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
+    cat "$OLD_STR" >> "$CONF"
+    ZAPRET_RESTART
+    echo -e "\n${RED}Рабочая стратегия для YouTube не найдена!${NC}\n"
+    read -p "Нажмите Enter..." dummy </dev/tty
+    return 1
+}
+
 # ==========================================
 # РКН список ВКЛ / ВЫКЛ
 # ==========================================
