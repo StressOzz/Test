@@ -252,6 +252,78 @@ then if grep -q 'ct original packets ge 30 flow offload @ft;' /usr/share/firewal
 sed -i 's/meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;/meta l4proto { tcp, udp } flow offload @ft;/' /usr/share/firewall4/templates/ruleset.uc; fw4 restart >/dev/null 2>&1
 echo -e "FIX ${GREEN}отключён!${NC}\n"; else echo -e "\n${MAGENTA}Применяем FIX для Flow Offloading${NC}"; sed -i 's/meta l4proto { tcp, udp } flow offload @ft;/meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;/' /usr/share/firewall4/templates/ruleset.uc
 fw4 restart >/dev/null 2>&1; echo -e "FIX ${GREEN}успешно применён!${NC}\n"; fi; read -p "Нажмите Enter..." dummy; fi ;; *) echo; return ;; esac; done; }
+
+
+STRAT1="--filter-tcp=2053,2083,2087,2096,8443
+--hostlist-domains=discord.media
+--dpi-desync=fake,multisplit
+--dpi-desync-split-seqovl=681
+--dpi-desync-split-pos=1
+--dpi-desync-fooling=ts
+--dpi-desync-repeats=8
+--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin
+--dpi-desync-fake-tls-mod=rnd,dupsid,sni=www.google.com"
+
+STRAT2="--filter-tcp=2053,2083,2087,2096,8443
+--hostlist-domains=discord.media
+--dpi-desync=multisplit
+--dpi-desync-split-seqovl=652
+--dpi-desync-split-pos=2
+--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin"
+
+switch_strategy() {
+
+    CURRENT=$(grep -o 'Dv=[12]' "$CONF" | cut -d= -f2)
+    [ -z "$CURRENT" ] && CURRENT=1
+
+    if [ "$CURRENT" = "1" ]; then
+        NEW_STRAT="$STRAT2"
+        NEW_NUM=2
+    else
+        NEW_STRAT="$STRAT1"
+        NEW_NUM=1
+    fi
+
+    awk -i inplace -v new="$NEW_STRAT" '
+        BEGIN { inblock=0; found=0 }
+        {
+            if ($0 ~ /^--filter-tcp=2053,2083,2087,2096,8443$/) {
+                print new
+                inblock=1
+                found=1
+                next
+            }
+            if (inblock && ($0 == "--new" || $0 == "'\''")) {
+                inblock=0
+                print $0
+                next
+            }
+            if (!inblock) print $0
+        }
+        END {
+            if (!found) {
+                print "ERROR: strategy block not found" > "/dev/stderr"
+                exit 1
+            }
+        }
+    ' "$CONF" || exit 1
+
+    if grep -q '^# Dv=' "$CONF"; then
+        sed -i "s/^# Dv=[12]/# Dv=$NEW_NUM/" "$CONF"
+    else
+        sed -i "1i# Dv=$NEW_NUM" "$CONF"
+    fi
+
+    echo "OK: strategy switched to $NEW_NUM"
+
+
+
+
+
+
+
+
+
 # ==========================================
 # Главное меню
 # ==========================================
@@ -269,7 +341,7 @@ then echo -e "${YELLOW}Используется стратегия:${NC}  ${CYAN
 echo -e "\n${CYAN}1) ${GREEN}Установить${NC} Zapret\n${CYAN}2) ${GREEN}Меню стратегий${NC}\n${CYAN}3) ${GREEN}Вернуть ${NC}настройки по умолчанию\n${CYAN}4) ${GREEN}$str_stp_zpr ${NC}Zapret"
 echo -e "${CYAN}5) ${GREEN}Удалить ${NC}Zapret\n${CYAN}6) ${GREEN}Меню настройки ${NC}Discord\n${CYAN}7) ${GREEN}Меню ${NC}DNS over HTTPS\n${CYAN}8) ${GREEN}Удалить → установить → настроить${NC} Zapret\n${CYAN}0) ${GREEN}Системное меню${NC}" ; echo -ne "${CYAN}Enter) ${GREEN}Выход${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read choice
 case "$choice" in 1) install_Zapret ;; 2) menu_str ;; 3) comeback_def ;; 4) pgrep -f /opt/zapret >/dev/null 2>&1 && stop_zapret || start_zapret ;; 5) uninstall_zapret ;; 6) scrypt_install ;; 7) DoH_menu ;; 8) zapret_key ;;
-0) sys_menu ;; *) echo; exit 0 ;; esac; }
+9) switch_strategy ;; 0) sys_menu ;; *) echo; exit 0 ;; esac; }
 # ==========================================
 # Старт скрипта
 # ==========================================
