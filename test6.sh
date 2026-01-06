@@ -6,7 +6,7 @@
 switch_strategy() {
 
     # Узнаём текущую стратегию
-    CURRENT=$(grep -o '#Dv[12]' "$CONF" | cut -d= -f2)
+    CURRENT=$(grep -o -E '#[[:space:]]*Dv[12]' "$CONF" | cut -d'v' -f2)
     [ -z "$CURRENT" ] && CURRENT=1
 
     if [ "$CURRENT" = "1" ]; then
@@ -17,18 +17,17 @@ switch_strategy() {
         NEW_NUM=1
     fi
 
-    # Проверка, есть ли блок
-    grep -q '^--filter-tcp=2053,2083,2087,2096,8443$' "$CONF" || {
+    # Проверка, есть ли блок (игнорируем пробелы в начале строки)
+    grep -q -E '^[[:space:]]*--filter-tcp=2053,2083,2087,2096,8443' "$CONF" || {
         echo "ERROR: strategy block not found" >&2
         return 1
     }
 
-    # Меняем блок через sed
-    # sed в BusyBox умеет inline с -i
-    awk_block=$(echo "$NEW_STRAT" | sed 's/[&/\]/\\&/g') # экранируем спецсимволы
+    # Экранируем спецсимволы для sed
+    awk_block=$(echo "$NEW_STRAT" | sed 's/[&/\]/\\&/g')
 
     # Находим начало блока
-    START=$(grep -n '^--filter-tcp=2053,2083,2087,2096,8443$' "$CONF" | cut -d: -f1)
+    START=$(grep -n -E '^[[:space:]]*--filter-tcp=2053,2083,2087,2096,8443' "$CONF" | cut -d: -f1)
     # Находим конец блока (--new или ')
     END=$(tail -n +"$START" "$CONF" | grep -n -m1 -E '^--new$|^'\''$' | cut -d: -f1)
     END=$((START + END -1))
@@ -39,8 +38,8 @@ switch_strategy() {
     sed -i "${START}i$awk_block" "$CONF"
 
     # Обновляем маркер стратегии
-    if grep -q '^#Dv' "$CONF"; then
-        sed -i "s/^#Dv[12]/#Dv$NEW_NUM/" "$CONF"
+    if grep -q -E '^#[[:space:]]*Dv' "$CONF"; then
+        sed -i "s/^#[[:space:]]*Dv[12]/#Dv$NEW_NUM/" "$CONF"
     else
         sed -i "1i#Dv$NEW_NUM" "$CONF"
     fi
