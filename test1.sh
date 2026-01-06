@@ -315,7 +315,7 @@ switch_strategy() {
     fi
 
     echo "OK: strategy switched to $NEW_NUM"
-
+}
 
 
 
