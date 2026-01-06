@@ -39,10 +39,10 @@ switch_strategy() {
     sed -i "${START}i$awk_block" "$CONF"
 
     # Обновляем маркер стратегии
-    if grep -q '^# Dv=' "$CONF"; then
-        sed -i "s/^# Dv=[12]/# Dv=$NEW_NUM/" "$CONF"
+    if grep -q '^#Dv' "$CONF"; then
+        sed -i "s/^#Dv[12]/#Dv$NEW_NUM/" "$CONF"
     else
-        sed -i "1i# Dv=$NEW_NUM" "$CONF"
+        sed -i "1i#Dv$NEW_NUM" "$CONF"
     fi
 
     echo "OK: strategy switched to $NEW_NUM"
