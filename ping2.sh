@@ -1,14 +1,14 @@
 #!/bin/sh
 
 DOMAINS="
-cloudflare-dns.com/dns-query
-dns.google/dns-query
-dns.comss.one/dns-query
-xbox-dns.ru/dns-query
-dns.malw.link/dns-query
-5u35p8m9i7.cloudflare-gateway.com/dns-query
-dns.mafioznik.xyz/dns-quer
-dns.astracat.ru/dns-querym
+cloudflare-dns.com
+dns.google
+dns.comss.one
+xbox-dns.ru
+dns.malw.link
+5u35p8m9i7.cloudflare-gateway.com
+dns.mafioznik.xyz
+dns.astracat.ru
 "
 
 TIMEOUT=1
