@@ -16,6 +16,8 @@ IP_SET="/opt/zapret/ipset/zapret-ip-user.txt"
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 RED='\033[1;31m'
+CYAN="\033[1;36m"
+MAGENTA="\033[1;35m"
 NC='\033[0m'
 
 # Функция перезапуска Zapret
@@ -24,35 +26,34 @@ ZAPRET_RESTART() {
     /opt/zapret/sync_config.sh
     /etc/init.d/zapret restart >/dev/null 2>&1
 }
-
-echo -e "\n${YELLOW}===== Проверка GitHub =====${NC}"
+clear
+echo -e "\n${MAGENTA}===== Проверка GitHub =====${NC}"
 RATE=$(curl -s https://api.github.com/rate_limit | grep '"remaining"' | head -1 | awk '{print $2}' | tr -d ,)
 [ -z "$RATE" ] && RATE_OUT="${RED}N/A${NC}" || RATE_OUT=$([ "$RATE" -eq 0 ] && echo -e "${RED}0${NC}" || echo -e "${GREEN}$RATE${NC}")
 echo -n "API: "
 curl -Is --connect-timeout 3 https://api.github.com >/dev/null 2>&1 && echo -e "${GREEN}ok${NC} | Limit: $RATE_OUT" || echo -e "${RED}fail${NC} | Limit: $RATE_OUT"
 
-echo -e "${YELLOW}=== Обновление стратегий NFQWS с GitHub ===${NC}"
+echo -e "${MAGENTA}===== Обновление стратегий NFQWS с GitHub =====${NC}"
 
 # 1️⃣ Создаём временную папку
-echo -e "${GREEN}Создаём временную папку $TMP_DIR${NC}"
 rm -rf "$TMP_DIR"
 mkdir -p "$TMP_DIR"
 
 # 2️⃣ Получаем список файлов из GitHub
 GITHUB_API="https://api.github.com/repos/kartavkun/zapret-discord-youtube/contents/configs"
-echo -e "${GREEN}Получаем список файлов из GitHub...${NC}"
+echo -e "${CYAN}Получаем список файлов из GitHub...${NC}"
 wget -q -O "/tmp/files.json" "$GITHUB_API"
 
 # 3️⃣ Скачиваем все файлы
 echo -e "${GREEN}Скачиваем файлы из configs...${NC}"
 cat /tmp/files.json | grep -o '"download_url": *"[^"]*"' | cut -d'"' -f4 | while read url; do
     fname="$(basename "$url")"
-    echo -e "${YELLOW}Скачиваем $fname${NC}"
+    echo -e "${CYAN}Скачиваем ${NC}$fname"
     wget -q -O "$TMP_DIR/$fname" "$url"
 done
 
 # 4️⃣ Собираем все файлы в один DUMP_FILE
-echo -e "${GREEN}Собираем все стратегии в $DUMP_FILE${NC}"
+echo -e "${GREEN}Собираем все стратегии в ${NC}$DUMP_FILE"
 : > "$DUMP_FILE"
 
 for f in "$TMP_DIR"/*; do
@@ -73,7 +74,7 @@ for f in "$TMP_DIR"/*; do
 done
 
 # 5️⃣ Фильтруем нужные TCP блоки
-echo -e "${GREEN}Фильтруем TCP-блоки для $OUT_FILE${NC}"
+echo -e "${GREEN}Фильтруем TCP-блоки в ${NC}$OUT_FILE"
 : > "$OUT_FILE"
 
 include=0
@@ -86,8 +87,6 @@ while IFS= read -r line; do
     esac
 
     case "$line" in
-        "--filter-tcp=2053,2083,2087,2096,8443")
-            include=1; skip_last_new=0; echo "$line" >> "$OUT_FILE"; continue ;;
         "--filter-tcp=80,443")
             include=1; skip_last_new=1; echo "$line" >> "$OUT_FILE"; continue ;;
     esac
@@ -103,7 +102,7 @@ while IFS= read -r line; do
 done < "$DUMP_FILE"
 
 # 6️⃣ Постобработка файлов
-echo -e "${GREEN}Применяем финальные правки к $OUT_FILE${NC}"
+echo -e "${CYAN}Применяем финальные правки к ${NC}$OUT_FILE${NC}"
 sed -i \
     -e 's/%20//g' \
     -e 's/80,//g' \
@@ -113,7 +112,7 @@ sed -i \
     -e 's|^--hostlist-exclude=.*|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|' \
     "$OUT_FILE"
 
-echo -e "${GREEN}Применяем финальные правки к $DUMP_FILE${NC}"
+echo -e "${CYAN}Применяем финальные правки к ${NC}$DUMP_FILE${NC}"
 sed -i'' \
     -e 's/%20//g' \
     -e 's/"//g' \
@@ -127,18 +126,22 @@ sed -i'' \
     "$DUMP_FILE"
 
 # 7️⃣ Очистка временных файлов
-echo -e "${GREEN}Удаляем временные файлы...${NC}"
+
 rm -rf "$TMP_DIR" /tmp/files.json
+echo -e "${GREEN}Стратегии готовый !${NC}"
 read -p "Нажмите Enter..." dummy
 
 # 8️⃣ Меню выбора стратегии по кругу
 while true; do
+
+clear
+
     # Текущая стратегия
     CURRENT=$(sed -n "/^[[:space:]]*option NFQWS_OPT '/,/^'/p" "$CONF" | sed -n '2p' | grep -v "^[[:space:]]*'$" | head -1)
     [ -z "$CURRENT" ] && CURRENT="(не выбрана)"
 
-    echo -e "\n${YELLOW}=== Меню выбора стратегии NFQWS ===${NC}"
-    echo -e "${GREEN}Текущая стратегия:${NC} $CURRENT\n"
+    echo -e "\n${MAGENTA}===== Меню выбора стратегии =====${NC}\n"
+    echo -e "${YELLOW}Текущая стратегия:${NC} $CURRENT\n"
 
     # Карта меню
     MAP="/tmp/nfqws_menu.map"
@@ -153,7 +156,7 @@ while true; do
     done < "$MAP"
 
     echo ""
-    printf "Выберите стратегию (1-%s): " "$COUNT"
+    echo -e "${YELLOW}Выберите стратегию (1-%s):${NC} " "$COUNT"
     read SEL
 
     # Любой неверный ввод — выход
@@ -165,7 +168,6 @@ while true; do
     esac
 
     if [ "$SEL" -lt 1 ] || [ "$SEL" -gt "$COUNT" ]; then
-        echo -e "${RED}Номер вне диапазона, выходим...${NC}"
         exit 1
     fi
 
@@ -176,14 +178,13 @@ while true; do
     [ -z "$NEXT_LINE" ] && NEXT_LINE=$(wc -l < "$DUMP_FILE" | tr -d ' '); NEXT_LINE=$((NEXT_LINE+1))
 
     # Сохраняем выбранную стратегию в STR_FILE
-    echo -e "${GREEN}Сохраняем стратегию в $STR_FILE:${NC} $NAME"
     {
         echo "#$NAME"
         sed -n "$((START_LINE+1)),$((NEXT_LINE-1))p" "$DUMP_FILE" | grep -v '^#'
     } > "$STR_FILE"
 
     # Применяем стратегию в конфиг
-    echo -e "${GREEN}Применяем стратегию в $CONF${NC}"
+    echo -e "${CYAN}Применяем стратегию в ${NC}$CONF"
     sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
     {
         echo "  option NFQWS_OPT '"
@@ -192,15 +193,15 @@ while true; do
     } >> "$CONF"
 
     # Применяем список РКН
-echo -e "${YELLOW}Применяем список${NC}"
+echo -e "${CYAN}Применяем список${NC}"
 
 curl -fsSL "$RKN_URL" -o "$HOSTLIST_FILE" || { echo -e "\n${RED}Не удалось скачать список РКН${NC}\n"; read -p "Нажмите Enter..." dummy; return; }
 curl -fsSL "$IP_SET_ALL" -o "$IP_SET" || { echo -e "\n${RED}Не удалось скачать список IP${NC}\n"; read -p "Нажмите Enter..." dummy; return; }
 
     # Перезапуск Zapret
-    echo -e "${YELLOW}Применяем настройки Zapret...${NC}"
+    echo -e "${CYAN}Применяем настройки ${NC}Zapret"
     ZAPRET_RESTART
 
-    echo -e "${GREEN}Готово. Стратегия '${NAME}' применена.${NC}\n"
+    echo -e "${GREEN}Стратегия ${NC}${NAME} ${GREEN}применена!\n"
     read -p "Нажмите Enter..." dummy
 done
