@@ -99,6 +99,7 @@ echo -e "${GREEN}Применяем финальные правки к $DUMP_FIL
 sed -i \
     -e 's/%20//g' \
     -e 's/"//g' \
+    -e 's/\$GAME_FILTER/1024-65535/g'
     -e 's|^--hostlist=/opt/zapret/hostlists/list-google.txt.*|--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt|' \
     -e 's|^--hostlist=/opt/zapret/hostlists/list-general.txt.*|--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt|' \
     -e 's|^--hostlist-exclude=.*|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|' \
