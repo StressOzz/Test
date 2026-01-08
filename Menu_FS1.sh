@@ -14,32 +14,35 @@ ZAPRET_RESTART() {
     /etc/init.d/zapret restart >/dev/null 2>&1
 }
 
+[ ! -f "$DUMP_FILE" ] && {
+    echo -e "${RED}Файл $DUMP_FILE не найден${NC}"
+    exit 1
+}
+
 echo -e "\n${YELLOW}=== Выбор стратегии NFQWS ===${NC}"
 
-# Собираем список стратегий
-MAP_FILE="/tmp/nfqws_menu.map"
-: > "$MAP_FILE"
+MAP="/tmp/nfqws_menu.map"
+: > "$MAP"
 
 awk '
 /^#/ {
     name=substr($0,2)
     print NR "|" name
 }
-' "$DUMP_FILE" > "$MAP_FILE"
+' "$DUMP_FILE" > "$MAP"
 
-COUNT=$(wc -l < "$MAP_FILE")
+COUNT=$(wc -l < "$MAP")
 
 [ "$COUNT" -eq 0 ] && {
     echo -e "${RED}Стратегии не найдены${NC}"
     exit 1
 }
 
-# Печатаем меню
 i=1
 while IFS="|" read -r line name; do
     printf "%2d) %s\n" "$i" "$name"
     i=$((i+1))
-done < "$MAP_FILE"
+done < "$MAP"
 
 echo ""
 printf "Выберите стратегию (1-%s): " "$COUNT"
@@ -57,28 +60,38 @@ esac
     exit 1
 }
 
-START_LINE=$(sed -n "${SEL}p" "$MAP_FILE" | cut -d'|' -f1)
+START_LINE=$(sed -n "${SEL}p" "$MAP" | cut -d'|' -f1)
+NAME=$(sed -n "${SEL}p" "$MAP" | cut -d'|' -f2)
 
-# Определяем конец блока
 END_LINE=$(awk -v s="$START_LINE" '
 NR > s && /^#/ { print NR-1; exit }
 END { print NR }
 ' "$DUMP_FILE")
 
-echo -e "${GREEN}Применяем стратегию:${NC} $(sed -n "${SEL}p" "$MAP_FILE" | cut -d'|' -f2)"
+echo -e "${GREEN}Применяем стратегию:${NC} $NAME"
 
-# Формируем новый NFQWS_OPT
-TMP_OPT="/tmp/NFQWS_OPT.new"
-: > "$TMP_OPT"
+TMP_CONF="/tmp/zapret.new"
+: > "$TMP_CONF"
 
-sed -n "${START_LINE},${END_LINE}p" "$DUMP_FILE" | sed '1d' >> "$TMP_OPT"
+# Всё ДО NFQWS_OPT
+awk '
+/option NFQWS_OPT '\''/ { exit }
+{ print }
+' "$CONF" >> "$TMP_CONF"
 
-# Переписываем конфиг
-sed -i'' "/option NFQWS_OPT '/,\$c\
-\toption NFQWS_OPT '\\
-$(sed 's/^/\t\t/' "$TMP_OPT")\
-\t'
-" "$CONF"
+# Новый NFQWS_OPT
+echo -e "\toption NFQWS_OPT '" >> "$TMP_CONF"
+sed -n "${START_LINE},${END_LINE}p" "$DUMP_FILE" | sed '1d; s/^/\t\t/' >> "$TMP_CONF"
+echo -e "\t'" >> "$TMP_CONF"
+
+# Всё ПОСЛЕ старого NFQWS_OPT
+awk '
+found && print
+/option NFQWS_OPT '\''/ { found=1; next }
+found && /^\t'\''$/ { next }
+' "$CONF" >> "$TMP_CONF"
+
+mv "$TMP_CONF" "$CONF"
 
 ZAPRET_RESTART
 
