@@ -501,6 +501,7 @@ esac
         case "$RESP" in
             [Yy])
                 echo
+                read -p "Нажмите Enter..." dummy
                 break
                 ;;
             [Nn])
@@ -512,8 +513,6 @@ esac
                 ;;
         esac
     done
-
-    read -p "Нажмите Enter..." dummy
 done
 }
 
