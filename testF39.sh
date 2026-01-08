@@ -329,7 +329,6 @@ echo -e "${MAGENTA}Оптимизируем стратегии Flowseal для O
 
 
 echo -e "${CYAN}Проверка GitHub${NC}"
-/etc/init.d/zapret stop >/dev/null 2>&1
 RATE=$(curl -s https://api.github.com/rate_limit | grep '"remaining"' | head -1 | awk '{print $2}' | tr -d ,)
 [ -z "$RATE" ] && RATE_OUT="${RED}N/A${NC}" || RATE_OUT=$([ "$RATE" -eq 0 ] && echo -e "${RED}0${NC}" || echo -e "${GREEN}$RATE${NC}")
 echo -n "API: "
@@ -474,7 +473,6 @@ while true; do
 if [ ! -f "$DUMP_FILE" ] || [ ! -f "$OUT_FILE" ]; then
     Flowseal_STR
     if [ "$RATE" -eq 0 ]; then
-    ZAPRET_RESTART
     return
 fi
 fi
