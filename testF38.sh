@@ -474,6 +474,7 @@ while true; do
 if [ ! -f "$DUMP_FILE" ] || [ ! -f "$OUT_FILE" ]; then
     Flowseal_STR
     if [ "$RATE" -eq 0 ]; then
+    ZAPRET_RESTART
     return
 fi
 fi
