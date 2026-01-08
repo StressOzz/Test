@@ -408,12 +408,33 @@ while IFS= read -r line; do
     esac
 
     case "$line" in
-        "--filter-tcp=80,443")
-            include=1
-            skip_last_new=1
-            echo "$line" >> "$OUT_FILE"
-            continue
+        "--filter-udp=19294-19344,50000-50100")
+            include=1; skip_last_new=0; echo "$line" >> "$OUT_FILE"; continue
             ;;
+
+        "--filter-udp=443")
+            include=1; skip_last_new=0; echo "$line" >> "$OUT_FILE"; continue
+            ;;
+
+        "--filter-tcp=2053,2083,2087,2096,8443")
+            include=1; skip_last_new=0; echo "$line" >> "$OUT_FILE"; continue
+            ;;
+
+        "--filter-tcp=443")
+            include=1; skip_last_new=0; echo "$line" >> "$OUT_FILE"; continue
+            ;;
+            
+        "--filter-tcp=80,443")
+            include=1; skip_last_new=1; echo "$line" >> "$OUT_FILE"; continue
+            ;;
+
+        "--filter-udp=443")
+            include=1; skip_last_new=0; echo "$line" >> "$OUT_FILE"; continue
+            ;;
+
+        "--filter-udp=1024-65535")
+            include=1; skip_last_new=0; echo "$line" >> "$OUT_FILE"; continue
+            ;;      
     esac
 
     [ "$include" -eq 1 ] && {
