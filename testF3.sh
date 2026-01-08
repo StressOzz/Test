@@ -449,16 +449,16 @@ read SEL
 
 case "$SEL" in
     0)
-        ZAPRET_DEF
+        comeback_def
         read -p "Нажмите Enter..." dummy
         continue  # возвращаемся в начало меню
         ;;
     ''|*[!0-9]*)
-        echo; exit 0
+        echo; return 0
         ;;
 esac
 
-[ "$SEL" -lt 0 ] || [ "$SEL" -gt "$COUNT" ] && { echo; exit 0; }
+[ "$SEL" -lt 0 ] || [ "$SEL" -gt "$COUNT" ] && { echo; return 0; }
 
     # Определяем строки выбранного блока
     START_LINE=$(sed -n "${SEL}p" "$MAP" | cut -d'|' -f1)
@@ -485,8 +485,8 @@ esac
     # Скачиваем список РКН и IP
     echo -e "${CYAN}Применяем списки ${NC}РКН ${CYAN}и ${NC}IP"
     /etc/init.d/zapret stop >/dev/null 2>&1
-    curl -fsSL "$RKN_URL" -o "$HOSTLIST_FILE" || { echo -e "${RED}Не удалось скачать список РКН${NC}"; exit 1; }
-    curl -fsSL "$IP_SET_ALL" -o "$IP_SET" || { echo -e "${RED}Не удалось скачать список IP${NC}"; exit 1; }
+    curl -fsSL "$RKN_URL" -o "$HOSTLIST_FILE" || { echo -e "${RED}Не удалось скачать список РКН${NC}"; return; }
+    curl -fsSL "$IP_SET_ALL" -o "$IP_SET" || { echo -e "${RED}Не удалось скачать список IP${NC}"; return; }
 
     # Перезапуск Zapret
     echo -e "${CYAN}Применяем настройки ${NC}Zapret"
@@ -504,7 +504,7 @@ esac
                 break
                 ;;
             [Nn])
-                ZAPRET_DEF
+                comeback_def
                 break
                 ;;
             *)
