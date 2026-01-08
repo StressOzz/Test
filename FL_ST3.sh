@@ -86,7 +86,7 @@ done < "$DUMP_FILE"
 # 6️⃣ Постобработка финального файла
 echo -e "${GREEN}Применяем финальные правки к $OUT_FILE${NC}"
 sed -i \
-    -e 's/%20/_/g' \
+    -e 's/%20//g' \
     -e 's/80,//g' \
     -e '/^--hostlist=/d' \
     -e '/^--ipset-exclude=/d' \
