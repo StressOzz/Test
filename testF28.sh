@@ -515,8 +515,9 @@ esac
     done
 done
 }
-print_current_strategy() {
 
+
+print_current_strategy() {
     CURRENT_STR=""
 
     # Добавляем по очереди, только если есть
@@ -525,11 +526,12 @@ print_current_strategy() {
     [ -n "$gen_ver" ] && CURRENT_STR="$CURRENT_STR$( [ -n "$CURRENT_STR" ] && echo " / " )$gen_ver"
     [ -n "$DV" ] && CURRENT_STR="$CURRENT_STR $DV"
 
-    [ -z "$CURRENT_STR" ] && CURRENT_STR=""
-    
     [ -n "$RKN_STATUS" ] && CURRENT_STR="$CURRENT_STR $RKN_STATUS"
-    echo -e "${YELLOW}Используется стратегия:${NC}  ${CYAN}$CURRENT_STR${NC}"
+
+    # Если строка пустая, не выводим
+    [ -n "$CURRENT_STR" ] && echo -e "${YELLOW}Используется стратегия:${NC}  ${CYAN}$CURRENT_STR${NC}"
 }
+
 # ==========================================
 # Главное меню
 # ==========================================
