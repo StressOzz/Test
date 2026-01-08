@@ -155,7 +155,7 @@ while true; do
     [ -z "$CURRENT" ] && CURRENT="не выбрана"
 
     echo -e "${MAGENTA}Меню выбора стратегии${NC}\n"
-    echo -e "${YELLOW}Текущая стратегия:${NC}$CURRENT\n"
+    echo -e "${YELLOW}Текущая стратегия:${NC} $CURRENT\n"
 
     # Создаём карту меню
     MAP="/tmp/nfqws_menu.map"
@@ -201,7 +201,7 @@ esac
 
     # Вставляем стратегию в конфиг
     echo -e "\n${MAGENTA}Применяем новую стратегию${NC}"
-    echo -e "\n${CYAN}Применяем стратегию ${NC}$CONF"
+    echo -e "${CYAN}Применяем стратегию ${NC}$CONF"
     sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
     {
         echo "  option NFQWS_OPT '"
