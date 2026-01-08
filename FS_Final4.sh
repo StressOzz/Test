@@ -6,6 +6,11 @@ DUMP_FILE="/opt/FS_dump.txt"
 OUT_FILE="/opt/FS_filtered.txt"
 STR_FILE="/opt/FS_Str.txt"
 TMP_DIR="/tmp/zapret_configs"
+HOSTLIST_FILE="/opt/zapret/ipset/zapret-hosts-user.txt"
+RKN_URL="https://raw.githubusercontent.com/IndeecFOX/zapret4rocket/refs/heads/master/extra_strats/TCP/RKN/List.txt"
+IP_SET_ALL="https://raw.githubusercontent.com/kartavkun/zapret-discord-youtube/refs/heads/main/hostlists/ipset-all.txt"
+IP_SET="/opt/zapret/ipset/zapret-ip-user.txt"
+
 
 # Цвета
 GREEN='\033[0;32m'
@@ -124,6 +129,7 @@ sed -i'' \
 # 7️⃣ Очистка временных файлов
 echo -e "${GREEN}Удаляем временные файлы...${NC}"
 rm -rf "$TMP_DIR" /tmp/files.json
+read -p "Нажмите Enter..." dummy
 
 # 8️⃣ Меню выбора стратегии по кругу
 while true; do
@@ -153,7 +159,7 @@ while true; do
     # Любой неверный ввод — выход
     case "$SEL" in
         ''|*[!0-9]*)
-            echo -e "${RED}Неверный ввод, выходим...${NC}"
+            echo
             exit 1
             ;;
     esac
@@ -185,11 +191,16 @@ while true; do
         echo "'"
     } >> "$CONF"
 
+    # Применяем список РКН
+echo -e "${YELLOW}Применяем список${NC}"
+
+curl -fsSL "$RKN_URL" -o "$HOSTLIST_FILE" || { echo -e "\n${RED}Не удалось скачать список РКН${NC}\n"; read -p "Нажмите Enter..." dummy; return; }
+curl -fsSL "$IP_SET_ALL" -o "$IP_SET" || { echo -e "\n${RED}Не удалось скачать список IP${NC}\n"; read -p "Нажмите Enter..." dummy; return; }
+
     # Перезапуск Zapret
     echo -e "${YELLOW}Применяем настройки Zapret...${NC}"
     ZAPRET_RESTART
 
-    echo -e "${GREEN}Готово. Стратегия '${NAME}' применена.${NC}"
-    echo -e "${YELLOW}Нажмите Enter чтобы вернуться в меню...${NC}"
-    read
+    echo -e "${GREEN}Готово. Стратегия '${NAME}' применена.${NC}\n"
+    read -p "Нажмите Enter..." dummy
 done
