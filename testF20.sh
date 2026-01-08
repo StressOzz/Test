@@ -144,7 +144,7 @@ sed -i 's|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|--h
 disable_rkn() { echo -e "\n${MAGENTA}Выключаем списки РКН${NC}"; sed -i 's|--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|' "$CONF"
 if [ -s $BACKUP_FILE ]; then cp $BACKUP_FILE "$HOSTLIST_FILE"; else : > "$HOSTLIST_FILE"; fi; rm -f $HOSTS_USER $BACKUP_FILE; ZAPRET_RESTART; echo -e "${GREEN}Обход по спискам ${NC}РКН${GREEN} выключен${NC}\n"; }
 toggle_rkn_bypass() { if grep -q -- "--filter-tcp=443 ˂HOSTLIST˃" "$CONF"; then if [ -f "$HOSTLIST_FILE" ] && [ "$(wc -c < "$HOSTLIST_FILE")" -gt "$HOSTLIST_MIN_SIZE" ]; then disable_rkn; else [ -f "$HOSTLIST_FILE" ] && cp "$HOSTLIST_FILE" "$BACKUP_FILE"
-enable_rkn; fi; read -p "Нажмите Enter..." dummy </dev/tty; return; fi;  if grep -q -- "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "$CONF" && (grep -qE "^#v" "$CONF" || grep -qE "^#general" "$CONF"); then enable_rkn; read -p "Нажмите Enter..." dummy </dev/tty
+enable_rkn; fi; read -p "Нажмите Enter..." dummy </dev/tty; return; fi; if grep -q -- "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "$CONF" && grep -qE "^#v" "$CONF"; then enable_rkn; read -p "Нажмите Enter..." dummy </dev/tty
 elif grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONF"; then disable_rkn; read -p "Нажмите Enter..." dummy </dev/tty; else echo -e "\n${RED}Стратегия не подходит для списков РКН\n${NC}"; read -p "Нажмите Enter..." dummy </dev/tty; fi; }
 RKN_Check() { if (grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONF" >/dev/null 2>&1 || grep -q -- "--filter-tcp=443 ˂HOSTLIST˃" "$CONF" >/dev/null 2>&1) && [ "$(wc -c < /opt/zapret/ipset/zapret-hosts-user.txt)" -gt 1800000 ]
 then RKN_STATUS="/ РКН"; RKN_TEXT_MENU="${GREEN}Выключить обход по спискам${NC} РКН"; else RKN_STATUS=""; RKN_TEXT_MENU="${GREEN}Включить обход по спискам${NC} РКН"; fi; }
@@ -400,9 +400,9 @@ sed -i \
     -e 's/\$GAME_FILTER/1024-65535/g' \
     -e 's|^--hostlist=/opt/zapret/hostlists/list-google.txt.*|--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt|' \
     -e 's|^--hostlist=/opt/zapret/hostlists/list-general.txt.*|--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt|' \
+    -e 's|^--hostlist-exclude=.*|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|' \
     -e 's|^--ipset=.*|--ipset=/opt/zapret/ipset/zapret-ip-user.txt|' \
-    -e '/^--ipset-exclude/d' \
-    -e '/^--hostlist-exclude/d' \
+    -e 's|^--ipset-exclude=.*|--ipset-exclude=/opt/zapret/ipset/zapret-ip-user-exclude.txt|' \
     -e '/^[[:space:]]*$/d' \
     "$DUMP_FILE"
 
@@ -448,11 +448,12 @@ fi
         i=$((i+1))
     done < "$MAP"
     
-printf "\n${YELLOW}Выберите стратегию (0-%s): ${NC}" "$COUNT"
+echo -e "${CYAN}0) ${GREEN}Вернуть ${NC}настройки по умолчанию\n"
+
+printf "${YELLOW}Выберите стратегию (0-%s): ${NC}" "$COUNT"
 read SEL
 
 case "$SEL" in
-
     ''|*[!0-9]*)
         echo; return 0
         ;;
@@ -509,7 +510,7 @@ esac
                 break
                 ;;
             *)
-                echo -e "${RED}Неверный ввод, введите Y или N${NC}"
+                echo -e "\n${RED}Неверный ввод, введите Y или N${NC}\n"
                 ;;
         esac
     done
@@ -541,10 +542,10 @@ print_current_strategy() {
     [ -n "$gen_ver" ] && CURRENT_STR="$CURRENT_STR$( [ -n "$CURRENT_STR" ] && echo " / " )$gen_ver"
     [ -n "$DV" ] && CURRENT_STR="$CURRENT_STR $DV"
 
-    [ -z "$CURRENT_STR" ] && CURRENT_STR="не выбрана"
+    [ -z "$CURRENT_STR" ] && CURRENT_STR=""
     
     [ -n "$RKN_STATUS" ] && CURRENT_STR="$CURRENT_STR $RKN_STATUS"
-    echo -e "${YELLOW}Используется стратегия:${NC} ${CYAN}$CURRENT_STR${NC}"
+    echo -e "${YELLOW}Используется стратегия:${NC}  ${CYAN}$CURRENT_STR${NC}"
 }
 
 print_current_strategy
