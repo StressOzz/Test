@@ -423,9 +423,13 @@ while IFS= read -r line; do
         "--filter-tcp=443")
             include=1; skip_last_new=0; echo "$line" >> "$OUT_FILE"; continue
             ;;
+
+        "--filter-l3=ipv4")
+            include=1; skip_last_new=0; echo "$line" >> "$OUT_FILE"; continue
+            ;;
             
         "--filter-tcp=80,443")
-            include=1; skip_last_new=1; echo "$line" >> "$OUT_FILE"; continue
+            include=1; skip_last_new=0; echo "$line" >> "$OUT_FILE"; continue
             ;;
 
         "--filter-udp=443")
@@ -433,7 +437,7 @@ while IFS= read -r line; do
             ;;
 
         "--filter-udp=1024-65535")
-            include=1; skip_last_new=0; echo "$line" >> "$OUT_FILE"; continue
+            include=1; skip_last_new=1; echo "$line" >> "$OUT_FILE"; continue
             ;;      
     esac
 
