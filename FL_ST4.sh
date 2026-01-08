@@ -88,6 +88,7 @@ echo -e "${GREEN}Применяем финальные правки к $OUT_FILE
 sed -i \
     -e 's/%20//g' \
     -e 's/80,//g' \
+    -e 's/"//g' \
     -e '/^--hostlist=/d' \
     -e '/^--ipset-exclude=/d' \
     -e 's|^--hostlist-exclude=.*|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|' \
