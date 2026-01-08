@@ -15,8 +15,8 @@ echo -e "${YELLOW}=== Обновление стратегий NFQWS с GitHub ==
 
 GITHUB_API="https://api.github.com/repos/kartavkun/zapret-discord-youtube/contents/configs"
 TMP_DIR="/tmp/zapret_configs"
-DUMP_FILE="/opt/zapret_tmp/FS_dump.txt"
-OUT_FILE="/opt/zapret_tmp/FS_filtered.txt"
+DUMP_FILE="/opt/FS_dump.txt"
+OUT_FILE="/opt/FS_filtered.txt"
 
 # 1️⃣ Создаём временную папку
 echo -e "${GREEN}Создаём временную папку $TMP_DIR${NC}"
