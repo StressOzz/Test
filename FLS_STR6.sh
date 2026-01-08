@@ -1,8 +1,37 @@
 #!/bin/sh
 
-IN_FILE="/root/nfqws_dump.txt"
+SRC_DIR="/root/configs"
+DUMP_FILE="/root/nfqws_dump.txt"
 OUT_FILE="/root/nfqws_filtered.txt"
 
+# 1️⃣ Собираем все файлы в один
+: > "$DUMP_FILE"
+
+for f in "$SRC_DIR"/*; do
+    [ -f "$f" ] || continue
+    name="$(basename "$f")"
+    echo "$name" >> "$DUMP_FILE"
+
+    in_block=0
+    while IFS= read -r line; do
+        case "$line" in
+            'NFQWS_OPT="'*) in_block=1; continue ;;
+            '"'*) in_block=0; echo "" >> "$DUMP_FILE"; continue ;;
+        esac
+
+        if [ $in_block -eq 1 ]; then
+            # каждая часть через --
+            echo "$line" | tr ' ' '\n' | while IFS= read -r word; do
+                case "$word" in
+                    --*) echo "$word" >> "$DUMP_FILE" ;;
+                esac
+            done
+        fi
+    done < "$f"
+    echo "" >> "$DUMP_FILE"
+done
+
+# 2️⃣ Фильтруем нужные блоки
 : > "$OUT_FILE"
 
 include=0
@@ -48,4 +77,4 @@ while IFS= read -r line; do
             echo "$line" >> "$OUT_FILE"
         fi
     fi
-done < "$IN_FILE"
+done < "$DUMP_FILE"
