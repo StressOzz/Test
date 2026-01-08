@@ -184,7 +184,7 @@ menu_str() { [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не ус�
 menu_game=$( [ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*88,500,1024-19293,19345-49999,50101-65535" "$CONF" && grep -q -- "--filter-udp=88,500,1024-19293,19345-49999,50101-65535" "$CONF" && echo "Удалить стратегию для игр" || echo "Включить стратегию для игр" )
 print=0; current="$ver$( [ -n "$ver" ] && [ -n "$yv_ver" ] && echo " / " )$yv_ver"; if [ -n "$current" ]; then echo -e "${YELLOW}Используется стратегия:${NC} $current $RKN_STATUS"; print=1; elif [ -n "$RKN_STATUS" ]; then echo -e "${YELLOW}Используется стратегия:${NC} РКН"; print=1; fi
 [ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*88,500,1024-19293,19345-49999,50101-65535" "$CONF" && grep -q -- "--filter-udp=88,500,1024-19293,19345-49999,50101-65535" "$CONF" && echo -e "${YELLOW}Стратегия для игр:${NC} ${GREEN}включена${NC}" && print=1
-[ "$print" -eq 1 ] && echo; echo -e "${CYAN}1) ${GREEN}Выбрать стратегию для установки ${NC}v1-v7\n${CYAN}2) ${GREEN}$menu_game\n${CYAN}3) $RKN_TEXT_MENU\n${CYAN}4) ${GREEN}Подобрать стратегию для ${NC}YouTube"
+[ "$print" -eq 1 ] && echo; echo -e "${CYAN}1) ${GREEN}Выбрать стратегию для установки ${NC}v1-v7\n${CYAN}2) ${GREEN}$menu_game\n${CYAN}3) $RKN_TEXT_MENU\n${CYAN}4) ${GREEN}Подобрать стратегию для ${NC}YouTube\n${CYAN}5) ${GREEN}Выбрать стратегию ${NC}Flowseal${GREEN} для установки${NC}
 echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read choiceST; case "$choiceST" in 1) strategy_CHOUSE ;; 2) fix_GAME ;; 3) toggle_rkn_bypass; continue ;; 4) auto_stryou ;; 5) Flowseal_menu ;; *) return ;; esac; done }
 strategy_CHOUSE () { echo -ne "\n${YELLOW}Введите версию стратегии для установки (1-7):${NC} "; read -r choice; if [[ "$choice" =~ ^[1-7]$ ]]; then install_strategy "v$choice"; fi; }
 
@@ -192,18 +192,29 @@ show_current_strategy() {
     [ -f "$CONF" ] || return
 
     ver=""
+    yv_ver=""
+    gen_ver=""
+    DV=""
+
+    # v1..v99
     for i in $(seq 1 99); do
         grep -q "#v$i" "$CONF" && { ver="v$i"; break; }
     done
 
-    yv_ver=""
+    # Yv01..Yv99
     for i in $(seq -w 1 99); do
         grep -q "#Yv$i" "$CONF" && { yv_ver="Yv$i"; break; }
     done
 
-    gen_ver=""
+    # general(...)
     gen_ver=$(grep -m1 '^#general' "$CONF" | sed 's/^#//')
+
+    # Dv1 / Dv2
+    DV=$(grep -o -E '^#[[:space:]]*Dv[12]' "$CONF" \
+        | sed 's/^#[[:space:]]*/\/ /' \
+        | head -n1)
 }
+
 
 discord_str_add() { if ! grep -q "option NFQWS_PORTS_UDP.*19294-19344,50000-50100" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'$/,19294-19344,50000-50100'/" "$CONF"; fi
 if ! grep -q "option NFQWS_PORTS_TCP.*2053,2083,2087,2096,8443" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_TCP '/s/'$/,2053,2083,2087,2096,8443'/" "$CONF"; fi
@@ -556,7 +567,7 @@ if [ -f "$CONF" ]; then
     fi
 
     if [ -n "$current" ]; then
-        echo -e "${YELLOW}Используется стратегия:${NC}  ${CYAN}$current $DV $RKN_STATUS${NC}"
+        echo -e "${YELLOW}Используется стратегия:${NC}  ${CYAN}$current $DV $RKN_STATUS${NC} $DV"
     elif [ -n "$RKN_STATUS" ]; then
         echo -e "${YELLOW}Используется стратегия:${NC}  ${CYAN}РКН $DV${NC}"
     fi
