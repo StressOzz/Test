@@ -310,7 +310,7 @@ echo -e "${GREEN}Скачиваем стратегии${NC}"
 
 grep -o '"download_url": *"[^"]*"' /tmp/files.json | cut -d'"' -f4 | while read -r url; do
     fname="$(basename "$url")"
-    fname_print="$(printf '%s\n' "$fname" | sed 's/%20/ /g')"
+    fname_print="$(printf '%s\n' "$fname" | sed 's/%20/_/g')"
     echo -e "${CYAN}Скачиваем ${NC}$fname_print"
     wget -q -O "$TMP_DIR/$fname" "$url"
 done
@@ -381,7 +381,7 @@ done < "$DUMP_FILE"
 # 6️⃣ Постобработка
 # =========================
 sed -i \
-    -e 's/%20//g' \
+    -e 's/%20/_/g' \
     -e 's/80,//g' \
     -e 's/"//g' \
     -e '/^--hostlist=/d' \
@@ -390,7 +390,7 @@ sed -i \
     "$OUT_FILE"
 
 sed -i \
-    -e 's/%20//g' \
+    -e 's/%20/_/g' \
     -e 's/"//g' \
     -e 's/\$GAME_FILTER/1024-65535/g' \
     -e 's|^--hostlist=/opt/zapret/hostlists/list-google.txt.*|--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt|' \
