@@ -68,7 +68,7 @@ sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
 # Вставляем новый блок
 {
     echo "  option NFQWS_OPT '"
-    sed "s/^/    /" "$STR_FILE"
+    grep -v '^[[:space:]]*$' "$STR_FILE"
     echo "  '"
 } >> "$CONF"
 
