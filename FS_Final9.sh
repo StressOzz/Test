@@ -140,7 +140,7 @@ while true; do
     [ -z "$CURRENT" ] && CURRENT="не выбрана"
 
     echo -e "${MAGENTA}===== Меню выбора стратегии =====${NC}\n"
-    echo -e "${YELLOW}Текущая стратегия:${NC} $CURRENT\n"
+    echo -e "${YELLOW}Текущая стратегия:${NC}$CURRENT\n"
 
     # Создаём карту меню
     MAP="/tmp/nfqws_menu.map"
@@ -179,7 +179,8 @@ while true; do
     } > "$STR_FILE"
 
     # Вставляем стратегию в конфиг
-    echo -e "${CYAN}Применяем стратегию в ${NC}$CONF"
+    echo -e "\n${MAGENTA}Применяем новую стратегию${NC}"
+    echo -e "\n${CYAN}Применяем стратегию ${NC}$CONF"
     sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
     {
         echo "  option NFQWS_OPT '"
@@ -188,12 +189,12 @@ while true; do
     } >> "$CONF"
 
     # Скачиваем список РКН и IP
-    echo -e "${CYAN}Применяем списки РКН и IP${NC}"
+    echo -e "${CYAN}Применяем списки ${NC}РКН ${CYAN}и ${NC}IP"
     curl -fsSL "$RKN_URL" -o "$HOSTLIST_FILE" || { echo -e "${RED}Не удалось скачать список РКН${NC}"; exit 1; }
     curl -fsSL "$IP_SET_ALL" -o "$IP_SET" || { echo -e "${RED}Не удалось скачать список IP${NC}"; exit 1; }
 
     # Перезапуск Zapret
-    echo -e "${CYAN}Применяем настройки Zapret${NC}"
+    echo -e "${CYAN}Применяем настройки ${NC}Zapret"
     ZAPRET_RESTART
 
     echo -e "${GREEN}Стратегия ${NC}${NAME} ${GREEN}применена!${NC}\n"
@@ -201,10 +202,9 @@ while true; do
 
     # Проверка работы стратегии
     while true; do
-        read -p "$(echo -e "${YELLOW}Стратегия работает? Y/N: ${NC}")" RESP
+        read -p "$(echo -e "${YELLOW}Стратегия работает? ${NC}Y/N: ")" RESP
         case "$RESP" in
             [Yy])
-                echo -e "${GREEN}Продолжаем работу...${NC}"
                 break
                 ;;
             [Nn])
@@ -224,5 +224,5 @@ while true; do
         esac
     done
 
-    read -p "Нажмите Enter, чтобы продолжить..." dummy
+    read -p "Нажмите Enter..." dummy
 done
