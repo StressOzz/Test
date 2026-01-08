@@ -69,7 +69,7 @@ sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
 {
     echo "  option NFQWS_OPT '"
     grep -v '^[[:space:]]*$' "$STR_FILE"
-    echo "  '"
+    echo "'"
 } >> "$CONF"
 
 # Перезапуск Zapret
