@@ -2,7 +2,7 @@
 # ==========================================
 # Zapret on remittor Manager by StressOzz
 # =========================================
-ZAPRET_MANAGER_VERSION="7.9"; ZAPRET_VERSION="72.20251227"; STR_VERSION_AUTOINSTALL="v6"
+ZAPRET_MANAGER_VERSION="8.0"; ZAPRET_VERSION="72.20251227"; STR_VERSION_AUTOINSTALL="v6"
 TEST_HOST="https://rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com"; LAN_IP=$(uci get network.lan.ipaddr)
 GREEN="\033[1;32m"; RED="\033[1;31m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"
 MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -146,20 +146,22 @@ if [ -s $BACKUP_FILE ]; then cp $BACKUP_FILE "$HOSTLIST_FILE"; else : > "$HOSTLI
 toggle_rkn_bypass() { 
 
 if grep -q "^#general" "$CONF"; then
-    echo -e "\n${RED}Эта стратегия не может быть изменена!${NC}\n"
     # Проверяем размер файла РКН
     if [ "$(wc -c < "$HOSTLIST_FILE")" -gt 1800000 ]; then
         # Если слишком большой — очищаем
         : > "$HOSTLIST_FILE"
-        echo -e "${YELLOW}Файл РКН очищен${NC}"
+        echo -e "\n${MAGENTA}Выключаем списки РКН${NC}"
+        ZAPRET_RESTART
+        echo -e "${GREEN}Обход по спискам ${NC}РКН${GREEN} выключен${NC}\n"
     else
-        # Если маленький — скачиваем заново
+        echo -e "\n${MAGENTA}Включаем списки РКН${NC}"
         curl -fsSL "$RKN_URL" -o "$HOSTLIST_FILE" || {
             echo -e "\n${RED}Не удалось скачать список РКН${NC}\n"
             read -p "Нажмите Enter..." dummy
             return
         }
-        echo -e "${GREEN}Список РКН обновлён${NC}"
+        ZAPRET_RESTART
+        echo -e "${GREEN}Обход по спискам ${NC}РКН${GREEN} включен${NC}\n"
     fi
     read -p "Нажмите Enter..." dummy </dev/tty
     return
