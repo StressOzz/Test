@@ -273,8 +273,8 @@ fw4 restart >/dev/null 2>&1; echo -e "FIX ${GREEN}успешно применё�
 Flowseal_STR() { 
 clear
 echo -e "${MAGENTA}Оптимизируем стратегии Flowseal для OpenWRT${NC}"
-echo -e "${GREEN}Проверка GitHub${NC}"
-
+echo -e "${CYAN}Проверка GitHub${NC}"
+/etc/init.d/zapret stop >/dev/null 2>&1
 RATE=$(curl -s https://api.github.com/rate_limit | grep '"remaining"' | head -1 | awk '{print $2}' | tr -d ,)
 [ -z "$RATE" ] && RATE_OUT="${RED}N/A${NC}" || RATE_OUT=$([ "$RATE" -eq 0 ] && echo -e "${RED}0${NC}" || echo -e "${GREEN}$RATE${NC}")
 
@@ -400,6 +400,7 @@ sed -i \
 # 7️⃣ Очистка
 # =========================
 rm -rf "$TMP_DIR" /tmp/files.json
+ZAPRET_RESTART
 echo -e "${GREEN}Стратегии готовы!${NC}\n"
 read -p "Нажмите Enter..." dummy
 }
