@@ -548,7 +548,8 @@ print_current_strategy() {
     [ -n "$DV" ] && CURRENT_STR="$CURRENT_STR $DV"
 
     [ -z "$CURRENT_STR" ] && CURRENT_STR="не выбрана"
-
+    
+    [ -n "$RKN_STATUS" ] && CURRENT_STR="$CURRENT_STR $RKN_STATUS"
     echo -e "${YELLOW}Используется стратегия:${NC} ${CYAN}$CURRENT_STR${NC}"
 }
 
