@@ -83,7 +83,7 @@ while IFS= read -r line; do
     }
 done < "$DUMP_FILE"
 
-# 6️⃣ Постобработка финального файла
+# 6️⃣ Постобработка файла
 echo -e "${GREEN}Применяем финальные правки к $OUT_FILE${NC}"
 sed -i \
     -e 's/%20//g' \
@@ -93,6 +93,18 @@ sed -i \
     -e '/^--ipset-exclude=/d' \
     -e 's|^--hostlist-exclude=.*|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|' \
     "$OUT_FILE"
+
+
+echo -e "${GREEN}Применяем финальные правки к $DUMP_FILE${NC}"
+sed -i \
+    -e 's/%20//g' \
+    -e 's/"//g' \
+    -e 's|^--hostlist="/opt/zapret/hostlists/list-google.txt".*|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-google.txt|' \
+    -e 's|^--hostlist="/opt/zapret/hostlists/list-general.txt".*|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user.txt|' \
+    -e 's|^--hostlist-exclude=.*|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|' \
+    -e 's|^--ipset-exclude=.*|--hostlist-exclude=/opt/zapret/ipset/zapret-ip-user-exclude.txt|' \
+    "$DUMP_FILE"
+
 
 # 7️⃣ Очистка временных файлов
 echo -e "${GREEN}Удаляем временные файлы...${NC}"
