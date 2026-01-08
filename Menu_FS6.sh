@@ -21,7 +21,7 @@ ZAPRET_RESTART() {
 
 echo -e "\n${YELLOW}=== Выбор стратегии NFQWS ===${NC}"
 
-# Карта стратегий
+# Создаём карту стратегий
 MAP="/tmp/nfqws_menu.map"
 : > "$MAP"
 awk '/^#/ {print NR "|" substr($0,2)}' "$DUMP_FILE" > "$MAP"
@@ -57,24 +57,37 @@ esac
     exit 1
 }
 
-# Берём выбранную стратегию
+# Определяем диапазон выбранной стратегии
 START_LINE=$(sed -n "${SEL}p" "$MAP" | cut -d'|' -f1)
 NAME=$(sed -n "${SEL}p" "$MAP" | cut -d'|' -f2)
 END_LINE=$(awk -v s="$START_LINE" 'NR>s && /^#/ {print NR-1; exit} END {print NR}' "$DUMP_FILE")
 
 echo -e "${GREEN}Применяем стратегию:${NC} $NAME"
 
-# Удаляем старый NFQWS_OPT
-sed -i "/option NFQWS_OPT '/,\$d" "$CONF"
+# Создаём временный файл конфигурации
+TMP_CONF="/tmp/zapret.new"
+: > "$TMP_CONF"
 
-# Вставляем новую стратегию
+# Всё до option NFQWS_OPT
+awk '/option NFQWS_OPT '\''/ {exit} {print}' "$CONF" >> "$TMP_CONF"
+
+# Вставляем выбранную стратегию
 {
     echo "  option NFQWS_OPT '"
     sed -n "${START_LINE},${END_LINE}p" "$DUMP_FILE" | sed '1d; s/^/    /'
-    echo "'"
-} >> "$CONF"
+    echo "  '"
+} >> "$TMP_CONF"
 
-# Применяем
+# Всё после старого NFQWS_OPT
+awk '
+found {print}
+!found && /option NFQWS_OPT '\''/ {found=1}
+' "$CONF" >> "$TMP_CONF"
+
+# Перемещаем временный файл на место конфигурации
+mv "$TMP_CONF" "$CONF"
+
+# Перезапуск Zapret
 ZAPRET_RESTART
 
 echo -e "${GREEN}Готово. Стратегия применена.${NC}"
