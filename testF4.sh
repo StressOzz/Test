@@ -8,22 +8,19 @@ GREEN="\033[1;32m"; RED="\033[1;31m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"
 MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
 WORKDIR="/tmp/zapret-update"; CONF="/etc/config/zapret"; CUSTOM_DIR="/opt/zapret/init.d/openwrt/custom.d/"
 STR_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ListStrYou"
-TMP_LIST="/opt/zapret_yt_list.txt"; SAVED_STR="/opt/StrYou"; OLD_STR="/opt/StrOLD"
-BACKUP_FILE="/opt/hosts_temp.txt"; HOSTLIST_FILE="/opt/zapret/ipset/zapret-hosts-user.txt"
+TMP_LIST="/opt/zapret_yt_list"; SAVED_STR="/opt/StrYou"; OLD_STR="/opt/StrOLD"
+BACKUP_FILE="/opt/hosts_temp"; HOSTLIST_FILE="/opt/zapret/ipset/zapret-hosts-user.txt"
 HOSTLIST_MIN_SIZE=1800000; FINAL_STR="/opt/StrFINAL"; NEW_STR="/opt/StrNEW"; HOSTS_USER="/opt/hosts-user.txt"
 EXCLUDE_FILE="/opt/zapret/ipset/zapret-hosts-user-exclude.txt"; fileDoH="/etc/config/https-dns-proxy"
 RKN_URL="https://raw.githubusercontent.com/IndeecFOX/zapret4rocket/refs/heads/master/extra_strats/TCP/RKN/List.txt"
 EXCLUDE_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/zapret-hosts-user-exclude.txt"
 
-
-DUMP_FILE="/opt/FS_dump.txt"
-OUT_FILE="/opt/FS_filtered.txt"
-STR_FILE="/opt/FS_Str.txt"
+DUMP_FILE="/opt/FS_dump"
+OUT_FILE="/opt/FS_filtered"
+STR_FILE="/opt/FS_Str"
 TMP_DIR="/tmp/zapret_configs"
 IP_SET="/opt/zapret/ipset/zapret-ip-user.txt"
 IP_SET_ALL="https://raw.githubusercontent.com/kartavkun/zapret-discord-youtube/refs/heads/main/hostlists/ipset-all.txt"
-
-
 
 HOSTS_LIST="185.87.51.182 4pda.to www.4pda.to|130.255.77.28 ntc.party|30.255.77.28 ntc.party|173.245.58.219 rutor.info d.rutor.info|185.39.18.98 lib.rus.ec www.lib.rus.ec
 57.144.222.34 instagram.com www.instagram.com|157.240.9.174 instagram.com www.instagram.com|157.240.245.174 instagram.com www.instagram.com|157.240.205.174 instagram.com www.instagram.com"
@@ -114,7 +111,7 @@ echo -e "Zapret ${GREEN}запущен!${NC}\n"; else echo -e "\n${RED}Zapret н
 uninstall_zapret() { local NO_PAUSE=$1; [ "$NO_PAUSE" != "1" ] && echo; echo -e "${MAGENTA}Удаляем ZAPRET${NC}\n${CYAN}Останавливаем ${NC}zapret\n${CYAN}Убиваем процессы${NC}"
 /etc/init.d/zapret stop >/dev/null 2>&1; for pid in $(pgrep -f /opt/zapret 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done; echo -e "${CYAN}Удаляем пакеты${NC}"; opkg --force-removal-of-dependent-packages --autoremove remove zapret luci-app-zapret >/dev/null 2>&1
 echo -e "${CYAN}Удаляем временные файлы${NC}"; rm -rf /opt/zapret /etc/config/zapret /etc/firewall.zapret /etc/init.d/zapret /tmp/*zapret* /var/run/*zapret* /tmp/*.ipk /tmp/*.zip 2>/dev/null; crontab -l 2>/dev/null | grep -v -i "zapret" | crontab - 2>/dev/null
-nft list tables 2>/dev/null | awk '{print $2}' | grep -E '(zapret|ZAPRET)' | while read t; do [ -n "$t" ] && nft delete table "$t" 2>/dev/null; done;  rm -f "$FINAL_STR" "$NEW_STR" "$OLD_STR" "$SAVED_STR" "$TMP_LIST" $HOSTS_USER $BACKUP_FILE
+nft list tables 2>/dev/null | awk '{print $2}' | grep -E '(zapret|ZAPRET)' | while read t; do [ -n "$t" ] && nft delete table "$t" 2>/dev/null; done;  rm -f "$FINAL_STR" "$NEW_STR" "$OLD_STR" "$SAVED_STR" "$TMP_LIST" $HOSTS_USER $BACKUP_FILE $DUMP_FILE $OUT_FILE $STR_FILE $TMP_DIR
 hosts_clear; echo -e "Zapret ${GREEN}полностью удалён!${NC}\n"; [ "$NO_PAUSE" != "1" ] && read -p "Нажмите Enter..." dummy; }
 # ==========================================
 # Подбор стратегии для Ютуб
@@ -200,7 +197,7 @@ install_strategy() { local version="$1"; local NO_PAUSE="${2:-0}"; local fileGP=
 echo -e "${MAGENTA}Устанавливаем стратегию ${version}${NC}\n${CYAN}Меняем стратегию${NC}"; sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; { echo "  option NFQWS_OPT '"; strategy_"$version"; echo "'"; } >> "$CONF"
 printf '%s\n' "gvt1.com" "googleplay.com" "play.google.com" "beacons.gvt2.com" "play.googleapis.com" "play-fe.googleapis.com" "lh3.googleusercontent.com" "android.clients.google.com" "connectivitycheck.gstatic.com" \
 "play-lh.googleusercontent.com" "play-games.googleusercontent.com" "prod-lt-playstoregatewayadapter-pa.googleapis.com" | grep -Fxv -f "$fileGP" 2>/dev/null >> "$fileGP"; echo -e "${CYAN}Редактируем ${NC}/etc/hosts${NC}"; hosts_add
-echo -e "${CYAN}Добавляем домены в исключения${NC}"; rm -f "$EXCLUDE_FILE"; wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL" || echo -e "\n${RED}Не удалось загрузить exclude файл${NC}\n"
+echo -e "${CYAN}Добавляем домены в исключения${NC}"; rm -f "$EXCLUDE_FILE";/etc/init.d/zapret stop >/dev/null 2>&1; wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL" || echo -e "\n${RED}Не удалось загрузить exclude файл${NC}\n"
 discord_str_add; echo -e "${CYAN}Применяем новую стратегию и настройки${NC}"; ZAPRET_RESTART; echo -e "${GREEN}Стратегия ${NC}${version}${GREEN} установлена!${NC}"; [ "$NO_PAUSE" != "1" ] && echo && read -p "Нажмите Enter..." dummy; }
 # ==========================================
 # DNS over HTTPS
@@ -275,7 +272,8 @@ fw4 restart >/dev/null 2>&1; echo -e "FIX ${GREEN}успешно применё�
 # =========================
 Flowseal_STR() { 
 clear
-echo -e "${MAGENTA}Проверка GitHub${NC}"
+echo -e "${MAGENTA}Оптимизируем стратегии Flowseal для OpenWRT${NC}"
+echo -e "${GREEN}Проверка GitHub${NC}"
 
 RATE=$(curl -s https://api.github.com/rate_limit | grep '"remaining"' | head -1 | awk '{print $2}' | tr -d ,)
 [ -z "$RATE" ] && RATE_OUT="${RED}N/A${NC}" || RATE_OUT=$([ "$RATE" -eq 0 ] && echo -e "${RED}0${NC}" || echo -e "${GREEN}$RATE${NC}")
@@ -284,8 +282,6 @@ echo -n "API: "
 curl -Is --connect-timeout 3 https://api.github.com >/dev/null 2>&1 \
     && echo -e "${GREEN}ok${NC} | Limit: $RATE_OUT" \
     || echo -e "${RED}fail${NC} | Limit: $RATE_OUT"
-
-echo -e "${MAGENTA}Оптимизируем стратегии Flowseal для OpenWRT${NC}"
 
 
 # =========================
@@ -306,8 +302,6 @@ wget -q -O "/tmp/files.json" "$GITHUB_API"
 # =========================
 # 3️⃣ Скачивание стратегий
 # =========================
-echo -e "${GREEN}Скачиваем стратегии${NC}"
-
 grep -o '"download_url": *"[^"]*"' /tmp/files.json | cut -d'"' -f4 | while read -r url; do
     fname="$(basename "$url")"
     fname_print="$(printf '%s\n' "$fname" | sed 's/%20/_/g')"
@@ -473,8 +467,8 @@ esac
     } > "$STR_FILE"
 
     # Вставляем стратегию в конфиг
-    echo -e "\n${MAGENTA}Применяем новую стратегию${NC}"
-    echo -e "${CYAN}Применяем стратегию ${NC}$CONF"
+    echo -e "\n${MAGENTA}Уставливаем стратегию ${NAME}${NC}"
+    echo -e "${CYAN}Меняем стратегию${NC}"
     sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
     {
         echo "  option NFQWS_OPT '"
@@ -489,10 +483,10 @@ esac
     curl -fsSL "$IP_SET_ALL" -o "$IP_SET" || { echo -e "${RED}Не удалось скачать список IP${NC}"; return; }
 
     # Перезапуск Zapret
-    echo -e "${CYAN}Применяем настройки ${NC}Zapret"
+    echo -e "${CYAN}Применяем новую стратегию и настройки${NC}"
     ZAPRET_RESTART
 
-    echo -e "${GREEN}Стратегия ${NC}${NAME} ${GREEN}применена!${NC}\n"
+    echo -e "${GREEN}Стратегия ${NC}${NAME} ${GREEN}установлена!${NC}\n"
     echo -e "${YELLOW}Проверьте работу стратегии!${NC}\n"
 
     # Проверка работы стратегии
