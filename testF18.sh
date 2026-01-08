@@ -448,16 +448,11 @@ fi
         i=$((i+1))
     done < "$MAP"
     
-echo -e "${CYAN}0) ${GREEN}Вернуть ${NC}настройки по умолчанию\n"
-
-printf "${YELLOW}Выберите стратегию (0-%s): ${NC}" "$COUNT"
+printf "\n${YELLOW}Выберите стратегию (0-%s): ${NC}" "$COUNT"
 read SEL
 
 case "$SEL" in
-    0)
-        comeback_def
-        continue  # возвращаемся в начало меню
-        ;;
+
     ''|*[!0-9]*)
         echo; return 0
         ;;
