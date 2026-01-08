@@ -168,7 +168,8 @@ while true; do
         printf "${CYAN}%2d)${NC} %s\n" "$i" "$name"
         i=$((i+1))
     done < "$MAP"
-echo -e"${CYAN}0) ${GREEN}Вернуть ${NC}настройки по умолчанию\n"
+    
+echo -e "${CYAN}0) ${GREEN}Вернуть ${NC}настройки по умолчанию\n"
 
 printf "${YELLOW}Выберите стратегию (0-%s): ${NC}" "$COUNT"
 read SEL
