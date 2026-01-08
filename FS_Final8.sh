@@ -27,7 +27,7 @@ ZAPRET_RESTART() {
     /etc/init.d/zapret restart >/dev/null 2>&1
 }
 clear
-echo -e "\n${MAGENTA}===== Проверка GitHub =====${NC}"
+echo -e "${MAGENTA}===== Проверка GitHub =====${NC}"
 RATE=$(curl -s https://api.github.com/rate_limit | grep '"remaining"' | head -1 | awk '{print $2}' | tr -d ,)
 [ -z "$RATE" ] && RATE_OUT="${RED}N/A${NC}" || RATE_OUT=$([ "$RATE" -eq 0 ] && echo -e "${RED}0${NC}" || echo -e "${GREEN}$RATE${NC}")
 echo -n "API: "
@@ -128,22 +128,21 @@ sed -i'' \
 # 7️⃣ Очистка временных файлов
 
 rm -rf "$TMP_DIR" /tmp/files.json
-echo -e "${GREEN}Стратегии готовый !${NC}"
+echo -e "${GREEN}Стратегии готовы !${NC}\n"
 read -p "Нажмите Enter..." dummy
 
 # 8️⃣ Меню выбора стратегии по кругу
 while true; do
-
-clear
+    clear
 
     # Текущая стратегия
-    CURRENT=$(sed -n "/^[[:space:]]*option NFQWS_OPT '/,/^'/p" "$CONF" | sed -n '2p' | grep -v "^[[:space:]]*'$" | head -1)
-    [ -z "$CURRENT" ] && CURRENT="(не выбрана)"
+    CURRENT=$(sed -n "/^[[:space:]]*option NFQWS_OPT '/,/^'/p" "$CONF" | sed -n '2p' | grep -v "^[[:space:]]*'$" | head -1 | sed 's/^#//')
+    [ -z "$CURRENT" ] && CURRENT="не выбрана"
 
     echo -e "${MAGENTA}===== Меню выбора стратегии =====${NC}\n"
     echo -e "${YELLOW}Текущая стратегия:${NC} $CURRENT\n"
 
-    # Карта меню
+    # Создаём карту меню
     MAP="/tmp/nfqws_menu.map"
     : > "$MAP"
     awk '/^#/ {print NR "|" substr($0,2)}' "$DUMP_FILE" > "$MAP"
@@ -151,7 +150,7 @@ clear
 
     i=1
     while IFS="|" read -r line name; do
-        printf "%2d) %s\n" "$i" "$name"
+        printf "${CYAN}%2d)${NC} %s\n" "$i" "$name"
         i=$((i+1))
     done < "$MAP"
 
@@ -162,14 +161,10 @@ clear
     # Любой неверный ввод — выход
     case "$SEL" in
         ''|*[!0-9]*)
-            echo
-            exit 1
+            echo; exit 0
             ;;
     esac
-
-    if [ "$SEL" -lt 1 ] || [ "$SEL" -gt "$COUNT" ]; then
-        exit 1
-    fi
+    [ "$SEL" -lt 1 ] || [ "$SEL" -gt "$COUNT" ] && { echo; exit 0; }
 
     # Определяем строки выбранного блока
     START_LINE=$(sed -n "${SEL}p" "$MAP" | cut -d'|' -f1)
@@ -183,7 +178,7 @@ clear
         sed -n "$((START_LINE+1)),$((NEXT_LINE-1))p" "$DUMP_FILE" | grep -v '^#'
     } > "$STR_FILE"
 
-    # Применяем стратегию в конфиг
+    # Вставляем стратегию в конфиг
     echo -e "${CYAN}Применяем стратегию в ${NC}$CONF"
     sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
     {
@@ -192,16 +187,42 @@ clear
         echo "'"
     } >> "$CONF"
 
-    # Применяем список РКН
-echo -e "${CYAN}Применяем список${NC}"
-
-curl -fsSL "$RKN_URL" -o "$HOSTLIST_FILE" || { echo -e "\n${RED}Не удалось скачать список РКН${NC}\n"; read -p "Нажмите Enter..." dummy; return; }
-curl -fsSL "$IP_SET_ALL" -o "$IP_SET" || { echo -e "\n${RED}Не удалось скачать список IP${NC}\n"; read -p "Нажмите Enter..." dummy; return; }
+    # Скачиваем список РКН и IP
+    echo -e "${CYAN}Применяем списки РКН и IP${NC}"
+    curl -fsSL "$RKN_URL" -o "$HOSTLIST_FILE" || { echo -e "${RED}Не удалось скачать список РКН${NC}"; exit 1; }
+    curl -fsSL "$IP_SET_ALL" -o "$IP_SET" || { echo -e "${RED}Не удалось скачать список IP${NC}"; exit 1; }
 
     # Перезапуск Zapret
-    echo -e "${CYAN}Применяем настройки ${NC}Zapret"
+    echo -e "${CYAN}Применяем настройки Zapret${NC}"
     ZAPRET_RESTART
 
     echo -e "${GREEN}Стратегия ${NC}${NAME} ${GREEN}применена!${NC}\n"
-    read -p "Нажмите Enter..." dummy
+    echo -e "${YELLOW}Проверьте работу стратегии!${NC}\n"
+
+    # Проверка работы стратегии
+    while true; do
+        read -p "$(echo -e "${YELLOW}Стратегия работает? Y/N: ${NC}")" RESP
+        case "$RESP" in
+            [Yy])
+                echo -e "${GREEN}Продолжаем работу...${NC}"
+                break
+                ;;
+            [Nn])
+                echo -e "\n${MAGENTA}Возвращаем настройки по умолчанию${NC}"
+                for i in 1 2 3 4; do rm -f "/opt/zapret/ipset/cust$i.txt"; done
+                /etc/init.d/zapret stop >/dev/null 2>&1
+                echo -e "${CYAN}Возвращаем ${NC}настройки, стратегию и hostlist к значениям по умолчанию${NC}"
+                cp -f /opt/zapret/ipset_def/* /opt/zapret/ipset/
+                chmod +x /opt/zapret/restore-def-cfg.sh && /opt/zapret/restore-def-cfg.sh
+                ZAPRET_RESTART
+                echo -e "Настройки по умолчанию ${GREEN}возвращены!${NC}\n"
+                break
+                ;;
+            *)
+                echo -e "${RED}Неверный ввод, введите Y или N${NC}"
+                ;;
+        esac
+    done
+
+    read -p "Нажмите Enter, чтобы продолжить..." dummy
 done
