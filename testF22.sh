@@ -182,8 +182,7 @@ printf '%s\n' "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/z
 # ==========================================
 menu_str() { [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter..." dummy; return; }; while true; do show_current_strategy; RKN_Check; clear; echo -e "${MAGENTA}Меню стратегий${NC}\n"
 menu_game=$( [ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*88,500,1024-19293,19345-49999,50101-65535" "$CONF" && grep -q -- "--filter-udp=88,500,1024-19293,19345-49999,50101-65535" "$CONF" && echo "Удалить стратегию для игр" || echo "Включить стратегию для игр" )
-print=0; current="$ver$( [ -n "$ver" ] && [ -n "$yv_ver" ] && echo " / " )$yv_ver"; if [ -n "$current" ]; then echo -e "${YELLOW}Используется стратегия:${NC} $current $RKN_STATUS"; print=1; elif [ -n "$RKN_STATUS" ]; then echo -e "${YELLOW}Используется стратегия:${NC} РКН"; print=1; fi
-[ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*88,500,1024-19293,19345-49999,50101-65535" "$CONF" && grep -q -- "--filter-udp=88,500,1024-19293,19345-49999,50101-65535" "$CONF" && echo -e "${YELLOW}Стратегия для игр:${NC} ${GREEN}включена${NC}" && print=1
+print=0; print_current_strategy print=1; [ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*88,500,1024-19293,19345-49999,50101-65535" "$CONF" && grep -q -- "--filter-udp=88,500,1024-19293,19345-49999,50101-65535" "$CONF" && echo -e "${YELLOW}Стратегия для игр:${NC} ${GREEN}включена${NC}" && print=1
 [ "$print" -eq 1 ] && echo; echo -e "${CYAN}1) ${GREEN}Выбрать стратегию для установки ${NC}v1-v7\n${CYAN}2) ${GREEN}$menu_game\n${CYAN}3) $RKN_TEXT_MENU\n${CYAN}4) ${GREEN}Подобрать стратегию для ${NC}YouTube\n${CYAN}5) ${GREEN}Выбрать стратегию ${NC}Flowseal${GREEN} для установки${NC}"
 echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read choiceST; case "$choiceST" in 1) strategy_CHOUSE ;; 2) fix_GAME ;; 3) toggle_rkn_bypass; continue ;; 4) auto_stryou ;; 5) Flowseal_menu ;; *) return ;; esac; done }
 strategy_CHOUSE () { echo -ne "\n${YELLOW}Введите версию стратегии для установки (1-7):${NC} "; read -r choice; if [[ "$choice" =~ ^[1-7]$ ]]; then install_strategy "v$choice"; fi; }
@@ -448,8 +447,6 @@ fi
         i=$((i+1))
     done < "$MAP"
     
-echo -e "${CYAN}0) ${GREEN}Вернуть ${NC}настройки по умолчанию\n"
-
 printf "${YELLOW}Выберите стратегию (0-%s): ${NC}" "$COUNT"
 read SEL
 
@@ -516,22 +513,6 @@ esac
     done
 done
 }
-
-# ==========================================
-# Главное меню
-# ==========================================
-show_menu() { get_versions; get_doh_status; show_current_strategy; RKN_Check; clear; echo -e "╔════════════════════════════════════╗\n║     ${BLUE}Zapret on remittor Manager${NC}     ║\n╚════════════════════════════════════╝\n                     ${DGRAY}by StressOzz v$ZAPRET_MANAGER_VERSION${NC}"
-for pkg in byedpi youtubeUnblock; do if opkg list-installed | grep -q "^$pkg"; then echo -e "\n${RED}Найден установленный ${NC}$pkg${RED}!${NC}\nZapret${RED} может работать некорректно с ${NC}$pkg${RED}!${NC}"; fi; done
-if uci get firewall.@defaults[0].flow_offloading 2>/dev/null | grep -q '^1$' || uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null | grep -q '^1$'; then if ! grep -q 'meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc
-then echo -e "\n${RED}Включён ${NC}Flow Offloading${RED}!${NC}\n${NC}Zapret${RED} некорректно работает с включённым ${NC}Flow Offloading${RED}!\nПримените ${NC}FIX${RED} в системном меню!${NC}"; fi; fi
-pgrep -f "/opt/zapret" >/dev/null 2>&1 && str_stp_zpr="Остановить" || str_stp_zpr="Запустить"; echo -e "\n${YELLOW}Установленная версия:    ${INST_COLOR}$INSTALLED_DISPLAY${NC}"; [ -n "$ZAPRET_STATUS" ] && echo -e "${YELLOW}Статус Zapret:${NC}           $ZAPRET_STATUS"
-show_script_50 && [ -n "$name" ] && echo -e "${YELLOW}Установлен скрипт:${NC}       $name"; grep -q "$Fin_IP_Dis" /etc/hosts && echo -e "${YELLOW}Финские IP для Discord:  ${GREEN}включены${NC}"
-[ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*88,500,1024-19293,19345-49999,50101-65535" "$CONF" && grep -q -- "--filter-udp=88,500,1024-19293,19345-49999,50101-65535" "$CONF" && echo -e "${YELLOW}Стратегия для игр:${NC}       ${GREEN}включена${NC}"
-[ -n "$DOH_STATUS" ] && opkg list-installed | grep -q '^https-dns-proxy ' && echo -e "${YELLOW}DNS over HTTPS:${NC}          $DOH_STATUS"; web_is_enabled && if web_is_enabled; then echo -e "${YELLOW}Доступ из браузера:${NC}      $LAN_IP:7681"; fi
-quic_is_blocked && if quic_is_blocked; then echo -e "${YELLOW}Блокировка QUIC:${NC}         ${GREEN}включена${NC}"; fi; if grep -q 'ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc
-then echo -e "${YELLOW}FIX для Flow Offloading:${NC} ${GREEN}включён${NC}"; fi
-
-
 print_current_strategy() {
 
     CURRENT_STR=""
@@ -547,13 +528,19 @@ print_current_strategy() {
     [ -n "$RKN_STATUS" ] && CURRENT_STR="$CURRENT_STR $RKN_STATUS"
     echo -e "${YELLOW}Используется стратегия:${NC}  ${CYAN}$CURRENT_STR${NC}"
 }
-
-print_current_strategy
-
-
-# if [ -f "$CONF" ]; then current="$ver$( [ -n "$ver" ] && [ -n "$yv_ver" ] && echo " / " )$yv_ver"; DV=$(grep -o -E '^#[[:space:]]*Dv[12]' "$CONF" | sed 's/^#[[:space:]]*/\/ /' | head -n1)
-# if [ -n "$current" ]; then echo -e "${YELLOW}Используется стратегия:${NC}  ${CYAN}$current $DV $RKN_STATUS${NC}"; elif [ -n "$RKN_STATUS" ]; then echo -e "${YELLOW}Используется стратегия:${NC}${CYAN}  РКН $DV${NC}"; fi; fi
-
+# ==========================================
+# Главное меню
+# ==========================================
+show_menu() { get_versions; get_doh_status; show_current_strategy; RKN_Check; clear; echo -e "╔════════════════════════════════════╗\n║     ${BLUE}Zapret on remittor Manager${NC}     ║\n╚════════════════════════════════════╝\n                     ${DGRAY}by StressOzz v$ZAPRET_MANAGER_VERSION${NC}"
+for pkg in byedpi youtubeUnblock; do if opkg list-installed | grep -q "^$pkg"; then echo -e "\n${RED}Найден установленный ${NC}$pkg${RED}!${NC}\nZapret${RED} может работать некорректно с ${NC}$pkg${RED}!${NC}"; fi; done
+if uci get firewall.@defaults[0].flow_offloading 2>/dev/null | grep -q '^1$' || uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null | grep -q '^1$'; then if ! grep -q 'meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc
+then echo -e "\n${RED}Включён ${NC}Flow Offloading${RED}!${NC}\n${NC}Zapret${RED} некорректно работает с включённым ${NC}Flow Offloading${RED}!\nПримените ${NC}FIX${RED} в системном меню!${NC}"; fi; fi
+pgrep -f "/opt/zapret" >/dev/null 2>&1 && str_stp_zpr="Остановить" || str_stp_zpr="Запустить"; echo -e "\n${YELLOW}Установленная версия:    ${INST_COLOR}$INSTALLED_DISPLAY${NC}"; [ -n "$ZAPRET_STATUS" ] && echo -e "${YELLOW}Статус Zapret:${NC}           $ZAPRET_STATUS"
+show_script_50 && [ -n "$name" ] && echo -e "${YELLOW}Установлен скрипт:${NC}       $name"; grep -q "$Fin_IP_Dis" /etc/hosts && echo -e "${YELLOW}Финские IP для Discord:  ${GREEN}включены${NC}"
+[ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*88,500,1024-19293,19345-49999,50101-65535" "$CONF" && grep -q -- "--filter-udp=88,500,1024-19293,19345-49999,50101-65535" "$CONF" && echo -e "${YELLOW}Стратегия для игр:${NC}       ${GREEN}включена${NC}"
+[ -n "$DOH_STATUS" ] && opkg list-installed | grep -q '^https-dns-proxy ' && echo -e "${YELLOW}DNS over HTTPS:${NC}          $DOH_STATUS"; web_is_enabled && if web_is_enabled; then echo -e "${YELLOW}Доступ из браузера:${NC}      $LAN_IP:7681"; fi
+quic_is_blocked && if quic_is_blocked; then echo -e "${YELLOW}Блокировка QUIC:${NC}         ${GREEN}включена${NC}"; fi; if grep -q 'ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc
+then echo -e "${YELLOW}FIX для Flow Offloading:${NC} ${GREEN}включён${NC}"; fi; print_current_strategy
 echo -e "\n${CYAN}1) ${GREEN}Установить${NC} Zapret\n${CYAN}2) ${GREEN}Меню стратегий${NC}\n${CYAN}3) ${GREEN}Вернуть ${NC}настройки по умолчанию\n${CYAN}4) ${GREEN}$str_stp_zpr ${NC}Zapret"
 echo -e "${CYAN}5) ${GREEN}Удалить ${NC}Zapret\n${CYAN}6) ${GREEN}Меню настройки ${NC}Discord\n${CYAN}7) ${GREEN}Меню ${NC}DNS over HTTPS\n${CYAN}8) ${GREEN}Удалить → установить → настроить${NC} Zapret\n${CYAN}0) ${GREEN}Системное меню${NC}" ; echo -ne "${CYAN}Enter) ${GREEN}Выход${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read choice
 case "$choice" in 1) install_Zapret ;; 2) menu_str ;; 3) comeback_def ;; 4) pgrep -f /opt/zapret >/dev/null 2>&1 && stop_zapret || start_zapret ;; 5) uninstall_zapret ;; 6) scrypt_install ;; 7) DoH_menu ;; 8) zapret_key ;; 0) sys_menu ;; *) echo; exit 0 ;; esac; }
