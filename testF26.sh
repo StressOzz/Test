@@ -425,15 +425,16 @@ if [ ! -f "$DUMP_FILE" ] || [ ! -f "$OUT_FILE" ]; then
     Flowseal_STR
 fi
 
+show_current_strategy
+RKN_Check
 
     clear
 
-    # Текущая стратегия
-    CURRENT=$(sed -n "/^[[:space:]]*option NFQWS_OPT '/,/^'/p" "$CONF" | sed -n '2p' | grep -v "^[[:space:]]*'$" | head -1 | sed 's/^#//')
-    [ -z "$CURRENT" ] && CURRENT="не выбрана"
 
     echo -e "${MAGENTA}Меню выбора стратегии${NC}\n"
-    echo -e "${YELLOW}Текущая стратегия:${NC} $CURRENT\n"
+    
+print_current_strategy
+echo
 
     # Создаём карту меню
     MAP="/tmp/nfqws_menu.map"
