@@ -25,6 +25,7 @@ echo -e "\n${YELLOW}=== Выбор стратегии NFQWS ===${NC}"
 MAP="/tmp/nfqws_menu.map"
 : > "$MAP"
 
+# BusyBox awk совместимый вариант
 awk '/^#/ {print NR "|" substr($0,2)}' "$DUMP_FILE" > "$MAP"
 
 COUNT=$(wc -l < "$MAP" | tr -d ' ')
@@ -34,7 +35,7 @@ COUNT=$(wc -l < "$MAP" | tr -d ' ')
     exit 1
 }
 
-# Показываем меню
+# Меню
 i=1
 while IFS="|" read -r line name; do
     printf "%2d) %s\n" "$i" "$name"
@@ -45,7 +46,7 @@ echo ""
 printf "Выберите стратегию (1-%s): " "$COUNT"
 read SEL
 
-# Проверка ввода
+# Проверка
 case "$SEL" in
     ''|*[!0-9]*)
         echo -e "${RED}Неверный ввод${NC}"
@@ -58,39 +59,32 @@ esac
     exit 1
 }
 
-# Определяем границы блока стратегии
+# Определяем границы блока стратегии (BusyBox awk вариант)
 START_LINE=$(sed -n "${SEL}p" "$MAP" | cut -d'|' -f1)
 NAME=$(sed -n "${SEL}p" "$MAP" | cut -d'|' -f2)
 
-END_LINE=$(awk -v s="$START_LINE" '
-NR > s && /^#/ {print NR-1; exit}
-END {print NR}
-' "$DUMP_FILE")
+END_LINE=$(awk -v s="$START_LINE" 'NR>s && /^#/ {print NR-1; exit} NR>=s {last=NR} END{print last}' "$DUMP_FILE")
 
 echo -e "${GREEN}Применяем стратегию:${NC} $NAME"
 
 TMP_CONF="/tmp/zapret.new"
 : > "$TMP_CONF"
 
-# 1️⃣ Всё ДО NFQWS_OPT
+# Всё ДО NFQWS_OPT
 awk '/option NFQWS_OPT '\''/ {exit} {print}' "$CONF" >> "$TMP_CONF"
 
-# 2️⃣ Новый NFQWS_OPT
+# Новый NFQWS_OPT
 echo -e "\toption NFQWS_OPT '" >> "$TMP_CONF"
 sed -n "${START_LINE},${END_LINE}p" "$DUMP_FILE" | sed '1d; s/^/\t\t/' >> "$TMP_CONF"
 echo -e "\t'" >> "$TMP_CONF"
 
-# 3️⃣ Всё ПОСЛЕ старого NFQWS_OPT
-awk '
-found && print
-/option NFQWS_OPT '\''/ {found=1; next}
-found && /^\t'\''$/ {next}
-' "$CONF" >> "$TMP_CONF"
+# Всё ПОСЛЕ старого NFQWS_OPT
+awk 'f && {print} /option NFQWS_OPT '\''/ {f=1; next} f && /^\t'\''$/ {next}' "$CONF" >> "$TMP_CONF"
 
-# 4️⃣ Заменяем старый конфиг новым
+# Меняем конфиг
 mv "$TMP_CONF" "$CONF"
 
-# 5️⃣ Перезапуск zapret
+# Перезапуск zapret
 ZAPRET_RESTART
 
 echo -e "${GREEN}Готово. Стратегия применена.${NC}"
