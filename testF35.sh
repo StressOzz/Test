@@ -340,7 +340,7 @@ curl -Is --connect-timeout 3 https://api.github.com >/dev/null 2>&1 \
 if [ "$RATE" -eq 0 ]; then
     echo -e "\n${RED}Выключите DoH или подождите!${NC}\n"
     read -p "Нажмите Enter..." dummy
-    return
+    break
 fi
 
 
