@@ -26,6 +26,21 @@ ZAPRET_RESTART() {
     /opt/zapret/sync_config.sh
     /etc/init.d/zapret restart >/dev/null 2>&1
 }
+
+ZAPRET_DEF() {
+                echo -e "\n${MAGENTA}Возвращаем настройки по умолчанию${NC}"
+                for i in 1 2 3 4; do rm -f "/opt/zapret/ipset/cust$i.txt"; done
+                /etc/init.d/zapret stop >/dev/null 2>&1
+                echo -e "${CYAN}Возвращаем ${NC}настройки, стратегию и hostlist к значениям по умолчанию${NC}"
+                cp -f /opt/zapret/ipset_def/* /opt/zapret/ipset/
+                chmod +x /opt/zapret/restore-def-cfg.sh && /opt/zapret/restore-def-cfg.sh
+                ZAPRET_RESTART
+                echo -e "Настройки по умолчанию ${GREEN}возвращены!${NC}\n"
+}
+
+
+
+
 clear
 echo -e "${MAGENTA}===== Проверка GitHub =====${NC}"
 RATE=$(curl -s https://api.github.com/rate_limit | grep '"remaining"' | head -1 | awk '{print $2}' | tr -d ,)
@@ -153,18 +168,23 @@ while true; do
         printf "${CYAN}%2d)${NC} %s\n" "$i" "$name"
         i=$((i+1))
     done < "$MAP"
+echo -e"${CYAN}0) ${GREEN}Вернуть ${NC}настройки по умолчанию\n"
 
-    echo ""
-    printf "${YELLOW}Выберите стратегию (1-%s): ${NC}" "$COUNT"
-    read SEL
+printf "${YELLOW}Выберите стратегию (0-%s): ${NC}" "$COUNT"
+read SEL
 
-    # Любой неверный ввод — выход
-    case "$SEL" in
-        ''|*[!0-9]*)
-            echo; exit 0
-            ;;
-    esac
-    [ "$SEL" -lt 1 ] || [ "$SEL" -gt "$COUNT" ] && { echo; exit 0; }
+case "$SEL" in
+    0)
+        ZAPRET_DEF
+        read -p "Нажмите Enter..." dummy
+        continue  # возвращаемся в начало меню
+        ;;
+    ''|*[!0-9]*)
+        echo; exit 0
+        ;;
+esac
+
+[ "$SEL" -lt 0 ] || [ "$SEL" -gt "$COUNT" ] && { echo; exit 0; }
 
     # Определяем строки выбранного блока
     START_LINE=$(sed -n "${SEL}p" "$MAP" | cut -d'|' -f1)
@@ -208,14 +228,7 @@ while true; do
                 break
                 ;;
             [Nn])
-                echo -e "\n${MAGENTA}Возвращаем настройки по умолчанию${NC}"
-                for i in 1 2 3 4; do rm -f "/opt/zapret/ipset/cust$i.txt"; done
-                /etc/init.d/zapret stop >/dev/null 2>&1
-                echo -e "${CYAN}Возвращаем ${NC}настройки, стратегию и hostlist к значениям по умолчанию${NC}"
-                cp -f /opt/zapret/ipset_def/* /opt/zapret/ipset/
-                chmod +x /opt/zapret/restore-def-cfg.sh && /opt/zapret/restore-def-cfg.sh
-                ZAPRET_RESTART
-                echo -e "Настройки по умолчанию ${GREEN}возвращены!${NC}\n"
+                ZAPRET_DEF
                 break
                 ;;
             *)
