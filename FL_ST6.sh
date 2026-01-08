@@ -99,10 +99,10 @@ echo -e "${GREEN}Применяем финальные правки к $DUMP_FIL
 sed -i \
     -e 's/%20//g' \
     -e 's/"//g' \
-    -e 's|^--hostlist="/opt/zapret/hostlists/list-google.txt".*|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-google.txt|' \
-    -e 's|^--hostlist="/opt/zapret/hostlists/list-general.txt".*|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user.txt|' \
+    -e 's|^--hostlist=/opt/zapret/hostlists/list-google.txt.*|--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt|' \
+    -e 's|^--hostlist=/opt/zapret/hostlists/list-general.txt.*|--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt|' \
     -e 's|^--hostlist-exclude=.*|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|' \
-    -e 's|^--ipset-exclude=.*|--hostlist-exclude=/opt/zapret/ipset/zapret-ip-user-exclude.txt|' \
+    -e 's|^--ipset-exclude=.*|--ipset-exclude=/opt/zapret/ipset/zapret-ip-user-exclude.txt|' \
     "$DUMP_FILE"
 
 
