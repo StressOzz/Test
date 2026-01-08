@@ -434,7 +434,7 @@ RKN_Check
     echo -e "${MAGENTA}Меню выбора стратегии${NC}\n"
     
 print_current_strategy
-echo
+[ -n "$CURRENT_STR" ] && echo
 
     # Создаём карту меню
     MAP="/tmp/nfqws_menu.map"
