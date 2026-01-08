@@ -1,14 +1,16 @@
 #!/bin/sh
 
 SRC_DIR="/root/configs"
-OUT_FILE="/root/nfqws_filtered.txt"
+DUMP_FILE="/root/nfqws_dump.txt"        # полный сбор всех стратегий
+OUT_FILE="/root/nfqws_filtered.txt"     # только нужные блоки
 
-: > "$OUT_FILE"
+# 1️⃣ Собираем все файлы в один (не изменяя оригинальные данные)
+: > "$DUMP_FILE"
 
 for f in "$SRC_DIR"/*; do
     [ -f "$f" ] || continue
     name="$(basename "$f")"
-    echo "#$name" >> "$OUT_FILE"
+    echo "#$name" >> "$DUMP_FILE"
 
     in_block=0
     while IFS= read -r line; do
@@ -21,19 +23,17 @@ for f in "$SRC_DIR"/*; do
             # каждая часть через --
             echo "$line" | tr ' ' '\n' | while IFS= read -r word; do
                 case "$word" in
-                    --*) echo "$word" >> "$OUT_FILE" ;;
+                    --*) echo "$word" >> "$DUMP_FILE" ;;
                 esac
             done
         fi
     done < "$f"
 
-    # пустая строка между стратегиями (имя следующего файла)
-    echo "" >> "$OUT_FILE"
+    # пустая строка между стратегиями
+    echo "" >> "$DUMP_FILE"
 done
 
-# --- фильтруем только нужные блоки ---
-TEMP_FILE="/root/nfqws_temp.txt"
-mv "$OUT_FILE" "$TEMP_FILE"
+# 2️⃣ Фильтруем нужные блоки из DUMP_FILE
 : > "$OUT_FILE"
 
 include=0
@@ -49,7 +49,7 @@ while IFS= read -r line; do
            ;;
     esac
 
-    # проверяем начало нужного блока (строгое сравнение)
+    # проверяем начало нужного блока
     case "$line" in
         "--filter-tcp=2053,2083,2087,2096,8443")
             include=1
@@ -78,6 +78,4 @@ while IFS= read -r line; do
             echo "$line" >> "$OUT_FILE"
         fi
     fi
-done < "$TEMP_FILE"
-
-rm -f "$TEMP_FILE"
+done < "$DUMP_FILE"
