@@ -191,29 +191,12 @@ strategy_CHOUSE () { echo -ne "\n${YELLOW}Введите версию страт
 show_current_strategy() {
     [ -f "$CONF" ] || return
 
-    ver=""
-    yv_ver=""
-    gen_ver=""
-    DV=""
-
-    # v1..v99
-    for i in $(seq 1 99); do
-        grep -q "#v$i" "$CONF" && { ver="v$i"; break; }
-    done
-
-    # Yv01..Yv99
-    for i in $(seq -w 1 99); do
-        grep -q "#Yv$i" "$CONF" && { yv_ver="Yv$i"; break; }
-    done
-
-    # general(...)
+    ver=$(grep -m1 '^#v' "$CONF" | sed 's/^#//')
+    yv_ver=$(grep -m1 '^#Yv' "$CONF" | sed 's/^#//')
     gen_ver=$(grep -m1 '^#general' "$CONF" | sed 's/^#//')
-
-    # Dv1 / Dv2
-    DV=$(grep -o -E '^#[[:space:]]*Dv[12]' "$CONF" \
-        | sed 's/^#[[:space:]]*/\/ /' \
-        | head -n1)
+    DV=$(grep -m1 '^#Dv' "$CONF" | sed 's/^#/\//')
 }
+
 
 
 discord_str_add() { if ! grep -q "option NFQWS_PORTS_UDP.*19294-19344,50000-50100" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'$/,19294-19344,50000-50100'/" "$CONF"; fi
@@ -554,28 +537,24 @@ quic_is_blocked && if quic_is_blocked; then echo -e "${YELLOW}Блокировк
 then echo -e "${YELLOW}FIX для Flow Offloading:${NC} ${GREEN}включён${NC}"; fi
 
 
-if [ -f "$CONF" ]; then
-    current=""
+print_current_strategy() {
+    show_current_strategy
 
-    # приоритет: general → v/Yv
-    if [ -n "$gen_ver" ]; then
-        current="$gen_ver"
-    else
-        current="$ver"
-        [ -n "$ver" ] && [ -n "$yv_ver" ] && current="$current / $yv_ver"
-        [ -z "$ver" ] && current="$yv_ver"
-    fi
+    CURRENT_STR=""
 
-    if [ -n "$current" ]; then
-        echo -e "${YELLOW}Используется стратегия:${NC}  ${CYAN}$current $DV $RKN_STATUS${NC} $DV"
-    elif [ -n "$RKN_STATUS" ]; then
-        echo -e "${YELLOW}Используется стратегия:${NC}  ${CYAN}РКН $DV${NC}"
-    fi
-fi
+    # Добавляем по очереди, только если есть
+    [ -n "$ver" ] && CURRENT_STR="$ver"
+    [ -n "$yv_ver" ] && CURRENT_STR="$CURRENT_STR$( [ -n "$CURRENT_STR" ] && echo " / " )$yv_ver"
+    [ -n "$gen_ver" ] && CURRENT_STR="$CURRENT_STR$( [ -n "$CURRENT_STR" ] && echo " / " )$gen_ver"
+    [ -n "$DV" ] && CURRENT_STR="$CURRENT_STR $DV"
+
+    [ -z "$CURRENT_STR" ] && CURRENT_STR="не выбрана"
+
+    echo -e "${YELLOW}Используется стратегия:${NC} ${CYAN}$CURRENT_STR${NC}"
+}
 
 
-
-
+    echo -e "${YELLOW}Используется стратегия:${NC} ${CYAN}$CURRENT_STR${NC}"
 
 
 # if [ -f "$CONF" ]; then current="$ver$( [ -n "$ver" ] && [ -n "$yv_ver" ] && echo " / " )$yv_ver"; DV=$(grep -o -E '^#[[:space:]]*Dv[12]' "$CONF" | sed 's/^#[[:space:]]*/\/ /' | head -n1)
