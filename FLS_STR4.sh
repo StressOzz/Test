@@ -5,7 +5,6 @@ OUT_FILE="/root/nfqws_filtered.txt"
 
 : > "$OUT_FILE"
 
-current_block=""
 include=0
 
 while IFS= read -r line; do
@@ -15,9 +14,9 @@ while IFS= read -r line; do
         *) echo "#$line" >> "$OUT_FILE"; continue ;;
     esac
 
-    # проверяем начало нужного блока
+    # проверяем начало нужного блока (только точные строки)
     case "$line" in
-        --filter-tcp=2053,2083,2087,2096,8443*|--filter-tcp=80,443*)
+        "--filter-tcp=2053,2083,2087,2096,8443"|"--filter-tcp=80,443")
             include=1
             echo "$line" >> "$OUT_FILE"
             continue
