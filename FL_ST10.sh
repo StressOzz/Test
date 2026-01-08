@@ -3,7 +3,13 @@
 # Цвета для вывода
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+RED="\033[1;31m"
 NC='\033[0m'
+
+echo -e "\n${GREEN}===== Проверка GitHub =====${NC}"
+RATE=$(curl -s https://api.github.com/rate_limit | grep '"remaining"' | head -1 | awk '{print $2}' | tr -d ,)
+[ -z "$RATE" ] && RATE_OUT="${RED}N/A${NC}" || RATE_OUT=$([ "$RATE" -eq 0 ] && echo -e "${RED}0${NC}" || echo -e "${GREEN}$RATE${NC}")
+echo -n "API: "; curl -Is --connect-timeout 3 https://api.github.com >/dev/null 2>&1 && echo -e "${GREEN}ok${NC} | Limit: $RATE_OUT" || echo -e "${RED}fail${NC} | Limit: $RATE_OUT"; 
 
 echo -e "${YELLOW}=== Обновление стратегий NFQWS с GitHub ===${NC}"
 
@@ -16,6 +22,10 @@ OUT_FILE="/root/nfqws_filtered.txt"
 echo -e "${GREEN}Создаём временную папку $TMP_DIR${NC}"
 rm -rf "$TMP_DIR"
 mkdir -p "$TMP_DIR"
+
+
+
+
 
 # 2️⃣ Получаем список файлов из GitHub
 echo -e "${GREEN}Получаем список файлов из GitHub...${NC}"
