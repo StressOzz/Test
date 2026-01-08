@@ -228,21 +228,16 @@ printf '%s\n' "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/z
 menu_str() { [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; read -p "Нажмите Enter..." dummy; return; }; while true; do show_current_strategy; RKN_Check; clear; echo -e "${MAGENTA}Меню стратегий${NC}\n"
 menu_game=$( [ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*88,500,1024-19293,19345-49999,50101-65535" "$CONF" && grep -q -- "--filter-udp=88,500,1024-19293,19345-49999,50101-65535" "$CONF" && echo "Удалить стратегию для игр" || echo "Включить стратегию для игр" )
 print=0; print_current_strategy && print=1; [ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*88,500,1024-19293,19345-49999,50101-65535" "$CONF" && grep -q -- "--filter-udp=88,500,1024-19293,19345-49999,50101-65535" "$CONF" && echo -e "${YELLOW}Стратегия для игр:${NC} ${GREEN}включена${NC}" && print=1
-[ "$print" -eq 1 ] && echo; echo -e "${CYAN}1) ${GREEN}Выбрать стратегию для установки ${NC}v1-v7\n${CYAN}2) ${GREEN}$menu_game\n${CYAN}3) $RKN_TEXT_MENU\n${CYAN}4) ${GREEN}Подобрать стратегию для ${NC}YouTube\n${CYAN}5) ${GREEN}Выбрать стратегию ${NC}Flowseal${GREEN} для установки${NC}"
-echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read choiceST; case "$choiceST" in 1) strategy_CHOUSE ;; 2) fix_GAME ;; 3) toggle_rkn_bypass; continue ;; 4) auto_stryou ;; 5) Flowseal_menu ;; *) return ;; esac; done }
+[ "$print" -eq 1 ] && echo; echo -e "${CYAN}1) ${GREEN}Выбрать стратегию для установки ${NC}v1-v7\n${CYAN}2) ${GREEN}Выбрать стратегию ${NC}Flowseal${GREEN} для установки${NC}\n${CYAN}3) ${GREEN}$menu_game\n${CYAN}4) $RKN_TEXT_MENU\n${CYAN}5) ${GREEN}Подобрать стратегию для ${NC}YouTube"
+echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read choiceST; case "$choiceST" in 1) strategy_CHOUSE ;; 2) Flowseal_menu ;; 3) fix_GAME ;; 4) toggle_rkn_bypass; continue ;; 5) auto_stryou ;; *) return ;; esac; done }
 strategy_CHOUSE () { echo -ne "\n${YELLOW}Введите версию стратегии для установки (1-7):${NC} "; read -r choice; if [[ "$choice" =~ ^[1-7]$ ]]; then install_strategy "v$choice"; fi; }
-
 show_current_strategy() {
     [ -f "$CONF" ] || return
-
     ver=$(grep -m1 '^#v' "$CONF" | sed 's/^#//')
     yv_ver=$(grep -m1 '^#Yv' "$CONF" | sed 's/^#//')
     gen_ver=$(grep -m1 '^#general' "$CONF" | sed 's/^#//')
     DV=$(grep -m1 '^#Dv' "$CONF" | sed 's/^#/\//')
 }
-
-
-
 discord_str_add() { if ! grep -q "option NFQWS_PORTS_UDP.*19294-19344,50000-50100" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'$/,19294-19344,50000-50100'/" "$CONF"; fi
 if ! grep -q "option NFQWS_PORTS_TCP.*2053,2083,2087,2096,8443" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_TCP '/s/'$/,2053,2083,2087,2096,8443'/" "$CONF"; fi
 if ! grep -q -- "--filter-udp=19294-19344,50000-50100" "$CONF"; then last_line1=$(grep -n "^'$" "$CONF" | tail -n1 | cut -d: -f1); if [ -n "$last_line1" ]; then sed -i "${last_line1},\$d" "$CONF"; fi
@@ -543,6 +538,11 @@ esac
 
     # Перезапуск Zapret
     echo -e "${CYAN}Применяем новую стратегию и настройки${NC}"
+
+    
+sed -i "s|^\([[:space:]]*option NFQWS_PORTS_TCP '\).*'|\180,443,1024-65535'|" "$CONF"
+sed -i "s|^\([[:space:]]*option NFQWS_PORTS_UDP '\).*'|\188,500,443,1024-65535'|" "$CONF"
+
     hosts_add
     ZAPRET_RESTART
 
