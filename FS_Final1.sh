@@ -115,15 +115,27 @@ sed -i'' \
 # ================= 5️⃣ Удаляем временные файлы =================
 rm -rf "$TMP_DIR" /tmp/files.json
 
-# ================= 6️⃣ Меню стратегий по кругу =================
+
+    echo -e "${YELLOW}Нажмите Enter...${NC}"
+    read
+
+# ================= 6️⃣ Меню стратегий по кругу с отображением текущей =================
 while true; do
+    # Читаем текущую стратегию из конфига
+    CURRENT=$(sed -n "/^[[:space:]]*option NFQWS_OPT '/,/^'/p" "$CONF" | sed -n '2,$p' | grep -v "^[[:space:]]*'$" | tr '\n' ' ' | sed 's/^ //; s/ $//')
+    [ -z "$CURRENT" ] && CURRENT="(не выбрана)"
+
     # Создаём карту меню
     MAP="/tmp/nfqws_menu.map"
     : > "$MAP"
     awk '/^#/ {print NR "|" substr($0,2)}' "$DUMP_FILE" > "$MAP"
     COUNT=$(wc -l < "$MAP" | tr -d ' ')
 
-    echo -e "\n${YELLOW}=== Выбор стратегии NFQWS ===${NC}"
+
+clear
+    echo -e "${YELLOW}=== Выбор стратегии NFQWS ===${NC}"
+    echo -e "\n${GREEN}Текущая стратегия:${NC} $CURRENT\n"
+
     i=1
     while IFS="|" read -r line name; do
         printf "%2d) %s\n" "$i" "$name"
@@ -148,7 +160,6 @@ while true; do
     # Определяем строки выбранного блока
     START_LINE=$(sed -n "${SEL}p" "$MAP" | cut -d'|' -f1)
     NAME=$(sed -n "${SEL}p" "$MAP" | cut -d'|' -f2)
-
     NEXT_LINE=$(awk -v s="$START_LINE" 'NR>s && /^#/ {print NR; exit}' "$DUMP_FILE")
     [ -z "$NEXT_LINE" ] && NEXT_LINE=$(wc -l < "$DUMP_FILE" | tr -d ' '); NEXT_LINE=$((NEXT_LINE+1))
 
