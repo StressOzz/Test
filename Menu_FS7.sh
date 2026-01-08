@@ -14,14 +14,13 @@ ZAPRET_RESTART() {
     /etc/init.d/zapret restart >/dev/null 2>&1
 }
 
+# Проверяем наличие файла стратегий
 [ ! -f "$DUMP_FILE" ] && {
     echo -e "${RED}Файл $DUMP_FILE не найден${NC}"
     exit 1
 }
 
-echo -e "\n${YELLOW}=== Выбор стратегии NFQWS ===${NC}"
-
-# Создаём карту стратегий
+# Собираем карту стратегий (#строка -> номер)
 MAP="/tmp/nfqws_menu.map"
 : > "$MAP"
 awk '/^#/ {print NR "|" substr($0,2)}' "$DUMP_FILE" > "$MAP"
@@ -33,7 +32,8 @@ COUNT=$(wc -l < "$MAP" | tr -d ' ')
     exit 1
 }
 
-# Меню
+# Выводим меню
+echo -e "\n${YELLOW}=== Выбор стратегии NFQWS ===${NC}"
 i=1
 while IFS="|" read -r line name; do
     printf "%2d) %s\n" "$i" "$name"
@@ -57,37 +57,31 @@ esac
     exit 1
 }
 
-# Определяем диапазон выбранной стратегии
+# Определяем выбранный блок
 START_LINE=$(sed -n "${SEL}p" "$MAP" | cut -d'|' -f1)
 NAME=$(sed -n "${SEL}p" "$MAP" | cut -d'|' -f2)
 END_LINE=$(awk -v s="$START_LINE" 'NR>s && /^#/ {print NR-1; exit} END {print NR}' "$DUMP_FILE")
 
 echo -e "${GREEN}Применяем стратегию:${NC} $NAME"
 
-# Создаём временный файл конфигурации
 TMP_CONF="/tmp/zapret.new"
 : > "$TMP_CONF"
 
-# Всё до option NFQWS_OPT
+# 1️⃣ Всё до NFQWS_OPT
 awk '/option NFQWS_OPT '\''/ {exit} {print}' "$CONF" >> "$TMP_CONF"
 
-# Вставляем выбранную стратегию
-{
-    echo "  option NFQWS_OPT '"
-    sed -n "${START_LINE},${END_LINE}p" "$DUMP_FILE" | sed '1d; s/^/    /'
-    echo "  '"
-} >> "$TMP_CONF"
+# 2️⃣ Вставляем выбранный блок
+echo "  option NFQWS_OPT '" >> "$TMP_CONF"
+sed -n "${START_LINE},${END_LINE}p" "$DUMP_FILE" | sed '1d; s/^/    /' >> "$TMP_CONF"
+echo "  '" >> "$TMP_CONF"
 
-# Всё после старого NFQWS_OPT
-awk '
-found {print}
-!found && /option NFQWS_OPT '\''/ {found=1}
-' "$CONF" >> "$TMP_CONF"
+# 3️⃣ Всё после старого NFQWS_OPT
+awk 'found {print} !found && /option NFQWS_OPT '\''/ {found=1}' "$CONF" >> "$TMP_CONF"
 
-# Перемещаем временный файл на место конфигурации
+# 4️⃣ Перемещаем временный файл на место конфигурации
 mv "$TMP_CONF" "$CONF"
 
-# Перезапуск Zapret
+# 5️⃣ Перезапуск Zapret
 ZAPRET_RESTART
 
 echo -e "${GREEN}Готово. Стратегия применена.${NC}"
