@@ -407,7 +407,6 @@ sed -i \
     -e 's|^--ipset=.*|--ipset=/opt/zapret/ipset/zapret-ip-user.txt|' \
     -e '/^--ipset-exclude/d' \
     -e '/^--hostlist-exclude/d' \
-
     -e '/^[[:space:]]*$/d' \
     "$DUMP_FILE"
 
