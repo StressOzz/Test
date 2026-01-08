@@ -340,7 +340,7 @@ curl -Is --connect-timeout 3 https://api.github.com >/dev/null 2>&1 \
 if [ "$RATE" -eq 0 ]; then
     echo -e "\n${RED}Выключите DoH или подождите!${NC}\n"
     read -p "Нажмите Enter..." dummy
-    continue
+    return
 fi
 
 
@@ -473,6 +473,9 @@ while true; do
 
 if [ ! -f "$DUMP_FILE" ] || [ ! -f "$OUT_FILE" ]; then
     Flowseal_STR
+    if [ "$RATE" -eq 0 ]; then
+    return
+fi
 fi
 
 show_current_strategy
