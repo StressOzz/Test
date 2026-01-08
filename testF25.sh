@@ -138,16 +138,83 @@ echo -e "\n${RED}Рабочая стратегия для YouTube не найд�
 # ==========================================
 # РКН список ВКЛ / ВЫКЛ
 # ==========================================
-enable_rkn() { echo -e "\n${MAGENTA}Включаем списки РКН${NC}"; [ -f "$HOSTLIST_FILE" ] && cp "$HOSTLIST_FILE" $BACKUP_FILE && cp "$HOSTLIST_FILE" $HOSTS_USER
-curl -fsSL "$RKN_URL" -o "$HOSTLIST_FILE" || { echo -e "\n${RED}Не удалось скачать список РКН${NC}\n"; read -p "Нажмите Enter..." dummy; return; }
-sed -i 's|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt|' "$CONF"; ZAPRET_RESTART; echo -e "${GREEN}Обход по спискам ${NC}РКН${GREEN} включен${NC}\n"; }
-disable_rkn() { echo -e "\n${MAGENTA}Выключаем списки РКН${NC}"; sed -i 's|--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|' "$CONF"
-if [ -s $BACKUP_FILE ]; then cp $BACKUP_FILE "$HOSTLIST_FILE"; else : > "$HOSTLIST_FILE"; fi; rm -f $HOSTS_USER $BACKUP_FILE; ZAPRET_RESTART; echo -e "${GREEN}Обход по спискам ${NC}РКН${GREEN} выключен${NC}\n"; }
-toggle_rkn_bypass() { if grep -q -- "--filter-tcp=443 ˂HOSTLIST˃" "$CONF"; then if [ -f "$HOSTLIST_FILE" ] && [ "$(wc -c < "$HOSTLIST_FILE")" -gt "$HOSTLIST_MIN_SIZE" ]; then disable_rkn; else [ -f "$HOSTLIST_FILE" ] && cp "$HOSTLIST_FILE" "$BACKUP_FILE"
-enable_rkn; fi; read -p "Нажмите Enter..." dummy </dev/tty; return; fi;  if grep -q -- "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "$CONF" && (grep -qE "^#v" "$CONF" || grep -qE "^#general" "$CONF"); then enable_rkn; read -p "Нажмите Enter..." dummy </dev/tty
-elif grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONF"; then disable_rkn; read -p "Нажмите Enter..." dummy </dev/tty; else echo -e "\n${RED}Стратегия не подходит для списков РКН\n${NC}"; read -p "Нажмите Enter..." dummy </dev/tty; fi; }
-RKN_Check() { if (grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONF" >/dev/null 2>&1 || grep -q -- "--filter-tcp=443 ˂HOSTLIST˃" "$CONF" >/dev/null 2>&1) && [ "$(wc -c < /opt/zapret/ipset/zapret-hosts-user.txt)" -gt 1800000 ]
-then RKN_STATUS="/ РКН"; RKN_TEXT_MENU="${GREEN}Выключить обход по спискам${NC} РКН"; else RKN_STATUS=""; RKN_TEXT_MENU="${GREEN}Включить обход по спискам${NC} РКН"; fi; }
+enable_rkn() {
+    echo -e "\n${MAGENTA}Включаем списки РКН${NC}"
+
+    # Резервная копия
+    [ -f "$HOSTLIST_FILE" ] && cp "$HOSTLIST_FILE" "$BACKUP_FILE" && cp "$HOSTLIST_FILE" "$HOSTS_USER"
+
+    # Скачиваем список
+    curl -fsSL "$RKN_URL" -o "$HOSTLIST_FILE" || {
+        echo -e "\n${RED}Не удалось скачать список РКН${NC}\n"
+        read -p "Нажмите Enter..." dummy
+        return
+    }
+
+    # Заменяем hostlist-exclude только после фильтрующей строки и если стратегия подходит
+    sed -i '/--filter-/ { n; s|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt| }' "$CONF"
+
+    ZAPRET_RESTART
+    echo -e "${GREEN}Обход по спискам ${NC}РКН${GREEN} включен${NC}\n"
+}
+
+disable_rkn() {
+    echo -e "\n${MAGENTA}Выключаем списки РКН${NC}"
+
+    # Заменяем обратно
+    sed -i '/--filter-/ { n; s|--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt| }' "$CONF"
+
+    # Восстанавливаем резервную копию
+    if [ -s "$BACKUP_FILE" ]; then
+        cp "$BACKUP_FILE" "$HOSTLIST_FILE"
+    else
+        : > "$HOSTLIST_FILE"
+    fi
+
+    rm -f "$HOSTS_USER" "$BACKUP_FILE"
+    ZAPRET_RESTART
+    echo -e "${GREEN}Обход по спискам ${NC}РКН${GREEN} выключен${NC}\n"
+}
+
+toggle_rkn_bypass() {
+    # Если фильтрующая строка с ˂HOSTLIST˃ присутствует
+    if grep -q -- "--filter-tcp=443 ˂HOSTLIST˃" "$CONF"; then
+        if [ -f "$HOSTLIST_FILE" ] && [ "$(wc -c < "$HOSTLIST_FILE")" -gt "$HOSTLIST_MIN_SIZE" ]; then
+            disable_rkn
+        else
+            [ -f "$HOSTLIST_FILE" ] && cp "$HOSTLIST_FILE" "$BACKUP_FILE"
+            enable_rkn
+        fi
+        read -p "Нажмите Enter..." dummy </dev/tty
+        return
+    fi
+
+    # Проверка для обычных стратегий #v… или #general
+    if grep -q -- "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "$CONF" \
+        && (grep -qE "^#v" "$CONF" || grep -qE "^#general" "$CONF"); then
+        enable_rkn
+        read -p "Нажмите Enter..." dummy </dev/tty
+    elif grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONF"; then
+        disable_rkn
+        read -p "Нажмите Enter..." dummy </dev/tty
+    else
+        echo -e "\n${RED}Стратегия не подходит для списков РКН${NC}"
+        read -p "Нажмите Enter..." dummy </dev/tty
+    fi
+}
+
+RKN_Check() {
+    # Проверка состояния
+    if (grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONF" >/dev/null 2>&1 \
+        || grep -q -- "--filter-tcp=443 ˂HOSTLIST˃" "$CONF" >/dev/null 2>&1) \
+        && [ "$(wc -c < /opt/zapret/ipset/zapret-hosts-user.txt)" -gt 1800000 ]; then
+        RKN_STATUS="/ РКН"
+        RKN_TEXT_MENU="${GREEN}Выключить обход по спискам${NC} РКН"
+    else
+        RKN_STATUS=""
+        RKN_TEXT_MENU="${GREEN}Включить обход по спискам${NC} РКН"
+    fi
+}
 # ==========================================
 # Стратегии
 # ==========================================
