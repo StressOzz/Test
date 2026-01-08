@@ -102,7 +102,7 @@ while IFS= read -r line; do
 done < "$DUMP_FILE"
 
 # 6️⃣ Постобработка файлов
-echo -e "${CYAN}Применяем финальные правки к ${NC}$OUT_FILE${NC}"
+# echo -e "${CYAN}Применяем финальные правки к ${NC}$OUT_FILE${NC}"
 sed -i \
     -e 's/%20//g' \
     -e 's/80,//g' \
@@ -112,7 +112,7 @@ sed -i \
     -e 's|^--hostlist-exclude=.*|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|' \
     "$OUT_FILE"
 
-echo -e "${CYAN}Применяем финальные правки к ${NC}$DUMP_FILE${NC}"
+# echo -e "${CYAN}Применяем финальные правки к ${NC}$DUMP_FILE${NC}"
 sed -i'' \
     -e 's/%20//g' \
     -e 's/"//g' \
@@ -140,7 +140,7 @@ clear
     CURRENT=$(sed -n "/^[[:space:]]*option NFQWS_OPT '/,/^'/p" "$CONF" | sed -n '2p' | grep -v "^[[:space:]]*'$" | head -1)
     [ -z "$CURRENT" ] && CURRENT="(не выбрана)"
 
-    echo -e "\n${MAGENTA}===== Меню выбора стратегии =====${NC}\n"
+    echo -e "${MAGENTA}===== Меню выбора стратегии =====${NC}\n"
     echo -e "${YELLOW}Текущая стратегия:${NC} $CURRENT\n"
 
     # Карта меню
@@ -202,6 +202,6 @@ curl -fsSL "$IP_SET_ALL" -o "$IP_SET" || { echo -e "\n${RED}Не удалось 
     echo -e "${CYAN}Применяем настройки ${NC}Zapret"
     ZAPRET_RESTART
 
-    echo -e "${GREEN}Стратегия ${NC}${NAME} ${GREEN}применена!\n"
+    echo -e "${GREEN}Стратегия ${NC}${NAME} ${GREEN}применена!${NC}\n"
     read -p "Нажмите Enter..." dummy
 done
