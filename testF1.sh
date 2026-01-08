@@ -299,7 +299,7 @@ mkdir -p "$TMP_DIR"
 # 2️⃣ Получаем список файлов
 # =========================
 GITHUB_API="https://api.github.com/repos/kartavkun/zapret-discord-youtube/contents/configs"
-echo -e "${CYAN}Получаем список стратегий из ${NC}GitHub"
+echo -e "${CYAN}Получаем список стратегий${NC}"
 wget -q -O "/tmp/files.json" "$GITHUB_API"
 
 
@@ -310,7 +310,8 @@ echo -e "${GREEN}Скачиваем стратегии${NC}"
 
 grep -o '"download_url": *"[^"]*"' /tmp/files.json | cut -d'"' -f4 | while read -r url; do
     fname="$(basename "$url")"
-    echo -e "${CYAN}Скачиваем ${NC}$fname"
+    fname_print="$(printf '%s\n' "$fname" | sed 's/%20/ /g')"
+    echo -e "${CYAN}Скачиваем ${NC}$fname_print"
     wget -q -O "$TMP_DIR/$fname" "$url"
 done
 
@@ -414,15 +415,22 @@ read -p "Нажмите Enter..." dummy
 # =========================
 Flowseal_menu() {
 while true; do
+
+if [ ! -f "$DUMP_FILE" ] || [ ! -f "$OUT_FILE" ]; then
     Flowseal_STR
+fi
+
+
     clear
 
+    # Текущая стратегия
     CURRENT=$(sed -n "/^[[:space:]]*option NFQWS_OPT '/,/^'/p" "$CONF" | sed -n '2p' | grep -v "^[[:space:]]*'$" | head -1 | sed 's/^#//')
     [ -z "$CURRENT" ] && CURRENT="не выбрана"
 
-    echo -e "${MAGENTA}Меню выбора стратегии by Flowseal${NC}\n"
+    echo -e "${MAGENTA}Меню выбора стратегии${NC}\n"
     echo -e "${YELLOW}Текущая стратегия:${NC} $CURRENT\n"
 
+    # Создаём карту меню
     MAP="/tmp/nfqws_menu.map"
     : > "$MAP"
     awk '/^#/ {print NR "|" substr($0,2)}' "$DUMP_FILE" > "$MAP"
@@ -433,35 +441,40 @@ while true; do
         printf "${CYAN}%2d)${NC} %s\n" "$i" "$name"
         i=$((i+1))
     done < "$MAP"
+    
+echo -e "${CYAN}0) ${GREEN}Вернуть ${NC}настройки по умолчанию\n"
 
-    echo -e "\n${CYAN}0) ${GREEN}Вернуть ${NC}настройки по умолчанию\n"
+printf "${YELLOW}Выберите стратегию (0-%s): ${NC}" "$COUNT"
+read SEL
 
-    printf "${YELLOW}Выберите стратегию (0-%s): ${NC}" "$COUNT"
-    read SEL
+case "$SEL" in
+    0)
+        ZAPRET_DEF
+        read -p "Нажмите Enter..." dummy
+        continue  # возвращаемся в начало меню
+        ;;
+    ''|*[!0-9]*)
+        echo; exit 0
+        ;;
+esac
 
-    case "$SEL" in
-        0)
-            comeback_def
-            read -p "Нажмите Enter..." dummy
-            continue
-            ;;
-        ''|*[!0-9]*)
-            exit 0
-            ;;
-    esac
+[ "$SEL" -lt 0 ] || [ "$SEL" -gt "$COUNT" ] && { echo; exit 0; }
 
-    [ "$SEL" -lt 0 ] || [ "$SEL" -gt "$COUNT" ] && exit 0
-
+    # Определяем строки выбранного блока
     START_LINE=$(sed -n "${SEL}p" "$MAP" | cut -d'|' -f1)
     NAME=$(sed -n "${SEL}p" "$MAP" | cut -d'|' -f2)
     NEXT_LINE=$(awk -v s="$START_LINE" 'NR>s && /^#/ {print NR; exit}' "$DUMP_FILE")
-    [ -z "$NEXT_LINE" ] && NEXT_LINE=$(wc -l < "$DUMP_FILE"); NEXT_LINE=$((NEXT_LINE+1))
+    [ -z "$NEXT_LINE" ] && NEXT_LINE=$(wc -l < "$DUMP_FILE" | tr -d ' '); NEXT_LINE=$((NEXT_LINE+1))
 
+    # Сохраняем выбранную стратегию в STR_FILE
     {
         echo "#$NAME"
         sed -n "$((START_LINE+1)),$((NEXT_LINE-1))p" "$DUMP_FILE" | grep -v '^#'
     } > "$STR_FILE"
 
+    # Вставляем стратегию в конфиг
+    echo -e "\n${MAGENTA}Применяем новую стратегию${NC}"
+    echo -e "${CYAN}Применяем стратегию ${NC}$CONF"
     sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
     {
         echo "  option NFQWS_OPT '"
@@ -469,20 +482,34 @@ while true; do
         echo "'"
     } >> "$CONF"
 
+    # Скачиваем список РКН и IP
+    echo -e "${CYAN}Применяем списки ${NC}РКН ${CYAN}и ${NC}IP"
     /etc/init.d/zapret stop >/dev/null 2>&1
-    curl -fsSL "$RKN_URL" -o "$HOSTLIST_FILE" || exit 1
-    curl -fsSL "$IP_SET_ALL" -o "$IP_SET" || exit 1
+    curl -fsSL "$RKN_URL" -o "$HOSTLIST_FILE" || { echo -e "${RED}Не удалось скачать список РКН${NC}"; exit 1; }
+    curl -fsSL "$IP_SET_ALL" -o "$IP_SET" || { echo -e "${RED}Не удалось скачать список IP${NC}"; exit 1; }
 
+    # Перезапуск Zapret
+    echo -e "${CYAN}Применяем настройки ${NC}Zapret"
     ZAPRET_RESTART
 
-    echo -e "${GREEN}Стратегия ${NAME} применена!${NC}\n"
+    echo -e "${GREEN}Стратегия ${NC}${NAME} ${GREEN}применена!${NC}\n"
+    echo -e "${YELLOW}Проверьте работу стратегии!${NC}\n"
 
+    # Проверка работы стратегии
     while true; do
         read -p "$(echo -e "${YELLOW}Стратегия работает? ${NC}Y/N: ")" RESP
         case "$RESP" in
-            [Yy]) break ;;
-            [Nn]) comeback_def; break ;;
-            *) echo -e "${RED}Введите Y или N${NC}" ;;
+            [Yy])
+                echo
+                break
+                ;;
+            [Nn])
+                ZAPRET_DEF
+                break
+                ;;
+            *)
+                echo -e "${RED}Неверный ввод, введите Y или N${NC}"
+                ;;
         esac
     done
 
