@@ -156,7 +156,7 @@ clear
     done < "$MAP"
 
     echo ""
-    echo -e "${YELLOW}Выберите стратегию (1-%s):${NC} " "$COUNT"
+    printf "${YELLOW}Выберите стратегию (1-%s): ${NC}" "$COUNT"
     read SEL
 
     # Любой неверный ввод — выход
