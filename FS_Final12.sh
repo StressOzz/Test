@@ -42,13 +42,13 @@ ZAPRET_DEF() {
 
 
 clear
-echo -e "${MAGENTA}===== Проверка GitHub =====${NC}"
+echo -e "${MAGENTA}Проверка GitHub${NC}"
 RATE=$(curl -s https://api.github.com/rate_limit | grep '"remaining"' | head -1 | awk '{print $2}' | tr -d ,)
 [ -z "$RATE" ] && RATE_OUT="${RED}N/A${NC}" || RATE_OUT=$([ "$RATE" -eq 0 ] && echo -e "${RED}0${NC}" || echo -e "${GREEN}$RATE${NC}")
 echo -n "API: "
 curl -Is --connect-timeout 3 https://api.github.com >/dev/null 2>&1 && echo -e "${GREEN}ok${NC} | Limit: $RATE_OUT" || echo -e "${RED}fail${NC} | Limit: $RATE_OUT"
 
-echo -e "${MAGENTA}===== Обновление стратегий NFQWS с GitHub =====${NC}"
+echo -e "${MAGENTA}Обновление стратегий NFQWS с GitHub${NC}"
 
 # 1️⃣ Создаём временную папку
 rm -rf "$TMP_DIR"
@@ -154,7 +154,7 @@ while true; do
     CURRENT=$(sed -n "/^[[:space:]]*option NFQWS_OPT '/,/^'/p" "$CONF" | sed -n '2p' | grep -v "^[[:space:]]*'$" | head -1 | sed 's/^#//')
     [ -z "$CURRENT" ] && CURRENT="не выбрана"
 
-    echo -e "${MAGENTA}===== Меню выбора стратегии =====${NC}\n"
+    echo -e "${MAGENTA}Меню выбора стратегии${NC}\n"
     echo -e "${YELLOW}Текущая стратегия:${NC}$CURRENT\n"
 
     # Создаём карту меню
@@ -211,6 +211,7 @@ esac
 
     # Скачиваем список РКН и IP
     echo -e "${CYAN}Применяем списки ${NC}РКН ${CYAN}и ${NC}IP"
+    /etc/init.d/zapret stop >/dev/null 2>&1
     curl -fsSL "$RKN_URL" -o "$HOSTLIST_FILE" || { echo -e "${RED}Не удалось скачать список РКН${NC}"; exit 1; }
     curl -fsSL "$IP_SET_ALL" -o "$IP_SET" || { echo -e "${RED}Не удалось скачать список IP${NC}"; exit 1; }
 
@@ -226,6 +227,7 @@ esac
         read -p "$(echo -e "${YELLOW}Стратегия работает? ${NC}Y/N: ")" RESP
         case "$RESP" in
             [Yy])
+                echo
                 break
                 ;;
             [Nn])
