@@ -42,21 +42,14 @@ esac
 # Определяем строки блока
 START_LINE=$(sed -n "${SEL}p" "$MAP" | cut -d'|' -f1)
 NAME=$(sed -n "${SEL}p" "$MAP" | cut -d'|' -f2)
+
 # Находим строку следующего #
 NEXT_LINE=$(awk -v s="$START_LINE" 'NR>s && /^#/ {print NR; exit}' "$DUMP_FILE")
-
-# Если следующего # нет, берём до конца файла
 [ -z "$NEXT_LINE" ] && NEXT_LINE=$(wc -l < "$DUMP_FILE" | tr -d ' '); NEXT_LINE=$((NEXT_LINE+1))
 
 echo -e "${GREEN}Сохраняем стратегию в $OUT_FILE:${NC} $NAME"
 
-# Берём блок без заголовка #
+# Берём блок включая пустые строки и --строки до следующего #
 sed -n "$((START_LINE+1)),$((NEXT_LINE-1))p" "$DUMP_FILE" > "$OUT_FILE"
-
-# Проверка, что файл не пустой
-if [ ! -s "$OUT_FILE" ]; then
-    echo -e "${RED}Ошибка: выбранный блок пустой${NC}"
-    exit 1
-fi
 
 echo -e "${GREEN}Готово. Стратегия сохранена в $OUT_FILE${NC}"
