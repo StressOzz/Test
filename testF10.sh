@@ -538,7 +538,6 @@ then echo -e "${YELLOW}FIX для Flow Offloading:${NC} ${GREEN}включён${
 
 
 print_current_strategy() {
-    show_current_strategy
 
     CURRENT_STR=""
 
@@ -553,8 +552,7 @@ print_current_strategy() {
     echo -e "${YELLOW}Используется стратегия:${NC} ${CYAN}$CURRENT_STR${NC}"
 }
 
-
-    echo -e "${YELLOW}Используется стратегия:${NC} ${CYAN}$CURRENT_STR${NC}"
+print_current_strategy
 
 
 # if [ -f "$CONF" ]; then current="$ver$( [ -n "$ver" ] && [ -n "$yv_ver" ] && echo " / " )$yv_ver"; DV=$(grep -o -E '^#[[:space:]]*Dv[12]' "$CONF" | sed 's/^#[[:space:]]*/\/ /' | head -n1)
