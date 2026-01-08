@@ -146,7 +146,21 @@ if [ -s $BACKUP_FILE ]; then cp $BACKUP_FILE "$HOSTLIST_FILE"; else : > "$HOSTLI
 toggle_rkn_bypass() { 
 
 if grep -q "^#general" "$CONF"; then
-    echo -e "\n${RED}Эта стратегия содержит #general и не может быть изменена${NC}"
+    echo -e "\n${RED}Эта стратегия не может быть изменена!${NC}\n"
+    # Проверяем размер файла РКН
+    if [ "$(wc -c < "$HOSTLIST_FILE")" -gt 1800000 ]; then
+        # Если слишком большой — очищаем
+        : > "$HOSTLIST_FILE"
+        echo -e "${YELLOW}Файл РКН очищен${NC}"
+    else
+        # Если маленький — скачиваем заново
+        curl -fsSL "$RKN_URL" -o "$HOSTLIST_FILE" || {
+            echo -e "\n${RED}Не удалось скачать список РКН${NC}\n"
+            read -p "Нажмите Enter..." dummy
+            return
+        }
+        echo -e "${GREEN}Список РКН обновлён${NC}"
+    fi
     read -p "Нажмите Enter..." dummy </dev/tty
     return
 fi
@@ -530,7 +544,6 @@ esac
         case "$RESP" in
             [Yy])
                 echo
-                read -p "Нажмите Enter..." dummy
                 break
                 ;;
             [Nn])
