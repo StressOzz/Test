@@ -204,7 +204,7 @@ while true; do
     CURRENT=$(sed -n "/^[[:space:]]*option NFQWS_OPT '/,/^'/p" "$CONF" | sed -n '2p' | grep -v "^[[:space:]]*'$" | head -1 | sed 's/^#//')
     [ -z "$CURRENT" ] && CURRENT="не выбрана"
 
-    echo -e "${MAGENTA}Меню выбора стратегии${NC}\n"
+    echo -e "${MAGENTA}Меню выбора стратегии by Flowseal${NC}\n"
     echo -e "${YELLOW}Текущая стратегия:${NC} $CURRENT\n"
 
     MAP="/tmp/nfqws_menu.map"
