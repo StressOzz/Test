@@ -326,15 +326,21 @@ fw4 restart >/dev/null 2>&1; echo -e "FIX ${GREEN}успешно применё�
 Flowseal_STR() { 
 clear
 echo -e "${MAGENTA}Оптимизируем стратегии Flowseal для OpenWRT${NC}"
+
+
 echo -e "${CYAN}Проверка GitHub${NC}"
 /etc/init.d/zapret stop >/dev/null 2>&1
 RATE=$(curl -s https://api.github.com/rate_limit | grep '"remaining"' | head -1 | awk '{print $2}' | tr -d ,)
 [ -z "$RATE" ] && RATE_OUT="${RED}N/A${NC}" || RATE_OUT=$([ "$RATE" -eq 0 ] && echo -e "${RED}0${NC}" || echo -e "${GREEN}$RATE${NC}")
-
 echo -n "API: "
 curl -Is --connect-timeout 3 https://api.github.com >/dev/null 2>&1 \
     && echo -e "${GREEN}ok${NC} | Limit: $RATE_OUT" \
     || echo -e "${RED}fail${NC} | Limit: $RATE_OUT"
+
+if [ "$RATE" -eq 0 ]; then
+    echo -e "\n${RED}Выключите DoH или подождите!${NC}\n"
+    return
+fi
 
 
 # =========================
