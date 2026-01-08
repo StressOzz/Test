@@ -448,7 +448,7 @@ echo
         i=$((i+1))
     done < "$MAP"
     
-printf "${YELLOW}Выберите стратегию (0-%s): ${NC}" "$COUNT"
+printf "\n${YELLOW}Выберите стратегию (0-%s): ${NC}" "$COUNT"
 read SEL
 
 case "$SEL" in
@@ -472,7 +472,7 @@ esac
     } > "$STR_FILE"
 
     # Вставляем стратегию в конфиг
-    echo -e "\n${MAGENTA}Уставливаем стратегию ${NAME}${NC}"
+    echo -e "\n${MAGENTA}Уставливаем стратегию${NC}"
     echo -e "${CYAN}Меняем стратегию${NC}"
     sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
     {
@@ -489,6 +489,7 @@ esac
 
     # Перезапуск Zapret
     echo -e "${CYAN}Применяем новую стратегию и настройки${NC}"
+    hosts_add
     ZAPRET_RESTART
 
     echo -e "${GREEN}Стратегия ${NC}${NAME} ${GREEN}установлена!${NC}\n"
