@@ -8,22 +8,16 @@ YELLOW='\033[1;33m'
 RED='\033[1;31m'
 NC='\033[0m'
 
-[ ! -f "$DUMP_FILE" ] && {
-    echo -e "${RED}Файл $DUMP_FILE не найден${NC}"
-    exit 1
-}
+[ ! -f "$DUMP_FILE" ] && { echo -e "${RED}Файл $DUMP_FILE не найден${NC}"; exit 1; }
 
-# Собираем меню стратегий
+# Создаём меню стратегий
 MAP="/tmp/nfqws_menu.map"
 : > "$MAP"
 awk '/^#/ {print NR "|" substr($0,2)}' "$DUMP_FILE" > "$MAP"
 
 COUNT=$(wc -l < "$MAP" | tr -d ' ')
 
-[ "$COUNT" -eq 0 ] && {
-    echo -e "${RED}Стратегии не найдены${NC}"
-    exit 1
-}
+[ "$COUNT" -eq 0 ] && { echo -e "${RED}Стратегии не найдены${NC}"; exit 1; }
 
 echo -e "\n${YELLOW}=== Выбор стратегии NFQWS ===${NC}"
 i=1
@@ -43,19 +37,22 @@ case "$SEL" in
         ;;
 esac
 
-[ "$SEL" -lt 1 ] || [ "$SEL" -gt "$COUNT" ] && {
-    echo -e "${RED}Номер вне диапазона${NC}"
-    exit 1
-}
+[ "$SEL" -lt 1 ] || [ "$SEL" -gt "$COUNT" ] && { echo -e "${RED}Номер вне диапазона${NC}"; exit 1; }
 
-# Определяем выбранный блок
+# Определяем строки блока
 START_LINE=$(sed -n "${SEL}p" "$MAP" | cut -d'|' -f1)
 NAME=$(sed -n "${SEL}p" "$MAP" | cut -d'|' -f2)
-END_LINE=$(awk -v s="$START_LINE" 'NR>s && /^#/ {print NR-1; exit} END {print NR}' "$DUMP_FILE")
+NEXT_LINE=$(awk -v s="$START_LINE" 'NR>s && /^#/ {print NR; exit} END {print NR+1}' "$DUMP_FILE")
 
 echo -e "${GREEN}Сохраняем стратегию в $OUT_FILE:${NC} $NAME"
 
-# Записываем стратегию в файл
-sed -n "${START_LINE},${END_LINE}p" "$DUMP_FILE" | sed '1d' > "$OUT_FILE"
+# Берём блок без заголовка #
+sed -n "$((START_LINE+1)),$((NEXT_LINE-1))p" "$DUMP_FILE" > "$OUT_FILE"
+
+# Проверка, что файл не пустой
+if [ ! -s "$OUT_FILE" ]; then
+    echo -e "${RED}Ошибка: выбранный блок пустой${NC}"
+    exit 1
+fi
 
 echo -e "${GREEN}Готово. Стратегия сохранена в $OUT_FILE${NC}"
