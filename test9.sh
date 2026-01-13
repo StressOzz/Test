@@ -283,7 +283,7 @@ show_current_strategy() {
     ver=$(grep -m1 '^#v' "$CONF" | sed 's/^#//')
     yv_ver=$(grep -m1 '^#Yv' "$CONF" | sed 's/^#//')
     gen_ver=$(grep -m1 '^#general' "$CONF" | sed 's/^#//')
-    DV=$(grep -m1 '^#Dv' "$CONF" | sed 's/^#/\//')
+    DV=$(grep -m1 '^#Dv' "$CONF" | sed 's/^#//')
 }
 
 
