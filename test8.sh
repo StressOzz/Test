@@ -260,6 +260,35 @@ sed -i 's/meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;/
 echo -e "FIX ${GREEN}отключён!${NC}\n"; else echo -e "\n${MAGENTA}Применяем FIX для Flow Offloading${NC}"; sed -i 's/meta l4proto { tcp, udp } flow offload @ft;/meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;/' /usr/share/firewall4/templates/ruleset.uc
 fw4 restart >/dev/null 2>&1; echo -e "FIX ${GREEN}успешно применён!${NC}\n"; fi; read -p "Нажмите Enter..." dummy; fi ;; *) echo; return ;; esac; done; }
 # ==========================================
+# показ стратегии
+# ==========================================
+
+print_current_strategy() {
+    CURRENT_STR=""
+
+    # Добавляем по очереди, только если есть
+    [ -n "$ver" ] && CURRENT_STR="$ver"
+    [ -n "$yv_ver" ] && CURRENT_STR="$CURRENT_STR$( [ -n "$CURRENT_STR" ] && echo " / " )$yv_ver"
+    [ -n "$gen_ver" ] && CURRENT_STR="$CURRENT_STR$( [ -n "$CURRENT_STR" ] && echo " / " )$gen_ver"
+    [ -n "$DV" ] && CURRENT_STR="$CURRENT_STR $DV"
+
+    [ -n "$RKN_STATUS" ] && CURRENT_STR="$CURRENT_STR $RKN_STATUS"
+
+    # Если строка пустая, не выводим
+    [ -n "$CURRENT_STR" ] && echo -e "${YELLOW}Используется стратегия:${NC}  ${CYAN}$CURRENT_STR${NC}"
+}
+
+show_current_strategy() {
+    [ -f "$CONF" ] || return
+    ver=$(grep -m1 '^#v' "$CONF" | sed 's/^#//')
+    yv_ver=$(grep -m1 '^#Yv' "$CONF" | sed 's/^#//')
+    gen_ver=$(grep -m1 '^#general' "$CONF" | sed 's/^#//')
+    DV=$(grep -m1 '^#Dv' "$CONF" | sed 's/^#/\//')
+}
+
+
+
+# ==========================================
 # Главное меню
 # ==========================================
 show_menu() { get_versions; get_doh_status; show_current_strategy; RKN_Check; clear; echo -e "╔════════════════════════════════════╗\n║     ${BLUE}Zapret on remittor Manager${NC}     ║\n╚════════════════════════════════════╝\n                     ${DGRAY}by StressOzz v$ZAPRET_MANAGER_VERSION${NC}"
@@ -271,8 +300,14 @@ show_script_50 && [ -n "$name" ] && echo -e "${YELLOW}Установлен ск�
 [ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*88,500,1024-19293,19345-49999,50101-65535" "$CONF" && grep -q -- "--filter-udp=88,500,1024-19293,19345-49999,50101-65535" "$CONF" && echo -e "${YELLOW}Стратегия для игр:${NC}       ${GREEN}включена${NC}"
 [ -n "$DOH_STATUS" ] && opkg list-installed | grep -q '^https-dns-proxy ' && echo -e "${YELLOW}DNS over HTTPS:${NC}          $DOH_STATUS"; web_is_enabled && if web_is_enabled; then echo -e "${YELLOW}Доступ из браузера:${NC}      $LAN_IP:7681"; fi
 quic_is_blocked && if quic_is_blocked; then echo -e "${YELLOW}Блокировка QUIC:${NC}         ${GREEN}включена${NC}"; fi; if grep -q 'ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc
-then echo -e "${YELLOW}FIX для Flow Offloading:${NC} ${GREEN}включён${NC}"; fi; if [ -f "$CONF" ]; then current="$ver$( [ -n "$ver" ] && [ -n "$yv_ver" ] && echo " / " )$yv_ver"; DV=$(grep -o -E '^#[[:space:]]*Dv[12]' "$CONF" | sed 's/^#[[:space:]]*/\/ /' | head -n1)
-if [ -n "$current" ]; then echo -e "${YELLOW}Используется стратегия:${NC}  ${CYAN}$current $DV $RKN_STATUS${NC}"; elif [ -n "$RKN_STATUS" ]; then echo -e "${YELLOW}Используется стратегия:${NC}${CYAN}  РКН $DV${NC}"; fi; fi
+then echo -e "${YELLOW}FIX для Flow Offloading:${NC} ${GREEN}включён${NC}"; fi
+
+
+print_current_strategy
+
+
+# if [ -f "$CONF" ]; then current="$ver$( [ -n "$ver" ] && [ -n "$yv_ver" ] && echo " / " )$yv_ver"; DV=$(grep -o -E '^#[[:space:]]*Dv[12]' "$CONF" | sed 's/^#[[:space:]]*/\/ /' | head -n1)
+# if [ -n "$current" ]; then echo -e "${YELLOW}Используется стратегия:${NC}  ${CYAN}$current $DV $RKN_STATUS${NC}"; elif [ -n "$RKN_STATUS" ]; then echo -e "${YELLOW}Используется стратегия:${NC}${CYAN}  РКН $DV${NC}"; fi; fi
 echo -e "\n${CYAN}1) ${GREEN}Установить${NC} Zapret\n${CYAN}2) ${GREEN}Меню стратегий${NC}\n${CYAN}3) ${GREEN}Вернуть ${NC}настройки по умолчанию\n${CYAN}4) ${GREEN}$str_stp_zpr ${NC}Zapret"
 echo -e "${CYAN}5) ${GREEN}Удалить ${NC}Zapret\n${CYAN}6) ${GREEN}Меню настройки ${NC}Discord\n${CYAN}7) ${GREEN}Меню ${NC}DNS over HTTPS\n${CYAN}8) ${GREEN}Удалить → установить → настроить${NC} Zapret\n${CYAN}0) ${GREEN}Системное меню${NC}" ; echo -ne "${CYAN}Enter) ${GREEN}Выход${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read choice
 case "$choice" in 888) echo; uninstall_zapret "1"; install_Zapret "1"; curl -fsSL https://raw.githubusercontent.com/StressOzz/Test/refs/heads/main/zapret -o "$CONF"; hosts_add; rm -f "$EXCLUDE_FILE"; wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL"; ZAPRET_RESTART; echo -e "\033[5m${GREEN}OK${NC}"; read -n 1 -s ;;
