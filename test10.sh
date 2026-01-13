@@ -270,7 +270,7 @@ print_current_strategy() {
     [ -n "$ver" ] && CURRENT_STR="$ver"
     [ -n "$yv_ver" ] && CURRENT_STR="$CURRENT_STR$( [ -n "$CURRENT_STR" ] && echo " / " )$yv_ver"
     [ -n "$gen_ver" ] && CURRENT_STR="$CURRENT_STR$( [ -n "$CURRENT_STR" ] && echo " / " )$gen_ver"
-    [ -n "$DV" ] && CURRENT_STR="$CURRENT_STR $DV"
+    [ -n "$DV" ] && CURRENT_STR="$CURRENT_STR$( [ -n "$CURRENT_STR" ] && echo " / " )$$DV"
 
     [ -n "$RKN_STATUS" ] && CURRENT_STR="$CURRENT_STR $RKN_STATUS"
 
