@@ -255,7 +255,7 @@ else echo -e "${CYAN}0) ${GREEN}Применить${NC} FIX ${GREEN}для${NC} 
 echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read -r choiceMN; case "$choiceMN" in
 1) wget -q -U "Mozilla/5.0" -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/sys_info.sh | sh; echo; read -p "Нажмите Enter..." dummy ;; 2) toggle_web ;; 3) toggle_quic ;;
 
-4) stop_zapret "1"; echo -e "${YELLOW}${NC}blockcheck${YELLOW} можно прервать - ${NC}Ctrl+C${YELLOW}, при этом, ${NC}Zapret ${YELLOW}останется ${NC}остановленным !"; echo; read -p "Нажмите Enter для запуска..." dummy
+4) stop_zapret "1"; echo -e "${YELLOW}Прервать${NC}blockcheck${YELLOW} - ${NC}Ctrl+C"; echo; read -p "Нажмите Enter для запуска..." dummy
 clear; echo -e "${MAGENTA}blockcheck${NC}\n"; chmod +x /opt/zapret/blockcheck.sh; /opt/zapret/blockcheck.sh; start_zapret ;;
 
 
