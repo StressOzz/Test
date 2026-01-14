@@ -28,6 +28,7 @@ RATE=$(curl -s https://api.github.com/rate_limit | grep '"remaining"' | head -1 
 echo -n "API: "; curl -Is --connect-timeout 3 https://api.github.com >/dev/null 2>&1 && echo -e "${GREEN}ok${NC} | Limit: $RATE_OUT" || echo -e "${RED}fail${NC} | Limit: $RATE_OUT"; fi
 echo -e "\n${GREEN}===== Проверка IPv4 / IPv6 =====${NC}"
 wget -qO- "http://ip-api.com/line/?fields=as,isp,country,city" | tr '\n' ',' | sed -E 's/AS[0-9]+ ?//g; s/,$//; s/,/, /g; s/(.*), (O.*)/\1\n\2/'
+echo
 echo -n "Google IPv4: "; time=$(ping -4 -c 1 -W 2 google.com 2>/dev/null | grep 'time=' | awk -F'time=' '{print $2}' | awk '{print $1}')
 if [ -n "$time" ]; then echo -e "${GREEN}ok ($time ms)${NC}"; else echo -e "${RED}fail${NC}"; fi
 echo -n "Google IPv6: "; time=$(ping -6 -c 1 -W 2 google.com 2>/dev/null | grep 'time=' | awk -F'time=' '{print $2}' | awk '{print $1}')
