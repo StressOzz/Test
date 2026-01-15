@@ -152,41 +152,68 @@ choose_strategy_manual() {
     # 1. Скачиваем список стратегий
     curl -fsSL "$STR_URL" -o "$TMP_LIST" || { echo -e "\n${RED}Не удалось скачать список${NC}\n"; PAUSE </dev/tty; return 1; }
 
-    # 2. Собираем имена стратегий
-    mapfile -t STRATEGIES < <(grep '^Yv[0-9]\+' "$TMP_LIST")
-    TOTAL=${#STRATEGIES[@]}
+    # 2. Выводим все стратегии с номерами
+    COUNT=0
+    echo -e "\n${MAGENTA}Доступные стратегии для YouTube:${NC}"
+    while IFS= read -r LINE; do
+        case "$LINE" in
+            Yv[0-9]*)
+                COUNT=$((COUNT + 1))
+                echo -e "${CYAN}$COUNT${NC}) $LINE"
+                echo "$LINE" >> /tmp/strategy_list
+                ;;
+        esac
+    done < "$TMP_LIST"
 
-    if [ "$TOTAL" -eq 0 ]; then
+    if [ "$COUNT" -eq 0 ]; then
         echo -e "${RED}Стратегий не найдено!${NC}"; PAUSE </dev/tty; return 1
     fi
 
-    # 3. Выводим список с номерами
-    echo -e "\n${MAGENTA}Доступные стратегии для YouTube:${NC}"
-    for i in "${!STRATEGIES[@]}"; do
-        echo -e "${CYAN}$((i+1))${NC}) ${STRATEGIES[i]}"
-    done
+    # 3. Выбираем вручную
+    echo -en "\nВыберите номер стратегии: "; read CHOICE </dev/tty
 
-    # 4. Выбираем вручную
-    echo -en "\nВыберите номер стратегии: "; read -r CHOICE </dev/tty
-
-    if ! [[ "$CHOICE" =~ ^[0-9]+$ ]] || [ "$CHOICE" -lt 1 ] || [ "$CHOICE" -gt "$TOTAL" ]; then
-        echo -e "${RED}Неверный выбор!${NC}"; PAUSE </dev/tty; return 1
+    if ! echo "$CHOICE" | grep -qE '^[0-9]+$' || [ "$CHOICE" -lt 1 ] || [ "$CHOICE" -gt "$COUNT" ]; then
+        echo -e "${RED}Неверный выбор!${NC}"; PAUSE </dev/tty; rm -f /tmp/strategy_list; return 1
     fi
 
-    SELECTED_NAME="${STRATEGIES[$((CHOICE-1))]}"
+    # 4. Получаем имя выбранной стратегии
+    SELECTED_NAME=$(sed -n "${CHOICE}p" /tmp/strategy_list)
+    rm -f /tmp/strategy_list
+
     # 5. Получаем тело стратегии
-    SELECTED_BODY=$(awk "/^$SELECTED_NAME\$/{flag=1;next}/^Yv[0-9]+/{flag=0}flag{print}" "$TMP_LIST")
+    SELECTED_BODY=""
+    FLAG=0
+    while IFS= read -r LINE; do
+        if [ "$LINE" = "$SELECTED_NAME" ]; then
+            FLAG=1
+            continue
+        fi
+        case "$LINE" in
+            Yv[0-9]*)
+                FLAG=0
+                ;;
+        esac
+        if [ "$FLAG" -eq 1 ]; then
+            SELECTED_BODY="${SELECTED_BODY}${LINE}\n"
+        fi
+    done < "$TMP_LIST"
 
     echo -e "\n${CYAN}Применяем стратегию: ${NC}$SELECTED_NAME${NC}"
 
     # 6. Сохраняем текущий конфиг и удаляем старую стратегию
     awk '/^[[:space:]]*option NFQWS_OPT '\''/{flag=1} !flag{print}' "$CONF" > "$OLD_STR"
 
-    # 7. Применяем выбранную стратегию точно так же, как в auto_stryou
-    { echo "  option NFQWS_OPT '"; echo "#AUTO $SELECTED_NAME"; printf "%b\n" "$SELECTED_BODY"; echo "'"; } >> "$OLD_STR"
+    # 7. Применяем выбранную стратегию
+    {
+        echo "  option NFQWS_OPT '"
+        echo "#AUTO $SELECTED_NAME"
+        printf "%b\n" "$SELECTED_BODY"
+        echo "'"
+    } >> "$OLD_STR"
 
     # 8. Перезаписываем конфиг
     mv "$OLD_STR" "$CONF"
+
     # 9. Проверяем пустую строку в конце
     grep -q "^[[:space:]]*' *\$" "$CONF" || echo "'" >> "$CONF"
 
@@ -196,6 +223,7 @@ choose_strategy_manual() {
     echo -e "${GREEN}Стратегия применена!${NC}\n"
     PAUSE </dev/tty
 }
+
 
 
 
