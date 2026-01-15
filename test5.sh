@@ -216,33 +216,6 @@ chmod +x /opt/zapret/restore-def-cfg.sh && /opt/zapret/restore-def-cfg.sh; ZAPRE
 hosts_clear; echo -e "Настройки по умолчанию ${GREEN}возвращены!${NC}\n"; else echo -e "\n${RED}Zapret не установлен!${NC}\n"; fi; read -p "Нажмите Enter..." dummy;
 }
 
-# =====================
-# Главный цикл основного меню
-# =====================
-
-while true; do
-    main_menu
-    read choice
-    case $choice in
-        1) echo "Действие A" ; pause ;;
-        2) echo "Действие B" ; pause ;;
-        3) echo "Действие C" ; pause ;;
-        5) backup_menu_loop ;;  # <-- вызываем backup меню
-        0) break ;;
-        *) echo "Неверный выбор!" ; pause ;;
-    esac
-done
-
-echo "Выход из скрипта."
-
-
-
-
-
-
-
-
-
 
 
 
