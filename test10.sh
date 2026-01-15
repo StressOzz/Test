@@ -121,7 +121,7 @@ backup_menu() {
         echo -e "${MAGENTA}Меню управление настройками${NC}\n"
         if [ -f "$DATE_FILE" ]; then
             CREATE_DATE=$(cat "$DATE_FILE")
-            echo -e "${YELLOW}Резервная копия:${NC} $CREATE_DATE (du -sh /opt/zapret_backup 2>/dev/null | awk '{print $1}')\n"
+            echo -e "${YELLOW}Резервная копия:${NC} $CREATE_DATE ($(du -sh /opt/zapret_backup 2>/dev/null | awk '{print $1}'))\n"
         fi
         echo -e "${CYAN}1) ${GREEN}Сохранить текущие настройки${NC}"
         echo -e "${CYAN}2) ${GREEN}Восстановить из резервной копии${NC}"
