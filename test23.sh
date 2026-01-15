@@ -95,7 +95,7 @@ zapret_key() { clear; echo -e "${MAGENTA}Удаление, установка и
 backup_menu() { [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }
 while true; do clear; echo -e "${MAGENTA}Меню управление настройками${NC}\n"; if [ -f "$DATE_FILE" ]; then CREATE_DATE=$(cat "$DATE_FILE")
 echo -e "${YELLOW}Резервная копия:${NC} $CREATE_DATE ($(du -sh /opt/zapret_backup 2>/dev/null | awk '{print $1}'))\n"; else echo -e "${YELLOW}Резервная копия: ${RED}отсутствует${NC}\n"; fi
-echo -e "${CYAN}1) ${GREEN}Сохранить текущие настройки${NC}\n${CYAN}2) ${GREEN}Восстановить настройки из резервной копии${NC}\n${CYAN}3) ${GREEN}Восстановить настройки по умолчанию${NC}"
+echo -e "${CYAN}1) ${GREEN}Создать резервную копию настроек${NC}\n${CYAN}2) ${GREEN}Восстановить настройки из резервной копии${NC}\n${CYAN}3) ${GREEN}Сбросить настройки к значениям по умолчанию${NC}"
 echo -ne "${CYAN}4) ${GREEN}Удалить резервную копию${NC}\n${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт: ${NC}"
 read choice; case $choice in 1) save_backup ;; 2) restore_backup ;; 3) restore_default ;; 4) delete_backup ;; *) break ;; esac; done; }
 delete_backup() { if [ -d "$BACKUP_DIR" ]; then rm -rf "$BACKUP_DIR"; echo -e "\n${GREEN}Резервная копия удалена!${NC}\n"; else echo -e "\n${RED}Резервная копия не найдена!${NC}\n"; fi; PAUSE; }
@@ -106,7 +106,7 @@ hosts_clear; echo -e "${GREEN}Настройки по умолчанию воз�
 save_backup() { mkdir -p "$BACKUP_DIR"; for f in $FILES_BACK; do [ -f "$f" ] || continue; rel="${f#/}"; mkdir -p "$BACKUP_DIR/$(dirname "$rel")"; cp -p "$f" "$BACKUP_DIR/$rel"; done
 date '+%Y-%m-%d %H:%M:%S' > "$DATE_FILE"; echo -e "\n${GREEN}Настройки сохранены в${NC} $BACKUP_DIR\n"; PAUSE; }
 restore_backup() { [ ! -d "$BACKUP_DIR" ] && { echo -e "\n${RED}Резервная копия не найдена!${NC}\n"; PAUSE; return; }; find "$BACKUP_DIR" -type f ! -name "created.txt" | while read bf; do orig="/${bf#$BACKUP_DIR/}"
-mkdir -p "$(dirname "$orig")"; cp -p "$bf" "$orig"; done; echo -e "\n${MAGENTA}Восстанавливаем настройки из резервной копии${NC}\n${CYAN}Восстанавливаем и применяем настройки${NC}"; ZAPRET_RESTART; echo -e "\n${GREEN}Настройки восстановлены из резервной копии!${NC}\n"; PAUSE; }
+mkdir -p "$(dirname "$orig")"; cp -p "$bf" "$orig"; done; echo -e "\n${MAGENTA}Восстанавливаем настройки из резервной копии${NC}\n${CYAN}Восстанавливаем и применяем настройки${NC}"; ZAPRET_RESTART; echo -e "${GREEN}Настройки восстановлены из резервной копии!${NC}\n"; PAUSE; }
 # ==========================================
 # Cтарт/стоп Zapret
 # ==========================================
