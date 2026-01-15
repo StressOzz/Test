@@ -152,7 +152,7 @@ choose_strategy_manual() {
     # 1. Скачиваем список стратегий
     curl -fsSL "$STR_URL" -o "$TMP_LIST" || { echo -e "\n${RED}Не удалось скачать список${NC}\n"; PAUSE </dev/tty; return 1; }
 
-    # 2. Выводим все стратегии с номерами
+    # 2. Выводим стратегии с цифрами
     COUNT=0
     > /tmp/strategy_list
     echo -e "\n${MAGENTA}Доступные стратегии для YouTube:${NC}"
@@ -166,13 +166,10 @@ choose_strategy_manual() {
         esac
     done < "$TMP_LIST"
 
-    if [ "$COUNT" -eq 0 ]; then
-        echo -e "${RED}Стратегий не найдено!${NC}"; PAUSE </dev/tty; rm -f /tmp/strategy_list; return 1
-    fi
+    [ "$COUNT" -eq 0 ] && echo -e "${RED}Стратегий не найдено!${NC}" && PAUSE </dev/tty && rm -f /tmp/strategy_list && return 1
 
-    # 3. Выбираем вручную
+    # 3. Выбор
     echo -en "\nВыберите номер стратегии: "; read CHOICE </dev/tty
-
     if ! echo "$CHOICE" | grep -qE '^[0-9]+$' || [ "$CHOICE" -lt 1 ] || [ "$CHOICE" -gt "$COUNT" ]; then
         echo -e "${RED}Неверный выбор!${NC}"; PAUSE </dev/tty; rm -f /tmp/strategy_list; return 1
     fi
@@ -182,50 +179,40 @@ choose_strategy_manual() {
 
     echo -e "\n${CYAN}Применяем стратегию: ${NC}$SELECTED_NAME${NC}"
 
-    # 4. Сохраняем выбранную стратегию во временный файл
+    # 4. Сохраняем тело выбранной стратегии
     SAVED_STR="/tmp/selected_str"
     > "$SAVED_STR"
     FLAG=0
     while IFS= read -r LINE; do
-        if [ "$LINE" = "$SELECTED_NAME" ]; then FLAG=1; continue; fi
+        [ "$LINE" = "$SELECTED_NAME" ] && FLAG=1 && continue
         case "$LINE" in
             Yv[0-9]*) FLAG=0 ;;
         esac
         [ "$FLAG" -eq 1 ] && printf "%b\n" "$LINE" >> "$SAVED_STR"
     done < "$TMP_LIST"
 
-    # 5. Создаём OLD_STR без старых правил
-    awk '{if(skip){if($0=="--new"||$0~/\047/){skip=0;next}if($0~/^[[:space:]]*$/)next;next}if($0=="--filter-tcp=443"){getline n;if(n=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt"){skip=1;next}else{print $0;print n;next}}if($0=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt")has_google=1;if($0~/^[[:space:]]*#Yv/)next;print}' "$CONF" > "$NEW_STR"
+    # 5. Разделяем конфиг на часть до option NFQWS_OPT ' и после
+    awk '/^[[:space:]]*option NFQWS_OPT '\''/{print; exit} {print}' "$CONF" > "$NEW_STR"
 
-    # 6. Вставляем выбранную стратегию с #AUTO
-    awk 'BEGIN{inserted=0;has_google=0}
-        $0=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt"{has_google=1}
-        $0=="--new"&&!inserted{
-            print "#AUTO '"$SELECTED_NAME"'"
-            while((getline l<"'"$SAVED_STR"'")>0) if(l!~/^[[:space:]]*$/) print l
-            print "--new"
-            inserted=1
-            next
-        }
-        $0~/^[[:space:]]*option NFQWS_OPT \047$/&&!has_google&&!inserted{
-            print
-            print "#AUTO '"$SELECTED_NAME"'"
-            while((getline l<"'"$SAVED_STR"'")>0) if(l!~/^[[:space:]]*$/) print l
-            print "--new"
-            inserted=1
-            next
-        }
-        {print}' "$NEW_STR" > "$FINAL_STR"
+    # 6. Вставляем выбранную стратегию после option NFQWS_OPT '
+    {
+        echo "#AUTO $SELECTED_NAME"
+        while IFS= read -r LINE; do
+            [ -n "$LINE" ] && echo "$LINE"
+        done < "$SAVED_STR"
+        echo "--new"
+    } >> "$NEW_STR"
 
-    # 7. Перезаписываем конфиг
-    sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
-    cat "$FINAL_STR" >> "$CONF"
-    awk '{if($0=="--new"){if(prev!="--new")print}else print;prev=$0}' "$CONF" > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"
+    # 7. Вставляем оставшуюся часть конфига (если что-то было после старой option NFQWS_OPT ')
+    awk '/^[[:space:]]*option NFQWS_OPT '\''/{flag=1; next} flag{print}' "$CONF" >> "$NEW_STR"
 
-    # 8. Проверяем пустую строку в конце
+    # 8. Перезаписываем конфиг
+    mv "$NEW_STR" "$CONF"
+
+    # 9. Проверяем пустую строку в конце
     grep -q "^[[:space:]]*' *\$" "$CONF" || echo "'" >> "$CONF"
 
-    # 9. Перезапуск Zapret
+    # 10. Перезапуск Zapret
     ZAPRET_RESTART
 
     echo -e "${GREEN}Стратегия применена!${NC}\n"
