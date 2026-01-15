@@ -88,7 +88,7 @@ zapret_key() { clear; echo -e "${MAGENTA}Удаление, установка и
 # Меню управление настройками
 # ==========================================
 
-PAUSE() { echo "Нажмите Enter..."; read dummy }
+PAUSE() { echo "Нажмите Enter..."; read dummy; }
 
 BACKUP_DIR="/opt/zapret_backup"
 DATE_FILE="$BACKUP_DIR/created.txt"
