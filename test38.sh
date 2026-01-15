@@ -211,8 +211,7 @@ choose_strategy_manual() {
         }
         $0~/^[[:space:]]*option NFQWS_OPT \047$/&&!has_google&&!inserted{
             print
-            echo_comment="#$SELECTED_NAME"
-            print echo_comment
+            print "#'"$SELECTED_NAME"'"       # <-- ровно #Yv18
             while((getline l<"'"$SAVED_STR"'")>0) if(l!~/^[[:space:]]*$/) print l
             print "--new"
             inserted=1
