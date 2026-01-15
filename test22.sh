@@ -92,86 +92,22 @@ zapret_key() { clear; echo -e "${MAGENTA}Удаление, установка и
 # ==========================================
 # Меню управление настройками
 # ==========================================
-backup_menu() {
-[ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }
-    while true; do
-    clear
-        echo -e "${MAGENTA}Меню управление настройками${NC}\n"
-        if [ -f "$DATE_FILE" ]; then
-    CREATE_DATE=$(cat "$DATE_FILE")
-    echo -e "${YELLOW}Резервная копия:${NC} $CREATE_DATE ($(du -sh /opt/zapret_backup 2>/dev/null | awk '{print $1}'))\n"
-else
-    echo -e "${YELLOW}Резервная копия: ${RED}отсутствует${NC}\n"
-fi
-
-        echo -e "${CYAN}1) ${GREEN}Сохранить текущие настройки${NC}"
-        echo -e "${CYAN}2) ${GREEN}Восстановить настройки из резервной копии${NC}"
-        echo -e "${CYAN}3) ${GREEN}Восстановить настройки по умолчанию${NC}"
-        echo -e "${CYAN}4) ${GREEN}Удалить резервную копию${NC}"
-        echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n"
-        echo -ne "${YELLOW}Выберите пункт: ${NC}"
-        read choice
-        case $choice in
-            1) save_backup ;;
-            2) restore_backup ;;
-            3) restore_default ;;
-            4) delete_backup ;;
-            *) break ;;
-        esac
-    done
-}
-
-delete_backup() {
-    if [ -d "$BACKUP_DIR" ]; then
-        rm -rf "$BACKUP_DIR"
-        echo -e "\n${GREEN}Резервная копия удалена!${NC}\n"
-    else
-        echo -e "\n${RED}Резервная копия не найдена!${NC}\n"
-    fi
-    PAUSE
-}
-
+backup_menu() { [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }
+while true; do clear; echo -e "${MAGENTA}Меню управление настройками${NC}\n"; if [ -f "$DATE_FILE" ]; then CREATE_DATE=$(cat "$DATE_FILE")
+echo -e "${YELLOW}Резервная копия:${NC} $CREATE_DATE ($(du -sh /opt/zapret_backup 2>/dev/null | awk '{print $1}'))\n"; else echo -e "${YELLOW}Резервная копия: ${RED}отсутствует${NC}\n"; fi
+echo -e "${CYAN}1) ${GREEN}Сохранить текущие настройки${NC}\n${CYAN}2) ${GREEN}Восстановить настройки из резервной копии${NC}\n${CYAN}3) ${GREEN}Восстановить настройки по умолчанию${NC}"
+echo -ne "${CYAN}4) ${GREEN}Удалить резервную копию${NC}\n${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт: ${NC}"
+read choice; case $choice in 1) save_backup ;; 2) restore_backup ;; 3) restore_default ;; 4) delete_backup ;; *) break ;; esac; done; }
+delete_backup() { if [ -d "$BACKUP_DIR" ]; then rm -rf "$BACKUP_DIR"; echo -e "\n${GREEN}Резервная копия удалена!${NC}\n"; else echo -e "\n${RED}Резервная копия не найдена!${NC}\n"; fi; PAUSE; }
 restore_default() { if [ -f /opt/zapret/restore-def-cfg.sh ]; then echo -e "\n${MAGENTA}Возвращаем настройки по умолчанию${NC}"; rm -f /opt/zapret/init.d/openwrt/custom.d/50-script.sh; for i in 1 2 3 4; do rm -f "/opt/zapret/ipset/cust$i.txt"; done
 [ -f /etc/init.d/zapret ] && /etc/init.d/zapret stop >/dev/null 2>&1; echo -e "${CYAN}Возвращаем ${NC}настройки${CYAN}, ${NC}стратегию${CYAN} и ${NC}hostlist${CYAN} к значениям по умолчанию${NC}"; cp -f /opt/zapret/ipset_def/* /opt/zapret/ipset/
 chmod +x /opt/zapret/restore-def-cfg.sh && /opt/zapret/restore-def-cfg.sh; ZAPRET_RESTART
 hosts_clear; echo -e "${GREEN}Настройки по умолчанию возвращены!${NC}\n"; else echo -e "\n${RED}Zapret не установлен!${NC}\n"; fi; PAUSE; }
-
-
-save_backup() {
-    mkdir -p "$BACKUP_DIR"
-    for f in $FILES_BACK; do
-        [ -f "$f" ] || continue
-        # путь относительно корня
-        rel="${f#/}"                   # убираем ведущий /
-        # создаём папки внутри backup
-        mkdir -p "$BACKUP_DIR/$(dirname "$rel")"
-        # копируем файл
-        cp -p "$f" "$BACKUP_DIR/$rel"
-    done
-    date '+%Y-%m-%d %H:%M:%S' > "$DATE_FILE"
-    echo -e "\n${GREEN}Настройки сохранены в${NC} $BACKUP_DIR\n"
-    PAUSE
-}
-
-restore_backup() {
-    if [ ! -d "$BACKUP_DIR" ]; then
-        echo -e "\n${RED}Резервная копия не найдена!${NC}\n"
-        PAUSE
-        return
-    fi
-    # перебираем все файлы в backup, кроме created.txt
-    find "$BACKUP_DIR" -type f ! -name "created.txt" | while read bf; do
-        # путь относительно backup
-        orig="/${bf#$BACKUP_DIR/}"
-        mkdir -p "$(dirname "$orig")"
-        cp -p "$bf" "$orig"
-    done
-    echo -e "\n${MAGENTA}Восстанавливаем настройки из резервной копии${NC}"
-    echo -e "${CYAN}Восстанавливаем и применяем настройки${NC}"
-    ZAPRET_RESTART
-    echo -e "\n${GREEN}Настройки восстановлены из резервной копии!${NC}\n"
-    PAUSE
-}# ==========================================
+save_backup() { mkdir -p "$BACKUP_DIR"; for f in $FILES_BACK; do [ -f "$f" ] || continue; rel="${f#/}"; mkdir -p "$BACKUP_DIR/$(dirname "$rel")"; cp -p "$f" "$BACKUP_DIR/$rel"; done
+date '+%Y-%m-%d %H:%M:%S' > "$DATE_FILE"; echo -e "\n${GREEN}Настройки сохранены в${NC} $BACKUP_DIR\n"; PAUSE; }
+restore_backup() { [ ! -d "$BACKUP_DIR" ] && { echo -e "\n${RED}Резервная копия не найдена!${NC}\n"; PAUSE; return; }; find "$BACKUP_DIR" -type f ! -name "created.txt" | while read bf; do orig="/${bf#$BACKUP_DIR/}"
+mkdir -p "$(dirname "$orig")"; cp -p "$bf" "$orig"; done; echo -e "\n${MAGENTA}Восстанавливаем настройки из резервной копии${NC}\n${CYAN}Восстанавливаем и применяем настройки${NC}"; ZAPRET_RESTART; echo -e "\n${GREEN}Настройки восстановлены из резервной копии!${NC}\n"; PAUSE; }
+# ==========================================
 # Cтарт/стоп Zapret
 # ==========================================
 stop_zapret() { local NO_PAUSE=$1; echo -e "\n${MAGENTA}Останавливаем Zapret${NC}\n${CYAN}Останавливаем ${NC}Zapret"; /etc/init.d/zapret stop >/dev/null 2>&1
@@ -257,7 +193,7 @@ printf '%s\n' "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/z
 menu_str() { [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }; while true; do show_current_strategy; RKN_Check; clear; echo -e "${MAGENTA}Меню стратегий${NC}\n"
 menu_game=$( [ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*88,500,1024-19293,19345-49999,50101-65535" "$CONF" && grep -q -- "--filter-udp=88,500,1024-19293,19345-49999,50101-65535" "$CONF" && echo "Удалить стратегию для игр" || echo "Включить стратегию для игр" )
 print=0; if [ -f "$CONF" ]; then current="$ver$( [ -n "$ver" ] && [ -n "$yv_ver" ] && echo " / " )$yv_ver"; DV=$(grep -o -E '^#[[:space:]]*Dv[12]' "$CONF" | sed 's/^#[[:space:]]*/\/ /' | head -n1)
-if [ -n "$current" ]; then print=1; echo -e "${YELLOW}Используется стратегия:${NC}  ${CYAN}$current $DV $RKN_STATUS${NC}"; elif [ -n "$RKN_STATUS" ]; then print=1; echo -e "${YELLOW}Используется стратегия:${NC}${CYAN}  РКН $DV${NC}"; fi; f
+if [ -n "$current" ]; then print=1; echo -e "${YELLOW}Используется стратегия:${NC}  ${CYAN}$current $DV $RKN_STATUS${NC}"; elif [ -n "$RKN_STATUS" ]; then print=1; echo -e "${YELLOW}Используется стратегия:${NC}${CYAN}  РКН $DV${NC}"; fi; fi
 [ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*88,500,1024-19293,19345-49999,50101-65535" "$CONF" && grep -q -- "--filter-udp=88,500,1024-19293,19345-49999,50101-65535" "$CONF" && echo -e "${YELLOW}Стратегия для игр:${NC} ${GREEN}включена${NC}" && print=1
 [ "$print" -eq 1 ] && echo; echo -e "${CYAN}1) ${GREEN}Выбрать стратегию для установки ${NC}v1-v7\n${CYAN}2) ${GREEN}$menu_game\n${CYAN}3) $RKN_TEXT_MENU\n${CYAN}4) ${GREEN}Подобрать стратегию для ${NC}YouTube\n${CYAN}5) ${GREEN}Обновить список исключений${NC}"
 echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read choiceST; case "$choiceST" in 1) strategy_CHOUSE ;; 2) fix_GAME ;; 3) toggle_rkn_bypass; continue ;; 4) auto_stryou ;; 
