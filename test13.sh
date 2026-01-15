@@ -94,6 +94,7 @@ BACKUP_DIR="/opt/zapret_backup"
 DATE_FILE="$BACKUP_DIR/created.txt"
 
 FILES_BACK="/etc/config/zapret \
+/opt/zapret/config \
 /opt/zapret/ipset/cust1.txt \
 /opt/zapret/ipset/cust2.txt \
 /opt/zapret/ipset/cust3.txt \
