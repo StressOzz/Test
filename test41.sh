@@ -146,85 +146,15 @@ echo -e "\n${YELLOW}Подбор остановлен. Cтратегия вос�
 echo -e "\n${RED}Рабочая стратегия для YouTube не найдена!${NC}\n"; PAUSE </dev/tty; return 1; }
 check_access() { curl -s --connect-timeout 4 -m 4 "$TEST_HOST" >/dev/null && echo "ok" || echo "fail"; }
 apply_strategy() { NAME="$1"; BODY="$2"; sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; { echo "  option NFQWS_OPT '"; echo "#AUTO $NAME"; printf "%b\n" "$BODY"; echo "'"; } >> "$CONF"; ZAPRET_RESTART; }
-
-
-choose_strategy_manual() {
-
-    curl -fsSL "$STR_URL" -o "$TMP_LIST" || { echo -e "\n${RED}Не удалось скачать список${NC}\n"; read -p "Нажмите Enter..." dummy </dev/tty; return 1; }
-
-
-    COUNT=0
-    > /tmp/strategy_list
-    while IFS= read -r LINE; do
-        case "$LINE" in
-            Yv[0-9]*)
-                COUNT=$((COUNT + 1))
-                echo "$LINE" >> /tmp/strategy_list
-                ;;
-        esac
-    done < "$TMP_LIST"
-
-    [ "$COUNT" -eq 0 ] && echo -e "${RED}Стратегий не найдено!${NC}" && read -p "Нажмите Enter..." dummy </dev/tty && rm -f /tmp/strategy_list && return 1
-
-
-    echo -en "\n${YELLOW}Выберите стратегию для YouTube (1-$COUNT)${NC}: "; read CHOICE </dev/tty
-    if ! echo "$CHOICE" | grep -qE '^[0-9]+$' || [ "$CHOICE" -lt 1 ] || [ "$CHOICE" -gt "$COUNT" ]; then return 1; fi
-
-    SELECTED_NAME=$(sed -n "${CHOICE}p" /tmp/strategy_list)
-    rm -f /tmp/strategy_list
-
-    echo -e "\n${CYAN}Применяем стратегию: ${NC}$SELECTED_NAME"
-
-
-    SAVED_STR="/tmp/selected_str"
-    > "$SAVED_STR"
-    FLAG=0
-    while IFS= read -r LINE; do
-        [ "$LINE" = "$SELECTED_NAME" ] && FLAG=1 && continue
-        case "$LINE" in
-            Yv[0-9]*) FLAG=0 ;;
-        esac
-        [ "$FLAG" -eq 1 ] && printf "%b\n" "$LINE" >> "$SAVED_STR"
-    done < "$TMP_LIST"
-
-
-    awk '/^[[:space:]]*option NFQWS_OPT '\''/{flag=1} flag{print}' "$CONF" > "$OLD_STR"
-    sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
-    sed -i "/^[[:space:]]*#Yv[0-9]\+/d" "$OLD_STR"
-
-    awk '{if(skip){if($0=="--new"||$0~/\047/){skip=0;next}if($0~/^[[:space:]]*$/)next;next}if($0=="--filter-tcp=443"){getline n;if(n=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt"){skip=1;next}else{print $0;print n;next}}if($0=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt")has_google=1;if($0~/^[[:space:]]*#Yv/)next;print}' "$OLD_STR" > "$NEW_STR"
-
-    awk 'BEGIN{inserted=0;has_google=0}
-        $0=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt"{has_google=1}
-        $0=="--new"&&!inserted{
-            while((getline l<"'"$SAVED_STR"'")>0) if(l!~/^[[:space:]]*$/) print l
-            print "--new"
-            inserted=1
-            next
-        }
-        $0~/^[[:space:]]*option NFQWS_OPT \047$/&&!has_google&&!inserted{
-            print
-            print "#'"$SELECTED_NAME"'"
-            while((getline l<"'"$SAVED_STR"'")>0) if(l!~/^[[:space:]]*$/) print l
-            print "--new"
-            inserted=1
-            next
-        }
-        {print}' "$NEW_STR" > "$FINAL_STR"
-
-    cat "$FINAL_STR" >> "$CONF"
-    awk '{if($0=="--new"){if(prev!="--new")print}else print;prev=$0}' "$CONF" > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"
-    grep -q "^[[:space:]]*' *\$" "$CONF" || echo "'" >> "$CONF"
-    ZAPRET_RESTART
-
-    echo -e "${GREEN}Стратегия применена!${NC}\n"
-    read -p "Нажмите Enter..." dummy </dev/tty
-}
-
-
-
-
-
+choose_strategy_manual() { curl -fsSL "$STR_URL" -o "$TMP_LIST" || { echo -e "\n${RED}Не удалось скачать список${NC}\n"; read -p "Нажмите Enter..." dummy </dev/tty; return 1; }
+COUNT=0; > /tmp/strategy_list; while IFS= read -r LINE; do case "$LINE" in Yv[0-9]*) COUNT=$((COUNT + 1)); echo "$LINE" >> /tmp/strategy_list ;; esac; done < "$TMP_LIST"
+[ "$COUNT" -eq 0 ] && echo -e "${RED}Стратегий не найдено!${NC}" && read -p "Нажмите Enter..." dummy </dev/tty && rm -f /tmp/strategy_list && return 1; echo -en "\n${YELLOW}Выберите стратегию для YouTube (1-$COUNT)${NC}: "
+read CHOICE </dev/tty; if ! echo "$CHOICE" | grep -qE '^[0-9]+$' || [ "$CHOICE" -lt 1 ] || [ "$CHOICE" -gt "$COUNT" ]; then return 1; fi; SELECTED_NAME=$(sed -n "${CHOICE}p" /tmp/strategy_list); rm -f /tmp/strategy_list
+echo -e "\n${CYAN}Применяем стратегию: ${NC}$SELECTED_NAME"; SAVED_STR="/tmp/selected_str"; > "$SAVED_STR"; FLAG=0; while IFS= read -r LINE; do [ "$LINE" = "$SELECTED_NAME" ] && FLAG=1 && continue; case "$LINE" in Yv[0-9]*) FLAG=0 ;; esac
+[ "$FLAG" -eq 1 ] && printf "%b\n" "$LINE" >> "$SAVED_STR"; done < "$TMP_LIST"; awk '/^[[:space:]]*option NFQWS_OPT '\''/{flag=1} flag{print}' "$CONF" > "$OLD_STR"; sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; sed -i "/^[[:space:]]*#Yv[0-9]\+/d" "$OLD_STR"
+awk '{if(skip){if($0=="--new"||$0~/\047/){skip=0;next}if($0~/^[[:space:]]*$/)next;next}if($0=="--filter-tcp=443"){getline n;if(n=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt"){skip=1;next}else{print $0;print n;next}}if($0=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt")has_google=1;if($0~/^[[:space:]]*#Yv/)next;print}' "$OLD_STR" > "$NEW_STR"
+awk 'BEGIN{inserted=0;has_google=0} $0=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt"{has_google=1} $0=="--new"&&!inserted{while((getline l<"'"$SAVED_STR"'")>0) if(l!~/^[[:space:]]*$/) print l; print "--new"; inserted=1; next} $0~/^[[:space:]]*option NFQWS_OPT \047$/&&!has_google&&!inserted{print; print "#'"$SELECTED_NAME"'"; while((getline l<"'"$SAVED_STR"'")>0) if(l!~/^[[:space:]]*$/) print l; print "--new"; inserted=1; next} {print}' "$NEW_STR" > "$FINAL_STR"
+cat "$FINAL_STR" >> "$CONF"; awk '{if($0=="--new"){if(prev!="--new")print}else print;prev=$0}' "$CONF" > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"; grep -q "^[[:space:]]*' *\$" "$CONF" || echo "'" >> "$CONF"; ZAPRET_RESTART; echo -e "${GREEN}Стратегия применена!${NC}\n"; read -p "Нажмите Enter..." dummy </dev/tty; }
 # ==========================================
 # РКН список ВКЛ / ВЫКЛ
 # ==========================================
