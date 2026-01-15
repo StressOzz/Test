@@ -177,37 +177,48 @@ choose_strategy_manual() {
         echo -e "${RED}Неверный выбор!${NC}"; PAUSE </dev/tty; rm -f /tmp/strategy_list; return 1
     fi
 
-    # 4. Получаем имя выбранной стратегии
     SELECTED_NAME=$(sed -n "${CHOICE}p" /tmp/strategy_list)
     rm -f /tmp/strategy_list
 
-    echo -e "\n${CYAN}Применяем стратегию: ${NC}$SELECTED_NAME${NC}"
+    # 4. Сохраняем выбранную стратегию во временный файл
+    SAVED_STR="/tmp/selected_str"
+    > "$SAVED_STR"
+    FLAG=0
+    while IFS= read -r LINE; do
+        if [ "$LINE" = "$SELECTED_NAME" ]; then FLAG=1; continue; fi
+        case "$LINE" in
+            Yv[0-9]*) FLAG=0 ;;
+        esac
+        [ "$FLAG" -eq 1 ] && printf "%b\n" "$LINE" >> "$SAVED_STR"
+    done < "$TMP_LIST"
 
     # 5. Сохраняем текущий конфиг без старых правил
-    awk '/^[[:space:]]*option NFQWS_OPT '\''/{flag=1} !flag{print}' "$CONF" > "$OLD_STR"
+    awk '{if(skip){if($0=="--new"||$0~/\047/){skip=0;next}if($0~/^[[:space:]]*$/)next;next}if($0=="--filter-tcp=443"){getline n;if(n=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt"){skip=1;next}else{print $0;print n;next}}if($0=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt")has_google=1;if($0~/^[[:space:]]*#Yv/)next;print}' "$CONF" > "$NEW_STR"
 
-    # 6. Добавляем новую стратегию точно так же, как auto_stryou
-    {
-        echo "  option NFQWS_OPT '"
-        echo "#AUTO $SELECTED_NAME"
-        FLAG=0
-        while IFS= read -r LINE; do
-            if [ "$LINE" = "$SELECTED_NAME" ]; then
-                FLAG=1
-                continue
-            fi
-            case "$LINE" in
-                Yv[0-9]*)
-                    FLAG=0
-                    ;;
-            esac
-            [ "$FLAG" -eq 1 ] && echo "$LINE"
-        done < "$TMP_LIST"
-        echo "'"
-    } >> "$OLD_STR"
+    # 6. Вставляем выбранную стратегию в правильное место
+    awk 'BEGIN{inserted=0;has_google=0}
+        $0=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt"{has_google=1}
+        $0=="--new"&&!inserted{
+            while((getline l<"'"$SAVED_STR"'")>0)
+                if(l!~/^[[:space:]]*$/) print l
+            print "--new"
+            inserted=1
+            next
+        }
+        $0~/^[[:space:]]*option NFQWS_OPT \047$/&&!has_google&&!inserted{
+            print
+            while((getline l<"'"$SAVED_STR"'")>0)
+                if(l!~/^[[:space:]]*$/) print l
+            print "--new"
+            inserted=1
+            next
+        }
+        {print}' "$NEW_STR" > "$FINAL_STR"
 
     # 7. Перезаписываем конфиг
-    mv "$OLD_STR" "$CONF"
+    sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
+    cat "$FINAL_STR" >> "$CONF"
+    awk '{if($0=="--new"){if(prev!="--new")print}else print;prev=$0}' "$CONF" > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"
 
     # 8. Проверяем пустую строку в конце
     grep -q "^[[:space:]]*' *\$" "$CONF" || echo "'" >> "$CONF"
@@ -218,6 +229,7 @@ choose_strategy_manual() {
     echo -e "${GREEN}Стратегия применена!${NC}\n"
     PAUSE </dev/tty
 }
+
 
 
 
