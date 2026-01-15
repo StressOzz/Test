@@ -118,7 +118,7 @@ FILES_BACK="/etc/config/zapret \
 backup_menu() {
     while true; do
     clear
-        cho -e "${MAGENTA}Меню управление настройками${NC}\n"
+        echo -e "${MAGENTA}Меню управление настройками${NC}\n"
         if [ -f "$DATE_FILE" ]; then
             CREATE_DATE=$(cat "$DATE_FILE")
             echo -e "${YELLOW}Резервная копия:${NC} $CREATE_DATE (du -sh /opt/zapret_backup 2>/dev/null | awk '{print $1}')\n"
