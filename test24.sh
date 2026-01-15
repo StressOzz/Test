@@ -96,8 +96,8 @@ backup_menu() { [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не у
 while true; do clear; echo -e "${MAGENTA}Меню управление настройками${NC}\n"; if [ -f "$DATE_FILE" ]; then CREATE_DATE=$(cat "$DATE_FILE")
 echo -e "${YELLOW}Резервная копия:${NC} $CREATE_DATE ($(du -sh /opt/zapret_backup 2>/dev/null | awk '{print $1}'))\n"; else echo -e "${YELLOW}Резервная копия: ${RED}отсутствует${NC}\n"; fi
 echo -e "${CYAN}1) ${GREEN}Создать резервную копию настроек${NC}\n${CYAN}2) ${GREEN}Восстановить настройки из резервной копии${NC}\n${CYAN}3) ${GREEN}Сбросить настройки к значениям по умолчанию${NC}"
-echo -ne "${CYAN}4) ${GREEN}Удалить резервную копию${NC}\n${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт: ${NC}"
-read choice; case $choice in 1) save_backup ;; 2) restore_backup ;; 3) restore_default ;; 4) delete_backup ;; *) break ;; esac; done; }
+echo -ne "${CYAN}4) ${GREEN}Показать сохранённую стратегию${NC}\n${CYAN}5) ${GREEN}Удалить резервную копию${NC}\n${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт: ${NC}"
+read choice; case $choice in 1) save_backup ;; 2) restore_backup ;; 3) restore_default ;; 4) echo; awk 'f{if($0=="'\''")exit;print} /option NFQWS_OPT '\''/{f=1}' /opt/zapret_backup/etc/config/zapret; PAUSE ;; 5) delete_backup ;; *) break ;; esac; done; }
 delete_backup() { if [ -d "$BACKUP_DIR" ]; then rm -rf "$BACKUP_DIR"; echo -e "\n${GREEN}Резервная копия удалена!${NC}\n"; else echo -e "\n${RED}Резервная копия не найдена!${NC}\n"; fi; PAUSE; }
 restore_default() { if [ -f /opt/zapret/restore-def-cfg.sh ]; then echo -e "\n${MAGENTA}Возвращаем настройки по умолчанию${NC}"; rm -f /opt/zapret/init.d/openwrt/custom.d/50-script.sh; for i in 1 2 3 4; do rm -f "/opt/zapret/ipset/cust$i.txt"; done
 [ -f /etc/init.d/zapret ] && /etc/init.d/zapret stop >/dev/null 2>&1; echo -e "${CYAN}Возвращаем ${NC}настройки${CYAN}, ${NC}стратегию${CYAN} и ${NC}hostlist${CYAN} к значениям по умолчанию${NC}"; cp -f /opt/zapret/ipset_def/* /opt/zapret/ipset/
