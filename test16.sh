@@ -141,36 +141,6 @@ fi
     done
 }
 
-
-save_backup() {
-    mkdir -p "$BACKUP_DIR"
-    for f in $FILES_BACK; do
-        [ -f "$f" ] && cp -p --parents "$f" "$BACKUP_DIR/"
-    done
-    date '+%Y-%m-%d %H:%M:%S' > "$DATE_FILE"
-    echo -e "\n${GREEN}Настройки сохранены в${NC} $BACKUP_DIR${GREEN}!${NC}\n"
-    PAUSE
-}
-
-restore_backup() {
-    if [ ! -d "$BACKUP_DIR" ]; then
-        echo -e "\n${RED}Резервная копия не найдена!${NC}\n"
-        PAUSE
-        return
-    fi
-    find "$BACKUP_DIR" -type f ! -name "created.txt" | while read bf; do
-        # путь относительно $BACKUP_DIR
-        orig="/${bf#$BACKUP_DIR/}"
-        mkdir -p "$(dirname "$orig")"
-        cp -p "$bf" "$orig"
-    done
-    echo -e "\n${MAGENTA}Восстанавливаем настройки из резервной копии${NC}"
-    echo -e "${CYAN}Восстанавливаем и применяем настройки${NC}"
-    ZAPRET_RESTART
-    echo -e "\n${GREEN}Настройки восстановлены из резервной копии!${NC}\n"
-    PAUSE
-}
-
 delete_backup() {
     if [ -d "$BACKUP_DIR" ]; then
         rm -rf "$BACKUP_DIR"
@@ -187,7 +157,41 @@ chmod +x /opt/zapret/restore-def-cfg.sh && /opt/zapret/restore-def-cfg.sh; ZAPRE
 hosts_clear; echo -e "${GREEN}Настройки по умолчанию возвращены!${NC}\n"; else echo -e "\n${RED}Zapret не установлен!${NC}\n"; fi; PAUSE; }
 
 
+save_backup() {
+    mkdir -p "$BACKUP_DIR"
+    for f in $FILES_BACK; do
+        [ -f "$f" ] || continue
+        # путь относительно корня
+        rel="${f#/}"                   # убираем ведущий /
+        # создаём папки внутри backup
+        mkdir -p "$BACKUP_DIR/$(dirname "$rel")"
+        # копируем файл
+        cp -p "$f" "$BACKUP_DIR/$rel"
+    done
+    date '+%Y-%m-%d %H:%M:%S' > "$DATE_FILE"
+    echo -e "\n${GREEN}Настройки сохранены в${NC} $BACKUP_DIR\n"
+    PAUSE
+}
 
+restore_backup() {
+    if [ ! -d "$BACKUP_DIR" ]; then
+        echo -e "\n${RED}Резервная копия не найдена!${NC}\n"
+        PAUSE
+        return
+    fi
+    # перебираем все файлы в backup, кроме created.txt
+    find "$BACKUP_DIR" -type f ! -name "created.txt" | while read bf; do
+        # путь относительно backup
+        orig="/${bf#$BACKUP_DIR/}"
+        mkdir -p "$(dirname "$orig")"
+        cp -p "$bf" "$orig"
+    done
+    echo -e "\n${MAGENTA}Восстанавливаем настройки из резервной копии${NC}"
+    echo -e "${CYAN}Восстанавливаем и применяем настройки${NC}"
+    ZAPRET_RESTART
+    echo -e "\n${GREEN}Настройки восстановлены из резервной копии!${NC}\n"
+    PAUSE
+}
 
 
 
