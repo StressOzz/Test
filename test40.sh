@@ -149,10 +149,10 @@ apply_strategy() { NAME="$1"; BODY="$2"; sed -i "/^[[:space:]]*option NFQWS_OPT 
 
 
 choose_strategy_manual() {
-     # 1. Скачиваем список стратегий
+
     curl -fsSL "$STR_URL" -o "$TMP_LIST" || { echo -e "\n${RED}Не удалось скачать список${NC}\n"; read -p "Нажмите Enter..." dummy </dev/tty; return 1; }
 
-    # 2. Создаём временный список только с именами стратегий
+
     COUNT=0
     > /tmp/strategy_list
     while IFS= read -r LINE; do
@@ -166,18 +166,16 @@ choose_strategy_manual() {
 
     [ "$COUNT" -eq 0 ] && echo -e "${RED}Стратегий не найдено!${NC}" && read -p "Нажмите Enter..." dummy </dev/tty && rm -f /tmp/strategy_list && return 1
 
-    # 3. Простая строка с выбором: (1-COUNT)
-    echo -en "\nВыберите стратегию для YouTube (1-$COUNT): "; read CHOICE </dev/tty
-    if ! echo "$CHOICE" | grep -qE '^[0-9]+$' || [ "$CHOICE" -lt 1 ] || [ "$CHOICE" -gt "$COUNT" ]; then
-        echo -e "${RED}Неверный выбор!${NC}"; read -p "Нажмите Enter..." dummy </dev/tty; rm -f /tmp/strategy_list; return 1
-    fi
+
+    echo -en "\n${YELLOW}Выберите стратегию для YouTube (1-$COUNT)${NC}: "; read CHOICE </dev/tty
+    if ! echo "$CHOICE" | grep -qE '^[0-9]+$' || [ "$CHOICE" -lt 1 ] || [ "$CHOICE" -gt "$COUNT" ]; then return 1; fi
 
     SELECTED_NAME=$(sed -n "${CHOICE}p" /tmp/strategy_list)
     rm -f /tmp/strategy_list
 
-    echo -e "\n${CYAN}Применяем стратегию: ${NC}$SELECTED_NAME${NC}"
+    echo -e "\n${CYAN}Применяем стратегию: ${NC}$SELECTED_NAME"
 
-    # 4. Сохраняем тело выбранной стратегии во временный файл
+
     SAVED_STR="/tmp/selected_str"
     > "$SAVED_STR"
     FLAG=0
@@ -189,7 +187,7 @@ choose_strategy_manual() {
         [ "$FLAG" -eq 1 ] && printf "%b\n" "$LINE" >> "$SAVED_STR"
     done < "$TMP_LIST"
 
-    # 5-11. Применение стратегии (как в choose_strategy_manual)
+
     awk '/^[[:space:]]*option NFQWS_OPT '\''/{flag=1} flag{print}' "$CONF" > "$OLD_STR"
     sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
     sed -i "/^[[:space:]]*#Yv[0-9]\+/d" "$OLD_STR"
@@ -277,15 +275,11 @@ menu_game=$( [ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*88,500,1024-1929
 print=0; if [ -f "$CONF" ]; then current="$ver$( [ -n "$ver" ] && [ -n "$yv_ver" ] && echo " / " )$yv_ver"; DV=$(grep -o -E '^#[[:space:]]*Dv[12]' "$CONF" | sed 's/^#[[:space:]]*/\/ /' | head -n1)
 if [ -n "$current" ]; then print=1; echo -e "${YELLOW}Используется стратегия:${NC}  ${CYAN}$current $DV $RKN_STATUS${NC}"; elif [ -n "$RKN_STATUS" ]; then print=1; echo -e "${YELLOW}Используется стратегия:${NC}${CYAN}  РКН $DV${NC}"; fi; fi
 [ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*88,500,1024-19293,19345-49999,50101-65535" "$CONF" && grep -q -- "--filter-udp=88,500,1024-19293,19345-49999,50101-65535" "$CONF" && echo -e "${YELLOW}Стратегия для игр:${NC} ${GREEN}включена${NC}" && print=1
-[ "$print" -eq 1 ] && echo; echo -e "${CYAN}1) ${GREEN}Выбрать стратегию для установки ${NC}v1-v7\n${CYAN}2) ${GREEN}$menu_game\n${CYAN}3) $RKN_TEXT_MENU\n${CYAN}4) ${GREEN}Подобрать стратегию для ${NC}YouTube\n${CYAN}5) ${GREEN}Обновить список исключений${NC}"
+[ "$print" -eq 1 ] && echo; echo -e "${CYAN}1) ${GREEN}Выбрать стратегию для установки ${NC}v1-v7\n${CYAN}2) ${GREEN}$menu_game\n${CYAN}3) $RKN_TEXT_MENU\n${CYAN}4) ${GREEN}Подобрать стратегию для ${NC}YouTube\n${CYAN}5) ${GREEN}Выбрать стратегию для ${NC}YouTube\n${CYAN}6) ${GREEN}Обновить список исключений${NC}"
 echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read choiceST; case "$choiceST" in 1) strategy_CHOUSE ;; 2) fix_GAME ;; 3) toggle_rkn_bypass; continue ;; 4) auto_stryou ;; 
-5) echo -e "\n${MAGENTA}Обновляем список исключений${NC}\n${CYAN}Останавливаем ${NC}Zapret"; /etc/init.d/zapret stop >/dev/null 2>&1; echo -e "${CYAN}Добавляем домены в исключения${NC}"
+5) choose_strategy_manual ;; 6) echo -e "\n${MAGENTA}Обновляем список исключений${NC}\n${CYAN}Останавливаем ${NC}Zapret"; /etc/init.d/zapret stop >/dev/null 2>&1; echo -e "${CYAN}Добавляем домены в исключения${NC}"
 rm -f "$EXCLUDE_FILE"; wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL" || echo -e "\n${RED}Не удалось загрузить exclude файл${NC}\n"; echo -e "${CYAN}Перезапускаем ${NC}Zapret"
-ZAPRET_RESTART; echo -e "${GREEN}Список исключений обновлён!${NC}\n"; PAUSE ;;
-
-6) choose_strategy_manual ;;
-
-*) return ;; esac; done }
+ZAPRET_RESTART; echo -e "${GREEN}Список исключений обновлён!${NC}\n"; PAUSE ;; *) return ;; esac; done }
 strategy_CHOUSE () { echo -ne "\n${YELLOW}Введите версию стратегии для установки (1-7):${NC} "; read -r choice; if [[ "$choice" =~ ^[1-7]$ ]]; then install_strategy "v$choice"; fi; }
 show_current_strategy() { [ -f "$CONF" ] || return; ver=""; for i in $(seq 1 99); do grep -q "#v$i" "$CONF" && { ver="v$i"; break; }; done; yv_ver=""; for i in $(seq -w 1 99); do grep -q "#Yv$i" "$CONF" && { yv_ver="Yv$i"; break; }; done; }
 discord_str_add() { if ! grep -q "option NFQWS_PORTS_UDP.*19294-19344,50000-50100" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'$/,19294-19344,50000-50100'/" "$CONF"; fi
