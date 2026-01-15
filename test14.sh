@@ -19,6 +19,7 @@ HOSTS_LIST="185.87.51.182 4pda.to www.4pda.to|130.255.77.28 ntc.party|30.255.77.
 ZAPRET_RESTART () { chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1; sleep 1; }
 hosts_add() { echo "$HOSTS_LIST" | tr '|' '\n' | grep -Fxv -f /etc/hosts >> /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1; }
 hosts_clear() { for ip in 185.87.51.182 130.255.77.28 30.255.77.28 173.245.58.219 185.39.18.98 57.144.222.34 157.240.9.174 157.240.245.174 157.240.205.174; do sed -i "/$ip/d" /etc/hosts >/dev/null 2>&1; done; /etc/init.d/dnsmasq restart >/dev/null 2>&1; }
+PAUSE() { echo "Нажмите Enter..."; read dummy; }; BACKUP_DIR="/opt/zapret_backup"; DATE_FILE="$BACKUP_DIR/created.txt"
 # ==========================================
 # Получение версии
 # ==========================================
@@ -88,11 +89,6 @@ zapret_key() { clear; echo -e "${MAGENTA}Удаление, установка и
 # Меню управление настройками
 # ==========================================
 
-PAUSE() { echo "Нажмите Enter..."; read dummy; }
-
-BACKUP_DIR="/opt/zapret_backup"
-DATE_FILE="$BACKUP_DIR/created.txt"
-
 FILES_BACK="/etc/config/zapret \
 /opt/zapret/config \
 /opt/zapret/ipset/cust1.txt \
@@ -145,14 +141,11 @@ fi
     done
 }
 
-# ---------------------
-# Backup функции
-# ---------------------
 
 save_backup() {
     mkdir -p "$BACKUP_DIR"
     for f in $FILES_BACK; do
-        [ -f "$f" ] && cp -p "$f" "$BACKUP_DIR/"
+        [ -f "$f" ] && cp -p --parents "$f" "$BACKUP_DIR/"
     done
     date '+%Y-%m-%d %H:%M:%S' > "$DATE_FILE"
     echo -e "\n${GREEN}Настройки сохранены в${NC} $BACKUP_DIR\n"
@@ -165,12 +158,9 @@ restore_backup() {
         PAUSE
         return
     fi
-    for bf in "$BACKUP_DIR"/*; do
-        [ "$(basename "$bf")" = "created.txt" ] && continue
-        case "$(basename "$bf")" in
-            zapret) orig="/etc/config/zapret" ;;
-            *) orig="/opt/zapret/$(echo "$bf" | cut -d/ -f4-)" ;;
-        esac
+    find "$BACKUP_DIR" -type f ! -name "created.txt" | while read bf; do
+        # путь относительно $BACKUP_DIR
+        orig="/${bf#$BACKUP_DIR/}"
         mkdir -p "$(dirname "$orig")"
         cp -p "$bf" "$orig"
     done
@@ -178,7 +168,6 @@ restore_backup() {
     echo -e "${CYAN}Восстанавливаем и применяем настройки${NC}"
     ZAPRET_RESTART
     echo -e "\n${GREEN}Настройки восстановлены из резервной копии!${NC}\n"
-    
     PAUSE
 }
 
