@@ -146,6 +146,60 @@ echo -e "\n${YELLOW}Подбор остановлен. Cтратегия вос�
 echo -e "\n${RED}Рабочая стратегия для YouTube не найдена!${NC}\n"; PAUSE </dev/tty; return 1; }
 check_access() { curl -s --connect-timeout 4 -m 4 "$TEST_HOST" >/dev/null && echo "ok" || echo "fail"; }
 apply_strategy() { NAME="$1"; BODY="$2"; sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; { echo "  option NFQWS_OPT '"; echo "#AUTO $NAME"; printf "%b\n" "$BODY"; echo "'"; } >> "$CONF"; ZAPRET_RESTART; }
+
+
+choose_strategy_manual() {
+    # 1. Скачиваем список стратегий
+    curl -fsSL "$STR_URL" -o "$TMP_LIST" || { echo -e "\n${RED}Не удалось скачать список${NC}\n"; PAUSE </dev/tty; return 1; }
+
+    # 2. Собираем имена стратегий
+    mapfile -t STRATEGIES < <(grep '^Yv[0-9]\+' "$TMP_LIST")
+    TOTAL=${#STRATEGIES[@]}
+
+    if [ "$TOTAL" -eq 0 ]; then
+        echo -e "${RED}Стратегий не найдено!${NC}"; PAUSE </dev/tty; return 1
+    fi
+
+    # 3. Выводим список с номерами
+    echo -e "\n${MAGENTA}Доступные стратегии для YouTube:${NC}"
+    for i in "${!STRATEGIES[@]}"; do
+        echo -e "${CYAN}$((i+1))${NC}) ${STRATEGIES[i]}"
+    done
+
+    # 4. Выбираем вручную
+    echo -en "\nВыберите номер стратегии: "; read -r CHOICE </dev/tty
+
+    if ! [[ "$CHOICE" =~ ^[0-9]+$ ]] || [ "$CHOICE" -lt 1 ] || [ "$CHOICE" -gt "$TOTAL" ]; then
+        echo -e "${RED}Неверный выбор!${NC}"; PAUSE </dev/tty; return 1
+    fi
+
+    SELECTED_NAME="${STRATEGIES[$((CHOICE-1))]}"
+    # 5. Получаем тело стратегии
+    SELECTED_BODY=$(awk "/^$SELECTED_NAME\$/{flag=1;next}/^Yv[0-9]+/{flag=0}flag{print}" "$TMP_LIST")
+
+    echo -e "\n${CYAN}Применяем стратегию: ${NC}$SELECTED_NAME${NC}"
+
+    # 6. Сохраняем текущий конфиг и удаляем старую стратегию
+    awk '/^[[:space:]]*option NFQWS_OPT '\''/{flag=1} !flag{print}' "$CONF" > "$OLD_STR"
+
+    # 7. Применяем выбранную стратегию точно так же, как в auto_stryou
+    { echo "  option NFQWS_OPT '"; echo "#AUTO $SELECTED_NAME"; printf "%b\n" "$SELECTED_BODY"; echo "'"; } >> "$OLD_STR"
+
+    # 8. Перезаписываем конфиг
+    mv "$OLD_STR" "$CONF"
+    # 9. Проверяем пустую строку в конце
+    grep -q "^[[:space:]]*' *\$" "$CONF" || echo "'" >> "$CONF"
+
+    # 10. Перезапуск Zapret
+    ZAPRET_RESTART
+
+    echo -e "${GREEN}Стратегия применена!${NC}\n"
+    PAUSE </dev/tty
+}
+
+
+
+
 # ==========================================
 # РКН список ВКЛ / ВЫКЛ
 # ==========================================
@@ -200,7 +254,11 @@ if [ -n "$current" ]; then print=1; echo -e "${YELLOW}Используется �
 echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read choiceST; case "$choiceST" in 1) strategy_CHOUSE ;; 2) fix_GAME ;; 3) toggle_rkn_bypass; continue ;; 4) auto_stryou ;; 
 5) echo -e "\n${MAGENTA}Обновляем список исключений${NC}\n${CYAN}Останавливаем ${NC}Zapret"; /etc/init.d/zapret stop >/dev/null 2>&1; echo -e "${CYAN}Добавляем домены в исключения${NC}"
 rm -f "$EXCLUDE_FILE"; wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL" || echo -e "\n${RED}Не удалось загрузить exclude файл${NC}\n"; echo -e "${CYAN}Перезапускаем ${NC}Zapret"
-ZAPRET_RESTART; echo -e "${GREEN}Список исключений обновлён!${NC}\n"; PAUSE ;; *) return ;; esac; done }
+ZAPRET_RESTART; echo -e "${GREEN}Список исключений обновлён!${NC}\n"; PAUSE ;;
+
+6) choose_strategy_manual ;;
+
+*) return ;; esac; done }
 strategy_CHOUSE () { echo -ne "\n${YELLOW}Введите версию стратегии для установки (1-7):${NC} "; read -r choice; if [[ "$choice" =~ ^[1-7]$ ]]; then install_strategy "v$choice"; fi; }
 show_current_strategy() { [ -f "$CONF" ] || return; ver=""; for i in $(seq 1 99); do grep -q "#v$i" "$CONF" && { ver="v$i"; break; }; done; yv_ver=""; for i in $(seq -w 1 99); do grep -q "#Yv$i" "$CONF" && { yv_ver="Yv$i"; break; }; done; }
 discord_str_add() { if ! grep -q "option NFQWS_PORTS_UDP.*19294-19344,50000-50100" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'$/,19294-19344,50000-50100'/" "$CONF"; fi
