@@ -150,9 +150,9 @@ apply_strategy() { NAME="$1"; BODY="$2"; sed -i "/^[[:space:]]*option NFQWS_OPT 
 
 choose_strategy_manual() {
     # 1. Скачиваем список стратегий
-    curl -fsSL "$STR_URL" -o "$TMP_LIST" || { echo -e "\n${RED}Не удалось скачать список${NC}\n"; PAUSE </dev/tty; return 1; }
+    curl -fsSL "$STR_URL" -o "$TMP_LIST" || { echo -e "\n${RED}Не удалось скачать список${NC}\n"; read -p "Нажмите Enter..." dummy </dev/tty; return 1; }
 
-    # 2. Выводим стратегии с цифрами
+    # 2. Выводим все стратегии с цифрами
     COUNT=0
     > /tmp/strategy_list
     echo -e "\n${MAGENTA}Доступные стратегии для YouTube:${NC}"
@@ -166,12 +166,12 @@ choose_strategy_manual() {
         esac
     done < "$TMP_LIST"
 
-    [ "$COUNT" -eq 0 ] && echo -e "${RED}Стратегий не найдено!${NC}" && PAUSE </dev/tty && rm -f /tmp/strategy_list && return 1
+    [ "$COUNT" -eq 0 ] && echo -e "${RED}Стратегий не найдено!${NC}" && read -p "Нажмите Enter..." dummy </dev/tty && rm -f /tmp/strategy_list && return 1
 
-    # 3. Выбор
+    # 3. Выбор вручную
     echo -en "\nВыберите номер стратегии: "; read CHOICE </dev/tty
     if ! echo "$CHOICE" | grep -qE '^[0-9]+$' || [ "$CHOICE" -lt 1 ] || [ "$CHOICE" -gt "$COUNT" ]; then
-        echo -e "${RED}Неверный выбор!${NC}"; PAUSE </dev/tty; rm -f /tmp/strategy_list; return 1
+        echo -e "${RED}Неверный выбор!${NC}"; read -p "Нажмите Enter..." dummy </dev/tty; rm -f /tmp/strategy_list; return 1
     fi
 
     SELECTED_NAME=$(sed -n "${CHOICE}p" /tmp/strategy_list)
@@ -179,7 +179,7 @@ choose_strategy_manual() {
 
     echo -e "\n${CYAN}Применяем стратегию: ${NC}$SELECTED_NAME${NC}"
 
-    # 4. Сохраняем тело выбранной стратегии
+    # 4. Сохраняем тело выбранной стратегии во временный файл
     SAVED_STR="/tmp/selected_str"
     > "$SAVED_STR"
     FLAG=0
@@ -191,32 +191,47 @@ choose_strategy_manual() {
         [ "$FLAG" -eq 1 ] && printf "%b\n" "$LINE" >> "$SAVED_STR"
     done < "$TMP_LIST"
 
-    # 5. Разделяем конфиг на часть до option NFQWS_OPT ' и после
-    awk '/^[[:space:]]*option NFQWS_OPT '\''/{print; exit} {print}' "$CONF" > "$NEW_STR"
+    # 5. Сохраняем старый блок после option NFQWS_OPT '
+    awk '/^[[:space:]]*option NFQWS_OPT '\''/{flag=1} flag{print}' "$CONF" > "$OLD_STR"
 
-    # 6. Вставляем выбранную стратегию после option NFQWS_OPT '
-    {
-        echo "#AUTO $SELECTED_NAME"
-        while IFS= read -r LINE; do
-            [ -n "$LINE" ] && echo "$LINE"
-        done < "$SAVED_STR"
-        echo "--new"
-    } >> "$NEW_STR"
+    # 6. Удаляем старый блок из конфига
+    sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
 
-    # 7. Вставляем оставшуюся часть конфига (если что-то было после старой option NFQWS_OPT ')
-    awk '/^[[:space:]]*option NFQWS_OPT '\''/{flag=1; next} flag{print}' "$CONF" >> "$NEW_STR"
+    # 7. Применяем стратегию по той же логике auto_stryou
+    awk '{if(skip){if($0=="--new"||$0~/\047/){skip=0;next}if($0~/^[[:space:]]*$/)next;next}if($0=="--filter-tcp=443"){getline n;if(n=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt"){skip=1;next}else{print $0;print n;next}}if($0=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt")has_google=1;if($0~/^[[:space:]]*#Yv/)next;print}' "$OLD_STR" > "$NEW_STR"
 
-    # 8. Перезаписываем конфиг
-    mv "$NEW_STR" "$CONF"
+    awk 'BEGIN{inserted=0;has_google=0}
+        $0=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt"{has_google=1}
+        $0=="--new"&&!inserted{
+            while((getline l<"'"$SAVED_STR"'")>0) if(l!~/^[[:space:]]*$/) print l
+            print "--new"
+            inserted=1
+            next
+        }
+        $0~/^[[:space:]]*option NFQWS_OPT \047$/&&!has_google&&!inserted{
+            print
+            print "#AUTO '"$SELECTED_NAME"'"
+            while((getline l<"'"$SAVED_STR"'")>0) if(l!~/^[[:space:]]*$/) print l
+            print "--new"
+            inserted=1
+            next
+        }
+        {print}' "$NEW_STR" > "$FINAL_STR"
 
-    # 9. Проверяем пустую строку в конце
+    # 8. Вставляем в конфиг
+    cat "$FINAL_STR" >> "$CONF"
+
+    # 9. Убираем лишние дубликаты --new
+    awk '{if($0=="--new"){if(prev!="--new")print}else print;prev=$0}' "$CONF" > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"
+
+    # 10. Проверяем пустую строку в конце
     grep -q "^[[:space:]]*' *\$" "$CONF" || echo "'" >> "$CONF"
 
-    # 10. Перезапуск Zapret
+    # 11. Перезапуск Zapret
     ZAPRET_RESTART
 
     echo -e "${GREEN}Стратегия применена!${NC}\n"
-    PAUSE </dev/tty
+    read -p "Нажмите Enter..." dummy </dev/tty
 }
 
 
