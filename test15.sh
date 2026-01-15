@@ -125,17 +125,17 @@ else
 fi
 
         echo -e "${CYAN}1) ${GREEN}Сохранить текущие настройки${NC}"
-        echo -e "${CYAN}2) ${GREEN}Восстановить из резервной копии${NC}"
-        echo -e "${CYAN}3) ${GREEN}Удалить резервную копию${NC}"
-        echo -e "${CYAN}4) ${GREEN}Восстановить настройки по умолчанию${NC}"
+        echo -e "${CYAN}2) ${GREEN}Восстановить настройки из резервной копии${NC}"
+        echo -e "${CYAN}3) ${GREEN}Восстановить настройки по умолчанию${NC}"
+        echo -e "${CYAN}4) ${GREEN}Удалить резервную копию${NC}"
         echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n"
         echo -ne "${YELLOW}Выберите пункт: ${NC}"
         read choice
         case $choice in
             1) save_backup ;;
             2) restore_backup ;;
-            3) delete_backup ;;
-            4) restore_default ;;
+            3) restore_default ;;
+            4) delete_backup ;;
             *) break ;;
         esac
     done
@@ -148,7 +148,7 @@ save_backup() {
         [ -f "$f" ] && cp -p --parents "$f" "$BACKUP_DIR/"
     done
     date '+%Y-%m-%d %H:%M:%S' > "$DATE_FILE"
-    echo -e "\n${GREEN}Настройки сохранены в${NC} $BACKUP_DIR\n"
+    echo -e "\n${GREEN}Настройки сохранены в${NC} $BACKUP_DIR${GREEN}!${NC}\n"
     PAUSE
 }
 
@@ -174,7 +174,7 @@ restore_backup() {
 delete_backup() {
     if [ -d "$BACKUP_DIR" ]; then
         rm -rf "$BACKUP_DIR"
-        echo -e "\n${GREEN}Резервная копия удалена${NC}\n"
+        echo -e "\n${GREEN}Резервная копия удалена!${NC}\n"
     else
         echo -e "\n${RED}Резервная копия не найдена!${NC}\n"
     fi
@@ -184,7 +184,7 @@ delete_backup() {
 restore_default() { if [ -f /opt/zapret/restore-def-cfg.sh ]; then echo -e "\n${MAGENTA}Возвращаем настройки по умолчанию${NC}"; rm -f /opt/zapret/init.d/openwrt/custom.d/50-script.sh; for i in 1 2 3 4; do rm -f "/opt/zapret/ipset/cust$i.txt"; done
 [ -f /etc/init.d/zapret ] && /etc/init.d/zapret stop >/dev/null 2>&1; echo -e "${CYAN}Возвращаем ${NC}настройки${CYAN}, ${NC}стратегию${CYAN} и ${NC}hostlist${CYAN} к значениям по умолчанию${NC}"; cp -f /opt/zapret/ipset_def/* /opt/zapret/ipset/
 chmod +x /opt/zapret/restore-def-cfg.sh && /opt/zapret/restore-def-cfg.sh; ZAPRET_RESTART
-hosts_clear; echo -e "Настройки по умолчанию ${GREEN}возвращены!${NC}\n"; else echo -e "\n${RED}Zapret не установлен!${NC}\n"; fi; PAUSE; }
+hosts_clear; echo -e "${GREEN}Настройки по умолчанию возвращены!${NC}\n"; else echo -e "\n${RED}Zapret не установлен!${NC}\n"; fi; PAUSE; }
 
 
 
