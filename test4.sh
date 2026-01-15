@@ -87,6 +87,170 @@ zapret_key() { clear; echo -e "${MAGENTA}Удаление, установка и
 # ==========================================
 # Вернуть настройки по умолчанию
 # ==========================================
+
+
+main_menu() {
+    echo -e "\n===================="
+    echo "      Основное меню"
+    echo "===================="
+    echo "1) Действие A"
+    echo "2) Действие B"
+    echo "3) Действие C"
+    echo "5) Управление backup"
+    echo "0) Выход"
+    echo "===================="
+    echo -n "Выберите действие: "
+}
+
+pause() {
+    echo "Нажмите любую клавишу, чтобы продолжить..."
+    read -n1 -s
+}
+
+# =====================
+# Backup меню
+# =====================
+
+BACKUP_DIR="/opt/zapret_backup"
+DATE_FILE="$BACKUP_DIR/created.txt"
+
+FILES_BACK="/etc/config/zapret \
+/opt/zapret/ipset/cust1.txt \
+/opt/zapret/ipset/cust2.txt \
+/opt/zapret/ipset/cust3.txt \
+/opt/zapret/ipset/cust4.txt \
+/opt/zapret/ipset/zapret-ip-user.txt \
+/opt/zapret/ipset/zapret-ip-user-ipban.txt \
+/opt/zapret/ipset/zapret-ip-user-exclude.txt \
+/opt/zapret/ipset/zapret-ip-exclude.txt \
+/opt/zapret/ipset/zapret-hosts-user.txt \
+/opt/zapret/ipset/zapret-hosts-user-ipban.txt \
+/opt/zapret/ipset/zapret-hosts-user-exclude.txt.default \
+/opt/zapret/ipset/zapret-hosts-user-exclude.txt-opkg \
+/opt/zapret/ipset/zapret-hosts-user-exclude.txt \
+/opt/zapret/ipset/zapret-hosts-google.txt \
+/opt/zapret/ipset/zapret-hosts-auto.txt \
+/opt/zapret/init.d/openwrt/custom.d/10-script.sh \
+/opt/zapret/init.d/openwrt/custom.d/20-script.sh \
+/opt/zapret/init.d/openwrt/custom.d/50-script.sh \
+/opt/zapret/init.d/openwrt/custom.d/60-script.sh \
+/opt/zapret/init.d/openwrt/custom.d/90-script.sh"
+
+backup_menu_loop() {
+    while true; do
+        echo -e "\n========================"
+        echo "  Управление настройками"
+        echo "========================"
+        if [ -f "$DATE_FILE" ]; then
+            CREATE_DATE=$(cat "$DATE_FILE")
+            echo "Резервная копия: $CREATE_DATE"
+        fi
+        echo "------------------------"
+        echo "1) Сохранить текущие настройки"
+        echo "2) Восстановить из резервной копии"
+        echo "3) Удалить резервную копию"
+        echo "4) Восстановить настройки по умолчанию"
+        echo "0) Вернуться в основное меню"
+        echo "========================"
+        echo -n "Выберите действие: "
+        read choice
+        case $choice in
+            1) save_backup ;;
+            2) restore_backup ;;
+            3) delete_backup ;;
+            4) restore_default ;;
+            0) break ;;
+            *) echo "Неверный выбор!" ; pause ;;
+        esac
+    done
+}
+
+# ---------------------
+# Backup функции
+# ---------------------
+
+save_backup() {
+    mkdir -p "$BACKUP_DIR"
+    for f in $FILES_BACK; do
+        [ -f "$f" ] && cp -p "$f" "$BACKUP_DIR/"
+    done
+    date '+%Y-%m-%d %H:%M:%S' > "$DATE_FILE"
+    echo "Настройки сохранены в $BACKUP_DIR"
+    pause
+}
+
+restore_backup() {
+    if [ ! -d "$BACKUP_DIR" ]; then
+        echo "Резервная копия не найдена!"
+        pause
+        return
+    fi
+    for bf in "$BACKUP_DIR"/*; do
+        [ "$(basename "$bf")" = "created.txt" ] && continue
+        case "$(basename "$bf")" in
+            zapret) orig="/etc/config/zapret" ;;
+            *) orig="/opt/zapret/$(echo "$bf" | cut -d/ -f4-)" ;;
+        esac
+        mkdir -p "$(dirname "$orig")"
+        cp -p "$bf" "$orig"
+    done
+    echo "Настройки восстановлены из резервной копии"
+    ZAPRET_RESTART
+    pause
+}
+
+delete_backup() {
+    if [ -d "$BACKUP_DIR" ]; then
+        rm -rf "$BACKUP_DIR"
+        echo "Резервная копия удалена"
+    else
+        echo "Резервная копия не найдена"
+    fi
+    pause
+}
+
+restore_default() {
+    if [ -f /opt/zapret/restore-def-cfg.sh ]; then echo -e "\n${MAGENTA}Возвращаем настройки по умолчанию${NC}"; rm -f /opt/zapret/init.d/openwrt/custom.d/50-script.sh; for i in 1 2 3 4; do rm -f "/opt/zapret/ipset/cust$i.txt"; done
+[ -f /etc/init.d/zapret ] && /etc/init.d/zapret stop >/dev/null 2>&1; echo -e "${CYAN}Возвращаем ${NC}настройки${CYAN}, ${NC}стратегию${CYAN} и ${NC}hostlist${CYAN} к значениям по умолчанию${NC}"; cp -f /opt/zapret/ipset_def/* /opt/zapret/ipset/
+chmod +x /opt/zapret/restore-def-cfg.sh && /opt/zapret/restore-def-cfg.sh; ZAPRET_RESTART
+hosts_clear; echo -e "Настройки по умолчанию ${GREEN}возвращены!${NC}\n"; else echo -e "\n${RED}Zapret не установлен!${NC}\n"; fi; read -p "Нажмите Enter..." dummy;
+}
+
+# =====================
+# Главный цикл основного меню
+# =====================
+
+while true; do
+    main_menu
+    read choice
+    case $choice in
+        1) echo "Действие A" ; pause ;;
+        2) echo "Действие B" ; pause ;;
+        3) echo "Действие C" ; pause ;;
+        5) backup_menu_loop ;;  # <-- вызываем backup меню
+        0) break ;;
+        *) echo "Неверный выбор!" ; pause ;;
+    esac
+done
+
+echo "Выход из скрипта."
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 comeback_def () { if [ -f /opt/zapret/restore-def-cfg.sh ]; then echo -e "\n${MAGENTA}Возвращаем настройки по умолчанию${NC}"; rm -f /opt/zapret/init.d/openwrt/custom.d/50-script.sh; for i in 1 2 3 4; do rm -f "/opt/zapret/ipset/cust$i.txt"; done
 [ -f /etc/init.d/zapret ] && /etc/init.d/zapret stop >/dev/null 2>&1; echo -e "${CYAN}Возвращаем ${NC}настройки${CYAN}, ${NC}стратегию${CYAN} и ${NC}hostlist${CYAN} к значениям по умолчанию${NC}"; cp -f /opt/zapret/ipset_def/* /opt/zapret/ipset/
 chmod +x /opt/zapret/restore-def-cfg.sh && /opt/zapret/restore-def-cfg.sh; ZAPRET_RESTART
@@ -281,7 +445,7 @@ if [ -n "$current" ]; then echo -e "${YELLOW}Используется страт
 echo -e "\n${CYAN}1) ${GREEN}Установить${NC} Zapret\n${CYAN}2) ${GREEN}Меню стратегий${NC}\n${CYAN}3) ${GREEN}Вернуть ${NC}настройки по умолчанию\n${CYAN}4) ${GREEN}$str_stp_zpr ${NC}Zapret"
 echo -e "${CYAN}5) ${GREEN}Удалить ${NC}Zapret\n${CYAN}6) ${GREEN}Меню настройки ${NC}Discord\n${CYAN}7) ${GREEN}Меню ${NC}DNS over HTTPS\n${CYAN}8) ${GREEN}Удалить → установить → настроить${NC} Zapret\n${CYAN}0) ${GREEN}Системное меню${NC}" ; echo -ne "${CYAN}Enter) ${GREEN}Выход${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read choice
 case "$choice" in 888) echo; uninstall_zapret "1"; install_Zapret "1"; curl -fsSL https://raw.githubusercontent.com/StressOzz/Test/refs/heads/main/zapret -o "$CONF"; hosts_add; rm -f "$EXCLUDE_FILE"; wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL"; ZAPRET_RESTART; echo -e "\033[5m${GREEN}OK${NC}"; read -n 1 -s ;;
-1) install_Zapret ;; 2) menu_str ;; 3) comeback_def ;; 4) pgrep -f /opt/zapret >/dev/null 2>&1 && stop_zapret || start_zapret ;; 5) uninstall_zapret ;; 6) scrypt_install ;; 7) DoH_menu ;; 8) zapret_key ;; 0) sys_menu ;; *) echo; exit 0 ;; esac; }
+1) install_Zapret ;; 2) menu_str ;; 3) backup_menu_loop ;; 4) pgrep -f /opt/zapret >/dev/null 2>&1 && stop_zapret || start_zapret ;; 5) uninstall_zapret ;; 6) scrypt_install ;; 7) DoH_menu ;; 8) zapret_key ;; 0) sys_menu ;; *) echo; exit 0 ;; esac; }
 # ==========================================
 # Старт скрипта
 # ==========================================
