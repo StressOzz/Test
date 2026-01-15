@@ -116,13 +116,17 @@ FILES_BACK="/etc/config/zapret \
 /opt/zapret/init.d/openwrt/custom.d/90-script.sh"
 
 backup_menu() {
+[ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }
     while true; do
     clear
         echo -e "${MAGENTA}Меню управление настройками${NC}\n"
         if [ -f "$DATE_FILE" ]; then
-            CREATE_DATE=$(cat "$DATE_FILE")
-            echo -e "${YELLOW}Резервная копия:${NC} $CREATE_DATE ($(du -sh /opt/zapret_backup 2>/dev/null | awk '{print $1}'))\n"
-        fi
+    CREATE_DATE=$(cat "$DATE_FILE")
+    echo -e "${YELLOW}Резервная копия:${NC} $CREATE_DATE ($(du -sh /opt/zapret_backup 2>/dev/null | awk '{print $1}'))\n"
+else
+    echo -e "${YELLOW}Резервная копия: ${RED}отсутствует${NC}\n"
+fi
+
         echo -e "${CYAN}1) ${GREEN}Сохранить текущие настройки${NC}"
         echo -e "${CYAN}2) ${GREEN}Восстановить из резервной копии${NC}"
         echo -e "${CYAN}3) ${GREEN}Удалить резервную копию${NC}"
@@ -169,8 +173,11 @@ restore_backup() {
         mkdir -p "$(dirname "$orig")"
         cp -p "$bf" "$orig"
     done
-    echo -e "\n${GREEN}Настройки восстановлены из резервной копии${NC}\n"
+    echo -e "\n${MAGENTA}Восстанавливаем настройки из резервной копии${NC}"
+    echo -e "${CYAN}Восстанавливаем и применяем настройки${NC}"
     ZAPRET_RESTART
+    echo -e "\n${GREEN}Настройки восстановлены из резервной копии!${NC}\n"
+    
     PAUSE
 }
 
@@ -179,30 +186,23 @@ delete_backup() {
         rm -rf "$BACKUP_DIR"
         echo -e "\n${GREEN}Резервная копия удалена${NC}\n"
     else
-        echo -e "\n${GREEN}Резервная копия не найдена${NC}\n"
+        echo -e "\n${RED}Резервная копия не найдена!${NC}\n"
     fi
     PAUSE
 }
 
-restore_default() {
-    if [ -f /opt/zapret/restore-def-cfg.sh ]; then echo -e "\n${MAGENTA}Возвращаем настройки по умолчанию${NC}"; rm -f /opt/zapret/init.d/openwrt/custom.d/50-script.sh; for i in 1 2 3 4; do rm -f "/opt/zapret/ipset/cust$i.txt"; done
-[ -f /etc/init.d/zapret ] && /etc/init.d/zapret stop >/dev/null 2>&1; echo -e "${CYAN}Возвращаем ${NC}настройки${CYAN}, ${NC}стратегию${CYAN} и ${NC}hostlist${CYAN} к значениям по умолчанию${NC}"; cp -f /opt/zapret/ipset_def/* /opt/zapret/ipset/
-chmod +x /opt/zapret/restore-def-cfg.sh && /opt/zapret/restore-def-cfg.sh; ZAPRET_RESTART
-hosts_clear; echo -e "Настройки по умолчанию ${GREEN}возвращены!${NC}\n"; else echo -e "\n${RED}Zapret не установлен!${NC}\n"; fi; PAUSE;
-}
-
-
-
-
-
-
-
-
-
-comeback_def () { if [ -f /opt/zapret/restore-def-cfg.sh ]; then echo -e "\n${MAGENTA}Возвращаем настройки по умолчанию${NC}"; rm -f /opt/zapret/init.d/openwrt/custom.d/50-script.sh; for i in 1 2 3 4; do rm -f "/opt/zapret/ipset/cust$i.txt"; done
+restore_default() { if [ -f /opt/zapret/restore-def-cfg.sh ]; then echo -e "\n${MAGENTA}Возвращаем настройки по умолчанию${NC}"; rm -f /opt/zapret/init.d/openwrt/custom.d/50-script.sh; for i in 1 2 3 4; do rm -f "/opt/zapret/ipset/cust$i.txt"; done
 [ -f /etc/init.d/zapret ] && /etc/init.d/zapret stop >/dev/null 2>&1; echo -e "${CYAN}Возвращаем ${NC}настройки${CYAN}, ${NC}стратегию${CYAN} и ${NC}hostlist${CYAN} к значениям по умолчанию${NC}"; cp -f /opt/zapret/ipset_def/* /opt/zapret/ipset/
 chmod +x /opt/zapret/restore-def-cfg.sh && /opt/zapret/restore-def-cfg.sh; ZAPRET_RESTART
 hosts_clear; echo -e "Настройки по умолчанию ${GREEN}возвращены!${NC}\n"; else echo -e "\n${RED}Zapret не установлен!${NC}\n"; fi; PAUSE; }
+
+
+
+
+
+
+
+
 # ==========================================
 # Cтарт/стоп Zapret
 # ==========================================
