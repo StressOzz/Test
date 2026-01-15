@@ -194,10 +194,11 @@ choose_strategy_manual() {
     # 5. Сохраняем старый блок после option NFQWS_OPT '
     awk '/^[[:space:]]*option NFQWS_OPT '\''/{flag=1} flag{print}' "$CONF" > "$OLD_STR"
 
-    # 6. Удаляем старый блок из конфига
+    # 6. Удаляем старый блок и старый комментарий #Yv…
     sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
+    sed -i "/^[[:space:]]*#Yv[0-9]\+/d" "$OLD_STR"
 
-    # 7. Применяем стратегию по той же логике auto_stryou
+    # 7. Применяем стратегию по логике auto_stryou
     awk '{if(skip){if($0=="--new"||$0~/\047/){skip=0;next}if($0~/^[[:space:]]*$/)next;next}if($0=="--filter-tcp=443"){getline n;if(n=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt"){skip=1;next}else{print $0;print n;next}}if($0=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt")has_google=1;if($0~/^[[:space:]]*#Yv/)next;print}' "$OLD_STR" > "$NEW_STR"
 
     awk 'BEGIN{inserted=0;has_google=0}
@@ -210,7 +211,8 @@ choose_strategy_manual() {
         }
         $0~/^[[:space:]]*option NFQWS_OPT \047$/&&!has_google&&!inserted{
             print
-            print "#AUTO '"$SELECTED_NAME"'"
+            echo_comment="#$SELECTED_NAME"
+            print echo_comment
             while((getline l<"'"$SAVED_STR"'")>0) if(l!~/^[[:space:]]*$/) print l
             print "--new"
             inserted=1
