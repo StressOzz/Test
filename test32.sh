@@ -2,7 +2,7 @@
 # ==========================================
 # Zapret on remittor Manager by StressOzz
 # =========================================
-ZAPRET_MANAGER_VERSION="8.0"; ZAPRET_VERSION="72.20260114"; STR_VERSION_AUTOINSTALL="v6"
+ZAPRET_MANAGER_VERSION="8.1"; ZAPRET_VERSION="72.20260114"; STR_VERSION_AUTOINSTALL="v6"
 TEST_HOST="https://rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com"; LAN_IP=$(uci get network.lan.ipaddr)
 GREEN="\033[1;32m"; RED="\033[1;31m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"
 MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -154,6 +154,7 @@ choose_strategy_manual() {
 
     # 2. Выводим все стратегии с номерами
     COUNT=0
+    > /tmp/strategy_list
     echo -e "\n${MAGENTA}Доступные стратегии для YouTube:${NC}"
     while IFS= read -r LINE; do
         case "$LINE" in
@@ -166,7 +167,7 @@ choose_strategy_manual() {
     done < "$TMP_LIST"
 
     if [ "$COUNT" -eq 0 ]; then
-        echo -e "${RED}Стратегий не найдено!${NC}"; PAUSE </dev/tty; return 1
+        echo -e "${RED}Стратегий не найдено!${NC}"; PAUSE </dev/tty; rm -f /tmp/strategy_list; return 1
     fi
 
     # 3. Выбираем вручную
@@ -180,44 +181,38 @@ choose_strategy_manual() {
     SELECTED_NAME=$(sed -n "${CHOICE}p" /tmp/strategy_list)
     rm -f /tmp/strategy_list
 
-    # 5. Получаем тело стратегии
-    SELECTED_BODY=""
-    FLAG=0
-    while IFS= read -r LINE; do
-        if [ "$LINE" = "$SELECTED_NAME" ]; then
-            FLAG=1
-            continue
-        fi
-        case "$LINE" in
-            Yv[0-9]*)
-                FLAG=0
-                ;;
-        esac
-        if [ "$FLAG" -eq 1 ]; then
-            SELECTED_BODY="${SELECTED_BODY}${LINE}\n"
-        fi
-    done < "$TMP_LIST"
-
     echo -e "\n${CYAN}Применяем стратегию: ${NC}$SELECTED_NAME${NC}"
 
-    # 6. Сохраняем текущий конфиг и удаляем старую стратегию
+    # 5. Сохраняем текущий конфиг без старых правил
     awk '/^[[:space:]]*option NFQWS_OPT '\''/{flag=1} !flag{print}' "$CONF" > "$OLD_STR"
 
-    # 7. Применяем выбранную стратегию
+    # 6. Добавляем новую стратегию точно так же, как auto_stryou
     {
         echo "  option NFQWS_OPT '"
         echo "#AUTO $SELECTED_NAME"
-        printf "%b\n" "$SELECTED_BODY"
+        FLAG=0
+        while IFS= read -r LINE; do
+            if [ "$LINE" = "$SELECTED_NAME" ]; then
+                FLAG=1
+                continue
+            fi
+            case "$LINE" in
+                Yv[0-9]*)
+                    FLAG=0
+                    ;;
+            esac
+            [ "$FLAG" -eq 1 ] && echo "$LINE"
+        done < "$TMP_LIST"
         echo "'"
     } >> "$OLD_STR"
 
-    # 8. Перезаписываем конфиг
+    # 7. Перезаписываем конфиг
     mv "$OLD_STR" "$CONF"
 
-    # 9. Проверяем пустую строку в конце
+    # 8. Проверяем пустую строку в конце
     grep -q "^[[:space:]]*' *\$" "$CONF" || echo "'" >> "$CONF"
 
-    # 10. Перезапуск Zapret
+    # 9. Перезапуск Zapret
     ZAPRET_RESTART
 
     echo -e "${GREEN}Стратегия применена!${NC}\n"
