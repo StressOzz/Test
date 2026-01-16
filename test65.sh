@@ -26,10 +26,7 @@ PAUSE() { echo "Нажмите Enter..."; read dummy; }; BACKUP_DIR="/opt/zapret
 get_versions() {
     # === Архитектура ===
     LOCAL_ARCH=$(awk -F\' '/DISTRIB_ARCH/ {print $2; exit}' /etc/openwrt_release)
-    if [ -z "$LOCAL_ARCH" ]; then
-        # Берем последнюю не-noarch архитектуру
-        LOCAL_ARCH=$(opkg print-architecture | awk '$2!="noarch"{arch=$2} END{print arch}')
-    fi
+    [ -z "$LOCAL_ARCH" ] && LOCAL_ARCH=$(opkg print-architecture | awk '$2!="noarch"{arch=$2} END{print arch}')
     USED_ARCH="$LOCAL_ARCH"
 
     # === URL последней версии ===
@@ -39,28 +36,25 @@ get_versions() {
     INSTALLED_VER=$(opkg list-installed zapret 2>/dev/null | awk '{sub(/-r[0-9]+$/, "", $3); print $3; exit}')
     [ -z "$INSTALLED_VER" ] && INSTALLED_VER="не найдена"
 
-    # === NFQ статусы ===
-    NFQ_RUN=$(pgrep -f nfqws | awk 'END{print NR}')  # количество запущенных процессов nfqws
-
+    # === NFQ статусы и сервис ===
+    NFQ_RUN=0
     NFQ_ALL=0
-    if [ -f /etc/init.d/zapret ]; then
-        NFQ_ALL=$(/etc/init.d/zapret info 2>/dev/null | grep -c 'instance[0-9]\+')
-    fi
-
-    NFQ_STAT=""
-    if [ "$NFQ_RUN" -ne 0 ] || [ "$NFQ_ALL" -ne 0 ]; then
-        NFQ_CLR=$([ "$NFQ_RUN" -eq "$NFQ_ALL" ] && echo "$GREEN" || echo "$RED")
-        NFQ_STAT="${NFQ_CLR}[${NFQ_RUN}/${NFQ_ALL}]${NC}"
-    fi
-
-    # === Статус сервиса ===
     ZAPRET_STATUS=""
+
     if [ -f /etc/init.d/zapret ]; then
-        if /etc/init.d/zapret status 2>/dev/null | grep -qi running; then
-            ZAPRET_STATUS="${GREEN}запущен $NFQ_STAT${NC}"
-        else
-            ZAPRET_STATUS="${RED}остановлен${NC}"
+        # Быстро считаем nfqws через pidof (один вызов)
+        NFQ_RUN=$(pidof nfqws | wc -w)
+        # Считаем все инстансы из info (grep -c быстрее на одной строке)
+        NFQ_ALL=$(/etc/init.d/zapret info 2>/dev/null | grep -c 'instance[0-9]\+')
+
+        # Определяем цвет NFQ
+        if [ "$NFQ_RUN" -ne 0 ] || [ "$NFQ_ALL" -ne 0 ]; then
+            NFQ_CLR=$([ "$NFQ_RUN" -eq "$NFQ_ALL" ] && echo "$GREEN" || echo "$RED")
+            NFQ_STAT="${NFQ_CLR}[${NFQ_RUN}/${NFQ_ALL}]${NC}"
         fi
+
+        # Статус сервиса
+        /etc/init.d/zapret status 2>/dev/null | grep -qi running && ZAPRET_STATUS="${GREEN}запущен $NFQ_STAT${NC}" || ZAPRET_STATUS="${RED}остановлен${NC}"
     fi
 
     # === Цвет установленной версии ===
