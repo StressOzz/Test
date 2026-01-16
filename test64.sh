@@ -24,33 +24,36 @@ PAUSE() { echo "Нажмите Enter..."; read dummy; }; BACKUP_DIR="/opt/zapret
 # Получение версии
 # ==========================================
 get_versions() {
-    # Получаем архитектуру
+    # === Архитектура ===
     LOCAL_ARCH=$(awk -F\' '/DISTRIB_ARCH/ {print $2; exit}' /etc/openwrt_release)
     if [ -z "$LOCAL_ARCH" ]; then
+        # Берем последнюю не-noarch архитектуру
         LOCAL_ARCH=$(opkg print-architecture | awk '$2!="noarch"{arch=$2} END{print arch}')
     fi
     USED_ARCH="$LOCAL_ARCH"
 
-    # URL последней версии
+    # === URL последней версии ===
     LATEST_URL="https://github.com/remittor/zapret-openwrt/releases/download/v${ZAPRET_VERSION}/zapret_v${ZAPRET_VERSION}_${LOCAL_ARCH}.zip"
 
-    # Установленная версия
+    # === Установленная версия ===
     INSTALLED_VER=$(opkg list-installed zapret 2>/dev/null | awk '{sub(/-r[0-9]+$/, "", $3); print $3; exit}')
     [ -z "$INSTALLED_VER" ] && INSTALLED_VER="не найдена"
 
-    # NFQ статусы
-    NFQ_RUN=$(pgrep -fc nfqws)
+    # === NFQ статусы ===
+    NFQ_RUN=$(pgrep -f nfqws | awk 'END{print NR}')  # количество запущенных процессов nfqws
+
     NFQ_ALL=0
     if [ -f /etc/init.d/zapret ]; then
         NFQ_ALL=$(/etc/init.d/zapret info 2>/dev/null | grep -c 'instance[0-9]\+')
     fi
+
     NFQ_STAT=""
     if [ "$NFQ_RUN" -ne 0 ] || [ "$NFQ_ALL" -ne 0 ]; then
         NFQ_CLR=$([ "$NFQ_RUN" -eq "$NFQ_ALL" ] && echo "$GREEN" || echo "$RED")
         NFQ_STAT="${NFQ_CLR}[${NFQ_RUN}/${NFQ_ALL}]${NC}"
     fi
 
-    # Статус сервиса
+    # === Статус сервиса ===
     ZAPRET_STATUS=""
     if [ -f /etc/init.d/zapret ]; then
         if /etc/init.d/zapret status 2>/dev/null | grep -qi running; then
@@ -60,7 +63,7 @@ get_versions() {
         fi
     fi
 
-    # Цвет установленной версии
+    # === Цвет установленной версии ===
     if [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ]; then
         INST_COLOR=$GREEN
         INSTALLED_DISPLAY="$INSTALLED_VER"
@@ -69,6 +72,7 @@ get_versions() {
         INSTALLED_DISPLAY="$INSTALLED_VER"
     fi
 }
+
 # ==========================================
 # Установка Zapret
 # ==========================================
