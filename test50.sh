@@ -16,10 +16,6 @@ RKN_URL="https://raw.githubusercontent.com/IndeecFOX/zapret4rocket/refs/heads/ma
 EXCLUDE_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/zapret-hosts-user-exclude.txt"
 HOSTS_LIST="185.87.51.182 4pda.to www.4pda.to|130.255.77.28 ntc.party|30.255.77.28 ntc.party|173.245.58.219 rutor.info d.rutor.info|185.39.18.98 lib.rus.ec www.lib.rus.ec
 57.144.222.34 instagram.com www.instagram.com|157.240.9.174 instagram.com www.instagram.com|157.240.245.174 instagram.com www.instagram.com|157.240.205.174 instagram.com www.instagram.com"
-FILES_BACK="/etc/config/zapret /opt/zapret/config /opt/zapret/ipset/cust1.txt /opt/zapret/ipset/cust2.txt /opt/zapret/ipset/cust3.txt /opt/zapret/ipset/cust4.txt /opt/zapret/ipset/zapret-ip-user.txt /opt/zapret/ipset/zapret-ip-user-ipban.txt \
-/opt/zapret/ipset/zapret-ip-user-exclude.txt /opt/zapret/ipset/zapret-ip-exclude.txt /opt/zapret/ipset/zapret-hosts-user.txt /opt/zapret/ipset/zapret-hosts-user-ipban.txt /opt/zapret/ipset/zapret-hosts-user-exclude.txt.default \
-/opt/zapret/ipset/zapret-hosts-user-exclude.txt-opkg /opt/zapret/ipset/zapret-hosts-user-exclude.txt /opt/zapret/ipset/zapret-hosts-google.txt /opt/zapret/ipset/zapret-hosts-auto.txt /opt/zapret/init.d/openwrt/custom.d/10-script.sh \
-/opt/zapret/init.d/openwrt/custom.d/20-script.sh /opt/zapret/init.d/openwrt/custom.d/50-script.sh /opt/zapret/init.d/openwrt/custom.d/60-script.sh /opt/zapret/init.d/openwrt/custom.d/90-script.sh"
 ZAPRET_RESTART () { chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1; sleep 1; }
 hosts_add() { echo "$HOSTS_LIST" | tr '|' '\n' | grep -Fxv -f /etc/hosts >> /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1; }
 hosts_clear() { for ip in 185.87.51.182 130.255.77.28 30.255.77.28 173.245.58.219 185.39.18.98 57.144.222.34 157.240.9.174 157.240.245.174 157.240.205.174; do sed -i "/$ip/d" /etc/hosts >/dev/null 2>&1; done; /etc/init.d/dnsmasq restart >/dev/null 2>&1; }
@@ -104,10 +100,35 @@ restore_default() { if [ -f /opt/zapret/restore-def-cfg.sh ]; then echo -e "\n${
 [ -f /etc/init.d/zapret ] && /etc/init.d/zapret stop >/dev/null 2>&1; echo -e "${CYAN}Возвращаем ${NC}настройки${CYAN}, ${NC}стратегию${CYAN} и ${NC}hostlist${CYAN} к значениям по умолчанию${NC}"; cp -f /opt/zapret/ipset_def/* /opt/zapret/ipset/
 chmod +x /opt/zapret/restore-def-cfg.sh && /opt/zapret/restore-def-cfg.sh; ZAPRET_RESTART
 hosts_clear; echo -e "${GREEN}Настройки по умолчанию возвращены!${NC}\n"; else echo -e "\n${RED}Zapret не установлен!${NC}\n"; fi; PAUSE; }
-save_backup() { mkdir -p "$BACKUP_DIR"; for f in $FILES_BACK; do [ -f "$f" ] || continue; rel="${f#/}"; mkdir -p "$BACKUP_DIR/$(dirname "$rel")"; cp -p "$f" "$BACKUP_DIR/$rel"; done
-date '+%Y-%m-%d %H:%M:%S' > "$DATE_FILE"; echo -e "\n${GREEN}Настройки сохранены в${NC} $BACKUP_DIR\n"; PAUSE; }
-restore_backup() { [ ! -d "$BACKUP_DIR" ] && { echo -e "\n${RED}Резервная копия не найдена!${NC}\n"; PAUSE; return; }; find "$BACKUP_DIR" -type f ! -name "created.txt" | while read bf; do orig="/${bf#$BACKUP_DIR/}"
-mkdir -p "$(dirname "$orig")"; cp -p "$bf" "$orig"; done; echo -e "\n${MAGENTA}Восстанавливаем настройки из резервной копии${NC}\n${CYAN}Восстанавливаем и применяем настройки${NC}"; ZAPRET_RESTART; echo -e "${GREEN}Настройки восстановлены из резервной копии!${NC}\n"; PAUSE; }
+save_backup() {
+  mkdir -p "$BACKUP_DIR"
+  TMPDIR="$(mktemp -d /tmp/zapret_backup.XXXXXX)" || return 1
+  tar -czf "$TMPDIR/zapret.tar.gz" -C /opt zapret 2>/dev/null
+  [ -f /etc/config/zapret ] && cp -p /etc/config/zapret "$TMPDIR/zapret.conf"
+  rm -rf "$BACKUP_DIR"/*
+  cp -p "$TMPDIR/zapret.tar.gz" "$BACKUP_DIR/"
+  [ -f "$TMPDIR/zapret.conf" ] && cp -p "$TMPDIR/zapret.conf" "$BACKUP_DIR/"
+  date '+%Y-%m-%d %H:%M:%S' > "$DATE_FILE"
+  rm -rf "$TMPDIR"
+  echo -e "\n${GREEN}Настройки сохранены в${NC} $BACKUP_DIR\n"
+  PAUSE
+}
+
+restore_backup() {
+  [ ! -f "$BACKUP_DIR/zapret.tar.gz" ] && { echo -e "\n${RED}Резервная копия не найдена!${NC}\n"; PAUSE; return; }
+  TMPDIR="$(mktemp -d /tmp/zapret_restore.XXXXXX)" || return 1
+  tar -xzf "$BACKUP_DIR/zapret.tar.gz" -C /opt 2>/dev/null
+  [ -f "$BACKUP_DIR/zapret.conf" ] && cp -p "$BACKUP_DIR/zapret.conf" /etc/config/zapret
+  rm -rf "$TMPDIR"
+  echo -e "\n${MAGENTA}Восстанавливаем настройки из резервной копии${NC}\n${CYAN}Применяем настройки${NC}"
+  ZAPRET_RESTART
+  echo -e "${GREEN}Настройки восстановлены из резервной копии!${NC}\n"
+  PAUSE
+}
+
+
+
+
 # ==========================================
 # Cтарт/стоп Zapret
 # ==========================================
