@@ -88,9 +88,7 @@ zapret_key() { clear; echo -e "${MAGENTA}Удаление, установка и
 # ==========================================
 # Меню управления настройками
 # ==========================================
-backup_menu() { 
-# [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }
-while true; do clear; echo -e "${MAGENTA}Меню управления настройками${NC}\n"; if [ -f "$DATE_FILE" ]; then CREATE_DATE=$(cat "$DATE_FILE")
+backup_menu() { while true; do clear; echo -e "${MAGENTA}Меню управления настройками${NC}\n"; if [ -f "$DATE_FILE" ]; then CREATE_DATE=$(cat "$DATE_FILE")
 echo -e "${YELLOW}Резервная копия:${NC} $CREATE_DATE ($(du -sh /opt/zapret_backup 2>/dev/null | awk '{print $1}'))\n"; else echo -e "${YELLOW}Резервная копия: ${RED}отсутствует${NC}\n"; fi
 echo -e "${CYAN}1) ${GREEN}Сделать резервную копию настроек${NC} Zapret\n${CYAN}2) ${GREEN}Восстановить настройки ${NC}Zapret${GREEN} из резервной копии${NC}\n${CYAN}3) ${GREEN}Вернуть настройки по умолчанию${NC}"
 echo -ne "${CYAN}4) ${GREEN}Показать стратегию из резервной копии${NC}\n${CYAN}5) ${GREEN}Удалить резервную копию${NC}\n${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт: ${NC}"
@@ -336,6 +334,11 @@ pgrep -f "/opt/zapret" >/dev/null 2>&1 && str_stp_zpr="Остановить" || 
 show_script_50 && [ -n "$name" ] && echo -e "${YELLOW}Установлен скрипт:${NC}       $name"; grep -q "$Fin_IP_Dis" /etc/hosts && echo -e "${YELLOW}Финские IP для Discord:  ${GREEN}включены${NC}"
 [ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*88,500,1024-19293,19345-49999,50101-65535" "$CONF" && grep -q -- "--filter-udp=88,500,1024-19293,19345-49999,50101-65535" "$CONF" && echo -e "${YELLOW}Стратегия для игр:${NC}       ${GREEN}включена${NC}"
 [ -n "$DOH_STATUS" ] && opkg list-installed | grep -q '^https-dns-proxy ' && echo -e "${YELLOW}DNS over HTTPS:${NC}          $DOH_STATUS"; web_is_enabled && if web_is_enabled; then echo -e "${YELLOW}Доступ из браузера:${NC}      $LAN_IP:7681"; fi
+if [ -f "$DATE_FILE" ]; then
+    CREATE_DATE=$(cat "$DATE_FILE")
+    SIZE=$(du -sh "$BACKUP_DIR" 2>/dev/null | awk '{print $1}')
+    echo -e "${YELLOW}Резервная копия:${NC} $CREATE_DATE ($SIZE)\n"
+fi
 quic_is_blocked && if quic_is_blocked; then echo -e "${YELLOW}Блокировка QUIC:${NC}         ${GREEN}включена${NC}"; fi; if grep -q 'ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc
 then echo -e "${YELLOW}FIX для Flow Offloading:${NC} ${GREEN}включён${NC}"; fi; if [ -f "$CONF" ]; then current="$ver$( [ -n "$ver" ] && [ -n "$yv_ver" ] && echo " / " )$yv_ver"; DV=$(grep -o -E '^#[[:space:]]*Dv[12]' "$CONF" | sed 's/^#[[:space:]]*/\/ /' | head -n1)
 if [ -n "$current" ]; then echo -e "${YELLOW}Используется стратегия:${NC}  ${CYAN}$current $DV $RKN_STATUS${NC}"; elif [ -n "$RKN_STATUS" ]; then echo -e "${YELLOW}Используется стратегия:${NC}${CYAN}  РКН $DV${NC}"; fi; fi
