@@ -88,44 +88,57 @@ zapret_key() { clear; echo -e "${MAGENTA}Удаление, установка и
 # ==========================================
 # Меню управления настройками
 # ==========================================
-backup_menu() { [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }
+backup_menu() { 
+# [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }
 while true; do clear; echo -e "${MAGENTA}Меню управления настройками${NC}\n"; if [ -f "$DATE_FILE" ]; then CREATE_DATE=$(cat "$DATE_FILE")
 echo -e "${YELLOW}Резервная копия:${NC} $CREATE_DATE ($(du -sh /opt/zapret_backup 2>/dev/null | awk '{print $1}'))\n"; else echo -e "${YELLOW}Резервная копия: ${RED}отсутствует${NC}\n"; fi
 echo -e "${CYAN}1) ${GREEN}Сделать резервную копию настроек${NC} Zapret\n${CYAN}2) ${GREEN}Восстановить настройки ${NC}Zapret${GREEN} из резервной копии${NC}\n${CYAN}3) ${GREEN}Вернуть настройки по умолчанию${NC}"
 echo -ne "${CYAN}4) ${GREEN}Показать стратегию из резервной копии${NC}\n${CYAN}5) ${GREEN}Удалить резервную копию${NC}\n${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт: ${NC}"
 read choice; case $choice in 1) save_backup ;; 2) restore_backup ;; 3) restore_default ;; 5) delete_backup ;;
-4) if [ -d "$BACKUP_DIR" ]; then echo; awk 'f{if($0=="'\''")exit;print} /option NFQWS_OPT '\''/{f=1}' /opt/zapret_backup/etc/config/zapret; echo; PAUSE; else echo -e "\n${RED}Резервная копия не найдена!${NC}\n"; PAUSE; fi ;; *) break ;; esac; done; }
+4) if [ -d "$BACKUP_DIR" ]; then echo; awk 'f{if($0=="'\''")exit;print} /option NFQWS_OPT '\''/{f=1}' /opt/zapret_backup/zapret; echo; PAUSE; else echo -e "\n${RED}Резервная копия не найдена!${NC}\n"; PAUSE; fi ;; *) break ;; esac; done; }
 delete_backup() { if [ -d "$BACKUP_DIR" ]; then rm -rf "$BACKUP_DIR"; echo -e "\n${GREEN}Резервная копия удалена!${NC}\n"; else echo -e "\n${RED}Резервная копия не найдена!${NC}\n"; fi; PAUSE; }
 restore_default() { if [ -f /opt/zapret/restore-def-cfg.sh ]; then echo -e "\n${MAGENTA}Возвращаем настройки по умолчанию${NC}"; rm -f /opt/zapret/init.d/openwrt/custom.d/50-script.sh; for i in 1 2 3 4; do rm -f "/opt/zapret/ipset/cust$i.txt"; done
 [ -f /etc/init.d/zapret ] && /etc/init.d/zapret stop >/dev/null 2>&1; echo -e "${CYAN}Возвращаем ${NC}настройки${CYAN}, ${NC}стратегию${CYAN} и ${NC}hostlist${CYAN} к значениям по умолчанию${NC}"; cp -f /opt/zapret/ipset_def/* /opt/zapret/ipset/
 chmod +x /opt/zapret/restore-def-cfg.sh && /opt/zapret/restore-def-cfg.sh; ZAPRET_RESTART
 hosts_clear; echo -e "${GREEN}Настройки по умолчанию возвращены!${NC}\n"; else echo -e "\n${RED}Zapret не установлен!${NC}\n"; fi; PAUSE; }
+
 save_backup() {
+  [ ! -f /etc/init.d/zapret ] && { 
+    echo -e "\n${RED}Zapret не установлен!${NC}\n"; 
+    PAUSE; 
+    return; 
+  }
   mkdir -p "$BACKUP_DIR"
-  TMPDIR="$(mktemp -d /tmp/zapret_backup.XXXXXX)" || return 1
-  tar -czf "$TMPDIR/zapret.tar.gz" -C /opt zapret 2>/dev/null
-  [ -f /etc/config/zapret ] && cp -p /etc/config/zapret "$TMPDIR/zapret.conf"
-  rm -rf "$BACKUP_DIR"/*
-  cp -p "$TMPDIR/zapret.tar.gz" "$BACKUP_DIR/"
-  [ -f "$TMPDIR/zapret.conf" ] && cp -p "$TMPDIR/zapret.conf" "$BACKUP_DIR/"
+  [ -d /opt/zapret ] && tar -czf "$BACKUP_DIR/zapret.tar.gz" -C /opt zapret 2>/dev/null
+  [ -f /etc/config/zapret ] && cp -p /etc/config/zapret "$BACKUP_DIR/"
   date '+%Y-%m-%d %H:%M:%S' > "$DATE_FILE"
-  rm -rf "$TMPDIR"
   echo -e "\n${GREEN}Настройки сохранены в${NC} $BACKUP_DIR\n"
   PAUSE
 }
 
 restore_backup() {
-  [ ! -f "$BACKUP_DIR/zapret.tar.gz" ] && { echo -e "\n${RED}Резервная копия не найдена!${NC}\n"; PAUSE; return; }
-  TMPDIR="$(mktemp -d /tmp/zapret_restore.XXXXXX)" || return 1
+  [ ! -f /etc/init.d/zapret ] && { 
+    echo -e "\n${RED}Zapret не установлен!${NC}\n"; 
+    PAUSE; 
+    return; 
+  }
+  [ ! -f "$BACKUP_DIR/zapret.tar.gz" ] && { 
+    echo -e "\n${RED}Резервная копия не найдена!${NC}\n"; 
+    PAUSE; 
+    return; 
+  }
+  echo -e "\n${MAGENTA}Восстанавливаем настройки из резервной копии${NC}"
+  /etc/init.d/zapret stop >/dev/null 2>&1
+  rm -rf /opt/zapret
+  rm -f /etc/config/zapret
+  mkdir -p /opt
   tar -xzf "$BACKUP_DIR/zapret.tar.gz" -C /opt 2>/dev/null
-  [ -f "$BACKUP_DIR/zapret.conf" ] && cp -p "$BACKUP_DIR/zapret.conf" /etc/config/zapret
-  rm -rf "$TMPDIR"
-  echo -e "\n${MAGENTA}Восстанавливаем настройки из резервной копии${NC}\n${CYAN}Применяем настройки${NC}"
+  [ -f "$BACKUP_DIR/zapret" ] && cp -p "$BACKUP_DIR/zapret" /etc/config/zapret
+  echo -e "${CYAN}Применяем настройки${NC}"
   ZAPRET_RESTART
   echo -e "${GREEN}Настройки восстановлены из резервной копии!${NC}\n"
   PAUSE
 }
-
 
 
 
