@@ -301,20 +301,19 @@ get_doh_status() {
     DOH_STATUS=""
     [ ! -f "$fileDoH" ] && return
 
-    local doh_content
-    doh_content=$(<"$fileDoH")  # читаем файл один раз в переменную
+    while IFS= read -r line; do
+        case "$line" in
+            *dns.comss.one*) DOH_STATUS="Comss DNS"; break ;;
+            *xbox-dns.ru*) DOH_STATUS="Xbox DNS"; break ;;
+            *5u35p8m9i7.cloudflare-gateway.com*) DOH_STATUS="dns.malw.link (CloudFlare)"; break ;;
+            *dns.malw.link*) DOH_STATUS="dns.malw.link"; break ;;
+            *dns.mafioznik.xyz*) DOH_STATUS="dns.mafioznik.xyz"; break ;;
+            *dns.astracat.ru*) DOH_STATUS="dns.astracat.ru"; break ;;
+        esac
+    done < "$fileDoH"
 
-    case "$doh_content" in
-        *dns.comss.one*) DOH_STATUS="Comss DNS" ;;
-        *xbox-dns.ru*) DOH_STATUS="Xbox DNS" ;;
-        *5u35p8m9i7.cloudflare-gateway.com*) DOH_STATUS="dns.malw.link (CloudFlare)" ;;
-        *dns.malw.link*) DOH_STATUS="dns.malw.link" ;;
-        *dns.mafioznik.xyz*) DOH_STATUS="dns.mafioznik.xyz" ;;
-        *dns.astracat.ru*) DOH_STATUS="dns.astracat.ru" ;;
-        *) DOH_STATUS="установлен" ;;
-    esac
+    [ -z "$DOH_STATUS" ] && DOH_STATUS="установлен"
 }
-
 
 
 
