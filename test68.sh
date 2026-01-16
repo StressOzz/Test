@@ -376,18 +376,17 @@ fw4 restart >/dev/null 2>&1; echo -e "FIX ${GREEN}успешно применё�
 # Главное меню
 # ==========================================
 show_menu() {
-    # Получаем все данные заранее
+    # --- Получение данных ---
     get_versions
     get_doh_status
     show_current_strategy
     RKN_Check
     clear
 
-    # Заголовок
     echo -e "╔════════════════════════════════════╗\n║     ${BLUE}Zapret on remittor Manager${NC}     ║\n╚════════════════════════════════════╝\n                     ${DGRAY}by StressOzz v$ZAPRET_MANAGER_VERSION${NC}"
 
-    # --- Проверка конфликтных пакетов ---
-    installed_pkgs=$(opkg list-installed)
+    # --- Определяем установленные пакеты один раз ---
+    installed_pkgs=$(opkg list-installed 2>/dev/null)
     for pkg in byedpi youtubeUnblock; do
         case "$installed_pkgs" in
             *"$pkg"*) echo -e "\n${RED}Найден установленный ${NC}$pkg${RED}!${NC}\nZapret${RED} может работать некорректно с ${NC}$pkg${RED}!${NC}" ;;
@@ -397,70 +396,57 @@ show_menu() {
     # --- Проверка Flow Offloading ---
     flow_offload=$(uci get firewall.@defaults[0].flow_offloading 2>/dev/null || echo 0)
     flow_offload_hw=$(uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null || echo 0)
+    rules_uc=""
+    [ -f /usr/share/firewall4/templates/ruleset.uc ] && rules_uc=$(< /usr/share/firewall4/templates/ruleset.uc)
     if [ "$flow_offload" = 1 ] || [ "$flow_offload_hw" = 1 ]; then
-        rules_uc=$(< /usr/share/firewall4/templates/ruleset.uc)
         case "$rules_uc" in
-            *"meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;"*)
-                ;;
-            *)
-                echo -e "\n${RED}Включён ${NC}Flow Offloading${RED}!${NC}\n${NC}Zapret${RED} некорректно работает с включённым ${NC}Flow Offloading${RED}!\nПримените ${NC}FIX${RED} в системном меню!${NC}"
-                ;;
+            *"meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;"*) : ;; # FIX есть
+            *) echo -e "\n${RED}Включён ${NC}Flow Offloading${RED}!${NC}\n${NC}Zapret${RED} некорректно работает с включённым ${NC}Flow Offloading${RED}!\nПримените ${NC}FIX${RED} в системном меню!${NC}" ;;
         esac
     fi
 
     # --- Запуск / остановка ---
-    if pidof /opt/zapret >/dev/null 2>&1; then
-        str_stp_zpr="Остановить"
-    else
-        str_stp_zpr="Запустить"
-    fi
+    if pidof /opt/zapret >/dev/null 2>&1; then str_stp_zpr="Остановить"; else str_stp_zpr="Запустить"; fi
 
     # --- Основная информация ---
     echo -e "\n${YELLOW}Установленная версия:    ${INST_COLOR}$INSTALLED_DISPLAY${NC}"
     [ -n "$ZAPRET_STATUS" ] && echo -e "${YELLOW}Статус Zapret:${NC}           $ZAPRET_STATUS"
 
-    # Резервная копия и скрипты
-    if [ -f "$DATE_FILE" ]; then
-        echo -e "${YELLOW}Резервная копия:${NC}         ${GREEN}сохранена"
-        show_script_50
-        [ -n "$name" ] && echo -e "${YELLOW}Установлен скрипт:${NC}       $name"
-    fi
+    # --- Резервная копия и скрипты ---
+    [ -f "$DATE_FILE" ] && echo -e "${YELLOW}Резервная копия:${NC}         ${GREEN}сохранена" && show_script_50
+    [ -n "$name" ] && echo -e "${YELLOW}Установлен скрипт:${NC}       $name"
 
-    # Финские IP
-    if grep -q "$Fin_IP_Dis" /etc/hosts 2>/dev/null; then
-        echo -e "${YELLOW}Финские IP для Discord:  ${GREEN}включены${NC}"
-    fi
+    # --- Финские IP ---
+    grep -q "$Fin_IP_Dis" /etc/hosts 2>/dev/null && echo -e "${YELLOW}Финские IP для Discord:  ${GREEN}включены${NC}"
 
-    # Стратегия для игр
+    # --- Стратегия для игр ---
     if [ -f "$CONF" ]; then
         conf_content=$(<"$CONF")
         if echo "$conf_content" | grep -q "option NFQWS_PORTS_UDP.*88,500,1024-19293,19345-49999,50101-65535" && \
            echo "$conf_content" | grep -q -- "--filter-udp=88,500,1024-19293,19345-49999,50101-65535"; then
             echo -e "${YELLOW}Стратегия для игр:${NC}       ${GREEN}включена${NC}"
+        else
+            echo -e "${YELLOW}Стратегия для игр:${NC}       ${RED}выключена${NC}"
         fi
     fi
 
-    # DNS over HTTPS
+    # --- DNS over HTTPS ---
     if [ -n "$DOH_STATUS" ] && echo "$installed_pkgs" | grep -q '^https-dns-proxy '; then
         echo -e "${YELLOW}DNS over HTTPS:${NC}          $DOH_STATUS"
     fi
 
-    # Доступ из браузера
-    if web_is_enabled; then
-        echo -e "${YELLOW}Доступ из браузера:${NC}      $LAN_IP:7681"
-    fi
+    # --- Доступ из браузера ---
+    web_is_enabled && echo -e "${YELLOW}Доступ из браузера:${NC}      $LAN_IP:7681"
 
-    # QUIC
-    if quic_is_blocked; then
-        echo -e "${YELLOW}Блокировка QUIC:${NC}         ${GREEN}включена${NC}"
-    fi
+    # --- QUIC ---
+    quic_is_blocked && echo -e "${YELLOW}Блокировка QUIC:${NC}         ${GREEN}включена${NC}"
 
-    # FIX Flow Offloading
-    if echo "$rules_uc" | grep -q 'ct original packets ge 30 flow offload @ft;'; then
-        echo -e "${YELLOW}FIX для Flow Offloading:${NC} ${GREEN}включён${NC}"
-    fi
+    # --- FIX Flow Offloading ---
+    case "$rules_uc" in
+        *"ct original packets ge 30 flow offload @ft;"*) echo -e "${YELLOW}FIX для Flow Offloading:${NC} ${GREEN}включён${NC}" ;;
+    esac
 
-    # Стратегия
+    # --- Отображение стратегии ---
     if [ -f "$CONF" ]; then
         current="$ver$( [ -n "$ver" ] && [ -n "$yv_ver" ] && echo " / " )$yv_ver"
         DV=$(echo "$conf_content" | grep -o -E '^#[[:space:]]*Dv[12]' | sed 's/^#[[:space:]]*/\/ /' | head -n1)
@@ -502,6 +488,7 @@ show_menu() {
         *) echo; exit 0 ;;
     esac
 }
+
 # ==========================================
 # Старт скрипта
 # ==========================================
