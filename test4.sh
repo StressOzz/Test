@@ -102,8 +102,8 @@ chmod +x /opt/zapret/restore-def-cfg.sh && /opt/zapret/restore-def-cfg.sh; ZAPRE
 save_backup() { [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }; mkdir -p "$BACKUP_DIR"; [ -d /opt/zapret ] && tar -czf "$BACKUP_DIR/zapret.tar.gz" -C /opt zapret 2>/dev/null
 [ -f /etc/config/zapret ] && cp -p /etc/config/zapret "$BACKUP_DIR/"
 
-# date '+%Y-%m-%d %H:%M:%S' > "$DATE_FILE"
-date '+%d.%m.%Y %H:%M' | tr -d '\n' > "$DATE_FILE"; echo " ($(du -sh /opt/zapret_backup 2>/dev/null | awk '{num=$1; sub(/K$/," КБ",num); sub(/M$/," МБ",num); print num}'))" >> "$DATE_FILE"
+#date '+%d.%m.%Y %H:%M' | tr -d '\n' > "$DATE_FILE"; echo " ($(du -sh /opt/zapret_backup 2>/dev/null | cut -f1 | sed -E 's/\.0K$/K/;s/K$/ КБ/;s/M$/ МБ/'))" >> "$DATE_FILE"
+printf '%s (%s)\n' "$(date '+%d.%m.%Y %H:%M')" "$(du -sh /opt/zapret_backup 2>/dev/null | cut -f1 | sed -E 's/\.0K$/K/;s/K$/ КБ/;s/M$/ МБ/')" > "$DATE_FILE"
 
 echo -e "\n${GREEN}Настройки сохранены в${NC} $BACKUP_DIR\n"; PAUSE; }
 restore_backup() { [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }; [ ! -f "$BACKUP_DIR/zapret.tar.gz" ] && { echo -e "\n${RED}Резервная копия не найдена!${NC}\n"; PAUSE; return; }
