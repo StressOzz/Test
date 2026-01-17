@@ -89,7 +89,7 @@ zapret_key() { clear; echo -e "${MAGENTA}Удаление, установка и
 # ==========================================
 # Меню управления настройками
 # ==========================================
-backup_menu() { while true; do clear; echo -e "${MAGENTA}Меню управления настройками${NC}\n"; if [ -f "$DATE_FILE" ]; then CREATE_DATE=$(cat "$DATE_FILE")
+backup_menu() { while true; do clear; echo -e "${MAGENTA}Меню управления настройками${NC}\n"; if [ -f "$DATE_FILE" ] && [ -f "$BACKUP_DIR/zapret.tar.gz" ] && [ -f "$BACKUP_DIR/zapret" ]; then CREATE_DATE=$(cat "$DATE_FILE")
 echo -e "${YELLOW}Резервная копия:${NC} $CREATE_DATE\n"; else echo -e "${YELLOW}Резервная копия: ${RED}отсутствует${NC}\n"; fi
 echo -e "${CYAN}1) ${GREEN}Сделать резервную копию настроек${NC} Zapret\n${CYAN}2) ${GREEN}Восстановить настройки ${NC}Zapret${GREEN} из резервной копии${NC}\n${CYAN}3) ${GREEN}Вернуть настройки по умолчанию${NC}"
 echo -ne "${CYAN}4) ${GREEN}Показать стратегию из резервной копии${NC}\n${CYAN}5) ${GREEN}Удалить резервную копию${NC}\n${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт: ${NC}"
@@ -99,12 +99,8 @@ delete_backup() { if [ -d "$BACKUP_DIR" ]; then rm -rf "$BACKUP_DIR"; echo -e "\
 restore_default() { if [ -f /opt/zapret/restore-def-cfg.sh ]; then echo -e "\n${MAGENTA}Возвращаем настройки по умолчанию${NC}"; rm -f /opt/zapret/init.d/openwrt/custom.d/50-script.sh; for i in 1 2 3 4; do rm -f "/opt/zapret/ipset/cust$i.txt"; done
 [ -f /etc/init.d/zapret ] && /etc/init.d/zapret stop >/dev/null 2>&1; echo -e "${CYAN}Возвращаем ${NC}настройки${CYAN}, ${NC}стратегию${CYAN} и ${NC}hostlist${CYAN} к значениям по умолчанию${NC}"; cp -f /opt/zapret/ipset_def/* /opt/zapret/ipset/
 chmod +x /opt/zapret/restore-def-cfg.sh && /opt/zapret/restore-def-cfg.sh; ZAPRET_RESTART; hosts_clear; echo -e "${GREEN}Настройки по умолчанию возвращены!${NC}\n"; else echo -e "\n${RED}Zapret не установлен!${NC}\n"; fi; PAUSE; }
-save_backup() { [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }; mkdir -p "$BACKUP_DIR"; [ -d /opt/zapret ] && tar -czf "$BACKUP_DIR/zapret.tar.gz" -C /opt zapret 2>/dev/null
-[ -f /etc/config/zapret ] && cp -p /etc/config/zapret "$BACKUP_DIR/"
-
-#date '+%d.%m.%Y %H:%M' | tr -d '\n' > "$DATE_FILE"; echo " ($(du -sh /opt/zapret_backup 2>/dev/null | cut -f1 | sed -E 's/\.0K$/K/;s/K$/ КБ/;s/M$/ МБ/'))" >> "$DATE_FILE"
-printf '%s (%s)\n' "$(date '+%d.%m.%Y %H:%M')" "$(du -sh /opt/zapret_backup 2>/dev/null | cut -f1 | sed -E 's/\.0K$/K/;s/K$/ КБ/;s/M$/ МБ/')" > "$DATE_FILE"
-
+save_backup() { [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }; rm -rf "$BACKUP_DIR"; mkdir -p "$BACKUP_DIR"; tar -czf "$BACKUP_DIR/zapret.tar.gz" -C /opt zapret 2>/dev/null
+cp -p /etc/config/zapret "$BACKUP_DIR/"; printf '%s / %s / %s\n' "$(date '+%H:%M')" "$(date '+%d.%m.%y')" "$(du -sh /opt/zapret_backup 2>/dev/null | cut -f1 | sed -E 's/\.0K$/K/;s/K$/ КБ/;s/M$/ МБ/')" > "$DATE_FILE"
 echo -e "\n${GREEN}Настройки сохранены в${NC} $BACKUP_DIR\n"; PAUSE; }
 restore_backup() { [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }; [ ! -f "$BACKUP_DIR/zapret.tar.gz" ] && { echo -e "\n${RED}Резервная копия не найдена!${NC}\n"; PAUSE; return; }
 echo -e "\n${MAGENTA}Восстанавливаем настройки из резервной копии${NC}"; /etc/init.d/zapret stop >/dev/null 2>&1; rm -rf /opt/zapret; rm -f /etc/config/zapret; mkdir -p /opt; tar -xzf "$BACKUP_DIR/zapret.tar.gz" -C /opt 2>/dev/null
@@ -117,12 +113,12 @@ for pid in $(pgrep -f /opt/zapret 2>/dev/null); do kill -9 "$pid" 2>/dev/null; d
 start_zapret() { if [ -f /etc/init.d/zapret ]; then echo -e "\n${MAGENTA}Запускаем Zapret${NC}"; echo -e "${CYAN}Запускаем ${NC}Zapret"; /etc/init.d/zapret start >/dev/null 2>&1; ZAPRET_RESTART
 echo -e "Zapret ${GREEN}запущен!${NC}\n"; else echo -e "\n${RED}Zapret не установлен!${NC}\n"; fi; [ "$NO_PAUSE" != "1" ] && PAUSE; }
 # ==========================================
-# Полное удаление Zapret
+# Удаление Zapret
 # ==========================================
 uninstall_zapret() { local NO_PAUSE=$1; [ "$NO_PAUSE" != "1" ] && echo; echo -e "${MAGENTA}Удаляем ZAPRET${NC}\n${CYAN}Останавливаем ${NC}zapret\n${CYAN}Убиваем процессы${NC}"
 /etc/init.d/zapret stop >/dev/null 2>&1; for pid in $(pgrep -f /opt/zapret 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done; echo -e "${CYAN}Удаляем пакеты${NC}"; opkg --force-removal-of-dependent-packages --autoremove remove zapret luci-app-zapret >/dev/null 2>&1
 echo -e "${CYAN}Удаляем временные файлы${NC}"; rm -rf /opt/zapret /etc/config/zapret /etc/firewall.zapret /etc/init.d/zapret /tmp/*zapret* /var/run/*zapret* /tmp/*.ipk /tmp/*.zip 2>/dev/null; crontab -l 2>/dev/null | grep -v -i "zapret" | crontab - 2>/dev/null
-nft list tables 2>/dev/null | awk '{print $2}' | grep -E '(zapret|ZAPRET)' | while read t; do [ -n "$t" ] && nft delete table "$t" 2>/dev/null; done;  rm -f "$FINAL_STR" "$NEW_STR" "$OLD_STR" "$SAVED_STR" "$TMP_LIST" $HOSTS_USER $BACKUP_FILE
+nft list tables 2>/dev/null | awk '{print $2}' | grep -E '(zapret|ZAPRET)' | while read t; do [ -n "$t" ] && nft delete table "$t" 2>/dev/null; done;  rm -rf "$FINAL_STR" "$NEW_STR" "$OLD_STR" "$SAVED_STR" "$TMP_LIST" $HOSTS_USER $BACKUP_FILE
 hosts_clear; echo -e "Zapret ${GREEN}удалён!${NC}\n"; [ "$NO_PAUSE" != "1" ] && PAUSE; }
 # ==========================================
 # Подбор стратегии для Ютуб
