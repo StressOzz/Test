@@ -40,13 +40,15 @@ if opkg list-installed | grep -q "^zapret2 "; then
 fi
 
 
-echo -e "${GREEN}Обновляем списки пакетов...${NC}"
+echo -e "${GREEN}Обновляем списки пакетов${NC}"
 opkg update >/dev/null 2>&1 || exit 1
 
   install_pkg "zapret2_"
   install_pkg "luci-app-zapret2_"
-  
+echo -e "${GREEN}Настраиваем${NC}"
 sed -i "/config strategy 'default'/,/config /s/option enabled '0'/option enabled '1'/" /etc/config/zapret2
+sed -i "/^--lua-desync=hostfakesplit:midhost=host-2:host=rzd\.ru:tcp_seq=0:tcp_ack=-66000:badsum:strategy=14:final'/ s/host=rzd\.ru/host=google.com/" /etc/config/zapret2
+sed -i -e "s/rzd\.ru/max.ru/g" -e "s/m\.ok\.ru/max.ru/g" /etc/config/zapret2
 /etc/init.d/zapret2 restart >/dev/null 2>&1
   
 echo -e "${GREEN}Готово!${NC}"
