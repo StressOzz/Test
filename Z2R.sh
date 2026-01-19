@@ -2,19 +2,18 @@
 
 clear
 
+echo "███████╗██████╗ ██████╗ "
+echo "╚══███╔╝╚════██╗██╔══██╗"
+echo "  ███╔╝  █████╔╝██████╔╝"
+echo " ███╔╝  ██╔═══╝ ██╔══██╗"
+echo "███████╗███████╗██║  ██║"
+echo "╚══════╝╚══════╝╚═╝  ╚═╝"
+
 BASE_HTML="https://github.com/routerich/packages.routerich/tree/24.10.4/routerich"
 RAW_BASE="https://github.com/routerich/packages.routerich/raw/refs/heads/24.10.4/routerich"
 TMP="/tmp/z2r"; GREEN="\033[1;32m"; RED="\033[1;31m"; NC="\033[0m"
 
 [ "$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release)" = "aarch64_cortex-a53" ] || { echo -e "\n${RED}Неподдерживаемая архитектура!${NC}\n${GREEN}Только для ${NC}aarch64_cortex-a53\n"; exit 1; }
-
-find_latest() { wget -qO- "$BASE_HTML" | grep -oE "$1[^\"']+\.ipk" | sort -u | head -n1; }
-
-install_pkg() {
-    PKG="$(find_latest "$1")" || { echo -e "\n${RED}Файл не найден!${NC}\n"; exit 1; }
-    echo -e "${GREEN}Скачиваем${NC} ${1%_}"; wget "$RAW_BASE/$PKG" -O "$TMP/$PKG" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при скачивании!${NC}\n"; exit 1; }
-    echo -e "${GREEN}Устанавливаем${NC} ${1%_}"; opkg install "$TMP/$PKG" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при установке!${NC}\n"; exit 1; }
-}
 
 if opkg list-installed | grep -q "^zapret2 "; then
     echo -e "${RED}Удаляем Zapret2${NC}"
@@ -23,14 +22,14 @@ if opkg list-installed | grep -q "^zapret2 "; then
     echo -e "${GREEN}Удалено!${NC}\n"
     exit 0
 fi
-echo "███████╗██████╗ ██████╗ "
-echo "╚══███╔╝╚════██╗██╔══██╗"
-echo "  ███╔╝  █████╔╝██████╔╝"
-echo " ███╔╝  ██╔═══╝ ██╔══██╗"
-echo "███████╗███████╗██║  ██║"
-echo "╚══════╝╚══════╝╚═╝  ╚═╝"
 
+find_latest() { wget -qO- "$BASE_HTML" | grep -oE "$1[^\"']+\.ipk" | sort -u | head -n1; }
 
+install_pkg() {
+    PKG="$(find_latest "$1")" || { echo -e "\n${RED}Файл не найден!${NC}\n"; exit 1; }
+    echo -e "${GREEN}Скачиваем${NC} ${1%_}"; wget "$RAW_BASE/$PKG" -O "$TMP/$PKG" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при скачивании!${NC}\n"; exit 1; }
+    echo -e "${GREEN}Устанавливаем${NC} ${1%_}"; opkg install "$TMP/$PKG" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при установке!${NC}\n"; exit 1; }
+}
 
 echo -e "${GREEN}Обновляем список пакетов${NC}"; opkg update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; exit 1; }
 
