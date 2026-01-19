@@ -23,6 +23,14 @@ if opkg list-installed | grep -q "^zapret2 "; then
     echo -e "${GREEN}Удалено!${NC}\n"
     exit 0
 fi
+echo "███████╗██████╗ ██████╗ "
+echo "╚══███╔╝╚════██╗██╔══██╗"
+echo "  ███╔╝  █████╔╝██████╔╝"
+echo " ███╔╝  ██╔═══╝ ██╔══██╗"
+echo "███████╗███████╗██║  ██║"
+echo "╚══════╝╚══════╝╚═╝  ╚═╝"
+
+
 
 echo -e "${GREEN}Обновляем список пакетов${NC}"; opkg update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; exit 1; }
 
