@@ -9,8 +9,8 @@ echo " ███╔╝  ██╔═══╝ ██╔══██╗"
 echo "███████╗███████╗██║  ██║"
 echo "╚══════╝╚══════╝╚═╝  ╚═╝"
 
-BASE_HTML="https://github.com/routerich/packages.routerich/tree/24.10.4/routerich"
-RAW_BASE="https://github.com/routerich/packages.routerich/raw/refs/heads/24.10.4/routerich"
+BASE_HTML="$(echo aHR0cHM6Ly9naXRodWIuY29tL3JvdXRlcmljaC9wYWNrYWdlcy5yb3V0ZXJpY2gvdHJlZS8yNC4xMC40L3JvdXRlcmljaA== | base64 -d)"
+RAW_BASE="$(echo aHR0cHM6Ly9naXRodWIuY29tL3JvdXRlcmljaC9wYWNrYWdlcy5yb3V0ZXJpY2gvcmF3L3JlZnMvaGVhZHMvMjQuMTAuNC9yb3V0ZXJpY2g= | base64 -d)"
 TMP="/tmp/z2r"; GREEN="\033[1;32m"; RED="\033[1;31m"; NC="\033[0m"
 
 [ "$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release)" = "aarch64_cortex-a53" ] || { echo -e "\n${RED}Неподдерживаемая архитектура!${NC}\n${GREEN}Только для ${NC}aarch64_cortex-a53\n"; exit 1; }
