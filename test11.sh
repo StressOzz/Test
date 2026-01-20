@@ -283,7 +283,9 @@ echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${
 
 
 
-menu_hosts() { if hosts_enabled; echo -e "\nIP ${GREEN}добавлены в ${NC}hosts"; then hosts_clear; echo -e "\nIP ${GREEN}удалены из ${NC}hosts"; PAUSE; else hosts_add; PAUSE; fi; }
+menu_hosts() { if hosts_enabled; then echo -e "\nIP ${GREEN}добавлены в ${NC}hosts"; hosts_clear; else hosts_add; echo -e "\nIP ${GREEN}добавлены в ${NC}hosts"; fi; PAUSE; }
+
+
 
 
 5) choose_strategy_manual ;; 7) menu_hosts ;; 6) echo -e "\n${MAGENTA}Обновляем список исключений${NC}\n${CYAN}Останавливаем ${NC}Zapret"; /etc/init.d/zapret stop >/dev/null 2>&1; echo -e "${CYAN}Добавляем домены в исключения${NC}"
