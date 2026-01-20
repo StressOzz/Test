@@ -73,29 +73,27 @@ Dv3="--filter-tcp=2053,2083,2087,2096,8443
 
 select_Dv() {
   DVS=$(set | grep -E '^Dv[0-9]+=' | sed 's/=.*//' | sort -V)
-  COUNT=$(echo "$DVS" | wc -l)
+  COUNT_dv=$(echo "$DVS" | wc -l)
 
 
   echo
-  read -rp "Выбери стратегию (1-$COUNT): " CHOICE
+  echo -en "\n${YELLOW}Введите версию стратегии для discord.media ${NC}(1-$COUNT_dv)${YELLOW}:${NC} "
+  read CHOICE_DV </dev/tty
 
-  case "$CHOICE" in
+  case "$CHOICE_DV" in
     ''|*[!0-9]*|0) return 1 ;;
   esac
 
-  SELECTED="Dv$CHOICE"
-  echo "$DVS" | grep -qx "$SELECTED" || return 1
+  SELECTED_dv="Dv$CHOICE_DV"
+  echo "$DVS" | grep -qx "$SELECTED_dv" || return 1
 
-  NEW_NUM="$CHOICE"
-  NEW_STRAT=$(eval echo \"\$$SELECTED\")
+  NEW_NUM="$CHOICE_DV"
+  NEW_STRAT=$(eval echo \"\$$SELECTED_dv\")
 }
 
 switch_Dv() {
 
-  select_Dv || {
-    echo -e "\n${RED}Неверный выбор стратегии!${NC}\n"
-    PAUSE; return 1
-  }
+select_Dv || return 1
 
   grep -q -E '^[[:space:]]*--filter-tcp=2053,2083,2087,2096,8443' "$CONF" || {
     echo -e "\n${RED}Стратегия не подходит!${NC}\n"
@@ -122,7 +120,7 @@ switch_Dv() {
 
   echo -e "\n${MAGENTA}Меняем стратегию для discord.media${NC}"
   ZAPRET_RESTART
-  echo -e "${GREEN}Стратегия Dv$NEW_NUM применена!${NC}\n"
+  echo -e "${GREEN}Стратегия ${NC}Dv$NEW_NUM${GREEN} применена!${NC}\n"
   PAUSE
 }
 
