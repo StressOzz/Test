@@ -46,7 +46,7 @@ PAUSE; return; } ; done; echo -e "${CYAN}Удаляем временные фа�
 # ==========================================
 # Меню настройки Discord
 # ==========================================
-Dv1="--filter-tcp=2053,2083,2087,2096,8443 --hostlist-domains=discord.media --dpi-desync=multisplit --dpi-desync-split-seqovl=652 --dpi-desync-split-pos=2 --dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin"
+Dv1=$'--filter-tcp=2053,2083,2087,2096,8443\n--hostlist-domains=discord.media\n--dpi-desync=multisplit\n--dpi-desync-split-seqovl=652\n--dpi-desync-split-pos=2\n--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin'
 
 Dv2="--filter-tcp=2053,2083,2087,2096,8443
 --hostlist-domains=discord.media
