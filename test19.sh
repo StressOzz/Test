@@ -47,86 +47,13 @@ PAUSE; return; } ; done; echo -e "${CYAN}Удаляем временные фа�
 # Меню настройки Discord
 # ==========================================
 Dv1=$'--filter-tcp=2053,2083,2087,2096,8443\n--hostlist-domains=discord.media\n--dpi-desync=multisplit\n--dpi-desync-split-seqovl=652\n--dpi-desync-split-pos=2\n--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin'
-
-Dv2="--filter-tcp=2053,2083,2087,2096,8443
---hostlist-domains=discord.media
---dpi-desync=fake,multisplit
---dpi-desync-split-seqovl=681
---dpi-desync-split-pos=1
---dpi-desync-fooling=ts
---dpi-desync-repeats=8
---dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin
---dpi-desync-fake-tls-mod=rnd,dupsid,sni=www.google.com"
-Dv3="--filter-tcp=2053,2083,2087,2096,8443
---hostlist-domains=discord.media
---dpi-desync=fake
---dpi-desync-repeats=6
---dpi-desync-fooling=ts
---dpi-desync-fake-tls=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin
---dpi-desync-fake-tls-mod=none"
-
-
-
-
-select_Dv() {
-  DVS=$(set | grep -E '^Dv[0-9]+=' | sed 's/=.*//' | sort -V)
-  COUNT_dv=$(echo "$DVS" | wc -l)
-
-
-  echo
-  echo -en "${YELLOW}Введите версию стратегии для discord.media ${NC}(1-$COUNT_dv)${YELLOW}:${NC} "
-  read CHOICE_DV </dev/tty
-
-  case "$CHOICE_DV" in
-    ''|*[!0-9]*|0) return 1 ;;
-  esac
-
-  SELECTED_dv="Dv$CHOICE_DV"
-  echo "$DVS" | grep -qx "$SELECTED_dv" || return 1
-
-  NEW_NUM="$CHOICE_DV"
-  NEW_STRAT=$(eval echo \"\$$SELECTED_dv\")
-}
-
-switch_Dv() {
-
-select_Dv || return 1
-
-  grep -q -E '^[[:space:]]*--filter-tcp=2053,2083,2087,2096,8443' "$CONF" || {
-    echo -e "\n${RED}Стратегия не подходит!${NC}\n"
-    PAUSE; return 1
-  }
-
-  START=$(grep -n -E '^[[:space:]]*--filter-tcp=2053,2083,2087,2096,8443' "$CONF" | cut -d: -f1)
-  END=$(tail -n +"$START" "$CONF" | grep -n -m1 -E '^--new$|^'\''$' | cut -d: -f1)
-  END=$((START + END - 1))
-
-  sed -i "${START},$((END-1))d" "$CONF"
-
-  LINE=$START
-  echo "$NEW_STRAT" | while IFS= read -r l; do
-    sed -i "${LINE}i$l" "$CONF"
-    LINE=$((LINE + 1))
-  done
-
-  if grep -q -E '^#[[:space:]]*Dv' "$CONF"; then
-    sed -i "s/^#[[:space:]]*Dv[0-9]\+/#Dv$NEW_NUM/" "$CONF"
-  else
-    sed -i "$START i#Dv$NEW_NUM" "$CONF"
-  fi
-
-  echo -e "\n${MAGENTA}Меняем стратегию для discord.media${NC}"
-  ZAPRET_RESTART
-  echo -e "${GREEN}Стратегия ${NC}Dv$NEW_NUM${GREEN} применена!${NC}\n"
-  PAUSE
-}
-
-
-
-
-
-
-
+Dv2=$'--filter-tcp=2053,2083,2087,2096,8443\n--hostlist-domains=discord.media\n--dpi-desync=fake,multisplit\n--dpi-desync-split-seqovl=681\n--dpi-desync-split-pos=1\n--dpi-desync-fooling=ts\n--dpi-desync-repeats=8\n--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin\n--dpi-desync-fake-tls-mod=rnd,dupsid,sni=www.google.com'
+Dv3=$'--filter-tcp=2053,2083,2087,2096,8443\n--hostlist-domains=discord.media\n--dpi-desync=fake\n--dpi-desync-repeats=6\n--dpi-desync-fooling=ts\n--dpi-desync-fake-tls=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin\n--dpi-desync-fake-tls-mod=none'
+select_Dv() { DVS=$(set | grep -E '^Dv[0-9]+=' | sed 's/=.*//' | sort -V); COUNT_dv=$(echo "$DVS" | wc -l); echo; echo -en "${YELLOW}Введите версию стратегии для discord.media ${NC}(1-$COUNT_dv)${YELLOW}:${NC} "; read CHOICE_DV </dev/tty
+case "$CHOICE_DV" in ''|*[!0-9]*|0) return 1 ;; esac; SELECTED_dv="Dv$CHOICE_DV"; echo "$DVS" | grep -qx "$SELECTED_dv" || return 1; NEW_NUM="$CHOICE_DV"; NEW_STRAT=$(eval echo \"\$$SELECTED_dv\"); }
+switch_Dv() { select_Dv || return 1; grep -q -E '^[[:space:]]*--filter-tcp=2053,2083,2087,2096,8443' "$CONF" || { echo -e "\n${RED}Стратегия не подходит!${NC}\n"; PAUSE; return 1; }; START=$(grep -n -E '^[[:space:]]*--filter-tcp=2053,2083,2087,2096,8443' "$CONF" | cut -d: -f1)
+END=$(tail -n +"$START" "$CONF" | grep -n -m1 -E '^--new$|^'\''$' | cut -d: -f1); END=$((START + END - 1)); sed -i "${START},$((END-1))d" "$CONF"; LINE=$START; echo "$NEW_STRAT" | while IFS= read -r l; do sed -i "${LINE}i$l" "$CONF"; LINE=$((LINE + 1)); done
+if grep -q -E '^#[[:space:]]*Dv' "$CONF"; then sed -i "s/^#[[:space:]]*Dv[0-9]\+/#Dv$NEW_NUM/" "$CONF"; else sed -i "$START i#Dv$NEW_NUM" "$CONF"; fi; echo -e "\n${MAGENTA}Меняем стратегию для discord.media${NC}"; ZAPRET_RESTART; echo -e "${GREEN}Стратегия ${NC}Dv$NEW_NUM${GREEN} применена!${NC}\n"; PAUSE; }
 toggle_finland_hosts() { if grep -q "$Fin_IP_Dis" /etc/hosts; then sed -i "/$Fin_IP_Dis/d" /etc/hosts; echo -e "\n${MAGENTA}Удаляем Финские IP${NC}"; /etc/init.d/dnsmasq restart 2>/dev/null
 echo -e "${GREEN}Финские ${NC}IP${GREEN} удалены${NC}\n"; else seq 10000 10199 | awk '{print "104.25.158.178 finland"$1".discord.media"}' | grep -vxFf /etc/hosts >> /etc/hosts; echo -e "\n${MAGENTA}Добавляем Финские IP${NC}"; /etc/init.d/dnsmasq restart 2>/dev/null
 echo -e "${GREEN}Финские ${NC}IP${GREEN} добавлены${NC}\n"; fi; PAUSE; }
