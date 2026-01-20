@@ -279,15 +279,6 @@ if [ -n "$current" ]; then print=1; echo -e "${YELLOW}Используется �
 [ "$print" -eq 1 ] && echo; echo -e "${CYAN}1) ${GREEN}Выбрать и установить стратегию ${NC}v1-v8\n${CYAN}2) ${GREEN}$menu_game\n${CYAN}3) $RKN_TEXT_MENU\n${CYAN}4) ${GREEN}Подобрать стратегию для ${NC}YouTube\n${CYAN}5) ${GREEN}Выбрать и установить стратегию для ${NC}YouTube\n${CYAN}6) ${GREEN}Обновить список исключений${NC}"
 if hosts_enabled; then echo -e "${CYAN}7) ${GREEN}Добавить IP в ${NC}hosts"; else echo -e "${CYAN}7) ${GREEN} Удалиль IP из ${NC}hosts"; fi
 echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read choiceST; case "$choiceST" in 1) strategy_CHOUSE ;; 2) fix_GAME ;; 3) toggle_rkn_bypass; continue ;; 4) auto_stryou ;;
-
-
-
-
-menu_hosts() { if hosts_enabled; then echo -e "\nIP ${GREEN}добавлены в ${NC}hosts"; hosts_clear; else hosts_add; echo -e "\nIP ${GREEN}добавлены в ${NC}hosts"; fi; PAUSE; }
-
-
-
-
 5) choose_strategy_manual ;; 7) menu_hosts ;; 6) echo -e "\n${MAGENTA}Обновляем список исключений${NC}\n${CYAN}Останавливаем ${NC}Zapret"; /etc/init.d/zapret stop >/dev/null 2>&1; echo -e "${CYAN}Добавляем домены в исключения${NC}"
 rm -f "$EXCLUDE_FILE"; wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL" || echo -e "\n${RED}Не удалось загрузить exclude файл${NC}\n"; echo -e "${CYAN}Перезапускаем ${NC}Zapret"
 ZAPRET_RESTART; echo -e "${GREEN}Список исключений обновлён!${NC}\n"; PAUSE ;; *) return ;; esac; done }
@@ -313,6 +304,7 @@ echo -e "\n${CYAN}Применяем стратегию: ${NC}$SELECTED_NAME"; S
 awk '{if(skip){if($0=="--new"||$0~/\047/){skip=0;next}if($0~/^[[:space:]]*$/)next;next}if($0=="--filter-tcp=443"){getline n;if(n=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt"){skip=1;next}else{print $0;print n;next}}if($0=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt")has_google=1;if($0~/^[[:space:]]*#Yv/)next;print}' "$OLD_STR" > "$NEW_STR"
 awk 'BEGIN{inserted=0;has_google=0} $0=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt"{has_google=1} $0=="--new"&&!inserted{while((getline l<"'"$SAVED_STR"'")>0) if(l!~/^[[:space:]]*$/) print l; print "--new"; inserted=1; next} $0~/^[[:space:]]*option NFQWS_OPT \047$/&&!has_google&&!inserted{print; print "#'"$SELECTED_NAME"'"; while((getline l<"'"$SAVED_STR"'")>0) if(l!~/^[[:space:]]*$/) print l; print "--new"; inserted=1; next} {print}' "$NEW_STR" > "$FINAL_STR"
 cat "$FINAL_STR" >> "$CONF"; awk '{if($0=="--new"){if(prev!="--new")print}else print;prev=$0}' "$CONF" > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"; grep -q "^[[:space:]]*' *\$" "$CONF" || echo "'" >> "$CONF"; ZAPRET_RESTART; echo -e "${GREEN}Стратегия применена!${NC}\n"; read -p "Нажмите Enter..." dummy </dev/tty; }
+menu_hosts() { if hosts_enabled; then echo -e "\nIP ${GREEN}добавлены в ${NC}hosts"; hosts_clear; else hosts_add; echo -e "\nIP ${GREEN}добавлены в ${NC}hosts"; fi; PAUSE; }
 # ==========================================
 # DNS over HTTPS
 # ==========================================
