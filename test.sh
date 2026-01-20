@@ -2,13 +2,14 @@
 # ==========================================
 # Zapret on remittor Manager by StressOzz
 # =========================================
-ZAPRET_MANAGER_VERSION="8.1"; ZAPRET_VERSION="72.20260116"; STR_VERSION_AUTOINSTALL="v6"
+ZAPRET_MANAGER_VERSION="8.1"; ZAPRET_VERSION="72.20260117"; STR_VERSION_AUTOINSTALL="v6"
 TEST_HOST="https://rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com"; LAN_IP=$(uci get network.lan.ipaddr)
 GREEN="\033[1;32m"; RED="\033[1;31m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"
 MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
 WORKDIR="/tmp/zapret-update"; CONF="/etc/config/zapret"; CUSTOM_DIR="/opt/zapret/init.d/openwrt/custom.d/"
 STR_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ListStrYou"
 TMP_LIST="/opt/zapret_yt_list.txt"; SAVED_STR="/opt/StrYou"; OLD_STR="/opt/StrOLD"
+Fin_IP_Dis="104\.25\.158\.178 finland[0-9]\{5\}\.discord\.media"
 BACKUP_FILE="/opt/hosts_temp.txt"; HOSTLIST_FILE="/opt/zapret/ipset/zapret-hosts-user.txt"
 HOSTLIST_MIN_SIZE=1800000; FINAL_STR="/opt/StrFINAL"; NEW_STR="/opt/StrNEW"; HOSTS_USER="/opt/hosts-user.txt"
 EXCLUDE_FILE="/opt/zapret/ipset/zapret-hosts-user-exclude.txt"; fileDoH="/etc/config/https-dns-proxy"
@@ -44,13 +45,92 @@ PAUSE; return; } ; done; echo -e "${CYAN}Удаляем временные фа�
 # ==========================================
 # Меню настройки Discord
 # ==========================================
-Fin_IP_Dis="104\.25\.158\.178 finland[0-9]\{5\}\.discord\.media"; STRAT1="--filter-tcp=2053,2083,2087,2096,8443\n--hostlist-domains=discord.media\n--dpi-desync=multisplit\n--dpi-desync-split-seqovl=652\n--dpi-desync-split-pos=2\n--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin"
-STRAT2="--filter-tcp=2053,2083,2087,2096,8443\n--hostlist-domains=discord.media\n--dpi-desync=fake,multisplit\n--dpi-desync-split-seqovl=681\n--dpi-desync-split-pos=1\n--dpi-desync-fooling=ts\n--dpi-desync-repeats=8\n--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin\n--dpi-desync-fake-tls-mod=rnd,dupsid,sni=www.google.com"
-switch_Dv() { CURRENT=$(grep -o -E '#[[:space:]]*Dv[12]' "$CONF" | cut -d'v' -f2); [ -z "$CURRENT" ] && CURRENT=1; if [ "$CURRENT" = "1" ]; then NEW_STRAT="$STRAT2"; NEW_NUM=2; else NEW_STRAT="$STRAT1"; NEW_NUM=1; fi
-grep -q -E '^[[:space:]]*--filter-tcp=2053,2083,2087,2096,8443' "$CONF" || { echo -e "\n${RED}Стратегия не подходит!${NC}\n"; PAUSE; return 1; }; START=$(grep -n -E '^[[:space:]]*--filter-tcp=2053,2083,2087,2096,8443' "$CONF" | cut -d: -f1)
-END=$(tail -n +"$START" "$CONF" | grep -n -m1 -E '^--new$|^'\''$' | cut -d: -f1); END=$((START + END -1)); sed -i "${START},$((END-1))d" "$CONF"; LINE=$START; echo "$NEW_STRAT" | while IFS= read -r l; do sed -i "${LINE}i$l" "$CONF"
-LINE=$((LINE + 1)); done; if grep -q -E '^#[[:space:]]*Dv' "$CONF"; then sed -i "s/^#[[:space:]]*Dv[12]/#Dv$NEW_NUM/" "$CONF"; else sed -i "$START i#Dv$NEW_NUM" "$CONF"; fi
-echo -e "\n${MAGENTA}Меняем стратегию для discord.media${NC}"; ZAPRET_RESTART; echo -e "${GREEN}Стратегия для ${NC}discord.media ${GREEN}изменена!${NC}\n"; PAUSE; }
+Dv1="--filter-tcp=2053,2083,2087,2096,8443
+--hostlist-domains=discord.media
+--dpi-desync=multisplit
+--dpi-desync-split-seqovl=652
+--dpi-desync-split-pos=2
+--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin"
+Dv2="--filter-tcp=2053,2083,2087,2096,8443
+--hostlist-domains=discord.media
+--dpi-desync=fake,multisplit
+--dpi-desync-split-seqovl=681
+--dpi-desync-split-pos=1
+--dpi-desync-fooling=ts
+--dpi-desync-repeats=8
+--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin
+--dpi-desync-fake-tls-mod=rnd,dupsid,sni=www.google.com"
+
+select_Dv() {
+  DVS=$(set | grep -E '^Dv[0-9]+=' | sed 's/=.*//' | sort -V)
+  COUNT=$(echo "$DVS" | wc -l)
+
+  [ "$COUNT" -eq 0 ] && {
+    echo -e "\n${RED}Стратегии не найдены!${NC}\n"
+    PAUSE; return 1
+  }
+
+  echo -e "\n${MAGENTA}Доступные стратегии:${NC}"
+  for d in $DVS; do
+    echo " $d"
+  done
+
+  echo
+  read -rp "Выбери стратегию (1-$COUNT): " CHOICE
+
+  case "$CHOICE" in
+    ''|*[!0-9]*|0) return 1 ;;
+  esac
+
+  SELECTED="Dv$CHOICE"
+  echo "$DVS" | grep -qx "$SELECTED" || return 1
+
+  NEW_NUM="$CHOICE"
+  NEW_STRAT=$(eval echo \"\$$SELECTED\")
+}
+
+switch_Dv() {
+
+  select_Dv || {
+    echo -e "\n${RED}Неверный выбор стратегии!${NC}\n"
+    PAUSE; return 1
+  }
+
+  grep -q -E '^[[:space:]]*--filter-tcp=2053,2083,2087,2096,8443' "$CONF" || {
+    echo -e "\n${RED}Стратегия не подходит!${NC}\n"
+    PAUSE; return 1
+  }
+
+  START=$(grep -n -E '^[[:space:]]*--filter-tcp=2053,2083,2087,2096,8443' "$CONF" | cut -d: -f1)
+  END=$(tail -n +"$START" "$CONF" | grep -n -m1 -E '^--new$|^'\''$' | cut -d: -f1)
+  END=$((START + END - 1))
+
+  sed -i "${START},$((END-1))d" "$CONF"
+
+  LINE=$START
+  echo "$NEW_STRAT" | while IFS= read -r l; do
+    sed -i "${LINE}i$l" "$CONF"
+    LINE=$((LINE + 1))
+  done
+
+  if grep -q -E '^#[[:space:]]*Dv' "$CONF"; then
+    sed -i "s/^#[[:space:]]*Dv[0-9]\+/#Dv$NEW_NUM/" "$CONF"
+  else
+    sed -i "$START i#Dv$NEW_NUM" "$CONF"
+  fi
+
+  echo -e "\n${MAGENTA}Меняем стратегию для discord.media${NC}"
+  ZAPRET_RESTART
+  echo -e "${GREEN}Стратегия Dv$NEW_NUM применена!${NC}\n"
+  PAUSE
+}
+
+
+
+
+
+
+
 toggle_finland_hosts() { if grep -q "$Fin_IP_Dis" /etc/hosts; then sed -i "/$Fin_IP_Dis/d" /etc/hosts; echo -e "\n${MAGENTA}Удаляем Финские IP${NC}"; /etc/init.d/dnsmasq restart 2>/dev/null
 echo -e "${GREEN}Финские ${NC}IP${GREEN} удалены${NC}\n"; else seq 10000 10199 | awk '{print "104.25.158.178 finland"$1".discord.media"}' | grep -vxFf /etc/hosts >> /etc/hosts; echo -e "\n${MAGENTA}Добавляем Финские IP${NC}"; /etc/init.d/dnsmasq restart 2>/dev/null
 echo -e "${GREEN}Финские ${NC}IP${GREEN} добавлены${NC}\n"; fi; PAUSE; }
