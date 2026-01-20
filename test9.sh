@@ -77,7 +77,7 @@ select_Dv() {
 
 
   echo
-  echo -en "\n${YELLOW}Введите версию стратегии для discord.media ${NC}(1-$COUNT_dv)${YELLOW}:${NC} "
+  echo -en "${YELLOW}Введите версию стратегии для discord.media ${NC}(1-$COUNT_dv)${YELLOW}:${NC} "
   read CHOICE_DV </dev/tty
 
   case "$CHOICE_DV" in
@@ -143,7 +143,7 @@ local NO_PAUSE=$1; while true; do [ "$NO_PAUSE" != "1" ] && clear && echo -e "${
 $output_shown && echo; if [ "$NO_PAUSE" = "1" ]; then SELECTED="50-stun4all"; URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-stun4all"; else
 echo -e "${CYAN}1) ${GREEN}Установить скрипт ${NC}50-stun4all\n${CYAN}2) ${GREEN}Установить скрипт ${NC}50-quic4all\n${CYAN}3) ${GREEN}Установить скрипт ${NC}50-discord-media\n${CYAN}4) ${GREEN}Установить скрипт ${NC}50-discord\n${CYAN}5) ${GREEN}Удалить скрипт${NC}"
 grep -q '104\.25\.158\.178 finland[0-9]\{5\}\.discord\.media' /etc/hosts && FIN_TXT="${GREEN}Удалить Финские ${NC}IP ${GREEN}из ${NC}hosts" || FIN_TXT="${GREEN}Добавить Финские ${NC}IP ${GREEN}в ${NC}hosts"
-echo -ne "${CYAN}6) $FIN_TXT\n${CYAN}7) ${GREEN}Сменить стратегию для ${NC}discord.media\n${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read choiceSC; case "$choiceSC" in
+echo -ne "${CYAN}6) $FIN_TXT\n${CYAN}7) ${GREEN}Выбрать и установить стратегию для ${NC}discord.media\n${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read choiceSC; case "$choiceSC" in
 1) SELECTED="50-stun4all"; URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-stun4all" ;; 2) SELECTED="50-quic4all"; URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-quic4all" ;;
 3) SELECTED="50-discord-media"; URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-discord-media" ;; 4) SELECTED="50-discord"; URL="https://raw.githubusercontent.com/bol-van/zapret/v70.5/init.d/custom.d.examples.linux/50-discord" ;;
 5) [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; continue; }; echo -e "\n${MAGENTA}Удаляем скрипт${NC}"; rm -f "$CUSTOM_DIR/50-script.sh" 2>/dev/null; sed -i "/DISABLE_CUSTOM/s/'0'/'1'/" /etc/config/zapret; ZAPRET_RESTART; echo -e "${GREEN}Скрипт удалён!${NC}\n"; PAUSE; continue ;; 
