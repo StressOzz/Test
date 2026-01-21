@@ -206,6 +206,113 @@ strategy_v8() { printf '%s\n' "#v8" "#Yv03" "--filter-tcp=443" "--hostlist=/opt/
 printf '%s\n' "--dpi-desync-fake-tls-mod=rnd,dupsid,sni=ggpht.com" "--dpi-desync-split-seqovl=620" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin" "--dpi-desync-fooling=badsum,badseq"
 printf '%s\n' "--new" "--filter-tcp=443" "--dpi-desync=fake" "--dpi-desync-repeats=6" "--dpi-desync-fooling=ts" "--dpi-desync-fake-tls=/opt/zapret/files/fake/4pda.bin" "--dpi-desync-fake-tls-mod=none" ; }
 # ==========================================
+# Cтратегии Flowseal
+# ==========================================
+#!/bin/sh
+
+flowseal_menu() {
+    TMP="/opt/zapret_temp"
+    OUT="$TMP/str_flow.txt"
+    ZIP="$TMP/repo.zip"
+    ZAPRET_CONF="/etc/config/zapret"
+
+    download_strategies() {
+        echo "Скачиваем и формируем стратегии..."
+        mkdir -p "$TMP" || exit 1
+        : > "$OUT"
+
+        wget -qO "$ZIP" https://github.com/Flowseal/zapret-discord-youtube/archive/refs/heads/main.zip || exit 1
+        unzip -oq "$ZIP" -d "$TMP" || exit 1
+
+        BASE="$TMP/zapret-discord-youtube-main"
+
+        find "$BASE" -type f -name 'general*.bat' ! -name 'general (ALT5).bat' | while read -r F; do
+            MATCH=$(grep -E \
+                '^--filter-udp=19294-19344,50000-50100|^--filter-tcp=2053,2083,2087,2096,8443|^--filter-tcp=443 --hostlist="%LISTS%list-google.txt"|^--filter-tcp=80,443 --hostlist="%LISTS%list-general.txt"' \
+                "$F")
+            [ -z "$MATCH" ] && continue
+            NAME=$(basename "$F" .bat)
+            {
+                echo "#$NAME"
+                echo "$MATCH" | sed 's/--/\n--/g' | sed '/^$/d' | sed 's/[[:space:]]*$//'
+                echo
+            } >> "$OUT"
+        done
+
+        sed -i 's|"%BIN%tls_clienthello_www_google_com.bin"|/opt/zapret/files/fake/tls_clienthello_www_google_com.bin|g' "$OUT"
+        sed -i '/--hostlist="%LISTS%list-general.txt"/d' "$OUT"
+        sed -i '/--ipset-exclude="%LISTS%ipset-exclude.txt"/d' "$OUT"
+        sed -i 's|"%LISTS%list-exclude.txt"|/opt/zapret/ipset/zapret-hosts-user-exclude.txt|g' "$OUT"
+        sed -i 's/--new[[:space:]]\^/--new/g' "$OUT"
+        sed -i 's|"%LISTS%list-google.txt"|/opt/zapret/ipset/zapret-hosts-google.txt|g' "$OUT"
+        sed -i 's|"%BIN%tls_clienthello_4pda_to.bin"|/opt/zapret/files/fake/4pda.bin|g' "$OUT"
+        sed -i 's|"%BIN%tls_clienthello_max_ru.bin"|/opt/zapret/files/fake/max.bin|g' "$OUT"
+        sed -i 's|\^!|/opt/zapret/files/fake/tls_clienthello_www_google_com.bin|g' "$OUT"
+        sed -i 's/[[:space:]]\+$//g' "$OUT"
+        sed -i '/^--new$/{
+            N
+            /^\--new\n$/d
+        }' "$OUT"
+
+        rm -rf "$TMP/zapret-discord-youtube-main" "$ZIP"
+    }
+
+    [ ! -f "$OUT" ] && download_strategies
+
+    while true; do
+        STRATEGIES=$(grep '^#' "$OUT" | sed 's/^#//')
+
+        echo
+        echo "Список стратегий от Flowseal:"
+        echo "0) Обновить стратегии"
+        i=1
+        echo "$STRATEGIES" | while IFS= read -r line; do
+            echo "$i) $line"
+            i=$((i+1))
+        done
+
+        echo -n "Выберите стратегию: "
+        read CHOICE
+
+        if ! echo "$CHOICE" | grep -qE '^[0-9]+$'; then
+            echo "Ошибка: нужно число"
+            continue
+        fi
+
+        if [ "$CHOICE" -eq 0 ]; then
+            rm -rf "$TMP"
+            download_strategies
+            continue
+        fi
+
+        SEL_NAME=$(echo "$STRATEGIES" | sed -n "${CHOICE}p")
+
+        if [ -z "$SEL_NAME" ]; then
+            echo "Ошибка: такой стратегии нет"
+            continue
+        fi
+
+        BLOCK=$(awk -v name="$SEL_NAME" '
+            $0=="#"name {flag=1; print; next}
+            /^#/ && flag {exit}
+            flag {print}' "$OUT")
+
+        sed -i "/option NFQWS_OPT '/,\$d" "$ZAPRET_CONF"
+
+        {
+            echo "	option NFQWS_OPT '"
+            echo "$BLOCK"
+            echo "'"
+        } >> "$ZAPRET_CONF"
+
+        echo "Стратегия '$SEL_NAME' успешно установлена в $ZAPRET_CONF"
+        break
+    done
+}
+
+
+
+# ==========================================
 # Меню стратегий
 # ==========================================
 menu_str() { [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }; while true; do show_current_strategy; RKN_Check; clear; echo -e "${MAGENTA}Меню стратегий${NC}\n"
@@ -214,10 +321,11 @@ if [ -f "$CONF" ]; then current="$ver$( [ -n "$ver" ] && [ -n "$yv_ver" ] && ech
 if [ -n "$current" ]; then echo -e "${YELLOW}Используется стратегия:${NC} ${CYAN}$current${DV:+ $DV}${RKN_STATUS:+ $RKN_STATUS}${NC}"; elif [ -n "$RKN_STATUS" ]; then  echo -e "${YELLOW}Используется стратегия:${NC}${CYAN} РКН${DV:+ $DV}${NC}"; fi; fi
 [ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*88,500,1024-19293,19345-49999,50101-65535" "$CONF" && grep -q -- "--filter-udp=88,500,1024-19293,19345-49999,50101-65535" "$CONF" && echo -e "${YELLOW}Стратегия для игр:${NC} ${GREEN}включена${NC}"
 if hosts_enabled; then echo -e "${YELLOW}IP в hosts: ${GREEN}добавлены${NC}\n"; else echo -e "${YELLOW}IP в hosts: ${RED}отсутствуют${NC}\n"; fi
-echo -e "${CYAN}1) ${GREEN}Выбрать и установить стратегию ${NC}v1-v8\n${CYAN}2) ${GREEN}$menu_game\n${CYAN}3) $RKN_TEXT_MENU\n${CYAN}4) ${GREEN}Подобрать стратегию для ${NC}YouTube\n${CYAN}5) ${GREEN}Выбрать и установить стратегию для ${NC}YouTube\n${CYAN}6) ${GREEN}Обновить список исключений${NC}"
-if hosts_enabled; then echo -e "${CYAN}7) ${GREEN}Удалиль ${NC}IP${GREEN} из ${NC}hosts"; else echo -e "${CYAN}7) ${GREEN}Добавить ${NC}IP${GREEN} в ${NC}hosts"; fi
+echo -e "${CYAN}1) ${GREEN}Выбрать и установить стратегию ${NC}v1-v8\n${CYAN}2) ${GREEN}$menu_game\n${CYAN}3) $RKN_TEXT_MENU\n${CYAN}4) ${GREEN}Подобрать стратегию для ${NC}YouTube"
+echo -e "${CYAN}5) ${GREEN}Выбрать и установить стратегию для ${NC}YouTube\n${CYAN}6) ${GREEN}Выбрать и установить стратегию от ${NC}Flowseal\n${CYAN}7) ${GREEN}Обновить список исключений${NC}"
+if hosts_enabled; then echo -e "${CYAN}8) ${GREEN}Удалиль ${NC}IP${GREEN} из ${NC}hosts"; else echo -e "${CYAN}8) ${GREEN}Добавить ${NC}IP${GREEN} в ${NC}hosts"; fi
 echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read choiceST; case "$choiceST" in 1) strategy_CHOUSE ;; 2) fix_GAME ;; 3) toggle_rkn_bypass; continue ;; 4) auto_stryou ;;
-5) choose_strategy_manual ;; 7) menu_hosts ;; 6) echo -e "\n${MAGENTA}Обновляем список исключений${NC}\n${CYAN}Останавливаем ${NC}Zapret"; /etc/init.d/zapret stop >/dev/null 2>&1; echo -e "${CYAN}Добавляем домены в исключения${NC}"
+5) choose_strategy_manual ;; 6) flowseal_menu ;; 8) menu_hosts ;; 7) echo -e "\n${MAGENTA}Обновляем список исключений${NC}\n${CYAN}Останавливаем ${NC}Zapret"; /etc/init.d/zapret stop >/dev/null 2>&1; echo -e "${CYAN}Добавляем домены в исключения${NC}"
 rm -f "$EXCLUDE_FILE"; wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL" || echo -e "\n${RED}Не удалось загрузить exclude файл${NC}\n"; echo -e "${CYAN}Перезапускаем ${NC}Zapret"
 ZAPRET_RESTART; echo -e "${GREEN}Список исключений обновлён!${NC}\n"; PAUSE ;; *) return ;; esac; done }
 strategy_CHOUSE () { echo -ne "\n${YELLOW}Введите версию стратегии ${NC}(1-8)${YELLOW}:${NC} "; read -r choice; if [[ "$choice" =~ ^[1-8]$ ]]; then install_strategy "v$choice"; fi; }
