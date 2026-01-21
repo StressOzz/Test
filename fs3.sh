@@ -38,8 +38,15 @@ BLOCK=$(awk -v name="$SEL_NAME" '
     /^#/ && flag {exit}
     flag {print}' "$STR_FILE")
 
-# 6. Вставляем блок **после строки "option NFQWS_OPT '"**
-# не трогаем саму строку
-sed -i "/option NFQWS_OPT '/a $BLOCK" "$ZAPRET_CONF"
+# 6. Вставляем блок после строки "option NFQWS_OPT '"
+TMP_BLOCK="/tmp/block.tmp"
+echo "$BLOCK" > "$TMP_BLOCK"
+
+awk -v blk="$TMP_BLOCK" '
+    {print}
+    $0=="option NFQWS_OPT '\''" {
+        while ((getline line < blk) > 0) print line
+    }
+' "$ZAPRET_CONF" > "$ZAPRET_CONF.tmp" && mv "$ZAPRET_CONF.tmp" "$ZAPRET_CONF"
 
 echo "Стратегия '$SEL_NAME' успешно вставлена в $ZAPRET_CONF"
