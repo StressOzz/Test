@@ -2,7 +2,7 @@
 # ==========================================
 # Zapret on remittor Manager by StressOzz
 # =========================================
-ZAPRET_MANAGER_VERSION="8.1"; ZAPRET_VERSION="72.20260117"; STR_VERSION_AUTOINSTALL="v6"
+ZAPRET_MANAGER_VERSION="8.2"; ZAPRET_VERSION="72.20260119"; STR_VERSION_AUTOINSTALL="v6"
 TEST_HOST="https://rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com"; LAN_IP=$(uci get network.lan.ipaddr)
 GREEN="\033[1;32m"; RED="\033[1;31m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"
 MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -214,106 +214,20 @@ printf '%s\n' "--new" "--filter-tcp=443" "--dpi-desync=fake" "--dpi-desync-repea
 # ==========================================
 # Cтратегии Flowseal
 # ==========================================
-#!/bin/sh
-
-flowseal_menu() {
-    [ ! -f "$OUT" ] && download_strategies
-
-    while true; do
-        STRATEGIES=$(grep '^#' "$OUT" | sed 's/^#//')
-clear
-        echo -e "${YELLOW}Список стратегий от Flowseal${NC}\n"
-        
-        i=1
-        echo "$STRATEGIES" | while IFS= read -r line; do
-            echo -e "${CYAN}$i) ${NC}$line"
-            i=$((i+1))
-        done
-        echo -e "${CYAN}0) ${GREEN}Обновить стратегии${NC}"
-        echo -e "${CYAN}Enter) ${GREEN}Выход в меню стратегий${NC}\n"
-        echo -ne "${YELLOW}Выберите стратегию: ${NC}"
-read CHOICE
-
-[ -z "$CHOICE" ] && return
-echo "$CHOICE" | grep -qE '^[0-9]+$' || return
-
-
-[ "$CHOICE" -eq 0 ] && { rm -rf "$TMP_SF"; download_strategies; continue; }
-
-SEL_NAME=$(echo "$STRATEGIES" | sed -n "${CHOICE}p")
-[ -z "$SEL_NAME" ] && return 
-
-
-
-        BLOCK=$(awk -v name="$SEL_NAME" '
-            $0=="#"name {flag=1; print; next}
-            /^#/ && flag {exit}
-            flag {print}' "$OUT")
-
-        sed -i "/option NFQWS_OPT '/,\$d" "$CONF"
-
-        {
-            echo "	option NFQWS_OPT '"
-            echo "$BLOCK"
-            echo "'"
-        } >> "$CONF"
-        
-        echo -e "\n${CYAN}Устанавливаем и применяем стратегию${NC}"; 
-if ! grep -q "option NFQWS_PORTS_UDP.*19294-19344,50000-50100" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'$/,19294-19344,50000-50100'/" "$CONF"; fi
-if ! grep -q "option NFQWS_PORTS_TCP.*2053,2083,2087,2096,8443" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_TCP '/s/'$/,2053,2083,2087,2096,8443'/" "$CONF"; fi
-        
-        ZAPRET_RESTART; echo -e "${GREEN}Стратегия ${NC}$SEL_NAME ${GREEN}установлена!${NC}\n"
-        PAUSE
-        break
-    done
-}
-    download_strategies() {
-        echo -e "\n${MAGENTA}Скачиваем и формируем стратегии${NC}"
-        mkdir -p "$TMP_SF"
-        : > "$OUT"
-
-        wget -qO "$ZIP" https://github.com/Flowseal/zapret-discord-youtube/archive/refs/heads/main.zip || { echo -e "\n${RED}Не удалось загрузить файл стратегий${NC}\n"; PAUSE; return; }
-
- if ! command -v unzip >/dev/null 2>&1; then echo -e "${CYAN}Устанавливаем ${NC}unzip" && opkg install unzip >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить unzip!${NC}\n"; PAUSE; return; }; fi
-        
-        unzip -oq "$ZIP" -d "$TMP_SF" || { echo -e "\n${RED}Не удалось распоковать файл${NC}\n"; PAUSE; return; }
-
-        BASE="$TMP_SF/zapret-discord-youtube-main"
-
-        find "$BASE" -type f -name 'general*.bat' ! -name 'general (ALT5).bat' | while read -r F; do
-            MATCH=$(grep -E \
-                '^--filter-udp=19294-19344,50000-50100|^--filter-tcp=2053,2083,2087,2096,8443|^--filter-tcp=443 --hostlist="%LISTS%list-google.txt"|^--filter-tcp=80,443 --hostlist="%LISTS%list-general.txt"' \
-                "$F")
-            [ -z "$MATCH" ] && continue
-            NAME=$(basename "$F" .bat)
-            {
-                echo "#$NAME"
-                echo "$MATCH" | sed 's/--/\n--/g' | sed '/^$/d' | sed 's/[[:space:]]*$//'
-                echo
-            } >> "$OUT"           
-        done
-
-        sed -i 's|"%BIN%tls_clienthello_www_google_com.bin"|/opt/zapret/files/fake/tls_clienthello_www_google_com.bin|g' "$OUT"
-        sed -i '/--hostlist="%LISTS%list-general.txt"/d' "$OUT"
-        sed -i '/--ipset-exclude="%LISTS%ipset-exclude.txt"/d' "$OUT"
-        sed -i 's|"%LISTS%list-exclude.txt"|/opt/zapret/ipset/zapret-hosts-user-exclude.txt|g' "$OUT"
-        sed -i 's/--new[[:space:]]\^/--new/g' "$OUT"
-        sed -i 's|"%LISTS%list-google.txt"|/opt/zapret/ipset/zapret-hosts-google.txt|g' "$OUT"
-        sed -i 's|"%BIN%tls_clienthello_4pda_to.bin"|/opt/zapret/files/fake/4pda.bin|g' "$OUT"
-        sed -i 's|"%BIN%tls_clienthello_max_ru.bin"|/opt/zapret/files/fake/max.bin|g' "$OUT"
-        sed -i 's|\^!|/opt/zapret/files/fake/tls_clienthello_www_google_com.bin|g' "$OUT"
-        sed -i 's/[[:space:]]\+$//g' "$OUT"
-        sed -i '/^--new$/{
-            N
-            /^\--new\n$/d
-        }' "$OUT"
-
-        rm -rf "$TMP_SF/zapret-discord-youtube-main" "$ZIP"
-        echo -e "${GREEN}Стратегии сформированы!${NC}\n"
-        PAUSE
-    }
-
-
+flowseal_menu() { [ ! -f "$OUT" ] && download_strategies; while true; do STRATEGIES=$(grep '^#' "$OUT" | sed 's/^#//'); clear
+echo -e "${YELLOW}Список стратегий от Flowseal${NC}\n"; i=1; echo "$STRATEGIES" | while IFS= read -r line; do echo -e "${CYAN}$i) ${NC}$line"; i=$((i+1)); done
+echo -en "${CYAN}0) ${GREEN}Обновить стратегии${NC}\n${CYAN}Enter) ${GREEN}Выход в меню стратегий${NC}\n\n${YELLOW}Выберите стратегию: ${NC}"; read CHOICE_SF
+[ -z "$CHOICE_SF" ] && return; echo "$CHOICE_SF" | grep -qE '^[0-9]+$' || return; [ "$CHOICE_SF" -eq 0 ] && { rm -rf "$TMP_SF"; download_strategies; continue; }; SEL_NAME=$(echo "$STRATEGIES" | sed -n "${CHOICE_SF}p"); [ -z "$SEL_NAME" ] && return 
+BLOCK=$(awk -v name="$SEL_NAME" '$0=="#"name {flag=1; print; next} /^#/ && flag {exit} flag {print}' "$OUT"); sed -i "/option NFQWS_OPT '/,\$d" "$CONF"; { echo "	option NFQWS_OPT '"; echo "$BLOCK"; echo "'"; } >> "$CONF"
+echo -e "\n${CYAN}Устанавливаем и применяем стратегию${NC}"; if ! grep -q "option NFQWS_PORTS_UDP.*19294-19344,50000-50100" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'$/,19294-19344,50000-50100'/" "$CONF"; fi
+if ! grep -q "option NFQWS_PORTS_TCP.*2053,2083,2087,2096,8443" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_TCP '/s/'$/,2053,2083,2087,2096,8443'/" "$CONF"; fi; ZAPRET_RESTART; echo -e "${GREEN}Стратегия ${NC}$SEL_NAME ${GREEN}установлена!${NC}\n"; PAUSE; break; done; }
+download_strategies() { echo -e "\n${MAGENTA}Скачиваем и формируем стратегии${NC}"; mkdir -p "$TMP_SF"; : > "$OUT"; wget -qO "$ZIP" https://github.com/Flowseal/zapret-discord-youtube/archive/refs/heads/main.zip || { echo -e "\n${RED}Не удалось загрузить файл стратегий${NC}\n"PAUSE; return; }
+if ! command -v unzip >/dev/null 2>&1; then echo -e "${CYAN}Устанавливаем ${NC}unzip" && opkg install unzip >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить unzip!${NC}\n"; PAUSE; return; }; fi; unzip -oq "$ZIP" -d "$TMP_SF" || { echo -e "\n${RED}Не удалось распоковать файл${NC}\n"; PAUSE; return; }
+BASE="$TMP_SF/zapret-discord-youtube-main"; find "$BASE" -type f -name 'general*.bat' ! -name 'general (ALT5).bat' | while read -r F; do MATCH=$(grep -E '^--filter-udp=19294-19344,50000-50100|^--filter-tcp=2053,2083,2087,2096,8443|^--filter-tcp=443 --hostlist="%LISTS%list-google.txt"|^--filter-tcp=80,443 --hostlist="%LISTS%list-general.txt"' "$F")
+[ -z "$MATCH" ] && continue; NAME=$(basename "$F" .bat); { echo "#$NAME"; echo "$MATCH" | sed 's/--/\n--/g' | sed '/^$/d' | sed 's/[[:space:]]*$//'; echo; } >> "$OUT"; done; sed -i 's|"%BIN%tls_clienthello_www_google_com.bin"|/opt/zapret/files/fake/tls_clienthello_www_google_com.bin|g' "$OUT"; sed -i '/--hostlist="%LISTS%list-general.txt"/d' "$OUT"
+sed -i '/--ipset-exclude="%LISTS%ipset-exclude.txt"/d' "$OUT"; sed -i 's|"%LISTS%list-exclude.txt"|/opt/zapret/ipset/zapret-hosts-user-exclude.txt|g' "$OUT"; sed -i 's/--new[[:space:]]\^/--new/g' "$OUT"; sed -i 's|"%LISTS%list-google.txt"|/opt/zapret/ipset/zapret-hosts-google.txt|g' "$OUT"
+sed -i 's|"%BIN%tls_clienthello_4pda_to.bin"|/opt/zapret/files/fake/4pda.bin|g' "$OUT"; sed -i 's|"%BIN%tls_clienthello_max_ru.bin"|/opt/zapret/files/fake/max.bin|g' "$OUT"; sed -i 's|\^!|/opt/zapret/files/fake/tls_clienthello_www_google_com.bin|g' "$OUT"; sed -i 's/[[:space:]]\+$//g' "$OUT"; sed -i '/^--new$/ { N; /^\--new\n$/d; }' "$OUT"
+rm -rf "$TMP_SF/zapret-discord-youtube-main" "$ZIP"; echo -e "${GREEN}Стратегии сформированы!${NC}\n"; PAUSE; }
 # ==========================================
 # Меню стратегий
 # ==========================================
@@ -322,6 +236,7 @@ menu_game=$( [ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*88,500,1024-1929
 if [ -f "$CONF" ]; then current="$ver$( [ -n "$ver" ] && [ -n "$yv_ver" ] && echo " / " )$yv_ver"; DV=$(grep -o -E '^#[[:space:]]*Dv[0-9][0-9]*' "$CONF" | sed 's/^#[[:space:]]*/\/ /' | head -n1)
 if [ -n "$current" ]; then echo -e "${YELLOW}Используется стратегия:${NC} ${CYAN}$current${DV:+ $DV}${RKN_STATUS:+ $RKN_STATUS}${NC}"; elif [ -n "$RKN_STATUS" ]; then  echo -e "${YELLOW}Используется стратегия:${NC}${CYAN} РКН${DV:+ $DV}${NC}"; fi; fi
 [ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*88,500,1024-19293,19345-49999,50101-65535" "$CONF" && grep -q -- "--filter-udp=88,500,1024-19293,19345-49999,50101-65535" "$CONF" && echo -e "${YELLOW}Стратегия для игр:${NC} ${GREEN}включена${NC}"
+grep -q '^#general' "$CONF" && echo -e "${YELLOW}Используется стратегия:${NC} ${CYAN}$(grep '^#general' "$CONF" | head -n1 | cut -c2-)${NC}"
 if hosts_enabled; then echo -e "${YELLOW}IP в hosts: ${GREEN}добавлены${NC}\n"; else echo -e "${YELLOW}IP в hosts: ${RED}отсутствуют${NC}\n"; fi
 echo -e "${CYAN}1) ${GREEN}Выбрать и установить стратегию ${NC}v1-v8\n${CYAN}2) ${GREEN}Выбрать и установить стратегию от ${NC}Flowseal\n${CYAN}3) ${GREEN}$menu_game\n${CYAN}4)${NC} $RKN_TEXT_MENU${NC}"
 echo -e "${CYAN}5) ${GREEN}Подобрать стратегию для ${NC}YouTube\n${CYAN}6) ${GREEN}Выбрать и установить стратегию для ${NC}YouTube\n${CYAN}7) ${GREEN}Обновить список исключений${NC}"
