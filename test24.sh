@@ -219,7 +219,6 @@ flowseal_menu() {
     while true; do
         STRATEGIES=$(grep '^#' "$OUT" | sed 's/^#//')
 
-        echo
         echo -e "\n${YELLOW}Список стратегий от Flowseal${NC}\n"
         
         i=1
@@ -228,12 +227,19 @@ flowseal_menu() {
             i=$((i+1))
         done
         echo -e "${CYAN}0) ${GREEN}Обновить стратегии${NC}"
-        echo -e "${CYAN}Enter) ${GREEN} Выход в меню стратегий: ${NC}\n"
+        echo -e "${CYAN}Enter) ${GREEN} Выход в меню стратегий${NC}\n"
         echo -ne "${YELLOW}Выберите стратегию: ${NC}"
 read CHOICE
-SEL_NAME=$(echo "$STRATEGIES" | sed -n "${CHOICE}p")
-[ -z "$SEL_NAME" ] && return  # или exit 0
+
+[ -z "$CHOICE" ] && return
+echo "$CHOICE" | grep -qE '^[0-9]+$' || return
+
+
 [ "$CHOICE" -eq 0 ] && { rm -rf "$TMP_SF"; download_strategies; return; }
+
+SEL_NAME=$(echo "$STRATEGIES" | sed -n "${CHOICE}p")
+[ -z "$SEL_NAME" ] && return  # если такого номера нет — возвращаемся
+
 
 
         BLOCK=$(awk -v name="$SEL_NAME" '
@@ -250,13 +256,13 @@ SEL_NAME=$(echo "$STRATEGIES" | sed -n "${CHOICE}p")
         } >> "$CONF"
         
 ZAPRET_RESTART
-        echo -e "\n${GREEN}Стратегия ${NC}'$SEL_NAME' ${GREEN}успешно установлена!\n"
+        echo -e "\т${CYAN}Применяем стратегию\n${GREEN}Стратегия ${NC}'$SEL_NAME' ${GREEN}успешно установлена!\n"
         PAUSE
         break
     done
 }
     download_strategies() {
-        echo -e "${MAGENTA}Скачиваем и формируем стратегии${NC}"
+        echo -e "\n${MAGENTA}Скачиваем и формируем стратегии${NC}"
         mkdir -p "$TMP_SF" || exit 1
         : > "$OUT"
 
@@ -294,7 +300,6 @@ ZAPRET_RESTART
         }' "$OUT"
 
         rm -rf "$TMP_SF/zapret-discord-youtube-main" "$ZIP"
-        PAUSE
     }
 
 
