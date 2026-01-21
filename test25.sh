@@ -255,8 +255,7 @@ SEL_NAME=$(echo "$STRATEGIES" | sed -n "${CHOICE}p")
             echo "'"
         } >> "$CONF"
         
-ZAPRET_RESTART
-        echo -e "\т${CYAN}Применяем стратегию\n${GREEN}Стратегия ${NC}'$SEL_NAME' ${GREEN}успешно установлена!\n"
+        echo -e "\n${CYAN}Применяем стратегию${NC}"; ZAPRET_RESTART; echo -e "${GREEN}Стратегия ${NC}'$SEL_NAME' ${GREEN}установлена!\n"
         PAUSE
         break
     done
