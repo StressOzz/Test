@@ -31,7 +31,6 @@ find "$BASE" -type f -name 'general*.bat' ! -name 'general (ALT5).bat' | while r
 done
 
 # 2. Замены по списку
-
 sed -i 's|"%BIN%tls_clienthello_www_google_com.bin"|/opt/zapret/files/fake/tls_clienthello_www_google_com.bin|g' "$OUT"
 sed -i '/--hostlist="%LISTS%list-general.txt"/d' "$OUT"
 sed -i '/--ipset-exclude="%LISTS%ipset-exclude.txt"/d' "$OUT"
@@ -45,8 +44,11 @@ sed -i 's|\^!|/opt/zapret/files/fake/tls_clienthello_www_google_com.bin|g' "$OUT
 # убрать trailing spaces
 sed -i 's/[[:space:]]\+$//g' "$OUT"
 
-# 3. Удаляем пустые строки перед #general и лишние --new выше
+# 3. Удаляем блоки --new + пустая строка
 sed -i '/^--new$/{
     N
     /^\--new\n$/d
 }' "$OUT"
+
+# 4. Убираем временные файлы репозитория
+rm -rf "$TMP/zapret-discord-youtube-main" "$ZIP"
