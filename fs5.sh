@@ -38,14 +38,13 @@ BLOCK=$(awk -v name="$SEL_NAME" '
     /^#/ && flag {exit}
     flag {print}' "$STR_FILE")
 
-# 6. Вставляем блок после строки "option NFQWS_OPT '"
-# Используем ed для OpenWrt
-ed -s "$ZAPRET_CONF" <<EOF
-/^option NFQWS_OPT '/a
-$BLOCK
-.
-w
-q
-EOF
+# 6. Вставляем в /etc/config/zapret
+sed -i "/option NFQWS_OPT '/,\$d" "$ZAPRET_CONF"
 
-echo "Стратегия '$SEL_NAME' успешно вставлена в $ZAPRET_CONF"
+{
+    echo "    option NFQWS_OPT '"
+    echo "$BLOCK"
+    echo "'"
+} >> "$ZAPRET_CONF"
+
+echo "Стратегия '$SEL_NAME' успешно установлена в $ZAPRET_CONF"
