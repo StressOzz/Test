@@ -46,7 +46,7 @@ sed -i 's|\^!|/opt/zapret/files/fake/tls_clienthello_www_google_com.bin|g' "$OUT
 sed -i 's/[[:space:]]\+$//g' "$OUT"
 
 # 3. Удаляем пустые строки перед #general и лишние --new выше
-awk 'BEGIN{prev=""} 
-     /^#general/ {gsub(/^[[:space:]]+/,""); print; prev=""; next} 
-     /^--new$/ {prev="skip"; next} 
-     {if(prev!="skip") print; prev=""}' "$OUT" > "$OUT.tmp" && mv "$OUT.tmp" "$OUT"
+sed -i '/^$/{
+    N
+    /^$\n--new$/d
+}' "$OUT"
