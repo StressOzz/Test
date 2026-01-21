@@ -6,11 +6,11 @@ ZAPRET_CONF="/etc/config/zapret"
 # 1. Собираем список стратегий (названия без #)
 STRATEGIES=$(grep '^#' "$STR_FILE" | sed 's/^#//')
 
-# 2. Выводим меню
+# 2. Выводим меню построчно
 echo "Список стратегий от Flowseal:"
 i=1
-for s in $STRATEGIES; do
-    echo "$i) $s"
+echo "$STRATEGIES" | while IFS= read -r line; do
+    echo "$i) $line"
     i=$((i+1))
 done
 
@@ -18,13 +18,13 @@ done
 echo -n "Выберите стратегию: "
 read CHOICE
 
-# Проверка
+# Проверка ввода
 if ! echo "$CHOICE" | grep -qE '^[0-9]+$'; then
     echo "Ошибка: нужно число"
     exit 1
 fi
 
-# Находим выбранное название
+# 4. Находим выбранное название
 SEL_NAME=$(echo "$STRATEGIES" | sed -n "${CHOICE}p")
 
 if [ -z "$SEL_NAME" ]; then
@@ -32,17 +32,15 @@ if [ -z "$SEL_NAME" ]; then
     exit 1
 fi
 
-# 4. Вытаскиваем из str_flow.txt блок выбранной стратегии
+# 5. Вытаскиваем блок выбранной стратегии
 BLOCK=$(awk -v name="$SEL_NAME" '
-    $0=="#"name {flag=1; print; next} 
-    /^#/ && flag {exit} 
+    $0=="#"name {flag=1; print; next}
+    /^#/ && flag {exit}
     flag {print}' "$STR_FILE")
 
-# 5. Вставляем в /etc/config/zapret
-# удаляем всё после строки "option NFQWS_OPT '"
+# 6. Вставляем в /etc/config/zapret
 sed -i "/option NFQWS_OPT '/,\$d" "$ZAPRET_CONF"
 
-# добавляем в конец
 {
     echo "option NFQWS_OPT '"
     echo "$BLOCK"
