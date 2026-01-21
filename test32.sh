@@ -238,7 +238,7 @@ read CHOICE
 echo "$CHOICE" | grep -qE '^[0-9]+$' || return
 
 
-[ "$CHOICE" -eq 0 ] && { rm -rf "$TMP_SF"; download_strategies; }
+[ "$CHOICE" -eq 0 ] && { rm -rf "$TMP_SF"; download_strategies; continue; }
 
 SEL_NAME=$(echo "$STRATEGIES" | sed -n "${CHOICE}p")
 [ -z "$SEL_NAME" ] && return 
