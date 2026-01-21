@@ -42,7 +42,7 @@ BLOCK=$(awk -v name="$SEL_NAME" '
 sed -i "/option NFQWS_OPT '/,\$d" "$ZAPRET_CONF"
 
 {
-    echo "    option NFQWS_OPT '"
+    echo "	option NFQWS_OPT '"
     echo "$BLOCK"
     echo "'"
 } >> "$ZAPRET_CONF"
