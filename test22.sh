@@ -10,6 +10,9 @@ WORKDIR="/tmp/zapret-update"; CONF="/etc/config/zapret"; CUSTOM_DIR="/opt/zapret
 STR_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ListStrYou"
 TMP_LIST="/opt/zapret_yt_list.txt"; SAVED_STR="/opt/StrYou"; OLD_STR="/opt/StrOLD"
 Fin_IP_Dis="104\.25\.158\.178 finland[0-9]\{5\}\.discord\.media"
+TMP_SF="/opt/zapret_temp"
+OUT="$TMP_SF/str_flow.txt"
+ZIP="$TMP_SF/repo.zip"
 BACKUP_FILE="/opt/hosts_temp.txt"; HOSTLIST_FILE="/opt/zapret/ipset/zapret-hosts-user.txt"
 HOSTLIST_MIN_SIZE=1800000; FINAL_STR="/opt/StrFINAL"; NEW_STR="/opt/StrNEW"; HOSTS_USER="/opt/hosts-user.txt"
 EXCLUDE_FILE="/opt/zapret/ipset/zapret-hosts-user-exclude.txt"; fileDoH="/etc/config/https-dns-proxy"
@@ -211,20 +214,55 @@ printf '%s\n' "--new" "--filter-tcp=443" "--dpi-desync=fake" "--dpi-desync-repea
 #!/bin/sh
 
 flowseal_menu() {
-    TMP="/opt/zapret_temp"
-    OUT="$TMP/str_flow.txt"
-    ZIP="$TMP/repo.zip"
-    ZAPRET_CONF="/etc/config/zapret"
+    [ ! -f "$OUT" ] && download_strategies
 
+    while true; do
+        STRATEGIES=$(grep '^#' "$OUT" | sed 's/^#//')
+
+        echo
+        echo -e "\nСписок стратегий от Flowseal:"
+        
+        i=1
+        echo "$STRATEGIES" | while IFS= read -r line; do
+            echo -e "${CYAN}$i) ${NC}$line"
+            i=$((i+1))
+        done
+        echo -e "${CYAN}0) ${GREEN}Обновить стратегии"
+        echo -n "Выберите стратегию: "
+read CHOICE
+SEL_NAME=$(echo "$STRATEGIES" | sed -n "${CHOICE}p")
+[ -z "$SEL_NAME" ] && return  # или exit 0
+[ "$CHOICE" -eq 0 ] && { rm -rf "$TMP_SF"; download_strategies; return; }
+
+
+        BLOCK=$(awk -v name="$SEL_NAME" '
+            $0=="#"name {flag=1; print; next}
+            /^#/ && flag {exit}
+            flag {print}' "$OUT")
+
+        sed -i "/option NFQWS_OPT '/,\$d" "$CONF"
+
+        {
+            echo "	option NFQWS_OPT '"
+            echo "$BLOCK"
+            echo "'"
+        } >> "$CONF"
+        
+ZAPRET_RESTART
+        echo "Стратегия '$SEL_NAME' успешно установлена в $CONF"
+        
+        break
+    done
+}
     download_strategies() {
         echo "Скачиваем и формируем стратегии..."
-        mkdir -p "$TMP" || exit 1
+        mkdir -p "$TMP_SF" || exit 1
         : > "$OUT"
 
         wget -qO "$ZIP" https://github.com/Flowseal/zapret-discord-youtube/archive/refs/heads/main.zip || exit 1
-        unzip -oq "$ZIP" -d "$TMP" || exit 1
+        unzip -oq "$ZIP" -d "$TMP_SF" || exit 1
 
-        BASE="$TMP/zapret-discord-youtube-main"
+        BASE="$TMP_SF/zapret-discord-youtube-main"
 
         find "$BASE" -type f -name 'general*.bat' ! -name 'general (ALT5).bat' | while read -r F; do
             MATCH=$(grep -E \
@@ -254,62 +292,8 @@ flowseal_menu() {
             /^\--new\n$/d
         }' "$OUT"
 
-        rm -rf "$TMP/zapret-discord-youtube-main" "$ZIP"
+        rm -rf "$TMP_SF/zapret-discord-youtube-main" "$ZIP"
     }
-
-    [ ! -f "$OUT" ] && download_strategies
-
-    while true; do
-        STRATEGIES=$(grep '^#' "$OUT" | sed 's/^#//')
-
-        echo
-        echo "Список стратегий от Flowseal:"
-        echo "0) Обновить стратегии"
-        i=1
-        echo "$STRATEGIES" | while IFS= read -r line; do
-            echo "$i) $line"
-            i=$((i+1))
-        done
-
-        echo -n "Выберите стратегию: "
-        read CHOICE
-
-        if ! echo "$CHOICE" | grep -qE '^[0-9]+$'; then
-            echo "Ошибка: нужно число"
-            continue
-        fi
-
-        if [ "$CHOICE" -eq 0 ]; then
-            rm -rf "$TMP"
-            download_strategies
-            continue
-        fi
-
-        SEL_NAME=$(echo "$STRATEGIES" | sed -n "${CHOICE}p")
-
-        if [ -z "$SEL_NAME" ]; then
-            echo "Ошибка: такой стратегии нет"
-            continue
-        fi
-
-        BLOCK=$(awk -v name="$SEL_NAME" '
-            $0=="#"name {flag=1; print; next}
-            /^#/ && flag {exit}
-            flag {print}' "$OUT")
-
-        sed -i "/option NFQWS_OPT '/,\$d" "$ZAPRET_CONF"
-
-        {
-            echo "	option NFQWS_OPT '"
-            echo "$BLOCK"
-            echo "'"
-        } >> "$ZAPRET_CONF"
-
-        echo "Стратегия '$SEL_NAME' успешно установлена в $ZAPRET_CONF"
-        break
-    done
-}
-
 
 
 # ==========================================
