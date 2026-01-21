@@ -30,32 +30,25 @@ find "$BASE" -type f -name 'general*.bat' ! -name 'general (ALT5).bat' | while r
   } >> "$OUT"
 done
 
-# 2. Замены по твоему списку
-
-# BIN google
+# 2. Замены по списку
 sed -i 's|"%BIN%tls_clienthello_www_google_com.bin"|/opt/zapret/files/fake/tls_clienthello_www_google_com.bin|g' "$OUT"
-
-# удаляем строки
 sed -i '/--hostlist="%LISTS%list-general.txt"/d' "$OUT"
 sed -i '/--ipset-exclude="%LISTS%ipset-exclude.txt"/d' "$OUT"
-
-# list-exclude
 sed -i 's|"%LISTS%list-exclude.txt"|/opt/zapret/ipset/zapret-hosts-user-exclude.txt|g' "$OUT"
-
-# --new ^
 sed -i 's/--new[[:space:]]\^/--new/g' "$OUT"
-
-# list-google
 sed -i 's|"%LISTS%list-google.txt"|/opt/zapret/ipset/zapret-hosts-google.txt|g' "$OUT"
-
-# BIN 4pda
 sed -i 's|"%BIN%tls_clienthello_4pda_to.bin"|/opt/zapret/files/fake/4pda.bin|g' "$OUT"
-
-# BIN max
 sed -i 's|"%BIN%tls_clienthello_max_ru.bin"|/opt/zapret/files/fake/max.bin|g' "$OUT"
+sed -i 's|\^!|/opt/zapret/files/fake/tls_clienthello_www_google_com.bin|g' "$OUT'
 
-# ^! → tls_clienthello_www_google_com.bin
-sed -i 's|\^!|/opt/zapret/files/fake/tls_clienthello_www_google_com.bin|g' "$OUT"
-
-# убрать trailing spaces в конце строк
+# убрать trailing spaces
 sed -i 's/[[:space:]]\+$//g' "$OUT"
+
+# 3. Удаляем пустые строки перед #general и лишние --new выше
+awk 'BEGIN{prev=""} 
+     /^#general/ {gsub(/^[[:space:]]+/,""); print; prev=""; next} 
+     /^--new$/ {prev="skip"; next} 
+     {if(prev!="skip") print; prev=""}' "$OUT" > "$OUT.tmp" && mv "$OUT.tmp" "$OUT"
+
+# 4. Чистим все временные файлы кроме str_flow.txt
+find "$TMP" -mindepth 1 ! -name "$(basename "$OUT")" -exec rm -rf {} +
