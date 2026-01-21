@@ -12,15 +12,17 @@ unzip -oq "$ZIP" -d "$TMP" || exit 1
 
 BASE="$TMP/zapret-discord-youtube-main"
 
-find "$BASE" -type f -name 'general*' | while read -r F; do
+find "$BASE" -type f -name 'general*.bat' ! -name 'general (ALT5).bat' | while read -r F; do
   MATCH=$(grep -E \
     '^--filter-udp=19294-19344,50000-50100|^--filter-tcp=2053,2083,2087,2096,8443|^--filter-tcp=443 --hostlist="%LISTS%list-google.txt"|^--filter-tcp=80,443 --hostlist="%LISTS%list-general.txt"' \
     "$F")
 
   [ -z "$MATCH" ] && continue
 
+  NAME=$(basename "$F" .bat)
+
   {
-    echo "# $(basename "$F")"
+    echo "#$NAME"
     echo "$MATCH" | sed 's/--/\n--/g' | sed '/^$/d'
     echo
   } >> "$OUT"
