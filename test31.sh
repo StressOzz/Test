@@ -230,7 +230,7 @@ flowseal_menu() {
             i=$((i+1))
         done
         echo -e "${CYAN}0) ${GREEN}Обновить стратегии${NC}"
-        echo -e "${CYAN}Enter) ${GREEN} Выход в меню стратегий${NC}\n"
+        echo -e "${CYAN}Enter) ${GREEN}Выход в меню стратегий${NC}\n"
         echo -ne "${YELLOW}Выберите стратегию: ${NC}"
 read CHOICE
 
@@ -238,7 +238,7 @@ read CHOICE
 echo "$CHOICE" | grep -qE '^[0-9]+$' || return
 
 
-[ "$CHOICE" -eq 0 ] && { rm -rf "$TMP_SF"; download_strategies; return; }
+[ "$CHOICE" -eq 0 ] && { rm -rf "$TMP_SF"; download_strategies; }
 
 SEL_NAME=$(echo "$STRATEGIES" | sed -n "${CHOICE}p")
 [ -z "$SEL_NAME" ] && return 
