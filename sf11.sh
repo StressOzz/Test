@@ -49,6 +49,3 @@ awk 'BEGIN{prev=""}
      /^#general/ {gsub(/^[[:space:]]+/,""); print; prev=""; next} 
      /^--new$/ {prev="skip"; next} 
      {if(prev!="skip") print; prev=""}' "$OUT" > "$OUT.tmp" && mv "$OUT.tmp" "$OUT"
-
-# 4. Чистим все временные файлы кроме str_flow.txt
-rm -rf /opt/zapret_temp/zapret-discord-youtube-main repo.zip
