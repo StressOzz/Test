@@ -25,7 +25,7 @@ find "$BASE" -type f -name 'general*.bat' ! -name 'general (ALT5).bat' | while r
 
   {
     echo "#$NAME"
-    echo "$MATCH" | sed 's/--/\n--/g' | sed '/^$/d'
+    echo "$MATCH" | sed 's/--/\n--/g' | sed '/^$/d' | sed 's/[[:space:]]*$//'
     echo
   } >> "$OUT"
 done
@@ -53,3 +53,9 @@ sed -i 's|"%BIN%tls_clienthello_4pda_to.bin"|/opt/zapret/files/fake/4pda.bin|g' 
 
 # BIN max
 sed -i 's|"%BIN%tls_clienthello_max_ru.bin"|/opt/zapret/files/fake/max.bin|g' "$OUT"
+
+# ^! → tls_clienthello_www_google_com.bin
+sed -i 's|\^!|/opt/zapret/files/fake/tls_clienthello_www_google_com.bin|g' "$OUT"
+
+# убрать trailing spaces в конце строк
+sed -i 's/[[:space:]]\+$//g' "$OUT"
