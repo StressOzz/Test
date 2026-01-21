@@ -222,7 +222,7 @@ flowseal_menu() {
     while true; do
         STRATEGIES=$(grep '^#' "$OUT" | sed 's/^#//')
 clear
-        echo -e "\n${YELLOW}Список стратегий от Flowseal${NC}\n"
+        echo -e "${YELLOW}Список стратегий от Flowseal${NC}\n"
         
         i=1
         echo "$STRATEGIES" | while IFS= read -r line; do
