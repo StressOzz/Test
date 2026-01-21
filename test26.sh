@@ -255,7 +255,7 @@ SEL_NAME=$(echo "$STRATEGIES" | sed -n "${CHOICE}p")
             echo "'"
         } >> "$CONF"
         
-        echo -e "\n${CYAN}Применяем стратегию${NC}"; ZAPRET_RESTART; echo -e "${GREEN}Стратегия ${NC}'$SEL_NAME' ${GREEN}установлена!\n"
+        echo -e "\n${CYAN}Устанавливаем и применяем стратегию${NC}"; ZAPRET_RESTART; echo -e "${GREEN}Стратегия ${NC}$SEL_NAME ${GREEN}установлена!${NC}\n"
         PAUSE
         break
     done
@@ -311,11 +311,11 @@ if [ -f "$CONF" ]; then current="$ver$( [ -n "$ver" ] && [ -n "$yv_ver" ] && ech
 if [ -n "$current" ]; then echo -e "${YELLOW}Используется стратегия:${NC} ${CYAN}$current${DV:+ $DV}${RKN_STATUS:+ $RKN_STATUS}${NC}"; elif [ -n "$RKN_STATUS" ]; then  echo -e "${YELLOW}Используется стратегия:${NC}${CYAN} РКН${DV:+ $DV}${NC}"; fi; fi
 [ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*88,500,1024-19293,19345-49999,50101-65535" "$CONF" && grep -q -- "--filter-udp=88,500,1024-19293,19345-49999,50101-65535" "$CONF" && echo -e "${YELLOW}Стратегия для игр:${NC} ${GREEN}включена${NC}"
 if hosts_enabled; then echo -e "${YELLOW}IP в hosts: ${GREEN}добавлены${NC}\n"; else echo -e "${YELLOW}IP в hosts: ${RED}отсутствуют${NC}\n"; fi
-echo -e "${CYAN}1) ${GREEN}Выбрать и установить стратегию ${NC}v1-v8\n${CYAN}2) ${GREEN}$menu_game\n${CYAN}3) $RKN_TEXT_MENU\n${CYAN}4) ${GREEN}Подобрать стратегию для ${NC}YouTube"
-echo -e "${CYAN}5) ${GREEN}Выбрать и установить стратегию для ${NC}YouTube\n${CYAN}6) ${GREEN}Выбрать и установить стратегию от ${NC}Flowseal\n${CYAN}7) ${GREEN}Обновить список исключений${NC}"
+echo -e "${CYAN}1) ${GREEN}Выбрать и установить стратегию ${NC}v1-v8\n${CYAN}2) ${GREEN}Выбрать и установить стратегию от ${NC}Flowseal\n${CYAN}3) ${GREEN}$menu_game\n${CYAN}4) $RKN_TEXT_MENU\n${CYAN}${NC}"
+echo -e "${CYAN}5) ${GREEN}Подобрать стратегию для ${NC}YouTube\n${CYAN}6) ${GREEN}Выбрать и установить стратегию для ${NC}YouTube\n${CYAN}7) ${GREEN}Обновить список исключений${NC}"
 if hosts_enabled; then echo -e "${CYAN}8) ${GREEN}Удалиль ${NC}IP${GREEN} из ${NC}hosts"; else echo -e "${CYAN}8) ${GREEN}Добавить ${NC}IP${GREEN} в ${NC}hosts"; fi
-echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read choiceST; case "$choiceST" in 1) strategy_CHOUSE ;; 2) fix_GAME ;; 3) toggle_rkn_bypass; continue ;; 4) auto_stryou ;;
-5) choose_strategy_manual ;; 6) flowseal_menu ;; 8) menu_hosts ;; 7) echo -e "\n${MAGENTA}Обновляем список исключений${NC}\n${CYAN}Останавливаем ${NC}Zapret"; /etc/init.d/zapret stop >/dev/null 2>&1; echo -e "${CYAN}Добавляем домены в исключения${NC}"
+echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read choiceST; case "$choiceST" in 1) strategy_CHOUSE ;; 3) fix_GAME ;; 4) toggle_rkn_bypass; continue ;; 5) auto_stryou ;;
+6) choose_strategy_manual ;; 2) flowseal_menu ;; 8) menu_hosts ;; 7) echo -e "\n${MAGENTA}Обновляем список исключений${NC}\n${CYAN}Останавливаем ${NC}Zapret"; /etc/init.d/zapret stop >/dev/null 2>&1; echo -e "${CYAN}Добавляем домены в исключения${NC}"
 rm -f "$EXCLUDE_FILE"; wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL" || echo -e "\n${RED}Не удалось загрузить exclude файл${NC}\n"; echo -e "${CYAN}Перезапускаем ${NC}Zapret"
 ZAPRET_RESTART; echo -e "${GREEN}Список исключений обновлён!${NC}\n"; PAUSE ;; *) return ;; esac; done }
 strategy_CHOUSE () { echo -ne "\n${YELLOW}Введите версию стратегии ${NC}(1-8)${YELLOW}:${NC} "; read -r choice; if [[ "$choice" =~ ^[1-8]$ ]]; then install_strategy "v$choice"; fi; }
