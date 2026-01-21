@@ -220,15 +220,16 @@ flowseal_menu() {
         STRATEGIES=$(grep '^#' "$OUT" | sed 's/^#//')
 
         echo
-        echo -e "\nСписок стратегий от Flowseal:"
+        echo -e "\n${YELLOW}Список стратегий от Flowseal${NC}\n"
         
         i=1
         echo "$STRATEGIES" | while IFS= read -r line; do
             echo -e "${CYAN}$i) ${NC}$line"
             i=$((i+1))
         done
-        echo -e "${CYAN}0) ${GREEN}Обновить стратегии"
-        echo -n "Выберите стратегию: "
+        echo -e "${CYAN}0) ${GREEN}Обновить стратегии${NC}"
+        echo -e "${CYAN}Enter) ${GREEN} Выход в меню стратегий: ${NC}\n"
+        echo -ne "${YELLOW}Выберите стратегию: ${NC}"
 read CHOICE
 SEL_NAME=$(echo "$STRATEGIES" | sed -n "${CHOICE}p")
 [ -z "$SEL_NAME" ] && return  # или exit 0
@@ -249,13 +250,13 @@ SEL_NAME=$(echo "$STRATEGIES" | sed -n "${CHOICE}p")
         } >> "$CONF"
         
 ZAPRET_RESTART
-        echo "Стратегия '$SEL_NAME' успешно установлена в $CONF"
-        
+        echo -e "\n${GREEN}Стратегия ${NC}'$SEL_NAME' ${GREEN}успешно установлена!\n"
+        PAUSE
         break
     done
 }
     download_strategies() {
-        echo "Скачиваем и формируем стратегии..."
+        echo -e "${MAGENTA}Скачиваем и формируем стратегии${NC}"
         mkdir -p "$TMP_SF" || exit 1
         : > "$OUT"
 
@@ -293,6 +294,7 @@ ZAPRET_RESTART
         }' "$OUT"
 
         rm -rf "$TMP_SF/zapret-discord-youtube-main" "$ZIP"
+        PAUSE
     }
 
 
