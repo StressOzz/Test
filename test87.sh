@@ -236,7 +236,7 @@ if [ -n "$current" ]; then echo -e "${YELLOW}Используется страт
 [ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*88,500,1024-19293,19345-49999,50101-65535" "$CONF" && grep -q -- "--filter-udp=88,500,1024-19293,19345-49999,50101-65535" "$CONF" && echo -e "${YELLOW}Стратегия для игр:${NC} ${GREEN}включена${NC}"
 if hosts_enabled; then echo -e "${YELLOW}IP в /etc/hosts: ${GREEN}добавлены${NC}\n"; else echo -e "${YELLOW}IP в /etc/hosts: ${RED}отсутствуют${NC}\n"; fi
 echo -e "${CYAN}1) ${GREEN}Выбрать и установить стратегию ${NC}v1-v8\n${CYAN}2) ${GREEN}Выбрать и установить стратегию от ${NC}Flowseal\n${CYAN}3) ${GREEN}$menu_game\n${CYAN}4)${NC} $RKN_TEXT_MENU${NC}"
-echo -e "${CYAN}5) ${GREEN}Подобрать стратегию для ${NC}YouTube\n${CYAN}6) ${GREEN}Выбрать и установить стратегию для ${NC}YouTube\n${CYAN}7) ${GREEN}Обновить список исключений${NC}\n${CYAN}8) ${GREEN}Меню редактирования ${NC}/etc/hosts"
+echo -e "${CYAN}5) ${GREEN}Подобрать стратегию для ${NC}YouTube\n${CYAN}6) ${GREEN}Выбрать и установить стратегию для ${NC}YouTube\n${CYAN}7) ${GREEN}Обновить список исключений${NC}\n${CYAN}8) ${GREEN}Меню управления доменами в ${NC}/etc/hosts"
 echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read choiceST; case "$choiceST" in 1) strategy_CHOUSE;; 3) fix_GAME;; 4) toggle_rkn_bypass; continue;; 5) auto_stryou;;
 6) choose_strategy_manual;; 2) flowseal_menu;; 8) menu_hosts;; 7) echo -e "\n${MAGENTA}Обновляем список исключений${NC}\n${CYAN}Останавливаем ${NC}Zapret"; /etc/init.d/zapret stop >/dev/null 2>&1; echo -e "${CYAN}Добавляем домены в исключения${NC}"
 rm -f "$EXCLUDE_FILE"; wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL" || echo -e "\n${RED}Не удалось загрузить exclude файл${NC}\n"; echo -e "${CYAN}Перезапускаем ${NC}Zapret"
@@ -340,9 +340,9 @@ remove_block() { while IFS= read -r line; do [ -z "$line" ] && continue; sed -i 
 toggle_block() { if status_block "$1"; then remove_block "$1"; echo -e "\n${CYAN}Удаляем и применяем${NC}"; else add_block "$1"; echo -e "\n${CYAN}Добавляем и применяем${NC}"; fi; /etc/init.d/dnsmasq restart >/dev/null 2>&1; echo -e "${GREEN}Готово!${NC}\n"; PAUSE; }
 toggle_all() { if status_block "$ALL_BLOCKS"; then remove_block "$ALL_BLOCKS"; echo -e "\n${CYAN}Удаляем и применяем${NC}"; else add_block "$ALL_BLOCKS"; echo -e "\n${CYAN}Добавляем и применяем${NC}"; fi; /etc/init.d/dnsmasq restart >/dev/null 2>&1; echo -e "${GREEN}Готово!${NC}\n"; PAUSE; }
 menu_hosts() { while true; do clear; status_block "$INSTAGRAM" && S1="Удалить" || S1="Добавить"; status_block "$PDA" && S2="Удалить" || S2="Добавить"; status_block "$NTC" && S3="Удалить" || S3="Добавить"
-status_block "$RUTOR" && S4="Удалить" || S4="Добавить"; status_block "$LIBRUSEC" && S5="Удалить" || S5="Добавить"; status_block "$ALL_BLOCKS" && S6="${GREEN}Удалить все ${NC}IP ${GREEN}из${NC} /etc/hosts" || S6="${GREEN}Добавить все ${NC}IP ${GREEN}в${NC} /etc/hosts"
-echo -e "${YELLOW}Меню редактирования /etc/hosts${NC}\n\n${CYAN}1) ${GREEN}$S2 ${NC}IP ${GREEN}для${NC} 4Pda\n${CYAN}2) ${GREEN}$S4 ${NC}IP ${GREEN}для${NC} Rutor\n${CYAN}3) ${GREEN}$S3 ${NC}IP ${GREEN}для${NC} ntc.party\n${CYAN}4) ${GREEN}$S1 ${NC}IP ${GREEN}для${NC} Instagram"
-echo -e "${CYAN}5) ${GREEN}$S5 ${NC}IP ${GREEN}для${NC} Lib.rus.ec\n${CYAN}6) ${NC}$S6${NC}\n${CYAN}Enter) ${GREEN}Выход в меню стратегий${NC}"
+status_block "$RUTOR" && S4="Удалить" || S4="Добавить"; status_block "$LIBRUSEC" && S5="Удалить" || S5="Добавить"; status_block "$ALL_BLOCKS" && S6="${GREEN}Удалить все домены${NC}" || S6="${GREEN}Добавить все домены${NC}"
+echo -e "${YELLOW}Меню управления доменами в /etc/hosts${NC}\n\n${CYAN}1) ${GREEN}$S2${NC} 4Pda\n${CYAN}2) ${GREEN}$S4${NC} Rutor\n${CYAN}3) ${GREEN}$S3${NC} ntc.party\n${CYAN}4) ${GREEN}$S1${NC} Instagram"
+echo -e "${CYAN}5) ${GREEN}$S5${NC} Lib.rus.ec\n${CYAN}6) ${NC}$S6${NC}\n${CYAN}Enter) ${GREEN}Выход в меню стратегий${NC}"
 echo -ne "\n${YELLOW}Выберите пункт:${NC} "; read -r choiceIP; case "$choiceIP" in 4) toggle_block "$INSTAGRAM";; 1) toggle_block "$PDA";; 3) toggle_block "$NTC";; 2) toggle_block "$RUTOR";; 5) toggle_block "$LIBRUSEC";; 6) toggle_all;; *) break;; esac; done; }
 # ==========================================
 # Главное меню
