@@ -367,22 +367,33 @@ $LIBRUSEC"
 # ---------- проверки ----------
 
 status_block() {
-    for line in $1; do
+    while IFS= read -r line; do
+        [ -z "$line" ] && continue
         grep -Fxq "$line" "$HOSTS_FILE" || return 1
-    done
+    done <<EOF
+$1
+EOF
     return 0
 }
 
 
 add_block() {
-    echo "$1" >> "$HOSTS_FILE"
+    while IFS= read -r line; do
+        [ -z "$line" ] && continue
+        grep -Fxq "$line" "$HOSTS_FILE" || echo "$line" >> "$HOSTS_FILE"
+    done <<EOF
+$1
+EOF
 }
 
 
 remove_block() {
-    for line in $1; do
+    while IFS= read -r line; do
+        [ -z "$line" ] && continue
         sed -i "\|^$line$|d" "$HOSTS_FILE"
-    done
+    done <<EOF
+$1
+EOF
 }
 
 
