@@ -367,9 +367,9 @@ $LIBRUSEC"
 # ---------- проверки ----------
 
 status_block() {
-    while IFS= read -r line; do
+    for line in $1; do
         grep -Fxq "$line" "$HOSTS_FILE" || return 1
-    done <<< "$1"
+    done
     return 0
 }
 
