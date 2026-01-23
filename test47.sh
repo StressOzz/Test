@@ -264,7 +264,7 @@ echo -e "\n${CYAN}Применяем стратегию: ${NC}$SELECTED_NAME"; S
 awk '{if(skip){if($0=="--new"||$0~/\047/){skip=0;next}if($0~/^[[:space:]]*$/)next;next}if($0=="--filter-tcp=443"){getline n;if(n=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt"){skip=1;next}else{print $0;print n;next}}if($0=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt")has_google=1;if($0~/^[[:space:]]*#Yv/)next;print}' "$OLD_STR" > "$NEW_STR"
 awk 'BEGIN{inserted=0;has_google=0} $0=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt"{has_google=1} $0=="--new"&&!inserted{while((getline l<"'"$SAVED_STR"'")>0) if(l!~/^[[:space:]]*$/) print l; print "--new"; inserted=1; next} $0~/^[[:space:]]*option NFQWS_OPT \047$/&&!has_google&&!inserted{print; print "#'"$SELECTED_NAME"'"; while((getline l<"'"$SAVED_STR"'")>0) if(l!~/^[[:space:]]*$/) print l; print "--new"; inserted=1; next} {print}' "$NEW_STR" > "$FINAL_STR"
 cat "$FINAL_STR" >> "$CONF"; awk '{if($0=="--new"){if(prev!="--new")print}else print;prev=$0}' "$CONF" > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"; grep -q "^[[:space:]]*' *\$" "$CONF" || echo "'" >> "$CONF"; ZAPRET_RESTART; echo -e "${GREEN}Стратегия применена!${NC}\n"; read -p "Нажмите Enter..." dummy </dev/tty; }
-menu_hosts() { if hosts_enabled; then echo -e "\n${MAGENTA}Удаляем Ip${NC}"; hosts_clear; echo -e "IP ${GREEN}удалены из ${NC}hosts\n"; else echo -e "\n${MAGENTA}Добавляем Ip${NC}"; hosts_add; echo -e "IP ${GREEN}добавлены в ${NC}hosts\n"; fi; PAUSE; }
+# menu_hosts() { if hosts_enabled; then echo -e "\n${MAGENTA}Удаляем Ip${NC}"; hosts_clear; echo -e "IP ${GREEN}удалены из ${NC}hosts\n"; else echo -e "\n${MAGENTA}Добавляем Ip${NC}"; hosts_add; echo -e "IP ${GREEN}добавлены в ${NC}hosts\n"; fi; PAUSE; }
 # ==========================================
 # DNS over HTTPS
 # ==========================================
@@ -330,6 +330,90 @@ echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${
 0) FO=$(uci get firewall.@defaults[0].flow_offloading 2>/dev/null); FOHW=$(uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null); if grep -q 'ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc; then echo -e "\n${MAGENTA}Отключаем FIX для Flow Offloading${NC}"
 sed -i 's/meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;/meta l4proto { tcp, udp } flow offload @ft;/' /usr/share/firewall4/templates/ruleset.uc; fw4 restart >/dev/null 2>&1; echo -e "FIX ${GREEN}отключён!${NC}\n"; PAUSE; elif [ "$FO" = 1 ] || [ "$FOHW" = 1 ]; then echo -e "\n${MAGENTA}Применяем FIX для Flow Offloading${NC}"
 sed -i 's/meta l4proto { tcp, udp } flow offload @ft;/meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;/' /usr/share/firewall4/templates/ruleset.uc; fw4 restart >/dev/null 2>&1; echo -e "FIX ${GREEN}успешно применён!${NC}\n"; PAUSE; fi ;; *) echo; return ;; esac; done; }
+
+
+# ==========================================
+# Hosts menu
+# ==========================================
+
+HOSTS_FILE="/etc/hosts"
+
+INSTAGRAM="57.144.222.34 instagram.com www.instagram.com
+157.240.9.174 instagram.com www.instagram.com
+157.240.245.174 instagram.com www.instagram.com
+157.240.205.174 instagram.com www.instagram.com"
+
+PDA="185.87.51.182 4pda.to www.4pda.to"
+
+NTC="130.255.77.28 ntc.party
+30.255.77.28 ntc.party"
+
+RUTOR="173.245.58.219 rutor.info d.rutor.info"
+
+LIBRUSEC="185.39.18.98 lib.rus.ec www.lib.rus.ec"
+
+
+
+toggle_block() {
+    LIST="$1"
+
+    if echo "$LIST" | while read -r line; do grep -Fxq "$line" "$HOSTS_FILE"; done; then
+        # если есть — удаляем
+        echo "$LIST" | while read -r line; do sed -i "\|^$line$|d" "$HOSTS_FILE"; done
+        return 1
+    else
+        # если нет — добавляем
+        echo "$LIST" >> "$HOSTS_FILE"
+        return 0
+    fi
+}
+
+
+
+status_block() {
+    LIST="$1"
+    echo "$LIST" | while read -r line; do grep -Fxq "$line" "$HOSTS_FILE" || return 1; done
+    return 0
+}
+
+
+
+menu_hosts() {
+    while true; do
+        clear
+
+        status_block "$INSTAGRAM" && S1="Удалить" || S1="Добавить"
+        status_block "$PDA"       && S2="Удалить" || S2="Добавить"
+        status_block "$NTC"       && S3="Удалить" || S3="Добавить"
+        status_block "$RUTOR"     && S4="Удалить" || S4="Добавить"
+        status_block "$LIBRUSEC"  && S5="Удалить" || S5="Добавить"
+
+        echo "====== HOSTS меню ======"
+        echo "1) $S1 Instagram"
+        echo "2) $S2 4Pda"
+        echo "3) $S3 NTC"
+        echo "4) $S4 Rutor"
+        echo "5) $S5 Lib.rus.ec"
+        echo "0) Выход"
+        echo
+
+        read -r -p "Выбор: " c
+
+        case "$c" in
+            1) toggle_block "$INSTAGRAM" ;;
+            2) toggle_block "$PDA" ;;
+            3) toggle_block "$NTC" ;;
+            4) toggle_block "$RUTOR" ;;
+            5) toggle_block "$LIBRUSEC" ;;
+            0) break ;;
+        esac
+    done
+}
+
+
+
+
+
 # ==========================================
 # Главное меню
 # ==========================================
