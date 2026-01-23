@@ -362,63 +362,12 @@ $LIBRUSEC"
 
 # ---------- проверки ----------
 
-status_block() {
-    while IFS= read -r line; do
-        [ -z "$line" ] && continue
-        grep -Fxq "$line" "$HOSTS_FILE" || return 1
-    done <<EOF
-$1
-EOF
-    return 0
-}
+status_block() {while IFS= read -r line;do [ -z "$line" ]&& continue;grep -Fxq "$line" "$HOSTS_FILE"||return 1;done<<EOF $1 EOF;return 0;}
+add_block() {while IFS= read -r line;do [ -z "$line" ]&& continue;grep -Fxq "$line" "$HOSTS_FILE"||echo "$line">>"$HOSTS_FILE";done<<EOF $1 EOF;}
+remove_block() {while IFS= read -r line;do [ -z "$line" ]&& continue;sed -i "\|^$line$|d" "$HOSTS_FILE";done<<EOF $1 EOF;}
+toggle_block() {if status_block "$1";then remove_block "$1";echo -e "\n${CYAN}Удаляем и применяем${NC}";else add_block "$1";echo -e "\n${CYAN}Добавляем и применяем${NC}";fi;/etc/init.d/dnsmasq restart >/dev/null 2>&1;echo -e "${GREEN}Готово!${NC}\n";PAUSE;}
+toggle_all() {if status_block "$ALL_BLOCKS";then remove_block "$ALL_BLOCKS";echo -e "\n${CYAN}Удаляем и применяем${NC}";else add_block "$ALL_BLOCKS";echo -e "\n${CYAN}Добавляем и применяем${NC}";fi;/etc/init.d/dnsmasq restart >/dev/null 2>&1;echo -e "${GREEN}Готово!${NC}\n";PAUSE;}
 
-
-add_block() {
-    while IFS= read -r line; do
-        [ -z "$line" ] && continue
-        grep -Fxq "$line" "$HOSTS_FILE" || echo "$line" >> "$HOSTS_FILE"
-    done <<EOF
-$1
-EOF
-}
-
-
-remove_block() {
-    while IFS= read -r line; do
-        [ -z "$line" ] && continue
-        sed -i "\|^$line$|d" "$HOSTS_FILE"
-    done <<EOF
-$1
-EOF
-}
-
-
-toggle_block() {
-    if status_block "$1"; then
-        remove_block "$1"
-        echo -e "\n${CYAN}Удаляем и применяем${NC}"
-    else
-        add_block "$1"
-        echo -e "\n${CYAN}Добавляем и применяем${NC}"
-    fi
-/etc/init.d/dnsmasq restart >/dev/null 2>&1
-echo -e "${GREEN}Готово!${NC}\n"
-PAUSE
-}
-
-
-toggle_all() {
-    if status_block "$ALL_BLOCKS"; then
-        remove_block "$ALL_BLOCKS"
-        echo -e "\n${CYAN}Удаляем и применяем${NC}"
-    else
-        add_block "$ALL_BLOCKS"
-        echo -e "\n${CYAN}Добавляем и применяем${NC}"
-    fi
-/etc/init.d/dnsmasq restart >/dev/null 2>&1
-echo -e "${GREEN}Готово!${NC}\n"
-PAUSE
-}
 
 
 
@@ -435,12 +384,12 @@ clear
         status_block "$ALL_BLOCKS"&& S6="Удалить все" || S6="Добавить все"
 
         echo -e "${YELLOW}Меню редактирования /etc/hosts${NC}\n"
-        echo -e "${CYAN}1) ${GREEN}$S2${NC}IP ${GREEN}для${NC} 4Pda"
-        echo -e "${CYAN}2) ${GREEN}$S4${NC}IP ${GREEN}для${NC} Rutor"
-        echo -e "${CYAN}3) ${GREEN}$S3${NC}IP ${GREEN}для${NC} ntc.party"
-        echo -e "${CYAN}4) ${GREEN}$S1${NC}IP ${GREEN}для${NC} Instagram"
-        echo -e "${CYAN}5) ${GREEN}$S5${NC}IP ${GREEN}для${NC} Lib.rus.ec"
-        echo -e "${CYAN}6) ${GREEN}$S6${NC}IP ${GREEN}для${NC}"
+        echo -e "${CYAN}1) ${GREEN}$S2 ${NC}IP ${GREEN}для${NC} 4Pda"
+        echo -e "${CYAN}2) ${GREEN}$S4 ${NC}IP ${GREEN}для${NC} Rutor"
+        echo -e "${CYAN}3) ${GREEN}$S3 ${NC}IP ${GREEN}для${NC} ntc.party"
+        echo -e "${CYAN}4) ${GREEN}$S1 ${NC}IP ${GREEN}для${NC} Instagram"
+        echo -e "${CYAN}5) ${GREEN}$S5 ${NC}IP ${GREEN}для${NC} Lib.rus.ec"
+        echo -e "${CYAN}6) ${GREEN}$S6 ${NC}IP ${GREEN}для${NC}"
 echo -e "${CYAN}Enter) ${GREEN}Выход в меню стратегий${NC}"
 
 echo -ne "\n${YELLOW}Выберите пункт:${NC} " 
