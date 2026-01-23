@@ -16,7 +16,7 @@ HOSTLIST_MIN_SIZE=1800000; FINAL_STR="/opt/StrFINAL"; NEW_STR="/opt/StrNEW"; HOS
 EXCLUDE_FILE="/opt/zapret/ipset/zapret-hosts-user-exclude.txt"; fileDoH="/etc/config/https-dns-proxy"
 RKN_URL="https://raw.githubusercontent.com/IndeecFOX/zapret4rocket/refs/heads/master/extra_strats/TCP/RKN/List.txt"
 EXCLUDE_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/zapret-hosts-user-exclude.txt"
-HOSTS_LIST="185.87.51.182 4pda.to www.4pda.to|130.255.77.28 ntc.party|30.255.77.28 ntc.party|173.245.58.219 rutor.info d.rutor.info|185.39.18.98 lib.rus.ec www.lib.rus.ec
+HOSTS_LIST="130.255.77.28 ntc.party|30.255.77.28 ntc.party|173.245.58.219 rutor.info d.rutor.info|185.39.18.98 lib.rus.ec www.lib.rus.ec
 57.144.222.34 instagram.com www.instagram.com|157.240.9.174 instagram.com www.instagram.com|157.240.245.174 instagram.com www.instagram.com|157.240.205.174 instagram.com www.instagram.com"
 hosts_enabled() { grep -q "4pda.to\|instagram.com\|rutor.info\|lib.rus.ec\|ntc.party" /etc/hosts; }
 hosts_add() { echo "$HOSTS_LIST" | tr '|' '\n' | grep -Fxv -f /etc/hosts >> /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1; }
@@ -237,7 +237,7 @@ if [ -n "$current" ]; then echo -e "${YELLOW}Используется страт
 if hosts_enabled; then echo -e "${YELLOW}IP в hosts: ${GREEN}добавлены${NC}\n"; else echo -e "${YELLOW}IP в hosts: ${RED}отсутствуют${NC}\n"; fi
 echo -e "${CYAN}1) ${GREEN}Выбрать и установить стратегию ${NC}v1-v8\n${CYAN}2) ${GREEN}Выбрать и установить стратегию от ${NC}Flowseal\n${CYAN}3) ${GREEN}$menu_game\n${CYAN}4)${NC} $RKN_TEXT_MENU${NC}"
 echo -e "${CYAN}5) ${GREEN}Подобрать стратегию для ${NC}YouTube\n${CYAN}6) ${GREEN}Выбрать и установить стратегию для ${NC}YouTube\n${CYAN}7) ${GREEN}Обновить список исключений${NC}"
-if hosts_enabled; then echo -e "${CYAN}8) ${GREEN}Удалиль ${NC}IP${GREEN} из ${NC}hosts"; else echo -e "${CYAN}8) ${GREEN}Добавить ${NC}IP${GREEN} в ${NC}hosts"; fi
+if hosts_enabled; then echo -e "${CYAN}8) ${GREEN}Удалиль ${NC}IP${GREEN} из ${NC}hosts"; else echo -e "${CYAN}8) ${GREEN}Меню редактирования ${NC}/etc/hosts"; fi
 echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read choiceST; case "$choiceST" in 1) strategy_CHOUSE ;; 3) fix_GAME ;; 4) toggle_rkn_bypass; continue ;; 5) auto_stryou ;;
 6) choose_strategy_manual ;; 2) flowseal_menu ;; 8) menu_hosts ;; 7) echo -e "\n${MAGENTA}Обновляем список исключений${NC}\n${CYAN}Останавливаем ${NC}Zapret"; /etc/init.d/zapret stop >/dev/null 2>&1; echo -e "${CYAN}Добавляем домены в исключения${NC}"
 rm -f "$EXCLUDE_FILE"; wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL" || echo -e "\n${RED}Не удалось загрузить exclude файл${NC}\n"; echo -e "${CYAN}Перезапускаем ${NC}Zapret"
@@ -336,8 +336,6 @@ sed -i 's/meta l4proto { tcp, udp } flow offload @ft;/meta l4proto { tcp, udp } 
 # Hosts menu
 # ==========================================
 
-#!/bin/sh
-
 HOSTS_FILE="/etc/hosts"
 
 
@@ -405,7 +403,7 @@ toggle_block() {
         add_block "$1"
         echo -e "${GREEN}Добавлено!${NC}"
     fi
-/etc/init.d/dnsmasq reload >/dev/null 2>&1
+/etc/init.d/dnsmasq restart >/dev/null 2>&1
 PAUSE
 }
 
@@ -418,7 +416,7 @@ toggle_all() {
         add_block "$ALL_BLOCKS"
         echo -e "${GREEN}Добавлено!${NC}"
     fi
-/etc/init.d/dnsmasq reload >/dev/null 2>&1
+/etc/init.d/dnsmasq restart >/dev/null 2>&1
 PAUSE
 }
 
@@ -436,11 +434,11 @@ clear
         status_block "$LIBRUSEC"  && S5="Удалить" || S5="Добавить"
         status_block "$ALL_BLOCKS"&& S6="Удалить все" || S6="Добавить все"
 
-        echo -e "${YELLOW}Меню редактирования /etc/hosts"
-        echo -e "${CYAN}1) ${GREEN}$S1${NC} Instagram"
-        echo -e "${CYAN}2) ${GREEN}$S2${NC} 4Pda"
+        echo -e "${YELLOW}Меню редактирования /etc/hosts${NC}\n"
+        echo -e "${CYAN}1) ${GREEN}$S2${NC} 4Pda"
+        echo -e "${CYAN}2) ${GREEN}$S4${NC} Rutor"
         echo -e "${CYAN}3) ${GREEN}$S3${NC} ntc.party"
-        echo -e "${CYAN}4) ${GREEN}$S4${NC} Rutor"
+        echo -e "${CYAN}4) ${GREEN}$S1${NC} Instagram"
         echo -e "${CYAN}5) ${GREEN}$S5${NC} Lib.rus.ec"
         echo -e "${CYAN}6) ${GREEN}$S6${NC}"
 echo -e "${CYAN}Enter) ${GREEN}Выход в меню стратегий${NC}"
@@ -449,10 +447,10 @@ echo -e "${CYAN}Enter) ${GREEN}Выход в меню стратегий${NC}"
 echo -ne "\n${YELLOW}Выберите пункт:${NC} " 
 read -r choiceIP
 case "$choiceIP" in
-            1) toggle_block "$INSTAGRAM" ;;
-            2) toggle_block "$PDA" ;;
+            4) toggle_block "$INSTAGRAM" ;;
+            1) toggle_block "$PDA" ;;
             3) toggle_block "$NTC" ;;
-            4) toggle_block "$RUTOR" ;;
+            2) toggle_block "$RUTOR" ;;
             5) toggle_block "$LIBRUSEC" ;;
             6) toggle_all ;;
             *) break ;;
