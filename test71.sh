@@ -19,13 +19,22 @@ EXCLUDE_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/hea
 HOSTS_FILE="/etc/hosts"
 
 
-INSTAGRAM=$'57.144.222.34 instagram.com www.instagram.com\n157.240.9.174 instagram.com www.instagram.com\n157.240.245.174 instagram.com www.instagram.com\n157.240.205.174 instagram.com www.instagram.com'
-PDA=$'185.87.51.182 4pda.to www.4pda.to'
-NTC=$'130.255.77.28 ntc.party\n30.255.77.28 ntc.party'
-RUTOR=$'173.245.58.219 rutor.info d.rutor.info'
-LIBRUSEC=$'185.39.18.98 lib.rus.ec www.lib.rus.ec'
+INSTAGRAM="57.144.222.34 instagram.com www.instagram.com
+157.240.9.174 instagram.com www.instagram.com
+157.240.245.174 instagram.com www.instagram.com
+157.240.205.174 instagram.com www.instagram.com"
 
-ALL_BLOCKS=$"$INSTAGRAM\n$PDA\n$NTC\n$RUTOR\n$LIBRUSEC"
+PDA="185.87.51.182 4pda.to www.4pda.to"
+NTC="130.255.77.28 ntc.party
+30.255.77.28 ntc.party"
+RUTOR="173.245.58.219 rutor.info d.rutor.info"
+LIBRUSEC="185.39.18.98 lib.rus.ec www.lib.rus.ec"
+
+ALL_BLOCKS="$INSTAGRAM
+$PDA
+$NTC
+$RUTOR
+$LIBRUSEC"
 
 
 
