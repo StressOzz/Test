@@ -336,7 +336,10 @@ sed -i 's/meta l4proto { tcp, udp } flow offload @ft;/meta l4proto { tcp, udp } 
 # Hosts menu
 # ==========================================
 
+#!/bin/sh
+
 HOSTS_FILE="/etc/hosts"
+
 
 INSTAGRAM="57.144.222.34 instagram.com www.instagram.com
 157.240.9.174 instagram.com www.instagram.com
@@ -353,30 +356,56 @@ RUTOR="173.245.58.219 rutor.info d.rutor.info"
 LIBRUSEC="185.39.18.98 lib.rus.ec www.lib.rus.ec"
 
 
+ALL_BLOCKS="$INSTAGRAM
+$PDA
+$NTC
+$RUTOR
+$LIBRUSEC"
+
+
+
+# ---------- проверки ----------
+
+status_block() {
+    while IFS= read -r line; do
+        grep -Fxq "$line" "$HOSTS_FILE" || return 1
+    done <<< "$1"
+    return 0
+}
+
+
+add_block() {
+    echo "$1" >> "$HOSTS_FILE"
+}
+
+
+remove_block() {
+    while IFS= read -r line; do
+        sed -i "\|^$line$|d" "$HOSTS_FILE"
+    done <<< "$1"
+}
+
 
 toggle_block() {
-    LIST="$1"
-
-    if echo "$LIST" | while read -r line; do grep -Fxq "$line" "$HOSTS_FILE"; done; then
-        # если есть — удаляем
-        echo "$LIST" | while read -r line; do sed -i "\|^$line$|d" "$HOSTS_FILE"; done
-        return 1
+    if status_block "$1"; then
+        remove_block "$1"
     else
-        # если нет — добавляем
-        echo "$LIST" >> "$HOSTS_FILE"
-        return 0
+        add_block "$1"
+    fi
+}
+
+
+toggle_all() {
+    if status_block "$ALL_BLOCKS"; then
+        remove_block "$ALL_BLOCKS"
+    else
+        add_block "$ALL_BLOCKS"
     fi
 }
 
 
 
-status_block() {
-    LIST="$1"
-    echo "$LIST" | while read -r line; do grep -Fxq "$line" "$HOSTS_FILE" || return 1; done
-    return 0
-}
-
-
+# ---------- меню ----------
 
 menu_hosts() {
     while true; do
@@ -387,13 +416,15 @@ menu_hosts() {
         status_block "$NTC"       && S3="Удалить" || S3="Добавить"
         status_block "$RUTOR"     && S4="Удалить" || S4="Добавить"
         status_block "$LIBRUSEC"  && S5="Удалить" || S5="Добавить"
+        status_block "$ALL_BLOCKS"&& S6="Удалить всё" || S6="Добавить всё"
 
-        echo "====== HOSTS меню ======"
+        echo "========== HOSTS =========="
         echo "1) $S1 Instagram"
         echo "2) $S2 4Pda"
         echo "3) $S3 NTC"
         echo "4) $S4 Rutor"
         echo "5) $S5 Lib.rus.ec"
+        echo "6) $S6"
         echo "0) Выход"
         echo
 
@@ -405,6 +436,7 @@ menu_hosts() {
             3) toggle_block "$NTC" ;;
             4) toggle_block "$RUTOR" ;;
             5) toggle_block "$LIBRUSEC" ;;
+            6) toggle_all ;;
             0) break ;;
         esac
     done
