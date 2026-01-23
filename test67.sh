@@ -16,7 +16,12 @@ HOSTLIST_MIN_SIZE=1800000; FINAL_STR="/opt/StrFINAL"; NEW_STR="/opt/StrNEW"; HOS
 EXCLUDE_FILE="/opt/zapret/ipset/zapret-hosts-user-exclude.txt"; fileDoH="/etc/config/https-dns-proxy"
 RKN_URL="https://raw.githubusercontent.com/IndeecFOX/zapret4rocket/refs/heads/master/extra_strats/TCP/RKN/List.txt"
 EXCLUDE_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/zapret-hosts-user-exclude.txt"
-HOSTS_FILE="/etc/hosts"; NTC="130.255.77.28 ntc.party\n30.255.77.28 ntc.party"; ALL_BLOCKS="$INSTAGRAM\n$PDA\n$NTC\n$RUTOR\n$LIBRUSEC"
+HOSTS_FILE="/etc/hosts"; NTC="130.255.77.28 ntc.party\n30.255.77.28 ntc.party"; 
+ALL_BLOCKS="$INSTAGRAM
+$PDA
+$NTC
+$RUTOR
+$LIBRUSEC"
 PDA="185.87.51.182 4pda.to www.4pda.to"; RUTOR="173.245.58.219 rutor.info d.rutor.info"; LIBRUSEC="185.39.18.98 lib.rus.ec www.lib.rus.ec"
 INSTAGRAM="57.144.222.34 instagram.com www.instagram.com\n157.240.9.174 instagram.com www.instagram.com\n157.240.245.174 instagram.com www.instagram.com\n157.240.205.174 instagram.com www.instagram.com"
 HOSTS_LIST="130.255.77.28 ntc.party|30.255.77.28 ntc.party|173.245.58.219 rutor.info d.rutor.info|185.39.18.98 lib.rus.ec www.lib.rus.ec
@@ -342,7 +347,7 @@ toggle_all() { if status_block "$ALL_BLOCKS"; then remove_block "$ALL_BLOCKS"; e
 menu_hosts() { while true; do clear; status_block "$INSTAGRAM" && S1="${RED}Удалить" || S1="${GREEN}Добавить"; status_block "$PDA" && S2="${RED}Удалить" || S2="${GREEN}Добавить"; status_block "$NTC" && S3="${RED}Удалить" || S3="${GREEN}Добавить"
 status_block "$RUTOR" && S4="${RED}Удалить" || S4="${GREEN}Добавить"; status_block "$LIBRUSEC" && S5="${RED}Удалить" || S5="${GREEN}Добавить"; status_block "$ALL_BLOCKS" && S6="${RED}Удалить все" || S6="${GREEN}Добавить все"
 echo -e "${YELLOW}Меню редактирования /etc/hosts${NC}\n\n${CYAN}1) $S2 ${NC}IP ${GREEN}для${NC} 4Pda\n${CYAN}2) $S4 ${NC}IP ${GREEN}для${NC} Rutor\n${CYAN}3) $S3 ${NC}IP ${GREEN}для${NC} ntc.party\n${CYAN}4) $S1 ${NC}IP ${GREEN}для${NC} Instagram"
-echo -e "${CYAN}5) $S5 ${NC}IP ${GREEN}для${NC} Lib.rus.ec${CYAN}6) $S6 ${NC}IP\n${CYAN}Enter) ${GREEN}Выход в меню стратегий${NC}"
+echo -e "${CYAN}5) $S5 ${NC}IP ${GREEN}для${NC} Lib.rus.ec\n${CYAN}6) $S6 ${NC}IP\n${CYAN}Enter) ${GREEN}Выход в меню стратегий${NC}"
 echo -ne "\n${YELLOW}Выберите пункт:${NC} "; read -r choiceIP; case "$choiceIP" in 4) toggle_block "$INSTAGRAM";; 1) toggle_block "$PDA";; 3) toggle_block "$NTC";; 2) toggle_block "$RUTOR";; 5) toggle_block "$LIBRUSEC";; 6) toggle_all;; *) break;; esac; done; }
 # ==========================================
 # Главное меню
