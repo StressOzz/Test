@@ -362,11 +362,11 @@ $LIBRUSEC"
 
 # ---------- проверки ----------
 
-status_block() {while IFS= read -r line;do [ -z "$line" ]&& continue;grep -Fxq "$line" "$HOSTS_FILE"||return 1;done<<EOF $1 EOF;return 0;}
-add_block() {while IFS= read -r line;do [ -z "$line" ]&& continue;grep -Fxq "$line" "$HOSTS_FILE"||echo "$line">>"$HOSTS_FILE";done<<EOF $1 EOF;}
-remove_block() {while IFS= read -r line;do [ -z "$line" ]&& continue;sed -i "\|^$line$|d" "$HOSTS_FILE";done<<EOF $1 EOF;}
-toggle_block() {if status_block "$1";then remove_block "$1";echo -e "\n${CYAN}Удаляем и применяем${NC}";else add_block "$1";echo -e "\n${CYAN}Добавляем и применяем${NC}";fi;/etc/init.d/dnsmasq restart >/dev/null 2>&1;echo -e "${GREEN}Готово!${NC}\n";PAUSE;}
-toggle_all() {if status_block "$ALL_BLOCKS";then remove_block "$ALL_BLOCKS";echo -e "\n${CYAN}Удаляем и применяем${NC}";else add_block "$ALL_BLOCKS";echo -e "\n${CYAN}Добавляем и применяем${NC}";fi;/etc/init.d/dnsmasq restart >/dev/null 2>&1;echo -e "${GREEN}Готово!${NC}\n";PAUSE;}
+status_block() { echo "$1" | while IFS= read -r line; do [ -z "$line" ] && continue; grep -Fxq "$line" "$HOSTS_FILE" || return 1; done; return 0; }
+add_block() { echo "$1" | while IFS= read -r line; do [ -z "$line" ] && continue; grep -Fxq "$line" "$HOSTS_FILE" || echo "$line" >> "$HOSTS_FILE"; done; }
+remove_block() { echo "$1" | while IFS= read -r line; do [ -z "$line" ] && continue; sed -i "\|^$line$|d" "$HOSTS_FILE"; done; }
+toggle_block() { if status_block "$1"; then remove_block "$1"; echo -e "\n${CYAN}Удаляем и применяем${NC}"; else add_block "$1"; echo -e "\n${CYAN}Добавляем и применяем${NC}"; fi; /etc/init.d/dnsmasq restart >/dev/null 2>&1; echo -e "${GREEN}Готово!${NC}\n"; PAUSE; }
+toggle_all() { if status_block "$ALL_BLOCKS"; then remove_block "$ALL_BLOCKS"; echo -e "\n${CYAN}Удаляем и применяем${NC}"; else add_block "$ALL_BLOCKS"; echo -e "\n${CYAN}Добавляем и применяем${NC}"; fi; /etc/init.d/dnsmasq restart >/dev/null 2>&1; echo -e "${GREEN}Готово!${NC}\n"; PAUSE; }
 
 
 
