@@ -16,14 +16,33 @@ HOSTLIST_MIN_SIZE=1800000; FINAL_STR="/opt/StrFINAL"; NEW_STR="/opt/StrNEW"; HOS
 EXCLUDE_FILE="/opt/zapret/ipset/zapret-hosts-user-exclude.txt"; fileDoH="/etc/config/https-dns-proxy"
 RKN_URL="https://raw.githubusercontent.com/IndeecFOX/zapret4rocket/refs/heads/master/extra_strats/TCP/RKN/List.txt"
 EXCLUDE_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/zapret-hosts-user-exclude.txt"
-HOSTS_FILE="/etc/hosts"; NTC="130.255.77.28 ntc.party\n30.255.77.28 ntc.party"; 
+HOSTS_FILE="/etc/hosts"
+
+
+INSTAGRAM="57.144.222.34 instagram.com www.instagram.com
+157.240.9.174 instagram.com www.instagram.com
+157.240.245.174 instagram.com www.instagram.com
+157.240.205.174 instagram.com www.instagram.com"
+
+PDA="185.87.51.182 4pda.to www.4pda.to"
+NTC="130.255.77.28 ntc.party
+30.255.77.28 ntc.party"
+RUTOR="173.245.58.219 rutor.info d.rutor.info"
+LIBRUSEC="185.39.18.98 lib.rus.ec www.lib.rus.ec"
+
 ALL_BLOCKS="$INSTAGRAM
 $PDA
 $NTC
 $RUTOR
 $LIBRUSEC"
-PDA="185.87.51.182 4pda.to www.4pda.to"; RUTOR="173.245.58.219 rutor.info d.rutor.info"; LIBRUSEC="185.39.18.98 lib.rus.ec www.lib.rus.ec"
-INSTAGRAM="57.144.222.34 instagram.com www.instagram.com\n157.240.9.174 instagram.com www.instagram.com\n157.240.245.174 instagram.com www.instagram.com\n157.240.205.174 instagram.com www.instagram.com"
+
+
+
+#NTC="130.255.77.28 ntc.party\n30.255.77.28 ntc.party"; ALL_BLOCKS="$INSTAGRAM\n$PDA\n$NTC\n$RUTOR\n$LIBRUSEC"
+#PDA="185.87.51.182 4pda.to www.4pda.to"; RUTOR="173.245.58.219 rutor.info d.rutor.info"; LIBRUSEC="185.39.18.98 lib.rus.ec www.lib.rus.ec"
+#INSTAGRAM="57.144.222.34 instagram.com www.instagram.com\n157.240.9.174 instagram.com www.instagram.com\n157.240.245.174 instagram.com www.instagram.com\n157.240.205.174 instagram.com www.instagram.com"
+
+
 HOSTS_LIST="130.255.77.28 ntc.party|30.255.77.28 ntc.party|173.245.58.219 rutor.info d.rutor.info|185.39.18.98 lib.rus.ec www.lib.rus.ec
 57.144.222.34 instagram.com www.instagram.com|157.240.9.174 instagram.com www.instagram.com|157.240.245.174 instagram.com www.instagram.com|157.240.205.174 instagram.com www.instagram.com"
 hosts_enabled() { grep -q "4pda.to\|instagram.com\|rutor.info\|lib.rus.ec\|ntc.party" /etc/hosts; }
