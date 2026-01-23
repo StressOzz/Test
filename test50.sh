@@ -380,9 +380,9 @@ add_block() {
 
 
 remove_block() {
-    while IFS= read -r line; do
+    for line in $1; do
         sed -i "\|^$line$|d" "$HOSTS_FILE"
-    done <<< "$1"
+    done
 }
 
 
