@@ -40,7 +40,8 @@ config main 'config'
 --hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt
 --dpi-desync=hostfakesplit
 --dpi-desync-hostfakesplit-mod=host=max.ru
---dpi-desync-fooling=ts
+--dpi-desync-fooling=badseq
+--dpi-desync-badseq-increment=0
 --new
 --filter-udp=88,500,1024-65535
 --dpi-desync=fake
