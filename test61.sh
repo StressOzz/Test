@@ -211,7 +211,7 @@ printf '%s\n' "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/z
 # ==========================================
 flowseal_menu() { [ ! -f "$OUT" ] && download_strategies; while true; do STRATEGIES=$(grep '^#' "$OUT" | sed 's/^#//'); clear
 echo -e "${YELLOW}Список стратегий от Flowseal${NC}\n"; i=1; echo "$STRATEGIES" | while IFS= read -r line; do echo -e "${CYAN}$i) ${NC}$line"; i=$((i+1)); done
-echo -en "${CYAN}0) ${GREEN}Обновить стратегии${NC}\n${CYAN}Enter) ${GREEN}Выход в меню стратегий${NC}\n\n${YELLOW}Выберите стратегию: ${NC}"; read CHOICE_SF
+echo -en "${CYAN}0) ${GREEN}Обновить стратегии${NC}\n${CYAN}Enter) ${GREEN}Выход в меню стратегий${NC}\n\n${YELLOW}Выберите пункт: ${NC}"; read CHOICE_SF
 [ -z "$CHOICE_SF" ] && return; echo "$CHOICE_SF" | grep -qE '^[0-9]+$' || return; [ "$CHOICE_SF" -eq 0 ] && { rm -rf "$TMP_SF"; download_strategies; continue; }; SEL_NAME=$(echo "$STRATEGIES" | sed -n "${CHOICE_SF}p"); [ -z "$SEL_NAME" ] && return 
 BLOCK=$(awk -v name="$SEL_NAME" '$0=="#"name {flag=1; print; next} /^#/ && flag {exit} flag {print}' "$OUT"); sed -i "/option NFQWS_OPT '/,\$d" "$CONF"; { echo "	option NFQWS_OPT '"; echo "$BLOCK"; echo "'"; } >> "$CONF"
 if ! grep -q "option NFQWS_PORTS_UDP.*19294-19344,50000-50100" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'$/,19294-19344,50000-50100'/" "$CONF"; fi
@@ -435,14 +435,13 @@ clear
         status_block "$ALL_BLOCKS"&& S6="Удалить все" || S6="Добавить все"
 
         echo -e "${YELLOW}Меню редактирования /etc/hosts${NC}\n"
-        echo -e "${CYAN}1) ${GREEN}$S2${NC} 4Pda"
-        echo -e "${CYAN}2) ${GREEN}$S4${NC} Rutor"
-        echo -e "${CYAN}3) ${GREEN}$S3${NC} ntc.party"
-        echo -e "${CYAN}4) ${GREEN}$S1${NC} Instagram"
-        echo -e "${CYAN}5) ${GREEN}$S5${NC} Lib.rus.ec"
-        echo -e "${CYAN}6) ${GREEN}$S6${NC}"
+        echo -e "${CYAN}1) ${GREEN}$S2${NC}IP ${GREEN}для${NC} 4Pda"
+        echo -e "${CYAN}2) ${GREEN}$S4${NC}IP ${GREEN}для${NC} Rutor"
+        echo -e "${CYAN}3) ${GREEN}$S3${NC}IP ${GREEN}для${NC} ntc.party"
+        echo -e "${CYAN}4) ${GREEN}$S1${NC}IP ${GREEN}для${NC} Instagram"
+        echo -e "${CYAN}5) ${GREEN}$S5${NC}IP ${GREEN}для${NC} Lib.rus.ec"
+        echo -e "${CYAN}6) ${GREEN}$S6${NC}IP ${GREEN}для${NC}"
 echo -e "${CYAN}Enter) ${GREEN}Выход в меню стратегий${NC}"
-
 
 echo -ne "\n${YELLOW}Выберите пункт:${NC} " 
 read -r choiceIP
