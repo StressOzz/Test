@@ -16,25 +16,23 @@ HOSTLIST_MIN_SIZE=1800000; FINAL_STR="/opt/StrFINAL"; NEW_STR="/opt/StrNEW"; HOS
 EXCLUDE_FILE="/opt/zapret/ipset/zapret-hosts-user-exclude.txt"; fileDoH="/etc/config/https-dns-proxy"
 RKN_URL="https://raw.githubusercontent.com/IndeecFOX/zapret4rocket/refs/heads/master/extra_strats/TCP/RKN/List.txt"
 EXCLUDE_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/zapret-hosts-user-exclude.txt"
+
+
 HOSTS_FILE="/etc/hosts"
 
+INSTAGRAM=$'57.144.222.34 instagram.com www.instagram.com\n157.240.9.174 instagram.com www.instagram.com\n157.240.245.174 instagram.com www.instagram.com\n157.240.205.174 instagram.com www.instagram.com'
+PDA=$'185.87.51.182 4pda.to www.4pda.to'
+NTC=$'130.255.77.28 ntc.party\n30.255.77.28 ntc.party'
+RUTOR=$'173.245.58.219 rutor.info d.rutor.info'
+LIBRUSEC=$'185.39.18.98 lib.rus.ec www.lib.rus.ec'
 
-INSTAGRAM="57.144.222.34 instagram.com www.instagram.com
-157.240.9.174 instagram.com www.instagram.com
-157.240.245.174 instagram.com www.instagram.com
-157.240.205.174 instagram.com www.instagram.com"
+ALL_BLOCKS=$"$INSTAGRAM\n$PDA\n$NTC\n$RUTOR\n$LIBRUSEC"
 
-PDA="185.87.51.182 4pda.to www.4pda.to"
-NTC="130.255.77.28 ntc.party
-30.255.77.28 ntc.party"
-RUTOR="173.245.58.219 rutor.info d.rutor.info"
-LIBRUSEC="185.39.18.98 lib.rus.ec www.lib.rus.ec"
-
-ALL_BLOCKS="$INSTAGRAM
-$PDA
-$NTC
-$RUTOR
-$LIBRUSEC"
+status_block() { while IFS= read -r line; do [ -z "$line" ] && continue; grep -Fxq "$line" "$HOSTS_FILE" || return 1; done < <(printf '%b' "$1"); return 0; }
+add_block() { while IFS= read -r line; do [ -z "$line" ] && continue; grep -Fxq "$line" "$HOSTS_FILE" || echo "$line" >> "$HOSTS_FILE"; done < <(printf '%b' "$1"); }
+remove_block() { while IFS= read -r line; do [ -z "$line" ] && continue; sed -i "\|^$line$|d" "$HOSTS_FILE"; done < <(printf '%b' "$1"); }
+toggle_block() { if status_block "$1"; then remove_block "$1"; echo -e "\n${CYAN}Удаляем и применяем${NC}"; else add_block "$1"; echo -e "\n${CYAN}Добавляем и применяем${NC}"; fi; /etc/init.d/dnsmasq restart >/dev/null 2>&1; echo -e "${GREEN}Готово!${NC}\n"; PAUSE; }
+toggle_all() { if status_block "$ALL_BLOCKS"; then remove_block "$ALL_BLOCKS"; echo -e "\n${CYAN}Удаляем и применяем${NC}"; else add_block "$ALL_BLOCKS"; echo -e "\n${CYAN}Добавляем и применяем${NC}"; fi; /etc/init.d/dnsmasq restart >/dev/null 2>&1; echo -e "${GREEN}Готово!${NC}\n"; PAUSE; }
 
 
 
@@ -355,17 +353,38 @@ sed -i 's/meta l4proto { tcp, udp } flow offload @ft;/meta l4proto { tcp, udp } 
 # ==========================================
 # Hosts menu
 # ==========================================
-status_block() { while IFS= read -r line; do [ -z "$line" ] && continue; grep -Fxq "$line" "$HOSTS_FILE" || return 1; done < <(printf '%s\n' "$1"); return 0; }
-add_block() { while IFS= read -r line; do [ -z "$line" ] && continue; grep -Fxq "$line" "$HOSTS_FILE" || echo "$line" >> "$HOSTS_FILE"; done < <(printf '%s\n' "$1"); }
-remove_block() { while IFS= read -r line; do [ -z "$line" ] && continue; sed -i "\|^$line$|d" "$HOSTS_FILE"; done < <(printf '%s\n' "$1"); }
-toggle_block() { if status_block "$1"; then remove_block "$1"; echo -e "\n${CYAN}Удаляем и применяем${NC}"; else add_block "$1"; echo -e "\n${CYAN}Добавляем и применяем${NC}"; fi; /etc/init.d/dnsmasq restart >/dev/null 2>&1; echo -e "${GREEN}Готово!${NC}\n"; PAUSE; }
-toggle_all() { if status_block "$ALL_BLOCKS"; then remove_block "$ALL_BLOCKS"; echo -e "\n${CYAN}Удаляем и применяем${NC}"; else add_block "$ALL_BLOCKS"; echo -e "\n${CYAN}Добавляем и применяем${NC}"; fi; /etc/init.d/dnsmasq restart >/dev/null 2>&1; echo -e "${GREEN}Готово!${NC}\n"; PAUSE; }
-menu_hosts() { while true; do clear; status_block "$INSTAGRAM" && S1="Удалить" || S1="Добавить"; status_block "$PDA" && S2="Удалить" || S2="Добавить"; status_block "$NTC" && S3="Удалить" || S3="Добавить"
-status_block "$RUTOR" && S4="Удалить" || S4="Добавить"; status_block "$LIBRUSEC" && S5="Удалить" || S5="Добавить"; status_block "$ALL_BLOCKS" && S6="Удалить все" || S6="Добавить все"
-echo -e "${YELLOW}Меню редактирования /etc/hosts${NC}\n\n${CYAN}1) ${GREEN}$S2 ${NC}IP ${GREEN}для${NC} 4Pda\n${CYAN}2) ${GREEN}$S4 ${NC}IP ${GREEN}для${NC} Rutor\n${CYAN}3) ${GREEN}$S3 ${NC}IP ${GREEN}для${NC} ntc.party\n${CYAN}4) ${GREEN}$S1 ${NC}IP ${GREEN}для${NC} Instagram"
-echo -e "${CYAN}5) ${GREEN}$S5 ${NC}IP ${GREEN}для${NC} Lib.rus.ec\n${CYAN}6) ${GREEN}$S6 ${NC}IP\n${CYAN}Enter) ${GREEN}Выход в меню стратегий${NC}"
-echo -ne "\n${YELLOW}Выберите пункт:${NC} "; read -r choiceIP; case "$choiceIP" in 4) toggle_block "$INSTAGRAM";; 1) toggle_block "$PDA";; 3) toggle_block "$NTC";; 2) toggle_block "$RUTOR";; 5) toggle_block "$LIBRUSEC";; 6) toggle_all;; *) break;; esac; done; }
-# ==========================================
+menu_hosts() {
+    while true; do
+        clear
+        status_block "$INSTAGRAM" && S1="Удалить" || S1="Добавить"
+        status_block "$PDA" && S2="Удалить" || S2="Добавить"
+        status_block "$NTC" && S3="Удалить" || S3="Добавить"
+        status_block "$RUTOR" && S4="Удалить" || S4="Добавить"
+        status_block "$LIBRUSEC" && S5="Удалить" || S5="Добавить"
+        status_block "$ALL_BLOCKS" && S6="Удалить все" || S6="Добавить все"
+
+        echo -e "${YELLOW}Меню редактирования /etc/hosts${NC}\n"
+        echo -e "${CYAN}1) ${GREEN}$S2 ${NC}IP ${GREEN}для${NC} 4Pda"
+        echo -e "${CYAN}2) ${GREEN}$S4 ${NC}IP ${GREEN}для${NC} Rutor"
+        echo -e "${CYAN}3) ${GREEN}$S3 ${NC}IP ${GREEN}для${NC} ntc.party"
+        echo -e "${CYAN}4) ${GREEN}$S1 ${NC}IP ${GREEN}для${NC} Instagram"
+        echo -e "${CYAN}5) ${GREEN}$S5 ${NC}IP ${GREEN}для${NC} Lib.rus.ec"
+        echo -e "${CYAN}6) ${GREEN}$S6 ${NC}IP"
+        echo -e "${CYAN}Enter) ${GREEN}Выход в меню стратегий${NC}"
+
+        echo -ne "\n${YELLOW}Выберите пункт:${NC} "
+        read -r choiceIP
+        case "$choiceIP" in
+            1) toggle_block "$PDA";;
+            2) toggle_block "$RUTOR";;
+            3) toggle_block "$NTC";;
+            4) toggle_block "$INSTAGRAM";;
+            5) toggle_block "$LIBRUSEC";;
+            6) toggle_all;;
+            *) break;;
+        esac
+    done
+}# ==========================================
 # Главное меню
 # ==========================================
 show_menu() { get_versions; get_doh_status; show_current_strategy; RKN_Check; clear; echo -e "╔════════════════════════════════════╗\n║     ${BLUE}Zapret on remittor Manager${NC}     ║\n╚════════════════════════════════════╝\n                     ${DGRAY}by StressOzz v$ZAPRET_MANAGER_VERSION${NC}"
