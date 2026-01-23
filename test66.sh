@@ -16,6 +16,9 @@ HOSTLIST_MIN_SIZE=1800000; FINAL_STR="/opt/StrFINAL"; NEW_STR="/opt/StrNEW"; HOS
 EXCLUDE_FILE="/opt/zapret/ipset/zapret-hosts-user-exclude.txt"; fileDoH="/etc/config/https-dns-proxy"
 RKN_URL="https://raw.githubusercontent.com/IndeecFOX/zapret4rocket/refs/heads/master/extra_strats/TCP/RKN/List.txt"
 EXCLUDE_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/zapret-hosts-user-exclude.txt"
+HOSTS_FILE="/etc/hosts"; NTC="130.255.77.28 ntc.party\n30.255.77.28 ntc.party"; ALL_BLOCKS="$INSTAGRAM\n$PDA\n$NTC\n$RUTOR\n$LIBRUSEC"
+PDA="185.87.51.182 4pda.to www.4pda.to"; RUTOR="173.245.58.219 rutor.info d.rutor.info"; LIBRUSEC="185.39.18.98 lib.rus.ec www.lib.rus.ec"
+INSTAGRAM="57.144.222.34 instagram.com www.instagram.com\n157.240.9.174 instagram.com www.instagram.com\n157.240.245.174 instagram.com www.instagram.com\n157.240.205.174 instagram.com www.instagram.com"
 HOSTS_LIST="130.255.77.28 ntc.party|30.255.77.28 ntc.party|173.245.58.219 rutor.info d.rutor.info|185.39.18.98 lib.rus.ec www.lib.rus.ec
 57.144.222.34 instagram.com www.instagram.com|157.240.9.174 instagram.com www.instagram.com|157.240.245.174 instagram.com www.instagram.com|157.240.205.174 instagram.com www.instagram.com"
 hosts_enabled() { grep -q "4pda.to\|instagram.com\|rutor.info\|lib.rus.ec\|ntc.party" /etc/hosts; }
@@ -328,88 +331,19 @@ echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${
 0) FO=$(uci get firewall.@defaults[0].flow_offloading 2>/dev/null); FOHW=$(uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null); if grep -q 'ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc; then echo -e "\n${MAGENTA}Отключаем FIX для Flow Offloading${NC}"
 sed -i 's/meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;/meta l4proto { tcp, udp } flow offload @ft;/' /usr/share/firewall4/templates/ruleset.uc; fw4 restart >/dev/null 2>&1; echo -e "FIX ${GREEN}отключён!${NC}\n"; PAUSE; elif [ "$FO" = 1 ] || [ "$FOHW" = 1 ]; then echo -e "\n${MAGENTA}Применяем FIX для Flow Offloading${NC}"
 sed -i 's/meta l4proto { tcp, udp } flow offload @ft;/meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;/' /usr/share/firewall4/templates/ruleset.uc; fw4 restart >/dev/null 2>&1; echo -e "FIX ${GREEN}успешно применён!${NC}\n"; PAUSE; fi;; *) echo; return;; esac; done; }
-
-
 # ==========================================
 # Hosts menu
 # ==========================================
-
-HOSTS_FILE="/etc/hosts"
-
-
-INSTAGRAM="57.144.222.34 instagram.com www.instagram.com
-157.240.9.174 instagram.com www.instagram.com
-157.240.245.174 instagram.com www.instagram.com
-157.240.205.174 instagram.com www.instagram.com"
-
-PDA="185.87.51.182 4pda.to www.4pda.to"
-
-NTC="130.255.77.28 ntc.party
-30.255.77.28 ntc.party"
-
-RUTOR="173.245.58.219 rutor.info d.rutor.info"
-
-LIBRUSEC="185.39.18.98 lib.rus.ec www.lib.rus.ec"
-
-
-ALL_BLOCKS="$INSTAGRAM
-$PDA
-$NTC
-$RUTOR
-$LIBRUSEC"
-
-
-
-# ---------- проверки ----------
-
 status_block() { while IFS= read -r line; do [ -z "$line" ] && continue; grep -Fxq "$line" "$HOSTS_FILE" || return 1; done < <(printf '%s\n' "$1"); return 0; }
 add_block() { while IFS= read -r line; do [ -z "$line" ] && continue; grep -Fxq "$line" "$HOSTS_FILE" || echo "$line" >> "$HOSTS_FILE"; done < <(printf '%s\n' "$1"); }
 remove_block() { while IFS= read -r line; do [ -z "$line" ] && continue; sed -i "\|^$line$|d" "$HOSTS_FILE"; done < <(printf '%s\n' "$1"); }
 toggle_block() { if status_block "$1"; then remove_block "$1"; echo -e "\n${CYAN}Удаляем и применяем${NC}"; else add_block "$1"; echo -e "\n${CYAN}Добавляем и применяем${NC}"; fi; /etc/init.d/dnsmasq restart >/dev/null 2>&1; echo -e "${GREEN}Готово!${NC}\n"; PAUSE; }
 toggle_all() { if status_block "$ALL_BLOCKS"; then remove_block "$ALL_BLOCKS"; echo -e "\n${CYAN}Удаляем и применяем${NC}"; else add_block "$ALL_BLOCKS"; echo -e "\n${CYAN}Добавляем и применяем${NC}"; fi; /etc/init.d/dnsmasq restart >/dev/null 2>&1; echo -e "${GREEN}Готово!${NC}\n"; PAUSE; }
-
-
-
-
-# ---------- меню ----------
-
-menu_hosts() {
-    while true; do
-clear
-        status_block "$INSTAGRAM" && S1="Удалить" || S1="Добавить"
-        status_block "$PDA"       && S2="${GREEN}Удалить" || S2="${RED}Добавить"
-        status_block "$NTC"       && S3="Удалить" || S3="Добавить"
-        status_block "$RUTOR"     && S4="Удалить" || S4="Добавить"
-        status_block "$LIBRUSEC"  && S5="Удалить" || S5="Добавить"
-        status_block "$ALL_BLOCKS"&& S6="Удалить все" || S6="Добавить все"
-
-        echo -e "${YELLOW}Меню редактирования /etc/hosts${NC}\n"
-        echo -e "${CYAN}1) $S2 ${NC}IP ${GREEN}для${NC} 4Pda"
-        echo -e "${CYAN}2) ${GREEN}$S4 ${NC}IP ${GREEN}для${NC} Rutor"
-        echo -e "${CYAN}3) ${GREEN}$S3 ${NC}IP ${GREEN}для${NC} ntc.party"
-        echo -e "${CYAN}4) ${GREEN}$S1 ${NC}IP ${GREEN}для${NC} Instagram"
-        echo -e "${CYAN}5) ${GREEN}$S5 ${NC}IP ${GREEN}для${NC} Lib.rus.ec"
-        echo -e "${CYAN}6) ${GREEN}$S6 ${NC}IP ${GREEN}для${NC}"
-echo -e "${CYAN}Enter) ${GREEN}Выход в меню стратегий${NC}"
-
-echo -ne "\n${YELLOW}Выберите пункт:${NC} " 
-read -r choiceIP
-case "$choiceIP" in
-            4) toggle_block "$INSTAGRAM";;
-            1) toggle_block "$PDA";;
-            3) toggle_block "$NTC";;
-            2) toggle_block "$RUTOR";;
-            5) toggle_block "$LIBRUSEC";;
-            6) toggle_all;;
-            *) break;;
-        esac
-    done
-}
-
-
-
-
-
+menu_hosts() { while true; do clear; status_block "$INSTAGRAM" && S1="${RED}Удалить" || S1="${GREEN}Добавить"; status_block "$PDA" && S2="${RED}Удалить" || S2="${GREEN}Добавить"; status_block "$NTC" && S3="${RED}Удалить" || S3="${GREEN}Добавить"
+status_block "$RUTOR" && S4="${RED}Удалить" || S4="${GREEN}Добавить"; status_block "$LIBRUSEC" && S5="${RED}Удалить" || S5="${GREEN}Добавить"; status_block "$ALL_BLOCKS" && S6="${RED}Удалить все" || S6="${GREEN}Добавить все"
+echo -e "${YELLOW}Меню редактирования /etc/hosts${NC}\n\n${CYAN}1) $S2 ${NC}IP ${GREEN}для${NC} 4Pda\n${CYAN}2) $S4 ${NC}IP ${GREEN}для${NC} Rutor\n${CYAN}3) $S3 ${NC}IP ${GREEN}для${NC} ntc.party\n${CYAN}4) $S1 ${NC}IP ${GREEN}для${NC} Instagram"
+echo -e "${CYAN}5) $S5 ${NC}IP ${GREEN}для${NC} Lib.rus.ec${CYAN}6) $S6 ${NC}IP\n${CYAN}Enter) ${GREEN}Выход в меню стратегий${NC}"
+echo -ne "\n${YELLOW}Выберите пункт:${NC} "; read -r choiceIP; case "$choiceIP" in 4) toggle_block "$INSTAGRAM";; 1) toggle_block "$PDA";; 3) toggle_block "$NTC";; 2) toggle_block "$RUTOR";; 5) toggle_block "$LIBRUSEC";; 6) toggle_all;; *) break;; esac; done; }
 # ==========================================
 # Главное меню
 # ==========================================
