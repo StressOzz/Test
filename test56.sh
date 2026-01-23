@@ -398,10 +398,10 @@ EOF
 toggle_block() {
     if status_block "$1"; then
         remove_block "$1"
-        echo -e "${GREEN}Удалено!${NC}"
+        echo -e "\n${CYAN}Удаляем и применяем${NC}\n"
     else
         add_block "$1"
-        echo -e "${GREEN}Добавлено!${NC}"
+        echo -e "\n${CYAN}Добавляем и применяем${NC}\n"
     fi
 /etc/init.d/dnsmasq restart >/dev/null 2>&1
 PAUSE
@@ -411,10 +411,10 @@ PAUSE
 toggle_all() {
     if status_block "$ALL_BLOCKS"; then
         remove_block "$ALL_BLOCKS"
-        echo -e "${GREEN}Удаляем и применяем!${NC}"
+        echo -e "\n${CYAN}Удаляем и применяем${NC}\n"
     else
         add_block "$ALL_BLOCKS"
-        echo -e "${GREEN}Добавлено!${NC}"
+        echo -e "\n${CYAN}Добавляем и применяем${NC}\n"
     fi
 /etc/init.d/dnsmasq restart >/dev/null 2>&1
 PAUSE
