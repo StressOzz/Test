@@ -444,7 +444,9 @@ menu_hosts() {
         echo -e "${CYAN}5) ${GREEN}$S5${NC} Lib.rus.ec"
         echo -e "${CYAN}6) ${GREEN}$S6${NC}"
 
-echo -ne "\n${YELLOW}Выберите пункт:${NC} " && read -r choiceIP; case "$choiceMN" in
+echo -ne "\n${YELLOW}Выберите пункт:${NC} " 
+read -r choiceIP
+case "$choiceIP" in
             1) toggle_block "$INSTAGRAM" ;;
             2) toggle_block "$PDA" ;;
             3) toggle_block "$NTC" ;;
