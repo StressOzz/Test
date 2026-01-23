@@ -377,14 +377,14 @@ menu_hosts() {
     while true; do
 clear
         status_block "$INSTAGRAM" && S1="Удалить" || S1="Добавить"
-        status_block "$PDA"       && S2="Удалить" || S2="Добавить"
+        status_block "$PDA"       && S2="${GREEN}Удалить" || S2="${RED}Добавить"
         status_block "$NTC"       && S3="Удалить" || S3="Добавить"
         status_block "$RUTOR"     && S4="Удалить" || S4="Добавить"
         status_block "$LIBRUSEC"  && S5="Удалить" || S5="Добавить"
         status_block "$ALL_BLOCKS"&& S6="Удалить все" || S6="Добавить все"
 
         echo -e "${YELLOW}Меню редактирования /etc/hosts${NC}\n"
-        echo -e "${CYAN}1) ${GREEN}$S2 ${NC}IP ${GREEN}для${NC} 4Pda"
+        echo -e "${CYAN}1) $S2 ${NC}IP ${GREEN}для${NC} 4Pda"
         echo -e "${CYAN}2) ${GREEN}$S4 ${NC}IP ${GREEN}для${NC} Rutor"
         echo -e "${CYAN}3) ${GREEN}$S3 ${NC}IP ${GREEN}для${NC} ntc.party"
         echo -e "${CYAN}4) ${GREEN}$S1 ${NC}IP ${GREEN}для${NC} Instagram"
