@@ -37,8 +37,8 @@ config main 'config'
 --dpi-desync-autottl=-2
 --new
 --filter-tcp=443
---dpi-desync=hostfakesplit
 --hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt
+--dpi-desync=hostfakesplit
 --dpi-desync-hostfakesplit-mod=host=max.ru
 --dpi-desync-fooling=ts
 --new
