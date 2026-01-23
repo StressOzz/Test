@@ -405,7 +405,7 @@ toggle_block() {
         add_block "$1"
         echo -e "${GREEN}Добавлено!${NC}"
     fi
-/etc/init.d/dnsmasq restart >/dev/null 2>&1
+/etc/init.d/dnsmasq reload >/dev/null 2>&1
 PAUSE
 }
 
@@ -413,12 +413,12 @@ PAUSE
 toggle_all() {
     if status_block "$ALL_BLOCKS"; then
         remove_block "$ALL_BLOCKS"
-        echo -e "${GREEN}Удалено!${NC}"
+        echo -e "${GREEN}Удаляем и применяем!${NC}"
     else
         add_block "$ALL_BLOCKS"
         echo -e "${GREEN}Добавлено!${NC}"
     fi
-/etc/init.d/dnsmasq restart >/dev/null 2>&1
+/etc/init.d/dnsmasq reload >/dev/null 2>&1
 PAUSE
 }
 
@@ -428,7 +428,7 @@ PAUSE
 
 menu_hosts() {
     while true; do
-
+clear
         status_block "$INSTAGRAM" && S1="Удалить" || S1="Добавить"
         status_block "$PDA"       && S2="Удалить" || S2="Добавить"
         status_block "$NTC"       && S3="Удалить" || S3="Добавить"
@@ -443,6 +443,8 @@ menu_hosts() {
         echo -e "${CYAN}4) ${GREEN}$S4${NC} Rutor"
         echo -e "${CYAN}5) ${GREEN}$S5${NC} Lib.rus.ec"
         echo -e "${CYAN}6) ${GREEN}$S6${NC}"
+echo -e "${CYAN}Enter) ${GREEN}Выход в меню стратегий${NC}"
+
 
 echo -ne "\n${YELLOW}Выберите пункт:${NC} " 
 read -r choiceIP
