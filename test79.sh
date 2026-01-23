@@ -331,14 +331,27 @@ sed -i 's/meta l4proto { tcp, udp } flow offload @ft;/meta l4proto { tcp, udp } 
 # ==========================================
 # Hosts menu
 # ==========================================
-HOSTS_FILE="/etc/hosts"; ALL_BLOCKS="$INSTAGRAM\n$PDA\n$NTC\n$RUTOR\n$LIBRUSEC"
+
+HOSTS_FILE="/etc/hosts"
+
 INSTAGRAM="57.144.222.34 instagram.com www.instagram.com\n157.240.9.174 instagram.com www.instagram.com\n157.240.245.174 instagram.com www.instagram.com\n157.240.205.174 instagram.com www.instagram.com"
-PDA="185.87.51.182 4pda.to www.4pda.to"; NTC="130.255.77.28 ntc.party\n30.255.77.28 ntc.party"; RUTOR="173.245.58.219 rutor.info d.rutor.info"; LIBRUSEC="185.39.18.98 lib.rus.ec www.lib.rus.ec"
+PDA="185.87.51.182 4pda.to www.4pda.to"
+NTC="130.255.77.28 ntc.party\n30.255.77.28 ntc.party"
+RUTOR="173.245.58.219 rutor.info d.rutor.info"
+LIBRUSEC="185.39.18.98 lib.rus.ec www.lib.rus.ec"
+
+ALL_BLOCKS="$INSTAGRAM\n$PDA\n$NTC\n$RUTOR\n$LIBRUSEC"
+
 status_block() { while IFS= read -r line; do [ -z "$line" ] && continue; grep -Fxq "$line" "$HOSTS_FILE" || return 1; done < <(printf '%b\n' "$1"); return 0; }
+
 add_block() { while IFS= read -r line; do [ -z "$line" ] && continue; grep -Fxq "$line" "$HOSTS_FILE" || echo "$line" >> "$HOSTS_FILE"; done < <(printf '%b\n' "$1"); }
+
 remove_block() { while IFS= read -r line; do [ -z "$line" ] && continue; sed -i "\|^$line$|d" "$HOSTS_FILE"; done < <(printf '%b\n' "$1"); }
+
 toggle_block() { if status_block "$1"; then remove_block "$1"; echo -e "\n${CYAN}Удаляем и применяем${NC}"; else add_block "$1"; echo -e "\n${CYAN}Добавляем и применяем${NC}"; fi; /etc/init.d/dnsmasq restart >/dev/null 2>&1; echo -e "${GREEN}Готово!${NC}\n"; PAUSE; }
+
 toggle_all() { if status_block "$ALL_BLOCKS"; then remove_block "$ALL_BLOCKS"; echo -e "\n${CYAN}Удаляем и применяем${NC}"; else add_block "$ALL_BLOCKS"; echo -e "\n${CYAN}Добавляем и применяем${NC}"; fi; /etc/init.d/dnsmasq restart >/dev/null 2>&1; echo -e "${GREEN}Готово!${NC}\n"; PAUSE; }
+
 menu_hosts() {
 while true; do
 clear
@@ -371,6 +384,7 @@ case "$choiceIP" in
 esac
 done
 }
+
 
 # ==========================================
 # Главное меню
