@@ -400,18 +400,26 @@ EOF
 toggle_block() {
     if status_block "$1"; then
         remove_block "$1"
+        echo -e "${GREEN}Удалено!${NC}"
     else
         add_block "$1"
+        echo -e "${GREEN}Добавлено!${NC}"
     fi
+/etc/init.d/dnsmasq restart >/dev/null 2>&1
+PAUSE
 }
 
 
 toggle_all() {
     if status_block "$ALL_BLOCKS"; then
         remove_block "$ALL_BLOCKS"
+        echo -e "${GREEN}Удалено!${NC}"
     else
         add_block "$ALL_BLOCKS"
+        echo -e "${GREEN}Добавлено!${NC}"
     fi
+/etc/init.d/dnsmasq restart >/dev/null 2>&1
+PAUSE
 }
 
 
@@ -420,35 +428,30 @@ toggle_all() {
 
 menu_hosts() {
     while true; do
-        clear
 
         status_block "$INSTAGRAM" && S1="Удалить" || S1="Добавить"
         status_block "$PDA"       && S2="Удалить" || S2="Добавить"
         status_block "$NTC"       && S3="Удалить" || S3="Добавить"
         status_block "$RUTOR"     && S4="Удалить" || S4="Добавить"
         status_block "$LIBRUSEC"  && S5="Удалить" || S5="Добавить"
-        status_block "$ALL_BLOCKS"&& S6="Удалить всё" || S6="Добавить всё"
+        status_block "$ALL_BLOCKS"&& S6="Удалить все" || S6="Добавить все"
 
-        echo "========== HOSTS =========="
-        echo "1) $S1 Instagram"
-        echo "2) $S2 4Pda"
-        echo "3) $S3 NTC"
-        echo "4) $S4 Rutor"
-        echo "5) $S5 Lib.rus.ec"
-        echo "6) $S6"
-        echo "0) Выход"
-        echo
+        echo -e "${YELLOW}Меню редактирования /etc/hosts"
+        echo -e "${CYAN}1) ${GREEN}$S1${NC} Instagram"
+        echo -e "${CYAN}2) ${GREEN}$S2${NC} 4Pda"
+        echo -e "${CYAN}3) ${GREEN}$S3${NC} ntc.party"
+        echo -e "${CYAN}4) ${GREEN}$S4${NC} Rutor"
+        echo -e "${CYAN}5) ${GREEN}$S5${NC} Lib.rus.ec"
+        echo -e "${CYAN}6) ${GREEN}$S6${NC}"
 
-        read -r -p "Выбор: " c
-
-        case "$c" in
+echo -ne "\n${YELLOW}Выберите пункт:${NC} " && read -r choiceIP; case "$choiceMN" in
             1) toggle_block "$INSTAGRAM" ;;
             2) toggle_block "$PDA" ;;
             3) toggle_block "$NTC" ;;
             4) toggle_block "$RUTOR" ;;
             5) toggle_block "$LIBRUSEC" ;;
             6) toggle_all ;;
-            0) break ;;
+            *) break ;;
         esac
     done
 }
