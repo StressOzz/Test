@@ -7,13 +7,11 @@ RESULTS="/tmp/zapret_bench.txt"
 
 ZAPRET_RESTART () { chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1; sleep 1; }
 
-# цвета
 RED="\e[31m"
 GREEN="\e[32m"
 YELLOW="\e[33m"
 NC="\e[0m"
 
-# список сайтов
 URLS=$(cat <<EOF
 https://gosuslugi.ru
 https://esia.gosuslugi.ru
@@ -44,9 +42,16 @@ EOF
 
 : > "$RESULTS"
 
-# перебор блоков стратегий
+echo "$URLS" | wc -l > /tmp/z_total
+TOTAL=$(cat /tmp/z_total)
+
+########################################
+# перебор стратегий
+########################################
+
 grep -n '^#' "$STR_FILE" | cut -d: -f1 | while read START; do
-    NEXT=$(grep -n '^#' "$STR_FILE" | cut -d: -f1 | awk -v s="$START" '$1>s {print $1; exit}')
+
+    NEXT=$(grep -n '^#' "$STR_FILE" | cut -d: -f1 | awk -v s="$START" '$1>s{print;exit}')
 
     if [ -z "$NEXT" ]; then
         sed -n "${START},\$p" "$STR_FILE" > "$TEMP_FILE"
@@ -56,28 +61,40 @@ grep -n '^#' "$STR_FILE" | cut -d: -f1 | while read START; do
     fi
 
     BLOCK=$(cat "$TEMP_FILE")
-    BLOCK_NAME=$(echo "$BLOCK" | head -n1)
+    NAME=$(head -n1 "$TEMP_FILE")
 
-    # вставка блока в конфиг
+    ########################################
+    # вставка блока
+    ########################################
+
     awk -v block="$BLOCK" '
-        BEGIN{inside=0}
-        /option NFQWS_OPT '\''/ {print "	option NFQWS_OPT '\''\n" block "\n'\''"; inside=1; next}
-        /^'\''$/ && inside==1 {inside=0; next}
-        {if(!inside) print}
+        BEGIN{skip=0}
+        /option NFQWS_OPT '\''/ {
+            print "\toption NFQWS_OPT '\''"
+            print block
+            print "'\''"
+            skip=1
+            next
+        }
+        skip && /^'\''$/ { skip=0; next }
+        !skip { print }
     ' "$CONF" > "${CONF}.tmp"
+
     mv "${CONF}.tmp" "$CONF"
 
     ZAPRET_RESTART
 
+    ########################################
     # проверка сайтов
-    OK=0
-    TOTAL=$(echo "$URLS" | wc -l)
+    ########################################
 
-    echo -e "\n${YELLOW}${BLOCK_NAME}${NC}"
+    OK=0
+
+    echo
+    echo -e "${YELLOW}${NAME}${NC}"
 
     while read URL; do
-        HTTP_CODE=$(curl -k -s -o /dev/null -w "%{http_code}" --connect-timeout 3 --max-time 3 "$URL")
-        if [ "$HTTP_CODE" = "200" ]; then
+        if curl -Is --connect-timeout 3 --max-time 4 "$URL" >/dev/null 2>&1; then
             echo -e "${GREEN}$URL → OK${NC}"
             OK=$((OK+1))
         else
@@ -87,7 +104,6 @@ grep -n '^#' "$STR_FILE" | cut -d: -f1 | while read START; do
 $URLS
 EOF
 
-    # вывод доступности блока
     if [ "$OK" -eq "$TOTAL" ]; then
         COLOR="$GREEN"
     elif [ "$OK" -gt 0 ]; then
@@ -98,27 +114,24 @@ EOF
 
     echo -e "${COLOR}Доступно: $OK/$TOTAL${NC}"
 
-    # сохраняем результат
-    echo -e "$OK/$TOTAL\n$BLOCK_NAME" >> "$RESULTS"
+    echo "$OK $NAME" >> "$RESULTS"
+
 done
 
-# вывод топ-5 стратегий
-echo -e "\n${YELLOW}Топ-5 стратегий:${NC}"
-sort -rn "$RESULTS" | head -10 | while read LINE; do
-    if [ $(echo "$LINE" | grep -q '/' && echo 1 || echo 0) -eq 1 ]; then
-        COUNT_LINE="$LINE"
+########################################
+# топ 5
+########################################
+
+echo
+echo -e "${YELLOW}Топ-5 стратегий:${NC}"
+
+sort -rn "$RESULTS" | head -5 | while read COUNT NAME; do
+    if [ "$COUNT" -eq "$TOTAL" ]; then
+        COLOR="$GREEN"
+    elif [ "$COUNT" -gt 0 ]; then
+        COLOR="$YELLOW"
     else
-        BLOCK_NAME_LINE="$LINE"
-        # определяем цвет
-        OK=$(echo "$COUNT_LINE" | cut -d'/' -f1)
-        TOTAL=$(echo "$COUNT_LINE" | cut -d'/' -f2)
-        if [ "$OK" -eq "$TOTAL" ]; then
-            COLOR="$GREEN"
-        elif [ "$OK" -gt 0 ]; then
-            COLOR="$YELLOW"
-        else
-            COLOR="$RED"
-        fi
-        echo -e "${COLOR}${BLOCK_NAME_LINE} → $COUNT_LINE${NC}"
+        COLOR="$RED"
     fi
+    echo -e "${COLOR}${NAME} → $COUNT/$TOTAL${NC}"
 done
