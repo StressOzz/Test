@@ -73,14 +73,20 @@ grep -n '^#' "$STR_FILE" | cut -d: -f1 | while read START; do
     # проверка сайтов
     OK=0
     TOTAL=$(echo "$URLS" | wc -l)
+
+    echo -e "\n${YELLOW}${BLOCK_NAME}${NC}"
+
     echo "$URLS" | while read URL; do
         HTTP_CODE=$(curl -k -s -o /dev/null -w "%{http_code}" --connect-timeout 5 --max-time 15 "$URL")
         if [ "$HTTP_CODE" = "200" ]; then
+            echo -e "${GREEN}$URL → OK${NC}"
             OK=$((OK+1))
+        else
+            echo -e "${RED}$URL → FAIL${NC}"
         fi
     done
 
-    # вывод результата с цветом
+    # вывод доступности блока
     if [ "$OK" -eq "$TOTAL" ]; then
         COLOR="$GREEN"
     elif [ "$OK" -gt 0 ]; then
@@ -89,6 +95,8 @@ grep -n '^#' "$STR_FILE" | cut -d: -f1 | while read START; do
         COLOR="$RED"
     fi
 
-    echo -e "${COLOR}${BLOCK_NAME} → Доступно: $OK/$TOTAL${NC}"
-    echo "$OK/$TOTAL" >> "$RESULTS"
+    echo -e "${COLOR}Доступно: $OK/$TOTAL${NC}"
+
+    # сохраняем результат для топ-5
+    echo -e "$OK/$TOTAL\n$BLOCK" >> "$RESULTS"
 done
