@@ -401,23 +401,30 @@ Discord|https://discord.com
     }
 
     check_all_urls() {
-        TMP_OK="/tmp/z_ok.$$"
-        : > "$TMP_OK"
-        RUN=0
+    TMP_OK="/tmp/z_ok.$$"
+    : > "$TMP_OK"
+    RUN=0
 
-        echo "$URLS_LIST" | while IFS="|" read TEXT LINK; do
-            check_url "$TEXT" "$LINK" &
-            RUN=$((RUN+1))
-            if [ "$RUN" -ge "$PARALLEL" ]; then
-                wait
-                RUN=0
-            fi
-        done
-        wait
+    echo "$URLS_LIST" | while IFS="|" read TEXT LINK; do
+        check_url "$TEXT" "$LINK" &
+        RUN=$((RUN+1))
+        if [ "$RUN" -ge "$PARALLEL" ]; then
+            wait
+            RUN=0
+        fi
+    done
+    wait   # важный wait, чтобы дождаться всех фоновых процессов
 
+    # теперь подсчёт
+    if [ -f "$TMP_OK" ]; then
         OK=$(wc -l < "$TMP_OK")
-        rm -f "$TMP_OK"
-    }
+    else
+        OK=0
+    fi
+
+    rm -f "$TMP_OK"
+}
+
 
     # -------------------------------
     # Перебор стратегий
