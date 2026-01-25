@@ -367,11 +367,11 @@ run_test_strategies() {
     done
     sed -i '/#Y/d' "$STR_FILE"
 
-    # список сайтов в формате "Текст|Ссылка"
+    # список сайтов: Название|Ссылка
     URLS="$(cat <<EOF
-Госуслуги|https://gosuslugi.ru
-Налог.ру|https://nalog.ru
-ЛК ФЛ|https://lkfl2.nalog.ru
+Gosuslugi|https://gosuslugi.ru
+Nalog.ru|https://nalog.ru
+LK FL|https://lkfl2.nalog.ru
 ESIA|https://esia.gosuslugi.ru
 YouTube|https://youtube.com
 Instagram|https://instagram.com
@@ -401,6 +401,7 @@ EOF
         : > "$TMP_OK"
         RUN=0
         echo "$URLS" | while IFS= read -r URL; do
+            [ -z "$URL" ] && continue
             check_url "$URL" &
             RUN=$((RUN+1))
             if [ "$RUN" -ge "$PARALLEL" ]; then
@@ -425,6 +426,7 @@ EOF
         BLOCK=$(cat "$TEMP_FILE")
         NAME=$(head -n1 "$TEMP_FILE")
         NAME="${NAME#\#}"  # убираем #
+
         awk -v block="$BLOCK" '
         BEGIN{skip=0}
 /option NFQWS_OPT '\''/ {
@@ -453,9 +455,9 @@ skip && /^'\''$/ { skip=0; next }
         echo "$OK $NAME" >> "$RESULTS"
     done
 
-    # вывод лучших стратегий
-    echo -e "\n\033[33mЛучшие 10 стратегий\033[0m"
-    sort -rn "$RESULTS" | head -10 | while IFS= read -r LINE; do
+    # вывод всех стратегий по убыванию
+    echo -e "\n\033[33mСтратегии по результатам (от лучших к худшим)\033[0m"
+    sort -rn "$RESULTS" | while IFS= read -r LINE; do
         COUNT=$(echo "$LINE" | cut -d" " -f1)
         NAME=$(echo "$LINE" | cut -d" " -f2-)
         if [ "$COUNT" -eq "$TOTAL" ]; then COLOR="\033[32m"
@@ -469,6 +471,7 @@ skip && /^'\''$/ { skip=0; next }
     ZAPRET_RESTART
     PAUSE
 }
+
 
 
 
