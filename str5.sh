@@ -8,7 +8,8 @@ RESULTS="/tmp/zapret_bench.txt"
 # очистим предыдущие результаты
 : > "$RESULTS"
 
-# делим файл на блоки стратегий (от # до следующего #)
+# читаем блоки стратегий: от # до следующего #
+# awk разделяет блоки по строкам, начинающимся с #
 awk '
   /^#/ { 
     if (NR != 1) print block; 
@@ -18,14 +19,19 @@ awk '
   { block = block "\n" $0 } 
   END { print block }
 ' "$STR_FILE" | while IFS= read -r STRAT_BLOCK; do
-    # вставляем блок стратегии в конфиг между option NFQWS_OPT ' и '
-    sed -i "/option NFQWS_OPT '/,/^'/c\	option NFQWS_OPT '\n$STRAT_BLOCK\n'" "$CONF"
+
+    # пропускаем пустые блоки
+    [ -z "$STRAT_BLOCK" ] && continue
 
     echo -e "\nПрименяем стратегию:\n$STRAT_BLOCK"
 
+    # вставляем блок стратегии в конфиг полностью
+    # между option NFQWS_OPT ' и '
+    sed -i "/option NFQWS_OPT '/,/^'/c\	option NFQWS_OPT '\n$STRAT_BLOCK\n'" "$CONF"
+
     # рестарт Zapret
     /etc/init.d/zapret restart >/dev/null 2>&1
-    sleep 5
+    sleep 5  # даём время подняться
 
     # проверка сайтов
     OK=0
@@ -38,10 +44,11 @@ awk '
     done
 
     # сохраняем результат
-    echo "$OK/$TOTAL" >> "$RESULTS"
+    echo -e "$OK/$TOTAL\n$STRAT_BLOCK\n" >> "$RESULTS"
     echo "Доступно: $OK/$TOTAL"
 done
 
 # вывод топ-5 лучших стратегий
 echo -e "\nТоп-5 лучших стратегий:"
-paste -d ' ' <(awk '/^#/{print $0}' "$STR_FILE") "$RESULTS" | sort -rn -k2 | head -5
+# сортируем по числу доступных сайтов
+awk 'NR%6==1{score=$1; getline; print score, $0}' "$RESULTS" | sort -rn | head -5
