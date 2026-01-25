@@ -420,7 +420,7 @@ EOF
 )"
 TOTAL=$(echo "$URLS" | wc -l)
 : > "$RESULTS"
-echo -e "${CYAN}Начинаем тест стратегий${NC}\n"
+echo -e "${CYAN}Начинаем тест стратегий${NC}"
 check_url() {
 if curl -Is --connect-timeout 2 --max-time 3 "$1" >/dev/null 2>&1; then
 echo 1 >> "$TMP_OK"
@@ -471,7 +471,7 @@ skip && /^'\''$/ { skip=0; next }
 ' "$CONF" > "${CONF}.tmp"
 mv "${CONF}.tmp" "$CONF"
 NAME="${NAME#\#}"
-echo -e "${CYAN}Тестируем стратегию: ${YELLOW}${NAME}${NC}"
+echo -e "\n${CYAN}Тестируем стратегию: ${YELLOW}${NAME}${NC}"
 ZAPRET_RESTART
 OK=0
 check_all_urls
