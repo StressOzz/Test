@@ -2,7 +2,7 @@
 
 CONF="/etc/config/zapret"
 STR_FILE="/opt/zapret_temp/str_flow.txt"
-TEST_SITES="youtube.com google.com github.com discord.com wikipedia.org reddit.com instagram.com microsoft.com openai.com"
+TEST_SITES="gosuslugi.ru youtube.com instagram.com rutor.info ntc.party rutracker.org epidemz.net.co nnmclub.to"
 RESULTS="/tmp/zapret_bench.txt"
 
 # очистим предыдущие результаты
