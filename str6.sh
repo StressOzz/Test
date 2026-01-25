@@ -5,33 +5,22 @@ STR_FILE="/opt/zapret_temp/str_flow.txt"
 TEST_SITES="youtube.com google.com github.com discord.com wikipedia.org reddit.com instagram.com microsoft.com openai.com"
 RESULTS="/tmp/zapret_bench.txt"
 
-# очистим предыдущие результаты
+# очистка предыдущих результатов
 : > "$RESULTS"
 
-# читаем блоки стратегий: от # до следующего #
-# awk разделяет блоки по строкам, начинающимся с #
-awk '
-  /^#/ { 
-    if (NR != 1) print block; 
-    block=$0; 
-    next 
-  } 
-  { block = block "\n" $0 } 
-  END { print block }
-' "$STR_FILE" | while IFS= read -r STRAT_BLOCK; do
-
-    # пропускаем пустые блоки
+# читаем весь файл и разбиваем на блоки от # до следующего #
+awk 'BEGIN{RS=""; ORS="\n\n"} /^#/{print $0}' "$STR_FILE" | while IFS= read -r STRAT_BLOCK; do
+    # убираем пустые блоки
     [ -z "$STRAT_BLOCK" ] && continue
 
     echo -e "\nПрименяем стратегию:\n$STRAT_BLOCK"
 
-    # вставляем блок стратегии в конфиг полностью
-    # между option NFQWS_OPT ' и '
+    # вставка блока стратегии в конфиг полностью
     sed -i "/option NFQWS_OPT '/,/^'/c\	option NFQWS_OPT '\n$STRAT_BLOCK\n'" "$CONF"
 
     # рестарт Zapret
     /etc/init.d/zapret restart >/dev/null 2>&1
-    sleep 5  # даём время подняться
+    sleep 1
 
     # проверка сайтов
     OK=0
@@ -43,12 +32,11 @@ awk '
         fi
     done
 
-    # сохраняем результат
+    # сохраняем результат (с полным блоком)
     echo -e "$OK/$TOTAL\n$STRAT_BLOCK\n" >> "$RESULTS"
     echo "Доступно: $OK/$TOTAL"
 done
 
-# вывод топ-5 лучших стратегий
+# вывод топ-5 лучших стратегий с полными блоками
 echo -e "\nТоп-5 лучших стратегий:"
-# сортируем по числу доступных сайтов
-awk 'NR%6==1{score=$1; getline; print score, $0}' "$RESULTS" | sort -rn | head -5
+awk 'BEGIN{ORS="";} {if($0 ~ /^[0-9]+\//){score=$0; getline; block=$0; print score "\n" block "\n\n";}}' "$RESULTS" | sort -rn | head -20
