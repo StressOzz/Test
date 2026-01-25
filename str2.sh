@@ -2,18 +2,18 @@
 
 CONF="/etc/config/zapret"
 STR_FILE="/opt/zapret_temp/str_flow.txt"
-TEST_SITES="gosuslugi.ru youtube.com instagram.com rutor.info ntc.party rutracker.org epidemz.net.co nnmclub.to"
+TEST_SITES="youtube.com google.com github.com discord.com wikipedia.org reddit.com instagram.com microsoft.com openai.com"
 RESULTS="/tmp/zapret_bench.txt"
 
 # очистим предыдущие результаты
 : > "$RESULTS"
 
-# читаем файл стратегий, каждая стратегия начинается с #
-grep '^#' "$STR_FILE" | while read STRAT; do
-    echo -e "\nПрименяем стратегию: $STRAT"
+# читаем стратегии от # до следующего #
+awk '/^#/{if (s!="") print s; s=$0; next} {s=s"\n"$0} END{print s}' "$STR_FILE" | while read -r -d $'\n' STRAT_BLOCK; do
+    echo -e "\nПрименяем стратегию:\n$STRAT_BLOCK"
 
-    # вставляем стратегию в конфиг
-    sed -i "/option NFQWS_OPT '/,/^'/c\	option NFQWS_OPT '\n$STRAT\n'" "$CONF"
+    # вставляем стратегию в конфиг между option NFQWS_OPT ' и '
+    sed -i "/option NFQWS_OPT '/,/^'/c\	option NFQWS_OPT '\n$STRAT_BLOCK\n'" "$CONF"
 
     # рестарт Zapret
     /etc/init.d/zapret restart >/dev/null 2>&1
@@ -30,7 +30,7 @@ grep '^#' "$STR_FILE" | while read STRAT; do
     done
 
     # сохраняем результат
-    echo "$OK/$TOTAL $STRAT" >> "$RESULTS"
+    echo "$OK/$TOTAL $STRAT_BLOCK" >> "$RESULTS"
     echo "Доступно: $OK/$TOTAL"
 done
 
