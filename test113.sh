@@ -349,94 +349,90 @@ echo -ne "\n${YELLOW}Выберите пункт:${NC} "; read -r choiceIP; case
 # Тест стратегий
 # ==========================================
 run_test_strategies() {
-    echo -e "\n${MAGENTA}Тест стратегий${NC}"
-    echo -e "${CYAN}Собираем стратегии для теста${NC}"
+    echo
+    echo "Тест стратегий"
+    echo "Собираем стратегии для теста"
 
     download_strategies "1"
-    cp /opt/zapret_temp/str_flow.txt /opt/zapret_temp/str_test.txt
 
+    cp /opt/zapret_temp/str_flow.txt /opt/zapret_temp/str_test.txt
     STR_FILE="/opt/zapret_temp/str_test.txt"
     TEMP_FILE="/opt/zapret_temp/str_temp.txt"
     RESULTS="/opt/zapret_temp/zapret_bench.txt"
     BACK="/opt/zapret_temp/zapret_back"
-
-    cp "$OUT" "$STR_FILE"
     cp "$CONF" "$BACK"
 
-    PARALLEL=10
+    PARALLEL=5  # безопасная параллельность
 
+    # Собираем стратегии
     for N in 1 2 3 4 5 6 7 8; do
         strategy_v$N >> "$STR_FILE"
     done
-
     sed -i '/#Y/d' "$STR_FILE"
 
-    # -------------------------------
-    # Список тестируемых сайтов: "текст|ссылка"
-    # -------------------------------
-    URLS_LIST="
-Госуслуги|https://gosuslugi.ru
-ESIA|https://esia.gosuslugi.ru
+    # Список ссылок с текстом
+    # формат: Текст|URL
+    URLS="Госуслуги|https://gosuslugi.ru
 Налог.ру|https://nalog.ru
 ЛК ФЛ|https://lkfl2.nalog.ru
+ESIA|https://esia.gosuslugi.ru
 YouTube|https://youtube.com
 Instagram|https://instagram.com
 Rutor|https://rutor.info
 Rutracker|https://rutracker.org
 Discord|https://discord.com
-"
+NTC|https://ntc.party
+Filmix|https://filmix.my"
 
-    TOTAL=$(echo "$URLS_LIST" | wc -l)
+    TOTAL=$(echo "$URLS" | wc -l)
     : > "$RESULTS"
 
+    # функция проверки одной ссылки
     check_url() {
-        NAME="$1"
-        URL="$2"
-        if curl -Is --connect-timeout 2 --max-time 3 "$URL" >/dev/null 2>&1; then
-            echo 1 >> "$TMP_OK"
-            echo -e "${GREEN}[ OK ]${NC} $NAME"
-        else
-            echo -e "${RED}[FAIL]${NC} $NAME"
-        fi
-    }
-
-check_all_urls() {
-    TMP_OK="/tmp/z_ok.$$"
-    : > "$TMP_OK"
-
-    for LINE in $URLS; do
-        URL=$(echo "$LINE" | cut -d"|" -f2)
-        TEXT=$(echo "$LINE" | cut -d"|" -f1)
-        if curl -Is --connect-timeout 2 --max-time 3 "$URL" >/dev/null 2>&1; then
+        TEXT=$(echo "$1" | cut -d"|" -f1)
+        LINK=$(echo "$1" | cut -d"|" -f2)
+        if curl -Is --connect-timeout 2 --max-time 3 "$LINK" >/dev/null 2>&1; then
             echo 1 >> "$TMP_OK"
             echo "[ OK ] $TEXT"
         else
             echo "[FAIL] $TEXT"
         fi
-    done
+    }
 
-    OK=$(wc -l < "$TMP_OK")
-    rm -f "$TMP_OK"
-}
+    # проверка всех ссылок
+    check_all_urls() {
+        TMP_OK="/tmp/z_ok.$$"
+        : > "$TMP_OK"
 
+        RUN=0
+        echo "$URLS" | while IFS= read -r LINE; do
+            check_url "$LINE" &
+            RUN=$((RUN + 1))
+            if [ "$RUN" -ge "$PARALLEL" ]; then
+                wait
+                RUN=0
+            fi
+        done
+        wait
+        OK=$(wc -l < "$TMP_OK")
+        rm -f "$TMP_OK"
+    }
 
-    # -------------------------------
-    # Перебор стратегий
-    # -------------------------------
+    # перебор стратегий
     LINES=$(grep -n '^#' "$STR_FILE" | cut -d: -f1)
-
-    echo "$LINES" | while read START; do
+    echo "$LINES" | while IFS= read -r START; do
         NEXT=$(echo "$LINES" | awk -v s="$START" '$1>s{print;exit}')
         if [ -z "$NEXT" ]; then
             sed -n "${START},\$p" "$STR_FILE" > "$TEMP_FILE"
         else
-            sed -n "${START},$((NEXT-1))p" "$STR_FILE" > "$TEMP_FILE"
+            sed -n "${START},$((NEXT - 1))p" "$STR_FILE" > "$TEMP_FILE"
         fi
 
         BLOCK=$(cat "$TEMP_FILE")
         NAME=$(head -n1 "$TEMP_FILE")
         NAME="${NAME#\#}"  # убираем #
 
+        # вставка блока в конфиг
         awk -v block="$BLOCK" '
         BEGIN{skip=0}
         /option NFQWS_OPT '\''/ {
@@ -449,41 +445,35 @@ check_all_urls() {
         skip && /^'\''$/ { skip=0; next }
         !skip { print }
         ' "$CONF" > "${CONF}.tmp"
-
         mv "${CONF}.tmp" "$CONF"
 
-        echo -e "\n${CYAN}Тестируем стратегию: ${YELLOW}${NAME}${NC}"
+        echo
+        echo "Тестируем стратегию: $NAME"
+
         ZAPRET_RESTART
 
         OK=0
         check_all_urls
 
-        if [ "$OK" -eq "$TOTAL" ]; then COLOR="$GREEN"
-        elif [ "$OK" -gt 0 ]; then COLOR="$YELLOW"
-        else COLOR="$RED"; fi
+        echo "Результат теста: $OK/$TOTAL"
 
-        echo -e "${CYAN}Результат теста: ${COLOR}$OK/$TOTAL${NC}"
         echo "$OK $NAME" >> "$RESULTS"
     done
 
-    # -------------------------------
-    # Лучшие 10 стратегий
-    # -------------------------------
-    echo -e "\n${YELLOW}Лучшие 10 стратегий${NC}"
-
-    sort -rn "$RESULTS" | head -10 | while read COUNT NAME; do
-        NAME="${NAME#\#}"
-        if [ "$COUNT" -eq "$TOTAL" ]; then COLOR="$GREEN"
-        elif [ "$COUNT" -gt 0 ]; then COLOR="$YELLOW"
-        else COLOR="$RED"; fi
-        echo -e "${COLOR}$NAME${NC} → $COUNT/$TOTAL"
+    # вывод топ-10 стратегий
+    echo
+    echo "Лучшие 10 стратегий"
+    sort -rn "$RESULTS" | head -10 | while IFS= read -r LINE; do
+        COUNT=$(echo "$LINE" | cut -d" " -f1)
+        NAME=$(echo "$LINE" | cut -d" " -f2-)
+        echo "$NAME → $COUNT/$TOTAL"
     done
 
     mv -f "$BACK" "$CONF"
-    echo
     ZAPRET_RESTART
     PAUSE
 }
+
 
 # ==========================================
 # Главное меню
