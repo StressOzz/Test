@@ -2,14 +2,12 @@
 
 CONF="/etc/config/zapret"
 BACK="/opt/zapret_temp/zapret_back"
-STR_FILE="/opt/zapret_temp/str_flow.txt"       # исходный файл — не трогаем
-WORK_FILE="/opt/zapret_temp/str_work.txt"     # рабочий файл для перебора
+STR_FILE="/opt/zapret_temp/str_flow.txt"
+WORK_FILE="/opt/zapret_temp/work_file.txt"
 TEMP_FILE="/opt/zapret_temp/str_temp.txt"
 RESULTS="/opt/zapret_temp/zapret_bench.txt"
 TMP_SF="/opt/zapret_temp"
 ZIP="$TMP_SF/repo.zip"
-OUT="$TMP_SF/str_flow.txt"
-
 
 PARALLEL=9
 
@@ -24,16 +22,17 @@ ZAPRET_RESTART () {
     /etc/init.d/zapret restart >/dev/null 2>&1
 }
 
-########################################
+# -----------------------------
 # Бэкап конфига
-########################################
-
+# -----------------------------
 mkdir -p "$TMP_SF"
 cp "$CONF" "$BACK"
 
-########################################
-# Формирование стратегий
-########################################
+# -----------------------------
+# Формируем рабочий файл стратегий
+# -----------------------------
+: > "$WORK_FILE"
+
 
 echo -e "\n${MAGENTA}Скачиваем и формируем стратегии${NC}"; mkdir -p "$TMP_SF"; : > "$OUT"; wget -qO "$ZIP" https://github.com/Flowseal/zapret-discord-youtube/archive/refs/heads/main.zip || { echo -e "\n${RED}Не удалось загрузить файл стратегий${NC}\n"PAUSE; return; }
 if ! command -v unzip >/dev/null 2>&1; then echo -e "${CYAN}Устанавливаем ${NC}unzip" && opkg install unzip >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить unzip!${NC}\n"; PAUSE; return; }; fi; unzip -oq "$ZIP" -d "$TMP_SF" || { echo -e "\n${RED}Не удалось распоковать файл${NC}\n"; PAUSE; return; }
@@ -43,6 +42,8 @@ sed -i '/--ipset-exclude="%LISTS%ipset-exclude.txt"/d' "$OUT"; sed -i 's|"%LISTS
 sed -i 's|"%BIN%tls_clienthello_4pda_to.bin"|/opt/zapret/files/fake/4pda.bin|g' "$OUT"; sed -i 's|"%BIN%tls_clienthello_max_ru.bin"|/opt/zapret/files/fake/max.bin|g' "$OUT"; sed -i 's|\^!|/opt/zapret/files/fake/tls_clienthello_www_google_com.bin|g' "$OUT"; sed -i 's/[[:space:]]\+$//g' "$OUT"; sed -i '/^--new$/ { N; /^\--new\n$/d; }' "$OUT"
 rm -rf "$TMP_SF/zapret-discord-youtube-main" "$ZIP"; echo -e "${GREEN}Стратегии сформированы!${NC}\n"
 
+grep -v '#Y' "$STR_FILE" >> "$WORK_FILE"
+
 strategy_v1() { printf '%s\n' "#v1" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake,multidisorder" "--dpi-desync-split-seqovl=681" "--dpi-desync-split-pos=1" "--dpi-desync-fooling=badseq"
 printf '%s\n' "--dpi-desync-badseq-increment=10000000" "--dpi-desync-repeats=6" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin" "--dpi-desync-fake-tls-mod=rnd,dupsid,sni=fonts.google.com" "--new"
 printf '%s\n' "--filter-udp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake" "--dpi-desync-repeats=6" "--dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin"; }
@@ -50,7 +51,7 @@ strategy_v2() { printf '%s\n' "#v2" "--filter-tcp=443" "--hostlist-exclude=/opt/
 printf '%s\n' "--dpi-desync-fake-tls-mod=rnd,dupsid,sni=fonts.google.com" "--dpi-desync-fake-tls=0x0F0F0F0F" "--dpi-desync-fake-tls-mod=none" "--dpi-desync-fakedsplit-pattern=/opt/zapret/files/fake/tls_clienthello_vk_com.bin" "--dpi-desync-split-seqovl=336"
 printf '%s\n' "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_gosuslugi_ru.bin" "--dpi-desync-fooling=badseq,badsum" "--dpi-desync-badseq-increment=0" "--new" "--filter-udp=443"
 printf '%s\n' "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake" "--dpi-desync-repeats=6" "--dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin"; }
-strategy_v3() { printf '%s\n' "#v3" "--filter-tcp=443" "--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt" "--ip-id=zero" "--dpi-desync=multisplit" "--dpi-desync-split-seqovl=681" "--dpi-desync-split-pos=1" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin"
+strategy_v3() { printf '%s\n' "#v3" "#Dv1" "--filter-tcp=443" "--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt" "--ip-id=zero" "--dpi-desync=multisplit" "--dpi-desync-split-seqovl=681" "--dpi-desync-split-pos=1" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin"
 printf '%s\n' "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake,fakeddisorder" "--dpi-desync-split-pos=10,midsld" "--dpi-desync-fake-tls=/opt/zapret/files/fake/t2.bin"
 printf '%s\n' "--dpi-desync-fake-tls-mod=rnd,dupsid,sni=m.ok.ru" "--dpi-desync-fake-tls=0x0F0F0F0F" "--dpi-desync-fake-tls-mod=none" "--dpi-desync-fakedsplit-pattern=/opt/zapret/files/fake/tls_clienthello_vk_com.bin"
 printf '%s\n' "--dpi-desync-split-seqovl=336" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_gosuslugi_ru.bin" "--dpi-desync-fooling=badseq,badsum" "--dpi-desync-badseq-increment=0"
@@ -73,51 +74,21 @@ strategy_v8() { printf '%s\n' "#v8" "#Yv03" "--filter-tcp=443" "--hostlist=/opt/
 printf '%s\n' "--dpi-desync-fake-tls-mod=rnd,dupsid,sni=ggpht.com" "--dpi-desync-split-seqovl=620" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin" "--dpi-desync-fooling=badsum,badseq"
 printf '%s\n' "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake" "--dpi-desync-repeats=6" "--dpi-desync-fooling=ts" "--dpi-desync-fake-tls=/opt/zapret/files/fake/4pda.bin" "--dpi-desync-fake-tls-mod=none" ; }
 
+echo -e "${GREEN}Рабочий файл стратегий сформирован: $WORK_FILE${NC}"
 
-# Создаем рабочий файл (str_work.txt)
-: > "$WORK_FILE"
-cat "$STR_FILE" >> "$WORK_FILE"
-
-# Добавляем нужные стратегии из переменных
-for N in 1 2 3 4 5 6 7 8; do
-    strategy_v$N >> "$WORK_FILE"
-done
-
-# Убираем все строки с #Y только в рабочем файле
-sed -i '/#Y/d' "$WORK_FILE"
-
-########################################
+# -----------------------------
 # Сайты для проверки
-########################################
-
+# -----------------------------
 URLS="$(cat <<EOF
 https://gosuslugi.ru
 https://esia.gosuslugi.ru
-https://nalog.ru
-https://lkfl2.nalog.ru
-https://rutube.ru
 https://youtube.com
-https://instagram.com
-https://rutor.info
-https://ntc.party
-https://rutracker.org
-https://epidemz.net.co
-https://nnmclub.to
-https://openwrt.org
-https://sxyprn.net
-https://spankbang.com
-https://pornhub.com
 https://discord.com
-https://x.com
-https://filmix.my
-https://flightradar24.com
-https://cdn77.com
-https://play.google.com
-https://genderize.io
-https://ottai.com
+https://instagram.com
+https://rutracker.org
+https://openwrt.org
 EOF
 )"
-
 TOTAL=$(echo "$URLS" | wc -l)
 : > "$RESULTS"
 
@@ -135,7 +106,7 @@ check_all_urls() {
     }
 
     RUN=0
-    while read URL; do
+    while read -r URL; do
         check_url "$URL" &
         RUN=$((RUN+1))
         if [ "$RUN" -ge "$PARALLEL" ]; then wait; RUN=0; fi
@@ -148,14 +119,11 @@ EOF
     rm -f "$TMP_OK"
 }
 
-########################################
+# -----------------------------
 # Перебор стратегий
-########################################
-
-LINES=$(grep -n '^#' "$WORK_FILE" | cut -d: -f1)
-
-echo "$LINES" | while read START; do
-    NEXT=$(echo "$LINES" | awk -v s="$START" '$1>s{print;exit}')
+# -----------------------------
+grep -n '^#' "$WORK_FILE" | while read -r START; do
+    NEXT=$(grep -n '^#' "$WORK_FILE" | awk -v s="$START" '$1>s{print;exit}')
     if [ -z "$NEXT" ]; then
         sed -n "${START},\$p" "$WORK_FILE" > "$TEMP_FILE"
     else
@@ -180,7 +148,8 @@ echo "$LINES" | while read START; do
     mv "${CONF}.tmp" "$CONF"
     ZAPRET_RESTART
 
-    echo; echo -e "${YELLOW}${NAME}${NC}"
+    echo
+    echo -e "${YELLOW}${NAME}${NC}"
 
     OK=0
     check_all_urls
@@ -193,24 +162,23 @@ echo "$LINES" | while read START; do
     echo "$OK $NAME" >> "$RESULTS"
 done
 
-########################################
+# -----------------------------
 # Топ-5 стратегий
-########################################
-
-echo; echo -e "${YELLOW}=========== Топ-5 стратегий ===========${NC}"
-
-sort -rn "$RESULTS" | head -5 | while read COUNT NAME; do
-    if [ "$COUNT" -eq "$TOTAL" ]; then COLOR="$GREEN"
-    elif [ "$COUNT" -gt 0 ]; then COLOR="$YELLOW"
-    else COLOR="$RED"; fi
+# -----------------------------
+echo
+echo -e "${YELLOW}=========== Топ-5 стратегий ===========${NC}"
+sort -rn "$RESULTS" | head -5 | while read -r COUNT NAME; do
+    [ "$COUNT" -eq "$TOTAL" ] && COLOR="$GREEN"
+    [ "$COUNT" -gt 0 ] && [ "$COUNT" -lt "$TOTAL" ] && COLOR="$YELLOW"
+    [ "$COUNT" -eq 0 ] && COLOR="$RED"
     echo -e "${COLOR}${NAME} → $COUNT/$TOTAL${NC}"
 done
 
-########################################
-# Восстановление конфига
-########################################
-
-echo; echo "Восстанавливаем исходный конфиг..."
+# -----------------------------
+# Восстановление
+# -----------------------------
+echo
+echo "Восстанавливаем исходный конфиг..."
 mv -f "$BACK" "$CONF"
 rm -f "$TEMP_FILE" "$RESULTS"
 
