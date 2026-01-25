@@ -352,13 +352,14 @@ run_test_strategies() {
     echo -e "\n${MAGENTA}Тест стратегий${NC}"
     echo -e "${CYAN}Собираем стратегии для теста${NC}"
 
-    # Формируем файл стратегий
     download_strategies "1"
     cp /opt/zapret_temp/str_flow.txt /opt/zapret_temp/str_test.txt
+
     STR_FILE="/opt/zapret_temp/str_test.txt"
     TEMP_FILE="/opt/zapret_temp/str_temp.txt"
     RESULTS="/opt/zapret_temp/zapret_bench.txt"
     BACK="/opt/zapret_temp/zapret_back"
+
     cp "$OUT" "$STR_FILE"
     cp "$CONF" "$BACK"
 
@@ -370,44 +371,32 @@ run_test_strategies() {
 
     sed -i '/#Y/d' "$STR_FILE"
 
-    # Ассоциативный массив: ключ = текст, значение = URL
-    declare -A URLS
-    URLS=(
-        ["Госуслуги"]="https://gosuslugi.ru"
-        ["ESIA"]="https://esia.gosuslugi.ru"
-        ["Налог.ру"]="https://nalog.ru"
-        ["Личный кабинет ФЛ"]="https://lkfl2.nalog.ru"
-        ["Rutube"]="https://rutube.ru"
-        ["YouTube"]="https://youtube.com"
-        ["Instagram"]="https://instagram.com"
-        ["Rutor"]="https://rutor.info"
-        ["NTC Party"]="https://ntc.party"
-        ["Rutracker"]="https://rutracker.org"
-        ["Epidemz"]="https://epidemz.net.co"
-        ["NNMClub"]="https://nnmclub.to"
-        ["OpenWRT"]="https://openwrt.org"
-        ["SXYPRN"]="https://sxyprn.net"
-        ["Spankbang"]="https://spankbang.com"
-        ["Pornhub"]="https://pornhub.com"
-        ["Discord"]="https://discord.com"
-        ["X.com"]="https://x.com"
-        ["Filmix"]="https://filmix.my"
-        ["Flightradar24"]="https://flightradar24.com"
-        ["Play Google"]="https://play.google.com"
-    )
+    # -------------------------------
+    # Список тестируемых сайтов: "текст|ссылка"
+    # -------------------------------
+    URLS_LIST="
+Госуслуги|https://gosuslugi.ru
+ESIA|https://esia.gosuslugi.ru
+Налог.ру|https://nalog.ru
+ЛК ФЛ|https://lkfl2.nalog.ru
+YouTube|https://youtube.com
+Instagram|https://instagram.com
+Rutor|https://rutor.info
+Rutracker|https://rutracker.org
+Discord|https://discord.com
+"
 
-    TOTAL=${#URLS[@]}
+    TOTAL=$(echo "$URLS_LIST" | wc -l)
     : > "$RESULTS"
 
-    # Функции проверки
     check_url() {
-        local NAME="$1"
-        local URL="$2"
+        NAME="$1"
+        URL="$2"
         if curl -Is --connect-timeout 2 --max-time 3 "$URL" >/dev/null 2>&1; then
             echo 1 >> "$TMP_OK"
-            echo -e "${GREEN}[ OK ]${NC} $NAME → $URL"
+            echo -e "${GREEN}[ OK ]${NC} $NAME"
         else
-            echo -e "${RED}[FAIL]${NC} $NAME → $URL"
+            echo -e "${RED}[FAIL]${NC} $NAME"
         fi
     }
 
@@ -415,9 +404,9 @@ run_test_strategies() {
         TMP_OK="/tmp/z_ok.$$"
         : > "$TMP_OK"
         RUN=0
-        for NAME in "${!URLS[@]}"; do
-            URL="${URLS[$NAME]}"
-            check_url "$NAME" "$URL" &
+
+        echo "$URLS_LIST" | while IFS="|" read TEXT LINK; do
+            check_url "$TEXT" "$LINK" &
             RUN=$((RUN+1))
             if [ "$RUN" -ge "$PARALLEL" ]; then
                 wait
@@ -425,12 +414,16 @@ run_test_strategies() {
             fi
         done
         wait
+
         OK=$(wc -l < "$TMP_OK")
         rm -f "$TMP_OK"
     }
 
+    # -------------------------------
     # Перебор стратегий
+    # -------------------------------
     LINES=$(grep -n '^#' "$STR_FILE" | cut -d: -f1)
+
     echo "$LINES" | while read START; do
         NEXT=$(echo "$LINES" | awk -v s="$START" '$1>s{print;exit}')
         if [ -z "$NEXT" ]; then
@@ -441,7 +434,7 @@ run_test_strategies() {
 
         BLOCK=$(cat "$TEMP_FILE")
         NAME=$(head -n1 "$TEMP_FILE")
-        NAME="${NAME#\#}"  # убираем # в начале
+        NAME="${NAME#\#}"  # убираем #
 
         awk -v block="$BLOCK" '
         BEGIN{skip=0}
@@ -459,8 +452,8 @@ run_test_strategies() {
         mv "${CONF}.tmp" "$CONF"
 
         echo -e "\n${CYAN}Тестируем стратегию: ${YELLOW}${NAME}${NC}"
-
         ZAPRET_RESTART
+
         OK=0
         check_all_urls
 
@@ -472,10 +465,13 @@ run_test_strategies() {
         echo "$OK $NAME" >> "$RESULTS"
     done
 
-    # Вывод лучших стратегий
+    # -------------------------------
+    # Лучшие 10 стратегий
+    # -------------------------------
     echo -e "\n${YELLOW}Лучшие 10 стратегий${NC}"
+
     sort -rn "$RESULTS" | head -10 | while read COUNT NAME; do
-        NAME="${NAME#\#}"  # убираем # если есть
+        NAME="${NAME#\#}"
         if [ "$COUNT" -eq "$TOTAL" ]; then COLOR="$GREEN"
         elif [ "$COUNT" -gt 0 ]; then COLOR="$YELLOW"
         else COLOR="$RED"; fi
@@ -487,6 +483,7 @@ run_test_strategies() {
     ZAPRET_RESTART
     PAUSE
 }
+
 # ==========================================
 # Главное меню
 # ==========================================
