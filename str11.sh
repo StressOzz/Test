@@ -3,7 +3,7 @@
 CONF="/etc/config/zapret"
 STR_FILE="/opt/zapret_temp/str_flow.txt"
 TEMP_FILE="/opt/str_temp.txt"
-TEST_SITES="youtube.com google.com github.com discord.com wikipedia.org reddit.com instagram.com microsoft.com openai.com"
+TEST_SITES="gosuslugi.ru youtube.com rutracker.org epidemz.net.co nnmclub.to sxyprn.net spankbang.com pornhub.com discord.com x.com play.google.com"
 RESULTS="/tmp/zapret_bench.txt"
 
 : > "$RESULTS"
