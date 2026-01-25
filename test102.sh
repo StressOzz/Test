@@ -349,14 +349,21 @@ echo -ne "\n${YELLOW}Выберите пункт:${NC} "; read -r choiceIP; case
 # Тест стратегий
 # ==========================================
 run_test_strategies() {
+
+
+
+
     download_strategies
 
     cp /opt/zapret_temp/str_flow.txt /opt/zapret_temp/str_test.txt
 
-    CONF="/etc/config/zapret"
     STR_FILE="/opt/zapret_temp/str_test.txt"
     TEMP_FILE="/opt/zapret_temp/str_temp.txt"
     RESULTS="/opt/zapret_temp/zapret_bench.txt"
+    BACK="/opt/zapret_temp/zapret_back"
+
+cp "$CONF" "$BACK"
+
 
     PARALLEL=9
 
@@ -518,13 +525,24 @@ EOF
     echo
     echo -e "${YELLOW}=========== Топ-5 стратегий ===========${NC}"
 
-    sort -rn "$RESULTS" | head -5 | while read COUNT NAME; do
-        if [ "$COUNT" -eq "$TOTAL" ]; then COLOR="$GREEN"
-        elif [ "$COUNT" -gt 0 ]; then COLOR="$YELLOW"
-        else COLOR="$RED"; fi
-    done
+sort -rn "$RESULTS" | head -5 | while read COUNT NAME; do
+    if [ "$COUNT" -eq "$TOTAL" ]; then COLOR="$GREEN"
+    elif [ "$COUNT" -gt 0 ]; then COLOR="$YELLOW"
+    else COLOR="$RED"; fi
+
+    echo -e "${COLOR}$NAME → $COUNT/$TOTAL${NC}"
+done
+
 
     PAUSE
+    
+echo "Восстанавливаем исходный конфиг..."
+mv -f "$BACK" "$CONF"
+
+ZAPRET_RESTART
+
+    PAUSE
+    
 }
 
 
