@@ -354,22 +354,20 @@ run_test_strategies() {
 
     download_strategies "1"
     cp /opt/zapret_temp/str_flow.txt /opt/zapret_temp/str_test.txt
-
     STR_FILE="/opt/zapret_temp/str_test.txt"
     TEMP_FILE="/opt/zapret_temp/str_temp.txt"
     RESULTS="/opt/zapret_temp/zapret_bench.txt"
     BACK="/opt/zapret_temp/zapret_back"
+    cp "$OUT" "$STR_FILE"
     cp "$CONF" "$BACK"
-
     PARALLEL=10
 
-    for N in 1 2 3 4 5 6 7 8; do
+    for N in 1 2 3 4 5 6 7 8 ; do
         strategy_v$N >> "$STR_FILE"
     done
-
     sed -i '/#Y/d' "$STR_FILE"
 
-    # Ссылки с пользовательскими названиями
+    # список сайтов: Название|Ссылка
     URLS="$(cat <<EOF
 Gosuslugi|https://gosuslugi.ru
 Nalog.ru|https://nalog.ru
@@ -410,37 +408,46 @@ NL.SW-01 Scaleway|https://www.velivole.fr/img/header.jpg?t=0.7058447082956326
 US.CNST-01 Constant|https://cdn.xuansiwei.com/common/lib/font-awesome/4.7.0/fontawesome-webfont.woff2?v=4.7.0&t=0.45608957890091195
 EOF
 )"
-
-    TOTAL=$(echo "$URLS" | wc -l)
+    TOTAL=$(echo "$URLS" | grep -c "|")
     : > "$RESULTS"
 
-    check_all_urls() {
-        TMP_OK="/tmp/z_ok.$$"
-        : > "$TMP_OK"
-        TMP_OUT="/tmp/z_out.$$"
-        : > "$TMP_OUT"
+    check_url() {
+        TEXT=$(echo "$1" | cut -d"|" -f1)
+        LINK=$(echo "$1" | cut -d"|" -f2)
+        if curl -Is --connect-timeout 2 --max-time 3 "$LINK" >/dev/null 2>&1; then
+            echo 1 >> "$TMP_OK"
+            echo -e "\033[32m[ OK ]\033[0m $TEXT"
+        else
+            echo -e "\033[31m[FAIL]\033[0m $TEXT"
+        fi
+    }
 
-        while IFS='|' read -r NAME LINK; do
-            [ -z "$LINK" ] && continue
-            if curl -Is --connect-timeout 2 --max-time 3 "$LINK" >/dev/null 2>&1; then
-                printf "1\n" >> "$TMP_OK"
-                STATUS="\033[32m[ OK ]\033[0m"
-            else
-                STATUS="\033[31m[FAIL]\033[0m"
-            fi
-            echo "$STATUS $NAME" >> "$TMP_OUT"
-        done <<EOF
+   check_all_urls() {
+    TMP_OK="/tmp/z_ok.$$"
+    : > "$TMP_OK"
+    RUN=0
+
+    # используем here-doc без пайпа
+    while IFS= read -r URL; do
+        [ -z "$URL" ] && continue
+        check_url "$URL" &
+        RUN=$((RUN+1))
+        if [ "$RUN" -ge "$PARALLEL" ]; then
+            wait
+            RUN=0
+        fi
+    done <<EOF
 $URLS
 EOF
 
-        OK=$(wc -l < "$TMP_OK" | tr -d ' ')
-        cat "$TMP_OUT"
-        rm -f "$TMP_OK" "$TMP_OUT"
-    }
+    wait
+    # теперь OK точно подсчитан
+    OK=$(wc -l < "$TMP_OK" | tr -d ' ')
+    rm -f "$TMP_OK"
+}
 
-    # Перебор стратегий
+    # перебор стратегий
     LINES=$(grep -n '^#' "$STR_FILE" | cut -d: -f1)
-
     echo "$LINES" | while read START; do
         NEXT=$(echo "$LINES" | awk -v s="$START" '$1>s{print;exit}')
         if [ -z "$NEXT" ]; then
@@ -448,45 +455,47 @@ EOF
         else
             sed -n "${START},$((NEXT-1))p" "$STR_FILE" > "$TEMP_FILE"
         fi
-
         BLOCK=$(cat "$TEMP_FILE")
         NAME=$(head -n1 "$TEMP_FILE")
-        NAME="${NAME#\#}"  # убрать #
+        NAME="${NAME#\#}"  # убираем #
 
         awk -v block="$BLOCK" '
         BEGIN{skip=0}
-        /option NFQWS_OPT '\''/ {
-            print "\toption NFQWS_OPT '\''"
-            print block
-            print "'\''"
-            skip=1
-            next
-        }
-        skip && /^'\''$/ { skip=0; next }
-        !skip { print }
-        ' "$CONF" > "${CONF}.tmp"
+/option NFQWS_OPT '\''/ {
+print "\toption NFQWS_OPT '\''"
+print block
+print "'\''"
+skip=1
+next
+}
+skip && /^'\''$/ { skip=0; next }
+!skip { print }
+' "$CONF" > "${CONF}.tmp"
+        mv "${CONF}.tmp" "$CONF"
 
-        mv -f "${CONF}.tmp" "$CONF"
-
-        echo -e "\n\033[36mТестируем стратегию: \033[33m$NAME\033[0m"
-
+        echo -e "\n\033[36mТестируем стратегию: \033[33m${NAME}\033[0m"
         ZAPRET_RESTART
 
+        OK=0
         check_all_urls
 
-        echo -e "\033[36mРезультат теста: \033[33m$OK/$TOTAL\033[0m"
+        if [ "$OK" -eq "$TOTAL" ]; then COLOR="\033[32m"
+        elif [ "$OK" -gt 0 ]; then COLOR="\033[33m"
+        else COLOR="\033[31m"; fi
 
+        echo -e "\033[36mРезультат теста: ${COLOR}$OK/$TOTAL\033[0m"
         echo "$OK $NAME" >> "$RESULTS"
     done
 
-    # Лучшие 10 стратегий
-    echo -e "\n\033[33mЛучшие 10 стратегий\033[0m"
-    sort -rn "$RESULTS" | head -10 | while read COUNT NAME; do
-        NAME="${NAME#\#}"
+    # вывод всех стратегий по убыванию
+    echo -e "\n\033[33mСтратегии по результатам (от лучших к худшим)\033[0m"
+    sort -rn "$RESULTS" | while IFS= read -r LINE; do
+        COUNT=$(echo "$LINE" | cut -d" " -f1)
+        NAME=$(echo "$LINE" | cut -d" " -f2-)
         if [ "$COUNT" -eq "$TOTAL" ]; then COLOR="\033[32m"
         elif [ "$COUNT" -gt 0 ]; then COLOR="\033[33m"
         else COLOR="\033[31m"; fi
-        echo -e "${COLOR}$NAME\033[0m → $COUNT/$TOTAL"
+        echo -e "${COLOR}${NAME}\033[0m → $COUNT/$TOTAL"
     done
 
     mv -f "$BACK" "$CONF"
