@@ -349,150 +349,143 @@ echo -ne "\n${YELLOW}Выберите пункт:${NC} "; read -r choiceIP; case
 # Тест стратегий
 # ==========================================
 run_test_strategies() {
-echo -e "\n${MAGENTA}Тест стратегий${NC}"
-echo -e "${CYAN}Собираем стратегии для теста${NC}"
-download_strategies "1"
-cp /opt/zapret_temp/str_flow.txt /opt/zapret_temp/str_test.txt
-STR_FILE="/opt/zapret_temp/str_test.txt"
-TEMP_FILE="/opt/zapret_temp/str_temp.txt"
-RESULTS="/opt/zapret_temp/zapret_bench.txt"
-BACK="/opt/zapret_temp/zapret_back"
-cp "$OUT" "$STR_FILE"
-cp "$CONF" "$BACK"
-PARALLEL=10
-for N in 1 2 3 4 5 6 7 8 ; do
-strategy_v$N >> "$STR_FILE"
-done
-sed -i '/#Y/d' "$STR_FILE"
-URLS="$(cat <<EOF
-https://gosuslugi.ru
-https://esia.gosuslugi.ru
-https://nalog.ru
-https://lkfl2.nalog.ru
-https://rutube.ru
-https://youtube.com
-https://instagram.com
-https://rutor.info
-https://ntc.party
-https://rutracker.org
-https://epidemz.net.co
-https://nnmclub.to
-https://openwrt.org
-https://sxyprn.net
-https://spankbang.com
-https://pornhub.com
-https://discord.com
-https://x.com
-https://filmix.my
-https://flightradar24.com
-https://cdn77.com
-https://play.google.com
-https://genderize.io
-https://ottai.com
-https://img.wzstats.gg/cleaver/gunFullDisplay?t=0.8379293615805524
-https://genshin.jmp.blue/characters/all
-https://api.frankfurter.dev/v1/2000-01-01..2002-12-31?t=0.10086058232485262
-https://www.bigcartel.com/?t=0.05350771418326239
-https://genderize.io/?t=0.690010399215886
-https://genderize.io/?t=0.8043720968884225
-https://j.dejure.org/jcg/doctrine/doctrine_banner.webp?t=0.9998959160553804
-https://accesorioscelular.com/tienda/css/plugins.css?t=0.21851062503227425
-https://251b5cd9.nip.io/1MB.bin?t=0.4002108804473481
-https://nioges.com/libs/fontawesome/webfonts/fa-solid-900.woff2?t=0.5863188987474373
-https://5fd8bdae.nip.io/1MB.bin?t=0.2578104779291205
-https://5fd8bca5.nip.io/1MB.bin?t=0.15580206924030682
-https://eu.api.ovh.com/console/rapidoc-min.js?t=0.4173820664969895
-https://ovh.sfx.ovh/10M.bin?t=0.8326647985641201
-https://oracle.sfx.ovh/10M.bin?t=0.23943050058539272
-https://www.getscope.com/assets/fonts/fa-solid-900.woff2?t=0.5476677250009963
-https://corp.kaltura.com/wp-content/cache/min/1/wp-content/themes/airfleet/dist/styles/theme.css?t=0.4091857736085579
-https://api.usercentrics.eu/gvl/v3/en.json?t=0.9164301389568108
-https://www.jetblue.com/footer/footer-element-es2015.js?t=0.3058062700141776
-https://www.cnn10.com/?t=0.8325471181626721
-https://www.roxio.com/static/roxio/images/products/creator/nxt9/call-action-footer-bg.jpg?t=0.3837369616891504
-https://media-assets.stryker.com/is/image/stryker/gateway_1?$max_width_1410$&t=0.6966182400011641
-https://cdn.eso.org/images/banner1920/eso2520a.jpg?t=0.5186907385065521
-https://bandobaskent.com/logo.png?t=0.9087762933670076
-https://www.velivole.fr/img/header.jpg?t=0.7058447082956326
-https://cdn.xuansiwei.com/common/lib/font-awesome/4.7.0/fontawesome-webfont.woff2?v=4.7.0&t=0.45608957890091195
-https://cdn.amplitude.com/script/fcf83c280a5dc45267f3ade26c5ade4d.experiment.js
-EOF
-)"
-TOTAL=$(echo "$URLS" | wc -l)
-: > "$RESULTS"
-echo -e "${CYAN}Начинаем тест стратегий${NC}"
-check_url() {
-if curl -Is --connect-timeout 2 --max-time 3 "$1" >/dev/null 2>&1; then
-echo 1 >> "$TMP_OK"
-echo -e "${GREEN}[ OK ]${NC} $1"
-else
-echo -e "${RED}[FAIL]${NC} $1"
-fi
-}
-check_all_urls() {
-TMP_OK="/tmp/z_ok.$$"
-: > "$TMP_OK"
-RUN=0
-while read URL; do
-check_url "$URL" &
-RUN=$((RUN+1))
-if [ "$RUN" -ge "$PARALLEL" ]; then
-wait
-RUN=0
-fi
-done <<EOF
-$URLS
-EOF
-wait
-OK=$(wc -l < "$TMP_OK")
-rm -f "$TMP_OK"
-}
-LINES=$(grep -n '^#' "$STR_FILE" | cut -d: -f1)
-echo "$LINES" | while read START; do
-NEXT=$(echo "$LINES" | awk -v s="$START" '$1>s{print;exit}')
-if [ -z "$NEXT" ]; then
-sed -n "${START},\$p" "$STR_FILE" > "$TEMP_FILE"
-else
-sed -n "${START},$((NEXT-1))p" "$STR_FILE" > "$TEMP_FILE"
-fi
-BLOCK=$(cat "$TEMP_FILE")
-NAME=$(head -n1 "$TEMP_FILE")
-awk -v block="$BLOCK" '
-BEGIN{skip=0}
-/option NFQWS_OPT '\''/ {
-print "\toption NFQWS_OPT '\''"
-print block
-print "'\''"
-skip=1
-next
-}
-skip && /^'\''$/ { skip=0; next }
-!skip { print }
-' "$CONF" > "${CONF}.tmp"
-mv "${CONF}.tmp" "$CONF"
-NAME="${NAME#\#}"
-echo -e "\n${CYAN}Тестируем стратегию: ${YELLOW}${NAME}${NC}"
-ZAPRET_RESTART
-OK=0
-check_all_urls
-if [ "$OK" -eq "$TOTAL" ]; then COLOR="$GREEN"
-elif [ "$OK" -gt 0 ]; then COLOR="$YELLOW"
-else COLOR="$RED"; fi
-echo -e "${CYAN}Результат теста: ${COLOR}$OK/$TOTAL${NC}"
-echo "$OK $NAME" >> "$RESULTS"
-done
-echo -e "\n${YELLOW}Лучшие 10 стратегий${NC}"
-sort -rn "$RESULTS" | head -10 | while read COUNT NAME; do
-NAME="${NAME#\#}"
-if [ "$COUNT" -eq "$TOTAL" ]; then COLOR="$GREEN"
-elif [ "$COUNT" -gt 0 ]; then COLOR="$YELLOW"
-else COLOR="$RED"; fi
-echo -e "${COLOR}$NAME${NC} → $COUNT/$TOTAL"
-done
-mv -f "$BACK" "$CONF"
-echo
-ZAPRET_RESTART
-PAUSE
+    echo -e "\n${MAGENTA}Тест стратегий${NC}"
+    echo -e "${CYAN}Собираем стратегии для теста${NC}"
+
+    # Формируем файл стратегий
+    download_strategies "1"
+    cp /opt/zapret_temp/str_flow.txt /opt/zapret_temp/str_test.txt
+    STR_FILE="/opt/zapret_temp/str_test.txt"
+    TEMP_FILE="/opt/zapret_temp/str_temp.txt"
+    RESULTS="/opt/zapret_temp/zapret_bench.txt"
+    BACK="/opt/zapret_temp/zapret_back"
+    cp "$OUT" "$STR_FILE"
+    cp "$CONF" "$BACK"
+
+    PARALLEL=10
+
+    for N in 1 2 3 4 5 6 7 8; do
+        strategy_v$N >> "$STR_FILE"
+    done
+
+    sed -i '/#Y/d' "$STR_FILE"
+
+    # Ассоциативный массив: ключ = текст, значение = URL
+    declare -A URLS
+    URLS=(
+        ["Госуслуги"]="https://gosuslugi.ru"
+        ["ESIA"]="https://esia.gosuslugi.ru"
+        ["Налог.ру"]="https://nalog.ru"
+        ["Личный кабинет ФЛ"]="https://lkfl2.nalog.ru"
+        ["Rutube"]="https://rutube.ru"
+        ["YouTube"]="https://youtube.com"
+        ["Instagram"]="https://instagram.com"
+        ["Rutor"]="https://rutor.info"
+        ["NTC Party"]="https://ntc.party"
+        ["Rutracker"]="https://rutracker.org"
+        ["Epidemz"]="https://epidemz.net.co"
+        ["NNMClub"]="https://nnmclub.to"
+        ["OpenWRT"]="https://openwrt.org"
+        ["SXYPRN"]="https://sxyprn.net"
+        ["Spankbang"]="https://spankbang.com"
+        ["Pornhub"]="https://pornhub.com"
+        ["Discord"]="https://discord.com"
+        ["X.com"]="https://x.com"
+        ["Filmix"]="https://filmix.my"
+        ["Flightradar24"]="https://flightradar24.com"
+        ["Play Google"]="https://play.google.com"
+    )
+
+    TOTAL=${#URLS[@]}
+    : > "$RESULTS"
+
+    # Функции проверки
+    check_url() {
+        local NAME="$1"
+        local URL="$2"
+        if curl -Is --connect-timeout 2 --max-time 3 "$URL" >/dev/null 2>&1; then
+            echo 1 >> "$TMP_OK"
+            echo -e "${GREEN}[ OK ]${NC} $NAME → $URL"
+        else
+            echo -e "${RED}[FAIL]${NC} $NAME → $URL"
+        fi
+    }
+
+    check_all_urls() {
+        TMP_OK="/tmp/z_ok.$$"
+        : > "$TMP_OK"
+        RUN=0
+        for NAME in "${!URLS[@]}"; do
+            URL="${URLS[$NAME]}"
+            check_url "$NAME" "$URL" &
+            RUN=$((RUN+1))
+            if [ "$RUN" -ge "$PARALLEL" ]; then
+                wait
+                RUN=0
+            fi
+        done
+        wait
+        OK=$(wc -l < "$TMP_OK")
+        rm -f "$TMP_OK"
+    }
+
+    # Перебор стратегий
+    LINES=$(grep -n '^#' "$STR_FILE" | cut -d: -f1)
+    echo "$LINES" | while read START; do
+        NEXT=$(echo "$LINES" | awk -v s="$START" '$1>s{print;exit}')
+        if [ -z "$NEXT" ]; then
+            sed -n "${START},\$p" "$STR_FILE" > "$TEMP_FILE"
+        else
+            sed -n "${START},$((NEXT-1))p" "$STR_FILE" > "$TEMP_FILE"
+        fi
+
+        BLOCK=$(cat "$TEMP_FILE")
+        NAME=$(head -n1 "$TEMP_FILE")
+        NAME="${NAME#\#}"  # убираем # в начале
+
+        awk -v block="$BLOCK" '
+        BEGIN{skip=0}
+        /option NFQWS_OPT '\''/ {
+            print "\toption NFQWS_OPT '\''"
+            print block
+            print "'\''"
+            skip=1
+            next
+        }
+        skip && /^'\''$/ { skip=0; next }
+        !skip { print }
+        ' "$CONF" > "${CONF}.tmp"
+
+        mv "${CONF}.tmp" "$CONF"
+
+        echo -e "\n${CYAN}Тестируем стратегию: ${YELLOW}${NAME}${NC}"
+
+        ZAPRET_RESTART
+        OK=0
+        check_all_urls
+
+        if [ "$OK" -eq "$TOTAL" ]; then COLOR="$GREEN"
+        elif [ "$OK" -gt 0 ]; then COLOR="$YELLOW"
+        else COLOR="$RED"; fi
+
+        echo -e "${CYAN}Результат теста: ${COLOR}$OK/$TOTAL${NC}"
+        echo "$OK $NAME" >> "$RESULTS"
+    done
+
+    # Вывод лучших стратегий
+    echo -e "\n${YELLOW}Лучшие 10 стратегий${NC}"
+    sort -rn "$RESULTS" | head -10 | while read COUNT NAME; do
+        NAME="${NAME#\#}"  # убираем # если есть
+        if [ "$COUNT" -eq "$TOTAL" ]; then COLOR="$GREEN"
+        elif [ "$COUNT" -gt 0 ]; then COLOR="$YELLOW"
+        else COLOR="$RED"; fi
+        echo -e "${COLOR}$NAME${NC} → $COUNT/$TOTAL"
+    done
+
+    mv -f "$BACK" "$CONF"
+    echo
+    ZAPRET_RESTART
+    PAUSE
 }
 # ==========================================
 # Главное меню
