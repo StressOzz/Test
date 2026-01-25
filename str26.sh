@@ -5,30 +5,34 @@ BACK="/opt/zapret_temp/zapret_back"
 STR_FILE="/opt/zapret_temp/str_flow.txt"
 TEMP_FILE="/opt/zapret_temp/str_temp.txt"
 RESULTS="/opt/zapret_temp/zapret_bench.txt"
-TMP_SF="/opt/zapret_temp"; OUT="$TMP_SF/str_flow.txt"; ZIP="$TMP_SF/repo.zip"
-BACKUP_FILE="/opt/hosts_temp.txt"; HOSTLIST_FILE="/opt/zapret/ipset/zapret-hosts-user.txt"
+TMP_SF="/opt/zapret_temp"
+OUT="$TMP_SF/str_flow.txt"
+ZIP="$TMP_SF/repo.zip"
 
 PARALLEL=9
-
-ZAPRET_RESTART () { chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1; }
 
 RED="\e[31m"
 GREEN="\e[32m"
 YELLOW="\e[33m"
 NC="\e[0m"
 
+ZAPRET_RESTART () {
+    chmod +x /opt/zapret/sync_config.sh
+    /opt/zapret/sync_config.sh
+    /etc/init.d/zapret restart >/dev/null 2>&1
+}
 
 ########################################
-# бэкап
+# Бэкап конфига
 ########################################
 
-mkdir -p /opt/zapret_temp
+mkdir -p "$TMP_SF"
 cp "$CONF" "$BACK"
 
+########################################
+# Формирование стратегий
+########################################
 
-########################################
-# подготавливаем стратегии
-########################################
 
 echo -e "\n${MAGENTA}Скачиваем и формируем стратегии${NC}"; mkdir -p "$TMP_SF"; : > "$OUT"; wget -qO "$ZIP" https://github.com/Flowseal/zapret-discord-youtube/archive/refs/heads/main.zip || { echo -e "\n${RED}Не удалось загрузить файл стратегий${NC}\n"PAUSE; return; }
 if ! command -v unzip >/dev/null 2>&1; then echo -e "${CYAN}Устанавливаем ${NC}unzip" && opkg install unzip >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить unzip!${NC}\n"; PAUSE; return; }; fi; unzip -oq "$ZIP" -d "$TMP_SF" || { echo -e "\n${RED}Не удалось распоковать файл${NC}\n"; PAUSE; return; }
@@ -68,15 +72,21 @@ strategy_v8() { printf '%s\n' "#v8" "#Yv03" "--filter-tcp=443" "--hostlist=/opt/
 printf '%s\n' "--dpi-desync-fake-tls-mod=rnd,dupsid,sni=ggpht.com" "--dpi-desync-split-seqovl=620" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin" "--dpi-desync-fooling=badsum,badseq"
 printf '%s\n' "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake" "--dpi-desync-repeats=6" "--dpi-desync-fooling=ts" "--dpi-desync-fake-tls=/opt/zapret/files/fake/4pda.bin" "--dpi-desync-fake-tls-mod=none" ; }
 
+# Добавляем остальные стратегии (v4-v8) при необходимости, при этом строки с #Y удалятся ниже
 
-
-for N in 1 2 3 4 5 6 7 8; do
+for N in 1 2 3 8; do  # вставляем нужные стратегии
     strategy_v$N >> "$STR_FILE"
 done
-########################################
-# сайты
-########################################
 
+# Убираем все строки с #Y
+sed -i '/#Y/d' "$STR_FILE"
+
+# Создаем рабочий файл
+cp "$STR_FILE" "$OUT"
+
+########################################
+# Сайты для проверки
+########################################
 
 URLS="$(cat <<EOF
 https://gosuslugi.ru
@@ -90,11 +100,10 @@ EOF
 )"
 
 TOTAL=$(echo "$URLS" | wc -l)
-
 : > "$RESULTS"
 
 ########################################
-# проверка
+# Функция проверки сайтов
 ########################################
 
 check_all_urls() {
@@ -112,11 +121,9 @@ check_all_urls() {
     }
 
     RUN=0
-
     while read URL; do
         check_url "$URL" &
         RUN=$((RUN+1))
-
         if [ "$RUN" -ge "$PARALLEL" ]; then
             wait
             RUN=0
@@ -126,25 +133,24 @@ $URLS
 EOF
 
     wait
-
     OK=$(wc -l < "$TMP_OK")
     rm -f "$TMP_OK"
 }
 
 ########################################
-# стратегии
+# Перебор стратегий и проверка
 ########################################
 
-LINES=$(grep -n '^#' "$STR_FILE" | cut -d: -f1)
+LINES=$(grep -n '^#' "$OUT" | cut -d: -f1)
 
 echo "$LINES" | while read START; do
 
     NEXT=$(echo "$LINES" | awk -v s="$START" '$1>s{print;exit}')
 
     if [ -z "$NEXT" ]; then
-        sed -n "${START},\$p" "$STR_FILE" > "$TEMP_FILE"
+        sed -n "${START},\$p" "$OUT" > "$TEMP_FILE"
     else
-        sed -n "${START},$((NEXT-1))p" "$STR_FILE" > "$TEMP_FILE"
+        sed -n "${START},$((NEXT-1))p" "$TEMP_FILE" > "$TEMP_FILE"
     fi
 
     BLOCK=$(cat "$TEMP_FILE")
@@ -178,13 +184,12 @@ echo "$LINES" | while read START; do
     else COLOR="$RED"; fi
 
     echo -e "${COLOR}Доступно: $OK/$TOTAL${NC}"
-
     echo "$OK $NAME" >> "$RESULTS"
 
 done
 
 ########################################
-# топ 5
+# Топ-5 стратегий
 ########################################
 
 echo
@@ -198,7 +203,7 @@ sort -rn "$RESULTS" | head -5 | while read COUNT NAME; do
 done
 
 ########################################
-# восстановление
+# Восстановление конфига и очистка
 ########################################
 
 echo
