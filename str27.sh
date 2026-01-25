@@ -2,11 +2,11 @@
 
 CONF="/etc/config/zapret"
 BACK="/opt/zapret_temp/zapret_back"
-STR_FILE="/opt/zapret_temp/str_flow.txt"
+STR_FILE="/opt/zapret_temp/str_flow.txt"       # исходный файл — не трогаем
+WORK_FILE="/opt/zapret_temp/str_work.txt"     # рабочий файл для перебора
 TEMP_FILE="/opt/zapret_temp/str_temp.txt"
 RESULTS="/opt/zapret_temp/zapret_bench.txt"
 TMP_SF="/opt/zapret_temp"
-OUT="$TMP_SF/str_flow.txt"
 ZIP="$TMP_SF/repo.zip"
 
 PARALLEL=9
@@ -32,7 +32,6 @@ cp "$CONF" "$BACK"
 ########################################
 # Формирование стратегий
 ########################################
-
 
 echo -e "\n${MAGENTA}Скачиваем и формируем стратегии${NC}"; mkdir -p "$TMP_SF"; : > "$OUT"; wget -qO "$ZIP" https://github.com/Flowseal/zapret-discord-youtube/archive/refs/heads/main.zip || { echo -e "\n${RED}Не удалось загрузить файл стратегий${NC}\n"PAUSE; return; }
 if ! command -v unzip >/dev/null 2>&1; then echo -e "${CYAN}Устанавливаем ${NC}unzip" && opkg install unzip >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить unzip!${NC}\n"; PAUSE; return; }; fi; unzip -oq "$ZIP" -d "$TMP_SF" || { echo -e "\n${RED}Не удалось распоковать файл${NC}\n"; PAUSE; return; }
@@ -72,17 +71,18 @@ strategy_v8() { printf '%s\n' "#v8" "#Yv03" "--filter-tcp=443" "--hostlist=/opt/
 printf '%s\n' "--dpi-desync-fake-tls-mod=rnd,dupsid,sni=ggpht.com" "--dpi-desync-split-seqovl=620" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin" "--dpi-desync-fooling=badsum,badseq"
 printf '%s\n' "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake" "--dpi-desync-repeats=6" "--dpi-desync-fooling=ts" "--dpi-desync-fake-tls=/opt/zapret/files/fake/4pda.bin" "--dpi-desync-fake-tls-mod=none" ; }
 
-# Добавляем остальные стратегии (v4-v8) при необходимости, при этом строки с #Y удалятся ниже
 
-for N in 1 2 3 8; do  # вставляем нужные стратегии
-    strategy_v$N >> "$STR_FILE"
+# Создаем рабочий файл (str_work.txt)
+: > "$WORK_FILE"
+cat "$STR_FILE" >> "$WORK_FILE"
+
+# Добавляем нужные стратегии из переменных
+for N in 1 2 3 4 5 6 7 8; do
+    strategy_v$N >> "$WORK_FILE"
 done
 
-# Убираем все строки с #Y
-sed -i '/#Y/d' "$STR_FILE"
-
-# Создаем рабочий файл
-cp "$STR_FILE" "$OUT"
+# Убираем все строки с #Y только в рабочем файле
+sed -i '/#Y/d' "$WORK_FILE"
 
 ########################################
 # Сайты для проверки
@@ -91,23 +91,35 @@ cp "$STR_FILE" "$OUT"
 URLS="$(cat <<EOF
 https://gosuslugi.ru
 https://esia.gosuslugi.ru
+https://nalog.ru
+https://lkfl2.nalog.ru
+https://rutube.ru
 https://youtube.com
-https://discord.com
 https://instagram.com
+https://rutor.info
+https://ntc.party
 https://rutracker.org
+https://epidemz.net.co
+https://nnmclub.to
 https://openwrt.org
+https://sxyprn.net
+https://spankbang.com
+https://pornhub.com
+https://discord.com
+https://x.com
+https://filmix.my
+https://flightradar24.com
+https://cdn77.com
+https://play.google.com
+https://genderize.io
+https://ottai.com
 EOF
 )"
 
 TOTAL=$(echo "$URLS" | wc -l)
 : > "$RESULTS"
 
-########################################
-# Функция проверки сайтов
-########################################
-
 check_all_urls() {
-
     TMP_OK="/tmp/z_ok.$$"
     : > "$TMP_OK"
 
@@ -124,10 +136,7 @@ check_all_urls() {
     while read URL; do
         check_url "$URL" &
         RUN=$((RUN+1))
-        if [ "$RUN" -ge "$PARALLEL" ]; then
-            wait
-            RUN=0
-        fi
+        if [ "$RUN" -ge "$PARALLEL" ]; then wait; RUN=0; fi
     done <<EOF
 $URLS
 EOF
@@ -138,19 +147,17 @@ EOF
 }
 
 ########################################
-# Перебор стратегий и проверка
+# Перебор стратегий
 ########################################
 
-LINES=$(grep -n '^#' "$OUT" | cut -d: -f1)
+LINES=$(grep -n '^#' "$WORK_FILE" | cut -d: -f1)
 
 echo "$LINES" | while read START; do
-
     NEXT=$(echo "$LINES" | awk -v s="$START" '$1>s{print;exit}')
-
     if [ -z "$NEXT" ]; then
-        sed -n "${START},\$p" "$OUT" > "$TEMP_FILE"
+        sed -n "${START},\$p" "$WORK_FILE" > "$TEMP_FILE"
     else
-        sed -n "${START},$((NEXT-1))p" "$TEMP_FILE" > "$TEMP_FILE"
+        sed -n "${START},$((NEXT-1))p" "$WORK_FILE" > "$TEMP_FILE"
     fi
 
     BLOCK=$(cat "$TEMP_FILE")
@@ -162,38 +169,33 @@ echo "$LINES" | while read START; do
             print "\toption NFQWS_OPT '\''"
             print block
             print "'\''"
-            skip=1
-            next
+            skip=1; next
         }
         skip && /^'\''$/ { skip=0; next }
         !skip { print }
     ' "$CONF" > "${CONF}.tmp"
 
     mv "${CONF}.tmp" "$CONF"
-
     ZAPRET_RESTART
 
-    echo
-    echo -e "${YELLOW}${NAME}${NC}"
+    echo; echo -e "${YELLOW}${NAME}${NC}"
 
     OK=0
     check_all_urls
 
-    if [ "$OK" -eq "$TOTAL" ]; then COLOR="$GREEN"
-    elif [ "$OK" -gt 0 ]; then COLOR="$YELLOW"
-    else COLOR="$RED"; fi
+    [ "$OK" -eq "$TOTAL" ] && COLOR="$GREEN"
+    [ "$OK" -gt 0 ] && [ "$OK" -lt "$TOTAL" ] && COLOR="$YELLOW"
+    [ "$OK" -eq 0 ] && COLOR="$RED"
 
     echo -e "${COLOR}Доступно: $OK/$TOTAL${NC}"
     echo "$OK $NAME" >> "$RESULTS"
-
 done
 
 ########################################
 # Топ-5 стратегий
 ########################################
 
-echo
-echo -e "${YELLOW}=========== Топ-5 стратегий ===========${NC}"
+echo; echo -e "${YELLOW}=========== Топ-5 стратегий ===========${NC}"
 
 sort -rn "$RESULTS" | head -5 | while read COUNT NAME; do
     if [ "$COUNT" -eq "$TOTAL" ]; then COLOR="$GREEN"
@@ -203,12 +205,10 @@ sort -rn "$RESULTS" | head -5 | while read COUNT NAME; do
 done
 
 ########################################
-# Восстановление конфига и очистка
+# Восстановление конфига
 ########################################
 
-echo
-echo "Восстанавливаем исходный конфиг..."
-
+echo; echo "Восстанавливаем исходный конфиг..."
 mv -f "$BACK" "$CONF"
 rm -f "$TEMP_FILE" "$RESULTS"
 
