@@ -8,7 +8,7 @@ TEMP_FILE="/opt/zapret_temp/str_temp.txt"
 RESULTS="/opt/zapret_temp/zapret_bench.txt"
 TMP_SF="/opt/zapret_temp"
 ZIP="$TMP_SF/repo.zip"
-
+OUT="$TMP_SF/str_flow.txt"
 PARALLEL=9
 
 RED="\e[31m"
