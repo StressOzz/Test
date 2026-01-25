@@ -15,31 +15,30 @@ NC="\e[0m"
 
 # список сайтов как текстовый блок
 URLS=$(cat <<EOF
-https://img.wzstats.gg/cleaver/gunFullDisplay
-https://genshin.jmp.blue/characters/all
-https://api.frankfurter.dev/v1/2000-01-01..2002-12-31
-https://www.bigcartel.com/
-https://genderize.io/
-https://j.dejure.org/jcg/doctrine/doctrine_banner.webp
-https://maps.gnosis.earth/ogcapi/api/swagger-ui/swagger-ui-standalone-preset.js
-https://251b5cd9.nip.io/1MB.bin
-https://nioges.com/libs/fontawesome/webfonts/fa-solid-900.woff2
-https://5fd8bdae.nip.io/1MB.bin
-https://5fd8bca5.nip.io/1MB.bin
-https://eu.api.ovh.com/console/rapidoc-min.js
-https://ovh.sfx.ovh/10M.bin
-https://oracle.sfx.ovh/10M.bin
-https://www.getscope.com/assets/fonts/fa-solid-900.woff2
-https://corp.kaltura.com/wp-content/cache/min/1/wp-content/themes/airfleet/dist/styles/theme.css
-https://api.usercentrics.eu/gvl/v3/en.json
-https://www.jetblue.com/footer/footer-element-es2015.js
-https://www.cnn10.com/
-https://www.roxio.com/static/roxio/images/products/creator/nxt9/call-action-footer-bg.jpg
-https://media-assets.stryker.com/is/image/stryker/gateway_1?\$max_width=1410\$
-https://cdn.eso.org/images/banner1920/eso2520a.jpg
-https://airsea.no/images/main_logo.png
-https://www.velivole.fr/img/header.jpg
-https://cdn.xuansiwei.com/common/lib/font-awesome/4.7.0/fontawesome-webfont.woff2?v=4.7.0
+https://gosuslugi.ru
+https://esia.gosuslugi.ru
+https://nalog.ru
+https://lkfl2.nalog.ru
+https://rutube.ru
+https://youtube.com
+https://instagram.com
+https://rutor.info
+https://ntc.party
+https://rutracker.org
+https://epidemz.net.co
+https://nnmclub.to
+https://openwrt.org
+https://sxyprn.net
+https://spankbang.com
+https://pornhub.com
+https://discord.com
+https://x.com
+https://filmix.my
+https://flightradar24.com
+https://cdn77.com
+https://play.google.com
+https://genderize.io
+https://ottai.com
 EOF
 )
 
