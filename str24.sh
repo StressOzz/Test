@@ -2,10 +2,10 @@
 
 CONF="/etc/config/zapret"
 STR_FILE="/opt/zapret_temp/str_flow.txt"
-TEMP_FILE="/opt/str_temp.txt"
-RESULTS="/tmp/zapret_bench.txt"
+TEMP_FILE="/opt/zapret_temp/str_temp.txt"
+RESULTS="/opt/zapret_temp/zapret_bench.txt"
 
-PARALLEL=8   # сколько проверок одновременно (5-10 норм)
+PARALLEL=9
 
 ZAPRET_RESTART () { chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1; }
 
@@ -15,10 +15,10 @@ YELLOW="\e[33m"
 NC="\e[0m"
 
 ########################################
-# список сайтов
+# сайты
 ########################################
 
-URLS=$(cat <<EOF
+URLS="$(cat <<EOF
 https://gosuslugi.ru
 https://esia.gosuslugi.ru
 https://nalog.ru
@@ -71,14 +71,14 @@ https://www.velivole.fr/img/header.jpg?t=0.7058447082956326
 https://cdn.xuansiwei.com/common/lib/font-awesome/4.7.0/fontawesome-webfont.woff2?v=4.7.0&t=0.45608957890091195
 https://cdn.amplitude.com/script/fcf83c280a5dc45267f3ade26c5ade4d.experiment.js
 EOF
-)
+)"
 
 TOTAL=$(echo "$URLS" | wc -l)
 
 : > "$RESULTS"
 
 ########################################
-# функция быстрой проверки (параллельно)
+# параллельная проверка
 ########################################
 
 check_all_urls() {
@@ -87,12 +87,11 @@ check_all_urls() {
     : > "$TMP_OK"
 
     check_url() {
-        URL="$1"
-        if curl -Is --connect-timeout 2 --max-time 3 "$URL" >/dev/null 2>&1; then
-            echo "$URL" >> "$TMP_OK"
-            echo -e "${GREEN}$URL → OK${NC}"
+        if curl -Is --connect-timeout 2 --max-time 3 "$1" >/dev/null 2>&1; then
+            echo 1 >> "$TMP_OK"
+            echo -e "${GREEN}$1 → OK${NC}"
         else
-            echo -e "${RED}$URL → FAIL${NC}"
+            echo -e "${RED}$1 → FAIL${NC}"
         fi
     }
 
@@ -120,23 +119,20 @@ EOF
 # перебор стратегий
 ########################################
 
-grep -n '^#' "$STR_FILE" | cut -d: -f1 | while read START; do
+LINES=$(grep -n '^#' "$STR_FILE" | cut -d: -f1)
 
-    NEXT=$(grep -n '^#' "$STR_FILE" | cut -d: -f1 | awk -v s="$START" '$1>s{print;exit}')
+echo "$LINES" | while read START; do
+
+    NEXT=$(echo "$LINES" | awk -v s="$START" '$1>s{print;exit}')
 
     if [ -z "$NEXT" ]; then
         sed -n "${START},\$p" "$STR_FILE" > "$TEMP_FILE"
     else
-        END=$((NEXT-1))
-        sed -n "${START},${END}p" "$STR_FILE" > "$TEMP_FILE"
+        sed -n "${START},$((NEXT-1))p" "$STR_FILE" > "$TEMP_FILE"
     fi
 
     BLOCK=$(cat "$TEMP_FILE")
     NAME=$(head -n1 "$TEMP_FILE")
-
-    ########################################
-    # вставка блока в CONF
-    ########################################
 
     awk -v block="$BLOCK" '
         BEGIN{skip=0}
@@ -155,23 +151,15 @@ grep -n '^#' "$STR_FILE" | cut -d: -f1 | while read START; do
 
     ZAPRET_RESTART
 
-    ########################################
-    # тестируем сайты
-    ########################################
-
     echo
     echo -e "${YELLOW}${NAME}${NC}"
 
     OK=0
     check_all_urls
 
-    if [ "$OK" -eq "$TOTAL" ]; then
-        COLOR="$GREEN"
-    elif [ "$OK" -gt 0 ]; then
-        COLOR="$YELLOW"
-    else
-        COLOR="$RED"
-    fi
+    if [ "$OK" -eq "$TOTAL" ]; then COLOR="$GREEN"
+    elif [ "$OK" -gt 0 ]; then COLOR="$YELLOW"
+    else COLOR="$RED"; fi
 
     echo -e "${COLOR}Доступно: $OK/$TOTAL${NC}"
 
@@ -180,19 +168,15 @@ grep -n '^#' "$STR_FILE" | cut -d: -f1 | while read START; do
 done
 
 ########################################
-# топ 5 стратегий
+# топ 5
 ########################################
 
 echo
 echo -e "${YELLOW}=========== Топ-5 стратегий ===========${NC}"
 
 sort -rn "$RESULTS" | head -5 | while read COUNT NAME; do
-    if [ "$COUNT" -eq "$TOTAL" ]; then
-        COLOR="$GREEN"
-    elif [ "$COUNT" -gt 0 ]; then
-        COLOR="$YELLOW"
-    else
-        COLOR="$RED"
-    fi
+    if [ "$COUNT" -eq "$TOTAL" ]; then COLOR="$GREEN"
+    elif [ "$COUNT" -gt 0 ]; then COLOR="$YELLOW"
+    else COLOR="$RED"; fi
     echo -e "${COLOR}${NAME} → $COUNT/$TOTAL${NC}"
 done
