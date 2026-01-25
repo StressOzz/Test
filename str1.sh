@@ -17,7 +17,7 @@ grep '^#' "$STR_FILE" | while read STRAT; do
 
     # рестарт Zapret
     /etc/init.d/zapret restart >/dev/null 2>&1
-    sleep 5  # даём время подняться
+    sleep 1  # даём время подняться
 
     # проверка сайтов
     OK=0
