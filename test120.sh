@@ -360,7 +360,6 @@ run_test_strategies() {
     BACK="/opt/zapret_temp/zapret_back"
     cp "$OUT" "$STR_FILE"
     cp "$CONF" "$BACK"
-    PARALLEL=10
 
     for N in 1 2 3 4 5 6 7 8 ; do
         strategy_v$N >> "$STR_FILE"
@@ -411,40 +410,17 @@ EOF
     TOTAL=$(echo "$URLS" | grep -c "|")
     : > "$RESULTS"
 
+    # функция проверки одного сайта
     check_url() {
         TEXT=$(echo "$1" | cut -d"|" -f1)
         LINK=$(echo "$1" | cut -d"|" -f2)
         if curl -Is --connect-timeout 2 --max-time 3 "$LINK" >/dev/null 2>&1; then
-            echo 1 >> "$TMP_OK"
+            OK=$((OK+1))
             echo -e "\033[32m[ OK ]\033[0m $TEXT"
         else
             echo -e "\033[31m[FAIL]\033[0m $TEXT"
         fi
     }
-
-   check_all_urls() {
-    TMP_OK="/tmp/z_ok.$$"
-    : > "$TMP_OK"
-    RUN=0
-
-    # используем here-doc без пайпа
-    while IFS= read -r URL; do
-        [ -z "$URL" ] && continue
-        check_url "$URL" &
-        RUN=$((RUN+1))
-        if [ "$RUN" -ge "$PARALLEL" ]; then
-            wait
-            RUN=0
-        fi
-    done <<EOF
-$URLS
-EOF
-
-    wait
-    # теперь OK точно подсчитан
-    OK=$(wc -l < "$TMP_OK" | tr -d ' ')
-    rm -f "$TMP_OK"
-}
 
     # перебор стратегий
     LINES=$(grep -n '^#' "$STR_FILE" | cut -d: -f1)
@@ -461,24 +437,29 @@ EOF
 
         awk -v block="$BLOCK" '
         BEGIN{skip=0}
-/option NFQWS_OPT '\''/ {
-print "\toption NFQWS_OPT '\''"
-print block
-print "'\''"
-skip=1
-next
-}
-skip && /^'\''$/ { skip=0; next }
-!skip { print }
-' "$CONF" > "${CONF}.tmp"
+        /option NFQWS_OPT '\''/ {
+            print "\toption NFQWS_OPT '\''"
+            print block
+            print "'\''"
+            skip=1
+            next
+        }
+        skip && /^'\''$/ { skip=0; next }
+        !skip { print }
+        ' "$CONF" > "${CONF}.tmp"
         mv "${CONF}.tmp" "$CONF"
 
         echo -e "\n\033[36mТестируем стратегию: \033[33m${NAME}\033[0m"
         ZAPRET_RESTART
 
         OK=0
-        check_all_urls
+        # проверяем сайты по очереди
+        echo "$URLS" | while IFS= read -r SITE; do
+            [ -z "$SITE" ] && continue
+            check_url "$SITE"
+        done
 
+        # выбираем цвет для результата
         if [ "$OK" -eq "$TOTAL" ]; then COLOR="\033[32m"
         elif [ "$OK" -gt 0 ]; then COLOR="\033[33m"
         else COLOR="\033[31m"; fi
