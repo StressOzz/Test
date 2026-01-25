@@ -34,8 +34,7 @@ grep -n '^#' "$STR_FILE" | cut -d: -f1 | while read START; do
     mv "${CONF}.tmp" "$CONF"
 
     # рестарт Zapret
-    /etc/init.d/zapret restart >/dev/null 2>&1
-    sleep 1
+chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1; sleep 1
 
     # проверка сайтов
     OK=0
