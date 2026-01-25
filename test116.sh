@@ -396,23 +396,29 @@ EOF
         fi
     }
 
-    check_all_urls() {
-        TMP_OK="/tmp/z_ok.$$"
-        : > "$TMP_OK"
-        RUN=0
-        echo "$URLS" | while IFS= read -r URL; do
-            [ -z "$URL" ] && continue
-            check_url "$URL" &
-            RUN=$((RUN+1))
-            if [ "$RUN" -ge "$PARALLEL" ]; then
-                wait
-                RUN=0
-            fi
-        done
-        wait
-        OK=$(wc -l < "$TMP_OK")
-        rm -f "$TMP_OK"
-    }
+   check_all_urls() {
+    TMP_OK="/tmp/z_ok.$$"
+    : > "$TMP_OK"
+    RUN=0
+
+    # используем here-doc без пайпа
+    while IFS= read -r URL; do
+        [ -z "$URL" ] && continue
+        check_url "$URL" &
+        RUN=$((RUN+1))
+        if [ "$RUN" -ge "$PARALLEL" ]; then
+            wait
+            RUN=0
+        fi
+    done <<EOF
+$URLS
+EOF
+
+    wait
+    # теперь OK точно подсчитан
+    OK=$(wc -l < "$TMP_OK" | tr -d ' ')
+    rm -f "$TMP_OK"
+}
 
     # перебор стратегий
     LINES=$(grep -n '^#' "$STR_FILE" | cut -d: -f1)
