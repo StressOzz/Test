@@ -8,8 +8,11 @@ RESULTS="/tmp/zapret_bench.txt"
 # очистим предыдущие результаты
 : > "$RESULTS"
 
-# читаем стратегии от # до следующего #
-awk '/^#/{if (s!="") print s; s=$0; next} {s=s"\n"$0} END{print s}' "$STR_FILE" | while read -r -d $'\n' STRAT_BLOCK; do
+# читаем блоки стратегий от # до следующего #
+awk 'BEGIN{RS=""; FS="\n"} /^#/{print $0}' "$STR_FILE" | while read -r BLOCK; do
+    # убираем лишние пустые строки в начале/конце блока
+    STRAT_BLOCK=$(echo "$BLOCK" | sed '/^$/d')
+
     echo -e "\nПрименяем стратегию:\n$STRAT_BLOCK"
 
     # вставляем стратегию в конфиг между option NFQWS_OPT ' и '
