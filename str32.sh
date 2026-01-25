@@ -1,7 +1,7 @@
 #!/bin/sh
 
 CONF="/etc/config/zapret"
-STR_FILE="/opt/zapret_temp/str_test.txt"
+STR_FILE="/opt/zapret_temp/str_flow.txt"
 TEMP_FILE="/opt/zapret_temp/str_temp.txt"
 RESULTS="/opt/zapret_temp/zapret_bench.txt"
 
