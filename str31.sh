@@ -1,98 +1,88 @@
 #!/bin/sh
 
 CONF="/etc/config/zapret"
-BACK="/opt/zapret_temp/zapret_back"
-STR_FILE="/opt/zapret_temp/str_flow.txt"
-WORK_FILE="/opt/zapret_temp/work_file.txt"
+STR_FILE="/opt/zapret_temp/str_test.txt"
 TEMP_FILE="/opt/zapret_temp/str_temp.txt"
 RESULTS="/opt/zapret_temp/zapret_bench.txt"
-TMP_SF="/opt/zapret_temp"
-ZIP="$TMP_SF/repo.zip"
-OUT="$TMP_SF/str_flow.txt"
+
 PARALLEL=9
+
+ZAPRET_RESTART () { chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1; }
 
 RED="\e[31m"
 GREEN="\e[32m"
 YELLOW="\e[33m"
 NC="\e[0m"
 
-ZAPRET_RESTART () {
-    chmod +x /opt/zapret/sync_config.sh
-    /opt/zapret/sync_config.sh
-    /etc/init.d/zapret restart >/dev/null 2>&1
-}
+########################################
+# сайты
+########################################
 
-# -----------------------------
-# Бэкап конфига
-# -----------------------------
-mkdir -p "$TMP_SF"
-cp "$CONF" "$BACK"
-
-# -----------------------------
-# Формируем рабочий файл стратегий
-# -----------------------------
-: > "$WORK_FILE"
-
-
-echo -e "\n${MAGENTA}Скачиваем и формируем стратегии${NC}"; mkdir -p "$TMP_SF"; : > "$OUT"; wget -qO "$ZIP" https://github.com/Flowseal/zapret-discord-youtube/archive/refs/heads/main.zip || { echo -e "\n${RED}Не удалось загрузить файл стратегий${NC}\n"PAUSE; return; }
-if ! command -v unzip >/dev/null 2>&1; then echo -e "${CYAN}Устанавливаем ${NC}unzip" && opkg install unzip >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить unzip!${NC}\n"; PAUSE; return; }; fi; unzip -oq "$ZIP" -d "$TMP_SF" || { echo -e "\n${RED}Не удалось распоковать файл${NC}\n"; PAUSE; return; }
-BASE="$TMP_SF/zapret-discord-youtube-main"; find "$BASE" -type f -name 'general*.bat' ! -name 'general (ALT5).bat' | while read -r F; do MATCH=$(grep -E '^--filter-udp=19294-19344,50000-50100|^--filter-tcp=2053,2083,2087,2096,8443|^--filter-tcp=443 --hostlist="%LISTS%list-google.txt"|^--filter-tcp=80,443 --hostlist="%LISTS%list-general.txt"' "$F")
-[ -z "$MATCH" ] && continue; NAME=$(basename "$F" .bat); { echo "#$NAME"; echo "$MATCH" | sed 's/--/\n--/g' | sed '/^$/d' | sed 's/[[:space:]]*$//'; echo; } >> "$OUT"; done; sed -i 's|"%BIN%tls_clienthello_www_google_com.bin"|/opt/zapret/files/fake/tls_clienthello_www_google_com.bin|g' "$OUT"; sed -i '/--hostlist="%LISTS%list-general.txt"/d' "$OUT"
-sed -i '/--ipset-exclude="%LISTS%ipset-exclude.txt"/d' "$OUT"; sed -i 's|"%LISTS%list-exclude.txt"|/opt/zapret/ipset/zapret-hosts-user-exclude.txt|g' "$OUT"; sed -i 's/--new[[:space:]]\^/--new/g' "$OUT"; sed -i 's|"%LISTS%list-google.txt"|/opt/zapret/ipset/zapret-hosts-google.txt|g' "$OUT"
-sed -i 's|"%BIN%tls_clienthello_4pda_to.bin"|/opt/zapret/files/fake/4pda.bin|g' "$OUT"; sed -i 's|"%BIN%tls_clienthello_max_ru.bin"|/opt/zapret/files/fake/max.bin|g' "$OUT"; sed -i 's|\^!|/opt/zapret/files/fake/tls_clienthello_www_google_com.bin|g' "$OUT"; sed -i 's/[[:space:]]\+$//g' "$OUT"; sed -i '/^--new$/ { N; /^\--new\n$/d; }' "$OUT"
-rm -rf "$TMP_SF/zapret-discord-youtube-main" "$ZIP"; echo -e "${GREEN}Стратегии сформированы!${NC}\n"
-
-grep -v '#Y' "$STR_FILE" >> "$WORK_FILE"
-
-strategy_v1() { printf '%s\n' "#v1" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake,multidisorder" "--dpi-desync-split-seqovl=681" "--dpi-desync-split-pos=1" "--dpi-desync-fooling=badseq"
-printf '%s\n' "--dpi-desync-badseq-increment=10000000" "--dpi-desync-repeats=6" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin" "--dpi-desync-fake-tls-mod=rnd,dupsid,sni=fonts.google.com" "--new"
-printf '%s\n' "--filter-udp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake" "--dpi-desync-repeats=6" "--dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin"; }
-strategy_v2() { printf '%s\n' "#v2" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake,fakeddisorder" "--dpi-desync-split-pos=10,midsld" "--dpi-desync-fake-tls=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin"
-printf '%s\n' "--dpi-desync-fake-tls-mod=rnd,dupsid,sni=fonts.google.com" "--dpi-desync-fake-tls=0x0F0F0F0F" "--dpi-desync-fake-tls-mod=none" "--dpi-desync-fakedsplit-pattern=/opt/zapret/files/fake/tls_clienthello_vk_com.bin" "--dpi-desync-split-seqovl=336"
-printf '%s\n' "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_gosuslugi_ru.bin" "--dpi-desync-fooling=badseq,badsum" "--dpi-desync-badseq-increment=0" "--new" "--filter-udp=443"
-printf '%s\n' "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake" "--dpi-desync-repeats=6" "--dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin"; }
-strategy_v3() { printf '%s\n' "#v3" "#Dv1" "--filter-tcp=443" "--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt" "--ip-id=zero" "--dpi-desync=multisplit" "--dpi-desync-split-seqovl=681" "--dpi-desync-split-pos=1" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin"
-printf '%s\n' "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake,fakeddisorder" "--dpi-desync-split-pos=10,midsld" "--dpi-desync-fake-tls=/opt/zapret/files/fake/t2.bin"
-printf '%s\n' "--dpi-desync-fake-tls-mod=rnd,dupsid,sni=m.ok.ru" "--dpi-desync-fake-tls=0x0F0F0F0F" "--dpi-desync-fake-tls-mod=none" "--dpi-desync-fakedsplit-pattern=/opt/zapret/files/fake/tls_clienthello_vk_com.bin"
-printf '%s\n' "--dpi-desync-split-seqovl=336" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_gosuslugi_ru.bin" "--dpi-desync-fooling=badseq,badsum" "--dpi-desync-badseq-increment=0"
-printf '%s\n' "--new" "--filter-udp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake" "--dpi-desync-repeats=6" "--dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin"; }
-strategy_v4() { printf '%s\n' "#v4" "#Yv15" "--filter-tcp=443" "--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt" "--dpi-desync=fake,multisplit" "--dpi-desync-split-pos=2,sld" "--dpi-desync-fake-tls=0x0F0F0F0F" "--dpi-desync-fake-tls=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin"
-printf '%s\n' "--dpi-desync-fake-tls-mod=rnd,dupsid,sni=google.com" "--dpi-desync-split-seqovl=2108" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin" "--dpi-desync-fooling=badseq" "--new" "--filter-tcp=443"
-printf '%s\n' "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync-any-protocol=1" "--dpi-desync-cutoff=n5" "--dpi-desync=multisplit" "--dpi-desync-split-seqovl=582" "--dpi-desync-split-pos=1" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/4pda.bin"
-printf '%s\n' "--new" "--filter-udp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake" "--dpi-desync-repeats=6" "--dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin"; }
-strategy_v5() { printf '%s\n' "#v5" "#Yv01" "--filter-tcp=443" "--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt" "--ip-id=zero" "--dpi-desync=multisplit" "--dpi-desync-split-seqovl=681" "--dpi-desync-split-pos=1" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin"
-printf '%s\n' "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake,fakeddisorder" "--dpi-desync-split-pos=10,midsld" "--dpi-desync-fake-tls=/opt/zapret/files/fake/max.bin" "--dpi-desync-fake-tls-mod=rnd,dupsid"
-printf '%s\n' "--dpi-desync-fake-tls=0x0F0F0F0F" "--dpi-desync-fake-tls-mod=none" "--dpi-desync-fakedsplit-pattern=/opt/zapret/files/fake/tls_clienthello_vk_com.bin" "--dpi-desync-fooling=badseq,badsum" "--dpi-desync-badseq-increment=0" "--new" "--filter-udp=443"
-printf '%s\n' "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake" "--dpi-desync-repeats=6" "--dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin"; }
-strategy_v6() { printf '%s\n' "#v6" "#Yv03" "--filter-tcp=443" "--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt" "--dpi-desync=fake,multisplit" "--dpi-desync-split-pos=2,sld" "--dpi-desync-fake-tls=0x0F0F0F0F" "--dpi-desync-fake-tls=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin"
-printf '%s\n' "--dpi-desync-fake-tls-mod=rnd,dupsid,sni=ggpht.com" "--dpi-desync-split-seqovl=620" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin" "--dpi-desync-fooling=badsum,badseq"
-printf '%s\n' "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=hostfakesplit" "--dpi-desync-hostfakesplit-mod=host=max.ru" "--dpi-desync-hostfakesplit-midhost=host-2" "--dpi-desync-split-seqovl=726" "--dpi-desync-fooling=badsum,badseq" "--dpi-desync-badseq-increment=0"; }
-strategy_v7() { printf '%s\n' "#v7" "#Yv03" "--filter-tcp=443" "--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt" "--dpi-desync=fake,multisplit" "--dpi-desync-split-pos=2,sld" "--dpi-desync-fake-tls=0x0F0F0F0F" "--dpi-desync-fake-tls=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin"
-printf '%s\n' "--dpi-desync-fake-tls-mod=rnd,dupsid,sni=ggpht.com" "--dpi-desync-split-seqovl=620" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin" "--dpi-desync-fooling=badsum,badseq"
-printf '%s\n' "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake,multisplit" "--dpi-desync-split-seqovl=654" "--dpi-desync-split-pos=1" "--dpi-desync-fooling=ts" "--dpi-desync-repeats=8" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/max.bin" "--dpi-desync-fake-tls=/opt/zapret/files/fake/max.bin"; }
-strategy_v8() { printf '%s\n' "#v8" "#Yv03" "--filter-tcp=443" "--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt" "--dpi-desync=fake,multisplit" "--dpi-desync-split-pos=2,sld" "--dpi-desync-fake-tls=0x0F0F0F0F" "--dpi-desync-fake-tls=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin"
-printf '%s\n' "--dpi-desync-fake-tls-mod=rnd,dupsid,sni=ggpht.com" "--dpi-desync-split-seqovl=620" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin" "--dpi-desync-fooling=badsum,badseq"
-printf '%s\n' "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake" "--dpi-desync-repeats=6" "--dpi-desync-fooling=ts" "--dpi-desync-fake-tls=/opt/zapret/files/fake/4pda.bin" "--dpi-desync-fake-tls-mod=none" ; }
-
-echo -e "${GREEN}Рабочий файл стратегий сформирован: $WORK_FILE${NC}"
-
-# -----------------------------
-# Сайты для проверки
-# -----------------------------
 URLS="$(cat <<EOF
 https://gosuslugi.ru
 https://esia.gosuslugi.ru
+https://nalog.ru
+https://lkfl2.nalog.ru
+https://rutube.ru
 https://youtube.com
-https://discord.com
 https://instagram.com
+https://rutor.info
+https://ntc.party
 https://rutracker.org
+https://epidemz.net.co
+https://nnmclub.to
 https://openwrt.org
+https://sxyprn.net
+https://spankbang.com
+https://pornhub.com
+https://discord.com
+https://x.com
+https://filmix.my
+https://flightradar24.com
+https://cdn77.com
+https://play.google.com
+https://genderize.io
+https://ottai.com
+https://img.wzstats.gg/cleaver/gunFullDisplay?t=0.8379293615805524
+https://genshin.jmp.blue/characters/all
+https://api.frankfurter.dev/v1/2000-01-01..2002-12-31?t=0.10086058232485262
+https://www.bigcartel.com/?t=0.05350771418326239
+https://genderize.io/?t=0.690010399215886
+https://genderize.io/?t=0.8043720968884225
+https://j.dejure.org/jcg/doctrine/doctrine_banner.webp?t=0.9998959160553804
+https://accesorioscelular.com/tienda/css/plugins.css?t=0.21851062503227425
+https://251b5cd9.nip.io/1MB.bin?t=0.4002108804473481
+https://nioges.com/libs/fontawesome/webfonts/fa-solid-900.woff2?t=0.5863188987474373
+https://5fd8bdae.nip.io/1MB.bin?t=0.2578104779291205
+https://5fd8bca5.nip.io/1MB.bin?t=0.15580206924030682
+https://eu.api.ovh.com/console/rapidoc-min.js?t=0.4173820664969895
+https://ovh.sfx.ovh/10M.bin?t=0.8326647985641201
+https://oracle.sfx.ovh/10M.bin?t=0.23943050058539272
+https://www.getscope.com/assets/fonts/fa-solid-900.woff2?t=0.5476677250009963
+https://corp.kaltura.com/wp-content/cache/min/1/wp-content/themes/airfleet/dist/styles/theme.css?t=0.4091857736085579
+https://api.usercentrics.eu/gvl/v3/en.json?t=0.9164301389568108
+https://www.jetblue.com/footer/footer-element-es2015.js?t=0.3058062700141776
+https://www.cnn10.com/?t=0.8325471181626721
+https://www.roxio.com/static/roxio/images/products/creator/nxt9/call-action-footer-bg.jpg?t=0.3837369616891504
+https://media-assets.stryker.com/is/image/stryker/gateway_1?$max_width_1410$&t=0.6966182400011641
+https://cdn.eso.org/images/banner1920/eso2520a.jpg?t=0.5186907385065521
+https://bandobaskent.com/logo.png?t=0.9087762933670076
+https://www.velivole.fr/img/header.jpg?t=0.7058447082956326
+https://cdn.xuansiwei.com/common/lib/font-awesome/4.7.0/fontawesome-webfont.woff2?v=4.7.0&t=0.45608957890091195
+https://cdn.amplitude.com/script/fcf83c280a5dc45267f3ade26c5ade4d.experiment.js
 EOF
 )"
+
 TOTAL=$(echo "$URLS" | wc -l)
+
 : > "$RESULTS"
 
+########################################
+# параллельная проверка
+########################################
+
 check_all_urls() {
+
     TMP_OK="/tmp/z_ok.$$"
     : > "$TMP_OK"
 
@@ -106,28 +96,39 @@ check_all_urls() {
     }
 
     RUN=0
-    while read -r URL; do
+
+    while read URL; do
         check_url "$URL" &
         RUN=$((RUN+1))
-        if [ "$RUN" -ge "$PARALLEL" ]; then wait; RUN=0; fi
+
+        if [ "$RUN" -ge "$PARALLEL" ]; then
+            wait
+            RUN=0
+        fi
     done <<EOF
 $URLS
 EOF
 
     wait
+
     OK=$(wc -l < "$TMP_OK")
     rm -f "$TMP_OK"
 }
 
-# -----------------------------
-# Перебор стратегий
-# -----------------------------
-grep -n '^#' "$WORK_FILE" | while read -r START; do
-    NEXT=$(grep -n '^#' "$WORK_FILE" | awk -v s="$START" '$1>s{print;exit}')
+########################################
+# перебор стратегий
+########################################
+
+LINES=$(grep -n '^#' "$STR_FILE" | cut -d: -f1)
+
+echo "$LINES" | while read START; do
+
+    NEXT=$(echo "$LINES" | awk -v s="$START" '$1>s{print;exit}')
+
     if [ -z "$NEXT" ]; then
-        sed -n "${START},\$p" "$WORK_FILE" > "$TEMP_FILE"
+        sed -n "${START},\$p" "$STR_FILE" > "$TEMP_FILE"
     else
-        sed -n "${START},$((NEXT-1))p" "$WORK_FILE" > "$TEMP_FILE"
+        sed -n "${START},$((NEXT-1))p" "$STR_FILE" > "$TEMP_FILE"
     fi
 
     BLOCK=$(cat "$TEMP_FILE")
@@ -139,13 +140,15 @@ grep -n '^#' "$WORK_FILE" | while read -r START; do
             print "\toption NFQWS_OPT '\''"
             print block
             print "'\''"
-            skip=1; next
+            skip=1
+            next
         }
         skip && /^'\''$/ { skip=0; next }
         !skip { print }
     ' "$CONF" > "${CONF}.tmp"
 
     mv "${CONF}.tmp" "$CONF"
+
     ZAPRET_RESTART
 
     echo
@@ -154,32 +157,26 @@ grep -n '^#' "$WORK_FILE" | while read -r START; do
     OK=0
     check_all_urls
 
-    [ "$OK" -eq "$TOTAL" ] && COLOR="$GREEN"
-    [ "$OK" -gt 0 ] && [ "$OK" -lt "$TOTAL" ] && COLOR="$YELLOW"
-    [ "$OK" -eq 0 ] && COLOR="$RED"
+    if [ "$OK" -eq "$TOTAL" ]; then COLOR="$GREEN"
+    elif [ "$OK" -gt 0 ]; then COLOR="$YELLOW"
+    else COLOR="$RED"; fi
 
     echo -e "${COLOR}Доступно: $OK/$TOTAL${NC}"
+
     echo "$OK $NAME" >> "$RESULTS"
+
 done
 
-# -----------------------------
-# Топ-5 стратегий
-# -----------------------------
+########################################
+# топ 5
+########################################
+
 echo
 echo -e "${YELLOW}=========== Топ-5 стратегий ===========${NC}"
-sort -rn "$RESULTS" | head -5 | while read -r COUNT NAME; do
-    [ "$COUNT" -eq "$TOTAL" ] && COLOR="$GREEN"
-    [ "$COUNT" -gt 0 ] && [ "$COUNT" -lt "$TOTAL" ] && COLOR="$YELLOW"
-    [ "$COUNT" -eq 0 ] && COLOR="$RED"
+
+sort -rn "$RESULTS" | head -5 | while read COUNT NAME; do
+    if [ "$COUNT" -eq "$TOTAL" ]; then COLOR="$GREEN"
+    elif [ "$COUNT" -gt 0 ]; then COLOR="$YELLOW"
+    else COLOR="$RED"; fi
     echo -e "${COLOR}${NAME} → $COUNT/$TOTAL${NC}"
 done
-
-# -----------------------------
-# Восстановление
-# -----------------------------
-echo
-echo "Восстанавливаем исходный конфиг..."
-mv -f "$BACK" "$CONF"
-rm -f "$TEMP_FILE" "$RESULTS"
-
-ZAPRET_RESTART
