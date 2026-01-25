@@ -400,28 +400,22 @@ Discord|https://discord.com
         fi
     }
 
-    check_all_urls() {
+check_all_urls() {
     TMP_OK="/tmp/z_ok.$$"
     : > "$TMP_OK"
-    RUN=0
 
-    echo "$URLS_LIST" | while IFS="|" read TEXT LINK; do
-        check_url "$TEXT" "$LINK" &
-        RUN=$((RUN+1))
-        if [ "$RUN" -ge "$PARALLEL" ]; then
-            wait
-            RUN=0
+    for LINE in $URLS; do
+        URL=$(echo "$LINE" | cut -d"|" -f2)
+        TEXT=$(echo "$LINE" | cut -d"|" -f1)
+        if curl -Is --connect-timeout 2 --max-time 3 "$URL" >/dev/null 2>&1; then
+            echo 1 >> "$TMP_OK"
+            echo "[ OK ] $TEXT"
+        else
+            echo "[FAIL] $TEXT"
         fi
     done
-    wait   # важный wait, чтобы дождаться всех фоновых процессов
 
-    # теперь подсчёт
-    if [ -f "$TMP_OK" ]; then
-        OK=$(wc -l < "$TMP_OK")
-    else
-        OK=0
-    fi
-
+    OK=$(wc -l < "$TMP_OK")
     rm -f "$TMP_OK"
 }
 
