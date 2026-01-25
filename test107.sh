@@ -349,36 +349,21 @@ echo -ne "\n${YELLOW}Выберите пункт:${NC} "; read -r choiceIP; case
 # Тест стратегий
 # ==========================================
 run_test_strategies() {
-
-
 echo -e "\n${MAGENTA}Тест стратегий${NC}"
 echo -e "${CYAN}Собираем стратегии для теста${NC}"
 download_strategies "1"
-
 cp /opt/zapret_temp/str_flow.txt /opt/zapret_temp/str_test.txt
-
-    STR_FILE="/opt/zapret_temp/str_test.txt"
-    TEMP_FILE="/opt/zapret_temp/str_temp.txt"
-    RESULTS="/opt/zapret_temp/zapret_bench.txt"
-    BACK="/opt/zapret_temp/zapret_back"
-    
+STR_FILE="/opt/zapret_temp/str_test.txt"
+TEMP_FILE="/opt/zapret_temp/str_temp.txt"
+RESULTS="/opt/zapret_temp/zapret_bench.txt"
+BACK="/opt/zapret_temp/zapret_back"
 cp "$OUT" "$STR_FILE"
 cp "$CONF" "$BACK"
-
-
-    PARALLEL=10
-
-    for N in 1 2 3 4 5 6 7 8 ; do
-        strategy_v$N >> "$STR_FILE"
-    done
-
-    # Убираем все строки с #Y только в рабочем файле
-    sed -i '/#Y/d' "$STR_FILE"
-
-    ########################################
-    # сайты
-    ########################################
-
+PARALLEL=10
+for N in 1 2 3 4 5 6 7 8 ; do
+strategy_v$N >> "$STR_FILE"
+done
+sed -i '/#Y/d' "$STR_FILE"
 URLS="$(cat <<EOF
 https://gosuslugi.ru
 https://esia.gosuslugi.ru
@@ -433,119 +418,82 @@ https://cdn.xuansiwei.com/common/lib/font-awesome/4.7.0/fontawesome-webfont.woff
 https://cdn.amplitude.com/script/fcf83c280a5dc45267f3ade26c5ade4d.experiment.js
 EOF
 )"
-
-    TOTAL=$(echo "$URLS" | wc -l)
-    : > "$RESULTS"
-
-
+TOTAL=$(echo "$URLS" | wc -l)
+: > "$RESULTS"
 echo -e "${CYAN}Начинаем тест стратегий${NC}\n"
-
-    ########################################
-    # параллельная проверка
-    ########################################
-
-
-
-    check_all_urls() {
-        TMP_OK="/tmp/z_ok.$$"
-        : > "$TMP_OK"
-
-        check_url() {
-            if curl -Is --connect-timeout 2 --max-time 3 "$1" >/dev/null 2>&1; then
-                echo 1 >> "$TMP_OK"
-                echo -e "${GREEN}[ OK ]${NC} $1"
-            else
-                echo -e "${RED}[FAIL]${NC} $1"
-            fi
-        }
-
-        RUN=0
-        while read URL; do
-            check_url "$URL" &
-            RUN=$((RUN+1))
-            if [ "$RUN" -ge "$PARALLEL" ]; then
-                wait
-                RUN=0
-            fi
-        done <<EOF
+check_url() {
+if curl -Is --connect-timeout 2 --max-time 3 "$1" >/dev/null 2>&1; then
+echo 1 >> "$TMP_OK"
+echo -e "${GREEN}[ OK ]${NC} $1"
+else
+echo -e "${RED}[FAIL]${NC} $1"
+fi
+}
+check_all_urls() {
+TMP_OK="/tmp/z_ok.$$"
+: > "$TMP_OK"
+RUN=0
+while read URL; do
+check_url "$URL" &
+RUN=$((RUN+1))
+if [ "$RUN" -ge "$PARALLEL" ]; then
+wait
+RUN=0
+fi
+done <<EOF
 $URLS
 EOF
-        wait
-        OK=$(wc -l < "$TMP_OK")
-        rm -f "$TMP_OK"
-    }
-
-    ########################################
-    # перебор стратегий
-    ########################################
-
-    LINES=$(grep -n '^#' "$STR_FILE" | cut -d: -f1)
-
-    echo "$LINES" | while read START; do
-        NEXT=$(echo "$LINES" | awk -v s="$START" '$1>s{print;exit}')
-        if [ -z "$NEXT" ]; then
-            sed -n "${START},\$p" "$STR_FILE" > "$TEMP_FILE"
-        else
-            sed -n "${START},$((NEXT-1))p" "$STR_FILE" > "$TEMP_FILE"
-        fi
-
-        BLOCK=$(cat "$TEMP_FILE")
-        NAME=$(head -n1 "$TEMP_FILE")
-
-        awk -v block="$BLOCK" '
-            BEGIN{skip=0}
-            /option NFQWS_OPT '\''/ {
-                print "\toption NFQWS_OPT '\''"
-                print block
-                print "'\''"
-                skip=1
-                next
-            }
-            skip && /^'\''$/ { skip=0; next }
-            !skip { print }
-        ' "$CONF" > "${CONF}.tmp"
-
-        mv "${CONF}.tmp" "$CONF"
-
-        echo
-        NAME="${NAME#\#}"
-        echo -e "${CYAN}Тестируем стратегию: ${YELLOW}${NAME}${NC}"
+wait
+OK=$(wc -l < "$TMP_OK")
+rm -f "$TMP_OK"
+}
+LINES=$(grep -n '^#' "$STR_FILE" | cut -d: -f1)
+echo "$LINES" | while read START; do
+NEXT=$(echo "$LINES" | awk -v s="$START" '$1>s{print;exit}')
+if [ -z "$NEXT" ]; then
+sed -n "${START},\$p" "$STR_FILE" > "$TEMP_FILE"
+else
+sed -n "${START},$((NEXT-1))p" "$STR_FILE" > "$TEMP_FILE"
+fi
+BLOCK=$(cat "$TEMP_FILE")
+NAME=$(head -n1 "$TEMP_FILE")
+awk -v block="$BLOCK" '
+BEGIN{skip=0}
+/option NFQWS_OPT '\''/ {
+print "\toption NFQWS_OPT '\''"
+print block
+print "'\''"
+skip=1
+next
+}
+skip && /^'\''$/ { skip=0; next }
+!skip { print }
+' "$CONF" > "${CONF}.tmp"
+mv "${CONF}.tmp" "$CONF"
+NAME="${NAME#\#}"
+echo -e "${CYAN}Тестируем стратегию: ${YELLOW}${NAME}${NC}"
 ZAPRET_RESTART
-        OK=0
-        check_all_urls
-
-        if [ "$OK" -eq "$TOTAL" ]; then COLOR="$GREEN"
-        elif [ "$OK" -gt 0 ]; then COLOR="$YELLOW"
-        else COLOR="$RED"; fi
-
-        echo -e "${CYAN}Результат теста: ${COLOR}$OK/$TOTAL${NC}"
-
-        echo "$OK $NAME" >> "$RESULTS"
-    done
-
-    ########################################
-    # топ
-    ########################################
-
-
-echo -e "\n${YELLOW}Лучшие 10 стратегий${NC}"
-
-sort -rn "$RESULTS" | head -10 | while read COUNT NAME; do
-    # Убираем ведущий #
-    NAME="${NAME#\#}"
-    if [ "$COUNT" -eq "$TOTAL" ]; then COLOR="$GREEN"
-    elif [ "$COUNT" -gt 0 ]; then COLOR="$YELLOW"
-    else COLOR="$RED"; fi
-    echo -e "${COLOR}$NAME${NC} → $COUNT/$TOTAL"
+OK=0
+check_all_urls
+if [ "$OK" -eq "$TOTAL" ]; then COLOR="$GREEN"
+elif [ "$OK" -gt 0 ]; then COLOR="$YELLOW"
+else COLOR="$RED"; fi
+echo -e "${CYAN}Результат теста: ${COLOR}$OK/$TOTAL${NC}"
+echo "$OK $NAME" >> "$RESULTS"
 done
-
+echo -e "\n${YELLOW}Лучшие 10 стратегий${NC}"
+sort -rn "$RESULTS" | head -10 | while read COUNT NAME; do
+NAME="${NAME#\#}"
+if [ "$COUNT" -eq "$TOTAL" ]; then COLOR="$GREEN"
+elif [ "$COUNT" -gt 0 ]; then COLOR="$YELLOW"
+else COLOR="$RED"; fi
+echo -e "${COLOR}$NAME${NC} → $COUNT/$TOTAL"
+done
 mv -f "$BACK" "$CONF"
 echo
 ZAPRET_RESTART
-    PAUSE 
+PAUSE
 }
-
-
 # ==========================================
 # Главное меню
 # ==========================================
