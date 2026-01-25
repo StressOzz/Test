@@ -351,21 +351,22 @@ echo -ne "\n${YELLOW}Выберите пункт:${NC} "; read -r choiceIP; case
 run_test_strategies() {
 
 
-echo -e "\n${MAGENTA}Тест стратегию${NC}"
-echo -e "\n${CYAN}Собираем стратегии для теста${NC}"
-    download_strategies "1"
+echo -e "\n${MAGENTA}Тест стратегий${NC}"
+echo -e "${CYAN}Собираем стратегии для теста${NC}"
+download_strategies "1"
 
-    cp /opt/zapret_temp/str_flow.txt /opt/zapret_temp/str_test.txt
+cp /opt/zapret_temp/str_flow.txt /opt/zapret_temp/str_test.txt
 
     STR_FILE="/opt/zapret_temp/str_test.txt"
     TEMP_FILE="/opt/zapret_temp/str_temp.txt"
     RESULTS="/opt/zapret_temp/zapret_bench.txt"
     BACK="/opt/zapret_temp/zapret_back"
-
+    
+cp "$OUT" "$STR_FILE"
 cp "$CONF" "$BACK"
 
 
-    PARALLEL=9
+    PARALLEL=10
 
     for N in 1 2 3 4 5 6 7 8 ; do
         strategy_v$N >> "$STR_FILE"
@@ -378,7 +379,7 @@ cp "$CONF" "$BACK"
     # сайты
     ########################################
 
-    URLS="$(cat <<EOF
+URLS="$(cat <<EOF
 https://gosuslugi.ru
 https://esia.gosuslugi.ru
 https://nalog.ru
@@ -437,7 +438,7 @@ EOF
     : > "$RESULTS"
 
 
-echo -e "\n${CYAN}Начинаем тест стратегий${NC}"
+echo -e "${CYAN}Начинаем тест стратегий${NC}\n"
 
     ########################################
     # параллельная проверка
@@ -452,9 +453,9 @@ echo -e "\n${CYAN}Начинаем тест стратегий${NC}"
         check_url() {
             if curl -Is --connect-timeout 2 --max-time 3 "$1" >/dev/null 2>&1; then
                 echo 1 >> "$TMP_OK"
-                echo -e "${GREEN}$1 → OK${NC}"
+                echo -e "${GREEN}[ OK ]${NC} $1"
             else
-                echo -e "${RED}$1 → FAIL${NC}"
+                echo -e "${RED}[FAIL]${NC} $1"
             fi
         }
 
@@ -509,7 +510,7 @@ EOF
         ZAPRET_RESTART
 
         echo
-        echo -e "${YELLOW}${NAME}${NC}"
+        echo -e "${CYAN}Тестируем стратегию: ${YELLOW}${NAME}${NC}"
 
         OK=0
         check_all_urls
@@ -518,7 +519,7 @@ EOF
         elif [ "$OK" -gt 0 ]; then COLOR="$YELLOW"
         else COLOR="$RED"; fi
 
-        echo -e "${COLOR}Доступно: $OK/$TOTAL${NC}"
+        echo -e "${CYAN}Результат теста: ${COLOR}$OK/$TOTAL${NC}"
 
         echo "$OK $NAME" >> "$RESULTS"
     done
@@ -527,28 +528,22 @@ EOF
     # топ
     ########################################
 
-echo
-echo -e "${YELLOW}=========== Стратегии от лучших к худшим ===========${NC}"
 
-sort -rn "$RESULTS" | while read COUNT NAME; do
+    echo -e "\n${YELLOW}Лучшие 10 стратегий${NC}"
+
+sort -rn "$RESULTS" | head -5 | while read COUNT NAME; do
     if [ "$COUNT" -eq "$TOTAL" ]; then COLOR="$GREEN"
     elif [ "$COUNT" -gt 0 ]; then COLOR="$YELLOW"
     else COLOR="$RED"; fi
 
-    echo -e "${COLOR}$NAME → $COUNT/$TOTAL${NC}"
+    echo -e "${COLOR}$NAME${NC} → $COUNT/$TOTAL"
 done
 
 
-
-    PAUSE
-    
-echo "Восстанавливаем исходный конфиг..."
 mv -f "$BACK" "$CONF"
 
 ZAPRET_RESTART
-
-    PAUSE
-    
+    PAUSE 
 }
 
 
