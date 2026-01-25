@@ -76,7 +76,7 @@ grep -n '^#' "$STR_FILE" | cut -d: -f1 | while read START; do
     echo -e "\n${YELLOW}${BLOCK_NAME}${NC}"
 
     while read URL; do
-        HTTP_CODE=$(curl -k -s -o /dev/null -w "%{http_code}" --connect-timeout 5 --max-time 15 "$URL")
+        HTTP_CODE=$(curl -k -s -o /dev/null -w "%{http_code}" --connect-timeout 3 --max-time 3 "$URL")
         if [ "$HTTP_CODE" = "200" ]; then
             echo -e "${GREEN}$URL → OK${NC}"
             OK=$((OK+1))
