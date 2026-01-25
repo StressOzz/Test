@@ -237,7 +237,7 @@ if [ -n "$current" ]; then echo -e "${YELLOW}Используется страт
 if hosts_enabled; then echo -e "${YELLOW}Домены в hosts: ${GREEN}добавлены${NC}\n"; else echo -e "${YELLOW}Домены в hosts: ${RED}отсутствуют${NC}\n"; fi
 echo -e "${CYAN}1) ${GREEN}Выбрать и установить стратегию ${NC}v1-v8\n${CYAN}2) ${GREEN}Выбрать и установить стратегию от ${NC}Flowseal\n${CYAN}3) ${GREEN}Выбрать и установить стратегию для ${NC}YouTube\n${CYAN}4) ${GREEN}Подобрать стратегию для ${NC}YouTube"
 echo -e "${CYAN}5) ${GREEN}Меню управления доменами в ${NC}hosts\n${CYAN}6) ${NC}$RKN_TEXT_MENU${NC}\n${CYAN}7) ${GREEN}$menu_game\n${CYAN}8) ${GREEN}Обновить список исключений${NC}"
-echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read choiceST; case "$choiceST" in 1) strategy_CHOUSE;; 2) flowseal_menu;; 3) choose_strategy_manual;; 4) auto_stryou;; 5) menu_hosts;; 0) STR_TESTER;;
+echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read choiceST; case "$choiceST" in 1) strategy_CHOUSE;; 2) flowseal_menu;; 3) choose_strategy_manual;; 4) auto_stryou;; 5) menu_hosts;; 0) run_test_strategies;;
 6) toggle_rkn_bypass; continue;; 7) fix_GAME;; 8) echo -e "\n${MAGENTA}Обновляем список исключений${NC}\n${CYAN}Останавливаем ${NC}Zapret"; /etc/init.d/zapret stop >/dev/null 2>&1; echo -e "${CYAN}Добавляем домены в исключения${NC}"
 rm -f "$EXCLUDE_FILE"; wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL" || echo -e "\n${RED}Не удалось загрузить exclude файл${NC}\n"; echo -e "${CYAN}Перезапускаем ${NC}Zapret"
 ZAPRET_RESTART; echo -e "${GREEN}Список исключений обновлён!${NC}\n"; PAUSE;; *) return;; esac; done }
@@ -348,34 +348,30 @@ echo -ne "\n${YELLOW}Выберите пункт:${NC} "; read -r choiceIP; case
 # ==========================================
 # Тест стратегий
 # ==========================================
-STR_TESTER() {
+run_test_strategies() {
+    download_strategies
 
-download_strategies
+    cp /opt/zapret_temp/str_flow.txt /opt/zapret_temp/str_test.txt
 
-cp /opt/zapret_temp/str_flow.txt /opt/zapret_temp/str_test.txt
+    CONF="/etc/config/zapret"
+    STR_FILE="/opt/zapret_temp/str_test.txt"
+    TEMP_FILE="/opt/zapret_temp/str_temp.txt"
+    RESULTS="/opt/zapret_temp/zapret_bench.txt"
 
-CONF="/etc/config/zapret"
-STR_FILE="/opt/zapret_temp/str_test.txt"
-TEMP_FILE="/opt/zapret_temp/str_temp.txt"
-RESULTS="/opt/zapret_temp/zapret_bench.txt"
+    PARALLEL=9
 
-PARALLEL=9
+    for N in 1 2 3 4 5 6 7 8 ; do
+        strategy_v$N >> "$STR_FILE"
+    done
 
+    # Убираем все строки с #Y только в рабочем файле
+    sed -i '/#Y/d' "$STR_FILE"
 
-for N in 1 2 3 4 5 6 7 8 ; do
-    strategy_v$N >> "$STR_FILE"
-done
+    ########################################
+    # сайты
+    ########################################
 
-# Убираем все строки с #Y только в рабочем файле
-sed -i '/#Y/d' "$STR_FILE"
-
-
-
-########################################
-# сайты
-########################################
-
-URLS="$(cat <<EOF
+    URLS="$(cat <<EOF
 https://gosuslugi.ru
 https://esia.gosuslugi.ru
 https://nalog.ru
@@ -430,114 +426,107 @@ https://cdn.amplitude.com/script/fcf83c280a5dc45267f3ade26c5ade4d.experiment.js
 EOF
 )"
 
-TOTAL=$(echo "$URLS" | wc -l)
+    TOTAL=$(echo "$URLS" | wc -l)
+    : > "$RESULTS"
 
-: > "$RESULTS"
+    ########################################
+    # параллельная проверка
+    ########################################
 
-########################################
-# параллельная проверка
-########################################
+    check_all_urls() {
+        TMP_OK="/tmp/z_ok.$$"
+        : > "$TMP_OK"
 
-check_all_urls() {
+        check_url() {
+            if curl -Is --connect-timeout 2 --max-time 3 "$1" >/dev/null 2>&1; then
+                echo 1 >> "$TMP_OK"
+                echo -e "${GREEN}$1 → OK${NC}"
+            else
+                echo -e "${RED}$1 → FAIL${NC}"
+            fi
+        }
 
-    TMP_OK="/tmp/z_ok.$$"
-    : > "$TMP_OK"
-
-    check_url() {
-        if curl -Is --connect-timeout 2 --max-time 3 "$1" >/dev/null 2>&1; then
-            echo 1 >> "$TMP_OK"
-            echo -e "${GREEN}$1 → OK${NC}"
-        else
-            echo -e "${RED}$1 → FAIL${NC}"
-        fi
-    }
-
-    RUN=0
-
-    while read URL; do
-        check_url "$URL" &
-        RUN=$((RUN+1))
-
-        if [ "$RUN" -ge "$PARALLEL" ]; then
-            wait
-            RUN=0
-        fi
-    done <<EOF
+        RUN=0
+        while read URL; do
+            check_url "$URL" &
+            RUN=$((RUN+1))
+            if [ "$RUN" -ge "$PARALLEL" ]; then
+                wait
+                RUN=0
+            fi
+        done <<EOF
 $URLS
 EOF
+        wait
+        OK=$(wc -l < "$TMP_OK")
+        rm -f "$TMP_OK"
+    }
 
-    wait
+    ########################################
+    # перебор стратегий
+    ########################################
 
-    OK=$(wc -l < "$TMP_OK")
-    rm -f "$TMP_OK"
-}
+    LINES=$(grep -n '^#' "$STR_FILE" | cut -d: -f1)
 
-########################################
-# перебор стратегий
-########################################
+    echo "$LINES" | while read START; do
+        NEXT=$(echo "$LINES" | awk -v s="$START" '$1>s{print;exit}')
+        if [ -z "$NEXT" ]; then
+            sed -n "${START},\$p" "$STR_FILE" > "$TEMP_FILE"
+        else
+            sed -n "${START},$((NEXT-1))p" "$STR_FILE" > "$TEMP_FILE"
+        fi
 
-LINES=$(grep -n '^#' "$STR_FILE" | cut -d: -f1)
+        BLOCK=$(cat "$TEMP_FILE")
+        NAME=$(head -n1 "$TEMP_FILE")
 
-echo "$LINES" | while read START; do
+        awk -v block="$BLOCK" '
+            BEGIN{skip=0}
+            /option NFQWS_OPT '\''/ {
+                print "\toption NFQWS_OPT '\''"
+                print block
+                print "'\''"
+                skip=1
+                next
+            }
+            skip && /^'\''$/ { skip=0; next }
+            !skip { print }
+        ' "$CONF" > "${CONF}.tmp"
 
-    NEXT=$(echo "$LINES" | awk -v s="$START" '$1>s{print;exit}')
+        mv "${CONF}.tmp" "$CONF"
 
-    if [ -z "$NEXT" ]; then
-        sed -n "${START},\$p" "$STR_FILE" > "$TEMP_FILE"
-    else
-        sed -n "${START},$((NEXT-1))p" "$STR_FILE" > "$TEMP_FILE"
-    fi
+        ZAPRET_RESTART
 
-    BLOCK=$(cat "$TEMP_FILE")
-    NAME=$(head -n1 "$TEMP_FILE")
+        echo
+        echo -e "${YELLOW}${NAME}${NC}"
 
-    awk -v block="$BLOCK" '
-        BEGIN{skip=0}
-        /option NFQWS_OPT '\''/ {
-            print "\toption NFQWS_OPT '\''"
-            print block
-            print "'\''"
-            skip=1
-            next
-        }
-        skip && /^'\''$/ { skip=0; next }
-        !skip { print }
-    ' "$CONF" > "${CONF}.tmp"
+        OK=0
+        check_all_urls
 
-    mv "${CONF}.tmp" "$CONF"
+        if [ "$OK" -eq "$TOTAL" ]; then COLOR="$GREEN"
+        elif [ "$OK" -gt 0 ]; then COLOR="$YELLOW"
+        else COLOR="$RED"; fi
 
-    ZAPRET_RESTART
+        echo -e "${COLOR}Доступно: $OK/$TOTAL${NC}"
+
+        echo "$OK $NAME" >> "$RESULTS"
+    done
+
+    ########################################
+    # топ 5
+    ########################################
 
     echo
-    echo -e "${YELLOW}${NAME}${NC}"
+    echo -e "${YELLOW}=========== Топ-5 стратегий ===========${NC}"
 
-    OK=0
-    check_all_urls
+    sort -rn "$RESULTS" | head -5 | while read COUNT NAME; do
+        if [ "$COUNT" -eq "$TOTAL" ]; then COLOR="$GREEN"
+        elif [ "$COUNT" -gt 0 ]; then COLOR="$YELLOW"
+        else COLOR="$RED"; fi
+    done
 
-    if [ "$OK" -eq "$TOTAL" ]; then COLOR="$GREEN"
-    elif [ "$OK" -gt 0 ]; then COLOR="$YELLOW"
-    else COLOR="$RED"; fi
-
-    echo -e "${COLOR}Доступно: $OK/$TOTAL${NC}"
-
-    echo "$OK $NAME" >> "$RESULTS"
-
-done
-
-########################################
-# топ 5
-########################################
-
-echo
-echo -e "${YELLOW}=========== Топ-5 стратегий ===========${NC}"
-
-sort -rn "$RESULTS" | head -5 | while read COUNT NAME; do
-    if [ "$COUNT" -eq "$TOTAL" ]; then COLOR="$GREEN"
-    elif [ "$COUNT" -gt 0 ]; then COLOR="$YELLOW"
-    else COLOR="$RED"; fi
-
-PAUSE
+    PAUSE
 }
+
 
 # ==========================================
 # Главное меню
