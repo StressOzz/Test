@@ -350,59 +350,77 @@ echo -ne "\n${YELLOW}Выберите пункт:${NC} "; read -r choiceIP; case
 # ==========================================
 
 run_test_strategies() {
-
- # --- обработка Ctrl+C ---
-cleanup() {
-    echo -e "\n${RED}Прервано пользователем!${NC}"
-    
-    # остановка всех фоновых процессов
-    pkill -P $$
-
-    # восстановление конфигурации
-    if [ -f "$BACK" ]; then
-        mv -f "$BACK" "$CONF"
-        ZAPRET_RESTART
-    fi
-
-    echo -e "${CYAN}Возврат в меню...${NC}"
-    trap - SIGINT
-    return 1
-}
-trap cleanup SIGINT
-    # -----------------------
-
-
-
     echo -e "\n${MAGENTA}Тест стратегий${NC}"
+    echo -e "${CYAN}Останавливаем${NC} Zapret"
+    /etc/init.d/zapret stop >/dev/null 2>&1
     echo -e "${CYAN}Собираем стратегии для теста${NC}"
-
+    
     download_strategies "1"
-
     cp /opt/zapret_temp/str_flow.txt /opt/zapret_temp/str_test.txt
     STR_FILE="/opt/zapret_temp/str_test.txt"
     TEMP_FILE="/opt/zapret_temp/str_temp.txt"
     RESULTS="/opt/zapret_temp/zapret_bench.txt"
     BACK="/opt/zapret_temp/zapret_back"
-
     cp "$OUT" "$STR_FILE"
     cp "$CONF" "$BACK"
-
-    PARALLEL=6
-
+    PARALLEL=8
     for N in $(seq 1 100); do
         strategy_v$N >> "$STR_FILE" 2>/dev/null || break
     done
-
     sed -i '/#Y/d' "$STR_FILE"
     TOTAL_STR=$(grep -c '^#' "$STR_FILE")
     echo -e "${CYAN}Найдено стратегий: ${NC}$TOTAL_STR"
-
-    URLS="$(cat <<EOF
+    
+URLS="$(cat <<EOF
 Госуслуги|https://gosuslugi.ru
+ЛК Госуслуги|https://esia.gosuslugi.ru
+Налоги|https://nalog.ru
+ЛК Налоги|https://lkfl2.nalog.ru
+ntc.party|https://ntc.party/uploads/default/original/1X/d79b1fc888df4f6a5764f6c65b79db9d1077abbd.png
+RuTube|https://rutube.ru
+YouTube|https://youtube.com
+Instagram|https://instagram.com
+Rutor|https://rutor.info
+Rutracker|https://rutracker.org
+Epidemz|https://epidemz.net.co
+NNM Club|https://nnmclub.to
 OpenWRT|https://openwrt.org
 Sxyprn|https://sxyprn.net
 Spankbang|https://ru.spankbang.com
 Pornhub|https://pornhub.com
+Discord|https://discord.com
+X|https://x.com
+Filmix|https://filmix.my
+Flight Radar|https://flightradar24.com
+cdn77|https://cdn77.com
+Play Google|https://play.google.com
+Ottai|https://ottai.com
+US.CF-01 Cloudflare|https://img.wzstats.gg/cleaver/gunFullDisplay?t=0.8379293615805524
+US.CF-02 Cloudflare|https://genshin.jmp.blue/characters/all
+US.CF-03 Cloudflare|https://api.frankfurter.dev/v1/2000-01-01..2002-12-31?t=0.10086058232485262
+US.CF-04 Cloudflare|https://www.bigcartel.com/?t=0.05350771418326239
+US.DO-01@0 DigitalOcean|https://genderize.io/?t=0.690010399215886
+US.DO-01@1 DigitalOcean|https://genderize.io/?t=0.8043720968884225
+DE.HE-01 Hetzner|https://j.dejure.org/jcg/doctrine/doctrine_banner.webp?t=0.9998959160553804
+DE.HE-02 Hetzner|https://accesorioscelular.com/tienda/css/plugins.css?t=0.21851062503227425
+FI.HE-01 Hetzner|https://251b5cd9.nip.io/1MB.bin?t=0.4002108804473481
+FI.HE-02 Hetzner|https://nioges.com/libs/fontawesome/webfonts/fa-solid-900.woff2?t=0.5863188987474373
+FI.HE-03 Hetzner|https://5fd8bdae.nip.io/1MB.bin?t=0.2578104779291205
+FI.HE-04 Hetzner|https://5fd8bca5.nip.io/1MB.bin?t=0.15580206924030682
+FR.OVH-01 OVH|https://eu.api.ovh.com/console/rapidoc-min.js?t=0.4173820664969895
+FR.OVH-02 OVH|https://ovh.sfx.ovh/10M.bin?t=0.8326647985641201
+SE.OR-01 Oracle|https://oracle.sfx.ovh/10M.bin?t=0.23943050058539272
+DE.AWS-01 AWS|https://www.getscope.com/assets/fonts/fa-solid-900.woff2?t=0.5476677250009963
+US.AWS-01 AWS|https://corp.kaltura.com/wp-content/cache/min/1/wp-content/themes/airfleet/dist/styles/theme.css?t=0.4091857736085579
+US.GC-01 Google Cloud|https://api.usercentrics.eu/gvl/v3/en.json?t=0.9164301389568108
+US.FST-01 Fastly|https://www.jetblue.com/footer/footer-element-es2015.js?t=0.3058062700141776
+CA.FST-01 Fastly|https://www.cnn10.com/?t=0.8325471181626721
+US.AKM-01 Akamai|https://www.roxio.com/static/roxio/images/products/creator/nxt9/call-action-footer-bg.jpg?t=0.3837369616891504
+PL.AKM-01 Akamai|https://media-assets.stryker.com/is/image/stryker/gateway_1?$max_width_1410$&t=0.6966182400011641
+US.CDN77-01 CDN77|https://cdn.eso.org/images/banner1920/eso2520a.jpg?t=0.5186907385065521
+FR.CNTB-01 Contabo|https://bandobaskent.com/logo.png?t=0.9087762933670076
+NL.SW-01 Scaleway|https://www.velivole.fr/img/header.jpg?t=0.7058447082956326
+US.CNST-01 Constant|https://cdn.xuansiwei.com/common/lib/font-awesome/4.7.0/fontawesome-webfont.woff2?v=4.7.0&t=0.45608957890091195
 EOF
 )"
 
