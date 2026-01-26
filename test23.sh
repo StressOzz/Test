@@ -406,7 +406,7 @@ US.CNST-01 Constant|https://cdn.xuansiwei.com/common/lib/font-awesome/4.7.0/font
 EOF
 )"; TOTAL=$(echo "$URLS" | grep -c "|"); : > "$RESULTS"; check_url() { TEXT=$(echo "$1" | cut -d"|" -f1); LINK=$(echo "$1" | cut -d"|" -f2)
 if curl -Is --connect-timeout 2 --max-time 3 "$LINK" >/dev/null 2>&1; then echo 1 >> "$TMP_OK"; echo -e "${GREEN}[ OK ]${NC} $TEXT"; else echo -e "${RED}[FAIL]${NC} $TEXT"; fi; }
-check_all_urls() { TMP_OK="/tmp/z_ok.$$"; : > "$TMP_OK"; RUN=0; while IFS= read -r URL; do [ -z "$URL" ] && continue; check_url "$URL" & RUN=$((RUN+1)); [ "$RUN" -ge "$PARALLEL" ] && { wait; RUN=0; }; done <<<"$URLS"; wait; OK=$(wc -l < "$TMP_OK" | tr -d ' '); rm -f "$TMP_OK"; }
+check_all_urls() { TMP_OK="/tmp/z_ok.$$"; : >"$TMP_OK"; RUN=0; while IFS= read -r URL; do [ -z "$URL" ] && continue; check_url "$URL" & ((RUN++)); [ "$RUN" -ge "$PARALLEL" ] && { wait; RUN=0; }; done <<<"$URLS"; wait; OK=$(wc -l <"$TMP_OK"|tr -d ' '); rm -f "$TMP_OK"; }
 LINES=$(grep -n '^#' "$STR_FILE" | cut -d: -f1); CUR=0; echo "$LINES" | while read START; do CUR=$((CUR+1)); NEXT=$(echo "$LINES" | awk -v s="$START" '$1>s{print;exit}')
 if [ -z "$NEXT" ]; then sed -n "${START},\$p" "$STR_FILE" > "$TEMP_FILE"; else sed -n "${START},$((NEXT-1))p" "$STR_FILE" > "$TEMP_FILE"; fi
 BLOCK=$(cat "$TEMP_FILE"); NAME=$(head -n1 "$TEMP_FILE"); NAME="${NAME#\#}"
