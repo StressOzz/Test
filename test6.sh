@@ -370,18 +370,16 @@ run_test_strategies() {
 
 
 TOTAL_STR=0
-N=1
 
-while type "strategy_v$N" >/dev/null 2>&1; do
-    strategy_v$N >> "$STR_FILE"
+for N in $(seq 1 100); do
+    strategy_v$N >> "$STR_FILE" 2>/dev/null || break
     TOTAL_STR=$((TOTAL_STR+1))
-    N=$((N+1))
 done
 
-    sed -i '/#Y/d' "$STR_FILE"
-TOTAL_STR=$(grep -c '^#' "$STR_FILE")
-    # ===== считаем сколько всего стратегий =====
-    echo -e "\033[35mНайдено стратегий: \033[33m$TOTAL_STR\033[0m"
+sed -i '/#Y/d' "$STR_FILE"
+
+echo -e "\033[36mНайдено стратегий: \033[33m$TOTAL_STR\033[0m"
+
 
     # список сайтов
     URLS="$(cat <<EOF
