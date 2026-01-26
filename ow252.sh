@@ -30,20 +30,23 @@ PAUSE() { echo "Нажмите Enter..."; read dummy; }; BACKUP_DIR="/opt/zapret
 # ==========================================
 get_versions() {
     LOCAL_ARCH=$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release)
-    [ -z "$LOCAL_ARCH" ] && LOCAL_ARCH=$(opkg print-architecture | grep -v "noarch" | sort -k3 -n | tail -n1 | awk '{print $2}')
+    [ -z "$LOCAL_ARCH" ] && {
+        LOCAL_ARCH=$(opkg print-architecture 2>/dev/null | grep -v "noarch" | sort -k3 -n | tail -n1 | awk '{print $2}')
+        [ -z "$LOCAL_ARCH" ] && LOCAL_ARCH="unknown"
+    }
+
     USED_ARCH="$LOCAL_ARCH"
     LATEST_URL="https://github.com/remittor/zapret-openwrt/releases/download/v${ZAPRET_VERSION}/zapret_v${ZAPRET_VERSION}_${LOCAL_ARCH}.zip"
 
-    # Определяем установленную версию через универсальную функцию
     if [ "$PKG_IS_APK" -eq 1 ]; then
-        INSTALLED_VER=$(apk list --installed | grep -o "^zapret-[0-9.]\+" | head -n1 | sed 's/zapret-//')
+        INSTALLED_VER=$(apk list --installed 2>/dev/null | grep -o "^zapret-[0-9.]\+" | head -n1 | sed 's/zapret-//')
         [ -z "$INSTALLED_VER" ] && INSTALLED_VER="не найдена"
     else
-        INSTALLED_VER=$(opkg list-installed zapret | awk '{sub(/-r[0-9]+$/, "", $3); print $3}')
+        INSTALLED_VER=$(opkg list-installed zapret 2>/dev/null | awk '{sub(/-r[0-9]+$/, "", $3); print $3}' | head -n1)
         [ -z "$INSTALLED_VER" ] && INSTALLED_VER="не найдена"
     fi
 
-    NFQ_RUN=$(pgrep -f nfqws | wc -l)
+    NFQ_RUN=$(pgrep -f nfqws 2>/dev/null | wc -l)
     NFQ_ALL=$(/etc/init.d/zapret info 2>/dev/null | grep -o 'instance[0-9]\+' | wc -l)
     NFQ_STAT=""
     [ "$NFQ_RUN" -ne 0 ] || [ "$NFQ_ALL" -ne 0 ] && {
