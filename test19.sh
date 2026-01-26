@@ -350,8 +350,8 @@ echo -ne "\n${YELLOW}Выберите пункт:${NC} "; read -r choiceIP; case
 # ==========================================
 # Тест стратегий
 # ==========================================
-run_test_strategies() { echo; clear; echo -e "${MAGENTA}Тестирование стратегий${NC}"; echo -e "${CYAN}Останавливаем${NC} Zapret"; /etc/init.d/zapret stop >/dev/null 2>&1; echo -e "${CYAN}Собираем стратегии для теста${NC}"; 
-rm -rf "$TMP_SF"; download_strategies "1"; echo -e "1"; cp /opt/zapret_temp/str_flow.txt /opt/zapret_temp/str_test.txt; echo -e "2";cp "$OUT" "$STR_FILE"; cp "$CONF" "$BACK"; echo -e "3"
+run_test_strategies() { echo; clear; echo -e "${MAGENTA}Тестирование стратегий${NC}"; echo -e "${CYAN}Останавливаем${NC} Zapret"; /etc/init.d/zapret stop >/dev/null 2>&1; sleep 1; echo -e "${CYAN}Собираем стратегии для теста${NC}"; 
+rm -rf "$TMP_SF"; sleep 1; download_strategies "1"; echo -e "1"; cp /opt/zapret_temp/str_flow.txt /opt/zapret_temp/str_test.txt; echo -e "2";cp "$OUT" "$STR_FILE"; cp "$CONF" "$BACK"; echo -e "3"
 for N in $(seq 1 100)
 do strategy_v$N >> "$STR_FILE" 2>/dev/null || break; done; echo -e "4"; sed -i '/#Y/d' "$STR_FILE"; TOTAL_STR=$(grep -c '^#' "$STR_FILE"); echo -e "${CYAN}Найдено стратегий: ${NC}$TOTAL_STR"
 
