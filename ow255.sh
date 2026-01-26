@@ -29,12 +29,83 @@ PAUSE() { echo "Нажмите Enter..."; read dummy; }; BACKUP_DIR="/opt/zapret
 # Получение версии
 # ==========================================
 
-get_versions() { LOCAL_ARCH=$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release); [ -z "$LOCAL_ARCH" ] && LOCAL_ARCH=$(opkg print-architecture | grep -v "noarch" | sort -k3 -n | tail -n1 | awk '{print $2}')
-USED_ARCH="$LOCAL_ARCH"; LATEST_URL="https://github.com/remittor/zapret-openwrt/releases/download/v${ZAPRET_VERSION}/zapret_v${ZAPRET_VERSION}_${LOCAL_ARCH}.zip"
-INSTALLED_VER=$(opkg list-installed zapret | awk '{sub(/-r[0-9]+$/, "", $3); print $3}'); [ -z "$INSTALLED_VER" ] && INSTALLED_VER="не найдена"
-NFQ_RUN=$(pgrep -f nfqws | wc -l); NFQ_ALL=$(/etc/init.d/zapret info 2>/dev/null | grep -o 'instance[0-9]\+' | wc -l); NFQ_STAT=""; [ "$NFQ_RUN" -ne 0 ] || [ "$NFQ_ALL" -ne 0 ] && { [ "$NFQ_RUN" -eq "$NFQ_ALL" ] && NFQ_CLR="$GREEN" || NFQ_CLR="$RED"; NFQ_STAT="${NFQ_CLR}[${NFQ_RUN}/${NFQ_ALL}]${NC}"; }
-ZAPRET_STATUS=$([ -f /etc/init.d/zapret ] && /etc/init.d/zapret status 2>/dev/null | grep -qi running && echo "${GREEN}запущен $NFQ_STAT${NC}" || echo "${RED}остановлен${NC}"); [ -f /etc/init.d/zapret ] || ZAPRET_STATUS=""
-[ "$INSTALLED_VER" = "$ZAPRET_VERSION" ] && INST_COLOR=$GREEN INSTALLED_DISPLAY="$INSTALLED_VER" || { INST_COLOR=$RED; INSTALLED_DISPLAY=$([ "$INSTALLED_VER" != "не найдена" ] && echo "$INSTALLED_VER" || echo "$INSTALLED_VER"); }; }
+get_versions() {
+    # --------------------- Определяем пакетный менеджер ---------------------
+    PKG_IS_APK=0
+    if command -v apk >/dev/null 2>&1; then
+        PKG_IS_APK=1
+    elif command -v opkg >/dev/null 2>&1; then
+        PKG_IS_APK=0
+    else
+        echo "Ни apk, ни opkg не найдены. Скрипт не сможет работать с пакетами."
+        return 1
+    fi
+
+    # --------------------- Определяем версию OpenWrt ---------------------
+    OPENWRT_VERSION=""
+    if [ -f /etc/openwrt_release ]; then
+        OPENWRT_VERSION=$(awk -F\' '/DISTRIB_RELEASE/ {print $2}' /etc/openwrt_release)
+    fi
+    [ -z "$OPENWRT_VERSION" ] && OPENWRT_VERSION="неизвестна"
+
+    # --------------------- Определяем архитектуру ---------------------
+    LOCAL_ARCH=$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release 2>/dev/null)
+    if [ -z "$LOCAL_ARCH" ]; then
+        if [ "$PKG_IS_APK" -eq 1 ]; then
+            LOCAL_ARCH=$(uname -m)
+        else
+            TMP=$(opkg print-architecture 2>/dev/null | grep -v "noarch")
+            [ -n "$TMP" ] && LOCAL_ARCH=$(echo "$TMP" | tail -n1 | awk '{print $2}')
+        fi
+    fi
+    [ -z "$LOCAL_ARCH" ] && LOCAL_ARCH="unknown"
+    USED_ARCH="$LOCAL_ARCH"
+
+    # --------------------- Ссылка на последний релиз ---------------------
+    LATEST_URL="https://github.com/remittor/zapret-openwrt/releases/download/v${ZAPRET_VERSION}/zapret_v${ZAPRET_VERSION}_${LOCAL_ARCH}.zip"
+
+    # --------------------- Определяем установленную версию ---------------------
+    INSTALLED_VER="не найдена"
+    if [ "$PKG_IS_APK" -eq 1 ]; then
+        TMP=$(apk list --installed 2>/dev/null | grep -o "^zapret-[0-9.]\+")
+        [ -n "$TMP" ] && INSTALLED_VER=$(echo "$TMP" | head -n1 | sed 's/zapret-//')
+    else
+        TMP=$(opkg list-installed zapret 2>/dev/null | awk '{sub(/-r[0-9]+$/, "", $3); print $3}')
+        [ -n "$TMP" ] && INSTALLED_VER=$(echo "$TMP" | head -n1)
+    fi
+
+    # --------------------- Статус nfq ---------------------
+    NFQ_RUN=$(pgrep -f nfqws 2>/dev/null | wc -l)
+    NFQ_ALL=$(/etc/init.d/zapret info 2>/dev/null | grep -o 'instance[0-9]\+' | wc -l)
+    NFQ_STAT=""
+    if [ "$NFQ_RUN" -ne 0 ] || [ "$NFQ_ALL" -ne 0 ]; then
+        if [ "$NFQ_RUN" -eq "$NFQ_ALL" ]; then
+            NFQ_CLR="$GREEN"
+        else
+            NFQ_CLR="$RED"
+        fi
+        NFQ_STAT="${NFQ_CLR}[${NFQ_RUN}/${NFQ_ALL}]${NC}"
+    fi
+
+    # --------------------- Статус Zapret ---------------------
+    ZAPRET_STATUS=""
+    if [ -f /etc/init.d/zapret ]; then
+        if /etc/init.d/zapret status 2>/dev/null | grep -qi running; then
+            ZAPRET_STATUS="${GREEN}запущен $NFQ_STAT${NC}"
+        else
+            ZAPRET_STATUS="${RED}остановлен${NC}"
+        fi
+    fi
+
+    # --------------------- Цвет версии ---------------------
+    if [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ]; then
+        INST_COLOR=$GREEN
+        INSTALLED_DISPLAY="$INSTALLED_VER"
+    else
+        INST_COLOR=$RED
+        INSTALLED_DISPLAY="$INSTALLED_VER"
+    fi
+}
 
 
 # ==========================================
