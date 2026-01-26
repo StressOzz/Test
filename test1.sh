@@ -377,28 +377,11 @@ set | grep '^strategy_v[0-9]\+ ()' | cut -d' ' -f1 | sort -V | while read f; do 
     # список сайтов
     URLS="$(cat <<EOF
 Госуслуги|https://gosuslugi.ru
-ЛК Госуслуги|https://esia.gosuslugi.ru
-Налоги|https://nalog.ru
-ЛК Налоги|https://lkfl2.nalog.ru
-ntc.party|https://ntc.party/uploads/default/original/1X/d79b1fc888df4f6a5764f6c65b79db9d1077abbd.png
-RuTube|https://rutube.ru
-YouTube|https://youtube.com
-Instagram|https://instagram.com
-Rutor|https://rutor.info
-Rutracker|https://rutracker.org
-Epidemz|https://epidemz.net.co
-NNM Club|https://nnmclub.to
 OpenWRT|https://openwrt.org
 Sxyprn|https://sxyprn.net
 Spankbang|https://ru.spankbang.com
 Pornhub|https://pornhub.com
-Discord|https://discord.com
-X|https://x.com
-Filmix|https://filmix.my
-Flight Radar|https://flightradar24.com
-cdn77|https://cdn77.com
-Play Google|https://play.google.com
-Ottai|https://ottai.com
+
 EOF
 )"
 
