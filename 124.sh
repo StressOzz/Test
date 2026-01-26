@@ -355,9 +355,9 @@ download_strategies 1; cp /opt/zapret_temp/str_flow.txt /opt/zapret_temp/str_tes
 do strategy_v$N >> "$STR_FILE" 2>/dev/null || break; done; sed -i '/#Y/d' "$STR_FILE"; TOTAL_STR=$(grep -c '^#' "$STR_FILE"); echo -e "${CYAN}Найдено стратегий: ${NC}$TOTAL_STR"
 URLS="$(cat <<EOF
 Госуслуги|https://gosuslugi.ru
-ЛК Госуслуги|https://esia.gosuslugi.ru
+ГосуслугиЛК|https://esia.gosuslugi.ru
 Налоги|https://nalog.ru
-ЛК Налоги|https://lkfl2.nalog.ru
+НалогиЛК|https://lkfl2.nalog.ru
 ntc.party|https://ntc.party/
 RuTube|https://rutube.ru
 Instagram|https://instagram.com
@@ -372,9 +372,9 @@ Pornhub|https://pornhub.com
 Discord|https://discord.com
 X|https://x.com
 Filmix|https://filmix.my
-Flight Radar|https://flightradar24.com
+FlightRadar24|https://flightradar24.com
 cdn77|https://cdn77.com
-Play Google|https://play.google.com
+GooglePlay|https://play.google.com
 Ottai|https://ottai.com
 US.CF-01|https://img.wzstats.gg/cleaver/gunFullDisplay
 US.CF-02|https://genshin.jmp.blue/characters/all
@@ -396,11 +396,11 @@ US.GC-01|https://api.usercentrics.eu/gvl/v3/en.json
 US.FST-01|https://www.jetblue.com/footer/footer-element-es2015.js
 CA.FST-01|https://www.cnn10.com/
 US.AKM-01|https://www.roxio.com/static/roxio/images/products/creator/nxt9/call-action-footer-bg.jpg
-PL.AKM-01|https://media-assets.stryker.com/is/image/stryker/gateway_1?$max_width_1410$
+PL.AKM-01|https://media-assets.stryker.com/is/image/stryker/gateway_1
 US.CDN77-01|https://cdn.eso.org/images/banner1920/eso2520a.jpg
 FR.CNTB-01|https://bandobaskent.com/logo.png
 NL.SW-01|https://www.velivole.fr/img/header.jpg
-US.CNST-01|https://cdn.xuansiwei.com/common/lib/font-awesome/4.7.0/fontawesome-webfont.woff2?v=4.7.0
+US.CNST-01|https://cdn.xuansiwei.com/common/lib/font-awesome/4.7.0/fontawesome-webfont.woff2
 EOF
 )"; TOTAL=$(echo "$URLS" | grep -c "|"); : > "$RESULTS"; check_url() { TEXT=$(echo "$1" | cut -d"|" -f1); LINK=$(echo "$1" | cut -d"|" -f2)
 if curl -Is --connect-timeout 2 --max-time 3 "$LINK" >/dev/null 2>&1; then echo 1 >> "$TMP_OK"; echo -e "${GREEN}[ OK ]${NC} $TEXT"; else echo -e "${RED}[FAIL]${NC} $TEXT"; fi; }
@@ -427,7 +427,7 @@ then echo -e "\n${RED}Включён ${NC}Flow Offloading${RED}!${NC}\n${NC}Zapr
 pgrep -f "/opt/zapret" >/dev/null 2>&1 && str_stp_zpr="Остановить" || str_stp_zpr="Запустить"; echo -e "\n${YELLOW}Установленная версия:    ${INST_COLOR}$INSTALLED_DISPLAY${NC}"; [ -n "$ZAPRET_STATUS" ] && echo -e "${YELLOW}Статус Zapret:${NC}           $ZAPRET_STATUS"
 [ -f "$DATE_FILE" ] && echo -e "${YELLOW}Резервная копия:${NC}         ${GREEN}сохранена"; show_script_50 && [ -n "$name" ] && echo -e "${YELLOW}Установлен скрипт:${NC}       $name"; grep -q "$Fin_IP_Dis" /etc/hosts && echo -e "${YELLOW}Финские IP для Discord:  ${GREEN}включены${NC}"
 [ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*88,500,1024-19293,19345-49999,50101-65535" "$CONF" && grep -q -- "--filter-udp=88,500,1024-19293,19345-49999,50101-65535" "$CONF" && echo -e "${YELLOW}Стратегия для игр:${NC}       ${GREEN}включена${NC}"
-[ -n "$DOH_STATUS" ] && opkg list-installed | grep -q '^https-dns-proxy ' && echo -e "${YELLOW}DNS over HTTPS:${NC}          $DOH_STATUS"; web_is_enabled && if web_is_enabled; then echo -e "${YELLOW}Доступ из браузера:${NC}      $LAN_IP:7681"; fi
+[ -n "$DOH_STATUS" ] && opkg list-installed | grep -q '^https-dns-proxy ' && echo -e "${YELLOW}DNS over HTTPS:${NC}          $DOH_STATUS"; web_is_enabled && if web_is_enabled; then echo -e "${YELLOW}Доступ из браузера:${NC}      $LAN_IP:7681"; fi; if hosts_enabled; then echo -e "${YELLOW}Домены в hosts:      ${GREEN}добавлены${NC}"; fi
 quic_is_blocked && if quic_is_blocked; then echo -e "${YELLOW}Блокировка QUIC:${NC}         ${GREEN}включена${NC}"; fi; if grep -q 'ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc
 then echo -e "${YELLOW}FIX для Flow Offloading:${NC} ${GREEN}включён${NC}"; fi; [ -f "$CONF" ] && line=$(grep -m1 '^#general' "$CONF") && [ -n "$line" ] && echo -e "${YELLOW}Используется стратегия:${NC}  ${CYAN}${line#?}${NC}"
 if [ -f "$CONF" ]; then current="$ver$( [ -n "$ver" ] && [ -n "$yv_ver" ] && echo " / " )$yv_ver"; DV=$(grep -o -E '^#[[:space:]]*Dv[0-9][0-9]*' "$CONF" | sed 's/^#[[:space:]]*/\/ /' | head -n1)
