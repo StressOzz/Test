@@ -355,9 +355,9 @@ download_strategies 1; cp /opt/zapret_temp/str_flow.txt /opt/zapret_temp/str_tes
 do strategy_v$N >> "$STR_FILE" 2>/dev/null || break; done; sed -i '/#Y/d' "$STR_FILE"; TOTAL_STR=$(grep -c '^#' "$STR_FILE"); echo -e "${CYAN}Найдено стратегий: ${NC}$TOTAL_STR"
 URLS="$(cat <<EOF
 Госуслуги|https://gosuslugi.ru
-ГосуслугиЛК|https://esia.gosuslugi.ru
+Госуслуги ЛК|https://esia.gosuslugi.ru
 Налоги|https://nalog.ru
-НалогиЛК|https://lkfl2.nalog.ru
+Налоги ЛК|https://lkfl2.nalog.ru
 ntc.party|https://ntc.party/
 RuTube|https://rutube.ru
 Instagram|https://instagram.com
@@ -373,7 +373,6 @@ Discord|https://discord.com
 X|https://x.com
 Filmix|https://filmix.my
 FlightRadar24|https://flightradar24.com
-cdn77|https://cdn77.com
 GooglePlay|https://play.google.com
 Ottai|https://ottai.com
 US.CF-01|https://img.wzstats.gg/cleaver/gunFullDisplay
