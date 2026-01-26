@@ -369,15 +369,13 @@ run_test_strategies() {
     # собираем стратегии
 
 
-TOTAL_STR=0
 
 for N in $(seq 1 100); do
     strategy_v$N >> "$STR_FILE" 2>/dev/null || break
-    TOTAL_STR=$((TOTAL_STR+1))
 done
 
 sed -i '/#Y/d' "$STR_FILE"
-
+TOTAL_STR=$(grep -c '^#' "$STR_FILE")
 echo -e "\033[36mНайдено стратегий: \033[33m$TOTAL_STR\033[0m"
 
 
