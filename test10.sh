@@ -352,14 +352,22 @@ echo -ne "\n${YELLOW}Выберите пункт:${NC} "; read -r choiceIP; case
 run_test_strategies() {
 
  # --- обработка Ctrl+C ---
-    cleanup() {
-        echo -e "\n${RED}Прервано пользователем!${NC}"
+cleanup() {
+    echo -e "\n${RED}Прервано пользователем!${NC}"
+    
+    # Восстановление только если резервная копия есть
+    if [ -f "$BACK" ]; then
         mv -f "$BACK" "$CONF"
         ZAPRET_RESTART
-        echo -e "${CYAN}Возврат в меню...${NC}"
-        return 1
-    }
-    trap cleanup SIGINT
+    fi
+
+    echo -e "${CYAN}Возврат в меню...${NC}"
+    
+    # отключаем trap и выходим
+    trap - SIGINT
+    return 1  # или exit 1 если это в скрипте
+}
+trap cleanup SIGINT
     # -----------------------
 
 
