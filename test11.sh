@@ -355,17 +355,18 @@ run_test_strategies() {
 cleanup() {
     echo -e "\n${RED}Прервано пользователем!${NC}"
     
-    # Восстановление только если резервная копия есть
+    # остановка всех фоновых процессов
+    pkill -P $$
+
+    # восстановление конфигурации
     if [ -f "$BACK" ]; then
         mv -f "$BACK" "$CONF"
         ZAPRET_RESTART
     fi
 
     echo -e "${CYAN}Возврат в меню...${NC}"
-    
-    # отключаем trap и выходим
     trap - SIGINT
-    return 1  # или exit 1 если это в скрипте
+    return 1
 }
 trap cleanup SIGINT
     # -----------------------
