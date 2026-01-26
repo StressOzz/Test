@@ -350,6 +350,20 @@ echo -ne "\n${YELLOW}Выберите пункт:${NC} "; read -r choiceIP; case
 # ==========================================
 
 run_test_strategies() {
+
+ # --- обработка Ctrl+C ---
+    cleanup() {
+        echo -e "\n${RED}Прервано пользователем!${NC}"
+        mv -f "$BACK" "$CONF"
+        ZAPRET_RESTART
+        echo -e "${CYAN}Возврат в меню...${NC}"
+        return 1
+    }
+    trap cleanup SIGINT
+    # -----------------------
+
+
+
     echo -e "\n${MAGENTA}Тест стратегий${NC}"
     echo -e "${CYAN}Собираем стратегии для теста${NC}"
 
@@ -468,7 +482,7 @@ skip && /^'\''$/ { skip=0; next }
         echo "$OK $NAME" >> "$RESULTS"
     done
 
-    echo -e "\n${YELLOW}Лучшие 10 стратегий:${NC}"
+    echo -e "\n${YELLOW}Лучшие стратегии:${NC}"
     sort -rn "$RESULTS" | head -n 10 | while IFS= read -r LINE; do
         COUNT=$(echo "$LINE" | cut -d" " -f1)
         NAME=$(echo "$LINE" | cut -d" " -f2-)
