@@ -142,7 +142,7 @@ hosts_clear; echo -e "Zapret ${GREEN}удалён!${NC}\n"; [ "$NO_PAUSE" != "1"
 # Подбор стратегии для Ютуб
 # ==========================================
 auto_stryou() { awk '/^[[:space:]]*option NFQWS_OPT '\''/{flag=1} flag{print}' "$CONF" > "$OLD_STR"; curl -fsSL "$STR_URL" -o "$TMP_LIST" || { echo -e "\n${RED}Не удалось скачать список${NC}\n"; PAUSE </dev/tty; return 1; }
-TOTAL=$(grep -c '^Yv[0-9]\+' "$TMP_LIST"); echo -e "\n${MAGENTA}Подбираем стратегию для ${NC}YouTube${NC}"; echo -e "${CYAN}Найдено ${NC}$TOTAL${CYAN} стратегий${NC}"; CURRENT_NAME=""; CURRENT_BODY=""; COUNT=0
+TOTAL=$(grep -c '^Yv[0-9]\+' "$TMP_LIST"); echo -e "\n${MAGENTA}Подбираем стратегию для ${NC}YouTube${NC}"; echo -e "${CYAN}Найдено стратегий: ${NC}$TOTAL"; CURRENT_NAME=""; CURRENT_BODY=""; COUNT=0
 while IFS= read -r LINE || [ -n "$LINE" ]; do if echo "$LINE" | grep -q '^Yv[0-9]\+'; then if [ -n "$CURRENT_NAME" ]; then COUNT=$((COUNT + 1))
 echo -e "\n${CYAN}Проверяем стратегию: ${NC}$CURRENT_NAME ($COUNT/$TOTAL)"; apply_strategy "$CURRENT_NAME" "$CURRENT_BODY"; STATUS=$(check_access); if [ "$STATUS" = "ok" ]; then echo -e "${GREEN}Видео на ПК открывается!${NC}\n${YELLOW}Проверьте работу ${NC}YouTube${YELLOW} на других устройствах!${NC}"
 echo -en "Enter${GREEN} - применить стратегию, ${NC}S/s${GREEN} - остановить, ${NC}N/n${GREEN} - продолжить подбор:${NC} "; read -r ANSWER </dev/tty
@@ -350,8 +350,8 @@ echo -ne "\n${YELLOW}Выберите пункт:${NC} "; read -r choiceIP; case
 # ==========================================
 
 run_test_strategies() {
-    echo -e "\n\033[35mТест стратегий\033[0m"
-    echo -e "\033[36mСобираем стратегии для теста\033[0m"
+    echo -e "\n${MAGENTA}Тест стратегий${NC}"
+    echo -e "${CYAN}Собираем стратегии для теста${NC}"
 
     download_strategies "1"
 
@@ -366,27 +366,20 @@ run_test_strategies() {
 
     PARALLEL=6
 
-    # собираем стратегии
+    for N in $(seq 1 100); do
+        strategy_v$N >> "$STR_FILE" 2>/dev/null || break
+    done
 
+    sed -i '/#Y/d' "$STR_FILE"
+    TOTAL_STR=$(grep -c '^#' "$STR_FILE")
+    echo -e "${CYAN}Найдено стратегий: ${NC}$TOTAL_STR"
 
-
-for N in $(seq 1 100); do
-    strategy_v$N >> "$STR_FILE" 2>/dev/null || break
-done
-
-sed -i '/#Y/d' "$STR_FILE"
-TOTAL_STR=$(grep -c '^#' "$STR_FILE")
-echo -e "\033[36mНайдено стратегий: \033[33m$TOTAL_STR\033[0m"
-
-
-    # список сайтов
     URLS="$(cat <<EOF
 Госуслуги|https://gosuslugi.ru
 OpenWRT|https://openwrt.org
 Sxyprn|https://sxyprn.net
 Spankbang|https://ru.spankbang.com
 Pornhub|https://pornhub.com
-
 EOF
 )"
 
@@ -399,9 +392,9 @@ EOF
 
         if curl -Is --connect-timeout 2 --max-time 3 "$LINK" >/dev/null 2>&1; then
             echo 1 >> "$TMP_OK"
-            echo -e "\033[32m[ OK ]\033[0m $TEXT"
+            echo -e "${GREEN}[ OK ]${NC} $TEXT"
         else
-            echo -e "\033[31m[FAIL]\033[0m $TEXT"
+            echo -e "${RED}[FAIL]${NC} $TEXT"
         fi
     }
 
@@ -424,20 +417,16 @@ $URLS
 EOF
 
         wait
-
         OK=$(wc -l < "$TMP_OK" | tr -d ' ')
         rm -f "$TMP_OK"
     }
 
-    # ===== перебор стратегий =====
     LINES=$(grep -n '^#' "$STR_FILE" | cut -d: -f1)
     CUR=0
 
     echo "$LINES" | while read START; do
         CUR=$((CUR+1))
-
         NEXT=$(echo "$LINES" | awk -v s="$START" '$1>s{print;exit}')
-
         if [ -z "$NEXT" ]; then
             sed -n "${START},\$p" "$STR_FILE" > "$TEMP_FILE"
         else
@@ -463,43 +452,40 @@ skip && /^'\''$/ { skip=0; next }
 
         mv "${CONF}.tmp" "$CONF"
 
-        # ===== прогресс =====
-        echo -e "\n\033[36mТестируем стратегию: \033[33m${NAME}\033[0m [$CUR/$TOTAL_STR]"
+        echo -e "\n${CYAN}Тестируем стратегию: ${YELLOW}${NAME}${NC} ($CUR/$TOTAL_STR)"
 
         ZAPRET_RESTART
 
         OK=0
         check_all_urls
 
-        if [ "$OK" -eq "$TOTAL" ]; then COLOR="\033[32m"
-        elif [ "$OK" -gt 0 ]; then COLOR="\033[33m"
-        else COLOR="\033[31m"; fi
+        if [ "$OK" -eq "$TOTAL" ]; then COLOR="${GREEN}"
+        elif [ "$OK" -gt 0 ]; then COLOR="${YELLOW}"
+        else COLOR="${RED}"; fi
 
-        echo -e "\033[36mРезультат теста: ${COLOR}$OK/$TOTAL\033[0m"
+        echo -e "${CYAN}Результат теста: ${COLOR}$OK/$TOTAL${NC}"
 
         echo "$OK $NAME" >> "$RESULTS"
     done
 
-    # ===== итог =====
-    echo -e "\n\033[33mЛучшие 10 стратегий\033[0m"
-
-sort -rn "$RESULTS" | head -n 10 | while IFS= read -r LINE; do
+    echo -e "\n${YELLOW}Лучшие 10 стратегий:${NC}"
+    sort -rn "$RESULTS" | head -n 10 | while IFS= read -r LINE; do
         COUNT=$(echo "$LINE" | cut -d" " -f1)
         NAME=$(echo "$LINE" | cut -d" " -f2-)
 
-        if [ "$COUNT" -eq "$TOTAL" ]; then COLOR="\033[32m"
-        elif [ "$COUNT" -gt 0 ]; then COLOR="\033[33m"
-        else COLOR="\033[31m"; fi
+        if [ "$COUNT" -eq "$TOTAL" ]; then COLOR="${GREEN}"
+        elif [ "$COUNT" -gt 0 ]; then COLOR="${YELLOW}"
+        else COLOR="${RED}"; fi
 
-        echo -e "${COLOR}${NAME}\033[0m → $COUNT/$TOTAL"
+        echo -e "${COLOR}${NAME}${NC} → $COUNT/$TOTAL"
     done
 
     mv -f "$BACK" "$CONF"
-
     echo
     ZAPRET_RESTART
     PAUSE
 }
+
 
 
 
