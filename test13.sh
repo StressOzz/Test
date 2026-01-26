@@ -12,6 +12,8 @@ TMP_LIST="/opt/zapret_yt_list.txt"; SAVED_STR="/opt/StrYou"; OLD_STR="/opt/StrOL
 Fin_IP_Dis="104\.25\.158\.178 finland[0-9]\{5\}\.discord\.media"
 TMP_SF="/opt/zapret_temp"; OUT="$TMP_SF/str_flow.txt"; ZIP="$TMP_SF/repo.zip"
 BACKUP_FILE="/opt/hosts_temp.txt"; HOSTLIST_FILE="/opt/zapret/ipset/zapret-hosts-user.txt"
+STR_FILE="/opt/zapret_temp/str_test.txt"; TEMP_FILE="/opt/zapret_temp/str_temp.txt"
+RESULTS="/opt/zapret_temp/zapret_bench.txt"; BACK="/opt/zapret_temp/zapret_back"; PARALLEL=8
 HOSTLIST_MIN_SIZE=1800000; FINAL_STR="/opt/StrFINAL"; NEW_STR="/opt/StrNEW"; HOSTS_USER="/opt/hosts-user.txt"
 EXCLUDE_FILE="/opt/zapret/ipset/zapret-hosts-user-exclude.txt"; fileDoH="/etc/config/https-dns-proxy"
 RKN_URL="https://raw.githubusercontent.com/IndeecFOX/zapret4rocket/refs/heads/master/extra_strats/TCP/RKN/List.txt"
@@ -236,7 +238,7 @@ if [ -n "$current" ]; then echo -e "${YELLOW}Используется страт
 [ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*88,500,1024-19293,19345-49999,50101-65535" "$CONF" && grep -q -- "--filter-udp=88,500,1024-19293,19345-49999,50101-65535" "$CONF" && echo -e "${YELLOW}Стратегия для игр:${NC} ${GREEN}включена${NC}"
 if hosts_enabled; then echo -e "${YELLOW}Домены в hosts: ${GREEN}добавлены${NC}\n"; else echo -e "${YELLOW}Домены в hosts: ${RED}отсутствуют${NC}\n"; fi
 echo -e "${CYAN}1) ${GREEN}Выбрать и установить стратегию ${NC}v1-v8\n${CYAN}2) ${GREEN}Выбрать и установить стратегию от ${NC}Flowseal\n${CYAN}3) ${GREEN}Выбрать и установить стратегию для ${NC}YouTube\n${CYAN}4) ${GREEN}Подобрать стратегию для ${NC}YouTube"
-echo -e "${CYAN}5) ${GREEN}Меню управления доменами в ${NC}hosts\n${CYAN}6) ${NC}$RKN_TEXT_MENU${NC}\n${CYAN}7) ${GREEN}$menu_game\n${CYAN}8) ${GREEN}Обновить список исключений${NC}\n${CYAN}9) ${GREEN}Протестировать все стратегии${NC}"
+echo -e "${CYAN}5) ${GREEN}Меню управления доменами в ${NC}hosts\n${CYAN}6) ${NC}$RKN_TEXT_MENU${NC}\n${CYAN}7) ${GREEN}$menu_game\n${CYAN}8) ${GREEN}Обновить список исключений${NC}\n${CYAN}9) ${GREEN}Тестирование стратегий${NC}"
 echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read choiceST; case "$choiceST" in 1) strategy_CHOUSE;; 2) flowseal_menu;; 3) choose_strategy_manual;; 4) auto_stryou;; 5) menu_hosts;; 9) run_test_strategies;;
 6) toggle_rkn_bypass; continue;; 7) fix_GAME;; 8) echo -e "\n${MAGENTA}Обновляем список исключений${NC}\n${CYAN}Останавливаем ${NC}Zapret"; /etc/init.d/zapret stop >/dev/null 2>&1; echo -e "${CYAN}Добавляем домены в исключения${NC}"
 rm -f "$EXCLUDE_FILE"; wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL" || echo -e "\n${RED}Не удалось загрузить exclude файл${NC}\n"; echo -e "${CYAN}Перезапускаем ${NC}Zapret"
@@ -348,29 +350,9 @@ echo -ne "\n${YELLOW}Выберите пункт:${NC} "; read -r choiceIP; case
 # ==========================================
 # Тест стратегий
 # ==========================================
-
-run_test_strategies() {
-    echo -e "\n${MAGENTA}Тест стратегий${NC}"
-    echo -e "${CYAN}Останавливаем${NC} Zapret"
-    /etc/init.d/zapret stop >/dev/null 2>&1
-    echo -e "${CYAN}Собираем стратегии для теста${NC}"
-    
-    download_strategies "1"
-    cp /opt/zapret_temp/str_flow.txt /opt/zapret_temp/str_test.txt
-    STR_FILE="/opt/zapret_temp/str_test.txt"
-    TEMP_FILE="/opt/zapret_temp/str_temp.txt"
-    RESULTS="/opt/zapret_temp/zapret_bench.txt"
-    BACK="/opt/zapret_temp/zapret_back"
-    cp "$OUT" "$STR_FILE"
-    cp "$CONF" "$BACK"
-    PARALLEL=8
-    for N in $(seq 1 100); do
-        strategy_v$N >> "$STR_FILE" 2>/dev/null || break
-    done
-    sed -i '/#Y/d' "$STR_FILE"
-    TOTAL_STR=$(grep -c '^#' "$STR_FILE")
-    echo -e "${CYAN}Найдено стратегий: ${NC}$TOTAL_STR"
-    
+run_test_strategies() { clear; echo -e "\n${MAGENTA}Тест стратегий${NC}"; echo -e "${CYAN}Останавливаем${NC} Zapret"; /etc/init.d/zapret stop >/dev/null 2>&1; echo -e "${CYAN}Собираем стратегии для теста${NC}"; download_strategies "1"
+cp /opt/zapret_temp/str_flow.txt /opt/zapret_temp/str_test.txt; cp "$OUT" "$STR_FILE"; cp "$CONF" "$BACK"; for N in $(seq 1 100); do strategy_v$N >> "$STR_FILE" 2>/dev/null || break; done
+sed -i '/#Y/d' "$STR_FILE"; TOTAL_STR=$(grep -c '^#' "$STR_FILE"); echo -e "${CYAN}Найдено стратегий: ${NC}$TOTAL_STR"
 URLS="$(cat <<EOF
 Госуслуги|https://gosuslugi.ru
 ЛК Госуслуги|https://esia.gosuslugi.ru
@@ -423,63 +405,20 @@ NL.SW-01 Scaleway|https://www.velivole.fr/img/header.jpg?t=0.7058447082956326
 US.CNST-01 Constant|https://cdn.xuansiwei.com/common/lib/font-awesome/4.7.0/fontawesome-webfont.woff2?v=4.7.0&t=0.45608957890091195
 EOF
 )"
-
-    TOTAL=$(echo "$URLS" | grep -c "|")
-    : > "$RESULTS"
-
-    check_url() {
-        TEXT=$(echo "$1" | cut -d"|" -f1)
-        LINK=$(echo "$1" | cut -d"|" -f2)
-
-        if curl -Is --connect-timeout 2 --max-time 3 "$LINK" >/dev/null 2>&1; then
-            echo 1 >> "$TMP_OK"
-            echo -e "${GREEN}[ OK ]${NC} $TEXT"
-        else
-            echo -e "${RED}[FAIL]${NC} $TEXT"
-        fi
-    }
-
-    check_all_urls() {
-        TMP_OK="/tmp/z_ok.$$"
-        : > "$TMP_OK"
-        RUN=0
-
-        while IFS= read -r URL; do
-            [ -z "$URL" ] && continue
-            check_url "$URL" &
-            RUN=$((RUN+1))
-
-            if [ "$RUN" -ge "$PARALLEL" ]; then
-                wait
-                RUN=0
-            fi
-        done <<EOF
+TOTAL=$(echo "$URLS" | grep -c "|"); : > "$RESULTS"
+check_url() { TEXT=$(echo "$1" | cut -d"|" -f1); LINK=$(echo "$1" | cut -d"|" -f2); if curl -Is --connect-timeout 2 --max-time 3 "$LINK" >/dev/null 2>&1; then
+echo 1 >> "$TMP_OK"; echo -e "${GREEN}[ OK ]${NC} $TEXT"; else echo -e "${RED}[FAIL]${NC} $TEXT"; fi; }
+check_all_urls() { TMP_OK="/tmp/z_ok.$$"; : > "$TMP_OK"; RUN=0; while IFS= read -r URL; do [ -z "$URL" ] && continue; check_url "$URL" & RUN=$((RUN+1))
+if [ "$RUN" -ge "$PARALLEL" ]; then wait; RUN=0; fi
+done <<EOF
 $URLS
 EOF
-
-        wait
-        OK=$(wc -l < "$TMP_OK" | tr -d ' ')
-        rm -f "$TMP_OK"
-    }
-
-    LINES=$(grep -n '^#' "$STR_FILE" | cut -d: -f1)
-    CUR=0
-
-    echo "$LINES" | while read START; do
-        CUR=$((CUR+1))
-        NEXT=$(echo "$LINES" | awk -v s="$START" '$1>s{print;exit}')
-        if [ -z "$NEXT" ]; then
-            sed -n "${START},\$p" "$STR_FILE" > "$TEMP_FILE"
-        else
-            sed -n "${START},$((NEXT-1))p" "$STR_FILE" > "$TEMP_FILE"
-        fi
-
-        BLOCK=$(cat "$TEMP_FILE")
-        NAME=$(head -n1 "$TEMP_FILE")
-        NAME="${NAME#\#}"
-
-        awk -v block="$BLOCK" '
-        BEGIN{skip=0}
+wait; OK=$(wc -l < "$TMP_OK" | tr -d ' '); rm -f "$TMP_OK"; }
+LINES=$(grep -n '^#' "$STR_FILE" | cut -d: -f1); CUR=0; echo "$LINES" | while read START; do CUR=$((CUR+1)); NEXT=$(echo "$LINES" | awk -v s="$START" '$1>s{print;exit}')
+if [ -z "$NEXT" ]; then sed -n "${START},\$p" "$STR_FILE" > "$TEMP_FILE"; else sed -n "${START},$((NEXT-1))p" "$STR_FILE" > "$TEMP_FILE"; fi
+BLOCK=$(cat "$TEMP_FILE"); NAME=$(head -n1 "$TEMP_FILE"); NAME="${NAME#\#}"
+awk -v block="$BLOCK" '
+BEGIN{skip=0}
 /option NFQWS_OPT '\''/ {
 print "\toption NFQWS_OPT '\''"
 print block
@@ -490,47 +429,11 @@ next
 skip && /^'\''$/ { skip=0; next }
 !skip { print }
 ' "$CONF" > "${CONF}.tmp"
-
-        mv "${CONF}.tmp" "$CONF"
-
-        echo -e "\n${CYAN}Тестируем стратегию: ${YELLOW}${NAME}${NC} ($CUR/$TOTAL_STR)"
-
-        ZAPRET_RESTART
-
-        OK=0
-        check_all_urls
-
-        if [ "$OK" -eq "$TOTAL" ]; then COLOR="${GREEN}"
-        elif [ "$OK" -gt 0 ]; then COLOR="${YELLOW}"
-        else COLOR="${RED}"; fi
-
-        echo -e "${CYAN}Результат теста: ${COLOR}$OK/$TOTAL${NC}"
-
-        echo "$OK $NAME" >> "$RESULTS"
-    done
-
-    echo -e "\n${YELLOW}Лучшие стратегии:${NC}"
-    sort -rn "$RESULTS" | head -n 10 | while IFS= read -r LINE; do
-        COUNT=$(echo "$LINE" | cut -d" " -f1)
-        NAME=$(echo "$LINE" | cut -d" " -f2-)
-
-        if [ "$COUNT" -eq "$TOTAL" ]; then COLOR="${GREEN}"
-        elif [ "$COUNT" -gt 0 ]; then COLOR="${YELLOW}"
-        else COLOR="${RED}"; fi
-
-        echo -e "${COLOR}${NAME}${NC} → $COUNT/$TOTAL"
-    done
-
-    mv -f "$BACK" "$CONF"
-    echo
-    ZAPRET_RESTART
-    PAUSE
-}
-
-
-
-
-
+mv "${CONF}.tmp" "$CONF"; echo -e "\n${CYAN}Тестируем стратегию: ${YELLOW}${NAME}${NC} ($CUR/$TOTAL_STR)"; ZAPRET_RESTART; OK=0; check_all_urls
+if [ "$OK" -eq "$TOTAL" ]; then COLOR="${GREEN}"; elif [ "$OK" -gt 0 ]; then COLOR="${YELLOW}"; else COLOR="${RED}"; fi; echo -e "${CYAN}Результат теста: ${COLOR}$OK/$TOTAL${NC}"
+echo "$OK $NAME" >> "$RESULTS"; done; echo -e "\n${YELLOW}Лучшие стратегии:${NC}"; sort -rn "$RESULTS" | head -n 10 | while IFS= read -r LINE; do COUNT=$(echo "$LINE" | cut -d" " -f1)
+NAME=$(echo "$LINE" | cut -d" " -f2-); if [ "$COUNT" -eq "$TOTAL" ]; then COLOR="${GREEN}"; elif [ "$COUNT" -gt 0 ]; then COLOR="${YELLOW}"; else COLOR="${RED}"; fi
+echo -e "${COLOR}${NAME}${NC} → $COUNT/$TOTAL"; done; mv -f "$BACK" "$CONF"; echo; ZAPRET_RESTART; PAUSE; }
 # ==========================================
 # Главное меню
 # ==========================================
