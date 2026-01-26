@@ -379,7 +379,7 @@ while type "strategy_v$N" >/dev/null 2>&1; do
 done
 
     sed -i '/#Y/d' "$STR_FILE"
-
+TOTAL_STR=$(grep -c '^#' "$STR_FILE")
     # ===== считаем сколько всего стратегий =====
     echo -e "\033[35mНайдено стратегий: \033[33m$TOTAL_STR\033[0m"
 
