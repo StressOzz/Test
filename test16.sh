@@ -350,9 +350,9 @@ echo -ne "\n${YELLOW}Выберите пункт:${NC} "; read -r choiceIP; case
 # ==========================================
 # Тест стратегий
 # ==========================================
-run_test_strategies() { clear; echo -e "${MAGENTA}Тест стратегий${NC}"; echo -e "${CYAN}Останавливаем${NC} Zapret"; /etc/init.d/zapret stop >/dev/null 2>&1; echo -e "${CYAN}Собираем стратегии для теста${NC}"; download_strategies "1"
-cp /opt/zapret_temp/str_flow.txt /opt/zapret_temp/str_test.txt; cp "$OUT" "$STR_FILE"; cp "$CONF" "$BACK"; for N in $(seq 1 100); do strategy_v$N >> "$STR_FILE" 2>/dev/null || break; done
-sed -i '/#Y/d' "$STR_FILE"; TOTAL_STR=$(grep -c '^#' "$STR_FILE"); echo -e "${CYAN}Найдено стратегий: ${NC}$TOTAL_STR"
+run_test_strategies() { echo; clear; echo -e "${MAGENTA}Тестирование стратегий${NC}"; echo -e "${CYAN}Останавливаем${NC} Zapret"; /etc/init.d/zapret stop >/dev/null 2>&1; echo -e "${CYAN}Собираем стратегии для теста${NC}"; 
+rm -rf "$TMP_SF"; download_strategies "1"; cp /opt/zapret_temp/str_flow.txt /opt/zapret_temp/str_test.txt; cp "$OUT" "$STR_FILE"; cp "$CONF" "$BACK"; for N in $(seq 1 100)
+do strategy_v$N >> "$STR_FILE" 2>/dev/null || break; done; sed -i '/#Y/d' "$STR_FILE"; TOTAL_STR=$(grep -c '^#' "$STR_FILE"); echo -e "${CYAN}Найдено стратегий: ${NC}$TOTAL_STR"
 URLS="$(cat <<EOF
 Госуслуги|https://gosuslugi.ru
 ЛК Госуслуги|https://esia.gosuslugi.ru
