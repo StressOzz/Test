@@ -350,7 +350,7 @@ echo -ne "\n${YELLOW}Выберите пункт:${NC} "; read -r choiceIP; case
 # ==========================================
 # Тест стратегий
 # ==========================================
-run_test_strategies() { clear; echo -e "\n${MAGENTA}Тест стратегий${NC}"; echo -e "${CYAN}Останавливаем${NC} Zapret"; /etc/init.d/zapret stop >/dev/null 2>&1; echo -e "${CYAN}Собираем стратегии для теста${NC}"; download_strategies "1"
+run_test_strategies() { clear; echo -e "${MAGENTA}Тест стратегий${NC}"; echo -e "${CYAN}Останавливаем${NC} Zapret"; /etc/init.d/zapret stop >/dev/null 2>&1; echo -e "${CYAN}Собираем стратегии для теста${NC}"; download_strategies "1"
 cp /opt/zapret_temp/str_flow.txt /opt/zapret_temp/str_test.txt; cp "$OUT" "$STR_FILE"; cp "$CONF" "$BACK"; for N in $(seq 1 100); do strategy_v$N >> "$STR_FILE" 2>/dev/null || break; done
 sed -i '/#Y/d' "$STR_FILE"; TOTAL_STR=$(grep -c '^#' "$STR_FILE"); echo -e "${CYAN}Найдено стратегий: ${NC}$TOTAL_STR"
 URLS="$(cat <<EOF
@@ -409,26 +409,11 @@ TOTAL=$(echo "$URLS" | grep -c "|"); : > "$RESULTS"
 check_url() { TEXT=$(echo "$1" | cut -d"|" -f1); LINK=$(echo "$1" | cut -d"|" -f2); if curl -Is --connect-timeout 2 --max-time 3 "$LINK" >/dev/null 2>&1; then
 echo 1 >> "$TMP_OK"; echo -e "${GREEN}[ OK ]${NC} $TEXT"; else echo -e "${RED}[FAIL]${NC} $TEXT"; fi; }
 check_all_urls() { TMP_OK="/tmp/z_ok.$$"; : > "$TMP_OK"; RUN=0; while IFS= read -r URL; do [ -z "$URL" ] && continue; check_url "$URL" & RUN=$((RUN+1))
-if [ "$RUN" -ge "$PARALLEL" ]; then wait; RUN=0; fi
-done <<EOF
-$URLS
-EOF
-wait; OK=$(wc -l < "$TMP_OK" | tr -d ' '); rm -f "$TMP_OK"; }
+if [ "$RUN" -ge "$PARALLEL" ]; then wait; RUN=0; fi; done <<< "$URLS"; wait; OK=$(wc -l < "$TMP_OK" | tr -d ' '); rm -f "$TMP_OK"; }
 LINES=$(grep -n '^#' "$STR_FILE" | cut -d: -f1); CUR=0; echo "$LINES" | while read START; do CUR=$((CUR+1)); NEXT=$(echo "$LINES" | awk -v s="$START" '$1>s{print;exit}')
 if [ -z "$NEXT" ]; then sed -n "${START},\$p" "$STR_FILE" > "$TEMP_FILE"; else sed -n "${START},$((NEXT-1))p" "$STR_FILE" > "$TEMP_FILE"; fi
 BLOCK=$(cat "$TEMP_FILE"); NAME=$(head -n1 "$TEMP_FILE"); NAME="${NAME#\#}"
-awk -v block="$BLOCK" '
-BEGIN{skip=0}
-/option NFQWS_OPT '\''/ {
-print "\toption NFQWS_OPT '\''"
-print block
-print "'\''"
-skip=1
-next
-}
-skip && /^'\''$/ { skip=0; next }
-!skip { print }
-' "$CONF" > "${CONF}.tmp"
+awk -v block="$BLOCK" 'BEGIN{skip=0} /option NFQWS_OPT '\''/ {printf "\toption NFQWS_OPT '\''\n%s\n'\''\n", block; skip=1; next} skip && /^'\''$/ {skip=0; next} !skip {print}' "$CONF" > "${CONF}.tmp"
 mv "${CONF}.tmp" "$CONF"; echo -e "\n${CYAN}Тестируем стратегию: ${YELLOW}${NAME}${NC} ($CUR/$TOTAL_STR)"; ZAPRET_RESTART; OK=0; check_all_urls
 if [ "$OK" -eq "$TOTAL" ]; then COLOR="${GREEN}"; elif [ "$OK" -gt 0 ]; then COLOR="${YELLOW}"; else COLOR="${RED}"; fi; echo -e "${CYAN}Результат теста: ${COLOR}$OK/$TOTAL${NC}"
 echo "$OK $NAME" >> "$RESULTS"; done; echo -e "\n${YELLOW}Лучшие стратегии:${NC}"; sort -rn "$RESULTS" | head -n 10 | while IFS= read -r LINE; do COUNT=$(echo "$LINE" | cut -d" " -f1)
