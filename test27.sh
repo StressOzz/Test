@@ -2,7 +2,7 @@
 # ==========================================
 # Zapret on remittor Manager by StressOzz
 # =========================================
-ZAPRET_MANAGER_VERSION="8.3"; ZAPRET_VERSION="72.20260125"; STR_VERSION_AUTOINSTALL="v6"
+ZAPRET_MANAGER_VERSION="8.4"; ZAPRET_VERSION="72.20260125"; STR_VERSION_AUTOINSTALL="v6"
 TEST_HOST="https://rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com"; LAN_IP=$(uci get network.lan.ipaddr)
 GREEN="\033[1;32m"; RED="\033[1;31m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"
 MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -238,7 +238,7 @@ if [ -n "$current" ]; then echo -e "${YELLOW}Используется страт
 [ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*88,500,1024-19293,19345-49999,50101-65535" "$CONF" && grep -q -- "--filter-udp=88,500,1024-19293,19345-49999,50101-65535" "$CONF" && echo -e "${YELLOW}Стратегия для игр:${NC} ${GREEN}включена${NC}"
 if hosts_enabled; then echo -e "${YELLOW}Домены в hosts: ${GREEN}добавлены${NC}\n"; else echo -e "${YELLOW}Домены в hosts: ${RED}отсутствуют${NC}\n"; fi
 echo -e "${CYAN}1) ${GREEN}Выбрать и установить стратегию ${NC}v1-v8\n${CYAN}2) ${GREEN}Выбрать и установить стратегию от ${NC}Flowseal\n${CYAN}3) ${GREEN}Выбрать и установить стратегию для ${NC}YouTube\n${CYAN}4) ${GREEN}Подобрать стратегию для ${NC}YouTube"
-echo -e "${CYAN}5) ${GREEN}Меню управления доменами в ${NC}hosts\n${CYAN}6) ${NC}$RKN_TEXT_MENU${NC}\n${CYAN}7) ${GREEN}$menu_game\n${CYAN}8) ${GREEN}Обновить список исключений${NC}\n${CYAN}9) ${GREEN}Тестирование стратегий${NC}"
+echo -e "${CYAN}5) ${GREEN}Меню управления доменами в ${NC}hosts\n${CYAN}6) ${NC}$RKN_TEXT_MENU${NC}\n${CYAN}7) ${GREEN}$menu_game\n${CYAN}8) ${GREEN}Обновить список исключений${NC}\n${CYAN}9) ${GREEN}Тестирование всех стратегий${NC}"
 echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read choiceST; case "$choiceST" in 1) strategy_CHOUSE;; 2) flowseal_menu;; 3) choose_strategy_manual;; 4) auto_stryou;; 5) menu_hosts;; 9) run_test_strategies;;
 6) toggle_rkn_bypass; continue;; 7) fix_GAME;; 8) echo -e "\n${MAGENTA}Обновляем список исключений${NC}\n${CYAN}Останавливаем ${NC}Zapret"; /etc/init.d/zapret stop >/dev/null 2>&1; echo -e "${CYAN}Добавляем домены в исключения${NC}"
 rm -f "$EXCLUDE_FILE"; wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL" || echo -e "\n${RED}Не удалось загрузить exclude файл${NC}\n"; echo -e "${CYAN}Перезапускаем ${NC}Zapret"
@@ -360,7 +360,6 @@ URLS="$(cat <<EOF
 ЛК Налоги|https://lkfl2.nalog.ru
 ntc.party|https://ntc.party/uploads/default/original/1X/d79b1fc888df4f6a5764f6c65b79db9d1077abbd.png
 RuTube|https://rutube.ru
-YouTube|https://youtube.com
 Instagram|https://instagram.com
 Rutor|https://rutor.info
 Rutracker|https://rutracker.org
@@ -416,10 +415,9 @@ if [ -z "$NEXT" ]; then sed -n "${START},\$p" "$STR_FILE" > "$TEMP_FILE"; else s
 BLOCK=$(cat "$TEMP_FILE"); NAME=$(head -n1 "$TEMP_FILE"); NAME="${NAME#\#}"
 awk -v block="$BLOCK" 'BEGIN{skip=0} /option NFQWS_OPT '\''/ {printf "\toption NFQWS_OPT '\''\n%s\n'\''\n", block; skip=1; next} skip && /^'\''$/ {skip=0; next} !skip {print}' "$CONF" > "${CONF}.tmp"
 mv "${CONF}.tmp" "$CONF"; echo -e "\n${CYAN}Тестируем стратегию: ${YELLOW}${NAME}${NC} ($CUR/$TOTAL_STR)"; ZAPRET_RESTART; OK=0; check_all_urls
-if [ "$OK" -eq "$TOTAL" ]; then COLOR="${GREEN}"; elif [ "$OK" -gt 0 ]; then COLOR="${YELLOW}"; else COLOR="${RED}"; fi; echo -e "${CYAN}Результат теста: ${COLOR}$OK/$TOTAL${NC}"
-echo "$OK $NAME" >> "$RESULTS"; done; echo -e "\n${YELLOW}Лучшие стратегии:${NC}"; sort -rn "$RESULTS" | head -n 10 | while IFS= read -r LINE; do COUNT=$(echo "$LINE" | cut -d" " -f1)
-NAME=$(echo "$LINE" | cut -d" " -f2-); if [ "$COUNT" -eq "$TOTAL" ]; then COLOR="${GREEN}"; elif [ "$COUNT" -gt 0 ]; then COLOR="${YELLOW}"; else COLOR="${RED}"; fi
-echo -e "${COLOR}${NAME}${NC} → $COUNT/$TOTAL"; done; mv -f "$BACK" "$CONF"; echo; ZAPRET_RESTART; PAUSE; }
+if [ "$OK" -eq "$TOTAL" ]; then COLOR="${GREEN}"; elif [ "$OK" -gt 0 ]; then COLOR="${YELLOW}"; else COLOR="${RED}"; fi; echo -e "${CYAN}Результат теста: ${COLOR}$OK/$TOTAL${NC}"; echo "$OK $NAME" >> "$RESULTS"; done
+echo -e "\n${GREEN}Тестирование завершено!${NC}"; echo -e "\n${YELLOW}Лучшие стратегии:${NC}"; sort -rn "$RESULTS" | head -n 10 | while IFS= read -r LINE; do COUNT=$(echo "$LINE" | cut -d" " -f1); NAME=$(echo "$LINE" | cut -d" " -f2-)
+if [ "$COUNT" -eq "$TOTAL" ]; then COLOR="${GREEN}"; elif [ "$COUNT" -gt 0 ]; then COLOR="${YELLOW}"; else COLOR="${RED}"; fi; echo -e "${COLOR}${NAME}${NC} → $COUNT/$TOTAL"; done; mv -f "$BACK" "$CONF"; echo; ZAPRET_RESTART; PAUSE; }
 # ==========================================
 # Главное меню
 # ==========================================
