@@ -367,7 +367,12 @@ run_test_strategies() {
     PARALLEL=6
 
     # собираем стратегии
-grep -o '^strategy_v[0-9]\+()' "$0" | sed 's/()//' | sort -V | while read f; do "$f" >> "$STR_FILE"; done
+
+
+    for N in 1 2 3 4 5 6 7 8 ; do
+        strategy_v$N >> "$STR_FILE"
+    done
+
     sed -i '/#Y/d' "$STR_FILE"
 
     # ===== считаем сколько всего стратегий =====
