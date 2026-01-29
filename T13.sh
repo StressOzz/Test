@@ -125,8 +125,15 @@ install_Zapret() {
 
     FILE_NAME=$(basename "$LATEST_URL")
 
-    # unzip
-    command -v unzip >/dev/null 2>&1 || install_pkg unzip unzip || return
+# Проверка unzip
+if ! command -v unzip >/dev/null 2>&1; then
+    echo -e "${CYAN}Устанавливаем ${NC}unzip"
+    if [ "$PKG_IS_APK" -eq 1 ]; then
+        apk add unzip >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить unzip!${NC}\n"; PAUSE; return; }
+    else
+        opkg install unzip >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить unzip!${NC}\n"; PAUSE; return; }
+    fi
+fi
 
     # Скачиваем архив
     echo -e "${CYAN}Скачиваем архив ${NC}$FILE_NAME"
