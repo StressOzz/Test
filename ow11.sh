@@ -79,14 +79,14 @@ install_Zapret() {
     # Проверяем unzip
     if ! command -v unzip >/dev/null 2>&1; then
         echo -e "${CYAN}Устанавливаем ${NC}unzip"
-        apk add unzip >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить unzip!${NC}\n"; PAUSE; return; }
+        apk add unzip || { echo -e "\n${RED}Не удалось установить unzip!${NC}\n"; PAUSE; return; }
     fi
 
     echo -e "${CYAN}Скачиваем архив ${NC}$FILE_NAME"
     wget -q -U "Mozilla/5.0" -O "$FILE_NAME" "$LATEST_URL" || { echo -e "\n${RED}Не удалось скачать ${NC}$FILE_NAME\n"; PAUSE; return; }
 
     echo -e "${CYAN}Распаковываем архив${NC}"
-    unzip -o "$FILE_NAME" >/dev/null
+    unzip -o "$FILE_NAME"
 
 # Сначала zapret
 if [ -f "$WORKDIR/apk/zapret-*.apk" ]; then
@@ -94,7 +94,7 @@ if [ -f "$WORKDIR/apk/zapret-*.apk" ]; then
         [ -f "$PKG" ] || continue
         chmod 644 "$PKG"
         echo -e "${CYAN}Устанавливаем ${NC}$PKG"
-        apk add --allow-untrusted "$PKG" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить $PKG!${NC}\n"; PAUSE; return; }
+        apk add --allow-untrusted "$PKG" || { echo -e "\n${RED}Не удалось установить $PKG!${NC}\n"; PAUSE; return; }
     done
 fi
 
@@ -104,7 +104,7 @@ if [ -f "$WORKDIR/apk/luci-app-zapret-*.apk" ]; then
         [ -f "$PKG" ] || continue
         chmod 644 "$PKG"
         echo -e "${CYAN}Устанавливаем ${NC}$PKG"
-        apk add --allow-untrusted "$PKG" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить $PKG!${NC}\n"; PAUSE; return; }
+        apk add --allow-untrusted "$PKG" || { echo -e "\n${RED}Не удалось установить $PKG!${NC}\n"; PAUSE; return; }
     done
 fi
 
