@@ -88,15 +88,62 @@ get_versions() {
 # ==========================================
 # Установка Zapret
 # ==========================================
-install_Zapret() { local NO_PAUSE=$1; get_versions; if [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ]; then echo -e "\nZapret ${GREEN}уже установлен!${NC}\n"; PAUSE; return; fi
-[ "$NO_PAUSE" != "1" ] && echo; echo -e "${MAGENTA}Устанавливаем ZAPRET${NC}"; if [ -f /etc/init.d/zapret ]; then echo -e "${CYAN}Останавливаем ${NC}zapret" && /etc/init.d/zapret stop >/dev/null 2>&1; for pid in $(pgrep -f /opt/zapret 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done; fi
-echo -e "${CYAN}Обновляем список пакетов${NC}"; opkg update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; PAUSE; return; }
-mkdir -p "$WORKDIR"; rm -f "$WORKDIR"/* 2>/dev/null; cd "$WORKDIR" || return; FILE_NAME=$(basename "$LATEST_URL"); if ! command -v unzip >/dev/null 2>&1; then
-echo -e "${CYAN}Устанавливаем ${NC}unzip" && opkg install unzip >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить unzip!${NC}\n"; PAUSE; return; }; fi
-echo -e "${CYAN}Скачиваем архив ${NC}$FILE_NAME"; wget -q -U "Mozilla/5.0" -O "$FILE_NAME" "$LATEST_URL" || { echo -e "\n${RED}Не удалось скачать ${NC}$FILE_NAME\n"; PAUSE; return; }
-echo -e "${CYAN}Распаковываем архив${NC}"; unzip -o "$FILE_NAME" >/dev/null; for PKG in zapret_*.ipk luci-app-zapret_*.ipk; do [ -f "$PKG" ] && echo -e "${CYAN}Устанавливаем ${NC}$PKG" && opkg install --force-reinstall "$PKG" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить $PKG!${NC}\n"
-PAUSE; return; } ; done; echo -e "${CYAN}Удаляем временные файлы${NC}"; cd /; rm -rf "$WORKDIR" /tmp/*.ipk /tmp/*.zip /tmp/*zapret* 2>/dev/null; if [ -f /etc/init.d/zapret ]; then echo -e "Zapret ${GREEN}установлен!${NC}\n"
-[ "$NO_PAUSE" != "1" ] && PAUSE; else echo -e "\n${RED}Zapret не был установлен!${NC}\n"; PAUSE; fi; }
+install_Zapret() {
+    local NO_PAUSE=$1
+    get_versions
+    if [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ]; then
+        echo -e "\nZapret ${GREEN}уже установлен!${NC}\n"
+        PAUSE
+        return
+    fi
+
+    [ "$NO_PAUSE" != "1" ] && echo
+    echo -e "${MAGENTA}Устанавливаем ZAPRET${NC}"
+
+    if [ -f /etc/init.d/zapret ]; then
+        echo -e "${CYAN}Останавливаем ${NC}zapret"
+        /etc/init.d/zapret stop >/dev/null 2>&1
+        for pid in $(pgrep -f /opt/zapret 2>/dev/null); do
+            kill -9 "$pid" 2>/dev/null
+        done
+    fi
+
+    echo -e "${CYAN}Обновляем список пакетов${NC}"
+    opkg update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; PAUSE; return; }
+
+    mkdir -p "$WORKDIR"
+    rm -f "$WORKDIR"/* 2>/dev/null
+    cd "$WORKDIR" || return
+
+    FILE_NAME=$(basename "$LATEST_URL")
+
+    if ! command -v unzip >/dev/null 2>&1; then
+        echo -e "${CYAN}Устанавливаем ${NC}unzip"
+        opkg install unzip >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить unzip!${NC}\n"; PAUSE; return; }
+    fi
+
+    echo -e "${CYAN}Скачиваем архив ${NC}$FILE_NAME"
+    wget -q -U "Mozilla/5.0" -O "$FILE_NAME" "$LATEST_URL" || { echo -e "\n${RED}Не удалось скачать ${NC}$FILE_NAME\n"; PAUSE; return; }
+
+    echo -e "${CYAN}Распаковываем архив${NC}"
+    unzip -o "$FILE_NAME" >/dev/null
+
+    for PKG in zapret_*.ipk luci-app-zapret_*.ipk; do
+        [ -f "$PKG" ] && echo -e "${CYAN}Устанавливаем ${NC}$PKG" && opkg install --force-reinstall "$PKG" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить $PKG!${NC}\n"; PAUSE; return; }
+    done
+
+    echo -e "${CYAN}Удаляем временные файлы${NC}"
+    cd /
+    rm -rf "$WORKDIR" /tmp/*.ipk /tmp/*.zip /tmp/*zapret* 2>/dev/null
+
+    if [ -f /etc/init.d/zapret ]; then
+        echo -e "Zapret ${GREEN}установлен!${NC}\n"
+        [ "$NO_PAUSE" != "1" ] && PAUSE
+    else
+        echo -e "\n${RED}Zapret не был установлен!${NC}\n"
+        PAUSE
+    fi
+}
 # ==========================================
 # Меню настройки Discord
 # ==========================================
