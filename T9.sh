@@ -37,19 +37,24 @@ fi
 
 # ----------------- Функция определения версии -----------------
 get_versions() {
+    # ----------------- Определяем архитектуру -----------------
     LOCAL_ARCH=$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release)
     [ -z "$LOCAL_ARCH" ] && LOCAL_ARCH=$(opkg print-architecture | grep -v "noarch" | sort -k3 -n | tail -n1 | awk '{print $2}')
     USED_ARCH="$LOCAL_ARCH"
     LATEST_URL="https://github.com/remittor/zapret-openwrt/releases/download/v${ZAPRET_VERSION}/zapret_v${ZAPRET_VERSION}_${LOCAL_ARCH}.zip"
 
+    # ----------------- Определяем установленную версию -----------------
     if [ "$PKG_IS_APK" -eq 1 ]; then
-        INSTALLED_VER=$(apk info | grep -E '^zapret' | awk -F'-' '{print $2}' | head -n1)
+        # apk: берём zapret*, оставляем только цифры версии
+        INSTALLED_VER=$(apk info -v | grep '^zapret-' | head -n1 | cut -d'-' -f2 | sed 's/-r[0-9]\+$//')
         [ -z "$INSTALLED_VER" ] && INSTALLED_VER="не найдена"
     else
+        # opkg: берём zapret_*.ipk
         INSTALLED_VER=$(opkg list-installed zapret 2>/dev/null | awk '{sub(/-r[0-9]+$/, "", $3); print $3}')
         [ -z "$INSTALLED_VER" ] && INSTALLED_VER="не найдена"
     fi
 
+    # ----------------- Статус NFQ -----------------
     NFQ_RUN=$(pgrep -f nfqws 2>/dev/null | wc -l)
     NFQ_RUN=${NFQ_RUN:-0}
     NFQ_ALL=$(/etc/init.d/zapret info 2>/dev/null | grep -o 'instance[0-9]\+' | wc -l)
@@ -61,15 +66,18 @@ get_versions() {
         NFQ_STAT="${NFQ_CLR}[${NFQ_RUN}/${NFQ_ALL}]${NC}"
     fi
 
+    # ----------------- Статус Zapret -----------------
     if [ -f /etc/init.d/zapret ]; then
         /etc/init.d/zapret status >/dev/null 2>&1 && ZAPRET_STATUS="${GREEN}запущен $NFQ_STAT${NC}" || ZAPRET_STATUS="${RED}остановлен${NC}"
     else
         ZAPRET_STATUS=""
     fi
 
+    # ----------------- Цвет установленной версии -----------------
     [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ] && INST_COLOR=$GREEN || INST_COLOR=$RED
     INSTALLED_DISPLAY=${INSTALLED_VER:-"не найдена"}
 }
+
 
 # ----------------- Функция установки пакета -----------------
 install_pkg() {
