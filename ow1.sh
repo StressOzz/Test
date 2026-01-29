@@ -84,7 +84,8 @@ get_versions() {
         INST_COLOR=$RED
         INSTALLED_DISPLAY=$([ "$INSTALLED_VER" != "не найдена" ] && echo "$INSTALLED_VER" || echo "$INSTALLED_VER")
     fi
-}# ==========================================
+}
+# ==========================================
 # Установка Zapret
 # ==========================================
 install_Zapret() { local NO_PAUSE=$1; get_versions; if [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ]; then echo -e "\nZapret ${GREEN}уже установлен!${NC}\n"; PAUSE; return; fi
