@@ -33,7 +33,7 @@ get_versions() {
     [ -z "$LOCAL_ARCH" ] && LOCAL_ARCH=$(apk info -vv | grep -v "noarch" | sort -k3 -n | tail -n1 | awk '{print $2}')
     USED_ARCH="$LOCAL_ARCH"
     LATEST_URL="https://github.com/remittor/zapret-openwrt/releases/download/v${ZAPRET_VERSION}/zapret_v${ZAPRET_VERSION}_${LOCAL_ARCH}.zip"
-    INSTALLED_VER=$(apk info zapret | awk '{sub(/-r[0-9]+$/, "", $1); print $1}')
+    INSTALLED_VER=$(apk info zapret | grep '^zapret-[0-9]' | head -n1 | sed 's/^zapret-\([0-9.]\+\).*$/\1/')
     [ -z "$INSTALLED_VER" ] && INSTALLED_VER="не найдена"
     NFQ_RUN=$(pgrep -f nfqws | wc -l)
     NFQ_ALL=$(/etc/init.d/zapret info 2>/dev/null | grep -o 'instance[0-9]\+' | wc -l)
