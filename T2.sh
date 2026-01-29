@@ -28,6 +28,7 @@ PAUSE() { echo "Нажмите Enter..."; read dummy; }; BACKUP_DIR="/opt/zapret
 # ==========================================
 # Получение версии
 # ==========================================
+# -------------------- Функция определения версий и статуса --------------------
 get_versions() {
     # Определяем архитектуру
     LOCAL_ARCH=$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release)
@@ -47,17 +48,20 @@ get_versions() {
     fi
 
     # Статус NFQ
-    NFQ_RUN=$(pgrep -f nfqws | wc -l)
+    NFQ_RUN=$(pgrep -f nfqws 2>/dev/null | wc -l)
+    NFQ_RUN=${NFQ_RUN:-0}
     NFQ_ALL=$(/etc/init.d/zapret info 2>/dev/null | grep -o 'instance[0-9]\+' | wc -l)
+    NFQ_ALL=${NFQ_ALL:-0}
+
     NFQ_STAT=""
-    [ "$NFQ_RUN" -ne 0 ] || [ "$NFQ_ALL" -ne 0 ] && {
+    if [ "$NFQ_ALL" -gt 0 ]; then
         [ "$NFQ_RUN" -eq "$NFQ_ALL" ] && NFQ_CLR="$GREEN" || NFQ_CLR="$RED"
         NFQ_STAT="${NFQ_CLR}[${NFQ_RUN}/${NFQ_ALL}]${NC}"
-    }
+    fi
 
     # Статус zapret
     if [ -f /etc/init.d/zapret ]; then
-        ZAPRET_STATUS=$(/etc/init.d/zapret status 2>/dev/null | grep -qi running && echo "${GREEN}запущен $NFQ_STAT${NC}" || echo "${RED}остановлен${NC}")
+        /etc/init.d/zapret status 2>/dev/null | grep -qi running && ZAPRET_STATUS="${GREEN}запущен $NFQ_STAT${NC}" || ZAPRET_STATUS="${RED}остановлен${NC}"
     else
         ZAPRET_STATUS=""
     fi
@@ -68,11 +72,12 @@ get_versions() {
         INSTALLED_DISPLAY="$INSTALLED_VER"
     else
         INST_COLOR=$RED
-        INSTALLED_DISPLAY=$([ "$INSTALLED_VER" != "не найдена" ] && echo "$INSTALLED_VER" || echo "$INSTALLED_VER")
+        INSTALLED_DISPLAY=${INSTALLED_VER:-"не найдена"}
     fi
 }
+
 # ==========================================
-# Установка Zapret
+# Установки Zapret
 # ==========================================
 install_pkg() {
     local pkg_file="$1"
@@ -91,19 +96,23 @@ install_Zapret() {
 
     if [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ]; then
         echo -e "\nZapret ${GREEN}уже установлен!${NC}\n"
-        PAUSE
+        [ "$NO_PAUSE" != "1" ] && PAUSE
         return
     fi
 
     [ "$NO_PAUSE" != "1" ] && echo
     echo -e "${MAGENTA}Устанавливаем ZAPRET${NC}"
 
+    # Остановка предыдущего zapret
     if [ -f /etc/init.d/zapret ]; then
         echo -e "${CYAN}Останавливаем ${NC}zapret"
         /etc/init.d/zapret stop >/dev/null 2>&1
-        for pid in $(pgrep -f /opt/zapret 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done
+        for pid in $(pgrep -f /opt/zapret 2>/dev/null); do
+            kill -9 "$pid" 2>/dev/null
+        done
     fi
 
+    # Обновляем список пакетов
     echo -e "${CYAN}Обновляем список пакетов${NC}"
     if [ "$PKG_IS_APK" -eq 1 ]; then
         apk update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении apk!${NC}\n"; PAUSE; return; }
@@ -111,30 +120,39 @@ install_Zapret() {
         opkg update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении opkg!${NC}\n"; PAUSE; return; }
     fi
 
+    # Подготовка рабочей папки
     mkdir -p "$WORKDIR"
     rm -f "$WORKDIR"/* 2>/dev/null
     cd "$WORKDIR" || return
+
     FILE_NAME=$(basename "$LATEST_URL")
 
+    # Устанавливаем unzip
     if ! command -v unzip >/dev/null 2>&1; then
         echo -e "${CYAN}Устанавливаем ${NC}unzip"
         install_pkg unzip || return
     fi
 
+    # Скачиваем архив
     echo -e "${CYAN}Скачиваем архив ${NC}$FILE_NAME"
     wget -q -U "Mozilla/5.0" -O "$FILE_NAME" "$LATEST_URL" || { echo -e "\n${RED}Не удалось скачать ${NC}$FILE_NAME\n"; PAUSE; return; }
 
+    # Распаковываем
     echo -e "${CYAN}Распаковываем архив${NC}"
     unzip -o "$FILE_NAME" >/dev/null
 
+    # Устанавливаем пакеты
     for PKG in zapret_*.ipk luci-app-zapret_*.ipk; do
-        [ -f "$PKG" ] && install_pkg "$PKG" || continue
+        [ -f "$PKG" ] || continue
+        install_pkg "$PKG" || return
     done
 
+    # Чистим временные файлы
     echo -e "${CYAN}Удаляем временные файлы${NC}"
     cd /
     rm -rf "$WORKDIR" /tmp/*.ipk /tmp/*.zip /tmp/*zapret* 2>/dev/null
 
+    # Проверка установки
     if [ -f /etc/init.d/zapret ]; then
         echo -e "Zapret ${GREEN}установлен!${NC}\n"
         [ "$NO_PAUSE" != "1" ] && PAUSE
