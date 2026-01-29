@@ -59,7 +59,7 @@ install_Zapret() {
     [ "$NO_PAUSE" != "1" ] && echo
     echo -e "${MAGENTA}Устанавливаем ZAPRET${NC}"
 
-    # Останавливаем старый Zapret, если есть
+    # Останавливаем старый Zapret
     if [ -f /etc/init.d/zapret ]; then
         echo -e "${CYAN}Останавливаем ${NC}zapret"
         /etc/init.d/zapret stop >/dev/null 2>&1
@@ -69,7 +69,6 @@ install_Zapret() {
     echo -e "${CYAN}Обновляем список пакетов${NC}"
     apk update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; PAUSE; return; }
 
-    # Создаём рабочую папку и скачиваем архив
     mkdir -p "$WORKDIR"
     rm -rf "$WORKDIR"/* 2>/dev/null
     cd "$WORKDIR" || return
@@ -79,34 +78,38 @@ install_Zapret() {
     # Проверяем unzip
     if ! command -v unzip >/dev/null 2>&1; then
         echo -e "${CYAN}Устанавливаем ${NC}unzip"
-        apk add unzip || { echo -e "\n${RED}Не удалось установить unzip!${NC}\n"; PAUSE; return; }
+        apk add unzip >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить unzip!${NC}\n"; PAUSE; return; }
     fi
 
     echo -e "${CYAN}Скачиваем архив ${NC}$FILE_NAME"
     wget -q -U "Mozilla/5.0" -O "$FILE_NAME" "$LATEST_URL" || { echo -e "\n${RED}Не удалось скачать ${NC}$FILE_NAME\n"; PAUSE; return; }
 
     echo -e "${CYAN}Распаковываем архив${NC}"
-    unzip -o "$FILE_NAME"
+    unzip -o "$FILE_NAME" >/dev/null
 
-# Сначала zapret
-if [ -f "$WORKDIR/apk/zapret-*.apk" ]; then
-    for PKG in "$WORKDIR"/apk/zapret-*.apk; do
-        [ -f "$PKG" ] || continue
-        chmod 644 "$PKG"
-        echo -e "${CYAN}Устанавливаем ${NC}$PKG"
-        apk add --allow-untrusted "$PKG" || { echo -e "\n${RED}Не удалось установить $PKG!${NC}\n"; PAUSE; return; }
-    done
-fi
+    # --- Сначала основной пакет zapret ---
+    if [ -f "$WORKDIR/apk/zapret-*.apk" ]; then
+        for PKG in "$WORKDIR"/apk/zapret-*.apk; do
+            [ -f "$PKG" ] || continue
+            chmod 644 "$PKG"
+            echo -e "${CYAN}Устанавливаем ${NC}$PKG"
+            apk add --allow-untrusted "$PKG" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить $PKG!${NC}\n"; PAUSE; return; }
+        done
+    else
+        echo -e "\n${RED}Основной пакет zapret не найден!${NC}\n"
+        PAUSE
+        return
+    fi
 
-# Потом luci-app-zapret
-if [ -f "$WORKDIR/apk/luci-app-zapret-*.apk" ]; then
-    for PKG in "$WORKDIR"/apk/luci-app-zapret-*.apk; do
-        [ -f "$PKG" ] || continue
-        chmod 644 "$PKG"
-        echo -e "${CYAN}Устанавливаем ${NC}$PKG"
-        apk add --allow-untrusted "$PKG" || { echo -e "\n${RED}Не удалось установить $PKG!${NC}\n"; PAUSE; return; }
-    done
-fi
+    # --- Потом luci-app-zapret ---
+    if [ -f "$WORKDIR/apk/luci-app-zapret-*.apk" ]; then
+        for PKG in "$WORKDIR"/apk/luci-app-zapret-*.apk; do
+            [ -f "$PKG" ] || continue
+            chmod 644 "$PKG"
+            echo -e "${CYAN}Устанавливаем ${NC}$PKG"
+            apk add --allow-untrusted "$PKG" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить $PKG!${NC}\n"; PAUSE; return; }
+        done
+    fi
 
     echo -e "${CYAN}Удаляем временные файлы${NC}"
     cd /
@@ -121,6 +124,7 @@ fi
         PAUSE
     fi
 }
+
 # ==========================================
 # Меню настройки Discord
 # ==========================================
