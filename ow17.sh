@@ -87,25 +87,21 @@ install_Zapret() {
     echo -e "${CYAN}Распаковываем архив${NC}"
     unzip -o "$FILE_NAME" >/dev/null
 
-    # --- Устанавливаем основной пакет zapret ---
-    ZAPRET_PKG=$(ls "$WORKDIR"/apk/zapret-*.apk 2>/dev/null | head -n1)
-    if [ -n "$ZAPRET_PKG" ] && [ -f "$ZAPRET_PKG" ]; then
-        chmod 644 "$ZAPRET_PKG"
-        echo -e "${CYAN}Устанавливаем ${NC}$ZAPRET_PKG"
-        apk add --allow-untrusted "$ZAPRET_PKG" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить $ZAPRET_PKG!${NC}\n"; PAUSE; return; }
-    else
-        echo -e "\n${RED}Основной пакет zapret не найден!${NC}\n"
-        PAUSE
-        return
-    fi
+# --- Устанавливаем основной пакет zapret ---
+ZAPRET_PKG=$(ls "$WORKDIR"/apk/zapret-*.apk 2>/dev/null | head -n1)
+if [ -n "$ZAPRET_PKG" ] && [ -f "$ZAPRET_PKG" ]; then
+    chmod 644 "$ZAPRET_PKG"
+    echo -e "${CYAN}Устанавливаем ${NC}$(basename "$ZAPRET_PKG")"
+    apk add --allow-untrusted "$ZAPRET_PKG" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить $(basename "$ZAPRET_PKG")!${NC}\n"; PAUSE; return; }
+fi
 
-    # --- Потом luci-app-zapret ---
-    LUCIPKG=$(ls "$WORKDIR"/apk/luci-app-zapret-*.apk 2>/dev/null | head -n1)
-    if [ -n "$LUCIPKG" ] && [ -f "$LUCIPKG" ]; then
-        chmod 644 "$LUCIPKG"
-        echo -e "${CYAN}Устанавливаем ${NC}$LUCIPKG"
-        apk add --allow-untrusted "$LUCIPKG" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить $LUCIPKG!${NC}\n"; PAUSE; return; }
-    fi
+# --- Потом luci-app-zapret ---
+LUCIPKG=$(ls "$WORKDIR"/apk/luci-app-zapret-*.apk 2>/dev/null | head -n1)
+if [ -n "$LUCIPKG" ] && [ -f "$LUCIPKG" ]; then
+    chmod 644 "$LUCIPKG"
+    echo -e "${CYAN}Устанавливаем ${NC}$(basename "$LUCIPKG")"
+    apk add --allow-untrusted "$LUCIPKG" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить $(basename "$LUCIPKG")!${NC}\n"; PAUSE; return; }
+fi
 
     echo -e "${CYAN}Удаляем временные файлы${NC}"
     cd /
