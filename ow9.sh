@@ -94,7 +94,7 @@ install_Zapret() {
             [ -f "$PKG" ] || { echo -e "${RED}Файл $PKG не найден!${NC}"; continue; }
             chmod 644 "$PKG"
             echo -e "${CYAN}Устанавливаем ${NC}$PKG"
-            apk add --allow-untrusted "$PKG" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить $PKG!${NC}\n"; PAUSE; return; }
+            apk add --allow-untrusted "$PKG" || { echo -e "\n${RED}Не удалось установить $PKG!${NC}\n"; PAUSE; return; }
         done
     else
         echo -e "\n${RED}Папка apk с пакетами не найдена!${NC}\n"
