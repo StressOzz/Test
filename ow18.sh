@@ -28,96 +28,26 @@ PAUSE() { echo "Нажмите Enter..."; read dummy; }; BACKUP_DIR="/opt/zapret
 # ==========================================
 # Получение версии
 # ==========================================
-get_versions() {
-    LOCAL_ARCH=$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release)
-    [ -z "$LOCAL_ARCH" ] && LOCAL_ARCH=$(apk info -vv | grep -v "noarch" | sort -k3 -n | tail -n1 | awk '{print $2}')
-    USED_ARCH="$LOCAL_ARCH"
-    LATEST_URL="https://github.com/remittor/zapret-openwrt/releases/download/v${ZAPRET_VERSION}/zapret_v${ZAPRET_VERSION}_${LOCAL_ARCH}.zip"
-    INSTALLED_VER=$(apk info zapret | grep '^zapret-[0-9]' | head -n1 | sed 's/^zapret-\([0-9.]\+\).*$/\1/')
-    [ -z "$INSTALLED_VER" ] && INSTALLED_VER="не найдена"
-    NFQ_RUN=$(pgrep -f nfqws | wc -l)
-    NFQ_ALL=$(/etc/init.d/zapret info 2>/dev/null | grep -o 'instance[0-9]\+' | wc -l)
-    NFQ_STAT=""
-    [ "$NFQ_RUN" -ne 0 ] || [ "$NFQ_ALL" -ne 0 ] && { [ "$NFQ_RUN" -eq "$NFQ_ALL" ] && NFQ_CLR="$GREEN" || NFQ_CLR="$RED"; NFQ_STAT="${NFQ_CLR}[${NFQ_RUN}/${NFQ_ALL}]${NC}"; }
-    ZAPRET_STATUS=$([ -f /etc/init.d/zapret ] && /etc/init.d/zapret status 2>/dev/null | grep -qi running && echo "${GREEN}запущен $NFQ_STAT${NC}" || echo "${RED}остановлен${NC}")
-    [ -f /etc/init.d/zapret ] || ZAPRET_STATUS=""
-    [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ] && INST_COLOR=$GREEN INSTALLED_DISPLAY="$INSTALLED_VER" || { INST_COLOR=$RED; INSTALLED_DISPLAY=$([ "$INSTALLED_VER" != "не найдена" ] && echo "$INSTALLED_VER" || echo "$INSTALLED_VER"); }
-}
+get_versions() { LOCAL_ARCH=$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release); [ -z "$LOCAL_ARCH" ] && LOCAL_ARCH=$(apk info -vv | grep -v "noarch" | sort -k3 -n | tail -n1 | awk '{print $2}')
+USED_ARCH="$LOCAL_ARCH"; LATEST_URL="https://github.com/remittor/zapret-openwrt/releases/download/v${ZAPRET_VERSION}/zapret_v${ZAPRET_VERSION}_${LOCAL_ARCH}.zip"
+INSTALLED_VER=$(apk info zapret | grep '^zapret-[0-9]' | head -n1 | sed 's/^zapret-\([0-9.]\+\).*$/\1/'); [ -z "$INSTALLED_VER" ] && INSTALLED_VER="не найдена"
+NFQ_RUN=$(pgrep -f nfqws | wc -l); NFQ_ALL=$(/etc/init.d/zapret info 2>/dev/null | grep -o 'instance[0-9]\+' | wc -l); NFQ_STAT=""
+[ "$NFQ_RUN" -ne 0 ] || [ "$NFQ_ALL" -ne 0 ] && { [ "$NFQ_RUN" -eq "$NFQ_ALL" ] && NFQ_CLR="$GREEN" || NFQ_CLR="$RED"; NFQ_STAT="${NFQ_CLR}[${NFQ_RUN}/${NFQ_ALL}]${NC}"; }
+ZAPRET_STATUS=$([ -f /etc/init.d/zapret ] && /etc/init.d/zapret status 2>/dev/null | grep -qi running && echo "${GREEN}запущен $NFQ_STAT${NC}" || echo "${RED}остановлен${NC}")
+[ -f /etc/init.d/zapret ] || ZAPRET_STATUS=""; [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ] && INST_COLOR=$GREEN INSTALLED_DISPLAY="$INSTALLED_VER" || { INST_COLOR=$RED; INSTALLED_DISPLAY=$([ "$INSTALLED_VER" != "не найдена" ] && echo "$INSTALLED_VER" || echo "$INSTALLED_VER"); }; }
 # ==========================================
 # Установка Zapret
 # ==========================================
-install_Zapret() {
-    local NO_PAUSE=$1
-    get_versions
-
-    if [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ]; then
-        echo -e "\nZapret ${GREEN}уже установлен!${NC}\n"
-        PAUSE
-        return
-    fi
-
-    [ "$NO_PAUSE" != "1" ] && echo
-    echo -e "${MAGENTA}Устанавливаем ZAPRET${NC}"
-
-    # Останавливаем старый Zapret
-    if [ -f /etc/init.d/zapret ]; then
-        echo -e "${CYAN}Останавливаем ${NC}zapret"
-        /etc/init.d/zapret stop >/dev/null 2>&1
-        for pid in $(pgrep -f /opt/zapret 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done
-    fi
-
-    echo -e "${CYAN}Обновляем список пакетов${NC}"
-    apk update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; PAUSE; return; }
-
-    mkdir -p "$WORKDIR"
-    rm -rf "$WORKDIR"/* 2>/dev/null
-    cd "$WORKDIR" || return
-
-    FILE_NAME=$(basename "$LATEST_URL")
-
-    # Проверяем unzip
-    if ! command -v unzip >/dev/null 2>&1; then
-        echo -e "${CYAN}Устанавливаем ${NC}unzip"
-        apk add unzip >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить unzip!${NC}\n"; PAUSE; return; }
-    fi
-
-    echo -e "${CYAN}Скачиваем архив ${NC}$FILE_NAME"
-    wget -q -U "Mozilla/5.0" -O "$FILE_NAME" "$LATEST_URL" || { echo -e "\n${RED}Не удалось скачать ${NC}$FILE_NAME\n"; PAUSE; return; }
-
-    echo -e "${CYAN}Распаковываем архив${NC}"
-    unzip -o "$FILE_NAME" >/dev/null
-
-# --- Устанавливаем основной пакет zapret ---
-ZAPRET_PKG=$(ls "$WORKDIR"/apk/zapret-*.apk 2>/dev/null | head -n1)
-if [ -n "$ZAPRET_PKG" ] && [ -f "$ZAPRET_PKG" ]; then
-    chmod 644 "$ZAPRET_PKG"
-    echo -e "${CYAN}Устанавливаем ${NC}$(basename "$ZAPRET_PKG")"
-    apk add --allow-untrusted "$ZAPRET_PKG" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить $(basename "$ZAPRET_PKG")!${NC}\n"; PAUSE; return; }
-fi
-
-# --- Потом luci-app-zapret ---
-LUCIPKG=$(ls "$WORKDIR"/apk/luci-app-zapret-*.apk 2>/dev/null | head -n1)
-if [ -n "$LUCIPKG" ] && [ -f "$LUCIPKG" ]; then
-    chmod 644 "$LUCIPKG"
-    echo -e "${CYAN}Устанавливаем ${NC}$(basename "$LUCIPKG")"
-    apk add --allow-untrusted "$LUCIPKG" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить $(basename "$LUCIPKG")!${NC}\n"; PAUSE; return; }
-fi
-
-    echo -e "${CYAN}Удаляем временные файлы${NC}"
-    cd /
-    rm -rf "$WORKDIR" /tmp/*.apk /tmp/*.zip /tmp/*zapret* 2>/dev/null
-
-    # Проверяем установку
-    if [ -f /etc/init.d/zapret ]; then
-        echo -e "Zapret ${GREEN}установлен!${NC}\n"
-        [ "$NO_PAUSE" != "1" ] && PAUSE
-    else
-        echo -e "\n${RED}Zapret не был установлен!${NC}\n"
-        PAUSE
-    fi
-}
-
-
+install_Zapret() { local NO_PAUSE=$1; get_versions; if [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ]; then echo -e "\nZapret ${GREEN}уже установлен!${NC}\n"; PAUSE; return; fi
+[ "$NO_PAUSE" != "1" ] && echo; echo -e "${MAGENTA}Устанавливаем ZAPRET${NC}"; if [ -f /etc/init.d/zapret ]; then echo -e "${CYAN}Останавливаем ${NC}zapret"; /etc/init.d/zapret stop >/dev/null 2>&1
+for pid in $(pgrep -f /opt/zapret 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done; fi; echo -e "${CYAN}Обновляем список пакетов${NC}"; apk update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; PAUSE; return; }
+mkdir -p "$WORKDIR"; rm -rf "$WORKDIR"/* 2>/dev/null; cd "$WORKDIR" || return; FILE_NAME=$(basename "$LATEST_URL"); if ! command -v unzip >/dev/null 2>&1; then echo -e "${CYAN}Устанавливаем ${NC}unzip"; apk add unzip >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить unzip!${NC}\n"; PAUSE; return; }; fi
+echo -e "${CYAN}Скачиваем архив ${NC}$FILE_NAME"; wget -q -U "Mozilla/5.0" -O "$FILE_NAME" "$LATEST_URL" || { echo -e "\n${RED}Не удалось скачать ${NC}$FILE_NAME\n"; PAUSE; return; }; echo -e "${CYAN}Распаковываем архив${NC}"
+unzip -o "$FILE_NAME" >/dev/null; ZAPRET_PKG=$(ls "$WORKDIR"/apk/zapret-*.apk 2>/dev/null | head -n1); if [ -n "$ZAPRET_PKG" ] && [ -f "$ZAPRET_PKG" ]; then chmod 644 "$ZAPRET_PKG"; echo -e "${CYAN}Устанавливаем ${NC}$(basename "$ZAPRET_PKG")"
+apk add --allow-untrusted "$ZAPRET_PKG" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить $(basename "$ZAPRET_PKG")!${NC}\n"; PAUSE; return; }; fi; LUCIPKG=$(ls "$WORKDIR"/apk/luci-app-zapret-*.apk 2>/dev/null | head -n1)
+if [ -n "$LUCIPKG" ] && [ -f "$LUCIPKG" ]; then chmod 644 "$LUCIPKG"; echo -e "${CYAN}Устанавливаем ${NC}$(basename "$LUCIPKG")"; apk add --allow-untrusted "$LUCIPKG" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить $(basename "$LUCIPKG")!${NC}\n"; PAUSE; return; }; fi
+echo -e "${CYAN}Удаляем временные файлы${NC}"; cd /; rm -rf "$WORKDIR" /tmp/*.apk /tmp/*.zip /tmp/*zapret* 2>/dev/null; if [ -f /etc/init.d/zapret ]; then echo -e "Zapret ${GREEN}установлен!${NC}\n"; [ "$NO_PAUSE" != "1" ] && PAUSE
+else echo -e "\n${RED}Zapret не был установлен!${NC}\n"; PAUSE; fi; }
 # ==========================================
 # Меню настройки Discord
 # ==========================================
@@ -207,32 +137,11 @@ echo -e "Zapret ${GREEN}запущен!${NC}\n"; else echo -e "\n${RED}Zapret н
 # ==========================================
 # Удаление Zapret
 # ==========================================
-uninstall_zapret() {
-    local NO_PAUSE=$1
-    [ "$NO_PAUSE" != "1" ] && echo
-    echo -e "${MAGENTA}Удаляем ZAPRET${NC}\n${CYAN}Останавливаем ${NC}zapret\n${CYAN}Убиваем процессы${NC}"
-
-    /etc/init.d/zapret stop >/dev/null 2>&1
-    for pid in $(pgrep -f /opt/zapret 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done
-
-    echo -e "${CYAN}Удаляем пакеты${NC}"
-    apk del zapret luci-app-zapret >/dev/null 2>&1
-
-    echo -e "${CYAN}Удаляем временные файлы${NC}"
-    rm -rf /opt/zapret /etc/config/zapret /etc/firewall.zapret /etc/init.d/zapret /tmp/*zapret* /var/run/*zapret* /tmp/*.zip 2>/dev/null
-
-    crontab -l 2>/dev/null | grep -v -i "zapret" | crontab - 2>/dev/null
-
-    nft list tables 2>/dev/null | awk '{print $2}' | grep -E '(zapret|ZAPRET)' | while read t; do
-        [ -n "$t" ] && nft delete table "$t" 2>/dev/null
-    done
-
-    rm -rf $FINAL_STR $NEW_STR $OLD_STR $SAVED_STR $TMP_LIST $HOSTS_USER $BACKUP_FILE $TMP_SF
-
-    hosts_clear
-    echo -e "Zapret ${GREEN}удалён!${NC}\n"
-    [ "$NO_PAUSE" != "1" ] && PAUSE
-}
+uninstall_zapret() { local NO_PAUSE=$1; [ "$NO_PAUSE" != "1" ] && echo; echo -e "${MAGENTA}Удаляем ZAPRET${NC}\n${CYAN}Останавливаем ${NC}zapret\n${CYAN}Убиваем процессы${NC}"; /etc/init.d/zapret stop >/dev/null 2>&1
+for pid in $(pgrep -f /opt/zapret 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done; echo -e "${CYAN}Удаляем пакеты${NC}"; apk del zapret luci-app-zapret >/dev/null 2>&1; echo -e "${CYAN}Удаляем временные файлы${NC}"
+rm -rf /opt/zapret /etc/config/zapret /etc/firewall.zapret /etc/init.d/zapret /tmp/*zapret* /var/run/*zapret* /tmp/*.zip 2>/dev/null; crontab -l 2>/dev/null | grep -v -i "zapret" | crontab - 2>/dev/null
+nft list tables 2>/dev/null | awk '{print $2}' | grep -E '(zapret|ZAPRET)' | while read t; do [ -n "$t" ] && nft delete table "$t" 2>/dev/null; done
+rm -rf $FINAL_STR $NEW_STR $OLD_STR $SAVED_STR $TMP_LIST $HOSTS_USER $BACKUP_FILE $TMP_SF; hosts_clear; echo -e "Zapret ${GREEN}удалён!${NC}\n"; [ "$NO_PAUSE" != "1" ] && PAUSE; }
 # ==========================================
 # Подбор стратегии для Ютуб
 # ==========================================
