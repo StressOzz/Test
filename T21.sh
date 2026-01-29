@@ -354,7 +354,7 @@ remove_block() { while IFS= read -r line; do [ -z "$line" ] && continue; sed -i 
 toggle_block() { if status_block "$1"; then remove_block "$1"; echo -e "\n${CYAN}Удаляем и применяем${NC}"; else add_block "$1"; echo -e "\n${CYAN}Добавляем и применяем${NC}"; fi; /etc/init.d/dnsmasq restart >/dev/null 2>&1; echo -e "${GREEN}Готово!${NC}\n"; PAUSE; }
 toggle_all() { if status_block "$ALL_BLOCKS"; then remove_block "$ALL_BLOCKS"; echo -e "\n${CYAN}Удаляем и применяем${NC}"; else add_block "$ALL_BLOCKS"; echo -e "\n${CYAN}Добавляем и применяем${NC}"; fi; /etc/init.d/dnsmasq restart >/dev/null 2>&1; echo -e "${GREEN}Готово!${NC}\n"; PAUSE; }
 menu_hosts() {
-    get_state() { status_block "$1" && echo "Удалить" || echo "Добавить"; }
+    get_state() { status_block "$1" && echo "Удалить " || echo "Добавить"; }
 
     while true; do
         clear
