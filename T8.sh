@@ -166,7 +166,7 @@ install_Zapret() {
     rm -rf "$WORKDIR" /tmp/*.ipk /tmp/*.zip /tmp/*zapret* 2>/dev/null
 
     printf "%b\n" "Zapret ${GREEN}установлен!${NC}"
-    [ "$NO_PAUSE" != "1" ] && read -r
+    [ "$NO_PAUSE" != "1" ] && PAUSE
 }
 # ==========================================
 # Меню настройки Discord
@@ -257,11 +257,59 @@ echo -e "Zapret ${GREEN}запущен!${NC}\n"; else echo -e "\n${RED}Zapret н
 # ==========================================
 # Удаление Zapret
 # ==========================================
-uninstall_zapret() { local NO_PAUSE=$1; [ "$NO_PAUSE" != "1" ] && echo; echo -e "${MAGENTA}Удаляем ZAPRET${NC}\n${CYAN}Останавливаем ${NC}zapret\n${CYAN}Убиваем процессы${NC}"
-/etc/init.d/zapret stop >/dev/null 2>&1; for pid in $(pgrep -f /opt/zapret 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done; echo -e "${CYAN}Удаляем пакеты${NC}"; opkg --force-removal-of-dependent-packages --autoremove remove zapret luci-app-zapret >/dev/null 2>&1
-echo -e "${CYAN}Удаляем временные файлы${NC}"; rm -rf /opt/zapret /etc/config/zapret /etc/firewall.zapret /etc/init.d/zapret /tmp/*zapret* /var/run/*zapret* /tmp/*.ipk /tmp/*.zip 2>/dev/null; crontab -l 2>/dev/null | grep -v -i "zapret" | crontab - 2>/dev/null
-nft list tables 2>/dev/null | awk '{print $2}' | grep -E '(zapret|ZAPRET)' | while read t; do [ -n "$t" ] && nft delete table "$t" 2>/dev/null; done;  rm -rf $FINAL_STR $NEW_STR $OLD_STR $SAVED_STR $TMP_LIST $HOSTS_USER $BACKUP_FILE $TMP_SF
-hosts_clear; echo -e "Zapret ${GREEN}удалён!${NC}\n"; [ "$NO_PAUSE" != "1" ] && PAUSE; }
+# ----------------- Удаление пакета -----------------
+pkg_remove() {
+    local pkg_name="$1"
+
+    if [ "$PKG_IS_APK" -eq 1 ]; then
+        apk del "$pkg_name" >/dev/null 2>&1 || true
+    else
+        opkg remove --force-depends "$pkg_name" >/dev/null 2>&1 || true
+    fi
+}
+
+# ----------------- Функция удаления Zapret -----------------
+uninstall_zapret() {
+    local NO_PAUSE=$1
+    [ "$NO_PAUSE" != "1" ] && echo
+
+    printf "%b\n" "${MAGENTA}Удаляем ZAPRET${NC}"
+    printf "%b\n" "${CYAN}Останавливаем ${NC}zapret"
+    /etc/init.d/zapret stop >/dev/null 2>&1
+
+    printf "%b\n" "${CYAN}Убиваем процессы${NC}"
+    for pid in $(pgrep -f /opt/zapret 2>/dev/null); do
+        kill -9 "$pid" 2>/dev/null
+    done
+
+    printf "%b\n" "${CYAN}Удаляем пакеты${NC}"
+    # 1️⃣ Сначала основной zapret
+    pkg_remove zapret
+    # 2️⃣ Потом LuCI
+    pkg_remove luci-app-zapret
+
+    printf "%b\n" "${CYAN}Удаляем временные файлы${NC}"
+    rm -rf /opt/zapret /etc/config/zapret /etc/firewall.zapret /etc/init.d/zapret \
+           /tmp/*zapret* /var/run/*zapret* /tmp/*.ipk /tmp/*.zip 2>/dev/null
+
+    # Чистим cron
+    crontab -l 2>/dev/null | grep -v -i "zapret" | crontab - 2>/dev/null
+
+    # Чистим nftables
+    nft list tables 2>/dev/null | awk '{print $2}' | grep -E '(zapret|ZAPRET)' | while read t; do
+        [ -n "$t" ] && nft delete table "$t" 2>/dev/null
+    done
+
+    # Чистим остаточные файлы из переменных (если определены)
+    rm -rf "${FINAL_STR:-}" "${NEW_STR:-}" "${OLD_STR:-}" "${SAVED_STR:-}" \
+           "${TMP_LIST:-}" "${HOSTS_USER:-}" "${BACKUP_FILE:-}" "${TMP_SF:-}" 2>/dev/null
+
+    # Чистим hosts
+    hosts_clear
+
+    printf "%b\n" "Zapret ${GREEN}удалён!${NC}\n"
+    [ "$NO_PAUSE" != "1" ] && PAUSE
+}
 # ==========================================
 # Подбор стратегии для Ютуб
 # ==========================================
