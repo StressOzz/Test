@@ -1,5 +1,6 @@
 #!/bin/sh
 GREEN="\033[1;32m"; RED="\033[1;31m"; NC="\033[0m"; CONF="/etc/config/zapret"
+if command -v apk >/dev/null 2>&1; then PKG_IS_APK=1; else PKG_IS_APK=0; fi
 if ! command -v curl >/dev/null 2>&1; then echo -e "\n${GREEN}Устанавливаем ${NC}curl"
 if command -v apk >/dev/null 2>&1; then apk update >/dev/null 2>&1 && apk add curl >/dev/null 2>&1
 else opkg update >/dev/null 2>&1 && opkg install curl >/dev/null 2>&1; fi; fi
