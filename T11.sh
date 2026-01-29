@@ -78,20 +78,21 @@ get_versions() {
     INSTALLED_DISPLAY=${INSTALLED_VER:-"не найдена"}
 }
 
-
-# ----------------- Функция установки пакета -----------------
+# ==========================================
+# Установка Zapret
+# ==========================================
 install_pkg() {
-    local pkg_file="$1"
+    local display_name="$1"  # имя для вывода
+    local pkg_file="$2"      # путь к файлу
     if [ "$PKG_IS_APK" -eq 1 ]; then
-        printf "%b\n" "${CYAN}Устанавливаем ${NC}$pkg_file"
-        apk add --allow-untrusted "$pkg_file" >/dev/null 2>&1 || { printf "%b\n" "${RED}Не удалось установить $pkg_file!${NC}"; return 1; }
+        printf "%b\n" "${CYAN}Устанавливаем ${NC}$display_name"
+        apk add --allow-untrusted "$pkg_file" >/dev/null 2>&1 || { printf "%b\n" "${RED}Не удалось установить $display_name!${NC}"; return 1; }
     else
-        printf "%b\n" "${CYAN}Устанавливаем ${NC}$pkg_file"
-        opkg install --force-reinstall "$pkg_file" >/dev/null 2>&1 || { printf "%b\n" "${RED}Не удалось установить $pkg_file!${NC}"; return 1; }
+        printf "%b\n" "${CYAN}Устанавливаем ${NC}$display_name"
+        opkg install --force-reinstall "$pkg_file" >/dev/null 2>&1 || { printf "%b\n" "${RED}Не удалось установить $display_name!${NC}"; return 1; }
     fi
 }
 
-# ----------------- Функция установки Zapret -----------------
 install_Zapret() {
     local NO_PAUSE=$1
     get_versions
@@ -125,7 +126,7 @@ install_Zapret() {
     FILE_NAME=$(basename "$LATEST_URL")
 
     # unzip
-    command -v unzip >/dev/null 2>&1 || install_pkg unzip || return
+    command -v unzip >/dev/null 2>&1 || install_pkg unzip unzip || return
 
     # Скачиваем архив
     printf "%b\n" "${CYAN}Скачиваем архив ${NC}$FILE_NAME"
@@ -143,13 +144,13 @@ install_Zapret() {
         for PKG in "$PKG_PATH"/zapret*; do
             [ -f "$PKG" ] || continue
             echo "$PKG" | grep -q "luci" && continue
-            install_pkg "$PKG" || return
+            install_pkg "$(basename "$PKG")" "$PKG" || return
         done
 
         # 2️⃣ Потом luci*
         for PKG in "$PKG_PATH"/luci*; do
             [ -f "$PKG" ] || continue
-            install_pkg "$PKG" || return
+            install_pkg "$(basename "$PKG")" "$PKG" || return
         done
 
     else
@@ -158,13 +159,13 @@ install_Zapret() {
         # 1️⃣ Сначала zapret_*.ipk
         for PKG in "$PKG_PATH"/zapret_*.ipk; do
             [ -f "$PKG" ] || continue
-            install_pkg "$PKG" || return
+            install_pkg "$(basename "$PKG")" "$PKG" || return
         done
 
         # 2️⃣ Потом luci-app-zapret_*.ipk
         for PKG in "$PKG_PATH"/luci-app-zapret_*.ipk; do
             [ -f "$PKG" ] || continue
-            install_pkg "$PKG" || return
+            install_pkg "$(basename "$PKG")" "$PKG" || return
         done
     fi
 
@@ -176,6 +177,7 @@ install_Zapret() {
     printf "%b\n" "Zapret ${GREEN}установлен!${NC}"
     [ "$NO_PAUSE" != "1" ] && PAUSE
 }
+
 # ==========================================
 # Меню настройки Discord
 # ==========================================
