@@ -20,7 +20,7 @@ RKN_URL="https://raw.githubusercontent.com/IndeecFOX/zapret4rocket/refs/heads/ma
 EXCLUDE_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/zapret-hosts-user-exclude.txt"
 HOSTS_FILE="/etc/hosts"; HOSTS_LIST="45.155.204.190 gemini.google.com|130.255.77.28 ntc.party|30.255.77.28 ntc.party|173.245.58.219 rutor.info d.rutor.info|185.39.18.98 lib.rus.ec www.lib.rus.ec
 57.144.222.34 instagram.com www.instagram.com|157.240.9.174 instagram.com www.instagram.com|157.240.245.174 instagram.com www.instagram.com|157.240.205.174 instagram.com www.instagram.com"
-hosts_enabled() { grep -q "4pda.to\|instagram.com\|rutor.info\|lib.rus.ec\|ntc.party" /etc/hosts; }
+hosts_enabled() { grep -q "gemini.google.com\|4pda.to\|instagram.com\|rutor.info\|lib.rus.ec\|ntc.party" /etc/hosts; }
 hosts_add() { echo "$HOSTS_LIST" | tr '|' '\n' | grep -Fxv -f /etc/hosts >> /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1; }
 hosts_clear() { for ip in 45.155.204.190 185.87.51.182 130.255.77.28 30.255.77.28 173.245.58.219 185.39.18.98 57.144.222.34 157.240.9.174 157.240.245.174 157.240.205.174; do sed -i "/$ip/d" /etc/hosts >/dev/null 2>&1; done; /etc/init.d/dnsmasq restart >/dev/null 2>&1; }
 ZAPRET_RESTART () { chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1; sleep 1; }
@@ -347,46 +347,18 @@ sed -i 's/meta l4proto { tcp, udp } flow offload @ft;/meta l4proto { tcp, udp } 
 # ==========================================
 INSTAGRAM="57.144.222.34 instagram.com www.instagram.com\n157.240.9.174 instagram.com www.instagram.com\n157.240.245.174 instagram.com www.instagram.com\n157.240.205.174 instagram.com www.instagram.com"
 PDA="185.87.51.182 4pda.to www.4pda.to"; NTC="30.255.77.28 ntc.party\n130.255.77.28 ntc.party"; RUTOR="173.245.58.219 rutor.info d.rutor.info"; LIBRUSEC="185.39.18.98 lib.rus.ec www.lib.rus.ec"
-GENEMI="45.155.204.190 gemini.google.com"; ALL_BLOCKS="$INSTAGRAM\n$PDA\n$NTC\n$RUTOR\n$LIBRUSEC"
+GENEMI="45.155.204.190 gemini.google.com"; ALL_BLOCKS="$GENEMI\n$INSTAGRAM\n$PDA\n$NTC\n$RUTOR\n$LIBRUSEC"
 status_block() { while IFS= read -r line; do [ -z "$line" ] && continue; grep -Fxq "$line" "$HOSTS_FILE" || return 1; done < <(printf '%b\n' "$1"); return 0; }
 add_block() { while IFS= read -r line; do [ -z "$line" ] && continue; grep -Fxq "$line" "$HOSTS_FILE" || echo "$line" >> "$HOSTS_FILE"; done < <(printf '%b\n' "$1"); }
 remove_block() { while IFS= read -r line; do [ -z "$line" ] && continue; sed -i "\|^$line$|d" "$HOSTS_FILE"; done < <(printf '%b\n' "$1"); }
 toggle_block() { if status_block "$1"; then remove_block "$1"; echo -e "\n${CYAN}Удаляем и применяем${NC}"; else add_block "$1"; echo -e "\n${CYAN}Добавляем и применяем${NC}"; fi; /etc/init.d/dnsmasq restart >/dev/null 2>&1; echo -e "${GREEN}Готово!${NC}\n"; PAUSE; }
 toggle_all() { if status_block "$ALL_BLOCKS"; then remove_block "$ALL_BLOCKS"; echo -e "\n${CYAN}Удаляем и применяем${NC}"; else add_block "$ALL_BLOCKS"; echo -e "\n${CYAN}Добавляем и применяем${NC}"; fi; /etc/init.d/dnsmasq restart >/dev/null 2>&1; echo -e "${GREEN}Готово!${NC}\n"; PAUSE; }
-menu_hosts() {
-    get_state() { status_block "$1" && echo "Удалить " || echo "Добавить"; }
-
-    while true; do
-        clear
-
-        S_ALL=$(status_block "$ALL_BLOCKS" && echo "${GREEN}Удалить все домены${NC}" || echo "${GREEN}Добавить все домены${NC}")
-
-        echo -e "${YELLOW}Меню управления доменами в hosts${NC}\n"
-
-        echo -e "${CYAN}1) ${GREEN}$(get_state "$PDA")${NC} 4pda.to"
-        echo -e "${CYAN}2) ${GREEN}$(get_state "$RUTOR")${NC} rutor.info"
-        echo -e "${CYAN}3) ${GREEN}$(get_state "$NTC")${NC} ntc.party"
-        echo -e "${CYAN}4) ${GREEN}$(get_state "$INSTAGRAM")${NC} instagram.com"
-        echo -e "${CYAN}5) ${GREEN}$(get_state "$LIBRUSEC")${NC} lib.rus.ec"
-        echo -e "${CYAN}6) ${GREEN}$(get_state "$GENEMI")${NC} Gemini"
-        echo -e "${CYAN}7) $S_ALL"
-        echo -e "${CYAN}Enter) ${GREEN}Выход в меню стратегий${NC}"
-
-        echo -ne "\n${YELLOW}Выберите пункт:${NC} "
-        read -r c
-
-        case "$c" in
-            1) toggle_block "$PDA" ;;
-            2) toggle_block "$RUTOR" ;;
-            3) toggle_block "$NTC" ;;
-            4) toggle_block "$INSTAGRAM" ;;
-            5) toggle_block "$LIBRUSEC" ;;
-            6) toggle_block "$GENEMI" ;;
-            7) toggle_all ;;
-            *) break ;;
-        esac
-    done
-}
+get_state() { status_block "$1" && echo "Удалить " || echo "Добавить"; }
+menu_hosts() { while true; do clear; S_ALL=$(status_block "$ALL_BLOCKS" && echo "${GREEN}Удалить все домены${NC}" || echo "${GREEN}Добавить все домены${NC}")
+echo -e "${YELLOW}Меню управления доменами в hosts${NC}\n\n${CYAN}1) ${GREEN}$(get_state "$PDA")${NC} 4pda.to\n${CYAN}2) ${GREEN}$(get_state "$RUTOR")${NC} rutor.info\n${CYAN}3) ${GREEN}$(get_state "$NTC")${NC} ntc.party"
+echo -e "${CYAN}4) ${GREEN}$(get_state "$INSTAGRAM")${NC} instagram.com\n${CYAN}5) ${GREEN}$(get_state "$LIBRUSEC")${NC} lib.rus.ec\n${CYAN}6) ${GREEN}$(get_state "$GENEMI")${NC} Google Gemini\n${CYAN}7) $S_ALL"
+echo -ne "${CYAN}Enter) ${GREEN}Выход в меню стратегий${NC}\n\n${YELLOW}Выберите пункт:${NC} ";read -r c; case "$c" in
+1) toggle_block "$PDA" ;; 2) toggle_block "$RUTOR" ;; 3) toggle_block "$NTC" ;; 4) toggle_block "$INSTAGRAM" ;; 5) toggle_block "$LIBRUSEC" ;; 6) toggle_block "$GENEMI" ;; 7) toggle_all ;; *) break ;; esac; done; }
 # ==========================================
 # Тест стратегий
 # ==========================================
