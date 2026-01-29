@@ -95,72 +95,64 @@ install_Zapret() {
     get_versions
 
     if [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ]; then
-        echo -e "\nZapret ${GREEN}уже установлен!${NC}\n"
+        printf "\nZapret ${GREEN}уже установлен!${NC}\n"
         [ "$NO_PAUSE" != "1" ] && PAUSE
         return
     fi
 
-    [ "$NO_PAUSE" != "1" ] && echo
-    echo -e "${MAGENTA}Устанавливаем ZAPRET${NC}"
+    [ "$NO_PAUSE" != "1" ] && printf "\n"
+    printf "${MAGENTA}Устанавливаем ZAPRET${NC}\n"
 
-    # Остановка предыдущего zapret
     if [ -f /etc/init.d/zapret ]; then
-        echo -e "${CYAN}Останавливаем ${NC}zapret"
+        printf "${CYAN}Останавливаем ${NC}zapret\n"
         /etc/init.d/zapret stop >/dev/null 2>&1
         for pid in $(pgrep -f /opt/zapret 2>/dev/null); do
             kill -9 "$pid" 2>/dev/null
         done
     fi
 
-    # Обновляем список пакетов
-    echo -e "${CYAN}Обновляем список пакетов${NC}"
+    printf "${CYAN}Обновляем список пакетов${NC}\n"
     if [ "$PKG_IS_APK" -eq 1 ]; then
-        apk update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении apk!${NC}\n"; PAUSE; return; }
+        apk update >/dev/null 2>&1 || { printf "\n${RED}Ошибка при обновлении apk!${NC}\n"; PAUSE; return; }
     else
-        opkg update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении opkg!${NC}\n"; PAUSE; return; }
+        opkg update >/dev/null 2>&1 || { printf "\n${RED}Ошибка при обновлении opkg!${NC}\n"; PAUSE; return; }
     fi
 
-    # Подготовка рабочей папки
     mkdir -p "$WORKDIR"
     rm -f "$WORKDIR"/* 2>/dev/null
     cd "$WORKDIR" || return
 
     FILE_NAME=$(basename "$LATEST_URL")
 
-    # Устанавливаем unzip
     if ! command -v unzip >/dev/null 2>&1; then
-        echo -e "${CYAN}Устанавливаем ${NC}unzip"
+        printf "${CYAN}Устанавливаем ${NC}unzip\n"
         install_pkg unzip || return
     fi
 
-    # Скачиваем архив
-    echo -e "${CYAN}Скачиваем архив ${NC}$FILE_NAME"
-    wget -q -U "Mozilla/5.0" -O "$FILE_NAME" "$LATEST_URL" || { echo -e "\n${RED}Не удалось скачать ${NC}$FILE_NAME\n"; PAUSE; return; }
+    printf "${CYAN}Скачиваем архив ${NC}$FILE_NAME\n"
+    wget -q -U "Mozilla/5.0" -O "$FILE_NAME" "$LATEST_URL" || { printf "\n${RED}Не удалось скачать ${NC}$FILE_NAME\n"; PAUSE; return; }
 
-    # Распаковываем
-    echo -e "${CYAN}Распаковываем архив${NC}"
+    printf "${CYAN}Распаковываем архив${NC}\n"
     unzip -o "$FILE_NAME" >/dev/null
 
-    # Устанавливаем пакеты
     for PKG in zapret_*.ipk luci-app-zapret_*.ipk; do
         [ -f "$PKG" ] || continue
         install_pkg "$PKG" || return
     done
 
-    # Чистим временные файлы
-    echo -e "${CYAN}Удаляем временные файлы${NC}"
+    printf "${CYAN}Удаляем временные файлы${NC}\n"
     cd /
     rm -rf "$WORKDIR" /tmp/*.ipk /tmp/*.zip /tmp/*zapret* 2>/dev/null
 
-    # Проверка установки
     if [ -f /etc/init.d/zapret ]; then
-        echo -e "Zapret ${GREEN}установлен!${NC}\n"
+        printf "Zapret ${GREEN}установлен!${NC}\n"
         [ "$NO_PAUSE" != "1" ] && PAUSE
     else
-        echo -e "\n${RED}Zapret не был установлен!${NC}\n"
+        printf "\n${RED}Zapret не был установлен!${NC}\n"
         PAUSE
     fi
 }
+
 # ==========================================
 # Меню настройки Discord
 # ==========================================
