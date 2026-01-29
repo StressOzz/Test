@@ -127,20 +127,40 @@ install_Zapret() {
     printf "%b\n" "${CYAN}Распаковываем архив${NC}"
     unzip -o "$FILE_NAME" >/dev/null
 
-    # Определяем откуда брать пакеты
+    # ----------------- Установка пакетов -----------------
     if [ "$PKG_IS_APK" -eq 1 ]; then
         PKG_PATH="$WORKDIR/apk"
+
+        # 1️⃣ Сначала zapret* (без luci)
+        for PKG in "$PKG_PATH"/zapret*; do
+            [ -f "$PKG" ] || continue
+            echo "$PKG" | grep -q "luci" && continue
+            install_pkg "$PKG" || return
+        done
+
+        # 2️⃣ Потом luci*
+        for PKG in "$PKG_PATH"/luci*; do
+            [ -f "$PKG" ] || continue
+            install_pkg "$PKG" || return
+        done
+
     else
         PKG_PATH="$WORKDIR"
+
+        # 1️⃣ Сначала zapret_*.ipk
+        for PKG in "$PKG_PATH"/zapret_*.ipk; do
+            [ -f "$PKG" ] || continue
+            install_pkg "$PKG" || return
+        done
+
+        # 2️⃣ Потом luci-app-zapret_*.ipk
+        for PKG in "$PKG_PATH"/luci-app-zapret_*.ipk; do
+            [ -f "$PKG" ] || continue
+            install_pkg "$PKG" || return
+        done
     fi
 
-    # Устанавливаем пакеты
-    for PKG in "$PKG_PATH"/*; do
-        [ -f "$PKG" ] || continue
-        install_pkg "$PKG" || return
-    done
-
-    # Чистим
+    # Чистим временные файлы
     printf "%b\n" "${CYAN}Удаляем временные файлы${NC}"
     cd /
     rm -rf "$WORKDIR" /tmp/*.ipk /tmp/*.zip /tmp/*zapret* 2>/dev/null
@@ -148,7 +168,6 @@ install_Zapret() {
     printf "%b\n" "Zapret ${GREEN}установлен!${NC}"
     [ "$NO_PAUSE" != "1" ] && read -r
 }
-
 # ==========================================
 # Меню настройки Discord
 # ==========================================
