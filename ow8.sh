@@ -59,6 +59,7 @@ install_Zapret() {
     [ "$NO_PAUSE" != "1" ] && echo
     echo -e "${MAGENTA}Устанавливаем ZAPRET${NC}"
 
+    # Останавливаем старый Zapret, если есть
     if [ -f /etc/init.d/zapret ]; then
         echo -e "${CYAN}Останавливаем ${NC}zapret"
         /etc/init.d/zapret stop >/dev/null 2>&1
@@ -68,12 +69,14 @@ install_Zapret() {
     echo -e "${CYAN}Обновляем список пакетов${NC}"
     apk update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; PAUSE; return; }
 
+    # Создаём рабочую папку и скачиваем архив
     mkdir -p "$WORKDIR"
-    rm -f "$WORKDIR"/* 2>/dev/null
+    rm -rf "$WORKDIR"/* 2>/dev/null
     cd "$WORKDIR" || return
 
     FILE_NAME=$(basename "$LATEST_URL")
 
+    # Проверяем unzip
     if ! command -v unzip >/dev/null 2>&1; then
         echo -e "${CYAN}Устанавливаем ${NC}unzip"
         apk add unzip >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить unzip!${NC}\n"; PAUSE; return; }
@@ -88,7 +91,10 @@ install_Zapret() {
     # Устанавливаем все apk-пакеты из папки apk
     if [ -d "$WORKDIR/apk" ]; then
         for PKG in "$WORKDIR"/apk/*.apk; do
-            [ -f "$PKG" ] && echo -e "${CYAN}Устанавливаем ${NC}$PKG" && apk add --allow-untrusted "$PKG" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить $PKG!${NC}\n"; PAUSE; return; }
+            [ -f "$PKG" ] || { echo -e "${RED}Файл $PKG не найден!${NC}"; continue; }
+            chmod 644 "$PKG"
+            echo -e "${CYAN}Устанавливаем ${NC}$PKG"
+            apk add --allow-untrusted "$PKG" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить $PKG!${NC}\n"; PAUSE; return; }
         done
     else
         echo -e "\n${RED}Папка apk с пакетами не найдена!${NC}\n"
@@ -100,6 +106,7 @@ install_Zapret() {
     cd /
     rm -rf "$WORKDIR" /tmp/*.apk /tmp/*.zip /tmp/*zapret* 2>/dev/null
 
+    # Проверяем установку
     if [ -f /etc/init.d/zapret ]; then
         echo -e "Zapret ${GREEN}установлен!${NC}\n"
         [ "$NO_PAUSE" != "1" ] && PAUSE
