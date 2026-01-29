@@ -211,11 +211,32 @@ echo -e "Zapret ${GREEN}запущен!${NC}\n"; else echo -e "\n${RED}Zapret н
 # ==========================================
 # Удаление Zapret
 # ==========================================
-uninstall_zapret() { local NO_PAUSE=$1; [ "$NO_PAUSE" != "1" ] && echo; echo -e "${MAGENTA}Удаляем ZAPRET${NC}\n${CYAN}Останавливаем ${NC}zapret\n${CYAN}Убиваем процессы${NC}"
-/etc/init.d/zapret stop >/dev/null 2>&1; for pid in $(pgrep -f /opt/zapret 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done; echo -e "${CYAN}Удаляем пакеты${NC}"; opkg --force-removal-of-dependent-packages --autoremove remove zapret luci-app-zapret >/dev/null 2>&1
-echo -e "${CYAN}Удаляем временные файлы${NC}"; rm -rf /opt/zapret /etc/config/zapret /etc/firewall.zapret /etc/init.d/zapret /tmp/*zapret* /var/run/*zapret* /tmp/*.ipk /tmp/*.zip 2>/dev/null; crontab -l 2>/dev/null | grep -v -i "zapret" | crontab - 2>/dev/null
-nft list tables 2>/dev/null | awk '{print $2}' | grep -E '(zapret|ZAPRET)' | while read t; do [ -n "$t" ] && nft delete table "$t" 2>/dev/null; done;  rm -rf $FINAL_STR $NEW_STR $OLD_STR $SAVED_STR $TMP_LIST $HOSTS_USER $BACKUP_FILE $TMP_SF
-hosts_clear; echo -e "Zapret ${GREEN}удалён!${NC}\n"; [ "$NO_PAUSE" != "1" ] && PAUSE; }
+uninstall_zapret() {
+    local NO_PAUSE=$1
+    [ "$NO_PAUSE" != "1" ] && echo
+    echo -e "${MAGENTA}Удаляем ZAPRET${NC}\n${CYAN}Останавливаем ${NC}zapret\n${CYAN}Убиваем процессы${NC}"
+
+    /etc/init.d/zapret stop >/dev/null 2>&1
+    for pid in $(pgrep -f /opt/zapret 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done
+
+    echo -e "${CYAN}Удаляем пакеты${NC}"
+    apk del zapret luci-app-zapret >/dev/null 2>&1
+
+    echo -e "${CYAN}Удаляем временные файлы${NC}"
+    rm -rf /opt/zapret /etc/config/zapret /etc/firewall.zapret /etc/init.d/zapret /tmp/*zapret* /var/run/*zapret* /tmp/*.zip 2>/dev/null
+
+    crontab -l 2>/dev/null | grep -v -i "zapret" | crontab - 2>/dev/null
+
+    nft list tables 2>/dev/null | awk '{print $2}' | grep -E '(zapret|ZAPRET)' | while read t; do
+        [ -n "$t" ] && nft delete table "$t" 2>/dev/null
+    done
+
+    rm -rf $FINAL_STR $NEW_STR $OLD_STR $SAVED_STR $TMP_LIST $HOSTS_USER $BACKUP_FILE $TMP_SF
+
+    hosts_clear
+    echo -e "Zapret ${GREEN}удалён!${NC}\n"
+    [ "$NO_PAUSE" != "1" ] && PAUSE
+}
 # ==========================================
 # Подбор стратегии для Ютуб
 # ==========================================
