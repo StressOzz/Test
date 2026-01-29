@@ -83,10 +83,10 @@ get_versions() {
 install_pkg() {
     local pkg_file="$1"
     if [ "$PKG_IS_APK" -eq 1 ]; then
-        printf "%b\n" "${CYAN}Устанавливаем ${NC}$pkg_file (apk)..."
+        printf "%b\n" "${CYAN}Устанавливаем ${NC}$pkg_file"
         apk add --allow-untrusted "$pkg_file" >/dev/null 2>&1 || { printf "%b\n" "${RED}Не удалось установить $pkg_file!${NC}"; return 1; }
     else
-        printf "%b\n" "${CYAN}Устанавливаем ${NC}$pkg_file (opkg)..."
+        printf "%b\n" "${CYAN}Устанавливаем ${NC}$pkg_file"
         opkg install --force-reinstall "$pkg_file" >/dev/null 2>&1 || { printf "%b\n" "${RED}Не удалось установить $pkg_file!${NC}"; return 1; }
     fi
 }
