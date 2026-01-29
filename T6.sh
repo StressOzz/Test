@@ -6,7 +6,8 @@ ZAPRET_MANAGER_VERSION="8.4"; ZAPRET_VERSION="72.20260128"; STR_VERSION_AUTOINST
 TEST_HOST="https://rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com"; LAN_IP=$(uci get network.lan.ipaddr)
 GREEN="\033[1;32m"; RED="\033[1;31m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"
 MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
-WORKDIR="/tmp/zapret-update"; CONF="/etc/config/zapret"; CUSTOM_DIR="/opt/zapret/init.d/openwrt/custom.d/"
+WORKDIR="/tmp/zapret-update"; 
+CONF="/etc/config/zapret"; CUSTOM_DIR="/opt/zapret/init.d/openwrt/custom.d/"
 STR_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ListStrYou"
 TMP_LIST="/opt/zapret_yt_list.txt"; SAVED_STR="/opt/StrYou"; OLD_STR="/opt/StrOLD"
 Fin_IP_Dis="104\.25\.158\.178 finland[0-9]\{5\}\.discord\.media"
@@ -27,26 +28,20 @@ ZAPRET_RESTART () { chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config
 PAUSE() { echo "Нажмите Enter..."; read dummy; }; BACKUP_DIR="/opt/zapret_backup"; DATE_FILE="$BACKUP_DIR/date_backup.txt"
 
 
+# ----------------- Определяем пакетный менеджер -----------------
 if command -v apk >/dev/null 2>&1; then
     PKG_IS_APK=1
 else
     PKG_IS_APK=0
 fi
 
-
-# ==========================================
-# Получение версии
-# ==========================================
+# ----------------- Функция определения версии -----------------
 get_versions() {
-    # Архитектура
     LOCAL_ARCH=$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release)
     [ -z "$LOCAL_ARCH" ] && LOCAL_ARCH=$(opkg print-architecture | grep -v "noarch" | sort -k3 -n | tail -n1 | awk '{print $2}')
     USED_ARCH="$LOCAL_ARCH"
-
-    # Ссылка на последнюю версию
     LATEST_URL="https://github.com/remittor/zapret-openwrt/releases/download/v${ZAPRET_VERSION}/zapret_v${ZAPRET_VERSION}_${LOCAL_ARCH}.zip"
 
-    # Определяем установленную версию
     if [ "$PKG_IS_APK" -eq 1 ]; then
         INSTALLED_VER=$(apk info | grep -E '^zapret' | awk -F'-' '{print $2}' | head -n1)
         [ -z "$INSTALLED_VER" ] && INSTALLED_VER="не найдена"
@@ -55,7 +50,6 @@ get_versions() {
         [ -z "$INSTALLED_VER" ] && INSTALLED_VER="не найдена"
     fi
 
-    # NFQ статус
     NFQ_RUN=$(pgrep -f nfqws 2>/dev/null | wc -l)
     NFQ_RUN=${NFQ_RUN:-0}
     NFQ_ALL=$(/etc/init.d/zapret info 2>/dev/null | grep -o 'instance[0-9]\+' | wc -l)
@@ -67,64 +61,52 @@ get_versions() {
         NFQ_STAT="${NFQ_CLR}[${NFQ_RUN}/${NFQ_ALL}]${NC}"
     fi
 
-    # Статус zapret
     if [ -f /etc/init.d/zapret ]; then
-        /etc/init.d/zapret status 2>/dev/null | grep -qi running && ZAPRET_STATUS="${GREEN}запущен $NFQ_STAT${NC}" || ZAPRET_STATUS="${RED}остановлен${NC}"
+        /etc/init.d/zapret status >/dev/null 2>&1 && ZAPRET_STATUS="${GREEN}запущен $NFQ_STAT${NC}" || ZAPRET_STATUS="${RED}остановлен${NC}"
     else
         ZAPRET_STATUS=""
     fi
 
-    # Цвет для версии
-    if [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ]; then
-        INST_COLOR=$GREEN
-        INSTALLED_DISPLAY="$INSTALLED_VER"
-    else
-        INST_COLOR=$RED
-        INSTALLED_DISPLAY=${INSTALLED_VER:-"не найдена"}
-    fi
+    [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ] && INST_COLOR=$GREEN || INST_COLOR=$RED
+    INSTALLED_DISPLAY=${INSTALLED_VER:-"не найдена"}
 }
 
-# -------------------- Установка пакета --------------------
+# ----------------- Функция установки пакета -----------------
 install_pkg() {
     local pkg_file="$1"
     if [ "$PKG_IS_APK" -eq 1 ]; then
-        printf "${CYAN}Устанавливаем ${NC}$pkg_file (apk)...\n"
-        apk add --allow-untrusted "$pkg_file" >/dev/null 2>&1 || { printf "\n${RED}Не удалось установить $pkg_file!${NC}\n"; PAUSE; return 1; }
+        printf "%b\n" "${CYAN}Устанавливаем ${NC}$pkg_file (apk)..."
+        apk add --allow-untrusted "$pkg_file" >/dev/null 2>&1 || { printf "%b\n" "${RED}Не удалось установить $pkg_file!${NC}"; return 1; }
     else
-        printf "${CYAN}Устанавливаем ${NC}$pkg_file (opkg)...\n"
-        opkg install --force-reinstall "$pkg_file" >/dev/null 2>&1 || { printf "\n${RED}Не удалось установить $pkg_file!${NC}\n"; PAUSE; return 1; }
+        printf "%b\n" "${CYAN}Устанавливаем ${NC}$pkg_file (opkg)..."
+        opkg install --force-reinstall "$pkg_file" >/dev/null 2>&1 || { printf "%b\n" "${RED}Не удалось установить $pkg_file!${NC}"; return 1; }
     fi
 }
 
-# -------------------- Установка Zapret --------------------
+# ----------------- Функция установки Zapret -----------------
 install_Zapret() {
     local NO_PAUSE=$1
     get_versions
 
-    if [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ]; then
-        printf "\nZapret ${GREEN}уже установлен!${NC}\n"
-        [ "$NO_PAUSE" != "1" ] && PAUSE
-        return
-    fi
+    [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ] && { printf "%b\n" "${GREEN}Zapret уже установлен!${NC}"; [ "$NO_PAUSE" != "1" ] && read -r; return; }
 
-    [ "$NO_PAUSE" != "1" ] && printf "\n"
-    printf "${MAGENTA}Устанавливаем ZAPRET${NC}\n"
+    printf "%b\n" "${MAGENTA}Устанавливаем ZAPRET${NC}"
 
-    # Остановка предыдущего zapret
+    # Останавливаем предыдущий zapret
     if [ -f /etc/init.d/zapret ]; then
-        printf "${CYAN}Останавливаем ${NC}zapret\n"
+        printf "%b\n" "${CYAN}Останавливаем ${NC}zapret"
         /etc/init.d/zapret stop >/dev/null 2>&1
         for pid in $(pgrep -f /opt/zapret 2>/dev/null); do
             kill -9 "$pid" 2>/dev/null
         done
     fi
 
-    # Обновляем список пакетов
-    printf "${CYAN}Обновляем список пакетов${NC}\n"
+    # Обновляем пакеты
+    printf "%b\n" "${CYAN}Обновляем список пакетов${NC}"
     if [ "$PKG_IS_APK" -eq 1 ]; then
-        apk update >/dev/null 2>&1 || { printf "\n${RED}Ошибка при обновлении apk!${NC}\n"; PAUSE; return; }
+        apk update >/dev/null 2>&1 || { printf "%b\n" "${RED}Ошибка при обновлении apk!${NC}"; return; }
     else
-        opkg update >/dev/null 2>&1 || { printf "\n${RED}Ошибка при обновлении opkg!${NC}\n"; PAUSE; return; }
+        opkg update >/dev/null 2>&1 || { printf "%b\n" "${RED}Ошибка при обновлении opkg!${NC}"; return; }
     fi
 
     # Подготовка рабочей папки
@@ -134,39 +116,37 @@ install_Zapret() {
 
     FILE_NAME=$(basename "$LATEST_URL")
 
-    # Устанавливаем unzip
-    if ! command -v unzip >/dev/null 2>&1; then
-        printf "${CYAN}Устанавливаем ${NC}unzip\n"
-        install_pkg unzip || return
-    fi
+    # unzip
+    command -v unzip >/dev/null 2>&1 || install_pkg unzip || return
 
     # Скачиваем архив
-    printf "${CYAN}Скачиваем архив ${NC}$FILE_NAME\n"
-    wget -q -U "Mozilla/5.0" -O "$FILE_NAME" "$LATEST_URL" || { printf "\n${RED}Не удалось скачать ${NC}$FILE_NAME\n"; PAUSE; return; }
+    printf "%b\n" "${CYAN}Скачиваем архив ${NC}$FILE_NAME"
+    wget -q -U "Mozilla/5.0" -O "$FILE_NAME" "$LATEST_URL" || { printf "%b\n" "${RED}Не удалось скачать $FILE_NAME${NC}"; return; }
 
-    # Распаковываем
-    printf "${CYAN}Распаковываем архив${NC}\n"
+    # Распаковываем архив
+    printf "%b\n" "${CYAN}Распаковываем архив${NC}"
     unzip -o "$FILE_NAME" >/dev/null
 
+    # Определяем откуда брать пакеты
+    if [ "$PKG_IS_APK" -eq 1 ]; then
+        PKG_PATH="$WORKDIR/apk"
+    else
+        PKG_PATH="$WORKDIR"
+    fi
+
     # Устанавливаем пакеты
-    for PKG in zapret_*.ipk luci-app-zapret_*.ipk; do
+    for PKG in "$PKG_PATH"/*; do
         [ -f "$PKG" ] || continue
         install_pkg "$PKG" || return
     done
 
-    # Чистим временные файлы
-    printf "${CYAN}Удаляем временные файлы${NC}\n"
+    # Чистим
+    printf "%b\n" "${CYAN}Удаляем временные файлы${NC}"
     cd /
     rm -rf "$WORKDIR" /tmp/*.ipk /tmp/*.zip /tmp/*zapret* 2>/dev/null
 
-    # Проверка установки
-    if [ -f /etc/init.d/zapret ]; then
-        printf "Zapret ${GREEN}установлен!${NC}\n"
-        [ "$NO_PAUSE" != "1" ] && PAUSE
-    else
-        printf "\n${RED}Zapret не был установлен!${NC}\n"
-        PAUSE
-    fi
+    printf "%b\n" "Zapret ${GREEN}установлен!${NC}"
+    [ "$NO_PAUSE" != "1" ] && read -r
 }
 
 # ==========================================
