@@ -82,14 +82,14 @@ get_versions() {
 # Установка Zapret
 # ==========================================
 install_pkg() {
-    local display_name="$1"  # имя для вывода
-    local pkg_file="$2"      # путь к файлу
+    local display_name="$1"
+    local pkg_file="$2"
     if [ "$PKG_IS_APK" -eq 1 ]; then
-        printf "%b\n" "${CYAN}Устанавливаем ${NC}$display_name"
-        apk add --allow-untrusted "$pkg_file" >/dev/null 2>&1 || { printf "%b\n" "${RED}Не удалось установить $display_name!${NC}"; return 1; }
+        echo -e "${CYAN}Устанавливаем ${NC}$display_name"
+        apk add --allow-untrusted "$pkg_file" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить $display_name!${NC}\n"; PAUSE; return 1; }
     else
-        printf "%b\n" "${CYAN}Устанавливаем ${NC}$display_name"
-        opkg install --force-reinstall "$pkg_file" >/dev/null 2>&1 || { printf "%b\n" "${RED}Не удалось установить $display_name!${NC}"; return 1; }
+        echo -e "${CYAN}Устанавливаем ${NC}$display_name"
+        opkg install --force-reinstall "$pkg_file" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить $display_name!${NC}\n"; PAUSE; return 1; }
     fi
 }
 
@@ -97,13 +97,13 @@ install_Zapret() {
     local NO_PAUSE=$1
     get_versions
 
-    [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ] && { printf "%b\n" "${GREEN}Zapret уже установлен!${NC}"; [ "$NO_PAUSE" != "1" ] && read -r; return; }
+    [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ] && { echo -e "\n${GREEN}Zapret уже установлен!${NC}\n"; [ "$NO_PAUSE" != "1" ] && PAUSE; return; }
 
-    printf "%b\n" "${MAGENTA}Устанавливаем ZAPRET${NC}"
+    echo -e "\n${MAGENTA}Устанавливаем ZAPRET${NC}"
 
     # Останавливаем предыдущий zapret
     if [ -f /etc/init.d/zapret ]; then
-        printf "%b\n" "${CYAN}Останавливаем ${NC}zapret"
+        echo -e "${CYAN}Останавливаем ${NC}zapret"
         /etc/init.d/zapret stop >/dev/null 2>&1
         for pid in $(pgrep -f /opt/zapret 2>/dev/null); do
             kill -9 "$pid" 2>/dev/null
@@ -111,11 +111,11 @@ install_Zapret() {
     fi
 
     # Обновляем пакеты
-    printf "%b\n" "${CYAN}Обновляем список пакетов${NC}"
+    echo -e "${CYAN}Обновляем список пакетов${NC}"
     if [ "$PKG_IS_APK" -eq 1 ]; then
-        apk update >/dev/null 2>&1 || { printf "%b\n" "${RED}Ошибка при обновлении apk!${NC}"; return; }
+        apk update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении apk!${NC}\n"; PAUSE; return; }
     else
-        opkg update >/dev/null 2>&1 || { printf "%b\n" "${RED}Ошибка при обновлении opkg!${NC}"; return; }
+        opkg update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении opkg!${NC}\n"; PAUSE; return; }
     fi
 
     # Подготовка рабочей папки
@@ -129,11 +129,11 @@ install_Zapret() {
     command -v unzip >/dev/null 2>&1 || install_pkg unzip unzip || return
 
     # Скачиваем архив
-    printf "%b\n" "${CYAN}Скачиваем архив ${NC}$FILE_NAME"
-    wget -q -U "Mozilla/5.0" -O "$FILE_NAME" "$LATEST_URL" || { printf "%b\n" "${RED}Не удалось скачать $FILE_NAME${NC}"; return; }
+    echo -e "${CYAN}Скачиваем архив ${NC}$FILE_NAME"
+    wget -q -U "Mozilla/5.0" -O "$FILE_NAME" "$LATEST_URL" || { echo -e "\n${RED}Не удалось скачать $FILE_NAME${NC}\n"; PAUSE; return; }
 
     # Распаковываем архив
-    printf "%b\n" "${CYAN}Распаковываем архив${NC}"
+    echo -e "${CYAN}Распаковываем архив${NC}"
     unzip -o "$FILE_NAME" >/dev/null
 
     # ----------------- Установка пакетов -----------------
@@ -170,11 +170,11 @@ install_Zapret() {
     fi
 
     # Чистим временные файлы
-    printf "%b\n" "${CYAN}Удаляем временные файлы${NC}"
+    echo -e "${CYAN}Удаляем временные файлы${NC}"
     cd /
     rm -rf "$WORKDIR" /tmp/*.ipk /tmp/*.zip /tmp/*zapret* 2>/dev/null
 
-    printf "%b\n" "Zapret ${GREEN}установлен!${NC}"
+    echo -e "Zapret ${GREEN}установлен!${NC}\n"
     [ "$NO_PAUSE" != "1" ] && PAUSE
 }
 
