@@ -28,65 +28,64 @@ PAUSE() { echo "Нажмите Enter..."; read dummy; }; BACKUP_DIR="/opt/zapret
 # ==========================================
 # Получение версии
 # ==========================================
+#!/bin/sh
+
+# ---------------- Цвета ----------------
+GREEN="\033[1;32m"; RED="\033[1;31m"; CYAN="\033[1;36m"
+MAGENTA="\033[1;35m"; YELLOW="\033[1;33m"; NC="\033[0m"
+
+# ---------------- Пауза ----------------
+PAUSE() {
+    read -rp "Нажмите Enter для продолжения..."
+}
+
+# ---------------- Версия Zapret ----------------
+ZAPRET_VERSION="1.2.3"   # <--- здесь указываем актуальную версию
+WORKDIR="/tmp/zapret_install"
+
+# ---------------- Функция получения версий ----------------
 get_versions() {
-    # --------------------- Определяем пакетный менеджер ---------------------
-    PKG_IS_APK=0
+    # ---------- Пакетный менеджер ----------
     if command -v apk >/dev/null 2>&1; then
-        PKG_IS_APK=1
+        PKG_MANAGER="apk"
     elif command -v opkg >/dev/null 2>&1; then
-        PKG_IS_APK=0
+        PKG_MANAGER="opkg"
     else
-        echo "Ни apk, ни opkg не найдены. Скрипт не сможет работать с пакетами."
+        echo -e "${RED}Ни apk, ни opkg не найдены. Скрипт не сможет работать.${NC}"
         return 1
     fi
 
-    # --------------------- Определяем версию OpenWrt ---------------------
-    OPENWRT_VERSION=""
+    # ---------- OpenWrt версия ----------
     if [ -f /etc/openwrt_release ]; then
         OPENWRT_VERSION=$(awk -F\' '/DISTRIB_RELEASE/ {print $2}' /etc/openwrt_release)
+        LOCAL_ARCH=$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release)
     fi
     [ -z "$OPENWRT_VERSION" ] && OPENWRT_VERSION="неизвестна"
+    [ -z "$LOCAL_ARCH" ] && LOCAL_ARCH=$(uname -m)
 
-    # --------------------- Определяем архитектуру ---------------------
-    LOCAL_ARCH=$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release 2>/dev/null)
-    if [ -z "$LOCAL_ARCH" ]; then
-        if [ "$PKG_IS_APK" -eq 1 ]; then
-            LOCAL_ARCH=$(uname -m)
-        else
-            TMP=$(opkg print-architecture 2>/dev/null | grep -v "noarch")
-            [ -n "$TMP" ] && LOCAL_ARCH=$(echo "$TMP" | tail -n1 | awk '{print $2}')
-        fi
-    fi
-    [ -z "$LOCAL_ARCH" ] && LOCAL_ARCH="unknown"
     USED_ARCH="$LOCAL_ARCH"
-
-    # --------------------- Ссылка на последний релиз ---------------------
     LATEST_URL="https://github.com/remittor/zapret-openwrt/releases/download/v${ZAPRET_VERSION}/zapret_v${ZAPRET_VERSION}_${LOCAL_ARCH}.zip"
 
-    # --------------------- Определяем установленную версию ---------------------
+    # ---------- Установленная версия ----------
     INSTALLED_VER="не найдена"
-    if [ "$PKG_IS_APK" -eq 1 ]; then
+    if [ "$PKG_MANAGER" = "apk" ]; then
         TMP=$(apk list --installed 2>/dev/null | grep -o "^zapret-[0-9.]\+")
         [ -n "$TMP" ] && INSTALLED_VER=$(echo "$TMP" | head -n1 | sed 's/zapret-//')
     else
-        TMP=$(opkg list-installed zapret 2>/dev/null | awk '{sub(/-r[0-9]+$/, "", $3); print $3}')
+        TMP=$(opkg list-installed zapret 2>/dev/null | awk '{print $2}')
         [ -n "$TMP" ] && INSTALLED_VER=$(echo "$TMP" | head -n1)
     fi
 
-    # --------------------- Статус nfq ---------------------
+    # ---------- Статус NFQ ----------
     NFQ_RUN=$(pgrep -f nfqws 2>/dev/null | wc -l)
     NFQ_ALL=$(/etc/init.d/zapret info 2>/dev/null | grep -o 'instance[0-9]\+' | wc -l)
     NFQ_STAT=""
     if [ "$NFQ_RUN" -ne 0 ] || [ "$NFQ_ALL" -ne 0 ]; then
-        if [ "$NFQ_RUN" -eq "$NFQ_ALL" ]; then
-            NFQ_CLR="$GREEN"
-        else
-            NFQ_CLR="$RED"
-        fi
+        [ "$NFQ_RUN" -eq "$NFQ_ALL" ] && NFQ_CLR="$GREEN" || NFQ_CLR="$RED"
         NFQ_STAT="${NFQ_CLR}[${NFQ_RUN}/${NFQ_ALL}]${NC}"
     fi
 
-    # --------------------- Статус Zapret ---------------------
+    # ---------- Статус Zapret ----------
     ZAPRET_STATUS=""
     if [ -f /etc/init.d/zapret ]; then
         if /etc/init.d/zapret status 2>/dev/null | grep -qi running; then
@@ -96,101 +95,95 @@ get_versions() {
         fi
     fi
 
-    # --------------------- Цвет версии ---------------------
-    if [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ]; then
-        INST_COLOR=$GREEN
-        INSTALLED_DISPLAY="$INSTALLED_VER"
-    else
-        INST_COLOR=$RED
-        INSTALLED_DISPLAY="$INSTALLED_VER"
-    fi
+    # ---------- Цвет версии ----------
+    [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ] && INST_COLOR=$GREEN || INST_COLOR=$RED
+    INSTALLED_DISPLAY="$INSTALLED_VER"
 }
-# ==========================================
-# Установка Zapret
-# ==========================================
-install_Zapret() {
-    local NO_PAUSE=$1
 
-    # Получаем версии, архитектуру, статус
-    get_versions
+# ---------------- Установка Zapret ----------------
+install_Zapret() {
+    NO_PAUSE=$1
+    get_versions || return
+
     if [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ]; then
         echo -e "\nZapret ${GREEN}уже установлен!${NC}\n"
         PAUSE
         return
     fi
 
-    # Сообщение о начале установки
     [ "$NO_PAUSE" != "1" ] && echo
     echo -e "${MAGENTA}Устанавливаем ZAPRET${NC}"
 
-    # Остановка существующего zapret
+    # ---------- Остановка старого ----------
     if [ -f /etc/init.d/zapret ]; then
         echo -e "${CYAN}Останавливаем ${NC}zapret"
         /etc/init.d/zapret stop >/dev/null 2>&1
-        for pid in $(pgrep -f /opt/zapret 2>/dev/null); do
-            kill -9 "$pid" 2>/dev/null
-        done
+        pkill -f /opt/zapret 2>/dev/null
     fi
 
-    # Обновляем список пакетов
+    # ---------- Обновление пакетов ----------
     echo -e "${CYAN}Обновляем список пакетов${NC}"
-    if [ "$PKG_IS_APK" -eq 1 ]; then
-        apk update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении apk!${NC}\n"; PAUSE; return; }
+    if [ "$PKG_MANAGER" = "apk" ]; then
+        apk update >/dev/null 2>&1 || { echo -e "${RED}Ошибка при обновлении apk${NC}"; PAUSE; return; }
     else
-        opkg update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении opkg!${NC}\n"; PAUSE; return; }
+        opkg update >/dev/null 2>&1 || { echo -e "${RED}Ошибка при обновлении opkg${NC}"; PAUSE; return; }
     fi
 
-    # Подготовка рабочего каталога
+    # ---------- Подготовка рабочего каталога ----------
     mkdir -p "$WORKDIR"
     rm -f "$WORKDIR"/* 2>/dev/null
     cd "$WORKDIR" || return
 
     FILE_NAME=$(basename "$LATEST_URL")
 
-    # Устанавливаем unzip, если нужно
+    # ---------- Установка unzip ----------
     if ! command -v unzip >/dev/null 2>&1; then
-        echo -e "${CYAN}Устанавливаем ${NC}unzip"
-        if [ "$PKG_IS_APK" -eq 1 ]; then
-            apk add unzip >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить unzip!${NC}\n"; PAUSE; return; }
+        echo -e "${CYAN}Устанавливаем unzip${NC}"
+        if [ "$PKG_MANAGER" = "apk" ]; then
+            apk add unzip >/dev/null 2>&1 || { echo -e "${RED}Не удалось установить unzip!${NC}"; PAUSE; return; }
         else
-            opkg install unzip >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить unzip!${NC}\n"; PAUSE; return; }
+            opkg install unzip >/dev/null 2>&1 || { echo -e "${RED}Не удалось установить unzip!${NC}"; PAUSE; return; }
         fi
     fi
 
-    # Скачиваем архив
+    # ---------- Скачивание ----------
     echo -e "${CYAN}Скачиваем архив ${NC}$FILE_NAME"
-    wget -q -U "Mozilla/5.0" -O "$FILE_NAME" "$LATEST_URL" || { echo -e "\n${RED}Не удалось скачать ${NC}$FILE_NAME\n"; PAUSE; return; }
+    wget -q -U "Mozilla/5.0" -O "$FILE_NAME" "$LATEST_URL" || { echo -e "${RED}Не удалось скачать $FILE_NAME${NC}"; PAUSE; return; }
 
-    # Распаковываем архив
+    # ---------- Распаковка ----------
     echo -e "${CYAN}Распаковываем архив${NC}"
     unzip -o "$FILE_NAME" >/dev/null
 
-    # Устанавливаем пакеты из архива
+    # ---------- Установка пакетов ----------
     for PKG in zapret_*.ipk luci-app-zapret_*.ipk; do
-        if [ -f "$PKG" ]; then
-            echo -e "${CYAN}Устанавливаем ${NC}$PKG"
-            if [ "$PKG_IS_APK" -eq 1 ]; then
-                apk add --allow-untrusted "$PKG" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить $PKG!${NC}\n"; PAUSE; return; }
-            else
-                opkg install --force-reinstall "$PKG" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить $PKG!${NC}\n"; PAUSE; return; }
-            fi
+        [ -f "$PKG" ] || continue
+        echo -e "${CYAN}Устанавливаем ${NC}$PKG"
+
+        if [ "$PKG_MANAGER" = "apk" ]; then
+            echo -e "${YELLOW}Пропускаем установку $PKG для apk (только ipk)${NC}"
+        else
+            opkg install --force-reinstall "$PKG" >/dev/null 2>&1 || { echo -e "${RED}Не удалось установить $PKG!${NC}"; PAUSE; return; }
         fi
     done
 
-    # Чистим временные файлы
+    # ---------- Очистка ----------
     echo -e "${CYAN}Удаляем временные файлы${NC}"
     cd /
-    rm -rf "$WORKDIR" /tmp/*.ipk /tmp/*.zip /tmp/*zapret* 2>/dev/null
+    rm -rf "$WORKDIR"
 
-    # Проверяем успешность установки
+    # ---------- Проверка ----------
     if [ -f /etc/init.d/zapret ]; then
         echo -e "Zapret ${GREEN}установлен!${NC}\n"
         [ "$NO_PAUSE" != "1" ] && PAUSE
     else
-        echo -e "\n${RED}Zapret не был установлен!${NC}\n"
+        echo -e "${RED}Zapret не был установлен!${NC}\n"
         PAUSE
     fi
 }
+
+# ---------------- Пример запуска ----------------
+# install_Zapret
+
 # ==========================================
 # Меню настройки Discord
 # ==========================================
