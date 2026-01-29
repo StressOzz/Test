@@ -3,7 +3,7 @@
 # Zapret on remittor Manager by StressOzz
 # =========================================
 ZAPRET_MANAGER_VERSION="8.4"; ZAPRET_VERSION="72.20260128"; STR_VERSION_AUTOINSTALL="v6"
-TEST_HOST="https://rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com"; LAN_IP=$(uci get network.lan.ipaddr)
+TEST_HOST="https://rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com"; LAN_IP=$(uci get network.lan.ipaddr 2>/dev/null | cut -d/ -f1)
 GREEN="\033[1;32m"; RED="\033[1;31m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"
 MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
 WORKDIR="/tmp/zapret-update"; 
@@ -35,15 +35,17 @@ else
     PKG_IS_APK=0
 fi
 
-# ----------------- Функция определения версии -----------------
+# ==========================================
+# Получение версии
+# ==========================================
 get_versions() {
-    # ----------------- Определяем архитектуру -----------------
+
     LOCAL_ARCH=$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release)
     [ -z "$LOCAL_ARCH" ] && LOCAL_ARCH=$(opkg print-architecture | grep -v "noarch" | sort -k3 -n | tail -n1 | awk '{print $2}')
     USED_ARCH="$LOCAL_ARCH"
     LATEST_URL="https://github.com/remittor/zapret-openwrt/releases/download/v${ZAPRET_VERSION}/zapret_v${ZAPRET_VERSION}_${LOCAL_ARCH}.zip"
 
-    # ----------------- Определяем установленную версию -----------------
+
     if [ "$PKG_IS_APK" -eq 1 ]; then
         # apk: берём zapret*, оставляем только цифры версии
         INSTALLED_VER=$(apk info -v | grep '^zapret-' | head -n1 | cut -d'-' -f2 | sed 's/-r[0-9]\+$//')
@@ -54,7 +56,7 @@ get_versions() {
         [ -z "$INSTALLED_VER" ] && INSTALLED_VER="не найдена"
     fi
 
-    # ----------------- Статус NFQ -----------------
+
     NFQ_RUN=$(pgrep -f nfqws 2>/dev/null | wc -l)
     NFQ_RUN=${NFQ_RUN:-0}
     NFQ_ALL=$(/etc/init.d/zapret info 2>/dev/null | grep -o 'instance[0-9]\+' | wc -l)
@@ -66,14 +68,14 @@ get_versions() {
         NFQ_STAT="${NFQ_CLR}[${NFQ_RUN}/${NFQ_ALL}]${NC}"
     fi
 
-    # ----------------- Статус Zapret -----------------
+
     if [ -f /etc/init.d/zapret ]; then
         /etc/init.d/zapret status >/dev/null 2>&1 && ZAPRET_STATUS="${GREEN}запущен $NFQ_STAT${NC}" || ZAPRET_STATUS="${RED}остановлен${NC}"
     else
         ZAPRET_STATUS=""
     fi
 
-    # ----------------- Цвет установленной версии -----------------
+
     [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ] && INST_COLOR=$GREEN || INST_COLOR=$RED
     INSTALLED_DISPLAY=${INSTALLED_VER:-"не найдена"}
 }
@@ -101,7 +103,7 @@ install_Zapret() {
 
     [ "$NO_PAUSE" != "1" ] && echo; echo -e "${MAGENTA}Устанавливаем ZAPRET${NC}"
 
-    # Останавливаем предыдущий zapret
+
     if [ -f /etc/init.d/zapret ]; then
         echo -e "${CYAN}Останавливаем ${NC}zapret"
         /etc/init.d/zapret stop >/dev/null 2>&1
@@ -110,7 +112,7 @@ install_Zapret() {
         done
     fi
 
-    # Обновляем пакеты
+
     echo -e "${CYAN}Обновляем список пакетов${NC}"
     if [ "$PKG_IS_APK" -eq 1 ]; then
         apk update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении apk!${NC}\n"; PAUSE; return; }
@@ -118,14 +120,14 @@ install_Zapret() {
         opkg update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении opkg!${NC}\n"; PAUSE; return; }
     fi
 
-    # Подготовка рабочей папки
+
     mkdir -p "$WORKDIR"
     rm -f "$WORKDIR"/* 2>/dev/null
     cd "$WORKDIR" || return
 
     FILE_NAME=$(basename "$LATEST_URL")
 
-# Проверка unzip
+
 if ! command -v unzip >/dev/null 2>&1; then
     echo -e "${CYAN}Устанавливаем ${NC}unzip"
     if [ "$PKG_IS_APK" -eq 1 ]; then
@@ -135,26 +137,26 @@ if ! command -v unzip >/dev/null 2>&1; then
     fi
 fi
 
-    # Скачиваем архив
+
     echo -e "${CYAN}Скачиваем архив ${NC}$FILE_NAME"
     wget -q -U "Mozilla/5.0" -O "$FILE_NAME" "$LATEST_URL" || { echo -e "\n${RED}Не удалось скачать $FILE_NAME${NC}\n"; PAUSE; return; }
 
-    # Распаковываем архив
+
     echo -e "${CYAN}Распаковываем архив${NC}"
     unzip -o "$FILE_NAME" >/dev/null
 
-    # ----------------- Установка пакетов -----------------
+
     if [ "$PKG_IS_APK" -eq 1 ]; then
         PKG_PATH="$WORKDIR/apk"
 
-        # 1️⃣ Сначала zapret* (без luci)
+
         for PKG in "$PKG_PATH"/zapret*; do
             [ -f "$PKG" ] || continue
             echo "$PKG" | grep -q "luci" && continue
             install_pkg "$(basename "$PKG")" "$PKG" || return
         done
 
-        # 2️⃣ Потом luci*
+
         for PKG in "$PKG_PATH"/luci*; do
             [ -f "$PKG" ] || continue
             install_pkg "$(basename "$PKG")" "$PKG" || return
@@ -163,20 +165,20 @@ fi
     else
         PKG_PATH="$WORKDIR"
 
-        # 1️⃣ Сначала zapret_*.ipk
+
         for PKG in "$PKG_PATH"/zapret_*.ipk; do
             [ -f "$PKG" ] || continue
             install_pkg "$(basename "$PKG")" "$PKG" || return
         done
 
-        # 2️⃣ Потом luci-app-zapret_*.ipk
+
         for PKG in "$PKG_PATH"/luci-app-zapret_*.ipk; do
             [ -f "$PKG" ] || continue
             install_pkg "$(basename "$PKG")" "$PKG" || return
         done
     fi
 
-    # Чистим временные файлы
+
     echo -e "${CYAN}Удаляем временные файлы${NC}"
     cd /
     rm -rf "$WORKDIR" /tmp/*.ipk /tmp/*.zip /tmp/*zapret* 2>/dev/null
@@ -274,7 +276,7 @@ echo -e "Zapret ${GREEN}запущен!${NC}\n"; else echo -e "\n${RED}Zapret н
 # ==========================================
 # Удаление Zapret
 # ==========================================
-# ----------------- Удаление пакета -----------------
+
 pkg_remove() {
     local pkg_name="$1"
 
@@ -285,46 +287,44 @@ pkg_remove() {
     fi
 }
 
-# ----------------- Функция удаления Zapret -----------------
+
 uninstall_zapret() {
     local NO_PAUSE=$1
     [ "$NO_PAUSE" != "1" ] && echo
 
-    printf "%b\n" "${MAGENTA}Удаляем ZAPRET${NC}"
-    printf "%b\n" "${CYAN}Останавливаем ${NC}zapret"
+    echo -e "${MAGENTA}Удаляем ZAPRET${NC}"
+    echo -e "${CYAN}Останавливаем ${NC}zapret"
     /etc/init.d/zapret stop >/dev/null 2>&1
 
-    printf "%b\n" "${CYAN}Убиваем процессы${NC}"
+    echo -e "${CYAN}Убиваем процессы${NC}"
     for pid in $(pgrep -f /opt/zapret 2>/dev/null); do
         kill -9 "$pid" 2>/dev/null
     done
 
-    printf "%b\n" "${CYAN}Удаляем пакеты${NC}"
-    # 1️⃣ Сначала основной zapret
+    echo -e "${CYAN}Удаляем пакеты${NC}"
     pkg_remove zapret
-    # 2️⃣ Потом LuCI
     pkg_remove luci-app-zapret
 
-    printf "%b\n" "${CYAN}Удаляем временные файлы${NC}"
+    echo -e "${CYAN}Удаляем временные файлы${NC}"
     rm -rf /opt/zapret /etc/config/zapret /etc/firewall.zapret /etc/init.d/zapret \
            /tmp/*zapret* /var/run/*zapret* /tmp/*.ipk /tmp/*.zip 2>/dev/null
 
-    # Чистим cron
+
     crontab -l 2>/dev/null | grep -v -i "zapret" | crontab - 2>/dev/null
 
-    # Чистим nftables
+
     nft list tables 2>/dev/null | awk '{print $2}' | grep -E '(zapret|ZAPRET)' | while read t; do
         [ -n "$t" ] && nft delete table "$t" 2>/dev/null
     done
 
-    # Чистим остаточные файлы из переменных (если определены)
+
     rm -rf "${FINAL_STR:-}" "${NEW_STR:-}" "${OLD_STR:-}" "${SAVED_STR:-}" \
            "${TMP_LIST:-}" "${HOSTS_USER:-}" "${BACKUP_FILE:-}" "${TMP_SF:-}" 2>/dev/null
 
     # Чистим hosts
     hosts_clear
 
-    printf "%b\n" "Zapret ${GREEN}удалён!${NC}\n"
+    echo -e "Zapret ${GREEN}удалён!${NC}\n"
     [ "$NO_PAUSE" != "1" ] && PAUSE
 }
 # ==========================================
@@ -495,7 +495,6 @@ D_o_H() {
         PKG_MANAGER="opkg"
     fi
 
-    # Проверка, установлен ли пакет
     if { [ "$PKG_MANAGER" = "apk" ] && apk info -e "$PKG_CHECK" >/dev/null 2>&1; } || \
        { [ "$PKG_MANAGER" = "opkg" ] && opkg list-installed | grep -q '^https-dns-proxy '; }; then
 
