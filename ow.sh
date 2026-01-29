@@ -2,7 +2,7 @@
 # ==========================================
 # Zapret on remittor Manager by StressOzz
 # =========================================
-ZAPRET_MANAGER_VERSION="8.4"; ZAPRET_VERSION="72.20260125"; STR_VERSION_AUTOINSTALL="v6"
+ZAPRET_MANAGER_VERSION="8.4"; ZAPRET_VERSION="72.20260128"; STR_VERSION_AUTOINSTALL="v6"
 TEST_HOST="https://rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com"; LAN_IP=$(uci get network.lan.ipaddr)
 GREEN="\033[1;32m"; RED="\033[1;31m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"
 MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -28,162 +28,74 @@ PAUSE() { echo "Нажмите Enter..."; read dummy; }; BACKUP_DIR="/opt/zapret
 # ==========================================
 # Получение версии
 # ==========================================
-#!/bin/sh
-
-# ---------------- Цвета ----------------
-GREEN="\033[1;32m"; RED="\033[1;31m"; CYAN="\033[1;36m"
-MAGENTA="\033[1;35m"; YELLOW="\033[1;33m"; NC="\033[0m"
-
-# ---------------- Пауза ----------------
-PAUSE() {
-    read -rp "Нажмите Enter для продолжения..."
-}
-
-# ---------------- Версия Zapret ----------------
-ZAPRET_VERSION="1.2.3"   # <--- здесь указываем актуальную версию
-WORKDIR="/tmp/zapret_install"
-
-# ---------------- Функция получения версий ----------------
 get_versions() {
-    # ---------- Пакетный менеджер ----------
+    # Определяем пакетный менеджер
+    PKG_IS_APK=0
     if command -v apk >/dev/null 2>&1; then
-        PKG_MANAGER="apk"
+        PKG_IS_APK=1
     elif command -v opkg >/dev/null 2>&1; then
-        PKG_MANAGER="opkg"
+        PKG_IS_APK=0
     else
-        echo -e "${RED}Ни apk, ни opkg не найдены. Скрипт не сможет работать.${NC}"
-        return 1
+        echo "Ни apk, ни opkg не найдены. Выход."
+        exit 1
     fi
 
-    # ---------- OpenWrt версия ----------
-    if [ -f /etc/openwrt_release ]; then
-        OPENWRT_VERSION=$(awk -F\' '/DISTRIB_RELEASE/ {print $2}' /etc/openwrt_release)
-        LOCAL_ARCH=$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release)
-    fi
-    [ -z "$OPENWRT_VERSION" ] && OPENWRT_VERSION="неизвестна"
-    [ -z "$LOCAL_ARCH" ] && LOCAL_ARCH=$(uname -m)
-
+    # Определяем архитектуру
+    LOCAL_ARCH=$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release 2>/dev/null)
+    [ -z "$LOCAL_ARCH" ] && LOCAL_ARCH=$(opkg print-architecture 2>/dev/null | grep -v "noarch" | sort -k3 -n | tail -n1 | awk '{print $2}')
     USED_ARCH="$LOCAL_ARCH"
+    
+    # URL последнего релиза
     LATEST_URL="https://github.com/remittor/zapret-openwrt/releases/download/v${ZAPRET_VERSION}/zapret_v${ZAPRET_VERSION}_${LOCAL_ARCH}.zip"
 
-    # ---------- Установленная версия ----------
-    INSTALLED_VER="не найдена"
-    if [ "$PKG_MANAGER" = "apk" ]; then
-        TMP=$(apk list --installed 2>/dev/null | grep -o "^zapret-[0-9.]\+")
-        [ -n "$TMP" ] && INSTALLED_VER=$(echo "$TMP" | head -n1 | sed 's/zapret-//')
+    # Проверка установленной версии
+    if [ "$PKG_IS_APK" -eq 1 ]; then
+        INSTALLED_VER=$(apk info | grep zapret | sed -E 's/-r[0-9]+$//')
     else
-        TMP=$(opkg list-installed zapret 2>/dev/null | awk '{print $2}')
-        [ -n "$TMP" ] && INSTALLED_VER=$(echo "$TMP" | head -n1)
+        INSTALLED_VER=$(opkg list-installed zapret | awk '{sub(/-r[0-9]+$/, "", $3); print $3}')
     fi
+    [ -z "$INSTALLED_VER" ] && INSTALLED_VER="не найдена"
 
-    # ---------- Статус NFQ ----------
-    NFQ_RUN=$(pgrep -f nfqws 2>/dev/null | wc -l)
+    # Статус nfq
+    NFQ_RUN=$(pgrep -f nfqws | wc -l)
     NFQ_ALL=$(/etc/init.d/zapret info 2>/dev/null | grep -o 'instance[0-9]\+' | wc -l)
     NFQ_STAT=""
     if [ "$NFQ_RUN" -ne 0 ] || [ "$NFQ_ALL" -ne 0 ]; then
-        [ "$NFQ_RUN" -eq "$NFQ_ALL" ] && NFQ_CLR="$GREEN" || NFQ_CLR="$RED"
+        if [ "$NFQ_RUN" -eq "$NFQ_ALL" ]; then
+            NFQ_CLR="$GREEN"
+        else
+            NFQ_CLR="$RED"
+        fi
         NFQ_STAT="${NFQ_CLR}[${NFQ_RUN}/${NFQ_ALL}]${NC}"
     fi
 
-    # ---------- Статус Zapret ----------
-    ZAPRET_STATUS=""
+    # Статус сервиса
     if [ -f /etc/init.d/zapret ]; then
-        if /etc/init.d/zapret status 2>/dev/null | grep -qi running; then
-            ZAPRET_STATUS="${GREEN}запущен $NFQ_STAT${NC}"
-        else
-            ZAPRET_STATUS="${RED}остановлен${NC}"
-        fi
+        /etc/init.d/zapret status 2>/dev/null | grep -qi running && ZAPRET_STATUS="${GREEN}запущен $NFQ_STAT${NC}" || ZAPRET_STATUS="${RED}остановлен${NC}"
+    else
+        ZAPRET_STATUS=""
     fi
 
-    # ---------- Цвет версии ----------
-    [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ] && INST_COLOR=$GREEN || INST_COLOR=$RED
-    INSTALLED_DISPLAY="$INSTALLED_VER"
-}
-
-# ---------------- Установка Zapret ----------------
-install_Zapret() {
-    NO_PAUSE=$1
-    get_versions || return
-
+    # Цвет для установленной версии
     if [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ]; then
-        echo -e "\nZapret ${GREEN}уже установлен!${NC}\n"
-        PAUSE
-        return
-    fi
-
-    [ "$NO_PAUSE" != "1" ] && echo
-    echo -e "${MAGENTA}Устанавливаем ZAPRET${NC}"
-
-    # ---------- Остановка старого ----------
-    if [ -f /etc/init.d/zapret ]; then
-        echo -e "${CYAN}Останавливаем ${NC}zapret"
-        /etc/init.d/zapret stop >/dev/null 2>&1
-        pkill -f /opt/zapret 2>/dev/null
-    fi
-
-    # ---------- Обновление пакетов ----------
-    echo -e "${CYAN}Обновляем список пакетов${NC}"
-    if [ "$PKG_MANAGER" = "apk" ]; then
-        apk update >/dev/null 2>&1 || { echo -e "${RED}Ошибка при обновлении apk${NC}"; PAUSE; return; }
+        INST_COLOR=$GREEN
+        INSTALLED_DISPLAY="$INSTALLED_VER"
     else
-        opkg update >/dev/null 2>&1 || { echo -e "${RED}Ошибка при обновлении opkg${NC}"; PAUSE; return; }
+        INST_COLOR=$RED
+        INSTALLED_DISPLAY=$([ "$INSTALLED_VER" != "не найдена" ] && echo "$INSTALLED_VER" || echo "$INSTALLED_VER")
     fi
-
-    # ---------- Подготовка рабочего каталога ----------
-    mkdir -p "$WORKDIR"
-    rm -f "$WORKDIR"/* 2>/dev/null
-    cd "$WORKDIR" || return
-
-    FILE_NAME=$(basename "$LATEST_URL")
-
-    # ---------- Установка unzip ----------
-    if ! command -v unzip >/dev/null 2>&1; then
-        echo -e "${CYAN}Устанавливаем unzip${NC}"
-        if [ "$PKG_MANAGER" = "apk" ]; then
-            apk add unzip >/dev/null 2>&1 || { echo -e "${RED}Не удалось установить unzip!${NC}"; PAUSE; return; }
-        else
-            opkg install unzip >/dev/null 2>&1 || { echo -e "${RED}Не удалось установить unzip!${NC}"; PAUSE; return; }
-        fi
-    fi
-
-    # ---------- Скачивание ----------
-    echo -e "${CYAN}Скачиваем архив ${NC}$FILE_NAME"
-    wget -q -U "Mozilla/5.0" -O "$FILE_NAME" "$LATEST_URL" || { echo -e "${RED}Не удалось скачать $FILE_NAME${NC}"; PAUSE; return; }
-
-    # ---------- Распаковка ----------
-    echo -e "${CYAN}Распаковываем архив${NC}"
-    unzip -o "$FILE_NAME" >/dev/null
-
-    # ---------- Установка пакетов ----------
-    for PKG in zapret_*.ipk luci-app-zapret_*.ipk; do
-        [ -f "$PKG" ] || continue
-        echo -e "${CYAN}Устанавливаем ${NC}$PKG"
-
-        if [ "$PKG_MANAGER" = "apk" ]; then
-            echo -e "${YELLOW}Пропускаем установку $PKG для apk (только ipk)${NC}"
-        else
-            opkg install --force-reinstall "$PKG" >/dev/null 2>&1 || { echo -e "${RED}Не удалось установить $PKG!${NC}"; PAUSE; return; }
-        fi
-    done
-
-    # ---------- Очистка ----------
-    echo -e "${CYAN}Удаляем временные файлы${NC}"
-    cd /
-    rm -rf "$WORKDIR"
-
-    # ---------- Проверка ----------
-    if [ -f /etc/init.d/zapret ]; then
-        echo -e "Zapret ${GREEN}установлен!${NC}\n"
-        [ "$NO_PAUSE" != "1" ] && PAUSE
-    else
-        echo -e "${RED}Zapret не был установлен!${NC}\n"
-        PAUSE
-    fi
-}
-
-# ---------------- Пример запуска ----------------
-# install_Zapret
-
+}# ==========================================
+# Установка Zapret
+# ==========================================
+install_Zapret() { local NO_PAUSE=$1; get_versions; if [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ]; then echo -e "\nZapret ${GREEN}уже установлен!${NC}\n"; PAUSE; return; fi
+[ "$NO_PAUSE" != "1" ] && echo; echo -e "${MAGENTA}Устанавливаем ZAPRET${NC}"; if [ -f /etc/init.d/zapret ]; then echo -e "${CYAN}Останавливаем ${NC}zapret" && /etc/init.d/zapret stop >/dev/null 2>&1; for pid in $(pgrep -f /opt/zapret 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done; fi
+echo -e "${CYAN}Обновляем список пакетов${NC}"; opkg update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; PAUSE; return; }
+mkdir -p "$WORKDIR"; rm -f "$WORKDIR"/* 2>/dev/null; cd "$WORKDIR" || return; FILE_NAME=$(basename "$LATEST_URL"); if ! command -v unzip >/dev/null 2>&1; then
+echo -e "${CYAN}Устанавливаем ${NC}unzip" && opkg install unzip >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить unzip!${NC}\n"; PAUSE; return; }; fi
+echo -e "${CYAN}Скачиваем архив ${NC}$FILE_NAME"; wget -q -U "Mozilla/5.0" -O "$FILE_NAME" "$LATEST_URL" || { echo -e "\n${RED}Не удалось скачать ${NC}$FILE_NAME\n"; PAUSE; return; }
+echo -e "${CYAN}Распаковываем архив${NC}"; unzip -o "$FILE_NAME" >/dev/null; for PKG in zapret_*.ipk luci-app-zapret_*.ipk; do [ -f "$PKG" ] && echo -e "${CYAN}Устанавливаем ${NC}$PKG" && opkg install --force-reinstall "$PKG" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить $PKG!${NC}\n"
+PAUSE; return; } ; done; echo -e "${CYAN}Удаляем временные файлы${NC}"; cd /; rm -rf "$WORKDIR" /tmp/*.ipk /tmp/*.zip /tmp/*zapret* 2>/dev/null; if [ -f /etc/init.d/zapret ]; then echo -e "Zapret ${GREEN}установлен!${NC}\n"
+[ "$NO_PAUSE" != "1" ] && PAUSE; else echo -e "\n${RED}Zapret не был установлен!${NC}\n"; PAUSE; fi; }
 # ==========================================
 # Меню настройки Discord
 # ==========================================
@@ -273,37 +185,11 @@ echo -e "Zapret ${GREEN}запущен!${NC}\n"; else echo -e "\n${RED}Zapret н
 # ==========================================
 # Удаление Zapret
 # ==========================================
-uninstall_zapret() {
-    local NO_PAUSE=$1
-    [ "$NO_PAUSE" != "1" ] && echo
-    echo -e "${MAGENTA}Удаляем ZAPRET${NC}\n${CYAN}Останавливаем ${NC}zapret\n${CYAN}Убиваем процессы${NC}"
-
-    /etc/init.d/zapret stop >/dev/null 2>&1
-    for pid in $(pgrep -f /opt/zapret 2>/dev/null); do
-        kill -9 "$pid" 2>/dev/null
-    done
-
-    echo -e "${CYAN}Удаляем пакеты${NC}"
-    if [ "$PKG_IS_APK" -eq 1 ]; then
-        apk del zapret luci-app-zapret >/dev/null 2>&1
-    else
-        opkg --force-removal-of-dependent-packages --autoremove remove zapret luci-app-zapret >/dev/null 2>&1
-    fi
-
-    echo -e "${CYAN}Удаляем временные файлы${NC}"
-    rm -rf /opt/zapret /etc/config/zapret /etc/firewall.zapret /etc/init.d/zapret /tmp/*zapret* /var/run/*zapret* /tmp/*.ipk /tmp/*.zip 2>/dev/null
-    crontab -l 2>/dev/null | grep -v -i "zapret" | crontab - 2>/dev/null
-
-    nft list tables 2>/dev/null | awk '{print $2}' | grep -E '(zapret|ZAPRET)' | while read t; do
-        [ -n "$t" ] && nft delete table "$t" 2>/dev/null
-    done
-
-    rm -rf $FINAL_STR $NEW_STR $OLD_STR $SAVED_STR $TMP_LIST $HOSTS_USER $BACKUP_FILE $TMP_SF
-    hosts_clear
-
-    echo -e "Zapret ${GREEN}удалён!${NC}\n"
-    [ "$NO_PAUSE" != "1" ] && PAUSE
-}
+uninstall_zapret() { local NO_PAUSE=$1; [ "$NO_PAUSE" != "1" ] && echo; echo -e "${MAGENTA}Удаляем ZAPRET${NC}\n${CYAN}Останавливаем ${NC}zapret\n${CYAN}Убиваем процессы${NC}"
+/etc/init.d/zapret stop >/dev/null 2>&1; for pid in $(pgrep -f /opt/zapret 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done; echo -e "${CYAN}Удаляем пакеты${NC}"; opkg --force-removal-of-dependent-packages --autoremove remove zapret luci-app-zapret >/dev/null 2>&1
+echo -e "${CYAN}Удаляем временные файлы${NC}"; rm -rf /opt/zapret /etc/config/zapret /etc/firewall.zapret /etc/init.d/zapret /tmp/*zapret* /var/run/*zapret* /tmp/*.ipk /tmp/*.zip 2>/dev/null; crontab -l 2>/dev/null | grep -v -i "zapret" | crontab - 2>/dev/null
+nft list tables 2>/dev/null | awk '{print $2}' | grep -E '(zapret|ZAPRET)' | while read t; do [ -n "$t" ] && nft delete table "$t" 2>/dev/null; done;  rm -rf $FINAL_STR $NEW_STR $OLD_STR $SAVED_STR $TMP_LIST $HOSTS_USER $BACKUP_FILE $TMP_SF
+hosts_clear; echo -e "Zapret ${GREEN}удалён!${NC}\n"; [ "$NO_PAUSE" != "1" ] && PAUSE; }
 # ==========================================
 # Подбор стратегии для Ютуб
 # ==========================================
@@ -368,7 +254,7 @@ printf '%s\n' "--dpi-desync-fake-tls-mod=rnd,dupsid,sni=ggpht.com" "--dpi-desync
 printf '%s\n' "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=hostfakesplit" "--dpi-desync-hostfakesplit-mod=host=max.ru" "--dpi-desync-hostfakesplit-midhost=host-2" "--dpi-desync-split-seqovl=726" "--dpi-desync-fooling=badsum,badseq" "--dpi-desync-badseq-increment=0"; }
 strategy_v7() { printf '%s\n' "#v7" "#Yv03" "--filter-tcp=443" "--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt" "--dpi-desync=fake,multisplit" "--dpi-desync-split-pos=2,sld" "--dpi-desync-fake-tls=0x0F0F0F0F" "--dpi-desync-fake-tls=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin"
 printf '%s\n' "--dpi-desync-fake-tls-mod=rnd,dupsid,sni=ggpht.com" "--dpi-desync-split-seqovl=620" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin" "--dpi-desync-fooling=badsum,badseq"
-printf '%s\n' "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake,multisplit" "--dpi-desync-split-seqovl=654" "--dpi-desync-split-pos=1" "--dpi-desync-fooling=ts" "--dpi-desync-repeats=8" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/max.bin" "--dpi-desync-fake-tls=/opt/zapret/files/fake/max.bin"; }
+printf '%s\n' "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake,multisplit" "--dpi-desync-split-seqovl=654" "--dpi-desync-split-pos=1" "--dpi-desync-fooling=badseq,badsum" "--dpi-desync-repeats=8" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/max.bin" "--dpi-desync-fake-tls=/opt/zapret/files/fake/max.bin" "--dpi-desync-badseq-increment=0"; }
 strategy_v8() { printf '%s\n' "#v8" "#Yv03" "--filter-tcp=443" "--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt" "--dpi-desync=fake,multisplit" "--dpi-desync-split-pos=2,sld" "--dpi-desync-fake-tls=0x0F0F0F0F" "--dpi-desync-fake-tls=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin"
 printf '%s\n' "--dpi-desync-fake-tls-mod=rnd,dupsid,sni=ggpht.com" "--dpi-desync-split-seqovl=620" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin" "--dpi-desync-fooling=badsum,badseq"
 printf '%s\n' "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake" "--dpi-desync-repeats=6" "--dpi-desync-fooling=ts" "--dpi-desync-fake-tls=/opt/zapret/files/fake/4pda.bin" "--dpi-desync-fake-tls-mod=none" ; }
@@ -519,10 +405,10 @@ download_strategies 1; cp /opt/zapret_temp/str_flow.txt /opt/zapret_temp/str_tes
 do strategy_v$N >> "$STR_FILE" 2>/dev/null || break; done; sed -i '/#Y/d' "$STR_FILE"; TOTAL_STR=$(grep -c '^#' "$STR_FILE"); echo -e "${CYAN}Найдено стратегий: ${NC}$TOTAL_STR"
 URLS="$(cat <<EOF
 Госуслуги|https://gosuslugi.ru
-ЛК Госуслуги|https://esia.gosuslugi.ru
+Госуслуги ЛК|https://esia.gosuslugi.ru
 Налоги|https://nalog.ru
-ЛК Налоги|https://lkfl2.nalog.ru
-ntc.party|https://ntc.party/uploads/default/original/1X/d79b1fc888df4f6a5764f6c65b79db9d1077abbd.png
+Налоги ЛК|https://lkfl2.nalog.ru
+ntc.party|https://ntc.party/
 RuTube|https://rutube.ru
 Instagram|https://instagram.com
 Rutor|https://rutor.info
@@ -536,36 +422,34 @@ Pornhub|https://pornhub.com
 Discord|https://discord.com
 X|https://x.com
 Filmix|https://filmix.my
-Flight Radar|https://flightradar24.com
-cdn77|https://cdn77.com
-Play Google|https://play.google.com
+FlightRadar24|https://flightradar24.com
+GooglePlay|https://play.google.com
 Ottai|https://ottai.com
-US.CF-01    Cloudflare|https://img.wzstats.gg/cleaver/gunFullDisplay?t=0.8379293615805524
-US.CF-02    Cloudflare|https://genshin.jmp.blue/characters/all
-US.CF-03    Cloudflare|https://api.frankfurter.dev/v1/2000-01-01..2002-12-31?t=0.10086058232485262
-US.CF-04    Cloudflare|https://www.bigcartel.com/?t=0.05350771418326239
-US.DO-01@0  DigitalOcean|https://genderize.io/?t=0.690010399215886
-US.DO-01@1  DigitalOcean|https://genderize.io/?t=0.8043720968884225
-DE.HE-01    Hetzner|https://j.dejure.org/jcg/doctrine/doctrine_banner.webp?t=0.9998959160553804
-DE.HE-02    Hetzner|https://accesorioscelular.com/tienda/css/plugins.css?t=0.21851062503227425
-FI.HE-01    Hetzner|https://251b5cd9.nip.io/1MB.bin?t=0.4002108804473481
-FI.HE-02    Hetzner|https://nioges.com/libs/fontawesome/webfonts/fa-solid-900.woff2?t=0.5863188987474373
-FI.HE-03    Hetzner|https://5fd8bdae.nip.io/1MB.bin?t=0.2578104779291205
-FI.HE-04    Hetzner|https://5fd8bca5.nip.io/1MB.bin?t=0.15580206924030682
-FR.OVH-01   OVH|https://eu.api.ovh.com/console/rapidoc-min.js?t=0.4173820664969895
-FR.OVH-02   OVH|https://ovh.sfx.ovh/10M.bin?t=0.8326647985641201
-SE.OR-01    Oracle|https://oracle.sfx.ovh/10M.bin?t=0.23943050058539272
-DE.AWS-01   AWS|https://www.getscope.com/assets/fonts/fa-solid-900.woff2?t=0.5476677250009963
-US.AWS-01   AWS|https://corp.kaltura.com/wp-content/cache/min/1/wp-content/themes/airfleet/dist/styles/theme.css?t=0.4091857736085579
-US.GC-01    Google Cloud|https://api.usercentrics.eu/gvl/v3/en.json?t=0.9164301389568108
-US.FST-01   Fastly|https://www.jetblue.com/footer/footer-element-es2015.js?t=0.3058062700141776
-CA.FST-01   Fastly|https://www.cnn10.com/?t=0.8325471181626721
-US.AKM-01   Akamai|https://www.roxio.com/static/roxio/images/products/creator/nxt9/call-action-footer-bg.jpg?t=0.3837369616891504
-PL.AKM-01   Akamai|https://media-assets.stryker.com/is/image/stryker/gateway_1?$max_width_1410$&t=0.6966182400011641
-US.CDN77-01 CDN77|https://cdn.eso.org/images/banner1920/eso2520a.jpg?t=0.5186907385065521
-FR.CNTB-01  Contabo|https://bandobaskent.com/logo.png?t=0.9087762933670076
-NL.SW-01    Scaleway|https://www.velivole.fr/img/header.jpg?t=0.7058447082956326
-US.CNST-01  Constant|https://cdn.xuansiwei.com/common/lib/font-awesome/4.7.0/fontawesome-webfont.woff2?v=4.7.0&t=0.45608957890091195
+US.CF-01|https://img.wzstats.gg/cleaver/gunFullDisplay
+US.CF-02|https://genshin.jmp.blue/characters/all
+US.CF-03|https://api.frankfurter.dev/v1/2000-01-01..2002-12-31
+US.CF-04|https://www.bigcartel.com/
+US.DO-01|https://genderize.io/
+DE.HE-01|https://j.dejure.org/jcg/doctrine/doctrine_banner.webp
+DE.HE-02|https://accesorioscelular.com/tienda/css/plugins.css
+FI.HE-01|https://251b5cd9.nip.io/1MB.bin
+FI.HE-02|https://nioges.com/libs/fontawesome/webfonts/fa-solid-900.woff2
+FI.HE-03|https://5fd8bdae.nip.io/1MB.bin
+FI.HE-04|https://5fd8bca5.nip.io/1MB.bin
+FR.OVH-01|https://eu.api.ovh.com/console/rapidoc-min.js
+FR.OVH-02|https://ovh.sfx.ovh/10M.bin
+SE.OR-01|https://oracle.sfx.ovh/10M.bin
+DE.AWS-01|https://www.getscope.com/assets/fonts/fa-solid-900.woff2
+US.AWS-01|https://corp.kaltura.com/wp-content/cache/min/1/wp-content/themes/airfleet/dist/styles/theme.css
+US.GC-01|https://api.usercentrics.eu/gvl/v3/en.json
+US.FST-01|https://www.jetblue.com/footer/footer-element-es2015.js
+CA.FST-01|https://www.cnn10.com/
+US.AKM-01|https://www.roxio.com/static/roxio/images/products/creator/nxt9/call-action-footer-bg.jpg
+PL.AKM-01|https://media-assets.stryker.com/is/image/stryker/gateway_1
+US.CDN77-01|https://cdn.eso.org/images/banner1920/eso2520a.jpg
+FR.CNTB-01|https://bandobaskent.com/logo.png
+NL.SW-01|https://www.velivole.fr/img/header.jpg
+US.CNST-01|https://cdn.xuansiwei.com/common/lib/font-awesome/4.7.0/fontawesome-webfont.woff2
 EOF
 )"; TOTAL=$(echo "$URLS" | grep -c "|"); : > "$RESULTS"; check_url() { TEXT=$(echo "$1" | cut -d"|" -f1); LINK=$(echo "$1" | cut -d"|" -f2)
 if curl -Is --connect-timeout 2 --max-time 3 "$LINK" >/dev/null 2>&1; then echo 1 >> "$TMP_OK"; echo -e "${GREEN}[ OK ]${NC} $TEXT"; else echo -e "${RED}[FAIL]${NC} $TEXT"; fi; }
@@ -590,6 +474,7 @@ for pkg in byedpi youtubeUnblock; do if opkg list-installed | grep -q "^$pkg"; t
 if uci get firewall.@defaults[0].flow_offloading 2>/dev/null | grep -q '^1$' || uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null | grep -q '^1$'; then if ! grep -q 'meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc
 then echo -e "\n${RED}Включён ${NC}Flow Offloading${RED}!${NC}\n${NC}Zapret${RED} некорректно работает с включённым ${NC}Flow Offloading${RED}!\nПримените ${NC}FIX${RED} в системном меню!${NC}"; fi; fi
 pgrep -f "/opt/zapret" >/dev/null 2>&1 && str_stp_zpr="Остановить" || str_stp_zpr="Запустить"; echo -e "\n${YELLOW}Установленная версия:    ${INST_COLOR}$INSTALLED_DISPLAY${NC}"; [ -n "$ZAPRET_STATUS" ] && echo -e "${YELLOW}Статус Zapret:${NC}           $ZAPRET_STATUS"
+if hosts_enabled; then echo -e "${YELLOW}Домены в hosts:          ${GREEN}добавлены${NC}"; fi
 [ -f "$DATE_FILE" ] && echo -e "${YELLOW}Резервная копия:${NC}         ${GREEN}сохранена"; show_script_50 && [ -n "$name" ] && echo -e "${YELLOW}Установлен скрипт:${NC}       $name"; grep -q "$Fin_IP_Dis" /etc/hosts && echo -e "${YELLOW}Финские IP для Discord:  ${GREEN}включены${NC}"
 [ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*88,500,1024-19293,19345-49999,50101-65535" "$CONF" && grep -q -- "--filter-udp=88,500,1024-19293,19345-49999,50101-65535" "$CONF" && echo -e "${YELLOW}Стратегия для игр:${NC}       ${GREEN}включена${NC}"
 [ -n "$DOH_STATUS" ] && opkg list-installed | grep -q '^https-dns-proxy ' && echo -e "${YELLOW}DNS over HTTPS:${NC}          $DOH_STATUS"; web_is_enabled && if web_is_enabled; then echo -e "${YELLOW}Доступ из браузера:${NC}      $LAN_IP:7681"; fi
@@ -597,7 +482,7 @@ quic_is_blocked && if quic_is_blocked; then echo -e "${YELLOW}Блокировк
 then echo -e "${YELLOW}FIX для Flow Offloading:${NC} ${GREEN}включён${NC}"; fi; [ -f "$CONF" ] && line=$(grep -m1 '^#general' "$CONF") && [ -n "$line" ] && echo -e "${YELLOW}Используется стратегия:${NC}  ${CYAN}${line#?}${NC}"
 if [ -f "$CONF" ]; then current="$ver$( [ -n "$ver" ] && [ -n "$yv_ver" ] && echo " / " )$yv_ver"; DV=$(grep -o -E '^#[[:space:]]*Dv[0-9][0-9]*' "$CONF" | sed 's/^#[[:space:]]*/\/ /' | head -n1)
 if [ -n "$current" ]; then echo -e "${YELLOW}Используется стратегия:${NC}  ${CYAN}$current${DV:+ $DV}${RKN_STATUS:+ $RKN_STATUS}${NC}"; elif [ -n "$RKN_STATUS" ]; then echo -e "${YELLOW}Используется стратегия:${NC}${CYAN}  РКН${DV:+ $DV}${NC}"; fi; fi
-echo -e "\n${CYAN}1) ${GREEN}Установить${NC} Zapret\n${CYAN}2) ${GREEN}Меню стратегий${NC}\n${CYAN}3) ${GREEN}Меню управления настройками\n${CYAN}4) ${GREEN}$str_stp_zpr ${NC}Zapret"
+echo -e "\n${CYAN}1) ${GREEN}Установить${NC} Zapret\n${CYAN}2) ${GREEN}Меню стратегий${NC}\n${CYAN}3) ${GREEN}Меню настроек\n${CYAN}4) ${GREEN}$str_stp_zpr ${NC}Zapret"
 echo -e "${CYAN}5) ${GREEN}Удалить ${NC}Zapret\n${CYAN}6) ${GREEN}Меню настройки ${NC}Discord\n${CYAN}7) ${GREEN}Меню ${NC}DNS over HTTPS\n${CYAN}8) ${GREEN}Удалить → установить → настроить${NC} Zapret\n${CYAN}0) ${GREEN}Системное меню${NC}" ; echo -ne "${CYAN}Enter) ${GREEN}Выход${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read choice
 case "$choice" in 888) echo; uninstall_zapret "1"; install_Zapret "1"; curl -fsSL https://raw.githubusercontent.com/StressOzz/Test/refs/heads/main/zapret -o "$CONF"; hosts_add; rm -f "$EXCLUDE_FILE"; wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL"; ZAPRET_RESTART; PAUSE;;
 1) install_Zapret;; 2) menu_str;; 3) backup_menu;; 4) pgrep -f /opt/zapret >/dev/null 2>&1 && stop_zapret || start_zapret;; 5) uninstall_zapret;; 6) scrypt_install;; 7) DoH_menu;; 8) zapret_key;; 0) sys_menu;; *) echo; exit 0;; esac; }
