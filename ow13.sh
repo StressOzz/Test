@@ -87,14 +87,12 @@ install_Zapret() {
     echo -e "${CYAN}Распаковываем архив${NC}"
     unzip -o "$FILE_NAME" >/dev/null
 
-    # --- Сначала основной пакет zapret ---
-    if [ -f "$WORKDIR/apk/zapret-*.apk" ]; then
-        for PKG in "$WORKDIR"/apk/zapret-*.apk; do
-            [ -f "$PKG" ] || continue
-            chmod 644 "$PKG"
-            echo -e "${CYAN}Устанавливаем ${NC}$PKG"
-            apk add --allow-untrusted "$PKG" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить $PKG!${NC}\n"; PAUSE; return; }
-        done
+    # --- Устанавливаем основной пакет zapret ---
+    ZAPRET_PKG=$(ls "$WORKDIR"/apk/zapret-*.apk 2>/dev/null | head -n1)
+    if [ -n "$ZAPRET_PKG" ] && [ -f "$ZAPRET_PKG" ]; then
+        chmod 644 "$ZAPRET_PKG"
+        echo -e "${CYAN}Устанавливаем ${NC}$ZAPRET_PKG"
+        apk add --allow-untrusted "$ZAPRET_PKG" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить $ZAPRET_PKG!${NC}\n"; PAUSE; return; }
     else
         echo -e "\n${RED}Основной пакет zapret не найден!${NC}\n"
         PAUSE
@@ -102,13 +100,11 @@ install_Zapret() {
     fi
 
     # --- Потом luci-app-zapret ---
-    if [ -f "$WORKDIR/apk/luci-app-zapret-*.apk" ]; then
-        for PKG in "$WORKDIR"/apk/luci-app-zapret-*.apk; do
-            [ -f "$PKG" ] || continue
-            chmod 644 "$PKG"
-            echo -e "${CYAN}Устанавливаем ${NC}$PKG"
-            apk add --allow-untrusted "$PKG" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить $PKG!${NC}\n"; PAUSE; return; }
-        done
+    LUCIPKG=$(ls "$WORKDIR"/apk/luci-app-zapret-*.apk 2>/dev/null | head -n1)
+    if [ -n "$LUCIPKG" ] && [ -f "$LUCIPKG" ]; then
+        chmod 644 "$LUCIPKG"
+        echo -e "${CYAN}Устанавливаем ${NC}$LUCIPKG"
+        apk add --allow-untrusted "$LUCIPKG" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить $LUCIPKG!${NC}\n"; PAUSE; return; }
     fi
 
     echo -e "${CYAN}Удаляем временные файлы${NC}"
@@ -124,6 +120,7 @@ install_Zapret() {
         PAUSE
     fi
 }
+
 
 # ==========================================
 # Меню настройки Discord
