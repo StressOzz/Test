@@ -21,7 +21,16 @@ RKN_URL="https://raw.githubusercontent.com/IndeecFOX/zapret4rocket/refs/heads/ma
 EXCLUDE_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/zapret-hosts-user-exclude.txt"
 INSTAGRAM="57.144.222.34 instagram.com www.instagram.com\n157.240.9.174 instagram.com www.instagram.com\n157.240.245.174 instagram.com www.instagram.com\n157.240.205.174 instagram.com www.instagram.com"
 PDA="185.87.51.182 4pda.to www.4pda.to"; NTC="30.255.77.28 ntc.party\n130.255.77.28 ntc.party"; RUTOR="173.245.58.219 rutor.info d.rutor.info"; LIBRUSEC="185.39.18.98 lib.rus.ec www.lib.rus.ec"
-AI="45.155.204.190 gemini.google.com\n45.155.204.190 grok.com accounts.x.ai assets.grok.com\n45.155.204.190 chatgpt.com ab.chatgpt.com auth.openai.com auth0.openai.com platform.openai.com cdn.oaistatic.com files.oaiusercontent.com cdn.auth0.com tcr9i.chat.openai.com\n45.155.204.190 webrtc.chatgpt.com android.chat.openai.comapi.openai.com operator.chatgpt.com sora.chatgpt.com sora.com videos.openai.com ios.chat.openai.com"
+# AI="45.155.204.190 gemini.google.com\n45.155.204.190 grok.com accounts.x.ai assets.grok.com\n45.155.204.190 chatgpt.com ab.chatgpt.com auth.openai.com auth0.openai.com platform.openai.com cdn.oaistatic.com files.oaiusercontent.com cdn.auth0.com tcr9i.chat.openai.com\n45.155.204.190 webrtc.chatgpt.com android.chat.openai.comapi.openai.com operator.chatgpt.com sora.chatgpt.com sora.com videos.openai.com ios.chat.openai.com"
+
+AI="45.155.204.190 gemini.google.com chatgpt.com ab.chatgpt.com auth.openai.com auth0.openai.com platform.openai.com\n45.155.204.190 cdn.oaistatic.com files.oaiusercontent.com cdn.auth0.com tcr9i.chat.openai.com webrtc.chatgpt.com
+45.155.204.190 android.chat.openai.com api.openai.com operator.chatgpt.com sora.chatgpt.com sora.com videos.openai.com\n45.155.204.190 ios.chat.openai.com grok.com accounts.x.ai assets.grok.com deepl.com www.deepl.com www2.deepl.com
+45.155.204.190 login-wall.deepl.com w.deepl.com dict.deepl.com ita-free.www.deepl.com write-free.www.deepl.com\n45.155.204.190 experimentation.deepl.com experimentation-grpc.deepl.com ita-free.app.deepl.com shield.deepl.com
+45.155.204.190 ott.deepl.com api-free.deepl.com backend.deepl.com clearance.deepl.com errortracking.deepl.com\n45.155.204.190 auth.deepl.com oneshot-free.www.deepl.com checkout.www.deepl.com gtm.deepl.com"
+
+
+
+
 HOSTS_FILE="/etc/hosts"; ALL_BLOCKS="$AI\n$INSTAGRAM\n$NTC\n$RUTOR\n$LIBRUSEC"
 hosts_enabled() { grep -q "grok.com\|chatgpt.com\|gemini.google.com\|4pda.to\|instagram.com\|rutor.info\|lib.rus.ec\|ntc.party" /etc/hosts; }
 hosts_add() { printf "%b\n" "$1" | while IFS= read -r L; do grep -qxF "$L" /etc/hosts || echo "$L" >> /etc/hosts; done; /etc/init.d/dnsmasq restart >/dev/null 2>&1; }
