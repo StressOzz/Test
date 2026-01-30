@@ -433,7 +433,7 @@ run_test_strategies() {
     TOTAL_STR=$(grep -c '^#' "$STR_FILE")
     echo -e "${CYAN}Найдено стратегий: ${NC}$TOTAL_STR"
 
-    : > "$RESULTS"  # очищаем, но это безопасно
+    : > "$RESULTS"
 
     LINES=$(grep -n '^#' "$STR_FILE" | cut -d: -f1)
     CUR=0
@@ -455,11 +455,16 @@ run_test_strategies() {
         ZAPRET_RESTART
         OK=0
         check_all_urls
+        # Записываем сразу результат в виде "число название" без цветов
         echo "$OK $NAME" >> "$RESULTS"
     done
 
+    # Сортируем файл по результату и перезаписываем его
+    sort -rn "$RESULTS" -o "$RESULTS"
+
     echo -e "\n${GREEN}Тестирование завершено!${NC}\n\n${YELLOW}Лучшие стратегии:${NC}"
-    sort -rn "$RESULTS" | head -n 10 | while IFS= read -r LINE; do
+    # Выводим первые 10 в цвете
+    head -n 10 "$RESULTS" | while IFS= read -r LINE; do
         COUNT=$(echo "$LINE" | cut -d" " -f1)
         NAME=$(echo "$LINE" | cut -d" " -f2-)
         if [ "$COUNT" -eq "$TOTAL" ]; then COLOR="${GREEN}"
@@ -474,6 +479,7 @@ run_test_strategies() {
     ZAPRET_RESTART
     PAUSE
 }
+
 
 
 # ==========================================
