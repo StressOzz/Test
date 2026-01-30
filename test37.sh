@@ -498,18 +498,21 @@ show_test_results() {
 
     [ ! -f "$RESULTS" ] || [ ! -s "$RESULTS" ] && { echo -e "${RED}Результаты не найдены!${NC}\n"; PAUSE; return; }
 
-    TOTAL=$(head -n1 "$RESULTS" | awk -F'/' '{print $2}')  # Берём общее число тестов из первой строки
+    # Сортировка по цифра1 по убыванию
+    sort -t'/' -k1,1nr "$RESULTS" | while IFS= read -r LINE; do
+        NUM1=$(echo "$LINE" | cut -d'/' -f1 | tr -d '[:space:]')
+        NUM2=$(echo "$LINE" | cut -d'/' -f2 | tr -d '[:space:]')
 
-    # Сортировка по числу успехов (цифра перед /), по убыванию
-    awk -F'[/ ]' '{for(i=1;i<=NF;i++) if($i ~ /^[0-9]+$/){print $i "/" $(i+1), $0; break}}' "$RESULTS" |
-    sort -nr -k1,1 |
-    awk -v total="$TOTAL" -v GREEN="$GREEN" -v YELLOW="$YELLOW" -v RED="$RED" -v NC="$NC" '{
-        count=$1; $1=""; sub(/^ /,""); line=$0;
-        if(count==total) color=GREEN;
-        else if(count>total/2) color=YELLOW;
-        else color=RED;
-        print color line NC
-    }'
+        if [ "$NUM1" -eq "$NUM2" ]; then
+            COLOR="$GREEN"
+        elif [ "$NUM1" -lt 10 ]; then
+            COLOR="$RED"
+        else
+            COLOR="$YELLOW"
+        fi
+
+        echo -e "${COLOR}${LINE}${NC}"
+    done
 
     echo
     PAUSE
