@@ -498,16 +498,13 @@ show_test_results() {
 
     [ ! -f "$RESULTS" ] || [ ! -s "$RESULTS" ] && { echo -e "${RED}Результаты не найдены!${NC}\n"; PAUSE; return; }
 
-    # Находим максимальное число успешных тестов
-    MAX=$(awk -F'/' '{gsub(/[^0-9]/,"",$1); print $1}' "$RESULTS" | sort -nr | head -n1)
-
     sort -t'/' -k1,1nr "$RESULTS" | while IFS= read -r LINE; do
-        COUNT=$(echo "$LINE" | cut -d'/' -f1 | tr -cd '0-9')
-        if [ -z "$COUNT" ]; then COUNT=0; fi
+        NUM=$(echo "$LINE" | awk -F'/' '{gsub(/[^0-9]/,"",$1); print $1}')
+        TOTAL=$(echo "$LINE" | awk -F'/' '{gsub(/[^0-9]/,"",$2); print $2}')
 
-        if [ "$COUNT" -eq "$MAX" ] 2>/dev/null; then COLOR="${GREEN}"
-        elif [ "$COUNT" -ge $((MAX/2)) ] 2>/dev/null; then COLOR="${YELLOW}"
-        else COLOR="${RED}"; fi
+        if [ "$NUM" -eq "$TOTAL" ] 2>/dev/null; then COLOR="$GREEN"
+        elif [ "$NUM" -lt 10 ] 2>/dev/null; then COLOR="$RED"
+        else COLOR="$YELLOW"; fi
 
         echo -e "${COLOR}${LINE}${NC}"
     done
@@ -515,6 +512,7 @@ show_test_results() {
     echo
     PAUSE
 }
+
 
 
 
