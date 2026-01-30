@@ -397,9 +397,9 @@ mv -f "$BACK" "$CONF"; rm -f "$OUT_DPI"; echo; ZAPRET_RESTART; PAUSE; }
 
 
 show_test_results() {
-    echo -e "\n${MAGENTA}Результаты теста стратегий${NC}\n"
+    echo -e "\n${MAGENTA}Результаты тестирования стратегий${NC}\n"
     if [ ! -f "$RESULTS" ] || [ ! -s "$RESULTS" ]; then
-        echo -e "${RED}Результатов не найдены!${NC}\n"
+        echo -e "${RED}Результаты не найдены!${NC}\n"
         PAUSE
         return
     fi
