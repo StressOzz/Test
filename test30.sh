@@ -494,20 +494,27 @@ run_test_strategies() {
 
 
 show_test_results() {
-    echo -e "\nРезультаты тестирования стратегий\n"
+    echo -e "\n${MAGENTA}Результаты тестирования стратегий${NC}\n"
 
-    if [ ! -f "$RESULTS" ] || [ ! -s "$RESULTS" ]; then
-        echo "Результаты не найдены!"
-        PAUSE
-        return
-    fi
+    [ ! -f "$RESULTS" ] || [ ! -s "$RESULTS" ] && { echo -e "${RED}Результаты не найдены!${NC}\n"; PAUSE; return; }
 
-    # Сортируем строки по числу перед слэшем в порядке убывания
-    sort -t'/' -k1,1nr "$RESULTS"
+    TOTAL=$(head -n1 "$RESULTS" | awk -F'/' '{print $2}')  # Берём общее число тестов из первой строки
+
+    # Сортировка по числу успехов (цифра перед /), по убыванию
+    awk -F'[/ ]' '{for(i=1;i<=NF;i++) if($i ~ /^[0-9]+$/){print $i "/" $(i+1), $0; break}}' "$RESULTS" |
+    sort -nr -k1,1 |
+    awk -v total="$TOTAL" -v GREEN="$GREEN" -v YELLOW="$YELLOW" -v RED="$RED" -v NC="$NC" '{
+        count=$1; $1=""; sub(/^ /,""); line=$0;
+        if(count==total) color=GREEN;
+        else if(count>total/2) color=YELLOW;
+        else color=RED;
+        print color line NC
+    }'
 
     echo
     PAUSE
 }
+
 
 
 
