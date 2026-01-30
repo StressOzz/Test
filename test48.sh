@@ -384,7 +384,7 @@ echo -e "${NAME} → ${OK}/${TOTAL}" >> "$RESULTS"; done; sort -t'/' -k1 -nr "$R
 
 
 mv -f "$BACK" "$CONF"; rm -f "$OUT_DPI"; ZAPRET_RESTART; show_test_results; }
-show_test_results() { clear; echo -e "\n${MAGENTA}Результат тестирования стратегий${NC}\n"; [ ! -f "$RESULTS" ] || [ ! -s "$RESULTS" ] && { echo -e "${RED}Результат не найден!${NC}\n"; PAUSE; return; }
+show_test_results() { clear; echo -e "${MAGENTA}Результат тестирования стратегий${NC}\n"; [ ! -f "$RESULTS" ] || [ ! -s "$RESULTS" ] && { echo -e "${RED}Результат не найден!${NC}\n"; PAUSE; return; }
 TOTAL=$(head -n1 "$RESULTS" | awk -F'/' '{print $2}'); awk -F'[/ ]' '{for(i=1;i<=NF;i++) if($i ~ /^[0-9]+$/){print $i "/" $(i+1), $0; break}}' "$RESULTS" | sort -nr -k1,1 | awk -v total="$TOTAL" -v GREEN="$GREEN" -v YELLOW="$YELLOW" -v RED="$RED" -v NC="$NC" '{split($1,a,"/"); count=a[1]; $1=""; sub(/^ /,""); line=$0; if(count==total) color=GREEN; else if(count>total/2) color=YELLOW; else color=RED; print color line NC}'; echo; PAUSE; }
 # ==========================================
 # Главное меню
