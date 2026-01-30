@@ -494,18 +494,21 @@ run_test_strategies() {
 
 
 show_test_results() {
-    echo -e "\nРезультаты тестирования стратегий\n"
+    echo -e "\n${MAGENTA}Результаты тестирования стратегий${NC}\n"
 
-    [ ! -f "$RESULTS" ] || [ ! -s "$RESULTS" ] && { echo -e "Результаты не найдены!\n"; PAUSE; return; }
+    [ ! -f "$RESULTS" ] || [ ! -s "$RESULTS" ] && { echo -e "${RED}Результаты не найдены!${NC}\n"; PAUSE; return; }
 
     TOTAL=$(head -n1 "$RESULTS" | awk -F'/' '{print $2}')  # Берём общее число тестов из первой строки
 
-    # Сортировка по числу успехов (цифра перед /), по убыванию
+    # Сортировка по числу успехов (цифра перед /), по убыванию, с подсветкой
     awk -F'[/ ]' '{for(i=1;i<=NF;i++) if($i ~ /^[0-9]+$/){print $i "/" $(i+1), $0; break}}' "$RESULTS" |
     sort -nr -k1,1 |
-    awk -v total="$TOTAL" '{
-        count=$1; $1=""; sub(/^ /,""); line=$0;
-        print line
+    awk -v total="$TOTAL" -v GREEN="$GREEN" -v YELLOW="$YELLOW" -v RED="$RED" -v NC="$NC" '{
+        split($1,a,"/"); count=a[1]; max=a[2]; $1=""; sub(/^ /,""); line=$0;
+        if(count==max) color=GREEN;
+        else if(count<10) color=RED;
+        else color=YELLOW;
+        print color line NC
     }'
 
     echo
