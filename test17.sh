@@ -363,67 +363,72 @@ echo -ne "${CYAN}Enter) ${GREEN}Выход в меню стратегий${NC}\n
 # ==========================================
 # Тест стратегий
 # ==========================================
+# -----------------------------
+# Проверка отдельного URL
+check_url() {
+    TEXT=$(echo "$1" | cut -d"|" -f1)
+    LINK=$(echo "$1" | cut -d"|" -f2)
+    if curl -Is --connect-timeout 2 --max-time 3 "$LINK" >/dev/null 2>&1; then
+        echo 1 >> "$TMP_OK"
+        echo -e "${GREEN}[ OK ]${NC} $TEXT"
+    else
+        echo -e "${RED}[FAIL]${NC} $TEXT"
+    fi
+}
+
+# -----------------------------
+# Проверка всех URL для стратегии
+check_all_urls() {
+    TMP_OK="/tmp/z_ok.$$"
+    : > "$TMP_OK"
+    RUN=0
+    while IFS= read -r URL; do
+        [ -z "$URL" ] && continue
+        check_url "$URL" & RUN=$((RUN+1))
+        if [ "$RUN" -ge "$PARALLEL" ]; then
+            wait
+            RUN=0
+        fi
+    done <<EOF
+$URLS
+EOF
+    wait
+    OK=$(wc -l < "$TMP_OK" | tr -d ' ')
+    rm -f "$TMP_OK"
+}
+
+# -----------------------------
+# Основная функция тестирования стратегий
 run_test_strategies() {
     clear
     echo -e "${MAGENTA}Тестирование стратегий${NC}\n\n${CYAN}Собираем стратегии для теста${NC}"
-
     rm -rf "$TMP_SF"
     download_strategies 1
     cp /opt/zapret_temp/str_flow.txt /opt/zapret_temp/str_test.txt
     cp "$OUT" "$STR_FILE"
     cp "$CONF" "$BACK"
-
     for N in $(seq 1 100); do
         strategy_v$N >> "$STR_FILE" 2>/dev/null || break
     done
-
     sed -i '/#Y/d' "$STR_FILE"
+    
     curl -fsSL "$RAW" | grep 'url:' | sed -n 's/.*id: "\([^"]*\)".*url: "\([^"]*\)".*/\1|\2/p' > "$OUT_DPI" || { 
-        echo -e "\n${RED}Ошибка загрузки DPI списка${NC}\n"; PAUSE; return
+        echo -e "\n${RED}Ошибка загрузки DPI списка${NC}\n"
+        PAUSE
+        return
     }
-
-    printf '%s\n' \
-    "Госуслуги|https://gosuslugi.ru" "Госуслуги ЛК|https://esia.gosuslugi.ru" "Налоги|https://nalog.ru" "Налоги ЛК|https://lkfl2.nalog.ru" "ntc.party|https://ntc.party/" \
+    
+    printf '%s\n' "Госуслуги|https://gosuslugi.ru" "Госуслуги ЛК|https://esia.gosuslugi.ru" "Налоги|https://nalog.ru" "Налоги ЛК|https://lkfl2.nalog.ru" "ntc.party|https://ntc.party/" \
     "RuTube|https://rutube.ru" "Instagram|https://instagram.com" "Rutor|https://rutor.info" "Rutracker|https://rutracker.org" "Epidemz|https://epidemz.net.co" \
     "NNM Club|https://nnmclub.to" "OpenWRT|https://openwrt.org" "Sxyprn|https://sxyprn.net" "Spankbang|https://ru.spankbang.com" "Pornhub|https://pornhub.com" \
     "Discord|https://discord.com" "X|https://x.com" "Filmix|https://filmix.my" "FlightRadar24|https://flightradar24.com" "GooglePlay|https://play.google.com" "Ottai|https://ottai.com" > "${OUT_DPI}.tmp"
-
+    
     cat "$OUT_DPI" >> "${OUT_DPI}.tmp"
     mv "${OUT_DPI}.tmp" "$OUT_DPI"
     URLS="$(cat "$OUT_DPI")"
     TOTAL=$(grep -c "|" "$OUT_DPI")
     TOTAL_STR=$(grep -c '^#' "$STR_FILE")
     echo -e "${CYAN}Найдено стратегий: ${NC}$TOTAL_STR"
-
-    check_url() {
-        TEXT=$(echo "$1" | cut -d"|" -f1)
-        LINK=$(echo "$1" | cut -d"|" -f2)
-        if curl -Is --connect-timeout 2 --max-time 3 "$LINK" >/dev/null 2>&1; then
-            echo 1 >> "$TMP_OK"
-            echo -e "${GREEN}[ OK ]${NC} $TEXT"
-        else
-            echo -e "${RED}[FAIL]${NC} $TEXT"
-        fi
-    }
-
-    check_all_urls() {
-        TMP_OK="/tmp/z_ok.$$"
-        : > "$TMP_OK"
-        RUN=0
-        while IFS= read -r URL; do
-            [ -z "$URL" ] && continue
-            check_url "$URL" & RUN=$((RUN+1))
-            if [ "$RUN" -ge "$PARALLEL" ]; then wait; RUN=0; fi
-        done <<EOF
-$URLS
-EOF
-        wait
-        OK=$(wc -l < "$TMP_OK" | tr -d ' ')
-        rm -f "$TMP_OK"
-    }
-
-    # --- создаём временный файл для результатов ---
-    : > "$RESULTS.tmp"
 
     LINES=$(grep -n '^#' "$STR_FILE" | cut -d: -f1)
     CUR=0
@@ -440,29 +445,32 @@ EOF
         NAME="${NAME#\#}"
         awk -v block="$BLOCK" 'BEGIN{skip=0} /option NFQWS_OPT '\''/ {printf "\toption NFQWS_OPT '\''\n%s\n'\''\n", block; skip=1; next} skip && /^'\''$/ {skip=0; next} !skip {print}' "$CONF" > "${CONF}.tmp"
         mv "${CONF}.tmp" "$CONF"
-
+        
         echo -e "\n${CYAN}Тестируем стратегию: ${YELLOW}${NAME}${NC} ($CUR/$TOTAL_STR)"
         ZAPRET_RESTART
         OK=0
-        check_all_urls
-
-        if [ "$OK" -eq "$TOTAL" ]; then COLOR="${GREEN}"
-        elif [ "$OK" -gt 0 ]; then COLOR="${YELLOW}"
-        else COLOR="${RED}"; fi
-
+        check_all_urls  # <- вызываем здесь
+        
+        if [ "$OK" -eq "$TOTAL" ]; then COLOR="${GREEN}"; elif [ "$OK" -gt 0 ]; then COLOR="${YELLOW}"; else COLOR="${RED}"; fi
         echo -e "${CYAN}Результат теста: ${COLOR}$OK/$TOTAL${NC}"
-        echo -e "${NAME} → ${OK}/${TOTAL}" >> "$RESULTS.tmp"
-
+        echo "$OK $NAME" >> "$RESULTS"
     done
 
     echo -e "\n${GREEN}Тестирование завершено!${NC}\n\n${YELLOW}Лучшие стратегии:${NC}"
-    sort -rn -t'/' -k2 "$RESULTS.tmp" | head -n 10 | while IFS= read -r LINE; do
-        echo "$LINE"
+    sort -rn "$RESULTS" | head -n 10 | while IFS= read -r LINE; do
+        COUNT=$(echo "$LINE" | cut -d" " -f1)
+        NAME=$(echo "$LINE" | cut -d" " -f2-)
+        if [ "$COUNT" -eq "$TOTAL" ]; then COLOR="${GREEN}"; elif [ "$COUNT" -gt 0 ]; then COLOR="${YELLOW}"; else COLOR="${RED}"; fi
+        echo -e "${COLOR}${NAME}${NC} → $COUNT/$TOTAL"
     done
 
-    # --- сохраняем полный отсортированный файл ---
-    sort -rn -t'/' -k2 "$RESULTS.tmp" > "$RESULTS"
-    rm -f "$RESULTS.tmp"
+    # Перезаписываем $RESULTS отсортированным для полного просмотра
+    sort -rn "$RESULTS" | while IFS= read -r LINE; do
+        COUNT=$(echo "$LINE" | cut -d" " -f1)
+        NAME=$(echo "$LINE" | cut -d" " -f2-)
+        if [ "$COUNT" -eq "$TOTAL" ]; then COLOR="${GREEN}"; elif [ "$COUNT" -gt 0 ]; then COLOR="${YELLOW}"; else COLOR="${RED}"; fi
+        echo -e "${COLOR}${NAME}${NC} → $COUNT/$TOTAL"
+    done > "$RESULTS"
 
     mv -f "$BACK" "$CONF"
     rm -f "$OUT_DPI"
@@ -470,7 +478,6 @@ EOF
     ZAPRET_RESTART
     PAUSE
 }
-
 
 
 
