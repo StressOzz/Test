@@ -403,16 +403,16 @@ EOF
 run_test_strategies() {
     clear
     echo -e "${MAGENTA}Тестирование стратегий${NC}\n\n${CYAN}Собираем стратегии для теста${NC}"
-
     rm -rf "$TMP_SF"
     download_strategies 1
     cp /opt/zapret_temp/str_flow.txt /opt/zapret_temp/str_test.txt
-
     cp "$OUT" "$STR_FILE"
     cp "$CONF" "$BACK"
+
     for N in $(seq 1 100); do
         strategy_v$N >> "$STR_FILE" 2>/dev/null || break
     done
+
     sed -i '/#Y/d' "$STR_FILE"
 
     curl -fsSL "$RAW" | grep 'url:' | sed -n 's/.*id: "\([^"]*\)".*url: "\([^"]*\)".*/\1|\2/p' > "$OUT_DPI" || {
@@ -421,20 +421,20 @@ run_test_strategies() {
         return
     }
 
-    printf '%s\n' "Госуслуги|https://gosuslugi.ru" "Госуслуги ЛК|https://esia.gosuslugi.ru" "Налоги|https://nalog.ru" "Налоги ЛК|https://lkfl2.nalog.ru" "ntc.party|https://ntc.party/" \
+    printf '%s\n' \
+    "Госуслуги|https://gosuslugi.ru" "Госуслуги ЛК|https://esia.gosuslugi.ru" "Налоги|https://nalog.ru" "Налоги ЛК|https://lkfl2.nalog.ru" "ntc.party|https://ntc.party/" \
     "RuTube|https://rutube.ru" "Instagram|https://instagram.com" "Rutor|https://rutor.info" "Rutracker|https://rutracker.org" "Epidemz|https://epidemz.net.co" \
     "NNM Club|https://nnmclub.to" "OpenWRT|https://openwrt.org" "Sxyprn|https://sxyprn.net" "Spankbang|https://ru.spankbang.com" "Pornhub|https://pornhub.com" \
-    "Discord|https://discord.com" "X|https://x.com" "Filmix|https://filmix.my" "FlightRadar24|https://flightradar24.com" "GooglePlay|https://play.google.com" "Ottai|https://ottai.com" > "${OUT_DPI}.tmp"
+    "Discord|https://discord.com" "X|https://x.com" "Filmix|https://filmix.my" "FlightRadar24|https://flightradar24.com" "GooglePlay|https://play.google.com" "Ottai|https://ottai.com" \
+    > "${OUT_DPI}.tmp"
 
     cat "$OUT_DPI" >> "${OUT_DPI}.tmp"
     mv "${OUT_DPI}.tmp" "$OUT_DPI"
-
     URLS="$(cat "$OUT_DPI")"
     TOTAL=$(grep -c "|" "$OUT_DPI")
     TOTAL_STR=$(grep -c '^#' "$STR_FILE")
     echo -e "${CYAN}Найдено стратегий: ${NC}$TOTAL_STR"
 
-    # очищаем $RESULTS
     : > "$RESULTS"
 
     LINES=$(grep -n '^#' "$STR_FILE" | cut -d: -f1)
@@ -447,6 +447,7 @@ run_test_strategies() {
         else
             sed -n "${START},$((NEXT-1))p" "$STR_FILE" > "$TEMP_FILE"
         fi
+
         BLOCK=$(cat "$TEMP_FILE")
         NAME=$(head -n1 "$TEMP_FILE")
         NAME="${NAME#\#}"
@@ -456,31 +457,32 @@ run_test_strategies() {
 
         echo -e "\n${CYAN}Тестируем стратегию: ${YELLOW}${NAME}${NC} ($CUR/$TOTAL_STR)"
         ZAPRET_RESTART
-
         OK=0
+
         check_all_urls
 
         if [ "$OK" -eq "$TOTAL" ]; then COLOR="${GREEN}"
         elif [ "$OK" -ge $((TOTAL/2)) ]; then COLOR="${YELLOW}"
         else COLOR="${RED}"; fi
 
-        # вывод на экран
-        echo -e "${COLOR}${NAME}${NC} → $OK/$TOTAL"
+        echo -e "${CYAN}Результат теста: ${COLOR}$OK/$TOTAL${NC}"
 
-        # запись в $RESULTS без цветов
-        echo "${NAME} → $OK/$TOTAL" >> "$RESULTS"
-
+        # Добавляем в файл сразу в нужном формате
+        echo -e "${NAME} → ${OK}/${TOTAL}" >> "$RESULTS"
     done
 
-    # показываем лучшие 10 на экране
+    # Сортируем по числу успешных тестов (число перед /) и сохраняем в файле
+    sort -t'/' -k1 -nr "$RESULTS" -o "$RESULTS"
+
+    # Вывод лучших 10
     echo -e "\n${GREEN}Тестирование завершено!${NC}\n\n${YELLOW}Лучшие стратегии:${NC}"
-    sort -t'→' -k2 -nr "$RESULTS" | head -n 10 | while read LINE; do
-        NAME=$(echo "$LINE" | cut -d'→' -f1 | xargs)
-        COUNT=$(echo "$LINE" | cut -d'/' -f1 | awk '{print $NF}')
+    head -n 10 "$RESULTS" | while IFS= read -r LINE; do
+        COUNT=$(echo "$LINE" | awk -F'→' '{print $2}' | cut -d'/' -f1 | tr -d ' ')
+        NAME=$(echo "$LINE" | awk -F'→' '{print $1}' | sed 's/ *$//')
         if [ "$COUNT" -eq "$TOTAL" ]; then COLOR="${GREEN}"
         elif [ "$COUNT" -ge $((TOTAL/2)) ]; then COLOR="${YELLOW}"
         else COLOR="${RED}"; fi
-        echo -e "${COLOR}${NAME}${NC} → $LINE" | awk -F'→' '{print $1 " → " $2}'  # сохраняем формат
+        echo -e "${COLOR}${NAME}${NC} → ${COUNT}/${TOTAL}"
     done
 
     mv -f "$BACK" "$CONF"
@@ -491,7 +493,33 @@ run_test_strategies() {
 }
 
 
+show_test_results() {
+    echo -e "\n${MAGENTA}Результаты тестирования стратегий${NC}\n"
 
+    if [ ! -f "$RESULTS" ] || [ ! -s "$RESULTS" ]; then
+        echo -e "${RED}Результаты не найдены!${NC}\n"
+        PAUSE
+        return
+    fi
+
+    while IFS= read -r LINE; do
+        COUNT=$(echo "$LINE" | awk -F'→' '{print $2}' | cut -d'/' -f1 | tr -d ' ')
+        NAME=$(echo "$LINE" | awk -F'→' '{print $1}' | sed 's/ *$//')
+
+        if [ "$COUNT" -eq "$TOTAL" ]; then
+            COLOR="${GREEN}"
+        elif [ "$COUNT" -ge $((TOTAL/2)) ]; then
+            COLOR="${YELLOW}"
+        else
+            COLOR="${RED}"
+        fi
+
+        echo -e "${COLOR}${NAME}${NC} → ${COUNT}/${TOTAL}"
+    done < "$RESULTS"
+
+    echo
+    PAUSE
+}
 # ==========================================
 # Главное меню
 # ==========================================
