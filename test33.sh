@@ -499,22 +499,22 @@ show_test_results() {
     [ ! -f "$RESULTS" ] || [ ! -s "$RESULTS" ] && { echo -e "${RED}Результаты не найдены!${NC}\n"; PAUSE; return; }
 
     # Находим максимальное число успешных тестов
-    MAX=$(awk -F'/' '{print $1}' "$RESULTS" | sort -nr | head -n1)
+    MAX=$(awk -F'/' '{gsub(/[^0-9]/,"",$1); print $1}' "$RESULTS" | sort -nr | head -n1)
 
-    # Сортируем по числу успешных тестов (перед /) и выводим с цветом
-    sort -nr -t'/' -k1,1 "$RESULTS" | while IFS= read -r LINE; do
-        COUNT=$(echo "$LINE" | cut -d'/' -f1)
-        if [ "$COUNT" -eq "$MAX" ]; then COLOR="${GREEN}"
-        elif [ "$COUNT" -ge $((MAX/2)) ]; then COLOR="${YELLOW}"
+    sort -t'/' -k1,1nr "$RESULTS" | while IFS= read -r LINE; do
+        COUNT=$(echo "$LINE" | cut -d'/' -f1 | tr -cd '0-9')
+        if [ -z "$COUNT" ]; then COUNT=0; fi
+
+        if [ "$COUNT" -eq "$MAX" ] 2>/dev/null; then COLOR="${GREEN}"
+        elif [ "$COUNT" -ge $((MAX/2)) ] 2>/dev/null; then COLOR="${YELLOW}"
         else COLOR="${RED}"; fi
+
         echo -e "${COLOR}${LINE}${NC}"
     done
 
     echo
     PAUSE
 }
-
-
 
 
 
