@@ -363,12 +363,10 @@ echo -ne "${CYAN}Enter) ${GREEN}Выход в меню стратегий${NC}\n
 # ==========================================
 # Тест стратегий
 # ==========================================
-run_test_strategies() { echo; clear; echo -e "${MAGENTA}Тестирование стратегий${NC}"; echo -e "${CYAN}Собираем стратегии для теста${NC}"; rm -rf "$TMP_SF"
+run_test_strategies() { echo; clear; echo -e "${MAGENTA}Тестирование стратегий${NC}"; echo -e "${CYAN}Собираем стратегии для теста${NC}"; rm -rf "$TMP_SF"; download_strategies 1
+cp /opt/zapret_temp/str_flow.txt /opt/zapret_temp/str_test.txt; cp "$OUT" "$STR_FILE"; cp "$CONF" "$BACK"; for N in $(seq 1 100); do strategy_v$N >> "$STR_FILE" 2>/dev/null || break; done; 
 curl -fsSL "$RAW" | grep 'url:' | sed -n 's/.*id: "\([^"]*\)".*url: "\([^"]*\)".*/\1|\2/p' > "$OUT_DPI" || { echo -e "\n${RED}Ошибка загрузки DPI списка${NC}\n"; PAUSE; return; }
-download_strategies 1; cp /opt/zapret_temp/str_flow.txt /opt/zapret_temp/str_test.txt;cp "$OUT" "$STR_FILE"; cp "$CONF" "$BACK"; for N in $(seq 1 100)
-do strategy_v$N >> "$STR_FILE" 2>/dev/null || break; done; sed -i '/#Y/d' "$STR_FILE"; TOTAL_STR=$(grep -c '^#' "$STR_FILE"); echo -e "${CYAN}Найдено стратегий: ${NC}$TOTAL_STR"
-URLS="$(cat "$OUT_DPI")"
-TOTAL=$(grep -c "|" "$OUT_DPI")
+sed -i '/#Y/d' "$STR_FILE"; TOTAL_STR=$(grep -c '^#' "$STR_FILE"); echo -e "${CYAN}Найдено стратегий: ${NC}$TOTAL_STR"; URLS="$(cat "$OUT_DPI")"; TOTAL=$(grep -c "|" "$OUT_DPI")
 : > "$RESULTS"; check_url() { TEXT=$(echo "$1" | cut -d"|" -f1); LINK=$(echo "$1" | cut -d"|" -f2)
 if curl -Is --connect-timeout 2 --max-time 3 "$LINK" >/dev/null 2>&1; then echo 1 >> "$TMP_OK"; echo -e "${GREEN}[ OK ]${NC} $TEXT"; else echo -e "${RED}[FAIL]${NC} $TEXT"; fi; }
 check_all_urls() { TMP_OK="/tmp/z_ok.$$"; : > "$TMP_OK"; RUN=0; while IFS= read -r URL; do [ -z "$URL" ] && continue; check_url "$URL" & RUN=$((RUN+1)); if [ "$RUN" -ge "$PARALLEL" ]; then wait; RUN=0; fi
