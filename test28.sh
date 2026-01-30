@@ -496,7 +496,7 @@ run_test_strategies() {
 show_test_results() {
     echo -e "\n${MAGENTA}Результаты тестирования стратегий${NC}\n"
 
-    [ ! -f "$RESULTS" ] || [ ! -s "$RESULTS" ] || { echo -e "${RED}Результаты не найдены!${NC}\n"; PAUSE; return; }
+#    [ ! -f "$RESULTS" ] || [ ! -s "$RESULTS" ] || { echo -e "${RED}Результаты не найдены!${NC}\n"; PAUSE; return; }
 
     while IFS= read -r LINE; do
         # извлекаем только число перед /
