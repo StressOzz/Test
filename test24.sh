@@ -503,8 +503,9 @@ show_test_results() {
     fi
 
     while IFS= read -r LINE; do
-        COUNT=$(echo "$LINE" | cut -d' ' -f1)
-        NAME=$(echo "$LINE" | cut -d' ' -f2-)
+        # Разделяем по последнему " → "
+        COUNT=$(echo "$LINE" | awk -F' → ' '{print $2}' | cut -d'/' -f1)
+        NAME=$(echo "$LINE" | awk -F' → ' '{print $1}')
         if [ "$COUNT" -eq "$TOTAL" ]; then
             COLOR="${GREEN}"
         elif [ "$COUNT" -ge $((TOTAL/2)) ]; then
