@@ -496,31 +496,33 @@ run_test_strategies() {
 show_test_results() {
     echo -e "\n${MAGENTA}Результаты тестирования стратегий${NC}\n"
 
-    if [ ! -f "$RESULTS" ] || [ ! -s "$RESULTS" ]; then
-        echo -e "${RED}Результаты не найдены!${NC}\n"
-        PAUSE
-        return
-    fi
+    [ ! -f "$RESULTS" ] || [ ! -s "$RESULTS" ] || { echo -e "${RED}Результаты не найдены!${NC}\n"; PAUSE; return; }
 
     while IFS= read -r LINE; do
-        # извлекаем первую цифру перед "/"
-        NUM=$(echo "$LINE" | sed -E 's/^([0-9]+)\/[0-9]+.*/\1/')
-        TOTAL=$(echo "$LINE" | sed -E 's/^[0-9]+\/([0-9]+).*/\1/')
-        
+        # извлекаем только число перед /
+        NUM=$(echo "$LINE" | cut -d'/' -f1 | tr -dc '0-9')
+        TOTAL=$(echo "$LINE" | cut -d'/' -f2 | tr -dc '0-9')
+
+        if [ -z "$NUM" ] || [ -z "$TOTAL" ]; then
+            echo "$LINE"
+            continue
+        fi
+
         if [ "$NUM" -eq "$TOTAL" ]; then
             COLOR="${GREEN}"
-        elif [ "$NUM" -ge $((TOTAL/2)) ]; then
+        elif [ "$NUM" -ge $((TOTAL / 2)) ]; then
             COLOR="${YELLOW}"
         else
             COLOR="${RED}"
         fi
-        
+
         echo -e "${COLOR}${LINE}${NC}"
     done < "$RESULTS"
 
     echo
     PAUSE
 }
+
 
 
 
