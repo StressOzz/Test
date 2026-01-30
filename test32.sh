@@ -498,23 +498,21 @@ show_test_results() {
 
     [ ! -f "$RESULTS" ] || [ ! -s "$RESULTS" ] && { echo -e "${RED}Результаты не найдены!${NC}\n"; PAUSE; return; }
 
-    # Находим максимальное число успешных тестов (до /)
-    MAX=$(awk -F'[/ ]' '{for(i=1;i<=NF;i++) if($i ~ /^[0-9]+$/){print $i; break}}' "$RESULTS" | sort -nr | head -n1)
+    # Находим максимальное число успешных тестов
+    MAX=$(awk -F'/' '{print $1}' "$RESULTS" | sort -nr | head -n1)
 
-    # Сортируем по числу успехов и выводим в цвете
-    awk -F'[/ ]' -v max="$MAX" -v GREEN="$GREEN" -v YELLOW="$YELLOW" -v RED="$RED" -v NC="$NC" '{
-        for(i=1;i<=NF;i++) if($i ~ /^[0-9]+$/){count=$i; break}
-        $1=""; sub(/^ /,""); line=$0
-        if(count==max) color=GREEN
-        else if(count>max/2) color=YELLOW
-        else color=RED
-        print color line NC
-    }' "$RESULTS" | sort -nr -k2,2
+    # Сортируем по числу успешных тестов (перед /) и выводим с цветом
+    sort -nr -t'/' -k1,1 "$RESULTS" | while IFS= read -r LINE; do
+        COUNT=$(echo "$LINE" | cut -d'/' -f1)
+        if [ "$COUNT" -eq "$MAX" ]; then COLOR="${GREEN}"
+        elif [ "$COUNT" -ge $((MAX/2)) ]; then COLOR="${YELLOW}"
+        else COLOR="${RED}"; fi
+        echo -e "${COLOR}${LINE}${NC}"
+    done
 
     echo
     PAUSE
 }
-
 
 
 
