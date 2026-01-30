@@ -495,30 +495,33 @@ run_test_strategies() {
 
 show_test_results() {
     echo -e "\n${MAGENTA}Результаты тестирования стратегий${NC}\n"
-    
+
     if [ ! -f "$RESULTS" ] || [ ! -s "$RESULTS" ]; then
         echo -e "${RED}Результаты не найдены!${NC}\n"
         PAUSE
         return
     fi
 
-    # выводим строки из $RESULTS с цветами
     while IFS= read -r LINE; do
-        COUNT=$(echo "$LINE" | cut -d'/' -f1)
-        NAME=$(echo "$LINE" | sed -E 's/^([0-9]+)\/[0-9]+[[:space:]]+//')
-        if [ "$COUNT" -eq "$TOTAL" ]; then
+        # извлекаем первую цифру перед "/"
+        NUM=$(echo "$LINE" | sed -E 's/^([0-9]+)\/[0-9]+.*/\1/')
+        TOTAL=$(echo "$LINE" | sed -E 's/^[0-9]+\/([0-9]+).*/\1/')
+        
+        if [ "$NUM" -eq "$TOTAL" ]; then
             COLOR="${GREEN}"
-        elif [ "$COUNT" -ge $((TOTAL/2)) ]; then
+        elif [ "$NUM" -ge $((TOTAL/2)) ]; then
             COLOR="${YELLOW}"
         else
             COLOR="${RED}"
         fi
-        echo -e "${COLOR}${NAME} → $COUNT/$TOTAL${NC}"
+        
+        echo -e "${COLOR}${LINE}${NC}"
     done < "$RESULTS"
 
     echo
     PAUSE
 }
+
 
 
 
