@@ -247,7 +247,7 @@ if hosts_enabled; then echo -e "${YELLOW}Домены в hosts: ${GREEN}доба
 echo -e "${CYAN}1) ${GREEN}Выбрать и установить стратегию ${NC}v1-v8\n${CYAN}2) ${GREEN}Выбрать и установить стратегию от ${NC}Flowseal\n${CYAN}3) ${GREEN}Выбрать и установить стратегию для ${NC}YouTube\n${CYAN}4) ${GREEN}Подобрать стратегию для ${NC}YouTube"
 echo -e "${CYAN}5) ${GREEN}Меню управления доменами в ${NC}hosts\n${CYAN}6) ${NC}$RKN_TEXT_MENU${NC}\n${CYAN}7) ${GREEN}$menu_game\n${CYAN}8) ${GREEN}Обновить список исключений${NC}\n${CYAN}9) ${GREEN}Тестирование всех стратегий${NC}"
 echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read choiceST; case "$choiceST" in 1) strategy_CHOUSE;; 2) flowseal_menu;; 3) choose_strategy_manual;; 4) auto_stryou;; 5) menu_hosts;; 9) run_test_strategies;;
-6) toggle_rkn_bypass; continue;; 7) fix_GAME;; 8) echo -e "\n${MAGENTA}Обновляем список исключений${NC}\n${CYAN}Останавливаем ${NC}Zapret"; /etc/init.d/zapret stop >/dev/null 2>&1; echo -e "${CYAN}Добавляем домены в исключения${NC}"
+6) toggle_rkn_bypass; continue;; 7) fix_GAME;; 0) show_test_results;; 8) echo -e "\n${MAGENTA}Обновляем список исключений${NC}\n${CYAN}Останавливаем ${NC}Zapret"; /etc/init.d/zapret stop >/dev/null 2>&1; echo -e "${CYAN}Добавляем домены в исключения${NC}"
 rm -f "$EXCLUDE_FILE"; wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL" || echo -e "\n${RED}Не удалось загрузить exclude файл${NC}\n"; echo -e "${CYAN}Перезапускаем ${NC}Zapret"
 ZAPRET_RESTART; echo -e "${GREEN}Список исключений обновлён!${NC}\n"; PAUSE;; *) return;; esac; done }
 strategy_CHOUSE () { echo -ne "\n${YELLOW}Введите версию стратегии ${NC}(1-8)${YELLOW}:${NC} "; read -r choice; if [[ "$choice" =~ ^[1-8]$ ]]; then install_strategy "v$choice"; fi; }
@@ -383,7 +383,31 @@ NAME=$(head -n1 "$TEMP_FILE"); NAME="${NAME#\#}"; awk -v block="$BLOCK" 'BEGIN{s
 mv "${CONF}.tmp" "$CONF"; echo -e "\n${CYAN}Тестируем стратегию: ${YELLOW}${NAME}${NC} ($CUR/$TOTAL_STR)"; ZAPRET_RESTART; OK=0; check_all_urls; if [ "$OK" -eq "$TOTAL" ]; then COLOR="${GREEN}"; elif [ "$OK" -gt 0 ]; then COLOR="${YELLOW}"; else COLOR="${RED}"; fi
 echo -e "${CYAN}Результат теста: ${COLOR}$OK/$TOTAL${NC}"; echo "$OK $NAME" >> "$RESULTS"; done; echo -e "\n${GREEN}Тестирование завершено!${NC}\n\n${YELLOW}Лучшие стратегии:${NC}"; sort -rn "$RESULTS" | head -n 10 | while IFS= read -r LINE; do
 COUNT=$(echo "$LINE" | cut -d" " -f1); NAME=$(echo "$LINE" | cut -d" " -f2-); if [ "$COUNT" -eq "$TOTAL" ]; then COLOR="${GREEN}"; elif [ "$COUNT" -gt 0 ]; then COLOR="${YELLOW}"; else COLOR="${RED}"; fi
-echo -e "${COLOR}${NAME}${NC} → $COUNT/$TOTAL"; done; mv -f "$BACK" "$CONF"; rm -f "$OUT_DPI"; echo; ZAPRET_RESTART; PAUSE; }
+echo -e "${COLOR}${NAME}${NC} → $COUNT/$TOTAL"; done; 
+TOP_FILE="/opt/zapret_temp/zapret_bench_sorted.txt"
+sort -rn "$RESULTS" | while IFS= read -r LINE; do
+    COUNT=$(echo "$LINE" | cut -d" " -f1)
+    NAME=$(echo "$LINE" | cut -d" " -f2-)
+    if [ "$COUNT" -eq "$TOTAL" ]; then COLOR="${GREEN}"
+    elif [ "$COUNT" -gt 0 ]; then COLOR="${YELLOW}"
+    else COLOR="${RED}"; fi
+    echo -e "${COLOR}${NAME}${NC} → $COUNT/$TOTAL"
+done > "$RESULTS"
+mv -f "$BACK" "$CONF"; rm -f "$OUT_DPI"; echo; ZAPRET_RESTART; PAUSE; }
+show_test_results() {
+    echo -e "${MAGENTA}Результаты теста стратегий${NC}\n"
+    if [ ! -f "$RESULTS" ] || [ ! -s "$RESULTS" ]; then
+        echo -e "\n${RED}Результатов нет!${NC}\n"
+        PAUSE
+        return
+    fi
+    cat "$RESULTS"
+    echo
+    PAUSE
+}
+
+
+
 # ==========================================
 # Главное меню
 # ==========================================
