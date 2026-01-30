@@ -505,9 +505,9 @@ show_test_results() {
     sort -nr -k1,1 |
     awk -v total="$TOTAL" -v GREEN="$GREEN" -v YELLOW="$YELLOW" -v RED="$RED" -v NC="$NC" '{
         split($1,a,"/"); count=a[1]; max=a[2]; $1=""; sub(/^ /,""); line=$0;
-        if(count==max) color=GREEN;
-        else if(count<10) color=RED;
-        else color=YELLOW;
+if(count==total) color=GREEN;
+else if(count>total/2) color=YELLOW;
+else color=RED;
         print color line NC
     }'
 
