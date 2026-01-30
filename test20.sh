@@ -399,15 +399,17 @@ EOF
 
 # -----------------------------
 # Основная функция тестирования стратегий
+
 run_test_strategies() {
     clear
     echo -e "${MAGENTA}Тестирование стратегий${NC}\n\n${CYAN}Собираем стратегии для теста${NC}"
+
     rm -rf "$TMP_SF"
     download_strategies 1
     cp /opt/zapret_temp/str_flow.txt /opt/zapret_temp/str_test.txt
+
     cp "$OUT" "$STR_FILE"
     cp "$CONF" "$BACK"
-
     for N in $(seq 1 100); do
         strategy_v$N >> "$STR_FILE" 2>/dev/null || break
     done
@@ -419,12 +421,11 @@ run_test_strategies() {
         return
     }
 
-    printf '%s\n' "Госуслуги|https://gosuslugi.ru" "Госуслуги ЛК|https://esia.gosuslugi.ru" "Налоги|https://nalog.ru" \
-    "Налоги ЛК|https://lkfl2.nalog.ru" "ntc.party|https://ntc.party/" "RuTube|https://rutube.ru" "Instagram|https://instagram.com" \
-    "Rutor|https://rutor.info" "Rutracker|https://rutracker.org" "Epidemz|https://epidemz.net.co" "NNM Club|https://nnmclub.to" \
-    "OpenWRT|https://openwrt.org" "Sxyprn|https://sxyprn.net" "Spankbang|https://ru.spankbang.com" "Pornhub|https://pornhub.com" \
-    "Discord|https://discord.com" "X|https://x.com" "Filmix|https://filmix.my" "FlightRadar24|https://flightradar24.com" \
-    "GooglePlay|https://play.google.com" "Ottai|https://ottai.com" > "${OUT_DPI}.tmp"
+    printf '%s\n' "Госуслуги|https://gosuslugi.ru" "Госуслуги ЛК|https://esia.gosuslugi.ru" "Налоги|https://nalog.ru" "Налоги ЛК|https://lkfl2.nalog.ru" "ntc.party|https://ntc.party/" \
+    "RuTube|https://rutube.ru" "Instagram|https://instagram.com" "Rutor|https://rutor.info" "Rutracker|https://rutracker.org" "Epidemz|https://epidemz.net.co" \
+    "NNM Club|https://nnmclub.to" "OpenWRT|https://openwrt.org" "Sxyprn|https://sxyprn.net" "Spankbang|https://ru.spankbang.com" "Pornhub|https://pornhub.com" \
+    "Discord|https://discord.com" "X|https://x.com" "Filmix|https://filmix.my" "FlightRadar24|https://flightradar24.com" "GooglePlay|https://play.google.com" "Ottai|https://ottai.com" > "${OUT_DPI}.tmp"
+
     cat "$OUT_DPI" >> "${OUT_DPI}.tmp"
     mv "${OUT_DPI}.tmp" "$OUT_DPI"
 
@@ -433,6 +434,7 @@ run_test_strategies() {
     TOTAL_STR=$(grep -c '^#' "$STR_FILE")
     echo -e "${CYAN}Найдено стратегий: ${NC}$TOTAL_STR"
 
+    # очищаем $RESULTS
     : > "$RESULTS"
 
     LINES=$(grep -n '^#' "$STR_FILE" | cut -d: -f1)
@@ -448,29 +450,37 @@ run_test_strategies() {
         BLOCK=$(cat "$TEMP_FILE")
         NAME=$(head -n1 "$TEMP_FILE")
         NAME="${NAME#\#}"
+
         awk -v block="$BLOCK" 'BEGIN{skip=0} /option NFQWS_OPT '\''/ {printf "\toption NFQWS_OPT '\''\n%s\n'\''\n", block; skip=1; next} skip && /^'\''$/ {skip=0; next} !skip {print}' "$CONF" > "${CONF}.tmp"
         mv "${CONF}.tmp" "$CONF"
 
         echo -e "\n${CYAN}Тестируем стратегию: ${YELLOW}${NAME}${NC} ($CUR/$TOTAL_STR)"
         ZAPRET_RESTART
+
         OK=0
         check_all_urls
-        # Записываем сразу результат в виде "число название" без цветов
-        echo "$OK $NAME" >> "$RESULTS"
+
+        if [ "$OK" -eq "$TOTAL" ]; then COLOR="${GREEN}"
+        elif [ "$OK" -ge $((TOTAL/2)) ]; then COLOR="${YELLOW}"
+        else COLOR="${RED}"; fi
+
+        # вывод на экран
+        echo -e "${COLOR}${NAME}${NC} → $OK/$TOTAL"
+
+        # запись в $RESULTS без цветов
+        echo "${NAME} → $OK/$TOTAL" >> "$RESULTS"
+
     done
 
-    # Сортируем файл по результату и перезаписываем его
-    sort -rn "$RESULTS" -o "$RESULTS"
-
+    # показываем лучшие 10 на экране
     echo -e "\n${GREEN}Тестирование завершено!${NC}\n\n${YELLOW}Лучшие стратегии:${NC}"
-    # Выводим первые 10 в цвете
-    head -n 10 "$RESULTS" | while IFS= read -r LINE; do
-        COUNT=$(echo "$LINE" | cut -d" " -f1)
-        NAME=$(echo "$LINE" | cut -d" " -f2-)
+    sort -t'→' -k2 -nr "$RESULTS" | head -n 10 | while read LINE; do
+        NAME=$(echo "$LINE" | cut -d'→' -f1 | xargs)
+        COUNT=$(echo "$LINE" | cut -d'/' -f1 | awk '{print $NF}')
         if [ "$COUNT" -eq "$TOTAL" ]; then COLOR="${GREEN}"
         elif [ "$COUNT" -ge $((TOTAL/2)) ]; then COLOR="${YELLOW}"
         else COLOR="${RED}"; fi
-        echo -e "${COLOR}${NAME}${NC} → $COUNT/$TOTAL"
+        echo -e "${COLOR}${NAME}${NC} → $LINE" | awk -F'→' '{print $1 " → " $2}'  # сохраняем формат
     done
 
     mv -f "$BACK" "$CONF"
