@@ -378,8 +378,24 @@ printf '%s\n' "Госуслуги|https://gosuslugi.ru" "Госуслуги ЛК
 : > "$RESULTS"; LINES=$(grep -n '^#' "$STR_FILE" | cut -d: -f1); CUR=0; echo "$LINES" | while read START; do CUR=$((CUR+1)); NEXT=$(echo "$LINES" | awk -v s="$START" '$1>s{print;exit}'); if [ -z "$NEXT" ]; then sed -n "${START},\$p" "$STR_FILE" > "$TEMP_FILE"; else sed -n "${START},$((NEXT-1))p" "$STR_FILE" > "$TEMP_FILE"; fi
 BLOCK=$(cat "$TEMP_FILE"); NAME=$(head -n1 "$TEMP_FILE"); NAME="${NAME#\#}"; awk -v block="$BLOCK" 'BEGIN{skip=0} /option NFQWS_OPT '\''/ {printf "\toption NFQWS_OPT '\''\n%s\n'\''\n", block; skip=1; next} skip && /^'\''$/ {skip=0; next} !skip {print}' "$CONF" > "${CONF}.tmp"; mv "${CONF}.tmp" "$CONF"
 echo -e "\n${CYAN}Тестируем стратегию: ${YELLOW}${NAME}${NC} ($CUR/$TOTAL_STR)"; ZAPRET_RESTART; OK=0; check_all_urls; if [ "$OK" -eq "$TOTAL" ]; then COLOR="${GREEN}"; elif [ "$OK" -ge $((TOTAL/2)) ]; then COLOR="${YELLOW}"; else COLOR="${RED}"; fi; echo -e "${CYAN}Результат теста: ${COLOR}$OK/$TOTAL${NC}"
-echo -e "${NAME} → ${OK}/${TOTAL}" >> "$RESULTS"; done; sort -t'/' -k1 -nr "$RESULTS" -o "$RESULTS"; echo -e "\n${GREEN}Тестирование завершено!${NC}\n\n${YELLOW}Лучшие стратегии:${NC}"; head -n 10 "$RESULTS" | while IFS= read -r LINE; do COUNT=$(echo "$LINE" | awk -F'→' '{print $2}' | cut -d'/' -f1 | tr -d ' ')
-NAME=$(echo "$LINE" | awk -F'→' '{print $1}' | sed 's/ *$//'); if [ "$COUNT" -eq "$TOTAL" ]; then COLOR="${GREEN}"; elif [ "$COUNT" -ge $((TOTAL/2)) ]; then COLOR="${YELLOW}"; else COLOR="${RED}"; fi; echo -e "${COLOR}${NAME}${NC} → ${COUNT}/${TOTAL}"; done; mv -f "$BACK" "$CONF"; rm -f "$OUT_DPI"; echo; ZAPRET_RESTART; PAUSE; }
+echo -e "${NAME} → ${OK}/${TOTAL}" >> "$RESULTS"; done; sort -t'/' -k1 -nr "$RESULTS" -o "$RESULTS"; echo -e "\n${GREEN}Тестирование завершено!${NC}\n\n${YELLOW}Лучшие стратегии:${NC}"; 
+
+TOTAL=$(head -n1 "$RESULTS" | awk -F'/' '{print $2}')  # Общее число тестов
+
+sort -t'→' -k2,2nr "$RESULTS" | head -n 10 | while IFS= read -r LINE; do
+    COUNT=$(echo "$LINE" | awk -F'→' '{print $2}' | cut -d'/' -f1 | tr -d ' ')
+    NAME=$(echo "$LINE" | awk -F'→' '{print $1}' | sed 's/ *$//')
+    if [ "$COUNT" -eq "$TOTAL" ]; then
+        COLOR="${GREEN}"
+    elif [ "$COUNT" -ge $((TOTAL/2)) ]; then
+        COLOR="${YELLOW}"
+    else
+        COLOR="${RED}"
+    fi
+    echo -e "${COLOR}${NAME}${NC} → ${COUNT}/${TOTAL}"
+done
+
+mv -f "$BACK" "$CONF"; rm -f "$OUT_DPI"; echo; ZAPRET_RESTART; PAUSE; }
 show_test_results() { echo -e "\n${MAGENTA}Результат тестирования стратегий${NC}\n"; [ ! -f "$RESULTS" ] || [ ! -s "$RESULTS" ] && { echo -e "${RED}Результат не найден!${NC}\n"; PAUSE; return; }
 TOTAL=$(head -n1 "$RESULTS" | awk -F'/' '{print $2}'); awk -F'[/ ]' '{for(i=1;i<=NF;i++) if($i ~ /^[0-9]+$/){print $i "/" $(i+1), $0; break}}' "$RESULTS" | sort -nr -k1,1 | awk -v total="$TOTAL" -v GREEN="$GREEN" -v YELLOW="$YELLOW" -v RED="$RED" -v NC="$NC" '{split($1,a,"/"); count=a[1]; $1=""; sub(/^ /,""); line=$0; if(count==total) color=GREEN; else if(count>total/2) color=YELLOW; else color=RED; print color line NC}'; echo; PAUSE; }
 # ==========================================
