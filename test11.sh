@@ -384,7 +384,7 @@ mv "${CONF}.tmp" "$CONF"; echo -e "\n${CYAN}Тестируем стратеги�
 echo -e "${CYAN}Результат теста: ${COLOR}$OK/$TOTAL${NC}"; echo "$OK $NAME" >> "$RESULTS"; done; echo -e "\n${GREEN}Тестирование завершено!${NC}\n\n${YELLOW}Лучшие стратегии:${NC}"; sort -rn "$RESULTS" | head -n 10 | while IFS= read -r LINE; do
 COUNT=$(echo "$LINE" | cut -d" " -f1); NAME=$(echo "$LINE" | cut -d" " -f2-); if [ "$COUNT" -eq "$TOTAL" ]; then COLOR="${GREEN}"; elif [ "$COUNT" -gt 0 ]; then COLOR="${YELLOW}"; else COLOR="${RED}"; fi
 echo -e "${COLOR}${NAME}${NC} → $COUNT/$TOTAL"; done; 
-TOP_FILE="/opt/zapret_temp/zapret_bench_sorted.txt"
+
 sort -rn "$RESULTS" | while IFS= read -r LINE; do
     COUNT=$(echo "$LINE" | cut -d" " -f1)
     NAME=$(echo "$LINE" | cut -d" " -f2-)
@@ -394,10 +394,12 @@ sort -rn "$RESULTS" | while IFS= read -r LINE; do
     echo -e "${COLOR}${NAME}${NC} → $COUNT/$TOTAL"
 done > "$RESULTS"
 mv -f "$BACK" "$CONF"; rm -f "$OUT_DPI"; echo; ZAPRET_RESTART; PAUSE; }
+
+
 show_test_results() {
-    echo -e "${MAGENTA}Результаты теста стратегий${NC}\n"
+    echo -e "\n${MAGENTA}Результаты теста стратегий${NC}\n"
     if [ ! -f "$RESULTS" ] || [ ! -s "$RESULTS" ]; then
-        echo -e "\n${RED}Результатов нет!${NC}\n"
+        echo -e "${RED}Результатов не найдены!${NC}\n"
         PAUSE
         return
     fi
