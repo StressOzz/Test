@@ -22,7 +22,7 @@ EXCLUDE_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/hea
 INSTAGRAM="57.144.222.34 instagram.com www.instagram.com\n157.240.9.174 instagram.com www.instagram.com\n157.240.245.174 instagram.com www.instagram.com\n157.240.205.174 instagram.com www.instagram.com"
 PDA="185.87.51.182 4pda.to www.4pda.to"; NTC="30.255.77.28 ntc.party\n130.255.77.28 ntc.party"; RUTOR="173.245.58.219 rutor.info d.rutor.info"; LIBRUSEC="185.39.18.98 lib.rus.ec www.lib.rus.ec"
 AI="45.155.204.190 gemini.google.com\n45.155.204.190 grok.com accounts.x.ai assets.grok.com\n45.155.204.190 chatgpt.com ab.chatgpt.com auth.openai.com auth0.openai.com platform.openai.com cdn.oaistatic.com files.oaiusercontent.com cdn.auth0.com tcr9i.chat.openai.com\n45.155.204.190 webrtc.chatgpt.com android.chat.openai.comapi.openai.com operator.chatgpt.com sora.chatgpt.com sora.com videos.openai.com ios.chat.openai.com"
-HOSTS_FILE="/etc/hosts"; ALL_BLOCKS="$AI\n$INSTAGRAM\n$PDA\n$NTC\n$RUTOR\n$LIBRUSEC"
+HOSTS_FILE="/etc/hosts"; ALL_BLOCKS="$AI\n$INSTAGRAM\n$NTC\n$RUTOR\n$LIBRUSEC"
 hosts_enabled() { grep -q "grok.com\|chatgpt.com\|gemini.google.com\|4pda.to\|instagram.com\|rutor.info\|lib.rus.ec\|ntc.party" /etc/hosts; }
 hosts_add() { printf "%b\n" "$1" | while IFS= read -r L; do grep -qxF "$L" /etc/hosts || echo "$L" >> /etc/hosts; done; /etc/init.d/dnsmasq restart >/dev/null 2>&1; }
 hosts_clear() { printf "%b\n" "$1" | while IFS= read -r L; do sed -i "\|^$L$|d" /etc/hosts; done; /etc/init.d/dnsmasq restart >/dev/null 2>&1; }
@@ -146,8 +146,7 @@ pkg_remove() { local pkg_name="$1"; if [ "$PKG_IS_APK" -eq 1 ]; then apk del "$p
 uninstall_zapret() { local NO_PAUSE=$1; [ "$NO_PAUSE" != "1" ] && echo; echo -e "${MAGENTA}Удаляем ZAPRET${NC}\n${CYAN}Останавливаем ${NC}zapret"; /etc/init.d/zapret stop >/dev/null 2>&1; echo -e "${CYAN}Убиваем процессы${NC}"
 for pid in $(pgrep -f /opt/zapret 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done; echo -e "${CYAN}Удаляем пакеты${NC}"; pkg_remove zapret; pkg_remove luci-app-zapret; echo -e "${CYAN}Удаляем временные файлы${NC}"
 rm -rf /opt/zapret /etc/config/zapret /etc/firewall.zapret /etc/init.d/zapret /tmp/*zapret* /var/run/*zapret* /tmp/*.ipk /tmp/*.zip 2>/dev/null; crontab -l 2>/dev/null | grep -v -i "zapret" | crontab - 2>/dev/null
-nft list tables 2>/dev/null | awk '{print $2}' | grep -E '(zapret|ZAPRET)' | while read t; do [ -n "$t" ] && nft delete table "$t" 2>/dev/null; done; rm -rf "${FINAL_STR:-}" "${NEW_STR:-}" "${OLD_STR:-}" "${SAVED_STR:-}" \
-"${TMP_LIST:-}" "${HOSTS_USER:-}" "${BACKUP_FILE:-}" "${TMP_SF:-}" 2>/dev/null; hosts_clear "$ALL_BLOCKS"; echo -e "Zapret ${GREEN}удалён!${NC}\n"; [ "$NO_PAUSE" != "1" ] && PAUSE; }
+nft list tables 2>/dev/null | awk '{print $2}' | grep -E '(zapret|ZAPRET)' | while read t; do [ -n "$t" ] && nft delete table "$t" 2>/dev/null; done; rm -rf -- "$TMP_SF"; hosts_clear "$ALL_BLOCKS"; echo -e "Zapret ${GREEN}удалён!${NC}\n"; [ "$NO_PAUSE" != "1" ] && PAUSE; }
 # ==========================================
 # Подбор стратегии для Ютуб
 # ==========================================
