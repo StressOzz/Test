@@ -503,12 +503,15 @@ show_test_results() {
     fi
 
     while IFS= read -r LINE; do
-        COUNT=$(echo "$LINE" | awk -F'→' '{print $2}' | cut -d'/' -f1 | tr -d ' ')
         NAME=$(echo "$LINE" | awk -F'→' '{print $1}' | sed 's/ *$//')
+        COUNT=$(echo "$LINE" | awk -F'→' '{print $2}' | cut -d'/' -f1 | tr -d ' ')
+        
+        # Защита, если TOTAL не задан
+        [ -z "$TOTAL" ] && TOTAL=$(grep -c "|" "$OUT_DPI")
 
         if [ "$COUNT" -eq "$TOTAL" ]; then
             COLOR="${GREEN}"
-        elif [ "$COUNT" -ge $((TOTAL/2)) ]; then
+        elif [ "$COUNT" -ge $((TOTAL / 2)) ]; then
             COLOR="${YELLOW}"
         else
             COLOR="${RED}"
@@ -520,6 +523,7 @@ show_test_results() {
     echo
     PAUSE
 }
+
 # ==========================================
 # Главное меню
 # ==========================================
