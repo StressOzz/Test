@@ -3,16 +3,14 @@
 RAW="https://raw.githubusercontent.com/hyperion-cs/dpi-checkers/main/ru/tcp-16-20/index.html"
 TMP="/tmp/dpi_urls.$$"
 
-echo "Скачиваем список тестов..."
-
-if ! curl -fsSL "$RAW" -o "$TMP"; then
+curl -fsSL "$RAW" -o "$TMP" || {
     echo "Ошибка загрузки"
     exit 1
-fi
+}
 
-awk -F'"' '
-/id:[[:space:]]*"/  { id=$2 }
-/url:[[:space:]]*"/ { print id "|" $2 }
+awk '
+match($0, /id:[[:space:]]*"([^"]+)"/, a)  { id=a[1] }
+match($0, /url:[[:space:]]*"([^"]+)"/, b) { print id "|" b[1] }
 ' "$TMP"
 
 rm -f "$TMP"
