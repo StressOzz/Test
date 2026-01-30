@@ -26,7 +26,7 @@ AI="45.155.204.190 gemini.google.com chatgpt.com ab.chatgpt.com auth.openai.com 
 45.155.204.190 login-wall.deepl.com w.deepl.com dict.deepl.com ita-free.www.deepl.com write-free.www.deepl.com\n45.155.204.190 experimentation.deepl.com experimentation-grpc.deepl.com ita-free.app.deepl.com shield.deepl.com
 45.155.204.190 ott.deepl.com api-free.deepl.com backend.deepl.com clearance.deepl.com errortracking.deepl.com\n45.155.204.190 auth.deepl.com oneshot-free.www.deepl.com checkout.www.deepl.com gtm.deepl.com"
 HOSTS_FILE="/etc/hosts"; ALL_BLOCKS="$AI\n$INSTAGRAM\n$NTC\n$RUTOR\n$LIBRUSEC"
-hosts_enabled() { grep -q "grok.com\|chatgpt.com\|gemini.google.com\|4pda.to\|instagram.com\|rutor.info\|lib.rus.ec\|ntc.party" /etc/hosts; }
+hosts_enabled() { grep -q "45.155.204.190\|4pda.to\|instagram.com\|rutor.info\|lib.rus.ec\|ntc.party" /etc/hosts; }
 hosts_add() { printf "%b\n" "$1" | while IFS= read -r L; do grep -qxF "$L" /etc/hosts || echo "$L" >> /etc/hosts; done; /etc/init.d/dnsmasq restart >/dev/null 2>&1; }
 hosts_clear() { printf "%b\n" "$1" | while IFS= read -r L; do sed -i "\|^$L$|d" /etc/hosts; done; /etc/init.d/dnsmasq restart >/dev/null 2>&1; }
 ZAPRET_RESTART () { chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1; sleep 1; }
@@ -351,7 +351,7 @@ sed -i 's/meta l4proto { tcp, udp } flow offload @ft;/meta l4proto { tcp, udp } 
 # ==========================================
 # Hosts menu
 # ==========================================
-hosts_reset() { echo -e "\n${MAGENTA}Восстанавливаем hosts${NC}"; : > /etc/hosts; echo -e "127.0.0.1\tlocalhost\n\n::1\tlocalhost ip6-localhost ip6-loopback\nff02::1 ip6-allnodes\nff02::2 ip6-allrouters" > /etc/hosts; /etc/init.d/dnsmasq restart; echo -e "hosts ${GREEN}восстановлен!${NC}"; PAUSE; }
+hosts_reset() { echo -e "\n${MAGENTA}Восстанавливаем hosts${NC}"; : > /etc/hosts; echo -e "127.0.0.1\tlocalhost\n\n::1\tlocalhost ip6-localhost ip6-loopback\nff02::1 ip6-allnodes\nff02::2 ip6-allrouters" > /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1; echo -e "hosts ${GREEN}восстановлен!${NC}\n"; PAUSE; }
 status_block() { while IFS= read -r line; do [ -z "$line" ] && continue; grep -Fxq "$line" "$HOSTS_FILE" || return 1; done < <(printf '%b\n' "$1"); return 0; }
 add_block() { while IFS= read -r line; do [ -z "$line" ] && continue; grep -Fxq "$line" "$HOSTS_FILE" || echo "$line" >> "$HOSTS_FILE"; done < <(printf '%b\n' "$1"); }
 remove_block() { while IFS= read -r line; do [ -z "$line" ] && continue; sed -i "\|^$line$|d" "$HOSTS_FILE"; done < <(printf '%b\n' "$1"); }
