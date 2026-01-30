@@ -498,6 +498,7 @@ show_test_results() {
 
     [ ! -f "$RESULTS" ] || [ ! -s "$RESULTS" ] && { echo -e "${RED}Результаты не найдены!${NC}\n"; PAUSE; return; }
 
+    # Сортировка по числу перед /, по убыванию
     sort -t'/' -k1,1nr "$RESULTS" | while IFS= read -r LINE; do
         NUM=$(echo "$LINE" | awk -F'/' '{gsub(/[^0-9]/,"",$1); print $1}')
         TOTAL=$(echo "$LINE" | awk -F'/' '{gsub(/[^0-9]/,"",$2); print $2}')
@@ -512,6 +513,7 @@ show_test_results() {
     echo
     PAUSE
 }
+
 
 
 
