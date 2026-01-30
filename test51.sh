@@ -8,30 +8,24 @@ GREEN="\033[1;32m"; RED="\033[1;31m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"
 MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
 WORKDIR="/tmp/zapret-update"; CONF="/etc/config/zapret"; CUSTOM_DIR="/opt/zapret/init.d/openwrt/custom.d/"
 STR_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ListStrYou"
-TMP_LIST="/opt/zapret_yt_list.txt"; SAVED_STR="/opt/StrYou"; OLD_STR="/opt/StrOLD"
-Fin_IP_Dis="104\.25\.158\.178 finland[0-9]\{5\}\.discord\.media"; OUT_DPI="/opt/zapret_temp/dpi_urls.txt"
-TMP_SF="/opt/zapret_temp"; OUT="$TMP_SF/str_flow.txt"; ZIP="$TMP_SF/repo.zip"
+TMP_SF="/opt/zapret_temp"; TMP_LIST="$TMP_SF/zapret_yt_list.txt"; SAVED_STR="$TMP_SF/StrYou"; OLD_STR="$TMP_SF/StrOLD"
+Fin_IP_Dis="104\.25\.158\.178 finland[0-9]\{5\}\.discord\.media"; OUT_DPI="$TMP_SF/dpi_urls.txt"
+OUT="$TMP_SF/str_flow.txt"; ZIP="$TMP_SF/repo.zip"
 RAW="https://raw.githubusercontent.com/hyperion-cs/dpi-checkers/main/ru/tcp-16-20/index.html"
-BACKUP_FILE="/opt/hosts_temp.txt"; HOSTLIST_FILE="/opt/zapret/ipset/zapret-hosts-user.txt"
-STR_FILE="/opt/zapret_temp/str_test.txt"; TEMP_FILE="/opt/zapret_temp/str_temp.txt"
-RESULTS="/opt/zapret_temp/zapret_bench.txt"; BACK="/opt/zapret_temp/zapret_back"; PARALLEL=8
-HOSTLIST_MIN_SIZE=1800000; FINAL_STR="/opt/StrFINAL"; NEW_STR="/opt/StrNEW"; HOSTS_USER="/opt/hosts-user.txt"
+BACKUP_FILE="$TMP_SF/hosts_temp.txt"; HOSTLIST_FILE="/opt/zapret/ipset/zapret-hosts-user.txt"
+STR_FILE="$TMP_SF/str_test.txt"; TEMP_FILE="$TMP_SF/str_temp.txt"
+RESULTS="$TMP_SF/zapret_bench.txt"; BACK="$TMP_SF/zapret_back"; PARALLEL=8
+HOSTLIST_MIN_SIZE=1800000; FINAL_STR="$TMP_SF/StrFINAL"; NEW_STR="$TMP_SF/StrNEW"; HOSTS_USER="$TMP_SF/hosts-user.txt"
 EXCLUDE_FILE="/opt/zapret/ipset/zapret-hosts-user-exclude.txt"; fileDoH="/etc/config/https-dns-proxy"
 RKN_URL="https://raw.githubusercontent.com/IndeecFOX/zapret4rocket/refs/heads/master/extra_strats/TCP/RKN/List.txt"
 EXCLUDE_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/zapret-hosts-user-exclude.txt"
-
 INSTAGRAM="57.144.222.34 instagram.com www.instagram.com\n157.240.9.174 instagram.com www.instagram.com\n157.240.245.174 instagram.com www.instagram.com\n157.240.205.174 instagram.com www.instagram.com"
 PDA="185.87.51.182 4pda.to www.4pda.to"; NTC="30.255.77.28 ntc.party\n130.255.77.28 ntc.party"; RUTOR="173.245.58.219 rutor.info d.rutor.info"; LIBRUSEC="185.39.18.98 lib.rus.ec www.lib.rus.ec"
-AI="45.155.204.190 gemini.google.com\n45.155.204.190 grok.com accounts.x.ai assets.grok.com\n45.155.204.190 chatgpt.com ab.chatgpt.com auth.openai.com auth0.openai.com platform.openai.com cdn.oaistatic.com files.oaiusercontent.com cdn.auth0.com tcr9i.chat.openai.com webrtc.chatgpt.com android.chat.openai.com api.openai.com operator.chatgpt.com sora.chatgpt.com sora.com videos.openai.com ios.chat.openai.com"
-ALL_BLOCKS="$AI\n$INSTAGRAM\n$PDA\n$NTC\n$RUTOR\n$LIBRUSEC"
-HOSTS_FILE="/etc/hosts"
-
-
+AI="45.155.204.190 gemini.google.com\n45.155.204.190 grok.com accounts.x.ai assets.grok.com\n45.155.204.190 chatgpt.com ab.chatgpt.com auth.openai.com auth0.openai.com platform.openai.com cdn.oaistatic.com files.oaiusercontent.com cdn.auth0.com tcr9i.chat.openai.com\n45.155.204.190 webrtc.chatgpt.com android.chat.openai.comapi.openai.com operator.chatgpt.com sora.chatgpt.com sora.com videos.openai.com ios.chat.openai.com"
+HOSTS_FILE="/etc/hosts"; ALL_BLOCKS="$AI\n$INSTAGRAM\n$PDA\n$NTC\n$RUTOR\n$LIBRUSEC"
 hosts_enabled() { grep -q "grok.com\|chatgpt.com\|gemini.google.com\|4pda.to\|instagram.com\|rutor.info\|lib.rus.ec\|ntc.party" /etc/hosts; }
 hosts_add() { printf "%b\n" "$1" | while IFS= read -r L; do grep -qxF "$L" /etc/hosts || echo "$L" >> /etc/hosts; done; /etc/init.d/dnsmasq restart; }
 hosts_clear() { printf "%b\n" "$1" | while IFS= read -r L; do sed -i "\|^$L$|d" /etc/hosts; done; /etc/init.d/dnsmasq restart; }
-
-
 ZAPRET_RESTART () { chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1; sleep 1; }
 PAUSE() { echo "Нажмите Enter..."; read dummy; }; BACKUP_DIR="/opt/zapret_backup"; DATE_FILE="$BACKUP_DIR/date_backup.txt"
 if command -v apk >/dev/null 2>&1; then PKG_IS_APK=1; else PKG_IS_APK=0; fi
@@ -131,11 +125,7 @@ read choice; case $choice in 1) save_backup;; 2) restore_backup;; 3) restore_def
 delete_backup() { if [ -d "$BACKUP_DIR" ]; then rm -rf "$BACKUP_DIR"; echo -e "\n${GREEN}Резервная копия удалена!${NC}\n"; else echo -e "\n${RED}Резервная копия не найдена!${NC}\n"; fi; PAUSE; }
 restore_default() { if [ -f /opt/zapret/restore-def-cfg.sh ]; then echo -e "\n${MAGENTA}Возвращаем настройки по умолчанию${NC}"; rm -f /opt/zapret/init.d/openwrt/custom.d/50-script.sh; for i in 1 2 3 4; do rm -f "/opt/zapret/ipset/cust$i.txt"; done
 [ -f /etc/init.d/zapret ] && /etc/init.d/zapret stop >/dev/null 2>&1; echo -e "${CYAN}Возвращаем ${NC}настройки${CYAN}, ${NC}стратегию${CYAN} и ${NC}hostlist${CYAN} к значениям по умолчанию${NC}"; cp -f /opt/zapret/ipset_def/* /opt/zapret/ipset/
-chmod +x /opt/zapret/restore-def-cfg.sh && /opt/zapret/restore-def-cfg.sh; ZAPRET_RESTART
-
-hosts_clear "$INSTAGRAM\n$PDA\n$NTC\n$RUTOR\n$LIBRUSEC\n$AI"
-
-echo -e "${GREEN}Настройки по умолчанию возвращены!${NC}\n"; else echo -e "\n${RED}Zapret не установлен!${NC}\n"; fi; PAUSE; }
+chmod +x /opt/zapret/restore-def-cfg.sh && /opt/zapret/restore-def-cfg.sh; ZAPRET_RESTART; hosts_clear "$ALL_BLOCKS"; echo -e "${GREEN}Настройки по умолчанию возвращены!${NC}\n"; else echo -e "\n${RED}Zapret не установлен!${NC}\n"; fi; PAUSE; }
 save_backup() { [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }; rm -rf "$BACKUP_DIR"; mkdir -p "$BACKUP_DIR"; tar -czf "$BACKUP_DIR/zapret.tar.gz" -C /opt zapret 2>/dev/null
 cp -p /etc/config/zapret "$BACKUP_DIR/"; printf '%s / %s\n' "$(date '+%d.%m.%y')" "$(du -sh /opt/zapret_backup 2>/dev/null | cut -f1 | sed -E 's/\.0K$/K/;s/K$/ КБ/;s/M$/ МБ/')" > "$DATE_FILE"
 echo -e "\n${GREEN}Настройки сохранены в${NC} $BACKUP_DIR\n"; PAUSE; }
@@ -157,11 +147,7 @@ uninstall_zapret() { local NO_PAUSE=$1; [ "$NO_PAUSE" != "1" ] && echo; echo -e 
 for pid in $(pgrep -f /opt/zapret 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done; echo -e "${CYAN}Удаляем пакеты${NC}"; pkg_remove zapret; pkg_remove luci-app-zapret; echo -e "${CYAN}Удаляем временные файлы${NC}"
 rm -rf /opt/zapret /etc/config/zapret /etc/firewall.zapret /etc/init.d/zapret /tmp/*zapret* /var/run/*zapret* /tmp/*.ipk /tmp/*.zip 2>/dev/null; crontab -l 2>/dev/null | grep -v -i "zapret" | crontab - 2>/dev/null
 nft list tables 2>/dev/null | awk '{print $2}' | grep -E '(zapret|ZAPRET)' | while read t; do [ -n "$t" ] && nft delete table "$t" 2>/dev/null; done; rm -rf "${FINAL_STR:-}" "${NEW_STR:-}" "${OLD_STR:-}" "${SAVED_STR:-}" \
-"${TMP_LIST:-}" "${HOSTS_USER:-}" "${BACKUP_FILE:-}" "${TMP_SF:-}" 2>/dev/null
-
-hosts_clear "$INSTAGRAM\n$PDA\n$NTC\n$RUTOR\n$LIBRUSEC\n$AI"
-
-echo -e "Zapret ${GREEN}удалён!${NC}\n"; [ "$NO_PAUSE" != "1" ] && PAUSE; }
+"${TMP_LIST:-}" "${HOSTS_USER:-}" "${BACKUP_FILE:-}" "${TMP_SF:-}" 2>/dev/null; hosts_clear "$ALL_BLOCKS"; echo -e "Zapret ${GREEN}удалён!${NC}\n"; [ "$NO_PAUSE" != "1" ] && PAUSE; }
 # ==========================================
 # Подбор стратегии для Ютуб
 # ==========================================
@@ -277,10 +263,7 @@ printf "%s\n" "--new" "--filter-udp=19294-19344,50000-50100" "--filter-l7=discor
 install_strategy() { local version="$1"; local NO_PAUSE="${2:-0}"; local fileGP="/opt/zapret/ipset/zapret-hosts-google.txt"; [ "$NO_PAUSE" != "1" ] && echo
 echo -e "${MAGENTA}Устанавливаем стратегию ${version}${NC}\n${CYAN}Меняем стратегию${NC}"; sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; { echo "  option NFQWS_OPT '"; strategy_"$version"; echo "'"; } >> "$CONF"
 printf '%s\n' "gvt1.com" "googleplay.com" "play.google.com" "beacons.gvt2.com" "play.googleapis.com" "play-fe.googleapis.com" "lh3.googleusercontent.com" "android.clients.google.com" "connectivitycheck.gstatic.com" \
-"play-lh.googleusercontent.com" "play-games.googleusercontent.com" "prod-lt-playstoregatewayadapter-pa.googleapis.com" | grep -Fxv -f "$fileGP" 2>/dev/null >> "$fileGP"; echo -e "${CYAN}Редактируем ${NC}hosts${NC}";
-
-hosts_add "$INSTAGRAM\n$PDA\n$NTC\n$RUTOR\n$LIBRUSEC\n$AI"
-
+"play-lh.googleusercontent.com" "play-games.googleusercontent.com" "prod-lt-playstoregatewayadapter-pa.googleapis.com" | grep -Fxv -f "$fileGP" 2>/dev/null >> "$fileGP"; echo -e "${CYAN}Редактируем ${NC}hosts${NC}"; hosts_add "$ALL_BLOCKS"
 echo -e "${CYAN}Добавляем домены в исключения${NC}"; rm -f "$EXCLUDE_FILE"; wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL" || { echo -e "\n${RED}Не удалось загрузить exclude файл${NC}\n"; PAUSE; return; }
 discord_str_add; echo -e "${CYAN}Применяем новую стратегию и настройки${NC}"; ZAPRET_RESTART; echo -e "${GREEN}Стратегия ${NC}${version}${GREEN} установлена!${NC}"; [ "$NO_PAUSE" != "1" ] && echo && PAUSE; }
 choose_strategy_manual() { curl -fsSL "$STR_URL" -o "$TMP_LIST" || { echo -e "\n${RED}Не удалось скачать список${NC}\n"; read -p "Нажмите Enter..." dummy </dev/tty; return 1; }
@@ -363,14 +346,9 @@ chmod +x /opt/zapret/blockcheck.sh; /opt/zapret/blockcheck.sh; start_zapret; els
 0) FO=$(uci get firewall.@defaults[0].flow_offloading 2>/dev/null); FOHW=$(uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null); if grep -q 'ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc; then echo -e "\n${MAGENTA}Отключаем FIX для Flow Offloading${NC}"
 sed -i 's/meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;/meta l4proto { tcp, udp } flow offload @ft;/' /usr/share/firewall4/templates/ruleset.uc; fw4 restart >/dev/null 2>&1; echo -e "FIX ${GREEN}отключён!${NC}\n"; PAUSE; elif [ "$FO" = 1 ] || [ "$FOHW" = 1 ]; then echo -e "\n${MAGENTA}Применяем FIX для Flow Offloading${NC}"
 sed -i 's/meta l4proto { tcp, udp } flow offload @ft;/meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;/' /usr/share/firewall4/templates/ruleset.uc; fw4 restart >/dev/null 2>&1; echo -e "FIX ${GREEN}успешно применён!${NC}\n"; PAUSE; fi;; *) echo; return;; esac; done; }
-
 # ==========================================
 # Hosts menu
 # ==========================================
-
-ALL_BLOCKS="$AI\n$INSTAGRAM\n$PDA\n$NTC\n$RUTOR\n$LIBRUSEC"
-
-
 status_block() { while IFS= read -r line; do [ -z "$line" ] && continue; grep -Fxq "$line" "$HOSTS_FILE" || return 1; done < <(printf '%b\n' "$1"); return 0; }
 add_block() { while IFS= read -r line; do [ -z "$line" ] && continue; grep -Fxq "$line" "$HOSTS_FILE" || echo "$line" >> "$HOSTS_FILE"; done < <(printf '%b\n' "$1"); }
 remove_block() { while IFS= read -r line; do [ -z "$line" ] && continue; sed -i "\|^$line$|d" "$HOSTS_FILE"; done < <(printf '%b\n' "$1"); }
@@ -422,5 +400,5 @@ if [ -f "$CONF" ]; then current="$ver$( [ -n "$ver" ] && [ -n "$yv_ver" ] && ech
 if [ -n "$current" ]; then echo -e "${YELLOW}Используется стратегия:${NC}  ${CYAN}$current${DV:+ $DV}${RKN_STATUS:+ $RKN_STATUS}${NC}"; elif [ -n "$RKN_STATUS" ]; then echo -e "${YELLOW}Используется стратегия:${NC}${CYAN}  РКН${DV:+ $DV}${NC}"; fi; fi
 echo -e "\n${CYAN}1) ${GREEN}Установить${NC} Zapret\n${CYAN}2) ${GREEN}Меню стратегий${NC}\n${CYAN}3) ${GREEN}Меню настроек\n${CYAN}4) ${GREEN}$str_stp_zpr ${NC}Zapret"
 echo -e "${CYAN}5) ${GREEN}Удалить ${NC}Zapret\n${CYAN}6) ${GREEN}Меню настройки ${NC}Discord\n${CYAN}7) ${GREEN}Меню ${NC}DNS over HTTPS\n${CYAN}8) ${GREEN}Удалить → установить → настроить${NC} Zapret\n${CYAN}0) ${GREEN}Системное меню${NC}" ; echo -ne "${CYAN}Enter) ${GREEN}Выход${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read choice
-case "$choice" in 888) echo; uninstall_zapret "1"; install_Zapret "1"; curl -fsSL https://raw.githubusercontent.com/StressOzz/Test/refs/heads/main/zapret -o "$CONF"; hosts_add "$INSTAGRAM\n$PDA\n$NTC\n$RUTOR\n$LIBRUSEC\n$AI"; rm -f "$EXCLUDE_FILE"; wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL"; ZAPRET_RESTART; PAUSE;;
+case "$choice" in 888) echo; uninstall_zapret "1"; install_Zapret "1"; curl -fsSL https://raw.githubusercontent.com/StressOzz/Test/refs/heads/main/zapret -o "$CONF"; hosts_add "$ALL_BLOCKS"; rm -f "$EXCLUDE_FILE"; wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL"; ZAPRET_RESTART; PAUSE;;
 1) install_Zapret;; 2) menu_str;; 3) backup_menu;; 4) pgrep -f /opt/zapret >/dev/null 2>&1 && stop_zapret || start_zapret;; 5) uninstall_zapret;; 6) scrypt_install;; 7) DoH_menu;; 8) zapret_key;; 0) sys_menu;; *) echo; exit 0;; esac; }; while true; do show_menu; done
