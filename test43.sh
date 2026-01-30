@@ -364,8 +364,6 @@ echo -ne "${CYAN}Enter) ${GREEN}Выход в меню стратегий${NC}\n
 # ==========================================
 # Тест стратегий
 # ==========================================
-# -----------------------------
-# Проверка отдельного URL
 check_url() {
     TEXT=$(echo "$1" | cut -d"|" -f1)
     LINK=$(echo "$1" | cut -d"|" -f2)
@@ -377,8 +375,6 @@ check_url() {
     fi
 }
 
-# -----------------------------
-# Проверка всех URL для стратегии
 check_all_urls() {
     TMP_OK="/tmp/z_ok.$$"
     : > "$TMP_OK"
@@ -398,8 +394,6 @@ EOF
     rm -f "$TMP_OK"
 }
 
-# -----------------------------
-# Основная функция тестирования стратегий
 
 run_test_strategies() {
     clear
@@ -468,14 +462,11 @@ run_test_strategies() {
 
         echo -e "${CYAN}Результат теста: ${COLOR}$OK/$TOTAL${NC}"
 
-        # Добавляем в файл сразу в нужном формате
+
         echo -e "${NAME} → ${OK}/${TOTAL}" >> "$RESULTS"
     done
 
-    # Сортируем по числу успешных тестов (число перед /) и сохраняем в файле
     sort -t'/' -k1 -nr "$RESULTS" -o "$RESULTS"
-
-    # Вывод лучших 10
     echo -e "\n${GREEN}Тестирование завершено!${NC}\n\n${YELLOW}Лучшие стратегии:${NC}"
     head -n 10 "$RESULTS" | while IFS= read -r LINE; do
         COUNT=$(echo "$LINE" | awk -F'→' '{print $2}' | cut -d'/' -f1 | tr -d ' ')
@@ -495,13 +486,12 @@ run_test_strategies() {
 
 
 show_test_results() {
-    echo -e "\n${MAGENTA}Результаты тестирования стратегий${NC}\n"
+    echo -e "\n${MAGENTA}Результат тестирования стратегий${NC}\n"
 
-    [ ! -f "$RESULTS" ] || [ ! -s "$RESULTS" ] && { echo -e "${RED}Результаты не найдены!${NC}\n"; PAUSE; return; }
+    [ ! -f "$RESULTS" ] || [ ! -s "$RESULTS" ] && { echo -e "${RED}Результат не найден!${NC}\n"; PAUSE; return; }
 
-    TOTAL=$(head -n1 "$RESULTS" | awk -F'/' '{print $2}')  # Берём общее число тестов из первой строки
+    TOTAL=$(head -n1 "$RESULTS" | awk -F'/' '{print $2}')  
 
-    # Сортировка по числу успехов (цифра перед /), по убыванию, с подсветкой
     awk -F'[/ ]' '{for(i=1;i<=NF;i++) if($i ~ /^[0-9]+$/){print $i "/" $(i+1), $0; break}}' "$RESULTS" |
     sort -nr -k1,1 |
     awk -v total="$TOTAL" -v GREEN="$GREEN" -v YELLOW="$YELLOW" -v RED="$RED" -v NC="$NC" '{
