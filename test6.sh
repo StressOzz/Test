@@ -383,7 +383,7 @@ echo -ne "${CYAN}Enter) ${GREEN}Выход в меню стратегий${NC}\n
 # ==========================================
 # Тест стратегий
 # ==========================================
-check_url() { TEXT=$(echo "$1" | cut -d"|" -f1); LINK=$(echo "$1" | cut -d"|" -f2); CODE=$(curl -sL -o /dev/null --connect-timeout 3 --max-time 8 -w "%{http_code}" "$LINK"); echo 1 >> "$TMP_OK"; echo -e "${GREEN}[ OK ]${NC} $TEXT"; } || echo -e "${RED}[FAIL]${NC} $TEXT)"
+check_url() { TEXT=$(echo "$1" | cut -d"|" -f1); LINK=$(echo "$1" | cut -d"|" -f2); CODE=$(curl -sL -o /dev/null --connect-timeout 3 --max-time 8 -w "%{http_code}" "$LINK"); [ "$CODE" -ge 200 ] && [ "$CODE" -lt 400 ] && { echo 1 >> "$TMP_OK"; echo -e "${GREEN}[ OK ]${NC} $TEXT"; } || echo -e "${RED}[FAIL]${NC} $TEXT ($CODE)"; }
 check_all_urls() { TMP_OK="$TMP_SF/z_ok.$$"; : > "$TMP_OK"; RUN=0; while IFS= read -r URL; do [ -z "$URL" ] && continue; check_url "$URL" & RUN=$((RUN+1)); if [ "$RUN" -ge "$PARALLEL" ]; then wait; RUN=0; fi
 done <<EOF
 $URLS
