@@ -433,7 +433,7 @@ echo -e "\n${CYAN}Тестируем стратегию: ${YELLOW}${NAME}${NC} (
 echo -e "${NAME} → ${OK}/${TOTAL}" >> "$RESULTS"; done; sort -t'/' -k1 -nr "$RESULTS" -o "$RESULTS"; mv -f "$BACK" "$CONF"; rm -f "$OUT_DPI"; ZAPRET_RESTART; show_test_results; }
 
 
-show_test_results() { clear; echo -e "${MAGENTA}Результат тестирования стратегий${NC}\n"; [ ! -f "$RESULTS" ] || [ ! -s "$RESULTS" ] && { echo -e "${RED}Результат не найден!${NC}\n"; PAUSE; return; }; TOTAL=$(head -n1 "$RESULTS" | cut -d'/' -f2); sort -nr -k1,1 <(awk -F'[/ ]' '{for(i=1;i<=NF;i++) if($i~/^[0-9]+$/){print $i "/" $(i+1), $0; break}}' "$RESULTS") | while read -r line; do COUNT=$(echo "$line" | awk -F'/' '{print $1}'); TEXT=$(echo "$line" | cut -d' ' -f2-); if [[ "$TEXT" =~ Zapret ]]; then COLOR="$CYAN"; elif [ "$COUNT" -eq "$TOTAL" ]; then COLOR="$GREEN"; elif [ "$COUNT" -gt $((TOTAL/2)) ]; then COLOR="$YELLOW"; else COLOR="$RED"; fi; echo -e "${COLOR}${TEXT}${NC}"; done; echo; PAUSE; }
+show_test_results() { clear; echo -e "${MAGENTA}Результат тестирования стратегий${NC}\n"; [ ! -f "$RESULTS" ] || [ ! -s "$RESULTS" ] && { echo -e "${RED}Результат не найден!${NC}\n"; PAUSE; return; }; TOTAL=$(head -n1 "$RESULTS" | awk -F'/' '{print $2}'); awk -F'[/ ]' -v total="$TOTAL" -v GREEN="$GREEN" -v YELLOW="$YELLOW" -v RED="$RED" -v CYAN="$CYAN" -v NC="$NC" '{for(i=1;i<=NF;i++) if($i ~ /^[0-9]+$/){split($i,a,"/"); count=a[1]; $1=""; sub(/^ /,""); line=$0; if(line ~ /Zapret/) color=CYAN; else if(count==total) color=GREEN; else if(count>total/2) color=YELLOW; else color=RED; print color line NC; break}}' "$RESULTS"; echo; PAUSE; }
 
 # ==========================================
 # Главное меню
