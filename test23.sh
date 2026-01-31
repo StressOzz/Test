@@ -411,32 +411,7 @@ check_zpr_off() {
 
 
 
-check_url() {
-    TEXT=$(echo "$1" | cut -d"|" -f1)
-    LINK=$(echo "$1" | cut -d"|" -f2)
-
-    BODY_SIZE=$(curl -sL \
-        --connect-timeout 5 \
-        --max-time 8 \
-        --speed-time 5 \
-        --speed-limit 1 \
-        --range 0-65535 \
-        -A "curl/8.0" \
-        -w "%{size_download}" \
-        -o /dev/null \
-        "$LINK" 2>/dev/null)
-
-    if [ "$BODY_SIZE" -lt 65536 ]; then
-        echo -e "${RED}[FAIL]${NC} $TEXT (recv $BODY_SIZE bytes)"
-    else
-        echo 1 >> "$TMP_OK"
-        echo -e "${GREEN}[ OK ]${NC} $TEXT"
-    fi
-}
-
-
-
-
+check_url() { TEXT=$(echo "$1" | cut -d"|" -f1); LINK=$(echo "$1" | cut -d"|" -f2); if curl -Is --connect-timeout 2 --max-time 3 "$LINK" >/dev/null 2>&1; then echo 1 >> "$TMP_OK"; echo -e "${GREEN}[ OK ]${NC} $TEXT"; else echo -e "${RED}[FAIL]${NC} $TEXT"; fi; }
 check_all_urls() { TMP_OK="$TMP_SF/z_ok.$$"; : > "$TMP_OK"; RUN=0; while IFS= read -r URL; do [ -z "$URL" ] && continue; check_url "$URL" & RUN=$((RUN+1)); if [ "$RUN" -ge "$PARALLEL" ]; then wait; RUN=0; fi
 done <<EOF
 $URLS
