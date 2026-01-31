@@ -416,9 +416,9 @@ check_url() {
     LINK=$(echo "$1" | cut -d"|" -f2)
 
     BODY_SIZE=$(curl -sL \
-        --connect-timeout 3 \
-        --max-time 5 \
-        --speed-time 3 \
+        --connect-timeout 5 \
+        --max-time 8 \
+        --speed-time 5 \
         --speed-limit 1 \
         --range 0-65535 \
         -A "curl/8.0" \
