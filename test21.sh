@@ -414,30 +414,24 @@ check_zpr_off() {
 check_url() {
     TEXT=$(echo "$1" | cut -d"|" -f1)
     LINK=$(echo "$1" | cut -d"|" -f2)
-    BODY_FILE="$TMP_SF/check_$$.body"
 
-    curl -sL \
+    BODY_SIZE=$(curl -sL \
         --connect-timeout 3 \
         --max-time 5 \
         --speed-time 3 \
         --speed-limit 1 \
         --range 0-65535 \
         -A "curl/8.0" \
-        -o "$BODY_FILE" \
-        "$LINK" >/dev/null 2>&1
+        -w "%{size_download}" \
+        -o /dev/null \
+        "$LINK" 2>/dev/null)
 
-    REQ_SIZE=65536
-    BODY_SIZE=0
-    [ -f "$BODY_FILE" ] && BODY_SIZE=$(wc -c < "$BODY_FILE")
-
-    if [ "$BODY_SIZE" -lt "$REQ_SIZE" ]; then
+    if [ "$BODY_SIZE" -lt 65536 ]; then
         echo -e "${RED}[FAIL]${NC} $TEXT (recv $BODY_SIZE bytes)"
     else
         echo 1 >> "$TMP_OK"
         echo -e "${GREEN}[ OK ]${NC} $TEXT"
     fi
-
-    rm -f "$BODY_FILE"
 }
 
 
