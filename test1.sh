@@ -391,7 +391,7 @@ done <<EOF
 $URLS
 EOF
 wait; OK=$(wc -l < "$TMP_OK" | tr -d ' '); rm -f "$TMP_OK"; }
-run_test_strategies() { clear; echo -e "${MAGENTA}Тестирование стратегий${NC}\n\n${CYAN}Собираем стратегии для теста${NC}"; rm -rf "$TMP_SF"; download_strategies 1; cp /opt/zapret_temp/str_flow.txt /opt/zapret_temp/str_test.txt; cp "$OUT" "$STR_FILE"; cp "$CONF" "$BACK"
+run_test_strategies() { clear; echo -e "${MAGENTA}Тестирование стратегий${NC}\n\n${CYAN}Собираем стратегии для теста${NC}"; rm -rf "$TMP_SF"; download_strategies 1; cp "$OUT" "$STR_FILE"; cp "$CONF" "$BACK"
 for N in $(seq 1 100); do strategy_v$N >> "$STR_FILE" 2>/dev/null || break; done; sed -i '/#Y/d' "$STR_FILE"; curl -fsSL "$RAW" | grep 'url:' | sed -n 's/.*id: "\([^"]*\)".*url: "\([^"]*\)".*/\1|\2/p' > "$OUT_DPI" || { echo -e "\n${RED}Ошибка загрузки DPI списка${NC}\n"; PAUSE; return; }
 printf '%s\n' "Госуслуги|https://gosuslugi.ru" "Госуслуги ЛК|https://esia.gosuslugi.ru" "Налоги|https://nalog.ru" "Налоги ЛК|https://lkfl2.nalog.ru" "ntc.party|https://ntc.party/" "RuTube|https://rutube.ru" "Instagram|https://instagram.com" "Rutor|https://rutor.info" "Rutracker|https://rutracker.org" \
 "Epidemz|https://epidemz.net.co" "NNM Club|https://nnmclub.to" "OpenWRT|https://openwrt.org" "Sxyprn|https://sxyprn.net" "Spankbang|https://ru.spankbang.com" "Pornhub|https://pornhub.com" "Discord|https://discord.com" "X|https://x.com" "Filmix|https://filmix.my" "FlightRadar24|https://flightradar24.com" \
