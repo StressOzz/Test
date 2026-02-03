@@ -100,7 +100,6 @@ kinozal.tv
 cub.red
 mobile.de
 exleasingcar.com
-redirector.googlevideo.com/report_mapping
 EOF
 )
 sites_clean=$(echo "$SITES" | grep -v '^#' | grep -v '^\s*$'); total=$(echo "$sites_clean" | wc -l); half=$(( (total + 1) / 2 ))
