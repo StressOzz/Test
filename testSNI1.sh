@@ -48,10 +48,11 @@ check_all_urls() {
     : > "$TMP_OK"
 
     RUN=0
-    while IFS= read -r U; do
+
+    printf "%s\n" "$URLS" | while IFS= read -r U; do
         check_url "$U" & RUN=$((RUN+1))
         [ "$RUN" -ge "$PARALLEL" ] && { wait; RUN=0; }
-    done <<< "$URLS"
+    done
 
     wait
     OK=$(wc -l < "$TMP_OK" | tr -d ' ')
