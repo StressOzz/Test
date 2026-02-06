@@ -11,7 +11,7 @@ RESULTS="/opt/zapret/tmp/zapret_hostbench.txt"
 RAW="https://raw.githubusercontent.com/hyperion-cs/dpi-checkers/main/ru/tcp-16-20/index.html"
 WHITELIST_URL="https://raw.githubusercontent.com/hxehex/russia-mobile-internet-whitelist/refs/heads/main/whitelist.txt"
 
-PARALLEL=8
+PARALLEL=10
 
 GREEN="\033[1;32m"
 RED="\033[1;31m"
@@ -35,7 +35,7 @@ check_url() {
     TEXT="${1%%|*}"
     LINK="${1##*|}"
 
-    if curl -sL --connect-timeout 3 --max-time 5 --speed-time 3 --speed-limit 1 -o /dev/null "$LINK" >/dev/null 2>&1; then
+    if curl -sL --connect-timeout 1 --max-time 2 --speed-time 2 --speed-limit 1 -o /dev/null "$LINK" >/dev/null 2>&1; then
         echo 1 >> "$TMP_OK"
         echo -e "${GREEN}[ OK ]${NC} $TEXT"
     else
