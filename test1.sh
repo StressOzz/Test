@@ -9,7 +9,7 @@ TMP_SF="/tmp/zapret_hostbench"
 RESULTS="/opt/zapret/tmp/zapret_hostbench.txt"
 
 RAW="https://raw.githubusercontent.com/hyperion-cs/dpi-checkers/main/ru/tcp-16-20/index.html"
-WHITELIST_URL="https://raw.githubusercontent.com/hxehex/russia-mobile-internet-whitelist/refs/heads/main/whitelist.txt"
+WHITELIST_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/list.txt"
 
 PARALLEL=10
 
