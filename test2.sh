@@ -50,7 +50,9 @@ check_all_urls() {
             RUN=0
         fi
     done < "$TMP_SF/dpi.txt"
-
+    
+    wait
+    
     OK=$(wc -l < "$TMP_OK" | tr -d ' ')
     rm -f "$TMP_OK"
 }
