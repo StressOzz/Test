@@ -17,6 +17,9 @@ YELLOW="\033[1;33m"
 MAGENTA="\033[1;35m"
 NC="\033[0m"
 
+show_test_results() { clear; echo -e "${MAGENTA}Результат тестирования стратегий${NC}\n"; [ ! -f "$RESULTS" ] || [ ! -s "$RESULTS" ] && { echo -e "${RED}Результат не найден!${NC}\n"; PAUSE; return; }; TOTAL=$(head -n1 "$RESULTS" | cut -d'/' -f2); sort -nr -k1,1 <(awk -F'[/ ]' '{for(i=1;i<=NF;i++) if($i~/^[0-9]+$/){print $i "/" $(i+1), $0; break}}' "$RESULTS") | while read -r line
+do COUNT=$(echo "$line" | awk -F'/' '{print $1}'); TEXT=$(echo "$line" | cut -d' ' -f2-); if [[ "$TEXT" =~ Zapret ]]; then COLOR="$CYAN"; elif [ "$COUNT" -eq "$TOTAL" ]; then COLOR="$GREEN"; elif [ "$COUNT" -gt $((TOTAL/2)) ]; then COLOR="$YELLOW"; else COLOR="$RED"; fi; echo -e "${COLOR}${TEXT}${NC}"; done; echo; PAUSE; }
+
 
 ZAPRET_RESTART() {
     chmod +x /opt/zapret/sync_config.sh 2>/dev/null
@@ -130,8 +133,7 @@ sed -i "s|--dpi-desync-fake-tls=.*|--dpi-desync-fake-tls=$FULL_PATH|" "$CONF"
     mv "$TMP_SF/conf.bak" "$CONF"
     ZAPRET_RESTART
 
-    echo -e "\n${MAGENTA}===== ИТОГ =====${NC}"
-    sort -t'/' -k1 -nr "$RESULTS"
+    show_test_results
 }
 
 
