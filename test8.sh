@@ -261,11 +261,13 @@ echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${
 rm -f "$EXCLUDE_FILE"; wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL" || echo -e "\n${RED}Не удалось загрузить exclude файл${NC}\n"; echo -e "${CYAN}Перезапускаем ${NC}Zapret"
 ZAPRET_RESTART; echo -e "${GREEN}Список исключений обновлён!${NC}\n"; PAUSE;; *) return;; esac; done }
 strategy_CHOUSE () {
-COUNT=$(declare -F | awk '{print $3}' | grep -E '^strategy_v[0-9]+$' | sed 's/strategy_v//' | sort -n | tail -n1)
+COUNT=$(grep -o '^[[:space:]]*strategy_v[0-9]\+()' "$0" | sed 's/[^0-9]//g' | sort -n | tail -n1)
 [ -z "$COUNT" ] && COUNT=0
 echo -ne "\n${YELLOW}Введите версию стратегии ${NC}(1-$COUNT)${YELLOW}:${NC} "
 read -r choice
-if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "$COUNT" ]; then install_strategy "v$choice"; fi
+case "$choice" in ''|*[!0-9]*) return;; esac
+[ "$choice" -lt 1 ] || [ "$choice" -gt "$COUNT" ] && return
+install_strategy "v$choice"
 }
 show_current_strategy() { [ -f "$CONF" ] || return; ver=""; for i in $(seq 1 99); do grep -qw "#v$i" "$CONF" && { ver="v$i"; break; }; done; yv_ver=""; for i in $(seq -w 1 99); do grep -qw "#Yv$i" "$CONF" && { yv_ver="Yv$i"; break; }; done; }
 discord_str_add() { if ! grep -q "option NFQWS_PORTS_UDP.*19294-19344,50000-50100" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'$/,19294-19344,50000-50100'/" "$CONF"; fi
