@@ -1,9 +1,5 @@
 #!/usr/bin/env bash
 
-############################################
-# переменные (как в твоём менеджере)
-############################################
-
 CONF="/etc/config/zapret"
 TMP_SF="/tmp/zapret_hostbench"
 RESULTS="/opt/zapret/tmp/zapret_hostbench.txt"
@@ -19,10 +15,6 @@ CYAN="\033[1;36m"
 YELLOW="\033[1;33m"
 MAGENTA="\033[1;35m"
 NC="\033[0m"
-
-############################################
-# функции
-############################################
 
 ZAPRET_RESTART() {
     chmod +x /opt/zapret/sync_config.sh 2>/dev/null
@@ -57,17 +49,11 @@ check_all_urls() {
             wait
             RUN=0
         fi
-    done < "$TMP_SF/dpi.txt"   # ← читаем файл напрямую, БЕЗ pipe
-
-    wait   # ← дождаться вообще всех
+    done < "$TMP_SF/dpi.txt"
 
     OK=$(wc -l < "$TMP_OK" | tr -d ' ')
     rm -f "$TMP_OK"
 }
-
-############################################
-# основная логика
-############################################
 
 main() {
 
@@ -93,7 +79,6 @@ main() {
     curl -fsSL "$WHITELIST_URL" > "$TMP_SF/hosts.txt" || exit 1
     TOTAL_HOSTS=$(wc -l < "$TMP_SF/hosts.txt")
 
-
     cp "$CONF" "$TMP_SF/conf.bak"
 
     CUR=0
@@ -107,7 +92,6 @@ main() {
 
         cp "$TMP_SF/conf.bak" "$CONF"
 
-        # меняем только значение после host=
         sed -i "s|--dpi-desync-hostfakesplit-mod=host=.*|--dpi-desync-hostfakesplit-mod=host=$HOST|" "$CONF"
 
         ZAPRET_RESTART
