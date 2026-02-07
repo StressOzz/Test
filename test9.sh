@@ -261,7 +261,7 @@ echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${
 rm -f "$EXCLUDE_FILE"; wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL" || echo -e "\n${RED}Не удалось загрузить exclude файл${NC}\n"; echo -e "${CYAN}Перезапускаем ${NC}Zapret"
 ZAPRET_RESTART; echo -e "${GREEN}Список исключений обновлён!${NC}\n"; PAUSE;; *) return;; esac; done }
 strategy_CHOUSE () {
-COUNT=$(grep -o '^[[:space:]]*strategy_v[0-9]\+()' "$0" | sed 's/[^0-9]//g' | sort -n | tail -n1)
+COUNT=$(set | grep -o 'strategy_v[0-9]\+ ()' | sed 's/[^0-9]//g' | sort -n | tail -n1)
 [ -z "$COUNT" ] && COUNT=0
 echo -ne "\n${YELLOW}Введите версию стратегии ${NC}(1-$COUNT)${YELLOW}:${NC} "
 read -r choice
