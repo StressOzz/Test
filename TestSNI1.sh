@@ -16,6 +16,14 @@ YELLOW="\033[1;33m"
 MAGENTA="\033[1;35m"
 NC="\033[0m"
 
+check_host_line() {
+if ! grep -q -- "--dpi-desync-hostfakesplit-mod=host=" "$CONF"; then
+    echo -e "${RED}Стратегия не подходит!$CONF${NC}"
+    exit 1
+fi
+}
+
+
 ZAPRET_RESTART() {
     chmod +x /opt/zapret/sync_config.sh 2>/dev/null
     /opt/zapret/sync_config.sh
@@ -82,6 +90,8 @@ check_all_urls() {
 
 main() {
 
+    check_host_line
+
     mkdir -p "$TMP_SF"
     : > "$RESULTS"
 
@@ -140,8 +150,7 @@ main() {
     mv "$TMP_SF/conf.bak" "$CONF"
     ZAPRET_RESTART
 
-show_host_results
-
+    show_host_results
 }
 
 main
