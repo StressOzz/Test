@@ -32,14 +32,12 @@ ZAPRET_RESTART() {
 }
 
 show_host_results() {
-
     clear
     echo -e "${MAGENTA}Результат тестирования host=${NC}\n"
 
     TOTAL=$(head -n1 "$RESULTS" | cut -d'/' -f2)
 
-    sort -t'/' -k2 -nr "$RESULTS" | while read line; do
-
+    sort -nr -k3 "$RESULTS" | while read -r line; do
         COUNT=$(echo "$line" | awk -F'[ /]' '{print $(NF-1)}')
 
         if [ "$COUNT" -eq "$TOTAL" ]; then
@@ -73,16 +71,31 @@ check_all_urls() {
     : > "$TMP_OK"
 
     RUN=0
+    PIDS=()
 
     while IFS= read -r U; do
-        check_url "$U" &
+        (
+            # проверка с таймаутом 5 сек
+            if curl -sL --connect-timeout 1 --max-time 5 --speed-time 3 --speed-limit 1 -o /dev/null "$U" >/dev/null 2>&1; then
+                echo 1 >> "$TMP_OK"
+                echo -e "${GREEN}[ OK ]${NC} $U"
+            else
+                echo -e "${RED}[FAIL]${NC} $U"
+            fi
+        ) &
+
+        PIDS+=($!)
         RUN=$((RUN+1))
 
         if [ "$RUN" -ge "$PARALLEL" ]; then
-            wait
+            wait "${PIDS[@]}"
             RUN=0
+            PIDS=()
         fi
     done < "$TMP_SF/dpi.txt"
+
+    # дождаться оставшиеся
+    [ ${#PIDS[@]} -gt 0 ] && wait "${PIDS[@]}"
 
     OK=$(wc -l < "$TMP_OK" | tr -d ' ')
     rm -f "$TMP_OK"
