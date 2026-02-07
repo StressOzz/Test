@@ -260,8 +260,9 @@ echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${
 6) toggle_rkn_bypass; continue;; 7) fix_GAME;; 0) show_test_results;; 8) echo -e "\n${MAGENTA}Обновляем список исключений${NC}\n${CYAN}Останавливаем ${NC}Zapret"; /etc/init.d/zapret stop >/dev/null 2>&1; echo -e "${CYAN}Добавляем домены в исключения${NC}"
 rm -f "$EXCLUDE_FILE"; wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL" || echo -e "\n${RED}Не удалось загрузить exclude файл${NC}\n"; echo -e "${CYAN}Перезапускаем ${NC}Zapret"
 ZAPRET_RESTART; echo -e "${GREEN}Список исключений обновлён!${NC}\n"; PAUSE;; *) return;; esac; done }
-strategy_CHOUSE () {
-COUNT=$(set | grep -o 'strategy_v[0-9]\+ ()' | sed 's/[^0-9]//g' | sort -n | tail -n1)
+strategy_CHOUSE() {
+SCRIPT="$(readlink -f /proc/$$/fd/255 2>/dev/null || echo "$0")"
+COUNT=$(grep -o 'strategy_v[0-9]\+' "$SCRIPT" | sed 's/[^0-9]//g' | sort -n | tail -n1)
 [ -z "$COUNT" ] && COUNT=0
 echo -ne "\n${YELLOW}Введите версию стратегии ${NC}(1-$COUNT)${YELLOW}:${NC} "
 read -r choice
@@ -398,8 +399,7 @@ printf '%s\n' "Госуслуги|https://gosuslugi.ru" "Госуслуги ЛК
 BLOCK=$(cat "$TEMP_FILE"); NAME=$(head -n1 "$TEMP_FILE"); NAME="${NAME#\#}"; awk -v block="$BLOCK" 'BEGIN{skip=0} /option NFQWS_OPT '\''/ {printf "\toption NFQWS_OPT '\''\n%s\n'\''\n", block; skip=1; next} skip && /^'\''$/ {skip=0; next} !skip {print}' "$CONF" > "${CONF}.tmp"; mv "${CONF}.tmp" "$CONF"
 echo -e "\n${CYAN}Тестируем стратегию: ${YELLOW}${NAME}${NC} ($CUR/$TOTAL_STR)"; ZAPRET_RESTART; OK=0; check_all_urls; if [ "$OK" -eq "$TOTAL" ]; then COLOR="${GREEN}"; elif [ "$OK" -ge $((TOTAL/2)) ]; then COLOR="${YELLOW}"; else COLOR="${RED}"; fi; echo -e "${CYAN}Результат теста: ${COLOR}$OK/$TOTAL${NC}"
 echo -e "${NAME} → ${OK}/${TOTAL}" >> "$RESULTS"; done; sort -t'/' -k1 -nr "$RESULTS" -o "$RESULTS"; mv -f "$BACK" "$CONF"; rm -f "$OUT_DPI"; ZAPRET_RESTART; show_test_results; }
-show_test_results() { clear; echo -e "${MAGENTA}Результат тестирования стратегий${NC}\n"; [ ! -f "$RESULTS" ] || [ ! -s "$RESULTS" ] && { echo -e "${RED}Результат не найден!${NC}\n"; PAUSE; return; }; TOTAL=$(head -n1 "$RESULTS" | cut -d'/' -f2); sort -nr -k1,1 <(awk -F'[/ ]' '{for(i=1;i<=NF;i++) if($i~/^[0-9]+$/){print $i "/" $(i+1), $0; break}}' "$RESULTS") | while read -r line
-do COUNT=$(echo "$line" | awk -F'/' '{print $1}'); TEXT=$(echo "$line" | cut -d' ' -f2-); if [[ "$TEXT" =~ Zapret ]]; then COLOR="$CYAN"; elif [ "$COUNT" -eq "$TOTAL" ]; then COLOR="$GREEN"; elif [ "$COUNT" -gt $((TOTAL/2)) ]; then COLOR="$YELLOW"; else COLOR="$RED"; fi; echo -e "${COLOR}${TEXT}${NC}"; done; echo; PAUSE; }
+show_test_results() { clear; echo -e "${MAGENTA}Результат тестирования стратегий${NC}\n"; [ ! -f "$RESULTS" ] || [ ! -s "$RESULTS" ] && { echo -e "${RED}Результат не найден!${NC}\n"; PAUSE; return; }; TOTAL=$(head -n1 "$RESULTS" | cut -d'/' -f2); awk -F'[/ ]' '{for(i=1;i<=NF;i++) if($i~/^[0-9]+$/){print $i "/" $(i+1), $0; break}}' "$RESULTS" | sort -nr -k1,1 | while read -r line; do COUNT=$(echo "$line" | awk -F'/' '{print $1}'); TEXT=$(echo "$line" | cut -d' ' -f2-); if echo "$TEXT" | grep -q Zapret; then COLOR="$CYAN"; elif [ "$COUNT" -eq "$TOTAL" ]; then COLOR="$GREEN"; elif [ "$COUNT" -gt $((TOTAL/2)) ]; then COLOR="$YELLOW"; else COLOR="$RED"; fi; echo -e "${COLOR}${TEXT}${NC}"; done; echo; PAUSE; }
 # ==========================================
 # Главное меню
 # ==========================================
