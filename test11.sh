@@ -261,14 +261,23 @@ echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${
 rm -f "$EXCLUDE_FILE"; wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL" || echo -e "\n${RED}Не удалось загрузить exclude файл${NC}\n"; echo -e "${CYAN}Перезапускаем ${NC}Zapret"
 ZAPRET_RESTART; echo -e "${GREEN}Список исключений обновлён!${NC}\n"; PAUSE;; *) return;; esac; done }
 strategy_CHOUSE() {
-SCRIPT="$(readlink -f /proc/$$/fd/255 2>/dev/null || echo "$0")"
-COUNT=$(grep -o 'strategy_v[0-9]\+' "$SCRIPT" | sed 's/[^0-9]//g' | sort -n | tail -n1)
-[ -z "$COUNT" ] && COUNT=0
-echo -ne "\n${YELLOW}Введите версию стратегии ${NC}(1-$COUNT)${YELLOW}:${NC} "
-read -r choice
-case "$choice" in ''|*[!0-9]*) return;; esac
-[ "$choice" -lt 1 ] || [ "$choice" -gt "$COUNT" ] && return
-install_strategy "v$choice"
+  # Определяем путь к скрипту
+  if [ -f "$0" ]; then
+    SCRIPT="$0"
+  else
+    # если запущено через sh или source, попробуем найти в /tmp или /opt
+    SCRIPT="/tmp/$(basename "$0")"
+  fi
+
+  # Ищем все функции strategy_vN в файле скрипта
+  COUNT=$(grep -o 'strategy_v[0-9]\+' "$SCRIPT" 2>/dev/null | sed 's/[^0-9]//g' | sort -n | tail -n1)
+  [ -z "$COUNT" ] && COUNT=0
+
+  echo -ne "\n${YELLOW}Введите версию стратегии ${NC}(1-$COUNT)${YELLOW}:${NC} "
+  read -r choice
+  case "$choice" in ''|*[!0-9]*) return;; esac
+  [ "$choice" -lt 1 ] || [ "$choice" -gt "$COUNT" ] && return
+  install_strategy "v$choice"
 }
 show_current_strategy() { [ -f "$CONF" ] || return; ver=""; for i in $(seq 1 99); do grep -qw "#v$i" "$CONF" && { ver="v$i"; break; }; done; yv_ver=""; for i in $(seq -w 1 99); do grep -qw "#Yv$i" "$CONF" && { yv_ver="Yv$i"; break; }; done; }
 discord_str_add() { if ! grep -q "option NFQWS_PORTS_UDP.*19294-19344,50000-50100" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'$/,19294-19344,50000-50100'/" "$CONF"; fi
@@ -399,7 +408,8 @@ printf '%s\n' "Госуслуги|https://gosuslugi.ru" "Госуслуги ЛК
 BLOCK=$(cat "$TEMP_FILE"); NAME=$(head -n1 "$TEMP_FILE"); NAME="${NAME#\#}"; awk -v block="$BLOCK" 'BEGIN{skip=0} /option NFQWS_OPT '\''/ {printf "\toption NFQWS_OPT '\''\n%s\n'\''\n", block; skip=1; next} skip && /^'\''$/ {skip=0; next} !skip {print}' "$CONF" > "${CONF}.tmp"; mv "${CONF}.tmp" "$CONF"
 echo -e "\n${CYAN}Тестируем стратегию: ${YELLOW}${NAME}${NC} ($CUR/$TOTAL_STR)"; ZAPRET_RESTART; OK=0; check_all_urls; if [ "$OK" -eq "$TOTAL" ]; then COLOR="${GREEN}"; elif [ "$OK" -ge $((TOTAL/2)) ]; then COLOR="${YELLOW}"; else COLOR="${RED}"; fi; echo -e "${CYAN}Результат теста: ${COLOR}$OK/$TOTAL${NC}"
 echo -e "${NAME} → ${OK}/${TOTAL}" >> "$RESULTS"; done; sort -t'/' -k1 -nr "$RESULTS" -o "$RESULTS"; mv -f "$BACK" "$CONF"; rm -f "$OUT_DPI"; ZAPRET_RESTART; show_test_results; }
-show_test_results() { clear; echo -e "${MAGENTA}Результат тестирования стратегий${NC}\n"; [ ! -f "$RESULTS" ] || [ ! -s "$RESULTS" ] && { echo -e "${RED}Результат не найден!${NC}\n"; PAUSE; return; }; TOTAL=$(head -n1 "$RESULTS" | cut -d'/' -f2); awk -F'[/ ]' '{for(i=1;i<=NF;i++) if($i~/^[0-9]+$/){print $i "/" $(i+1), $0; break}}' "$RESULTS" | sort -nr -k1,1 | while read -r line; do COUNT=$(echo "$line" | awk -F'/' '{print $1}'); TEXT=$(echo "$line" | cut -d' ' -f2-); if echo "$TEXT" | grep -q Zapret; then COLOR="$CYAN"; elif [ "$COUNT" -eq "$TOTAL" ]; then COLOR="$GREEN"; elif [ "$COUNT" -gt $((TOTAL/2)) ]; then COLOR="$YELLOW"; else COLOR="$RED"; fi; echo -e "${COLOR}${TEXT}${NC}"; done; echo; PAUSE; }
+show_test_results() { clear; echo -e "${MAGENTA}Результат тестирования стратегий${NC}\n"; [ ! -f "$RESULTS" ] || [ ! -s "$RESULTS" ] && { echo -e "${RED}Результат не найден!${NC}\n"; PAUSE; return; }; TOTAL=$(head -n1 "$RESULTS" | cut -d'/' -f2); awk -F'[/ ]' '{for(i=1;i<=NF;i++) if($i~/^[0-9]+$/){print $i "/" $(i+1), $0; break}}' "$RESULTS" | sort -nr -k1,1 | while read -r line; do COUNT=$(echo "$line" | awk -F'/' '{print $1}')
+TEXT=$(echo "$line" | cut -d' ' -f2-); if echo "$TEXT" | grep -q Zapret; then COLOR="$CYAN"; elif [ "$COUNT" -eq "$TOTAL" ]; then COLOR="$GREEN"; elif [ "$COUNT" -gt $((TOTAL/2)) ]; then COLOR="$YELLOW"; else COLOR="$RED"; fi; echo -e "${COLOR}${TEXT}${NC}"; done; echo; PAUSE; }
 # ==========================================
 # Главное меню
 # ==========================================
