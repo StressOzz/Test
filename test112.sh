@@ -296,7 +296,7 @@ echo -e "\n${CYAN}Применяем стратегию: ${NC}$SELECTED_NAME"; S
 awk '{if(skip){if($0=="--new"||$0~/\047/){skip=0;next}if($0~/^[[:space:]]*$/)next;next}if($0=="--filter-tcp=443"){getline n;if(n=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt"){skip=1;next}else{print $0;print n;next}}if($0=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt")has_google=1;if($0~/^[[:space:]]*#Yv/)next;print}' "$OLD_STR" > "$NEW_STR"
 awk 'BEGIN{inserted=0;has_google=0} $0=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt"{has_google=1} $0=="--new"&&!inserted{while((getline l<"'"$SAVED_STR"'")>0) if(l!~/^[[:space:]]*$/) print l; print "--new"; inserted=1; next} $0~/^[[:space:]]*option NFQWS_OPT \047$/&&!has_google&&!inserted{print; print "#'"$SELECTED_NAME"'"; while((getline l<"'"$SAVED_STR"'")>0) if(l!~/^[[:space:]]*$/) print l; print "--new"; inserted=1; next} {print}' "$NEW_STR" > "$FINAL_STR"
 cat "$FINAL_STR" >> "$CONF"; awk '{if($0=="--new"){if(prev!="--new")print}else print;prev=$0}' "$CONF" > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"; grep -q "^[[:space:]]*' *\$" "$CONF" || echo "'" >> "$CONF"; ZAPRET_RESTART; echo -e "${GREEN}Стратегия применена!${NC}\n"; 
-grep -- "--dpi-desync-fooling=ts" "$CONF" >/dev/null && echo -e "\n${YELLOW}Для работы этой стртатегии, в терминале Windows нужно выполнить: ${NC}netsh int tcp set global timestamps=enabled\n"; PAUSE; }
+if grep -Fq "--dpi-desync-fooling=ts" "$CONF"; then echo -e "\n${YELLOW}Для работы этой стратегии, в терминале Windows нужно выполнить: ${NC}netsh int tcp set global timestamps=enabled\n"; fi; PAUSE; }
 # ==========================================
 # DNS over HTTPS
 # ==========================================
