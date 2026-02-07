@@ -246,7 +246,6 @@ rm -rf "$TMP_SF/zapret-discord-youtube-main" "$ZIP"; [ "$NO_PAUSE" != "1" ] && e
 # ==========================================
 # Меню стратегий
 # ==========================================
-
 menu_str() { [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }; while true; do show_current_strategy; RKN_Check; clear; echo -e "${MAGENTA}Меню стратегий${NC}\n"
 menu_game=$( [ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*88,500,1024-19293,19345-49999,50101-65535" "$CONF" && grep -q -- "--filter-udp=88,500,1024-19293,19345-49999,50101-65535" "$CONF" && echo "Удалить стратегию для игр" || echo "Включить стратегию для игр" )
 [ -f "$CONF" ] && line=$(grep -m1 '^#general' "$CONF") && [ -n "$line" ] && echo -e "${YELLOW}Используется стратегия:${NC} ${CYAN}${line#?}${NC}"
@@ -257,7 +256,7 @@ if hosts_enabled; then echo -e "${YELLOW}Домены в hosts: ${GREEN}доба
 echo -e "${CYAN}1) ${GREEN}Выбрать и установить стратегию ${NC}v1-v9\n${CYAN}2) ${GREEN}Выбрать и установить стратегию от ${NC}Flowseal\n${CYAN}3) ${GREEN}Выбрать и установить стратегию для ${NC}YouTube\n${CYAN}4) ${GREEN}Тестирование стратегий для ${NC}YouTube"
 echo -e "${CYAN}5) ${GREEN}Меню управления доменами в ${NC}hosts\n${CYAN}6) ${NC}$RKN_TEXT_MENU${NC}\n${CYAN}7) ${GREEN}$menu_game\n${CYAN}8) ${GREEN}Обновить список исключений${NC}\n${CYAN}9) ${GREEN}Тестирование всех стратегий${NC}"
 if [ -f "$RESULTS" ] && [ -s "$RESULTS" ]; then echo -e "${CYAN}0) ${GREEN}Результат тестирования стратегий${NC}"; fi
-echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read choiceST; case "$choiceST" in 1) strategy_CHOUSE;; 2) flowseal_menu;; 3) choose_strategy_manual;; 4) auto_stryou;; 5) menu_hosts;; 9) run_test_strategies;;
+echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read choiceST; case "$choiceST" in 1) strategy_CHOUSE;; 2) flowseal_menu;; 3) choose_strategy_manual;; 4) auto_stryou;; 5) menu_hosts;; 9) menu_tests;;
 6) toggle_rkn_bypass; continue;; 7) fix_GAME;; 0) show_test_results;; 8) echo -e "\n${MAGENTA}Обновляем список исключений${NC}\n${CYAN}Останавливаем ${NC}Zapret"; /etc/init.d/zapret stop >/dev/null 2>&1; echo -e "${CYAN}Добавляем домены в исключения${NC}"
 rm -f "$EXCLUDE_FILE"; wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL" || echo -e "\n${RED}Не удалось загрузить exclude файл${NC}\n"; echo -e "${CYAN}Перезапускаем ${NC}Zapret"
 ZAPRET_RESTART; echo -e "${GREEN}Список исключений обновлён!${NC}\n"; PAUSE;; *) return;; esac; done }
@@ -285,7 +284,6 @@ awk '{if(skip){if($0=="--new"||$0~/\047/){skip=0;next}if($0~/^[[:space:]]*$/)nex
 awk 'BEGIN{inserted=0;has_google=0} $0=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt"{has_google=1} $0=="--new"&&!inserted{while((getline l<"'"$SAVED_STR"'")>0) if(l!~/^[[:space:]]*$/) print l; print "--new"; inserted=1; next} $0~/^[[:space:]]*option NFQWS_OPT \047$/&&!has_google&&!inserted{print; print "#'"$SELECTED_NAME"'"; while((getline l<"'"$SAVED_STR"'")>0) if(l!~/^[[:space:]]*$/) print l; print "--new"; inserted=1; next} {print}' "$NEW_STR" > "$FINAL_STR"
 cat "$FINAL_STR" >> "$CONF"; awk '{if($0=="--new"){if(prev!="--new")print}else print;prev=$0}' "$CONF" > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"; grep -q "^[[:space:]]*' *\$" "$CONF" || echo "'" >> "$CONF"; ZAPRET_RESTART; echo -e "${GREEN}Стратегия применена!${NC}\n"; 
 grep -Fq "=ts" "$CONF" && echo -e "\n${YELLOW}Для работы этой стратегии, в терминале Windows нужно выполнить:${NC}\nnetsh int tcp set global timestamps=enabled"; PAUSE; }
-
 # ==========================================
 # DNS over HTTPS
 # ==========================================
@@ -375,25 +373,165 @@ echo -ne "${CYAN}Enter) ${GREEN}Выход в меню стратегий${NC}\n
 # ==========================================
 # Тест стратегий
 # ==========================================
-check_zpr_off() { echo -e "\n${CYAN}Контрольный тест: ${YELLOW}Zapret выключен${NC}"; /etc/init.d/zapret stop >/dev/null 2>&1; OK=0; check_all_urls; if [ "$OK" -eq "$TOTAL" ]; then COLOR="${GREEN}"; elif [ "$OK" -ge $((TOTAL/2)) ]
-then COLOR="${YELLOW}"; else COLOR="${RED}"; fi; echo -e "${CYAN}Результат теста: ${COLOR}$OK/$TOTAL${NC}"; echo -e "Контрольный тест (Zapret выключен) → ${OK}/${TOTAL}" >> "$RESULTS"; /etc/init.d/zapret start >/dev/null 2>&1; }
-check_url() { TEXT=$(echo "$1" | cut -d"|" -f1); LINK=$(echo "$1" | cut -d"|" -f2); if curl -sL --connect-timeout 3 --max-time 5 --speed-time 3 --speed-limit 1 --range 0-65535 -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) curl/8.0" -o /dev/null "$LINK" >/dev/null 2>&1; then echo 1 >> "$TMP_OK"; echo -e "${GREEN}[ OK ]${NC} $TEXT"; else echo -e "${RED}[FAIL]${NC} $TEXT"; fi; }
-check_all_urls() { TMP_OK="$TMP_SF/z_ok.$$"; : > "$TMP_OK"; RUN=0; while IFS= read -r URL; do [ -z "$URL" ] && continue; check_url "$URL" & RUN=$((RUN+1)); if [ "$RUN" -ge "$PARALLEL" ]; then wait; RUN=0; fi
-done <<EOF
+# ----- Меню тестирования стратегий -----
+menu_tests() {
+
+    # Цвета и пути
+    GREEN="\033[1;32m"
+    YELLOW="\033[1;33m"
+    RED="\033[1;31m"
+    CYAN="\033[1;36m"
+    MAGENTA="\033[1;35m"
+    NC="\033[0m"
+
+    CONF="/etc/config/zapret"
+    TMP_SF="/tmp/zapret_hostbench"
+    RESULTS="/opt/zapret/tmp/zapret_hostbench.txt"
+    OUT_DPI="$TMP_SF/out_dpi.txt"
+    STR_FILE="$TMP_SF/str.txt"
+    BACK="$TMP_SF/conf.back"
+    TEMP_FILE="$TMP_SF/temp.txt"
+    RAW="https://raw.githubusercontent.com/hyperion-cs/dpi-checkers/main/ru/tcp-16-20/index.html"
+    PARALLEL=10
+
+    # -------- Функции --------
+    check_url() {
+        TEXT=$(echo "$1" | cut -d"|" -f1)
+        LINK=$(echo "$1" | cut -d"|" -f2)
+        if curl -sL --connect-timeout 3 --max-time 5 --speed-time 3 --speed-limit 1 --range 0-65535 -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) curl/8.0" -o /dev/null "$LINK" >/dev/null 2>&1; then
+            echo 1 >> "$TMP_OK"
+            echo -e "${GREEN}[ OK ]${NC} $TEXT"
+        else
+            echo -e "${RED}[FAIL]${NC} $TEXT"
+        fi
+    }
+
+    check_all_urls() {
+        TMP_OK="$TMP_SF/z_ok.$$"
+        : > "$TMP_OK"
+        RUN=0
+        while IFS= read -r URL; do
+            [ -z "$URL" ] && continue
+            check_url "$URL" &
+            RUN=$((RUN+1))
+            if [ "$RUN" -ge "$PARALLEL" ]; then wait; RUN=0; fi
+        done <<EOF
 $URLS
 EOF
-wait; OK=$(wc -l < "$TMP_OK" | tr -d ' '); rm -f "$TMP_OK"; }
-run_test_strategies() { clear; echo -e "${MAGENTA}Тестирование стратегий${NC}\n\n${CYAN}Собираем стратегии для теста${NC}"; rm -rf "$TMP_SF"; download_strategies 1; cp "$OUT" "$STR_FILE"; cp "$CONF" "$BACK"
-for N in $(seq 1 100); do strategy_v$N >> "$STR_FILE" 2>/dev/null || break; done; sed -i '/#Y/d' "$STR_FILE"; curl -fsSL "$RAW" | grep 'url:' | sed -n 's/.*id: "\([^"]*\)".*url: "\([^"]*\)".*/\1|\2/p' > "$OUT_DPI" || { echo -e "\n${RED}Ошибка загрузки DPI списка${NC}\n"; PAUSE; return; }
-printf '%s\n' "Госуслуги|https://gosuslugi.ru" "Госуслуги ЛК|https://esia.gosuslugi.ru" "Налоги|https://nalog.ru" "Налоги ЛК|https://lkfl2.nalog.ru" "ntc.party|https://ntc.party/" "rutube.ru|https://rutube.ru" "instagram.com|https://instagram.com" "facebook.com|https://facebook.com" "rutor.info|https://rutor.info" "rutracker.org|https://rutracker.org" \
-"epidemz.net.co|https://epidemz.net.co" "nnmclub.to|https://nnmclub.to" "openwrt.org|https://openwrt.org" "sxyprn.net|https://sxyprn.net" "spankbang.com|https://ru.spankbang.com" "pornhub.com|https://pornhub.com" "discord.com|https://discord.com" "x.com|https://x.com" "filmix.my|https://filmix.my" "flightradar24.com|https://flightradar24.com" \
-"play.google.com|https://play.google.com" "kinozal.tv|https://kinozal.tv" "cub.red|https://cub.red" "ottai.com|https://ottai.com" "mobile.de|https://mobile.de" "exleasingcar.com|https://exleasingcar.com" > "${OUT_DPI}.tmp"; cat "$OUT_DPI" >> "${OUT_DPI}.tmp"; mv "${OUT_DPI}.tmp" "$OUT_DPI"; URLS="$(cat "$OUT_DPI")"; TOTAL=$(grep -c "|" "$OUT_DPI"); TOTAL_STR=$(grep -c '^#' "$STR_FILE"); echo -e "${CYAN}Найдено стратегий: ${NC}$TOTAL_STR"
-: > "$RESULTS"; check_zpr_off; LINES=$(grep -n '^#' "$STR_FILE" | cut -d: -f1); CUR=0; echo "$LINES" | while read START; do CUR=$((CUR+1)); NEXT=$(echo "$LINES" | awk -v s="$START" '$1>s{print;exit}'); if [ -z "$NEXT" ]; then sed -n "${START},\$p" "$STR_FILE" > "$TEMP_FILE"; else sed -n "${START},$((NEXT-1))p" "$STR_FILE" > "$TEMP_FILE"; fi
-BLOCK=$(cat "$TEMP_FILE"); NAME=$(head -n1 "$TEMP_FILE"); NAME="${NAME#\#}"; awk -v block="$BLOCK" 'BEGIN{skip=0} /option NFQWS_OPT '\''/ {printf "\toption NFQWS_OPT '\''\n%s\n'\''\n", block; skip=1; next} skip && /^'\''$/ {skip=0; next} !skip {print}' "$CONF" > "${CONF}.tmp"; mv "${CONF}.tmp" "$CONF"
-echo -e "\n${CYAN}Тестируем стратегию: ${YELLOW}${NAME}${NC} ($CUR/$TOTAL_STR)"; ZAPRET_RESTART; OK=0; check_all_urls; if [ "$OK" -eq "$TOTAL" ]; then COLOR="${GREEN}"; elif [ "$OK" -ge $((TOTAL/2)) ]; then COLOR="${YELLOW}"; else COLOR="${RED}"; fi; echo -e "${CYAN}Результат теста: ${COLOR}$OK/$TOTAL${NC}"
-echo -e "${NAME} → ${OK}/${TOTAL}" >> "$RESULTS"; done; sort -t'/' -k1 -nr "$RESULTS" -o "$RESULTS"; mv -f "$BACK" "$CONF"; rm -f "$OUT_DPI"; ZAPRET_RESTART; show_test_results; }
-show_test_results() { clear; echo -e "${MAGENTA}Результат тестирования стратегий${NC}\n"; [ ! -f "$RESULTS" ] || [ ! -s "$RESULTS" ] && { echo -e "${RED}Результат не найден!${NC}\n"; PAUSE; return; }; TOTAL=$(head -n1 "$RESULTS" | cut -d'/' -f2); awk -F'[/ ]' '{for(i=1;i<=NF;i++) if($i~/^[0-9]+$/){print $i "/" $(i+1), $0; break}}' "$RESULTS" | sort -nr -k1,1 | while read -r line; do COUNT=$(echo "$line" | awk -F'/' '{print $1}')
-TEXT=$(echo "$line" | cut -d' ' -f2-); if echo "$TEXT" | grep -q Zapret; then COLOR="$CYAN"; elif [ "$COUNT" -eq "$TOTAL" ]; then COLOR="$GREEN"; elif [ "$COUNT" -gt $((TOTAL/2)) ]; then COLOR="$YELLOW"; else COLOR="$RED"; fi; echo -e "${COLOR}${TEXT}${NC}"; done; echo; PAUSE; }
+        wait
+        OK=$(wc -l < "$TMP_OK" | tr -d ' ')
+        rm -f "$TMP_OK"
+    }
+
+    check_zpr_off() {
+        echo -e "\n${CYAN}Контрольный тест: ${YELLOW}Zapret выключен${NC}"
+        /etc/init.d/zapret stop >/dev/null 2>&1
+        OK=0
+        check_all_urls
+        if [ "$OK" -eq "$TOTAL" ]; then COLOR="${GREEN}"; elif [ "$OK" -ge $((TOTAL/2)) ]; then COLOR="${YELLOW}"; else COLOR="${RED}"; fi
+        echo -e "${CYAN}Результат теста: ${COLOR}$OK/$TOTAL${NC}"
+        echo -e "Контрольный тест (Zapret выключен) → ${OK}/${TOTAL}" >> "$RESULTS"
+        /etc/init.d/zapret start >/dev/null 2>&1
+    }
+
+    download_strategies() {
+        mkdir -p "$TMP_SF"
+        # placeholder для скачивания стратегий
+        echo "#v1" > "$OUT_DPI"
+        echo "#Flowseal1" >> "$OUT_DPI"
+    }
+
+    ZAPRET_RESTART() { /etc/init.d/zapret restart >/dev/null 2>&1; }
+
+    show_test_results() {
+        clear
+        echo -e "${MAGENTA}Результат тестирования стратегий${NC}\n"
+        [ ! -f "$RESULTS" ] || [ ! -s "$RESULTS" ] || { echo -e "${RED}Результат не найден!${NC}\n"; read -p "Нажмите Enter для продолжения..."; return; }
+        TOTAL=$(head -n1 "$RESULTS" | cut -d'/' -f2)
+        awk -F'[/ ]' '{for(i=1;i<=NF;i++) if($i~/^[0-9]+$/){print $i "/" $(i+1), $0; break}}' "$RESULTS" | sort -nr -k1,1 | while read -r line; do
+            COUNT=$(echo "$line" | awk -F'/' '{print $1}')
+            TEXT=$(echo "$line" | cut -d' ' -f2-)
+            if echo "$TEXT" | grep -q Zapret; then COLOR="$CYAN"
+            elif [ "$COUNT" -eq "$TOTAL" ]; then COLOR="$GREEN"
+            elif [ "$COUNT" -gt $((TOTAL/2)) ]; then COLOR="$YELLOW"
+            else COLOR="$RED"
+            fi
+            echo -e "${COLOR}${TEXT}${NC}"
+        done
+        echo
+        read -p "Нажмите Enter для продолжения..."
+    }
+
+    run_test_strategies() {
+        test_filtered_strategies ""   # пустой фильтр = все стратегии
+    }
+
+    test_filtered_strategies() {
+        FILTER="$1" # v или Flowseal или пусто для всех
+        clear
+        echo -e "${MAGENTA}Тестирование стратегий ${FILTER}${NC}\n\n${CYAN}Собираем стратегии для теста${NC}"
+        rm -rf "$TMP_SF"
+        download_strategies 1
+        cp "$OUT_DPI" "$STR_FILE"
+        cp "$CONF" "$BACK"
+
+        [ -n "$FILTER" ] && grep -i "$FILTER" "$STR_FILE" > "$STR_FILE.tmp" && mv "$STR_FILE.tmp" "$STR_FILE"
+
+        URLS=$(cat "$OUT_DPI")
+        TOTAL=$(grep -c "|" "$OUT_DPI")
+        TOTAL_STR=$(grep -c '^#' "$STR_FILE")
+        echo -e "${CYAN}Найдено стратегий: ${NC}$TOTAL_STR"
+        : > "$RESULTS"
+        check_zpr_off
+
+        LINES=$(grep -n '^#' "$STR_FILE" | cut -d: -f1)
+        CUR=0
+        echo "$LINES" | while read START; do
+            CUR=$((CUR+1))
+            NEXT=$(echo "$LINES" | awk -v s="$START" '$1>s{print;exit}')
+            if [ -z "$NEXT" ]; then sed -n "${START},\$p" "$STR_FILE" > "$TEMP_FILE"; else sed -n "${START},$((NEXT-1))p" "$STR_FILE" > "$TEMP_FILE"; fi
+            BLOCK=$(cat "$TEMP_FILE")
+            NAME=$(head -n1 "$TEMP_FILE")
+            NAME="${NAME#\#}"
+            awk -v block="$BLOCK" 'BEGIN{skip=0} /option NFQWS_OPT '\''/ {printf "\toption NFQWS_OPT '\''\n%s\n'\''\n", block; skip=1; next} skip && /^'\''$/ {skip=0; next} !skip {print}' "$CONF" > "${CONF}.tmp"
+            mv "${CONF}.tmp" "$CONF"
+
+            echo -e "\n${CYAN}Тестируем стратегию: ${YELLOW}${NAME}${NC} ($CUR/$TOTAL_STR)"
+            ZAPRET_RESTART
+            OK=0
+            check_all_urls
+            if [ "$OK" -eq "$TOTAL" ]; then COLOR="${GREEN}"; elif [ "$OK" -ge $((TOTAL/2)) ]; then COLOR="${YELLOW}"; else COLOR="${RED}"; fi
+            echo -e "${CYAN}Результат теста: ${COLOR}$OK/$TOTAL${NC}"
+            echo -e "${NAME} → ${OK}/${TOTAL}" >> "$RESULTS"
+        done
+        sort -t'/' -k1 -nr "$RESULTS" -o "$RESULTS"
+        mv -f "$BACK" "$CONF"
+        ZAPRET_RESTART
+        show_test_results
+    }
+
+    # ----- Меню -----
+    while true; do
+        clear
+        echo "==========================="
+        echo "   Тестирование стратегий  "
+        echo "==========================="
+        echo "1) Протестировать все стратегии"
+        echo "2) Протестировать v-стратегии"
+        echo "3) Протестировать Flowseal стратегии"
+        echo "0) Выход"
+        echo -n "Выберите пункт: "
+        read CHOICE
+        case "$CHOICE" in
+            1) run_test_strategies ;;
+            2) test_filtered_strategies "v" ;;
+            3) test_filtered_strategies "Flowseal" ;;
+            0) echo "Выход..."; break ;;
+            *) echo "Неверный выбор!"; sleep 1 ;;
+        esac
+    done
+}
+
 # ==========================================
 # Главное меню
 # ==========================================
