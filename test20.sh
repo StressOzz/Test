@@ -479,7 +479,7 @@ show_single_result() {
 
 run_test_flowseal() {
     clear
-    echo -e "${MAGENTA}Тестирование стратегий FLOWSEAL${NC}\n\n${CYAN}Собираем стратегии для теста${NC}"
+    echo -e "${MAGENTA}Тестирование стратегий Flowseal${NC}\n\n${CYAN}Собираем стратегии для теста${NC}"
 
     RESULTS="/opt/zapret/tmp/results_flowseal.txt"
 
@@ -513,7 +513,7 @@ run_test_versions() {
 
 run_all_tests() {
     NO_PAUSE=1 RESULTS="/opt/zapret/tmp/results_flowseal.txt" run_test_flowseal
-    NO_PAUSE=1 SKIP_CTRL_TEST=1 RESULTS="/opt/zapret/tmp/results_versions.txt" run_test_versions
+    NO_PAUSE=1 RESULTS="/opt/zapret/tmp/results_versions.txt" run_test_versions
     show_test_results
 }
 
@@ -546,9 +546,7 @@ printf '%s\n' \
     "play.google.com|https://play.google.com" \
     "kinozal.tv|https://kinozal.tv" \
     "cub.red|https://cub.red" \
-    "ottai.com|https://ottai.com" \
-    "mobile.de|https://mobile.de" \
-    "exleasingcar.com|https://exleasingcar.com" > "${OUT_DPI}.tmp"
+    "ottai.com|https://ottai.com" > "${OUT_DPI}.tmp"
 
     cat "$OUT_DPI" >> "${OUT_DPI}.tmp"
     mv "${OUT_DPI}.tmp" "$OUT_DPI"
@@ -561,7 +559,7 @@ printf '%s\n' \
 
     : > "$RESULTS"
 
-[ -z "$SKIP_CTRL_TEST" ] && check_zpr_off
+    check_zpr_off
 
     LINES=$(grep -n '^#' "$STR_FILE" | cut -d: -f1)
     CUR=0
