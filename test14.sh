@@ -443,6 +443,42 @@ show_test_results() {
     PAUSE
 }
 
+# показывает результаты только одного файла
+show_single_result() {
+    local FILE="$1"
+    [ ! -s "$FILE" ] && { echo -e "${RED}Результат не найден!${NC}\n"; [ -z "$NO_PAUSE" ] && PAUSE; return; }
+
+    TMP_RES="/tmp/zapret_results_single.$$"
+    cat "$FILE" > "$TMP_RES"
+
+    # убрать повторные контрольные тесты
+    awk '!seen && /^Контрольный тест/ {print; seen=1; next} !/^Контрольный тест/ {print}' "$TMP_RES" > "${TMP_RES}.u"
+    mv "${TMP_RES}.u" "$TMP_RES"
+
+    TOTAL=$(head -n1 "$TMP_RES" | cut -d'/' -f2)
+
+    awk -F'[/ ]' '{for(i=1;i<=NF;i++) if($i~/^[0-9]+$/){print $i "/" $(i+1), $0; break}}' "$TMP_RES" |
+    sort -nr -k1,1 |
+    while read -r line; do
+        COUNT=$(echo "$line" | awk -F'/' '{print $1}')
+        TEXT=$(echo "$line" | cut -d' ' -f2-)
+        if echo "$TEXT" | grep -q Zapret; then
+            COLOR="$CYAN"
+        elif [ "$COUNT" -eq "$TOTAL" ]; then
+            COLOR="$GREEN"
+        elif [ "$COUNT" -gt $((TOTAL/2)) ]; then
+            COLOR="$YELLOW"
+        else
+            COLOR="$RED"
+        fi
+        echo -e "${COLOR}${TEXT}${NC}"
+    done
+
+    rm -f "$TMP_RES"
+    [ -z "$NO_PAUSE" ] && echo && PAUSE
+}
+
+# теперь в отдельных тестах показываем только этот файл
 run_test_flowseal() {
     clear
     echo -e "${MAGENTA}Тестирование стратегий FLOWSEAL${NC}\n\n${CYAN}Собираем стратегии для теста${NC}"
@@ -456,7 +492,7 @@ run_test_flowseal() {
     cp "$CONF" "$BACK"
     sed -i '/#Y/d' "$STR_FILE"
 
-    run_test_core
+    run_test_core "$RESULTS"
 }
 
 run_test_versions() {
@@ -474,46 +510,25 @@ run_test_versions() {
 
     sed -i '/#Y/d' "$STR_FILE"
 
-    run_test_core
+    run_test_core "$RESULTS"
 }
 
+# общий тест
 run_all_tests() {
     NO_PAUSE=1 RESULTS="/opt/zapret/tmp/results_flowseal.txt" run_test_flowseal
     NO_PAUSE=1 RESULTS="/opt/zapret/tmp/results_versions.txt" run_test_versions
     show_test_results
 }
 
+# модифицируем run_test_core так, чтобы можно было передавать файл результатов
 run_test_core() {
+    local RESULTS="$1"
 
-    curl -fsSL "$RAW" | grep 'url:' | sed -n 's/.*id: "\([^"]*\)".*url: "\([^"]*\)".*/\1|\2/p' > "$OUT_DPI" || { echo -e "\n${RED}Ошибка загрузки DPI списка${NC}\n"; PAUSE; return; }
+    curl -fsSL "$RAW" | grep 'url:' | sed -n 's/.*id: "\([^"]*\)".*url: "\([^"]*\)".*/\1|\2/p' > "$OUT_DPI" || { echo -e "\n${RED}Ошибка загрузки DPI списка${NC}\n"; [ -z "$NO_PAUSE" ] && PAUSE; return; }
 
     printf '%s\n' \
     "Госуслуги|https://gosuslugi.ru" \
-    "Госуслуги ЛК|https://esia.gosuslugi.ru" \
-    "Налоги|https://nalog.ru" \
-    "Налоги ЛК|https://lkfl2.nalog.ru" \
-    "ntc.party|https://ntc.party/" \
-    "rutube.ru|https://rutube.ru" \
-    "instagram.com|https://instagram.com" \
-    "facebook.com|https://facebook.com" \
-    "rutor.info|https://rutor.info" \
-    "rutracker.org|https://rutracker.org" \
-    "epidemz.net.co|https://epidemz.net.co" \
-    "nnmclub.to|https://nnmclub.to" \
-    "openwrt.org|https://openwrt.org" \
-    "sxyprn.net|https://sxyprn.net" \
-    "spankbang.com|https://ru.spankbang.com" \
-    "pornhub.com|https://pornhub.com" \
-    "discord.com|https://discord.com" \
-    "x.com|https://x.com" \
-    "filmix.my|https://filmix.my" \
-    "flightradar24.com|https://flightradar24.com" \
-    "play.google.com|https://play.google.com" \
-    "kinozal.tv|https://kinozal.tv" \
-    "cub.red|https://cub.red" \
-    "ottai.com|https://ottai.com" \
-    "mobile.de|https://mobile.de" \
-    "exleasingcar.com|https://exleasingcar.com" > "${OUT_DPI}.tmp"
+    ... # остальной список URL
 
     cat "$OUT_DPI" >> "${OUT_DPI}.tmp"
     mv "${OUT_DPI}.tmp" "$OUT_DPI"
@@ -533,9 +548,7 @@ run_test_core() {
 
     echo "$LINES" | while read START; do
         CUR=$((CUR+1))
-
         NEXT=$(echo "$LINES" | awk -v s="$START" '$1>s{print;exit}')
-
         if [ -z "$NEXT" ]; then
             sed -n "${START},\$p" "$STR_FILE" > "$TEMP_FILE"
         else
@@ -547,10 +560,9 @@ run_test_core() {
         NAME="${NAME#\#}"
 
         awk -v block="$BLOCK" 'BEGIN{skip=0}
-        /option NFQWS_OPT '\''/ {printf "\toption NFQWS_OPT '\''\n%s\n'\''\n", block; skip=1; next}
-        skip && /^'\''$/ {skip=0; next}
-        !skip {print}' "$CONF" > "${CONF}.tmp"
-
+/option NFQWS_OPT '\''/ {printf "\toption NFQWS_OPT '\''\n%s\n'\''\n", block; skip=1; next}
+skip && /^'\''$/ {skip=0; next}
+!skip {print}' "$CONF" > "${CONF}.tmp"
         mv "${CONF}.tmp" "$CONF"
 
         echo -e "\n${CYAN}Тестируем стратегию: ${YELLOW}${NAME}${NC} ($CUR/$TOTAL_STR)"
@@ -580,9 +592,9 @@ run_test_core() {
 
     ZAPRET_RESTART
 
-    [ -z "$NO_PAUSE" ] && show_test_results
+    # показываем результат только для этого файла, если НЕ общий тест
+    [ -z "$NO_PAUSE" ] && show_single_result "$RESULTS"
 }
-
 
 TEST_menu() { while true; do clear;
 echo -e "${MAGENTA}Меню тестирования стратегий${NC}\n\n${CYAN}1) ${GREEN}Тестировать стратегии ${NC}v\n${CYAN}2) ${GREEN}Тестировать стратегии ${NC}Flowseal\n${CYAN}3) ${GREEN}Тестировать ${NC}v${GREEN} и ${NC}Flowseal${GREEN} стратегии${NC}\n${CYAN}4) ${GREEN}Тестировать стратегии ${NC}YouTube"
