@@ -405,6 +405,8 @@ run_test_flowseal() {
 clear
 echo -e "${MAGENTA}Тестирование стратегий FLOWSEAL${NC}\n\n${CYAN}Собираем стратегии для теста${NC}"
 
+RESULTS="/opt/zapret/tmp/results_flowseal.txt"
+
 rm -rf "$TMP_SF"
 download_strategies 1
 
@@ -415,9 +417,12 @@ sed -i '/#Y/d' "$STR_FILE"
 run_test_core
 }
 
+
 run_test_versions() {
 clear
 echo -e "${MAGENTA}Тестирование strategies v${NC}\n\n${CYAN}Собираем стратегии для теста${NC}"
+
+RESULTS="/opt/zapret/tmp/results_versions.txt"
 
 : > "$STR_FILE"
 cp "$CONF" "$BACK"
