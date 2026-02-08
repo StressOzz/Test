@@ -475,6 +475,8 @@ for N in $(seq 1 100); do
     strategy_v$N >> "$STR_FILE" 2>/dev/null || break
 done
 
+sed -i '/#Y/d' "$STR_FILE"
+
 run_test_core
 }
 
