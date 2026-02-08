@@ -455,7 +455,14 @@ skip && /^'\''$/ {skip=0; next}
 !skip {print}' "$CONF" > "${CONF}.tmp"; mv "${CONF}.tmp" "$CONF"; echo -e "\n${CYAN}Тестируем стратегию: ${YELLOW}${NAME}${NC} ($CUR/$TOTAL_STR)"; ZAPRET_RESTART; OK=0; check_all_urls; if [ "$OK" -eq "$TOTAL" ]; then
 COLOR="${GREEN}"; elif [ "$OK" -ge $((TOTAL/2)) ]; then COLOR="${YELLOW}"; else COLOR="${RED}"; fi; echo -e "${CYAN}Результат теста: ${COLOR}$OK/$TOTAL${NC}"; echo -e "${NAME} → ${OK}/${TOTAL}" >> "$RESULTS"; done
 sort -t'/' -k1 -nr "$RESULTS" -o "$RESULTS"; mv -f "$BACK" "$CONF"; rm -f "$OUT_DPI"; ZAPRET_RESTART; [ -z "$NO_PAUSE" ] && show_single_result "$RESULTS"; }
-TEST_menu() { while true; do clear; echo -e "${MAGENTA}Меню тестирования стратегий${NC}\n"; STATUS_V=""; STATUS_FLOW=""; [ -s "/opt/zapret/tmp/results_versions.txt" ] && STATUS_V="${GREEN}v${NC}" || STATUS_V="${RED}v${NC}"
+TEST_menu() { while true; do clear; echo -e "${MAGENTA}Меню тестирования стратегий${NC}\n"; 
+
+[ -f "$CONF" ] && line=$(grep -m1 '^#general' "$CONF") && [ -n "$line" ] && echo -e "${YELLOW}Используется стратегия:${NC}  ${CYAN}${line#?}${NC}"
+if [ -f "$CONF" ]; then current="$ver$( [ -n "$ver" ] && [ -n "$yv_ver" ] && echo " / " )$yv_ver"; DV=$(grep -o -E '^#[[:space:]]*Dv[0-9][0-9]*' "$CONF" | sed 's/^#[[:space:]]*/\/ /' | head -n1)
+if [ -n "$current" ]; then echo -e "${YELLOW}Используется стратегия:${NC}  ${CYAN}$current${DV:+ $DV}${RKN_STATUS:+ $RKN_STATUS}${NC}"; elif [ -n "$RKN_STATUS" ]; then echo -e "${YELLOW}Используется стратегия:${NC}${CYAN}  РКН${DV:+ $DV}${NC}"; fi; fi
+
+
+STATUS_V=""; STATUS_FLOW=""; [ -s "/opt/zapret/tmp/results_versions.txt" ] && STATUS_V="${GREEN}v${NC}" || STATUS_V="${RED}v${NC}"
 [ -s "/opt/zapret/tmp/results_flowseal.txt" ] && STATUS_FLOW="${GREEN}Flowseal${NC}" || STATUS_FLOW="${RED}Flowseal${NC}"; echo -e "${YELLOW}Тест пройден:${NC} ${STATUS_V} | ${STATUS_FLOW}\n"
 echo -e "${CYAN}1) ${GREEN}Тестировать стратегии ${NC}v\n${CYAN}2) ${GREEN}Тестировать стратегии ${NC}Flowseal\n${CYAN}3) ${GREEN}Тестировать ${NC}v${GREEN} и ${NC}Flowseal${GREEN} стратегии${NC}\n${CYAN}4) ${GREEN}Тестировать стратегии ${NC}YouTube"
 if { [ -s "/opt/zapret/tmp/results_flowseal.txt" ] || [ -s "/opt/zapret/tmp/results_versions.txt" ]; }; then echo -e "${CYAN}5) ${GREEN}Результаты тестирования стратегий${NC}"; fi
