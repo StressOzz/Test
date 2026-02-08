@@ -620,10 +620,10 @@ echo -e "${MAGENTA}Меню тестирования стратегий${NC}\n"
 
         STATUS_V=""
         STATUS_FLOW=""
-        [ -s "/opt/zapret/tmp/results_versions.txt" ] && STATUS_V="${GREEN}✔${NC}" || STATUS_V="${RED}✖${NC}"
-        [ -s "/opt/zapret/tmp/results_flowseal.txt" ] && STATUS_FLOW="${GREEN}✔${NC}" || STATUS_FLOW="${RED}✖${NC}"
+        [ -s "/opt/zapret/tmp/results_versions.txt" ] && STATUS_V="${GREEN}v${NC}" || STATUS_V="${RED}v${NC}"
+        [ -s "/opt/zapret/tmp/results_flowseal.txt" ] && STATUS_FLOW="${GREEN}Flowseal${NC}" || STATUS_FLOW="${RED}Flowseal${NC}"
 
-         echo -e "${YELLOW}Тест пройден:${NC} v-${STATUS_V} | Flowseal-${STATUS_FLOW})\n"
+         echo -e "${YELLOW}Тест пройден:${NC} ${STATUS_V} | ${STATUS_FLOW}\n"
 
 echo -e "${CYAN}1) ${GREEN}Тестировать стратегии ${NC}v\n${CYAN}2) ${GREEN}Тестировать стратегии ${NC}Flowseal\n${CYAN}3) ${GREEN}Тестировать ${NC}v${GREEN} и ${NC}Flowseal${GREEN} стратегии${NC}\n${CYAN}4) ${GREEN}Тестировать стратегии ${NC}YouTube"
 if { [ -s "/opt/zapret/tmp/results_flowseal.txt" ] || [ -s "/opt/zapret/tmp/results_versions.txt" ]; }; then echo -e "${CYAN}5) ${GREEN}Результаты тестирования стратегий${NC}"; fi
