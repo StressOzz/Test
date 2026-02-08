@@ -414,7 +414,6 @@ show_test_results() {
 
     [ ! -s "$TMP_RES" ] && { rm -f "$TMP_RES"; echo -e "${RED}Результат не найден!${NC}\n"; PAUSE; return; }
 
-    # убрать повторные контрольные тесты
     awk '!seen && /^Контрольный тест/ {print; seen=1; next} !/^Контрольный тест/ {print}' "$TMP_RES" > "${TMP_RES}.u"
     mv "${TMP_RES}.u" "$TMP_RES"
 
@@ -443,15 +442,15 @@ show_test_results() {
     PAUSE
 }
 
-# показывает результаты только одного файла
 show_single_result() {
+    clear
+    echo -e "${MAGENTA}Результат тестирования стратегий${NC}\n"
     local FILE="$1"
     [ ! -s "$FILE" ] && { echo -e "${RED}Результат не найден!${NC}\n"; [ -z "$NO_PAUSE" ] && PAUSE; return; }
 
     TMP_RES="/tmp/zapret_results_single.$$"
     cat "$FILE" > "$TMP_RES"
 
-    # убрать повторные контрольные тесты
     awk '!seen && /^Контрольный тест/ {print; seen=1; next} !/^Контрольный тест/ {print}' "$TMP_RES" > "${TMP_RES}.u"
     mv "${TMP_RES}.u" "$TMP_RES"
 
@@ -478,7 +477,6 @@ show_single_result() {
     [ -z "$NO_PAUSE" ] && echo && PAUSE
 }
 
-# теперь в отдельных тестах показываем только этот файл
 run_test_flowseal() {
     clear
     echo -e "${MAGENTA}Тестирование стратегий FLOWSEAL${NC}\n\n${CYAN}Собираем стратегии для теста${NC}"
@@ -497,7 +495,7 @@ run_test_flowseal() {
 
 run_test_versions() {
     clear
-    echo -e "${MAGENTA}Тестирование strategies v${NC}\n\n${CYAN}Собираем стратегии для теста${NC}"
+    echo -e "${MAGENTA}Тестирование стратегий v${NC}\n\n${CYAN}Собираем стратегии для теста${NC}"
 
     RESULTS="/opt/zapret/tmp/results_versions.txt"
 
@@ -513,14 +511,12 @@ run_test_versions() {
     run_test_core "$RESULTS"
 }
 
-# общий тест
 run_all_tests() {
     NO_PAUSE=1 RESULTS="/opt/zapret/tmp/results_flowseal.txt" run_test_flowseal
     NO_PAUSE=1 RESULTS="/opt/zapret/tmp/results_versions.txt" run_test_versions
     show_test_results
 }
 
-# модифицируем run_test_core так, чтобы можно было передавать файл результатов
 run_test_core() {
     local RESULTS="$1"
 
@@ -616,7 +612,6 @@ skip && /^'\''$/ {skip=0; next}
 
     ZAPRET_RESTART
 
-    # показываем результат только для этого файла, если НЕ общий тест
     [ -z "$NO_PAUSE" ] && show_single_result "$RESULTS"
 }
 
