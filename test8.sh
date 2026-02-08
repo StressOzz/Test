@@ -275,7 +275,7 @@ echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${
 
 111) run_test_flowseal;;
 222) run_test_versions;;
-
+333) run_all_tests;;
 
 
 
@@ -404,191 +404,197 @@ $URLS
 EOF
 wait; OK=$(wc -l < "$TMP_OK" | tr -d ' '); rm -f "$TMP_OK"; }
 
+
+
 show_test_results() {
-clear
-echo -e "${MAGENTA}Результат тестирования стратегий${NC}\n"
+    clear
+    echo -e "${MAGENTA}Результат тестирования стратегий${NC}\n"
 
-RES1="/opt/zapret/tmp/results_flowseal.txt"
-RES2="/opt/zapret/tmp/results_versions.txt"
-TMP_RES="/tmp/zapret_results_all.$$"
+    RES1="/opt/zapret/tmp/results_flowseal.txt"
+    RES2="/opt/zapret/tmp/results_versions.txt"
+    TMP_RES="/tmp/zapret_results_all.$$"
 
-: > "$TMP_RES"
+    : > "$TMP_RES"
 
-[ -s "$RES1" ] && cat "$RES1" >> "$TMP_RES"
-[ -s "$RES2" ] && cat "$RES2" >> "$TMP_RES"
+    [ -s "$RES1" ] && cat "$RES1" >> "$TMP_RES"
+    [ -s "$RES2" ] && cat "$RES2" >> "$TMP_RES"
 
-# если нет ни одного результата
-[ ! -s "$TMP_RES" ] && { rm -f "$TMP_RES"; echo -e "${RED}Результат не найден!${NC}\n"; PAUSE; return; }
+    [ ! -s "$TMP_RES" ] && { rm -f "$TMP_RES"; echo -e "${RED}Результат не найден!${NC}\n"; PAUSE; return; }
 
-# убрать повторные контрольные тесты (оставить только первый)
-awk '!seen && /^Контрольный тест/ {print; seen=1; next} !/^Контрольный тест/ {print}' "$TMP_RES" > "${TMP_RES}.u"
-mv "${TMP_RES}.u" "$TMP_RES"
+    # убрать повторные контрольные тесты
+    awk '!seen && /^Контрольный тест/ {print; seen=1; next} !/^Контрольный тест/ {print}' "$TMP_RES" > "${TMP_RES}.u"
+    mv "${TMP_RES}.u" "$TMP_RES"
 
-TOTAL=$(head -n1 "$TMP_RES" | cut -d'/' -f2)
+    TOTAL=$(head -n1 "$TMP_RES" | cut -d'/' -f2)
 
-awk -F'[/ ]' '{for(i=1;i<=NF;i++) if($i~/^[0-9]+$/){print $i "/" $(i+1), $0; break}}' "$TMP_RES" |
-sort -nr -k1,1 |
-while read -r line; do
+    awk -F'[/ ]' '{for(i=1;i<=NF;i++) if($i~/^[0-9]+$/){print $i "/" $(i+1), $0; break}}' "$TMP_RES" |
+    sort -nr -k1,1 |
+    while read -r line; do
+        COUNT=$(echo "$line" | awk -F'/' '{print $1}')
+        TEXT=$(echo "$line" | cut -d' ' -f2-)
+        if echo "$TEXT" | grep -q Zapret; then
+            COLOR="$CYAN"
+        elif [ "$COUNT" -eq "$TOTAL" ]; then
+            COLOR="$GREEN"
+        elif [ "$COUNT" -gt $((TOTAL/2)) ]; then
+            COLOR="$YELLOW"
+        else
+            COLOR="$RED"
+        fi
+        echo -e "${COLOR}${TEXT}${NC}"
+    done
 
-COUNT=$(echo "$line" | awk -F'/' '{print $1}')
-TEXT=$(echo "$line" | cut -d' ' -f2-)
+    rm -f "$TMP_RES"
 
-if echo "$TEXT" | grep -q Zapret; then
-COLOR="$CYAN"
-elif [ "$COUNT" -eq "$TOTAL" ]; then
-COLOR="$GREEN"
-elif [ "$COUNT" -gt $((TOTAL/2)) ]; then
-COLOR="$YELLOW"
-else
-COLOR="$RED"
-fi
-
-echo -e "${COLOR}${TEXT}${NC}"
-done
-
-rm -f "$TMP_RES"
-
-echo
-PAUSE
+    echo
+    PAUSE
 }
-
-
 
 run_test_flowseal() {
-clear
-echo -e "${MAGENTA}Тестирование стратегий FLOWSEAL${NC}\n\n${CYAN}Собираем стратегии для теста${NC}"
+    clear
+    echo -e "${MAGENTA}Тестирование стратегий FLOWSEAL${NC}\n\n${CYAN}Собираем стратегии для теста${NC}"
 
-RESULTS="/opt/zapret/tmp/results_flowseal.txt"
+    RESULTS="/opt/zapret/tmp/results_flowseal.txt"
 
-rm -rf "$TMP_SF"
-download_strategies 1
+    rm -rf "$TMP_SF"
+    download_strategies 1
 
-cp "$OUT" "$STR_FILE"
-cp "$CONF" "$BACK"
-sed -i '/#Y/d' "$STR_FILE"
+    cp "$OUT" "$STR_FILE"
+    cp "$CONF" "$BACK"
+    sed -i '/#Y/d' "$STR_FILE"
 
-run_test_core
+    run_test_core
 }
 
-
 run_test_versions() {
-clear
-echo -e "${MAGENTA}Тестирование strategies v${NC}\n\n${CYAN}Собираем стратегии для теста${NC}"
+    clear
+    echo -e "${MAGENTA}Тестирование strategies v${NC}\n\n${CYAN}Собираем стратегии для теста${NC}"
 
-RESULTS="/opt/zapret/tmp/results_versions.txt"
+    RESULTS="/opt/zapret/tmp/results_versions.txt"
 
-: > "$STR_FILE"
-cp "$CONF" "$BACK"
+    : > "$STR_FILE"
+    cp "$CONF" "$BACK"
 
-for N in $(seq 1 100); do
-    strategy_v$N >> "$STR_FILE" 2>/dev/null || break
-done
+    for N in $(seq 1 100); do
+        strategy_v$N >> "$STR_FILE" 2>/dev/null || break
+    done
 
-sed -i '/#Y/d' "$STR_FILE"
+    sed -i '/#Y/d' "$STR_FILE"
 
-run_test_core
+    run_test_core
+}
+
+run_all_tests() {
+    NO_PAUSE=1 RESULTS="/opt/zapret/tmp/results_flowseal.txt" run_test_flowseal
+    NO_PAUSE=1 RESULTS="/opt/zapret/tmp/results_versions.txt" run_test_versions
+    show_test_results
 }
 
 run_test_core() {
 
-curl -fsSL "$RAW" | grep 'url:' | sed -n 's/.*id: "\([^"]*\)".*url: "\([^"]*\)".*/\1|\2/p' > "$OUT_DPI" || { echo -e "\n${RED}Ошибка загрузки DPI списка${NC}\n"; PAUSE; return; }
+    curl -fsSL "$RAW" | grep 'url:' | sed -n 's/.*id: "\([^"]*\)".*url: "\([^"]*\)".*/\1|\2/p' > "$OUT_DPI" || { echo -e "\n${RED}Ошибка загрузки DPI списка${NC}\n"; PAUSE; return; }
 
-printf '%s\n' \
-"Госуслуги|https://gosuslugi.ru" \
-"Госуслуги ЛК|https://esia.gosuslugi.ru" \
-"Налоги|https://nalog.ru" \
-"Налоги ЛК|https://lkfl2.nalog.ru" \
-"ntc.party|https://ntc.party/" \
-"rutube.ru|https://rutube.ru" \
-"instagram.com|https://instagram.com" \
-"facebook.com|https://facebook.com" \
-"rutor.info|https://rutor.info" \
-"rutracker.org|https://rutracker.org" \
-"epidemz.net.co|https://epidemz.net.co" \
-"nnmclub.to|https://nnmclub.to" \
-"openwrt.org|https://openwrt.org" \
-"sxyprn.net|https://sxyprn.net" \
-"spankbang.com|https://ru.spankbang.com" \
-"pornhub.com|https://pornhub.com" \
-"discord.com|https://discord.com" \
-"x.com|https://x.com" \
-"filmix.my|https://filmix.my" \
-"flightradar24.com|https://flightradar24.com" \
-"play.google.com|https://play.google.com" \
-"kinozal.tv|https://kinozal.tv" \
-"cub.red|https://cub.red" \
-"ottai.com|https://ottai.com" \
-"mobile.de|https://mobile.de" \
-"exleasingcar.com|https://exleasingcar.com" > "${OUT_DPI}.tmp"
+    printf '%s\n' \
+    "Госуслуги|https://gosuslugi.ru" \
+    "Госуслуги ЛК|https://esia.gosuslugi.ru" \
+    "Налоги|https://nalog.ru" \
+    "Налоги ЛК|https://lkfl2.nalog.ru" \
+    "ntc.party|https://ntc.party/" \
+    "rutube.ru|https://rutube.ru" \
+    "instagram.com|https://instagram.com" \
+    "facebook.com|https://facebook.com" \
+    "rutor.info|https://rutor.info" \
+    "rutracker.org|https://rutracker.org" \
+    "epidemz.net.co|https://epidemz.net.co" \
+    "nnmclub.to|https://nnmclub.to" \
+    "openwrt.org|https://openwrt.org" \
+    "sxyprn.net|https://sxyprn.net" \
+    "spankbang.com|https://ru.spankbang.com" \
+    "pornhub.com|https://pornhub.com" \
+    "discord.com|https://discord.com" \
+    "x.com|https://x.com" \
+    "filmix.my|https://filmix.my" \
+    "flightradar24.com|https://flightradar24.com" \
+    "play.google.com|https://play.google.com" \
+    "kinozal.tv|https://kinozal.tv" \
+    "cub.red|https://cub.red" \
+    "ottai.com|https://ottai.com" \
+    "mobile.de|https://mobile.de" \
+    "exleasingcar.com|https://exleasingcar.com" > "${OUT_DPI}.tmp"
 
-cat "$OUT_DPI" >> "${OUT_DPI}.tmp"
-mv "${OUT_DPI}.tmp" "$OUT_DPI"
+    cat "$OUT_DPI" >> "${OUT_DPI}.tmp"
+    mv "${OUT_DPI}.tmp" "$OUT_DPI"
 
-URLS="$(cat "$OUT_DPI")"
-TOTAL=$(grep -c "|" "$OUT_DPI")
-TOTAL_STR=$(grep -c '^#' "$STR_FILE")
+    URLS="$(cat "$OUT_DPI")"
+    TOTAL=$(grep -c "|" "$OUT_DPI")
+    TOTAL_STR=$(grep -c '^#' "$STR_FILE")
 
-echo -e "${CYAN}Найдено стратегий: ${NC}$TOTAL_STR"
+    echo -e "${CYAN}Найдено стратегий: ${NC}$TOTAL_STR"
 
-: > "$RESULTS"
+    : > "$RESULTS"
 
-check_zpr_off
+    check_zpr_off
 
-LINES=$(grep -n '^#' "$STR_FILE" | cut -d: -f1)
-CUR=0
+    LINES=$(grep -n '^#' "$STR_FILE" | cut -d: -f1)
+    CUR=0
 
-echo "$LINES" | while read START; do
-CUR=$((CUR+1))
+    echo "$LINES" | while read START; do
+        CUR=$((CUR+1))
 
-NEXT=$(echo "$LINES" | awk -v s="$START" '$1>s{print;exit}')
+        NEXT=$(echo "$LINES" | awk -v s="$START" '$1>s{print;exit}')
 
-if [ -z "$NEXT" ]; then
-sed -n "${START},\$p" "$STR_FILE" > "$TEMP_FILE"
-else
-sed -n "${START},$((NEXT-1))p" "$STR_FILE" > "$TEMP_FILE"
-fi
+        if [ -z "$NEXT" ]; then
+            sed -n "${START},\$p" "$STR_FILE" > "$TEMP_FILE"
+        else
+            sed -n "${START},$((NEXT-1))p" "$STR_FILE" > "$TEMP_FILE"
+        fi
 
-BLOCK=$(cat "$TEMP_FILE")
-NAME=$(head -n1 "$TEMP_FILE")
-NAME="${NAME#\#}"
+        BLOCK=$(cat "$TEMP_FILE")
+        NAME=$(head -n1 "$TEMP_FILE")
+        NAME="${NAME#\#}"
 
-awk -v block="$BLOCK" 'BEGIN{skip=0}
-/option NFQWS_OPT '\''/ {printf "\toption NFQWS_OPT '\''\n%s\n'\''\n", block; skip=1; next}
-skip && /^'\''$/ {skip=0; next}
-!skip {print}' "$CONF" > "${CONF}.tmp"
+        awk -v block="$BLOCK" 'BEGIN{skip=0}
+        /option NFQWS_OPT '\''/ {printf "\toption NFQWS_OPT '\''\n%s\n'\''\n", block; skip=1; next}
+        skip && /^'\''$/ {skip=0; next}
+        !skip {print}' "$CONF" > "${CONF}.tmp"
 
-mv "${CONF}.tmp" "$CONF"
+        mv "${CONF}.tmp" "$CONF"
 
-echo -e "\n${CYAN}Тестируем стратегию: ${YELLOW}${NAME}${NC} ($CUR/$TOTAL_STR)"
+        echo -e "\n${CYAN}Тестируем стратегию: ${YELLOW}${NAME}${NC} ($CUR/$TOTAL_STR)"
 
-ZAPRET_RESTART
+        ZAPRET_RESTART
 
-OK=0
-check_all_urls
+        OK=0
+        check_all_urls
 
-if [ "$OK" -eq "$TOTAL" ]; then
-COLOR="${GREEN}"
-elif [ "$OK" -ge $((TOTAL/2)) ]; then
-COLOR="${YELLOW}"
-else
-COLOR="${RED}"
-fi
+        if [ "$OK" -eq "$TOTAL" ]; then
+            COLOR="${GREEN}"
+        elif [ "$OK" -ge $((TOTAL/2)) ]; then
+            COLOR="${YELLOW}"
+        else
+            COLOR="${RED}"
+        fi
 
-echo -e "${CYAN}Результат теста: ${COLOR}$OK/$TOTAL${NC}"
-echo -e "${NAME} → ${OK}/${TOTAL}" >> "$RESULTS"
+        echo -e "${CYAN}Результат теста: ${COLOR}$OK/$TOTAL${NC}"
+        echo -e "${NAME} → ${OK}/${TOTAL}" >> "$RESULTS"
 
-done
+    done
 
-sort -t'/' -k1 -nr "$RESULTS" -o "$RESULTS"
+    sort -t'/' -k1 -nr "$RESULTS" -o "$RESULTS"
 
-mv -f "$BACK" "$CONF"
-rm -f "$OUT_DPI"
+    mv -f "$BACK" "$CONF"
+    rm -f "$OUT_DPI"
 
-ZAPRET_RESTART
-show_test_results
+    ZAPRET_RESTART
+
+    [ -z "$NO_PAUSE" ] && show_test_results
 }
 
 
+TEST_menu() { while true; do clear;
+echo -e "${YELLOW}Меню тестирования стратегий${NC}\n\n${CYAN}1) ${GREEN}Тестировать стратегии ${NC}v\n${CYAN}2) ${GREEN}Тестировать стратегии ${NC}Flowseal\n${CYAN}3) ${GREEN}Тестировать стратегии  ${NC}Youtube\n${CYAN}4) ${GREEN} ${NC}\n${CYAN}5) ${GREEN}$(get_state "$LIBRUSEC")${NC} lib.rus.ec\n${CYAN}6) ${GREEN}$(get_state "$AI")${NC} AI сервисы\n${CYAN}7) $S_ALL\n${CYAN}0) ${GREEN}Восстановить ${NC}hosts"
+echo -ne "${CYAN}Enter) ${GREEN}Выход в меню стратегий${NC}\n\n${YELLOW}Выберите пункт:${NC} ";read -r c; case "$c" in
+1) toggle_block "$PDA";; 2) toggle_block "$RUTOR";; 3) toggle_block "$NTC";; 4) toggle_block "$INSTAGRAM";; 5) toggle_block "$LIBRUSEC";; 6) toggle_block "$AI";; 7) toggle_all;; 0) hosts_reset;; *) break;; esac; done; }
 
 
 
