@@ -400,8 +400,9 @@ printf '%s\n' "Госуслуги|https://gosuslugi.ru" "Госуслуги ЛК
 "spankbang.com|https://ru.spankbang.com" "pornhub.com|https://pornhub.com" "discord.com|https://discord.com" "x.com|https://x.com" "filmix.my|https://filmix.my" "flightradar24.com|https://flightradar24.com" "play.google.com|https://play.google.com" \
 "kinozal.tv|https://kinozal.tv" "cub.red|https://cub.red" "ottai.com|https://ottai.com" >> "$OUT_DPI"; curl -fsSL "$RAW" | grep 'url:' | sed -n 's/.*id: "\([^"]*\)".*url: "\([^"]*\)".*/\1|\2/p' >> "$OUT_DPI" || return 1; TOTAL=$(grep -c "|" "$OUT_DPI"); }
 
-check_current_strategy() { clear; echo -e "${MAGENTA}Тестирование текущей стратегии${NC}\n"; prepare_urls; URLS="$(cat "$OUT_DPI")"; OK=0; check_all_urls; echo -e "\n${CYAN}Результат теста: $OK/$TOTAL\n"; rm -f "$OUT_DPI"; PAUSE; }
+# check_current_strategy() { clear; echo -e "${MAGENTA}Тестирование текущей стратегии${NC}\n"; prepare_urls; URLS="$(cat "$OUT_DPI")"; OK=0; check_all_urls; echo -e "\n${CYAN}Результат теста: $OK/$TOTAL\n"; rm -f "$OUT_DPI"; PAUSE; }
 
+check_current_strategy() { clear; echo -e "${MAGENTA}Тестирование текущей стратегии${NC}\n"; prepare_urls; URLS="$(cat "$OUT_DPI")"; OK=0; check_all_urls; if [ "$OK" -eq "$TOTAL" ]; then COLOR="${GREEN}"; elif [ "$OK" -ge $((TOTAL/2)) ]; then COLOR="${YELLOW}"; else COLOR="${RED}"; fi; echo -e "\n${CYAN}Результат теста: ${COLOR}$OK/$TOTAL${NC}\n"; rm -f "$OUT_DPI"; PAUSE; }
 
 
 
