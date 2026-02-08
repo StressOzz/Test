@@ -401,9 +401,9 @@ prepare_urls() {
     "YouTube|https://youtube.com" \
     "Discord|https://discord.com" >> "$OUT_DPI"
 
-    URLS="$(cat "$OUT_DPI")"
     TOTAL=$(grep -c "|" "$OUT_DPI")
 }
+
 
 check_current_strategy() {
     clear
@@ -411,6 +411,7 @@ check_current_strategy() {
 
     prepare_urls || { echo "Ошибка загрузки списка"; PAUSE; return; }
 
+    URLS="$(cat "$OUT_DPI")"   # ← перенесли сюда
     OK=0
     check_all_urls
 
@@ -419,6 +420,7 @@ check_current_strategy() {
     rm -f "$OUT_DPI"
     PAUSE
 }
+
 
 
 
