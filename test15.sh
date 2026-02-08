@@ -526,9 +526,33 @@ run_test_core() {
 
     curl -fsSL "$RAW" | grep 'url:' | sed -n 's/.*id: "\([^"]*\)".*url: "\([^"]*\)".*/\1|\2/p' > "$OUT_DPI" || { echo -e "\n${RED}Ошибка загрузки DPI списка${NC}\n"; [ -z "$NO_PAUSE" ] && PAUSE; return; }
 
-    printf '%s\n' \
+printf '%s\n' \
     "Госуслуги|https://gosuslugi.ru" \
-    ... # остальной список URL
+    "Госуслуги ЛК|https://esia.gosuslugi.ru" \
+    "Налоги|https://nalog.ru" \
+    "Налоги ЛК|https://lkfl2.nalog.ru" \
+    "ntc.party|https://ntc.party/" \
+    "rutube.ru|https://rutube.ru" \
+    "instagram.com|https://instagram.com" \
+    "facebook.com|https://facebook.com" \
+    "rutor.info|https://rutor.info" \
+    "rutracker.org|https://rutracker.org" \
+    "epidemz.net.co|https://epidemz.net.co" \
+    "nnmclub.to|https://nnmclub.to" \
+    "openwrt.org|https://openwrt.org" \
+    "sxyprn.net|https://sxyprn.net" \
+    "spankbang.com|https://ru.spankbang.com" \
+    "pornhub.com|https://pornhub.com" \
+    "discord.com|https://discord.com" \
+    "x.com|https://x.com" \
+    "filmix.my|https://filmix.my" \
+    "flightradar24.com|https://flightradar24.com" \
+    "play.google.com|https://play.google.com" \
+    "kinozal.tv|https://kinozal.tv" \
+    "cub.red|https://cub.red" \
+    "ottai.com|https://ottai.com" \
+    "mobile.de|https://mobile.de" \
+    "exleasingcar.com|https://exleasingcar.com" > "${OUT_DPI}.tmp"
 
     cat "$OUT_DPI" >> "${OUT_DPI}.tmp"
     mv "${OUT_DPI}.tmp" "$OUT_DPI"
