@@ -276,7 +276,7 @@ echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${
 111) run_test_flowseal;;
 222) run_test_versions;;
 333) run_all_tests;;
-
+444) TEST_menu;;
 
 
 6) toggle_rkn_bypass; continue;; 7) fix_GAME;; 0) show_test_results;; 8) echo -e "\n${MAGENTA}Обновляем список исключений${NC}\n${CYAN}Останавливаем ${NC}Zapret"; /etc/init.d/zapret stop >/dev/null 2>&1; echo -e "${CYAN}Добавляем домены в исключения${NC}"
@@ -592,9 +592,10 @@ run_test_core() {
 
 
 TEST_menu() { while true; do clear;
-echo -e "${YELLOW}Меню тестирования стратегий${NC}\n\n${CYAN}1) ${GREEN}Тестировать стратегии ${NC}v\n${CYAN}2) ${GREEN}Тестировать стратегии ${NC}Flowseal\n${CYAN}3) ${GREEN}Тестировать стратегии  ${NC}Youtube\n${CYAN}4) ${GREEN} ${NC}\n${CYAN}5) ${GREEN}$(get_state "$LIBRUSEC")${NC} lib.rus.ec\n${CYAN}6) ${GREEN}$(get_state "$AI")${NC} AI сервисы\n${CYAN}7) $S_ALL\n${CYAN}0) ${GREEN}Восстановить ${NC}hosts"
+echo -e "${YELLOW}Меню тестирования стратегий${NC}\n\n${CYAN}1) ${GREEN}Тестировать стратегии ${NC}v\n${CYAN}2) ${GREEN}Тестировать стратегии ${NC}Flowseal\n${CYAN}3) ${GREEN}Тестировать ${NC}v${GREEN} и ${NC}Flowseal${GREEN} стратегии${NC}\n${CYAN}4) ${GREEN}Тестировать стратегии ${NC} YouTube\n"
+if { [ -s "/opt/zapret/tmp/results_flowseal.txt" ] || [ -s "/opt/zapret/tmp/results_versions.txt" ]; }; then echo -e "${CYAN}5) ${GREEN}Результат тестирования стратегий${NC}"; fi
 echo -ne "${CYAN}Enter) ${GREEN}Выход в меню стратегий${NC}\n\n${YELLOW}Выберите пункт:${NC} ";read -r c; case "$c" in
-1) toggle_block "$PDA";; 2) toggle_block "$RUTOR";; 3) toggle_block "$NTC";; 4) toggle_block "$INSTAGRAM";; 5) toggle_block "$LIBRUSEC";; 6) toggle_block "$AI";; 7) toggle_all;; 0) hosts_reset;; *) break;; esac; done; }
+1) run_test_versions;; 2) run_test_flowseal;; 3) run_all_tests;; 4) auto_stryou;; 5) show_test_results;; *) break;; esac; done; }
 
 
 
