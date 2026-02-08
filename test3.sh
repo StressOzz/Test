@@ -401,9 +401,48 @@ $URLS
 EOF
 wait; OK=$(wc -l < "$TMP_OK" | tr -d ' '); rm -f "$TMP_OK"; }
 
-show_test_results() { clear; echo -e "${MAGENTA}Результат тестирования стратегий${NC}\n"; [ ! -f "$RESULTS" ] || [ ! -s "$RESULTS" ] && { echo -e "${RED}Результат не найден!${NC}\n"; PAUSE; return; }; TOTAL=$(head -n1 "$RESULTS" | cut -d'/' -f2); awk -F'[/ ]' '{for(i=1;i<=NF;i++) if($i~/^[0-9]+$/){print $i "/" $(i+1), $0; break}}' "$RESULTS" | sort -nr -k1,1 | while read -r line; do COUNT=$(echo "$line" | awk -F'/' '{print $1}')
-TEXT=$(echo "$line" | cut -d' ' -f2-); if echo "$TEXT" | grep -q Zapret; then COLOR="$CYAN"; elif [ "$COUNT" -eq "$TOTAL" ]; then COLOR="$GREEN"; elif [ "$COUNT" -gt $((TOTAL/2)) ]; then COLOR="$YELLOW"; else COLOR="$RED"; fi; echo -e "${COLOR}${TEXT}${NC}"; done; echo; PAUSE; }
+show_test_results() {
+clear
+echo -e "${MAGENTA}Результат тестирования стратегий${NC}\n"
 
+RES1="/opt/zapret/tmp/results_flowseal.txt"
+RES2="/opt/zapret/tmp/results_versions.txt"
+TMP_RES="/tmp/zapret_results_all.$$"
+
+: > "$TMP_RES"
+
+[ -s "$RES1" ] && cat "$RES1" >> "$TMP_RES"
+[ -s "$RES2" ] && cat "$RES2" >> "$TMP_RES"
+
+[ ! -s "$TMP_RES" ] && { rm -f "$TMP_RES"; echo -e "${RED}Результат не найден!${NC}\n"; PAUSE; return; }
+
+TOTAL=$(head -n1 "$TMP_RES" | cut -d'/' -f2)
+
+awk -F'[/ ]' '{for(i=1;i<=NF;i++) if($i~/^[0-9]+$/){print $i "/" $(i+1), $0; break}}' "$TMP_RES" |
+sort -nr -k1,1 |
+while read -r line; do
+
+COUNT=$(echo "$line" | awk -F'/' '{print $1}')
+TEXT=$(echo "$line" | cut -d' ' -f2-)
+
+if echo "$TEXT" | grep -q Zapret; then
+COLOR="$CYAN"
+elif [ "$COUNT" -eq "$TOTAL" ]; then
+COLOR="$GREEN"
+elif [ "$COUNT" -gt $((TOTAL/2)) ]; then
+COLOR="$YELLOW"
+else
+COLOR="$RED"
+fi
+
+echo -e "${COLOR}${TEXT}${NC}"
+done
+
+rm -f "$TMP_RES"
+
+echo
+PAUSE
+}
 
 
 run_test_flowseal() {
