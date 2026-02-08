@@ -486,6 +486,7 @@ run_test_versions() {
 
 run_all_tests() {
     NO_PAUSE=1 RESULTS="/opt/zapret/tmp/results_flowseal.txt" run_test_flowseal
+    echo
     NO_PAUSE=1 RESULTS="/opt/zapret/tmp/results_versions.txt" run_test_versions
     show_test_results
 }
