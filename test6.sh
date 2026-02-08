@@ -417,8 +417,8 @@ TMP_RES="/tmp/zapret_results_all.$$"
 # если нет ни одного результата
 [ ! -s "$TMP_RES" ] && { rm -f "$TMP_RES"; echo -e "${RED}Результат не найден!${NC}\n"; PAUSE; return; }
 
-# убрать дубликаты (включая двойной контрольный тест)
-awk '!seen[$0]++' "$TMP_RES" > "${TMP_RES}.u"
+# убрать повторные контрольные тесты (оставить только первый)
+awk '!seen && /^Контрольный тест/ {print; seen=1; next} !/^Контрольный тест/ {print}' "$TMP_RES" > "${TMP_RES}.u"
 mv "${TMP_RES}.u" "$TMP_RES"
 
 TOTAL=$(head -n1 "$TMP_RES" | cut -d'/' -f2)
@@ -448,6 +448,7 @@ rm -f "$TMP_RES"
 echo
 PAUSE
 }
+
 
 
 run_test_flowseal() {
