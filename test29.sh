@@ -394,36 +394,13 @@ EOF
 wait; OK=$(wc -l < "$TMP_OK" | tr -d ' '); rm -f "$TMP_OK"; }
 
 prepare_urls() {
-    curl -fsSL "$RAW" | grep 'url:' | sed -n 's/.*id: "\([^"]*\)".*url: "\([^"]*\)".*/\1|\2/p' > "$OUT_DPI" || return 1
+: > "$OUT_DPI"
+printf '%s\n' "Госуслуги|https://gosuslugi.ru" "Госуслуги ЛК|https://esia.gosuslugi.ru" "Налоги|https://nalog.ru" "Налоги ЛК|https://lkfl2.nalog.ru" "ntc.party|https://ntc.party/" "rutube.ru|https://rutube.ru" "instagram.com|https://instagram.com" \
+"facebook.com|https://facebook.com" "rutor.info|https://rutor.info" "rutracker.org|https://rutracker.org" "epidemz.net.co|https://epidemz.net.co" "nnmclub.to|https://nnmclub.to" "openwrt.org|https://openwrt.org" "sxyprn.net|https://sxyprn.net" \
+"spankbang.com|https://ru.spankbang.com" "pornhub.com|https://pornhub.com" "discord.com|https://discord.com" "x.com|https://x.com" "filmix.my|https://filmix.my" "flightradar24.com|https://flightradar24.com" "play.google.com|https://play.google.com" \
+"kinozal.tv|https://kinozal.tv" "cub.red|https://cub.red" "ottai.com|https://ottai.com" >> "$OUT_DPI"; curl -fsSL "$RAW" | grep 'url:' | sed -n 's/.*id: "\([^"]*\)".*url: "\([^"]*\)".*/\1|\2/p' >> "$OUT_DPI" || return 1; TOTAL=$(grep -c "|" "$OUT_DPI"); }
 
-    printf '%s\n' \
-    "Госуслуги|https://gosuslugi.ru" \
-    "YouTube|https://youtube.com" \
-    "Discord|https://discord.com" >> "$OUT_DPI"
-
-    TOTAL=$(grep -c "|" "$OUT_DPI")
-}
-
-
-check_current_strategy() {
-    clear
-    echo -e "${MAGENTA}Тест текущей активной стратегии${NC}\n"
-
-    prepare_urls || { echo "Ошибка загрузки списка"; PAUSE; return; }
-
-    URLS="$(cat "$OUT_DPI")"   # ← перенесли сюда
-    OK=0
-    check_all_urls
-
-    echo -e "\nРезультат: $OK/$TOTAL"
-
-    rm -f "$OUT_DPI"
-    PAUSE
-}
-
-
-
-
+check_current_strategy() { clear; echo -e "${MAGENTA}Тестирование текущей стратегии${NC}\n"; prepare_urls; URLS="$(cat "$OUT_DPI")"; OK=0; check_all_urls; echo -e "\nРезультат: $OK/$TOTAL"; rm -f "$OUT_DPI"; echo; PAUSE; }
 
 
 
@@ -468,7 +445,7 @@ echo -e "${CYAN}1) ${GREEN}Тестировать стратегии ${NC}v\n${C
 if { [ -s "/opt/zapret/tmp/results_flowseal.txt" ] || [ -s "/opt/zapret/tmp/results_versions.txt" ]; }; then echo -e "${CYAN}5) ${GREEN}Результаты тестирования стратегий${NC}"; fi
 if { [ -s "/opt/zapret/tmp/results_flowseal.txt" ] || [ -s "/opt/zapret/tmp/results_versions.txt" ]; }; then echo -e "${CYAN}0) ${GREEN}Удалить результаты тестования${NC}"; fi
 echo -ne "${CYAN}Enter) ${GREEN}Выход в меню стратегий${NC}\n\n${YELLOW}Выберите пункт:${NC} ";read -r t; case "$t" in
-1) run_test_versions;; 2) run_test_flowseal;; 3) run_all_tests;; 4) auto_stryou;; 5) show_test_results;; 111) check_current_strategy;; 0) rm -f /opt/zapret/tmp/results_flowseal.txt; rm -f /opt/zapret/tmp/results_versions.txt; echo -e "\n${GREEN}Результаты тестирования удалены!${NC}\n"; PAUSE;; *) break;; esac; done; }
+1) run_test_versions;; 2) run_test_flowseal;; 3) run_all_tests;; 4)  4) auto_stryou;; 9) show_test_results;; 111) check_current_strategy;; 0) rm -f /opt/zapret/tmp/results_flowseal.txt; rm -f /opt/zapret/tmp/results_versions.txt; echo -e "\n${GREEN}Результаты тестирования удалены!${NC}\n"; PAUSE;; *) break;; esac; done; }
 # ==========================================
 # Главное меню
 # ==========================================
