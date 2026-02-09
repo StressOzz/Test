@@ -596,7 +596,7 @@ if [ -f /etc/init.d/zapret ]; then zpr_info; else echo -e "${RED}Zapret не у�
 
 
 
-echo -e "\n\033[1;32m===== Доступность сайтов =====\033[0m"
+echo -e "\n===== Доступность сайтов ====="
 
 prepare_urls
 
@@ -620,29 +620,31 @@ for idx in $(seq 0 $((half-1))); do
     right_name=$(echo "$right_line" | cut -d'|' -f1)
     right_url=$(echo "$right_line" | cut -d'|' -f2)
 
-    # цвета
+    # проверка левого сайта
     if [ -n "$left_url" ]; then
         if curl -sL --connect-timeout 3 --max-time 5 --speed-time 3 --speed-limit 1 -o /dev/null "$left_url"; then
-            left_color="\033[1;32mOK\033[0m"
+            left_status="OK"
         else
-            left_color="\033[1;31mFAIL\033[0m"
+            left_status="FAIL"
         fi
     fi
 
+    # проверка правого сайта
     if [ -n "$right_url" ]; then
         if curl -sL --connect-timeout 3 --max-time 5 --speed-time 3 --speed-limit 1 -o /dev/null "$right_url"; then
-            right_color="\033[1;32mOK\033[0m"
+            right_status="OK"
         else
-            right_color="\033[1;31mFAIL\033[0m"
+            right_status="FAIL"
         fi
-        # ровные колонки через printf
-        printf "%-8s %-25s %-8s %-25s\n" "$left_color" "$left_name" "$right_color" "$right_name"
+        # ровные колонки
+        printf "%-6s %-25s %-6s %-25s\n" "$left_status" "$left_name" "$right_status" "$right_name"
     else
-        printf "%-8s %-25s\n" "$left_color" "$left_name"
+        printf "%-6s %-25s\n" "$left_status" "$left_name"
     fi
 done
 
 PAUSE
+
 }
 
 
