@@ -415,6 +415,7 @@ prepare_urls() {
     "spankbang.com|https://ru.spankbang.com" \
     "pornhub.com|https://pornhub.com" \
     "discord.com|https://discord.com" \
+    "updates.discord.com|https://updates.discord.com" \
     "x.com|https://x.com" \
     "filmix.my|https://filmix.my" \
     "flightradar24.com|https://flightradar24.com" \
