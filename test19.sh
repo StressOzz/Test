@@ -613,24 +613,34 @@ for idx in $(seq 1 $half); do
     right_name=$(echo "$right_line" | cut -d'|' -f1)
     right_url=$(echo "$right_line" | cut -d'|' -f2)
 
-    left_pad=$(printf "%-25s" "$left_name")
-    right_pad=$(printf "%-25s" "$right_name")
-
+    # проверка сайтов
     if curl -sL --connect-timeout 3 --max-time 5 --speed-time 3 --speed-limit 1 -o /dev/null "$left_url"; then
-        left_color="[${GREEN} OK ${NC}] "
+        left_status="OK"
+        left_color="${GREEN}"
     else
-        left_color="[${RED}FAIL${NC}] "
+        left_status="FAIL"
+        left_color="${RED}"
     fi
 
     if [ -n "$right_url" ]; then
         if curl -sL --connect-timeout 3 --max-time 5 --speed-time 3 --speed-limit 1 -o /dev/null "$right_url"; then
-            right_color="[${GREEN} OK ${NC}] "
+            right_status="OK"
+            right_color="${GREEN}"
         else
-            right_color="[${RED}FAIL${NC}] "
+            right_status="FAIL"
+            right_color="${RED}"
         fi
-        echo -e "$left_color $left_pad $right_color $right_pad"
+    fi
+
+    # формируем ровные колонки без учёта цвета
+    left_pad=$(printf "%-25s" "$left_name")
+    right_pad=$(printf "%-25s" "$right_name")
+
+    if [ -n "$right_name" ]; then
+        # вывод с цветом, но ровные колонки
+        echo -e "[${left_color}${left_status}${NC}] $left_pad [${right_color}${right_status}${NC}] $right_pad"
     else
-        echo -e "$left_color $left_pad"
+        echo -e "[${left_color}${left_status}${NC}] $left_pad"
     fi
 done
 
