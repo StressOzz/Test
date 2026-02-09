@@ -603,6 +603,9 @@ prepare_urls   # формирует $OUT_DPI
 total=$(wc -l < "$OUT_DPI")
 half=$(( (total + 1) / 2 ))
 
+# фиксированный отступ второй колонки
+COL_OFFSET=40
+
 for idx in $(seq 1 $half); do
     left_line=$(sed -n "${idx}p" "$OUT_DPI")
     left_name=$(echo "$left_line" | cut -d'|' -f1)
@@ -615,32 +618,21 @@ for idx in $(seq 1 $half); do
 
     # проверка сайтов
     if curl -sL --connect-timeout 3 --max-time 5 --speed-time 3 --speed-limit 1 -o /dev/null "$left_url"; then
-        left_status="OK"
-        left_color="${GREEN}"
+        left_status="[${GREEN} OK ${NC}]"
     else
-        left_status="FAIL"
-        left_color="${RED}"
+        left_status="[${RED}FAIL${NC}]"
     fi
 
     if [ -n "$right_url" ]; then
         if curl -sL --connect-timeout 3 --max-time 5 --speed-time 3 --speed-limit 1 -o /dev/null "$right_url"; then
-            right_status="OK"
-            right_color="${GREEN}"
+            right_status="[${GREEN} OK ${NC}]"
         else
-            right_status="FAIL"
-            right_color="${RED}"
+            right_status="[${RED}FAIL${NC}]"
         fi
-    fi
-
-    # формируем ровные колонки без учёта цвета
-    left_pad=$(printf "%-25s" "$left_name")
-    right_pad=$(printf "%-25s" "$right_name")
-
-    if [ -n "$right_name" ]; then
-        # вывод с цветом, но ровные колонки
-        echo -e "[${left_color}${left_status}${NC}] $left_pad [${right_color}${right_status}${NC}] $right_pad"
+        # просто добавляем фиксированный отступ перед правой колонкой
+        echo -e "$left_status $left_name$(printf '%*s' $((COL_OFFSET - ${#left_name})) '')$right_status $right_name"
     else
-        echo -e "[${left_color}${left_status}${NC}] $left_pad"
+        echo -e "$left_status $left_name"
     fi
 done
 
