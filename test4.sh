@@ -595,17 +595,23 @@ flag {if(/'\''/) {sub(/'\''$/, ""); print; exit} print}' "$CONF"; }
 if [ -f /etc/init.d/zapret ]; then zpr_info; else echo -e "${RED}Zapret не установлен!${NC}\n"; fi
 echo -e "\n${GREEN}===== Доступность сайтов =====${NC}"
 
-prepare_urls 
+prepare_urls
 
 TOTAL=$(grep -c "|" "$OUT_DPI")
 half=$(( (TOTAL + 1) / 2 ))
-sites_list=($(cut -d'|' -f2 "$OUT_DPI"))
 
-for idx in $(seq 0 $((half-1))); do
-    left="${sites_list[$idx]}"
-    right_idx=$((idx + half))
-    right="${sites_list[$right_idx]}"
+# Читаем ссылки в массив совместимо с ash
+sites_list=""
+while IFS='|' read -r name url; do
+    sites_list="$sites_list $url"
+done < "$OUT_DPI"
 
+# Проверка по двум колонкам
+idx=1
+for left in $sites_list; do
+    # определяем правый сайт
+    right=$(echo $sites_list | cut -d' ' -f$((idx + half)))
+    
     if curl -sL --connect-timeout 3 --max-time 5 --speed-time 3 --speed-limit 1 --range 0-65535 -A "Mozilla/5.0" -o /dev/null "$left"; then
         left_color="[${GREEN}OK${NC}]  "
     else
@@ -622,6 +628,7 @@ for idx in $(seq 0 $((half-1))); do
     else
         printf "%-35s\n" "$left_color $left"
     fi
+    idx=$((idx + 1))
 done
 PAUSE
 }
