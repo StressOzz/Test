@@ -613,24 +613,29 @@ for idx in $(seq 1 $half); do
     right_name=$(echo "$right_line" | cut -d'|' -f1)
     right_url=$(echo "$right_line" | cut -d'|' -f2)
 
-    left_pad=$(printf "%-25s" "$left_name")
-    right_pad=$(printf "%-25s" "$right_name")
-
-    if curl -sL --connect-timeout 3 --max-time 5 --speed-time 3 --speed-limit 1 -o /dev/null "$left_url"; then
-        left_color="[${GREEN} OK ${NC}] "
+    # проверка левого сайта
+    if [ -n "$left_url" ] && curl -sL --connect-timeout 3 --max-time 5 --speed-time 3 --speed-limit 1 -o /dev/null "$left_url"; then
+        left_status="[ OK ]"
     else
-        left_color="[${RED}FAIL${NC}] "
+        left_status="[FAIL]"
     fi
 
+    # проверка правого сайта
     if [ -n "$right_url" ]; then
         if curl -sL --connect-timeout 3 --max-time 5 --speed-time 3 --speed-limit 1 -o /dev/null "$right_url"; then
-            right_color="[${GREEN} OK ${NC}] "
+            right_status="[ OK ]"
         else
-            right_color="[${RED}FAIL${NC}] "
+            right_status="[FAIL]"
         fi
-        echo -e "$left_color $left_pad $right_color $right_pad"
+    fi
+
+    # вывод с фиксированной шириной колонки
+    left_pad=$(printf "%-7s %-25s" "$left_status" "$left_name")
+    if [ -n "$right_name" ]; then
+        right_pad=$(printf "%-7s %-25s" "$right_status" "$right_name")
+        echo -e "$left_pad $right_pad"
     else
-        echo -e "$left_color $left_pad"
+        echo -e "$left_pad"
     fi
 done
 
