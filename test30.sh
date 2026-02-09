@@ -394,43 +394,12 @@ done <<EOF
 $URLS
 EOF
 wait; OK=$(wc -l < "$TMP_OK" | tr -d ' '); rm -f "$TMP_OK"; }
-
-prepare_urls() {
-    : > "$OUT_DPI"
-    printf '%s\n' \
-    "gosuslugi|https://gosuslugi.ru" \
-    "esia.gosuslugi.ru|https://esia.gosuslugi.ru" \
-    "nalog.ru|https://nalog.ru" \
-    "lkfl2.nalog.ru|https://lkfl2.nalog.ru" \
-    "rutube.ru|https://rutube.ru" \
-    "ntc.party|https://ntc.party/" \
-    "instagram.com|https://instagram.com" \
-    "facebook.com|https://facebook.com" \
-    "rutor.info|https://rutor.info" \
-    "rutracker.org|https://rutracker.org" \
-    "epidemz.net.co|https://epidemz.net.co" \
-    "nnmclub.to|https://nnmclub.to" \
-    "openwrt.org|https://openwrt.org" \
-    "sxyprn.net|https://sxyprn.net" \
-    "spankbang.com|https://ru.spankbang.com" \
-    "pornhub.com|https://pornhub.com" \
-    "discord.com|https://discord.com" \
-    "updates.discord.com|https://updates.discord.com" \
-    "x.com|https://x.com" \
-    "filmix.my|https://filmix.my" \
-    "flightradar24.com|https://flightradar24.com" \
-    "play.google.com|https://play.google.com" \
-    "kinozal.tv|https://kinozal.tv" \
-    "cub.red|https://cub.red" \
-    "ottai.com|https://ottai.com" >> "$OUT_DPI"
-
-    curl -fsSL "$RAW" | grep 'url:' | sed -n 's/.*id: "\([^"]*\)".*url: "\([^"]*\)".*/\1|\2/p' >> "$OUT_DPI" \
-        || { echo -e "\n${RED}Ошибка загрузки DPI списка${NC}\n"; PAUSE; return 1; }
-
-    TOTAL=$(grep -c "|" "$OUT_DPI")
-}
-
-
+prepare_urls() { : > "$OUT_DPI"; printf '%s\n' "gosuslugi|https://gosuslugi.ru" "esia.gosuslugi.ru|https://esia.gosuslugi.ru" "nalog.ru|https://nalog.ru" "lkfl2.nalog.ru|https://lkfl2.nalog.ru" \
+"rutube.ru|https://rutube.ru" "ntc.party|https://ntc.party/" "instagram.com|https://instagram.com" "facebook.com|https://facebook.com" "rutor.info|https://rutor.info" "rutracker.org|https://rutracker.org" \
+"epidemz.net.co|https://epidemz.net.co" "nnmclub.to|https://nnmclub.to" "openwrt.org|https://openwrt.org" "sxyprn.net|https://sxyprn.net" "spankbang.com|https://ru.spankbang.com" "pornhub.com|https://pornhub.com" \
+"discord.com|https://discord.com" "updates.discord.com|https://updates.discord.com" "x.com|https://x.com" "filmix.my|https://filmix.my" "flightradar24.com|https://flightradar24.com" "play.google.com|https://play.google.com" \
+"kinozal.tv|https://kinozal.tv" "cub.red|https://cub.red" "ottai.com|https://ottai.com" >> "$OUT_DPI"; curl -fsSL "$RAW" | grep 'url:' | sed -n 's/.*id: "\([^"]*\)".*url: "\([^"]*\)".*/\1|\2/p' >> "$OUT_DPI" \
+|| { echo -e "\n${RED}Ошибка загрузки DPI списка${NC}\n"; PAUSE; return 1; }; TOTAL=$(grep -c "|" "$OUT_DPI"); }
 check_current_strategy() { clear; echo -e "${MAGENTA}Тестирование текущей стратегии${NC}\n"; prepare_urls; URLS="$(cat "$OUT_DPI")"; OK=0; check_all_urls; if [ "$OK" -eq "$TOTAL" ]; then COLOR="${GREEN}"; elif [ "$OK" -ge $((TOTAL/2)) ]; then COLOR="${YELLOW}"; else COLOR="${RED}"; fi; echo -e "\n${CYAN}Результат теста: ${COLOR}$OK/$TOTAL${NC}\n"; rm -f "$OUT_DPI"; PAUSE; }
 show_test_results() { clear; echo -e "${MAGENTA}Результат тестирования стратегий${NC}\n"; : > "$TMP_RES"; [ -s "$RES1" ] && cat "$RES1" >> "$TMP_RES"; [ -s "$RES2" ] && cat "$RES2" >> "$TMP_RES"; [ ! -s "$TMP_RES" ] && { rm -f "$TMP_RES"; echo -e "${RED}Результат не найден!${NC}\n"; PAUSE; return; }
 awk '!seen && /^Контрольный тест/ {print; seen=1; next} !/^Контрольный тест/ {print}' "$TMP_RES" > "${TMP_RES}.u"; mv "${TMP_RES}.u" "$TMP_RES"; TOTAL=$(head -n1 "$TMP_RES" | cut -d'/' -f2); awk -F'[/ ]' '{for(i=1;i<=NF;i++) if($i~/^[0-9]+$/){print $i "/" $(i+1), $0; break}}' "$TMP_RES" | sort -nr -k1,1 | while read -r line; do
@@ -445,73 +414,17 @@ download_strategies 1; cp "$OUT" "$STR_FILE"; cp "$CONF" "$BACK"; sed -i '/#Y/d'
 run_test_versions() { clear; echo -e "${MAGENTA}Тестирование стратегий v${NC}\n\n${CYAN}Собираем стратегии для теста${NC}"; RESULTS="/opt/zapret/tmp/results_versions.txt"; : > "$STR_FILE"; cp "$CONF" "$BACK"
 for N in $(seq 1 100); do strategy_v$N >> "$STR_FILE" 2>/dev/null || break; done; sed -i '/#Y/d' "$STR_FILE"; run_test_core "$RESULTS"; }
 run_all_tests() { NO_PAUSE=1 RESULTS="/opt/zapret/tmp/results_flowseal.txt" run_test_flowseal; NO_PAUSE=1 RESULTS="/opt/zapret/tmp/results_versions.txt" run_test_versions; show_test_results; }
-
-
-
-
-
-run_test_core() {
-    local RESULTS="$1"
-
-    # Формируем список URL
-    prepare_urls || return 1
-
-    URLS="$(cat "$OUT_DPI")"
-    TOTAL=$(grep -c "|" "$OUT_DPI")
-    TOTAL_STR=$(grep -c '^#' "$STR_FILE")
-
-    echo -e "${CYAN}Найдено стратегий: ${NC}$TOTAL_STR"
-    : > "$RESULTS"
-
-    check_zpr_off
-    LINES=$(grep -n '^#' "$STR_FILE" | cut -d: -f1)
-    CUR=0
-
-    echo "$LINES" | while read START; do
-        CUR=$((CUR+1))
-        NEXT=$(echo "$LINES" | awk -v s="$START" '$1>s{print;exit}')
-        if [ -z "$NEXT" ]; then
-            sed -n "${START},\$p" "$STR_FILE" > "$TEMP_FILE"
-        else
-            sed -n "${START},$((NEXT-1))p" "$STR_FILE" > "$TEMP_FILE"
-        fi
-        BLOCK=$(cat "$TEMP_FILE")
-        NAME=$(head -n1 "$TEMP_FILE")
-        NAME="${NAME#\#}"
-
-        awk -v block="$BLOCK" 'BEGIN{skip=0}
-        /option NFQWS_OPT '\''/ {printf "\toption NFQWS_OPT '\''\n%s\n'\''\n", block; skip=1; next}
-        skip && /^'\''$/ {skip=0; next}
-        !skip {print}' "$CONF" > "${CONF}.tmp"
-        mv "${CONF}.tmp" "$CONF"
-
-        echo -e "\n${CYAN}Тестируем стратегию: ${YELLOW}${NAME}${NC} ($CUR/$TOTAL_STR)"
-        ZAPRET_RESTART
-        OK=0
-        check_all_urls
-
-        if [ "$OK" -eq "$TOTAL" ]; then
-            COLOR="${GREEN}"
-        elif [ "$OK" -ge $((TOTAL/2)) ]; then
-            COLOR="${YELLOW}"
-        else
-            COLOR="${RED}"
-        fi
-        echo -e "${CYAN}Результат теста: ${COLOR}$OK/$TOTAL${NC}"
-        echo -e "${NAME} → ${OK}/${TOTAL}" >> "$RESULTS"
-    done
-
-    sort -t'/' -k1 -nr "$RESULTS" -o "$RESULTS"
-    mv -f "$BACK" "$CONF"
-    rm -f "$OUT_DPI"
-    ZAPRET_RESTART
-    [ -z "$NO_PAUSE" ] && show_single_result "$RESULTS"
-}
-
-
-
-
-
+run_test_core() { local RESULTS="$1"; prepare_urls || return 1; URLS="$(cat "$OUT_DPI")"; TOTAL=$(grep -c "|" "$OUT_DPI"); TOTAL_STR=$(grep -c '^#' "$STR_FILE")
+echo -e "${CYAN}Найдено стратегий: ${NC}$TOTAL_STR"; : > "$RESULTS"; check_zpr_off; LINES=$(grep -n '^#' "$STR_FILE" | cut -d: -f1); CUR=0
+echo "$LINES" | while read START; do CUR=$((CUR+1)); NEXT=$(echo "$LINES" | awk -v s="$START" '$1>s{print;exit}'); if [ -z "$NEXT" ]; then
+sed -n "${START},\$p" "$STR_FILE" > "$TEMP_FILE"; else sed -n "${START},$((NEXT-1))p" "$STR_FILE" > "$TEMP_FILE"; fi
+BLOCK=$(cat "$TEMP_FILE"); NAME=$(head -n1 "$TEMP_FILE"); NAME="${NAME#\#}"; awk -v block="$BLOCK" 'BEGIN{skip=0}
+/option NFQWS_OPT '\''/ {printf "\toption NFQWS_OPT '\''\n%s\n'\''\n", block; skip=1; next}
+skip && /^'\''$/ {skip=0; next}
+!skip {print}' "$CONF" > "${CONF}.tmp"; mv "${CONF}.tmp" "$CONF"; echo -e "\n${CYAN}Тестируем стратегию: ${YELLOW}${NAME}${NC} ($CUR/$TOTAL_STR)"; ZAPRET_RESTART; OK=0; check_all_urls
+if [ "$OK" -eq "$TOTAL" ]; then COLOR="${GREEN}"; elif [ "$OK" -ge $((TOTAL/2)) ]; then COLOR="${YELLOW}"; else COLOR="${RED}"; fi
+echo -e "${CYAN}Результат теста: ${COLOR}$OK/$TOTAL${NC}\n${NAME} → ${OK}/${TOTAL}" >> "$RESULTS"; done
+sort -t'/' -k1 -nr "$RESULTS" -o "$RESULTS"; mv -f "$BACK" "$CONF"; rm -f "$OUT_DPI"; ZAPRET_RESTART; [ -z "$NO_PAUSE" ] && show_single_result "$RESULTS"; }
 TEST_menu() { while true; do show_current_strategy; RKN_Check; clear; echo -e "${MAGENTA}Меню тестирования стратегий${NC}\n"; 
 [ -f "$CONF" ] && line=$(grep -m1 '^#general' "$CONF") && [ -n "$line" ] && echo -e "${YELLOW}Используется стратегия:${NC}  ${CYAN}${line#?}${NC}"
 if [ -f "$CONF" ]; then current="$ver$( [ -n "$ver" ] && [ -n "$yv_ver" ] && echo " / " )$yv_ver"; DV=$(grep -o -E '^#[[:space:]]*Dv[0-9][0-9]*' "$CONF" | sed 's/^#[[:space:]]*/\/ /' | head -n1)
@@ -594,62 +507,15 @@ echo -e "\n${GREEN}===== Стратегия =====${NC}"
 awk '/^[[:space:]]*option[[:space:]]+NFQWS_OPT[[:space:]]*'\''/ {flag=1; sub(/^[[:space:]]*option[[:space:]]+NFQWS_OPT[[:space:]]*'\''/, ""); next}  
 flag {if(/'\''/) {sub(/'\''$/, ""); print; exit} print}' "$CONF"; }
 if [ -f /etc/init.d/zapret ]; then zpr_info; else echo -e "${RED}Zapret не установлен!${NC}\n"; fi
-
-
-
 echo -e "\n${GREEN}===== Доступность сайтов =====\n"
-
-prepare_urls   # формирует $OUT_DPI
-
-total=$(wc -l < "$OUT_DPI")
-half=$(( (total + 1) / 2 ))
-
-# фиксированный отступ второй колонки
-COL_OFFSET=25
-
-for idx in $(seq 1 $half); do
-    left_line=$(sed -n "${idx}p" "$OUT_DPI")
-    left_name=$(echo "$left_line" | cut -d'|' -f1)
-    left_url=$(echo "$left_line" | cut -d'|' -f2)
-
-    right_idx=$((idx + half))
-    right_line=$(sed -n "${right_idx}p" "$OUT_DPI")
-    right_name=$(echo "$right_line" | cut -d'|' -f1)
-    right_url=$(echo "$right_line" | cut -d'|' -f2)
-
-    # проверка сайтов
-    if curl -sL --connect-timeout 2 --max-time 3 --speed-time 3 --speed-limit 1 --range 0-65535 -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) curl/8.0" -o /dev/null "$left_url" >/dev/null 2>&1; then
-        left_status="[${GREEN} OK ${NC}]"
-    else
-        left_status="[${RED}FAIL${NC}]"
-    fi
-
-    if [ -n "$right_url" ]; then
-        if curl -sL --connect-timeout 2 --max-time 3 --speed-time 3 --speed-limit 1 --range 0-65535 -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) curl/8.0" -o /dev/null "$right_url" >/dev/null 2>&1; then
-
-            
-            right_status="[${GREEN} OK ${NC}]"
-        else
-            right_status="[${RED}FAIL${NC}]"
-        fi
-        # просто добавляем фиксированный отступ перед правой колонкой
-        echo -e "$left_status $left_name$(printf '%*s' $((COL_OFFSET - ${#left_name})) '')$right_status $right_name"
-    else
-        echo -e "$left_status $left_name"
-    fi
-done
-
-echo; PAUSE
-
-
-}
-
-
-
-
-
-
-
+prepare_urls; total=$(wc -l < "$OUT_DPI"); half=$(( (total + 1) / 2 )); COL_OFFSET=25; for idx in $(seq 1 $half); do
+left_line=$(sed -n "${idx}p" "$OUT_DPI"); left_name=$(echo "$left_line" | cut -d'|' -f1); left_url=$(echo "$left_line" | cut -d'|' -f2)
+right_idx=$((idx + half)); right_line=$(sed -n "${right_idx}p" "$OUT_DPI"); right_name=$(echo "$right_line" | cut -d'|' -f1); right_url=$(echo "$right_line" | cut -d'|' -f2)
+if curl -sL --connect-timeout 2 --max-time 3 --speed-time 3 --speed-limit 1 --range 0-65535 -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) curl/8.0" -o /dev/null "$left_url" >/dev/null 2>&1; then
+left_status="[${GREEN} OK ${NC}]"; else left_status="[${RED}FAIL${NC}]"; fi; if [ -n "$right_url" ]; then
+if curl -sL --connect-timeout 2 --max-time 3 --speed-time 3 --speed-limit 1 --range 0-65535 -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) curl/8.0" -o /dev/null "$right_url" >/dev/null 2>&1; then
+right_status="[${GREEN} OK ${NC}]"; else right_status="[${RED}FAIL${NC}]"; fi; echo -e "$left_status $left_name$(printf '%*s' $((COL_OFFSET - ${#left_name})) '')$right_status $right_name"
+else echo -e "$left_status $left_name"; fi; done; echo; PAUSE; }
 # ==========================================
 # Главное меню
 # ==========================================
