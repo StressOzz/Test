@@ -597,7 +597,7 @@ if [ -f /etc/init.d/zapret ]; then zpr_info; else echo -e "${RED}Zapret не у�
 
 
 
-echo -e "\n===== Доступность сайтов =====\n"
+echo -e "\n${GREEN}===== Доступность сайтов =====\n"
 
 prepare_urls   # формирует $OUT_DPI
 
@@ -639,7 +639,7 @@ for idx in $(seq 1 $half); do
     fi
 done
 
-PAUSE
+echo; PAUSE
 
 
 }
