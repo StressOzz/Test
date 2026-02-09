@@ -398,10 +398,10 @@ wait; OK=$(wc -l < "$TMP_OK" | tr -d ' '); rm -f "$TMP_OK"; }
 prepare_urls() {
     : > "$OUT_DPI"
     printf '%s\n' \
-    "Госуслуги|https://gosuslugi.ru" \
-    "Госуслуги ЛК|https://esia.gosuslugi.ru" \
-    "Налоги|https://nalog.ru" \
-    "Налоги ЛК|https://lkfl2.nalog.ru" \
+    "gosuslugi|https://gosuslugi.ru" \
+    "esia.gosuslugi.ru|https://esia.gosuslugi.ru" \
+    "nalog.ru|https://nalog.ru" \
+    "lkfl2.nalog.ru|https://lkfl2.nalog.ru" \
     "ntc.party|https://ntc.party/" \
     "rutube.ru|https://rutube.ru" \
     "instagram.com|https://instagram.com" \
