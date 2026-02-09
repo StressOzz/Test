@@ -596,11 +596,11 @@ if [ -f /etc/init.d/zapret ]; then zpr_info; else echo -e "${RED}Zapret не у�
 
 
 
-echo -e "\n${GREEN}===== Доступность сайтов =====${NC}"
+echo -e "\n\033[1;32m===== Доступность сайтов =====\033[0m"
 
 prepare_urls
 
-# Читаем список в переменные через eval (как у тебя)
+# читаем список
 i=0
 while IFS= read -r line; do
     eval url_list_$i=\$line
@@ -611,18 +611,16 @@ TOTAL=$i
 half=$(( (TOTAL + 1) / 2 ))
 
 for idx in $(seq 0 $((half-1))); do
-    # левая колонка
     eval left_line=\$url_list_$idx
     left_name=$(echo "$left_line" | cut -d'|' -f1)
     left_url=$(echo "$left_line" | cut -d'|' -f2)
 
-    # правая колонка
     right_idx=$((idx + half))
     eval right_line=\$url_list_$right_idx
     right_name=$(echo "$right_line" | cut -d'|' -f1)
     right_url=$(echo "$right_line" | cut -d'|' -f2)
 
-    # проверка левого сайта
+    # цвета
     if [ -n "$left_url" ]; then
         if curl -sL --connect-timeout 3 --max-time 5 --speed-time 3 --speed-limit 1 -o /dev/null "$left_url"; then
             left_color="\033[1;32mOK\033[0m"
@@ -631,17 +629,16 @@ for idx in $(seq 0 $((half-1))); do
         fi
     fi
 
-    # проверка правого сайта
     if [ -n "$right_url" ]; then
         if curl -sL --connect-timeout 3 --max-time 5 --speed-time 3 --speed-limit 1 -o /dev/null "$right_url"; then
             right_color="\033[1;32mOK\033[0m"
         else
             right_color="\033[1;31mFAIL\033[0m"
         fi
-        # вывод через echo -e с табуляцией
-        echo -e "$left_color\t$left_name\t$right_color\t$right_name"
+        # ровные колонки через printf
+        printf "%-8s %-25s %-8s %-25s\n" "$left_color" "$left_name" "$right_color" "$right_name"
     else
-        echo -e "$left_color\t$left_name"
+        printf "%-8s %-25s\n" "$left_color" "$left_name"
     fi
 done
 
