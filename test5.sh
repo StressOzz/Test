@@ -593,44 +593,51 @@ echo -e "\n${GREEN}===== Стратегия =====${NC}"
 awk '/^[[:space:]]*option[[:space:]]+NFQWS_OPT[[:space:]]*'\''/ {flag=1; sub(/^[[:space:]]*option[[:space:]]+NFQWS_OPT[[:space:]]*'\''/, ""); next}  
 flag {if(/'\''/) {sub(/'\''$/, ""); print; exit} print}' "$CONF"; }
 if [ -f /etc/init.d/zapret ]; then zpr_info; else echo -e "${RED}Zapret не установлен!${NC}\n"; fi
+
+
+
 echo -e "\n${GREEN}===== Доступность сайтов =====${NC}"
 
-prepare_urls
+prepare_urls  # формирует список name|url
 
 TOTAL=$(grep -c "|" "$OUT_DPI")
 half=$(( (TOTAL + 1) / 2 ))
 
-# Читаем ссылки в массив совместимо с ash
-sites_list=""
-while IFS='|' read -r name url; do
-    sites_list="$sites_list $url"
+# Читаем строки полностью
+urls=()
+while IFS= read -r line; do
+    urls+=("$line")
 done < "$OUT_DPI"
 
-# Проверка по двум колонкам
-idx=1
-for left in $sites_list; do
-    # определяем правый сайт
-    right=$(echo $sites_list | cut -d' ' -f$((idx + half)))
+for idx in $(seq 0 $((half-1))); do
+    left_name=$(echo "${urls[$idx]}" | cut -d'|' -f1)
+    left_url=$(echo "${urls[$idx]}" | cut -d'|' -f2)
     
-    if curl -sL --connect-timeout 3 --max-time 5 --speed-time 3 --speed-limit 1 --range 0-65535 -A "Mozilla/5.0" -o /dev/null "$left"; then
-        left_color="[${GREEN}OK${NC}]  "
-    else
-        left_color="[${RED}FAIL${NC}]"
+    right_idx=$((idx + half))
+    right_name=$(echo "${urls[$right_idx]}" | cut -d'|' -f1)
+    right_url=$(echo "${urls[$right_idx]}" | cut -d'|' -f2)
+
+    # Проверка левого сайта
+    if [ -n "$left_url" ]; then
+        if curl -sL --connect-timeout 3 --max-time 5 --speed-time 3 --speed-limit 1 -o /dev/null "$left_url"; then
+            left_color="[${GREEN}OK${NC}]"
+        else
+            left_color="[${RED}FAIL${NC}]"
+        fi
     fi
 
-    if [ -n "$right" ]; then
-        if curl -sL --connect-timeout 3 --max-time 5 --speed-time 3 --speed-limit 1 --range 0-65535 -A "Mozilla/5.0" -o /dev/null "$right"; then
-            right_color="[${GREEN}OK${NC}]  "
+    # Проверка правого сайта
+    if [ -n "$right_url" ]; then
+        if curl -sL --connect-timeout 3 --max-time 5 --speed-time 3 --speed-limit 1 -o /dev/null "$right_url"; then
+            right_color="[${GREEN}OK${NC}]"
         else
             right_color="[${RED}FAIL${NC}]"
         fi
-        printf "%-35s %-35s\n" "$left_color $left" "$right_color $right"
+        printf "%-20s %-35s %-20s %-35s\n" "$left_color" "$left_name" "$right_color" "$right_name"
     else
-        printf "%-35s\n" "$left_color $left"
+        printf "%-20s %-35s\n" "$left_color" "$left_name"
     fi
-    idx=$((idx + 1))
 done
-PAUSE
 }
 
 
