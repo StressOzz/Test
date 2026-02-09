@@ -604,8 +604,8 @@ prepare_urls   # формирует $OUT_DPI
 total=$(wc -l < "$OUT_DPI")
 half=$(( (total + 1) / 2 ))
 
-# фиксированный отступ второй колонки
-FIXED_SPACES=30
+# на сколько символов отступать правую колонку
+COL_OFFSET=50
 
 for idx in $(seq 1 $half); do
     left_line=$(sed -n "${idx}p" "$OUT_DPI")
@@ -630,8 +630,8 @@ for idx in $(seq 1 $half); do
         else
             right_status="[${RED}FAIL${NC}]"
         fi
-        # фиксированный отступ
-        echo -e "$left_status $left_name$(printf '%*s' $FIXED_SPACES '')$right_status $right_name"
+        # echo с фиксированным отступом для правой колонки
+        printf "%s %s%*s%s %s\n" "$left_status" "$left_name" $((COL_OFFSET - ${#left_status} - ${#left_name})) "" "$right_status" "$right_name"
     else
         echo -e "$left_status $left_name"
     fi
