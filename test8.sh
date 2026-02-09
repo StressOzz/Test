@@ -598,9 +598,10 @@ if [ -f /etc/init.d/zapret ]; then zpr_info; else echo -e "${RED}Zapret не у�
 
 echo -e "\n${GREEN}===== Доступность сайтов =====${NC}"
 
+# Генерируем список сайтов
+prepare_urls
 
-prepare_urls 
-# Считаем и разделяем список на левую и правую половины
+# Читаем список в переменные (совместимо с ash)
 i=0
 while IFS= read -r line; do
     eval url_list_$i=\$line
@@ -625,25 +626,26 @@ for idx in $(seq 0 $((half-1))); do
     # проверка левого сайта
     if [ -n "$left_url" ]; then
         if curl -sL --connect-timeout 3 --max-time 5 --speed-time 3 --speed-limit 1 -o /dev/null "$left_url"; then
-            left_color="[${GREEN}OK${NC}]"
+            left_color="\033[1;32mOK\033[0m"
         else
-            left_color="[${RED}FAIL${NC}]"
+            left_color="\033[1;31mFAIL\033[0m"
         fi
     fi
 
     # проверка правого сайта
     if [ -n "$right_url" ]; then
         if curl -sL --connect-timeout 3 --max-time 5 --speed-time 3 --speed-limit 1 -o /dev/null "$right_url"; then
-            right_color="[${GREEN}OK${NC}]"
+            right_color="\033[1;32mOK\033[0m"
         else
-            right_color="[${RED}FAIL${NC}]"
+            right_color="\033[1;31mFAIL\033[0m"
         fi
-        printf "%-20s %-35s %-20s %-35s\n" "$left_color" "$left_name" "$right_color" "$right_name"
+        printf "%-10b %-30s %-10b %-30s\n" "$left_color" "$left_name" "$right_color" "$right_name"
     else
-        printf "%-20s %-35s\n" "$left_color" "$left_name"
+        printf "%-10b %-30s\n" "$left_color" "$left_name"
     fi
 done
-PAUSE
+
+echo; PAUSE
 }
 
 
