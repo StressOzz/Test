@@ -605,7 +605,7 @@ total=$(wc -l < "$OUT_DPI")
 half=$(( (total + 1) / 2 ))
 
 # фиксированный отступ второй колонки
-COL_OFFSET=30
+COL_OFFSET=25
 
 for idx in $(seq 1 $half); do
     left_line=$(sed -n "${idx}p" "$OUT_DPI")
