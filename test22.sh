@@ -605,7 +605,7 @@ total=$(wc -l < "$OUT_DPI")
 half=$(( (total + 1) / 2 ))
 
 # фиксированный отступ второй колонки
-COL_OFFSET=40
+FIXED_SPACES=30
 
 for idx in $(seq 1 $half); do
     left_line=$(sed -n "${idx}p" "$OUT_DPI")
@@ -630,8 +630,8 @@ for idx in $(seq 1 $half); do
         else
             right_status="[${RED}FAIL${NC}]"
         fi
-        # просто добавляем фиксированный отступ перед правой колонкой
-        echo -e "$left_status $left_name$(printf '%*s' $((COL_OFFSET - ${#left_name})) '')$right_status $right_name"
+        # фиксированный отступ
+        echo -e "$left_status $left_name$(printf '%*s' $FIXED_SPACES '')$right_status $right_name"
     else
         echo -e "$left_status $left_name"
     fi
