@@ -402,8 +402,8 @@ prepare_urls() {
     "esia.gosuslugi.ru|https://esia.gosuslugi.ru" \
     "nalog.ru|https://nalog.ru" \
     "lkfl2.nalog.ru|https://lkfl2.nalog.ru" \
-    "ntc.party|https://ntc.party/" \
     "rutube.ru|https://rutube.ru" \
+    "ntc.party|https://ntc.party/" \
     "instagram.com|https://instagram.com" \
     "facebook.com|https://facebook.com" \
     "rutor.info|https://rutor.info" \
@@ -618,14 +618,16 @@ for idx in $(seq 1 $half); do
     right_url=$(echo "$right_line" | cut -d'|' -f2)
 
     # проверка сайтов
-    if curl -sL --connect-timeout 3 --max-time 5 --speed-time 3 --speed-limit 1 -o /dev/null "$left_url"; then
+    if curl -sL --connect-timeout 2 --max-time 3 --speed-time 3 --speed-limit 1 --range 0-65535 -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) curl/8.0" -o /dev/null "$left_url" >/dev/null 2>&1; then
         left_status="[${GREEN} OK ${NC}]"
     else
         left_status="[${RED}FAIL${NC}]"
     fi
 
     if [ -n "$right_url" ]; then
-        if curl -sL --connect-timeout 3 --max-time 5 --speed-time 3 --speed-limit 1 -o /dev/null "$right_url"; then
+        if curl -sL --connect-timeout 2 --max-time 3 --speed-time 3 --speed-limit 1 --range 0-65535 -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) curl/8.0" -o /dev/null "$right_url" >/dev/null 2>&1; then
+
+            
             right_status="[${GREEN} OK ${NC}]"
         else
             right_status="[${RED}FAIL${NC}]"
