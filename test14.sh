@@ -596,50 +596,41 @@ if [ -f /etc/init.d/zapret ]; then zpr_info; else echo -e "${RED}Zapret не у�
 
 
 
-echo -e "\n===== Доступность сайтов ====="
+echo -e "\n===== Доступность сайтов =====\n"
 
-prepare_urls
+prepare_urls   # формирует $OUT_DPI
 
-# читаем список
-i=0
-while IFS= read -r line; do
-    eval url_list_$i=\$line
-    i=$((i+1))
-done < "$OUT_DPI"
+total=$(wc -l < "$OUT_DPI")
+half=$(( (total + 1) / 2 ))
 
-TOTAL=$i
-half=$(( (TOTAL + 1) / 2 ))
-
-for idx in $(seq 0 $((half-1))); do
-    eval left_line=\$url_list_$idx
+for idx in $(seq 1 $half); do
+    left_line=$(sed -n "${idx}p" "$OUT_DPI")
     left_name=$(echo "$left_line" | cut -d'|' -f1)
     left_url=$(echo "$left_line" | cut -d'|' -f2)
 
     right_idx=$((idx + half))
-    eval right_line=\$url_list_$right_idx
+    right_line=$(sed -n "${right_idx}p" "$OUT_DPI")
     right_name=$(echo "$right_line" | cut -d'|' -f1)
     right_url=$(echo "$right_line" | cut -d'|' -f2)
 
-    # проверка левого сайта
-    if [ -n "$left_url" ]; then
-        if curl -sL --connect-timeout 3 --max-time 5 --speed-time 3 --speed-limit 1 -o /dev/null "$left_url"; then
-            left_status="OK"
-        else
-            left_status="FAIL"
-        fi
+    left_pad=$(printf "%-25s" "$left_name")
+    right_pad=$(printf "%-25s" "$right_name")
+
+    if curl -sL --connect-timeout 3 --max-time 5 --speed-time 3 --speed-limit 1 -o /dev/null "$left_url"; then
+        left_color="[${GREEN}OK${NC}]  "
+    else
+        left_color="[${RED}FAIL${NC}] "
     fi
 
-    # проверка правого сайта
     if [ -n "$right_url" ]; then
         if curl -sL --connect-timeout 3 --max-time 5 --speed-time 3 --speed-limit 1 -o /dev/null "$right_url"; then
-            right_status="OK"
+            right_color="[${GREEN}OK${NC}]  "
         else
-            right_status="FAIL"
+            right_color="[${RED}FAIL${NC}] "
         fi
-        # ровные колонки
-        printf "%-6s %-25s %-6s %-25s\n" "$left_status" "$left_name" "$right_status" "$right_name"
+        echo -e "$left_color $left_pad $right_color $right_pad"
     else
-        printf "%-6s %-25s\n" "$left_status" "$left_name"
+        echo -e "$left_color $left_pad"
     fi
 done
 
