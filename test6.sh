@@ -598,26 +598,31 @@ if [ -f /etc/init.d/zapret ]; then zpr_info; else echo -e "${RED}Zapret не у�
 
 echo -e "\n${GREEN}===== Доступность сайтов =====${NC}"
 
-prepare_urls  # формирует список name|url
 
-TOTAL=$(grep -c "|" "$OUT_DPI")
-half=$(( (TOTAL + 1) / 2 ))
-
-# Читаем строки полностью
-urls=()
+prepare_urls 
+# Считаем и разделяем список на левую и правую половины
+i=0
 while IFS= read -r line; do
-    urls+=("$line")
+    eval url_list_$i=\$line
+    i=$((i+1))
 done < "$OUT_DPI"
 
-for idx in $(seq 0 $((half-1))); do
-    left_name=$(echo "${urls[$idx]}" | cut -d'|' -f1)
-    left_url=$(echo "${urls[$idx]}" | cut -d'|' -f2)
-    
-    right_idx=$((idx + half))
-    right_name=$(echo "${urls[$right_idx]}" | cut -d'|' -f1)
-    right_url=$(echo "${urls[$right_idx]}" | cut -d'|' -f2)
+TOTAL=$i
+half=$(( (TOTAL + 1) / 2 ))
 
-    # Проверка левого сайта
+for idx in $(seq 0 $((half-1))); do
+    # левая колонка
+    eval left_line=\$url_list_$idx
+    left_name=$(echo "$left_line" | cut -d'|' -f1)
+    left_url=$(echo "$left_line" | cut -d'|' -f2)
+
+    # правая колонка
+    right_idx=$((idx + half))
+    eval right_line=\$url_list_$right_idx
+    right_name=$(echo "$right_line" | cut -d'|' -f1)
+    right_url=$(echo "$right_line" | cut -d'|' -f2)
+
+    # проверка левого сайта
     if [ -n "$left_url" ]; then
         if curl -sL --connect-timeout 3 --max-time 5 --speed-time 3 --speed-limit 1 -o /dev/null "$left_url"; then
             left_color="[${GREEN}OK${NC}]"
@@ -626,7 +631,7 @@ for idx in $(seq 0 $((half-1))); do
         fi
     fi
 
-    # Проверка правого сайта
+    # проверка правого сайта
     if [ -n "$right_url" ]; then
         if curl -sL --connect-timeout 3 --max-time 5 --speed-time 3 --speed-limit 1 -o /dev/null "$right_url"; then
             right_color="[${GREEN}OK${NC}]"
@@ -638,7 +643,7 @@ for idx in $(seq 0 $((half-1))); do
         printf "%-20s %-35s\n" "$left_color" "$left_name"
     fi
 done
-}
+
 
 
 
