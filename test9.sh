@@ -596,30 +596,30 @@ if [ -f /etc/init.d/zapret ]; then zpr_info; else echo -e "${RED}Zapret не у�
 
 
 
-echo -e "\n${GREEN}===== Доступность сайтов =====${NC}"
+echo -e "\n===== Доступность сайтов ====="
 
 # Генерируем список сайтов
 prepare_urls
 
-# Читаем список в переменные (совместимо с ash)
+# Читаем список в массив
 i=0
 while IFS= read -r line; do
-    eval url_list_$i=\$line
+    url_list[$i]="$line"
     i=$((i+1))
 done < "$OUT_DPI"
 
-TOTAL=$i
+TOTAL=${#url_list[@]}
 half=$(( (TOTAL + 1) / 2 ))
 
 for idx in $(seq 0 $((half-1))); do
     # левая колонка
-    eval left_line=\$url_list_$idx
+    left_line="${url_list[$idx]}"
     left_name=$(echo "$left_line" | cut -d'|' -f1)
     left_url=$(echo "$left_line" | cut -d'|' -f2)
 
     # правая колонка
     right_idx=$((idx + half))
-    eval right_line=\$url_list_$right_idx
+    right_line="${url_list[$right_idx]}"
     right_name=$(echo "$right_line" | cut -d'|' -f1)
     right_url=$(echo "$right_line" | cut -d'|' -f2)
 
@@ -639,11 +639,13 @@ for idx in $(seq 0 $((half-1))); do
         else
             right_color="\033[1;31mFAIL\033[0m"
         fi
-        printf "%-10b %-30s %-10b %-30s\n" "$left_color" "$left_name" "$right_color" "$right_name"
+        # Вывод колонок с табуляцией
+        echo -e "$left_color $left_name\t$right_color $right_name"
     else
-        printf "%-10b %-30s\n" "$left_color" "$left_name"
+        echo -e "$left_color $left_name"
     fi
 done
+
 
 echo; PAUSE
 }
