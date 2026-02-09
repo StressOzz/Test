@@ -643,7 +643,8 @@ for idx in $(seq 0 $((half-1))); do
         printf "%-20s %-35s\n" "$left_color" "$left_name"
     fi
 done
-
+PAUSE
+}
 
 
 
