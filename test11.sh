@@ -596,47 +596,56 @@ if [ -f /etc/init.d/zapret ]; then zpr_info; else echo -e "${RED}Zapret не у�
 
 
 
-echo -e "\n===== Доступность сайтов ====="
+echo -e "\n${GREEN}===== Доступность сайтов =====${NC}"
 
 prepare_urls
 
-TOTAL=$(wc -l < "$OUT_DPI")
+# Читаем список в переменные через eval (как у тебя)
+i=0
+while IFS= read -r line; do
+    eval url_list_$i=\$line
+    i=$((i+1))
+done < "$OUT_DPI"
+
+TOTAL=$i
 half=$(( (TOTAL + 1) / 2 ))
 
-# читаем все строки в одну переменную
-lines=$(cat "$OUT_DPI")
+for idx in $(seq 0 $((half-1))); do
+    # левая колонка
+    eval left_line=\$url_list_$idx
+    left_name=$(echo "$left_line" | cut -d'|' -f1)
+    left_url=$(echo "$left_line" | cut -d'|' -f2)
 
-# разделяем пополам
-left_lines=$(echo "$lines" | head -n "$half")
-right_lines=$(echo "$lines" | tail -n +$((half+1)))
+    # правая колонка
+    right_idx=$((idx + half))
+    eval right_line=\$url_list_$right_idx
+    right_name=$(echo "$right_line" | cut -d'|' -f1)
+    right_url=$(echo "$right_line" | cut -d'|' -f2)
 
-paste -d '\t' <(echo "$left_lines") <(echo "$right_lines") | while IFS=$'\t' read -r left right; do
-    left_name=$(echo "$left" | cut -d'|' -f1)
-    left_url=$(echo "$left" | cut -d'|' -f2)
-    right_name=$(echo "$right" | cut -d'|' -f1 2>/dev/null)
-    right_url=$(echo "$right" | cut -d'|' -f2 2>/dev/null)
-
-    # проверка левого
-    if curl -sL --connect-timeout 3 --max-time 5 -o /dev/null "$left_url"; then
-        left_color="\033[1;32mOK\033[0m"
-    else
-        left_color="\033[1;31mFAIL\033[0m"
+    # проверка левого сайта
+    if [ -n "$left_url" ]; then
+        if curl -sL --connect-timeout 3 --max-time 5 --speed-time 3 --speed-limit 1 -o /dev/null "$left_url"; then
+            left_color="\033[1;32mOK\033[0m"
+        else
+            left_color="\033[1;31mFAIL\033[0m"
+        fi
     fi
 
-    # проверка правого
+    # проверка правого сайта
     if [ -n "$right_url" ]; then
-        if curl -sL --connect-timeout 3 --max-time 5 -o /dev/null "$right_url"; then
+        if curl -sL --connect-timeout 3 --max-time 5 --speed-time 3 --speed-limit 1 -o /dev/null "$right_url"; then
             right_color="\033[1;32mOK\033[0m"
         else
             right_color="\033[1;31mFAIL\033[0m"
         fi
-        echo -e "$left_color $left_name\t$right_color $right_name"
+        # вывод через echo -e с табуляцией
+        echo -e "$left_color\t$left_name\t$right_color\t$right_name"
     else
-        echo -e "$left_color $left_name"
+        echo -e "$left_color\t$left_name"
     fi
 done
 
-echo; PAUSE
+PAUSE
 }
 
 
