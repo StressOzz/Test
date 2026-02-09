@@ -617,14 +617,14 @@ for idx in $(seq 1 $half); do
     right_pad=$(printf "%-25s" "$right_name")
 
     if curl -sL --connect-timeout 3 --max-time 5 --speed-time 3 --speed-limit 1 -o /dev/null "$left_url"; then
-        left_color="[${GREEN}OK${NC}]  "
+        left_color="[${GREEN} OK ${NC}]  "
     else
         left_color="[${RED}FAIL${NC}] "
     fi
 
     if [ -n "$right_url" ]; then
         if curl -sL --connect-timeout 3 --max-time 5 --speed-time 3 --speed-limit 1 -o /dev/null "$right_url"; then
-            right_color="[${GREEN}OK${NC}]  "
+            right_color="[${GREEN} OK ${NC}]  "
         else
             right_color="[${RED}FAIL${NC}] "
         fi
