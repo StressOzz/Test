@@ -108,8 +108,8 @@ fi
 install_pkg podkop.ipk podkop-v0.7.14-r1-all.ipk
 install_pkg luci-app-podkop.ipk luci-app-podkop-v0.7.14-r1-all.ipk
 install_pkg luci-i18n-podkop-ru.ipk luci-i18n-podkop-ru-0.7.14.ipk
-wget -qO /etc/config/podkop https://raw.githubusercontent.com/StressOzz/Test/refs/heads/main/podkop
-echo -e "AWG ${GREEN}интегрирован в ${NC}Podkop${GREEN}.${NC}"
+
+echo -e "AWG ${GREEN}интегрирован в ${NC}Podkop${GREEN}${NC}"
 echo -e "${CYAN}Запускаем ${NC}Podkop${NC}"
 podkop enable >/dev/null 2>&1
 echo -e "${CYAN}Применяем конфигурацию${NC}"
