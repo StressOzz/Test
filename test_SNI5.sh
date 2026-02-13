@@ -28,7 +28,7 @@ check_url() {
     TEXT="${1%%|*}"
     LINK="${1##*|}"
 
-    if curl -sL --connect-timeout 1 --max-time 2 --speed-time 2 --speed-limit 1 -o /dev/null "$LINK" >/dev/null 2>&1; then
+    if curl -sL --connect-timeout 2 --max-time 3 --speed-time 3 --speed-limit 1 --range 0-65535 -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) curl/8.0" -o /dev/null "$LINK" >/dev/null 2>&1; then
         echo 1 >> "$TMP_OK"
         echo -e "${GREEN}[ OK ]${NC} $TEXT"
     else
