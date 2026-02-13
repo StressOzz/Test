@@ -1,8 +1,8 @@
 #!/bin/sh
 
-URL="https://example.com/file.txt"
-TMP="/tmp/src.txt"
-OUT="/tmp/domains.txt"
+URL="https://raw.githubusercontent.com/StressOzz/Test/refs/heads/main/ttt"
+TMP="/opt/src.txt"
+OUT="/opt/domains.txt"
 
 wget -qO "$TMP" "$URL"
 
