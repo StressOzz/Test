@@ -66,8 +66,6 @@ main() {
 
 curl -fsSL "$RAW" | sed -n 's/.*"id":[[:space:]]*"\([^"]*\)".*"url":[[:space:]]*"\([^"]*\)".*/\1|\2/p' > "$TMP_SF/dpi.txt"
 
-    }
-
     URLS="$(cat "$TMP_SF/dpi.txt")"
     TOTAL_URLS=$(grep -c "|" "$TMP_SF/dpi.txt")
 
