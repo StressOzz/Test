@@ -4,7 +4,7 @@ CONF="/etc/config/zapret"
 TMP_SF="/tmp/zapret_hostbench"
 RESULTS="/opt/zapret/tmp/zapret_hostbench.txt"
 
-RAW="https://raw.githubusercontent.com/hyperion-cs/dpi-checkers/main/ru/tcp-16-20/index.html"
+RAW="https://raw.githubusercontent.com/hyperion-cs/dpi-checkers/refs/heads/main/ru/tcp-16-20/suite.json"
 WHITELIST_URL="https://raw.githubusercontent.com/hxehex/russia-mobile-internet-whitelist/refs/heads/main/whitelist.txt"
 
 PARALLEL=10
@@ -64,9 +64,7 @@ main() {
 
     echo -e "${CYAN}Загрузка DPI сайтов...${NC}"
 
-    curl -fsSL "$RAW" | grep 'url:' | \
-    sed -n 's/.*id: "\([^"]*\)".*url: "\([^"]*\)".*/\1|\2/p' > "$TMP_SF/dpi.txt" || {
-        echo -e "${RED}Не удалось получить DPI список${NC}"
+curl -fsSL "$RAW" | sed -n 's/.*"id":[[:space:]]*"\([^"]*\)".*"url":[[:space:]]*"\([^"]*\)".*/\1|\2/p' > "$TMP_SF/dpi.txt" 
         exit 1
     }
 
