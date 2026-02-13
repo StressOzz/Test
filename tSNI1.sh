@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/sh
 
 CONF="/etc/config/zapret"
 TMP_SF="/tmp/zapret_hostbench"
