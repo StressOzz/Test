@@ -4,7 +4,7 @@ CONF="/etc/config/zapret"
 TMP_SF="/tmp/zapret_hostbench"
 RESULTS="/opt/zapret/tmp/zapret_hostbench.txt"
 
-RAW="https://raw.githubusercontent.com/hyperion-cs/dpi-checkers/main/ru/tcp-16-20/index.html"
+RAW="https://raw.githubusercontent.com/hyperion-cs/dpi-checkers/refs/heads/main/ru/tcp-16-20/suite.json"
 
 FAKE_DIR="/opt/zapret/files/fake"
 
@@ -72,11 +72,7 @@ main() {
 
     echo -e "${CYAN}Загрузка DPI сайтов...${NC}"
 
-    curl -fsSL "$RAW" | grep 'url:' | \
-    sed -n 's/.*id: "\([^"]*\)".*url: "\([^"]*\)".*/\1|\2/p' > "$TMP_SF/dpi.txt" || {
-        echo -e "${RED}Не удалось получить DPI список${NC}"
-        exit 1
-    }
+curl -fsSL "$RAW" | sed -n 's/.*"id":[[:space:]]*"\([^"]*\)".*"url":[[:space:]]*"\([^"]*\)".*/\1|\2/p' > "$TMP_SF/dpi.txt"
 
     TOTAL_URLS=$(grep -c "|" "$TMP_SF/dpi.txt")
     echo -e "${CYAN}DPI сайтов:${NC} $TOTAL_URLS"
