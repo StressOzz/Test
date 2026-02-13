@@ -64,8 +64,8 @@ main() {
 
     echo -e "${CYAN}Загрузка DPI сайтов...${NC}"
 
-curl -fsSL "$RAW" | sed -n 's/.*"id":[[:space:]]*"\([^"]*\)".*"url":[[:space:]]*"\([^"]*\)".*/\1|\2/p' > "$TMP_SF/dpi.txt" 
-        exit 1
+curl -fsSL "$RAW" | sed -n 's/.*"id":[[:space:]]*"\([^"]*\)".*"url":[[:space:]]*"\([^"]*\)".*/\1|\2/p' > "$TMP_SF/dpi.txt"
+
     }
 
     URLS="$(cat "$TMP_SF/dpi.txt")"
