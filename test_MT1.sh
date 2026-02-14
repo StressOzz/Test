@@ -5,7 +5,6 @@ TMP="/tmp/mtproto_list.txt"
 RESULT="/tmp/mtproto_result.txt"
 FINAL="/tmp/mtproto_sorted.txt"
 
-echo "Скачиваем список..."
 wget -q -O "$TMP" "$URL" || { echo "Ошибка загрузки"; exit 1; }
 
 > "$RESULT"
@@ -21,24 +20,26 @@ while read -r line; do
             [ -z "$SERVER" ] && continue
             [ -z "$PORT" ] && continue
 
+            # фильтр невалидных портов
+            if [ "$PORT" -gt 65535 ] 2>/dev/null || [ "$PORT" -lt 1 ] 2>/dev/null; then
+                echo "Пропуск $SERVER:$PORT (невалидный порт)"
+                continue
+            fi
+
             printf "Проверка %s:%s ... " "$SERVER" "$PORT"
 
-            # Проверка TCP порта
-            nc -w3 -z "$SERVER" "$PORT" >/dev/null 2>&1
+            # проверка TCP (без -z)
+            echo | nc -w3 "$SERVER" "$PORT" >/dev/null 2>&1
             if [ $? -ne 0 ]; then
                 echo "FAIL"
                 continue
             fi
 
-            # Проверка пинга (1 пакет, таймаут 1с)
+            # пинг (если доступен)
             PING=$(ping -c1 -W1 "$SERVER" 2>/dev/null | awk -F'time=' '/time=/{print $2}' | awk '{print $1}')
-
-            if [ -z "$PING" ]; then
-                PING=9999
-            fi
+            [ -z "$PING" ] && PING=9999
 
             echo "OK (${PING} ms)"
-
             echo "$PING $SERVER $PORT" >> "$RESULT"
         ;;
     esac
@@ -61,4 +62,4 @@ while read -r line; do
 done < "$FINAL"
 
 echo
-echo "Результат сохранён в $FINAL"
+echo "Готово. Результат: $FINAL"
