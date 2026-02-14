@@ -15,29 +15,44 @@ YELLOW="\033[1;33m"
 MAGENTA="\033[1;35m"
 NC="\033[0m"
 
-show_test_results() {
-    clear
-    echo -e "${MAGENTA}Результат тестирования стратегий${NC}\n"
-    [ ! -f "$RESULTS" ] || [ ! -s "$RESULTS" ] && { echo -e "${RED}Результат не найден!${NC}\n"; return; }
-    TOTAL=$(head -n1 "$RESULTS" | cut -d'/' -f2)
-    sort -nr -k1,1 <(awk -F'[/ ]' '{for(i=1;i<=NF;i++) if($i~/^[0-9]+$/){print $i "/" $(i+1), $0; break}}' "$RESULTS") | while read -r line
-    do
-        COUNT=$(echo "$line" | awk -F'/' '{print $1}')
-        TEXT=$(echo "$line" | cut -d' ' -f2-)
-        if [[ "$TEXT" =~ Zapret ]]; then
-            COLOR="$CYAN"
-        elif [ "$COUNT" -eq "$TOTAL" ]; then
-            COLOR="$GREEN"
-        elif [ "$COUNT" -gt $((TOTAL/2)) ]; then
-            COLOR="$YELLOW"
-        else
-            COLOR="$RED"
-        fi
-        echo -e "${COLOR}${TEXT}${NC}"
+FAKE_TLS="$TMP_SF/clienthello.bin"
+
+# ===== TLS GENERATOR =====
+generate_tls() {
+
+    # 32 байта random
+    RAND=$(hexdump -n 32 -e '1/1 "%02x"' /dev/urandom)
+
+    # случайные cipher suites (4 штуки)
+    CIPHERS=""
+    for i in 1 2 3 4; do
+        C=$(printf "%04x" $((RANDOM % 65535)))
+        CIPHERS="${CIPHERS}${C}"
     done
-    echo
+
+    CIPHER_LEN=$(printf "%04x" $(( ${#CIPHERS} / 2 )))
+
+    BODY="0303"              # TLS 1.2
+    BODY="${BODY}${RAND}"
+    BODY="${BODY}00"         # session id len
+    BODY="${BODY}${CIPHER_LEN}"
+    BODY="${BODY}${CIPHERS}"
+    BODY="${BODY}01"         # compression len
+    BODY="${BODY}00"
+    BODY="${BODY}0000"       # no extensions
+
+    BODY_LEN=$(printf "%06x" $(( ${#BODY} / 2 )))
+
+    HANDSHAKE="01${BODY_LEN}${BODY}"
+
+    RECORD_LEN=$(printf "%04x" $(( ${#HANDSHAKE} / 2 )))
+
+    TLS="160301${RECORD_LEN}${HANDSHAKE}"
+
+    echo "$TLS" | xxd -r -p > "$FAKE_TLS"
 }
 
+# ===== RESTART =====
 ZAPRET_RESTART() {
     chmod +x /opt/zapret/sync_config.sh 2>/dev/null
     /opt/zapret/sync_config.sh
@@ -45,6 +60,7 @@ ZAPRET_RESTART() {
     sleep 1
 }
 
+# ===== URL CHECK =====
 check_url() {
     TEXT="${1%%|*}"
     LINK="${1##*|}"
@@ -60,13 +76,11 @@ check_url() {
 check_all_urls() {
     TMP_OK="$TMP_SF/ok.$$"
     : > "$TMP_OK"
-
     RUN=0
 
     while IFS= read -r U; do
         check_url "$U" &
         RUN=$((RUN+1))
-
         if [ "$RUN" -ge "$PARALLEL" ]; then
             wait
             RUN=0
@@ -74,11 +88,11 @@ check_all_urls() {
     done < "$TMP_SF/dpi.txt"
 
     wait
-
     OK=$(wc -l < "$TMP_OK" | tr -d ' ')
     rm -f "$TMP_OK"
 }
 
+# ===== MAIN =====
 main() {
 
     mkdir -p "$TMP_SF"
@@ -91,42 +105,25 @@ main() {
     TOTAL_URLS=$(grep -c "|" "$TMP_SF/dpi.txt")
     echo -e "${CYAN}DPI сайтов:${NC} $TOTAL_URLS"
 
-    # --- создаем резервную копию конфига ---
     cp "$CONF" "$TMP_SF/conf.bak"
 
-    CUR=0
+    ITER=0
 
-    # --- бесконечный цикл ---
     while true; do
-        CUR=$((CUR+1))
-        
-        # Генерация случайной длины от 1 до 15
-        LEN=$((10 + RANDOM % 35))
-        
-        # Генерация STUN-паттерна
-        STUN_PATTERN=""
-        for j in $(seq 1 $LEN); do
-            BYTE=$((RANDOM % 256))
-            HEX=$(printf "%02x" $BYTE)
-            STUN_PATTERN="${STUN_PATTERN}x${HEX}"
-        done
+        ITER=$((ITER+1))
 
-        echo -e "\n${CYAN}[$CUR] STUN=${YELLOW}$STUN_PATTERN${NC}"
+        echo -e "\n${CYAN}[$ITER] Генерация TLS ClientHello...${NC}"
 
-        # Восстанавливаем конфиг
+        generate_tls
+
         cp "$TMP_SF/conf.bak" "$CONF"
 
-        # Подставляем в конфиг
-        sed -i "s|--dpi-desync-split-seqovl-pattern=.*|--dpi-desync-split-seqovl-pattern=$STUN_PATTERN|" "$CONF"
-        sed -i "s|--dpi-desync-fake-tls=.*|--dpi-desync-fake-tls=$STUN_PATTERN|" "$CONF"
+        sed -i "s|--dpi-desync-fake-tls=.*|--dpi-desync-fake-tls=$FAKE_TLS|" "$CONF"
 
-        # Перезапуск zapret
         ZAPRET_RESTART
 
-        # Проверка сайтов
         check_all_urls
 
-        # Цвет результата
         if [ "$OK" -eq "$TOTAL_URLS" ]; then
             COLOR="$GREEN"
         elif [ "$OK" -ge $((TOTAL_URLS/2)) ]; then
@@ -136,7 +133,7 @@ main() {
         fi
 
         echo -e "${CYAN}Результат:${NC} ${COLOR}$OK/$TOTAL_URLS${NC}"
-        echo "$STUN_PATTERN → $OK/$TOTAL_URLS" >> "$RESULTS"
+        echo "ITER $ITER → $OK/$TOTAL_URLS" >> "$RESULTS"
     done
 }
 
