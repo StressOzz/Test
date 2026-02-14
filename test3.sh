@@ -23,7 +23,7 @@ generate_tls() {
     # 32 байта random
     RAND=$(hexdump -n 32 -e '1/1 "%02x"' /dev/urandom)
 
-    # случайные cipher suites (4 штуки)
+    # 4 случайных cipher suites
     CIPHERS=""
     for i in 1 2 3 4; do
         C=$(printf "%04x" $((RANDOM % 65535)))
@@ -32,24 +32,29 @@ generate_tls() {
 
     CIPHER_LEN=$(printf "%04x" $(( ${#CIPHERS} / 2 )))
 
-    BODY="0303"              # TLS 1.2
+    BODY="0303"
     BODY="${BODY}${RAND}"
-    BODY="${BODY}00"         # session id len
+    BODY="${BODY}00"
     BODY="${BODY}${CIPHER_LEN}"
     BODY="${BODY}${CIPHERS}"
-    BODY="${BODY}01"         # compression len
+    BODY="${BODY}01"
     BODY="${BODY}00"
-    BODY="${BODY}0000"       # no extensions
+    BODY="${BODY}0000"
 
     BODY_LEN=$(printf "%06x" $(( ${#BODY} / 2 )))
-
     HANDSHAKE="01${BODY_LEN}${BODY}"
 
     RECORD_LEN=$(printf "%04x" $(( ${#HANDSHAKE} / 2 )))
-
     TLS="160301${RECORD_LEN}${HANDSHAKE}"
 
-    echo "$TLS" | xxd -r -p > "$FAKE_TLS"
+    # --- hex → binary без xxd ---
+    : > "$FAKE_TLS"
+    i=0
+    while [ $i -lt ${#TLS} ]; do
+        byte=$(echo "$TLS" | cut -c $((i+1))-$((i+2)))
+        printf "\\x$byte" >> "$FAKE_TLS"
+        i=$((i+2))
+    done
 }
 
 # ===== RESTART =====
