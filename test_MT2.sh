@@ -22,20 +22,24 @@ while read -r line; do
 
             # фильтр невалидных портов
             if [ "$PORT" -gt 65535 ] 2>/dev/null || [ "$PORT" -lt 1 ] 2>/dev/null; then
-                echo "Пропуск $SERVER:$PORT (невалидный порт)"
                 continue
             fi
 
             printf "Проверка %s:%s ... " "$SERVER" "$PORT"
 
-            # проверка TCP (без -z)
-            echo | nc -w3 "$SERVER" "$PORT" >/dev/null 2>&1
+            # пробуем подключение через wget
+            if [ "$PORT" = "443" ] || [ "$PORT" = "2053" ]; then
+                wget -q --timeout=3 --spider "https://$SERVER:$PORT" >/dev/null 2>&1
+            else
+                wget -q --timeout=3 --spider "http://$SERVER:$PORT" >/dev/null 2>&1
+            fi
+
             if [ $? -ne 0 ]; then
                 echo "FAIL"
                 continue
             fi
 
-            # пинг (если доступен)
+            # замер пинга
             PING=$(ping -c1 -W1 "$SERVER" 2>/dev/null | awk -F'time=' '/time=/{print $2}' | awk '{print $1}')
             [ -z "$PING" ] && PING=9999
 
