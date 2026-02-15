@@ -38,9 +38,24 @@ replace_server() {
     update_packages
 }
 
+# --- определяем текущее зеркало ---
+current_mirror() {
+    if [ -f "$CONF" ]; then
+        # берем первую строку, вырезаем между https:// и /releases/
+        MIRROR=$(head -n1 "$CONF" | sed -n 's|https://\(.*\)/releases/.*|\1|p')
+        [ -z "$MIRROR" ] && MIRROR="Неизвестно"
+    else
+        MIRROR="Файл не найден"
+    fi
+    echo "$MIRROR"
+}
+
 # --- меню ---
 show_menu() {
     clear
+
+    CURRENT=$(current_mirror)
+    echo -e "${BLUE}Используется зеркало: ${GREEN}$CURRENT${NC}\n"
     
     echo -e "${BLUE}Выберите зеркало:${NC}"
     echo -e "${CYAN}1)${NC} Belgium"
