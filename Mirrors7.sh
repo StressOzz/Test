@@ -38,23 +38,28 @@ replace_server() {
     update_packages
 }
 
-# --- определяем текущее зеркало ---
-current_mirror() {
+# --- определяем текущее зеркало по стране ---
+current_country() {
     if [ -f "$CONF" ]; then
-        # берем первую строку, вырезаем между https:// и /releases/
-        MIRROR=$(head -n1 "$CONF" | sed -n 's|https://\(.*\)/releases/.*|\1|p')
-        [ -z "$MIRROR" ] && MIRROR="Неизвестно"
+        URL=$(head -n1 "$CONF")
+        case "$URL" in
+            *tiguinet.net*) echo "Belgium" ;;
+            *utwente.nl*) echo "Netherlands" ;;
+            *freifunk.net*) echo "Germany" ;;
+            *cernet.edu.cn*) echo "China" ;;
+            *downloads.openwrt.org*) echo "OpenWrt" ;;
+            *) echo "Неизвестно" ;;
+        esac
     else
-        MIRROR="Файл не найден"
+        echo "Файл не найден"
     fi
-    echo "$MIRROR"
 }
 
 # --- меню ---
 show_menu() {
     clear
 
-    CURRENT=$(current_mirror)
+    CURRENT=$(current_country)
     echo -e "${BLUE}Используется зеркало: ${GREEN}$CURRENT${NC}\n"
     
     echo -e "${BLUE}Выберите зеркало:${NC}"
