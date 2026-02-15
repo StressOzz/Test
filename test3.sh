@@ -55,7 +55,7 @@ hosts_add() { printf "%b\n" "$1" | while IFS= read -r L; do grep -qxF "$L" /etc/
 hosts_clear() { printf "%b\n" "$1" | while IFS= read -r L; do sed -i "\|^$L$|d" /etc/hosts; done; /etc/init.d/dnsmasq restart >/dev/null 2>&1; }
 ZAPRET_RESTART () { chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1; sleep 1; }
 PAUSE() { echo "Нажмите Enter..."; read dummy; }; BACKUP_DIR="/opt/zapret_backup"; DATE_FILE="$BACKUP_DIR/date_backup.txt"
-if command -v apk >/dev/null 2>&1; then PKG_IS_APK=1; else PKG_IS_APK=0; fi
+if command -v apk >/dev/null 2>&1; then CONFZ="/etc/apk/repositories.d/distfeeds.list"; PKG_IS_APK=1; else CONFZ="/etc/opkg/distfeeds.conf"; PKG_IS_APK=0; fi
 echo 'sh <(wget -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/main/Zapret-Manager.sh)' > /usr/bin/zms; chmod +x /usr/bin/zms
 # ==========================================
 # Получение версии
@@ -358,11 +358,11 @@ uci commit firewall >/dev/null 2>&1; /etc/init.d/firewall restart >/dev/null 2>&
 # Системное меню
 # ==========================================
 sys_menu() { while true; do web_is_enabled && WEB_TEXT="Удалить доступ к скрипту из браузера" || WEB_TEXT="Активировать доступ к скрипту из браузера"
-quic_is_blocked && QUIC_TEXT="${GREEN}Отключить блокировку${NC} QUIC ${GREEN}(80,443)${NC}" || QUIC_TEXT="${GREEN}Включить блокировку${NC} QUIC ${GREEN}(80,443)${NC}"
-clear; echo -e "${MAGENTA}Системное меню${NC}\n"; printed=0; if web_is_enabled; then echo -e "${YELLOW}Доступ из браузера:${NC} $LAN_IP:7681"; printed=1; fi
-if grep -q 'ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc; then echo -e "${YELLOW}FIX для Flow Offloading:${NC} ${GREEN}включён${NC}"; printed=1; fi
-if quic_is_blocked; then echo -e "${YELLOW}Блокировка QUIC: ${GREEN}включена${NC}"; printed=1; fi
-[ "$printed" -eq 1 ] && echo; echo -e "${CYAN}1) ${GREEN}Системная информация${NC}\n${CYAN}2) ${GREEN}$WEB_TEXT${NC}\n${CYAN}3) ${GREEN}$QUIC_TEXT${NC}\n${CYAN}4) ${GREEN}Запустить${NC} blockcheck"
+quic_is_blocked && QUIC_TEXT="${GREEN}Отключить блокировку${NC} QUIC ${GREEN}(80,443)${NC}" || QUIC_TEXT="${GREEN}Включить блокировку${NC} QUIC ${GREEN}(80,443)${NC}"; CURR=$(curr_MIR)
+clear; echo -e "${MAGENTA}Системное меню${NC}\n\n${YELLOW}Используется зеркало: ${GREEN}$CURR${NC}"; if web_is_enabled; then echo -e "${YELLOW}Доступ из браузера:${NC} $LAN_IP:7681"; fi
+if grep -q 'ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc; then echo -e "${YELLOW}FIX для Flow Offloading:${NC} ${GREEN}включён${NC}"; fi
+if quic_is_blocked; then echo -e "${YELLOW}Блокировка QUIC: ${GREEN}включена${NC}"; fi
+echo -e "\n${CYAN}1) ${GREEN}Системная информация${NC}\n${CYAN}2) ${GREEN}$WEB_TEXT${NC}\n${CYAN}3) ${GREEN}$QUIC_TEXT${NC}\n${CYAN}4) ${GREEN}Запустить${NC} blockcheck"
 FO=$(uci get firewall.@defaults[0].flow_offloading 2>/dev/null); FOHW=$(uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null); FIX=$(grep -q 'ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc && echo 1 || echo 0)
 if [ "$FO" = 1 ] || [ "$FOHW" = 1 ] || [ "$FIX" = 1 ]; then if [ "$FIX" = 1 ]; then echo -e "${CYAN}0) ${GREEN}Отключить${NC} FIX ${GREEN}для${NC} Flow Offloading"; else echo -e "${CYAN}0) ${GREEN}Применить${NC} FIX ${GREEN}для${NC} Flow Offloading"; fi; fi
 echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read -r choiceMN; case "$choiceMN" in
@@ -501,8 +501,7 @@ echo -e "${GREEN}\nЗеркало работает! Обновление вып�
 replace_server() { NEW_BASE="$1"; sed -i "s|https://.*/releases/|https://$NEW_BASE/releases/|g" "$CONFZ"; echo -e "${GREEN}\nЗеркало обновлено!${NC}"; check_MIR; }
 curr_MIR() { if [ -f "$CONFZ" ]; then URL=$(head -n1 "$CONFZ"); case "$URL" in *tiguinet.net*) echo "Belgium" ;; *utwente.nl*) echo "Netherlands" ;; *freifunk.net*) echo "Germany" ;;
 *sjtu.edu.cn*) echo "China" ;; *downloads.openwrt.org*) echo "default / OpenWrt" ;; *) echo "Неизвестно" ;; esac; else echo "файл не найден"; fi; }
-menu_MIR() { while true; do if command -v apk >/dev/null 2>&1; then CONFZ="/etc/apk/repositories.d/distfeeds.list"; else CONFZ="/etc/opkg/distfeeds.conf"; fi
-clear; CURR=$(curr_MIR); echo -e "${MAGENTA}Меню выбора зеркала OpenWrt${NC}\n\n${YELLOW}Используется зеркало: ${GREEN}$CURR${NC}\n\n${CYAN}1)${NC} China"
+menu_MIR() { while true; do clear; CURR=$(curr_MIR); echo -e "${MAGENTA}Меню выбора зеркала OpenWrt${NC}\n\n${YELLOW}Используется зеркало: ${GREEN}$CURR${NC}\n\n${CYAN}1)${NC} China"
 echo -e "${CYAN}2)${NC} Germany\n${CYAN}3)${NC} Belgium\n${CYAN}4)${NC} Netherlands\n${CYAN}5)${NC} default / OpenWrt\n${CYAN}Enter)${NC} Выход"
 echo -en "\n${YELLOW}Введите номер: ${NC}"; read -r z; case "$z" in 1) replace_server "mirror.sjtu.edu.cn/openwrt" ;; 2) replace_server "mirror.berlin.freifunk.net/downloads.openwrt.org" ;;
 3) replace_server "mirror.tiguinet.net/openwrt" ;; 4) replace_server "ftp.snt.utwente.nl/pub/software/openwrt" ;; 5) replace_server "downloads.openwrt.org" ;; *) break ;; esac; done; }
