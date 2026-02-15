@@ -497,7 +497,7 @@ right_status="[${GREEN} OK ${NC}]"; else right_status="[${RED}FAIL${NC}]"; fi; e
 check_MIR() { echo -e "${CYAN}Проверяем зеркало. Обновляем список пакетов...${NC}"; PKGM="$(command -v apk >/dev/null 2>&1 && echo apk || echo opkg)"
 $PKGM update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка! Зеркало не работает!${NC}\n"; echo "Нажмите Enter..."; read dummy; return 1; }
 echo -e "${GREEN}Зеркало работает! Пакеты обновлены!${NC}\n"; echo "Нажмите Enter..."; read dummy; }
-replace_server() { NEW_BASE="$1"; sed -i "s|https://.*/releases/|https://$NEW_BASE/releases/|g" "$CONFZ"; echo -e "${GREEN}\nЗеркало применено!${NC}"; check_MIR; }
+replace_server() { NEW_BASE="$1"; sed -i "s|https://.*/releases/|https://$NEW_BASE/releases/|g" "$CONFZ"; echo -e "${GREEN}\nЗеркало изменено!${NC}"; check_MIR; }
 curr_MIR() { if [ -f "$CONFZ" ]; then URL=$(head -n1 "$CONFZ"); case "$URL" in *tiguinet.net*) echo "Belgium" ;; *utwente.nl*) echo "Netherlands" ;; *freifunk.net*) echo "Germany" ;;
 *sjtu.edu.cn*) echo "China" ;; *downloads.openwrt.org*) echo "default / OpenWrt" ;; *) echo "Неизвестно" ;; esac; else echo "файл не найден"; fi; }
 menu_MIR() { while true; do clear; CURR=$(curr_MIR); echo -e "${MAGENTA}Меню выбора зеркала OpenWrt${NC}\n\n${YELLOW}Используется зеркало: ${GREEN}$CURR${NC}\n\n${CYAN}1)${NC} China"
