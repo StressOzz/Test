@@ -59,7 +59,7 @@ show_menu() {
     echo -e "${CYAN}2)${NC} Netherlands"
     echo -e "${CYAN}3)${NC} Germany"
     echo -e "${CYAN}4)${NC} China"
-    echo -e "${CYAN}5)${NC} Вернуть downloads.openwrt.org"
+    echo -e "${CYAN}5)${NC} default / OpenWrt"
     echo -e "${CYAN}Enter)${NC} Выход"
     echo -en "\n${YELLOW}Введите номер: ${NC}"
 }
