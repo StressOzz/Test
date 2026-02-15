@@ -1,7 +1,11 @@
 #!/bin/sh
 
 
-CONF="/etc/opkg/distfeeds.conf"
+if command -v apk >/dev/null 2>&1; then
+    CONF="/etc/apk/repositories.d/distfeeds.conf"
+else
+    CONF="/etc/opkg/distfeeds.conf"
+fi
 
 GREEN="\033[1;32m"; RED="\033[1;31m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"
 
