@@ -33,7 +33,7 @@ replace_server() {
 show_menu() {
     clear
     
-    echo "${BLUE}Выберите зеркало:${NC}"
+    echo -e "${BLUE}Выберите зеркало:${NC}"
     echo -e "${CYAN}1)${NC} Belgium"
     echo -e "${CYAN}2)${NC} Netherlands"
     echo -e "${CYAN}3)${NC} Germany"
