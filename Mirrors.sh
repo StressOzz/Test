@@ -6,7 +6,9 @@ else
     CONF="/etc/opkg/distfeeds.conf"
 fi
 
-GREEN="\033[1;32m"; RED="\033[1;31m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"
+GREEN="\033[1;32m"; RED="\033[1;31m"
+CYAN="\033[1;36m"; YELLOW="\033[1;33m"
+BLUE="\033[0;34m"; NC="\033[0m"
 
 update_packages() {
     echo -e "${CYAN}\nПроверяем зеркало. Обновляем список пакетов...${NC}"
@@ -54,11 +56,12 @@ show_menu() {
 
     CURRENT=$(current_country)
     echo -e "${YELLOW}Используется зеркало: ${GREEN}$CURRENT${NC}\n"
-    
-    echo -e "${CYAN}1)${NC} Belgium"
-    echo -e "${CYAN}2)${NC} Netherlands"
-    echo -e "${CYAN}3)${NC} Germany"
-    echo -e "${CYAN}4)${NC} China"
+
+
+    echo -e "${CYAN}1)${NC} China"
+    echo -e "${CYAN}2)${NC} Germany"
+    echo -e "${CYAN}3)${NC} Belgium"
+    echo -e "${CYAN}4)${NC} Netherlands"
     echo -e "${CYAN}5)${NC} default / OpenWrt"
     echo -e "${CYAN}Enter)${NC} Выход"
     echo -en "\n${YELLOW}Введите номер: ${NC}"
@@ -69,10 +72,10 @@ while true; do
     read choice
 
     case "$choice" in
-        1) replace_server "mirror.tiguinet.net/openwrt" ;;
-        2) replace_server "ftp.snt.utwente.nl/pub/software/openwrt" ;;
-        3) replace_server "mirror.berlin.freifunk.net/downloads.openwrt.org" ;;
-        4) replace_server "mirror.sjtu.edu.cn/openwrt" ;;
+        1) replace_server "mirror.sjtu.edu.cn/openwrt" ;;
+        2) replace_server "mirror.berlin.freifunk.net/downloads.openwrt.org" ;;
+        3) replace_server "mirror.tiguinet.net/openwrt" ;;
+        4) replace_server "ftp.snt.utwente.nl/pub/software/openwrt" ;;
         5) replace_server "downloads.openwrt.org" ;;
         *) exit 0 ;;
     esac
