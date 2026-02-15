@@ -39,8 +39,8 @@ show_menu() {
     echo -e "${CYAN}3)${NC} Germany"
     echo -e "${CYAN}4)${NC} China"
     echo -e "${CYAN}5)${NC} Вернуть downloads.openwrt.org"
-    echo -e "${CYAN}Enter) Выход"
-    echo -en "\n${YELLOW}Введите номер: "
+    echo -e "${CYAN}Enter)${NC} Выход"
+    echo -en "\n${YELLOW}Введите номер: ${NC}"
 }
 
 while true; do
