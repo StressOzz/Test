@@ -26,7 +26,8 @@ replace_server() {
 }
 
 show_menu() {
-    echo ""
+    clear
+    
     echo "Выберите зеркало:"
     echo "1) mirror.tiguinet.net/openwrt"
     echo "2) ftp.snt.utwente.nl/pub/software/openwrt"
