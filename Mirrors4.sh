@@ -1,21 +1,23 @@
 #!/bin/sh
 
-
+# --- конфиг ---
 if command -v apk >/dev/null 2>&1; then
     CONF="/etc/apk/repositories.d/distfeeds.list"
 else
     CONF="/etc/opkg/distfeeds.conf"
 fi
 
+# --- цвета ---
 GREEN="\033[1;32m"; RED="\033[1;31m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"
 
+# --- проверка зеркала ---
 update_packages() {
     echo -e "${CYAN}\nПроверяем зеркало. Обновляем список пакетов...${NC}"
 
     PKG="$(command -v apk >/dev/null 2>&1 && echo apk || echo opkg)"
 
     $PKG update >/dev/null 2>&1 || {
-        echo -e "\n${RED}Ошибка! Зеркало не работат!${NC}\n"
+        echo -e "\n${RED}Ошибка! Зеркало не работает!${NC}\n"
         return 1
     }
 
@@ -24,16 +26,19 @@ update_packages() {
     echo "Нажмите Enter..."; read dummy
 }
 
+# --- замена зеркала ---
 replace_server() {
     NEW_BASE="$1"
 
-    sed -i "s|https://[^/]*/releases|https://$NEW_BASE/releases|g" "$CONF"
+    # заменяем только домен, оставляя путь нетронутым
+    sed -i "s|https://[^/]\+|https://$NEW_BASE|g" "$CONF"
 
     echo -e "${GREEN}\nЗеркало обновлено!${NC}"
 
     update_packages
 }
 
+# --- меню ---
 show_menu() {
     clear
     
@@ -47,6 +52,7 @@ show_menu() {
     echo -en "\n${YELLOW}Введите номер: ${NC}"
 }
 
+# --- главный цикл ---
 while true; do
     show_menu
     read choice
