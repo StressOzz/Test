@@ -2,7 +2,7 @@
 
 
 if command -v apk >/dev/null 2>&1; then
-    CONF="/etc/apk/repositories.d/distfeeds.conf"
+    CONF="/etc/apk/repositories.d/distfeeds.list"
 else
     CONF="/etc/opkg/distfeeds.conf"
 fi
