@@ -2,6 +2,33 @@
 
 CONF="/etc/opkg/distfeeds.conf"
 
+update_packages() {
+    echo ""
+    echo "[*] Обновляем списки пакетов..."
+
+    PKG="$(command -v apk >/dev/null 2>&1 && echo apk || echo opkg)"
+
+    $PKG update >/dev/null 2>&1 || {
+        echo "[!] Ошибка при обновлении $PKG"
+        return 1
+    }
+
+    echo "[✓] Обновление выполнено ($PKG)"
+}
+
+replace_server() {
+    NEW_BASE="$1"
+
+    echo ""
+    echo "[*] Переключаем на: $NEW_BASE"
+
+    sed -i "s|https://[^/]*/releases|https://$NEW_BASE/releases|g" "$CONF"
+
+    echo "[✓] Зеркало обновлено"
+
+    update_packages
+}
+
 show_menu() {
     echo ""
     echo "Выберите зеркало:"
@@ -14,21 +41,6 @@ show_menu() {
     echo "0) Выход"
     echo ""
     printf "Введите номер: "
-}
-
-replace_server() {
-    NEW_BASE="$1"
-
-    echo "[*] Переключаем на: $NEW_BASE"
-
-    sed -i "s|https://[^/]*/releases|https://$NEW_BASE/releases|g" "$CONF"
-
-    echo "[✓] Готово"
-    echo ""
-    echo "Текущий distfeeds.conf:"
-    echo "--------------------------------"
-    cat "$CONF"
-    echo "--------------------------------"
 }
 
 while true; do
