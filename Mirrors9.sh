@@ -15,11 +15,11 @@ update_packages() {
 
     $PKG update >/dev/null 2>&1 || {
         echo -e "\n${RED}Ошибка! Зеркало не работает!${NC}\n"
+        echo "Нажмите Enter..."; read dummy
         return 1
     }
-
-    echo -e "${GREEN}\nЗеркало работает! Обновление выполнено!${NC}\n"
     
+    echo -e "${GREEN}\nЗеркало работает! Обновление выполнено!${NC}\n"
     echo "Нажмите Enter..."; read dummy
 }
 
