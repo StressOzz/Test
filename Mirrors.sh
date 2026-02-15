@@ -41,8 +41,7 @@ current_country() {
             *utwente.nl*) echo "Netherlands" ;;
             *freifunk.net*) echo "Germany" ;;
             *sjtu.edu.cn*) echo "China" ;;
-            *tencent.com*) echo "China (tencent)" ;;
-            *downloads.openwrt.org*) echo "OpenWrt" ;;
+            *downloads.openwrt.org*) echo "default / OpenWrt" ;;
             *) echo "Неизвестно" ;;
         esac
     else
@@ -60,8 +59,7 @@ show_menu() {
     echo -e "${CYAN}2)${NC} Netherlands"
     echo -e "${CYAN}3)${NC} Germany"
     echo -e "${CYAN}4)${NC} China"
-    echo -e "${CYAN}5)${NC} China (tencent)"
-    echo -e "${CYAN}6)${NC} Вернуть downloads.openwrt.org"
+    echo -e "${CYAN}5)${NC} Вернуть downloads.openwrt.org"
     echo -e "${CYAN}Enter)${NC} Выход"
     echo -en "\n${YELLOW}Введите номер: ${NC}"
 }
@@ -75,8 +73,7 @@ while true; do
         2) replace_server "ftp.snt.utwente.nl/pub/software/openwrt" ;;
         3) replace_server "mirror.berlin.freifunk.net/downloads.openwrt.org" ;;
         4) replace_server "mirror.sjtu.edu.cn/openwrt" ;;
-        5) replace_server "mirrors.cloud.tencent.com/openwrt" ;;
-        6) replace_server "downloads.openwrt.org" ;;
+        5) replace_server "downloads.openwrt.org" ;;
         *) exit 0 ;;
     esac
 done
