@@ -1,16 +1,13 @@
 #!/bin/sh
 
-# --- конфиг ---
 if command -v apk >/dev/null 2>&1; then
     CONF="/etc/apk/repositories.d/distfeeds.list"
 else
     CONF="/etc/opkg/distfeeds.conf"
 fi
 
-# --- цвета ---
 GREEN="\033[1;32m"; RED="\033[1;31m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"
 
-# --- проверка зеркала ---
 update_packages() {
     echo -e "${CYAN}\nПроверяем зеркало. Обновляем список пакетов...${NC}"
 
@@ -26,11 +23,9 @@ update_packages() {
     echo "Нажмите Enter..."; read dummy
 }
 
-# --- замена зеркала ---
 replace_server() {
     NEW_BASE="$1"
 
-    # заменяем только часть между https:// и /releases/
     sed -i "s|https://.*/releases/|https://$NEW_BASE/releases/|g" "$CONF"
 
     echo -e "${GREEN}\nЗеркало обновлено!${NC}"
@@ -38,7 +33,6 @@ replace_server() {
     update_packages
 }
 
-# --- определяем текущее зеркало по стране ---
 current_country() {
     if [ -f "$CONF" ]; then
         URL=$(head -n1 "$CONF")
@@ -46,7 +40,8 @@ current_country() {
             *tiguinet.net*) echo "Belgium" ;;
             *utwente.nl*) echo "Netherlands" ;;
             *freifunk.net*) echo "Germany" ;;
-            *cernet.edu.cn*) echo "China" ;;
+            *sjtu.edu.cn*) echo "China" ;;
+            *tencent.com*) echo "China (tencent)" ;;
             *downloads.openwrt.org*) echo "OpenWrt" ;;
             *) echo "Неизвестно" ;;
         esac
@@ -55,24 +50,22 @@ current_country() {
     fi
 }
 
-# --- меню ---
 show_menu() {
     clear
 
     CURRENT=$(current_country)
-    echo -e "${BLUE}Используется зеркало: ${GREEN}$CURRENT${NC}\n"
+    echo -e "${YELLOW}Используется зеркало: ${GREEN}$CURRENT${NC}\n"
     
-    echo -e "${BLUE}Выберите зеркало:${NC}"
     echo -e "${CYAN}1)${NC} Belgium"
     echo -e "${CYAN}2)${NC} Netherlands"
     echo -e "${CYAN}3)${NC} Germany"
     echo -e "${CYAN}4)${NC} China"
-    echo -e "${CYAN}5)${NC} Вернуть downloads.openwrt.org"
+    echo -e "${CYAN}5)${NC} China (tencent)"
+    echo -e "${CYAN}6)${NC} Вернуть downloads.openwrt.org"
     echo -e "${CYAN}Enter)${NC} Выход"
     echo -en "\n${YELLOW}Введите номер: ${NC}"
 }
 
-# --- главный цикл ---
 while true; do
     show_menu
     read choice
@@ -81,8 +74,9 @@ while true; do
         1) replace_server "mirror.tiguinet.net/openwrt" ;;
         2) replace_server "ftp.snt.utwente.nl/pub/software/openwrt" ;;
         3) replace_server "mirror.berlin.freifunk.net/downloads.openwrt.org" ;;
-        4) replace_server "mirrors.cernet.edu.cn/openwrt" ;;
-        5) replace_server "downloads.openwrt.org" ;;
+        4) replace_server "mirror.sjtu.edu.cn/openwrt" ;;
+        5) replace_server "mirrors.cloud.tencent.com/openwrt" ;;
+        6) replace_server "downloads.openwrt.org" ;;
         *) exit 0 ;;
     esac
 done
