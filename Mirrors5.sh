@@ -30,8 +30,8 @@ update_packages() {
 replace_server() {
     NEW_BASE="$1"
 
-    # заменяем только домен, оставляя путь нетронутым
-    sed -i "s|https://[^/]\+|https://$NEW_BASE|g" "$CONF"
+    # заменяем только часть между https:// и /releases/
+    sed -i "s|https://.*/releases/|https://$NEW_BASE/releases/|g" "$CONF"
 
     echo -e "${GREEN}\nЗеркало обновлено!${NC}"
 
