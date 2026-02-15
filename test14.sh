@@ -494,15 +494,15 @@ right_status="[${GREEN} OK ${NC}]"; else right_status="[${RED}FAIL${NC}]"; fi; e
 # ==========================================
 # Смена зеркала
 # ==========================================
-set_mirror() { NEW_BASE="$1"; sed -i "s|https://.*/releases/|https://$NEW_BASE/releases/|g" "$CONFZ"; echo -e "\n${CYAN}Проверяем зеркало\nОбновляем список пакетов${NC}"
+set_mirror() { NEW_BASE="$1"; sed -i "s|https://.*/releases/|https://$NEW_BASE/releases/|g" "$CONFZ"; echo -e "\n${CYAN}Проверяем зеркало - обновляем список пакетов${NC}"
 PKGM="$(command -v apk >/dev/null 2>&1 && echo apk || echo opkg)"; if ! $PKGM update >/dev/null 2>&1; then echo -e "\n${RED}Ошибка! Зеркало не работает!\n${GREEN}Зеркало сброшено на ${NC}default ${GREEN}/${NC} OpenWrt${GREEN}!${NC}\n"
-sed -i "s|https://.*/releases/|https://downloads.openwrt.org/releases/|g" "$CONFZ"; PAUSE; return 1; fi; echo -e "${GREEN}Зеркало работает!${NC}\n"; PAUSE; }
+sed -i "s|https://.*/releases/|https://downloads.openwrt.org/releases/|g" "$CONFZ"; PAUSE; return 1; fi; echo -e "${GREEN}Пакеты обновлены! Зеркало работает!${NC}\n"; PAUSE; }
 curr_MIR() { if [ -f "$CONFZ" ]; then URL=$(head -n1 "$CONFZ"); case "$URL" in *tiguinet.net*) echo "Belgium" ;; *utwente.nl*) echo "Netherlands" ;; *freifunk.net*) echo "Germany" ;;
 *sjtu.edu.cn*) echo "China" ;; *downloads.openwrt.org*) echo "default / OpenWrt" ;; *) echo "неизвестное" ;; esac; else echo "файл не найден"; fi; }
 menu_MIR() { while true; do clear; CURR=$(curr_MIR); echo -e "${MAGENTA}Меню выбора зеркала OpenWrt${NC}\n\n${YELLOW}Используется зеркало: ${GREEN}$CURR${NC}\n\n${CYAN}1)${NC} China"
-echo -e "${CYAN}2)${NC} Germany\n${CYAN}3)${NC} Belgium\n${CYAN}4)${NC} Netherlands\n${CYAN}5)${NC} default / OpenWrt\n${CYAN}Enter)${GREEN} Выход в системное меню${NC}"
+echo -e "${CYAN}2)${NC} Germany\n${CYAN}3)${NC} Belgium\n${CYAN}4)${NC} Kazakhstan\n${CYAN}5)${NC} Netherlands\n${CYAN}6)${NC} default / OpenWrt\n${CYAN}Enter)${GREEN} Выход в системное меню${NC}"
 echo -en "\n${YELLOW}Выберите зеркало: ${NC}"; read -r z; case "$z" in 1) set_mirror "mirror.sjtu.edu.cn/openwrt" ;; 2) set_mirror "mirror.berlin.freifunk.net/downloads.openwrt.org" ;;
-3) set_mirror "mirror.tiguinet.net/openwrt" ;; 4) set_mirror "ftp.snt.utwente.nl/pub/software/openwrt" ;; 5) set_mirror "downloads.openwrt.org" ;; *) break ;; esac; done; }
+3) set_mirror "mirror.tiguinet.net/openwrt" ;; 4) set_mirror "mirror.ps.kz/openwrt" ;; 5) set_mirror "ftp.snt.utwente.nl/pub/software/openwrt" ;; 6) set_mirror "downloads.openwrt.org" ;; *) break ;; esac; done; }
 # ==========================================
 # Главное меню
 # ==========================================
