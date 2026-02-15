@@ -500,7 +500,7 @@ $PKGM update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка! Зеркало 
 echo -e "${GREEN}\nЗеркало работает! Обновление выполнено!${NC}\n"; echo "Нажмите Enter..."; read dummy; }
 replace_server() { NEW_BASE="$1"; sed -i "s|https://.*/releases/|https://$NEW_BASE/releases/|g" "$CONFZ"; echo -e "${GREEN}\nЗеркало обновлено!${NC}"; check_MIR; }
 curr_MIR() { if [ -f "$CONFZ" ]; then URL=$(head -n1 "$CONFZ"); case "$URL" in *tiguinet.net*) echo "Belgium" ;; *utwente.nl*) echo "Netherlands" ;; *freifunk.net*) echo "Germany" ;;
-*sjtu.edu.cn*) echo "China" ;; *downloads.openwrt.org*) echo "default / OpenWrt" ;; *) echo "Неизвестно" ;; esac; else; echo "файл не найден"; fi; }
+*sjtu.edu.cn*) echo "China" ;; *downloads.openwrt.org*) echo "default / OpenWrt" ;; *) echo "Неизвестно" ;; esac; else echo "файл не найден"; fi; }
 menu_MIR() { while true; do if command -v apk >/dev/null 2>&1; then CONFZ="/etc/apk/repositories.d/distfeeds.list"; else CONFZ="/etc/opkg/distfeeds.conf"; fi
 clear; CURR=$(curr_MIR); echo -e "${MAGENTA}Меню выбора зеркала OpenWrt${NC}\n\n${YELLOW}Используется зеркало: ${GREEN}$CURR${NC}\n\n${CYAN}1)${NC} China"
 echo -e "${CYAN}2)${NC} Germany\n${CYAN}3)${NC} Belgium\n${CYAN}4)${NC} Netherlands\n${CYAN}5)${NC} default / OpenWrt\n${CYAN}Enter)${NC} Выход"
