@@ -495,87 +495,17 @@ right_status="[${GREEN} OK ${NC}]"; else right_status="[${RED}FAIL${NC}]"; fi; e
 # ==========================================
 # Смена зеркала
 # ==========================================
-check_MIR() {
-    echo -e "${CYAN}\nПроверяем зеркало. Обновляем список пакетов...${NC}"
-
-    PKG="$(command -v apk >/dev/null 2>&1 && echo apk || echo opkg)"
-
-    $PKG update >/dev/null 2>&1 || {
-        echo -e "\n${RED}Ошибка! Зеркало не работает!${NC}\n"
-        echo "Нажмите Enter..."; read dummy
-        return 1
-    }
-    
-    echo -e "${GREEN}\nЗеркало работает! Обновление выполнено!${NC}\n"
-    echo "Нажмите Enter..."; read dummy
-}
-
-replace_server() {
-    NEW_BASE="$1"
-
-    sed -i "s|https://.*/releases/|https://$NEW_BASE/releases/|g" "$CONFZ"
-
-    echo -e "${GREEN}\nЗеркало обновлено!${NC}"
-
-    check_MIR
-}
-
-curr_MIR() {
-    if [ -f "$CONFZ" ]; then
-        URL=$(head -n1 "$CONFZ")
-        case "$URL" in
-            *tiguinet.net*) echo "Belgium" ;;
-            *utwente.nl*) echo "Netherlands" ;;
-            *freifunk.net*) echo "Germany" ;;
-            *sjtu.edu.cn*) echo "China" ;;
-            *downloads.openwrt.org*) echo "default / OpenWrt" ;;
-            *) echo "Неизвестно" ;;
-        esac
-    else
-        echo "Файл не найден"
-    fi
-}
-
-
-menu_MIR() { while true; do 
-
-if command -v apk >/dev/null 2>&1; then
-    CONFZ="/etc/apk/repositories.d/distfeeds.list"
-else
-    CONFZ="/etc/opkg/distfeeds.conf"
-fi
-
-clear
-
-    CURR=$(curr_MIR)
-
-    echo -e "${MAGENTA}Меню выбора зеркал OpenWrt${NC}"
-    
-    echo -e "${YELLOW}Используется зеркало: ${GREEN}$CURR${NC}\n"
-
-    echo -e "${CYAN}1)${NC} China"
-    echo -e "${CYAN}2)${NC} Germany"
-    echo -e "${CYAN}3)${NC} Belgium"
-    echo -e "${CYAN}4)${NC} Netherlands"
-    echo -e "${CYAN}5)${NC} default / OpenWrt"
-    echo -e "${CYAN}Enter)${NC} Выход"
-    echo -en "\n${YELLOW}Введите номер: ${NC}"
-
-read -r z; case "$z" in
-
-        1) replace_server "mirror.sjtu.edu.cn/openwrt" ;;
-        2) replace_server "mirror.berlin.freifunk.net/downloads.openwrt.org" ;;
-        3) replace_server "mirror.tiguinet.net/openwrt" ;;
-        4) replace_server "ftp.snt.utwente.nl/pub/software/openwrt" ;;
-        5) replace_server "downloads.openwrt.org" ;;
-        *) break ;;
-
-
-    
-esac; done; }
-
-
-
+check_MIR() { echo -e "${CYAN}\nПроверяем зеркало. Обновляем список пакетов...${NC}"; PKGM="$(command -v apk >/dev/null 2>&1 && echo apk || echo opkg)"
+$PKGM update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка! Зеркало не работает!${NC}\n"; echo "Нажмите Enter..."; read dummy; return 1; }
+echo -e "${GREEN}\nЗеркало работает! Обновление выполнено!${NC}\n"; echo "Нажмите Enter..."; read dummy; }
+replace_server() { NEW_BASE="$1"; sed -i "s|https://.*/releases/|https://$NEW_BASE/releases/|g" "$CONFZ"; echo -e "${GREEN}\nЗеркало обновлено!${NC}"; check_MIR; }
+curr_MIR() { if [ -f "$CONFZ" ]; then URL=$(head -n1 "$CONFZ"); case "$URL" in *tiguinet.net*) echo "Belgium" ;; *utwente.nl*) echo "Netherlands" ;; *freifunk.net*) echo "Germany" ;;
+*sjtu.edu.cn*) echo "China" ;; *downloads.openwrt.org*) echo "default / OpenWrt" ;; *) echo "Неизвестно" ;; esac; else; echo "файл не найден"; fi; }
+menu_MIR() { while true; do if command -v apk >/dev/null 2>&1; then CONFZ="/etc/apk/repositories.d/distfeeds.list"; else CONFZ="/etc/opkg/distfeeds.conf"; fi
+clear; CURR=$(curr_MIR); echo -e "${MAGENTA}Меню выбора зеркала OpenWrt${NC}\n\n${YELLOW}Используется зеркало: ${GREEN}$CURR${NC}\n\n${CYAN}1)${NC} China"
+echo -e "${CYAN}2)${NC} Germany\n${CYAN}3)${NC} Belgium\n${CYAN}4)${NC} Netherlands\n${CYAN}5)${NC} default / OpenWrt\n${CYAN}Enter)${NC} Выход"
+echo -en "\n${YELLOW}Введите номер: ${NC}"; read -r z; case "$z" in 1) replace_server "mirror.sjtu.edu.cn/openwrt" ;; 2) replace_server "mirror.berlin.freifunk.net/downloads.openwrt.org" ;;
+3) replace_server "mirror.tiguinet.net/openwrt" ;; 4) replace_server "ftp.snt.utwente.nl/pub/software/openwrt" ;; 5) replace_server "downloads.openwrt.org" ;; *) break ;; esac; done; }
 # ==========================================
 # Главное меню
 # ==========================================
