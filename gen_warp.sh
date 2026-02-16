@@ -4,7 +4,7 @@ echo "Проверяем зависимости..."
 
 for pkg in wireguard-tools curl jq coreutils-base64; do
     if ! opkg list-installed | grep -q "^$pkg "; then
-        echo "Устанавливаю $pkg..."
+        echo "Устанавливаем $pkg..."
         opkg update
         opkg install $pkg || {
             echo "Ошибка установки $pkg"
@@ -63,6 +63,15 @@ PrivateKey = ${priv}
 Address = ${client_ipv4}, ${client_ipv6}
 DNS = 1.1.1.1, 2606:4700:4700::1111
 MTU = 1280
+S1 = 0
+S2 = 0
+Jc = 4
+Jmin = 40
+Jmax = 70
+H1 = 1
+H2 = 2
+H3 = 3
+H4 = 4
 
 [Peer]
 PublicKey = ${peer_pub}
@@ -80,8 +89,3 @@ echo
 
 echo "$conf" > /root/WARP.conf
 echo "Файл сохранён: /root/WARP.conf"
-
-conf_base64=$(echo -n "$conf" | base64 | tr -d '\n')
-echo
-echo "Base64 (если нужно куда-то вставить):"
-echo "$conf_base64"
