@@ -77,7 +77,7 @@ I1 = <b 0x5245474953544552207369703a676f6f676c652e636f6d205349502f322e300d0a5669
 [Peer]
 PublicKey = ${peer_pub}
 AllowedIPs = 0.0.0.0/0, ::/0
-Endpoint = 162.159.192.1:500
+Endpoint = engage.cloudflareclient.com:4500
 PersistentKeepalive = 25
 EOF
 )
