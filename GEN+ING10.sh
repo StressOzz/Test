@@ -72,7 +72,7 @@ echo -e "${GREEN}Интерфейс ${NC}$IF_NAME${GREEN} создан и акт
 
 sleep 8
 
-echo "${GREEN}Проверяем зависимости..."
+echo -e "${GREEN}Проверяем зависимости..."
 
 for pkg in wireguard-tools curl jq coreutils-base64; do
     if ! opkg list-installed | grep -q "^$pkg "; then
@@ -444,3 +444,7 @@ echo -e "AWG ${GREEN}интегрирован в ${NC}Podkop${GREEN}.${NC}"
 echo -e "${CYAN}Запускаем ${NC}Podkop${NC}"
 podkop restart >/dev/null 2>&1
 echo -e "Podkop ${GREEN}готов к работе!${NC}\n"
+
+/etc/init.d/network restart
+sleep 8
+echo "Готово."
