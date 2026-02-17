@@ -442,12 +442,5 @@ EOF
 
 echo -e "AWG ${GREEN}интегрирован в ${NC}Podkop${GREEN}.${NC}"
 echo -e "${CYAN}Запускаем ${NC}Podkop${NC}"
-podkop enable >/dev/null 2>&1
-echo -e "${CYAN}Применяем конфигурацию${NC}"
-podkop reload >/dev/null 2>&1
-podkop restart >/dev/null 2>&1
-echo -e "${CYAN}Обновляем списки${NC}"
-podkop list_update >/dev/null 2>&1
-echo -e "${CYAN}Перезапускаем сервис${NC}"
 podkop restart >/dev/null 2>&1
 echo -e "Podkop ${GREEN}готов к работе!${NC}\n"
