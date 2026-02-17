@@ -16,7 +16,7 @@ IFNAME="AWG"
 
 echo -e "\n${MAGENTA}Устанавливаем AWG + интерфейс${NC}"
 echo -e "${GREEN}Обновляем список пакетов${NC}"
-opkg update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; read -p "Нажмите Enter..." dummy; return; }
+opkg update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; exit; }
 PKGARCH=$(opkg print-architecture | awk 'BEGIN {max=0} {if ($3 > max) {max = $3; arch = $2}} END {print arch}')
 TARGET=$(ubus call system board | jsonfilter -e '@.release.target' | cut -d '/' -f1)
 SUBTARGET=$(ubus call system board | jsonfilter -e '@.release.target' | cut -d '/' -f2)
@@ -33,11 +33,11 @@ local url="${BASE_URL}v${VERSION}/${filename}"
         echo -e "${CYAN}Устанавливаем ${NC}$pkgname"
         if ! opkg install "$AWG_DIR/$filename" >/dev/null 2>&1 ; then
             echo -e "\n${RED}Ошибка установки $pkgname!${NC}\n"
-            read -p "Нажмите Enter..." dummy; return
+           exit
         fi
     else
         echo -e "\n${RED}Ошибка! Не удалось скачать $filename${NC}\n"
-        read -p "Нажмите Enter..." dummy; return
+        exit
     fi
 }
 install_pkg "kmod-amneziawg"
@@ -313,16 +313,12 @@ echo -e "\n${MAGENTA}Установка Podkop${NC}"
 	
 [ "$AVAILABLE_SPACE" -lt "$REQUIRED_SPACE" ] && { 
     msg "Недостаточно свободного места"
-    echo ""
-    read -p "Нажмите Enter..." dummy
-    return
+    exit
 }
 
 nslookup google.com >/dev/null 2>&1 || { 
     msg "DNS не работает"
-    echo ""
-    read -p "Нажмите Enter..." dummy
-    return
+	exit
 }
 
 
@@ -348,9 +344,7 @@ nslookup google.com >/dev/null 2>&1 || {
 
 pkg_list_update || { 
     msg "Не удалось обновить список пакетов"
-    echo ""
-    read -p "Нажмите Enter..." dummy
-    return
+	exit
 }
 
 
@@ -376,9 +370,7 @@ pkg_list_update || {
 
 [ $download_success -eq 0 ] && { 
     msg "Нет успешно скачанных пакетов"
-    echo ""
-    read -p "Нажмите Enter..." dummy
-    return
+	exit
 }
 
     # Установка пакетов
@@ -404,7 +396,7 @@ pkg_list_update || {
     rm -rf "$DOWNLOAD_DIR"
 
     echo -e "Podkop ${GREEN}успешно установлен!${NC}\n"
-    read -p "Нажмите Enter..." dummy
+    sleep 5
 
 
 
