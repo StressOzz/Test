@@ -195,6 +195,7 @@ config settings 'settings'
 	option dont_touch_dhcp '0'
 	option config_path '/etc/sing-box/config.json'
 	option cache_path '/tmp/sing-box/cache.db'
+	option log_level 'warn'
 	option exclude_ntp '0'
 	option shutdown_correctly '0'
 
@@ -205,8 +206,7 @@ config section 'main'
 	option user_domain_list_type 'disabled'
 	option user_subnet_list_type 'disabled'
 	option mixed_proxy_enabled '0'
-	list community_lists 'russia_inside'
-	list community_lists 'hodca'
+	list community_lists 'telegram'
 EOF
 
 echo -e "AWG интегрирован в Podkop."
