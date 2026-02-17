@@ -260,13 +260,6 @@ echo "Готово."
     return
 }
 
-nslookup google.com >/dev/null 2>&1 || { 
-    msg "DNS не работает"
-    echo ""
-    read -p "Нажмите Enter..." dummy
-    return
-}
-
 
     if pkg_is_installed https-dns-proxy; then
         msg "Обнаружен конфликтный пакет" "https-dns-proxy. Удаляем..."
