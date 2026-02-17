@@ -186,7 +186,7 @@ uci commit network
 echo
 echo "Интерфейс создан. Перезапускаем сеть..."
 /etc/init.d/network restart
-
+sleep 8
 echo "Готово."
 
 
