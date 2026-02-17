@@ -69,10 +69,10 @@ echo -e "${CYAN}Перезапускаем сеть${NC}"
 /etc/init.d/firewall restart
 /etc/init.d/uhttpd restart
 echo -e "${GREEN}Интерфейс ${NC}$IF_NAME${GREEN} создан и активирован!${NC}"
-echo -e "${YELLOW}Вставьте рабочий конфиг в Interfaces (Интерфейс) AWG!${NC}\n"
-read -p "Нажмите Enter..." dummy
 
-echo "Проверяем зависимости..."
+sleep 8
+
+echo "${GREEN}Проверяем зависимости..."
 
 for pkg in wireguard-tools curl jq coreutils-base64; do
     if ! opkg list-installed | grep -q "^$pkg "; then
