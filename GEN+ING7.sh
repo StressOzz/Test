@@ -14,6 +14,64 @@ DGRAY="\033[38;5;244m"
 CONF="/root/WARP.conf"
 IFNAME="AWG"
 
+echo -e "\n${MAGENTA}Устанавливаем AWG + интерфейс${NC}"
+echo -e "${GREEN}Обновляем список пакетов${NC}"
+opkg update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; read -p "Нажмите Enter..." dummy; return; }
+PKGARCH=$(opkg print-architecture | awk 'BEGIN {max=0} {if ($3 > max) {max = $3; arch = $2}} END {print arch}')
+TARGET=$(ubus call system board | jsonfilter -e '@.release.target' | cut -d '/' -f1)
+SUBTARGET=$(ubus call system board | jsonfilter -e '@.release.target' | cut -d '/' -f2)
+VERSION=$(ubus call system board | jsonfilter -e '@.release.version')
+PKGPOSTFIX="_v${VERSION}_${PKGARCH}_${TARGET}_${SUBTARGET}.ipk"
+BASE_URL="https://github.com/FreeRKN/awg-openwrt/releases/download/"
+AWG_DIR="/tmp/amneziawg"
+mkdir -p "$AWG_DIR"
+install_pkg() {
+local pkgname=$1
+local filename="${pkgname}${PKGPOSTFIX}"
+local url="${BASE_URL}v${VERSION}/${filename}"
+    if wget -O "$AWG_DIR/$filename" "$url" >/dev/null 2>&1 ; then
+        echo -e "${CYAN}Устанавливаем ${NC}$pkgname"
+        if ! opkg install "$AWG_DIR/$filename" >/dev/null 2>&1 ; then
+            echo -e "\n${RED}Ошибка установки $pkgname!${NC}\n"
+            read -p "Нажмите Enter..." dummy; return
+        fi
+    else
+        echo -e "\n${RED}Ошибка! Не удалось скачать $filename${NC}\n"
+        read -p "Нажмите Enter..." dummy; return
+    fi
+}
+install_pkg "kmod-amneziawg"
+install_pkg "amneziawg-tools"
+install_pkg "luci-proto-amneziawg"
+install_pkg "luci-i18n-amneziawg-ru" >/dev/null 2>&1 || echo -e "${RED}Внимание: русская локализация не установлена (не критично)${NC}"
+rm -rf "$AWG_DIR"
+echo -e "${YELLOW}Перезапускаем сеть! Подождите...${NC}"
+/etc/init.d/network restart >/dev/null 2>&1
+echo -e "AmneziaWG ${GREEN}установлен!${NC}"
+
+echo -e "${MAGENTA}Устанавливаем интерфейс AWG${NC}"
+IF_NAME="AWG"
+PROTO="amneziawg"
+DEV_NAME="amneziawg0"
+if grep -q "config interface '$IF_NAME'" /etc/config/network; then
+echo -e "${RED}Интерфейс ${NC}$IF_NAME${RED} уже существует${NC}"
+else
+echo -e "${CYAN}Добавляем интерфейс ${NC}$IF_NAME"
+uci batch <<EOF
+set network.$IF_NAME=interface
+set network.$IF_NAME.proto=$PROTO
+set network.$IF_NAME.device=$DEV_NAME
+commit network
+EOF
+fi
+echo -e "${CYAN}Перезапускаем сеть${NC}"
+/etc/init.d/network restart
+/etc/init.d/firewall restart
+/etc/init.d/uhttpd restart
+echo -e "${GREEN}Интерфейс ${NC}$IF_NAME${GREEN} создан и активирован!${NC}"
+echo -e "${YELLOW}Вставьте рабочий конфиг в Interfaces (Интерфейс) AWG!${NC}\n"
+read -p "Нажмите Enter..." dummy
+
 echo "Проверяем зависимости..."
 
 for pkg in wireguard-tools curl jq coreutils-base64; do
@@ -191,7 +249,7 @@ echo "Готово."
 
 
 
- echo -e "\n${MAGENTA}Установка Podkop${NC}"
+echo -e "\n${MAGENTA}Установка Podkop${NC}"
 
     REPO="https://api.github.com/repos/itdoginfo/podkop/releases/latest"
     DOWNLOAD_DIR="/tmp/podkop"
@@ -255,6 +313,13 @@ echo "Готово."
 	
 [ "$AVAILABLE_SPACE" -lt "$REQUIRED_SPACE" ] && { 
     msg "Недостаточно свободного места"
+    echo ""
+    read -p "Нажмите Enter..." dummy
+    return
+}
+
+nslookup google.com >/dev/null 2>&1 || { 
+    msg "DNS не работает"
     echo ""
     read -p "Нажмите Enter..." dummy
     return
@@ -340,7 +405,6 @@ pkg_list_update || {
 
     echo -e "Podkop ${GREEN}успешно установлен!${NC}\n"
     read -p "Нажмите Enter..." dummy
-}
 
 
 
@@ -376,14 +440,14 @@ config section 'main'
 	list community_lists 'telegram'
 EOF
 
-echo -e "AWG интегрирован в Podkop."
-echo -e "Запускаем Podkop"
+echo -e "AWG ${GREEN}интегрирован в ${NC}Podkop${GREEN}.${NC}"
+echo -e "${CYAN}Запускаем ${NC}Podkop${NC}"
 podkop enable >/dev/null 2>&1
-echo -e "Применяем конфигурацию"
+echo -e "${CYAN}Применяем конфигурацию${NC}"
 podkop reload >/dev/null 2>&1
 podkop restart >/dev/null 2>&1
-echo -e "Обновляем списки"
+echo -e "${CYAN}Обновляем списки${NC}"
 podkop list_update >/dev/null 2>&1
-echo -e "Перезапускаем сервис"
+echo -e "${CYAN}Перезапускаем сервис${NC}"
 podkop restart >/dev/null 2>&1
-echo -e "Podkop готов к работе!\n"
+echo -e "Podkop ${GREEN}готов к работе!${NC}\n"
