@@ -47,6 +47,7 @@ install_pkg "luci-i18n-amneziawg-ru" >/dev/null 2>&1 || echo -e "${RED}Вним�
 rm -rf "$AWG_DIR"
 echo -e "${YELLOW}Перезапускаем сеть! Подождите...${NC}"
 /etc/init.d/network restart >/dev/null 2>&1
+sleep 10
 echo -e "AmneziaWG ${GREEN}установлен!${NC}"
 
 echo -e "${MAGENTA}Устанавливаем интерфейс AWG${NC}"
@@ -70,9 +71,9 @@ echo -e "${CYAN}Перезапускаем сеть${NC}"
 /etc/init.d/uhttpd restart
 echo -e "${GREEN}Интерфейс ${NC}$IF_NAME${GREEN} создан и активирован!${NC}"
 
-sleep 8
+sleep 10
 
-echo -e "${GREEN}Проверяем зависимости..."
+echo -e "Проверяем зависимости..."
 
 for pkg in wireguard-tools curl jq coreutils-base64; do
     if ! opkg list-installed | grep -q "^$pkg "; then
@@ -244,7 +245,7 @@ uci commit network
 echo
 echo "Интерфейс создан. Перезапускаем сеть..."
 /etc/init.d/network restart
-sleep 8
+sleep 10
 echo "Готово."
 
 
@@ -396,7 +397,7 @@ pkg_list_update || {
     rm -rf "$DOWNLOAD_DIR"
 
     echo -e "Podkop ${GREEN}успешно установлен!${NC}\n"
-    sleep 5
+    sleep 10
 
 
 
@@ -438,5 +439,5 @@ podkop restart >/dev/null 2>&1
 echo -e "Podkop ${GREEN}готов к работе!${NC}\n"
 
 /etc/init.d/network restart
-sleep 8
+sleep 10
 echo "Готово."
