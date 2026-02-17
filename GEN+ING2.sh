@@ -176,3 +176,47 @@ echo "Интерфейс создан. Перезапускаем сеть..."
 /etc/init.d/network restart
 
 echo "Готово."
+
+echo -e "Меняем конфигурацию в Podkop"
+    # Создаём / меняем /etc/config/podkop
+    cat <<EOF >/etc/config/podkop
+config settings 'settings'
+	option dns_type 'udp'
+	option dns_server '8.8.8.8'
+	option bootstrap_dns_server '77.88.8.8'
+	option dns_rewrite_ttl '60'
+	list source_network_interfaces 'br-lan'
+	option enable_output_network_interface '0'
+	option enable_badwan_interface_monitoring '0'
+	option enable_yacd '0'
+	option disable_quic '0'
+	option update_interval '1d'
+	option download_lists_via_proxy '0'
+	option dont_touch_dhcp '0'
+	option config_path '/etc/sing-box/config.json'
+	option cache_path '/tmp/sing-box/cache.db'
+	option exclude_ntp '0'
+	option shutdown_correctly '0'
+
+config section 'main'
+	option connection_type 'vpn'
+	option interface 'AWG'
+	option domain_resolver_enabled '0'
+	option user_domain_list_type 'disabled'
+	option user_subnet_list_type 'disabled'
+	option mixed_proxy_enabled '0'
+	list community_lists 'russia_inside'
+	list community_lists 'hodca'
+EOF
+
+echo -e "AWG интегрирован в Podkop."
+echo -e "Запускаем Podkop"
+podkop enable >/dev/null 2>&1
+echo -e "Применяем конфигурацию"
+podkop reload >/dev/null 2>&1
+podkop restart >/dev/null 2>&1
+echo -e "Обновляем списки"
+podkop list_update >/dev/null 2>&1
+echo -e "Перезапускаем сервис"
+podkop restart >/dev/null 2>&1
+echo -e "Podkop готов к работе!\n"
