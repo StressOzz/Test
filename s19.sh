@@ -274,7 +274,6 @@ menu_game=$( [ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*88,1024-2407,240
 if [ -f "$CONF" ]; then current="$ver$( [ -n "$ver" ] && [ -n "$yv_ver" ] && echo " / " )$yv_ver"; DV=$(grep -o -E '^#[[:space:]]*Dv[0-9][0-9]*' "$CONF" | sed 's/^#[[:space:]]*/\/ /' | head -n1)
 if [ -n "$current" ]; then echo -e "${YELLOW}Используется стратегия:${NC} ${CYAN}$current${DV:+ $DV}${RKN_STATUS:+ $RKN_STATUS}${NC}"; elif [ -n "$RKN_STATUS" ]; then  echo -e "${YELLOW}Используется стратегия:${NC}${CYAN} РКН${DV:+ $DV}${NC}"; fi; fi
 [ -f "$CONF" ] && grep -q "option NFQWS_PORTS_UDP.*88,1024-2407,2409-4499,4501-19293,19345-49999,50101-65535" "$CONF" && grep -q -- "--filter-udp=88,1024-2407,2409-4499,4501-19293,19345-49999,50101-65535" "$CONF" && echo -e "${YELLOW}Стратегия для игр:${NC} ${GREEN}включена${NC}"
-if hosts_enabled; then echo -e "${YELLOW}Домены в hosts: ${GREEN}добавлены${NC}\n"; else echo -e "${YELLOW}Домены в hosts: ${RED}отсутствуют${NC}\n"; fi
 echo -e "${CYAN}1) ${GREEN}Выбрать и установить стратегию ${NC}v1-v9\n${CYAN}2) ${GREEN}Выбрать и установить стратегию от ${NC}Flowseal\n${CYAN}3) ${GREEN}Выбрать и установить стратегию для ${NC}YouTube\n${CYAN}4) ${GREEN}Меню тестирования стратегий ${NC}"
 echo -e "${CYAN}5) ${NC}$RKN_TEXT_MENU${NC}\n${CYAN}6) ${GREEN}$menu_game\n${CYAN}7) ${GREEN}Обновить список исключений${NC}"
 echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read choiceST; case "$choiceST" in 1) strategy_CHOUSE;; 2) flowseal_menu;; 3) choose_strategy_manual;; 4) TEST_menu;;
