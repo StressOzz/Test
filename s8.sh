@@ -128,14 +128,63 @@ sed -i "/DISABLE_CUSTOM/s/'1'/'0'/" /etc/config/zapret; ZAPRET_RESTART; [ "$NO_P
 # ==========================================
 # FIX GAME
 # ==========================================
-fix_GAME() { local NO_PAUSE=$1; [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }
-[ "$NO_PAUSE" != "1" ] && echo; echo -e "${MAGENTA}Настраиваем стратегию для игр${NC}"; if grep -q "option NFQWS_PORTS_UDP.*88,1024-2407,2409-4499,4501-19293,19345-49999,50101-65535" "$CONF" && grep -q -- "--filter-udp=88,1024-2407,2409-4499,4501-19293,19345-49999,50101-65535" "$CONF"; then echo -e "${CYAN}Удаляем настройки для игр${NC}"
-sed -i ':a;N;$!ba;s|--new\n--filter-udp=88,1024-2407,2409-4499,4501-19293,19345-49999,50101-65535\n--dpi-desync=fake\n--dpi-desync-cutoff=d2\n--dpi-desync-any-protocol=1\n--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/quic_initial_www_google_com\.bin\n*||g' "$CONF"
-sed -i "s/,88,1024-2407,2409-4499,4501-19293,19345-49999,50101-65535//" "$CONF"; ZAPRET_RESTART; echo -e "${GREEN}Игровая стратегия удалена!${NC}\n"; PAUSE; return; fi
-if ! grep -q "option NFQWS_PORTS_UDP.*88,1024-2407,2409-4499,4501-19293,19345-49999,50101-65535" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'$/,88,1024-2407,2409-4499,4501-19293,19345-49999,50101-65535'/" "$CONF"; fi; if ! grep -q -- "--filter-udp=88,1024-2407,2409-4499,4501-19293,19345-49999,50101-65535" "$CONF"; then last_line=$(grep -n "^'$" "$CONF" | tail -n1 | cut -d: -f1)
-if [ -n "$last_line" ]; then sed -i "${last_line},\$d" "$CONF"; fi; printf "%s\n" "--new" "--filter-udp=88,1024-2407,2409-4499,4501-19293,19345-49999,50101-65535" "--dpi-desync=fake" "--dpi-desync-cutoff=d2" "--dpi-desync-any-protocol=1" "--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/quic_initial_www_google_com.bin" "'" >> "$CONF"; fi
-echo -e "${CYAN}Включаем настройки для игр${NC}"; ZAPRET_RESTART; echo -e "${GREEN}Игровая стратегия включена!${NC}\n";[ "$NO_PAUSE" != "1" ] && PAUSE; }
-# ==========================================
+fix_GAME() {
+    local NO_PAUSE=$1
+
+    # --- стратегия в одну строку ---
+    GAME_STRATEGY="--new\n--filter-udp=88,1024-2407,2409-4499,4501-19293,19345-49999,50101-65535\n--dpi-desync=fake\n--dpi-desync-cutoff=d2\n--dpi-desync-any-protocol=1\n--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/quic_initial_www_google_com.bin\n--new\n--filter-tcp=25565\n--dpi-desync-any-protocol=1\n--dpi-desync-cutoff=n5\n--dpi-desync=multisplit\n--dpi-desync-split-seqovl=582\n--dpi-desync-split-pos=1\n--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/4pda.bin"
+
+    [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }
+
+    [ "$NO_PAUSE" != "1" ] && echo
+    echo -e "${MAGENTA}Настраиваем стратегию для игр${NC}"
+
+    # --- удаляем стратегию, если уже есть ---
+    if grep -q "option NFQWS_PORTS_UDP.*88,1024-2407,2409-4499,4501-19293,19345-49999,50101-65535" "$CONF" && \
+       grep -q -- "--filter-udp=88,1024-2407,2409-4499,4501-19293,19345-49999,50101-65535" "$CONF"; then
+
+        echo -e "${CYAN}Удаляем настройки для игр${NC}"
+
+        tmp_strategy="/tmp/game_strategy.$$"
+
+        # превращаем переменную в реальный многострочный блок
+        printf "%b\n" "$GAME_STRATEGY" > "$tmp_strategy"
+
+        # экранируем спецсимволы для sed
+        escaped_strategy=$(sed 's/[\/&]/\\&/g' "$tmp_strategy")
+
+        # склеиваем файл и удаляем точное совпадение блока
+        sed -i ":a;N;\$!ba;s|$escaped_strategy\n||" "$CONF"
+
+        rm -f "$tmp_strategy"
+
+        sed -i "s/,88,1024-2407,2409-4499,4501-19293,19345-49999,50101-65535//" "$CONF"
+
+        ZAPRET_RESTART
+        echo -e "${GREEN}Игровая стратегия удалена!${NC}\n"
+        PAUSE
+        return
+    fi
+
+    # --- добавляем UDP-порты в конфиг, если их нет ---
+    if ! grep -q "option NFQWS_PORTS_UDP.*88,1024-2407,2409-4499,4501-19293,19345-49999,50101-65535" "$CONF"; then
+        sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'$/,88,1024-2407,2409-4499,4501-19293,19345-49999,50101-65535'/" "$CONF"
+    fi
+
+    # --- добавляем стратегию, если её нет ---
+    if ! grep -q -- "--filter-udp=88,1024-2407,2409-4499,4501-19293,19345-49999,50101-65535" "$CONF"; then
+        last_line=$(grep -n "^'$" "$CONF" | tail -n1 | cut -d: -f1)
+        [ -n "$last_line" ] && sed -i "${last_line},\$d" "$CONF"
+
+        printf "%b\n" "$GAME_STRATEGY" "'" >> "$CONF"
+    fi
+
+    echo -e "${CYAN}Включаем настройки для игр${NC}"
+    ZAPRET_RESTART
+    echo -e "${GREEN}Игровая стратегия включена!${NC}\n"
+
+    [ "$NO_PAUSE" != "1" ] && PAUSE
+}# ==========================================
 # Zapret под ключ
 # ==========================================
 zapret_key() { clear; echo -e "${MAGENTA}Удаление, установка и настройка Zapret${NC}\n"; get_versions; uninstall_zapret "1"; install_Zapret "1"
@@ -367,7 +416,7 @@ FO=$(uci get firewall.@defaults[0].flow_offloading 2>/dev/null); FOHW=$(uci get 
 if [ "$FO" = 1 ] || [ "$FOHW" = 1 ] || [ "$FIX" = 1 ]; then if [ "$FIX" = 1 ]; then echo -e "${CYAN}0) ${GREEN}Отключить${NC} FIX ${GREEN}для${NC} Flow Offloading"; else echo -e "${CYAN}0) ${GREEN}Применить${NC} FIX ${GREEN}для${NC} Flow Offloading"; fi; fi
 echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read -r choiceMN; case "$choiceMN" in 1) Sys_Info;; 2) toggle_web;; 3) toggle_quic;; 4) menu_MIR;;
 5) [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; continue; }; stop_zapret "1"; grep -q 'echo "Start Zapret"' /opt/zapret/blockcheck.sh || sed -i $'/^[[:space:]]*read A/a\\\t\techo "Start Zapret"; /etc/init.d/zapret restart >/dev/null 2>&1' /opt/zapret/blockcheck.sh
-echo -e "\n${GREEN}Ctrl+C - oстановить blockcheck${NC}\n"; chmod +x /opt/zapret/blockcheck.sh; /opt/zapret/blockcheck.sh; start_zapret;;
+echo -e "${GREEN}Ctrl+C - oстановить blockcheck${NC}\n"; chmod +x /opt/zapret/blockcheck.sh; /opt/zapret/blockcheck.sh; start_zapret;;
 0) FO=$(uci get firewall.@defaults[0].flow_offloading 2>/dev/null); FOHW=$(uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null); if grep -q 'ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc; then echo -e "\n${MAGENTA}Отключаем FIX для Flow Offloading${NC}"
 sed -i 's/meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;/meta l4proto { tcp, udp } flow offload @ft;/' /usr/share/firewall4/templates/ruleset.uc; fw4 restart >/dev/null 2>&1; echo -e "FIX ${GREEN}отключён!${NC}\n"; PAUSE; elif [ "$FO" = 1 ] || [ "$FOHW" = 1 ]; then echo -e "\n${MAGENTA}Применяем FIX для Flow Offloading${NC}"
 sed -i 's/meta l4proto { tcp, udp } flow offload @ft;/meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;/' /usr/share/firewall4/templates/ruleset.uc; fw4 restart >/dev/null 2>&1; echo -e "FIX ${GREEN}успешно применён!${NC}\n"; PAUSE; fi;; *) echo; return;; esac; done; }
