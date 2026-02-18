@@ -7,10 +7,10 @@ TEST_HOST="https://rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com"; LAN_IP=$(uci get n
 GREEN="\033[1;32m"; RED="\033[1;31m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
 CONF="/etc/config/zapret"; CUSTOM_DIR="/opt/zapret/init.d/openwrt/custom.d/"; HOSTLIST_FILE="/opt/zapret/ipset/zapret-hosts-user.txt"
 STR_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ListStrYou"
-TMP_SF="/tmp/zapret_temp"; HOSTS_FILE="/etc/hosts"; TMP_LIST="$TMP_SF/zapret_yt_list.txt"; 
+TMP_SF="/tmp/zapret_temp"; HOSTS_FILE="/etc/hosts"; TMP_LIST="$TMP_SF/zapret_yt_list.txt"
 SAVED_STR="$TMP_SF/StrYou.txt"; HOSTS_USER="$TMP_SF/hosts-user.txt"; OUT_DPI="$TMP_SF/dpi_urls.txt"; OUT="$TMP_SF/str_flow.txt"; ZIP="$TMP_SF/repo.zip"
 BACKUP_FILE="/opt/zapret/tmp/hosts_temp.txt"; STR_FILE="$TMP_SF/str_test.txt"; TEMP_FILE="$TMP_SF/str_temp.txt"
-RESULTS="/opt/zapret/tmp/zapret_bench.txt"; BACK="$TMP_SF/zapret_back.txt"; TMP_RES="/tmp/zapret_results_all.$$"
+RESULTS="/opt/zapret/tmp/zapret_bench.txt"; BACK="$TMP_SF/zapret_back.txt"; TMP_RES="$TMP_SF/zapret_results_all.$$"
 FINAL_STR="$TMP_SF/StrFINAL.txt"; NEW_STR="$TMP_SF/StrNEW.txt"; OLD_STR="$TMP_SF/StrOLD.txt"
 RES1="/opt/zapret/tmp/results_flowseal.txt"; RES2="/opt/zapret/tmp/results_versions.txt"
 Fin_IP_Dis="104\.25\.158\.178 finland[0-9]\{5\}\.discord\.media"; PARALLEL=8
@@ -21,12 +21,11 @@ EXCLUDE_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/hea
 INSTAGRAM="#Instagram&Facebook\n57.144.222.34 instagram.com www.instagram.com\n157.240.9.174 instagram.com www.instagram.com\n157.240.245.174 instagram.com www.instagram.com b.i.instagram.com z-p42-chat-e2ee-ig.facebook.com help.instagram.com
 157.240.205.174 instagram.com www.instagram.com\n57.144.244.192 static.cdninstagram.com graph.instagram.com i.instagram.com api.instagram.com edge-chat.instagram.com\n31.13.66.63 scontent.cdninstagram.com scontent-hel3-1.cdninstagram.com
 57.144.244.1 facebook.com www.facebook.com fb.com fbsbx.com\n57.144.244.128 static.xx.fbcdn.net scontent.xx.fbcdn.net\n31.13.67.20 scontent-hel3-1.xx.fbcdn.net"
-TWCH="#Twitch\n45.155.204.190 usher.ttvnw.net gql.twitch.tv"
 TGWeb="#TelegramWeb\n149.154.167.220 api.telegram.org flora.web.telegram.org kws1-1.web.telegram.org kws1.web.telegram.org kws2-1.web.telegram.org kws2.web.telegram.org kws4-1.web.telegram.org
 149.154.167.220 kws4.web.telegram.org kws5-1.web.telegram.org kws5.web.telegram.org pluto-1.web.telegram.org pluto.web.telegram.org td.telegram.org telegram.dog
 149.154.167.220 telegram.me telegram.org telegram.space telesco.pe venus.web.telegram.org web.telegram.org zws1-1.web.telegram.org zws1.web.telegram.org\n
 149.154.167.220 tg.dev t.me zws2-1.web.telegram.org zws2.web.telegram.org zws4-1.web.telegram.org zws5-1.web.telegram.org zws5.web.telegram.org"
-PDA="#4pda\n185.87.51.182 4pda.to www.4pda.to"; NTC="#ntc.party\n130.255.77.28 ntc.party";
+PDA="#4pda\n185.87.51.182 4pda.to www.4pda.to"; NTC="#ntc.party\n130.255.77.28 ntc.party"; TWCH="#Twitch\n45.155.204.190 usher.ttvnw.net gql.twitch.tv"
 RUTOR="#rutor\n173.245.58.219 rutor.info d.rutor.info"; LIBRUSEC="#lib.rus.ec\n185.39.18.98 lib.rus.ec www.lib.rus.ec"
 AI="#Gemini\n45.155.204.190 gemini.google.com\n#Grok\n45.155.204.190 grok.com accounts.x.ai assets.grok.com
 #OpenAI\n45.155.204.190 chatgpt.com ab.chatgpt.com auth.openai.com auth0.openai.com platform.openai.com cdn.oaistatic.com
@@ -381,13 +380,12 @@ status_block() { while IFS= read -r line; do [ -z "$line" ] && continue; grep -F
 add_block() { while IFS= read -r line; do [ -z "$line" ] && continue; grep -Fxq "$line" "$HOSTS_FILE" || echo "$line" >> "$HOSTS_FILE"; done < <(printf '%b\n' "$1"); }
 remove_block() { while IFS= read -r line; do [ -z "$line" ] && continue; sed -i "\|^$line$|d" "$HOSTS_FILE"; done < <(printf '%b\n' "$1"); }
 toggle_block() { if status_block "$1"; then remove_block "$1"; echo -e "\n${CYAN}Удаляем и применяем${NC}"; else add_block "$1"; echo -e "\n${CYAN}Добавляем и применяем${NC}"; fi; /etc/init.d/dnsmasq restart >/dev/null 2>&1; echo -e "${GREEN}Готово!${NC}\n"; PAUSE; }
-toggle_all() { if status_block "$ALL_BLOCKS"; then remove_block "$ALL_BLOCKS"; echo -e "\n${CYAN}Удаляем и применяем${NC}"; else add_block "$ALL_BLOCKS"; echo -e "\n${CYAN}Добавляем и применяем${NC}"; fi; /etc/init.d/dnsmasq restart >/dev/null 2>&1; echo -e "${GREEN}Готово!${NC}\n"; PAUSE; }
 get_state() { status_block "$1" && echo "Удалить " || echo "Добавить"; }
 menu_hosts() { while true; do clear; S_ALL=$(status_block "$ALL_BLOCKS" && echo "${GREEN}Удалить все домены${NC}" || echo "${GREEN}Добавить все домены${NC}")
 echo -e "${MAGENTA}Меню управления доменами в hosts${NC}\n\n${CYAN}1) ${GREEN}$(get_state "$PDA")${NC} 4pda.to\n${CYAN}2) ${GREEN}$(get_state "$RUTOR")${NC} rutor.info\n${CYAN}3) ${GREEN}$(get_state "$NTC")${NC} ntc.party"
-echo -e "${CYAN}4) ${GREEN}$(get_state "$INSTAGRAM")${NC} Instagram & Facebook\n${CYAN}5) ${GREEN}$(get_state "$LIBRUSEC")${NC} lib.rus.ec\n${CYAN}6) ${GREEN}$(get_state "$AI")${NC} AI сервисы\n${CYAN}7) ${GREEN}$(get_state "$TWCH")${NC} Twitch\n${CYAN}8) ${GREEN}$(get_state "$TGWeb")${NC} Telegram Web\n${CYAN}9) $S_ALL\n${CYAN}0) ${GREEN}Восстановить ${NC}hosts"
+echo -e "${CYAN}4) ${GREEN}$(get_state "$INSTAGRAM")${NC} Instagram & Facebook\n${CYAN}5) ${GREEN}$(get_state "$LIBRUSEC")${NC} lib.rus.ec\n${CYAN}6) ${GREEN}$(get_state "$AI")${NC} AI сервисы\n${CYAN}7) ${GREEN}$(get_state "$TWCH")${NC} Twitch\n${CYAN}8) ${GREEN}$(get_state "$TGWeb")${NC} Telegram Web\n${CYAN}0) ${GREEN}Восстановить ${NC}hosts"
 echo -ne "${CYAN}Enter) ${GREEN}Выход в меню стратегий${NC}\n\n${YELLOW}Выберите пункт:${NC} ";read -r c; case "$c" in
-1) toggle_block "$PDA";; 2) toggle_block "$RUTOR";; 3) toggle_block "$NTC";; 4) toggle_block "$INSTAGRAM";; 5) toggle_block "$LIBRUSEC";; 6) toggle_block "$AI";; 7) toggle_block "$TWCH";; 8) toggle_block "$TGWeb";; 9) toggle_all;; 0) hosts_reset;; *) break;; esac; done; }
+1) toggle_block "$PDA";; 2) toggle_block "$RUTOR";; 3) toggle_block "$NTC";; 4) toggle_block "$INSTAGRAM";; 5) toggle_block "$LIBRUSEC";; 6) toggle_block "$AI";; 7) toggle_block "$TWCH";; 8) toggle_block "$TGWeb";; 0) hosts_reset;; *) break;; esac; done; }
 # ==========================================
 # Тест стратегий
 # ==========================================
