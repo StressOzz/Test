@@ -128,6 +128,7 @@ sed -i "/DISABLE_CUSTOM/s/'1'/'0'/" /etc/config/zapret; ZAPRET_RESTART; [ "$NO_P
 # ==========================================
 # FIX GAME
 # ==========================================
+
 fix_GAME() {
     local NO_PAUSE=$1
 
@@ -145,19 +146,12 @@ fix_GAME() {
 
         echo -e "${CYAN}Удаляем настройки для игр${NC}"
 
-        tmp_strategy="/tmp/game_strategy.$$"
+        # удаляем строки стратегии построчно
+        while IFS= read -r line; do
+            sed -i "\|$line|d" "$CONF"
+        done <<< "$(printf "%b\n" "$GAME_STRATEGY")"
 
-        # превращаем переменную в реальный многострочный блок
-        printf "%b\n" "$GAME_STRATEGY" > "$tmp_strategy"
-
-        # экранируем спецсимволы для sed
-        escaped_strategy=$(sed 's/[\/&]/\\&/g' "$tmp_strategy")
-
-        # склеиваем файл и удаляем точное совпадение блока
-        sed -i ":a;N;\$!ba;s|$escaped_strategy\n||" "$CONF"
-
-        rm -f "$tmp_strategy"
-
+        # удаляем UDP из опций
         sed -i "s/,88,1024-2407,2409-4499,4501-19293,19345-49999,50101-65535//" "$CONF"
 
         ZAPRET_RESTART
@@ -185,6 +179,8 @@ fix_GAME() {
 
     [ "$NO_PAUSE" != "1" ] && PAUSE
 }
+
+
 # ==========================================
 # Zapret под ключ
 # ==========================================
