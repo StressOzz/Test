@@ -144,20 +144,20 @@ fix_GAME() {
     if grep -q "option NFQWS_PORTS_UDP.*88,1024-2407,2409-4499,4501-19293,19345-49999,50101-65535" "$CONF" && \
        grep -q -- "--filter-udp=88,1024-2407,2409-4499,4501-19293,19345-49999,50101-65535" "$CONF"; then
 
-        echo -e "${CYAN}Удаляем настройки для игр${NC}"
+echo -e "${CYAN}Удаляем настройки для игр${NC}"
 
-        # удаляем строки стратегии построчно
-        while IFS= read -r line; do
-            sed -i "\|$line|d" "$CONF"
-        done <<< "$(printf "%b\n" "$GAME_STRATEGY")"
+# используем echo + pipe вместо <<<, чтобы работало в ash
+printf "%b\n" "$GAME_STRATEGY" | while IFS= read -r line; do
+    sed -i "\|$line|d" "$CONF"
+done
 
-        # удаляем UDP из опций
-        sed -i "s/,88,1024-2407,2409-4499,4501-19293,19345-49999,50101-65535//" "$CONF"
+# удаляем UDP из опций
+sed -i "s/,88,1024-2407,2409-4499,4501-19293,19345-49999,50101-65535//" "$CONF"
 
-        ZAPRET_RESTART
-        echo -e "${GREEN}Игровая стратегия удалена!${NC}\n"
-        PAUSE
-        return
+ZAPRET_RESTART
+echo -e "${GREEN}Игровая стратегия удалена!${NC}\n"
+PAUSE
+return
     fi
 
     # --- добавляем UDP-порты в конфиг, если их нет ---
