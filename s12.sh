@@ -128,64 +128,20 @@ sed -i "/DISABLE_CUSTOM/s/'1'/'0'/" /etc/config/zapret; ZAPRET_RESTART; [ "$NO_P
 # ==========================================
 # FIX GAME
 # ==========================================
-
-fix_GAME() {
-    local NO_PAUSE=$1
-
-    # --- стратегия в одну строку ---
-    GAME_STRATEGY="--new\n--filter-udp=88,1024-2407,2409-4499,4501-19293,19345-49999,50101-65535\n--dpi-desync=fake\n--dpi-desync-cutoff=d2\n--dpi-desync-any-protocol=1\n--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/quic_initial_www_google_com.bin\n--new\n--filter-tcp=25565\n--dpi-desync-any-protocol=1\n--dpi-desync-cutoff=n5\n--dpi-desync=multisplit\n--dpi-desync-split-seqovl=582\n--dpi-desync-split-pos=1\n--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/4pda.bin"
-
-    [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }
-
-    [ "$NO_PAUSE" != "1" ] && echo
-    echo -e "${MAGENTA}Настраиваем стратегию для игр${NC}"
-
-    # --- удаляем стратегию, если уже есть ---
-    if grep -q "option NFQWS_PORTS_UDP.*88,1024-2407,2409-4499,4501-19293,19345-49999,50101-65535" "$CONF" && \
-       grep -q -- "--filter-udp=88,1024-2407,2409-4499,4501-19293,19345-49999,50101-65535" "$CONF"; then
-
-echo -e "${CYAN}Удаляем настройки для игр${NC}"
-
-# используем echo + pipe вместо <<<, чтобы работало в ash
-printf "%b\n" "$GAME_STRATEGY" | while IFS= read -r line; do
-    sed -i "\|$line|d" "$CONF"
-done
-
-# удаляем UDP из опций
-sed -i "s/,88,1024-2407,2409-4499,4501-19293,19345-49999,50101-65535//" "$CONF"
-
-ZAPRET_RESTART
-echo -e "${GREEN}Игровая стратегия удалена!${NC}\n"
-PAUSE
-return
-    fi
-
-    # --- добавляем UDP-порты в конфиг, если их нет ---
-    if ! grep -q "option NFQWS_PORTS_UDP.*88,1024-2407,2409-4499,4501-19293,19345-49999,50101-65535" "$CONF"; then
-        sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'$/,88,1024-2407,2409-4499,4501-19293,19345-49999,50101-65535'/" "$CONF"
-    fi
-
-    # --- добавляем стратегию, если её нет ---
-    if ! grep -q -- "--filter-udp=88,1024-2407,2409-4499,4501-19293,19345-49999,50101-65535" "$CONF"; then
-        last_line=$(grep -n "^'$" "$CONF" | tail -n1 | cut -d: -f1)
-        [ -n "$last_line" ] && sed -i "${last_line},\$d" "$CONF"
-
-        printf "%b\n" "$GAME_STRATEGY" "'" >> "$CONF"
-    fi
-
-    echo -e "${CYAN}Включаем настройки для игр${NC}"
-    ZAPRET_RESTART
-    echo -e "${GREEN}Игровая стратегия включена!${NC}\n"
-
-    [ "$NO_PAUSE" != "1" ] && PAUSE
-}
-
-
+fix_GAME() { local NO_PAUSE=$1; GAME_STRATEGY="--new\n--filter-udp=88,1024-2407,2409-4499,4501-19293,19345-49999,50101-65535\n--dpi-desync=fake\n--dpi-desync-cutoff=d2\n--dpi-desync-any-protocol=1\n--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/quic_initial_www_google_com.bin
+--new\n--filter-tcp=25565\n--dpi-desync-any-protocol=1\n--dpi-desync-cutoff=n5\n--dpi-desync=multisplit\n--dpi-desync-split-seqovl=582\n--dpi-desync-split-pos=1\n--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/4pda.bin"
+[ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }; [ "$NO_PAUSE" != "1" ] && echo; echo -e "${MAGENTA}Настраиваем стратегию для игр${NC}"
+if grep -q "option NFQWS_PORTS_UDP.*88,1024-2407,2409-4499,4501-19293,19345-49999,50101-65535" "$CONF" && grep -q -- "--filter-udp=88,1024-2407,2409-4499,4501-19293,19345-49999,50101-65535" "$CONF"; then
+echo -e "${CYAN}Удаляем настройки для игр${NC}"; printf "%b\n" "$GAME_STRATEGY" | while IFS= read -r line; do sed -i "\|$line|d" "$CONF"; done; sed -i "s/,88,1024-2407,2409-4499,4501-19293,19345-49999,50101-65535//" "$CONF"
+sed -i "/^[[:space:]]*option NFQWS_PORTS_TCP '/s/,25565//" "$CONF"; ZAPRET_RESTART; echo -e "${GREEN}Игровая стратегия удалена!${NC}\n"; PAUSE; return; fi
+if ! grep -q "option NFQWS_PORTS_UDP.*88,1024-2407,2409-4499,4501-19293,19345-49999,50101-65535" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'$/,88,1024-2407,2409-4499,4501-19293,19345-49999,50101-65535'/" "$CONF"; fi
+if ! grep -q -- "--filter-udp=88,1024-2407,2409-4499,4501-19293,19345-49999,50101-65535" "$CONF"; then last_line=$(grep -n "^'$" "$CONF" | tail -n1 | cut -d: -f1); [ -n "$last_line" ] && sed -i "${last_line},\$d" "$CONF"; printf "%b\n" "$GAME_STRATEGY" "'" >> "$CONF"; fi
+if ! grep -q "option NFQWS_PORTS_TCP.*,25565" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_TCP '/s/'$/,25565'/" "$CONF"; fi; echo -e "${CYAN}Включаем настройки для игр${NC}"; ZAPRET_RESTART; echo -e "${GREEN}Игровая стратегия включена!${NC}\n"; [ "$NO_PAUSE" != "1" ] && PAUSE; }
 # ==========================================
 # Zapret под ключ
 # ==========================================
 zapret_key() { clear; echo -e "${MAGENTA}Удаление, установка и настройка Zapret${NC}\n"; get_versions; uninstall_zapret "1"; install_Zapret "1"
-[ ! -f /etc/init.d/zapret ] && { echo -e "${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }; install_strategy $STR_VERSION_AUTOINSTALL "1"; echo; scrypt_install "1"; fix_GAME "1"; echo -e "Zapret ${GREEN}установлен и настроен!${NC}\n"; PAUSE; }
+[ ! -f /etc/init.d/zapret ] && { echo -e "${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }; install_strategy $STR_VERSION_AUTOINSTALL "1"; hosts_add "$ALL_BLOCKS"; echo; scrypt_install "1"; fix_GAME "1"; echo -e "Zapret ${GREEN}установлен и настроен!${NC}\n"; PAUSE; }
 # ==========================================
 # Меню настроек
 # ==========================================
@@ -334,7 +290,7 @@ printf "%s\n" "--new" "--filter-udp=19294-19344,50000-50100" "--filter-l7=discor
 install_strategy() { local version="$1"; local NO_PAUSE="${2:-0}"; local fileGP="/opt/zapret/ipset/zapret-hosts-google.txt"; [ "$NO_PAUSE" != "1" ] && echo
 echo -e "${MAGENTA}Устанавливаем стратегию ${version}${NC}\n${CYAN}Меняем стратегию${NC}"; sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; { echo "  option NFQWS_OPT '"; strategy_"$version"; echo "'"; } >> "$CONF"
 printf '%s\n' "gvt1.com" "googleplay.com" "play.google.com" "beacons.gvt2.com" "play.googleapis.com" "play-fe.googleapis.com" "lh3.googleusercontent.com" "android.clients.google.com" "connectivitycheck.gstatic.com" \
-"play-lh.googleusercontent.com" "play-games.googleusercontent.com" "prod-lt-playstoregatewayadapter-pa.googleapis.com" | grep -Fxv -f "$fileGP" 2>/dev/null >> "$fileGP"; echo -e "${CYAN}Редактируем ${NC}hosts${NC}"; hosts_add "$ALL_BLOCKS"
+"play-lh.googleusercontent.com" "play-games.googleusercontent.com" "prod-lt-playstoregatewayadapter-pa.googleapis.com" | grep -Fxv -f "$fileGP" 2>/dev/null >> "$fileGP"
 echo -e "${CYAN}Добавляем домены в исключения${NC}"; rm -f "$EXCLUDE_FILE"; wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL" || { echo -e "\n${RED}Не удалось загрузить exclude файл${NC}\n"; PAUSE; return; }
 discord_str_add; echo -e "${CYAN}Применяем новую стратегию и настройки${NC}"; ZAPRET_RESTART; echo -e "${GREEN}Стратегия ${NC}${version}${GREEN} установлена!${NC}"
 grep -Fq "=ts" "$CONF" && echo -e "\n${YELLOW}Для работы этой стратегии, в терминале Windows нужно выполнить:${NC}\nnetsh int tcp set global timestamps=enabled"; [ "$NO_PAUSE" != "1" ] && echo && PAUSE; }
