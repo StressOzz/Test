@@ -48,7 +48,7 @@ AI="#Gemini\n45.155.204.190 gemini.google.com\n#Grok\n45.155.204.190 grok.com ac
 45.155.204.190 proactivebackend-pa.googleapis.com robinfrontend-pa.googleapis.com o.pki.goog labs.google labs.google.com notebooklm.google
 45.155.204.190 notebooklm.google.com jules.google.com stitch.withgoogle.com gemini.google.com copilot.microsoft.com edgeservices.bing.com
 45.155.204.190 rewards.bing.com sydney.bing.com xboxdesignlab.xbox.com xgpuweb.gssv-play-prod.xboxlive.com xgpuwebf2p.gssv-play-prod.xboxlive.com"
-ALL_BLOCKS="$AI\n$INSTAGRAM\n$NTC\n$RUTOR\n$LIBRUSEC"
+ALL_BLOCKS="$AI\n$INSTAGRAM\n$NTC\n$RUTOR\n$LIBRUSEC\n$TGWeb\n$TWCH"
 hosts_enabled() { grep -q "45.155.204.190\|4pda.to\|instagram.com\|rutor.info\|lib.rus.ec\|ntc.party\|twitch.tv\|web.telegram.org" /etc/hosts; }
 hosts_add() { printf "%b\n" "$1" | while IFS= read -r L; do grep -qxF "$L" /etc/hosts || echo "$L" >> /etc/hosts; done; /etc/init.d/dnsmasq restart >/dev/null 2>&1; }
 hosts_clear() { printf "%b\n" "$1" | while IFS= read -r L; do sed -i "\|^$L$|d" /etc/hosts; done; /etc/init.d/dnsmasq restart >/dev/null 2>&1; }
@@ -141,7 +141,9 @@ if ! grep -q "option NFQWS_PORTS_TCP.*,25565" "$CONF"; then sed -i "/^[[:space:]
 # Zapret под ключ
 # ==========================================
 zapret_key() { clear; echo -e "${MAGENTA}Удаление, установка и настройка Zapret${NC}\n"; get_versions; uninstall_zapret "1"; install_Zapret "1"
-[ ! -f /etc/init.d/zapret ] && { echo -e "${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }; install_strategy $STR_VERSION_AUTOINSTALL "1"; hosts_add "$ALL_BLOCKS"; echo; scrypt_install "1"; fix_GAME "1"; echo -e "Zapret ${GREEN}установлен и настроен!${NC}\n"; PAUSE; }
+[ ! -f /etc/init.d/zapret ] && { echo -e "${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }; install_strategy $STR_VERSION_AUTOINSTALL "1"; 
+echo -e "${MAGENTA}Редактируем ${NC}hosts${NC}\n${CYAN}Добавляем IP ${CYAN}и${NC} домены ${CYAN}в${NC} hosts\nIP ${GREEN}и${NC} домены ${GREEN}добавлены в ${NC}hosts\n"
+hosts_add "$ALL_BLOCKS"; scrypt_install "1"; fix_GAME "1"; echo -e "Zapret ${GREEN}установлен и настроен!${NC}\n"; PAUSE; }
 # ==========================================
 # Меню настроек
 # ==========================================
