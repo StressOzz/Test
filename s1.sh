@@ -127,6 +127,8 @@ sed -i "/DISABLE_CUSTOM/s/'1'/'0'/" /etc/config/zapret; ZAPRET_RESTART; [ "$NO_P
 # ==========================================
 # FIX GAME
 # ==========================================
+
+
 fix_GAME() {
     local NO_PAUSE=$1
     GAME_STRATEGY="--new
@@ -149,54 +151,19 @@ fix_GAME() {
     echo -e "${MAGENTA}Настраиваем стратегию для игр${NC}"
 
     # Проверяем, есть ли весь блок в конфиге
-    if awk -v block="$(printf '%b\n' "$GAME_STRATEGY")" '
-        BEGIN{split(block,b,"\n"); n=length(b); matched=0}
-        {
-            lines[NR]=$0
-        }
-        END{
-            for(i=1;i<=NR-n+1;i++){
-                ok=1
-                for(j=0;j<n;j++){
-                    if(lines[i+j]!=b[j+1]){ok=0; break}
-                }
-                if(ok){matched=1; start=i; break}
-            }
-            if(matched){
-                for(i=1;i<start;i++) print lines[i]
-                for(i=start+n;i<=NR;i++) print lines[i]
-            } else {
-                for(i=1;i<=NR;i++) print lines[i]
-            }
-        }
-    ' "$CONF" | cmp -s - "$CONF"; then
-        echo -e "${CYAN}Игровая стратегия не найдена или не совпадает полностью — ничего не трогаем${NC}"
-    else
+    if grep -Fqx -f <(printf '%b\n' "$GAME_STRATEGY") "$CONF" 2>/dev/null; then
         # Удаляем блок полностью
-        awk -v block="$(printf '%b\n' "$GAME_STRATEGY")" '
-            BEGIN{split(block,b,"\n"); n=length(b)}
-            {
-                lines[NR]=$0
-            }
-            END{
-                for(i=1;i<=NR-n+1;i++){
-                    ok=1
-                    for(j=0;j<n;j++){ if(lines[i+j]!=b[j+1]){ok=0; break} }
-                    if(ok){start=i; break} else {start=0}
-                }
-                for(i=1;i<=NR;i++){
-                    if(start && i>=start && i<start+n) continue
-                    print lines[i]
-                }
-            }
-        ' "$CONF" > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"
+        tmp=$(mktemp)
+        grep -Fvx -f <(printf '%b\n' "$GAME_STRATEGY") "$CONF" > "$tmp" && mv "$tmp" "$CONF"
         echo -e "${GREEN}Игровая стратегия удалена!${NC}\n"
         ZAPRET_RESTART
         [ "$NO_PAUSE" != "1" ] && PAUSE
+    else
+        echo -e "${CYAN}Игровая стратегия не найдена или не совпадает полностью — ничего не трогаем${NC}"
     fi
 
-    # Добавление стратегии (если нужно)
-    if ! grep -Fxq -- "$(printf '%b\n' "$GAME_STRATEGY")" "$CONF"; then
+    # Добавление стратегии, если её нет
+    if ! grep -Fqx -f <(printf '%b\n' "$GAME_STRATEGY") "$CONF"; then
         printf "%b\n" "$GAME_STRATEGY" >> "$CONF"
         echo -e "${CYAN}Включаем настройки для игр${NC}"
         ZAPRET_RESTART
@@ -204,6 +171,8 @@ fix_GAME() {
         [ "$NO_PAUSE" != "1" ] && PAUSE
     fi
 }
+
+
 # ==========================================
 # Zapret под ключ
 # ==========================================
