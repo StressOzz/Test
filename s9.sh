@@ -210,25 +210,33 @@ disable_rkn() { echo -e "\n${MAGENTA}Выключаем списки РКН${NC}
 if [ -s "$BACKUP_FILE" ]; then cp "$BACKUP_FILE" "$HOSTLIST_FILE"; else : > "$HOSTLIST_FILE"; fi; rm -f "$HOSTS_USER" "$BACKUP_FILE"; ZAPRET_RESTART; echo -e "${GREEN}Обход по спискам ${NC}РКН${GREEN} выключен${NC}\n"; }
 
 toggle_rkn_bypass() {
+
 if grep -q -- "--filter-tcp=443 <HOSTLIST>" "$CONF"; then
-    SIZE=0
-    [ -f "$HOSTLIST_FILE" ] && SIZE=$(wc -c < "$HOSTLIST_FILE" 2>/dev/null || echo 0)
-    case "$HOSTLIST_MIN_SIZE" in ''|*[!0-9]*) HOSTLIST_MIN_SIZE=0 ;; esac
-    if [ "$SIZE" -gt "$HOSTLIST_MIN_SIZE" ]; then
+
+    # Если есть backup — значит уже включено → выключаем
+    if [ -f "$BACKUP_FILE" ]; then
         disable_rkn
     else
+        # если списка ещё нет — создаём backup перед включением
         [ -f "$HOSTLIST_FILE" ] && cp "$HOSTLIST_FILE" "$BACKUP_FILE"
         enable_rkn
     fi
-    PAUSE </dev/tty; return
+
+    PAUSE </dev/tty
+    return
 fi
 
 if grep -q -- "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "$CONF"; then
-    enable_rkn; PAUSE </dev/tty
+    enable_rkn
+    PAUSE </dev/tty
+
 elif grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONF"; then
-    disable_rkn; PAUSE </dev/tty
+    disable_rkn
+    PAUSE </dev/tty
+
 else
-    echo -e "\n${RED}Стратегия не подходит для списков РКН\n${NC}"; PAUSE </dev/tty
+    echo -e "\n${RED}Стратегия не подходит для списков РКН\n${NC}"
+    PAUSE </dev/tty
 fi
 }
 
