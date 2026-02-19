@@ -129,75 +129,7 @@ sed -i "/DISABLE_CUSTOM/s/'1'/'0'/" /etc/config/zapret; ZAPRET_RESTART; [ "$NO_P
 # ==========================================
 
 
-fix_GAME() {
-    local NO_PAUSE=$1
-    GAME_STRATEGY="--new
---filter-udp=88,1024-2407,2409-4499,4501-19293,19345-49999,50101-65535
---dpi-desync=fake
---dpi-desync-cutoff=d2
---dpi-desync-any-protocol=1
---dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/quic_initial_www_google_com.bin
---new
---filter-tcp=25565
---dpi-desync-any-protocol=1
---dpi-desync-cutoff=n5
---dpi-desync=multisplit
---dpi-desync-split-seqovl=582
---dpi-desync-split-pos=1
---dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/4pda.bin"
-
-    [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }
-    [ "$NO_PAUSE" != "1" ] && echo
-    echo -e "${MAGENTA}Настраиваем стратегию для игр${NC}"
-
-    # === Удаляем блок целиком, если он полностью совпадает ===
-    if awk -v block="$GAME_STRATEGY" '
-        BEGIN { split(block,b,"\n"); n=length(b); found=0 }
-        { lines[NR]=$0 }
-        END {
-            for(i=1;i<=NR-n+1;i++){
-                ok=1
-                for(j=0;j<n;j++){ if(lines[i+j]!=b[j+1]) { ok=0; break } }
-                if(ok){ found=1; start=i; break }
-            }
-            if(found){
-                for(i=1;i<start;i++) print lines[i]
-                for(i=start+n;i<=NR;i++) print lines[i]
-            } else {
-                for(i=1;i<=NR;i++) print lines[i]
-            }
-        }
-    ' "$CONF" > "$CONF.tmp"; then
-        mv "$CONF.tmp" "$CONF"
-        echo -e "${GREEN}Игровая стратегия удалена!${NC}\n"
-        ZAPRET_RESTART
-        [ "$NO_PAUSE" != "1" ] && PAUSE
-    else
-        rm -f "$CONF.tmp"
-        echo -e "${CYAN}Блок не найден или не совпадает полностью — ничего не трогаем${NC}"
-    fi
-
-    # === Добавляем блок, если его ещё нет ===
-    if ! awk -v block="$GAME_STRATEGY" '
-        BEGIN { split(block,b,"\n"); n=length(b); found=0 }
-        { lines[NR]=$0 }
-        END {
-            for(i=1;i<=NR-n+1;i++){
-                ok=1
-                for(j=0;j<n;j++){ if(lines[i+j]!=b[j+1]) { ok=0; break } }
-                if(ok){ found=1; break }
-            }
-            exit !found
-        }
-    ' "$CONF"; then
-        printf "%b\n" "$GAME_STRATEGY" >> "$CONF"
-        echo -e "${CYAN}Включаем настройки для игр${NC}"
-        ZAPRET_RESTART
-        echo -e "${GREEN}Игровая стратегия включена!${NC}\n"
-        [ "$NO_PAUSE" != "1" ] && PAUSE
-    fi
-}
-
+fix_GAME() { local NO_PAUSE=$1; [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }; [ "$NO_PAUSE" != "1" ] && echo; echo -e "${MAGENTA}Настраиваем стратегию для игр${NC}"; if grep -q "option NFQWS_PORTS_UDP.*88,1024-2407,2409-4499,4501-19293,19345-49999,50101-65535" "$CONF" && grep -q -- "--filter-udp=88,1024-2407,2409-4499,4501-19293,19345-49999,50101-65535" "$CONF"; then echo -e "${CYAN}Удаляем настройки для игр${NC}"; sed -i ':a;N;$!ba;s|--new\n--filter-udp=88,1024-2407,2409-4499,4501-19293,19345-49999,50101-65535\n--dpi-desync=fake\n--dpi-desync-cutoff=d2\n--dpi-desync-any-protocol=1\n--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/quic_initial_www_google_com\.bin\n*||g' "$CONF"; sed -i "s/,88,1024-2407,2409-4499,4501-19293,19345-49999,50101-65535//" "$CONF"; ZAPRET_RESTART; echo -e "${GREEN}Игровая стратегия удалена!${NC}\n"; PAUSE; return; fi; if ! grep -q "option NFQWS_PORTS_UDP.*88,1024-2407,2409-4499,4501-19293,19345-49999,50101-65535" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'$/,88,1024-2407,2409-4499,4501-19293,19345-49999,50101-65535'/" "$CONF"; fi; if ! grep -q -- "--filter-udp=88,1024-2407,2409-4499,4501-19293,19345-49999,50101-65535" "$CONF"; then last_line=$(grep -n "^'$" "$CONF" | tail -n1 | cut -d: -f1); if [ -n "$last_line" ]; then sed -i "${last_line},\$d" "$CONF"; fi; printf "%s\n" "--new" "--filter-udp=88,1024-2407,2409-4499,4501-19293,19345-49999,50101-65535" "--filter-tcp=25565" "--dpi-desync=fake" "--dpi-desync-cutoff=d2" "--dpi-desync-any-protocol=1" "--dpi-desync=multisplit" "--dpi-desync-split-seqovl=582" "--dpi-desync-split-pos=1" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/4pda.bin" "--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/quic_initial_www_google_com.bin" "'" >> "$CONF"; fi; echo -e "${CYAN}Включаем настройки для игр${NC}"; ZAPRET_RESTART; echo -e "${GREEN}Игровая стратегия включена!${NC}\n"; [ "$NO_PAUSE" != "1" ] && PAUSE; }
 
 
 # ==========================================
