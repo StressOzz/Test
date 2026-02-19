@@ -210,8 +210,9 @@ if [ -s $BACKUP_FILE ]; then cp $BACKUP_FILE "$HOSTLIST_FILE"; else : > "$HOSTLI
 toggle_rkn_bypass() { if grep -q -- "--filter-tcp=443" "$CONF" && grep -q -- "HOSTLIST" "$CONF"; then if [ -f "$HOSTLIST_FILE" ] && [ "$(wc -c < "$HOSTLIST_FILE")" -gt "$HOSTLIST_MIN_SIZE" ]; then disable_rkn; else [ -f "$HOSTLIST_FILE" ] && cp "$HOSTLIST_FILE" "$BACKUP_FILE"
 enable_rkn; fi; PAUSE </dev/tty; return; fi; if grep -q -- "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "$CONF"; then enable_rkn; PAUSE </dev/tty
 elif grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONF"; then disable_rkn; PAUSE </dev/tty; else echo -e "\n${RED}Стратегия не подходит для списков РКН\n${NC}"; PAUSE </dev/tty; fi; }
-RKN_Check() { if (grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONF" >/dev/null 2>&1 || if grep -q -- "--filter-tcp=443" "$CONF" && grep -q -- "HOSTLIST" "$CONF" >/dev/null 2>&1) && [ "$(wc -c < /opt/zapret/ipset/zapret-hosts-user.txt)" -gt 1800000 ]
+RKN_Check() { if (grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONF" >/dev/null 2>&1 || grep -q -- "--filter-tcp=443" "$CONF" && grep -q -- "HOSTLIST" "$CONF" >/dev/null 2>&1) && [ "$(wc -c < /opt/zapret/ipset/zapret-hosts-user.txt)" -gt 1800000 ]
 then RKN_STATUS="/ РКН"; RKN_TEXT_MENU="${GREEN}Выключить обход по спискам${NC} РКН"; else RKN_STATUS=""; RKN_TEXT_MENU="${GREEN}Включить обход по спискам${NC} РКН"; fi; }
+
 # ==========================================
 # Стратегии
 # ==========================================
