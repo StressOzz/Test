@@ -202,17 +202,49 @@ apply_strategy() { NAME="$1"; BODY="$2"; sed -i "/^[[:space:]]*option NFQWS_OPT 
 # ==========================================
 # РКН список ВКЛ / ВЫКЛ echo "1";
 # ==========================================
-enable_rkn() { echo -e "\n${MAGENTA}Включаем списки РКН${NC}"; [ -f "$HOSTLIST_FILE" ] && cp "$HOSTLIST_FILE" $BACKUP_FILE && cp "$HOSTLIST_FILE" $HOSTS_USER
+enable_rkn() { echo -e "\n${MAGENTA}Включаем списки РКН${NC}"; [ -f "$HOSTLIST_FILE" ] && cp "$HOSTLIST_FILE" "$BACKUP_FILE" && cp "$HOSTLIST_FILE" "$HOSTS_USER"
 curl -fsSL "$RKN_URL" -o "$HOSTLIST_FILE" || { echo -e "\n${RED}Не удалось скачать список РКН${NC}\n"; PAUSE; return; }
 sed -i 's|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt|' "$CONF"; ZAPRET_RESTART; echo -e "${GREEN}Обход по спискам ${NC}РКН${GREEN} включен${NC}\n"; }
-disable_rkn() { echo -e "\n${MAGENTA}Выключаем списки РКН${NC}"; sed -i 's|--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|' "$CONF"
-if [ -s $BACKUP_FILE ]; then cp $BACKUP_FILE "$HOSTLIST_FILE"; else : > "$HOSTLIST_FILE"; fi; rm -f $HOSTS_USER $BACKUP_FILE; ZAPRET_RESTART; echo -e "${GREEN}Обход по спискам ${NC}РКН${GREEN} выключен${NC}\n"; }
-toggle_rkn_bypass() { echo "1"; if grep -q -- "--filter-tcp=443" "$CONF" && grep -q -- "<HOSTLIST>" "$CONF"; then if [ -f "$HOSTLIST_FILE" ] && [ "$(wc -c < "$HOSTLIST_FILE")" -gt "$HOSTLIST_MIN_SIZE" ]; then disable_rkn; else [ -f "$HOSTLIST_FILE" ] && cp "$HOSTLIST_FILE" "$BACKUP_FILE"
-echo "2"; enable_rkn; fi; PAUSE </dev/tty; return; fi; if grep -q -- "--filter-tcp=443" "$CONF" && grep -q -- "<HOSTLIST>" "$CONF"; then enable_rkn; PAUSE </dev/tty
-elif grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONF"; then disable_rkn; PAUSE </dev/tty; else echo -e "\n${RED}Стратегия не подходит для списков РКН\n${NC}"; PAUSE </dev/tty; fi; }
-RKN_Check() { if (grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONF" >/dev/null 2>&1 || grep -q -- "--filter-tcp=443" "$CONF" && grep -q -- "<HOSTLIST>" "$CONF" >/dev/null 2>&1) && [ "$(wc -c < /opt/zapret/ipset/zapret-hosts-user.txt)" -gt 1800000 ]
-then RKN_STATUS="/ РКН"; RKN_TEXT_MENU="${GREEN}Выключить обход по спискам${NC} РКН"; else RKN_STATUS=""; RKN_TEXT_MENU="${GREEN}Включить обход по спискам${NC} РКН"; fi; }
 
+disable_rkn() { echo -e "\n${MAGENTA}Выключаем списки РКН${NC}"; sed -i 's|--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|' "$CONF"
+if [ -s "$BACKUP_FILE" ]; then cp "$BACKUP_FILE" "$HOSTLIST_FILE"; else : > "$HOSTLIST_FILE"; fi; rm -f "$HOSTS_USER" "$BACKUP_FILE"; ZAPRET_RESTART; echo -e "${GREEN}Обход по спискам ${NC}РКН${GREEN} выключен${NC}\n"; }
+
+toggle_rkn_bypass() {
+if grep -q -- "--filter-tcp=443 <HOSTLIST>" "$CONF"; then
+    SIZE=0
+    [ -f "$HOSTLIST_FILE" ] && SIZE=$(wc -c < "$HOSTLIST_FILE" 2>/dev/null || echo 0)
+    case "$HOSTLIST_MIN_SIZE" in ''|*[!0-9]*) HOSTLIST_MIN_SIZE=0 ;; esac
+    if [ "$SIZE" -gt "$HOSTLIST_MIN_SIZE" ]; then
+        disable_rkn
+    else
+        [ -f "$HOSTLIST_FILE" ] && cp "$HOSTLIST_FILE" "$BACKUP_FILE"
+        enable_rkn
+    fi
+    PAUSE </dev/tty; return
+fi
+
+if grep -q -- "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "$CONF"; then
+    enable_rkn; PAUSE </dev/tty
+elif grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONF"; then
+    disable_rkn; PAUSE </dev/tty
+else
+    echo -e "\n${RED}Стратегия не подходит для списков РКН\n${NC}"; PAUSE </dev/tty
+fi
+}
+
+RKN_Check() {
+SIZE=0
+[ -f /opt/zapret/ipset/zapret-hosts-user.txt ] && SIZE=$(wc -c < /opt/zapret/ipset/zapret-hosts-user.txt 2>/dev/null || echo 0)
+
+if { grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONF" || grep -q -- "--filter-tcp=443 <HOSTLIST>" "$CONF"; } \
+   && [ "$SIZE" -gt 1800000 ]; then
+    RKN_STATUS="/ РКН"
+    RKN_TEXT_MENU="${GREEN}Выключить обход по спискам${NC} РКН"
+else
+    RKN_STATUS=""
+    RKN_TEXT_MENU="${GREEN}Включить обход по спискам${NC} РКН"
+fi
+}
 # ==========================================
 # Стратегии
 # ==========================================
