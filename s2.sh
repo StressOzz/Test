@@ -150,20 +150,46 @@ fix_GAME() {
     [ "$NO_PAUSE" != "1" ] && echo
     echo -e "${MAGENTA}Настраиваем стратегию для игр${NC}"
 
-    # Проверяем, есть ли весь блок в конфиге
-    if grep -Fqx -f <(printf '%b\n' "$GAME_STRATEGY") "$CONF" 2>/dev/null; then
-        # Удаляем блок полностью
-        tmp=$(mktemp)
-        grep -Fvx -f <(printf '%b\n' "$GAME_STRATEGY") "$CONF" > "$tmp" && mv "$tmp" "$CONF"
+    # === Удаляем блок целиком, если он полностью совпадает ===
+    if awk -v block="$GAME_STRATEGY" '
+        BEGIN { split(block,b,"\n"); n=length(b); found=0 }
+        { lines[NR]=$0 }
+        END {
+            for(i=1;i<=NR-n+1;i++){
+                ok=1
+                for(j=0;j<n;j++){ if(lines[i+j]!=b[j+1]) { ok=0; break } }
+                if(ok){ found=1; start=i; break }
+            }
+            if(found){
+                for(i=1;i<start;i++) print lines[i]
+                for(i=start+n;i<=NR;i++) print lines[i]
+            } else {
+                for(i=1;i<=NR;i++) print lines[i]
+            }
+        }
+    ' "$CONF" > "$CONF.tmp"; then
+        mv "$CONF.tmp" "$CONF"
         echo -e "${GREEN}Игровая стратегия удалена!${NC}\n"
         ZAPRET_RESTART
         [ "$NO_PAUSE" != "1" ] && PAUSE
     else
-        echo -e "${CYAN}Игровая стратегия не найдена или не совпадает полностью — ничего не трогаем${NC}"
+        rm -f "$CONF.tmp"
+        echo -e "${CYAN}Блок не найден или не совпадает полностью — ничего не трогаем${NC}"
     fi
 
-    # Добавление стратегии, если её нет
-    if ! grep -Fqx -f <(printf '%b\n' "$GAME_STRATEGY") "$CONF"; then
+    # === Добавляем блок, если его ещё нет ===
+    if ! awk -v block="$GAME_STRATEGY" '
+        BEGIN { split(block,b,"\n"); n=length(b); found=0 }
+        { lines[NR]=$0 }
+        END {
+            for(i=1;i<=NR-n+1;i++){
+                ok=1
+                for(j=0;j<n;j++){ if(lines[i+j]!=b[j+1]) { ok=0; break } }
+                if(ok){ found=1; break }
+            }
+            exit !found
+        }
+    ' "$CONF"; then
         printf "%b\n" "$GAME_STRATEGY" >> "$CONF"
         echo -e "${CYAN}Включаем настройки для игр${NC}"
         ZAPRET_RESTART
@@ -171,6 +197,7 @@ fix_GAME() {
         [ "$NO_PAUSE" != "1" ] && PAUSE
     fi
 }
+
 
 
 # ==========================================
