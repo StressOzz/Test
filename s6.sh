@@ -149,7 +149,7 @@ if [ -n "$last_line" ]; then sed -i "${last_line},\$d" "$CONF"; fi; printf "%s\n
 "--dpi-desync-split-pos=1" \
 "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/4pda.bin" \
 "'" >> "$CONF"; fi
-echo -e "${CYAN}Включаем настройки для игр${NC}"; if ! grep -q "option NFQWS_PORTS_TCP.*,25565" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_TCP '/s/'$/,25565'/" "$CONF"; ZAPRET_RESTART; echo -e "${GREEN}Игровая стратегия включена!${NC}\n";[ "$NO_PAUSE" != "1" ] && PAUSE; }
+echo -e "${CYAN}Включаем настройки для игр${NC}"; if ! grep -q "option NFQWS_PORTS_TCP.*,25565" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_TCP '/s/'$/,25565'/" "$CONF"; fi; ZAPRET_RESTART; echo -e "${GREEN}Игровая стратегия включена!${NC}\n";[ "$NO_PAUSE" != "1" ] && PAUSE; }
 
 
 # ==========================================
