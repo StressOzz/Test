@@ -522,7 +522,7 @@ prepare_urls() { : > "$OUT_DPI"; printf '%s\n' "gosuslugi|https://gosuslugi.ru" 
 "rutube.ru|https://rutube.ru" "ntc.party|https://ntc.party/" "instagram.com|https://instagram.com" "facebook.com|https://facebook.com" "rutor.info|https://rutor.info" "rutracker.org|https://rutracker.org" \
 "epidemz.net.co|https://epidemz.net.co" "nnmclub.to|https://nnmclub.to" "openwrt.org|https://openwrt.org" "sxyprn.net|https://sxyprn.net" "spankbang.com|https://ru.spankbang.com" "pornhub.com|https://pornhub.com" \
 "discord.com|https://discord.com" "updates.discord.com|https://updates.discord.com" "x.com|https://x.com" "filmix.my|https://filmix.my" "flightradar24.com|https://flightradar24.com" "play.google.com|https://play.google.com" \
-"kinozal.tv|https://kinozal.tv" "cub.red|https://cub.red" "ottai.com|https://ottai.com" >> "$OUT_DPI"; curl -fsSL "$RAW" | sed -n 's/.*"id":[[:space:]]*"\([^"]*\)".*"url":[[:space:]]*"\([^"]*\)".*/\1|\2/p' >> "$OUT_DPI" \
+"kinozal.tv|https://kinozal.tv" "cub.red|https://cub.red" >> "$OUT_DPI"; curl -fsSL "$RAW" | sed -n 's/.*"id":[[:space:]]*"\([^"]*\)".*"url":[[:space:]]*"\([^"]*\)".*/\1|\2/p' >> "$OUT_DPI" \
 || { echo -e "\n${RED}Ошибка загрузки DPI списка${NC}\n"; PAUSE; return 1; }; TOTAL=$(grep -c "|" "$OUT_DPI"); }
 check_current_strategy() { clear; echo -e "${MAGENTA}Тестирование текущей стратегии${NC}\n"; prepare_urls; URLS="$(cat "$OUT_DPI")"; OK=0; check_all_urls; if [ "$OK" -eq "$TOTAL" ]; then COLOR="${GREEN}"; elif [ "$OK" -ge $((TOTAL/2)) ]; then COLOR="${YELLOW}"; else COLOR="${RED}"; fi; echo -e "\n${CYAN}Результат теста: ${COLOR}$OK/$TOTAL${NC}\n"; rm -f "$OUT_DPI"; PAUSE; }
 show_test_results() { clear; echo -e "${MAGENTA}Результат тестирования стратегий${NC}\n"; : > "$TMP_RES"; [ -s "$RES1" ] && cat "$RES1" >> "$TMP_RES"; [ -s "$RES2" ] && cat "$RES2" >> "$TMP_RES"; [ ! -s "$TMP_RES" ] && { rm -f "$TMP_RES"; echo -e "${RED}Результат не найден!${NC}\n"; PAUSE; return; }
@@ -542,17 +542,17 @@ for N in $(seq 1 100); do strategy_v$N >> "$STR_FILE" 2>/dev/null || break; done
 
 run_all_tests() {
   clear
-  echo -e "${MAGENTA}Тестирование всех стратегий сразу${NC}\n"
+  echo -e "${MAGENTA}Тестирование всех стратегий${NC}\n"
   
   RESULTS="/opt/zapret/tmp/results_all.txt"
   : > "$STR_FILE"
   [ -f "$BACK" ] || cp "$CONF" "$BACK"
 
-  echo -e "${CYAN}Собираем Flowseal стратегии...${NC}"
+  echo -e "${CYAN}Собираем ${NC}Flowseal${CYAN} стратегии${NC}"
   download_strategies 1
   cat "$OUT" >> "$STR_FILE"
 
-  echo -e "${CYAN}Добавляем v стратегии...${NC}"
+  echo -e "${CYAN}Собираем ${NC}v${CYAN} стратегии${NC}"
   for N in $(seq 1 100); do
     strategy_v$N >> "$STR_FILE" 2>/dev/null || break
   done
@@ -569,7 +569,7 @@ run_all_tests() {
   URLS="$(cat "$OUT_DPI")"
   TOTAL=$(grep -c "|" "$OUT_DPI")
 
-  echo -e "${CYAN}Сайтов для теста:${NC} $TOTAL\n"
+  echo -e "${CYAN}Доменов для теста:${NC} $TOTAL"
 
   # контрольный тест
   check_zpr_off
