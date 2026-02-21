@@ -389,70 +389,86 @@ echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${
 # ==========================================
 
 run_test_by_domain() {
-  clear
-  echo -e "${MAGENTA}Тестирование стратегий по домену${NC}\n"
-  echo -ne "${YELLOW}Введите домен или URL: ${NC}"
-  read -r INPUT
+clear
+echo -e "${MAGENTA}Тестирование стратегий по домену${NC}\n"
+echo -ne "${YELLOW}Введите домен или URL: ${NC}"
+read -r INPUT
 
-  TARGET="$(normalize_target "$INPUT")" || { echo -e "\n${RED}Пустой ввод${NC}\n"; PAUSE; return; }
+INPUT="$(printf "%s" "$INPUT" | tr -d ' \t\r\n')"
+[ -z "$INPUT" ] && { echo -e "\n${RED}Пустой ввод${NC}\n"; PAUSE; return; }
 
-  HOST=$(printf "%s\n" "$TARGET" | sed -E 's#^https?://##; s#/.*##')
+case "$INPUT" in
+http://*|https://*) TARGET="$INPUT" ;;
+*) TARGET="https://$INPUT" ;;
+esac
 
-  mkdir -p "$TMP_SF"
+HOST=$(printf "%s\n" "$TARGET" | sed -E 's#^https?://##; s#/.*##')
 
-  URLS="${HOST}|${TARGET}"
-  TOTAL=1
+mkdir -p "$TMP_SF"
 
-  RESULTS="/opt/zapret/tmp/results_domain.txt"
-  : > "$RESULTS"
+URLS="${HOST}|https://${HOST}"
+TOTAL=1
 
-  echo -e "\n${CYAN}Тестируем:${NC} ${TARGET}\n"
+RESULTS="/opt/zapret/tmp/results_domain.txt"
+: > "$RESULTS"
 
-  check_zpr_off
+echo -e "\n${CYAN}Тестируем:${NC} https://${HOST}\n"
 
-  CUR=0
-  TOTAL_STR=$(grep -c '^#' "$STR_FILE")
-  echo -e "${CYAN}Найдено стратегий:${NC} $TOTAL_STR"
+check_zpr_off
 
-  LINES=$(grep -n '^#' "$STR_FILE" | cut -d: -f1)
+LINES=$(grep -n '^#' "$STR_FILE" | cut -d: -f1)
+CUR=0
+TOTAL_STR=$(grep -c '^#' "$STR_FILE")
 
-  while read -r START; do
-    [ -z "$START" ] && continue
-    CUR=$((CUR+1))
+echo -e "${CYAN}Найдено стратегий:${NC} $TOTAL_STR"
 
-    NEXT=$(echo "$LINES" | awk -v s="$START" '$1>s{print;exit}')
+echo "$LINES" | while read -r START; do
 
-    if [ -z "$NEXT" ]; then
-      sed -n "${START},\$p" "$STR_FILE" > "$TEMP_FILE"
-    else
-      sed -n "${START},$((NEXT-1))p" "$STR_FILE" > "$TEMP_FILE"
-    fi
+CUR=$((CUR+1))
 
-    BLOCK=$(cat "$TEMP_FILE")
-    NAME=$(head -n1 "$TEMP_FILE"); NAME="${NAME#\#}"
+NEXT=$(echo "$LINES" | awk -v s="$START" '$1>s{print;exit}')
 
-    awk -v block="$BLOCK" 'BEGIN{skip=0}
-      /option NFQWS_OPT '\''/ {printf "\toption NFQWS_OPT '\''\n%s\n'\''\n", block; skip=1; next}
-      skip && /^'\''$/ {skip=0; next}
-      !skip {print}' "$CONF" > "${CONF}.tmp" && mv "${CONF}.tmp" "$CONF"
+if [ -z "$NEXT" ]; then
+sed -n "${START},\$p" "$STR_FILE" > "$TEMP_FILE"
+else
+sed -n "${START},$((NEXT-1))p" "$STR_FILE" > "$TEMP_FILE"
+fi
 
-    echo -e "\n${CYAN}Тестируем стратегию:${NC} ${YELLOW}${NAME}${NC} ($CUR/$TOTAL_STR)"
+BLOCK=$(cat "$TEMP_FILE")
+NAME=$(head -n1 "$TEMP_FILE")
+NAME="${NAME#\#}"
 
-    ZAPRET_RESTART
-    OK=0
-    check_all_urls
+awk -v block="$BLOCK" 'BEGIN{skip=0}
+/option NFQWS_OPT '\''/ {printf "\toption NFQWS_OPT '\''\n%s\n'\''\n", block; skip=1; next}
+skip && /^'\''$/ {skip=0; next}
+!skip {print}' "$CONF" > "${CONF}.tmp"
 
-    if [ "$OK" -eq 1 ]; then COLOR="${GREEN}"; else COLOR="${RED}"; fi
-    echo -e "${CYAN}Результат:${NC} ${COLOR}$OK/$TOTAL${NC}"
-    echo -e "${NAME} → ${OK}/${TOTAL}" >> "$RESULTS"
-  done <<EOF
-$LINES
-EOF
+mv "${CONF}.tmp" "$CONF"
 
-  sort -t'/' -k1 -nr "$RESULTS" -o "$RESULTS"
-  [ -f "$BACK" ] && mv -f "$BACK" "$CONF"
-  ZAPRET_RESTART
-  show_single_result "$RESULTS"
+echo -e "\n${CYAN}Тестируем стратегию:${NC} ${YELLOW}${NAME}${NC} ($CUR/$TOTAL_STR)"
+
+ZAPRET_RESTART
+
+OK=0
+check_all_urls
+
+if [ "$OK" -eq "$TOTAL" ]; then COLOR="${GREEN}"
+else COLOR="${RED}"
+fi
+
+echo -e "${CYAN}Результат:${NC} ${COLOR}$OK/$TOTAL${NC}"
+
+echo -e "${NAME} → ${OK}/${TOTAL}" >> "$RESULTS"
+
+done
+
+sort -t'/' -k1 -nr "$RESULTS" -o "$RESULTS"
+
+[ -f "$BACK" ] && mv -f "$BACK" "$CONF"
+
+ZAPRET_RESTART
+
+show_single_result "$RESULTS"
 }
 
 
