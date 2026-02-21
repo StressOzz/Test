@@ -2,7 +2,7 @@
 # ==========================================
 # Zapret on remittor Manager by StressOzz
 # =========================================
-ZAPRET_MANAGER_VERSION="9.0"; ZAPRET_VERSION="72.20260207"; STR_VERSION_AUTOINSTALL="v1"
+ZAPRET_MANAGER_VERSION="9.1"; ZAPRET_VERSION="72.20260221"; STR_VERSION_AUTOINSTALL="v1"
 TEST_HOST="https://rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com"; LAN_IP=$(uci get network.lan.ipaddr 2>/dev/null | cut -d/ -f1)
 GREEN="\033[1;32m"; RED="\033[1;31m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
 CONF="/etc/config/zapret"; CUSTOM_DIR="/opt/zapret/init.d/openwrt/custom.d/"; HOSTLIST_FILE="/opt/zapret/ipset/zapret-hosts-user.txt"
@@ -52,7 +52,7 @@ ALL_BLOCKS="$AI\n$INSTAGRAM\n$NTC\n$RUTOR\n$LIBRUSEC\n$TGWeb\n$TWCH"
 hosts_enabled() { grep -q "45.155.204.190\|4pda.to\|instagram.com\|rutor.info\|lib.rus.ec\|ntc.party\|twitch.tv\|web.telegram.org" /etc/hosts; }
 hosts_add() { printf "%b\n" "$1" | while IFS= read -r L; do grep -qxF "$L" /etc/hosts || echo "$L" >> /etc/hosts; done; /etc/init.d/dnsmasq restart >/dev/null 2>&1; }
 ZAPRET_RESTART () { chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1; sleep 1; }
-PAUSE() { echo "Нажмите Enter..."; read dummy; }; BACKUP_DIR="/opt/zapret_backup"; DATE_FILE="$BACKUP_DIR/date_backup.txt"
+PAUSE() { echo -ne "Нажмите Enter..."; read dummy; }; BACKUP_DIR="/opt/zapret_backup"; DATE_FILE="$BACKUP_DIR/date_backup.txt"
 if command -v apk >/dev/null 2>&1; then CONFZ="/etc/apk/repositories.d/distfeeds.list"; PKG_IS_APK=1; else CONFZ="/etc/opkg/distfeeds.conf"; PKG_IS_APK=0; fi
 echo 'sh <(wget -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/main/Zapret-Manager.sh)' > /usr/bin/zms; chmod +x /usr/bin/zms
 # ==========================================
@@ -387,6 +387,84 @@ echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${
 # ==========================================
 # Тест стратегий
 # ==========================================
+
+run_test_by_domain() {
+clear
+echo -e "${MAGENTA}Тестирование стратегий по домену${NC}\n"
+echo -ne "${YELLOW}Введите домен или URL: ${NC}"
+read -r INPUT
+
+TARGET="$(normalize_target "$INPUT")" || { echo -e "\n${RED}Пустой ввод${NC}\n"; PAUSE; return; }
+
+HOST=$(printf "%s\n" "$TARGET" | sed -E 's#^https?://##; s#/.*##')
+
+URLS="${HOST}|https://${HOST}"
+TOTAL=1
+
+RESULTS="/opt/zapret/tmp/results_domain.txt"
+: > "$RESULTS"
+
+echo -e "\n${CYAN}Тестируем:${NC} https://${HOST}\n"
+
+check_zpr_off
+
+LINES=$(grep -n '^#' "$STR_FILE" | cut -d: -f1)
+CUR=0
+TOTAL_STR=$(grep -c '^#' "$STR_FILE")
+
+echo -e "${CYAN}Найдено стратегий:${NC} $TOTAL_STR"
+
+echo "$LINES" | while read -r START; do
+
+CUR=$((CUR+1))
+
+NEXT=$(echo "$LINES" | awk -v s="$START" '$1>s{print;exit}')
+
+if [ -z "$NEXT" ]; then
+sed -n "${START},\$p" "$STR_FILE" > "$TEMP_FILE"
+else
+sed -n "${START},$((NEXT-1))p" "$STR_FILE" > "$TEMP_FILE"
+fi
+
+BLOCK=$(cat "$TEMP_FILE")
+NAME=$(head -n1 "$TEMP_FILE")
+NAME="${NAME#\#}"
+
+awk -v block="$BLOCK" 'BEGIN{skip=0}
+/option NFQWS_OPT '\''/ {printf "\toption NFQWS_OPT '\''\n%s\n'\''\n", block; skip=1; next}
+skip && /^'\''$/ {skip=0; next}
+!skip {print}' "$CONF" > "${CONF}.tmp"
+
+mv "${CONF}.tmp" "$CONF"
+
+echo -e "\n${CYAN}Тестируем стратегию:${NC} ${YELLOW}${NAME}${NC} ($CUR/$TOTAL_STR)"
+
+ZAPRET_RESTART
+
+OK=0
+check_all_urls
+
+if [ "$OK" -eq "$TOTAL" ]; then COLOR="${GREEN}"
+else COLOR="${RED}"
+fi
+
+echo -e "${CYAN}Результат:${NC} ${COLOR}$OK/$TOTAL${NC}"
+
+echo -e "${NAME} → ${OK}/${TOTAL}" >> "$RESULTS"
+
+done
+
+sort -t'/' -k1 -nr "$RESULTS" -o "$RESULTS"
+
+[ -f "$BACK" ] && mv -f "$BACK" "$CONF"
+
+ZAPRET_RESTART
+
+show_single_result "$RESULTS"
+}
+
+
+
 check_zpr_off() { echo -e "\n${CYAN}Контрольный тест: ${YELLOW}Zapret выключен${NC}"; /etc/init.d/zapret stop >/dev/null 2>&1; OK=0; check_all_urls; if [ "$OK" -eq "$TOTAL" ]; then COLOR="${GREEN}"; elif [ "$OK" -ge $((TOTAL/2)) ]
 then COLOR="${YELLOW}"; else COLOR="${RED}"; fi; echo -e "${CYAN}Результат теста: ${COLOR}$OK/$TOTAL${NC}"; echo -e "Контрольный тест (Zapret выключен) → ${OK}/${TOTAL}" >> "$RESULTS"; /etc/init.d/zapret start >/dev/null 2>&1; }
 check_url() { TEXT=$(echo "$1" | cut -d"|" -f1); LINK=$(echo "$1" | cut -d"|" -f2); if curl -sL --connect-timeout 3 --max-time 5 --speed-time 3 --speed-limit 1 --range 0-65535 -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) curl/8.0" -o /dev/null "$LINK" >/dev/null 2>&1; then echo 1 >> "$TMP_OK"; echo -e "${GREEN}[ OK ]${NC} $TEXT"; else echo -e "${RED}[FAIL]${NC} $TEXT"; fi; }
@@ -433,9 +511,13 @@ STATUS_V=""; STATUS_FLOW=""; [ -s "/opt/zapret/tmp/results_versions.txt" ] && ST
 [ -s "/opt/zapret/tmp/results_flowseal.txt" ] && STATUS_FLOW="${GREEN}Flowseal${NC}" || STATUS_FLOW="${RED}Flowseal${NC}"; echo -e "${YELLOW}Тест пройден:${NC} ${STATUS_V} | ${STATUS_FLOW}\n"
 echo -e "${CYAN}1) ${GREEN}Тестировать стратегии ${NC}v\n${CYAN}2) ${GREEN}Тестировать стратегии ${NC}Flowseal\n${CYAN}3) ${GREEN}Тестировать ${NC}v${GREEN} и ${NC}Flowseal${GREEN} стратегии${NC}\n${CYAN}4) ${GREEN}Тестировать ${NC}текущую${GREEN} стратегию ${NC}\n${CYAN}5) ${GREEN}Тестировать стратегии ${NC}YouTube"
 if { [ -s "/opt/zapret/tmp/results_flowseal.txt" ] || [ -s "/opt/zapret/tmp/results_versions.txt" ]; }; then echo -e "${CYAN}9) ${GREEN}Результаты тестирования стратегий${NC}"; fi
-if { [ -s "/opt/zapret/tmp/results_flowseal.txt" ] || [ -s "/opt/zapret/tmp/results_versions.txt" ]; }; then echo -e "${CYAN}0) ${GREEN}Удалить результаты тестования${NC}"; fi
+if { [ -s "/opt/zapret/tmp/results_flowseal.txt" ] || [ -s "/opt/zapret/tmp/results_versions.txt" ]; }; then echo -e "${CYAN}0) ${GREEN}Удалить результаты тестирования${NC}"; fi
 echo -ne "${CYAN}Enter) ${GREEN}Выход в меню стратегий${NC}\n\n${YELLOW}Выберите пункт:${NC} ";read -r t; case "$t" in
-1) run_test_versions;; 2) run_test_flowseal;; 3) run_all_tests;; 4) check_current_strategy;;  5) auto_stryou;; 9) show_test_results;; 0) rm -f /opt/zapret/tmp/results_flowseal.txt; rm -f /opt/zapret/tmp/results_versions.txt; echo -e "\n${GREEN}Результаты тестирования удалены!${NC}\n"; PAUSE;; *) break;; esac; done; }
+1) run_test_versions;; 2) run_test_flowseal;; 3) run_all_tests;; 4) check_current_strategy;;  5) auto_stryou;;
+
+6) run_test_by_domain;;
+
+9) show_test_results;; 0) rm -f /opt/zapret/tmp/results_flowseal.txt; rm -f /opt/zapret/tmp/results_versions.txt; echo -e "\n${GREEN}Результаты тестирования удалены!${NC}\n"; PAUSE;; *) break;; esac; done; }
 # ==========================================
 # Системная информация
 # ==========================================
