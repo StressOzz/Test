@@ -389,79 +389,72 @@ echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${
 # ==========================================
 
 run_test_by_domain() {
-clear
-echo -e "${MAGENTA}Тестирование стратегий по домену${NC}\n"
-echo -ne "${YELLOW}Введите домен или URL: ${NC}"
-read -r INPUT
+  clear
+  echo -e "${MAGENTA}Тестирование стратегий по домену${NC}\n"
+  echo -ne "${YELLOW}Введите домен или URL: ${NC}"
+  read -r INPUT
 
-TARGET="$(normalize_target "$INPUT")" || { echo -e "\n${RED}Пустой ввод${NC}\n"; PAUSE; return; }
+  TARGET="$(normalize_target "$INPUT")" || { echo -e "\n${RED}Пустой ввод${NC}\n"; PAUSE; return; }
 
-HOST=$(printf "%s\n" "$TARGET" | sed -E 's#^https?://##; s#/.*##')
+  HOST=$(printf "%s\n" "$TARGET" | sed -E 's#^https?://##; s#/.*##')
 
-URLS="${HOST}|https://${HOST}"
-TOTAL=1
+  mkdir -p "$TMP_SF"
 
-RESULTS="/opt/zapret/tmp/results_domain.txt"
-: > "$RESULTS"
+  URLS="${HOST}|${TARGET}"
+  TOTAL=1
 
-echo -e "\n${CYAN}Тестируем:${NC} https://${HOST}\n"
+  RESULTS="/opt/zapret/tmp/results_domain.txt"
+  : > "$RESULTS"
 
-check_zpr_off
+  echo -e "\n${CYAN}Тестируем:${NC} ${TARGET}\n"
 
-LINES=$(grep -n '^#' "$STR_FILE" | cut -d: -f1)
-CUR=0
-TOTAL_STR=$(grep -c '^#' "$STR_FILE")
+  check_zpr_off
 
-echo -e "${CYAN}Найдено стратегий:${NC} $TOTAL_STR"
+  CUR=0
+  TOTAL_STR=$(grep -c '^#' "$STR_FILE")
+  echo -e "${CYAN}Найдено стратегий:${NC} $TOTAL_STR"
 
-echo "$LINES" | while read -r START; do
+  LINES=$(grep -n '^#' "$STR_FILE" | cut -d: -f1)
 
-CUR=$((CUR+1))
+  while read -r START; do
+    [ -z "$START" ] && continue
+    CUR=$((CUR+1))
 
-NEXT=$(echo "$LINES" | awk -v s="$START" '$1>s{print;exit}')
+    NEXT=$(echo "$LINES" | awk -v s="$START" '$1>s{print;exit}')
 
-if [ -z "$NEXT" ]; then
-sed -n "${START},\$p" "$STR_FILE" > "$TEMP_FILE"
-else
-sed -n "${START},$((NEXT-1))p" "$STR_FILE" > "$TEMP_FILE"
-fi
+    if [ -z "$NEXT" ]; then
+      sed -n "${START},\$p" "$STR_FILE" > "$TEMP_FILE"
+    else
+      sed -n "${START},$((NEXT-1))p" "$STR_FILE" > "$TEMP_FILE"
+    fi
 
-BLOCK=$(cat "$TEMP_FILE")
-NAME=$(head -n1 "$TEMP_FILE")
-NAME="${NAME#\#}"
+    BLOCK=$(cat "$TEMP_FILE")
+    NAME=$(head -n1 "$TEMP_FILE"); NAME="${NAME#\#}"
 
-awk -v block="$BLOCK" 'BEGIN{skip=0}
-/option NFQWS_OPT '\''/ {printf "\toption NFQWS_OPT '\''\n%s\n'\''\n", block; skip=1; next}
-skip && /^'\''$/ {skip=0; next}
-!skip {print}' "$CONF" > "${CONF}.tmp"
+    awk -v block="$BLOCK" 'BEGIN{skip=0}
+      /option NFQWS_OPT '\''/ {printf "\toption NFQWS_OPT '\''\n%s\n'\''\n", block; skip=1; next}
+      skip && /^'\''$/ {skip=0; next}
+      !skip {print}' "$CONF" > "${CONF}.tmp" && mv "${CONF}.tmp" "$CONF"
 
-mv "${CONF}.tmp" "$CONF"
+    echo -e "\n${CYAN}Тестируем стратегию:${NC} ${YELLOW}${NAME}${NC} ($CUR/$TOTAL_STR)"
 
-echo -e "\n${CYAN}Тестируем стратегию:${NC} ${YELLOW}${NAME}${NC} ($CUR/$TOTAL_STR)"
+    ZAPRET_RESTART
+    OK=0
+    check_all_urls
 
-ZAPRET_RESTART
+    if [ "$OK" -eq 1 ]; then COLOR="${GREEN}"; else COLOR="${RED}"; fi
+    echo -e "${CYAN}Результат:${NC} ${COLOR}$OK/$TOTAL${NC}"
+    echo -e "${NAME} → ${OK}/${TOTAL}" >> "$RESULTS"
+  done <<EOF
+$LINES
+EOF
 
-OK=0
-check_all_urls
-
-if [ "$OK" -eq "$TOTAL" ]; then COLOR="${GREEN}"
-else COLOR="${RED}"
-fi
-
-echo -e "${CYAN}Результат:${NC} ${COLOR}$OK/$TOTAL${NC}"
-
-echo -e "${NAME} → ${OK}/${TOTAL}" >> "$RESULTS"
-
-done
-
-sort -t'/' -k1 -nr "$RESULTS" -o "$RESULTS"
-
-[ -f "$BACK" ] && mv -f "$BACK" "$CONF"
-
-ZAPRET_RESTART
-
-show_single_result "$RESULTS"
+  sort -t'/' -k1 -nr "$RESULTS" -o "$RESULTS"
+  [ -f "$BACK" ] && mv -f "$BACK" "$CONF"
+  ZAPRET_RESTART
+  show_single_result "$RESULTS"
 }
+
 
 
 
@@ -602,4 +595,4 @@ if [ -n "$current" ]; then echo -e "${YELLOW}Используется страт
 echo -e "\n${CYAN}1) ${GREEN}$Z_ACTION_TEXT${NC} Zapret\n${CYAN}2) ${GREEN}$str_stp_zpr ${NC}Zapret\n${CYAN}3) ${GREEN}Меню стратегий${NC}"
 echo -e "${CYAN}4) ${GREEN}Меню ${NC}DNS over HTTPS\n${CYAN}5) ${GREEN}Меню настройки ${NC}Discord\n${CYAN}6) ${GREEN}Меню управления настройками\n${CYAN}7) ${GREEN}Меню управления доменами в ${NC}hosts\n${CYAN}8) ${GREEN}Удалить ${NC}→${GREEN} установить ${NC}→${GREEN} настроить${NC} Zapret\n${CYAN}0) ${GREEN}Системное меню${NC}" ; echo -ne "${CYAN}Enter) ${GREEN}Выход${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read choice
 case "$choice" in 888) echo; uninstall_zapret "1"; install_Zapret "1"; curl -fsSL https://raw.githubusercontent.com/StressOzz/Test/refs/heads/main/zapret -o "$CONF"; hosts_add "$ALL_BLOCKS"; rm -f "$EXCLUDE_FILE"; wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL"; ZAPRET_RESTART; PAUSE;;
-1) $Z_ACTION_FUNC;; 2) pgrep -f /opt/zapret >/dev/null 2>&1 && stop_zapret || start_zapret;; 3) menu_str;; 4) DoH_menu;; 5) Discord_menu;; 6) backup_menu;; 7) menu_hosts;; 8) zapret_key;; 0) sys_menu;; *) echo; exit 0;; esac; }; while true; do show_menu; done
+666) run_test_by_domain;; 1) $Z_ACTION_FUNC;; 2) pgrep -f /opt/zapret >/dev/null 2>&1 && stop_zapret || start_zapret;; 3) menu_str;; 4) DoH_menu;; 5) Discord_menu;; 6) backup_menu;; 7) menu_hosts;; 8) zapret_key;; 0) sys_menu;; *) echo; exit 0;; esac; }; while true; do show_menu; done
