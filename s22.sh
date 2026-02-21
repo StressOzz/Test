@@ -392,7 +392,7 @@ INPUT="$(printf "%s" "$INPUT" | tr -s ' ')"; [ -z "$INPUT" ] && return; URLS="";
 HOST=$(printf "%s\n" "$TARGET" | sed -E 's#^https?://##; s#/.*##'); URLS="${URLS}${HOST}|https://${HOST}/"$'\n'; COUNT=$((COUNT+1)); done; TOTAL="$COUNT"; [ "$TOTAL" -eq 0 ] && { echo -e "\n${RED}Домены введены неверно${NC}\n"; PAUSE; return; }
 RESULTS="/opt/zapret/tmp/results_domain.txt"; : > "$RESULTS"; : > "$STR_FILE"; cp "$CONF" "$BACK"; echo -e "\n${CYAN}Собираем ${NC}Flowseal${CYAN} стратегии${NC}"; download_strategies 1; cp "$OUT" "$STR_FILE"
 echo -e "${CYAN}Собираем ${NC}v${CYAN} стратегии${NC}"; for N in $(seq 1 100); do strategy_v$N >> "$STR_FILE" 2>/dev/null || break; done; sed -i '/#Y/d' "$STR_FILE"; LINES=$(grep -n '^#' "$STR_FILE" | cut -d: -f1); CUR=0; TOTAL_STR=$(grep -c '^#' "$STR_FILE")
-echo -e "${CYAN}Найдено стратегий:${NC} $TOTAL_STR\n${CYAN}Доменов для теста::${NC} $TOTAL"; check_zpr_off; echo "$LINES" | while read -r START; do CUR=$((CUR+1)); NEXT=$(echo "$LINES" | awk -v s="$START" '$1>s{print;exit}'); if [ -z "$NEXT" ]; then
+echo -e "${CYAN}Найдено стратегий:${NC} $TOTAL_STR\n${CYAN}Доменов для теста:${NC} $TOTAL"; check_zpr_off; echo "$LINES" | while read -r START; do CUR=$((CUR+1)); NEXT=$(echo "$LINES" | awk -v s="$START" '$1>s{print;exit}'); if [ -z "$NEXT" ]; then
 sed -n "${START},\$p" "$STR_FILE" > "$TEMP_FILE"; else sed -n "${START},$((NEXT-1))p" "$STR_FILE" > "$TEMP_FILE"; fi; BLOCK=$(cat "$TEMP_FILE"); NAME=$(head -n1 "$TEMP_FILE"); NAME="${NAME#\#}"; awk -v block="$BLOCK" 'BEGIN{skip=0}
 /option NFQWS_OPT '\''/ {printf "\toption NFQWS_OPT '\''\n%s\n'\''\n", block; skip=1; next}
 skip && /^'\''$/ {skip=0; next}
