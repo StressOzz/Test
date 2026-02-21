@@ -699,9 +699,9 @@ if [ -s "$RES1" ] || [ -s "$RES2" ] || [ -s "$RES3" ]; then
 fi
 
 echo -ne "${CYAN}Enter) ${GREEN}Выход в меню стратегий${NC}\n\n${YELLOW}Выберите пункт:${NC} ";read -r t; case "$t" in
-1) rm -f /opt/zapret/tmp/results*; run_test_versions;; 2) rm -f /opt/zapret/tmp/results*; run_test_flowseal;; 3) rm -f /opt/zapret/tmp/results*; run_all_tests;; 4) check_current_strategy;;  5) auto_stryou;;
+1) rm -f "$RES3"; run_test_versions;; 2) rm -f "$RES3"; run_test_flowseal;; 3) rm -f "$RES1" "$RES2" "$RES3"; run_all_tests;; 4) check_current_strategy;;  5) auto_stryou;;
 
-6) rm -f /opt/zapret/tmp/results*; run_test_by_domain;;
+6) run_test_by_domain;;
 
 9) show_test_results;; 0) rm -f /opt/zapret/tmp/results*; echo -e "\n${GREEN}Результаты тестирования удалены!${NC}\n"; PAUSE;; *) break;; esac; done; }
 # ==========================================
