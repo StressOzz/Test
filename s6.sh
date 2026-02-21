@@ -391,24 +391,42 @@ echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${
 run_test_by_domain() {
 clear
 echo -e "${MAGENTA}Тестирование стратегий по домену${NC}\n"
-echo -ne "${YELLOW}Введите домен или URL: ${NC}"
+
+echo -ne "${YELLOW}Введите домен или URL (можно несколько через пробел): ${NC}"
 read -r INPUT
 
-INPUT="$(printf "%s" "$INPUT" | tr -d ' \t\r\n')"
+INPUT="$(printf "%s" "$INPUT" | tr -s ' ')"
 [ -z "$INPUT" ] && { echo -e "\n${RED}Пустой ввод${NC}\n"; PAUSE; return; }
 
-case "$INPUT" in
-http://*|https://*) TARGET="$INPUT" ;;
-*) TARGET="https://$INPUT" ;;
+URLS=""
+COUNT=0
+
+for item in $INPUT; do
+
+item="$(printf "%s" "$item" | tr -d ' \t\r\n')"
+[ -z "$item" ] && continue
+
+case "$item" in
+http://*|https://*) TARGET="$item" ;;
+*) TARGET="https://$item" ;;
 esac
 
 HOST=$(printf "%s\n" "$TARGET" | sed -E 's#^https?://##; s#/.*##')
 
-# mkdir -p "$TMP_SF"
-# mkdir -p "$(dirname "$STR_FILE")"
+URLS="${URLS}${HOST}|https://${HOST}/
+"
 
-URLS="${HOST}|https://${HOST}/"
-TOTAL=1
+COUNT=$((COUNT+1))
+
+done
+
+TOTAL="$COUNT"
+
+[ "$TOTAL" -eq 0 ] && { echo -e "\n${RED}Нет валидных адресов${NC}\n"; PAUSE; return; }
+
+echo
+echo -e "${CYAN}Сайтов для теста:${NC} $TOTAL"
+echo
 
 RESULTS="/opt/zapret/tmp/results_domain.txt"
 : > "$RESULTS"
