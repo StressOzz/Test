@@ -392,7 +392,9 @@ run_test_by_domain() {
 clear
 echo -e "${MAGENTA}Тестирование стратегий по домену${NC}\n"
 
-echo -ne "${YELLOW}Введите домен ( (можно несколько через пробел): ${NC}"
+echo -e "${CYAN}Введите один или несколько доменов через пробел (например: x.com ya.ru)${NC}\n"
+
+echo -ne "${YELLOW}Введите домен: ${NC}"
 read -r INPUT
 
 INPUT="$(printf "%s" "$INPUT" | tr -s ' ')"
@@ -422,7 +424,7 @@ done
 
 TOTAL="$COUNT"
 
-[ "$TOTAL" -eq 0 ] && { echo -e "\n${RED}Нет валидных адресов${NC}\n"; PAUSE; return; }
+[ "$TOTAL" -eq 0 ] && { echo -e "\n${RED}Домены введены неверно${NC}\n"; PAUSE; return; }
 
 RESULTS="/opt/zapret/tmp/results_domain.txt"
 : > "$RESULTS"
@@ -435,12 +437,12 @@ RESULTS="/opt/zapret/tmp/results_domain.txt"
 : > "$STR_FILE"
 cp "$CONF" "$BACK"
 
-echo -e "${CYAN}Собираем Flowseal стратегии...${NC}"
+  echo -e "${CYAN}Собираем ${NC}Flowseal${CYAN} стратегии${NC}"
 
 download_strategies 1
 cp "$OUT" "$STR_FILE"
 
-echo -e "${CYAN}Добавляем v стратегии...${NC}"
+  echo -e "${CYAN}Собираем ${NC}v${CYAN} стратегии${NC}"
 
 for N in $(seq 1 100); do
 strategy_v$N >> "$STR_FILE" 2>/dev/null || break
