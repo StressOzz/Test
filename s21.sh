@@ -387,128 +387,19 @@ echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${
 # ==========================================
 # Тест стратегий
 # ==========================================
-run_test_by_domain() {
-clear
-echo -e "${MAGENTA}Тестирование стратегий по домену${NC}\n"
-
-echo -e "${CYAN}Введите один или несколько доменов через пробел (например: x.com ya.ru)${NC}\n"
-
-echo -ne "${YELLOW}Введите домен: ${NC}"
-read -r INPUT
-
-INPUT="$(printf "%s" "$INPUT" | tr -s ' ')"
-[ -z "$INPUT" ] && return
-
-URLS=""
-COUNT=0
-
-for item in $INPUT; do
-
-item="$(printf "%s" "$item" | tr -d ' \t\r\n')"
-[ -z "$item" ] && continue
-
-case "$item" in
-http://*|https://*) TARGET="$item" ;;
-*) TARGET="https://$item" ;;
-esac
-
+run_test_by_domain() { clear; echo -e "${MAGENTA}Тестирование стратегий по домену${NC}\n\n${CYAN}Введите один или несколько доменов через пробел (например: ${NC}x.com vk.com${CYAN})${NC}\n"; echo -ne "${YELLOW}Введите домен: ${NC}"; read -r INPUT
+INPUT="$(printf "%s" "$INPUT" | tr -s ' ')"; [ -z "$INPUT" ] && return; URLS=""; COUNT=0; for item in $INPUT; do item="$(printf "%s" "$item" | tr -d ' \t\r\n')"; [ -z "$item" ] && continue; case "$item" in http://*|https://*) TARGET="$item" ;; *) TARGET="https://$item" ;; esac
 HOST=$(printf "%s\n" "$TARGET" | sed -E 's#^https?://##; s#/.*##')
-
-URLS="${URLS}${HOST}|https://${HOST}/
-"
-
-COUNT=$((COUNT+1))
-
-done
-
-TOTAL="$COUNT"
-
-[ "$TOTAL" -eq 0 ] && { echo -e "\n${RED}Домены введены неверно${NC}\n"; PAUSE; return; }
-
-RESULTS="/opt/zapret/tmp/results_domain.txt"
-: > "$RESULTS"
-
-
-#
-# собираем стратегии
-#
-
-: > "$STR_FILE"
-cp "$CONF" "$BACK"
-
-  echo -e "${CYAN}Собираем ${NC}Flowseal${CYAN} стратегии${NC}"
-
-download_strategies 1
-cp "$OUT" "$STR_FILE"
-
-  echo -e "${CYAN}Собираем ${NC}v${CYAN} стратегии${NC}"
-
-for N in $(seq 1 100); do
-strategy_v$N >> "$STR_FILE" 2>/dev/null || break
-done
-
-sed -i '/#Y/d' "$STR_FILE"
-
-LINES=$(grep -n '^#' "$STR_FILE" | cut -d: -f1)
-CUR=0
-TOTAL_STR=$(grep -c '^#' "$STR_FILE")
-
-echo -e "${CYAN}Найдено стратегий:${NC} $TOTAL_STR"
-
-echo -e "${CYAN}Сайтов для теста:${NC} $TOTAL"
-
-check_zpr_off
-
-echo "$LINES" | while read -r START; do
-
-CUR=$((CUR+1))
-
-NEXT=$(echo "$LINES" | awk -v s="$START" '$1>s{print;exit}')
-
-if [ -z "$NEXT" ]; then
-sed -n "${START},\$p" "$STR_FILE" > "$TEMP_FILE"
-else
-sed -n "${START},$((NEXT-1))p" "$STR_FILE" > "$TEMP_FILE"
-fi
-
-BLOCK=$(cat "$TEMP_FILE")
-NAME=$(head -n1 "$TEMP_FILE")
-NAME="${NAME#\#}"
-
-awk -v block="$BLOCK" 'BEGIN{skip=0}
+URLS="${URLS}${HOST}|https://${HOST}/"$'\n'
+COUNT=$((COUNT+1)); done; TOTAL="$COUNT"; [ "$TOTAL" -eq 0 ] && { echo -e "\n${RED}Домены введены неверно${NC}\n"; PAUSE; return; }
+RESULTS="/opt/zapret/tmp/results_domain.txt"; : > "$RESULTS"; : > "$STR_FILE"; cp "$CONF" "$BACK"; echo -e "\n${CYAN}Собираем ${NC}Flowseal${CYAN} стратегии${NC}"; download_strategies 1; cp "$OUT" "$STR_FILE"
+echo -e "${CYAN}Собираем ${NC}v${CYAN} стратегии${NC}"; for N in $(seq 1 100); do strategy_v$N >> "$STR_FILE" 2>/dev/null || break; done; sed -i '/#Y/d' "$STR_FILE"; LINES=$(grep -n '^#' "$STR_FILE" | cut -d: -f1); CUR=0; TOTAL_STR=$(grep -c '^#' "$STR_FILE")
+echo -e "${CYAN}Найдено стратегий:${NC} $TOTAL_STR\n${CYAN}Доменов для теста::${NC} $TOTAL"; check_zpr_off; echo "$LINES" | while read -r START; do CUR=$((CUR+1)); NEXT=$(echo "$LINES" | awk -v s="$START" '$1>s{print;exit}'); if [ -z "$NEXT" ]; then
+sed -n "${START},\$p" "$STR_FILE" > "$TEMP_FILE"; else sed -n "${START},$((NEXT-1))p" "$STR_FILE" > "$TEMP_FILE"; fi; BLOCK=$(cat "$TEMP_FILE"); NAME=$(head -n1 "$TEMP_FILE"); NAME="${NAME#\#}"; awk -v block="$BLOCK" 'BEGIN{skip=0}
 /option NFQWS_OPT '\''/ {printf "\toption NFQWS_OPT '\''\n%s\n'\''\n", block; skip=1; next}
 skip && /^'\''$/ {skip=0; next}
-!skip {print}' "$CONF" > "${CONF}.tmp"
-
-mv "${CONF}.tmp" "$CONF"
-
-echo -e "\n${CYAN}Тестируем стратегию:${NC} ${YELLOW}${NAME}${NC} ($CUR/$TOTAL_STR)"
-
-ZAPRET_RESTART
-
-OK=0
-check_all_urls
-
-if [ "$OK" -eq "$TOTAL" ]; then COLOR="${GREEN}"
-else COLOR="${RED}"
-fi
-
-echo -e "${CYAN}Результат:${NC} ${COLOR}$OK/$TOTAL${NC}"
-
-echo -e "${NAME} → ${OK}/${TOTAL}" >> "$RESULTS"
-
-done
-
-sort -t'/' -k1 -nr "$RESULTS" -o "$RESULTS"
-
-[ -f "$BACK" ] && mv -f "$BACK" "$CONF"
-
-ZAPRET_RESTART
-
-show_single_result "$RESULTS"
-rm -f "/opt/zapret/tmp/results_domain.txt"
-}
-
+!skip {print}' "$CONF" > "${CONF}.tmp"; mv "${CONF}.tmp" "$CONF"; echo -e "\n${CYAN}Тестируем стратегию:${NC} ${YELLOW}${NAME}${NC} ($CUR/$TOTAL_STR)"; ZAPRET_RESTART; OK=0; check_all_urls; if [ "$OK" -eq "$TOTAL" ]; then COLOR="${GREEN}"; else COLOR="${RED}"; fi
+echo -e "${CYAN}Результат теста:${NC} ${COLOR}$OK/$TOTAL${NC}"; echo -e "${NAME} → ${OK}/${TOTAL}" >> "$RESULTS"; done; sort -t'/' -k1 -nr "$RESULTS" -o "$RESULTS"; [ -f "$BACK" ] && mv -f "$BACK" "$CONF"; ZAPRET_RESTART; show_single_result "$RESULTS"; rm -f "/opt/zapret/tmp/results_domain.txt"; }
 
 
 check_zpr_off() { echo -e "\n${CYAN}Контрольный тест: ${YELLOW}Zapret выключен${NC}"; /etc/init.d/zapret stop >/dev/null 2>&1; OK=0; check_all_urls; if [ "$OK" -eq "$TOTAL" ]; then COLOR="${GREEN}"; elif [ "$OK" -ge $((TOTAL/2)) ]
