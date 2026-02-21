@@ -424,14 +424,9 @@ TOTAL="$COUNT"
 
 [ "$TOTAL" -eq 0 ] && { echo -e "\n${RED}Нет валидных адресов${NC}\n"; PAUSE; return; }
 
-echo
-echo -e "${CYAN}Сайтов для теста:${NC} $TOTAL"
-echo
-
 RESULTS="/opt/zapret/tmp/results_domain.txt"
 : > "$RESULTS"
 
-echo -e "\n${CYAN}Тестируем:${NC} https://${HOST}\n"
 
 #
 # собираем стратегии
@@ -458,6 +453,8 @@ CUR=0
 TOTAL_STR=$(grep -c '^#' "$STR_FILE")
 
 echo -e "${CYAN}Найдено стратегий:${NC} $TOTAL_STR"
+
+echo -e "${CYAN}Сайтов для теста:${NC} $TOTAL"
 
 check_zpr_off
 
@@ -540,7 +537,81 @@ run_test_flowseal() { clear; echo -e "${MAGENTA}Тестирование стр�
 download_strategies 1; cp "$OUT" "$STR_FILE"; cp "$CONF" "$BACK"; sed -i '/#Y/d' "$STR_FILE"; run_test_core "$RESULTS"; }
 run_test_versions() { clear; echo -e "${MAGENTA}Тестирование стратегий v${NC}\n\n${CYAN}Собираем стратегии для теста${NC}"; RESULTS="/opt/zapret/tmp/results_versions.txt"; : > "$STR_FILE"; cp "$CONF" "$BACK"
 for N in $(seq 1 100); do strategy_v$N >> "$STR_FILE" 2>/dev/null || break; done; sed -i '/#Y/d' "$STR_FILE"; run_test_core "$RESULTS"; }
-run_all_tests() { NO_PAUSE=1 RESULTS="/opt/zapret/tmp/results_flowseal.txt" run_test_flowseal; NO_PAUSE=1 RESULTS="/opt/zapret/tmp/results_versions.txt" run_test_versions; show_test_results; }
+
+
+
+run_all_tests() {
+  clear
+  echo -e "${MAGENTA}Тестирование всех стратегий сразу${NC}\n"
+  
+  RESULTS="/opt/zapret/tmp/results_all.txt"
+  : > "$STR_FILE"
+  [ -f "$BACK" ] || cp "$CONF" "$BACK"
+
+  echo -e "${CYAN}Собираем Flowseal стратегии...${NC}"
+  download_strategies 1
+  cat "$OUT" >> "$STR_FILE"
+
+  echo -e "${CYAN}Добавляем v стратегии...${NC}"
+  for N in $(seq 1 100); do
+    strategy_v$N >> "$STR_FILE" 2>/dev/null || break
+  done
+
+  sed -i '/#Y/d' "$STR_FILE"
+
+  LINES=$(grep -n '^#' "$STR_FILE" | cut -d: -f1)
+  CUR=0
+  TOTAL_STR=$(grep -c '^#' "$STR_FILE")
+  echo -e "${CYAN}Найдено стратегий:${NC} $TOTAL_STR"
+
+  # подготовка URL как обычно
+  prepare_urls || return 1
+  URLS="$(cat "$OUT_DPI")"
+  TOTAL=$(grep -c "|" "$OUT_DPI")
+
+  echo -e "${CYAN}Сайтов для теста:${NC} $TOTAL\n"
+
+  # контрольный тест
+  check_zpr_off
+
+  echo "$LINES" | while read -r START; do
+    CUR=$((CUR+1))
+    NEXT=$(echo "$LINES" | awk -v s="$START" '$1>s{print;exit}')
+    if [ -z "$NEXT" ]; then
+      sed -n "${START},\$p" "$STR_FILE" > "$TEMP_FILE"
+    else
+      sed -n "${START},$((NEXT-1))p" "$STR_FILE" > "$TEMP_FILE"
+    fi
+
+    BLOCK=$(cat "$TEMP_FILE")
+    NAME=$(head -n1 "$TEMP_FILE"); NAME="${NAME#\#}"
+
+    awk -v block="$BLOCK" 'BEGIN{skip=0}
+/option NFQWS_OPT '\''/ {printf "\toption NFQWS_OPT '\''\n%s\n'\''\n", block; skip=1; next}
+skip && /^'\''$/ {skip=0; next}
+!skip {print}' "$CONF" > "${CONF}.tmp" && mv "${CONF}.tmp" "$CONF"
+
+    echo -e "\n${CYAN}Тестируем стратегию:${NC} ${YELLOW}${NAME}${NC} ($CUR/$TOTAL_STR)"
+    ZAPRET_RESTART
+
+    OK=0
+    check_all_urls
+
+    if [ "$OK" -eq "$TOTAL" ]; then COLOR="${GREEN}"; elif [ "$OK" -ge $((TOTAL/2)) ]; then COLOR="${YELLOW}"; else COLOR="${RED}"; fi
+
+    echo -e "${CYAN}Результат:${NC} ${COLOR}$OK/$TOTAL${NC}"
+    echo -e "${NAME} → ${OK}/${TOTAL}" >> "$RESULTS"
+  done
+
+  sort -t'/' -k1 -nr "$RESULTS" -o "$RESULTS"
+  [ -f "$BACK" ] && mv -f "$BACK" "$CONF"
+  ZAPRET_RESTART
+
+  show_single_result "$RESULTS"
+}
+
+
+
 run_test_core() { local RESULTS="$1"; prepare_urls || return 1; URLS="$(cat "$OUT_DPI")"; TOTAL=$(grep -c "|" "$OUT_DPI"); TOTAL_STR=$(grep -c '^#' "$STR_FILE")
 echo -e "${CYAN}Найдено стратегий: ${NC}$TOTAL_STR"; : > "$RESULTS"; check_zpr_off; LINES=$(grep -n '^#' "$STR_FILE" | cut -d: -f1); CUR=0
 echo "$LINES" | while read START; do CUR=$((CUR+1)); NEXT=$(echo "$LINES" | awk -v s="$START" '$1>s{print;exit}'); if [ -z "$NEXT" ]; then
