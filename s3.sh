@@ -405,14 +405,28 @@ esac
 HOST=$(printf "%s\n" "$TARGET" | sed -E 's#^https?://##; s#/.*##')
 
 mkdir -p "$TMP_SF"
+mkdir -p "$(dirname "$STR_FILE")"
 
-URLS="${HOST}|https://${HOST}"
+URLS="${HOST}|https://${HOST}/"
 TOTAL=1
 
 RESULTS="/opt/zapret/tmp/results_domain.txt"
 : > "$RESULTS"
 
 echo -e "\n${CYAN}Тестируем:${NC} https://${HOST}\n"
+
+#
+# Готовим стратегии (как в run_test_versions)
+#
+
+: > "$STR_FILE"
+cp "$CONF" "$BACK"
+
+for N in $(seq 1 100); do
+strategy_v$N >> "$STR_FILE" 2>/dev/null || break
+done
+
+sed -i '/#Y/d' "$STR_FILE"
 
 check_zpr_off
 
