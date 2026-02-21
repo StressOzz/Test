@@ -435,13 +435,13 @@ done
 
 sed -i '/#Y/d' "$STR_FILE"
 
-check_zpr_off
-
 LINES=$(grep -n '^#' "$STR_FILE" | cut -d: -f1)
 CUR=0
 TOTAL_STR=$(grep -c '^#' "$STR_FILE")
 
 echo -e "${CYAN}Найдено стратегий:${NC} $TOTAL_STR"
+
+check_zpr_off
 
 echo "$LINES" | while read -r START; do
 
