@@ -45,12 +45,9 @@ install_pkg "amneziawg-tools"
 install_pkg "luci-proto-amneziawg"
 install_pkg "luci-i18n-amneziawg-ru" >/dev/null 2>&1 || echo -e "${RED}Внимание: русская локализация не установлена (не критично)${NC}"
 rm -rf "$AWG_DIR"
-echo -e "${YELLOW}Перезапускаем сеть! Подождите...${NC}"
-/etc/init.d/network restart >/dev/null 2>&1
-sleep 10
 echo -e "AmneziaWG ${GREEN}установлен!${NC}"
 
-echo -e "${MAGENTA}Устанавливаем интерфейс AWG${NC}"
+echo -e "\n${MAGENTA}Устанавливаем интерфейс AWG${NC}"
 IF_NAME="AWG"
 PROTO="amneziawg"
 DEV_NAME="amneziawg0"
@@ -65,12 +62,9 @@ set network.$IF_NAME.device=$DEV_NAME
 commit network
 EOF
 fi
-echo -e "${CYAN}Перезапускаем сеть${NC}"
-/etc/init.d/network restart
-sleep 5
-echo -e "${GREEN}Интерфейс ${NC}$IF_NAME${GREEN} создан и активирован!${NC}"
+echo -e "${GREEN}Интерфейс ${NC}$IF_NAME${GREEN} создан!${NC}"
 
-echo -en "\n${YELLOW}Вставьте рабочий конфиг в Interfaces (Интерфейс) AWG в LuCI и нажмите Save!\nЗатем нажмите Enter для установки Podkop!${NC}"; read -p "" dummy
+echo -en "\n${YELLOW}Вставьте рабочий конфиг в Interfaces (Интерфейс) AWG в LuCI и нажмите Save затем Save & Apply!\nНажмите Enter для установки Podkop!${NC}"; read -p "" dummy
 
 echo -e "\n${MAGENTA}Установка Podkop${NC}"
 
@@ -215,7 +209,7 @@ echo -e "${CYAN}Обновляем русский язык...${NC}" "$ru"
 
 
 
-echo -e "${CYAN}Меняем конфигурацию в Podkop${NC}"
+echo -e "${MAGENTA}Меняем конфигурацию в Podkop${NC}"
     cat <<EOF >/etc/config/podkop
 config settings 'settings'
 	option dns_type 'udp'
