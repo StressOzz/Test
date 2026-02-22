@@ -272,8 +272,7 @@ config section 'main'
 	option user_domain_list_type 'disabled'
 	option user_subnet_list_type 'disabled'
 	option mixed_proxy_enabled '0'
-	list community_lists 'russia_inside'
-	list community_lists 'hodca'
+	list community_lists 'telegram'
 EOF
 
 echo -e "AWG ${GREEN}интегрирован в ${NC}Podkop${GREEN}.${NC}"
