@@ -134,7 +134,7 @@ install_mihomo() {
         step_fail
     fi
 
-    if ! opkg install kmod-nft-tproxy kmod-tun curl libcurl4 ca-bundle ca-certificates > "$PKG_LOG" 2>&1; then
+    if ! opkg install kmod-nft-tproxy kmod-tun curl libcurl4 ca-bundle ca-certificates > "$PKG_LOG" >/dev/null 2>&1; then
         log_error "Ошибка при установке пакетов!"
         
         if grep -iq "No space left on device" "$PKG_LOG" || grep -iq "write error" "$PKG_LOG"; then
@@ -181,7 +181,7 @@ install_mihomo() {
     log_info "Скачивание архива $FILENAME"
     echo "--> URL: $DOWNLOAD_URL"
 
-    if ! curl -Lf --retry 3 --retry-delay 2 "$DOWNLOAD_URL" -o "$TMP_FILE"; then
+    if ! curl -Lf --retry 3 --retry-delay 2 "$DOWNLOAD_URL" -o "$TMP_FILE" >/dev/null 2>&1; then
         log_error "Ошибка скачивания! Проверьте, существует ли файл $FILENAME в релизах."
         return 1
     fi
@@ -1184,7 +1184,7 @@ EOF
 
 install_hev_tunnel() {
 	log_info "Установка hev-socks5-tunnel..."
-    opkg install hev-socks5-tunnel > /dev/null 2>&1
+    opkg install hev-socks5-tunnel >/dev/null 2>&1
 
     echo "--> Создание конфигурации /etc/hev-socks5-tunnel/main.yml..."
     mkdir -p /etc/hev-socks5-tunnel
@@ -1266,8 +1266,13 @@ install_magitrickle() {
             URL="https://gitlab.com/api/v4/projects/69165954/packages/generic/magitrickle/0.5.2/$IPK"
             cd /tmp
             wget -O "$IPK" "$URL" || { log_error "Ошибка скачивания оригинального MagiTrickle"; return 1; }
-            opkg install "$IPK" || return 1
+            opkg install "$IPK" >/dev/null 2>&1 || return 1
             rm -f "$IPK"
+			
+			
+wget -O /etc/magitrickle/state/config.yaml \
+"https://raw.githubusercontent.com/StressOzz/Use_WARP_on_OpenWRT/refs/heads/main/files/MagiTrickle/config.yaml"
+			
             echo "--> Включение автозапуска MagiTrickle..."
             /etc/init.d/magitrickle enable >/dev/null 2>&1
             echo "--> Запуск MagiTrickle..."
