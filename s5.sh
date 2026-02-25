@@ -1204,7 +1204,7 @@ install_magitrickle() {
             IPK="magitrickle_0.5.2-2_openwrt_${ARCH_SYS}.ipk"
             URL="https://gitlab.com/api/v4/projects/69165954/packages/generic/magitrickle/0.5.2/$IPK"
             cd /tmp
-            wget -O -q "$IPK" "$URL" || { log_error "Ошибка скачивания оригинального MagiTrickle"; return 1; }
+            wget -O "$IPK" "$URL" || { log_error "Ошибка скачивания оригинального MagiTrickle"; return 1; }
             opkg install "$IPK" >/dev/null 2>&1 || return 1
             rm -f "$IPK"
 			
