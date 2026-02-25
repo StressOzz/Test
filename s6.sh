@@ -1204,17 +1204,20 @@ install_magitrickle() {
             IPK="magitrickle_0.5.2-2_openwrt_${ARCH_SYS}.ipk"
             URL="https://gitlab.com/api/v4/projects/69165954/packages/generic/magitrickle/0.5.2/$IPK"
             cd /tmp
-            wget -O "$IPK" "$URL" || { log_error "Ошибка скачивания оригинального MagiTrickle"; return 1; }
+			echo "--> Установка MagiTrickle..."
+            wget -q -O "$IPK" "$URL" || { log_error "Ошибка скачивания оригинального MagiTrickle"; return 1; }
             opkg install "$IPK" >/dev/null 2>&1 || return 1
             rm -f "$IPK"
 			
 			
-wget -O -q /etc/magitrickle/state/config.yaml \
+wget -q -O /etc/magitrickle/state/config.yaml \
 "https://raw.githubusercontent.com/StressOzz/Use_WARP_on_OpenWRT/refs/heads/main/files/MagiTrickle/config.yaml"
 			
             echo "--> Включение автозапуска MagiTrickle..."
             /etc/init.d/magitrickle enable >/dev/null 2>&1
             echo "--> Запуск MagiTrickle..."
+			/etc/init.d/magitrickle reload  >/dev/null 2>&1
+			/etc/init.d/magitrickle start >/dev/null 2>&1
             /etc/init.d/magitrickle restart >/dev/null 2>&1
     
     compare_versions() {
