@@ -16,5 +16,5 @@ rm -rf /usr/lib/opkg/info/*{hev,magitri,mihom,kmod-nft}* /tmp/luci-*
 /etc/init.d/rpcd restart >/dev/null 2>&1
 /etc/init.d/uhttpd restart >/dev/null 2>&1
 
-echo -e "\n\n Удаление завершино! reboot? (y)"
+echo -e "\nУдаление завершино! reboot? (y)"
 read ans; [ "$ans" = y ] && reboot
