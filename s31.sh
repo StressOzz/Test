@@ -78,7 +78,7 @@ INSIDE="$WORK/inside-kvas.lst"
 fetch "https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Russia/inside-kvas.lst" "$INSIDE"
 
 LIST_COUNT="$(find "$WORK" -maxdepth 1 -name '*.lst' | wc -l | tr -d ' ')"
-say "$MAG" "Всего файлов в работе:" "$YEL" "$LIST_COUNT"
+say "$MAG" "Всего файлов в работе:" "$YEL""$LIST_COUNT"
 
 # 4) tagged.tsv (CIDR не режем; /path режем только у URL со схемой)
 awk '
@@ -118,8 +118,8 @@ FNR==1{
 ' "$WORK"/*.lst > "$WORK/tagged.tsv"
 
 TAGGED_TOTAL="$(wc -l < "$WORK/tagged.tsv" 2>/dev/null || echo 0)"
-say "$MAG" "Всего строк:" "$YEL" "$TAGGED_TOTAL"
-say "$CYN" "Создаю общий список. Ждите..."
+say "$MAG" "Всего строк:" "$YEL""$TAGGED_TOTAL"
+say "$CYN" "Создаём общий список. Ждите..."
 
 # 5) JSON
 awk -F '\t' '
@@ -206,4 +206,4 @@ END{
 ' "$WORK/tagged.tsv" 2> "$WORK/report.tsv" > "$OUT"
 
 say "$GRN" "Готово!"
-say "$GRN" "Файл сохранён: " "$RST" "$OUT"
+say "$GRN" "Файл сохранён: ""$RST""$OUT"
