@@ -1,17 +1,41 @@
 #!/bin/sh
 set -eu
 
-OUT="/root/ItDogLists.mtrickle"
+OUT="/root/mihomo_groups.json"
 WORK="/tmp/mihomo_groups.$$"
 TAG="mihomo-groups"
 mkdir -p "$WORK"
 trap 'rm -rf "$WORK"' EXIT
 
-log() {
-  msg="$1"
-  echo "$msg"
+# Цветной вывод (ANSI). В syslog цвета не отправляем.
+RED="$(printf '\033[31m')"
+GRN="$(printf '\033[32m')"
+YEL="$(printf '\033[33m')"
+BLU="$(printf '\033[34m')"
+MAG="$(printf '\033[35m')"
+CYN="$(printf '\033[36m')"
+RST="$(printf '\033[0m')"
+
+logc() {
+  color="$1"; shift
+  msg="$*"
+  printf "%b%s%b\n" "$color" "$msg" "$RST"
   if command -v logger >/dev/null 2>&1; then
     logger -t "$TAG" "$msg"
+  fi
+}
+
+fetch() {
+  u="$1"; d="$2"
+  if command -v uclient-fetch >/dev/null 2>&1; then
+    uclient-fetch -q -O "$d" "$u"
+  elif command -v wget >/dev/null 2>&1; then
+    wget -q -O "$d" "$u"
+  elif command -v curl >/dev/null 2>&1; then
+    curl -fsSL -o "$d" "$u"
+  else
+    logc "$RED" "ОШИБКА: нет uclient-fetch/wget/curl для загрузки"
+    exit 1
   fi
 }
 
@@ -51,35 +75,20 @@ https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Subnet
 https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Subnets/IPv4/twitter.lst
 '
 
-fetch() {
-  u="$1"; d="$2"
-  if command -v uclient-fetch >/dev/null 2>&1; then
-    uclient-fetch -q -O "$d" "$u"
-  elif command -v wget >/dev/null 2>&1; then
-    wget -q -O "$d" "$u"
-  elif command -v curl >/dev/null 2>&1; then
-    curl -fsSL -o "$d" "$u"
-  else
-    log "ERROR: no downloader found (need uclient-fetch/wget/curl)"
-    exit 1
-  fi
-}
+logc "$CYN" "Старт: собираю группы для Mihomo -> $OUT"
+LIST_COUNT="$(printf "%s" "$URLS" | awk 'NF{c++} END{print c+0}')"
+logc "$YEL" "Списков для загрузки: $LIST_COUNT"
 
-log "Start build -> $OUT"
-log "Lists to fetch: $(printf "%s" "$URLS" | awk 'NF{c++} END{print c+0}')"
-
-# download + show what exactly we download
 printf "%s" "$URLS" | while IFS= read -r url; do
   [ -n "$url" ] || continue
   base="$(basename "$url")"
   dst="$WORK/$base"
-  log "Fetch: $base <= $url"
+  logc "$BLU" "Загружаю: $base"
   fetch "$url" "$dst"
   lines="$(wc -l < "$dst" 2>/dev/null || echo 0)"
-  log "Fetched: $base lines=$lines"
+  logc "$GRN" "Готово: $base (строк: $lines)"
 done
 
-# normalize + tag: group<TAB>value
 awk '
 function trim(s){ sub(/^[ \t\r\n]+/,"",s); sub(/[ \t\r\n]+$/,"",s); return s }
 function tolower_ascii(s,   i,c,r,up,lo){
@@ -108,10 +117,9 @@ FNR==1{
 }
 ' "$WORK"/*.lst > "$WORK/tagged.tsv"
 
-tagged_total="$(wc -l < "$WORK/tagged.tsv" 2>/dev/null || echo 0)"
-log "Tagged total lines (before dedup inside groups): $tagged_total"
+TAGGED_TOTAL="$(wc -l < "$WORK/tagged.tsv" 2>/dev/null || echo 0)"
+logc "$MAG" "Строк после очистки (до дедупликации): $TAGGED_TOTAL"
 
-# build json + also build report file
 awk -F '\t' '
 function is_ipv4(s){ return (s ~ /^([0-9]{1,3}\.){3}[0-9]{1,3}$/) }
 function is_ipv4_cidr(s){ return (s ~ /^([0-9]{1,3}\.){3}[0-9]{1,3}\/[0-9]{1,2}$/) }
@@ -153,12 +161,11 @@ BEGIN{
   vals[g, ++cnt[g]] = v
 }
 END{
-  # sort groups
   n=0
   for(g in groups){ glist[++n]=g }
   for(i=1;i<=n;i++) for(j=i+1;j<=n;j++) if(glist[i] > glist[j]){ t=glist[i]; glist[i]=glist[j]; glist[j]=t }
 
-  # report to stderr for wrapper (we capture into file)
+  # отчёт в stderr
   for(gi=1; gi<=n; gi++){
     g=glist[gi]
     m=cnt[g]
@@ -173,7 +180,6 @@ END{
     print g "\t" m "\t" nm "\t" dn "\t" sn "\t" s6n > "/dev/stderr"
   }
 
-  # json
   for(gi=1; gi<=n; gi++){
     g=glist[gi]
     if(!first_group) print ","
@@ -210,11 +216,11 @@ END{
 }
 ' "$WORK/tagged.tsv" 2> "$WORK/report.tsv" > "$OUT"
 
-log "Groups report (group total namespace domain subnet subnet6):"
+logc "$MAG" "Отчёт по группам (группа / всего / namespace / domain / subnet / subnet6):"
 while IFS="$(printf '\t')" read -r g total ns dom sn s6; do
   [ -n "${g:-}" ] || continue
-  log "  $g: total=$total namespace=$ns domain=$dom subnet=$sn subnet6=$s6"
+  logc "$CYN" "  $g: всего=$total namespace=$ns domain=$dom subnet=$sn subnet6=$s6"
 done < "$WORK/report.tsv"
 
-log "Done. Saved: $OUT"
-log "Tip: view system log with: logread -e $TAG"  # logread is standard on OpenWrt [web:17]
+logc "$GRN" "Готово. Файл сохранён: $OUT"
+logc "$YEL" "Подсказка: посмотреть системные логи: logread -e $TAG"
