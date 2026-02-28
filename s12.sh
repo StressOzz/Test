@@ -3,7 +3,7 @@ set -eu
 
 OUT="/root/ItDogList.mtrickle"
 WORK="/tmp/mihomo_groups.$$"
-TAG="mihomo-groups"
+TAG="mihomo-groups"  # оставил переменную, но логирование убрано
 mkdir -p "$WORK"
 trap 'rm -rf "$WORK"' EXIT
 
@@ -13,16 +13,13 @@ YEL="$(printf '\033[33m')"
 BLU="$(printf '\033[34m')"
 CYN="$(printf '\033[36m')"
 WHT="$(printf '\033[37m')"
-RST="$(printf '\033[0m')"
 MAG="$(printf '\033[35m')"
+RST="$(printf '\033[0m')"
 
-logc() {
+say() {
+  # простой вывод, без logger
   color="$1"; shift
-  msg="$*"
-  printf "%b%s%b\n" "$color" "$msg" "$RST"
-  if command -v logger >/dev/null 2>&1; then
-    logger -t "$TAG" "$msg"
-  fi
+  echo -e "${color}$*${RST}"
 }
 
 fetch() {
@@ -34,7 +31,7 @@ fetch() {
   elif command -v curl >/dev/null 2>&1; then
     curl -fsSL -o "$d" "$u"
   else
-    logc "$RED" "ОШИБКА: нет uclient-fetch/wget/curl для загрузки"
+    say "$RED" "ОШИБКА: нет uclient-fetch/wget/curl для загрузки"
     exit 1
   fi
 }
@@ -77,18 +74,18 @@ https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Subnet
 
 clear
 
-logc "$CYN" "Старт: собираю группы для Mihomo -> $OUT"
+say "$CYN" "Старт: собираю группы для Mihomo -> $OUT"
 LIST_COUNT="$(printf "%s" "$URLS" | awk 'NF{c++} END{print c+0}')"
-logc "$YEL" "Списков для загрузки: $LIST_COUNT"
+say "$YEL" "Списков для загрузки: $LIST_COUNT"
 
 printf "%s" "$URLS" | while IFS= read -r url; do
   [ -n "$url" ] || continue
   base="$(basename "$url")"
   dst="$WORK/$base"
-  logc "$BLU" "Загружаю: $base"
+  say "$BLU" "Загружаю: $base"
   fetch "$url" "$dst"
   lines="$(wc -l < "$dst" 2>/dev/null || echo 0)"
-  logc "$GRN" "Готово: $base (строк: $lines)"
+  say "$GRN" "Готово: $base (строк: $lines)"
 done
 
 awk '
@@ -103,7 +100,6 @@ FNR==1{
   fn=FILENAME
   sub(/^.*\//,"",fn); sub(/\.lst$/,"",fn)
   grp=titlecase(tolower_ascii(fn))
-
   if (grp=="Inside-kvas") grp="Russia-Inside"
 }
 {
@@ -122,8 +118,8 @@ FNR==1{
 ' "$WORK"/*.lst > "$WORK/tagged.tsv"
 
 TAGGED_TOTAL="$(wc -l < "$WORK/tagged.tsv" 2>/dev/null || echo 0)"
-logc "$MAG" "Всего строк после очистки: $TAGGED_TOTAL"
-logc "$CYN" "Создаю общий список. Ждите..."
+say "$MAG" "Всего строк после очистки: $TAGGED_TOTAL"
+say "$CYN" "Создаю общий список. Ждите..."
 
 awk -F '\t' '
 function is_ipv4(s){ return (s ~ /^([0-9]{1,3}\.){3}[0-9]{1,3}$/) }
@@ -224,18 +220,19 @@ NAMEC="$CYN"
 KEYC="$WHT"
 NUMC="$YEL"
 
-logc "$MAG" "Итог по группам:"
+say "$MAG" "Итог по группам:"
 
 while IFS="$(printf '\t')" read -r g total ns dom sn s6; do
   [ -n "${g:-}" ] || continue
 
-  line="$(printf "%b%s%b:" "$NAMEC" "$g" "$RST")"
+  # Строка с цветами
+  line="${NAMEC}${g}${RST}:"
 
   add_kv() {
     k="$1"
     v="${2:-0}"
     if [ "$v" -ne 0 ] 2>/dev/null; then
-      line="$line $(printf "%b%s%b=%b%s%b" "$KEYC" "$k" "$RST" "$NUMC" "$v" "$RST")"
+      line="${line} ${KEYC}${k}${RST}=${NUMC}${v}${RST}"
     fi
   }
 
@@ -245,7 +242,7 @@ while IFS="$(printf '\t')" read -r g total ns dom sn s6; do
   add_kv "subnet" "${sn:-0}"
   add_kv "subnet6" "${s6:-0}"
 
-  printf "%s\n" "$line"
+  echo -e "$line"
 done < "$WORK/report.tsv"
 
-logc "$GRN" "Готово. Файл сохранён: $OUT"
+say "$GRN" "Готово. Файл сохранён: $OUT"
