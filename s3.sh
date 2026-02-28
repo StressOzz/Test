@@ -1183,18 +1183,20 @@ EOF
 
 
 select_magitrickle_config() {
+
+log_step "Выбор сиска для MagiTrickle"
+
   local choice=""
   local URL_DEFAULT="https://raw.githubusercontent.com/StressOzz/Use_WARP_on_OpenWRT/refs/heads/main/files/MagiTrickle/config.yaml"
   local URL_ITDOG="https://raw.githubusercontent.com/StressOzz/Use_WARP_on_OpenWRT/refs/heads/main/files/MagiTrickle/configAD.yaml"
 
   echo
-  echo "Выбор списка MagiTrickle:"
   echo "  1) ITDog Allow Domains"
   echo "  2) Default"
   echo
 
   while true; do
-    printf "Введите номер [1-2] (по умолчанию 2): "
+    printf "Введите номер [1-2]: "
     read -r choice
     choice="${choice:-2}"
 
@@ -1245,7 +1247,7 @@ CONFIGPATH="/etc/magitrickle/state/config.yaml"
 
 wget -q -O "$CONFIGPATH" "$MAGITRICKLE_CONFIG_URL"
 if [ $? -ne 0 ]; then
-  echo "Ошибка: не удалось скачать config!"
+  echo "Ошибка: не удалось скачать список!"
   echo "URL: $MAGITRICKLE_CONFIG_URL"
   return 1
 fi
@@ -1255,8 +1257,7 @@ if [ ! -s "$CONFIGPATH" ]; then
   return 1
 fi
 
-echo "Config установлен: $CONFIGPATH"
-			
+            echo "--> Установка списка для MagiTrickle..."
             echo "--> Включение автозапуска MagiTrickle..."
             /etc/init.d/magitrickle enable >/dev/null 2>&1
             echo "--> Запуск MagiTrickle..."
