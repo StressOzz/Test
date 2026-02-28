@@ -12,8 +12,8 @@ RED="$(printf '\033[31m')"
 GRN="$(printf '\033[32m')"
 YEL="$(printf '\033[33m')"
 BLU="$(printf '\033[34m')"
-MAG="$(printf '\033[35m')"
 CYN="$(printf '\033[36m')"
+WHT="$(printf '\033[37m')"   # белый (ключи)
 RST="$(printf '\033[0m')"
 
 logc() {
@@ -121,9 +121,8 @@ FNR==1{
 ' "$WORK"/*.lst > "$WORK/tagged.tsv"
 
 TAGGED_TOTAL="$(wc -l < "$WORK/tagged.tsv" 2>/dev/null || echo 0)"
-logc "$MAG" "Всего строк: $TAGGED_TOTAL"
-logc "$CYN" "Сздаём общий список. Ждите..."
-
+logc "$YEL" "Всего строк после очистки: $TAGGED_TOTAL"
+logc "$CYN" "Создаю общий список. Ждите..."
 
 awk -F '\t' '
 function is_ipv4(s){ return (s ~ /^([0-9]{1,3}\.){3}[0-9]{1,3}$/) }
@@ -221,26 +220,34 @@ END{
 }
 ' "$WORK/tagged.tsv" 2> "$WORK/report.tsv" > "$OUT"
 
-# Итог: одна строка на группу, но внутри строки разные цвета:
-# - Название группы: CYN
-# - Ключи (всего/namespace/...): MAG
-# - Числа после "=": YEL
-NAMEC="$CYN"
-KEYC="$RST"
-NUMC="$YEL"
+# Итог: одна строка на группу, внутри строки разные цвета.
+# Показываем ТОЛЬКО поля, где значение != 0 (включая "всего").
+NAMEC="$CYN"   # название
+KEYC="$WHT"    # ключи белым
+NUMC="$YEL"    # цифры
 
-logc "$MAG" "Итог по группам:"
+logc "$WHT" "Итог по группам:"
 
 while IFS="$(printf '\t')" read -r g total ns dom sn s6; do
   [ -n "${g:-}" ] || continue
 
-  printf "%b%s%b: %bвсего%b=%b%s%b %bnamespace%b=%b%s%b %bdomain%b=%b%s%b %bsubnet%b=%b%s%b %bsubnet6%b=%b%s%b\n" \
-    "$NAMEC" "$g" "$RST" \
-    "$KEYC" "$RST" "$NUMC" "${total:-0}" "$RST" \
-    "$KEYC" "$RST" "$NUMC" "${ns:-0}" "$RST" \
-    "$KEYC" "$RST" "$NUMC" "${dom:-0}" "$RST" \
-    "$KEYC" "$RST" "$NUMC" "${sn:-0}" "$RST" \
-    "$KEYC" "$RST" "$NUMC" "${s6:-0}" "$RST"
+  line="$(printf "%b%s%b:" "$NAMEC" "$g" "$RST")"
+
+  add_kv() {
+    k="$1"
+    v="${2:-0}"
+    if [ "$v" -ne 0 ] 2>/dev/null; then
+      line="$line $(printf "%b%s%b=%b%s%b" "$KEYC" "$k" "$RST" "$NUMC" "$v" "$RST")"
+    fi
+  }
+
+  add_kv "всего" "${total:-0}"
+  add_kv "namespace" "${ns:-0}"
+  add_kv "domain" "${dom:-0}"
+  add_kv "subnet" "${sn:-0}"
+  add_kv "subnet6" "${s6:-0}"
+
+  printf "%s\n" "$line"
 done < "$WORK/report.tsv"
 
 logc "$GRN" "Готово. Файл сохранён: $OUT"
