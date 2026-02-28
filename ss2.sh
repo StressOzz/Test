@@ -1248,11 +1248,8 @@ if [ -n "$MAGITRICKLE_CONFIG_URL" ]; then
   }
 
   if [ ! -s "$CONFIGPATH" ]; then
-    echo "Ошибка: config пустой/не создан: $CONFIGPATH"
-    return 1
+  echo; echo "Ошибка: config пустой/не создан: $CONFIGPATH"; echo
   fi
-else
-  echo "Пропуск: текущий config не изменён: $CONFIGPATH"
 fi
 
 echo
