@@ -23,6 +23,7 @@ say() { color="$1"; shift; echo -e "${color}$*${RST}"; }
 fetch() {
   u="$1"; d="$2"
   if command -v uclient-fetch >/dev/null 2>&1; then
+    # Важно: uclient-fetch обычно умеет редиректы, если вдруг нет — скажи, сделаем fallback на curl -L
     uclient-fetch -q -O "$d" "$u"
   elif command -v wget >/dev/null 2>&1; then
     wget -q -O "$d" "$u"
@@ -38,11 +39,7 @@ count_lines_human() {
   f="$1"
   bytes="$(wc -c < "$f" 2>/dev/null || echo 0)"
   nl="$(wc -l < "$f" 2>/dev/null || echo 0)"
-  if [ "$bytes" -gt 0 ] && [ "$nl" -eq 0 ]; then
-    echo 1
-  else
-    echo "$nl"
-  fi
+  if [ "$bytes" -gt 0 ] && [ "$nl" -eq 0 ]; then echo 1; else echo "$nl"; fi
 }
 
 copy_lst_dir() {
@@ -56,7 +53,7 @@ copy_lst_dir() {
 clear
 say "$CYN" "Старт: собираю списки -> $OUT"
 
-# 1) Скачать весь репозиторий архивом
+# 1) Скачиваем весь репозиторий архивом
 say "$YEL" "Скачиваю репозиторий allow-domains (tarball main)"
 fetch "https://api.github.com/repos/itdoginfo/allow-domains/tarball/main" "$REPO_TGZ"
 
@@ -66,14 +63,14 @@ tar -xzf "$REPO_TGZ" -C "$REPO_DIR"
 ROOTDIR="$(find "$REPO_DIR" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
 [ -n "${ROOTDIR:-}" ] || { say "$RED" "ОШИБКА: не нашёл корневую папку в архиве"; exit 1; }
 
-# 2) Вытащить нужные каталоги со списками
+# 2) Берём нужные .lst из репозитория
 say "$YEL" "Копирую .lst из Categories / Services / Subnets/IPv4 / Subnets/IPv6"
 copy_lst_dir "$ROOTDIR/Categories"
 copy_lst_dir "$ROOTDIR/Services"
 copy_lst_dir "$ROOTDIR/Subnets/IPv4"
 copy_lst_dir "$ROOTDIR/Subnets/IPv6"
 
-# 3) Отдельно inside-kvas.lst (как ты просил)
+# 3) Отдельно inside-kvas.lst (как ты хотел)
 INSIDE="$WORK/inside-kvas.lst"
 say "$BLU" "Загружаю: inside-kvas.lst"
 fetch "https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Russia/inside-kvas.lst" "$INSIDE"
@@ -82,7 +79,7 @@ say "$GRN" "Готово: inside-kvas.lst (строк: $(count_lines_human "$INS
 LIST_COUNT="$(find "$WORK" -maxdepth 1 -name '*.lst' | wc -l | tr -d ' ')"
 say "$MAG" "Всего .lst файлов в работе: $LIST_COUNT"
 
-# 4) tagged.tsv
+# 4) tagged.tsv (ВАЖНО: CIDR не режем; режем /path только у URL со схемой)
 awk '
 function trim(s){ sub(/^[ \t\r\n]+/,"",s); sub(/[ \t\r\n]+$/,"",s); return s }
 function tolower_ascii(s,   i,c,r,up,lo){
@@ -103,8 +100,11 @@ FNR==1{
   line=trim(line)
   if(line=="") next
 
-  gsub(/^([a-zA-Z]+:\/\/)/,"",line)
-  sub(/\/.*$/,"",line)
+  if (line ~ /^[a-zA-Z]+:\/\//) {
+    gsub(/^([a-zA-Z]+:\/\/)/,"",line)
+    sub(/\/.*$/,"",line)
+  }
+
   if(line ~ /^\*\./) line=substr(line,2)
   if(line ~ /^\./) line=substr(line,2)
 
@@ -116,10 +116,11 @@ TAGGED_TOTAL="$(wc -l < "$WORK/tagged.tsv" 2>/dev/null || echo 0)"
 say "$MAG" "Всего строк после очистки: $TAGGED_TOTAL"
 say "$CYN" "Создаю общий список. Ждите..."
 
-# 5) JSON
+# 5) JSON (OFS="" чтобы не было пробелов в rule/type/id) [web:243]
 awk -F '\t' '
 function is_ipv4(s){ return (s ~ /^([0-9]{1,3}\.){3}[0-9]{1,3}$/) }
 function is_ipv4_cidr(s){ return (s ~ /^([0-9]{1,3}\.){3}[0-9]{1,3}\/[0-9]{1,2}$/) }
+function is_ipv6(s){ return (s ~ /^[0-9a-fA-F:]+$/) }
 function is_ipv6_cidr(s){ return (s ~ /^[0-9a-fA-F:]+\/[0-9]{1,3}$/) }
 function is_domainish(s){ return (s ~ /^[A-Za-z0-9][A-Za-z0-9.-]*\.[A-Za-z0-9.-]+$/) }
 function dotcount(s,  i,c,n){ n=0; for(i=1;i<=length(s);i++){ c=substr(s,i,1); if(c==".") n++ } return n }
@@ -147,7 +148,7 @@ function rand_color(    h){
   return "#" h
 }
 BEGIN{
-  OFS=""  # убрать пробелы между аргументами print [web:243]
+  OFS=""
   print "{\"groups\":["
   first_group=1
 }
@@ -169,7 +170,7 @@ END{
     dn=0; nm=0; sn=0; s6n=0
     for(i=1;i<=m;i++){
       v=vals[g,i]
-      if(is_ipv6_cidr(v)) s6n++
+      if(is_ipv6_cidr(v) || is_ipv6(v)) s6n++
       else if(is_ipv4_cidr(v) || is_ipv4(v)) sn++
       else if(is_domainish(v)){ if(dotcount(v)>=2) dn++; else nm++ }
       else nm++
@@ -196,7 +197,7 @@ END{
       v=vlist[i]
       if(v=="") continue
 
-      if(is_ipv6_cidr(v)) typ="subnet6"
+      if(is_ipv6_cidr(v) || is_ipv6(v)) typ="subnet6"
       else if(is_ipv4_cidr(v) || is_ipv4(v)) typ="subnet"
       else if(is_domainish(v)){
         if(dotcount(v)>=2) typ="domain"; else typ="namespace"
@@ -218,10 +219,8 @@ KEYC="$WHT"
 NUMC="$YEL"
 
 say "$MAG" "Итог по группам:"
-
 while IFS="$(printf '\t')" read -r g total ns dom sn s6; do
   [ -n "${g:-}" ] || continue
-
   line="${NAMEC}${g}${RST}:"
 
   add_kv() {
@@ -237,7 +236,6 @@ while IFS="$(printf '\t')" read -r g total ns dom sn s6; do
   add_kv "domain" "${dom:-0}"
   add_kv "subnet" "${sn:-0}"
   add_kv "subnet6" "${s6:-0}"
-
   echo -e "$line"
 done < "$WORK/report.tsv"
 
