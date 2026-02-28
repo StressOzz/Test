@@ -1388,8 +1388,8 @@ finalize_install() {
 
 main() {
 	clear
-    log_done "Скрипт установки Mixomo OpenWRT $SCRIPT_VERSION от Internet Helper"
-	log_done "                              от Internet Helper (StressOzz Remix)"
+    log_done "Скрипт установки Mixomo OpenWRT $SCRIPT_VERSION"
+	log_done "           от Internet Helper (StressOzz Remix)"
 	echo ""
 	
     log_step "[1/3] Установка Mihomo"
