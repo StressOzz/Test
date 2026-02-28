@@ -20,10 +20,6 @@ fetch() {
 }
 
 norm_file() {
-  # Печатает нормализованные элементы (по одному на строку)
-  # - убирает CR, комментарии # и ;, пробелы
-  # - если это URL со схемой, убирает scheme:// и /path
-  # - убирает leading "*." и "."
   awk '
   function trim(s){ sub(/^[ \t\r\n]+/,"",s); sub(/[ \t\r\n]+$/,"",s); return s }
   {
@@ -59,19 +55,21 @@ echo "== normalize inside-kvas =="
 norm_file "$WORK/inside-kvas.lst" | sort -u > "$WORK/inside.norm"
 
 echo "== normalize Categories + Services =="
-# 2>/dev/null чтобы не падать, если glob не матчится (на всякий)
 ( for f in "$ROOTDIR/Categories/"*.lst "$ROOTDIR/Services/"*.lst; do
     [ -f "$f" ] || continue
     norm_file "$f"
   done ) | sort -u > "$WORK/catsrv.norm"
 
 echo "== counts =="
-echo -n "inside unique:  " ; wc -l < "$WORK/inside.norm" | tr -d ' '
-echo -n "catsrv unique:  " ; wc -l < "$WORK/catsrv.norm" | tr -d ' '
+echo -n "inside unique:  " ; wc -l < "$WORK/inside.norm" | tr -d " "
+echo -n "catsrv unique:  " ; wc -l < "$WORK/catsrv.norm" | tr -d " "
 
-echo "== inside minus catsrv (count) =="
-comm -23 "$WORK/inside.norm" "$WORK/catsrv.norm" > "$WORK/diff.norm"
-wc -l < "$WORK/diff.norm" | tr -d ' '
+echo "== inside minus catsrv (count + first 50) =="
+awk '
+FNR==NR { seen[$0]=1; next }
+!seen[$0] { print; c++ }
+END { print "COUNT=" (c+0) > "/dev/stderr" }
+' "$WORK/catsrv.norm" "$WORK/inside.norm" > "$WORK/diff.norm" 2> "$WORK/diff.count"
 
-echo "== first 50 leftovers (if any) =="
-sed -n '1,50p' "$WORK/diff.norm"
+cat "$WORK/diff.count"
+sed -n "1,50p" "$WORK/diff.norm"
