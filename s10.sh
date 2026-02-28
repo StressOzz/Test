@@ -1,20 +1,20 @@
 #!/bin/sh
 set -eu
 
-OUT="/root/mihomo_groups.json"
+OUT="/root/ItDogList.mtrickle"
 WORK="/tmp/mihomo_groups.$$"
 TAG="mihomo-groups"
 mkdir -p "$WORK"
 trap 'rm -rf "$WORK"' EXIT
 
-# Цветной вывод (ANSI). В syslog цвета не отправляем.
 RED="$(printf '\033[31m')"
 GRN="$(printf '\033[32m')"
 YEL="$(printf '\033[33m')"
 BLU="$(printf '\033[34m')"
 CYN="$(printf '\033[36m')"
-WHT="$(printf '\033[37m')"   # белый (ключи)
+WHT="$(printf '\033[37m')"
 RST="$(printf '\033[0m')"
+MAG="$(printf '\033[35m')"
 
 logc() {
   color="$1"; shift
@@ -102,7 +102,6 @@ FNR==1{
   sub(/^.*\//,"",fn); sub(/\.lst$/,"",fn)
   grp=titlecase(tolower_ascii(fn))
 
-  # Переименование группы: Inside-kvas -> Russia-Inside
   if (grp=="Inside-kvas") grp="Russia-Inside"
 }
 {
@@ -121,7 +120,7 @@ FNR==1{
 ' "$WORK"/*.lst > "$WORK/tagged.tsv"
 
 TAGGED_TOTAL="$(wc -l < "$WORK/tagged.tsv" 2>/dev/null || echo 0)"
-logc "$YEL" "Всего строк после очистки: $TAGGED_TOTAL"
+logc "$MAG" "Всего строк после очистки: $TAGGED_TOTAL"
 logc "$CYN" "Создаю общий список. Ждите..."
 
 awk -F '\t' '
@@ -169,7 +168,6 @@ END{
   for(g in groups){ glist[++n]=g }
   for(i=1;i<=n;i++) for(j=i+1;j<=n;j++) if(glist[i] > glist[j]){ t=glist[i]; glist[i]=glist[j]; glist[j]=t }
 
-  # отчёт в stderr: группа\tвсего\tnamespace\tdomain\tsubnet\tsubnet6
   for(gi=1; gi<=n; gi++){
     g=glist[gi]
     m=cnt[g]
@@ -220,13 +218,11 @@ END{
 }
 ' "$WORK/tagged.tsv" 2> "$WORK/report.tsv" > "$OUT"
 
-# Итог: одна строка на группу, внутри строки разные цвета.
-# Показываем ТОЛЬКО поля, где значение != 0 (включая "всего").
-NAMEC="$CYN"   # название
-KEYC="$WHT"    # ключи белым
-NUMC="$YEL"    # цифры
+NAMEC="$CYN"
+KEYC="$WHT"
+NUMC="$YEL"
 
-logc "$WHT" "Итог по группам:"
+logc "$MAG" "Итог по группам:"
 
 while IFS="$(printf '\t')" read -r g total ns dom sn s6; do
   [ -n "${g:-}" ] || continue
@@ -251,4 +247,3 @@ while IFS="$(printf '\t')" read -r g total ns dom sn s6; do
 done < "$WORK/report.tsv"
 
 logc "$GRN" "Готово. Файл сохранён: $OUT"
-logc "$YEL" "Подсказка: посмотреть системные логи: logread -e $TAG"
