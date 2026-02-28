@@ -1183,8 +1183,8 @@ EOF
 
 
 select_magitrickle_config() {
-echo
-log_step "Выбор списка для MagiTrickle"
+  echo
+  log_step "Выбор списка для MagiTrickle"
 
   local choice=""
   local URL_DEFAULT="https://raw.githubusercontent.com/StressOzz/Use_WARP_on_OpenWRT/refs/heads/main/files/MagiTrickle/config.yaml"
@@ -1193,21 +1193,22 @@ log_step "Выбор списка для MagiTrickle"
   echo
   echo "  1) ITDog Allow Domains"
   echo "  2) Default"
+  echo "  3) Пропустить (оставить текущий config)"
   echo
 
   while true; do
-    printf "Введите номер [1-2]: "
+    printf "Введите номер [1-3]: "
     read -r choice
     choice="${choice:-2}"
 
     case "$choice" in
-      1) MAGITRICKLE_CONFIG_URL="$URL_ITDOG"; break ;;
-      2) MAGITRICKLE_CONFIG_URL="$URL_DEFAULT"; break ;;
-      *) echo "Неверный выбор. Введите 1 или 2." ;;
+      1) MAGITRICKLE_CONFIG_URL="$URL_ITDOG"; return 0 ;;
+      2) MAGITRICKLE_CONFIG_URL="$URL_DEFAULT"; return 0 ;;
+      3) MAGITRICKLE_CONFIG_URL=""; return 2 ;;   # специальный код "пропуск"
+      *) echo "Неверный выбор. Введите 1, 2 или 3." ;;
     esac
   done
 }
-
 
 install_magitrickle() {
     
@@ -1236,14 +1237,17 @@ install_magitrickle() {
             wget -q -O "$IPK" "$URL" || { log_error "Ошибка скачивания оригинального MagiTrickle"; return 1; }
             opkg install "$IPK" >/dev/null 2>&1 || return 1
             rm -f "$IPK"
+			echo "--> Установка списка для MagiTrickle..."
 			
-
-
-
-
 select_magitrickle_config
+rc=$?
 
 CONFIGPATH="/etc/magitrickle/state/config.yaml"
+
+if [ $rc -eq 2 ]; then
+  echo "Пропуск: текущий config не изменён: $CONFIGPATH"
+  return 0
+fi
 
 wget -q -O "$CONFIGPATH" "$MAGITRICKLE_CONFIG_URL"
 if [ $? -ne 0 ]; then
@@ -1256,8 +1260,8 @@ if [ ! -s "$CONFIGPATH" ]; then
   echo "Ошибка: config пустой/не создан: $CONFIGPATH"
   return 1
 fi
+
 echo
-            echo "--> Установка списка для MagiTrickle..."
             echo "--> Включение автозапуска MagiTrickle..."
             /etc/init.d/magitrickle enable >/dev/null 2>&1
             echo "--> Запуск MagiTrickle..."
