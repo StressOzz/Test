@@ -39,13 +39,14 @@ count_lines_human() {
 }
 
 need_cmd() { command -v "$1" >/dev/null 2>&1 || { say "$RED" "Нужна утилита: $1"; exit 1; }; }
-need_cmd tar; need_cmd awk; need_cmd wc; need_cmd basename; need_cmd find; need_cmd head; need_cmd cp
+need_cmd tar; need_cmd awk; need_cmd wc; need_cmd basename; need_cmd find; need_cmd head; need_cmd cp; need_cmd hexdump
 
 clear
 say "$CYN" "Старт: собираю списки -> $OUT"
 
+# 1) Быстро: скачиваем tarball репозитория и берём нужные .lst
 TARBALL="$WORK/repo.tgz"
-say "$YEL" "Скачиваю архив репозитория allow-domains"
+say "$YEL" "Скачиваю архив allow-domains (tarball)"
 fetch "https://api.github.com/repos/itdoginfo/allow-domains/tarball/main" "$TARBALL"
 
 REPO="$WORK/repo"
@@ -53,7 +54,7 @@ mkdir -p "$REPO"
 tar -xzf "$TARBALL" -C "$REPO"
 
 ROOTDIR="$(find "$REPO" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
-[ -n "${ROOTDIR:-}" ] || { say "$RED" "Не нашёл корень архива"; exit 1; }
+[ -n "${ROOTDIR:-}" ] || { say "$RED" "Не нашёл корневую папку архива"; exit 1; }
 
 copy_lst_dir() {
   src="$1"
@@ -61,21 +62,23 @@ copy_lst_dir() {
   find "$src" -maxdepth 1 -type f -name '*.lst' -print | while IFS= read -r f; do
     b="$(basename "$f")"
     cp "$f" "$WORK/$b"
-    say "$GRN" "Добавлено: $b (строк: $(count_lines_human "$WORK/$b"))"
   done
 }
 
-say "$YEL" "Беру .lst из Categories/ Services/ Subnets/IPv4/ Subnets/IPv6/"
+say "$YEL" "Копирую списки из Categories/ Services/ Subnets/IPv4/ Subnets/IPv6"
 copy_lst_dir "$ROOTDIR/Categories"
 copy_lst_dir "$ROOTDIR/Services"
 copy_lst_dir "$ROOTDIR/Subnets/IPv4"
 copy_lst_dir "$ROOTDIR/Subnets/IPv6"
 
+# 2) Плюс inside-kvas.lst
 INSIDE="$WORK/inside-kvas.lst"
 say "$BLU" "Загружаю: inside-kvas.lst"
 fetch "https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Russia/inside-kvas.lst" "$INSIDE"
-say "$GRN" "Готово: inside-kvas.lst (строк: $(count_lines_human "$INSIDE"))"
 
+say "$MAG" "Скачано файлов: $(find "$WORK" -maxdepth 1 -name '*.lst' | wc -l | tr -d ' ')"
+
+# --- Tagging ---
 awk '
 function trim(s){ sub(/^[ \t\r\n]+/,"",s); sub(/[ \t\r\n]+$/,"",s); return s }
 function tolower_ascii(s,   i,c,r,up,lo){
@@ -84,6 +87,7 @@ function tolower_ascii(s,   i,c,r,up,lo){
   return r
 }
 function titlecase(s){ return (s==""?s:toupper(substr(s,1,1)) substr(s,2)) }
+
 FNR==1{
   fn=FILENAME
   sub(/^.*\//,"",fn); sub(/\.lst$/,"",fn)
@@ -96,7 +100,7 @@ FNR==1{
   line=trim(line)
   if(line=="") next
 
-  # ВАЖНО: /path режем только у URL со схемой, чтобы не ломать CIDR x.x.x.x/24 и 2001::/48
+  # РЕЖЕМ /path ТОЛЬКО у URL со схемой, CIDR не трогаем
   if (line ~ /^[a-zA-Z]+:\/\//) {
     gsub(/^([a-zA-Z]+:\/\/)/,"",line)
     sub(/\/.*$/,"",line)
@@ -109,9 +113,10 @@ FNR==1{
 }
 ' "$WORK"/*.lst > "$WORK/tagged.tsv"
 
-say "$MAG" "Всего строк после очистки: $(wc -l < "$WORK/tagged.tsv" 2>/dev/null || echo 0)"
-say "$CYN" "Создаю общий список. Ждите..."
+say "$MAG" "Всего правил после очистки: $(wc -l < "$WORK/tagged.tsv" 2>/dev/null || echo 0)"
+say "$CYN" "Генерирую $OUT ..."
 
+# --- Build JSON + report ---
 awk -F '\t' '
 function is_ipv4(s){ return (s ~ /^([0-9]{1,3}\.){3}[0-9]{1,3}$/) }
 function is_ipv4_cidr(s){ return (s ~ /^([0-9]{1,3}\.){3}[0-9]{1,3}\/[0-9]{1,2}$/) }
@@ -205,6 +210,7 @@ END{
 }
 ' "$WORK/tagged.tsv" 2> "$WORK/report.tsv" > "$OUT"
 
+# --- Pretty output (hide =0) ---
 NAMEC="$CYN"; KEYC="$WHT"; NUMC="$YEL"
 say "$MAG" "Итог по группам:"
 
