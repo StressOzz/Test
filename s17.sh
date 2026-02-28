@@ -38,41 +38,30 @@ count_lines_human() {
   if [ "$bytes" -gt 0 ] && [ "$nl" -eq 0 ]; then echo 1; else echo "$nl"; fi
 }
 
-need_cmd() {
-  c="$1"
-  command -v "$c" >/dev/null 2>&1 || { say "$RED" "Нужна утилита: $c"; exit 1; }
-}
-
-need_cmd tar
-need_cmd awk
-need_cmd wc
-need_cmd basename
+need_cmd() { command -v "$1" >/dev/null 2>&1 || { say "$RED" "Нужна утилита: $1"; exit 1; }; }
+need_cmd tar; need_cmd awk; need_cmd wc; need_cmd basename; need_cmd find; need_cmd head; need_cmd cp
 
 clear
 say "$CYN" "Старт: собираю списки -> $OUT"
 
-# 1) Скачиваем архив репозитория (tar.gz) и извлекаем нужные .lst локально
 TARBALL="$WORK/repo.tgz"
 say "$YEL" "Скачиваю архив репозитория allow-domains"
-# tarball endpoint (даёт 302 на реальный архив) [web:191]
 fetch "https://api.github.com/repos/itdoginfo/allow-domains/tarball/main" "$TARBALL"
 
 REPO="$WORK/repo"
 mkdir -p "$REPO"
 tar -xzf "$TARBALL" -C "$REPO"
 
-# Внутри будет папка вида itdoginfo-allow-domains-<hash>/
 ROOTDIR="$(find "$REPO" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
 [ -n "${ROOTDIR:-}" ] || { say "$RED" "Не нашёл корень архива"; exit 1; }
 
-# Копируем .lst из нужных директорий в $WORK, сохраняя имена файлов
 copy_lst_dir() {
   src="$1"
   [ -d "$src" ] || return 0
   find "$src" -maxdepth 1 -type f -name '*.lst' -print | while IFS= read -r f; do
     b="$(basename "$f")"
     cp "$f" "$WORK/$b"
-    say "$GRN" "Добавлено из архива: $b (строк: $(count_lines_human "$WORK/$b"))"
+    say "$GRN" "Добавлено: $b (строк: $(count_lines_human "$WORK/$b"))"
   done
 }
 
@@ -82,16 +71,11 @@ copy_lst_dir "$ROOTDIR/Services"
 copy_lst_dir "$ROOTDIR/Subnets/IPv4"
 copy_lst_dir "$ROOTDIR/Subnets/IPv6"
 
-# 2) Плюс Russia/inside-kvas.lst как ты просил
 INSIDE="$WORK/inside-kvas.lst"
 say "$BLU" "Загружаю: inside-kvas.lst"
 fetch "https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Russia/inside-kvas.lst" "$INSIDE"
 say "$GRN" "Готово: inside-kvas.lst (строк: $(count_lines_human "$INSIDE"))"
 
-# --- Tagging rules by group name from filename ---
-# Для subnet-списков добавим префикс IPv4-/IPv6- по содержимому строк:
-# - если строка похожа на IPv6 CIDR -> IPv6-
-# - если строка похожа на IPv4 CIDR -> IPv4-
 awk '
 function trim(s){ sub(/^[ \t\r\n]+/,"",s); sub(/[ \t\r\n]+$/,"",s); return s }
 function tolower_ascii(s,   i,c,r,up,lo){
@@ -100,9 +84,6 @@ function tolower_ascii(s,   i,c,r,up,lo){
   return r
 }
 function titlecase(s){ return (s==""?s:toupper(substr(s,1,1)) substr(s,2)) }
-function is_ipv4_cidr(s){ return (s ~ /^([0-9]{1,3}\.){3}[0-9]{1,3}\/[0-9]{1,2}$/) }
-function is_ipv6_cidr(s){ return (s ~ /^[0-9a-fA-F:]+\/[0-9]{1,3}$/) }
-
 FNR==1{
   fn=FILENAME
   sub(/^.*\//,"",fn); sub(/\.lst$/,"",fn)
@@ -115,27 +96,26 @@ FNR==1{
   line=trim(line)
   if(line=="") next
 
-  gsub(/^([a-zA-Z]+:\/\/)/,"",line)
-  sub(/\/.*$/,"",line)
+  # ВАЖНО: /path режем только у URL со схемой, чтобы не ломать CIDR x.x.x.x/24 и 2001::/48
+  if (line ~ /^[a-zA-Z]+:\/\//) {
+    gsub(/^([a-zA-Z]+:\/\/)/,"",line)
+    sub(/\/.*$/,"",line)
+  }
+
   if(line ~ /^\*\./) line=substr(line,2)
   if(line ~ /^\./) line=substr(line,2)
 
-  # Префикс для подсетей чтобы было видно IPv4/IPv6
-  if (is_ipv6_cidr(line)) outgrp="IPv6-" grp
-  else if (is_ipv4_cidr(line)) outgrp="IPv4-" grp
-  else outgrp=grp
-
-  print outgrp "\t" line
+  print grp "\t" line
 }
 ' "$WORK"/*.lst > "$WORK/tagged.tsv"
 
 say "$MAG" "Всего строк после очистки: $(wc -l < "$WORK/tagged.tsv" 2>/dev/null || echo 0)"
 say "$CYN" "Создаю общий список. Ждите..."
 
-# --- Build .mtrickle JSON + report.tsv ---
 awk -F '\t' '
 function is_ipv4(s){ return (s ~ /^([0-9]{1,3}\.){3}[0-9]{1,3}$/) }
 function is_ipv4_cidr(s){ return (s ~ /^([0-9]{1,3}\.){3}[0-9]{1,3}\/[0-9]{1,2}$/) }
+function is_ipv6(s){ return (s ~ /^[0-9a-fA-F:]+$/) }
 function is_ipv6_cidr(s){ return (s ~ /^[0-9a-fA-F:]+\/[0-9]{1,3}$/) }
 function is_domainish(s){ return (s ~ /^[A-Za-z0-9][A-Za-z0-9.-]*\.[A-Za-z0-9.-]+$/) }
 function dotcount(s,  i,c,n){ n=0; for(i=1;i<=length(s);i++){ c=substr(s,i,1); if(c==".") n++ } return n }
@@ -162,10 +142,7 @@ function rand_color(    h){
   if(h=="") h="ffffff"
   return "#" h
 }
-BEGIN{
-  print "{\"groups\":["
-  first_group=1
-}
+BEGIN{ print "{\"groups\":["; first_group=1 }
 {
   g=$1; v=$2
   key=g SUBSEP v
@@ -184,7 +161,7 @@ END{
     dn=0; nm=0; sn=0; s6n=0
     for(i=1;i<=m;i++){
       v=vals[g,i]
-      if(is_ipv6_cidr(v)) s6n++
+      if(is_ipv6_cidr(v) || is_ipv6(v)) s6n++
       else if(is_ipv4_cidr(v) || is_ipv4(v)) sn++
       else if(is_domainish(v)){ if(dotcount(v)>=2) dn++; else nm++ }
       else nm++
@@ -211,7 +188,7 @@ END{
       v=vlist[i]
       if(v=="") continue
 
-      if(is_ipv6_cidr(v)) typ="subnet6"
+      if(is_ipv6_cidr(v) || is_ipv6(v)) typ="subnet6"
       else if(is_ipv4_cidr(v) || is_ipv4(v)) typ="subnet"
       else if(is_domainish(v)){
         if(dotcount(v)>=2) typ="domain"; else typ="namespace"
@@ -228,10 +205,7 @@ END{
 }
 ' "$WORK/tagged.tsv" 2> "$WORK/report.tsv" > "$OUT"
 
-NAMEC="$CYN"
-KEYC="$WHT"
-NUMC="$YEL"
-
+NAMEC="$CYN"; KEYC="$WHT"; NUMC="$YEL"
 say "$MAG" "Итог по группам:"
 
 while IFS="$(printf '\t')" read -r g total ns dom sn s6; do
