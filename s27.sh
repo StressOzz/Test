@@ -46,15 +46,15 @@ merge_lst_dir() {
   [ -d "$src" ] || return 0
   find "$src" -maxdepth 1 -type f -name '*.lst' -print | while IFS= read -r f; do
     base="$(basename "$f")"
-    cat "$f" >> "$WORK/$base"
-    printf '\n' >> "$WORK/$base"
+    out="$WORK/$base"
+    # AWK печатает строки с \n на конце, даже если в исходнике нет \n
+    awk '{ sub(/\r$/,""); print } END{ if(NR==0){} }' "$f" >> "$out"
   done
 }
 
 clear
 say "$CYN" "Старт: собираю списки -> $OUT"
 
-# 1) Скачать весь репозиторий архивом
 say "$YEL" "Скачиваю репозиторий allow-domains (tarball main)"
 fetch "https://api.github.com/repos/itdoginfo/allow-domains/tarball/main" "$REPO_TGZ"
 
@@ -64,14 +64,12 @@ tar -xzf "$REPO_TGZ" -C "$REPO_DIR"
 ROOTDIR="$(find "$REPO_DIR" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
 [ -n "${ROOTDIR:-}" ] || { say "$RED" "ОШИБКА: не нашёл корневую папку в архиве"; exit 1; }
 
-# 2) Склеить списки в WORK по имени файла => одинаковые группы объединяются
-say "$YEL" "Склеиваю .lst из Categories / Services / Subnets/IPv4 / Subnets/IPv6 (одинаковые имена -> одна группа)"
+say "$YEL" "Склеиваю .lst из Categories / Services / Subnets/IPv4 / Subnets/IPv6"
 merge_lst_dir "$ROOTDIR/Categories"
 merge_lst_dir "$ROOTDIR/Services"
 merge_lst_dir "$ROOTDIR/Subnets/IPv4"
 merge_lst_dir "$ROOTDIR/Subnets/IPv6"
 
-# 3) Отдельно inside-kvas.lst
 INSIDE="$WORK/inside-kvas.lst"
 say "$BLU" "Загружаю: inside-kvas.lst"
 fetch "https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Russia/inside-kvas.lst" "$INSIDE"
@@ -80,7 +78,7 @@ say "$GRN" "Готово: inside-kvas.lst (строк: $(count_lines_human "$INS
 LIST_COUNT="$(find "$WORK" -maxdepth 1 -name '*.lst' | wc -l | tr -d ' ')"
 say "$MAG" "Всего .lst файлов в работе: $LIST_COUNT"
 
-# 4) tagged.tsv
+# tagged.tsv
 awk '
 function trim(s){ sub(/^[ \t\r\n]+/,"",s); sub(/[ \t\r\n]+$/,"",s); return s }
 function tolower_ascii(s,   i,c,r,up,lo){
@@ -97,11 +95,11 @@ FNR==1{
 }
 {
   line=$0
+  sub(/\r$/,"",line)          # FIX: CRLF/одиночные строки [часто ломает сравнения]
   sub(/#.*/,"",line); sub(/;.*/,"",line)
   line=trim(line)
   if(line=="") next
 
-  # URL -> убрать схему и /path, CIDR (1.2.3.0/24) не трогаем
   if (line ~ /^[a-zA-Z]+:\/\//) {
     gsub(/^([a-zA-Z]+:\/\/)/,"",line)
     sub(/\/.*$/,"",line)
@@ -112,7 +110,6 @@ FNR==1{
 
   line=trim(line)
   if(line=="") next
-
   print grp "\t" line
 }
 ' "$WORK"/*.lst > "$WORK/tagged.tsv"
@@ -121,7 +118,7 @@ TAGGED_TOTAL="$(wc -l < "$WORK/tagged.tsv" 2>/dev/null || echo 0)"
 say "$MAG" "Всего строк после очистки: $TAGGED_TOTAL"
 say "$CYN" "Создаю общий список. Ждите..."
 
-# 5) JSON
+# JSON
 awk -F '\t' '
 function is_ipv4(s){ return (s ~ /^([0-9]{1,3}\.){3}[0-9]{1,3}$/) }
 function is_ipv4_cidr(s){ return (s ~ /^([0-9]{1,3}\.){3}[0-9]{1,3}\/[0-9]{1,2}$/) }
@@ -153,7 +150,7 @@ function rand_color(    h){
   return "#" h
 }
 BEGIN{
-  OFS=""  # иначе awk вставляет пробелы между print-аргументами [web:243]
+  OFS=""  # убрать пробелы между print-аргументами [web:243]
   print "{\"groups\":["
   first_group=1
 }
@@ -204,30 +201,5 @@ END{
   print "]}"
 }
 ' "$WORK/tagged.tsv" 2> "$WORK/report.tsv" > "$OUT"
-
-NAMEC="$CYN"
-KEYC="$WHT"
-NUMC="$YEL"
-
-say "$MAG" "Итог по группам:"
-while IFS="$(printf '\t')" read -r g total ns dom sn s6; do
-  [ -n "${g:-}" ] || continue
-  line="${NAMEC}${g}${RST}:"
-
-  add_kv() {
-    k="$1"
-    v="${2:-0}"
-    if [ "$v" -ne 0 ] 2>/dev/null; then
-      line="${line} ${KEYC}${k}${RST}=${NUMC}${v}${RST}"
-    fi
-  }
-
-  add_kv "всего" "${total:-0}"
-  add_kv "namespace" "${ns:-0}"
-  add_kv "domain" "${dom:-0}"
-  add_kv "subnet" "${sn:-0}"
-  add_kv "subnet6" "${s6:-0}"
-  echo -e "$line"
-done < "$WORK/report.tsv"
 
 say "$GRN" "Готово. Файл сохранён: $OUT"
