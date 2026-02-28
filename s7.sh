@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-OUT="/root/ItDogList.mtrickle"
+OUT="/root/mihomo_groups.json"
 WORK="/tmp/mihomo_groups.$$"
 TAG="mihomo-groups"
 mkdir -p "$WORK"
@@ -121,8 +121,7 @@ FNR==1{
 ' "$WORK"/*.lst > "$WORK/tagged.tsv"
 
 TAGGED_TOTAL="$(wc -l < "$WORK/tagged.tsv" 2>/dev/null || echo 0)"
-logc "$MAG" "Всего строк: $TAGGED_TOTAL"
-logc "$GRN" "Собираем общий список. Ждите..."
+logc "$MAG" "Строк после очистки (до дедупликации): $TAGGED_TOTAL"
 
 awk -F '\t' '
 function is_ipv4(s){ return (s ~ /^([0-9]{1,3}\.){3}[0-9]{1,3}$/) }
@@ -220,23 +219,26 @@ END{
 }
 ' "$WORK/tagged.tsv" 2> "$WORK/report.tsv" > "$OUT"
 
-# Цветной понятный вывод отчёта как ты просил:
-logc "$MAG" "Итог по группам (как читать: всего / namespace / domain / subnet / subnet6):"
+# Итог: одна строка на группу, но внутри строки разные цвета:
+# - Название группы: CYN
+# - Ключи (всего/namespace/...): MAG
+# - Числа после "=": YEL
+NAMEC="$CYN"
+KEYC="$MAG"
+NUMC="$YEL"
+
+logc "$MAG" "Итог по группам:"
+
 while IFS="$(printf '\t')" read -r g total ns dom sn s6; do
   [ -n "${g:-}" ] || continue
 
-  # Выделяем цветом тип группы по содержимому:
-  # - если есть subnet/subnet6 -> синий
-  # - иначе если есть domain -> жёлтый
-  # - иначе -> зелёный
-  color="$GRN"
-  if [ "${sn:-0}" != "0" ] || [ "${s6:-0}" != "0" ]; then
-    color="$BLU"
-  elif [ "${dom:-0}" != "0" ]; then
-    color="$YEL"
-  fi
-
-  logc "$color" "  $g: всего=$total namespace=$ns domain=$dom subnet=$sn subnet6=$s6"
+  printf "%b%s%b: %bвсего%b=%b%s%b %bnamespace%b=%b%s%b %bdomain%b=%b%s%b %bsubnet%b=%b%s%b %bsubnet6%b=%b%s%b\n" \
+    "$NAMEC" "$g" "$RST" \
+    "$KEYC" "$RST" "$NUMC" "${total:-0}" "$RST" \
+    "$KEYC" "$RST" "$NUMC" "${ns:-0}" "$RST" \
+    "$KEYC" "$RST" "$NUMC" "${dom:-0}" "$RST" \
+    "$KEYC" "$RST" "$NUMC" "${sn:-0}" "$RST" \
+    "$KEYC" "$RST" "$NUMC" "${s6:-0}" "$RST"
 done < "$WORK/report.tsv"
 
 logc "$GRN" "Готово. Файл сохранён: $OUT"
