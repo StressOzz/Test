@@ -35,90 +35,63 @@ count_lines_human() {
   f="$1"
   bytes="$(wc -c < "$f" 2>/dev/null || echo 0)"
   nl="$(wc -l < "$f" 2>/dev/null || echo 0)"
-  if [ "$bytes" -gt 0 ] && [ "$nl" -eq 0 ]; then
-    echo 1
-  else
-    echo "$nl"
-  fi
+  if [ "$bytes" -gt 0 ] && [ "$nl" -eq 0 ]; then echo 1; else echo "$nl"; fi
 }
 
-# --- GitHub API listing (contents) ---
-# Возвращает download_url для .lst файлов в директории репозитория
-list_dir_lst_urls() {
-  dir="$1"
-  api="https://api.github.com/repos/itdoginfo/allow-domains/contents/$dir?ref=main"
-  tmp="$WORK/api.$(printf "%s" "$dir" | tr '/:' '__').json"
-
-  if command -v uclient-fetch >/dev/null 2>&1; then
-    # uclient-fetch не всегда удобен с заголовками, поэтому без них (хватит и так)
-    uclient-fetch -q -O "$tmp" "$api" || return 1
-  elif command -v curl >/dev/null 2>&1; then
-    curl -fsSL -o "$tmp" "$api" || return 1
-  else
-    wget -q -O "$tmp" "$api" || return 1
-  fi
-
-  # Достаём download_url только для файлов *.lst (без jq)
-  # В ответе contents для директории каждый элемент имеет поля "name", "type", "download_url". [web:191]
-  awk '
-    BEGIN{RS="\\{"; FS="\n"}
-    /"type"[[:space:]]*:[[:space:]]*"file"/ && /"name"[[:space:]]*:[[:space:]]*".*\.lst"/ {
-      for(i=1;i<=NF;i++){
-        if($i ~ /"download_url"[[:space:]]*:/){
-          line=$i
-          sub(/.*"download_url"[[:space:]]*:[[:space:]]*"/,"",line)
-          sub(/".*/,"",line)
-          if(line!="null" && line!="") print line
-        }
-      }
-    }
-  ' "$tmp"
+need_cmd() {
+  c="$1"
+  command -v "$c" >/dev/null 2>&1 || { say "$RED" "Нужна утилита: $c"; exit 1; }
 }
+
+need_cmd tar
+need_cmd awk
+need_cmd wc
+need_cmd basename
 
 clear
 say "$CYN" "Старт: собираю списки -> $OUT"
 
-# Директории, которые ты указал
-DIRS="
-Subnets/IPv4
-Subnets/IPv6
-Services
-Categories
-"
+# 1) Скачиваем архив репозитория (tar.gz) и извлекаем нужные .lst локально
+TARBALL="$WORK/repo.tgz"
+say "$YEL" "Скачиваю архив репозитория allow-domains"
+# tarball endpoint (даёт 302 на реальный архив) [web:191]
+fetch "https://api.github.com/repos/itdoginfo/allow-domains/tarball/main" "$TARBALL"
 
-URLS=""
-for d in $DIRS; do
-  say "$YEL" "Читаю каталог GitHub: $d"
-  urls="$(list_dir_lst_urls "$d" || true)"
-  if [ -n "${urls:-}" ]; then
-    URLS="$URLS
-$urls"
-  else
-    say "$RED" "Не смог получить список файлов для $d (возможен лимит/403)"
-  fi
-done
+REPO="$WORK/repo"
+mkdir -p "$REPO"
+tar -xzf "$TARBALL" -C "$REPO"
 
-# Плюс inside-kvas.lst
-URLS="$URLS
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Russia/inside-kvas.lst
-"
+# Внутри будет папка вида itdoginfo-allow-domains-<hash>/
+ROOTDIR="$(find "$REPO" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
+[ -n "${ROOTDIR:-}" ] || { say "$RED" "Не нашёл корень архива"; exit 1; }
 
-LIST_COUNT="$(printf "%s" "$URLS" | awk 'NF{c++} END{print c+0}')"
-say "$YEL" "Списков для загрузки: $LIST_COUNT"
+# Копируем .lst из нужных директорий в $WORK, сохраняя имена файлов
+copy_lst_dir() {
+  src="$1"
+  [ -d "$src" ] || return 0
+  find "$src" -maxdepth 1 -type f -name '*.lst' -print | while IFS= read -r f; do
+    b="$(basename "$f")"
+    cp "$f" "$WORK/$b"
+    say "$GRN" "Добавлено из архива: $b (строк: $(count_lines_human "$WORK/$b"))"
+  done
+}
 
-printf "%s" "$URLS" | while IFS= read -r url; do
-  [ -n "$url" ] || continue
-  base="$(basename "$url")"
-  dst="$WORK/$base"
+say "$YEL" "Беру .lst из Categories/ Services/ Subnets/IPv4/ Subnets/IPv6/"
+copy_lst_dir "$ROOTDIR/Categories"
+copy_lst_dir "$ROOTDIR/Services"
+copy_lst_dir "$ROOTDIR/Subnets/IPv4"
+copy_lst_dir "$ROOTDIR/Subnets/IPv6"
 
-  say "$BLU" "Загружаю: $base"
-  fetch "$url" "$dst"
-
-  lines="$(count_lines_human "$dst")"
-  say "$GRN" "Готово: $base (строк: $lines)"
-done
+# 2) Плюс Russia/inside-kvas.lst как ты просил
+INSIDE="$WORK/inside-kvas.lst"
+say "$BLU" "Загружаю: inside-kvas.lst"
+fetch "https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Russia/inside-kvas.lst" "$INSIDE"
+say "$GRN" "Готово: inside-kvas.lst (строк: $(count_lines_human "$INSIDE"))"
 
 # --- Tagging rules by group name from filename ---
+# Для subnet-списков добавим префикс IPv4-/IPv6- по содержимому строк:
+# - если строка похожа на IPv6 CIDR -> IPv6-
+# - если строка похожа на IPv4 CIDR -> IPv4-
 awk '
 function trim(s){ sub(/^[ \t\r\n]+/,"",s); sub(/[ \t\r\n]+$/,"",s); return s }
 function tolower_ascii(s,   i,c,r,up,lo){
@@ -127,6 +100,9 @@ function tolower_ascii(s,   i,c,r,up,lo){
   return r
 }
 function titlecase(s){ return (s==""?s:toupper(substr(s,1,1)) substr(s,2)) }
+function is_ipv4_cidr(s){ return (s ~ /^([0-9]{1,3}\.){3}[0-9]{1,3}\/[0-9]{1,2}$/) }
+function is_ipv6_cidr(s){ return (s ~ /^[0-9a-fA-F:]+\/[0-9]{1,3}$/) }
+
 FNR==1{
   fn=FILENAME
   sub(/^.*\//,"",fn); sub(/\.lst$/,"",fn)
@@ -144,12 +120,16 @@ FNR==1{
   if(line ~ /^\*\./) line=substr(line,2)
   if(line ~ /^\./) line=substr(line,2)
 
-  print grp "\t" line
+  # Префикс для подсетей чтобы было видно IPv4/IPv6
+  if (is_ipv6_cidr(line)) outgrp="IPv6-" grp
+  else if (is_ipv4_cidr(line)) outgrp="IPv4-" grp
+  else outgrp=grp
+
+  print outgrp "\t" line
 }
 ' "$WORK"/*.lst > "$WORK/tagged.tsv"
 
-TAGGED_TOTAL="$(wc -l < "$WORK/tagged.tsv" 2>/dev/null || echo 0)"
-say "$MAG" "Всего строк после очистки: $TAGGED_TOTAL"
+say "$MAG" "Всего строк после очистки: $(wc -l < "$WORK/tagged.tsv" 2>/dev/null || echo 0)"
 say "$CYN" "Создаю общий список. Ждите..."
 
 # --- Build .mtrickle JSON + report.tsv ---
@@ -248,7 +228,6 @@ END{
 }
 ' "$WORK/tagged.tsv" 2> "$WORK/report.tsv" > "$OUT"
 
-# --- Pretty summary ---
 NAMEC="$CYN"
 KEYC="$WHT"
 NUMC="$YEL"
@@ -257,12 +236,10 @@ say "$MAG" "Итог по группам:"
 
 while IFS="$(printf '\t')" read -r g total ns dom sn s6; do
   [ -n "${g:-}" ] || continue
-
   line="${NAMEC}${g}${RST}:"
 
   add_kv() {
-    k="$1"
-    v="${2:-0}"
+    k="$1"; v="${2:-0}"
     if [ "$v" -ne 0 ] 2>/dev/null; then
       line="${line} ${KEYC}${k}${RST}=${NUMC}${v}${RST}"
     fi
