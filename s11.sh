@@ -1,8 +1,6 @@
 #!/bin/sh
 set -eu
 
-clear
-
 OUT="/root/ItDogList.mtrickle"
 WORK="/tmp/mihomo_groups.$$"
 TAG="mihomo-groups"
@@ -76,6 +74,8 @@ https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Subnet
 https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Subnets/IPv4/telegram.lst
 https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Subnets/IPv4/twitter.lst
 '
+
+clear
 
 logc "$CYN" "Старт: собираю группы для Mihomo -> $OUT"
 LIST_COUNT="$(printf "%s" "$URLS" | awk 'NF{c++} END{print c+0}')"
