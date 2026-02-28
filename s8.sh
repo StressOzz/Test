@@ -121,7 +121,9 @@ FNR==1{
 ' "$WORK"/*.lst > "$WORK/tagged.tsv"
 
 TAGGED_TOTAL="$(wc -l < "$WORK/tagged.tsv" 2>/dev/null || echo 0)"
-logc "$MAG" "Строк после очистки (до дедупликации): $TAGGED_TOTAL"
+logc "$MAG" "Всего строк: $TAGGED_TOTAL"
+logc "$CYN" "Сздаём общий список. Ждите..."
+
 
 awk -F '\t' '
 function is_ipv4(s){ return (s ~ /^([0-9]{1,3}\.){3}[0-9]{1,3}$/) }
@@ -224,7 +226,7 @@ END{
 # - Ключи (всего/namespace/...): MAG
 # - Числа после "=": YEL
 NAMEC="$CYN"
-KEYC="$MAG"
+KEYC="$RST"
 NUMC="$YEL"
 
 logc "$MAG" "Итог по группам:"
