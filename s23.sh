@@ -6,6 +6,9 @@ WORK="/tmp/mihomo_groups.$$"
 mkdir -p "$WORK"
 trap 'rm -rf "$WORK"' EXIT
 
+REPO_TGZ="$WORK/repo.tgz"
+REPO_DIR="$WORK/repo"
+
 RED="$(printf '\033[31m')"
 GRN="$(printf '\033[32m')"
 YEL="$(printf '\033[33m')"
@@ -15,10 +18,7 @@ WHT="$(printf '\033[37m')"
 MAG="$(printf '\033[35m')"
 RST="$(printf '\033[0m')"
 
-say() {
-  color="$1"; shift
-  echo -e "${color}$*${RST}"
-}
+say() { color="$1"; shift; echo -e "${color}$*${RST}"; }
 
 fetch() {
   u="$1"; d="$2"
@@ -38,7 +38,6 @@ count_lines_human() {
   f="$1"
   bytes="$(wc -c < "$f" 2>/dev/null || echo 0)"
   nl="$(wc -l < "$f" 2>/dev/null || echo 0)"
-  # wc -l считает \n, поэтому файл без завершающего \n может дать 0 при 1 строке [web:179]
   if [ "$bytes" -gt 0 ] && [ "$nl" -eq 0 ]; then
     echo 1
   else
@@ -46,61 +45,44 @@ count_lines_human() {
   fi
 }
 
-URLS='
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Russia/inside-kvas.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Categories/anime.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Categories/block.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Categories/geoblock.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Categories/hodca.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Categories/news.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Categories/porn.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Services/cloudflare.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Services/cloudfront.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Services/digitalocean.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Services/discord.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Services/google_ai.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Services/google_play.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Services/hdrezka.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Services/hetzner.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Services/meta.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Services/ovh.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Services/telegram.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Services/tiktok.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Services/twitter.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Services/youtube.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Subnets/IPv4/Discord.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Subnets/IPv4/Meta.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Subnets/IPv4/Twitter.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Subnets/IPv4/cloudflare.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Subnets/IPv4/cloudfront.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Subnets/IPv4/digitalocean.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Subnets/IPv4/discord.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Subnets/IPv4/hetzner.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Subnets/IPv4/meta.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Subnets/IPv4/ovh.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Subnets/IPv4/telegram.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Subnets/IPv4/twitter.lst
-'
+copy_lst_dir() {
+  src="$1"
+  [ -d "$src" ] || return 0
+  find "$src" -maxdepth 1 -type f -name '*.lst' -print | while IFS= read -r f; do
+    cp "$f" "$WORK/$(basename "$f")"
+  done
+}
 
 clear
 say "$CYN" "Старт: собираю списки -> $OUT"
 
-LIST_COUNT="$(printf "%s" "$URLS" | awk 'NF{c++} END{print c+0}')"
-say "$YEL" "Списков для загрузки: $LIST_COUNT"
+# 1) Скачать весь репозиторий архивом
+say "$YEL" "Скачиваю репозиторий allow-domains (tarball main)"
+fetch "https://api.github.com/repos/itdoginfo/allow-domains/tarball/main" "$REPO_TGZ"
 
-printf "%s" "$URLS" | while IFS= read -r url; do
-  [ -n "$url" ] || continue
+mkdir -p "$REPO_DIR"
+tar -xzf "$REPO_TGZ" -C "$REPO_DIR"
 
-  base="$(basename "$url")"
-  dst="$WORK/$base"
+ROOTDIR="$(find "$REPO_DIR" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
+[ -n "${ROOTDIR:-}" ] || { say "$RED" "ОШИБКА: не нашёл корневую папку в архиве"; exit 1; }
 
-  say "$BLU" "Загружаю: $base"
-  fetch "$url" "$dst"
+# 2) Вытащить нужные каталоги со списками
+say "$YEL" "Копирую .lst из Categories / Services / Subnets/IPv4 / Subnets/IPv6"
+copy_lst_dir "$ROOTDIR/Categories"
+copy_lst_dir "$ROOTDIR/Services"
+copy_lst_dir "$ROOTDIR/Subnets/IPv4"
+copy_lst_dir "$ROOTDIR/Subnets/IPv6"
 
-  lines="$(count_lines_human "$dst")"
-  say "$GRN" "Готово: $base (строк: $lines)"
-done
+# 3) Отдельно inside-kvas.lst (как ты просил)
+INSIDE="$WORK/inside-kvas.lst"
+say "$BLU" "Загружаю: inside-kvas.lst"
+fetch "https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Russia/inside-kvas.lst" "$INSIDE"
+say "$GRN" "Готово: inside-kvas.lst (строк: $(count_lines_human "$INSIDE"))"
 
+LIST_COUNT="$(find "$WORK" -maxdepth 1 -name '*.lst' | wc -l | tr -d ' ')"
+say "$MAG" "Всего .lst файлов в работе: $LIST_COUNT"
+
+# 4) tagged.tsv
 awk '
 function trim(s){ sub(/^[ \t\r\n]+/,"",s); sub(/[ \t\r\n]+$/,"",s); return s }
 function tolower_ascii(s,   i,c,r,up,lo){
@@ -134,6 +116,7 @@ TAGGED_TOTAL="$(wc -l < "$WORK/tagged.tsv" 2>/dev/null || echo 0)"
 say "$MAG" "Всего строк после очистки: $TAGGED_TOTAL"
 say "$CYN" "Создаю общий список. Ждите..."
 
+# 5) JSON
 awk -F '\t' '
 function is_ipv4(s){ return (s ~ /^([0-9]{1,3}\.){3}[0-9]{1,3}$/) }
 function is_ipv4_cidr(s){ return (s ~ /^([0-9]{1,3}\.){3}[0-9]{1,3}\/[0-9]{1,2}$/) }
@@ -164,7 +147,7 @@ function rand_color(    h){
   return "#" h
 }
 BEGIN{
-  OFS=""   # чтобы AWK не вставлял пробелы между аргументами print [web:243]
+  OFS=""  # убрать пробелы между аргументами print [web:243]
   print "{\"groups\":["
   first_group=1
 }
