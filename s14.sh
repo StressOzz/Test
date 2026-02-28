@@ -34,7 +34,18 @@ fetch() {
   fi
 }
 
-# Можно вставлять как голые URL, так и markdown [text](url).
+count_lines_human() {
+  f="$1"
+  bytes="$(wc -c < "$f" 2>/dev/null || echo 0)"
+  nl="$(wc -l < "$f" 2>/dev/null || echo 0)"
+  # wc -l считает \n, поэтому файл без завершающего \n может дать 0 при 1 строке [web:179]
+  if [ "$bytes" -gt 0 ] && [ "$nl" -eq 0 ]; then
+    echo 1
+  else
+    echo "$nl"
+  fi
+}
+
 URLS='
 https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Russia/inside-kvas.lst
 https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Categories/anime.lst
@@ -80,21 +91,13 @@ say "$YEL" "Списков для загрузки: $LIST_COUNT"
 printf "%s" "$URLS" | while IFS= read -r url; do
   [ -n "$url" ] || continue
 
-  # Если вдруг попадётся markdown [text](url) — извлекаем URL из круглых скобок.
-  # sed с захватом группы \(...\) в basic-regex работает в busybox sed [web:166]
-  case "$url" in
-    *"]("*")"*)
-      url="$(printf "%s" "$url" | sed -n 's/.*(\(http[^)]*\)).*/\1/p')"
-      ;;
-  esac
-
   base="$(basename "$url")"
   dst="$WORK/$base"
 
   say "$BLU" "Загружаю: $base"
   fetch "$url" "$dst"
 
-  lines="$(wc -l < "$dst" 2>/dev/null || echo 0)"
+  lines="$(count_lines_human "$dst")"
   say "$GRN" "Готово: $base (строк: $lines)"
 done
 
@@ -176,7 +179,6 @@ END{
   for(g in groups){ glist[++n]=g }
   for(i=1;i<=n;i++) for(j=i+1;j<=n;j++) if(glist[i] > glist[j]){ t=glist[i]; glist[i]=glist[j]; glist[j]=t }
 
-  # report.tsv: группа\tвсего\tnamespace\tdomain\tsubnet\tsubnet6
   for(gi=1; gi<=n; gi++){
     g=glist[gi]
     m=cnt[g]
