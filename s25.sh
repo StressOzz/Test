@@ -23,14 +23,13 @@ say() { color="$1"; shift; echo -e "${color}$*${RST}"; }
 fetch() {
   u="$1"; d="$2"
   if command -v uclient-fetch >/dev/null 2>&1; then
-    # Важно: uclient-fetch обычно умеет редиректы, если вдруг нет — скажи, сделаем fallback на curl -L
     uclient-fetch -q -O "$d" "$u"
   elif command -v wget >/dev/null 2>&1; then
     wget -q -O "$d" "$u"
   elif command -v curl >/dev/null 2>&1; then
     curl -fsSL -o "$d" "$u"
   else
-    say "$RED" "ОШИБКА: нет uclient-fetch/wget/curl для загрузки"
+    say "$RED" "ОШИБКА: нет uclient-fetch/wget/curl"
     exit 1
   fi
 }
@@ -42,18 +41,19 @@ count_lines_human() {
   if [ "$bytes" -gt 0 ] && [ "$nl" -eq 0 ]; then echo 1; else echo "$nl"; fi
 }
 
-copy_lst_dir() {
+copy_lst_dir_prefixed() {
   src="$1"
+  prefix="$2"
   [ -d "$src" ] || return 0
   find "$src" -maxdepth 1 -type f -name '*.lst' -print | while IFS= read -r f; do
-    cp "$f" "$WORK/$(basename "$f")"
+    base="$(basename "$f")"
+    cp "$f" "$WORK/${prefix}${base}"
   done
 }
 
 clear
 say "$CYN" "Старт: собираю списки -> $OUT"
 
-# 1) Скачиваем весь репозиторий архивом
 say "$YEL" "Скачиваю репозиторий allow-domains (tarball main)"
 fetch "https://api.github.com/repos/itdoginfo/allow-domains/tarball/main" "$REPO_TGZ"
 
@@ -63,15 +63,13 @@ tar -xzf "$REPO_TGZ" -C "$REPO_DIR"
 ROOTDIR="$(find "$REPO_DIR" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
 [ -n "${ROOTDIR:-}" ] || { say "$RED" "ОШИБКА: не нашёл корневую папку в архиве"; exit 1; }
 
-# 2) Берём нужные .lst из репозитория
-say "$YEL" "Копирую .lst из Categories / Services / Subnets/IPv4 / Subnets/IPv6"
-copy_lst_dir "$ROOTDIR/Categories"
-copy_lst_dir "$ROOTDIR/Services"
-copy_lst_dir "$ROOTDIR/Subnets/IPv4"
-copy_lst_dir "$ROOTDIR/Subnets/IPv6"
+say "$YEL" "Копирую .lst из Categories / Services / Subnets/IPv4 / Subnets/IPv6 (с префиксами)"
+copy_lst_dir_prefixed "$ROOTDIR/Categories"    "Categories_"
+copy_lst_dir_prefixed "$ROOTDIR/Services"      "Services_"
+copy_lst_dir_prefixed "$ROOTDIR/Subnets/IPv4"  "Subnets_IPv4_"
+copy_lst_dir_prefixed "$ROOTDIR/Subnets/IPv6"  "Subnets_IPv6_"
 
-# 3) Отдельно inside-kvas.lst (как ты хотел)
-INSIDE="$WORK/inside-kvas.lst"
+INSIDE="$WORK/Russia-Inside_inside-kvas.lst"
 say "$BLU" "Загружаю: inside-kvas.lst"
 fetch "https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Russia/inside-kvas.lst" "$INSIDE"
 say "$GRN" "Готово: inside-kvas.lst (строк: $(count_lines_human "$INSIDE"))"
@@ -79,7 +77,7 @@ say "$GRN" "Готово: inside-kvas.lst (строк: $(count_lines_human "$INS
 LIST_COUNT="$(find "$WORK" -maxdepth 1 -name '*.lst' | wc -l | tr -d ' ')"
 say "$MAG" "Всего .lst файлов в работе: $LIST_COUNT"
 
-# 4) tagged.tsv (ВАЖНО: CIDR не режем; режем /path только у URL со схемой)
+# tagged.tsv
 awk '
 function trim(s){ sub(/^[ \t\r\n]+/,"",s); sub(/[ \t\r\n]+$/,"",s); return s }
 function tolower_ascii(s,   i,c,r,up,lo){
@@ -91,7 +89,19 @@ function titlecase(s){ return (s==""?s:toupper(substr(s,1,1)) substr(s,2)) }
 FNR==1{
   fn=FILENAME
   sub(/^.*\//,"",fn); sub(/\.lst$/,"",fn)
+
+  # Группа = имя файла без .lst; для Russia-Inside уже задано префиксом
   grp=titlecase(tolower_ascii(fn))
+  sub(/_.*$/,"",grp) # Categories_/Services_/Subnets_... -> один общий префикс в имени группы
+  # Но нам важнее “человеческое” имя по самому файлу:
+  # берём всё после первого "_" (если есть), иначе как есть
+  if (index(fn,"_")>0) {
+    grp = substr(fn, index(fn,"_")+1)
+    sub(/\.lst$/,"",grp)
+    grp = titlecase(tolower_ascii(grp))
+  } else {
+    grp = titlecase(tolower_ascii(fn))
+  }
   if (grp=="Inside-kvas") grp="Russia-Inside"
 }
 {
@@ -100,6 +110,7 @@ FNR==1{
   line=trim(line)
   if(line=="") next
 
+  # Убираем /path только у URL со схемой, CIDR не трогаем
   if (line ~ /^[a-zA-Z]+:\/\//) {
     gsub(/^([a-zA-Z]+:\/\/)/,"",line)
     sub(/\/.*$/,"",line)
@@ -107,6 +118,9 @@ FNR==1{
 
   if(line ~ /^\*\./) line=substr(line,2)
   if(line ~ /^\./) line=substr(line,2)
+
+  line=trim(line)
+  if(line=="") next
 
   print grp "\t" line
 }
@@ -116,7 +130,7 @@ TAGGED_TOTAL="$(wc -l < "$WORK/tagged.tsv" 2>/dev/null || echo 0)"
 say "$MAG" "Всего строк после очистки: $TAGGED_TOTAL"
 say "$CYN" "Создаю общий список. Ждите..."
 
-# 5) JSON (OFS="" чтобы не было пробелов в rule/type/id) [web:243]
+# JSON
 awk -F '\t' '
 function is_ipv4(s){ return (s ~ /^([0-9]{1,3}\.){3}[0-9]{1,3}$/) }
 function is_ipv4_cidr(s){ return (s ~ /^([0-9]{1,3}\.){3}[0-9]{1,3}\/[0-9]{1,2}$/) }
@@ -166,20 +180,6 @@ END{
 
   for(gi=1; gi<=n; gi++){
     g=glist[gi]
-    m=cnt[g]
-    dn=0; nm=0; sn=0; s6n=0
-    for(i=1;i<=m;i++){
-      v=vals[g,i]
-      if(is_ipv6_cidr(v) || is_ipv6(v)) s6n++
-      else if(is_ipv4_cidr(v) || is_ipv4(v)) sn++
-      else if(is_domainish(v)){ if(dotcount(v)>=2) dn++; else nm++ }
-      else nm++
-    }
-    print g "\t" m "\t" nm "\t" dn "\t" sn "\t" s6n > "/dev/stderr"
-  }
-
-  for(gi=1; gi<=n; gi++){
-    g=glist[gi]
     if(!first_group) print ","
     first_group=0
 
@@ -212,31 +212,6 @@ END{
   }
   print "]}"
 }
-' "$WORK/tagged.tsv" 2> "$WORK/report.tsv" > "$OUT"
-
-NAMEC="$CYN"
-KEYC="$WHT"
-NUMC="$YEL"
-
-say "$MAG" "Итог по группам:"
-while IFS="$(printf '\t')" read -r g total ns dom sn s6; do
-  [ -n "${g:-}" ] || continue
-  line="${NAMEC}${g}${RST}:"
-
-  add_kv() {
-    k="$1"
-    v="${2:-0}"
-    if [ "$v" -ne 0 ] 2>/dev/null; then
-      line="${line} ${KEYC}${k}${RST}=${NUMC}${v}${RST}"
-    fi
-  }
-
-  add_kv "всего" "${total:-0}"
-  add_kv "namespace" "${ns:-0}"
-  add_kv "domain" "${dom:-0}"
-  add_kv "subnet" "${sn:-0}"
-  add_kv "subnet6" "${s6:-0}"
-  echo -e "$line"
-done < "$WORK/report.tsv"
+' "$WORK/tagged.tsv" > "$OUT"
 
 say "$GRN" "Готово. Файл сохранён: $OUT"
