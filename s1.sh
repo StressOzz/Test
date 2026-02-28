@@ -1184,38 +1184,27 @@ EOF
 
 select_magitrickle_config() {
   local choice=""
-  local CONFIG_URL_DEFAULT="https://raw.githubusercontent.com/StressOzz/Use_WARP_on_OpenWRT/refs/heads/main/files/MagiTrickle/config.yaml"
-  local CONFIG_URL_ITDOG="https://raw.githubusercontent.com/StressOzz/Use_WARP_on_OpenWRT/refs/heads/main/files/MagiTrickle/configAD.yaml"
+  local URL_DEFAULT="https://raw.githubusercontent.com/StressOzz/Use_WARP_on_OpenWRT/refs/heads/main/files/MagiTrickle/config.yaml"
+  local URL_ITDOG="https://raw.githubusercontent.com/StressOzz/Use_WARP_on_OpenWRT/refs/heads/main/files/MagiTrickle/configAD.yaml"
 
   echo
-  logstep "Выбор списка MagiTrickle:"
-  echo -e "  ${GREEN}1)${NC} ITDog Allow Domains"
-  echo -e "  ${GREEN}2)${NC} Default"
+  echo "Выбор списка MagiTrickle:"
+  echo "  1) ITDog Allow Domains"
+  echo "  2) Default"
   echo
 
   while true; do
-    echo -ne "${GREEN}Введите номер [1-2]: ${NC}"
+    printf "Введите номер [1-2] (по умолчанию 2): "
     read -r choice
     choice="${choice:-2}"
 
     case "$choice" in
-      1)
-        MAGITRICKLE_CONFIG_URL="$CONFIG_URL_ITDOG"
-        loginfo "Выбран: ITDog Allow Domains"
-        break
-        ;;
-      2)
-        MAGITRICKLE_CONFIG_URL="$CONFIG_URL_DEFAULT"
-        loginfo "Выбран: Default"
-        break
-        ;;
-      *)
-        logwarn "Неверный выбор. Введите 1 или 2."
-        ;;
+      1) MAGITRICKLE_CONFIG_URL="$URL_ITDOG"; break ;;
+      2) MAGITRICKLE_CONFIG_URL="$URL_DEFAULT"; break ;;
+      *) echo "Неверный выбор. Введите 1 или 2." ;;
     esac
   done
 }
-
 
 
 install_magitrickle() {
@@ -1249,22 +1238,24 @@ install_magitrickle() {
 
 
 
-local CONFIGPATH="/etc/magitrickle/state/config.yaml"
 
 select_magitrickle_config
 
-wget -q -O "$CONFIGPATH" "$MAGITRICKLE_CONFIG_URL" || {
-  logerror "Не удалось скачать MagiTrickle config!"
-  logerror "URL: $MAGITRICKLE_CONFIG_URL"
-  return 1
-}
+CONFIGPATH="/etc/magitrickle/state/config.yaml"
 
-if [ ! -s "$CONFIGPATH" ]; then
-  logerror "Config скачан, но файл пустой/не создан: $CONFIGPATH"
+wget -q -O "$CONFIGPATH" "$MAGITRICKLE_CONFIG_URL"
+if [ $? -ne 0 ]; then
+  echo "Ошибка: не удалось скачать config!"
+  echo "URL: $MAGITRICKLE_CONFIG_URL"
   return 1
 fi
 
-loginfo "--> Config установлен: $CONFIGPATH"
+if [ ! -s "$CONFIGPATH" ]; then
+  echo "Ошибка: config пустой/не создан: $CONFIGPATH"
+  return 1
+fi
+
+echo "Config установлен: $CONFIGPATH"
 			
             echo "--> Включение автозапуска MagiTrickle..."
             /etc/init.d/magitrickle enable >/dev/null 2>&1
