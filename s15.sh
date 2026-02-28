@@ -15,10 +15,7 @@ WHT="$(printf '\033[37m')"
 MAG="$(printf '\033[35m')"
 RST="$(printf '\033[0m')"
 
-say() {
-  color="$1"; shift
-  echo -e "${color}$*${RST}"
-}
+say() { color="$1"; shift; echo -e "${color}$*${RST}"; }
 
 fetch() {
   u="$1"; d="$2"
@@ -29,7 +26,7 @@ fetch() {
   elif command -v curl >/dev/null 2>&1; then
     curl -fsSL -o "$d" "$u"
   else
-    say "$RED" "ОШИБКА: нет uclient-fetch/wget/curl для загрузки"
+    say "$RED" "ОШИБКА: нет uclient-fetch/wget/curl"
     exit 1
   fi
 }
@@ -38,7 +35,6 @@ count_lines_human() {
   f="$1"
   bytes="$(wc -c < "$f" 2>/dev/null || echo 0)"
   nl="$(wc -l < "$f" 2>/dev/null || echo 0)"
-  # wc -l считает \n, поэтому файл без завершающего \n может дать 0 при 1 строке [web:179]
   if [ "$bytes" -gt 0 ] && [ "$nl" -eq 0 ]; then
     echo 1
   else
@@ -46,51 +42,72 @@ count_lines_human() {
   fi
 }
 
-URLS='
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Russia/inside-kvas.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Categories/anime.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Categories/block.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Categories/geoblock.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Categories/hodca.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Categories/news.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Categories/porn.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Services/cloudflare.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Services/cloudfront.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Services/digitalocean.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Services/discord.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Services/google_ai.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Services/google_play.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Services/hdrezka.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Services/hetzner.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Services/meta.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Services/ovh.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Services/telegram.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Services/tiktok.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Services/twitter.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Services/youtube.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Subnets/IPv4/Discord.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Subnets/IPv4/Meta.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Subnets/IPv4/Twitter.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Subnets/IPv4/cloudflare.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Subnets/IPv4/cloudfront.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Subnets/IPv4/digitalocean.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Subnets/IPv4/discord.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Subnets/IPv4/hetzner.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Subnets/IPv4/meta.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Subnets/IPv4/ovh.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Subnets/IPv4/telegram.lst
-https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Subnets/IPv4/twitter.lst
-'
+# --- GitHub API listing (contents) ---
+# Возвращает download_url для .lst файлов в директории репозитория
+list_dir_lst_urls() {
+  dir="$1"
+  api="https://api.github.com/repos/itdoginfo/allow-domains/contents/$dir?ref=main"
+  tmp="$WORK/api.$(printf "%s" "$dir" | tr '/:' '__').json"
+
+  if command -v uclient-fetch >/dev/null 2>&1; then
+    # uclient-fetch не всегда удобен с заголовками, поэтому без них (хватит и так)
+    uclient-fetch -q -O "$tmp" "$api" || return 1
+  elif command -v curl >/dev/null 2>&1; then
+    curl -fsSL -o "$tmp" "$api" || return 1
+  else
+    wget -q -O "$tmp" "$api" || return 1
+  fi
+
+  # Достаём download_url только для файлов *.lst (без jq)
+  # В ответе contents для директории каждый элемент имеет поля "name", "type", "download_url". [web:191]
+  awk '
+    BEGIN{RS="\\{"; FS="\n"}
+    /"type"[[:space:]]*:[[:space:]]*"file"/ && /"name"[[:space:]]*:[[:space:]]*".*\.lst"/ {
+      for(i=1;i<=NF;i++){
+        if($i ~ /"download_url"[[:space:]]*:/){
+          line=$i
+          sub(/.*"download_url"[[:space:]]*:[[:space:]]*"/,"",line)
+          sub(/".*/,"",line)
+          if(line!="null" && line!="") print line
+        }
+      }
+    }
+  ' "$tmp"
+}
 
 clear
 say "$CYN" "Старт: собираю списки -> $OUT"
+
+# Директории, которые ты указал
+DIRS="
+Subnets/IPv4
+Subnets/IPv6
+Services
+Categories
+"
+
+URLS=""
+for d in $DIRS; do
+  say "$YEL" "Читаю каталог GitHub: $d"
+  urls="$(list_dir_lst_urls "$d" || true)"
+  if [ -n "${urls:-}" ]; then
+    URLS="$URLS
+$urls"
+  else
+    say "$RED" "Не смог получить список файлов для $d (возможен лимит/403)"
+  fi
+done
+
+# Плюс inside-kvas.lst
+URLS="$URLS
+https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Russia/inside-kvas.lst
+"
 
 LIST_COUNT="$(printf "%s" "$URLS" | awk 'NF{c++} END{print c+0}')"
 say "$YEL" "Списков для загрузки: $LIST_COUNT"
 
 printf "%s" "$URLS" | while IFS= read -r url; do
   [ -n "$url" ] || continue
-
   base="$(basename "$url")"
   dst="$WORK/$base"
 
@@ -101,6 +118,7 @@ printf "%s" "$URLS" | while IFS= read -r url; do
   say "$GRN" "Готово: $base (строк: $lines)"
 done
 
+# --- Tagging rules by group name from filename ---
 awk '
 function trim(s){ sub(/^[ \t\r\n]+/,"",s); sub(/[ \t\r\n]+$/,"",s); return s }
 function tolower_ascii(s,   i,c,r,up,lo){
@@ -134,6 +152,7 @@ TAGGED_TOTAL="$(wc -l < "$WORK/tagged.tsv" 2>/dev/null || echo 0)"
 say "$MAG" "Всего строк после очистки: $TAGGED_TOTAL"
 say "$CYN" "Создаю общий список. Ждите..."
 
+# --- Build .mtrickle JSON + report.tsv ---
 awk -F '\t' '
 function is_ipv4(s){ return (s ~ /^([0-9]{1,3}\.){3}[0-9]{1,3}$/) }
 function is_ipv4_cidr(s){ return (s ~ /^([0-9]{1,3}\.){3}[0-9]{1,3}\/[0-9]{1,2}$/) }
@@ -229,6 +248,7 @@ END{
 }
 ' "$WORK/tagged.tsv" 2> "$WORK/report.tsv" > "$OUT"
 
+# --- Pretty summary ---
 NAMEC="$CYN"
 KEYC="$WHT"
 NUMC="$YEL"
