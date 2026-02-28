@@ -14,7 +14,6 @@ GRN="$(printf '\033[32m')"
 YEL="$(printf '\033[33m')"
 BLU="$(printf '\033[34m')"
 CYN="$(printf '\033[36m')"
-WHT="$(printf '\033[37m')"
 MAG="$(printf '\033[35m')"
 RST="$(printf '\033[0m')"
 
@@ -34,19 +33,13 @@ fetch() {
   fi
 }
 
-count_lines_human() {
-  f="$1"
-  bytes="$(wc -c < "$f" 2>/dev/null || echo 0)"
-  nl="$(wc -l < "$f" 2>/dev/null || echo 0)"
-  if [ "$bytes" -gt 0 ] && [ "$nl" -eq 0 ]; then echo 1; else echo "$nl"; fi
-}
-
 merge_lst_dir() {
   src="$1"
   [ -d "$src" ] || return 0
   find "$src" -maxdepth 1 -type f -name '*.lst' -print | while IFS= read -r f; do
     base="$(basename "$f")"
     out="$WORK/$base"
+    # печатаем с \n на конце каждой строки, даже если в исходнике нет \n
     awk '{ sub(/\r$/,""); print }' "$f" >> "$out"
   done
 }
@@ -63,21 +56,16 @@ tar -xzf "$REPO_TGZ" -C "$REPO_DIR"
 ROOTDIR="$(find "$REPO_DIR" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
 [ -n "${ROOTDIR:-}" ] || { say "$RED" "ОШИБКА: не нашёл корневую папку в архиве"; exit 1; }
 
-say "$YEL" "Склеиваю .lst из Categories / Services / Subnets/IPv4 / Subnets/IPv6 (одинаковые имена -> одна группа)"
+say "$YEL" "Склеиваю .lst из Categories + Services (одинаковые имена -> одна группа)"
 merge_lst_dir "$ROOTDIR/Categories"
 merge_lst_dir "$ROOTDIR/Services"
-merge_lst_dir "$ROOTDIR/Subnets/IPv4"
-merge_lst_dir "$ROOTDIR/Subnets/IPv6"
 
 INSIDE="$WORK/inside-kvas.lst"
 say "$BLU" "Загружаю: inside-kvas.lst"
 fetch "https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Russia/inside-kvas.lst" "$INSIDE"
-say "$GRN" "Готово: inside-kvas.lst (строк: $(count_lines_human "$INSIDE"))"
+say "$GRN" "Готово: inside-kvas.lst загружен"
 
-LIST_COUNT="$(find "$WORK" -maxdepth 1 -name '*.lst' | wc -l | tr -d ' ')"
-say "$MAG" "Всего .lst файлов в работе (без inside-kvas отдельно не считается): $LIST_COUNT"
-
-# 1) Сначала сделаем tagged.tsv для "всех остальных" (без inside-kvas)
+# 1) tagged для Services+Categories
 awk '
 function trim(s){ sub(/^[ \t\r\n]+/,"",s); sub(/[ \t\r\n]+$/,"",s); return s }
 function tolower_ascii(s,   i,c,r,up,lo){
@@ -86,7 +74,6 @@ function tolower_ascii(s,   i,c,r,up,lo){
   return r
 }
 function titlecase(s){ return (s==""?s:toupper(substr(s,1,1)) substr(s,2)) }
-
 FNR==1{
   fn=FILENAME
   sub(/^.*\//,"",fn); sub(/\.lst$/,"",fn)
@@ -114,12 +101,10 @@ FNR==1{
 }
 ' "$WORK"/*.lst > "$WORK/others_tagged.tsv"
 
-# 2) tagged.tsv для inside-kvas, НО вычитаем всё что есть в others_tagged.tsv
-# Сравнение по значению (2-я колонка), т.е. по самому домену/подсети.
+# 2) Russia-Inside = inside-kvas MINUS (Services+Categories), сравнение по самому значению
 awk -F '\t' '
 function trim(s){ sub(/^[ \t\r\n]+/,"",s); sub(/[ \t\r\n]+$/,"",s); return s }
 function norm(s){ s=trim(s); sub(/\r$/,"",s); return s }
-
 BEGIN{ inside_grp="Russia-Inside" }
 
 FNR==NR {
@@ -150,11 +135,9 @@ FNR==NR {
 }
 ' "$WORK/others_tagged.tsv" "$INSIDE" > "$WORK/tagged.tsv"
 
-TAGGED_TOTAL="$(wc -l < "$WORK/tagged.tsv" 2>/dev/null || echo 0)"
-say "$MAG" "Russia-Inside после вычитания (строк): $TAGGED_TOTAL"
-say "$CYN" "Создаю общий список. Ждите..."
+say "$MAG" "Russia-Inside после вычитания (строк): $(wc -l < "$WORK/tagged.tsv" 2>/dev/null || echo 0)"
+say "$CYN" "Генерирую JSON..."
 
-# JSON
 awk -F '\t' '
 function is_ipv4(s){ return (s ~ /^([0-9]{1,3}\.){3}[0-9]{1,3}$/) }
 function is_ipv4_cidr(s){ return (s ~ /^([0-9]{1,3}\.){3}[0-9]{1,3}\/[0-9]{1,2}$/) }
@@ -186,7 +169,7 @@ function rand_color(    h){
   return "#" h
 }
 BEGIN{
-  OFS=""  # чтобы awk не вставлял пробелы между аргументами print [web:243]
+  OFS=""
   print "{\"groups\":["
   first_group=1
 }
