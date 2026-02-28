@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-OUT="/root/mihomo_groups.json"
+OUT="/root/ItDogList.mtrickle"
 WORK="/tmp/mihomo_groups.$$"
 TAG="mihomo-groups"
 mkdir -p "$WORK"
@@ -101,6 +101,9 @@ FNR==1{
   fn=FILENAME
   sub(/^.*\//,"",fn); sub(/\.lst$/,"",fn)
   grp=titlecase(tolower_ascii(fn))
+
+  # Переименование группы: Inside-kvas -> Russia-Inside
+  if (grp=="Inside-kvas") grp="Russia-Inside"
 }
 {
   line=$0
@@ -118,7 +121,8 @@ FNR==1{
 ' "$WORK"/*.lst > "$WORK/tagged.tsv"
 
 TAGGED_TOTAL="$(wc -l < "$WORK/tagged.tsv" 2>/dev/null || echo 0)"
-logc "$MAG" "Строк после очистки (до дедупликации): $TAGGED_TOTAL"
+logc "$MAG" "Всего строк: $TAGGED_TOTAL"
+logc "$GRN" "Собираем общий список. Ждите..."
 
 awk -F '\t' '
 function is_ipv4(s){ return (s ~ /^([0-9]{1,3}\.){3}[0-9]{1,3}$/) }
@@ -165,7 +169,7 @@ END{
   for(g in groups){ glist[++n]=g }
   for(i=1;i<=n;i++) for(j=i+1;j<=n;j++) if(glist[i] > glist[j]){ t=glist[i]; glist[i]=glist[j]; glist[j]=t }
 
-  # отчёт в stderr
+  # отчёт в stderr: группа\tвсего\tnamespace\tdomain\tsubnet\tsubnet6
   for(gi=1; gi<=n; gi++){
     g=glist[gi]
     m=cnt[g]
@@ -216,10 +220,23 @@ END{
 }
 ' "$WORK/tagged.tsv" 2> "$WORK/report.tsv" > "$OUT"
 
-logc "$MAG" "Отчёт по группам (группа / всего / namespace / domain / subnet / subnet6):"
+# Цветной понятный вывод отчёта как ты просил:
+logc "$MAG" "Итог по группам (как читать: всего / namespace / domain / subnet / subnet6):"
 while IFS="$(printf '\t')" read -r g total ns dom sn s6; do
   [ -n "${g:-}" ] || continue
-  logc "$CYN" "  $g: всего=$total namespace=$ns domain=$dom subnet=$sn subnet6=$s6"
+
+  # Выделяем цветом тип группы по содержимому:
+  # - если есть subnet/subnet6 -> синий
+  # - иначе если есть domain -> жёлтый
+  # - иначе -> зелёный
+  color="$GRN"
+  if [ "${sn:-0}" != "0" ] || [ "${s6:-0}" != "0" ]; then
+    color="$BLU"
+  elif [ "${dom:-0}" != "0" ]; then
+    color="$YEL"
+  fi
+
+  logc "$color" "  $g: всего=$total namespace=$ns domain=$dom subnet=$sn subnet6=$s6"
 done < "$WORK/report.tsv"
 
 logc "$GRN" "Готово. Файл сохранён: $OUT"
