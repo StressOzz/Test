@@ -1,6 +1,8 @@
 #!/bin/sh
 set -eu
 
+clear
+
 OUT="/root/ItDogList.mtrickle"
 WORK="/tmp/mihomo_groups.$$"
 TAG="mihomo-groups"
