@@ -1183,8 +1183,8 @@ EOF
 
 
 select_magitrickle_config() {
-
-log_step "Выбор сиска для MagiTrickle"
+echo
+log_step "Выбор списка для MagiTrickle"
 
   local choice=""
   local URL_DEFAULT="https://raw.githubusercontent.com/StressOzz/Use_WARP_on_OpenWRT/refs/heads/main/files/MagiTrickle/config.yaml"
@@ -1256,7 +1256,7 @@ if [ ! -s "$CONFIGPATH" ]; then
   echo "Ошибка: config пустой/не создан: $CONFIGPATH"
   return 1
 fi
-
+echo
             echo "--> Установка списка для MagiTrickle..."
             echo "--> Включение автозапуска MagiTrickle..."
             /etc/init.d/magitrickle enable >/dev/null 2>&1
@@ -1389,6 +1389,7 @@ finalize_install() {
 main() {
 	clear
     log_done "Скрипт установки Mixomo OpenWRT $SCRIPT_VERSION от Internet Helper"
+	log_done "                              от Internet Helper (StressOzz Remix)"
 	echo ""
 	
     log_step "[1/3] Установка Mihomo"
