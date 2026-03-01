@@ -6,9 +6,11 @@ OUT="/etc/mihomo/config.yaml"
 API="https://api.web2core.workers.dev/api"
 
 [ -r "$IN" ] || { echo "Can't read $IN" >&2; exit 1; }
-[ -r /usr/share/libubox/jshn.sh ] || { echo "Missing jshn.sh (libubox). Install package providing it." >&2; exit 1; }
+[ -r /usr/share/libubox/jshn.sh ] || { echo "Missing /usr/share/libubox/jshn.sh" >&2; exit 1; }
 command -v curl >/dev/null 2>&1 || { echo "Missing curl" >&2; exit 1; }
 
+# Важно для jshn: задать JSON_PREFIX перед . jshn.sh [web:70]
+JSON_PREFIX="W2C_"
 . /usr/share/libubox/jshn.sh
 
 INPUT="$(cat "$IN")"
@@ -24,7 +26,7 @@ json_add_boolean addTun 0
 json_close_object
 json_dump > "$REQ"
 
-# Worker: POST / or /api, JSON request; mihomo response is text/yaml [web:49]
+# Worker принимает POST JSON и для mihomo возвращает YAML [web:49]
 curl -fsS -X POST "$API" \
   -H "Content-Type: application/json" \
   --data-binary @"$REQ" > "$TMP" || {
@@ -33,7 +35,7 @@ curl -fsS -X POST "$API" \
     exit 2
   }
 
-# Если API вернул JSON-ошибку вида {"error":"..."} — это не YAML [web:49]
+# Если пришел JSON, скорее всего это {"error": "..."} [web:49]
 if head -c 1 "$TMP" | grep -q '{'; then
   echo "API returned JSON (likely error):" >&2
   cat "$TMP" >&2
