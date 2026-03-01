@@ -171,4 +171,6 @@ END{
 chmod 600 "$TMP"
 mkdir -p "$(dirname "$OUT")"
 mv -f "$TMP" "$OUT"
-echo "Written: $OUT"
+
+/etc/init.d/mihomo reload
+/etc/init.d/mihomo restart
