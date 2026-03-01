@@ -361,9 +361,9 @@ if quic_is_blocked; then echo -e "${YELLOW}Блокировка QUIC: ${GREEN}в
 [ "$printed" -eq 1 ] && echo; echo -e "${CYAN}1) ${GREEN}Системная информация${NC}\n${CYAN}2) ${GREEN}$WEB_TEXT${NC}\n${CYAN}3) ${GREEN}$QUIC_TEXT${NC}\n${CYAN}4) ${GREEN}Меню выбора зеркала ${NC}OpenWrt\n${CYAN}5) ${GREEN}Запустить${NC} blockcheck\n${CYAN}6) ${GREEN}Удалить ${NC}Zapret"
 
 if [ -f /etc/init.d/zapret ] && [ -f "$CONF" ]; then
-    if grep -q "option DISABLE_IPV6 '1'" "$CONF"; then
+    if grep -q "^ *option DISABLE_IPV6 '1'" "$CONF"; then
         echo -e "${CYAN}7) ${GREEN}Включить ${NC}IPv6${GREEN} в ${NC}Zapret"
-    else
+    elif grep -q "^ *option DISABLE_IPV6 '0'" "$CONF"; then
         echo -e "${CYAN}7) ${GREEN}Выключить ${NC}IPv6${GREEN} в ${NC}Zapret"
     fi
 fi
