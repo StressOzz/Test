@@ -380,7 +380,7 @@ sed -i 's/meta l4proto { tcp, udp } flow offload @ft;/meta l4proto { tcp, udp } 
 
 toggle_ipv6() {
 
-    [ -f /etc/init.d/zapret ] && [ -f "$CONF" ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }
+[ ! -f /etc/init.d/zapret ] || [ ! -f "$CONF" ] && { echo -e "\n${RED}Zapret не установлен или отсутствует конфиг!${NC}\n"; PAUSE; return; }
 
     if grep -q "option DISABLE_IPV6 '0'" "$CONF"; then
         sed -i "s/option DISABLE_IPV6 '0'/option DISABLE_IPV6 '1'/" "$CONF"
