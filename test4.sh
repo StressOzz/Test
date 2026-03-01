@@ -390,7 +390,7 @@ toggle_ipv6() {
         PAUSE
     fi
 
-    echo -en "\n${MAGENTA}Проверяем IPv6${NC}"
+    echo -e "\n${MAGENTA}Проверяем IPv6${NC}"
     time=$(ping -6 -c 1 -W 2 google.com 2>/dev/null | grep 'time=' | awk -F'time=' '{print $2}' | awk '{print $1}')
 
     if [ -z "$time" ]; then
