@@ -1,19 +1,26 @@
 #!/bin/sh
 
-echo "Проверяем зависимости..."
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+
+clear
+
+echo -e "${YELLOW}Проверяем зависимости...${NC}"
 
 for pkg in wireguard-tools curl jq coreutils-base64; do
     if ! opkg list-installed | grep -q "^$pkg "; then
-        echo "Устанавливаем $pkg..."
+        echo -e "${GREEN}Устанавливаем:${NC} $pkg"
         opkg update
         opkg install $pkg || {
-            echo "Ошибка установки $pkg"
+            echo -e "\n${RED}Ошибка установки ${NC}$pkg"
             exit 1
         }
     fi
 done
 
-echo "Генерируем ключи..."
+echo -e "${YELLOW}Генерируем ключи...${NC}"
 priv="$(wg genkey)"
 pub="$(printf "%s" "$priv" | wg pubkey)"
 
@@ -30,7 +37,7 @@ sec() {
     ins "$1" "$2" -H "Authorization: Bearer $3" "${@:4}"
 }
 
-echo "Регистрируем устройство в Cloudflare..."
+echo -e "${GREEN}Регистрируем устройство в Cloudflare...${NC}"
 
 response=$(ins POST "reg" \
 -d "{\"install_id\":\"\",\"tos\":\"$(date -u +%FT%TZ)\",\"key\":\"${pub}\",\"fcm_token\":\"\",\"type\":\"ios\",\"locale\":\"en_US\"}")
@@ -39,12 +46,12 @@ id=$(echo "$response" | jq -r '.result.id')
 token=$(echo "$response" | jq -r '.result.token')
 
 if [ -z "$id" ] || [ "$id" = "null" ]; then
-    echo "Ошибка регистрации:"
+    echo -e "${RED}Ошибка регистрации:${NC}"
     echo "$response"
     exit 1
 fi
 
-echo "Активируем WARP..."
+echo -e "${GREEN}Активируем WARP...${NC}"
 
 response=$(sec PATCH "reg/${id}" "$token" -d '{"warp_enabled":true}')
 
@@ -53,7 +60,7 @@ client_ipv4=$(echo "$response" | jq -r '.result.config.interface.addresses.v4')
 client_ipv6=$(echo "$response" | jq -r '.result.config.interface.addresses.v6')
 
 if [ -z "$peer_pub" ] || [ "$peer_pub" = "null" ]; then
-    echo "Ошибка получения конфигурации"
+    echo -e "\n${RED}Ошибка получения конфигурации${NC}"
     exit 1
 fi
 
@@ -83,10 +90,10 @@ EOF
 )
 
 echo
-echo "========== WARP CONFIG =========="
+echo -e "${GREEN}========== ${YELLOW}WARP CONFIG${NC} ==========${NC}"
 echo "$conf"
-echo "================================="
+echo -e "${GREEN}=================================${NC}"
 echo
 
 echo "$conf" > /root/WARP.conf
-echo "Файл сохранён: /root/WARP.conf"
+echo -e "${YELLOW}Файл сохранён:${NC} /root/WARP.conf"
