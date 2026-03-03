@@ -194,14 +194,17 @@ chmod 600 /root/WARP.conf
 }
 
 
-require_openwrt
-check_space
-install_base_deps
-install_mihomo
-configure_hev
-install_magitrickle
-install_warp
+main() {
+    require_openwrt
+    check_space
+    install_base_deps
+    install_mihomo
+    configure_hev
+    install_magitrickle
+    install_warp
 
-log ""
-log "ВСЁ ГОТОВО."
-log "Mihomo + HEV + MagiTrickle + WARP (AWG) установлены."
+    log ""
+    log "ВСЁ ГОТОВО."
+}
+
+main "$@"
