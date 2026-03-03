@@ -64,15 +64,15 @@ check_status() {
   HEV_STATUS="[Не установлен]"
   MAGITRICKLE_STATUS="[Не установлен]"
 
-  [ -x /etc/init.d/mixomo-openwrt ] && MIHOMO_STATUS="[Установлен]"
+  [ -x /etc/init.d/mixomo ] && MIHOMO_STATUS="[Установлен]"
   [ -x /etc/init.d/hev-socks5-tunnel ] && HEV_STATUS="[Установлен]"
   [ -x /etc/init.d/magitrickle ] && MAGITRICKLE_STATUS="[Установлен]"
 
   echo
-  echo "${YELLOW}Статус компонентов:${NC}"
-  echo " - mixomo-openwrt:      $MIHOMO_STATUS"
-  echo " - hev-socks5-tunnel:  $HEV_STATUS"
-  echo " - magitrickle:         $MAGITRICKLE_STATUS"
+  echo -e "${YELLOW}Статус компонентов:${NC}"
+  echo -e " - mixomo-openwrt:      $MIHOMO_STATUS"
+  echo -e " - hev-socks5-tunnel:  $HEV_STATUS"
+  echo -e " - magitrickle:         $MAGITRICKLE_STATUS"
   echo
 }
 
