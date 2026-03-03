@@ -60,16 +60,15 @@ fi
 }
 
 check_status() {
-  MIHOMO_STATUS="[Не установлен]"; HEV_STATUS="[Не установлен]"; MAGITRICKLE_STATUS="[Не установлен]"
+  MIHOMO_STATUS="${RED}не установлен${NC}"; HEV_STATUS="${RED}не установлен${NC}"; MAGITRICKLE_STATUS="${RED}не установлен${NC}"
 
-  [ -x /etc/init.d/mihomo ] && MIHOMO_STATUS="Установлен"
-  [ -x /etc/init.d/hev-socks5-tunnel ] && HEV_STATUS="Установлен"
-  [ -x /etc/init.d/magitrickle ] && MAGITRICKLE_STATUS="Установлен"
+  [ -x /etc/init.d/mihomo ] && MIHOMO_STATUS="${GREEN}установлен${NC}"
+  [ -x /etc/init.d/hev-socks5-tunnel ] && HEV_STATUS="${GREEN}установлен${NC}"
+  [ -x /etc/init.d/magitrickle ] && MAGITRICKLE_STATUS="${GREEN}установлен${NC}"
 
-  echo -e "Статус компонентов:${NC}"
-  echo -e "${YELLOW}mihomo-openwrt:${NC}   $MIHOMO_STATUS"
+  echo -e "${YELLOW}mihomo-openwrt:${NC}    $MIHOMO_STATUS"
   echo -e "${YELLOW}hev-socks5-tunnel:${NC} $HEV_STATUS"
-  echo -e "${YELLOW}magitrickle:${NC}      $MAGITRICKLE_STATUS"
+  echo -e "${YELLOW}magitrickle:${NC}       $MAGITRICKLE_STATUS"
 }
 
 show_menu() {
