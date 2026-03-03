@@ -1,5 +1,4 @@
 #!/bin/sh
-set -e
 
 MIHOMO_BIN="/usr/bin/mihomo"
 MIHOMO_ETC="/etc/mihomo"
