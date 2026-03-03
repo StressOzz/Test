@@ -33,7 +33,7 @@ while true; do
     1) MAGITRICKLE_CONFIG_URL="$URL_ITDOG"; break ;;
     2) MAGITRICKLE_CONFIG_URL="$URL_DEFAULT"; break ;;
     3) MAGITRICKLE_CONFIG_URL=""; break ;;
-    *) echo ;;
+    *) echo; break ;;
   esac
 done
 
