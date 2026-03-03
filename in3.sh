@@ -73,6 +73,7 @@ echo -e "4) Сгенерировать WARP"
 echo -e "5) Интегрировать WARP в mixomo-openwrt"
 echo -e "6) Удалить → установить → настроить mixomo-openwrt"
 echo -e "Enter) Выход"
+echo
 echo -ne "Выберите пункт: "
 read choiceM
 
@@ -98,6 +99,7 @@ case "$choiceM" in
   PAUSE
   ;;
 6)
+  sh <(wget -O - https://raw.githubusercontent.com/StressOzz/WARP_on_OpenWRT/main/mixomo_openwrt_delete.sh)
   sh <(wget -O - https://raw.githubusercontent.com/StressOzz/WARP_on_OpenWRT/main/mixomo_openwrt_install.sh)
   sh <(wget -O - https://raw.githubusercontent.com/StressOzz/WARP_on_OpenWRT/main/gen_WARP.sh)
   sh <(wget -O - https://raw.githubusercontent.com/StressOzz/WARP_on_OpenWRT/main/WARP_to_conf.sh)
