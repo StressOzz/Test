@@ -13,7 +13,7 @@ CONFIGPATH="/etc/magitrickle/state/config.yaml"
 URL_DEFAULT="https://raw.githubusercontent.com/StressOzz/Use_WARP_on_OpenWRT/refs/heads/main/files/MagiTrickle/config.yaml"
 URL_ITDOG="https://raw.githubusercontent.com/StressOzz/Use_WARP_on_OpenWRT/refs/heads/main/files/MagiTrickle/configAD.yaml"
 
-PAUSE() { echo -ne "Нажмите Enter..."; read dummy; }
+PAUSE() { echo -ne "\nНажмите Enter..."; read dummy; }
 
 magitrickle_config() {
 echo
@@ -59,22 +59,43 @@ else
 fi
 }
 
+check_status() {
+  MIHOMO_STATUS="[Не установлен]"
+  HEV_STATUS="[Не установлен]"
+  MAGITRICKLE_STATUS="[Не установлен]"
+
+  [ -x /etc/init.d/mixomo-openwrt ] && MIHOMO_STATUS="[Установлен]"
+  [ -x /etc/init.d/hev-socks5-tunnel ] && HEV_STATUS="[Установлен]"
+  [ -x /etc/init.d/magitrickle ] && MAGITRICKLE_STATUS="[Установлен]"
+
+  echo
+  echo "${YELLOW}Статус компонентов:${NC}"
+  echo " - mixomo-openwrt:      $MIHOMO_STATUS"
+  echo " - hev-socks5-tunnel:  $HEV_STATUS"
+  echo " - magitrickle:         $MAGITRICKLE_STATUS"
+  echo
+}
+
 show_menu() {
 clear
 echo -e "╔═══════════════════════════════════════════╗"
-echo -e "║ mixomo-openwrt on Internet-Helper Manager ║"
+echo -e "║ ${BLUE}mixomo-openwrt on Internet-Helper Manager${NC} ║"
 echo -e "╚═══════════════════════════════════════════╝"
-echo -e "                                 by StressOzz"
+echo -e "                                 ${DGRAY}by StressOzz${NC}"
 echo
-echo -e "1) Установить mixomo-openwrt"
-echo -e "2) Удалить mixomo-openwrt"
-echo -e "3) Сменить список MagiTrickle"
-echo -e "4) Сгенерировать WARP"
-echo -e "5) Интегрировать WARP в mixomo-openwrt"
-echo -e "6) Удалить → установить → настроить mixomo-openwrt"
-echo -e "Enter) Выход"
+
+check_status
+
 echo
-echo -ne "Выберите пункт: "
+echo -e "${CYAN}1) ${GREEN}Установить ${NC}mixomo-openwrt"
+echo -e "${CYAN}2) ${GREEN}Удалить ${NC}mixomo-openwrt"
+echo -e "${CYAN}3) ${GREEN}Сменить список ${NC}MagiTrickle"
+echo -e "${CYAN}4) ${GREEN}Сгенерировать ${NC}WARP"
+echo -e "${CYAN}5) ${GREEN}Интегрировать ${NC}WARP${GREEN} в ${NC}mixomo-openwrt"
+echo -e "${CYAN}6) ${GREEN}Удалить ${NC}→ ${GREEN}установить ${NC}→ ${GREEN}настроить ${NC}mixomo-openwrt"
+echo -e "${CYAN}Enter) ${GREEN}Выход"
+echo
+echo -ne "${YELLOW}Выберите пункт: ${NC}"
 read choiceM
 
 case "$choiceM" in
