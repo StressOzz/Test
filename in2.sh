@@ -50,6 +50,10 @@ if [ -n "$MAGITRICKLE_CONFIG_URL" ]; then
   fi
 
   echo -e "${GREEN}Готово.${NC}"
+  /etc/init.d/magitrickle enable >/dev/null 2>&1
+  /etc/init.d/magitrickle reload  >/dev/null 2>&1
+  /etc/init.d/magitrickle start >/dev/null 2>&1
+  /etc/init.d/magitrickle restart >/dev/null 2>&1
 else
   echo -e "${YELLOW}Текущий список оставлен без изменений.${NC}"
 fi
