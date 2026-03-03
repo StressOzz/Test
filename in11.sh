@@ -17,14 +17,15 @@ PAUSE() { echo -ne "\nНажмите Enter..."; read dummy; }
 
 magitrickle_config() {
 echo
-echo -e "Выбор списка для MagiTrickle"
-echo -e "1) ITDog Allow Domains"
-echo -e "2) Internet Helper"
-echo -e "3) Оставить текущий список"
+echo -e "${YELLOW}Выбор списка для MagiTrickle${NC}"
+echo -e "${CYAN}1) ${GREEN}ITDog Allow Domains${NC}"
+echo -e "${CYAN}2) ${GREEN}Internet Helper${NC}"
+echo -e "${CYAN}3) ${GREEN}Оставить текущий список${NC}"
+echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}"
 echo
 
 while true; do
-  echo -en "Введите номер: "
+  echo -en "${YELLOW}Введите номер: ${NC}"
   read -r choice
   choice="${choice:-2}"
 
@@ -32,7 +33,7 @@ while true; do
     1) MAGITRICKLE_CONFIG_URL="$URL_ITDOG"; break ;;
     2) MAGITRICKLE_CONFIG_URL="$URL_DEFAULT"; break ;;
     3) MAGITRICKLE_CONFIG_URL=""; break ;;
-    *) echo "Неверный выбор. Введите 1, 2 или 3." ;;
+    *) echo ;;
   esac
 done
 
@@ -95,11 +96,11 @@ read choiceM
 
 case "$choiceM" in
 1)
-  sh <(wget -O - https://raw.githubusercontent.com/StressOzz/Mihomo-OpenWRT_Manager/main/mihomo_openwrt_install.sh)
+  sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Mihomo-OpenWRT_Manager/main/mihomo_openwrt_install.sh)
   PAUSE
   ;;
 2)
-  sh <(wget -O - https://raw.githubusercontent.com/StressOzz/Mihomo-OpenWRT_Manager/main/mihomo_openwrt_delete.sh)
+  sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Mihomo-OpenWRT_Manager/main/mihomo_openwrt_delete.sh)
   PAUSE
   ;;
 3)
@@ -107,18 +108,18 @@ case "$choiceM" in
   PAUSE
   ;;
 4)
-  sh <(wget -O - https://raw.githubusercontent.com/StressOzz/Mihomo-OpenWRT_Manager/main/gen_WARP.sh)
+  sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Mihomo-OpenWRT_Manager/main/gen_WARP.sh)
   PAUSE
   ;;
 5)
-  sh <(wget -O - https://raw.githubusercontent.com/StressOzz/Mihomo-OpenWRT_Manager/main/WARP_to_conf.sh)
+  sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Mihomo-OpenWRT_Manager/main/WARP_to_conf.sh)
   PAUSE
   ;;
 6)
-  sh <(wget -O - https://raw.githubusercontent.com/StressOzz/Mihomo-OpenWRT_Manager/main/mihomo_openwrt_delete.sh)
-  sh <(wget -O - https://raw.githubusercontent.com/StressOzz/Mihomo-OpenWRT_Manager/main/mihomo_openwrt_install.sh)
-  sh <(wget -O - https://raw.githubusercontent.com/StressOzz/Mihomo-OpenWRT_Manager/main/gen_WARP.sh)
-  sh <(wget -O - https://raw.githubusercontent.com/StressOzz/Mihomo-OpenWRT_Manager/main/WARP_to_conf.sh)
+  sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Mihomo-OpenWRT_Manager/main/mihomo_openwrt_delete.sh)
+  sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Mihomo-OpenWRT_Manager/main/mihomo_openwrt_install.sh)
+  sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Mihomo-OpenWRT_Manager/main/gen_WARP.sh)
+  sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Mihomo-OpenWRT_Manager/main/WARP_to_conf.sh)
   PAUSE
   ;;
 *)
