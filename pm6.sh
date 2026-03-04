@@ -120,8 +120,8 @@ echo -e "${YELLOW}Перезапускаем сеть! Подождите...${NC
 /etc/init.d/network restart >/dev/null 2>&1
 sleep 5
 
-echo -e "AmneziaWG ${GREEN}установлен!${NC}"
-echo -e "${GREEN}Создайте интерфейс в LuCI${NC}"
+echo -e "\nAmneziaWG ${GREEN}установлен!${NC}\n"
+echo -e "${GREEN}Создайте интерфейс ${NC}AWG${GREEN} в ${NC}LuCI${GREEN}!${NC}\n"
 echo -e "${YELLOW}Вставьте в него рабочий конфиг!${NC}\n"
 read -p "Нажмите Enter..." dummy
 }
