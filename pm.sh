@@ -116,23 +116,42 @@ echo -e "${MAGENTA}Устанавливаем интерфейс AWG${NC}"
 IF_NAME="AWG"
 PROTO="amneziawg"
 DEV_NAME="amneziawg0"
+
+# --- проверяем модуль ---
+if ! lsmod | grep -q "^amneziawg"; then
+    echo -e "${CYAN}Модуль amneziawg не загружен, пробуем загрузить...${NC}"
+    if ! modprobe amneziawg 2>/dev/null; then
+        echo -e "${RED}Ошибка: модуль amneziawg не найден или несовместим с ядром.${NC}"
+        echo -e "${RED}Интерфейс AWG создать нельзя.${NC}"
+        return
+    fi
+    sleep 1
+fi
+
+# --- проверяем, появилось ли устройство ---
+if [ ! -d "/sys/class/net/$DEV_NAME" ]; then
+    echo -e "${RED}Ошибка: сетевое устройство $DEV_NAME не найдено.${NC}"
+    echo -e "${RED}AWG не может работать без устройства.${NC}"
+    return
+fi
+
+# --- проверяем, есть ли интерфейс в конфиге ---
 if grep -q "config interface '$IF_NAME'" /etc/config/network; then
-echo -e "${RED}Интерфейс ${NC}$IF_NAME${RED} уже существует${NC}"
+    echo -e "${RED}Интерфейс ${NC}$IF_NAME${RED} уже существует${NC}"
 else
-echo -e "${CYAN}Добавляем интерфейс ${NC}$IF_NAME"
-uci batch <<EOF
+    echo -e "${CYAN}Добавляем интерфейс ${NC}$IF_NAME"
+    uci batch <<EOF
 set network.$IF_NAME=interface
 set network.$IF_NAME.proto=$PROTO
 set network.$IF_NAME.device=$DEV_NAME
 commit network
 EOF
+    echo -e "${GREEN}Интерфейс $IF_NAME добавлен!${NC}"
 fi
-echo -e "${CYAN}Перезапускаем сеть${NC}"
 
+echo -e "${CYAN}Перезапускаем сеть${NC}"
 /etc/init.d/network restart
 sleep 5
-# /etc/init.d/firewall restart
-# /etc/init.d/uhttpd restart
 
 echo -e "${GREEN}Интерфейс ${NC}$IF_NAME${GREEN} создан и активирован!${NC}"
 echo -e "${YELLOW}Вставьте рабочий конфиг в Interfaces (Интерфейс) AWG!${NC}\n"
