@@ -636,7 +636,7 @@ fi
     echo -e "${CYAN}4) ${GREEN}Удалить ${NC}ByeDPI"
     echo -e "${CYAN}5) ${GREEN}Интегрировать ${NC}ByeDPI ${GREEN}в ${NC}Podkop"
     echo -e "${CYAN}6) ${GREEN}Изменить текущую стратегию ${NC}ByeDPI"
-	echo -e "${CYAN}7) ${GREEN}Установить ${NC}AWGс"
+	echo -e "${CYAN}7) ${GREEN}Установить ${NC}AWG"
 	echo -e "${CYAN}8) ${GREEN}Удалить ${NC}AWG"
 	echo -e "${CYAN}9) ${GREEN}Интегрировать ${NC}AWG ${GREEN}в ${NC}Podkop"
 	echo -e "${CYAN}0) ${GREEN}Перезагрузить устройство${NC}"
