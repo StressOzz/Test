@@ -23,7 +23,16 @@ BYEDPI_VER="0.17.3-r1"
 BYEDPI_ARCH="$LOCAL_ARCH"
 BYEDPI_FILE="byedpi_${BYEDPI_VER}_${BYEDPI_ARCH}.ipk"
 BYEDPI_URL="https://github.com/DPITrickster/ByeDPI-OpenWrt/releases/download/v0.17.3-24.10/${BYEDPI_FILE}"
-if command -v apk >/dev/null 2>&1; then PKG_IS_APK=1; else PKG_IS_APK=0; fi
+
+if command -v apk >/dev/null 2>&1; then
+    PKG_IS_APK=1
+    PKG_MANAGER="apk list -I 2>/dev/null"
+else
+    PKG_IS_APK=0
+    PKG_MANAGER="opkg list-installed 2>/dev/null"
+fi
+
+
 pkg_remove() { local pkg_name="$1"; if [ "$PKG_IS_APK" -eq 1 ]; then apk del "$pkg_name" >/dev/null 2>&1 || true; else opkg remove --force-depends "$pkg_name" >/dev/null 2>&1 || true; fi; }
 
 
@@ -617,18 +626,12 @@ fi
 	echo -e "${YELLOW}Установленная версия:${NC} $BYEDPI_STATUS"
 	echo -e "${YELLOW}Текущая стратегия:${NC} ${WHITE}$CURRENT_STRATEGY${NC}"
 	echo -e "${MAGENTA}--- AWG ---${NC}"
-if command -v amneziawg >/dev/null 2>&1 || opkg list-installed | grep -q "^amneziawg-tools"; then
+
+if command -v amneziawg >/dev/null 2>&1 || eval "$PKG_MANAGER" | grep -q "amneziawg-tools"; then
     echo -e "${YELLOW}AWG: ${GREEN}установлен${NC}"
 else
     echo -e "${YELLOW}AWG: ${RED}не установлен${NC}"
 fi
-
-if uci -q get network.AWG >/dev/null; then
-    echo -e "${YELLOW}Интерфейс AWG: ${GREEN}установлен${NC}"
-else
-    echo -e "${YELLOW}Интерфейс AWG: ${RED}не установлен${NC}"
-fi
-
 
  	echo -e "\n${CYAN}1) ${GREEN}Установить ${NC}Podkop"
 	echo -e "${CYAN}2) ${GREEN}Удалить ${NC}Podkop"
