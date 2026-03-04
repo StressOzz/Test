@@ -185,7 +185,11 @@ read -p "Нажмите Enter..." dummy
 get_versions() {
 
  # --- ByeDPI установленная версия ---
-    BYEDPI_VER=$(opkg list-installed | grep '^byedpi ' | awk '{print $3}' | sed 's/-r[0-9]\+$//')
+    if command -v apk >/dev/null 2>&1; then
+    BYEDPI_VER=$(apk list -I 2>/dev/null | grep '^byedpi-' | awk -F'-' '{print $2}' | sed 's/-r[0-9]\+$//' | head -1)
+else
+    BYEDPI_VER=$(opkg list-installed 2>/dev/null | grep '^byedpi ' | awk '{print $3}' | sed 's/-r[0-9]\+$//')
+fi
     [ -z "$BYEDPI_VER" ] && BYEDPI_VER="не найдена"
 
     # --- Архитектура ---
