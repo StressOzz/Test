@@ -31,19 +31,10 @@ BYEDPI_URL="https://github.com/DPITrickster/ByeDPI-OpenWrt/releases/download/v0.
 install_AWG() {
 echo -e "\n${MAGENTA}Устанавливаем AWG + интерфейс${NC}"
 
-    PKGARCH=$(opkg print-architecture | awk 'BEGIN {max=0} {if ($3 > max) {max = $3; arch = $2}} END {print arch}')
-    TARGET=$(ubus call system board | jsonfilter -e '@.release.target' | cut -d '/' -f1)
-    SUBTARGET=$(ubus call system board | jsonfilter -e '@.release.target' | cut -d '/' -f2)
-    PKGPOSTFIX="_v${VERSION}_${PKGARCH}_${TARGET}_${SUBTARGET}.ipk"
-    BASE_URL="https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/"
-    AWG_DIR="/tmp/amneziawg"
-
-    mkdir -p "$AWG_DIR"
-
-VERSION=$(ubus call system board | jsonfilter -e '@.release.version' | tr -d '\n')
+VERSION=$(ubus call system board | jsonfilter -e '@.release.version')
 MAJOR_VERSION=$(echo "$VERSION" | cut -d '.' -f1)
 
-if [ "$MAJOR_VERSION" -ge 25 ]; then
+if [ "$MAJOR_VERSION" -ge 25 ] 2>/dev/null; then
 
     echo -e "${GREEN}Обнаружен OpenWrt $VERSION (apk)${NC}"
     echo -e "${GREEN}Обновляем список пакетов${NC}"
@@ -72,6 +63,15 @@ else
         read -p "Нажмите Enter..." dummy
         return
     }
+
+    PKGARCH=$(opkg print-architecture | awk 'BEGIN {max=0} {if ($3 > max) {max = $3; arch = $2}} END {print arch}')
+    TARGET=$(ubus call system board | jsonfilter -e '@.release.target' | cut -d '/' -f1)
+    SUBTARGET=$(ubus call system board | jsonfilter -e '@.release.target' | cut -d '/' -f2)
+    PKGPOSTFIX="_v${VERSION}_${PKGARCH}_${TARGET}_${SUBTARGET}.ipk"
+    BASE_URL="https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/"
+    AWG_DIR="/tmp/amneziawg"
+
+    mkdir -p "$AWG_DIR"
 
     install_pkg() {
         local pkgname=$1
