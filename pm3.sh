@@ -24,6 +24,8 @@ BYEDPI_ARCH="$LOCAL_ARCH"
 BYEDPI_FILE="byedpi_${BYEDPI_VER}_${BYEDPI_ARCH}.ipk"
 BYEDPI_URL="https://github.com/DPITrickster/ByeDPI-OpenWrt/releases/download/v0.17.3-24.10/${BYEDPI_FILE}"
 
+pkg_remove() { local pkg_name="$1"; if [ "$PKG_IS_APK" -eq 1 ]; then apk del "$pkg_name" >/dev/null 2>&1 || true; else opkg remove --force-depends "$pkg_name" >/dev/null 2>&1 || true; fi; }
+
 
 # ==========================================
 # AWG
@@ -551,7 +553,9 @@ uninstall_podkop() {
     echo -e "\n${MAGENTA}Удаление Podkop${NC}"
     
     # Удаляем пакеты
-    opkg remove luci-i18n-podkop-ru luci-app-podkop podkop --autoremove >/dev/null 2>&1 || true
+pkg_remove luci-i18n-podkop-ru
+pkg_remove luci-app-podkop podkop
+pkg_remove podkop
 
     # Удаляем конфиги и временные папки
     rm -rf /etc/config/podkop /tmp/podkop_installer
@@ -571,6 +575,12 @@ uninstall_podkop() {
 uninstall_AWG() {
 echo -e "\n${MAGENTA}Удаление AWG + интерфейс${NC}"
 opkg remove --force-removal-of-dependent-packages luci-i18n-amneziawg-ru luci-proto-amneziawg amneziawg-tools kmod-amneziawg >/dev/null 2>&1
+
+pkg_remove luci-i18n-amneziawg-ru
+pkg_remove luci-proto-amneziawg
+pkg_remove amneziawg-tools
+pkg_remove kmod-amneziawg
+
 echo -e "AWG ${GREEN}удалён.${NC}"
 echo -e "${MAGENTA}Удаляем интерфейс AWG${NC}"
 uci -q delete network.AWG
