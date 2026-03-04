@@ -40,10 +40,10 @@ echo -e "\n${MAGENTA}Устанавливаем AWG + интерфейс${NC}"
 
     mkdir -p "$AWG_DIR"
 
-VERSION=$(ubus call system board | jsonfilter -e '@.release.version')
+VERSION=$(ubus call system board | jsonfilter -e '@.release.version' | tr -d '\n')
 MAJOR_VERSION=$(echo "$VERSION" | cut -d '.' -f1)
 
-if [ "$MAJOR_VERSION" -ge 25 ] 2>/dev/null; then
+if [ "$MAJOR_VERSION" -ge 25 ]; then
 
     echo -e "${GREEN}Обнаружен OpenWrt $VERSION (apk)${NC}"
     echo -e "${GREEN}Обновляем список пакетов${NC}"
