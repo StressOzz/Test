@@ -29,34 +29,60 @@ BYEDPI_URL="https://github.com/DPITrickster/ByeDPI-OpenWrt/releases/download/v0.
 # AWG
 # ==========================================
 install_AWG() {
+
 echo -e "\n${MAGENTA}Устанавливаем AWG + интерфейс${NC}"
 
-VERSION=$(ubus call system board | jsonfilter -e '@.release.version')
+VERSION=$(ubus call system board | jsonfilter -e '@.release.version' | tr -d '\n')
 MAJOR_VERSION=$(echo "$VERSION" | cut -d '.' -f1)
 
+if [ -z "$VERSION" ]; then
+    echo -e "\n${RED}Не удалось определить версию OpenWrt!${NC}\n"
+    read -p "Нажмите Enter..." dummy
+    return
+fi
+
+TARGET=$(ubus call system board | jsonfilter -e '@.release.target' | cut -d '/' -f1)
+SUBTARGET=$(ubus call system board | jsonfilter -e '@.release.target' | cut -d '/' -f2)
+
+BASE_URL="https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/"
+AWG_DIR="/tmp/amneziawg"
+mkdir -p "$AWG_DIR"
+
+install_pkg() {
+    local pkgname=$1
+    local filename="${pkgname}${PKGPOSTFIX}"
+    local url="${BASE_URL}v${VERSION}/${filename}"
+
+    echo -e "${CYAN}Скачиваем:${NC} $filename"
+
+    if wget -O "$AWG_DIR/$filename" "$url" >/dev/null 2>&1; then
+        echo -e "${CYAN}Устанавливаем:${NC} $pkgname"
+        if ! $INSTALL_CMD "$AWG_DIR/$filename" >/dev/null 2>&1; then
+            echo -e "\n${RED}Ошибка установки $pkgname!${NC}\n"
+            read -p "Нажмите Enter..." dummy
+            return 1
+        fi
+    else
+        echo -e "\n${RED}Ошибка! Не удалось скачать $filename${NC}\n"
+        read -p "Нажмите Enter..." dummy
+        return 1
+    fi
+}
+
+# --- OpenWrt 25+ (apk) ---
 if [ "$MAJOR_VERSION" -ge 25 ] 2>/dev/null; then
 
     echo -e "${GREEN}Обнаружен OpenWrt $VERSION (apk)${NC}"
-    echo -e "${GREEN}Обновляем список пакетов${NC}"
-    apk update >/dev/null 2>&1 || {
-        echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"
-        read -p "Нажмите Enter..." dummy
-        return
-    }
 
-    echo -e "${CYAN}Устанавливаем пакеты через apk${NC}"
-    apk add kmod-amneziawg amneziawg-tools luci-proto-amneziawg >/dev/null 2>&1 || {
-        echo -e "\n${RED}Ошибка установки AWG пакетов!${NC}\n"
-        read -p "Нажмите Enter..." dummy
-        return
-    }
+    PKGARCH=$(cat /etc/apk/arch)
+    PKGPOSTFIX="_v${VERSION}_${PKGARCH}_${TARGET}_${SUBTARGET}.apk"
+    INSTALL_CMD="apk add --allow-untrusted"
 
-    apk add luci-i18n-amneziawg-ru >/dev/null 2>&1 || \
-        echo -e "${RED}Внимание: русская локализация не установлена (не критично)${NC}"
-
+# --- OpenWrt 24 и ниже (opkg) ---
 else
 
     echo -e "${GREEN}Обнаружен OpenWrt $VERSION (opkg)${NC}"
+
     echo -e "${GREEN}Обновляем список пакетов${NC}"
     opkg update >/dev/null 2>&1 || {
         echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"
@@ -64,48 +90,27 @@ else
         return
     }
 
-    PKGARCH=$(opkg print-architecture | awk 'BEGIN {max=0} {if ($3 > max) {max = $3; arch = $2}} END {print arch}')
-    TARGET=$(ubus call system board | jsonfilter -e '@.release.target' | cut -d '/' -f1)
-    SUBTARGET=$(ubus call system board | jsonfilter -e '@.release.target' | cut -d '/' -f2)
+    PKGARCH=$(opkg print-architecture | awk 'BEGIN {max=0} {if ($3 > max) {max=$3; arch=$2}} END {print arch}')
     PKGPOSTFIX="_v${VERSION}_${PKGARCH}_${TARGET}_${SUBTARGET}.ipk"
-    BASE_URL="https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/"
-    AWG_DIR="/tmp/amneziawg"
-
-    mkdir -p "$AWG_DIR"
-
-    install_pkg() {
-        local pkgname=$1
-        local filename="${pkgname}${PKGPOSTFIX}"
-        local url="${BASE_URL}v${VERSION}/${filename}"
-
-        if wget -O "$AWG_DIR/$filename" "$url" >/dev/null 2>&1 ; then
-            echo -e "${CYAN}Устанавливаем ${NC}$pkgname"
-            if ! opkg install "$AWG_DIR/$filename" >/dev/null 2>&1 ; then
-                echo -e "\n${RED}Ошибка установки $pkgname!${NC}\n"
-                read -p "Нажмите Enter..." dummy
-                return
-            fi
-        else
-            echo -e "\n${RED}Ошибка! Не удалось скачать $filename${NC}\n"
-            read -p "Нажмите Enter..." dummy
-            return
-        fi
-    }
-
-    install_pkg "kmod-amneziawg"
-    install_pkg "amneziawg-tools"
-    install_pkg "luci-proto-amneziawg"
-    install_pkg "luci-i18n-amneziawg-ru" >/dev/null 2>&1 || \
-        echo -e "${RED}Внимание: русская локализация не установлена (не критично)${NC}"
-
-    rm -rf "$AWG_DIR"
+    INSTALL_CMD="opkg install"
 
 fi
+
+install_pkg "kmod-amneziawg"
+install_pkg "amneziawg-tools"
+install_pkg "luci-proto-amneziawg"
+install_pkg "luci-i18n-amneziawg-ru" >/dev/null 2>&1 || \
+    echo -e "${RED}Внимание: русская локализация не установлена (не критично)${NC}"
+
+rm -rf "$AWG_DIR"
 
 echo -e "${YELLOW}Перезапускаем сеть! Подождите...${NC}"
 /etc/init.d/network restart >/dev/null 2>&1
 sleep 5
+
 echo -e "AmneziaWG ${GREEN}установлен!${NC}"
+
+
 
 echo -e "${MAGENTA}Устанавливаем интерфейс AWG${NC}"
 IF_NAME="AWG"
