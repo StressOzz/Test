@@ -96,6 +96,7 @@ else
 
 fi
 
+# --- установка пакетов ---
 install_pkg "kmod-amneziawg"
 install_pkg "amneziawg-tools"
 install_pkg "luci-proto-amneziawg"
@@ -110,14 +111,13 @@ sleep 5
 
 echo -e "AmneziaWG ${GREEN}установлен!${NC}"
 
-
-
+# --- настройка интерфейса ---
 echo -e "${MAGENTA}Устанавливаем интерфейс AWG${NC}"
 IF_NAME="AWG"
 PROTO="amneziawg"
 DEV_NAME="amneziawg0"
 
-# --- проверяем модуль ---
+# загружаем модуль, если ещё не загружен
 if ! lsmod | grep -q "^amneziawg"; then
     echo -e "${CYAN}Модуль amneziawg не загружен, пробуем загрузить...${NC}"
     if ! modprobe amneziawg 2>/dev/null; then
@@ -128,14 +128,14 @@ if ! lsmod | grep -q "^amneziawg"; then
     sleep 1
 fi
 
-# --- проверяем, появилось ли устройство ---
+# проверяем наличие устройства
 if [ ! -d "/sys/class/net/$DEV_NAME" ]; then
     echo -e "${RED}Ошибка: сетевое устройство $DEV_NAME не найдено.${NC}"
     echo -e "${RED}AWG не может работать без устройства.${NC}"
     return
 fi
 
-# --- проверяем, есть ли интерфейс в конфиге ---
+# создаём интерфейс, если его ещё нет
 if grep -q "config interface '$IF_NAME'" /etc/config/network; then
     echo -e "${RED}Интерфейс ${NC}$IF_NAME${RED} уже существует${NC}"
 else
@@ -156,6 +156,7 @@ sleep 5
 echo -e "${GREEN}Интерфейс ${NC}$IF_NAME${GREEN} создан и активирован!${NC}"
 echo -e "${YELLOW}Вставьте рабочий конфиг в Interfaces (Интерфейс) AWG!${NC}\n"
 read -p "Нажмите Enter..." dummy
+
 }
 
 # ==========================================
