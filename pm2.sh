@@ -110,43 +110,8 @@ echo -e "${YELLOW}Перезапускаем сеть! Подождите...${NC
 sleep 5
 
 echo -e "AmneziaWG ${GREEN}установлен!${NC}"
-
-echo -e "${MAGENTA}Устанавливаем интерфейс AWG${NC}"
-IF_NAME="AWG"
-PROTO="amneziawg"
-DEV_NAME="amneziawg0"
-timeout=5
-count=0
-while [ ! -d "/sys/class/net/$DEV_NAME" ] && [ $count -lt $timeout ]; do
-    sleep 1
-    count=$((count+1))
-done
-
-if [ ! -d "/sys/class/net/$DEV_NAME" ]; then
-    echo -e "${RED}Ошибка: сетевое устройство $DEV_NAME не найдено.${NC}"
-    echo -e "${RED}AWG не может работать без устройства.${NC}"
-    return
-fi
-if grep -q "config interface '$IF_NAME'" /etc/config/network; then
-echo -e "${RED}Интерфейс ${NC}$IF_NAME${RED} уже существует${NC}"
-else
-echo -e "${CYAN}Добавляем интерфейс ${NC}$IF_NAME"
-uci batch <<EOF
-set network.$IF_NAME=interface
-set network.$IF_NAME.proto=$PROTO
-set network.$IF_NAME.device=$DEV_NAME
-commit network
-EOF
-fi
-echo -e "${CYAN}Перезапускаем сеть${NC}"
-
-/etc/init.d/network restart
-sleep 5
-# /etc/init.d/firewall restart
-# /etc/init.d/uhttpd restart
-
-echo -e "${GREEN}Интерфейс ${NC}$IF_NAME${GREEN} создан и активирован!${NC}"
-echo -e "${YELLOW}Вставьте рабочий конфиг в Interfaces (Интерфейс) AWG!${NC}\n"
+echo -e "${GREEN}Создайте интерфейс в LuCI${NC}"
+echo -e "${YELLOW}Вставьте в него рабочий конфиг!${NC}\n"
 read -p "Нажмите Enter..." dummy
 }
 
@@ -661,8 +626,8 @@ fi
     echo -e "${CYAN}4) ${GREEN}Удалить ${NC}ByeDPI"
     echo -e "${CYAN}5) ${GREEN}Интегрировать ${NC}ByeDPI ${GREEN}в ${NC}Podkop"
     echo -e "${CYAN}6) ${GREEN}Изменить текущую стратегию ${NC}ByeDPI"
-	echo -e "${CYAN}7) ${GREEN}Установить ${NC}AWG ${GREEN}+${NC} интерфейс"
-	echo -e "${CYAN}8) ${GREEN}Удалить ${NC}AWG ${GREEN}+${NC} интерфейс"
+	echo -e "${CYAN}7) ${GREEN}Установить ${NC}AWGс"
+	echo -e "${CYAN}8) ${GREEN}Удалить ${NC}AWG"
 	echo -e "${CYAN}9) ${GREEN}Интегрировать ${NC}AWG ${GREEN}в ${NC}Podkop"
 	echo -e "${CYAN}0) ${GREEN}Перезагрузить устройство${NC}"
 	echo -e "${CYAN}Enter) ${GREEN}Выход${NC}"
