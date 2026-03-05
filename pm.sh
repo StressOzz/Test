@@ -39,7 +39,7 @@ pkg_remove() { local pkg_name="$1"; if [ "$PKG_IS_APK" -eq 1 ]; then apk del "$p
 # ==========================================
 install_AWG() {
 
-echo -e "\n${MAGENTA}Устанавливаем AWG + интерфейс${NC}"
+echo -e "\n${MAGENTA}Устанавливаем AWG${NC}"
 
 VERSION=$(ubus call system board | jsonfilter -e '@.release.version' | tr -d '\n')
 MAJOR_VERSION=$(echo "$VERSION" | cut -d '.' -f1)
@@ -80,7 +80,7 @@ PAUSE
 
 if [ "$MAJOR_VERSION" -ge 25 ] 2>/dev/null; then
 
-    echo -e "${GREEN}Обнаружен OpenWrt $VERSION (apk)${NC}"
+    echo -e "${GREEN}Обнаружен ${NC}OpenWrt $VERSION"
 
     PKGARCH=$(cat /etc/apk/arch)
     PKGPOSTFIX="_v${VERSION}_${PKGARCH}_${TARGET}_${SUBTARGET}.apk"
@@ -88,7 +88,7 @@ if [ "$MAJOR_VERSION" -ge 25 ] 2>/dev/null; then
 
 else
 
-    echo -e "${GREEN}Обнаружен OpenWrt $VERSION (opkg)${NC}"
+    echo -e "${GREEN}Обнаружен ${NC}OpenWrt $VERSION"
 
     echo -e "${GREEN}Обновляем список пакетов${NC}"
     opkg update >/dev/null 2>&1 || {
@@ -413,8 +413,6 @@ pkg_list_update || {
     return
 }
 
-
-    # Шаблон скачивания
     if [ "$PKG_IS_APK" -eq 1 ]; then
         grep_url_pattern='https://[^"[:space:]]*\.apk'
     else
@@ -446,7 +444,6 @@ pkg_list_update || {
         [ -n "$file" ] && pkg_install "$DOWNLOAD_DIR/$file"
     done
 
-    # Русский интерфейс
     ru=$(ls "$DOWNLOAD_DIR" | grep "luci-i18n-podkop-ru" | head -n 1)
     if [ -n "$ru" ]; then
         if pkg_is_installed luci-i18n-podkop-ru; then
@@ -606,7 +603,7 @@ PAUSE
 # uninstall_AWG
 # ==========================================
 uninstall_AWG() {
-echo -e "\n${MAGENTA}Удаление AWG + интерфейс${NC}"
+echo -e "\n${MAGENTA}Удаление AWG${NC}"
 
 pkg_remove luci-i18n-amneziawg-ru
 pkg_remove luci-proto-amneziawg
