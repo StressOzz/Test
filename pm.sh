@@ -105,10 +105,10 @@ install_pkg "amneziawg-tools"
 install_pkg "luci-proto-amneziawg"
 install_pkg "luci-i18n-amneziawg-ru"
 
-echo "${CYAN}Создаем интерфейс AWG${NC}"
+echo -e "${CYAN}Создаем интерфейс AWG${NC}"
 
 if uci show network.$IF_NAME >/dev/null 2>&1; then
-echo "${RED}Интерфейс уже существует!${NC}"
+echo -e "${RED}Интерфейс уже существует!${NC}"
 else
 uci set network.$IF_NAME=interface
 uci set network.$IF_NAME.proto=$PROTO
