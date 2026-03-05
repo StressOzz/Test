@@ -115,7 +115,7 @@ echo -e "${YELLOW}Перезапускаем сеть! Подождите...${NC
 sleep 5
 
 echo -e "\nAmneziaWG ${GREEN}установлен!${NC}\n"
-echo -e "${GREEN}Создайте интерфейс ${NC}AWG${GREEN} в ${NC}LuCI${GREEN}!${NC}\n"
+echo -e "${GREEN}Создайте интерфейс ${NC}AWG${GREEN} в ${NC}LuCI${GREEN}!${NC}"
 echo -e "${YELLOW}Вставьте в него рабочий конфиг!${NC}"
 PAUSE
 }
