@@ -230,57 +230,66 @@ fi
 # Установка  ByeDPI
 # ==========================================
 install_ByeDPI() {
-
-get_versions
-
     echo -e "\n${MAGENTA}Установка ByeDPI${NC}"
-    
-    if command -v apk >/dev/null 2>&1; then
-        echo -e "${GREEN}Обнаружена OpenWrt 25 (apk)${NC}"
-        BYEDPI_FILE="byedpi_${BYEDPI_VER}-r1_${BYEDPI_ARCH}.apk"
-        BYEDPI_URL="https://github.com/DPITrickster/ByeDPI-OpenWrt/releases/download/v${BYEDPI_VER}-v25.12.0/${BYEDPI_FILE}"
-        
-        echo -e "${GREEN}Скачиваем ${NC}${WHITE}$BYEDPI_FILE${NC}"
-        mkdir -p "$WORKDIR"
-        cd "$WORKDIR" || return
-        
-        wget -q --show-progress -U "Mozilla/5.0" -O "$BYEDPI_FILE" "$BYEDPI_URL" || {
-            echo -e "${RED}Ошибка загрузки ${NC}$BYEDPI_FILE"
-            PAUSE
-            return
-        }
-        
-        echo -e "${GREEN}Устанавливаем${NC} ${WHITE}$BYEDPI_FILE${NC}"
-        apk add --allow-untrusted "$BYEDPI_FILE" >/dev/null 2>&1
-    else
-        echo -e "${GREEN}Обнаружена OpenWrt 24 (opkg)${NC}"
-        BYEDPI_FILE="byedpi_${BYEDPI_VER}-r1_${BYEDPI_ARCH}.ipk"
-        BYEDPI_URL="https://github.com/DPITrickster/ByeDPI-OpenWrt/releases/download/v${BYEDPI_VER}-24.10/${BYEDPI_FILE}"
-        
-        echo -e "${GREEN}Скачиваем ${NC}${WHITE}$BYEDPI_FILE${NC}"
-        mkdir -p "$WORKDIR"
-        cd "$WORKDIR" || return
-        wget -q --show-progress -U "Mozilla/5.0" -O "$BYEDPI_FILE" "$BYEDPI_URL" || {
-            echo -e "${RED}Ошибка загрузки ${NC}$BYEDPI_FILE"
-            PAUSE
-            return
-        }
-        
-        echo -e "${GREEN}Устанавливаем${NC} ${WHITE}$BYEDPI_FILE${NC}"
-        opkg install --force-reinstall "$BYEDPI_FILE" >/dev/null 2>&1
-    fi
 
+    # Определяем архитектуру
+    LOCAL_ARCH=$(opkg print-architecture 2>/dev/null | grep -oE 'mips_24kc|mipsel_24kc|aarch64_cortex-a53|arm_cortex-a7|arm_cortex-a9|x86_64|i386_pentium4' | head -1)
+    [ -z "$LOCAL_ARCH" ] && LOCAL_ARCH="mips_24kc"  # значение по умолчанию
+
+    BYEDPI_VER="0.17.3"
+    
+    # Определяем версию OpenWrt и соответствующий URL
+    if command -v apk >/dev/null 2>&1; then
+        OPENWRT_VER="25"
+        PKG_EXT="apk"
+        RELEASE_TAG="v${BYEDPI_VER}-v25.12.0"
+        INSTALL_CMD="apk add --allow-untrusted"
+    else
+        OPENWRT_VER="24"
+        PKG_EXT="ipk"
+        RELEASE_TAG="v${BYEDPI_VER}-24.10"
+        INSTALL_CMD="opkg install --force-reinstall"
+    fi
+    
+    BYEDPI_FILE="byedpi_${BYEDPI_VER}-r1_${LOCAL_ARCH}.${PKG_EXT}"
+    BYEDPI_URL="https://github.com/DPITrickster/ByeDPI-OpenWrt/releases/download/${RELEASE_TAG}/${BYEDPI_FILE}"
+    
+    echo -e "${GREEN}Обнаружена OpenWrt ${OPENWRT_VER}${NC}"
+    echo -e "${GREEN}Архитектура: ${NC}${WHITE}$LOCAL_ARCH${NC}"
+    echo -e "${GREEN}Скачиваем ${NC}${WHITE}$BYEDPI_FILE${NC}"
+    
+    mkdir -p "$WORKDIR"
+    cd "$WORKDIR" || return
+    
+    # Скачиваем файл
+    wget -q -U "Mozilla/5.0" -O "$BYEDPI_FILE" "$BYEDPI_URL" || {
+        echo -e "${RED}Ошибка загрузки ${NC}$BYEDPI_FILE"
+        echo -e "${YELLOW}URL: $BYEDPI_URL${NC}"
+        read -p "Нажмите Enter..." dummy
+        return
+    }
+    
+    echo -e "${GREEN}Устанавливаем${NC} ${WHITE}$BYEDPI_FILE${NC}"
+    $INSTALL_CMD "$BYEDPI_FILE" >/dev/null 2>&1
+    
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}Пакет успешно установлен${NC}"
+    else
+        echo -e "${RED}Ошибка установки пакета${NC}"
+    fi
+    
     rm -rf "$WORKDIR"
     
+    # Запускаем сервис
     if [ -f /etc/init.d/byedpi ]; then
         /etc/init.d/byedpi enable >/dev/null 2>&1
         /etc/init.d/byedpi start >/dev/null 2>&1
         echo -e "ByeDPI ${GREEN}успешно установлен!${NC}\n"
     else
-        echo -e "${RED}Сервис byedpi не найден. Проверьте установку.${NC}\n"
+        echo -e "${YELLOW}Сервис byedpi не найден. Проверьте установку.${NC}\n"
     fi
     
-PAUSE
+    read -p "Нажмите Enter..." dummy
 }
 
 # ==========================================
