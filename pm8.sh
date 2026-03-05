@@ -230,6 +230,9 @@ fi
 # Установка  ByeDPI
 # ==========================================
 install_ByeDPI() {
+
+get_versions
+
     echo -e "\n${MAGENTA}Установка ByeDPI${NC}"
     
     if command -v apk >/dev/null 2>&1; then
