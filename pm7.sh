@@ -19,10 +19,8 @@ WORKDIR="/tmp/byedpi"
 
 PODKOP_LATEST_VER="0.7.14"
 
-BYEDPI_VER="0.17.3-r1"
+BYEDPI_VER="0.17.3"
 BYEDPI_ARCH="$LOCAL_ARCH"
-BYEDPI_FILE="byedpi_${BYEDPI_VER}_${BYEDPI_ARCH}.ipk"
-BYEDPI_URL="https://github.com/DPITrickster/ByeDPI-OpenWrt/releases/download/v0.17.3-24.10/${BYEDPI_FILE}"
 
 if command -v apk >/dev/null 2>&1; then
     PKG_IS_APK=1
@@ -32,9 +30,9 @@ else
     PKG_MANAGER="opkg list-installed 2>/dev/null"
 fi
 
+PAUSE() { echo -ne "\nНажмите Enter..."; read dummy; }
 
 pkg_remove() { local pkg_name="$1"; if [ "$PKG_IS_APK" -eq 1 ]; then apk del "$pkg_name" >/dev/null 2>&1 || true; else opkg remove --force-depends "$pkg_name" >/dev/null 2>&1 || true; fi; }
-
 
 # ==========================================
 # AWG
@@ -47,8 +45,8 @@ VERSION=$(ubus call system board | jsonfilter -e '@.release.version' | tr -d '\n
 MAJOR_VERSION=$(echo "$VERSION" | cut -d '.' -f1)
 
 if [ -z "$VERSION" ]; then
-    echo -e "\n${RED}Не удалось определить версию OpenWrt!${NC}\n"
-    read -p "Нажмите Enter..." dummy
+    echo -e "\n${RED}Не удалось определить версию OpenWrt!${NC}"
+PAUSE
     return
 fi
 
@@ -69,18 +67,17 @@ install_pkg() {
     if wget -O "$AWG_DIR/$filename" "$url" >/dev/null 2>&1; then
         echo -e "${CYAN}Устанавливаем:${NC} $pkgname"
         if ! $INSTALL_CMD "$AWG_DIR/$filename" >/dev/null 2>&1; then
-            echo -e "\n${RED}Ошибка установки $pkgname!${NC}\n"
-            read -p "Нажмите Enter..." dummy
+            echo -e "\n${RED}Ошибка установки $pkgname!${NC}"
+PAUSE
             return 1
         fi
     else
-        echo -e "\n${RED}Ошибка! Не удалось скачать $filename${NC}\n"
-        read -p "Нажмите Enter..." dummy
+        echo -e "\n${RED}Ошибка! Не удалось скачать $filename${NC}"
+PAUSE
         return 1
     fi
 }
 
-# --- OpenWrt 25+ (apk) ---
 if [ "$MAJOR_VERSION" -ge 25 ] 2>/dev/null; then
 
     echo -e "${GREEN}Обнаружен OpenWrt $VERSION (apk)${NC}"
@@ -89,15 +86,14 @@ if [ "$MAJOR_VERSION" -ge 25 ] 2>/dev/null; then
     PKGPOSTFIX="_v${VERSION}_${PKGARCH}_${TARGET}_${SUBTARGET}.apk"
     INSTALL_CMD="apk add --allow-untrusted"
 
-# --- OpenWrt 24 и ниже (opkg) ---
 else
 
     echo -e "${GREEN}Обнаружен OpenWrt $VERSION (opkg)${NC}"
 
     echo -e "${GREEN}Обновляем список пакетов${NC}"
     opkg update >/dev/null 2>&1 || {
-        echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"
-        read -p "Нажмите Enter..." dummy
+        echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}"
+PAUSE
         return
     }
 
@@ -107,12 +103,10 @@ else
 
 fi
 
-# --- установка пакетов ---
 install_pkg "kmod-amneziawg"
 install_pkg "amneziawg-tools"
 install_pkg "luci-proto-amneziawg"
-install_pkg "luci-i18n-amneziawg-ru" >/dev/null 2>&1 || \
-    echo -e "${RED}Внимание: русская локализация не установлена (не критично)${NC}"
+install_pkg "luci-i18n-amneziawg-ru"
 
 rm -rf "$AWG_DIR"
 
@@ -122,8 +116,8 @@ sleep 5
 
 echo -e "\nAmneziaWG ${GREEN}установлен!${NC}\n"
 echo -e "${GREEN}Создайте интерфейс ${NC}AWG${GREEN} в ${NC}LuCI${GREEN}!${NC}\n"
-echo -e "${YELLOW}Вставьте в него рабочий конфиг!${NC}\n"
-read -p "Нажмите Enter..." dummy
+echo -e "${YELLOW}Вставьте в него рабочий конфиг!${NC}"
+PAUSE
 }
 
 # ==========================================
@@ -175,8 +169,8 @@ echo -e "${CYAN}Обновляем списки${NC}"
 podkop list_update >/dev/null 2>&1
 echo -e "${CYAN}Перезапускаем сервис${NC}"
 podkop restart >/dev/null 2>&1
-echo -e "Podkop ${GREEN}готов к работе!${NC}\n"
-read -p "Нажмите Enter..." dummy
+echo -e "Podkop ${GREEN}готов к работе!${NC}"
+PAUSE
 }
 
 # ==========================================
@@ -237,31 +231,53 @@ fi
 # ==========================================
 install_ByeDPI() {
     echo -e "\n${MAGENTA}Установка ByeDPI${NC}"
-
-    BYEDPI_VER="0.17.3-r1"
-    BYEDPI_ARCH="$LOCAL_ARCH"
-    BYEDPI_FILE="byedpi_${BYEDPI_VER}_${BYEDPI_ARCH}.ipk"
-    BYEDPI_URL="https://github.com/DPITrickster/ByeDPI-OpenWrt/releases/download/v0.17.3-24.10/${BYEDPI_FILE}"
-
-    echo -e "${GREEN}Скачиваем ${NC}${WHITE}$BYEDPI_FILE${NC}"
-    mkdir -p "$WORKDIR"
-    cd "$WORKDIR" || return
-
-    wget -q -U "Mozilla/5.0" -O "$BYEDPI_FILE" "$BYEDPI_URL" || {
-        echo -e "${RED}Ошибка загрузки ${NC}$BYEDPI_FILE"
-        read -p "Нажмите Enter..." dummy
-        return
-    }
-
-    echo -e "${GREEN}Устанавливаем${NC} ${WHITE}$BYEDPI_FILE${NC}"
-    opkg install --force-reinstall "$BYEDPI_FILE" >/dev/null 2>&1
+    
+    if command -v apk >/dev/null 2>&1; then
+        echo -e "${GREEN}Обнаружена OpenWrt 25 (apk)${NC}"
+        BYEDPI_FILE="byedpi_${BYEDPI_VER}-r1_${BYEDPI_ARCH}.apk"
+        BYEDPI_URL="https://github.com/DPITrickster/ByeDPI-OpenWrt/releases/download/v${BYEDPI_VER}-v25.12.0/${BYEDPI_FILE}"
+        
+        echo -e "${GREEN}Скачиваем ${NC}${WHITE}$BYEDPI_FILE${NC}"
+        mkdir -p "$WORKDIR"
+        cd "$WORKDIR" || return
+        
+        wget -q --show-progress -U "Mozilla/5.0" -O "$BYEDPI_FILE" "$BYEDPI_URL" || {
+            echo -e "${RED}Ошибка загрузки ${NC}$BYEDPI_FILE"
+            PAUSE
+            return
+        }
+        
+        echo -e "${GREEN}Устанавливаем${NC} ${WHITE}$BYEDPI_FILE${NC}"
+        apk add --allow-untrusted "$BYEDPI_FILE" >/dev/null 2>&1
+    else
+        echo -e "${GREEN}Обнаружена OpenWrt 24 (opkg)${NC}"
+        BYEDPI_FILE="byedpi_${BYEDPI_VER}-r1_${BYEDPI_ARCH}.ipk"
+        BYEDPI_URL="https://github.com/DPITrickster/ByeDPI-OpenWrt/releases/download/v${BYEDPI_VER}-24.10/${BYEDPI_FILE}"
+        
+        echo -e "${GREEN}Скачиваем ${NC}${WHITE}$BYEDPI_FILE${NC}"
+        mkdir -p "$WORKDIR"
+        cd "$WORKDIR" || return
+        wget -q --show-progress -U "Mozilla/5.0" -O "$BYEDPI_FILE" "$BYEDPI_URL" || {
+            echo -e "${RED}Ошибка загрузки ${NC}$BYEDPI_FILE"
+            PAUSE
+            return
+        }
+        
+        echo -e "${GREEN}Устанавливаем${NC} ${WHITE}$BYEDPI_FILE${NC}"
+        opkg install --force-reinstall "$BYEDPI_FILE" >/dev/null 2>&1
+    fi
 
     rm -rf "$WORKDIR"
-    /etc/init.d/byedpi enable >/dev/null 2>&1
-    /etc/init.d/byedpi start >/dev/null 2>&1
-
-    echo -e "ByeDPI ${GREEN}успешно установлен!${NC}\n"
-    read -p "Нажмите Enter..." dummy
+    
+    if [ -f /etc/init.d/byedpi ]; then
+        /etc/init.d/byedpi enable >/dev/null 2>&1
+        /etc/init.d/byedpi start >/dev/null 2>&1
+        echo -e "ByeDPI ${GREEN}успешно установлен!${NC}\n"
+    else
+        echo -e "${RED}Сервис byedpi не найден. Проверьте установку.${NC}\n"
+    fi
+    
+PAUSE
 }
 
 # ==========================================
@@ -271,11 +287,13 @@ uninstall_byedpi() {
     echo -e "\n${MAGENTA}Удаление ByeDPI${NC}"
 /etc/init.d/byedpi stop >/dev/null 2>&1
 /etc/init.d/byedpi disable >/dev/null 2>&1
-opkg remove --force-removal-of-dependent-packages byedpi >/dev/null 2>&1
+
+pkg_remove byedpi
+
 uci delete dhcp.@dnsmasq[0].localuse >/dev/null 2>&1; uci commit dhcp >/dev/null 2>&1; /etc/init.d/dnsmasq restart >/dev/null 2>&1
 rm -rf /etc/init.d/byedpi /opt/byedpi /etc/config/byedpi
-    echo -e "${GREEN}ByeDPI удалён!${NC}\n"
-    read -p "Нажмите Enter..." dummy
+echo -e "${GREEN}ByeDPI удалён!${NC}\n"
+PAUSE
 }
 
 # ==========================================
@@ -346,15 +364,13 @@ install_podkop() {
 	
 [ "$AVAILABLE_SPACE" -lt "$REQUIRED_SPACE" ] && { 
     msg "Недостаточно свободного места"
-    echo ""
-    read -p "Нажмите Enter..." dummy
+	PAUSE
     return
 }
 
 nslookup google.com >/dev/null 2>&1 || { 
     msg "DNS не работает"
-    echo ""
-    read -p "Нажмите Enter..." dummy
+	PAUSE
     return
 }
 
@@ -381,8 +397,7 @@ nslookup google.com >/dev/null 2>&1 || {
 
 pkg_list_update || { 
     msg "Не удалось обновить список пакетов"
-    echo ""
-    read -p "Нажмите Enter..." dummy
+	PAUSE
     return
 }
 
@@ -409,8 +424,7 @@ pkg_list_update || {
 
 [ $download_success -eq 0 ] && { 
     msg "Нет успешно скачанных пакетов"
-    echo ""
-    read -p "Нажмите Enter..." dummy
+	PAUSE
     return
 }
 
@@ -436,8 +450,8 @@ pkg_list_update || {
     # Очистка
     rm -rf "$DOWNLOAD_DIR"
 
-    echo -e "Podkop ${GREEN}успешно установлен!${NC}\n"
-    read -p "Нажмите Enter..." dummy
+    echo -e "Podkop ${GREEN}успешно установлен!${NC}"
+PAUSE
 }
 
 # ==========================================
@@ -448,8 +462,8 @@ integration_byedpi_podkop() {
 
 	# Проверяем установлен ли ByeDPI
     if ! command -v byedpi >/dev/null 2>&1 && [ ! -f /etc/init.d/byedpi ]; then
-		echo -e "${YELLOW}ByeDPI не установлен.${NC}\n"
-        read -p "Нажмите Enter..." dummy
+		echo -e "${YELLOW}ByeDPI не установлен.${NC}"
+PAUSE
         return
     fi
 	echo -e "${GREEN}Отключаем локальный ${NC}DNS${GREEN}...${NC}"
@@ -524,8 +538,8 @@ EOF
         reboot
         ;;
     *)
-        echo -e "${YELLOW}Перезагрузка отложена.${NC}\n"
-		read -p "Нажмите Enter..." dummy
+        echo -e "${YELLOW}Перезагрузка отложена.${NC}"
+PAUSE
         ;;
 esac
 }
@@ -554,9 +568,9 @@ fix_strategy() {
             echo -e "${GREEN}Стратегия изменена на:${NC} ${WHITE}$NEW_STRATEGY${NC}\n"
         fi
     else
-        echo -e "\n${YELLOW}ByeDPI не установлен.${NC}\n"
+        echo -e "\n${RED}ByeDPI не установлен.${NC}"
     fi
-    read -p "Нажмите Enter..." dummy
+PAUSE
 }
 
 # ==========================================
@@ -565,42 +579,30 @@ fix_strategy() {
 uninstall_podkop() {
     echo -e "\n${MAGENTA}Удаление Podkop${NC}"
     
-    # Удаляем пакеты
 pkg_remove luci-i18n-podkop-ru
 pkg_remove luci-app-podkop podkop
 pkg_remove podkop
 
-    # Удаляем конфиги и временные папки
     rm -rf /etc/config/podkop /tmp/podkop_installer
-
-    # Удаляем все файлы в /etc/config с именем содержащим podkop
     rm -f /etc/config/*podkop* >/dev/null 2>&1
 
-    echo -e "Podkop ${GREEN}удалён полностью.${NC}\n"
-    read -p "Нажмите Enter..." dummy
+    echo -e "Podkop ${GREEN}удалён!${NC}\n"
+PAUSE
 }
-
-
 
 # ==========================================
 # uninstall_AWG
 # ==========================================
 uninstall_AWG() {
 echo -e "\n${MAGENTA}Удаление AWG + интерфейс${NC}"
-opkg remove --force-removal-of-dependent-packages luci-i18n-amneziawg-ru luci-proto-amneziawg amneziawg-tools kmod-amneziawg >/dev/null 2>&1
 
 pkg_remove luci-i18n-amneziawg-ru
 pkg_remove luci-proto-amneziawg
 pkg_remove amneziawg-tools
 pkg_remove kmod-amneziawg
 
-echo -e "AWG ${GREEN}удалён.${NC}"
-echo -e "${MAGENTA}Удаляем интерфейс AWG${NC}"
-uci -q delete network.AWG
-uci commit network
-/etc/init.d/network reload >/dev/null 2>&1
-echo -e "AWG ${GREEN}удалён.${NC}\n"
-read -p "Нажмите Enter..." dummy
+echo -e "AWG ${GREEN}удалён!${NC}"
+PAUSE
 }
 
 # ==========================================
