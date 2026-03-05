@@ -232,10 +232,6 @@ fi
 install_ByeDPI() {
     echo -e "\n${MAGENTA}Установка ByeDPI${NC}"
 
-    # Определяем архитектуру
-    LOCAL_ARCH=$(opkg print-architecture 2>/dev/null | grep -oE 'mips_24kc|mipsel_24kc|aarch64_cortex-a53|arm_cortex-a7|arm_cortex-a9|x86_64|i386_pentium4' | head -1)
-    [ -z "$LOCAL_ARCH" ] && LOCAL_ARCH="mips_24kc"  # значение по умолчанию
-
     BYEDPI_VER="0.17.3"
     
     # Определяем версию OpenWrt и соответствующий URL
