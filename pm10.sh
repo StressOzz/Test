@@ -127,7 +127,7 @@ integration_AWG() {
 
 echo -e "\n${MAGENTA}Интегрируем AWG в Podkop${NC}"
 
-echo -e "${GREEN}Меняем конфигурацию в ${NC}Podkop${GREEN}...${NC}"
+echo -e "${GREEN}Меняем конфигурацию в ${NC}Podkop${NC}"
     # Создаём / меняем /etc/config/podkop
     cat <<EOF >/etc/config/podkop
 config settings 'settings'
@@ -265,7 +265,7 @@ install_ByeDPI() {
     wget -q -U "Mozilla/5.0" -O "$BYEDPI_FILE" "$BYEDPI_URL" || {
         echo -e "${RED}Ошибка загрузки ${NC}$BYEDPI_FILE"
         echo -e "${YELLOW}URL: $BYEDPI_URL${NC}"
-        read -p "Нажмите Enter..." dummy
+PAUSE
         return
     }
     
@@ -286,10 +286,10 @@ install_ByeDPI() {
         /etc/init.d/byedpi start >/dev/null 2>&1
         echo -e "ByeDPI ${GREEN}успешно установлен!${NC}\n"
     else
-        echo -e "${YELLOW}Сервис byedpi не найден. Проверьте установку.${NC}\n"
+        echo -e "${YELLOW}Сервис byedpi не найден. Проверьте установку.${NC}"
     fi
     
-    read -p "Нажмите Enter..." dummy
+PAUSE
 }
 
 # ==========================================
@@ -342,7 +342,7 @@ install_podkop() {
 
     pkg_remove() {
         local pkg_name="$1"
-        msg "Удаляем" "$pkg_name..."
+        msg "Удаляем" "$pkg_name"
         if [ "$PKG_IS_APK" -eq 1 ]; then
             apk del "$pkg_name" >/dev/null 2>&1
         else
@@ -351,7 +351,7 @@ install_podkop() {
     }
 
     pkg_list_update() {
-        msg "Обновляем список пакетов..."
+        msg "Обновляем список пакетов"
         if [ "$PKG_IS_APK" -eq 1 ]; then
             apk update >/dev/null 2>&1
         else
@@ -450,7 +450,7 @@ pkg_list_update || {
     ru=$(ls "$DOWNLOAD_DIR" | grep "luci-i18n-podkop-ru" | head -n 1)
     if [ -n "$ru" ]; then
         if pkg_is_installed luci-i18n-podkop-ru; then
-            msg "Обновляем русский язык..." "$ru"
+            msg "Обновляем русский язык" "$ru"
             pkg_remove luci-i18n-podkop* >/dev/null 2>&1
             pkg_install "$DOWNLOAD_DIR/$ru"
         else
@@ -474,22 +474,22 @@ integration_byedpi_podkop() {
 
 	# Проверяем установлен ли ByeDPI
     if ! command -v byedpi >/dev/null 2>&1 && [ ! -f /etc/init.d/byedpi ]; then
-		echo -e "${YELLOW}ByeDPI не установлен.${NC}"
+		echo -e "${RED}ByeDPI не установлен!${NC}"
 PAUSE
         return
     fi
-	echo -e "${GREEN}Отключаем локальный ${NC}DNS${GREEN}...${NC}"
+	echo -e "${GREEN}Отключаем локальный ${NC}DNS"
 	uci set dhcp.@dnsmasq[0].localuse='0'
     uci commit dhcp
-	echo -e "${GREEN}Перезапускаем ${NC}dnsmasq${GREEN}...${NC}"
+	echo -e "${GREEN}Перезапускаем ${NC}dnsmasq"
 	/etc/init.d/dnsmasq restart >/dev/null 2>&1
 
     # Меняем стратегию ByeDPI на интеграционную
-	echo -e "${GREEN}Меняем стратегию ${NC}ByeDPI${GREEN} на рабочую...${NC}"
+	echo -e "${GREEN}Меняем стратегию ${NC}ByeDPI${GREEN} на рабочую${NC}"
     if [ -f /etc/config/byedpi ]; then
         sed -i "s|option cmd_opts .*| option cmd_opts '-o2 --auto=t,r,a,s -d2'|" /etc/config/byedpi
     fi
-echo -e "${GREEN}Меняем конфигурацию в ${NC}Podkop${GREEN}...${NC}"
+echo -e "${GREEN}Меняем конфигурацию в ${NC}Podkop"
     # Создаём / меняем /etc/config/podkop
     cat <<EOF >/etc/config/podkop
 config settings 'settings'
@@ -525,16 +525,16 @@ config section 'main'
 	list community_lists 'youtube'
 EOF
 
-    echo -e "${GREEN}Запуск ${NC}ByeDPI${GREEN}...${NC}"
+    echo -e "${GREEN}Запуск ${NC}ByeDPI"
     /etc/init.d/byedpi enable >/dev/null 2>&1
     /etc/init.d/byedpi start >/dev/null 2>&1
-	echo -e "${GREEN}Запуск ${NC}Podkop${GREEN}...${NC}"
+	echo -e "${GREEN}Запуск ${NC}Podkop"
     podkop enable >/dev/null 2>&1
-    echo -e "${GREEN}Применяем конфигурацию...${NC}"
+    echo -e "${GREEN}Применяем конфигурацию${NC}"
     podkop reload >/dev/null 2>&1
-    echo -e "${GREEN}Перезапускаем сервис...${NC}"
+    echo -e "${GREEN}Перезапускаем сервис${NC}"
     podkop restart >/dev/null 2>&1
-    echo -e "${GREEN}Обновляем списки...${NC}"
+    echo -e "${GREEN}Обновляем списки${NC}"
     podkop list_update >/dev/null 2>&1
 
     echo -e "Podkop ${GREEN}готов к работе.${NC}"
@@ -545,12 +545,12 @@ EOF
     case "$REBOOT_CHOICE" in
 	y|Y)
 
-        echo -e "\n${GREEN}Перезагрузка роутера...${NC}"
+        echo -e "\n${GREEN}Перезагрузка роутера!${NC}"
         sleep 1
         reboot
         ;;
     *)
-        echo -e "${YELLOW}Перезагрузка отложена.${NC}"
+        echo -e "${YELLOW}Перезагрузка отложена!${NC}"
 PAUSE
         ;;
 esac
