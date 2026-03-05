@@ -80,15 +80,11 @@ PAUSE
 
 if [ "$MAJOR_VERSION" -ge 25 ] 2>/dev/null; then
 
-    echo -e "${GREEN}Обнаружена ${NC}OpenWrt $VERSION"
-
     PKGARCH=$(cat /etc/apk/arch)
     PKGPOSTFIX="_v${VERSION}_${PKGARCH}_${TARGET}_${SUBTARGET}.apk"
     INSTALL_CMD="apk add --allow-untrusted"
 
 else
-
-    echo -e "${GREEN}Обнаружена ${NC}OpenWrt $VERSION"
 
     echo -e "${GREEN}Обновляем список пакетов${NC}"
     opkg update >/dev/null 2>&1 || {
@@ -250,7 +246,6 @@ install_ByeDPI() {
     BYEDPI_FILE="byedpi_${BYEDPI_VER}-r1_${LOCAL_ARCH}.${PKG_EXT}"
     BYEDPI_URL="https://github.com/DPITrickster/ByeDPI-OpenWrt/releases/download/${RELEASE_TAG}/${BYEDPI_FILE}"
     
-    echo -e "${GREEN}Обнаружена ${NC}OpenWrt ${OPENWRT_VER}"
     echo -e "${GREEN}Архитектура: ${NC}${WHITE}$LOCAL_ARCH${NC}"
     echo -e "${GREEN}Скачиваем ${NC}${WHITE}$BYEDPI_FILE${NC}"
     
