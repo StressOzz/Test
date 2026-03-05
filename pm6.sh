@@ -87,7 +87,7 @@ if [ "$MAJOR_VERSION" -ge 25 ] 2>/dev/null; then
 
 else
 
-    echo -e "${GREEN}Обновляем список пакетов${NC}"
+    echo -e "${CYAN}Обновляем список пакетов${NC}"
     opkg update >/dev/null 2>&1 || {
         echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}"
 PAUSE
@@ -124,7 +124,7 @@ integration_AWG() {
 
 echo -e "\n${MAGENTA}Интегрируем AWG в Podkop${NC}"
 
-echo -e "${GREEN}Меняем конфигурацию в ${NC}Podkop${NC}"
+echo -e "${CYAN}Меняем конфигурацию в ${NC}Podkop${NC}"
     cat <<EOF >/etc/config/podkop
 config settings 'settings'
 	option dns_type 'udp'
@@ -239,7 +239,7 @@ install_ByeDPI() {
     BYEDPI_URL="https://github.com/DPITrickster/ByeDPI-OpenWrt/releases/download/${RELEASE_TAG}/${BYEDPI_FILE}"
     
     echo -e "${GREEN}Архитектура: ${NC}${WHITE}$LOCAL_ARCH${NC}"
-    echo -e "${GREEN}Скачиваем ${NC}${WHITE}$BYEDPI_FILE${NC}"
+    echo -e "${CYAN}Скачиваем ${NC}${WHITE}$BYEDPI_FILE${NC}"
     
     mkdir -p "$WORKDIR"
     cd "$WORKDIR" || return
@@ -251,11 +251,11 @@ PAUSE
         return
     }
     
-    echo -e "${GREEN}Устанавливаем${NC} ${WHITE}$BYEDPI_FILE${NC}"
+    echo -e "${CYAN}Устанавливаем${NC} ${WHITE}$BYEDPI_FILE${NC}"
     $INSTALL_CMD "$BYEDPI_FILE" >/dev/null 2>&1
     
     if [ $? -eq 0 ]; then
-        echo -e "${GREEN}Пакет успешно установлен${NC}"
+        echo -e "${GREEN}Пакет установлен!${NC}"
     else
         echo -e "${RED}Ошибка установки пакета${NC}"
     fi
@@ -265,7 +265,7 @@ PAUSE
     if [ -f /etc/init.d/byedpi ]; then
         /etc/init.d/byedpi enable >/dev/null 2>&1
         /etc/init.d/byedpi start >/dev/null 2>&1
-        echo -e "ByeDPI ${GREEN}успешно установлен!${NC}\n"
+        echo -e "ByeDPI ${GREEN} установлен!${NC}\n"
     else
         echo -e "${RED}Сервис byedpi не найден!${NC}"
     fi
@@ -452,17 +452,17 @@ PAUSE
         return
     fi
 	
-	echo -e "${GREEN}Отключаем локальный ${NC}DNS"
+	echo -e "${CYAN}Отключаем локальный ${NC}DNS"
 	uci set dhcp.@dnsmasq[0].localuse='0'
     uci commit dhcp
-	echo -e "${GREEN}Перезапускаем ${NC}dnsmasq"
+	echo -e "${CYAN}Перезапускаем ${NC}dnsmasq"
 	/etc/init.d/dnsmasq restart >/dev/null 2>&1
 
-	echo -e "${GREEN}Меняем стратегию ${NC}ByeDPI${GREEN} на рабочую${NC}"
+	echo -e "${CYAN}Меняем стратегию ${NC}ByeDPI${CYAN} на рабочую${NC}"
     if [ -f /etc/config/byedpi ]; then
         sed -i "s|option cmd_opts .*| option cmd_opts '-o2 --auto=t,r,a,s -d2'|" /etc/config/byedpi
     fi
-	echo -e "${GREEN}Меняем конфигурацию в ${NC}Podkop"
+	echo -e "${CYAN}Меняем конфигурацию в ${NC}Podkop"
     cat <<EOF >/etc/config/podkop
 config settings 'settings'
 	option dns_type 'udp'
@@ -497,21 +497,21 @@ config section 'main'
 	list community_lists 'youtube'
 EOF
 
-    echo -e "${GREEN}Запуск ${NC}ByeDPI"
+    echo -e "${CYAN}Запускаем ${NC}ByeDPI"
     /etc/init.d/byedpi enable >/dev/null 2>&1
     /etc/init.d/byedpi start >/dev/null 2>&1
-	echo -e "${GREEN}Запуск ${NC}Podkop"
+	echo -e "${CYAN}Запускаем ${NC}Podkop"
     podkop enable >/dev/null 2>&1
-    echo -e "${GREEN}Применяем конфигурацию${NC}"
+    echo -e "${CYAN}Применяем конфигурацию${NC}"
     podkop reload >/dev/null 2>&1
-    echo -e "${GREEN}Перезапускаем сервис${NC}"
+    echo -e "${CYAN}Перезапускаем сервис${NC}"
     podkop restart >/dev/null 2>&1
-    echo -e "${GREEN}Обновляем списки${NC}"
+    echo -e "${CYAN}Обновляем списки${NC}"
     podkop list_update >/dev/null 2>&1
 
     echo -e "Podkop ${GREEN}готов к работе!${NC}"
 
-    echo -e "ByeDPI ${GREEN}интегрирован в ${NC}Podkop${GREEN}.${NC}"
+    echo -e "ByeDPI ${GREEN}интегрирован в ${NC}Podkop${GREEN}!${NC}"
     echo -ne "\nНужно ${RED}обязательно${NC} перезагрузить роутер!\nПерезагрузить сейчас? [y/N]: "
     read REBOOT_CHOICE
     case "$REBOOT_CHOICE" in
