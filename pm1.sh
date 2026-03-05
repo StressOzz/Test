@@ -303,14 +303,6 @@ REPO="https://api.github.com/repos/itdoginfo/podkop/releases/latest"
 PKG_IS_APK=0
 command -v apk >/dev/null 2>&1 && PKG_IS_APK=1
 
-msg() {
-if [ -n "$2" ]; then
-printf "\033[32;1m%s \033[37;1m%s\033[0m\n" "$1" "$2"
-else
-printf "\033[32;1m%s\033[0m\n" "$1"
-fi
-}
-
 pkg_is_installed () {
 local pkg_name="$1"
 if [ "$PKG_IS_APK" -eq 1 ]; then
@@ -322,7 +314,7 @@ fi
 
 pkg_remove() {
 local pkg_name="$1"
-msg "Удаляем" "$pkg_name"
+echo -e "${CYAN}Удаляем ${NC}$pkg_name"
 if [ "$PKG_IS_APK" -eq 1 ]; then
 apk del "$pkg_name" >/dev/null 2>&1
 else
@@ -331,7 +323,7 @@ fi
 }
 
 pkg_list_update() {
-msg "Обновляем список пакетов"
+echo -e "${CYAN}Обновляем список пакетов${NC}"
 if [ "$PKG_IS_APK" -eq 1 ]; then
 apk update >/dev/null 2>&1
 else
@@ -341,7 +333,7 @@ fi
 
 pkg_install() {
 local pkg_file="$1"
-msg "Устанавливаем" "$(basename "$pkg_file")"
+echo -e "${CYAN}Устанавливаем ${NC}$(basename "$pkg_file")"
 if [ "$PKG_IS_APK" -eq 1 ]; then
 apk add --allow-untrusted "$pkg_file" >/dev/null 2>&1
 else
@@ -354,20 +346,20 @@ AVAILABLE_SPACE=$(df /overlay | awk 'NR==2 {print $4}')
 REQUIRED_SPACE=26000
 
 [ "$AVAILABLE_SPACE" -lt "$REQUIRED_SPACE" ] && {
-msg "Недостаточно свободного места"
+echo -e "${RED}Недостаточно свободного места!${NC}"
 PAUSE
 return
 }
 
 nslookup google.com >/dev/null 2>&1 || {
-msg "DNS не работает"
+echo -e "${RED}DNS не работает!${NC}"
 PAUSE
 return
 }
 
 
 if pkg_is_installed https-dns-proxy; then
-msg "Обнаружен конфликтный пакет" "https-dns-proxy. Удаляем..."
+echo -e "${RED}Обнаружен конфликтный пакет ${NC}https-dns-proxy${RED}. Удаляем...${NC}"
 pkg_remove luci-app-https-dns-proxy
 pkg_remove https-dns-proxy
 pkg_remove luci-i18n-https-dns-proxy*
@@ -377,7 +369,7 @@ if pkg_is_installed "^sing-box"; then
 sing_box_version=$(sing-box version | head -n 1 | awk '{print $3}')
 required_version="1.12.4"
 if [ "$(echo -e "$sing_box_version\n$required_version" | sort -V | head -n 1)" != "$required_version" ]; then
-msg "sing-box устарел. Удаляем..."
+echo -e "sing-box ${RED}устарел. Удаляем...${NC}"
 service podkop stop >/dev/null 2>&1
 pkg_remove sing-box
 fi
@@ -386,7 +378,7 @@ fi
 /usr/sbin/ntpd -q -p 194.190.168.1 -p 216.239.35.0 -p 216.239.35.4 -p 162.159.200.1 -p 162.159.200.123 >/dev/null 2>&1
 
 pkg_list_update || {
-msg "Не удалось обновить список пакетов"
+echo -e "${RED}Не удалось обновить список пакетов!${NC}"
 PAUSE
 return
 }
@@ -402,16 +394,16 @@ urls=$(wget -qO- "$REPO" 2>/dev/null | grep -o "$grep_url_pattern")
 for url in $urls; do
 filename=$(basename "$url")
 filepath="$tmpDIR/$filename"
-msg "Скачиваем" "$filename"
+echo -e "${CYAN}Скачиваем ${NC}$filename"
 if wget -q -O "$filepath" "$url" >/dev/null 2>&1 && [ -s "$filepath" ]; then
 download_success=1
 else
-msg "Ошибка скачивания" "$filename"
+echo -e "${RED}Ошибка скачивания ${NC}$filename"
 fi
 done
 
 [ $download_success -eq 0 ] && {
-msg "Нет успешно скачанных пакетов"
+echo -e "${RED}Нет успешно скачанных пакетов${NC}"
 PAUSE
 return
 }
@@ -424,7 +416,7 @@ done
 ru=$(ls "$tmpDIR" | grep "luci-i18n-podkop-ru" | head -n 1)
 if [ -n "$ru" ]; then
 if pkg_is_installed luci-i18n-podkop-ru; then
-msg "Обновляем русский язык" "$ru"
+echo -e "${CYAN}Обновляем русский язык ${NC}$ru"
 pkg_remove luci-i18n-podkop* >/dev/null 2>&1
 pkg_install "$tmpDIR/$ru"
 else
@@ -432,8 +424,6 @@ pkg_install "$tmpDIR/$ru"
 
 fi
 fi
-
-rm -rf "$tmpDIR"
 
 echo -e "Podkop ${GREEN}установлен!${NC}"
 PAUSE
