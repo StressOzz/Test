@@ -114,8 +114,8 @@ fi
 echo -e "${YELLOW}Перезапускаем сеть! Подождите...${NC}"
 /etc/init.d/network restart >/dev/null 2>&1
 
-echo -e "\nAWG ${GREEN}и${NC} интерфейс AWG ${GREEN}установлены!${NC}\n"
-echo -e "${YELLOW}Необходимо в LuCI загрузить конфиг в интерфейс AWG:${NC}\nNetwork ${GREEN}→${NC} Interfaces ${GREEN}→${NC} AWG ${GREEN}→${NC} Edit ${GREEN}→${NC} Load configuration…${NC}"
+echo -e "AWG ${GREEN}и${NC} интерфейс AWG ${GREEN}установлены!${NC}\n"
+echo -e "${YELLOW}Необходимо в LuCI в интерфейс AWG загрузить конфиг:${NC}\nNetwork ${GREEN}→${NC} Interfaces ${GREEN}→${NC} AWG ${GREEN}→${NC} Edit ${GREEN}→${NC} Load configuration…${NC}"
 PAUSE
 }
 
@@ -167,7 +167,7 @@ podkop list_update >/dev/null 2>&1
 echo -e "${CYAN}Перезапускаем сервис${NC}"
 podkop restart >/dev/null 2>&1
 echo -e "AWG ${GREEN}интегрирован в ${NC}Podkop${GREEN}!${NC}\n"
-echo -e "${YELLOW}Необходимо в LuCI загрузить конфиг в интерфейс AWG:${NC}\nNetwork ${GREEN}→${NC} Interfaces ${GREEN}→${NC} AWG ${GREEN}→${NC} Edit ${GREEN}→${NC} Load configuration…${NC}"
+echo -e "${YELLOW}Необходимо в LuCI в интерфейс AWG загрузить конфиг:${NC}\nNetwork ${GREEN}→${NC} Interfaces ${GREEN}→${NC} AWG ${GREEN}→${NC} Edit ${GREEN}→${NC} Load configuration…${NC}"
 PAUSE
 }
 
@@ -260,16 +260,12 @@ return
 echo -e "${CYAN}Устанавливаем${NC} $BYEDPI_FILE${NC}"
 $INSTALL_CMD "$BYEDPI_FILE" >/dev/null 2>&1
 
-if [ $? -eq 0 ]; then
-echo -e "${GREEN}Пакет установлен!${NC}"
-else
-echo -e "${RED}Ошибка установки пакета${NC}"
-fi
+[ $? -eq 0 ] || echo -e "${RED}Ошибка установки!${NC}"
 
 if [ -f /etc/init.d/byedpi ]; then
 /etc/init.d/byedpi enable >/dev/null 2>&1
 /etc/init.d/byedpi start >/dev/null 2>&1
-echo -e "ByeDPI ${GREEN} установлен!${NC}\n"
+echo -e "ByeDPI ${GREEN}установлен!${NC}\n"
 else
 echo -e "${RED}Сервис byedpi не найден!${NC}"
 fi
@@ -571,13 +567,13 @@ pkg_remove luci-proto-amneziawg
 pkg_remove amneziawg-tools
 pkg_remove kmod-amneziawg
 
-uci delete network.AWG
-uci commit network
+uci delete network.AWG >/dev/null 2>&1
+uci commit network >/dev/null 2>&1
 
 for peer in $(uci show network | grep "interface='AWG'" | cut -d. -f2); do
     uci delete network.$peer
 done
-uci commit network
+uci commit network >/dev/null 2>&1
 echo -e "${${CYAN}}Удаляем ${NC}интерфейс AWG"
 echo -e "${YELLOW}Перезапускаем сеть! Подождите...${NC}"
 /etc/init.d/network restart
