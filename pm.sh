@@ -300,7 +300,7 @@ pkg_remove byedpi
 
 uci delete dhcp.@dnsmasq[0].localuse >/dev/null 2>&1; uci commit dhcp >/dev/null 2>&1; /etc/init.d/dnsmasq restart >/dev/null 2>&1
 rm -rf /etc/init.d/byedpi /opt/byedpi /etc/config/byedpi
-echo -e "${GREEN}ByeDPI удалён!${NC}\n"
+echo -e "${GREEN}ByeDPI удалён!${NC}"
 PAUSE
 }
 
@@ -565,12 +565,12 @@ fix_strategy() {
 		read NEW_STRATEGY
         echo
         if [ -z "$NEW_STRATEGY" ]; then
-            echo -e "${GREEN}Стратегия не изменена.${NC}\n"
+            echo -e "${GREEN}Стратегия не изменена!${NC}"
         else
             sed -i "s|option cmd_opts .*| option cmd_opts '$NEW_STRATEGY'|" /etc/config/byedpi
 			/etc/init.d/byedpi enable >/dev/null 2>&1
 			/etc/init.d/byedpi start >/dev/null 2>&1
-            echo -e "${GREEN}Стратегия изменена на:${NC} ${WHITE}$NEW_STRATEGY${NC}\n"
+            echo -e "${GREEN}Стратегия изменена на:${NC} ${WHITE}$NEW_STRATEGY${NC}"
         fi
     else
         echo -e "\n${RED}ByeDPI не установлен.${NC}"
@@ -591,7 +591,7 @@ pkg_remove podkop
     rm -rf /etc/config/podkop /tmp/podkop_installer
     rm -f /etc/config/*podkop* >/dev/null 2>&1
 
-    echo -e "Podkop ${GREEN}удалён!${NC}\n"
+    echo -e "Podkop ${GREEN}удалён!${NC}"
 PAUSE
 }
 
