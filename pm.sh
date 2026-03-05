@@ -628,6 +628,12 @@ echo -e "${YELLOW}AWG: ${GREEN}установлен${NC}"
 else
 echo -e "${YELLOW}AWG: ${RED}не установлен${NC}"
 fi
+if uci -q get network.AWG >/dev/null; then
+    echo -e "${YELLOW}Интерфейс AWG: ${GREEN}установлен${NC}"
+else
+    echo -e "${YELLOW}Интерфейс AWG: ${RED}не установлен${NC}"
+fi
+
 
 echo -e "\n${CYAN}1) ${GREEN}Установить ${NC}Podkop"
 echo -e "${CYAN}2) ${GREEN}Удалить ${NC}Podkop"
