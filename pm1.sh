@@ -111,8 +111,8 @@ echo -e "${YELLOW}Перезапускаем сеть! Подождите...${NC
 sleep 5
 
 echo -e "\nAmneziaWG ${GREEN}установлен!${NC}\n"
-echo -e "${YELLOW}Необходимо создать интерфейс:${NC}\nNetwork → Interfaces → Add new interface... → Name:AWG → Protocol:AmneziaWG VPN → Create interface${NC}"
-echo -e "${YELLOW}Необходимо загрузить конфиг:${NC}\nNetwork → Interfaces → AWG → Edit → Load configuration…${NC}"
+echo -e "${YELLOW}Необходимо создать интерфейс:${NC}\nNetwork ${GREEN}→${NC} Interfaces ${GREEN}→${NC} Add new interface... ${GREEN}→${NC} Name:AWG ${GREEN}→${NC} Protocol:AmneziaWG VPN ${GREEN}→${NC} Create interface${NC}"
+echo -e "${YELLOW}Необходимо загрузить конфиг:${NC}\nNetwork ${GREEN}→${NC} Interfaces ${GREEN}→${NC} AWG ${GREEN}→${NC} Edit ${GREEN}→${NC} Load configuration…${NC}"
 PAUSE
 }
 GREEN
@@ -165,7 +165,9 @@ echo -e "${CYAN}Обновляем списки${NC}"
 podkop list_update >/dev/null 2>&1
 echo -e "${CYAN}Перезапускаем сервис${NC}"
 podkop restart >/dev/null 2>&1
-echo -e "Podkop ${GREEN}готов к работе!${NC}"
+echo -e "Podkop ${GREEN}готов к работе!${NC}\n"
+echo -e "${YELLOW}Необходимо создать интерфейс в LuCI:${NC}\nNetwork ${GREEN}→${NC} Interfaces ${GREEN}→${NC} Add new interface... ${GREEN}→${NC} Name:AWG ${GREEN}→${NC} Protocol:AmneziaWG VPN ${GREEN}→${NC} Create interface${NC}"
+echo -e "${YELLOW}Необходимо загрузить конфиг в интерфейс AWG в LuCI:${NC}\nNetwork ${GREEN}→${NC} Interfaces ${GREEN}→${NC} AWG ${GREEN}→${NC} Edit ${GREEN}→${NC} Load configuration…${NC}"
 PAUSE
 }
 
