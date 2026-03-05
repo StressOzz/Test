@@ -285,7 +285,7 @@ pkg_remove byedpi
 
 uci delete dhcp.@dnsmasq[0].localuse >/dev/null 2>&1; uci commit dhcp >/dev/null 2>&1; /etc/init.d/dnsmasq restart >/dev/null 2>&1
 rm -rf /etc/init.d/byedpi /opt/byedpi /etc/config/byedpi
-echo -e "${GREEN}ByeDPI удалён!${NC}"
+echo -e "ByeDPI ${GREEN}удалён!${NC}"
 PAUSE
 }
 
@@ -628,7 +628,7 @@ fi
 	echo -e "${CYAN}3) ${GREEN}Установить ${NC}ByeDPI"
     echo -e "${CYAN}4) ${GREEN}Удалить ${NC}ByeDPI"
     echo -e "${CYAN}5) ${GREEN}Интегрировать ${NC}ByeDPI ${GREEN}в ${NC}Podkop"
-    echo -e "${CYAN}6) ${GREEN}Изменить текущую стратегию ${NC}ByeDPI"
+    echo -e "${CYAN}6) ${GREEN}Изменить стратегию ${NC}ByeDPI"
 	echo -e "${CYAN}7) ${GREEN}Установить ${NC}AWG"
 	echo -e "${CYAN}8) ${GREEN}Удалить ${NC}AWG"
 	echo -e "${CYAN}9) ${GREEN}Интегрировать ${NC}AWG ${GREEN}в ${NC}Podkop"
