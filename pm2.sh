@@ -21,6 +21,8 @@ PODKOP_LATEST_VER="0.7.14"
 BYEDPI_VER="0.17.3"
 BYEDPI_LATEST_VER="$BYEDPI_VER"
 
+BASE_URL="https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/"
+
 IF_NAME="AWG"
 PROTO="amneziawg"
 DEV_NAME="amneziawg0"
@@ -56,8 +58,6 @@ fi
 TARGET=$(ubus call system board | jsonfilter -e '@.release.target' | cut -d '/' -f1)
 SUBTARGET=$(ubus call system board | jsonfilter -e '@.release.target' | cut -d '/' -f2)
 
-BASE_URL="https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/"
-
 install_pkg() {
 local pkgname=$1
 local filename="${pkgname}${PKGPOSTFIX}"
@@ -80,24 +80,19 @@ fi
 }
 
 if [ "$MAJOR_VERSION" -ge 25 ] 2>/dev/null; then
-
 PKGARCH=$(cat /etc/apk/arch)
 PKGPOSTFIX="_v${VERSION}_${PKGARCH}_${TARGET}_${SUBTARGET}.apk"
 INSTALL_CMD="apk add --allow-untrusted"
-
 else
-
 echo -e "${CYAN}Обновляем список пакетов${NC}"
 opkg update >/dev/null 2>&1 || {
 echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}"
 PAUSE
 return
 }
-
 PKGARCH=$(opkg print-architecture | awk 'BEGIN {max=0} {if ($3 > max) {max=$3; arch=$2}} END {print arch}')
 PKGPOSTFIX="_v${VERSION}_${PKGARCH}_${TARGET}_${SUBTARGET}.ipk"
 INSTALL_CMD="opkg install"
-
 fi
 
 install_pkg "kmod-amneziawg"
@@ -118,7 +113,6 @@ fi
 
 echo -e "${YELLOW}Перезапускаем сеть! Подождите...${NC}"
 /etc/init.d/network restart >/dev/null 2>&1
-sleep 5
 
 echo -e "\nAWG ${GREEN}и${NC} интерфейс AWG ${GREEN}установлены!${NC}\n"
 echo -e "${YELLOW}Необходимо в LuCI загрузить конфиг в интерфейс AWG:${NC}\nNetwork ${GREEN}→${NC} Interfaces ${GREEN}→${NC} AWG ${GREEN}→${NC} Edit ${GREEN}→${NC} Load configuration…${NC}"
@@ -188,6 +182,13 @@ else
 BYEDPI_VER_OWRT=$(opkg list-installed 2>/dev/null | grep '^byedpi ' | awk '{print $3}' | sed 's/-r[0-9]\+$//')
 fi
 [ -z "$BYEDPI_VER_OWRT" ] && BYEDPI_VER_OWRT="не найдена"
+
+if [ -f /etc/config/byedpi ]; then
+CURRENT_STRATEGY=$(grep "option cmd_opts" /etc/config/byedpi | sed -E "s/.*'(.+)'/\1/")
+[ -z "$CURRENT_STRATEGY" ] && CURRENT_STRATEGY="${RED}не задана${NC}"
+else
+CURRENT_STRATEGY="${RED}не найдена${NC}"
+fi
 
 LOCAL_ARCH=$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release)
 
@@ -591,20 +592,11 @@ PAUSE
 show_menu() {
 get_versions
 
-if [ -f /etc/config/byedpi ]; then
-CURRENT_STRATEGY=$(grep "option cmd_opts" /etc/config/byedpi | sed -E "s/.*'(.+)'/\1/")
-[ -z "$CURRENT_STRATEGY" ] && CURRENT_STRATEGY="(не задана)"
-else
-CURRENT_STRATEGY="не найдена"
-fi
-
-
 clear
 echo -e "╔═══════════════════════════════╗"
 echo -e "║         ${BLUE}Podkop Manager${NC}        ║"
 echo -e "╚═══════════════════════════════╝"
 echo -e "                ${DGRAY}by StressOzz v2.8${NC}"
-
 
 echo -e "${MAGENTA}--- Podkop ---${NC}"
 echo -e "${YELLOW}Установленная версия:${NC} $PODKOP_STATUS"
@@ -623,7 +615,6 @@ if uci -q get network.AWG >/dev/null; then
 else
     echo -e "${YELLOW}Интерфейс AWG: ${RED}не установлен${NC}"
 fi
-
 
 echo -e "\n${CYAN}1) ${GREEN}Установить ${NC}Podkop"
 echo -e "${CYAN}2) ${GREEN}Удалить ${NC}Podkop"
