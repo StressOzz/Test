@@ -3,7 +3,6 @@
 # ByeDPI & Podkop Manager by StressOzz
 # ==========================================
 
-# Цвета
 GREEN="\033[1;32m"
 RED="\033[1;31m"
 CYAN="\033[1;36m"
@@ -20,6 +19,8 @@ WORKDIR="/tmp/byedpi"
 PODKOP_LATEST_VER="0.7.14"
 
 BYEDPI_VER="0.17.3"
+BYEDPI_LATEST_VER="$BYEDPI_VER"
+
 BYEDPI_ARCH="$LOCAL_ARCH"
 
 if command -v apk >/dev/null 2>&1; then
@@ -111,11 +112,11 @@ echo -e "${YELLOW}Перезапускаем сеть! Подождите...${NC
 sleep 5
 
 echo -e "\nAmneziaWG ${GREEN}установлен!${NC}\n"
-echo -e "${YELLOW}Необходимо создать интерфейс в LuCI:${NC}\nNetwork ${GREEN}→${NC} Interfaces ${GREEN}→${NC} Add new interface... ${GREEN}→${NC} Name:AWG ${GREEN}→${NC} Protocol:AmneziaWG VPN ${GREEN}→${NC} Create interface${NC}"
+echo -e "${YELLOW}Необходимо создать интерфейс в LuCI:${NC}\nNetwork ${GREEN}→${NC} Interfaces ${GREEN}→${NC} Add new interface… ${GREEN}→${NC} Name:AWG ${GREEN}→${NC} Protocol:AmneziaWG VPN ${GREEN}→${NC} Create interface${NC}"
 echo -e "${YELLOW}Необходимо загрузить конфиг в интерфейс AWG в LuCI:${NC}\nNetwork ${GREEN}→${NC} Interfaces ${GREEN}→${NC} AWG ${GREEN}→${NC} Edit ${GREEN}→${NC} Load configuration…${NC}"
 PAUSE
 }
-GREEN
+
 # ==========================================
 # Интеграция AWG
 # ==========================================
@@ -124,7 +125,6 @@ integration_AWG() {
 echo -e "\n${MAGENTA}Интегрируем AWG в Podkop${NC}"
 
 echo -e "${GREEN}Меняем конфигурацию в ${NC}Podkop${NC}"
-    # Создаём / меняем /etc/config/podkop
     cat <<EOF >/etc/config/podkop
 config settings 'settings'
 	option dns_type 'udp'
@@ -166,7 +166,7 @@ podkop list_update >/dev/null 2>&1
 echo -e "${CYAN}Перезапускаем сервис${NC}"
 podkop restart >/dev/null 2>&1
 echo -e "Podkop ${GREEN}готов к работе!${NC}\n"
-echo -e "${YELLOW}Необходимо создать интерфейс в LuCI:${NC}\nNetwork ${GREEN}→${NC} Interfaces ${GREEN}→${NC} Add new interface... ${GREEN}→${NC} Name:AWG ${GREEN}→${NC} Protocol:AmneziaWG VPN ${GREEN}→${NC} Create interface${NC}"
+echo -e "${YELLOW}Необходимо создать интерфейс в LuCI:${NC}\nNetwork ${GREEN}→${NC} Interfaces ${GREEN}→${NC} Add new interface… ${GREEN}→${NC} Name:AWG ${GREEN}→${NC} Protocol:AmneziaWG VPN ${GREEN}→${NC} Create interface${NC}"
 echo -e "${YELLOW}Необходимо загрузить конфиг в интерфейс AWG в LuCI:${NC}\nNetwork ${GREEN}→${NC} Interfaces ${GREEN}→${NC} AWG ${GREEN}→${NC} Edit ${GREEN}→${NC} Load configuration…${NC}"
 PAUSE
 }
@@ -176,22 +176,15 @@ PAUSE
 # ==========================================
 get_versions() {
 
- # --- ByeDPI установленная версия ---
     if command -v apk >/dev/null 2>&1; then
-    BYEDPI_VER=$(apk list -I 2>/dev/null | grep '^byedpi-' | awk -F'-' '{print $2}' | sed 's/-r[0-9]\+$//' | head -1)
+    BYEDPI_VER_OWRT=$(apk list -I 2>/dev/null | grep '^byedpi-' | awk -F'-' '{print $2}' | sed 's/-r[0-9]\+$//' | head -1)
 else
-    BYEDPI_VER=$(opkg list-installed 2>/dev/null | grep '^byedpi ' | awk '{print $3}' | sed 's/-r[0-9]\+$//')
+    BYEDPI_VER_OWRT=$(opkg list-installed 2>/dev/null | grep '^byedpi ' | awk '{print $3}' | sed 's/-r[0-9]\+$//')
 fi
-    [ -z "$BYEDPI_VER" ] && BYEDPI_VER="не найдена"
+    [ -z "$BYEDPI_VER_OWRT" ] && BYEDPI_VER_OWRT="не найдена"
 
-    # --- Архитектура ---
     LOCAL_ARCH=$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release)
-    [ -z "$LOCAL_ARCH" ] && LOCAL_ARCH=$(opkg print-architecture | grep -v noarch | tail -n1 | awk '{print $2}')
 
-    # --- Последняя версия (фиксированная) ---
-    BYEDPI_LATEST_VER="0.17.3"
-
-    # --- Podkop ---
     if command -v podkop >/dev/null 2>&1; then
         PODKOP_VER=$(podkop show_version 2>/dev/null | sed 's/-r[0-9]\+$//')
         [ -z "$PODKOP_VER" ] && PODKOP_VER="не найдена"
@@ -201,18 +194,17 @@ fi
 	
     [ -z "$PODKOP_LATEST_VER" ] && PODKOP_LATEST_VER="не найдена"
 
-    # --- Нормализация версий ---
     PODKOP_VER=$(echo "$PODKOP_VER" | sed 's/^v//')
     PODKOP_LATEST_VER=$(echo "$PODKOP_LATEST_VER" | sed 's/^v//')
-    BYEDPI_VER=$(echo "$BYEDPI_VER" | sed 's/^v//')
+    BYEDPI_VER_OWRT=$(echo "$BYEDPI_VER_OWRT" | sed 's/^v//')
     BYEDPI_LATEST_VER=$(echo "$BYEDPI_LATEST_VER" | sed 's/^v//')
 
-    if [ "$BYEDPI_VER" = "не найдена" ] || [ "$BYEDPI_VER" = "не установлен" ]; then
-        BYEDPI_STATUS="${RED}$BYEDPI_VER${NC}"
-    elif [ "$BYEDPI_VER" != "$BYEDPI_LATEST_VER" ]; then
-        BYEDPI_STATUS="${RED}$BYEDPI_VER${NC}"
+    if [ "$BYEDPI_VER_OWRT" = "не найдена" ] || [ "$BYEDPI_VER_OWRT" = "не установлен" ]; then
+        BYEDPI_STATUS="${RED}$BYEDPI_VER_OWRT${NC}"
+    elif [ "$BYEDPI_VER_OWRT" != "$BYEDPI_LATEST_VER" ]; then
+        BYEDPI_STATUS="${RED}$BYEDPI_VER_OWRT${NC}"
     else
-        BYEDPI_STATUS="${GREEN}$BYEDPI_VER${NC}"
+        BYEDPI_STATUS="${GREEN}$BYEDPI_VER_OWRT${NC}"
     fi
 
     if [ "$PODKOP_VER" = "не найдена" ] || [ "$PODKOP_VER" = "не установлен" ]; then
@@ -224,15 +216,13 @@ fi
     fi
 	
 }
+
 # ==========================================
 # Установка  ByeDPI
 # ==========================================
 install_ByeDPI() {
     echo -e "\n${MAGENTA}Установка ByeDPI${NC}"
 
-    BYEDPI_VER="0.17.3"
-    
-    # Определяем версию OpenWrt и соответствующий URL
     if command -v apk >/dev/null 2>&1; then
         OPENWRT_VER="25"
         PKG_EXT="apk"
@@ -254,7 +244,6 @@ install_ByeDPI() {
     mkdir -p "$WORKDIR"
     cd "$WORKDIR" || return
     
-    # Скачиваем файл
     wget -q -U "Mozilla/5.0" -O "$BYEDPI_FILE" "$BYEDPI_URL" || {
         echo -e "${RED}Ошибка загрузки ${NC}$BYEDPI_FILE"
         echo -e "${YELLOW}URL: $BYEDPI_URL${NC}"
@@ -273,13 +262,12 @@ PAUSE
     
     rm -rf "$WORKDIR"
     
-    # Запускаем сервис
     if [ -f /etc/init.d/byedpi ]; then
         /etc/init.d/byedpi enable >/dev/null 2>&1
         /etc/init.d/byedpi start >/dev/null 2>&1
         echo -e "ByeDPI ${GREEN}успешно установлен!${NC}\n"
     else
-        echo -e "${YELLOW}Сервис byedpi не найден. Проверьте установку.${NC}"
+        echo -e "${RED}Сервис byedpi не найден!${NC}"
     fi
     
 PAUSE
@@ -362,7 +350,6 @@ install_podkop() {
         fi
     }
 
-    # Проверка системы
     MODEL=$(cat /tmp/sysinfo/model 2>/dev/null || echo "не определено")
     AVAILABLE_SPACE=$(df /overlay | awk 'NR==2 {print $4}')
     REQUIRED_SPACE=26000
@@ -387,7 +374,6 @@ nslookup google.com >/dev/null 2>&1 || {
         pkg_remove luci-i18n-https-dns-proxy*
     fi
 
-    # Проверка sing-box
     if pkg_is_installed "^sing-box"; then
         sing_box_version=$(sing-box version | head -n 1 | awk '{print $3}')
         required_version="1.12.4"
@@ -431,7 +417,6 @@ pkg_list_update || {
     return
 }
 
-    # Установка пакетов
     for pkg in podkop luci-app-podkop; do
         file=$(ls "$DOWNLOAD_DIR" | grep "^$pkg" | head -n 1)
         [ -n "$file" ] && pkg_install "$DOWNLOAD_DIR/$file"
@@ -449,10 +434,9 @@ pkg_list_update || {
         fi
     fi
 
-    # Очистка
     rm -rf "$DOWNLOAD_DIR"
 
-    echo -e "Podkop ${GREEN}успешно установлен!${NC}"
+    echo -e "Podkop ${GREEN}установлен!${NC}"
 PAUSE
 }
 
@@ -462,25 +446,23 @@ PAUSE
 integration_byedpi_podkop() {
     echo -e "\n${MAGENTA}Интеграция ByeDPI в Podkop${NC}"
 
-	# Проверяем установлен ли ByeDPI
     if ! command -v byedpi >/dev/null 2>&1 && [ ! -f /etc/init.d/byedpi ]; then
 		echo -e "${RED}ByeDPI не установлен!${NC}"
 PAUSE
         return
     fi
+	
 	echo -e "${GREEN}Отключаем локальный ${NC}DNS"
 	uci set dhcp.@dnsmasq[0].localuse='0'
     uci commit dhcp
 	echo -e "${GREEN}Перезапускаем ${NC}dnsmasq"
 	/etc/init.d/dnsmasq restart >/dev/null 2>&1
 
-    # Меняем стратегию ByeDPI на интеграционную
 	echo -e "${GREEN}Меняем стратегию ${NC}ByeDPI${GREEN} на рабочую${NC}"
     if [ -f /etc/config/byedpi ]; then
         sed -i "s|option cmd_opts .*| option cmd_opts '-o2 --auto=t,r,a,s -d2'|" /etc/config/byedpi
     fi
-echo -e "${GREEN}Меняем конфигурацию в ${NC}Podkop"
-    # Создаём / меняем /etc/config/podkop
+	echo -e "${GREEN}Меняем конфигурацию в ${NC}Podkop"
     cat <<EOF >/etc/config/podkop
 config settings 'settings'
 	option dns_type 'udp'
@@ -527,10 +509,10 @@ EOF
     echo -e "${GREEN}Обновляем списки${NC}"
     podkop list_update >/dev/null 2>&1
 
-    echo -e "Podkop ${GREEN}готов к работе.${NC}"
+    echo -e "Podkop ${GREEN}готов к работе!${NC}"
 
     echo -e "ByeDPI ${GREEN}интегрирован в ${NC}Podkop${GREEN}.${NC}"
-    echo -ne "\nНужно ${RED}обязательно${NC} перезагрузить роутер.\nПерезагрузить сейчас? [y/N]: "
+    echo -ne "\nНужно ${RED}обязательно${NC} перезагрузить роутер!\nПерезагрузить сейчас? [y/N]: "
     read REBOOT_CHOICE
     case "$REBOOT_CHOICE" in
 	y|Y)
@@ -555,7 +537,6 @@ fix_strategy() {
     echo -e "\n${MAGENTA}Изменение стратегии ByeDPI${NC}"
 
     if [ -f /etc/config/byedpi ]; then
-        # Получаем текущую стратегию
         CURRENT_STRATEGY=$(grep "option cmd_opts" /etc/config/byedpi | sed -E "s/.*'(.+)'/\1/")
         [ -z "$CURRENT_STRATEGY" ] && CURRENT_STRATEGY="(не задана)"
         echo -e "\n${GREEN}Текущая стратегия:${NC} ${WHITE}$CURRENT_STRATEGY${NC}"
@@ -571,7 +552,7 @@ fix_strategy() {
             echo -e "${GREEN}Стратегия изменена на:${NC} ${WHITE}$NEW_STRATEGY${NC}"
         fi
     else
-        echo -e "\n${RED}ByeDPI не установлен.${NC}"
+        echo -e "\n${RED}ByeDPI не установлен!${NC}"
     fi
 PAUSE
 }
