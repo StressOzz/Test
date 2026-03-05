@@ -111,11 +111,11 @@ echo -e "${YELLOW}Перезапускаем сеть! Подождите...${NC
 sleep 5
 
 echo -e "\nAmneziaWG ${GREEN}установлен!${NC}\n"
-echo -e "${GREEN}Создайте интерфейс ${NC}AWG${GREEN} в ${NC}LuCI${GREEN}!${NC}"
-echo -e "${YELLOW}Вставьте в него рабочий конфиг!${NC}"
+echo -e "${YELLOW}Необходимо создать интерфейс:${NC}\nNetwork → Interfaces → Add new interface... → Name:AWG → Protocol:AmneziaWG VPN → Create interface${NC}"
+echo -e "${YELLOW}Необходимо загрузить конфиг:${NC}\nNetwork → Interfaces → AWG → Edit → Load configuration…${NC}"
 PAUSE
 }
-
+GREEN
 # ==========================================
 # Интеграция AWG
 # ==========================================
@@ -528,7 +528,7 @@ EOF
     echo -e "Podkop ${GREEN}готов к работе.${NC}"
 
     echo -e "ByeDPI ${GREEN}интегрирован в ${NC}Podkop${GREEN}.${NC}"
-    echo -ne "\nНужно ${RED}обязательно${NC} перезагрузить роутер. Перезагрузить сейчас? [y/N]: \n"
+    echo -ne "\nНужно ${RED}обязательно${NC} перезагрузить роутер.\nПерезагрузить сейчас? [y/N]: "
     read REBOOT_CHOICE
     case "$REBOOT_CHOICE" in
 	y|Y)
@@ -536,6 +536,7 @@ EOF
         echo -e "\n${GREEN}Перезагрузка роутера!${NC}"
         sleep 1
         reboot
+		exit
         ;;
     *)
         echo -e "${YELLOW}Перезагрузка отложена!${NC}"
