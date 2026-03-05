@@ -126,7 +126,7 @@ integration_AWG() {
 
 echo -e "\n${MAGENTA}Интегрируем AWG в Podkop${NC}"
 
-if ! command -v awg >/dev/null 2>&1; then
+if ! awg --version >/dev/null 2>&1; then
 echo -e "\n${RED}AWG не установлен!${NC}"
 PAUSE
 return
@@ -566,7 +566,7 @@ PAUSE
 # ==========================================
 uninstall_AWG() {
 echo -e "\n${MAGENTA}Удаление AWG и интерфейс AWG${NC}"
-
+echo -e "${CYAN}Удаляем ${NC}AWG"
 pkg_remove luci-i18n-amneziawg-ru
 pkg_remove luci-proto-amneziawg
 pkg_remove amneziawg-tools
