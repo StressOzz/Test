@@ -577,7 +577,7 @@ for peer in $(uci show network | grep "interface='AWG'" | cut -d. -f2); do
     uci delete network.$peer
 done
 uci commit network
-
+echo -e "${${CYAN}}Удаляем ${NC}интерфейс AWG"
 echo -e "${YELLOW}Перезапускаем сеть! Подождите...${NC}"
 /etc/init.d/network restart
 
