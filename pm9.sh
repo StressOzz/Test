@@ -126,7 +126,7 @@ integration_AWG() {
 
 echo -e "\n${MAGENTA}Интегрируем AWG в Podkop${NC}"
 
-if ! command -v amneziawg-tools >/dev/null 2>&1 && [ ! -f /etc/init.d/amneziawg-tools ]; then
+if ! command -v awg >/dev/null 2>&1; then
 echo -e "\n${RED}AWG не установлен!${NC}"
 PAUSE
 return
