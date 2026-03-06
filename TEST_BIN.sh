@@ -103,6 +103,8 @@ curl -fsSL "$RAW" | sed -n 's/.*"id":[[:space:]]*"\([^"]*\)".*"url":[[:space:]]*
 
         cp "$TMP_SF/conf.bak" "$CONF"
 
+# ТУТ ПРОПИСЫВАЕМ СТРОКИ В КОТОРЫХ МЕНЯЕМ BIN
+
 sed -i "s|--dpi-desync-split-seqovl-pattern=.*|--dpi-desync-split-seqovl-pattern=$FULL_PATH|" "$CONF"
 sed -i "s|--dpi-desync-fake-tls=.*|--dpi-desync-fake-tls=$FULL_PATH|" "$CONF"
 
