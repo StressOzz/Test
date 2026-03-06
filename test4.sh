@@ -29,8 +29,8 @@ while true; do
   read -r choice
 
   case "$choice" in
-    1) MAGITRICKLE_CONFIG_URL="$URL_ITDOG"; PAUSE; break ;;
-    2) MAGITRICKLE_CONFIG_URL="$URL_DEFAULT"; PAUSE; break ;;
+    1) MAGITRICKLE_CONFIG_URL="$URL_ITDOG"; break ;;
+    2) MAGITRICKLE_CONFIG_URL="$URL_DEFAULT"; break ;;
     *) break ;;
   esac
 done
@@ -53,6 +53,7 @@ if [ -n "$MAGITRICKLE_CONFIG_URL" ]; then
   /etc/init.d/magitrickle reload >/dev/null 2>&1
   /etc/init.d/magitrickle start >/dev/null 2>&1
   /etc/init.d/magitrickle restart >/dev/null 2>&1
+  PAUSE
 fi
 }
 
