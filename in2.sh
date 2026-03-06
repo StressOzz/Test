@@ -72,9 +72,9 @@ check_status() {
   [ -x /etc/init.d/hev-socks5-tunnel ] && HEV_STATUS="${GREEN}установлен${NC}"
   [ -x /etc/init.d/magitrickle ] && MAGITRICKLE_STATUS="${GREEN}установлен${NC}"
 
-  echo -e "${YELLOW}Mihomo:${NC}            $MIHOMO_STATUS"
-  echo -e "${YELLOW}MagiTrickle:${NC}       $MAGITRICKLE_STATUS"
-  echo -e "${YELLOW}HevSocks5Tunnel:${NC}   $HEV_STATUS"
+  echo -e "${YELLOW}Mihomo:${NC}              $MIHOMO_STATUS"
+  echo -e "${YELLOW}MagiTrickle:${NC}         $MAGITRICKLE_STATUS"
+  echo -e "${YELLOW}HevSocks5Tunnel:${NC}     $HEV_STATUS"
 }
 
 show_menu() {
@@ -92,7 +92,7 @@ echo
 echo -e "${CYAN}1) ${GREEN}Установить ${NC}Mixomo OpenWRT"
 echo -e "${CYAN}2) ${GREEN}Удалить ${NC}Mixomo OpenWRT"
 echo -e "${CYAN}3) ${GREEN}Сменить список ${NC}MagiTrickle"
-echo -e "${CYAN}4) ${GREEN}Сгенерировать ${NC}WARP"
+echo -e "${CYAN}4) ${GREEN}Сгенерировать ${NC}WARP ${GREEN}в ${NC}/root/WARP.conf"
 echo -e "${CYAN}5) ${GREEN}Интегрировать ${NC}/root/WARP.conf${GREEN} в ${NC}Mixomo OpenWRT"
 # echo -e "${CYAN}6) ${GREEN}Удалить ${NC}→ ${GREEN}установить ${NC}→ ${GREEN}настроить ${NC}mihomo-openwrt"
 echo -e "${CYAN}Enter) ${GREEN}Выход"
