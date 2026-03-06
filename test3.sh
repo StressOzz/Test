@@ -18,7 +18,7 @@ echo 'sh <(wget -O - https://raw.githubusercontent.com/StressOzz/Mixomo-Manager/
 PAUSE() { echo -ne "\nНажмите Enter..."; read dummy; }
 
 magitrickle_config() {
-echo -e "\n${MAGENTA}Выбор списка для MagiTrickle${NC}\n"
+echo -e "\n${MAGENTA}Выбор списка для MagiTrickle${NC}"
 echo -e "${CYAN}1) ${GREEN}Список от${NC} ITDog"
 echo -e "${CYAN}2) ${GREEN}Список от${NC} Internet Helper"
 echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}"
