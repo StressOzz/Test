@@ -13,13 +13,20 @@ CONFIGPATH="/etc/magitrickle/state/config.yaml"
 URL_DEFAULT="https://raw.githubusercontent.com/StressOzz/Mihomo-OpenWRT_Manager/refs/heads/main/files/MagiTrickle/config.yaml"
 URL_ITDOG="https://raw.githubusercontent.com/StressOzz/Mihomo-OpenWRT_Manager/refs/heads/main/files/MagiTrickle/configAD.yaml"
 
+echo 'sh <(wget -O - https://raw.githubusercontent.com/StressOzz/Mihomo-OpenWRT_Manager/main/Mihomo-OpenWRT_Manager.sh)' > /usr/bin/mom; chmod +x /usr/bin/mom
+
 PAUSE() { echo -ne "\nНажмите Enter..."; read dummy; }
 
 magitrickle_config() {
-echo
-echo -e "${YELLOW}Выбор списка для MagiTrickle${NC}"
-echo -e "${CYAN}1) ${GREEN}ITDog Allow Domains${NC}"
-echo -e "${CYAN}2) ${GREEN}Internet Helper${NC}"
+clear
+
+echo -e "${MAGENTA}Выбор списка для MagiTrickle${NC}\n"
+
+grep -F -A1 'id: "06776295"' "$CONFIGPATH" 2>/dev/null | grep -q 'name: Meta (WA+FB+Instagram)' && echo -e "${YELLOW}Используется список: ${NC}Internet Helper\n"
+grep -F -A1 'id: 542c6095' "$CONFIGPATH" 2>/dev/null | grep -q 'name: Google_ai' && echo -e "${YELLOW}Используется список: ${NC}ITDog\n"
+
+echo -e "${CYAN}1) ${GREEN}Список от${NC} ITDog"
+echo -e "${CYAN}2) ${GREEN}Список от${NC} Internet Helper"
 echo -e "${CYAN}3) ${GREEN}Оставить текущий список${NC}"
 echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}"
 echo
@@ -31,13 +38,12 @@ while true; do
   case "$choice" in
     1) MAGITRICKLE_CONFIG_URL="$URL_ITDOG"; break ;;
     2) MAGITRICKLE_CONFIG_URL="$URL_DEFAULT"; break ;;
-    3) MAGITRICKLE_CONFIG_URL=""; break ;;
     *) echo; break ;;
   esac
 done
 
 if [ -n "$MAGITRICKLE_CONFIG_URL" ]; then
-  echo -e "${CYAN}Скачивание конфигурации...${NC}"
+  echo -e "\n${CYAN}Скачиванем и устанавливаем список${NC}"
   wget -q -O "$CONFIGPATH" "$MAGITRICKLE_CONFIG_URL" || {
     echo -e "${RED}Ошибка: не удалось скачать список!${NC}"
     echo "URL: $MAGITRICKLE_CONFIG_URL"
@@ -49,13 +55,13 @@ if [ -n "$MAGITRICKLE_CONFIG_URL" ]; then
     return 1
   fi
 
-  echo -e "${GREEN}Готово.${NC}"
+  echo -e "${GREEN}Список успешно изменён!${NC}"
   /etc/init.d/magitrickle enable >/dev/null 2>&1
-  /etc/init.d/magitrickle reload  >/dev/null 2>&1
+  /etc/init.d/magitrickle reload >/dev/null 2>&1
   /etc/init.d/magitrickle start >/dev/null 2>&1
   /etc/init.d/magitrickle restart >/dev/null 2>&1
 else
-  echo -e "${YELLOW}Текущий список оставлен без изменений.${NC}"
+  echo -e "${CYAN}Текущий список оставлен без изменений.${NC}"
 fi
 }
 
@@ -66,28 +72,31 @@ check_status() {
   [ -x /etc/init.d/hev-socks5-tunnel ] && HEV_STATUS="${GREEN}установлен${NC}"
   [ -x /etc/init.d/magitrickle ] && MAGITRICKLE_STATUS="${GREEN}установлен${NC}"
 
-  echo -e "${YELLOW}mihomo-openwrt:${NC}    $MIHOMO_STATUS"
-  echo -e "${YELLOW}hev-socks5-tunnel:${NC} $HEV_STATUS"
-  echo -e "${YELLOW}magitrickle:${NC}       $MAGITRICKLE_STATUS"
+  echo -e "${YELLOW}Mihomo:${NC}            $MIHOMO_STATUS"
+  echo -e "${YELLOW}MagiTrickle:${NC}       $MAGITRICKLE_STATUS"
+  echo -e "${YELLOW}HevSocks5Tunnel:${NC}   $HEV_STATUS"
 }
 
 show_menu() {
 clear
 echo -e "╔═══════════════════════════════════════════╗"
-echo -e "║ ${BLUE}mihomo-openwrt on Internet-Helper Manager${NC} ║"
+echo -e "║ ${BLUE}Mixomo OpenWRT on Internet-Helper Manager${NC} ║"
 echo -e "╚═══════════════════════════════════════════╝"
-echo -e "                                 ${DGRAY}by StressOzz${NC}"
-echo
+echo -e "                                 ${DGRAY}by StressOzz${NC}\т"
 
 check_status
 
-echo
-echo -e "${CYAN}1) ${GREEN}Установить ${NC}mihomo-openwrt"
-echo -e "${CYAN}2) ${GREEN}Удалить ${NC}mihomo-openwrt"
+pri=0
+grep -F -A1 'id: "06776295"' "$CONFIGPATH" 2>/dev/null | grep -q 'name: Meta (WA+FB+Instagram)' && echo -e "${YELLOW}Используется список: ${NC}Internet Helper\n" && pri=1
+grep -F -A1 'id: 542c6095' "$CONFIGPATH" 2>/dev/null | grep -q 'name: Google_ai' && echo -e "${YELLOW}Используется список: ${NC}ITDog\n" && pri=1
+[ "$pri" -eq 1 ] && echo
+
+echo -e "${CYAN}1) ${GREEN}Установить ${NC}Mixomo OpenWRT"
+echo -e "${CYAN}2) ${GREEN}Удалить ${NC}Mixomo OpenWRT"
 echo -e "${CYAN}3) ${GREEN}Сменить список ${NC}MagiTrickle"
 echo -e "${CYAN}4) ${GREEN}Сгенерировать ${NC}WARP"
-echo -e "${CYAN}5) ${GREEN}Интегрировать ${NC}/root/WARP.conf${GREEN} в ${NC}mihomo-openwrt"
-echo -e "${CYAN}6) ${GREEN}Удалить ${NC}→ ${GREEN}установить ${NC}→ ${GREEN}настроить ${NC}mihomo-openwrt"
+echo -e "${CYAN}5) ${GREEN}Интегрировать ${NC}/root/WARP.conf${GREEN} в ${NC}Mixomo OpenWRT"
+# echo -e "${CYAN}6) ${GREEN}Удалить ${NC}→ ${GREEN}установить ${NC}→ ${GREEN}настроить ${NC}mihomo-openwrt"
 echo -e "${CYAN}Enter) ${GREEN}Выход"
 echo
 echo -ne "${YELLOW}Выберите пункт: ${NC}"
@@ -95,11 +104,11 @@ read choiceM
 
 case "$choiceM" in
 1)
-  sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Mihomo-OpenWRT_Manager/main/mihomo_openwrt_install.sh)
+  sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Mihomo-OpenWRT_Manager/main/mixomo_openwrt_install.sh)
   PAUSE
   ;;
 2)
-  sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Mihomo-OpenWRT_Manager/main/mihomo_openwrt_delete.sh)
+  sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Mihomo-OpenWRT_Manager/main/mixomo_openwrt_delete.sh)
   PAUSE
   ;;
 3)
@@ -115,8 +124,8 @@ case "$choiceM" in
   PAUSE
   ;;
 6)
-  sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Mihomo-OpenWRT_Manager/main/mihomo_openwrt_delete.sh)
-  sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Mihomo-OpenWRT_Manager/main/mihomo_openwrt_install.sh)
+  sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Mihomo-OpenWRT_Manager/main/mixomo_openwrt_delete.sh)
+  sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Mihomo-OpenWRT_Manager/main/mixomo_openwrt_install.sh)
   sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Mihomo-OpenWRT_Manager/main/gen_WARP.sh)
   sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Mihomo-OpenWRT_Manager/main/WARP_to_conf.sh)
   PAUSE
