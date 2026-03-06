@@ -21,11 +21,10 @@ magitrickle_config() {
 echo -e "\n${MAGENTA}Выбор списка для MagiTrickle${NC}"
 echo -e "${CYAN}1) ${GREEN}Список от${NC} ITDog"
 echo -e "${CYAN}2) ${GREEN}Список от${NC} Internet Helper"
-echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}"
-echo
+echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n"
 
 while true; do
-  echo -en "${YELLOW}Введите номер: ${NC}"
+  echo -en "${YELLOW}Выберите пункт: ${NC}"
   read -r choice
 
   case "$choice" in
