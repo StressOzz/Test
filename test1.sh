@@ -181,7 +181,7 @@ END{
   for(gi=1; gi<=n; gi++){
     g=glist[gi]
 
-    if(!first_group) print ","
+    if(!first_group) printf(",\n")
     first_group=0
 
     gid=rid()
@@ -206,10 +206,10 @@ END{
         if(dotcount(v)>=2) typ="domain"; else typ="namespace"
       } else typ="namespace"
 
-      if(!first_rule) print ","
+      if(!first_rule) printf(",\n")
       first_rule=0
 
-      print "{\"enable\":true,\"id\":\"",rid(),"\",\"name\":\"\",\"rule\":\"",json_escape(v),"\",\"type\":\"",typ,"\"}"
+      printf("{\"enable\":true,\"id\":\"%s\",\"name\":\"\",\"rule\":\"%s\",\"type\":\"%s\"}",rid(),json_escape(v),typ)
     }
 
     print "]}"
