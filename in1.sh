@@ -82,15 +82,13 @@ clear
 echo -e "╔═══════════════════════════════════════════╗"
 echo -e "║ ${BLUE}Mixomo OpenWRT on Internet-Helper Manager${NC} ║"
 echo -e "╚═══════════════════════════════════════════╝"
-echo -e "                                 ${DGRAY}by StressOzz${NC}\т"
+echo -e "                                 ${DGRAY}by StressOzz${NC}\n"
 
 check_status
 
-pri=0
-grep -F -A1 'id: "06776295"' "$CONFIGPATH" 2>/dev/null | grep -q 'name: Meta (WA+FB+Instagram)' && echo -e "${YELLOW}Используется список: ${NC}Internet Helper\n" && pri=1
-grep -F -A1 'id: 542c6095' "$CONFIGPATH" 2>/dev/null | grep -q 'name: Google_ai' && echo -e "${YELLOW}Используется список: ${NC}ITDog\n" && pri=1
-[ "$pri" -eq 1 ] && echo
-
+grep -F -A1 'id: "06776295"' "$CONFIGPATH" 2>/dev/null | grep -q 'name: Meta (WA+FB+Instagram)' && echo -e "${YELLOW}Используется список: ${NC}Internet Helper"
+grep -F -A1 'id: 542c6095' "$CONFIGPATH" 2>/dev/null | grep -q 'name: Google_ai' && echo -e "${YELLOW}Используется список: ${NC}ITDog"
+echo
 echo -e "${CYAN}1) ${GREEN}Установить ${NC}Mixomo OpenWRT"
 echo -e "${CYAN}2) ${GREEN}Удалить ${NC}Mixomo OpenWRT"
 echo -e "${CYAN}3) ${GREEN}Сменить список ${NC}MagiTrickle"
