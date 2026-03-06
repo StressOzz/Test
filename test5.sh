@@ -31,7 +31,7 @@ while true; do
   case "$choice" in
     1) MAGITRICKLE_CONFIG_URL="$URL_ITDOG"; break ;;
     2) MAGITRICKLE_CONFIG_URL="$URL_DEFAULT"; break ;;
-    *) break ;;
+    *) return ;;
   esac
 done
 
