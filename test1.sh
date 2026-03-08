@@ -1367,14 +1367,14 @@ install_magitrickle() {
         _magitrickle_opkg || return 1
     fi
 
-echo "--> Установка списка для MagiTrickle..."
-confWRT="/etc/magitrickle/state/config.yaml"
-confGIT="https://raw.githubusercontent.com/StressOzz/Use_WARP_on_OpenWRT/refs/heads/main/files/MagiTrickle/configAD.yaml"
-
-  wget -q -O "$confWRT" "$confGIT" || {
+	echo "--> Установка списка для MagiTrickle..."
+	confWRT="/etc/magitrickle/state/config.yaml"
+	confGIT="https://raw.githubusercontent.com/StressOzz/Use_WARP_on_OpenWRT/refs/heads/main/files/MagiTrickle/configAD.yaml"
+	wget -q -O "$confWRT" "$confGIT" || {
     echo "Ошибка: не удалось скачать список!"
     echo "URL: $MAGITRICKLE_CONFIG_URL"
     return 1
+	}
 
     echo "--> Создание страницы MagiTrickle в LuCI..."
     mkdir -p /www/luci-static/resources/view/magitrickle
