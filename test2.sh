@@ -198,7 +198,7 @@ install_mihomo() {
 
     log_info "Скачивание архива $FILENAME"
     echo "--> URL: $DOWNLOAD_URL"
-    if ! curl -Lf --retry 3 --retry-delay 2 "$DOWNLOAD_URL" -o "$TMP_FILE"; then
+    if ! curl -Lf --retry 3 --retry-delay 2 "$DOWNLOAD_URL" -o "$TMP_FILE" >/dev/null 2>&1; then
         log_error "Ошибка скачивания! Проверьте, существует ли файл $FILENAME в релизах."
         return 1
     fi
@@ -1280,73 +1280,6 @@ EOF
     /etc/init.d/firewall restart
 }
 
-_magitrickle_apk() {
-    local OPENWRT_ARCH
-    OPENWRT_ARCH=$(grep "^OPENWRT_ARCH=" /etc/os-release | cut -d'"' -f2)
-    [ -n "$OPENWRT_ARCH" ] || { log_error "Не удалось определить архитектуру из /etc/os-release"; return 1; }
-    echo "--> Архитектура OpenWrt: $OPENWRT_ARCH"
-
-    local APK_NAME="magitrickle_${MT_VERSION_APK}_${MT_PRE_APK}-r1_openwrt_${OPENWRT_ARCH}.apk"
-    local APK_URL="https://gitlab.com/api/v4/projects/69165954/jobs/artifacts/develop/raw/.build/${APK_NAME}?job=build"
-    local TMP_APK="/tmp/magitrickle.apk"
-
-    echo "--> Скачивание: $APK_NAME"
-    if ! curl -Lf --retry 3 --retry-delay 2 -o "$TMP_APK" "$APK_URL"; then
-        log_error "Ошибка скачивания пакета"
-        log_error "URL: $APK_URL"
-        rm -f "$TMP_APK"
-        return 1
-    fi
-
-    if [ ! -s "$TMP_APK" ]; then
-        log_error "Скачанный файл пустой. Проверьте MT_VERSION_APK и MT_PRE_APK в начале скрипта."
-        rm -f "$TMP_APK"
-        return 1
-    fi
-
-    echo "--> Установка пакета..."
-    apk add --allow-untrusted "$TMP_APK" || { log_error "Ошибка установки MagiTrickle"; rm -f "$TMP_APK"; return 1; }
-    rm -f "$TMP_APK"
-
-    /etc/init.d/magitrickle enable 2>/dev/null || true
-    /etc/init.d/magitrickle start 2>/dev/null || true
-}
-
-_magitrickle_opkg() {
-    echo "Выберите версию MagiTrickle для установки:"
-    echo "1) Оригинал v${MT_VERSION_OPKG} (https://magitrickle.dev/docs/welcome/)"
-    echo "2) Мод от LarinIvan (https://github.com/LarinIvan/MagiTrickle_Mod/)"
-    printf "-> "
-    local CHOICE
-    read -r CHOICE
-
-    case "$CHOICE" in
-        1)
-            local ARCH_SYS
-            ARCH_SYS=$(grep "^OPENWRT_ARCH=" /etc/os-release | cut -d'"' -f2)
-            [ -n "$ARCH_SYS" ] || { log_error "Не удалось определить архитектуру OpenWrt"; return 1; }
-            echo "--> Архитектура: $ARCH_SYS"
-
-            local IPK="magitrickle_${MT_VERSION_OPKG}-2_openwrt_${ARCH_SYS}.ipk"
-            local URL="https://gitlab.com/api/v4/projects/69165954/packages/generic/magitrickle/${MT_VERSION_OPKG}/$IPK"
-
-            wget -O "/tmp/$IPK" "$URL" || { log_error "Ошибка скачивания оригинального MagiTrickle"; return 1; }
-            opkg install "/tmp/$IPK" || return 1
-            rm -f "/tmp/$IPK"
-
-            /etc/init.d/magitrickle enable > /dev/null 2>&1
-            /etc/init.d/magitrickle start > /dev/null 2>&1
-            ;;
-        2)
-            log_info "Установка MagiTrickle_Mod..."
-            wget -O- https://raw.githubusercontent.com/LarinIvan/MagiTrickle_Mod/develop/add_repo.sh | sh || return 1
-            ;;
-        *)
-            log_error "Неверный выбор"
-            return 1
-            ;;
-    esac
-}
 
 install_magitrickle() {
     local CONFIG_PATH="/etc/magitrickle/state/config.yaml"
@@ -1362,9 +1295,19 @@ install_magitrickle() {
     fi
 
     if [ "$USE_APK" -eq 1 ]; then
-        _magitrickle_apk || return 1
+ARCH=$(grep "^OPENWRT_ARCH=" /etc/os-release | cut -d'"' -f2) || exit 1
+APK="magitrickle_${MT_VERSION_APK}_${MT_PRE_APK}-r1_openwrt_${ARCH}.apk"
+URL="https://gitlab.com/api/v4/projects/69165954/jobs/artifacts/develop/raw/.build/$APK?job=build"
+curl -Lf --retry 3 --retry-delay 2 -o /tmp/magitrickle.apk "$URL" >/dev/null 2>&1 || exit 1
+apk add --allow-untrusted /tmp/magitrickle.apk >/dev/null 2>&1 || exit 1
+rm -f /tmp/magitrickle.apk
     else
-        _magitrickle_opkg || return 1
+ARCH=$(grep "^OPENWRT_ARCH=" /etc/os-release | cut -d'"' -f2) || exit 1
+IPK="magitrickle_${MT_VERSION_OPKG}-2_openwrt_${ARCH}.ipk"
+URL="https://gitlab.com/api/v4/projects/69165954/packages/generic/magitrickle/${MT_VERSION_OPKG}/$IPK"
+wget -q -O "/tmp/$IPK" "$URL" || exit 1
+opkg install "/tmp/$IPK" >/dev/null 2>&1 || exit 1
+rm -f "/tmp/$IPK"
     fi
 
 	echo "--> Установка списка для MagiTrickle..."
@@ -1375,6 +1318,12 @@ install_magitrickle() {
     echo "URL: $MAGITRICKLE_CONFIG_URL"
     return 1
 	}
+	echo "--> Запуск MagiTrickle..."
+	/etc/init.d/magitrickle enable >/dev/null 2>&1
+	echo "--> Запуск MagiTrickle..."
+	/etc/init.d/magitrickle reload  >/dev/null 2>&1
+	/etc/init.d/magitrickle start >/dev/null 2>&1
+	/etc/init.d/magitrickle restart >/dev/null 2>&1
 
     echo "--> Создание страницы MagiTrickle в LuCI..."
     mkdir -p /www/luci-static/resources/view/magitrickle
