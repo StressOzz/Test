@@ -1204,9 +1204,9 @@ install_hev_tunnel() {
 
     if [ "$USE_APK" -eq 1 ]; then
         apk cache clean
-        apk add hev-socks5-tunnel
+        apk add hev-socks5-tunnel >/dev/null 2>&1
     else
-        manage_pkg install hev-socks5-tunnel
+        manage_pkg install hev-socks5-tunnel >/dev/null 2>&1
     fi
 
     rm -f /etc/hev-socks5-tunnel/main.yml
