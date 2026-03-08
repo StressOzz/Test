@@ -4,10 +4,12 @@ GREEN='\033[0;32m'
 RED='\033[0;31m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
+MAGENTA="\033[1;35m"
+CYAN="\033[1;36m"
 
 clear
 
-echo -e "${YELLOW}Проверяем пакетный менеджер...${NC}"
+echo -e "${MAGENTA}Генерируем ключи AWG${NC}"
 
 if command -v apk >/dev/null 2>&1; then
     PKG="apk"
@@ -18,7 +20,7 @@ else
     exit 1
 fi
 
-echo -e "${YELLOW}Обновляем пакеты...${NC}"
+echo -e "${CYAN}Обновляем пакеты...${NC}"
 
 if [ "$PKG" = "apk" ]; then
     apk update >/dev/null 2>&1 || {
@@ -52,7 +54,7 @@ install_pkg() {
     fi
 }
 
-echo -e "${YELLOW}Проверяем зависимости...${NC}"
+echo -e "${CYAN}Проверяем зависимости...${NC}"
 
 for pkg in wireguard-tools curl jq coreutils-base64; do
     install_pkg "$pkg"
