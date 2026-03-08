@@ -1288,10 +1288,9 @@ install_magitrickle() {
     [ -f "$CONFIG_PATH" ] && cp "$CONFIG_PATH" "$BACKUP_PATH"
 
     if [ "$USE_APK" -eq 1 ]; then
-        apk del magitrickle 2>/dev/null || true
+        apk del magitrickle >/dev/null 2>&1 || true
     else
-        opkg remove magitrickle_mod 2>/dev/null || true
-        opkg remove magitrickle 2>/dev/null || true
+        opkg remove magitrickle >/dev/null 2>&1 || true
     fi
 
     if [ "$USE_APK" -eq 1 ]; then
@@ -1311,16 +1310,14 @@ rm -f "/tmp/$IPK"
     fi
 
 	echo "--> Установка списка для MagiTrickle..."
-	confWRT="/etc/magitrickle/state/config.yaml"
 	confGIT="https://raw.githubusercontent.com/StressOzz/Use_WARP_on_OpenWRT/refs/heads/main/files/MagiTrickle/configAD.yaml"
-	wget -q -O "$confWRT" "$confGIT" || {
+	wget -q -O "$CONFIG_PATH" "$confGIT" || {
     echo "Ошибка: не удалось скачать список!"
     echo "URL: $MAGITRICKLE_CONFIG_URL"
     return 1
 	}
 	echo "--> Запуск MagiTrickle..."
 	/etc/init.d/magitrickle enable >/dev/null 2>&1
-	echo "--> Запуск MagiTrickle..."
 	/etc/init.d/magitrickle reload  >/dev/null 2>&1
 	/etc/init.d/magitrickle start >/dev/null 2>&1
 	/etc/init.d/magitrickle restart >/dev/null 2>&1
