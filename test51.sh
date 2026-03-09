@@ -154,7 +154,7 @@ fi
 chose_endpoint
 ################################################################################################
 
-echo -e "\n${GREEN}Активируем и генерируем ${NC}WARP${NC}"
+echo -e "${GREEN}Активируем и генерируем ${NC}WARP${NC}"
 
 response=$(sec PATCH "reg/${id}" "$token" -d '{"warp_enabled":true}')
 
