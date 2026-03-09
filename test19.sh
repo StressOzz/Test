@@ -22,33 +22,49 @@ echo
 echo -e "${MAGENTA}Выберите страну:${NC}"
 
 i=1
+max_len=0
+countries=()
+hosts=()
+pings=()
 
+# Первый проход - собираем данные и определяем максимальную длину названия страны
 while IFS='|' read -r name ep; do
-
-case "$name" in
-*Текущая*) country="Россия" ;;
-*Нидерланд*) country="Нидерланды" ;;
-*Америка*) country="Америка" ;;
-*Сингапур*) country="Сингапур" ;;
-*Латвия*) country="Латвия" ;;
-*Герман*) country="Германия" ;;
-*Литва*) country="Литва" ;;
-*Финлянд*) country="Финляндия" ;;
-*) country="$name" ;;
-esac
-
-host="${ep%%:*}"
-
-ping_ms="$(ping -c1 -W1 "$host" 2>/dev/null | awk -F'/' 'END{print $5}')"
-[ -z "$ping_ms" ] && ping_ms="TimeOut"
-
-printf "${CYAN}%s) ${GREEN}%s ${MAGENTA}| ${YELLOW}%s${NC}\n" "$i" "$country" "$ping_ms"
-
-i=$((i+1))
-
+    case "$name" in
+    *Текущая*) country="Россия" ;;
+    *Нидерланд*) country="Нидерланды" ;;
+    *Америка*) country="Америка" ;;
+    *Сингапур*) country="Сингапур" ;;
+    *Латвия*) country="Латвия" ;;
+    *Герман*) country="Германия" ;;
+    *Литва*) country="Литва" ;;
+    *Финлянд*) country="Финляндия" ;;
+    *) country="$name" ;;
+    esac
+    
+    host="${ep%%:*}"
+    countries[$i]="$country"
+    hosts[$i]="$host"
+    
+    # Обновляем максимальную длину
+    len=${#country}
+    [ $len -gt $max_len ] && max_len=$len
+    
+    i=$((i+1))
 done <<EOF
 $EP_LIST
 EOF
+
+# Второй проход - выводим с выравниванием
+for ((j=1; j<i; j++)); do
+    country="${countries[$j]}"
+    host="${hosts[$j]}"
+    
+    ping_ms="$(ping -c1 -W1 "$host" 2>/dev/null | awk -F'/' 'END{print $5}')"
+    [ -z "$ping_ms" ] && ping_ms="TimeOut"
+    
+    # Выравнивание названий стран
+    printf "${CYAN}%s) ${GREEN}%-${max_len}s ${MAGENTA}| ${YELLOW}%s${NC}\n" "$j" "$country" "$ping_ms"
+done
 
 echo
 printf "${CYAN}Введите номер:${NC} "
@@ -62,8 +78,6 @@ fi
 
 echo
 }
-
-
 
 echo -e "${MAGENTA}Генерируем WARP.conf${NC}"
 
