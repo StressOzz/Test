@@ -21,9 +21,11 @@ chose_endpoint() {
     echo
     echo -e "${MAGENTA}Выберите страну:${NC}"
 
-    # Собираем список стран в массив
-    COUNTRIES=()
-    while IFS='|' read -r name ep; do
+    # Сначала формируем список стран и находим макс длину
+    MAX_LEN=0
+    LINES=""
+    i=1
+    echo "$EP_LIST" | while IFS='|' read -r name ep; do
         case "$name" in
             *Текущая*) country="Текущая страна" ;;
             *Нидерланд*) country="Нидерланды" ;;
@@ -35,35 +37,26 @@ chose_endpoint() {
             *Финлянд*) country="Финляндия" ;;
             *) country="$name" ;;
         esac
-        COUNTRIES+=("$country")
-    done <<EOF
-$EP_LIST
-EOF
-
-    # Находим максимальную длину страны
-    MAX_LEN=0
-    for c in "${COUNTRIES[@]}"; do
-        len=${#c}
+        # Найти максимальную длину страны
+        len=${#country}
         [ "$len" -gt "$MAX_LEN" ] && MAX_LEN=$len
+        # Собираем строки с номерами
+        LINES="$LINES
+$i|$country"
+        i=$((i+1))
     done
 
-    # Ширина для номера (кол-во цифр у последнего номера)
-    TOTAL_NUM=${#COUNTRIES[@]}
-    NUM_WIDTH=${#TOTAL_NUM}
-
-    # Выводим аккуратно с ровным |
-    i=1
-    for c in "${COUNTRIES[@]}"; do
-        # Используем обычное printf с заранее вычисленной шириной
-        printf "%*d) %-*s | \n" "$NUM_WIDTH" "$i" "$MAX_LEN" "$c"
-        i=$((i+1))
+    # Выводим красиво с ровным |
+    echo "$LINES" | while IFS='|' read -r num country; do
+        printf "%2s) %-*s | \n" "$num" "$MAX_LEN" "$country"
     done
 
     echo
     printf "${CYAN}Введите номер:${NC} "
     read num
 
-    CHOSEN_COUNTRY="${COUNTRIES[$((num-1))]}"
+    # Выбираем страну
+    CHOSEN_COUNTRY="$(echo "$LINES" | awk -F'|' -v n="$num" '$1==n {print $2}')"
 
     if [ -z "$CHOSEN_COUNTRY" ]; then
         echo -e "${RED}Неверный выбор${NC}"
