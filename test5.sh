@@ -21,8 +21,6 @@ echo
 echo -e "${MAGENTA}Выберите страну:${NC}"
 
 i=1
-ENDPOINTS=""
-COUNTRIES=""
 
 while IFS='|' read -r name ep; do
 
@@ -38,13 +36,7 @@ case "$name" in
 *) country="$name" ;;
 esac
 
-printf "%s) %s\n" "$i" "$country"
-
-ENDPOINTS="${ENDPOINTS}
-${ep}"
-
-COUNTRIES="${COUNTRIES}
-${country}"
+printf "%s) %s | %s\n" "$i" "$country" "$ep"
 
 i=$((i+1))
 
@@ -56,7 +48,7 @@ echo
 printf "${CYAN}Введите номер:${NC} "
 read num
 
-ENDPOINT="$(echo "$ENDPOINTS" | sed -n "${num}p")"
+ENDPOINT="$(echo "$EP_LIST" | sed -n "${num}p" | cut -d'|' -f2)"
 
 if [ -z "$ENDPOINT" ]; then
 echo -e "${RED}Неверный выбор${NC}"
