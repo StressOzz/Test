@@ -3,13 +3,13 @@
 SCRIPT_VERSION="v0.1.2-alpha"
 
 MT_VERSION="0.5.3"
-MT_PRE_APK="pre20260305232358"
-MT_PRE_IPK="~git20260305232358.d47bd8b3"
+MT_PRE_APK="pre20260305232358-r1"
+MT_PRE_IPK="~git20260305232358.d47bd8b3-1"
 
 ARCH=$(grep "^OPENWRT_ARCH=" /etc/os-release | cut -d'"' -f2)
 URL="https://gitlab.com/magitrickle/magitrickle/-/jobs/13378493545/artifacts/raw/.build/"
-APK="magitrickle_${MT_VERSION}_${MT_PRE_APK}-r1_openwrt_${ARCH}.apk"
-IPK="magitrickle_${MT_VERSION}${MT_PRE_IPK}-1_openwrt_${ARCH}.ipk"
+APK="magitrickle_${MT_VERSION}_${MT_PRE_APK}_openwrt_${ARCH}.apk"
+IPK="magitrickle_${MT_VERSION}${MT_PRE_IPK}_openwrt_${ARCH}.ipk"
 
 URL_APK="$URL$APK"
 URL_IPK="$URL$IPK"
@@ -87,36 +87,23 @@ detect_mihomo_arch() {
 install_deps() {
     log_info "Установка зависимостей..."
 
-    local PKG_LOG="/tmp/install_deps.log"
-
     if [ "$USE_APK" -eq 1 ]; then
-        log_info "Обновление индексов пакетов (apk)..."
-        apk update >"$PKG_LOG" 2>&1 || { log_error "apk update не удался"; cat "$PKG_LOG"; rm -f "$PKG_LOG"; return 1; }
-
-        apk add ca-certificates kmod-tun kmod-nft-tproxy kmod-nft-nat curl >>"$PKG_LOG" 2>&1 || {
+        log_info "Обновление списков пакетов..."
+		apk update >/dev/null 2>&1 || { log_error "apk update не удался"; return 1; }
+        apk add ca-certificates kmod-tun kmod-nft-tproxy kmod-nft-nat curl >/dev/null 2>&1 || {
             log_error "Ошибка установки зависимостей"
-            cat "$PKG_LOG"
-            rm -f "$PKG_LOG"
             return 1
         }
 
     else
-        log_info "Обновление списков пакетов (opkg)..."
-        opkg update >"$PKG_LOG" 2>&1 || { log_error "opkg update не удался"; cat "$PKG_LOG"; rm -f "$PKG_LOG"; return 1; }
+        log_info "Обновление списков пакетов..."
+        opkg update >/dev/null 2>&1 || { log_error "opkg update не удался"; return 1; }
 
-        opkg install ca-certificates kmod-tun kmod-nft-tproxy kmod-nft-nat curl libcurl4 ca-bundle >>"$PKG_LOG" 2>&1 || {
-            if grep -qi "No space left on device\|write error" "$PKG_LOG"; then
-                log_error "Недостаточно места на диске!"
-            else
-                log_error "Ошибка установки зависимостей"
-                cat "$PKG_LOG"
-            fi
-            rm -f "$PKG_LOG"
+        opkg install ca-certificates kmod-tun kmod-nft-tproxy kmod-nft-nat curl libcurl4 ca-bundle >/dev/null 2>&1 || {
+            log_error "Ошибка установки зависимостей"
             return 1
         }
     fi
-
-    rm -f "$PKG_LOG"
     log_info "Зависимости установлены."
 }
 
