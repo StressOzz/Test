@@ -21,11 +21,13 @@ exit 1
 echo
 echo -e "${MAGENTA}Выберите страну:${NC}"
 
+# Создаем временные файлы для хранения данных
+TEMP_COUNTRIES=$(mktemp)
+TEMP_HOSTS=$(mktemp)
+TEMP_PINGS=$(mktemp)
+
 i=1
 max_len=0
-countries=()
-hosts=()
-pings=()
 
 # Первый проход - собираем данные и определяем максимальную длину названия страны
 while IFS='|' read -r name ep; do
@@ -42,8 +44,10 @@ while IFS='|' read -r name ep; do
     esac
     
     host="${ep%%:*}"
-    countries[$i]="$country"
-    hosts[$i]="$host"
+    
+    # Сохраняем во временные файлы
+    echo "$country" >> "$TEMP_COUNTRIES"
+    echo "$host" >> "$TEMP_HOSTS"
     
     # Обновляем максимальную длину
     len=${#country}
@@ -54,17 +58,26 @@ done <<EOF
 $EP_LIST
 EOF
 
+total=$((i-1))
+
 # Второй проход - выводим с выравниванием
-for ((j=1; j<i; j++)); do
-    country="${countries[$j]}"
-    host="${hosts[$j]}"
+j=1
+while [ $j -le $total ]; do
+    # Читаем из временных файлов
+    country=$(sed -n "${j}p" "$TEMP_COUNTRIES")
+    host=$(sed -n "${j}p" "$TEMP_HOSTS")
     
     ping_ms="$(ping -c1 -W1 "$host" 2>/dev/null | awk -F'/' 'END{print $5}')"
     [ -z "$ping_ms" ] && ping_ms="TimeOut"
     
     # Выравнивание названий стран
     printf "${CYAN}%s) ${GREEN}%-${max_len}s ${MAGENTA}| ${YELLOW}%s${NC}\n" "$j" "$country" "$ping_ms"
+    
+    j=$((j+1))
 done
+
+# Удаляем временные файлы
+rm -f "$TEMP_COUNTRIES" "$TEMP_HOSTS" "$TEMP_PINGS"
 
 echo
 printf "${CYAN}Введите номер:${NC} "
