@@ -41,8 +41,17 @@ chose_endpoint() {
         ping_ms="$(ping -c1 -W1 "$host" 2>/dev/null | awk -F'/' 'END{print $5}')"
         [ -z "$ping_ms" ] && ping_ms="TimeOut"
 
-        # Выравниваем: страна до 15-го символа, | ровно на 16-м
-        printf "%2s) %-15s | %s ms\n" "$i" "$country" "$ping_ms"
+        # Считаем количество символов в строке (не байт)
+        char_count=$(echo "$country" | awk '{print length($0)}')
+        
+        # Рассчитываем сколько пробелов нужно добавить
+        spaces=$((15 - char_count))
+        
+        # Создаем строку с нужным количеством пробелов
+        space_str=$(printf "%*s" "$spaces" "")
+        
+        # Выводим с правильным выравниванием
+        printf "%2s) %s%s | %s ms\n" "$i" "$country" "$space_str" "$ping_ms"
 
         i=$((i+1))
     done <<EOF
