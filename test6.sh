@@ -51,11 +51,10 @@ read num
 ENDPOINT="$(echo "$EP_LIST" | sed -n "${num}p" | cut -d'|' -f2)"
 
 if [ -z "$ENDPOINT" ]; then
-echo -e "${RED}Неверный выбор${NC}"
+ENDPOINT="engage.cloudflareclient.com:4500"
 exit 1
 fi
 
-echo -e "${GREEN}Выбран Endpoint:${NC} $ENDPOINT"
 echo
 }
 
