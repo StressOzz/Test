@@ -19,35 +19,14 @@ chose_endpoint() {
         exit 1
     }
 
-    # Сначала вычисляем максимальную длину страны для красивого меню
-    MAX_LEN=0
-    while IFS='|' read -r name ep; do
-        case "$name" in
-            *Текущая*) country="Текущая страна" ;;
-            *Нидерланд*) country="Нидерланды" ;;
-            *Америка*) country="Америка" ;;
-            *Сингапур*) country="Сингапур" ;;
-            *Латвия*) country="Латвия" ;;
-            *Герман*) country="Германия" ;;
-            *Литва*) country="Литва" ;;
-            *Финлянд*) country="Финляндия" ;;
-            *) country="$name" ;;
-        esac
-        len=${#country}
-        [ "$len" -gt "$MAX_LEN" ] && MAX_LEN=$len
-    done <<EOF
-$EP_LIST
-EOF
-
     echo
-    echo -e "${MAGENTA}Выберите страну или оставьте пустой для автоподбора (самый быстрый):${NC}"
+    echo -e "${MAGENTA}Выберите страну:${NC}"
 
-    # Выводим меню и одновременно собираем список хостов для ping
     i=1
-    HOSTS=""
     while IFS='|' read -r name ep; do
+        # Определяем страну для вывода
         case "$name" in
-            *Текущая*) country="Текущая страна" ;;
+            *Текущая*) country="Россия" ;;
             *Нидерланд*) country="Нидерланды" ;;
             *Америка*) country="Америка" ;;
             *Сингапур*) country="Сингапур" ;;
@@ -57,60 +36,31 @@ EOF
             *Финлянд*) country="Финляндия" ;;
             *) country="$name" ;;
         esac
-        printf "%2s) %-*s | \n" "$i" "$MAX_LEN" "$country"
+
         host="${ep%%:*}"
-        HOSTS="$HOSTS
-$i|$country|$host|$ep"
+        ping_ms="$(ping -c1 -W1 "$host" 2>/dev/null | awk -F'/' 'END{print $5}')"
+        [ -z "$ping_ms" ] && ping_ms="TimeOut"
+
+        # Фиксированная ширина 15 символов для страны
+        printf "%2s) %-15s | %s ms\n" "$i" "$country" "$ping_ms"
+
         i=$((i+1))
     done <<EOF
 $EP_LIST
 EOF
 
     echo
-    printf "${CYAN}Введите номер (или Enter для автоподбора):${NC} "
+    printf "${CYAN}Введите номер:${NC} "
     read num
 
-    CHOSEN_COUNTRY=""
-    ENDPOINT=""
+    ENDPOINT="$(echo "$EP_LIST" | sed -n "${num}p" | cut -d'|' -f2)"
 
-    if [ -n "$num" ]; then
-        # Пользователь выбрал вручную
-        i=1
-        while IFS='|' read -r idx country host ep; do
-            if [ "$idx" -eq "$num" ]; then
-                CHOSEN_COUNTRY="$country"
-                ENDPOINT="$ep"
-                break
-            fi
-        done <<EOF
-$HOSTS
-EOF
-    else
-        # Автоподбор: минимальный ping
-        MIN_PING=9999
-        while IFS='|' read -r idx country host ep; do
-            ping_ms=$(ping -c1 -W1 "$host" 2>/dev/null | awk -F'/' 'END{print $5}')
-            if [ -n "$ping_ms" ] && [ "$ping_ms" -lt "$MIN_PING" ]; then
-                MIN_PING=$ping_ms
-                CHOSEN_COUNTRY="$country"
-                ENDPOINT="$ep"
-            fi
-        done <<EOF
-$HOSTS
-EOF
-    fi
-
-    if [ -z "$CHOSEN_COUNTRY" ] || [ -z "$ENDPOINT" ]; then
-        echo -e "${RED}Не удалось определить страну${NC}, выбираем по умолчанию"
-        CHOSEN_COUNTRY="Текущая страна"
+    if [ -z "$ENDPOINT" ]; then
         ENDPOINT="engage.cloudflareclient.com:4500"
     fi
 
-    echo -e "${GREEN}Выбрана страна:${NC} $CHOSEN_COUNTRY"
-    echo -e "${GREEN}Используем Endpoint:${NC} $ENDPOINT"
     echo
 }
-
 
 
 echo -e "${MAGENTA}Генерируем WARP.conf${NC}"
