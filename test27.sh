@@ -41,7 +41,7 @@ chose_endpoint() {
         ping_ms="$(ping -c1 -W1 "$host" 2>/dev/null | awk -F'/' 'END{print $5}')"
         [ -z "$ping_ms" ] && ping_ms="TimeOut"
 
-        # Фиксированная ширина 15 символов для страны
+        # Выравниваем: страна до 15-го символа, | ровно на 16-м
         printf "%2s) %-20s | %s ms\n" "$i" "$country" "$ping_ms"
 
         i=$((i+1))
