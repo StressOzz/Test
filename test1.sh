@@ -21,21 +21,45 @@ echo
 echo -e "${YELLOW}Выберите страну:${NC}"
 
 i=1
-echo "$EP_LIST" | while IFS='|' read -r name ep; do
-country="$(echo "$name" | sed 's/[[:space:]]*от.*//' | sed 's/^[^[:alpha:]]*//')"
+ENDPOINTS=""
+COUNTRIES=""
+
+while IFS='|' read -r name ep; do
+
+case "$name" in
+*Россия*) country="Текущая страна" ;;
+*Нидерланд*) country="Нидерланды" ;;
+*Америка*) country="Америка" ;;
+*Сингапур*) country="Сингапур" ;;
+*Латвия*) country="Латвия" ;;
+*Герман*) country="Германия" ;;
+*Литва*) country="Литва" ;;
+*Финлянд*) country="Финляндия" ;;
+*) country="$name" ;;
+esac
+
 printf "%s) %s\n" "$i" "$country"
+
+ENDPOINTS="${ENDPOINTS}
+${ep}"
+
+COUNTRIES="${COUNTRIES}
+${country}"
+
 i=$((i+1))
-done
+
+done <<EOF
+$EP_LIST
+EOF
 
 echo
-printf "${CYAN}Введите номер:${NC} "
+echo -en "${YELLOW}Введите номер:${NC} "
 read num
 
-ENDPOINT="$(echo "$EP_LIST" | sed -n "${num}p" | cut -d'|' -f2)"
+ENDPOINT="$(echo "$ENDPOINTS" | sed -n "${num}p")"
 
 if [ -z "$ENDPOINT" ]; then
-echo -e "${RED}Неверный выбор${NC}"
-exit 1
+ENDPOINT="engage.cloudflareclient.com:4500"
 fi
 
 echo -e "${GREEN}Выбран Endpoint:${NC} $ENDPOINT"
