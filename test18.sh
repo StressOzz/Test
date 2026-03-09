@@ -40,9 +40,9 @@ esac
 host="${ep%%:*}"
 
 ping_ms="$(ping -c1 -W1 "$host" 2>/dev/null | awk -F'/' 'END{print $5}')"
-[ -z "$ping_ms" ] && ping_ms="${RED}TimeOut${NC}"
+[ -z "$ping_ms" ] && ping_ms="TimeOut"
 
-printf "${CYAN}%s) ${GREEN}%s ${MAGENTA}| ${YELLOW}(%s)${NC}\n" "$i" "$country" "$ping_ms"
+printf "${CYAN}%s) ${GREEN}%s ${MAGENTA}| ${YELLOW}%s${NC}\n" "$i" "$country" "$ping_ms"
 
 i=$((i+1))
 
