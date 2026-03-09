@@ -11,60 +11,68 @@ CYAN="\033[1;36m"
 clear
 
 chose_endpoint() {
-
     echo -e "${CYAN}Получаем список Endpoint...${NC}"
 
-    TMP_FILE="$(mktemp)"
-    curl -fsSL https://raw.githubusercontent.com/STR97/STRUGOV/refs/heads/main/end%20point -o "$TMP_FILE" || {
+    # Создаём временный файл
+    TEMP_EP_LIST=$(mktemp)
+
+    # Скачиваем список и сохраняем во временный файл
+    curl -fsSL "https://raw.githubusercontent.com/STR97/STRUGOV/refs/heads/main/end%20point" -o "$TEMP_EP_LIST" || {
         echo -e "${RED}Не удалось загрузить список Endpoint${NC}"
+        rm -f "$TEMP_EP_LIST"
         exit 1
     }
 
     echo
     echo -e "${MAGENTA}Выберите страну:${NC}"
 
-    # 1. Сначала определяем страны для вывода и максимальную длину
+    # --- ПЕРВЫЙ ПРОХОД: определяем максимальную длину строки с названием ---
     MAX_LEN=0
+    while IFS='|' read -r name _; do
+        # Убираем лишние пробелы в конце названия, но оставляем эмодзи
+        clean_name=$(echo "$name" | sed 's/[[:space:]]*$//')
+        len=${#clean_name}
+        if [ $len -gt $MAX_LEN ]; then
+            MAX_LEN=$len
+        fi
+    done < "$TEMP_EP_LIST"
+
+    # --- ВТОРОЙ ПРОХОД: выводим меню с идеальным выравниванием ---
     i=1
     while IFS='|' read -r name ep; do
-        case "$name" in
-            *Текущая*) country="Россия" ;;
-            *Нидерланд*) country="Нидерланды" ;;
-            *Америка*) country="Америка" ;;
-            *Сингапур*) country="Сингапур" ;;
-            *Латвия*) country="Латвия" ;;
-            *Герман*) country="Германия" ;;
-            *Литва*) country="Литва" ;;
-            *Финлянд*) country="Финляндия" ;;
-            *) country="$name" ;;
-        esac
-        echo "$i|$country|$ep" >> "${TMP_FILE}.parsed"
-        len=${#country}
-        [ "$len" -gt "$MAX_LEN" ] && MAX_LEN=$len
-        i=$((i+1))
-    done < "$TMP_FILE"
-
-    # 2. Выводим меню
-    while IFS='|' read -r num country ep; do
+        # Оставляем название как есть (с эмодзи)
+        country_name=$(echo "$name" | sed 's/[[:space:]]*$//')
         host="${ep%%:*}"
+        
+        # Получаем пинг
         ping_ms="$(ping -c1 -W1 "$host" 2>/dev/null | awk -F'/' 'END{print $5}')"
-        [ -z "$ping_ms" ] && ping_ms="TimeOut"
-        printf "%2s) %-*s | %s ms\n" "$num" "$MAX_LEN" "$country" "$ping_ms"
-    done < "${TMP_FILE}.parsed"
+        [ -z "$ping_ms" ] && ping_ms="Timeout"
+        
+        # Выводим с выравниванием:
+        # %2s - номер (2 символа, по правому краю)
+        # ) и пробел - добавляем вручную после номера
+        # %-*s - название страны, выровненное по ЛЕВОМУ краю с шириной MAX_LEN
+        printf "%2s) %-*s | %s ms\n" "$i" "$MAX_LEN" "$country_name" "$ping_ms"
+        
+        i=$((i+1))
+    done < "$TEMP_EP_LIST"
+
+    # Удаляем временный файл
+    rm -f "$TEMP_EP_LIST"
 
     echo
     printf "${CYAN}Введите номер:${NC} "
-    read sel
+    read num
 
-    ENDPOINT="$(awk -F'|' -v n="$sel" '$1==n {print $3}' "${TMP_FILE}.parsed")"
-    [ -z "$ENDPOINT" ] && ENDPOINT="engage.cloudflareclient.com:4500"
+    # Получаем выбранный endpoint (снова читаем из оригинального URL для простоты)
+    ENDPOINT="$(curl -fsSL "https://raw.githubusercontent.com/STR97/STRUGOV/refs/heads/main/end%20point" 2>/dev/null | sed -n "${num}p" | cut -d'|' -f2)"
 
-    # Убираем временные файлы
-    rm -f "$TMP_FILE" "${TMP_FILE}.parsed"
+    if [ -z "$ENDPOINT" ]; then
+        ENDPOINT="engage.cloudflareclient.com:4500"
+    fi
 
     echo
 }
-
 
 #######################################################################################################################################
 
