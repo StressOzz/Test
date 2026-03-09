@@ -33,7 +33,7 @@ while IFS='|' read -r name ep; do
         *Латвия*) country="Латвия    " ;;
         *Герман*) country="Германия  " ;;
         *Литва*) country="Литва     " ;;
-        *Финлянд*) country="Финляндия " ;;
+        *Финлянд*) country="Финляндия" ;;
         *) country="$name" ;;
     esac
 
@@ -43,7 +43,7 @@ while IFS='|' read -r name ep; do
     [ -z "$ping_ms" ] && ping_ms="TimeOut"
 
     # Один пробел перед номером для 1–9
-    printf " %s) %-11s | %s\n" "$i" "$country" "$ping_ms"
+    printf "%2d) %s | %s ms\n" "$i" "$country" "$ping_ms"
 
     i=$((i+1))
 
