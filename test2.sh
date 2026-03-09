@@ -27,7 +27,7 @@ COUNTRIES=""
 while IFS='|' read -r name ep; do
 
 case "$name" in
-*Россия*) country="Текущая страна" ;;
+*Текущая страна*) country="Россия" ;;
 *Нидерланд*) country="Нидерланды" ;;
 *Америка*) country="Америка" ;;
 *Сингапур*) country="Сингапур" ;;
