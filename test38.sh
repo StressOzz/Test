@@ -20,12 +20,9 @@ chose_endpoint() {
         exit 1
     }
 
-    echo
-    echo -e "${MAGENTA}Выберите страну:${NC}"
-
-    # 1. Сначала определяем страны для вывода и максимальную длину
+    # 1. Собираем массив стран и пингов
+    i=0
     MAX_LEN=0
-    i=1
     while IFS='|' read -r name ep; do
         case "$name" in
             *Текущая*) country="Россия" ;;
@@ -38,33 +35,30 @@ chose_endpoint() {
             *Финлянд*) country="Финляндия" ;;
             *) country="$name" ;;
         esac
-        echo "$i|$country|$ep" >> "${TMP_FILE}.parsed"
-        len=${#country}
-        [ "$len" -gt "$MAX_LEN" ] && MAX_LEN=$len
-        i=$((i+1))
-    done < "$TMP_FILE"
 
-    # 2. Выводим меню
-    while IFS='|' read -r num country ep; do
         host="${ep%%:*}"
         ping_ms="$(ping -c1 -W1 "$host" 2>/dev/null | awk -F'/' 'END{print $5}')"
         [ -z "$ping_ms" ] && ping_ms="TimeOut"
-        printf "%2s) %-*s | %s ms\n" "$num" "$MAX_LEN" "$country" "$ping_ms"
-    done < "${TMP_FILE}.parsed"
 
-    echo
-    printf "${CYAN}Введите номер:${NC} "
-    read sel
+        COUNTRIES[i]="$country"
+        PINGS[i]="$ping_ms"
 
-    ENDPOINT="$(awk -F'|' -v n="$sel" '$1==n {print $3}' "${TMP_FILE}.parsed")"
-    [ -z "$ENDPOINT" ] && ENDPOINT="engage.cloudflareclient.com:4500"
+        len=${#country}
+        [ "$len" -gt "$MAX_LEN" ] && MAX_LEN=$len
 
-    # Убираем временные файлы
-    rm -f "$TMP_FILE" "${TMP_FILE}.parsed"
+        i=$((i+1))
+    done < "$TMP_FILE"
 
+    # 2. Выводим ровную таблицу
+    echo -e "${MAGENTA}Страна          | Ping${NC}"
+    echo "----------------+--------"
+    for idx in "${!COUNTRIES[@]}"; do
+        printf "%-*s | %s ms\n" "$MAX_LEN" "${COUNTRIES[idx]}" "${PINGS[idx]}"
+    done
+
+    rm -f "$TMP_FILE"
     echo
 }
-
 
 
 
