@@ -135,6 +135,7 @@ fi
 
 if [ "$AVAIL_ROOT_KB" -lt "$REQ_ROOT_KB" ]; then
     log_error "Недостаточно места: $((AVAIL_ROOT_KB/1024)) MB (нужно $((REQ_ROOT_KB/1024)) MB)"
+fi
 
 [ -f /etc/init.d/mihomo ] && /etc/init.d/mihomo stop 2>/dev/null
 
