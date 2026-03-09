@@ -1171,15 +1171,17 @@ install_magitrickle() {
         opkg remove magitrickle >/dev/null 2>&1 || true
     fi
 
-    if [ "$USE_APK" -eq 1 ]; then
-curl -Lf --retry 3 --retry-delay 2 -o /tmp/$APK "$URL_APK" >/dev/null 2>&1 || exit 1
-apk add --allow-untrusted /tmp/$APK >/dev/null 2>&1 || exit 1
-rm -f /tmp/$APK
-    else
-curl -Lf --retry 3 --retry-delay 2 -o /tmp/$IPK "$URL_IPK" >/dev/null 2>&1 || exit 1
-opkg install --allow-untrusted /tmp/$IPK >/dev/null 2>&1 || exit 1
-rm -f /tmp/$IPK
-    fi
+if [ "$USE_APK" -eq 1 ]; then
+    FILE=/tmp/magitrickle.apk
+    curl -Lf --retry 3 --retry-delay 2 -o "$FILE" "$URL_APK" >/dev/null 2>&1 || exit 1
+    apk add --allow-untrusted "$FILE" >/dev/null 2>&1 || exit 1
+else
+    FILE=/tmp/magitrickle.ipk
+    curl -Lf --retry 3 --retry-delay 2 -o "$FILE" "$URL_IPK" >/dev/null 2>&1 || exit 1
+    opkg install "$FILE" >/dev/null 2>&1 || exit 1
+fi
+
+rm -f "$FILE"
 
 	echo "--> Установка списка для MagiTrickle..."
 	confGIT="https://raw.githubusercontent.com/StressOzz/Use_WARP_on_OpenWRT/refs/heads/main/files/MagiTrickle/configAD.yaml"
