@@ -41,8 +41,8 @@ chose_endpoint() {
         ping_ms="$(ping -c1 -W1 "$host" 2>/dev/null | awk -F'/' 'END{print $5}')"
         [ -z "$ping_ms" ] && ping_ms="TimeOut"
 
-        # Номер (2 символа) + ) + пробел + страна (ровно 15 символов) + пробел + | + пробел + пинг
-        printf "%2s) %-20s | %s ms\n" "$i" "$country" "$ping_ms"
+        # Номер + ) + пробел + страна + 15 пробелов от начала строки до |
+        printf "%2s) %s%*s | %s ms\n" "$i" "$country" $((15 - ${#country})) "" "$ping_ms"
 
         i=$((i+1))
     done <<EOF
