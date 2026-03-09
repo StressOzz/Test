@@ -42,7 +42,7 @@ chose_endpoint() {
         [ -z "$ping_ms" ] && ping_ms="TimeOut"
 
         # Фиксированная ширина 15 символов для страны
-        printf "%2s) %-15s | %s ms\n" "$i" "$country" "$ping_ms"
+        printf "%2s) %-20s | %s ms\n" "$i" "$country" "$ping_ms"
 
         i=$((i+1))
     done <<EOF
