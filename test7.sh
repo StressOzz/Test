@@ -10,6 +10,7 @@ CYAN="\033[1;36m"
 clear
 
 chose_endpoint() {
+
 echo -e "${CYAN}Получаем список Endpoint...${NC}"
 
 EP_LIST="$(curl -fsSL https://raw.githubusercontent.com/STR97/STRUGOV/refs/heads/main/end%20point)" || {
@@ -36,7 +37,12 @@ case "$name" in
 *) country="$name" ;;
 esac
 
-printf "${CYAN}%s) ${GREEN}%s ${MAGENTA}|${CYAN} %s${NC}\n" "$i" "$country" "$ep"
+host="${ep%%:*}"
+
+ping_ms="$(ping -c1 -W1 "$host" 2>/dev/null | awk -F'/' 'END{print $5}')"
+[ -z "$ping_ms" ] && ping_ms="timeout"
+
+printf "${CYAN}%s) ${GREEN}%s ${MAGENTA}|${CYAN} %s ${YELLOW}(%s ms)${NC}\n" "$i" "$country" "$ep" "$ping_ms"
 
 i=$((i+1))
 
@@ -52,7 +58,6 @@ ENDPOINT="$(echo "$EP_LIST" | sed -n "${num}p" | cut -d'|' -f2)"
 
 if [ -z "$ENDPOINT" ]; then
 ENDPOINT="engage.cloudflareclient.com:4500"
-exit 1
 fi
 
 echo
