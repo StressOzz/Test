@@ -21,15 +21,14 @@ exit 1
 echo
 echo -e "${MAGENTA}Выберите страну:${NC}"
 
-# Создаем временные файлы для хранения данных
-TEMP_COUNTRIES=$(mktemp)
-TEMP_HOSTS=$(mktemp)
+# Создаем временные файлы
+TEMP_DATA=$(mktemp)
 TEMP_PINGS=$(mktemp)
 
 i=1
 max_len=0
 
-# Первый проход - собираем данные и определяем максимальную длину названия страны
+# Первый проход - собираем данные и определяем максимальную длину
 while IFS='|' read -r name ep; do
     case "$name" in
     *Текущая*) country="Россия" ;;
@@ -45,9 +44,8 @@ while IFS='|' read -r name ep; do
     
     host="${ep%%:*}"
     
-    # Сохраняем во временные файлы
-    echo "$country" >> "$TEMP_COUNTRIES"
-    echo "$host" >> "$TEMP_HOSTS"
+    # Сохраняем во временный файл
+    echo "$i|$country|$host" >> "$TEMP_DATA"
     
     # Обновляем максимальную длину
     len=${#country}
@@ -60,24 +58,37 @@ EOF
 
 total=$((i-1))
 
-# Второй проход - выводим с выравниванием
+# Второй проход - пингуем и выводим
 j=1
 while [ $j -le $total ]; do
-    # Читаем из временных файлов
-    country=$(sed -n "${j}p" "$TEMP_COUNTRIES")
-    host=$(sed -n "${j}p" "$TEMP_HOSTS")
+    # Читаем строку из временного файла
+    line=$(grep "^$j|" "$TEMP_DATA")
+    country=$(echo "$line" | cut -d'|' -f2)
+    host=$(echo "$line" | cut -d'|' -f3)
     
     ping_ms="$(ping -c1 -W1 "$host" 2>/dev/null | awk -F'/' 'END{print $5}')"
-    [ -z "$ping_ms" ] && ping_ms="TimeOut"
+    [ -z "$ping_ms" ] && ping_ms="Timeout"
     
-    # Выравнивание названий стран
-    printf "${CYAN}%s) ${GREEN}%-${max_len}s ${MAGENTA}| ${YELLOW}%s${NC}\n" "$j" "$country" "$ping_ms"
+    # Сохраняем пинг для последующего вывода
+    echo "$j|$ping_ms" >> "$TEMP_PINGS"
+    
+    j=$((j+1))
+done
+
+# Выводим с выравниванием
+j=1
+while [ $j -le $total ]; do
+    country=$(grep "^$j|" "$TEMP_DATA" | cut -d'|' -f2)
+    ping_ms=$(grep "^$j|" "$TEMP_PINGS" | cut -d'|' -f2)
+    
+    # Форматируем пинг до 10 символов (выравнивание по правому краю)
+    printf "${CYAN}%2s) ${GREEN}%-${max_len}s ${MAGENTA}| ${YELLOW}%10s${NC}\n" "$j" "$country" "$ping_ms"
     
     j=$((j+1))
 done
 
 # Удаляем временные файлы
-rm -f "$TEMP_COUNTRIES" "$TEMP_HOSTS" "$TEMP_PINGS"
+rm -f "$TEMP_DATA" "$TEMP_PINGS"
 
 echo
 printf "${CYAN}Введите номер:${NC} "
