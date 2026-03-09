@@ -11,8 +11,6 @@ clear
 
 chose_endpoint() {
 
-chose_endpoint() {
-
     echo -e "${CYAN}Получаем список Endpoint...${NC}"
 
     EP_LIST="$(curl -fsSL https://raw.githubusercontent.com/STR97/STRUGOV/refs/heads/main/end%20point)" || {
