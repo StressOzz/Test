@@ -11,15 +11,15 @@ clear
 
 chose_endpoint() {
 
-echo -e "${CYAN}Получаем список Endpoint${NC}"
+echo -e "${CYAN}Получаем список ${NC}Endpoint"
 
 EP_LIST="$(curl -fsSL https://raw.githubusercontent.com/STR97/STRUGOV/refs/heads/main/end%20point)" || {
     echo -e "${RED}Не удалось загрузить список Endpoint${NC}"
     exit 1
 }
 
-echo
-echo -e "${MAGENTA}Выберите страну:${NC}"
+
+echo -e "\n${MAGENTA}Выберите страну:${NC}"
 
 i=1
 
@@ -54,8 +54,7 @@ done <<EOF
 $EP_LIST
 EOF
 
-echo
-printf "${YELLOW}Введите номер:${NC} "
+echo -en "\n${YELLOW}Введите номер:${NC} "
 read num
 
 # Проверяем, что введено число и оно в диапазоне
@@ -70,9 +69,7 @@ fi
 echo
 }
 
-
-
-echo -e "${MAGENTA}Генерируем WARP.conf${NC}"
+echo -e "${MAGENTA}Генерируем WARP${NC}"
 
 if command -v apk >/dev/null 2>&1; then
 PKG="apk"
@@ -157,7 +154,7 @@ fi
 chose_endpoint
 ################################################################################################
 
-echo -e "${GREEN}Активируем и генерируем ${NC}WARP${NC}"
+echo -e "\n${GREEN}Активируем и генерируем ${NC}WARP${NC}"
 
 response=$(sec PATCH "reg/${id}" "$token" -d '{"warp_enabled":true}')
 
@@ -199,7 +196,6 @@ echo
 echo -e "${GREEN}========== ${YELLOW}WARP CONFIG${GREEN} ==========${NC}"
 echo "$conf"
 echo -e "${GREEN}=================================${NC}"
-echo
 
 echo "$conf" > /root/WARP.conf
-echo -e "${YELLOW}Файл сохранён:${NC} /root/WARP.conf"
+echo -e "\n${YELLOW}Файл сохранён:${NC} /root/WARP.conf"
