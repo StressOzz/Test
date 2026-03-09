@@ -26,7 +26,7 @@ i=1
 while IFS='|' read -r name ep; do
 
 case "$name" in
-*Текущая*) country="Текущая страна" ;;
+*Текущая*) country="Россия" ;;
 *Нидерланд*) country="Нидерланды" ;;
 *Америка*) country="Америка" ;;
 *Сингапур*) country="Сингапур" ;;
@@ -42,7 +42,7 @@ host="${ep%%:*}"
 ping_ms="$(ping -c1 -W1 "$host" 2>/dev/null | awk -F'/' 'END{print $5}')"
 [ -z "$ping_ms" ] && ping_ms="timeout"
 
-printf "${CYAN}%s) ${GREEN}%s ${MAGENTA}|${CYAN} %s ${YELLOW}(%s ms)${NC}\n" "$i" "$country" "$ep" "$ping_ms"
+printf "${CYAN}%s) ${GREEN}%s ${MAGENTA}|${CYAN} %s ${YELLOW}(%s)${NC}\n" "$i" "$country" "$ep" "$ping_ms"
 
 i=$((i+1))
 
