@@ -22,9 +22,9 @@ chose_endpoint() {
     echo
     echo -e "${MAGENTA}Выберите страну:${NC}"
 
-    # Выводим меню с ровными колонками и ping
     i=1
     while IFS='|' read -r name ep; do
+        # Определяем страну для вывода
         case "$name" in
             *Текущая*) country="Россия" ;;
             *Нидерланд*) country="Нидерланды" ;;
@@ -41,8 +41,8 @@ chose_endpoint() {
         ping_ms="$(ping -c1 -W1 "$host" 2>/dev/null | awk -F'/' 'END{print $5}')"
         [ -z "$ping_ms" ] && ping_ms="TimeOut"
 
-        # Номер + ) + пробел + страна + 15 пробелов от начала строки до |
-        printf "%2s) %s%*s | %s ms\n" "$i" "$country" $((15 - ${#country})) "" "$ping_ms"
+        # Выравниваем: страна до 15-го символа, | ровно на 16-м
+        printf "%2s) %-15s | %s ms\n" "$i" "$country" "$ping_ms"
 
         i=$((i+1))
     done <<EOF
