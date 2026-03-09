@@ -11,7 +11,7 @@ clear
 
 chose_endpoint() {
 
-echo -e "${CYAN}Получаем список Endpoint...${NC}"
+echo -e "${CYAN}Получаем список Endpoint${NC}"
 
 EP_LIST="$(curl -fsSL https://raw.githubusercontent.com/STR97/STRUGOV/refs/heads/main/end%20point)" || {
     echo -e "${RED}Не удалось загрузить список Endpoint${NC}"
@@ -83,7 +83,7 @@ echo -e "${RED}Не найден пакетный менеджер!${NC}"
 exit 1
 fi
 
-echo -e "${CYAN}Обновляем пакеты...${NC}"
+echo -e "${CYAN}Обновляем пакеты${NC}"
 
 if [ "$PKG" = "apk" ]; then
 apk update >/dev/null 2>&1 || {
@@ -117,13 +117,13 @@ exit 1
 fi
 }
 
-echo -e "${CYAN}Проверяем зависимости...${NC}"
+echo -e "${CYAN}Проверяем зависимости${NC}"
 
 for pkg in wireguard-tools curl jq coreutils-base64; do
 install_pkg "$pkg"
 done
 
-echo -e "${YELLOW}Генерируем ключи...${NC}"
+echo -e "${CYAN}Генерируем ключи${NC}"
 priv="$(wg genkey)"
 pub="$(printf "%s" "$priv" | wg pubkey)"
 
@@ -140,7 +140,7 @@ sec() {
 ins "$1" "$2" -H "Authorization: Bearer $3" "${@:4}"
 }
 
-echo -e "${CYAN}Регистрируем устройство в Cloudflare...${NC}"
+echo -e "${CYAN}Регистрируем устройство в ${NC}Cloudflare"
 
 response=$(ins POST "reg" \
 -d "{\"install_id\":\"\",\"tos\":\"$(date -u +%FT%TZ)\",\"key\":\"${pub}\",\"fcm_token\":\"\",\"type\":\"ios\",\"locale\":\"en_US\"}")
@@ -157,7 +157,7 @@ fi
 chose_endpoint
 ################################################################################################
 
-echo -e "${GREEN}Активируем WARP...${NC}"
+echo -e "${GREEN}Активируем и генерируем ${NC}WARP${NC}"
 
 response=$(sec PATCH "reg/${id}" "$token" -d '{"warp_enabled":true}')
 
