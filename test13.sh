@@ -68,7 +68,6 @@ EOF
 
     echo -e "${GREEN}Выбрана страна:${NC} $CHOSEN_COUNTRY"
     echo
-    
 }
 
 
