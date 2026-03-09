@@ -4,11 +4,12 @@ SCRIPT_VERSION="v0.1.2-alpha"
 
 MT_VERSION="0.5.3"
 MT_PRE_APK="pre20260305232358"
+MT_PRE_IPK="~git20260305232358.d47bd8b3"
 
 ARCH=$(grep "^OPENWRT_ARCH=" /etc/os-release | cut -d'"' -f2)
 URL="https://gitlab.com/magitrickle/magitrickle/-/jobs/13378493545/artifacts/raw/.build/"
 APK="magitrickle_${MT_VERSION}_${MT_PRE_APK}-r1_openwrt_${ARCH}.apk"
-IPK="magitrickle_${MT_VERSION}_${MT_PRE_APK}-r1_openwrt_${ARCH}.ipk"
+IPK="magitrickle_${MT_VERSION}${MT_PRE_APK}-1_openwrt_${ARCH}.ipk"
 
 URL_APK="$URL$APK"
 URL_IPK="$URL$IPK"
