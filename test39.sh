@@ -1,4 +1,3 @@
-ВОТ ЧТО ПОЛУЧИЛОСЬ !
 #!/bin/sh
 
 GREEN='\033[0;32m'
@@ -12,58 +11,59 @@ clear
 
 chose_endpoint() {
 
-    echo -e "${CYAN}Получаем список Endpoint...${NC}"
+echo -e "${CYAN}Получаем список Endpoint...${NC}"
 
-    TMP_FILE="$(mktemp)"
-    curl -fsSL https://raw.githubusercontent.com/STR97/STRUGOV/refs/heads/main/end%20point -o "$TMP_FILE" || {
-        echo -e "${RED}Не удалось загрузить список Endpoint${NC}"
-        exit 1
-    }
+EP_LIST="$(curl -fsSL https://raw.githubusercontent.com/STR97/STRUGOV/refs/heads/main/end%20point)" || {
+echo -e "${RED}Не удалось загрузить список Endpoint${NC}"
+exit 1
+}
 
-    # 1. Собираем массив стран и пингов
-    i=0
-    MAX_LEN=0
-    while IFS='|' read -r name ep; do
-        case "$name" in
-            *Текущая*) country="Россия" ;;
-            *Нидерланд*) country="Нидерланды" ;;
-            *Америка*) country="Америка" ;;
-            *Сингапур*) country="Сингапур" ;;
-            *Латвия*) country="Латвия" ;;
-            *Герман*) country="Германия" ;;
-            *Литва*) country="Литва" ;;
-            *Финлянд*) country="Финляндия" ;;
-            *) country="$name" ;;
-        esac
+echo
+echo -e "${MAGENTA}Выберите страну:${NC}"
 
-        host="${ep%%:*}"
-        ping_ms="$(ping -c1 -W1 "$host" 2>/dev/null | awk -F'/' 'END{print $5}')"
-        [ -z "$ping_ms" ] && ping_ms="TimeOut"
+i=1
 
-        COUNTRIES[i]="$country"
-        PINGS[i]="$ping_ms"
+while IFS='|' read -r name ep; do
 
-        len=${#country}
-        [ "$len" -gt "$MAX_LEN" ] && MAX_LEN=$len
+case "$name" in
+*Текущая*) country="Россия" ;;
+*Нидерланд*) country="Нидерланды" ;;
+*Америка*) country="Америка" ;;
+*Сингапур*) country="Сингапур" ;;
+*Латвия*) country="Латвия" ;;
+*Герман*) country="Германия" ;;
+*Литва*) country="Литва" ;;
+*Финлянд*) country="Финляндия" ;;
+*) country="$name" ;;
+esac
 
-        i=$((i+1))
-    done < "$TMP_FILE"
+host="${ep%%:*}"
 
-    # 2. Выводим ровную таблицу
-    echo -e "${MAGENTA}Страна          | Ping${NC}"
-    echo "----------------+--------"
-    for idx in "${!COUNTRIES[@]}"; do
-        printf "%-*s | %s ms\n" "$MAX_LEN" "${COUNTRIES[idx]}" "${PINGS[idx]}"
-    done
+ping_ms="$(ping -c1 -W1 "$host" 2>/dev/null | awk -F'/' 'END{print $5}')"
+[ -z "$ping_ms" ] && ping_ms="TimeOut"
 
-    rm -f "$TMP_FILE"
-    echo
+printf "${CYAN}%s) ${GREEN}%s ${MAGENTA}| ${YELLOW}%s${NC}\n" "$i" "$country" "$ping_ms"
+
+i=$((i+1))
+
+done <<EOF
+$EP_LIST
+EOF
+
+echo
+printf "${CYAN}Введите номер:${NC} "
+read num
+
+ENDPOINT="$(echo "$EP_LIST" | sed -n "${num}p" | cut -d'|' -f2)"
+
+if [ -z "$ENDPOINT" ]; then
+ENDPOINT="engage.cloudflareclient.com:4500"
+fi
+
+echo
 }
 
 
-
-
-#######################################################################################################################################
 
 echo -e "${MAGENTA}Генерируем WARP.conf${NC}"
 
