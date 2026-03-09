@@ -36,7 +36,7 @@ case "$name" in
 *) country="$name" ;;
 esac
 
-printf "%s) %s | %s\n" "$i" "$country" "$ep"
+printf "${CYAN}%s) ${GREEN}%s ${MAGENTA}|${CYAN} %s${NC}\n" "$i" "$country" "$ep"
 
 i=$((i+1))
 
