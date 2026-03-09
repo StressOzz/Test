@@ -18,7 +18,7 @@ exit 1
 }
 
 echo
-echo -e "${YELLOW}Выберите страну:${NC}"
+echo -e "${MAGENTA}Выберите страну:${NC}"
 
 i=1
 ENDPOINTS=""
@@ -27,7 +27,7 @@ COUNTRIES=""
 while IFS='|' read -r name ep; do
 
 case "$name" in
-*Текущая страна*) country="Россия" ;;
+*Текущая*) country="Текущая страна" ;;
 *Нидерланд*) country="Нидерланды" ;;
 *Америка*) country="Америка" ;;
 *Сингапур*) country="Сингапур" ;;
@@ -53,13 +53,14 @@ $EP_LIST
 EOF
 
 echo
-echo -en "${YELLOW}Введите номер:${NC} "
+printf "${CYAN}Введите номер:${NC} "
 read num
 
 ENDPOINT="$(echo "$ENDPOINTS" | sed -n "${num}p")"
 
 if [ -z "$ENDPOINT" ]; then
-ENDPOINT="engage.cloudflareclient.com:4500"
+echo -e "${RED}Неверный выбор${NC}"
+exit 1
 fi
 
 echo -e "${GREEN}Выбран Endpoint:${NC} $ENDPOINT"
