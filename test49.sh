@@ -42,7 +42,7 @@ while IFS='|' read -r name ep; do
 ping_ms="$(ping -c1 -W1 "$host" 2>/dev/null | awk -F'/' 'END{print $5}')"
 [ -z "$ping_ms" ] && ping_ms="TimeOut"
 
-if [ "$ping_ms" = "TimeOut" ]; then
+if [ "$ping_ms" = "FAIL" ]; then
     printf "${CYAN}%2d) ${GREEN}%s ${MAGENTA}| ${RED}%s${NC}\n" "$i" "$country" "$ping_ms"
 else
     printf "${CYAN}%2d) ${GREEN}%s ${MAGENTA}| ${YELLOW}%s${NC}\n" "$i" "$country" "$ping_ms"
