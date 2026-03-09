@@ -42,7 +42,7 @@ host="${ep%%:*}"
 ping_ms="$(ping -c1 -W1 "$host" 2>/dev/null | awk -F'/' 'END{print $5}')"
 [ -z "$ping_ms" ] && ping_ms="${CYAN}FAIL${NC}\"
 
-printf "${CYAN}%s) ${GREEN}%s ${MAGENTA}|${YELLOW}(%s)${NC}\n" "$i" "$country" "$ping_ms"
+printf "${CYAN}%s) ${GREEN}%s ${MAGENTA}| ${YELLOW}(%s ms)${NC}\n" "$i" "$country" "$ping_ms"
 
 i=$((i+1))
 
