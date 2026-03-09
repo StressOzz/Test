@@ -21,7 +21,7 @@ chose_endpoint() {
     echo
     echo -e "${MAGENTA}Выберите страну:${NC}"
 
-    # Сначала собираем список стран в массив
+    # Собираем список стран в массив
     COUNTRIES=()
     while IFS='|' read -r name ep; do
         case "$name" in
@@ -40,17 +40,22 @@ chose_endpoint() {
 $EP_LIST
 EOF
 
-    # Находим максимальную длину строки
+    # Находим максимальную длину страны
     MAX_LEN=0
     for c in "${COUNTRIES[@]}"; do
         len=${#c}
         [ "$len" -gt "$MAX_LEN" ] && MAX_LEN=$len
     done
 
-    # Выводим красиво с ровным |
+    # Ширина для номера (кол-во цифр у последнего номера)
+    TOTAL_NUM=${#COUNTRIES[@]}
+    NUM_WIDTH=${#TOTAL_NUM}
+
+    # Выводим аккуратно с ровным |
     i=1
     for c in "${COUNTRIES[@]}"; do
-        printf "%s) %-*s | \n" "$i" "$MAX_LEN" "$c"
+        # Используем обычное printf с заранее вычисленной шириной
+        printf "%*d) %-*s | \n" "$NUM_WIDTH" "$i" "$MAX_LEN" "$c"
         i=$((i+1))
     done
 
@@ -58,7 +63,6 @@ EOF
     printf "${CYAN}Введите номер:${NC} "
     read num
 
-    # Выбираем страну (можно потом использовать для логики)
     CHOSEN_COUNTRY="${COUNTRIES[$((num-1))]}"
 
     if [ -z "$CHOSEN_COUNTRY" ]; then
