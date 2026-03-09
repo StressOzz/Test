@@ -5,7 +5,7 @@ GREEN='\033[0;32m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
-log() { echo -e "${GREEN}-->${CYAN} $*${NС}"; }
+log() { echo -e "${GREEN}-->${CYAN} $*${NC}"; }
 
 PKG_REMOVE=""
 if command -v apk >/dev/null 2>&1; then
