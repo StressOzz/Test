@@ -14,8 +14,8 @@ chose_endpoint() {
 echo -e "${CYAN}Получаем список Endpoint...${NC}"
 
 EP_LIST="$(curl -fsSL https://raw.githubusercontent.com/STR97/STRUGOV/refs/heads/main/end%20point)" || {
-echo -e "${RED}Не удалось загрузить список Endpoint${NC}"
-exit 1
+    echo -e "${RED}Не удалось загрузить список Endpoint${NC}"
+    exit 1
 }
 
 echo
@@ -25,26 +25,27 @@ i=1
 
 while IFS='|' read -r name ep; do
 
-case "$name" in
-*Текущая*) country="Россия    " ;;
-*Нидерланд*) country="Нидерланды" ;;
-*Америка*) country="Америка   " ;;
-*Сингапур*) country="Сингапур  " ;;
-*Латвия*) country="Латвия    " ;;
-*Герман*) country="Германия  " ;;
-*Литва*) country="Литва     " ;;
-*Финлянд*) country="Финляндия " ;;
-*) country="$name" ;;
-esac
+    case "$name" in
+        *Текущая*) country="Россия    " ;;
+        *Нидерланд*) country="Нидерланды" ;;
+        *Америка*) country="Америка   " ;;
+        *Сингапур*) country="Сингапур  " ;;
+        *Латвия*) country="Латвия    " ;;
+        *Герман*) country="Германия  " ;;
+        *Литва*) country="Литва     " ;;
+        *Финлянд*) country="Финляндия " ;;
+        *) country="$name" ;;
+    esac
 
-host="${ep%%:*}"
+    host="${ep%%:*}"
 
-ping_ms="$(ping -c1 -W1 "$host" 2>/dev/null | awk -F'/' 'END{print $5}')"
-[ -z "$ping_ms" ] && ping_ms="TimeOut"
+    ping_ms="$(ping -c1 -W1 "$host" 2>/dev/null | awk -F'/' 'END{print $5}')"
+    [ -z "$ping_ms" ] && ping_ms="TimeOut"
 
-printf "${CYAN}%s) ${GREEN}%s ${MAGENTA}| ${YELLOW}%s${NC}\n" "$i" "$country" "$ping_ms"
+    # Один пробел перед номером для 1–9
+    printf " %s) %-11s | %s\n" "$i" "$country" "$ping_ms"
 
-i=$((i+1))
+    i=$((i+1))
 
 done <<EOF
 $EP_LIST
@@ -57,7 +58,7 @@ read num
 ENDPOINT="$(echo "$EP_LIST" | sed -n "${num}p" | cut -d'|' -f2)"
 
 if [ -z "$ENDPOINT" ]; then
-ENDPOINT="engage.cloudflareclient.com:4500"
+    ENDPOINT="engage.cloudflareclient.com:4500"
 fi
 
 echo
