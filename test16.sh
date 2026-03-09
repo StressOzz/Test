@@ -11,60 +11,56 @@ clear
 
 chose_endpoint() {
 
-    echo -e "${CYAN}Получаем список Endpoint...${NC}"
+echo -e "${CYAN}Получаем список Endpoint...${NC}"
 
-    EP_LIST="$(curl -fsSL https://raw.githubusercontent.com/STR97/STRUGOV/refs/heads/main/end%20point)" || {
-        echo -e "${RED}Не удалось загрузить список Endpoint${NC}"
-        exit 1
-    }
+EP_LIST="$(curl -fsSL https://raw.githubusercontent.com/STR97/STRUGOV/refs/heads/main/end%20point)" || {
+echo -e "${RED}Не удалось загрузить список Endpoint${NC}"
+exit 1
+}
 
-    echo
-    echo -e "${MAGENTA}Выберите страну:${NC}"
+echo
+echo -e "${MAGENTA}Выберите страну:${NC}"
 
-    # Сначала формируем список стран и находим макс длину
-    MAX_LEN=0
-    LINES=""
-    i=1
-    echo "$EP_LIST" | while IFS='|' read -r name ep; do
-        case "$name" in
-            *Текущая*) country="Текущая страна" ;;
-            *Нидерланд*) country="Нидерланды" ;;
-            *Америка*) country="Америка" ;;
-            *Сингапур*) country="Сингапур" ;;
-            *Латвия*) country="Латвия" ;;
-            *Герман*) country="Германия" ;;
-            *Литва*) country="Литва" ;;
-            *Финлянд*) country="Финляндия" ;;
-            *) country="$name" ;;
-        esac
-        # Найти максимальную длину страны
-        len=${#country}
-        [ "$len" -gt "$MAX_LEN" ] && MAX_LEN=$len
-        # Собираем строки с номерами
-        LINES="$LINES
-$i|$country"
-        i=$((i+1))
-    done
+i=1
 
-    # Выводим красиво с ровным |
-    echo "$LINES" | while IFS='|' read -r num country; do
-        printf "%2s) %-*s | \n" "$num" "$MAX_LEN" "$country"
-    done
+while IFS='|' read -r name ep; do
 
-    echo
-    printf "${CYAN}Введите номер:${NC} "
-    read num
+case "$name" in
+*Текущая*) country="Текущая страна" ;;
+*Нидерланд*) country="Нидерланды" ;;
+*Америка*) country="Америка" ;;
+*Сингапур*) country="Сингапур" ;;
+*Латвия*) country="Латвия" ;;
+*Герман*) country="Германия" ;;
+*Литва*) country="Литва" ;;
+*Финлянд*) country="Финляндия" ;;
+*) country="$name" ;;
+esac
 
-    # Выбираем страну
-    CHOSEN_COUNTRY="$(echo "$LINES" | awk -F'|' -v n="$num" '$1==n {print $2}')"
+host="${ep%%:*}"
 
-    if [ -z "$CHOSEN_COUNTRY" ]; then
-        echo -e "${RED}Неверный выбор${NC}"
-        exit 1
-    fi
+ping_ms="$(ping -c1 -W1 "$host" 2>/dev/null | awk -F'/' 'END{print $5}')"
+[ -z "$ping_ms" ] && ping_ms="timeout"
 
-    echo -e "${GREEN}Выбрана страна:${NC} $CHOSEN_COUNTRY"
-    echo
+printf "${CYAN}%s) ${GREEN}%s ${MAGENTA}| ${YELLOW}(%s ms)${NC}\n" "$i" "$country" "$ping_ms"
+
+i=$((i+1))
+
+done <<EOF
+$EP_LIST
+EOF
+
+echo
+printf "${CYAN}Введите номер:${NC} "
+read num
+
+ENDPOINT="$(echo "$EP_LIST" | sed -n "${num}p" | cut -d'|' -f2)"
+
+if [ -z "$ENDPOINT" ]; then
+ENDPOINT="engage.cloudflareclient.com:4500"
+fi
+
+echo
 }
 
 
