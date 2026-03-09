@@ -55,13 +55,16 @@ $EP_LIST
 EOF
 
 echo
-printf "${CYAN}Введите номер:${NC} "
+printf "${YELLOW}Введите номер:${NC} "
 read num
 
-ENDPOINT="$(echo "$EP_LIST" | sed -n "${num}p" | cut -d'|' -f2)"
-
-if [ -z "$ENDPOINT" ]; then
+# Проверяем, что введено число и оно в диапазоне
+MAX_NUM=$(echo "$EP_LIST" | wc -l)
+if ! printf '%s' "$num" | grep -qE '^[0-9]+$' || [ "$num" -lt 1 ] || [ "$num" -gt "$MAX_NUM" ]; then
     ENDPOINT="engage.cloudflareclient.com:4500"
+else
+    ENDPOINT="$(echo "$EP_LIST" | sed -n "${num}p" | cut -d'|' -f2)"
+    [ -z "$ENDPOINT" ] && ENDPOINT="engage.cloudflareclient.com:4500"
 fi
 
 echo
