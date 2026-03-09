@@ -7,12 +7,9 @@ MT_PRE_APK="pre20260305232358-r1"
 MT_PRE_IPK="~git20260305232358.d47bd8b3-1"
 
 ARCH=$(grep "^OPENWRT_ARCH=" /etc/os-release | cut -d'"' -f2)
-URL="https://gitlab.com/magitrickle/magitrickle/-/jobs/13378493545/artifacts/raw/.build/"
-APK="magitrickle_${MT_VERSION}_${MT_PRE_APK}_openwrt_${ARCH}.apk"
-IPK="magitrickle_${MT_VERSION}${MT_PRE_IPK}_openwrt_${ARCH}.ipk"
 
-URL_APK="$URL$APK"
-URL_IPK="$URL$IPK"
+URL_APK="https://gitlab.com/magitrickle/magitrickle/-/jobs/13378493545/artifacts/raw/.build/magitrickle_${MT_VERSION}_${MT_PRE_APK}_openwrt_${ARCH}.apk"
+URL_IPK="https://gitlab.com/magitrickle/magitrickle/-/jobs/13378493545/artifacts/raw/.build/magitrickle_${MT_VERSION}${MT_PRE_IPK}_openwrt_${ARCH}.ipk"
 
 MIHOMO_INSTALL_DIR="/etc/mihomo"
 MIHOMO_BIN="/usr/bin/mihomo"
