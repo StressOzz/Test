@@ -14,7 +14,8 @@ chose_endpoint() {
 
     echo -e "${CYAN}Получаем список Endpoint...${NC}"
 
-    EP_LIST="$(curl -fsSL https://raw.githubusercontent.com/STR97/STRUGOV/refs/heads/main/end%20point)" || {
+    TMP_FILE="$(mktemp)"
+    curl -fsSL https://raw.githubusercontent.com/STR97/STRUGOV/refs/heads/main/end%20point -o "$TMP_FILE" || {
         echo -e "${RED}Не удалось загрузить список Endpoint${NC}"
         exit 1
     }
@@ -22,9 +23,10 @@ chose_endpoint() {
     echo
     echo -e "${MAGENTA}Выберите страну:${NC}"
 
+    # 1. Сначала определяем страны для вывода и максимальную длину
+    MAX_LEN=0
     i=1
     while IFS='|' read -r name ep; do
-        # Определяем страну для вывода
         case "$name" in
             *Текущая*) country="Россия" ;;
             *Нидерланд*) country="Нидерланды" ;;
@@ -36,44 +38,29 @@ chose_endpoint() {
             *Финлянд*) country="Финляндия" ;;
             *) country="$name" ;;
         esac
+        echo "$i|$country|$ep" >> "${TMP_FILE}.parsed"
+        len=${#country}
+        [ "$len" -gt "$MAX_LEN" ] && MAX_LEN=$len
+        i=$((i+1))
+    done < "$TMP_FILE"
 
+    # 2. Выводим меню
+    while IFS='|' read -r num country ep; do
         host="${ep%%:*}"
         ping_ms="$(ping -c1 -W1 "$host" 2>/dev/null | awk -F'/' 'END{print $5}')"
         [ -z "$ping_ms" ] && ping_ms="TimeOut"
-
-        # Выводим номер и страну
-        printf "%2s) %s" "$i" "$country"
-        
-        # В РУЧНУЮ добавляем пробелы до 25 символов (чтобы точно хватило)
-        case "$country" in
-            "Россия") echo -n "                   " ;;  # 19 пробелов
-            "Америка") echo -n "                   " ;;  # 19 пробелов
-            "Латвия") echo -n "                    " ;;  # 20 пробелов
-            "Литва") echo -n "                     " ;;  # 21 пробел
-            "Германия") echo -n "                 " ;;    # 17 пробелов
-            "Сингапур") echo -n "                 " ;;    # 17 пробелов
-            "Нидерланды") echo -n "               " ;;    # 15 пробелов
-            "Финляндия") echo -n "                " ;;    # 16 пробелов
-            *) echo -n "                         " ;;     # 25 пробелов по умолчанию
-        esac
-        
-        # Выводим | и пинг
-        echo "| $ping_ms ms"
-
-        i=$((i+1))
-    done <<EOF
-$EP_LIST
-EOF
+        printf "%2s) %-*s | %s ms\n" "$num" "$MAX_LEN" "$country" "$ping_ms"
+    done < "${TMP_FILE}.parsed"
 
     echo
     printf "${CYAN}Введите номер:${NC} "
-    read num
+    read sel
 
-    ENDPOINT="$(echo "$EP_LIST" | sed -n "${num}p" | cut -d'|' -f2)"
+    ENDPOINT="$(awk -F'|' -v n="$sel" '$1==n {print $3}' "${TMP_FILE}.parsed")"
+    [ -z "$ENDPOINT" ] && ENDPOINT="engage.cloudflareclient.com:4500"
 
-    if [ -z "$ENDPOINT" ]; then
-        ENDPOINT="engage.cloudflareclient.com:4500"
-    fi
+    # Убираем временные файлы
+    rm -f "$TMP_FILE" "${TMP_FILE}.parsed"
 
     echo
 }
