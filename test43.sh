@@ -33,17 +33,18 @@ while IFS='|' read -r name ep; do
         *Латвия*) country="Латвия    " ;;
         *Герман*) country="Германия  " ;;
         *Литва*) country="Литва     " ;;
-        *Финлянд*) country="Финляндия" ;;
+        *Финлянд*) country="Финляндия " ;;
         *) country="$name" ;;
     esac
 
     host="${ep%%:*}"
 
     ping_ms="$(ping -c1 -W1 "$host" 2>/dev/null | awk -F'/' 'END{print $5}')"
-    [ -z "$ping_ms" ] && ping_ms="TimeOut"
-
-    # Один пробел перед номером для 1–9
-    printf "%2d) %s | %s ms\n" "$i" "$country" "$ping_ms"
+if [ "$ping_ms" = "TimeOut" ]; then
+    printf "${CYAN}%2d) ${GREEN}%s ${MAGENTA}| ${RED}%s${NC}\n" "$i" "$country" "$ping_ms"
+else
+    printf "${CYAN}%2d) ${GREEN}%s ${MAGENTA}| ${YELLOW}%s${NC}\n" "$i" "$country" "$ping_ms"
+fi
 
     i=$((i+1))
 
