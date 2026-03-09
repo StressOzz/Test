@@ -56,13 +56,24 @@ $PKG_REMOVE magitrickle_mod >/dev/null 2>&1 || true
 $PKG_REMOVE magitrickle >/dev/null 2>&1 || true
 $PKG_REMOVE kmod-nft-tproxy >/dev/null 2>&1 || true
 
+log "Clean policy routing"
+ip rule del fwmark 0x1 lookup 100 2>/dev/null || true
+ip rule del fwmark 0x1 lookup 200 2>/dev/null || true
+ip route flush table 100 2>/dev/null || true
+ip route flush table 200 2>/dev/null || true
+ip route flush cache 2>/dev/null || true
+
+log "Clean nftables leftovers"
+nft flush table inet mihomo 2>/dev/null || true
+nft delete table inet mihomo 2>/dev/null || true
+
 log "Clear LuCI cache"
 rm -rf /tmp/luci-indexcache /tmp/luci-modulecache 2>/dev/null || true
 /etc/init.d/rpcd restart >/dev/null 2>&1 || true
 /etc/init.d/uhttpd restart >/dev/null 2>&1 || true
 
-log "Reload network/firewall"
-/etc/init.d/network restart >/dev/null 2>&1 || true
+log "Reload firewall/network"
 /etc/init.d/firewall restart >/dev/null 2>&1 || true
+/etc/init.d/network restart >/dev/null 2>&1 || true
 
 log "Done."
