@@ -1,9 +1,6 @@
 #!/bin/sh
 
 EP_LIST='Россия    |engage.cloudflareclient.com:4500
-Нидерланды|45.84.222.208:4500
-Америка   |usa-pop.astracat.ru:4500
-Сингапур  |5.34.176.170:4500
 Латвия    |150.241.75.91:4500
 Германия  |de.tribukvy.ltd:4501
 Литва     |lt.tribukvy.ltd:4501
@@ -29,20 +26,19 @@ TMP_FILE=$(mktemp)
 
 while IFS='|' read -r country ep; do
 (
-    host="${ep%%:*}"
+host="${ep%%:*}"
 
-    ping_ms="$(ping -c1 -W1 "$host" 2>/dev/null | awk -F'/' 'END{print int($5)}')"
+ping_ms="$(ping -c1 -W1 "$host" 2>/dev/null | awk -F'/' 'END{print int($5)}')"
 
-    if [ -z "$ping_ms" ] || [ "$ping_ms" -eq 0 ]; then
-        ping_val="FAIL"
-        ping_sort=9999
-    else
-        ping_val="${ping_ms} ms"
-        ping_sort="$ping_ms"
-    fi
+if [ -z "$ping_ms" ] || [ "$ping_ms" -eq 0 ]; then
+ping_val="FAIL"
+ping_sort=9999
+else
+ping_val="${ping_ms} ms"
+ping_sort="$ping_ms"
+fi
 
-    # сортировка|страна|endpoint|ping
-    echo "${ping_sort}|${country}|${ep}|${ping_val}" >> "$TMP_FILE"
+echo "${ping_sort}|${country}|${ep}|${ping_val}" >> "$TMP_FILE"
 ) &
 done <<EOF
 $EP_LIST
