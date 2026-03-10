@@ -26,36 +26,33 @@ chose_endpoint() {
 echo -e "\n${MAGENTA}Выберите страну:${NC}"
 
 TMP_FILE=$(mktemp)
-i=1
 
-# Параллельный пинг для ускорения
 while IFS='|' read -r country ep; do
-    (
-        host="${ep%%:*}"
-        ping_ms="$(ping -c1 -W1 "$host" 2>/dev/null | awk -F'/' 'END{print int($5)}')"
+(
+    host="${ep%%:*}"
 
-        if [ -z "$ping_ms" ] || [ "$ping_ms" -eq 0 ]; then
-            ping_val="FAIL"
-            ping_sort=9999
-        else
-            ping_val="${ping_ms} ms"
-            ping_sort="$ping_ms"
-        fi
+    ping_ms="$(ping -c1 -W1 "$host" 2>/dev/null | awk -F'/' 'END{print int($5)}')"
 
-        # Формат: сортировка|страна|endpoint|display
-        echo -e "${ping_sort}|${country}|${ep}|${ping_val}" >> "$TMP_FILE"
-    ) &
+    if [ -z "$ping_ms" ] || [ "$ping_ms" -eq 0 ]; then
+        ping_val="FAIL"
+        ping_sort=9999
+    else
+        ping_val="${ping_ms} ms"
+        ping_sort="$ping_ms"
+    fi
+
+    # сортировка|страна|endpoint|ping
+    echo "${ping_sort}|${country}|${ep}|${ping_val}" >> "$TMP_FILE"
+) &
 done <<EOF
 $EP_LIST
 EOF
 
-wait  # ждем все пинги
+wait
 
-# Сортируем по ping
 SORTED_LIST=$(sort -t'|' -k1n "$TMP_FILE")
 rm -f "$TMP_FILE"
 
-# Вывод в привычном стиле
 i=1
 echo "$SORTED_LIST" | while IFS='|' read -r ping_sort country ep ping_val; do
 
@@ -72,20 +69,21 @@ echo "$SORTED_LIST" | while IFS='|' read -r ping_sort country ep ping_val; do
         fi
     fi
 
-    printf "${CYAN}%2d) ${GREEN}%s ${MAGENTA}| ${color}%s${NC}\n" "$i" "$country" "$ping_val"
-    i=$((i+1))
+printf "${CYAN}%2d) ${GREEN}%-10s ${MAGENTA}| ${color}%-7s ${MAGENTA}| ${CYAN}%s${NC}\n" "$i" "$country" "$ping_val" "$ep"
+
+i=$((i+1))
 done
 
-# Выбор номера
 echo -en "\n${YELLOW}Введите номер:${NC} "
 read num
+
 MAX_NUM=$(echo "$SORTED_LIST" | wc -l)
 
 if ! printf '%s' "$num" | grep -qE '^[0-9]+$' || [ "$num" -lt 1 ] || [ "$num" -gt "$MAX_NUM" ]; then
-    ENDPOINT="engage.cloudflareclient.com:4500"
+ENDPOINT="engage.cloudflareclient.com:4500"
 else
-    ENDPOINT="$(echo "$SORTED_LIST" | sed -n "${num}p" | cut -d'|' -f3)"
-    [ -z "$ENDPOINT" ] && ENDPOINT="engage.cloudflareclient.com:4500"
+ENDPOINT="$(echo "$SORTED_LIST" | sed -n "${num}p" | cut -d'|' -f3)"
+[ -z "$ENDPOINT" ] && ENDPOINT="engage.cloudflareclient.com:4500"
 fi
 
 echo
