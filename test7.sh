@@ -24,7 +24,10 @@ clear
 chose_endpoint() {
 
 echo -e "\n${MAGENTA}Выберите страну:${NC}"
+
 i=1
+
+while IFS='|' read -r country ep; do
 
 host="${ep%%:*}"
 
@@ -48,7 +51,9 @@ printf "${CYAN}%2d) ${GREEN}%s ${MAGENTA}| ${color}%s${NC}\n" "$i" "$country" "$
 
 i=$((i+1))
 
-done
+done <<EOF
+$EP_LIST
+EOF
 
 echo -en "\n${YELLOW}Введите номер:${NC} "
 read num
