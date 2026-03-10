@@ -1,7 +1,6 @@
 #!/bin/sh
 
-EP_LIST='
-Россия    |engage.cloudflareclient.com:4500
+EP_LIST='Россия    |engage.cloudflareclient.com:4500
 Нидерланды|45.84.222.208:4500
 Америка   |usa-pop.astracat.ru:4500
 Сингапур  |5.34.176.170:4500
@@ -11,8 +10,7 @@ EP_LIST='
 Нидерланды|nl3.tribukvy.ltd:4501
 Нидерланды|nl0.tribukvy.ltd:4501
 Финляндия |fi.tribukvy.ltd:4501
-Финляндия |fi0.tribukvy.ltd:4501
-'
+Финляндия |fi0.tribukvy.ltd:4501'
 
 GREEN='\033[0;32m'
 RED='\033[0;31m'
