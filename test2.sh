@@ -23,9 +23,7 @@ clear
 
 chose_endpoint() {
 
-echo -e "${CYAN}Список Endpoint${NC}"
-
-echo
+echo -e "\n${MAGENTA}Выберите страну:${NC}"
 i=1
 
 echo "$EP_LIST" | while IFS='|' read -r country ep; do
