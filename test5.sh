@@ -33,7 +33,7 @@ host="${ep%%:*}"
 ping_ms="$(ping -c1 -W1 "$host" 2>/dev/null | awk -F'/' 'END{print int($5)}')"
 
 if [ -z "$ping_ms" ]; then
-    ping_ms="FAIL"
+    ping_val="FAIL"
     color="$RED"
 else
     if [ "$ping_ms" -lt 50 ]; then
@@ -43,9 +43,11 @@ else
     else
         color="$RED"
     fi
+    ping_val="${ping_ms} ms"
 fi
 
-printf "${CYAN}%2d) ${GREEN}%s ${MAGENTA}| ${color}%s${NC}\n" "$i" "$country" "$ping_ms"
+printf "${CYAN}%2d) ${GREEN}%s ${MAGENTA}| ${color}%s${NC}\n" "$i" "$country" "$ping_val"
+
 i=$((i+1))
 
 done
