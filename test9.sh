@@ -25,53 +25,40 @@ chose_endpoint() {
 
 echo -e "\n${MAGENTA}Выберите страну:${NC}"
 
-EP_LIST='Россия|engage.cloudflareclient.com:4500
-Нидерланды|45.84.222.208:4500
-Америка|usa-pop.astracat.ru:4500
-Сингапур|5.34.176.170:4500
-Латвия|150.241.75.91:4500
-Германия|de.tribukvy.ltd:4501
-Литва|lt.tribukvy.ltd:4501
-Нидерланды|nl3.tribukvy.ltd:4501
-Нидерланды|nl0.tribukvy.ltd:4501
-Финляндия|fi.tribukvy.ltd:4501
-Финляндия|fi0.tribukvy.ltd:4501'
-
-# Массив для временного хранения результатов
 TMP_FILE=$(mktemp)
+i=1
 
+# Параллельный пинг для ускорения
 while IFS='|' read -r country ep; do
-    host="${ep%%:*}"
-    ping_ms="$(ping -c1 -W1 "$host" 2>/dev/null | awk -F'/' 'END{print int($5)}')"
+    (
+        host="${ep%%:*}"
+        ping_ms="$(ping -c1 -W1 "$host" 2>/dev/null | awk -F'/' 'END{print int($5)}')"
 
-    if [ -z "$ping_ms" ] || [ "$ping_ms" -eq 0 ]; then
-        ping_val="FAIL"
-        ping_sort=9999
-    else
-        ping_val="${ping_ms} ms"
-        ping_sort="$ping_ms"
-    fi
+        if [ -z "$ping_ms" ] || [ "$ping_ms" -eq 0 ]; then
+            ping_val="FAIL"
+            ping_sort=9999
+        else
+            ping_val="${ping_ms} ms"
+            ping_sort="$ping_ms"
+        fi
 
-    # Записываем в файл для сортировки: ping_sort|страна|endpoint|display
-    echo -e "${ping_sort}|${country}|${ep}|${ping_val}" >> "$TMP_FILE"
-
+        # Формат: сортировка|страна|endpoint|display
+        echo -e "${ping_sort}|${country}|${ep}|${ping_val}" >> "$TMP_FILE"
+    ) &
 done <<EOF
 $EP_LIST
 EOF
 
-# Сортируем по ping_sort
-SORTED_LIST=$(sort -t'|' -k1n "$TMP_FILE")
+wait  # ждем все пинги
 
+# Сортируем по ping
+SORTED_LIST=$(sort -t'|' -k1n "$TMP_FILE")
 rm -f "$TMP_FILE"
 
-# Заголовок таблицы
-printf "${CYAN}%-3s %-15s %-10s${NC}\n" "№" "Страна" "Ping"
-printf "${CYAN}%-3s %-15s %-10s${NC}\n" "---" "------" "----"
-
+# Вывод в привычном стиле
 i=1
 echo "$SORTED_LIST" | while IFS='|' read -r ping_sort country ep ping_val; do
 
-    # Цвет пинга
     if [ "$ping_val" = "FAIL" ]; then
         color="$RED"
     else
@@ -85,13 +72,13 @@ echo "$SORTED_LIST" | while IFS='|' read -r ping_sort country ep ping_val; do
         fi
     fi
 
-    printf "${CYAN}%-3s ${GREEN}%-15s ${color}%-10s${NC}\n" "$i" "$country" "$ping_val"
+    printf "${CYAN}%2d) ${GREEN}%s ${MAGENTA}| ${color}%s${NC}\n" "$i" "$country" "$ping_val"
     i=$((i+1))
 done
 
+# Выбор номера
 echo -en "\n${YELLOW}Введите номер:${NC} "
 read num
-
 MAX_NUM=$(echo "$SORTED_LIST" | wc -l)
 
 if ! printf '%s' "$num" | grep -qE '^[0-9]+$' || [ "$num" -lt 1 ] || [ "$num" -gt "$MAX_NUM" ]; then
