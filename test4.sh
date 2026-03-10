@@ -30,15 +30,22 @@ echo "$EP_LIST" | while IFS='|' read -r country ep; do
 
 host="${ep%%:*}"
 
-ping_ms="$(ping -c1 -W1 "$host" 2>/dev/null | awk -F'/' 'END{print $5}')"
-[ -z "$ping_ms" ] && ping_ms="FAIL"
+ping_ms="$(ping -c1 -W1 "$host" 2>/dev/null | awk -F'/' 'END{print int($5)}')"
 
-if [ "$ping_ms" = "FAIL" ]; then
-printf "${CYAN}%2d) ${GREEN}%s ${MAGENTA}| ${RED}%s${NC}\n" "$i" "$country" "$ping_ms"
+if [ -z "$ping_ms" ]; then
+    ping_ms="FAIL"
+    color="$RED"
 else
-printf "${CYAN}%2d) ${GREEN}%s ${MAGENTA}| ${YELLOW}%s${NC}\n" "$i" "$country" "$ping_ms"
+    if [ "$ping_ms" -lt 50 ]; then
+        color="$GREEN"
+    elif [ "$ping_ms" -lt 100 ]; then
+        color="$YELLOW"
+    else
+        color="$RED"
+    fi
 fi
 
+printf "${CYAN}%2d) ${GREEN}%s ${MAGENTA}| ${color}%s${NC}\n" "$i" "$country" "$ping_ms"
 i=$((i+1))
 
 done
