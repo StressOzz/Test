@@ -48,13 +48,9 @@ AI="#Gemini\n45.155.204.190 gemini.google.com\n#Grok\n45.155.204.190 grok.com ac
 45.155.204.190 proactivebackend-pa.googleapis.com robinfrontend-pa.googleapis.com o.pki.goog labs.google labs.google.com notebooklm.google
 45.155.204.190 notebooklm.google.com jules.google.com stitch.withgoogle.com gemini.google.com copilot.microsoft.com edgeservices.bing.com
 45.155.204.190 rewards.bing.com sydney.bing.com xboxdesignlab.xbox.com xgpuweb.gssv-play-prod.xboxlive.com xgpuwebf2p.gssv-play-prod.xboxlive.com"
-SCell="#Supercell\n144.31.14.104 cdn.id.supercell.com security.id.supercell.com accounts.supercell.com game-assets.clashroyaleapp.com
-144.31.14.104 game-assets.clashofclans.com clashofclans.inbox.supercell.com game-assets.brawlstarsgame.com store.supercell.com
-45.95.233.23 game.clashroyaleapp.com\n193.23.209.189 gamea.clashofclans.com\n185.246.223.127 game.brawlstarsgame.com
-108.61.167.26 game.squadbustersgame.com\n179.43.148.133 game.brawlstarsgame.com
-31.25.239.132 accounts.supercell.com cdn.id.supercell.com clashofclans.inbox.supercell.com game-assets.brawlstarsgame.com game-assets.clashofclans.com
-31.25.239.132 game-assets.clashroyaleapp.com game.boombeachgame.com game.mocogame.com security.id.supercell.com store.supercell.com
-31.7.60.154 game.clashroyaleapp.com\n31.7.60.155 gamea.clashofclans.com\n31.7.60.156 game.squadbustersgame.com\n31.7.60.157 game.mocogame.com"
+SCell="#Supercell\n144.31.14.104 security.id.supercell.com accounts.supercell.com game-assets.clashroyaleapp.com game-assets.clashofclans.com
+144.31.14.104 clashofclans.inbox.supercell.com game-assets.brawlstarsgame.com store.supercell.com cdn.id.supercell.com\n108.61.167.26 game.squadbustersgame.com
+45.95.233.23 game.clashroyaleapp.com game.mocogame.com\n193.23.209.189 gamea.clashofclans.com\n185.246.223.127 game.brawlstarsgame.com"
 SPFY="#Spotify\n45.155.204.190 api.spotify.com login5.spotify.com encore.scdn.co gew1-spclient.spotify.com spclient.wg.spotify.com
 45.155.204.190 api-partner.spotify.com aet.spotify.com www.spotify.com accounts.spotify.com open.spotify.com
 45.155.204.190 accounts.scdn.co gew1-dealer.spotify.com open-exp.spotifycdn.com www-growth.scdn.co"
@@ -397,7 +393,7 @@ menu_hosts() { while true; do clear; S_ALL=$(status_block "$ALL_BLOCKS" && echo 
 echo -e "${MAGENTA}Меню управления доменами в hosts${NC}\n"; if hosts_enabled; then echo -e "${YELLOW}Домены в hosts: ${GREEN}добавлены${NC}"; prin=1; fi; [ "$prin" -eq 1 ] && echo
 echo -e "${CYAN} 1) ${GREEN}$(get_state "$PDA")${NC} 4pda.to\n${CYAN} 2) ${GREEN}$(get_state "$RUTOR")${NC} rutor.info\n${CYAN} 3) ${GREEN}$(get_state "$NTC")${NC} ntc.party"
 echo -e "${CYAN} 4) ${GREEN}$(get_state "$INSTAGRAM")${NC} Instagram & Facebook\n${CYAN} 5) ${GREEN}$(get_state "$LIBRUSEC")${NC} lib.rus.ec\n${CYAN} 6) ${GREEN}$(get_state "$AI")${NC} AI сервисы"
-echo -e "${CYAN} 7) ${GREEN}$(get_state "$TWCH")${NC} Twitch\n${CYAN} 8) ${GREEN}$(get_state "$TGWeb")${NC} Telegram Web\n${CYAN} 9) ${GREEN}$(get_state "$SPFY")${NC} Spotify\n${CYAN}10) ${GREEN}$(get_state "$SCell")${NC} Supercell\n${CYAN}88) $S_ALL\n${CYAN}99) ${GREEN}Восстановить ${NC}hosts"
+echo -e "${CYAN} 7) ${GREEN}$(get_state "$TWCH")${NC} Twitch\n${CYAN} 8) ${GREEN}$(get_state "$TGWeb")${NC} Telegram Web\n${CYAN} 9) ${GREEN}$(get_state "$SPFY")${NC} Spotify\n${CYAN}10) ${GREEN}$(get_state "$SCell")${NC} Brawl stars, Clash of clans, Clash royale\n${CYAN}88) $S_ALL\n${CYAN}99) ${GREEN}Восстановить ${NC}hosts"
 echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} ";read -r c; case "$c" in
 1) toggle_block "$PDA";; 2) toggle_block "$RUTOR";; 3) toggle_block "$NTC";; 4) toggle_block "$INSTAGRAM";; 5) toggle_block "$LIBRUSEC";; 6) toggle_block "$AI";;
 7) toggle_block "$TWCH";; 8) toggle_block "$TGWeb";; 9) toggle_block "$SPFY";; 10) toggle_block "$SCell";; 88) toggle_all;; 99) hosts_reset;; *) break;; esac; done; }
