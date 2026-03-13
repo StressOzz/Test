@@ -50,7 +50,11 @@ AI="#Gemini\n45.155.204.190 gemini.google.com\n#Grok\n45.155.204.190 grok.com ac
 45.155.204.190 rewards.bing.com sydney.bing.com xboxdesignlab.xbox.com xgpuweb.gssv-play-prod.xboxlive.com xgpuwebf2p.gssv-play-prod.xboxlive.com"
 SCell="#Supercell\n144.31.14.104 cdn.id.supercell.com security.id.supercell.com accounts.supercell.com game-assets.clashroyaleapp.com
 144.31.14.104 game-assets.clashofclans.com clashofclans.inbox.supercell.com game-assets.brawlstarsgame.com store.supercell.com
-45.95.233.23 game.clashroyaleapp.com game.mocogame.com\n193.23.209.189 gamea.clashofclans.com\n185.246.223.127 game.brawlstarsgame.com\n108.61.167.26 game.squadbustersgame.com"
+45.95.233.23 game.clashroyaleapp.com\n193.23.209.189 gamea.clashofclans.com\n185.246.223.127 game.brawlstarsgame.com
+108.61.167.26 game.squadbustersgame.com\n179.43.148.133 game.brawlstarsgame.com
+31.25.239.132 accounts.supercell.com cdn.id.supercell.com clashofclans.inbox.supercell.com game-assets.brawlstarsgame.com game-assets.clashofclans.com
+31.25.239.132 game-assets.clashroyaleapp.com game.boombeachgame.com game.mocogame.com security.id.supercell.com store.supercell.com
+31.7.60.154 game.clashroyaleapp.com\n31.7.60.155 gamea.clashofclans.com\n31.7.60.156 game.squadbustersgame.com\n31.7.60.157 game.mocogame.com"
 SPFY="#Spotify\n45.155.204.190 api.spotify.com login5.spotify.com encore.scdn.co gew1-spclient.spotify.com spclient.wg.spotify.com
 45.155.204.190 api-partner.spotify.com aet.spotify.com www.spotify.com accounts.spotify.com open.spotify.com
 45.155.204.190 accounts.scdn.co gew1-dealer.spotify.com open-exp.spotifycdn.com www-growth.scdn.co"
