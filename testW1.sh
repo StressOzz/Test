@@ -65,11 +65,11 @@ echo "$SORTED_LIST" | while IFS='|' read -r ping_sort country ep ping_val; do
         fi
     fi
 
-printf "${CYAN}%2d) ${GREEN}%-10s ${MAGENTA}| ${color}%-7s${MAGENTA}| ${CYAN}%s${NC}\n" "$i" "$country" "$ping_val" "$ep"
+printf "${CYAN}%1d) ${GREEN}%-10s ${MAGENTA}| ${color}%-7s${MAGENTA}| ${CYAN}%s${NC}\n" "$i" "$country" "$ping_val" "$ep"
 
 i=$((i+1))
 done
-echo -e "${CYAN}Enter)${GREEN} По умолчанию ${NC}engage.cloudflareclient.com:4500"
+echo -e "${CYAN}Enter)${GREEN} Россия ${NC}engage.cloudflareclient.com:4500"
 
 echo -en "\n${YELLOW}Введите номер:${NC} "
 read num
