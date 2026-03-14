@@ -28,7 +28,7 @@ DNS_SELECTED="1.1.1.1, 2606:4700:4700::1111"
 
 if [ "$ENDPOINT" = "engage.cloudflareclient.com:4500" ]; then
 
-echo -e "\n${MAGENTA}Выберите DNS:${NC}"
+echo -e "${MAGENTA}Выберите DNS:${NC}"
 
 i=1
 echo "$DNS_LIST" | while IFS='|' read -r name dns; do
