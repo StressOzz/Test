@@ -32,7 +32,7 @@ echo -e "\n${MAGENTA}Выберите DNS:${NC}"
 
 i=1
 echo "$DNS_LIST" | while IFS='|' read -r name dns; do
-printf "${CYAN}%2d) ${GREEN}%-10s ${MAGENTA}| ${CYAN}%s${NC}\n" "$i" "$name" "$dns"
+printf "${CYAN}%1d) ${GREEN}%s${NC}\n" "$i" "$name"
 i=$((i+1))
 done
 
