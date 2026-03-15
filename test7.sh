@@ -132,110 +132,133 @@ sed -i "/DISABLE_CUSTOM/s/'1'/'0'/" /etc/config/zapret; ZAPRET_RESTART; [ "$NO_P
 # ==========================================
 # FIX GAME
 # ==========================================
-strategy_Gv1() {
-    printf '%s\n' \
-    "#Gv1" \
-    "--new" \
-    "--filter-udp=88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535" \
-    "--dpi-desync=fake" \
-    "--dpi-desync-cutoff=d2" \
-    "--dpi-desync-any-protocol=1" \
-    "--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/stun.bin" \
-    "--new" \
-    "--filter-tcp=6695-6710,25565,50001" \
-    "--dpi-desync-any-protocol=1" \
-    "--dpi-desync-cutoff=n5" \
-    "--dpi-desync=multisplit" \
-    "--dpi-desync-split-seqovl=582" \
-    "--dpi-desync-split-pos=1" \
-    "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/stun.bin"
-}
-
-strategy_Gv2() {
-    printf '%s\n' \
-    "#Gv2" \
-    "--new" \
-    "--filter-udp=88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535" \
-    "--dpi-desync=fake" \
-    "--dpi-desync-repeats=10" \
-    "--dpi-desync-any-protocol=1" \
-    "--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/quic_initial_www_google_com.bin" \
-    "--dpi-desync-cutoff=n4" \
-    "--new" \
-    "--filter-tcp=6695-6710,25565,50001" \
-    "--dpi-desync-any-protocol=1" \
-    "--dpi-desync-cutoff=n5" \
-    "--dpi-desync=multisplit" \
-    "--dpi-desync-split-seqovl=582" \
-    "--dpi-desync-split-pos=1" \
-    "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/stun.bin"
-}
-
-# функция управления стратегиями
 fix_GAME() {
-    local NO_PAUSE=$1
-    [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }
+local NO_PAUSE=$1
+[ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }
 
-    # быстрый запуск без меню
-    [ -n "$NO_PAUSE" ] && GAME_CHOICE="$NO_PAUSE"
+# если параметр передан — используем его
+if [ -n "$NO_PAUSE" ]; then
+GAME_CHOICE="$NO_PAUSE"
+else
 
-    if [ -z "$GAME_CHOICE" ]; then
-        CURRENT_GAME=""
-        grep -q "^#Gv1" "$CONF" && CURRENT_GAME="Gv1"
-        grep -q "^#Gv2" "$CONF" && CURRENT_GAME="Gv2"
+CURRENT_GAME=""
+grep -q "^#Gv1" "$CONF" && CURRENT_GAME="Gv1"
+grep -q "^#Gv2" "$CONF" && CURRENT_GAME="Gv2"
 
-        echo
-        echo -e "${MAGENTA}Выберите игровую стратегию${NC}"
+echo
+echo -e "${MAGENTA}Выберите игровую стратегию${NC}"
 
-        echo -n "1) Gv1"; [ "$CURRENT_GAME" = "Gv1" ] && echo "   [текущая]" || echo
-        echo -n "2) Gv2"; [ "$CURRENT_GAME" = "Gv2" ] && echo "   [текущая]" || echo
-        echo "3) Удалить игровую стратегию"
+echo -n "1) Gv1"
+[ "$CURRENT_GAME" = "Gv1" ] && echo "   [текущая]" || echo
 
-        echo
-        printf "Выбор: "
-        read GAME_CHOICE
-    fi
+echo -n "2) Gv2"
+[ "$CURRENT_GAME" = "Gv2" ] && echo "   [текущая]" || echo
 
-    echo -e "${CYAN}Обновляем настройки...${NC}"
+echo "3) Удалить игровую стратегию"
 
-    # удаляем старую стратегию
-    sed -i '/#Gv[0-9]/,/^'\''$/d' "$CONF"
+echo
+printf "Выбор: "
+read GAME_CHOICE
 
-    # удаляем игровые порты
-    sed -i "s/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535//g" "$CONF"
-    sed -i "s/,6695-6710,25565,50001//g" "$CONF"
+fi
 
-    case "$GAME_CHOICE" in
-        1|2)
-            sed -i "/option NFQWS_PORTS_UDP '/s/'$/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535'/" "$CONF"
-            sed -i "/option NFQWS_PORTS_TCP '/s/'$/,6695-6710,25565,50001'/" "$CONF"
+echo -e "${CYAN}Обновляем настройки...${NC}"
 
-            tail -n1 "$CONF" | grep -q "^'$" && sed -i '$d' "$CONF"
+# удаляем старые блоки
+sed -i '/#Gv[0-9]/,/^'\''$/d' "$CONF"
 
-            # вызываем функцию стратегии по имени
-            STRATEGY_FUNC="strategy_Gv$GAME_CHOICE"
-            $STRATEGY_FUNC >> "$CONF"
-            echo "'" >> "$CONF"
+# удаляем игровые порты
+sed -i "s/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535//g" "$CONF"
+sed -i "s/,6695-6710,25565,50001//g" "$CONF"
 
-            echo -e "${GREEN}Стратегия Gv$GAME_CHOICE включена${NC}"
-        ;;
-        3)
-            if ! grep -q "^#Gv" "$CONF"; then
-                echo -e "${YELLOW}Игровая стратегия не установлена!${NC}"
-                return
-            fi
+case "$GAME_CHOICE" in
 
-            tail -n1 "$CONF" | grep -q "^'$" || echo "'" >> "$CONF"
-            echo -e "${GREEN}Игровая стратегия удалена!${NC}"
-        ;;
-        *)
-            return
-        ;;
-    esac
+1)
 
-    ZAPRET_RESTART
-    echo
-    [ -z "$NO_PAUSE" ] && PAUSE
+sed -i "/option NFQWS_PORTS_UDP '/s/'$/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535'/" "$CONF"
+sed -i "/option NFQWS_PORTS_TCP '/s/'$/,6695-6710,25565,50001'/" "$CONF"
+
+tail -n1 "$CONF" | grep -q "^'$" && sed -i '$d' "$CONF"
+
+printf "%s\n" \
+"#Gv1" \
+"--new" \
+"--filter-udp=88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535" \
+"--dpi-desync=fake" \
+"--dpi-desync-cutoff=d2" \
+"--dpi-desync-any-protocol=1" \
+"--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/stun.bin" \
+"--new" \
+"--filter-tcp=6695-6710,25565,50001" \
+"--dpi-desync-any-protocol=1" \
+"--dpi-desync-cutoff=n5" \
+"--dpi-desync=multisplit" \
+"--dpi-desync-split-seqovl=582" \
+"--dpi-desync-split-pos=1" \
+"--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/stun.bin" \
+"'" >> "$CONF"
+
+echo -e "${GREEN}Стратегия Gv1 включена${NC}"
+;;
+
+2)
+
+sed -i "/option NFQWS_PORTS_UDP '/s/'$/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535'/" "$CONF"
+sed -i "/option NFQWS_PORTS_TCP '/s/'$/,6695-6710,25565,50001'/" "$CONF"
+
+tail -n1 "$CONF" | grep -q "^'$" && sed -i '$d' "$CONF"
+
+printf "%s\n" \
+"#Gv2" \
+"--new" \
+"--filter-udp=88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535" \
+"--dpi-desync=fake" \
+"--dpi-desync-repeats=10" \
+"--dpi-desync-any-protocol=1" \
+"--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/quic_initial_www_google_com.bin" \
+"--dpi-desync-cutoff=n4" \
+"--new" \
+"--filter-tcp=6695-6710,25565,50001" \
+"--dpi-desync-any-protocol=1" \
+"--dpi-desync-cutoff=n5" \
+"--dpi-desync=multisplit" \
+"--dpi-desync-split-seqovl=582" \
+"--dpi-desync-split-pos=1" \
+"--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/stun.bin" \
+"'" >> "$CONF"
+
+echo -e "${GREEN}Стратегия Gv2 включена${NC}"
+;;
+
+3)
+
+if ! grep -q "^#Gv" "$CONF"; then
+echo -e "${YELLOW}Игровая стратегия не установлена!${NC}"
+return
+fi
+
+echo -e "${CYAN}Удаляем игровую стратегию${NC}"
+
+sed -i '/#Gv[0-9]/,/^'\''$/d' "$CONF"
+
+sed -i "s/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535//g" "$CONF"
+sed -i "s/,6695-6710,25565,50001//g" "$CONF"
+
+tail -n1 "$CONF" | grep -q "^'$" || echo "'" >> "$CONF"
+
+echo -e "${GREEN}Игровая стратегия удалена!${NC}"
+;;
+
+*)
+return
+;;
+
+esac
+
+ZAPRET_RESTART
+echo
+
+[ -z "$NO_PAUSE" ] && PAUSE
 }
 # ==========================================
 # Zapret под ключ
