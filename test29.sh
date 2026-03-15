@@ -61,50 +61,6 @@ ZAPRET_RESTART () { chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config
 PAUSE() { echo -ne "Нажмите Enter..."; read dummy; }; BACKUP_DIR="/opt/zapret_backup"; DATE_FILE="$BACKUP_DIR/date_backup.txt"
 if command -v apk >/dev/null 2>&1; then CONFZ="/etc/apk/repositories.d/distfeeds.list"; PKG_IS_APK=1; else CONFZ="/etc/opkg/distfeeds.conf"; PKG_IS_APK=0; fi
 echo 'sh <(wget -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/main/Zapret-Manager.sh)' > /usr/bin/zms; chmod +x /usr/bin/zms
-
-TEST() {
-local NO_PAUSE=$1; [ "$NO_PAUSE" != "1" ] && echo -e "\n${MAGENTA}Скачиваем и формируем стратегии${NC}"
-mkdir -p "$TMP_SF"; : > "$OUT"
-wget -qO "$ZIP" https://github.com/Flowseal/zapret-discord-youtube/archive/refs/heads/main.zip || { echo -e "\n${RED}Не удалось загрузить файл стратегий${NC}\n"; PAUSE; return; }
-if ! command -v unzip >/dev/null 2>&1; then echo -e "${CYAN}Устанавливаем ${NC}unzip"
-if [ "$PKG_IS_APK" -eq 1 ]; then apk add unzip >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить unzip!${NC}\n"; PAUSE; return; }
-else opkg install unzip >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить unzip!${NC}\n"; PAUSE; return; }; fi; fi
-unzip -oq "$ZIP" -d "$TMP_SF" || { echo -e "\n${RED}Не удалось распоковать файл${NC}\n"; PAUSE; return; }
-BASE="$TMP_SF/zapret-discord-youtube-main"; find "$BASE" -type f -name 'general*.bat' ! -name 'general (ALT5).bat' | while read -r F; do MATCH=$(grep -E '^--filter-tcp=%GameFilterTCP%|^--filter-udp=%GameFilterUDP%' "$F")
-[ -z "$MATCH" ] && continue; NAME=$(basename "$F" .bat); { echo "#$NAME"; echo "$MATCH" | sed 's/--/\n--/g' | sed '/^$/d' | sed 's/[[:space:]]*$//'; echo; } >> "$OUT"; done
-sed -i 's|"%BIN%tls_clienthello_www_google_com.bin"|/opt/zapret/files/fake/tls_clienthello_www_google_com.bin|g' "$OUT"
-sed -i '/--hostlist="%LISTS%list-general.txt"/d' "$OUT"
-sed -i '/--hostlist="%LISTS%list-general-user.txt"/d' "$OUT"
-
-sed -i '/--ipset="%LISTS%ipset-all.txt"/d' "$OUT"
-
-sed -i '/--ipset-exclude="%LISTS%ipset-exclude.txt"/d' "$OUT"
-sed -i '/--ipset-exclude="%LISTS%ipset-exclude-user.txt"/d' "$OUT"
-sed -i '/--hostlist-exclude="%LISTS%list-exclude-user.txt"/d' "$OUT"
-sed -i 's|"%LISTS%list-exclude.txt"|/opt/zapret/ipset/zapret-hosts-user-exclude.txt|g' "$OUT"
-sed -i 's/--new[[:space:]]\^/--new/g' "$OUT";
-sed -i 's|"%LISTS%list-google.txt"|/opt/zapret/ipset/zapret-hosts-google.txt|g' "$OUT"
-
-sed -i 's|%GameFilterTCP%|6695-6710,25565,50001|g' "$OUT"
-sed -i 's|%GameFilterUDP%|88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535|g' "$OUT"
-
-sed -i 's|"%BIN%quic_initial_www_google_com.bin"|/opt/zapret/files/fake/quic_initial_www_google_com.bin|g' "$OUT"
-
-sed -i 's|"%BIN%stun.bin"|/opt/zapret/files/fake/stun.bin|g' "$OUT"
-sed -i 's|"%BIN%tls_clienthello_4pda_to.bin"|/opt/zapret/files/fake/4pda.bin|g' "$OUT";
-sed -i 's|"%BIN%tls_clienthello_max_ru.bin"|/opt/zapret/files/fake/tls_clienthello_www_onetrust_com.bin|g' "$OUT"
-sed -i 's|\^!|/opt/zapret/files/fake/tls_clienthello_www_google_com.bin|g' "$OUT"
-sed -i 's/[[:space:]]\+$//g' "$OUT"
-sed -i '/^--new$/ { N; /^\--new\n$/d; }' "$OUT"
-rm -rf "$TMP_SF/zapret-discord-youtube-main" "$ZIP"
-[ "$NO_PAUSE" != "1" ] && echo -e "${GREEN}Стратегии сформированы!${NC}\n"
-[ "$NO_PAUSE" != "1" ] && PAUSE; }
-
-
-
-
-
-
 # ==========================================
 # Получение версии
 # ==========================================
@@ -200,65 +156,64 @@ strategy_Gv1() {
 "--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/stun.bin"
 }
 
-strategy_Gv2() {
+strategy_Gv() {
+    local N="$1"
+
     printf "%s\n" \
-"#Gv2" \
+"#Gv$N" \
 "--new" \
 "--filter-udp=88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535" \
 "--dpi-desync=fake" \
 "--dpi-desync-repeats=10" \
 "--dpi-desync-any-protocol=1" \
 "--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/quic_initial_www_google_com.bin" \
-"--dpi-desync-cutoff=n4"
+"--dpi-desync-cutoff=n$N"
 }
 
 fix_GAME() {
     local NO_PAUSE=$1
     [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }
 
-    # определяем текущую стратегию
+    # --- определяем текущую стратегию ---
     CURRENT_GAME=""
-    if grep -q "^#Gv1" "$CONF"; then
-        CURRENT_GAME="Gv1"
-    elif grep -q "^#Gv2" "$CONF"; then
-        CURRENT_GAME="Gv2"
-    fi
+    for i in 1 2 3 4; do
+        grep -q "^#Gv$i" "$CONF" && CURRENT_GAME="Gv$i"
+    done
 
-    # если передан параметр — используем его
+    # --- выбор стратегии ---
     if [ -n "$NO_PAUSE" ]; then
         GAME_CHOICE="$NO_PAUSE"
     else
         echo
         echo -e "${MAGENTA}Выберите игровую стратегию${NC}"
 
-        echo -n "1) Gv1"
-        [ "$CURRENT_GAME" = "Gv1" ] && echo "   [текущая]" || echo
-
-        echo -n "2) Gv2"
-        [ "$CURRENT_GAME" = "Gv2" ] && echo "   [текущая]" || echo
-
-        echo "3) Удалить игровую стратегию"
+        for i in 1 4; do
+            echo -n "$i) Gv$i"
+            [ "$CURRENT_GAME" = "Gv$i" ] && echo "   [текущая]" || echo
+        done
+        echo "5) Удалить игровую стратегию"
         echo
         printf "Выбор: "
         read GAME_CHOICE
     fi
 
-    # ничего не делаем, если выбор не распознан
+    # --- проверка корректности выбора ---
     case "$GAME_CHOICE" in
-        1|2|3) ;;
+        1|2|3|4|5) ;;
         *) return ;;
     esac
 
     echo -e "${MAGENTA}Настраиваем стратегию для игр${NC}"
 
-    # === удаляем старые блоки только если ставим новую или удаляем ===
-    if [ "$GAME_CHOICE" != "" ]; then
+    # --- удаляем старые блоки только если ставим новую или удаляем ---
+    if [ "$GAME_CHOICE" != "5" ]; then
         OLD_EXISTS=$(grep -c "^#Gv" "$CONF")
         sed -i '/#Gv[0-9]/,/^'\''$/d' "$CONF"
         sed -i "s/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535//g" "$CONF"
         sed -i "s/,6695-6710,25565,50001//g" "$CONF"
     fi
 
+    # --- вставка выбранной стратегии ---
     case "$GAME_CHOICE" in
         1)
             sed -i "/option NFQWS_PORTS_UDP '/s/'$/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535'/" "$CONF"
@@ -269,18 +224,17 @@ fix_GAME() {
             echo "'" >> "$CONF"
             echo -e "${GREEN}Игровая стратегия Gv1 включена${NC}"
             ;;
-
-        2)
+        2|3|4)
             sed -i "/option NFQWS_PORTS_UDP '/s/'$/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535'/" "$CONF"
             sed -i "/option NFQWS_PORTS_TCP '/s/'$/,6695-6710,25565,50001'/" "$CONF"
             tail -n1 "$CONF" | grep -q "^'$" && sed -i '$d' "$CONF"
-            strategy_Gv2 >> "$CONF"
+            strategy_Gv "$GAME_CHOICE" >> "$CONF"
             strategy_TCP_common >> "$CONF"
             echo "'" >> "$CONF"
-            echo -e "${GREEN}Игровая стратегия Gv2 включена${NC}"
+            echo -e "${GREEN}Игровая стратегия Gv$GAME_CHOICE включена${NC}"
             ;;
-
-        3)
+        5)
+            OLD_EXISTS=$(grep -c "^#Gv" "$CONF")
             if [ "$OLD_EXISTS" -eq 0 ]; then
                 echo -e "\n${YELLOW}Игровая стратегия не установлена!${NC}\n"
                 [ -z "$NO_PAUSE" ] && PAUSE
@@ -295,7 +249,6 @@ fix_GAME() {
     ZAPRET_RESTART
     [ -z "$NO_PAUSE" ] && PAUSE
 }
-
 
 # ==========================================
 # Zapret под ключ
@@ -714,4 +667,4 @@ then echo -e "${YELLOW}FIX для Flow Offloading:${NC} ${GREEN}включён${
 if [ -n "$current" ]; then echo -e "${YELLOW}Используется стратегия:${NC}  ${CYAN}$current${DV:+ $DV}${RKN_STATUS:+ $RKN_STATUS}${NC}"; elif [ -n "$RKN_STATUS" ]; then echo -e "${YELLOW}Используется стратегия:${NC}${CYAN}  РКН${DV:+ $DV}${NC}"; fi; fi; echo -e "\n${CYAN}1) ${GREEN}$Z_ACTION_TEXT${NC} Zapret\n${CYAN}2) ${GREEN}$str_stp_zpr ${NC}Zapret\n${CYAN}3) ${GREEN}Меню стратегий${NC}"
 echo -e "${CYAN}4) ${GREEN}Меню ${NC}DNS over HTTPS\n${CYAN}5) ${GREEN}Меню настройки ${NC}Discord\n${CYAN}6) ${GREEN}Меню управления настройками\n${CYAN}7) ${GREEN}Меню управления доменами в ${NC}hosts\n${CYAN}8) ${GREEN}Удалить ${NC}→${GREEN} установить ${NC}→${GREEN} настроить${NC} Zapret\n${CYAN}0) ${GREEN}Системное меню${NC}" ; echo -ne "${CYAN}Enter) ${GREEN}Выход${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read choice
 case "$choice" in 888) echo; uninstall_zapret "1"; install_Zapret "1"; curl -fsSL https://raw.githubusercontent.com/StressOzz/Test/refs/heads/main/zapret -o "$CONF"; hosts_add "$ALL_BLOCKS"; rm -f "$EXCLUDE_FILE"; wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL"; ZAPRET_RESTART; PAUSE;;
-1) $Z_ACTION_FUNC;; 2) pgrep -f /opt/zapret >/dev/null 2>&1 && stop_zapret || start_zapret;; 99) fix_GAME;; 00) TEST;; 3) menu_str;; 4) DoH_menu;; 5) Discord_menu;; 6) backup_menu;; 7) menu_hosts;; 8) zapret_key;; 0) sys_menu;; *) echo; exit 0;; esac; }; while true; do show_menu; done
+1) $Z_ACTION_FUNC;; 2) pgrep -f /opt/zapret >/dev/null 2>&1 && stop_zapret || start_zapret;; 99) fix_GAME;; 3) menu_str;; 4) DoH_menu;; 5) Discord_menu;; 6) backup_menu;; 7) menu_hosts;; 8) zapret_key;; 0) sys_menu;; *) echo; exit 0;; esac; }; while true; do show_menu; done
