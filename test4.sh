@@ -179,82 +179,48 @@ strategy_Gv2() {
 # ===================================
 # Функция управления стратегиями
 # ===================================
+STRATEGIES="Gv1 Gv2"
+
 fix_GAME() {
     local NO_PAUSE=$1
-    [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }
+    [ ! -f /etc/init.d/zapret ] && { echo -e "\nZapret не установлен!\n"; return; }
 
-    # получаем список всех стратегий автоматически
-    mapfile -t STRATEGY_FUNCS < <(declare -F | awk '{print $3}' | grep '^strategy_Gv')
-    [ "${#STRATEGY_FUNCS[@]}" -eq 0 ] && { echo -e "${YELLOW}Нет стратегий для выбора!${NC}"; return; }
-
-    # определяем текущую стратегию
     CURRENT_GAME=""
-    grep -q "^#Gv" "$CONF" && CURRENT_GAME=$(grep "^#Gv" "$CONF" | head -n1 | sed 's/#//')
+    grep -q "^#Gv1" "$CONF" && CURRENT_GAME="Gv1"
+    grep -q "^#Gv2" "$CONF" && CURRENT_GAME="Gv2"
 
-    # быстрый запуск без меню
-    if [ -n "$NO_PAUSE" ] && [[ "$NO_PAUSE" =~ ^[0-9]+$ ]] && [ "$NO_PAUSE" -le "${#STRATEGY_FUNCS[@]}" ]; then
-        GAME_CHOICE="$NO_PAUSE"
-    fi
-
-    if [ -z "$GAME_CHOICE" ]; then
-        echo
-        echo -e "${MAGENTA}Выберите игровую стратегию${NC}"
-        for i in "${!STRATEGY_FUNCS[@]}"; do
-            STR_NAME="${STRATEGY_FUNCS[$i]#strategy_}"
-            echo -n "$((i+1))) $STR_NAME"
-            [ "$STR_NAME" = "$CURRENT_GAME" ] && echo "   [текущая]" || echo
+    if [ -z "$NO_PAUSE" ]; then
+        echo "Выберите игровую стратегию:"
+        i=1
+        for s in $STRATEGIES; do
+            echo -n "$i) $s"
+            [ "$s" = "$CURRENT_GAME" ] && echo " [текущая]" || echo
+            i=$((i+1))
         done
-        echo "$(( ${#STRATEGY_FUNCS[@]} + 1 ))) Удалить игровую стратегию"
-
-        echo
+        echo "$i) Удалить игровую стратегию"
         printf "Выбор: "
         read GAME_CHOICE
-    fi
-
-    echo -e "${CYAN}Обновляем настройки...${NC}"
-
-    if [ "$GAME_CHOICE" -ge 1 ] && [ "$GAME_CHOICE" -le "${#STRATEGY_FUNCS[@]}" ]; then
-        # выбранная стратегия
-        STRATEGY_FUNC="${STRATEGY_FUNCS[$((GAME_CHOICE-1))]}"
-
-        # удаляем старую стратегию
-        sed -i '/#Gv[0-9]/,/^'\''$/d' "$CONF"
-
-        # чистим порты
-        sed -i "s/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535//g" "$CONF"
-        sed -i "s/,6695-6710,25565,50001//g" "$CONF"
-
-        # добавляем порты
-        sed -i "/option NFQWS_PORTS_UDP '/s/'$/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535'/" "$CONF"
-        sed -i "/option NFQWS_PORTS_TCP '/s/'$/,6695-6710,25565,50001'/" "$CONF"
-
-        # удаляем лишнюю кавычку если есть
-        tail -n1 "$CONF" | grep -q "^'$" && sed -i '$d' "$CONF"
-
-        # вставляем стратегию
-        $STRATEGY_FUNC >> "$CONF"
-        echo "'" >> "$CONF"
-
-        echo -e "${GREEN}Стратегия ${STRATEGY_FUNC#strategy_} включена${NC}"
-
-    elif [ "$GAME_CHOICE" -eq $(( ${#STRATEGY_FUNCS[@]} + 1 )) ]; then
-        # удаление стратегии
-        if ! grep -q "^#Gv" "$CONF"; then
-            echo -e "${YELLOW}Игровая стратегия не установлена!${NC}"
-            return
-        fi
-        sed -i '/#Gv[0-9]/,/^'\''$/d' "$CONF"
-        sed -i "s/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535//g" "$CONF"
-        sed -i "s/,6695-6710,25565,50001//g" "$CONF"
-        tail -n1 "$CONF" | grep -q "^'$" || echo "'"
-        echo -e "${GREEN}Игровая стратегия удалена!${NC}"
     else
-        return
+        GAME_CHOICE=$NO_PAUSE
     fi
 
-    ZAPRET_RESTART
-    echo
-    [ -z "$NO_PAUSE" ] && PAUSE
+    # очистка предыдущей стратегии
+    sed -i '/#Gv[0-9]/,/^'\''$/d' "$CONF"
+    sed -i "s/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535//g" "$CONF"
+    sed -i "s/,6695-6710,25565,50001//g" "$CONF"
+
+    if [ "$GAME_CHOICE" -ge 1 ] && [ "$GAME_CHOICE" -le $(echo $STRATEGIES | wc -w) ]; then
+        CHOSEN=$(echo $STRATEGIES | cut -d' ' -f"$GAME_CHOICE")
+        strategy_func="strategy_$CHOSEN"
+        $strategy_func >> "$CONF"
+        echo "'" >> "$CONF"
+        echo "Стратегия $CHOSEN включена"
+    elif [ "$GAME_CHOICE" -eq $(($(echo $STRATEGIES | wc -w)+1)) ]; then
+        tail -n1 "$CONF" | grep -q "^'$" || echo "'"
+        echo "Игровая стратегия удалена"
+    fi
+
+    /etc/init.d/zapret restart
 }
 # ==========================================
 # Zapret под ключ
