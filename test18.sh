@@ -214,7 +214,7 @@ sed -i "/option NFQWS_PORTS_TCP '/s/'$/,6695-6710,25565,50001'/" "$CONF"
 tail -n1 "$CONF" | grep -q "^'$" && sed -i '$d' "$CONF"
 
 strategy_Gv1 >> "$CONF"
-strategy_TCP_common >> "$CONF"
+
 echo "'" >> "$CONF"
 
 echo -e "${GREEN}Игровая стратегия Gv1 включена${NC}"
@@ -227,7 +227,7 @@ sed -i "/option NFQWS_PORTS_TCP '/s/'$/,6695-6710,25565,50001'/" "$CONF"
 tail -n1 "$CONF" | grep -q "^'$" && sed -i '$d' "$CONF"
 
 strategy_Gv2 >> "$CONF"
-strategy_TCP_common >> "$CONF"
+
 echo "'" >> "$CONF"
 
 echo -e "${GREEN}Игровая стратегия Gv2 включена${NC}"
