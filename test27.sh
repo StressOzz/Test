@@ -77,8 +77,6 @@ sed -i '/--hostlist="%LISTS%list-general.txt"/d' "$OUT"
 sed -i '/--hostlist="%LISTS%list-general-user.txt"/d' "$OUT"
 
 sed -i '/--ipset="%LISTS%ipset-all.txt"/d' "$OUT"
-sed -i '/--ipset-exclude="%LISTS%ipset-exclude.txt"/d' "$OUT"
-sed -i '/--ipset-exclude="%LISTS%ipset-exclude-user.txt"/d' "$OUT"
 
 sed -i '/--ipset-exclude="%LISTS%ipset-exclude.txt"/d' "$OUT"
 sed -i '/--ipset-exclude="%LISTS%ipset-exclude-user.txt"/d' "$OUT"
@@ -86,6 +84,10 @@ sed -i '/--hostlist-exclude="%LISTS%list-exclude-user.txt"/d' "$OUT"
 sed -i 's|"%LISTS%list-exclude.txt"|/opt/zapret/ipset/zapret-hosts-user-exclude.txt|g' "$OUT"
 sed -i 's/--new[[:space:]]\^/--new/g' "$OUT";
 sed -i 's|"%LISTS%list-google.txt"|/opt/zapret/ipset/zapret-hosts-google.txt|g' "$OUT"
+
+sed -i 's|"%GameFilterTCP%|6695-6710,25565,50001|g' "$OUT"
+sed -i 's|"%GameFilterUDP%|88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535|g' "$OUT"
+
 sed -i 's|"%BIN%stun.bin"|/opt/zapret/files/fake/stun.bin|g' "$OUT"
 sed -i 's|"%BIN%tls_clienthello_4pda_to.bin"|/opt/zapret/files/fake/4pda.bin|g' "$OUT";
 sed -i 's|"%BIN%tls_clienthello_max_ru.bin"|/opt/zapret/files/fake/tls_clienthello_www_onetrust_com.bin|g' "$OUT"
