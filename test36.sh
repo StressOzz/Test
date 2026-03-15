@@ -174,13 +174,11 @@ fix_GAME() {
     local NO_PAUSE=$1
     [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }
 
-    # --- определяем текущую стратегию ---
     CURRENT_GAME=""
     for i in 1 2 3 4; do
         grep -q "^#Gv$i" "$CONF" && CURRENT_GAME="Gv$i"
     done
 
-    # --- выбор стратегии ---
     if [ -n "$NO_PAUSE" ]; then
         GAME_CHOICE="$NO_PAUSE"
     else
@@ -199,36 +197,29 @@ done
         read GAME_CHOICE
     fi
 
-    # --- проверка корректности выбора ---
     case "$GAME_CHOICE" in
         1|2|3|4) ;;
         *) return ;;
     esac
 
-    echo -e "\n${MAGENTA}Настраиваем стратегию для игр${NC}"
-
-    # --- если выбранная стратегия уже стоит, удаляем её ---
     if [ "$CURRENT_GAME" = "Gv$GAME_CHOICE" ]; then
-        echo -e "${CYAN}Удаляем текущую игровую стратегию ${NC}Gv$GAME_CHOICE${NC}"
+        echo -e "${CYAN}Удаляем игровую стратегию ${NC}Gv$GAME_CHOICE${NC}"
         sed -i '/#Gv[0-9]/,/^'\''$/d' "$CONF"
         sed -i "s/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535//g" "$CONF"
         sed -i "s/,6695-6710,25565,50001//g" "$CONF"
         echo "'" >> "$CONF"
         ZAPRET_RESTART
-        echo -e "${GREEN}Игровая стратегия ${NC}Gv$GAME_CHOICE${GREEN} удалена!${NC}"
+        echo -e "${GREEN}Игровая стратегия ${NC}Gv$GAME_CHOICE${GREEN} удалена!${NC}\n"
         [ -z "$NO_PAUSE" ] && PAUSE
         return
     fi
 
-    # --- иначе ставим новую стратегию ---
-    # удаляем старую, если есть
     if [ -n "$CURRENT_GAME" ]; then
         sed -i '/#Gv[0-9]/,/^'\''$/d' "$CONF"
         sed -i "s/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535//g" "$CONF"
         sed -i "s/,6695-6710,25565,50001//g" "$CONF"
     fi
 
-    # --- вставляем новую ---
     sed -i "/option NFQWS_PORTS_UDP '/s/'$/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535'/" "$CONF"
     sed -i "/option NFQWS_PORTS_TCP '/s/'$/,6695-6710,25565,50001'/" "$CONF"
     tail -n1 "$CONF" | grep -q "^'$" && sed -i '$d' "$CONF"
@@ -240,9 +231,9 @@ done
     fi
     strategy_TCP_common >> "$CONF"
     echo "'" >> "$CONF"
-
+    echo -e "${CYAN}Устанавливаем игровую стратегию ${NC}Gv$GAME_CHOICE"
     ZAPRET_RESTART
-    echo -e "${GREEN}Игровая стратегия ${NC}Gv$GAME_CHOICE${GREEN} установлена!${NC}"
+    echo -e "${GREEN}Игровая стратегия ${NC}Gv$GAME_CHOICE${GREEN} установлена!${NC}\n"
     [ -z "$NO_PAUSE" ] && PAUSE
 }
 
