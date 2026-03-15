@@ -173,52 +173,48 @@ fix_GAME() {
     local NO_PAUSE=$1
     [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }
 
-    # Автоматически находим все функции стратегий (без here string)
-    local strategies=""
-    local s
+    # Автоматически находим все функции стратегий
+    local strategies_file="/tmp/zapret_strategies.$$"
     
-    # Сохраняем вывод declare -F во временный файл или используем pipe
+    # Очищаем временный файл
+    > "$strategies_file"
+    
+    # Находим все функции strategy_Gv*
     if command -v declare >/dev/null 2>&1; then
         declare -F 2>/dev/null | while read -r line; do
             s=$(echo "$line" | awk '{print $3}')
             case "$s" in
                 strategy_Gv[0-9]*)
-                    echo "$s"
+                    echo "$s" >> "$strategies_file"
                     ;;
             esac
-        done > /tmp/zapret_strategies.$$
+        done
     else
         typeset -F 2>/dev/null | while read -r line; do
             s=$(echo "$line" | awk '{print $3}')
             case "$s" in
                 strategy_Gv[0-9]*)
-                    echo "$s"
+                    echo "$s" >> "$strategies_file"
                     ;;
             esac
-        done > /tmp/zapret_strategies.$$
+        done
     fi
     
-    # Читаем из временного файла
-    strategies=""
-    while read -r s; do
-        strategies="$strategies $s"
-    done < /tmp/zapret_strategies.$$
+    # Сортируем и считаем стратегии
+    sort -V "$strategies_file" -o "$strategies_file"
     
-    # Удаляем временный файл
-    rm -f /tmp/zapret_strategies.$$
-    
-    # Преобразуем в массив
-    local strategies_array=($strategies)
-    local strategies_count=${#strategies_array[@]}
+    # Считаем количество стратегий
+    local strategies_count=0
+    while read -r line; do
+        strategies_count=$((strategies_count + 1))
+    done < "$strategies_file"
     
     if [ $strategies_count -eq 0 ]; then
         echo -e "\n${RED}Не найдено ни одной стратегии!${NC}\n"
+        rm -f "$strategies_file"
         PAUSE
         return
     fi
-
-    # Сортируем массив
-    strategies_array=($(printf '%s\n' "${strategies_array[@]}" | sort -V))
 
     # если параметр передан — используем его
     if [ -n "$NO_PAUSE" ]; then
@@ -226,23 +222,23 @@ fix_GAME() {
     else
         # Определяем текущую стратегию
         CURRENT_GAME=""
-        local strategy_name
-        for s in "${strategies_array[@]}"; do
+        local line_num=1
+        while read -r s; do
             strategy_name="${s#strategy_}"
             grep -q "^${strategy_name}" "$CONF" && CURRENT_GAME="$strategy_name"
-        done
+        done < "$strategies_file"
 
         echo
         echo -e "${MAGENTA}Выберите игровую стратегию${NC}"
 
         # Выводим все найденные стратегии
         local i=1
-        for s in "${strategies_array[@]}"; do
+        while read -r s; do
             local strategy_name="${s#strategy_}"
             echo -en "$i) $strategy_name"
             [ "$CURRENT_GAME" = "$strategy_name" ] && echo "   [текущая]" || echo
             i=$((i+1))
-        done
+        done < "$strategies_file"
 
         echo -e "$i) Удалить игровую стратегию\n"
 
@@ -251,7 +247,10 @@ fix_GAME() {
     fi
 
     # Проверка на отмену
-    [ -z "$GAME_CHOICE" ] && return
+    [ -z "$GAME_CHOICE" ] && {
+        rm -f "$strategies_file"
+        return
+    }
 
     echo -e "${MAGENTA}Настраиваем стратегию для игр${NC}"
 
@@ -260,11 +259,18 @@ fix_GAME() {
     sed -i "s/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535//g" "$CONF"
     sed -i "s/,6695-6710,25565,50001//g" "$CONF"
 
-    # Проверяем, является ли выбор числом и в пределах диапазона
+    # Проверяем, является ли выбор числом
     if [ "$GAME_CHOICE" -ge 1 ] 2>/dev/null && [ "$GAME_CHOICE" -le "$strategies_count" ] 2>/dev/null; then
-        # Выбрана стратегия
-        local selected_idx=$((GAME_CHOICE-1))
-        local selected_strategy="${strategies_array[$selected_idx]#strategy_}"
+        # Выбрана стратегия - находим нужную строку из файла
+        local selected_line=1
+        local selected_strategy=""
+        while read -r s; do
+            if [ $selected_line -eq $GAME_CHOICE ]; then
+                selected_strategy="${s#strategy_}"
+                break
+            fi
+            selected_line=$((selected_line + 1))
+        done < "$strategies_file"
         
         # Добавляем порты
         sed -i "/option NFQWS_PORTS_UDP '/s/'$/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535'/" "$CONF"
@@ -282,6 +288,7 @@ fix_GAME() {
         # Удаление стратегии
         if ! grep -q "^#Gv" "$CONF"; then
             echo -e "\n${RED}Игровая стратегия не установлена!${NC}\n"
+            rm -f "$strategies_file"
             PAUSE
             return
         fi
@@ -289,12 +296,15 @@ fix_GAME() {
         echo -e "\n${CYAN}Удаляем игровую стратегию${NC}"
         tail -n1 "$CONF" | grep -q "^'$" || echo "'" >> "$CONF"
         echo -e "${GREEN}Игровая стратегия удалена!${NC}\n"
+        rm -f "$strategies_file"
         PAUSE
         return
     else
+        rm -f "$strategies_file"
         return
     fi
 
+    rm -f "$strategies_file"
     ZAPRET_RESTART
     [ -z "$NO_PAUSE" ] && PAUSE
 }
