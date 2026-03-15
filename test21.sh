@@ -132,6 +132,7 @@ sed -i "/DISABLE_CUSTOM/s/'1'/'0'/" /etc/config/zapret; ZAPRET_RESTART; [ "$NO_P
 # ==========================================
 # FIX GAME
 # ==========================================
+
 strategy_TCP_common() {
     printf "%s\n" \
     "--new" \
@@ -152,7 +153,8 @@ strategy_Gv1() {
 "--dpi-desync=fake" \
 "--dpi-desync-cutoff=d2" \
 "--dpi-desync-any-protocol=1" \
-"--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/stun.bin" \
+"--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/stun.bin"
+    strategy_TCP_common
 }
 
 strategy_Gv2() {
@@ -164,103 +166,103 @@ strategy_Gv2() {
 "--dpi-desync-repeats=10" \
 "--dpi-desync-any-protocol=1" \
 "--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/quic_initial_www_google_com.bin" \
-"--dpi-desync-cutoff=n4" \
+"--dpi-desync-cutoff=n4"
+    strategy_TCP_common
 }
 
 fix_GAME() {
-local NO_PAUSE=$1
-[ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }
+    local NO_PAUSE=$1
+    [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }
 
-# если параметр передан — используем его
-if [ -n "$NO_PAUSE" ]; then
-GAME_CHOICE="$NO_PAUSE"
-else
+    # если параметр передан — используем его
+    if [ -n "$NO_PAUSE" ]; then
+        GAME_CHOICE="$NO_PAUSE"
+    else
+        CURRENT_GAME=""
+        grep -q "^#Gv1" "$CONF" && CURRENT_GAME="Gv1"
+        grep -q "^#Gv2" "$CONF" && CURRENT_GAME="Gv2"
 
-CURRENT_GAME=""
-grep -q "^#Gv1" "$CONF" && CURRENT_GAME="Gv1"
-grep -q "^#Gv2" "$CONF" && CURRENT_GAME="Gv2"
+        echo
+        echo -e "${MAGENTA}Выберите игровую стратегию${NC}"
 
-echo
-echo -e "${MAGENTA}Выберите игровую стратегию${NC}"
+        echo -en "1) Gv1"
+        [ "$CURRENT_GAME" = "Gv1" ] && echo "   [текущая]" || echo
 
-echo -en "1) Gv1"
-[ "$CURRENT_GAME" = "Gv1" ] && echo "   [текущая]" || echo
+        echo -en "2) Gv2"
+        [ "$CURRENT_GAME" = "Gv2" ] && echo "   [текущая]" || echo
 
-echo -en "2) Gv2"
-[ "$CURRENT_GAME" = "Gv2" ] && echo "   [текущая]" || echo
+        echo -e "3) Удалить игровую стратегию\n"
 
-echo -e "3) Удалить игровую стратегию\n"
+        printf "Выбор: "
+        read GAME_CHOICE
+    fi
 
-printf "Выбор: "
-read GAME_CHOICE
+    echo -e "${MAGENTA}Настраиваем стратегию для игр${NC}"
 
-fi
+    # удаляем старые блоки
+    sed -i '/#Gv[0-9]/,/^'\''$/d' "$CONF"
 
-echo -e "${MAGENTA}Настраиваем стратегию для игр${NC}"
+    # удаляем игровые порты
+    sed -i "s/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535//g" "$CONF"
+    sed -i "s/,6695-6710,25565,50001//g" "$CONF"
 
-# удаляем старые блоки
-sed -i '/#Gv[0-9]/,/^'\''$/d' "$CONF"
+    case "$GAME_CHOICE" in
 
-# удаляем игровые порты
-sed -i "s/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535//g" "$CONF"
-sed -i "s/,6695-6710,25565,50001//g" "$CONF"
+        1)
+            sed -i "/option NFQWS_PORTS_UDP '/s/'$/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535'/" "$CONF"
+            sed -i "/option NFQWS_PORTS_TCP '/s/'$/,6695-6710,25565,50001'/" "$CONF"
 
-case "$GAME_CHOICE" in
+            tail -n1 "$CONF" | grep -q "^'$" && sed -i '$d' "$CONF"
 
-1)
-sed -i "/option NFQWS_PORTS_UDP '/s/'$/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535'/" "$CONF"
-sed -i "/option NFQWS_PORTS_TCP '/s/'$/,6695-6710,25565,50001'/" "$CONF"
+            strategy_Gv1 >> "$CONF"
+            echo "'" >> "$CONF"
 
-tail -n1 "$CONF" | grep -q "^'$" && sed -i '$d' "$CONF"
+            echo -e "${GREEN}Игровая стратегия Gv1 включена${NC}"
+            ;;
 
-strategy_Gv1 >> "$CONF"
-echo "'" >> "$CONF"
+        2)
+            sed -i "/option NFQWS_PORTS_UDP '/s/'$/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535'/" "$CONF"
+            sed -i "/option NFQWS_PORTS_TCP '/s/'$/,6695-6710,25565,50001'/" "$CONF"
 
-echo -e "${GREEN}Игровая стратегия Gv1 включена${NC}"
-;;
+            tail -n1 "$CONF" | grep -q "^'$" && sed -i '$d' "$CONF"
 
-2)
-sed -i "/option NFQWS_PORTS_UDP '/s/'$/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535'/" "$CONF"
-sed -i "/option NFQWS_PORTS_TCP '/s/'$/,6695-6710,25565,50001'/" "$CONF"
+            strategy_Gv2 >> "$CONF"
+            echo "'" >> "$CONF"
 
-tail -n1 "$CONF" | grep -q "^'$" && sed -i '$d' "$CONF"
+            echo -e "${GREEN}Игровая стратегия Gv2 включена${NC}"
+            ;;
 
-strategy_Gv2 >> "$CONF"
-echo "'" >> "$CONF"
+        3)
+            if ! grep -q "^#Gv" "$CONF"; then
+                echo -e "\n${RED}Игровая стратегия не установлена!${NC}\n"
+                PAUSE
+                return
+            fi
 
-echo -e "${GREEN}Игровая стратегия Gv2 включена${NC}"
-;;
+            echo -e "\n${CYAN}Удаляем игровую стратегию${NC}"
 
-3)
-if ! grep -q "^#Gv" "$CONF"; then
-echo -e "\n${RED}Игровая стратегия не установлена!${NC}\n"
-PAUSE
-return
-fi
+            sed -i '/#Gv[0-9]/,/^'\''$/d' "$CONF"
 
-echo -e "\n${CYAN}Удаляем игровую стратегию${NC}"
+            sed -i "s/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535//g" "$CONF"
+            sed -i "s/,6695-6710,25565,50001//g" "$CONF"
 
-sed -i '/#Gv[0-9]/,/^'\''$/d' "$CONF"
+            tail -n1 "$CONF" | grep -q "^'$" || echo "'" >> "$CONF"
 
-sed -i "s/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535//g"
-sed -i "s/,6695-6710,25565,50001//g"
+            echo -e "${GREEN}Игровая стратегия удалена!${NC}\n"
+            PAUSE
+            ;;
 
-tail -n1 "$CONF" | grep -q "^'$" || echo "'" >> "$CONF"
+        *)
+            return
+            ;;
+    esac
 
-echo -e "${GREEN}Игровая стратегия удалена!${NC}\n"
-PAUSE
-;;
+    ZAPRET_RESTART
 
-*)
-return
-;;
-
-esac
-
-ZAPRET_RESTART
-
-[ -z "$NO_PAUSE" ] && PAUSE
+    [ -z "$NO_PAUSE" ] && PAUSE
 }
+
+
 
 # ==========================================
 # Zapret под ключ
