@@ -189,14 +189,13 @@ fix_GAME() {
 
 for i in $(seq 1 4); do
     if [ "$CURRENT_GAME" = "Gv$i" ]; then
-        echo -e "${CYAN}$i) ${RED}Удалить ${NC}Gv$i"
+        echo -e "${CYAN}$i) ${GREEN}Удалить ${NC}Gv$i"
     else
         echo -e "${CYAN}$i) ${GREEN}Установить ${NC}Gv$i"
     fi
 done
-
-        echo
-        printf "Выбор: "
+        echo -e "${CYAN}Enter) ${GREEN}Выход в меню стратегий"
+        echo -en "\n${YELLOW}Выберите пункт: ${NC}"
         read GAME_CHOICE
     fi
 
@@ -210,13 +209,13 @@ done
 
     # --- если выбранная стратегия уже стоит, удаляем её ---
     if [ "$CURRENT_GAME" = "Gv$GAME_CHOICE" ]; then
-        echo -e "${CYAN}Удаляем текущую стратегию Gv$GAME_CHOICE${NC}"
+        echo -e "${CYAN}Удаляем текущую игровую стратегию ${NC}Gv$GAME_CHOICE${NC}"
         sed -i '/#Gv[0-9]/,/^'\''$/d' "$CONF"
         sed -i "s/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535//g" "$CONF"
         sed -i "s/,6695-6710,25565,50001//g" "$CONF"
         echo "'" >> "$CONF"
         ZAPRET_RESTART
-        echo -e "${GREEN}Стратегия Gv$GAME_CHOICE удалена!${NC}"
+        echo -e "${GREEN}Игровая стратегия ${NC}Gv$GAME_CHOICE${GREEN} удалена!${NC}"
         [ -z "$NO_PAUSE" ] && PAUSE
         return
     fi
@@ -243,7 +242,7 @@ done
     echo "'" >> "$CONF"
 
     ZAPRET_RESTART
-    echo -e "${GREEN}Игровая стратегия Gv$GAME_CHOICE установлена!${NC}"
+    echo -e "${GREEN}Игровая стратегия ${NC}Gv$GAME_CHOICE${GREEN} установлена!${NC}"
     [ -z "$NO_PAUSE" ] && PAUSE
 }
 
