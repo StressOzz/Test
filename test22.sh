@@ -154,7 +154,6 @@ strategy_Gv1() {
 "--dpi-desync-cutoff=d2" \
 "--dpi-desync-any-protocol=1" \
 "--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/stun.bin"
-    strategy_TCP_common
 }
 
 strategy_Gv2() {
@@ -167,14 +166,13 @@ strategy_Gv2() {
 "--dpi-desync-any-protocol=1" \
 "--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/quic_initial_www_google_com.bin" \
 "--dpi-desync-cutoff=n4"
-    strategy_TCP_common
 }
 
 fix_GAME() {
     local NO_PAUSE=$1
     [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }
 
-    # если параметр передан — используем его
+    # определяем выбор
     if [ -n "$NO_PAUSE" ]; then
         GAME_CHOICE="$NO_PAUSE"
     else
@@ -197,17 +195,22 @@ fix_GAME() {
         read GAME_CHOICE
     fi
 
-    echo -e "${MAGENTA}Настраиваем стратегию для игр${NC}"
+    # ничего не делаем, если выбор не распознан
+    case "$GAME_CHOICE" in
+        1|2|3) ;;
+        *) return ;;
+    esac
 
-    # удаляем старые блоки
-    sed -i '/#Gv[0-9]/,/^'\''$/d' "$CONF"
+    echo -e "${MAGENTA}Обновляем настройки...${NC}"
 
-    # удаляем игровые порты
-    sed -i "s/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535//g" "$CONF"
-    sed -i "s/,6695-6710,25565,50001//g" "$CONF"
+    # === Удаляем старую стратегию только если ставим новую или удаляем ===
+    if [ "$GAME_CHOICE" != "" ]; then
+        sed -i '/#Gv[0-9]/,/^'\''$/d' "$CONF"
+        sed -i "s/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535//g" "$CONF"
+        sed -i "s/,6695-6710,25565,50001//g" "$CONF"
+    fi
 
     case "$GAME_CHOICE" in
-
         1)
             sed -i "/option NFQWS_PORTS_UDP '/s/'$/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535'/" "$CONF"
             sed -i "/option NFQWS_PORTS_TCP '/s/'$/,6695-6710,25565,50001'/" "$CONF"
@@ -215,6 +218,7 @@ fix_GAME() {
             tail -n1 "$CONF" | grep -q "^'$" && sed -i '$d' "$CONF"
 
             strategy_Gv1 >> "$CONF"
+            strategy_TCP_common >> "$CONF"
             echo "'" >> "$CONF"
 
             echo -e "${GREEN}Игровая стратегия Gv1 включена${NC}"
@@ -227,6 +231,7 @@ fix_GAME() {
             tail -n1 "$CONF" | grep -q "^'$" && sed -i '$d' "$CONF"
 
             strategy_Gv2 >> "$CONF"
+            strategy_TCP_common >> "$CONF"
             echo "'" >> "$CONF"
 
             echo -e "${GREEN}Игровая стратегия Gv2 включена${NC}"
@@ -235,25 +240,15 @@ fix_GAME() {
         3)
             if ! grep -q "^#Gv" "$CONF"; then
                 echo -e "\n${RED}Игровая стратегия не установлена!${NC}\n"
-                PAUSE
+                [ -z "$NO_PAUSE" ] && PAUSE
                 return
             fi
 
             echo -e "\n${CYAN}Удаляем игровую стратегию${NC}"
 
-            sed -i '/#Gv[0-9]/,/^'\''$/d' "$CONF"
-
-            sed -i "s/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535//g" "$CONF"
-            sed -i "s/,6695-6710,25565,50001//g" "$CONF"
-
             tail -n1 "$CONF" | grep -q "^'$" || echo "'" >> "$CONF"
 
             echo -e "${GREEN}Игровая стратегия удалена!${NC}\n"
-            PAUSE
-            ;;
-
-        *)
-            return
             ;;
     esac
 
