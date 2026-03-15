@@ -173,17 +173,39 @@ fix_GAME() {
     local NO_PAUSE=$1
     [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }
 
-    # Автоматически находим все функции стратегий (без использования process substitution)
+    # Автоматически находим все функции стратегий (без here string)
     local strategies=""
     local s
-    while read -r line; do
-        s=$(echo "$line" | awk '{print $3}')
-        case "$s" in
-            strategy_Gv[0-9]*)
-                strategies="$strategies $s"
-                ;;
-        esac
-    done <<< "$(declare -F 2>/dev/null || typeset -F 2>/dev/null)"
+    
+    # Сохраняем вывод declare -F во временный файл или используем pipe
+    if command -v declare >/dev/null 2>&1; then
+        declare -F 2>/dev/null | while read -r line; do
+            s=$(echo "$line" | awk '{print $3}')
+            case "$s" in
+                strategy_Gv[0-9]*)
+                    echo "$s"
+                    ;;
+            esac
+        done > /tmp/zapret_strategies.$$
+    else
+        typeset -F 2>/dev/null | while read -r line; do
+            s=$(echo "$line" | awk '{print $3}')
+            case "$s" in
+                strategy_Gv[0-9]*)
+                    echo "$s"
+                    ;;
+            esac
+        done > /tmp/zapret_strategies.$$
+    fi
+    
+    # Читаем из временного файла
+    strategies=""
+    while read -r s; do
+        strategies="$strategies $s"
+    done < /tmp/zapret_strategies.$$
+    
+    # Удаляем временный файл
+    rm -f /tmp/zapret_strategies.$$
     
     # Преобразуем в массив
     local strategies_array=($strategies)
