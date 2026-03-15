@@ -153,7 +153,6 @@ strategy_Gv1() {
 "--dpi-desync-cutoff=d2" \
 "--dpi-desync-any-protocol=1" \
 "--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/stun.bin" \
-strategy_TCP_common >> "$CONF"
 }
 
 strategy_Gv2() {
@@ -166,7 +165,6 @@ strategy_Gv2() {
 "--dpi-desync-any-protocol=1" \
 "--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/quic_initial_www_google_com.bin" \
 "--dpi-desync-cutoff=n4" \
-strategy_TCP_common >> "$CONF"
 }
 
 fix_GAME() {
@@ -216,6 +214,7 @@ sed -i "/option NFQWS_PORTS_TCP '/s/'$/,6695-6710,25565,50001'/" "$CONF"
 tail -n1 "$CONF" | grep -q "^'$" && sed -i '$d' "$CONF"
 
 strategy_Gv1 >> "$CONF"
+strategy_TCP_common >> "$CONF"
 echo "'" >> "$CONF"
 
 echo -e "${GREEN}Игровая стратегия Gv1 включена${NC}"
@@ -228,6 +227,7 @@ sed -i "/option NFQWS_PORTS_TCP '/s/'$/,6695-6710,25565,50001'/" "$CONF"
 tail -n1 "$CONF" | grep -q "^'$" && sed -i '$d' "$CONF"
 
 strategy_Gv2 >> "$CONF"
+strategy_TCP_common >> "$CONF"
 echo "'" >> "$CONF"
 
 echo -e "${GREEN}Игровая стратегия Gv2 включена${NC}"
