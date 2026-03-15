@@ -187,10 +187,11 @@ fix_GAME() {
         echo
         echo -e "${MAGENTA}Выберите игровую стратегию${NC}"
 
-        for i in 1 4; do
-            echo -n "$i) Gv$i"
-            [ "$CURRENT_GAME" = "Gv$i" ] && echo "   [текущая]" || echo
-        done
+for i in $(seq 1 4); do
+
+    echo -n "$i) Gv$i"
+    [ "$CURRENT_GAME" = "Gv$i" ] && echo "   [текущая]" || echo
+done
         echo "5) Удалить игровую стратегию"
         echo
         printf "Выбор: "
