@@ -2,7 +2,7 @@
 # ==========================================
 # Zapret on remittor Manager by StressOzz
 # =========================================
-ZAPRET_MANAGER_VERSION="9.1"; ZAPRET_VERSION="72.20260307"; STR_VERSION_AUTOINSTALL="v1"
+ZAPRET_MANAGER_VERSION="9.2"; ZAPRET_VERSION="72.20260307"; STR_VERSION_AUTOINSTALL="v1"
 TEST_HOST="https://rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com"; LAN_IP=$(uci get network.lan.ipaddr 2>/dev/null | cut -d/ -f1)
 GREEN="\033[1;32m"; RED="\033[1;31m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
 CONF="/etc/config/zapret"; CUSTOM_DIR="/opt/zapret/init.d/openwrt/custom.d/"; HOSTLIST_FILE="/opt/zapret/ipset/zapret-hosts-user.txt"
@@ -132,117 +132,25 @@ sed -i "/DISABLE_CUSTOM/s/'1'/'0'/" /etc/config/zapret; ZAPRET_RESTART; [ "$NO_P
 # ==========================================
 # FIX GAME
 # ==========================================
-
-strategy_TCP_common() {
-    printf "%s\n" \
-    "--new" \
-    "--filter-tcp=6695-6710,25565,50001" \
-    "--dpi-desync-any-protocol=1" \
-    "--dpi-desync-cutoff=n5" \
-    "--dpi-desync=multisplit" \
-    "--dpi-desync-split-seqovl=582" \
-    "--dpi-desync-split-pos=1" \
-    "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/stun.bin"
-}
-
-strategy_Gv1() {
-    printf "%s\n" \
-"#Gv1" \
-"--new" \
-"--filter-udp=88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535" \
-"--dpi-desync=fake" \
-"--dpi-desync-cutoff=d2" \
-"--dpi-desync-any-protocol=1" \
-"--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/stun.bin"
-}
-
-strategy_Gv() {
-    local N="$1"
-
-    printf "%s\n" \
-"#Gv$N" \
-"--new" \
-"--filter-udp=88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535" \
-"--dpi-desync=fake" \
-"--dpi-desync-repeats=10" \
-"--dpi-desync-any-protocol=1" \
-"--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/quic_initial_www_google_com.bin" \
-"--dpi-desync-cutoff=n$N"
-}
-
-fix_GAME() {
-    local NO_PAUSE=$1
-    [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }
-
-    CURRENT_GAME=""
-    for i in 1 2 3 4; do
-        grep -q "^#Gv$i" "$CONF" && CURRENT_GAME="Gv$i"
-    done
-
-    if [ -n "$NO_PAUSE" ]; then
-        GAME_CHOICE="$NO_PAUSE"
-    else
-        echo
-        echo -e "${MAGENTA}Выберите игровую стратегию${NC}"
-
-for i in $(seq 1 4); do
-    if [ "$CURRENT_GAME" = "Gv$i" ]; then
-        echo -e "${CYAN}$i) ${GREEN}Удалить ${NC}Gv$i"
-    else
-        echo -e "${CYAN}$i) ${GREEN}Установить ${NC}Gv$i"
-    fi
-done
-        echo -e "${CYAN}Enter) ${GREEN}Выход в меню стратегий"
-        echo -en "\n${YELLOW}Выберите пункт: ${NC}"
-        read GAME_CHOICE
-    fi
-
-    case "$GAME_CHOICE" in
-        1|2|3|4) ;;
-        *) return ;;
-    esac
-
-    if [ "$CURRENT_GAME" = "Gv$GAME_CHOICE" ]; then
-        echo -e "\n${CYAN}Удаляем игровую стратегию ${NC}Gv$GAME_CHOICE${NC}"
-        sed -i '/#Gv[0-9]/,/^'\''$/d' "$CONF"
-        sed -i "s/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535//g" "$CONF"
-        sed -i "s/,6695-6710,25565,50001//g" "$CONF"
-        echo "'" >> "$CONF"
-        ZAPRET_RESTART
-        echo -e "${GREEN}Игровая стратегия ${NC}Gv$GAME_CHOICE${GREEN} удалена!${NC}\n"
-        [ -z "$NO_PAUSE" ] && PAUSE
-        return
-    fi
-
-    if [ -n "$CURRENT_GAME" ]; then
-        sed -i '/#Gv[0-9]/,/^'\''$/d' "$CONF"
-        sed -i "s/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535//g" "$CONF"
-        sed -i "s/,6695-6710,25565,50001//g" "$CONF"
-    fi
-
-    sed -i "/option NFQWS_PORTS_UDP '/s/'$/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535'/" "$CONF"
-    sed -i "/option NFQWS_PORTS_TCP '/s/'$/,6695-6710,25565,50001'/" "$CONF"
-    tail -n1 "$CONF" | grep -q "^'$" && sed -i '$d' "$CONF"
-
-    if [ "$GAME_CHOICE" -eq 1 ]; then
-        strategy_Gv1 >> "$CONF"
-    else
-        strategy_Gv "$GAME_CHOICE" >> "$CONF"
-    fi
-    strategy_TCP_common >> "$CONF"
-    echo "'" >> "$CONF"
-    echo -e "\n${CYAN}Устанавливаем игровую стратегию ${NC}Gv$GAME_CHOICE"
-    ZAPRET_RESTART
-    echo -e "${GREEN}Игровая стратегия ${NC}Gv$GAME_CHOICE${GREEN} установлена!${NC}\n"
-    [ -z "$NO_PAUSE" ] && PAUSE
-}
-
+strategy_TCP_common() { printf "%s\n" "--new" "--filter-tcp=6695-6710,25565,50001" "--dpi-desync-any-protocol=1" "--dpi-desync-cutoff=n5" "--dpi-desync=multisplit" "--dpi-desync-split-seqovl=582" "--dpi-desync-split-pos=1" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/stun.bin"; }
+strategy_Gv1() { printf "%s\n" "#Gv1" "--new" "--filter-udp=88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535" "--dpi-desync=fake" "--dpi-desync-cutoff=d2" "--dpi-desync-any-protocol=1" "--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/stun.bin"; }
+strategy_Gv() { local N="$1"; printf "%s\n" "#Gv$N" "--new" "--filter-udp=88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535" "--dpi-desync=fake" "--dpi-desync-repeats=10" "--dpi-desync-any-protocol=1" "--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/quic_initial_www_google_com.bin" "--dpi-desync-cutoff=n$N"; }
+fix_GAME() { local NO_PAUSE=$1; [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }; CURRENT_GAME=""; for i in 1 2 3 4; do
+grep -q "^#Gv$i" "$CONF" && CURRENT_GAME="Gv$i"; done; if [ -n "$NO_PAUSE" ]; then GAME_CHOICE="$NO_PAUSE"; else echo -e "\n${MAGENTA}Выберите игровую стратегию${NC}"
+for i in $(seq 1 4); do if [ "$CURRENT_GAME" = "Gv$i" ]; then echo -e "${CYAN}$i) ${GREEN}Удалить ${NC}Gv$i"; else echo -e "${CYAN}$i) ${GREEN}Установить ${NC}Gv$i"; fi; done
+echo -e "${CYAN}Enter) ${GREEN}Выход в меню стратегий"; echo -en "\n${YELLOW}Выберите пункт: ${NC}"; read GAME_CHOICE; fi; case "$GAME_CHOICE" in 1|2|3|4) ;; *) return ;; esac
+if [ "$CURRENT_GAME" = "Gv$GAME_CHOICE" ]; then echo -e "\n${CYAN}Удаляем игровую стратегию ${NC}Gv$GAME_CHOICE${NC}"; sed -i '/#Gv[0-9]/,/^'\''$/d' "$CONF"; sed -i "s/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535//g" "$CONF"
+sed -i "s/,6695-6710,25565,50001//g" "$CONF"; echo "'" >> "$CONF"; ZAPRET_RESTART; echo -e "${GREEN}Игровая стратегия ${NC}Gv$GAME_CHOICE${GREEN} удалена!${NC}\n"; [ -z "$NO_PAUSE" ] && PAUSE; return; fi
+if [ -n "$CURRENT_GAME" ]; then sed -i '/#Gv[0-9]/,/^'\''$/d' "$CONF"; sed -i "s/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535//g" "$CONF"; sed -i "s/,6695-6710,25565,50001//g" "$CONF"; fi
+sed -i "/option NFQWS_PORTS_UDP '/s/'$/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535'/" "$CONF"; sed -i "/option NFQWS_PORTS_TCP '/s/'$/,6695-6710,25565,50001'/" "$CONF"; tail -n1 "$CONF" | grep -q "^'$" && sed -i '$d' "$CONF"
+if [ "$GAME_CHOICE" -eq 1 ]; then strategy_Gv1 >> "$CONF"; else strategy_Gv "$GAME_CHOICE" >> "$CONF"; fi; strategy_TCP_common >> "$CONF"; echo "'" >> "$CONF"; [ -z "$NO_PAUSE" ] && echo; echo -e "${CYAN}Устанавливаем игровую стратегию ${NC}Gv$GAME_CHOICE"
+ZAPRET_RESTART; echo -e "${GREEN}Игровая стратегия ${NC}Gv$GAME_CHOICE${GREEN} установлена!${NC}\n"; [ -z "$NO_PAUSE" ] && PAUSE; }
 # ==========================================
 # Zapret под ключ
 # ==========================================
 zapret_key() { clear; echo -e "${MAGENTA}Удаление, установка и настройка Zapret${NC}\n"; get_versions; uninstall_zapret "1"; install_Zapret "1"
 [ ! -f /etc/init.d/zapret ] && { echo -e "${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }; install_strategy $STR_VERSION_AUTOINSTALL "1"; echo -e "\n${MAGENTA}Редактируем hosts${NC}\n${CYAN}Добавляем IP и домены в${NC} hosts"
-hosts_add "$ALL_BLOCKS"; echo -e "IP ${GREEN}и${NC} домены ${GREEN}добавлены в ${NC}hosts${GREEN}!${NC}\n"; Discord_menu "1"; fix_GAME "1"; echo -e "Zapret ${GREEN}установлен и настроен!${NC}\n"; PAUSE; }
+hosts_add "$ALL_BLOCKS"; echo -e "IP ${GREEN}и${NC} домены ${GREEN}добавлены в ${NC}hosts${GREEN}!${NC}\n"; Discord_menu "1"; echo -e "${MAGENTA}Настраиваем стратегию для игр${NC}"; fix_GAME "1"; echo -e "Zapret ${GREEN}установлен и настроен!${NC}\n"; PAUSE; }
 # ==========================================
 # Меню настроек
 # ==========================================
@@ -338,10 +246,10 @@ printf '%s\n' "--dpi-desync-fake-tls-mod=rnd,dupsid,sni=ggpht.com" "--dpi-desync
 printf '%s\n' "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake,multisplit" "--dpi-desync-split-seqovl=654" "--dpi-desync-split-pos=1" "--dpi-desync-fooling=badseq,badsum" "--dpi-desync-repeats=8" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/stun.bin" "--dpi-desync-fake-tls=/opt/zapret/files/fake/stun.bin" "--dpi-desync-badseq-increment=0"; }
 strategy_v8() { printf '%s\n' "#v8" "#Yv03" "--filter-tcp=443" "--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt" "--dpi-desync=fake,multisplit" "--dpi-desync-split-pos=2,sld" "--dpi-desync-fake-tls=0x0F0F0F0F" "--dpi-desync-fake-tls=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin"
 printf '%s\n' "--dpi-desync-fake-tls-mod=rnd,dupsid,sni=ggpht.com" "--dpi-desync-split-seqovl=620" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin" "--dpi-desync-fooling=badsum,badseq"
-printf '%s\n' "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake" "--dpi-desync-fooling=ts" "--dpi-desync-fake-tls=/opt/zapret/files/fake/4pda.bin" "--dpi-desync-fake-tls-mod=none" ; }
+printf '%s\n' "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake" "--dpi-desync-fooling=ts" "--dpi-desync-fake-tls=/opt/zapret/files/fake/4pda.bin" "--dpi-desync-fake-tls-mod=none"; }
 strategy_v9() { printf '%s\n' "#v9" "#Yv03" "--filter-tcp=443" "--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt" "--dpi-desync=fake,multisplit" "--dpi-desync-split-pos=2,sld" "--dpi-desync-fake-tls=0x0F0F0F0F" "--dpi-desync-fake-tls=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin"
 printf '%s\n' "--dpi-desync-fake-tls-mod=rnd,dupsid,sni=ggpht.com" "--dpi-desync-split-seqovl=620" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin" "--dpi-desync-fooling=badsum,badseq"
-printf '%s\n' "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=hostfakesplit" "--dpi-desync-fooling=badseq,badsum" "--dpi-desync-hostfakesplit-mod=host=mapgl.2gis.com" "--dpi-desync-badseq-increment=0" ; }
+printf '%s\n' "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=hostfakesplit" "--dpi-desync-fooling=badseq,badsum" "--dpi-desync-hostfakesplit-mod=host=mapgl.2gis.com" "--dpi-desync-badseq-increment=0"; }
 # ==========================================
 # Cтратегии Flowseal
 # ==========================================
