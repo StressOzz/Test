@@ -153,7 +153,7 @@ strategy_Gv1() {
 "--dpi-desync-cutoff=d2" \
 "--dpi-desync-any-protocol=1" \
 "--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/stun.bin" \
-strategy_TCP_common
+strategy_TCP_common >> "$CONF"
 }
 
 strategy_Gv2() {
@@ -166,7 +166,7 @@ strategy_Gv2() {
 "--dpi-desync-any-protocol=1" \
 "--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/quic_initial_www_google_com.bin" \
 "--dpi-desync-cutoff=n4" \
-strategy_TCP_common
+strategy_TCP_common >> "$CONF"
 }
 
 fix_GAME() {
