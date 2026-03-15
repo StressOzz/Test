@@ -2,15 +2,6 @@
 # ==========================================
 # Zapret on remittor Manager by StressOzz
 # =========================================
-
-
-
-
-
-
-
-
-
 ZAPRET_MANAGER_VERSION="9.1"; ZAPRET_VERSION="72.20260307"; STR_VERSION_AUTOINSTALL="v1"
 TEST_HOST="https://rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com"; LAN_IP=$(uci get network.lan.ipaddr 2>/dev/null | cut -d/ -f1)
 GREEN="\033[1;32m"; RED="\033[1;31m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -79,11 +70,16 @@ if ! command -v unzip >/dev/null 2>&1; then echo -e "${CYAN}Устанавлив
 if [ "$PKG_IS_APK" -eq 1 ]; then apk add unzip >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить unzip!${NC}\n"; PAUSE; return; }
 else opkg install unzip >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить unzip!${NC}\n"; PAUSE; return; }; fi; fi
 unzip -oq "$ZIP" -d "$TMP_SF" || { echo -e "\n${RED}Не удалось распоковать файл${NC}\n"; PAUSE; return; }
-BASE="$TMP_SF/zapret-discord-youtube-main"; find "$BASE" -type f -name 'general*.bat' ! -name 'general (ALT5).bat' | while read -r F; do MATCH=$(grep -E '^--filter-tcp=%GameFilterTCP%|^--filter-udp=%GameFilterUDP%"' "$F")
+BASE="$TMP_SF/zapret-discord-youtube-main"; find "$BASE" -type f -name 'general*.bat' ! -name 'general (ALT5).bat' | while read -r F; do MATCH=$(grep -E '^--filter-tcp=%GameFilterTCP%|^--filter-udp=%GameFilterUDP%' "$F")
 [ -z "$MATCH" ] && continue; NAME=$(basename "$F" .bat); { echo "#$NAME"; echo "$MATCH" | sed 's/--/\n--/g' | sed '/^$/d' | sed 's/[[:space:]]*$//'; echo; } >> "$OUT"; done
 sed -i 's|"%BIN%tls_clienthello_www_google_com.bin"|/opt/zapret/files/fake/tls_clienthello_www_google_com.bin|g' "$OUT"
 sed -i '/--hostlist="%LISTS%list-general.txt"/d' "$OUT"
 sed -i '/--hostlist="%LISTS%list-general-user.txt"/d' "$OUT"
+
+sed -i '/--ipset="%LISTS%ipset-all.txt"/d' "$OUT"
+sed -i '/--ipset-exclude="%LISTS%ipset-exclude.txt"/d' "$OUT"
+sed -i '/--ipset-exclude="%LISTS%ipset-exclude-user.txt"/d' "$OUT"
+
 sed -i '/--ipset-exclude="%LISTS%ipset-exclude.txt"/d' "$OUT"
 sed -i '/--ipset-exclude="%LISTS%ipset-exclude-user.txt"/d' "$OUT"
 sed -i '/--hostlist-exclude="%LISTS%list-exclude-user.txt"/d' "$OUT"
