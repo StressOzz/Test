@@ -173,9 +173,21 @@ fix_GAME() {
     local NO_PAUSE=$1
     [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }
 
-    # Автоматически находим все функции стратегий
-    local strategies=($(declare -F | awk '{print $3}' | grep '^strategy_Gv[0-9]\+$' | sort -V))
-    local strategies_count=${#strategies[@]}
+    # Автоматически находим все функции стратегий (без использования process substitution)
+    local strategies=""
+    local s
+    while read -r line; do
+        s=$(echo "$line" | awk '{print $3}')
+        case "$s" in
+            strategy_Gv[0-9]*)
+                strategies="$strategies $s"
+                ;;
+        esac
+    done <<< "$(declare -F 2>/dev/null || typeset -F 2>/dev/null)"
+    
+    # Преобразуем в массив
+    local strategies_array=($strategies)
+    local strategies_count=${#strategies_array[@]}
     
     if [ $strategies_count -eq 0 ]; then
         echo -e "\n${RED}Не найдено ни одной стратегии!${NC}\n"
@@ -183,14 +195,19 @@ fix_GAME() {
         return
     fi
 
+    # Сортируем массив
+    strategies_array=($(printf '%s\n' "${strategies_array[@]}" | sort -V))
+
     # если параметр передан — используем его
     if [ -n "$NO_PAUSE" ]; then
         GAME_CHOICE="$NO_PAUSE"
     else
         # Определяем текущую стратегию
         CURRENT_GAME=""
-        for s in "${strategies[@]}"; do
-            grep -q "^${s#strategy_}" "$CONF" && CURRENT_GAME="${s#strategy_}"
+        local strategy_name
+        for s in "${strategies_array[@]}"; do
+            strategy_name="${s#strategy_}"
+            grep -q "^${strategy_name}" "$CONF" && CURRENT_GAME="$strategy_name"
         done
 
         echo
@@ -198,11 +215,11 @@ fix_GAME() {
 
         # Выводим все найденные стратегии
         local i=1
-        for s in "${strategies[@]}"; do
+        for s in "${strategies_array[@]}"; do
             local strategy_name="${s#strategy_}"
             echo -en "$i) $strategy_name"
             [ "$CURRENT_GAME" = "$strategy_name" ] && echo "   [текущая]" || echo
-            ((i++))
+            i=$((i+1))
         done
 
         echo -e "$i) Удалить игровую стратегию\n"
@@ -222,9 +239,10 @@ fix_GAME() {
     sed -i "s/,6695-6710,25565,50001//g" "$CONF"
 
     # Проверяем, является ли выбор числом и в пределах диапазона
-    if [[ "$GAME_CHOICE" =~ ^[0-9]+$ ]] && [ "$GAME_CHOICE" -le "$strategies_count" ]; then
+    if [ "$GAME_CHOICE" -ge 1 ] 2>/dev/null && [ "$GAME_CHOICE" -le "$strategies_count" ] 2>/dev/null; then
         # Выбрана стратегия
-        local selected_strategy="${strategies[$((GAME_CHOICE-1))]#strategy_}"
+        local selected_idx=$((GAME_CHOICE-1))
+        local selected_strategy="${strategies_array[$selected_idx]#strategy_}"
         
         # Добавляем порты
         sed -i "/option NFQWS_PORTS_UDP '/s/'$/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535'/" "$CONF"
