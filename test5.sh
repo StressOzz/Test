@@ -217,6 +217,7 @@ fix_GAME() {
         echo "Стратегия $CHOSEN включена"
     elif [ "$GAME_CHOICE" -eq $(($(echo $STRATEGIES | wc -w)+1)) ]; then
         tail -n1 "$CONF" | grep -q "^'$" || echo "'"
+        echo "'" >> "$CONF"
         echo "Игровая стратегия удалена"
     fi
 
