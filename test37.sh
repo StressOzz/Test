@@ -203,7 +203,7 @@ done
     esac
 
     if [ "$CURRENT_GAME" = "Gv$GAME_CHOICE" ]; then
-        echo -e "${CYAN}Удаляем игровую стратегию ${NC}Gv$GAME_CHOICE${NC}"
+        echo -e "\n${CYAN}Удаляем игровую стратегию ${NC}Gv$GAME_CHOICE${NC}"
         sed -i '/#Gv[0-9]/,/^'\''$/d' "$CONF"
         sed -i "s/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535//g" "$CONF"
         sed -i "s/,6695-6710,25565,50001//g" "$CONF"
@@ -231,7 +231,7 @@ done
     fi
     strategy_TCP_common >> "$CONF"
     echo "'" >> "$CONF"
-    echo -e "${CYAN}Устанавливаем игровую стратегию ${NC}Gv$GAME_CHOICE"
+    echo -e "\n${CYAN}Устанавливаем игровую стратегию ${NC}Gv$GAME_CHOICE"
     ZAPRET_RESTART
     echo -e "${GREEN}Игровая стратегия ${NC}Gv$GAME_CHOICE${GREEN} установлена!${NC}\n"
     [ -z "$NO_PAUSE" ] && PAUSE
