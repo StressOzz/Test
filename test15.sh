@@ -132,6 +132,18 @@ sed -i "/DISABLE_CUSTOM/s/'1'/'0'/" /etc/config/zapret; ZAPRET_RESTART; [ "$NO_P
 # ==========================================
 # FIX GAME
 # ==========================================
+strategy_TCP_common() {
+    printf "%s\n" \
+    "--new" \
+    "--filter-tcp=6695-6710,25565,50001" \
+    "--dpi-desync-any-protocol=1" \
+    "--dpi-desync-cutoff=n5" \
+    "--dpi-desync=multisplit" \
+    "--dpi-desync-split-seqovl=582" \
+    "--dpi-desync-split-pos=1" \
+    "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/stun.bin"
+}
+
 strategy_Gv1() {
     printf "%s\n" \
 "#Gv1" \
@@ -155,18 +167,6 @@ strategy_Gv2() {
 "--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/quic_initial_www_google_com.bin" \
 "--dpi-desync-cutoff=n4" \
 strategy_TCP_common
-}
-
-strategy_TCP_common() {
-    printf "%s\n" \
-    "--new" \
-    "--filter-tcp=6695-6710,25565,50001" \
-    "--dpi-desync-any-protocol=1" \
-    "--dpi-desync-cutoff=n5" \
-    "--dpi-desync=multisplit" \
-    "--dpi-desync-split-seqovl=582" \
-    "--dpi-desync-split-pos=1" \
-    "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/stun.bin"
 }
 
 fix_GAME() {
