@@ -173,33 +173,37 @@ fix_GAME() {
 local NO_PAUSE=$1
 [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }
 
-# Если передан параметр, используем его
+# если параметр передан — используем его
 if [ -n "$NO_PAUSE" ]; then
-    GAME_CHOICE="$NO_PAUSE"
+GAME_CHOICE="$NO_PAUSE"
 else
-    CURRENT_GAME=""
-    grep -q "^#Gv1" "$CONF" && CURRENT_GAME="Gv1"
-    grep -q "^#Gv2" "$CONF" && CURRENT_GAME="Gv2"
 
-    echo
-    echo -e "${MAGENTA}Выберите игровую стратегию${NC}"
+CURRENT_GAME=""
+grep -q "^#Gv1" "$CONF" && CURRENT_GAME="Gv1"
+grep -q "^#Gv2" "$CONF" && CURRENT_GAME="Gv2"
 
-    echo -en "1) Gv1"
-    [ "$CURRENT_GAME" = "Gv1" ] && echo "   [текущая]" || echo
+echo
+echo -e "${MAGENTA}Выберите игровую стратегию${NC}"
 
-    echo -en "2) Gv2"
-    [ "$CURRENT_GAME" = "Gv2" ] && echo "   [текущая]" || echo
+echo -en "1) Gv1"
+[ "$CURRENT_GAME" = "Gv1" ] && echo "   [текущая]" || echo
 
-    echo -e "3) Удалить игровую стратегию\n"
+echo -en "2) Gv2"
+[ "$CURRENT_GAME" = "Gv2" ] && echo "   [текущая]" || echo
 
-    printf "Выбор: "
-    read GAME_CHOICE
+echo -e "3) Удалить игровую стратегию\n"
+
+printf "Выбор: "
+read GAME_CHOICE
+
 fi
 
 echo -e "${MAGENTA}Настраиваем стратегию для игр${NC}"
 
-# Удаляем старые блоки и игровые порты
+# удаляем старые блоки
 sed -i '/#Gv[0-9]/,/^'\''$/d' "$CONF"
+
+# удаляем игровые порты
 sed -i "s/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535//g" "$CONF"
 sed -i "s/,6695-6710,25565,50001//g" "$CONF"
 
@@ -231,14 +235,15 @@ echo -e "${GREEN}Игровая стратегия Gv2 включена${NC}"
 
 3)
 if ! grep -q "^#Gv" "$CONF"; then
-    echo -e "\n${RED}Игровая стратегия не установлена!${NC}\n"
-    PAUSE
-    return
+echo -e "\n${RED}Игровая стратегия не установлена!${NC}\n"
+PAUSE
+return
 fi
 
 echo -e "\n${CYAN}Удаляем игровую стратегию${NC}"
 
 sed -i '/#Gv[0-9]/,/^'\''$/d' "$CONF"
+
 sed -i "s/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535//g"
 sed -i "s/,6695-6710,25565,50001//g"
 
