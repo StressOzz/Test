@@ -187,13 +187,13 @@ fix_GAME() {
         echo
         echo -e "${MAGENTA}Выберите игровую стратегию${NC}"
 
-        for i in 1 4; do
-            if [ "$CURRENT_GAME" = "Gv$i" ]; then
-                echo -e "${CYAN}$i) ${RED}Удалить ${NC}Gv$i (текущая)"
-            else
-                echo -e "${CYAN}$i) ${GREEN}Установить ${NC}Gv$i"
-            fi
-        done
+for i in {1..4}; do
+    if [ "$CURRENT_GAME" = "Gv$i" ]; then
+        echo -e "${CYAN}$i) ${RED}Удалить ${NC}Gv$i"
+    else
+        echo -e "${CYAN}$i) ${GREEN}Установить ${NC}Gv$i"
+    fi
+done
 
         echo
         printf "Выбор: "
