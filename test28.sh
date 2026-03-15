@@ -85,8 +85,10 @@ sed -i 's|"%LISTS%list-exclude.txt"|/opt/zapret/ipset/zapret-hosts-user-exclude.
 sed -i 's/--new[[:space:]]\^/--new/g' "$OUT";
 sed -i 's|"%LISTS%list-google.txt"|/opt/zapret/ipset/zapret-hosts-google.txt|g' "$OUT"
 
-sed -i 's|"%GameFilterTCP%|6695-6710,25565,50001|g' "$OUT"
-sed -i 's|"%GameFilterUDP%|88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535|g' "$OUT"
+sed -i 's|%GameFilterTCP%|6695-6710,25565,50001|g' "$OUT"
+sed -i 's|%GameFilterUDP%|88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535|g' "$OUT"
+
+sed -i 's|"%BIN%quic_initial_www_google_com.bin"|/opt/zapret/files/fake/quic_initial_www_google_com.bin|g' "$OUT"
 
 sed -i 's|"%BIN%stun.bin"|/opt/zapret/files/fake/stun.bin|g' "$OUT"
 sed -i 's|"%BIN%tls_clienthello_4pda_to.bin"|/opt/zapret/files/fake/4pda.bin|g' "$OUT";
