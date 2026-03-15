@@ -132,6 +132,43 @@ sed -i "/DISABLE_CUSTOM/s/'1'/'0'/" /etc/config/zapret; ZAPRET_RESTART; [ "$NO_P
 # ==========================================
 # FIX GAME
 # ==========================================
+strategy_Gv1() {
+    printf "%s\n" \
+"#Gv1" \
+"--new" \
+"--filter-udp=88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535" \
+"--dpi-desync=fake" \
+"--dpi-desync-cutoff=d2" \
+"--dpi-desync-any-protocol=1" \
+"--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/stun.bin" \
+strategy_TCP_common
+}
+
+strategy_Gv2() {
+    printf "%s\n" \
+"#Gv2" \
+"--new" \
+"--filter-udp=88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535" \
+"--dpi-desync=fake" \
+"--dpi-desync-repeats=10" \
+"--dpi-desync-any-protocol=1" \
+"--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/quic_initial_www_google_com.bin" \
+"--dpi-desync-cutoff=n4" \
+strategy_TCP_common
+}
+
+strategy_TCP_common() {
+    printf "%s\n" \
+    "--new" \
+    "--filter-tcp=6695-6710,25565,50001" \
+    "--dpi-desync-any-protocol=1" \
+    "--dpi-desync-cutoff=n5" \
+    "--dpi-desync=multisplit" \
+    "--dpi-desync-split-seqovl=582" \
+    "--dpi-desync-split-pos=1" \
+    "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/stun.bin"
+}
+
 fix_GAME() {
 local NO_PAUSE=$1
 [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }
@@ -148,21 +185,20 @@ grep -q "^#Gv2" "$CONF" && CURRENT_GAME="Gv2"
 echo
 echo -e "${MAGENTA}Выберите игровую стратегию${NC}"
 
-echo -n "1) Gv1"
+echo -en "1) Gv1"
 [ "$CURRENT_GAME" = "Gv1" ] && echo "   [текущая]" || echo
 
-echo -n "2) Gv2"
+echo -en "2) Gv2"
 [ "$CURRENT_GAME" = "Gv2" ] && echo "   [текущая]" || echo
 
-echo "3) Удалить игровую стратегию"
+echo -e "3) Удалить игровую стратегию\n"
 
-echo
 printf "Выбор: "
 read GAME_CHOICE
 
 fi
 
-echo -e "${CYAN}Обновляем настройки...${NC}"
+echo -e "\n${CYAN}Обновляем настройки${NC}"
 
 # удаляем старые блоки
 sed -i '/#Gv[0-9]/,/^'\''$/d' "$CONF"
@@ -174,79 +210,47 @@ sed -i "s/,6695-6710,25565,50001//g" "$CONF"
 case "$GAME_CHOICE" in
 
 1)
-
 sed -i "/option NFQWS_PORTS_UDP '/s/'$/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535'/" "$CONF"
 sed -i "/option NFQWS_PORTS_TCP '/s/'$/,6695-6710,25565,50001'/" "$CONF"
 
 tail -n1 "$CONF" | grep -q "^'$" && sed -i '$d' "$CONF"
 
-printf "%s\n" \
-"#Gv1" \
-"--new" \
-"--filter-udp=88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535" \
-"--dpi-desync=fake" \
-"--dpi-desync-cutoff=d2" \
-"--dpi-desync-any-protocol=1" \
-"--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/stun.bin" \
-"--new" \
-"--filter-tcp=6695-6710,25565,50001" \
-"--dpi-desync-any-protocol=1" \
-"--dpi-desync-cutoff=n5" \
-"--dpi-desync=multisplit" \
-"--dpi-desync-split-seqovl=582" \
-"--dpi-desync-split-pos=1" \
-"--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/stun.bin" \
-"'" >> "$CONF"
+strategy_Gv1 >> "$CONF"
+echo "'" >> "$CONF"
 
-echo -e "${GREEN}Стратегия Gv1 включена${NC}"
+echo -e "${GREEN}Игровая стратегия Gv1 включена${NC}"
 ;;
 
 2)
-
 sed -i "/option NFQWS_PORTS_UDP '/s/'$/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535'/" "$CONF"
 sed -i "/option NFQWS_PORTS_TCP '/s/'$/,6695-6710,25565,50001'/" "$CONF"
 
 tail -n1 "$CONF" | grep -q "^'$" && sed -i '$d' "$CONF"
 
-printf "%s\n" \
-"#Gv2" \
-"--new" \
-"--filter-udp=88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535" \
-"--dpi-desync=fake" \
-"--dpi-desync-repeats=10" \
-"--dpi-desync-any-protocol=1" \
-"--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/quic_initial_www_google_com.bin" \
-"--dpi-desync-cutoff=n4" \
-"--new" \
-"--filter-tcp=6695-6710,25565,50001" \
-"--dpi-desync-any-protocol=1" \
-"--dpi-desync-cutoff=n5" \
-"--dpi-desync=multisplit" \
-"--dpi-desync-split-seqovl=582" \
-"--dpi-desync-split-pos=1" \
-"--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/stun.bin" \
-"'" >> "$CONF"
+strategy_Gv2 >> "$CONF"
+echo "'" >> "$CONF"
 
-echo -e "${GREEN}Стратегия Gv2 включена${NC}"
+echo -e "${GREEN}Игровая стратегия Gv2 включена${NC}"
 ;;
 
 3)
-
 if ! grep -q "^#Gv" "$CONF"; then
-echo -e "${YELLOW}Игровая стратегия не установлена!${NC}"
+echo -e "\n${RED}Игровая стратегия не установлена!${NC}"
+PAUSE
 return
 fi
 
-echo -e "${CYAN}Удаляем игровую стратегию${NC}"
+echo -e "\n${CYAN}Удаляем игровую стратегию${NC}"
 
 sed -i '/#Gv[0-9]/,/^'\''$/d' "$CONF"
 
-sed -i "s/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535//g" "$CONF"
-sed -i "s/,6695-6710,25565,50001//g" "$CONF"
+sed -i "s/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535//g"
+sed -i "s/,6695-6710,25565,50001//g"
 
 tail -n1 "$CONF" | grep -q "^'$" || echo "'" >> "$CONF"
 
 echo -e "${GREEN}Игровая стратегия удалена!${NC}"
+PAUSE
 ;;
 
 *)
