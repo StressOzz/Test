@@ -161,6 +161,8 @@ case "$GAME_CHOICE" in
 sed -i "/option NFQWS_PORTS_UDP '/s/'$/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535'/" "$CONF"
 sed -i "/option NFQWS_PORTS_TCP '/s/'$/,6695-6710,25565,50001'/" "$CONF"
 
+tail -n1 "$CONF" | grep -q "^'$" && sed -i '$d' "$CONF"
+
 printf "%s\n" \
 "#Gv1" \
 "--new" \
@@ -186,6 +188,8 @@ echo -e "${GREEN}Стратегия Gv1 включена${NC}"
 
 sed -i "/option NFQWS_PORTS_UDP '/s/'$/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535'/" "$CONF"
 sed -i "/option NFQWS_PORTS_TCP '/s/'$/,6695-6710,25565,50001'/" "$CONF"
+
+tail -n1 "$CONF" | grep -q "^'$" && sed -i '$d' "$CONF"
 
 printf "%s\n" \
 "#Gv2" \
@@ -225,8 +229,6 @@ echo -e "${GREEN}Игровая стратегия удалена!${NC}"
 ;;
 
 *)
-
-echo -e "${RED}Неверный выбор${NC}"
 return
 ;;
 
