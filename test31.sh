@@ -187,12 +187,14 @@ fix_GAME() {
         echo
         echo -e "${MAGENTA}Выберите игровую стратегию${NC}"
 
-for i in $(seq 1 4); do
+        for i in 1 4; do
+            if [ "$CURRENT_GAME" = "Gv$i" ]; then
+                echo -e "${CYAN}$i) ${RED}Удалить ${NC}Gv$i (текущая)"
+            else
+                echo -e "${CYAN}$i) ${GREEN}Установить ${NC}Gv$i"
+            fi
+        done
 
-    echo -n "$i) Gv$i"
-    [ "$CURRENT_GAME" = "Gv$i" ] && echo "   [текущая]" || echo
-done
-        echo "5) Удалить игровую стратегию"
         echo
         printf "Выбор: "
         read GAME_CHOICE
@@ -200,54 +202,48 @@ done
 
     # --- проверка корректности выбора ---
     case "$GAME_CHOICE" in
-        1|2|3|4|5) ;;
+        1|2|3|4) ;;
         *) return ;;
     esac
 
-    echo -e "${MAGENTA}Настраиваем стратегию для игр${NC}"
+    echo -e "\n${MAGENTA}Настраиваем стратегию для игр${NC}"
 
-    # --- удаляем старые блоки только если ставим новую или удаляем ---
-    if [ "$GAME_CHOICE" != "5" ]; then
-        OLD_EXISTS=$(grep -c "^#Gv" "$CONF")
+    # --- если выбранная стратегия уже стоит, удаляем её ---
+    if [ "$CURRENT_GAME" = "Gv$GAME_CHOICE" ]; then
+        echo -e "${CYAN}Удаляем текущую стратегию Gv$GAME_CHOICE${NC}"
+        sed -i '/#Gv[0-9]/,/^'\''$/d' "$CONF"
+        sed -i "s/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535//g" "$CONF"
+        sed -i "s/,6695-6710,25565,50001//g" "$CONF"
+        echo "'" >> "$CONF"
+        ZAPRET_RESTART
+        echo -e "${GREEN}Стратегия Gv$GAME_CHOICE удалена!${NC}"
+        [ -z "$NO_PAUSE" ] && PAUSE
+        return
+    fi
+
+    # --- иначе ставим новую стратегию ---
+    # удаляем старую, если есть
+    if [ -n "$CURRENT_GAME" ]; then
         sed -i '/#Gv[0-9]/,/^'\''$/d' "$CONF"
         sed -i "s/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535//g" "$CONF"
         sed -i "s/,6695-6710,25565,50001//g" "$CONF"
     fi
 
-    # --- вставка выбранной стратегии ---
-    case "$GAME_CHOICE" in
-        1)
-            sed -i "/option NFQWS_PORTS_UDP '/s/'$/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535'/" "$CONF"
-            sed -i "/option NFQWS_PORTS_TCP '/s/'$/,6695-6710,25565,50001'/" "$CONF"
-            tail -n1 "$CONF" | grep -q "^'$" && sed -i '$d' "$CONF"
-            strategy_Gv1 >> "$CONF"
-            strategy_TCP_common >> "$CONF"
-            echo "'" >> "$CONF"
-            echo -e "${GREEN}Игровая стратегия Gv1 включена${NC}"
-            ;;
-        2|3|4)
-            sed -i "/option NFQWS_PORTS_UDP '/s/'$/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535'/" "$CONF"
-            sed -i "/option NFQWS_PORTS_TCP '/s/'$/,6695-6710,25565,50001'/" "$CONF"
-            tail -n1 "$CONF" | grep -q "^'$" && sed -i '$d' "$CONF"
-            strategy_Gv "$GAME_CHOICE" >> "$CONF"
-            strategy_TCP_common >> "$CONF"
-            echo "'" >> "$CONF"
-            echo -e "${GREEN}Игровая стратегия Gv$GAME_CHOICE включена${NC}"
-            ;;
-        5)
-            OLD_EXISTS=$(grep -c "^#Gv" "$CONF")
-            if [ "$OLD_EXISTS" -eq 0 ]; then
-                echo -e "\n${YELLOW}Игровая стратегия не установлена!${NC}\n"
-                [ -z "$NO_PAUSE" ] && PAUSE
-                return
-            fi
-            echo -e "\n${CYAN}Удаляем игровую стратегию${NC}"
-            tail -n1 "$CONF" | grep -q "^'$" || echo "'" >> "$CONF"
-            echo -e "${GREEN}Игровая стратегия удалена!${NC}\n"
-            ;;
-    esac
+    # --- вставляем новую ---
+    sed -i "/option NFQWS_PORTS_UDP '/s/'$/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535'/" "$CONF"
+    sed -i "/option NFQWS_PORTS_TCP '/s/'$/,6695-6710,25565,50001'/" "$CONF"
+    tail -n1 "$CONF" | grep -q "^'$" && sed -i '$d' "$CONF"
+
+    if [ "$GAME_CHOICE" -eq 1 ]; then
+        strategy_Gv1 >> "$CONF"
+    else
+        strategy_Gv "$GAME_CHOICE" >> "$CONF"
+    fi
+    strategy_TCP_common >> "$CONF"
+    echo "'" >> "$CONF"
 
     ZAPRET_RESTART
+    echo -e "${GREEN}Игровая стратегия Gv$GAME_CHOICE установлена!${NC}"
     [ -z "$NO_PAUSE" ] && PAUSE
 }
 
