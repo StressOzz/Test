@@ -166,39 +166,53 @@ fix_GAME() {
 
     # --- Если выбран «Удалить Gv» текущий
     if [ "$CURRENT_GAME" = "Gv$GAME_CHOICE" ]; then
+        # Удаляем от #Gv до последней кавычки включительно
         Gv_LINE=$(grep -n "^#Gv" "$CONF" | tail -n1 | cut -d: -f1)
-        sed -i "${Gv_LINE},\$d" "$CONF"
+        LAST_QUOTE=$(grep -n "^'\$" "$CONF" | tail -n1 | cut -d: -f1)
+        sed -i "${Gv_LINE},${LAST_QUOTE}d" "$CONF"
+        # Вставляем обратно закрывающую кавычку
         echo "'" >> "$CONF"
         echo -e "${CYAN}Стратегия для игр ${NC}Gv$GAME_CHOICE удалена!${NC}\n"
         [ -z "$NO_PAUSE" ] && PAUSE
         return
     fi
 
-    # --- Подготавливаем стратегию для вставки
+    # --- Определяем стратегию для вставки
     if [ "$GAME_CHOICE" -eq 1 ]; then
-        STRATEGY=$( (strategy_Gv1; strategy_TCP_common) | sed '/^$/d' | tr -d '\r')
+        STRATEGY="$(strategy_Gv1; strategy_TCP_common)"
     else
-        STRATEGY=$( (strategy_Gv "$GAME_CHOICE"; strategy_TCP_common) | sed '/^$/d' | tr -d '\r')
+        STRATEGY="$(strategy_Gv "$GAME_CHOICE"; strategy_TCP_common)"
     fi
 
-    # --- Если стратегия уже есть, удаляем от #Gv до конца
+    # --- Если стратегия уже есть, удаляем от #Gv до последней кавычки включительно
     if grep -q "^#Gv" "$CONF"; then
         Gv_LINE=$(grep -n "^#Gv" "$CONF" | tail -n1 | cut -d: -f1)
-        sed -i "${Gv_LINE},\$d" "$CONF"
+        LAST_QUOTE=$(grep -n "^'\$" "$CONF" | tail -n1 | cut -d: -f1)
+        sed -i "${Gv_LINE},${LAST_QUOTE}d" "$CONF"
     else
         # Если нет стратегии, удаляем только последнюю одинарную кавычку
         sed -i '$s/^'\''$//' "$CONF"
     fi
 
-    # --- Вставляем стратегию в конец и сразу закрываем кавычку
-    printf "%s'" "$STRATEGY" >> "$CONF"
+    # --- Очищаем старые диапазоны портов, чтобы не дублировались
+    sed -i "s/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535//g" "$CONF"
+    sed -i "s/,6695-6710,25565,50001//g" "$CONF"
+
+    # --- Вставляем новую стратегию в конец
+    echo "$STRATEGY" >> "$CONF"
+
+    # --- Закрываем блок одинарной кавычкой
+    echo "'" >> "$CONF"
+
+    # --- Подставляем свежие порты
+    sed -i "/option NFQWS_PORTS_UDP '/s/'$/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535'/" "$CONF"
+    sed -i "/option NFQWS_PORTS_TCP '/s/'$/,6695-6710,25565,50001'/" "$CONF"
 
     echo -e "${CYAN}Устанавливаем стратегию для игр ${NC}Gv$GAME_CHOICE"
     ZAPRET_RESTART
     echo -e "${GREEN}Стратегия для игр ${NC}Gv$GAME_CHOICE${GREEN} установлена!${NC}\n"
     [ -z "$NO_PAUSE" ] && PAUSE
 }
-
 
 # ==========================================
 # Zapret под ключ
