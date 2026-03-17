@@ -166,11 +166,8 @@ fix_GAME() {
 
     # --- Если выбран «Удалить Gv» текущий
     if [ "$CURRENT_GAME" = "Gv$GAME_CHOICE" ]; then
-        # Удаляем от #Gv до последней кавычки включительно
         Gv_LINE=$(grep -n "^#Gv" "$CONF" | tail -n1 | cut -d: -f1)
-        LAST_QUOTE=$(grep -n "^'\$" "$CONF" | tail -n1 | cut -d: -f1)
-        sed -i "${Gv_LINE},${LAST_QUOTE}d" "$CONF"
-        # Вставляем обратно закрывающую кавычку
+        sed -i "${Gv_LINE},\$d" "$CONF"
         echo "'" >> "$CONF"
         echo -e "${CYAN}Стратегия для игр ${NC}Gv$GAME_CHOICE удалена!${NC}\n"
         [ -z "$NO_PAUSE" ] && PAUSE
@@ -184,11 +181,10 @@ fix_GAME() {
         STRATEGY="$(strategy_Gv "$GAME_CHOICE"; strategy_TCP_common)"
     fi
 
-    # --- Если стратегия уже есть, удаляем от #Gv до последней кавычки включительно
+    # --- Если стратегия уже есть, удаляем от #Gv до конца
     if grep -q "^#Gv" "$CONF"; then
         Gv_LINE=$(grep -n "^#Gv" "$CONF" | tail -n1 | cut -d: -f1)
-        LAST_QUOTE=$(grep -n "^'\$" "$CONF" | tail -n1 | cut -d: -f1)
-        sed -i "${Gv_LINE},${LAST_QUOTE}d" "$CONF"
+        sed -i "${Gv_LINE},\$d" "$CONF"
     else
         # Если нет стратегии, удаляем только последнюю одинарную кавычку
         sed -i '$s/^'\''$//' "$CONF"
@@ -213,6 +209,8 @@ fix_GAME() {
     echo -e "${GREEN}Стратегия для игр ${NC}Gv$GAME_CHOICE${GREEN} установлена!${NC}\n"
     [ -z "$NO_PAUSE" ] && PAUSE
 }
+
+
 
 # ==========================================
 # Zapret под ключ
