@@ -166,41 +166,37 @@ fix_GAME() {
 
     case "$GAME_CHOICE" in 1|2|3|4) ;; *) return ;; esac
 
-    # Удаляем старую стратегию (если есть)
-    if [ -n "$CURRENT_GAME" ]; then
-        sed -i '/#Gv[0-9]/,/^'\''$/d' "$CONF"
-        # чистим TCP/UDP порты
-        sed -i "s/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535//g" "$CONF"
-        sed -i "s/,6695-6710,25565,50001//g" "$CONF"
-        
+    # --- Определяем стратегию
+    if [ "$GAME_CHOICE" -eq 1 ]; then
+        STRATEGY="$(strategy_Gv1; strategy_TCP_common)"
+    else
+        STRATEGY="$(strategy_Gv "$GAME_CHOICE"; strategy_TCP_common)"
     fi
 
-    # Подставляем нужные порты в конфиг
+    # --- Если стратегия уже есть, удаляем от #Gv до конца
+    if grep -q "^#Gv" "$CONF"; then
+        Gv_LINE=$(grep -n "^#Gv" "$CONF" | tail -n1 | cut -d: -f1)
+        sed -i "${Gv_LINE},\$d" "$CONF"
+    else
+        # Если нет стратегии, удаляем только последнюю одинарную кавычку
+        sed -i '$s/^'\''$//' "$CONF"
+    fi
+
+    # --- Вставляем новую стратегию в конец
+    echo "$STRATEGY" >> "$CONF"
+
+    # --- Закрываем блок одинарной кавычкой
+    echo "'" >> "$CONF"
+
+    # --- Подставляем порты
     sed -i "/option NFQWS_PORTS_UDP '/s/'$/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535'/" "$CONF"
     sed -i "/option NFQWS_PORTS_TCP '/s/'$/,6695-6710,25565,50001'/" "$CONF"
-
-    # Удаляем последнюю одинарную кавычку блока option NFQWS_OPT '
-    sed -i '$s/^'\''$//' "$CONF"
-
-    # Вставляем новую стратегию в конец
-    {
-        if [ "$GAME_CHOICE" -eq 1 ]; then
-            strategy_Gv1
-        else
-            strategy_Gv "$GAME_CHOICE"
-        fi
-        strategy_TCP_common
-    } >> "$CONF"
-
-    # Закрываем блок снова
-    echo "'" >> "$CONF"
 
     echo -e "${CYAN}Устанавливаем стратегию для игр ${NC}Gv$GAME_CHOICE"
     ZAPRET_RESTART
     echo -e "${GREEN}Стратегия для игр ${NC}Gv$GAME_CHOICE${GREEN} установлена!${NC}\n"
     [ -z "$NO_PAUSE" ] && PAUSE
 }
-
 
 
 # ==========================================
