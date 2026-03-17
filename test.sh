@@ -132,19 +132,64 @@ sed -i "/DISABLE_CUSTOM/s/'1'/'0'/" /etc/config/zapret; ZAPRET_RESTART; [ "$NO_P
 # ==========================================
 # FIX GAME
 # ==========================================
-strategy_TCP_common() { printf "%s\n" "--new" "--filter-tcp=6695-6710,25565,50001" "--dpi-desync-any-protocol=1" "--dpi-desync-cutoff=n5" "--dpi-desync=multisplit" "--dpi-desync-split-seqovl=582" "--dpi-desync-split-pos=1" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/stun.bin"; }
-strategy_Gv1() { printf "%s\n" "#Gv1" "--new" "--filter-udp=88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535" "--dpi-desync=fake" "--dpi-desync-cutoff=d2" "--dpi-desync-any-protocol=1" "--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/stun.bin"; }
-strategy_Gv() { local N="$1"; printf "%s\n" "#Gv$N" "--new" "--filter-udp=88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535" "--dpi-desync=fake" "--dpi-desync-repeats=10" "--dpi-desync-any-protocol=1" "--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/quic_initial_www_google_com.bin" "--dpi-desync-cutoff=n$N"; }
-fix_GAME() { local NO_PAUSE=$1; [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }; CURRENT_GAME=""; for i in 1 2 3 4; do
-grep -q "^#Gv$i" "$CONF" && CURRENT_GAME="Gv$i"; done; if [ -n "$NO_PAUSE" ]; then GAME_CHOICE="$NO_PAUSE"; else echo -e "\n${MAGENTA}Выберите стратегию для игр${NC}"
-for i in $(seq 1 4); do if [ "$CURRENT_GAME" = "Gv$i" ]; then echo -e "${CYAN}$i) ${GREEN}Удалить ${NC}Gv$i"; else echo -e "${CYAN}$i) ${GREEN}Установить ${NC}Gv$i"; fi; done
-echo -e "${CYAN}Enter) ${GREEN}Выход в меню стратегий"; echo -en "\n${YELLOW}Выберите пункт: ${NC}"; read GAME_CHOICE; fi; case "$GAME_CHOICE" in 1|2|3|4) ;; *) return ;; esac
-if [ "$CURRENT_GAME" = "Gv$GAME_CHOICE" ]; then echo -e "\n${CYAN}Удаляем стратегию для игр ${NC}Gv$GAME_CHOICE${NC}"; sed -i '/#Gv[0-9]/,/^'\''$/d' "$CONF"; sed -i "s/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535//g" "$CONF"
-sed -i "s/,6695-6710,25565,50001//g" "$CONF"; echo "'" >> "$CONF"; ZAPRET_RESTART; echo -e "${GREEN}Стратегия для игр ${NC}Gv$GAME_CHOICE${GREEN} удалена!${NC}\n"; [ -z "$NO_PAUSE" ] && PAUSE; return; fi
-if [ -n "$CURRENT_GAME" ]; then sed -i '/#Gv[0-9]/,/^'\''$/d' "$CONF"; sed -i "s/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535//g" "$CONF"; sed -i "s/,6695-6710,25565,50001//g" "$CONF"; fi
-sed -i "/option NFQWS_PORTS_UDP '/s/'$/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535'/" "$CONF"; sed -i "/option NFQWS_PORTS_TCP '/s/'$/,6695-6710,25565,50001'/" "$CONF"; tail -n1 "$CONF" | grep -q "^'$" && sed -i '$d' "$CONF"
-if [ "$GAME_CHOICE" -eq 1 ]; then strategy_Gv1 >> "$CONF"; else strategy_Gv "$GAME_CHOICE" >> "$CONF"; fi; strategy_TCP_common >> "$CONF"; echo "'" >> "$CONF"; [ -z "$NO_PAUSE" ] && echo; echo -e "${CYAN}Устанавливаем стратегию для игр ${NC}Gv$GAME_CHOICE"
-ZAPRET_RESTART; echo -e "${GREEN}Стратегию для игр ${NC}Gv$GAME_CHOICE${GREEN} установлена!${NC}\n"; [ -z "$NO_PAUSE" ] && PAUSE; }
+
+fix_GAME() {
+    local NO_PAUSE=$1
+    [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }
+
+    local CURRENT_GAME=""
+    for i in 1 2 3 4; do
+        grep -q "^#Gv$i" "$CONF" && CURRENT_GAME="Gv$i"
+    done
+
+    if [ -n "$NO_PAUSE" ]; then
+        GAME_CHOICE="$NO_PAUSE"
+    else
+        echo -e "\n${MAGENTA}Выберите стратегию для игр${NC}"
+        for i in $(seq 1 4); do
+            if [ "$CURRENT_GAME" = "Gv$i" ]; then
+                echo -e "${CYAN}$i) ${GREEN}Удалить ${NC}Gv$i"
+            else
+                echo -e "${CYAN}$i) ${GREEN}Установить ${NC}Gv$i"
+            fi
+        done
+        echo -e "${CYAN}Enter) ${GREEN}Выход в меню стратегий"
+        echo -en "\n${YELLOW}Выберите пункт: ${NC}"
+        read GAME_CHOICE
+    fi
+
+    case "$GAME_CHOICE" in 1|2|3|4) ;; *) return ;; esac
+
+    # Удаляем старую стратегию (если есть)
+    if [ -n "$CURRENT_GAME" ]; then
+        sed -i "/#Gv[0-9]/,/^#END-Gv[0-9]/d" "$CONF"
+        # чистим TCP/UDP порты
+        sed -i "s/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535//g" "$CONF"
+        sed -i "s/,6695-6710,25565,50001//g" "$CONF"
+    fi
+
+    # Подставляем нужные порты в конфиг
+    sed -i "/option NFQWS_PORTS_UDP '/s/'$/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535'/" "$CONF"
+    sed -i "/option NFQWS_PORTS_TCP '/s/'$/,6695-6710,25565,50001'/" "$CONF"
+
+    # Устанавливаем выбранную стратегию
+    if [ "$GAME_CHOICE" -eq 1 ]; then
+        strategy_Gv1 >> "$CONF"
+        echo "#END-Gv1" >> "$CONF"
+    else
+        strategy_Gv "$GAME_CHOICE" >> "$CONF"
+        echo "#END-Gv$GAME_CHOICE" >> "$CONF"
+    fi
+    strategy_TCP_common >> "$CONF"
+
+    echo -e "${CYAN}Устанавливаем стратегию для игр ${NC}Gv$GAME_CHOICE"
+    ZAPRET_RESTART
+    echo -e "${GREEN}Стратегия для игр ${NC}Gv$GAME_CHOICE${GREEN} установлена!${NC}\n"
+    [ -z "$NO_PAUSE" ] && PAUSE
+}
+
+
+
 # ==========================================
 # Zapret под ключ
 # ==========================================
@@ -398,7 +443,7 @@ menu_hosts() { while true; do clear; S_ALL=$(status_block "$ALL_BLOCKS" && echo 
 echo -e "${MAGENTA}Меню управления доменами в hosts${NC}\n"; if hosts_enabled; then echo -e "${YELLOW}Домены в hosts: ${GREEN}добавлены${NC}"; prin=1; fi; [ "$prin" -eq 1 ] && echo
 echo -e "${CYAN} 1) ${GREEN}$(get_state "$RUTOR")${NC} rutor.info\n${CYAN} 2) ${GREEN}$(get_state "$NTC")${NC} ntc.party"
 echo -e "${CYAN} 3) ${GREEN}$(get_state "$INSTAGRAM")${NC} Instagram & Facebook\n${CYAN} 4) ${GREEN}$(get_state "$LIBRUSEC")${NC} lib.rus.ec\n${CYAN} 5) ${GREEN}$(get_state "$AI")${NC} AI сервисы"
-echo -e "${CYAN} 6) ${GREEN}$(get_state "$TWCH")${NC} Twitch\n${CYAN} 7) ${GREEN}$(get_state "$TGWeb")${NC} Telegram Web\n${CYAN} 8) ${GREEN}$(get_state "$SPFY")${NC} Spotify\n${CYAN}9) ${GREEN}$(get_state "$SCell")${NC} Supercell\n${CYAN}10) $S_ALL\n${CYAN}11) ${GREEN}Восстановить ${NC}hosts"
+echo -e "${CYAN} 6) ${GREEN}$(get_state "$TWCH")${NC} Twitch\n${CYAN} 7) ${GREEN}$(get_state "$TGWeb")${NC} Telegram Web\n${CYAN} 8) ${GREEN}$(get_state "$SPFY")${NC} Spotify\n${CYAN} 9) ${GREEN}$(get_state "$SCell")${NC} Supercell\n${CYAN}10) $S_ALL\n${CYAN}11) ${GREEN}Восстановить ${NC}hosts"
 echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} ";read -r c; case "$c" in
 1) toggle_block "$RUTOR";; 2) toggle_block "$NTC";; 3) toggle_block "$INSTAGRAM";; 4) toggle_block "$LIBRUSEC";; 5) toggle_block "$AI";; 6) toggle_block "$TWCH";; 7) toggle_block "$TGWeb";; 8) toggle_block "$SPFY";; 9) toggle_block "$SCell";; 10) toggle_all;; 11) hosts_reset;; *) break;; esac; done; }
 status_block() { local line; while IFS= read -r line; do [ -z "$line" ] && continue; grep -Fxq "$line" "$HOSTS_FILE" || return 1; done <<EOF
