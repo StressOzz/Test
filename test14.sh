@@ -164,19 +164,20 @@ fix_GAME() {
 
     case "$GAME_CHOICE" in 1|2|3|4) ;; *) return ;; esac
 
-    # --- Если выбран «Удалить Gv» текущий
-    if [ "$CURRENT_GAME" = "Gv$GAME_CHOICE" ]; then
+    # --- Удаляем старую стратегию: всё от #Gv до конца блока '
+    LAST_QUOTE=$(grep -n "^'\$" "$CONF" | tail -n1 | cut -d: -f1)
+    if grep -q "^#Gv" "$CONF"; then
         Gv_LINE=$(grep -n "^#Gv" "$CONF" | tail -n1 | cut -d: -f1)
-        LAST_QUOTE=$(grep -n "^'\$" "$CONF" | tail -n1 | cut -d: -f1)
-        if [ -n "$Gv_LINE" ] && [ -n "$LAST_QUOTE" ]; then
-            sed -i "${Gv_LINE},${LAST_QUOTE}d" "$CONF"
-            echo "'" >> "$CONF"
-        fi
+        sed -i "${Gv_LINE},${LAST_QUOTE}d" "$CONF"
+    elif [ -n "$LAST_QUOTE" ]; then
+        sed -i "${LAST_QUOTE},\$d" "$CONF"
+    fi
 
-        # --- Очищаем порты
+    # --- Если удаляем текущую стратегию, очищаем порты и ставим '
+    if [ "$CURRENT_GAME" = "Gv$GAME_CHOICE" ]; then
         sed -i "s/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535//g" "$CONF"
         sed -i "s/,6695-6710,25565,50001//g" "$CONF"
-
+        echo "'" >> "$CONF"
         echo -e "${CYAN}Стратегия для игр ${NC}Gv$GAME_CHOICE удалена!${NC}\n"
         [ -z "$NO_PAUSE" ] && PAUSE
         return
@@ -189,17 +190,7 @@ fix_GAME() {
         STRATEGY="$(strategy_Gv "$GAME_CHOICE"; strategy_TCP_common)"
     fi
 
-    # --- Удаляем старую стратегию, если есть
-    if grep -q "^#Gv" "$CONF"; then
-        Gv_LINE=$(grep -n "^#Gv" "$CONF" | tail -n1 | cut -d: -f1)
-        LAST_QUOTE=$(grep -n "^'\$" "$CONF" | tail -n1 | cut -d: -f1)
-        [ -n "$Gv_LINE" ] && [ -n "$LAST_QUOTE" ] && sed -i "${Gv_LINE},${LAST_QUOTE}d" "$CONF"
-    else
-        # Если нет стратегии, удаляем только последнюю одинарную кавычку
-        sed -i '$s/^'\''$//' "$CONF"
-    fi
-
-    # --- Очищаем старые диапазоны портов
+    # --- Очищаем старые диапазоны портов перед вставкой новой стратегии
     sed -i "s/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535//g" "$CONF"
     sed -i "s/,6695-6710,25565,50001//g" "$CONF"
 
