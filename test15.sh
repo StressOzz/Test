@@ -164,7 +164,6 @@ fix_GAME() {
 
     case "$GAME_CHOICE" in 1|2|3|4) ;; *) return ;; esac
 
-    # --- Удаляем старую стратегию: всё от #Gv до конца блока '
     LAST_QUOTE=$(grep -n "^'\$" "$CONF" | tail -n1 | cut -d: -f1)
     if grep -q "^#Gv" "$CONF"; then
         Gv_LINE=$(grep -n "^#Gv" "$CONF" | tail -n1 | cut -d: -f1)
@@ -173,38 +172,34 @@ fix_GAME() {
         sed -i "${LAST_QUOTE},\$d" "$CONF"
     fi
 
-    # --- Если удаляем текущую стратегию, очищаем порты и ставим '
     if [ "$CURRENT_GAME" = "Gv$GAME_CHOICE" ]; then
         sed -i "s/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535//g" "$CONF"
         sed -i "s/,6695-6710,25565,50001//g" "$CONF"
         echo "'" >> "$CONF"
+        echo -e "\n${CYAN}Удаляем стратегию для игр ${NC}Gv$GAME_CHOICE"
+        ZAPRET_RESTART
         echo -e "${CYAN}Стратегия для игр ${NC}Gv$GAME_CHOICE удалена!${NC}\n"
         [ -z "$NO_PAUSE" ] && PAUSE
         return
     fi
 
-    # --- Определяем стратегию для вставки
     if [ "$GAME_CHOICE" -eq 1 ]; then
         STRATEGY="$(strategy_Gv1; strategy_TCP_common)"
     else
         STRATEGY="$(strategy_Gv "$GAME_CHOICE"; strategy_TCP_common)"
     fi
 
-    # --- Очищаем старые диапазоны портов перед вставкой новой стратегии
     sed -i "s/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535//g" "$CONF"
     sed -i "s/,6695-6710,25565,50001//g" "$CONF"
 
-    # --- Вставляем стратегию без пустых строк
     echo "$STRATEGY" | sed '/^$/d' >> "$CONF"
 
-    # --- Закрываем блок одинарной кавычкой
     echo "'" >> "$CONF"
 
-    # --- Подставляем свежие порты
     sed -i "/option NFQWS_PORTS_UDP '/s/'$/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535'/" "$CONF"
     sed -i "/option NFQWS_PORTS_TCP '/s/'$/,6695-6710,25565,50001'/" "$CONF"
 
-    echo -e "${CYAN}Устанавливаем стратегию для игр ${NC}Gv$GAME_CHOICE"
+    echo -e "\n${CYAN}Устанавливаем стратегию для игр ${NC}Gv$GAME_CHOICE"
     ZAPRET_RESTART
     echo -e "${GREEN}Стратегия для игр ${NC}Gv$GAME_CHOICE${GREEN} установлена!${NC}\n"
     [ -z "$NO_PAUSE" ] && PAUSE
