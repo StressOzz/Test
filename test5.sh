@@ -166,7 +166,17 @@ fix_GAME() {
 
     case "$GAME_CHOICE" in 1|2|3|4) ;; *) return ;; esac
 
-    # --- Определяем стратегию
+    # --- Если выбран «Удалить Gv» текущий
+    if [ "$CURRENT_GAME" = "Gv$GAME_CHOICE" ]; then
+        Gv_LINE=$(grep -n "^#Gv" "$CONF" | tail -n1 | cut -d: -f1)
+        sed -i "${Gv_LINE},\$d" "$CONF"
+        echo "'" >> "$CONF"
+        echo -e "${CYAN}Стратегия для игр ${NC}Gv$GAME_CHOICE удалена!${NC}\n"
+        [ -z "$NO_PAUSE" ] && PAUSE
+        return
+    fi
+
+    # --- Определяем стратегию для вставки
     if [ "$GAME_CHOICE" -eq 1 ]; then
         STRATEGY="$(strategy_Gv1; strategy_TCP_common)"
     else
@@ -197,7 +207,6 @@ fix_GAME() {
     echo -e "${GREEN}Стратегия для игр ${NC}Gv$GAME_CHOICE${GREEN} установлена!${NC}\n"
     [ -z "$NO_PAUSE" ] && PAUSE
 }
-
 
 # ==========================================
 # Zapret под ключ
