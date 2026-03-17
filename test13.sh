@@ -164,6 +164,24 @@ fix_GAME() {
 
     case "$GAME_CHOICE" in 1|2|3|4) ;; *) return ;; esac
 
+    # --- Если выбран «Удалить Gv» текущий
+    if [ "$CURRENT_GAME" = "Gv$GAME_CHOICE" ]; then
+        Gv_LINE=$(grep -n "^#Gv" "$CONF" | tail -n1 | cut -d: -f1)
+        LAST_QUOTE=$(grep -n "^'\$" "$CONF" | tail -n1 | cut -d: -f1)
+        if [ -n "$Gv_LINE" ] && [ -n "$LAST_QUOTE" ]; then
+            sed -i "${Gv_LINE},${LAST_QUOTE}d" "$CONF"
+            echo "'" >> "$CONF"
+        fi
+
+        # --- Очищаем порты
+        sed -i "s/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535//g" "$CONF"
+        sed -i "s/,6695-6710,25565,50001//g" "$CONF"
+
+        echo -e "${CYAN}Стратегия для игр ${NC}Gv$GAME_CHOICE удалена!${NC}\n"
+        [ -z "$NO_PAUSE" ] && PAUSE
+        return
+    fi
+
     # --- Определяем стратегию для вставки
     if [ "$GAME_CHOICE" -eq 1 ]; then
         STRATEGY="$(strategy_Gv1; strategy_TCP_common)"
@@ -171,18 +189,24 @@ fix_GAME() {
         STRATEGY="$(strategy_Gv "$GAME_CHOICE"; strategy_TCP_common)"
     fi
 
-    # --- Удаляем старую стратегию и лишние пустые строки
-    LAST_QUOTE=$(grep -n "^'\$" "$CONF" | tail -n1 | cut -d: -f1)
-    [ -n "$LAST_QUOTE" ] && sed -i "${LAST_QUOTE},\$d" "$CONF"
+    # --- Удаляем старую стратегию, если есть
+    if grep -q "^#Gv" "$CONF"; then
+        Gv_LINE=$(grep -n "^#Gv" "$CONF" | tail -n1 | cut -d: -f1)
+        LAST_QUOTE=$(grep -n "^'\$" "$CONF" | tail -n1 | cut -d: -f1)
+        [ -n "$Gv_LINE" ] && [ -n "$LAST_QUOTE" ] && sed -i "${Gv_LINE},${LAST_QUOTE}d" "$CONF"
+    else
+        # Если нет стратегии, удаляем только последнюю одинарную кавычку
+        sed -i '$s/^'\''$//' "$CONF"
+    fi
 
     # --- Очищаем старые диапазоны портов
     sed -i "s/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535//g" "$CONF"
     sed -i "s/,6695-6710,25565,50001//g" "$CONF"
 
-    # --- Вставляем новую стратегию без пустых строк
+    # --- Вставляем стратегию без пустых строк
     echo "$STRATEGY" | sed '/^$/d' >> "$CONF"
 
-    # --- Закрываем блок одинарной кавычкой сразу после стратегии
+    # --- Закрываем блок одинарной кавычкой
     echo "'" >> "$CONF"
 
     # --- Подставляем свежие порты
