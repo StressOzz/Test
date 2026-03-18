@@ -69,7 +69,7 @@ color="$RED"
 fi
 fi
 
-printf "${CYAN}%1d) ${GREEN}%-10s ${MAGENTA}| ${color}%-7s${MAGENTA}| ${CYAN}%s${NC}\n" "$i" "$country" "$ping_val" "$ep"
+printf "${CYAN}%2d) ${GREEN}%-10s ${MAGENTA}| ${color}%-7s${MAGENTA}| ${CYAN}%s${NC}\n" "$i" "$country" "$ping_val" "$ep"
 
 i=$((i+1))
 done
