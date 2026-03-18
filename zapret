@@ -38,7 +38,7 @@ config main 'config'
 --dpi-desync-split-seqovl=681
 --dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/stun.bin
 --new
---filter-udp=88,1024-2407,2409-4499,4501-65535
+--filter-udp=88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535
 --dpi-desync=fake
 --dpi-desync-cutoff=d2
 --dpi-desync-any-protocol=1
