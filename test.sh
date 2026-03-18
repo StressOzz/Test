@@ -1,129 +1,221 @@
 #!/bin/sh
 
-GREEN="\033[1;32m"
-RED="\033[1;31m"
-CYAN="\033[1;36m"
-YELLOW="\033[1;33m"
+EP_LIST='Россия     |engage.cloudflareclient.com:4500
+Латвия      |150.241.75.91:4500
+Германия    |de.tribukvy.ltd:4501
+Литва       |lt.tribukvy.ltd:4501
+Нидерланды 2|nl3.tribukvy.ltd:4501
+Нидерланды 1|nl0.tribukvy.ltd:4501
+Финляндия 2 |fi.tribukvy.ltd:4501
+Финляндия 1 |fi0.tribukvy.ltd:4501
+Эстония     |ee.tribukvy.ltd:4501
+Польша      |pl.tribukvy.ltd:4501'
+
+
+
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
 MAGENTA="\033[1;35m"
-BLUE="\033[0;34m"
-NC="\033[0m"
-DGRAY="\033[38;5;244m"
+CYAN="\033[1;36m"
 
-CONFIGPATH="/etc/magitrickle/state/config.yaml"
-URL_DEFAULT="https://raw.githubusercontent.com/StressOzz/Mixomo-Manager/refs/heads/main/files/MagiTrickle/config.yaml"
-URL_ITDOG="https://raw.githubusercontent.com/StressOzz/Mixomo-Manager/refs/heads/main/files/MagiTrickle/configAD.yaml"
+clear
 
-echo 'sh <(wget -O - https://raw.githubusercontent.com/StressOzz/Mixomo-Manager/main/Mixomo-Manager.sh)' > /usr/bin/mom; chmod +x /usr/bin/mom
+chose_endpoint() {
 
-PAUSE() { echo -ne "\nНажмите Enter..."; read dummy; }
+echo -e "\n${MAGENTA}Выберите страну:${NC}"
 
-magitrickle_config() {
-echo -e "\n${MAGENTA}Выбор списка для MagiTrickle${NC}"
-echo -e "${CYAN}1) ${GREEN}Список от${NC} ITDog"
-echo -e "${CYAN}2) ${GREEN}Список от${NC} Internet Helper"
-echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n"
+TMP_FILE=$(mktemp)
 
-while true; do
-  echo -en "${YELLOW}Выберите пункт: ${NC}"
-  read -r choice
+while IFS='|' read -r country ep; do
+(
+host="${ep%%:*}"
 
-  case "$choice" in
-    1) MAGITRICKLE_CONFIG_URL="$URL_ITDOG"; break ;;
-    2) MAGITRICKLE_CONFIG_URL="$URL_DEFAULT"; break ;;
-    *) return ;;
-  esac
+ping_ms="$(ping -c1 -W1 "$host" 2>/dev/null | awk -F'/' 'END{print int($5)}')"
+
+if [ -z "$ping_ms" ] || [ "$ping_ms" -eq 0 ]; then
+ping_val="FAIL"
+ping_sort=9999
+else
+ping_val="${ping_ms} ms"
+ping_sort="$ping_ms"
+fi
+
+echo "${ping_sort}|${country}|${ep}|${ping_val}" >> "$TMP_FILE"
+) &
+done <<EOF
+$EP_LIST
+EOF
+
+wait
+
+SORTED_LIST=$(sort -t'|' -k1n "$TMP_FILE")
+rm -f "$TMP_FILE"
+
+i=1
+echo "$SORTED_LIST" | while IFS='|' read -r ping_sort country ep ping_val; do
+
+if [ "$ping_val" = "FAIL" ]; then
+color="$RED"
+else
+ping_num=${ping_val%% *}
+if [ "$ping_num" -lt 50 ]; then
+color="$GREEN"
+elif [ "$ping_num" -lt 100 ]; then
+color="$YELLOW"
+else
+color="$RED"
+fi
+fi
+
+printf "${CYAN}%1d) ${GREEN}%-10s ${MAGENTA}| ${color}%-7s${MAGENTA}| ${CYAN}%s${NC}\n" "$i" "$country" "$ping_val" "$ep"
+
+i=$((i+1))
 done
 
-if [ -n "$MAGITRICKLE_CONFIG_URL" ]; then
-  echo -e "\n${CYAN}Скачиванем и устанавливаем список${NC}"
-  wget -q -O "$CONFIGPATH" "$MAGITRICKLE_CONFIG_URL" || {
-    echo -e "${RED}Ошибка: не удалось скачать список!${NC}"
-    echo "URL: $MAGITRICKLE_CONFIG_URL"
-    return 1
-  }
+echo -en "\n${YELLOW}Введите номер (Enter = Россия):${NC} "
+read num
 
-  if [ ! -s "$CONFIGPATH" ]; then
-    echo -e "${RED}Ошибка: файл пустой или не создан:${NC} $CONFIGPATH"
-    return 1
-  fi
+MAX_NUM=$(echo "$SORTED_LIST" | wc -l)
 
-  echo -e "${GREEN}Список успешно изменён!${NC}"
-  /etc/init.d/magitrickle enable >/dev/null 2>&1
-  /etc/init.d/magitrickle reload >/dev/null 2>&1
-  /etc/init.d/magitrickle start >/dev/null 2>&1
-  /etc/init.d/magitrickle restart >/dev/null 2>&1
-  PAUSE
+if ! printf '%s' "$num" | grep -qE '^[0-9]+$' || [ "$num" -lt 1 ] || [ "$num" -gt "$MAX_NUM" ]; then
+ENDPOINT="engage.cloudflareclient.com:4500"
+else
+ENDPOINT="$(echo "$SORTED_LIST" | sed -n "${num}p" | cut -d'|' -f3)"
+[ -z "$ENDPOINT" ] && ENDPOINT="engage.cloudflareclient.com:4500"
+fi
+
+echo
+}
+
+echo -e "${MAGENTA}Генерируем WARP${NC}"
+
+if command -v apk >/dev/null 2>&1; then
+PKG="apk"
+elif command -v opkg >/dev/null 2>&1; then
+PKG="opkg"
+else
+echo -e "${RED}Не найден пакетный менеджер!${NC}"
+exit 1
+fi
+
+echo -e "${CYAN}Обновляем пакеты${NC}"
+
+if [ "$PKG" = "apk" ]; then
+apk update >/dev/null 2>&1 || {
+echo -e "\n${RED}Ошибка обновления пакетов!${NC}"
+exit 1
+}
+else
+opkg update >/dev/null 2>&1 || {
+echo -e "\n${RED}Ошибка обновления пакетов!${NC}"
+exit 1
+}
+fi
+
+install_pkg() {
+pkg="$1"
+
+if [ "$PKG" = "apk" ]; then
+apk info -e "$pkg" >/dev/null 2>&1 && return
+echo -e "${GREEN}Устанавливаем:${NC} $pkg"
+apk add "$pkg" >/dev/null 2>&1 || {
+echo -e "\n${RED}Ошибка установки${NC} $pkg"
+exit 1
+}
+else
+opkg list-installed 2>/dev/null | grep -qF "^$pkg " && return
+echo -e "${GREEN}Устанавливаем:${NC} $pkg"
+opkg install "$pkg" >/dev/null 2>&1 || {
+echo -e "\n${RED}Ошибка установки${NC} $pkg"
+exit 1
+}
 fi
 }
 
-check_status() {
-  MIHOMO_STATUS="${RED}не установлен${NC}"; HEV_STATUS="${RED}не установлен${NC}"; MAGITRICKLE_STATUS="${RED}не установлен${NC}"
+echo -e "${CYAN}Проверяем зависимости${NC}"
 
-  [ -x /etc/init.d/mihomo ] && MIHOMO_STATUS="${GREEN}установлен${NC}"
-  [ -x /etc/init.d/hev-socks5-tunnel ] && HEV_STATUS="${GREEN}установлен${NC}"
-  [ -x /etc/init.d/magitrickle ] && MAGITRICKLE_STATUS="${GREEN}установлен${NC}"
-
-  echo -e "${YELLOW}Mihomo:${NC}              $MIHOMO_STATUS"
-  echo -e "${YELLOW}MagiTrickle:${NC}         $MAGITRICKLE_STATUS"
-  echo -e "${YELLOW}HevSocks5Tunnel:${NC}     $HEV_STATUS"
-}
-
-show_menu() {
-clear
-echo -e "╔═══════════════════════════════════╗"
-echo -e "║ ${BLUE}Mixomo on Internet-Helper Manager${NC} ║"
-echo -e "╚═══════════════════════════════════╝"
-echo -e "                         ${DGRAY}by StressOzz${NC}\n"
-
-check_status
-
-grep -F -A1 'id: "06776295"' "$CONFIGPATH" 2>/dev/null | grep -q 'name: Meta (WA+FB+Instagram)' && echo -e "${YELLOW}Используется список: ${NC}Internet Helper"
-grep -F -A1 'id: 4c172a51' "$CONFIGPATH" 2>/dev/null | grep -q 'name: Google_ai' && echo -e "${YELLOW}Используется список: ${NC}ITDog"
-
-echo -e "\n${CYAN}1) ${GREEN}Установить ${NC}Mixomo"
-echo -e "${CYAN}2) ${GREEN}Удалить ${NC}Mixomo"
-echo -e "${CYAN}3) ${GREEN}Сменить список ${NC}MagiTrickle"
-echo -e "${CYAN}4) ${GREEN}Сгенерировать ${NC}WARP ${GREEN}в ${NC}/root/WARP.conf"
-echo -e "${CYAN}5) ${GREEN}Интегрировать ${NC}/root/WARP.conf${GREEN} в ${NC}Mihomo"
-# echo -e "${CYAN}6) ${GREEN}Удалить ${NC}→ ${GREEN}установить ${NC}→ ${GREEN}настроить ${NC}mihomo-openwrt"
-echo -e "${CYAN}Enter) ${GREEN}Выход\n"
-echo -ne "${YELLOW}Выберите пункт: ${NC}"
-read choiceM
-
-case "$choiceM" in
-1)
-  sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Mixomo-Manager/main/mixomo_openwrt_install.sh)
-  PAUSE
-  ;;
-2)
-  sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Mixomo-Manager/main/mixomo_openwrt_delete.sh)
-  PAUSE
-  ;;
-3)
-  magitrickle_config
-  ;;
-4)
-  sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Mixomo-Manager/main/gen_WARP.sh)
-  PAUSE
-  ;;
-5)
-  sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Mixomo-Manager/main/WARP_to_conf.sh)
-  PAUSE
-  ;;
-6)
-  sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Mixomo-Manager/main/mixomo_openwrt_delete.sh)
-  sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Mixomo-Manager/main/mixomo_openwrt_install.sh)
-  sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Mixomo-Manager/main/gen_WARP.sh)
-  sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Mixomo-Manager/main/WARP_to_conf.sh)
-  PAUSE
-  ;;
-*)
-  echo
-  exit 0
-  ;;
-esac
-}
-
-while true; do
-  show_menu
+for pkg in wireguard-tools curl jq coreutils-base64; do
+install_pkg "$pkg"
 done
+
+echo -e "${CYAN}Генерируем ключи${NC}"
+priv="$(wg genkey)"
+pub="$(printf "%s" "$priv" | wg pubkey)"
+
+api="https://api.cloudflareclient.com/v0i1909051800"
+
+ins() {
+curl -s \
+-H "User-Agent: okhttp/3.12.1" \
+-H "Content-Type: application/json" \
+-X "$1" "$api/$2" "${@:3}"
+}
+
+sec() {
+ins "$1" "$2" -H "Authorization: Bearer $3" "${@:4}"
+}
+
+echo -e "${CYAN}Регистрируем устройство в ${NC}Cloudflare"
+
+response=$(ins POST "reg" \
+-d "{\"install_id\":\"\",\"tos\":\"$(date -u +%FT%TZ)\",\"key\":\"${pub}\",\"fcm_token\":\"\",\"type\":\"ios\",\"locale\":\"en_US\"}")
+
+id=$(echo "$response" | jq -r '.result.id')
+token=$(echo "$response" | jq -r '.result.token')
+
+if [ -z "$id" ] || [ "$id" = "null" ]; then
+echo -e "${RED}Ошибка регистрации${NC} $response"
+exit 1
+fi
+
+################################################################################################
+chose_endpoint
+################################################################################################
+
+echo -e "${GREEN}Активируем и генерируем ${NC}WARP${NC}"
+
+response=$(sec PATCH "reg/${id}" "$token" -d '{"warp_enabled":true}')
+
+peer_pub=$(echo "$response" | jq -r '.result.config.peers[0].public_key')
+client_ipv4=$(echo "$response" | jq -r '.result.config.interface.addresses.v4')
+client_ipv6=$(echo "$response" | jq -r '.result.config.interface.addresses.v6')
+
+if [ -z "$peer_pub" ] || [ "$peer_pub" = "null" ]; then
+echo -e "\n${RED}Ошибка получения конфигурации${NC}"
+exit 1
+fi
+
+conf=$(cat <<EOF
+[Interface]
+PrivateKey = ${priv}
+Address = ${client_ipv4}, ${client_ipv6}
+DNS = 1.1.1.1, 2606:4700:4700::1111
+MTU = 1280
+S1 = 0
+S2 = 0
+Jc = 4
+Jmin = 40
+Jmax = 70
+H1 = 1
+H2 = 2
+H3 = 3
+H4 = 4
+I1 = <b 0x5245474953544552207369703a676f6f676c652e636f6d205349502f322e300d0a5669613a205349502f322e302f554450203139322e3136382e3132312e36323a353036303b6272616e63683d7a39684734624b6635633762313765616462303238333334346136633033610d0a4d61782d466f7277617264733a2037300d0a546f3a203c7369703a7573657240676f6f676c652e636f6d3e0d0a46726f6d3a203c7369703a7573657240676f6f676c652e636f6d3e3b7461673d323938376135316463353839613831650d0a43616c6c2d49443a2036313663363636333036613366393361336665636635663233366239386431360d0a435365713a20312052454749535445520d0a436f6e746163743a203c7369703a75736572403139322e3136382e34352e3139303a353036303e0d0a557365722d4167656e743a205a6f6970657220352e302e300d0a457870697265733a20363139310d0a436f6e74656e742d4c656e6774683a20300d0a0d0a>
+
+[Peer]
+PublicKey = ${peer_pub}
+AllowedIPs = 0.0.0.0/0, ::/0
+Endpoint = ${ENDPOINT}
+PersistentKeepalive = 25
+EOF
+)
+
+echo
+echo -e "${GREEN}========== ${YELLOW}WARP CONFIG${GREEN} ==========${NC}"
+echo "$conf"
+echo -e "${GREEN}=================================${NC}"
+
+echo "$conf" > /root/WARP.conf
+echo -e "\n${YELLOW}Файл сохранён:${NC} /root/WARP.conf"
