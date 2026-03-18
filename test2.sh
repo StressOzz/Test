@@ -1,6 +1,6 @@
 #!/bin/sh
 
-EP_LIST='Россия     |engage.cloudflareclient.com:4500
+EP_LIST='Россия      |engage.cloudflareclient.com:4500
 Латвия      |150.241.75.91:4500
 Германия    |de.tribukvy.ltd:4501
 Литва       |lt.tribukvy.ltd:4501
@@ -69,7 +69,7 @@ color="$RED"
 fi
 fi
 
-printf "${CYAN}%2d) ${GREEN}%-10s ${MAGENTA}| ${color}%-7s${MAGENTA}| ${CYAN}%s${NC}\n" "$i" "$country" "$ping_val" "$ep"
+printf "${CYAN}%2d) ${GREEN}%-10s${MAGENTA}| ${color}%-7s${MAGENTA}| ${CYAN}%s${NC}\n" "$i" "$country" "$ping_val" "$ep"
 
 i=$((i+1))
 done
