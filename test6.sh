@@ -24,7 +24,7 @@ clear
 
 chose_endpoint() {
 
-echo -e "\n${MAGENTA} Выберите страну:${NC}"
+echo -e "\n${CYAN}Тестируем пинг до ${NC}endpoint"
 
 TMP_FILE=$(mktemp)
 
@@ -69,6 +69,7 @@ color="$RED"
 fi
 fi
 
+echo -e "\n${MAGENTA}Выберите страну:${NC}"
 printf "${CYAN}%2d) ${GREEN}%-10s${MAGENTA}| ${color}%-7s${MAGENTA}| ${CYAN}%s${NC}\n" "$i" "$country" "$ping_val" "$ep"
 
 i=$((i+1))
