@@ -24,7 +24,7 @@ clear
 
 chose_endpoint() {
 
-echo -e "\n${CYAN}Тестируем пинг до ${NC}endpoint"
+echo -e "${CYAN}Тестируем пинг до ${NC}endpoint"
 
 TMP_FILE=$(mktemp)
 
@@ -42,6 +42,8 @@ ping_val="${ping_ms} ms"
 ping_sort="$ping_ms"
 fi
 
+echo -e "\n${MAGENTA}Выберите страну:${NC}"
+
 echo "${ping_sort}|${country}|${ep}|${ping_val}" >> "$TMP_FILE"
 ) &
 done <<EOF
@@ -56,6 +58,7 @@ rm -f "$TMP_FILE"
 i=1
 echo "$SORTED_LIST" | while IFS='|' read -r ping_sort country ep ping_val; do
 
+
 if [ "$ping_val" = "FAIL" ]; then
 color="$RED"
 else
@@ -69,7 +72,6 @@ color="$RED"
 fi
 fi
 
-echo -e "\n${MAGENTA}Выберите страну:${NC}"
 printf "${CYAN}%2d) ${GREEN}%-10s${MAGENTA}| ${color}%-7s${MAGENTA}| ${CYAN}%s${NC}\n" "$i" "$country" "$ping_val" "$ep"
 
 i=$((i+1))
