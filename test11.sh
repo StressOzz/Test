@@ -24,7 +24,9 @@ clear
 
 chose_endpoint() {
 
-echo -en "${CYAN}Тестируем пинг до ${NC}endpoint\n"
+echo -en "${CYAN}Тестируем пинг до ${NC}endpoint"
+
+echo
 
 TMP_FILE=$(mktemp)
 
