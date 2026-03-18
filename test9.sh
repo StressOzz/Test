@@ -32,8 +32,6 @@ while IFS='|' read -r country ep; do
 (
 host="${ep%%:*}"
 
-echo -e "\n${MAGENTA}Выберите страну:${NC}"
-
 ping_ms="$(ping -c3 -W2 "$host" 2>/dev/null | awk -F'/' 'END{print int($5)}')"
 
 if [ -z "$ping_ms" ] || [ "$ping_ms" -eq 0 ]; then
@@ -77,7 +75,7 @@ printf "${CYAN}%2d) ${GREEN}%-10s${MAGENTA}| ${color}%-7s${MAGENTA}| ${CYAN}%s${
 i=$((i+1))
 done
 
-echo -en "\n${YELLOW}Введите номер (Enter = Россия):${NC} "
+echo -en "\n${YELLOW}Выберите страну (Enter = Россия):${NC} "
 read num
 
 MAX_NUM=$(echo "$SORTED_LIST" | wc -l)
