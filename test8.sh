@@ -32,6 +32,8 @@ while IFS='|' read -r country ep; do
 (
 host="${ep%%:*}"
 
+echo -e "\n${MAGENTA}Выберите страну:${NC}"
+
 ping_ms="$(ping -c3 -W2 "$host" 2>/dev/null | awk -F'/' 'END{print int($5)}')"
 
 if [ -z "$ping_ms" ] || [ "$ping_ms" -eq 0 ]; then
@@ -41,8 +43,6 @@ else
 ping_val="${ping_ms} ms"
 ping_sort="$ping_ms"
 fi
-
-echo -e "\n${MAGENTA}Выберите страну:${NC}"
 
 echo "${ping_sort}|${country}|${ep}|${ping_val}" >> "$TMP_FILE"
 ) &
