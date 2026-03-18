@@ -24,7 +24,7 @@ clear
 
 chose_endpoint() {
 
-echo -e "\n${MAGENTA}Выберите страну:${NC}"
+echo -e "\n${MAGENTA}Выберите  страну:${NC}"
 
 TMP_FILE=$(mktemp)
 
