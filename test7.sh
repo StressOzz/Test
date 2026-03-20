@@ -78,7 +78,7 @@ echo -e "                         ${DGRAY}by StressOzz${NC}\n"
 check_status
 
 [ -f /etc/mihomo/config.yaml ] && while IFS='|' read -r c a; do h=${a%%:*}
-grep -qF "$h" /etc/mihomo/config.yaml && echo "${YELLOW}WARP endpoint:       ${NC}$c" && break
+grep -qF "$h" /etc/mihomo/config.yaml && echo -e "${YELLOW}WARP endpoint:       ${NC}$c" && break
 done <<EOF
 Россия|engage.cloudflareclient.com:4500
 Латвия|150.241.75.91:4500
