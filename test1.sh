@@ -73,7 +73,6 @@ get_versions() {
     # --- Проверяем установленную версию ---
     if [ "$PKG_IS_APK" -eq 1 ]; then
         # Обновляем кэш, если его нет
-        [ -z "$(ls -A /var/cache/apk/*.tar.gz 2>/dev/null)" ] && echo -e "\n${CYAN}Обновляем список пакетов${NC}\n" && apk update >/dev/null
         INSTALLED_VER=$(apk info -v 2>/dev/null | grep '^zapret-' | head -n1 | cut -d'-' -f2 | sed 's/-r[0-9]\+$//')
         [ -z "$INSTALLED_VER" ] && INSTALLED_VER="не найдена"
     else
