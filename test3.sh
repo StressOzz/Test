@@ -80,10 +80,8 @@ check_status
 MIH="/etc/mihomo/config.yaml"
 
 if [ -f "$MIH" ]; then
-    ENDPOINT=$(tr -d '[:space:]' < "$MIH")
-
     while IFS='|' read -r country addr; do
-        if [ "$addr" = "$ENDPOINT" ]; then
+        if grep -qF "$addr" "$MIH"; then
             echo "Используется Endpoint: $country"
             break
         fi
