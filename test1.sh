@@ -77,20 +77,29 @@ echo -e "                         ${DGRAY}by StressOzz${NC}\n"
 
 check_status
 
-[ -f /etc/mihomo/config.yaml ] && ep=$(grep -F "$(tr -d '[:space:]' < /etc/mihomo/config.yaml)" <<'EOF' | cut -d'|' -f1
-Россия|engage.cloudflareclient.com:4500
-Латвия|150.241.75.91:4500
-Германия|de.tribukvy.ltd:4501
-Литва|lt.tribukvy.ltd:4501
-Нидерланды 2|nl3.tribukvy.ltd:4501
-Нидерланды 1|nl0.tribukvy.ltd:4501
-Финляндия 2|fi.tribukvy.ltd:4501
-Финляндия 1|fi0.tribukvy.ltd:4501
-Эстония|ee.tribukvy.ltd:4501
-Польша|pl.tribukvy.ltd:4501
-EOF
-)
-[ -n "$ep" ] && echo -e "${YELLOW}Используется Endpoint: ${NC}$ep"
+MIH="/etc/mihomo/config.yaml"
+
+if [ -f "$MIH" ]; then
+    ENDPOINT=$(tr -d '[:space:]' < "$MIH")
+    for line in \
+"Россия|engage.cloudflareclient.com:4500" \
+"Латвия|150.241.75.91:4500" \
+"Германия|de.tribukvy.ltd:4501" \
+"Литва|lt.tribukvy.ltd:4501" \
+"Нидерланды 2|nl3.tribukvy.ltd:4501" \
+"Нидерланды 1|nl0.tribukvy.ltd:4501" \
+"Финляндия 2|fi.tribukvy.ltd:4501" \
+"Финляндия 1|fi0.tribukvy.ltd:4501" \
+"Эстония|ee.tribukvy.ltd:4501" \
+"Польша|pl.tribukvy.ltd:4501"
+    do
+        country=$(echo "$line" | cut -d'|' -f1)
+        addr=$(echo "$line" | cut -d'|' -f2)
+        if [ "$addr" = "$ENDPOINT" ]; then
+            echo "Используется Endpoint: $country"
+        fi
+    done
+fi
 
 grep -F -A1 'id: "06776295"' "$CONFIGPATH" 2>/dev/null | grep -q 'name: Meta (WA+FB+Instagram)' && echo -e "${YELLOW}Используется список: ${NC}Internet Helper"
 grep -F -A1 'id: 4c172a51' "$CONFIGPATH" 2>/dev/null | grep -q 'name: Google_ai' && echo -e "${YELLOW}Используется список: ${NC}ITDog"
