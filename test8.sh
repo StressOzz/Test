@@ -78,7 +78,7 @@ echo -e "                         ${DGRAY}by StressOzz${NC}\n"
 check_status
 
 [ -f /etc/mihomo/config.yaml ] && while IFS='|' read -r c a; do h=${a%%:*}
-grep -qF "$h" /etc/mihomo/config.yaml && echo -e "${YELLOW}WARP endpoint:       ${NC}$c" && break
+grep -qF "$h" /etc/mihomo/config.yaml && echo -e "${YELLOW}WARP endpoint:       ${CYAN}$c${NC}" && break
 done <<EOF
 Россия|engage.cloudflareclient.com:4500
 Латвия|150.241.75.91:4500
@@ -92,11 +92,8 @@ done <<EOF
 Польша|pl.tribukvy.ltd:4501
 EOF
 
-grep -F -A1 'id: "06776295"' "$CONFIGPATH" 2>/dev/null | grep -q 'name: Meta (WA+FB+Instagram)' && echo -e "${YELLOW}Используется список: ${NC}Internet Helper"
-grep -F -A1 'id: 4c172a51' "$CONFIGPATH" 2>/dev/null | grep -q 'name: Google_ai' && echo -e "${YELLOW}Используется список: ${NC}ITDog"
-
-
-
+grep -F -A1 'name: Meta (WA+FB+Instagram)' "$CONFIGPATH" 2>/dev/null && echo -e "${YELLOW}Используется список: ${NC}Internet Helper"
+grep -F -A1 'name: Google_ai' "$CONFIGPATH" 2>/dev/null && echo -e "${YELLOW}Используется список: ${NC}ITDog"
 
 echo -e "\n${CYAN}1) ${GREEN}Установить ${NC}Mixomo"
 echo -e "${CYAN}2) ${GREEN}Удалить ${NC}Mixomo"
