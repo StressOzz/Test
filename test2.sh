@@ -81,24 +81,24 @@ MIH="/etc/mihomo/config.yaml"
 
 if [ -f "$MIH" ]; then
     ENDPOINT=$(tr -d '[:space:]' < "$MIH")
-    for line in \
-"Россия|engage.cloudflareclient.com:4500" \
-"Латвия|150.241.75.91:4500" \
-"Германия|de.tribukvy.ltd:4501" \
-"Литва|lt.tribukvy.ltd:4501" \
-"Нидерланды 2|nl3.tribukvy.ltd:4501" \
-"Нидерланды 1|nl0.tribukvy.ltd:4501" \
-"Финляндия 2|fi.tribukvy.ltd:4501" \
-"Финляндия 1|fi0.tribukvy.ltd:4501" \
-"Эстония|ee.tribukvy.ltd:4501" \
-"Польша|pl.tribukvy.ltd:4501"
-    do
-        country=$(echo "$line" | cut -d'|' -f1)
-        addr=$(echo "$line" | cut -d'|' -f2)
+
+    while IFS='|' read -r country addr; do
         if [ "$addr" = "$ENDPOINT" ]; then
             echo "Используется Endpoint: $country"
+            break
         fi
-    done
+    done <<EOF
+Россия|engage.cloudflareclient.com:4500
+Латвия|150.241.75.91:4500
+Германия|de.tribukvy.ltd:4501
+Литва|lt.tribukvy.ltd:4501
+Нидерланды 2|nl3.tribukvy.ltd:4501
+Нидерланды 1|nl0.tribukvy.ltd:4501
+Финляндия 2|fi.tribukvy.ltd:4501
+Финляндия 1|fi0.tribukvy.ltd:4501
+Эстония|ee.tribukvy.ltd:4501
+Польша|pl.tribukvy.ltd:4501
+EOF
 fi
 
 grep -F -A1 'id: "06776295"' "$CONFIGPATH" 2>/dev/null | grep -q 'name: Meta (WA+FB+Instagram)' && echo -e "${YELLOW}Используется список: ${NC}Internet Helper"
