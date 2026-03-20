@@ -7,7 +7,7 @@ MT_PRE_IPK="~git20260305232358.d47bd8b3-1"
 ARCH=$(grep "^OPENWRT_ARCH=" /etc/os-release | cut -d'"' -f2)
 
 URL_APK="https://github.com/badigit/MagiTrickle_mod_badigit/releases/download/0.5.2-badigit.6/magitrickle_0.5.2.6-r1_openwrt_${ARCH}.apk"
-URL_APK="https://github.com/badigit/MagiTrickle_mod_badigit/releases/download/0.5.2-badigit.6/magitrickle_0.5.2-badigit.6-1_openwrt_${ARCH}.ipk"
+URL_IPK="https://github.com/badigit/MagiTrickle_mod_badigit/releases/download/0.5.2-badigit.6/magitrickle_0.5.2-badigit.6-1_openwrt_${ARCH}.ipk"
 
 MIHOMO_INSTALL_DIR="/etc/mihomo"
 MIHOMO_BIN="/usr/bin/mihomo"
