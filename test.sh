@@ -21,7 +21,7 @@ echo "=== Обновляем пакеты ($PKG) ==="
 $UPDATE
 
 echo "=== Устанавливаем Python, pip и git ==="
-$INSTALL python3-light python3-pip git ca-certificates
+$INSTALL python3-light python3-pip git git-http ca-certificates
 
 # Клонируем tg-ws-proxy
 WORKDIR="/root/tg-ws-proxy"
