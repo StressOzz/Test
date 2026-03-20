@@ -1,5 +1,11 @@
 #!/bin/sh
 
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
 MT_VERSION="0.5.3"
 MT_PRE_APK="pre20260305232358-r1"
 MT_PRE_IPK="~git20260305232358.d47bd8b3-1"
@@ -13,30 +19,29 @@ URL_APK_MOD="https://github.com/badigit/MagiTrickle_mod_badigit/releases/downloa
 URL_IPK_MOD="https://github.com/badigit/MagiTrickle_mod_badigit/releases/download/0.5.2-badigit.6/magitrickle_0.5.2-badigit.6-1_openwrt_${ARCH}.ipk"
 
 magitrickle_menu() {
-echo -e "Выберите версию MagiTrickle для установки:"
-echo " 1) Оригинальный MagiTrickle"
-echo " 2) MagiTrickle badigit mod"
+    echo -e "\n${GREEN}Выберите версию MagiTrickle для установки${NC}"
+    echo " 1) ${CYAN}Оригинальный MagiTrickle${NC}"
+    echo " 2) ${CYAN}MagiTrickle badigit mod${NC}"
 
-while true; do
-    printf "Введите номер (Enter = Оригинал): "
+    echo -en "${YELLOW}Введите номер: ${NC}"
     read choice
 
     case "$choice" in
-        1) URL_APK="$URL_APK_ORIG"; URL_IPK="$URL_IPK_ORIG"; break;;
-        2) URL_APK="$URL_APK_MOD"; URL_IPK="$URL_IPK_MOD"; break ;;
-        *) URL_APK="$URL_APK_ORIG"; URL_IPK="$URL_IPK_ORIG"; break ;;
+        2)
+            URL_APK="$URL_APK_MOD"
+            URL_IPK="$URL_IPK_MOD"
+			echo -e "\n--> Устанавливаем MagiTrickle badigit mod"
+            ;;
+        *)
+            URL_APK="$URL_APK_ORIG"
+            URL_IPK="$URL_IPK_ORIG"
+			echo -e "\n--> Устанавливаем оригинальный MagiTrickle"
+            ;;
     esac
-done
 }
 
 MIHOMO_INSTALL_DIR="/etc/mihomo"
 MIHOMO_BIN="/usr/bin/mihomo"
-
-GREEN='\033[0;32m'
-RED='\033[0;31m'
-YELLOW='\033[1;33m'
-CYAN='\033[0;36m'
-NC='\033[0m'
 
 log_info()  { echo -e "${GREEN}[INFO]${NC} $*"; }
 log_warn()  { echo -e "${YELLOW}[WARN]${NC} $*"; }
