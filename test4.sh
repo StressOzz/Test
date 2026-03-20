@@ -81,7 +81,8 @@ MIH="/etc/mihomo/config.yaml"
 
 if [ -f "$MIH" ]; then
     while IFS='|' read -r country addr; do
-        if grep -qF "$addr" "$MIH"; then
+        host=${addr%%:*}
+        if grep -qF "$host" "$MIH"; then
             echo "Используется Endpoint: $country"
             break
         fi
