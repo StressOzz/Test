@@ -57,11 +57,33 @@ fi
 }
 
 check_status() {
-  MIHOMO_STATUS="${RED}не установлен${NC}"; HEV_STATUS="${RED}не установлен${NC}"; MAGITRICKLE_STATUS="${RED}не установлен${NC}"
+  MIHOMO_STATUS="${RED}не установлен${NC}"
+  HEV_STATUS="${RED}не установлен${NC}"
+  MAGITRICKLE_STATUS="${RED}не установлен${NC}"
 
-  [ -x /etc/init.d/mihomo ] && MIHOMO_STATUS="${GREEN}установлен${NC}"
-  [ -x /etc/init.d/hev-socks5-tunnel ] && HEV_STATUS="${GREEN}установлен${NC}"
-  [ -x /etc/init.d/magitrickle ] && MAGITRICKLE_STATUS="${GREEN}установлен${NC}"
+  if [ -x /etc/init.d/mihomo ]; then
+    STATUS=$(/etc/init.d/mihomo status 2>/dev/null)
+    case "$STATUS" in
+      running|active) MIHOMO_STATUS="${GREEN}запущен${NC}" ;;
+      *)              MIHOMO_STATUS="${RED}остановлен${NC}" ;;
+    esac
+  fi
+
+  if [ -x /etc/init.d/hev-socks5-tunnel ]; then
+    STATUS=$(/etc/init.d/hev-socks5-tunnel status 2>/dev/null)
+    case "$STATUS" in
+      running|active) HEV_STATUS="${GREEN}запущен${NC}" ;;
+      *)              HEV_STATUS="${RED}остановлен${NC}" ;;
+    esac
+  fi
+
+  if [ -x /etc/init.d/magitrickle ]; then
+    STATUS=$(/etc/init.d/magitrickle status 2>/dev/null)
+    case "$STATUS" in
+      running|active) MAGITRICKLE_STATUS="${GREEN}запущен${NC}" ;;
+      *)              MAGITRICKLE_STATUS="${RED}остановлен${NC}" ;;
+    esac
+  fi
 
   echo -e "${YELLOW}Mihomo:${NC}              $MIHOMO_STATUS"
   echo -e "${YELLOW}MagiTrickle:${NC}         $MAGITRICKLE_STATUS"
