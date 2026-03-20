@@ -6,8 +6,28 @@ MT_PRE_IPK="~git20260305232358.d47bd8b3-1"
 
 ARCH=$(grep "^OPENWRT_ARCH=" /etc/os-release | cut -d'"' -f2)
 
-URL_APK="https://github.com/badigit/MagiTrickle_mod_badigit/releases/download/0.5.2-badigit.6/magitrickle_0.5.2.6-r1_openwrt_${ARCH}.apk"
-URL_IPK="https://github.com/badigit/MagiTrickle_mod_badigit/releases/download/0.5.2-badigit.6/magitrickle_0.5.2-badigit.6-1_openwrt_${ARCH}.ipk"
+URL_APK_ORIG="https://gitlab.com/magitrickle/magitrickle/-/jobs/13378493545/artifacts/raw/.build/magitrickle_${MT_VERSION}_${MT_PRE_APK}_openwrt_${ARCH}.apk"
+URL_IPK_ORIG="https://gitlab.com/magitrickle/magitrickle/-/jobs/13378493545/artifacts/raw/.build/magitrickle_${MT_VERSION}${MT_PRE_IPK}_openwrt_${ARCH}.ipk"
+
+URL_APK_MOD="https://github.com/badigit/MagiTrickle_mod_badigit/releases/download/0.5.2-badigit.6/magitrickle_0.5.2.6-r1_openwrt_${ARCH}.apk"
+URL_IPK_MOD="https://github.com/badigit/MagiTrickle_mod_badigit/releases/download/0.5.2-badigit.6/magitrickle_0.5.2-badigit.6-1_openwrt_${ARCH}.ipk"
+
+magitrickle_menu() {
+echo -e "Выберите версию MagiTrickle для установки:"
+echo " 1) Оригинальный MagiTrickle"
+echo " 2) MagiTrickle badigit mod"
+
+while true; do
+    printf "Введите номер (Enter = Оригинал): "
+    read choice
+
+    case "$choice" in
+        1) URL_APK="$URL_APK_ORIG"; URL_IPK="$URL_IPK_ORIG"; break;;
+        2) URL_APK="$URL_APK_MOD"; URL_IPK="$URL_IPK_MOD"; break ;;
+        *) URL_APK="$URL_APK_ORIG"; URL_IPK="$URL_IPK_ORIG"; break ;;
+    esac
+done
+}
 
 MIHOMO_INSTALL_DIR="/etc/mihomo"
 MIHOMO_BIN="/usr/bin/mihomo"
@@ -1141,6 +1161,8 @@ EOF
 install_magitrickle() {
 	log_info "Установка MagiTrickle..."
 
+magitrickle_menu
+
     local CONFIG_PATH="/etc/magitrickle/state/config.yaml"
     local BACKUP_PATH="/tmp/magitrickle_config_backup.yaml"
 
@@ -1154,12 +1176,12 @@ install_magitrickle() {
 
 if [ "$USE_APK" -eq 1 ]; then
     FILE=/tmp/magitrickle.apk
-    curl -Lf --retry 3 --retry-delay 2 -o "$FILE" "$URL_APK" || exit 1
-    apk add --allow-untrusted "$FILE" || exit 1
+    curl -Lf --retry 3 --retry-delay 2 -o "$FILE" "$URL_APK" >/dev/null 2>&1 || exit 1
+    apk add --allow-untrusted "$FILE" >/dev/null 2>&1 || exit 1
 else
     FILE=/tmp/magitrickle.ipk
-    curl -Lf --retry 3 --retry-delay 2 -o "$FILE" "$URL_IPK" || exit 1
-    opkg install "$FILE" || exit 1
+    curl -Lf --retry 3 --retry-delay 2 -o "$FILE" "$URL_IPK" >/dev/null 2>&1 || exit 1
+    opkg install "$FILE" >/dev/null 2>&1 || exit 1
 fi
 
 rm -f "$FILE"
