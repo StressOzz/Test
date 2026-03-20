@@ -77,16 +77,9 @@ echo -e "                         ${DGRAY}by StressOzz${NC}\n"
 
 check_status
 
-MIH="/etc/mihomo/config.yaml"
-
-if [ -f "$MIH" ]; then
-    while IFS='|' read -r country addr; do
-        host=${addr%%:*}
-        if grep -qF "$host" "$MIH"; then
-            echo "Используется Endpoint: $country"
-            break
-        fi
-    done <<EOF
+[ -f /etc/mihomo/config.yaml ] && while IFS='|' read -r c a; do h=${a%%:*}
+grep -qF "$h" /etc/mihomo/config.yaml && echo "Используется Endpoint: $c" && break
+done <<EOF
 Россия|engage.cloudflareclient.com:4500
 Латвия|150.241.75.91:4500
 Германия|de.tribukvy.ltd:4501
@@ -98,7 +91,6 @@ if [ -f "$MIH" ]; then
 Эстония|ee.tribukvy.ltd:4501
 Польша|pl.tribukvy.ltd:4501
 EOF
-fi
 
 grep -F -A1 'id: "06776295"' "$CONFIGPATH" 2>/dev/null | grep -q 'name: Meta (WA+FB+Instagram)' && echo -e "${YELLOW}Используется список: ${NC}Internet Helper"
 grep -F -A1 'id: 4c172a51' "$CONFIGPATH" 2>/dev/null | grep -q 'name: Google_ai' && echo -e "${YELLOW}Используется список: ${NC}ITDog"
