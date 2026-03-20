@@ -20,8 +20,8 @@ URL_IPK_MOD="https://github.com/badigit/MagiTrickle_mod_badigit/releases/downloa
 
 magitrickle_menu() {
     echo -e "\n${GREEN}Выберите версию MagiTrickle для установки${NC}"
-    echo " 1) ${CYAN}Оригинальный MagiTrickle${NC}"
-    echo " 2) ${CYAN}MagiTrickle badigit mod${NC}"
+    echo -e " 1) ${CYAN}Оригинальный MagiTrickle${NC}"
+    echo -e " 2) ${CYAN}MagiTrickle badigit mod${NC}"
 
     echo -en "${YELLOW}Введите номер: ${NC}"
     read choice
@@ -105,10 +105,10 @@ detect_mihomo_arch() {
 }
 
 install_deps() {
-    log_info "Установка зависимостей..."
+    log_info "Установка зависимостей"
 
     if [ "$USE_APK" -eq 1 ]; then
-        log_info "Обновление списков пакетов..."
+        log_info "Обновление списков пакетов"
 		apk update >/dev/null 2>&1 || { log_error "apk update не удался"; return 1; }
         apk add ca-certificates kmod-tun kmod-nft-tproxy kmod-nft-nat curl >/dev/null 2>&1 || {
             log_error "Ошибка установки зависимостей"
@@ -116,14 +116,14 @@ install_deps() {
         }
 
     else
-        log_info "Обновление списков пакетов..."
+        log_info "Обновление списков пакетов"
         opkg update >/dev/null 2>&1 || { log_error "opkg update не удался"; return 1; }
         opkg install ca-certificates kmod-tun kmod-nft-tproxy kmod-nft-nat curl libcurl4 ca-bundle >/dev/null 2>&1 || {
             log_error "Ошибка установки зависимостей"
             return 1
         }
     fi
-    log_info "Зависимости установлены."
+    log_info "Зависимости установлены"
 }
 
 install_mihomo() {
@@ -153,10 +153,10 @@ mkdir -p "$MIHOMO_INSTALL_DIR" \
 
 echo "$MIHOMO_ARCH" > /etc/mihomo/.arch
 
-echo "--> Получение последней версии..."
+echo "--> Получение последней версии"
 RELEASE_TAG=$(curl -Ls -o /dev/null -w '%{url_effective}' https://github.com/MetaCubeX/mihomo/releases/latest | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | head -1)
 
-[ -z "$RELEASE_TAG" ] && { log_error "Не удалось определить версию."; return 1; }
+[ -z "$RELEASE_TAG" ] && { log_error "Не удалось определить версию"; return 1; }
 
 echo "--> Последняя версия: $RELEASE_TAG"
 
@@ -167,18 +167,18 @@ TMP="/tmp/mihomo.gz"
 log_info "Скачивание $FILENAME"
 echo "--> URL: $URL"
 
-curl -Lf --retry 3 --retry-delay 2 "$URL" -o "$TMP" >/dev/null 2>&1 || { log_error "Ошибка скачивания."; return 1; }
+curl -Lf --retry 3 --retry-delay 2 "$URL" -o "$TMP" >/dev/null 2>&1 || { log_error "Ошибка скачивания"; return 1; }
 
-echo "--> Распаковка..."
-gunzip -c "$TMP" > "$MIHOMO_BIN" 2>/dev/null || { log_error "Ошибка распаковки."; rm -f "$TMP"; return 1; }
+echo "--> Распаковка"
+gunzip -c "$TMP" > "$MIHOMO_BIN" 2>/dev/null || { log_error "Ошибка распаковки"; rm -f "$TMP"; return 1; }
 
 chmod +x "$MIHOMO_BIN"
 rm -f "$TMP"
 
-echo "--> Проверка ядра..."
-"$MIHOMO_BIN" -v >/dev/null 2>&1 || { log_error "Ядро не запускается."; return 1; }
+echo "--> Проверка ядра"
+"$MIHOMO_BIN" -v >/dev/null 2>&1 || { log_error "Ядро не запускается"; return 1; }
 
-    echo "--> Создание службы /etc/init.d/mihomo..."
+    echo "--> Создание службы /etc/init.d/mihomo"
     cat > /etc/init.d/mihomo <<'EOF'
 #!/bin/sh /etc/rc.common
 START=99
@@ -207,7 +207,7 @@ EOF
     chmod +x /etc/init.d/mihomo
     /etc/init.d/mihomo enable || log_warn "Не удалось включить автозапуск"
 
-    echo "--> Настройка страницы LuCI для управления Mihomo..."
+    echo "--> Настройка страницы LuCI для управления Mihomo"
     mkdir -p /usr/share/luci/menu.d
     cat > /usr/share/luci/menu.d/luci-app-mihomo.json <<'EOF'
 {
@@ -265,11 +265,11 @@ EOF
     local ACE_PATH="$VIEW_PATH/ace"
     mkdir -p "$ACE_PATH"
 
-    echo "--> Определение последней версии ACE Editor..."
+    echo "--> Определение последней версии ACE Editor"
     local LATEST_ACE_VER
     LATEST_ACE_VER=$(curl -s "https://api.cdnjs.com/libraries/ace" | grep -o '"version":"[^"]*"' | cut -d'"' -f4 | head -1)
     if [ -z "$LATEST_ACE_VER" ]; then
-        log_warn "cdnjs API недоступен, пробуем GitHub API..."
+        log_warn "cdnjs API недоступен, пробуем GitHub API"
         LATEST_ACE_VER=$(curl -s "https://api.github.com/repos/ajaxorg/ace/releases/latest" | grep -o '"tag_name": *"[^"]*"' | cut -d'"' -f4 | sed 's/^v//' | head -1)
     fi
     if [ -z "$LATEST_ACE_VER" ]; then
@@ -279,7 +279,7 @@ EOF
         echo "--> Актуальная версия ACE: $LATEST_ACE_VER"
     fi
 
-    log_info "Скачивание файлов ACE Editor $LATEST_ACE_VER..."
+    log_info "Скачивание файлов ACE Editor $LATEST_ACE_VER"
     for file in ace.js theme-merbivore_soft.js theme-tomorrow.js mode-yaml.js worker-yaml.js; do
         local dest="${ACE_PATH}/${file}"
         local success=0
@@ -300,12 +300,12 @@ EOF
         if [ "$success" -eq 1 ]; then
             echo "--> Скачан файл $file"
         else
-            log_error "Не удалось скачать $file ни из одного источника."
+            log_error "Не удалось скачать $file ни из одного источника"
             return 1
         fi
     done
 
-    echo "--> Создание config.js..."
+    echo "--> Создание config.js"
     cat > "$VIEW_PATH/config.js" <<'EOF'
 'use strict';
 'require view';
@@ -478,7 +478,7 @@ return view.extend({
             } catch (e) {}
         }
 		
-		if (isManual) ui.showModal(null, [E('p', { 'class': 'spinning' }, _('Проверка обновлений...'))]);
+		if (isManual) ui.showModal(null, [E('p', { 'class': 'spinning' }, _('Проверка обновлений'))]);
 		
 		var cmd = 'wget -q -O - "https://api.github.com/repos/MetaCubeX/mihomo/releases/latest" 2>/dev/null | grep -m1 \'"tag_name":\' | sed \'s/.*"\\(v[0-9.]*\\)".*/\\1/\'';
 		
@@ -506,25 +506,25 @@ return view.extend({
 		var self = this;
 		var latestVersion = this.latestVersion;
 		if (!latestVersion) return;
-		this.updateButton.textContent = _('Подождите...');
+		this.updateButton.textContent = _('Подождите');
 		this.updateButton.disabled = true;
 		var arch = 'arm64';
 		var downloadUrl = 'https://github.com/MetaCubeX/mihomo/releases/download/' + latestVersion + '/mihomo-linux-' + arch + '-' + latestVersion + '.gz';
 		var steps = [
-			{ msg: _('Создание бэкапа...'), shell: 'cp -f /usr/bin/mihomo /tmp/mihomo.backup' },
-			{ msg: _('Остановка Mihomo...'), shell: '/etc/init.d/mihomo stop' },
-			{ msg: _('Скачивание архива %s...').format(latestVersion), shell: 'wget -q -O /tmp/mihomo.gz "' + downloadUrl + '" && test -s /tmp/mihomo.gz' },
-			{ msg: _('Распаковка архива...'), shell: '/bin/gzip -d -c /tmp/mihomo.gz > /tmp/mihomo_new 2>/dev/null && test -s /tmp/mihomo_new' },
-			{ msg: _('Выдача временных прав...'), shell: '/bin/chmod 755 /tmp/mihomo_new' },
-			{ msg: _('Проверка ядра...'), shell: '/tmp/mihomo_new -v 2>&1 || true' },
-			{ msg: _('Установка ядра...'), shell: '/bin/mv -f /tmp/mihomo_new /usr/bin/mihomo' },
-			{ msg: _('Выдача постоянных прав...'), shell: '/bin/chmod 755 /usr/bin/mihomo' },
-			{ msg: _('Запуск Mihomo...'), shell: '/etc/init.d/mihomo start' },
-			{ msg: _('Удаление бэкапа...'), shell: 'rm -f /tmp/mihomo.gz /tmp/mihomo.backup' }
+			{ msg: _('Создание бэкапа'), shell: 'cp -f /usr/bin/mihomo /tmp/mihomo.backup' },
+			{ msg: _('Остановка Mihomo'), shell: '/etc/init.d/mihomo stop' },
+			{ msg: _('Скачивание архива %s').format(latestVersion), shell: 'wget -q -O /tmp/mihomo.gz "' + downloadUrl + '" && test -s /tmp/mihomo.gz' },
+			{ msg: _('Распаковка архива'), shell: '/bin/gzip -d -c /tmp/mihomo.gz > /tmp/mihomo_new 2>/dev/null && test -s /tmp/mihomo_new' },
+			{ msg: _('Выдача временных прав'), shell: '/bin/chmod 755 /tmp/mihomo_new' },
+			{ msg: _('Проверка ядра'), shell: '/tmp/mihomo_new -v 2>&1 || true' },
+			{ msg: _('Установка ядра'), shell: '/bin/mv -f /tmp/mihomo_new /usr/bin/mihomo' },
+			{ msg: _('Выдача постоянных прав'), shell: '/bin/chmod 755 /usr/bin/mihomo' },
+			{ msg: _('Запуск Mihomo'), shell: '/etc/init.d/mihomo start' },
+			{ msg: _('Удаление бэкапа'), shell: 'rm -f /tmp/mihomo.gz /tmp/mihomo.backup' }
 		];
 		var executeStep = function(index) {
 			if (index >= steps.length) {
-				self.showOutput(_('Обновлено успешно! Перезагрузка...'), false);
+				self.showOutput(_('Обновлено успешно! Перезагрузка'), false);
 				window.location.reload();
 				return Promise.resolve();
 			}
@@ -562,7 +562,7 @@ return view.extend({
         cachedRuleFiles = (data[2] || []).sort(function(a, b) { return a.name.localeCompare(b.name); });
         var isRunning = !!(serviceInfo.mihomo && serviceInfo.mihomo.instances.main.running);
         
-        var versionContainer = E('span', { 'id': 'mihomo-version', 'style': 'margin-left: 10px; font-size: 0.9em; opacity: 0.7;' }, _('Загрузка...'));
+        var versionContainer = E('span', { 'id': 'mihomo-version', 'style': 'margin-left: 10px; font-size: 0.9em; opacity: 0.7;' }, _('Загрузка'));
         var latestVersionEl = E('span', { 'id': 'mihomo-latest-version', 'style': 'margin-left: 4px; font-size: 0.9em; opacity: 0.7; display: none;' }, '');
         this.latestVersionEl = latestVersionEl;
         var updateButton = E('button', { 'id': 'mihomo-update-btn', 'class': 'btn cbi-button-neutral', 'style': 'margin-left: 10px; padding: 0 0.6em; font-size: 0.9em;', 'disabled': true }, _('Проверить обновление'));
@@ -760,7 +760,7 @@ return view.extend({
 		var self = this;
 		var snippet = generateProviderSnippet(currentFile);
 		if (!snippet) return;
-		ui.showModal(null, [E('p', { 'class': 'spinning' }, _('Добавление...'))]);
+		ui.showModal(null, [E('p', { 'class': 'spinning' }, _('Добавление'))]);
 		var indentedSnippet = snippet.split('\n').map(function(line) { return '  ' + line; }).join('\n');
 		fs.read(MAIN_CONFIG).then(function(content) {
 			var newContent = content || '';
@@ -926,7 +926,7 @@ return view.extend({
         if (path === currentFile) return;
         
         var self = this;
-        ui.showModal(null, [E('p', { 'class': 'spinning' }, _('Загрузка...'))]);
+        ui.showModal(null, [E('p', { 'class': 'spinning' }, _('Загрузка'))]);
         fs.read(path).then(function(content) {
             currentFile = path;
             if (editor) {
@@ -965,7 +965,7 @@ return view.extend({
                 if (!filename || !validateFilename(filename)) { ui.addNotification(null, E('p', _('Некорректное имя')), 'error'); return; }
                 var fullPath = RULE_DIR + filename + typeSelect.value;
                 if (!validatePath(fullPath, RULE_DIR)) { ui.addNotification(null, E('p', _('Недопустимый путь')), 'error'); return; }
-                ui.showModal(null, [E('p', { 'class': 'spinning' }, _('Создание...'))]);
+                ui.showModal(null, [E('p', { 'class': 'spinning' }, _('Создание'))]);
                 fs.stat(fullPath).then(function() {
                     ui.hideModal(); ui.addNotification(null, E('p', _('Файл уже существует')), 'error');
                 }).catch(function() {
@@ -989,7 +989,7 @@ return view.extend({
         if (!isSafeRulePath(path)) { ui.addNotification(null, E('p', _('Ошибка пути')), 'error'); return; }
         if (!confirm(_('Удалить %s?').format(path.split('/').pop()))) return;
         var self = this;
-        ui.showModal(null, [E('p', { 'class': 'spinning' }, _('Удаление...'))]);
+        ui.showModal(null, [E('p', { 'class': 'spinning' }, _('Удаление'))]);
         fs.remove(path).then(function() { return fs.list(RULE_DIR); }).then(function(files) {
             cachedRuleFiles = (files || []).sort(function(a, b) { return a.name.localeCompare(b.name); });
             if (currentFile === path) self.handleTabClick(MAIN_CONFIG);
@@ -1004,7 +1004,7 @@ return view.extend({
         var self = this;
         var content = editor.getValue();
         if (currentFile === MAIN_CONFIG) mainConfigContent = content;
-        ui.showModal(null, [E('p', { 'class': 'spinning' }, _('Сохранение...'))]);
+        ui.showModal(null, [E('p', { 'class': 'spinning' }, _('Сохранение'))]);
         fs.write(currentFile, content).then(function() {
             if (currentFile === MAIN_CONFIG) {
                 return fs.exec('/usr/bin/mihomo', ['-d', '/etc/mihomo', '-t', MAIN_CONFIG]).then(function(res) {
@@ -1021,7 +1021,7 @@ return view.extend({
     handleCheck: function() {
         if (currentFile !== MAIN_CONFIG || !editor) return;
         var self = this;
-        ui.showModal(null, [E('p', { 'class': 'spinning' }, _('Проверка...'))]);
+        ui.showModal(null, [E('p', { 'class': 'spinning' }, _('Проверка'))]);
         fs.write(MAIN_CONFIG, editor.getValue())
             .then(function() { return fs.exec('/usr/bin/mihomo', ['-d', '/etc/mihomo', '-t']); })
             .then(function(res) { self.showOutput((res.stdout || '') + (res.stderr || ''), res.code !== 0); ui.hideModal(); })
@@ -1042,7 +1042,7 @@ return view.extend({
 	handleServiceAction: function(act) {
 		if (!VALID_ACTIONS.includes(act)) return;
 		var self = this;
-		ui.showModal(null, [E('p', { 'class': 'spinning' }, _('Выполнение...'))]);
+		ui.showModal(null, [E('p', { 'class': 'spinning' }, _('Выполнение'))]);
 		fs.exec('/etc/init.d/mihomo', [act]).then(function() { window.location.reload(); })
 			.catch(function(e) { ui.hideModal(); ui.addNotification(null, E('p', e.message), 'error'); });
 	},
@@ -1052,9 +1052,9 @@ return view.extend({
         fs.exec('/sbin/logread', ['-e', 'mihomo']).then(function(res) {
             var logContent = res.stdout;
             if (!logContent && res.code !== 0) {
-                logContent = "Записей о 'mihomo' в системном журнале не найдено.\nВозможно, служба не запущена.";
+                logContent = "Записей о 'mihomo' в системном журнале не найдено.\nВозможно, служба не запущена";
             } else if (!logContent) {
-                logContent = "Журнал пуст.";
+                logContent = "Журнал пуст";
             }
 
             self.showOutput(logContent, false);
@@ -1082,7 +1082,7 @@ EOF
 }
 
 install_hev_tunnel() {
-    log_info "Установка hev-socks5-tunnel..."
+    log_info "Установка hev-socks5-tunnel"
 
     if [ "$USE_APK" -eq 1 ]; then
         apk cache clean
@@ -1106,7 +1106,7 @@ socks5:
 EOF
     chmod 600 /etc/hev-socks5-tunnel/main.yml
 
-    echo "--> Очистка старых настроек UCI..."
+    echo "--> Очистка старых настроек UCI"
     uci delete network.Mihomo 2>/dev/null || true
 
     local fw_section
@@ -1128,21 +1128,21 @@ EOF
     /etc/init.d/firewall restart 2>/dev/null || true
     sleep 1
 
-    echo "--> Настройка UCI-сервиса hev-socks5-tunnel..."
+    echo "--> Настройка UCI-сервиса hev-socks5-tunnel"
     uci set hev-socks5-tunnel.config.enabled='1'
     uci set hev-socks5-tunnel.config.configfile='/etc/hev-socks5-tunnel/main.yml'
     uci commit hev-socks5-tunnel
     /etc/init.d/hev-socks5-tunnel restart
     sleep 2
 
-    echo "--> Настройка сетевого интерфейса..."
+    echo "--> Настройка сетевого интерфейса"
     uci set network.Mihomo=interface
     uci set network.Mihomo.proto='none'
     uci set network.Mihomo.device='Mihomo'
     uci commit network
     /etc/init.d/network reload
 
-    echo "--> Настройка firewall..."
+    echo "--> Настройка firewall"
     local FW_ZONE
     FW_ZONE=$(uci add firewall zone)
     uci set "firewall.${FW_ZONE}.name=Mihomo"
@@ -1164,7 +1164,7 @@ EOF
 
 
 install_magitrickle() {
-	log_info "Установка MagiTrickle..."
+	log_info "Установка MagiTrickle"
 
 magitrickle_menu
 
@@ -1191,19 +1191,19 @@ fi
 
 rm -f "$FILE"
 
-	echo "--> Установка списка для MagiTrickle..."
+	echo "--> Установка списка для MagiTrickle"
 	confGIT="https://raw.githubusercontent.com/StressOzz/Use_WARP_on_OpenWRT/refs/heads/main/files/MagiTrickle/configAD.yaml"
 	wget -q -O "$CONFIG_PATH" "$confGIT" || {
     echo -e "${RED}Не удалось скачать список!${NC}"
     return 1
 	}
-	echo "--> Запуск MagiTrickle..."
+	echo "--> Запуск MagiTrickle"
 	/etc/init.d/magitrickle enable >/dev/null 2>&1
 	/etc/init.d/magitrickle reload  >/dev/null 2>&1
 	/etc/init.d/magitrickle start >/dev/null 2>&1
 	/etc/init.d/magitrickle restart >/dev/null 2>&1
 
-    echo "--> Создание страницы MagiTrickle в LuCI..."
+    echo "--> Создание страницы MagiTrickle в LuCI"
     mkdir -p /www/luci-static/resources/view/magitrickle
 
     cat > /www/luci-static/resources/view/magitrickle/magitrickle.js <<'EOF'
@@ -1241,12 +1241,12 @@ EOF
 }
 
 finalize_install() {
-    echo "--> Выставление прав доступа..."
+    echo "--> Выставление прав доступа"
     chmod -R 755 /www/luci-static/resources/view/mihomo 2>/dev/null || true
     find /www/luci-static/resources/view/mihomo -type f -exec chmod 644 {} \; 2>/dev/null || true
     chmod 644 /www/luci-static/resources/view/magitrickle/magitrickle.js 2>/dev/null || true
 
-    echo "--> Очистка кэша LuCI и перезапуск сервисов..."
+    echo "--> Очистка кэша LuCI и перезапуск сервисов"
     rm -rf /tmp/luci-indexcache /tmp/luci-modulecache/
     /etc/init.d/rpcd restart > /dev/null 2>&1
     /etc/init.d/uhttpd restart > /dev/null 2>&1
