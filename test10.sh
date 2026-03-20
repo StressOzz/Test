@@ -92,8 +92,8 @@ done <<EOF
 Польша|pl.tribukvy.ltd:4501
 EOF
 
-grep -F 'name: Meta (WA+FB+Instagram)' "$CONFIGPATH" 2>/dev/null && echo -e "${YELLOW}Используется список: ${NC}Internet Helper"
-grep -F 'name: Google_ai' "$CONFIGPATH" 2>/dev/null && echo -e "${YELLOW}Используется список: ${NC}ITDog"
+grep -Fq 'name: Google_ai' "$CONFIGPATH" && echo -e "${YELLOW}Используется список: ${NC}ITDog"
+grep -Fq 'name: Meta (WA+FB+Instagram)' "$CONFIGPATH" && echo -e "${YELLOW}Используется список: ${NC}Internet Helper"
 
 echo -e "\n${CYAN}1) ${GREEN}Установить ${NC}Mixomo"
 echo -e "${CYAN}2) ${GREEN}Удалить ${NC}Mixomo"
