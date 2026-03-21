@@ -67,7 +67,7 @@ echo -e "${GREEN}=== ${MAGENTA}Очистка мусора ${GREEN}===${NC}"
 
 rm -rf /root/.cache/pip
 rm -rf "$WORKDIR/.git"
-$REMOVE git git-http
+$REMOVE git-http
 
 echo -e "\n${MAGENTA}=== ${GREEN}Установка завершена${MAGENTA} ===${NC}\n"
 
