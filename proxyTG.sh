@@ -56,15 +56,12 @@ chmod +x /etc/init.d/tg-ws-proxy
 echo -e "${MAGENTA}=== Очистка мусора ===${NC}"
 
 rm -rf /root/.cache/pip
-
 rm -rf "$WORKDIR/.git"
-
 $REMOVE python3-pip git-http
 
 echo -e "\n${GREEN}=== Установка завершена ===${NC}\n"
 
 echo -e "${MAGENTA}=== Проверяем работу прокси ===${NC}"
-
 sleep 2
     
 if pgrep -f "tg-ws-proxy" > /dev/null; then
