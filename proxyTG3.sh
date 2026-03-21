@@ -63,12 +63,6 @@ chmod +x /etc/init.d/tg-ws-proxy
 /etc/init.d/tg-ws-proxy enable
 /etc/init.d/tg-ws-proxy start
 
-echo -e "${GREEN}=== ${MAGENTA}Очистка мусора ${GREEN}===${NC}"
-
-rm -rf /root/.cache/pip
-rm -rf "$WORKDIR/.git"
-$REMOVE git-http
-
 echo -e "\n${MAGENTA}=== ${GREEN}Установка завершена${MAGENTA} ===${NC}\n"
 
 echo -e "${GREEN}=== ${MAGENTA}Проверяем работу прокси ${GREEN}===${NC}"
