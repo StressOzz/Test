@@ -20,10 +20,20 @@ else
     REMOVE="apk del"
 fi
 
-echo -e "${MAGENTA}=== Обновляем пакеты ===${NC}"
+FREE_KB=$(df /root | tail -1 | awk '{print $4}')
+FREE_MB=$((FREE_KB / 1024))
+
+if [ "$FREE_MB" -ge 51 ]; then
+    echo -e "---> ${GREEN}Свободно ${NC}$FREE_MB ${GREEN}МБ${NC}"
+else
+    echo -e "\n${RED}Не достаточно места для установки!${NC}\n"
+    exit 0
+fi
+
+echo -e "${GREEN}=== ${MAGENTA}Обновляем пакеты ${GREEN}===${NC}"
 $UPDATE
 
-echo -e "${MAGENTA}=== Устанавливаем необходимые пакеты ===${NC}"
+echo -e "${GREEN}=== ${MAGENTA}Устанавливаем необходимые пакеты ${GREEN}===${NC}"
 $INSTALL python3-light python3-pip git-http
 
 WORKDIR="/root/tg-ws-proxy"
@@ -53,19 +63,19 @@ chmod +x /etc/init.d/tg-ws-proxy
 /etc/init.d/tg-ws-proxy enable
 /etc/init.d/tg-ws-proxy start
 
-echo -e "${MAGENTA}=== Очистка мусора ===${NC}"
+echo -e "${GREEN}=== ${MAGENTA}Очистка мусора ${GREEN}===${NC}"
 
 rm -rf /root/.cache/pip
 rm -rf "$WORKDIR/.git"
 $REMOVE python3-pip git git-http
 
-echo -e "\n${GREEN}=== Установка завершена ===${NC}\n"
+echo -e "\n${MAGENTA}=== ${GREEN}Установка завершена${MAGENTA} ===${NC}\n"
 
-echo -e "${MAGENTA}=== Проверяем работу прокси ===${NC}"
+echo -e "${GREEN}=== ${MAGENTA}Проверяем работу прокси ${GREEN}===${NC}"
 sleep 2
     
 if pgrep -f "tg-ws-proxy" > /dev/null; then
-    echo -e "${GREEN}✓${NC} tg-ws-proxy запущен${NC}"
+    echo -e "${GREEN}✓${NC} ${CYAN}tg-ws-proxy ${GREEN}запущен${NC}"
     PROCESS_OK=1
 else
     echo -e "${RED}Процесс tg-ws-proxy не запущен${NC}"
@@ -73,7 +83,7 @@ else
 fi
 
 if netstat -tuln | grep -q ":1080 "; then
-    echo -e "${GREEN}✓${NC} Порт 1080 прослушивается"
+    echo -e "${GREEN}✓${NC} ${CYAN}порт 1080 ${GREEN}прослушивается${NC}"
     PORT_OK=1
 else
     echo -e "${RED}Порт 1080 не прослушивается${NC}"
@@ -81,8 +91,7 @@ else
 fi
 
 if [ "$PROCESS_OK" -eq 1 ] && [ "$PORT_OK" -eq 1 ]; then
-    echo -e "\n${GREEN}Прокси работает корректно!${NC}"
-    echo -e "\n${YELLOW}Telegram прокси доступен на ${NC}$LAN_IP:1080\n"
+    echo -e "\n${YELLOW}Telegram прокси доступен: ${NC}$LAN_IP:1080\n"
 else
-    echo -e "${RED}Прокси не работает!${NC}"
+    echo -e "\n${RED}Прокси не работает!${NC}\n"
 fi
