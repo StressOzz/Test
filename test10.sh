@@ -21,7 +21,7 @@ echo -e "${MAGENTA}=== Обновляем пакеты ===${NC}"
 $UPDATE
 
 echo -e "${MAGENTA}=== Устанавливаем необходимые пакеты ===${NC}"
-$INSTALL python3-light git-http
+$INSTALL python3-light python3-pip git-http
 
 WORKDIR="/root/tg-ws-proxy"
 if [ ! -d "$WORKDIR" ]; then
