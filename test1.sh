@@ -21,15 +21,17 @@ echo -e "${MAGENTA}=== Обновляем пакеты ===${NC}"
 $UPDATE
 
 echo -e "${MAGENTA}=== Устанавливаем минимально необходимые пакеты ===${NC}"
-$INSTALL python3-light python3-pip git-http
+$INSTALL python3-light python3-pip git git-http
 
-WORKDIR="/root/tg-ws-proxy"
+# WORKDIR="/root/tg-ws-proxy"
 
-rm -rf "$WORKDIR"
+# rm -rf "$WORKDIR"
 
-cd /root
+# cd /root
+
 git clone https://github.com/Flowseal/tg-ws-proxy
-cd "$WORKDIR"
+
+# cd "$WORKDIR"
 
 pip install -e .
 
