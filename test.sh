@@ -1,29 +1,28 @@
 #!/bin/sh
-# Автоустановка tg-ws-proxy на OpenWrt (opkg или apk), строго по оригиналу
 
-set -e
+GREEN="\033[1;32m"
+YELLOW="\033[1;33m"
+MAGENTA="\033[1;35m"
+NC="\033[0m"
 
-echo "=== Определяем пакетный менеджер ==="
+LAN_IP=$(uci get network.lan.ipaddr 2>/dev/null | cut -d/ -f1)
+
 if command -v opkg >/dev/null 2>&1; then
     PKG="opkg"
     UPDATE="opkg update"
     INSTALL="opkg install"
-elif command -v apk >/dev/null 2>&1; then
+else
     PKG="apk"
     UPDATE="apk update"
     INSTALL="apk add"
-else
-    echo "Не найден пакетный менеджер (opkg или apk)"
-    exit 1
 fi
 
-echo "=== Обновляем пакеты ($PKG) ==="
+echo -e "${MAGENTA}=== Обновляем пакеты ===${NC}"
 $UPDATE
 
-echo "=== Устанавливаем Python, pip и git ==="
-$INSTALL python3-light python3-pip git git-http ca-certificates
+echo -e "${MAGENTA}=== Устанавливаем необходимые пакеты ===${NC}"
+$INSTALL python3-light python3-pip git-http
 
-# Клонируем tg-ws-proxy
 WORKDIR="/root/tg-ws-proxy"
 if [ ! -d "$WORKDIR" ]; then
     cd /root
@@ -33,11 +32,9 @@ else
     git pull || true
 fi
 
-# Устанавливаем tg-ws-proxy
 cd "$WORKDIR"
 pip install -e .
 
-# Создаём init.d для автозапуска
 cat << 'EOF' > /etc/init.d/tg-ws-proxy
 #!/bin/sh /etc/rc.common
 START=99
@@ -55,5 +52,5 @@ chmod +x /etc/init.d/tg-ws-proxy
 /etc/init.d/tg-ws-proxy enable
 /etc/init.d/tg-ws-proxy start
 
-echo "=== Установка завершена ==="
-echo "Telegram прокси доступен на IP роутера :1080"
+echo -e "\n${GREEN}=== Установка завершена ===${NC}"
+echo -e "\n${YELLOW}Telegram прокси доступен на ${NC}$LAN_IP:1080"
