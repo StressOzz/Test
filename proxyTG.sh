@@ -23,8 +23,9 @@ $UPDATE
 echo -e "${MAGENTA}=== Устанавливаем необходимые пакеты ===${NC}"
 $INSTALL python3-light python3-pip git git-http
 
-rm -rf "/root/tg-ws-proxy"
+echo -e "${MAGENTA}=== Устанавливаем tg-ws-proxy ===${NC}"
 
+rm -rf "/root/tg-ws-proxy"
 git clone https://github.com/Flowseal/tg-ws-proxy
 
 cd tg-ws-proxy
