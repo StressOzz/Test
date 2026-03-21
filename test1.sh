@@ -52,52 +52,6 @@ start_service() {
 EOF
 
 chmod +x /etc/init.d/tg-ws-proxy
-
-echo -e "${MAGENTA}=== Очистка ненужных файлов ===${NC}"
-
-# Очищаем pip кэш
-pip cache purge 2>/dev/null || true
-rm -rf /root/.cache
-rm -rf /root/.cache/pip 2>/dev/null
-
-# Удаляем ненужные файлы проекта
-cd "$WORKDIR"
-find . -name "*.pyc" -delete
-find . -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null
-rm -rf .git .gitignore .github tests examples docs *.md 2>/dev/null
-
-# Удаляем тесты и документацию Python
-echo -e "${YELLOW}Удаляем тесты и документацию Python...${NC}"
-find /usr/lib/python3.* -name "test" -type d -exec rm -rf {} + 2>/dev/null
-find /usr/lib/python3.* -name "tests" -type d -exec rm -rf {} + 2>/dev/null
-find /usr/lib/python3.* -name "*.txt" -delete 2>/dev/null
-find /usr/lib/python3.* -name "*.pyc" -delete 2>/dev/null
-find /usr/lib/python3.* -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null
-
-# Удаляем документацию и примеры из системы
-rm -rf /usr/share/doc 2>/dev/null
-rm -rf /usr/share/man 2>/dev/null
-rm -rf /usr/share/info 2>/dev/null
-
-# Удаляем git (экономия ~5-10 МБ)
-if command -v git >/dev/null 2>&1; then
-    echo -e "${YELLOW}Удаляем git...${NC}"
-    $REMOVE git-http 2>/dev/null || true
-fi
-
-# Удаляем pip и python3-pip (но сохраняем установленные пакеты)
-echo -e "${YELLOW}Удаляем pip...${NC}"
-# Удаляем сам pip, но оставляем установленные зависимости
-$REMOVE python3-pip 2>/dev/null || true
-# Дополнительно чистим остатки pip
-rm -rf /usr/lib/python3.*/site-packages/pip* 2>/dev/null
-rm -rf /usr/lib/python3.*/site-packages/pip-*.dist-info 2>/dev/null
-rm -rf /usr/bin/pip* 2>/dev/null
-
-# Опционально: если нужна еще экономия, можно удалить ensurepip
-rm -rf /usr/lib/python3.*/ensurepip 2>/dev/null
-
-# Запускаем сервис
 /etc/init.d/tg-ws-proxy enable
 /etc/init.d/tg-ws-proxy start
 
