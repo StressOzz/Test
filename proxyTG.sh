@@ -53,22 +53,20 @@ chmod +x /etc/init.d/tg-ws-proxy
 /etc/init.d/tg-ws-proxy enable
 /etc/init.d/tg-ws-proxy start
 
-echo -e "\n${GREEN}=== Установка завершена ===${NC}\n"
-
 echo -e "${MAGENTA}=== Очистка мусора ===${NC}"
 
-# удаляем pip cache
 rm -rf /root/.cache/pip
 
-# удаляем git метаданные
 rm -rf "$WORKDIR/.git"
 
-# удаляем ненужные пакеты
-$REMOVE python3-pip git-http 2>/dev/null
+$REMOVE python3-pip git-http
 
+echo -e "\n${GREEN}=== Установка завершена ===${NC}\n"
 
 echo -e "${MAGENTA}=== Проверяем работу прокси ===${NC}"
+
 sleep 2
+    
 if pgrep -f "tg-ws-proxy" > /dev/null; then
     echo -e "${GREEN}✓${NC} tg-ws-proxy запущен${NC}"
     PROCESS_OK=1
@@ -87,7 +85,7 @@ fi
 
 if [ "$PROCESS_OK" -eq 1 ] && [ "$PORT_OK" -eq 1 ]; then
     echo -e "\n${GREEN}Прокси работает корректно!${NC}"
-    echo -e "\n${YELLOW}Telegram прокси доступен на ${NC}$LAN_IP:1080"
+    echo -e "\n${YELLOW}Telegram прокси доступен на ${NC}$LAN_IP:1080\n"
 else
     echo -e "${RED}Прокси не работает!${NC}"
 fi
