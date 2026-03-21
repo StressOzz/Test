@@ -24,7 +24,7 @@ FREE_KB=$(df /root | tail -1 | awk '{print $4}')
 FREE_MB=$((FREE_KB / 1024))
 
 if [ "$FREE_MB" -ge 51 ]; then
-    echo -e "---> ${GREEN}Свободно ${NC}$FREE_MB ${GREEN}МБ${NC}"
+    echo -e "     ${GREEN}Свободно ${NC}$FREE_MB ${GREEN}МБ${NC}"
 else
     echo -e "\n${RED}Не достаточно места для установки!${NC}\n"
     exit 0
@@ -67,7 +67,7 @@ echo -e "${GREEN}=== ${MAGENTA}Очистка мусора ${GREEN}===${NC}"
 
 rm -rf /root/.cache/pip
 rm -rf "$WORKDIR/.git"
-$REMOVE python3-pip git git-http
+$REMOVE git git-http
 
 echo -e "\n${MAGENTA}=== ${GREEN}Установка завершена${MAGENTA} ===${NC}\n"
 
@@ -75,7 +75,7 @@ echo -e "${GREEN}=== ${MAGENTA}Проверяем работу прокси ${GR
 sleep 2
     
 if pgrep -f "tg-ws-proxy" > /dev/null; then
-    echo -e "${GREEN}✓${NC} ${CYAN}tg-ws-proxy ${GREEN}запущен${NC}"
+    echo -e "${GREEN}✓${NC} tg-ws-proxy ${GREEN}запущен${NC}"
     PROCESS_OK=1
 else
     echo -e "${RED}Процесс tg-ws-proxy не запущен${NC}"
@@ -83,7 +83,7 @@ else
 fi
 
 if netstat -tuln | grep -q ":1080 "; then
-    echo -e "${GREEN}✓${NC} ${CYAN}порт 1080 ${GREEN}прослушивается${NC}"
+    echo -e "${GREEN}✓${NC} порт 1080 ${GREEN}прослушивается${NC}"
     PORT_OK=1
 else
     echo -e "${RED}Порт 1080 не прослушивается${NC}"
