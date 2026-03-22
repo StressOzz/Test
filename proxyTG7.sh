@@ -13,12 +13,10 @@ if command -v opkg >/dev/null 2>&1; then
     PKG="opkg"
     UPDATE="opkg update"
     INSTALL="opkg install --force-reinstall"
-    DELETE="opkg remove --autoremove --force-removal-of-dependent-packages"
 else
     PKG="apk"
     UPDATE="apk update"
     INSTALL="apk add --force-reinstall"
-    DELETE="apk del"
 fi
 
 LAN_IP=$(uci get network.lan.ipaddr 2>/dev/null | cut -d/ -f1)
@@ -92,10 +90,12 @@ python3 -m pip uninstall -y tg-ws-proxy >/dev/null 2>&1
 pip uninstall -y tg-ws-proxy >/dev/null 2>&1
 
 echo -e "${CYAN}Удаляем зависимости${NC}"
-$DELETE git-http
-$DELETE python3-light
-$DELETE python3-pip
-$DELETE python3-light
+
+    if command -v opkg >/dev/null 2>&1; then
+        opkg remove --autoremove --force-removal-of-dependent-packages python3-light python3-pip git-http
+    else
+        apk del python3-light python3-pip git-http
+    fi
 
 echo -e "\n${GREEN}=== Удаление завершино ===${NC}"
 PAUSE
