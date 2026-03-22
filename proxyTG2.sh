@@ -39,7 +39,7 @@ is_running() {
     fi
 }
 
-install_tg-ws() {
+install_tg_ws() {
 echo -e "${MAGENTA}=== Обновляем пакеты ===${NC}"
 $UPDATE
 
@@ -75,7 +75,7 @@ echo -e "\n${YELLOW}Telegram прокси доступен на ${NC}$LAN_IP:108
 PAUSE
 }
 
-delete_tg-ws() {
+delete_tg_ws() {
 echo -e "${MAGENTA}=== Удаялем tg-ws-proxy ===${NC}"
 
 echo -e "${CYAN}Останавливаем сервис${NC}"
@@ -140,8 +140,8 @@ echo -e "${CYAN}Enter) ${GREEN}Выход${NC}\n"
 echo -en "${YELLOW}Выберите пункт: ${NC}"
 read choice
 case "$choice" in 
-1) install_tg-ws ;;
-2) delete_tg-ws ;;
+1) install_tg_ws ;;
+2) delete_tg_ws ;;
 *) echo; exit 0 ;;
 esac
 }
