@@ -23,19 +23,18 @@ LAN_IP=$(uci get network.lan.ipaddr 2>/dev/null | cut -d/ -f1)
 PAUSE() { echo -ne "\nНажмите Enter..."; read dummy; }
 
 is_installed() {
-    # Считаем установленным, если есть папка или pip пакет
     if [ -d "/root/tg-ws-proxy" ] || python3 -m pip show tg-ws-proxy >/dev/null 2>&1; then
-        return 0  # установлен
+        return 0
     else
-        return 1  # не установлен
+        return 1
     fi
 }
 
 is_running() {
     if pgrep -f tg-ws-proxy >/dev/null 2>&1; then
-        return 0  # запущен
+        return 0
     else
-        return 1  # не запущен
+        return 1
     fi
 }
 
@@ -105,24 +104,18 @@ PAUSE
 }
 
 menu() {
-echo "████████╗ ██████╗       ██╗    ██╗███████╗      ██████╗ ██████╗  ██████╗ ██╗  ██╗██╗   ██╗"
-echo "╚══██╔══╝██╔════╝       ██║    ██║██╔════╝      ██╔══██╗██╔══██╗██╔═══██╗╚██╗██╔╝╚██╗ ██╔╝"
-echo "   ██║   ██║  ███╗█████╗██║ █╗ ██║███████╗█████╗██████╔╝██████╔╝██║   ██║ ╚███╔╝  ╚████╔╝ "
-echo "   ██║   ██║   ██║╚════╝██║███╗██║╚════██║╚════╝██╔═══╝ ██╔══██╗██║   ██║ ██╔██╗   ╚██╔╝  "
-echo "   ██║   ╚██████╔╝      ╚███╔███╔╝███████║      ██║     ██║  ██║╚██████╔╝██╔╝ ██╗   ██║   "
-echo "   ╚═╝    ╚═════╝        ╚══╝╚══╝ ╚══════╝      ╚═╝     ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═╝   ╚═╝   "
-echo "                                                             by Flowseal (StresOzz Scrypt)"
+echo "░▀█▀░█▀▀░░░░░█░█░█▀▀░░░░░█▀█░█▀▄░█▀█░█░█░█░█"
+echo "░░█░░█░█░▄▄▄░█▄█░▀▀█░▄▄▄░█▀▀░█▀▄░█░█░▄▀▄░░█░"
+echo "░░▀░░▀▀▀░░░░░▀░▀░▀▀▀░░░░░▀░░░▀░▀░▀▀▀░▀░▀░░▀░"
+echo "               by Flowseal (StresOzz Scrypt)"
 
-    if is_installed; then
-        echo -e "${YELLOW}статус tg-ws-proxy: ${GREEN}установлен${NC}"
-    if is_running; then
-        echo -e "${YELLOW}статус tg-ws-proxy: ${GREEN}запущен${NC}"
-    else
-        echo -e "${YELLOW}статус tg-ws-proxy: ${RED}установлен, но не запущен${NC}"
-    fi
-    else
-        echo -e "${YELLOW}статус tg-ws-proxy: ${RED}не установлен${NC}"
-    fi
+if is_running; then
+    echo -e "${YELLOW}статус tg-ws-proxy: ${GREEN}запущен${NC}"
+elif is_installed; then
+    echo -e "${YELLOW}статус tg-ws-proxy: ${RED}установлен, но не запущен${NC}"
+else
+    echo -e "${YELLOW}статус tg-ws-proxy: ${RED}не установлен${NC}"
+fi
 
 if is_installed; then
     VERSION=$(python3 -m pip show tg-ws-proxy 2>/dev/null | grep ^Version | awk '{print $2}')
@@ -131,10 +124,10 @@ fi
 
 if is_running; then
     PORT=$(netstat -lnpt 2>/dev/null | grep tg-ws-proxy | awk '{print $4}' | cut -d: -f2)
-    echo -e "${YELLOW}порт: ${GREEN}${PORT:-1080}${NC}"
+    echo -e "${YELLOW}порт: ${GREEN}$LAN_IP:${PORT:-1080}${NC}"
 fi
 
-echo -e "${CYAN}1) ${GREEN}Установить${NC} tg-ws-proxy"
+echo -e "\n${CYAN}1) ${GREEN}Установить${NC} tg-ws-proxy"
 echo -e "${CYAN}2) ${GREEN}Удалить${NC} tg-ws-proxy"
 echo -e "${CYAN}Enter) ${GREEN}Выход${NC}\n"
 echo -en "${YELLOW}Выберите пункт: ${NC}"
