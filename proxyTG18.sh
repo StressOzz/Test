@@ -13,12 +13,12 @@ if command -v opkg >/dev/null 2>&1; then
     PKG="opkg"
     UPDATE="opkg update"
     INSTALL="opkg install"
-    DELETE="opkg remove"
+    DELETE="opkg remove --force-removal-of-dependent-packages"
 else
     PKG="apk"
     UPDATE="apk update"
     INSTALL="apk add"
-    DELETE="apk del"
+    DELETE="apk del --force-removal-of-dependent-packages"
 fi
 
 LAN_IP=$(uci get network.lan.ipaddr 2>/dev/null | cut -d/ -f1)
@@ -123,7 +123,7 @@ fi
 
 if is_running; then
     PORT=$(netstat -lnpt 2>/dev/null | grep tg-ws-proxy | awk '{print $4}' | cut -d: -f2)
-    echo -e "${YELLOW}Адресс SOCKS5: ${GREEN}$LAN_IP:${PORT:-1080}${NC}"
+    echo -e "${YELLOW}Адресс SOCKS5:      ${GREEN}$LAN_IP:${PORT:-1080}${NC}"
 fi
 
 echo -e "\n${CYAN}1) ${GREEN}Установить${NC} tg-ws-proxy"
