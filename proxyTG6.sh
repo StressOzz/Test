@@ -13,7 +13,7 @@ if command -v opkg >/dev/null 2>&1; then
     PKG="opkg"
     UPDATE="opkg update"
     INSTALL="opkg install --force-reinstall"
-    DELETE="opkg --force-removal-of-dependent-packages --autoremove remove "
+    DELETE="opkg remove --autoremove --force-removal-of-dependent-packages"
 else
     PKG="apk"
     UPDATE="apk update"
@@ -95,6 +95,7 @@ echo -e "${CYAN}Удаляем зависимости${NC}"
 $DELETE git-http
 $DELETE python3-light
 $DELETE python3-pip
+$DELETE python3-light
 
 echo -e "\n${GREEN}=== Удаление завершино ===${NC}"
 PAUSE
