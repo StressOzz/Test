@@ -40,7 +40,7 @@ is_running() {
 }
 
 install_tg_ws() {
-echo -e "${MAGENTA}=== Обновляем пакеты ===${NC}"
+echo -e "\n${MAGENTA}=== Обновляем пакеты ===${NC}"
 $UPDATE
 
 echo -e "${MAGENTA}=== Устанавливаем необходимые пакеты ===${NC}"
@@ -67,8 +67,8 @@ start_service() {
 EOF
 
 chmod +x /etc/init.d/tg-ws-proxy
-/etc/init.d/tg-ws-proxy enable
-/etc/init.d/tg-ws-proxy start
+/etc/init.d/tg-ws-proxy enable >/dev/null 2>&1
+/etc/init.d/tg-ws-proxy start >/dev/null 2>&1
 
 echo -e "\n${GREEN}=== Установка завершена ===${NC}"
 echo -e "\n${YELLOW}Telegram прокси доступен на ${NC}$LAN_IP:1080"
@@ -76,29 +76,29 @@ PAUSE
 }
 
 delete_tg_ws() {
-echo -e "${MAGENTA}=== Удаялем tg-ws-proxy ===${NC}"
+echo -e "\n${MAGENTA}=== Удаялем tg-ws-proxy ===${NC}"
 
 echo -e "${CYAN}Останавливаем сервис${NC}"
 /etc/init.d/tg-ws-proxy stop >/dev/null 2>&1
 /etc/init.d/tg-ws-proxy disable >/dev/null 2>&1
 
 echo -e "${CYAN}Удаляем сервис${NC}"
-rm -f /etc/init.d/tg-ws-proxy
+rm -f /etc/init.d/tg-ws-proxy >/dev/null 2>&1
 
 echo -e "${CYAN}Удаляем tg-ws-proxy${NC}"
-rm -rf /root/tg-ws-proxy
+rm -rf /root/tg-ws-proxy >/dev/null 2>&1
 
 echo -e "${CYAN}Удаляем Python пакет${NC}"
 pip uninstall -y tg-ws-proxy >/dev/null 2>&1
 
 echo -e "${CYAN}Чистим pip кеш${NC}"
-rm -rf /root/.cache/pip 2>/dev/null
+rm -rf /root/.cache/pip >/dev/null 2>&1
 
 echo -e "${CYAN}Удаляем зависимости${NC}"
 $DELETE python3-light python3-pip git git-http >/dev/null 2>&1
 
 echo -e "${CYAN}Чистим хвосты Python${NC}"
-find /usr/lib/python3* -name "*tg_ws_proxy*" -exec rm -rf {} +
+find /usr/lib/python3* -name "*tg_ws_proxy*" -exec rm -rf {} + >/dev/null 2>&1
 
 echo -e "\n${GREEN}=== Удаление завершино ===${NC}"
 PAUSE
@@ -114,7 +114,7 @@ echo -e "               by Flowseal (StresOzz Scrypt)\n"
 if is_running; then
     echo -e "${YELLOW}статус tg-ws-proxy: ${GREEN}запущен${NC}"
 elif is_installed; then
-    echo -e "${YELLOW}статус tg-ws-proxy: ${RED}установлен, но не запущен${NC}"
+    echo -e "${YELLOW}статус tg-ws-proxy: ${RED}не запущен${NC}"
 else
     echo -e "${YELLOW}статус tg-ws-proxy: ${RED}не установлен${NC}"
 fi
