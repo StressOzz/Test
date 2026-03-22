@@ -109,21 +109,21 @@ PAUSE
 menu() {
 clear
 echo -e "╔═════════════════════════════════╗"
-echo -e "║ ${BLUE}tg-ws-proxy on Flowseal Manager${NC} ║"
+echo -e "║ ${BLUE}tg-ws-proxy by Flowseal Manager${NC} ║"
 echo -e "╚═════════════════════════════════╝"
 echo -e "                       ${DGRAY}by StressOzz${NC}\n"
 
 if is_running; then
-    echo -e "${YELLOW}статус tg-ws-proxy: ${GREEN}запущен${NC}"
+    echo -e "${YELLOW}Cтатус tg-ws-proxy: ${GREEN}запущен${NC}"
 elif is_installed; then
-    echo -e "${YELLOW}статус tg-ws-proxy: ${RED}не запущен${NC}"
+    echo -e "${YELLOW}Cтатус tg-ws-proxy: ${RED}не запущен${NC}"
 else
-    echo -e "${YELLOW}статус tg-ws-proxy: ${RED}не установлен${NC}"
+    echo -e "${YELLOW}Cтатус tg-ws-proxy: ${RED}не установлен${NC}"
 fi
 
 if is_running; then
     PORT=$(netstat -lnpt 2>/dev/null | grep tg-ws-proxy | awk '{print $4}' | cut -d: -f2)
-    echo -e "${YELLOW}порт: ${GREEN}$LAN_IP:${PORT:-1080}${NC}"
+    echo -e "${YELLOW}Адресс SOCKS5: ${GREEN}$LAN_IP:${PORT:-1080}${NC}"
 fi
 
 echo -e "\n${CYAN}1) ${GREEN}Установить${NC} tg-ws-proxy"
