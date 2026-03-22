@@ -51,13 +51,13 @@ $INSTALL python3-light python3-pip git-http
 echo -e "${MAGENTA}=== Клонируем репозиторий tg-ws-proxy ===${NC}"
 rm -rf "/root/tg-ws-proxy"
 if ! git clone https://github.com/Flowseal/tg-ws-proxy; then
-    echo -e "${RED}Ошибка клонирования репозитория${NC}"
+    echo -e "\n${RED}Ошибка клонирования репозитория${NC}\n"
     return 1
 fi
 cd tg-ws-proxy || exit 1
 
 echo -e "${MAGENTA}=== Устанавливаем tg-ws-proxy ===${NC}"
-pip install --disable-pip-version-check --root-user-action=ignore --timeout 2 --retries 1 -e .
+pip install --disable-pip-version-check --timeout 2 --retries 1 -e .
 
 cat << 'EOF' > /etc/init.d/tg-ws-proxy
 #!/bin/sh /etc/rc.common
