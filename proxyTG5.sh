@@ -93,9 +93,8 @@ pip uninstall -y tg-ws-proxy >/dev/null 2>&1
 
 echo -e "${CYAN}Удаляем зависимости${NC}"
 $DELETE git-http
-$DELETE python3-pip
 $DELETE python3-light
-
+$DELETE python3-pip
 
 echo -e "\n${GREEN}=== Удаление завершино ===${NC}"
 PAUSE
