@@ -52,7 +52,7 @@ echo -e "${MAGENTA}=== Устанавливаем tg-ws-proxy ===${NC}"
 rm -rf "/root/tg-ws-proxy"
 git clone https://github.com/Flowseal/tg-ws-proxy
 cd tg-ws-proxy
-pip install --no-deps -e .
+pip install -e . --disable-pip-version-check --no-cache-dir --no-build-isolation --timeout 1 --retries 0
 # pip install -e .
 
 cat << 'EOF' > /etc/init.d/tg-ws-proxy
