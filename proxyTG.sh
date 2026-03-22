@@ -102,7 +102,7 @@ while [ $attempts -lt 10 ]; do
         CHECK_CMD="opkg list-installed"
     else
         apk del python3-light python3-pip git-http >/dev/null 2>&1
-        CHECK_CMD="apk list --installed"
+        CHECK_CMD="apk info"
     fi
     
     if ! $CHECK_CMD | grep -q "python3-light\|python3-pip\|git-http"; then
