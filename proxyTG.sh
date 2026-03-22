@@ -85,16 +85,15 @@ echo -e "${CYAN}Останавливаем сервис${NC}"
 /etc/init.d/tg-ws-proxy stop >/dev/null 2>&1
 /etc/init.d/tg-ws-proxy disable >/dev/null 2>&1
 
-echo -e "${CYAN}Удаляем init.d скрипт${NC}"
+echo -e "${CYAN}Удаляем ${NC}init.d${CYAN} скрипт${NC}"
 rm -f /etc/init.d/tg-ws-proxy >/dev/null 2>&1
 
-echo -e "${CYAN}Удаляем tg-ws-proxy${NC}"
+echo -e "${CYAN}Удаляем ${NC}tg-ws-proxy"
 rm -rf /root/tg-ws-proxy >/dev/null 2>&1
 
 echo -e "${CYAN}Удаляем пакеты и зависимости${NC}"
 python3 -m pip uninstall -y tg-ws-proxy >/dev/null 2>&1
 pip uninstall -y tg-ws-proxy >/dev/null 2>&1
-
 
 local attempts=0
 while [ $attempts -lt 10 ]; do
@@ -116,6 +115,8 @@ done
     if [ $attempts -eq 10 ]; then
         echo -e "${RED}Некоторые пакеты не удалились! Повторите удаление!${NC}"
     fi
+    
+rm -rf /usr/lib/python* /usr/lib/git* /usr/bin/python* /usr/bin/git* /root/.cache/pip /root/.local/lib/python* >/dev/null 2>&1
 
 echo -e "\n${GREEN}=== Удаление завершино ===${NC}"
 PAUSE
