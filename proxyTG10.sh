@@ -43,6 +43,7 @@ echo -e "${MAGENTA}=== Клонируем репозиторий tg-ws-proxy ===
 rm -rf "/root/tg-ws-proxy"
 if ! git clone https://github.com/Flowseal/tg-ws-proxy /root/tg-ws-proxy; then
     echo -e "\n${RED}Ошибка клонирования репозитория${NC}\n"
+    PAUSE
     return 1
 fi
 cd /root/tg-ws-proxy || exit 1
@@ -89,46 +90,26 @@ echo -e "${CYAN}Удаляем пакеты и зависимости${NC}"
 python3 -m pip uninstall -y tg-ws-proxy >/dev/null 2>&1
 pip uninstall -y tg-ws-proxy >/dev/null 2>&1
 
-    if command -v opkg >/dev/null 2>&1; then
-#    while opkg list-installed | grep -q "python3-light\|python3-pip\|git-http"; do
-#        opkg remove --autoremove --force-removal-of-dependent-packages python3-light python3-pip git-http >/dev/null 2>&1
-#        sleep 1
-#    done
 
-    local attempts=0
-    while [ $attempts -lt 10 ]; do
-
-        opkg remove --autoremove --force-removal-of-dependent-packages python3-light python3-pip git-http >/dev/null 2>&1
-
-        if ! opkg list-installed | grep -q "python3-light\|python3-pip\|git-http"; then
-            break
-        fi      
-        attempts=$((attempts + 1))
-    done
-    
-    if [ $attempts -eq 10 ]; then
-        echo -e "${RED}Некоторые пакеты не удалились! Повторите удаление!${NC}"
-    fi
-
-
-    else
- #       apk del python3-light python3-pip git-http
- 
 local attempts=0
-    while [ $attempts -lt 10 ]; do
-
-        apk remove --autoremove --force-removal-of-dependent-packages python3-light python3-pip git-http >/dev/null 2>&1
-
-        if ! apk list --installed | grep -q "python3-light\|python3-pip\|git-http"; then
-            break
-        fi      
-        attempts=$((attempts + 1))
-    done
+while [ $attempts -lt 10 ]; do
+    if command -v opkg >/dev/null 2>&1; then
+        opkg remove --autoremove --force-removal-of-dependent-packages python3-light python3-pip git-http >/dev/null 2>&1
+        CHECK_CMD="opkg list-installed"
+    else
+        apk del python3-light python3-pip git-http >/dev/null 2>&1
+        CHECK_CMD="apk list --installed"
+    fi
+    
+    if ! $CHECK_CMD | grep -q "python3-light\|python3-pip\|git-http"; then
+        break
+    fi
+    
+    attempts=$((attempts + 1))
+done
     
     if [ $attempts -eq 10 ]; then
         echo -e "${RED}Некоторые пакеты не удалились! Повторите удаление!${NC}"
-    fi
- 
     fi
 
 echo -e "\n${GREEN}=== Удаление завершино ===${NC}"
