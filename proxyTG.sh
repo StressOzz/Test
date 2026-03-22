@@ -48,13 +48,16 @@ $UPDATE
 echo -e "${MAGENTA}=== Устанавливаем необходимые пакеты ===${NC}"
 $INSTALL python3-light python3-pip git-http
 
-echo -e "${MAGENTA}=== Устанавливаем tg-ws-proxy ===${NC}"
+echo -e "${MAGENTA}=== Клонируем репозиторий tg-ws-proxy ===${NC}"
 rm -rf "/root/tg-ws-proxy"
-git clone https://github.com/Flowseal/tg-ws-proxy
-cd tg-ws-proxy
-pip install --disable-pip-version-check --timeout 5 --retries 2 -e .
-# pip install --disable-pip-version-check -e .
-# pip install -e .
+if ! git clone https://github.com/Flowseal/tg-ws-proxy; then
+    echo -e "${RED}Ошибка клонирования репозитория${NC}"
+    return 1
+fi
+cd tg-ws-proxy || exit 1
+
+echo -e "${MAGENTA}=== Устанавливаем tg-ws-proxy ===${NC}"
+pip install --disable-pip-version-check --root-user-action=ignore --timeout 2 --retries 1 -e .
 
 cat << 'EOF' > /etc/init.d/tg-ws-proxy
 #!/bin/sh /etc/rc.common
@@ -121,7 +124,7 @@ else
 fi
 
 if is_running; then
-    PORT=$(netstat -lnpt >/dev/null 2>&1 | grep tg-ws-proxy | awk '{print $4}' | cut -d: -f2)
+    PORT=$(netstat -lnpt 2>/dev/null | grep tg-ws-proxy | awk '{print $4}' | cut -d: -f2)
     echo -e "${YELLOW}адресс SOCKS5: ${NC}$LAN_IP:${PORT:-1080}"
 fi
 
