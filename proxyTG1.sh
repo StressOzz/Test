@@ -13,7 +13,7 @@ if command -v opkg >/dev/null 2>&1; then
     PKG="opkg"
     UPDATE="opkg update"
     INSTALL="opkg install --force-reinstall"
-    DELETE="opkg remove --force-removal-of-dependent-packages"
+    DELETE="opkg remove"
 else
     PKG="apk"
     UPDATE="apk update"
