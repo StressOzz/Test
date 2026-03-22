@@ -21,7 +21,7 @@ else
     DELETE="apk del --force-removal-of-dependent-packages"
 fi
 
-LAN_IP=$(uci get network.lan.ipaddr >/dev/null 2>&1 | cut -d/ -f1)
+LAN_IP=$(uci get network.lan.ipaddr 2>/dev/null | cut -d/ -f1)
 
 PAUSE() { echo -ne "\nНажмите Enter..."; read dummy; }
 
