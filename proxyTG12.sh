@@ -119,11 +119,6 @@ else
     echo -e "${YELLOW}статус tg-ws-proxy: ${RED}не установлен${NC}"
 fi
 
-if is_installed; then
-    VERSION=$(python3 -m pip show tg-ws-proxy 2>/dev/null | grep ^Version | awk '{print $2}')
-    echo -e "${YELLOW}tg-ws-proxy версия: ${GREEN}${VERSION:-неизвестна}${NC}"
-fi
-
 if is_running; then
     PORT=$(netstat -lnpt 2>/dev/null | grep tg-ws-proxy | awk '{print $4}' | cut -d: -f2)
     echo -e "${YELLOW}порт: ${GREEN}$LAN_IP:${PORT:-1080}${NC}"
