@@ -94,7 +94,7 @@ echo -e "${CYAN}Чистим pip кеш${NC}"
 rm -rf /root/.cache/pip 2>/dev/null
 
 echo -e "${CYAN}Удаляем зависимости${NC}"
-$DELETE python3-light python3-pip git git-http
+$DELETE python3-light python3-pip git git-http 2>/dev/null
 
 echo -e "${CYAN}Чистим хвосты Python${NC}"
 find /usr/lib/python3* -name "*tg_ws_proxy*" -exec rm -rf {} +
