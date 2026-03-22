@@ -109,7 +109,7 @@ clear
 echo "░▀█▀░█▀▀░░░░░█░█░█▀▀░░░░░█▀█░█▀▄░█▀█░█░█░█░█"
 echo "░░█░░█░█░▄▄▄░█▄█░▀▀█░▄▄▄░█▀▀░█▀▄░█░█░▄▀▄░░█░"
 echo "░░▀░░▀▀▀░░░░░▀░▀░▀▀▀░░░░░▀░░░▀░▀░▀▀▀░▀░▀░░▀░"
-echo "               by Flowseal (StresOzz Scrypt)"
+echo -e "               by Flowseal (StresOzz Scrypt)\n"
 
 if is_running; then
     echo -e "${YELLOW}статус tg-ws-proxy: ${GREEN}запущен${NC}"
