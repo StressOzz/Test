@@ -25,23 +25,16 @@ LAN_IP=$(uci get network.lan.ipaddr 2>/dev/null | cut -d/ -f1)
 
 PAUSE() { echo -ne "\nНажмите Enter..."; read dummy; }
 
-is_installed() {
-    if [ -d "/root/tg-ws-proxy" ] || python3 -m pip show tg-ws-proxy >/dev/null 2>&1; then
-        return 0
-    else
-        return 1
-    fi
-}
-
-is_running() {
-    if pgrep -f tg-ws-proxy >/dev/null 2>&1; then
-        return 0
-    else
-        return 1
-    fi
-}
+FREE_SPACE=$(df -m /root | awk 'NR==2 {print $4}')
 
 install_tg_ws() {
+
+if [ "$FREE_SPACE" -lt 55 ]; then
+    echo -e "\n${RED}Недостаточно свободного места!${NC}"
+    PAUSE
+    return 1
+fi
+
 echo -e "\n${MAGENTA}=== Обновляем пакеты ===${NC}"
 $UPDATE
 
@@ -115,17 +108,17 @@ echo -e "║ ${BLUE}tg-ws-proxy by Flowseal Manager${NC} ║"
 echo -e "╚═════════════════════════════════╝"
 echo -e "                       ${DGRAY}by StressOzz${NC}\n"
 
-if is_running; then
+if pgrep -f tg-ws-proxy >/dev/null 2>&1; then
     echo -e "${YELLOW}tg-ws-proxy:   ${GREEN}запущен${NC}"
-elif is_installed; then
-    echo -e "${YELLOW}Cтатус tg-ws-proxy: ${RED}не запущен${NC}"
+elif [ -d "/root/tg-ws-proxy" ] || python3 -m pip show tg-ws-proxy >/dev/null 2>&1; then
+    echo -e "${YELLOW}Статус tg-ws-proxy: ${RED}не запущен${NC}"
 else
-    echo -e "${YELLOW}Cтатус tg-ws-proxy: ${RED}не установлен${NC}"
+    echo -e "${YELLOW}Статус tg-ws-proxy: ${RED}не установлен${NC}"
 fi
 
-if is_running; then
+if pgrep -f tg-ws-proxy >/dev/null 2>&1; then
     PORT=$(netstat -lnpt 2>/dev/null | grep tg-ws-proxy | awk '{print $4}' | cut -d: -f2)
-    echo -e "${YELLOW}адресс SOCKS5: ${NC}$LAN_IP:${PORT:-1080}"
+    echo -e "${YELLOW}адрес SOCKS5: ${NC}$LAN_IP:${PORT:-1080}"
 fi
 
 echo -e "\n${CYAN}1) ${GREEN}Установить${NC} tg-ws-proxy"
