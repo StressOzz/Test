@@ -73,7 +73,6 @@ chmod +x /etc/init.d/tg-ws-proxy
 /etc/init.d/tg-ws-proxy start >/dev/null 2>&1
 
 echo -e "\n${GREEN}=== Установка завершена ===${NC}"
-echo -e "\n${YELLOW}Telegram прокси доступен на ${NC}$LAN_IP:1080"
 PAUSE
 }
 
@@ -93,13 +92,15 @@ rm -rf /root/tg-ws-proxy >/dev/null 2>&1
 echo -e "${CYAN}Удаляем Python пакет${NC}"
 python3 -m pip uninstall -y tg-ws-proxy >/dev/null 2>&1
 pip uninstall -y tg-ws-proxy >/dev/null 2>&1
-rm -rf /root/.cache/pip >/dev/null 2>&1
 
 echo -e "${CYAN}Удаляем зависимости${NC}"
 $DELETE python3-light python3-pip git git-http >/dev/null 2>&1
 
-echo -e "${CYAN}Чистим хвосты Python${NC}"
+echo -e "${CYAN}Чистим хвосты${NC}"
 rm -rf /usr/lib/python* /usr/local/lib/python* 2>/dev/null
+rm -rf /usr/lib/git* /usr/local/lib/git* 2>/dev/null
+rm -rf /root/.cache/pip >/dev/null 2>&1
+rm -rf /root/.git 2>/dev/null
 
 echo -e "\n${GREEN}=== Удаление завершино ===${NC}"
 PAUSE
@@ -122,7 +123,7 @@ fi
 
 if is_running; then
     PORT=$(netstat -lnpt 2>/dev/null | grep tg-ws-proxy | awk '{print $4}' | cut -d: -f2)
-    echo -e "${YELLOW}Адресс SOCKS5:      ${GREEN}$LAN_IP:${PORT:-1080}${NC}"
+    echo -e "${YELLOW}Адресс SOCKS5:      ${NC}$LAN_IP:${PORT:-1080}"
 fi
 
 echo -e "\n${CYAN}1) ${GREEN}Установить${NC} tg-ws-proxy"
