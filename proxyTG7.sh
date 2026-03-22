@@ -12,12 +12,12 @@ NC="\033[0m"
 if command -v opkg >/dev/null 2>&1; then
     PKG="opkg"
     UPDATE="opkg update"
-    INSTALL="opkg install --force-reinstall --force-depends"
+    INSTALL="opkg install --force-reinstall"
     DELETE="opkg remove --force-removal-of-dependent-packages"
 else
     PKG="apk"
     UPDATE="apk update"
-    INSTALL="apk add --force-reinstall --force-depends"
+    INSTALL="apk add --force-reinstall"
     DELETE="apk del --force-removal-of-dependent-packages"
 fi
 
