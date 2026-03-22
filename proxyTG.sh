@@ -46,7 +46,7 @@ echo -e "\n${MAGENTA}=== Обновляем пакеты ===${NC}"
 $UPDATE
 
 echo -e "${MAGENTA}=== Устанавливаем необходимые пакеты ===${NC}"
-$INSTALL python3-light python3-pip git git-http
+$INSTALL python3-light python3-pip git-http
 
 echo -e "${MAGENTA}=== Устанавливаем tg-ws-proxy ===${NC}"
 rm -rf "/root/tg-ws-proxy"
@@ -96,7 +96,6 @@ pip uninstall -y tg-ws-proxy >/dev/null 2>&1
 
 echo -e "${CYAN}Удаляем зависимости${NC}"
 $DELETE git-http
-$DELETE git
 $DELETE python3-pip
 $DELETE python3-light
 
