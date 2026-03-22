@@ -21,7 +21,7 @@ else
     DELETE="apk del --force-removal-of-dependent-packages"
 fi
 
-LAN_IP=$(uci get network.lan.ipaddr 2>/dev/null | cut -d/ -f1)
+LAN_IP=$(uci get network.lan.ipaddr >/dev/null 2>&1 | cut -d/ -f1)
 
 PAUSE() { echo -ne "\nНажмите Enter..."; read dummy; }
 
@@ -97,10 +97,15 @@ echo -e "${CYAN}Удаляем зависимости${NC}"
 $DELETE python3-light python3-pip git git-http >/dev/null 2>&1
 
 echo -e "${CYAN}Чистим хвосты${NC}"
-rm -rf /usr/lib/python* /usr/local/lib/python* 2>/dev/null
-rm -rf /usr/lib/git* /usr/local/lib/git* 2>/dev/null
+rm -rf /usr/lib/python* /usr/local/lib/python* >/dev/null 2>&1
+rm -rf /usr/lib/git* /usr/local/lib/git* >/dev/null 2>&1
 rm -rf /root/.cache/pip >/dev/null 2>&1
-rm -rf /root/.git 2>/dev/null
+rm -rf /root/.git >/dev/null 2>&1
+rm -rf /usr/share/git* >/dev/null 2>&1
+rm -rf /usr/lib/opkg/info/python* /usr/lib/opkg/info/git* /usr/lib/opkg/info/tg-ws-proxy* >/dev/null 2>&1
+rm -rf /usr/share/doc/python* /usr/share/doc/git* >/dev/null 2>&1
+rm -f /usr/bin/python3* /usr/bin/git* >/dev/null 2>&1
+rm -f /usr/sbin/python3* /usr/sbin/git* >/dev/null 2>&1
 
 echo -e "\n${GREEN}=== Удаление завершино ===${NC}"
 PAUSE
@@ -122,8 +127,8 @@ else
 fi
 
 if is_running; then
-    PORT=$(netstat -lnpt 2>/dev/null | grep tg-ws-proxy | awk '{print $4}' | cut -d: -f2)
-    echo -e "${YELLOW}Адресс SOCKS5: ${NC}$LAN_IP:${PORT:-1080}"
+    PORT=$(netstat -lnpt >/dev/null 2>&1 | grep tg-ws-proxy | awk '{print $4}' | cut -d: -f2)
+    echo -e "${YELLOW}адресс SOCKS5: ${NC}$LAN_IP:${PORT:-1080}"
 fi
 
 echo -e "\n${CYAN}1) ${GREEN}Установить${NC} tg-ws-proxy"
