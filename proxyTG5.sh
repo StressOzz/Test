@@ -18,7 +18,7 @@ else
     PKG="apk"
     UPDATE="apk update"
     INSTALL="apk add --force-reinstall"
-    DELETE="apk del --force-depends"
+    DELETE="apk del"
 fi
 
 LAN_IP=$(uci get network.lan.ipaddr 2>/dev/null | cut -d/ -f1)
@@ -95,7 +95,11 @@ python3 -m pip uninstall -y tg-ws-proxy >/dev/null 2>&1
 pip uninstall -y tg-ws-proxy >/dev/null 2>&1
 
 echo -e "${CYAN}Удаляем зависимости${NC}"
-$DELETE python3-light python3-pip git git-http >/dev/null 2>&1
+$DELETE git-http
+$DELETE git
+$DELETE python3-pip
+$DELETE python3-light
+
 
 echo -e "\n${GREEN}=== Удаление завершино ===${NC}"
 PAUSE
