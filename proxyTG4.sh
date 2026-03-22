@@ -18,7 +18,7 @@ else
     PKG="apk"
     UPDATE="apk update"
     INSTALL="apk add --force-reinstall"
-    DELETE="apk del --force-removal-of-dependent-packages"
+    DELETE="apk del --force-depends"
 fi
 
 LAN_IP=$(uci get network.lan.ipaddr 2>/dev/null | cut -d/ -f1)
