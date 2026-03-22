@@ -17,7 +17,7 @@ if command -v opkg >/dev/null 2>&1; then
 else
     PKG="apk"
     UPDATE="apk update"
-    INSTALL="apk add"
+    INSTALL="apk add --no-cache"
     DELETE="apk del --force-removal-of-dependent-packages"
 fi
 
