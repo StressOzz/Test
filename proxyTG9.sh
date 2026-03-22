@@ -27,7 +27,7 @@ FREE_SPACE=$(df -m /root | awk 'NR==2 {print $4}')
 
 install_tg_ws() {
 
-if [ "$FREE_SPACE" -lt 55 ]; then
+if [ "$FREE_SPACE" -lt 50 ]; then
     echo -e "\n${RED}Недостаточно свободного места!${NC}"
     PAUSE
     return 1
@@ -41,12 +41,11 @@ $INSTALL python3-light python3-pip git-http
 
 echo -e "${MAGENTA}=== Клонируем репозиторий tg-ws-proxy ===${NC}"
 rm -rf "/root/tg-ws-proxy"
-if ! git clone https://github.com/Flowseal/tg-ws-proxy; then
+if ! git clone https://github.com/Flowseal/tg-ws-proxy /root/tg-ws-proxy; then
     echo -e "\n${RED}Ошибка клонирования репозитория${NC}\n"
-    PAUSE
     return 1
 fi
-cd tg-ws-proxy || exit 1
+cd /root/tg-ws-proxy || exit 1
 
 echo -e "${MAGENTA}=== Устанавливаем tg-ws-proxy ===${NC}"
 pip install --disable-pip-version-check --timeout 2 --retries 1 -e .
@@ -103,19 +102,33 @@ pip uninstall -y tg-ws-proxy >/dev/null 2>&1
 
         if ! opkg list-installed | grep -q "python3-light\|python3-pip\|git-http"; then
             break
-        fi
-        
+        fi      
         attempts=$((attempts + 1))
-        sleep 2
     done
     
     if [ $attempts -eq 10 ]; then
-        echo -e "${YELLOW}⚠ Некоторые пакеты не удалились, но это не критично${NC}"
+        echo -e "${RED}Некоторые пакеты не удалились! Повторите удаление!${NC}"
     fi
 
 
     else
-        apk del python3-light python3-pip git-http
+ #       apk del python3-light python3-pip git-http
+ 
+local attempts=0
+    while [ $attempts -lt 10 ]; do
+
+        apk remove --autoremove --force-removal-of-dependent-packages python3-light python3-pip git-http >/dev/null 2>&1
+
+        if ! apk list --installed | grep -q "python3-light\|python3-pip\|git-http"; then
+            break
+        fi      
+        attempts=$((attempts + 1))
+    done
+    
+    if [ $attempts -eq 10 ]; then
+        echo -e "${RED}Некоторые пакеты не удалились! Повторите удаление!${NC}"
+    fi
+ 
     fi
 
 echo -e "\n${GREEN}=== Удаление завершино ===${NC}"
