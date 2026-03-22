@@ -84,23 +84,22 @@ echo -e "${CYAN}Останавливаем сервис${NC}"
 /etc/init.d/tg-ws-proxy stop >/dev/null 2>&1
 /etc/init.d/tg-ws-proxy disable >/dev/null 2>&1
 
-echo -e "${CYAN}Удаляем сервис${NC}"
+echo -e "${CYAN}Удаляем init.d скрипт${NC}"
 rm -f /etc/init.d/tg-ws-proxy >/dev/null 2>&1
 
 echo -e "${CYAN}Удаляем tg-ws-proxy${NC}"
 rm -rf /root/tg-ws-proxy >/dev/null 2>&1
 
 echo -e "${CYAN}Удаляем Python пакет${NC}"
+python3 -m pip uninstall -y tg-ws-proxy >/dev/null 2>&1
 pip uninstall -y tg-ws-proxy >/dev/null 2>&1
-
-echo -e "${CYAN}Чистим pip кеш${NC}"
 rm -rf /root/.cache/pip >/dev/null 2>&1
 
 echo -e "${CYAN}Удаляем зависимости${NC}"
 $DELETE python3-light python3-pip git git-http >/dev/null 2>&1
 
 echo -e "${CYAN}Чистим хвосты Python${NC}"
-find /usr/lib/python3* -name "*tg_ws_proxy*" -exec rm -rf {} + >/dev/null 2>&1
+rm -rf /usr/lib/python* /usr/local/lib/python* 2>/dev/null
 
 echo -e "\n${GREEN}=== Удаление завершино ===${NC}"
 PAUSE
