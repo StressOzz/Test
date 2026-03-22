@@ -4,6 +4,7 @@ GREEN="\033[1;32m"
 YELLOW="\033[1;33m"
 MAGENTA="\033[1;35m"
 CYAN="\033[1;36m"
+RED="\033[1;31m"
 NC="\033[0m"
 
 if command -v opkg >/dev/null 2>&1; then
@@ -20,6 +21,23 @@ fi
 LAN_IP=$(uci get network.lan.ipaddr 2>/dev/null | cut -d/ -f1)
 
 PAUSE() { echo -ne "\nНажмите Enter..."; read dummy; }
+
+is_installed() {
+    # Считаем установленным, если есть папка или pip пакет
+    if [ -d "/root/tg-ws-proxy" ] || python3 -m pip show tg-ws-proxy >/dev/null 2>&1; then
+        return 0  # установлен
+    else
+        return 1  # не установлен
+    fi
+}
+
+is_running() {
+    if pgrep -f tg-ws-proxy >/dev/null 2>&1; then
+        return 0  # запущен
+    else
+        return 1  # не запущен
+    fi
+}
 
 install_tg-ws() {
 echo -e "${MAGENTA}=== Обновляем пакеты ===${NC}"
@@ -94,6 +112,27 @@ echo "   ██║   ██║   ██║╚════╝██║███�
 echo "   ██║   ╚██████╔╝      ╚███╔███╔╝███████║      ██║     ██║  ██║╚██████╔╝██╔╝ ██╗   ██║   "
 echo "   ╚═╝    ╚═════╝        ╚══╝╚══╝ ╚══════╝      ╚═╝     ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═╝   ╚═╝   "
 echo "                                                             by Flowseal (StresOzz Scrypt)"
+
+    if is_installed; then
+        echo -e "${YELLOW}статус tg-ws-proxy: ${GREEN}установлен${NC}"
+    if is_running; then
+        echo -e "${YELLOW}статус tg-ws-proxy: ${GREEN}запущен${NC}"
+    else
+        echo -e "${YELLOW}статус tg-ws-proxy: ${RED}установлен, но не запущен${NC}"
+    fi
+    else
+        echo -e "${YELLOW}статус tg-ws-proxy: ${RED}не установлен${NC}"
+    fi
+
+if is_installed; then
+    VERSION=$(python3 -m pip show tg-ws-proxy 2>/dev/null | grep ^Version | awk '{print $2}')
+    echo -e "${YELLOW}tg-ws-proxy версия: ${GREEN}${VERSION:-неизвестна}${NC}"
+fi
+
+if is_running; then
+    PORT=$(netstat -lnpt 2>/dev/null | grep tg-ws-proxy | awk '{print $4}' | cut -d: -f2)
+    echo -e "${YELLOW}порт: ${GREEN}${PORT:-1080}${NC}"
+fi
 
 echo -e "${CYAN}1) ${GREEN}Установить${NC} tg-ws-proxy"
 echo -e "${CYAN}2) ${GREEN}Удалить${NC} tg-ws-proxy"
