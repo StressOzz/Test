@@ -43,6 +43,7 @@ echo -e "${MAGENTA}=== Клонируем репозиторий tg-ws-proxy ===
 rm -rf "/root/tg-ws-proxy"
 if ! git clone https://github.com/Flowseal/tg-ws-proxy; then
     echo -e "\n${RED}Ошибка клонирования репозитория${NC}\n"
+    PAUSE
     return 1
 fi
 cd tg-ws-proxy || exit 1
@@ -85,14 +86,34 @@ rm -f /etc/init.d/tg-ws-proxy >/dev/null 2>&1
 echo -e "${CYAN}Удаляем tg-ws-proxy${NC}"
 rm -rf /root/tg-ws-proxy >/dev/null 2>&1
 
-echo -e "${CYAN}Удаляем Python пакет${NC}"
+echo -e "${CYAN}Удаляем пакеты и зависимости${NC}"
 python3 -m pip uninstall -y tg-ws-proxy >/dev/null 2>&1
 pip uninstall -y tg-ws-proxy >/dev/null 2>&1
 
-echo -e "${CYAN}Удаляем зависимости${NC}"
-
     if command -v opkg >/dev/null 2>&1; then
-        opkg remove --autoremove --force-removal-of-dependent-packages python3-light python3-pip git-http
+#    while opkg list-installed | grep -q "python3-light\|python3-pip\|git-http"; do
+#        opkg remove --autoremove --force-removal-of-dependent-packages python3-light python3-pip git-http >/dev/null 2>&1
+#        sleep 1
+#    done
+
+    local attempts=0
+    while [ $attempts -lt 10 ]; do
+
+        opkg remove --autoremove --force-removal-of-dependent-packages python3-light python3-pip git-http >/dev/null 2>&1
+
+        if ! opkg list-installed | grep -q "python3-light\|python3-pip\|git-http"; then
+            break
+        fi
+        
+        attempts=$((attempts + 1))
+        sleep 2
+    done
+    
+    if [ $attempts -eq 10 ]; then
+        echo -e "${YELLOW}⚠ Некоторые пакеты не удалились, но это не критично${NC}"
+    fi
+
+
     else
         apk del python3-light python3-pip git-http
     fi
