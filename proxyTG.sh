@@ -43,7 +43,7 @@ rm -rf "/root/tg-ws-proxy"
 
 cd /root || exit 1
 
-if ! wget -O tg-ws-proxy.zip https://github.com/Flowseal/tg-ws-proxy/archive/refs/heads/master.zip; then
+if ! wget -O tg-ws-proxy.zip https://github.com/StressOzz/tg-ws-proxy-Manager/blob/main/tg-ws-proxy-main.zip; then
     echo -e "\n${RED}Ошибка скачивания архива${NC}\n"
     PAUSE
     return 1
