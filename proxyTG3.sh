@@ -39,11 +39,11 @@ $INSTALL python3-light python3-pip python3-psutil python3-cryptography unzip
 
 echo -e "${MAGENTA}=== Скачиваем tg-ws-proxy ===${NC}"
 
-rm -rf "/root/tg-ws-proxy"
+rm -rf "/root/tg-ws-proxy-master"
 
 cd /root || exit 1
 
-if ! wget -O tg-ws-proxy.zip https://github.com/Flowseal/tg-ws-proxy/archive/refs/heads/master.zip; then
+if ! wget -O tg-ws-proxy-master.zip https://github.com/Flowseal/tg-ws-proxy/archive/refs/heads/master.zip; then
     echo -e "\n${RED}Ошибка скачивания архива${NC}\n"
     PAUSE
     return 1
@@ -51,16 +51,15 @@ fi
 
 echo -e "${MAGENTA}=== Распаковываем ===${NC}"
 
-if ! unzip tg-ws-proxy.zip; then
+if ! unzip tg-ws-proxy-master.zip >/dev/null 2>&1; then
     echo -e "\n${RED}Ошибка распаковки${NC}\n"
     PAUSE
     return 1
 fi
 
-mv tg-ws-proxy-main tg-ws-proxy
-rm -f tg-ws-proxy.zip
+rm -f tg-ws-proxy-master.zip
 
-cd /root/tg-ws-proxy || exit 1
+cd /root/tg-ws-proxy-master || exit 1
 
 echo -e "${MAGENTA}=== Устанавливаем tg-ws-proxy ===${NC}"
 pip install --no-deps --disable-pip-version-check --timeout 2 --retries 1 -e .
