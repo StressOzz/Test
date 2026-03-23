@@ -9,6 +9,9 @@ BLUE="\033[0;34m"
 DGRAY="\033[38;5;244m"
 NC="\033[0m"
 
+TG_URL="https://github.com/StressOzz/tg-ws-proxy-Manager/raw/main/tg-ws-proxy-main.zip"
+# TG_URL="https://github.com/Flowseal/tg-ws-proxy/archive/refs/heads/master.zip"
+
 if command -v opkg >/dev/null 2>&1; then
     PKG="opkg"
     UPDATE="opkg update"
@@ -43,7 +46,7 @@ rm -rf "/root/tg-ws-proxy"
 
 cd /root || exit 1
 
-if ! wget -O tg-ws-proxy.zip https://github.com/StressOzz/tg-ws-proxy-Manager/raw/main/tg-ws-proxy-main.zip; then
+if ! wget -O tg-ws-proxy.zip "$TG_URL"; then
     echo -e "\n${RED}Ошибка скачивания архива${NC}\n"
     PAUSE
     return 1
