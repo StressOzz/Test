@@ -35,7 +35,7 @@ echo -e "\n${MAGENTA}=== Обновляем пакеты ===${NC}"
 $UPDATE
 
 echo -e "${MAGENTA}=== Устанавливаем необходимые пакеты ===${NC}"
-$INSTALL python3-light python3-pip python3-psutil python3-cryptography unzip
+$INSTALL python3-light python3-pip python3-psutil unzip
 
 echo -e "${MAGENTA}=== Скачиваем tg-ws-proxy ===${NC}"
 
@@ -48,8 +48,6 @@ if ! wget -O tg-ws-proxy.zip https://github.com/Flowseal/tg-ws-proxy/archive/ref
     PAUSE
     return 1
 fi
-
-echo -e "${MAGENTA}=== Распаковываем ===${NC}"
 
 if ! unzip tg-ws-proxy.zip >/dev/null 2>&1; then
     echo -e "\n${RED}Ошибка распаковки${NC}\n"
