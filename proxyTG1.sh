@@ -35,21 +35,32 @@ echo -e "\n${MAGENTA}=== Обновляем пакеты ===${NC}"
 $UPDATE
 
 echo -e "${MAGENTA}=== Устанавливаем необходимые пакеты ===${NC}"
-$INSTALL python3-light python3-pip git-http python3-psutil python3-cryptography
+$INSTALL python3-light python3-pip python3-psutil python3-cryptography unzip
 
-echo -e "${MAGENTA}=== Клонируем репозиторий tg-ws-proxy ===${NC}"
+echo -e "${MAGENTA}=== Скачиваем репозитарий tg-ws-proxy ===${NC}"
 
 rm -rf "/root/tg-ws-proxy"
 
-mkdir -p "/root/tg-ws-proxy"
+cd /root || exit 1
 
-cd "/root/tg-ws-proxy" || exit 1
-
-if ! git clone https://github.com/Flowseal/tg-ws-proxy . ; then
-    echo -e "\n${RED}Ошибка клонирования репозитория${NC}\n"
+if ! wget -O tg-ws-proxy.zip https://github.com/Flowseal/tg-ws-proxy/archive/refs/heads/master.zip; then
+    echo -e "\n${RED}Ошибка скачивания архива${NC}\n"
     PAUSE
     return 1
 fi
+
+echo -e "${MAGENTA}=== Распаковываем tg-ws-proxy.zip ===${NC}"
+
+if ! unzip tg-ws-proxy.zip; then
+    echo -e "\n${RED}Ошибка распаковки${NC}\n"
+    PAUSE
+    return 1
+fi
+
+mv tg-ws-proxy-master tg-ws-proxy 2>/dev/null
+rm -f tg-ws-proxy.zip
+
+cd "/root/tg-ws-proxy" || exit 1
 
 echo -e "${MAGENTA}=== Устанавливаем tg-ws-proxy ===${NC}"
 pip install --no-deps --disable-pip-version-check --timeout 2 --retries 1 -e .
@@ -96,14 +107,14 @@ pip uninstall -y tg-ws-proxy >/dev/null 2>&1
 local attempts=0
 while [ $attempts -lt 10 ]; do
     if command -v opkg >/dev/null 2>&1; then
-        opkg remove --autoremove --force-removal-of-dependent-packages python3-cryptography python3-psutil python3-light python3-pip git-http >/dev/null 2>&1
+        opkg remove --autoremove --force-removal-of-dependent-packages python3-light python3-pip python3-psutil python3-cryptography >/dev/null 2>&1
         CHECK_CMD="opkg list-installed"
     else
-        apk del python3-cryptography python3-psutil python3-light python3-pip git-http >/dev/null 2>&1
+        apk del python3-light python3-pip python3-psutil python3-cryptography >/dev/null 2>&1
         CHECK_CMD="apk info"
     fi
     
-    if ! $CHECK_CMD | grep -q "python3-light\|python3-pip\|git-http"; then
+    if ! $CHECK_CMD | grep -q "python3-light\|python3-pip\|python3-psutil\|python3-cryptography"; then
         break
     fi
     
@@ -114,7 +125,7 @@ done
         echo -e "${RED}Некоторые пакеты не удалились! Повторите удаление!${NC}"
     fi
     
-rm -rf /usr/lib/python* /usr/lib/git* /usr/bin/python* /usr/bin/git* /root/.cache/pip /root/.local/lib/python* >/dev/null 2>&1
+rm -rf /usr/lib/python* /usr/bin/python* /root/.cache/pip /root/.local/lib/python* >/dev/null 2>&1
 
 echo -e "\n${GREEN}=== Удаление завершино ===${NC}"
 PAUSE
