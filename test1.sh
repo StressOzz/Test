@@ -10,8 +10,8 @@ MT_VERSION="0.6.0"
 
 ARCH=$(grep "^OPENWRT_ARCH=" /etc/os-release | cut -d'"' -f2)
 
-URL_APK_ORIG="https://github.com/MagiTrickle/MagiTrickle/releases/download/0.6.0/magitrickle_${MT_VERSION}-1_openwrt_${ARCH}.ipk"
-URL_IPK_ORIG="https://github.com/MagiTrickle/MagiTrickle/releases/download/0.6.0/magitrickle_${MT_VERSION}-r1_openwrt_${ARCH}.apk"
+URL_APK_ORIG="https://github.com/MagiTrickle/MagiTrickle/releases/download/0.6.0/magitrickle_${MT_VERSION}-r1_openwrt_${ARCH}.apk"
+URL_IPK_ORIG="https://github.com/MagiTrickle/MagiTrickle/releases/download/0.6.0/magitrickle_${MT_VERSION}-1_openwrt_${ARCH}.ipk"
 
 URL_APK_MOD="https://github.com/badigit/MagiTrickle_mod_badigit/releases/download/0.5.2-badigit.9/magitrickle_0.5.2.9-r1_openwrt_${ARCH}.apk"
 URL_IPK_MOD="https://github.com/badigit/MagiTrickle_mod_badigit/releases/download/0.5.2-badigit.9/magitrickle_0.5.2-badigit.9-1_openwrt_${ARCH}.ipk"
