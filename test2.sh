@@ -6,7 +6,7 @@ YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
-MT_VERSION="0.6.0"
+MT_VERSION="$(curl -Ls -o /dev/null -w '%{url_effective}' https://github.com/MagiTrickle/MagiTrickle/releases/latest | sed -E 's#.*/tag/v?##')"
 
 ARCH=$(grep "^OPENWRT_ARCH=" /etc/os-release | cut -d'"' -f2)
 
