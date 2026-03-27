@@ -22,7 +22,7 @@ config main 'config'
 	option DESYNC_MARK_POSTNAT '0x20000000'
 	option FILTER_MARK '	'
 	option NFQWS_PORTS_TCP '443'
-	option NFQWS_PORTS_UDP '88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535'
+	option NFQWS_PORTS_UDP '88,1024-2407,2409-4499,4502-65535'
 	option NFQWS_TCP_PKT_OUT '9'
 	option NFQWS_TCP_PKT_IN '3'
 	option NFQWS_UDP_PKT_OUT '9'
@@ -38,7 +38,7 @@ config main 'config'
 --dpi-desync-split-seqovl=681
 --dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/stun.bin
 --new
---filter-udp=88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535
+--filter-udp=88,1024-2407,2409-4499,4502-65535
 --dpi-desync=fake
 --dpi-desync-cutoff=d2
 --dpi-desync-any-protocol=1
