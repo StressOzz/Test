@@ -38,7 +38,7 @@ PAUSE() { echo -ne "\nНажмите Enter..."; read dummy; }
 
 install_tg_ws() {
 
-if [ "$(df -m /root 2>/dev/null | awk 'NR==2 {print $4+0}')" -lt 40 ]; then
+if [ "$(df -m /root 2>/dev/null | awk 'NR==2 {print $4+0}')" -lt 33 ]; then
     echo -e "\n${RED}Недостаточно свободного места!${NC}"
     PAUSE
     return 1
@@ -48,7 +48,7 @@ echo -e "\n${MAGENTA}Обновляем пакеты${NC}"
 $UPDATE
 
 missing=$(for pkg in $REQUIRED_PKGS; do $CHECK_AVAIL | grep -qw "$pkg" || echo "$pkg"; done)
-[ -n "$missing" ] && { echo -e "${RED}Архитектура не потдерживается!${NC}"; PAUSE; return 1; }
+[ -n "$missing" ] && { echo -e "\n${RED}Архитектура не потдерживается!${NC}"; PAUSE; return 1; }
 
 echo -e "${MAGENTA}Устанавливаем необходимые пакеты${NC}"
 $INSTALL python3-light python3-pip python3-psutil python3-cryptography unzip
