@@ -119,7 +119,7 @@ chmod +x /etc/init.d/tg-ws-proxy
 /etc/init.d/tg-ws-proxy enable >/dev/null 2>&1
 /etc/init.d/tg-ws-proxy start >/dev/null 2>&1
 
-echo -e "\n${GREEN}Установка завершена${NC}"
+echo -e "\n${GREEN}Установка завершена!${NC}"
 PAUSE
 }
 
@@ -163,7 +163,7 @@ done
     
 rm -rf /usr/lib/python* /usr/bin/python* /root/.cache/pip /root/.local/lib/python* /usr/bin/tg-ws-proxy* >/dev/null 2>&1
 
-echo -e "\n${GREEN}Удаление завершино${NC}"
+echo -e "\n${GREEN}Удаление завершино!${NC}"
 PAUSE
 }
 
