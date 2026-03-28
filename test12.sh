@@ -20,7 +20,7 @@ OWRT_VER="$(awk -F"'" '/DISTRIB_RELEASE/ {print $2}' /etc/openwrt_release | cut 
 
 LAN_IP=$(uci get network.lan.ipaddr 2>/dev/null | cut -d/ -f1)
 
-REQUIRED_PKGS="python3-light python3-pip python3-psutil python3-cryptography"
+REQUIRED_PKGS="python3-light python3-pip python3-cryptography"
 
 if command -v opkg >/dev/null 2>&1; then
     PKG="opkg"
