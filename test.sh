@@ -1,178 +1,185 @@
 #!/bin/sh
+set -eu
 
 GREEN="\033[1;32m"
-YELLOW="\033[1;33m"
-MAGENTA="\033[1;35m"
-CYAN="\033[1;36m"
 RED="\033[1;31m"
-BLUE="\033[0;34m"
-DGRAY="\033[38;5;244m"
 NC="\033[0m"
 
-# TG_URL="https://github.com/StressOzz/tg-ws-proxy-Manager/raw/main/tg-ws-proxy-main.zip"
-TG_URL="https://github.com/Flowseal/tg-ws-proxy/archive/refs/heads/master.zip"
-
-echo 'sh <(wget -O - https://raw.githubusercontent.com/StressOzz/tg-ws-proxy-Manager/main/tg-ws-proxy-Manager.sh)' > /usr/bin/tpm; chmod +x /usr/bin/tpm
-
-ARCH="$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release)"
-
-OWRT_VER="$(awk -F"'" '/DISTRIB_RELEASE/ {print $2}' /etc/openwrt_release | cut -d. -f1)"
-
-if echo "$OWRT_VER" | grep -qE '^[0-9]+$' && [ "$OWRT_VER" -ge 25 ] && \
-   { [ "$ARCH" = "mipsel_24kc" ] || [ "$ARCH" = "mips_24kc" ]; }; then
-    echo -e "\n${RED}Архитектура ${NC}$ARCH${RED} не поддерживается на ${NC}OpenWrt $OWRT_VER+${RED} !${NC}\n"
-    exit 1
-fi
-
-if command -v opkg >/dev/null 2>&1; then
-    PKG="opkg"
-    UPDATE="opkg update"
-    INSTALL="opkg install --force-reinstall"
-else
-    PKG="apk"
-    UPDATE="apk update"
-    INSTALL="apk add --force-reinstall"
-fi
-
-LAN_IP=$(uci get network.lan.ipaddr 2>/dev/null | cut -d/ -f1)
+IN="/root/WARP.conf"
+OUT="/etc/mihomo/config.yaml"
+TMP="$(mktemp)"
 
 PAUSE() { echo -ne "\nНажмите Enter..."; read dummy; }
 
-install_tg_ws() {
+[ -r "$IN" ] || { echo -e "\n${RED}Файл ${NC}$IN ${RED}отсутвтвует!${NC}"; PAUSE; exit 1; }
+command -v awk >/dev/null 2>&1 || { echo -e "\n${RED}Отсутвтвует ${NC}awk"; PAUSE; exit 1; }
 
-if [ "$(df -m /root 2>/dev/null | awk 'NR==2 {print $4+0}')" -lt 40 ]; then
-    echo -e "\n${RED}Недостаточно свободного места!${NC}"
+awk -v OUT="$TMP" '
+function trim(s){ gsub(/^[ \t\r\n]+|[ \t\r\n]+$/, "", s); return s }
+function lc(s){ return tolower(s) }
+function yaml_quote(s){
+  gsub(/\\/,"\\\\",s)
+  gsub(/"/,"\\\"",s)
+  gsub(/\r/,"",s)
+  return "\"" s "\""
+}
+function split_endpoint(s,    a,n){
+  s=trim(s)
+  n=split(s,a,":")
+  if(n<2){ host=s; port="" } else {
+    port=a[n]
+    host=a[1]
+    for(i=2;i<n;i++) host=host ":" a[i]
+  }
+}
+BEGIN{
+  sec=""
+  addr4=""; addr6=""; dns=""; mtu=""
+  priv=""; pub=""; psk=""; allowed=""; endpoint=""; keep=""
+  s1=""; s2=""; s3=""; s4=""; jc=""; jmin=""; jmax=""; h1=""; h2=""; h3=""; h4=""
+  i1=""; i2=""; i3=""; i4=""; i5=""
+}
+{
+  raw=$0
+  line=$0
+  sub(/[;#].*$/, "", line)
+  line=trim(line)
+  if(line=="") next
+
+  if(line ~ /^\[.*\]$/){
+    sec=lc(trim(substr(line,2,length(line)-2)))
+    next
+  }
+
+  if(index(line,"=")==0) next
+  key=trim(substr(line,1,index(line,"=")-1))
+  val=trim(substr(line,index(line,"=")+1))
+  k=lc(key)
+
+  if(sec=="interface"){
+    if(k=="address"){
+      gsub(/,/, " ", val)
+      n=split(val, a, /[ \t]+/)
+      for(i=1;i<=n;i++){
+        if(a[i] ~ /:/) addr6=a[i]; else addr4=a[i]
+      }
+    } else if(k=="privatekey") priv=val
+    else if(k=="dns") dns=val
+    else if(k=="mtu") mtu=val
+    else if(k=="s1") s1=val
+    else if(k=="s2") s2=val
+    else if(k=="s3") s3=val
+    else if(k=="s4") s4=val
+    else if(k=="jc") jc=val
+    else if(k=="jmin") jmin=val
+    else if(k=="jmax") jmax=val
+    else if(k=="h1") h1=val
+    else if(k=="h2") h2=val
+    else if(k=="h3") h3=val
+    else if(k=="h4") h4=val
+    else if(k=="i1") i1=val
+    else if(k=="i2") i2=val
+    else if(k=="i3") i3=val
+    else if(k=="i4") i4=val
+    else if(k=="i5") i5=val
+  } else if(sec=="peer"){
+    if(k=="publickey") pub=val
+    else if(k=="presharedkey") psk=val
+    else if(k=="allowedips") { gsub(/[ \t]+/, "", val); allowed=val }
+    else if(k=="endpoint") endpoint=val
+    else if(k=="persistentkeepalive") keep=val
+  }
+}
+END{
+  if(priv=="" || pub=="" || endpoint==""){
+    echo -e "\n${RED}В ${NC}WARP.conf${RED} отсутствуют обязательные поля!${NC}"
     PAUSE
-    return 1
-fi
+    exit 2
+  }
+  split_endpoint(endpoint)
 
-echo -e "\n${MAGENTA}Обновляем пакеты${NC}"
-$UPDATE
+  ip=addr4; sub(/\/32$/, "", ip)
+  ipv6=addr6; sub(/\/128$/, "", ipv6)
 
-echo -e "${MAGENTA}Устанавливаем необходимые пакеты${NC}"
-$INSTALL python3-light python3-pip python3-psutil python3-cryptography unzip
+  if(allowed=="") allowed="0.0.0.0/0,::/0"
+  n=split(allowed, aip, ",")
+  
+  allowed_block=""
+  for(i=1;i<=n;i++){
+    if(aip[i]=="") continue
+    allowed_block = allowed_block "      - " yaml_quote(aip[i]) "\n"
+  }
 
-echo -e "${MAGENTA}Скачиваем и распаковываем tg-ws-proxy${NC}"
+  print "mixed-port: 7890" > OUT
+  print "allow-lan: false" >> OUT
+  print "tcp-concurrent: true" >> OUT
+  print "mode: rule" >> OUT
+  print "log-level: error" >> OUT
+  print "ipv6: false" >> OUT
+  print "external-controller: 0.0.0.0:9090" >> OUT
+  print "external-ui: ui" >> OUT
+  print "external-ui-url: https://github.com/MetaCubeX/metacubexd/releases/latest/download/compressed-dist.tgz" >> OUT
+  print "secret:" >> OUT
+  print "unified-delay: true" >> OUT
+  print "profile:" >> OUT
+  print "  store-selected: true" >> OUT
+  print "  store-fake-ip: true" >> OUT
+  print "" >> OUT
 
-rm -rf "/root/tg-ws-proxy"
+  print "proxy-groups:" >> OUT
+  print "  - name: GLOBAL" >> OUT
+  print "    type: select" >> OUT
+  print "    proxies:" >> OUT
+  print "      - WARP" >> OUT
+  print "      - REJECT" >> OUT
+  print "" >> OUT
 
-cd /root || exit 1
+  print "rules:" >> OUT
+  print "  - \"MATCH,GLOBAL\"" >> OUT
+  print "" >> OUT
 
-if ! wget -O tg-ws-proxy.zip "$TG_URL"; then
-    echo -e "\n${RED}Ошибка скачивания архива${NC}\n"
-    PAUSE
-    return 1
-fi
+  print "proxies:" >> OUT
+  print "  - name: WARP" >> OUT
+  print "    type: wireguard" >> OUT
+  print "    server: " host >> OUT
+  if(port!="") print "    port: " port >> OUT
+  print "    private-key: " yaml_quote(priv) >> OUT
+  print "    udp: true" >> OUT
+  if(ip!="") print "    ip: " ip >> OUT
+  if(ipv6!="") print "    ipv6: " ipv6 >> OUT
+  print "    public-key: " yaml_quote(pub) >> OUT
+  if(psk!="") print "    pre-shared-key: " yaml_quote(psk) >> OUT
+  print "    allowed-ips:" >> OUT
+  printf "%s", allowed_block >> OUT
+  if(mtu!="") print "    mtu: " mtu >> OUT
+  if(keep!="") print "    persistent-keepalive: " keep >> OUT
 
-if ! unzip tg-ws-proxy.zip >/dev/null 2>&1; then
-    echo -e "\n${RED}Ошибка распаковки${NC}\n"
-    PAUSE
-    return 1
-fi
-
-mv tg-ws-proxy-main tg-ws-proxy
-rm -f tg-ws-proxy.zip
-
-cd /root/tg-ws-proxy || exit 1
-
-echo -e "${MAGENTA}Устанавливаем tg-ws-proxy${NC}"
-pip install --no-deps --disable-pip-version-check --timeout 2 --retries 1 -e .
-
-cat << 'EOF' > /etc/init.d/tg-ws-proxy
-#!/bin/sh /etc/rc.common
-
-START=99
-USE_PROCD=1
-
-start_service() {
-    procd_open_instance
-    procd_set_param command /usr/bin/tg-ws-proxy --host 0.0.0.0
-    procd_set_param respawn
-    procd_close_instance
+  if(s1!="" || s2!="" || s3!="" || s4!="" || jc!="" || jmin!="" || jmax!="" || h1!="" || h2!="" || h3!="" || h4!="" || i1!="" || i2!="" || i3!="" || i4!="" || i5!=""){
+    print "    amnezia-wg-option:" >> OUT
+    if(s1!="")  print "      s1: " s1 >> OUT
+    if(s2!="")  print "      s2: " s2 >> OUT
+    if(s3!="")  print "      s3: " s3 >> OUT
+    if(s4!="")  print "      s4: " s4 >> OUT
+    if(jc!="")  print "      jc: " jc >> OUT
+    if(jmin!="")print "      jmin: " jmin >> OUT
+    if(jmax!="")print "      jmax: " jmax >> OUT
+    if(h1!="")  print "      h1: " h1 >> OUT
+    if(h2!="")  print "      h2: " h2 >> OUT
+    if(h3!="")  print "      h3: " h3 >> OUT
+    if(h4!="")  print "      h4: " h4 >> OUT
+    if(i1!="")  print "      i1: " yaml_quote(i1) >> OUT
+    if(i2!="")  print "      i2: " yaml_quote(i2) >> OUT
+    if(i3!="")  print "      i3: " yaml_quote(i3) >> OUT
+    if(i4!="")  print "      i4: " yaml_quote(i4) >> OUT
+    if(i5!="")  print "      i5: " yaml_quote(i5) >> OUT
+  }
 }
-EOF
+' "$IN"
 
-chmod +x /etc/init.d/tg-ws-proxy
-/etc/init.d/tg-ws-proxy enable >/dev/null 2>&1
-/etc/init.d/tg-ws-proxy start >/dev/null 2>&1
+chmod 600 "$TMP"
+mkdir -p "$(dirname "$OUT")"
+mv -f "$TMP" "$OUT"
 
-echo -e "\n${GREEN}Установка завершена${NC}"
-PAUSE
-}
-
-delete_tg_ws() {
-echo -e "\n${MAGENTA}Удаялем tg-ws-proxy${NC}"
-
-echo -e "${CYAN}Останавливаем сервис${NC}"
-/etc/init.d/tg-ws-proxy stop >/dev/null 2>&1
-/etc/init.d/tg-ws-proxy disable >/dev/null 2>&1
-
-echo -e "${CYAN}Удаляем ${NC}init.d${CYAN} скрипт${NC}"
-rm -f /etc/init.d/tg-ws-proxy >/dev/null 2>&1
-
-echo -e "${CYAN}Удаляем ${NC}tg-ws-proxy"
-rm -rf /root/tg-ws-proxy >/dev/null 2>&1
-
-echo -e "${CYAN}Удаляем пакеты и зависимости${NC}"
-python3 -m pip uninstall -y tg-ws-proxy >/dev/null 2>&1
-pip uninstall -y tg-ws-proxy >/dev/null 2>&1
-
-local attempts=0
-while [ $attempts -lt 10 ]; do
-    if command -v opkg >/dev/null 2>&1; then
-        opkg remove --autoremove --force-removal-of-dependent-packages python3-light python3-pip python3-psutil python3-cryptography unzip >/dev/null 2>&1
-        CHECK_CMD="opkg list-installed"
-    else
-        apk del python3-light python3-pip python3-psutil python3-cryptography unzip >/dev/null 2>&1
-        CHECK_CMD="apk info"
-    fi
-    
-    if ! $CHECK_CMD | grep -q "python3-light\|python3-pip\|python3-psutil\|python3-cryptography"; then
-        break
-    fi
-    
-    attempts=$((attempts + 1))
-done
-    
-    if [ $attempts -eq 10 ]; then
-        echo -e "${RED}Некоторые пакеты не удалились! Повторите удаление!${NC}"
-    fi
-    
-rm -rf /usr/lib/python* /usr/bin/python* /root/.cache/pip /root/.local/lib/python* /usr/bin/tg-ws-proxy* >/dev/null 2>&1
-
-echo -e "\n${GREEN}Удаление завершино${NC}"
-PAUSE
-}
-
-menu() {
-clear
-echo -e "╔═════════════════════════════════╗"
-echo -e "║ ${BLUE}tg-ws-proxy by Flowseal Manager${NC} ║"
-echo -e "╚═════════════════════════════════╝"
-echo -e "                       ${DGRAY}by StressOzz${NC}\n"
-
-if pgrep -f tg-ws-proxy >/dev/null 2>&1; then
-    echo -e "${YELLOW}tg-ws-proxy:  ${GREEN}запущен${NC}"
-elif [ -d "/root/tg-ws-proxy" ] || python3 -m pip show tg-ws-proxy >/dev/null 2>&1; then
-    echo -e "${YELLOW}Статус tg-ws-proxy: ${RED}не запущен${NC}"
-else
-    echo -e "${YELLOW}Статус tg-ws-proxy: ${RED}не установлен${NC}"
-fi
-
-if pgrep -f tg-ws-proxy >/dev/null 2>&1; then
-    PORT=$(netstat -lnpt 2>/dev/null | grep tg-ws-proxy | awk '{print $4}' | cut -d: -f2)
-    echo -e "${YELLOW}адрес SOCKS5: ${NC}$LAN_IP:${PORT:-1080}"
-fi
-
-echo -e "\n${CYAN}1) ${GREEN}Установить${NC} tg-ws-proxy"
-echo -e "${CYAN}2) ${GREEN}Удалить${NC} tg-ws-proxy"
-echo -e "${CYAN}Enter) ${GREEN}Выход${NC}\n"
-echo -en "${YELLOW}Выберите пункт: ${NC}"
-read choice
-case "$choice" in 
-1) install_tg_ws ;;
-2) delete_tg_ws ;;
-*) echo; exit 0 ;;
-esac
-}
-while true; do menu; done
+/etc/init.d/mihomo reload
+/etc/init.d/mihomo restart
+echo -e "\n${NC}WARP${GREEN} интегрирован в ${NC}Mihomo${GREEN}!${NC}"
