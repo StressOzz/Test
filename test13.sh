@@ -73,7 +73,7 @@ if [ $failed -ne 0 ]; then
 fi
 
 echo -e "\n${MAGENTA}Устанавливаем необходимые пакеты${NC}"
-$INSTALL python3-light python3-pip python3-psutil python3-cryptography unzip
+$INSTALL python3-light python3-pip python3-cryptography unzip
 
 echo -e "\n${MAGENTA}Скачиваем и распаковываем tg-ws-proxy${NC}"
 
@@ -143,14 +143,14 @@ pip uninstall -y tg-ws-proxy >/dev/null 2>&1
 local attempts=0
 while [ $attempts -lt 10 ]; do
     if command -v opkg >/dev/null 2>&1; then
-        opkg remove --autoremove --force-removal-of-dependent-packages python3-light python3-pip python3-psutil python3-cryptography unzip >/dev/null 2>&1
+        opkg remove --autoremove --force-removal-of-dependent-packages python3-light python3-pip python3-cryptography unzip >/dev/null 2>&1
         CHECK_CMD="opkg list-installed"
     else
-        apk del python3-light python3-pip python3-psutil python3-cryptography unzip >/dev/null 2>&1
+        apk del python3-light python3-pip python3-cryptography unzip >/dev/null 2>&1
         CHECK_CMD="apk info"
     fi
     
-    if ! $CHECK_CMD | grep -q "python3-light\|python3-pip\|python3-psutil\|python3-cryptography"; then
+    if ! $CHECK_CMD | grep -q "python3-light\|python3-pip\|python3-cryptography"; then
         break
     fi
     
