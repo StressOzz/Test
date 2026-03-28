@@ -52,14 +52,26 @@ if ! $UPDATE; then
     return 1
 fi
 
-missing=$(for pkg in $REQUIRED_PKGS; do
-    sh -c "$CHECK_AVAIL" | grep -qw "$pkg" || echo "$pkg"
-done)
+echo -e "\n${MAGENTA}Проверяем возможность установки tg-ws-proxy${NC}"
 
-if [ -n "$missing" ]; then
-    echo -e "\n${RED}Архитектура не поддерживается! Недоступные пакеты: ${NC}$missing"
+for pkg in $REQUIRED_PKGS; do
+    if sh -c "$CHECK_AVAIL" | grep -qw "$pkg"; then
+        echo -e "${GREEN}[OK]${NC} $pkg"
+    else
+        echo -e "${RED}[MISSING]${NC} $pkg"
+        missing_pkgs+=("$pkg")
+    fi
+done
+
+if [ ${#missing_pkgs[@]} -gt 0 ]; then
+    echo -e "\n${RED}Архитектура не поддерживается! Недоступные пакеты:${NC}"
+    for pkg in "${missing_pkgs[@]}"; do
+        echo -e "  - $pkg"
+    done
     PAUSE
     return 1
+else
+    echo -e "\n${GREEN}Все пакеты установлены и доступны.${NC}"
 fi
 
 echo -e "${MAGENTA}Устанавливаем необходимые пакеты${NC}"
