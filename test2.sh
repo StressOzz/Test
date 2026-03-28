@@ -47,8 +47,18 @@ fi
 echo -e "\n${MAGENTA}Обновляем пакеты${NC}"
 $UPDATE
 
-missing=$(for pkg in $REQUIRED_PKGS; do $CHECK_AVAIL | grep -qw "$pkg" || echo "$pkg"; done)
-[ -n "$missing" ] && { echo -e "\n${RED}Архитектура не потдерживается!${NC}"; PAUSE; return 1; }
+missing=$(for pkg in $REQUIRED_PKGS; do
+    sh -c "$CHECK_AVAIL" | grep -qw "$pkg" || echo "$pkg"
+done)
+
+if [ -n "$missing" ]; then
+    echo -e "\n${RED}Архитектура не поддерживается или пакеты недоступны:${NC}$missing"
+    read -r -p "Нажмите Enter..."
+    exit 1
+fi
+
+# missing=$(for pkg in $REQUIRED_PKGS; do $CHECK_AVAIL | grep -qw "$pkg" || echo "$pkg"; done)
+# [ -n "$missing" ] && { echo -e "\n${RED}Архитектура не потдерживается!${NC}"; PAUSE; return 1; }
 
 echo -e "${MAGENTA}Устанавливаем необходимые пакеты${NC}"
 $INSTALL python3-light python3-pip python3-psutil python3-cryptography unzip
