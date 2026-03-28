@@ -18,20 +18,18 @@ ARCH="$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release)"
 
 OWRT_VER="$(awk -F"'" '/DISTRIB_RELEASE/ {print $2}' /etc/openwrt_release | cut -d. -f1)"
 
-if echo "$OWRT_VER" | grep -qE '^[0-9]+$' && [ "$OWRT_VER" -ge 25 ] && \
-   { [ "$ARCH" = "mipsel_24kc" ] || [ "$ARCH" = "mips_24kc" ]; }; then
-    echo -e "\n${RED}Архитектура ${NC}$ARCH${RED} не поддерживается на ${NC}OpenWrt $OWRT_VER+${RED} !${NC}\n"
-    exit 1
-fi
+REQUIRED_PKGS="python3-light python3-pip python3-psutil python3-cryptography"
 
 if command -v opkg >/dev/null 2>&1; then
     PKG="opkg"
     UPDATE="opkg update"
-    INSTALL="opkg install --force-reinstall"
+    INSTALL="opkg install"
+    CHECK_AVAIL="opkg list | cut -d ' ' -f1"
 else
     PKG="apk"
     UPDATE="apk update"
-    INSTALL="apk add --force-reinstall"
+    INSTALL="apk add"
+    CHECK_AVAIL="apk search -e"
 fi
 
 LAN_IP=$(uci get network.lan.ipaddr 2>/dev/null | cut -d/ -f1)
@@ -49,8 +47,11 @@ fi
 echo -e "\n${MAGENTA}Обновляем пакеты${NC}"
 $UPDATE
 
+missing=$(for pkg in $REQUIRED_PKGS; do $CHECK_AVAIL | grep -qw "$pkg" || echo "$pkg"; done)
+[ -n "$missing" ] && { echo -e "${RED}Архитектура не потдерживается!${NC}"; PAUSE; return 1; }
+
 echo -e "${MAGENTA}Устанавливаем необходимые пакеты${NC}"
-$INSTALL python3-light python3-pip python3-psutil unzip
+$INSTALL python3-light python3-pip python3-psutil python3-cryptography unzip
 
 echo -e "${MAGENTA}Скачиваем и распаковываем tg-ws-proxy${NC}"
 
@@ -76,7 +77,7 @@ rm -f tg-ws-proxy.zip
 cd /root/tg-ws-proxy || exit 1
 
 echo -e "${MAGENTA}Устанавливаем tg-ws-proxy${NC}"
-pip install --disable-pip-version-check --timeout 2 --retries 1 -e .
+pip install --no-deps --disable-pip-version-check --timeout 2 --retries 1 -e .
 
 cat << 'EOF' > /etc/init.d/tg-ws-proxy
 #!/bin/sh /etc/rc.common
@@ -120,10 +121,10 @@ pip uninstall -y tg-ws-proxy >/dev/null 2>&1
 local attempts=0
 while [ $attempts -lt 10 ]; do
     if command -v opkg >/dev/null 2>&1; then
-        opkg remove --autoremove --force-removal-of-dependent-packages python3-light python3-pip python3-psutil unzip >/dev/null 2>&1
+        opkg remove --autoremove --force-removal-of-dependent-packages python3-light python3-pip python3-psutil python3-cryptography unzip >/dev/null 2>&1
         CHECK_CMD="opkg list-installed"
     else
-        apk del python3-light python3-pip python3-psutil unzip >/dev/null 2>&1
+        apk del python3-light python3-pip python3-psutil python3-cryptography unzip >/dev/null 2>&1
         CHECK_CMD="apk info"
     fi
     
