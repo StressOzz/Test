@@ -18,7 +18,7 @@ ARCH="$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release)"
 
 OWRT_VER="$(awk -F"'" '/DISTRIB_RELEASE/ {print $2}' /etc/openwrt_release | cut -d. -f1)"
 
-REQUIRED_PKGS="python3-light python3-pip python3-psutil python3-cryptography 1poie545"
+REQUIRED_PKGS="python3-light python3-pip python3-psutil python3-cryptography PROVERKA"
 
 if command -v opkg >/dev/null 2>&1; then
     PKG="opkg"
@@ -53,8 +53,8 @@ done)
 
 if [ -n "$missing" ]; then
     echo -e "\n${RED}Архитектура не поддерживается или пакеты недоступны:${NC}$missing"
-    read -r -p "Нажмите Enter..."
-    exit 1
+    PAUSE
+    return 1
 fi
 
 # missing=$(for pkg in $REQUIRED_PKGS; do $CHECK_AVAIL | grep -qw "$pkg" || echo "$pkg"; done)
