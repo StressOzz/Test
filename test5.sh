@@ -18,7 +18,7 @@ ARCH="$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release)"
 
 OWRT_VER="$(awk -F"'" '/DISTRIB_RELEASE/ {print $2}' /etc/openwrt_release | cut -d. -f1)"
 
-REQUIRED_PKGS="python3-light python3-pip python3-psutil python3-cryptography"
+REQUIRED_PKGS="python3-light python3-pip python3-psutil python3-cryptography AAAA123536246"
 
 if command -v opkg >/dev/null 2>&1; then
     PKG="opkg"
