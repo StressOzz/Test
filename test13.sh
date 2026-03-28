@@ -14,11 +14,11 @@ failed=0
 # TG_URL="https://github.com/StressOzz/tg-ws-proxy-Manager/raw/main/tg-ws-proxy-main.zip"
 TG_URL="https://github.com/Flowseal/tg-ws-proxy/archive/refs/heads/master.zip"
 
-echo 'sh <(wget -O - https://raw.githubusercontent.com/StressOzz/tg-ws-proxy-Manager/main/tg-ws-proxy-Manager.sh)' > /usr/bin/tpm; chmod +x /usr/bin/tpm
-
 ARCH="$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release)"
 
 OWRT_VER="$(awk -F"'" '/DISTRIB_RELEASE/ {print $2}' /etc/openwrt_release | cut -d. -f1)"
+
+LAN_IP=$(uci get network.lan.ipaddr 2>/dev/null | cut -d/ -f1)
 
 REQUIRED_PKGS="python3-light python3-pip python3-psutil python3-cryptography PROVERKA"
 
@@ -34,7 +34,7 @@ else
     CHECK_AVAIL="apk search -e"
 fi
 
-LAN_IP=$(uci get network.lan.ipaddr 2>/dev/null | cut -d/ -f1)
+echo 'sh <(wget -O - https://raw.githubusercontent.com/StressOzz/tg-ws-proxy-Manager/main/tg-ws-proxy-Manager.sh)' > /usr/bin/tpm; chmod +x /usr/bin/tpm
 
 PAUSE() { echo -ne "\nНажмите Enter..."; read dummy; }
 
@@ -54,7 +54,7 @@ if ! $UPDATE; then
     return 1
 fi
 
-echo -e "\n${MAGENTA}Проверяем возможность установки tg-ws-proxy${NC}"
+echo -e "\n${MAGENTA}Проверяем возможность установки пакетов Python${NC}"
 
 failed=0
 for pkg in $REQUIRED_PKGS; do
@@ -67,7 +67,7 @@ for pkg in $REQUIRED_PKGS; do
 done
 
 if [ $failed -ne 0 ]; then
-    echo -e "\n${RED}Установка не возможна!${NC}"
+    echo -e "\n${RED}Архитектура не подходит! Установка невозможна!${NC}"
     PAUSE
     return 1
 fi
