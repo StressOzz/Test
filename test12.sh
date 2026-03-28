@@ -9,6 +9,8 @@ BLUE="\033[0;34m"
 DGRAY="\033[38;5;244m"
 NC="\033[0m"
 
+failed=0
+
 # TG_URL="https://github.com/StressOzz/tg-ws-proxy-Manager/raw/main/tg-ws-proxy-main.zip"
 TG_URL="https://github.com/Flowseal/tg-ws-proxy/archive/refs/heads/master.zip"
 
@@ -54,19 +56,18 @@ fi
 
 echo -e "\n${MAGENTA}Проверяем возможность установки tg-ws-proxy${NC}"
 
-
-missing=""
+failed=0
 for pkg in $REQUIRED_PKGS; do
     if sh -c "$CHECK_AVAIL" | grep -qw "$pkg"; then
         echo -e "${GREEN}[OK]   ${NC}$pkg"
     else
         echo -e "${RED}[FALL] ${NC}$pkg"
-        missing="$missing $pkg"
+        failed=1
     fi
 done
 
-if [ -n "$missing" ]; then
-    echo "Архитектура не поддерживается! Недоступные пакеты:$missing"
+if [ $failed -ne 0 ]; then
+    echo -e "\n${RED}Установка не возможна!${NC}"
     PAUSE
     return 1
 fi
