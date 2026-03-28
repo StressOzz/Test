@@ -54,25 +54,6 @@ fi
 
 echo -e "\n${MAGENTA}Проверяем возможность установки tg-ws-proxy${NC}"
 
-for pkg in $REQUIRED_PKGS; do
-    if sh -c "$CHECK_AVAIL" | grep -qw "$pkg"; then
-        echo -e "${GREEN}[OK]${NC} $pkg"
-    else
-        echo -e "${RED}[MISSING]${NC} $pkg"
-        missing_pkgs+=("$pkg")
-    fi
-done
-
-if [ ${#missing_pkgs[@]} -gt 0 ]; then
-    echo -e "\n${RED}Архитектура не поддерживается! Недоступные пакеты:${NC}"
-    for pkg in "${missing_pkgs[@]}"; do
-        echo -e "  - $pkg"
-    done
-    PAUSE
-    return 1
-else
-    echo -e "\n${GREEN}Все пакеты установлены и доступны.${NC}"
-fi
 
 echo -e "${MAGENTA}Устанавливаем необходимые пакеты${NC}"
 $INSTALL python3-light python3-pip python3-psutil python3-cryptography unzip
