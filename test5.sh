@@ -38,7 +38,7 @@ PAUSE() { echo -ne "\nНажмите Enter..."; read dummy; }
 
 install_tg_ws() {
 
-if [ "$(df -m /root 2>/dev/null | awk 'NR==2 {print $4+0}')" -lt 17 ]; then
+if [ "$(df -m /root 2>/dev/null | awk 'NR==2 {print $4+0}')" -lt 1 ]; then
     echo -e "\n${RED}Недостаточно свободного места!${NC}"
     PAUSE
     return 1
