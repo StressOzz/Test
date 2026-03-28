@@ -20,7 +20,7 @@ OWRT_VER="$(awk -F"'" '/DISTRIB_RELEASE/ {print $2}' /etc/openwrt_release | cut 
 
 LAN_IP=$(uci get network.lan.ipaddr 2>/dev/null | cut -d/ -f1)
 
-REQUIRED_PKGS="python3-light python3-pip python3-psutil python3-cryptography PROVERKA"
+REQUIRED_PKGS="python3-light python3-pip python3-psutil python3-cryptography"
 
 if command -v opkg >/dev/null 2>&1; then
     PKG="opkg"
@@ -67,7 +67,7 @@ for pkg in $REQUIRED_PKGS; do
 done
 
 if [ $failed -ne 0 ]; then
-    echo -e "\n${RED}Архитектура не подходит! Установка невозможна!${NC}"
+    echo -e "\n${RED}Архитектура не поддерживается! Установка невозможна!${NC}"
     PAUSE
     return 1
 fi
