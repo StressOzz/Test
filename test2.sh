@@ -20,7 +20,7 @@ OWRT_VER="$(awk -F"'" '/DISTRIB_RELEASE/ {print $2}' /etc/openwrt_release | cut 
 
 LAN_IP=$(uci get network.lan.ipaddr 2>/dev/null | cut -d/ -f1)
 
-REQUIRED_PKGS="python3-light python3-pip python3-cryptography"
+REQUIRED_PKGS="python3-light python3-pip"
 
 if command -v opkg >/dev/null 2>&1; then
     PKG="opkg"
@@ -73,7 +73,7 @@ if [ $failed -ne 0 ]; then
 fi
 
 echo -e "\n${MAGENTA}Устанавливаем необходимые пакеты${NC}"
-$INSTALL python3-light python3-pip python3-cryptography unzip
+$INSTALL python3-light python3-pip unzip
 
 echo -e "\n${MAGENTA}Скачиваем и распаковываем tg-ws-proxy${NC}"
 
@@ -99,6 +99,7 @@ rm -f tg-ws-proxy.zip
 cd /root/tg-ws-proxy || exit 1
 
 echo -e "\n${MAGENTA}Устанавливаем tg-ws-proxy${NC}"
+pip install --root-user-action=ignore --disable-pip-version-check pycryptodome
 pip install --root-user-action=ignore --no-deps --disable-pip-version-check --timeout 2 --retries 1 -e .
 
 cat << 'EOF' > /etc/init.d/tg-ws-proxy
@@ -143,14 +144,14 @@ pip uninstall -y tg-ws-proxy >/dev/null 2>&1
 local attempts=0
 while [ $attempts -lt 10 ]; do
     if command -v opkg >/dev/null 2>&1; then
-        opkg remove --autoremove --force-removal-of-dependent-packages python3-light python3-pip python3-cryptography unzip >/dev/null 2>&1
+        opkg remove --autoremove --force-removal-of-dependent-packages python3-light python3-pip unzip >/dev/null 2>&1
         CHECK_CMD="opkg list-installed"
     else
-        apk del python3-light python3-pip python3-cryptography unzip >/dev/null 2>&1
+        apk del python3-light python3-pip unzip >/dev/null 2>&1
         CHECK_CMD="apk info"
     fi
     
-    if ! $CHECK_CMD | grep -q "python3-light\|python3-pip\|python3-cryptography"; then
+    if ! $CHECK_CMD | grep -q "python3-light\|python3-pip"; then
         break
     fi
     
