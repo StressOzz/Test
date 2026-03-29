@@ -66,12 +66,6 @@ for pkg in $REQUIRED_PKGS; do
     fi
 done
 
-# if [ $failed -ne 0 ]; then
-#    echo -e "\n${RED}Архитектура не поддерживается! Установка невозможна!${NC}"
-#    PAUSE
-#    return 1
-# fi
-
 echo -e "\n${MAGENTA}Устанавливаем необходимые пакеты${NC}"
 
 if [ $failed -ne 0 ]; then
@@ -159,7 +153,7 @@ pip uninstall -y cryptography cffi pycparser >/dev/null 2>&1
 local attempts=0
 while [ $attempts -lt 10 ]; do
     if command -v opkg >/dev/null 2>&1; then
-        opkg remove python3-light python3-pip python3-cryptography unzip >/dev/null 2>&1
+        opkg remove --autoremove --force-removal-of-dependent-packages python3-light python3-pip python3-cryptography unzip >/dev/null 2>&1
         CHECK_CMD="opkg list-installed"
     else
         apk del python3-light python3-pip python3-cryptography unzip >/dev/null 2>&1
