@@ -12,68 +12,47 @@ NC="\033[0m"
 # TG_URL="https://github.com/StressOzz/tg-ws-proxy-Manager/raw/main/tg-ws-proxy-main.zip"
 TG_URL="https://github.com/Flowseal/tg-ws-proxy/archive/refs/heads/master.zip"
 
+echo 'sh <(wget -O - https://raw.githubusercontent.com/StressOzz/tg-ws-proxy-Manager/main/tg-ws-proxy-Manager.sh)' > /usr/bin/tpm; chmod +x /usr/bin/tpm
+
 ARCH="$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release)"
 
 OWRT_VER="$(awk -F"'" '/DISTRIB_RELEASE/ {print $2}' /etc/openwrt_release | cut -d. -f1)"
 
-LAN_IP=$(uci get network.lan.ipaddr 2>/dev/null | cut -d/ -f1)
-
-REQUIRED_PKGS="python3-light python3-pip python3-cryptography"
+if echo "$OWRT_VER" | grep -qE '^[0-9]+$' && [ "$OWRT_VER" -ge 25 ] && \
+   { [ "$ARCH" = "mipsel_24kc" ] || [ "$ARCH" = "mips_24kc" ]; }; then
+    echo -e "\n${RED}Архитектура ${NC}$ARCH${RED} не поддерживается на ${NC}OpenWrt $OWRT_VER+${RED} !${NC}\n"
+    exit 1
+fi
 
 if command -v opkg >/dev/null 2>&1; then
     PKG="opkg"
     UPDATE="opkg update"
     INSTALL="opkg install"
-    CHECK_AVAIL="opkg list | cut -d ' ' -f1"
 else
     PKG="apk"
     UPDATE="apk update"
     INSTALL="apk add"
-    CHECK_AVAIL="apk search -e"
 fi
 
-echo 'sh <(wget -O - https://raw.githubusercontent.com/StressOzz/tg-ws-proxy-Manager/main/tg-ws-proxy-Manager.sh)' > /usr/bin/tpm; chmod +x /usr/bin/tpm
+LAN_IP=$(uci get network.lan.ipaddr 2>/dev/null | cut -d/ -f1)
 
 PAUSE() { echo -ne "\nНажмите Enter..."; read dummy; }
 
 install_tg_ws() {
 
-if [ "$(df -m /root 2>/dev/null | awk 'NR==2 {print $4+0}')" -lt 20 ]; then
+if [ "$(df -m /root 2>/dev/null | awk 'NR==2 {print $4+0}')" -lt 40 ]; then
     echo -e "\n${RED}Недостаточно свободного места!${NC}"
     PAUSE
     return 1
 fi
 
 echo -e "\n${MAGENTA}Обновляем пакеты${NC}"
+$UPDATE
 
-if ! $UPDATE; then
-    echo -e "\n${RED}Ошибка при обновлении пакетов!${NC}"
-    PAUSE
-    return 1
-fi
+echo -e "${MAGENTA}Устанавливаем необходимые пакеты${NC}"
+$INSTALL python3-light python3-pip python3-psutil python3-cryptography unzip
 
-echo -e "\n${MAGENTA}Проверяем возможность установки пакетов Python${NC}"
-
-failed=0
-for pkg in $REQUIRED_PKGS; do
-    if sh -c "$CHECK_AVAIL" | grep -qw "$pkg"; then
-        echo -e "${GREEN}[OK]   ${NC}$pkg"
-    else
-        echo -e "${RED}[FALL] ${NC}$pkg"
-        failed=1
-    fi
-done
-
-if [ $failed -ne 0 ]; then
-    echo -e "\n${RED}Архитектура не поддерживается! Установка невозможна!${NC}"
-    PAUSE
-    return 1
-fi
-
-echo -e "\n${MAGENTA}Устанавливаем необходимые пакеты${NC}"
-$INSTALL python3-light python3-pip python3-cryptography unzip
-
-echo -e "\n${MAGENTA}Скачиваем и распаковываем tg-ws-proxy${NC}"
+echo -e "${MAGENTA}Скачиваем и распаковываем tg-ws-proxy${NC}"
 
 rm -rf "/root/tg-ws-proxy"
 
@@ -96,8 +75,8 @@ rm -f tg-ws-proxy.zip
 
 cd /root/tg-ws-proxy || exit 1
 
-echo -e "\n${MAGENTA}Устанавливаем tg-ws-proxy${NC}"
-pip install --root-user-action=ignore --no-deps --disable-pip-version-check --timeout 2 --retries 1 -e .
+echo -e "${MAGENTA}Устанавливаем tg-ws-proxy${NC}"
+pip install --no-deps --disable-pip-version-check --timeout 2 --retries 1 -e .
 
 cat << 'EOF' > /etc/init.d/tg-ws-proxy
 #!/bin/sh /etc/rc.common
@@ -117,13 +96,7 @@ chmod +x /etc/init.d/tg-ws-proxy
 /etc/init.d/tg-ws-proxy enable >/dev/null 2>&1
 /etc/init.d/tg-ws-proxy start >/dev/null 2>&1
 
-if pgrep -f tg-ws-proxy >/dev/null 2>&1; then
-    echo -e "\n${GREEN}tg-ws-proxy ${GREEN}установлен!${NC}"
-elif [ -d "/root/tg-ws-proxy" ] || python3 -m pip show tg-ws-proxy >/dev/null 2>&1; then
-    echo -e "\ntg-ws-proxy ${YELLOW}установлен, но не запущен!${NC}"
-else
-    echo -e "\n${RED}Ошибка установки!${NC}"
-fi
+echo -e "\n${GREEN}Установка завершена${NC}"
 PAUSE
 }
 
@@ -147,14 +120,14 @@ pip uninstall -y tg-ws-proxy >/dev/null 2>&1
 local attempts=0
 while [ $attempts -lt 10 ]; do
     if command -v opkg >/dev/null 2>&1; then
-        opkg remove --autoremove --force-removal-of-dependent-packages python3-light python3-pip python3-cryptography unzip >/dev/null 2>&1
+        opkg remove --autoremove --force-removal-of-dependent-packages python3-light python3-pip python3-psutil python3-cryptography unzip >/dev/null 2>&1
         CHECK_CMD="opkg list-installed"
     else
-        apk del python3-light python3-pip python3-cryptography unzip >/dev/null 2>&1
+        apk del python3-light python3-pip python3-psutil python3-cryptography unzip >/dev/null 2>&1
         CHECK_CMD="apk info"
     fi
     
-    if ! $CHECK_CMD | grep -q "python3-light\|python3-pip\|python3-cryptography"; then
+    if ! $CHECK_CMD | grep -q "python3-light\|python3-pip\|python3-psutil\|python3-cryptography"; then
         break
     fi
     
@@ -162,12 +135,12 @@ while [ $attempts -lt 10 ]; do
 done
     
     if [ $attempts -eq 10 ]; then
-        echo -e "${RED}Некоторые пакеты не удалились!${NC}"
+        echo -e "${RED}Некоторые пакеты не удалились! Повторите удаление!${NC}"
     fi
     
 rm -rf /usr/lib/python* /usr/bin/python* /root/.cache/pip /root/.local/lib/python* /usr/bin/tg-ws-proxy* >/dev/null 2>&1
 
-echo -e "\n${GREEN}Удаление завершино!${NC}"
+echo -e "\n${GREEN}Удаление завершино${NC}"
 PAUSE
 }
 
