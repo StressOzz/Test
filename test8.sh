@@ -20,7 +20,7 @@ OWRT_VER="$(awk -F"'" '/DISTRIB_RELEASE/ {print $2}' /etc/openwrt_release | cut 
 
 LAN_IP=$(uci get network.lan.ipaddr 2>/dev/null | cut -d/ -f1)
 
-REQUIRED_PKGS="python3-light python3-pip"
+REQUIRED_PKGS="python3-light python3-pip python3-cryptography"
 
 if command -v opkg >/dev/null 2>&1; then
     PKG="opkg"
@@ -40,7 +40,7 @@ PAUSE() { echo -ne "\nНажмите Enter..."; read dummy; }
 
 install_tg_ws() {
 
-if [ "$(df -m /root 2>/dev/null | awk 'NR==2 {print $4+0}')" -lt 20 ]; then
+if [ "$(df -m /root 2>/dev/null | awk 'NR==2 {print $4+0}')" -lt 25 ]; then
     echo -e "\n${RED}Недостаточно свободного места!${NC}"
     PAUSE
     return 1
@@ -66,14 +66,19 @@ for pkg in $REQUIRED_PKGS; do
     fi
 done
 
-if [ $failed -ne 0 ]; then
-    echo -e "\n${RED}Архитектура не поддерживается! Установка невозможна!${NC}"
-    PAUSE
-    return 1
-fi
+# if [ $failed -ne 0 ]; then
+#    echo -e "\n${RED}Архитектура не поддерживается! Установка невозможна!${NC}"
+#    PAUSE
+#    return 1
+# fi
 
 echo -e "\n${MAGENTA}Устанавливаем необходимые пакеты${NC}"
+
+if [ $failed -ne 0 ]; then
 $INSTALL python3-light python3-pip unzip
+else
+$INSTALL python3-light python3-pip python3-cryptography unzip
+fi
 
 echo -e "\n${MAGENTA}Скачиваем и распаковываем tg-ws-proxy${NC}"
 
@@ -99,8 +104,14 @@ rm -f tg-ws-proxy.zip
 cd /root/tg-ws-proxy || exit 1
 
 echo -e "\n${MAGENTA}Устанавливаем tg-ws-proxy${NC}"
-pip install --root-user-action=ignore --disable-pip-version-check --timeout 2 --retries 1 cryptography
+
+
+if [ $failed -ne 0 ]; then
+pip install --root-user-action=ignore --disable-pip-version-check --timeout 2 --retries 1 cryptography 2>/dev/null
 pip install --root-user-action=ignore --no-deps --disable-pip-version-check --timeout 2 --retries 1 -e .
+else
+pip install --root-user-action=ignore --no-deps --disable-pip-version-check --timeout 2 --retries 1 -e .
+fi
 
 cat << 'EOF' > /etc/init.d/tg-ws-proxy
 #!/bin/sh /etc/rc.common
@@ -141,17 +152,21 @@ echo -e "${CYAN}Удаляем пакеты и зависимости${NC}"
 python3 -m pip uninstall -y tg-ws-proxy >/dev/null 2>&1
 pip uninstall -y tg-ws-proxy >/dev/null 2>&1
 
+python3 -m pip uninstall -y cryptography cffi pycparser >/dev/null 2>&1
+pip uninstall -y cryptography cffi pycparser >/dev/null 2>&1
+
+
 local attempts=0
 while [ $attempts -lt 10 ]; do
     if command -v opkg >/dev/null 2>&1; then
-        opkg remove --autoremove --force-removal-of-dependent-packages python3-light python3-pip unzip >/dev/null 2>&1
+        opkg remove --autoremove --force-removal-of-dependent-packages python3-light python3-pip python3-cryptography unzip >/dev/null 2>&1
         CHECK_CMD="opkg list-installed"
     else
-        apk del python3-light python3-pip unzip >/dev/null 2>&1
+        apk del python3-light python3-pip python3-cryptography unzip >/dev/null 2>&1
         CHECK_CMD="apk info"
     fi
     
-    if ! $CHECK_CMD | grep -q "python3-light\|python3-pip"; then
+    if ! $CHECK_CMD | grep -q "python3-light\|python3-pip\|python3-cryptography"; then
         break
     fi
     
