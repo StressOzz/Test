@@ -19,10 +19,12 @@ URL_APK_MOD="https://github.com/badigit/MagiTrickle_mod_badigit/releases/downloa
 URL_IPK_MOD="https://github.com/badigit/MagiTrickle_mod_badigit/releases/download/${MOD_VERSION}/magitrickle_${MOD_VERSION}-1_openwrt_${ARCH}.ipk"
 
 magitrickle_menu() {
-    echo -e " 1) ${CYAN}Оригинальный MagiTrickle${NC}"
-    echo -e " 2) ${CYAN}MagiTrickle badigit mod${NC}\n"
 
-    echo -en "${YELLOW}Выберите версию MagiTrickle: ${NC}"
+	echo -e "\n${YELLOW}Выберите версию MagiTrickle для установки\n${NC}"
+    echo -e "1) ${CYAN}Оригинальный MagiTrickle${NC}"
+    echo -e "2) ${CYAN}MagiTrickle badigit mod${NC}\n"
+
+    echo -en "${YELLOW}Введите номер: ${NC}"
     read choice
 
     case "$choice" in
