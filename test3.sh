@@ -1181,13 +1181,13 @@ magitrickle_menu
 
 if [ "$USE_APK" -eq 1 ]; then
     FILE=/tmp/magitrickle.apk
-	echo -e "--> Скачиваем\nURL: $URL_APK"
+	echo -e "--> Скачиваем\n$URL_APK"
     curl -Lf --retry 3 --retry-delay 2 -o "$FILE" "$URL_APK" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка скачивания${NC}"; exit 1; }
 	echo -e "--> Устанавливаем $(basename "$URL_APK")"
     apk add --allow-untrusted "$FILE" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка установки${NC}"; exit 1; }
 else
     FILE=/tmp/magitrickle.ipk
-	echo -e "--> Скачиваем\nURL: $URL_IPK"
+	echo -e "--> Скачиваем$URL_IPK"
     curl -Lf --retry 3 --retry-delay 2 -o "$FILE" "$URL_IPK" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка скачивания${NC}"; exit 1; }
 	echo -e "--> Устанавливаем $(basename "$URL_IPK")"
     opkg install "$FILE" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка установки${NC}"; exit 1; }
