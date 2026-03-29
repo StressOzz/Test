@@ -186,8 +186,12 @@ else
 fi
 
 if pgrep -f tg-ws-proxy >/dev/null 2>&1; then
-    PORT=$(netstat -lnpt 2>/dev/null | grep tg-ws-proxy | awk '{print $4}' | cut -d: -f2)
-    echo -e "${YELLOW}адрес SOCKS5: ${NC}$LAN_IP:${PORT:-1080}"
+echo -e "\nнастройки MTProto:"
+echo -e "      Хост: $(ip -4 route get 1 | awk '{print $7; exit}')"
+echo -e "      Порт: 1443"
+echo -e "      Ключ: dde8c0e50b1bd26df20bcb78dd4169d33a"
+
+echo -e "\nСссылка для подключения:\ntg://proxy?server=$(ip -4 route get 1 | awk '{print $7; exit}')&port=1443&secret=dde8c0e50b1bd26df20bcb78dd4169d33a"
 fi
 
 echo -e "\n${CYAN}1) ${GREEN}Установить${NC} tg-ws-proxy"
