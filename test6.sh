@@ -30,12 +30,14 @@ magitrickle_menu() {
         2)
             URL_APK="$URL_APK_MOD"
             URL_IPK="$URL_IPK_MOD"
-			log_info "\nУстанавливаем MagiTrickle badigit mod"
+			echo
+			log_info "Устанавливаем MagiTrickle badigit mod"
             ;;
         *)
             URL_APK="$URL_APK_ORIG"
             URL_IPK="$URL_IPK_ORIG"
-			log_info "\nУстанавливаем оригинальный MagiTrickle"
+			echo
+			log_info "Устанавливаем оригинальный MagiTrickle"
             ;;
     esac
 }
