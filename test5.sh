@@ -107,7 +107,7 @@ USE_PROCD=1
 
 start_service() {
     procd_open_instance
-    procd_set_param command /usr/bin/tg-ws-proxy --host 0.0.0.0 --secret e8c0e50b1bd26df20bcb78dd4169d33a
+    procd_set_param command /usr/bin/tg-ws-proxy --host 0.0.0.0 --secret 00000000000000000000000000000000
     procd_set_param respawn
     procd_close_instance
 }
@@ -189,9 +189,9 @@ if pgrep -f tg-ws-proxy >/dev/null 2>&1; then
 echo -e "\n${YELLOW}настройки MTProto:${NC}"
 echo -e " ${YELLOW}Хост:${NC} $(ip -4 route get 1 | awk '{print $7; exit}')"
 echo -e " ${YELLOW}Порт:${NC} 1443"
-echo -e " ${YELLOW}Ключ:${NC} dde8c0e50b1bd26df20bcb78dd4169d33a"
+echo -e " ${YELLOW}Ключ:${NC} dd00000000000000000000000000000000"
 
-echo -e "\n${YELLOW}Сссылка для подключения:${NC}\ntg://proxy?server=$(ip -4 route get 1 | awk '{print $7; exit}')&port=1443&secret=dde8c0e50b1bd26df20bcb78dd4169d33a"
+echo -e "\n${YELLOW}Сссылка для подключения:${NC}\ntg://proxy?server=$(ip -4 route get 1 | awk '{print $7; exit}')&port=1443&secret=dd00000000000000000000000000000000"
 fi
 
 echo -e "\n${CYAN}1) ${GREEN}Установить${NC} tg-ws-proxy"
