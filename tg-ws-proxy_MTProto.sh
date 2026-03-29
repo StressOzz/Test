@@ -45,7 +45,7 @@ if ! $UPDATE; then
     return 1
 fi
 
-echo -e "\n${MAGENTA}Проверяем возможность установки пакетов Python${NC}"
+echo -e "\n${MAGENTA}Проверяем доступность пакетов Python${NC}"
 
 failed=0
 for pkg in $REQUIRED_PKGS; do
@@ -120,7 +120,7 @@ PAUSE
 }
 
 delete_tg_ws() {
-echo -e "\n${MAGENTA}Удаялем tg-ws-proxy${NC}"
+echo -e "\n${MAGENTA}Удаляем tg-ws-proxy${NC}"
 
 echo -e "${CYAN}Останавливаем сервис${NC}"
 /etc/init.d/tg-ws-proxy stop >/dev/null 2>&1
