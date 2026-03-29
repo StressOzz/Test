@@ -9,10 +9,8 @@ BLUE="\033[0;34m"
 DGRAY="\033[38;5;244m"
 NC="\033[0m"
 
-failed=0
-
-# TG_URL="https://github.com/StressOzz/tg-ws-proxy-Manager/raw/main/tg-ws-proxy-main.zip"
-TG_URL="https://github.com/Flowseal/tg-ws-proxy/archive/refs/heads/master.zip"
+TG_URL="https://github.com/StressOzz/tg-ws-proxy-Manager/raw/main/tg-ws-proxy-main.zip"
+# TG_URL="https://github.com/Flowseal/tg-ws-proxy/archive/refs/heads/master.zip"
 
 ARCH="$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release)"
 
@@ -21,6 +19,10 @@ OWRT_VER="$(awk -F"'" '/DISTRIB_RELEASE/ {print $2}' /etc/openwrt_release | cut 
 LAN_IP=$(uci get network.lan.ipaddr 2>/dev/null | cut -d/ -f1)
 
 REQUIRED_PKGS="python3-light python3-pip python3-cryptography"
+
+PAUSE() { echo -ne "\nНажмите Enter..."; read dummy; }
+
+echo 'sh <(wget -O - https://raw.githubusercontent.com/StressOzz/tg-ws-proxy-Manager/main/tg-ws-proxy-Manager.sh)' > /usr/bin/tpm; chmod +x /usr/bin/tpm
 
 if command -v opkg >/dev/null 2>&1; then
     PKG="opkg"
@@ -34,13 +36,9 @@ else
     CHECK_AVAIL="apk search -e"
 fi
 
-echo 'sh <(wget -O - https://raw.githubusercontent.com/StressOzz/tg-ws-proxy-Manager/main/tg-ws-proxy-Manager.sh)' > /usr/bin/tpm; chmod +x /usr/bin/tpm
-
-PAUSE() { echo -ne "\nНажмите Enter..."; read dummy; }
-
 install_tg_ws() {
 
-if [ "$(df -m /root 2>/dev/null | awk 'NR==2 {print $4+0}')" -lt 20 ]; then
+if [ "$(df -m /root 2>/dev/null | awk 'NR==2 {print $4+0}')" -lt 25 ]; then
     echo -e "\n${RED}Недостаточно свободного места!${NC}"
     PAUSE
     return 1
@@ -79,16 +77,16 @@ echo -e "\n${MAGENTA}Скачиваем и распаковываем tg-ws-prox
 
 rm -rf "/root/tg-ws-proxy"
 
-cd /root || exit 1
+cd /root
 
 if ! wget -O tg-ws-proxy.zip "$TG_URL"; then
-    echo -e "\n${RED}Ошибка скачивания архива${NC}\n"
+    echo -e "\n${RED}Ошибка скачивания архива!${NC}\n"
     PAUSE
     return 1
 fi
 
 if ! unzip tg-ws-proxy.zip >/dev/null 2>&1; then
-    echo -e "\n${RED}Ошибка распаковки${NC}\n"
+    echo -e "\n${RED}Ошибка распаковки!${NC}\n"
     PAUSE
     return 1
 fi
@@ -96,12 +94,35 @@ fi
 mv tg-ws-proxy-main tg-ws-proxy
 rm -f tg-ws-proxy.zip
 
-cd /root/tg-ws-proxy || exit 1
+cd /root/tg-ws-proxy
 
 echo -e "\n${MAGENTA}Устанавливаем tg-ws-proxy${NC}"
 pip install --root-user-action=ignore --no-deps --disable-pip-version-check --timeout 2 --retries 1 -e .
 
-echo -e "\n${GREEN}Установка завершена!${NC}"
+cat << 'EOF' > /etc/init.d/tg-ws-proxy
+#!/bin/sh /etc/rc.common
+
+START=99
+USE_PROCD=1
+
+start_service() {
+    procd_open_instance
+    procd_set_param command /usr/bin/tg-ws-proxy --host 0.0.0.0
+    procd_set_param respawn
+    procd_close_instance
+}
+EOF
+
+chmod +x /etc/init.d/tg-ws-proxy
+/etc/init.d/tg-ws-proxy enable >/dev/null 2>&1
+/etc/init.d/tg-ws-proxy start >/dev/null 2>&1
+
+if pgrep -f tg-ws-proxy >/dev/null 2>&1; then
+    echo -e "\ntg-ws-proxy ${GREEN}установлен!${NC}"
+else
+    echo -e "\n${RED}Ошибка установки!${NC}"
+fi
+
 PAUSE
 }
 
@@ -122,7 +143,7 @@ echo -e "${CYAN}Удаляем пакеты и зависимости${NC}"
 python3 -m pip uninstall -y tg-ws-proxy >/dev/null 2>&1
 pip uninstall -y tg-ws-proxy >/dev/null 2>&1
 
-local attempts=0
+attempts=0
 while [ $attempts -lt 10 ]; do
     if command -v opkg >/dev/null 2>&1; then
         opkg remove --autoremove --force-removal-of-dependent-packages python3-light python3-pip python3-cryptography unzip >/dev/null 2>&1
@@ -140,12 +161,12 @@ while [ $attempts -lt 10 ]; do
 done
     
     if [ $attempts -eq 10 ]; then
-        echo -e "${RED}Некоторые пакеты не удалились! Повторите удаление!${NC}"
+        echo -e "${RED}Некоторые пакеты не удалились!${NC}"
     fi
     
 rm -rf /usr/lib/python* /usr/bin/python* /root/.cache/pip /root/.local/lib/python* /usr/bin/tg-ws-proxy* >/dev/null 2>&1
 
-echo -e "\n${GREEN}Удаление завершино!${NC}"
+echo -e "\n${GREEN}Удаление завершено!${NC}"
 PAUSE
 }
 
