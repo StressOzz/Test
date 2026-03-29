@@ -9,8 +9,6 @@ BLUE="\033[0;34m"
 DGRAY="\033[38;5;244m"
 NC="\033[0m"
 
-failed=0
-
 # TG_URL="https://github.com/StressOzz/tg-ws-proxy-Manager/raw/main/tg-ws-proxy-main.zip"
 TG_URL="https://github.com/Flowseal/tg-ws-proxy/archive/refs/heads/master.zip"
 
@@ -120,7 +118,7 @@ chmod +x /etc/init.d/tg-ws-proxy
 /etc/init.d/tg-ws-proxy start >/dev/null 2>&1
 
 if pgrep -f tg-ws-proxy >/dev/null 2>&1; then
-    echo -e "\n${GREEN}tg-ws-proxy ${GREEN}установлен и запущен!${NC}"
+    echo -e "\n${GREEN}tg-ws-proxy ${GREEN}установлен!${NC}"
 elif [ -d "/root/tg-ws-proxy" ] || python3 -m pip show tg-ws-proxy >/dev/null 2>&1; then
     echo -e "\ntg-ws-proxy ${YELLOW}установлен, но не запущен!${NC}"
 else
