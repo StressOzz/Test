@@ -9,8 +9,6 @@ BLUE="\033[0;34m"
 DGRAY="\033[38;5;244m"
 NC="\033[0m"
 
-failed=0
-
 # TG_URL="https://github.com/StressOzz/tg-ws-proxy-Manager/raw/main/tg-ws-proxy-main.zip"
 TG_URL="https://github.com/Flowseal/tg-ws-proxy/archive/refs/heads/master.zip"
 
@@ -95,7 +93,7 @@ fi
 mv tg-ws-proxy-main tg-ws-proxy
 rm -f tg-ws-proxy.zip
 
-cd /root/tg-ws-proxy || exit 1
+cd /root/tg-ws-proxy
 
 echo -e "\n${MAGENTA}Устанавливаем tg-ws-proxy${NC}"
 
@@ -168,7 +166,7 @@ while [ $attempts -lt 10 ]; do
 done
     
     if [ $attempts -eq 10 ]; then
-        echo -e "${RED}Некоторые пакеты не удалились! Повторите удаление!${NC}"
+        echo -e "${RED}Некоторые пакеты не удалились!${NC}"
     fi
     
 rm -rf /usr/lib/python* /usr/bin/python* /root/.cache/pip /root/.local/lib/python* /usr/bin/tg-ws-proxy* >/dev/null 2>&1
