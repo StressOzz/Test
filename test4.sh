@@ -1187,7 +1187,7 @@ if [ "$USE_APK" -eq 1 ]; then
     apk add --allow-untrusted "$FILE" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка установки${NC}"; exit 1; }
 else
     FILE=/tmp/magitrickle.ipk
-	echo -e "--> Скачиваем$URL_IPK"
+	echo -e "--> Скачиваем\n$URL_IPK"
     curl -Lf --retry 3 --retry-delay 2 -o "$FILE" "$URL_IPK" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка скачивания${NC}"; exit 1; }
 	echo -e "--> Устанавливаем $(basename "$URL_IPK")"
     opkg install "$FILE" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка установки${NC}"; exit 1; }
