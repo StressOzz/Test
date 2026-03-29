@@ -101,24 +101,6 @@ cd /root/tg-ws-proxy || exit 1
 echo -e "\n${MAGENTA}Устанавливаем tg-ws-proxy${NC}"
 pip install --root-user-action=ignore --no-deps --disable-pip-version-check --timeout 2 --retries 1 -e .
 
-cat << 'EOF' > /etc/init.d/tg-ws-proxy
-#!/bin/sh /etc/rc.common
-
-START=99
-USE_PROCD=1
-
-start_service() {
-    procd_open_instance
-    procd_set_param command /usr/bin/tg-ws-proxy --host 0.0.0.0
-    procd_set_param respawn
-    procd_close_instance
-}
-EOF
-
-chmod +x /etc/init.d/tg-ws-proxy
-/etc/init.d/tg-ws-proxy enable >/dev/null 2>&1
-/etc/init.d/tg-ws-proxy start >/dev/null 2>&1
-
 echo -e "\n${GREEN}Установка завершена!${NC}"
 PAUSE
 }
