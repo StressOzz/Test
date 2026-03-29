@@ -191,7 +191,7 @@ echo -e " ${YELLOW}Хост:${NC} $(ip -4 route get 1 | awk '{print $7; exit}')"
 echo -e " ${YELLOW}Порт:${NC} 1443"
 echo -e " ${YELLOW}Ключ:${NC} dd00000000000000000000000000000000"
 
-echo -e "\n${YELLOW}Сссылка для подключения:${NC}\ntg://proxy?server=$(ip -4 route get 1 | awk '{print $7; exit}')&port=1443&secret=dd00000000000000000000000000000000"
+echo -e "\n${YELLOW}Ссылка для подключения:${NC}\ntg://proxy?server=$(ip -4 route get 1 | awk '{print $7; exit}')&port=1443&secret=dd00000000000000000000000000000000"
 fi
 
 echo -e "\n${CYAN}1) ${GREEN}Установить${NC} tg-ws-proxy"
