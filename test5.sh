@@ -149,7 +149,7 @@ zapret_key() { clear; echo -e "${MAGENTA}Удаление, установка и
 [ ! -f /etc/init.d/zapret ] && { echo -e "${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }; install_strategy $STR_VERSION_AUTOINSTALL "1"; echo -e "\n${MAGENTA}Редактируем hosts${NC}\n${CYAN}Добавляем IP и домены в${NC} hosts"
 hosts_add "$ALL_BLOCKS"; echo -e "IP ${GREEN}и${NC} домены ${GREEN}добавлены в ${NC}hosts${GREEN}!${NC}\n"; Discord_menu "1"; echo -e "${MAGENTA}Настраиваем стратегию для игр${NC}"; fix_GAME "1"; echo -e "Zapret ${GREEN}установлен и настроен!${NC}\n"; PAUSE; }
 # ==========================================
-# Меню настроек
+# Резервная копия
 # ==========================================
 delete_backup() { if [ -d "$BACKUP_DIR" ]; then rm -rf "$BACKUP_DIR"; echo -e "\n${GREEN}Резервная копия удалена!${NC}\n"; else echo -e "\n${RED}Резервная копия не найдена!${NC}\n"; fi; PAUSE; }
 save_backup() { [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }; rm -rf "$BACKUP_DIR"; mkdir -p "$BACKUP_DIR"; tar -czf "$BACKUP_DIR/zapret.tar.gz" -C /opt zapret 2>/dev/null
@@ -352,37 +352,21 @@ uci commit firewall >/dev/null 2>&1; /etc/init.d/firewall restart >/dev/null 2>&
 # ==========================================
 sys_menu() { while true; do web_is_enabled && WEB_TEXT="Удалить доступ к скрипту из браузера" || WEB_TEXT="Активировать доступ к скрипту из браузера"
 quic_is_blocked && QUIC_TEXT="${GREEN}Отключить блокировку${NC} QUIC ${GREEN}(80,443)${NC}" || QUIC_TEXT="${GREEN}Включить блокировку${NC} QUIC ${GREEN}(80,443)${NC}"
-CURR=$(curr_MIR); clear; echo -e "${MAGENTA}Системное меню${NC}\n";
-
-if [ -f "$DATE_FILE" ] && [ -f "$BACKUP_DIR/zapret.tar.gz" ] && [ -f "$BACKUP_DIR/zapret" ]; then CREATE_DATE=$(cat "$DATE_FILE")
-echo -e "${YELLOW}Резервная копия:${NC} $CREATE_DATE"; else echo -e "${YELLOW}Резервная копия: ${RED}отсутствует${NC}"; fi
-
-if [ "$CURR" != "default / OpenWrt" ]; then echo -e "${YELLOW}Используется зеркало: ${NC}$CURR"; fi
-if web_is_enabled; then echo -e "${YELLOW}Доступ из браузера:${NC} $LAN_IP:7681"; fi
-if grep -q 'ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc; then echo -e "${YELLOW}FIX для Flow Offloading:${NC} ${GREEN}включён${NC}"; fi
-if quic_is_blocked; then echo -e "${YELLOW}Блокировка QUIC: ${GREEN}включена${NC}"; fi
-if [ -f /etc/init.d/zapret ] && [ -f "$CONF" ] && grep -Eq "^[[:space:]]*option DISABLE_IPV6 '0'" "$CONF"; then echo -e "${YELLOW}IPv6 в Zapret: ${GREEN}включён${NC}"; fi
+CURR=$(curr_MIR); clear; echo -e "${MAGENTA}Системное меню${NC}\n"; if [ -f "$DATE_FILE" ] && [ -f "$BACKUP_DIR/zapret.tar.gz" ] && [ -f "$BACKUP_DIR/zapret" ]; then CREATE_DATE=$(cat "$DATE_FILE")
+echo -e "${YELLOW}Резервная копия:${NC} $CREATE_DATE"; else echo -e "${YELLOW}Резервная копия: ${RED}отсутствует${NC}"; fi; if [ "$CURR" != "default / OpenWrt" ]; then echo -e "${YELLOW}Используется зеркало: ${NC}$CURR"; fi
+if web_is_enabled; then echo -e "${YELLOW}Доступ из браузера:${NC} $LAN_IP:7681"; fi; if grep -q 'ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc; then echo -e "${YELLOW}FIX для Flow Offloading:${NC} ${GREEN}включён${NC}"; fi
+if quic_is_blocked; then echo -e "${YELLOW}Блокировка QUIC: ${GREEN}включена${NC}"; fi; if [ -f /etc/init.d/zapret ] && [ -f "$CONF" ] && grep -Eq "^[[:space:]]*option DISABLE_IPV6 '0'" "$CONF"; then echo -e "${YELLOW}IPv6 в Zapret: ${GREEN}включён${NC}"; fi
 echo -e "\n${CYAN}1) ${GREEN}Системная информация${NC}\n${CYAN}2) ${GREEN}$WEB_TEXT${NC}\n${CYAN}3) ${GREEN}$QUIC_TEXT${NC}\n${CYAN}4) ${GREEN}Меню выбора зеркала ${NC}OpenWrt\n${CYAN}5) ${GREEN}Запустить${NC} blockcheck\n${CYAN}6) ${GREEN}Удалить ${NC}Zapret"
-
-
-if [ -f "$DATE_FILE" ] && [ -f "$BACKUP_DIR/zapret.tar.gz" ] && [ -f "$BACKUP_DIR/zapret" ]; then CREATE_DATE=$(cat "$DATE_FILE")
-echo -e "${CYAN}7) ${GREEN}Удалить резервную копию настроек${NC} Zapret"; else echo -e "${CYAN}7) ${GREEN}Сделать резервную копию настроек${NC} Zapret"; fi
-
+if [ -f "$DATE_FILE" ] && [ -f "$BACKUP_DIR/zapret.tar.gz" ] && [ -f "$BACKUP_DIR/zapret" ]; then CREATE_DATE=$(cat "$DATE_FILE"); echo -e "${CYAN}7) ${GREEN}Удалить резервную копию настроек${NC} Zapret"; else echo -e "${CYAN}7) ${GREEN}Сделать резервную копию настроек${NC} Zapret"; fi
 if [ -f "$DATE_FILE" ] && [ -f "$BACKUP_DIR/zapret.tar.gz" ] && [ -f "$BACKUP_DIR/zapret" ]; then echo -e "${CYAN}8) ${GREEN}Восстановить настройки ${NC}Zapret${GREEN} из резервной копии${NC}"; fi
-
-
 if [ -f /etc/init.d/zapret ] && [ -f "$CONF" ]; then if grep -Eq "^[[:space:]]*option DISABLE_IPV6 '0'" "$CONF"; then echo -e "${CYAN}9) ${GREEN}Выключить ${NC}IPv6${GREEN} в ${NC}Zapret"; elif grep -Eq "^[[:space:]]*option DISABLE_IPV6 '1'" "$CONF"; then
 ping -6 -c 1 -W 2 google.com >/dev/null 2>&1 && echo -e "${CYAN}9) ${GREEN}Включить ${NC}IPv6${GREEN} в ${NC}Zapret"; fi; fi
-
 FO=$(uci get firewall.@defaults[0].flow_offloading 2>/dev/null); FOHW=$(uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null); FIX=$(grep -q 'ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc && echo 1 || echo 0)
 if [ "$FO" = 1 ] || [ "$FOHW" = 1 ] || [ "$FIX" = 1 ]; then if [ "$FIX" = 1 ]; then echo -e "${CYAN}0) ${GREEN}Отключить${NC} FIX ${GREEN}для${NC} Flow Offloading"; else echo -e "${CYAN}0) ${GREEN}Применить${NC} FIX ${GREEN}для${NC} Flow Offloading"; fi; fi
 echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read -r choiceMN; case "$choiceMN" in 1) Sys_Info;; 2) toggle_web;; 3) toggle_quic;; 4) menu_MIR;;
 5) [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; continue; }; stop_zapret "1"; grep -q 'echo "Start Zapret"' /opt/zapret/blockcheck.sh || sed -i $'/^[[:space:]]*read A/a\\\t\techo "Start Zapret"; /etc/init.d/zapret restart >/dev/null 2>&1' /opt/zapret/blockcheck.sh
 echo -e "${GREEN}Ctrl+C - oстановить blockcheck${NC}\n"; chmod +x /opt/zapret/blockcheck.sh; /opt/zapret/blockcheck.sh; start_zapret;; 6) uninstall_zapret;; 9) toggle_ipv6;;
-
-7) if [ -f "$DATE_FILE" ] && [ -f "$BACKUP_DIR/zapret.tar.gz" ] && [ -f "$BACKUP_DIR/zapret" ]; then CREATE_DATE=$(cat "$DATE_FILE"); delete_backup; else save_backup; fi;;
-8) restore_backup ;;
-
+7) if [ -f "$DATE_FILE" ] && [ -f "$BACKUP_DIR/zapret.tar.gz" ] && [ -f "$BACKUP_DIR/zapret" ]; then CREATE_DATE=$(cat "$DATE_FILE"); delete_backup; else save_backup; fi;; 8) restore_backup ;;
 0) FO=$(uci get firewall.@defaults[0].flow_offloading 2>/dev/null); FOHW=$(uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null); if grep -q 'ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc; then echo -e "\n${MAGENTA}Отключаем FIX для Flow Offloading${NC}"
 sed -i 's/meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;/meta l4proto { tcp, udp } flow offload @ft;/' /usr/share/firewall4/templates/ruleset.uc; fw4 restart >/dev/null 2>&1; echo -e "FIX ${GREEN}отключён!${NC}\n"; PAUSE; elif [ "$FO" = 1 ] || [ "$FOHW" = 1 ]; then echo -e "\n${MAGENTA}Применяем FIX для Flow Offloading${NC}"
 sed -i 's/meta l4proto { tcp, udp } flow offload @ft;/meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;/' /usr/share/firewall4/templates/ruleset.uc; fw4 restart >/dev/null 2>&1; echo -e "FIX ${GREEN}успешно применён!${NC}\n"; PAUSE; fi;; *) echo; return;; esac; done; }
@@ -548,6 +532,26 @@ echo -e "${CYAN}2)${NC} Germany\n${CYAN}3)${NC} Belgium\n${CYAN}4)${NC} Kazakhst
 echo -en "\n${YELLOW}Выберите зеркало: ${NC}"; read -r z; case "$z" in 1) set_mirror "mirror.sjtu.edu.cn/openwrt" ;; 2) set_mirror "mirror.berlin.freifunk.net/downloads.openwrt.org" ;;
 3) set_mirror "mirror.tiguinet.net/openwrt" ;; 4) set_mirror "mirror.ps.kz/openwrt" ;; 5) set_mirror "ftp.snt.utwente.nl/pub/software/openwrt" ;; 6) set_mirror "downloads.openwrt.org" ;; *) break ;; esac; done; }
 # ==========================================
+# tg-ws-proxy-openwrt-go
+# ==========================================
+BIN_PATH="/usr/bin/tg-ws-proxy-go"
+INIT_PATH="/etc/init.d/tg-ws-proxy-go"
+
+get_arch() { case "$(uname -m)" in aarch64) echo "tg-ws-proxy-openwrt-aarch64";; armv7*|armv7l) echo "tg-ws-proxy-openwrt-armv7";; mipsel*) echo "tg-ws-proxy-openwrt-mipsel_24kc";;mips*) echo "tg-ws-proxy-openwrt-mips_24kc";; x86_64) echo "tg-ws-proxy-openwrt-x86_64";; *) return 1;; esac; }
+remove_TG() { echo -e "${MAGENTA}Удаляем tg-ws-proxy-go${NC}"; /etc/init.d/tg-ws-proxy-go stop >/dev/null 2>&1; /etc/init.d/tg-ws-proxy-go disable >/dev/null 2>&1; rm -f "$BIN_PATH"; rm -f "$INIT_PATH"; echo -e "\ntg-ws-proxy-go ${GREEN}удалён!\n${NC}"; }
+
+install_TG() { echo -e "${MAGENTA}Установка tg-ws-proxy-go${NC}"; ARCH_FILE="$(get_arch)" || { echo -e "\n${RED}Неизвестная архитектура:${NC} $(uname -m)"; exit 1; }; echo -e "${CYAN}Скачиваем и устанавливаем${NC} $ARCH_FILE"; 
+LATEST_TAG="$(curl -Ls -o /dev/null -w '%{url_effective}' https://github.com/d0mhate/-tg-ws-proxy-Manager-go/releases/latest | sed 's#.*/tag/##')"; DOWNLOAD_URL="https://github.com/d0mhate/-tg-ws-proxy-Manager-go/releases/download/$LATEST_TAG/$ARCH_FILE"; 
+curl -L --fail -o "$BIN_PATH" "$DOWNLOAD_URL" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка скачивания${NC}"; exit 1; }; chmod +x "$BIN_PATH"
+printf '%s\n' '#!/bin/sh /etc/rc.common' 'START=99' 'USE_PROCD=1' 'start_service() { procd_open_instance; procd_set_param command /usr/bin/tg-ws-proxy-go --host 0.0.0.0 --port 1080; procd_set_param respawn; procd_set_param stdout /dev/null; procd_set_param stderr /dev/null; procd_close_instance; }' > "$INIT_PATH"
+chmod +x "$INIT_PATH"; /etc/init.d/tg-ws-proxy-go enable; /etc/init.d/tg-ws-proxy-go start; if pidof tg-ws-proxy-go >/dev/null 2>&1; then echo -e "${GREEN}Сервис ${NC}tg-ws-proxy-go${GREEN} запущен!${NC}"
+echo -e "\n${YELLOW}адрес SOCKS5:${NC} ${NC}${LAN_IP}:1080\n"; else echo -e "\n${RED}Сервис tg-ws-proxy-go не запущен!${NC}\n"; fi; }
+
+tg_GO() { if ! command -v curl >/dev/null 2>&1; then echo -e "${CYAN}Устанавливаем ${NC}curl"; if command -v opkg >/dev/null 2>&1; then opkg update >/dev/null 2>&1 && opkg install curl >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка установки curl${NC}"; exit 1; }
+elif command -v apk >/dev/null 2>&1; then apk update >/dev/null 2>&1 && apk add curl >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка установки curl${NC}"; exit 1; }; fi; fi; if [ -f "$BIN_PATH" ] || [ -f "$INIT_PATH" ]; then remove_TG; else install_TG; fi; }
+
+
+# ==========================================
 # Главное меню
 # ==========================================
 show_menu() { get_versions; get_doh_status; show_current_strategy; RKN_Check; mkdir -p "$TMP_SF"; CURR=$(curr_MIR); clear; echo -e "╔════════════════════════════════════╗\n║     ${BLUE}Zapret on remittor Manager${NC}     ║\n╚════════════════════════════════════╝\n                     ${DGRAY}by StressOzz v$ZAPRET_MANAGER_VERSION${NC}"
@@ -557,6 +561,9 @@ else opkg list-installed | grep -q "^$pkg" && echo -e "\n${RED}Найден ус
 if uci get firewall.@defaults[0].flow_offloading 2>/dev/null | grep -q '^1$' || uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null | grep -q '^1$'; then if ! grep -q 'meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc
 then echo -e "\n${RED}Включён ${NC}Flow Offloading${RED}!${NC}\n${NC}Zapret${RED} некорректно работает с включённым ${NC}Flow Offloading${RED}!\nПримените ${NC}FIX${RED} в системном меню!${NC}"; fi; fi; pgrep -f "/opt/zapret" >/dev/null 2>&1 && str_stp_zpr="Остановить" || str_stp_zpr="Запустить"
 echo -e "\n${YELLOW}Установленная версия:    ${INST_COLOR}$INSTALLED_DISPLAY${NC}"; [ -n "$ZAPRET_STATUS" ] && echo -e "${YELLOW}Статус Zapret:${NC}           $ZAPRET_STATUS"
+
+if pidof tg-ws-proxy-go >/dev/null 2>&1; then echo -e "${YELLOW}адрес SOCKS5:${NC} ${NC}${LAN_IP}:1080${NC}"; fi
+
 if hosts_enabled; then echo -e "${YELLOW}Домены в hosts:          ${GREEN}добавлены${NC}"; fi; [ -f "$DATE_FILE" ] && echo -e "${YELLOW}Резервная копия:${NC}         ${GREEN}сохранена"; show_script_50 && [ -n "$name" ] && echo -e "${YELLOW}Установлен скрипт:${NC}       $name"; grep -q "$Fin_IP_Dis" /etc/hosts && echo -e "${YELLOW}Финские IP для Discord:  ${GREEN}включены${NC}"
 [ -f "$CONF" ] && CURRENT_GAME=$(grep -o '^#Gv[0-9]' "$CONF" | grep -o '[0-9]') && grep -q "option NFQWS_PORTS_UDP.*88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535" "$CONF" && grep -q -- "--filter-udp=88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535" "$CONF" && echo -e "${YELLOW}Стратегия для игр:${NC}       ${CYAN}Gv$CURRENT_GAME ${GREEN}включена${NC}"
 if [ -n "$DOH_STATUS" ]; then if [ "$PKG_IS_APK" -eq 1 ]; then apk info -e https-dns-proxy >/dev/null 2>&1 && echo -e "${YELLOW}DNS over HTTPS:${NC}          $DOH_STATUS"; else opkg list-installed | grep -q '^https-dns-proxy ' && echo -e "${YELLOW}DNS over HTTPS:${NC}          $DOH_STATUS"; fi; fi
@@ -564,6 +571,10 @@ if web_is_enabled; then echo -e "${YELLOW}Доступ из браузера:${N
 then echo -e "${YELLOW}FIX для Flow Offloading:${NC} ${GREEN}включён${NC}"; fi; if [ "$CURR" != "default / OpenWrt" ]; then echo -e "${YELLOW}Используется зеркало:${NC}    $CURR"; fi; if [ -f /etc/init.d/zapret ] && [ -f "$CONF" ] && grep -Eq "^[[:space:]]*option DISABLE_IPV6 '0'" "$CONF"; then echo -e "${YELLOW}IPv6 в Zapret:           ${GREEN}включён${NC}"; fi
 [ -f "$CONF" ] && line=$(grep -m1 '^#general' "$CONF") && [ -n "$line" ] && echo -e "${YELLOW}Используется стратегия:${NC}  ${CYAN}${line#?}${NC}"; if [ -f "$CONF" ]; then current="$ver$( [ -n "$ver" ] && [ -n "$yv_ver" ] && echo " / " )$yv_ver"; DV=$(grep -o -E '^#[[:space:]]*Dv[0-9][0-9]*' "$CONF" | sed 's/^#[[:space:]]*/\/ /' | head -n1)
 if [ -n "$current" ]; then echo -e "${YELLOW}Используется стратегия:${NC}  ${CYAN}$current${DV:+ $DV}${RKN_STATUS:+ $RKN_STATUS}${NC}"; elif [ -n "$RKN_STATUS" ]; then echo -e "${YELLOW}Используется стратегия:${NC}${CYAN}  РКН${DV:+ $DV}${NC}"; fi; fi; echo -e "\n${CYAN}1) ${GREEN}$Z_ACTION_TEXT${NC} Zapret\n${CYAN}2) ${GREEN}$str_stp_zpr ${NC}Zapret\n${CYAN}3) ${GREEN}Меню стратегий${NC}"
-echo -e "${CYAN}4) ${GREEN}Меню тестирования стратегий\n${CYAN}5) ${GREEN}Меню ${NC}DNS over HTTPS\n${CYAN}6) ${GREEN}Меню настройки ${NC}Discord\n${CYAN}7) ${GREEN}Меню управления доменами в ${NC}hosts\n${CYAN}8) ${GREEN}Удалить ${NC}→${GREEN} установить ${NC}→${GREEN} настроить${NC} Zapret\n${CYAN}0) ${GREEN}Системное меню${NC}" ; echo -ne "${CYAN}Enter) ${GREEN}Выход${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read choice
+echo -e "${CYAN}4) ${GREEN}Меню тестирования стратегий\n${CYAN}5) ${GREEN}Меню ${NC}DNS over HTTPS\n${CYAN}6) ${GREEN}Меню настройки ${NC}Discord\n${CYAN}7) ${GREEN}Меню управления доменами в ${NC}hosts\n${CYAN}8) ${GREEN}Удалить ${NC}→${GREEN} установить ${NC}→${GREEN} настроить${NC} Zapret"
+
+echo "9) $( [ -f "$BIN_PATH" ] && [ -f "$INIT_PATH" ] && echo 'Удалить tg-ws-proxy-go' || echo 'Установить tg-ws-proxy-go' )"
+
+echo -e "${CYAN}0) ${GREEN}Системное меню${NC}" ; echo -ne "${CYAN}Enter) ${GREEN}Выход${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read choice
 case "$choice" in 888) echo; uninstall_zapret "1"; install_Zapret "1"; curl -fsSL https://raw.githubusercontent.com/StressOzz/Test/refs/heads/main/zapret -o "$CONF"; hosts_add "$ALL_BLOCKS"; rm -f "$EXCLUDE_FILE"; wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL"; ZAPRET_RESTART; PAUSE;;
-1) $Z_ACTION_FUNC;; 2) pgrep -f /opt/zapret >/dev/null 2>&1 && stop_zapret || start_zapret;; 3) menu_str;; 4)TEST_menu;; 5) DoH_menu;; 6) Discord_menu;; 9) backup_menu;; 7) menu_hosts;; 8) zapret_key;; 0) sys_menu;; *) echo; exit 0;; esac; }; while true; do show_menu; done
+1) $Z_ACTION_FUNC;; 2) pgrep -f /opt/zapret >/dev/null 2>&1 && stop_zapret || start_zapret;; 3) menu_str;; 4)TEST_menu;; 5) DoH_menu;; 6) Discord_menu;; 9) tg_GO;; 7) menu_hosts;; 8) zapret_key;; 0) sys_menu;; *) echo; exit 0;; esac; }; while true; do show_menu; done
