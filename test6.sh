@@ -538,9 +538,9 @@ BIN_PATH="/usr/bin/tg-ws-proxy-go"
 INIT_PATH="/etc/init.d/tg-ws-proxy-go"
 
 get_arch() { case "$(uname -m)" in aarch64) echo "tg-ws-proxy-openwrt-aarch64";; armv7*|armv7l) echo "tg-ws-proxy-openwrt-armv7";; mipsel*) echo "tg-ws-proxy-openwrt-mipsel_24kc";;mips*) echo "tg-ws-proxy-openwrt-mips_24kc";; x86_64) echo "tg-ws-proxy-openwrt-x86_64";; *) return 1;; esac; }
-remove_TG() { echo -e "${MAGENTA}Удаляем tg-ws-proxy-go${NC}"; /etc/init.d/tg-ws-proxy-go stop >/dev/null 2>&1; /etc/init.d/tg-ws-proxy-go disable >/dev/null 2>&1; rm -f "$BIN_PATH"; rm -f "$INIT_PATH"; echo -e "\ntg-ws-proxy-go ${GREEN}удалён!\n${NC}"; }
+remove_TG() { echo -e "\n${MAGENTA}Удаляем tg-ws-proxy-go${NC}"; /etc/init.d/tg-ws-proxy-go stop >/dev/null 2>&1; /etc/init.d/tg-ws-proxy-go disable >/dev/null 2>&1; rm -f "$BIN_PATH"; rm -f "$INIT_PATH"; echo -e "tg-ws-proxy-go ${GREEN}удалён!\n${NC}"; }
 
-install_TG() { echo -e "${MAGENTA}Установка tg-ws-proxy-go${NC}"; ARCH_FILE="$(get_arch)" || { echo -e "\n${RED}Неизвестная архитектура:${NC} $(uname -m)"; exit 1; }; echo -e "${CYAN}Скачиваем и устанавливаем${NC} $ARCH_FILE"; 
+install_TG() { echo -e "\n${MAGENTA}Установка tg-ws-proxy-go${NC}"; ARCH_FILE="$(get_arch)" || { echo -e "\n${RED}Неизвестная архитектура:${NC} $(uname -m)"; exit 1; }; echo -e "${CYAN}Скачиваем и устанавливаем${NC} $ARCH_FILE"; 
 LATEST_TAG="$(curl -Ls -o /dev/null -w '%{url_effective}' https://github.com/d0mhate/-tg-ws-proxy-Manager-go/releases/latest | sed 's#.*/tag/##')"; DOWNLOAD_URL="https://github.com/d0mhate/-tg-ws-proxy-Manager-go/releases/download/$LATEST_TAG/$ARCH_FILE"; 
 curl -L --fail -o "$BIN_PATH" "$DOWNLOAD_URL" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка скачивания${NC}"; exit 1; }; chmod +x "$BIN_PATH"
 printf '%s\n' '#!/bin/sh /etc/rc.common' 'START=99' 'USE_PROCD=1' 'start_service() { procd_open_instance; procd_set_param command /usr/bin/tg-ws-proxy-go --host 0.0.0.0 --port 1080; procd_set_param respawn; procd_set_param stdout /dev/null; procd_set_param stderr /dev/null; procd_close_instance; }' > "$INIT_PATH"
@@ -548,7 +548,7 @@ chmod +x "$INIT_PATH"; /etc/init.d/tg-ws-proxy-go enable; /etc/init.d/tg-ws-prox
 echo -e "\n${YELLOW}адрес SOCKS5:${NC} ${NC}${LAN_IP}:1080\n"; else echo -e "\n${RED}Сервис tg-ws-proxy-go не запущен!${NC}\n"; fi; }
 
 tg_GO() { if ! command -v curl >/dev/null 2>&1; then echo -e "${CYAN}Устанавливаем ${NC}curl"; if command -v opkg >/dev/null 2>&1; then opkg update >/dev/null 2>&1 && opkg install curl >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка установки curl${NC}"; exit 1; }
-elif command -v apk >/dev/null 2>&1; then apk update >/dev/null 2>&1 && apk add curl >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка установки curl${NC}"; exit 1; }; fi; fi; if [ -f "$BIN_PATH" ] || [ -f "$INIT_PATH" ]; then remove_TG; else install_TG; fi; }
+elif command -v apk >/dev/null 2>&1; then apk update >/dev/null 2>&1 && apk add curl >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка установки curl${NC}"; exit 1; }; fi; fi; if [ -f "$BIN_PATH" ] || [ -f "$INIT_PATH" ]; then remove_TG; PAUSE; else install_TG; PAUSE; fi; }
 
 
 # ==========================================
