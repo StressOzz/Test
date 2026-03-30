@@ -1,200 +1,152 @@
 #!/bin/sh
 
-GREEN="\033[1;32m"
+BIN_PATH="/usr/bin/tg-ws-proxy-go"
+INIT_PATH="/etc/init.d/tg-ws-proxy-go"
+TMP_FILE="/tmp/tg-ws-proxy-go"
+
+RED="\033[0;31m"
+GREEN="\033[0;32m"
 YELLOW="\033[1;33m"
-MAGENTA="\033[1;35m"
-CYAN="\033[1;36m"
-RED="\033[1;31m"
-BLUE="\033[0;34m"
-DGRAY="\033[38;5;244m"
 NC="\033[0m"
 
-TG_URL="https://github.com/StressOzz/tg-ws-proxy-Manager/raw/main/tg-ws-proxy-main.zip"
-# TG_URL="https://github.com/Flowseal/tg-ws-proxy/archive/refs/heads/master.zip"
+get_arch() {
+    case "$(uname -m)" in
+        aarch64)
+            echo "tg-ws-proxy-openwrt-aarch64"
+            ;;
+        armv7*|armv7l)
+            echo "tg-ws-proxy-openwrt-armv7"
+            ;;
+        mipsel*)
+            echo "tg-ws-proxy-openwrt-mipsel_24kc"
+            ;;
+        mips*)
+            echo "tg-ws-proxy-openwrt-mips_24kc"
+            ;;
+        x86_64)
+            echo "tg-ws-proxy-openwrt-x86_64"
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
 
-LAN_IP=$(uci get network.lan.ipaddr 2>/dev/null | cut -d/ -f1)
+get_router_ip() {
+    uci get network.lan.ipaddr 2>/dev/null | cut -d/ -f1
+}
 
-REQUIRED_PKGS="python3-light python3-pip python3-cryptography"
+remove_all() {
+    echo -e "${YELLOW}Удаляем tg-ws-proxy-go...${NC}"
 
-PAUSE() { echo -ne "\nНажмите Enter..."; read dummy; }
+    /etc/init.d/tg-ws-proxy-go stop >/dev/null 2>&1
+    /etc/init.d/tg-ws-proxy-go disable >/dev/null 2>&1
 
-echo 'sh <(wget -O - https://raw.githubusercontent.com/StressOzz/tg-ws-proxy-Manager/main/tg-ws-proxy-Manager.sh)' > /usr/bin/tpm; chmod +x /usr/bin/tpm
+    rm -f "$BIN_PATH"
+    rm -f "$INIT_PATH"
 
-if command -v opkg >/dev/null 2>&1; then
-    PKG="opkg"
-    UPDATE="opkg update"
-    INSTALL="opkg install"
-    CHECK_AVAIL="opkg list | cut -d ' ' -f1"
-else
-    PKG="apk"
-    UPDATE="apk update"
-    INSTALL="apk add"
-    CHECK_AVAIL="apk search -e"
-fi
+    echo -e "${GREEN}Удалено.${NC}"
+}
 
-install_tg_ws() {
+install_all() {
+    echo -e "${GREEN}Установка tg-ws-proxy-go...${NC}"
 
-if [ "$(df -m /root 2>/dev/null | awk 'NR==2 {print $4+0}')" -lt 25 ]; then
-    echo -e "\n${RED}Недостаточно свободного места!${NC}"
-    PAUSE
-    return 1
-fi
+    ARCH_FILE="$(get_arch)" || {
+        echo -e "${RED}Неизвестная архитектура: $(uname -m)${NC}"
+        exit 1
+    }
 
-echo -e "\n${MAGENTA}Обновляем пакеты${NC}"
+    echo -e "${YELLOW}Архитектура: $ARCH_FILE${NC}"
 
-if ! $UPDATE; then
-    echo -e "\n${RED}Ошибка при обновлении пакетов!${NC}"
-    PAUSE
-    return 1
-fi
+    LATEST_URL="$(curl -Ls -o /dev/null -w '%{url_effective}' https://github.com/d0mhate/-tg-ws-proxy-Manager-go/releases/latest)"
+    DOWNLOAD_URL="$LATEST_URL/$ARCH_FILE"
 
-echo -e "\n${MAGENTA}Проверяем возможность установки пакетов Python${NC}"
+    echo -e "${YELLOW}Скачивание...${NC}"
 
-failed=0
-for pkg in $REQUIRED_PKGS; do
-    if sh -c "$CHECK_AVAIL" | grep -qw "$pkg"; then
-        echo -e "${GREEN}[OK]   ${NC}$pkg"
-    else
-        echo -e "${RED}[FALL] ${NC}$pkg"
-        failed=1
-    fi
-done
+    curl -L --fail -o "$TMP_FILE" "$DOWNLOAD_URL" || {
+        echo -e "${RED}Ошибка скачивания${NC}"
+        exit 1
+    }
 
-if [ $failed -ne 0 ]; then
-    echo -e "\n${RED}Архитектура не поддерживается! Установка невозможна!${NC}"
-    PAUSE
-    return 1
-fi
+    mv "$TMP_FILE" "$BIN_PATH"
+    chmod +x "$BIN_PATH"
 
-echo -e "\n${MAGENTA}Устанавливаем необходимые пакеты${NC}"
-$INSTALL python3-light python3-pip python3-cryptography unzip
+    echo -e "${GREEN}Бинарник установлен.${NC}"
 
-echo -e "\n${MAGENTA}Скачиваем и распаковываем tg-ws-proxy${NC}"
-
-rm -rf "/root/tg-ws-proxy"
-
-cd /root
-
-if ! wget -O tg-ws-proxy.zip "$TG_URL"; then
-    echo -e "\n${RED}Ошибка скачивания архива!${NC}\n"
-    PAUSE
-    return 1
-fi
-
-if ! unzip tg-ws-proxy.zip >/dev/null 2>&1; then
-    echo -e "\n${RED}Ошибка распаковки!${NC}\n"
-    PAUSE
-    return 1
-fi
-
-mv tg-ws-proxy-main tg-ws-proxy
-rm -f tg-ws-proxy.zip
-
-cd /root/tg-ws-proxy
-
-echo -e "\n${MAGENTA}Устанавливаем tg-ws-proxy${NC}"
-pip install --root-user-action=ignore --no-deps --disable-pip-version-check --timeout 2 --retries 1 -e .
-
-cat << 'EOF' > /etc/init.d/tg-ws-proxy
+    cat << 'EOF' > "$INIT_PATH"
 #!/bin/sh /etc/rc.common
 
 START=99
-USE_PROCD=1
+STOP=10
 
-start_service() {
-    procd_open_instance
-    procd_set_param command /usr/bin/tg-ws-proxy --host 0.0.0.0
-    procd_set_param respawn
-    procd_close_instance
+NAME=tg-ws-proxy-go
+PROG=/usr/bin/tg-ws-proxy-go
+PIDFILE=/var/run/$NAME.pid
+
+start() {
+    echo "Запускаем $NAME..."
+
+    if pidof $NAME >/dev/null; then
+        echo "Уже запущен"
+        return 0
+    fi
+
+    $PROG --host 0.0.0.0 --port 1080 >/dev/null 2>&1 &
+    echo $! > $PIDFILE
+}
+
+stop() {
+    echo "Останавливаем $NAME..."
+
+    if [ -f $PIDFILE ]; then
+        kill $(cat $PIDFILE) 2>/dev/null
+        rm -f $PIDFILE
+    fi
+
+    killall $NAME 2>/dev/null
+}
+
+restart() {
+    stop
+    sleep 1
+    start
+}
+
+status() {
+    if pidof $NAME >/dev/null; then
+        echo "$NAME запущен"
+        return 0
+    else
+        echo "$NAME не запущен"
+        return 1
+    fi
 }
 EOF
 
-chmod +x /etc/init.d/tg-ws-proxy
-/etc/init.d/tg-ws-proxy enable >/dev/null 2>&1
-/etc/init.d/tg-ws-proxy start >/dev/null 2>&1
+    chmod +x "$INIT_PATH"
 
-if pgrep -f tg-ws-proxy >/dev/null 2>&1; then
-    echo -e "\ntg-ws-proxy ${GREEN}установлен!${NC}"
-else
-    echo -e "\n${RED}Ошибка установки!${NC}"
-fi
+    /etc/init.d/tg-ws-proxy-go enable
+    /etc/init.d/tg-ws-proxy-go start
 
-PAUSE
+    IP="$(get_router_ip)"
+
+    echo -e "\n${GREEN}Установка завершена!${NC}"
+    echo -e "${YELLOW}адрес SOCKS5: ${NC}${IP}:1080"
 }
 
-delete_tg_ws() {
-echo -e "\n${MAGENTA}Удаляем tg-ws-proxy${NC}"
+main() {
+    echo "==== tg-ws-proxy-go installer ===="
 
-echo -e "${CYAN}Останавливаем сервис${NC}"
-/etc/init.d/tg-ws-proxy stop >/dev/null 2>&1
-/etc/init.d/tg-ws-proxy disable >/dev/null 2>&1
+    if ! command -v curl >/dev/null 2>&1; then
+        echo -e "${RED}curl не установлен${NC}"
+        exit 1
+    fi
 
-echo -e "${CYAN}Удаляем ${NC}init.d${CYAN} скрипт${NC}"
-rm -f /etc/init.d/tg-ws-proxy >/dev/null 2>&1
-
-echo -e "${CYAN}Удаляем ${NC}tg-ws-proxy"
-rm -rf /root/tg-ws-proxy >/dev/null 2>&1
-
-echo -e "${CYAN}Удаляем пакеты и зависимости${NC}"
-python3 -m pip uninstall -y tg-ws-proxy >/dev/null 2>&1
-pip uninstall -y tg-ws-proxy >/dev/null 2>&1
-
-attempts=0
-while [ $attempts -lt 10 ]; do
-    if command -v opkg >/dev/null 2>&1; then
-        opkg remove --autoremove --force-removal-of-dependent-packages python3-light python3-pip python3-cryptography unzip >/dev/null 2>&1
-        CHECK_CMD="opkg list-installed"
+    if [ -f "$BIN_PATH" ] || [ -f "$INIT_PATH" ]; then
+        remove_all
     else
-        apk del python3-light python3-pip python3-cryptography unzip >/dev/null 2>&1
-        CHECK_CMD="apk info"
+        install_all
     fi
-    
-    if ! $CHECK_CMD | grep -q "python3-light\|python3-pip\|python3-cryptography"; then
-        break
-    fi
-    
-    attempts=$((attempts + 1))
-done
-
-rm -rf /usr/lib/python* /usr/bin/python* /root/.cache/pip /root/.local/lib/python* /usr/bin/tg-ws-proxy* >/dev/null 2>&1
-
-    if [ $attempts -eq 10 ]; then
-        echo -e "\n${RED}Некоторые пакеты не удалились!${NC}"
-    else
-        echo -e "\n${GREEN}Удаление завершено!${NC}"
-    fi
-    
-PAUSE
 }
 
-menu() {
-clear
-echo -e "╔═════════════════════════════════╗"
-echo -e "║ ${BLUE}tg-ws-proxy by Flowseal Manager${NC} ║"
-echo -e "╚═════════════════════════════════╝"
-echo -e "                       ${DGRAY}by StressOzz${NC}\n"
-
-if pgrep -f tg-ws-proxy >/dev/null 2>&1; then
-    echo -e "${YELLOW}tg-ws-proxy:  ${GREEN}запущен${NC}"
-elif [ -d "/root/tg-ws-proxy" ] || python3 -m pip show tg-ws-proxy >/dev/null 2>&1; then
-    echo -e "${YELLOW}Статус tg-ws-proxy: ${RED}не запущен${NC}"
-else
-    echo -e "${YELLOW}Статус tg-ws-proxy: ${RED}не установлен${NC}"
-fi
-
-if pgrep -f tg-ws-proxy >/dev/null 2>&1; then
-    echo -e "${YELLOW}адрес SOCKS5: ${NC}$LAN_IP:1080"
-fi
-
-echo -e "\n${CYAN}1) ${GREEN}Установить${NC} tg-ws-proxy"
-echo -e "${CYAN}2) ${GREEN}Удалить${NC} tg-ws-proxy"
-echo -e "${CYAN}Enter) ${GREEN}Выход${NC}\n"
-echo -en "${YELLOW}Выберите пункт: ${NC}"
-read choice
-case "$choice" in 
-1) install_tg_ws ;;
-2) delete_tg_ws ;;
-*) echo; exit 0 ;;
-esac
-}
-while true; do menu; done
+main "$@"
