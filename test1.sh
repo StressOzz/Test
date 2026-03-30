@@ -58,15 +58,17 @@ install_all() {
 
     echo -e "${YELLOW}Архитектура: $ARCH_FILE${NC}"
 
-    LATEST_URL="$(curl -Ls -o /dev/null -w '%{url_effective}' https://github.com/d0mhate/-tg-ws-proxy-Manager-go/releases/latest)"
-    DOWNLOAD_URL="$LATEST_URL/$ARCH_FILE"
+LATEST_TAG="$(curl -Ls -o /dev/null -w '%{url_effective}' https://github.com/d0mhate/-tg-ws-proxy-Manager-go/releases/latest | sed 's#.*/tag/##')"
 
-    echo -e "${YELLOW}Скачивание...${NC}"
+DOWNLOAD_URL="https://github.com/d0mhate/-tg-ws-proxy-Manager-go/releases/download/$LATEST_TAG/$ARCH_FILE"
 
-    curl -L --fail -o "$TMP_FILE" "$DOWNLOAD_URL" || {
-        echo -e "${RED}Ошибка скачивания${NC}"
-        exit 1
-    }
+echo -e "${YELLOW}URL: $DOWNLOAD_URL${NC}"
+echo -e "${YELLOW}Скачивание...${NC}"
+
+curl -L --fail -o "$TMP_FILE" "$DOWNLOAD_URL" || {
+    echo -e "${RED}Ошибка скачивания${NC}"
+    exit 1
+}
 
     mv "$TMP_FILE" "$BIN_PATH"
     chmod +x "$BIN_PATH"
