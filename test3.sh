@@ -79,16 +79,15 @@ curl -L --fail -o "$TMP_FILE" "$DOWNLOAD_URL" || {
 #!/bin/sh /etc/rc.common
 
 START=99
-STOP=10
+USE_PROCD=1
 
-start() {
-    echo "Запускаем tg-ws-proxy-go..."
-    /usr/bin/tg-ws-proxy-go --host 0.0.0.0 --port 1080 &
-}
-
-stop() {
-    echo "Останавливаем tg-ws-proxy-go..."
-    killall tg-ws-proxy-go
+start_service() {
+    procd_open_instance
+    procd_set_param command /usr/bin/tg-ws-proxy --host 0.0.0.0 --port 1080
+    procd_set_param respawn
+    procd_set_param stdout /dev/null
+    procd_set_param stderr /dev/null
+    procd_close_instance
 }
 EOF
 
