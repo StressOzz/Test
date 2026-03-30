@@ -7,6 +7,7 @@ RED="\033[0;31m"
 GREEN="\033[0;32m"
 YELLOW="\033[1;33m"
 MAGENTA="\033[1;35m"
+CYAN="\033[1;36m"
 NC="\033[0m"
 
 get_arch() {
@@ -61,7 +62,8 @@ DOWNLOAD_URL="https://github.com/d0mhate/-tg-ws-proxy-Manager-go/releases/downlo
 
 echo -e "${YELLOW}URL: ${NC}$DOWNLOAD_URL${NC}"
 
-curl -L --fail -o "$BIN_PATH" "$DOWNLOAD_URL" || { echo -e "\n${RED}Ошибка скачивания${NC}"; exit 1; }
+echo -e "${CYAN}Скачиваем и устанавливаем${NC} $(basename "$$DOWNLOAD_URL")"
+curl -L --fail -o "$BIN_PATH" "$DOWNLOAD_URL" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка скачивания${NC}"; exit 1; }
 
     chmod +x "$BIN_PATH"
 
@@ -101,7 +103,7 @@ main() {
 clear
 
 if ! command -v curl >/dev/null 2>&1; then
-    echo -e "${YELLOW}Устанавливаем ${NC}curl"
+    echo -e "${CYAN}Устанавливаем ${NC}curl"
 
     if command -v opkg >/dev/null 2>&1; then
         opkg update >/dev/null 2>&1 && opkg install curl >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка установки curl${NC}"; exit 1; }
