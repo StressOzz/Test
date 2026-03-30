@@ -151,23 +151,6 @@ hosts_add "$ALL_BLOCKS"; echo -e "IP ${GREEN}и${NC} домены ${GREEN}доб
 # ==========================================
 # Меню настроек
 # ==========================================
-backup_menu() { while true; do clear; echo -e "${MAGENTA}Меню управления настройками${NC}\n"; 
-
-
-if [ -f "$DATE_FILE" ] && [ -f "$BACKUP_DIR/zapret.tar.gz" ] && [ -f "$BACKUP_DIR/zapret" ]; then CREATE_DATE=$(cat "$DATE_FILE")
-echo -e "${YELLOW}Резервная копия:${NC} $CREATE_DATE\n"; else echo -e "${YELLOW}Резервная копия: ${RED}отсутствует${NC}\n"; fi
-
-
-if [ -f "$DATE_FILE" ] && [ -f "$BACKUP_DIR/zapret.tar.gz" ] && [ -f "$BACKUP_DIR/zapret" ]; then CREATE_DATE=$(cat "$DATE_FILE")
-echo -e "${CYAN}1) ${GREEN}Сделать резервную копию настроек${NC} Zapret"; else echo -e "1 )${GREEN}Удалить резервную копию настроек${NC} Zapret"; fi
-echo -e "${CYAN}2) ${GREEN}Восстановить настройки ${NC}Zapret${GREEN} из резервной копии${NC}\n${CYAN}3) ${GREEN}Показать стратегию из резервной копии${NC}"
-
-
-1 if [ -f "$DATE_FILE" ] && [ -f "$BACKUP_DIR/zapret.tar.gz" ] && [ -f "$BACKUP_DIR/zapret" ]; then CREATE_DATE=$(cat "$DATE_FILE"); save_backup; else delete_backup; fi;;
-2 restore_default;;
-4 if [ -d "$BACKUP_DIR" ]; then echo; awk 'f{if($0=="'\''")exit;print} /option NFQWS_OPT '\''/{f=1}' /opt/zapret_backup/zapret; echo; PAUSE; else echo -e "\n${RED}Резервная копия не найдена!${NC}\n"; PAUSE; fi;; *) break;; esac; done; }
-
-
 delete_backup() { if [ -d "$BACKUP_DIR" ]; then rm -rf "$BACKUP_DIR"; echo -e "\n${GREEN}Резервная копия удалена!${NC}\n"; else echo -e "\n${RED}Резервная копия не найдена!${NC}\n"; fi; PAUSE; }
 save_backup() { [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }; rm -rf "$BACKUP_DIR"; mkdir -p "$BACKUP_DIR"; tar -czf "$BACKUP_DIR/zapret.tar.gz" -C /opt zapret 2>/dev/null
 cp -p /etc/config/zapret "$BACKUP_DIR/"; printf '%s / %s\n' "$(date '+%d.%m.%y')" "$(du -sh /opt/zapret_backup 2>/dev/null | cut -f1 | sed -E 's/\.0K$/K/;s/K$/ КБ/;s/M$/ МБ/')" > "$DATE_FILE"
