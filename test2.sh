@@ -52,9 +52,9 @@ remove_all() {
 install_all() {
 echo -e "${MAGENTA}Установка tg-ws-proxy-go${NC}"
 
-echo -e "${CYAN}Скачиваем и устанавливаем${NC} $ARCH_FILE"
+ARCH_FILE="$(get_arch)" || { echo -e "\n${RED}Неизвестная архитектура:${NC} $(uname -m)"; exit 1; }
 
-ARCH_FILE="$(get_arch)" || { echo -e "\n${RED}Неизвестная архитектура: $(uname -m)${NC}"; exit 1; }
+echo -e "${CYAN}Скачиваем и устанавливаем${NC} $ARCH_FILE"
 
 LATEST_TAG="$(curl -Ls -o /dev/null -w '%{url_effective}' https://github.com/d0mhate/-tg-ws-proxy-Manager-go/releases/latest | sed 's#.*/tag/##')"
 
