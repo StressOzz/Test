@@ -81,47 +81,14 @@ curl -L --fail -o "$TMP_FILE" "$DOWNLOAD_URL" || {
 START=99
 STOP=10
 
-NAME=tg-ws-proxy-go
-PROG=/usr/bin/tg-ws-proxy-go
-PIDFILE=/var/run/$NAME.pid
-
 start() {
-    echo "Запускаем $NAME..."
-
-    if pidof $NAME >/dev/null; then
-        echo "Уже запущен"
-        return 0
-    fi
-
-    $PROG --host 0.0.0.0 --port 1080 >/dev/null 2>&1 &
-    echo $! > $PIDFILE
+    echo "Запускаем tg-ws-proxy-go..."
+    /usr/bin/tg-ws-proxy-go --host 0.0.0.0 --port 1080 &
 }
 
 stop() {
-    echo "Останавливаем $NAME..."
-
-    if [ -f $PIDFILE ]; then
-        kill $(cat $PIDFILE) 2>/dev/null
-        rm -f $PIDFILE
-    fi
-
-    killall $NAME 2>/dev/null
-}
-
-restart() {
-    stop
-    sleep 1
-    start
-}
-
-status() {
-    if pidof $NAME >/dev/null; then
-        echo "$NAME запущен"
-        return 0
-    else
-        echo "$NAME не запущен"
-        return 1
-    fi
+    echo "Останавливаем tg-ws-proxy-go..."
+    killall tg-ws-proxy-go
 }
 EOF
 
