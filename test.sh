@@ -137,10 +137,15 @@ EOF
 main() {
     echo "==== tg-ws-proxy-go installer ===="
 
-    if ! command -v curl >/dev/null 2>&1; then
-        echo -e "${RED}curl не установлен${NC}"
-        exit 1
+if ! command -v curl >/dev/null 2>&1; then
+    echo -e "${YELLOW}curl не найден, устанавливаем...${NC}"
+
+    if command -v opkg >/dev/null 2>&1; then
+        opkg update >/dev/null 2>&1 && opkg install curl >/dev/null 2>&1 || echo -e "${RED}Ошибка установки curl${NC}"
+    elif command -v apk >/dev/null 2>&1; then
+        apk update >/dev/null 2>&1 && apk add curl >/dev/null 2>&1 || echo -e "${RED}Ошибка установки curl${NC}"
     fi
+fi
 
     if [ -f "$BIN_PATH" ] || [ -f "$INIT_PATH" ]; then
         remove_all
