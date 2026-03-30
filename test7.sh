@@ -37,7 +37,7 @@ get_router_ip() {
 }
 
 remove_all() {
-    echo -e "\n${MAGENTA}Удаляем tg-ws-proxy-go${NC}"
+    echo -e "${MAGENTA}Удаляем tg-ws-proxy-go${NC}"
 
     /etc/init.d/tg-ws-proxy-go stop >/dev/null 2>&1
     /etc/init.d/tg-ws-proxy-go disable >/dev/null 2>&1
@@ -49,7 +49,7 @@ remove_all() {
 }
 
 install_all() {
-    echo -e "\n${MAGENTA}Установка tg-ws-proxy-go${NC}"
+    echo -e "${MAGENTA}Установка tg-ws-proxy-go${NC}"
 
     ARCH_FILE="$(get_arch)" || { echo -e "\n${RED}Неизвестная архитектура: $(uname -m)${NC}"; exit 1; }
 
