@@ -50,22 +50,21 @@ remove_all() {
 }
 
 install_all() {
-    echo -e "${MAGENTA}Установка tg-ws-proxy-go${NC}"
+echo -e "${MAGENTA}Установка tg-ws-proxy-go${NC}"
 
-    ARCH_FILE="$(get_arch)" || { echo -e "\n${RED}Неизвестная архитектура: $(uname -m)${NC}"; exit 1; }
-
-    echo -e "${YELLOW}Архитектура:${NC} $ARCH_FILE${NC}"
+ARCH_FILE="$(get_arch)" || { echo -e "\n${RED}Неизвестная архитектура: $(uname -m)${NC}"; exit 1; }
 
 LATEST_TAG="$(curl -Ls -o /dev/null -w '%{url_effective}' https://github.com/d0mhate/-tg-ws-proxy-Manager-go/releases/latest | sed 's#.*/tag/##')"
 
 DOWNLOAD_URL="https://github.com/d0mhate/-tg-ws-proxy-Manager-go/releases/download/$LATEST_TAG/$ARCH_FILE"
 
+echo -e "${CYAN}Скачиваем и устанавливаем${NC} $ARCH_FILE"
+
 echo -e "${YELLOW}URL: ${NC}$DOWNLOAD_URL${NC}"
 
-echo -e "${CYAN}Скачиваем и устанавливаем${NC} $(basename "$$DOWNLOAD_URL")"
 curl -L --fail -o "$BIN_PATH" "$DOWNLOAD_URL" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка скачивания${NC}"; exit 1; }
 
-    chmod +x "$BIN_PATH"
+chmod +x "$BIN_PATH"
 
     cat << 'EOF' > "$INIT_PATH"
 #!/bin/sh /etc/rc.common
