@@ -60,8 +60,6 @@ DOWNLOAD_URL="https://github.com/d0mhate/-tg-ws-proxy-Manager-go/releases/downlo
 
 echo -e "${CYAN}Скачиваем и устанавливаем${NC} $ARCH_FILE"
 
-echo -e "${YELLOW}URL: ${NC}$DOWNLOAD_URL${NC}"
-
 curl -L --fail -o "$BIN_PATH" "$DOWNLOAD_URL" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка скачивания${NC}"; exit 1; }
 
 chmod +x "$BIN_PATH"
