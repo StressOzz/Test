@@ -49,11 +49,11 @@ remove_all() {
 }
 
 install_all() {
-    echo -e "${MAGENTA}Установка tg-ws-proxy-go${NC}"
+    echo -e "\n${MAGENTA}Установка tg-ws-proxy-go${NC}"
 
     ARCH_FILE="$(get_arch)" || { echo -e "\n${RED}Неизвестная архитектура: $(uname -m)${NC}"; exit 1; }
 
-    echo -e "${YELLOW}Архитектура: $ARCH_FILE${NC}"
+    echo -e "${YELLOW}Архитектура:${NC} $ARCH_FILE${NC}"
 
 LATEST_TAG="$(curl -Ls -o /dev/null -w '%{url_effective}' https://github.com/d0mhate/-tg-ws-proxy-Manager-go/releases/latest | sed 's#.*/tag/##')"
 
@@ -97,6 +97,9 @@ EOF
 }
 
 main() {
+
+clear
+
 if ! command -v curl >/dev/null 2>&1; then
     echo -e "${YELLOW}Устанавливаем ${NC}curl"
 
