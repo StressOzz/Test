@@ -196,19 +196,16 @@ else
     echo -e "${YELLOW}tg-ws-proxy: ${RED}не установлен${NC}"
 fi
 
-if pidof tg-ws-proxy-go >/dev/null 2>&1; then echo -e "${YELLOW}Настройки SOCKS5 в TG:${NC}   ${NC}${LAN_IP}:1080${NC}"; fi
-
-if pgrep -f tg-ws-proxy >/dev/null 2>&1; then
-echo -e "\n${YELLOW}настройки MTProto:${NC}"
-echo -e " ${YELLOW}Хост:${NC} $(ip -4 route get 1 | awk '{print $7; exit}')"
-echo -e " ${YELLOW}Порт:${NC} 1443"
-echo -e " ${YELLOW}Ключ:${NC} dd00000000000000000000000000000000"
-echo -e "\n${YELLOW}Ссылка для подключения:${NC}\ntg://proxy?server=$(ip -4 route get 1 | awk '{print $7; exit}')&port=1443&secret=dd00000000000000000000000000000000"
+if pgrep -f tg-ws-proxy >/dev/null 2>&1 && [ -f "$BIN_PATH" ] && [ -f "$INIT_PATH" ] && [ -f /root/tg-ws-proxy/README.md ] && grep -q '^Telegram Desktop → MTProto' /root/tg-ws-proxy/README.md; then
+    echo -e "\n${YELLOW}настройки MTProto:${NC}"
+    echo -e " ${YELLOW}Хост:${NC} $(ip -4 route get 1 | awk '{print $7; exit}')"
+    echo -e " ${YELLOW}Порт:${NC} 1443"
+    echo -e " ${YELLOW}Ключ:${NC} dd00000000000000000000000000000000"
+    echo -e "\n${YELLOW}Ссылка для подключения:${NC}\ntg://proxy?server=$(ip -4 route get 1 | awk '{print $7; exit}')&port=1443&secret=dd00000000000000000000000000000000"
 fi
 
 echo
 echo -e "${CYAN}1)${GREEN} $( [ -f "$BIN_PATH" ] && [ -f "$INIT_PATH" ] && [ -f /root/tg-ws-proxy/README.md ] && grep -q '^Telegram Desktop → MTProto' /root/tg-ws-proxy/README.md && echo -e "Удалить ${NC}TG WS Proxy MTProto" || echo "Установить ${NC}TG WS Proxy MTProto" )"
-echo -e "${CYAN}2)${GREEN} $( [ -f "$BIN_PATH" ] && [ -f "$INIT_PATH" ] && [ -f /root/tg-ws-proxy/README.md ] && grep -q '^Telegram Desktop → SOCKS5' /root/tg-ws-proxy/README.md && echo -e "Удалить ${NC}TG WS Proxy SOCKS5" || echo "Установить ${NC}TG WS Proxy SOCKS5" )"
 echo -e "${CYAN}3)${GREEN} $( [ -f "$BIN_PATH_GO" ] && [ -f "$INIT_PATH_GO" ] && echo -e "Удалить ${NC}TG WS Proxy Go" || echo "Установить ${NC}TG WS Proxy Go" )"
 
 echo -e "${CYAN}Enter) ${GREEN}Выход${NC}\n"
@@ -218,13 +215,7 @@ case "$choice" in
 1) 
 TG_URL="https://github.com/Flowseal/tg-ws-proxy/archive/refs/heads/master.zip"
 if [ -f "$BIN_PATH" ] && [ -f "$INIT_PATH" ] && [ -f /root/tg-ws-proxy/README.md ] && grep -q '^Telegram Desktop → MTProto' /root/tg-ws-proxy/README.md; then delete_tg_ws; else install_tg_ws; fi ;;
-
-2) 
-TG_URL="https://github.com/StressOzz/tg-ws-proxy-Manager/raw/main/tg-ws-proxy-main.zip"
-if [ -f "$BIN_PATH" ] && [ -f "$INIT_PATH" ] && [ -f /root/tg-ws-proxy/README.md ] && grep -q '^Telegram Desktop → SOCKS5' /root/tg-ws-proxy/README.md; then delete_tg_ws; else install_tg_ws; fi ;;
-
-3) tg_GO ;;
-4) delete_tg_ws ;;
+2) tg_GO ;;
 *) echo; exit 0 ;;
 esac
 }
