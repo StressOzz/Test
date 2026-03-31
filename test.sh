@@ -1,0 +1,51 @@
+#!/bin/sh
+
+msg() {
+    echo "[DNS CHECK] $1"
+}
+
+check_dns_ok() {
+    # 1. Проверка peerdns (использование DNS провайдера)
+    if [ "$(uci get network.wan.peerdns 2>/dev/null)" = "1" ]; then
+        msg "Используется DNS провайдера (peerdns=1)"
+        return 1
+    fi
+
+    # 2. Получаем список DNS
+    DNS_LIST="$(grep -oE '([0-9]{1,3}\.){3}[0-9]{1,3}' /tmp/resolv.conf.d/resolv.conf.auto 2>/dev/null)"
+    [ -z "$DNS_LIST" ] && DNS_LIST="$(uci get network.wan.dns 2>/dev/null)"
+    if [ -z "$DNS_LIST" ]; then
+        msg "DNS сервера не найдены"
+        return 1
+    fi
+
+    msg "Найденные DNS: $DNS_LIST"
+
+    # 3. Проверка на нормальные DNS
+    for dns in $DNS_LIST; do
+        case "$dns" in
+            1.1.1.1|1.0.0.1|8.8.8.8|8.8.4.4|9.9.9.9|149.112.112.112)
+                msg "Обнаружен нормальный DNS: $dns"
+                break
+            ;;
+        esac
+    done
+
+    # 4. Живой тест DNS через nslookup
+    if ! nslookup google.com >/dev/null 2>&1; then
+        msg "DNS не отвечает (nslookup не прошёл)"
+        return 1
+    fi
+
+    # Всё ок
+    return 0
+}
+
+# Запуск
+if check_dns_ok; then
+    msg "DNS нормальный, можно запускать стратегии YouTube"
+    exit 0
+else
+    msg "DNS не подходит, сначала поменяй DNS (например 1.1.1.1 или 8.8.8.8)"
+    exit 1
+fi
