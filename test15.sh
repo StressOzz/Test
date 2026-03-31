@@ -196,7 +196,7 @@ else
     echo -e "${YELLOW}tg-ws-proxy: ${RED}не установлен${NC}"
 fi
 
-if pidof tg-ws-proxy-go >/dev/null 2>&1 && [ -f "$BIN_PATH_GO" ] && [ -f "$INIT_PATH_GO" ]; then echo -e "\n${YELLOW}Настройки SOCKS5 в TG:${NC}   ${NC}$(uci get network.lan.ipaddr 2>/dev/null | cut -d/ -f1):1080${NC}"; fi
+if pidof tg-ws-proxy-go >/dev/null 2>&1 && [ -f "$BIN_PATH_GO" ] && [ -f "$INIT_PATH_GO" ]; then echo -e "\n${YELLOW}Настройки SOCKS5 в TG:${NC} ${NC}$(uci get network.lan.ipaddr 2>/dev/null | cut -d/ -f1):1080${NC}"; fi
 
 if pgrep -f tg-ws-proxy >/dev/null 2>&1 && [ -f "$BIN_PATH" ] && [ -f "$INIT_PATH" ] && [ -f /root/tg-ws-proxy/README.md ] && grep -q '^Telegram Desktop → MTProto' /root/tg-ws-proxy/README.md; then
     echo -e "\n${YELLOW}Настройки MTProto в TG:${NC}"
