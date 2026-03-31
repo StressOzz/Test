@@ -196,6 +196,8 @@ else
     echo -e "${YELLOW}tg-ws-proxy: ${RED}не установлен${NC}"
 fi
 
+if pidof tg-ws-proxy-go >/dev/null 2>&1; then echo -e "${YELLOW}Настройки SOCKS5 в TG:${NC}   ${NC}${LAN_IP}:1080${NC}"; fi
+
 if pgrep -f tg-ws-proxy >/dev/null 2>&1; then
 echo -e "\n${YELLOW}настройки MTProto:${NC}"
 echo -e " ${YELLOW}Хост:${NC} $(ip -4 route get 1 | awk '{print $7; exit}')"
@@ -206,7 +208,7 @@ fi
 
 echo
 echo -e "${CYAN}1) ${GREEN}Установить${NC} tg-ws-proxy"
-echo -e "${CYAN}3)${GREEN} $( [ -f "$BIN_PATH_S5" ] && [ -f "$INIT_PATH_S5" ] && echo -e "Удалить ${NC}TG WS Proxy SOCKS5" || echo "Установить ${NC}TG WS Proxy SOCKS5" )"
+echo -e "${CYAN}2)${GREEN} $( [ -f "$BIN_PATH_S5" ] && [ -f "$INIT_PATH_S5" ] && grep -q 'Telegram Desktop → MTProto' /root/tg-ws-proxy/README.md && echo -e "Удалить ${NC}TG WS Proxy SOCKS5" || echo "Установить ${NC}TG WS Proxy SOCKS5" )"
 echo -e "${CYAN}3)${GREEN} $( [ -f "$BIN_PATH_GO" ] && [ -f "$INIT_PATH_GO" ] && echo -e "Удалить ${NC}TG WS Proxy Go" || echo "Установить ${NC}TG WS Proxy Go" )"
 
 echo -e "${CYAN}Enter) ${GREEN}Выход${NC}\n"
@@ -216,7 +218,7 @@ case "$choice" in
 1) TG_URL="https://github.com/Flowseal/tg-ws-proxy/archive/refs/heads/master.zip"; install_tg_ws ;;
 2) TG_URL="https://github.com/StressOzz/tg-ws-proxy-Manager/raw/main/tg-ws-proxy-main.zip"; install_tg_ws ;;
 3) tg_GO ;;
-3) delete_tg_ws ;;
+4) delete_tg_ws ;;
 *) echo; exit 0 ;;
 esac
 }
