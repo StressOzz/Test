@@ -10,7 +10,7 @@ DGRAY="\033[38;5;244m"
 NC="\033[0m"
 
 BIN_PATH_GO="/usr/bin/tg-ws-proxy-go"; INIT_PATH_GO="/etc/init.d/tg-ws-proxy-go"
-BIN_PATH_S5="/usr/bin/tg-ws-proxy"; INIT_PATH_S5="/etc/init.d/tg-ws-proxy"
+BIN_PATH="/usr/bin/tg-ws-proxy"; INIT_PATH="/etc/init.d/tg-ws-proxy"
 
 REQUIRED_PKGS="python3-light python3-pip python3-cryptography"
 
@@ -207,8 +207,8 @@ echo -e "\n${YELLOW}Ссылка для подключения:${NC}\ntg://proxy
 fi
 
 echo
-echo -e "${CYAN}1)${GREEN} $( [ -f "$BIN_PATH_S5" ] && [ -f "$INIT_PATH_S5" ] && grep -q '^Telegram Desktop → MTProto' /root/tg-ws-proxy/README.md && echo -e "Удалить ${NC}TG WS Proxy MTProto" || echo "Установить ${NC}TG WS Proxy MTProto" )"
-echo -e "${CYAN}2)${GREEN} $( [ -f "$BIN_PATH_S5" ] && [ -f "$INIT_PATH_S5" ] && grep -q '^Telegram Desktop → SOCKS5' /root/tg-ws-proxy/README.md && echo -e "Удалить ${NC}TG WS Proxy SOCKS5" || echo "Установить ${NC}TG WS Proxy SOCKS5" )"
+echo -e "${CYAN}1)${GREEN} $( [ -f "$BIN_PATH" ] && [ -f "$INIT_PATH" ] && grep -q '^Telegram Desktop → MTProto' /root/tg-ws-proxy/README.md && echo -e "Удалить ${NC}TG WS Proxy MTProto" || echo "Установить ${NC}TG WS Proxy MTProto" )"
+echo -e "${CYAN}2)${GREEN} $( [ -f "$BIN_PATH" ] && [ -f "$INIT_PATH" ] && grep -q '^Telegram Desktop → SOCKS5' /root/tg-ws-proxy/README.md && echo -e "Удалить ${NC}TG WS Proxy SOCKS5" || echo "Установить ${NC}TG WS Proxy SOCKS5" )"
 
 
 Telegram Desktop → SOCKS5
