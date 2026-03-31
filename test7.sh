@@ -207,8 +207,8 @@ echo -e "\n${YELLOW}Ссылка для подключения:${NC}\ntg://proxy
 fi
 
 echo
-echo -e "${CYAN}1)${GREEN} $( [ -f "$BIN_PATH" ] && [ -f "$INIT_PATH" ] && grep -q '^Telegram Desktop → MTProto' /root/tg-ws-proxy/README.md && echo -e "Удалить ${NC}TG WS Proxy MTProto" || echo "Установить ${NC}TG WS Proxy MTProto" )"
-echo -e "${CYAN}2)${GREEN} $( [ -f "$BIN_PATH" ] && [ -f "$INIT_PATH" ] && grep -q '^Telegram Desktop → SOCKS5' /root/tg-ws-proxy/README.md && echo -e "Удалить ${NC}TG WS Proxy SOCKS5" || echo "Установить ${NC}TG WS Proxy SOCKS5" )"
+echo -e "${CYAN}1)${GREEN} $( [ -f "$BIN_PATH" ] && [ -f "$INIT_PATH" ] && [ -f /root/tg-ws-proxy/README.md ] && grep -q '^Telegram Desktop → MTProto' /root/tg-ws-proxy/README.md && echo -e "Удалить ${NC}TG WS Proxy MTProto" || echo "Установить ${NC}TG WS Proxy MTProto" )"
+echo -e "${CYAN}2)${GREEN} $( [ -f "$BIN_PATH" ] && [ -f "$INIT_PATH" ] && [ -f /root/tg-ws-proxy/README.md ] && grep -q '^Telegram Desktop → SOCKS5' /root/tg-ws-proxy/README.md && echo -e "Удалить ${NC}TG WS Proxy SOCKS5" || echo "Установить ${NC}TG WS Proxy SOCKS5" )"
 
 
 Telegram Desktop → SOCKS5
@@ -217,9 +217,15 @@ echo -e "${CYAN}3)${GREEN} $( [ -f "$BIN_PATH_GO" ] && [ -f "$INIT_PATH_GO" ] &&
 echo -e "${CYAN}Enter) ${GREEN}Выход${NC}\n"
 echo -en "${YELLOW}Выберите пункт: ${NC}"
 read choice
-case "$choice" in 
-1) TG_URL="https://github.com/Flowseal/tg-ws-proxy/archive/refs/heads/master.zip"; install_tg_ws ;;
-2) TG_URL="https://github.com/StressOzz/tg-ws-proxy-Manager/raw/main/tg-ws-proxy-main.zip"; install_tg_ws ;;
+case "$choice" in
+1) 
+TG_URL="https://github.com/Flowseal/tg-ws-proxy/archive/refs/heads/master.zip"
+[ -f "$BIN_PATH" ] && [ -f "$INIT_PATH" ] && [ -f /root/tg-ws-proxy/README.md ] && grep -q '^Telegram Desktop → MTProto' /root/tg-ws-proxy/README.md; then delete_tg_ws; PAUSE; else install_tg_ws; PAUSE; fi
+
+2) 
+TG_URL="https://github.com/StressOzz/tg-ws-proxy-Manager/raw/main/tg-ws-proxy-main.zip"
+[ -f "$BIN_PATH" ] && [ -f "$INIT_PATH" ] && [ -f /root/tg-ws-proxy/README.md ] && grep -q '^Telegram Desktop → SOCKS5' /root/tg-ws-proxy/README.md; then delete_tg_ws; PAUSE; else install_tg_ws; PAUSE; fi
+
 3) tg_GO ;;
 4) delete_tg_ws ;;
 *) echo; exit 0 ;;
