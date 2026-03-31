@@ -388,7 +388,13 @@ add_block() {
     done
 }
 
-remove_block() { while IFS= read -r line; do [ -z "$line" ] && continue; sed -i "\|^$line$|d" "$HOSTS_FILE"; done < <(printf '%b\n' "$1"); }
+remove_block() {
+    printf '%b\n' "$1" | while IFS= read -r line; do
+        [ -z "$line" ] && continue
+        sed -i "\|^$line$|d" "$HOSTS_FILE"
+    done
+}
+
 toggle_block() { if status_block "$1"; then remove_block "$1"; echo -e "\n${CYAN}Удаляем и применяем${NC}"; else add_block "$1"; echo -e "\n${CYAN}Добавляем и применяем${NC}"; fi; /etc/init.d/dnsmasq restart >/dev/null 2>&1; echo -e "${GREEN}Готово!${NC}\n"; PAUSE; }
 toggle_all() { if status_block "$ALL_BLOCKS"; then remove_block "$ALL_BLOCKS"; echo -e "\n${CYAN}Удаляем и применяем${NC}"; else add_block "$ALL_BLOCKS"; echo -e "\n${CYAN}Добавляем и применяем${NC}"; fi; /etc/init.d/dnsmasq restart >/dev/null 2>&1; echo -e "${GREEN}Готово!${NC}\n"; PAUSE; }
 get_state() { status_block "$1" && echo "Удалить " || echo "Добавить"; }
