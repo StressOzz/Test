@@ -14,6 +14,8 @@ BIN_PATH_S5="/usr/bin/tg-ws-proxy"; INIT_PATH_S5="/etc/init.d/tg-ws-proxy"
 
 REQUIRED_PKGS="python3-light python3-pip python3-cryptography"
 
+if command -v apk >/dev/null 2>&1; then PKG_IS_APK=1; else PKG_IS_APK=0; fi
+
 PAUSE() { echo -ne "\nНажмите Enter..."; read dummy; }
 
 echo 'sh <(wget -O - https://raw.githubusercontent.com/StressOzz/tg-ws-proxy-Manager/main/tg-ws-proxy-Manager.sh)' > /usr/bin/tpm; chmod +x /usr/bin/tpm
@@ -202,6 +204,7 @@ echo -e " ${YELLOW}Ключ:${NC} dd00000000000000000000000000000000"
 echo -e "\n${YELLOW}Ссылка для подключения:${NC}\ntg://proxy?server=$(ip -4 route get 1 | awk '{print $7; exit}')&port=1443&secret=dd00000000000000000000000000000000"
 fi
 
+echo
 echo -e "${CYAN}1) ${GREEN}Установить${NC} tg-ws-proxy"
 echo -e "${CYAN}3)${GREEN} $( [ -f "$BIN_PATH_S5" ] && [ -f "$INIT_PATH_S5" ] && echo -e "Удалить ${NC}TG WS Proxy SOCKS5" || echo "Установить ${NC}TG WS Proxy SOCKS5" )"
 echo -e "${CYAN}3)${GREEN} $( [ -f "$BIN_PATH_GO" ] && [ -f "$INIT_PATH_GO" ] && echo -e "Удалить ${NC}TG WS Proxy Go" || echo "Установить ${NC}TG WS Proxy Go" )"
