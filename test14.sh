@@ -186,7 +186,7 @@ clear
 echo -e "╔═════════════════════════════════╗"
 echo -e "║ ${BLUE}tg-ws-proxy by Flowseal Manager${NC} ║"
 echo -e "╚═════════════════════════════════╝"
-echo -e "                       ${DGRAY}by StressOzz${NC}\n"
+echo -e "                       ${DGRAY}by StressOzz${NC}"
 
 if pgrep -f tg-ws-proxy >/dev/null 2>&1; then
     echo -e "${YELLOW}tg-ws-proxy: ${GREEN}запущен${NC}"
@@ -196,7 +196,7 @@ else
     echo -e "${YELLOW}tg-ws-proxy: ${RED}не установлен${NC}"
 fi
 
-if pidof tg-ws-proxy-go >/dev/null 2>&1 && [ -f "$BIN_PATH_GO" ] && [ -f "$INIT_PATH_GO" ]; then echo -e "${YELLOW}Настройки SOCKS5 в TG:${NC}   ${NC}$(uci get network.lan.ipaddr 2>/dev/null | cut -d/ -f1):1080${NC}"; fi
+if pidof tg-ws-proxy-go >/dev/null 2>&1 && [ -f "$BIN_PATH_GO" ] && [ -f "$INIT_PATH_GO" ]; then echo -e "\n${YELLOW}Настройки SOCKS5 в TG:${NC}   ${NC}$(uci get network.lan.ipaddr 2>/dev/null | cut -d/ -f1):1080${NC}"; fi
 
 if pgrep -f tg-ws-proxy >/dev/null 2>&1 && [ -f "$BIN_PATH" ] && [ -f "$INIT_PATH" ] && [ -f /root/tg-ws-proxy/README.md ] && grep -q '^Telegram Desktop → MTProto' /root/tg-ws-proxy/README.md; then
     echo -e "\n${YELLOW}Настройки MTProto в TG:${NC}"
@@ -206,8 +206,8 @@ if pgrep -f tg-ws-proxy >/dev/null 2>&1 && [ -f "$BIN_PATH" ] && [ -f "$INIT_PAT
     echo -e "\n${YELLOW}Ссылка для подключения:${NC}\ntg://proxy?server=$(ip -4 route get 1 | awk '{print $7; exit}')&port=1443&secret=dd00000000000000000000000000000000"
 fi
 
-echo
-echo -e "${CYAN}1)${GREEN} $( [ -f "$BIN_PATH" ] && [ -f "$INIT_PATH" ] && [ -f /root/tg-ws-proxy/README.md ] && grep -q '^Telegram Desktop → MTProto' /root/tg-ws-proxy/README.md && echo -e "Удалить ${NC}TG WS Proxy MTProto" || echo "Установить ${NC}TG WS Proxy MTProto" )"
+
+echo -e "\n${CYAN}1)${GREEN} $( [ -f "$BIN_PATH" ] && [ -f "$INIT_PATH" ] && [ -f /root/tg-ws-proxy/README.md ] && grep -q '^Telegram Desktop → MTProto' /root/tg-ws-proxy/README.md && echo -e "Удалить ${NC}TG WS Proxy MTProto" || echo "Установить ${NC}TG WS Proxy MTProto" )"
 echo -e "${CYAN}2)${GREEN} $( [ -f "$BIN_PATH_GO" ] && [ -f "$INIT_PATH_GO" ] && echo -e "Удалить ${NC}TG WS Proxy Go" || echo "Установить ${NC}TG WS Proxy Go" )"
 
 echo -e "${CYAN}Enter) ${GREEN}Выход${NC}\n"
