@@ -125,6 +125,10 @@ PAUSE
 delete_tg_ws() {
 echo -e "\n${MAGENTA}Удаляем tg-ws-proxy${NC}"
 
+echo -e "${CYAN}Останавливаем сервис${NC}"
+/etc/init.d/tg-ws-proxy stop >/dev/null 2>&1
+/etc/init.d/tg-ws-proxy disable >/dev/null 2>&1
+
 echo -e "${CYAN}Удаляем ${NC}init.d${CYAN} скрипт${NC}"
 rm -f /etc/init.d/tg-ws-proxy >/dev/null 2>&1
 
@@ -181,7 +185,7 @@ menu() {
 clear
 echo -e "╔══════════════════════════════════╗"
 echo -e "║ ${BLUE}TG WS Proxy Manager by StressOzz${NC} ║"
-echo -e "╚══════════════════════════════════╝"
+echo -e "╚══════════════════════════════════╝\n"
 
 if pgrep -f tg-ws-proxy >/dev/null 2>&1; then
     echo -e "${YELLOW}tg-ws-proxy: ${GREEN}запущен${NC}"
@@ -200,7 +204,6 @@ if pgrep -f tg-ws-proxy >/dev/null 2>&1 && [ -f "$BIN_PATH" ] && [ -f "$INIT_PAT
     echo -e " ${YELLOW}Ключ:${NC} dd00000000000000000000000000000000"
     echo -e "\n${YELLOW}Ссылка для подключения:${NC}\ntg://proxy?server=$(ip -4 route get 1 | awk '{print $7; exit}')&port=1443&secret=dd00000000000000000000000000000000"
 fi
-
 
 echo -e "\n${CYAN}1)${GREEN} $( [ -f "$BIN_PATH" ] && [ -f "$INIT_PATH" ] && [ -f /root/tg-ws-proxy/README.md ] && grep -q '^Telegram Desktop → MTProto' /root/tg-ws-proxy/README.md && echo -e "Удалить ${NC}TG WS Proxy MTProto" || echo "Установить ${NC}TG WS Proxy MTProto" )"
 echo -e "${CYAN}2)${GREEN} $( [ -f "$BIN_PATH_GO" ] && [ -f "$INIT_PATH_GO" ] && echo -e "Удалить ${NC}TG WS Proxy Go" || echo "Установить ${NC}TG WS Proxy Go" )"
