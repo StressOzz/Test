@@ -125,10 +125,6 @@ PAUSE
 delete_tg_ws() {
 echo -e "\n${MAGENTA}Удаляем tg-ws-proxy${NC}"
 
-echo -e "${CYAN}Останавливаем сервис${NC}"
-/etc/init.d/tg-ws-proxy stop >/dev/null 2>&1
-/etc/init.d/tg-ws-proxy disable >/dev/null 2>&1
-
 echo -e "${CYAN}Удаляем ${NC}init.d${CYAN} скрипт${NC}"
 rm -f /etc/init.d/tg-ws-proxy >/dev/null 2>&1
 
@@ -160,7 +156,7 @@ done
         echo -e "${RED}Некоторые пакеты не удалились!${NC}"
     fi
     
-rm -rf /usr/lib/python* /usr/bin/python* /root/.cache/pip /root/.local/lib/python* /usr/bin/tg-ws-proxy* >/dev/null 2>&1
+rm -rf /usr/lib/python* /usr/bin/python* /root/.cache/pip /root/.local/lib/python* /usr/bin/tg-ws-proxy >/dev/null 2>&1
 
 echo -e "\n${GREEN}Удаление завершено!${NC}"
 PAUSE
@@ -183,10 +179,9 @@ tg_GO() { if [ "$(df -m /root 2>/dev/null | awk 'NR==2 {print $4+0}')" -lt 5 ]; 
 
 menu() {
 clear
-echo -e "╔═════════════════════════════════╗"
-echo -e "║ ${BLUE}tg-ws-proxy by Flowseal Manager${NC} ║"
-echo -e "╚═════════════════════════════════╝"
-echo -e "                       ${DGRAY}by StressOzz${NC}"
+echo -e "╔══════════════════════════════════╗"
+echo -e "║ ${BLUE}TG WS Proxy Manager by StressOzz${NC} ║"
+echo -e "╚══════════════════════════════════╝"
 
 if pgrep -f tg-ws-proxy >/dev/null 2>&1; then
     echo -e "${YELLOW}tg-ws-proxy: ${GREEN}запущен${NC}"
