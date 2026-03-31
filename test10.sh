@@ -209,9 +209,6 @@ fi
 echo
 echo -e "${CYAN}1)${GREEN} $( [ -f "$BIN_PATH" ] && [ -f "$INIT_PATH" ] && [ -f /root/tg-ws-proxy/README.md ] && grep -q '^Telegram Desktop → MTProto' /root/tg-ws-proxy/README.md && echo -e "Удалить ${NC}TG WS Proxy MTProto" || echo "Установить ${NC}TG WS Proxy MTProto" )"
 echo -e "${CYAN}2)${GREEN} $( [ -f "$BIN_PATH" ] && [ -f "$INIT_PATH" ] && [ -f /root/tg-ws-proxy/README.md ] && grep -q '^Telegram Desktop → SOCKS5' /root/tg-ws-proxy/README.md && echo -e "Удалить ${NC}TG WS Proxy SOCKS5" || echo "Установить ${NC}TG WS Proxy SOCKS5" )"
-
-
-Telegram Desktop → SOCKS5
 echo -e "${CYAN}3)${GREEN} $( [ -f "$BIN_PATH_GO" ] && [ -f "$INIT_PATH_GO" ] && echo -e "Удалить ${NC}TG WS Proxy Go" || echo "Установить ${NC}TG WS Proxy Go" )"
 
 echo -e "${CYAN}Enter) ${GREEN}Выход${NC}\n"
