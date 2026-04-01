@@ -34,7 +34,6 @@ else
 fi
 
 install_tg_ws() {
-
 if [ "$(df -m /root 2>/dev/null | awk 'NR==2 {print $4+0}')" -lt 25 ]; then
     echo -e "\n${RED}Недостаточно свободного места!${NC}"
     PAUSE
@@ -42,7 +41,6 @@ if [ "$(df -m /root 2>/dev/null | awk 'NR==2 {print $4+0}')" -lt 25 ]; then
 fi
 
 echo -e "\n${MAGENTA}Обновляем пакеты${NC}"
-
 if ! $UPDATE; then
     echo -e "\n${RED}Ошибка при обновлении пакетов!${NC}"
     PAUSE
@@ -50,7 +48,6 @@ if ! $UPDATE; then
 fi
 
 echo -e "\n${MAGENTA}Проверяем доступность пакетов Python${NC}"
-
 failed=0
 for pkg in $REQUIRED_PKGS; do
     if sh -c "$CHECK_AVAIL" | grep -qw "$pkg"; then
@@ -60,7 +57,6 @@ for pkg in $REQUIRED_PKGS; do
         failed=1
     fi
 done
-
 if [ $failed -ne 0 ]; then
     echo -e "\n${RED}Архитектура не поддерживается! Установка невозможна!${NC}"
     PAUSE
@@ -69,28 +65,21 @@ fi
 
 echo -e "\n${MAGENTA}Устанавливаем необходимые пакеты${NC}"
 $INSTALL python3-light python3-pip python3-cryptography unzip
-
 echo -e "\n${MAGENTA}Скачиваем и распаковываем tg-ws-proxy${NC}"
-
 rm -rf "/root/tg-ws-proxy"
-
 cd /root
-
 if ! wget -O tg-ws-proxy.zip "$TG_URL"; then
     echo -e "\n${RED}Ошибка скачивания архива!${NC}"
     PAUSE
     return 1
 fi
-
 if ! unzip tg-ws-proxy.zip >/dev/null 2>&1; then
     echo -e "\n${RED}Ошибка распаковки!${NC}"
     PAUSE
     return 1
 fi
-
 mv tg-ws-proxy-main tg-ws-proxy
 rm -f tg-ws-proxy.zip
-
 cd /root/tg-ws-proxy
 
 echo -e "\n${MAGENTA}Устанавливаем tg-ws-proxy${NC}"
@@ -138,7 +127,6 @@ rm -rf /root/tg-ws-proxy >/dev/null 2>&1
 echo -e "${CYAN}Удаляем пакеты и зависимости${NC}"
 python3 -m pip uninstall -y tg-ws-proxy >/dev/null 2>&1
 pip uninstall -y tg-ws-proxy >/dev/null 2>&1
-
 attempts=0
 while [ $attempts -lt 10 ]; do
     if command -v opkg >/dev/null 2>&1; then
@@ -151,13 +139,12 @@ while [ $attempts -lt 10 ]; do
     
     if ! $CHECK_CMD | grep -q "python3-light\|python3-pip\|python3-cryptography"; then
         break
-    fi
-    
+    fi    
     attempts=$((attempts + 1))
 done
-    
+
     if [ $attempts -eq 10 ]; then
-        echo -e "${RED}Некоторые пакеты не удалились!${NC}"
+        echo -e "\n${RED}Некоторые пакеты не удалились!${NC}"
     fi
     
 rm -rf /usr/lib/python* /usr/bin/python* /root/.cache/pip /root/.local/lib/python* /usr/bin/tg-ws-proxy >/dev/null 2>&1
@@ -180,9 +167,6 @@ echo -e "\n${YELLOW}Настройки SOCKS5 в TG:${NC} ${NC}$(uci get network
 tg_GO() { if [ -f "$BIN_PATH_GO" ] && [ -f "$INIT_PATH_GO" ]; then remove_TG; PAUSE; elif [ "$(df -m /root 2>/dev/null | awk 'NR==2 {print $4+0}')" -lt 5 ]; then echo -e "\n${RED}Недостаточно свободного места!${NC}"; PAUSE; return 1; else install_TG; PAUSE; fi; }
 
 menu() {
-
-[ -f /etc/init.d/tg-ws-proxy ] && SECRET_IN="$(sed -n 's/.*--secret[[:space:]]*\([0-9a-fA-F]\{32\}\).*/\1/p' /etc/init.d/tg-ws-proxy)"
-
 clear
 echo -e "╔══════════════════════════════════╗"
 echo -e "║ ${BLUE}TG WS Proxy Manager by StressOzz${NC} ║"
@@ -196,9 +180,15 @@ else
     echo -e "${YELLOW}tg-ws-proxy: ${RED}не установлен${NC}"
 fi
 
-if pidof tg-ws-proxy-go >/dev/null 2>&1 && [ -f "$BIN_PATH_GO" ] && [ -f "$INIT_PATH_GO" ]; then echo -e "\n${YELLOW}Настройки SOCKS5 в TG:${NC} ${NC}$(uci get network.lan.ipaddr 2>/dev/null | cut -d/ -f1):1080${NC}"; fi
+if pidof tg-ws-proxy-go >/dev/null 2>&1 && [ -f "$BIN_PATH_GO" ] && [ -f "$INIT_PATH_GO" ]; then 
+echo -e "\n${YELLOW}Настройки SOCKS5 в TG:${NC}
+    echo -e " ${YELLOW}Хост:${NC} $(uci get network.lan.ipaddr 2>/dev/null | cut -d/ -f1)
+    echo -e " ${YELLOW}Порт:${NC} 1080${NC}"
+fi
+
 
 if pgrep -f tg-ws-proxy >/dev/null 2>&1 && [ -f "$BIN_PATH" ] && [ -f "$INIT_PATH" ] && [ -f /root/tg-ws-proxy/README.md ] && grep -q '^Telegram Desktop → MTProto' /root/tg-ws-proxy/README.md; then
+    SECRET_IN="$(sed -n 's/.*--secret[[:space:]]*\([0-9a-fA-F]\{32\}\).*/\1/p' "$INIT_PATH")"
     echo -e "\n${YELLOW}Настройки MTProto в TG:${NC}"
     echo -e " ${YELLOW}Хост:${NC} $(ip -4 route get 1 | awk '{print $7; exit}')"
     echo -e " ${YELLOW}Порт:${NC} 1443"
@@ -208,13 +198,11 @@ fi
 
 echo -e "\n${CYAN}1)${GREEN} $( [ -f "$BIN_PATH" ] && [ -f "$INIT_PATH" ] && [ -f /root/tg-ws-proxy/README.md ] && grep -q '^Telegram Desktop → MTProto' /root/tg-ws-proxy/README.md && echo -e "Удалить ${NC}TG WS Proxy MTProto" || echo "Установить ${NC}TG WS Proxy MTProto" )"
 echo -e "${CYAN}2)${GREEN} $( [ -f "$BIN_PATH_GO" ] && [ -f "$INIT_PATH_GO" ] && echo -e "Удалить ${NC}TG WS Proxy Go" || echo "Установить ${NC}TG WS Proxy Go" )"
-
 echo -e "${CYAN}Enter) ${GREEN}Выход${NC}\n"
 echo -en "${YELLOW}Выберите пункт: ${NC}"
 read choice
 case "$choice" in
-1) 
-TG_URL="https://github.com/Flowseal/tg-ws-proxy/archive/refs/heads/master.zip"
+1) TG_URL="https://github.com/Flowseal/tg-ws-proxy/archive/refs/heads/master.zip"
 if [ -f "$BIN_PATH" ] && [ -f "$INIT_PATH" ] && [ -f /root/tg-ws-proxy/README.md ] && grep -q '^Telegram Desktop → MTProto' /root/tg-ws-proxy/README.md; then delete_tg_ws; else install_tg_ws; fi ;;
 2) tg_GO ;;
 *) echo; exit 0 ;;
