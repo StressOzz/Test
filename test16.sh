@@ -65,7 +65,7 @@ fi
 
 echo -e "\n${MAGENTA}Устанавливаем необходимые пакеты${NC}"
 $INSTALL python3-light python3-pip python3-cryptography unzip
-echo -e "\n${MAGENTA}Скачиваем и распаковываем tg-ws-proxy${NC}"
+echo -e "\n${MAGENTA}Скачиваем и распаковываем TG WS Proxy${NC}"
 rm -rf "/root/tg-ws-proxy"
 cd /root
 if ! wget -O tg-ws-proxy.zip "$TG_URL"; then
@@ -82,7 +82,7 @@ mv tg-ws-proxy-main tg-ws-proxy
 rm -f tg-ws-proxy.zip
 cd /root/tg-ws-proxy
 
-echo -e "\n${MAGENTA}Устанавливаем tg-ws-proxy${NC}"
+echo -e "\n${MAGENTA}Устанавливаем TG WS Proxy${NC}"
 pip install --root-user-action=ignore --no-deps --disable-pip-version-check --timeout 2 --retries 1 -e .
 
 cat << EOF > /etc/init.d/tg-ws-proxy
@@ -104,7 +104,7 @@ chmod +x /etc/init.d/tg-ws-proxy
 /etc/init.d/tg-ws-proxy start >/dev/null 2>&1
 
 if pgrep -f tg-ws-proxy >/dev/null 2>&1; then
-    echo -e "\ntg-ws-proxy ${GREEN}установлен!${NC}"
+    echo -e "\n${GREEN}Сервис ${NC}TG WS Proxy${GREEN} запущен!${NC}"
 else
     echo -e "\n${RED}Ошибка установки!${NC}"
 fi
@@ -112,7 +112,7 @@ PAUSE
 }
 
 delete_tg_ws() {
-echo -e "\n${MAGENTA}Удаляем tg-ws-proxy${NC}"
+echo -e "\n${MAGENTA}Удаляем TG WS Proxy${NC}"
 
 echo -e "${CYAN}Останавливаем сервис${NC}"
 /etc/init.d/tg-ws-proxy stop >/dev/null 2>&1
@@ -173,11 +173,11 @@ echo -e "║ ${BLUE}TG WS Proxy Manager by StressOzz${NC} ║"
 echo -e "╚══════════════════════════════════╝\n"
 
 if pgrep -f tg-ws-proxy >/dev/null 2>&1; then
-    echo -e "${YELLOW}tg-ws-proxy: ${GREEN}запущен${NC}"
+    echo -e "${YELLOW}TG WS Proxy: ${GREEN}запущен${NC}"
 elif [ -d "/root/tg-ws-proxy" ] || python3 -m pip show tg-ws-proxy >/dev/null 2>&1; then
-    echo -e "${YELLOW}tg-ws-proxy: ${RED}не запущен${NC}"
+    echo -e "${YELLOW}TG WS Proxy: ${RED}не запущен${NC}"
 else
-    echo -e "${YELLOW}tg-ws-proxy: ${RED}не установлен${NC}"
+    echo -e "${YELLOW}TG WS Proxy: ${RED}не установлен${NC}"
 fi
 
 if pidof tg-ws-proxy-go >/dev/null 2>&1 && [ -f "$BIN_PATH_GO" ] && [ -f "$INIT_PATH_GO" ]; then 
