@@ -14,7 +14,7 @@ BIN_PATH="/usr/bin/tg-ws-proxy"; INIT_PATH="/etc/init.d/tg-ws-proxy"
 REQUIRED_PKGS="python3-light python3-pip python3-cryptography"
 
 SECRET="$(head -c 16 /dev/urandom | hexdump -v -e '/1 "%02x"')"
-SECRET_IN="$(grep -oE 'secret dd[a-f0-9]+' /etc/init.d/tg-ws-proxy | awk '{print $2}')"
+SECRET_IN="$(sed -n 's/.*--secret[[:space:]]*\([0-9a-fA-F]\{32\}\).*/\1/p' /etc/init.d/tg-ws-proxy)"
 
 PAUSE() { echo -ne "\nНажмите Enter..."; read dummy; }
 
