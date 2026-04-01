@@ -181,7 +181,7 @@ else
 fi
 
 if pidof tg-ws-proxy-go >/dev/null 2>&1 && [ -f "$BIN_PATH_GO" ] && [ -f "$INIT_PATH_GO" ]; then 
-echo -e "\n${YELLOW}Настройки SOCKS5 в TG:${NC}
+echo -e "\n${YELLOW}Настройки SOCKS5 в TG:${NC}"
     echo -e " ${YELLOW}Хост:${NC} $(uci get network.lan.ipaddr 2>/dev/null | cut -d/ -f1)"
     echo -e " ${YELLOW}Порт:${NC} 1080${NC}"
 fi
