@@ -5,6 +5,7 @@
 ZAPRET_MANAGER_VERSION="9.3"; STR_VERSION_AUTOINSTALL="v7"; ZAPRET_VERSION="72.20260307"
 TEST_HOST="https://rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com"; LAN_IP=$(uci get network.lan.ipaddr 2>/dev/null | cut -d/ -f1)
 BIN_PATH="/usr/bin/tg-ws-proxy-go"; INIT_PATH="/etc/init.d/tg-ws-proxy-go"
+PORTS_UDP="88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535"; PORTS_TCP="6112-6119,6695-6710,25565,50001"
 GREEN="\033[1;32m"; RED="\033[1;31m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
 CONF="/etc/config/zapret"; CUSTOM_DIR="/opt/zapret/init.d/openwrt/custom.d/"; HOSTLIST_FILE="/opt/zapret/ipset/zapret-hosts-user.txt"
 STR_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ListStrYou"
@@ -132,32 +133,8 @@ sed -i "/DISABLE_CUSTOM/s/'1'/'0'/" /etc/config/zapret; ZAPRET_RESTART; [ "$NO_P
 # ==========================================
 # FIX GAME
 # ==========================================
-PORTS_UDP="88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535"
-PORTS_TCP="6112-6119,6695-6710,25565,50001"
-
-remove_ports_if_present() {
-    local OPTION="$1"
-    local PORTS="$2"
-
-    for p in $(echo "$PORTS" | tr ',' ' '); do
-        # удаляем точные совпадения и диапазоны
-        sed -i "\#option $OPTION '#s#,$p##g" "$CONF"
-    done
-
-    # чистим повторные запятые и запятую в конце
-    sed -i "\#option $OPTION '#s#,,#,#g; s#,\$##" "$CONF"
-}
-
-add_ports_if_missing() {
-    local OPTION="$1"
-    local PORTS="$2"
-
-    for p in $(echo "$PORTS" | tr ',' ' '); do
-        grep -q "option $OPTION '.*\b$p\b" "$CONF" || \
-        sed -i "\#option $OPTION '#s#'\$#,$p'#" "$CONF"
-    done
-}
-
+remove_ports_if_present() { local OPTION="$1"; local PORTS="$2"; for p in $(echo "$PORTS" | tr ',' ' '); do sed -i "\#option $OPTION '#s#,$p##g" "$CONF"; done; sed -i "\#option $OPTION '#s#,,#,#g; s#,\$##" "$CONF"; }
+add_ports_if_missing() { local OPTION="$1"; local PORTS="$2"; for p in $(echo "$PORTS" | tr ',' ' '); do grep -q "option $OPTION '.*\b$p\b" "$CONF" || sed -i "\#option $OPTION '#s#'\$#,$p'#" "$CONF"; done; }
 strategy_TCP_common() { printf "%s\n" "--new" "--filter-tcp=6112-6119,6695-6710,25565,50001" "--dpi-desync-any-protocol=1" "--dpi-desync-cutoff=n5" "--dpi-desync=multisplit" "--dpi-desync-split-seqovl=582" "--dpi-desync-split-pos=1" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/stun.bin"; }
 strategy_Gv1() { printf "%s\n" "#Gv1" "--new" "--filter-udp=88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535" "--dpi-desync=fake" "--dpi-desync-cutoff=d2" "--dpi-desync-any-protocol=1" "--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/stun.bin"; }
 strategy_Gv() { local N="$1"; printf "%s\n" "#Gv$N" "--new" "--filter-udp=88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535" "--dpi-desync=fake" "--dpi-desync-repeats=10" "--dpi-desync-any-protocol=1" "--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/quic_initial_www_google_com.bin" "--dpi-desync-cutoff=n$N"; }
@@ -165,20 +142,10 @@ fix_GAME() { local NO_PAUSE=$1; [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RE
 if [ -n "$NO_PAUSE" ]; then GAME_CHOICE="$NO_PAUSE"; else echo -e "\n${MAGENTA}Выберите стратегию для игр${NC}"; for i in $(seq 1 4); do if [ "$CURRENT_GAME" = "Gv$i" ]; then echo -e "${CYAN}$i) ${GREEN}Удалить ${NC}Gv$i"; else echo -e "${CYAN}$i) ${GREEN}Установить ${NC}Gv$i"; fi; done
 echo -e "${CYAN}Enter) ${GREEN}Выход в меню стратегий"; echo -en "\n${YELLOW}Выберите пункт: ${NC}"; read GAME_CHOICE; fi; case "$GAME_CHOICE" in 1|2|3|4) ;; *) return ;; esac; LAST_QUOTE=$(grep -n "^'\$" "$CONF" | tail -n1 | cut -d: -f1)
 if grep -q "^#Gv" "$CONF"; then Gv_LINE=$(grep -n "^#Gv" "$CONF" | tail -n1 | cut -d: -f1); sed -i "${Gv_LINE},${LAST_QUOTE}d" "$CONF"; elif [ -n "$LAST_QUOTE" ]; then sed -i "${LAST_QUOTE},\$d" "$CONF"; fi
-if [ "$CURRENT_GAME" = "Gv$GAME_CHOICE" ]; then 
-
-remove_ports_if_present NFQWS_PORTS_UDP "$PORTS_UDP"
-remove_ports_if_present NFQWS_PORTS_TCP "$PORTS_TCP"
-
-echo "'" >> "$CONF"; echo -e "\n${CYAN}Удаляем стратегию для игр ${NC}"; ZAPRET_RESTART
+if [ "$CURRENT_GAME" = "Gv$GAME_CHOICE" ]; then remove_ports_if_present NFQWS_PORTS_UDP "$PORTS_UDP"; remove_ports_if_present NFQWS_PORTS_TCP "$PORTS_TCP"; echo "'" >> "$CONF"; echo -e "\n${CYAN}Удаляем стратегию для игр ${NC}"; ZAPRET_RESTART
 echo -e "${GREEN}Стратегия для игр удалена!${NC}\n"; [ -z "$NO_PAUSE" ] && PAUSE; return; fi; if [ "$GAME_CHOICE" -eq 1 ]; then STRATEGY="$(strategy_Gv1; strategy_TCP_common)"; else STRATEGY="$(strategy_Gv "$GAME_CHOICE"; strategy_TCP_common)"; fi
-echo "$STRATEGY" | sed '/^$/d' >> "$CONF"; echo "'" >> "$CONF"
-
-add_ports_if_missing NFQWS_PORTS_UDP "$PORTS_UDP"
-add_ports_if_missing NFQWS_PORTS_TCP "$PORTS_TCP"
-
+echo "$STRATEGY" | sed '/^$/d' >> "$CONF"; echo "'" >> "$CONF"; add_ports_if_missing NFQWS_PORTS_UDP "$PORTS_UDP"; add_ports_if_missing NFQWS_PORTS_TCP "$PORTS_TCP"
 [ -z "$NO_PAUSE" ] && echo; echo -e "${CYAN}Устанавливаем стратегию для игр ${NC}"; ZAPRET_RESTART; echo -e "${GREEN}Стратегия для игр ${NC}Gv$GAME_CHOICE${GREEN} установлена!${NC}\n"; [ -z "$NO_PAUSE" ] && PAUSE; }
-
 # ==========================================
 # Zapret под ключ
 # ==========================================
