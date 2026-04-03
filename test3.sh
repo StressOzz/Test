@@ -132,6 +132,8 @@ sed -i "/DISABLE_CUSTOM/s/'1'/'0'/" /etc/config/zapret; ZAPRET_RESTART; [ "$NO_P
 # ==========================================
 # FIX GAME
 # ==========================================
+PORTS_UDP="88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535"
+PORTS_TCP="6112-6119,6695-6710,25565,50001"
 
 remove_ports_if_present() {
     local OPTION="$1"
@@ -139,6 +141,9 @@ remove_ports_if_present() {
 
     for p in $(echo "$PORTS" | tr ',' ' '); do
         sed -i "/option $OPTION '/s/,$p//g" "$CONF"
+        sed -i "/option $OPTION '/s/,[0-9]\+-[0-9]\+/$p/ { 
+            s/,$p//g
+        }/" "$CONF"
     done
 }
 
@@ -147,7 +152,7 @@ add_ports_if_missing() {
     local PORTS="$2"
 
     for p in $(echo "$PORTS" | tr ',' ' '); do
-        grep -q "option $OPTION '.*\\b$p\\b" "$CONF" || \
+        grep -q "option $OPTION '.*\b$p\b" "$CONF" || \
         sed -i "/option $OPTION '/s/'$/,$p'/" "$CONF"
     done
 }
@@ -161,17 +166,15 @@ echo -e "${CYAN}Enter) ${GREEN}Выход в меню стратегий"; echo 
 if grep -q "^#Gv" "$CONF"; then Gv_LINE=$(grep -n "^#Gv" "$CONF" | tail -n1 | cut -d: -f1); sed -i "${Gv_LINE},${LAST_QUOTE}d" "$CONF"; elif [ -n "$LAST_QUOTE" ]; then sed -i "${LAST_QUOTE},\$d" "$CONF"; fi
 if [ "$CURRENT_GAME" = "Gv$GAME_CHOICE" ]; then 
 
-
-remove_ports_if_present NFQWS_PORTS_UDP "88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535"
-remove_ports_if_present NFQWS_PORTS_TCP "6112-6119,6695-6710,25565,50001"
+remove_ports_if_present NFQWS_PORTS_UDP "$PORTS_UDP"
+remove_ports_if_present NFQWS_PORTS_TCP "$PORTS_TCP"
 
 echo "'" >> "$CONF"; echo -e "\n${CYAN}Удаляем стратегию для игр ${NC}"; ZAPRET_RESTART
 echo -e "${GREEN}Стратегия для игр удалена!${NC}\n"; [ -z "$NO_PAUSE" ] && PAUSE; return; fi; if [ "$GAME_CHOICE" -eq 1 ]; then STRATEGY="$(strategy_Gv1; strategy_TCP_common)"; else STRATEGY="$(strategy_Gv "$GAME_CHOICE"; strategy_TCP_common)"; fi
-sed -i "s/,88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535//g" "$CONF"; sed -i "s/,6112-6119,6695-6710,25565,50001//g" "$CONF"; echo "$STRATEGY" | sed '/^$/d' >> "$CONF"; echo "'" >> "$CONF"
+echo "$STRATEGY" | sed '/^$/d' >> "$CONF"; echo "'" >> "$CONF"
 
-
-add_ports_if_missing NFQWS_PORTS_UDP "88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535"
-add_ports_if_missing NFQWS_PORTS_TCP "6112-6119,6695-6710,25565,50001"
+add_ports_if_missing NFQWS_PORTS_UDP "$PORTS_UDP"
+add_ports_if_missing NFQWS_PORTS_TCP "$PORTS_TCP"
 
 [ -z "$NO_PAUSE" ] && echo; echo -e "${CYAN}Устанавливаем стратегию для игр ${NC}"; ZAPRET_RESTART; echo -e "${GREEN}Стратегия для игр ${NC}Gv$GAME_CHOICE${GREEN} установлена!${NC}\n"; [ -z "$NO_PAUSE" ] && PAUSE; }
 
