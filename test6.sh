@@ -139,10 +139,17 @@ remove_ports_if_present() {
     local OPTION="$1"
     local PORTS="$2"
 
+    # проходим по каждому порту или диапазону
     for p in $(echo "$PORTS" | tr ',' ' '); do
+        # удаляем точное совпадение порта
         sed -i "/option $OPTION '/s/,$p//g" "$CONF"
+
+        # удаляем диапазон, который полностью совпадает с p
+        # (если p сам по себе диапазон, например 1024-2407)
         sed -i "/option $OPTION '/s/,$p//g" "$CONF"
     done
+
+    # чистим возможные повторные запятые
     sed -i "/option $OPTION '/s/,,/,/g; s/,\$//' "$CONF"
 }
 
