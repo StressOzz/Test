@@ -204,4 +204,4 @@ echo -e "${GREEN}========== ${YELLOW}WARP CONFIG${GREEN} ==========${NC}"
 echo "$conf"
 echo -e "${GREEN}=================================${NC}"
 echo "$conf" > /root/WARP.conf
-echo -e "\n${YELLOW}Файл сохранён:${NC} /root/WARP.conf"
+echo -e "\n${YELLOW}Файл сохранён:${NC} /root/WARP.conf\n"
