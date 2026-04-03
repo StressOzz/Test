@@ -138,19 +138,15 @@ PORTS_TCP="6112-6119,6695-6710,25565,50001"
 remove_ports_if_present() {
     local OPTION="$1"
     local PORTS="$2"
-
     for p in $(echo "$PORTS" | tr ',' ' '); do
         sed -i "/option $OPTION '/s/,$p//g" "$CONF"
-        sed -i "/option $OPTION '/s/,[0-9]\+-[0-9]\+/$p/ { 
-            s/,$p//g
-        }/" "$CONF"
+        sed -i "/option $OPTION '/s/,[0-9]\+-[0-9]\+//g" "$CONF"
     done
 }
 
 add_ports_if_missing() {
     local OPTION="$1"
     local PORTS="$2"
-
     for p in $(echo "$PORTS" | tr ',' ' '); do
         grep -q "option $OPTION '.*\b$p\b" "$CONF" || \
         sed -i "/option $OPTION '/s/'$/,$p'/" "$CONF"
