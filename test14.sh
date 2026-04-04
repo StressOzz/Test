@@ -14,7 +14,7 @@ BIN_PATH="/usr/bin/tg-ws-proxy"; INIT_PATH="/etc/init.d/tg-ws-proxy"
 
 TG_URL="https://github.com/Flowseal/tg-ws-proxy/archive/refs/heads/master.zip"
 
-TMP_ARCHIVE="/tmp/tg-ws-proxy-rs.tar.gz"; TMP_DIR="/tmp/tg-ws-proxy-rs"
+TMP_ARCHIVE="/tmp/tg-ws-proxy-rs.tar.gz"
 
 REQUIRED_PKGS="python3-light python3-pip python3-cryptography"
 
@@ -79,58 +79,30 @@ install_TG_RS() {
 
     if ! command -v curl >/dev/null 2>&1; then
         echo -e "${CYAN}Устанавливаем ${NC}curl"
-
         if command -v opkg >/dev/null 2>&1; then
-            opkg update >/dev/null 2>&1 && opkg install curl >/dev/null 2>&1 || {
-                echo -e "\n${RED}Ошибка установки curl${NC}"
-                PAUSE
-                return 1
-            }
+            opkg update >/dev/null 2>&1 && opkg install curl >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка установки curl${NC}"; PAUSE; return 1; }
         elif command -v apk >/dev/null 2>&1; then
-            apk update >/dev/null 2>&1 && apk add curl >/dev/null 2>&1 || {
-                echo -e "\n${RED}Ошибка установки curl${NC}"
-                PAUSE
-                return 1
-            }
+            apk update >/dev/null 2>&1 && apk add curl >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка установки curl${NC}"; PAUSE; return 1; }
         fi
     fi
 
     echo -e "${CYAN}Скачиваем и устанавливаем${NC} $ARCH_FILE"
 
     LATEST_TAG="$(curl -Ls -o /dev/null -w '%{url_effective}' https://github.com/valnesfjord/tg-ws-proxy-rs/releases/latest | sed 's#.*/tag/##')"
-    [ -z "$LATEST_TAG" ] && {
-        echo -e "\n${RED}Не удалось получить версию${NC} TG WS Proxy Rust"
-        PAUSE
-        return 1
-    }
+    [ -z "$LATEST_TAG" ] && { echo -e "\n${RED}Не удалось получить версию${NC} TG WS Proxy Rust"; PAUSE; return 1; }
 
-DOWNLOAD_URL="https://github.com/valnesfjord/tg-ws-proxy-rs/releases/download/$LATEST_TAG/$ARCH_FILE"
+    DOWNLOAD_URL="https://github.com/valnesfjord/tg-ws-proxy-rs/releases/download/$LATEST_TAG/$ARCH_FILE"
 
-TMP_ARCHIVE="/tmp/tg-ws-proxy-rs.tar.gz"
-TMP_DIR="/tmp/tg-ws-proxy-rs"
+    curl -L --fail -o "$TMP_ARCHIVE" "$DOWNLOAD_URL" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка скачивания${NC}"; PAUSE; return 1; }
 
-curl -L --fail -o "$TMP_ARCHIVE" "$DOWNLOAD_URL" >/dev/null 2>&1 || {
-    echo -e "\n${RED}Ошибка скачивания${NC}"
-    PAUSE
-    return 1
-}
+    tar -xzf "$TMP_ARCHIVE" -C /tmp || { echo -e "\n${RED}Ошибка распаковки${NC}"; PAUSE; return 1; }
+    mv /tmp/tg-ws-proxy* "$BIN_PATH_RS"
+    chmod +x "$BIN_PATH_RS"
 
-rm -rf "$TMP_DIR"
-mkdir -p "$TMP_DIR"
+    rm -f "$TMP_ARCHIVE"
 
-tar -xzf "$TMP_ARCHIVE" -C "$TMP_DIR" || {
-    echo -e "\n${RED}Ошибка распаковки${NC}"
-    PAUSE
-    return 1
-}
-
-mv "$TMP_DIR"/tg-ws-proxy* "$BIN_PATH_RS"
-
-chmod +x "$BIN_PATH_RS"
-
-cat << EOF > /etc/init.d/tg-ws-proxy-rs
+    cat << EOF > "$INIT_PATH_RS"
 #!/bin/sh /etc/rc.common
-
 START=99
 USE_PROCD=1
 
