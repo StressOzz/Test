@@ -64,8 +64,7 @@ remove_TG_RS() {
     echo -e "\n${MAGENTA}Удаляем TG WS Proxy Rs${NC}"
     /etc/init.d/tg-ws-proxy-rs stop >/dev/null 2>&1
     /etc/init.d/tg-ws-proxy-rs disable >/dev/null 2>&1
-    rm -f "$BIN_PATH_RS"
-    rm -f "$INIT_PATH_RS"
+    rm -rf "$BIN_PATH_RS" "$INIT_PATH_RS"
     echo -e "TG WS Proxy Rust ${GREEN}удалён!${NC}"
 }
 
@@ -255,12 +254,6 @@ echo -e "${CYAN}Останавливаем сервис${NC}"
 /etc/init.d/tg-ws-proxy stop >/dev/null 2>&1
 /etc/init.d/tg-ws-proxy disable >/dev/null 2>&1
 
-echo -e "${CYAN}Удаляем ${NC}init.d${CYAN} скрипт${NC}"
-rm -f /etc/init.d/tg-ws-proxy >/dev/null 2>&1
-
-echo -e "${CYAN}Удаляем ${NC}tg-ws-proxy"
-rm -rf /root/tg-ws-proxy >/dev/null 2>&1
-
 echo -e "${CYAN}Удаляем пакеты и зависимости${NC}"
 python3 -m pip uninstall -y tg-ws-proxy >/dev/null 2>&1
 pip uninstall -y tg-ws-proxy >/dev/null 2>&1
@@ -284,7 +277,7 @@ done
         echo -e "\n${RED}Некоторые пакеты не удалились!${NC}"
     fi
     
-rm -rf /usr/lib/python* /usr/bin/python* /root/.cache/pip /root/.local/lib/python* /usr/bin/tg-ws-proxy >/dev/null 2>&1
+rm -rf /usr/lib/python* /root/tg-ws-proxy /usr/bin/python* /root/.cache/pip /root/.local/lib/python* /usr/bin/tg-ws-proxy-tray* "$BIN_PATH" "$INIT_PATH" >/dev/null 2>&1
 
 echo -e "\n${GREEN}Удаление завершено!${NC}"
 PAUSE
@@ -326,8 +319,7 @@ remove_TG() {
     echo -e "\n${MAGENTA}Удаляем TG WS Proxy Go${NC}"
     /etc/init.d/tg-ws-proxy-go stop >/dev/null 2>&1
     /etc/init.d/tg-ws-proxy-go disable >/dev/null 2>&1
-    rm -f "$BIN_PATH_GO"
-    rm -f "$INIT_PATH_GO"
+    rm -rf "$BIN_PATH_GO" "$INIT_PATH_GO"
     echo -e "TG WS Proxy Go ${GREEN}удалён!${NC}"
 }
 
