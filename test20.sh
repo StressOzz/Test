@@ -41,11 +41,11 @@ fi
 ##############################################################################################################
 
 get_arch_RS() {
-    if command -v opkg >/dev/null 2>&1; then
-        ARCH_RS="$(opkg print-architecture | awk '{print $2}' | tail -n1)"
-    elif command -v apk >/dev/null 2>&1; then
-        ARCH_RS="$(apk --print-arch 2>/dev/null)"
-    fi
+        if [ "$PKG_IS_APK" -eq 0 ]; then
+            ARCH_RS="$(opkg print-architecture | awk '{print $2}' | tail -n1)"
+        else
+            ARCH_RS="$(apk --print-arch 2>/dev/null)"
+        fi
 
     case "$ARCH_RS" in
         aarch64*)
@@ -80,23 +80,15 @@ install_TG_RS() {
         return 1
     }
 
-    if ! command -v curl >/dev/null 2>&1; then
-        echo -e "${CYAN}Устанавливаем ${NC}curl"
+        if ! command -v curl >/dev/null 2>&1; then
+            echo -e "${CYAN}Устанавливаем ${NC}curl"
 
-        if command -v opkg >/dev/null 2>&1; then
-            opkg update >/dev/null 2>&1 && opkg install curl >/dev/null 2>&1 || {
-                echo -e "\n${RED}Ошибка установки curl${NC}"
-                PAUSE
-                return 1
-            }
-        elif command -v apk >/dev/null 2>&1; then
-            apk update >/dev/null 2>&1 && apk add curl >/dev/null 2>&1 || {
+            $UPDATE >/dev/null 2>&1 && $INSTALL curl >/dev/null 2>&1 || {
                 echo -e "\n${RED}Ошибка установки curl${NC}"
                 PAUSE
                 return 1
             }
         fi
-    fi
 
     echo -e "${CYAN}Скачиваем и устанавливаем${NC} $ARCH_FILE_RS"
 
@@ -280,11 +272,11 @@ PAUSE
 ##############################################################################################################
 
 get_arch_GO() {
-    if command -v opkg >/dev/null 2>&1; then
-        ARCH_GO="$(opkg print-architecture | awk '{print $2}' | tail -n1)"
-    elif command -v apk >/dev/null 2>&1; then
-        ARCH_GO="$(apk --print-arch 2>/dev/null)"
-    fi
+        if [ "$PKG_IS_APK" -eq 0 ]; then
+            ARCH_RS="$(opkg print-architecture | awk '{print $2}' | tail -n1)"
+        else
+            ARCH_RS="$(apk --print-arch 2>/dev/null)"
+        fi
 
     case "$ARCH_GO" in
         aarch64*)
@@ -330,19 +322,11 @@ install_TG_GO() {
     if ! command -v curl >/dev/null 2>&1; then
         echo -e "${CYAN}Устанавливаем ${NC}curl"
 
-        if command -v opkg >/dev/null 2>&1; then
-            opkg update >/dev/null 2>&1 && opkg install curl >/dev/null 2>&1 || {
-                echo -e "\n${RED}Ошибка установки curl${NC}"
-                PAUSE
-                return 1
-            }
-        elif command -v apk >/dev/null 2>&1; then
-            apk update >/dev/null 2>&1 && apk add curl >/dev/null 2>&1 || {
-                echo -e "\n${RED}Ошибка установки curl${NC}"
-                PAUSE
-                return 1
-            }
-        fi
+        $UPDATE >/dev/null 2>&1 && $INSTALL curl >/dev/null 2>&1 || {
+        echo -e "\n${RED}Ошибка установки curl${NC}"
+        PAUSE
+        return 1
+        }
     fi
 
     echo -e "${CYAN}Скачиваем и устанавливаем${NC} $ARCH_FILE_GO"
@@ -428,7 +412,7 @@ if pgrep -f tg-ws-proxy-rs >/dev/null 2>&1 && [ -f "$BIN_PATH_RS" ] && [ -f "$IN
     echo -e "${YELLOW}Ссылка для подключения:${NC}\ntg://proxy?server=$(ip -4 route get 1 | awk '{print $7; exit}')&port=2443&secret=dd$SECRET_IN_RS"
 fi
 
-if pgrep -f tg-ws-proxy >/dev/null 2>&1 && [ -f "$BIN_PATH_PH" ] && [ -f "$INIT_PATH_PH" ] && [ -f /root/tg-ws-proxy/README.md ]; then
+if pgrep -f tg-ws-proxy >/dev/null 2>&1 && [ -f "$BIN_PATH_PH" ] && [ -f "$INIT_PATH_PH" ]; then
     SECRET_IN_PH="$(sed -n 's/.*--secret[[:space:]]*\([0-9a-fA-F]\{32\}\).*/\1/p' "$INIT_PATH_PH")"
     echo -e "\n${YELLOW}Настройки ${CYAN}Phyton${YELLOW} версии в TG:${NC}"
     echo -e " ${YELLOW}Типы прокси:${NC} MTProto"
@@ -440,7 +424,7 @@ fi
 
 echo -e "\n${CYAN}1)${GREEN} $( [ -f "$BIN_PATH_GO" ] && [ -f "$INIT_PATH_GO" ] && echo -e "Удалить ${NC}TG WS Proxy Go" || echo "Установить ${NC}TG WS Proxy Go" )"
 echo -e "${CYAN}2)${GREEN} $( [ -f "$BIN_PATH_RS" ] && [ -f "$INIT_PATH_RS" ] && echo -e "Удалить ${NC}TG WS Proxy Rust" || echo "Установить ${NC}TG WS Proxy Rust" )"
-echo -e "${CYAN}3)${GREEN} $( [ -f "$BIN_PATH_PH" ] && [ -f "$INIT_PATH_PH" ] && [ -f /root/tg-ws-proxy/README.md ] && echo -e "Удалить ${NC}TG WS Proxy Phyton" || echo "Установить ${NC}TG WS Proxy Phyton" )"
+echo -e "${CYAN}3)${GREEN} $( [ -f "$BIN_PATH_PH" ] && [ -f "$INIT_PATH_PH" ] && echo -e "Удалить ${NC}TG WS Proxy Phyton" || echo "Установить ${NC}TG WS Proxy Phyton" )"
 echo -e "${CYAN}Enter) ${GREEN}Выход${NC}\n"
 echo -en "${YELLOW}Выберите пункт: ${NC}"
 read choice
