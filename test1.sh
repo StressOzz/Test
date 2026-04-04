@@ -348,7 +348,7 @@ case "$choice" in
 1) TG_URL="https://github.com/Flowseal/tg-ws-proxy/archive/refs/heads/master.zip"
 if [ -f "$BIN_PATH" ] && [ -f "$INIT_PATH" ] && [ -f /root/tg-ws-proxy/README.md ] && grep -q '^Telegram Desktop → MTProto' /root/tg-ws-proxy/README.md; then delete_tg_ws; else install_tg_ws; fi ;;
 2) tg_GO ;;
-2) tg_RS ;;
+3) tg_RS ;;
 *) echo; exit 0 ;;
 esac
 }
