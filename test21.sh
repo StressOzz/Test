@@ -273,9 +273,9 @@ PAUSE
 
 get_arch_GO() {
         if [ "$PKG_IS_APK" -eq 0 ]; then
-            ARCH_RS="$(opkg print-architecture | awk '{print $2}' | tail -n1)"
+            ARCH_GO="$(opkg print-architecture | awk '{print $2}' | tail -n1)"
         else
-            ARCH_RS="$(apk --print-arch 2>/dev/null)"
+            ARCH_GO="$(apk --print-arch 2>/dev/null)"
         fi
 
     case "$ARCH_GO" in
