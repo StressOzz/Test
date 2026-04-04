@@ -135,7 +135,7 @@ USE_PROCD=1
 
 start_service() {
     procd_open_instance
-    procd_set_param command /usr/bin/tg-ws-proxy-rs --host 0.0.0.0 --secret $SECRET
+    procd_set_param command /usr/bin/tg-ws-proxy-rs --host 0.0.0.0 --port 2443 --secret $SECRET
     procd_set_param respawn
     procd_close_instance
 }
@@ -340,9 +340,9 @@ if pgrep -f tg-ws-proxy-rs >/dev/null 2>&1 && [ -f "$BIN_PATH_RS" ] && [ -f "$IN
     SECRET_IN="$(sed -n 's/.*--secret[[:space:]]*\([0-9a-fA-F]\{32\}\).*/\1/p' "$INIT_PATH_RS")"
     echo -e "\n${YELLOW}Настройки ${CYAN}MTProto${YELLOW} в TG:${NC}"
     echo -e " ${YELLOW}Хост:${NC} $(ip -4 route get 1 | awk '{print $7; exit}')"
-    echo -e " ${YELLOW}Порт:${NC} 1443"
+    echo -e " ${YELLOW}Порт:${NC} 2443"
     echo -e " ${YELLOW}Ключ:${NC} dd$SECRET_IN"
-    echo -e "${YELLOW}Ссылка для подключения:${NC}\ntg://proxy?server=$(ip -4 route get 1 | awk '{print $7; exit}')&port=1443&secret=dd$SECRET_IN"
+    echo -e "${YELLOW}Ссылка для подключения:${NC}\ntg://proxy?server=$(ip -4 route get 1 | awk '{print $7; exit}')&port=2443&secret=dd$SECRET_IN"
 fi
 
 echo -e "\n${CYAN}1)${GREEN} $( [ -f "$BIN_PATH" ] && [ -f "$INIT_PATH" ] && [ -f /root/tg-ws-proxy/README.md ] && grep -q '^Telegram Desktop → MTProto' /root/tg-ws-proxy/README.md && echo -e "Удалить ${NC}TG WS Proxy MTProto" || echo "Установить ${NC}TG WS Proxy MTProto" )"
