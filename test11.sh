@@ -392,7 +392,6 @@ install_TG() {
 
     if pidof tg-ws-proxy-go >/dev/null 2>&1; then
         echo -e "${GREEN}Сервис ${NC}TG WS Proxy Go${GREEN} запущен!${NC}"
-        echo -e "\n${YELLOW}Настройки SOCKS5 в TG:${NC} ${NC}$(uci get network.lan.ipaddr 2>/dev/null | cut -d/ -f1):1080"
     else
         echo -e "\n${RED}Сервис TG WS Proxy Go не запущен!${NC}"
     fi
