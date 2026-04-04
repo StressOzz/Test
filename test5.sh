@@ -98,7 +98,7 @@ install_TG_RS() {
 
     LATEST_TAG="$(curl -Ls -o /dev/null -w '%{url_effective}' https://github.com/valnesfjord/tg-ws-proxy-rs/releases/latest | sed 's#.*/tag/##')"
     [ -z "$LATEST_TAG" ] && {
-        echo -e "\n${RED}Не удалось получить версию${NC} TG WS Proxy Go"
+        echo -e "\n${RED}Не удалось получить версию${NC} TG WS Proxy Rs"
         PAUSE
         return 1
     }
@@ -166,8 +166,6 @@ tg_RS() {
     fi
 }
 
-
-
 ##############################################################################################################
 
 install_tg_ws() {
@@ -202,7 +200,7 @@ fi
 
 echo -e "\n${MAGENTA}Устанавливаем необходимые пакеты${NC}"
 $INSTALL python3-light python3-pip python3-cryptography unzip
-echo -e "\n${MAGENTA}Скачиваем и распаковываем TG WS Proxy${NC}"
+echo -e "\n${MAGENTA}Скачиваем и распаковываем TG WS Proxy Phyton${NC}"
 rm -rf "/root/tg-ws-proxy"
 cd /root
 if ! wget -O tg-ws-proxy.zip "$TG_URL"; then
@@ -219,7 +217,7 @@ mv tg-ws-proxy-main tg-ws-proxy
 rm -f tg-ws-proxy.zip
 cd /root/tg-ws-proxy
 
-echo -e "\n${MAGENTA}Устанавливаем TG WS Proxy${NC}"
+echo -e "\n${MAGENTA}Устанавливаем TG WS Proxy Phyton${NC}"
 pip install --root-user-action=ignore --no-deps --disable-pip-version-check --timeout 2 --retries 1 -e .
 
 cat << EOF > /etc/init.d/tg-ws-proxy
@@ -241,7 +239,7 @@ chmod +x /etc/init.d/tg-ws-proxy
 /etc/init.d/tg-ws-proxy start >/dev/null 2>&1
 
 if pgrep -f tg-ws-proxy >/dev/null 2>&1; then
-    echo -e "\n${GREEN}Сервис ${NC}TG WS Proxy${GREEN} запущен!${NC}"
+    echo -e "\n${GREEN}Сервис ${NC}TG WS Proxy Phyton${GREEN} запущен!${NC}"
 else
     echo -e "\n${RED}Ошибка установки!${NC}"
 fi
@@ -249,7 +247,7 @@ PAUSE
 }
 
 delete_tg_ws() {
-echo -e "\n${MAGENTA}Удаляем TG WS Proxy${NC}"
+echo -e "\n${MAGENTA}Удаляем TG WS Proxy Phyton${NC}"
 
 echo -e "${CYAN}Останавливаем сервис${NC}"
 /etc/init.d/tg-ws-proxy stop >/dev/null 2>&1
@@ -327,7 +325,7 @@ echo -e "\n${YELLOW}Настройки ${CYAN}SOCKS5${YELLOW} в TG:${NC}"
     echo -e " ${YELLOW}Порт:${NC} 1080${NC}"
 fi
 
-if pgrep -f tg-ws-proxy >/dev/null 2>&1 && [ -f "$BIN_PATH" ] && [ -f "$INIT_PATH" ] && [ -f /root/tg-ws-proxy/README.md ] && grep -q '^Telegram Desktop → MTProto' /root/tg-ws-proxy/README.md; then
+if pgrep -f tg-ws-proxy >/dev/null 2>&1 && [ -f "$BIN_PATH" ] && [ -f "$INIT_PATH" ] && [ -f /root/tg-ws-proxy/README.md ]; then
     SECRET_IN="$(sed -n 's/.*--secret[[:space:]]*\([0-9a-fA-F]\{32\}\).*/\1/p' "$INIT_PATH")"
     echo -e "\n${YELLOW}Настройки ${CYAN}MTProto${YELLOW} в TG:${NC}"
     echo -e " ${YELLOW}Хост:${NC} $(ip -4 route get 1 | awk '{print $7; exit}')"
@@ -345,7 +343,7 @@ if pgrep -f tg-ws-proxy-rs >/dev/null 2>&1 && [ -f "$BIN_PATH_RS" ] && [ -f "$IN
     echo -e "${YELLOW}Ссылка для подключения:${NC}\ntg://proxy?server=$(ip -4 route get 1 | awk '{print $7; exit}')&port=2443&secret=dd$SECRET_IN"
 fi
 
-echo -e "\n${CYAN}1)${GREEN} $( [ -f "$BIN_PATH" ] && [ -f "$INIT_PATH" ] && [ -f /root/tg-ws-proxy/README.md ] && grep -q '^Telegram Desktop → MTProto' /root/tg-ws-proxy/README.md && echo -e "Удалить ${NC}TG WS Proxy MTProto" || echo "Установить ${NC}TG WS Proxy MTProto" )"
+echo -e "\n${CYAN}1)${GREEN} $( [ -f "$BIN_PATH" ] && [ -f "$INIT_PATH" ] && [ -f /root/tg-ws-proxy/README.md ] && echo -e "Удалить ${NC}TG WS Proxy Phyton" || echo "Установить ${NC}TG WS Proxy Phyton" )"
 echo -e "${CYAN}2)${GREEN} $( [ -f "$BIN_PATH_GO" ] && [ -f "$INIT_PATH_GO" ] && echo -e "Удалить ${NC}TG WS Proxy Go" || echo "Установить ${NC}TG WS Proxy Go" )"
 echo -e "${CYAN}3)${GREEN} $( [ -f "$BIN_PATH_RS" ] && [ -f "$INIT_PATH_RS" ] && echo -e "Удалить ${NC}TG WS Proxy Rs" || echo "Установить ${NC}TG WS Proxy Rs" )"
 echo -e "${CYAN}Enter) ${GREEN}Выход${NC}\n"
@@ -353,7 +351,7 @@ echo -en "${YELLOW}Выберите пункт: ${NC}"
 read choice
 case "$choice" in
 1) TG_URL="https://github.com/Flowseal/tg-ws-proxy/archive/refs/heads/master.zip"
-if [ -f "$BIN_PATH" ] && [ -f "$INIT_PATH" ] && [ -f /root/tg-ws-proxy/README.md ] && grep -q '^Telegram Desktop → MTProto' /root/tg-ws-proxy/README.md; then delete_tg_ws; else install_tg_ws; fi ;;
+if [ -f "$BIN_PATH" ] && [ -f "$INIT_PATH" ] && [ -f /root/tg-ws-proxy/README.md ]; then delete_tg_ws; else install_tg_ws; fi ;;
 2) tg_GO ;;
 3) tg_RS ;;
 *) echo; exit 0 ;;
