@@ -343,17 +343,17 @@ if pgrep -f tg-ws-proxy-rs >/dev/null 2>&1 && [ -f "$BIN_PATH_RS" ] && [ -f "$IN
     echo -e "${YELLOW}Ссылка для подключения:${NC}\ntg://proxy?server=$(ip -4 route get 1 | awk '{print $7; exit}')&port=2443&secret=dd$SECRET_IN"
 fi
 
-echo -e "\n${CYAN}1)${GREEN} $( [ -f "$BIN_PATH" ] && [ -f "$INIT_PATH" ] && [ -f /root/tg-ws-proxy/README.md ] && echo -e "Удалить ${NC}TG WS Proxy Phyton" || echo "Установить ${NC}TG WS Proxy Phyton" )"
-echo -e "${CYAN}2)${GREEN} $( [ -f "$BIN_PATH_GO" ] && [ -f "$INIT_PATH_GO" ] && echo -e "Удалить ${NC}TG WS Proxy Go" || echo "Установить ${NC}TG WS Proxy Go" )"
-echo -e "${CYAN}3)${GREEN} $( [ -f "$BIN_PATH_RS" ] && [ -f "$INIT_PATH_RS" ] && echo -e "Удалить ${NC}TG WS Proxy Rs" || echo "Установить ${NC}TG WS Proxy Rs" )"
+echo -e "${CYAN}1)${GREEN} $( [ -f "$BIN_PATH_GO" ] && [ -f "$INIT_PATH_GO" ] && echo -e "Удалить ${NC}TG WS Proxy Go" || echo "Установить ${NC}TG WS Proxy Go" )"
+echo -e "${CYAN}2)${GREEN} $( [ -f "$BIN_PATH_RS" ] && [ -f "$INIT_PATH_RS" ] && echo -e "Удалить ${NC}TG WS Proxy Rs" || echo "Установить ${NC}TG WS Proxy Rs" )"
+echo -e "\n${CYAN}3)${GREEN} $( [ -f "$BIN_PATH" ] && [ -f "$INIT_PATH" ] && [ -f /root/tg-ws-proxy/README.md ] && echo -e "Удалить ${NC}TG WS Proxy Phyton" || echo "Установить ${NC}TG WS Proxy Phyton" )"
 echo -e "${CYAN}Enter) ${GREEN}Выход${NC}\n"
 echo -en "${YELLOW}Выберите пункт: ${NC}"
 read choice
 case "$choice" in
-1) TG_URL="https://github.com/Flowseal/tg-ws-proxy/archive/refs/heads/master.zip"
+1) tg_GO ;;
+2) tg_RS ;;
+3) TG_URL="https://github.com/Flowseal/tg-ws-proxy/archive/refs/heads/master.zip"
 if [ -f "$BIN_PATH" ] && [ -f "$INIT_PATH" ] && [ -f /root/tg-ws-proxy/README.md ]; then delete_tg_ws; else install_tg_ws; fi ;;
-2) tg_GO ;;
-3) tg_RS ;;
 *) echo; exit 0 ;;
 esac
 }
