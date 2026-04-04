@@ -68,6 +68,7 @@ delete_TG_RS() {
     /etc/init.d/tg-ws-proxy-rs disable >/dev/null 2>&1
     rm -rf "$BIN_PATH_RS" "$INIT_PATH_RS"
     echo -e "TG WS Proxy Rust ${GREEN}удалён!${NC}"
+    PAUSE
 }
 
 install_TG_RS() {
@@ -153,6 +154,7 @@ EOF
     else
         echo -e "\n${RED}Сервис TG WS Proxy Rust не запущен!${NC}"
     fi
+    PAUSE
 }
 
 ##############################################################################################################
@@ -313,6 +315,7 @@ delete_TG_GO() {
     /etc/init.d/tg-ws-proxy-go disable >/dev/null 2>&1
     rm -rf "$BIN_PATH_GO" "$INIT_PATH_GO"
     echo -e "TG WS Proxy Go ${GREEN}удалён!${NC}"
+    PAUSE
 }
 
 install_TG_GO() {
@@ -351,7 +354,7 @@ install_TG_GO() {
         return 1
     }
 
-    DOWNLOAD_URL_GO="https://github.com/d0mhate/-tg-ws-proxy-Manager-go/releases/download/$LATEST_TAG_GO/$ARCH_FILE"
+    DOWNLOAD_URL_GO="https://github.com/d0mhate/-tg-ws-proxy-Manager-go/releases/download/$LATEST_TAG_GO/$ARCH_FILE_GO"
 
     curl -L --fail -o "$BIN_PATH_GO" "$DOWNLOAD_URL_GO" >/dev/null 2>&1 || {
         echo -e "\n${RED}Ошибка скачивания${NC}"
@@ -361,12 +364,19 @@ install_TG_GO() {
 
     chmod +x "$BIN_PATH_GO"
 
-    printf '%s\n' \
-        '#!/bin/sh /etc/rc.common' \
-        'START=99' \
-        'USE_PROCD=1' \
-        'start_service() { procd_open_instance; procd_set_param command /usr/bin/tg-ws-proxy-go --host 0.0.0.0 --port 1080; procd_set_param respawn; procd_set_param stdout /dev/null; procd_set_param stderr /dev/null; procd_close_instance; }' \
-        > "$INIT_PATH_GO"
+cat << EOF > /etc/init.d/tg-ws-proxy-go
+#!/bin/sh /etc/rc.common
+
+START=99
+USE_PROCD=1
+
+start_service() {
+    procd_open_instance
+    procd_set_param command /usr/bin/tg-ws-proxy-go --host 0.0.0.0 --port 1080
+    procd_set_param respawn
+    procd_close_instance
+}
+EOF
 
     chmod +x "$INIT_PATH_GO"
     /etc/init.d/tg-ws-proxy-go enable
@@ -377,6 +387,7 @@ install_TG_GO() {
     else
         echo -e "\n${RED}Сервис TG WS Proxy Go не запущен!${NC}"
     fi
+    PAUSE
 }
 
 ##############################################################################################################
@@ -434,8 +445,8 @@ echo -e "${CYAN}Enter) ${GREEN}Выход${NC}\n"
 echo -en "${YELLOW}Выберите пункт: ${NC}"
 read choice
 case "$choice" in
-1) if [ -f "$BIN_PATH_GO" ] && [ -f "$INIT_PATH_GO" ]; then delete_TG_GO; else install_TG_GO; fi; PAUSE;;
-2) if [ -f "$BIN_PATH_RS" ] && [ -f "$INIT_PATH_RS" ]; then delete_TG_RS; else install_TG_RS; fi; PAUSE;;
+1) if [ -f "$BIN_PATH_GO" ] && [ -f "$INIT_PATH_GO" ]; then delete_TG_GO; else install_TG_GO; fi;;
+2) if [ -f "$BIN_PATH_RS" ] && [ -f "$INIT_PATH_RS" ]; then delete_TG_RS; else install_TG_RS; fi;;
 3) if [ -f "$BIN_PATH_PH" ] && [ -f "$INIT_PATH_PH" ]; then delete_TG_PH; else install_TG_PH; fi;;
 *) echo; exit 0 ;;
 esac
