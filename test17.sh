@@ -434,9 +434,9 @@ echo -e "${CYAN}Enter) ${GREEN}Выход${NC}\n"
 echo -en "${YELLOW}Выберите пункт: ${NC}"
 read choice
 case "$choice" in
-1) if [ -f "$BIN_PATH_GO" ] && [ -f "$INIT_PATH_GO" ]; then delete_TG_GO; else install_TG_GO; fi ;;
-2) if [ -f "$BIN_PATH_RS" ] && [ -f "$INIT_PATH_RS" ]; then delete_TG_RS; else install_TG_RS; fi ;;
-3) if [ -f "$BIN_PATH_PH" ] && [ -f "$INIT_PATH_PH" ]; then delete_TG_PH; else install_TG_PH; fi ;;
+1) if [ -f "$BIN_PATH_GO" ] && [ -f "$INIT_PATH_GO" ]; then delete_TG_GO; else install_TG_GO; fi; PAUSE;;
+2) if [ -f "$BIN_PATH_RS" ] && [ -f "$INIT_PATH_RS" ]; then delete_TG_RS; else install_TG_RS; fi; PAUSE;;
+3) if [ -f "$BIN_PATH_PH" ] && [ -f "$INIT_PATH_PH" ]; then delete_TG_PH; else install_TG_PH; fi;;
 *) echo; exit 0 ;;
 esac
 }
