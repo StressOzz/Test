@@ -127,12 +127,19 @@ mv "$TMP_DIR"/tg-ws-proxy* "$BIN_PATH_RS"
 
 chmod +x "$BIN_PATH_RS"
 
-    printf '%s\n' \
-        '#!/bin/sh /etc/rc.common' \
-        'START=99' \
-        'USE_PROCD=1' \
-        'start_service() { procd_open_instance; procd_set_param command /usr/bin/tg-ws-proxy-rs --host 0.0.0.0 --secret $SECRET; procd_set_param respawn; procd_set_param stdout /dev/null; procd_set_param stderr /dev/null; procd_close_instance; }' \
-        > "$INIT_PATH_RS"
+cat << EOF > /etc/init.d/tg-ws-proxy-rs
+#!/bin/sh /etc/rc.common
+
+START=99
+USE_PROCD=1
+
+start_service() {
+    procd_open_instance
+    procd_set_param command /usr/bin/tg-ws-proxy-rs --host 0.0.0.0 --secret $SECRET
+    procd_set_param respawn
+    procd_close_instance
+}
+EOF
 
     chmod +x "$INIT_PATH_RS"
     /etc/init.d/tg-ws-proxy-rs enable
