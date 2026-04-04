@@ -299,8 +299,7 @@ elif command -v apk >/dev/null 2>&1; then apk update >/dev/null 2>&1 && apk add 
 LATEST_TAG="$(curl -Ls -o /dev/null -w '%{url_effective}' https://github.com/d0mhate/-tg-ws-proxy-Manager-go/releases/latest | sed 's#.*/tag/##')"; [ -z "$LATEST_TAG" ] && { echo -e "\n${RED}Не удалось получить версию${NC} TG WS Proxy Go"; PAUSE; return 1; }
 DOWNLOAD_URL="https://github.com/d0mhate/-tg-ws-proxy-Manager-go/releases/download/$LATEST_TAG/$ARCH_FILE"; curl -L --fail -o "$BIN_PATH_GO" "$DOWNLOAD_URL" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка скачивания${NC}"; PAUSE; return 1; }; chmod +x "$BIN_PATH_GO"
 printf '%s\n' '#!/bin/sh /etc/rc.common' 'START=99' 'USE_PROCD=1' 'start_service() { procd_open_instance; procd_set_param command /usr/bin/tg-ws-proxy-go --host 0.0.0.0 --port 1080; procd_set_param respawn; procd_set_param stdout /dev/null; procd_set_param stderr /dev/null; procd_close_instance; }' > "$INIT_PATH_GO"
-chmod +x "$INIT_PATH_GO"; /etc/init.d/tg-ws-proxy-go enable; /etc/init.d/tg-ws-proxy-go start; if pidof tg-ws-proxy-go >/dev/null 2>&1; then echo -e "${GREEN}Сервис ${NC}TG WS Proxy Go${GREEN} запущен!${NC}"
-echo -e "\n${YELLOW}Настройки SOCKS5 в TG:${NC} ${NC}$(uci get network.lan.ipaddr 2>/dev/null | cut -d/ -f1):1080"; else echo -e "\n${RED}Сервис TG WS Proxy Go не запущен!${NC}"; fi; }
+chmod +x "$INIT_PATH_GO"; /etc/init.d/tg-ws-proxy-go enable; /etc/init.d/tg-ws-proxy-go start; if pidof tg-ws-proxy-go >/dev/null 2>&1; then echo -e "${GREEN}Сервис ${NC}TG WS Proxy Go${GREEN} запущен!${NC}"; else echo -e "\n${RED}Сервис TG WS Proxy Go не запущен!${NC}"; fi; }
 tg_GO() { if [ -f "$BIN_PATH_GO" ] && [ -f "$INIT_PATH_GO" ]; then remove_TG; PAUSE; elif [ "$(df -m /root 2>/dev/null | awk 'NR==2 {print $4+0}')" -lt 5 ]; then echo -e "\n${RED}Недостаточно свободного места!${NC}"; PAUSE; return 1; else install_TG; PAUSE; fi; }
 
 ##############################################################################################################
