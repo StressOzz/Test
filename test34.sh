@@ -1,6 +1,5 @@
 #!/bin/sh
 
-# --- Цвета ---
 GREEN="\033[1;32m"
 RED="\033[1;31m"
 YELLOW="\033[1;33m"
@@ -24,30 +23,22 @@ DNS_LIST="
 111.88.96.50
 "
 
-# --- Проверка dig ---
 if ! command -v dig >/dev/null 2>&1; then
-    echo -e "${YELLOW}dig не найден. Попытка установки...${NC}"
+    echo -e "${YELLOW}Устанавливаем ${NC}dig"
     if command -v opkg >/dev/null 2>&1; then
-        opkg update
-        opkg install bind-dig
+        opkg update >/dev/null 2>&1
+        opkg install bind-dig >/dev/null 2>&1
     elif command -v apk >/dev/null 2>&1; then
-        apk update
-        apk add bind-dig
+        apk update >/dev/null 2>&1
+        apk add bind-dig >/dev/null 2>&1
     else
-        echo -e "${RED}Не удалось установить dig. Прерывание скрипта${NC}"
+        echo -e "${RED}Не удалось установить ${NC}dig${RED}!${NC}"
         exit 1
     fi
-
-    if ! command -v dig >/dev/null 2>&1; then
-        echo -e "${RED}dig всё ещё не установлен. Прерывание скрипта${NC}"
-        exit 1
-    fi
-
-    echo -e "${GREEN}dig установлен${NC}"
 fi
 
 clear
-# --- Функция получения IP через dig ---
+
 get_ip4() {
     local domain=$1
     local server=$2
