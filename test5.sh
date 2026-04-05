@@ -75,7 +75,7 @@ for DOMAIN in $DOMAINS; do
         DNS_COLOR=$YELLOW
     fi
 
-    echo -e "  DNS итог: ${DNS_COLOR}$DNS_RESULT${NC}"
+    echo -e "  DNS: ${DNS_COLOR}$DNS_RESULT${NC}"
 
     # --- DPI проверка ---
     if [ -n "$SYS_IP" ]; then
@@ -85,7 +85,7 @@ for DOMAIN in $DOMAINS; do
             DPI_RESULT="OK"
             DPI_COLOR=$GREEN
         else
-            DPI_RESULT="DPI/БЛОК"
+            DPI_RESULT="DPI / БЛОК"
             DPI_COLOR=$RED
             FINAL_DPI_OK=0
         fi
@@ -99,14 +99,14 @@ for DOMAIN in $DOMAINS; do
     echo -e "${MAGENTA}----------------------------------------${NC}"
 done
 
-echo -e "${MAGENTA}=== ИТОГ ===${NC}"
+echo -e "\n${MAGENTA}=== ИТОГ ===${NC}"
 
 if [ $FINAL_DNS_OK -eq 1 ] && [ $FINAL_DPI_OK -eq 1 ]; then
-    echo -e "${GREEN}✔ Всё чисто (DNS и доступ без проблем)${NC}"
+    echo -e "${GREEN}[✓]${NC} ${CYAN}DNS не подменён, трафик доступен${NC}"
 elif [ $FINAL_DNS_OK -eq 0 ]; then
-    echo -e "${RED}✖ Есть проблемы с DNS${NC}"
+    echo -e "${RED}[✗]${NC} ${CYAN}DNS подменяется / блокируется${NC}"
 elif [ $FINAL_DPI_OK -eq 0 ]; then
-    echo -e "${RED}✖ Есть проблемы с DPI (режут трафик)${NC}"
+    echo -e "${RED}[✗]${NC} ${CYAN}Трафик режется провайдером${NC}"
 else
-    echo -e "${YELLOW}⚠ Неоднозначный результат${NC}"
+    echo -e "${YELLOW}[!]${NC} ${CYAN}Результат неполный / сомнительный${NC}"
 fi
