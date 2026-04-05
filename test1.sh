@@ -4,27 +4,27 @@
 # Проверка подмены DNS и блокировок доступа к googlevideo.com
 # 
 # Использование: ./youtube-check.sh [--verbose] [--json] [--log FILE]
-# Возврат: 0=OK, 1=DNS spoof, 2=DPI block, 3=error
+# Возврат: 0=OK, 1=DNS spoof, 2=DPI block, 3=DNS+DPI/ошибка
 #==============================================================================
 
 set -euo pipefail
 
-# ──────────────────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────
 # 🎨 Цвета и форматирование
-# ──────────────────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────
 if [ -t 1 ]; then
-    GREEN="\033[1;32m"    RED="\033[1;31m"    YELLOW="\033[1;33m"
-    CYAN="\033[1;36m"     MAGENTA="\033[1;35m"    BLUE="\033[1;34m"
-    BOLD="\033[1m"        NC="\033[0m"
-    ICON_OK="✓"  ICON_ERR="✗"  ICON_WARN="!"  ICON_INFO="•"
+    GREEN="\033[1;32m" RED="\033[1;31m" YELLOW="\033[1;33m"
+    CYAN="\033[1;36m" MAGENTA="\033[1;35m" BLUE="\033[1;34m"
+    BOLD="\033[1m" NC="\033[0m"
+    ICON_OK="✓" ICON_ERR="✗" ICON_WARN="!" ICON_INFO="•"
 else
     GREEN="" RED="" YELLOW="" CYAN="" MAGENTA="" BLUE="" BOLD="" NC=""
     ICON_OK="[OK]" ICON_ERR="[ERR]" ICON_WARN="[!]" ICON_INFO="[i]"
 fi
 
-# ──────────────────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────
 # ⚙️ Конфигурация
-# ──────────────────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────
 : "${TIMEOUT:=3}"
 : "${TRIES:=2}"
 : "${MIN_MATCH_PERCENT:=50}"
@@ -48,9 +48,9 @@ DNS_SERVERS=(
 
 DOH_SERVER="${DOH_SERVER:-127.0.0.1#5053}"  # dnscrypt-proxy / unbound
 
-# ──────────────────────────────────────────────────────────────────────────
-# 📊 Глобальные переменные и флаги
-# ──────────────────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────
+# 📊 Глобальные переменные
+# ──────────────────────────────────────────────────────────
 VERBOSE=0
 JSON_MODE=0
 LOG_FILE=""
@@ -58,9 +58,9 @@ FINAL_DNS_OK=1
 FINAL_DPI_OK=1
 declare -A IP_CACHE
 
-# ──────────────────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────
 # 🔧 Утилиты
-# ──────────────────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────
 log() {
     local level="$1"; shift
     local msg="[$(date '+%H:%M:%S')] [$level] $*"
@@ -76,18 +76,12 @@ die() {
 check_deps() {
     local missing=()
     for cmd in curl timeout; do command -v "$cmd" >/dev/null 2>&1 || missing+=("$cmd"); done
-    # dig/host/nslookup — хотя бы один
-    if ! command -v dig >/dev/null 2>&1 && \
-       ! command -v host >/dev/null 2>&1 && \
-       ! command -v nslookup >/dev/null 2>&1; then
+    if ! command -v dig >/dev/null 2>&1 && ! command -v host >/dev/null 2>&1 && ! command -v nslookup >/dev/null 2>&1; then
         missing+=("dig|host|nslookup")
     fi
     [ ${#missing[@]} -gt 0 ] && die "Отсутствуют зависимости: ${missing[*]}"
 }
 
-# ──────────────────────────────────────────────────────────────────────────
-# 🌐 DNS функции
-# ──────────────────────────────────────────────────────────────────────────
 get_resolver_cmd() {
     if command -v dig >/dev/null 2>&1; then
         echo "dig"
@@ -101,8 +95,6 @@ get_resolver_cmd() {
 get_all_ips() {
     local domain="$1" server="${2:-}"
     local cache_key="${domain}:${server:-system}"
-    
-    # Кэширование
     [[ -n "${IP_CACHE[$cache_key]:-}" ]] && { echo "${IP_CACHE[$cache_key]}"; return 0; }
     
     local resolver=$(get_resolver_cmd)
@@ -111,16 +103,13 @@ get_all_ips() {
     case "$resolver" in
         dig)
             local srv_flag="${server:+@$server}"
-            result=$(dig +short +time="$TIMEOUT" +tries="$TRIES" A "$domain" $srv_flag 2>/dev/null | \
-                     grep -E '^[0-9.]+$' | sort -u)
+            result=$(dig +short +time="$TIMEOUT" +tries="$TRIES" A "$domain" $srv_flag 2>/dev/null | grep -E '^[0-9.]+$' | sort -u)
             ;;
         host)
-            result=$(host -W "$TIMEOUT" -t A "$domain" ${server} 2>/dev/null | \
-                     awk '/has address/{print $4}' | sort -u)
+            result=$(host -W "$TIMEOUT" -t A "$domain" ${server} 2>/dev/null | awk '/has address/{print $4}' | sort -u)
             ;;
         nslookup)
-            result=$(nslookup -type=A "$domain" ${server} 2>/dev/null | \
-                     awk '/^Address: /{print $2}' | grep -E '^[0-9.]+$' | sort -u)
+            result=$(nslookup -type=A "$domain" ${server} 2>/dev/null | awk '/^Address: /{print $2}' | grep -E '^[0-9.]+$' | sort -u)
             ;;
     esac
     
@@ -131,74 +120,53 @@ get_all_ips() {
 compare_ip_sets() {
     local set1="$1" set2="$2"
     [ -z "$set1" ] || [ -z "$set2" ] && return 1
-    
     local common=$(comm -12 <(echo "$set1") <(echo "$set2") 2>/dev/null | wc -l)
     local total=$(echo -e "$set1\n$set2" | grep -v '^$' | sort -u | wc -l)
-    
     [ "$total" -eq 0 ] && return 1
     local match_pct=$((common * 100 / total))
-    [ "$match_pct" -ge "$MIN_MATCH_PERCENT" ]
+    [ "$match_pct" -ge "$MIN_MATCH_PERCENT" ] && return 0 || return 1
 }
 
 is_google_ip() {
     local ip="$1"
-    # Основные префиксы Google/YouTube (обновляйте при необходимости)
     echo "$ip" | grep -qE '^(8\.|172\.21[0-9]\.|172\.25[0-3]\.|142\.25[0-1]\.|173\.194\.|216\.58\.|74\.125\.|35\.19[0-1]\.|108\.177\.)' && return 0
     return 1
 }
 
 get_doh_ip() {
     local domain="$1"
-    # Если DoH на localhost — используем get_all_ips с указанием сервера
     if [[ "$DOH_SERVER" =~ ^127\. ]]; then
         get_all_ips "$domain" "${DOH_SERVER%%#*}"
         return
     fi
-    # Fallback: Cloudflare DoH API (требует jq)
     if command -v jq >/dev/null 2>&1; then
-        curl -s --max-time "$TIMEOUT" \
-             -H "accept: application/dns-json" \
-             "https://1.1.1.1/dns-query?name=$domain&type=A" 2>/dev/null | \
-             jq -r '.Answer[]? | select(.type==1) | .data' 2>/dev/null | sort -u
+        curl -s --max-time "$TIMEOUT" -H "accept: application/dns-json" "https://1.1.1.1/dns-query?name=$domain&type=A" 2>/dev/null | \
+        jq -r '.Answer[]? | select(.type==1) | .data' 2>/dev/null | sort -u
     else
-        get_all_ips "$domain"  # fallback на системный
+        [ $VERBOSE -eq 1 ] && log "INFO" "DoH fallback на системный DNS"
+        get_all_ips "$domain"
     fi
 }
 
-# ──────────────────────────────────────────────────────────────────────────
-# 🔐 DPI / TLS проверки
-# ──────────────────────────────────────────────────────────────────────────
 check_tls_handshake() {
     local domain="$1" ip="$2"
-    # Проверка TLS handshake с SNI и валидация сертификата
-    echo | timeout 5 openssl s_client -connect "${ip}:443" -servername "$domain" \
-         -verify_return_error 2>/dev/null | \
-         grep -q "Verify return code: 0" && return 0
-    return 1
+    echo | timeout 5 openssl s_client -connect "${ip}:443" -servername "$domain" -verify_return_error 2>/dev/null | grep -q "Verify return code: 0"
 }
 
 check_http_access() {
     local domain="$1" ip="$2"
-    # HTTP/2 запрос с реалистичными заголовками
     local http_code
-    http_code=$(curl -m 5 -s -o /dev/null -w "%{http_code}" \
-         --resolve "$domain:443:$ip" \
-         -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" \
-         -H "Accept: */*" \
-         --http2 \
-         "https://$domain/robots.txt" 2>/dev/null) || http_code="000"
-    
+    http_code=$(curl -m 5 -s -o /dev/null -w "%{http_code}" --resolve "$domain:443:$ip" \
+        -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" \
+        -H "Accept: */*" --http2 "https://$domain/robots.txt" 2>/dev/null || echo "000")
     [[ "$http_code" =~ ^[23] ]] && return 0
     return 1
 }
 
 check_dpi() {
     local domain="$1" ip="$2"
-    # Приоритет: проверка сертификата > HTTP доступ
-    if check_tls_handshake "$domain" "$ip"; then
-        return 0
-    elif check_http_access "$domain" "$ip"; then
-        return 0
+    if check_tls_handshake "$domain" "$ip"; then return 0
+    elif check_http_access "$domain" "$ip"; then return 0
     fi
     return 1
 }
@@ -206,15 +174,11 @@ check_dpi() {
 check_certificate() {
     local domain="$1" ip="$2"
     local cert_info
-    cert_info=$(echo | timeout 5 openssl s_client -connect "${ip}:443" -servername "$domain" 2>/dev/null | \
-                openssl x509 -noout -subject -issuer 2>/dev/null) || return 1
+    cert_info=$(echo | timeout 5 openssl s_client -connect "${ip}:443" -servername "$domain" 2>/dev/null | openssl x509 -noout -subject -issuer 2>/dev/null || return 1)
     echo "$cert_info" | grep -qiE "(Google|YouTube|GTS)" && return 0
     return 1
 }
 
-# ──────────────────────────────────────────────────────────────────────────
-# 📋 Вывод результатов
-# ──────────────────────────────────────────────────────────────────────────
 print_header() {
     echo -e "\n${MAGENTA}${BOLD}╔════════════════════════════════════════╗${NC}"
     echo -e "${MAGENTA}${BOLD}║  🔍 YouTube DNS/DPI Check v2.0      ║${NC}"
@@ -269,19 +233,13 @@ print_json_result() {
 EOF
 }
 
-# ──────────────────────────────────────────────────────────────────────────
-# 🔄 Основная логика проверки домена
-# ──────────────────────────────────────────────────────────────────────────
 check_domain() {
     local DOMAIN="$1"
     local sys_ips doh_ips dns_result dpi_result dns_color dpi_color
-    
     print_domain_header "$DOMAIN"
     
-    # Получаем IP от системного DNS и DoH
     sys_ips=$(get_all_ips "$DOMAIN")
     doh_ips=$(get_doh_ip "$DOMAIN")
-    
     local sys_ip_first="${sys_ips%%$'\n'*}"
     local doh_ip_first="${doh_ips%%$'\n'*}"
     
@@ -290,15 +248,12 @@ check_domain() {
         [ -n "$doh_ips" ] && print_result_line "DoH" "$doh_ips" "$GREEN"
     }
     
-    # Сравниваем с публичными DNS
     local match_count=0 total_count=0
     for DNS in "${DNS_SERVERS[@]}"; do
         local dns_ips=$(get_all_ips "$DOMAIN" "$DNS")
         [ -z "$dns_ips" ] && continue
-        
         total_count=$((total_count + 1))
         compare_ip_sets "$sys_ips" "$dns_ips" && match_count=$((match_count + 1))
-        
         [ $VERBOSE -eq 1 ] && {
             local ip_display="${dns_ips%%$'\n'*}"
             local color=$GREEN
@@ -307,7 +262,6 @@ check_domain() {
         }
     done
     
-    # === Анализ DNS ===
     if [ -z "$sys_ips" ]; then
         dns_result="БЛОК/НЕТ ОТВЕТА"
         dns_color=$RED
@@ -327,19 +281,15 @@ check_domain() {
         dns_color=$YELLOW
     fi
     
-    # Проверка принадлежности к Google
     if [ -n "$sys_ip_first" ] && ! is_google_ip "$sys_ip_first"; then
-        dns_result="🚫 IP не принадлежит Google!"
-        dns_color=$RED
-        FINAL_DNS_OK=0
+        dns_result="⚠️ IP не подтвержден как Google"
+        dns_color=$YELLOW
     fi
     
     print_result_line "DNS статус" "$dns_result" "$dns_color"
     
-    # === DPI проверка ===
     if [ -n "$sys_ip_first" ]; then
         if check_dpi "$DOMAIN" "$sys_ip_first"; then
-            # Доп. проверка сертификата
             if check_certificate "$DOMAIN" "$sys_ip_first"; then
                 dpi_result="✅ Доступен + сертификат валиден"
                 dpi_color=$GREEN
@@ -359,18 +309,11 @@ check_domain() {
     fi
     
     print_result_line "Доступ" "$dpi_result" "$dpi_color"
-    
-    # JSON вывод если нужно
     [ $JSON_MODE -eq 1 ] && print_json_result "$DOMAIN" "$sys_ip_first" "$doh_ip_first" "$dns_result" "$dpi_result"
-    
     echo -e "${MAGENTA}─────────────────────────────────────${NC}\n"
 }
 
-# ──────────────────────────────────────────────────────────────────────────
-# 🚀 Main
-# ──────────────────────────────────────────────────────────────────────────
 main() {
-    # Парсинг аргументов
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --verbose|-v) VERBOSE=1; shift ;;
@@ -378,9 +321,6 @@ main() {
             --log) LOG_FILE="$2"; shift 2 ;;
             --help|-h)
                 echo "Использование: $0 [--verbose] [--json] [--log FILE]"
-                echo "  --verbose  Подробный вывод"
-                echo "  --json     Вывод в JSON (для автоматизации)"
-                echo "  --log FILE Запись лога в файл"
                 exit 0
                 ;;
             *) die "Неизвестный аргумент: $1" ;;
@@ -397,20 +337,22 @@ main() {
     
     log "INFO" "Проверка ${#DOMAINS[@]} доменов через ${#DNS_SERVERS[@]} DNS серверов"
     
-    # Основной цикл
     for DOMAIN in "${DOMAINS[@]}"; do
         check_domain "$DOMAIN"
     done
     
-    # Финальный отчёт (только если не JSON режим)
     [ $JSON_MODE -eq 0 ] && {
         print_summary
-        local exit_code=0
-        [ $FINAL_DNS_OK -eq 0 ] && exit_code=1
-        [ $FINAL_DPI_OK -eq 0 ] && exit_code=2
-        exit $exit_code
+        if [ $FINAL_DNS_OK -eq 0 ] && [ $FINAL_DPI_OK -eq 0 ]; then
+            exit 3
+        elif [ $FINAL_DNS_OK -eq 0 ]; then
+            exit 1
+        elif [ $FINAL_DPI_OK -eq 0 ]; then
+            exit 2
+        else
+            exit 0
+        fi
     }
 }
 
-# Запуск
 main "$@"
