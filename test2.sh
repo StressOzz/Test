@@ -1,9 +1,8 @@
-```sh
 #!/bin/sh
 #===============================================================================
 #  Mihomo + MagiTrickle Installer for OpenWRT
-#  Author: StressOzz Remix | Optimized Edition v2.1.1
-#  License: MIT
+#  Author: StressOzz Remix | Optimized Edition v2.2.0
+#  Compatible: ash / dash / bash
 #===============================================================================
 
 set -eu
@@ -11,13 +10,12 @@ set -eu
 #-------------------------------------------------------------------------------
 #  GLOBAL CONFIGURATION
 #-------------------------------------------------------------------------------
-readonly MIHOMO_DIR="/etc/mihomo"
-readonly MIHOMO_BIN="/usr/bin/mihomo"
-readonly MAGITRICKLE_CFG="/etc/magitrickle/state/config.yaml"
-readonly LUCI_MIHOMO_VIEW="/www/luci-static/resources/view/mihomo"
-readonly LUCI_MT_VIEW="/www/luci-static/resources/view/magitrickle"
+MIHOMO_DIR="/etc/mihomo"
+MIHOMO_BIN="/usr/bin/mihomo"
+MAGITRICKLE_CFG="/etc/magitrickle/state/config.yaml"
+LUCI_MIHOMO_VIEW="/www/luci-static/resources/view/mihomo"
+LUCI_MT_VIEW="/www/luci-static/resources/view/magitrickle"
 
-# Colors
 C_RESET='\033[0m'
 C_BOLD='\033[1m'
 C_RED='\033[31m'
@@ -27,25 +25,24 @@ C_BLUE='\033[34m'
 C_CYAN='\033[36m'
 C_MAGENTA='\033[35m'
 
-# Progress tracking
 STEP_TOTAL=5
 STEP_CURRENT=0
 PKG_MGR=""
 
 #-------------------------------------------------------------------------------
-#  LOGGING FUNCTIONS
+#  LOGGING & UTILITIES
 #-------------------------------------------------------------------------------
-log()      { printf "${C_WHITE}[·]${C_RESET} %s\n" "$*"; }
-info()     { printf "${C_GREEN}[✓]${C_RESET} %s\n" "$*"; }
-warn()     { printf "${C_YELLOW}[!]${C_RESET} %s\n" "$*" >&2; }
-error()    { printf "${C_RED}[✗]${C_RESET} %s\n" "$*" >&2; }
-success()  { printf "${C_GREEN}✨ ${C_BOLD}%s${C_RESET}\n" "$*"; }
-header()   { printf "\n${C_CYAN}━━━ ${C_BOLD}%s${C_RESET} ${C_CYAN}━━━${C_RESET}\n" "$*"; }
-subheader(){ printf "${C_BLUE}➜ ${C_RESET}%s\n" "$*"; }
+log()      { printf '[·] %s\n' "$*"; }
+info()     { printf '\033[32m[✓]\033[0m %s\n' "$*"; }
+warn()     { printf '\033[33m[!]\033[0m %s\n' "$*" >&2; }
+error()    { printf '\033[31m[✗]\033[0m %s\n' "$*" >&2; }
+success()  { printf '\033[32m✨ \033[1m%s\033[0m\n' "$*"; }
+header()   { printf '\n\033[36m━━━ \033[1m%s\033[0m \033[36m━━━\033[0m\n' "$*"; }
+subheader(){ printf '\033[34m➜ \033[0m%s\n' "$*"; }
 
 step() {
     STEP_CURRENT=$((STEP_CURRENT + 1))
-    printf "\n${C_MAGENTA}▌${C_RESET} ${C_BOLD}Шаг ${STEP_CURRENT}/${STEP_TOTAL}:${C_RESET} %s\n" "$*"
+    printf '\n\033[35m▌\033[0m \033[1mШаг %d/%d:\033[0m %s\n' "$STEP_CURRENT" "$STEP_TOTAL" "$*"
 }
 
 die() {
@@ -53,9 +50,6 @@ die() {
     exit 1
 }
 
-#-------------------------------------------------------------------------------
-#  SYSTEM UTILITIES
-#-------------------------------------------------------------------------------
 init_pkgmgr() {
     if command -v apk >/dev/null 2>&1; then
         PKG_MGR="apk"
@@ -103,7 +97,7 @@ fetch_file() {
     local retry=0
     local max_retry=3
     
-    while [ $retry -lt $max_retry ]; do
+    while [ "$retry" -lt "$max_retry" ]; do
         if curl -Lf --connect-timeout 15 -sS -o "$dest" "$url" 2>/dev/null && [ -s "$dest" ]; then
             return 0
         fi
@@ -114,7 +108,8 @@ fetch_file() {
 }
 
 detect_mihomo_arch() {
-    local arch="$(uname -m)"
+    local arch
+    arch="$(uname -m)"
     case "$arch" in
         x86_64)        echo "amd64" ;;
         i?86)          echo "386" ;;
@@ -127,7 +122,11 @@ detect_mihomo_arch() {
             fpu=$(grep -c "FPU" /proc/cpuinfo 2>/dev/null || echo "0")
             float="softfloat"
             [ "$fpu" -gt 0 ] && float="hardfloat"
-            [ "$endian" = "1" ] && echo "mipsle-${float}" || echo "mips-${float}"
+            if [ "$endian" = "1" ]; then
+                echo "mipsle-${float}"
+            else
+                echo "mips-${float}"
+            fi
             ;;
         riscv64) echo "riscv64" ;;
         *) die "Неподдерживаемая архитектура: $arch" ;;
@@ -147,7 +146,7 @@ check_disk_space() {
 }
 
 #-------------------------------------------------------------------------------
-#  MODULE: Dependencies
+#  INSTALLATION MODULES
 #-------------------------------------------------------------------------------
 install_dependencies() {
     step "Установка зависимостей"
@@ -156,7 +155,9 @@ install_dependencies() {
     
     subheader "Установка компонентов..."
     local deps="ca-certificates kmod-tun kmod-nft-tproxy kmod-nft-nat curl"
-    [ "$PKG_MGR" = "opkg" ] && deps="$deps libcurl4 ca-bundle"
+    if [ "$PKG_MGR" = "opkg" ]; then
+        deps="$deps libcurl4 ca-bundle"
+    fi
     
     if pkg_install $deps; then
         info "Зависимости установлены успешно"
@@ -165,36 +166,27 @@ install_dependencies() {
     fi
 }
 
-#-------------------------------------------------------------------------------
-#  MODULE: Mihomo Core
-#-------------------------------------------------------------------------------
 install_mihomo_core() {
     step "Установка ядра Mihomo"
     
-    # Проверка места на диске
     check_disk_space /tmp 16000 || die "Недостаточно места в /tmp"
     check_disk_space / 18000 || die "Недостаточно места в корне"
     
-    # Остановка службы если запущена
     [ -f /etc/init.d/mihomo ] && /etc/init.d/mihomo stop 2>/dev/null || true
     
-    # Определение архитектуры
     local arch
     arch="$(detect_mihomo_arch)"
     subheader "Архитектура: $(uname -m) → ${arch}"
     
-    # Подготовка директорий
-    mkdir -p "${MIHOMO_DIR}"/{proxy-providers,rule-providers,rule-files,UI}
+    mkdir -p "${MIHOMO_DIR}"/proxy-providers "${MIHOMO_DIR}"/rule-providers "${MIHOMO_DIR}"/rule-files "${MIHOMO_DIR}"/UI
     echo "$arch" > "${MIHOMO_DIR}/.arch"
     
-    # Получение последней версии
     subheader "Поиск актуальной версии..."
     local version
     version="$(gh_latest "MetaCubeX/mihomo" 'v[0-9]+\\.[0-9]+\\.[0-9]+')"
     [ -z "$version" ] && die "Не удалось получить версию Mihomo"
     info "Найдена версия: ${version}"
     
-    # Загрузка бинарника
     local filename="mihomo-linux-${arch}-${version}.gz"
     local url="https://github.com/MetaCubeX/mihomo/releases/download/${version}/${filename}"
     local tmp="/tmp/mihomo.gz"
@@ -204,7 +196,6 @@ install_mihomo_core() {
         die "Ошибка загрузки ядра Mihomo"
     fi
     
-    # Установка
     subheader "Распаковка и установка..."
     if ! gunzip -c "$tmp" > "$MIHOMO_BIN" 2>/dev/null; then
         rm -f "$tmp"
@@ -213,13 +204,11 @@ install_mihomo_core() {
     chmod +x "$MIHOMO_BIN"
     rm -f "$tmp"
     
-    # Проверка работоспособности
     if ! "$MIHOMO_BIN" -v >/dev/null 2>&1; then
         die "Ядро не проходит проверку целостности"
     fi
     info "Ядро установлено: $("$MIHOMO_BIN" -v 2>&1 | head -1)"
     
-    # Создание init-скрипта
     subheader "Настройка службы..."
     cat > /etc/init.d/mihomo << 'MHSERVICE'
 #!/bin/sh /etc/rc.common
@@ -250,16 +239,12 @@ MHSERVICE
     info "Служба Mihomo настроена"
 }
 
-#-------------------------------------------------------------------------------
-#  MODULE: Hev-Socks5-Tunnel
-#-------------------------------------------------------------------------------
 install_hev_tunnel() {
     step "Установка Hev-Socks5-Tunnel"
     
     subheader "Установка пакета..."
     pkg_install hev-socks5-tunnel || warn "Пакет hev-socks5-tunnel может быть недоступен"
     
-    # Конфигурация
     mkdir -p /etc/hev-socks5-tunnel
     cat > /etc/hev-socks5-tunnel/main.yml << 'HEVCFG'
 tunnel:
@@ -274,7 +259,6 @@ socks5:
 HEVCFG
     chmod 600 /etc/hev-socks5-tunnel/main.yml
     
-    # Очистка старых UCI настроек
     subheader "Очистка старых конфигураций..."
     uci delete network.Mihomo 2>/dev/null || true
     
@@ -284,7 +268,6 @@ HEVCFG
     done
     uci commit firewall 2>/dev/null || true
     
-    # Настройка сервиса
     subheader "Конфигурация hev-socks5-tunnel..."
     uci set hev-socks5-tunnel.config.enabled='1' 2>/dev/null || true
     uci set hev-socks5-tunnel.config.configfile='/etc/hev-socks5-tunnel/main.yml' 2>/dev/null || true
@@ -292,17 +275,15 @@ HEVCFG
     /etc/init.d/hev-socks5-tunnel restart >/dev/null 2>&1 || true
     sleep 2
     
-    # Сетевой интерфейс
     subheader "Настройка сети..."
     if ! uci get network.Mihomo >/dev/null 2>&1; then
-        uci add network interface
+        uci add network interface >/dev/null 2>&1
     fi
     uci set network.Mihomo.proto='none'
     uci set network.Mihomo.device='Mihomo'
     uci commit network
     /etc/init.d/network reload >/dev/null 2>&1
     
-    # Firewall
     subheader "Правила фаервола..."
     local zone_fwd
     zone_fwd="$(uci add firewall zone)"
@@ -325,23 +306,18 @@ HEVCFG
     info "Hev-Socks5-Tunnel настроен"
 }
 
-#-------------------------------------------------------------------------------
-#  MODULE: MagiTrickle
-#-------------------------------------------------------------------------------
 install_magitrickle_app() {
     step "Установка MagiTrickle"
     
-    # Получение версий
     local mt_ver mod_ver arch
     mt_ver="$(gh_latest "MagiTrickle/MagiTrickle")"
     mod_ver="$(curl -Ls -o /dev/null -w '%{url_effective}' "https://github.com/badigit/MagiTrickle_mod_badigit/releases/latest" 2>/dev/null | sed -E 's#.*/tag/v?##')"
     arch="$(grep '^OPENWRT_ARCH=' /etc/os-release 2>/dev/null | cut -d'"' -f2 || echo 'unknown')"
     
-    # Меню выбора
-    printf "\n${C_YELLOW}╭─ Выбор версии MagiTrickle ─────────────${C_RESET}\n"
-    printf "${C_YELLOW}│${C_RESET}  ${C_CYAN}1)${C_RESET} Оригинальный ${C_GREEN}v${mt_ver}${C_RESET}\n"
-    printf "${C_YELLOW}│${C_RESET}  ${C_CYAN}2)${C_RESET} Mod by badigit ${C_GREEN}v${mod_ver}${C_RESET}\n"
-    printf "${C_YELLOW}╰─${C_RESET} Введите номер [1]: "
+    printf '\n\033[33m╭─ Выбор версии MagiTrickle ─────────────\033[0m\n'
+    printf '\033[33m│\033[0m  \033[36m1)\033[0m Оригинальный \033[32mv%s\033[0m\n' "$mt_ver"
+    printf '\033[33m│\033[0m  \033[36m2)\033[0m Mod by badigit \033[32mv%s\033[0m\n' "$mod_ver"
+    printf '\033[33m╰─\033[0m Введите номер [1]: '
     
     local choice
     read -r choice 2>/dev/null || choice="1"
@@ -358,17 +334,17 @@ install_magitrickle_app() {
             ;;
     esac
     
-    [ "$PKG_MGR" = "apk" ] && pkg_ext="apk" || pkg_ext="ipk"
+    if [ "$PKG_MGR" = "apk" ]; then
+        pkg_ext="apk"
+    else
+        pkg_ext="ipk"
+    fi
     
-    # Бэкап конфигурации
     [ -f "$MAGITRICKLE_CFG" ] && cp "$MAGITRICKLE_CFG" "/tmp/mt_backup_$(date +%s).yaml"
-    
-    # Удаление старой версии
     pkg_remove magitrickle
     
-    # Поиск и загрузка пакета
     subheader "Поиск пакета..."
-    local pkg_list tmp_pkg actual_pkg
+    local pkg_list actual_pkg tmp_pkg
     pkg_list="$(curl -Ls "$base_url" 2>/dev/null || echo "")"
     actual_pkg="$(echo "$pkg_list" | grep -oE "magitrickle_[^\"' ]+\\.${pkg_ext}" | head -1)"
     
@@ -378,12 +354,10 @@ install_magitrickle_app() {
     
     tmp_pkg="/tmp/magitrickle.${pkg_ext}"
     subheader "Загрузка ${actual_pkg}..."
-    
     if ! fetch_file "${base_url}/${actual_pkg}" "$tmp_pkg"; then
         die "Ошибка загрузки MagiTrickle"
     fi
     
-    # Установка
     subheader "Установка пакета..."
     if [ "$PKG_MGR" = "apk" ]; then
         apk add --allow-untrusted "$tmp_pkg" >/dev/null 2>&1 || die "Ошибка установки (apk)"
@@ -392,20 +366,14 @@ install_magitrickle_app() {
     fi
     rm -f "$tmp_pkg"
     
-    # Конфигурация
     subheader "Применение конфигурации..."
     local cfg_url="https://raw.githubusercontent.com/StressOzz/Use_WARP_on_OpenWRT/refs/heads/main/files/MagiTrickle/configAD.yaml"
     mkdir -p "$(dirname "$MAGITRICKLE_CFG")"
+    fetch_file "$cfg_url" "$MAGITRICKLE_CFG" || warn "Не удалось загрузить конфиг, используется дефолтный"
     
-    if ! fetch_file "$cfg_url" "$MAGITRICKLE_CFG"; then
-        warn "Не удалось загрузить конфиг, используется дефолтный"
-    fi
-    
-    # Запуск службы
     /etc/init.d/magitrickle enable >/dev/null 2>&1
     /etc/init.d/magitrickle restart >/dev/null 2>&1
     
-    # LuCI интеграция
     subheader "Интеграция с LuCI..."
     mkdir -p "$LUCI_MT_VIEW" /usr/share/luci/menu.d
     
@@ -442,9 +410,6 @@ MTMENU
     info "MagiTrickle установлен и настроен"
 }
 
-#-------------------------------------------------------------------------------
-#  MODULE: LuCI Interface for Mihomo
-#-------------------------------------------------------------------------------
 setup_luci_interface() {
     subheader "Настройка LuCI интерфейса для Mihomo..."
     
@@ -452,7 +417,6 @@ setup_luci_interface() {
     mkdir -p /usr/share/luci/menu.d
     mkdir -p /usr/share/rpcd/acl.d
     
-    # Menu entry
     cat > /usr/share/luci/menu.d/luci-app-mihomo.json << 'MENUEOF'
 {
     "admin/services/mihomo": {
@@ -466,7 +430,6 @@ setup_luci_interface() {
 }
 MENUEOF
     
-    # ACL rules
     cat > /usr/share/rpcd/acl.d/luci-app-mihomo.json << 'ACLEOF'
 {
     "luci-app-mihomo": {
@@ -488,7 +451,6 @@ MENUEOF
 }
 ACLEOF
     
-    # ACE Editor assets
     subheader "Загрузка ACE Editor..."
     local ace_ver
     ace_ver="$(curl -s https://api.cdnjs.com/libraries/ace 2>/dev/null | grep -o '"version":"[^"]*"' | cut -d'"' -f4 | head -1)"
@@ -502,10 +464,7 @@ ACLEOF
         fi
     done
     
-    # Main view file - external file approach for reliability
     subheader "Создание интерфейса..."
-    
-    # Write the JavaScript view file
     cat > "${LUCI_MIHOMO_VIEW}/config.js" << 'LUCIVIEW'
 'use strict';
 'require view';
@@ -1031,19 +990,18 @@ finalize_install() {
     /etc/init.d/rpcd restart >/dev/null 2>&1 || true
     /etc/init.d/uhttpd restart >/dev/null 2>&1 || true
     
-    # Get IP for display
     local my_ip
     my_ip="$(hostname -I 2>/dev/null | awk '{print $1}' || echo '192.168.1.1')"
     
     echo ""
     success "🎉 Установка успешно завершена!"
     echo ""
-    printf "${C_CYAN}╭─ Панели управления ─────────────────${C_RESET}\n"
-    printf "${C_CYAN}│${C_RESET} ${C_BOLD}Mihomo:${C_RESET}     http://${my_ip}:9090/ui/\n"
-    printf "${C_CYAN}│${C_RESET} ${C_BOLD}MagiTrickle:${C_RESET} http://${my_ip}:8080/\n"
-    printf "${C_CYAN}╰─────────────────────────────────────${C_RESET}\n"
+    printf '\033[36m╭─ Панели управления ─────────────────\033[0m\n'
+    printf '\033[36m│\033[0m \033[1mMihomo:\033[0m     http://%s:9090/ui/\n' "$my_ip"
+    printf '\033[36m│\033[0m \033[1mMagiTrickle:\033[0m http://%s:8080/\n' "$my_ip"
+    printf '\033[36m╰─────────────────────────────────────\033[0m\n'
     echo ""
-    info "Доступ в LuCI: ${C_CYAN}Services → Mihomo / MagiTrickle${C_RESET}"
+    info "Доступ в LuCI: \033[36mServices → Mihomo / MagiTrickle\033[0m"
     echo ""
 }
 
@@ -1051,25 +1009,21 @@ finalize_install() {
 #  MAIN ENTRY POINT
 #-------------------------------------------------------------------------------
 main() {
-    # Check requirements
     command -v curl >/dev/null 2>&1 || die "Требуется: curl"
     command -v wget >/dev/null 2>&1 || die "Требуется: wget"
     command -v uci >/dev/null 2>&1 || die "Требуется: uci"
     
-    # Clear and show banner
     clear
-    printf "${C_CYAN}"
+    printf '\033[36m'
     printf "╔════════════════════════════════════╗\n"
-    printf "║  ${C_BOLD}Mihomo + MagiTrickle Installer${C_RESET}${C_CYAN}  ║\n"
-    printf "║  v2.1.1 • OpenWRT Optimized${C_RESET}${C_CYAN}      ║\n"
+    printf "║  \033[1mMihomo + MagiTrickle Installer\033[0m\033[36m  ║\n"
+    printf "║  v2.2.0 • OpenWRT Optimized\033[0m\033[36m      ║\n"
     printf "╚════════════════════════════════════╝\n"
-    printf "${C_RESET}\n"
+    printf '\033[0m\n'
     
-    # Initialize
     init_pkgmgr
-    log "Система пакетов: ${C_GREEN}${PKG_MGR}${C_RESET}"
+    log "Система пакетов: \033[32m${PKG_MGR}\033[0m"
     
-    # Run installation steps
     install_dependencies
     install_mihomo_core
     install_hev_tunnel
@@ -1078,6 +1032,4 @@ main() {
     finalize_install
 }
 
-# Execute main function
 main "$@"
-```
