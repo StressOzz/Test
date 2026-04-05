@@ -34,7 +34,7 @@ get_ip4() {
 
 pad() {
     # выравнивание до 16 символов
-    printf "%-16s" "$1"
+    printf "%-14s" "$1"
 }
 
 echo -e "${MAGENTA}Проверка googlevideo (YouTube)${NC}"
