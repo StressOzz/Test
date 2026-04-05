@@ -8,14 +8,12 @@ CYAN="\033[1;36m"
 MAGENTA="\033[1;35m"
 NC="\033[0m"
 
-# --- Домен для проверки ---
 DOMAINS="
 rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com
 rr1---sn-gvnuxaxjvh-jx3l.googlevideo.com
 rr1---sn-gvnuxaxjvh-jx3s.googlevideo.com
 "
 
-# --- Сторонние DNS ---
 DNS_LIST="
 1.1.1.1
 8.8.8.8
@@ -26,7 +24,6 @@ DNS_LIST="
 111.88.96.50
 "
 
-# --- Локальный резолвер (системный) ---
 LOCAL_DNS="127.0.0.1#53"
 
 clear
@@ -35,8 +32,12 @@ get_ip4() {
     nslookup -type=A "$1" "$2" 2>/dev/null | awk '/^Address: /{print $2}' | grep -E '^[0-9.]+' | tail -n1
 }
 
-echo -e "${MAGENTA}Проверка googlevideo (YouTube)${NC}"
-echo
+pad() {
+    # выравнивание по 16 символов
+    printf "%-16s" "$1"
+}
+
+echo -e "${MAGENTA}Проверка googlevideo (YouTube)${NC}\n"
 
 FINAL_DNS_OK=1
 FINAL_DPI_OK=1
@@ -44,9 +45,9 @@ FINAL_DPI_OK=1
 for DOMAIN in $DOMAINS; do
     echo -e "${CYAN}Домен:${NC} $DOMAIN"
 
-    # --- Системный DNS через локальный резолвер ---
     SYS_IP=$(get_ip4 "$DOMAIN" "$LOCAL_DNS")
-    echo -e "  Системный DNS : ${GREEN}${SYS_IP:-НЕТ}${NC}"
+    echo -n "  Системный DNS : "
+    [ -n "$SYS_IP" ] && echo -e "${GREEN}$(pad $SYS_IP)${NC}" || echo -e "${RED}НЕТ${NC}"
 
     MATCH=0
     TOTAL=0
@@ -55,7 +56,8 @@ for DOMAIN in $DOMAINS; do
         IP=$(get_ip4 "$DOMAIN" "$DNS")
         [ -z "$IP" ] && continue
 
-        echo -e "  ${YELLOW}$DNS${NC} : $IP"
+        echo -n "  $(pad $DNS) : "
+        echo -e "$IP"
 
         TOTAL=$((TOTAL+1))
         [ "$SYS_IP" = "$IP" ] && MATCH=$((MATCH+1))
@@ -73,13 +75,11 @@ for DOMAIN in $DOMAINS; do
         DNS_RESULT="РАЗНЫЕ CDN (норма)"
         DNS_COLOR=$YELLOW
     fi
-
     echo -e "  DNS: ${DNS_COLOR}$DNS_RESULT${NC}"
 
     # --- DPI проверка ---
     if [ -n "$SYS_IP" ]; then
         curl -m 5 -I --resolve "$DOMAIN:443:$SYS_IP" "https://$DOMAIN" >/dev/null 2>&1
-
         if [ $? -eq 0 ]; then
             DPI_RESULT="OK"
             DPI_COLOR=$GREEN
@@ -93,7 +93,6 @@ for DOMAIN in $DOMAINS; do
         DPI_COLOR=$YELLOW
         FINAL_DPI_OK=0
     fi
-
     echo -e "  Доступ: ${DPI_COLOR}$DPI_RESULT${NC}"
     echo -e "${MAGENTA}----------------------------------------${NC}"
 done
