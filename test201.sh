@@ -8,12 +8,14 @@ CYAN="\033[1;36m"
 MAGENTA="\033[1;35m"
 NC="\033[0m"
 
+# --- Домен для проверки ---
 DOMAINS="
 rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com
 rr1---sn-gvnuxaxjvh-jx3l.googlevideo.com
 rr1---sn-gvnuxaxjvh-jx3s.googlevideo.com
 "
 
+# --- Сторонние DNS ---
 DNS_LIST="
 1.1.1.1
 8.8.8.8
@@ -24,18 +26,13 @@ DNS_LIST="
 111.88.96.50
 "
 
-DOH_URL="https://127.0.0.1:5053/resolve?name=%s&type=A"
+# --- Локальный резолвер (обычно Unbound/Stubby) ---
+LOCAL_DNS="127.0.0.1#53"
 
 clear
 
 get_ip4() {
     nslookup -type=A "$1" "$2" 2>/dev/null | awk '/^Address: /{print $2}' | grep -E '^[0-9.]+' | tail -n1
-}
-
-get_ip_doh() {
-    # Для DoH через curl, вытаскиваем IP из JSON
-    IP=$(curl -s --insecure -H 'accept: application/dns-json' "$(printf "$DOH_URL" "$1")" | grep -o '"data":[^}]*' | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | tail -n1)
-    echo "$IP"
 }
 
 echo -e "${MAGENTA}Проверка googlevideo (YouTube)${NC}"
@@ -48,10 +45,10 @@ for DOMAIN in $DOMAINS; do
     echo -e "${CYAN}Домен:${NC} $DOMAIN"
 
     SYS_IP=$(get_ip4 "$DOMAIN")
-    DOH_IP=$(get_ip_doh "$DOMAIN")
+    LOCAL_IP=$(get_ip4 "$DOMAIN" "$LOCAL_DNS")
 
     echo -e "  Системный DNS : ${GREEN}${SYS_IP:-НЕТ}${NC}"
-    [ -n "$DOH_IP" ] && echo -e "  DoH           : ${GREEN}$DOH_IP${NC}"
+    [ -n "$LOCAL_IP" ] && echo -e "  Локальный резолвер : ${GREEN}$LOCAL_IP${NC}"
 
     MATCH=0
     TOTAL=0
@@ -71,10 +68,9 @@ for DOMAIN in $DOMAINS; do
         DNS_RESULT="БЛОК DNS"
         DNS_COLOR=$RED
         FINAL_DNS_OK=0
-    elif [ -n "$DOH_IP" ] && [ "$SYS_IP" != "$DOH_IP" ]; then
-        DNS_RESULT="ПОДМЕНА DNS"
-        DNS_COLOR=$RED
-        FINAL_DNS_OK=0
+    elif [ "$SYS_IP" != "$LOCAL_IP" ]; then
+        DNS_RESULT="РАЗНЫЙ CDN / локальный резолвер отличается"
+        DNS_COLOR=$YELLOW
     elif [ $MATCH -eq $TOTAL ]; then
         DNS_RESULT="OK"
         DNS_COLOR=$GREEN
@@ -111,7 +107,7 @@ echo -e "\n${MAGENTA}Итог тестирования:${NC}"
 if [ $FINAL_DNS_OK -eq 1 ] && [ $FINAL_DPI_OK -eq 1 ]; then
     echo -e " ${GREEN}[✓]${NC} ${CYAN}DNS не подменён, трафик доступен${NC}"
 elif [ $FINAL_DNS_OK -eq 0 ]; then
-    echo -e " ${RED}[✗]${NC} ${CYAN}DNS подменяется / блокируется${NC}"
+    echo -e " ${RED}[✗]${NC} ${CYAN}DNS блокируется${NC}"
 elif [ $FINAL_DPI_OK -eq 0 ]; then
     echo -e " ${RED}[✗]${NC} ${CYAN}Трафик блокируется провайдером${NC}"
 else
