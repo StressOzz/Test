@@ -33,7 +33,7 @@ get_ip4() {
 }
 
 pad() {
-    printf "%-13s" "$1"
+    printf "%-14s" "$1"
 }
 
 echo -e "${MAGENTA}Проверка googlevideo (YouTube)${NC}"
@@ -48,8 +48,8 @@ for DOMAIN in $DOMAINS; do
     SYS_IP=$(get_ip4 "$DOMAIN")
     DOH_IP=$(get_ip4 "$DOMAIN" "$DOH")
 
-    echo -e "  Системный DNS : ${GREEN}$(pad $SYS_IP)${NC}"
-    [ -n "$DOH_IP" ] && echo -e "  DoH           : ${GREEN}$(pad $DOH_IP)${NC}"
+    echo -e "  Системный DNS  : ${GREEN}$(pad $SYS_IP)${NC}"
+    [ -n "$DOH_IP" ] && echo -e "  DoH            : ${GREEN}$(pad $DOH_IP)${NC}"
 
     MATCH=0
     TOTAL=0
