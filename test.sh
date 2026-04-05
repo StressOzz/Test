@@ -1,7 +1,7 @@
 #!/bin/sh
 
 DOMAIN_MAIN="youtube.com"
-DOMAIN_VIDEO="r1---sn-4g5edn7r.googlevideo.com"
+DOMAIN_VIDEO="rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com"
 
 DNS_CF="1.1.1.1"
 DOH="127.0.0.1#5053"
