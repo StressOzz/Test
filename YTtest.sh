@@ -26,11 +26,13 @@ DNS_LIST="
 
 DOH="127.0.0.1#5053"
 
+clear
+
 get_ip4() {
     nslookup -type=A "$1" $2 2>/dev/null | awk '/^Address: /{print $2}' | grep -E '^[0-9.]+' | tail -n1
 }
 
-echo -e "${MAGENTA}=== Проверка googlevideo (YouTube) ===${NC}"
+echo -e "${MAGENTA}Проверка googlevideo (YouTube)${NC}"
 echo
 
 FINAL_DNS_OK=1
@@ -98,13 +100,14 @@ for DOMAIN in $DOMAINS; do
     echo -e "  Доступ: ${DPI_COLOR}$DPI_RESULT${NC}"
     echo -e "${MAGENTA}----------------------------------------${NC}"
 done
-echo
+echo -e "\n${MAGENTA}Итог тестирования:${NC}"
 if [ $FINAL_DNS_OK -eq 1 ] && [ $FINAL_DPI_OK -eq 1 ]; then
-    echo -e "${GREEN}[✓]${NC} ${CYAN}DNS не подменён, трафик доступен${NC}"
+    echo -e " ${GREEN}[✓]${NC} ${CYAN}DNS не подменён, трафик доступен${NC}"
 elif [ $FINAL_DNS_OK -eq 0 ]; then
-    echo -e "${RED}[✗]${NC} ${CYAN}DNS подменяется / блокируется${NC}"
+    echo -e " ${RED}[✗]${NC} ${CYAN}DNS подменяется / блокируется${NC}"
 elif [ $FINAL_DPI_OK -eq 0 ]; then
-    echo -e "${RED}[✗]${NC} ${CYAN}Трафик режется провайдером${NC}"
+    echo -e " ${RED}[✗]${NC} ${CYAN}Трафик режется провайдером${NC}"
 else
     echo -e "${YELLOW}[!]${NC} ${CYAN}Результат неполный / сомнительный${NC}"
 fi
+echo
