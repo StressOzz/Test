@@ -8,12 +8,14 @@ CYAN="\033[1;36m"
 MAGENTA="\033[1;35m"
 NC="\033[0m"
 
+# --- Домен для проверки ---
 DOMAINS="
 rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com
 rr1---sn-gvnuxaxjvh-jx3l.googlevideo.com
 rr1---sn-gvnuxaxjvh-jx3s.googlevideo.com
 "
 
+# --- Сторонние DNS ---
 DNS_LIST="
 1.1.1.1
 8.8.8.8
@@ -23,6 +25,9 @@ DNS_LIST="
 45.155.204.190
 111.88.96.50
 "
+
+# --- Локальный резолвер (системный) ---
+LOCAL_DNS="127.0.0.1#53"
 
 clear
 
@@ -39,8 +44,8 @@ FINAL_DPI_OK=1
 for DOMAIN in $DOMAINS; do
     echo -e "${CYAN}Домен:${NC} $DOMAIN"
 
-    SYS_IP=$(get_ip4 "$DOMAIN")
-
+    # --- Системный DNS через локальный резолвер ---
+    SYS_IP=$(get_ip4 "$DOMAIN" "$LOCAL_DNS")
     echo -e "  Системный DNS : ${GREEN}${SYS_IP:-НЕТ}${NC}"
 
     MATCH=0
