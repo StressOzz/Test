@@ -24,20 +24,21 @@ DNS_LIST="
 111.88.96.50
 "
 
-LOCAL_DNS="127.0.0.1#53"
+DOH="127.0.0.1#5053"
 
 clear
 
 get_ip4() {
-    nslookup -type=A "$1" "$2" 2>/dev/null | awk '/^Address: /{print $2}' | grep -E '^[0-9.]+' | tail -n1
+    nslookup -type=A "$1" $2 2>/dev/null | awk '/^Address: /{print $2}' | grep -E '^[0-9.]+' | tail -n1
 }
 
 pad() {
-    # выравнивание по 16 символов
+    # выравнивание до 16 символов
     printf "%-16s" "$1"
 }
 
-echo -e "${MAGENTA}Проверка googlevideo (YouTube)${NC}\n"
+echo -e "${MAGENTA}Проверка googlevideo (YouTube)${NC}"
+echo
 
 FINAL_DNS_OK=1
 FINAL_DPI_OK=1
@@ -45,9 +46,12 @@ FINAL_DPI_OK=1
 for DOMAIN in $DOMAINS; do
     echo -e "${CYAN}Домен:${NC} $DOMAIN"
 
-    SYS_IP=$(get_ip4 "$DOMAIN" "$LOCAL_DNS")
+    SYS_IP=$(get_ip4 "$DOMAIN")
+    DOH_IP=$(get_ip4 "$DOMAIN" "$DOH")
+
     echo -n "  Системный DNS : "
     [ -n "$SYS_IP" ] && echo -e "${GREEN}$(pad $SYS_IP)${NC}" || echo -e "${RED}НЕТ${NC}"
+    [ -n "$DOH_IP" ] && echo -e "  DoH           : ${GREEN}$(pad $DOH_IP)${NC}"
 
     MATCH=0
     TOTAL=0
@@ -56,8 +60,7 @@ for DOMAIN in $DOMAINS; do
         IP=$(get_ip4 "$DOMAIN" "$DNS")
         [ -z "$IP" ] && continue
 
-        echo -n "  $(pad $DNS) : "
-        echo -e "$IP"
+        echo -e "  $(pad $DNS) : $IP"
 
         TOTAL=$((TOTAL+1))
         [ "$SYS_IP" = "$IP" ] && MATCH=$((MATCH+1))
@@ -68,6 +71,10 @@ for DOMAIN in $DOMAINS; do
         DNS_RESULT="БЛОК DNS"
         DNS_COLOR=$RED
         FINAL_DNS_OK=0
+    elif [ -n "$DOH_IP" ] && [ "$SYS_IP" != "$DOH_IP" ]; then
+        DNS_RESULT="ПОДМЕНА DNS"
+        DNS_COLOR=$RED
+        FINAL_DNS_OK=0
     elif [ $MATCH -eq $TOTAL ]; then
         DNS_RESULT="OK"
         DNS_COLOR=$GREEN
@@ -75,11 +82,13 @@ for DOMAIN in $DOMAINS; do
         DNS_RESULT="РАЗНЫЕ CDN (норма)"
         DNS_COLOR=$YELLOW
     fi
+
     echo -e "  DNS: ${DNS_COLOR}$DNS_RESULT${NC}"
 
     # --- DPI проверка ---
     if [ -n "$SYS_IP" ]; then
         curl -m 5 -I --resolve "$DOMAIN:443:$SYS_IP" "https://$DOMAIN" >/dev/null 2>&1
+
         if [ $? -eq 0 ]; then
             DPI_RESULT="OK"
             DPI_COLOR=$GREEN
@@ -93,6 +102,7 @@ for DOMAIN in $DOMAINS; do
         DPI_COLOR=$YELLOW
         FINAL_DPI_OK=0
     fi
+
     echo -e "  Доступ: ${DPI_COLOR}$DPI_RESULT${NC}"
     echo -e "${MAGENTA}----------------------------------------${NC}"
 done
