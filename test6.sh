@@ -98,9 +98,7 @@ for DOMAIN in $DOMAINS; do
     echo -e "  Доступ: ${DPI_COLOR}$DPI_RESULT${NC}"
     echo -e "${MAGENTA}----------------------------------------${NC}"
 done
-
-echo -e "\n${MAGENTA}=== ИТОГ ===${NC}"
-
+echo
 if [ $FINAL_DNS_OK -eq 1 ] && [ $FINAL_DPI_OK -eq 1 ]; then
     echo -e "${GREEN}[✓]${NC} ${CYAN}DNS не подменён, трафик доступен${NC}"
 elif [ $FINAL_DNS_OK -eq 0 ]; then
