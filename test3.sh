@@ -1,7 +1,7 @@
 #!/bin/sh
 #===============================================================================
 #  Mihomo + MagiTrickle Installer for OpenWRT
-#  Author: StressOzz Remix | Optimized Edition v2.2.0
+#  Author: StressOzz Remix | Optimized Edition v2.2.1
 #  Compatible: ash / dash / bash
 #===============================================================================
 
@@ -86,9 +86,14 @@ pkg_remove() {
 
 gh_latest() {
     local repo="$1"
-    local pattern="${2:-[0-9]+\\.[0-9]+\\.[0-9]+}"
-    curl -Ls -o /dev/null -w '%{url_effective}' "https://github.com/${repo}/releases/latest" 2>/dev/null \
-        | grep -oE "$pattern" | head -1
+    local tag=""
+    # Метод 1: GitHub API (наиболее надежный)
+    tag=$(curl -s "https://api.github.com/repos/${repo}/releases/latest" 2>/dev/null | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -1) || true
+    # Метод 2: Fallback через редирект
+    if [ -z "$tag" ]; then
+        tag=$(curl -Ls -o /dev/null -w '%{url_effective}' "https://github.com/${repo}/releases/latest" 2>/dev/null | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | head -1) || true
+    fi
+    printf '%s' "$tag"
 }
 
 fetch_file() {
@@ -183,8 +188,12 @@ install_mihomo_core() {
     
     subheader "Поиск актуальной версии..."
     local version
-    version="$(gh_latest "MetaCubeX/mihomo" 'v[0-9]+\\.[0-9]+\\.[0-9]+')"
-    [ -z "$version" ] && die "Не удалось получить версию Mihomo"
+    version="$(gh_latest "MetaCubeX/mihomo")"
+    if [ -z "$version" ]; then
+        error "Не удалось получить версию Mihomo. Проверьте подключение к интернету."
+        error "Попробуйте выполнить: curl -I https://api.github.com"
+        die "Аварийное завершение"
+    fi
     info "Найдена версия: ${version}"
     
     local filename="mihomo-linux-${arch}-${version}.gz"
@@ -311,12 +320,12 @@ install_magitrickle_app() {
     
     local mt_ver mod_ver arch
     mt_ver="$(gh_latest "MagiTrickle/MagiTrickle")"
-    mod_ver="$(curl -Ls -o /dev/null -w '%{url_effective}' "https://github.com/badigit/MagiTrickle_mod_badigit/releases/latest" 2>/dev/null | sed -E 's#.*/tag/v?##')"
+    mod_ver="$(curl -Ls -o /dev/null -w '%{url_effective}' "https://github.com/badigit/MagiTrickle_mod_badigit/releases/latest" 2>/dev/null | sed -E 's#.*/tag/v?##') || true
     arch="$(grep '^OPENWRT_ARCH=' /etc/os-release 2>/dev/null | cut -d'"' -f2 || echo 'unknown')"
     
     printf '\n\033[33m╭─ Выбор версии MagiTrickle ─────────────\033[0m\n'
-    printf '\033[33m│\033[0m  \033[36m1)\033[0m Оригинальный \033[32mv%s\033[0m\n' "$mt_ver"
-    printf '\033[33m│\033[0m  \033[36m2)\033[0m Mod by badigit \033[32mv%s\033[0m\n' "$mod_ver"
+    printf '\033[33m│\033[0m  \033[36m1)\033[0m Оригинальный \033[32mv%s\033[0m\n' "${mt_ver:-unknown}"
+    printf '\033[33m│\033[0m  \033[36m2)\033[0m Mod by badigit \033[32mv%s\033[0m\n' "${mod_ver:-unknown}"
     printf '\033[33m╰─\033[0m Введите номер [1]: '
     
     local choice
@@ -346,7 +355,7 @@ install_magitrickle_app() {
     subheader "Поиск пакета..."
     local pkg_list actual_pkg tmp_pkg
     pkg_list="$(curl -Ls "$base_url" 2>/dev/null || echo "")"
-    actual_pkg="$(echo "$pkg_list" | grep -oE "magitrickle_[^\"' ]+\\.${pkg_ext}" | head -1)"
+    actual_pkg="$(echo "$pkg_list" | grep -oE "magitrickle_[^\"' ]+\\.${pkg_ext}" | head -1) || true"
     
     if [ -z "$actual_pkg" ]; then
         die "Не удалось найти пакет MagiTrickle для скачивания"
@@ -453,7 +462,7 @@ ACLEOF
     
     subheader "Загрузка ACE Editor..."
     local ace_ver
-    ace_ver="$(curl -s https://api.cdnjs.com/libraries/ace 2>/dev/null | grep -o '"version":"[^"]*"' | cut -d'"' -f4 | head -1)"
+    ace_ver="$(curl -s https://api.cdnjs.com/libraries/ace 2>/dev/null | grep -o '"version":"[^"]*"' | cut -d'"' -f4 | head -1) || true"
     [ -z "$ace_ver" ] && ace_ver="1.43.3"
     
     local ace_files="ace.js theme-merbivore_soft.js theme-tomorrow.js mode-yaml.js worker-yaml.js"
@@ -1017,7 +1026,7 @@ main() {
     printf '\033[36m'
     printf "╔════════════════════════════════════╗\n"
     printf "║  \033[1mMihomo + MagiTrickle Installer\033[0m\033[36m  ║\n"
-    printf "║  v2.2.0 • OpenWRT Optimized\033[0m\033[36m      ║\n"
+    printf "║  v2.2.1 • OpenWRT Optimized\033[0m\033[36m      ║\n"
     printf "╚════════════════════════════════════╝\n"
     printf '\033[0m\n'
     
