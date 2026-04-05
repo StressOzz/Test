@@ -33,8 +33,7 @@ get_ip4() {
 }
 
 pad() {
-    # выравнивание до 16 символов
-    printf "%-14s" "$1"
+    printf "%-13s" "$1"
 }
 
 echo -e "${MAGENTA}Проверка googlevideo (YouTube)${NC}"
@@ -65,7 +64,6 @@ for DOMAIN in $DOMAINS; do
         [ "$SYS_IP" = "$IP" ] && MATCH=$((MATCH+1))
     done
 
-    # --- DNS анализ ---
     if [ -z "$SYS_IP" ]; then
         DNS_RESULT="БЛОК DNS"
         DNS_COLOR=$RED
@@ -84,7 +82,6 @@ for DOMAIN in $DOMAINS; do
 
     echo -e "  DNS: ${DNS_COLOR}$DNS_RESULT${NC}"
 
-    # --- DPI проверка ---
     if [ -n "$SYS_IP" ]; then
         curl -m 5 -I --resolve "$DOMAIN:443:$SYS_IP" "https://$DOMAIN" >/dev/null 2>&1
 
