@@ -1,6 +1,5 @@
 #!/bin/sh
 
-# --- Цвета ---
 GREEN="\033[1;32m"
 RED="\033[1;31m"
 YELLOW="\033[1;33m"
@@ -14,6 +13,9 @@ rr1---sn-gvnuxaxjvh-jx3l.googlevideo.com
 rr1---sn-gvnuxaxjvh-jx3s.googlevideo.com
 "
 
+# Убираем пустые строки
+DOMAINS=$(echo "$DOMAINS" | grep -v '^$')
+
 DNS_LIST="
 1.1.1.1
 8.8.8.8
@@ -24,41 +26,28 @@ DNS_LIST="
 111.88.96.50
 "
 
-DOH="127.0.0.1#5053"
+if ! command -v dig >/dev/null 2>&1; then
+    echo -e "${YELLOW}Устанавливаем ${NC}dig"
+    if command -v opkg >/dev/null 2>&1; then
+        opkg update >/dev/null 2>&1
+        opkg install bind-dig >/dev/null 2>&1
+    elif command -v apk >/dev/null 2>&1; then
+        apk update >/dev/null 2>&1
+        apk add bind-dig >/dev/null 2>&1
+    else
+        echo -e "${RED}Не удалось установить ${NC}dig${RED}!${NC}"
+        exit 1
+    fi
+fi
 
 clear
 
-# --- Проверка dig ---
-if ! command -v dig >/dev/null 2>&1; then
-    echo -e "${YELLOW}dig не найден. Попытка установки...${NC}"
-    if command -v opkg >/dev/null 2>&1; then
-        opkg update
-        opkg install bind-dig
-    elif command -v apk >/dev/null 2>&1; then
-        apk update
-        apk add bind-dig
-    else
-        echo -e "${RED}Не удалось установить dig. Прерывание скрипта${NC}"
-        exit 1
-    fi
-
-    if ! command -v dig >/dev/null 2>&1; then
-        echo -e "${RED}dig всё ещё не установлен. Прерывание скрипта${NC}"
-        exit 1
-    fi
-
-    echo -e "${GREEN}dig установлен${NC}"
-fi
-
-# --- Функция получения IP через dig ---
 get_ip4() {
     local domain=$1
     local server=$2
-    if [ -n "$server" ]; then
-        dig @"$server" +short A "$domain" +time=2 +tries=1 +https 2>/dev/null | grep -E '^[0-9.]+' | tail -n1
-    else
-        dig +short A "$domain" +time=2 +tries=1 2>/dev/null | grep -E '^[0-9.]+' | tail -n1
-    fi
+    local cmd="dig +short A $domain +time=2 +tries=1"
+    [ -n "$server" ] && cmd="dig @$server +short A $domain +time=2 +tries=1"
+    $cmd 2>/dev/null | grep -E '^[0-9.]+' | sort -u
 }
 
 pad() {
@@ -74,31 +63,26 @@ FINAL_DPI_OK=1
 for DOMAIN in $DOMAINS; do
     echo -e "${CYAN}Домен:${NC} $DOMAIN"
 
-    SYS_IP=$(get_ip4 "$DOMAIN")
-    DOH_IP=$(get_ip4 "$DOMAIN" "$DOH")
-
-    echo -e "  Системный DNS  : ${GREEN}$(pad $SYS_IP)${NC}"
-    [ -n "$DOH_IP" ] && echo -e "  DoH            : ${GREEN}$(pad $DOH_IP)${NC}"
+    SYS_IPS=$(get_ip4 "$DOMAIN")
+    echo -e "  Системный DNS  : ${GREEN}$(echo $SYS_IPS | tr '\n' ' ')${NC}"
 
     MATCH=0
     TOTAL=0
 
     for DNS in $DNS_LIST; do
-        IP=$(get_ip4 "$DOMAIN" "$DNS")
-        [ -z "$IP" ] && continue
+        DNS_IPS=$(get_ip4 "$DOMAIN" "$DNS")
+        [ -z "$DNS_IPS" ] && continue
 
-        echo -e "  ${YELLOW}$(pad $DNS)${NC} : $IP"
+        echo -e "  ${YELLOW}$(pad $DNS)${NC} : $(echo $DNS_IPS | tr '\n' ' ')"
 
         TOTAL=$((TOTAL+1))
-        [ "$SYS_IP" = "$IP" ] && MATCH=$((MATCH+1))
+        # проверяем пересечение множеств
+        INTERSECT=$(echo "$SYS_IPS" "$DNS_IPS" | tr ' ' '\n' | sort | uniq -d)
+        [ -n "$INTERSECT" ] && MATCH=$((MATCH+1))
     done
 
-    if [ -z "$SYS_IP" ]; then
+    if [ -z "$SYS_IPS" ]; then
         DNS_RESULT="БЛОК DNS"
-        DNS_COLOR=$RED
-        FINAL_DNS_OK=0
-    elif [ -n "$DOH_IP" ] && [ "$SYS_IP" != "$DOH_IP" ]; then
-        DNS_RESULT="ПОДМЕНА DNS"
         DNS_COLOR=$RED
         FINAL_DNS_OK=0
     elif [ $MATCH -eq $TOTAL ]; then
@@ -111,9 +95,8 @@ for DOMAIN in $DOMAINS; do
 
     echo -e "  DNS: ${DNS_COLOR}$DNS_RESULT${NC}"
 
-    if [ -n "$SYS_IP" ]; then
-        curl -m 5 -I --resolve "$DOMAIN:443:$SYS_IP" "https://$DOMAIN" >/dev/null 2>&1
-
+    if [ -n "$SYS_IPS" ]; then
+        curl -m 5 -I --resolve "$DOMAIN:443:$(echo $SYS_IPS | awk '{print $1}')" "https://$DOMAIN" >/dev/null 2>&1
         if [ $? -eq 0 ]; then
             DPI_RESULT="OK"
             DPI_COLOR=$GREEN
