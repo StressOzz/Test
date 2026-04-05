@@ -87,12 +87,12 @@ for DOMAIN in $DOMAINS; do
             DPI_RESULT="OK"
             DPI_COLOR=$GREEN
         else
-            DPI_RESULT="DPI / БЛОК"
+            DPI_RESULT="Блокировка"
             DPI_COLOR=$RED
             FINAL_DPI_OK=0
         fi
     else
-        DPI_RESULT="SKIP"
+        DPI_RESULT="НЕ ВОЗМОЖНО ОПРЕДЕЛИТЬ"
         DPI_COLOR=$YELLOW
         FINAL_DPI_OK=0
     fi
@@ -106,7 +106,7 @@ if [ $FINAL_DNS_OK -eq 1 ] && [ $FINAL_DPI_OK -eq 1 ]; then
 elif [ $FINAL_DNS_OK -eq 0 ]; then
     echo -e " ${RED}[✗]${NC} ${CYAN}DNS подменяется / блокируется${NC}"
 elif [ $FINAL_DPI_OK -eq 0 ]; then
-    echo -e " ${RED}[✗]${NC} ${CYAN}Трафик режется провайдером${NC}"
+    echo -e " ${RED}[✗]${NC} ${CYAN}Трафик блокируется провайдером${NC}"
 else
     echo -e "${YELLOW}[!]${NC} ${CYAN}Результат неполный / сомнительный${NC}"
 fi
