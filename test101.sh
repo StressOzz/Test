@@ -44,18 +44,32 @@ for DOMAIN in $DOMAINS; do
     SYS_IP=$(get_ip4 "$DOMAIN")
     DOH_IP=$(get_ip4 "$DOMAIN" "$DOH")
 
-    echo -e "  Системный DNS : ${GREEN}${SYS_IP:-НЕТ}${NC}"
-    [ -n "$DOH_IP" ] && echo -e "  DoH           : ${GREEN}$DOH_IP${NC}"
+    # --- вычисляем максимальную длину DNS заголовков для выравнивания ---
+    max_len=0
+    for DNS in $DNS_LIST; do
+        [ -z "$DNS" ] && continue
+        len=${#DNS}
+        [ $len -gt $max_len ] && max_len=$len
+    done
+    [ ${#'Системный DNS'} -gt $max_len ] && max_len=${#'Системный DNS'}
+    [ ${#'DoH'} -gt $max_len ] && max_len=${#'DoH'}
+
+    # --- вывод Системного DNS ---
+    printf "  %-${max_len}s : %s\n" "Системный DNS" "${SYS_IP:-НЕТ}"
+
+    # --- вывод DoH ---
+    [ -n "$DOH_IP" ] && printf "  %-${max_len}s : %s\n" "DoH" "$DOH_IP"
 
     MATCH=0
     TOTAL=0
 
+    # --- вывод публичных DNS ---
     for DNS in $DNS_LIST; do
         [ -z "$DNS" ] && continue
         IP=$(get_ip4 "$DOMAIN" "$DNS")
         [ -z "$IP" ] && continue
 
-        echo -e "  ${YELLOW}$DNS${NC} : $IP"
+        printf "  %-${max_len}s : %s\n" "$DNS" "$IP"
 
         TOTAL=$((TOTAL+1))
         [ "$SYS_IP" = "$IP" ] && MATCH=$((MATCH+1))
@@ -78,7 +92,7 @@ for DOMAIN in $DOMAINS; do
         DNS_COLOR=$YELLOW
     fi
 
-    echo -e "  DNS: ${DNS_COLOR}$DNS_RESULT${NC}"
+    printf "  %-${max_len}s : %s%s%s\n" "DNS" "$DNS_COLOR" "$DNS_RESULT" "$NC"
 
     # --- DPI проверка ---
     if [ -n "$SYS_IP" ]; then
@@ -97,7 +111,7 @@ for DOMAIN in $DOMAINS; do
         FINAL_DPI_OK=0
     fi
 
-    echo -e "  Доступ: ${DPI_COLOR}$DPI_RESULT${NC}"
+    printf "  %-${max_len}s : %s%s%s\n" "Доступ" "$DPI_COLOR" "$DPI_RESULT" "$NC"
     echo -e "${MAGENTA}----------------------------------------${NC}"
 done
 
