@@ -66,7 +66,7 @@ printf "${CYAN}%2d) ${GREEN}%-10s${MAGENTA}| ${color}%-7s${MAGENTA}| ${CYAN}%s${
 i=$((i+1))
 done
 
-echo -e "${MAGENTA} 0) Обновить пинг${NC}"
+echo -e "${CYAN}99) ${YELLOW}Обновить пинг${NC}"
 
 echo -en "\n${YELLOW}Выберите страну (Enter = Россия):${NC} "
 read num
