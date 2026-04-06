@@ -60,11 +60,11 @@ else
 color="$RED"
 fi
 fi
-printf "${CYAN}%2d) ${GREEN}%-10s${MAGENTA}│ ${color}%-7s${MAGENTA}│ ${CYAN}%s${NC}\n" "$i" "$country" "$ping_val" "$ep"
+printf "${CYAN}%2d) ${GREEN}%-10s${MAGENTA}| ${color}%-7s${MAGENTA}| ${CYAN}%s${NC}\n" "$i" "$country" "$ping_val" "$ep"
 i=$((i+1))
 done
 
-echo -e "${CYAN}99) ${YELLOW}Обновить пинг${NC} ${MAGENTA}│${NC}"
+echo -e "${CYAN}99) ${YELLOW}Обновить пинг${NC}"
 
 echo -en "\n${YELLOW}Выберите страну (Enter = Россия):${NC} "
 read num
