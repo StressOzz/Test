@@ -66,7 +66,7 @@ printf "${CYAN}%2d) ${GREEN}%-10s${MAGENTA}| ${color}%-7s${MAGENTA}| ${CYAN}%s${
 i=$((i+1))
 done
 
-echo -e "${CYAN}99) ${YELLOW}Обновить пинг${NC}"
+echo -e "${CYAN}99) ${NC}Обновить пинг"
 
 echo -en "\n${YELLOW}Выберите страну (Enter = Россия):${NC} "
 read num
@@ -80,7 +80,7 @@ break
 fi
 
 # Обновить
-if [ "$num" = "0" ]; then
+if [ "$num" = "99" ]; then
 clear
 continue
 fi
