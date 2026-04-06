@@ -4,8 +4,6 @@ EP_LIST='Россия        |engage.cloudflareclient.com:4500
 Россия #2     |engage.cloudflareclient.com:2408
 Россия #3     |engage.cloudflareclient.com:500
 Нидерланды #2 |45.84.222.208:4500
-Сингапур      |5.34.176.170:4500
-Латвия        |150.241.75.91:4500
 Америка       |usa.tribukvy.ltd:4500
 Нидерланды    |nl.tribukvy.ltd:4500
 Финляндия     |fi1.tribukvy.ltd:4500
@@ -66,7 +64,7 @@ printf "${CYAN}%2d) ${GREEN}%-10s${MAGENTA}| ${color}%-7s${MAGENTA}| ${CYAN}%s${
 i=$((i+1))
 done
 
-echo -e "${CYAN}99) ${NC}Обновить пинг"
+echo -e "${CYAN}99) ${YELLOW}Обновить пинг${NC}"
 
 echo -en "\n${YELLOW}Выберите страну (Enter = Россия):${NC} "
 read num
