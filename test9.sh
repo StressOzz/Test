@@ -1,16 +1,15 @@
 #!/bin/sh
 
-EP_LIST='Россия        |engage.cloudflareclient.com:4500
-Россия #2     |engage.cloudflareclient.com:2408
-Россия #3     |engage.cloudflareclient.com:500
-Нидерланды #2 |45.84.222.208:4500
-Америка       |usa.tribukvy.ltd:4500
-Нидерланды    |nl.tribukvy.ltd:4500
-Финляндия     |fi1.tribukvy.ltd:4500
-Россия #3     |ru0.tribukvy.ltd:4500
-Эстония       |ee.tribukvy.ltd:4500
-Польша #2     |pl0.tribukvy.ltd:4500
-Польша        |pl.tribukvy.ltd:4500'
+EP_LIST='Россия     |engage.cloudflareclient.com:4500
+Россия #2  |engage.cloudflareclient.com:2408
+Россия #3  |engage.cloudflareclient.com:500
+Америка    |usa.tribukvy.ltd:4500
+Нидерланды |nl.tribukvy.ltd:4500
+Финляндия  |fi1.tribukvy.ltd:4500
+Россия #3  |ru0.tribukvy.ltd:4500
+Эстония    |ee.tribukvy.ltd:4500
+Польша #2  |pl0.tribukvy.ltd:4500
+Польша     |pl.tribukvy.ltd:4500'
 
 GREEN='\033[0;32m'
 RED='\033[0;31m'
