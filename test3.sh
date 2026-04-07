@@ -26,6 +26,23 @@ DNS_LIST="
 111.88.96.50
 "
 
+clear
+
+get_ip4() {
+    local domain=$1
+    local server=$2
+    local cmd="dig +short A $domain +time=2 +tries=1"
+    [ -n "$server" ] && cmd="dig @$server +short A $domain +time=2 +tries=1"
+    $cmd 2>/dev/null | grep -E '^[0-9.]+' | sort -u
+}
+
+pad() {
+    printf "%-14s" "$1"
+}
+
+echo -e "${MAGENTA}Проверка googlevideo (YouTube)${NC}\n"
+
+    echo -e "${MAGENTA}----------------------------------------${NC}"
 if ! command -v dig >/dev/null 2>&1; then
     echo -e "${YELLOW}Устанавливаем ${NC}dig"
     if command -v opkg >/dev/null 2>&1; then
@@ -47,23 +64,7 @@ if ! command -v curl >/dev/null 2>&1; then
         apk add curl >/dev/null 2>&1
     fi
 fi
-
-clear
-
-get_ip4() {
-    local domain=$1
-    local server=$2
-    local cmd="dig +short A $domain +time=2 +tries=1"
-    [ -n "$server" ] && cmd="dig @$server +short A $domain +time=2 +tries=1"
-    $cmd 2>/dev/null | grep -E '^[0-9.]+' | sort -u
-}
-
-pad() {
-    printf "%-14s" "$1"
-}
-
-echo -e "${MAGENTA}Проверка googlevideo (YouTube)${NC}"
-echo
+    echo -e "${MAGENTA}----------------------------------------${NC}"
 
 FINAL_DNS_OK=1
 FINAL_DPI_OK=1
