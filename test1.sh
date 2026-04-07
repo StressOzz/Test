@@ -721,7 +721,7 @@ install_TG_GO() {
 
     chmod +x "$BIN_PATH_GO"
 
-cat > /etc/init.d/tg-ws-proxy-rs << 'EOF'
+cat > /etc/init.d/tg-ws-proxy-go << 'EOF'
 #!/bin/sh /etc/rc.common
 
 START=99
