@@ -37,6 +37,17 @@ if ! command -v dig >/dev/null 2>&1; then
     fi
 fi
 
+if ! command -v curl >/dev/null 2>&1; then
+    echo -e "${YELLOW}Устанавливаем ${NC}curl"
+    if command -v opkg >/dev/null 2>&1; then
+        opkg update >/dev/null 2>&1
+        opkg install curl >/dev/null 2>&1
+    elif command -v apk >/dev/null 2>&1; then
+        apk update >/dev/null 2>&1
+        apk add curl >/dev/null 2>&1
+    fi
+fi
+
 clear
 
 get_ip4() {
