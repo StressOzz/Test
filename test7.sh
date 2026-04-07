@@ -587,7 +587,7 @@ get_arch_RS() {
             echo "tg-ws-proxy"
         ;;       
         *)
-            echo -e "\n${RED}Архитектура не поддерживается: ${NC}$ARCH"
+            echo -e "\n${RED}Архитектура не поддерживается: ${NC}$ARCH\n"
             PAUSE
             return 1
         ;;
@@ -599,36 +599,36 @@ delete_TG_RS() {
     /etc/init.d/tg-ws-proxy-rs stop >/dev/null 2>&1
     /etc/init.d/tg-ws-proxy-rs disable >/dev/null 2>&1
     rm -rf "$BIN_PATH_RS" "$INIT_PATH_RS"
-    echo -e "TG WS Proxy Rust ${GREEN}удалён!${NC}"
+    echo -e "TG WS Proxy Rust ${GREEN}удалён!${NC}\n"
     PAUSE
 }
 
 install_TG_RS() {
     echo -e "\n${MAGENTA}Установка TG WS Proxy Rust${NC}"
 
-    ARCH_FILE_RS="$(get_arch_RS)" || { echo -e "\n${RED}Архитектура не поддерживается:${NC} $(uname -m)"; PAUSE; return 1; }
+    ARCH_FILE_RS="$(get_arch_RS)" || { echo -e "\n${RED}Архитектура не поддерживается:${NC} $(uname -m)\n"; PAUSE; return 1; }
 
         if ! command -v curl >/dev/null 2>&1; then
             echo -e "${CYAN}Устанавливаем ${NC}curl"
-            $UPDATE >/dev/null 2>&1 && $INSTALL curl >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка установки curl${NC}"; PAUSE; return 1; }
+            $UPDATE >/dev/null 2>&1 && $INSTALL curl >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка установки curl${NC}\n"; PAUSE; return 1; }
         fi
 
     echo -e "${CYAN}Скачиваем и устанавливаем${NC} $ARCH_FILE_RS"
 
     LATEST_TAG_RS="$(curl -Ls -o /dev/null -w '%{url_effective}' https://github.com/valnesfjord/tg-ws-proxy-rs/releases/latest | sed 's#.*/tag/##')"
-    [ -z "$LATEST_TAG_RS" ] && { echo -e "\n${RED}Не удалось получить версию${NC} TG WS Proxy Rust"; PAUSE; return 1; }
+    [ -z "$LATEST_TAG_RS" ] && { echo -e "\n${RED}Не удалось получить версию${NC} TG WS Proxy Rust\n"; PAUSE; return 1; }
 
 DOWNLOAD_URL_RS="https://github.com/valnesfjord/tg-ws-proxy-rs/releases/download/$LATEST_TAG_RS/$ARCH_FILE_RS"
 
 if echo "$ARCH" | grep -q "mipsel"; then
-    curl -L --fail -o "$BIN_PATH_RS" "$DOWNLOAD_URL_RS" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка скачивания${NC}"; PAUSE; return 1; }
+    curl -L --fail -o "$BIN_PATH_RS" "$DOWNLOAD_URL_RS" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка скачивания${NC}\n"; PAUSE; return 1; }
 else
-    curl -L --fail -o "$TMP_ARCHIVE_RS" "$DOWNLOAD_URL_RS" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка скачивания${NC}"; PAUSE; return 1; }
+    curl -L --fail -o "$TMP_ARCHIVE_RS" "$DOWNLOAD_URL_RS" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка скачивания${NC}\n"; PAUSE; return 1; }
 
     rm -rf "$TMP_DIR_RS"
     mkdir -p "$TMP_DIR_RS"
 
-    tar -xzf "$TMP_ARCHIVE_RS" -C "$TMP_DIR_RS" || { echo -e "\n${RED}Ошибка распаковки${NC}"; PAUSE; return 1; }
+    tar -xzf "$TMP_ARCHIVE_RS" -C "$TMP_DIR_RS" || { echo -e "\n${RED}Ошибка распаковки${NC}\n"; PAUSE; return 1; }
 
     mv "$TMP_DIR_RS"/tg-ws-proxy* "$BIN_PATH_RS"
 
@@ -685,27 +685,27 @@ delete_TG_GO() {
     /etc/init.d/tg-ws-proxy-go stop >/dev/null 2>&1
     /etc/init.d/tg-ws-proxy-go disable >/dev/null 2>&1
     rm -rf "$BIN_PATH_GO" "$INIT_PATH_GO"
-    echo -e "TG WS Proxy Go ${GREEN}удалён!${NC}"
+    echo -e "TG WS Proxy Go ${GREEN}удалён!${NC}\n"
     PAUSE
 }
 
 install_TG_GO() {
     echo -e "\n${MAGENTA}Установка TG WS Proxy Go${NC}"
 
-    ARCH_FILE_GO="$(get_arch_GO)" || { echo -e "\n${RED}Архитектура не поддерживается:${NC} $(uname -m)"; PAUSE; return 1; }
+    ARCH_FILE_GO="$(get_arch_GO)" || { echo -e "\n${RED}Архитектура не поддерживается:${NC} $(uname -m)\n"; PAUSE; return 1; }
 
     if ! command -v curl >/dev/null 2>&1; then
         echo -e "${CYAN}Устанавливаем ${NC}curl"
-        $UPDATE >/dev/null 2>&1 && $INSTALL curl >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка установки curl${NC}"; PAUSE ;return 1; }
+        $UPDATE >/dev/null 2>&1 && $INSTALL curl >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка установки curl${NC}\n"; PAUSE ;return 1; }
     fi
 
     echo -e "${CYAN}Скачиваем и устанавливаем${NC} $ARCH_FILE_GO"
     LATEST_TAG_GO="$(curl -Ls -o /dev/null -w '%{url_effective}' https://github.com/d0mhate/-tg-ws-proxy-Manager-go/releases/latest | sed 's#.*/tag/##')"
-    [ -z "$LATEST_TAG_GO" ] && { echo -e "\n${RED}Не удалось получить версию${NC} TG WS Proxy Go"; PAUSE; return 1; }
+    [ -z "$LATEST_TAG_GO" ] && { echo -e "\n${RED}Не удалось получить версию${NC} TG WS Proxy Go\n"; PAUSE; return 1; }
 
     DOWNLOAD_URL_GO="https://github.com/d0mhate/-tg-ws-proxy-Manager-go/releases/download/$LATEST_TAG_GO/$ARCH_FILE_GO"
 
-    curl -L --fail -o "$BIN_PATH_GO" "$DOWNLOAD_URL_GO" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка скачивания${NC}"; PAUSE; return 1; }
+    curl -L --fail -o "$BIN_PATH_GO" "$DOWNLOAD_URL_GO" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка скачивания${NC}\n"; PAUSE; return 1; }
 
     chmod +x "$BIN_PATH_GO"
 
@@ -737,7 +737,7 @@ echo -e "${MAGENTA}Меню TG WS Proxy${NC}\n"
 
 TGSTATUS=""
 pidof tg-ws-proxy-go >/dev/null 2>&1 && TGSTATUS="Go"
-pidof tg-ws-proxy-rs >/dev/null 2>&1 && TGSTATUS="$TGSTATUS$( [ -n "$TGSTATUS" ] && echo " / " )Rs"
+pidof tg-ws-proxy-rs >/dev/null 2>&1 && TGSTATUS="$TGSTATUS$( [ -n "$TGSTATUS" ] && echo " / " )Rust"
 
 if [ -n "$TGSTATUS" ]; then
     echo -e "${YELLOW}TG WS Proxy:${NC} ${GREEN}запущен [$TGSTATUS]${NC}"
