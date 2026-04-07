@@ -61,7 +61,7 @@ for DOMAIN in $DOMAINS; do
     echo -e "${CYAN}Домен:${NC} $DOMAIN"
 
     SYS_IPS=$(get_ip4 "$DOMAIN")
-    echo -e "  Системный DNS  : ${GREEN}$(echo $SYS_IPS | tr '\n' ' ')${NC}"
+    echo -e " Системный DNS  : ${GREEN}$(echo $SYS_IPS | tr '\n' ' ')${NC}"
 
     MATCH=0
     TOTAL=0
@@ -70,7 +70,7 @@ for DOMAIN in $DOMAINS; do
         DNS_IPS=$(get_ip4 "$DOMAIN" "$DNS")
         [ -z "$DNS_IPS" ] && continue
 
-        echo -e "  ${YELLOW}$(pad $DNS)${NC} : $(echo $DNS_IPS | tr '\n' ' ')"
+        echo -e " ${YELLOW}$(pad $DNS)${NC} : $(echo $DNS_IPS | tr '\n' ' ')"
 
         TOTAL=$((TOTAL+1))
         INTERSECT=$(echo "$SYS_IPS" "$DNS_IPS" | tr ' ' '\n' | sort | uniq -d)
@@ -112,7 +112,7 @@ for DOMAIN in $DOMAINS; do
 done
 
 if command -v dig >/dev/null 2>&1; then
-    echo -e "\n${YELLOW}Удаляем ${NC}dig\n"
+    echo -e "${YELLOW}Удаляем ${NC}dig"
     if command -v opkg >/dev/null 2>&1; then
         opkg remove bind-dig >/dev/null 2>&1
     elif command -v apk >/dev/null 2>&1; then
@@ -121,7 +121,7 @@ if command -v dig >/dev/null 2>&1; then
 fi
 
 echo -e "${MAGENTA}----------------------------------------${NC}"
-echo -e "\n${MAGENTA}Итог тестирования:${NC}"
+echo -e "${MAGENTA}Итог тестирования:${NC}"
 if [ $FINAL_DNS_OK -eq 1 ] && [ $FINAL_DPI_OK -eq 1 ]; then
     echo -e " ${GREEN}[✓]${NC} ${CYAN}DNS не подменён, трафик доступен${NC}"
 elif [ $FINAL_DNS_OK -eq 0 ]; then
