@@ -40,10 +40,10 @@ pad() {
     printf "%-14s" "$1"
 }
 
-echo -e "${MAGENTA}Проверка googlevideo (YouTube)${NC}\n"
+echo -e "${MAGENTA}Проверка подмены DNS и DPI для YouTube${NC}\n"
 
-    echo -e "${MAGENTA}----------------------------------------${NC}"
 if ! command -v dig >/dev/null 2>&1; then
+    echo -e "${MAGENTA}----------------------------------------${NC}"
     echo -e "${YELLOW}Устанавливаем ${NC}dig"
     if command -v opkg >/dev/null 2>&1; then
         opkg update >/dev/null 2>&1
@@ -55,6 +55,7 @@ if ! command -v dig >/dev/null 2>&1; then
 fi
 
 if ! command -v curl >/dev/null 2>&1; then
+    echo -e "${MAGENTA}----------------------------------------${NC}"
     echo -e "${YELLOW}Устанавливаем ${NC}curl"
     if command -v opkg >/dev/null 2>&1; then
         opkg update >/dev/null 2>&1
