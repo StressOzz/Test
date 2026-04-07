@@ -733,15 +733,16 @@ SECRET="$(head -c16 /dev/urandom | hexdump -e '16/1 "%02x"')"
 
 clear
 
-echo -e "${MAGENTA}Меню TG WS Proxy${NC}"
+echo -e "${MAGENTA}Меню TG WS Proxy${NC}\n"
 
 TGSTATUS=""
-pidof tg-ws-proxy-go >/dev/null 2>&1 && TGSTATUS="[Go]"
-pidof tg-ws-proxy-rs >/dev/null 2>&1 && TGSTATUS="${TGSTATUS:+$TGSTATUS / }[Rs]"
+pidof tg-ws-proxy-go >/dev/null 2>&1 && TGSTATUS="Go"
+pidof tg-ws-proxy-rs >/dev/null 2>&1 && TGSTATUS="$TGSTATUS$( [ -n "$TGSTATUS" ] && echo " / " )Rs"
+
 if [ -n "$TGSTATUS" ]; then
-echo -e "${YELLOW}TG WS Proxy:${NC}   ${GREEN}запущен $TGSTATUS${NC}"
+    echo -e "${YELLOW}TG WS Proxy:${NC} ${GREEN}запущен [$TGSTATUS]${NC}"
 else
-echo -e "${YELLOW}TG WS Proxy:${NC}   ${GREEN}не установлен"
+    echo -e "${YELLOW}TG WS Proxy:${NC} ${GREEN}не установлен${NC}"
 fi
 
 if pidof tg-ws-proxy-go >/dev/null 2>&1 && [ -f "$BIN_PATH_GO" ] && [ -f "$INIT_PATH_GO" ]; then 
