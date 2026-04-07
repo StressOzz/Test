@@ -26,20 +26,6 @@ DNS_LIST="
 111.88.96.50
 "
 
-if ! command -v dig >/dev/null 2>&1; then
-    echo -e "${YELLOW}Устанавливаем ${NC}dig"
-    if command -v opkg >/dev/null 2>&1; then
-        opkg update >/dev/null 2>&1
-        opkg install bind-dig >/dev/null 2>&1
-    elif command -v apk >/dev/null 2>&1; then
-        apk update >/dev/null 2>&1
-        apk add bind-dig >/dev/null 2>&1
-    else
-        echo -e "${RED}Не удалось установить ${NC}dig${RED}!${NC}"
-        exit 1
-    fi
-fi
-
 clear
 
 get_ip4() {
@@ -54,8 +40,32 @@ pad() {
     printf "%-14s" "$1"
 }
 
-echo -e "${MAGENTA}Проверка googlevideo (YouTube)${NC}"
-echo
+echo -e "${MAGENTA}Проверка подмены DNS и DPI для YouTube${NC}"
+
+if ! command -v dig >/dev/null 2>&1; then
+    echo -e "${MAGENTA}----------------------------------------${NC}"
+    echo -e "${YELLOW}Устанавливаем ${NC}dig"
+    if command -v opkg >/dev/null 2>&1; then
+        opkg update >/dev/null 2>&1
+        opkg install bind-dig >/dev/null 2>&1
+    elif command -v apk >/dev/null 2>&1; then
+        apk update >/dev/null 2>&1
+        apk add bind-dig >/dev/null 2>&1
+    fi
+fi
+
+if ! command -v curl >/dev/null 2>&1; then
+    echo -e "${MAGENTA}----------------------------------------${NC}"
+    echo -e "${YELLOW}Устанавливаем ${NC}curl"
+    if command -v opkg >/dev/null 2>&1; then
+        opkg update >/dev/null 2>&1
+        opkg install curl >/dev/null 2>&1
+    elif command -v apk >/dev/null 2>&1; then
+        apk update >/dev/null 2>&1
+        apk add curl >/dev/null 2>&1
+    fi
+fi
+    echo -e "${MAGENTA}----------------------------------------${NC}"
 
 FINAL_DNS_OK=1
 FINAL_DPI_OK=1
@@ -64,7 +74,7 @@ for DOMAIN in $DOMAINS; do
     echo -e "${CYAN}Домен:${NC} $DOMAIN"
 
     SYS_IPS=$(get_ip4 "$DOMAIN")
-    echo -e "  Системный DNS  : ${GREEN}$(echo $SYS_IPS | tr '\n' ' ')${NC}"
+    echo -e " Системный DNS  : ${GREEN}$(echo $SYS_IPS | tr '\n' ' ')${NC}"
 
     MATCH=0
     TOTAL=0
@@ -73,27 +83,26 @@ for DOMAIN in $DOMAINS; do
         DNS_IPS=$(get_ip4 "$DOMAIN" "$DNS")
         [ -z "$DNS_IPS" ] && continue
 
-        echo -e "  ${YELLOW}$(pad $DNS)${NC} : $(echo $DNS_IPS | tr '\n' ' ')"
+        echo -e " ${YELLOW}$(pad $DNS)${NC} : $(echo $DNS_IPS | tr '\n' ' ')"
 
         TOTAL=$((TOTAL+1))
-        # проверяем пересечение множеств
         INTERSECT=$(echo "$SYS_IPS" "$DNS_IPS" | tr ' ' '\n' | sort | uniq -d)
         [ -n "$INTERSECT" ] && MATCH=$((MATCH+1))
     done
 
     if [ -z "$SYS_IPS" ]; then
-        DNS_RESULT="БЛОК DNS"
+        DNS_RESULT="Блок DNS"
         DNS_COLOR=$RED
         FINAL_DNS_OK=0
     elif [ $MATCH -eq $TOTAL ]; then
         DNS_RESULT="OK"
         DNS_COLOR=$GREEN
     else
-        DNS_RESULT="РАЗНЫЕ CDN (норма)"
+        DNS_RESULT="Разные CDN (норма)"
         DNS_COLOR=$YELLOW
     fi
 
-    echo -e "  DNS: ${DNS_COLOR}$DNS_RESULT${NC}"
+    echo -e "${CYAN}DNS: ${DNS_COLOR}$DNS_RESULT${NC}"
 
     if [ -n "$SYS_IPS" ]; then
         curl -m 5 -I --resolve "$DOMAIN:443:$(echo $SYS_IPS | awk '{print $1}')" "https://$DOMAIN" >/dev/null 2>&1
@@ -106,16 +115,26 @@ for DOMAIN in $DOMAINS; do
             FINAL_DPI_OK=0
         fi
     else
-        DPI_RESULT="НЕ ВОЗМОЖНО ОПРЕДЕЛИТЬ"
+        DPI_RESULT="Не определённый результат"
         DPI_COLOR=$YELLOW
         FINAL_DPI_OK=0
     fi
 
-    echo -e "  Доступ: ${DPI_COLOR}$DPI_RESULT${NC}"
+    echo -e "${CYAN}Доступ: ${DPI_COLOR}$DPI_RESULT${NC}"
     echo -e "${MAGENTA}----------------------------------------${NC}"
 done
 
-echo -e "\n${MAGENTA}Итог тестирования:${NC}"
+if command -v dig >/dev/null 2>&1; then
+    echo -e "${YELLOW}Удаляем ${NC}dig"
+    if command -v opkg >/dev/null 2>&1; then
+        opkg remove bind-dig >/dev/null 2>&1
+    elif command -v apk >/dev/null 2>&1; then
+        apk del bind-dig >/dev/null 2>&1
+    fi
+fi
+
+echo -e "${MAGENTA}----------------------------------------${NC}"
+echo -e "${MAGENTA}Итог тестирования:${NC}"
 if [ $FINAL_DNS_OK -eq 1 ] && [ $FINAL_DPI_OK -eq 1 ]; then
     echo -e " ${GREEN}[✓]${NC} ${CYAN}DNS не подменён, трафик доступен${NC}"
 elif [ $FINAL_DNS_OK -eq 0 ]; then
