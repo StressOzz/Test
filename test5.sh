@@ -787,7 +787,7 @@ TGSTATUS=""
 [ "$(pidof tg-ws-proxy-go)" ] && TGSTATUS="Go"
 [ "$(pidof tg-ws-proxy-rs)" ] && TGSTATUS="$TGSTATUS$( [ -n "$TGSTATUS" ] && echo " / " )Rust"
 if [ -n "$TGSTATUS" ]; then
-    echo -e "${YELLOW}Статус TG WS Proxy:${NC}          ${GREEN}запущен [$TGSTATUS]${NC}"
+    echo -e "${YELLOW}Статус TG WS Proxy:${NC}      ${GREEN}запущен [$TGSTATUS]${NC}"
 fi
 
 if hosts_enabled; then echo -e "${YELLOW}Домены в hosts:          ${GREEN}добавлены${NC}"; fi; [ -f "$DATE_FILE" ] && echo -e "${YELLOW}Резервная копия:${NC}         ${GREEN}сохранена"; show_script_50 && [ -n "$name" ] && echo -e "${YELLOW}Установлен скрипт:${NC}       $name"; grep -q "$Fin_IP_Dis" /etc/hosts && echo -e "${YELLOW}Финские IP для Discord:  ${GREEN}включены${NC}"
