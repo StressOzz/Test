@@ -40,7 +40,7 @@ pad() {
     printf "%-14s" "$1"
 }
 
-echo -e "${MAGENTA}Проверка подмены DNS и DPI для YouTube${NC}\n"
+echo -e "${MAGENTA}Проверка подмены DNS и DPI для YouTube${NC}"
 
 if ! command -v dig >/dev/null 2>&1; then
     echo -e "${MAGENTA}----------------------------------------${NC}"
