@@ -2,7 +2,7 @@
 # ==========================================
 # Zapret on remittor Manager by StressOzz
 # =========================================
-ZAPRET_MANAGER_VERSION="9.3"; STR_VERSION_AUTOINSTALL="v7"; ZAPRET_VERSION="72.20260307"
+ZAPRET_MANAGER_VERSION="9.4"; STR_VERSION_AUTOINSTALL="v7"; ZAPRET_VERSION="72.20260307"
 TEST_HOST="https://rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com"; LAN_IP=$(uci get network.lan.ipaddr 2>/dev/null | cut -d/ -f1)
 BIN_PATH="/usr/bin/tg-ws-proxy-go"; INIT_PATH="/etc/init.d/tg-ws-proxy-go"
 PORTS_UDP="88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535"; PORTS_TCP="6112-6119,6695-6710,25565,50001"
