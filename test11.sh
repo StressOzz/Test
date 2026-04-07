@@ -55,41 +55,14 @@ SCell="#Supercell\n103.27.157.38 accounts.supercell.com cdn.id.supercell.com cla
 SPFY="#Spotify\n45.155.204.190 api.spotify.com login5.spotify.com encore.scdn.co gew1-spclient.spotify.com spclient.wg.spotify.com
 45.155.204.190 api-partner.spotify.com aet.spotify.com www.spotify.com accounts.spotify.com open.spotify.com
 45.155.204.190 accounts.scdn.co gew1-dealer.spotify.com open-exp.spotifycdn.com www-growth.scdn.co"
-ALL_BLOCKS="$AI\n$INSTAGRAM\n$NTC\n$RUTOR\n$LIBRUSEC\n$TGWeb\n$TWCH\n$SCell\n$SPFY"
-hosts_enabled() { grep -q "45.155.204.190\|instagram.com\|rutor.info\|lib.rus.ec\|ntc.party\|twitch.tv\|web.telegram.org\|www.spotify.com\|store.supercell.com" /etc/hosts; }
+ALL_BLOCKS="$AI\n$INSTAGRAM\n$NTC\n$RUTOR\n$LIBRUSEC\n$TGWeb\n$TWCH\n$SCell\n$SPFY"; hosts_enabled() { grep -q "45.155.204.190\|instagram.com\|rutor.info\|lib.rus.ec\|ntc.party\|twitch.tv\|web.telegram.org\|www.spotify.com\|store.supercell.com" /etc/hosts; }
 hosts_add() { printf "%b\n" "$1" | while IFS= read -r L; do grep -qxF "$L" /etc/hosts || echo "$L" >> /etc/hosts; done; /etc/init.d/dnsmasq restart >/dev/null 2>&1; }
 ZAPRET_RESTART () { chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1; sleep 1; }
 PAUSE() { echo -ne "Нажмите Enter..."; read dummy; }; BACKUP_DIR="/opt/zapret_backup"; DATE_FILE="$BACKUP_DIR/date_backup.txt"
-BIN_PATH_GO="/usr/bin/tg-ws-proxy-go"; INIT_PATH_GO="/etc/init.d/tg-ws-proxy-go"
-BIN_PATH_RS="/usr/bin/tg-ws-proxy-rs"; INIT_PATH_RS="/etc/init.d/tg-ws-proxy-rs"
-TMP_ARCHIVE_RS="/tmp/tg-ws-proxy-rs.tar.gz"; TMP_DIR_RS="/tmp/tg-ws-proxy-rs"
-
-if command -v opkg >/dev/null 2>&1; then
-    PKG="opkg"
-    CONFZ="/etc/opkg/distfeeds.conf"
-    PKG_IS_APK=0
-    UPDATE="opkg update"
-    INSTALL="opkg install"
-    CHECK_AVAIL="opkg list | cut -d ' ' -f1"
-    DELETE="opkg remove --autoremove --force-removal-of-dependent-packages"
-    CHECK_CMD="opkg list-installed"
-    ARCH="$(opkg print-architecture | awk '{print $2}' | tail -n1)"
-else
-    PKG="apk"
-    CONFZ="/etc/apk/repositories.d/distfeeds.list"
-    PKG_IS_APK=1
-    UPDATE="apk update"
-    INSTALL="apk add"
-    CHECK_AVAIL="apk search -e"
-    DELETE="apk del"
-    CHECK_CMD="apk info"
-    ARCH="$(apk --print-arch 2>/dev/null)"
-fi
-
-
-
-
-
+BIN_PATH_GO="/usr/bin/tg-ws-proxy-go"; INIT_PATH_GO="/etc/init.d/tg-ws-proxy-go"; BIN_PATH_RS="/usr/bin/tg-ws-proxy-rs"; INIT_PATH_RS="/etc/init.d/tg-ws-proxy-rs"
+if command -v opkg >/dev/null 2>&1; then PKG="opkg"; CONFZ="/etc/opkg/distfeeds.conf"; PKG_IS_APK=0; UPDATE="opkg update"; INSTALL="opkg install"; CHECK_AVAIL="opkg list | cut -d ' ' -f1"
+DELETE="opkg remove --autoremove --force-removal-of-dependent-packages"; CHECK_CMD="opkg list-installed"; ARCH="$(opkg print-architecture | awk '{print $2}' | tail -n1)"
+else PKG="apk"; CONFZ="/etc/apk/repositories.d/distfeeds.list"; PKG_IS_APK=1; UPDATE="apk update"; INSTALL="apk add"; CHECK_AVAIL="apk search -e"; DELETE="apk del"; CHECK_CMD="apk info"; ARCH="$(apk --print-arch 2>/dev/null)"; fi
 echo 'sh <(wget -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/main/Zapret-Manager.sh)' > /usr/bin/zms; chmod +x /usr/bin/zms
 # ==========================================
 # Получение версии
