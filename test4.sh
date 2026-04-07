@@ -645,9 +645,9 @@ printf '#!/bin/sh /etc/rc.common\nSTART=99\nUSE_PROCD=1\n\nstart_service() {\n  
     /etc/init.d/tg-ws-proxy-rs start
 
     if pidof tg-ws-proxy-rs >/dev/null 2>&1; then
-        echo -e "${GREEN}Сервис ${NC}TG WS Proxy Rust${GREEN} запущен!${NC}"
+        echo -e "${GREEN}Сервис ${NC}TG WS Proxy Rust${GREEN} запущен!${NC}\n"
     else
-        echo -e "\n${RED}Сервис TG WS Proxy Rust не запущен!${NC}"
+        echo -e "\n${RED}Сервис TG WS Proxy Rust не запущен!${NC}\n"
     fi
     PAUSE
 }
@@ -716,9 +716,9 @@ printf '#!/bin/sh /etc/rc.common\nSTART=99\nUSE_PROCD=1\n\nstart_service() {\n  
     /etc/init.d/tg-ws-proxy-go start
 
     if pidof tg-ws-proxy-go >/dev/null 2>&1; then
-        echo -e "${GREEN}Сервис ${NC}TG WS Proxy Go${GREEN} запущен!${NC}"
+        echo -e "${GREEN}Сервис ${NC}TG WS Proxy Go${GREEN} запущен!${NC}\n"
     else
-        echo -e "\n${RED}Сервис TG WS Proxy Go не запущен!${NC}"
+        echo -e "\n${RED}Сервис TG WS Proxy Go не запущен!${NC}\n"
     fi
     PAUSE
 }
@@ -784,10 +784,10 @@ echo -e "\n${YELLOW}Установленная версия:    ${INST_COLOR}$IN
 
 
 TGSTATUS=""
-pidof tg-ws-proxy-go >/dev/null 2>&1 && TGSTATUS="[Go]"
-pidof tg-ws-proxy-rs >/dev/null 2>&1 && TGSTATUS="${TGSTATUS:+$TGSTATUS / }[Rust]"
+[ "$(pidof tg-ws-proxy-go)" ] && TGSTATUS="Go"
+[ "$(pidof tg-ws-proxy-rs)" ] && TGSTATUS="$TGSTATUS$( [ -n "$TGSTATUS" ] && echo " / " )Rust"
 if [ -n "$TGSTATUS" ]; then
-echo -e "${YELLOW}Статус TG WS Proxy:${NC}        ${GREEN}запущен $TGSTATUS${NC}"
+    echo -e "${YELLOW}Статус TG WS Proxy:${NC}          ${GREEN}запущен [$TGSTATUS]${NC}"
 fi
 
 if hosts_enabled; then echo -e "${YELLOW}Домены в hosts:          ${GREEN}добавлены${NC}"; fi; [ -f "$DATE_FILE" ] && echo -e "${YELLOW}Резервная копия:${NC}         ${GREEN}сохранена"; show_script_50 && [ -n "$name" ] && echo -e "${YELLOW}Установлен скрипт:${NC}       $name"; grep -q "$Fin_IP_Dis" /etc/hosts && echo -e "${YELLOW}Финские IP для Discord:  ${GREEN}включены${NC}"
