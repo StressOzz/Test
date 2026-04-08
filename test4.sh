@@ -212,20 +212,20 @@ rr1---sn-gvnuxaxjvh-jx3l.googlevideo.com
 rr1---sn-gvnuxaxjvh-jx3s.googlevideo.com
 "
 
-    ALL_OK=1
+    ANY_OK=0
 
     for domain in $DOMAINS; do
-        echo -e "${CYAN}Тестируем домен:${NC} $domain" >&2
+        echo -ne "${CYAN}Тестируем домен:\n${NC} $domain" >&2
 
-        if curl -s --connect-timeout 1 -m 1 "https://$domain" >/dev/null; then
-            echo -e "${GREEN}Доступен${NC}\n" >&2
+        if curl -s --connect-timeout 2 -m 2 "https://$domain" >/dev/null; then
+            echo -ne "${GREEN}Доступен${NC}\n" >&2
+            ANY_OK=1
         else
-            echo -e "${RED}Недоступен${NC}\n" >&2
-            ALL_OK=0
+            echo -ne "${RED}Недоступен${NC}\n" >&2
         fi
     done
 
-    [ "$ALL_OK" = "1" ] && echo "ok" || echo "fail"
+    [ "$ANY_OK" = "1" ] && echo "ok" || echo "fail"
 }
 
 
