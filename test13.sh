@@ -249,19 +249,21 @@ DNS_TEST() {
 
 PUBLIC_DNS="1.1.1.1 8.8.8.8 77.88.8.8 83.220.169.155 84.21.189.133 45.155.204.190 111.88.96.50"
 
-ALL_OK_DNS=1
+ALL_OK=1
 
-echo -e "${MAGENTA}Проверка подмены DNS (IPv6/IPv4) для YouTube${NC}"
+echo -e "${MAGENTA}Проверка подмены DNS для YouTube${NC}"
 
 for DOMAIN in $DOMAINS; do
     echo -e "${CYAN}Домен: $DOMAIN${NC}"
 
-    # Сначала пробуем IPv6
+    # сначала пробуем IPv6 через nslookup
     SYS_IP=$(nslookup -type=AAAA "$DOMAIN" 2>/dev/null | awk '/^Address: /{print $2}' | tail -n1)
-    IP_VER="IPv6"
     
-    # Если нет IPv6, используем IPv4
-    if [ -z "$SYS_IP" ]; then
+    # проверяем реальный доступ IPv6
+    if [ -n "$SYS_IP" ] && ping6 -c1 -w1 "$SYS_IP" >/dev/null 2>&1; then
+        IP_VER="IPv6"
+    else
+        # fallback на IPv4
         SYS_IP=$(nslookup "$DOMAIN" 2>/dev/null | awk '/^Address: /{print $2}' | tail -n1)
         IP_VER="IPv4"
     fi
@@ -283,11 +285,11 @@ for DOMAIN in $DOMAINS; do
     done
 
     if [ "$SYS_IP" = "не определён" ]; then
-        ALL_OK_DNS=0
+        ALL_OK=0
         echo -e " ${RED}⚠ DNS недоступен${NC}"
     elif [ $MATCH -ne $TOTAL ]; then
         echo -e " ${YELLOW}⚠ Провайдер может подменять DNS${NC}"
-        ALL_OK_DNS=0
+        ALL_OK=0
     else
         echo -e " ${GREEN}[✓] DNS в порядке${NC}"
     fi
@@ -296,7 +298,7 @@ for DOMAIN in $DOMAINS; do
 done
 
 echo -e "${MAGENTA}Итог проверки DNS:${NC}"
-if [ $ALL_OK_DNS -eq 1 ]; then
+if [ $ALL_OK -eq 1 ]; then
     echo -e " ${GREEN}[✓] Все домены разрешаются корректно${NC}"
 else
     echo -e " ${YELLOW}[!] Есть проблемы с разрешением доменов${NC}"
