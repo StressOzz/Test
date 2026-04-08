@@ -247,34 +247,56 @@ apply_strategy() { NAME="$1"; BODY="$2"; sed -i "/^[[:space:]]*option NFQWS_OPT 
 
 DNS_TEST() {
 
-PUBLIC_DNS="1.1.1.1 8.8.8.8"
+PUBLIC_DNS="1.1.1.1 8.8.8.8 77.88.8.8 83.220.169.155 84.21.189.133 45.155.204.190 111.88.96.50"
 
 ALL_OK_DNS=1
 
-echo -e "${MAGENTA}Проверка DNS для YouTube${NC}"
+echo -e "${MAGENTA}Проверка подмены DNS (IPv6/IPv4) для YouTube${NC}"
 
 for DOMAIN in $DOMAINS; do
     echo -e "${CYAN}Домен: $DOMAIN${NC}"
 
-    SYS_IP=$(nslookup "$DOMAIN" 2>/dev/null | awk '/^Address: /{print $2}' | tail -n1)
-    [ -z "$SYS_IP" ] && SYS_IP="не определён"
-    echo -e " Системный DNS: $SYS_IP"
+    # Сначала пробуем IPv6
+    SYS_IP=$(nslookup -type=AAAA "$DOMAIN" 2>/dev/null | awk '/^Address: /{print $2}' | tail -n1)
+    IP_VER="IPv6"
+    
+    # Если нет IPv6, используем IPv4
+    if [ -z "$SYS_IP" ]; then
+        SYS_IP=$(nslookup "$DOMAIN" 2>/dev/null | awk '/^Address: /{print $2}' | tail -n1)
+        IP_VER="IPv4"
+    fi
 
+    [ -z "$SYS_IP" ] && SYS_IP="не определён"
+    echo -e " Системный $IP_VER: $SYS_IP"
+
+    MATCH=0
+    TOTAL=0
     for DNS in $PUBLIC_DNS; do
-        PUB_IP=$(nslookup "$DOMAIN" "$DNS" 2>/dev/null | awk '/^Address: /{print $2}' | tail -n1)
+        if [ "$IP_VER" = "IPv6" ]; then
+            PUB_IP=$(nslookup -type=AAAA "$DOMAIN" "$DNS" 2>/dev/null | awk '/^Address: /{print $2}' | tail -n1)
+        else
+            PUB_IP=$(nslookup "$DOMAIN" "$DNS" 2>/dev/null | awk '/^Address: /{print $2}' | tail -n1)
+        fi
         [ -n "$PUB_IP" ] && echo -e " DNS $DNS: $PUB_IP"
+        [ -n "$PUB_IP" ] && TOTAL=$((TOTAL+1))
+        [ "$PUB_IP" = "$SYS_IP" ] && MATCH=$((MATCH+1))
     done
 
     if [ "$SYS_IP" = "не определён" ]; then
         ALL_OK_DNS=0
         echo -e " ${RED}⚠ DNS недоступен${NC}"
+    elif [ $MATCH -ne $TOTAL ]; then
+        echo -e " ${YELLOW}⚠ Провайдер может подменять DNS${NC}"
+        ALL_OK_DNS=0
+    else
+        echo -e " ${GREEN}[✓] DNS в порядке${NC}"
     fi
 
     echo -e "${MAGENTA}----------------------------------------${NC}"
 done
 
 echo -e "${MAGENTA}Итог проверки DNS:${NC}"
-if [ $ALL_OK -eq 1 ]; then
+if [ $ALL_OK_DNS -eq 1 ]; then
     echo -e " ${GREEN}[✓] Все домены разрешаются корректно${NC}"
 else
     echo -e " ${YELLOW}[!] Есть проблемы с разрешением доменов${NC}"
