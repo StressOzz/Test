@@ -185,7 +185,7 @@ nft list tables 2>/dev/null | awk '{print $2}' | grep -E '(zapret|ZAPRET)' | whi
 # ==========================================
 
 
-auto_stryou() { clear; echo -e "${MAGENTA}Тестируем стратегии для ${NC}YouTube${NC}"; awk '/^[[:space:]]*option NFQWS_OPT '\''/{flag=1} flag{print}' "$CONF" > "$OLD_STR"; curl -fsSL "$STR_URL" -o "$TMP_LIST" || { echo -e "\n${RED}Не удалось скачать список${NC}\n"; PAUSE </dev/tty; return 1; }
+auto_stryou() { clear; echo -e "${MAGENTA}Тестируем стратегии для YouTube${NC}"; awk '/^[[:space:]]*option NFQWS_OPT '\''/{flag=1} flag{print}' "$CONF" > "$OLD_STR"; curl -fsSL "$STR_URL" -o "$TMP_LIST" || { echo -e "\n${RED}Не удалось скачать список${NC}\n"; PAUSE </dev/tty; return 1; }
 TOTAL=$(grep -c '^Yv[0-9]\+' "$TMP_LIST"); echo -e "\n${CYAN}Найдено стратегий: ${NC}$TOTAL"; CURRENT_NAME=""; CURRENT_BODY=""; COUNT=0
 while IFS= read -r LINE || [ -n "$LINE" ]; do if echo "$LINE" | grep -q '^Yv[0-9]\+'; then if [ -n "$CURRENT_NAME" ]; then COUNT=$((COUNT + 1))
 echo -e "\n${CYAN}Тестируем стратегию: ${NC}$CURRENT_NAME ($COUNT/$TOTAL)"; apply_strategy "$CURRENT_NAME" "$CURRENT_BODY"; STATUS=$(check_access); if [ "$STATUS" = "ok" ]; then echo -e "${GREEN}Видео на ПК открывается!${NC}\n${YELLOW}Проверьте работу ${NC}YouTube${YELLOW} на других устройствах!${NC}"
@@ -215,13 +215,13 @@ rr1---sn-gvnuxaxjvh-jx3s.googlevideo.com
     ANY_OK=0
 
     for domain in $DOMAINS; do
-        echo -ne "${CYAN}Тестируем домен:\n${NC} $domain" >&2
+        echo -ne "${CYAN}Тестируем домен:\n${NC}$domain" >&2
 
         if curl -s --connect-timeout 2 -m 2 "https://$domain" >/dev/null; then
-            echo -ne "${GREEN}Доступен${NC}\n" >&2
+            echo -ne " - ${GREEN}доступен${NC}\n" >&2
             ANY_OK=1
         else
-            echo -ne "${RED}Недоступен${NC}\n" >&2
+            echo -ne " - ${RED}недоступен${NC}\n" >&2
         fi
     done
 
