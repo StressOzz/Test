@@ -3,8 +3,8 @@
 # Zapret on remittor Manager by StressOzz
 # =========================================
 ZAPRET_MANAGER_VERSION="9.4"; STR_VERSION_AUTOINSTALL="v7"; ZAPRET_VERSION="72.20260307"
-TEST_HOST="https://rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com"; LAN_IP=$(uci get network.lan.ipaddr 2>/dev/null | cut -d/ -f1)
-BIN_PATH="/usr/bin/tg-ws-proxy-go"; INIT_PATH="/etc/init.d/tg-ws-proxy-go"
+DOMAINS="rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com rr1---sn-gvnuxaxjvh-jx3l.googlevideo.com rr1---sn-gvnuxaxjvh-jx3s.googlevideo.com"
+BIN_PATH="/usr/bin/tg-ws-proxy-go"; INIT_PATH="/etc/init.d/tg-ws-proxy-go"; LAN_IP=$(uci get network.lan.ipaddr 2>/dev/null | cut -d/ -f1)
 PORTS_UDP="88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535"; PORTS_TCP="6112-6119,6695-6710,25565,50001"
 GREEN="\033[1;32m"; RED="\033[1;31m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
 CONF="/etc/config/zapret"; CUSTOM_DIR="/opt/zapret/init.d/openwrt/custom.d/"; HOSTLIST_FILE="/opt/zapret/ipset/zapret-hosts-user.txt"
@@ -183,19 +183,11 @@ nft list tables 2>/dev/null | awk '{print $2}' | grep -E '(zapret|ZAPRET)' | whi
 # ==========================================
 # Тест стратегии для Ютуб
 # ==========================================
-
-
 auto_stryou() { clear; echo -e "${MAGENTA}Тестируем стратегии для YouTube${NC}"
-
-DNS_TEST
-
 awk '/^[[:space:]]*option NFQWS_OPT '\''/{flag=1} flag{print}' "$CONF" > "$OLD_STR"; curl -fsSL "$STR_URL" -o "$TMP_LIST" || { echo -e "\n${RED}Не удалось скачать список${NC}\n"; PAUSE </dev/tty; return 1; }
 TOTAL=$(grep -c '^Yv[0-9]\+' "$TMP_LIST"); echo -e "\n${CYAN}Найдено стратегий: ${NC}$TOTAL"; CURRENT_NAME=""; CURRENT_BODY=""; COUNT=0
 while IFS= read -r LINE || [ -n "$LINE" ]; do if echo "$LINE" | grep -q '^Yv[0-9]\+'; then if [ -n "$CURRENT_NAME" ]; then COUNT=$((COUNT + 1))
-echo -e "\n${CYAN}Тестируем стратегию: ${NC}$CURRENT_NAME ($COUNT/$TOTAL)"; apply_strategy "$CURRENT_NAME" "$CURRENT_BODY"; 
-
-echo -e "${CYAN}Тестируем домены:${NC}"
-
+echo -e "\n${CYAN}Тестируем стратегию: ${NC}$CURRENT_NAME ($COUNT/$TOTAL)"; apply_strategy "$CURRENT_NAME" "$CURRENT_BODY"; echo -e "${CYAN}Тестируем домены:${NC}"
 STATUS=$(check_access); if [ "$STATUS" = "ok" ]; then echo -e "\n${GREEN}Видео на ПК открывается!${NC}\n${YELLOW}Проверьте работу ${NC}YouTube${YELLOW} на других устройствах!${NC}"
 echo -en "Enter${GREEN} - применить стратегию, ${NC}S/s${GREEN} - остановить, ${NC}N/n${GREEN} - продолжить тест:${NC} "; read -r ANSWER </dev/tty
 if [ -z "$ANSWER" ]; then { echo "#$CURRENT_NAME"; printf "%b\n" "$CURRENT_BODY"; } > "$SAVED_STR"; echo -e "${CYAN}Применяем стратегию и перезапускаем ${NC}Zapret"
@@ -204,135 +196,14 @@ awk 'BEGIN{inserted=0;has_google=0}$0=="--hostlist=/opt/zapret/ipset/zapret-host
 sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; cat "$FINAL_STR" >> "$CONF"; awk '{if($0=="--new"){if(prev!="--new")print}else print;prev=$0}' "$CONF" > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"
 grep -q "^[[:space:]]*' *\$" "$CONF" || echo "'" >> "$CONF"; ZAPRET_RESTART; echo -e "${GREEN}Стратегия применена!${NC}\n"; PAUSE </dev/tty; return 0; elif [[ "$ANSWER" =~ ^[Ss]$ ]]; then sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; cat "$OLD_STR" >> "$CONF"; ZAPRET_RESTART
 echo -e "\n${GREEN}Тест остановлен!${NC}\n"; PAUSE </dev/tty; return 1; fi; else echo -e "${RED}Видео не открывается, продолжаем тест...${NC}"; fi; fi; CURRENT_NAME="$LINE"; CURRENT_BODY=""; else [ -n "$LINE" ] && CURRENT_BODY="${CURRENT_BODY}${LINE}\n"; fi; done < "$TMP_LIST"
-if [ -n "$CURRENT_NAME" ]; then COUNT=$((COUNT + 1)); echo -e "\n${CYAN}Проверяем стратегию: ${NC}$CURRENT_NAME ($COUNT/$TOTAL)"; apply_strategy "$CURRENT_NAME" "$CURRENT_BODY"; 
-
-echo -e "${CYAN}Тестируем домены:${NC}"
-
-STATUS=$(check_access); if [ "$STATUS" = "ok" ]; then echo -e "\n${GREEN}Видео на ПК открывается!${NC}\n${YELLOW}Проверьте работу ${NC}YouTube${YELLOW} на других устройствах!${NC}"
+if [ -n "$CURRENT_NAME" ]; then COUNT=$((COUNT + 1)); echo -e "\n${CYAN}Проверяем стратегию: ${NC}$CURRENT_NAME ($COUNT/$TOTAL)"; apply_strategy "$CURRENT_NAME" "$CURRENT_BODY"; echo -e "${CYAN}Тестируем домены:${NC}"; STATUS=$(check_access); if [ "$STATUS" = "ok" ]; then echo -e "\n${GREEN}Видео на ПК открывается!${NC}\n${YELLOW}Проверьте работу ${NC}YouTube${YELLOW} на других устройствах!${NC}"
 echo -en "Enter${GREEN} - применить стратегию, ${NC}S/s${GREEN} - остановить, ${NC}N/n${GREEN} - продолжить тест:${NC} "; read -r ANSWER </dev/tty; if [ -z "$ANSWER" ]; then { echo "#$CURRENT_NAME"; printf "%b\n" "$CURRENT_BODY"; } > "$SAVED_STR"; echo -e "${CYAN}Применяем стратегию и перезапускаем ${NC}Zapret"
 awk '{ if(skip) { if($0=="--new" || $0 ~ /'\''/) { skip=0; print; next } next } if($0=="--filter-tcp=443") { getline next_line; if(next_line=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt") { skip=1; next } else { print $0; print next_line; next } } if($0~/^[[:space:]]*#Yv/) next; print }' "$OLD_STR" > $NEW_STR
-awk 'BEGIN { inserted=0 } /^--new/ && !inserted { system("cat '"$SAVED_STR"'"); inserted=1 } { print }' $NEW_STR > $FINAL_STR; sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; cat $FINAL_STR >> "$CONF"; ZAPRET_RESTART
-echo -e "${GREEN}Стратегия применена!${NC}\n"; PAUSE </dev/tty; return 0; elif [[ "$ANSWER" =~ ^[Ss]$ ]]; then sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; cat "$OLD_STR" >> "$CONF"; ZAPRET_RESTART
-echo -e "\n${GREEN}Тест остановлен!${NC}\n"; PAUSE </dev/tty; return 1; fi; else echo -e "${RED}Видео не открывается...${NC}\n"; fi; fi; sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; cat "$OLD_STR" >> "$CONF"; ZAPRET_RESTART
-echo -e "\n${RED}Рабочая стратегия для YouTube не найдена!${NC}\n"; PAUSE </dev/tty; return 1; }
-
-DOMAINS="rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com rr1---sn-gvnuxaxjvh-jx3l.googlevideo.com rr1---sn-gvnuxaxjvh-jx3s.googlevideo.com"
-
-check_access() {
-    ANY_OK=0
-    ALL_OK=1
-
-    for domain in $DOMAINS; do
-        echo -ne "$domain" >&2
-
-        if curl -s --connect-timeout 1 -m 2 "https://$domain" >/dev/null; then
-            echo -ne " - ${GREEN}доступен${NC}\n" >&2
-            ANY_OK=1
-        else
-            echo -ne " - ${RED}недоступен${NC}\n" >&2
-            ALL_OK=0
-        fi
-    done
-
-if [ "$ALL_OK" -ne 1 ] && [ "$ANY_OK" -eq 1 ]; then
-    echo -e "\n${RED}Не все домены доступны, возможны проблемы на некоторых устройствах!${NC}\n" >&2
-fi
-
-    [ "$ANY_OK" = "1" ] && echo "ok" || echo "fail"
-}
-
-
+awk 'BEGIN { inserted=0 } /^--new/ && !inserted { system("cat '"$SAVED_STR"'"); inserted=1 } { print }' $NEW_STR > $FINAL_STR; sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; cat $FINAL_STR >> "$CONF"; ZAPRET_RESTART; echo -e "${GREEN}Стратегия применена!${NC}\n"; PAUSE </dev/tty; return 0; elif [[ "$ANSWER" =~ ^[Ss]$ ]]; then sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; 
+cat "$OLD_STR" >> "$CONF"; ZAPRET_RESTART; echo -e "\n${GREEN}Тест остановлен!${NC}\n"; PAUSE </dev/tty; return 1; fi; else echo -e "${RED}Видео не открывается...${NC}\n"; fi; fi; sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; cat "$OLD_STR" >> "$CONF"; ZAPRET_RESTART; echo -e "\n${RED}Рабочая стратегия для YouTube не найдена!${NC}\n"; PAUSE </dev/tty; return 1; }
+check_access() { ANY_OK=0; ALL_OK=1; for domain in $DOMAINS; do echo -ne "$domain" >&2; if curl -s --connect-timeout 1 -m 2 "https://$domain" >/dev/null; then echo -ne " - ${GREEN}доступен${NC}\n" >&2; ANY_OK=1; else echo -ne " - ${RED}недоступен${NC}\n" >&2; ALL_OK=0; fi; done
+if [ "$ALL_OK" -ne 1 ] && [ "$ANY_OK" -eq 1 ]; then echo -e "\n${RED}Не все домены доступны, возможны проблемы на некоторых устройствах!${NC}\n" >&2; fi; [ "$ANY_OK" = "1" ] && echo "ok" || echo "fail"; }
 apply_strategy() { NAME="$1"; BODY="$2"; sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; { echo "  option NFQWS_OPT '"; echo "#AUTO $NAME"; printf "%b\n" "$BODY"; echo "'"; } >> "$CONF"; ZAPRET_RESTART; }
-
-
-get_ip4() {
-    local domain=$1
-    local server=$2
-
-    if [ -n "$server" ]; then
-        nslookup "$domain" "$server" 2>/dev/null
-    else
-        nslookup "$domain" 2>/dev/null
-    fi | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}' \
-       | grep -vE '^(127\.0\.0\.1|1\.1\.1\.1|8\.8\.8\.8|77\.88\.8\.8|83\.220\.169\.155|84\.21\.189\.133|45\.155\.204\.190|111\.88\.96\.50)$' \
-       | sort -u
-}
-
-pad() {
-    printf "%-14s" "$1"
-}
-
-DNS_TEST () {
-
-DOMAINS="
-rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com
-rr1---sn-gvnuxaxjvh-jx3l.googlevideo.com
-rr1---sn-gvnuxaxjvh-jx3s.googlevideo.com
-"
-DOMAINS=$(echo "$DOMAINS" | grep -v '^$')
-
-DNS_LIST="
-1.1.1.1
-8.8.8.8
-77.88.8.8
-83.220.169.155
-84.21.189.133
-45.155.204.190
-111.88.96.50
-"
-
-echo -e "${MAGENTA}Проверка подмены DNS и DPI для YouTube${NC}"
-
-    echo -e "${MAGENTA}----------------------------------------${NC}"
-
-FINAL_DNS_OK=1
-FINAL_DPI_OK=1
-
-for DOMAIN in $DOMAINS; do
-    echo -e "${CYAN}Домен:${NC} $DOMAIN"
-
-    SYS_IPS=$(get_ip4 "$DOMAIN")
-    echo -e " Системный DNS  : ${GREEN}$(echo $SYS_IPS | tr '\n' ' ')${NC}"
-
-    MATCH=0
-    TOTAL=0
-
-    for DNS in $DNS_LIST; do
-        DNS_IPS=$(get_ip4 "$DOMAIN" "$DNS")
-        [ -z "$DNS_IPS" ] && continue
-
-        echo -e " ${YELLOW}$(pad $DNS)${NC} : $(echo $DNS_IPS | tr '\n' ' ')"
-
-        TOTAL=$((TOTAL+1))
-        INTERSECT=$(echo "$SYS_IPS" "$DNS_IPS" | tr ' ' '\n' | sort | uniq -d)
-        [ -n "$INTERSECT" ] && MATCH=$((MATCH+1))
-    done
-
-    if [ -z "$SYS_IPS" ]; then
-        DNS_RESULT="Блок DNS"
-        DNS_COLOR=$RED
-        FINAL_DNS_OK=0
-    elif [ $MATCH -eq $TOTAL ]; then
-        DNS_RESULT="OK"
-        DNS_COLOR=$GREEN
-    else
-        DNS_RESULT="Разные CDN (норма)"
-        DNS_COLOR=$YELLOW
-    fi
-
-    echo -e "${CYAN}DNS: ${DNS_COLOR}$DNS_RESULT${NC}"
-    echo -e "${MAGENTA}----------------------------------------${NC}"
-done
-
-echo -e "${MAGENTA}Итог тестирования:${NC}"
-if [ $FINAL_DNS_OK -eq 1 ]; then
-    echo -e " ${GREEN}[✓]${NC} ${CYAN}DNS не подменён${NC}"
-else
-    echo -e " ${RED}[✗]${NC} ${CYAN}DNS подменяется / блокируется${NC}"
-fi
-echo
-}
-
 # ==========================================
 # РКН список ВКЛ / ВЫКЛ
 # ==========================================
