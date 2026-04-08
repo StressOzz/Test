@@ -214,24 +214,26 @@ echo -e "\n${RED}Рабочая стратегия для YouTube не найд�
 
 
 check_access() {
-    DOMAINS="
-rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com
-rr1---sn-gvnuxaxjvh-jx3l.googlevideo.com
-rr1---sn-gvnuxaxjvh-jx3s.googlevideo.com
-"
+DOMAINS="rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com rr1---sn-gvnuxaxjvh-jx3l.googlevideo.com rr1---sn-gvnuxaxjvh-jx3s.googlevideo.com"
 
     ANY_OK=0
+    ALL_OK=1
 
     for domain in $DOMAINS; do
         echo -ne "$domain" >&2
 
-        if curl -s --connect-timeout 2 -m 2 "https://$domain" >/dev/null; then
+        if curl -s --connect-timeout 1 -m 2 "https://$domain" >/dev/null; then
             echo -ne " - ${GREEN}доступен${NC}\n" >&2
             ANY_OK=1
         else
             echo -ne " - ${RED}недоступен${NC}\n" >&2
+            ALL_OK=0
         fi
     done
+
+    if [ "$ALL_OK" -ne 1 ]; then
+        echo -e "\n${RED}Не все домены доступны, возможны проблемы на некоторых устройствах!${NC}\n" >&2
+    fi
 
     [ "$ANY_OK" = "1" ] && echo "ok" || echo "fail"
 }
