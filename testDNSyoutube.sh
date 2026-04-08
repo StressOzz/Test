@@ -105,7 +105,7 @@ for DOMAIN in $DOMAINS; do
     echo -e "${CYAN}DNS: ${DNS_COLOR}$DNS_RESULT${NC}"
 
     if [ -n "$SYS_IPS" ]; then
-        curl -m 5 -I --resolve "$DOMAIN:443:$(echo $SYS_IPS | awk '{print $1}')" "https://$DOMAIN" >/dev/null 2>&1
+        curl -sL --resolve "$DOMAIN:443:$(echo $SYS_IPS | awk '{print $1}')" --connect-timeout 4 --max-time 6 --speed-time 3 --speed-limit 1 --range 0-65535 -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) curl/8.0" "https://$DOMAIN" -o /dev/null >/dev/null 2>&1
         if [ $? -eq 0 ]; then
             DPI_RESULT="OK"
             DPI_COLOR=$GREEN
