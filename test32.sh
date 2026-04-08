@@ -245,37 +245,6 @@ fi
 apply_strategy() { NAME="$1"; BODY="$2"; sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; { echo "  option NFQWS_OPT '"; echo "#AUTO $NAME"; printf "%b\n" "$BODY"; echo "'"; } >> "$CONF"; ZAPRET_RESTART; }
 
 
-
-#!/bin/sh
-
-GREEN="\033[1;32m"
-RED="\033[1;31m"
-YELLOW="\033[1;33m"
-CYAN="\033[1;36m"
-MAGENTA="\033[1;35m"
-NC="\033[0m"
-
-DOMAINS="
-rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com
-rr1---sn-gvnuxaxjvh-jx3l.googlevideo.com
-rr1---sn-gvnuxaxjvh-jx3s.googlevideo.com
-"
-
-# Убираем пустые строки
-DOMAINS=$(echo "$DOMAINS" | grep -v '^$')
-
-DNS_LIST="
-1.1.1.1
-8.8.8.8
-77.88.8.8
-83.220.169.155
-84.21.189.133
-45.155.204.190
-111.88.96.50
-"
-
-clear
-
 get_ip4() {
     local domain=$1
     local server=$2
@@ -292,6 +261,24 @@ pad() {
 }
 
 DNS_TEST () {
+
+DOMAINS="
+rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com
+rr1---sn-gvnuxaxjvh-jx3l.googlevideo.com
+rr1---sn-gvnuxaxjvh-jx3s.googlevideo.com
+"
+DOMAINS=$(echo "$DOMAINS" | grep -v '^$')
+
+DNS_LIST="
+1.1.1.1
+8.8.8.8
+77.88.8.8
+83.220.169.155
+84.21.189.133
+45.155.204.190
+111.88.96.50
+"
+
 echo -e "${MAGENTA}Проверка подмены DNS и DPI для YouTube${NC}"
 
     echo -e "${MAGENTA}----------------------------------------${NC}"
