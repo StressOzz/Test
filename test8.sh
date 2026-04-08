@@ -226,10 +226,10 @@ rr1---sn-gvnuxaxjvh-jx3s.googlevideo.com
         echo -ne "$domain" >&2
 
         if curl -s --connect-timeout 2 -m 2 "https://$domain" >/dev/null; then
-            echo -e "- ${GREEN}доступен${NC}\n" >&2
+            echo -ne " - ${GREEN}доступен${NC}\n" >&2
             ANY_OK=1
         else
-            echo -e "- ${RED}недоступен${NC}\n" >&2
+            echo -ne " - ${RED}недоступен${NC}\n" >&2
         fi
     done
 
