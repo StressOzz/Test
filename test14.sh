@@ -245,40 +245,33 @@ check_access() {
 
 apply_strategy() { NAME="$1"; BODY="$2"; sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; { echo "  option NFQWS_OPT '"; echo "#AUTO $NAME"; printf "%b\n" "$BODY"; echo "'"; } >> "$CONF"; ZAPRET_RESTART; }
 
-DNS_TEST() {
+DNS_TEST() {#!/bin/sh
 
+GREEN="\033[1;32m"
+RED="\033[1;31m"
+YELLOW="\033[1;33m"
+CYAN="\033[1;36m"
+MAGENTA="\033[1;35m"
+NC="\033[0m"
+
+DOMAINS="rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com rr1---sn-gvnuxaxjvh-jx3l.googlevideo.com rr1---sn-gvnuxaxjvh-jx3s.googlevideo.com"
 PUBLIC_DNS="1.1.1.1 8.8.8.8 77.88.8.8 83.220.169.155 84.21.189.133 45.155.204.190 111.88.96.50"
 
 ALL_OK=1
 
-echo -e "${MAGENTA}Проверка подмены DNS для YouTube${NC}"
+echo -e "${MAGENTA}Проверка подмены DNS для YouTube (только IPv4)${NC}"
 
 for DOMAIN in $DOMAINS; do
     echo -e "${CYAN}Домен: $DOMAIN${NC}"
 
-    # сначала пробуем IPv6 через nslookup
-    SYS_IP=$(nslookup -type=AAAA "$DOMAIN" 2>/dev/null | awk '/^Address: /{print $2}' | tail -n1)
-    
-    # проверяем реальный доступ IPv6
-    if [ -n "$SYS_IP" ] && ping6 -c1 -w1 "$SYS_IP" >/dev/null 2>&1; then
-        IP_VER="IPv6"
-    else
-        # fallback на IPv4
-        SYS_IP=$(nslookup "$DOMAIN" 2>/dev/null | awk '/^Address: /{print $2}' | tail -n1)
-        IP_VER="IPv4"
-    fi
-
+    SYS_IP=$(nslookup "$DOMAIN" 2>/dev/null | awk '/^Address: /{print $2}' | grep -E '^[0-9.]+' | tail -n1)
     [ -z "$SYS_IP" ] && SYS_IP="не определён"
-    echo -e " Системный $IP_VER: $SYS_IP"
+    echo -e " Системный IPv4: $SYS_IP"
 
     MATCH=0
     TOTAL=0
     for DNS in $PUBLIC_DNS; do
-        if [ "$IP_VER" = "IPv6" ]; then
-            PUB_IP=$(nslookup -type=AAAA "$DOMAIN" "$DNS" 2>/dev/null | awk '/^Address: /{print $2}' | tail -n1)
-        else
-            PUB_IP=$(nslookup "$DOMAIN" "$DNS" 2>/dev/null | awk '/^Address: /{print $2}' | tail -n1)
-        fi
+        PUB_IP=$(nslookup "$DOMAIN" "$DNS" 2>/dev/null | awk '/^Address: /{print $2}' | grep -E '^[0-9.]+' | tail -n1)
         [ -n "$PUB_IP" ] && echo -e " DNS $DNS: $PUB_IP"
         [ -n "$PUB_IP" ] && TOTAL=$((TOTAL+1))
         [ "$PUB_IP" = "$SYS_IP" ] && MATCH=$((MATCH+1))
