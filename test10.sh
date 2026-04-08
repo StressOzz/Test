@@ -185,7 +185,12 @@ nft list tables 2>/dev/null | awk '{print $2}' | grep -E '(zapret|ZAPRET)' | whi
 # ==========================================
 
 
-auto_stryou() { clear; echo -e "${MAGENTA}Тестируем стратегии для YouTube${NC}"; awk '/^[[:space:]]*option NFQWS_OPT '\''/{flag=1} flag{print}' "$CONF" > "$OLD_STR"; curl -fsSL "$STR_URL" -o "$TMP_LIST" || { echo -e "\n${RED}Не удалось скачать список${NC}\n"; PAUSE </dev/tty; return 1; }
+auto_stryou() { clear; echo -e "${MAGENTA}Тестируем стратегии для YouTube${NC}"
+
+echo
+DNS_TEST
+
+awk '/^[[:space:]]*option NFQWS_OPT '\''/{flag=1} flag{print}' "$CONF" > "$OLD_STR"; curl -fsSL "$STR_URL" -o "$TMP_LIST" || { echo -e "\n${RED}Не удалось скачать список${NC}\n"; PAUSE </dev/tty; return 1; }
 TOTAL=$(grep -c '^Yv[0-9]\+' "$TMP_LIST"); echo -e "\n${CYAN}Найдено стратегий: ${NC}$TOTAL"; CURRENT_NAME=""; CURRENT_BODY=""; COUNT=0
 while IFS= read -r LINE || [ -n "$LINE" ]; do if echo "$LINE" | grep -q '^Yv[0-9]\+'; then if [ -n "$CURRENT_NAME" ]; then COUNT=$((COUNT + 1))
 echo -e "\n${CYAN}Тестируем стратегию: ${NC}$CURRENT_NAME ($COUNT/$TOTAL)"; apply_strategy "$CURRENT_NAME" "$CURRENT_BODY"; 
@@ -212,10 +217,9 @@ echo -e "${GREEN}Стратегия применена!${NC}\n"; PAUSE </dev/tty
 echo -e "\n${GREEN}Тест остановлен!${NC}\n"; PAUSE </dev/tty; return 1; fi; else echo -e "${RED}Видео не открывается...${NC}\n"; fi; fi; sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; cat "$OLD_STR" >> "$CONF"; ZAPRET_RESTART
 echo -e "\n${RED}Рабочая стратегия для YouTube не найдена!${NC}\n"; PAUSE </dev/tty; return 1; }
 
-
-check_access() {
 DOMAINS="rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com rr1---sn-gvnuxaxjvh-jx3l.googlevideo.com rr1---sn-gvnuxaxjvh-jx3s.googlevideo.com"
 
+check_access() {
     ANY_OK=0
     ALL_OK=1
 
@@ -240,6 +244,42 @@ DOMAINS="rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com rr1---sn-gvnuxaxjvh-jx3l.googl
 
 
 apply_strategy() { NAME="$1"; BODY="$2"; sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; { echo "  option NFQWS_OPT '"; echo "#AUTO $NAME"; printf "%b\n" "$BODY"; echo "'"; } >> "$CONF"; ZAPRET_RESTART; }
+
+DNS_TEST() {
+
+PUBLIC_DNS="1.1.1.1 8.8.8.8"
+
+ALL_OK_DNS=1
+
+echo -e "${MAGENTA}Проверка DNS для YouTube${NC}"
+
+for DOMAIN in $DOMAINS; do
+    echo -e "${CYAN}Домен: $DOMAIN${NC}"
+
+    SYS_IP=$(nslookup "$DOMAIN" 2>/dev/null | awk '/^Address: /{print $2}' | tail -n1)
+    [ -z "$SYS_IP" ] && SYS_IP="не определён"
+    echo -e " Системный DNS: $SYS_IP"
+
+    for DNS in $PUBLIC_DNS; do
+        PUB_IP=$(nslookup "$DOMAIN" "$DNS" 2>/dev/null | awk '/^Address: /{print $2}' | tail -n1)
+        [ -n "$PUB_IP" ] && echo -e " DNS $DNS: $PUB_IP"
+    done
+
+    if [ "$SYS_IP" = "не определён" ]; then
+        ALL_OK_DNS=0
+        echo -e " ${RED}⚠ DNS недоступен${NC}"
+    fi
+
+    echo -e "${MAGENTA}----------------------------------------${NC}"
+done
+
+echo -e "${MAGENTA}Итог проверки DNS:${NC}"
+if [ $ALL_OK -eq 1 ]; then
+    echo -e " ${GREEN}[✓] Все домены разрешаются корректно${NC}"
+else
+    echo -e " ${YELLOW}[!] Есть проблемы с разрешением доменов${NC}"
+fi
+}
 
 
 # ==========================================
@@ -600,9 +640,9 @@ chmod +x "$INIT_PATH_GO"; /etc/init.d/tg-ws-proxy-go enable; /etc/init.d/tg-ws-p
 # МЕНЮ
 menu_TG() { while true; do SECRET="$(head -c16 /dev/urandom | hexdump -e '16/1 "%02x"')"; clear; echo -e "${MAGENTA}Меню TG WS Proxy${NC}\n"; TGSTATUS=""; pidof tg-ws-proxy-go >/dev/null 2>&1 && TGSTATUS="Go"; pidof tg-ws-proxy-rs >/dev/null 2>&1 && TGSTATUS="$TGSTATUS$( [ -n "$TGSTATUS" ] && echo "/" )Rust"
 if [ -n "$TGSTATUS" ]; then echo -e "${YELLOW}TG WS Proxy:${NC} ${GREEN}запущен [$TGSTATUS]${NC}"; else echo -e "${YELLOW}TG WS Proxy:${NC} ${GREEN}не установлен${NC}"; fi
-if pidof tg-ws-proxy-go >/dev/null 2>&1 && [ -f "$BIN_PATH_GO" ] && [ -f "$INIT_PATH_GO" ]; then echo -e "\n${YELLOW}Настройки ${CYAN}Go${YELLOW} версии в TG:${NC}\n${YELLOW}Типы прокси:${NC} SOCKS5\n${YELLOW}Хост:${NC} $(uci get network.lan.ipaddr 2>/dev/null | cut -d/ -f1)\n${YELLOW}Порт:${NC} 1080${NC}"; fi
+if pidof tg-ws-proxy-go >/dev/null 2>&1 && [ -f "$BIN_PATH_GO" ] && [ -f "$INIT_PATH_GO" ]; then echo -e "\n${YELLOW}Настройки ${CYAN}Go${YELLOW} версии в TG:${NC}\n${YELLOW}Типы прокси:${NC} SOCKS5\n${YELLOW}Хост:${NC} $LAN_IP\n${YELLOW}Порт:${NC} 1080${NC}"; fi
 if pgrep -f tg-ws-proxy-rs >/dev/null 2>&1 && [ -f "$BIN_PATH_RS" ] && [ -f "$INIT_PATH_RS" ]; then SECRET_IN_RS="$(sed -n 's/.*--secret[[:space:]]*\([0-9a-fA-F]\{32\}\).*/\1/p' "$INIT_PATH_RS")"
-echo -e "\n${YELLOW}Настройки ${CYAN}Rust${YELLOW} версии в TG:${NC}\n${YELLOW}Типы прокси:${NC} MTProto\n${YELLOW}Хост:${NC} $(ip -4 route get 1 | awk '{print $7; exit}')\n${YELLOW}Порт:${NC} 2443\n${YELLOW}Ключ:${NC} dd$SECRET_IN_RS\n${YELLOW}Ссылка для подключения:${NC}\ntg://proxy?server=$(ip -4 route get 1 | awk '{print $7; exit}')&port=2443&secret=dd$SECRET_IN_RS"; fi
+echo -e "\n${YELLOW}Настройки ${CYAN}Rust${YELLOW} версии в TG:${NC}\n${YELLOW}Типы прокси:${NC} MTProto\n${YELLOW}Хост:${NC} $LAN_IP\n${YELLOW}Порт:${NC} 2443\n${YELLOW}Ключ:${NC} dd$SECRET_IN_RS\n${YELLOW}Ссылка для подключения:${NC}\ntg://proxy?server=$(ip -4 route get 1 | awk '{print $7; exit}')&port=2443&secret=dd$SECRET_IN_RS"; fi
 echo -e "\n${CYAN}1)${GREEN} $( [ -f "$BIN_PATH_GO" ] && [ -f "$INIT_PATH_GO" ] && echo -e "Удалить ${NC}TG WS Proxy Go" || echo "Установить ${NC}TG WS Proxy Go" )"; echo -e "${CYAN}2)${GREEN} $( [ -f "$BIN_PATH_RS" ] && [ -f "$INIT_PATH_RS" ] && echo -e "Удалить ${NC}TG WS Proxy Rust" || echo "Установить ${NC}TG WS Proxy Rust" )"
 echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n"; echo -en "${YELLOW}Выберите пункт: ${NC}"; read choice; case "$choice" in 1) if [ -f "$BIN_PATH_GO" ] && [ -f "$INIT_PATH_GO" ]; then delete_TG_GO; else install_TG_GO; fi;; 2) if [ -f "$BIN_PATH_RS" ] && [ -f "$INIT_PATH_RS" ]; then delete_TG_RS; else install_TG_RS; fi;; *) break ;; esac; done; }
 # ==========================================
