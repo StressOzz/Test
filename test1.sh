@@ -212,13 +212,13 @@ rr1---sn-gvnuxaxjvh-jx3s.googlevideo.com
 
     ALL_OK=1
 
-    echo -e "${CYAN}Проверка доменов:${NC}"
-
     for domain in $DOMAINS; do
+        echo -e "${CYAN}Тестируем домен:${NC} $domain"
+
         if curl -s --connect-timeout 4 -m 4 "https://$domain" >/dev/null; then
-            echo -e "  ${GREEN}✔ $domain доступен${NC}"
+            echo -e "${GREEN}Доступен${NC}\n"
         else
-            echo -e "  ${RED}✖ $domain недоступен${NC}"
+            echo -e "${RED}Недоступен${NC}\n"
             ALL_OK=0
         fi
     done
