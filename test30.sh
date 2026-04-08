@@ -186,6 +186,9 @@ nft list tables 2>/dev/null | awk '{print $2}' | grep -E '(zapret|ZAPRET)' | whi
 
 
 auto_stryou() { clear; echo -e "${MAGENTA}Тестируем стратегии для YouTube${NC}"
+
+DNS_TEST
+
 awk '/^[[:space:]]*option NFQWS_OPT '\''/{flag=1} flag{print}' "$CONF" > "$OLD_STR"; curl -fsSL "$STR_URL" -o "$TMP_LIST" || { echo -e "\n${RED}Не удалось скачать список${NC}\n"; PAUSE </dev/tty; return 1; }
 TOTAL=$(grep -c '^Yv[0-9]\+' "$TMP_LIST"); echo -e "\n${CYAN}Найдено стратегий: ${NC}$TOTAL"; CURRENT_NAME=""; CURRENT_BODY=""; COUNT=0
 while IFS= read -r LINE || [ -n "$LINE" ]; do if echo "$LINE" | grep -q '^Yv[0-9]\+'; then if [ -n "$CURRENT_NAME" ]; then COUNT=$((COUNT + 1))
