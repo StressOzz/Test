@@ -217,7 +217,7 @@ rr1---sn-gvnuxaxjvh-jx3s.googlevideo.com
     for domain in $DOMAINS; do
         echo -e "${CYAN}Тестируем домен:${NC} $domain" >&2
 
-        if curl -s --connect-timeout 4 -m 4 "https://$domain" >/dev/null; then
+        if curl -s --connect-timeout 1 -m 1 "https://$domain" >/dev/null; then
             echo -e "${GREEN}Доступен${NC}\n" >&2
         else
             echo -e "${RED}Недоступен${NC}\n" >&2
