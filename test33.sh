@@ -253,7 +253,7 @@ get_ip4() {
         nslookup "$domain" "$server" 2>/dev/null
     else
         nslookup "$domain" 2>/dev/null
-    fi | awk '/^Address [0-9]*: / {print $3}' | grep -E '^[0-9.]+' | sort -u
+    fi | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}' | sort -u
 }
 
 pad() {
