@@ -203,6 +203,8 @@ awk 'BEGIN { inserted=0 } /^--new/ && !inserted { system("cat '"$SAVED_STR"'"); 
 echo -e "${GREEN}Стратегия применена!${NC}\n"; PAUSE </dev/tty; return 0; elif [[ "$ANSWER" =~ ^[Ss]$ ]]; then sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; cat "$OLD_STR" >> "$CONF"; ZAPRET_RESTART
 echo -e "\n${GREEN}Тест остановлен!${NC}\n"; PAUSE </dev/tty; return 1; fi; else echo -e "${RED}Видео не открывается...${NC}\n"; fi; fi; sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; cat "$OLD_STR" >> "$CONF"; ZAPRET_RESTART
 echo -e "\n${RED}Рабочая стратегия для YouTube не найдена!${NC}\n"; PAUSE </dev/tty; return 1; }
+
+
 check_access() {
     DOMAINS="
 rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com
@@ -213,18 +215,20 @@ rr1---sn-gvnuxaxjvh-jx3s.googlevideo.com
     ALL_OK=1
 
     for domain in $DOMAINS; do
-        echo -e "${CYAN}Тестируем домен:${NC} $domain"
+        echo -e "${CYAN}Тестируем домен:${NC} $domain" >&2
 
         if curl -s --connect-timeout 4 -m 4 "https://$domain" >/dev/null; then
-            echo -e "${GREEN}Доступен${NC}\n"
+            echo -e "${GREEN}Доступен${NC}\n" >&2
         else
-            echo -e "${RED}Недоступен${NC}\n"
+            echo -e "${RED}Недоступен${NC}\n" >&2
             ALL_OK=0
         fi
     done
 
     [ "$ALL_OK" = "1" ] && echo "ok" || echo "fail"
 }
+
+
 apply_strategy() { NAME="$1"; BODY="$2"; sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; { echo "  option NFQWS_OPT '"; echo "#AUTO $NAME"; printf "%b\n" "$BODY"; echo "'"; } >> "$CONF"; ZAPRET_RESTART; }
 
 
