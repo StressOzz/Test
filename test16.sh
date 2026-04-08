@@ -231,9 +231,9 @@ check_access() {
         fi
     done
 
-    if [ "$ALL_OK" -ne 1 ]; then
-        echo -e "\n${RED}Не все домены доступны, возможны проблемы на некоторых устройствах!${NC}\n" >&2
-    fi
+if [ "$ALL_OK" -ne 1 ] && [ "$ANY_OK" -eq 1 ]; then
+    echo -e "\n${RED}Не все домены доступны, возможны проблемы на некоторых устройствах!${NC}\n" >&2
+fi
 
     [ "$ANY_OK" = "1" ] && echo "ok" || echo "fail"
 }
