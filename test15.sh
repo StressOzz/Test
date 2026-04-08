@@ -186,10 +186,6 @@ nft list tables 2>/dev/null | awk '{print $2}' | grep -E '(zapret|ZAPRET)' | whi
 
 
 auto_stryou() { clear; echo -e "${MAGENTA}Тестируем стратегии для YouTube${NC}"
-
-echo
-DNS_TEST
-
 awk '/^[[:space:]]*option NFQWS_OPT '\''/{flag=1} flag{print}' "$CONF" > "$OLD_STR"; curl -fsSL "$STR_URL" -o "$TMP_LIST" || { echo -e "\n${RED}Не удалось скачать список${NC}\n"; PAUSE </dev/tty; return 1; }
 TOTAL=$(grep -c '^Yv[0-9]\+' "$TMP_LIST"); echo -e "\n${CYAN}Найдено стратегий: ${NC}$TOTAL"; CURRENT_NAME=""; CURRENT_BODY=""; COUNT=0
 while IFS= read -r LINE || [ -n "$LINE" ]; do if echo "$LINE" | grep -q '^Yv[0-9]\+'; then if [ -n "$CURRENT_NAME" ]; then COUNT=$((COUNT + 1))
@@ -244,59 +240,6 @@ check_access() {
 
 
 apply_strategy() { NAME="$1"; BODY="$2"; sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; { echo "  option NFQWS_OPT '"; echo "#AUTO $NAME"; printf "%b\n" "$BODY"; echo "'"; } >> "$CONF"; ZAPRET_RESTART; }
-
-DNS_TEST() {#!/bin/sh
-
-GREEN="\033[1;32m"
-RED="\033[1;31m"
-YELLOW="\033[1;33m"
-CYAN="\033[1;36m"
-MAGENTA="\033[1;35m"
-NC="\033[0m"
-
-DOMAINS="rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com rr1---sn-gvnuxaxjvh-jx3l.googlevideo.com rr1---sn-gvnuxaxjvh-jx3s.googlevideo.com"
-PUBLIC_DNS="1.1.1.1 8.8.8.8 77.88.8.8 83.220.169.155 84.21.189.133 45.155.204.190 111.88.96.50"
-
-ALL_OK=1
-
-echo -e "${MAGENTA}Проверка подмены DNS для YouTube (только IPv4)${NC}"
-
-for DOMAIN in $DOMAINS; do
-    echo -e "${CYAN}Домен: $DOMAIN${NC}"
-
-    SYS_IP=$(nslookup "$DOMAIN" 2>/dev/null | awk '/^Address: /{print $2}' | grep -E '^[0-9.]+' | tail -n1)
-    [ -z "$SYS_IP" ] && SYS_IP="не определён"
-    echo -e " Системный IPv4: $SYS_IP"
-
-    MATCH=0
-    TOTAL=0
-    for DNS in $PUBLIC_DNS; do
-        PUB_IP=$(nslookup "$DOMAIN" "$DNS" 2>/dev/null | awk '/^Address: /{print $2}' | grep -E '^[0-9.]+' | tail -n1)
-        [ -n "$PUB_IP" ] && echo -e " DNS $DNS: $PUB_IP"
-        [ -n "$PUB_IP" ] && TOTAL=$((TOTAL+1))
-        [ "$PUB_IP" = "$SYS_IP" ] && MATCH=$((MATCH+1))
-    done
-
-    if [ "$SYS_IP" = "не определён" ]; then
-        ALL_OK=0
-        echo -e " ${RED}⚠ DNS недоступен${NC}"
-    elif [ $MATCH -ne $TOTAL ]; then
-        echo -e " ${YELLOW}⚠ Провайдер может подменять DNS${NC}"
-        ALL_OK=0
-    else
-        echo -e " ${GREEN}[✓] DNS в порядке${NC}"
-    fi
-
-    echo -e "${MAGENTA}----------------------------------------${NC}"
-done
-
-echo -e "${MAGENTA}Итог проверки DNS:${NC}"
-if [ $ALL_OK -eq 1 ]; then
-    echo -e " ${GREEN}[✓] Все домены разрешаются корректно${NC}"
-else
-    echo -e " ${YELLOW}[!] Есть проблемы с разрешением доменов${NC}"
-fi
-}
 
 
 # ==========================================
