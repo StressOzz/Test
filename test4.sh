@@ -106,7 +106,7 @@ remove_all() {
 
     # --- удаляем пакет redsocks ---
     if [ "$PKG" = "opkg" ]; then
-        opkg remove redsocks -y
+        opkg remove redsocks
     else
         apk del redsocks
     fi
