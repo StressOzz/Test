@@ -13,17 +13,17 @@ RED="\033[1;31m"
 YELLOW="\033[1;33m"
 NC="\033[0m"
 
-# ===== ОПРЕДЕЛЕНИЕ ПАКЕТНОГО МЕНЕДЖЕРА =====
+# ===== PKG =====
 if command -v opkg >/dev/null 2>&1; then
     PKG="opkg"
 elif command -v apk >/dev/null 2>&1; then
     PKG="apk"
 else
-    echo -e "${RED}Не найден пакетный менеджер${NC}"
+    echo -e "${RED}Пакетный менеджер не найден${NC}"
     exit 1
 fi
 
-# ===== УСТАНОВКА =====
+# ===== УСТАНОВКА ПАКЕТОВ =====
 install_pkgs() {
     echo -e "${YELLOW}Установка пакетов...${NC}"
     if [ "$PKG" = "opkg" ]; then
@@ -35,7 +35,17 @@ install_pkgs() {
     fi
 }
 
-# ===== КОНФИГ REDSOCKS =====
+# ===== УДАЛЕНИЕ ПАКЕТОВ =====
+remove_pkgs() {
+    echo -e "${YELLOW}Удаление пакетов...${NC}"
+    if [ "$PKG" = "opkg" ]; then
+        opkg remove redsocks ipset iptables-mod-nat-extra
+    else
+        apk del redsocks ipset iptables
+    fi
+}
+
+# ===== REDSOCKS CONFIG =====
 config_redsocks() {
 cat > /etc/redsocks.conf <<EOF
 base {
@@ -78,52 +88,61 @@ setup_iptables() {
     iptables -t nat -A PREROUTING -p tcp -j REDSOCKS
 }
 
-# ===== ЗАПУСК =====
+# ===== УДАЛЕНИЕ IPTABLES =====
+cleanup_iptables() {
+    iptables -t nat -D PREROUTING -p tcp -j REDSOCKS 2>/dev/null
+    iptables -t nat -F REDSOCKS 2>/dev/null
+    iptables -t nat -X REDSOCKS 2>/dev/null
+}
+
+# ===== REDSOCKS =====
 start_redsocks() {
     killall redsocks 2>/dev/null
     redsocks -c /etc/redsocks.conf
 }
 
-# ===== ОСТАНОВКА =====
+stop_redsocks() {
+    killall redsocks 2>/dev/null
+}
+
+# ===== STOP =====
 stop_all() {
     echo -e "${YELLOW}Отключение...${NC}"
-
-    iptables -t nat -D PREROUTING -p tcp -j REDSOCKS 2>/dev/null
-    iptables -t nat -F REDSOCKS 2>/dev/null
-    iptables -t nat -X REDSOCKS 2>/dev/null
-
+    cleanup_iptables
     ipset destroy $IPSET_NAME 2>/dev/null
-    killall redsocks 2>/dev/null
-
+    stop_redsocks
     echo -e "${GREEN}Отключено${NC}"
 }
 
-# ===== СТАТУС =====
-status() {
-    if pidof redsocks >/dev/null; then
-        echo -e "${GREEN}redsocks запущен${NC}"
-    else
-        echo -e "${RED}redsocks не работает${NC}"
-    fi
+# ===== UNINSTALL =====
+uninstall_all() {
+    echo -e "${YELLOW}Полное удаление...${NC}"
+    stop_all
+    remove_pkgs
+    rm -f /etc/redsocks.conf
+    echo -e "${GREEN}Полностью удалено${NC}"
+}
 
+# ===== STATUS =====
+status() {
+    pidof redsocks >/dev/null && echo -e "${GREEN}redsocks запущен${NC}" || echo -e "${RED}redsocks не работает${NC}"
     ipset list $IPSET_NAME >/dev/null 2>&1 && echo -e "${GREEN}ipset есть${NC}" || echo -e "${RED}ipset нет${NC}"
 }
 
-# ===== ВКЛЮЧЕНИЕ =====
-enable() {
+# ===== START =====
+start_all() {
     install_pkgs
     config_redsocks
     create_ipset
     setup_iptables
     start_redsocks
-
-    echo -e "${GREEN}Готово. Прозрачный Telegram прокси включен${NC}"
+    echo -e "${GREEN}Прозрачный Telegram прокси включен${NC}"
 }
 
-# ===== МЕНЮ =====
+# ===== MENU =====
 case "$1" in
     start)
-        enable
+        start_all
         ;;
     stop)
         stop_all
@@ -131,16 +150,20 @@ case "$1" in
     restart)
         stop_all
         sleep 1
-        enable
+        start_all
+        ;;
+    uninstall)
+        uninstall_all
         ;;
     status)
         status
         ;;
     *)
         echo "Использование:"
-        echo "$0 start   - включить"
-        echo "$0 stop    - выключить"
-        echo "$0 restart - перезапуск"
-        echo "$0 status  - статус"
+        echo "$0 start       - включить"
+        echo "$0 stop        - выключить"
+        echo "$0 restart     - перезапуск"
+        echo "$0 status      - статус"
+        echo "$0 uninstall   - удалить всё"
         ;;
 esac
