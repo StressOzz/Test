@@ -32,7 +32,7 @@ install_all() {
     # --- пакеты ---
     if [ "$PKG" = "opkg" ]; then
         opkg update
-        opkg install redsocks curl -y
+        opkg install redsocks curl
     else
         apk update
         apk add redsocks curl
