@@ -2,7 +2,7 @@
 
 # ===== НАСТРОЙКИ =====
 REDSOCKS_PORT="12345"
-SOCKS_IP="127.0.0.1"
+SOCKS_IP="192.168.1.1"
 SOCKS_PORT="1080"
 
 CONF="/etc/redsocks.conf"
