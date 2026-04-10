@@ -7,6 +7,7 @@ SOCKS_PORT="1080"
 
 CONF="/etc/redsocks.conf"
 FW_USER="/etc/firewall.user"
+
 TAG_BEGIN="# >>> TG REDSOCKS BEGIN >>>"
 TAG_END="# <<< TG REDSOCKS END <<<"
 
@@ -27,6 +28,19 @@ else
     exit 1
 fi
 
+# ===== ФИКС APK-NEW =====
+fix_apk_new() {
+    [ -f /etc/init.d/redsocks.apk-new ] && {
+        rm -f /etc/init.d/redsocks
+        mv /etc/init.d/redsocks.apk-new /etc/init.d/redsocks
+        chmod +x /etc/init.d/redsocks
+    }
+
+    [ -f /etc/redsocks.conf.apk-new ] && {
+        mv /etc/redsocks.conf.apk-new /etc/redsocks.conf
+    }
+}
+
 # ===== ПРОВЕРКА =====
 is_installed() {
     [ -f "$CONF" ]
@@ -44,7 +58,9 @@ install_all() {
         apk add redsocks
     fi
 
-# --- конфиг redsocks ---
+    fix_apk_new
+
+# --- конфиг ---
 cat > $CONF <<EOF
 base {
     log_debug = off;
@@ -63,10 +79,9 @@ redsocks {
 }
 EOF
 
-# --- удаляем старый блок если был ---
+# --- firewall ---
 sed -i "/$TAG_BEGIN/,/$TAG_END/d" $FW_USER 2>/dev/null
 
-# --- добавляем блок аккуратно ---
 cat >> $FW_USER <<EOF
 
 $TAG_BEGIN
@@ -89,10 +104,9 @@ EOF
     /etc/init.d/redsocks enable
     /etc/init.d/redsocks restart
 
-# --- firewall ---
     /etc/init.d/firewall restart
 
-    echo -e "${GREEN}Установлено и работает${NC}"
+    echo -e "${GREEN}Готово${NC}"
 }
 
 # ===== УДАЛЕНИЕ =====
@@ -104,7 +118,6 @@ remove_all() {
 
     rm -f $CONF
 
-    # удаляем только наш блок
     sed -i "/$TAG_BEGIN/,/$TAG_END/d" $FW_USER 2>/dev/null
 
     if [ "$PKG" = "opkg" ]; then
@@ -122,7 +135,7 @@ remove_all() {
 menu() {
     while true; do
         clear
-        echo -e "${CYAN}=== TG REDSOCKS (SMART) ===${NC}\n"
+        echo -e "${CYAN}=== TG REDSOCKS (FINAL) ===${NC}\n"
 
         if is_installed; then
             echo "1) Удалить"
