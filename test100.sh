@@ -2,8 +2,8 @@
 
 # ===== CONFIG =====
 REDSOCKS_PORT="12345"
-SOCKS_IP="127.0.0.1"  # IP вашего SOCKS5 прокси
-SOCKS_PORT="1080"      # Порт вашего SOCKS5 прокси
+SOCKS_IP="192.168.1.1"    # Ваш TG WS Proxy Go
+SOCKS_PORT="1080"          # Порт TG WS Proxy Go
 
 SET_NAME="telegram_list"
 CHAIN_NAME="tg_redsocks"
@@ -111,6 +111,9 @@ redsocks {
 EOF
     
     echo -e "${GREEN}Конфиг создан: $CONF${NC}"
+    echo -e "${CYAN}Настройки Redsocks:${NC}"
+    echo -e "  Слушает на порту: ${GREEN}$REDSOCKS_PORT${NC}"
+    echo -e "  Перенаправляет на: ${GREEN}$SOCKS_IP:$SOCKS_PORT${NC}"
     
     # Создание init скрипта если его нет
     if [ ! -f "/etc/init.d/redsocks" ]; then
@@ -143,7 +146,7 @@ EOF
     sleep 2
     
     if pgrep -f "redsocks" >/dev/null 2>&1; then
-        echo -e "${GREEN}Redsocks запущен на порту $REDSOCKS_PORT${NC}"
+        echo -e "${GREEN}Redsocks успешно запущен на порту $REDSOCKS_PORT${NC}"
         return 0
     else
         echo -e "${YELLOW}Redsocks не запустился, проверьте логи: logread | grep redsocks${NC}"
@@ -167,6 +170,8 @@ setup_nftables() {
     # Создание nft конфига
     cat > $NFT_FILE <<EOF
 # Telegram прозрачное проксирование через Redsocks
+# Перенаправляет трафик Telegram на TG WS Proxy Go ($SOCKS_IP:$SOCKS_PORT)
+
 table inet fw4 {
 
     set $SET_NAME {
@@ -178,7 +183,7 @@ table inet fw4 {
     chain $CHAIN_NAME {
         type nat hook output priority dstnat; policy accept;
         
-        # Редирект трафика Telegram на Redsocks
+        # Редирект HTTP/HTTPS трафика Telegram на Redsocks
         ip daddr @$SET_NAME tcp dport {80, 443} redirect to :$REDSOCKS_PORT
     }
 }
@@ -196,7 +201,7 @@ EOF
     nft flush set inet fw4 $SET_NAME 2>/dev/null
     
     # Добавление IP из файла
-    echo -e "${CYAN}Добавление IP адресов в nftables...${NC}"
+    echo -e "${CYAN}Добавление IP адресов Telegram в nftables...${NC}"
     TEMP_IPS="/tmp/telegram_ips.txt"
     count=0
     
@@ -221,7 +226,7 @@ EOF
     
     echo -e "${GREEN}Добавлено $count IP адресов/диапазонов${NC}"
     
-    # Добавляем дополнительные статические диапазоны (на всякий случай)
+    # Добавляем дополнительные статические диапазоны
     echo -e "${CYAN}Добавление дополнительных диапазонов...${NC}"
     nft add element inet fw4 $SET_NAME { \
         91.105.192.0/23, 91.108.4.0/22, 91.108.8.0/21, 91.108.16.0/22, \
@@ -257,6 +262,7 @@ EOF
     rm -f "$TEMP_IPS"
     
     echo -e "${GREEN}nftables настроен успешно${NC}"
+    echo -e "${CYAN}Трафик Telegram будет перенаправляться на TG WS Proxy Go${NC}"
     return 0
 }
 
@@ -317,18 +323,29 @@ remove_all() {
 
 # ===== STATUS =====
 status() {
-    echo -e "${CYAN}╔════════════════════════════════╗${NC}"
-    echo -e "${CYAN}║          СТАТУС               ║${NC}"
-    echo -e "${CYAN}╚════════════════════════════════╝${NC}"
+    echo -e "${CYAN}╔══════════════════════════════════════╗${NC}"
+    echo -e "${CYAN}║              СТАТУС                 ║${NC}"
+    echo -e "${CYAN}╚══════════════════════════════════════╝${NC}"
+    echo ""
+    
+    # TG WS Proxy Go
+    if pgrep -f "tg-ws-proxy-go" >/dev/null 2>&1; then
+        echo -e "${GREEN}✓${NC} TG WS Proxy Go: ${GREEN}РАБОТАЕТ${NC}"
+        echo -e "   Прокси:       ${CYAN}$SOCKS_IP:$SOCKS_PORT${NC}"
+    else
+        echo -e "${RED}✗${NC} TG WS Proxy Go: ${RED}НЕ РАБОТАЕТ${NC}"
+        echo -e "   ${YELLOW}Проверьте что TG WS Proxy Go запущен${NC}"
+    fi
+    
     echo ""
     
     # Redsocks
     if pgrep -f "redsocks" >/dev/null 2>&1; then
-        echo -e "${GREEN}✓${NC} Redsocks:     ${GREEN}РАБОТАЕТ${NC}"
+        echo -e "${GREEN}✓${NC} Redsocks:      ${GREEN}РАБОТАЕТ${NC}"
         echo -e "   Порт:         ${CYAN}$REDSOCKS_PORT${NC}"
         echo -e "   Целевой SOCKS: ${CYAN}$SOCKS_IP:$SOCKS_PORT${NC}"
     else
-        echo -e "${RED}✗${NC} Redsocks:     ${RED}НЕ РАБОТАЕТ${NC}"
+        echo -e "${RED}✗${NC} Redsocks:      ${RED}НЕ РАБОТАЕТ${NC}"
     fi
     
     echo ""
@@ -336,60 +353,21 @@ status() {
     # nftables
     if nft list set inet fw4 $SET_NAME >/dev/null 2>&1; then
         COUNT=$(nft list set inet fw4 $SET_NAME 2>/dev/null | grep -c "[0-9]\+\.[0-9]\+/[0-9]\+")
-        echo -e "${GREEN}✓${NC} nftables:     ${GREEN}НАСТРОЕН${NC}"
+        echo -e "${GREEN}✓${NC} nftables:      ${GREEN}НАСТРОЕН${NC}"
         echo -e "   IP правил:    ${CYAN}$COUNT${NC}"
     else
-        echo -e "${RED}✗${NC} nftables:     ${RED}НЕ НАСТРОЕН${NC}"
+        echo -e "${RED}✗${NC} nftables:      ${RED}НЕ НАСТРОЕН${NC}"
     fi
     
     echo ""
     
-    # Проверка правил
+    # Правило редиректа
     if nft list chain inet fw4 $CHAIN_NAME >/dev/null 2>&1; then
         echo -e "${GREEN}✓${NC} Правило редиректа: ${GREEN}АКТИВНО${NC}"
-        nft list chain inet fw4 $CHAIN_NAME 2>/dev/null | grep -q "redirect to"
-        if [ $? -eq 0 ]; then
-            echo -e "   Редирект:     ${CYAN}-> :$REDSOCKS_PORT${NC}"
-        fi
+        echo -e "   Редирект:     ${CYAN}Порт 80/443 -> :$REDSOCKS_PORT -> $SOCKS_IP:$SOCKS_PORT${NC}"
     else
         echo -e "${RED}✗${NC} Цепочка $CHAIN_NAME: ${RED}НЕ НАЙДЕНА${NC}"
     fi
-    
-    echo ""
-    
-    # Проверка SOCKS доступности
-    if nc -z $SOCKS_IP $SOCKS_PORT 2>/dev/null || timeout 1 bash -c "echo >/dev/tcp/$SOCKS_IP/$SOCKS_PORT" 2>/dev/null; then
-        echo -e "${GREEN}✓${NC} SOCKS сервер:  ${GREEN}ДОСТУПЕН${NC} ($SOCKS_IP:$SOCKS_PORT)"
-    else
-        echo -e "${RED}✗${NC} SOCKS сервер:  ${RED}НЕ ДОСТУПЕН${NC}"
-        echo -e "   ${YELLOW}Проверьте что SOCKS5 прокси запущен на $SOCKS_IP:$SOCKS_PORT${NC}"
-    fi
-}
-
-# ===== CONFIGURE SOCKS SETTINGS =====
-configure_socks() {
-    echo -e "${CYAN}Настройка SOCKS параметров${NC}"
-    echo -e "${YELLOW}Текущие настройки:${NC}"
-    echo -e "  SOCKS IP:   $SOCKS_IP"
-    echo -e "  SOCKS порт: $SOCKS_PORT"
-    echo -e "  Redsocks порт: $REDSOCKS_PORT"
-    echo ""
-    
-    read -p "Изменить SOCKS IP? (y/n): " change_ip
-    if [ "$change_ip" = "y" ]; then
-        read -p "Введите SOCKS IP [127.0.0.1]: " new_ip
-        SOCKS_IP=${new_ip:-127.0.0.1}
-    fi
-    
-    read -p "Изменить SOCKS порт? (y/n): " change_port
-    if [ "$change_port" = "y" ]; then
-        read -p "Введите SOCKS порт [1080]: " new_port
-        SOCKS_PORT=${new_port:-1080}
-    fi
-    
-    echo -e "${GREEN}Настройки обновлены${NC}"
-    echo -e "${YELLOW}Для применения изменений переустановите redsocks${NC}"
-    read -p "Enter..."
 }
 
 # ===== MENU =====
@@ -397,19 +375,18 @@ menu() {
     while true; do
         clear
         echo -e "${CYAN}╔══════════════════════════════════════╗${NC}"
-        echo -e "${CYAN}║     Redsocks + nftables для TG      ║${NC}"
+        echo -e "${CYAN}║   Redsocks + nftables для Telegram   ║${NC}"
         echo -e "${CYAN}╚══════════════════════════════════════╝${NC}"
         echo ""
         echo -e "${GREEN}1)${NC} Установить Redsocks + nftables"
         echo -e "${GREEN}2)${NC} Обновить список IP Telegram"
-        echo -e "${YELLOW}3)${NC} Настроить SOCKS параметры"
-        echo -e "${CYAN}4)${NC} Проверить статус"
-        echo -e "${RED}5)${NC} Удалить всё"
+        echo -e "${CYAN}3)${NC} Проверить статус"
+        echo -e "${RED}4)${NC} Удалить всё"
         echo -e "${RED}0)${NC} Выход"
         echo ""
+        echo -e "${CYAN}TG WS Proxy Go: ${NC}$SOCKS_IP:$SOCKS_PORT"
+        echo -e "${CYAN}Redsocks порт:  ${NC}$REDSOCKS_PORT"
         echo -e "${CYAN}Пакетный менеджер: ${NC}$PKG"
-        echo -e "${CYAN}Redsocks порт: ${NC}$REDSOCKS_PORT"
-        echo -e "${CYAN}Целевой SOCKS: ${NC}$SOCKS_IP:$SOCKS_PORT"
         echo ""
         
         read -p "Выбор: " c
@@ -417,7 +394,10 @@ menu() {
         case "$c" in
             1)
                 install_redsocks && setup_nftables
+                echo -e "${GREEN}════════════════════════════════════════${NC}"
                 echo -e "${GREEN}Установка завершена!${NC}"
+                echo -e "${GREEN}Трафик Telegram перенаправляется на TG WS Proxy Go${NC}"
+                echo -e "${GREEN}════════════════════════════════════════${NC}"
                 read -p "Enter..."
                 ;;
             2)
@@ -425,13 +405,10 @@ menu() {
                 read -p "Enter..."
                 ;;
             3)
-                configure_socks
-                ;;
-            4)
                 status
                 read -p "Enter..."
                 ;;
-            5)
+            4)
                 remove_all
                 ;;
             0)
@@ -449,7 +426,7 @@ menu() {
 # ===== START =====
 # Проверка root
 if [ "$(id -u)" != "0" ]; then
-    echo -e "${RED}Запустите с правами root (sudo)$NC}"
+    echo -e "${RED}Запустите с правами root (sudo)${NC}"
     exit 1
 fi
 
