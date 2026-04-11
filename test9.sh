@@ -197,8 +197,9 @@ if [ -f "$CONFIGPATH" ]; then
     grep -Fq 'name: Meta (WA+FB+Instagram)' "$CONFIGPATH" && echo -e "${YELLOW}Используется список: ${NC}Internet Helper"
 fi
 
-[ -f /etc/mihomo/config.yaml ] && grep -q "https://sub" /etc/mihomo/config.yaml && echo -e "${YELLOW}Web-интерфейс Mihomo:${NC}       ${CYAN}http://192.168.1.1:9090/ui/${NC}"
-[ -f "$CONFIGPATH" ] && echo -e "${YELLOW}Web-интерфейс MagiTrickle:${NC}  ${CYAN}http://192.168.1.1:8080/${NC}"
+[ -f "$CONFIGPATH" ] && echo -e "${YELLOW}Web-интерфейс MagiTrickle:${NC}  ${CYAN}192.168.1.1:8080${NC}"
+[ -f /etc/mihomo/config.yaml ] && echo -e "${YELLOW}Web-интерфейс Mihomo:${NC}       ${CYAN}192.168.1.1:9090/ui${NC}"
+
 
 
 echo -e "\n${CYAN}1) ${GREEN}Установить ${NC}Mixomo"
