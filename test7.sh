@@ -98,8 +98,6 @@ check_status() {
 
 PODPISKA() {
 
-  sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Mixomo-Manager/main/mixomo_openwrt_install.sh)
-
   echo -ne "\n${YELLOW}Введите ссылку на подписку (${CYAN}https://sub....${YELLOW}): ${NC}"
   read -r SUB_URL
 
@@ -201,12 +199,15 @@ fi
 
 
 echo -e "\n${CYAN}1) ${GREEN}Установить ${NC}Mixomo"
-echo -e "${CYAN}2) ${GREEN}Установить ${NC}Mixomo${GREEN} и включить ${NC}подписку${NC}"
-echo -e "${CYAN}3) ${GREEN}Сменить подписку${NC}"
-echo -e "${CYAN}4) ${GREEN}Удалить ${NC}Mixomo"
-echo -e "${CYAN}5) ${GREEN}Сменить список ${NC}MagiTrickle"
-echo -e "${CYAN}6) ${GREEN}Сгенерировать ${NC}WARP ${GREEN}в ${NC}/root/WARP.conf"
-echo -e "${CYAN}7) ${GREEN}Интегрировать ${NC}/root/WARP.conf${GREEN} в ${NC}Mihomo"
+echo -e "${CYAN}2) ${GREEN}Удалить ${NC}Mixomo"
+echo -e "${CYAN}3) ${GREEN}Сменить список ${NC}MagiTrickle"
+if [ -f /etc/mihomo/config.yaml ] && grep -q 'url: "' /etc/mihomo/config.yaml; then
+  echo -e "${CYAN}4) ${GREEN}Сменить подписку${NC}"
+else
+  echo -e "${CYAN}4) ${GREEN}Интегрировать подписку в ${NC}Mihomo${NC}"
+fi
+echo -e "${CYAN}5) ${GREEN}Сгенерировать ${NC}WARP ${GREEN}в ${NC}/root/WARP.conf"
+echo -e "${CYAN}6) ${GREEN}Интегрировать ${NC}/root/WARP.conf${GREEN} в ${NC}Mihomo"
 # echo -e "${CYAN}888) ${GREEN}Удалить ${NC}→ ${GREEN}установить ${NC}→ ${GREEN}настроить ${NC}mihomo-openwrt"
 echo -e "${CYAN}Enter) ${GREEN}Выход\n"
 echo -ne "${YELLOW}Выберите пункт: ${NC}"
@@ -218,45 +219,25 @@ case "$choiceM" in
   PAUSE
   ;;
 
-2) 
-  PODPISKA
-  ;;
-
-3)
- if [ ! -f /etc/mihomo/config.yaml ]; then
-    echo -e "${RED}Ошибка: config.yaml не найден!${NC}"
-    PAUSE
-    return
-  fi
-
-  echo -ne "\n${YELLOW}Введите ссылку на подписку (${CYAN}https://sub....${YELLOW}): ${NC}"
-  read -r SUB_URL
-
-  [ -z "$SUB_URL" ] && echo -e "\n${RED}Ошибка: ссылка пустая!${NC}\n" && PAUSE && return
-
-  sed -i "s|url: \"https://sub.*\"|url: \"$SUB_URL\"|" /etc/mihomo/config.yaml
-
-  echo -e "\n${GREEN}Подписка обновлена!${NC}"
-
-/etc/init.d/mihomo reload >/dev/null 2>&1
-/etc/init.d/mihomo restart >/dev/null 2>&1
-
-  PAUSE
-  ;;
-
-
-4)
+2)
   sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Mixomo-Manager/main/mixomo_openwrt_delete.sh)
   PAUSE
   ;;
-5)
+
+3)
   magitrickle_config
   ;;
-6)
+
+
+4) 
+  PODPISKA
+  ;;
+
+5)
   sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Mixomo-Manager/main/gen_WARP.sh)
   PAUSE
   ;;
-7)
+6)
   sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Mixomo-Manager/main/WARP_to_conf.sh)
   PAUSE
   ;;
