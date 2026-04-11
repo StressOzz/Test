@@ -107,20 +107,22 @@ PODPISKA() {
 
   cat > /etc/mihomo/config.yaml <<EOF
 mixed-port: 7890
-global-ua: clash.meta.router
 allow-lan: false
-tcp-concurrent: true
 mode: rule
-log-level: info
+log-level: error
 ipv6: false
+tcp-concurrent: true
+find-process-mode: off
+unified-delay: true
+
 external-controller: 0.0.0.0:9090
 external-ui: ui
 external-ui-url: https://github.com/MetaCubeX/metacubexd/releases/latest/download/compressed-dist.tgz
-secret: 
-unified-delay: true
+secret: ""
+
 profile:
-  store-selected: true
-  store-fake-ip: true
+  store-selected: false
+  store-fake-ip: false
 
 proxy-groups:
   - name: "StressKVN"
@@ -206,9 +208,9 @@ echo -e "\n${CYAN}1) ${GREEN}Установить ${NC}Mixomo"
 echo -e "${CYAN}2) ${GREEN}Удалить ${NC}Mixomo"
 echo -e "${CYAN}3) ${GREEN}Сменить список ${NC}MagiTrickle"
 if [ -f /etc/mihomo/config.yaml ] && grep -q 'url: "' /etc/mihomo/config.yaml; then
-  echo -e "${CYAN}4) ${GREEN}Сменить подписку${NC}"
+  echo -e "${CYAN}4) ${GREEN}Сменить ${NC}VPN${GREEN} подписку${NC}"
 else
-  echo -e "${CYAN}4) ${GREEN}Интегрировать подписку в ${NC}Mihomo${NC}"
+  echo -e "${CYAN}4) ${GREEN}Интегрировать ${NC}VPN${GREEN} подписку в ${NC}Mihomo${NC}"
 fi
 echo -e "${CYAN}5) ${GREEN}Сгенерировать ${NC}WARP ${GREEN}в ${NC}/root/WARP.conf"
 echo -e "${CYAN}6) ${GREEN}Интегрировать ${NC}/root/WARP.conf${GREEN} в ${NC}Mihomo"
