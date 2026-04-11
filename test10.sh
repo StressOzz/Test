@@ -243,7 +243,6 @@ case "$choiceM" in
   ;;
 6)
   sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Mixomo-Manager/main/WARP_to_conf.sh)
-  PAUSE
   ;;
   
 888)
