@@ -27,7 +27,7 @@ TMP_FILE=$(mktemp)
 while IFS='|' read -r country ep; do
 (
 host="${ep%%:*}"
-ping_ms="$(ping -c3 -W2 "$host" 2>/dev/null | awk -F'/' 'END{print int($5)}')"
+ping_ms="$(ping -c1 -W1 "$host" 2>/dev/null | awk -F'/' 'END{print int($5)}')"
 if [ -z "$ping_ms" ] || [ "$ping_ms" -eq 0 ]; then
 ping_val="FAIL"
 ping_sort=9999
@@ -59,7 +59,7 @@ else
 color="$RED"
 fi
 fi
-printf "${CYAN}%) ${GREEN}%-10s${MAGENTA}| ${color}%-7s${MAGENTA}| ${CYAN}%s${NC}\n" "$i" "$country" "$ping_val" "$ep"
+printf "${CYAN}%d) ${GREEN}%-10s${MAGENTA}| ${color}%-7s${MAGENTA}| ${CYAN}%s${NC}\n" "$i" "$country" "$ping_val" "$ep"
 i=$((i+1))
 done
 
@@ -82,7 +82,6 @@ clear
 continue
 fi
 
-# Проверка числа
 if ! printf '%s' "$num" | grep -qE '^[0-9]+$' || [ "$num" -lt 1 ] || [ "$num" -gt "$MAX_NUM" ]; then
 ENDPOINT="engage.cloudflareclient.com:4500"
 break
