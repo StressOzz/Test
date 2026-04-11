@@ -70,14 +70,12 @@ read num
 
 MAX_NUM=$(echo "$SORTED_LIST" | wc -l)
 
-# Enter → дефолт
 if [ -z "$num" ]; then
 ENDPOINT="engage.cloudflareclient.com:4500"
 break
 fi
 
-# Обновить
-if [ "$num" = "99" ]; then
+if [ "$num" = "0" ]; then
 clear
 continue
 fi
