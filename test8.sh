@@ -98,10 +98,12 @@ check_status() {
 
 PODPISKA() {
 
+
+
   echo -ne "\n${YELLOW}Введите ссылку на подписку (${CYAN}https://sub....${YELLOW}): ${NC}"
   read -r SUB_URL
 
-  [ -z "$SUB_URL" ] && echo -e "\n${RED}Ошибка: ссылка пустая!${NC}\n" && PAUSE && return
+  [ -z "$SUB_URL" ] && echo -e "\n${RED}Ошибка! Ссылка пустая!${NC}" && PAUSE && return
 
   cat > /etc/mihomo/config.yaml <<EOF
 mixed-port: 7890
@@ -195,7 +197,8 @@ if [ -f "$CONFIGPATH" ]; then
     grep -Fq 'name: Meta (WA+FB+Instagram)' "$CONFIGPATH" && echo -e "${YELLOW}Используется список: ${NC}Internet Helper"
 fi
 
-[ -f /etc/mihomo/config.yaml ] && grep -q "https://sub" /etc/mihomo/config.yaml && echo -e "${YELLOW}Web-интерфейс:${NC}       ${CYAN}http://192.168.1.1:9090/ui/${NC}"
+[ -f /etc/mihomo/config.yaml ] && grep -q "https://sub" /etc/mihomo/config.yaml && echo -e "${YELLOW}Web-интерфейс Mihomo:${NC}       ${CYAN}http://192.168.1.1:9090/ui/${NC}"
+[ -f "$CONFIGPATH" ] && echo -e "${YELLOW}Web-интерфейс MagiTrickle:${NC}  ${CYAN}http://192.168.1.1:8080/${NC}"
 
 
 echo -e "\n${CYAN}1) ${GREEN}Установить ${NC}Mixomo"
