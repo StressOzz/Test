@@ -151,7 +151,6 @@ EOF
   echo -e "\n${GREEN}Подписка успешно применена!${NC}"
 
   PAUSE
-  ;;
 }
 
 
@@ -200,7 +199,8 @@ echo -e "${CYAN}2) ${GREEN}Удалить ${NC}Mixomo"
 echo -e "${CYAN}3) ${GREEN}Сменить список ${NC}MagiTrickle"
 echo -e "${CYAN}4) ${GREEN}Сгенерировать ${NC}WARP ${GREEN}в ${NC}/root/WARP.conf"
 echo -e "${CYAN}5) ${GREEN}Интегрировать ${NC}/root/WARP.conf${GREEN} в ${NC}Mihomo"
-# echo -e "${CYAN}6) ${GREEN}Удалить ${NC}→ ${GREEN}установить ${NC}→ ${GREEN}настроить ${NC}mihomo-openwrt"
+echo -e "${CYAN}6) ${GREEN}Установить ${NC}Mixomo${GREEN} и включить ${NC}подписку${NC}"
+# echo -e "${CYAN}888) ${GREEN}Удалить ${NC}→ ${GREEN}установить ${NC}→ ${GREEN}настроить ${NC}mihomo-openwrt"
 echo -e "${CYAN}Enter) ${GREEN}Выход\n"
 echo -ne "${YELLOW}Выберите пункт: ${NC}"
 read choiceM
