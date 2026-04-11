@@ -103,7 +103,7 @@ PODPISKA() {
   echo -ne "\n${YELLOW}Введите ссылку на подписку (${CYAN}https://sub....${YELLOW}): ${NC}"
   read -r SUB_URL
 
-  [ -z "$SUB_URL" ] && echo -e "${RED}Ошибка: ссылка пустая!${NC}" && PAUSE && return
+  [ -z "$SUB_URL" ] && echo -e "\n${RED}Ошибка: ссылка пустая!${NC}\n" && PAUSE && return
 
   cat > /etc/mihomo/config.yaml <<EOF
 mixed-port: 7890
@@ -124,12 +124,15 @@ profile:
 
 proxy-groups:
   - name: "StressKVN"
-    type: url-test
+    type: fallback
     use:
-      - sub.skytunnel.pw
+      - StressKVN
     url: "https://www.gstatic.com/generate_204"
-    interval: 300
-    tolerance: 50
+    interval: 120
+    tolerance: 100
+    lazy: false
+    max-failed-times: 3
+
   - name: GLOBAL
     type: select
     proxies:
@@ -140,7 +143,7 @@ rules:
   - "MATCH,GLOBAL"
 
 proxy-providers:
-  sub.skytunnel.pw:
+  StressKVN:
     type: http
     url: "$SUB_URL"
     interval: 43200
@@ -149,6 +152,7 @@ proxy-providers:
       interval: 300
       url: "https://www.gstatic.com/generate_204"
       expected-status: 204
+
 EOF
 
 /etc/init.d/mihomo reload >/dev/null 2>&1
@@ -198,10 +202,11 @@ fi
 
 echo -e "\n${CYAN}1) ${GREEN}Установить ${NC}Mixomo"
 echo -e "${CYAN}2) ${GREEN}Установить ${NC}Mixomo${GREEN} и включить ${NC}подписку${NC}"
-echo -e "${CYAN}3) ${GREEN}Удалить ${NC}Mixomo"
-echo -e "${CYAN}4) ${GREEN}Сменить список ${NC}MagiTrickle"
-echo -e "${CYAN}5) ${GREEN}Сгенерировать ${NC}WARP ${GREEN}в ${NC}/root/WARP.conf"
-echo -e "${CYAN}6) ${GREEN}Интегрировать ${NC}/root/WARP.conf${GREEN} в ${NC}Mihomo"
+echo -e "${CYAN}3) ${GREEN}Сменить подписку${NC}"
+echo -e "${CYAN}4) ${GREEN}Удалить ${NC}Mixomo"
+echo -e "${CYAN}5) ${GREEN}Сменить список ${NC}MagiTrickle"
+echo -e "${CYAN}6) ${GREEN}Сгенерировать ${NC}WARP ${GREEN}в ${NC}/root/WARP.conf"
+echo -e "${CYAN}7) ${GREEN}Интегрировать ${NC}/root/WARP.conf${GREEN} в ${NC}Mihomo"
 # echo -e "${CYAN}888) ${GREEN}Удалить ${NC}→ ${GREEN}установить ${NC}→ ${GREEN}настроить ${NC}mihomo-openwrt"
 echo -e "${CYAN}Enter) ${GREEN}Выход\n"
 echo -ne "${YELLOW}Выберите пункт: ${NC}"
@@ -213,20 +218,45 @@ case "$choiceM" in
   PAUSE
   ;;
 
-2) PODPISKA ;;
+2) 
+  PODPISKA
+  ;;
 
 3)
+ if [ ! -f /etc/mihomo/config.yaml ]; then
+    echo -e "${RED}Ошибка: config.yaml не найден!${NC}"
+    PAUSE
+    return
+  fi
+
+  echo -ne "\n${YELLOW}Введите ссылку на подписку (${CYAN}https://sub....${YELLOW}): ${NC}"
+  read -r SUB_URL
+
+  [ -z "$SUB_URL" ] && echo -e "\n${RED}Ошибка: ссылка пустая!${NC}\n" && PAUSE && return
+
+  sed -i "s|url: \"https://sub.*\"|url: \"$SUB_URL\"|" /etc/mihomo/config.yaml
+
+  echo -e "\n${GREEN}Подписка обновлена!${NC}"
+
+/etc/init.d/mihomo reload >/dev/null 2>&1
+/etc/init.d/mihomo restart >/dev/null 2>&1
+
+  PAUSE
+  ;;
+
+
+4)
   sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Mixomo-Manager/main/mixomo_openwrt_delete.sh)
   PAUSE
   ;;
-4)
+5)
   magitrickle_config
   ;;
-5)
+6)
   sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Mixomo-Manager/main/gen_WARP.sh)
   PAUSE
   ;;
-6)
+7)
   sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Mixomo-Manager/main/WARP_to_conf.sh)
   PAUSE
   ;;
