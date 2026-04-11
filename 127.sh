@@ -27,7 +27,7 @@ TMP_FILE=$(mktemp)
 while IFS='|' read -r country ep; do
 (
 host="${ep%%:*}"
-ping_ms="$(ping -c1 -W1 "$host" 2>/dev/null | awk -F'/' 'END{print int($5)}')"
+ping_ms="$(ping -c2 -W2 "$host" 2>/dev/null | awk -F'/' 'END{print int($5)}')"
 if [ -z "$ping_ms" ] || [ "$ping_ms" -eq 0 ]; then
 ping_val="FAIL"
 ping_sort=9999
