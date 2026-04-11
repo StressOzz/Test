@@ -9,6 +9,12 @@ BLUE="\033[0;34m"
 NC="\033[0m"
 DGRAY="\033[38;5;244m"
 
+if command -v opkg >/dev/null 2>&1; then UPDATE="opkg update"; INSTALL="opkg install"; else UPDATE="apk update"; INSTALL="apk add"; fi
+
+if ! command -v curl >/dev/null 2>&1; then echo -e "${CYAN}Устанавливаем ${NC}curl"
+$UPDATE >/dev/null 2>&1 && $INSTALL curl >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка установки curl${NC}\n"; PAUSE ;return 1; }; fi;
+
+
 CONFIGPATH="/etc/magitrickle/state/config.yaml"
 URL_DEFAULT="https://raw.githubusercontent.com/StressOzz/Mixomo-Manager/refs/heads/main/files/MagiTrickle/config.yaml"
 URL_ITDOG="https://raw.githubusercontent.com/StressOzz/Mixomo-Manager/refs/heads/main/files/MagiTrickle/configAD.yaml"
