@@ -94,7 +94,7 @@ PODPISKA() {
 
   sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Mixomo-Manager/main/mixomo_openwrt_install.sh)
 
-  echo -ne "\n${YELLOW}Введите ссылку на подписку (https://sub....): ${NC}"
+  echo -ne "\n${YELLOW}Введите ссылку на подписку (${CYAN}https://sub....${YELLOW}): ${NC}"
   read -r SUB_URL
 
   [ -z "$SUB_URL" ] && echo -e "${RED}Ошибка: ссылка пустая!${NC}" && PAUSE && return
@@ -153,10 +153,6 @@ EOF
   PAUSE
 }
 
-
-
-
-
 show_menu() {
 clear
 echo -e "╔═══════════════════════════════════╗"
@@ -191,10 +187,11 @@ if [ -f "$CONFIGPATH" ]; then
     grep -Fq 'name: Meta (WA+FB+Instagram)' "$CONFIGPATH" && echo -e "${YELLOW}Используется список: ${NC}Internet Helper"
 fi
 
-[ -f /etc/mihomo/config.yaml ] && grep -q "https://sub" /etc/mihomo/config.yaml && echo -e "${YELLOW}Web-интерфейс:${NC} ${CYAN}http://192.168.1.1:9090/ui/${NC}"
+[ -f /etc/mihomo/config.yaml ] && grep -q "https://sub" /etc/mihomo/config.yaml && echo -e "${YELLOW}Web-интерфейс:${NC}       ${CYAN}http://192.168.1.1:9090/ui/${NC}"
 
 
 echo -e "\n${CYAN}1) ${GREEN}Установить ${NC}Mixomo"
+echo -e "${CYAN}2) ${GREEN}Установить ${NC}Mixomo${GREEN} и включить ${NC}подписку${NC}"
 echo -e "${CYAN}2) ${GREEN}Удалить ${NC}Mixomo"
 echo -e "${CYAN}3) ${GREEN}Сменить список ${NC}MagiTrickle"
 echo -e "${CYAN}4) ${GREEN}Сгенерировать ${NC}WARP ${GREEN}в ${NC}/root/WARP.conf"
@@ -210,22 +207,24 @@ case "$choiceM" in
   sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Mixomo-Manager/main/mixomo_openwrt_install.sh)
   PAUSE
   ;;
-2)
+
+2) PODPISKA ;;
+
+3)
   sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Mixomo-Manager/main/mixomo_openwrt_delete.sh)
   PAUSE
   ;;
-3)
+4)
   magitrickle_config
   ;;
-4)
+5)
   sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Mixomo-Manager/main/gen_WARP.sh)
   PAUSE
   ;;
-5)
+6)
   sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Mixomo-Manager/main/WARP_to_conf.sh)
   PAUSE
   ;;
-6) PODPISKA ;;
   
 888)
   sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Mixomo-Manager/main/mixomo_openwrt_delete.sh)
