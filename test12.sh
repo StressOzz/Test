@@ -106,55 +106,94 @@ PODPISKA() {
   [ -z "$SUB_URL" ] && echo -e "\n${RED}Ошибка! Ссылка пустая!${NC}" && PAUSE && return
 
   cat > /etc/mihomo/config.yaml <<EOF
-mixed-port: 7890
-allow-lan: false
 mode: rule
-log-level: error
 ipv6: false
-tcp-concurrent: true
-find-process-mode: off
+mixed-port: 7890
+log-level: error
+allow-lan: false
 unified-delay: true
-
+tcp-concurrent: false
+find-process-mode: off
 external-controller: 0.0.0.0:9090
-external-ui: ui
-external-ui-url: https://github.com/MetaCubeX/metacubexd/releases/latest/download/compressed-dist.tgz
-secret: ""
-
+external-ui: ./UI
+external-ui-url: "https://github.com/MetaCubeX/metacubexd/releases/latest/download/compressed-dist.tgz"
+routing-mark: 2
 profile:
-  store-selected: false
-  store-fake-ip: false
+  store-selected: true
+  store-fake-ip: true
+  tracing: true
+sniffer:
+  enable: true
+  force-dns-mapping: true
+  parse-pure-ip: true
+  sniff:
+    HTTP:
+      ports: [80]
+      override-destination: true
+    TLS:
+      ports: [443, 8443]
+    QUIC:
+      ports: [443, 8443]
+proxies:
 
-proxy-groups:
-  - name: "StressKVN"
-    type: fallback
-    use:
-      - StressKVN
-    url: "https://www.gstatic.com/generate_204"
-    interval: 120
-    tolerance: 100
-    lazy: false
-    max-failed-times: 3
-
-  - name: GLOBAL
-    type: select
-    proxies:
-      - "StressKVN"
-      - REJECT
-
-rules:
-  - "MATCH,GLOBAL"
+  - name: "Домашний интернет"
+    type: direct
 
 proxy-providers:
-  StressKVN:
+
+  Подписка:
     type: http
-    url: "$SUB_URL"
-    interval: 43200
+    url: "https://..." # ЗДЕСЬ УКАЖИТЕ ССЫЛКУ НА ВАШУ ПОДПИСКУ
+    path: ./proxy-providers/sub.yaml
+    interval: 86400
     health-check:
       enable: true
+      url: http://www.gstatic.com/generate_204
       interval: 300
-      url: "https://www.gstatic.com/generate_204"
-      expected-status: 204
+      timeout: 5000
+      lazy: true
 
+proxy-groups:
+
+  - name: "Сервер для YouTube"
+    type: fallback
+    url: http://gstatic.com/generate_204
+    expected-status: 204
+    interval: 300
+    lazy: true
+    icon: https://www.clashverge.dev/assets/icons/youtube.svg
+    proxies:
+      - "Домашний интернет"
+    use:
+      - "Подписка"
+
+  - name: "Сервер для остального трафика"
+    type: fallback
+    url: http://gstatic.com/generate_204
+    expected-status: 204
+    interval: 300
+    lazy: true
+    icon: https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.3/assets/svg/1f310.svg
+    use:
+      - "Подписка"
+
+rule-providers:
+
+  youtube:
+    type: http
+    format: yaml
+    behavior: classical
+    url: "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/YouTube/YouTube.yaml"
+    path: ./rule-providers/youtube-list.yaml
+    interval: 86400
+
+rules:
+
+  # Правила для списков из rule-providers
+  - RULE-SET,youtube,Сервер для YouTube
+
+  # Правило для остального трафика
+  - MATCH,Сервер для остального трафика
 EOF
 
 /etc/init.d/mihomo reload >/dev/null 2>&1
