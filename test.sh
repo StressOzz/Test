@@ -108,92 +108,33 @@ PODPISKA() {
   cat > /etc/mihomo/config.yaml <<EOF
 mode: rule
 ipv6: false
-mixed-port: 7890
 log-level: error
 allow-lan: false
 unified-delay: true
-tcp-concurrent: false
-find-process-mode: off
+tcp-concurrent: true
 external-controller: 0.0.0.0:9090
-external-ui: ./UI
+external-ui: ui
 external-ui-url: "https://github.com/MetaCubeX/metacubexd/releases/latest/download/compressed-dist.tgz"
+tproxy-port: 7894
 routing-mark: 2
-profile:
-  store-selected: true
-  store-fake-ip: true
-  tracing: true
-sniffer:
-  enable: true
-  force-dns-mapping: true
-  parse-pure-ip: true
-  sniff:
-    HTTP:
-      ports: [80]
-      override-destination: true
-    TLS:
-      ports: [443, 8443]
-    QUIC:
-      ports: [443, 8443]
+
 proxies:
 
-  - name: "Домашний интернет"
-    type: direct
-
 proxy-providers:
-
-  Подписка:
+  StressKVN:
     type: http
-    url: "https://..." # ЗДЕСЬ УКАЖИТЕ ССЫЛКУ НА ВАШУ ПОДПИСКУ
-    path: ./proxy-providers/sub.yaml
-    interval: 86400
-    health-check:
-      enable: true
-      url: http://www.gstatic.com/generate_204
-      interval: 300
-      timeout: 5000
-      lazy: true
+    url: "$SUB_URL"
+    interval: 3600
 
 proxy-groups:
-
-  - name: "Сервер для YouTube"
-    type: fallback
-    url: http://gstatic.com/generate_204
-    expected-status: 204
-    interval: 300
-    lazy: true
-    icon: https://www.clashverge.dev/assets/icons/youtube.svg
+  - name: Proxy
+    type: select
     proxies:
-      - "Домашний интернет"
     use:
-      - "Подписка"
-
-  - name: "Сервер для остального трафика"
-    type: fallback
-    url: http://gstatic.com/generate_204
-    expected-status: 204
-    interval: 300
-    lazy: true
-    icon: https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.3/assets/svg/1f310.svg
-    use:
-      - "Подписка"
-
-rule-providers:
-
-  youtube:
-    type: http
-    format: yaml
-    behavior: classical
-    url: "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/YouTube/YouTube.yaml"
-    path: ./rule-providers/youtube-list.yaml
-    interval: 86400
+      - StressKVN
 
 rules:
-
-  # Правила для списков из rule-providers
-  - RULE-SET,youtube,Сервер для YouTube
-
-  # Правило для остального трафика
-  - MATCH,Сервер для остального трафика
+  - MATCH,Proxy
 EOF
 
 /etc/init.d/mihomo reload >/dev/null 2>&1
