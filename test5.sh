@@ -325,7 +325,7 @@ grep -q -F -- "--wssize 1:6" "$CONF" && echo -e "${YELLOW}Блок с --wssize 1
 echo -e "${CYAN}5) ${NC}$RKN_TEXT_MENU${NC}\n${CYAN}6) ${GREEN}Обновить список исключений${NC}"
 
 if grep -q -F -- "--wssize 1:6" "$CONF"; then
-    WSSIZE_MENU_TEXT="Удалить из стратегии блок с ${NC}--wssize 1:6"
+    WSSIZE_MENU_TEXT="${GREEN}Удалить из стратегии блок с ${NC}--wssize 1:6"
 else
     WSSIZE_MENU_TEXT="${GREEN}Добавить в стратегию блок с ${NC}--wssize 1:6"
 fi
