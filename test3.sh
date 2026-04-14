@@ -270,9 +270,7 @@ rm -rf "$TMP_SF/zapret-discord-youtube-main" "$ZIP"; [ "$NO_PAUSE" != "1" ] && e
 # Меню стратегий
 # ==========================================
 add_wssize() {
-grep -q -F -- "--wssize 1:6" "$CONF" && { echo -e "\n${YELLOW}Уже добавлен${NC}"; PAUSE; return; }
-
-echo -e "\n${MAGENTA}Добавляем wssize 1:6${NC}"
+echo -e "\n${MAGENTA}Добавляем блок с --wssize 1:6${NC}"
 
 last_line=$(grep -n "^'$" "$CONF" | tail -n1 | cut -d: -f1)
 [ -n "$last_line" ] && sed -i "${last_line},\$d" "$CONF"
@@ -280,18 +278,13 @@ last_line=$(grep -n "^'$" "$CONF" | tail -n1 | cut -d: -f1)
 printf "%s\n" "--new" "--filter-tcp=443" "--wssize 1:6" "'" >> "$CONF"
 
 ZAPRET_RESTART
-echo -e "${GREEN}Добавлено!${NC}"
+echo -e "${GREEN}Блок с ${NC}--wssize 1:6${GREEN} добавлен!${NC}"
+echo -e "\n${YELLOW}Данный блок может ломать всю стратегию!${NC}\n"
 PAUSE
 }
 
 remove_wssize() {
-grep -q -F -- "--wssize 1:6" "$CONF" || {
-    echo -e "\n${YELLOW}wssize не найден${NC}"
-    PAUSE
-    return
-}
-
-echo -e "\n${MAGENTA}Удаляем wssize 1:6 (точное совпадение блока)${NC}"
+echo -e "\n${MAGENTA}Удаляем блок с --wssize 1:6${NC}"
 
 awk '
 BEGIN { skip=0 }
@@ -315,21 +308,19 @@ BEGIN { skip=0 }
 ' "$CONF" > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"
 
 ZAPRET_RESTART
-echo -e "${GREEN}Удалено корректно!${NC}"
+echo -e "${GREEN}Блок с ${NC}--wssize 1:6${GREEN} удалён!${NC}\n"
 PAUSE
 }
 
 
-
-
 menu_str() { [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }; while true; do show_current_strategy; RKN_Check; clear; echo -e "${MAGENTA}Меню стратегий${NC}\n"; pri=0
 [ -f "$CONF" ] && line=$(grep -m1 '^#general' "$CONF") && [ -n "$line" ] && echo -e "${YELLOW}Используется стратегия:${NC} ${CYAN}${line#?}${NC}" && pri=1
-
-grep -q -F -- "--wssize 1:6" "$CONF" && echo -e "${GREEN}WSSIZE: АКТИВИРОВАН${NC}" && pri=1
-
 if [ -f "$CONF" ]; then current="$ver$( [ -n "$ver" ] && [ -n "$yv_ver" ] && echo " / " )$yv_ver"; DV=$(grep -o -E '^#[[:space:]]*Dv[0-9][0-9]*' "$CONF" | sed 's/^#[[:space:]]*/\/ /' | head -n1)
 if [ -n "$current" ]; then echo -e "${YELLOW}Используется стратегия:${NC} ${CYAN}$current${DV:+ $DV}${RKN_STATUS:+ $RKN_STATUS}${NC}"; pri=1; elif [ -n "$RKN_STATUS" ]; then  echo -e "${YELLOW}Используется стратегия:${NC}${CYAN} РКН${DV:+ $DV}${NC}"; pri=1; fi; fi
 [ -f "$CONF" ] && CURRENT_GAME=$(grep -o '^#Gv[0-9]' "$CONF" | grep -o '[0-9]') && [ -n "$CURRENT_GAME" ] && echo -e "${YELLOW}Стратегия для игр:${NC} ${CYAN}Gv$CURRENT_GAME ${GREEN}включена${NC}" && pri=1
+
+grep -q -F -- "--wssize 1:6" "$CONF" && echo -e "${YELLOW}Блок с --wssize 1:6: ${GREEN}активирован${NC}" && pri=1
+
 [ "$pri" -eq 1 ] && echo; echo -e "${CYAN}1) ${GREEN}Выбрать и установить стратегию ${NC}v1-v9\n${CYAN}2) ${GREEN}Выбрать и установить стратегию от ${NC}Flowseal\n${CYAN}3) ${GREEN}Выбрать и установить стратегию для ${NC}YouTube\n${CYAN}4) ${GREEN}Выбрать и установить стратегию для ${NC}игр"
 echo -e "${CYAN}5) ${NC}$RKN_TEXT_MENU${NC}\n${CYAN}6) ${GREEN}Обновить список исключений${NC}"
 
@@ -661,7 +652,7 @@ if hosts_enabled; then echo -e "${YELLOW}Домены в hosts:          ${GREEN
 if [ -n "$DOH_STATUS" ]; then if [ "$PKG_IS_APK" -eq 1 ]; then apk info -e https-dns-proxy >/dev/null 2>&1 && echo -e "${YELLOW}DNS over HTTPS:${NC}          $DOH_STATUS"; else opkg list-installed | grep -q '^https-dns-proxy ' && echo -e "${YELLOW}DNS over HTTPS:${NC}          $DOH_STATUS"; fi; fi
 
 
-grep -q -F -- "--wssize 1:6" "$CONF" && echo -e "${GREEN}WSSIZE: АКТИВИРОВАН${NC}"
+grep -q -F -- "--wssize 1:6" "$CONF" && echo -e "${YELLOW}Блок с --wssize 1:6: ${GREEN}активирован${NC}"
 
 
 if web_is_enabled; then echo -e "${YELLOW}Доступ из браузера:${NC}      $LAN_IP:7681"; fi; quic_is_blocked && if quic_is_blocked; then echo -e "${YELLOW}Блокировка QUIC:${NC}         ${GREEN}включена${NC}"; fi; if grep -q 'ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc
