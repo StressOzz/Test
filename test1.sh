@@ -285,23 +285,37 @@ PAUSE
 }
 
 remove_wssize() {
-grep -q -F -- "--wssize 1:6" "$CONF" || { echo -e "\n${YELLOW}Не найден${NC}"; PAUSE; return; }
+grep -q -F -- "--wssize 1:6" "$CONF" || {
+    echo -e "\n${YELLOW}wssize не найден${NC}"
+    PAUSE
+    return
+}
 
-echo -e "\n${MAGENTA}Удаляем wssize 1:6${NC}"
+echo -e "\n${MAGENTA}Удаляем wssize 1:6 (точное совпадение блока)${NC}"
 
 awk '
-BEGIN{skip=0}
-$0=="--new" {
-    getline l1
-    getline l2
-    if(l1=="--filter-tcp=443" && l2=="--wssize 1:6"){next}
-    print "--new"; print l1; print l2; next
+BEGIN { skip=0 }
+
+{
+    if ($0=="--new") {
+        getline l1
+        getline l2
+
+        if ($0=="--new" && l1=="--filter-tcp=443" && l2=="--wssize 1:6") {
+            next
+        }
+
+        print "--new"
+        print l1
+        print l2
+        next
+    }
+    print
 }
-{print}
 ' "$CONF" > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"
 
 ZAPRET_RESTART
-echo -e "${GREEN}Удалено!${NC}"
+echo -e "${GREEN}Удалено корректно!${NC}"
 PAUSE
 }
 
