@@ -325,8 +325,7 @@ PAUSE
 menu_str() { [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }; while true; do show_current_strategy; RKN_Check; clear; echo -e "${MAGENTA}Меню стратегий${NC}\n"; pri=0
 [ -f "$CONF" ] && line=$(grep -m1 '^#general' "$CONF") && [ -n "$line" ] && echo -e "${YELLOW}Используется стратегия:${NC} ${CYAN}${line#?}${NC}" && pri=1
 
-WSSIZE_STATUS=""
-grep -q -F -- "--wssize 1:6" "$CONF" && WSSIZE_STATUS="${GREEN}активен${NC}" && pri=1
+grep -q -F -- "--wssize 1:6" "$CONF" && echo -e "${GREEN}WSSIZE: АКТИВИРОВАН${NC}" && pri=1
 
 if [ -f "$CONF" ]; then current="$ver$( [ -n "$ver" ] && [ -n "$yv_ver" ] && echo " / " )$yv_ver"; DV=$(grep -o -E '^#[[:space:]]*Dv[0-9][0-9]*' "$CONF" | sed 's/^#[[:space:]]*/\/ /' | head -n1)
 if [ -n "$current" ]; then echo -e "${YELLOW}Используется стратегия:${NC} ${CYAN}$current${DV:+ $DV}${RKN_STATUS:+ $RKN_STATUS}${NC}"; pri=1; elif [ -n "$RKN_STATUS" ]; then  echo -e "${YELLOW}Используется стратегия:${NC}${CYAN} РКН${DV:+ $DV}${NC}"; pri=1; fi; fi
@@ -662,8 +661,7 @@ if hosts_enabled; then echo -e "${YELLOW}Домены в hosts:          ${GREEN
 if [ -n "$DOH_STATUS" ]; then if [ "$PKG_IS_APK" -eq 1 ]; then apk info -e https-dns-proxy >/dev/null 2>&1 && echo -e "${YELLOW}DNS over HTTPS:${NC}          $DOH_STATUS"; else opkg list-installed | grep -q '^https-dns-proxy ' && echo -e "${YELLOW}DNS over HTTPS:${NC}          $DOH_STATUS"; fi; fi
 
 
-WSSIZE_STATUS=""
-grep -q -F -- "--wssize 1:6" "$CONF" && WSSIZE_STATUS="${GREEN}активен${NC}"
+grep -q -F -- "--wssize 1:6" "$CONF" && echo -e "${GREEN}WSSIZE: АКТИВИРОВАН${NC}"
 
 
 if web_is_enabled; then echo -e "${YELLOW}Доступ из браузера:${NC}      $LAN_IP:7681"; fi; quic_is_blocked && if quic_is_blocked; then echo -e "${YELLOW}Блокировка QUIC:${NC}         ${GREEN}включена${NC}"; fi; if grep -q 'ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc
