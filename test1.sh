@@ -24,61 +24,13 @@ echo -e "${CYAN}Пакетный менеджер: ${YELLOW}$PKG_NAME${NC}"
 echo -e "${GREEN}===> Установка зависимостей...${NC}"
 
 if [ "$PKG" = "apk" ]; then
-    echo -e "${CYAN}Команда: apk update && apk add curl kmod-nft-tproxy kmod-tun coreutils-base64${NC}"
+    echo -e "${CYAN}apk update && apk add curl kmod-nft-tproxy kmod-tun coreutils-base64${NC}"
     apk update
     apk add curl kmod-nft-tproxy kmod-tun coreutils-base64
 else
-    echo -e "${CYAN}Команда: opkg update && opkg install curl kmod-nft-tproxy kmod-tun coreutils-base64${NC}"
+    echo -e "${CYAN}opkg update && opkg install curl kmod-nft-tproxy kmod-tun coreutils-base64${NC}"
     opkg update
     opkg install curl kmod-nft-tproxy kmod-tun coreutils-base64
-fi
-
-# ===== Получаем версию SSClash =====
-echo -e "${GREEN}===> Получение версии SSClash...${NC}"
-
-SSCLASH_RELEASE=$(curl -Ls -o /dev/null -w '%{url_effective}' https://github.com/zerolabnet/SSClash/releases/latest | sed 's#.*/tag/##; s/^v//')
-
-if [ -z "$SSCLASH_RELEASE" ]; then
-    echo -e "${RED}Ошибка получения версии SSClash${NC}"
-    exit 1
-fi
-
-echo -e "${CYAN}Найдена версия SSClash: ${YELLOW}$SSCLASH_RELEASE${NC}"
-
-# ===== Установка SSClash =====
-echo -e "${GREEN}===> Установка SSClash...${NC}"
-
-if [ "$PKG" = "apk" ]; then
-    SSCLASH_FILE="luci-app-ssclash-${SSCLASH_RELEASE}-r1.apk"
-    URL="https://github.com/zerolabnet/SSClash/releases/download/v$SSCLASH_RELEASE/$SSCLASH_FILE"
-
-    echo -e "${CYAN}Скачивание: ${YELLOW}$SSCLASH_FILE${NC}"
-    echo -e "${CYAN}URL: ${YELLOW}$URL${NC}"
-
-    curl -L "$URL" -o /tmp/ssclash.apk || {
-        echo -e "${RED}Ошибка скачивания SSClash${NC}"
-        exit 1
-    }
-
-    echo -e "${CYAN}Установка пакета: ${YELLOW}$SSCLASH_FILE${NC}"
-    apk add /tmp/ssclash.apk --allow-untrusted
-    rm -f /tmp/ssclash.apk
-else
-    SSCLASH_FILE="luci-app-ssclash_${SSCLASH_RELEASE}-r1_all.ipk"
-    URL="https://github.com/zerolabnet/SSClash/releases/download/v$SSCLASH_RELEASE/$SSCLASH_FILE"
-
-    echo -e "${CYAN}Скачивание: ${YELLOW}$SSCLASH_FILE${NC}"
-    echo -e "${CYAN}URL: ${YELLOW}$URL${NC}"
-
-    curl -L "$URL" -o /tmp/ssclash.ipk || {
-        echo -e "${RED}Ошибка скачивания SSClash${NC}"
-        exit 1
-    }
-
-    echo -e "${CYAN}Установка пакета: ${YELLOW}$SSCLASH_FILE${NC}"
-    opkg install /tmp/ssclash.ipk
-    /etc/init.d/clash stop 2>/dev/null
-    rm -f /tmp/ssclash.ipk
 fi
 
 # ===== Определяем архитектуру =====
@@ -87,18 +39,10 @@ echo -e "${GREEN}===> Определение архитектуры...${NC}"
 ARCH=$(uname -m)
 
 case "$ARCH" in
-    aarch64*|arm64*)
-        MIHOMO_ARCH="linux-arm64"
-        ;;
-    armv7*|armv7l|armhf*)
-        MIHOMO_ARCH="linux-armv7"
-        ;;
-    mipsel*|mipsle*)
-        MIHOMO_ARCH="linux-mipsle-softfloat"
-        ;;
-    x86_64*)
-        MIHOMO_ARCH="linux-amd64-compatible"
-        ;;
+    aarch64*|arm64*) MIHOMO_ARCH="linux-arm64" ;;
+    armv7*|armv7l|armhf*) MIHOMO_ARCH="linux-armv7" ;;
+    mipsel*|mipsle*) MIHOMO_ARCH="linux-mipsle-softfloat" ;;
+    x86_64*) MIHOMO_ARCH="linux-amd64-compatible" ;;
     *)
         echo -e "${RED}Неизвестная архитектура: $ARCH${NC}"
         exit 1
@@ -113,10 +57,10 @@ echo -e "${GREEN}===> Получение версии Mihomo...${NC}"
 
 MIHOMO_RELEASE=$(curl -Ls -o /dev/null -w '%{url_effective}' https://github.com/MetaCubeX/mihomo/releases/latest | sed 's#.*/tag/##; s/^v//')
 
-if [ -z "$MIHOMO_RELEASE" ]; then
+[ -z "$MIHOMO_RELEASE" ] && {
     echo -e "${RED}Ошибка получения версии Mihomo${NC}"
     exit 1
-fi
+}
 
 echo -e "${CYAN}Найдена версия Mihomo: ${YELLOW}$MIHOMO_RELEASE${NC}"
 
@@ -139,11 +83,63 @@ echo -e "${GREEN}===> Установка Mihomo...${NC}"
 
 mkdir -p /opt/clash/bin
 
-gunzip -c /tmp/clash.gz > /opt/clash/bin/clash
+if ! gunzip -c /tmp/clash.gz > /opt/clash/bin/clash 2>/dev/null; then
+    echo -e "${RED}Ошибка распаковки Mihomo${NC}"
+    rm -f /tmp/clash.gz
+    exit 1
+fi
+
 chmod +x /opt/clash/bin/clash
 rm -f /tmp/clash.gz
 
+if [ ! -f /opt/clash/bin/clash ]; then
+    echo -e "${RED}Бинарник не найден после установки${NC}"
+    exit 1
+fi
+
 echo -e "${CYAN}Бинарник установлен: ${YELLOW}/opt/clash/bin/clash${NC}"
+
+# ===== Получаем версию SSClash =====
+echo -e "${GREEN}===> Получение версии SSClash...${NC}"
+
+SSCLASH_RELEASE=$(curl -Ls -o /dev/null -w '%{url_effective}' https://github.com/zerolabnet/SSClash/releases/latest | sed 's#.*/tag/##; s/^v//')
+
+[ -z "$SSCLASH_RELEASE" ] && {
+    echo -e "${RED}Ошибка получения версии SSClash${NC}"
+    exit 1
+}
+
+echo -e "${CYAN}Найдена версия SSClash: ${YELLOW}$SSCLASH_RELEASE${NC}"
+
+# ===== Установка SSClash =====
+echo -e "${GREEN}===> Установка SSClash...${NC}"
+
+if [ "$PKG" = "apk" ]; then
+    FILE="luci-app-ssclash-${SSCLASH_RELEASE}-r1.apk"
+    URL="https://github.com/zerolabnet/SSClash/releases/download/v$SSCLASH_RELEASE/$FILE"
+
+    echo -e "${CYAN}Скачивание: ${YELLOW}$FILE${NC}"
+    curl -L "$URL" -o /tmp/ssclash.apk || exit 1
+
+    echo -e "${CYAN}Установка: ${YELLOW}$FILE${NC}"
+    apk add /tmp/ssclash.apk --allow-untrusted
+    rm -f /tmp/ssclash.apk
+else
+    FILE="luci-app-ssclash_${SSCLASH_RELEASE}-r1_all.ipk"
+    URL="https://github.com/zerolabnet/SSClash/releases/download/v$SSCLASH_RELEASE/$FILE"
+
+    echo -e "${CYAN}Скачивание: ${YELLOW}$FILE${NC}"
+    curl -L "$URL" -o /tmp/ssclash.ipk || exit 1
+
+    echo -e "${CYAN}Установка: ${YELLOW}$FILE${NC}"
+    opkg install /tmp/ssclash.ipk
+    rm -f /tmp/ssclash.ipk
+fi
+
+# ===== Запуск =====
+echo -e "${GREEN}===> Запуск Clash...${NC}"
+/etc/init.d/clash enable
+/etc/init.d/clash restart
 
 # ===== Финал =====
 echo -e "${GREEN}======================================${NC}"
