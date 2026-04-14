@@ -325,12 +325,12 @@ grep -q -F -- "--wssize 1:6" "$CONF" && echo -e "${YELLOW}Блок с --wssize 1
 echo -e "${CYAN}5) ${NC}$RKN_TEXT_MENU${NC}\n${CYAN}6) ${GREEN}Обновить список исключений${NC}"
 
 if grep -q -F -- "--wssize 1:6" "$CONF"; then
-    WSSIZE_MENU_TEXT="Удалить wssize 1:6"
+    WSSIZE_MENU_TEXT="Удалить из стратегии блок с ${NC}--wssize 1:6"
 else
-    WSSIZE_MENU_TEXT="Добавить wssize 1:6"
+    WSSIZE_MENU_TEXT="${GREEN}Добавить в стратегию блок с ${NC}--wssize 1:6"
 fi
 
-echo -e "${CYAN}7) ${GREEN}${WSSIZE_MENU_TEXT}${NC}"
+echo -e "${CYAN}7) ${WSSIZE_MENU_TEXT}${NC}"
 
 
 echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read choiceST; case "$choiceST" in 1) strategy_CHOUSE;; 2) flowseal_menu;; 3) choose_strategy_manual;; 4) fix_GAME;;
