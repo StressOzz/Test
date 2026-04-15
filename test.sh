@@ -65,7 +65,7 @@ if command -v opkg >/dev/null 2>&1; then PKG="opkg"; CONFZ="/etc/opkg/distfeeds.
 DELETE="opkg remove --autoremove --force-removal-of-dependent-packages"; CHECK_CMD="opkg list-installed"; ARCH="$(opkg print-architecture | awk '{print $2}' | tail -n1)"
 else PKG="apk"; CONFZ="/etc/apk/repositories.d/distfeeds.list"; PKG_IS_APK=1; UPDATE="apk update"; INSTALL="apk add"; CHECK_AVAIL="apk search -e"; DELETE="apk del"; CHECK_CMD="apk info"; ARCH="$(apk --print-arch 2>/dev/null)"; fi
 echo 'sh <(wget -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/main/Zapret-Manager.sh)' > /usr/bin/zms; chmod +x /usr/bin/zms
-fix_dns() { if ! grep -q "8.8.8.8" /tmp/resolv.conf 2>/dev/null; then if ! nslookup downloads.openwrt.org >/dev/null 2>&1; then if ping -c 1 8.8.8.8 >/dev/null 2>&1; then echo "nameserver 8.8.8.8" > /tmp/resolv.conf; echo -e "\n${RED}DNS не работает, используем Google DNS (8.8.8.8)${NC}\n"; fi; fi; fi; }
+fix_dns() { if ! grep -q "8.8.8.8" /tmp/resolv.conf 2>/dev/null; then if ! nslookup downloads.openwrt.org >/dev/null 2>&1; then if ping -c 1 8.8.8.8 >/dev/null 2>&1; then echo "nameserver 8.8.8.8" > /tmp/resolv.conf; echo -e "\n${RED}DNS не работает, используем Google DNS в /tmp/resolv.conf${NC}\n"; fi; fi; fi; }
 # ==========================================
 # Получение версии
 # ==========================================
