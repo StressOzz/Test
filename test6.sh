@@ -83,7 +83,6 @@ delete_TG_RS() {
 install_TG_RS() {
     echo -e "\n${MAGENTA}Установка TG WS Proxy Rust (safe mode)${NC}"
 
-    ARCH="$(uname -m)"
     OPKG_ARCH="$(opkg print-architecture | awk '{print $2}' | tail -n1)"
 
     case "$OPKG_ARCH" in
