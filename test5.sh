@@ -81,101 +81,93 @@ delete_TG_RS() {
 }
 
 install_TG_RS() {
-    echo -e "\n${MAGENTA}=== УСТАНОВКА TG WS PROXY RUST ===${NC}"
+    echo -e "\n${MAGENTA}Установка TG WS Proxy Rust (safe mode)${NC}"
 
-    echo -e "${CYAN}[1/8] Определяем архитектуру...${NC}"
-    ARCH_FILE_RS="$(get_arch_RS)" || {
-        echo -e "${RED}Ошибка: архитектура не поддерживается ($(uname -m))${NC}"
-        PAUSE
-        return 1
-    }
-    echo -e "${GREEN}OK:${NC} $ARCH_FILE_RS"
+    ARCH="$(uname -m)"
+    OPKG_ARCH="$(opkg print-architecture | awk '{print $2}' | tail -n1)"
 
-    echo -e "${CYAN}[2/8] Проверка curl...${NC}"
-    if ! command -v curl >/dev/null 2>&1; then
-        echo -e "${YELLOW}curl не найден, устанавливаем...${NC}"
-        $UPDATE >/dev/null 2>&1
-        $INSTALL curl >/dev/null 2>&1 || {
-            echo -e "${RED}Ошибка установки curl${NC}"
-            PAUSE
+    case "$OPKG_ARCH" in
+        aarch64*)
+            ARCH_FILE_RS="tg-ws-proxy-aarch64-unknown-linux-musl.tar.gz"
+            ;;
+        x86_64)
+            ARCH_FILE_RS="tg-ws-proxy-x86_64-unknown-linux-musl.tar.gz"
+            ;;
+        arm*)
+            ARCH_FILE_RS="tg-ws-proxy-armv7-unknown-linux-musleabihf.tar.gz"
+            ;;
+        mips)
+            ARCH_FILE_RS="tg-ws-proxy-mips-unknown-linux-musl.tar.gz"
+            ;;
+        mipsel*|mipsel_24kc)
+            ARCH_FILE_RS="tg-ws-proxy-mipsel-unknown-linux-musl.tar.gz"
+            ;;
+        *)
+            echo -e "\n${RED}Архитектура не поддерживается: ${NC}$OPKG_ARCH"
             return 1
-        }
-    fi
-    echo -e "${GREEN}OK curl установлен${NC}"
+            ;;
+    esac
 
-    echo -e "${CYAN}[3/8] Получаем версию релиза...${NC}"
-    LATEST_TAG_RS="$(curl -Ls -o /dev/null -w '%{url_effective}' \
-        https://github.com/valnesfjord/tg-ws-proxy-rs/releases/latest \
-        | sed 's#.*/tag/##')"
+    TMP_DIR_RS="/tmp/tgwsrs"
+    TMP_ARCHIVE_RS="$TMP_DIR_RS/archive.tar.gz"
+    BIN_PATH_RS="/usr/bin/tg-ws-proxy-rs"
+    INIT_PATH_RS="/etc/init.d/tg-ws-proxy-rs"
 
-    echo -e "TAG: [$LATEST_TAG_RS]"
-
-    [ -z "$LATEST_TAG_RS" ] && {
-        echo -e "${RED}Ошибка: не удалось получить версию${NC}"
-        PAUSE
-        return 1
-    }
-
-    echo -e "${GREEN}OK:${NC} $LATEST_TAG_RS"
-
-    echo -e "${CYAN}[4/8] Формируем URL...${NC}"
-    DOWNLOAD_URL_RS="https://github.com/valnesfjord/tg-ws-proxy-rs/releases/download/$LATEST_TAG_RS/$ARCH_FILE_RS"
-    echo -e "URL: $DOWNLOAD_URL_RS"
-
-    echo -e "${CYAN}[5/8] Скачивание...${NC}"
-    rm -f "$TMP_ARCHIVE_RS"
-
-    curl -L --fail --retry 3 --connect-timeout 10 \
-        -o "$TMP_ARCHIVE_RS" "$DOWNLOAD_URL_RS" || {
-        echo -e "${RED}Ошибка скачивания${NC}"
-        PAUSE
-        return 1
-    }
-
-    echo -e "${GREEN}OK скачано:${NC} $TMP_ARCHIVE_RS"
-
-    echo -e "${CYAN}[6/8] Распаковка...${NC}"
     rm -rf "$TMP_DIR_RS"
     mkdir -p "$TMP_DIR_RS"
 
-    tar -xzf "$TMP_ARCHIVE_RS" -C "$TMP_DIR_RS" || {
-        echo -e "${RED}Ошибка распаковки${NC}"
-        PAUSE
+    if ! command -v curl >/dev/null 2>&1; then
+        echo -e "${CYAN}Устанавливаем curl${NC}"
+        opkg update >/dev/null 2>&1
+        opkg install curl >/dev/null 2>&1 || return 1
+    fi
+
+    echo -e "${CYAN}Получаем latest tag...${NC}"
+
+    LATEST_TAG_RS="$(curl -Ls https://github.com/valnesfjord/tg-ws-proxy-rs/releases/latest | grep -oE 'tag/v?[0-9]+\.[0-9]+\.[0-9]+' | head -n1 | cut -d/ -f2)"
+
+    [ -z "$LATEST_TAG_RS" ] && {
+        echo -e "\n${RED}Не удалось получить версию${NC}"
         return 1
     }
 
-    echo -e "${GREEN}OK распаковано${NC}"
+    DOWNLOAD_URL_RS="https://github.com/valnesfjord/tg-ws-proxy-rs/releases/download/$LATEST_TAG_RS/$ARCH_FILE_RS"
 
-    echo -e "${CYAN}[7/8] Поиск бинаря...${NC}"
-    BIN_FILE="$(find "$TMP_DIR_RS" -type f -name tg-ws-proxy | head -n1)"
+    echo -e "${CYAN}Скачиваем: $ARCH_FILE_RS${NC}"
 
-    echo -e "FOUND: $BIN_FILE"
-
-    [ -z "$BIN_FILE" ] && {
-        echo -e "${RED}Ошибка: бинарь tg-ws-proxy не найден${NC}"
-        PAUSE
+    curl -L --fail -o "$TMP_ARCHIVE_RS" "$DOWNLOAD_URL_RS" || {
+        echo -e "\n${RED}Ошибка скачивания${NC}"
         return 1
     }
 
-    echo -e "${GREEN}OK бинарь найден${NC}"
-
-    echo -e "${CYAN}[8/8] Установка в систему...${NC}"
-    rm -f "$BIN_PATH_RS"
-
-    mv "$BIN_FILE" "$BIN_PATH_RS" || {
-        echo -e "${RED}Ошибка перемещения файла${NC}"
-        PAUSE
+    # проверка что это архив
+    file "$TMP_ARCHIVE_RS" | grep -qi "gzip\|tar" || {
+        echo -e "\n${RED}Файл не является архивом (битая загрузка)${NC}"
         return 1
     }
 
+    echo -e "${CYAN}Распаковка...${NC}"
+    tar -xzf "$TMP_ARCHIVE_RS" -C "$TMP_DIR_RS" || return 1
+
+    BIN_FOUND="$(find "$TMP_DIR_RS" -type f -name "tg-ws-proxy*" | head -n1)"
+
+    [ -z "$BIN_FOUND" ] && {
+        echo -e "\n${RED}Бинарник не найден в архиве${NC}"
+        return 1
+    }
+
+    # проверка ELF
+    file "$BIN_FOUND" | grep -q "ELF" || {
+        echo -e "\n${RED}Это не ELF бинарник${NC}"
+        return 1
+    }
+
+    echo -e "${CYAN}Устанавливаем бинарник...${NC}"
+
+    mv "$BIN_FOUND" "$BIN_PATH_RS"
     chmod +x "$BIN_PATH_RS"
-    echo -e "${GREEN}OK установлен:${NC} $BIN_PATH_RS"
 
-    rm -rf "$TMP_DIR_RS" "$TMP_ARCHIVE_RS"
-
-    echo -e "${CYAN}Создание init.d сервиса...${NC}"
-
-    SECRET="$(head -c16 /dev/urandom | hexdump -e '16/1 "%02x"')"
+    echo -e "${CYAN}Установка init.d...${NC}"
 
     cat << EOF > "$INIT_PATH_RS"
 #!/bin/sh /etc/rc.common
@@ -183,28 +175,31 @@ install_TG_RS() {
 START=99
 USE_PROCD=1
 
+SECRET="$SECRET"
+
 start_service() {
     procd_open_instance
-    procd_set_param command $BIN_PATH_RS --host 0.0.0.0 --port 2443 --secret $SECRET
+    procd_set_param command $BIN_PATH_RS --host 0.0.0.0 --port 2443 --secret \$SECRET
     procd_set_param respawn
     procd_close_instance
 }
 EOF
 
     chmod +x "$INIT_PATH_RS"
+
     /etc/init.d/tg-ws-proxy-rs enable
-    /etc/init.d/tg-ws-proxy-rs start
+    /etc/init.d/tg-ws-proxy-rs restart
 
-    echo -e "${CYAN}Проверка запуска...${NC}"
-    sleep 1
-
-    if pgrep -f tg-ws-proxy >/dev/null 2>&1; then
+    if pidof tg-ws-proxy-rs >/dev/null 2>&1; then
         echo -e "${GREEN}OK: сервис запущен${NC}"
     else
-        echo -e "${YELLOW}ВНИМАНИЕ: сервис не найден (возможно не стартанул)${NC}"
+        echo -e "\n${RED}Сервис не запустился${NC}"
+        return 1
     fi
 
-    PAUSE
+    rm -rf "$TMP_DIR_RS"
+
+    echo -e "${GREEN}Установка завершена${NC}"
 }
 
 ##############################################################################################################
