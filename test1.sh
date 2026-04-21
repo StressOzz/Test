@@ -1,14 +1,5 @@
 #!/bin/sh
 
-clear
-
-echo "███████╗██████╗ ██████╗ "
-echo "╚══███╔╝╚════██╗██╔══██╗"
-echo "  ███╔╝  █████╔╝██████╔╝"
-echo " ███╔╝  ██╔═══╝ ██╔══██╗"
-echo "███████╗███████╗██║  ██║"
-echo "╚══════╝╚══════╝╚═╝  ╚═╝"
-
 BASE_HTML="https://github.com/routerich/packages.routerich/tree/24.10.6/routerich"
 RAW_BASE="https://github.com/routerich/packages.routerich/raw/refs/heads/24.10.5/routerich"
 TMP="/tmp/z2r"
@@ -99,6 +90,15 @@ remove_routerich() {
 menu() {
     clear
 
+echo "███████╗██████╗ ██████╗ "
+echo "╚══███╔╝╚════██╗██╔══██╗"
+echo "  ███╔╝  █████╔╝██████╔╝"
+echo " ███╔╝  ██╔═══╝ ██╔══██╗"
+echo "███████╗███████╗██║  ██║"
+echo "╚══════╝╚══════╝╚═╝  ╚═╝"
+
+    echo
+    
     if is_zapret_installed; then
         ZAPRET_TEXT="${YELLOW}Удалить Zapret${NC}"
     else
