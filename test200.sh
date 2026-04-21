@@ -314,13 +314,27 @@ menu() {
     echo -e "${CYAN}===== Router Manager =====${NC}"
     echo
     
-echo -e "${MAGENTA}--- AWG ---${NC}"
+echo -e "${MAGENTA}--- Zapret2 ---${NC}"
+if command -v zapret2 >/dev/null 2>&1; then
+echo -e "${YELLOW}Zapret2: ${GREEN}установлен${NC}"
+else
+echo -e "${YELLOW}Zapret2: ${RED}не установлен${NC}"
+fi
 
+echo -e "${MAGENTA}--- Zeroblock ---${NC}"
+if command -v Zeroblock >/dev/null 2>&1; then
+echo -e "${YELLOW}Zeroblock: ${GREEN}установлен${NC}"
+else
+echo -e "${YELLOW}Zeroblock: ${RED}не установлен${NC}"
+fi
+
+echo -e "${MAGENTA}--- AWG ---${NC}"
 if command -v amneziawg >/dev/null 2>&1 || eval "$PKG_MANAGER" | grep -q "amneziawg-tools"; then
 echo -e "${YELLOW}AWG: ${GREEN}установлен${NC}"
 else
 echo -e "${YELLOW}AWG: ${RED}не установлен${NC}"
 fi
+
 if uci -q get network.AWG >/dev/null; then
     echo -e "${YELLOW}Интерфейс AWG: ${GREEN}установлен${NC}"
 else
@@ -347,15 +361,11 @@ fi
 
     echo -e "\n${CYAN}1) ${GREEN}${Z}${NC} Zapret2"
     echo -e "${CYAN}2) ${GREEN}${ZB}${NC} Zeroblock"
-	
-if [ -f /etc/mihomo/config.yaml ] && grep -q 'url: "' /etc/mihomo/config.yaml; then
-  echo -e "${CYAN}3) ${GREEN}Сменить ${NC}VPN${GREEN} подписку в${NC} Zeroblock"
-else
-  echo -e "${CYAN}3) ${GREEN}Интегрировать ${NC}VPN${GREEN} подписку в ${NC}Zeroblock${NC}"
-fi
+	echo -e "${CYAN}3) ${GREEN}Интегрировать ${NC}VPN${GREEN} подписку в ${NC}Zeroblock${NC}"
     echo -e "${CYAN}4) ${GREEN}Установить ${NC}AWG ${GREEN}и${NC} интерфейс AWG"
-    echo -e "${CYAN}5) ${GREEN}Удалить ${NC}AWG ${GREEN}и${NC} интерфейс AWG" 
-    echo -e "${CYAN}6) ${GREEN}$R_TEXT пакеты${NC} Routerich"
+    echo -e "${CYAN}5) ${GREEN}Удалить ${NC}AWG ${GREEN}и${NC} интерфейс AWG"
+	echo -e "${CYAN}6) ${GREEN}Интегрировать ${NC}AWG${GREEN} в ${NC}Zeroblock${NC}"	
+    echo -e "${CYAN}7) ${GREEN}$R_TEXT пакеты${NC} Routerich"
     
 echo -ne "\n${YELLOW}Выберите пункт:${NC} "
     read c
@@ -383,7 +393,11 @@ echo -ne "\n${YELLOW}Выберите пункт:${NC} "
             uninstall_AWG
         ;;
 
-        6)
+        6) 
+            AWG_INT
+        ;;
+
+        7)
             if is_routerich; then routerich_remove; else routerich_add; fi
             PAUSE
         ;;      
