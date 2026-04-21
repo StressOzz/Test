@@ -343,11 +343,17 @@ fi
         R_TEXT="Добавить"
     fi
 
-    echo -e "${CYAN}1) ${GREEN}${Z}${NC} Zapret 2"
+    echo -e "\n${CYAN}1) ${GREEN}${Z}${NC} Zapret 2"
     echo -e "${CYAN}2) ${GREEN}${ZB}${NC} Zeroblock"
-    echo -e "${CYAN}3) ${GREEN}Установить ${NC}AWG ${GREEN}и${NC} интерфейс AWG"
-    echo -e "${CYAN}4) ${GREEN}Удалить ${NC}AWG ${GREEN}и${NC} интерфейс AWG" 
-    echo -e "${CYAN}5) ${GREEN}$R_TEXT пакеты${NC} Routerich"
+	
+if [ -f /etc/mihomo/config.yaml ] && grep -q 'url: "' /etc/mihomo/config.yaml; then
+  echo -e "${CYAN}3) ${GREEN}Сменить ${NC}VPN${GREEN} подписку в${NC} Zeroblock"
+else
+  echo -e "${CYAN}3) ${GREEN}Интегрировать ${NC}VPN${GREEN} подписку в ${NC}Zeroblock${NC}"
+fi
+    echo -e "${CYAN}4) ${GREEN}Установить ${NC}AWG ${GREEN}и${NC} интерфейс AWG"
+    echo -e "${CYAN}5) ${GREEN}Удалить ${NC}AWG ${GREEN}и${NC} интерфейс AWG" 
+    echo -e "${CYAN}6) ${GREEN}$R_TEXT пакеты${NC} Routerich"
     
 echo -ne "\n${YELLOW}Выберите пункт:${NC} "
     read c
@@ -362,15 +368,20 @@ echo -ne "\n${YELLOW}Выберите пункт:${NC} "
             PAUSE
         ;;
 
-        3) 
+		3) 
+			PODPISKA
+			PAUSE
+		;;
+
+        4) 
             install_AWG
         ;;
         
-        4) 
+        5) 
             uninstall_AWG
         ;;
 
-        5)
+        6)
             if is_routerich; then routerich_remove; else routerich_add; fi
             PAUSE
         ;;      
