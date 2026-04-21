@@ -70,14 +70,16 @@ install_zeroblock() {
 
 remove_zeroblock() {
     opkg --force-removal-of-dependent-packages --autoremove remove luci-app-zeroblock zeroblock
-    rm -f /etc/config/zeroblock
-    rm -rf /opt/zeroblock
+    rm -rf /etc/config/zeroblock*
+    rm -rf /etc/zeroblock*
+    rm -rf /opt/zeroblock*
+    rm -rf /usr/bin/zeroblock*
     echo -e "\n${GREEN}Zeroblock удалён${NC}\n"
 }
 
 add_routerich() {
     sed -i 's/option check_signature/# option check_signature/' /etc/opkg.conf
-    echo 'src/gz routerich https://github.com/routerich/packages.routerich/raw/24.10.5/routerich' > /etc/opkg/customfeeds.conf
+    echo 'src/gz routerich https://github.com/routerich/packages.routerich/raw/24.10.6/routerich' > /etc/opkg/customfeeds.conf
     opkg update
     echo -e "\n${GREEN}Routerich добавлен${NC}\n"
 }
