@@ -136,9 +136,23 @@ remove_routerich() {
     echo -e "\n${GREEN}✔ Routerich удалён${NC}\n"
 }
 
+refresh_status() {
+    zap_inst="$(get_installed_ver zapret2)"
+    zap_latest_file="$(find_latest zapret2_)"
+    zap_latest_ver="$(get_ver "$zap_latest_file")"
+
+    zero_inst="$(get_installed_ver zeroblock)"
+    zero_latest_file="$(find_latest zeroblock)"
+    zero_latest_ver="$(get_ver "$zero_latest_file")"
+}
+
+
+
 # ---------- MENU ----------
 
 menu() {
+
+refresh_status
     clear
 
 echo "███████╗██████╗ ██████╗ "
