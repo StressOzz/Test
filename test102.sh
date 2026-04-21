@@ -17,10 +17,15 @@ ARCH="$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release)"
     exit 1
 }
 
-find_latest() { wget -qO- "$BASE_HTML" | grep -oE "$1[^\"']+\.ipk" | sort -u | head -n1; }
+find_latest() {
+    wget -qO- "$BASE_HTML" \
+    | grep -oE "$1[^\"']+${ARCH}[^\"']*\.ipk" \
+    | sort -V \
+    | tail -n1
+}
 
-get_installed_ver() {
-    opkg list-installed | grep "^$1 " | awk '{print $3}'
+get_pkg_ver() {
+    echo "$1" | grep -oE '[0-9]+(\.[0-9]+)*(-r[0-9]+)?'
 }
 
 get_pkg_ver() {
