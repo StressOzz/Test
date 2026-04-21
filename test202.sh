@@ -95,7 +95,7 @@ menu() {
             if is_installed zeroblock; then remove_zero; else install_zero; fi
         ;;
 
-        1)
+        3)
             if is_routerich; then routerich_remove; else routerich_add; fi
         ;;      
         *)
