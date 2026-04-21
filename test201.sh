@@ -322,7 +322,7 @@ echo -e "${YELLOW}Zapret2: ${RED}не установлен${NC}"
 fi
 
 echo -e "${MAGENTA}--- Zeroblock ---${NC}"
-if command -v Zeroblock >/dev/null 2>&1; then
+if command -v zeroblock >/dev/null 2>&1; then
 echo -e "${YELLOW}Zeroblock: ${GREEN}установлен${NC}"
 else
 echo -e "${YELLOW}Zeroblock: ${RED}не установлен${NC}"
@@ -373,16 +373,13 @@ echo -ne "\n${YELLOW}Выберите пункт:${NC} "
     case "$c" in
         1)
             if is_installed zapret2; then remove_zapret; else install_zapret; fi
-            PAUSE
         ;;
         2)
             if is_installed zeroblock; then remove_zero; else install_zero; fi
-            PAUSE
         ;;
 
 		3) 
 			PODPISKA
-			PAUSE
 		;;
 
         4) 
@@ -399,7 +396,6 @@ echo -ne "\n${YELLOW}Выберите пункт:${NC} "
 
         7)
             if is_routerich; then routerich_remove; else routerich_add; fi
-            PAUSE
         ;;      
         *)
             exit 0
