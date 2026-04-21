@@ -30,8 +30,8 @@ find_latest() { wget -qO- "$BASE_HTML" | grep -oE "$1[^\"']+\.ipk" | sort -u | h
 
 install_pkg() {
     PKG="$(find_latest "$1")" || { echo -e "\n${RED}Файл не найден!${NC}\n"; exit 1; }
-    wget "$RAW_BASE/$PKG" -O "$TMP/$PKG" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка скачивания!${NC}\n"; exit 1; }
-    opkg install "$TMP/$PKG" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка установки!${NC}\n"; exit 1; }
+    wget "$RAW_BASE/$PKG" -O "$TMP/$PKG" || { echo -e "\n${RED}Ошибка скачивания!${NC}\n"; exit 1; }
+    opkg install "$TMP/$PKG" || { echo -e "\n${RED}Ошибка установки!${NC}\n"; exit 1; }
 }
 
 is_zapret_installed() {
@@ -43,26 +43,26 @@ is_zeroblock_installed() {
 }
 
 is_routerich_added() {
-    grep -q "routerich" /etc/opkg/customfeeds.conf 2>/dev/null
+    grep -q "routerich" /etc/opkg/customfeeds.conf
 }
 
 install_zapret() {
     mkdir -p "$TMP"
-    opkg update >/dev/null 2>&1
+    opkg update
     install_pkg "zapret2_"
     install_pkg "luci-app-zapret2_"
 
     wget -qO /opt/zapret2/ipset/zapret_hosts_user_exclude.txt https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/zapret-hosts-user-exclude.txt
 
     sed -i "/config strategy 'default'/,/config /s/option enabled '0'/option enabled '1'/" /etc/config/zapret2
-    /etc/init.d/zapret2 restart >/dev/null 2>&1
+    /etc/init.d/zapret2 restart
 
     rm -rf "$TMP"
     echo -e "\n${GREEN}Zapret установлен${NC}\n"
 }
 
 remove_zapret() {
-    opkg --force-removal-of-dependent-packages --autoremove remove luci-app-zapret2 zapret2 >/dev/null 2>&1
+    opkg --force-removal-of-dependent-packages --autoremove remove luci-app-zapret2 zapret2
     rm -f /etc/config/zapret2
     rm -rf /opt/zapret2
     echo -e "\n${GREEN}Zapret удалён${NC}\n"
@@ -70,7 +70,7 @@ remove_zapret() {
 
 install_zeroblock() {
     mkdir -p "$TMP"
-    opkg update >/dev/null 2>&1
+    opkg update
     install_pkg "zeroblock"
     install_pkg "luci-app-zeroblock"
     rm -rf "$TMP"
@@ -78,7 +78,7 @@ install_zeroblock() {
 }
 
 remove_zeroblock() {
-    opkg --force-removal-of-dependent-packages --autoremove remove luci-app-zeroblock zeroblock >/dev/null 2>&1
+    opkg --force-removal-of-dependent-packages --autoremove remove luci-app-zeroblock zeroblock
     echo -e "\n${GREEN}Zeroblock удалён${NC}\n"
 }
 
