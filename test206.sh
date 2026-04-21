@@ -244,9 +244,11 @@ echo -ne "\n${YELLOW}Выберите пункт:${NC} "
     case "$c" in
         1)
             if is_installed zapret2; then remove_zapret; else install_zapret; fi
+            PAUSE
         ;;
         2)
             if is_installed zeroblock; then remove_zero; else install_zero; fi
+            PAUSE
         ;;
 
         3) 
@@ -259,14 +261,12 @@ echo -ne "\n${YELLOW}Выберите пункт:${NC} "
 
         5)
             if is_routerich; then routerich_remove; else routerich_add; fi
+            PAUSE
         ;;      
         *)
             exit 0
         ;;
     esac
-
-    PAUSE
-    
     read
 }
 
