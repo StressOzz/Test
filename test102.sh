@@ -24,7 +24,7 @@ get_installed_ver() {
 }
 
 get_pkg_ver() {
-    echo "$1" | sed 's/.*_//;s/\.ipk//'
+    echo "$1" | grep -oE '[0-9]+(\.[0-9]+)*(-r[0-9]+)?'
 }
 
 install_pkg() {
