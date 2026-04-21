@@ -1,7 +1,7 @@
 #!/bin/sh
 
 BASE_HTML="https://github.com/routerich/packages.routerich/tree/24.10.6/routerich"
-RAW_BASE="https://github.com/routerich/packages.routerich/raw/refs/heads/24.10.5/routerich"
+RAW_BASE="https://github.com/routerich/packages.routerich/raw/refs/heads/24.10.6/routerich"
 TMP="/tmp/z2r"
 
 GREEN="\033[1;32m"
@@ -102,29 +102,28 @@ echo "╚══════╝╚══════╝╚═╝  ╚═╝"
     echo
     
     if is_zapret_installed; then
-        ZAPRET_TEXT="${YELLOW}Удалить Zapret${NC}"
+        ZAPRET_TEXT="${YELLOW}Удалить ${NC}Zapret 2"
     else
-        ZAPRET_TEXT="${GREEN}Установить Zapret${NC}"
+        ZAPRET_TEXT="${GREEN}Установить ${NC}Zapret 2"
     fi
 
     if is_zeroblock_installed; then
-        ZERO_TEXT="${YELLOW}Удалить Zeroblock${NC}"
+        ZERO_TEXT="${YELLOW}Удалить ${NC}Zeroblock${NC}"
     else
-        ZERO_TEXT="${GREEN}Установить Zeroblock${NC}"
+        ZERO_TEXT="${GREEN}Установить ${NC}Zeroblock${NC}"
     fi
 
     if is_routerich_added; then
-        ROUTE_TEXT="${YELLOW}Удалить Routerich feed${NC}"
+        ROUTE_TEXT="${YELLOW}Удалить пакеты${NC} Routerich"
     else
-        ROUTE_TEXT="${GREEN}Добавить Routerich feed${NC}"
+        ROUTE_TEXT="${GREEN}Добавить пакеты${NC} Routerich"
     fi
 
     echo -e "${CYAN}1) $ZAPRET_TEXT${NC}"
     echo -e "${CYAN}2) $ZERO_TEXT${NC}"
     echo -e "${CYAN}3) $ROUTE_TEXT${NC}"
-    echo -e "${CYAN}0) Выход${NC}"
-    echo
-    printf "Выбор: "
+    echo -e "${CYAN}Enter) ${GREEN}Выход${NC}"
+    echo -en "${YELLOW}Выберите пункт:${NC}"
     read choice
 
     case "$choice" in
@@ -139,7 +138,8 @@ echo "╚══════╝╚══════╝╚═╝  ╚═╝"
         ;;
         *) 
             echo
-            exit 0 ;; ;;
+            exit 0
+        ;;
     esac
 
     echo -ne "\nНажмите Enter..."
