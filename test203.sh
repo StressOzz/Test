@@ -13,7 +13,14 @@ VER="$(awk -F\' '/DISTRIB_RELEASE/ {print $2}' /etc/openwrt_release)"
 [ "$VER" = "24.10.6" ] || { echo -e "\n${RED}Неподдерживаемая версия OpenWrt: $VER${NC}\n"; exit 1; }
 [ "$ARCH" = "aarch64_cortex-a53" ] || { echo -e "\n${RED}Неподдерживаемая архитектура: $ARCH${NC}\n"; exit 1; }
 
-# добавляем Routerich
+
+if ! grep -q "routerich/packages.routerich" /etc/opkg/customfeeds.conf 2>/dev/null; then
+    echo -e "\n${CYAN}Добавляем пакеты Routerich${NC}"
+    sed -i 's/option check_signature/# option check_signature/' /etc/opkg.conf
+    echo 'src/gz routerich https://github.com/routerich/packages.routerich/raw/24.10.5/routerich' > /etc/opkg/customfeeds.conf
+    opkg update
+fi
+
 is_routerich() {
     grep -q "routerich/packages.routerich" /etc/opkg/customfeeds.conf 2>/dev/null
 }
@@ -40,6 +47,11 @@ is_installed() {
 install_zapret() {
     opkg update
     opkg install zapret2 luci-app-zapret2
+    echo -e "${GREEN}Настраиваем...${NC}"
+wget -qO /opt/zapret2/ipset/zapret_hosts_user_exclude.txt https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/zapret-hosts-user-exclude.txt
+sed -i "/config strategy 'default'/,/config /s/option enabled '0'/option enabled '1'/" /etc/config/zapret2
+/etc/init.d/zapret2 restart >/dev/null 2>&1
+
 }
 
 remove_zapret() {
@@ -78,7 +90,6 @@ menu() {
     else
         R_TEXT="Добавить Routerich"
     fi
-
 
     echo -e "${CYAN}1) ${Z}${NC}"
     echo -e "${CYAN}2) ${ZB}${NC}"
