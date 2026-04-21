@@ -11,7 +11,7 @@ VER="$(awk -F\' '/DISTRIB_RELEASE/ {print $2}' /etc/openwrt_release)"
 
 # проверка системы
 [ "$VER" = "24.10.6" ] || { echo -e "\n${RED}Неподдерживаемая версия OpenWrt: $VER${NC}\n"; exit 1; }
-[ "$ARCH" = "aarch64_cortex-a5" ] || { echo -e "\n${RED}Неподдерживаемая архитектура: $ARCH${NC}\n"; exit 1; }
+[ "$ARCH" = "aarch64_cortex-a53" ] || { echo -e "\n${RED}Неподдерживаемая архитектура: $ARCH${NC}\n"; exit 1; }
 
 # добавляем Routerich
 is_routerich() {
