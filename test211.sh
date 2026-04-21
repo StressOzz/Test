@@ -16,7 +16,7 @@ PROTO="amneziawg"
 DEV_NAME="amneziawg0"
 PKG_MANAGER="opkg list-installed 2>/dev/null"
 
-pkg_remove="opkg remove --force-depends "$pkg_name""
+pkg_remove="opkg remove --force-depends $pkg_name"
 
 PAUSE() { echo -ne "\nНажмите Enter..."; read dummy; }
 
