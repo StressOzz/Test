@@ -19,13 +19,13 @@ ARCH="$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release)"
 
 find_latest() {
     wget -qO- "$BASE_HTML" \
-    | grep -oE "$1[^\"']+${ARCH}[^\"']*\.ipk" \
+    | grep -oE "$1_[0-9][^\"']*_aarch64_cortex-a53\.ipk" \
     | sort -V \
     | tail -n1
 }
 
 get_pkg_ver() {
-    echo "$1" | grep -oE '[0-9]+(\.[0-9]+)*(-r[0-9]+)?'
+    echo "$1" | awk -F'_' '{print $2}'
 }
 
 get_pkg_ver() {
