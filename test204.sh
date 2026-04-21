@@ -167,7 +167,7 @@ echo -e "${YELLOW}Перезапускаем сеть! Подождите...${NC
 /etc/init.d/network restart >/dev/null 2>&1
 
 echo -e "AWG ${GREEN}и${NC} интерфейс AWG ${GREEN}установлены!${NC}\n"
-echo -e "${YELLOW}Необходимо в LuCI в интерфейс AWG загрузить конфиг:${NC}\nNetwork ${GREEN}→${NC} Interfaces ${GREEN}→${NC} AWG ${GREEN}→${NC} Edit ${GREEN}→${NC} Load configuration…${NC}"
+echo -e "${YELLOW}Необходимо в LuCI в интерфейс AWG загрузить конфиг:${NC}\nNetwork ${GREEN}→${NC} Interfaces ${GREEN}→${NC} AWG ${GREEN}→${NC} Edit ${GREEN}→${NC} Load configuration… ${GREEN}→${NC} Save ${GREEN}→${NC} Save&Apply"
 PAUSE
 }
 
@@ -299,12 +299,120 @@ config dashboard 'dashboard'
 config diagnostic 'diagnostic'
 EOF
 
+echo -e "${CYAN}Применяем конфигурацию${NC}"
 /etc/init.d/zeroblock reload >/dev/null 2>&1
 sleep 2
+echo -e "${CYAN}Перезапускаем сервис${NC}"
 /etc/init.d/zeroblockrestart >/dev/null 2>&1
-echo -e "\n${GREEN}Подписка успешно применена!${NC}"
+echo -e "AWG ${GREEN}интегрирован в ${NC}Zeroblock${GREEN}!${NC}\n"
 PAUSE
 }
+###################################################################################################################################################
+AWG_INT() {
+echo -e "\n${MAGENTA}Интегрируем AWG в Zeroblock${NC}"
+
+
+cat > /etc/config/zeroblock << EOF
+config settings 'settings'
+	option log_level 'warn'
+	option dns_type 'doh'
+	option dns_server '8.8.8.8'
+	option bootstrap_dns_server '77.88.8.8'
+	option dns_rewrite_ttl '60'
+	option dns_strategy 'ipv4_only'
+	option clash_api_enabled '1'
+	option clash_api_port '9090'
+	option tproxy_mark '0x10000'
+	option direct_mark '0x20000'
+	option bt_mark '0x40000'
+	option ctmark_dns '0x10000'
+	option ctmark_bt '0x40000'
+	option disable_quic '1'
+	option desync_mark '0x40000000'
+	option update_interval '1d'
+	option timeout_dnsmasq_restart '15'
+	option dns_hijack '1'
+	option auto_fallback_two_stage '1'
+	option discord_voice '1'
+	option exclude_bittorrent '1'
+	option exclude_ntp '1'
+	option fakeip_query_type_filter '1'
+	option dont_touch_dhcp '0'
+	option enable_output_network_interface '0'
+	option proxy_router_traffic '0'
+	option enable_bad_interface_monitoring '0'
+	option download_lists_via_proxy '0'
+	option ipv6_enabled '0'
+	option singbox_logging '0'
+	option xray_logging '0'
+	option trusttunnel_logging '0'
+	option xray_path '/usr/bin/xray'
+	option trusttunnel_path '/usr/bin/trusttunnel_client'
+	option custom_config_dir '/etc/zeroblock/sing-box.d'
+	option dpi_check_timeout '15'
+	option singbox_startup_timeout '30000'
+	option xray_startup_timeout '10000'
+	option subscription_timeout '30000'
+	option subscription_user_agent 'clash-verge/v2.0.0'
+	option update_time '09:00'
+	option api 'v1'
+	option youtube_cdn_url 'https://test.googlevideo.com/v2/cimg/android/blobs/sha256:6fd8bdac3da660bde7bd0b6f2b6a46e1b686afb74b9a4614def32532b73f5eaa'
+	option youtube_connect_host 'google.com'
+	option youtube_host_header 'mirror.gcr.io'
+	option youtube_threshold_mb '5'
+	option youtube_timeout '10'
+	option subscription_max_proxies '100'
+	list source_network_interfaces 'br-lan'
+	option testing_url 'http://www.gstatic.com/generate_204'
+
+config auto_config 'auto_config'
+	option monitor_time '03:00'
+	option monitor_interval 'daily'
+	option enable_monitoring '1'
+
+config dashboard 'dashboard'
+
+config diagnostic 'diagnostic'
+
+config section 'AWG'
+	option connection_type 'vpn'
+	option interface 'AWG'
+	option disable_fakeip '1'
+	list community_lists 'anime'
+	list community_lists 'block'
+	list community_lists 'cloudflare'
+	list community_lists 'cloudfront'
+	list community_lists 'digitalocean'
+	list community_lists 'discord'
+	list community_lists 'geoblock'
+	list community_lists 'google_ai'
+	list community_lists 'google_meet'
+	list community_lists 'google_play'
+	list community_lists 'hdrezka'
+	list community_lists 'hetzner'
+	list community_lists 'hodca'
+	list community_lists 'meta'
+	list community_lists 'news'
+	list community_lists 'ovh'
+	list community_lists 'porn'
+	list community_lists 'roblox'
+	list community_lists 'russia_inside'
+	list community_lists 'telegram'
+	list community_lists 'tiktok'
+	list community_lists 'twitter'
+	list community_lists 'youtube'
+	option enabled '1'
+EOF
+echo -e "${CYAN}Применяем конфигурацию${NC}"
+/etc/init.d/zeroblock reload >/dev/null 2>&1
+sleep 2
+echo -e "${CYAN}Перезапускаем сервис${NC}"
+/etc/init.d/zeroblockrestart >/dev/null 2>&1
+echo -e "AWG ${GREEN}интегрирован в ${NC}Zeroblock${GREEN}!${NC}\n"
+PAUSE
+}
+
+
 
 ###################################################################################################################################################
 
