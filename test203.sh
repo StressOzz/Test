@@ -315,14 +315,14 @@ menu() {
     echo
     
 echo -e "${MAGENTA}--- Zapret2 ---${NC}"
-if command -v zapret2 >/dev/null 2>&1; then
+if [ -f /etc/config/zapret2 ]; then
 echo -e "${YELLOW}Zapret2: ${GREEN}установлен${NC}"
 else
 echo -e "${YELLOW}Zapret2: ${RED}не установлен${NC}"
 fi
 
 echo -e "${MAGENTA}--- Zeroblock ---${NC}"
-if command -v zeroblock >/dev/null 2>&1; then
+if [ -f /etc/config/zeroblock ]; then
 echo -e "${YELLOW}Zeroblock: ${GREEN}установлен${NC}"
 else
 echo -e "${YELLOW}Zeroblock: ${RED}не установлен${NC}"
