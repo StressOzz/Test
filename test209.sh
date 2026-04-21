@@ -14,8 +14,6 @@ BASE_URL="https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/"
 IF_NAME="AWG"
 PROTO="amneziawg"
 DEV_NAME="amneziawg0"
-
-PKG_IS_APK=0
 PKG_MANAGER="opkg list-installed 2>/dev/null"
 
 PAUSE() { echo -ne "\nНажмите Enter..."; read dummy; }
@@ -23,8 +21,8 @@ PAUSE() { echo -ne "\nНажмите Enter..."; read dummy; }
 ARCH="$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release)"
 VER="$(awk -F\' '/DISTRIB_RELEASE/ {print $2}' /etc/openwrt_release)"
 
-[ "$VER" = "24.10.6" ] || { echo -e "\n${RED}Неподдерживаемая версия OpenWrt: $VER${NC}\n"; exit 1; }
-[ "$ARCH" = "aarch64_cortex-a53" ] || { echo -e "\n${RED}Неподдерживаемая архитектура: $ARCH${NC}\n"; exit 1; }
+[ "$VER" = "24.10.6" ] || { echo -e "\n${RED}Неподдерживаемая версия OpenWrt: ${NC}$VER\n"; exit 1; }
+[ "$ARCH" = "aarch64_cortex-a53" ] || { echo -e "\n${RED}Неподдерживаемая архитектура: ${NC}$ARCH\n"; exit 1; }
 
 if ! grep -q "routerich/packages.routerich" /etc/opkg/customfeeds.conf 2>/dev/null; then
     echo -e "\n${CYAN}Добавляем пакеты Routerich${NC}"
@@ -41,14 +39,16 @@ routerich_add() {
     sed -i 's/option check_signature/# option check_signature/' /etc/opkg.conf
     echo 'src/gz routerich https://github.com/routerich/packages.routerich/raw/24.10.5/routerich' > /etc/opkg/customfeeds.conf
     opkg update
-    echo "Routerich добавлен"
+    echo -e "\n${GREEN}Пакеты ${NC}Routerich${GREEN} добавлены!${NC}"
+	PAUSE
 }
 
 routerich_remove() {
     rm -f /etc/opkg/customfeeds.conf
     sed -i 's/# option check_signature/option check_signature/' /etc/opkg.conf
     opkg update
-    echo "Routerich удалён"
+    echo -e "\n${GREEN}Пакеты ${NC}Routerich${GREEN} удалены!${NC}"
+	PAUSE
 }
 
 
@@ -59,34 +59,37 @@ is_installed() {
 install_zapret() {
     opkg update
     opkg install zapret2 luci-app-zapret2
-    echo -e "${GREEN}Настраиваем...${NC}"
 wget -qO /opt/zapret2/ipset/zapret_hosts_user_exclude.txt https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/zapret-hosts-user-exclude.txt
 sed -i "/config strategy 'default'/,/config /s/option enabled '0'/option enabled '1'/" /etc/config/zapret2
 /etc/init.d/zapret2 restart >/dev/null 2>&1
-
+    echo -e "\nZapret2 ${GREEN}установлен${NC}"
+	PAUSE
 }
 
 remove_zapret() {
     opkg --force-removal-of-dependent-packages --autoremove remove luci-app-zapret2 zapret2
     rm -f /etc/config/zapret2
     rm -rf /opt/zapret2
-    echo -e "\n${GREEN}Zapret удалён${NC}\n"
+    echo -e "\nZapret2 ${GREEN}удалён${NC}"
+	PAUSE
 }
 
 install_zero() {
     opkg update
     opkg install zeroblock luci-app-zeroblock
+	sed -i "/option api /s/'v2'/'v1'/" /etc/config/zeroblock
+    echo -e "\nZeroblock ${GREEN}установлен!${NC}"
+	PAUSE
 }
 
 remove_zero() {
     opkg --force-removal-of-dependent-packages --autoremove remove luci-app-zeroblock zeroblock
     rm -rf /etc/config/zeroblock*
     rm -rf /etc/zeroblock*
-    rm -rf /opt/zeroblock*
     rm -rf /usr/bin/zeroblock*
-    echo -e "\n${GREEN}Zeroblock удалён${NC}\n"
+    echo -e "\n${GREEN}Zeroblock удалён${NC}"
+	PAUSE
 }
-
 
 ###################################################################################################################################################
 install_AWG() {
@@ -298,6 +301,7 @@ EOF
 sleep 2
 /etc/init.d/zeroblockrestart >/dev/null 2>&1
 echo -e "\n${GREEN}Подписка успешно применена!${NC}"
+PAUSE
 }
 
 ###################################################################################################################################################
@@ -321,10 +325,6 @@ else
     echo -e "${YELLOW}Интерфейс AWG: ${RED}не установлен${NC}"
 fi
 
-
-
-
-
     if is_installed zapret2; then
         Z="Удалить"
     else
@@ -343,7 +343,7 @@ fi
         R_TEXT="Добавить"
     fi
 
-    echo -e "\n${CYAN}1) ${GREEN}${Z}${NC} Zapret 2"
+    echo -e "\n${CYAN}1) ${GREEN}${Z}${NC} Zapret2"
     echo -e "${CYAN}2) ${GREEN}${ZB}${NC} Zeroblock"
 	
 if [ -f /etc/mihomo/config.yaml ] && grep -q 'url: "' /etc/mihomo/config.yaml; then
@@ -389,7 +389,6 @@ echo -ne "\n${YELLOW}Выберите пункт:${NC} "
             exit 0
         ;;
     esac
-    read
 }
 
 while true; do
