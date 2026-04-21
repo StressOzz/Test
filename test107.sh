@@ -74,8 +74,9 @@ install_zapret() {
 }
 
 remove_zapret() {
-    opkg remove zapret2 luci-app-zapret2 --autoremove
-    rm -rf /etc/config/zapret2 /opt/zapret2
+    opkg --force-removal-of-dependent-packages --autoremove remove luci-app-zapret2 zapret2
+    rm -f /etc/config/zapret2
+    rm -rf /opt/zapret2
     echo -e "\n${GREEN}✔ Zapret удалён${NC}\n"
 }
 
@@ -101,8 +102,11 @@ install_zeroblock() {
 }
 
 remove_zeroblock() {
-    opkg remove zeroblock luci-app-zeroblock --autoremove
-    rm -rf /etc/config/zeroblock /opt/zeroblock
+    opkg --force-removal-of-dependent-packages --autoremove remove luci-app-zeroblock zeroblock
+    rm -rf /etc/config/zeroblock*
+    rm -rf /etc/zeroblock*
+    rm -rf /opt/zeroblock*
+    rm -rf /usr/bin/zeroblock*
     echo -e "\n${GREEN}✔ Zeroblock удалён${NC}\n"
 }
 
@@ -154,7 +158,7 @@ echo
 # ZAPRET STATE
 if is_zap_installed; then
     if is_zap_update; then
-        ZAP_OPT="Удалить / Обновить"
+        ZAP_OPT="Обновить"
     else
         ZAP_OPT="Удалить"
     fi
@@ -165,7 +169,7 @@ fi
 # ZERO STATE
 if is_zero_installed; then
     if is_zero_update; then
-        ZERO_OPT="Удалить / Обновить"
+        ZERO_OPT="Обновить"
     else
         ZERO_OPT="Удалить"
     fi
@@ -180,12 +184,12 @@ else
     ROUTE_OPT="Добавить"
 fi
 
-echo "1) Zapret → $ZAP_OPT"
-echo "2) Zeroblock → $ZERO_OPT"
-echo "3) Routerich → $ROUTE_OPT"
-echo "0) Выход"
+echo "1) $ZAP_OPT Zapret 2"
+echo "2) $ZERO_OPT Zeroblock"
+echo "3) $ROUTE_OPT пакеты Routerich"
+echo "Enter) Выход"
 
-echo -n "Выбор: "
+echo -en "\nВыбор: "
 read c
 
 case "$c" in
