@@ -70,6 +70,8 @@ install_zeroblock() {
 
 remove_zeroblock() {
     opkg --force-removal-of-dependent-packages --autoremove remove luci-app-zeroblock zeroblock
+    rm -f /etc/config/zeroblock
+    rm -rf /opt/zeroblock
     echo -e "\n${GREEN}Zeroblock удалён${NC}\n"
 }
 
@@ -135,8 +137,9 @@ echo "╚══════╝╚══════╝╚═╝  ╚═╝"
         3)
             if is_routerich_added; then remove_routerich; else add_routerich; fi
         ;;
-        0) exit 0 ;;
-        *) echo -e "${RED}Неверный выбор${NC}" ;;
+        *) 
+            echo
+            exit 0 ;; ;;
     esac
 
     echo -ne "\nНажмите Enter..."
