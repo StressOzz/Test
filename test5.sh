@@ -144,7 +144,7 @@ echo "╚══════╝╚══════╝╚═╝  ╚═╝"
         ;;
     esac
 
-    echo -ne "\nНажмите Enter..."
+    echo -ne "Нажмите Enter..."
     read dummy
 }
 
