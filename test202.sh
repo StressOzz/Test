@@ -311,7 +311,7 @@ PAUSE
 menu() {
     clear
 
-    echo -e "${CYAN}===== Router Manager =====${NC}"
+    echo -e "${CYAN}===== Z2R Manager =====${NC}"
     echo
     
 echo -e "${MAGENTA}--- Zapret2 ---${NC}"
