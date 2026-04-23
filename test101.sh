@@ -422,7 +422,7 @@ show_domain_results() {
     clear
     echo -e "${MAGENTA}Результат тестирования по домену${NC}\n"
 
-    local FILE="$RES_DOMAIN"
+    FILE="$RES_DOMAIN"
 
     [ ! -s "$FILE" ] && {
         echo -e "${RED}Результат не найден!${NC}\n"
@@ -430,33 +430,28 @@ show_domain_results() {
         return
     }
 
-    TMP_RES="/tmp/zapret_results_domain.$$"
-    cat "$FILE" > "$TMP_RES"
+    while IFS= read -r line; do
 
-    awk '!seen && /^Контрольный тест/ {print; seen=1; next} !/^Контрольный тест/ {print}' "$TMP_RES" > "${TMP_RES}.u"
-    mv "${TMP_RES}.u" "$TMP_RES"
-
-    TOTAL=$(head -n1 "$TMP_RES" | cut -d'/' -f2)
-
-    awk -F'[/ ]' '{for(i=1;i<=NF;i++) if($i~/^[0-9]+$/){print $i "/" $(i+1), $0; break}}' "$TMP_RES" |
-    sort -nr -k1,1 | while read -r line; do
-        COUNT=$(echo "$line" | awk -F'/' '{print $1}')
-        TEXT=$(echo "$line" | cut -d' ' -f2-)
-
-        if echo "$TEXT" | grep -q Zapret; then
+        if echo "$line" | grep -q "^Контрольный тест"; then
             COLOR="$CYAN"
-        elif [ "$COUNT" -eq "$TOTAL" ]; then
-            COLOR="$GREEN"
-        elif [ "$COUNT" -gt $((TOTAL/2)) ]; then
+
+        elif echo "$line" | grep -q "→"; then
             COLOR="$YELLOW"
-        else
+
+        elif echo "$line" | grep -q "\[ OK \]"; then
+            COLOR="$GREEN"
+
+        elif echo "$line" | grep -q "\[FAIL\]"; then
             COLOR="$RED"
+
+        else
+            COLOR="$NC"
         fi
 
-        echo -e "${COLOR}${TEXT}${NC}"
-    done
+        echo -e "${COLOR}${line}${NC}"
 
-    rm -f "$TMP_RES"
+    done < "$FILE"
+
     echo
     PAUSE
 }
