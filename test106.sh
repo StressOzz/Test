@@ -432,15 +432,20 @@ show_domain_results() {
 
     while IFS= read -r line; do
 
-        # Контрольный тест
+        # Контрольный тест без изменений
         if echo "$line" | grep -q "^Контрольный тест"; then
-            COLOR="$CYAN"
+            echo -e "${CYAN}${line}${NC}"
+            continue
+        fi
 
-        # строки результатов стратегий
-        elif echo "$line" | grep -q "→"; then
+        # если есть результаты вида → X/Y
+        if echo "$line" | grep -q "→"; then
 
-            OK=$(echo "$line" | awk -F'→' '{print $2}' | awk -F'/' '{gsub(/ /,"",$1); print $1}')
-            TOTAL=$(echo "$line" | awk -F'→' '{print $2}' | awk -F'/' '{gsub(/ /,"",$2); print $2}')
+            LEFT=$(echo "$line" | cut -d'→' -f1)
+            RIGHT=$(echo "$line" | cut -d'→' -f2)
+
+            OK=$(echo "$RIGHT" | awk -F'/' '{gsub(/ /,"",$1); print $1}')
+            TOTAL=$(echo "$RIGHT" | awk -F'/' '{gsub(/ /,"",$2); print $2}')
 
             if [ "$OK" -eq "$TOTAL" ]; then
                 COLOR="$GREEN"
@@ -450,18 +455,18 @@ show_domain_results() {
                 COLOR="$YELLOW"
             fi
 
-        # строки доменов
-        elif echo "$line" | grep -q "\[ OK \]"; then
-            COLOR="$GREEN"
-
-        elif echo "$line" | grep -q "\[FAIL\]"; then
-            COLOR="$RED"
-
-        else
-            COLOR="$NC"
+            echo -e "${LEFT}→ ${COLOR}${OK}/${TOTAL}${NC}"
+            continue
         fi
 
-        echo -e "${COLOR}${line}${NC}"
+        # строки доменов
+        if echo "$line" | grep -q "\[ OK \]"; then
+            echo -e "${GREEN}${line}${NC"
+        elif echo "$line" | grep -q "\[FAIL\]"; then
+            echo -e "${RED}${line}${NC}"
+        else
+            echo "$line"
+        fi
 
     done < "$FILE"
 
