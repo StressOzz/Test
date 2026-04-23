@@ -452,7 +452,6 @@ show_domain_results() {
 
     done < "$FILE"
 
-    echo
     PAUSE
 }
 
