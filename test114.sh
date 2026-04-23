@@ -432,14 +432,34 @@ show_domain_results() {
 
     while IFS= read -r line; do
     
-        # убираем пустые строки
-echo "$line" | grep -q '^[[:space:]]*$' && continue
+# убираем пустые строки
+# echo "$line" | grep -q '^[[:space:]]*$' && continue
 
         # Контрольный тест
-        if echo "$line" | grep -q "^Контрольный тест"; then
-            echo -e "${CYAN}${line}${NC}"
-            continue
-        fi
+if echo "$line" | grep -q "^Контрольный тест"; then
+
+    LEFT=$(echo "$line" | cut -d'→' -f1)
+    RIGHT=$(echo "$line" | cut -d'→' -f2)
+
+    RIGHT_CLEAN=$(echo "$RIGHT" | tr -cd '0-9/')
+
+    OK=$(echo "$RIGHT_CLEAN" | cut -d'/' -f1)
+    TOTAL=$(echo "$RIGHT_CLEAN" | cut -d'/' -f2)
+
+    [ -z "$OK" ] && OK=0
+    [ -z "$TOTAL" ] && TOTAL=0
+
+    if [ "$OK" -eq "$TOTAL" ] && [ "$TOTAL" -ne 0 ]; then
+        COLOR="$GREEN"
+    elif [ "$OK" -eq 0 ]; then
+        COLOR="$RED"
+    else
+        COLOR="$YELLOW"
+    fi
+
+    echo -e "${CYAN}${LEFT}→ ${COLOR}${OK}/${TOTAL}${NC}"
+    continue
+fi
 
         # Строки стратегий с результатами
         if echo "$line" | grep -q "→"; then
@@ -481,7 +501,6 @@ echo "$line" | grep -q '^[[:space:]]*$' && continue
 
     done < "$FILE"
 
-    echo
     PAUSE
 }
 
