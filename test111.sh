@@ -460,13 +460,13 @@ show_domain_results() {
         fi
 
         # строки доменов
-        if echo "$line" | grep -q "\[ OK \]"; then
-            echo -e "${GREEN}${line}${NC"
-        elif echo "$line" | grep -q "\[FAIL\]"; then
-            echo -e "${RED}${line}${NC}"
-        else
-            echo "$line"
-        fi
+if echo "$line" | grep -q "\[ OK \]"; then
+    echo -e "${GREEN}${line}${NC}"
+elif echo "$line" | grep -q "\[FAIL\]"; then
+    echo -e "${RED}${line}${NC}"
+else
+    echo "$line"
+fi
 
     done < "$FILE"
 
