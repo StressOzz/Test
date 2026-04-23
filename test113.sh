@@ -431,6 +431,9 @@ show_domain_results() {
     }
 
     while IFS= read -r line; do
+    
+        # убираем пустые строки
+echo "$line" | grep -q '^[[:space:]]*$' && continue
 
         # Контрольный тест
         if echo "$line" | grep -q "^Контрольный тест"; then
