@@ -432,22 +432,30 @@ show_domain_results() {
 
     while IFS= read -r line; do
 
-        # Контрольный тест без изменений
+        # Контрольный тест
         if echo "$line" | grep -q "^Контрольный тест"; then
             echo -e "${CYAN}${line}${NC}"
             continue
         fi
 
-        # если есть результаты вида → X/Y
+        # Строки стратегий с результатами
         if echo "$line" | grep -q "→"; then
 
             LEFT=$(echo "$line" | cut -d'→' -f1)
             RIGHT=$(echo "$line" | cut -d'→' -f2)
 
-            OK=$(echo "$RIGHT" | awk -F'/' '{gsub(/ /,"",$1); print $1}')
-            TOTAL=$(echo "$RIGHT" | awk -F'/' '{gsub(/ /,"",$2); print $2}')
+            # чистим только цифры и /
+            RIGHT_CLEAN=$(echo "$RIGHT" | tr -cd '0-9/')
 
-            if [ "$OK" -eq "$TOTAL" ]; then
+            OK=$(echo "$RIGHT_CLEAN" | cut -d'/' -f1)
+            TOTAL=$(echo "$RIGHT_CLEAN" | cut -d'/' -f2)
+
+            # защита от мусора
+            [ -z "$OK" ] && OK=0
+            [ -z "$TOTAL" ] && TOTAL=0
+
+            # логика цвета
+            if [ "$OK" -eq "$TOTAL" ] && [ "$TOTAL" -ne 0 ]; then
                 COLOR="$GREEN"
             elif [ "$OK" -eq 0 ]; then
                 COLOR="$RED"
@@ -459,14 +467,14 @@ show_domain_results() {
             continue
         fi
 
-        # строки доменов
-if echo "$line" | grep -q "\[ OK \]"; then
-    echo -e "${GREEN}${line}${NC}"
-elif echo "$line" | grep -q "\[FAIL\]"; then
-    echo -e "${RED}${line}${NC}"
-else
-    echo "$line"
-fi
+        # домены
+        if echo "$line" | grep -q "\[ OK \]"; then
+            echo -e "${GREEN}${line}${NC}"
+        elif echo "$line" | grep -q "\[FAIL\]"; then
+            echo -e "${RED}${line}${NC}"
+        else
+            echo "$line"
+        fi
 
     done < "$FILE"
 
