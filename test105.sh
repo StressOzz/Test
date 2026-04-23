@@ -432,12 +432,25 @@ show_domain_results() {
 
     while IFS= read -r line; do
 
+        # Контрольный тест
         if echo "$line" | grep -q "^Контрольный тест"; then
             COLOR="$CYAN"
 
+        # строки результатов стратегий
         elif echo "$line" | grep -q "→"; then
-            COLOR="$YELLOW"
 
+            OK=$(echo "$line" | awk -F'→' '{print $2}' | awk -F'/' '{gsub(/ /,"",$1); print $1}')
+            TOTAL=$(echo "$line" | awk -F'→' '{print $2}' | awk -F'/' '{gsub(/ /,"",$2); print $2}')
+
+            if [ "$OK" -eq "$TOTAL" ]; then
+                COLOR="$GREEN"
+            elif [ "$OK" -eq 0 ]; then
+                COLOR="$RED"
+            else
+                COLOR="$YELLOW"
+            fi
+
+        # строки доменов
         elif echo "$line" | grep -q "\[ OK \]"; then
             COLOR="$GREEN"
 
@@ -452,6 +465,7 @@ show_domain_results() {
 
     done < "$FILE"
 
+    echo
     PAUSE
 }
 
