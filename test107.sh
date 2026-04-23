@@ -432,20 +432,15 @@ show_domain_results() {
 
     while IFS= read -r line; do
 
-        # Контрольный тест без изменений
+        # Контрольный тест
         if echo "$line" | grep -q "^Контрольный тест"; then
-            echo -e "${CYAN}${line}${NC}"
-            continue
-        fi
+            COLOR="$CYAN"
 
-        # если есть результаты вида → X/Y
-        if echo "$line" | grep -q "→"; then
+        # строки результатов стратегий
+        elif echo "$line" | grep -q "→"; then
 
-            LEFT=$(echo "$line" | cut -d'→' -f1)
-            RIGHT=$(echo "$line" | cut -d'→' -f2)
-
-            OK=$(echo "$RIGHT" | awk -F'/' '{gsub(/ /,"",$1); print $1}')
-            TOTAL=$(echo "$RIGHT" | awk -F'/' '{gsub(/ /,"",$2); print $2}')
+            OK=$(echo "$line" | awk -F'→' '{print $2}' | awk -F'/' '{gsub(/ /,"",$1); print $1}')
+            TOTAL=$(echo "$line" | awk -F'→' '{print $2}' | awk -F'/' '{gsub(/ /,"",$2); print $2}')
 
             if [ "$OK" -eq "$TOTAL" ]; then
                 COLOR="$GREEN"
@@ -455,25 +450,24 @@ show_domain_results() {
                 COLOR="$YELLOW"
             fi
 
-            echo -e "${LEFT}→ ${COLOR}${OK}/${TOTAL}${NC}"
-            continue
+        # строки доменов
+        elif echo "$line" | grep -q "\[ OK \]"; then
+            COLOR="$GREEN"
+
+        elif echo "$line" | grep -q "\[FAIL\]"; then
+            COLOR="$RED"
+
+        else
+            COLOR="$NC"
         fi
 
-        # строки доменов
-        if echo "$line" | grep -q "\[ OK \]"; then
-            echo -e "${GREEN}${line}${NC"
-        elif echo "$line" | grep -q "\[FAIL\]"; then
-            echo -e "${RED}${line}${NC}"
-        else
-            echo "$line"
-        fi
+        echo -e "${COLOR}${line}${NC}"
 
     done < "$FILE"
 
     echo
     PAUSE
 }
-
 
 run_test_by_domain() { MODE="domain"; clear; echo -e "${MAGENTA}Тестирование стратегий по домену${NC}\n\n${CYAN}Введите один или несколько доменов через пробел (например: ${NC}x.com vk.com${CYAN})${NC}\n"; echo -ne "${YELLOW}Введите домен: ${NC}"; read -r INPUT
 INPUT="$(printf "%s" "$INPUT" | tr -s ' ')"; [ -z "$INPUT" ] && return; URLS=""; COUNT=0; for item in $INPUT; do item="$(printf "%s" "$item" | tr -d ' \t\r\n')"; [ -z "$item" ] && continue; case "$item" in http://*|https://*) TARGET="$item" ;; *) TARGET="https://$item" ;; esac
