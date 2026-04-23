@@ -481,7 +481,13 @@ echo "${NAME} → ${OK}/${TOTAL}"
 cat "$LOG_TMP"
 echo
 } >> "$RESULTS"
-done; sort -t'/' -k1 -nr "$RESULTS" -o "$RESULTS"; [ -f "$BACK" ] && mv -f "$BACK" "$CONF"; ZAPRET_RESTART; show_single_result "$RESULTS"; }
+done; ZAPRET_RESTART; 
+
+[ -f "$BACK" ] && mv -f "$BACK" "$CONF"
+ZAPRET_RESTART
+show_single_result "$RESULTS"
+
+}
 check_zpr_off() { echo -e "\n${CYAN}Контрольный тест: ${YELLOW}Zapret выключен${NC}"; /etc/init.d/zapret stop >/dev/null 2>&1; OK=0;
 LOG_TMP="/tmp/zapret_log_${CUR}"
 : > "$LOG_TMP"
