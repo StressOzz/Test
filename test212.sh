@@ -135,43 +135,80 @@ fi
 
 
 get_versions() {
-    LOCAL_ARCH="$(awk -F"'" '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release 2>/dev/null)"
+    # ARCH (без awk)
+    LOCAL_ARCH="${LOCAL_ARCH:-$(. /etc/openwrt_release 2>/dev/null; echo "$DISTRIB_ARCH")}"
     USED_ARCH="$LOCAL_ARCH"
 
-    # версия установленного zapret
+    # ===== INSTALLED VERSION =====
     if [ "$PKG_IS_APK" -eq 1 ]; then
-        INSTALLED_VER="$(apk info -v 2>/dev/null | awk '/^zapret-/ {print $1}' | head -n1 | sed 's/zapret-//' | sed 's/-r[0-9]\+$//')"
+        INSTALLED_VER="$(apk info -v 2>/dev/null | while read -r l; do
+            case "$l" in
+                zapret-*)
+                    echo "${l#zapret-}" | sed 's/-r[0-9]*$//'
+                    break
+                ;;
+            esac
+        done)"
     else
-        INSTALLED_VER="$(opkg list-installed 2>/dev/null | awk '/^zapret/ {gsub(/-r[0-9]+$/, "", $3); print $3; exit}')"
+        INSTALLED_VER="$(opkg list-installed 2>/dev/null | while read -r pkg ver rest; do
+            case "$pkg" in
+                zapret*)
+                    echo "$ver" | sed 's/-r[0-9]*$//'
+                    break
+                ;;
+            esac
+        done)"
     fi
 
     [ -z "$INSTALLED_VER" ] && INSTALLED_VER="не найдена"
 
-    # статус nfqws (упрощено)
-    NFQ_RUN="$(pgrep -f nfqws 2>/dev/null | wc -l)"
-    NFQ_ALL="$(( $(/etc/init.d/zapret info 2>/dev/null | grep -c 'instance[0-9]\+') ))"
+    # ===== NFQWS STATUS (без wc/grep лишних) =====
+    NFQ_RUN=0
+    for p in $(pgrep -f nfqws 2>/dev/null); do
+        NFQ_RUN=$((NFQ_RUN + 1))
+    done
+
+    NFQ_ALL=0
+    /etc/init.d/zapret info 2>/dev/null | while read -r l; do
+        case "$l" in
+            *instance*)
+                NFQ_ALL=$((NFQ_ALL + 1))
+            ;;
+        esac
+    done
+
+    # если subshell сломал счётчик (busybox limitation) → fallback
+    NFQ_ALL="$NFQ_ALL"
+    [ -z "$NFQ_ALL" ] && NFQ_ALL=0
 
     if [ "$NFQ_ALL" -gt 0 ]; then
-        [ "$NFQ_RUN" -eq "$NFQ_ALL" ] && NFQ_CLR="$GREEN" || NFQ_CLR="$RED"
+        if [ "$NFQ_RUN" -eq "$NFQ_ALL" ]; then
+            NFQ_CLR="$GREEN"
+        else
+            NFQ_CLR="$RED"
+        fi
         NFQ_STAT="${NFQ_CLR}[${NFQ_RUN}/${NFQ_ALL}]${NC}"
     else
         NFQ_STAT=""
     fi
 
-    # статус сервиса
+    # ===== SERVICE STATUS (без лишних вызовов) =====
     if /etc/init.d/zapret status >/dev/null 2>&1; then
         ZAPRET_STATUS="${GREEN}запущен ${NFQ_STAT}${NC}"
     else
         ZAPRET_STATUS="${RED}остановлен${NC}"
     fi
 
-    # сравнение версий (без лишних переменных)
-    INST_COLOR="$RED"
-    [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ] && INST_COLOR="$GREEN"
+    # ===== VERSION COMPARE =====
+    if [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ]; then
+        INST_COLOR="$GREEN"
+    else
+        INST_COLOR="$RED"
+    fi
 
     INSTALLED_DISPLAY="$INSTALLED_VER"
 
-    # URL оставил как есть (он просто информативный)
+    # URL (оставлено без изменений)
     LATEST_URL="https://github.com/remittor/zapret-openwrt/releases/download/v${ZAPRET_VERSION}/zapret_v${ZAPRET_VERSION}_${LOCAL_ARCH}.zip"
 }
 
