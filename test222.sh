@@ -2,7 +2,7 @@
 # ==========================================
 # Zapret on remittor Manager by StressOzz
 # =========================================
-ZAPRET_MANAGER_VERSION="9.4"; STR_VERSION_AUTOINSTALL="v7"; TMP_VER="/tmp/zapret_version"
+ZAPRET_MANAGER_VERSION="9.5"; STR_VERSION_AUTOINSTALL="v7"; TMP_VER="/tmp/zapret_version"
 DOMAINS="rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com rr1---sn-gvnuxaxjvh-jx3l.googlevideo.com rr1---sn-gvnuxaxjvh-jx3s.googlevideo.com"
 BIN_PATH="/usr/bin/tg-ws-proxy-go"; INIT_PATH="/etc/init.d/tg-ws-proxy-go"; LAN_IP=$(uci get network.lan.ipaddr 2>/dev/null | cut -d/ -f1)
 PORTS_UDP="88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535"; PORTS_TCP="2802,2302,2502,6112-6119,6695-6710,25565,27015-27030,27036-27037,50001"
@@ -66,53 +66,11 @@ if command -v opkg >/dev/null 2>&1; then PKG="opkg"; CONFZ="/etc/opkg/distfeeds.
 DELETE="opkg remove --autoremove --force-removal-of-dependent-packages"; CHECK_CMD="opkg list-installed"; ARCH="$(opkg print-architecture | awk '{print $2}' | tail -n1)"
 else PKG="apk"; CONFZ="/etc/apk/repositories.d/distfeeds.list"; PKG_IS_APK=1; UPDATE="apk update"; INSTALL="apk add"; CHECK_AVAIL="apk search -e"; DELETE="apk del"; CHECK_CMD="apk info"; ARCH="$(apk --print-arch 2>/dev/null)"; fi
 echo 'sh <(wget -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/main/Zapret-Manager.sh)' > /usr/bin/zms; chmod +x /usr/bin/zms
-
-if ! command -v curl >/dev/null 2>&1; then
-clear
-    echo -e "${MAGENTA}Устанавливаем ${NC}curl"
-echo -e "${CYAN}Обновляем список пакетов${NC}"
-    ok=0
-    for i in 1 2 3 4 5; do
-        if $UPDATE >/dev/null 2>&1; then
-            ok=1
-            break
-        fi
-        echo -e "${YELLOW}Обновление пакетов попытка $i не удалась${NC}"
-        sleep 2
-    done
-
-    if [ "$ok" -ne 1 ]; then
-        echo -e "\n${RED}Не удалось обновить пакеты после 5 попыток${NC}\n"
-        PAUSE; exit 0
-    fi
-
-    ok=0
-echo -e "${CYAN}Устанавливаем ${NC}curl"
-    for i in 1 2 3 4 5; do
-        if $INSTALL curl >/dev/null 2>&1; then
-            ok=1
-            break
-        fi
-        echo -e "${YELLOW}Установка ${NC}curl${YELLOW} попытка ${NC}$i${YELLOW} не удалась!${NC}"
-        sleep 1
-    done
-
-    if [ "$ok" -ne 1 ]; then
-        echo -e "\n${RED}Не удалось установить ${NC}curl${RED} после 5 попыток${NC}\n"
-        PAUSE; exit 0
-    fi
-
-    if ! command -v curl >/dev/null 2>&1; then
-        echo -e "\ncurl${RED} не найден после установки${NC}\n"
-        PAUSE; exit 0
-    fi
-fi
-
-TMP_VER="/tmp/zapret_version"
-curl -sL -o /dev/null -w '%{url_effective}' https://github.com/remittor/zapret-openwrt/releases/latest | grep -o '[0-9.]*$' > "$TMP_VER"
-ZAPRET_VERSION="$(cat "$TMP_VER")"
-
-
+if ! command -v curl >/dev/null 2>&1; then clear; echo -e "${MAGENTA}Устанавливаем ${NC}curl"; echo -e "${CYAN}Обновляем список пакетов${NC}"; ok=0; for i in 1 2 3 4 5; do if $UPDATE >/dev/null 2>&1; then ok=1; break; fi
+echo -e "${YELLOW}Обновление пакетов попытка $i не удалась${NC}"; sleep 1; done; if [ "$ok" -ne 1 ]; then echo -e "\n${RED}Не удалось обновить пакеты после 5 попыток${NC}\n"; PAUSE; exit 0; fi
+ok=0; echo -e "${CYAN}Устанавливаем ${NC}curl"; for i in 1 2 3 4 5; do if $INSTALL curl >/dev/null 2>&1; then ok=1; break; fi; echo -e "${YELLOW}Установка ${NC}curl${YELLOW} попытка ${NC}$i${YELLOW} не удалась!${NC}"; sleep 1; done
+if [ "$ok" -ne 1 ]; then echo -e "\n${RED}Не удалось установить ${NC}curl${RED} после 5 попыток${NC}\n"; PAUSE; exit 0; fi; if ! command -v curl >/dev/null 2>&1; then echo -e "\ncurl${RED} не найден после установки${NC}\n"; PAUSE; exit 0; fi; fi
+curl -sL -o /dev/null -w '%{url_effective}' https://github.com/remittor/zapret-openwrt/releases/latest | grep -o '[0-9.]*$' > "$TMP_VER"; ZAPRET_VERSION="$(cat "$TMP_VER")"
 # ==========================================
 # Получение версии
 # ==========================================
@@ -201,8 +159,8 @@ echo "$STRATEGY" | sed '/^$/d' >> "$CONF"; echo "'" >> "$CONF"; add_ports_if_mis
 # Zapret под ключ
 # ==========================================
 zapret_key() { clear; echo -e "${MAGENTA}Удаление, установка и настройка Zapret${NC}\n"; get_versions; uninstall_zapret "1"; install_Zapret "1"
-[ ! -f /etc/init.d/zapret ] && { echo -e "${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }; install_strategy $STR_VERSION_AUTOINSTALL "1"; echo -e "\n${MAGENTA}Редактируем hosts${NC}\n${CYAN}Добавляем IP и домены в${NC} hosts"
-hosts_add "$ALL_BLOCKS"; echo -e "IP ${GREEN}и${NC} домены ${GREEN}добавлены в ${NC}hosts${GREEN}!${NC}\n"; Discord_menu "1"; echo -e "${MAGENTA}Настраиваем стратегию для игр${NC}"; fix_GAME "1"; echo -e "Zapret ${GREEN}установлен и настроен!${NC}\n"; PAUSE; }
+[ ! -f /etc/init.d/zapret ] && { echo -e "${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }; install_strategy $STR_VERSION_AUTOINSTALL "1"; echo -e "\n${MAGENTA}Редактируем hosts${NC}\n${CYAN}Добавляем домены в${NC} hosts"
+hosts_add "$ALL_BLOCKS"; echo -e "${GREEN}Домены добавлены в ${NC}hosts${GREEN}!${NC}\n"; Discord_menu "1"; echo -e "${MAGENTA}Настраиваем стратегию для игр${NC}"; fix_GAME "1"; echo -e "Zapret ${GREEN}установлен и настроен!${NC}\n"; PAUSE; }
 # ==========================================
 # Резервная копия
 # ==========================================
