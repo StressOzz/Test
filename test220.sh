@@ -67,16 +67,12 @@ DELETE="opkg remove --autoremove --force-removal-of-dependent-packages"; CHECK_C
 else PKG="apk"; CONFZ="/etc/apk/repositories.d/distfeeds.list"; PKG_IS_APK=1; UPDATE="apk update"; INSTALL="apk add"; CHECK_AVAIL="apk search -e"; DELETE="apk del"; CHECK_CMD="apk info"; ARCH="$(apk --print-arch 2>/dev/null)"; fi
 echo 'sh <(wget -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/main/Zapret-Manager.sh)' > /usr/bin/zms; chmod +x /usr/bin/zms
 
-LOCAL_ARCH=$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release); USED_ARCH="$LOCAL_ARCH"
-NFQ_RUN=$(pgrep -f nfqws 2>/dev/null | wc -l); NFQ_RUN=${NFQ_RUN:-0}; NFQ_ALL=$(/etc/init.d/zapret info 2>/dev/null | grep -o 'instance[0-9]\+' | wc -l); NFQ_ALL=${NFQ_ALL:-0}; NFQ_STAT=""
-
 if ! command -v curl >/dev/null 2>&1; then
-clear
     echo -e "${CYAN}Устанавливаем ${NC}curl"
 
     ok=0
     for i in 1 2 3 4 5; do
-        if $UPDATE >/dev/null 2>&1; then
+        if eval $UPDATE >/dev/null 2>&1; then
             ok=1
             break
         fi
@@ -86,12 +82,13 @@ clear
 
     if [ "$ok" -ne 1 ]; then
         echo -e "\n${RED}Не удалось обновить пакеты после 5 попыток${NC}\n"
-        PAUSE; exit 1
+        PAUSE
+        exit 1
     fi
 
     ok=0
     for i in 1 2 3 4 5; do
-        if $INSTALL curl >/dev/null 2>&1; then
+        if eval $INSTALL >/dev/null 2>&1; then
             ok=1
             break
         fi
@@ -101,34 +98,20 @@ clear
 
     if [ "$ok" -ne 1 ]; then
         echo -e "\n${RED}Не удалось установить ${NC}curl${RED} после 5 попыток${NC}\n"
-        PAUSE; exit 1
+        PAUSE
+        exit 1
     fi
 
     if ! command -v curl >/dev/null 2>&1; then
         echo -e "\ncurl${RED} не найден после установки${NC}\n"
-        PAUSE; exit 1
+        PAUSE
+        exit 1
     fi
 fi
 
 TMP_VER="/tmp/zapret_version"
-
-ZAPRET_VERSION_CURL="$(curl -Ls -o /dev/null -w '%{url_effective}' https://github.com/remittor/zapret-openwrt/releases/latest | sed 's#.*/tag/v\?##')"
-
-if [ -s "$TMP_VER" ]; then
-    ZAPRET_VERSION_FILE="$(cat "$TMP_VER")"
-
-    if [ "$ZAPRET_VERSION_CURL" = "$ZAPRET_VERSION_FILE" ]; then
-        ZAPRET_VERSION="$ZAPRET_VERSION_FILE"
-    else
-        LATEST="$(printf "%s\n%s\n" "$ZAPRET_VERSION_FILE" "$ZAPRET_VERSION_CURL" | sort -V | tail -n 1)"
-        ZAPRET_VERSION="$LATEST"
-
-        echo "$ZAPRET_VERSION" > "$TMP_VER"
-    fi
-else
-    ZAPRET_VERSION="$ZAPRET_VERSION_CURL"
-    echo "$ZAPRET_VERSION" > "$TMP_VER"
-fi
+curl -sL -o /dev/null -w '%{url_effective}' https://github.com/remittor/zapret-openwrt/releases/latest | grep -o '[0-9.]*$' > "$TMP_VER"
+ZAPRET_VERSION="$(cat "$TMP_VER")"
 
 
 # ==========================================
@@ -242,7 +225,7 @@ echo -e "Zapret ${GREEN}запущен!${NC}\n"; else echo -e "\n${RED}Zapret н
 # Удаление Zapret
 # ==========================================
 pkg_remove() { local pkg_name="$1"; if [ "$PKG_IS_APK" -eq 1 ]; then apk del "$pkg_name" >/dev/null 2>&1 || true; else opkg remove --force-depends "$pkg_name" >/dev/null 2>&1 || true; fi; }
-uninstall_zapret() { local NO_PAUSE=$1; [ "$NO_PAUSE" != "1" ] && echo; echo -e "${MAGENTA}Удаляем ZAPRET${NC}\n${CYAN}Останавливаем ${NC}zapret"; /etc/init.d/zapret stop >/dev/null 2>&1; echo -e "${CYAN}Убиваем процессы${NC}"
+uninstall_zapret() { local NO_PAUSE=$1; [ "$NO_PAUSE" != "1" ] && echo; echo -e "${MAGENTA}Удаляем Zapret${NC}\n${CYAN}Останавливаем ${NC}zapret"; /etc/init.d/zapret stop >/dev/null 2>&1; echo -e "${CYAN}Убиваем процессы${NC}"
 for pid in $(pgrep -f /opt/zapret 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done; echo -e "${CYAN}Удаляем пакеты${NC}"; pkg_remove zapret; pkg_remove luci-app-zapret; echo -e "${CYAN}Удаляем временные файлы${NC}"
 rm -rf /opt/zapret /etc/config/zapret /etc/firewall.zapret /etc/init.d/zapret /tmp/*zapret* /var/run/*zapret* /tmp/*.ipk /tmp/*.zip 2>/dev/null; crontab -l 2>/dev/null | grep -v -i "zapret" | crontab - 2>/dev/null
 nft list tables 2>/dev/null | awk '{print $2}' | grep -E '(zapret|ZAPRET)' | while read t; do [ -n "$t" ] && nft delete table "$t" 2>/dev/null; done; rm -rf -- "$TMP_SF" tmp/zapret* ; echo -e "Zapret ${GREEN}удалён!${NC}\n"; [ "$NO_PAUSE" != "1" ] && PAUSE; }
