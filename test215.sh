@@ -135,83 +135,99 @@ fi
 
 
 get_versions() {
+
 CACHE_FILE="/tmp/zapret_versions.cache"
-    # ==============================
-    # CACHE CHECK (главное ускорение)
-    # ==============================
-    NOW="$(date +%s 2>/dev/null)"
-    if [ -f "$CACHE_FILE" ]; then
-        read -r CTIME INSTALLED_VER NFQ_RUN NFQ_ALL ZAPRET_STATUS INST_COLOR LOCAL_ARCH USED_ARCH < "$CACHE_FILE"
 
-        AGE=$((NOW - CTIME))
-        if [ "$AGE" -lt "$CACHE_TTL" ]; then
-            return 0
-        fi
+# ==============================
+# SAFE NUM HELPER (ВАЖНО)
+# ==============================
+num() {
+    case "$1" in
+        ''|*[!0-9]*) echo 0 ;;
+        *) echo "$1" ;;
+    esac
+}
+
+# ==============================
+# CACHE CHECK
+# ==============================
+NOW="$(date +%s 2>/dev/null)"
+NOW="$(num "$NOW")"
+
+if [ -f "$CACHE_FILE" ]; then
+    read -r CTIME INSTALLED_VER NFQ_RUN NFQ_ALL ZAPRET_STATUS INST_COLOR LOCAL_ARCH USED_ARCH < "$CACHE_FILE"
+
+    CTIME="$(num "$CTIME")"
+    AGE=$((NOW - CTIME))
+
+    if [ "$AGE" -lt "${CACHE_TTL:-30}" ]; then
+        return 0
     fi
+fi
 
-    # ==============================
-    # ARCH (без subshell мусора)
-    # ==============================
-    LOCAL_ARCH="$(. /etc/openwrt_release 2>/dev/null; echo "$DISTRIB_ARCH")"
-    USED_ARCH="$LOCAL_ARCH"
+# ==============================
+# ARCH
+# ==============================
+LOCAL_ARCH="$(. /etc/openwrt_release 2>/dev/null; echo "$DISTRIB_ARCH")"
+USED_ARCH="$LOCAL_ARCH"
 
-    # ==============================
-    # INSTALLED VERSION (fast path)
-    # ==============================
-    if [ "$PKG_IS_APK" -eq 1 ]; then
-        INSTALLED_VER="$(apk info -v 2>/dev/null | grep '^zapret-' | head -n1)"
-        INSTALLED_VER="${INSTALLED_VER#zapret-}"
-    else
-        INSTALLED_VER="$(opkg list-installed 2>/dev/null | grep '^zapret' | head -n1 | awk '{print $3}')"
-    fi
+# ==============================
+# INSTALLED VERSION
+# ==============================
+if [ "$PKG_IS_APK" -eq 1 ]; then
+    INSTALLED_VER="$(apk info -v 2>/dev/null | grep '^zapret-' | head -n1)"
+    INSTALLED_VER="${INSTALLED_VER#zapret-}"
+else
+    INSTALLED_VER="$(opkg list-installed 2>/dev/null | grep '^zapret' | head -n1 | awk '{print $3}')"
+fi
 
-    INSTALLED_VER="${INSTALLED_VER%%-r*}"
-    [ -z "$INSTALLED_VER" ] && INSTALLED_VER="не найдена"
+INSTALLED_VER="${INSTALLED_VER%%-r*}"
+[ -z "$INSTALLED_VER" ] && INSTALLED_VER="не найдена"
 
-    # ==============================
-    # NFQWS COUNT (без wc/grep pipeline)
-    # ==============================
-    NFQ_RUN=0
-    for _ in $(pgrep -f nfqws 2>/dev/null); do
-        NFQ_RUN=$((NFQ_RUN + 1))
-    done
+# ==============================
+# NFQWS COUNT (SAFE)
+# ==============================
+NFQ_RUN=0
+for _ in $(pgrep -f nfqws 2>/dev/null); do
+    NFQ_RUN=$((NFQ_RUN + 1))
+done
 
-    NFQ_ALL=0
-    /etc/init.d/zapret info 2>/dev/null | while read -r l; do
-        case "$l" in
-            *instance*) NFQ_ALL=$((NFQ_ALL + 1)) ;;
-        esac
-    done
+NFQ_ALL=0
+while read -r l; do
+    case "$l" in
+        *instance*) NFQ_ALL=$((NFQ_ALL + 1)) ;;
+    esac
+done < /etc/init.d/zapret/info 2>/dev/null
 
-    # fallback если subshell убил значение
-    [ -z "$NFQ_ALL" ] && NFQ_ALL=0
+NFQ_ALL="$(num "$NFQ_ALL")"
 
-    # ==============================
-    # STATUS BUILD
-    # ==============================
-    if /etc/init.d/zapret status >/dev/null 2>&1; then
-        ZAPRET_STATUS="${GREEN}запущен [${NFQ_RUN}/${NFQ_ALL}]${NC}"
-    else
-        ZAPRET_STATUS="${RED}остановлен${NC}"
-    fi
+# ==============================
+# STATUS
+# ==============================
+if /etc/init.d/zapret status >/dev/null 2>&1; then
+    ZAPRET_STATUS="${GREEN}запущен [${NFQ_RUN}/${NFQ_ALL}]${NC}"
+else
+    ZAPRET_STATUS="${RED}остановлен${NC}"
+fi
 
-    # ==============================
-    # VERSION COLOR
-    # ==============================
-    if [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ]; then
-        INST_COLOR="$GREEN"
-    else
-        INST_COLOR="$RED"
-    fi
+# ==============================
+# VERSION COLOR
+# ==============================
+if [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ]; then
+    INST_COLOR="$GREEN"
+else
+    INST_COLOR="$RED"
+fi
 
-    # ==============================
-    # SAVE CACHE
-    # ==============================
-    echo "$NOW $INSTALLED_VER $NFQ_RUN $NFQ_ALL \"$ZAPRET_STATUS\" $INST_COLOR $LOCAL_ARCH $USED_ARCH" > "$CACHE_FILE"
+# ==============================
+# CACHE SAVE
+# ==============================
+echo "$NOW $INSTALLED_VER $NFQ_RUN $NFQ_ALL \"$ZAPRET_STATUS\" $INST_COLOR $LOCAL_ARCH $USED_ARCH" > "$CACHE_FILE"
 
-    INSTALLED_DISPLAY="$INSTALLED_VER"
+INSTALLED_DISPLAY="$INSTALLED_VER"
 
-    LATEST_URL="https://github.com/remittor/zapret-openwrt/releases/download/v${ZAPRET_VERSION}/zapret_v${ZAPRET_VERSION}_${LOCAL_ARCH}.zip"
+LATEST_URL="https://github.com/remittor/zapret-openwrt/releases/download/v${ZAPRET_VERSION}/zapret_v${ZAPRET_VERSION}_${LOCAL_ARCH}.zip"
+
 }
 
 # ==========================================
