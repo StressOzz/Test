@@ -63,10 +63,12 @@ ZAPRET_RESTART () { chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config
 PAUSE() { echo -ne "Нажмите Enter..."; read dummy; }; BACKUP_DIR="/opt/zapret_backup"; DATE_FILE="$BACKUP_DIR/date_backup.txt"
 BIN_PATH_GO="/usr/bin/tg-ws-proxy-go"; INIT_PATH_GO="/etc/init.d/tg-ws-proxy-go"; BIN_PATH_RS="/usr/bin/tg-ws-proxy-rs"; INIT_PATH_RS="/etc/init.d/tg-ws-proxy-rs"
 if command -v opkg >/dev/null 2>&1; then PKG="opkg"; CONFZ="/etc/opkg/distfeeds.conf"; PKG_IS_APK=0; UPDATE="opkg update"; INSTALL="opkg install"; CHECK_AVAIL="opkg list | cut -d ' ' -f1"
-DELETE="opkg remove --autoremove --force-removal-of-dependent-packages"; CHECK_CMD="opkg list-installed"; ARCH="$(opkg print-architecture | awk '{print $2}' | tail -n1)"
-else PKG="apk"; CONFZ="/etc/apk/repositories.d/distfeeds.list"; PKG_IS_APK=1; UPDATE="apk update"; INSTALL="apk add"; CHECK_AVAIL="apk search -e"; DELETE="apk del"; CHECK_CMD="apk info"; ARCH="$(apk --print-arch 2>/dev/null)"; fi
+DELETE="opkg remove --autoremove --force-removal-of-dependent-packages"; CHECK_CMD="opkg list-installed"; ARCH="$(opkg print-architecture | awk '{print $2}' | tail -n1)"; INSTALLED_VER=$(opkg list-installed zapret 2>/dev/null | awk '{sub(/-r[0-9]+$/, "", $3); print $3}')
+else INSTALLED_VER=$(apk info -v 2>/dev/null | grep '^zapret-' | head -n1 | cut -d'-' -f2 | sed 's/-r[0-9]\+$//'); PKG="apk"; CONFZ="/etc/apk/repositories.d/distfeeds.list"; PKG_IS_APK=1; UPDATE="apk update"; INSTALL="apk add"; CHECK_AVAIL="apk search -e"; DELETE="apk del"; CHECK_CMD="apk info"; ARCH="$(apk --print-arch 2>/dev/null)"; fi
 echo 'sh <(wget -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/main/Zapret-Manager.sh)' > /usr/bin/zms; chmod +x /usr/bin/zms
 
+LOCAL_ARCH=$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release); USED_ARCH="$LOCAL_ARCH"
+NFQ_RUN=$(pgrep -f nfqws 2>/dev/null | wc -l); NFQ_RUN=${NFQ_RUN:-0}; NFQ_ALL=$(/etc/init.d/zapret info 2>/dev/null | grep -o 'instance[0-9]\+' | wc -l); NFQ_ALL=${NFQ_ALL:-0}; NFQ_STAT=""
 
 if ! command -v curl >/dev/null 2>&1; then
 clear
@@ -132,110 +134,15 @@ fi
 # ==========================================
 # Получение версии
 # ==========================================
-
-
-get_versions() {
-
-CACHE_FILE="/tmp/zapret_versions.cache"
-
-# ==============================
-# SAFE NUM HELPER (ВАЖНО)
-# ==============================
-num() {
-    case "$1" in
-        ''|*[!0-9]*) echo 0 ;;
-        *) echo "$1" ;;
-    esac
-}
-
-# ==============================
-# CACHE CHECK
-# ==============================
-NOW="$(date +%s 2>/dev/null)"
-NOW="$(num "$NOW")"
-
-if [ -f "$CACHE_FILE" ]; then
-    read -r CTIME INSTALLED_VER NFQ_RUN NFQ_ALL ZAPRET_STATUS INST_COLOR LOCAL_ARCH USED_ARCH < "$CACHE_FILE"
-
-    CTIME="$(num "$CTIME")"
-    AGE=$((NOW - CTIME))
-
-    if [ "$AGE" -lt "${CACHE_TTL:-30}" ]; then
-        return 0
-    fi
-fi
-
-# ==============================
-# ARCH
-# ==============================
-LOCAL_ARCH="$(. /etc/openwrt_release 2>/dev/null; echo "$DISTRIB_ARCH")"
-USED_ARCH="$LOCAL_ARCH"
-
-# ==============================
-# INSTALLED VERSION
-# ==============================
-if [ "$PKG_IS_APK" -eq 1 ]; then
-    INSTALLED_VER="$(apk info -v 2>/dev/null | grep '^zapret-' | head -n1)"
-    INSTALLED_VER="${INSTALLED_VER#zapret-}"
-else
-    INSTALLED_VER="$(opkg list-installed 2>/dev/null | grep '^zapret' | head -n1 | awk '{print $3}')"
-fi
-
-INSTALLED_VER="${INSTALLED_VER%%-r*}"
-[ -z "$INSTALLED_VER" ] && INSTALLED_VER="не найдена"
-
-# ==============================
-# NFQWS COUNT (SAFE)
-# ==============================
-NFQ_RUN=0
-for _ in $(pgrep -f nfqws 2>/dev/null); do
-    NFQ_RUN=$((NFQ_RUN + 1))
-done
-
-NFQ_ALL=0
-while read -r l; do
-    case "$l" in
-        *instance*) NFQ_ALL=$((NFQ_ALL + 1)) ;;
-    esac
-done < /etc/init.d/zapret/info 2>/dev/null
-
-NFQ_ALL="$(num "$NFQ_ALL")"
-
-# ==============================
-# STATUS
-# ==============================
-if /etc/init.d/zapret status >/dev/null 2>&1; then
-    ZAPRET_STATUS="${GREEN}запущен [${NFQ_RUN}/${NFQ_ALL}]${NC}"
-else
-    ZAPRET_STATUS="${RED}остановлен${NC}"
-fi
-
-# ==============================
-# VERSION COLOR
-# ==============================
-if [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ]; then
-    INST_COLOR="$GREEN"
-else
-    INST_COLOR="$RED"
-fi
-
-# ==============================
-# CACHE SAVE
-# ==============================
-echo "$NOW $INSTALLED_VER $NFQ_RUN $NFQ_ALL \"$ZAPRET_STATUS\" $INST_COLOR $LOCAL_ARCH $USED_ARCH" > "$CACHE_FILE"
-
-INSTALLED_DISPLAY="$INSTALLED_VER"
-
-LATEST_URL="https://github.com/remittor/zapret-openwrt/releases/download/v${ZAPRET_VERSION}/zapret_v${ZAPRET_VERSION}_${LOCAL_ARCH}.zip"
-
-}
-
+get_versions() { LATEST_URL="https://github.com/remittor/zapret-openwrt/releases/download/v${ZAPRET_VERSION}/zapret_v${ZAPRET_VERSION}_${LOCAL_ARCH}.zip"
+[ -z "$INSTALLED_VER" ] && INSTALLED_VER="не найдена"; if [ "$NFQ_ALL" -gt 0 ]; then [ "$NFQ_RUN" -eq "$NFQ_ALL" ] && NFQ_CLR="$GREEN" || NFQ_CLR="$RED"; NFQ_STAT="${NFQ_CLR}[${NFQ_RUN}/${NFQ_ALL}]${NC}"; fi; if [ -f /etc/init.d/zapret ]; then /etc/init.d/zapret status >/dev/null 2>&1 && ZAPRET_STATUS="${GREEN}запущен $NFQ_STAT${NC}" || ZAPRET_STATUS="${RED}остановлен${NC}"
+else ZAPRET_STATUS=""; fi; [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ] && INST_COLOR=$GREEN || INST_COLOR=$RED; INSTALLED_DISPLAY=${INSTALLED_VER:-"не найдена"}; }
 # ==========================================
 # Установка Zapret
 # ==========================================
 install_pkg() { local display_name="$1"; local pkg_file="$2"; if [ "$PKG_IS_APK" -eq 1 ]; then echo -e "${CYAN}Устанавливаем ${NC}$display_name"; apk add --allow-untrusted "$pkg_file" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить $display_name!${NC}\n"; PAUSE; return 1; }
 else echo -e "${CYAN}Устанавливаем ${NC}$display_name"; opkg install --force-reinstall "$pkg_file" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить $display_name!${NC}\n"; PAUSE; return 1; }; fi; }
-install_Zapret() { mkdir -p "$TMP_SF"; local NO_PAUSE=$1; get_versions; [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ] && { echo -e "\n${GREEN}Zapret уже установлен!${NC}\n"; [ "$NO_PAUSE" != "1" ] && PAUSE; return; }; [ "$NO_PAUSE" != "1" ] && echo; echo -e "${MAGENTA}Устанавливаем ZAPRET${NC}"
+install_Zapret() { mkdir -p "$TMP_SF"; local NO_PAUSE=$1; get_versions; [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ] && { echo -e "\n${GREEN}Zapret уже установлен!${NC}\n"; [ "$NO_PAUSE" != "1" ] && PAUSE; return; }; [ "$NO_PAUSE" != "1" ] && echo; echo -e "${MAGENTA}Устанавливаем Zapret${NC}"
 if [ -f /etc/init.d/zapret ]; then echo -e "${CYAN}Останавливаем ${NC}zapret"; /etc/init.d/zapret stop >/dev/null 2>&1; for pid in $(pgrep -f /opt/zapret 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done; fi; echo -e "${CYAN}Обновляем список пакетов${NC}"
 if [ "$PKG_IS_APK" -eq 1 ]; then apk update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении apk!${NC}\n"; PAUSE; return; }; else opkg update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении opkg!${NC}\n"; PAUSE; return; }; fi
 rm -f "$TMP_SF"/* 2>/dev/null; cd "$TMP_SF" || return; FILE_NAME=$(basename "$LATEST_URL"); if ! command -v unzip >/dev/null 2>&1; then echo -e "${CYAN}Устанавливаем ${NC}unzip"; if [ "$PKG_IS_APK" -eq 1 ]; then
