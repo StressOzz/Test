@@ -2,7 +2,7 @@
 # ==========================================
 # Zapret on remittor Manager by StressOzz
 # =========================================
-ZAPRET_MANAGER_VERSION="9.4"; STR_VERSION_AUTOINSTALL="v7"
+ZAPRET_MANAGER_VERSION="9.4"; STR_VERSION_AUTOINSTALL="v7"; TMP_VER="/tmp/zapret_version"
 DOMAINS="rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com rr1---sn-gvnuxaxjvh-jx3l.googlevideo.com rr1---sn-gvnuxaxjvh-jx3s.googlevideo.com"
 BIN_PATH="/usr/bin/tg-ws-proxy-go"; INIT_PATH="/etc/init.d/tg-ws-proxy-go"; LAN_IP=$(uci get network.lan.ipaddr 2>/dev/null | cut -d/ -f1)
 PORTS_UDP="88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535"; PORTS_TCP="2802,2302,2502,6112-6119,6695-6710,25565,27015-27030,27036-27037,50001"
@@ -68,11 +68,12 @@ else PKG="apk"; CONFZ="/etc/apk/repositories.d/distfeeds.list"; PKG_IS_APK=1; UP
 echo 'sh <(wget -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/main/Zapret-Manager.sh)' > /usr/bin/zms; chmod +x /usr/bin/zms
 
 if ! command -v curl >/dev/null 2>&1; then
+clear
     echo -e "${CYAN}Устанавливаем ${NC}curl"
 
     ok=0
     for i in 1 2 3 4 5; do
-        if eval $UPDATE >/dev/null 2>&1; then
+        if $UPDATE >/dev/null 2>&1; then
             ok=1
             break
         fi
@@ -82,13 +83,12 @@ if ! command -v curl >/dev/null 2>&1; then
 
     if [ "$ok" -ne 1 ]; then
         echo -e "\n${RED}Не удалось обновить пакеты после 5 попыток${NC}\n"
-        PAUSE
-        exit 1
+        PAUSE; exit 1
     fi
 
     ok=0
     for i in 1 2 3 4 5; do
-        if eval $INSTALL >/dev/null 2>&1; then
+        if $INSTALL curl >/dev/null 2>&1; then
             ok=1
             break
         fi
@@ -98,14 +98,12 @@ if ! command -v curl >/dev/null 2>&1; then
 
     if [ "$ok" -ne 1 ]; then
         echo -e "\n${RED}Не удалось установить ${NC}curl${RED} после 5 попыток${NC}\n"
-        PAUSE
-        exit 1
+        PAUSE; exit 1
     fi
 
     if ! command -v curl >/dev/null 2>&1; then
         echo -e "\ncurl${RED} не найден после установки${NC}\n"
-        PAUSE
-        exit 1
+        PAUSE; exit 1
     fi
 fi
 
