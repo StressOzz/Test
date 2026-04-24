@@ -508,7 +508,7 @@ Sys_Info() { if ! command -v curl >/dev/null 2>&1; then echo -e "\n${CYAN}Уст
 if command -v apk >/dev/null 2>&1; then apk update >/dev/null 2>&1 && apk add curl >/dev/null 2>&1; else opkg update >/dev/null 2>&1 && opkg install curl >/dev/null 2>&1; fi; fi
 clear; echo -e "${GREEN}===== Информация о системе =====${NC}"; ARCH_FULL="$(cat /etc/openwrt_release | grep DISTRIB_ARCH | cut -d"'" -f2)"; MODEL="$(cat /tmp/sysinfo/model 2>/dev/null)"
 FREEMEM="$(df -h /tmp / 2>/dev/null | awk 'NR==2{printf "/tmp : used %-6s free %-6s\n",$3,$4} NR==3{printf "   /root: used %-6s free %-6s\n",$3,$4}')"
-OWRT="$(grep '^DISTRIB_RELEASE=' /etc/openwrt_release 2>/dev/null | cut -d"'" -f2)"; echo -e "Model   : $MODEL\nArch    : $ARCH_FULL"\nOpenWrt : $OWRT\nStorage :\n   $FREEMEM"
+OWRT="$(grep '^DISTRIB_RELEASE=' /etc/openwrt_release 2>/dev/null | cut -d"'" -f2)"; echo -e "Model   : $MODEL\nArch    : $ARCH_FULL\nOpenWrt : $OWRT\nStorage :\n   $FREEMEM"
 echo -e "\n${GREEN}===== Пользовательские пакеты =====${NC}"; if [ "$PKG_IS_APK" -eq 1 ]; then apk info -v 2>/dev/null | awk '
 BEGIN{grp[""]=0}
 {pkg=$1; gsub(/^(luci-(app|mod|proto|theme)-|kmod-|lib|ucode-mod-)/,"",pkg); grp[pkg]=grp[pkg]?grp[pkg]"\n"$1:$1}
