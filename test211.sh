@@ -68,11 +68,6 @@ else PKG="apk"; CONFZ="/etc/apk/repositories.d/distfeeds.list"; PKG_IS_APK=1; UP
 echo 'sh <(wget -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/main/Zapret-Manager.sh)' > /usr/bin/zms; chmod +x /usr/bin/zms
 
 
-if ! command -v curl >/dev/null 2>&1; then echo -e "${CYAN}Устанавливаем ${NC}curl"; $UPDATE >/dev/null 2>&1 && $INSTALL curl >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка установки curl${NC}\n"; }; fi
-
-
-
-
 if ! command -v curl >/dev/null 2>&1; then
 clear
     echo -e "${CYAN}Устанавливаем ${NC}curl"
@@ -137,11 +132,50 @@ fi
 # ==========================================
 # Получение версии
 # ==========================================
-get_versions() { LOCAL_ARCH=$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release); USED_ARCH="$LOCAL_ARCH"; LATEST_URL="https://github.com/remittor/zapret-openwrt/releases/download/v${ZAPRET_VERSION}/zapret_v${ZAPRET_VERSION}_${LOCAL_ARCH}.zip"
-if [ "$PKG_IS_APK" -eq 1 ]; then INSTALLED_VER=$(apk info -v 2>/dev/null | grep '^zapret-' | head -n1 | cut -d'-' -f2 | sed 's/-r[0-9]\+$//'); [ -z "$INSTALLED_VER" ] && INSTALLED_VER="не найдена"; else INSTALLED_VER=$(opkg list-installed zapret 2>/dev/null | awk '{sub(/-r[0-9]+$/, "", $3); print $3}')
-[ -z "$INSTALLED_VER" ] && INSTALLED_VER="не найдена"; fi; NFQ_RUN=$(pgrep -f nfqws 2>/dev/null | wc -l); NFQ_RUN=${NFQ_RUN:-0}; NFQ_ALL=$(/etc/init.d/zapret info 2>/dev/null | grep -o 'instance[0-9]\+' | wc -l); NFQ_ALL=${NFQ_ALL:-0}; NFQ_STAT=""; if [ "$NFQ_ALL" -gt 0 ]; then
-[ "$NFQ_RUN" -eq "$NFQ_ALL" ] && NFQ_CLR="$GREEN" || NFQ_CLR="$RED"; NFQ_STAT="${NFQ_CLR}[${NFQ_RUN}/${NFQ_ALL}]${NC}"; fi; if [ -f /etc/init.d/zapret ]; then /etc/init.d/zapret status >/dev/null 2>&1 && ZAPRET_STATUS="${GREEN}запущен $NFQ_STAT${NC}" || ZAPRET_STATUS="${RED}остановлен${NC}"
-else ZAPRET_STATUS=""; fi; [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ] && INST_COLOR=$GREEN || INST_COLOR=$RED; INSTALLED_DISPLAY=${INSTALLED_VER:-"не найдена"}; }
+
+
+get_versions() {
+    LOCAL_ARCH="$(awk -F"'" '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release 2>/dev/null)"
+    USED_ARCH="$LOCAL_ARCH"
+
+    # версия установленного zapret
+    if [ "$PKG_IS_APK" -eq 1 ]; then
+        INSTALLED_VER="$(apk info -v 2>/dev/null | awk '/^zapret-/ {print $1}' | head -n1 | sed 's/zapret-//' | sed 's/-r[0-9]\+$//')"
+    else
+        INSTALLED_VER="$(opkg list-installed 2>/dev/null | awk '/^zapret/ {gsub(/-r[0-9]+$/, "", $3); print $3; exit}')"
+    fi
+
+    [ -z "$INSTALLED_VER" ] && INSTALLED_VER="не найдена"
+
+    # статус nfqws (упрощено)
+    NFQ_RUN="$(pgrep -f nfqws 2>/dev/null | wc -l)"
+    NFQ_ALL="$(( $(/etc/init.d/zapret info 2>/dev/null | grep -c 'instance[0-9]\+') ))"
+
+    if [ "$NFQ_ALL" -gt 0 ]; then
+        [ "$NFQ_RUN" -eq "$NFQ_ALL" ] && NFQ_CLR="$GREEN" || NFQ_CLR="$RED"
+        NFQ_STAT="${NFQ_CLR}[${NFQ_RUN}/${NFQ_ALL}]${NC}"
+    else
+        NFQ_STAT=""
+    fi
+
+    # статус сервиса
+    if /etc/init.d/zapret status >/dev/null 2>&1; then
+        ZAPRET_STATUS="${GREEN}запущен ${NFQ_STAT}${NC}"
+    else
+        ZAPRET_STATUS="${RED}остановлен${NC}"
+    fi
+
+    # сравнение версий (без лишних переменных)
+    INST_COLOR="$RED"
+    [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ] && INST_COLOR="$GREEN"
+
+    INSTALLED_DISPLAY="$INSTALLED_VER"
+
+    # URL оставил как есть (он просто информативный)
+    LATEST_URL="https://github.com/remittor/zapret-openwrt/releases/download/v${ZAPRET_VERSION}/zapret_v${ZAPRET_VERSION}_${LOCAL_ARCH}.zip"
+}
+
+
 # ==========================================
 # Установка Zapret
 # ==========================================
@@ -248,7 +282,7 @@ pkg_remove() { local pkg_name="$1"; if [ "$PKG_IS_APK" -eq 1 ]; then apk del "$p
 uninstall_zapret() { local NO_PAUSE=$1; [ "$NO_PAUSE" != "1" ] && echo; echo -e "${MAGENTA}Удаляем ZAPRET${NC}\n${CYAN}Останавливаем ${NC}zapret"; /etc/init.d/zapret stop >/dev/null 2>&1; echo -e "${CYAN}Убиваем процессы${NC}"
 for pid in $(pgrep -f /opt/zapret 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done; echo -e "${CYAN}Удаляем пакеты${NC}"; pkg_remove zapret; pkg_remove luci-app-zapret; echo -e "${CYAN}Удаляем временные файлы${NC}"
 rm -rf /opt/zapret /etc/config/zapret /etc/firewall.zapret /etc/init.d/zapret /tmp/*zapret* /var/run/*zapret* /tmp/*.ipk /tmp/*.zip 2>/dev/null; crontab -l 2>/dev/null | grep -v -i "zapret" | crontab - 2>/dev/null
-nft list tables 2>/dev/null | awk '{print $2}' | grep -E '(zapret|ZAPRET)' | while read t; do [ -n "$t" ] && nft delete table "$t" 2>/dev/null; done; rm -rf -- "$TMP_SF"; echo -e "Zapret ${GREEN}удалён!${NC}\n"; [ "$NO_PAUSE" != "1" ] && PAUSE; }
+nft list tables 2>/dev/null | awk '{print $2}' | grep -E '(zapret|ZAPRET)' | while read t; do [ -n "$t" ] && nft delete table "$t" 2>/dev/null; done; rm -rf -- "$TMP_SF" tmp/zapret* ; echo -e "Zapret ${GREEN}удалён!${NC}\n"; [ "$NO_PAUSE" != "1" ] && PAUSE; }
 # ==========================================
 # Тест стратегии для Ютуб
 # ==========================================
