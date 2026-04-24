@@ -135,7 +135,7 @@ fi
 
 
 get_versions() {
-
+CACHE_FILE="/tmp/zapret_versions.cache"
     # ==============================
     # CACHE CHECK (главное ускорение)
     # ==============================
