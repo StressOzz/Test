@@ -504,19 +504,19 @@ if [ -s "$RES1" ] || [ -s "$RES2" ] || [ -s "$RES3" ]; then echo -e "${CYAN}0) $
 # ==========================================
 # Системная информация
 # ==========================================
-Sys_Info() { if command -v apk >/dev/null 2>&1; then PKG_IS_APK=1; else PKG_IS_APK=0; fi; if ! command -v curl >/dev/null 2>&1; then echo -e "\n${GREEN}Устанавливаем ${NC}curl"
+Sys_Info() { if ! command -v curl >/dev/null 2>&1; then echo -e "\n${CYAN}Устанавливаем ${NC}curl"
 if command -v apk >/dev/null 2>&1; then apk update >/dev/null 2>&1 && apk add curl >/dev/null 2>&1; else opkg update >/dev/null 2>&1 && opkg install curl >/dev/null 2>&1; fi; fi
 clear; echo -e "${GREEN}===== Информация о системе =====${NC}"; 
-
+ARCH_FULL="$(cat /etc/openwrt_release | grep DISTRIB_ARCH | cut -d"'" -f2)"
 MODEL="$(cat /tmp/sysinfo/model 2>/dev/null)"
 OWRT="$(grep '^DISTRIB_RELEASE=' /etc/openwrt_release 2>/dev/null | cut -d"'" -f2)"
 FREEMEM="$(df -h /tmp / 2>/dev/null | awk 'NR==2{printf "/tmp : used %-6s free %-6s\n",$3,$4} NR==3{printf "/root: used %-6s free %-6s\n",$3,$4}')"
 
 echo -e "Model   : $MODEL"
-echo -e "Arch    : $ARCH"
+echo -e "Arch    : $ARCH_FULL"
 echo -e "OpenWrt : $OWRT"
-echo -e "\nStorage:"
-echo -e "$FREEMEM"
+echo -e "Storage :"
+echo -e "    $FREEMEM"
 
 
 
