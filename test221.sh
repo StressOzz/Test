@@ -69,8 +69,8 @@ echo 'sh <(wget -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/
 
 if ! command -v curl >/dev/null 2>&1; then
 clear
-    echo -e "${CYAN}Устанавливаем ${NC}curl"
-
+    echo -e "${MAGENTA}Устанавливаем ${NC}curl"
+echo -e "${CYAN}Обновляем список пакетов${NC}"
     ok=0
     for i in 1 2 3 4 5; do
         if $UPDATE >/dev/null 2>&1; then
@@ -83,10 +83,11 @@ clear
 
     if [ "$ok" -ne 1 ]; then
         echo -e "\n${RED}Не удалось обновить пакеты после 5 попыток${NC}\n"
-        PAUSE; exit 1
+        PAUSE; exit 0
     fi
 
     ok=0
+echo -e "${CYAN}Устанавливаем ${NC}curl"
     for i in 1 2 3 4 5; do
         if $INSTALL curl >/dev/null 2>&1; then
             ok=1
@@ -98,12 +99,12 @@ clear
 
     if [ "$ok" -ne 1 ]; then
         echo -e "\n${RED}Не удалось установить ${NC}curl${RED} после 5 попыток${NC}\n"
-        PAUSE; exit 1
+        PAUSE; exit 0
     fi
 
     if ! command -v curl >/dev/null 2>&1; then
         echo -e "\ncurl${RED} не найден после установки${NC}\n"
-        PAUSE; exit 1
+        PAUSE; exit 0
     fi
 fi
 
