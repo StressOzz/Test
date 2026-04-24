@@ -434,7 +434,7 @@ sed -n "${START},\$p" "$STR_FILE" > "$TEMP_FILE"; else sed -n "${START},$((NEXT-
 /option NFQWS_OPT '\''/ {printf "\toption NFQWS_OPT '\''\n%s\n'\''\n", block; skip=1; next}
 skip && /^'\''$/ {skip=0; next}
 !skip {print}' "$CONF" > "${CONF}.tmp"; mv "${CONF}.tmp" "$CONF"; echo -e "\n${CYAN}Тестируем стратегию:${NC} ${YELLOW}${NAME}${NC} ($CUR/$TOTAL_STR)"; ZAPRET_RESTART; OK=0;
-LOG_TMP="/tmp/zapret_log_${CUR}"; : > "$LOG_TMP"; check_all_urls; if [ "$OK" -eq "$TOTAL" ]; then COLOR="${GREEN}"; else COLOR="${RED}"; fi; echo -e "${CYAN}Результат теста:${NC} ${COLOR}$OK/$TOTAL${NC}"
+LOG_TMP="/tmp/zapret_log_${CUR}"; : > "$LOG_TMP"; check_all_urls; if [ "$OK" -eq 0 ]; then COLOR="${RED}"; elif [ "$OK" -eq "$TOTAL" ]; then COLOR="${GREEN}"; else COLOR="${YELLOW}"; fi; echo -e "${CYAN}Результат теста:${NC} ${COLOR}$OK/$TOTAL${NC}"
 { echo "${NAME} → ${OK}/${TOTAL}"; cat "$LOG_TMP"; echo; } >> "$RESULTS"; done; [ -f "$BACK" ] && mv -f "$BACK" "$CONF"; ZAPRET_RESTART; show_single_result "$RESULTS"; }
 check_zpr_off() { echo -e "\n${CYAN}Контрольный тест: ${YELLOW}Zapret выключен${NC}"; /etc/init.d/zapret stop >/dev/null 2>&1; OK=0; LOG_TMP="/tmp/zapret_log_${CUR}"; : > "$LOG_TMP"; check_all_urls
 if [ "$OK" -eq "$TOTAL" ]; then COLOR="${GREEN}"; elif [ "$OK" -ge $((TOTAL/2)) ]; then COLOR="${YELLOW}"; else COLOR="${RED}"; fi; echo -e "${CYAN}Результат теста: ${COLOR}$OK/$TOTAL${NC}"
