@@ -510,13 +510,13 @@ clear; echo -e "${GREEN}===== Информация о системе =====${NC}"
 ARCH_FULL="$(cat /etc/openwrt_release | grep DISTRIB_ARCH | cut -d"'" -f2)"
 MODEL="$(cat /tmp/sysinfo/model 2>/dev/null)"
 OWRT="$(grep '^DISTRIB_RELEASE=' /etc/openwrt_release 2>/dev/null | cut -d"'" -f2)"
-FREEMEM="$(df -h /tmp / 2>/dev/null | awk 'NR==2{printf "/tmp : used %-6s free %-6s\n",$3,$4} NR==3{printf "/root: used %-6s free %-6s\n",$3,$4}')"
+FREEMEM="$(df -h /tmp / 2>/dev/null | awk 'NR==2{printf "/tmp : used %-6s free %-6s\n",$3,$4} NR==3{printf "    /root: used %-6s free %-6s\n",$3,$4}')"
 
 echo -e "Model   : $MODEL"
 echo -e "Arch    : $ARCH_FULL"
 echo -e "OpenWrt : $OWRT"
 echo -e "Storage :"
-echo -e "    $FREEMEM"
+echo -e "   $FREEMEM"
 
 
 
