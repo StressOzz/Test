@@ -136,10 +136,10 @@ echo -e "${CYAN}Обновляем список пакетов${NC}"
 $UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось обновить список пакетов${NC}\n"; PAUSE; return; }
 
 
-AWG_kmod=https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v$OWRT/kmod-amneziawg_v$OWRT_$$ARCH_AWG.$APK_RAS
-AWG_tools=https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v$OWRT/amneziawg-tools_v$OWRT_$$ARCH_AWG.$APK_RAS
-AWG_luci=https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v$OWRT/luci-proto-amneziawg_v$OWRT_$$ARCH_AWG.$APK_RAS
-AWG_ru=https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v$OWRT/luci-i18n-amneziawg-ru_v$OWRT_$$ARCH_AWG.$APK_RAS
+AWG_kmod=https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v$OWRT/kmod-amneziawg_v$OWRT_$ARCH_AWG.$APK_RAS
+AWG_tools=https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v$OWRT/amneziawg-tools_v$OWRT_$ARCH_AWG.$APK_RAS
+AWG_luci=https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v$OWRT/luci-proto-amneziawg_v$OWRT_$ARCH_AWG.$APK_RAS
+AWG_ru=https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v$OWRT/luci-i18n-amneziawg-ru_v$OWRT_$ARCH_AWG.$APK_RAS
 
 cd "$tmpDIR" || exit 1
 
