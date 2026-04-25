@@ -99,7 +99,7 @@ $INSTALL ./luci-app-podkop.$APK_RAS >/dev/null 2>&1 || { echo -e "\n${RED}Не �
 $INSTALL ./luci-i18n-podkop-ru.$APK_RAS >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить ${NC}$PODKOP_RUS\n"; PAUSE; return; }
 
 rm -rf "$tmpDIR"
-echo -e "Podkop Evolution ${GREEN}установлен!${NC}\n"
+echo -e "\nPodkop Evolution ${GREEN}установлен!${NC}\n"
 PAUSE
 
 else
