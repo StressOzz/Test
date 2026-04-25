@@ -124,7 +124,7 @@ fi
 install_AWG() {
 
 OWRT=$(grep '^DISTRIB_RELEASE=' /etc/openwrt_release | cut -d"'" -f2)
-ARCH_AWG="$(grep DISTRIB_ARCH /etc/openwrt_release | cut -d"'" -f2)_$(grep DISTRIB_TARGET /etc/openwrt_release | cut -d"'" -f2 | tr '/' '_')"
+ARCHAWG="$(grep DISTRIB_ARCH /etc/openwrt_release | cut -d"'" -f2)_$(grep DISTRIB_TARGET /etc/openwrt_release | cut -d"'" -f2 | tr '/' '_')"
 
 if ! pkg_is_installed amneziawg-tools; then
 rm -rf "$tmpDIR"
@@ -135,13 +135,16 @@ echo -e "${CYAN}Обновляем список пакетов${NC}"
 
 $UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось обновить список пакетов${NC}\n"; PAUSE; return; }
 
+https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v25.12.2/kmod-amneziawg_vaarch64_cortex-a53_mediatek_filogic.apk
 
-AWG_kmod=https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v$OWRT/kmod-amneziawg_v$OWRT_$ARCH_AWG.$APK_RAS
-AWG_tools=https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v$OWRT/amneziawg-tools_v$OWRT_$ARCH_AWG.$APK_RAS
-AWG_luci=https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v$OWRT/luci-proto-amneziawg_v$OWRT_$ARCH_AWG.$APK_RAS
-AWG_ru=https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v$OWRT/luci-i18n-amneziawg-ru_v$OWRT_$ARCH_AWG.$APK_RAS
+
+AWG_kmod=https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v$OWRT/kmod-amneziawg_v${OWRT}_$ARCHAWG.$APK_RAS
+AWG_tools=https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v$OWRT/amneziawg-tools_v${OWRT}_$ARCHAWG.$APK_RAS
+AWG_luci=https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v$OWRT/luci-proto-amneziawg_v${OWRT}_$ARCHAWG.$APK_RAS
+AWG_ru=https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v$OWRT/luci-i18n-amneziawg-ru_v${OWRT}_$ARCHAWG.$APK_RAS
 
 cd "$tmpDIR" || exit 1
+
 
 echo -e "${CYAN}Скачиваем ${NC}AWG"
 wget -q -U "Mozilla/5.0" -O AWG_kmod.$APK_RAS "$AWG_kmod" || { echo -e "\n${RED}Не удалось скачать $AWG_kmod${NC}\n"; PAUSE; return; }
