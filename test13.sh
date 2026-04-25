@@ -10,14 +10,28 @@ BLUE="\033[0;34m"
 DGRAY="\033[38;5;244m"
 PAUSE() { echo -ne "Нажмите Enter..."; read dummy; }
 ###########################################################################################################################################
+if command -v opkg >/dev/null 2>&1; then 
+PKG="opkg"
+CONFZ="/etc/opkg/distfeeds.conf"
+PKG_IS_APK=0
+UPDATE="opkg update"
+INSTALL="opkg install"
+CHECK_AVAIL="opkg list | cut -d ' ' -f1"
+DELETE="opkg remove --autoremove --force-removal-of-dependent-packages"
+CHECK_CMD="opkg list-installed"; 
+ARCH="$(opkg print-architecture | awk '{print $2}' | tail -n1)"
+VER_SUF="r1-all"; APK_RAS="ipk"; INSTALL="opkg install"
+else
+PKG="apk"; CONFZ="/etc/apk/repositories.d/distfeeds.list"
+PKG_IS_APK=1
+UPDATE="apk update"
+INSTALL="apk add --allow-untrusted"
+CHECK_AVAIL="apk search -e"
+DELETE="apk del"
+CHECK_CMD="apk info"
+ARCH="$(apk --print-arch 2>/dev/null)"
+fi
 
-VER_SUF="r1-all"; APK_RAS="ipk"; PKG_IS_APK=0; INSTALL_CMD="opkg install"
-command -v apk >/dev/null 2>&1 && VER_SUF="r1" && APK_RAS="apk" && PKG_IS_APK=1 && INSTALL_CMD="apk add --allow-untrusted"
-
-PODKOP_LATEST_VER="$(curl -Ls -o /dev/null -w '%{url_effective}' https://github.com/yandexru45/podkop-evolution/releases/latest | sed 's#.*/tag/##')"
-
-pkg_remove() { local pkg_name="$1"; if [ "$PKG_IS_APK" -eq 1 ]; then apk del "$pkg_name" >/dev/null 2>&1 || true; else opkg remove --force-depends "$pkg_name" >/dev/null 2>&1 || true; fi; }
-pkg_is_installed () { local pkg_name="$1"; if [ "$PKG_IS_APK" -eq 1 ]; then apk list --installed | grep -q "$pkg_name"; else opkg list-installed | grep -q "$pkg_name"; fi; }
 
 PODKOP_VER() {
 PODKOP_LATEST_VER="$(curl -Ls -o /dev/null -w '%{url_effective}' https://github.com/yandexru45/podkop-evolution/releases/latest | sed 's#.*/tag/##')"
@@ -43,7 +57,7 @@ fi
 # Установка Podkop
 # ==========================================
 PODKOP_INSTALL() {
-if ! pkg_is_installed podkop; then
+if ! $CHECK_AVAIL podkop; then
 
 echo -e "\n${MAGENTA}Устанавливаем Podkop Evolution${NC}"
 
@@ -51,11 +65,8 @@ tmpDIR="/tmp/PodkopEvolution"
 rm -rf "$tmpDIR"
 mkdir -p "$tmpDIR"
 echo -e "${CYAN}Обновляем список пакетов${NC}"
-if [ "$PKG_IS_APK" -eq 1 ]; then
-    apk update >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось обновить список пакетов${NC}\n"; PAUSE; return; }
-else
-    opkg update >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось обновить список пакетов${NC}\n"; PAUSE; return; }
-fi
+$UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось обновить список пакетов${NC}\n"; PAUSE; return; }
+
 
 PODKOP_INST="https://github.com/yandexru45/podkop-evolution/releases/download/$PODKOP_LATEST_VER/podkop-$PODKOP_LATEST_VER-$VER_SUF.$APK_RAS"
 PODKOP_LUCI="https://github.com/yandexru45/podkop-evolution/releases/download/$PODKOP_LATEST_VER/luci-app-podkop-$PODKOP_LATEST_VER-$VER_SUF.$APK_RAS"
@@ -80,9 +91,9 @@ PAUSE
 else
     echo -e "\n${MAGENTA}Удаление Podkop${NC}"
 
-pkg_remove luci-i18n-podkop-ru
-pkg_remove luci-app-podkop podkop
-pkg_remove podkop
+$DELETE luci-i18n-podkop-ru
+$DELETE luci-app-podkop podkop
+$DELETE podkop
 
 rm -rf /etc/config/podkop >/dev/null 2>&1
 rm -f /etc/config/*podkop* >/dev/null 2>&1
@@ -98,7 +109,7 @@ fi
 # ==========================================
 install_AWG() {
 
-if ! pkg_is_installed amneziawg-tools; then
+if ! $CHECK_AVAIL amneziawg-tools; then
 
 echo -e "\n${MAGENTA}Устанавливаем AWG и интерфейс AWG${NC}"
 
@@ -177,10 +188,10 @@ PAUSE
 else
 echo -e "\n${MAGENTA}Удаление AWG и интерфейс AWG${NC}"
 echo -e "${CYAN}Удаляем ${NC}AWG"
-pkg_remove luci-i18n-amneziawg-ru
-pkg_remove luci-proto-amneziawg
-pkg_remove amneziawg-tools
-pkg_remove kmod-amneziawg
+$DELETE luci-i18n-amneziawg-ru
+$DELETE luci-proto-amneziawg
+$DELETE amneziawg-tools
+$DELETE kmod-amneziawg
 uci delete network.AWG >/dev/null 2>&1
 uci commit network >/dev/null 2>&1
 for peer in $(uci show network | grep "interface='AWG'" | cut -d. -f2); do
@@ -201,7 +212,7 @@ fi
 # ==========================================
 integration_AWG() {
 
-if ! pkg_is_installed podkop; then echo -e "\n${RED}Podkop Evolution не установлен!${NC}\n"; PAUSE; return; fi
+if ! $CHECK_AVAIL podkop; then echo -e "\n${RED}Podkop Evolution не установлен!${NC}\n"; PAUSE; return; fi
 
 if ! awg --version >/dev/null 2>&1; then
 echo -e "\n${RED}AWG не установлен!${NC}"
@@ -243,14 +254,11 @@ list community_lists 'hodca'
 EOF
 
 echo -e "${CYAN}Запускаем ${NC}Podkop${NC}"
-podkop enable >/dev/null 2>&1
-echo -e "${CYAN}Применяем конфигурацию${NC}"
-podkop reload >/dev/null 2>&1
-podkop restart >/dev/null 2>&1
+/etc/init.d/podkop enable >/dev/null 2>&1
 echo -e "${CYAN}Обновляем списки${NC}"
-podkop list_update >/dev/null 2>&1
+/etc/init.d/podkop list_update >/dev/null 2>&1
 echo -e "${CYAN}Перезапускаем сервис${NC}"
-podkop restart >/dev/null 2>&1
+/etc/init.d/podkop restart >/dev/null 2>&1
 echo -e "AWG ${GREEN}интегрирован в ${NC}Podkop${GREEN}!${NC}\n"
 echo -e "${YELLOW}Необходимо в LuCI в интерфейс AWG загрузить конфиг:${NC}\nNetwork ${GREEN}→${NC} Interfaces ${GREEN}→${NC} AWG ${GREEN}→${NC} Edit ${GREEN}→${NC} Load configuration…${NC}"
 PAUSE
@@ -261,7 +269,7 @@ PAUSE
 # ==========================================
 PODKOP_VPN() {
 
-if ! pkg_is_installed podkop; then echo -e "\n${RED}Podkop Evolution не установлен!${NC}\n"; PAUSE; return; fi
+if ! $CHECK_AVAIL podkop; then echo -e "\n${RED}Podkop Evolution не установлен!${NC}\n"; PAUSE; return; fi
 
 
 echo -e "\n${MAGENTA}Интегрируем VPN подписку в Podkop Evolution${NC}"
@@ -328,14 +336,11 @@ config section 'main'
 EOF
 
 echo -e "${CYAN}Запускаем ${NC}Podkop Evolution${NC}"
-podkop enable >/dev/null 2>&1
-echo -e "${CYAN}Применяем конфигурацию${NC}"
-podkop reload >/dev/null 2>&1
-podkop restart >/dev/null 2>&1
+/etc/init.d/podkop enable >/dev/null 2>&1
 echo -e "${CYAN}Обновляем списки${NC}"
-podkop list_update >/dev/null 2>&1
+/etc/init.d/podkop list_update >/dev/null 2>&1
 echo -e "${CYAN}Перезапускаем сервис${NC}"
-podkop restart >/dev/null 2>&1
+/etc/init.d/podkop restart >/dev/null 2>&1
 echo -e "VPN подписка ${GREEN}интегрирована в ${NC}Podkop Evolution${GREEN}!${NC}\n"
 PAUSE
 }
@@ -359,7 +364,7 @@ echo -e "${YELLOW}Требуется: ${NC}$((REQUIRED_SPACE/1024))MB\n"
 PAUSE; return
     fi
 
-if pkg_is_installed https-dns-proxy; then
+if $CHECK_AVAIL https-dns-proxy; then
         echo -e "\n${RED}Обнаружен ${NC}DNS over HTTPS${RED}!"
         echo -e "${YELLOW}Удалите ${NC}DNS over HTTPS\n"
 PAUSE; return      
@@ -387,10 +392,10 @@ fi
 
 echo
 
-if pkg_is_installed podkop; then
+if $CHECK_AVAIL podkop; then
 echo -e "${CYAN}1) ${GREEN}Удалить ${NC}Podkop Evolution"; else
 echo -e "${CYAN}1) ${GREEN}Установить ${NC}Podkop Evolution"; fi
-if pkg_is_installed amneziawg-tools; then
+if $CHECK_AVAIL amneziawg-tools; then
 echo -e "${CYAN}2) ${GREEN}Удалить ${NC}AWG${GREEN} и ${NC}интерфейс AWG"; else
 echo -e "${CYAN}2) ${GREEN}Установить ${NC}AWG${GREEN} и ${NC}интерфейс AWG"; fi
 
@@ -416,7 +421,7 @@ case "$choicePOD" in
 
 3) PODKOP_VPN ;;
 
-6) integration_AWG ;;
+4) integration_AWG ;;
 
 *) return ;;
 
