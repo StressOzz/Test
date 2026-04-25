@@ -174,11 +174,11 @@ echo -e "${CYAN}Меняем конфигурацию в ${NC}Podkop${NC}"
 printf "%s\n" "config settings 'settings'" "option dns_type 'udp'" "option dns_server '8.8.8.8'" "option bootstrap_dns_server '77.88.8.8'" "option dns_rewrite_ttl '60'" "list source_network_interfaces 'br-lan'" "option enable_output_network_interface '0'" "option enable_badwan_interface_monitoring '0'" "option enable_yacd '0'" "option disable_quic '0'" "option update_interval '1d'" "option download_lists_via_proxy '0'" "option dont_touch_dhcp '0'" "option config_path '/etc/sing-box/config.json'" "option cache_path '/tmp/sing-box/cache.db'" "option log_level 'warn'" "option exclude_ntp '0'" "option shutdown_correctly '0'" "" "config section 'main'" "option connection_type 'vpn'" "option interface 'AWG'" "option domain_resolver_enabled '0'" "list community_lists 'geoblock'" "list community_lists 'block'" "list community_lists 'porn'" "list community_lists 'news'" "list community_lists 'anime'" "list community_lists 'youtube'" "list community_lists 'discord'" "list community_lists 'meta'" "list community_lists 'twitter'" "list community_lists 'hdrezka'" "list community_lists 'tiktok'" "list community_lists 'telegram'" "list community_lists 'cloudflare'" "list community_lists 'google_ai'" "list community_lists 'google_play'" "list community_lists 'hodca'" "list community_lists 'roblox'" "list community_lists 'hetzner'" "list community_lists 'ovh'" "list community_lists 'digitalocean'" "list community_lists 'cloudfront'" "option user_domain_list_type 'disabled'" "option user_subnet_list_type 'disabled'" "option mixed_proxy_enabled '0'" > /etc/config/podkop
 
 echo -e "${CYAN}Запускаем ${NC}Podkop${NC}"
-/etc/init.d/podkop enable >/dev/null 2>&1
+podkop enable >/dev/null 2>&1
 echo -e "${CYAN}Обновляем списки${NC}"
-/etc/init.d/podkop list_update >/dev/null 2>&1
+podkop list_update >/dev/null 2>&1
 echo -e "${CYAN}Перезапускаем сервис${NC}"
-/etc/init.d/podkop restart >/dev/null 2>&1
+podkop restart >/dev/null 2>&1
 echo -e "AWG ${GREEN}интегрирован в ${NC}Podkop${GREEN}!${NC}\n"
 echo -e "${YELLOW}Необходимо в ${NC}LuCI${YELLOW} в интерфейс ${NC}AWG${YELLOW} загрузить файл ${NC}*.conf${YELLOW}:${NC}"
 echo -e "${NC}Network ${GREEN}→${NC} Interfaces ${GREEN}→${NC} AWG ${GREEN}→${NC} Edit ${GREEN}→${NC} Load configuration… ${GREEN}→${NC} Save ${GREEN}→${NC} Save & Apply\n"
@@ -205,11 +205,11 @@ printf "%s\n" "" "config section 'main'" "option connection_type 'proxy'" "optio
 
 
 echo -e "${CYAN}Запускаем ${NC}Podkop Evolution${NC}"
-/etc/init.d/podkop enable >/dev/null 2>&1
+podkop enable >/dev/null 2>&1
 echo -e "${CYAN}Обновляем списки${NC}"
-/etc/init.d/podkop list_update >/dev/null 2>&1
+podkop list_update >/dev/null 2>&1
 echo -e "${CYAN}Перезапускаем сервис${NC}"
-/etc/init.d/podkop restart >/dev/null 2>&1
+podkop restart >/dev/null 2>&1
 echo -e "VPN подписка ${GREEN}интегрирована в ${NC}Podkop Evolution${GREEN}!${NC}\n"
 PAUSE
 }
