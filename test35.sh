@@ -45,23 +45,32 @@ opkg list-installed | grep -q "^$pkg_name"
 fi
 }
 PODKOP_VER() {
-PODKOP_LATEST_VER="$(curl -Ls -o /dev/null -w '%{url_effective}' https://github.com/yandexru45/podkop-evolution/releases/latest | sed 's#.*/tag/##')"
-if command -v podkop >/dev/null 2>&1; then
-PODKOP_VER=$(podkop show_version 2>/dev/null | sed 's/-r[0-9]\+$//')
-[ -z "$PODKOP_VER" ] && PODKOP_VER="не найдена"
-else
-PODKOP_VER="не установлен"
-fi
-[ -z "$PODKOP_LATEST_VER" ] && PODKOP_LATEST_VER="не найдена"
-PODKOP_VER=$(echo "$PODKOP_VER" | sed 's/^v//')
-PODKOP_LATEST_VER=$(echo "$PODKOP_LATEST_VER" | sed 's/^v//')
-if [ "$PODKOP_VER" = "не найдена" ] || [ "$PODKOP_VER" = "не установлен" ]; then
-PODKOP_STATUS="${RED}$PODKOP_VER${NC}"
-elif [ "$PODKOP_LATEST_VER" != "не найдена" ] && [ "$PODKOP_VER" != "$PODKOP_LATEST_VER" ]; then
-PODKOP_STATUS="${RED}$PODKOP_VER${NC}"
-else
-PODKOP_STATUS="${GREEN}$PODKOP_VER${NC}"
-fi
+    # latest версия с GitHub
+    LATEST=$(curl -fsL https://github.com/yandexru45/podkop-evolution/releases/latest 2>/dev/null \
+        | sed -n 's#.*tag/\([^"]*\)".*#\1#p' | head -n1)
+
+    LATEST=${LATEST#v}
+    [ -z "$LATEST" ] && LATEST="unknown"
+
+    # локальная версия
+    if command -v podkop >/dev/null 2>&1; then
+        LOCAL=$(podkop show_version 2>/dev/null | cut -d'-' -f1)
+        LOCAL=${LOCAL#v}
+        [ -z "$LOCAL" ] && LOCAL="unknown"
+    else
+        LOCAL="not_installed"
+    fi
+
+    # логика вывода
+    if [ "$LOCAL" = "not_installed" ]; then
+        PODKOP_STATUS="${RED}не установлена${NC}"
+    elif [ "$LATEST" = "unknown" ]; then
+        PODKOP_STATUS="${GREEN}$LOCAL${NC}"
+    elif [ "$LOCAL" = "$LATEST" ]; then
+        PODKOP_STATUS="${GREEN}$LOCAL${NC}"
+    else
+        PODKOP_STATUS="${RED}$LOCAL${NC}"
+    fi
 }
 # Установка Podkop
 PODKOP_INSTALL() {
