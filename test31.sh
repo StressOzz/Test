@@ -177,7 +177,7 @@ echo -e "${CYAN}Запускаем ${NC}Podkop${NC}"
 podkop enable >/dev/null 2>&1
 echo -e "${CYAN}Обновляем списки${NC}"
 podkop list_update >/dev/null 2>&1
-echo -e "${CYAN}Перезапускаем сервис${NC}"
+echo -e "${CYAN}Перезапускаем сервис${NC}\n${YELLOW}Подождите...${NC}"
 podkop restart >/dev/null 2>&1
 echo -e "AWG ${GREEN}интегрирован в ${NC}Podkop${GREEN}!${NC}\n"
 echo -e "${YELLOW}Необходимо в ${NC}LuCI${YELLOW} в интерфейс ${NC}AWG${YELLOW} загрузить файл ${NC}*.conf${YELLOW}:${NC}"
@@ -208,7 +208,7 @@ echo -e "${CYAN}Запускаем ${NC}Podkop Evolution${NC}"
 podkop enable >/dev/null 2>&1
 echo -e "${CYAN}Обновляем списки${NC}"
 podkop list_update >/dev/null 2>&1
-echo -e "${CYAN}Перезапускаем сервис${NC}"
+echo -e "${CYAN}Перезапускаем сервис${NC}\n${YELLOW}Подождите...${NC}"
 podkop restart >/dev/null 2>&1
 echo -e "VPN подписка ${GREEN}интегрирована в ${NC}Podkop Evolution${GREEN}!${NC}\n"
 PAUSE
