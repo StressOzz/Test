@@ -14,6 +14,7 @@ if command -v opkg >/dev/null 2>&1; then
 PKG="opkg"
 CONFZ="/etc/opkg/distfeeds.conf"
 PKG_IS_APK=0
+SUFICS="v"
 UPDATE="opkg update"
 INSTALL="opkg install"
 DELETE="opkg remove --autoremove --force-removal-of-dependent-packages"
@@ -24,6 +25,7 @@ else
 PKG="apk"
 CONFZ="/etc/apk/repositories.d/distfeeds.list"
 PKG_IS_APK=1
+SUFICS=""
 UPDATE="apk update"
 INSTALL="apk add --allow-untrusted"
 DELETE="apk del"
