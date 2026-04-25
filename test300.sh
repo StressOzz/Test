@@ -74,8 +74,8 @@ echo -e "\n${MAGENTA}Устанавливаем Podkop Evolution${NC}"
 echo -e "${CYAN}Обновляем список пакетов${NC}"
 $UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось обновить список пакетов${NC}\n"; PAUSE; return; }
 PODKOP_LATEST_VER="$(curl -Ls -o /dev/null -w '%{url_effective}' https://github.com/yandexru45/podkop-evolution/releases/latest | sed 's#.*/tag/##')"
-PODKOP_INST="https://github.com/yandexru45/podkop-evolution/releases/download/$PODKOP_LATEST_VER/podkop-$PODKOP_LATEST_VER-$VER_SUF.$APK_RAS"
-PODKOP_LUCI="https://github.com/yandexru45/podkop-evolution/releases/download/$PODKOP_LATEST_VER/luci-app-podkop-$PODKOP_LATEST_VER-$VER_SUF.$APK_RAS"
+PODKOP_INST="https://github.com/yandexru45/podkop-evolution/releases/download/$PODKOP_LATEST_VER/podkop-$SUFICS$PODKOP_LATEST_VER-$VER_SUF.$APK_RAS"
+PODKOP_LUCI="https://github.com/yandexru45/podkop-evolution/releases/download/$PODKOP_LATEST_VER/luci-app-podkop-$SUFICS$PODKOP_LATEST_VER-$VER_SUF.$APK_RAS"
 PODKOP_RUS="https://github.com/yandexru45/podkop-evolution/releases/download/$PODKOP_LATEST_VER/luci-i18n-podkop-ru-$PODKOP_LATEST_VER.$APK_RAS"
 cd "$tmpDIR" || exit 1
 echo -e "${CYAN}Скачиваем ${NC}Podkop Evolution"
