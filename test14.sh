@@ -364,7 +364,7 @@ echo -e "${YELLOW}Требуется: ${NC}$((REQUIRED_SPACE/1024))MB\n"
 PAUSE; return
     fi
 
-if $CHECK_AVAIL https-dns-proxy; then
+if ! $CHECK_AVAIL https-dns-proxy; then
         echo -e "\n${RED}Обнаружен ${NC}DNS over HTTPS${RED}!"
         echo -e "${YELLOW}Удалите ${NC}DNS over HTTPS\n"
 PAUSE; return      
