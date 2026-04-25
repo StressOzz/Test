@@ -600,7 +600,32 @@ echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n"; ec
 # PODKOP EVOLUTION и AWG
 # ==========================================
 pkg_is_installed () { local pkg_name="$1"; if [ "$PKG_IS_APK" -eq 1 ]; then apk info -e "$pkg_name" >/dev/null 2>&1; else opkg list-installed | grep -q "^$pkg_name"; fi }
-PODKOP_VER() { if ! command -v podkop >/dev/null 2>&1; then PODKOP_STATUS="${RED}не установлена${NC}"; return; fi; LOCALPOD="$(podkop show_version 2>/dev/null | cut -d'-' -f1 | sed 's/^v//')"; if [ "$PODKOP_LATEST_VER" = "$LOCALPOD" ]; then PODKOP_STATUS="${GREEN}$LOCALPOD${NC}"; else PODKOP_STATUS="${RED}$LOCALPOD${NC}"; fi }
+
+PODKOP_VER() {
+    PODKOP_LATEST_VER="$(curl -Ls -o /dev/null -w '%{url_effective}' https://github.com/yandexru45/podkop-evolution/releases/latest | sed 's#.*/tag/##')"
+
+    if ! command -v podkop >/dev/null 2>&1; then
+        PODKOP_STATUS="${RED}не установлена${NC}"
+        return
+    fi
+
+    LOCALPOD="$(podkop show_version 2>/dev/null | cut -d'-' -f1 | sed 's/^v//')"
+
+    if [ -z "$LOCALPOD" ]; then
+        PODKOP_STATUS="${RED}установлена (версия не определена)${NC}"
+        return
+    fi
+
+    if [ "$PODKOP_LATEST_VER" = "$LOCALPOD" ]; then
+        PODKOP_STATUS="${GREEN}$LOCALPOD${NC}"
+    else
+        PODKOP_STATUS="${RED}$LOCALPOD${NC}"
+    fi
+}
+
+
+
+
 # УСТАНОВКА PODKOP
 PODKOP_INSTALL() { if ! pkg_is_installed podkop; then rm -rf "$tmpDIR"; mkdir -p "$tmpDIR"; echo -e "\n${MAGENTA}Устанавливаем Podkop Evolution${NC}"; echo -e "${CYAN}Обновляем список пакетов${NC}"; $UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось обновить список пакетов${NC}\n"; PAUSE; return; }
 PODKOP_INST="https://github.com/yandexru45/podkop-evolution/releases/download/$PODKOP_LATEST_VER/podkop-$PODKOP_LATEST_VER-$VER_SUF.$APK_RAS"; PODKOP_LUCI="https://github.com/yandexru45/podkop-evolution/releases/download/$PODKOP_LATEST_VER/luci-app-podkop-$PODKOP_LATEST_VER-$VER_SUF.$APK_RAS"
