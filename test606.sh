@@ -602,17 +602,10 @@ echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n"; ec
 pkg_is_installed () { local pkg_name="$1"; if [ "$PKG_IS_APK" -eq 1 ]; then apk info -e "$pkg_name" >/dev/null 2>&1; else opkg list-installed | grep -q "^$pkg_name"; fi }
 
 PODKOP_VER() {
-    PODKOP_LATEST_VER="$(curl -Ls -o /dev/null -w '%{url_effective}' https://github.com/yandexru45/podkop-evolution/releases/latest | sed 's#.*/tag/##')"
-
-    if ! command -v podkop >/dev/null 2>&1; then
-        PODKOP_STATUS="${RED}не установлена${NC}"
-        return
-    fi
-
     LOCALPOD="$(podkop show_version 2>/dev/null | cut -d'-' -f1 | sed 's/^v//')"
 
     if [ -z "$LOCALPOD" ]; then
-        PODKOP_STATUS="${RED}установлена (версия не определена)${NC}"
+        PODKOP_STATUS="${RED}не установлена${NC}"
         return
     fi
 
