@@ -13,7 +13,7 @@ tmpDIR="/tmp/PodkopManager"
 rm -rf "$tmpDIR"
 mkdir -p "$tmpDIR"
 
-PODKOP_LATEST_VER="$(curl -Ls -o /dev/null -w '%{url_effective}' https://github.com/itdoginfo/podkop/releases/latest | sed -E 's#.*/tag/v?##')"
+PODKOP_LATEST_VER="$(curl -Ls -o /dev/null -w '%{url_effective}' https://github.com/yandexru45/podkop-evolution/releases/latest | sed -E 's#.*/tag/v?##')"
 
 BASE_URL="https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/"
 
@@ -64,15 +64,17 @@ fi
 
 
 # ==========================================
-# Установка
+# Установка (подробный режим)
 # ==========================================
 install_podkop() {
-echo -e "\n${MAGENTA}Установка Podkop Evolution${NC}"
+echo -e "\n${MAGENTA}===== Установка Podkop Evolution =====${NC}"
 
 REPO="https://github.com/yandexru45/podkop-evolution/releases/latest"
 
 PKG_IS_APK=0
-command -v apk && PKG_IS_APK=1
+command -v apk >/dev/null 2>&1 && PKG_IS_APK=1
+
+echo -e "${CYAN}Менеджер пакетов:${NC} $( [ "$PKG_IS_APK" -eq 1 ] && echo apk || echo opkg )"
 
 pkg_is_installed () {
 local pkg_name="$1"
@@ -85,7 +87,7 @@ fi
 
 pkg_remove() {
 local pkg_name="$1"
-echo -e "${CYAN}Удаляем ${NC}$pkg_name"
+echo -e "${YELLOW}Удаляем:${NC} $pkg_name"
 if [ "$PKG_IS_APK" -eq 1 ]; then
 apk del "$pkg_name"
 else
@@ -94,7 +96,7 @@ fi
 }
 
 pkg_list_update() {
-echo -e "${CYAN}Обновляем список пакетов${NC}"
+echo -e "${CYAN}Обновляем список пакетов...${NC}"
 if [ "$PKG_IS_APK" -eq 1 ]; then
 apk update
 else
@@ -104,7 +106,7 @@ fi
 
 pkg_install() {
 local pkg_file="$1"
-echo -e "${CYAN}Устанавливаем ${NC}$(basename "$pkg_file")"
+echo -e "${GREEN}Установка:${NC} $(basename "$pkg_file")"
 if [ "$PKG_IS_APK" -eq 1 ]; then
 apk add --allow-untrusted "$pkg_file"
 else
@@ -116,54 +118,69 @@ MODEL=$(cat /tmp/sysinfo/model 2>/dev/null || echo "не определено")
 AVAILABLE_SPACE=$(df /overlay | awk 'NR==2 {print $4}')
 REQUIRED_SPACE=26000
 
-[ "$AVAILABLE_SPACE" -lt "$REQUIRED_SPACE" ] && {
-echo -e "\n${RED}Недостаточно свободного места!${NC}"
+echo -e "${CYAN}Модель:${NC} $MODEL"
+echo -e "${CYAN}Свободно:${NC} $AVAILABLE_SPACE KB"
+
+if [ "$AVAILABLE_SPACE" -lt "$REQUIRED_SPACE" ]; then
+echo -e "${RED}Недостаточно места (нужно ~26MB)${NC}"
 PAUSE
 return
-}
+fi
 
-nslookup google.com || {
-echo -e "\n${RED}DNS не работает!${NC}"
+echo -e "${CYAN}Проверка DNS...${NC}"
+if ! nslookup google.com >/dev/null 2>&1; then
+echo -e "${RED}DNS не работает${NC}"
 PAUSE
 return
-}
+else
+echo -e "${GREEN}DNS OK${NC}"
+fi
 
+# конфликты
 if pkg_is_installed https-dns-proxy; then
-echo -e "${RED}Обнаружен конфликтный пакет ${NC}https-dns-proxy${RED}. Удаляем...${NC}"
+echo -e "${YELLOW}Найден конфликт: https-dns-proxy${NC}"
 pkg_remove luci-app-https-dns-proxy
 pkg_remove https-dns-proxy
 pkg_remove luci-i18n-https-dns-proxy*
 fi
 
+# sing-box проверка
 if pkg_is_installed "^sing-box"; then
 sing_box_version=$(sing-box version | head -n 1 | awk '{print $3}')
 required_version="1.12.4"
+echo -e "${CYAN}sing-box версия:${NC} $sing_box_version"
+
 if [ "$(echo -e "$sing_box_version\n$required_version" | sort -V | head -n 1)" != "$required_version" ]; then
-echo -e "sing-box ${RED}устарел. Удаляем...${NC}"
-service podkop stop
+echo -e "${YELLOW}sing-box устарел → удаляем${NC}"
+service podkop stop >/dev/null 2>&1
 pkg_remove sing-box
+else
+echo -e "${GREEN}sing-box OK${NC}"
 fi
 fi
 
+echo -e "${CYAN}Синхронизация времени...${NC}"
 /usr/sbin/ntpd -q -p 194.190.168.1 -p 216.239.35.0 -p 216.239.35.4 -p 162.159.200.1 -p 162.159.200.123
 
 pkg_list_update || {
-echo -e "\n${RED}Не удалось обновить список пакетов!${NC}"
+echo -e "${RED}Ошибка обновления пакетов${NC}"
 PAUSE
 return
 }
 
-# получаем реальный тег без API
+# получаем тег
+echo -e "${CYAN}Определяем последнюю версию...${NC}"
 LATEST_URL=$(curl -Ls -o /dev/null -w '%{url_effective}' "$REPO")
 TAG=$(echo "$LATEST_URL" | sed 's#.*/tag/##')
 
+echo -e "${CYAN}Redirect URL:${NC} $LATEST_URL"
+echo -e "${CYAN}Версия:${NC} $TAG"
+
 if [ -z "$TAG" ]; then
-echo -e "\n${RED}Не удалось определить версию релиза${NC}"
+echo -e "${RED}Не удалось получить версию${NC}"
 PAUSE
 return
 fi
-
-DOWNLOAD_URL="https://github.com/yandexru45/podkop-evolution/releases/download/$TAG"
 
 if [ "$PKG_IS_APK" -eq 1 ]; then
 EXT="apk"
@@ -171,39 +188,59 @@ else
 EXT="ipk"
 fi
 
-echo -e "${CYAN}Скачиваем пакеты версии ${NC}$TAG"
+echo -e "${CYAN}Тип пакетов:${NC} .$EXT"
 
-page=$(wget -qO- "$REPO" 2>/dev/null)
+echo -e "${CYAN}Получаем список файлов...${NC}"
+page=$(wget -qO- "$REPO")
 
-download_success=0
+count=0
 echo "$page" | grep -o "href=\"[^\" ]*\.$EXT\"" | sed 's/href="//;s/"//' | while read path; do
+
 url="https://github.com$path"
 filename=$(basename "$url")
 filepath="$tmpDIR/$filename"
 
-echo -e "${CYAN}Скачиваем ${NC}$filename"
+echo -e "\n${MAGENTA}----${NC}"
+echo -e "${CYAN}Найден файл:${NC} $filename"
+echo -e "${CYAN}Ссылка:${NC} $url"
 
-if wget -q -O "$filepath" "$url" && [ -s "$filepath" ]; then
-download_success=1
+echo -e "${CYAN}Скачивание...${NC}"
+if wget -O "$filepath" "$url"; then
+if [ -s "$filepath" ]; then
+echo -e "${GREEN}OK скачан${NC}"
 else
-echo -e "${RED}Ошибка скачивания ${NC}$filename"
+echo -e "${RED}Файл пустой${NC}"
 fi
+else
+echo -e "${RED}Ошибка скачивания${NC}"
+fi
+
 done
+
+echo -e "\n${CYAN}Установка пакетов...${NC}"
 
 for pkg in podkop luci-app-podkop; do
 file=$(ls "$tmpDIR" | grep "^$pkg" | head -n 1)
-[ -n "$file" ] && pkg_install "$tmpDIR/$file"
+if [ -n "$file" ]; then
+pkg_install "$tmpDIR/$file"
+else
+echo -e "${RED}Не найден пакет:${NC} $pkg"
+fi
 done
 
 ru=$(ls "$tmpDIR" | grep "luci-i18n-podkop-ru" | head -n 1)
+
 if [ -n "$ru" ]; then
+echo -e "${CYAN}Русский язык:${NC} $ru"
 if pkg_is_installed luci-i18n-podkop-ru; then
 pkg_remove luci-i18n-podkop*
 fi
 pkg_install "$tmpDIR/$ru"
+else
+echo -e "${YELLOW}Русский язык не найден${NC}"
 fi
 
-echo -e "Podkop Evolution ${GREEN}установлен!${NC}"
+echo -e "\n${GREEN}===== Установка завершена =====${NC}"
 PAUSE
 }
 
