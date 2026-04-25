@@ -43,11 +43,9 @@ fi
 # Установка Podkop
 # ==========================================
 PODKOP_INSTALL() {
-
-
 if ! pkg_is_installed podkop; then
 
-echo -e "${MAGENTA}Устанавливаем Podkop Evolution${NC}"
+echo -e "\n${MAGENTA}Устанавливаем Podkop Evolution${NC}"
 
 tmpDIR="/tmp/PodkopEvolution"
 rm -rf "$tmpDIR"
@@ -396,7 +394,7 @@ if pkg_is_installed amneziawg-tools; then
 echo -e "${CYAN}2) ${GREEN}Удалить ${NC}AWG${GREEN} и ${NC}интерфейс AWG"; else
 echo -e "${CYAN}2) ${GREEN}Установить ${NC}AWG${GREEN} и ${NC}интерфейс AWG"; fi
 
-if [ -f /etc/config/podkop ] && grep -qF 'option subscription_url' /etc/config/podkop; then
+if [ -f /etc/config/podkop ] && grep -q "^[[:space:]]*option subscription_url" /etc/config/podkop; then
   echo -e "${CYAN}3) ${GREEN}Сменить ${NC}VPN${GREEN} подписку${NC}"
 else
     echo -e "${CYAN}3) ${GREEN}Интегрировать ${NC}VPN подписку${GREEN} в ${NC}Podkop Evolution"
