@@ -93,7 +93,7 @@ wget -q -U "Mozilla/5.0" -O podkop.$APK_RAS "$PODKOP_INST" || { echo -e "\n${RED
 wget -q -U "Mozilla/5.0" -O luci-app-podkop.$APK_RAS "$PODKOP_LUCI" || { echo -e "\n${RED}Не удалось скачать $PODKOP_LUCI${NC}\n"; PAUSE; return; }
 wget -q -U "Mozilla/5.0" -O luci-i18n-podkop-ru.$APK_RAS "$PODKOP_RUS" || { echo -e "\n${RED}Не удалось скачать $PODKOP_RUS${NC}\n"; PAUSE; return; }
 
-echo -e "${CYAN}Устанавливаем ${NC}Podkop Evolution"
+echo -en "${CYAN}Устанавливаем ${NC}Podkop Evolution\n${YELLOW}Подождите...${NC}"
 $INSTALL ./podkop.$APK_RAS >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить ${NC}$PODKOP_INST\n"; PAUSE; return; }
 $INSTALL ./luci-app-podkop.$APK_RAS >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить ${NC}$PODKOP_LUCI\n"; PAUSE; return; }
 $INSTALL ./luci-i18n-podkop-ru.$APK_RAS >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить ${NC}$PODKOP_RUS\n"; PAUSE; return; }
@@ -105,17 +105,16 @@ PAUSE
 else
     echo -e "\n${MAGENTA}Удаление Podkop${NC}"
 
-$DELETE luci-i18n-podkop-ru
-$DELETE luci-app-podkop
-$DELETE podkop
+$DELETE luci-i18n-podkop-ru >/dev/null 2>&1
+$DELETE luci-app-podkop >/dev/null 2>&1
+$DELETE podkop >/dev/null 2>&1
 
 rm -rf /etc/config/podkop >/dev/null 2>&1
 rm -f /etc/config/*podkop* >/dev/null 2>&1
 
-echo -e "Podkop ${GREEN}удалён!${NC}"
+echo -e "Podkop ${GREEN}удалён!${NC}\n"
 PAUSE
 fi
-
 }
 
 # ==========================================
@@ -134,9 +133,6 @@ echo -e "\n${MAGENTA}Устанавливаем AWG и интерфейс AWG${N
 echo -e "${CYAN}Обновляем список пакетов${NC}"
 
 $UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось обновить список пакетов${NC}\n"; PAUSE; return; }
-
-https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v25.12.2/kmod-amneziawg_vaarch64_cortex-a53_mediatek_filogic.apk
-
 
 AWG_kmod=https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v$OWRT/kmod-amneziawg_v${OWRT}_$ARCHAWG.$APK_RAS
 AWG_tools=https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v$OWRT/amneziawg-tools_v${OWRT}_$ARCHAWG.$APK_RAS
@@ -174,7 +170,8 @@ echo -e "${YELLOW}Перезапускаем сеть! Подождите...${NC
 /etc/init.d/network restart >/dev/null 2>&1
 
 echo -e "AWG ${GREEN}и${NC} интерфейс AWG ${GREEN}установлены!${NC}\n"
-echo -e "${YELLOW}Необходимо в LuCI в интерфейс AWG загрузить конфиг:${NC}\nNetwork ${GREEN}→${NC} Interfaces ${GREEN}→${NC} AWG ${GREEN}→${NC} Edit ${GREEN}→${NC} Load configuration…${NC}"
+echo -e "${YELLOW}Необходимо в ${NC}LuCI${YELLOW} в интерфейс ${NC}AWG${YELLOW} загрузить файл ${NC}*.conf${YELLOW}:${NC}"
+echo -e "${NC}Network ${GREEN}→${NC} Interfaces ${GREEN}→${NC} AWG ${GREEN}→${NC} Edit ${GREEN}→${NC} Load configuration… ${GREEN}→${NC} Save ${GREEN}→${NC} Save & Apply\n"
 PAUSE
 rm -rf "$tmpDIR"
 
@@ -195,7 +192,7 @@ uci commit network >/dev/null 2>&1
 echo -e "${CYAN}Удаляем ${NC}интерфейс AWG"
 echo -e "${YELLOW}Перезапускаем сеть! Подождите...${NC}"
 /etc/init.d/network restart
-echo -e "AWG ${GREEN}и${NC} интерфейс AWG ${GREEN}удалены!${NC}"
+echo -e "AWG ${GREEN}и${NC} интерфейс AWG ${GREEN}удалены!${NC}\n"
 PAUSE
 fi
 
