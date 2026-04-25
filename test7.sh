@@ -46,7 +46,7 @@ PAUSE; exit 0
 
 if pkg_is_installed https-dns-proxy; then
         echo -e "\n${RED}Обнаружен ${NC}DNS over HTTPS${RED}!"
-        echo -e "${YELLOW}Удалите ${NC}DNS over HTTPS${YELLOW}!\n"
+        echo -e "${YELLOW}Удалите ${NC}DNS over HTTPS\n"
 PAUSE; exit 0        
     fi
 
