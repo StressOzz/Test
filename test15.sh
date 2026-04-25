@@ -57,7 +57,7 @@ fi
 # Установка Podkop
 # ==========================================
 PODKOP_INSTALL() {
-if ! $CHECK_AVAIL podkop; then
+if ! $CHECK_CMD podkop; then
 
 echo -e "\n${MAGENTA}Устанавливаем Podkop Evolution${NC}"
 
@@ -109,7 +109,7 @@ fi
 # ==========================================
 install_AWG() {
 
-if ! $CHECK_AVAIL amneziawg-tools; then
+if ! $CHECK_CMD amneziawg-tools; then
 
 echo -e "\n${MAGENTA}Устанавливаем AWG и интерфейс AWG${NC}"
 
@@ -212,7 +212,7 @@ fi
 # ==========================================
 integration_AWG() {
 
-if ! $CHECK_AVAIL podkop; then echo -e "\n${RED}Podkop Evolution не установлен!${NC}\n"; PAUSE; return; fi
+if ! $CHECK_CMD podkop; then echo -e "\n${RED}Podkop Evolution не установлен!${NC}\n"; PAUSE; return; fi
 
 if ! awg --version >/dev/null 2>&1; then
 echo -e "\n${RED}AWG не установлен!${NC}"
@@ -269,7 +269,7 @@ PAUSE
 # ==========================================
 PODKOP_VPN() {
 
-if ! $CHECK_AVAIL podkop; then echo -e "\n${RED}Podkop Evolution не установлен!${NC}\n"; PAUSE; return; fi
+if ! $CHECK_CMD podkop; then echo -e "\n${RED}Podkop Evolution не установлен!${NC}\n"; PAUSE; return; fi
 
 
 echo -e "\n${MAGENTA}Интегрируем VPN подписку в Podkop Evolution${NC}"
@@ -364,7 +364,7 @@ echo -e "${YELLOW}Требуется: ${NC}$((REQUIRED_SPACE/1024))MB\n"
 PAUSE; return
     fi
 
-if ! $CHECK_AVAIL https-dns-proxy; then
+if $CHECK_CMD https-dns-proxy; then
         echo -e "\n${RED}Обнаружен ${NC}DNS over HTTPS${RED}!"
         echo -e "${YELLOW}Удалите ${NC}DNS over HTTPS\n"
 PAUSE; return      
@@ -392,10 +392,10 @@ fi
 
 echo
 
-if $CHECK_AVAIL podkop; then
+if $CHECK_CMD podkop; then
 echo -e "${CYAN}1) ${GREEN}Удалить ${NC}Podkop Evolution"; else
 echo -e "${CYAN}1) ${GREEN}Установить ${NC}Podkop Evolution"; fi
-if $CHECK_AVAIL amneziawg-tools; then
+if $CHECK_CMD amneziawg-tools; then
 echo -e "${CYAN}2) ${GREEN}Удалить ${NC}AWG${GREEN} и ${NC}интерфейс AWG"; else
 echo -e "${CYAN}2) ${GREEN}Установить ${NC}AWG${GREEN} и ${NC}интерфейс AWG"; fi
 
