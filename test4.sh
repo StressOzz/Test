@@ -9,6 +9,8 @@ NC="\033[0m"
 BLUE="\033[0;34m"
 DGRAY="\033[38;5;244m"
 
+PODKOP_LATEST_VER="$(curl -Ls -o /dev/null -w '%{url_effective}' https://github.com/yandexru45/podkop-evolution/releases/latest | sed 's#.*/tag/##')"
+
 VER_SUF="r1-all"; APK_RAS="ipk"; PKG_IS_APK=0
 command -v apk >/dev/null 2>&1 && VER_SUF="r1" && APK_RAS="apk" && PKG_IS_APK=1
 
