@@ -2,7 +2,7 @@
 # ==========================================
 # Zapret on remittor Manager by StressOzz
 # =========================================
-ZAPRET_MANAGER_VERSION="9.5"; STR_VERSION_AUTOINSTALL="v7"; TMP_VER="/tmp/zapret_version"
+ZAPRET_MANAGER_VERSION="9.5"; STR_VERSION_AUTOINSTALL="v7"; TMP_VER="/tmp/zapret_version"; TMP_VER_POD="/tmp/podkop_version"
 DOMAINS="rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com rr1---sn-gvnuxaxjvh-jx3l.googlevideo.com rr1---sn-gvnuxaxjvh-jx3s.googlevideo.com"
 BIN_PATH="/usr/bin/tg-ws-proxy-go"; INIT_PATH="/etc/init.d/tg-ws-proxy-go"; LAN_IP=$(uci get network.lan.ipaddr 2>/dev/null | cut -d/ -f1)
 PORTS_UDP="88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535"; PORTS_TCP="2802,2302,2502,6112-6119,6695-6710,25565,27015-27030,27036-27037,50001"
@@ -71,6 +71,8 @@ echo -e "${YELLOW}Обновление пакетов попытка $i не у�
 ok=0; echo -e "${CYAN}Устанавливаем ${NC}curl"; for i in 1 2 3 4 5; do if $INSTALL curl >/dev/null 2>&1; then ok=1; break; fi; echo -e "${YELLOW}Установка ${NC}curl${YELLOW} попытка ${NC}$i${YELLOW} не удалась!${NC}"; sleep 1; done
 if [ "$ok" -ne 1 ]; then echo -e "\n${RED}Не удалось установить ${NC}curl${RED} после 5 попыток${NC}\n"; PAUSE; exit 0; fi; if ! command -v curl >/dev/null 2>&1; then echo -e "\ncurl${RED} не найден после установки${NC}\n"; PAUSE; exit 0; fi; fi
 curl -sL -o /dev/null -w '%{url_effective}' https://github.com/remittor/zapret-openwrt/releases/latest | grep -o '[0-9.]*$' > "$TMP_VER"; ZAPRET_VERSION="$(cat "$TMP_VER")"
+curl -sL -o /dev/null -w '%{url_effective}' https://github.com/yandexru45/podkop-evolution/releases/latest | grep -o '[0-9.]*$' > "$TMP_VER_POD"; PODKOP_LATEST_VER="$(cat "$TMP_VER_POD")"
+
 # ==========================================
 # Получение версии
 # ==========================================
@@ -598,14 +600,12 @@ echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n"; ec
 # PODKOP EVOLUTION и AWG
 # ==========================================
 pkg_is_installed () { local pkg_name="$1"; if [ "$PKG_IS_APK" -eq 1 ]; then apk info -e "$pkg_name" >/dev/null 2>&1; else opkg list-installed | grep -q "^$pkg_name"; fi }
-
-PODKOP_VER() { PODKOP_LATEST_VER="$(curl -Ls -o /dev/null -w '%{url_effective}' https://github.com/yandexru45/podkop-evolution/releases/latest | sed 's#.*/tag/##')"; if ! command -v podkop >/dev/null 2>&1; then PODKOP_STATUS="${RED}не установлена${NC}"; return; fi; LOCALPOD="$(podkop show_version 2>/dev/null | cut -d'-' -f1 | sed 's/^v//')"; if [ "$PODKOP_LATEST_VER" = "$LOCALPOD" ]; then PODKOP_STATUS="${GREEN}$LOCALPOD${NC}"; else PODKOP_STATUS="${RED}$LOCALPOD${NC}"; fi }
-
+PODKOP_VER() { if ! command -v podkop >/dev/null 2>&1; then PODKOP_STATUS="${RED}не установлена${NC}"; return; fi; LOCALPOD="$(podkop show_version 2>/dev/null | cut -d'-' -f1 | sed 's/^v//')"; if [ "$PODKOP_LATEST_VER" = "$LOCALPOD" ]; then PODKOP_STATUS="${GREEN}$LOCALPOD${NC}"; else PODKOP_STATUS="${RED}$LOCALPOD${NC}"; fi }
 # УСТАНОВКА PODKOP
 PODKOP_INSTALL() { if ! pkg_is_installed podkop; then rm -rf "$tmpDIR"; mkdir -p "$tmpDIR"; echo -e "\n${MAGENTA}Устанавливаем Podkop Evolution${NC}"; echo -e "${CYAN}Обновляем список пакетов${NC}"; $UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось обновить список пакетов${NC}\n"; PAUSE; return; }
-PODKOP_LATEST_VER="$(curl -Ls -o /dev/null -w '%{url_effective}' https://github.com/yandexru45/podkop-evolution/releases/latest | sed 's#.*/tag/##')"; PODKOP_INST="https://github.com/yandexru45/podkop-evolution/releases/download/$PODKOP_LATEST_VER/podkop-$PODKOP_LATEST_VER-$VER_SUF.$APK_RAS"
-PODKOP_LUCI="https://github.com/yandexru45/podkop-evolution/releases/download/$PODKOP_LATEST_VER/luci-app-podkop-$PODKOP_LATEST_VER-$VER_SUF.$APK_RAS"; PODKOP_RUS="https://github.com/yandexru45/podkop-evolution/releases/download/$PODKOP_LATEST_VER/luci-i18n-podkop-ru-$PODKOP_LATEST_VER.$APK_RAS"; cd "$tmpDIR"
-echo -e "${CYAN}Скачиваем ${NC}Podkop Evolution"; wget -q -U "Mozilla/5.0" -O podkop.$APK_RAS "$PODKOP_INST" || { echo -e "\n${RED}Не удалось скачать $PODKOP_INST${NC}\n"; PAUSE; return; }; wget -q -U "Mozilla/5.0" -O luci-app-podkop.$APK_RAS "$PODKOP_LUCI" || { echo -e "\n${RED}Не удалось скачать $PODKOP_LUCI${NC}\n"; PAUSE; return; }
+PODKOP_INST="https://github.com/yandexru45/podkop-evolution/releases/download/$PODKOP_LATEST_VER/podkop-$PODKOP_LATEST_VER-$VER_SUF.$APK_RAS"; PODKOP_LUCI="https://github.com/yandexru45/podkop-evolution/releases/download/$PODKOP_LATEST_VER/luci-app-podkop-$PODKOP_LATEST_VER-$VER_SUF.$APK_RAS"
+PODKOP_RUS="https://github.com/yandexru45/podkop-evolution/releases/download/$PODKOP_LATEST_VER/luci-i18n-podkop-ru-$PODKOP_LATEST_VER.$APK_RAS"; cd "$tmpDIR"; echo -e "${CYAN}Скачиваем ${NC}Podkop Evolution"
+wget -q -U "Mozilla/5.0" -O podkop.$APK_RAS "$PODKOP_INST" || { echo -e "\n${RED}Не удалось скачать $PODKOP_INST${NC}\n"; PAUSE; return; }; wget -q -U "Mozilla/5.0" -O luci-app-podkop.$APK_RAS "$PODKOP_LUCI" || { echo -e "\n${RED}Не удалось скачать $PODKOP_LUCI${NC}\n"; PAUSE; return; }
 wget -q -U "Mozilla/5.0" -O luci-i18n-podkop-ru.$APK_RAS "$PODKOP_RUS" || { echo -e "\n${RED}Не удалось скачать $PODKOP_RUS${NC}\n"; PAUSE; return; }; echo -en "${CYAN}Устанавливаем ${NC}Podkop Evolution\n${YELLOW}Подождите...${NC}"; $INSTALL ./podkop.$APK_RAS >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить ${NC}$PODKOP_INST\n"; PAUSE; return; }
 $INSTALL ./luci-app-podkop.$APK_RAS >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить ${NC}$PODKOP_LUCI\n"; PAUSE; return; }; $INSTALL ./luci-i18n-podkop-ru.$APK_RAS >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить ${NC}$PODKOP_RUS\n"; PAUSE; return; }; rm -rf "$tmpDIR"; echo -e "\nPodkop Evolution ${GREEN}установлен!${NC}\n"; PAUSE
 else echo -e "\n${MAGENTA}Удаляем Podkop${NC}"; $DELETE luci-i18n-podkop-ru >/dev/null 2>&1; $DELETE luci-app-podkop >/dev/null 2>&1; $DELETE podkop >/dev/null 2>&1; rm -rf /etc/config/podkop* /usr/bin/podkop >/dev/null 2>&1; echo -e "Podkop ${GREEN}удалён!${NC}\n"; PAUSE; fi }
