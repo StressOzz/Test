@@ -21,7 +21,7 @@ IF_NAME="AWG"
 PROTO="amneziawg"
 DEV_NAME="amneziawg0"
 
-if command -v apk >/dev/null 2>&1; then
+if command -v apk; then
 PKG_IS_APK=1
 PKG_MANAGER="apk list -I 2>/dev/null"
 else
@@ -31,7 +31,7 @@ fi
 
 PAUSE() { echo -ne "\nНажмите Enter..."; read dummy; }
 
-pkg_remove() { local pkg_name="$1"; if [ "$PKG_IS_APK" -eq 1 ]; then apk del "$pkg_name" >/dev/null 2>&1 || true; else opkg remove --force-depends "$pkg_name" >/dev/null 2>&1 || true; fi; }
+pkg_remove() { local pkg_name="$1"; if [ "$PKG_IS_APK" -eq 1 ]; then apk del "$pkg_name" || true; else opkg remove --force-depends "$pkg_name" || true; fi; }
 
 # ==========================================
 # Определение версий
@@ -41,7 +41,7 @@ get_versions() {
 
 LOCAL_ARCH=$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release)
 
-if command -v podkop >/dev/null 2>&1; then
+if command -v podkop; then
 PODKOP_VER=$(podkop show_version 2>/dev/null | sed 's/-r[0-9]\+$//')
 [ -z "$PODKOP_VER" ] && PODKOP_VER="не найдена"
 else
@@ -72,7 +72,7 @@ echo -e "\n${MAGENTA}Установка Podkop Evolution${NC}"
 REPO="https://github.com/yandexru45/podkop-evolution/releases/latest"
 
 PKG_IS_APK=0
-command -v apk >/dev/null 2>&1 && PKG_IS_APK=1
+command -v apk && PKG_IS_APK=1
 
 pkg_is_installed () {
 local pkg_name="$1"
@@ -87,18 +87,18 @@ pkg_remove() {
 local pkg_name="$1"
 echo -e "${CYAN}Удаляем ${NC}$pkg_name"
 if [ "$PKG_IS_APK" -eq 1 ]; then
-apk del "$pkg_name" >/dev/null 2>&1
+apk del "$pkg_name"
 else
-opkg remove --force-depends "$pkg_name" >/dev/null 2>&1
+opkg remove --force-depends "$pkg_name"
 fi
 }
 
 pkg_list_update() {
 echo -e "${CYAN}Обновляем список пакетов${NC}"
 if [ "$PKG_IS_APK" -eq 1 ]; then
-apk update >/dev/null 2>&1
+apk update
 else
-opkg update >/dev/null 2>&1
+opkg update
 fi
 }
 
@@ -106,9 +106,9 @@ pkg_install() {
 local pkg_file="$1"
 echo -e "${CYAN}Устанавливаем ${NC}$(basename "$pkg_file")"
 if [ "$PKG_IS_APK" -eq 1 ]; then
-apk add --allow-untrusted "$pkg_file" >/dev/null 2>&1
+apk add --allow-untrusted "$pkg_file"
 else
-opkg install "$pkg_file" >/dev/null 2>&1
+opkg install "$pkg_file"
 fi
 }
 
@@ -122,7 +122,7 @@ PAUSE
 return
 }
 
-nslookup google.com >/dev/null 2>&1 || {
+nslookup google.com || {
 echo -e "\n${RED}DNS не работает!${NC}"
 PAUSE
 return
@@ -140,12 +140,12 @@ sing_box_version=$(sing-box version | head -n 1 | awk '{print $3}')
 required_version="1.12.4"
 if [ "$(echo -e "$sing_box_version\n$required_version" | sort -V | head -n 1)" != "$required_version" ]; then
 echo -e "sing-box ${RED}устарел. Удаляем...${NC}"
-service podkop stop >/dev/null 2>&1
+service podkop stop
 pkg_remove sing-box
 fi
 fi
 
-/usr/sbin/ntpd -q -p 194.190.168.1 -p 216.239.35.0 -p 216.239.35.4 -p 162.159.200.1 -p 162.159.200.123 >/dev/null 2>&1
+/usr/sbin/ntpd -q -p 194.190.168.1 -p 216.239.35.0 -p 216.239.35.4 -p 162.159.200.1 -p 162.159.200.123
 
 pkg_list_update || {
 echo -e "\n${RED}Не удалось обновить список пакетов!${NC}"
@@ -183,7 +183,7 @@ filepath="$tmpDIR/$filename"
 
 echo -e "${CYAN}Скачиваем ${NC}$filename"
 
-if wget -q -O "$filepath" "$url" >/dev/null 2>&1 && [ -s "$filepath" ]; then
+if wget -q -O "$filepath" "$url" && [ -s "$filepath" ]; then
 download_success=1
 else
 echo -e "${RED}Ошибка скачивания ${NC}$filename"
@@ -218,7 +218,7 @@ pkg_remove luci-app-podkop podkop
 pkg_remove podkop
 
 rm -rf /etc/config/podkop /tmp/podkop_installer
-rm -f /etc/config/*podkop* >/dev/null 2>&1
+rm -f /etc/config/*podkop*
 
 echo -e "Podkop ${GREEN}удалён!${NC}"
 PAUSE
@@ -235,13 +235,13 @@ pkg_remove luci-proto-amneziawg
 pkg_remove amneziawg-tools
 pkg_remove kmod-amneziawg
 
-uci delete network.AWG >/dev/null 2>&1
-uci commit network >/dev/null 2>&1
+uci delete network.AWG
+uci commit network
 
 for peer in $(uci show network | grep "interface='AWG'" | cut -d. -f2); do
     uci delete network.$peer
 done
-uci commit network >/dev/null 2>&1
+uci commit network
 echo -e "${CYAN}Удаляем ${NC}интерфейс AWG"
 echo -e "${YELLOW}Перезапускаем сеть! Подождите...${NC}"
 /etc/init.d/network restart
@@ -276,9 +276,9 @@ local url="${BASE_URL}v${VERSION}/${filename}"
 
 echo -e "${CYAN}Скачиваем:${NC} $filename"
 
-if wget -O "$tmpDIR/$filename" "$url" >/dev/null 2>&1; then
+if wget -O "$tmpDIR/$filename" "$url"; then
 echo -e "${CYAN}Устанавливаем:${NC} $pkgname"
-if ! $INSTALL_CMD "$tmpDIR/$filename" >/dev/null 2>&1; then
+if ! $INSTALL_CMD "$tmpDIR/$filename"; then
 echo -e "\n${RED}Ошибка установки $pkgname!${NC}"
 PAUSE
 return 1
@@ -296,7 +296,7 @@ PKGPOSTFIX="_v${VERSION}_${PKGARCH}_${TARGET}_${SUBTARGET}.apk"
 INSTALL_CMD="apk add --allow-untrusted"
 else
 echo -e "${CYAN}Обновляем список пакетов${NC}"
-opkg update >/dev/null 2>&1 || {
+opkg update || {
 echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}"
 PAUSE
 return
@@ -313,7 +313,7 @@ install_pkg "luci-i18n-amneziawg-ru"
 
 echo -e "${CYAN}Создаем интерфейс AWG${NC}"
 
-if uci show network.$IF_NAME >/dev/null 2>&1; then
+if uci show network.$IF_NAME; then
 echo -e "${RED}Интерфейс уже существует!${NC}"
 else
 uci set network.$IF_NAME=interface
@@ -323,7 +323,7 @@ uci commit network
 fi
 
 echo -e "${YELLOW}Перезапускаем сеть! Подождите...${NC}"
-/etc/init.d/network restart >/dev/null 2>&1
+/etc/init.d/network restart
 
 echo -e "AWG ${GREEN}и${NC} интерфейс AWG ${GREEN}установлены!${NC}\n"
 echo -e "${YELLOW}Необходимо в LuCI в интерфейс AWG загрузить конфиг:${NC}\nNetwork ${GREEN}→${NC} Interfaces ${GREEN}→${NC} AWG ${GREEN}→${NC} Edit ${GREEN}→${NC} Load configuration…${NC}"
@@ -337,7 +337,7 @@ integration_AWG() {
 
 echo -e "\n${MAGENTA}Интегрируем AWG в Podkop${NC}"
 
-if ! awg --version >/dev/null 2>&1; then
+if ! awg --version; then
 echo -e "\n${RED}AWG не установлен!${NC}"
 PAUSE
 return
@@ -375,14 +375,14 @@ list community_lists 'hodca'
 EOF
 
 echo -e "${CYAN}Запускаем ${NC}Podkop${NC}"
-podkop enable >/dev/null 2>&1
+podkop enable
 echo -e "${CYAN}Применяем конфигурацию${NC}"
-podkop reload >/dev/null 2>&1
-podkop restart >/dev/null 2>&1
+podkop reload
+podkop restart
 echo -e "${CYAN}Обновляем списки${NC}"
-podkop list_update >/dev/null 2>&1
+podkop list_update
 echo -e "${CYAN}Перезапускаем сервис${NC}"
-podkop restart >/dev/null 2>&1
+podkop restart
 echo -e "AWG ${GREEN}интегрирован в ${NC}Podkop${GREEN}!${NC}\n"
 echo -e "${YELLOW}Необходимо в LuCI в интерфейс AWG загрузить конфиг:${NC}\nNetwork ${GREEN}→${NC} Interfaces ${GREEN}→${NC} AWG ${GREEN}→${NC} Edit ${GREEN}→${NC} Load configuration…${NC}"
 PAUSE
@@ -401,7 +401,7 @@ echo -e "${MAGENTA}--- Podkop ---${NC}"
 echo -e "${YELLOW}Установленная версия:${NC} $PODKOP_STATUS"
 
 echo -e "${MAGENTA}--- AWG ---${NC}"
-if command -v amneziawg >/dev/null 2>&1 || eval "$PKG_MANAGER" | grep -q "amneziawg-tools"; then
+if command -v amneziawg || eval "$PKG_MANAGER" | grep -q "amneziawg-tools"; then
 echo -e "${YELLOW}AWG: ${GREEN}установлен${NC}"
 else
 echo -e "${YELLOW}AWG: ${RED}не установлен${NC}"
