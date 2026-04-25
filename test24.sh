@@ -284,7 +284,7 @@ if ! pkg_is_installed podkop; then echo -e "\n${RED}Podkop Evolution не уст
 
 
 echo -e "\n${MAGENTA}Интегрируем VPN подписку в Podkop Evolution${NC}"
-echo -ne "${YELLOW}Введите ссылку на подписку (${NC}https://...${YELLOW}): ${NC}"
+echo -ne "\n${YELLOW}Введите ссылку на подписку (${NC}https://...${YELLOW}): ${NC}"
 read -r SUB_URL
 [ -z "$SUB_URL" ] && echo -e "\n${RED}Ошибка! Ссылка пустая!${NC}\n" && PAUSE && return
 
