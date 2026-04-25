@@ -43,14 +43,20 @@ fi
 # Установка Podkop
 # ==========================================
 PODKOP_INSTALL() {
-tmpDIR="/tmp/PodkopManager"
+
+
+if ! pkg_is_installed podkop; then
+
+echo -e "${MAGENTA}Устанавливаем Podkop Evolution${NC}"
+
+tmpDIR="/tmp/PodkopEvolution"
 rm -rf "$tmpDIR"
 mkdir -p "$tmpDIR"
 echo -e "${CYAN}Обновляем список пакетов${NC}"
 if [ "$PKG_IS_APK" -eq 1 ]; then
-    apk update >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось обновить список пакетов${NC}\n"; PAUSE; exit 0; }
+    apk update >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось обновить список пакетов${NC}\n"; PAUSE; return; }
 else
-    opkg update >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось обновить список пакетов${NC}\n"; PAUSE; exit 0; }
+    opkg update >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось обновить список пакетов${NC}\n"; PAUSE; return; }
 fi
 
 PODKOP_INST="https://github.com/yandexru45/podkop-evolution/releases/download/$PODKOP_LATEST_VER/podkop-$PODKOP_LATEST_VER-$VER_SUF.$APK_RAS"
@@ -59,28 +65,42 @@ PODKOP_RUS="https://github.com/yandexru45/podkop-evolution/releases/download/$PO
 
 cd "$tmpDIR" || exit 1
 
-echo -e "${CYAN}Скачиваем: ${YELLOW}$PODKOP_INST${NC}"
-wget -q -U "Mozilla/5.0" -O podkop.$APK_RAS "$PODKOP_INST" || { echo -e "\n${RED}Не удалось скачать $PODKOP_INST${NC}\n"; PAUSE; exit 0; }
-echo -e "${CYAN}Скачиваем: ${YELLOW}$PODKOP_LUCI${NC}"
-wget -q -U "Mozilla/5.0" -O luci-app-podkop.$APK_RAS "$PODKOP_LUCI" || { echo -e "\n${RED}Не удалось скачать $PODKOP_LUCI${NC}\n"; PAUSE; exit 0; }
-echo -e "${CYAN}Скачиваем: ${YELLOW}$PODKOP_RUS${NC}"
-wget -q -U "Mozilla/5.0" -O luci-i18n-podkop-ru.$APK_RAS "$PODKOP_RUS" || { echo -e "\n${RED}Не удалось скачать $PODKOP_RUS${NC}\n"; PAUSE; exit 0; }
+echo -e "${CYAN}Скачиваем ${NC}Podkop Evolution"
+wget -q -U "Mozilla/5.0" -O podkop.$APK_RAS "$PODKOP_INST" || { echo -e "\n${RED}Не удалось скачать $PODKOP_INST${NC}\n"; PAUSE; return; }
+wget -q -U "Mozilla/5.0" -O luci-app-podkop.$APK_RAS "$PODKOP_LUCI" || { echo -e "\n${RED}Не удалось скачать $PODKOP_LUCI${NC}\n"; PAUSE; return; }
+wget -q -U "Mozilla/5.0" -O luci-i18n-podkop-ru.$APK_RAS "$PODKOP_RUS" || { echo -e "\n${RED}Не удалось скачать $PODKOP_RUS${NC}\n"; PAUSE; return; }
 
-echo -e "\n${CYAN}Устанавливаем: ${NC}Podkop"
-$INSTALL_CMD ./podkop.$APK_RAS >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить ${NC}$PODKOP_INST\n"; PAUSE; exit 0; }
-echo -e "\n${CYAN}Устанавливаем: ${NC}Podkop LuCI"
-$INSTALL_CMD ./luci-app-podkop.$APK_RAS >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить ${NC}$PODKOP_LUCI\n"; PAUSE; exit 0; }
-echo -e "\n${CYAN}Устанавливаем: ${NC}Руссификатор"
-$INSTALL_CMD ./luci-i18n-podkop-ru.$APK_RAS >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить ${NC}$PODKOP_RUS\n"; PAUSE; exit 0; }
+echo -e "${CYAN}Устанавливаем ${NC}Podkop Evolution"
+$INSTALL_CMD ./podkop.$APK_RAS >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить ${NC}$PODKOP_INST\n"; PAUSE; return; }
+$INSTALL_CMD ./luci-app-podkop.$APK_RAS >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить ${NC}$PODKOP_LUCI\n"; PAUSE; return; }
+$INSTALL_CMD ./luci-i18n-podkop-ru.$APK_RAS >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить ${NC}$PODKOP_RUS\n"; PAUSE; return; }
 
 rm -rf "$tmpDIR"
-echo -e "\n${GREEN}===== Установка завершена =====${NC}"
+echo -e "Podkop Evolution ${GREEN}установлен!${NC}\n"
+PAUSE
+
+else
+    echo -e "\n${MAGENTA}Удаление Podkop${NC}"
+
+pkg_remove luci-i18n-podkop-ru
+pkg_remove luci-app-podkop podkop
+pkg_remove podkop
+
+rm -rf /etc/config/podkop >/dev/null 2>&1
+rm -f /etc/config/*podkop* >/dev/null 2>&1
+
+echo -e "Podkop ${GREEN}удалён!${NC}"
+PAUSE
+fi
+
 }
 
 # ==========================================
 # AWG
 # ==========================================
 install_AWG() {
+
+if ! pkg_is_installed amneziawg-tools; then
 
 echo -e "\n${MAGENTA}Устанавливаем AWG и интерфейс AWG${NC}"
 
@@ -155,6 +175,27 @@ echo -e "${YELLOW}Перезапускаем сеть! Подождите...${NC
 echo -e "AWG ${GREEN}и${NC} интерфейс AWG ${GREEN}установлены!${NC}\n"
 echo -e "${YELLOW}Необходимо в LuCI в интерфейс AWG загрузить конфиг:${NC}\nNetwork ${GREEN}→${NC} Interfaces ${GREEN}→${NC} AWG ${GREEN}→${NC} Edit ${GREEN}→${NC} Load configuration…${NC}"
 PAUSE
+
+else
+echo -e "\n${MAGENTA}Удаление AWG и интерфейс AWG${NC}"
+echo -e "${CYAN}Удаляем ${NC}AWG"
+pkg_remove luci-i18n-amneziawg-ru
+pkg_remove luci-proto-amneziawg
+pkg_remove amneziawg-tools
+pkg_remove kmod-amneziawg
+uci delete network.AWG >/dev/null 2>&1
+uci commit network >/dev/null 2>&1
+for peer in $(uci show network | grep "interface='AWG'" | cut -d. -f2); do
+uci delete network.$peer
+done
+uci commit network >/dev/null 2>&1
+echo -e "${CYAN}Удаляем ${NC}интерфейс AWG"
+echo -e "${YELLOW}Перезапускаем сеть! Подождите...${NC}"
+/etc/init.d/network restart
+echo -e "AWG ${GREEN}и${NC} интерфейс AWG ${GREEN}удалены!${NC}"
+PAUSE
+fi
+
 }
 
 # ==========================================
@@ -162,13 +203,15 @@ PAUSE
 # ==========================================
 integration_AWG() {
 
-echo -e "\n${MAGENTA}Интегрируем AWG в Podkop${NC}"
+if ! pkg_is_installed podkop; then echo -e "\n${RED}Podkop Evolution не установлен!${NC}\n"; PAUSE; return; fi
 
 if ! awg --version >/dev/null 2>&1; then
 echo -e "\n${RED}AWG не установлен!${NC}"
 PAUSE
 return
 fi
+
+echo -e "\n${MAGENTA}Интегрируем AWG в Podkop${NC}"
 
 echo -e "${CYAN}Меняем конфигурацию в ${NC}Podkop${NC}"
 cat <<'EOF' >/etc/config/podkop
@@ -216,45 +259,86 @@ PAUSE
 }
 
 # ==========================================
-# Удаление Podkop
+# Интеграция VPN
 # ==========================================
-PODKOP_UNINSTALL() {
-echo -e "\n${MAGENTA}Удаление Podkop${NC}"
+PODKOP_VPN() {
 
-pkg_remove luci-i18n-podkop-ru
-pkg_remove luci-app-podkop podkop
-pkg_remove podkop
+if ! pkg_is_installed podkop; then echo -e "\n${RED}Podkop Evolution не установлен!${NC}\n"; PAUSE; return; fi
 
-rm -rf /etc/config/podkop >/dev/null 2>&1
-rm -f /etc/config/*podkop* >/dev/null 2>&1
 
-echo -e "Podkop ${GREEN}удалён!${NC}"
-PAUSE
-}
+echo -e "\n${MAGENTA}Интегрируем VPN подписку в Podkop Evolution${NC}"
+echo -ne "${YELLOW}Введите ссылку на подписку (${CYAN}https://...${YELLOW}): ${NC}"
+read -r SUB_URL
+[ -z "$SUB_URL" ] && echo -e "\n${RED}Ошибка! Ссылка пустая!${NC}\n" && PAUSE && return
 
-# ==========================================
-# uninstall_AWG
-# ==========================================
-uninstall_AWG() {
-echo -e "\n${MAGENTA}Удаление AWG и интерфейс AWG${NC}"
-echo -e "${CYAN}Удаляем ${NC}AWG"
-pkg_remove luci-i18n-amneziawg-ru
-pkg_remove luci-proto-amneziawg
-pkg_remove amneziawg-tools
-pkg_remove kmod-amneziawg
+echo -e "${CYAN}Меняем конфигурацию в ${NC}Podkop Evolution${NC}"
 
-uci delete network.AWG >/dev/null 2>&1
-uci commit network >/dev/null 2>&1
+cat > /etc/config/podkop <<EOF
+config settings 'settings'
+	option dns_type 'udp'
+	option dns_server '8.8.8.8'
+	option bootstrap_dns_server '77.88.8.8'
+	option dns_rewrite_ttl '60'
+	list source_network_interfaces 'br-lan'
+	option enable_output_network_interface '0'
+	option enable_badwan_interface_monitoring '0'
+	option enable_yacd '0'
+	option disable_quic '0'
+	option update_interval '1d'
+	option download_lists_via_proxy '0'
+	option dont_touch_dhcp '0'
+	option config_path '/etc/sing-box/config.json'
+	option cache_path '/tmp/sing-box/cache.db'
+	option log_level 'panic'
+	option exclude_ntp '0'
+	option shutdown_correctly '0'
 
-for peer in $(uci show network | grep "interface='AWG'" | cut -d. -f2); do
-    uci delete network.$peer
-done
-uci commit network >/dev/null 2>&1
-echo -e "${CYAN}Удаляем ${NC}интерфейс AWG"
-echo -e "${YELLOW}Перезапускаем сеть! Подождите...${NC}"
-/etc/init.d/network restart
+config section 'main'
+	option connection_type 'proxy'
+	option proxy_config_type 'subscription'
+	option enable_udp_over_tcp '0'
+	option subscription_url '$SUB_URL'
+	option subscription_update_interval '1h'
+	option subscription_group_by_countries '0'
+	option urltest_check_interval '5m'
+	option urltest_tolerance '150'
+	option urltest_testing_url 'https://www.gstatic.com/generate_204'
+	list community_lists 'geoblock'
+	list community_lists 'block'
+	list community_lists 'porn'
+	list community_lists 'news'
+	list community_lists 'anime'
+	list community_lists 'youtube'
+	list community_lists 'discord'
+	list community_lists 'meta'
+	list community_lists 'twitter'
+	list community_lists 'hdrezka'
+	list community_lists 'tiktok'
+	list community_lists 'telegram'
+	list community_lists 'cloudflare'
+	list community_lists 'google_ai'
+	list community_lists 'google_play'
+	list community_lists 'hodca'
+	list community_lists 'roblox'
+	list community_lists 'hetzner'
+	list community_lists 'ovh'
+	list community_lists 'digitalocean'
+	list community_lists 'cloudfront'
+	option user_domain_list_type 'disabled'
+	option user_subnet_list_type 'disabled'
+	option mixed_proxy_enabled '0'
+EOF
 
-echo -e "AWG ${GREEN}и${NC} интерфейс AWG ${GREEN}удалены!${NC}"
+echo -e "${CYAN}Запускаем ${NC}Podkop Evolution${NC}"
+podkop enable >/dev/null 2>&1
+echo -e "${CYAN}Применяем конфигурацию${NC}"
+podkop reload >/dev/null 2>&1
+podkop restart >/dev/null 2>&1
+echo -e "${CYAN}Обновляем списки${NC}"
+podkop list_update >/dev/null 2>&1
+echo -e "${CYAN}Перезапускаем сервис${NC}"
+podkop restart >/dev/null 2>&1
+echo -e "VPN подписка ${GREEN}интегрирована в ${NC}Podkop Evolution${GREEN}!${NC}\n"
 PAUSE
 }
 
@@ -311,11 +395,16 @@ echo -e "${CYAN}1) ${GREEN}Установить ${NC}Podkop Evolution"; fi
 if pkg_is_installed amneziawg-tools; then
 echo -e "${CYAN}2) ${GREEN}Удалить ${NC}AWG${GREEN} и ${NC}интерфейс AWG"; else
 echo -e "${CYAN}2) ${GREEN}Установить ${NC}AWG${GREEN} и ${NC}интерфейс AWG"; fi
-echo -e "${CYAN}3) ${GREEN}Интегрировать подписку ${NC}VPN${GREEN} в ${NC}Podkop Evolution"
+
+if [ -f /etc/config/podkop ] && grep -qF 'option subscription_url' /etc/config/podkop; then
+  echo -e "${CYAN}3) ${GREEN}Сменить ${NC}VPN${GREEN} подписку${NC}"
+else
+    echo -e "${CYAN}3) ${GREEN}Интегрировать ${NC}VPN подписку${GREEN} в ${NC}Podkop Evolution"
+fi
 
 echo -e "${CYAN}4) ${GREEN}Интегрировать ${NC}AWG${GREEN} в ${NC}Podkop"
 
-echo -e "${CYAN}5) ${GREEN}Интегрировать ${NC}/root/WARP.conf${GREEN} в ${NC}AWG"
+# echo -e "${CYAN}5) ${GREEN}Интегрировать ${NC}/root/WARP.conf${GREEN} в ${NC}AWG"
 
 
 echo -e "${CYAN}Enter) ${GREEN}Выход${NC}"
@@ -323,23 +412,11 @@ echo -ne "\n${YELLOW}Выберите пункт:${NC} "
 read choicePOD
 
 case "$choicePOD" in
-1) 
-if pkg_is_installed podkop; then
-    PODKOP_UNINSTALL
-else
-    PODKOP_INSTALL
-fi
-;;
+1)  PODKOP_INSTALL ;;
 
+2) install_AWG ;;
 
-2)
-if pkg_is_installed amneziawg-tools; then
-    uninstall_AWG
-else
-    install_AWG
-fi
-;;
-
+3) PODKOP_VPN ;;
 
 6) integration_AWG ;;
 
