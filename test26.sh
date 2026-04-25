@@ -180,7 +180,8 @@ echo -e "${CYAN}Обновляем списки${NC}"
 echo -e "${CYAN}Перезапускаем сервис${NC}"
 /etc/init.d/podkop restart >/dev/null 2>&1
 echo -e "AWG ${GREEN}интегрирован в ${NC}Podkop${GREEN}!${NC}\n"
-echo -e "${YELLOW}Необходимо в LuCI в интерфейс AWG загрузить конфиг:${NC}\nNetwork ${GREEN}→${NC} Interfaces ${GREEN}→${NC} AWG ${GREEN}→${NC} Edit ${GREEN}→${NC} Load configuration…${NC}"
+echo -e "${YELLOW}Необходимо в ${NC}LuCI${YELLOW} в интерфейс ${NC}AWG${YELLOW} загрузить файл ${NC}*.conf${YELLOW}:${NC}"
+echo -e "${NC}Network ${GREEN}→${NC} Interfaces ${GREEN}→${NC} AWG ${GREEN}→${NC} Edit ${GREEN}→${NC} Load configuration… ${GREEN}→${NC} Save ${GREEN}→${NC} Save & Apply\n"
 PAUSE
 }
 
