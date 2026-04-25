@@ -253,6 +253,9 @@ echo -e "${YELLOW}Интерфейс AWG: ${GREEN}установлен${NC}"
 else
 echo -e "${YELLOW}Интерфейс AWG: ${RED}не установлен${NC}"
 fi
+
+grep -q "config section 'StressKVN'" /etc/config/podkop >/dev/null 2>&1  && echo -e "Режим работы Podkop: подписка" || grep -q "config section 'StressAWG'" /etc/config/podkop >/dev/null 2>&1 && echo -e "Режим работы Podkop: AWG"
+
 if pkg_is_installed podkop; then
 echo -e "\n${CYAN}1) ${GREEN}Удалить ${NC}Podkop Evolution"; else
 echo -e "\n${CYAN}1) ${GREEN}Установить ${NC}Podkop Evolution"; fi
