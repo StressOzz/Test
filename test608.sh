@@ -604,28 +604,7 @@ PODKOP_VER() { LOCALPOD="$(podkop show_version 2>/dev/null | cut -d'-' -f1 | sed
 then PODKOP_STATUS="${GREEN}$LOCALPOD${NC}"; else PODKOP_STATUS="${RED}$LOCALPOD${NC}"; fi; }
 # УСТАНОВКА PODKOP
 PODKOP_INSTALL() { 
-if ! pkg_is_installed podkop; then
-    ACTION="install"
-elif [ "$PODKOP_LATEST_VER" != "$LOCALPOD" ]; then
-    ACTION="update"
-else
-    ACTION="skip"
-fi
-if ! pkg_is_installed podkop; then ACTION="install"; elif [ "$PODKOP_LATEST_VER" != "$LOCALPOD" ]; then ACTION="update"; else ACTION="skip"; fi; if [ "$ACTION" = "install" ] || [ "$ACTION" = "update" ]
-then rm -rf "$tmpDIR"; mkdir -p "$tmpDIR"; [ "$ACTION" = "install" ] && echo -e "\n${MAGENTA}Устанавливаем Podkop Evolution${NC}" || echo -e "\n${MAGENTA}Обновляем Podkop Evolution${NC}"
-echo -e "${CYAN}Обновляем список пакетов${NC}"; $UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось обновить список пакетов${NC}\n"; PAUSE; return; }
-PODKOP_INST="https://github.com/yandexru45/podkop-evolution/releases/download/$PODKOP_LATEST_VER/podkop-$PODKOP_LATEST_VER-$VER_SUF.$APK_RAS"
-PODKOP_LUCI="https://github.com/yandexru45/podkop-evolution/releases/download/$PODKOP_LATEST_VER/luci-app-podkop-$PODKOP_LATEST_VER-$VER_SUF.$APK_RAS"
-PODKOP_RUS="https://github.com/yandexru45/podkop-evolution/releases/download/$PODKOP_LATEST_VER/luci-i18n-podkop-ru-$PODKOP_LATEST_VER.$APK_RAS"; cd "$tmpDIR"; echo -e "${CYAN}Скачиваем ${NC}Podkop Evolution"
-wget -q -U "Mozilla/5.0" -O podkop.$APK_RAS "$PODKOP_INST" || { echo -e "\n${RED}Не удалось скачать $PODKOP_INST${NC}\n"; PAUSE; return; }
-wget -q -U "Mozilla/5.0" -O luci-app-podkop.$APK_RAS "$PODKOP_LUCI" || { echo -e "\n${RED}Не удалось скачать $PODKOP_LUCI${NC}\n"; PAUSE; return; }
-wget -q -U "Mozilla/5.0" -O luci-i18n-podkop-ru.$APK_RAS "$PODKOP_RUS" || { echo -e "\n${RED}Не удалось скачать $PODKOP_RUS${NC}\n"; PAUSE; return; }
-echo -en "${CYAN}Устанавливаем ${NC}Podkop Evolution\n${YELLOW}Подождите...${NC}"; $INSTALL ./podkop.$APK_RAS >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить ${NC}$PODKOP_INST\n"; PAUSE; return; }
-$INSTALL ./luci-app-podkop.$APK_RAS >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить ${NC}$PODKOP_LUCI\n"; PAUSE; return; }
-$INSTALL ./luci-i18n-podkop-ru.$APK_RAS >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить ${NC}$PODKOP_RUS\n"; PAUSE; return; }; rm -rf "$tmpDIR"
-echo -e "\nPodkop Evolution ${GREEN}$( [ "$ACTION" = "install" ] && echo "установлен" || echo "обновлён" )!${NC}\n"; PAUSE; elif [ "$ACTION" = "skip" ]
-then echo -e "\n${GREEN}Podkop уже актуальной версии ($LOCALPOD)${NC}\n"; PAUSE; else echo -e "\n${MAGENTA}Удаляем Podkop${NC}"; $DELETE luci-i18n-podkop-ru >/dev/null 2>&1; $DELETE luci-app-podkop >/dev/null 2>&1
-$DELETE podkop >/dev/null 2>&1; rm -rf /etc/config/podkop* /usr/bin/podkop >/dev/null 2>&1; echo -e "Podkop ${GREEN}удалён!${NC}\n"; PAUSE; fi
+if ! pkg_is_installed podkop; then ACTION="install"; elif [ "$PODKOP_LATEST_VER" != "$LOCALPOD" ]; then ACTION="update"; else ACTION="remove"; fi; if [ "$ACTION" = "install" ] || [ "$ACTION" = "update" ]; then rm -rf "$tmpDIR"; mkdir -p "$tmpDIR"; [ "$ACTION" = "install" ] && echo -e "\n${MAGENTA}Устанавливаем Podkop Evolution${NC}" || echo -e "\n${MAGENTA}Обновляем Podkop Evolution${NC}"; echo -e "${CYAN}Обновляем список пакетов${NC}"; $UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось обновить список пакетов${NC}\n"; PAUSE; return; }; PODKOP_INST="https://github.com/yandexru45/podkop-evolution/releases/download/$PODKOP_LATEST_VER/podkop-$PODKOP_LATEST_VER-$VER_SUF.$APK_RAS"; PODKOP_LUCI="https://github.com/yandexru45/podkop-evolution/releases/download/$PODKOP_LATEST_VER/luci-app-podkop-$PODKOP_LATEST_VER-$VER_SUF.$APK_RAS"; PODKOP_RUS="https://github.com/yandexru45/podkop-evolution/releases/download/$PODKOP_LATEST_VER/luci-i18n-podkop-ru-$PODKOP_LATEST_VER.$APK_RAS"; cd "$tmpDIR"; echo -e "${CYAN}Скачиваем ${NC}Podkop Evolution"; wget -q -U "Mozilla/5.0" -O podkop.$APK_RAS "$PODKOP_INST" || { echo -e "\n${RED}Не удалось скачать $PODKOP_INST${NC}\n"; PAUSE; return; }; wget -q -U "Mozilla/5.0" -O luci-app-podkop.$APK_RAS "$PODKOP_LUCI" || { echo -e "\n${RED}Не удалось скачать $PODKOP_LUCI${NC}\n"; PAUSE; return; }; wget -q -U "Mozilla/5.0" -O luci-i18n-podkop-ru.$APK_RAS "$PODKOP_RUS" || { echo -e "\n${RED}Не удалось скачать $PODKOP_RUS${NC}\n"; PAUSE; return; }; echo -en "${CYAN}Устанавливаем ${NC}Podkop Evolution\n${YELLOW}Подождите...${NC}"; $INSTALL ./podkop.$APK_RAS >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить ${NC}$PODKOP_INST\n"; PAUSE; return; }; $INSTALL ./luci-app-podkop.$APK_RAS >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить ${NC}$PODKOP_LUCI\n"; PAUSE; return; }; $INSTALL ./luci-i18n-podkop-ru.$APK_RAS >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить ${NC}$PODKOP_RUS\n"; PAUSE; return; }; rm -rf "$tmpDIR"; echo -e "\nPodkop Evolution ${GREEN}$( [ "$ACTION" = "install" ] && echo "установлен" || echo "обновлён" )!${NC}\n"; PAUSE; else echo -e "\n${MAGENTA}Удаляем Podkop${NC}"; $DELETE luci-i18n-podkop-ru >/dev/null 2>&1; $DELETE luci-app-podkop >/dev/null 2>&1; $DELETE podkop >/dev/null 2>&1; rm -rf /etc/config/podkop* /usr/bin/podkop >/dev/null 2>&1; echo -e "Podkop ${GREEN}удалён!${NC}\n"; PAUSE; fi
 
 
 
