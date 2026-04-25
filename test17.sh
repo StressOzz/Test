@@ -80,7 +80,7 @@ mkdir -p "$tmpDIR"
 echo -e "\n${MAGENTA}Устанавливаем Podkop Evolution${NC}"
 echo -e "${CYAN}Обновляем список пакетов${NC}"
 $UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось обновить список пакетов${NC}\n"; PAUSE; return; }
-
+PODKOP_LATEST_VER="$(curl -Ls -o /dev/null -w '%{url_effective}' https://github.com/yandexru45/podkop-evolution/releases/latest | sed 's#.*/tag/##')"
 
 PODKOP_INST="https://github.com/yandexru45/podkop-evolution/releases/download/$PODKOP_LATEST_VER/podkop-$PODKOP_LATEST_VER-$VER_SUF.$APK_RAS"
 PODKOP_LUCI="https://github.com/yandexru45/podkop-evolution/releases/download/$PODKOP_LATEST_VER/luci-app-podkop-$PODKOP_LATEST_VER-$VER_SUF.$APK_RAS"
@@ -123,64 +123,38 @@ fi
 # ==========================================
 install_AWG() {
 
+OWRT=$(grep '^DISTRIB_RELEASE=' /etc/openwrt_release | cut -d"'" -f2)
+ARCH_AWG="$(grep DISTRIB_ARCH /etc/openwrt_release | cut -d"'" -f2)_$(grep DISTRIB_TARGET /etc/openwrt_release | cut -d"'" -f2 | tr '/' '_')"
+
 if ! pkg_is_installed amneziawg-tools; then
 rm -rf "$tmpDIR"
 mkdir -p "$tmpDIR"
 echo -e "\n${MAGENTA}Устанавливаем AWG и интерфейс AWG${NC}"
 
-VERSION=$(ubus call system board | jsonfilter -e '@.release.version' | tr -d '\n')
-MAJOR_VERSION=$(echo "$VERSION" | cut -d '.' -f1)
-
-if [ -z "$VERSION" ]; then
-echo -e "\n${RED}Не удалось определить версию OpenWrt!${NC}"
-PAUSE
-return
-fi
-
-TARGET=$(ubus call system board | jsonfilter -e '@.release.target' | cut -d '/' -f1)
-SUBTARGET=$(ubus call system board | jsonfilter -e '@.release.target' | cut -d '/' -f2)
-
-install_pkg() {
-local pkgname=$1
-local filename="${pkgname}${PKGPOSTFIX}"
-local url="${BASE_URL}v${VERSION}/${filename}"
-
-echo -e "${CYAN}Скачиваем:${NC} $filename"
-
-if wget -O "$tmpDIR/$filename" "$url" >/dev/null 2>&1; then
-echo -e "${CYAN}Устанавливаем:${NC} $pkgname"
-if ! $INSTALL "$tmpDIR/$filename" >/dev/null 2>&1; then
-echo -e "\n${RED}Ошибка установки $pkgname!${NC}"
-PAUSE
-return 1
-fi
-else
-echo -e "\n${RED}Ошибка! Не удалось скачать $filename${NC}"
-PAUSE
-return 1
-fi
-}
-
-if [ "$MAJOR_VERSION" -ge 25 ] 2>/dev/null; then
-PKGARCH=$(cat /etc/apk/arch)
-PKGPOSTFIX="_v${VERSION}_${PKGARCH}_${TARGET}_${SUBTARGET}.apk"
-INSTALL="apk add --allow-untrusted"
-else
 echo -e "${CYAN}Обновляем список пакетов${NC}"
-opkg update >/dev/null 2>&1 || {
-echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}"
-PAUSE
-return
-}
-PKGARCH=$(opkg print-architecture | awk 'BEGIN {max=0} {if ($3 > max) {max=$3; arch=$2}} END {print arch}')
-PKGPOSTFIX="_v${VERSION}_${PKGARCH}_${TARGET}_${SUBTARGET}.ipk"
-INSTALL="opkg install"
-fi
 
-install_pkg "kmod-amneziawg"
-install_pkg "amneziawg-tools"
-install_pkg "luci-proto-amneziawg"
-install_pkg "luci-i18n-amneziawg-ru"
+$UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось обновить список пакетов${NC}\n"; PAUSE; return; }
+
+
+AWG_kmod=https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v$OWRT/kmod-amneziawg_v$OWRT_$$ARCH_AWG.$APK_RAS
+AWG_tools=https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v$OWRT/amneziawg-tools_v$OWRT_$$ARCH_AWG.$APK_RAS
+AWG_luci=https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v$OWRT/luci-proto-amneziawg_v$OWRT_$$ARCH_AWG.$APK_RAS
+AWG_ru=https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v$OWRT/luci-i18n-amneziawg-ru_v$OWRT_$$ARCH_AWG.$APK_RAS
+
+cd "$tmpDIR" || exit 1
+
+echo -e "${CYAN}Скачиваем ${NC}AWG"
+wget -q -U "Mozilla/5.0" -O AWG_kmod.$APK_RAS "$AWG_kmod" || { echo -e "\n${RED}Не удалось скачать $AWG_kmod${NC}\n"; PAUSE; return; }
+wget -q -U "Mozilla/5.0" -O AWG_tools.$APK_RAS "$AWG_tools" || { echo -e "\n${RED}Не удалось скачать $AWG_tools${NC}\n"; PAUSE; return; }
+wget -q -U "Mozilla/5.0" -O AWG_luci.$APK_RAS "$AWG_luci" || { echo -e "\n${RED}Не удалось скачать $AWG_luci${NC}\n"; PAUSE; return; }
+wget -q -U "Mozilla/5.0" -O AWG_ru.$APK_RAS "$AWG_ru" || { echo -e "\n${RED}Не удалось скачать $AWG_ru${NC}\n"; PAUSE; return; }
+
+
+echo -e "${CYAN}Устанавливаем ${NC}AWG"
+$INSTALL ./AWG_kmod.$APK_RAS >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить ${NC}$AWG_kmod\n"; PAUSE; return; }
+$INSTALL ./AWG_tools.$APK_RAS >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить ${NC}$AWG_tools\n"; PAUSE; return; }
+$INSTALL ./AWG_luci.$APK_RAS >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить ${NC}$AWG_luci\n"; PAUSE; return; }
+$INSTALL ./AWG_ru.$APK_RAS >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить ${NC}$AWG_ru\n"; PAUSE; return; }
 
 echo -e "${CYAN}Создаем интерфейс AWG${NC}"
 
@@ -200,7 +174,9 @@ echo -e "AWG ${GREEN}и${NC} интерфейс AWG ${GREEN}установлен
 echo -e "${YELLOW}Необходимо в LuCI в интерфейс AWG загрузить конфиг:${NC}\nNetwork ${GREEN}→${NC} Interfaces ${GREEN}→${NC} AWG ${GREEN}→${NC} Edit ${GREEN}→${NC} Load configuration…${NC}"
 PAUSE
 rm -rf "$tmpDIR"
+
 else
+
 echo -e "\n${MAGENTA}Удаление AWG и интерфейс AWG${NC}"
 echo -e "${CYAN}Удаляем ${NC}AWG"
 $DELETE luci-i18n-amneziawg-ru >/dev/null 2>&1
@@ -288,11 +264,11 @@ if ! pkg_is_installed podkop; then echo -e "\n${RED}Podkop Evolution не уст
 
 
 echo -e "\n${MAGENTA}Интегрируем VPN подписку в Podkop Evolution${NC}"
-echo -ne "${YELLOW}Введите ссылку на подписку (${CYAN}https://...${YELLOW}): ${NC}"
+echo -ne "${YELLOW}Введите ссылку на подписку (${NC}https://...${YELLOW}): ${NC}"
 read -r SUB_URL
 [ -z "$SUB_URL" ] && echo -e "\n${RED}Ошибка! Ссылка пустая!${NC}\n" && PAUSE && return
 
-echo -e "${CYAN}Меняем конфигурацию в ${NC}Podkop Evolution${NC}"
+echo -e "\n${CYAN}Меняем конфигурацию в ${NC}Podkop Evolution${NC}"
 
 cat > /etc/config/podkop <<EOF
 config settings 'settings'
@@ -366,13 +342,13 @@ PAUSE
 PODKOP_menu() { while true; do
 openwrt_version=$(cat /etc/openwrt_release | grep DISTRIB_RELEASE | cut -d"'" -f2 | cut -d'.' -f1)
     if [ "$openwrt_version" = "23" ]; then
-echo -e "\n${RED}OpenWrt ниже 24 - не поддерживается!${NC}\n"
+echo -e "\n${RED}OpenWrt версии ниже 24 не поддерживаются!${NC}\n"
 PAUSE; return
     fi
 
 AVAILABLE_SPACE=$(df /overlay 2>/dev/null | awk 'NR==2 {print $4}')
 [ -z "$AVAILABLE_SPACE" ] && AVAILABLE_SPACE=$(df / 2>/dev/null | awk 'NR==2 {print $4}')
-REQUIRED_SPACE=15360
+REQUIRED_SPACE=16000
     if [ "$AVAILABLE_SPACE" -lt "$REQUIRED_SPACE" ]; then
 echo -e "\n${RED}Недостаточно свободного места${NC}\n"
 echo -e "${YELLOW}Доступно: ${NC}$((AVAILABLE_SPACE/1024))MB"
