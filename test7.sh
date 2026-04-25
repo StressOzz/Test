@@ -17,7 +17,7 @@ PAUSE() { echo -ne "Нажмите Enter..."; read dummy; }
 PODKOP_LATEST_VER="$(curl -Ls -o /dev/null -w '%{url_effective}' https://github.com/yandexru45/podkop-evolution/releases/latest | sed 's#.*/tag/##')"
 
 VER_SUF="r1-all"; APK_RAS="ipk"; PKG_IS_APK=0; INSTALL_CMD="opkg install"
-command -v apk >/dev/null 2>&1 && VER_SUF="r1" && APK_RAS="apk" && PKG_IS_APK=1; INSTALL_CMD="apk add --allow-untrusted"
+command -v apk >/dev/null 2>&1 && VER_SUF="r1" && APK_RAS="apk" && PKG_IS_APK=1 && INSTALL_CMD="apk add --allow-untrusted"
 
 pkg_is_installed () {
     local pkg_name="$1"
@@ -28,7 +28,7 @@ pkg_is_installed () {
     fi
 }
 
-openwrt_version=$(cat /etc/openwrt_release | grep DISTRIB_RELEASE | cut -d"'" -f2 | cut -d'.' -f1
+openwrt_version=$(cat /etc/openwrt_release | grep DISTRIB_RELEASE | cut -d"'" -f2 | cut -d'.' -f1)
 
     if [ "$openwrt_version" = "23" ]; then
 echo -e "\n${RED}OpenWrt ниже 24 - не поддерживается!${NC}\n"
@@ -61,7 +61,7 @@ PODKOP_INST="https://github.com/yandexru45/podkop-evolution/releases/download/$P
 PODKOP_LUCI="https://github.com/yandexru45/podkop-evolution/releases/download/$PODKOP_LATEST_VER/luci-app-podkop-$PODKOP_LATEST_VER-$VER_SUF.$APK_RAS"
 PODKOP_RUS="https://github.com/yandexru45/podkop-evolution/releases/download/$PODKOP_LATEST_VER/luci-i18n-podkop-ru-$PODKOP_LATEST_VER.$APK_RAS"
 
-cd /tmp/PodkopManager || exit 1
+cd "$tmpDIR" || exit 1
 
 echo -e "${CYAN}Скачиваем: ${YELLOW}$PODKOP_INST${NC}"
 wget -q -U "Mozilla/5.0" -O podkop.$APK_RAS "$PODKOP_INST" || { echo -e "\n${RED}Не удалось скачать $PODKOP_INST${NC}\n"; PAUSE; exit 0; }
