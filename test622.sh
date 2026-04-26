@@ -72,7 +72,6 @@ ok=0; echo -e "${CYAN}Устанавливаем ${NC}curl"; for i in 1 2 3 4 5;
 if [ "$ok" -ne 1 ]; then echo -e "\n${RED}Не удалось установить ${NC}curl${RED} после 5 попыток${NC}\n"; PAUSE; exit 0; fi; if ! command -v curl >/dev/null 2>&1; then echo -e "\ncurl${RED} не найден после установки${NC}\n"; PAUSE; exit 0; fi; fi
 curl -sL -o /dev/null -w '%{url_effective}' https://github.com/remittor/zapret-openwrt/releases/latest | grep -o '[0-9.]*$' > "$TMP_VER"; ZAPRET_VERSION="$(cat "$TMP_VER")"
 curl -sL -o /dev/null -w '%{url_effective}' https://github.com/yandexru45/podkop-evolution/releases/latest | grep -o '[0-9.]*$' > "$TMP_VER_POD"; PODKOP_LATEST_VER="$(cat "$TMP_VER_POD")"
-
 # ==========================================
 # Получение версии
 # ==========================================
@@ -84,11 +83,10 @@ else ZAPRET_STATUS=""; fi; [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ] && INST_COLO
 # ==========================================
 # Установка Zapret
 # ==========================================
-install_pkg() { local display_name="$1"; local pkg_file="$2"; if [ "$PKG_IS_APK" -eq 1 ]; then echo -e "${CYAN}Устанавливаем ${NC}$display_name"; apk add --allow-untrusted "$pkg_file" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить $display_name!${NC}\n"; PAUSE; return 1; }
-else echo -e "${CYAN}Устанавливаем ${NC}$display_name"; opkg install --force-reinstall "$pkg_file" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить $display_name!${NC}\n"; PAUSE; return 1; }; fi; }
+install_pkg() { local display_name="$1"; local pkg_file="$2"; $INSTALL "$pkg_file" || { echo -e "\n${RED}Не удалось установить $display_name!${NC}\n"; PAUSE; return 1; }; fi; }
 install_Zapret() { mkdir -p "$TMP_SF"; local NO_PAUSE=$1; get_versions; [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ] && { echo -e "\n${GREEN}Zapret уже установлен!${NC}\n"; [ "$NO_PAUSE" != "1" ] && PAUSE; return; }; [ "$NO_PAUSE" != "1" ] && echo; echo -e "${MAGENTA}Устанавливаем Zapret${NC}"
 if [ -f /etc/init.d/zapret ]; then echo -e "${CYAN}Останавливаем ${NC}zapret"; /etc/init.d/zapret stop >/dev/null 2>&1; for pid in $(pgrep -f /opt/zapret 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done; fi; echo -e "${CYAN}Обновляем список пакетов${NC}"
-if [ "$PKG_IS_APK" -eq 1 ]; then apk update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении apk!${NC}\n"; PAUSE; return; }; else opkg update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении opkg!${NC}\n"; PAUSE; return; }; fi
+$UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; PAUSE; return; }; fi
 rm -f "$TMP_SF"/* 2>/dev/null; cd "$TMP_SF" || return; FILE_NAME=$(basename "$LATEST_URL"); if ! command -v unzip >/dev/null 2>&1; then echo -e "${CYAN}Устанавливаем ${NC}unzip"; if [ "$PKG_IS_APK" -eq 1 ]; then
 apk add unzip >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить unzip!${NC}\n"; PAUSE; return; }; else opkg install unzip >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить unzip!${NC}\n"; PAUSE; return; }; fi; fi
 echo -e "${CYAN}Скачиваем архив ${NC}$FILE_NAME"; wget -q -U "Mozilla/5.0" -O "$FILE_NAME" "$LATEST_URL" || { echo -e "\n${RED}Не удалось скачать $FILE_NAME${NC}\n"; PAUSE; return; }; echo -e "${CYAN}Распаковываем архив${NC}"
@@ -178,7 +176,7 @@ echo -e "\n${MAGENTA}Восстанавливаем настройки из ре
 # ==========================================
 stop_zapret() { local NO_PAUSE=$1; echo -e "\n${MAGENTA}Останавливаем Zapret${NC}\n${CYAN}Останавливаем ${NC}Zapret"; /etc/init.d/zapret stop >/dev/null 2>&1
 for pid in $(pgrep -f /opt/zapret 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done; echo -e "Zapret ${GREEN}остановлен!${NC}\n"; [ "$NO_PAUSE" != "1" ] && PAUSE; }
-start_zapret() { if [ -f /etc/init.d/zapret ]; then echo -e "\n${MAGENTA}Запускаем Zapret${NC}"; echo -e "${CYAN}Запускаем ${NC}Zapret"; /etc/init.d/zapret start >/dev/null 2>&1; ZAPRET_RESTART
+start_zapret() { if [ -f /etc/init.d/zapret ]; then echo -e "\n${MAGENTA}Запускаем Zapret${NC}"; /etc/init.d/zapret start >/dev/null 2>&1; ZAPRET_RESTART
 echo -e "Zapret ${GREEN}запущен!${NC}\n"; else echo -e "\n${RED}Zapret не установлен!${NC}\n"; fi; [ "$NO_PAUSE" != "1" ] && PAUSE; }
 # ==========================================
 # Удаление Zapret
@@ -340,7 +338,7 @@ then DOH_STATUS="dns.malw.link (CloudFlare)"; elif grep -q "dns.malw.link" "$fil
 D_o_H() { if [ "$PKG_IS_APK" -eq 1 ]; then PKG_CHECK="https-dns-proxy"; PKG_MANAGER="apk"; else PKG_CHECK="https-dns-proxy"; PKG_MANAGER="opkg"; fi; if { [ "$PKG_MANAGER" = "apk" ] && apk info -e "$PKG_CHECK" >/dev/null 2>&1; } || { [ "$PKG_MANAGER" = "opkg" ] && opkg list-installed | grep -q '^https-dns-proxy '; }; then
 echo -e "\n${MAGENTA}Удаляем DNS over HTTPS${NC}\n${CYAN}Удаляем пакеты${NC}"; if [ "$PKG_MANAGER" = "apk" ]; then apk del https-dns-proxy luci-app-https-dns-proxy >/dev/null 2>&1; else opkg --force-removal-of-dependent-packages --autoremove remove https-dns-proxy luci-app-https-dns-proxy >/dev/null 2>&1; fi
 echo -e "${CYAN}Удаляем файлы конфигурации${NC}"; rm -f /etc/config/https-dns-proxy /etc/init.d/https-dns-proxy; echo -e "DNS over HTTPS${GREEN} удалён!${NC}\n"; PAUSE; else echo -e "\n${MAGENTA}Устанавливаем DNS over HTTPS${NC}\n${CYAN}Обновляем список пакетов${NC}"
-if [ "$PKG_MANAGER" = "apk" ]; then apk update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении apk!${NC}\n"; PAUSE; return; }; else opkg update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; PAUSE; return; }; fi
+$UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; PAUSE; return; }; fi
 echo -e "${CYAN}Устанавливаем ${NC}https-dns-proxy"; if [ "$PKG_MANAGER" = "apk" ]; then apk add https-dns-proxy >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при установке!${NC}\n"; PAUSE; return; }; else opkg install https-dns-proxy >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при установке!${NC}\n"; PAUSE; return; }; fi
 echo -e "${CYAN}Устанавливаем ${NC}luci-app-https-dns-proxy"; if [ "$PKG_MANAGER" = "apk" ]; then apk add luci-app-https-dns-proxy >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при установке!${NC}\n"; PAUSE; return; }; else opkg install luci-app-https-dns-proxy >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при установке!${NC}\n"; PAUSE; return; }; fi
 echo -e "DNS over HTTPS${GREEN} установлен!${NC}\n"; PAUSE; fi; }
@@ -356,8 +354,7 @@ doh_mafioznik=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 
 # ==========================================
 web_is_enabled() { command -v ttyd >/dev/null 2>&1 && uci -q get ttyd.@ttyd[0].command | grep -q "/usr/bin/zms"; }
 toggle_web() { if web_is_enabled; then echo -e "\n${MAGENTA}Удаляем доступ из браузера${NC}"; if [ "$PKG_IS_APK" -eq 1 ]; then apk del luci-app-ttyd ttyd >/dev/null 2>&1; else opkg remove luci-app-ttyd ttyd >/dev/null 2>&1; fi
-rm -f /etc/config/ttyd; echo -e "${GREEN}Доступ удалён!${NC}\n"; PAUSE; else echo -e "\n${MAGENTA}Активируем доступ из браузера${NC}"; echo -e "${CYAN}Обновляем список пакетов${NC}"; if [ "$PKG_IS_APK" -eq 1 ]
-then if ! apk update >/dev/null 2>&1; then echo -e "\n${RED}Ошибка при обновлении apk!${NC}\n"; PAUSE; return; fi; else if ! opkg update >/dev/null 2>&1; then echo -e "\n${RED}Ошибка при обновлении opkg!${NC}\n"; PAUSE; return; fi; fi
+rm -f /etc/config/ttyd; echo -e "${GREEN}Доступ удалён!${NC}\n"; PAUSE; else echo -e "\n${MAGENTA}Активируем доступ из браузера${NC}"; echo -e "${CYAN}Обновляем список пакетов${NC}"; $UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; PAUSE; return; }; fi
 echo -e "${CYAN}Устанавливаем ${NC}ttyd"; if [ "$PKG_IS_APK" -eq 1 ]; then if ! apk add luci-app-ttyd >/dev/null 2>&1; then echo -e "\n${RED}Ошибка при установке ttyd!${NC}\n"; PAUSE; return; fi; else if ! opkg install luci-app-ttyd >/dev/null 2>&1
 then echo -e "\n${RED}Ошибка при установке ttyd!${NC}\n"; PAUSE; return; fi; fi; echo -e "${CYAN}Настраиваем ${NC}ttyd"; sed -i 's#/bin/login#-t fontSize=15 sh /usr/bin/zms#' /etc/config/ttyd; /etc/init.d/ttyd restart >/dev/null 2>&1; if pidof ttyd >/dev/null
 then echo -e "${GREEN}Служба запущена!${NC}\n\n${YELLOW}Доступ из браузера: ${NC}$LAN_IP:7681\n"; PAUSE; else echo -e "\n${RED}Ошибка! Служба не запущена!${NC}\n"; PAUSE; fi; fi; }
