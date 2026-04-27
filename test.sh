@@ -15,10 +15,21 @@ tmpDIR="/tmp"
 IF_NAME="AWG"
 PROTO="amneziawg"
 DEV_NAME="amneziawg0"
-PKG_MANAGER="opkg list-installed 2>/dev/null"
+
+if command -v apk >/dev/null 2>&1; then
+    PKG_IS_APK=1
+    PKG_MANAGER="apk info -e"
+else
+    PKG_IS_APK=0
+    PKG_MANAGER="opkg list-installed 2>/dev/null"
+fi
 
 pkg_remove() {
+if [ "$PKG_IS_APK" = "1" ]; then
+    apk del "$1"
+else
     opkg remove --force-depends "$1"
+fi
 }
 
 PAUSE() { echo -ne "\nНажмите Enter..."; read dummy; }
@@ -26,35 +37,20 @@ PAUSE() { echo -ne "\nНажмите Enter..."; read dummy; }
 ARCH="$(awk -F"'" '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release)"
 VER="$(awk -F"'" '/DISTRIB_RELEASE/ {print $2}' /etc/openwrt_release | cut -d. -f1)"
 
-ROUTERICH_REPO="https://packages.routerich.ru/25.12/mediatek/filogic/routerich/"
+
 
 if [ "$ARCH" != "aarch64_cortex-a53" ]; then
     echo -e "\n${RED}Неподдерживаемая архитектура: ${NC}$ARCH\n"
     exit 0
 fi
 
-install_apk_latest() {
-    local name="$1"
-
-    echo -e "${CYAN}Ищем пакет:${NC} $name"
-
-    FILE=$(wget -qO- "$ROUTERICH_REPO" | grep -o "${name}-[^\"]*\.apk" | head -n1)
-
-    if [ -z "$FILE" ]; then
-        echo -e "\n${RED}Не найден пакет: $name${NC}"
-        PAUSE
-        return 1
-    fi
-
-    echo -e "${CYAN}Скачиваем:${NC} $FILE"
-    wget -qO "/tmp/$FILE" "${ROUTERICH_REPO}${FILE}"
-
-    echo -e "${CYAN}Устанавливаем:${NC} $name"
-    apk add --allow-untrusted "/tmp/$FILE" >/dev/null 2>&1
-}
 
 is_routerich() {
+if [ "$PKG_IS_APK" = "1" ]; then
+    grep -q "packages.routerich.ru" /etc/apk/repositories 2>/dev/null
+else
     grep -q "routerich/packages.routerich" /etc/opkg/customfeeds.conf 2>/dev/null
+fi
 }
 
 routerich_add() {
@@ -63,39 +59,71 @@ routerich_add() {
 	PAUSE
 	return
 	fi
+	
+if [ "$PKG_IS_APK" != "1" ]; then
     sed -i 's/option check_signature/# option check_signature/' /etc/opkg.conf
-    echo 'src/gz routerich https://github.com/routerich/packages.routerich/raw/24.10.6/routerich' > /etc/opkg/customfeeds.conf
+fi
+	
+if [ "$PKG_IS_APK" = "1" ]; then
+    REPO_URL="https://packages.routerich.ru/25.12/mediatek/filogic/routerich"
+    if ! grep -q "$REPO_URL" /etc/apk/repositories 2>/dev/null; then
+        echo "$REPO_URL" >> /etc/apk/repositories
+    fi
+    apk update
+else
+    if ! grep -q "routerich/packages.routerich" /etc/opkg/customfeeds.conf 2>/dev/null; then
+        echo -e "\n${CYAN}Добавляем пакеты Routerich${NC}"
+        echo 'src/gz routerich https://github.com/routerich/packages.routerich/raw/24.10.6/routerich' >> /etc/opkg/customfeeds.conf
+    fi
     opkg update
+fi
     echo -e "\n${GREEN}Пакеты ${NC}Routerich${GREEN} добавлены!${NC}"
 	PAUSE
 }
 
 routerich_remove() {
-    rm -f /etc/opkg/customfeeds.conf
+if [ "$PKG_IS_APK" = "1" ]; then
+	sed -i '\|filogic/routerich|d' /etc/apk/repositories
+    apk update
+else
+    sed -i '\|routerich/packages.routerich|d' /etc/opkg/customfeeds.conf
     sed -i 's/# option check_signature/option check_signature/' /etc/opkg.conf
     opkg update
+fi
     echo -e "\n${GREEN}Пакеты ${NC}Routerich${GREEN} удалены!${NC}"
 	PAUSE
 }
 
 
 is_installed() {
+if [ "$PKG_IS_APK" = "1" ]; then
+    apk info -e "$1" >/dev/null 2>&1
+else
     opkg list-installed | grep -q "$1"
+fi
 }
 
 install_zapret() {
 
 if ! echo "$MODEL" | grep -qi routerich; then
-    if ! grep -q "routerich/packages.routerich" /etc/opkg/customfeeds.conf 2>/dev/null; then
-        echo -e "\n${CYAN}Добавляем пакеты Routerich${NC}"
-        sed -i 's/option check_signature/# option check_signature/' /etc/opkg.conf
-        echo 'src/gz routerich https://github.com/routerich/packages.routerich/raw/24.10.6/routerich' > /etc/opkg/customfeeds.conf
+    if [ "$PKG_IS_APK" = "1" ]; then
+        REPO_URL="https://packages.routerich.ru/25.12/mediatek/filogic/routerich"
+        if ! grep -q "$REPO_URL" /etc/apk/repositories 2>/dev/null; then
+            echo -e "${CYAN}Добавляем пакеты Routerich${NC}"
+            echo "$REPO_URL" >> /etc/apk/repositories
+        fi
+    else
+if ! grep -q "routerich/packages.routerich" /etc/opkg/customfeeds.conf 2>/dev/null; then
+    echo -e "${CYAN}Добавляем пакеты Routerich${NC}"
+    echo 'src/gz routerich https://github.com/routerich/packages.routerich/raw/24.10.6/routerich' >> /etc/opkg/customfeeds.conf
+fi
     fi
 fi
 
-if [ "$VER" -ge 25 ] 2>/dev/null; then
-    install_apk_latest zapret2
-    install_apk_latest luci-app-zapret2
+
+if [ "$PKG_IS_APK" = "1" ]; then
+    apk update
+    apk add zapret2 luci-app-zapret2
 else
     opkg update
     opkg install zapret2 luci-app-zapret2
@@ -109,7 +137,12 @@ sed -i "/config strategy 'default'/,/config /s/option enabled '0'/option enabled
 }
 
 remove_zapret() {
+
+if [ "$PKG_IS_APK" = "1" ]; then
+    apk del zapret2 luci-app-zapret2
+else
     opkg --force-removal-of-dependent-packages --autoremove remove luci-app-zapret2 zapret2
+fi
     rm -f /etc/config/zapret2
     rm -rf /opt/zapret2
     echo -e "\nZapret2 ${GREEN}удалён${NC}"
@@ -119,16 +152,24 @@ remove_zapret() {
 install_zero() {
 
 if ! echo "$MODEL" | grep -qi routerich; then
-    if ! grep -q "routerich/packages.routerich" /etc/opkg/customfeeds.conf 2>/dev/null; then
-        echo -e "\n${CYAN}Добавляем пакеты Routerich${NC}"
-        sed -i 's/option check_signature/# option check_signature/' /etc/opkg.conf
-        echo 'src/gz routerich https://github.com/routerich/packages.routerich/raw/24.10.6/routerich' > /etc/opkg/customfeeds.conf
+    if [ "$PKG_IS_APK" = "1" ]; then
+        REPO_URL="https://packages.routerich.ru/25.12/mediatek/filogic/routerich"
+        if ! grep -q "$REPO_URL" /etc/apk/repositories 2>/dev/null; then
+            echo -e "\n${CYAN}Добавляем пакеты Routerich${NC}"
+            echo "$REPO_URL" >> /etc/apk/repositories
+        fi
+    else
+        if ! grep -q "routerich/packages.routerich" /etc/opkg/customfeeds.conf 2>/dev/null; then
+            echo -e "\n${CYAN}Добавляем пакеты Routerich${NC}"
+            sed -i 's/option check_signature/# option check_signature/' /etc/opkg.conf
+            echo 'src/gz routerich https://github.com/routerich/packages.routerich/raw/24.10.6/routerich' >> /etc/opkg/customfeeds.conf
+        fi
     fi
 fi
 
-if [ "$VER" -ge 25 ] 2>/dev/null; then
-    install_apk_latest zeroblock
-    install_apk_latest luci-app-zeroblock
+if [ "$PKG_IS_APK" = "1" ]; then
+	apk update
+    apk add zeroblock luci-app-zeroblock
 else
     opkg update
     opkg install zeroblock luci-app-zeroblock
@@ -143,7 +184,11 @@ fi
 }
 
 remove_zero() {
+if [ "$PKG_IS_APK" = "1" ]; then
+    apk del zeroblock luci-app-zeroblock
+else
     opkg --force-removal-of-dependent-packages --autoremove remove luci-app-zeroblock zeroblock
+fi
     rm -rf /etc/config/zeroblock*
     rm -rf /etc/zeroblock*
     rm -rf /usr/bin/zeroblock*
@@ -515,7 +560,7 @@ echo
 	fi
 
 echo
-	if command -v amneziawg >/dev/null 2>&1 || eval "$PKG_MANAGER" | grep -q "amneziawg-tools"; then
+if command -v amneziawg >/dev/null 2>&1 || is_installed amneziawg-tools; then
 		echo -e "${YELLOW}AWG: ${GREEN}установлен${NC}"
 	else
 		echo -e "${YELLOW}AWG: ${RED}не установлен${NC}"
