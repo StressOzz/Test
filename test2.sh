@@ -86,8 +86,8 @@ if [ "$PKG_IS_APK" = "1" ]; then
 	sed -i '\|filogic/routerich|d' /etc/apk/repositories
     apk update
 else
-    sed -i 's/option check_signature/# option check_signature/' /etc/opkg.conf
-    echo 'src/gz routerich https://github.com/routerich/packages.routerich/raw/24.10.6/routerich' > /etc/opkg/customfeeds.conf
+    rm -f /etc/opkg/customfeeds.conf
+    sed -i 's/# option check_signature/option check_signature/' /etc/opkg.conf
     opkg update
 fi
     echo -e "\n${GREEN}Пакеты ${NC}Routerich${GREEN} удалены!${NC}"
