@@ -26,15 +26,32 @@ PAUSE() { echo -ne "\nНажмите Enter..."; read dummy; }
 ARCH="$(awk -F"'" '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release)"
 VER="$(awk -F"'" '/DISTRIB_RELEASE/ {print $2}' /etc/openwrt_release | cut -d. -f1)"
 
-if [ "$VER" != "24" ]; then
-    echo -e "\n${RED}Неподдерживаемая версия OpenWrt: ${NC}$VER\n"
-    exit 0
-fi
+ROUTERICH_REPO="https://packages.routerich.ru/25.12/mediatek/filogic/routerich/"
 
 if [ "$ARCH" != "aarch64_cortex-a53" ]; then
     echo -e "\n${RED}Неподдерживаемая архитектура: ${NC}$ARCH\n"
     exit 0
 fi
+
+install_apk_latest() {
+    local name="$1"
+
+    echo -e "${CYAN}Ищем пакет:${NC} $name"
+
+    FILE=$(wget -qO- "$ROUTERICH_REPO" | grep -o "${name}-[^\"]*\.apk" | head -n1)
+
+    if [ -z "$FILE" ]; then
+        echo -e "\n${RED}Не найден пакет: $name${NC}"
+        PAUSE
+        return 1
+    fi
+
+    echo -e "${CYAN}Скачиваем:${NC} $FILE"
+    wget -qO "/tmp/$FILE" "${ROUTERICH_REPO}${FILE}"
+
+    echo -e "${CYAN}Устанавливаем:${NC} $name"
+    apk add --allow-untrusted "/tmp/$FILE" >/dev/null 2>&1
+}
 
 is_routerich() {
     grep -q "routerich/packages.routerich" /etc/opkg/customfeeds.conf 2>/dev/null
@@ -76,8 +93,13 @@ if ! echo "$MODEL" | grep -qi routerich; then
     fi
 fi
 
+if [ "$VER" -ge 25 ] 2>/dev/null; then
+    install_apk_latest zapret2
+    install_apk_latest luci-app-zapret2
+else
     opkg update
     opkg install zapret2 luci-app-zapret2
+fi
 
 wget -qO /opt/zapret2/ipset/zapret_hosts_user_exclude.txt https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/zapret-hosts-user-exclude.txt
 sed -i "/config strategy 'default'/,/config /s/option enabled '0'/option enabled '1'/" /etc/config/zapret2
@@ -104,8 +126,13 @@ if ! echo "$MODEL" | grep -qi routerich; then
     fi
 fi
 
+if [ "$VER" -ge 25 ] 2>/dev/null; then
+    install_apk_latest zeroblock
+    install_apk_latest luci-app-zeroblock
+else
     opkg update
     opkg install zeroblock luci-app-zeroblock
+fi
 
 if ! echo "$MODEL" | grep -qi routerich; then
 	sed -i "/option api /s/'v2'/'v1'/" /etc/config/zeroblock
