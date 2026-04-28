@@ -419,7 +419,7 @@ add_block() { printf '%b\n' "$1" | while IFS= read -r line; do [ -z "$line" ] &&
 
 add_GEO_HOSTS() { echo -e "\n${MAGENTA}Заменяем hosts на GeoHide hosts${NC}";
 : > /etc/hosts; echo -e "127.0.0.1\tlocalhost\n\n::1\tlocalhost ip6-localhost ip6-loopback\nff02::1 ip6-allnodes\nff02::2 ip6-allrouters" > /etc/hosts; wget -q -U "Mozilla/5.0" -O - "$GEO_HOSTS" >> /etc/hosts
-/etc/init.d/dnsmasq restart >/dev/null 2>&1; echo -e "GeoHide host ${GREEN}применён!${NC}\n"; PAUSE; }
+/etc/init.d/dnsmasq restart >/dev/null 2>&1; echo -e "hosts ${GREEN}заменён${NC} на GeoHide hosts ${GREEN}!${NC}\n"; PAUSE; }
 
 remove_block() { printf '%b\n' "$1" | while IFS= read -r line; do [ -z "$line" ] && continue; sed -i "\|^$line$|d" "$HOSTS_FILE"; done; }
 toggle_block() { if status_block "$1"; then remove_block "$1"; echo -e "\n${CYAN}Удаляем и применяем${NC}"; else add_block "$1"; echo -e "\n${CYAN}Добавляем и применяем${NC}"; fi; /etc/init.d/dnsmasq restart >/dev/null 2>&1; echo -e "${GREEN}Готово!${NC}\n"; PAUSE; }
