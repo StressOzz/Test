@@ -275,9 +275,9 @@ rm -rf "$TMP_SF/zapret-discord-youtube-main" "$ZIP"; [ "$NO_PAUSE" != "1" ] && e
 # ==========================================
 # Меню стратегий
 # ==========================================
-manage_block() { action="$1"; f1="$2"; f2="$3"; if [ "$action" = "add" ]; then echo -e "\n${MAGENTA}Добавляем блок с ${NC}${f2}"; last_line=$(grep -n "^'$" "$CONF" | tail -n1 | cut -d: -f1)
+manage_block() { action="$1"; f1="$2"; f2="$3"; if [ "$action" = "add" ]; then echo -e "\n${MAGENTA}Добавляем блок с ${f2}${NC}"; last_line=$(grep -n "^'$" "$CONF" | tail -n1 | cut -d: -f1)
 [ -n "$last_line" ] && sed -i "${last_line},\$d" "$CONF"; printf "%s\n" "--new" "$f1" "$f2" "'" >> "$CONF"; ZAPRET_RESTART; echo -e "${GREEN}Блок с ${NC}${f2}${GREEN} добавлен!${NC}"
-echo -e "\n${YELLOW}Блок может влиять на скорость и стабильность интернета!${NC}"; PAUSE; fi; if [ "$action" = "remove" ]; then echo -e "\n${MAGENTA}Удаляем блок с ${NC}${f2}"
+echo -e "\n${YELLOW}Блок может влиять на скорость и стабильность интернета!${NC}"; PAUSE; fi; if [ "$action" = "remove" ]; then echo -e "\n${MAGENTA}Удаляем блок с ${f2}${NC}"
 awk -v l1="$f1" -v l2="$f2" '$0=="--new" && getline a && getline b { if (a==l1 && b==l2) next; print "--new"; print a; print b; next } 1' "$CONF" > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"; ZAPRET_RESTART; echo -e "${GREEN}Блок с ${NC}${f2}${GREEN} удалён!${NC}\n"; PAUSE; fi; }
 add_wssize() { manage_block add "--filter-tcp=443" "--wssize 1:6"; }; remove_wssize() { manage_block remove "--filter-tcp=443" "--wssize 1:6"; }; add_methodeol() { manage_block add "--filter-tcp=80,443" "--methodeol"; }; remove_methodeol() { manage_block remove "--filter-tcp=80,443" "--methodeol"; }
 menu_str() { [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }; while true; do show_current_strategy; RKN_Check; clear; echo -e "${MAGENTA}Меню стратегий${NC}\n"; pri=0
