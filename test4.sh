@@ -597,99 +597,70 @@ echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n"; ec
 # PODKOP EVOLUTION и AWG
 # ==========================================
 
+
 update_singbox() {
-    BASE="https://github.com/shtorm-7/sing-box-extended/releases/latest"
+    API="https://api.github.com/repos/shtorm-7/sing-box-extended/releases/latest"
+    PAGE="https://github.com/shtorm-7/sing-box-extended/releases/latest"
     DEST="/usr/bin/sing-box"
     TMP="/tmp/sbox"
 
-    echo -e "\n${MAGENTA}=== Обновление sing-box ===${NC}"
+    echo -e "\n=== sing-box update ==="
 
-    GET="wget -q --no-check-certificate -O"
+    GET="wget -qO- --no-check-certificate"
+    DL="wget -q --no-check-certificate -O"
 
-    [ -f "/etc/init.d/podkop" ] && SERVICE="podkop" || SERVICE="sing-box"
+    [ -f "/etc/init.d/podkop" ] && SVC="podkop" || SVC="sing-box"
 
-    ARCH=$(uname -m)
-    case "$ARCH" in
-        aarch64) ARCH="arm64" ;;
-        armv7*)  ARCH="armv7" ;;
-        x86_64)  ARCH="amd64" ;;
-        mipsel*) ARCH="mipsle-softfloat" ;;
-        mips*)   ARCH="mips-softfloat" ;;
-        *)
-            echo -e "${RED}Неизвестная архитектура${NC}"
-            PAUSE; return
-        ;;
+    case "$(uname -m)" in
+        aarch64) A="arm64" ;;
+        armv7*)  A="armv7" ;;
+        x86_64)  A="amd64" ;;
+        mipsel*) A="mipsle-softfloat" ;;
+        mips*)   A="mips-softfloat" ;;
+        *) echo "bad arch"; return ;;
     esac
 
-    FILE="linux-$ARCH.tar.gz"
+    FILE="linux-$A.tar.gz"
 
-    CUR_VER=""
-    [ -f "$DEST" ] && CUR_VER=$("$DEST" version 2>/dev/null | awk '{print $NF}')
+    CUR=$([ -f "$DEST" ] && "$DEST" version 2>/dev/null | awk '{print $NF}')
 
-    echo -e "${CYAN}Текущая версия: ${YELLOW}${CUR_VER:-нет}${NC}"
+    rm -rf "$TMP"; mkdir -p "$TMP"; cd "$TMP" || return
 
-    rm -rf "$TMP"
-    mkdir -p "$TMP"
-    cd "$TMP" || return
+    echo "check update..."
 
-  echo -e "${CYAN}Поиск актуальной ссылки...${NC}"
+    DATA=$($GET "$API" 2>/dev/null)
 
-HTML=$(wget -qO- --no-check-certificate "$BASE")
+    URL=$(echo "$DATA" | grep -o "https://github.com/.*/releases/download/[^\"']*$FILE" | head -n1)
 
-URL=$(echo "$HTML" | grep -oE "https://github.com/shtorm-7/sing-box-extended/releases/download/[^\"']+linux-$ARCH\.tar\.gz" | head -n1)
+    [ -z "$URL" ] && URL=$(wget -qO- "$PAGE" | grep -o "https://github.com/.*/releases/download/[^\"']*$FILE" | head -n1)
 
-[ -z "$URL" ] && {
-    echo -e "${RED}Ссылка не найдена${NC}"
-    echo -e "${YELLOW}Проверь архитектуру или структуру релиза${NC}"
-    cd /; rm -rf "$TMP"; PAUSE; return
-}
+    [ -z "$URL" ] && { echo "no url"; return; }
 
-    echo -e "${GREEN}Найдена:${NC}"
-    echo -e "${YELLOW}$URL${NC}"
+    echo "download: $URL"
 
-    echo -e "${CYAN}Скачивание...${NC}"
-    $GET sbox.tar.gz "$URL" || {
-        echo -e "${RED}Ошибка скачивания${NC}"
-        cd /; rm -rf "$TMP"; PAUSE; return
-    }
+    $DL sbox.tar.gz "$URL" || return
 
-    SIZE=$(du -h sbox.tar.gz | awk '{print $1}')
-    echo -e "${GREEN}Скачано: $SIZE${NC}"
+    tar -tzf sbox.tar.gz >/dev/null 2>&1 || { echo "bad archive"; return; }
 
-    tar -xzf sbox.tar.gz || {
-        echo -e "${RED}Ошибка распаковки${NC}"
-        cd /; rm -rf "$TMP"; PAUSE; return
-    }
+    tar -xzf sbox.tar.gz
 
-    BIN=$(find . -type f -name sing-box | head -n1)
+    BIN=$(find . -name sing-box | head -n1)
 
-    [ -z "$BIN" ] && {
-        echo -e "${RED}Бинарник не найден${NC}"
-        cd /; rm -rf "$TMP"; PAUSE; return
-    }
+    NEW=$("$BIN" version 2>/dev/null | awk '{print $NF}')
 
-    NEW_VER=$("$BIN" version 2>/dev/null | awk '{print $NF}')
+    [ "$CUR" = "$NEW" ] && { echo "already latest"; return; }
 
-    echo -e "${CYAN}Новая версия: ${YELLOW}$NEW_VER${NC}"
-
-    if [ "$CUR_VER" = "$NEW_VER" ] && [ -n "$CUR_VER" ]; then
-        echo -e "${GREEN}Уже актуально${NC}"
-        cd /; rm -rf "$TMP"; PAUSE; return
-    fi
-
-    service "$SERVICE" stop 2>/dev/null
+    service "$SVC" stop 2>/dev/null
 
     mv -f "$BIN" "$DEST"
     chmod +x "$DEST"
 
-    service "$SERVICE" start 2>/dev/null
+    service "$SVC" start 2>/dev/null
 
-    cd /
-    rm -rf "$TMP"
-
-    echo -e "${GREEN}Обновлено: ${YELLOW}${CUR_VER:-н/д}${GREEN} -> ${YELLOW}$NEW_VER${NC}"
-    PAUSE
+    echo "$CUR -> $NEW"
 }
+
+
 
 
 
