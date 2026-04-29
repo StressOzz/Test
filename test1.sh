@@ -602,17 +602,20 @@ update_singbox() {
     DEST="/usr/bin/sing-box"
     TMP="/tmp/sbox"
 
-    echo -e "\n${MAGENTA}Обновление sing-box${NC}"
+    echo -e "\n${MAGENTA}=== Обновление sing-box ===${NC}"
 
     # чем качаем
     if command -v curl >/dev/null 2>&1; then
         GET="curl -L -k"
+        echo -e "${CYAN}Используем: curl${NC}"
     else
-        GET="wget -qO- --no-check-certificate"
+        GET="wget --no-check-certificate -O"
+        echo -e "${CYAN}Используем: wget${NC}"
     fi
 
     # сервис
     [ -f "/etc/init.d/podkop" ] && SERVICE="podkop" || SERVICE="sing-box"
+    echo -e "${CYAN}Сервис: ${YELLOW}$SERVICE${NC}"
 
     # архитектура
     case "$(uname -m)" in
@@ -628,22 +631,31 @@ update_singbox() {
     esac
 
     FILE="sing-box-linux-$ARCH.tar.gz"
+    FULL_URL="$URL/$FILE"
+
+    echo -e "${CYAN}Архитектура: ${YELLOW}$ARCH${NC}"
+    echo -e "${CYAN}Файл: ${YELLOW}$FILE${NC}"
+    echo -e "${CYAN}URL: ${YELLOW}$FULL_URL${NC}"
 
     CUR_VER=""
     [ -f "$DEST" ] && CUR_VER=$("$DEST" version 2>/dev/null | awk '{print $NF}')
 
-    echo -e "${CYAN}Текущая: ${YELLOW}${CUR_VER:-нет}${NC}"
+    echo -e "${CYAN}Текущая версия: ${YELLOW}${CUR_VER:-не установлена}${NC}"
 
     rm -rf "$TMP"
     mkdir -p "$TMP"
+    echo -e "${CYAN}Рабочая папка: ${YELLOW}$TMP${NC}"
     cd "$TMP" || return
 
-    echo -e "${CYAN}Скачивание...${NC}"
-    $GET "$URL/$FILE" -o sbox.tar.gz 2>/dev/null || {
+    echo -e "${CYAN}Скачивание архива...${NC}"
+    $GET "$FULL_URL" -o sbox.tar.gz 2>/dev/null || {
         echo -e "${RED}Ошибка скачивания${NC}"
         cd /; rm -rf "$TMP"; PAUSE; return
     }
 
+    echo -e "${GREEN}Скачано: sbox.tar.gz ($(du -h sbox.tar.gz | awk '{print $1}'))${NC}"
+
+    echo -e "${CYAN}Распаковка...${NC}"
     tar -xzf sbox.tar.gz 2>/dev/null || {
         echo -e "${RED}Ошибка распаковки${NC}"
         cd /; rm -rf "$TMP"; PAUSE; return
@@ -651,29 +663,35 @@ update_singbox() {
 
     BIN=$(find . -type f -name sing-box | head -n1)
 
+    echo -e "${CYAN}Найден бинарник: ${YELLOW}${BIN:-не найден}${NC}"
+
     [ -z "$BIN" ] && {
         echo -e "${RED}Бинарник не найден${NC}"
         cd /; rm -rf "$TMP"; PAUSE; return
     }
 
     NEW_VER=$("$BIN" version 2>/dev/null | awk '{print $NF}')
+    echo -e "${CYAN}Новая версия: ${YELLOW}$NEW_VER${NC}"
 
     if [ "$CUR_VER" = "$NEW_VER" ] && [ -n "$CUR_VER" ]; then
         echo -e "${GREEN}Уже актуально${NC}"
         cd /; rm -rf "$TMP"; PAUSE; return
     fi
 
+    echo -e "${CYAN}Останавливаем сервис: ${YELLOW}$SERVICE${NC}"
     service "$SERVICE" stop 2>/dev/null
 
+    echo -e "${CYAN}Установка: ${YELLOW}$DEST${NC}"
     mv -f "$BIN" "$DEST"
     chmod +x "$DEST"
 
+    echo -e "${CYAN}Запуск сервиса: ${YELLOW}$SERVICE${NC}"
     service "$SERVICE" start 2>/dev/null
 
     cd /
     rm -rf "$TMP"
 
-    echo -e "${GREEN}Готово: ${YELLOW}${CUR_VER:-н/д}${GREEN} -> ${YELLOW}$NEW_VER${NC}"
+    echo -e "${GREEN}=== Готово: ${YELLOW}${CUR_VER:-н/д}${GREEN} -> ${YELLOW}$NEW_VER${NC} ==="
     PAUSE
 }
 
