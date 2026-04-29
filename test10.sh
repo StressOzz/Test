@@ -629,6 +629,36 @@ FILE="sing-box-${VERSION}-linux-${ARCH_SUFFIX}.tar.gz"
 URL="${BASE}/v${VERSION}/${FILE}"
 
 echo "$URL"
+
+ARCHIVE="/tmp/sing-box.tar.gz"
+WORKDIR="/tmp/sing-box-update"
+
+DOWNLOAD_URL="$URL"
+
+rm -rf "$WORKDIR"
+mkdir -p "$WORKDIR"
+
+curl -L -o "$ARCHIVE" "$DOWNLOAD_URL" || { echo "download failed"; exit 1; }
+
+[ ! -s "$ARCHIVE" ] && { echo "empty archive"; exit 1; }
+
+tar -xzf "$ARCHIVE" -C "$WORKDIR" || { echo "extract failed"; exit 1; }
+
+rm -f "$ARCHIVE"
+
+BINARY=$(find "$WORKDIR" -type f -name "sing-box" -perm +111 | head -n 1)
+
+[ -z "$BINARY" ] && { echo "binary not found"; exit 1; }
+
+DEST="/usr/bin/sing-box"
+
+service sing-box stop 2>/dev/null
+
+mv -f "$BINARY" "$DEST"
+chmod +x "$DEST"
+
+service sing-box start 2>/dev/null
+
 }
 
 
