@@ -596,6 +596,91 @@ echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n"; ec
 # ==========================================
 # PODKOP EVOLUTION и AWG
 # ==========================================
+
+update_singbox() {
+    URL="https://github.com/shtorm-7/sing-box-extended/releases/latest/download"
+    DEST="/usr/bin/sing-box"
+    TMP="/tmp/sbox"
+
+    echo -e "\n${MAGENTA}Обновление sing-box${NC}"
+
+    # чем качаем
+    if command -v curl >/dev/null 2>&1; then
+        GET="curl -L -k"
+    else
+        GET="wget -qO- --no-check-certificate"
+    fi
+
+    # сервис
+    [ -f "/etc/init.d/podkop" ] && SERVICE="podkop" || SERVICE="sing-box"
+
+    # архитектура
+    case "$(uname -m)" in
+        aarch64) ARCH="arm64" ;;
+        armv7*)  ARCH="armv7" ;;
+        x86_64)  ARCH="amd64" ;;
+        mipsel*) ARCH="mipsle-softfloat" ;;
+        mips*)   ARCH="mips-softfloat" ;;
+        *)
+            echo -e "${RED}Неизвестная архитектура${NC}"
+            PAUSE; return
+        ;;
+    esac
+
+    FILE="sing-box-linux-$ARCH.tar.gz"
+
+    CUR_VER=""
+    [ -f "$DEST" ] && CUR_VER=$("$DEST" version 2>/dev/null | awk '{print $NF}')
+
+    echo -e "${CYAN}Текущая: ${YELLOW}${CUR_VER:-нет}${NC}"
+
+    rm -rf "$TMP"
+    mkdir -p "$TMP"
+    cd "$TMP" || return
+
+    echo -e "${CYAN}Скачивание...${NC}"
+    $GET "$URL/$FILE" -o sbox.tar.gz 2>/dev/null || {
+        echo -e "${RED}Ошибка скачивания${NC}"
+        cd /; rm -rf "$TMP"; PAUSE; return
+    }
+
+    tar -xzf sbox.tar.gz 2>/dev/null || {
+        echo -e "${RED}Ошибка распаковки${NC}"
+        cd /; rm -rf "$TMP"; PAUSE; return
+    }
+
+    BIN=$(find . -type f -name sing-box | head -n1)
+
+    [ -z "$BIN" ] && {
+        echo -e "${RED}Бинарник не найден${NC}"
+        cd /; rm -rf "$TMP"; PAUSE; return
+    }
+
+    NEW_VER=$("$BIN" version 2>/dev/null | awk '{print $NF}')
+
+    if [ "$CUR_VER" = "$NEW_VER" ] && [ -n "$CUR_VER" ]; then
+        echo -e "${GREEN}Уже актуально${NC}"
+        cd /; rm -rf "$TMP"; PAUSE; return
+    fi
+
+    service "$SERVICE" stop 2>/dev/null
+
+    mv -f "$BIN" "$DEST"
+    chmod +x "$DEST"
+
+    service "$SERVICE" start 2>/dev/null
+
+    cd /
+    rm -rf "$TMP"
+
+    echo -e "${GREEN}Готово: ${YELLOW}${CUR_VER:-н/д}${GREEN} -> ${YELLOW}$NEW_VER${NC}"
+    PAUSE
+}
+
+
+
+
+
 pkg_is_installed () { local pkg_name="$1"; if [ "$PKG_IS_APK" -eq 1 ]; then apk info -e "$pkg_name" >/dev/null 2>&1; else opkg list-installed | grep -q "^$pkg_name"; fi }
 PODKOP_VER() { LOCALPOD="$(podkop show_version 2>/dev/null | cut -d'-' -f1 | sed 's/^v//')"; if [ -z "$LOCALPOD" ]; then PODKOP_STATUS="${RED}не установлен${NC}"; return; fi; if [ "$PODKOP_LATEST_VER" = "$LOCALPOD" ]
 then PODKOP_STATUS="${GREEN}$LOCALPOD${NC}"; else PODKOP_STATUS="${RED}$LOCALPOD${NC}"; fi; }
@@ -656,7 +741,16 @@ echo -e "${YELLOW}Podkop Evolution:${NC} $PODKOP_STATUS"; if { pkg_is_installed 
 if ! pkg_is_installed podkop; then echo -e "\n${CYAN}1) ${GREEN}Установить ${NC}Podkop Evolution"; elif [ "$PODKOP_LATEST_VER" != "$LOCALPOD" ]; then echo -e "\n${CYAN}1) ${GREEN}Обновить ${NC}Podkop Evolution"; else echo -e "\n${CYAN}1) ${GREEN}Удалить ${NC}Podkop Evolution"; fi;
 if pkg_is_installed amneziawg-tools; then echo -e "${CYAN}2) ${GREEN}Удалить ${NC}AWG${GREEN} и ${NC}интерфейс AWG"; else echo -e "${CYAN}2) ${GREEN}Установить ${NC}AWG${GREEN} и ${NC}интерфейс AWG"; fi
 if [ -f /etc/config/podkop ] && grep -q "^[[:space:]]*option subscription_url" /etc/config/podkop; then echo -e "${CYAN}3) ${GREEN}Сменить ${NC}VPN подписку${GREEN} в ${NC}Podkop Evolution"; else echo -e "${CYAN}3) ${GREEN}Интегрировать ${NC}VPN подписку${GREEN} в ${NC}Podkop Evolution"; fi
-echo -e "${CYAN}4) ${GREEN}Интегрировать ${NC}AWG${GREEN} в ${NC}Podkop Evolution"; echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}"; echo -ne "\n${YELLOW}Выберите пункт:${NC} "; read choicePOD; case "$choicePOD" in 1) PODKOP_INSTALL ;; 2) install_AWG ;; 3) PODKOP_VPN ;; 4) integration_AWG ;; *) return ;; esac; done }
+echo -e "${CYAN}4) ${GREEN}Интегрировать ${NC}AWG${GREEN} в ${NC}Podkop Evolution"; 
+echo -e "${CYAN}5) ${GREEN}Уставновить sing-box-extended"; 
+
+
+echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}"; echo -ne "\n${YELLOW}Выберите пункт:${NC} "; read choicePOD; case "$choicePOD" in 
+1) PODKOP_INSTALL ;; 2) install_AWG ;; 3) PODKOP_VPN ;; 
+4) integration_AWG ;;
+5) update_singbox ;;
+
+*) return ;; esac; done }
 # ==========================================
 # Главное меню
 # ==========================================
