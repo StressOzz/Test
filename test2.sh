@@ -598,27 +598,18 @@ echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n"; ec
 # ==========================================
 
 update_singbox() {
-    URL="https://github.com/shtorm-7/sing-box-extended/releases/latest/download"
+    BASE="https://github.com/shtorm-7/sing-box-extended/releases/latest"
     DEST="/usr/bin/sing-box"
     TMP="/tmp/sbox"
 
     echo -e "\n${MAGENTA}=== Обновление sing-box ===${NC}"
 
-    # чем качаем
-    if command -v curl >/dev/null 2>&1; then
-        GET="curl -L -k"
-        echo -e "${CYAN}Используем: curl${NC}"
-    else
-        GET="wget --no-check-certificate -O"
-        echo -e "${CYAN}Используем: wget${NC}"
-    fi
+    GET="wget -q --no-check-certificate -O"
 
-    # сервис
     [ -f "/etc/init.d/podkop" ] && SERVICE="podkop" || SERVICE="sing-box"
-    echo -e "${CYAN}Сервис: ${YELLOW}$SERVICE${NC}"
 
-    # архитектура
-    case "$(uname -m)" in
+    ARCH=$(uname -m)
+    case "$ARCH" in
         aarch64) ARCH="arm64" ;;
         armv7*)  ARCH="armv7" ;;
         x86_64)  ARCH="amd64" ;;
@@ -630,40 +621,46 @@ update_singbox() {
         ;;
     esac
 
-    FILE="sing-box-linux-$ARCH.tar.gz"
-    FULL_URL="$URL/$FILE"
-
-    echo -e "${CYAN}Архитектура: ${YELLOW}$ARCH${NC}"
-    echo -e "${CYAN}Файл: ${YELLOW}$FILE${NC}"
-    echo -e "${CYAN}URL: ${YELLOW}$FULL_URL${NC}"
+    FILE="linux-$ARCH.tar.gz"
 
     CUR_VER=""
     [ -f "$DEST" ] && CUR_VER=$("$DEST" version 2>/dev/null | awk '{print $NF}')
 
-    echo -e "${CYAN}Текущая версия: ${YELLOW}${CUR_VER:-не установлена}${NC}"
+    echo -e "${CYAN}Текущая версия: ${YELLOW}${CUR_VER:-нет}${NC}"
 
     rm -rf "$TMP"
     mkdir -p "$TMP"
-    echo -e "${CYAN}Рабочая папка: ${YELLOW}$TMP${NC}"
     cd "$TMP" || return
 
-    echo -e "${CYAN}Скачивание архива...${NC}"
-    $GET "$FULL_URL" -o sbox.tar.gz 2>/dev/null || {
+    echo -e "${CYAN}Поиск актуальной ссылки...${NC}"
+
+    HTML=$(wget -qO- --no-check-certificate "$BASE")
+
+    URL=$(echo "$HTML" | grep -o "https://github.com/shtorm-7/sing-box-extended/releases/download/[^\"']*linux-$ARCH.tar.gz" | head -n1)
+
+    [ -z "$URL" ] && {
+        echo -e "${RED}Ссылка не найдена${NC}"
+        cd /; rm -rf "$TMP"; PAUSE; return
+    }
+
+    echo -e "${GREEN}Найдена:${NC}"
+    echo -e "${YELLOW}$URL${NC}"
+
+    echo -e "${CYAN}Скачивание...${NC}"
+    $GET sbox.tar.gz "$URL" || {
         echo -e "${RED}Ошибка скачивания${NC}"
         cd /; rm -rf "$TMP"; PAUSE; return
     }
 
-    echo -e "${GREEN}Скачано: sbox.tar.gz ($(du -h sbox.tar.gz | awk '{print $1}'))${NC}"
+    SIZE=$(du -h sbox.tar.gz | awk '{print $1}')
+    echo -e "${GREEN}Скачано: $SIZE${NC}"
 
-    echo -e "${CYAN}Распаковка...${NC}"
-    tar -xzf sbox.tar.gz 2>/dev/null || {
+    tar -xzf sbox.tar.gz || {
         echo -e "${RED}Ошибка распаковки${NC}"
         cd /; rm -rf "$TMP"; PAUSE; return
     }
 
     BIN=$(find . -type f -name sing-box | head -n1)
-
-    echo -e "${CYAN}Найден бинарник: ${YELLOW}${BIN:-не найден}${NC}"
 
     [ -z "$BIN" ] && {
         echo -e "${RED}Бинарник не найден${NC}"
@@ -671,6 +668,7 @@ update_singbox() {
     }
 
     NEW_VER=$("$BIN" version 2>/dev/null | awk '{print $NF}')
+
     echo -e "${CYAN}Новая версия: ${YELLOW}$NEW_VER${NC}"
 
     if [ "$CUR_VER" = "$NEW_VER" ] && [ -n "$CUR_VER" ]; then
@@ -678,24 +676,19 @@ update_singbox() {
         cd /; rm -rf "$TMP"; PAUSE; return
     fi
 
-    echo -e "${CYAN}Останавливаем сервис: ${YELLOW}$SERVICE${NC}"
     service "$SERVICE" stop 2>/dev/null
 
-    echo -e "${CYAN}Установка: ${YELLOW}$DEST${NC}"
     mv -f "$BIN" "$DEST"
     chmod +x "$DEST"
 
-    echo -e "${CYAN}Запуск сервиса: ${YELLOW}$SERVICE${NC}"
     service "$SERVICE" start 2>/dev/null
 
     cd /
     rm -rf "$TMP"
 
-    echo -e "${GREEN}=== Готово: ${YELLOW}${CUR_VER:-н/д}${GREEN} -> ${YELLOW}$NEW_VER${NC} ==="
+    echo -e "${GREEN}Обновлено: ${YELLOW}${CUR_VER:-н/д}${GREEN} -> ${YELLOW}$NEW_VER${NC}"
     PAUSE
 }
-
-
 
 
 
