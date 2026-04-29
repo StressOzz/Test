@@ -599,68 +599,63 @@ echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n"; ec
 
 
 update_singbox() {
-LATEST_URL=$(curl -sL -o /dev/null -w '%{url_effective}' https://github.com/shtorm-7/sing-box-extended/releases/latest)
+LATEST_URL_SING=$(curl -sL -o /dev/null -w '%{url_effective}' https://github.com/shtorm-7/sing-box-extended/releases/latest)
 
-VERSION=$(echo "$LATEST_URL" | awk -F'/tag/v' '{print $2}')
+VERSION_SING=$(echo "$LATEST_URL_SING" | awk -F'/tag/v' '{print $2}')
 
-if command -v opkg >/dev/null 2>&1; then
-    ARCH="$(opkg print-architecture | awk '{print $2}' | tail -n1)"
-else
-    ARCH="$(apk --print-arch 2>/dev/null)"
-fi
-
-case "$ARCH" in
-  aarch64)           ARCH_SUFFIX="arm64" ;;
-  armv7*)            ARCH_SUFFIX="armv7" ;;
-  armv6*)            ARCH_SUFFIX="armv6" ;;
-  x86_64)            ARCH_SUFFIX="amd64" ;;
-  i386|i686)         ARCH_SUFFIX="386" ;;
-  mips)              ARCH_SUFFIX="mips-softfloat" ;;
-  mipsel|mipsle)     ARCH_SUFFIX="mipsle-softfloat" ;;
-  mips64)            ARCH_SUFFIX="mips64" ;;
-  mips64el|mips64le) ARCH_SUFFIX="mips64le" ;;
-  riscv64)           ARCH_SUFFIX="riscv64" ;;
-  s390x)             ARCH_SUFFIX="s390x" ;;
+case "$ARCH_SING" in
+  aarch64)           ARCH_SUFFIX_SING="arm64" ;;
+  armv7*)            ARCH_SUFFIX_SING="armv7" ;;
+  armv6*)            ARCH_SUFFIX_SING="armv6" ;;
+  x86_64)            ARCH_SUFFIX_SING="amd64" ;;
+  i386|i686)         ARCH_SUFFIX_SING="386" ;;
+  mips)              ARCH_SUFFIX_SING="mips-softfloat" ;;
+  mipsel|mipsle)     ARCH_SUFFIX_SING="mipsle-softfloat" ;;
+  mips64)            ARCH_SUFFIX_SING="mips64" ;;
+  mips64el|mips64le) ARCH_SUFFIX_SING="mips64le" ;;
+  riscv64)           ARCH_SUFFIX_SING="riscv64" ;;
+  s390x)             ARCH_SUFFIX_SING="s390x" ;;
 esac
 
-BASE="https://github.com/shtorm-7/sing-box-extended/releases/download"
-FILE="sing-box-${VERSION}-linux-${ARCH_SUFFIX}.tar.gz"
+BASE_SING="https://github.com/shtorm-7/sing-box-extended/releases/download"
+FILE_SING="sing-box-${VERSION_SING}-linux-${ARCH_SUFFIX_SING}.tar.gz"
 
-URL="${BASE}/v${VERSION}/${FILE}"
+URL_SING="${BASE_SING}/v${VERSION_SING}/${FILE_SING}"
 
-echo "$URL"
+echo "$URL_SING"
 
-ARCHIVE="/tmp/sing-box.tar.gz"
-WORKDIR="/tmp/sing-box-update"
+ARCHIVE_SING="/tmp/sing-box.tar.gz"
+WORKDIR_SING="/tmp/sing-box-update"
 
-DOWNLOAD_URL="$URL"
+DOWNLOAD_URL_SING="$URL_SING"
 
-rm -rf "$WORKDIR"
-mkdir -p "$WORKDIR"
+rm -rf "$WORKDIR_SING"
+mkdir -p "$WORKDIR_SING"
 
-curl -L -o "$ARCHIVE" "$DOWNLOAD_URL" || { echo "download failed"; exit 1; }
+curl -L -o "$ARCHIVE_SING" "$DOWNLOAD_URL_SING" || { echo "download failed"; exit 1; }
 
-[ ! -s "$ARCHIVE" ] && { echo "empty archive"; exit 1; }
+[ ! -s "$ARCHIVE_SING" ] && { echo "empty archive"; exit 1; }
 
-tar -xzf "$ARCHIVE" -C "$WORKDIR" || { echo "extract failed"; exit 1; }
+tar -xzf "$ARCHIVE_SING" -C "$WORKDIR_SING" || { echo "extract failed"; exit 1; }
 
-rm -f "$ARCHIVE"
+rm -f "$ARCHIVE_SING"
 
-BINARY=$(find "$WORKDIR" -type f -name "sing-box" -perm +111 | head -n 1)
+BINARY_SING=$(find "$WORKDIR_SING" -type f -name "sing-box" -perm +111 | head -n 1)
 
-[ -z "$BINARY" ] && { echo "binary not found"; exit 1; }
+[ -z "$BINARY_SING" ] && { echo "binary not found"; exit 1; }
 
-DEST="/usr/bin/sing-box"
+DEST_SING="/usr/bin/sing-box"
 
 service sing-box stop 2>/dev/null
 
-mv -f "$BINARY" "$DEST"
-chmod +x "$DEST"
+mv -f "$BINARY_SING" "$DEST_SING"
+chmod +x "$DEST_SING"
 
 service sing-box start 2>/dev/null
 
-}
+PAUSE
 
+}
 
 
 
