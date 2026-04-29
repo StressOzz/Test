@@ -639,22 +639,13 @@ echo -e "${NC}Network ${GREEN}→${NC} Interfaces ${GREEN}→${NC} AWG ${GREEN}�
 # ИНТЕГРАЦИЯ VPN
 PODKOP_VPN() { if ! pkg_is_installed podkop; then echo -e "\n${RED}Podkop Evolution не установлен!${NC}\n"; PAUSE; return; fi; echo -e "\n${MAGENTA}Интегрируем VPN подписку в Podkop Evolution${NC}"; echo -ne "\n${YELLOW}Введите ссылку на подписку (${NC}https://...${YELLOW}): ${NC}"
 read -r SUB_URL; SUB_URL="$(echo "$SUB_URL" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"; echo "$SUB_URL" | grep -qE '^https?://' || { echo -e "\n${RED}Ошибка ввода! Только ${NC}http://${RED} или ${NC}https://${RED} ссылки!${NC}\n"; PAUSE; return; }; 
-
-
-if grep -q "^[[:space:]]*option subscription_url" /etc/config/podkop; then
-echo -e "${CYAN}Меняем подписку${NC}"
-sed -i "s|^[[:space:]]*option subscription_url.*|	option subscription_url '$SUB_URL'|" /etc/config/podkop
-else
-echo -e "\n${CYAN}Меняем конфигурацию в ${NC}Podkop Evolution${NC}"
+if grep -q "^[[:space:]]*option subscription_url" /etc/config/podkop; then echo -e "${CYAN}Меняем подписку${NC}"; sed -i "s|^[[:space:]]*option subscription_url.*|	option subscription_url '$SUB_URL'|" /etc/config/podkop; else echo -e "\n${CYAN}Меняем конфигурацию в ${NC}Podkop Evolution${NC}"
 printf "%s\n" "config settings 'settings'" "option dns_type 'udp'" "option dns_server '8.8.8.8'" "option bootstrap_dns_server '77.88.8.8'" "option dns_rewrite_ttl '60'" "list source_network_interfaces 'br-lan'" "option enable_output_network_interface '0'" "option enable_badwan_interface_monitoring '0'" "option enable_yacd '0'" > /etc/config/podkop
 printf "%s\n" "option disable_quic '0'" "option update_interval '1d'" "option download_lists_via_proxy '0'" "option dont_touch_dhcp '0'" "option config_path '/etc/sing-box/config.json'" "option cache_path '/tmp/sing-box/cache.db'" "option log_level 'panic'" "option exclude_ntp '0'" "option shutdown_correctly '0'" >> /etc/config/podkop
 printf "%s\n" "" "config section 'StressKVN'" "option connection_type 'proxy'" "option proxy_config_type 'subscription'" "option enable_udp_over_tcp '0'" "option subscription_url '$SUB_URL'" "option subscription_update_interval '1h'" "option subscription_group_by_countries '0'" "option urltest_check_interval '5m'" >> /etc/config/podkop
 printf "%s\n" "option urltest_tolerance '150'" "option urltest_testing_url 'https://www.gstatic.com/generate_204'" "list community_lists 'geoblock'" "list community_lists 'block'" "list community_lists 'porn'" "list community_lists 'news'" "list community_lists 'anime'" "list community_lists 'youtube'" "list community_lists 'discord'" >> /etc/config/podkop
 printf "%s\n" "list community_lists 'meta'" "list community_lists 'twitter'" "list community_lists 'hdrezka'" "list community_lists 'tiktok'" "list community_lists 'telegram'" "list community_lists 'cloudflare'" "list community_lists 'google_ai'" "list community_lists 'google_play'" "list community_lists 'hodca'" "list community_lists 'roblox'" >> /etc/config/podkop
-printf "%s\n" "list community_lists 'hetzner'" "list community_lists 'ovh'" "list community_lists 'digitalocean'" "list community_lists 'cloudfront'" "option user_domain_list_type 'disabled'" "option user_subnet_list_type 'disabled'" "option mixed_proxy_enabled '0'" >> /etc/config/podkop
-fi
-
-
+printf "%s\n" "list community_lists 'hetzner'" "list community_lists 'ovh'" "list community_lists 'digitalocean'" "list community_lists 'cloudfront'" "option user_domain_list_type 'disabled'" "option user_subnet_list_type 'disabled'" "option mixed_proxy_enabled '0'" >> /etc/config/podkop; fi
 echo -e "${CYAN}Запускаем ${NC}Podkop Evolution${NC}"; podkop enable >/dev/null 2>&1; echo -e "${CYAN}Обновляем списки${NC}"; podkop list_update >/dev/null 2>&1; echo -en "${CYAN}Перезапускаем сервис${NC}\n${YELLOW}Подождите...${NC}"; podkop restart >/dev/null 2>&1; echo -e "\nVPN подписка ${GREEN}интегрирована в ${NC}Podkop Evolution${GREEN}!${NC}\n"; PAUSE; }
 # МЕНЮ PODKOP
 PODKOP_menu() { while true; do openwrt_version=$(cat /etc/openwrt_release | grep DISTRIB_RELEASE | cut -d"'" -f2 | cut -d'.' -f1); if [ "$openwrt_version" = "23" ]; then echo -e "\n${RED}OpenWrt версии ниже 24 не поддерживаются!${NC}\n"; PAUSE; return; fi
