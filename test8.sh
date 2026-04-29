@@ -624,7 +624,7 @@ case "$ARCH" in
 esac
 
 BASE="https://github.com/shtorm-7/sing-box-extended/releases/download"
-FILE="sing-box-${VERSION}-linux-${ARCH_SUFFIX}.tar.gz"
+FILE="sing-box-v${VERSION}-linux-${ARCH_SUFFIX}.tar.gz"
 
 URL="${BASE}/${VERSION}/${FILE}"
 
