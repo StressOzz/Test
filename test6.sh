@@ -600,8 +600,15 @@ echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n"; ec
 
 update_singbox() {
 # 1. получить ссылку на latest → вытянуть версию
-LATEST_URLsingbox=$(curl -sL -o /dev/null -w '%{url_effective}' https://github.com/shtorm-7/sing-box-extended/releases/latest)
-VERSIONsingbox=$(echo "$LATEST_URL" | awk -F'/tag/' '{print $2}')
+LATEST_URL=$(curl -sL -o /dev/null -w '%{url_effective}' https://github.com/shtorm-7/sing-box-extended/releases/latest)
+VERSION=$(echo "$LATEST_URL" | awk -F'/tag/' '{print $2}')
+
+# 2. определить архитектуру
+if command -v opkg >/dev/null 2>&1; then
+    ARCH="$(opkg print-architecture | awk '{print $2}' | tail -n1)"
+else
+    ARCH="$(apk --print-arch 2>/dev/null)"
+fi
 
 case "$ARCH" in
   aarch64)             ARCH_SUFFIX="arm64" ;;
@@ -618,11 +625,11 @@ case "$ARCH" in
 esac
 
 # 3. собрать финальную ссылку
-BASEsingbox="https://github.com/shtorm-7/sing-box-extended/releases/download"
-FILEsingbox="sing-box-${VERSIONsingbox}-linux-${ARCH_SUFFIX}.tar.gz"
-URLsingbox="${BASEsingbox}/${VERSIONsingbox}/${FILEsingbox}"
+BASE="https://github.com/shtorm-7/sing-box-extended/releases/download"
+FILE="sing-box-${VERSION}-linux-${ARCH_SUFFIX}.tar.gz"
+URL="${BASE}/${VERSION}/${FILE}"
 
-echo "$URLsingbox"
+echo "$URL"
 }
 
 
