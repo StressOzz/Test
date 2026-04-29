@@ -599,11 +599,10 @@ echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n"; ec
 
 
 update_singbox() {
-# 1. получить ссылку на latest → вытянуть версию
 LATEST_URL=$(curl -sL -o /dev/null -w '%{url_effective}' https://github.com/shtorm-7/sing-box-extended/releases/latest)
-VERSION=$(echo "$LATEST_URL" | awk -F'/tag/' '{print $2}')
 
-# 2. определить архитектуру
+VERSION=$(echo "$LATEST_URL" | awk -F'/tag/v' '{print $2}')
+
 if command -v opkg >/dev/null 2>&1; then
     ARCH="$(opkg print-architecture | awk '{print $2}' | tail -n1)"
 else
@@ -611,22 +610,22 @@ else
 fi
 
 case "$ARCH" in
-  aarch64)             ARCH_SUFFIX="arm64" ;;
-  armv7*)              ARCH_SUFFIX="armv7" ;;
-  armv6*)              ARCH_SUFFIX="armv6" ;;
-  x86_64)              ARCH_SUFFIX="amd64" ;;
-  i386|i686)           ARCH_SUFFIX="386" ;;
-  mips)                ARCH_SUFFIX="mips-softfloat" ;;
-  mipsel|mipsle)       ARCH_SUFFIX="mipsle-softfloat" ;;
-  mips64)              ARCH_SUFFIX="mips64" ;;
-  mips64el|mips64le)   ARCH_SUFFIX="mips64le" ;;
-  riscv64)             ARCH_SUFFIX="riscv64" ;;
-  s390x)               ARCH_SUFFIX="s390x" ;;
+  aarch64)           ARCH_SUFFIX="arm64" ;;
+  armv7*)            ARCH_SUFFIX="armv7" ;;
+  armv6*)            ARCH_SUFFIX="armv6" ;;
+  x86_64)            ARCH_SUFFIX="amd64" ;;
+  i386|i686)         ARCH_SUFFIX="386" ;;
+  mips)              ARCH_SUFFIX="mips-softfloat" ;;
+  mipsel|mipsle)     ARCH_SUFFIX="mipsle-softfloat" ;;
+  mips64)            ARCH_SUFFIX="mips64" ;;
+  mips64el|mips64le) ARCH_SUFFIX="mips64le" ;;
+  riscv64)           ARCH_SUFFIX="riscv64" ;;
+  s390x)             ARCH_SUFFIX="s390x" ;;
 esac
 
-# 3. собрать финальную ссылку
 BASE="https://github.com/shtorm-7/sing-box-extended/releases/download"
 FILE="sing-box-${VERSION}-linux-${ARCH_SUFFIX}.tar.gz"
+
 URL="${BASE}/${VERSION}/${FILE}"
 
 echo "$URL"
