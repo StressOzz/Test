@@ -632,16 +632,17 @@ update_singbox() {
     mkdir -p "$TMP"
     cd "$TMP" || return
 
-    echo -e "${CYAN}Поиск актуальной ссылки...${NC}"
+  echo -e "${CYAN}Поиск актуальной ссылки...${NC}"
 
-    HTML=$(wget -qO- --no-check-certificate "$BASE")
+HTML=$(wget -qO- --no-check-certificate "$BASE")
 
-    URL=$(echo "$HTML" | grep -o "https://github.com/shtorm-7/sing-box-extended/releases/download/[^\"']*linux-$ARCH.tar.gz" | head -n1)
+URL=$(echo "$HTML" | grep -oE "https://github.com/shtorm-7/sing-box-extended/releases/download/[^\"']+linux-$ARCH\.tar\.gz" | head -n1)
 
-    [ -z "$URL" ] && {
-        echo -e "${RED}Ссылка не найдена${NC}"
-        cd /; rm -rf "$TMP"; PAUSE; return
-    }
+[ -z "$URL" ] && {
+    echo -e "${RED}Ссылка не найдена${NC}"
+    echo -e "${YELLOW}Проверь архитектуру или структуру релиза${NC}"
+    cd /; rm -rf "$TMP"; PAUSE; return
+}
 
     echo -e "${GREEN}Найдена:${NC}"
     echo -e "${YELLOW}$URL${NC}"
