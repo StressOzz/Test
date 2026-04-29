@@ -599,65 +599,30 @@ echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n"; ec
 
 
 update_singbox() {
-    API="https://api.github.com/repos/shtorm-7/sing-box-extended/releases/latest"
-    PAGE="https://github.com/shtorm-7/sing-box-extended/releases/latest"
-    DEST="/usr/bin/sing-box"
-    TMP="/tmp/sbox"
+# 1. получить ссылку на latest → вытянуть версию
+LATEST_URLsingbox=$(curl -sL -o /dev/null -w '%{url_effective}' https://github.com/shtorm-7/sing-box-extended/releases/latest)
+VERSIONsingbox=$(echo "$LATEST_URL" | awk -F'/tag/' '{print $2}')
 
-    echo -e "\n=== sing-box update ==="
+case "$ARCH" in
+  aarch64)             ARCH_SUFFIX="arm64" ;;
+  armv7*)              ARCH_SUFFIX="armv7" ;;
+  armv6*)              ARCH_SUFFIX="armv6" ;;
+  x86_64)              ARCH_SUFFIX="amd64" ;;
+  i386|i686)           ARCH_SUFFIX="386" ;;
+  mips)                ARCH_SUFFIX="mips-softfloat" ;;
+  mipsel|mipsle)       ARCH_SUFFIX="mipsle-softfloat" ;;
+  mips64)              ARCH_SUFFIX="mips64" ;;
+  mips64el|mips64le)   ARCH_SUFFIX="mips64le" ;;
+  riscv64)             ARCH_SUFFIX="riscv64" ;;
+  s390x)               ARCH_SUFFIX="s390x" ;;
+esac
 
-    GET="wget -qO- --no-check-certificate"
-    DL="wget -q --no-check-certificate -O"
+# 3. собрать финальную ссылку
+BASEsingbox="https://github.com/shtorm-7/sing-box-extended/releases/download"
+FILEsingbox="sing-box-${VERSIONsingbox}-linux-${ARCH_SUFFIX}.tar.gz"
+URLsingbox="${BASEsingbox}/${VERSIONsingbox}/${FILEsingbox}"
 
-    [ -f "/etc/init.d/podkop" ] && SVC="podkop" || SVC="sing-box"
-
-    case "$(uname -m)" in
-        aarch64) A="arm64" ;;
-        armv7*)  A="armv7" ;;
-        x86_64)  A="amd64" ;;
-        mipsel*) A="mipsle-softfloat" ;;
-        mips*)   A="mips-softfloat" ;;
-        *) echo "bad arch"; return ;;
-    esac
-
-    FILE="linux-$A.tar.gz"
-
-    CUR=$([ -f "$DEST" ] && "$DEST" version 2>/dev/null | awk '{print $NF}')
-
-    rm -rf "$TMP"; mkdir -p "$TMP"; cd "$TMP" || return
-
-    echo "check update..."
-
-    DATA=$($GET "$API" 2>/dev/null)
-
-    URL=$(echo "$DATA" | grep -o "https://github.com/.*/releases/download/[^\"']*$FILE" | head -n1)
-
-    [ -z "$URL" ] && URL=$(wget -qO- "$PAGE" | grep -o "https://github.com/.*/releases/download/[^\"']*$FILE" | head -n1)
-
-    [ -z "$URL" ] && { echo "no url"; return; }
-
-    echo "download: $URL"
-
-    $DL sbox.tar.gz "$URL" || return
-
-    tar -tzf sbox.tar.gz >/dev/null 2>&1 || { echo "bad archive"; return; }
-
-    tar -xzf sbox.tar.gz
-
-    BIN=$(find . -name sing-box | head -n1)
-
-    NEW=$("$BIN" version 2>/dev/null | awk '{print $NF}')
-
-    [ "$CUR" = "$NEW" ] && { echo "already latest"; return; }
-
-    service "$SVC" stop 2>/dev/null
-
-    mv -f "$BIN" "$DEST"
-    chmod +x "$DEST"
-
-    service "$SVC" start 2>/dev/null
-
-    echo "$CUR -> $NEW"
+echo "$URLsingbox"
 }
 
 
