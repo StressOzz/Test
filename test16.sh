@@ -633,14 +633,14 @@ FILE_NAME_GO="$(basename "$URL")"
     echo -e "${CYAN}Скачиваем и устанавливаем${NC} $FILE_NAME_GO"
 
 
-    wget -O "$TMP_FILE_GO" "$URL" || {
-        echo -e "\n${RED}Ошибка загрузки${NC}\n"
+    wget -q -O "$TMP_FILE_GO" "$URL" || {
+        echo -e "\n${RED}Ошибка загрузки $URL!${NC}\n"
         PAUSE
         return 1
     }
 
-    $INSTALL "$TMP_FILE_GO" || {
-        echo -e "\n${RED}Ошибка установки${NC}\n"
+    $INSTALL "$TMP_FILE_GO" >/dev/null 2>&1 || {
+        echo -e "\n${RED}Ошибка установки $TMP_FILE_GO!${NC}\n"
         rm -f "$TMP_FILE_GO"
         PAUSE
         return 1
@@ -656,9 +656,9 @@ fi
     /etc/init.d/tg-ws-proxy restart >/dev/null 2>&1
 
     if pidof tg-ws-proxy >/dev/null 2>&1; then
-        echo -e "${GREEN}Сервис запущен${NC}"
+        echo -e "TG WS Proxy Go MTProto ${GREEN}установлен!${NC}"
     else
-        echo -e "${RED}Сервис не запущен${NC}"
+        echo -e "${RED}TG WS Proxy Go MTProto не установлен!${NC}"
     fi
 
     PAUSE
