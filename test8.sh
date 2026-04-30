@@ -97,7 +97,7 @@ INSTALLED_VER=$(apk info -v 2>/dev/null | grep '^zapret-' | head -n1 | cut -d'-'
 fi
 
 
-
+SECRET_FILE="/etc/tg-ws-proxy/secret.conf"
 
 
 echo 'sh <(wget -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/main/Zapret-Manager.sh)' > /usr/bin/zms; chmod +x /usr/bin/zms
@@ -627,7 +627,6 @@ chmod +x "$INIT_PATH_GO"; /etc/init.d/tg-ws-proxy-go enable; /etc/init.d/tg-ws-p
 install_update_TG_PKG() {
     echo -e "\n${MAGENTA}TG WS Proxy MTProto${NC}"
 
-    SECRET_FILE="/etc/tg-ws-proxy/secret.conf"
 
     URL="https://github.com/spatiumstas/tg-ws-proxy-go/releases/download/${GO_VER}/tg-ws-proxy_${GO_VER}-${GO_SUF}_openwrt_${ARCH_FULL}.${PKG}"
 
