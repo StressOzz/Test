@@ -147,7 +147,7 @@ ZAPRET_VERSION="$(cat "$TMP_VER")"
 get_ver "https://github.com/yandexru45/podkop-evolution/releases/latest" "$TMP_VER_POD" "PODKOP"
 PODKOP_LATEST_VER="$(cat "$TMP_VER_POD")"
 
-#get_ver "https://github.com/spatiumstas/tg-ws-proxy-go/releases/latest" "$TMP_VER_GO" "TG-WS"
+# get_ver "https://github.com/spatiumstas/tg-ws-proxy-go/releases/latest" "$TMP_VER_GO" "TG-WS"
 GO_VER="$(cat "$TMP_VER_GO")"
 
 
