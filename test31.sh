@@ -2,8 +2,8 @@
 # ==========================================
 # Zapret on remittor Manager by StressOzz
 # =========================================
-ZAPRET_MANAGER_VERSION="9.5"; STR_VERSION_AUTOINSTALL="v7"
-TMP_VER="/tmp/zapret_version"; TMP_VER_POD="/tmp/podkop_version"; LAN_IP=$(uci get network.lan.ipaddr 2>/dev/null | cut -d/ -f1)
+ZAPRET_MANAGER_VERSION="9.6"; STR_VERSION_AUTOINSTALL="v7"
+LAN_IP=$(uci get network.lan.ipaddr 2>/dev/null | cut -d/ -f1)
 DOMAINS="rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com rr1---sn-gvnuxaxjvh-jx3l.googlevideo.com rr1---sn-gvnuxaxjvh-jx3s.googlevideo.com"
 PORTS_UDP="88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535"; PORTS_TCP="2802,2302,2502,6112-6119,6695-6710,25565,27015-27030,27036-27037,50001"
 GREEN="\033[1;32m"; RED="\033[1;31m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -15,7 +15,7 @@ IF_NAME="AWG"; PROTO="amneziawg"; DEV_NAME="amneziawg0"; BASE_URL="https://githu
 SAVED_STR="$TMP_SF/StrYou.txt"; HOSTS_USER="$TMP_SF/hosts-user.txt"; OUT_DPI="$TMP_SF/dpi_urls.txt"; OUT="$TMP_SF/str_flow.txt"; ZIP="$TMP_SF/repo.zip"
 BACKUP_FILE="/opt/zapret/tmp/hosts_temp.txt"; STR_FILE="$TMP_SF/str_test.txt"; TEMP_FILE="$TMP_SF/str_temp.txt"
 RESULTS="/opt/zapret/tmp/zapret_bench.txt"; BACK="$TMP_SF/zapret_back.txt"; TMP_RES="$TMP_SF/zapret_results_all.$$"
-FINAL_STR="$TMP_SF/StrFINAL.txt"; NEW_STR="$TMP_SF/StrNEW.txt"; OLD_STR="$TMP_SF/StrOLD.txt"
+FINAL_STR="$TMP_SF/StrFINAL.txt"; NEW_STR="$TMP_SF/StrNEW.txt"; OLD_STR="$TMP_SF/StrOLD.txt"; SECRET_FILE="/etc/tg-ws-proxy/secret.conf"
 ARCH_FULL="$(cat /etc/openwrt_release | grep DISTRIB_ARCH | cut -d"'" -f2)"; MODEL="$(cat /tmp/sysinfo/model 2>/dev/null)"
 RES1="/opt/zapret/tmp/results_flowseal.txt"; RES2="/opt/zapret/tmp/results_versions.txt"; RES3="/opt/zapret/tmp/results_all.txt"
 RES_DOMAIN="/opt/zapret/tmp/results_domain.txt"; Fin_IP_Dis="104\.25\.158\.178 finland[0-9]\{5\}\.discord\.media"; PARALLEL=8
@@ -66,84 +66,21 @@ hosts_add() { printf "%b\n" "$1" | while IFS= read -r L; do grep -qxF "$L" /etc/
 ZAPRET_RESTART () { chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1; sleep 1; }
 PAUSE() { echo -ne "Нажмите Enter..."; read dummy; }; BACKUP_DIR="/opt/zapret_backup"; DATE_FILE="$BACKUP_DIR/date_backup.txt"
 BIN_PATH_GO="/usr/bin/tg-ws-proxy-go"; INIT_PATH_GO="/etc/init.d/tg-ws-proxy-go"; BIN_PATH_RS="/usr/bin/tg-ws-proxy-rs"; INIT_PATH_RS="/etc/init.d/tg-ws-proxy-rs"
-
-if command -v opkg >/dev/null 2>&1; then 
-PKG="opkg"; GO_SUF="1"; 
-CONFZ="/etc/opkg/distfeeds.conf"; 
-PKG_IS_APK=0; 
-UPDATE="opkg update"; 
-INSTALL="opkg install"; 
-DELETE="opkg remove --autoremove --force-removal-of-dependent-packages"; 
-ARCH="$(opkg print-architecture | awk '{print $2}' | tail -n1)"
-VER_SUF="r1-all"; 
-APK_RAS="ipk"; 
-SUFICS="v"; 
-TMP_FILE_GO="/tmp/tg-ws-proxy.ipk"
-else 
-PKG="apk";  
-GO_SUF="r1"; 
-CONFZ="/etc/apk/repositories.d/distfeeds.list"; 
-PKG_IS_APK=1; 
-UPDATE="apk update"; 
-INSTALL="apk add --allow-untrusted"; 
-DELETE="apk del"; 
-ARCH="$(apk --print-arch 2>/dev/null)"; 
-APK_RAS="apk"; 
-VER_SUF="r1"; 
-SUFICS=""; 
-TMP_FILE_GO="/tmp/tg-ws-proxy.apk"
-fi
-
-TMP_VER_GO="/tmp/tg_ws_proxy_go_ver"
-SECRET_FILE="/etc/tg-ws-proxy/secret.conf"
-
-
+if command -v opkg >/dev/null 2>&1; then PKG="opkg"; GO_SUF="1"; CONFZ="/etc/opkg/distfeeds.conf"; PKG_IS_APK=0; UPDATE="opkg update"; INSTALL="opkg install"
+DELETE="opkg remove --autoremove --force-removal-of-dependent-packages"; ARCH="$(opkg print-architecture | awk '{print $2}' | tail -n1)"; VER_SUF="r1-all"
+APK_RAS="ipk"; SUFICS="v"; TMP_FILE_GO="/tmp/tg-ws-proxy.ipk"; else PKG="apk"; GO_SUF="r1"; CONFZ="/etc/apk/repositories.d/distfeeds.list"; PKG_IS_APK=1
+UPDATE="apk update"; INSTALL="apk add --allow-untrusted"; DELETE="apk del"; ARCH="$(apk --print-arch 2>/dev/null)"; APK_RAS="apk"; VER_SUF="r1"; SUFICS=""; TMP_FILE_GO="/tmp/tg-ws-proxy.apk"; fi
 echo 'sh <(wget -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/main/Zapret-Manager.sh)' > /usr/bin/zms; chmod +x /usr/bin/zms
 if ! command -v curl >/dev/null 2>&1; then clear; echo -e "${MAGENTA}Устанавливаем ${NC}curl"; echo -e "${CYAN}Обновляем список пакетов${NC}"; ok=0; for i in 1 2 3 4 5; do if $UPDATE >/dev/null 2>&1; then ok=1; break; fi
 echo -e "${YELLOW}Обновление пакетов попытка $i не удалась${NC}"; sleep 1; done; if [ "$ok" -ne 1 ]; then echo -e "\n${RED}Не удалось обновить пакеты после 5 попыток${NC}\n"; PAUSE; exit 0; fi
 ok=0; echo -e "${CYAN}Устанавливаем ${NC}curl"; for i in 1 2 3 4 5; do if $INSTALL curl >/dev/null 2>&1; then ok=1; break; fi; echo -e "${YELLOW}Устанавливаем ${NC}curl${YELLOW} попытка ${NC}$i${YELLOW} не удалась!${NC}"; sleep 1; done
 if [ "$ok" -ne 1 ]; then echo -e "\n${RED}Не удалось установить ${NC}curl${RED} после 5 попыток${NC}\n"; PAUSE; exit 0; fi; if ! command -v curl >/dev/null 2>&1; then echo -e "\ncurl${RED} не найден после установки${NC}\n"; PAUSE; exit 0; fi; fi
-echo -e "${CYAN}Cобираем версии:${NC}"
-
-get_ver() {
-  URL="$1"
-  OUT_FILE="$2"
-  NAME="$3"
-
-  echo -e "${YELLOW}→${NC} Проверка $NAME"
-
-  RESULT=$(curl -sL --connect-timeout 5 --max-time 10 --retry 2 --retry-delay 2 -w "%{http_code}|%{url_effective}" -o /dev/null "$URL" 2>/dev/null)
-
-  CURL_EXIT=$?
-
-  if [ $CURL_EXIT -ne 0 ]; then
-    echo -e "${RED}✗${NC} $NAME: ошибка curl (код $CURL_EXIT)"
-    PAUSE
-    return 1
-  fi
-
-  HTTP_CODE=$(echo "$RESULT" | cut -d'|' -f1)
-  FINAL_URL=$(echo "$RESULT" | cut -d'|' -f2)
-
-  VERSION=$(echo "$FINAL_URL" | grep -o '[0-9][0-9.]*$')
-
-  if [ -z "$VERSION" ]; then
-    echo -e "${RED}✗${NC} $NAME: не удалось извлечь версию (HTTP $HTTP_CODE)"
-    echo "URL: $FINAL_URL"
-    PAUSE
-    return 1
-  fi
-
-  echo "$VERSION" > "$OUT_FILE"
-  echo -e "${GREEN}✓${NC} $NAME: $VERSION"
-}
-
-get_ver "https://github.com/remittor/zapret-openwrt/releases/latest" "$TMP_VER" "ZAPRET"
-ZAPRET_VERSION="$(cat "$TMP_VER")"
-get_ver "https://github.com/yandexru45/podkop-evolution/releases/latest" "$TMP_VER_POD" "PODKOP"
-PODKOP_LATEST_VER="$(cat "$TMP_VER_POD")"
-get_ver "https://github.com/spatiumstas/tg-ws-proxy-go/releases/latest" "$TMP_VER_GO" "TG-WS"
-GO_VER="$(cat "$TMP_VER_GO")"
+get_ver() { URL="$1"; OUT_FILE="$2"; NAME="$3"; echo -e "${YELLOW}→${NC} Проверка $NAME"; RESULT=$(curl -sL --connect-timeout 5 --max-time 10 --retry 2 --retry-delay 2 -w "%{http_code}|%{url_effective}" -o /dev/null "$URL" 2>/dev/null)
+CURL_EXIT=$?; if [ $CURL_EXIT -ne 0 ]; then echo -e "${RED}✗${NC} $NAME: ошибка curl (код $CURL_EXIT)"; PAUSE; return 1; fi; HTTP_CODE=$(echo "$RESULT" | cut -d'|' -f1); FINAL_URL=$(echo "$RESULT" | cut -d'|' -f2)
+VERSION=$(echo "$FINAL_URL" | grep -o '[0-9][0-9.]*$'); if [ -z "$VERSION" ]; then echo -e "${RED}✗${NC} $NAME: не удалось извлечь версию (HTTP $HTTP_CODE)"; echo "URL: $FINAL_URL"; PAUSE; return 1; fi; echo "$VERSION" > "$OUT_FILE"; echo -e "${GREEN}✓${NC} $NAME: $VERSION"; }
+echo -e "${CYAN}Cобираем версии:${NC}"; TMP_VER="/tmp/zapret_version"; get_ver "https://github.com/remittor/zapret-openwrt/releases/latest" "$TMP_VER" "ZAPRET"; ZAPRET_VERSION="$(cat "$TMP_VER")"
+TMP_VER_POD="/tmp/podkop_version"; get_ver "https://github.com/yandexru45/podkop-evolution/releases/latest" "$TMP_VER_POD" "PODKOP";PODKOP_LATEST_VER="$(cat "$TMP_VER_POD")"
+TMP_VER_GO="/tmp/tg_ws_proxy_go_ver"; get_ver "https://github.com/spatiumstas/tg-ws-proxy-go/releases/latest" "$TMP_VER_GO" "TG-WS"; GO_VER="$(cat "$TMP_VER_GO")"
 # ==========================================
 # Получение версии
 # ==========================================
