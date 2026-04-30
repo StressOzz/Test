@@ -649,13 +649,7 @@ install_update_TG_PKG() {
 
     rm -f "$TMP_FILE_GO"
 
-    if [ -f "$SECRET_FILE" ]; then
-        SECRET="$(grep '^SECRET=' "$SECRET_FILE" | cut -d'=' -f2)"
-        echo -e "${GREEN}Используем существующий SECRET${NC}"
-    else
-        echo "SECRET=$SECRET" > "$SECRET_FILE"
-        echo -e "${GREEN}Сгенерирован новый SECRET${NC}"
-    fi
+echo "SECRET=$SECRET" > "$SECRET_FILE"
 
     /etc/init.d/tg-ws-proxy enable >/dev/null 2>&1
     /etc/init.d/tg-ws-proxy restart >/dev/null 2>&1
