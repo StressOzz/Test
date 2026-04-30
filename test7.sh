@@ -694,17 +694,17 @@ fi
 clear; echo -e "${MAGENTA}Меню TG WS Proxy${NC}\n"; TGSTATUS=""; pidof tg-ws-proxy-go >/dev/null 2>&1 && TGSTATUS="Go"; pidof tg-ws-proxy-rs >/dev/null 2>&1 && TGSTATUS="$TGSTATUS$( [ -n "$TGSTATUS" ] && echo "/" )Rust"
 if [ -n "$TGSTATUS" ]; then echo -e "${YELLOW}TG WS Proxy:${NC} ${GREEN}запущен [$TGSTATUS]${NC}"; else echo -e "${YELLOW}TG WS Proxy:${NC} ${GREEN}не установлен${NC}"; fi
 
-#if pidof tg-ws-proxy >/dev/null 2>&1 && [ -f "/etc/init.d/tg-ws-proxy" ]; then
-#    SECRET_CONF="$(grep '^SECRET=' $SECRET_FILE 2>/dev/null | cut -d'=' -f2)"
-#
-#    echo -e "\n${YELLOW}Настройки ${CYAN}TG WS Proxy MTProto${YELLOW}:${NC}"
-#    echo -e "${YELLOW}Тип прокси:${NC} MTProto"
-#    echo -e "${YELLOW}Хост:${NC} $LAN_IP"
-#    echo -e "${YELLOW}Порт:${NC} 1443"
-#    echo -e "${YELLOW}Ключ:${NC} dd$SECRET_CONF"
-#    echo -e "${YELLOW}Ссылка для подключения:${NC}"
-#    echo -e "tg://proxy?server=$LAN_IP&port=1443&secret=dd$SECRET_CONF"
-#fi
+if pidof tg-ws-proxy >/dev/null 2>&1 && [ -f "/etc/init.d/tg-ws-proxy" ]; then
+    SECRET_CONF="$(grep '^SECRET=' $SECRET_FILE 2>/dev/null | cut -d'=' -f2)"
+
+   echo -e "\n${YELLOW}Настройки ${CYAN}TG WS Proxy MTProto${YELLOW}:${NC}"
+   echo -e "${YELLOW}Тип прокси:${NC} MTProto"
+   echo -e "${YELLOW}Хост:${NC} $LAN_IP"
+   echo -e "${YELLOW}Порт:${NC} 1443"
+   echo -e "${YELLOW}Ключ:${NC} dd$SECRET_CONF"
+    echo -e "${YELLOW}Ссылка для подключения:${NC}"
+    echo -e "tg://proxy?server=$LAN_IP&port=1443&secret=dd$SECRET_CONF"
+fi
 
 
 if pidof tg-ws-proxy-go >/dev/null 2>&1 && [ -f "$BIN_PATH_GO" ] && [ -f "$INIT_PATH_GO" ]; then echo -e "\n${YELLOW}Настройки ${CYAN}TG WS Proxy Go${YELLOW}:${NC}\n${YELLOW}Тип прокси:${NC} SOCKS5\n${YELLOW}Хост:${NC} $LAN_IP\n${YELLOW}Порт:${NC} 1080${NC}\n${YELLOW}Ссылка для подключения:${NC}\ntg://socks?server=$LAN_IP&port=1080"; fi
