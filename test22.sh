@@ -669,7 +669,7 @@ chmod +x "$INIT_PATH_GO"; /etc/init.d/tg-ws-proxy-go enable; /etc/init.d/tg-ws-p
 install_update_TG_PKG() {
     echo -e "\n${MAGENTA}Устанавливаем TG WS Proxy Go MTProto${NC}"
 
-
+    rm -f /etc/tg-ws-proxy.conf
     URL="https://github.com/spatiumstas/tg-ws-proxy-go/releases/download/${GO_VER}/tg-ws-proxy_${GO_VER}-${GO_SUF}_openwrt_${ARCH_FULL}.${APK_RAS}"
     
 echo -e "${CYAN}Обновляем список пакетов${NC}"
@@ -697,7 +697,7 @@ FILE_NAME_GO="$(basename "$URL")"
 # if [ "$GO_ACTION" = "install" ]; then
 #    echo "SECRET=$SECRET" > "$SECRET_FILE"
 # fi
-
+    rm -f /etc/tg-ws-proxy.conf
     /etc/init.d/tg-ws-proxy enable >/dev/null 2>&1
     /etc/init.d/tg-ws-proxy restart >/dev/null 2>&1
 
