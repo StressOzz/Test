@@ -665,10 +665,9 @@ fi
 
 remove_TG_PKG() {
     echo -e "\n${MAGENTA}Удаление TG WS Proxy MTProto${NC}"
-
+/etc/init.d/tg-ws-proxy stop >/dev/null 2>&1; /etc/init.d/tg-ws-proxy disable >/dev/null 2>&1
 $DELETE tg-ws-proxy
     rm -rf /etc/tg-ws-proxy
-
     echo -e "${GREEN}Удалено полностью${NC}"
     PAUSE
 }
@@ -691,8 +690,6 @@ elif [ "$INSTALLED_VER_GO" != "$GO_VER" ]; then
 else
     GO_ACTION="installed"
 fi
-
-
 
 
 clear; echo -e "${MAGENTA}Меню TG WS Proxy${NC}\n";
