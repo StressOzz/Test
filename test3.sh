@@ -625,12 +625,9 @@ chmod +x "$INIT_PATH_GO"; /etc/init.d/tg-ws-proxy-go enable; /etc/init.d/tg-ws-p
 # УСТАНОВКА GO 2
 
 install_update_TG_PKG() {
-   install_update_TG_PKG() {
-    echo -e "\n${MAGENTA}TG WS Proxy MTProto (install/update)${NC}"
-
+    echo -e "\n${MAGENTA}TG WS Proxy MTProto${NC}"
 
     SECRET_FILE="/etc/tg-ws-proxy/secret.conf"
-
 
     URL="https://github.com/spatiumstas/tg-ws-proxy-go/releases/download/${GO_VER}/tg-ws-proxy_${GO_VER}-${GO_SUF}_openwrt_${ARCH_FULL}.${PKG}"
 
@@ -640,11 +637,15 @@ install_update_TG_PKG() {
     wget -q -O "$TMP_FILE" "$URL" || {
         echo -e "\n${RED}Ошибка загрузки${NC}\n"
         PAUSE
-        return
+        return 1
     }
 
-
-    $INSTALL "$TMP_FILE" || { echo -e "\n${RED}Ошибка установки${NC}\n"; rm -f "$TMP_FILE"; PAUSE; return; }
+    $INSTALL "$TMP_FILE" || {
+        echo -e "\n${RED}Ошибка установки${NC}\n"
+        rm -f "$TMP_FILE"
+        PAUSE
+        return 1
+    }
 
     rm -f "$TMP_FILE"
 
@@ -656,7 +657,6 @@ install_update_TG_PKG() {
         echo -e "${GREEN}Сгенерирован новый SECRET${NC}"
     fi
 
-
     /etc/init.d/tg-ws-proxy enable >/dev/null 2>&1
     /etc/init.d/tg-ws-proxy restart >/dev/null 2>&1
 
@@ -667,7 +667,6 @@ install_update_TG_PKG() {
     fi
 
     PAUSE
-}
 }
 
 remove_TG_PKG() {
@@ -685,7 +684,6 @@ $DELETE tg-ws-proxy
 menu_TG() { while true; do SECRET="$(head -c16 /dev/urandom | hexdump -e '16/1 "%02x"')"; 
 
 
-INSTALLED_VER=""
 GO_ACTION="install"
 
 if [ -z "$INSTALLED_VER" ]; then
