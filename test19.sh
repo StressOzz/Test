@@ -714,7 +714,8 @@ remove_TG_PKG() {
     echo -e "\n${MAGENTA}Удаляем TG WS Proxy Go MTProto${NC}"
 /etc/init.d/tg-ws-proxy stop >/dev/null 2>&1; /etc/init.d/tg-ws-proxy disable >/dev/null 2>&1
 $DELETE tg-ws-proxy >/dev/null 2>&1
-    rm -rf /etc/tg-ws-proxy
+    rm -rf /etc/tg-ws-proxy /etc/tg-ws-proxy.conf
+    rm -f /etc/tg-ws-proxy.conf
  echo -e "TG WS Proxy Go MTProto ${GREEN}удалён!${NC}\n"
     PAUSE
 }
@@ -754,9 +755,6 @@ if [ -n "$INSTALLED_VER_GO" ]; then
     else
         echo -e "${YELLOW}TG WS Proxy Go MTProto версия:${NC} ${GREEN}$INSTALLED_VER_GO (актуальная)${NC}"
     fi
-else
-    echo -e "${YELLOW}TG WS Proxy Go MTProto версия:${NC} ${RED}не установлено${NC}"
-fi
 
 
 if pidof tg-ws-proxy-go >/dev/null 2>&1 && [ -f "$BIN_PATH_GO" ] && [ -f "$INIT_PATH_GO" ]; then echo -e "\n${YELLOW}Настройки ${CYAN}TG WS Proxy Go SOCKS5${YELLOW}:${NC}\n${YELLOW}Тип прокси:${NC} SOCKS5\n${YELLOW}Хост:${NC} $LAN_IP\n${YELLOW}Порт:${NC} 1080${NC}\n${YELLOW}Ссылка для подключения:${NC}\ntg://socks?server=$LAN_IP&port=1080"; fi
