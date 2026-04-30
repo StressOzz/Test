@@ -694,9 +694,10 @@ FILE_NAME_GO="$(basename "$URL")"
 
     rm -f "$TMP_FILE_GO"
 
-# if [ "$GO_ACTION" = "install" ]; then
-#    echo "SECRET=$SECRET" > "$SECRET_FILE"
-# fi
+if [ "$GO_ACTION" = "install" ]; then
+   echo "SECRET=$SECRET" > "$SECRET_FILE"
+fi
+
     rm -f /etc/tg-ws-proxy.conf
     /etc/init.d/tg-ws-proxy enable >/dev/null 2>&1
     /etc/init.d/tg-ws-proxy restart >/dev/null 2>&1
