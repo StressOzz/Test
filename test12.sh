@@ -647,7 +647,9 @@ install_update_TG_PKG() {
 
     rm -f "$TMP_FILE_GO"
 
-echo "SECRET=$SECRET" > "$SECRET_FILE"
+if [ "$GO_ACTION" = "install" ]; then
+    echo "SECRET=$SECRET" > "$SECRET_FILE"
+fi
 
     /etc/init.d/tg-ws-proxy enable >/dev/null 2>&1
     /etc/init.d/tg-ws-proxy restart >/dev/null 2>&1
