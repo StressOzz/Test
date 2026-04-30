@@ -634,20 +634,20 @@ install_update_TG_PKG() {
     echo -e "${CYAN}Скачивание:${NC}"
     echo "$URL"
 
-    wget -O "$TMP_FILE" "$URL" || {
+    wget -O "$TMP_FILE_GO" "$URL" || {
         echo -e "\n${RED}Ошибка загрузки${NC}\n"
         PAUSE
         return 1
     }
 
-    $INSTALL "$TMP_FILE" || {
+    $INSTALL "$TMP_FILE_GO" || {
         echo -e "\n${RED}Ошибка установки${NC}\n"
-        rm -f "$TMP_FILE"
+        rm -f "$TMP_FILE_GO"
         PAUSE
         return 1
     }
 
-    rm -f "$TMP_FILE"
+    rm -f "$TMP_FILE_GO"
 
     if [ -f "$SECRET_FILE" ]; then
         SECRET="$(grep '^SECRET=' "$SECRET_FILE" | cut -d'=' -f2)"
