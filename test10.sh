@@ -676,18 +676,15 @@ $DELETE tg-ws-proxy
 menu_TG() { while true; do SECRET="$(head -c16 /dev/urandom | hexdump -e '16/1 "%02x"')"; 
 
 
-INSTALLED_VER_GO=""
-GO_ACTION="install"
-
 if command -v opkg >/dev/null 2>&1; then
     INSTALLED_VER_GO="$(opkg list-installed 2>/dev/null | grep '^tg-ws-proxy' | awk '{print $3}' | cut -d'-' -f1)"
 else
     INSTALLED_VER_GO="$(apk list -I 2>/dev/null | grep '^tg-ws-proxy-' | sed -E 's/tg-ws-proxy-([0-9.]+).*/\1/')"
 fi
 
-if [ -z "$INSTALLED_VER" ]; then
+if [ -z "$INSTALLED_VER_GO" ]; then
     GO_ACTION="install"
-elif [ "$INSTALLED_VER" != "$GO_VER" ]; then
+elif [ "$INSTALLED_VER_GO" != "$GO_VER" ]; then
     GO_ACTION="update"
 else
     GO_ACTION="installed"
