@@ -627,7 +627,7 @@ install_update_TG_PKG() {
     echo -e "\n${MAGENTA}TG WS Proxy MTProto${NC}"
 
 
-    URL="https://github.com/spatiumstas/tg-ws-proxy-go/releases/download/${GO_VER}/tg-ws-proxy_${GO_VER}-${GO_SUF}_openwrt_${ARCH_FULL}.${PKG}"
+    URL="https://github.com/spatiumstas/tg-ws-proxy-go/releases/download/${GO_VER}/tg-ws-proxy_${GO_VER}-${GO_SUF}_openwrt_${ARCH_FULL}.${APK_RAS}"
 
     echo -e "${CYAN}Скачивание:${NC}"
     echo "$URL"
