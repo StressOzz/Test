@@ -671,6 +671,9 @@ install_update_TG_PKG() {
 
 
     URL="https://github.com/spatiumstas/tg-ws-proxy-go/releases/download/${GO_VER}/tg-ws-proxy_${GO_VER}-${GO_SUF}_openwrt_${ARCH_FULL}.${APK_RAS}"
+    
+echo -e "${CYAN}Обновляем список пакетов${NC}"
+$UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; PAUSE; return; }
 
 FILE_NAME_GO="$(basename "$URL")"
     echo -e "${CYAN}Скачиваем и устанавливаем${NC} $FILE_NAME_GO"
