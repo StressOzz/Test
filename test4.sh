@@ -634,7 +634,7 @@ install_update_TG_PKG() {
     echo -e "${CYAN}Скачивание:${NC}"
     echo "$URL"
 
-    wget -q -O "$TMP_FILE" "$URL" || {
+    wget -O "$TMP_FILE" "$URL" || {
         echo -e "\n${RED}Ошибка загрузки${NC}\n"
         PAUSE
         return 1
