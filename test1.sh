@@ -16,6 +16,7 @@ SAVED_STR="$TMP_SF/StrYou.txt"; HOSTS_USER="$TMP_SF/hosts-user.txt"; OUT_DPI="$T
 BACKUP_FILE="/opt/zapret/tmp/hosts_temp.txt"; STR_FILE="$TMP_SF/str_test.txt"; TEMP_FILE="$TMP_SF/str_temp.txt"
 RESULTS="/opt/zapret/tmp/zapret_bench.txt"; BACK="$TMP_SF/zapret_back.txt"; TMP_RES="$TMP_SF/zapret_results_all.$$"
 FINAL_STR="$TMP_SF/StrFINAL.txt"; NEW_STR="$TMP_SF/StrNEW.txt"; OLD_STR="$TMP_SF/StrOLD.txt"
+ARCH_FULL="$(cat /etc/openwrt_release | grep DISTRIB_ARCH | cut -d"'" -f2)"; MODEL="$(cat /tmp/sysinfo/model 2>/dev/null)"
 RES1="/opt/zapret/tmp/results_flowseal.txt"; RES2="/opt/zapret/tmp/results_versions.txt"; RES3="/opt/zapret/tmp/results_all.txt"
 RES_DOMAIN="/opt/zapret/tmp/results_domain.txt"; Fin_IP_Dis="104\.25\.158\.178 finland[0-9]\{5\}\.discord\.media"; PARALLEL=8
 RAW="https://raw.githubusercontent.com/hyperion-cs/dpi-checkers/refs/heads/main/ru/tcp-16-20/suite.v2.json"
@@ -65,8 +66,40 @@ hosts_add() { printf "%b\n" "$1" | while IFS= read -r L; do grep -qxF "$L" /etc/
 ZAPRET_RESTART () { chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1; sleep 1; }
 PAUSE() { echo -ne "Нажмите Enter..."; read dummy; }; BACKUP_DIR="/opt/zapret_backup"; DATE_FILE="$BACKUP_DIR/date_backup.txt"
 BIN_PATH_GO="/usr/bin/tg-ws-proxy-go"; INIT_PATH_GO="/etc/init.d/tg-ws-proxy-go"; BIN_PATH_RS="/usr/bin/tg-ws-proxy-rs"; INIT_PATH_RS="/etc/init.d/tg-ws-proxy-rs"
-if command -v opkg >/dev/null 2>&1; then PKG="opkg"; CONFZ="/etc/opkg/distfeeds.conf"; PKG_IS_APK=0; UPDATE="opkg update"; INSTALL="opkg install"; DELETE="opkg remove --autoremove --force-removal-of-dependent-packages"; ARCH="$(opkg print-architecture | awk '{print $2}' | tail -n1)"
-VER_SUF="r1-all"; APK_RAS="ipk"; SUFICS="v"; else PKG="apk"; CONFZ="/etc/apk/repositories.d/distfeeds.list"; PKG_IS_APK=1; UPDATE="apk update"; INSTALL="apk add --allow-untrusted"; DELETE="apk del"; ARCH="$(apk --print-arch 2>/dev/null)"; APK_RAS="apk"; VER_SUF="r1"; SUFICS=""; fi
+
+if command -v opkg >/dev/null 2>&1; then 
+PKG="opkg"; GO_SUF="1"; 
+CONFZ="/etc/opkg/distfeeds.conf"; 
+PKG_IS_APK=0; 
+UPDATE="opkg update"; 
+INSTALL="opkg install"; 
+DELETE="opkg remove --autoremove --force-removal-of-dependent-packages"; 
+ARCH="$(opkg print-architecture | awk '{print $2}' | tail -n1)"
+VER_SUF="r1-all"; 
+APK_RAS="ipk"; 
+SUFICS="v"; 
+TMP_FILE_GO="/tmp/tg-ws-proxy.ipk"
+INSTALLED_VER=$(opkg list-installed zapret 2>/dev/null | awk '{sub(/-r[0-9]+$/, "", $3); print $3}')
+else 
+PKG="apk";  
+GO_SUF="r1"; 
+CONFZ="/etc/apk/repositories.d/distfeeds.list"; 
+PKG_IS_APK=1; 
+UPDATE="apk update"; 
+INSTALL="apk add --allow-untrusted"; 
+DELETE="apk del"; 
+ARCH="$(apk --print-arch 2>/dev/null)"; 
+APK_RAS="apk"; 
+VER_SUF="r1"; 
+SUFICS=""; 
+TMP_FILE_GO="/tmp/tg-ws-proxy.apk"
+INSTALLED_VER=$(apk info -v 2>/dev/null | grep '^zapret-' | head -n1 | cut -d'-' -f2 | sed 's/-r[0-9]\+$//')
+fi
+
+
+
+
+
 echo 'sh <(wget -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/main/Zapret-Manager.sh)' > /usr/bin/zms; chmod +x /usr/bin/zms
 if ! command -v curl >/dev/null 2>&1; then clear; echo -e "${MAGENTA}Устанавливаем ${NC}curl"; echo -e "${CYAN}Обновляем список пакетов${NC}"; ok=0; for i in 1 2 3 4 5; do if $UPDATE >/dev/null 2>&1; then ok=1; break; fi
 echo -e "${YELLOW}Обновление пакетов попытка $i не удалась${NC}"; sleep 1; done; if [ "$ok" -ne 1 ]; then echo -e "\n${RED}Не удалось обновить пакеты после 5 попыток${NC}\n"; PAUSE; exit 0; fi
@@ -75,12 +108,16 @@ if [ "$ok" -ne 1 ]; then echo -e "\n${RED}Не удалось установит
 echo "собираем версии"
 curl -sL -o /dev/null -w '%{url_effective}' https://github.com/remittor/zapret-openwrt/releases/latest | grep -o '[0-9.]*$' > "$TMP_VER"; ZAPRET_VERSION="$(cat "$TMP_VER")"
 curl -sL -o /dev/null -w '%{url_effective}' https://github.com/yandexru45/podkop-evolution/releases/latest | grep -o '[0-9.]*$' > "$TMP_VER_POD"; PODKOP_LATEST_VER="$(cat "$TMP_VER_POD")"
+
+TMP_VER_GO="/tmp/tg_ws_proxy_go_ver"
+curl -sL -o /dev/null -w '%{url_effective}' https://github.com/spatiumstas/tg-ws-proxy-go/releases/latest | grep -o '[0-9.]*$' > "$TMP_VER_GO"; GO_VER="$(cat "$TMP_VER_GO")"
+
+
 # ==========================================
 # Получение версии
 # ==========================================
 get_versions() { LOCAL_ARCH=$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release); USED_ARCH="$LOCAL_ARCH"; LATEST_URL="https://github.com/remittor/zapret-openwrt/releases/download/v${ZAPRET_VERSION}/zapret_v${ZAPRET_VERSION}_${LOCAL_ARCH}.zip"
-if [ "$PKG_IS_APK" -eq 1 ]; then INSTALLED_VER=$(apk info -v 2>/dev/null | grep '^zapret-' | head -n1 | cut -d'-' -f2 | sed 's/-r[0-9]\+$//'); [ -z "$INSTALLED_VER" ] && INSTALLED_VER="не найдена"; else INSTALLED_VER=$(opkg list-installed zapret 2>/dev/null | awk '{sub(/-r[0-9]+$/, "", $3); print $3}')
-[ -z "$INSTALLED_VER" ] && INSTALLED_VER="не найдена"; fi; NFQ_RUN=$(pgrep -f nfqws 2>/dev/null | wc -l); NFQ_RUN=${NFQ_RUN:-0}; NFQ_ALL=$(/etc/init.d/zapret info 2>/dev/null | grep -o 'instance[0-9]\+' | wc -l); NFQ_ALL=${NFQ_ALL:-0}; NFQ_STAT=""; if [ "$NFQ_ALL" -gt 0 ]; then
+if [ "$PKG_IS_APK" -eq 1 ]; then [ -z "$INSTALLED_VER" ] && INSTALLED_VER="не найдена"; else [ -z "$INSTALLED_VER" ] && INSTALLED_VER="не найдена"; fi; NFQ_RUN=$(pgrep -f nfqws 2>/dev/null | wc -l); NFQ_RUN=${NFQ_RUN:-0}; NFQ_ALL=$(/etc/init.d/zapret info 2>/dev/null | grep -o 'instance[0-9]\+' | wc -l); NFQ_ALL=${NFQ_ALL:-0}; NFQ_STAT=""; if [ "$NFQ_ALL" -gt 0 ]; then
 [ "$NFQ_RUN" -eq "$NFQ_ALL" ] && NFQ_CLR="$GREEN" || NFQ_CLR="$RED"; NFQ_STAT="${NFQ_CLR}[${NFQ_RUN}/${NFQ_ALL}]${NC}"; fi; if [ -f /etc/init.d/zapret ]; then /etc/init.d/zapret status >/dev/null 2>&1 && ZAPRET_STATUS="${GREEN}запущен $NFQ_STAT${NC}" || ZAPRET_STATUS="${RED}остановлен${NC}"
 else ZAPRET_STATUS=""; fi; [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ] && INST_COLOR=$GREEN || INST_COLOR=$RED; INSTALLED_DISPLAY=${INSTALLED_VER:-"не найдена"}; }
 # ==========================================
@@ -509,8 +546,7 @@ if [ -s "$RES1" ] || [ -s "$RES2" ] || [ -s "$RES3" ] || [ -s "$RES_DOMAIN" ]; t
 # ==========================================
 # Системная информация
 # ==========================================
-Sys_Info() { clear; echo -e "${GREEN}===== Информация о системе =====${NC}"; ARCH_FULL="$(cat /etc/openwrt_release | grep DISTRIB_ARCH | cut -d"'" -f2)"; MODEL="$(cat /tmp/sysinfo/model 2>/dev/null)"
-FREEMEM="$(df -h /tmp / 2>/dev/null | awk 'NR==2{printf "/tmp : used %-6s free %-6s\n",$3,$4} NR==3{printf "   /root: used %-6s free %-6s\n",$3,$4}')"
+Sys_Info() { clear; echo -e "${GREEN}===== Информация о системе =====${NC}"; FREEMEM="$(df -h /tmp / 2>/dev/null | awk 'NR==2{printf "/tmp : used %-6s free %-6s\n",$3,$4} NR==3{printf "   /root: used %-6s free %-6s\n",$3,$4}')"
 OWRT="$(grep '^DISTRIB_RELEASE=' /etc/openwrt_release 2>/dev/null | cut -d"'" -f2)"; echo -e "Model   : $MODEL\nArch    : $ARCH_FULL\nOpenWrt : $OWRT\nStorage :\n   $FREEMEM"
 echo -e "\n${GREEN}===== Пользовательские пакеты =====${NC}"; if [ "$PKG_IS_APK" -eq 1 ]; then apk info -v 2>/dev/null | awk '
 BEGIN{grp[""]=0}
@@ -586,14 +622,128 @@ install_TG_GO() { echo -e "\n${MAGENTA}Установка TG WS Proxy Go${NC}"; 
 [ -z "$LATEST_TAG_GO" ] && { echo -e "\n${RED}Не удалось получить версию${NC} TG WS Proxy Go\n"; PAUSE; return 1; }; DOWNLOAD_URL_GO="https://github.com/d0mhate/-tg-ws-proxy-Manager-go/releases/download/$LATEST_TAG_GO/$ARCH_FILE_GO"; curl -L --fail -o "$BIN_PATH_GO" "$DOWNLOAD_URL_GO" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка скачивания${NC}\n"; PAUSE; return 1; }; chmod +x "$BIN_PATH_GO"
 printf '#!/bin/sh /etc/rc.common\nSTART=99\nUSE_PROCD=1\n\nstart_service() {\n    procd_open_instance\n    procd_set_param command /usr/bin/tg-ws-proxy-go --host 0.0.0.0 --port 1080\n    procd_set_param respawn\n    procd_close_instance\n}\n' > /etc/init.d/tg-ws-proxy-go
 chmod +x "$INIT_PATH_GO"; /etc/init.d/tg-ws-proxy-go enable; /etc/init.d/tg-ws-proxy-go start; if pidof tg-ws-proxy-go >/dev/null 2>&1; then echo -e "${GREEN}Сервис ${NC}TG WS Proxy Go${GREEN} запущен!${NC}\n"; else echo -e "\n${RED}Сервис TG WS Proxy Go не запущен!${NC}\n"; fi; PAUSE; }
+# УСТАНОВКА GO 2
+
+install_update_TG_PKG() {
+   install_update_TG_PKG() {
+    echo -e "\n${MAGENTA}TG WS Proxy MTProto (install/update)${NC}"
+
+
+    SECRET_FILE="/etc/tg-ws-proxy/secret.conf"
+
+
+    URL="https://github.com/spatiumstas/tg-ws-proxy-go/releases/download/${GO_VER}/tg-ws-proxy_${GO_VER}-${GO_SUF}_openwrt_${ARCH_FULL}.${PKG}"
+
+    echo -e "${CYAN}Скачивание:${NC}"
+    echo "$URL"
+
+    wget -q -O "$TMP_FILE" "$URL" || {
+        echo -e "\n${RED}Ошибка загрузки${NC}\n"
+        PAUSE
+        return
+    }
+
+
+    $INSTALL "$TMP_FILE" || { echo -e "\n${RED}Ошибка установки${NC}\n"; rm -f "$TMP_FILE"; PAUSE; return; }
+
+    rm -f "$TMP_FILE"
+
+    if [ -f "$SECRET_FILE" ]; then
+        SECRET="$(grep '^SECRET=' "$SECRET_FILE" | cut -d'=' -f2)"
+        echo -e "${GREEN}Используем существующий SECRET${NC}"
+    else
+        echo "SECRET=$SECRET" > "$SECRET_FILE"
+        echo -e "${GREEN}Сгенерирован новый SECRET${NC}"
+    fi
+
+
+    /etc/init.d/tg-ws-proxy enable >/dev/null 2>&1
+    /etc/init.d/tg-ws-proxy restart >/dev/null 2>&1
+
+    if pidof tg-ws-proxy >/dev/null 2>&1; then
+        echo -e "${GREEN}Сервис запущен${NC}"
+    else
+        echo -e "${RED}Сервис не запущен${NC}"
+    fi
+
+    PAUSE
+}
+}
+
+remove_TG_PKG() {
+    echo -e "\n${MAGENTA}Удаление TG WS Proxy MTProto${NC}"
+
+$DELETE tg-ws-proxy
+    rm -rf /etc/tg-ws-proxy
+
+    echo -e "${GREEN}Удалено полностью${NC}"
+    PAUSE
+}
+
+
 # МЕНЮ
-menu_TG() { while true; do SECRET="$(head -c16 /dev/urandom | hexdump -e '16/1 "%02x"')"; clear; echo -e "${MAGENTA}Меню TG WS Proxy${NC}\n"; TGSTATUS=""; pidof tg-ws-proxy-go >/dev/null 2>&1 && TGSTATUS="Go"; pidof tg-ws-proxy-rs >/dev/null 2>&1 && TGSTATUS="$TGSTATUS$( [ -n "$TGSTATUS" ] && echo "/" )Rust"
+menu_TG() { while true; do SECRET="$(head -c16 /dev/urandom | hexdump -e '16/1 "%02x"')"; 
+
+
+INSTALLED_VER=""
+GO_ACTION="install"
+
+if [ -z "$INSTALLED_VER" ]; then
+    GO_ACTION="install"
+elif [ "$INSTALLED_VER" != "$GO_VER" ]; then
+    GO_ACTION="update"
+else
+    GO_ACTION="installed"
+fi
+
+
+
+
+clear; echo -e "${MAGENTA}Меню TG WS Proxy${NC}\n"; TGSTATUS=""; pidof tg-ws-proxy-go >/dev/null 2>&1 && TGSTATUS="Go"; pidof tg-ws-proxy-rs >/dev/null 2>&1 && TGSTATUS="$TGSTATUS$( [ -n "$TGSTATUS" ] && echo "/" )Rust"
 if [ -n "$TGSTATUS" ]; then echo -e "${YELLOW}TG WS Proxy:${NC} ${GREEN}запущен [$TGSTATUS]${NC}"; else echo -e "${YELLOW}TG WS Proxy:${NC} ${GREEN}не установлен${NC}"; fi
+
+if pidof tg-ws-proxy >/dev/null 2>&1 && [ -f "/etc/init.d/tg-ws-proxy" ]; then
+    SECRET_CONF="$(grep '^SECRET=' $SECRET_FILE 2>/dev/null | cut -d'=' -f2)"
+
+    echo -e "\n${YELLOW}Настройки ${CYAN}TG WS Proxy MTProto${YELLOW}:${NC}"
+    echo -e "${YELLOW}Тип прокси:${NC} MTProto"
+    echo -e "${YELLOW}Хост:${NC} $LAN_IP"
+    echo -e "${YELLOW}Порт:${NC} 1443"
+    echo -e "${YELLOW}Ключ:${NC} dd$SECRET_CONF"
+    echo -e "${YELLOW}Ссылка для подключения:${NC}"
+    echo -e "tg://proxy?server=$LAN_IP&port=1443&secret=dd$SECRET_CONF"
+fi
+
+
 if pidof tg-ws-proxy-go >/dev/null 2>&1 && [ -f "$BIN_PATH_GO" ] && [ -f "$INIT_PATH_GO" ]; then echo -e "\n${YELLOW}Настройки ${CYAN}TG WS Proxy Go${YELLOW}:${NC}\n${YELLOW}Тип прокси:${NC} SOCKS5\n${YELLOW}Хост:${NC} $LAN_IP\n${YELLOW}Порт:${NC} 1080${NC}\n${YELLOW}Ссылка для подключения:${NC}\ntg://socks?server=$LAN_IP&port=1080"; fi
 if pgrep -f tg-ws-proxy-rs >/dev/null 2>&1 && [ -f "$BIN_PATH_RS" ] && [ -f "$INIT_PATH_RS" ]; then SECRET_IN_RS="$(sed -n 's/.*--secret[[:space:]]*\([0-9a-fA-F]\{32\}\).*/\1/p' "$INIT_PATH_RS")"
 echo -e "\n${YELLOW}Настройки ${CYAN}TG WS Proxy Rust${YELLOW}:${NC}\n${YELLOW}Тип прокси:${NC} MTProto\n${YELLOW}Хост:${NC} $LAN_IP\n${YELLOW}Порт:${NC} 2443\n${YELLOW}Ключ:${NC} dd$SECRET_IN_RS\n${YELLOW}Ссылка для подключения:${NC}\ntg://proxy?server=$LAN_IP&port=2443&secret=dd$SECRET_IN_RS"; fi
-echo -e "\n${CYAN}1)${GREEN} $( [ -f "$BIN_PATH_GO" ] && [ -f "$INIT_PATH_GO" ] && echo -e "Удалить ${NC}TG WS Proxy Go" || echo "Установить ${NC}TG WS Proxy Go" )"; echo -e "${CYAN}2)${GREEN} $( [ -f "$BIN_PATH_RS" ] && [ -f "$INIT_PATH_RS" ] && echo -e "Удалить ${NC}TG WS Proxy Rust" || echo "Установить ${NC}TG WS Proxy Rust" )"
-echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n"; echo -en "${YELLOW}Выберите пункт: ${NC}"; read choice; case "$choice" in 1) if [ -f "$BIN_PATH_GO" ] && [ -f "$INIT_PATH_GO" ]; then delete_TG_GO; else install_TG_GO; fi;; 2) if [ -f "$BIN_PATH_RS" ] && [ -f "$INIT_PATH_RS" ]; then delete_TG_RS; else install_TG_RS; fi;; *) break ;; esac; done; }
+echo -e "\n${CYAN}1)${GREEN} $( [ -f "$BIN_PATH_GO" ] && [ -f "$INIT_PATH_GO" ] && echo -e "Удалить ${NC}TG WS Proxy Go" || echo "Установить ${NC}TG WS Proxy Go" )"
+echo -e "${CYAN}2)${GREEN} $( [ -f "$BIN_PATH_RS" ] && [ -f "$INIT_PATH_RS" ] && echo -e "Удалить ${NC}TG WS Proxy Rust" || echo "Установить ${NC}TG WS Proxy Rust" )"
+
+echo -ne "${CYAN}3)${GREEN} "
+if [ "$GO_ACTION" = "install" ]; then
+    echo -e "Установить ${NC}TG WS Proxy Go MTProto"
+elif [ "$GO_ACTION" = "update" ]; then
+    echo -e "Обновить ${NC}TG WS Proxy Go MTProto${NC}"
+else
+    echo -e "Удалить ${NC}TG WS Proxy Go MTProto${NC}"
+fi
+
+
+echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n"; echo -en "${YELLOW}Выберите пункт: ${NC}"; read choice; case "$choice" in 1) if [ -f "$BIN_PATH_GO" ] && [ -f "$INIT_PATH_GO" ]; then delete_TG_GO; else install_TG_GO; fi;; 2) if [ -f "$BIN_PATH_RS" ] && [ -f "$INIT_PATH_RS" ]; then delete_TG_RS; else install_TG_RS; fi;; 
+
+
+3)
+    if [ "$GO_ACTION" = "install" ] || [ "$GO_ACTION" = "update" ]; then
+        install_update_TG_PKG
+    else
+        remove_TG_PKG
+    fi
+;;
+
+
+*) break ;; esac; done; }
 # ==========================================
 # PODKOP EVOLUTION и AWG
 # ==========================================
