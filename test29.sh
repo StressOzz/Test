@@ -103,7 +103,7 @@ if ! command -v curl >/dev/null 2>&1; then clear; echo -e "${MAGENTA}Устан�
 echo -e "${YELLOW}Обновление пакетов попытка $i не удалась${NC}"; sleep 1; done; if [ "$ok" -ne 1 ]; then echo -e "\n${RED}Не удалось обновить пакеты после 5 попыток${NC}\n"; PAUSE; exit 0; fi
 ok=0; echo -e "${CYAN}Устанавливаем ${NC}curl"; for i in 1 2 3 4 5; do if $INSTALL curl >/dev/null 2>&1; then ok=1; break; fi; echo -e "${YELLOW}Устанавливаем ${NC}curl${YELLOW} попытка ${NC}$i${YELLOW} не удалась!${NC}"; sleep 1; done
 if [ "$ok" -ne 1 ]; then echo -e "\n${RED}Не удалось установить ${NC}curl${RED} после 5 попыток${NC}\n"; PAUSE; exit 0; fi; if ! command -v curl >/dev/null 2>&1; then echo -e "\ncurl${RED} не найден после установки${NC}\n"; PAUSE; exit 0; fi; fi
-echo "Cобираем версии"
+echo "Cобираем версии:"
 
 get_ver() {
   URL="$1"
@@ -135,7 +135,7 @@ get_ver() {
   fi
 
   echo "$VERSION" > "$OUT_FILE"
-  echo -e"${GREEN}✓${NC} $NAME: $VERSION"
+  echo -e "${GREEN}✓${NC} $NAME: $VERSION"
 }
 
 get_ver "https://github.com/remittor/zapret-openwrt/releases/latest" "$TMP_VER" "ZAPRET"
