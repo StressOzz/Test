@@ -34,16 +34,17 @@ log() { echo "[*] $1"; }
 
 fetch() {
     NAME="$1"
+
     echo "[*] Поиск пакета: $NAME" >&2
 
     FILE="$(curl -s "$BASE" | grep -o "$NAME[^\" ]*\.$EXT" | head -n1)"
 
     if [ -n "$FILE" ]; then
         echo "[*] Найден: $FILE" >&2
-        echo "$FILE"
+        printf "%s" "$FILE"
     else
         echo "[*] Не найден" >&2
-        echo ""
+        printf ""
     fi
 }
 
@@ -73,8 +74,9 @@ get_local_ver() {
 get_state() {
     NAME="$1"
 
-    FILE="$(fetch $NAME)"
-    REMOTE_VER="$(get_ver_remote "$FILE")"
+    FILE="$(fetch "$NAME")"
+
+    REMOTE_VER="$(echo "$FILE" | sed -E 's/.*([0-9]+\.[0-9]+(\.[0-9]+)*-r[0-9]+).*/\1/')"
     LOCAL_VER="$(get_local_ver "$NAME")"
 
     if [ -z "$LOCAL_VER" ]; then
@@ -93,9 +95,10 @@ get_state() {
 get_label() {
     NAME="$1"
 
-    IFS="|" read -r STATE LVER RVER <<EOF
-$(get_state "$NAME")
-EOF
+    DATA="$(get_state "$NAME")"
+    STATE="$(echo "$DATA" | cut -d'|' -f1)"
+    LVER="$(echo "$DATA" | cut -d'|' -f2)"
+    RVER="$(echo "$DATA" | cut -d'|' -f3)"
 
     case "$STATE" in
         install)
