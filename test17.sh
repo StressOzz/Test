@@ -40,9 +40,10 @@ get_remote_file() {
 
     [ ! -f "$CACHE" ] && update_cache
 
+    # Исправленный парсер - ищем href="имя_файла.${EXT}"
     cat "$CACHE" \
-        | tr '"' '\n' \
-        | grep "^${NAME}-.*\.${EXT}$" \
+        | grep -oE "href=\"${NAME}-[^\"]+\.${EXT}\"" \
+        | sed 's/href="//;s/"//' \
         | head -n1
 }
 
@@ -52,7 +53,11 @@ get_version() {
 
 get_remote_ver() {
     FILE="$1"
-    get_version "$FILE"
+    if [ -n "$FILE" ]; then
+        get_version "$FILE"
+    else
+        echo ""
+    fi
 }
 
 ### =======================
@@ -65,8 +70,9 @@ get_local_ver() {
     if command -v opkg >/dev/null 2>&1; then
         opkg list-installed 2>/dev/null | awk -v n="$NAME" '$1==n {print $3}'
     else
-        apk info -e "$NAME" >/dev/null 2>&1 || return
-        apk info "$NAME" 2>/dev/null | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)*-r[0-9]+' | head -n1
+        if apk info -e "$NAME" >/dev/null 2>&1; then
+            apk info "$NAME" 2>/dev/null | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)*-r[0-9]+' | head -n1
+        fi
     fi
 }
 
@@ -79,17 +85,27 @@ get_state() {
 
     FILE="$(get_remote_file "$NAME")"
 
-    REMOTE_VER="$(get_remote_ver "$FILE")"
+    if [ -n "$FILE" ]; then
+        REMOTE_VER="$(get_remote_ver "$FILE")"
+    else
+        REMOTE_VER=""
+    fi
+    
     LOCAL_VER="$(get_local_ver "$NAME")"
 
-    [ -z "$REMOTE_VER" ] && REMOTE_VER="0.0.0"
+    # Отладочный вывод (можно закомментировать после проверки)
+    echo "DEBUG: NAME=$NAME, FILE=$FILE, REMOTE_VER=$REMOTE_VER, LOCAL_VER=$LOCAL_VER" >&2
 
-    if [ -z "$LOCAL_VER" ]; then
+    if [ -z "$LOCAL_VER" ] && [ -n "$REMOTE_VER" ]; then
         echo "install|$LOCAL_VER|$REMOTE_VER"
-    elif [ "$LOCAL_VER" != "$REMOTE_VER" ]; then
+    elif [ -n "$LOCAL_VER" ] && [ -n "$REMOTE_VER" ] && [ "$LOCAL_VER" != "$REMOTE_VER" ]; then
         echo "update|$LOCAL_VER|$REMOTE_VER"
-    else
+    elif [ -n "$LOCAL_VER" ] && [ -z "$REMOTE_VER" ]; then
+        echo "remove|$LOCAL_VER|unknown"
+    elif [ -n "$LOCAL_VER" ] && [ "$LOCAL_VER" = "$REMOTE_VER" ]; then
         echo "remove|$LOCAL_VER|$REMOTE_VER"
+    else
+        echo "unknown||"
     fi
 }
 
@@ -115,6 +131,9 @@ get_label() {
             ;;
         remove)
             echo "$NAME ($LVER) → Удалить"
+            ;;
+        *)
+            echo "$NAME (ошибка получения версии)"
             ;;
     esac
 }
@@ -176,6 +195,7 @@ action_pkg() {
     case "$STATE" in
         install|update) install_pkg "$NAME" ;;
         remove) remove_pkg "$NAME" ;;
+        *) log "Неизвестное состояние для $NAME" ;;
     esac
 }
 
