@@ -53,16 +53,16 @@ fetch() {
 
 get_ver_remote() {
     FILE="$1"
-    echo "$FILE" | sed -E 's/.*([0-9]+\.[0-9]+(\.[0-9]+)*(-r[0-9]+)?).*/\1/'
+    echo "$FILE" | sed -E 's/.*_([0-9]+\.[0-9]+(\.[0-9]+)*-r[0-9]+)\..*/\1/'
 }
 
 get_local_ver() {
     NAME="$1"
 
     if command -v opkg >/dev/null 2>&1; then
-        opkg list-installed 2>/dev/null | grep "^$NAME " | awk '{print $3}'
+        opkg list-installed 2>/dev/null | awk -v n="$NAME" '$1==n {print $3}'
     else
-        apk info "$NAME" 2>/dev/null | head -n1 | awk '{print $1}' | sed "s/^$NAME-//"
+        apk info "$NAME" 2>/dev/null | head -n1 | sed -E "s/^$NAME-//"
     fi
 }
 
