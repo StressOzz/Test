@@ -94,10 +94,14 @@ get_state() {
 get_label() {
     NAME="$1"
 
-    DATA="$(get_state "$NAME")"
-    STATE="$(echo "$DATA" | cut -d'|' -f1)"
-    LVER="$(echo "$DATA" | cut -d'|' -f2)"
-    RVER="$(echo "$DATA" | cut -d'|' -f3)"
+    STATE_DATA="$(get_state "$NAME")"
+    STATE="$(echo "$STATE_DATA" | cut -d'|' -f1)"
+    LVER="$(echo "$STATE_DATA" | cut -d'|' -f2)"
+    RVER="$(echo "$STATE_DATA" | cut -d'|' -f3)"
+
+    # чистка мусора
+    LVER="$(echo "$LVER" | grep -oE '[0-9]+\.[0-9]+.*' )"
+    RVER="$(echo "$RVER" | grep -oE '[0-9]+\.[0-9]+.*' )"
 
     case "$STATE" in
         install)
