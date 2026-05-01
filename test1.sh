@@ -26,10 +26,17 @@ log() {
 
 fetch() {
     NAME="$1"
-    log "Поиск пакета: $NAME"
+    echo "[*] Поиск пакета: $NAME" >&2
+
     FILE="$(curl -s "$BASE" | grep -o "$NAME[^\" ]*\.$EXT" | head -n1)"
-    [ -n "$FILE" ] && log "Найден: $FILE" || log "Не найден"
-    echo "$FILE"
+
+    if [ -n "$FILE" ]; then
+        echo "[*] Найден: $FILE" >&2
+        echo "$FILE"
+    else
+        echo "[*] Не найден" >&2
+        echo ""
+    fi
 }
 
 is_installed() {
