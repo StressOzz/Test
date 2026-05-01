@@ -63,7 +63,8 @@ get_local_ver() {
     if command -v opkg >/dev/null 2>&1; then
         opkg list-installed 2>/dev/null | awk -v n="$NAME" '$1==n {print $3}'
     else
-        apk info "$NAME" 2>/dev/null | head -n1 | sed -E "s/^$NAME-//"
+        apk info -e "$NAME" >/dev/null 2>&1 || return
+        apk info "$NAME" 2>/dev/null | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)*-r[0-9]+' | head -n1
     fi
 }
 
