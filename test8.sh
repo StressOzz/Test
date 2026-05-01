@@ -37,11 +37,14 @@ fetch() {
 
     echo "[*] Поиск пакета: $NAME" >&2
 
-    FILE="$(curl -s "$BASE" | grep -o "$NAME[^\" ]*\.$EXT" | head -n1)"
+    FILE="$(curl -s "$BASE" \
+        | grep -o "href=\"[^\"]*${NAME}[^\" ]*\\.${EXT}\"" \
+        | head -n1 \
+        | sed -E 's/.*href="([^"]+)".*/\1/')"
 
     if [ -n "$FILE" ]; then
         echo "[*] Найден: $FILE" >&2
-        printf "%s" "$FILE"
+        printf "%s" "$(basename "$FILE")"
     else
         echo "[*] Не найден" >&2
         printf ""
