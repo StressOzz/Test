@@ -53,8 +53,7 @@ fetch() {
 ### =======================
 
 get_ver_remote() {
-    FILE="$1"
-    echo "$FILE" | sed -E 's/.*_([0-9]+\.[0-9]+(\.[0-9]+)*-r[0-9]+)\..*/\1/'
+    echo "$1" | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)*-r[0-9]+'
 }
 
 get_local_ver() {
@@ -76,7 +75,7 @@ get_state() {
 
     FILE="$(fetch "$NAME")"
 
-    REMOTE_VER="$(echo "$FILE" | sed -E 's/.*([0-9]+\.[0-9]+(\.[0-9]+)*-r[0-9]+).*/\1/')"
+    REMOTE_VER="$(get_ver_remote "$FILE")"
     LOCAL_VER="$(get_local_ver "$NAME")"
 
     if [ -z "$LOCAL_VER" ]; then
