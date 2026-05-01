@@ -33,9 +33,9 @@ get_remote_file() {
     NAME="$1"
 
     curl -s "$BASE" \
-        | grep -o "href=\"[^\"]*${NAME}[^\" ]*\\.${EXT}\"" \
-        | head -n1 \
-        | sed -E 's/.*href="([^"]+)".*/\1/'
+        | tr '"' '\n' \
+        | grep "^${NAME}.*\.${EXT}$" \
+        | head -n1
 }
 
 get_version() {
