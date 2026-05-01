@@ -69,17 +69,18 @@ get_state() {
     NAME="$1"
 
     FILE="$(get_remote_file "$NAME")"
+
     REMOTE_VER="$(get_remote_ver "$FILE")"
     LOCAL_VER="$(get_local_ver "$NAME")"
 
     [ -z "$REMOTE_VER" ] && REMOTE_VER="0.0.0"
 
     if [ -z "$LOCAL_VER" ]; then
-        echo "install|$LOCAL_VER|$REMOTE_VER|$FILE"
+        echo "install|$LOCAL_VER|$REMOTE_VER"
     elif [ "$LOCAL_VER" != "$REMOTE_VER" ]; then
-        echo "update|$LOCAL_VER|$REMOTE_VER|$FILE"
+        echo "update|$LOCAL_VER|$REMOTE_VER"
     else
-        echo "remove|$LOCAL_VER|$REMOTE_VER|$FILE"
+        echo "remove|$LOCAL_VER|$REMOTE_VER"
     fi
 }
 
