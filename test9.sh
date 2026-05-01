@@ -32,23 +32,26 @@ log() { echo "[*] $1"; }
 ### FETCH PACKAGE NAME
 ### =======================
 
-fetch() {
+fetch_pkg() {
     NAME="$1"
 
-    echo "[*] Поиск пакета: $NAME" >&2
-
     FILE="$(curl -s "$BASE" \
-        | grep -o "href=\"[^\"]*${NAME}[^\" ]*\\.${EXT}\"" \
+        | grep -o "href=\"[^\"]*${NAME}_[^\"]*\\.${EXT}\"" \
         | head -n1 \
         | sed -E 's/.*href="([^"]+)".*/\1/')"
 
-    if [ -n "$FILE" ]; then
-        echo "[*] Найден: $FILE" >&2
-        printf "%s" "$(basename "$FILE")"
-    else
-        echo "[*] Не найден" >&2
-        printf ""
-    fi
+    printf "%s" "$(basename "$FILE")"
+}
+
+fetch_luci() {
+    NAME="$1"
+
+    FILE="$(curl -s "$BASE" \
+        | grep -o "href=\"luci-app-${NAME}[^\" ]*\\.${EXT}\"" \
+        | head -n1 \
+        | sed -E 's/.*href="([^"]+)".*/\1/')"
+
+    printf "%s" "$(basename "$FILE")"
 }
 
 ### =======================
@@ -128,26 +131,39 @@ install_pkg() {
 
     log "=== Установка/обновление $NAME ==="
 
-    PKG="$(fetch $NAME)"
-    LUCI="$(fetch luci-app-$NAME)"
+    PKG="$(fetch_pkg "$NAME")"
+    LUCI="$(fetch_luci "$NAME")"
+
+    if [ -z "$PKG" ] && [ -z "$LUCI" ]; then
+        log "Нечего скачивать (пакеты не найдены)"
+        return
+    fi
 
     for f in "$PKG" "$LUCI"; do
-        [ -n "$f" ] && {
-            URL="$BASE$f"
-            log "Скачивание: $URL"
-            wget -q "$URL" -O "$TMP/$f"
-        }
+        [ -n "$f" ] || continue
+
+        URL="$BASE$f"
+
+        log "Скачивание: $URL"
+
+        wget -q --timeout=15 --tries=2 "$URL" -O "$TMP/$f"
+
+        if [ $? -ne 0 ]; then
+            log "Ошибка скачивания: $f"
+        fi
     done
 
     if ls "$TMP"/*.$EXT >/dev/null 2>&1; then
-        log "Установка..."
+        log "Установка пакетов..."
+
         $INSTALL $TMP/*.$EXT
+
         log "Готово"
     else
-        log "Нечего устанавливать"
+        log "Файлы не скачались — установка отменена"
     fi
 
-    rm -f $TMP/*.$EXT
+    rm -f "$TMP"/*.$EXT
 }
 
 ### =======================
