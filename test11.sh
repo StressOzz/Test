@@ -4,9 +4,6 @@
 ### BASE SETTINGS
 ### =======================
 
-ARCH="$(opkg print-architecture 2>/dev/null | awk '{print $2}' | tail -n1)"
-[ -z "$ARCH" ] && ARCH="$(apk --print-arch 2>/dev/null)"
-
 if command -v opkg >/dev/null 2>&1; then
     BASE="https://packages.routerich.ru/24.10/mediatek/filogic/routerich/"
     EXT="ipk"
@@ -29,38 +26,30 @@ mkdir -p "$TMP"
 log() { echo "[*] $1"; }
 
 ### =======================
-### FETCH PACKAGE NAME
+### GET REMOTE FILE + VERSION
 ### =======================
 
-fetch_pkg() {
+get_remote_file() {
     NAME="$1"
 
-    FILE="$(curl -s "$BASE" \
-        | grep -o "href=\"[^\"]*${NAME}_[^\"]*\\.${EXT}\"" \
+    curl -s "$BASE" \
+        | grep -o "href=\"[^\"]*${NAME}[^\" ]*\\.${EXT}\"" \
         | head -n1 \
-        | sed -E 's/.*href="([^"]+)".*/\1/')"
-
-    printf "%s" "$(basename "$FILE")"
+        | sed -E 's/.*href="([^"]+)".*/\1/'
 }
 
-fetch_luci() {
-    NAME="$1"
-
-    FILE="$(curl -s "$BASE" \
-        | grep -o "href=\"luci-app-${NAME}[^\" ]*\\.${EXT}\"" \
-        | head -n1 \
-        | sed -E 's/.*href="([^"]+)".*/\1/')"
-
-    printf "%s" "$(basename "$FILE")"
-}
-
-### =======================
-### VERSION PARSER
-### =======================
-
-get_ver_remote() {
+get_version() {
     echo "$1" | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)*-r[0-9]+'
 }
+
+get_remote_ver() {
+    FILE="$1"
+    get_version "$FILE"
+}
+
+### =======================
+### LOCAL VERSION
+### =======================
 
 get_local_ver() {
     NAME="$1"
@@ -73,43 +62,39 @@ get_local_ver() {
 }
 
 ### =======================
-### STATE ENGINE
+### STATE
 ### =======================
 
 get_state() {
     NAME="$1"
 
-    PKG_FILE="$(fetch_pkg "$NAME")"
-
-    REMOTE_VER="$(get_ver_remote "$PKG_FILE")"
+    FILE="$(get_remote_file "$NAME")"
+    REMOTE_VER="$(get_remote_ver "$FILE")"
     LOCAL_VER="$(get_local_ver "$NAME")"
 
     [ -z "$REMOTE_VER" ] && REMOTE_VER="0.0.0"
 
     if [ -z "$LOCAL_VER" ]; then
-        echo "install|$LOCAL_VER|$REMOTE_VER"
+        echo "install|$LOCAL_VER|$REMOTE_VER|$FILE"
     elif [ "$LOCAL_VER" != "$REMOTE_VER" ]; then
-        echo "update|$LOCAL_VER|$REMOTE_VER"
+        echo "update|$LOCAL_VER|$REMOTE_VER|$FILE"
     else
-        echo "remove|$LOCAL_VER|$REMOTE_VER"
+        echo "remove|$LOCAL_VER|$REMOTE_VER|$FILE"
     fi
 }
 
 ### =======================
-### MENU LABEL
+### LABEL
 ### =======================
 
 get_label() {
     NAME="$1"
 
-    STATE_DATA="$(get_state "$NAME")"
-    STATE="$(echo "$STATE_DATA" | cut -d'|' -f1)"
-    LVER="$(echo "$STATE_DATA" | cut -d'|' -f2)"
-    RVER="$(echo "$STATE_DATA" | cut -d'|' -f3)"
+    DATA="$(get_state "$NAME")"
 
-    # чистка мусора
-#   LVER="$(echo "$LVER" | grep -oE '[0-9]+\.[0-9]+.*' )"
-    RVER="$(echo "$RVER" | grep -oE '[0-9]+\.[0-9]+.*' )"
+    STATE="$(echo "$DATA" | cut -d'|' -f1)"
+    LVER="$(echo "$DATA" | cut -d'|' -f2)"
+    RVER="$(echo "$DATA" | cut -d'|' -f3)"
 
     case "$STATE" in
         install)
@@ -133,36 +118,25 @@ install_pkg() {
 
     log "=== Установка/обновление $NAME ==="
 
-    PKG="$(fetch_pkg "$NAME")"
-    LUCI="$(fetch_luci "$NAME")"
+    FILE="$(get_remote_file "$NAME")"
+    LUCI="$(get_remote_file "luci-app-$NAME")"
 
-    if [ -z "$PKG" ] && [ -z "$LUCI" ]; then
-        log "Нечего скачивать (пакеты не найдены)"
-        return
-    fi
-
-    for f in "$PKG" "$LUCI"; do
-        [ -n "$f" ] || continue
+    for f in "$FILE" "$LUCI"; do
+        [ -z "$f" ] && continue
 
         URL="$BASE$f"
 
         log "Скачивание: $URL"
 
         wget -q --timeout=15 --tries=2 "$URL" -O "$TMP/$f"
-
-        if [ $? -ne 0 ]; then
-            log "Ошибка скачивания: $f"
-        fi
     done
 
     if ls "$TMP"/*.$EXT >/dev/null 2>&1; then
-        log "Установка пакетов..."
-
+        log "Установка..."
         $INSTALL $TMP/*.$EXT
-
         log "Готово"
     else
-        log "Файлы не скачались — установка отменена"
+        log "Нечего устанавливать"
     fi
 
     rm -f "$TMP"/*.$EXT
@@ -178,11 +152,10 @@ remove_pkg() {
     log "=== Удаление $NAME ==="
     $REMOVE luci-app-$NAME 2>/dev/null
     $REMOVE $NAME 2>/dev/null
-    log "Удалено"
 }
 
 ### =======================
-### ACTION ROUTER
+### ACTION
 ### =======================
 
 action_pkg() {
@@ -208,6 +181,7 @@ menu() {
         echo "2) $(get_label zeroblock)"
         echo "0) Выход"
         echo "==============================="
+
         printf "Выбор: "
         read -r opt
 
@@ -215,7 +189,7 @@ menu() {
             1) action_pkg zapret2; read -p "Enter..." ;;
             2) action_pkg zeroblock; read -p "Enter..." ;;
             0) exit 0 ;;
-            *) echo "Неверный выбор"; sleep 1 ;;
+            *) echo "Неверно"; sleep 1 ;;
         esac
     done
 }
