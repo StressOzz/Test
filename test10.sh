@@ -79,10 +79,12 @@ get_local_ver() {
 get_state() {
     NAME="$1"
 
-    FILE="$(fetch "$NAME")"
+    PKG_FILE="$(fetch_pkg "$NAME")"
 
-    REMOTE_VER="$(get_ver_remote "$FILE")"
+    REMOTE_VER="$(get_ver_remote "$PKG_FILE")"
     LOCAL_VER="$(get_local_ver "$NAME")"
+
+    [ -z "$REMOTE_VER" ] && REMOTE_VER="0.0.0"
 
     if [ -z "$LOCAL_VER" ]; then
         echo "install|$LOCAL_VER|$REMOTE_VER"
@@ -106,7 +108,7 @@ get_label() {
     RVER="$(echo "$STATE_DATA" | cut -d'|' -f3)"
 
     # чистка мусора
-    LVER="$(echo "$LVER" | grep -oE '[0-9]+\.[0-9]+.*' )"
+#   LVER="$(echo "$LVER" | grep -oE '[0-9]+\.[0-9]+.*' )"
     RVER="$(echo "$RVER" | grep -oE '[0-9]+\.[0-9]+.*' )"
 
     case "$STATE" in
