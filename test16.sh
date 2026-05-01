@@ -38,7 +38,9 @@ log() { echo "[*] $1"; }
 get_remote_file() {
     NAME="$1"
 
-    curl -s "$BASE" \
+    [ ! -f "$CACHE" ] && update_cache
+
+    cat "$CACHE" \
         | tr '"' '\n' \
         | grep "^${NAME}-.*\.${EXT}$" \
         | head -n1
@@ -184,6 +186,7 @@ action_pkg() {
 menu() {
     while true; do
         clear
+        update_cache
         echo "====== Routerich Manager ======"
         echo "1) $(get_label zapret2)"
         echo "2) $(get_label zeroblock)"
