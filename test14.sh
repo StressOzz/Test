@@ -19,6 +19,12 @@ fi
 TMP="/tmp/routerich"
 mkdir -p "$TMP"
 
+CACHE="$TMP/index.html"
+
+update_cache() {
+    curl -s "$BASE" > "$CACHE"
+}
+
 ### =======================
 ### LOG
 ### =======================
@@ -34,7 +40,7 @@ get_remote_file() {
 
     curl -s "$BASE" \
         | tr '"' '\n' \
-        | grep "^${NAME}.*\.${EXT}$" \
+        | grep "^${NAME}-.*\.${EXT}$" \
         | head -n1
 }
 
