@@ -24,7 +24,7 @@ mkdir -p "$TMP"
 CACHE="$TMP/index.html"
 
 update_cache() {
-    curl -s "$BASE" > "$CACHE"
+    curl -s -L "$BASE" > "$CACHE"
 }
 
 log() { echo "[*] $1"; }
@@ -38,17 +38,21 @@ get_remote_file() {
 
     [ ! -f "$CACHE" ] && update_cache
 
-    # Простой поиск по имени файла
-    cat "$CACHE" | grep -o "${NAME}-[^\"]*\.${EXT}" | head -n1
+    # Универсальный парсер для обоих типов репозиториев
+    # Ищем ссылки вида: name-version.ext или name_version.ext
+    cat "$CACHE" | \
+        grep -oE "(href=[\"']?)?${NAME}[-\_][0-9][^\"]*\.${EXT}" | \
+        sed 's/href=//g; s/["'\'']//g' | \
+        head -n1
 }
 
 get_version() {
-    echo "$1" | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)*-r[0-9]+'
+    echo "$1" | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)*[-_r][0-9]+|[0-9]+\.[0-9]+(\.[0-9]+)*'
 }
 
 get_remote_ver() {
     FILE="$1"
-    get_version "$FILE"
+    [ -n "$FILE" ] && get_version "$FILE" || echo ""
 }
 
 ### =======================
@@ -59,7 +63,9 @@ get_local_ver() {
     NAME="$1"
 
     if [ "$PKG_TYPE" = "opkg" ]; then
-        opkg list-installed 2>/dev/null | awk -v n="$NAME" '$1==n {print $3}'
+        opkg list-installed 2>/dev/null | grep "^$NAME -" | awk '{print $3}'
+        # Альтернативный метод
+        [ -z "$LOCAL_VER" ] && opkg status "$NAME" 2>/dev/null | grep "^Version" | cut -d' ' -f2
     else
         apk list --installed 2>/dev/null | grep "^$NAME" | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)*-r[0-9]+' | head -n1
     fi
@@ -76,8 +82,10 @@ get_state() {
     REMOTE_VER="$(get_remote_ver "$FILE")"
     LOCAL_VER="$(get_local_ver "$NAME")"
 
-    # Отладка
-    echo "DEBUG: $NAME -> LOCAL: '$LOCAL_VER', REMOTE: '$REMOTE_VER', FILE: '$FILE'" >&2
+    # Отладка для opkg
+    if [ "$PKG_TYPE" = "opkg" ]; then
+        echo "DEBUG: $NAME -> FILE='$FILE', REMOTE='$REMOTE_VER', LOCAL='$LOCAL_VER'" >&2
+    fi
 
     if [ -z "$LOCAL_VER" ] && [ -n "$REMOTE_VER" ]; then
         echo "install|$LOCAL_VER|$REMOTE_VER"
@@ -134,29 +142,47 @@ install_pkg() {
     FILE="$(get_remote_file "$NAME")"
     LUCI="$(get_remote_file "luci-app-$NAME")"
 
-    log "Найден файл: $FILE"
+    log "Найден основной файл: $FILE"
+    
+    if [ -z "$FILE" ]; then
+        log "ОШИБКА: Не найден пакет $NAME в репозитории"
+        return 1
+    fi
 
-    for f in "$FILE" "$LUCI"; do
-        [ -z "$f" ] && continue
-
-        URL="$BASE$f"
-
-        log "Скачивание: $URL"
-
-        wget -q "$URL" -O "$TMP/$f" 2>/dev/null
-        
-        if [ -f "$TMP/$f" ]; then
-            log "OK: $f скачан"
-        fi
-    done
-
-    # Проверяем, есть ли файлы для установки
-    if ls "$TMP"/*.$EXT >/dev/null 2>&1; then
-        log "Установка..."
-        $INSTALL $TMP/*.$EXT
-        log "Готово"
+    # Скачиваем основной пакет
+    URL="$BASE$FILE"
+    log "Скачивание: $URL"
+    
+    if command -v wget >/dev/null 2>&1; then
+        wget -q "$URL" -O "$TMP/$FILE"
     else
-        log "Ошибка: нет файлов для установки"
+        curl -s -o "$TMP/$FILE" "$URL"
+    fi
+    
+    if [ ! -f "$TMP/$FILE" ]; then
+        log "ОШИБКА: Не удалось скачать $FILE"
+        return 1
+    fi
+    
+    # Скачиваем luci если есть
+    if [ -n "$LUCI" ]; then
+        URL="$BASE$LUCI"
+        log "Скачивание luci: $URL"
+        if command -v wget >/dev/null 2>&1; then
+            wget -q "$URL" -O "$TMP/$LUCI"
+        else
+            curl -s -o "$TMP/$LUCI" "$URL"
+        fi
+    fi
+
+    # Установка
+    log "Установка пакетов..."
+    $INSTALL $TMP/*.$EXT
+    
+    if [ $? -eq 0 ]; then
+        log "✓ Установка завершена успешно"
+    else
+        log "✗ Ошибка при установке"
     fi
 
     rm -f "$TMP"/*.$EXT
@@ -172,7 +198,7 @@ remove_pkg() {
     log "=== Удаление $NAME ==="
     $REMOVE luci-app-$NAME 2>/dev/null
     $REMOVE $NAME 2>/dev/null
-    log "Готово"
+    log "✓ Удаление завершено"
 }
 
 ### =======================
@@ -185,10 +211,35 @@ action_pkg() {
     STATE="$(get_state "$NAME" | cut -d'|' -f1)"
 
     case "$STATE" in
-        install|update) install_pkg "$NAME" ;;
-        remove) remove_pkg "$NAME" ;;
-        *) log "Ошибка: пакет $NAME недоступен" ;;
+        install|update) 
+            install_pkg "$NAME" 
+            ;;
+        remove) 
+            remove_pkg "$NAME" 
+            ;;
+        *) 
+            log "Ошибка: пакет $NAME недоступен" 
+            ;;
     esac
+}
+
+### =======================
+### DIAGNOSTICS
+### =======================
+
+diagnostic() {
+    echo "=== Diagnostic ==="
+    echo "PKG_TYPE: $PKG_TYPE"
+    echo "BASE: $BASE"
+    echo "EXT: $EXT"
+    echo ""
+    echo "Testing connection..."
+    curl -s -I "$BASE" | head -n1
+    echo ""
+    echo "Looking for zapret2..."
+    curl -s "$BASE" | grep -i "zapret" | head -n5
+    echo ""
+    echo "=== End Diagnostic ==="
 }
 
 ### =======================
@@ -204,6 +255,7 @@ menu() {
         echo "==============================="
         echo "1) $(get_label zapret2)"
         echo "2) $(get_label zeroblock)"
+        echo "3) Диагностика"
         echo "0) Выход"
         echo "==============================="
 
@@ -213,6 +265,7 @@ menu() {
         case "$opt" in
             1) action_pkg zapret2; read -p "Нажмите Enter..." ;;
             2) action_pkg zeroblock; read -p "Нажмите Enter..." ;;
+            3) diagnostic; read -p "Нажмите Enter..." ;;
             0) exit 0 ;;
             *) echo "Неверно"; sleep 1 ;;
         esac
