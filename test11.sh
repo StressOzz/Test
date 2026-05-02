@@ -384,13 +384,17 @@ install_awg() {
 remove_awg() {
     log "${MAGENTA}=== Удаление AmneziaWG ===${NC}"
     
-    for pkg in $AWG_PKGS; do
-        if CHECK_INSTALLED "$pkg"; then
-            log "${CYAN}Удаление:${NC} $pkg"
-            $PKG_REMOVE "$pkg" 2>/dev/null
-            log "${GREEN}✓ $pkg удален${NC}"
-        fi
-    done
+    log "${CYAN}Удаление:${NC} luci-i18n-amneziawg-ru"
+    $PKG_REMOVE luci-i18n-amneziawg-ru 2>/dev/null
+    
+    log "${CYAN}Удаление:${NC} luci-proto-amneziawg"
+    $PKG_REMOVE luci-proto-amneziawg 2>/dev/null
+    
+    log "${CYAN}Удаление:${NC} amneziawg-tools"
+    $PKG_REMOVE amneziawg-tools 2>/dev/null
+    
+    log "${CYAN}Удаление:${NC} kmod-amneziawg"
+    $PKG_REMOVE kmod-amneziawg 2>/dev/null
     
     log "${CYAN}Перезапускаем сеть! Подождите...${NC}"
     /etc/init.d/network restart 2>/dev/null
