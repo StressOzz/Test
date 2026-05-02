@@ -28,6 +28,10 @@ if command -v opkg >/dev/null 2>&1; then
     BASE_URL="https://packages.routerich.ru/24.10/mediatek/filogic/routerich/"
     ARCH_SUFFIX="aarch64_cortex-a53"
     
+    # Формат имен файлов для RouterICH
+    PKG_FILE_PATTERN="${pkg_name}_[0-9][^\"]*_${ARCH_SUFFIX}\\.${PKG_EXT}"
+    LUCI_FILE_PATTERN="luci-app-${pkg_name}_[0-9][^\"]*_all\\.${PKG_EXT}"
+    
     # Функция получения версии установленного пакета
     GET_LOCAL_VERSION() {
         opkg list-installed 2>/dev/null | grep "^$1 -" | awk '{print $3}'
@@ -41,6 +45,8 @@ if command -v opkg >/dev/null 2>&1; then
     # Для AWG
     opkg update >/dev/null 2>&1
     AWG_PKGARCH=$(opkg print-architecture 2>/dev/null | awk 'BEGIN {max=0} {if ($3 > max) {max=$3; arch=$2}} END {print arch}')
+    AWG_POSTFIX="_v${VERSION}_${AWG_PKGARCH}_${TARGET}_${SUBTARGET}.ipk"
+    AWG_INSTALL_CMD="opkg install"
     
 else
     # OpenWrt 24.10+ (apk)
@@ -54,6 +60,10 @@ else
     BASE_URL="https://packages.routerich.ru/25.12/mediatek/filogic/routerich/"
     ARCH_SUFFIX=""
     
+    # Формат имен файлов для RouterICH
+    PKG_FILE_PATTERN="${pkg_name}-[0-9][^\"]*\\.${PKG_EXT}"
+    LUCI_FILE_PATTERN="luci-app-${pkg_name}-[0-9][^\"]*\\.${PKG_EXT}"
+    
     # Функция получения версии установленного пакета
     GET_LOCAL_VERSION() {
         apk list --installed 2>/dev/null | grep "^$1" | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)*-r[0-9]+' | head -n1
@@ -66,6 +76,8 @@ else
     
     # Для AWG
     AWG_PKGARCH=$(cat /etc/apk/arch 2>/dev/null)
+    AWG_POSTFIX="_v${VERSION}_${AWG_PKGARCH}_${TARGET}_${SUBTARGET}.apk"
+    AWG_INSTALL_CMD="apk add --allow-untrusted"
 fi
 
 # Общие настройки
@@ -80,8 +92,16 @@ SUBTARGET=$(ubus call system board 2>/dev/null | jsonfilter -e '@.release.target
 
 # Настройки AWG
 AWG_BASE_URL="https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/"
-AWG_POSTFIX="_v${VERSION}_${AWG_PKGARCH}_${TARGET}_${SUBTARGET}.${PKG_EXT}"
-AWG_PACKAGES="kmod-amneziawg amneziawg-tools luci-proto-amneziawg luci-i18n-amneziawg-ru"
+AWG_IF_NAME="AWG"
+AWG_PROTO="amneziawg"
+AWG_DEV_NAME="amneziawg0"
+
+# Обновляем POSTFIX для AWG с актуальной версией
+if [ "$PKG_IS_APK" -eq 1 ]; then
+    AWG_POSTFIX="_v${VERSION}_${AWG_PKGARCH}_${TARGET}_${SUBTARGET}.apk"
+else
+    AWG_POSTFIX="_v${VERSION}_${AWG_PKGARCH}_${TARGET}_${SUBTARGET}.ipk"
+fi
 
 ### =======================================================================
 ### ОБЩИЕ ФУНКЦИИ
@@ -109,64 +129,24 @@ get_remote_file() {
     local pkg_name="$1"
     [ ! -f "$CACHE_FILE" ] && update_cache
     
-    if [ "$PKG_IS_APK" -eq 1 ]; then
-        # Для apk: zapret2-0.9.4.7-r4.apk
-        grep -o "${pkg_name}-[0-9][^\"]*\.${PKG_EXT}" "$CACHE_FILE" | head -n1
-    else
-        # Для opkg: zapret2_0.9.5-r2_aarch64_cortex-a53.ipk
-        grep -o "${pkg_name}_[0-9][^\"]*_${ARCH_SUFFIX}\.${PKG_EXT}" "$CACHE_FILE" | head -n1
-    fi
+    local pattern=$(echo "$PKG_FILE_PATTERN" | sed "s/\${pkg_name}/$pkg_name/g")
+    grep -o "$pattern" "$CACHE_FILE" | head -n1
 }
 
 get_luci_file() {
     local pkg_name="$1"
     [ ! -f "$CACHE_FILE" ] && update_cache
     
-    if [ "$PKG_IS_APK" -eq 1 ]; then
-        # Для apk: luci-app-zapret2-0.9.4.7-r4.apk
-        grep -o "luci-app-${pkg_name}-[0-9][^\"]*\.${PKG_EXT}" "$CACHE_FILE" | head -n1
-    else
-        # Для opkg: luci-app-zapret2_0.9.5-r2_all.ipk
-        grep -o "luci-app-${pkg_name}_[0-9][^\"]*_all\.${PKG_EXT}" "$CACHE_FILE" | head -n1
-    fi
+    local pattern=$(echo "$LUCI_FILE_PATTERN" | sed "s/\${pkg_name}/$pkg_name/g")
+    grep -o "$pattern" "$CACHE_FILE" | head -n1
 }
 
 get_version_from_filename() {
     echo "$1" | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)*-r[0-9]+'
 }
 
-# Установка пакетов AWG
-install_awg_packages() {
-    echo -e "${CYAN}Установка пакетов AWG...${NC}"
-    
-    for pkg in $AWG_PACKAGES; do
-        local filename="${pkg}${AWG_POSTFIX}"
-        local url="${AWG_BASE_URL}v${VERSION}/${filename}"
-        
-        echo -e "  ${CYAN}Скачиваем:${NC} $filename"
-        
-        if download_file "$url" "$TMP_DIR/$filename"; then
-            $PKG_INSTALL "$TMP_DIR/$filename" >/dev/null 2>&1
-            echo -e "  ${GREEN}✓ $pkg установлен${NC}"
-        else
-            echo -e "  ${RED}✗ Ошибка скачивания $pkg${NC}"
-        fi
-    done
-}
-
-# Удаление пакетов AWG
-remove_awg_packages() {
-    echo -e "${CYAN}Удаление пакетов AWG...${NC}"
-    for pkg in $AWG_PACKAGES; do
-        $PKG_REMOVE "$pkg" 2>/dev/null
-        echo -e "  ${GREEN}✓ $pkg удален${NC}"
-    done
-}
-
-# Установка основного пакета (Zapret2 или Zeroblock)
 install_routerich_pkg() {
     local pkg_name="$1"
-    local with_awg="$2"
     
     echo -e "\n${MAGENTA}=== Установка/обновление $pkg_name ===${NC}"
     
@@ -175,65 +155,97 @@ install_routerich_pkg() {
     
     if [ -z "$main_file" ]; then
         echo -e "${RED}ОШИБКА: Не найден пакет $pkg_name${NC}"
-        echo -e "${YELLOW}Проверьте содержимое репозитория:${NC}"
-        echo "  curl -s \"$BASE_URL\" | grep -i \"$pkg_name\""
         return 1
     fi
     
-    echo -e "${CYAN}Найден файл:${NC} $main_file"
-    
-    # Скачиваем основной пакет
     echo -e "${CYAN}Скачивание:${NC} $main_file"
     download_file "${BASE_URL}${main_file}" "$TMP_DIR/$main_file"
     
-    if [ ! -f "$TMP_DIR/$main_file" ]; then
-        echo -e "${RED}ОШИБКА: Не удалось скачать $main_file${NC}"
-        return 1
-    fi
-    
-    # Скачиваем luci если есть
     if [ -n "$luci_file" ]; then
         echo -e "${CYAN}Скачивание:${NC} $luci_file"
         download_file "${BASE_URL}${luci_file}" "$TMP_DIR/$luci_file"
     fi
     
-    # Установка основного пакета
-    echo -e "${CYAN}Установка $pkg_name...${NC}"
+    echo -e "${CYAN}Установка...${NC}"
     $PKG_INSTALL $TMP_DIR/*.$PKG_EXT 2>/dev/null
     
     if [ $? -eq 0 ]; then
         echo -e "${GREEN}✓ $pkg_name установлен/обновлен${NC}"
-        
-        # Если это Zeroblock, устанавливаем AWG пакеты
-        if [ "$with_awg" = "true" ]; then
-            install_awg_packages
-            echo -e "\n${GREEN}✓ Zeroblock и AWG успешно установлены!${NC}"
-        fi
     else
-        echo -e "${RED}✗ Ошибка установки $pkg_name${NC}"
-        echo -e "${YELLOW}Попробуйте установить вручную:${NC}"
-        echo "  $PKG_INSTALL $TMP_DIR/$main_file"
+        echo -e "${RED}✗ Ошибка установки${NC}"
     fi
     
     rm -f "$TMP_DIR"/*.$PKG_EXT
 }
 
-# Удаление основного пакета
 remove_routerich_pkg() {
     local pkg_name="$1"
-    local with_awg="$2"
-    
     echo -e "\n${MAGENTA}=== Удаление $pkg_name ===${NC}"
-    
     $PKG_REMOVE "luci-app-$pkg_name" 2>/dev/null
     $PKG_REMOVE "$pkg_name" 2>/dev/null
     echo -e "${GREEN}✓ $pkg_name удален${NC}"
+}
+
+### =======================================================================
+### ФУНКЦИИ ДЛЯ AWG
+### =======================================================================
+
+install_awg_pkg() {
+    local pkgname="$1"
+    local filename="${pkgname}${AWG_POSTFIX}"
+    local url="${AWG_BASE_URL}v${VERSION}/${filename}"
     
-    # Если это Zeroblock, удаляем AWG пакеты
-    if [ "$with_awg" = "true" ]; then
-        remove_awg_packages
-        echo -e "\n${GREEN}✓ AWG удален${NC}"
+    echo -e "${CYAN}Скачиваем:${NC} $filename"
+    
+    if download_file "$url" "$TMP_DIR/$filename"; then
+        echo -e "${CYAN}Устанавливаем:${NC} $pkgname"
+        $AWG_INSTALL_CMD "$TMP_DIR/$filename" >/dev/null 2>&1
+        return $?
+    else
+        echo -e "${RED}Ошибка скачивания $filename${NC}"
+        return 1
     fi
+}
+
+install_awg() {
+    echo -e "\n${MAGENTA}=== Установка AWG ===${NC}"
+    
+    for pkg in kmod-amneziawg amneziawg-tools luci-proto-amneziawg luci-i18n-amneziawg-ru; do
+        install_awg_pkg "$pkg" || { echo -e "${RED}Ошибка установки${NC}"; pause; return; }
+    done
+    
+    if ! uci show network.$AWG_IF_NAME >/dev/null 2>&1; then
+        echo -e "${CYAN}Создаем интерфейс AWG${NC}"
+        uci set network.$AWG_IF_NAME=interface
+        uci set network.$AWG_IF_NAME.proto=$AWG_PROTO
+        uci set network.$AWG_IF_NAME.device=$AWG_DEV_NAME
+        uci commit network
+    fi
+    
+    echo -e "${YELLOW}Перезапуск сети...${NC}"
+    /etc/init.d/network restart >/dev/null 2>&1
+    
+    echo -e "\n${GREEN}✓ AWG установлен!${NC}"
+    echo -e "${YELLOW}В LuCI: Network → Interfaces → AWG → Edit → Load configuration${NC}"
+    pause
+}
+
+remove_awg() {
+    echo -e "\n${MAGENTA}=== Удаление AWG ===${NC}"
+    
+    for pkg in luci-i18n-amneziawg-ru luci-proto-amneziawg amneziawg-tools kmod-amneziawg; do
+        $PKG_REMOVE "$pkg" 2>/dev/null
+    done
+    
+    uci delete network.$AWG_IF_NAME 2>/dev/null
+    for peer in $(uci show network 2>/dev/null | grep "interface='$AWG_IF_NAME'" | cut -d. -f2); do
+        uci delete network.$peer 2>/dev/null
+    done
+    uci commit network 2>/dev/null
+    
+    /etc/init.d/network restart >/dev/null 2>&1
+    echo -e "${GREEN}✓ AWG удален${NC}"
+    pause
 }
 
 ### =======================================================================
@@ -257,19 +269,18 @@ get_routerich_label() {
     fi
 }
 
-run_action() {
+run_routerich_action() {
     local pkg_name="$1"
-    local with_awg="$2"
     local main_file="$(get_remote_file "$pkg_name")"
     local remote_ver="$(get_version_from_filename "$main_file")"
     local local_ver="$(GET_LOCAL_VERSION "$pkg_name")"
     
-    if [ -z "$local_ver" ] && [ -n "$main_file" ]; then
-        install_routerich_pkg "$pkg_name" "$with_awg"
-    elif [ -n "$local_ver" ] && [ -n "$main_file" ] && [ "$local_ver" != "$remote_ver" ]; then
-        install_routerich_pkg "$pkg_name" "$with_awg"
+    if [ -z "$local_ver" ] && [ -n "$remote_ver" ]; then
+        install_routerich_pkg "$pkg_name"
+    elif [ -n "$local_ver" ] && [ -n "$remote_ver" ] && [ "$local_ver" != "$remote_ver" ]; then
+        install_routerich_pkg "$pkg_name"
     elif [ -n "$local_ver" ]; then
-        remove_routerich_pkg "$pkg_name" "$with_awg"
+        remove_routerich_pkg "$pkg_name"
     else
         echo -e "${RED}Ошибка: пакет $pkg_name недоступен${NC}"
         pause
@@ -284,6 +295,13 @@ while true; do
     clear
     update_cache >/dev/null 2>&1
     
+    # Определяем текст для AWG пункта
+    if IS_PKG_INSTALLED "kmod-amneziawg"; then
+        AWG_LABEL="AWG (AmneziaWG) → Удалить"
+    else
+        AWG_LABEL="AWG (AmneziaWG) → Установить"
+    fi
+    
     echo -e "${MAGENTA}======================================${NC}"
     echo -e "${MAGENTA}       RouterICH Package Manager       ${NC}"
     echo -e "${MAGENTA}======================================${NC}"
@@ -292,6 +310,7 @@ while true; do
     echo -e "${MAGENTA}======================================${NC}"
     echo -e "  ${GREEN}1)${NC} $(get_routerich_label zapret2)"
     echo -e "  ${GREEN}2)${NC} $(get_routerich_label zeroblock)"
+    echo -e "  ${GREEN}3)${NC} $AWG_LABEL"
     echo -e "  ${RED}0)${NC} Выход"
     echo -e "${MAGENTA}======================================${NC}"
     
@@ -299,8 +318,15 @@ while true; do
     read -r choice
     
     case "$choice" in
-        1) run_action "zapret2" "false"; pause ;;
-        2) run_action "zeroblock" "true"; pause ;;
+        1) run_routerich_action zapret2 ;;
+        2) run_routerich_action zeroblock ;;
+        3) 
+            if IS_PKG_INSTALLED "kmod-amneziawg"; then
+                remove_awg
+            else
+                install_awg
+            fi
+            ;;
         0) echo -e "${GREEN}До свидания!${NC}"; exit 0 ;;
         *) echo -e "${RED}Неверный выбор${NC}"; sleep 1 ;;
     esac
