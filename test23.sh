@@ -31,11 +31,11 @@ PAUSE() { echo -ne "\nНажмите Enter..."; read dummy; }
 
 echo -e "${CYAN}Обновляем список пакетов${NC}"
 for i in 1 2 3; do if $UPDATE >/dev/null 2>&1; then ok=1; break; fi
-echo -e "${YELLOW}Обновление пакетов попытка $i не удалась${NC}"; sleep 1; done
+echo -e "${YELLOW}Обновление пакетов попытка $i не удалась${NC}"; done
 
 
 if ! command -v curl >/dev/null 2>&1; then clear; echo -e "${MAGENTA}Устанавливаем ${NC}curl"
-ok=0; echo -e "${CYAN}Устанавливаем ${NC}curl"; for i in 1 2 3 4 5; do if $PKG_INSTALL curl >/dev/null 2>&1; then ok=1; break; fi; echo -e "${YELLOW}Устанавливаем ${NC}curl${YELLOW} попытка ${NC}$i${YELLOW} не удалась!${NC}"; sleep 1; done
+ok=0; echo -e "${CYAN}Устанавливаем ${NC}curl"; for i in 1 2 3; do if $PKG_INSTALL curl >/dev/null 2>&1; then ok=1; break; fi; echo -e "${YELLOW}Устанавливаем ${NC}curl${YELLOW} попытка ${NC}$i${YELLOW} не удалась!${NC}"; done
 if [ "$ok" -ne 1 ]; then echo -e "\n${RED}Не удалось установить ${NC}curl${RED} после 5 попыток${NC}"; PAUSE; exit 0; fi; if ! command -v curl >/dev/null 2>&1; then echo -e "\ncurl${RED} не найден после установки${NC}"; PAUSE; exit 0; fi; fi
 
 TMP_DIR="/tmp/routerich"
@@ -203,8 +203,8 @@ get_package_state() {
 ### УСТАНОВКА И УДАЛЕНИЕ
 ### =======================================================================
 
-install_zapret2() {
-    local pkg_name="zapret2"
+install_package() {
+    local pkg_name="$1"
     
     # Очищаем временную директорию перед установкой
     rm -f "$TMP_DIR"/*.${PKG_EXT}
@@ -244,61 +244,10 @@ install_zapret2() {
         $PKG_INSTALL $packages_to_install
         sleep 2
         if [ $? -eq 0 ]; then
-wget -qO /opt/zapret2/ipset/zapret_hosts_user_exclude.txt https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/zapret-hosts-user-exclude.txt
-sed -i "/config strategy 'default'/,/config /s/option enabled '0'/option enabled '1'/" /etc/config/zapret2
-/etc/init.d/zapret2 restart >/dev/null 2>&1
-            log "${GREEN}✓ Установка завершена${NC}"
-        else
-            log "${RED}✗ Ошибка при установке${NC}"
-        fi
-    fi
-    
-    # Очистка
-    rm -f "$TMP_DIR"/*.$PKG_EXT
-}
-
-install_zeroblock() {
-    local pkg_name="zeroblock"
-    
-    # Очищаем временную директорию перед установкой
-    rm -f "$TMP_DIR"/*.${PKG_EXT}
-    
-    log "${MAGENTA}=== Установка $pkg_name ===${NC}"
-    
-    # Получаем состояние (это заполнит MAIN_FILE и LUCI_FILE)
-    get_package_state "$pkg_name" > /dev/null
-    
-    if [ -z "$MAIN_FILE" ]; then
-        log "${RED}ОШИБКА: Не найден пакет${NC} $pkg_name"
-        return 1
-    fi
-    
-    # Скачиваем основной пакет
-    local main_url="${BASE_URL}${MAIN_FILE}"
-    log "${CYAN}Скачивание:${NC} $MAIN_FILE"
-    download_file "$main_url" "$TMP_DIR/$MAIN_FILE"
-    
-    if [ ! -f "$TMP_DIR/$MAIN_FILE" ]; then
-        log "${RED}ОШИБКА: Не удалось скачать $MAIN_FILE${NC}"
-        return 1
-    fi
-    
-    # Скачиваем luci если есть
-    if [ -n "$LUCI_FILE" ]; then
-        local luci_url="${BASE_URL}${LUCI_FILE}"
-        log "${CYAN}Скачивание:${NC} $LUCI_FILE"
-        download_file "$luci_url" "$TMP_DIR/$LUCI_FILE"
-    fi
-    
-    # Установка
-    log "${CYAN}Установка пакетов...${NC}"
-    local packages_to_install=$(ls "$TMP_DIR"/*.$PKG_EXT 2>/dev/null)
-    
-    if [ -n "$packages_to_install" ]; then
-        $PKG_INSTALL $packages_to_install
-        sleep 2
-        if [ $? -eq 0 ]; then
-            log "${GREEN}✓ Установка завершена${NC}"
+            # Перезапускаем веб-интерфейс если установлен luci
+            if [ -n "$LUCI_FILE" ]; then
+                log "${GREEN}✓ Установка завершена${NC}"
+            fi
         else
             log "${RED}✗ Ошибка при установке${NC}"
         fi
@@ -478,27 +427,27 @@ run_awg_action() {
 ### ОТОБРАЖЕНИЕ МЕНЮ
 ### =======================================================================
 
-get_zapret2_label() {
-    local state_data="$(get_package_state "zapret2")"
+get_menu_label() {
+    local pkg_name="$1"
+    local state_data="$(get_package_state "$pkg_name")"
+    
     local action="$(echo "$state_data" | cut -d'|' -f1)"
+    local local_ver="$(echo "$state_data" | cut -d'|' -f2)"
+    local remote_ver="$(echo "$state_data" | cut -d'|' -f3)"
+    local luci_local_ver="$(echo "$state_data" | cut -d'|' -f4)"
+    local luci_remote_ver="$(echo "$state_data" | cut -d'|' -f5)"
     
     case "$action" in
-        install) echo -e "${GREEN}Установить${NC} zapret2" ;;
-        update)  echo -e "${GREEN}Обновить${NC} zapret2" ;;
-        remove)  echo -e "${GREEN}Удалить${NC} zapret2" ;;
-        *)       echo "zapret2 → Недоступно" ;;
-    esac
-}
-
-get_zeroblock_label() {
-    local state_data="$(get_package_state "zeroblock")"
-    local action="$(echo "$state_data" | cut -d'|' -f1)"
-    
-    case "$action" in
-        install) echo -e "${GREEN}Установить${NC} zeroblock" ;;
-        update)  echo -e "${GREEN}Обновить${NC} zeroblock" ;;
-        remove)  echo -e "${GREEN}Удалить${NC} zeroblock" ;;
-        *)       echo "zeroblock → Недоступно" ;;
+        install) 
+            echo -e "${GREEN}Установить${NC} $pkg_name"
+            ;;
+        update)
+            echo -e "${GREEN}Обновить${NC} $pkg_name"
+            ;;
+        remove)
+            echo -e "${GREEN}Удалить${NC} $pkg_name"
+            ;;
+        *)       echo "$pkg_name → Недоступно" ;;
     esac
 }
 
@@ -510,29 +459,18 @@ get_awg_menu_label() {
     fi
 }
 
-run_zapret2_action() {
-    local state_data="$(get_package_state "zapret2")"
-    local action="$(echo "$state_data" | cut -d'|' -f1)"
+run_action() {
+    local pkg_name="$1"
+    local action="$(get_package_state "$pkg_name" | cut -d'|' -f1)"
     
-    if [ "$action" = "remove" ]; then
+    if [ "$pkg_name" = "zapret2" ] && [ "$action" = "remove" ]; then
         remove_zapret2
-    elif [ "$action" = "install" ] || [ "$action" = "update" ]; then
-        install_zapret2
-    else
-        log "${RED}Ошибка: пакет zapret2 недоступен${NC}"
-    fi
-}
-
-run_zeroblock_action() {
-    local state_data="$(get_package_state "zeroblock")"
-    local action="$(echo "$state_data" | cut -d'|' -f1)"
-    
-    if [ "$action" = "remove" ]; then
+    elif [ "$pkg_name" = "zeroblock" ] && [ "$action" = "remove" ]; then
         remove_zeroblock
     elif [ "$action" = "install" ] || [ "$action" = "update" ]; then
-        install_zeroblock
+        install_package "$pkg_name"
     else
-        log "${RED}Ошибка: пакет zeroblock недоступен${NC}"
+        log "${RED}Ошибка: пакет $pkg_name недоступен${NC}"
     fi
 }
 
@@ -547,8 +485,8 @@ menu() {
         echo "======================================"
         echo "       Routerich Package Manager       "
         echo "======================================"
-        echo -e "${CYAN}1)${NC} $(get_zapret2_label)"
-        echo -e "${CYAN}2)${NC} $(get_zeroblock_label)"
+        echo -e "${CYAN}1)${NC} $(get_menu_label zapret2)"
+        echo -e "${CYAN}2)${NC} $(get_menu_label zeroblock)"
         echo -e "${CYAN}3)${NC} $(get_awg_menu_label)"
         echo -e "${CYAN}Enter) ${GREEN}Выход${NC}"
         echo "======================================"
@@ -557,8 +495,8 @@ menu() {
         read -r user_choice
         
         case "$user_choice" in
-            1) run_zapret2_action; PAUSE ;;
-            2) run_zeroblock_action; PAUSE ;;
+            1) run_action zapret2; PAUSE ;;
+            2) run_action zeroblock; PAUSE ;;
             3) run_awg_action; PAUSE ;;
             *) exit 0 ;;
         esac
