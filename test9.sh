@@ -233,7 +233,7 @@ install_package() {
     fi
     
     # Установка
-    log "Установка пакетов..."
+    log "${CYAN}Установка пакетов...${NC}"
     local packages_to_install=$(ls "$TMP_DIR"/*.$PKG_EXT 2>/dev/null)
     
     if [ -n "$packages_to_install" ]; then
@@ -243,7 +243,7 @@ install_package() {
             
             # Перезапускаем веб-интерфейс если установлен luci
             if [ -n "$LUCI_FILE" ]; then
-                log "${NC}Перезапуск веб-интерфейса...${NC}"
+                log "${CYAN}Перезапуск веб-интерфейса...${NC}"
                 /etc/init.d/uhttpd restart 2>/dev/null
                 /etc/init.d/rpcd restart 2>/dev/null
             fi
@@ -376,7 +376,7 @@ install_awg() {
     done
     
     rm -rf "$temp_dir"
-    log "${CYAN}Перезапускаем сервисы...${NC}"
+    log "${CYAN}Перезапускаем сеть! Подождите...${NC}"
     /etc/init.d/network restart 2>/dev/null
     /etc/init.d/uhttpd restart 2>/dev/null
     /etc/init.d/rpcd restart 2>/dev/null
@@ -394,7 +394,7 @@ remove_awg() {
         fi
     done
     
-    log "${CYAN}Перезапускаем сервисы...${NC}"
+    log "${CYAN}Перезапускаем сеть! Подождите...${NC}"
     /etc/init.d/network restart 2>/dev/null
     /etc/init.d/uhttpd restart 2>/dev/null
     /etc/init.d/rpcd restart 2>/dev/null
