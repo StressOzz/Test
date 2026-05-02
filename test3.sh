@@ -28,10 +28,6 @@ if command -v opkg >/dev/null 2>&1; then
     BASE_URL="https://packages.routerich.ru/24.10/mediatek/filogic/routerich/"
     ARCH_SUFFIX="aarch64_cortex-a53"
     
-    # Формат имен файлов для RouterICH
-    PKG_FILE_PATTERN="${pkg_name}_[0-9][^\"]*_${ARCH_SUFFIX}\\.${PKG_EXT}"
-    LUCI_FILE_PATTERN="luci-app-${pkg_name}_[0-9][^\"]*_all\\.${PKG_EXT}"
-    
     # Функция получения версии установленного пакета
     GET_LOCAL_VERSION() {
         opkg list-installed 2>/dev/null | grep "^$1 -" | awk '{print $3}'
@@ -57,10 +53,6 @@ else
     # Для RouterICH пакетов
     BASE_URL="https://packages.routerich.ru/25.12/mediatek/filogic/routerich/"
     ARCH_SUFFIX=""
-    
-    # Формат имен файлов для RouterICH
-    PKG_FILE_PATTERN="${pkg_name}-[0-9][^\"]*\\.${PKG_EXT}"
-    LUCI_FILE_PATTERN="luci-app-${pkg_name}-[0-9][^\"]*\\.${PKG_EXT}"
     
     # Функция получения версии установленного пакета
     GET_LOCAL_VERSION() {
@@ -117,16 +109,26 @@ get_remote_file() {
     local pkg_name="$1"
     [ ! -f "$CACHE_FILE" ] && update_cache
     
-    local pattern=$(echo "$PKG_FILE_PATTERN" | sed "s/\${pkg_name}/$pkg_name/g")
-    grep -o "$pattern" "$CACHE_FILE" | head -n1
+    if [ "$PKG_IS_APK" -eq 1 ]; then
+        # Для apk: zapret2-0.9.4.7-r4.apk
+        grep -o "${pkg_name}-[0-9][^\"]*\.${PKG_EXT}" "$CACHE_FILE" | head -n1
+    else
+        # Для opkg: zapret2_0.9.5-r2_aarch64_cortex-a53.ipk
+        grep -o "${pkg_name}_[0-9][^\"]*_${ARCH_SUFFIX}\.${PKG_EXT}" "$CACHE_FILE" | head -n1
+    fi
 }
 
 get_luci_file() {
     local pkg_name="$1"
     [ ! -f "$CACHE_FILE" ] && update_cache
     
-    local pattern=$(echo "$LUCI_FILE_PATTERN" | sed "s/\${pkg_name}/$pkg_name/g")
-    grep -o "$pattern" "$CACHE_FILE" | head -n1
+    if [ "$PKG_IS_APK" -eq 1 ]; then
+        # Для apk: luci-app-zapret2-0.9.4.7-r4.apk
+        grep -o "luci-app-${pkg_name}-[0-9][^\"]*\.${PKG_EXT}" "$CACHE_FILE" | head -n1
+    else
+        # Для opkg: luci-app-zapret2_0.9.5-r2_all.ipk
+        grep -o "luci-app-${pkg_name}_[0-9][^\"]*_all\.${PKG_EXT}" "$CACHE_FILE" | head -n1
+    fi
 }
 
 get_version_from_filename() {
@@ -173,12 +175,21 @@ install_routerich_pkg() {
     
     if [ -z "$main_file" ]; then
         echo -e "${RED}ОШИБКА: Не найден пакет $pkg_name${NC}"
+        echo -e "${YELLOW}Проверьте содержимое репозитория:${NC}"
+        echo "  curl -s \"$BASE_URL\" | grep -i \"$pkg_name\""
         return 1
     fi
+    
+    echo -e "${CYAN}Найден файл:${NC} $main_file"
     
     # Скачиваем основной пакет
     echo -e "${CYAN}Скачивание:${NC} $main_file"
     download_file "${BASE_URL}${main_file}" "$TMP_DIR/$main_file"
+    
+    if [ ! -f "$TMP_DIR/$main_file" ]; then
+        echo -e "${RED}ОШИБКА: Не удалось скачать $main_file${NC}"
+        return 1
+    fi
     
     # Скачиваем luci если есть
     if [ -n "$luci_file" ]; then
@@ -200,6 +211,8 @@ install_routerich_pkg() {
         fi
     else
         echo -e "${RED}✗ Ошибка установки $pkg_name${NC}"
+        echo -e "${YELLOW}Попробуйте установить вручную:${NC}"
+        echo "  $PKG_INSTALL $TMP_DIR/$main_file"
     fi
     
     rm -f "$TMP_DIR"/*.$PKG_EXT
@@ -251,9 +264,9 @@ run_action() {
     local remote_ver="$(get_version_from_filename "$main_file")"
     local local_ver="$(GET_LOCAL_VERSION "$pkg_name")"
     
-    if [ -z "$local_ver" ] && [ -n "$remote_ver" ]; then
+    if [ -z "$local_ver" ] && [ -n "$main_file" ]; then
         install_routerich_pkg "$pkg_name" "$with_awg"
-    elif [ -n "$local_ver" ] && [ -n "$remote_ver" ] && [ "$local_ver" != "$remote_ver" ]; then
+    elif [ -n "$local_ver" ] && [ -n "$main_file" ] && [ "$local_ver" != "$remote_ver" ]; then
         install_routerich_pkg "$pkg_name" "$with_awg"
     elif [ -n "$local_ver" ]; then
         remove_routerich_pkg "$pkg_name" "$with_awg"
