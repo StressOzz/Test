@@ -11,7 +11,7 @@ if command -v opkg >/dev/null 2>&1; then
     BASE_URL="https://packages.routerich.ru/24.10/mediatek/filogic/routerich/"
     PKG_EXT="ipk"
     PKG_INSTALL="opkg install"
-    PKG_REMOVE="opkg remove --autoremove --force-removal-of-dependent-packages"
+    PKG_REMOVE="opkg --force-removal-of-dependent-packages --autoremove remove"
     PKG_TYPE="opkg"
     UPDATE="opkg update"
     ARCH_SUFFIX="aarch64_cortex-a53"
@@ -253,21 +253,39 @@ install_package() {
     rm -f "$TMP_DIR"/*.$PKG_EXT
 }
 
-remove_package() {
-    local pkg_name="$1"
-    
-    log "${MAGENTA}=== Удаление $pkg_name ===${NC}"
+remove_zapret2() {
+    log "${MAGENTA}=== Удаление zapret2 ===${NC}"
+
+    # Удаляем основной пакет
+    log "${CYAN}Удаление zapret2...${NC}"
+    $PKG_REMOVE "zapret2" 2>/dev/null
     
     # Удаляем luci если он установлен
-    if is_luci_installed "$pkg_name"; then
-        log "${CYAN}Удаление luci-app-$pkg_name...${NC}"
-        $PKG_REMOVE "luci-app-$pkg_name" 2>/dev/null
+    if is_luci_installed "zapret2"; then
+        log "${CYAN}Удаление luci-app-zapret2...${NC}"
+        $PKG_REMOVE "luci-app-zapret2" 2>/dev/null
     fi
-    
+    rm -f /etc/config/zapret2
+    rm -rf /opt/zapret2
+    log "${GREEN}✓ Удаление zapret2 завершено${NC}"
+}
+
+remove_zeroblock() {
+    log "${MAGENTA}=== Удаление zeroblock ===${NC}"
+
     # Удаляем основной пакет
-    log "${CYAN}Удаление $pkg_name...${NC}"
-    $PKG_REMOVE "$pkg_name" 2>/dev/null
-    log "${GREEN}✓ Удаление завершено${NC}"
+    log "${CYAN}Удаление zeroblock...${NC}"
+    $PKG_REMOVE "zeroblock" 2>/dev/null
+    
+    # Удаляем luci если он установлен
+    if is_luci_installed "zeroblock"; then
+        log "${CYAN}Удаление luci-app-zeroblock...${NC}"
+        $PKG_REMOVE "luci-app-zeroblock" 2>/dev/null
+    fi
+    rm -rf /etc/config/zeroblock*
+    rm -rf /etc/zeroblock*
+    rm -rf /usr/bin/zeroblock*
+    log "${GREEN}✓ Удаление zeroblock завершено${NC}"
 }
 
 ### =======================================================================
@@ -441,11 +459,15 @@ run_action() {
     local pkg_name="$1"
     local action="$(get_package_state "$pkg_name" | cut -d'|' -f1)"
     
-    case "$action" in
-        install|update) install_package "$pkg_name" ;;
-        remove)         remove_package "$pkg_name" ;;
-        *)              log "${RED}Ошибка: пакет $pkg_name недоступен${NC}" ;;
-    esac
+    if [ "$pkg_name" = "zapret2" ] && [ "$action" = "remove" ]; then
+        remove_zapret2
+    elif [ "$pkg_name" = "zeroblock" ] && [ "$action" = "remove" ]; then
+        remove_zeroblock
+    elif [ "$action" = "install" ] || [ "$action" = "update" ]; then
+        install_package "$pkg_name"
+    else
+        log "${RED}Ошибка: пакет $pkg_name недоступен${NC}"
+    fi
 }
 
 ### =======================================================================
