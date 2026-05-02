@@ -241,9 +241,6 @@ install_package() {
         if [ $? -eq 0 ]; then
             # Перезапускаем веб-интерфейс если установлен luci
             if [ -n "$LUCI_FILE" ]; then
-                log "${CYAN}Перезапуск веб-интерфейса...${NC}"
-                /etc/init.d/uhttpd restart 2>/dev/null
-                /etc/init.d/rpcd restart 2>/dev/null
                 log "${GREEN}✓ Установка/обновление завершено${NC}"
             fi
         else
@@ -269,10 +266,6 @@ remove_package() {
     # Удаляем основной пакет
     log "${CYAN}Удаление $pkg_name...${NC}"
     $PKG_REMOVE "$pkg_name" 2>/dev/null
-    
-    # Перезапускаем веб-интерфейс
-    /etc/init.d/uhttpd restart 2>/dev/null
-    /etc/init.d/rpcd restart 2>/dev/null
     log "${CYAN}✓ Удаление завершено${NC}"
 }
 
@@ -376,8 +369,6 @@ install_awg() {
     rm -rf "$temp_dir"
     log "${CYAN}Перезапускаем сеть! Подождите...${NC}"
     /etc/init.d/network restart 2>/dev/null
-    /etc/init.d/uhttpd restart 2>/dev/null
-    /etc/init.d/rpcd restart 2>/dev/null
     log "${GREEN}✓ Установка AWG завершена${NC}"
 }
 
@@ -398,8 +389,6 @@ remove_awg() {
     
     log "${CYAN}Перезапускаем сеть! Подождите...${NC}"
     /etc/init.d/network restart 2>/dev/null
-    /etc/init.d/uhttpd restart 2>/dev/null
-    /etc/init.d/rpcd restart 2>/dev/null
     log "${GREEN}✓ Удаление AWG завершено${NC}"
 }
 
