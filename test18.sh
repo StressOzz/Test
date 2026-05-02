@@ -11,7 +11,7 @@ if command -v opkg >/dev/null 2>&1; then
     BASE_URL="https://packages.routerich.ru/24.10/mediatek/filogic/routerich/"
     PKG_EXT="ipk"
     PKG_INSTALL="opkg install"
-    PKG_REMOVE="opkg remove"
+    PKG_REMOVE="opkg remove --autoremove --force-removal-of-dependent-packages"
     PKG_TYPE="opkg"
     UPDATE="opkg update"
     ARCH_SUFFIX="aarch64_cortex-a53"
