@@ -491,9 +491,9 @@ menu() {
         read -r user_choice
         
         case "$user_choice" in
-            1) run_action zapret2; sleep 2; PAUSE ;;
-            2) run_action zeroblock; sleep 2; PAUSE ;;
-            3) run_awg_action; sleep 2; PAUSE ;;
+            1) run_action zapret2; PAUSE ;;
+            2) run_action zeroblock; PAUSE ;;
+            3) run_awg_action; PAUSE ;;
             *) exit 0 ;;
         esac
     done
