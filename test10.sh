@@ -239,13 +239,12 @@ install_package() {
     if [ -n "$packages_to_install" ]; then
         $PKG_INSTALL $packages_to_install
         if [ $? -eq 0 ]; then
-            log "${GREEN}✓ Установка/обновление завершено${NC}"
-            
             # Перезапускаем веб-интерфейс если установлен luci
             if [ -n "$LUCI_FILE" ]; then
                 log "${CYAN}Перезапуск веб-интерфейса...${NC}"
                 /etc/init.d/uhttpd restart 2>/dev/null
                 /etc/init.d/rpcd restart 2>/dev/null
+                log "${GREEN}✓ Установка/обновление завершено${NC}"
             fi
         else
             log "${RED}✗ Ошибка при установке${NC}"
@@ -271,11 +270,10 @@ remove_package() {
     log "${CYAN}Удаление $pkg_name...${NC}"
     $PKG_REMOVE "$pkg_name" 2>/dev/null
     
-    log "${CYAN}✓ Удаление завершено${NC}"
-    
     # Перезапускаем веб-интерфейс
     /etc/init.d/uhttpd restart 2>/dev/null
     /etc/init.d/rpcd restart 2>/dev/null
+    log "${CYAN}✓ Удаление завершено${NC}"
 }
 
 ### =======================================================================
