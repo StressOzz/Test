@@ -4,6 +4,8 @@
 ### АВТООПРЕДЕЛЕНИЕ ТИПА ПАКЕТНОГО МЕНЕДЖЕРА И НАСТРОЙКА РЕПОЗИТОРИЯ
 ### =======================================================================
 
+GREEN="\033[1;32m"; RED="\033[1;31m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
+
 # Определяем менеджер
 if command -v opkg >/dev/null 2>&1; then
     BASE_URL="https://packages.routerich.ru/24.10/mediatek/filogic/routerich/"
@@ -11,7 +13,7 @@ if command -v opkg >/dev/null 2>&1; then
     PKG_INSTALL="opkg install"
     PKG_REMOVE="opkg remove"
     PKG_TYPE="opkg"
-    
+    UPDATE="opkg update"
     # Определяем архитектуру устройства
     # Для mediatek/filogic это всегда aarch64_cortex-a53
     ARCH_SUFFIX="aarch64_cortex-a53"
@@ -23,7 +25,17 @@ else
     PKG_REMOVE="apk del"
     PKG_TYPE="apk"
     ARCH_SUFFIX=""
+    UPDATE="apk update"
 fi
+
+PAUSE() { echo -ne "\nНажмите Enter..."; read dummy; }
+
+if ! command -v curl >/dev/null 2>&1; then clear; echo -e "${MAGENTA}Устанавливаем ${NC}curl"; echo -e "${CYAN}Обновляем список пакетов${NC}"; ok=0; for i in 1 2 3 4 5; do if $UPDATE >/dev/null 2>&1; then ok=1; break; fi
+echo -e "${YELLOW}Обновление пакетов попытка $i не удалась${NC}"; sleep 1; done; if [ "$ok" -ne 1 ]; then echo -e "\n${RED}Не удалось обновить пакеты после 5 попыток${NC}"; PAUSE; exit 0; fi
+ok=0; echo -e "${CYAN}Устанавливаем ${NC}curl"; for i in 1 2 3 4 5; do if $PKG_INSTALL curl >/dev/null 2>&1; then ok=1; break; fi; echo -e "${YELLOW}Устанавливаем ${NC}curl${YELLOW} попытка ${NC}$i${YELLOW} не удалась!${NC}"; sleep 1; done
+if [ "$ok" -ne 1 ]; then echo -e "\n${RED}Не удалось установить ${NC}curl${RED} после 5 попыток${NC}"; PAUSE; exit 0; fi; if ! command -v curl >/dev/null 2>&1; then echo -e "\ncurl${RED} не найден после установки${NC}"; PAUSE; exit 0; fi; fi
+
+
 
 TMP_DIR="/tmp/routerich"
 mkdir -p "$TMP_DIR"
@@ -336,22 +348,18 @@ menu() {
         echo "======================================"
         echo "       RouterICH Package Manager       "
         echo "======================================"
-        echo "  Package Manager: $PKG_TYPE"
-        [ "$PKG_TYPE" = "opkg" ] && echo "  Architecture: $ARCH_SUFFIX"
-        echo "======================================"
         echo "  1) $(get_menu_label zapret2)"
         echo "  2) $(get_menu_label zeroblock)"
-        echo "  0) Выход"
+        echo "  Enter) Выход"
         echo "======================================"
         
         printf "  Выбор: "
         read -r user_choice
         
         case "$user_choice" in
-            1) run_action zapret2; read -p "  Нажмите Enter..." ;;
-            2) run_action zeroblock; read -p "  Нажмите Enter..." ;;
-            0) echo "  До свидания!"; exit 0 ;;
-            *) echo "  Неверный выбор"; sleep 1 ;;
+            1) run_action zapret2; PAUSE ;;
+            2) run_action zeroblock; PAUSE ;;
+            *) exit 0 ;;
         esac
     done
 }
