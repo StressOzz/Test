@@ -416,13 +416,13 @@ get_menu_label() {
     
     case "$action" in
         install) 
-            echo "Установить $pkg_name"
+            echo -e "${GREEN}Установить${NC} $pkg_name"
             ;;
         update)
-            echo "Обновить $pkg_name"
+            echo -e "${GREEN}Обновить${NC} $pkg_name"
             ;;
         remove)
-            echo "Удалить $pkg_name"
+            echo -e "${GREEN}Удалить${NC} $pkg_name"
             ;;
         *)       echo "$pkg_name → Недоступно" ;;
     esac
@@ -430,9 +430,9 @@ get_menu_label() {
 
 get_awg_menu_label() {
     if is_awg_installed; then
-        echo "Удалить AmneziaWG"
+        echo -e "${GREEN}Удалить${NC} AmneziaWG"
     else
-        echo "Установить AmneziaWG"
+        echo -e "${GREEN}Установить${NC} AmneziaWG"
     fi
 }
 
@@ -456,15 +456,15 @@ menu() {
         clear
         update_cache >/dev/null 2>&1
         echo "======================================"
-        echo "       RouterICH Package Manager       "
+        echo "       Routerich Package Manager       "
         echo "======================================"
-        echo "  1) $(get_menu_label zapret2)"
-        echo "  2) $(get_menu_label zeroblock)"
-        echo "  3) $(get_awg_menu_label)"
-        echo "  Enter) Выход"
+        echo -e "${CYAN}1)${NC} $(get_menu_label zapret2)"
+        echo -e "${CYAN}2)${NC} $(get_menu_label zeroblock)"
+        echo -e "${CYAN}3)${NC} $(get_awg_menu_label)"
+        echo -e "${CYAN}Enter) ${GREEN}Выход${NC}"
         echo "======================================"
         
-        printf "  Выбор: "
+        echo -en "${YELLOW}Выберите пункт:${NC} "
         read -r user_choice
         
         case "$user_choice" in
