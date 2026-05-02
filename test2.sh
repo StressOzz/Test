@@ -72,18 +72,24 @@ get_opkg_luci_file() {
     grep -o "luci-app-${pkg_name}_[0-9][^\"]*_all\.${PKG_EXT}" "$CACHE_FILE" | head -n1
 }
 
-# Получение имени удаленного файла для APK (включая luci если он отдельный)
+# Получение имени удаленного файла для APK
 get_apk_file() {
     local pkg_name="$1"
-    local include_luci="$2"
     
     [ ! -f "$CACHE_FILE" ] && update_cache
     
-    if [ "$include_luci" = "luci" ]; then
-        grep -o "luci-app-${pkg_name}-[0-9][^\"]*\.${PKG_EXT}" "$CACHE_FILE" | head -n1
-    else
-        grep -o "${pkg_name}-[0-9][^\"]*\.${PKG_EXT}" "$CACHE_FILE" | head -n1
-    fi
+    # Ищем основной пакет
+    grep -o "${pkg_name}-[0-9][^\"]*\.${PKG_EXT}" "$CACHE_FILE" | head -n1
+}
+
+# Получение имени luci-файла для APK
+get_apk_luci_file() {
+    local pkg_name="$1"
+    
+    [ ! -f "$CACHE_FILE" ] && update_cache
+    
+    # Ищем luci пакет для APK
+    grep -o "luci-app-${pkg_name}-[0-9][^\"]*\.${PKG_EXT}" "$CACHE_FILE" | head -n1
 }
 
 # Извлечение версии из имени файла для OPKG
@@ -120,6 +126,17 @@ is_luci_installed() {
     fi
 }
 
+# Получение версии установленного luci
+get_luci_version() {
+    local pkg_name="$1"
+    
+    if [ "$PKG_TYPE" = "opkg" ]; then
+        opkg list-installed 2>/dev/null | grep "luci-app-$pkg_name" | awk '{print $3}'
+    else
+        apk list --installed 2>/dev/null | grep "luci-app-$pkg_name" | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)*-r[0-9]+' | head -n1
+    fi
+}
+
 ### =======================================================================
 ### ОПРЕДЕЛЕНИЕ СОСТОЯНИЯ ПАКЕТА
 ### =======================================================================
@@ -136,38 +153,44 @@ get_package_state() {
         else
             remote_ver=""
         fi
-    else
-        local main_file="$(get_apk_file "$pkg_name" "")"
-        local luci_file=""
         
-        # Для APK проверяем есть ли отдельный luci пакет
-        local luci_remote_file="$(get_apk_file "$pkg_name" "luci")"
+        # Для opkg luci версия обычно такая же как у основного пакета
+        luci_remote_ver="$remote_ver"
+    else
+        local main_file="$(get_apk_file "$pkg_name")"
+        local luci_file="$(get_apk_luci_file "$pkg_name")"
         
         if [ -n "$main_file" ]; then
             remote_ver="$(get_apk_version "$main_file")"
         else
             remote_ver=""
         fi
+        
+        if [ -n "$luci_file" ]; then
+            luci_remote_ver="$(get_apk_version "$luci_file")"
+        else
+            luci_remote_ver=""
+        fi
     fi
     
     local local_ver="$(get_local_version "$pkg_name")"
+    local luci_local_ver="$(get_luci_version "$pkg_name")"
     
     # Сохраняем имена файлов в глобальные переменные для установки
     MAIN_FILE="$main_file"
     LUCI_FILE="$luci_file"
-    LUCI_REMOTE_FILE="$luci_remote_file"
     
     # Отладка
-    echo "DEBUG: $pkg_name -> MAIN='$main_file', LUCI='$luci_file', REMOTE='$remote_ver', LOCAL='$local_ver'" >&2
+    echo "DEBUG: $pkg_name -> MAIN='$main_file', LUCI='$luci_file', REMOTE='$remote_ver', LOCAL='$local_ver', LUCI_LOCAL='$luci_local_ver'" >&2
     
     if [ -z "$local_ver" ] && [ -n "$remote_ver" ]; then
-        echo "install|$local_ver|$remote_ver"
+        echo "install|$local_ver|$remote_ver|$luci_local_ver|$luci_remote_ver"
     elif [ -n "$local_ver" ] && [ -n "$remote_ver" ] && [ "$local_ver" != "$remote_ver" ]; then
-        echo "update|$local_ver|$remote_ver"
+        echo "update|$local_ver|$remote_ver|$luci_local_ver|$luci_remote_ver"
     elif [ -n "$local_ver" ]; then
-        echo "remove|$local_ver|$remote_ver"
+        echo "remove|$local_ver|$remote_ver|$luci_local_ver|$luci_remote_ver"
     else
-        echo "error||"
+        echo "error||||"
     fi
 }
 
@@ -180,7 +203,7 @@ install_package() {
     
     log "=== Установка/обновление $pkg_name ==="
     
-    # Получаем состояние (это заполнит MAIN_FILE, LUCI_FILE и LUCI_REMOTE_FILE)
+    # Получаем состояние (это заполнит MAIN_FILE и LUCI_FILE)
     get_package_state "$pkg_name" > /dev/null
     
     if [ -z "$MAIN_FILE" ]; then
@@ -198,18 +221,11 @@ install_package() {
         return 1
     fi
     
-    # Скачиваем luci если есть (для opkg)
-    if [ "$PKG_TYPE" = "opkg" ] && [ -n "$LUCI_FILE" ]; then
+    # Скачиваем luci если есть
+    if [ -n "$LUCI_FILE" ]; then
         local luci_url="${BASE_URL}${LUCI_FILE}"
         log "Скачивание: $LUCI_FILE"
         download_file "$luci_url" "$TMP_DIR/$LUCI_FILE"
-    fi
-    
-    # Для APK скачиваем luci если он существует отдельно
-    if [ "$PKG_TYPE" = "apk" ] && [ -n "$LUCI_REMOTE_FILE" ]; then
-        local luci_url="${BASE_URL}${LUCI_REMOTE_FILE}"
-        log "Скачивание: $LUCI_REMOTE_FILE"
-        download_file "$luci_url" "$TMP_DIR/$LUCI_REMOTE_FILE"
     fi
     
     # Установка
@@ -222,8 +238,7 @@ install_package() {
             log "✓ Установка/обновление завершено"
             
             # Перезапускаем веб-интерфейс если установлен luci
-            if [ "$PKG_TYPE" = "opkg" ] && [ -n "$LUCI_FILE" ] || \
-               [ "$PKG_TYPE" = "apk" ] && [ -n "$LUCI_REMOTE_FILE" ]; then
+            if [ -n "$LUCI_FILE" ]; then
                 log "Перезапуск веб-интерфейса..."
                 /etc/init.d/uhttpd restart 2>/dev/null
                 /etc/init.d/rpcd restart 2>/dev/null
@@ -242,25 +257,21 @@ remove_package() {
     
     log "=== Удаление $pkg_name ==="
     
-    # Удаляем основной пакет и luci если он есть
-    if [ "$PKG_TYPE" = "opkg" ]; then
+    # Удаляем luci если он установлен
+    if is_luci_installed "$pkg_name"; then
+        log "Удаление luci-app-$pkg_name..."
         $PKG_REMOVE "luci-app-$pkg_name" 2>/dev/null
-        $PKG_REMOVE "$pkg_name" 2>/dev/null
-    else
-        # Для APK сначала пробуем удалить luci если он установлен
-        if is_luci_installed "$pkg_name"; then
-            $PKG_REMOVE "luci-app-$pkg_name" 2>/dev/null
-        fi
-        $PKG_REMOVE "$pkg_name" 2>/dev/null
     fi
+    
+    # Удаляем основной пакет
+    log "Удаление $pkg_name..."
+    $PKG_REMOVE "$pkg_name" 2>/dev/null
     
     log "✓ Удаление завершено"
     
-    # Перезапускаем веб-интерфейс если был удален luci
-    if is_luci_installed "$pkg_name" 2>/dev/null || [ "$PKG_TYPE" = "opkg" ]; then
-        /etc/init.d/uhttpd restart 2>/dev/null
-        /etc/init.d/rpcd restart 2>/dev/null
-    fi
+    # Перезапускаем веб-интерфейс
+    /etc/init.d/uhttpd restart 2>/dev/null
+    /etc/init.d/rpcd restart 2>/dev/null
 }
 
 ### =======================================================================
@@ -274,11 +285,31 @@ get_menu_label() {
     local action="$(echo "$state_data" | cut -d'|' -f1)"
     local local_ver="$(echo "$state_data" | cut -d'|' -f2)"
     local remote_ver="$(echo "$state_data" | cut -d'|' -f3)"
+    local luci_local_ver="$(echo "$state_data" | cut -d'|' -f4)"
+    local luci_remote_ver="$(echo "$state_data" | cut -d'|' -f5)"
     
     case "$action" in
-        install) echo "$pkg_name (не установлен / $remote_ver) → Установить" ;;
-        update)  echo "$pkg_name ($local_ver → $remote_ver) → Обновить" ;;
-        remove)  echo "$pkg_name ($local_ver) → Удалить" ;;
+        install) 
+            if [ -n "$luci_remote_ver" ]; then
+                echo "$pkg_name (осн:не уст / $remote_ver, luci:$luci_remote_ver) → Установить"
+            else
+                echo "$pkg_name (не установлен / $remote_ver) → Установить"
+            fi
+            ;;
+        update)
+            if [ -n "$luci_remote_ver" ]; then
+                echo "$pkg_name (осн:$local_ver → $remote_ver, luci:$luci_local_ver → $luci_remote_ver) → Обновить"
+            else
+                echo "$pkg_name ($local_ver → $remote_ver) → Обновить"
+            fi
+            ;;
+        remove)
+            if [ -n "$luci_local_ver" ]; then
+                echo "$pkg_name (осн:$local_ver, luci:$luci_local_ver) → Удалить"
+            else
+                echo "$pkg_name ($local_ver) → Удалить"
+            fi
+            ;;
         *)       echo "$pkg_name → Недоступно" ;;
     esac
 }
