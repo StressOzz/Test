@@ -15,9 +15,8 @@ NC="\033[0m"
 ### ОПРЕДЕЛЕНИЕ СИСТЕМЫ И ПАКЕТНОГО МЕНЕДЖЕРА
 ### =======================================================================
 
-# Определяем тип пакетного менеджера и устанавливаем все переменные
+# Определяем тип пакетного менеджера
 if command -v opkg >/dev/null 2>&1; then
-    # OpenWrt 23.05 и старше (opkg)
     PKG_TYPE="opkg"
     PKG_EXT="ipk"
     PKG_INSTALL="opkg install"
@@ -28,28 +27,10 @@ if command -v opkg >/dev/null 2>&1; then
     BASE_URL="https://packages.routerich.ru/24.10/mediatek/filogic/routerich/"
     ARCH_SUFFIX="aarch64_cortex-a53"
     
-    # Формат имен файлов для RouterICH
-    PKG_FILE_PATTERN="${pkg_name}_[0-9][^\"]*_${ARCH_SUFFIX}\\.${PKG_EXT}"
-    LUCI_FILE_PATTERN="luci-app-${pkg_name}_[0-9][^\"]*_all\\.${PKG_EXT}"
-    
-    # Функция получения версии установленного пакета
-    GET_LOCAL_VERSION() {
-        opkg list-installed 2>/dev/null | grep "^$1 -" | awk '{print $3}'
-    }
-    
-    # Функция проверки установлен ли пакет
-    IS_PKG_INSTALLED() {
-        opkg list-installed 2>/dev/null | grep -q "^$1"
-    }
-    
     # Для AWG
     opkg update >/dev/null 2>&1
     AWG_PKGARCH=$(opkg print-architecture 2>/dev/null | awk 'BEGIN {max=0} {if ($3 > max) {max=$3; arch=$2}} END {print arch}')
-    AWG_POSTFIX="_v${VERSION}_${AWG_PKGARCH}_${TARGET}_${SUBTARGET}.ipk"
-    AWG_INSTALL_CMD="opkg install"
-    
 else
-    # OpenWrt 24.10+ (apk)
     PKG_TYPE="apk"
     PKG_EXT="apk"
     PKG_INSTALL="apk add --allow-untrusted"
@@ -60,24 +41,8 @@ else
     BASE_URL="https://packages.routerich.ru/25.12/mediatek/filogic/routerich/"
     ARCH_SUFFIX=""
     
-    # Формат имен файлов для RouterICH
-    PKG_FILE_PATTERN="${pkg_name}-[0-9][^\"]*\\.${PKG_EXT}"
-    LUCI_FILE_PATTERN="luci-app-${pkg_name}-[0-9][^\"]*\\.${PKG_EXT}"
-    
-    # Функция получения версии установленного пакета
-    GET_LOCAL_VERSION() {
-        apk list --installed 2>/dev/null | grep "^$1" | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)*-r[0-9]+' | head -n1
-    }
-    
-    # Функция проверки установлен ли пакет
-    IS_PKG_INSTALLED() {
-        apk list --installed 2>/dev/null | grep -q "^$1"
-    }
-    
     # Для AWG
     AWG_PKGARCH=$(cat /etc/apk/arch 2>/dev/null)
-    AWG_POSTFIX="_v${VERSION}_${AWG_PKGARCH}_${TARGET}_${SUBTARGET}.apk"
-    AWG_INSTALL_CMD="apk add --allow-untrusted"
 fi
 
 # Общие настройки
@@ -87,6 +52,7 @@ CACHE_FILE="$TMP_DIR/index.html"
 
 # Определяем версию OpenWrt для AWG
 VERSION=$(ubus call system board 2>/dev/null | jsonfilter -e '@.release.version' 2>/dev/null | tr -d '\n')
+MAJOR_VERSION=$(echo "$VERSION" | cut -d '.' -f1)
 TARGET=$(ubus call system board 2>/dev/null | jsonfilter -e '@.release.target' 2>/dev/null | cut -d '/' -f1)
 SUBTARGET=$(ubus call system board 2>/dev/null | jsonfilter -e '@.release.target' 2>/dev/null | cut -d '/' -f2)
 
@@ -96,11 +62,12 @@ AWG_IF_NAME="AWG"
 AWG_PROTO="amneziawg"
 AWG_DEV_NAME="amneziawg0"
 
-# Обновляем POSTFIX для AWG с актуальной версией
 if [ "$PKG_IS_APK" -eq 1 ]; then
     AWG_POSTFIX="_v${VERSION}_${AWG_PKGARCH}_${TARGET}_${SUBTARGET}.apk"
+    AWG_INSTALL_CMD="apk add --allow-untrusted"
 else
     AWG_POSTFIX="_v${VERSION}_${AWG_PKGARCH}_${TARGET}_${SUBTARGET}.ipk"
+    AWG_INSTALL_CMD="opkg install"
 fi
 
 ### =======================================================================
@@ -121,6 +88,15 @@ pause() {
     read dummy
 }
 
+is_pkg_installed() {
+    local pkg="$1"
+    if [ "$PKG_IS_APK" -eq 1 ]; then
+        apk list --installed 2>/dev/null | grep -q "^$pkg"
+    else
+        opkg list-installed 2>/dev/null | grep -q "^$pkg"
+    fi
+}
+
 ### =======================================================================
 ### ФУНКЦИИ ДЛЯ ROUTERICH ПАКЕТОВ (zapret2, zeroblock)
 ### =======================================================================
@@ -129,20 +105,35 @@ get_remote_file() {
     local pkg_name="$1"
     [ ! -f "$CACHE_FILE" ] && update_cache
     
-    local pattern=$(echo "$PKG_FILE_PATTERN" | sed "s/\${pkg_name}/$pkg_name/g")
-    grep -o "$pattern" "$CACHE_FILE" | head -n1
+    if [ "$PKG_IS_APK" -eq 1 ]; then
+        grep -o "${pkg_name}-[0-9][^\"]*\.${PKG_EXT}" "$CACHE_FILE" | head -n1
+    else
+        grep -o "${pkg_name}_[0-9][^\"]*_${ARCH_SUFFIX}\.${PKG_EXT}" "$CACHE_FILE" | head -n1
+    fi
 }
 
 get_luci_file() {
     local pkg_name="$1"
     [ ! -f "$CACHE_FILE" ] && update_cache
     
-    local pattern=$(echo "$LUCI_FILE_PATTERN" | sed "s/\${pkg_name}/$pkg_name/g")
-    grep -o "$pattern" "$CACHE_FILE" | head -n1
+    if [ "$PKG_IS_APK" -eq 1 ]; then
+        grep -o "luci-app-${pkg_name}-[0-9][^\"]*\.${PKG_EXT}" "$CACHE_FILE" | head -n1
+    else
+        grep -o "luci-app-${pkg_name}_[0-9][^\"]*_all\.${PKG_EXT}" "$CACHE_FILE" | head -n1
+    fi
 }
 
 get_version_from_filename() {
     echo "$1" | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)*-r[0-9]+'
+}
+
+get_local_version() {
+    local pkg="$1"
+    if [ "$PKG_IS_APK" -eq 1 ]; then
+        apk list --installed 2>/dev/null | grep "^$pkg" | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)*-r[0-9]+' | head -n1
+    else
+        opkg list-installed 2>/dev/null | grep "^$pkg -" | awk '{print $3}'
+    fi
 }
 
 install_routerich_pkg() {
@@ -158,14 +149,17 @@ install_routerich_pkg() {
         return 1
     fi
     
+    # Скачиваем основной пакет
     echo -e "${CYAN}Скачивание:${NC} $main_file"
     download_file "${BASE_URL}${main_file}" "$TMP_DIR/$main_file"
     
+    # Скачиваем luci если есть
     if [ -n "$luci_file" ]; then
         echo -e "${CYAN}Скачивание:${NC} $luci_file"
         download_file "${BASE_URL}${luci_file}" "$TMP_DIR/$luci_file"
     fi
     
+    # Установка
     echo -e "${CYAN}Установка...${NC}"
     $PKG_INSTALL $TMP_DIR/*.$PKG_EXT 2>/dev/null
     
@@ -189,6 +183,10 @@ remove_routerich_pkg() {
 ### =======================================================================
 ### ФУНКЦИИ ДЛЯ AWG
 ### =======================================================================
+
+is_awg_installed() {
+    is_pkg_installed "kmod-amneziawg"
+}
 
 install_awg_pkg() {
     local pkgname="$1"
@@ -214,6 +212,7 @@ install_awg() {
         install_awg_pkg "$pkg" || { echo -e "${RED}Ошибка установки${NC}"; pause; return; }
     done
     
+    # Создаем интерфейс если нет
     if ! uci show network.$AWG_IF_NAME >/dev/null 2>&1; then
         echo -e "${CYAN}Создаем интерфейс AWG${NC}"
         uci set network.$AWG_IF_NAME=interface
@@ -237,6 +236,7 @@ remove_awg() {
         $PKG_REMOVE "$pkg" 2>/dev/null
     done
     
+    # Удаляем интерфейс и пиров
     uci delete network.$AWG_IF_NAME 2>/dev/null
     for peer in $(uci show network 2>/dev/null | grep "interface='$AWG_IF_NAME'" | cut -d. -f2); do
         uci delete network.$peer 2>/dev/null
@@ -256,7 +256,7 @@ get_routerich_label() {
     local pkg_name="$1"
     local main_file="$(get_remote_file "$pkg_name")"
     local remote_ver="$(get_version_from_filename "$main_file")"
-    local local_ver="$(GET_LOCAL_VERSION "$pkg_name")"
+    local local_ver="$(get_local_version "$pkg_name")"
     
     if [ -z "$local_ver" ] && [ -n "$remote_ver" ]; then
         echo "$pkg_name (нет / $remote_ver) → Установить"
@@ -273,7 +273,7 @@ run_routerich_action() {
     local pkg_name="$1"
     local main_file="$(get_remote_file "$pkg_name")"
     local remote_ver="$(get_version_from_filename "$main_file")"
-    local local_ver="$(GET_LOCAL_VERSION "$pkg_name")"
+    local local_ver="$(get_local_version "$pkg_name")"
     
     if [ -z "$local_ver" ] && [ -n "$remote_ver" ]; then
         install_routerich_pkg "$pkg_name"
@@ -287,16 +287,13 @@ run_routerich_action() {
     fi
 }
 
-### =======================================================================
-### ГЛАВНОЕ МЕНЮ
-### =======================================================================
-
+# Главное меню
 while true; do
     clear
     update_cache >/dev/null 2>&1
     
     # Определяем текст для AWG пункта
-    if IS_PKG_INSTALLED "kmod-amneziawg"; then
+    if is_awg_installed; then
         AWG_LABEL="AWG (AmneziaWG) → Удалить"
     else
         AWG_LABEL="AWG (AmneziaWG) → Установить"
@@ -321,7 +318,7 @@ while true; do
         1) run_routerich_action zapret2 ;;
         2) run_routerich_action zeroblock ;;
         3) 
-            if IS_PKG_INSTALLED "kmod-amneziawg"; then
+            if is_awg_installed; then
                 remove_awg
             else
                 install_awg
