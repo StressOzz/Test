@@ -287,6 +287,100 @@ remove_package() {
 }
 
 ### =======================================================================
+### ФУНКЦИИ ДЛЯ AWG
+### =======================================================================
+
+check_awg_installed() {
+    if opkg list-installed 2>/dev/null | grep -q "kmod-amneziawg" && \
+       opkg list-installed 2>/dev/null | grep -q "amneziawg-tools"; then
+        return 0
+    fi
+    return 1
+}
+
+get_awg_state() {
+    if check_awg_installed; then
+        echo "remove|Установлен → Удалить"
+    else
+        echo "install|Не установлен → Установить"
+    fi
+}
+
+install_awg() {
+    log "=== Установка AmneziaWG ==="
+    
+    # Определяем архитектуру и версию
+    ARCH_AWG="$(uname -m)_cortex-a53_$(cat /etc/openwrt_release | grep DISTRIB_TARGET | cut -d'=' -f2 | tr -d "'" | tr '/' '_')"
+    OWRT="$(grep '^DISTRIB_RELEASE=' /etc/openwrt_release 2>/dev/null | cut -d"'" -f2)"
+    
+    log "Архитектура: $ARCH_AWG"
+    log "Версия OpenWrt: $OWRT"
+    
+    # Список пакетов для скачивания
+    AWG_PACKAGES="kmod-amneziawg amneziawg-tools luci-proto-amneziawg luci-i18n-amneziawg-ru"
+    
+    # Скачиваем каждый пакет
+    for pkg in $AWG_PACKAGES; do
+        PKG_URL="https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v$OWRT/${pkg}_v${OWRT}_${ARCH_AWG}.${PKG_EXT}"
+        log "Скачивание: ${pkg}_v${OWRT}_${ARCH_AWG}.${PKG_EXT}"
+        download_file "$PKG_URL" "$TMP_DIR/${pkg}_v${OWRT}_${ARCH_AWG}.${PKG_EXT}"
+        
+        if [ ! -f "$TMP_DIR/${pkg}_v${OWRT}_${ARCH_AWG}.${PKG_EXT}" ]; then
+            log "ОШИБКА: Не удалось скачать $pkg"
+            return 1
+        fi
+    done
+    
+    # Установка
+    log "Установка пакетов AWG..."
+    local packages_to_install=$(ls "$TMP_DIR"/*${ARCH_AWG}.${PKG_EXT} 2>/dev/null)
+    
+    if [ -n "$packages_to_install" ]; then
+        $PKG_INSTALL $packages_to_install --force-depends 2>/dev/null || \
+        $PKG_INSTALL $packages_to_install
+        
+        if [ $? -eq 0 ]; then
+            log "✓ Установка AWG завершена"
+            
+            # Перезапускаем веб-интерфейс
+            log "Перезапуск веб-интерфейса..."
+            /etc/init.d/uhttpd restart 2>/dev/null
+            /etc/init.d/rpcd restart 2>/dev/null
+        else
+            log "✗ Ошибка при установке AWG"
+            return 1
+        fi
+    fi
+    
+    # Очистка
+    rm -f "$TMP_DIR"/*${ARCH_AWG}.${PKG_EXT}
+}
+
+remove_awg() {
+    log "=== Удаление AmneziaWG ==="
+    
+    # Удаляем пакеты в правильном порядке
+    $PKG_REMOVE luci-i18n-amneziawg-ru 2>/dev/null
+    $PKG_REMOVE luci-proto-amneziawg 2>/dev/null
+    $PKG_REMOVE amneziawg-tools 2>/dev/null
+    $PKG_REMOVE kmod-amneziawg 2>/dev/null
+    
+    log "✓ Удаление AWG завершено"
+    
+    # Перезапускаем веб-интерфейс
+    /etc/init.d/uhttpd restart 2>/dev/null
+    /etc/init.d/rpcd restart 2>/dev/null
+}
+
+run_awg_action() {
+    if check_awg_installed; then
+        remove_awg
+    else
+        install_awg
+    fi
+}
+
+### =======================================================================
 ### ОТОБРАЖЕНИЕ МЕНЮ
 ### =======================================================================
 
@@ -326,6 +420,18 @@ get_menu_label() {
     esac
 }
 
+get_awg_menu_label() {
+    local state_data="$(get_awg_state)"
+    local action="$(echo "$state_data" | cut -d'|' -f1)"
+    local label="$(echo "$state_data" | cut -d'|' -f2)"
+    
+    case "$action" in
+        install) echo "AmneziaWG (Не установлен) → Установить" ;;
+        remove)  echo "AmneziaWG (Установлен) → Удалить" ;;
+        *)       echo "AmneziaWG → Недоступно" ;;
+    esac
+}
+
 run_action() {
     local pkg_name="$1"
     local action="$(get_package_state "$pkg_name" | cut -d'|' -f1)"
@@ -350,6 +456,7 @@ menu() {
         echo "======================================"
         echo "  1) $(get_menu_label zapret2)"
         echo "  2) $(get_menu_label zeroblock)"
+        echo "  3) $(get_awg_menu_label)"
         echo "  Enter) Выход"
         echo "======================================"
         
@@ -359,6 +466,7 @@ menu() {
         case "$user_choice" in
             1) run_action zapret2; PAUSE ;;
             2) run_action zeroblock; PAUSE ;;
+            3) run_awg_action; PAUSE ;;
             *) exit 0 ;;
         esac
     done
