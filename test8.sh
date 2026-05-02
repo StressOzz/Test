@@ -42,12 +42,7 @@ CACHE_FILE="$TMP_DIR/index.html"
 download_file() {
     local url="$1"
     local output="$2"
-    
-    if command -v curl >/dev/null 2>&1; then
-        curl -L -s --connect-timeout 20 "$url" -o "$output"
-    elif command -v wget >/dev/null 2>&1; then
-        wget -q --timeout=20 "$url" -O "$output" 2>/dev/null
-    fi
+    curl -L -s --connect-timeout 10 "$url" -o "$output"
 }
 
 # Обновление кэша
@@ -55,7 +50,7 @@ update_cache() {
     download_file "$BASE_URL" "$CACHE_FILE"
 }
 
-log() { echo "[*] $1"; }
+log() { echo -e "${YELLOW}[*]${NC} $1"; }
 
 ### =======================================================================
 ### ФУНКЦИИ ДЛЯ РАБОТЫ С ПАКЕТАМИ
@@ -210,30 +205,30 @@ install_package() {
     # Очищаем временную директорию перед установкой
     rm -f "$TMP_DIR"/*.${PKG_EXT}
     
-    log "=== Установка/обновление $pkg_name ==="
+    log "${MAGENTA}=== Установка/обновление $pkg_name ===${NC}"
     
     # Получаем состояние (это заполнит MAIN_FILE и LUCI_FILE)
     get_package_state "$pkg_name" > /dev/null
     
     if [ -z "$MAIN_FILE" ]; then
-        log "ОШИБКА: Не найден пакет $pkg_name"
+        log "${RED}ОШИБКА: Не найден пакет${NC} $pkg_name"
         return 1
     fi
     
     # Скачиваем основной пакет
     local main_url="${BASE_URL}${MAIN_FILE}"
-    log "Скачивание: $MAIN_FILE"
+    log "${CYAN}Скачивание:${NC} $MAIN_FILE"
     download_file "$main_url" "$TMP_DIR/$MAIN_FILE"
     
     if [ ! -f "$TMP_DIR/$MAIN_FILE" ]; then
-        log "ОШИБКА: Не удалось скачать $MAIN_FILE"
+        log "${RED}ОШИБКА: Не удалось скачать $MAIN_FILE${NC}"
         return 1
     fi
     
     # Скачиваем luci если есть
     if [ -n "$LUCI_FILE" ]; then
         local luci_url="${BASE_URL}${LUCI_FILE}"
-        log "Скачивание: $LUCI_FILE"
+        log "${CYAN}Скачивание:${NC} $LUCI_FILE"
         download_file "$luci_url" "$TMP_DIR/$LUCI_FILE"
     fi
     
@@ -244,16 +239,16 @@ install_package() {
     if [ -n "$packages_to_install" ]; then
         $PKG_INSTALL $packages_to_install
         if [ $? -eq 0 ]; then
-            log "✓ Установка/обновление завершено"
+            log "${GREEN}✓ Установка/обновление завершено${NC}"
             
             # Перезапускаем веб-интерфейс если установлен luci
             if [ -n "$LUCI_FILE" ]; then
-                log "Перезапуск веб-интерфейса..."
+                log "${NC}Перезапуск веб-интерфейса...${NC}"
                 /etc/init.d/uhttpd restart 2>/dev/null
                 /etc/init.d/rpcd restart 2>/dev/null
             fi
         else
-            log "✗ Ошибка при установке"
+            log "${RED}✗ Ошибка при установке${NC}"
         fi
     fi
     
@@ -264,19 +259,19 @@ install_package() {
 remove_package() {
     local pkg_name="$1"
     
-    log "=== Удаление $pkg_name ==="
+    log "${MAGENTA}=== Удаление $pkg_name ===${NC}"
     
     # Удаляем luci если он установлен
     if is_luci_installed "$pkg_name"; then
-        log "Удаление luci-app-$pkg_name..."
+        log "${CYAN}Удаление luci-app-$pkg_name...${NC}"
         $PKG_REMOVE "luci-app-$pkg_name" 2>/dev/null
     fi
     
     # Удаляем основной пакет
-    log "Удаление $pkg_name..."
+    log "${CYAN}Удаление $pkg_name...${NC}"
     $PKG_REMOVE "$pkg_name" 2>/dev/null
     
-    log "✓ Удаление завершено"
+    log "${CYAN}✓ Удаление завершено${NC}"
     
     # Перезапускаем веб-интерфейс
     /etc/init.d/uhttpd restart 2>/dev/null
@@ -287,18 +282,54 @@ remove_package() {
 ### ФУНКЦИИ ДЛЯ AWG
 ### =======================================================================
 
-# Параметры для AWG
-MACHINE_ARCH="$(uname -m)"
-OWRT_FULL="$(grep '^DISTRIB_RELEASE=' /etc/openwrt_release 2>/dev/null | cut -d"'" -f2)"
-OWRT_MAJOR="$(echo "$OWRT_FULL" | cut -d'.' -f1-2)"
+# Определение архитектуры через get_pkgarch (как в оригинальном скрипте)
+get_pkgarch() {
+    # Пытаемся получить через ubus
+    PKGARCH_UBUS=$(ubus call system board 2>/dev/null | jsonfilter -e '@.release.arch' 2>/dev/null)
+    if [ -n "$PKGARCH_UBUS" ]; then
+        echo "$PKGARCH_UBUS"
+        return
+    fi
+    
+    # Если ubus не доступен, пробуем opkg
+    if command -v opkg >/dev/null 2>&1; then
+        opkg print-architecture | awk 'BEGIN {max=0} {if ($3 > max) {max = $3; arch = $2}} END {print arch}'
+        return
+    fi
+    
+    # Fallback на /etc/openwrt_release
+    if [ -f /etc/openwrt_release ]; then
+        PKGARCH_RELEASE=$(grep "^DISTRIB_ARCH='" /etc/openwrt_release | cut -d"'" -f2)
+        if [ -n "$PKGARCH_RELEASE" ]; then
+            echo "$PKGARCH_RELEASE"
+            return
+        fi
+    fi
+    
+    # Последний шанс - apk или uname
+    if command -v apk >/dev/null 2>&1; then
+        apk --print-arch
+    else
+        uname -m
+    fi
+}
 
-# Формируем правильную архитектуру для AWG
-ARCH_SIMPLE="$(echo "$MACHINE_ARCH")_cortex-a53"
-# Полная архитектура с таргетом
-ARCH_AWG="${MACHINE_ARCH}_cortex-a53_mediatek_filogic"
+# Получаем параметры для AWG
+PKGARCH=$(get_pkgarch)
+TARGET=$(ubus call system board 2>/dev/null | jsonfilter -e '@.release.target' | cut -d '/' -f 1)
+SUBTARGET=$(ubus call system board 2>/dev/null | jsonfilter -e '@.release.target' | cut -d '/' -f 2)
+VERSION=$(ubus call system board 2>/dev/null | jsonfilter -e '@.release.version')
 
-# Пробуем разные версии
-AWG_VERSIONS="$OWRT_FULL $OWRT_MAJOR 25.12 24.10"
+# Если ubus не работает, берем из файла
+if [ -z "$TARGET" ] && [ -f /etc/openwrt_release ]; then
+    TARGET=$(grep DISTRIB_TARGET /etc/openwrt_release | cut -d"'" -f2 | cut -d '/' -f 1)
+    SUBTARGET=$(grep DISTRIB_TARGET /etc/openwrt_release | cut -d"'" -f2 | cut -d '/' -f 2)
+    VERSION=$(grep DISTRIB_RELEASE /etc/openwrt_release | cut -d"'" -f2)
+fi
+
+# Формируем постфикс для имени файла
+PKGPOSTFIX_BASE="_v${VERSION}_${PKGARCH}_${TARGET}_${SUBTARGET}"
+AWG_BASE_URL="https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v${VERSION}/"
 
 AWG_PKGS="kmod-amneziawg amneziawg-tools luci-proto-amneziawg luci-i18n-amneziawg-ru"
 
@@ -309,117 +340,65 @@ is_awg_installed() {
     return 0
 }
 
-# Функция для проверки существования файла
-check_url() {
-    curl -fsL -o /dev/null "$1" 2>/dev/null
-    return $?
-}
-
 install_awg() {
-    # Очищаем старые файлы
-    rm -f /tmp/awg_*.${PKG_EXT}
+    local temp_dir="/tmp/amneziawg"
+    mkdir -p "$temp_dir"
     
-    log "=== Установка AmneziaWG ==="
-    log "Версия OpenWrt: $OWRT_FULL"
-    log "Архитектура: $ARCH_AWG"
+    log "${MAGENTA}=== Установка AmneziaWG ===${NC}"
+    log "${CYAN}Архитектура:${NC} $PKGARCH"
+    log "${CYAN}Таргет:${NC} $TARGET/$SUBTARGET"
+    log "${CYAN}Версия:${NC} $VERSION"
     
-    local installed=0
-    local failed=0
-    
-    for version in $AWG_VERSIONS; do
-        [ $failed -eq 1 ] && break
+    for pkg in $AWG_PKGS; do
+        if CHECK_INSTALLED "$pkg"; then
+            log "${GREEN}✓ $pkg уже установлен${NC}"
+            continue
+        fi
         
-        log "Пробуем версию: $version"
-        local base_url="https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v$version"
+        local filename="${pkg}${PKGPOSTFIX_BASE}.${PKG_EXT}"
+        local url="${AWG_BASE_URL}${filename}"
         
-        # Пробуем разные форматы имен файлов
-        for p in $AWG_PKGS; do
-            if CHECK_INSTALLED "$p"; then
-                log "✓ $p уже установлен"
-                continue
-            fi
-            
-            local downloaded=0
-            local file=""
-            local url=""
-            
-            # Пробуем разные форматы имен
-            for name_format in \
-                "${p}_v${version}_${ARCH_AWG}.${PKG_EXT}" \
-                "${p}_${version}_${ARCH_AWG}.${PKG_EXT}" \
-                "${p}_v${version}_${ARCH_SIMPLE}.${PKG_EXT}" \
-                "${p}_${version}_${ARCH_SIMPLE}.${PKG_EXT}" \
-                "${p}_${version}_${MACHINE_ARCH}.${PKG_EXT}" \
-                "${p}.${PKG_EXT}"; do
-                
-                url="$base_url/$name_format"
-                file="/tmp/awg_${p}.${PKG_EXT}"
-                
-                if check_url "$url"; then
-                    log "  Найден: $name_format"
-                    if curl -fsL -o "$file" "$url"; then
-                        downloaded=1
-                        break
-                    fi
-                fi
-            done
-            
-            if [ $downloaded -eq 1 ]; then
-                log "Установка: $p"
-                if $PKG_INSTALL "$file" 2>/dev/null; then
-                    log "✓ $p установлен"
-                    installed=1
-                    rm -f "$file"
-                else
-                    log "✗ Ошибка установки $p"
-                    failed=1
-                    break
-                fi
+        log "${CYAN}Скачивание:${NC} $filename"
+        if curl -fsL -o "$temp_dir/$filename" "$url"; then
+            log "${CYAN}Установка:${NC} $pkg"
+            if $PKG_INSTALL "$temp_dir/$filename" 2>/dev/null; then
+                log "${GREEN}✓ $pkg установлен${NC}"
             else
-                log "✗ Не найден пакет $p для версии $version"
-                failed=1
-                break
+                log "${RED}✗ Ошибка установки $pkg${NC}"
+                rm -rf "$temp_dir"
+                return 1
             fi
-        done
-        
-        if [ $failed -eq 0 ] && [ $installed -eq 1 ]; then
-            log "Перезапускаем сеть! Подождите..."
-            /etc/init.d/network restart >/dev/null 2>&1
-            /etc/init.d/uhttpd restart 2>/dev/null
-            /etc/init.d/rpcd restart 2>/dev/null
-            log "✓ Установка AWG завершена"
-            return 0
-        elif [ $failed -eq 1 ]; then
-            log "Не удалось установить для версии $version, пробуем следующую..."
-            failed=0
-            # Очищаем частично установленные пакеты
-            for p in $AWG_PKGS; do
-                if CHECK_INSTALLED "$p"; then
-                    $PKG_REMOVE "$p" 2>/dev/null
-                fi
-            done
+        else
+            log "${RED}✗ Не удалось скачать $pkg${NC}"
+            rm -rf "$temp_dir"
+            return 1
         fi
     done
     
-    return 1
+    rm -rf "$temp_dir"
+    log "${CYAN}Перезапускаем сервисы...${NC}"
+    /etc/init.d/network restart 2>/dev/null
+    /etc/init.d/uhttpd restart 2>/dev/null
+    /etc/init.d/rpcd restart 2>/dev/null
+    log "${GREEN}✓ Установка AWG завершена${NC}"
 }
 
 remove_awg() {
-    log "=== Удаление AmneziaWG ==="
+    log "${MAGENTA}=== Удаление AmneziaWG ===${NC}"
     
-    for p in $AWG_PKGS; do
-        if CHECK_INSTALLED "$p"; then
-            log "Удаление: $p"
-            $PKG_REMOVE "$p" 2>/dev/null
-            log "✓ $p удален"
+    for pkg in $AWG_PKGS; do
+        if CHECK_INSTALLED "$pkg"; then
+            log "${CYAN}Удаление:${NC} $pkg"
+            $PKG_REMOVE "$pkg" 2>/dev/null
+            log "${GREEN}✓ $pkg удален${NC}"
         fi
     done
     
-    log "Перезапускаем сеть! Подождите..."
-    /etc/init.d/network restart >/dev/null 2>&1
+    log "${CYAN}Перезапускаем сервисы...${NC}"
+    /etc/init.d/network restart 2>/dev/null
     /etc/init.d/uhttpd restart 2>/dev/null
     /etc/init.d/rpcd restart 2>/dev/null
-    log "✓ Удаление AWG завершено"
+    log "${GREEN}✓ Удаление AWG завершено${NC}"
 }
 
 run_awg_action() {
@@ -446,25 +425,13 @@ get_menu_label() {
     
     case "$action" in
         install) 
-            if [ -n "$luci_remote_ver" ]; then
-                echo "Установить $pkg_name"
-            else
-                echo "Установить $pkg_name"
-            fi
+            echo "Установить $pkg_name"
             ;;
         update)
-            if [ -n "$luci_remote_ver" ]; then
-                echo "Обновить $pkg_name"
-            else
-                echo "Обновить $pkg_name"
-            fi
+            echo "Обновить $pkg_name"
             ;;
         remove)
-            if [ -n "$luci_local_ver" ]; then
-                echo "Удалить $pkg_name"
-            else
-                echo "Удалить $pkg_name"
-            fi
+            echo "Удалить $pkg_name"
             ;;
         *)       echo "$pkg_name → Недоступно" ;;
     esac
@@ -485,7 +452,7 @@ run_action() {
     case "$action" in
         install|update) install_package "$pkg_name" ;;
         remove)         remove_package "$pkg_name" ;;
-        *)              log "Ошибка: пакет $pkg_name недоступен" ;;
+        *)              log "${RED}Ошибка: пакет $pkg_name недоступен${NC}" ;;
     esac
 }
 
