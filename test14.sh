@@ -205,7 +205,7 @@ install_package() {
     # Очищаем временную директорию перед установкой
     rm -f "$TMP_DIR"/*.${PKG_EXT}
     
-    log "${MAGENTA}=== Установка/обновление $pkg_name ===${NC}"
+    log "${MAGENTA}=== Установка $pkg_name ===${NC}"
     
     # Получаем состояние (это заполнит MAIN_FILE и LUCI_FILE)
     get_package_state "$pkg_name" > /dev/null
@@ -241,7 +241,7 @@ install_package() {
         if [ $? -eq 0 ]; then
             # Перезапускаем веб-интерфейс если установлен luci
             if [ -n "$LUCI_FILE" ]; then
-                log "${GREEN}✓ Установка/обновление завершено${NC}"
+                log "${GREEN}✓ Установка завершена${NC}"
             fi
         else
             log "${RED}✗ Ошибка при установке${NC}"
@@ -266,7 +266,7 @@ remove_package() {
     # Удаляем основной пакет
     log "${CYAN}Удаление $pkg_name...${NC}"
     $PKG_REMOVE "$pkg_name" 2>/dev/null
-    log "${CYAN}✓ Удаление завершено${NC}"
+    log "${GREEN}✓ Удаление завершено${NC}"
 }
 
 ### =======================================================================
@@ -468,9 +468,9 @@ menu() {
         read -r user_choice
         
         case "$user_choice" in
-            1) run_action zapret2; PAUSE ;;
-            2) run_action zeroblock; PAUSE ;;
-            3) run_awg_action; PAUSE ;;
+            1) run_action zapret2; sleep 2; PAUSE ;;
+            2) run_action zeroblock; sleep 2; PAUSE ;;
+            3) run_awg_action; sleep 2; PAUSE ;;
             *) exit 0 ;;
         esac
     done
