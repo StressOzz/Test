@@ -242,9 +242,6 @@ install_package() {
         if [ $? -eq 0 ]; then
             # Перезапускаем веб-интерфейс если установлен luci
             if [ -n "$LUCI_FILE" ]; then
-wget -qO /opt/zapret2/ipset/zapret_hosts_user_exclude.txt https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/zapret-hosts-user-exclude.txt
-sed -i "/config strategy 'default'/,/config /s/option enabled '0'/option enabled '1'/" /etc/config/zapret2
-/etc/init.d/zapret2 restart >/dev/null 2>&1
                 log "${GREEN}✓ Установка завершена${NC}"
             fi
         else
