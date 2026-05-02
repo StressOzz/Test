@@ -383,9 +383,11 @@ install_awg() {
         done
         
         if [ $failed -eq 0 ] && [ $installed -eq 1 ]; then
-            log "✓ Установка AWG завершена"
+            log "Перезапускаем сеть! Подождите..."
+            /etc/init.d/network restart >/dev/null 2>&1
             /etc/init.d/uhttpd restart 2>/dev/null
             /etc/init.d/rpcd restart 2>/dev/null
+            log "✓ Установка AWG завершена"
             return 0
         elif [ $failed -eq 1 ]; then
             log "Не удалось установить для версии $version, пробуем следующую..."
@@ -399,10 +401,6 @@ install_awg() {
         fi
     done
     
-    if [ $installed -eq 0 ]; then
-        log "✗ Не удалось найти или установить пакеты AWG"
-        log "Попробуйте установить вручную с https://github.com/Slava-Shchipunov/awg-openwrt"
-    fi
     return 1
 }
 
@@ -417,9 +415,11 @@ remove_awg() {
         fi
     done
     
-    log "✓ Удаление AWG завершено"
+    log "Перезапускаем сеть! Подождите..."
+    /etc/init.d/network restart >/dev/null 2>&1
     /etc/init.d/uhttpd restart 2>/dev/null
     /etc/init.d/rpcd restart 2>/dev/null
+    log "✓ Удаление AWG завершено"
 }
 
 run_awg_action() {
@@ -447,23 +447,23 @@ get_menu_label() {
     case "$action" in
         install) 
             if [ -n "$luci_remote_ver" ]; then
-                echo "$pkg_name (осн:не уст / $remote_ver, luci:$luci_remote_ver) → Установить"
+                echo "Установить $pkg_name"
             else
-                echo "$pkg_name (не установлен / $remote_ver) → Установить"
+                echo "Установить $pkg_name"
             fi
             ;;
         update)
             if [ -n "$luci_remote_ver" ]; then
-                echo "$pkg_name (осн:$local_ver → $remote_ver, luci:$luci_local_ver → $luci_remote_ver) → Обновить"
+                echo "Обновить $pkg_name"
             else
-                echo "$pkg_name ($local_ver → $remote_ver) → Обновить"
+                echo "Обновить $pkg_name"
             fi
             ;;
         remove)
             if [ -n "$luci_local_ver" ]; then
-                echo "$pkg_name (осн:$local_ver, luci:$luci_local_ver) → Удалить"
+                echo "Удалить $pkg_name"
             else
-                echo "$pkg_name ($local_ver) → Удалить"
+                echo "Удалить $pkg_name"
             fi
             ;;
         *)       echo "$pkg_name → Недоступно" ;;
@@ -472,9 +472,9 @@ get_menu_label() {
 
 get_awg_menu_label() {
     if is_awg_installed; then
-        echo "AmneziaWG (Установлен) → Удалить"
+        echo "Удалить AmneziaWG"
     else
-        echo "AmneziaWG (Не установлен) → Установить"
+        echo "Установить AmneziaWG"
     fi
 }
 
