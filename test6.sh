@@ -38,13 +38,13 @@ TMP_DIR="/tmp/routerich"
 mkdir -p "$TMP_DIR"
 CACHE_FILE="$TMP_DIR/index.html"
 
-# Функция для скачивания
+# Функция для скачивания (с поддержкой редиректов)
 download_file() {
     local url="$1"
     local output="$2"
     
     if command -v curl >/dev/null 2>&1; then
-        curl -s --connect-timeout 20 "$url" -o "$output"
+        curl -L -s --connect-timeout 20 "$url" -o "$output"
     elif command -v wget >/dev/null 2>&1; then
         wget -q --timeout=20 "$url" -O "$output" 2>/dev/null
     fi
@@ -207,6 +207,9 @@ get_package_state() {
 install_package() {
     local pkg_name="$1"
     
+    # Очищаем временную директорию перед установкой
+    rm -f "$TMP_DIR"/*.${PKG_EXT}
+    
     log "=== Установка/обновление $pkg_name ==="
     
     # Получаем состояние (это заполнит MAIN_FILE и LUCI_FILE)
@@ -281,13 +284,22 @@ remove_package() {
 }
 
 ### =======================================================================
-### ФУНКЦИИ ДЛЯ AWG (УПРОЩЕННЫЕ)
+### ФУНКЦИИ ДЛЯ AWG
 ### =======================================================================
 
 # Параметры для AWG
-ARCH_AWG="$(uname -m)_cortex-a53_$(grep DISTRIB_TARGET /etc/openwrt_release 2>/dev/null | cut -d'=' -f2 | tr -d "'" | tr '/' '_')"
-OWRT="$(grep '^DISTRIB_RELEASE=' /etc/openwrt_release 2>/dev/null | cut -d"'" -f2 | cut -d'.' -f1-2)"
-AWG_BASE_URL="https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v$OWRT"
+MACHINE_ARCH="$(uname -m)"
+OWRT_FULL="$(grep '^DISTRIB_RELEASE=' /etc/openwrt_release 2>/dev/null | cut -d"'" -f2)"
+OWRT_MAJOR="$(echo "$OWRT_FULL" | cut -d'.' -f1-2)"
+
+# Формируем правильную архитектуру для AWG
+ARCH_SIMPLE="$(echo "$MACHINE_ARCH")_cortex-a53"
+# Полная архитектура с таргетом
+ARCH_AWG="${MACHINE_ARCH}_cortex-a53_mediatek_filogic"
+
+# Пробуем разные версии
+AWG_VERSIONS="$OWRT_FULL $OWRT_MAJOR 25.12 24.10"
+
 AWG_PKGS="kmod-amneziawg amneziawg-tools luci-proto-amneziawg luci-i18n-amneziawg-ru"
 
 is_awg_installed() {
@@ -297,50 +309,101 @@ is_awg_installed() {
     return 0
 }
 
+# Функция для проверки существования файла
+check_url() {
+    curl -fsL -o /dev/null "$1" 2>/dev/null
+    return $?
+}
+
 install_awg() {
+    # Очищаем старые файлы
+    rm -f /tmp/awg_*.${PKG_EXT}
+    
     log "=== Установка AmneziaWG ==="
+    log "Версия OpenWrt: $OWRT_FULL"
     log "Архитектура: $ARCH_AWG"
-    log "Версия: $OWRT"
     
     local installed=0
     local failed=0
     
-    for p in $AWG_PKGS; do
-        if CHECK_INSTALLED "$p"; then
-            log "✓ $p уже установлен"
-            continue
-        fi
+    for version in $AWG_VERSIONS; do
+        [ $failed -eq 1 ] && break
         
-        local file="/tmp/${p}.${PKG_EXT}"
-        local url="$AWG_BASE_URL/${p}_v${OWRT}_${ARCH_AWG}.${PKG_EXT}"
+        log "Пробуем версию: $version"
+        local base_url="https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v$version"
         
-        log "Скачивание: $p"
-        if curl -fsL -o "$file" "$url"; then
-            log "Установка: $p"
-            if $PKG_INSTALL "$file" 2>/dev/null; then
-                log "✓ $p установлен"
-                installed=1
-            else
-                log "✗ Ошибка установки $p"
-                failed=1
+        # Пробуем разные форматы имен файлов
+        for p in $AWG_PKGS; do
+            if CHECK_INSTALLED "$p"; then
+                log "✓ $p уже установлен"
+                continue
             fi
-            rm -f "$file"
-        else
-            log "✗ Не удалось скачать $p"
-            failed=1
+            
+            local downloaded=0
+            local file=""
+            local url=""
+            
+            # Пробуем разные форматы имен
+            for name_format in \
+                "${p}_v${version}_${ARCH_AWG}.${PKG_EXT}" \
+                "${p}_${version}_${ARCH_AWG}.${PKG_EXT}" \
+                "${p}_v${version}_${ARCH_SIMPLE}.${PKG_EXT}" \
+                "${p}_${version}_${ARCH_SIMPLE}.${PKG_EXT}" \
+                "${p}_${version}_${MACHINE_ARCH}.${PKG_EXT}" \
+                "${p}.${PKG_EXT}"; do
+                
+                url="$base_url/$name_format"
+                file="/tmp/awg_${p}.${PKG_EXT}"
+                
+                if check_url "$url"; then
+                    log "  Найден: $name_format"
+                    if curl -fsL -o "$file" "$url"; then
+                        downloaded=1
+                        break
+                    fi
+                fi
+            done
+            
+            if [ $downloaded -eq 1 ]; then
+                log "Установка: $p"
+                if $PKG_INSTALL "$file" 2>/dev/null; then
+                    log "✓ $p установлен"
+                    installed=1
+                    rm -f "$file"
+                else
+                    log "✗ Ошибка установки $p"
+                    failed=1
+                    break
+                fi
+            else
+                log "✗ Не найден пакет $p для версии $version"
+                failed=1
+                break
+            fi
+        done
+        
+        if [ $failed -eq 0 ] && [ $installed -eq 1 ]; then
+            log "✓ Установка AWG завершена"
+            /etc/init.d/uhttpd restart 2>/dev/null
+            /etc/init.d/rpcd restart 2>/dev/null
+            return 0
+        elif [ $failed -eq 1 ]; then
+            log "Не удалось установить для версии $version, пробуем следующую..."
+            failed=0
+            # Очищаем частично установленные пакеты
+            for p in $AWG_PKGS; do
+                if CHECK_INSTALLED "$p"; then
+                    $PKG_REMOVE "$p" 2>/dev/null
+                fi
+            done
         fi
     done
     
-    if [ $failed -eq 1 ]; then
-        log "✗ Ошибка при установке AWG"
-        return 1
-    elif [ $installed -eq 1 ]; then
-        log "✓ Установка AWG завершена"
-        /etc/init.d/uhttpd restart 2>/dev/null
-        /etc/init.d/rpcd restart 2>/dev/null
-    else
-        log "✓ Все пакеты AWG уже установлены"
+    if [ $installed -eq 0 ]; then
+        log "✗ Не удалось найти или установить пакеты AWG"
+        log "Попробуйте установить вручную с https://github.com/Slava-Shchipunov/awg-openwrt"
     fi
+    return 1
 }
 
 remove_awg() {
