@@ -14,10 +14,8 @@ if command -v opkg >/dev/null 2>&1; then
     PKG_REMOVE="opkg remove"
     PKG_TYPE="opkg"
     UPDATE="opkg update"
-    # Определяем архитектуру устройства
-    # Для mediatek/filogic это всегда aarch64_cortex-a53
     ARCH_SUFFIX="aarch64_cortex-a53"
-    
+    CHECK_INSTALLED() { opkg list-installed 2>/dev/null | grep -q "^$1 -"; }
 else
     BASE_URL="https://packages.routerich.ru/25.12/mediatek/filogic/routerich/"
     PKG_EXT="apk"
@@ -26,6 +24,7 @@ else
     PKG_TYPE="apk"
     ARCH_SUFFIX=""
     UPDATE="apk update"
+    CHECK_INSTALLED() { apk list --installed 2>/dev/null | grep -q "^$1"; }
 fi
 
 PAUSE() { echo -ne "\nНажмите Enter..."; read dummy; }
@@ -34,8 +33,6 @@ if ! command -v curl >/dev/null 2>&1; then clear; echo -e "${MAGENTA}Устан�
 echo -e "${YELLOW}Обновление пакетов попытка $i не удалась${NC}"; sleep 1; done; if [ "$ok" -ne 1 ]; then echo -e "\n${RED}Не удалось обновить пакеты после 5 попыток${NC}"; PAUSE; exit 0; fi
 ok=0; echo -e "${CYAN}Устанавливаем ${NC}curl"; for i in 1 2 3 4 5; do if $PKG_INSTALL curl >/dev/null 2>&1; then ok=1; break; fi; echo -e "${YELLOW}Устанавливаем ${NC}curl${YELLOW} попытка ${NC}$i${YELLOW} не удалась!${NC}"; sleep 1; done
 if [ "$ok" -ne 1 ]; then echo -e "\n${RED}Не удалось установить ${NC}curl${RED} после 5 попыток${NC}"; PAUSE; exit 0; fi; if ! command -v curl >/dev/null 2>&1; then echo -e "\ncurl${RED} не найден после установки${NC}"; PAUSE; exit 0; fi; fi
-
-
 
 TMP_DIR="/tmp/routerich"
 mkdir -p "$TMP_DIR"
@@ -192,9 +189,6 @@ get_package_state() {
     MAIN_FILE="$main_file"
     LUCI_FILE="$luci_file"
     
-    # Отладка
-    echo "DEBUG: $pkg_name -> MAIN='$main_file', LUCI='$luci_file', REMOTE='$remote_ver', LOCAL='$local_ver', LUCI_LOCAL='$luci_local_ver'" >&2
-    
     if [ -z "$local_ver" ] && [ -n "$remote_ver" ]; then
         echo "install|$local_ver|$remote_ver|$luci_local_ver|$luci_remote_ver"
     elif [ -n "$local_ver" ] && [ -n "$remote_ver" ] && [ "$local_ver" != "$remote_ver" ]; then
@@ -287,93 +281,86 @@ remove_package() {
 }
 
 ### =======================================================================
-### ФУНКЦИИ ДЛЯ AWG
+### ФУНКЦИИ ДЛЯ AWG (УПРОЩЕННЫЕ)
 ### =======================================================================
 
-check_awg_installed() {
-    if opkg list-installed 2>/dev/null | grep -q "kmod-amneziawg" && \
-       opkg list-installed 2>/dev/null | grep -q "amneziawg-tools"; then
-        return 0
-    fi
-    return 1
-}
+# Параметры для AWG
+ARCH_AWG="$(uname -m)_cortex-a53_$(grep DISTRIB_TARGET /etc/openwrt_release 2>/dev/null | cut -d'=' -f2 | tr -d "'" | tr '/' '_')"
+OWRT="$(grep '^DISTRIB_RELEASE=' /etc/openwrt_release 2>/dev/null | cut -d"'" -f2 | cut -d'.' -f1-2)"
+AWG_BASE_URL="https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v$OWRT"
+AWG_PKGS="kmod-amneziawg amneziawg-tools luci-proto-amneziawg luci-i18n-amneziawg-ru"
 
-get_awg_state() {
-    if check_awg_installed; then
-        echo "remove|Установлен → Удалить"
-    else
-        echo "install|Не установлен → Установить"
-    fi
+is_awg_installed() {
+    for p in $AWG_PKGS; do
+        CHECK_INSTALLED "$p" || return 1
+    done
+    return 0
 }
 
 install_awg() {
     log "=== Установка AmneziaWG ==="
-    
-    # Определяем архитектуру и версию
-    ARCH_AWG="$(uname -m)_cortex-a53_$(cat /etc/openwrt_release | grep DISTRIB_TARGET | cut -d'=' -f2 | tr -d "'" | tr '/' '_')"
-    OWRT="$(grep '^DISTRIB_RELEASE=' /etc/openwrt_release 2>/dev/null | cut -d"'" -f2)"
-    
     log "Архитектура: $ARCH_AWG"
-    log "Версия OpenWrt: $OWRT"
+    log "Версия: $OWRT"
     
-    # Список пакетов для скачивания
-    AWG_PACKAGES="kmod-amneziawg amneziawg-tools luci-proto-amneziawg luci-i18n-amneziawg-ru"
+    local installed=0
+    local failed=0
     
-    # Скачиваем каждый пакет
-    for pkg in $AWG_PACKAGES; do
-        PKG_URL="https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v$OWRT/${pkg}_v${OWRT}_${ARCH_AWG}.${PKG_EXT}"
-        log "Скачивание: ${pkg}_v${OWRT}_${ARCH_AWG}.${PKG_EXT}"
-        download_file "$PKG_URL" "$TMP_DIR/${pkg}_v${OWRT}_${ARCH_AWG}.${PKG_EXT}"
+    for p in $AWG_PKGS; do
+        if CHECK_INSTALLED "$p"; then
+            log "✓ $p уже установлен"
+            continue
+        fi
         
-        if [ ! -f "$TMP_DIR/${pkg}_v${OWRT}_${ARCH_AWG}.${PKG_EXT}" ]; then
-            log "ОШИБКА: Не удалось скачать $pkg"
-            return 1
+        local file="/tmp/${p}.${PKG_EXT}"
+        local url="$AWG_BASE_URL/${p}_v${OWRT}_${ARCH_AWG}.${PKG_EXT}"
+        
+        log "Скачивание: $p"
+        if curl -fsL -o "$file" "$url"; then
+            log "Установка: $p"
+            if $PKG_INSTALL "$file" 2>/dev/null; then
+                log "✓ $p установлен"
+                installed=1
+            else
+                log "✗ Ошибка установки $p"
+                failed=1
+            fi
+            rm -f "$file"
+        else
+            log "✗ Не удалось скачать $p"
+            failed=1
         fi
     done
     
-    # Установка
-    log "Установка пакетов AWG..."
-    local packages_to_install=$(ls "$TMP_DIR"/*${ARCH_AWG}.${PKG_EXT} 2>/dev/null)
-    
-    if [ -n "$packages_to_install" ]; then
-        $PKG_INSTALL $packages_to_install --force-depends 2>/dev/null || \
-        $PKG_INSTALL $packages_to_install
-        
-        if [ $? -eq 0 ]; then
-            log "✓ Установка AWG завершена"
-            
-            # Перезапускаем веб-интерфейс
-            log "Перезапуск веб-интерфейса..."
-            /etc/init.d/uhttpd restart 2>/dev/null
-            /etc/init.d/rpcd restart 2>/dev/null
-        else
-            log "✗ Ошибка при установке AWG"
-            return 1
-        fi
+    if [ $failed -eq 1 ]; then
+        log "✗ Ошибка при установке AWG"
+        return 1
+    elif [ $installed -eq 1 ]; then
+        log "✓ Установка AWG завершена"
+        /etc/init.d/uhttpd restart 2>/dev/null
+        /etc/init.d/rpcd restart 2>/dev/null
+    else
+        log "✓ Все пакеты AWG уже установлены"
     fi
-    
-    # Очистка
-    rm -f "$TMP_DIR"/*${ARCH_AWG}.${PKG_EXT}
 }
 
 remove_awg() {
     log "=== Удаление AmneziaWG ==="
     
-    # Удаляем пакеты в правильном порядке
-    $PKG_REMOVE luci-i18n-amneziawg-ru 2>/dev/null
-    $PKG_REMOVE luci-proto-amneziawg 2>/dev/null
-    $PKG_REMOVE amneziawg-tools 2>/dev/null
-    $PKG_REMOVE kmod-amneziawg 2>/dev/null
+    for p in $AWG_PKGS; do
+        if CHECK_INSTALLED "$p"; then
+            log "Удаление: $p"
+            $PKG_REMOVE "$p" 2>/dev/null
+            log "✓ $p удален"
+        fi
+    done
     
     log "✓ Удаление AWG завершено"
-    
-    # Перезапускаем веб-интерфейс
     /etc/init.d/uhttpd restart 2>/dev/null
     /etc/init.d/rpcd restart 2>/dev/null
 }
 
 run_awg_action() {
-    if check_awg_installed; then
+    if is_awg_installed; then
         remove_awg
     else
         install_awg
@@ -421,15 +408,11 @@ get_menu_label() {
 }
 
 get_awg_menu_label() {
-    local state_data="$(get_awg_state)"
-    local action="$(echo "$state_data" | cut -d'|' -f1)"
-    local label="$(echo "$state_data" | cut -d'|' -f2)"
-    
-    case "$action" in
-        install) echo "AmneziaWG (Не установлен) → Установить" ;;
-        remove)  echo "AmneziaWG (Установлен) → Удалить" ;;
-        *)       echo "AmneziaWG → Недоступно" ;;
-    esac
+    if is_awg_installed; then
+        echo "AmneziaWG (Установлен) → Удалить"
+    else
+        echo "AmneziaWG (Не установлен) → Установить"
+    fi
 }
 
 run_action() {
