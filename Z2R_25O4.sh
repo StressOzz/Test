@@ -210,7 +210,7 @@ install_package() {
     # Очищаем временную директорию перед установкой
     rm -f "$TMP_DIR"/*.${PKG_EXT}
     
-    log "\n${MAGENTA}=== Установка $pkg_name ===${NC}"
+    log "${MAGENTA}=== Установка $pkg_name ===${NC}"
 
     UPDATE_PACK
 
