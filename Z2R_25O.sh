@@ -482,9 +482,9 @@ menu() {
     while true; do
         clear
         update_cache >/dev/null 2>&1
-echo -e "╔══════════════════════════════╗"
-echo -e "║   ${BLUE}Z2R Manager by StressOzz${NC}   ║"
-echo -e "╚══════════════════════════════╝\n"
+echo -e "╔════════════════════════════╗"
+echo -e "║  ${BLUE}Z2R Manager by StressOzz${NC}  ║"
+echo -e "╚════════════════════════════╝\n"
 
         echo -e "${CYAN}1)${NC} $(get_menu_label zapret2)"
         echo -e "${CYAN}2)${NC} $(get_menu_label zeroblock)"
@@ -495,7 +495,12 @@ echo -e "╚══════════════════════�
         read -r user_choice
         
         case "$user_choice" in
-            1) run_action zapret2; PAUSE ;;
+            1) run_action zapret2
+wget -qO /opt/zapret2/ipset/zapret_hosts_user_exclude.txt https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/zapret-hosts-user-exclude.txt
+sed -i "/config strategy 'default'/,/config /s/option enabled '0'/option enabled '1'/" /etc/config/zapret2
+/etc/init.d/zapret2 restart >/dev/null 2>&1 
+PAUSE ;;
+            
             2) run_action zeroblock; PAUSE ;;
             3) run_awg_action; PAUSE ;;
             *) exit 0 ;;
