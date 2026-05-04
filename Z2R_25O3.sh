@@ -29,6 +29,10 @@ fi
 
 PAUSE() { echo -ne "\nНажмите Enter..."; read dummy; }
 
+UPDATE_PACK() { echo -e "${CYAN}Обновляем список пакетов${NC}"
+for i in 1 2 3; do if $UPDATE >/dev/null 2>&1; then ok=1; break; fi
+echo -e "${YELLOW}Обновление пакетов попытка $i не удалась${NC}"; done; }
+ 
 if ! command -v curl >/dev/null 2>&1; then clear; echo -e "${MAGENTA}Устанавливаем ${NC}curl"
 ok=0; echo -e "${CYAN}Устанавливаем ${NC}curl"; for i in 1 2 3; do if $PKG_INSTALL curl >/dev/null 2>&1; then ok=1; break; fi; echo -e "${YELLOW}Устанавливаем ${NC}curl${YELLOW} попытка ${NC}$i${YELLOW} не удалась!${NC}"; done
 if [ "$ok" -ne 1 ]; then echo -e "\n${RED}Не удалось установить ${NC}curl${RED} после 5 попыток${NC}"; PAUSE; exit 0; fi; if ! command -v curl >/dev/null 2>&1; then echo -e "\ncurl${RED} не найден после установки${NC}"; PAUSE; exit 0; fi; fi
@@ -200,17 +204,16 @@ get_package_state() {
 
 install_package() {
 
-    echo -e "${CYAN}Обновляем список пакетов${NC}"
-    for i in 1 2 3; do if $UPDATE >/dev/null 2>&1; then ok=1; break; fi
-    echo -e "${YELLOW}Обновление пакетов попытка $i не удалась${NC}"; done
 
     local pkg_name="$1"
     
     # Очищаем временную директорию перед установкой
     rm -f "$TMP_DIR"/*.${PKG_EXT}
     
-    log "${MAGENTA}=== Установка $pkg_name ===${NC}"
-    
+    log "\n${MAGENTA}=== Установка $pkg_name ===${NC}"
+
+    UPDATE_PACK
+
     # Получаем состояние (это заполнит MAIN_FILE и LUCI_FILE)
     get_package_state "$pkg_name" > /dev/null
     
@@ -258,7 +261,7 @@ install_package() {
 }
 
 remove_zapret2() {
-    log "${MAGENTA}=== Удаление zapret2 ===${NC}"
+    log "\n${MAGENTA}=== Удаление zapret2 ===${NC}"
 
     # Удаляем основной пакет
     log "${CYAN}Удаление zapret2...${NC}"
@@ -275,7 +278,7 @@ remove_zapret2() {
 }
 
 remove_zeroblock() {
-    log "${MAGENTA}=== Удаление zeroblock ===${NC}"
+    log "\n${MAGENTA}=== Удаление zeroblock ===${NC}"
 
     # Удаляем основной пакет
     log "${CYAN}Удаление zeroblock...${NC}"
@@ -358,17 +361,19 @@ install_awg() {
     local temp_dir="/tmp/amneziawg"
     mkdir -p "$temp_dir"
     
-    log "${MAGENTA}=== Установка AmneziaWG ===${NC}"
+    log "\n${MAGENTA}=== Установка AmneziaWG ===${NC}"
     log "${CYAN}Архитектура:${NC} $PKGARCH"
     log "${CYAN}Таргет:${NC} $TARGET/$SUBTARGET"
     log "${CYAN}Версия:${NC} $VERSION"
-    
+
+    UPDATE_PACK
+
     for pkg in $AWG_PKGS; do
         if CHECK_INSTALLED "$pkg"; then
             log "${GREEN}✓ $pkg уже установлен${NC}"
             continue
         fi
-        
+    
         local filename="${pkg}${PKGPOSTFIX_BASE}.${PKG_EXT}"
         local url="${AWG_BASE_URL}${filename}"
         
