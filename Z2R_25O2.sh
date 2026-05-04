@@ -29,11 +29,6 @@ fi
 
 PAUSE() { echo -ne "\nНажмите Enter..."; read dummy; }
 
-echo -e "${CYAN}Обновляем список пакетов${NC}"
-for i in 1 2 3; do if $UPDATE >/dev/null 2>&1; then ok=1; break; fi
-echo -e "${YELLOW}Обновление пакетов попытка $i не удалась${NC}"; done
-
-
 if ! command -v curl >/dev/null 2>&1; then clear; echo -e "${MAGENTA}Устанавливаем ${NC}curl"
 ok=0; echo -e "${CYAN}Устанавливаем ${NC}curl"; for i in 1 2 3; do if $PKG_INSTALL curl >/dev/null 2>&1; then ok=1; break; fi; echo -e "${YELLOW}Устанавливаем ${NC}curl${YELLOW} попытка ${NC}$i${YELLOW} не удалась!${NC}"; done
 if [ "$ok" -ne 1 ]; then echo -e "\n${RED}Не удалось установить ${NC}curl${RED} после 5 попыток${NC}"; PAUSE; exit 0; fi; if ! command -v curl >/dev/null 2>&1; then echo -e "\ncurl${RED} не найден после установки${NC}"; PAUSE; exit 0; fi; fi
@@ -204,6 +199,11 @@ get_package_state() {
 ### =======================================================================
 
 install_package() {
+
+    echo -e "${CYAN}Обновляем список пакетов${NC}"
+    for i in 1 2 3; do if $UPDATE >/dev/null 2>&1; then ok=1; break; fi
+    echo -e "${YELLOW}Обновление пакетов попытка $i не удалась${NC}"; done
+
     local pkg_name="$1"
     
     # Очищаем временную директорию перед установкой
