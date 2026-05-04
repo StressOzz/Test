@@ -404,7 +404,7 @@ install_awg() {
     done
     
     rm -rf "$temp_dir"
-    log "${CYAN}Перезапускаем сеть! Подождите...${NC}"
+    log "${CYAN}Перезапускаем сеть! ${YELLOW}Подождите...${NC}"
     /etc/init.d/network restart 2>/dev/null
     log "${GREEN}✓ Установка AWG завершена${NC}"
 }
@@ -427,7 +427,7 @@ remove_awg() {
     log "${CYAN}Удаление:${NC} kmod-amneziawg"
     $PKG_REMOVE kmod-amneziawg 2>/dev/null
     
-    log "${CYAN}Перезапускаем сеть! Подождите...${NC}"
+    log "${CYAN}Перезапускаем сеть! ${YELLOW}Подождите...${NC}"
     /etc/init.d/network restart 2>/dev/null
     log "${GREEN}✓ Удаление AWG завершено${NC}"
 }
