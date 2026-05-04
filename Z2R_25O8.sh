@@ -51,7 +51,6 @@ update_cache() {
 
 log() { echo -e "${YELLOW}[*]${NC} $1"; }
 
-
 UPDATE_PACK() { log "${CYAN}Обновляем список пакетов${NC}"
 for i in 1 2 3; do if $UPDATE >/dev/null 2>&1; then ok=1; break; fi
 log "${YELLOW}Обновление пакетов попытка $i не удалась${NC}"; done; }
@@ -205,13 +204,12 @@ get_package_state() {
 
 install_package() {
 
-
     local pkg_name="$1"
     
     # Очищаем временную директорию перед установкой
     rm -f "$TMP_DIR"/*.${PKG_EXT}
 
-echo
+    echo
     
     log "${MAGENTA}=== Установка $pkg_name ===${NC}"
 
@@ -264,7 +262,10 @@ echo
 }
 
 remove_zapret2() {
-    log "\n${MAGENTA}=== Удаление zapret2 ===${NC}"
+
+    echo
+    
+    log "${MAGENTA}=== Удаление zapret2 ===${NC}"
 
     # Удаляем основной пакет
     log "${CYAN}Удаление zapret2...${NC}"
@@ -281,7 +282,10 @@ remove_zapret2() {
 }
 
 remove_zeroblock() {
-    log "\n${MAGENTA}=== Удаление zeroblock ===${NC}"
+
+    echo
+
+    log "${MAGENTA}=== Удаление zeroblock ===${NC}"
 
     # Удаляем основной пакет
     log "${CYAN}Удаление zeroblock...${NC}"
@@ -363,8 +367,10 @@ is_awg_installed() {
 install_awg() {
     local temp_dir="/tmp/amneziawg"
     mkdir -p "$temp_dir"
-    
-    log "\n${MAGENTA}=== Установка AmneziaWG ===${NC}"
+
+    echo
+
+    log "${MAGENTA}=== Установка AmneziaWG ===${NC}"
     log "${CYAN}Архитектура:${NC} $PKGARCH"
     log "${CYAN}Таргет:${NC} $TARGET/$SUBTARGET"
     log "${CYAN}Версия:${NC} $VERSION"
@@ -404,6 +410,9 @@ install_awg() {
 }
 
 remove_awg() {
+
+    echo
+
     log "${MAGENTA}=== Удаление AmneziaWG ===${NC}"
     
     log "${CYAN}Удаление:${NC} luci-i18n-amneziawg-ru"
