@@ -497,7 +497,7 @@ echo -e "╚══════════════════════�
         case "$user_choice" in
             1) run_action zapret2
 wget -qO /opt/zapret2/ipset/zapret_hosts_user_exclude.txt https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/zapret-hosts-user-exclude.txt
-sed -i "/config strategy 'default'/,/config /s/option enabled '0'/option enabled '1'/" /etc/config/zapret2
+sed -i "/config strategy 'default'/,/config /s/option enabled '0'/option enabled '1'/" /etc/config/zapret2 >/dev/null 2>&1
 /etc/init.d/zapret2 restart >/dev/null 2>&1 
 PAUSE ;;
             
