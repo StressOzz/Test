@@ -482,14 +482,14 @@ menu() {
     while true; do
         clear
         update_cache >/dev/null 2>&1
-        echo "======================================"
-        echo "       Routerich Package Manager       "
-        echo "======================================"
+echo -e "╔══════════════════════════════╗"
+echo -e "║   ${BLUE}Z2R Manager by StressOzz${NC}   ║"
+echo -e "╚══════════════════════════════╝\n"
+
         echo -e "${CYAN}1)${NC} $(get_menu_label zapret2)"
         echo -e "${CYAN}2)${NC} $(get_menu_label zeroblock)"
         echo -e "${CYAN}3)${NC} $(get_awg_menu_label)"
         echo -e "${CYAN}Enter) ${GREEN}Выход${NC}"
-        echo "======================================"
         
         echo -en "${YELLOW}Выберите пункт:${NC} "
         read -r user_choice
