@@ -81,7 +81,9 @@ VERSION=$(echo "$FINAL_URL" | grep -o '[0-9][0-9.]*$'); if [ -z "$VERSION" ]; th
 echo -e "${CYAN}Cобираем версии:${NC}"; TMP_VER="/tmp/zapret_version"; get_ver "https://github.com/remittor/zapret-openwrt/releases/latest" "$TMP_VER" "ZAPRET"; ZAPRET_VERSION="$(cat "$TMP_VER")"
 TMP_VER_POD="/tmp/podkop_version"; get_ver "https://github.com/yandexru45/podkop-evolution/releases/latest" "$TMP_VER_POD" "PODKOP";PODKOP_LATEST_VER="$(cat "$TMP_VER_POD")"
 TMP_VER_GO="/tmp/tg_ws_proxy_go_ver"; get_ver "https://github.com/spatiumstas/tg-ws-proxy-go/releases/latest" "$TMP_VER_GO" "TG-WS"; GO_VER="$(cat "$TMP_VER_GO")"
-URL='https://raw.githubusercontent.com/StressOzz/Zapret-Manager/main/Zapret-Manager.sh'; TMP='/tmp/zms'; DST='/usr/bin/zms'; curl -fsSL --connect-timeout 5 --retry 2 --retry-delay 1 -o "$TMP" "$URL" && { [ ! -f "$DST" ] || ! cmp -s "$TMP" "$DST"; } && mv "$TMP" "$DST" && chmod +x "$DST"; rm -f "$TMP"; [ -x "$DST" ] && "$DST"
+
+URL_zms='https://raw.githubusercontent.com/StressOzz/Zapret-Manager/main/Zapret-Manager.sh'; TMP_zms='/tmp/zms'; DST_zms='/usr/bin/zms'; curl -fsSL --connect-timeout 5 --retry 2 --retry-delay 1 -o "$TMP_zms" "$URL_zms" && { [ ! -f "$DST_zms" ] || ! cmp -s "$TMP_zms" "$DST_zms"; } && mv "$TMP_zms" "$DST_zms" && chmod +x "$DST_zms"; rm -f "$TMP_zms"; [ -x "$DST_zms" ] && "$DST_zms"
+
 # ==========================================
 # Получение версии
 # ==========================================
