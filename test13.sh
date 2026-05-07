@@ -3,7 +3,7 @@
 # Zapret on remittor Manager by StressOzz
 # =========================================
 clear
-ZAPRET_MANAGER_VERSION="9.6"; STR_VERSION_AUTOINSTALL="v7"
+ZAPRET_MANAGER_VERSION="9.7"; STR_VERSION_AUTOINSTALL="v7"
 LAN_IP=$(uci get network.lan.ipaddr 2>/dev/null | cut -d/ -f1)
 DOMAINS="rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com rr1---sn-gvnuxaxjvh-jx3l.googlevideo.com rr1---sn-gvnuxaxjvh-jx3s.googlevideo.com"
 PORTS_UDP="88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535"; PORTS_TCP="2802,2302,2502,6112-6119,6695-6710,25565,27015-27030,27036-27037,50001"
@@ -81,8 +81,7 @@ CURL_EXIT=$?; if [ $CURL_EXIT -ne 0 ]; then echo -e "${RED}$NAME: ошибка c
 VERSION=$(echo "$FINAL_URL" | grep -o '[0-9][0-9.]*$'); if [ -z "$VERSION" ]; then echo -e "${RED}✗${NC} $NAME: не удалось извлечь версию (HTTP $HTTP_CODE)"; echo -e "${YELLOW}URL:${NC} $FINAL_URL\n"; PAUSE; return 1; fi; echo "$VERSION" > "$OUT_FILE"; echo -e "${GREEN}✓${NC} $NAME: $VERSION"; }
 echo -e "${CYAN}Cобираем версии:${NC}"; TMP_VER="/tmp/zapret_version"; get_ver "https://github.com/remittor/zapret-openwrt/releases/latest" "$TMP_VER" "ZAPRET"; ZAPRET_VERSION="$(cat "$TMP_VER")"
 TMP_VER_POD="/tmp/podkop_version"; get_ver "https://github.com/yandexru45/podkop-evolution/releases/latest" "$TMP_VER_POD" "PODKOP";PODKOP_LATEST_VER="$(cat "$TMP_VER_POD")"
-TMP_VER_GO="/tmp/tg_ws_proxy_go_ver"; get_ver "https://github.com/spatiumstas/tg-ws-proxy-go/releases/latest" "$TMP_VER_GO" "TG-WS"; GO_VER="$(cat "$TMP_VER_GO")"
-echo -e "${GREEN}Запускаем ${NC}Zapret Manager..."
+TMP_VER_GO="/tmp/tg_ws_proxy_go_ver"; get_ver "https://github.com/spatiumstas/tg-ws-proxy-go/releases/latest" "$TMP_VER_GO" "TG-WS"; GO_VER="$(cat "$TMP_VER_GO")"; echo -e "\n${GREEN}Запускаем ${NC}Zapret Manager..."
 URL_zms='https://raw.githubusercontent.com/StressOzz/Zapret-Manager/main/Zapret-Manager.sh'; TMP_zms='/tmp/zms'; DST_zms='/usr/bin/zms'; curl -fsS4 --connect-timeout 1 --max-time 2 --retry 1 -o "$TMP_zms" "$URL_zms" && { [ ! -f "$DST_zms" ] || ! cmp -s "$TMP_zms" "$DST_zms"; } && mv "$TMP_zms" "$DST_zms" && chmod +x "$DST_zms"; rm -f "$TMP_zms"
 # ==========================================
 # Получение версии
@@ -413,8 +412,8 @@ add_block() { printf '%b\n' "$1" | while IFS= read -r line; do [ -z "$line" ] &&
 add_GEO_HOSTS() { echo -e "\n${MAGENTA}Заменяем hosts на GeoHide hosts${NC}"; : > /etc/hosts; echo -e "127.0.0.1\tlocalhost\n\n::1\tlocalhost ip6-localhost ip6-loopback\nff02::1 ip6-allnodes\nff02::2 ip6-allrouters" > /etc/hosts
 wget -q -U "Mozilla/5.0" -O - "$GEO_HOSTS" >> /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1; echo -e "hosts ${GREEN}заменён на ${NC}GeoHide hosts${GREEN}!${NC}\n"; PAUSE; }
 remove_block() { printf '%b\n' "$1" | while IFS= read -r line; do [ -z "$line" ] && continue; sed -i "\|^$line$|d" "$HOSTS_FILE"; done; }
-toggle_block() { if status_block "$1"; then remove_block "$1"; echo -e "\n${CYAN}Удаляем и применяем${NC}"; else add_block "$1"; echo -e "\n${CYAN}Добавляем и применяем${NC}"; fi; /etc/init.d/dnsmasq restart >/dev/null 2>&1; echo -e "${GREEN}Готово!${NC}\n"; PAUSE; }
-toggle_all() { if status_block "$ALL_BLOCKS"; then remove_block "$ALL_BLOCKS"; echo -e "\n${CYAN}Удаляем и применяем${NC}"; else add_block "$ALL_BLOCKS"; echo -e "\n${CYAN}Добавляем и применяем${NC}"; fi; /etc/init.d/dnsmasq restart >/dev/null 2>&1; echo -e "${GREEN}Готово!${NC}\n"; PAUSE; }
+toggle_block() { if status_block "$1"; then remove_block "$1"; echo -e "\n${CYAN}Удаляем и применяем${NC}"; else add_block "$1"; echo -e "\n${CYAN}Добавляем и применяем${NC}"; fi; /etc/init.d/dnsmasq restart >/dev/null 2>&1; echo -e "${GREEN}Изменения применены!${NC}\n"; PAUSE; }
+toggle_all() { if status_block "$ALL_BLOCKS"; then remove_block "$ALL_BLOCKS"; echo -e "\n${CYAN}Удаляем и применяем${NC}"; else add_block "$ALL_BLOCKS"; echo -e "\n${CYAN}Добавляем и применяем${NC}"; fi; /etc/init.d/dnsmasq restart >/dev/null 2>&1; echo -e "${GREEN}Изменения применены!${NC}\n"; PAUSE; }
 get_state() { status_block "$1" && echo "Удалить " || echo "Добавить"; }
 menu_hosts() { while true; do clear; S_ALL=$(status_block "$ALL_BLOCKS" && echo "${GREEN}Удалить все домены${NC}" || echo "${GREEN}Добавить все домены${NC}"); prin=0
 echo -e "${MAGENTA}Меню управления доменами в hosts${NC}\n"; if hosts_enabled; then echo -e "${YELLOW}Домены в hosts: ${GREEN}$hosts_echo${NC}"; prin=1; fi; [ "$prin" -eq 1 ] && echo
