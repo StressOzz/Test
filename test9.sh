@@ -2,6 +2,7 @@
 # ==========================================
 # Zapret on remittor Manager by StressOzz
 # =========================================
+clear
 ZAPRET_MANAGER_VERSION="9.6"; STR_VERSION_AUTOINSTALL="v7"
 LAN_IP=$(uci get network.lan.ipaddr 2>/dev/null | cut -d/ -f1)
 DOMAINS="rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com rr1---sn-gvnuxaxjvh-jx3l.googlevideo.com rr1---sn-gvnuxaxjvh-jx3s.googlevideo.com"
