@@ -2,16 +2,24 @@
 
 CONF="/root/WARP.conf"
 IFACE="AWG"
-PEER="amneziawg_AWG"
 
 [ ! -f "$CONF" ] && {
 	echo "Файл $CONF не найден"
 	exit 1
 }
 
-# удалить старый интерфейс
+# остановить и удалить старый интерфейс
+ifdown "$IFACE" 2>/dev/null
+ip link del "$IFACE" 2>/dev/null
+
+# удалить interface
 uci -q delete network.$IFACE
-uci -q delete network.$PEER
+
+# удалить все amneziawg_AWG секции
+while uci show network | grep -q "=amneziawg_AWG"; do
+	SEC="$(uci show network | grep "=amneziawg_AWG" | head -n1 | cut -d. -f2 | cut -d= -f1)"
+	[ -n "$SEC" ] && uci -q delete network.$SEC
+done
 
 # получить значение параметра
 get_val() {
