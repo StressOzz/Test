@@ -832,6 +832,11 @@ INTEGRA() {
 	return
 }
 
+if ! grep -q "option proto 'amneziawg'" /etc/config/network; then
+	echo -e "\n${RED}Интрефейс ${NC}AmneziaWG${RED} не найден!\n${NC}"
+	PAUSE
+	return
+fi
 
 echo -e "\n${MAGENTA}Интегрируем WARP в интерфейс${NC}"
 
@@ -967,7 +972,7 @@ uci commit network
 echo -e "${YELLOW}Перезапускаем сеть! Подождите...${NC}"
 /etc/init.d/network restart
 
-echo -e "\n${NC}WARP${GREEN} интегрирован в ${NC}интерфейс${GREEN}!${NC}\n"
+echo -e "${NC}WARP${GREEN} интегрирован в ${NC}интерфейс${GREEN}!${NC}\n"
 PAUSE
 }
 
@@ -981,8 +986,6 @@ if [ -f /etc/config/podkop ] && grep -q "^[[:space:]]*option subscription_url" /
 echo -e "${CYAN}4) ${GREEN}Интегрировать ${NC}AWG${GREEN} в ${NC}Podkop Evolution"
 echo -e "${CYAN}5) ${GREEN}Интегрировать ${NC}/root/WARP.conf${GREEN} в ${NC}интерфейс"
 echo -e "${CYAN}6) ${GREEN}Сгенерировать ${NC}WARP ${GREEN}в ${NC}/root/WARP.conf"
-
-
 
 
 echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}"; echo -ne "\n${YELLOW}Выберите пункт:${NC} "; read choicePOD; case "$choicePOD" in 
