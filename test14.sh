@@ -648,7 +648,7 @@ if pkg_is_installed https-dns-proxy; then echo -e "\n${RED}Обнаружен ${
 echo -e "${CYAN}Идеёт установка из оригинального скрипта.\n${YELLOW}Пожалуйста подождите...${NC}"
 wget -qO- https://raw.githubusercontent.com/ushan0v/podkop-plus/main/install.sh | sh >/dev/null
 
-echo -e "\nPodkop Plus ${GREEN}$( [ "$ACTION" = "install" ] && echo "установлен" || echo "обновлён" )!${NC}\n"; PAUSE
+echo -e "Podkop Plus ${GREEN}$( [ "$ACTION" = "install" ] && echo "установлен" || echo "обновлён" )!${NC}\n"; PAUSE
 else echo -e "\n${MAGENTA}Удаляем Podkop Plus${NC}"
 $DELETE luci-i18n-podkop-plus-ru >/dev/null 2>&1; $DELETE luci-app-podkop-plus >/dev/null 2>&1; $DELETE podkop-plus >/dev/null 2>&1; rm -rf /etc/config/podkop-plus* /usr/bin/podkop-plus >/dev/null 2>&1; echo -e "Podkop Plus ${GREEN}удалён!${NC}\n"; PAUSE; fi; }
 # УСТАНОВКА AWG
