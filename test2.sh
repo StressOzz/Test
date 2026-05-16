@@ -79,6 +79,8 @@ H4="$(get_val H4)"
 I1="$(get_val I1)"
 I2="$(get_val I2)"
 I3="$(get_val I3)"
+I4="$(get_val I4)"
+I5="$(get_val I5)"
 
 uci set network.$IFACE="interface"
 
@@ -102,6 +104,8 @@ set_opt awg_h4 "$H4"
 set_opt awg_i1 "$I1"
 set_opt awg_i2 "$I2"
 set_opt awg_i3 "$I3"
+set_opt awg_i4 "$I4"
+set_opt awg_i5 "$I5"
 
 set_opt mtu "$MTU"
 
