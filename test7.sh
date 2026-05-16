@@ -820,9 +820,7 @@ EOF
 
 echo "$config" > /root/WARP.conf
 
-echo -e "${GREEN}Активируем и генерируем ${NC}WARP${NC}"
-
-echo -e "\n${YELLOW}Файл сохранён:${NC} /root/WARP.conf\n"
+echo -e "WARP ${GREEN}сгенерирован и сохранён в ${NC}/root/WARP.conf\n"
 PAUSE
 }
 
