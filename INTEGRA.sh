@@ -1,10 +1,10 @@
 #!/bin/sh
 
-CONF="/root/WARP.conf"
+CONFWARP="/root/WARP.conf"
 IFACE="AWG"
 
-[ ! -f "$CONF" ] && {
-	echo "Файл $CONF не найден"
+[ ! -f "$CONFWARP" ] && {
+	echo "Файл $CONFWARP не найден"
 	exit 1
 }
 
@@ -23,7 +23,7 @@ done
 
 # получить значение параметра
 get_val() {
-	sed -n "s/^$1 *= *//p" "$CONF" | head -n1
+	sed -n "s/^$1 *= *//p" "$CONFWARP" | head -n1
 }
 
 # добавить option если значение существует
@@ -138,7 +138,7 @@ set_peer_opt() {
 	[ -n "$val" ] && uci set "network.$PEER_SECTION.$key=$val"
 }
 
-set_peer_opt description "$(basename "$CONF")"
+set_peer_opt description "$(basename "$CONFWARP")"
 set_peer_opt public_key "$PUBLIC_KEY"
 set_peer_opt preshared_key "$PRESHARED_KEY"
 
