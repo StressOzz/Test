@@ -709,6 +709,7 @@ echo -e "${CYAN}Запускаем ${NC}Podkop Evolution${NC}"; podkop enable >/
 
 
 GENERATOR() {
+clear
 echo -e "${MAGENTA}Генерируем WARP${NC}"
 
 echo -e "${CYAN}Проверяем зависимости${NC}"
@@ -780,10 +781,6 @@ echo -e "${RED}Ошибка регистрации${NC} $response"
 exit 1
 fi
 
-################################################################################################
-chose_endpoint
-################################################################################################
-
 echo -e "${GREEN}Активируем и генерируем ${NC}WARP${NC}"
 
 response=$(sec PATCH "reg/${id}" "$token" -d '{"warp_enabled":true}')
@@ -827,35 +824,35 @@ echo -e "${GREEN}========== ${YELLOW}WARP CONFIG${GREEN} ==========${NC}"
 echo "$conf"
 echo -e "${GREEN}=================================${NC}"
 echo "$conf" > /root/WARP.conf
-echo -e "\n${YELLOW}Файл сохранён:${NC} /root/WARP.conf"
+echo -e "\n${YELLOW}Файл сохранён:${NC} /root/WARP.conf\n"
 PAUSE
 }
 
 INTEGRA() {
+
+echo -e "${MAGENTA}Интегрируем WARP в интерфейс${NC}"
 [ ! -f "$CONFWARP" ] && {
-	echo "Файл $CONFWARP не найден"
-	exit 1
+	echo -e"\nФайл $CONFWARP не найден\n"
+	PAUSE
+	return
 }
 
-# остановить и удалить старый интерфейс
+echo -e "${CYAN}Интегрируем${NC} /root/WARP.conf"
+
 ifdown "$IFACE" 2>/dev/null
 ip link del "$IFACE" 2>/dev/null
 
-# удалить interface
 uci -q delete network.$IFACE
 
-# удалить все amneziawg_AWG секции
 while uci show network | grep -q "=amneziawg_AWG"; do
 	SEC="$(uci show network | grep "=amneziawg_AWG" | head -n1 | cut -d. -f2 | cut -d= -f1)"
 	[ -n "$SEC" ] && uci -q delete network.$SEC
 done
 
-# получить значение параметра
 get_val() {
 	sed -n "s/^$1 *= *//p" "$CONFWARP" | head -n1
 }
 
-# добавить option если значение существует
 set_opt() {
 	local key="$1"
 	local val="$2"
@@ -863,7 +860,6 @@ set_opt() {
 	[ -n "$val" ] && uci set "network.$IFACE.$key=$val"
 }
 
-# добавить list
 add_list() {
 	local section="$1"
 	local key="$2"
@@ -881,10 +877,6 @@ add_list() {
 
 	IFS="$OLD_IFS"
 }
-
-# =========================
-# Interface
-# =========================
 
 PRIVATE_KEY="$(get_val PrivateKey)"
 ADDRESS="$(get_val Address)"
@@ -943,10 +935,6 @@ uci set network.$IFACE.multipath="off"
 add_list "$IFACE" addresses "$ADDRESS"
 add_list "$IFACE" dns "$DNS"
 
-# =========================
-# Peer
-# =========================
-
 PUBLIC_KEY="$(get_val PublicKey)"
 PRESHARED_KEY="$(get_val PresharedKey)"
 ALLOWED_IPS="$(get_val AllowedIPs)"
@@ -956,10 +944,8 @@ KEEPALIVE="$(get_val PersistentKeepalive)"
 ENDPOINT_HOST="${ENDPOINT%:*}"
 ENDPOINT_PORT="${ENDPOINT##*:}"
 
-# создать peer
 PEER_SECTION="$(uci add network amneziawg_AWG)"
 
-# добавить peer option если значение существует
 set_peer_opt() {
 	local key="$1"
 	local val="$2"
@@ -977,13 +963,13 @@ set_peer_opt endpoint_host "$ENDPOINT_HOST"
 set_peer_opt endpoint_port "$ENDPOINT_PORT"
 set_peer_opt persistent_keepalive "$KEEPALIVE"
 
-# сохранить
 uci commit network
 
-# перезапуск сети
+
+echo -e "${YELLOW}Перезапускаем сеть! Подождите...${NC}"
 /etc/init.d/network restart
 
-echo "AWG интерфейс успешно создан"
+echo -e "\n${NC}WARP${GREEN} интегрирован в ${NC}интерфейс${GREEN}!${NC}"
 PAUSE
 }
 
