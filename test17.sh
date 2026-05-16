@@ -680,7 +680,10 @@ echo -e "${CYAN}Удаляем ${NC}интерфейс AWG"; echo -en "${YELLOW}
 
 
 # ИНТЕГРАЦИЯ AWG
-integration_AWG() { if ! pkg_is_installed podkop-plus; then echo -e "\n${RED}Podkop Plus не установлен!${NC}\n"; PAUSE; return; fi; if ! awg --version >/dev/null 2>&1; then echo -e "\n${RED}AWG не установлен!${NC}\n"; PAUSE; return; fi; echo -e "\n${MAGENTA}Интегрируем AWG в Podkop Plus${NC}"; echo -e "${CYAN}Меняем конфигурацию в ${NC}Podkop Plus${NC}"
+integration_AWG() { if ! pkg_is_installed podkop-plus; then echo -e "\n${RED}Podkop Plus не установлен!${NC}\n"; PAUSE; return; fi; 
+
+
+if ! awg --version >/dev/null 2>&1; then echo -e "\n${RED}AWG не установлен!${NC}\n"; PAUSE; return; fi; echo -e "\n${MAGENTA}Интегрируем AWG в Podkop Plus${NC}"; echo -e "${CYAN}Меняем конфигурацию в ${NC}Podkop Plus${NC}"
 
 printf "%s\n" "" "config rule 'AWG'" "    option enabled '1'" "    option action 'vpn'" "    option interface 'AWG'" "    option domain_resolver_enabled '0'" "    option mixed_proxy_enabled '0'" "    option resolve_real_ip_for_routing '0'" "    list community_lists 'russia_inside'" "    list community_lists 'cloudfront'" "    list community_lists 'digitalocean'" "    list community_lists 'ovh'" >> /etc/config/podkop-plus
 printf "%s\n" "    list community_lists 'hetzner'" "    list community_lists 'roblox'" "    list community_lists 'google_play'" "    list community_lists 'hodca'" "    list community_lists 'google_ai'" "    list community_lists 'cloudflare'" "    list community_lists 'telegram'" "    list community_lists 'twitter'" "    list community_lists 'meta'" "    list community_lists 'discord'" >> /etc/config/podkop-plus
@@ -691,13 +694,11 @@ echo -e "${NC}Network ${GREEN}→${NC} Interfaces ${GREEN}→${NC} AWG ${GREEN}�
 # ИНТЕГРАЦИЯ VPN
 PODKOP_VPN() { if ! pkg_is_installed podkop-plus; then echo -e "\n${RED}Podkop Plus не установлен!${NC}\n"; PAUSE; return; fi; echo -e "\n${MAGENTA}Интегрируем VPN подписку в Podkop Plus${NC}"; echo -ne "\n${YELLOW}Введите ссылку на подписку (${NC}https://...${YELLOW}): ${NC}"
 read -r SUB_URL; SUB_URL="$(echo "$SUB_URL" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"; echo "$SUB_URL" | grep -qE '^https?://' || { echo -e "\n${RED}Ошибка ввода! Только ${NC}http://${RED} или ${NC}https://${RED} ссылки!${NC}\n"; PAUSE; return; }; 
-if grep -q "^[[:space:]]*option subscription_url" /etc/config/podkop; then echo -e "${CYAN}Меняем подписку${NC}"; sed -i "s|^[[:space:]]*option subscription_url.*|	option subscription_url '$SUB_URL'|" /etc/config/podkop-plus; else echo -e "\n${CYAN}Меняем конфигурацию в ${NC}Podkop Plus${NC}"
-
+if grep -q "^[[:space:]]*option subscription_url" /etc/config/podkop-plus; then echo -e "${CYAN}Меняем подписку${NC}"; sed -i "s|^[[:space:]]*option subscription_url.*|	option subscription_url '$SUB_URL'|" /etc/config/podkop-plus; else echo -e "\n${CYAN}Меняем конфигурацию в ${NC}Podkop Plus${NC}"
 
 printf "%s\n" "" "config rule 'PODPISKA'" "	option enabled '1'" "	option proxy_config_type 'subscription'" "	option subscription_url '$SUB_URL'" "	option subscription_update_interval '1h'" "	option subscription_group_by_countries '0'" "	option urltest_check_interval '3m'" "	option urltest_tolerance '50'" >> /etc/config/podkop-plus
 printf "%s\n"  "	option urltest_testing_url 'https://www.gstatic.com/generate_204'" "	option enable_udp_over_tcp '0'" "	option mixed_proxy_enabled '0'" "	option resolve_real_ip_for_routing '0'" "	list community_lists 'russia_inside'" "	list community_lists 'cloudfront'" "	list community_lists 'digitalocean'" "	list community_lists 'ovh'" >> /etc/config/podkop-plus
 printf "%s\n"  "	list community_lists 'hetzner'" "	list community_lists 'roblox'" "	list community_lists 'google_play'" "	list community_lists 'hodca'" "	list community_lists 'google_ai'" "	list community_lists 'cloudflare'" "	list community_lists 'telegram'" "	list community_lists 'twitter'" "	list community_lists 'meta'" "	list community_lists 'discord'" >> /etc/config/podkop-plus
-
 
 fi
 echo -e "${CYAN}Запускаем ${NC}Podkop Plus${NC}"; podkop-plus enable >/dev/null 2>&1; echo -e "${CYAN}Обновляем списки${NC}"; podkop-plus list_update >/dev/null 2>&1; echo -en "${CYAN}Перезапускаем сервис${NC}\n${YELLOW}Подождите...${NC}"; podkop-plus restart >/dev/null 2>&1; echo -e "\nVPN подписка ${GREEN}интегрирована в ${NC}Podkop Plus${GREEN}!${NC}\n"; PAUSE; }
