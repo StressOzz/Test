@@ -709,8 +709,7 @@ echo -e "${CYAN}Запускаем ${NC}Podkop Evolution${NC}"; podkop enable >/
 
 
 GENERATOR() {
-clear
-echo -e "${MAGENTA}Генерируем WARP${NC}"
+echo -e "\n${MAGENTA}Генерируем WARP${NC}"
 
 echo -e "${CYAN}Проверяем зависимости${NC}"
 
@@ -728,9 +727,9 @@ done
 if [ -n "$missing" ]; then
 echo -e "${CYAN}Обновляем пакеты${NC}"
 if [ "$PKG" = "apk" ]; then
-apk update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка обновления пакетов!${NC}"; exit 1; }
+apk update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка обновления пакетов!${NC}\n"; PAUSE; return; }
 else
-opkg update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка обновления пакетов!${NC}"; exit 1; }
+opkg update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка обновления пакетов!${NC}\n"; PAUSE; return; }
 fi
 
 install_pkg() {
@@ -738,11 +737,11 @@ pkg="$1"
 if [ "$PKG" = "apk" ]; then
 apk info -e "$pkg" >/dev/null 2>&1 && return
 echo -e "${GREEN}Устанавливаем:${NC} $pkg"
-apk add "$pkg" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка установки${NC} $pkg"; exit 1; }
+apk add "$pkg" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка установки${NC} $pkg\n"; PAUSE; return; }
 else
 opkg list-installed 2>/dev/null | grep -qF "^$pkg " && return
 echo -e "${GREEN}Устанавливаем:${NC} $pkg"
-opkg install "$pkg" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка установки${NC} $pkg"; exit 1; }
+opkg install "$pkg" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка установки${NC} $pkg\n"; PAUSE; return; }
 fi
 }
 
@@ -777,11 +776,11 @@ id=$(echo "$response" | jq -r '.result.id')
 token=$(echo "$response" | jq -r '.result.token')
 
 if [ -z "$id" ] || [ "$id" = "null" ]; then
-echo -e "${RED}Ошибка регистрации${NC} $response"
-exit 1
+echo -e "\n${RED}Ошибка регистрации${NC} $response\n"
+PAUSE; return
 fi
 
-echo -e "${GREEN}Активируем и генерируем ${NC}WARP${NC}"
+echo -e "${CYAN}Активируем и генерируем ${NC}WARP${NC}"
 
 response=$(sec PATCH "reg/${id}" "$token" -d '{"warp_enabled":true}')
 
@@ -790,11 +789,11 @@ client_ipv4=$(echo "$response" | jq -r '.result.config.interface.addresses.v4')
 client_ipv6=$(echo "$response" | jq -r '.result.config.interface.addresses.v6')
 
 if [ -z "$peer_pub" ] || [ "$peer_pub" = "null" ]; then
-echo -e "\n${RED}Ошибка получения конфигурации${NC}"
-exit 1
+echo -e "\n${RED}Ошибка получения конфигурации!${NC}\n"
+PAUSE; return
 fi
 
-conf=$(cat <<EOF
+config=$(cat <<EOF
 [Interface]
 PrivateKey = ${priv}
 Address = ${client_ipv4}, ${client_ipv6}
@@ -819,11 +818,10 @@ PersistentKeepalive = 25
 EOF
 )
 
-echo
-echo -e "${GREEN}========== ${YELLOW}WARP CONFIG${GREEN} ==========${NC}"
-echo "$conf"
-echo -e "${GREEN}=================================${NC}"
-echo "$conf" > /root/WARP.conf
+echo "$config" > /root/WARP.conf
+
+echo -e "${GREEN}Активируем и генерируем ${NC}WARP${NC}"
+
 echo -e "\n${YELLOW}Файл сохранён:${NC} /root/WARP.conf\n"
 PAUSE
 }
