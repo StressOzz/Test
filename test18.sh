@@ -682,6 +682,7 @@ echo -e "${CYAN}Удаляем ${NC}интерфейс AWG"; echo -en "${YELLOW}
 # ИНТЕГРАЦИЯ AWG
 integration_AWG() { if ! pkg_is_installed podkop-plus; then echo -e "\n${RED}Podkop Plus не установлен!${NC}\n"; PAUSE; return; fi; 
 
+grep -q "^config rule 'AWG'" /etc/config/podkop-plus && { echo -e "\n${RED}AWG уже существует!${NC}\n"; PAUSE; return; }
 
 if ! awg --version >/dev/null 2>&1; then echo -e "\n${RED}AWG не установлен!${NC}\n"; PAUSE; return; fi; echo -e "\n${MAGENTA}Интегрируем AWG в Podkop Plus${NC}"; echo -e "${CYAN}Меняем конфигурацию в ${NC}Podkop Plus${NC}"
 
