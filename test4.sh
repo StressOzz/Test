@@ -830,7 +830,7 @@ PAUSE
 
 INTEGRA() {
 
-echo -e "${MAGENTA}Интегрируем WARP в интерфейс${NC}"
+echo -e "\n${MAGENTA}Интегрируем WARP в интерфейс${NC}"
 [ ! -f "$CONFWARP" ] && {
 	echo -e"\nФайл $CONFWARP не найден\n"
 	PAUSE
@@ -969,7 +969,7 @@ uci commit network
 echo -e "${YELLOW}Перезапускаем сеть! Подождите...${NC}"
 /etc/init.d/network restart
 
-echo -e "\n${NC}WARP${GREEN} интегрирован в ${NC}интерфейс${GREEN}!${NC}"
+echo -e "\n${NC}WARP${GREEN} интегрирован в ${NC}интерфейс${GREEN}!${NC}\n"
 PAUSE
 }
 
