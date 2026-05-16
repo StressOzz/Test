@@ -2,7 +2,7 @@
 
 CONF="/root/WARP.conf"
 IFACE="AWG"
-PEER="amneziawg_$IFACE"
+PEER="amneziawg_AWG"
 
 [ ! -f "$CONF" ] && {
 	echo "Файл $CONF не найден"
@@ -24,14 +24,6 @@ set_opt() {
 	local val="$2"
 
 	[ -n "$val" ] && uci set "network.$IFACE.$key=$val"
-}
-
-# добавить option peer если значение существует
-set_peer_opt() {
-	local key="$1"
-	local val="$2"
-
-	[ -n "$val" ] && uci set "network.$PEER.$key=$val"
 }
 
 # добавить list
@@ -123,13 +115,22 @@ KEEPALIVE="$(get_val PersistentKeepalive)"
 ENDPOINT_HOST="${ENDPOINT%:*}"
 ENDPOINT_PORT="${ENDPOINT##*:}"
 
-uci set network.$PEER="amneziawg_$IFACE"
+# создать peer
+PEER_SECTION="$(uci add network amneziawg_AWG)"
+
+# добавить peer option если значение существует
+set_peer_opt() {
+	local key="$1"
+	local val="$2"
+
+	[ -n "$val" ] && uci set "network.$PEER_SECTION.$key=$val"
+}
 
 set_peer_opt description "$(basename "$CONF")"
 set_peer_opt public_key "$PUBLIC_KEY"
 set_peer_opt preshared_key "$PRESHARED_KEY"
 
-add_list "$PEER" allowed_ips "$ALLOWED_IPS"
+add_list "$PEER_SECTION" allowed_ips "$ALLOWED_IPS"
 
 set_peer_opt endpoint_host "$ENDPOINT_HOST"
 set_peer_opt endpoint_port "$ENDPOINT_PORT"
