@@ -833,7 +833,7 @@ INTEGRA() {
 }
 
 if ! grep -q "option proto 'amneziawg'" /etc/config/network; then
-	echo -e "\n${RED}Интрефейс ${NC}AmneziaWG${RED} не найден!\n${NC}"
+	echo -e "\n${RED}Интрефейс ${NC}AWG${RED} не найден!\n${NC}"
 	PAUSE
 	return
 fi
@@ -984,7 +984,7 @@ if ! pkg_is_installed podkop; then echo -e "\n${CYAN}1) ${GREEN}Установи
 if pkg_is_installed amneziawg-tools; then echo -e "${CYAN}2) ${GREEN}Удалить ${NC}AWG${GREEN} и ${NC}интерфейс AWG"; else echo -e "${CYAN}2) ${GREEN}Установить ${NC}AWG${GREEN} и ${NC}интерфейс AWG"; fi
 if [ -f /etc/config/podkop ] && grep -q "^[[:space:]]*option subscription_url" /etc/config/podkop; then echo -e "${CYAN}3) ${GREEN}Сменить ${NC}VPN подписку${GREEN} в ${NC}Podkop Evolution"; else echo -e "${CYAN}3) ${GREEN}Интегрировать ${NC}VPN подписку${GREEN} в ${NC}Podkop Evolution"; fi
 echo -e "${CYAN}4) ${GREEN}Интегрировать ${NC}AWG${GREEN} в ${NC}Podkop Evolution"
-echo -e "${CYAN}5) ${GREEN}Интегрировать ${NC}/root/WARP.conf${GREEN} в ${NC}интерфейс"
+echo -e "${CYAN}5) ${GREEN}Интегрировать ${NC}/root/WARP.conf${GREEN} в ${NC}интерфейс AWG"
 echo -e "${CYAN}6) ${GREEN}Сгенерировать ${NC}WARP ${GREEN}в ${NC}/root/WARP.conf"
 
 
