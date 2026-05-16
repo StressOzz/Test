@@ -636,7 +636,7 @@ if pkg_is_installed https-dns-proxy; then echo -e "\n${RED}Обнаружен ${
 [ "$ACTION" = "install" ] && echo -e "\n${MAGENTA}Устанавливаем Podkop Plus${NC}" || echo -e "\n${MAGENTA}Обновляем Podkop Plus${NC}"
 
 echo -e "${CYAN}Выполняется установка из оригинального скрипта\n${YELLOW}Пожалуйста подождите...${NC}"
-wget -qO- https://raw.githubusercontent.com/ushan0v/podkop-plus/main/install.sh | sh >/dev/null || { echo -e "\n${RED}Ошибка установки!${NC}\n"; PAUSE; return; }
+wget -qO- https://raw.githubusercontent.com/ushan0v/podkop-plus/main/install.sh | sed 's|decide_sing_box_installation() {|decide_sing_box_installation() { SING_BOX_ACTION="install_extended"; return 0;|' | sh >/dev/null || { echo -e "\n${RED}Ошибка установки!\n"; PAUSE; return; }
 
 echo -e "Podkop Plus ${GREEN}$( [ "$ACTION" = "install" ] && echo "установлен" || echo "обновлён" )!${NC}\n"; PAUSE
 else echo -e "\n${MAGENTA}Удаляем Podkop Plus${NC}"
