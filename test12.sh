@@ -975,9 +975,9 @@ PAUSE
 # МЕНЮ PODKOP
 PODKOP_menu() { while true; do openwrt_version=$(cat /etc/openwrt_release | grep DISTRIB_RELEASE | cut -d"'" -f2 | cut -d'.' -f1); if [ "$openwrt_version" = "23" ]; then echo -e "\n${RED}OpenWrt версии ниже 24 не поддерживаются!${NC}\n"; PAUSE; return; fi
 PODKOP_VER; clear; echo -e "${MAGENTA}Меню Podkop Plus${NC}\n"; echo -e "${YELLOW}Podkop Plus:${NC} $PODKOP_STATUS"; if { pkg_is_installed amneziawg-tools || command -v amneziawg >/dev/null 2>&1; } && uci -q get network.AWG >/dev/null; then echo -e "${YELLOW}AWG и интерфейс:  ${GREEN}установлены${NC}"; else echo -e "${YELLOW}AWG и интерфейс:  ${RED}не установлены${NC}"; fi
-if ! pkg_is_installed podkop; then echo -e "\n${CYAN}1) ${GREEN}Установить ${NC}Podkop Plus"; elif [ "$PODKOP_LATEST_VER" != "$LOCALPOD" ]; then echo -e "\n${CYAN}1) ${GREEN}Обновить ${NC}Podkop Plus"; else echo -e "\n${CYAN}1) ${GREEN}Удалить ${NC}Podkop Plus"; fi;
+if ! pkg_is_installed podkop-plus; then echo -e "\n${CYAN}1) ${GREEN}Установить ${NC}Podkop Plus"; elif [ "$PODKOP_LATEST_VER" != "$LOCALPOD" ]; then echo -e "\n${CYAN}1) ${GREEN}Обновить ${NC}Podkop Plus"; else echo -e "\n${CYAN}1) ${GREEN}Удалить ${NC}Podkop Plus"; fi;
 if pkg_is_installed amneziawg-tools; then echo -e "${CYAN}2) ${GREEN}Удалить ${NC}AWG${GREEN} и ${NC}интерфейс AWG"; else echo -e "${CYAN}2) ${GREEN}Установить ${NC}AWG${GREEN} и ${NC}интерфейс AWG"; fi
-if [ -f /etc/config/podkop ] && grep -q "^[[:space:]]*option subscription_url" /etc/config/podkop; then echo -e "${CYAN}3) ${GREEN}Сменить ${NC}VPN подписку${GREEN} в ${NC}Podkop Plus"; else echo -e "${CYAN}3) ${GREEN}Интегрировать ${NC}VPN подписку${GREEN} в ${NC}Podkop Plus"; fi
+if [ -f /etc/config/podkop-plus ] && grep -q "^[[:space:]]*option subscription_url" /etc/config/podkop-plus; then echo -e "${CYAN}3) ${GREEN}Сменить ${NC}VPN подписку${GREEN} в ${NC}Podkop Plus"; else echo -e "${CYAN}3) ${GREEN}Интегрировать ${NC}VPN подписку${GREEN} в ${NC}Podkop Plus"; fi
 echo -e "${CYAN}4) ${GREEN}Интегрировать ${NC}AWG${GREEN} в ${NC}Podkop Plus"
 echo -e "${CYAN}5) ${GREEN}Интегрировать ${NC}/root/WARP.conf${GREEN} в ${NC}интерфейс AWG"
 echo -e "${CYAN}6) ${GREEN}Сгенерировать ${NC}WARP ${GREEN}в ${NC}/root/WARP.conf"
