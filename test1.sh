@@ -777,6 +777,7 @@ echo -e "${RED}Ошибка регистрации${NC} $response"
 exit 1
 fi
 
+
 echo -e "${GREEN}Активируем и генерируем ${NC}WARP${NC}"
 
 response=$(sec PATCH "reg/${id}" "$token" -d '{"warp_enabled":true}')
