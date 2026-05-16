@@ -830,12 +830,14 @@ PAUSE
 
 INTEGRA() {
 
-echo -e "\n${MAGENTA}Интегрируем WARP в интерфейс${NC}"
 [ ! -f "$CONFWARP" ] && {
-	echo -e"\nФайл $CONFWARP не найден\n"
+	echo -e "\n${RED}Файл ${NC}$CONFWARP${RED} не найден!\n${NC}"
 	PAUSE
 	return
 }
+
+
+echo -e "\n${MAGENTA}Интегрируем WARP в интерфейс${NC}"
 
 echo -e "${CYAN}Интегрируем${NC} /root/WARP.conf"
 
