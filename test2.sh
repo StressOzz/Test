@@ -632,7 +632,7 @@ echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n"; ec
 
 CONFWARP="/root/WARP.conf"
 IFACE="AWG"
-
+ENDPOINT="engage.cloudflareclient.com:4500"
 
 
 pkg_is_installed () { local pkg_name="$1"; if [ "$PKG_IS_APK" -eq 1 ]; then apk info -e "$pkg_name" >/dev/null 2>&1; else opkg list-installed | grep -q "^$pkg_name"; fi }
@@ -726,7 +726,10 @@ done
 
 if [ -n "$missing" ]; then
 echo -e "${CYAN}Обновляем пакеты${NC}"
-$UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка обновления пакетов!${NC}\n"; PAUSE; return; }
+if [ "$PKG" = "apk" ]; then
+apk update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка обновления пакетов!${NC}"; exit 1; }
+else
+opkg update >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка обновления пакетов!${NC}"; exit 1; }
 fi
 
 install_pkg() {
@@ -777,6 +780,9 @@ echo -e "${RED}Ошибка регистрации${NC} $response"
 exit 1
 fi
 
+################################################################################################
+chose_endpoint
+################################################################################################
 
 echo -e "${GREEN}Активируем и генерируем ${NC}WARP${NC}"
 
@@ -821,7 +827,7 @@ echo -e "${GREEN}========== ${YELLOW}WARP CONFIG${GREEN} ==========${NC}"
 echo "$conf"
 echo -e "${GREEN}=================================${NC}"
 echo "$conf" > /root/WARP.conf
-echo -e "\n${YELLOW}Файл сохранён:${NC} /root/WARP.conf\n"
+echo -e "\n${YELLOW}Файл сохранён:${NC} /root/WARP.conf"
 PAUSE
 }
 
