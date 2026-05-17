@@ -746,7 +746,12 @@ pub="$(printf "%s" "$priv" | wg pubkey)"
 api="https://api.cloudflareclient.com/v0i1909051800"
 
 ins() {
-curl -s \
+curl -sS --fail \
+--connect-timeout 3 \
+--max-time 10 \
+--retry 2 \
+--retry-delay 1 \
+--retry-all-errors \
 -H "User-Agent: okhttp/3.12.1" \
 -H "Content-Type: application/json" \
 -X "$1" "$api/$2" "${@:3}"
