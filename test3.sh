@@ -746,7 +746,7 @@ pub="$(printf "%s" "$priv" | wg pubkey)"
 api="https://api.cloudflareclient.com/v0i1909051800"
 
 ins() {
-curl -sS --fail \
+curl -s --fail \
 --connect-timeout 3 \
 --max-time 10 \
 --retry 2 \
