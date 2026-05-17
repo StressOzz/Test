@@ -785,9 +785,8 @@ fi
 config=$(cat <<EOF
 [Interface]
 PrivateKey = ${priv}
-Address = ${client_ipv4}, ${client_ipv6}
-DNS = 1.1.1.1, 1.0.0.1, 2606:4700:4700::1111, 2606:4700:4700::1001
-MTU = 1280
+Address = ${client_ipv4}
+DNS = 1.1.1.1, 1.0.0.1
 S1 = 0
 S2 = 0
 Jc = 4
@@ -815,8 +814,10 @@ PAUSE
 
 INTEGRA() {
 
+if ! pkg_is_installed podkop-plus; then echo -e "\n${RED}Podkop Plus не установлен!${NC}\n"; PAUSE; return; fi; 
+
 [ ! -f "$CONFWARP" ] && {
-	echo -e "\n${RED}Файл ${NC}$CONFWARP${RED} не найден!\n${NC}"
+	echo -e "\n${RED}Файл ${NC}/root/WARP.conf${RED} не найден!\n${NC}"
 	PAUSE
 	return
 }
