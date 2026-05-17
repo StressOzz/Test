@@ -839,8 +839,6 @@ echo -e "${CYAN}4) ${GREEN}Интегрировать ${NC}AWG${GREEN} в ${NC}P
 echo -e "${CYAN}5) ${GREEN}Интегрировать ${NC}ByeDPI${GREEN} в ${NC}Podkop Plus"
 echo -e "${CYAN}5) ${GREEN}Сгенерировать ${NC}WARP ${GREEN}в ${NC}/root/WARP.conf"
 
-
-ByeDPI
 echo -e "${CYAN}u) ${GREEN}Удалить ${NC}Podkop Evolution"
 
 echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}"; echo -ne "\n${YELLOW}Выберите пункт:${NC} "; read choicePOD; case "$choicePOD" in 
