@@ -826,7 +826,7 @@ if ! grep -q "option proto 'amneziawg'" /etc/config/network; then
 	echo -e "\n${RED}Интерфейс ${NC}AWG${RED} не найден!\n${NC}"
 	PAUSE
 	return
-}
+	fi
 
 echo -e "\n${MAGENTA}Интегрируем WARP в интерфейс${NC}"
 
