@@ -837,16 +837,16 @@ if pkg_is_installed amneziawg-tools; then echo -e "${CYAN}2) ${GREEN}Удали�
 if [ -f /etc/config/podkop-plus ] && grep -q "^[[:space:]]*option subscription_url" /etc/config/podkop-plus; then echo -e "${CYAN}3) ${GREEN}Сменить ${NC}VPN подписку${GREEN} в ${NC}Podkop Plus"; else echo -e "${CYAN}3) ${GREEN}Интегрировать ${NC}VPN подписку${GREEN} в ${NC}Podkop Plus"; fi
 echo -e "${CYAN}4) ${GREEN}Интегрировать ${NC}AWG${GREEN} в ${NC}Podkop Plus"
 echo -e "${CYAN}5) ${GREEN}Интегрировать ${NC}ByeDPI${GREEN} в ${NC}Podkop Plus"
-echo -e "${CYAN}5) ${GREEN}Сгенерировать ${NC}WARP ${GREEN}в ${NC}/root/WARP.conf"
+echo -e "${CYAN}6) ${GREEN}Сгенерировать ${NC}WARP ${GREEN}в ${NC}/root/WARP.conf"
 
 echo -e "${CYAN}u) ${GREEN}Удалить ${NC}Podkop Evolution"
 
 echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}"; echo -ne "\n${YELLOW}Выберите пункт:${NC} "; read choicePOD; case "$choicePOD" in 
 1) PODKOP_INSTALL ;; 2) install_AWG ;; 3) PODKOP_VPN ;; 4) integration_AWG ;; 
 
-# 5) ByeDPI ;;
+5) ByeDPI ;;
 
-5) GENERATOR ;;
+6) GENERATOR ;;
 
 u) echo -e "\n${MAGENTA}Удаляем Podkop Evolution${NC}"
 $DELETE luci-i18n-podkop-ru >/dev/null 2>&1; $DELETE luci-app-podkop >/dev/null 2>&1; $DELETE podkop >/dev/null 2>&1; rm -rf /etc/config/podkop* /usr/bin/podkop >/dev/null 2>&1; echo -e "Podkop Evolution ${GREEN}удалён!${NC}\n"; PAUSE ;;
