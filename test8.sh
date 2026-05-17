@@ -823,7 +823,7 @@ INTEGRA() {
 }
 
 if ! grep -q "option proto 'amneziawg'" /etc/config/network; then
-	echo -e "\n${RED}Интрефейс ${NC}AWG${RED} не найден!\n${NC}"
+	echo -e "\n${RED}Интерфейс ${NC}AWG${RED} не найден!\n${NC}"
 	PAUSE
 	return
 fi
@@ -876,14 +876,14 @@ ADDRESS="$(get_val Address)"
 DNS="$(get_val DNS)"
 MTU="$(get_val MTU)"
 
+JC="$(get_val Jc)"
+JMIN="$(get_val Jmin)"
+JMAX="$(get_val Jmax)"
+
 S1="$(get_val S1)"
 S2="$(get_val S2)"
 S3="$(get_val S3)"
 S4="$(get_val S4)"
-
-JC="$(get_val Jc)"
-JMIN="$(get_val Jmin)"
-JMAX="$(get_val Jmax)"
 
 H1="$(get_val H1)"
 H2="$(get_val H2)"
@@ -896,19 +896,34 @@ I3="$(get_val I3)"
 I4="$(get_val I4)"
 I5="$(get_val I5)"
 
+PUBLIC_KEY="$(get_val PublicKey)"
+PRESHARED_KEY="$(get_val PresharedKey)"
+ALLOWED_IPS="$(get_val AllowedIPs)"
+ENDPOINT="$(get_val Endpoint)"
+KEEPALIVE="$(get_val PersistentKeepalive)"
+
+ENDPOINT_HOST="${ENDPOINT%:*}"
+ENDPOINT_PORT="${ENDPOINT##*:}"
+
 uci set network.$IFACE="interface"
 
+# [Interface]
 set_opt proto "amneziawg"
 set_opt private_key "$PRIVATE_KEY"
+
+add_list "$IFACE" addresses "$ADDRESS"
+add_list "$IFACE" dns "$DNS"
+
+set_opt mtu "$MTU"
+
+set_opt awg_jc "$JC"
+set_opt awg_jmin "$JMIN"
+set_opt awg_jmax "$JMAX"
 
 set_opt awg_s1 "$S1"
 set_opt awg_s2 "$S2"
 set_opt awg_s3 "$S3"
 set_opt awg_s4 "$S4"
-
-set_opt awg_jc "$JC"
-set_opt awg_jmin "$JMIN"
-set_opt awg_jmax "$JMAX"
 
 set_opt awg_h1 "$H1"
 set_opt awg_h2 "$H2"
@@ -921,22 +936,9 @@ set_opt awg_i3 "$I3"
 set_opt awg_i4 "$I4"
 set_opt awg_i5 "$I5"
 
-set_opt mtu "$MTU"
-
 uci set network.$IFACE.multipath="off"
 
-add_list "$IFACE" addresses "$ADDRESS"
-add_list "$IFACE" dns "$DNS"
-
-PUBLIC_KEY="$(get_val PublicKey)"
-PRESHARED_KEY="$(get_val PresharedKey)"
-ALLOWED_IPS="$(get_val AllowedIPs)"
-ENDPOINT="$(get_val Endpoint)"
-KEEPALIVE="$(get_val PersistentKeepalive)"
-
-ENDPOINT_HOST="${ENDPOINT%:*}"
-ENDPOINT_PORT="${ENDPOINT##*:}"
-
+# [Peer]
 PEER_SECTION="$(uci add network amneziawg_AWG)"
 
 set_peer_opt() {
@@ -958,11 +960,11 @@ set_peer_opt persistent_keepalive "$KEEPALIVE"
 
 uci commit network
 
-
 echo -e "${YELLOW}Перезапускаем сеть! Подождите...${NC}"
 /etc/init.d/network restart
 
 echo -e "${NC}WARP${GREEN} интегрирован в ${NC}интерфейс${GREEN}!${NC}\n"
+
 PAUSE
 }
 
