@@ -816,8 +816,6 @@ PAUSE
 
 INTEGRA() {
 
-if ! pkg_is_installed podkop-plus; then echo -e "\n${RED}Podkop Plus не установлен!${NC}\n"; PAUSE; return; fi; 
-
 [ ! -f "$CONFWARP" ] && {
 	echo -e "\n${RED}Файл ${NC}/root/WARP.conf${RED} не найден!\n${NC}"
 	PAUSE
