@@ -826,13 +826,16 @@ if ! grep -q "option proto 'amneziawg'" /etc/config/network; then
 	echo -e "\n${RED}Интерфейс ${NC}AWG${RED} не найден!\n${NC}"
 	PAUSE
 	return
-fi
+}
 
 echo -e "\n${MAGENTA}Интегрируем WARP в интерфейс${NC}"
 
 echo -e "${CYAN}Интегрируем${NC} /root/WARP.conf"
 
 ifdown "$IFACE" 2>/dev/null
+ubus call network.interface.$IFACE down >/dev/null 2>&1
+sleep 2
+
 ip link del "$IFACE" 2>/dev/null
 
 uci -q delete network.$IFACE
@@ -842,33 +845,10 @@ while uci show network | grep -q "=amneziawg_AWG"; do
 	[ -n "$SEC" ] && uci -q delete network.$SEC
 done
 
+uci commit network
+
 get_val() {
 	sed -n "s/^$1 *= *//p" "$CONFWARP" | head -n1
-}
-
-set_opt() {
-	local key="$1"
-	local val="$2"
-
-	[ -n "$val" ] && uci set "network.$IFACE.$key=$val"
-}
-
-add_list() {
-	local section="$1"
-	local key="$2"
-	local vals="$3"
-
-	[ -z "$vals" ] && return
-
-	local OLD_IFS="$IFS"
-	IFS=','
-
-	for v in $vals; do
-		v="$(echo "$v" | xargs)"
-		[ -n "$v" ] && uci add_list "network.$section.$key=$v"
-	done
-
-	IFS="$OLD_IFS"
 }
 
 PRIVATE_KEY="$(get_val PrivateKey)"
@@ -905,69 +885,84 @@ KEEPALIVE="$(get_val PersistentKeepalive)"
 ENDPOINT_HOST="${ENDPOINT%:*}"
 ENDPOINT_PORT="${ENDPOINT##*:}"
 
-uci set network.$IFACE="interface"
+ADDR4="$(echo "$ADDRESS" | cut -d, -f1 | xargs)"
+ADDR6="$(echo "$ADDRESS" | cut -d, -f2 | xargs)"
 
-# [Interface]
-set_opt proto "amneziawg"
-set_opt private_key "$PRIVATE_KEY"
+DNS1="$(echo "$DNS" | cut -d, -f1 | xargs)"
+DNS2="$(echo "$DNS" | cut -d, -f2 | xargs)"
+DNS3="$(echo "$DNS" | cut -d, -f3 | xargs)"
+DNS4="$(echo "$DNS" | cut -d, -f4 | xargs)"
 
-add_list "$IFACE" addresses "$ADDRESS"
-add_list "$IFACE" dns "$DNS"
+ALLOWED1="$(echo "$ALLOWED_IPS" | cut -d, -f1 | xargs)"
+ALLOWED2="$(echo "$ALLOWED_IPS" | cut -d, -f2 | xargs)"
 
-set_opt mtu "$MTU"
+cat >> /etc/config/network <<EOF
 
-set_opt awg_jc "$JC"
-set_opt awg_jmin "$JMIN"
-set_opt awg_jmax "$JMAX"
+config interface '$IFACE'
+	option proto 'amneziawg'
+	option private_key '$PRIVATE_KEY'
 
-set_opt awg_s1 "$S1"
-set_opt awg_s2 "$S2"
-set_opt awg_s3 "$S3"
-set_opt awg_s4 "$S4"
+	list addresses '$ADDR4/32'
+	list addresses '$ADDR6/128'
 
-set_opt awg_h1 "$H1"
-set_opt awg_h2 "$H2"
-set_opt awg_h3 "$H3"
-set_opt awg_h4 "$H4"
+	list dns '$DNS1'
+	list dns '$DNS2'
+	list dns '$DNS3'
+	list dns '$DNS4'
 
-set_opt awg_i1 "$I1"
-set_opt awg_i2 "$I2"
-set_opt awg_i3 "$I3"
-set_opt awg_i4 "$I4"
-set_opt awg_i5 "$I5"
+	option mtu '$MTU'
 
-uci set network.$IFACE.multipath="off"
+	option awg_jc '$JC'
+	option awg_jmin '$JMIN'
+	option awg_jmax '$JMAX'
 
-# [Peer]
-PEER_SECTION="$(uci add network amneziawg_AWG)"
+	option awg_s1 '$S1'
+	option awg_s2 '$S2'
+	option awg_s3 '$S3'
+	option awg_s4 '$S4'
 
-set_peer_opt() {
-	local key="$1"
-	local val="$2"
+	option awg_h1 '$H1'
+	option awg_h2 '$H2'
+	option awg_h3 '$H3'
+	option awg_h4 '$H4'
 
-	[ -n "$val" ] && uci set "network.$PEER_SECTION.$key=$val"
-}
+	option awg_i1 '$I1'
+	option awg_i2 '$I2'
+	option awg_i3 '$I3'
+	option awg_i4 '$I4'
+	option awg_i5 '$I5'
 
-set_peer_opt description "$(basename "$CONFWARP")"
-set_peer_opt public_key "$PUBLIC_KEY"
-set_peer_opt preshared_key "$PRESHARED_KEY"
+	option multipath 'off'
 
-add_list "$PEER_SECTION" allowed_ips "$ALLOWED_IPS"
+config amneziawg_AWG
+	option description '$(basename "$CONFWARP")'
+	option public_key '$PUBLIC_KEY'
 
-set_peer_opt endpoint_host "$ENDPOINT_HOST"
-set_peer_opt endpoint_port "$ENDPOINT_PORT"
-set_peer_opt persistent_keepalive "$KEEPALIVE"
+	list allowed_ips '$ALLOWED1'
+	list allowed_ips '$ALLOWED2'
 
-uci commit network
+	option endpoint_host '$ENDPOINT_HOST'
+	option endpoint_port '$ENDPOINT_PORT'
+	option persistent_keepalive '$KEEPALIVE'
 
-echo -e "${YELLOW}Перезапускаем сеть! Подождите...${NC}"
-/etc/init.d/network restart
+EOF
+
+echo -e "${YELLOW}Перезапускаем AWG...${NC}"
+
+/etc/init.d/network reload
+
+sleep 2
+
+ifup "$IFACE"
+
+sleep 3
 
 echo -e "${NC}WARP${GREEN} интегрирован в ${NC}интерфейс${GREEN}!${NC}\n"
 
+ifstatus "$IFACE"
+
 PAUSE
 }
-
 
 # МЕНЮ PODKOP
 PODKOP_menu() { while true; do openwrt_version=$(cat /etc/openwrt_release | grep DISTRIB_RELEASE | cut -d"'" -f2 | cut -d'.' -f1); if [ "$openwrt_version" = "23" ]; then echo -e "\n${RED}OpenWrt версии ниже 24 не поддерживаются!${NC}\n"; PAUSE; return; fi
