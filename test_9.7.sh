@@ -636,7 +636,8 @@ if pkg_is_installed https-dns-proxy; then echo -e "\n${RED}Обнаружен ${
 [ "$ACTION" = "install" ] && echo -e "\n${MAGENTA}Устанавливаем Podkop Plus${NC}" || echo -e "\n${MAGENTA}Обновляем Podkop Plus${NC}"
 
 echo -e "${CYAN}Выполняется установка из оригинального скрипта\n${YELLOW}Пожалуйста подождите...${NC}"
-wget -qO- https://raw.githubusercontent.com/ushan0v/podkop-plus/main/install.sh | sed 's|decide_sing_box_installation() {|decide_sing_box_installation() { SING_BOX_ACTION="install_extended"; return 0;|' | sh >/dev/null || { echo -e "\n${RED}Ошибка установки!\n"; PAUSE; return; }
+
+wget -qO- https://raw.githubusercontent.com/ushan0v/podkop-plus/main/install.sh | sed 's|decide_sing_box_installation() {|decide_sing_box_installation() { SING_BOX_ACTION="install_extended"; return 0;|' | sed 's|decide_byedpi_installation() {|decide_byedpi_installation() { BYEDPI_REQUESTED=1; return 0;|' | sed 's|decide_i18n_installation() {|decide_i18n_installation() { PODKOP_PLUS_I18N_REQUESTED=1; return 0;|' | sh >/dev/null || { echo -e "\n${RED}Ошибка установки!${NC}\n"; PAUSE; return; }
 
 echo -e "Podkop Plus ${GREEN}$( [ "$ACTION" = "install" ] && echo "установлен" || echo "обновлён" )!${NC}\n"; PAUSE
 else echo -e "\n${MAGENTA}Удаляем Podkop Plus${NC}"
@@ -695,6 +696,20 @@ fi
 echo -e "${CYAN}Запускаем ${NC}Podkop Plus${NC}"; podkop-plus enable >/dev/null 2>&1; echo -e "${CYAN}Обновляем списки${NC}"; podkop-plus list_update >/dev/null 2>&1; echo -en "${CYAN}Перезапускаем сервис${NC}\n${YELLOW}Подождите...${NC}"; podkop-plus restart >/dev/null 2>&1; echo -e "\nVPN подписка ${GREEN}интегрирована в ${NC}Podkop Plus${GREEN}!${NC}\n"; PAUSE; }
 
 
+ByeDPI_POD() {
+if ! pkg_is_installed podkop-plus; then echo -e "\n${RED}Podkop Plus не установлен!${NC}\n"; PAUSE; return; fi
+if ! pkg_is_installed byedpi; then echo -e "\n${RED}ByeDPI не установлен!${NC}\n"; PAUSE; return; fi
+
+echo -e "\n${MAGENTA}Интегрируем ByeDPI в Podkop Plus${NC}"; echo -e "${CYAN}Меняем конфигурацию в ${NC}Podkop Plus${NC}"
+
+printf "%s\n" "" "config rule 'ByeDPI_Youtube'" "	option enabled '1'" "	option action 'byedpi'" "	option mixed_proxy_enabled '0'" "	option resolve_real_ip_for_routing '1'" "	list community_lists 'youtube'" >> /etc/config/podkop-plus
+
+echo -e "${CYAN}Запускаем ${NC}Podkop Plus${NC}"
+podkop-plus enable >/dev/null 2>&1; echo -e "${CYAN}Обновляем списки${NC}"; podkop-plus list_update >/dev/null 2>&1
+echo -en "${CYAN}Перезапускаем сервис${NC}\n${YELLOW}Подождите...${NC}"; podkop-plus restart >/dev/null 2>&1
+echo -e "\nByeDPI ${GREEN}интегрирован в ${NC}Podkop Plus${GREEN}!${NC}\n";
+PAUSE
+}
 
 GENERATOR() {
 echo -e "\n${MAGENTA}Генерируем WARP${NC}"
@@ -787,17 +802,18 @@ PrivateKey = ${priv}
 Address = ${client_ipv4}, ${client_ipv6}
 DNS = 1.1.1.1, 1.0.0.1, 2606:4700:4700::1111, 2606:4700:4700::1001
 MTU = 1280
+Jc = 3
+Jmin = 297
+Jmax = 655
 S1 = 0
 S2 = 0
-Jc = 4
-Jmin = 40
-Jmax = 70
+S3 = 0
+S4 = 0
 H1 = 1
 H2 = 2
 H3 = 3
 H4 = 4
-I1 = <b 0xce000000010897a297ecc34cd6dd000044d0ec2e2e1ea2991f467ace4222129b5a098823784694b4897b9986ae0b7280135fa85e196d9ad980b150122129ce2a9379531b0fd3e871ca5fdb883c369832f730e272d7b8b74f393f9f0fa43f11e510ecb2219a52984410c204cf875585340c62238e14ad04dff382f2c200e0ee22fe743b9c6b8b043121c5710ec289f471c91ee414fca8b8be8419ae8ce7ffc53837f6ade262891895f3f4cecd31bc93ac5599e18e4f01b472362b8056c3172b513051f8322d1062997ef4a383b01706598d08d48c221d30e74c7ce000cdad36b706b1bf9b0607c32ec4b3203a4ee21ab64df336212b9758280803fcab14933b0e7ee1e04a7becce3e2633f4852585c567894a5f9efe9706a151b615856647e8b7dba69ab357b3982f554549bef9256111b2d67afde0b496f16962d4957ff654232aa9e845b61463908309cfd9de0a6abf5f425f577d7e5f6440652aa8da5f73588e82e9470f3b21b27b28c649506ae1a7f5f15b876f56abc4615f49911549b9bb39dd804fde182bd2dcec0c33bad9b138ca07d4a4a1650a2c2686acea05727e2a78962a840ae428f55627516e73c83dd8893b02358e81b524b4d99fda6df52b3a8d7a5291326e7ac9d773c5b43b8444554ef5aea104a738ed650aa979674bbed38da58ac29d87c29d387d80b526065baeb073ce65f075ccb56e47533aef357dceaa8293a523c5f6f790be90e4731123d3c6152a70576e90b4ab5bc5ead01576c68ab633ff7d36dcde2a0b2c68897e1acfc4d6483aaaeb635dd63c96b2b6a7a2bfe042f6aed82e5363aa850aace12ee3b1a93f30d8ab9537df483152a5527faca21efc9981b304f11fc95336f5b9637b174c5a0659e2b22e159a9fed4b8e93047371175b1d6d9cc8ab745f3b2281537d1c75fb9451871864efa5d184c38c185fd203de206751b92620f7c369e031d2041e152040920ac2c5ab5340bfc9d0561176abf10a147287ea90758575ac6a9f5ac9f390d0d5b23ee12af583383d994e22c0cf42383834bcd3ada1b3825a0664d8f3fb678261d57601ddf94a8a68a7c273a18c08aa99c7ad8c6c42eab67718843597ec9930457359dfdfbce024afc2dcf9348579a57d8d3490b2fa99f278f1c37d87dad9b221acd575192ffae1784f8e60ec7cee4068b6b988f0433d96d6a1b1865f4e155e9fe020279f434f3bf1bd117b717b92f6cd1cc9bea7d45978bcc3f24bda631a36910110a6ec06da35f8966c9279d130347594f13e9e07514fa370754d1424c0a1545c5070ef9fb2acd14233e8a50bfc5978b5bdf8bc1714731f798d21e2004117c61f2989dd44f0cf027b27d4019e81ed4b5c31db347c4a3a4d85048d7093cf16753d7b0d15e078f5c7a5205dc2f87e330a1f716738dce1c6180e9d02869b5546f1c4d2748f8c90d9693cba4e0079297d22fd61402dea32ff0eb69ebd65a5d0b687d87e3a8b2c42b648aa723c7c7daf37abcc4bb85caea2ee8f55bec20e913b3324ab8f5c3304f820d42ad1b9f2ffc1a3af9927136b4419e1e579ab4c2ae3c776d293d397d575df181e6cae0a4ada5d67ecea171cca3288d57c7bbdaee3befe745fb7d634f70386d873b90c4d6c6596bb65af68f9e5121e67ebf0d89d3c909ceedfb32ce9575a7758ff080724e1ab5d5f43074ecb53a479af21ed03d7b6899c36631c0166f9d47e5e1d4528a5d3d3f744029c4b1c190cbfbad06f5f83f7ad0429fa9a2719c56ffe3783460e166de2d8>
-
+I1 = <b 0x494e56495445207369703a626f624062696c6f78692e636f6d205349502f322e300d0a5669613a205349502f322e302f55445020706333332e61746c616e74612e636f6d3b6272616e63683d7a39684734624b3839383939363135350d0a4d61782d466f7277617264733a2037300d0a546f3a20426f62203c7369703a626f624062696c6f78692e636f6d3e0d0a46726f6d3a20416c696365203c7369703a616c6963654061746c616e74612e636f6d3e3b7461673d323235303636363030310d0a43616c6c2d49443a2039343335373733333340706333332e61746c616e74612e636f6d0d0a435365713a20373839323520494e564954450d0a436f6e746163743a203c7369703a616c69636540706333332e61746c616e74612e636f6d3e0d0a436f6e74656e742d547970653a206170706c69636174696f6e2f7364700d0a436f6e74656e742d4c656e6774683a20300d0a0d0a>
 [Peer]
 PublicKey = ${peer_pub}
 AllowedIPs = 0.0.0.0/0, ::/0
@@ -812,177 +828,28 @@ echo -e "WARP ${GREEN}сгенерирован и сохранён в ${NC}/root
 PAUSE
 }
 
-INTEGRA() {
-
-[ ! -f "$CONFWARP" ] && {
-	echo -e "\n${RED}Файл ${NC}$CONFWARP${RED} не найден!\n${NC}"
-	PAUSE
-	return
-}
-
-if ! grep -q "option proto 'amneziawg'" /etc/config/network; then
-	echo -e "\n${RED}Интрефейс ${NC}AWG${RED} не найден!\n${NC}"
-	PAUSE
-	return
-fi
-
-echo -e "\n${MAGENTA}Интегрируем WARP в интерфейс${NC}"
-
-echo -e "${CYAN}Интегрируем${NC} /root/WARP.conf"
-
-ifdown "$IFACE" 2>/dev/null
-ip link del "$IFACE" 2>/dev/null
-
-uci -q delete network.$IFACE
-
-while uci show network | grep -q "=amneziawg_AWG"; do
-	SEC="$(uci show network | grep "=amneziawg_AWG" | head -n1 | cut -d. -f2 | cut -d= -f1)"
-	[ -n "$SEC" ] && uci -q delete network.$SEC
-done
-
-get_val() {
-	sed -n "s/^$1 *= *//p" "$CONFWARP" | head -n1
-}
-
-set_opt() {
-	local key="$1"
-	local val="$2"
-
-	[ -n "$val" ] && uci set "network.$IFACE.$key=$val"
-}
-
-add_list() {
-	local section="$1"
-	local key="$2"
-	local vals="$3"
-
-	[ -z "$vals" ] && return
-
-	local OLD_IFS="$IFS"
-	IFS=','
-
-	for v in $vals; do
-		v="$(echo "$v" | xargs)"
-		[ -n "$v" ] && uci add_list "network.$section.$key=$v"
-	done
-
-	IFS="$OLD_IFS"
-}
-
-PRIVATE_KEY="$(get_val PrivateKey)"
-ADDRESS="$(get_val Address)"
-DNS="$(get_val DNS)"
-MTU="$(get_val MTU)"
-
-S1="$(get_val S1)"
-S2="$(get_val S2)"
-S3="$(get_val S3)"
-S4="$(get_val S4)"
-
-JC="$(get_val Jc)"
-JMIN="$(get_val Jmin)"
-JMAX="$(get_val Jmax)"
-
-H1="$(get_val H1)"
-H2="$(get_val H2)"
-H3="$(get_val H3)"
-H4="$(get_val H4)"
-
-I1="$(get_val I1)"
-I2="$(get_val I2)"
-I3="$(get_val I3)"
-I4="$(get_val I4)"
-I5="$(get_val I5)"
-
-uci set network.$IFACE="interface"
-
-set_opt proto "amneziawg"
-set_opt private_key "$PRIVATE_KEY"
-
-set_opt awg_s1 "$S1"
-set_opt awg_s2 "$S2"
-set_opt awg_s3 "$S3"
-set_opt awg_s4 "$S4"
-
-set_opt awg_jc "$JC"
-set_opt awg_jmin "$JMIN"
-set_opt awg_jmax "$JMAX"
-
-set_opt awg_h1 "$H1"
-set_opt awg_h2 "$H2"
-set_opt awg_h3 "$H3"
-set_opt awg_h4 "$H4"
-
-set_opt awg_i1 "$I1"
-set_opt awg_i2 "$I2"
-set_opt awg_i3 "$I3"
-set_opt awg_i4 "$I4"
-set_opt awg_i5 "$I5"
-
-set_opt mtu "$MTU"
-
-uci set network.$IFACE.multipath="off"
-
-add_list "$IFACE" addresses "$ADDRESS"
-add_list "$IFACE" dns "$DNS"
-
-PUBLIC_KEY="$(get_val PublicKey)"
-PRESHARED_KEY="$(get_val PresharedKey)"
-ALLOWED_IPS="$(get_val AllowedIPs)"
-ENDPOINT="$(get_val Endpoint)"
-KEEPALIVE="$(get_val PersistentKeepalive)"
-
-ENDPOINT_HOST="${ENDPOINT%:*}"
-ENDPOINT_PORT="${ENDPOINT##*:}"
-
-PEER_SECTION="$(uci add network amneziawg_AWG)"
-
-set_peer_opt() {
-	local key="$1"
-	local val="$2"
-
-	[ -n "$val" ] && uci set "network.$PEER_SECTION.$key=$val"
-}
-
-set_peer_opt description "$(basename "$CONFWARP")"
-set_peer_opt public_key "$PUBLIC_KEY"
-set_peer_opt preshared_key "$PRESHARED_KEY"
-
-add_list "$PEER_SECTION" allowed_ips "$ALLOWED_IPS"
-
-set_peer_opt endpoint_host "$ENDPOINT_HOST"
-set_peer_opt endpoint_port "$ENDPOINT_PORT"
-set_peer_opt persistent_keepalive "$KEEPALIVE"
-
-uci commit network
-
-
-echo -e "${YELLOW}Перезапускаем сеть! Подождите...${NC}"
-/etc/init.d/network restart
-
-echo -e "${NC}WARP${GREEN} интегрирован в ${NC}интерфейс${GREEN}!${NC}\n"
-PAUSE
-}
-
-
 # МЕНЮ PODKOP
 PODKOP_menu() { while true; do openwrt_version=$(cat /etc/openwrt_release | grep DISTRIB_RELEASE | cut -d"'" -f2 | cut -d'.' -f1); if [ "$openwrt_version" = "23" ]; then echo -e "\n${RED}OpenWrt версии ниже 24 не поддерживаются!${NC}\n"; PAUSE; return; fi
 PODKOP_VER; clear; echo -e "${MAGENTA}Меню Podkop Plus${NC}\n"; echo -e "${YELLOW}Podkop Plus: ${NC}$PODKOP_STATUS"; if { pkg_is_installed amneziawg-tools || command -v amneziawg >/dev/null 2>&1; } && uci -q get network.AWG >/dev/null
 then echo -e "${YELLOW}AWG и интерфейс: ${GREEN}установлены${NC}"; else echo -e "${YELLOW}AWG и интерфейс: ${RED}не установлены${NC}"; fi; [ -f /root/WARP.conf ] && echo -e "${YELLOW}Файл WARP.conf: ${GREEN}присутствует в /root${NC}"
 if ! pkg_is_installed podkop-plus; then echo -e "\n${CYAN}1) ${GREEN}Установить ${NC}Podkop Plus"; elif [ "$PODKOP_LATEST_VER" != "$LOCALPOD" ]; then echo -e "\n${CYAN}1) ${GREEN}Обновить ${NC}Podkop Plus"; else echo -e "\n${CYAN}1) ${GREEN}Удалить ${NC}Podkop Plus"; fi;
 if pkg_is_installed amneziawg-tools; then echo -e "${CYAN}2) ${GREEN}Удалить ${NC}AWG${GREEN} и ${NC}интерфейс AWG"; else echo -e "${CYAN}2) ${GREEN}Установить ${NC}AWG${GREEN} и ${NC}интерфейс AWG"; fi
+
+
 if [ -f /etc/config/podkop-plus ] && grep -q "^[[:space:]]*option subscription_url" /etc/config/podkop-plus; then echo -e "${CYAN}3) ${GREEN}Сменить ${NC}VPN подписку${GREEN} в ${NC}Podkop Plus"; else echo -e "${CYAN}3) ${GREEN}Интегрировать ${NC}VPN подписку${GREEN} в ${NC}Podkop Plus"; fi
 echo -e "${CYAN}4) ${GREEN}Интегрировать ${NC}AWG${GREEN} в ${NC}Podkop Plus"
-echo -e "${CYAN}5) ${GREEN}Интегрировать ${NC}/root/WARP.conf${GREEN} в ${NC}интерфейс AWG"
+echo -e "${CYAN}5) ${GREEN}Интегрировать ${NC}ByeDPI${GREEN} в ${NC}Podkop Plus"
 echo -e "${CYAN}6) ${GREEN}Сгенерировать ${NC}WARP ${GREEN}в ${NC}/root/WARP.conf"
+
 echo -e "${CYAN}u) ${GREEN}Удалить ${NC}Podkop Evolution"
 
 echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}"; echo -ne "\n${YELLOW}Выберите пункт:${NC} "; read choicePOD; case "$choicePOD" in 
-1) PODKOP_INSTALL ;; 2) install_AWG ;; 3) PODKOP_VPN ;; 4) integration_AWG ;; 
-
-5) INTEGRA ;;
+1) PODKOP_INSTALL ;;
+2) install_AWG ;;
+3) PODKOP_VPN ;;
+4) integration_AWG ;; 
+5) ByeDPI_POD ;;
 6) GENERATOR ;;
-
 u) echo -e "\n${MAGENTA}Удаляем Podkop Evolution${NC}"
 $DELETE luci-i18n-podkop-ru >/dev/null 2>&1; $DELETE luci-app-podkop >/dev/null 2>&1; $DELETE podkop >/dev/null 2>&1; rm -rf /etc/config/podkop* /usr/bin/podkop >/dev/null 2>&1; echo -e "Podkop Evolution ${GREEN}удалён!${NC}\n"; PAUSE ;;
 
