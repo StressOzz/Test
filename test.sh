@@ -637,7 +637,11 @@ if pkg_is_installed https-dns-proxy; then echo -e "\n${RED}Обнаружен ${
 
 echo -e "${CYAN}Выполняется установка из оригинального скрипта\n${YELLOW}Пожалуйста подождите...${NC}"
 
-wget -qO- https://raw.githubusercontent.com/ushan0v/podkop-plus/main/install.sh | sed 's|decide_sing_box_installation() {|decide_sing_box_installation() { SING_BOX_ACTION="install_extended"; return 0;|' | sed 's|decide_byedpi_installation() {|decide_byedpi_installation() { BYEDPI_REQUESTED=1; return 0;|' | sed 's|decide_i18n_installation() {|decide_i18n_installation() { PODKOP_PLUS_I18N_REQUESTED=1; return 0;|' | sh >/dev/null || { echo -e "\n${RED}Ошибка установки!${NC}\n"; PAUSE; return; }
+# wget -qO- https://raw.githubusercontent.com/ushan0v/podkop-plus/main/install.sh | sed 's|decide_sing_box_installation() {|decide_sing_box_installation() { SING_BOX_ACTION="install_extended"; return 0;|' | sed 's|decide_byedpi_installation() {|decide_byedpi_installation() { BYEDPI_REQUESTED=1; return 0;|' | sed 's|decide_i18n_installation() {|decide_i18n_installation() { PODKOP_PLUS_I18N_REQUESTED=1; return 0;|' | sh >/dev/null || { echo -e "\n${RED}Ошибка установки!${NC}\n"; PAUSE; return; }
+
+wget -qO- https://raw.githubusercontent.com/ushan0v/podkop-plus/main/install.sh | sed 's|decide_sing_box_installation() {|decide_sing_box_installation() { SING_BOX_ACTION="install_extended"; return 0;|' | sed 's|decide_i18n_installation() {|decide_i18n_installation() { PODKOP_PLUS_I18N_REQUESTED=1; return 0;|' | sh >/dev/null || { echo -e "\n${RED}Ошибка установки!${NC}\n"; PAUSE; return; }
+
+
 
 echo -e "Podkop Plus ${GREEN}$( [ "$ACTION" = "install" ] && echo "установлен" || echo "обновлён" )!${NC}\n"; PAUSE
 else echo -e "\n${MAGENTA}Удаляем Podkop Plus${NC}"
