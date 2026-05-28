@@ -30,7 +30,14 @@ config main 'config'
 	option NFQWS_PORTS_TCP_KEEPALIVE '0'
 	option NFQWS_PORTS_UDP_KEEPALIVE '0'
 	option NFQWS_OPT '
+#Yv19
+--filter-tcp=443
+--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt
+--dpi-desync=hostfakesplit
+--dpi-desync-hostfakesplit-mod=host=google.com
+--dpi-desync-fooling=ts
 #v1
+--new
 --filter-tcp=443
 --hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt
 --dpi-desync=split2
