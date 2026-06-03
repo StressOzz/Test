@@ -131,6 +131,7 @@ if command -v dig >/dev/null 2>&1; then
     elif command -v apk >/dev/null 2>&1; then
         apk del bind-dig >/dev/null 2>&1
     fi
+    command -v dig >/dev/null 2>&1 && echo -e "${RED}Не удалось удалить ${NC}dig"
 fi
 
 echo -e "${MAGENTA}----------------------------------------${NC}"
