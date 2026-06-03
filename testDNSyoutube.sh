@@ -9,6 +9,7 @@ NC="\033[0m"
 
 DOMAINS="
 youtube.com
+googlevideo.com
 rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com
 rr1---sn-gvnuxaxjvh-jx3l.googlevideo.com
 rr1---sn-gvnuxaxjvh-jx3s.googlevideo.com
