@@ -432,9 +432,19 @@ echo -e "${MAGENTA}Меню управления доменами в hosts${NC}\
 echo -e "${CYAN} 0) ${GREEN}$(get_state "$NALOG")${NC} nalog.ru\n${CYAN} 1) ${GREEN}$(get_state "$RUTOR")${NC} rutor.info\n${CYAN} 2) ${GREEN}$(get_state "$NTC")${NC} ntc.party"
 echo -e "${CYAN} 3) ${GREEN}$(get_state "$INSTAGRAM")${NC} Instagram & Facebook\n${CYAN} 4) ${GREEN}$(get_state "$LIBRUSEC")${NC} lib.rus.ec\n${CYAN} 5) ${GREEN}$(get_state "$AI")${NC} AI сервисы"
 echo -e "${CYAN} 6) ${GREEN}$(get_state "$TWCH")${NC} Twitch\n${CYAN} 7) ${GREEN}$(get_state "$TGWeb")${NC} Telegram Web\n${CYAN} 8) ${GREEN}$(get_state "$SPFY")${NC} Spotify\n${CYAN} 9) ${GREEN}$(get_state "$SCell")${NC} Supercell"
-echo -e "${CYAN}10) ${GREEN}$(get_state "$GITH")${NC} githubusercontent.com\n${CYAN}11) $S_ALL\n${CYAN}12) ${GREEN}Заменить ${NC}hosts${GREEN} на ${NC}GeoHide hosts\n${CYAN}13) ${GREEN}Восстановить ${NC}hosts"
+echo -e "${CYAN}10) ${GREEN}$(get_state "$GITH")${NC} githubusercontent.com\n${CYAN}11) $S_ALL\n${CYAN}12) ${GREEN}Заменить ${NC}hosts${GREEN} на ${NC}GeoHide hosts"
+echo -e "${CYAN}13) ${GREEN}Заменить ${NC}hosts${GREEN} на ${NC}Mafioznik hosts\n${CYAN}14) ${GREEN}Заменить ${NC}hosts${GREEN} на ${NC}Malw.link hosts\n${CYAN}15) ${GREEN}Восстановить ${NC}hosts"
 echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} ";read -r c; case "$c" in 0) toggle_block "$NALOG";; 1) toggle_block "$RUTOR";; 2) toggle_block "$NTC";; 3) toggle_block "$INSTAGRAM";;
-4) toggle_block "$LIBRUSEC";; 5) toggle_block "$AI";; 6) toggle_block "$TWCH";; 7) toggle_block "$TGWeb";; 8) toggle_block "$SPFY";; 9) toggle_block "$SCell";; 10) toggle_block "$GITH";; 11) toggle_all;; 12) add_GEO_HOSTS;; 13) hosts_reset;; *) break;; esac; done; }
+4) toggle_block "$LIBRUSEC";; 5) toggle_block "$AI";; 6) toggle_block "$TWCH";; 7) toggle_block "$TGWeb";; 8) toggle_block "$SPFY";; 9) toggle_block "$SCell";; 10) toggle_block "$GITH";; 11) toggle_all;;
+12) add_GEO_HOSTS;;
+13) echo -e "\n${MAGENTA}Заменяем hosts на Mafioznik hosts${NC}"
+wget -qO /etc/hosts https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/hosts_mafioznik.txt >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось скачать файл hosts${NC}\n"; PAUSE; }
+/etc/init.d/dnsmasq restart >/dev/null 2>&1; echo -e "hosts ${GREEN}заменён на ${NC}Mafioznik hosts${GREEN}!${NC}\n"; PAUSE;;
+14) echo -e "\n${MAGENTA}Заменяем hosts на Malw.link hosts${NC}"
+wget -qO /etc/hosts https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/hosts_malw.link.txt >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось скачать файл hosts${NC}\n"; PAUSE; }
+/etc/init.d/dnsmasq restart >/dev/null 2>&1; echo -e "hosts ${GREEN}заменён на ${NC}Malw.link hosts${GREEN}!${NC}\n"; PAUSE;;
+
+15) hosts_reset;; *) break;; esac; done; }
 status_block() { local line; while IFS= read -r line; do [ -z "$line" ] && continue; grep -Fxq "$line" "$HOSTS_FILE" || return 1; done <<EOF
 $(printf '%b\n' "$1")
 EOF
@@ -699,9 +709,7 @@ echo -e "${CYAN}4) ${GREEN}Интегрировать ${NC}AWG${GREEN} в ${NC}P
 # Главное меню
 # ==========================================
 show_menu() { get_versions; get_doh_status; show_current_strategy; RKN_Check; mkdir -p "$TMP_SF"; CURR=$(curr_MIR); clear; echo -e "╔═══════════════════════════════╗\n║  ${BLUE}Zapret Manager by StressOzz${NC}  ║\n╚═══════════════════════════════╝\n                             ${DGRAY}v$ZAPRET_MANAGER_VERSION${NC}"
-
-echo -e "\n${RED}Обнаружен IPv6! ${GREEN}Включите ${NC}IPv6${GREEN} в системном меню!\n${NC}"
-
+if [ -f /etc/init.d/zapret ] && [ -f "$CONF" ] && grep -Eq "^[[:space:]]*option DISABLE_IPV6 '1'" "$CONF" && ping -6 -c 1 -W 2 google.com >/dev/null 2>&1; then echo -e "\n${RED}Обнаружен IPv6! ${GREEN}Включите ${NC}IPv6${GREEN} в системном меню!${NC}"; fi
 if [ ! -f /etc/init.d/zapret ]; then Z_ACTION_TEXT="Установить"; Z_ACTION_FUNC="install_Zapret"; elif [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ]; then Z_ACTION_TEXT="Удалить" Z_ACTION_FUNC="uninstall_zapret"; else Z_ACTION_TEXT="Обновить"; Z_ACTION_FUNC="install_Zapret"; fi
 for pkg in byedpi youtubeUnblock; do if [ "$PKG_IS_APK" -eq 1 ]; then apk info -e "$pkg" >/dev/null 2>&1 && echo -e "\n${RED}Найден установленный ${NC}$pkg${RED}!${NC}\nZapret${RED} может работать некорректно с ${NC}$pkg${RED}!${NC}"
 else opkg list-installed | grep -q "^$pkg" && echo -e "\n${RED}Найден установленный ${NC}$pkg${RED}!${NC}\nZapret${RED} может работать некорректно с ${NC}$pkg${RED}!${NC}"; fi; done
