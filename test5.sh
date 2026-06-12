@@ -108,6 +108,7 @@ get_ver() {
     echo -e "$NAME: ${GREEN}$VERSION${NC}"
 }
 
+clear
 echo -e "${CYAN}Cобираем версии${NC} Zapret, Podkop и TG-WS Proxy GO"
 
 TMP_VER="/tmp/zapret_version"
@@ -125,8 +126,6 @@ PODKOP_LATEST_VER="$(cat "$TMP_VER_POD" 2>/dev/null)"
 GO_VER="$(cat "$TMP_VER_GO" 2>/dev/null)"
 
 echo -e "\n${GREEN}Запускаем ${NC}Zapret Manager..."
-
-PAUSE
 
 echo 'sh <(wget -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/main/Zapret-Manager.sh)' > /usr/bin/zms; chmod +x /usr/bin/zms
 
