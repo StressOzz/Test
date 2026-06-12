@@ -97,15 +97,14 @@ get_ver() {
     }
 
     VERSION="${RESULT##*/}"
+    VERSION="${VERSION#v}"
 
-    case "$VERSION" in
-        ''|*[!0-9.]*)
-            echo -e "${RED}✗${NC} $NAME: не удалось извлечь версию"
-            echo -e "${YELLOW}URL:${NC} $RESULT\n"
-            PAUSE
-            return 1
-        ;;
-    esac
+    [ -z "$VERSION" ] && {
+        echo -e "${RED}✗${NC} $NAME: не удалось извлечь версию"
+        echo -e "${YELLOW}URL:${NC} $RESULT\n"
+        PAUSE
+        return 1
+    }
 
     echo "$VERSION" > "$OUT_FILE"
     echo -e "${GREEN}✓${NC} $NAME: $VERSION"
@@ -128,7 +127,6 @@ PODKOP_LATEST_VER="$(cat "$TMP_VER_POD" 2>/dev/null)"
 GO_VER="$(cat "$TMP_VER_GO" 2>/dev/null)"
 
 echo -e "\n${GREEN}Запускаем ${NC}Zapret Manager..."
-
 
 PAUSE
 
