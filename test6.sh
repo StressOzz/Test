@@ -105,19 +105,20 @@ get_ver() {
     }
 
     echo "$VERSION" > "$OUT_FILE"
-    echo -e "$NAME: ${GREEN}$VERSION${NC}"
+printf "%-8s : %s%s%s\n" "$NAME" "${GREEN}" "$VERSION" "${NC}"
+# echo -e "$NAME: ${GREEN}$VERSION${NC}"
 }
 
 clear
-echo -e "${CYAN}Cобираем версии${NC} Zapret, Podkop и TG-WS Proxy GO"
+echo -e "${CYAN}Cобираем версии:${NC}"
 
 TMP_VER="/tmp/zapret_version"
 TMP_VER_POD="/tmp/podkop_version"
 TMP_VER_GO="/tmp/tg_ws_proxy_go_ver"
 
-get_ver "https://github.com/remittor/zapret-openwrt/releases/latest" "$TMP_VER" "ZAPRET" &
-get_ver "https://github.com/yandexru45/netshift/releases/latest" "$TMP_VER_POD" "PODKOP" &
-get_ver "https://github.com/spatiumstas/tg-ws-proxy-go/releases/latest" "$TMP_VER_GO" "TG-WS" &
+get_ver "https://github.com/yandexru45/netshift/releases/latest" "$TMP_VER_POD" "Podkop" &
+get_ver "https://github.com/remittor/zapret-openwrt/releases/latest" "$TMP_VER" "Zapret" &
+get_ver "https://github.com/spatiumstas/tg-ws-proxy-go/releases/latest" "$TMP_VER_GO" "TG-WS Proxy GO" &
 
 wait
 
