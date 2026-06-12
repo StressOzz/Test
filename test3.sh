@@ -86,8 +86,6 @@ get_ver() {
     OUT_FILE="$2"
     NAME="$3"
 
-    echo -e "${YELLOW}→${NC} Проверка $NAME"
-
     RESULT=$(curl -sIL --connect-timeout 2 --max-time 2 --retry 1 -w "%{url_effective}" -o /dev/null "$URL" 2>/dev/null)
 
     [ $? -ne 0 ] && {
@@ -110,7 +108,7 @@ get_ver() {
     echo -e "${GREEN}✓${NC} $NAME: $VERSION"
 }
 
-echo -e "${CYAN}Cобираем версии:${NC}"
+echo -e "${CYAN}Cобираем версии${NC} Zapret, Podkop и TG-WS Proxy GO"
 
 TMP_VER="/tmp/zapret_version"
 TMP_VER_POD="/tmp/podkop_version"
