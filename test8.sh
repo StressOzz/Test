@@ -125,8 +125,6 @@ ZAPRET_VERSION="$(cat "$TMP_VER" 2>/dev/null)"
 PODKOP_LATEST_VER="$(cat "$TMP_VER_POD" 2>/dev/null)"
 GO_VER="$(cat "$TMP_VER_GO" 2>/dev/null)"
 
-echo -e "\n${GREEN}Запускаем ${NC}Zapret Manager..."
-
 echo 'sh <(wget -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/main/Zapret-Manager.sh)' > /usr/bin/zms; chmod +x /usr/bin/zms
 
 # URL_zms='https://raw.githubusercontent.com/StressOzz/Zapret-Manager/main/Zapret-Manager.sh'; TMP_zms='/tmp/zms'; DST_zms='/usr/bin/zms'; curl -fsS4 --connect-timeout 1 --max-time 2 --retry 1 -o "$TMP_zms" "$URL_zms" && { [ ! -f "$DST_zms" ] || ! cmp -s "$TMP_zms" "$DST_zms"; } && mv "$TMP_zms" "$DST_zms" && chmod +x "$DST_zms"; rm -f "$TMP_zms"
