@@ -105,8 +105,7 @@ get_ver() {
     }
 
     echo "$VERSION" > "$OUT_FILE"
-printf "%-8s : %s%s%s\n" "$NAME" "${GREEN}" "$VERSION" "${NC}"
-# echo -e "$NAME: ${GREEN}$VERSION${NC}"
+    echo -e "$NAME: ${GREEN}$VERSION${NC}"
 }
 
 clear
