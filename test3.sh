@@ -657,7 +657,7 @@ wget -q -U "Mozilla/5.0" -O luci-i18n-netshift-ru.$APK_RAS "$PODKOP_RUS" || { ec
 echo -en "${CYAN}Устанавливаем ${NC}NetShift\n${YELLOW}Подождите...${NC}"; $INSTALL ./netshift.$APK_RAS >/dev/null 2>&1 || { echo -e "\n\n${RED}Не удалось установить ${NC}$PODKOP_INST\n"; PAUSE; return; }
 $INSTALL ./luci-app-netshift.$APK_RAS >/dev/null 2>&1 || { echo -e "\n\n${RED}Не удалось установить ${NC}$PODKOP_LUCI\n"; PAUSE; return; }
 $INSTALL ./luci-i18n-netshift-ru.$APK_RAS >/dev/null 2>&1 || { echo -e "\n\n${RED}Не удалось установить ${NC}$PODKOP_RUS\n"; PAUSE; return; }; rm -rf "$tmpDIR"
-echo -e "\nPodkop Evolution ${GREEN}$( [ "$ACTION" = "install" ] && echo "установлен" || echo "обновлён" )!${NC}\n"; PAUSE; else echo -e "\n${MAGENTA}Удаляем NetShift${NC}"; netshift stop >/dev/null 2>&1
+echo -e "\nNetShift ${GREEN}$( [ "$ACTION" = "install" ] && echo "установлен" || echo "обновлён" )!${NC}\n"; PAUSE; else echo -e "\n${MAGENTA}Удаляем NetShift${NC}"; netshift stop >/dev/null 2>&1
 $DELETE luci-i18n-netshift-ru >/dev/null 2>&1; $DELETE luci-app-netshift >/dev/null 2>&1; $DELETE netshift >/dev/null 2>&1; rm -rf /etc/config/netshift* /usr/bin/netshift >/dev/null 2>&1; echo -e "NetShift ${GREEN}удалён!${NC}\n"; PAUSE; fi; }
 # УСТАНОВКА AWG
 install_AWG() { OWRT=$(grep '^DISTRIB_RELEASE=' /etc/openwrt_release | cut -d"'" -f2); ARCHAWG="$(grep DISTRIB_ARCH /etc/openwrt_release | cut -d"'" -f2)_$(grep DISTRIB_TARGET /etc/openwrt_release | cut -d"'" -f2 | tr '/' '_')"; if ! pkg_is_installed amneziawg-tools; then rm -rf "$tmpDIR"; mkdir -p "$tmpDIR"
