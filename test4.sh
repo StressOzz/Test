@@ -3,7 +3,7 @@
 # Zapret on remittor Manager by StressOzz
 # =========================================
 ZAPRET_MANAGER_VERSION="9.6"; STR_VERSION_AUTOINSTALL="v7"
-ZAPRET_VERSION="72.20260307"; GO_VER="0.7.2"; PODKOP_LATEST_VER="0.8.8"
+# ZAPRET_VERSION="72.20260307"; GO_VER="0.7.2"; PODKOP_LATEST_VER="0.8.8"
 
 # git="githubusercontent.com"; if ! grep -q "raw.$git" /etc/hosts; then echo -e "\033[1;36mДля корректной работы скрипта добавляем домены \033[0mGitHub\033[1;36m в \033[0m/etc/hosts\033[0m"
 # printf "#$git\n185.199.109.133 raw.$git release-assets.$git\n185.199.108.133 private-user-images.$git gist.$git avatars.$git\n" >> /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1; echo -e "\033[0;32mДомены \033[0mGitHub\033[0;32m добавлены!\033[0m"; fi
@@ -98,14 +98,14 @@ get_ver() {
     VERSION="${VERSION#v}"
 
     [ -z "$VERSION" ] && {
-        echo -e "${RED}✗${NC} $NAME: не удалось извлечь версию"
+        echo -e "$NAME - ${RED}не удалось извлечь версию${NC}"
         echo -e "${YELLOW}URL:${NC} $RESULT\n"
         PAUSE
         return 1
     }
 
     echo "$VERSION" > "$OUT_FILE"
-    echo -e "${GREEN}✓${NC} $NAME: $VERSION"
+    echo -e "$NAME: ${GREEN}$VERSION${NC}"
 }
 
 echo -e "${CYAN}Cобираем версии${NC} Zapret, Podkop и TG-WS Proxy GO"
