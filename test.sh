@@ -711,7 +711,24 @@ for pkg in byedpi youtubeUnblock; do if [ "$PKG_IS_APK" -eq 1 ]; then apk info -
 else opkg list-installed | grep -q "^$pkg" && echo -e "\n${RED}Найден установленный ${NC}$pkg${RED}!${NC}\nZapret${RED} может работать некорректно с ${NC}$pkg${RED}!${NC}"; fi; done
 if uci get firewall.@defaults[0].flow_offloading 2>/dev/null | grep -q '^1$' || uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null | grep -q '^1$'; then if ! grep -q 'meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc
 then echo -e "\n${RED}Включён ${NC}Flow Offloading${RED}!${NC}\n${NC}Zapret${RED} некорректно работает с включённым ${NC}Flow Offloading${RED}!\nПримените ${NC}FIX${RED} в системном меню!${NC}"; fi; fi; pgrep -f "/opt/zapret" >/dev/null 2>&1 && str_stp_zpr="Остановить" || str_stp_zpr="Запустить"
-echo -e "\n${YELLOW}Установленная версия:    ${INST_COLOR}$INSTALLED_DISPLAY${NC}"; [ -n "$ZAPRET_STATUS" ] && echo -e "${YELLOW}Статус Zapret:${NC}           $ZAPRET_STATUS"; TGSTATUS=""; pidof tg-ws-proxy-go >/dev/null 2>&1 && TGSTATUS="${TGSTATUS:+$TGSTATUS/}Go SOCKS5"
+
+
+if [ -f /etc/init.d/zapret ]; then
+    /etc/init.d/zapret status >/dev/null 2>&1 \
+        && ZAPRET_STATUS="${GREEN}запущен${NC}" \
+        || ZAPRET_STATUS="${RED}остановлен${NC}"
+
+    if [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ]; then
+        echo -e "${YELLOW}Zapret:${NC}                  ${GREEN}$INSTALLED_VER${NC} ($ZAPRET_STATUS)"
+    else
+        echo -e "${YELLOW}Zapret:${NC}                  ${RED}версия устарела${NC} ($ZAPRET_STATUS)"
+    fi
+else
+    echo -e "${YELLOW}Zapret:${NC}                  ${RED}не установлен${NC}"
+fi
+
+
+TGSTATUS=""; pidof tg-ws-proxy-go >/dev/null 2>&1 && TGSTATUS="${TGSTATUS:+$TGSTATUS/}Go SOCKS5"
 pidof tg-ws-proxy >/dev/null 2>&1 && TGSTATUS="${TGSTATUS:+$TGSTATUS/}Go MTProto"; pidof tg-ws-proxy-rs >/dev/null 2>&1 && TGSTATUS="${TGSTATUS:+$TGSTATUS/}Rust"; if [ -n "$TGSTATUS" ]; then echo -e "${YELLOW}TG WS Proxy:${NC}             ${GREEN}запущен [$TGSTATUS]${NC}"; fi
 if hosts_enabled; then echo -e "${YELLOW}Домены в hosts:          ${GREEN}$hosts_echo${NC}"; fi; [ -f "$DATE_FILE" ] && echo -e "${YELLOW}Резервная копия:${NC}         ${GREEN}сохранена"; show_script_50 && [ -n "$name" ] && echo -e "${YELLOW}Установлен скрипт:${NC}       $name"; grep -q "$Fin_IP_Dis" /etc/hosts && echo -e "${YELLOW}Финские IP для Discord:  ${GREEN}включены${NC}"
 [ -f "$CONF" ] && CURRENT_GAME=$(grep -o '^#Gv[0-9]' "$CONF" | grep -o '[0-9]') && [ -n "$CURRENT_GAME" ] && echo -e "${YELLOW}Стратегия для игр:${NC}       ${CYAN}Gv$CURRENT_GAME${NC}"; if [ -n "$DOH_STATUS" ]; then if [ "$PKG_IS_APK" -eq 1 ]; then apk info -e https-dns-proxy >/dev/null 2>&1 && echo -e "${YELLOW}DNS over HTTPS:${NC}          $DOH_STATUS"
