@@ -76,7 +76,7 @@ DELETE="opkg remove --autoremove --force-removal-of-dependent-packages"; ARCH="$
 APK_RAS="ipk"; TMP_FILE_GO="/tmp/tg-ws-proxy.ipk"; else PKG="apk"; GO_SUF="r1"; CONFZ="/etc/apk/repositories.d/distfeeds.list"; PKG_IS_APK=1
 UPDATE="apk update"; INSTALL="apk add --allow-untrusted"; DELETE="apk del"; ARCH="$(apk --print-arch 2>/dev/null)"; APK_RAS="apk"; VER_SUF="r1"; TMP_FILE_GO="/tmp/tg-ws-proxy.apk"; fi
 if ! command -v curl >/dev/null 2>&1; then clear; echo -e "${MAGENTA}Устанавливаем ${NC}curl"; echo -e "${CYAN}Обновляем список пакетов${NC}"; if ! $UPDATE >/dev/null 2>&1; then echo -e "\n${RED}Не удалось обновить пакеты!${NC}\n"
-PAUSE; fi; echo -e "${CYAN}Устанавливаем ${NC}curl"; if ! $INSTALL curl >/dev/null 2>&1; then echo -e "\n${RED}Не удалось установить ${NC}curl!${NC}\n"; PAUSE; fi
+PAUSE; fi; echo -e "${CYAN}Устанавливаем ${NC}curl"; if ! $INSTALL curl >/dev/null 2>&1; then echo -e "\n${RED}Не удалось установить ${NC}curl!${NC}\n"; PAUSE; fi; fi
 ZAPRET_VERSION="72.20260307"; PODKOP_LATEST_VER="0.9.1"; GO_VER="0.7.2"
 get_ver() { URL="$1"; OUT_FILE="$2"; NAME="$3"; RESULT=$(curl -sIL --connect-timeout 2 --max-time 2 --retry 1 -w "%{url_effective}" -o /dev/null "$URL" 2>/dev/null); if [ $? -ne 0 ] || [ -z "$RESULT" ]; then
 echo -e "${RED}$NAME: ошибка curl${NC}"; return 1; fi; VERSION="${RESULT##*/}"; VERSION="${VERSION#v}"; if [ -z "$VERSION" ]; then echo -e "$NAME - ${RED}не удалось извлечь версию${NC}"
