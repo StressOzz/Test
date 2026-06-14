@@ -560,13 +560,23 @@ echo -e "\n${GREEN}===== Проверка IPv4 / IPv6 =====${NC}"; PROVIDER=$(cu
 echo -n "Google IPv4: "; time=$(ping -4 -c 1 -W 2 google.com 2>/dev/null | grep 'time=' | awk -F'time=' '{print $2}' | awk '{print $1}'); if [ -n "$time" ]; then echo -e "${GREEN}ok ($time ms)${NC}"; else echo -e "${RED}fail${NC}"; fi
 echo -n "Google IPv6: "; time=$(ping -6 -c 1 -W 2 google.com 2>/dev/null | grep 'time=' | awk -F'time=' '{print $2}' | awk '{print $1}'); if [ -n "$time" ]; then echo -e "${GREEN}ok ($time ms)${NC}"; else echo -e "${RED}fail${NC}"; fi
 echo -e "\n${GREEN}===== Настройки hosts =====${NC}"; if hosts_enabled; then echo -e "Домены в hosts: ${GREEN}$hosts_echo${NC}"; fi
-echo -e "\n${GREEN}===== Настройки Zapret =====${NC}"; zpr_info() { if [ "$PKG_IS_APK" -eq 1 ]; then INSTALLED_VER=$(apk info zapret 2>/dev/null | awk '/^zapret-[0-9]/ {gsub(/^zapret-|-r[0-9]+.*$/,""); print; exit}')
-else INSTALLED_VER=$(opkg list-installed | awk '/^zapret / {gsub(/-r[0-9]+$/,"",$3); print $3; exit}'); fi; NFQ_RUN=$(pgrep -f nfqws | wc -l); NFQ_ALL=$(/etc/init.d/zapret info 2>/dev/null | grep -o 'instance[0-9]\+' | wc -l); NFQ_STAT=""
-[ "$NFQ_RUN" -ne 0 ] || [ "$NFQ_ALL" -ne 0 ] && { [ "$NFQ_RUN" -eq "$NFQ_ALL" ] && NFQ_CLR="$GREEN" || NFQ_CLR="$RED"; NFQ_STAT="${NFQ_CLR}[${NFQ_RUN}/${NFQ_ALL}]${NC}"; }
-if /etc/init.d/zapret status 2>/dev/null | grep -qi "running"; then ZAPRET_STATUS="${GREEN}запущен${NC} $NFQ_STAT"; else ZAPRET_STATUS="${RED}остановлен${NC}"; fi; SCRIPT_FILE="/opt/zapret/init.d/openwrt/custom.d/50-script.sh"
-if [ -f "$SCRIPT_FILE" ]; then line=$(head -n1 "$SCRIPT_FILE"); case "$line" in *QUIC*) name="50-quic4all" ;; *stun*) name="50-stun4all" ;; *"discord media"*) name="50-discord-media" ;; *"discord subnets"*) name="50-discord" ;; *) name="" ;; esac; fi
+echo -e "\n${GREEN}===== Настройки Zapret =====${NC}"
 TCP_VAL=$(grep -E "^[[:space:]]*option NFQWS_PORTS_TCP[[:space:]]+'" "$CONF" | sed "s/.*'\(.*\)'.*/\1/"); UDP_VAL=$(grep -E "^[[:space:]]*option NFQWS_PORTS_UDP[[:space:]]+'" "$CONF" | sed "s/.*'\(.*\)'.*/\1/")
-echo -e "${GREEN}$INSTALLED_VER${NC} | $ZAPRET_STATUS"; [ -n "$name" ] && echo -e "${GREEN}$name${NC}"; echo -e "TCP: ${GREEN}$TCP_VAL${NC}\nUDP: ${GREEN}$UDP_VAL${NC}"
+
+if [ -f /etc/init.d/zapret ]; then /etc/init.d/zapret status >/dev/null 2>&1 && ZAPRET_STATUS="${GREEN}запущен${NC} $NFQ_STAT" || ZAPRET_STATUS="${RED}остановлен${NC}"; if [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ]; then echo -e "${YELLOW}Zapret:${NC}              ${GREEN}$INSTALLED_VER${NC} / $ZAPRET_STATUS"
+else echo -e "${YELLOW}Zapret:${NC}              ${RED}версия устарела${NC} / $ZAPRET_STATUS"; fi; else echo -e "${YELLOW}Zapret:${NC}              ${RED}не установлен${NC}"; fi
+TGSTATUS=""; pidof tg-ws-proxy-go >/dev/null 2>&1 && TGSTATUS="${TGSTATUS:+$TGSTATUS/}Go SOCKS5"; pidof tg-ws-proxy >/dev/null 2>&1 && TGSTATUS="${TGSTATUS:+$TGSTATUS/}Go MTProto"; pidof tg-ws-proxy-rs >/dev/null 2>&1 && TGSTATUS="${TGSTATUS:+$TGSTATUS/}Rust"; if [ -n "$TGSTATUS" ]; then echo -e "${YELLOW}TG WS Proxy:${NC}         ${GREEN}запущен [$TGSTATUS]${NC}"; fi
+if hosts_enabled; then echo -e "${YELLOW}Домены в hosts:      ${GREEN}$hosts_echo${NC}"; fi; [ -f "$DATE_FILE" ] && echo -e "${YELLOW}Резервная копия:${NC}     ${GREEN}сохранена"; show_script_50 && [ -n "$name" ] && echo -e "${YELLOW}Установлен скрипт:${NC}   $name"; grep -q "$Fin_IP_Dis" /etc/hosts && echo -e "${YELLOW}IP для Discord:      ${GREEN}включены${NC}"
+if [ -n "$DOH_STATUS" ]; then if [ "$PKG_IS_APK" -eq 1 ]; then apk info -e https-dns-proxy >/dev/null 2>&1 && echo -e "${YELLOW}DNS over HTTPS:${NC}          $DOH_STATUS"; else opkg list-installed | grep -q '^https-dns-proxy ' && echo -e "${YELLOW}DNS over HTTPS:${NC}          $DOH_STATUS"; fi; fi
+pkg_is_installed netshift && { [ "$INST_VER_POD" != "$PODKOP_LATEST_VER" ] && echo -e "${YELLOW}NetShift:${NC}           ${RED}версия устарела${NC}" || echo -e "${YELLOW}NetShift:${NC}            ${GREEN}$VER_POD${NC}"; }
+if web_is_enabled; then echo -e "${YELLOW}Доступ из браузера:${NC}  $LAN_IP:7681"; fi; quic_is_blocked && if quic_is_blocked; then echo -e "${YELLOW}Блокировка QUIC:${NC}     ${GREEN}включена${NC}"; fi; if grep -q 'ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc
+then echo -e "${YELLOW}FIX Flow Offloading:${NC} ${GREEN}включён${NC}"; fi; if [ "$CURR" != "default / OpenWrt" ]; then echo -e "${YELLOW}Зеркало OpenWRT:${NC}     $CURR"; fi; if [ -f /etc/init.d/zapret ] && [ -f "$CONF" ] && grep -Eq "^[[:space:]]*option DISABLE_IPV6 '0'" "$CONF"; then echo -e "${YELLOW}IPv6 в Zapret:       ${GREEN}включён${NC}"; fi
+[ -f "$CONF" ] && line=$(grep -m1 '^#general' "$CONF") && [ -n "$line" ] && echo -e "${YELLOW}Стратегия Zapret:${NC}    ${CYAN}${line#?}$(grep -o -E '^#Gv[0-9][0-9]*' "$CONF" | sed 's/^#/ \/ /' | head -n1)${NC}"
+if [ -f "$CONF" ]; then current="$ver$( [ -n "$ver" ] && [ -n "$yv_ver" ] && echo " / " )$yv_ver"; DV=$(grep -o -E '^#Dv[0-9][0-9]*' "$CONF" | sed 's/^#[[:space:]]*/\/ /' | head -n1); GV=$(grep -o -E '^#Gv[0-9][0-9]*' "$CONF" | sed 's/^#/\/ /' | head -n1); UPD=$(grep -q '^#udp443' "$CONF" && echo '/ upd'); WS=$(grep -q -- '--wssize 1:6' "$CONF" && echo '/ wssize')
+ME=$(grep -q -- '--methodeol' "$CONF" && echo '/ methodeol'); if [ -n "$current" ]; then echo -e "${YELLOW}Стратегия Zapret:${NC}    ${CYAN}$current${DV:+ $DV}${GV:+ $GV}${UPD:+ $UPD}${WS:+ $WS}${ME:+ $ME}${RKN_STATUS:+ $RKN_STATUS}${NC}"; elif [ -n "$RKN_STATUS" ]; then echo -e "${YELLOW}Стратегия Zapret:${NC}    ${CYAN}РКН${DV:+ $DV}${GV:+ $GV}${UPD:+ $UPD}${WS:+ $WS}${ME:+ $ME}${NC}"; fi; fi
+
+
+echo -e "TCP: ${GREEN}$TCP_VAL${NC}\nUDP: ${GREEN}$UDP_VAL${NC}"
 echo -e "\n${GREEN}===== Стратегия =====${NC}"; awk '/^[[:space:]]*option[[:space:]]+NFQWS_OPT[[:space:]]*'\''/ {flag=1; sub(/^[[:space:]]*option[[:space:]]+NFQWS_OPT[[:space:]]*'\''/, ""); next}  
 flag {if(/'\''/) {sub(/'\''$/, ""); print; exit} print}' "$CONF"; }; if [ -f /etc/init.d/zapret ]; then zpr_info; else echo -e "${RED}Zapret не установлен!${NC}"; fi
 echo -e "\n${GREEN}===== Доступность сайтов =====${NC}"; prepare_urls; total=$(wc -l < "$OUT_DPI"); half=$(( (total + 1) / 2 )); COL_OFFSET=25; checked=0; ok=0; for idx in $(seq 1 $half); do left_line=$(sed -n "${idx}p" "$OUT_DPI")
@@ -687,8 +697,7 @@ printf "%s\n" "option subscription_group_by_countries '0'" "option urltest_check
 printf "%s\n" "list community_lists 'porn'" "list community_lists 'news'" "list community_lists 'anime'" "list community_lists 'discord'" "list community_lists 'meta'" "list community_lists 'twitter'" "list community_lists 'hdrezka'" "list community_lists 'tiktok'" "list community_lists 'telegram'" "list community_lists 'cloudflare'" >> /etc/config/netshift
 printf "%s\n" "list community_lists 'google_ai'" "list community_lists 'google_play'" "list community_lists 'hodca'" "list community_lists 'roblox'" "list community_lists 'hetzner'" "list community_lists 'ovh'" "list community_lists 'digitalocean'" "list community_lists 'cloudfront'" "option user_domain_list_type 'disabled'" >> /etc/config/netshift
 printf "%s\n" "option user_subnet_list_type 'disabled'" "option mixed_proxy_enabled '0'" "option resolve_real_ip_for_routing '0'" "list subscription_filter_exclude_keywords '⬇️'" "list subscription_filter_exclude_keywords 'LTE'" "list subscription_filter_exclude_keywords 'SS'" "list subscription_filter_exclude_keywords 'Авто'" >> /etc/config/netshift
-fi
-echo -e "${CYAN}Запускаем ${NC}NetShift${NC}"; netshift enable >/dev/null 2>&1; echo -e "${CYAN}Обновляем списки${NC}"; netshift list_update >/dev/null 2>&1; echo -en "${CYAN}Перезапускаем сервис${NC}\n${YELLOW}Подождите...${NC}"; netshift restart >/dev/null 2>&1; echo -e "\nVPN подписка ${GREEN}интегрирована в ${NC}NetShift${GREEN}!${NC}\n"; PAUSE; }
+fi; echo -e "${CYAN}Запускаем ${NC}NetShift${NC}"; netshift enable >/dev/null 2>&1; echo -e "${CYAN}Обновляем списки${NC}"; netshift list_update >/dev/null 2>&1; echo -en "${CYAN}Перезапускаем сервис${NC}\n${YELLOW}Подождите...${NC}"; netshift restart >/dev/null 2>&1; echo -e "\nVPN подписка ${GREEN}интегрирована в ${NC}NetShift${GREEN}!${NC}\n"; PAUSE; }
 # МЕНЮ PODKOP
 PODKOP_menu() { while true; do openwrt_version=$(cat /etc/openwrt_release | grep DISTRIB_RELEASE | cut -d"'" -f2 | cut -d'.' -f1); if [ "$openwrt_version" = "23" ]; then echo -e "\n${RED}OpenWrt версии ниже 24 не поддерживаются!${NC}\n"; PAUSE; return; fi
 PODKOP_VER; clear; echo -e "${MAGENTA}Меню NetShift${NC}\n"; echo -e "${YELLOW}NetShift:${NC} $PODKOP_STATUS"; if { pkg_is_installed amneziawg-tools || command -v amneziawg >/dev/null 2>&1; } && uci -q get network.AWG >/dev/null; then echo -e "${YELLOW}AWG и интерфейс:  ${GREEN}установлены${NC}"; else echo -e "${YELLOW}AWG и интерфейс:  ${RED}не установлены${NC}"; fi
@@ -715,22 +724,8 @@ pkg_is_installed netshift && { [ "$INST_VER_POD" != "$PODKOP_LATEST_VER" ] && ec
 if web_is_enabled; then echo -e "${YELLOW}Доступ из браузера:${NC}  $LAN_IP:7681"; fi; quic_is_blocked && if quic_is_blocked; then echo -e "${YELLOW}Блокировка QUIC:${NC}     ${GREEN}включена${NC}"; fi; if grep -q 'ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc
 then echo -e "${YELLOW}FIX Flow Offloading:${NC} ${GREEN}включён${NC}"; fi; if [ "$CURR" != "default / OpenWrt" ]; then echo -e "${YELLOW}Зеркало OpenWRT:${NC}     $CURR"; fi; if [ -f /etc/init.d/zapret ] && [ -f "$CONF" ] && grep -Eq "^[[:space:]]*option DISABLE_IPV6 '0'" "$CONF"; then echo -e "${YELLOW}IPv6 в Zapret:       ${GREEN}включён${NC}"; fi
 [ -f "$CONF" ] && line=$(grep -m1 '^#general' "$CONF") && [ -n "$line" ] && echo -e "${YELLOW}Стратегия Zapret:${NC}    ${CYAN}${line#?}$(grep -o -E '^#Gv[0-9][0-9]*' "$CONF" | sed 's/^#/ \/ /' | head -n1)${NC}"
-
-if [ -f "$CONF" ]; then
-    current="$ver$( [ -n "$ver" ] && [ -n "$yv_ver" ] && echo " / " )$yv_ver"
-    DV=$(grep -o -E '^#Dv[0-9][0-9]*' "$CONF" | sed 's/^#[[:space:]]*/\/ /' | head -n1)
-    GV=$(grep -o -E '^#Gv[0-9][0-9]*' "$CONF" | sed 's/^#/\/ /' | head -n1)
-    UPD=$(grep -q '^#udp443' "$CONF" && echo '/ UPD')
-    WS=$(grep -q -- '--wssize 1:6' "$CONF" && echo '/ wssize')
-    ME=$(grep -q -- '--methodeol' "$CONF" && echo '/ methodeol')
-
-    if [ -n "$current" ]; then
-        echo -e "${YELLOW}Стратегия Zapret:${NC}    ${CYAN}$current${DV:+ $DV}${GV:+ $GV}${UPD:+ $UPD}${WS:+ $WS}${ME:+ $ME}${RKN_STATUS:+ $RKN_STATUS}${NC}"
-    elif [ -n "$RKN_STATUS" ]; then
-        echo -e "${YELLOW}Стратегия Zapret:${NC}    ${CYAN}РКН${DV:+ $DV}${GV:+ $GV}${UPD:+ $UPD}${WS:+ $WS}${ME:+ $ME}${NC}"
-    fi
-fi
-
+if [ -f "$CONF" ]; then current="$ver$( [ -n "$ver" ] && [ -n "$yv_ver" ] && echo " / " )$yv_ver"; DV=$(grep -o -E '^#Dv[0-9][0-9]*' "$CONF" | sed 's/^#[[:space:]]*/\/ /' | head -n1); GV=$(grep -o -E '^#Gv[0-9][0-9]*' "$CONF" | sed 's/^#/\/ /' | head -n1); UPD=$(grep -q '^#udp443' "$CONF" && echo '/ upd'); WS=$(grep -q -- '--wssize 1:6' "$CONF" && echo '/ wssize')
+ME=$(grep -q -- '--methodeol' "$CONF" && echo '/ methodeol'); if [ -n "$current" ]; then echo -e "${YELLOW}Стратегия Zapret:${NC}    ${CYAN}$current${DV:+ $DV}${GV:+ $GV}${UPD:+ $UPD}${WS:+ $WS}${ME:+ $ME}${RKN_STATUS:+ $RKN_STATUS}${NC}"; elif [ -n "$RKN_STATUS" ]; then echo -e "${YELLOW}Стратегия Zapret:${NC}    ${CYAN}РКН${DV:+ $DV}${GV:+ $GV}${UPD:+ $UPD}${WS:+ $WS}${ME:+ $ME}${NC}"; fi; fi
 echo -e "\n${CYAN}1) ${GREEN}$Z_ACTION_TEXT${NC} Zapret"; echo -e "${CYAN}2) ${GREEN}Меню стратегий${NC}\n${CYAN}3) ${GREEN}Меню тестирования стратегий\n${CYAN}4) ${GREEN}Меню ${NC}TG WS Proxy\n${CYAN}5) ${GREEN}Меню ${NC}DNS over HTTPS\n${CYAN}6) ${GREEN}Меню ${NC}NetShift\n${CYAN}7) ${GREEN}Меню настройки ${NC}Discord\n${CYAN}8) ${GREEN}Меню управления доменами в ${NC}hosts"
 echo -e "${CYAN}9) ${GREEN}Удалить ${NC}→${GREEN} установить ${NC}→${GREEN} настроить${NC} Zapret\n${CYAN}0) ${GREEN}Системное меню${NC}\n${CYAN}s) ${GREEN}$str_stp_zpr ${NC}Zapret" ; echo -ne "${CYAN}Enter) ${GREEN}Выход${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read choice
 case "$choice" in 999) echo; uninstall_zapret "1"; install_Zapret "1"; curl -fsSL https://raw.githubusercontent.com/StressOzz/Test/refs/heads/main/zapret -o "$CONF"; hosts_add "$ALL_BLOCKS"; rm -f "$EXCLUDE_FILE"; wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL"; ZAPRET_RESTART; PAUSE;;
