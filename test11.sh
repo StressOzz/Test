@@ -716,12 +716,14 @@ if [ -f "$CONF" ]; then
     current="$ver$( [ -n "$ver" ] && [ -n "$yv_ver" ] && echo " / " )$yv_ver"
     DV=$(grep -o -E '^#[[:space:]]*Dv[0-9][0-9]*' "$CONF" | sed 's/^#[[:space:]]*/\/ /' | head -n1)
     GV=$(grep -o -E '^#Gv[0-9][0-9]*' "$CONF" | sed 's/^#/\/ /' | head -n1)
-    UPD=$(grep -o -E '^#UPD([[:space:]]+.*)?$' "$CONF" | sed 's/^#/\/ /' | head -n1)
+    UPD=$(grep -q '^#UPD' "$CONF" && echo '/ UPD')
+    WS=$(grep -q -- '--wssize 1:6' "$CONF" && echo '/ wssize')
+    ME=$(grep -q -- '--methodeol' "$CONF" && echo '/ methodeol')
 
     if [ -n "$current" ]; then
-        echo -e "${YELLOW}Используется стратегия:${NC}  ${CYAN}$current${DV:+ $DV}${GV:+ $GV}${UPD:+ $UPD}${RKN_STATUS:+ $RKN_STATUS}${NC}"
+        echo -e "${YELLOW}Используется стратегия:${NC}  ${CYAN}$current${DV:+ $DV}${GV:+ $GV}${UPD:+ $UPD}${WS:+ $WS}${ME:+ $ME}${RKN_STATUS:+ $RKN_STATUS}${NC}"
     elif [ -n "$RKN_STATUS" ]; then
-        echo -e "${YELLOW}Используется стратегия:${NC}  ${CYAN}РКН${DV:+ $DV}${GV:+ $GV}${UPD:+ $UPD}${NC}"
+        echo -e "${YELLOW}Используется стратегия:${NC}  ${CYAN}РКН${DV:+ $DV}${GV:+ $GV}${UPD:+ $UPD}${WS:+ $WS}${ME:+ $ME}${NC}"
     fi
 fi
 
