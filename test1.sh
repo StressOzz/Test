@@ -3,10 +3,6 @@
 # Zapret on remittor Manager by StressOzz
 # =========================================
 ZAPRET_MANAGER_VERSION="9.6"; STR_VERSION_AUTOINSTALL="v7"
-
-# git="githubusercontent.com"; if ! grep -q "raw.$git" /etc/hosts; then echo -e "\033[1;36mДля корректной работы скрипта добавляем домены \033[0mGitHub\033[1;36m в \033[0m/etc/hosts\033[0m"
-# printf "#$git\n185.199.109.133 raw.$git release-assets.$git\n185.199.108.133 private-user-images.$git gist.$git avatars.$git\n" >> /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1; echo -e "\033[0;32mДомены \033[0mGitHub\033[0;32m добавлены!\033[0m"; fi
-
 LAN_IP=$(uci get network.lan.ipaddr 2>/dev/null | cut -d/ -f1)
 DOMAINS="youtube.com rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com rr1---sn-gvnuxaxjvh-jx3l.googlevideo.com rr1---sn-gvnuxaxjvh-jx3s.googlevideo.com"
 PORTS_UDP="88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535"; PORTS_TCP="2802,2302,2502,6000-8000,25565,27015-27030,27036-27037,50001,60442"
@@ -85,8 +81,6 @@ clear ; echo -e "${CYAN}Cобираем версии:${NC}" ; TMP_VER="/tmp/zapr
 get_ver "https://github.com/yandexru45/netshift/releases/latest" "$TMP_VER_POD" "NetShift" & get_ver "https://github.com/remittor/zapret-openwrt/releases/latest" "$TMP_VER" "Zapret" & get_ver "https://github.com/spatiumstas/tg-ws-proxy-go/releases/latest" "$TMP_VER_GO" "TG-WS Proxy GO" &
 wait; [ -s "$TMP_VER" ] && ZAPRET_VERSION="$(cat "$TMP_VER")"; [ -s "$TMP_VER_POD" ] && PODKOP_LATEST_VER="$(cat "$TMP_VER_POD")"; [ -s "$TMP_VER_GO" ] && GO_VER="$(cat "$TMP_VER_GO")"
 echo 'sh <(wget -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/main/Zapret-Manager.sh)' > /usr/bin/zms; chmod +x /usr/bin/zms
-
-# URL_zms='https://raw.githubusercontent.com/StressOzz/Zapret-Manager/main/Zapret-Manager.sh'; TMP_zms='/tmp/zms'; DST_zms='/usr/bin/zms'; curl -fsS4 --connect-timeout 1 --max-time 2 --retry 1 -o "$TMP_zms" "$URL_zms" && { [ ! -f "$DST_zms" ] || ! cmp -s "$TMP_zms" "$DST_zms"; } && mv "$TMP_zms" "$DST_zms" && chmod +x "$DST_zms"; rm -f "$TMP_zms"
 # ==========================================
 # Получение версии
 # ==========================================
@@ -474,9 +468,7 @@ prepare_urls() { : > "$OUT_DPI"; printf '%s\n' "gosuslugi.ru|https://www.gosuslu
 "discord.com|https://discord.com" "x.com|https://x.com" "filmix.my|https://filmix.my" "flightradar24.com|https://flightradar24.com" "play.google.com|https://play.google.com" \
 "kinozal.tv|https://kinozal.tv" "cub.red|https://cub.red" >> "$OUT_DPI"; curl -fsSL "$RAW" | sed -n 's/.*"id":[[:space:]]*"\([^"]*\)".*"host":[[:space:]]*"\([^"]*\)".*/\1|\2/p' >> "$OUT_DPI" \
 || { echo -e "\n${RED}Ошибка загрузки DPI списка${NC}\n"; PAUSE; return 1; }; TOTAL=$(grep -c "|" "$OUT_DPI"); }
-check_current_strategy() { clear; echo -e "${MAGENTA}Тестирование текущей стратегии${NC}\n"; prepare_urls; URLS="$(cat "$OUT_DPI")"; OK=0; URLS="$(cat "$OUT_DPI")"; TOTAL=$(grep -c "|" "$OUT_DPI"); echo -e "${CYAN}Доменов для теста:${NC} $TOTAL\n"
-LOG_TMP="/tmp/zapret_log_${CUR}"
-: > "$LOG_TMP"
+check_current_strategy() { clear; echo -e "${MAGENTA}Тестирование текущей стратегии${NC}\n"; prepare_urls; URLS="$(cat "$OUT_DPI")"; OK=0; URLS="$(cat "$OUT_DPI")"; TOTAL=$(grep -c "|" "$OUT_DPI"); echo -e "${CYAN}Доменов для теста:${NC} $TOTAL\n"; LOG_TMP="/tmp/zapret_log_${CUR}"; : > "$LOG_TMP"
 check_all_urls; if [ "$OK" -eq "$TOTAL" ]; then COLOR="${GREEN}"; elif [ "$OK" -ge $((TOTAL/2)) ]; then COLOR="${YELLOW}"; else COLOR="${RED}"; fi; echo -e "\n${CYAN}Результат теста: ${COLOR}$OK/$TOTAL${NC}\n"; rm -f "$OUT_DPI"; PAUSE; }
 show_test_results() { clear; echo -e "${MAGENTA}Результаты тестирования стратегий${NC}\n"; TMP_RES="/tmp/zapret_results_show.$$"; : > "$TMP_RES"; if [ -s "$RES3" ]; then cat "$RES3" > "$TMP_RES"; else [ -s "$RES1" ] && cat "$RES1" >> "$TMP_RES"
 [ -s "$RES2" ] && cat "$RES2" >> "$TMP_RES"; [ ! -s "$TMP_RES" ] && { rm -f "$TMP_RES"; echo -e "${RED}Результаты не найдены!${NC}\n"; PAUSE; return; }; fi; awk '!seen && /^Контрольный тест/ {print; seen=1; next} !/^Контрольный тест/ {print}' "$TMP_RES" > "${TMP_RES}.u"
@@ -560,8 +552,7 @@ echo -e "\n${GREEN}===== Проверка IPv4 / IPv6 =====${NC}"; PROVIDER=$(cu
 echo -n "Google IPv4: "; time=$(ping -4 -c 1 -W 2 google.com 2>/dev/null | grep 'time=' | awk -F'time=' '{print $2}' | awk '{print $1}'); if [ -n "$time" ]; then echo -e "${GREEN}ok ($time ms)${NC}"; else echo -e "${RED}fail${NC}"; fi
 echo -n "Google IPv6: "; time=$(ping -6 -c 1 -W 2 google.com 2>/dev/null | grep 'time=' | awk -F'time=' '{print $2}' | awk '{print $1}'); if [ -n "$time" ]; then echo -e "${GREEN}ok ($time ms)${NC}"; else echo -e "${RED}fail${NC}"; fi
 echo -e "\n${GREEN}===== Настройки Zapret =====${NC}"
-if [ -f /etc/init.d/zapret ]; then INFO_ZPR
-TCP_VAL=$(grep -E "^[[:space:]]*option NFQWS_PORTS_TCP[[:space:]]+'" "$CONF" | sed "s/.*'\(.*\)'.*/\1/"); UDP_VAL=$(grep -E "^[[:space:]]*option NFQWS_PORTS_UDP[[:space:]]+'" "$CONF" | sed "s/.*'\(.*\)'.*/\1/")
+if [ -f /etc/init.d/zapret ]; then INFO_ZPR; TCP_VAL=$(grep -E "^[[:space:]]*option NFQWS_PORTS_TCP[[:space:]]+'" "$CONF" | sed "s/.*'\(.*\)'.*/\1/"); UDP_VAL=$(grep -E "^[[:space:]]*option NFQWS_PORTS_UDP[[:space:]]+'" "$CONF" | sed "s/.*'\(.*\)'.*/\1/")
 echo -e "TCP: ${GREEN}$TCP_VAL${NC}\nUDP: ${GREEN}$UDP_VAL${NC}"; echo -e "\n${GREEN}===== Стратегия =====${NC}"; awk '/^[[:space:]]*option[[:space:]]+NFQWS_OPT[[:space:]]*'\''/ {flag=1; sub(/^[[:space:]]*option[[:space:]]+NFQWS_OPT[[:space:]]*'\''/, ""); next}  
 flag {if(/'\''/) {sub(/'\''$/, ""); print; exit} print}' "$CONF"; else echo -e "${RED}Zapret не установлен!${NC}"; fi
 echo -e "\n${GREEN}===== Доступность сайтов =====${NC}"; prepare_urls; total=$(wc -l < "$OUT_DPI"); half=$(( (total + 1) / 2 )); COL_OFFSET=25; checked=0; ok=0; for idx in $(seq 1 $half); do left_line=$(sed -n "${idx}p" "$OUT_DPI")
@@ -690,7 +681,9 @@ if ! pkg_is_installed netshift; then echo -e "\n${CYAN}1) ${GREEN}Установ
 if pkg_is_installed amneziawg-tools; then echo -e "${CYAN}2) ${GREEN}Удалить ${NC}AWG${GREEN} и ${NC}интерфейс AWG"; else echo -e "${CYAN}2) ${GREEN}Установить ${NC}AWG${GREEN} и ${NC}интерфейс AWG"; fi
 if [ -f /etc/config/netshift ] && grep -q "^[[:space:]]*option subscription_url" /etc/config/netshift; then echo -e "${CYAN}3) ${GREEN}Сменить ${NC}VPN подписку${GREEN} в ${NC}NetShift"; else echo -e "${CYAN}3) ${GREEN}Интегрировать ${NC}VPN подписку${GREEN} в ${NC}NetShift"; fi
 echo -e "${CYAN}4) ${GREEN}Интегрировать ${NC}AWG${GREEN} в ${NC}NetShift"; echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}"; echo -ne "\n${YELLOW}Выберите пункт:${NC} "; read choicePOD; case "$choicePOD" in 1) PODKOP_INSTALL ;; 2) install_AWG ;; 3) PODKOP_VPN ;; 4) integration_AWG ;; *) return ;; esac; done }
-
+# ==========================================
+# Информация
+# ==========================================
 INFO_ZPR() { if [ -f /etc/init.d/zapret ]; then /etc/init.d/zapret status >/dev/null 2>&1 && ZAPRET_STATUS="${GREEN}запущен${NC} $NFQ_STAT" || ZAPRET_STATUS="${RED}остановлен${NC}"; if [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ]; then echo -e "${YELLOW}Zapret:${NC}              ${GREEN}$INSTALLED_VER${NC} / $ZAPRET_STATUS"
 else echo -e "${YELLOW}Zapret:${NC}              ${RED}версия устарела${NC} / $ZAPRET_STATUS"; fi; else echo -e "${YELLOW}Zapret:${NC}              ${RED}не установлен${NC}"; fi
 TGSTATUS=""; pidof tg-ws-proxy-go >/dev/null 2>&1 && TGSTATUS="${TGSTATUS:+$TGSTATUS/}Go SOCKS5"; pidof tg-ws-proxy >/dev/null 2>&1 && TGSTATUS="${TGSTATUS:+$TGSTATUS/}Go MTProto"; pidof tg-ws-proxy-rs >/dev/null 2>&1 && TGSTATUS="${TGSTATUS:+$TGSTATUS/}Rust"; if [ -n "$TGSTATUS" ]; then echo -e "${YELLOW}TG WS Proxy:${NC}         ${GREEN}запущен [$TGSTATUS]${NC}"; fi
@@ -712,8 +705,7 @@ for pkg in byedpi youtubeUnblock; do if [ "$PKG_IS_APK" -eq 1 ]; then apk info -
 else opkg list-installed | grep -q "^$pkg" && echo -e "${RED}Найден установленный ${NC}$pkg${RED}!${NC}\nZapret${RED} может работать некорректно с ${NC}$pkg${RED}!${NC}\n"; fi; done
 if uci get firewall.@defaults[0].flow_offloading 2>/dev/null | grep -q '^1$' || uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null | grep -q '^1$'; then if ! grep -q 'meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc
 then echo -e "${RED}Включён ${NC}Flow Offloading${RED}!${NC}\n${NC}Zapret${RED} некорректно работает с включённым ${NC}Flow Offloading${RED}!\nПримените ${NC}FIX${RED} в системном меню!\n${NC}"; fi; fi; pgrep -f "/opt/zapret" >/dev/null 2>&1 && str_stp_zpr="Остановить" || str_stp_zpr="Запустить"
-INFO_ZPR
-echo -e "\n${CYAN}1) ${GREEN}$Z_ACTION_TEXT${NC} Zapret"; echo -e "${CYAN}2) ${GREEN}Меню стратегий${NC}\n${CYAN}3) ${GREEN}Меню тестирования стратегий\n${CYAN}4) ${GREEN}Меню ${NC}TG WS Proxy\n${CYAN}5) ${GREEN}Меню ${NC}DNS over HTTPS\n${CYAN}6) ${GREEN}Меню ${NC}NetShift\n${CYAN}7) ${GREEN}Меню настройки ${NC}Discord\n${CYAN}8) ${GREEN}Меню управления доменами в ${NC}hosts"
+INFO_ZPR; echo -e "\n${CYAN}1) ${GREEN}$Z_ACTION_TEXT${NC} Zapret"; echo -e "${CYAN}2) ${GREEN}Меню стратегий${NC}\n${CYAN}3) ${GREEN}Меню тестирования стратегий\n${CYAN}4) ${GREEN}Меню ${NC}TG WS Proxy\n${CYAN}5) ${GREEN}Меню ${NC}DNS over HTTPS\n${CYAN}6) ${GREEN}Меню ${NC}NetShift\n${CYAN}7) ${GREEN}Меню настройки ${NC}Discord\n${CYAN}8) ${GREEN}Меню управления доменами в ${NC}hosts"
 echo -e "${CYAN}9) ${GREEN}Удалить ${NC}→${GREEN} установить ${NC}→${GREEN} настроить${NC} Zapret\n${CYAN}0) ${GREEN}Системное меню${NC}\n${CYAN}s) ${GREEN}$str_stp_zpr ${NC}Zapret" ; echo -ne "${CYAN}Enter) ${GREEN}Выход${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read choice
 case "$choice" in 999) echo; uninstall_zapret "1"; install_Zapret "1"; curl -fsSL https://raw.githubusercontent.com/StressOzz/Test/refs/heads/main/zapret -o "$CONF"; hosts_add "$ALL_BLOCKS"; rm -f "$EXCLUDE_FILE"; wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL"; ZAPRET_RESTART; PAUSE;;
 1) $Z_ACTION_FUNC;; s|S) pgrep -f /opt/zapret >/dev/null 2>&1 && stop_zapret || start_zapret;; 2) menu_str;; 3)TEST_menu;; 4) menu_TG;; 5) DoH_menu;; 6) PODKOP_menu ;; 7) Discord_menu;; 8) menu_hosts;; 9) zapret_key;; 0) sys_menu;; *) echo; exit 0;; esac; }; while true; do show_menu; done
