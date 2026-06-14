@@ -711,8 +711,20 @@ pkg_is_installed netshift && { [ "$INST_VER_POD" != "$PODKOP_LATEST_VER" ] && ec
 if web_is_enabled; then echo -e "${YELLOW}Доступ из браузера:${NC}      $LAN_IP:7681"; fi; quic_is_blocked && if quic_is_blocked; then echo -e "${YELLOW}Блокировка QUIC:${NC}         ${GREEN}включена${NC}"; fi; if grep -q 'ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc
 then echo -e "${YELLOW}FIX для Flow Offloading:${NC} ${GREEN}включён${NC}"; fi; if [ "$CURR" != "default / OpenWrt" ]; then echo -e "${YELLOW}Используется зеркало:${NC}    $CURR"; fi; if [ -f /etc/init.d/zapret ] && [ -f "$CONF" ] && grep -Eq "^[[:space:]]*option DISABLE_IPV6 '0'" "$CONF"; then echo -e "${YELLOW}IPv6 в Zapret:           ${GREEN}включён${NC}"; fi
 [ -f "$CONF" ] && line=$(grep -m1 '^#general' "$CONF") && [ -n "$line" ] && echo -e "${YELLOW}Используется стратегия:${NC}  ${CYAN}${line#?}$(grep -o -E '^#Gv[0-9][0-9]*' "$CONF" | sed 's/^#/ \/ /' | head -n1)${NC}"
-if [ -f "$CONF" ]; then current="$ver$( [ -n "$ver" ] && [ -n "$yv_ver" ] && echo " / " )$yv_ver"; DV=$(grep -o -E '^#[[:space:]]*Dv[0-9][0-9]*' "$CONF" | sed 's/^#[[:space:]]*/\/ /' | head -n1); GV=$(grep -o -E '^#Gv[0-9][0-9]*' "$CONF" | sed 's/^#/\/ /' | head -n1); if [ -n "$current" ]
-then echo -e "${YELLOW}Используется стратегия:${NC}  ${CYAN}$current${DV:+ $DV}${GV:+ $GV}${RKN_STATUS:+ $RKN_STATUS}${NC}"; elif [ -n "$RKN_STATUS" ]; then echo -e "${YELLOW}Используется стратегия:${NC}  ${CYAN}РКН${DV:+ $DV}${GV:+ $GV}${NC}"; fi; fi
+
+if [ -f "$CONF" ]; then
+    current="$ver$( [ -n "$ver" ] && [ -n "$yv_ver" ] && echo " / " )$yv_ver"
+    DV=$(grep -o -E '^#[[:space:]]*Dv[0-9][0-9]*' "$CONF" | sed 's/^#[[:space:]]*/\/ /' | head -n1)
+    GV=$(grep -o -E '^#Gv[0-9][0-9]*' "$CONF" | sed 's/^#/\/ /' | head -n1)
+    UPD=$(grep -o -E '^#UPD([[:space:]]+.*)?$' "$CONF" | sed 's/^#/\/ /' | head -n1)
+
+    if [ -n "$current" ]; then
+        echo -e "${YELLOW}Используется стратегия:${NC}  ${CYAN}$current${DV:+ $DV}${GV:+ $GV}${UPD:+ $UPD}${RKN_STATUS:+ $RKN_STATUS}${NC}"
+    elif [ -n "$RKN_STATUS" ]; then
+        echo -e "${YELLOW}Используется стратегия:${NC}  ${CYAN}РКН${DV:+ $DV}${GV:+ $GV}${UPD:+ $UPD}${NC}"
+    fi
+fi
+
 echo -e "\n${CYAN}1) ${GREEN}$Z_ACTION_TEXT${NC} Zapret"; echo -e "${CYAN}2) ${GREEN}Меню стратегий${NC}\n${CYAN}3) ${GREEN}Меню тестирования стратегий\n${CYAN}4) ${GREEN}Меню ${NC}TG WS Proxy\n${CYAN}5) ${GREEN}Меню ${NC}DNS over HTTPS\n${CYAN}6) ${GREEN}Меню ${NC}NetShift\n${CYAN}7) ${GREEN}Меню настройки ${NC}Discord\n${CYAN}8) ${GREEN}Меню управления доменами в ${NC}hosts"
 echo -e "${CYAN}9) ${GREEN}Удалить ${NC}→${GREEN} установить ${NC}→${GREEN} настроить${NC} Zapret\n${CYAN}0) ${GREEN}Системное меню${NC}\n${CYAN}s) ${GREEN}$str_stp_zpr ${NC}Zapret" ; echo -ne "${CYAN}Enter) ${GREEN}Выход${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read choice
 case "$choice" in 999) echo; uninstall_zapret "1"; install_Zapret "1"; curl -fsSL https://raw.githubusercontent.com/StressOzz/Test/refs/heads/main/zapret -o "$CONF"; hosts_add "$ALL_BLOCKS"; rm -f "$EXCLUDE_FILE"; wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL"; ZAPRET_RESTART; PAUSE;;
