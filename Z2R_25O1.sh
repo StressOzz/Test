@@ -23,7 +23,7 @@ else
     PKG_REMOVE="apk del"
     PKG_TYPE="apk"
     ARCH_SUFFIX=""
-    UPDATE="apk update"
+    ="apk "
     CHECK_INSTALLED() { apk list --installed 2>/dev/null | grep -q "^$1"; }
 fi
 
@@ -246,6 +246,7 @@ install_package() {
     
     if [ -n "$packages_to_install" ]; then
         $PKG_INSTALL $packages_to_install
+		$PKG_INSTALL sing-box
         sleep 2
         if [ $? -eq 0 ]; then
             # Перезапускаем веб-интерфейс если установлен luci
