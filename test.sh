@@ -73,7 +73,7 @@ APK_RAS="ipk"; TMP_FILE_GO="/tmp/tg-ws-proxy.ipk"; else PKG="apk"; GO_SUF="r1"; 
 UPDATE="apk update"; INSTALL="apk add --allow-untrusted"; DELETE="apk del"; ARCH="$(apk --print-arch 2>/dev/null)"; APK_RAS="apk"; VER_SUF="r1"; TMP_FILE_GO="/tmp/tg-ws-proxy.apk"; fi
 if ! command -v curl; then clear; echo -e "${MAGENTA}Устанавливаем ${NC}curl"; echo -e "${CYAN}Обновляем список пакетов${NC}"; if ! $UPDATE; then echo -e "\n${RED}Не удалось обновить пакеты!${NC}\n"
 PAUSE; fi; echo -e "${CYAN}Устанавливаем ${NC}curl"; if ! $INSTALL curl; then echo -e "\n${RED}Не удалось установить ${NC}curl!${NC}\n"; PAUSE; fi; fi
-ZAPRET_VERSION="72.20260307"; PODKOP_LATEST_VER="0.9.1"; GO_VER="0.7.2"
+ZAPRET_VERSION="72.20260307"; PODKOP_LATEST_VER="0.9.2"; GO_VER="0.7.2"
 echo 'sh <(wget -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/main/Zapret-Manager.sh)' > /usr/bin/zms; chmod +x /usr/bin/zms
 
 git="githubusercontent.com"; if ! grep -q "raw.$git" /etc/hosts; then echo -e "\n\033[1;36mДля корректной работы скрипта добавляем домены \033[0mGitHub\033[1;36m в \033[0m/etc/hosts\033[0m"
