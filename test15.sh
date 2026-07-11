@@ -251,35 +251,11 @@ apply_strategy() { NAME="$1"; BODY="$2"; sed -i "/^[[:space:]]*option NFQWS_OPT 
 # ==========================================
 # РКН список ВКЛ / ВЫКЛ
 # ==========================================
-enable_rkn() {
-    echo -e "\n${MAGENTA}Включаем списки РКН${NC}"
-
-SIZE=0
-[ -f "$HOSTLIST_FILE" ] && SIZE=$(wc -c < "$HOSTLIST_FILE" 2>/dev/null || echo 0)
-
-if [ "$SIZE" -gt 1800000 ]; then
-    echo -e "${YELLOW}Список РКН уже существует, скачивание пропущено${NC}"
-else
-    [ -f "$HOSTLIST_FILE" ] && cp "$HOSTLIST_FILE" "$BACKUP_FILE" && cp "$HOSTLIST_FILE" "$HOSTS_USER"
-
-    curl -fsSL "$RKN_URL" >> "$HOSTLIST_FILE" || {
-        echo -e "\n${RED}Не удалось скачать список РКН${NC}\n"
-        PAUSE
-        return
-    }
-fi
-
-    sed -i 's|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt|' "$CONF"
-
-    ZAPRET_RESTART
-
-    echo -e "${GREEN}Обход по спискам ${NC}РКН${GREEN} включен${NC}\n"
-}
-
-
+enable_rkn() { echo -e "\n${MAGENTA}Включаем списки РКН${NC}"; SIZE=0; [ -f "$HOSTLIST_FILE" ] && SIZE=$(wc -c < "$HOSTLIST_FILE" 2>/dev/null || echo 0); if [ "$SIZE" -le 1800000 ]
+then [ -f "$HOSTLIST_FILE" ] && cp "$HOSTLIST_FILE" "$BACKUP_FILE" && cp "$HOSTLIST_FILE" "$HOSTS_USER"; curl -fsSL "$RKN_URL" >> "$HOSTLIST_FILE" || { echo -e "\n${RED}Не удалось скачать список РКН${NC}\n"; PAUSE; return; }; fi
+sed -i 's|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt|' "$CONF"; ZAPRET_RESTART; echo -e "${GREEN}Обход по спискам ${NC}РКН${GREEN} включен${NC}\n"; }
 disable_rkn() { echo -e "\n${MAGENTA}Выключаем списки РКН${NC}"; sed -i 's|--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|' "$CONF"; if [ -s "$BACKUP_FILE" ]
 then cp "$BACKUP_FILE" "$HOSTLIST_FILE"; else : > "$HOSTLIST_FILE"; fi; rm -f "$HOSTS_USER" "$BACKUP_FILE"; ZAPRET_RESTART; echo -e "${GREEN}Обход по спискам ${NC}РКН${GREEN} выключен${NC}\n"; }
-
 toggle_rkn_bypass() { if grep -q -- "--filter-tcp=443 <HOSTLIST>" "$CONF"; then if [ -f "$BACKUP_FILE" ]; then disable_rkn; else [ -f "$HOSTLIST_FILE" ] && cp "$HOSTLIST_FILE" "$BACKUP_FILE"; enable_rkn; fi; PAUSE </dev/tty; return; fi; if grep -q -- "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "$CONF"
 then enable_rkn; PAUSE </dev/tty; elif grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONF"; then disable_rkn; PAUSE </dev/tty; else echo -e "\n${RED}Стратегия не подходит для списков РКН\n${NC}"; PAUSE </dev/tty; fi; }
 RKN_Check() { SIZE=0; [ -f /opt/zapret/ipset/zapret-hosts-user.txt ] && SIZE=$(wc -c < /opt/zapret/ipset/zapret-hosts-user.txt 2>/dev/null || echo 0)
