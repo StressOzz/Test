@@ -75,6 +75,7 @@ hosts_add() { printf "%b\n" "$1" | while IFS= read -r L; do grep -qxF "$L" /etc/
 ZAPRET_RESTART () { chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1; sleep 1; }
 PAUSE() { echo -ne "Нажмите Enter..."; read dummy; }; BACKUP_DIR="/opt/zapret_backup"; DATE_FILE="$BACKUP_DIR/date_backup.txt"
 BIN_PATH_GO="/usr/bin/tg-ws-proxy-go"; INIT_PATH_GO="/etc/init.d/tg-ws-proxy-go"; BIN_PATH_RS="/usr/bin/tg-ws-proxy-rs"; INIT_PATH_RS="/etc/init.d/tg-ws-proxy-rs"
+
 if command -v opkg >/dev/null 2>&1; then PKG="opkg"; GO_SUF="1"; CONFZ="/etc/opkg/distfeeds.conf"; PKG_IS_APK=0; UPDATE="opkg update"; INSTALL="opkg install"
 DELETE="opkg remove"; ARCH="$(opkg print-architecture | awk '{print $2}' | tail -n1)"; VER_SUF="r1-all"
 APK_RAS="ipk"; TMP_FILE_GO="/tmp/tg-ws-proxy.ipk"; else PKG="apk"; GO_SUF="r1"; CONFZ="/etc/apk/repositories.d/distfeeds.list"; PKG_IS_APK=1
@@ -297,7 +298,7 @@ then sed -i "/^[[:space:]]*option NFQWS_PORTS_TCP '/s/'$/,2053,2083,2087,2096,84
 wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL" || { echo -e "\n${RED}Не удалось загрузить exclude файл${NC}\n"; PAUSE; return; }; echo -e "${CYAN}Применяем стратегию${NC}"; ZAPRET_RESTART; echo -e "${GREEN}Стратегия ${NC}$SEL_NAME ${GREEN}установлена!${NC}\n"
 grep -Fq "=ts" "$CONF" && echo -e "${YELLOW}Для работы этой стратегии, в терминале Windows нужно выполнить:${NC}\nnetsh int tcp set global timestamps=enabled\n"; PAUSE; break; done; }
 download_strategies() { local NO_PAUSE=$1; [ "$NO_PAUSE" != "1" ] && echo -e "\n${MAGENTA}Скачиваем и формируем стратегии${NC}"; mkdir -p "$TMP_SF"; : > "$OUT";  wget -q -U "Mozilla/5.0" -O "$ZIP" "$FLOWSEAL_STR_ZIP" || { echo -e "\n${RED}Не удалось загрузить файл стратегий${NC}\n"; PAUSE; return; }
-if ! command -v unzip >/dev/null 2>&1; then echo -e "${CYAN}Устанавливаем ${NC}unzip"; if [ "$PKG_IS_APK" -eq 1 ]; then apk add unzip >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить unzip!${NC}\n"; PAUSE; return; }; else opkg install unzip >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить unzip!${NC}\n"; PAUSE; return; }; fi; fi
+if ! command -v unzip >/dev/null 2>&1; then echo -e "${CYAN}Устанавливаем ${NC}unzip"; $INSTALL unzip >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить unzip!${NC}\n"; PAUSE; return; }; fi
 unzip -oq "$ZIP" -d "$TMP_SF" || { echo -e "\n${RED}Не удалось распоковать файл${NC}\n"; PAUSE; return; }; BASE="$TMP_SF"; find "$BASE" -type f -name 'general*.bat' ! -name 'general (ALT5).bat' | while read -r F; do MATCH=$(grep -E '^--filter-udp=19294-19344,50000-50100|^--filter-tcp=2053,2083,2087,2096,8443|^--filter-tcp=443 --hostlist="%LISTS%list-google.txt"|^--filter-tcp=80,443 --hostlist="%LISTS%list-general.txt"' "$F")
 [ -z "$MATCH" ] && continue; NAME=$(basename "$F" .bat); { echo "#$NAME"; echo "$MATCH" | sed 's/--/\n--/g' | sed '/^$/d' | sed 's/[[:space:]]*$//'; echo; } >> "$OUT"; done; sed -i 's|"%BIN%tls_clienthello_www_google_com.bin"|/opt/zapret/files/fake/tls_clienthello_www_google_com.bin|g' "$OUT"; sed -i '/--hostlist="%LISTS%list-general.txt"/d' "$OUT"
 sed -i '/--hostlist="%LISTS%list-general-user.txt"/d' "$OUT"; sed -i '/--ipset-exclude="%LISTS%ipset-exclude.txt"/d' "$OUT"; sed -i '/--ipset-exclude="%LISTS%ipset-exclude-user.txt"/d' "$OUT"; sed -i '/--hostlist-exclude="%LISTS%list-exclude-user.txt"/d' "$OUT"; sed -i 's|"%LISTS%list-exclude.txt"|/opt/zapret/ipset/zapret-hosts-user-exclude.txt|g' "$OUT"
@@ -386,10 +387,9 @@ doh_mafioznik=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 
 # Доступ из браузера
 # ==========================================
 web_is_enabled() { command -v ttyd >/dev/null 2>&1 && uci -q get ttyd.@ttyd[0].command | grep -q "/usr/bin/zms"; }
-toggle_web() { if web_is_enabled; then echo -e "\n${MAGENTA}Удаляем доступ из браузера${NC}"; if [ "$PKG_IS_APK" -eq 1 ]; then apk del luci-app-ttyd ttyd >/dev/null 2>&1; else opkg remove luci-app-ttyd ttyd >/dev/null 2>&1; fi
-rm -f /etc/config/ttyd; echo -e "${GREEN}Доступ удалён!${NC}\n"; PAUSE; else echo -e "\n${MAGENTA}Активируем доступ из браузера${NC}"; echo -e "${CYAN}Обновляем список пакетов${NC}"; $UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; PAUSE; return; }
-echo -e "${CYAN}Устанавливаем ${NC}ttyd"; if [ "$PKG_IS_APK" -eq 1 ]; then if ! apk add luci-app-ttyd >/dev/null 2>&1; then echo -e "\n${RED}Ошибка при установке ttyd!${NC}\n"; PAUSE; return; fi; else if ! opkg install luci-app-ttyd >/dev/null 2>&1
-then echo -e "\n${RED}Ошибка при установке ttyd!${NC}\n"; PAUSE; return; fi; fi; echo -e "${CYAN}Настраиваем ${NC}ttyd"; sed -i 's#/bin/login#-t fontSize=15 sh /usr/bin/zms#' /etc/config/ttyd; /etc/init.d/ttyd restart >/dev/null 2>&1; if pidof ttyd >/dev/null
+toggle_web() { if web_is_enabled; then echo -e "\n${MAGENTA}Удаляем доступ из браузера${NC}"; $DELETE luci-app-ttyd ttyd >/dev/null 2>&1; fi; rm -f /etc/config/ttyd
+echo -e "${GREEN}Доступ удалён!${NC}\n"; PAUSE; else echo -e "\n${MAGENTA}Активируем доступ из браузера${NC}"; echo -e "${CYAN}Обновляем список пакетов${NC}"; $UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; PAUSE; return; }
+echo -e "${CYAN}Устанавливаем ${NC}ttyd"; $INSTALL luci-app-ttyd >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при установке ttyd!${NC}\n"; PAUSE; return; }; echo -e "${CYAN}Настраиваем ${NC}ttyd"; sed -i 's#/bin/login#-t fontSize=15 sh /usr/bin/zms#' /etc/config/ttyd; /etc/init.d/ttyd restart >/dev/null 2>&1; if pidof ttyd >/dev/null
 then echo -e "${GREEN}Служба запущена!${NC}\n\n${YELLOW}Доступ из браузера: ${NC}$LAN_IP:7681\n"; PAUSE; else echo -e "\n${RED}Ошибка! Служба не запущена!${NC}\n"; PAUSE; fi; fi; }
 # ==========================================
 # Вкл/Выкл QUIC
@@ -588,13 +588,12 @@ echo -en "\n${YELLOW}Выберите зеркало: ${NC}"; read -r z; case "$
 # МЕНЮ TG WS Proxy
 # ==========================================
 # УСТАНОВКА RUST
-#get_arch_RS() { case "$ARCH" in aarch64*) echo "aarch64" ;; x86_64) echo "x86_64" ;; arm*) echo "armv7" ;; mipsel*) echo "mipsel" ;; mips*) echo "mips" ;; *) echo -e "\n${RED}Архитектура не поддерживается:${NC} $ARCH\n"; PAUSE; return 1 ;; esac; }
-#delete_TG_RS() { echo -e "\n${MAGENTA}Удаляем TG WS Proxy Rust${NC}"; /etc/init.d/tg-ws-proxy-rs stop >/dev/null 2>&1; /etc/init.d/tg-ws-proxy-rs disable >/dev/null 2>&1; rm -rf "$BIN_PATH_RS" "$INIT_PATH_RS"; echo -e "TG WS Proxy Rust ${GREEN}удалён!${NC}\n"; PAUSE; }
-#install_TG_RS() { echo -e "\n${MAGENTA}Устанавливаем TG WS Proxy Rust${NC}"; ARCH_FILE_RS="$(get_arch_RS)" || { echo -e "\n${RED}Архитектура не поддерживается:${NC} $ARCH\n"; PAUSE; return 1; }; echo -e "${CYAN}Скачиваем и устанавливаем${NC} tg-ws-proxy-rs-$ARCH_FILE_RS"
-#DOWNLOAD_URL_RS="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/files/tg_ws_proxy_rs/tg-ws-proxy-rs-$ARCH_FILE_RS"; curl -L --fail -o "$BIN_PATH_RS" "$DOWNLOAD_URL_RS" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка скачивания${NC}\n"; PAUSE; return 1; }; chmod +x "$BIN_PATH_RS"
-#printf '#!/bin/sh /etc/rc.common\nSTART=99\nUSE_PROCD=1\n\nstart_service() {\n    procd_open_instance\n    procd_set_param command /usr/bin/tg-ws-proxy-rs --host 0.0.0.0 --port 2443 --secret %s --default-domains --cf-balance --cf-priority\n    procd_set_param respawn\n    procd_close_instance\n}\n' "$SECRET" > /etc/init.d/tg-ws-proxy-rs
-#chmod +x "$INIT_PATH_RS"; /etc/init.d/tg-ws-proxy-rs enable; /etc/init.d/tg-ws-proxy-rs start; if pidof tg-ws-proxy-rs >/dev/null 2>&1; then echo -e "${GREEN}Сервис ${NC}TG WS Proxy Rust${GREEN} запущен!${NC}\n"; else echo -e "\n${RED}Сервис TG WS Proxy Rust не запущен!${NC}\n"; fi; PAUSE; }
-
+get_arch_RS() { case "$ARCH" in aarch64*) echo "aarch64" ;; x86_64) echo "x86_64" ;; arm*) echo "armv7" ;; mipsel*) echo "mipsel" ;; mips*) echo "mips" ;; *) echo -e "\n${RED}Архитектура не поддерживается:${NC} $ARCH\n"; PAUSE; return 1 ;; esac; }
+delete_TG_RS() { echo -e "\n${MAGENTA}Удаляем TG WS Proxy Rust${NC}"; /etc/init.d/tg-ws-proxy-rs stop >/dev/null 2>&1; /etc/init.d/tg-ws-proxy-rs disable >/dev/null 2>&1; rm -rf "$BIN_PATH_RS" "$INIT_PATH_RS"; echo -e "TG WS Proxy Rust ${GREEN}удалён!${NC}\n"; PAUSE; }
+install_TG_RS() { echo -e "\n${MAGENTA}Устанавливаем TG WS Proxy Rust${NC}"; ARCH_FILE_RS="$(get_arch_RS)" || { echo -e "\n${RED}Архитектура не поддерживается:${NC} $ARCH\n"; PAUSE; return 1; }; echo -e "${CYAN}Скачиваем и устанавливаем${NC} tg-ws-proxy-rs-$ARCH_FILE_RS"
+DOWNLOAD_URL_RS="https://github.com/DaveFromSheffield/rezerv/raw/refs/heads/main/files/tg-ws-proxy-rs/tg-ws-proxy-rs-$ARCH_FILE_RS"; curl -L --fail -o "$BIN_PATH_RS" "$DOWNLOAD_URL_RS" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка скачивания${NC}\n"; PAUSE; return 1; }; chmod +x "$BIN_PATH_RS"
+printf '#!/bin/sh /etc/rc.common\nSTART=99\nUSE_PROCD=1\n\nstart_service() {\n    procd_open_instance\n    procd_set_param command /usr/bin/tg-ws-proxy-rs --host 0.0.0.0 --port 2443 --secret %s --default-domains --cf-balance --cf-priority\n    procd_set_param respawn\n    procd_close_instance\n}\n' "$SECRET" > /etc/init.d/tg-ws-proxy-rs
+chmod +x "$INIT_PATH_RS"; /etc/init.d/tg-ws-proxy-rs enable; /etc/init.d/tg-ws-proxy-rs start; if pidof tg-ws-proxy-rs >/dev/null 2>&1; then echo -e "${GREEN}Сервис ${NC}TG WS Proxy Rust${GREEN} запущен!${NC}\n"; else echo -e "\n${RED}Сервис TG WS Proxy Rust не запущен!${NC}\n"; fi; PAUSE; }
 # УСТАНОВКА GO
 get_arch_GO() { case "$ARCH" in aarch64*) echo "tg-ws-proxy-openwrt-aarch64" ;; arm*) echo "tg-ws-proxy-openwrt-armv7" ;; mipsel*) echo "tg-ws-proxy-openwrt-mipsel_24kc" ;; mips*) echo "tg-ws-proxy-openwrt-mips_24kc" ;; x86_64) echo "tg-ws-proxy-openwrt-x86_64" ;; *) echo "Неизвестная архитектура: $ARCH"; return 1 ;; esac }
 delete_TG_GO() { echo -e "\n${MAGENTA}Удаляем TG WS Proxy Go SOCKS5${NC}"; /etc/init.d/tg-ws-proxy-go stop >/dev/null 2>&1; /etc/init.d/tg-ws-proxy-go disable >/dev/null 2>&1; rm -rf "$BIN_PATH_GO" "$INIT_PATH_GO"; echo -e "TG WS Proxy Go SOCKS5 ${GREEN}удалён!${NC}\n"; PAUSE; }
@@ -610,8 +609,7 @@ echo -e "${CYAN}Обновляем список пакетов${NC}"; $UPDATE >/
 wget -q -O "$TMP_FILE_GO" "$URL" || { echo -e "\n${RED}Ошибка скачивания $URL${NC}\n"; PAUSE; return 1; }; $INSTALL "$TMP_FILE_GO" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка установки $TMP_FILE_GO!${NC}\n"; rm -f "$TMP_FILE_GO"; PAUSE; return 1; }
 rm -f "$TMP_FILE_GO"; if ! grep -q '^SECRET=.' "$SECRET_FILE" 2>/dev/null; then echo "SECRET=$SECRET" > "$SECRET_FILE"; fi; rm -f /etc/tg-ws-proxy.conf /etc/tg-ws-proxy.conf-opkg; /etc/init.d/tg-ws-proxy enable >/dev/null 2>&1; /etc/init.d/tg-ws-proxy restart >/dev/null 2>&1
 if pidof tg-ws-proxy >/dev/null 2>&1; then echo -e "TG WS Proxy Go MTProto ${GREEN}установлен!${NC}\n"; else echo -e "${RED}TG WS Proxy Go MTProto не установлен!${NC}\n"; fi; PAUSE; }
-remove_TG_PKG() { echo -e "\n${MAGENTA}Удаляем TG WS Proxy Go MTProto${NC}"; /etc/init.d/tg-ws-proxy stop >/dev/null 2>&1; /etc/init.d/tg-ws-proxy disable >/dev/null 2>&1
-$DELETE tg-ws-proxy >/dev/null 2>&1; rm -rf /etc/tg-ws-proxy /etc/tg-ws-proxy.conf /etc/tg-ws-proxy.conf-opkg; echo -e "TG WS Proxy Go MTProto ${GREEN}удалён!${NC}\n"; PAUSE; }
+remove_TG_PKG() { echo -e "\n${MAGENTA}Удаляем TG WS Proxy Go MTProto${NC}"; /etc/init.d/tg-ws-proxy stop >/dev/null 2>&1; /etc/init.d/tg-ws-proxy disable >/dev/null 2>&1; $DELETE tg-ws-proxy >/dev/null 2>&1; rm -rf /etc/tg-ws-proxy /etc/tg-ws-proxy.conf /etc/tg-ws-proxy.conf-opkg; echo -e "TG WS Proxy Go MTProto ${GREEN}удалён!${NC}\n"; PAUSE; }
 # МЕНЮ
 menu_TG() { while true; do SECRET="$(head -c16 /dev/urandom | hexdump -e '16/1 "%02x"')"; if command -v opkg >/dev/null 2>&1; then INSTALLED_VER_GO="$(opkg list-installed 2>/dev/null | grep '^tg-ws-proxy' | awk '{print $3}' | cut -d'-' -f1)"
 else INSTALLED_VER_GO="$(apk list -I 2>/dev/null | grep '^tg-ws-proxy-' | sed -E 's/tg-ws-proxy-([0-9.]+).*/\1/')"; fi; if [ -z "$INSTALLED_VER_GO" ]; then GO_ACTION="install"; elif [ "$INSTALLED_VER_GO" != "$GO_VER" ]; then GO_ACTION="update"; else GO_ACTION="installed"; fi
@@ -623,15 +621,11 @@ if pgrep -f tg-ws-proxy-rs >/dev/null 2>&1 && [ -f "$BIN_PATH_RS" ] && [ -f "$IN
 echo -e "\n${YELLOW}Настройки ${CYAN}TG WS Proxy Rust${YELLOW}:${NC}\n${YELLOW}Тип прокси:${NC} MTProto\n${YELLOW}Хост:${NC} $LAN_IP\n${YELLOW}Порт:${NC} 2443\n${YELLOW}Ключ:${NC} dd$SECRET_IN_RS\n${YELLOW}Ссылка для подключения:${NC}\ntg://proxy?server=$LAN_IP&port=2443&secret=dd$SECRET_IN_RS"; fi
 if pidof tg-ws-proxy >/dev/null 2>&1 && [ -f "/etc/init.d/tg-ws-proxy" ]; then SECRET_CONF="$(grep '^SECRET=' $SECRET_FILE 2>/dev/null | cut -d'=' -f2)"; echo -e "\n${YELLOW}Настройки ${CYAN}TG WS Proxy Go MTProto${YELLOW}:${NC}"; echo -e "${YELLOW}Тип прокси:${NC} MTProto"
 echo -e "${YELLOW}Хост:${NC} $LAN_IP"; echo -e "${YELLOW}Порт:${NC} 1443"; echo -e "${YELLOW}Ключ:${NC} dd$SECRET_CONF"; echo -e "${YELLOW}Ссылка для подключения:${NC}"; echo -e "tg://proxy?server=$LAN_IP&port=1443&secret=dd$SECRET_CONF"; fi
-echo -e "\n${CYAN}1)${GREEN} $( [ -f "$BIN_PATH_GO" ] && [ -f "$INIT_PATH_GO" ] && echo -e "Удалить ${NC}TG WS Proxy Go SOCKS5" || echo "Установить ${NC}TG WS Proxy Go SOCKS5" )"
-
-# echo -e "${CYAN}2)${GREEN} $( [ -f "$BIN_PATH_RS" ] && [ -f "$INIT_PATH_RS" ] && echo -e "Удалить ${NC}TG WS Proxy Rust" || echo "Установить ${NC}TG WS Proxy Rust" )"
-
-if [ "$GO_ACTION" = "install" ]; then echo -e "${CYAN}2)${GREEN} Установить ${NC}TG WS Proxy Go MTProto"; elif [ "$GO_ACTION" = "update" ]; then echo -e "${CYAN}2)${GREEN} Обновить ${NC}TG WS Proxy Go MTProto${NC}"; else echo -e "${CYAN}2)${GREEN} Удалить ${NC}TG WS Proxy Go MTProto${NC}"; fi
-echo -e "${CYAN}3)${GREEN} Удалить все ${NC}TG WS Proxy\n${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n"; echo -en "${YELLOW}Выберите пункт: ${NC}"; read choice; case "$choice" in 1) if [ -f "$BIN_PATH_GO" ] && [ -f "$INIT_PATH_GO" ]; then delete_TG_GO; else install_TG_GO; fi;;
-# 2) if [ -f "$BIN_PATH_RS" ] && [ -f "$INIT_PATH_RS" ]; then delete_TG_RS; else install_TG_RS; fi;;
-2) if [ "$GO_ACTION" = "install" ] || [ "$GO_ACTION" = "update" ]; then install_update_TG_PKG; else remove_TG_PKG; fi ;; 3) echo -e "\n${MAGENTA}Удаляeм все TG WS Proxy${NC}"
-for s in /etc/init.d/tg-ws*; do [ -e "$s" ] || continue; "$s" stop >/dev/null 2>&1; "$s" disable >/dev/null 2>&1; done; apk del tg-ws* >/dev/null 2>&1 || opkg remove tg-ws* >/dev/null 2>&1; rm -rf /usr/bin/tg-ws* /etc/init.d/tg-ws* /etc/tg-ws* /etc/config/tg-ws*; echo -e "${GREEN}Все ${NC}TG WS Proxy ${GREEN}удалены!${NC}\n";PAUSE ;; *) break ;; esac; done; }
+echo -e "\n${CYAN}1)${GREEN} $( [ -f "$BIN_PATH_GO" ] && [ -f "$INIT_PATH_GO" ] && echo -e "Удалить ${NC}TG WS Proxy Go SOCKS5" || echo "Установить ${NC}TG WS Proxy Go SOCKS5" )"; echo -e "${CYAN}2)${GREEN} $( [ -f "$BIN_PATH_RS" ] && [ -f "$INIT_PATH_RS" ] && echo -e "Удалить ${NC}TG WS Proxy Rust" || echo "Установить ${NC}TG WS Proxy Rust" )"
+if [ "$GO_ACTION" = "install" ]; then echo -e "${CYAN}3)${GREEN} Установить ${NC}TG WS Proxy Go MTProto"; elif [ "$GO_ACTION" = "update" ]; then echo -e "${CYAN}3)${GREEN} Обновить ${NC}TG WS Proxy Go MTProto${NC}"; else echo -e "${CYAN}3)${GREEN} Удалить ${NC}TG WS Proxy Go MTProto${NC}"; fi
+echo -e "${CYAN}4)${GREEN} Удалить все ${NC}TG WS Proxy\n${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n"; echo -en "${YELLOW}Выберите пункт: ${NC}"; read choice; case "$choice" in 1) if [ -f "$BIN_PATH_GO" ] && [ -f "$INIT_PATH_GO" ]; then delete_TG_GO; else install_TG_GO; fi;;
+2) if [ -f "$BIN_PATH_RS" ] && [ -f "$INIT_PATH_RS" ]; then delete_TG_RS; else install_TG_RS; fi;; 3) if [ "$GO_ACTION" = "install" ] || [ "$GO_ACTION" = "update" ]; then install_update_TG_PKG; else remove_TG_PKG; fi ;; 4) echo -e "\n${MAGENTA}Удаляeм все TG WS Proxy${NC}"
+for s in /etc/init.d/tg-ws*; do [ -e "$s" ] || continue; "$s" stop >/dev/null 2>&1; "$s" disable >/dev/null 2>&1; done; $DELETE tg-ws* >/dev/null 2>&1; rm -rf /usr/bin/tg-ws* /etc/init.d/tg-ws* /etc/tg-ws* /etc/config/tg-ws*; echo -e "${GREEN}Все ${NC}TG WS Proxy ${GREEN}удалены!${NC}\n";PAUSE ;; *) break ;; esac; done; }
 # ==========================================
 # PODKOP EVOLUTION и AWG
 # ==========================================
@@ -710,49 +704,10 @@ ME=$(grep -q -- '--methodeol' "$CONF" && echo '/ methodeol'); if [ -n "$current"
 # ==========================================
 # Mixomo
 # ==========================================
-magitrickle_config() {
-    echo -e "\n${MAGENTA}Выбор списка для MagiTrickle${NC}"
-    echo -e "${CYAN}1) ${GREEN}Список от${NC} ITDog"
-    echo -e "${CYAN}2) ${GREEN}Список от${NC} Internet Helper"
-    echo -e "${CYAN}3) ${GREEN}Список от${NC} Internet Helper OLD"
-    echo -e "${CYAN}Enter) ${GREEN}Выход в меню Mixomo${NC}\n"
-
-    while true; do
-        echo -en "${YELLOW}Выберите пункт: ${NC}"
-        read -r choice
-        case "$choice" in
-            1) MAGITRICKLE_CONFIG_URL="$URL_ITDOG"; break ;;
-            2) MAGITRICKLE_CONFIG_URL="$URL_DEFAULT"; break ;;
-            3) MAGITRICKLE_CONFIG_URL="$URL_OLD"; break ;;
-            *) return ;;
-        esac
-    done
-
-    if [ -n "$MAGITRICKLE_CONFIG_URL" ]; then
-        echo -e "\n${CYAN}Скачиваем и устанавливаем список${NC}"
-
-        wget -q -O "$CONFIGPATH" "$MAGITRICKLE_CONFIG_URL" || {
-            echo -e "\n${RED}Ошибка: не удалось скачать список!${NC}"
-            echo "URL: $MAGITRICKLE_CONFIG_URL\n"
-            PAUSE
-            return 1
-        }
-
-        if [ ! -s "$CONFIGPATH" ]; then
-            echo -e "\n${RED}Ошибка: файл пустой или не создан:${NC} $CONFIGPATH\n"
-            PAUSE
-            return 1
-        fi
-
-        /etc/init.d/magitrickle enable >/dev/null 2>&1
-        /etc/init.d/magitrickle reload >/dev/null 2>&1
-        /etc/init.d/magitrickle start >/dev/null 2>&1
-        /etc/init.d/magitrickle restart >/dev/null 2>&1
-
-        echo -e "${GREEN}Список успешно изменён!${NC}\n"
-        PAUSE
-    fi
-}
+magitrickle_config() { echo -e "\n${MAGENTA}Выбор списка для MagiTrickle${NC}"; echo -e "${CYAN}1) ${GREEN}Список от${NC} ITDog\n${CYAN}2) ${GREEN}Список от${NC} Internet Helper #1\n${CYAN}3) ${GREEN}Список от${NC} Internet Helper #2\n${CYAN}Enter) ${GREEN}Выход в меню Mixomo${NC}\n"
+while true; do echo -en "${YELLOW}Выберите пункт: ${NC}"; read -r choice; case "$choice" in 1) MAGITRICKLE_CONFIG_URL="$URL_ITDOG"; break ;; 2) MAGITRICKLE_CONFIG_URL="$URL_DEFAULT"; break ;; 3) MAGITRICKLE_CONFIG_URL="$URL_OLD"; break ;; *) return ;; esac; done
+if [ -n "$MAGITRICKLE_CONFIG_URL" ]; then echo -e "\n${CYAN}Скачиваем и устанавливаем список${NC}"; wget -q -O "$CONFIGPATH" "$MAGITRICKLE_CONFIG_URL" || { echo -e "\n${RED}Не удалось скачать список!${NC}\nURL: $MAGITRICKLE_CONFIG_URL\n"; PAUSE; return 1; }
+if [ ! -s "$CONFIGPATH" ]; then echo -e "\n${RED}Файл пустой или не создан:${NC} $CONFIGPATH\n"; PAUSE; return 1; fi; /etc/init.d/magitrickle enable >/dev/null 2>&1; /etc/init.d/magitrickle reload >/dev/null 2>&1; /etc/init.d/magitrickle start >/dev/null 2>&1; /etc/init.d/magitrickle restart >/dev/null 2>&1; echo -e "${GREEN}Список успешно изменён!${NC}\n"; PAUSE; fi; }
 check_status() { MIHOMO_STATUS="${RED}не установлен${NC}"; HEV_STATUS="${RED}не установлен${NC}"; MAGITRICKLE_STATUS="${RED}не установлен${NC}"; if [ -x /etc/init.d/mihomo ]; then
 STATUS=$(/etc/init.d/mihomo status 2>/dev/null); case "$STATUS" in running|active) MIHOMO_STATUS="${GREEN}запущен${NC}" ;; *) MIHOMO_STATUS="${RED}остановлен${NC}" ;; esac; fi
 if [ -x /etc/init.d/hev-socks5-tunnel ]; then STATUS=$(/etc/init.d/hev-socks5-tunnel status 2>/dev/null); case "$STATUS" in running|active) HEV_STATUS="${GREEN}запущен${NC}" ;;
@@ -787,7 +742,7 @@ echo -e "\n${GREEN}Автоперезапуск ${NC}Mihomo${GREEN} включе
 check_mihomo() { if [ ! -f /etc/init.d/mihomo ]; then echo -e "\n${RED}Mixomo не установлен!${NC}\n"; PAUSE; return 1; fi; return 0; }
 MIXOMO_MENU() { while true; do LINECRON=$(grep -F "/etc/init.d/mihomo restart" /etc/crontabs/root 2>/dev/null | head -n 1); clear; echo -e "${MAGENTA}Меню Mixomo${NC}\n"; check_status
 [ -f /etc/mihomo/config.yaml ] && grep -q "engage.cloudflareclient.com" /etc/mihomo/config.yaml && echo -e "${YELLOW}WARP endpoint:       ${CYAN}Россия${NC}"
-if [ -f "$CONFIGPATH" ]; then grep -Fq 'name: Google_ai' "$CONFIGPATH" && echo -e "${YELLOW}Используется список: ${NC}ITDog"; grep -Fq 'name: Meta (WA+FB+Instagram)' "$CONFIGPATH" && echo -e "${YELLOW}Используется список: ${NC}Internet Helper"; fi
+if [ -f "$CONFIGPATH" ]; then grep -Fq 'name: Google_ai' "$CONFIGPATH" && echo -e "${YELLOW}Используется список: ${NC}ITDog"; grep -Fq 'name: Meta (WA+FB+Instagram)' "$CONFIGPATH" && echo -e "${YELLOW}Используется список: ${NC}Internet Helper #2"; grep -Fq 'url: https://sw.ext.io/ipset/ipset_cf.list' "$CONFIGPATH" && echo -e "${YELLOW}Используется список: ${NC}Internet Helper #1"; fi
 if [ -n "$LINECRON" ]; then HOURM=$(echo "$LINECRON" | awk '{print $2}'); if echo "$HOURM" | grep -q "/"; then INTERVAL=$(echo "$HOURM" | cut -d'/' -f2)
 echo -e "${YELLOW}Автоперезапуск Mihomo: ${GREEN}каждые ${NC}$INTERVAL ${GREEN}часа(ов)"; else echo -e "${YELLOW}Автоперезапуск Mihomo: ${GREEN}ежедневно в ${NC}$(printf "%02d" "$HOURM"):00"; fi; fi
 [ -f /etc/mihomo/config.yaml ] && echo -e "${YELLOW}Web-интерфейс Mihomo:${NC}       ${CYAN}$LAN_IP:9090/ui${NC}"; [ -f "$CONFIGPATH" ] && echo -e "${YELLOW}Web-интерфейс MagiTrickle:${NC}  ${CYAN}$LAN_IP:8080${NC}"
