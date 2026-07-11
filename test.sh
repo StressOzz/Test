@@ -7,6 +7,7 @@ CRON_CMD="/etc/init.d/mihomo restart"; CONFIGPATH="/etc/magitrickle/state/config
 FLOWSEAL_STR_ZIP="https://github.com/StressOzz/Zapret-Manager/raw/refs/heads/files/flowseal-str.zip"
 URL_DEFAULT="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/mixomo/files/MagiTrickle/config.yaml"
 URL_ITDOG="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/mixomo/files/MagiTrickle/configAD.yaml"
+URL_OLD="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/mixomo/files/MagiTrickle/configOLD.yaml"
 CRON_FILE="/etc/crontabs/root"; CONFIGMIX="/etc/mihomo/config.yaml"; LAN_IP=$(uci get network.lan.ipaddr 2>/dev/null | cut -d/ -f1)
 DOMAINS="youtube.com rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com rr1---sn-gvnuxaxjvh-jx3l.googlevideo.com rr1---sn-gvnuxaxjvh-jx3s.googlevideo.com rr4---sn-4g5e6nze.googlevideo.com rr2---sn-4g5edn6k.googlevideo.com rr3---sn-4g5ednld.googlevideo.com rr3---sn-4g5ednky.googlevideo.com rr1---sn-4g5lznlz.googlevideo.com rr2---sn-4g5e6ns6.googlevideo.com rr1---sn-4g5edns6.googlevideo.com rr3---sn-ug5onuxaxjvh-n8v6.googlevideo.com rr1---sn-ug5onuxaxjvh-p5ge.googlevideo.com"
 PORTS_UDP="88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535"; PORTS_TCP="2802,2302,2502,3724,6000-8000,8085,8090,8100,8903,8904,25565,27015-27030,27036-27037,50001,60442"
@@ -709,12 +710,49 @@ ME=$(grep -q -- '--methodeol' "$CONF" && echo '/ methodeol'); if [ -n "$current"
 # ==========================================
 # Mixomo
 # ==========================================
-magitrickle_config() { echo -e "\n${MAGENTA}Выбор списка для MagiTrickle${NC}"; echo -e "${CYAN}1) ${GREEN}Список от${NC} ITDog"; echo -e "${CYAN}2) ${GREEN}Список от${NC} Internet Helper"
-echo -e "${CYAN}Enter) ${GREEN}Выход в меню Mixomo${NC}\n"; while true; do echo -en "${YELLOW}Выберите пункт: ${NC}"; read -r choice; case "$choice" in 1) MAGITRICKLE_CONFIG_URL="$URL_ITDOG"; break ;;
-2) MAGITRICKLE_CONFIG_URL="$URL_DEFAULT"; break ;; *) return ;; esac; done; if [ -n "$MAGITRICKLE_CONFIG_URL" ]; then echo -e "\n${CYAN}Скачиванем и устанавливаем список${NC}"
-wget -q -O "$CONFIGPATH" "$MAGITRICKLE_CONFIG_URL" || { echo -e "\n${RED}Ошибка: не удалось скачать список!${NC}"; echo "URL: $MAGITRICKLE_CONFIG_URL\n"; PAUSE; return 1; }; if [ ! -s "$CONFIGPATH" ]; then
-echo -e "\n${RED}Ошибка: файл пустой или не создан:${NC} $CONFIGPATH\n"; PAUSE; return 1; fi; /etc/init.d/magitrickle enable >/dev/null 2>&1; /etc/init.d/magitrickle reload >/dev/null 2>&1
-/etc/init.d/magitrickle start >/dev/null 2>&1; /etc/init.d/magitrickle restart >/dev/null 2>&1; echo -e "${GREEN}Список успешно изменён!${NC}\n"; PAUSE; fi; }
+magitrickle_config() {
+    echo -e "\n${MAGENTA}Выбор списка для MagiTrickle${NC}"
+    echo -e "${CYAN}1) ${GREEN}Список от${NC} ITDog"
+    echo -e "${CYAN}2) ${GREEN}Список от${NC} Internet Helper"
+    echo -e "${CYAN}3) ${GREEN}Список от${NC} Internet Helper OLD"
+    echo -e "${CYAN}Enter) ${GREEN}Выход в меню Mixomo${NC}\n"
+
+    while true; do
+        echo -en "${YELLOW}Выберите пункт: ${NC}"
+        read -r choice
+        case "$choice" in
+            1) MAGITRICKLE_CONFIG_URL="$URL_ITDOG"; break ;;
+            2) MAGITRICKLE_CONFIG_URL="$URL_DEFAULT"; break ;;
+            3) MAGITRICKLE_CONFIG_URL="$URL_OLD"; break ;;
+            *) return ;;
+        esac
+    done
+
+    if [ -n "$MAGITRICKLE_CONFIG_URL" ]; then
+        echo -e "\n${CYAN}Скачиваем и устанавливаем список${NC}"
+
+        wget -q -O "$CONFIGPATH" "$MAGITRICKLE_CONFIG_URL" || {
+            echo -e "\n${RED}Ошибка: не удалось скачать список!${NC}"
+            echo "URL: $MAGITRICKLE_CONFIG_URL\n"
+            PAUSE
+            return 1
+        }
+
+        if [ ! -s "$CONFIGPATH" ]; then
+            echo -e "\n${RED}Ошибка: файл пустой или не создан:${NC} $CONFIGPATH\n"
+            PAUSE
+            return 1
+        fi
+
+        /etc/init.d/magitrickle enable >/dev/null 2>&1
+        /etc/init.d/magitrickle reload >/dev/null 2>&1
+        /etc/init.d/magitrickle start >/dev/null 2>&1
+        /etc/init.d/magitrickle restart >/dev/null 2>&1
+
+        echo -e "${GREEN}Список успешно изменён!${NC}\n"
+        PAUSE
+    fi
+}
 check_status() { MIHOMO_STATUS="${RED}не установлен${NC}"; HEV_STATUS="${RED}не установлен${NC}"; MAGITRICKLE_STATUS="${RED}не установлен${NC}"; if [ -x /etc/init.d/mihomo ]; then
 STATUS=$(/etc/init.d/mihomo status 2>/dev/null); case "$STATUS" in running|active) MIHOMO_STATUS="${GREEN}запущен${NC}" ;; *) MIHOMO_STATUS="${RED}остановлен${NC}" ;; esac; fi
 if [ -x /etc/init.d/hev-socks5-tunnel ]; then STATUS=$(/etc/init.d/hev-socks5-tunnel status 2>/dev/null); case "$STATUS" in running|active) HEV_STATUS="${GREEN}запущен${NC}" ;;
