@@ -254,20 +254,20 @@ apply_strategy() { NAME="$1"; BODY="$2"; sed -i "/^[[:space:]]*option NFQWS_OPT 
 enable_rkn() {
     echo -e "\n${MAGENTA}Включаем списки РКН${NC}"
 
-    SIZE=0
-    [ -f "$HOSTS_USER" ] && SIZE=$(wc -c < "$HOSTS_USER" 2>/dev/null || echo 0)
+SIZE=0
+[ -f "$HOSTLIST_FILE" ] && SIZE=$(wc -c < "$HOSTLIST_FILE" 2>/dev/null || echo 0)
 
-    if [ "$SIZE" -gt 1800000 ]; then
-        echo -e "${YELLOW}Список РКН уже существует, скачивание пропущено${NC}"
-    else
-        [ -f "$HOSTLIST_FILE" ] && cp "$HOSTLIST_FILE" "$BACKUP_FILE" && cp "$HOSTLIST_FILE" "$HOSTS_USER"
+if [ "$SIZE" -gt 1800000 ]; then
+    echo -e "${YELLOW}Список РКН уже существует, скачивание пропущено${NC}"
+else
+    [ -f "$HOSTLIST_FILE" ] && cp "$HOSTLIST_FILE" "$BACKUP_FILE" && cp "$HOSTLIST_FILE" "$HOSTS_USER"
 
-        curl -fsSL "$RKN_URL" >> "$HOSTLIST_FILE" || {
-            echo -e "\n${RED}Не удалось скачать список РКН${NC}\n"
-            PAUSE
-            return
-        }
-    fi
+    curl -fsSL "$RKN_URL" >> "$HOSTLIST_FILE" || {
+        echo -e "\n${RED}Не удалось скачать список РКН${NC}\n"
+        PAUSE
+        return
+    }
+fi
 
     sed -i 's|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt|' "$CONF"
 
