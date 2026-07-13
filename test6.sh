@@ -8,7 +8,7 @@ WHITE='\033[1;37m'
 NC='\033[0m'
 
 HOST="raw.githubusercontent.com"
-URL="https://raw.githubusercontent.com/StressOzz/Test/main/test1.sh"
+URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/main/Zapret-Manager.sh"
 
 BACKUP="/tmp/hosts_backup_github_test"
 
