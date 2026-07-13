@@ -1,51 +1,75 @@
 #!/bin/sh
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+NC='\033[0m'
 
 HOST="raw.githubusercontent.com"
 URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/main/Zapret-Manager.sh"
-LOG="/tmp/github_test.log"
 
-echo "=== GitHub Raw Test ===" | tee $LOG
-echo "Дата: $(date)" | tee -a $LOG
-echo | tee -a $LOG
+RESULT1=""
+RESULT2=""
 
-test_access() {
-    NAME="$1"
+check() {
+    TITLE="$1"
 
-    echo "===== $NAME =====" | tee -a $LOG
+    echo -e "\n${CYAN}========== $TITLE ==========${NC}"
 
-    IP=$(nslookup $HOST 2>/dev/null | awk '/Address: /{print $2}' | head -1)
-    echo "DNS IP: $IP" | tee -a $LOG
+    echo -e "\n${YELLOW}[ DNS nslookup ]${NC}"
+    DNS=$(nslookup $HOST 2>/dev/null | grep "Address:" | tail -n +2)
 
-    START=$(date +%s)
-
-    if wget -4 -q --timeout=10 --spider "$URL"; then
-        RESULT="OK"
+    if [ -n "$DNS" ]; then
+        echo -e "${GREEN}$DNS${NC}"
     else
-        RESULT="FAIL"
+        echo -e "${RED}DNS ERROR${NC}"
     fi
 
-    END=$(date +%s)
-    TIME=$((END-START))
 
-    echo "IPv4 HTTPS: $RESULT (${TIME}s)" | tee -a $LOG
+    echo -e "\n${YELLOW}[ CURL IPv4 ]${NC}"
+    IPV4=$(curl -4 -sS -o /dev/null \
+    -w "HTTP:%{http_code}  TIME:%{time_connect}s  IP:%{remote_ip}" \
+    --connect-timeout 5 "$URL" 2>&1)
 
-    if curl -4 -k -I --connect-timeout 5 "$URL" >/dev/null 2>&1; then
-        echo "curl IPv4: OK" | tee -a $LOG
+    if echo "$IPV4" | grep -q "HTTP:200"; then
+        echo -e "${GREEN}$IPV4${NC}"
+        STATUS="OK"
     else
-        echo "curl IPv4: FAIL" | tee -a $LOG
+        echo -e "${RED}$IPV4${NC}"
+        STATUS="FAIL"
     fi
 
-    echo | tee -a $LOG
+
+    echo -e "\n${YELLOW}[ CURL IPv6 ]${NC}"
+    IPV6=$(curl -6 -sS -o /dev/null \
+    -w "HTTP:%{http_code}  TIME:%{time_connect}s  IP:%{remote_ip}" \
+    --connect-timeout 5 "$URL" 2>&1)
+
+    if echo "$IPV6" | grep -q "HTTP:200"; then
+        echo -e "${GREEN}$IPV6${NC}"
+    else
+        echo -e "${RED}$IPV6${NC}"
+    fi
+
+    echo "$STATUS"
 }
 
 
-echo "1) Проверка без изменений"
-test_access "ORIGINAL"
+echo -e "${CYAN}
+╔══════════════════════════════╗
+║   GitHub Raw Access Test     ║
+╚══════════════════════════════╝
+${NC}"
 
 
-echo "2) Добавление hosts записи"
+echo -e "${YELLOW}1) Проверка без hosts${NC}"
+RESULT1=$(check "ORIGINAL")
+
+
+echo -e "\n${YELLOW}2) Добавление githubusercontent hosts${NC}"
 
 git="githubusercontent.com"
+
 grep -q "raw.$git" /etc/hosts || {
 printf "#$git\n185.199.109.133 raw.$git release-assets.$git\n185.199.108.133 private-user-images.$git gist.$git avatars.$git\n" >> /etc/hosts
 /etc/init.d/dnsmasq restart 2>/dev/null
@@ -53,39 +77,31 @@ printf "#$git\n185.199.109.133 raw.$git release-assets.$git\n185.199.108.133 pri
 
 sleep 2
 
-test_access "WITH HOSTS"
+RESULT2=$(check "WITH HOSTS")
 
 
-echo "3) Удаление hosts записи"
+echo -e "\n${YELLOW}3) Удаление hosts${NC}"
 
 sed -i '/#githubusercontent.com/,+2d' /etc/hosts
 /etc/init.d/dnsmasq restart 2>/dev/null
 
 sleep 2
 
-test_access "AFTER REMOVE"
+
+check "AFTER REMOVE"
 
 
-echo "=== ИТОГ ==="
+echo -e "\n${CYAN}========== ИТОГ ==========${NC}"
 
-grep "IPv4 HTTPS" $LOG
+if [ "$RESULT1" = "OK" ] && [ "$RESULT2" = "OK" ]; then
+    echo -e "${GREEN}Доступ к GitHub работает. hosts не нужен.${NC}"
 
-echo
+elif [ "$RESULT1" = "FAIL" ] && [ "$RESULT2" = "OK" ]; then
+    echo -e "${YELLOW}hosts помогает. Проблема связана с DNS/маршрутом.${NC}"
 
-ORIG=$(grep -A3 "ORIGINAL" $LOG | grep "IPv4 HTTPS")
-HOST=$(grep -A3 "WITH HOSTS" $LOG | grep "IPv4 HTTPS")
+elif [ "$RESULT1" = "FAIL" ] && [ "$RESULT2" = "FAIL" ]; then
+    echo -e "${RED}GitHub недоступен. Проблема HTTPS/провайдер/Zapret.${NC}"
 
-if echo "$ORIG" | grep -q OK && echo "$HOST" | grep -q OK; then
-    echo "Вывод: hosts не нужен, доступ к GitHub работает."
-elif echo "$ORIG" | grep -q FAIL && echo "$HOST" | grep -q OK; then
-    echo "Вывод: запись /etc/hosts помогает."
-elif echo "$ORIG" | grep -q FAIL && echo "$HOST" | grep -q FAIL; then
-    echo "Вывод: проблема не в DNS, GitHub недоступен по HTTPS."
 else
-    echo "Вывод: требуется дополнительная проверка."
+    echo -e "${YELLOW}Нестандартный результат, нужна дополнительная проверка.${NC}"
 fi
-
-echo
-echo "Лог сохранён: $LOG"
-
-EOF
