@@ -1428,9 +1428,9 @@ main() {
 TMP1="/tmp/zashboard.zip"; TMP2="/tmp/zashboard"; DIR1="/etc/mihomo/ui"
 URL1="https://github.com/Zephyruso/zashboard/releases/latest/download/dist-cdn-fonts.zip"
 echo "Устанавка панели Zashboard для Mihomo"
-curl -fL --connect-timeout 3 --max-time 7 -o "$TMP1" "$URL1" >/dev/null 2>&1 || echo -e "\n${RED}Ошибка скачивания WEB UI!${NC}\n"
+curl -fL --connect-timeout 3 --max-time 15 -o "$TMP1" "$URL1" >/dev/null 2>&1 || echo -e "\n${RED}Ошибка скачивания WEB UI!${NC}\n"
 rm -rf "$TMP2" "$DIR1"; mkdir -p "$TMP2" "$DIR1"
-unzip -oq "$TMP1" -d "$TMP2" || { echo -e "\n${RED}Ошибка распаковки WEB UI!${NC}\n" }
+unzip -oq "$TMP1" -d "$TMP2" || echo -e "\n${RED}Ошибка распаковки WEB UI!${NC}\n"
 cp -r "$TMP2"/dist/* "$DIR1"/ 2>/dev/null || echo -e "\n${RED}Не удалось установить WEB UI!${NC}\n"
 rm -rf "$TMP1" "$TMP2"; /etc/init.d/mihomo restart > /dev/null 2>&1
 
