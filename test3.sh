@@ -1317,16 +1317,16 @@ confGIT="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/m
 MT_VERSION="$(curl -Ls -o /dev/null -w '%{url_effective}' https://github.com/MagiTrickle/MagiTrickle/releases/latest | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
 URL_APK="https://github.com/MagiTrickle/MagiTrickle/releases/download/${MT_VERSION}/magitrickle_${MT_VERSION}-r1_openwrt_${ARCH_MT}.apk"
 URL_IPK="https://github.com/MagiTrickle/MagiTrickle/releases/download/${MT_VERSION}/magitrickle_${MT_VERSION}-1_openwrt_${ARCH_MT}.ipk"
-if [ "$USE_APK" -eq 1 ]; then FILE_MT="/tmp/magitrickle.apk"; echo -e "Скачиваем:\n$URL_APK"
+if [ "$USE_APK" -eq 1 ]; then FILE_MT="/tmp/magitrickle.apk"; log_online "Скачивание:"; echo - e"$URL_IPK"
 curl -Lf --retry 3 --retry-delay 2 -o "$FILE_MT" "$URL_APK" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка скачивания${NC}"; return 1; }
-echo -e "Устанавливаем $(basename "$URL_APK")"
+echo -e "Устанавка $(basename "$URL_APK")"
 apk add --allow-untrusted "$FILE_MT" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка установки${NC}"; return 1; }
-else FILE_MT=/tmp/magitrickle.ipk; echo -e "Скачиваем:\n$URL_IPK"
+else FILE_MT=/tmp/magitrickle.ipk; log_online "Скачивание:"; echo - e"$URL_IPK"
 curl -Lf --retry 3 --retry-delay 2 -o "$FILE_MT" "$URL_IPK" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка скачивания${NC}"; return 1; }
-echo -e "Устанавливаем $(basename "$URL_IPK")"
+echo -e "Устанавка $(basename "$URL_IPK")"
 opkg install "$FILE_MT" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка установки${NC}"; return 1; }; fi
 echo "Установка списка для MagiTrickle"
-curl -fL --connect-timeout 3 --max-time 7 -o "$CONFIG_PATH" "$confGIT" >/dev/null 2>&1 || echo -e "\n${RED}Не удалось скачать список!${NC}\n"
+curl -fL --connect-timeout 3 --max-time 10 -o "$CONFIG_PATH" "$confGIT" >/dev/null 2>&1 || echo -e "\n${RED}Не удалось скачать список!${NC}\n"
 /etc/init.d/magitrickle enable >/dev/null 2>&1; /etc/init.d/magitrickle reload >/dev/null 2>&1; /etc/init.d/magitrickle restart >/dev/null 2>&1
 #################################################################################################################################################################################
 
@@ -1424,7 +1424,6 @@ main() {
     finalize_install || step_fail
 
 ###################################################################################################
-
 TMP1="/tmp/zashboard.zip"; TMP2="/tmp/zashboard"; DIR1="/etc/mihomo/ui"
 URL1="https://github.com/Zephyruso/zashboard/releases/latest/download/dist-cdn-fonts.zip"
 echo "Устанавка панели Zashboard для Mihomo"
@@ -1433,7 +1432,6 @@ rm -rf "$TMP2" "$DIR1"; mkdir -p "$TMP2" "$DIR1"
 unzip -oq "$TMP1" -d "$TMP2" || echo -e "\n${RED}Ошибка распаковки WEB UI!${NC}\n"
 cp -r "$TMP2"/dist/* "$DIR1"/ 2>/dev/null || echo -e "\n${RED}Не удалось установить WEB UI!${NC}\n"
 rm -rf "$TMP1" "$TMP2"; /etc/init.d/mihomo restart > /dev/null 2>&1
-
 ###################################################################################################
 
     echo ""
