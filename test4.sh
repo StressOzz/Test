@@ -700,6 +700,8 @@ then echo -e "${YELLOW}Flow Offloading FIX:${NC} ${GREEN}включён${NC}"; f
 
 if [ -f "$CONF" ]; then
     line=$(grep -m1 '^#general' "$CONF")
+    GEN="${line:+${line#?} / }"
+
     current="$ver$( [ -n "$ver" ] && [ -n "$yv_ver" ] && echo " / " )$yv_ver"
     DV=$(grep -o -E '^#Dv[0-9][0-9]*' "$CONF" | sed 's/^#[[:space:]]*/\/ /' | head -n1)
     GV=$(grep -o -E '^#Gv[0-9][0-9]*' "$CONF" | sed 's/^#/\/ /' | head -n1)
@@ -708,17 +710,13 @@ if [ -f "$CONF" ]; then
     ME=$(grep -q -- '--methodeol' "$CONF" && echo '/ methodeol')
 
     if [ -n "$current" ]; then
-        STR="$current${DV:+ $DV}${GV:+ $GV}${UPD:+ $UPD}${WS:+ $WS}${ME:+ $ME}${RKN_STATUS:+ $RKN_STATUS}"
+        echo -e "${YELLOW}Стратегия Zapret:${NC}    ${CYAN}${GEN}$current${DV:+ $DV}${GV:+ $GV}${UPD:+ $UPD}${WS:+ $WS}${ME:+ $ME}${RKN_STATUS:+ $RKN_STATUS}${NC}"
     elif [ -n "$RKN_STATUS" ]; then
-        STR="РКН${DV:+ $DV}${GV:+ $GV}${UPD:+ $UPD}${WS:+ $WS}${ME:+ $ME}"
+        echo -e "${YELLOW}Стратегия Zapret:${NC}    ${CYAN}${GEN}РКН${DV:+ $DV}${GV:+ $GV}${UPD:+ $UPD}${WS:+ $WS}${ME:+ $ME}${NC}"
     elif [ -n "$line" ]; then
-        STR="${line#?}$(echo "$GV" | sed 's#^/ # / #')"
+        echo -e "${YELLOW}Стратегия Zapret:${NC}    ${CYAN}${line#?}${GV:+ $GV}${NC}"
     fi
-
-    [ -n "$STR" ] && echo -e "${YELLOW}Стратегия Zapret:${NC}    ${CYAN}$STR${NC}"
 fi
-
-}
 
 # ==========================================
 # Mixomo
