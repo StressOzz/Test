@@ -317,11 +317,11 @@ echo -e "\n${YELLOW}Блок может влиять на скорость и с
 awk -v l1="$f1" -v l2="$f2" '$0=="--new" && getline a && getline b { if (a==l1 && b==l2) next; print "--new"; print a; print b; next } 1' "$CONF" > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"; ZAPRET_RESTART; echo -e "${GREEN}Блок с ${NC}${f2}${GREEN} удалён!${NC}\n"; PAUSE; fi; }
 add_wssize() { manage_block add "--filter-tcp=443" "--wssize 1:6"; }; remove_wssize() { manage_block remove "--filter-tcp=443" "--wssize 1:6"; }; add_methodeol() { manage_block add "--filter-tcp=80,443" "--methodeol"; }; remove_methodeol() { manage_block remove "--filter-tcp=80,443" "--methodeol"; }
 menu_str() { [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }; while true; do show_current_strategy; RKN_Check; clear; echo -e "${MAGENTA}Меню стратегий${NC}\n"; pri=0
-[ -f "$CONF" ] && line=$(grep -m1 '^#general' "$CONF") && [ -n "$line" ] && echo -e "${YELLOW}Используется стратегия:${NC}  ${CYAN}${line#?}$(grep -o -E '^#Gv[0-9][0-9]*' "$CONF" | sed 's/^#/ \/ /' | head -n1)${NC}" && pri=1
-if [ -f "$CONF" ]; then current="$ver$( [ -n "$ver" ] && [ -n "$yv_ver" ] && echo " / " )$yv_ver"; DV=$(grep -o -E '^#[[:space:]]*Dv[0-9][0-9]*' "$CONF" | sed 's/^#[[:space:]]*/\/ /' | head -n1); GV=$(grep -o -E '^#Gv[0-9][0-9]*' "$CONF" | sed 's/^#/\/ /' | head -n1); if [ -n "$current" ]
-then echo -e "${YELLOW}Используется стратегия:${NC}  ${CYAN}$current${DV:+ $DV}${GV:+ $GV}${RKN_STATUS:+ $RKN_STATUS}${NC}" && pri=1; elif [ -n "$RKN_STATUS" ]; then echo -e "${YELLOW}Используется стратегия:${NC}  ${CYAN}РКН${DV:+ $DV}${GV:+ $GV}${NC}" && pri=1; fi; fi
-grep -q -F -- "--wssize 1:6" "$CONF" && echo -e "${YELLOW}Блок с --wssize 1:6: ${GREEN}активирован${NC}" && pri=1; grep -q -F -- "--methodeol" "$CONF" && echo -e "${YELLOW}Блок с --methodeol: ${GREEN}активирован${NC}" && pri=1
-grep -q "^#udp443" "$CONF" && echo -e "${YELLOW}Блок с --filter-udp=443: ${GREEN}активирован${NC}" && pri=1; GV_FAKE_FILE=$(grep -m1 -- '--dpi-desync-fake-unknown-udp=' "$CONF" | sed 's|.*fake/||'); [ -n "$GV_FAKE_FILE" ] && echo -e "${YELLOW}fake для Gv:${NC} $GV_FAKE_FILE" && pri=1
+
+INFO_ZPR_STR && pri=1 
+
+
+GV_FAKE_FILE=$(grep -m1 -- '--dpi-desync-fake-unknown-udp=' "$CONF" | sed 's|.*fake/||'); [ -n "$GV_FAKE_FILE" ] && echo -e "${YELLOW}fake для Gv:${NC} $GV_FAKE_FILE" && pri=1
 if [ "$SIZE" -gt 1800000 ] && ! grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt" "$CONF"; then echo -e "User hostname entries ${YELLOW}содержит список ${NC}РКН"; pri=1; fi
 [ "$pri" -eq 1 ] && echo; echo -e "${CYAN}0) ${GREEN}Меню тестирования стратегий${NC}"; echo -e "${CYAN}1) ${GREEN}Выбрать и установить стратегию ${NC}v1-v9\n${CYAN}2) ${GREEN}Выбрать и установить стратегию от ${NC}Flowseal\n${CYAN}3) ${GREEN}Выбрать и установить стратегию для ${NC}YouTube\n${CYAN}4) ${GREEN}Меню управления стратегией для ${NC}игр"
 echo -e "${CYAN}5) ${NC}$RKN_TEXT_MENU${NC}\n${CYAN}6) ${GREEN}Обновить список исключений${NC}"; if grep -q -F -- "--wssize 1:6" "$CONF"; then WSSIZE_MENU_TEXT="${GREEN}Удалить из стратегии блок с ${NC}--wssize 1:6"; else WSSIZE_MENU_TEXT="${GREEN}Добавить в стратегию блок с ${NC}--wssize 1:6"; fi
@@ -697,7 +697,10 @@ if [ -n "$DOH_STATUS" ]; then if [ "$PKG_IS_APK" -eq 1 ]; then apk info -e https
 pkg_is_installed netshift && { [ "$INST_VER_POD" != "$PODKOP_LATEST_VER" ] && echo -e "${YELLOW}NetShift:${NC}            ${RED}версия устарела${NC}" || echo -e "${YELLOW}NetShift:${NC}            ${GREEN}$VER_POD${NC}"; }
 if web_is_enabled; then echo -e "${YELLOW}Доступ из браузера:${NC}  $LAN_IP:7681"; fi; quic_is_blocked && if quic_is_blocked; then echo -e "${YELLOW}Блокировка QUIC:${NC}     ${GREEN}включена${NC}"; fi; if grep -q 'ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc
 then echo -e "${YELLOW}Flow Offloading FIX:${NC} ${GREEN}включён${NC}"; fi; if [ "$CURR" != "default / OpenWrt" ]; then echo -e "${YELLOW}Зеркало OpenWRT:${NC}     $CURR"; fi; if [ -f /etc/init.d/zapret ] && [ -f "$CONF" ] && grep -Eq "^[[:space:]]*option DISABLE_IPV6 '0'" "$CONF"; then echo -e "${YELLOW}IPv6 в Zapret:       ${GREEN}включён${NC}"; fi
+INFO_ZPR_STR
+}
 
+INFO_ZPR_STR() {
 if [ -f "$CONF" ]; then
     line=$(grep -m1 '^#general' "$CONF")
     GEN="${line:+${line#?} / }"
@@ -717,9 +720,6 @@ if [ -f "$CONF" ]; then
         echo -e "${YELLOW}Стратегия Zapret:${NC}    ${CYAN}${line#?}${GV:+ $GV}${NC}"
     fi
 fi
-
-
-
 
 }
 
