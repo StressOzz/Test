@@ -714,49 +714,40 @@ INFO_ZPR() {
     pidof tg-ws-proxy-go >/dev/null 2>&1 && TGSTATUS="${TGSTATUS:+$TGSTATUS/}SOCKS5"
     pidof tg-ws-proxy >/dev/null 2>&1 && TGSTATUS="${TGSTATUS:+$TGSTATUS/}MTProto"
     pidof tg-ws-proxy-rs >/dev/null 2>&1 && TGSTATUS="${TGSTATUS:+$TGSTATUS/}Rust"
-    [ -n "$TGSTATUS" ] && \
-        echo -e "${YELLOW}TG WS Proxy:${NC}         ${GREEN}запущен [$TGSTATUS]${NC}"
+    [ -n "$TGSTATUS" ] && echo -e "${YELLOW}TG WS Proxy:${NC}         ${GREEN}запущен [$TGSTATUS]${NC}"
 
-    hosts_enabled && \
-        echo -e "${YELLOW}Домены в hosts:      ${GREEN}$hosts_echo${NC}"
-
-    [ -f "$DATE_FILE" ] && \
-        echo -e "${YELLOW}Резервная копия:${NC}     ${GREEN}сохранена"
+    hosts_enabled && echo -e "${YELLOW}Домены в hosts:      ${GREEN}$hosts_echo${NC}"
+    [ -f "$DATE_FILE" ] && echo -e "${YELLOW}Резервная копия:${NC}     ${GREEN}сохранена"
 
     show_script_50
-    [ -n "$name" ] && \
-        echo -e "${YELLOW}Установлен скрипт:${NC}   $name"
+    [ -n "$name" ] && echo -e "${YELLOW}Установлен скрипт:${NC}   $name"
 
-    grep -q "$Fin_IP_Dis" /etc/hosts && \
-        echo -e "${YELLOW}IP для Discord:      ${GREEN}включены${NC}"
+    grep -q "$Fin_IP_Dis" /etc/hosts && echo -e "${YELLOW}IP для Discord:      ${GREEN}включены${NC}"
 
     if [ -n "$DOH_STATUS" ]; then
         if [ "$PKG_IS_APK" -eq 1 ]; then
-            apk info -e https-dns-proxy >/dev/null 2>&1 && \
+            apk info -e https-dns-proxy >/dev/null 2>&1 &&
                 echo -e "${YELLOW}DNS over HTTPS:${NC}      ${GREEN}$DOH_STATUS${NC}"
         else
-            opkg list-installed | grep -q '^https-dns-proxy ' && \
+            opkg list-installed | grep -q '^https-dns-proxy ' &&
                 echo -e "${YELLOW}DNS over HTTPS:${NC}      ${GREEN}$DOH_STATUS${NC}"
         fi
     fi
 
     pkg_is_installed netshift && {
-        [ "$INST_VER_POD" != "$PODKOP_LATEST_VER" ] && \
-            echo -e "${YELLOW}NetShift:${NC}            ${RED}версия устарела${NC}" || \
+        [ "$INST_VER_POD" != "$PODKOP_LATEST_VER" ] &&
+            echo -e "${YELLOW}NetShift:${NC}            ${RED}версия устарела${NC}" ||
             echo -e "${YELLOW}NetShift:${NC}            ${GREEN}$VER_POD${NC}"
     }
 
-    web_is_enabled && \
-        echo -e "${YELLOW}Доступ из браузера:${NC}  $LAN_IP:7681"
-
-    quic_is_blocked && \
-        echo -e "${YELLOW}Блокировка QUIC:${NC}     ${GREEN}включена${NC}"
+    web_is_enabled && echo -e "${YELLOW}Доступ из браузера:${NC}  $LAN_IP:7681"
+    quic_is_blocked && echo -e "${YELLOW}Блокировка QUIC:${NC}     ${GREEN}включена${NC}"
 
     if grep -q 'ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc; then
         echo -e "${YELLOW}Flow Offloading FIX:${NC} ${GREEN}включён${NC}"
     fi
 
-    [ "$CURR" != "default / OpenWrt" ] && \
+    [ "$CURR" != "default / OpenWrt" ] &&
         echo -e "${YELLOW}Зеркало OpenWRT:${NC}     $CURR"
 
     if [ -f /etc/init.d/zapret ] && [ -f "$CONF" ] &&
@@ -765,25 +756,8 @@ INFO_ZPR() {
     fi
 
     if [ -f "$CONF" ]; then
-        line=$(grep -m1 '^#general' "$CONF")
-        current="$ver$( [ -n "$ver" ] && [ -n "$yv_ver" ] && echo " / " )$yv_ver"
-        DV=$(grep -o -E '^#Dv[0-9][0-9]*' "$CONF" | sed 's/^#[[:space:]]*/\/ /' | head -n1)
-        GV=$(grep -o -E '^#Gv[0-9][0-9]*' "$CONF" | sed 's/^#/\/ /' | head -n1)
-        UPD=$(grep -q '^#udp443' "$CONF" && echo '/ udp443')
-        WS=$(grep -q -- '--wssize 1:6' "$CONF" && echo '/ wssize')
-        ME=$(grep -q -- '--methodeol' "$CONF" && echo '/ methodeol')
-
-        STR=""
-        if [ -n "$current" ]; then
-            STR="$current${DV:+ $DV}${GV:+ $GV}${UPD:+ $UPD}${WS:+ $WS}${ME:+ $ME}${RKN_STATUS:+ $RKN_STATUS}"
-        elif [ -n "$RKN_STATUS" ]; then
-            STR="РКН${DV:+ $DV}${GV:+ $GV}${UPD:+ $UPD}${WS:+ $WS}${ME:+ $ME}"
-        elif [ -n "$line" ]; then
-            STR="${line#?}$(grep -o -E '^#Gv[0-9][0-9]*' "$CONF" | sed 's/^#/ \/ /' | head -n1)"
-        fi
-
-        [ -n "$STR" ] && \
-            echo -e "${YELLOW}Стратегия Zapret:${NC}    ${CYAN}$STR${NC}"
+        STR=$(awk '/^#/ {sub(/^#/,""); printf("%s%s", NR==1?"":" / ", $0)} END{print ""}' "$CONF")
+        [ -n "$STR" ] && echo -e "${YELLOW}Стратегия Zapret:${NC}    ${CYAN}$STR${NC}"
     fi
 }
 
