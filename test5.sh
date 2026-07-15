@@ -704,18 +704,7 @@ STATUS=$(/etc/init.d/mihomo status 2>/dev/null); case "$STATUS" in running|activ
 if [ -x /etc/init.d/hev-socks5-tunnel ]; then STATUS=$(/etc/init.d/hev-socks5-tunnel status 2>/dev/null); case "$STATUS" in running|active) HEV_STATUS="${GREEN}запущен${NC}" ;;
 *) HEV_STATUS="${RED}остановлен${NC}" ;; esac; fi; if [ -x /etc/init.d/magitrickle ]; then STATUS=$(/etc/init.d/magitrickle status 2>/dev/null)
 case "$STATUS" in running|active) MAGITRICKLE_STATUS="${GREEN}запущен${NC}" ;; *) MAGITRICKLE_STATUS="${RED}остановлен${NC}" ;; esac; fi; echo -e "${YELLOW}Mihomo:${NC}              $MIHOMO_STATUS"
-
-
-
-echo -ne "${YELLOW}MagiTrickle:${NC}         $MAGITRICKLE_STATUS"
-if [ "$Magi_INSTALL_VER" != "$MT_VERSION" ]; then
-    echo -e " / ${RED}$Magi_INSTALL_VER версия устарела${NC}"
-else
-    echo -e " / ${GREEN}$Magi_INSTALL_VER${NC}"
-fi
-
-
-echo -e "${YELLOW}HevSocks5Tunnel:${NC}     $HEV_STATUS"; }
+echo -ne "${YELLOW}MagiTrickle:${NC}         $MAGITRICKLE_STATUS"; if [ "$Magi_INSTALL_VER" != "$MT_VERSION" ]; then echo -e " / ${RED}$Magi_INSTALL_VER версия устарела${NC}"; else echo -e " / ${GREEN}$Magi_INSTALL_VER${NC}"; fi; echo -e "${YELLOW}HevSocks5Tunnel:${NC}     $HEV_STATUS"; }
 PODPISKA() { echo -ne "\n${YELLOW}Введите ссылку на подписку (${CYAN}https://...${YELLOW}): ${NC}"; read -r SUB_URL; case "$SUB_URL" in http://*|https://*) ;;
 *) echo -e "\n${RED}Ошибка! Ссылка должна начинаться с ${NC}http:// ${RED}или ${NC}https://${NC}\n"; PAUSE; return ;; esac; /etc/init.d/mihomo stop; rm -rf /etc/mihomo/proxy-providers /etc/mihomo/proxies/
 SUB_URL_ESC=$(printf '%s' "$SUB_URL" | sed 's/[&|]/\\&/g'); if grep -q "^[[:space:]]*proxy-providers:" "$CONFIGMIX" 2>/dev/null; then TMP_FILE=$(mktemp)
@@ -743,14 +732,8 @@ then echo -e "\n${RED}Ошибка! Диапазон должен быть от 
 echo -e "\n${GREEN}Автоперезапуск ${NC}Mihomo${GREEN} и ${NC}MagiTrickle${GREEN} включен!${NC}\n"; PAUSE ;; *) return ;; esac; }
 check_mihomo() { if [ ! -f /etc/init.d/mihomo ]; then echo -e "\n${RED}Mixomo не установлен!${NC}\n"; PAUSE; return 1; fi; return 0; }
 MIXOMO_MENU() { while true; do LINECRON=$(grep -F "/etc/init.d/mihomo restart" /etc/crontabs/root 2>/dev/null | head -n 1); clear; echo -e "${MAGENTA}Меню Mixomo${NC}\n"; 
-if command -v apk >/dev/null 2>&1; then
-    Magi_INSTALL_VER="$(apk info -v | grep '^magitrickle-' | cut -d- -f2)"
-else
-    Magi_INSTALL_VER="$(opkg status magitrickle 2>/dev/null | awk '/^Version:/ {sub(/-1$/,"",$2); sub(/-r1$/,"",$2); print $2}')"
-fi
-
-check_status
-[ -f /etc/mihomo/config.yaml ] && grep -q "engage.cloudflareclient.com" /etc/mihomo/config.yaml && echo -e "${YELLOW}WARP endpoint:       ${CYAN}Россия${NC}"
+if command -v apk >/dev/null 2>&1; then Magi_INSTALL_VER="$(apk info -v | grep '^magitrickle-' | cut -d- -f2)"; else Magi_INSTALL_VER="$(opkg status magitrickle 2>/dev/null | awk '/^Version:/ {sub(/-1$/,"",$2); sub(/-r1$/,"",$2); print $2}')"; fi
+check_status; [ -f /etc/mihomo/config.yaml ] && grep -q "engage.cloudflareclient.com" /etc/mihomo/config.yaml && echo -e "${YELLOW}WARP endpoint:       ${CYAN}Россия${NC}"
 if [ -f "$CONFIGPATH" ]; then grep -Fq 'name: Google_ai' "$CONFIGPATH" && echo -e "${YELLOW}Используется список: ${NC}ITDog"; grep -Fq 'name: Meta (WA+FB+Instagram)' "$CONFIGPATH" && echo -e "${YELLOW}Используется список: ${NC}Internet Helper #2"; grep -Fq 'url: https://sw.ext.io/ipset/ipset_cf.list' "$CONFIGPATH" && echo -e "${YELLOW}Используется список: ${NC}Internet Helper #1"; fi
 if [ -n "$LINECRON" ]; then HOURM=$(echo "$LINECRON" | awk '{print $2}'); if echo "$HOURM" | grep -q "/"; then INTERVAL=$(echo "$HOURM" | cut -d'/' -f2)
 echo -e "${YELLOW}Автоперезапуск Mihomo и MagiTrickle: ${GREEN}каждые ${NC}$INTERVAL ${GREEN}часа(ов)"; else echo -e "${YELLOW}Автоперезапуск Mihomo и MagiTrickle: ${GREEN}ежедневно в ${NC}$(printf "%02d" "$HOURM"):00"; fi; fi
@@ -758,36 +741,14 @@ echo -e "${YELLOW}Автоперезапуск Mihomo и MagiTrickle: ${GREEN}к
 echo -e "\n${CYAN}1) ${GREEN}Установить ${NC}Mixomo"; echo -e "${CYAN}2) ${GREEN}Удалить ${NC}Mixomo"; echo -e "${CYAN}3) ${GREEN}Сменить список ${NC}MagiTrickle"; if [ -f /etc/mihomo/config.yaml ] && grep -q '^[[:space:]]*[^#].*url: "' /etc/mihomo/config.yaml
 then echo -e "${CYAN}4) ${GREEN}Сменить ${NC}VPN${GREEN} подписку${NC}"; else echo -e "${CYAN}4) ${GREEN}Интегрировать ${NC}VPN${GREEN} подписку в ${NC}Mihomo${NC}"; fi; echo -e "${CYAN}5) ${GREEN}Сгенерировать ${NC}WARP ${GREEN}в ${NC}/root/WARP.conf"
 echo -e "${CYAN}6) ${GREEN}Интегрировать ${NC}/root/WARP.conf${GREEN} в ${NC}Mihomo"; echo -e "${CYAN}7) ${GREEN}Выбрать и установить панель для ${NC}Mihomo"; if grep -qF "/etc/init.d/mihomo restart" /etc/crontabs/root 2>/dev/null
-then echo -e "${CYAN}8) ${GREEN}Выключить автоперезапуск ${NC}Mihomo ${GREEN}и${NC} MagiTrickle"; else echo -e "${CYAN}8) ${GREEN}Включить автоперезапуск ${NC}Mihomo${GREEN} и ${NC}MagiTrickle"; fi
-
-
-if command -v apk >/dev/null 2>&1; then
-    Magi_INSTALL_VER="$(apk info -v | grep '^magitrickle-' | cut -d- -f2)"
-else
-    Magi_INSTALL_VER="$(opkg status magitrickle 2>/dev/null | awk '/^Version:/ {sub(/-1$/,"",$2); sub(/-r1$/,"",$2); print $2}')"
-fi
-
-[ "$Magi_INSTALL_VER" != "$MT_VERSION" ] && echo -e "${CYAN}9) ${GREEN}Обновить ${NC}MagiTrickle"
-
-
+then echo -e "${CYAN}8) ${GREEN}Выключить автоперезапуск ${NC}Mihomo ${GREEN}и${NC} MagiTrickle"; else echo -e "${CYAN}8) ${GREEN}Включить автоперезапуск ${NC}Mihomo${GREEN} и ${NC}MagiTrickle"; fi; [ "$Magi_INSTALL_VER" != "$MT_VERSION" ] && echo -e "${CYAN}9) ${GREEN}Обновить ${NC}MagiTrickle"
 echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню\n"; echo -ne "${YELLOW}Выберите пункт: ${NC}"; read choiceM; case "$choiceM" in 1) sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/mixomo/mixomo_openwrt_install.sh); PAUSE ;;
-2) sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/mixomo/mixomo_openwrt_delete.sh); sed -i "\|$CRON_CMD|d" "$CRON_FILE"; /etc/init.d/cron restart
-echo -e "\n${YELLOW}Рекомендую сделать перезагрузку роутера!${NC}\n"; PAUSE ;; 3) check_mihomo || continue; magitrickle_config ;; 4) check_mihomo || continue; PODPISKA ;; 5) sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/mixomo/gen_WARP.sh); echo; PAUSE ;;
+2) sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/mixomo/mixomo_openwrt_delete.sh); sed -i "\|$CRON_CMD|d" "$CRON_FILE"; /etc/init.d/cron restart; echo -e "\n${YELLOW}Рекомендую сделать перезагрузку роутера!${NC}\n"; PAUSE ;;
+3) check_mihomo || continue; magitrickle_config ;; 4) check_mihomo || continue; PODPISKA ;; 5) sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/mixomo/gen_WARP.sh); echo; PAUSE ;;
 6) check_mihomo || continue; sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/mixomo/WARP_to_conf.sh); echo; PAUSE ;; 7) check_mihomo || continue; UI_INSTALL ;; 8) check_mihomo || continue; MIXOMO_RESTART ;; 
-
-
-9) check_mihomo || continue
-ARCH_MT=$(grep "^OPENWRT_ARCH=" /etc/os-release | cut -d'"' -f2); FILE_MT="/tmp/magitrickle.$APK_RAS"
-URL_MT="https://github.com/MagiTrickle/MagiTrickle/releases/download/${MT_VERSION}/magitrickle_${MT_VERSION}-${SUF_MT}1_openwrt_${ARCH_MT}.$APK_RAS"
-echo -e "\n${MAGENTA}Обновляем MagiTrickle\n${CYAN}Скачиваем ${NC}MagiTrickle\n${NC}$URL_MT"
-curl -Lf --retry 3 --retry-delay 2 -o "$FILE_MT" "$URL_MT" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка скачивания${NC}\n"; exit 1; }
-echo -e "${CYAN}Устанавливаем ${NC}MagiTrickle"
-$UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка обновления пакетов${NC}\n"; PAUSE; return 1; }
-$INSTALL "$FILE_MT" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка установки${NC}\n"; PAUSE; return 1; }
-echo -e "MagiTrickle ${GREEN}обновлён!${NC}\n"; PAUSE ;;
-
-
-*) echo; return ;; esac; done; }
+9) check_mihomo || continue; ARCH_MT=$(grep "^OPENWRT_ARCH=" /etc/os-release | cut -d'"' -f2); FILE_MT="/tmp/magitrickle.$APK_RAS"; URL_MT="https://github.com/MagiTrickle/MagiTrickle/releases/download/${MT_VERSION}/magitrickle_${MT_VERSION}-${SUF_MT}1_openwrt_${ARCH_MT}.$APK_RAS"
+echo -e "\n${MAGENTA}Обновляем MagiTrickle\n${CYAN}Скачиваем ${NC}MagiTrickle\n${NC}$URL_MT"; curl -Lf --retry 3 --retry-delay 2 -o "$FILE_MT" "$URL_MT" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка скачивания${NC}\n"; exit 1; }; echo -e "${CYAN}Устанавливаем ${NC}MagiTrickle"
+$UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка обновления пакетов${NC}\n"; PAUSE; return 1; }; $INSTALL "$FILE_MT" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка установки${NC}\n"; PAUSE; return 1; }; echo -e "MagiTrickle ${GREEN}обновлён!${NC}\n"; PAUSE ;; *) echo; return ;; esac; done; }
 # ==========================================
 # Главное меню
 # ==========================================
