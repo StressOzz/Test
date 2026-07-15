@@ -707,8 +707,12 @@ case "$STATUS" in running|active) MAGITRICKLE_STATUS="${GREEN}запущен${NC
 
 
 
-echo -e "${YELLOW}MagiTrickle:${NC}         $MAGITRICKLE_STATUS"; [ "$Magi_INSTALL_VER" != "$MT_VERSION" ] && echo -e "/${RED}$Magi_INSTALL_VER версия устарел${NC}"; [ "$Magi_INSTALL_VER" = "$MT_VERSION" ] && echo -e "/${GREEN}$Magi_INSTALL_VER${NC}"
-
+echo -ne "${YELLOW}MagiTrickle:${NC}         $MAGITRICKLE_STATUS"
+if [ "$Magi_INSTALL_VER" != "$MT_VERSION" ]; then
+    echo -e " / ${RED}$Magi_INSTALL_VER версия устарела${NC}"
+else
+    echo -e " / ${GREEN}$Magi_INSTALL_VER${NC}"
+fi
 
 
 echo -e "${YELLOW}HevSocks5Tunnel:${NC}     $HEV_STATUS"; }
