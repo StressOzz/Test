@@ -3,7 +3,7 @@
 # Zapret Manager by StressOzz
 # =========================================
 ZAPRET_MANAGER_VERSION="9.76"; STR_VERSION_AUTOINSTALL="v7"
-CRON_CMD="/etc/init.d/mihomo restart; /etc/init.d/magitrickle restart"; CONFIGPATH="/etc/magitrickle/state/config.yaml"
+CRON_CMD="/etc/init.d/mihomo restart"; CONFIGPATH="/etc/magitrickle/state/config.yaml"
 FLOWSEAL_STR_ZIP="https://github.com/StressOzz/Zapret-Manager/raw/refs/heads/files/flowseal-str.zip"
 URL_DEFAULT="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/mixomo/files/MagiTrickle/config.yaml"
 URL_ITDOG="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/mixomo/files/MagiTrickle/configAD.yaml"
@@ -69,7 +69,7 @@ SPFY="#Spotify\n45.155.204.190 api.spotify.com login5.spotify.com encore.scdn.co
 GITH_RAW="#githubusercontent.com\n185.199.109.133 raw.githubusercontent.com release-assets.githubusercontent.com
 185.199.108.133 private-user-images.githubusercontent.com gist.githubusercontent.com avatars.githubusercontent.com"
 GITH="#github.com\n140.82.114.3 github.com\n185.199.110.154 github.githubassets.com\n185.199.110.133 camo.githubassets.com"
-ALL_BLOCKS="$AI\n$INSTAGRAM\n$NTC\n$RUTOR\n$LIBRUSEC\n$TGWeb\n$TWCH\n$SCell\n$SPFY"; TMP_ARCHIVE_RS="/tmp/tg-ws-proxy-rs.tar.gz"; TMP_DIR_RS="/tmp/tg-ws-proxy-rs"
+ALL_BLOCKS="$AI\n$INSTAGRAM\n$NTC\n$RUTOR\n$LIBRUSEC\n$TGWeb\n$TWCH\n$SCell\n$SPFY\n$GITH_RAW"; TMP_ARCHIVE_RS="/tmp/tg-ws-proxy-rs.tar.gz"; TMP_DIR_RS="/tmp/tg-ws-proxy-rs"
 hosts_enabled() { if grep -q "### dns.malw.link" /etc/hosts; then hosts_echo="Malw.link"; return 0; elif grep -q "#mafioznik" /etc/hosts; then hosts_echo="Mafioznik"; return 0; elif grep -q "### dns.geohide.ru" /etc/hosts; then hosts_echo="GeoHide"; return 0
 elif grep -q "45.155.204.190\|instagram.com\|rutor.info\|lib.rus.ec\|ntc.party\|twitch.tv\|web.telegram.org\|www.spotify.com\|store.supercell.com\|raw.githubusercontent.com\|lkfl2.nalog.ru" /etc/hosts; then hosts_echo="добавлены"; return 0; fi; return 1; }
 hosts_add() { printf "%b\n" "$1" | while IFS= read -r L; do grep -qxF "$L" /etc/hosts || echo "$L" >> /etc/hosts; done; /etc/init.d/dnsmasq restart >/dev/null 2>&1; }
@@ -722,25 +722,25 @@ do curl -fL --connect-timeout 3 --max-time 7 -o /tmp/metacubexd.tgz https://gith
 [ -f /tmp/metacubexd.tgz ] || { echo -e "\n${RED}Ошибка загрузки MetaCubeXD${NC}\n"; PAUSE; return; }; mkdir -p /etc/mihomo/ui; rm -rf /etc/mihomo/ui/*; rm -rf /tmp/metacubexd; mkdir -p /tmp/metacubexd
 tar -xzf /tmp/metacubexd.tgz -C /tmp/metacubexd || { echo -e "\n${RED}Ошибка распаковки архива${NC}\n"; rm -rf /tmp/metacubexd.tgz /tmp/metacubexd; PAUSE; return; }; cp -r /tmp/metacubexd/* /etc/mihomo/ui/
 rm -rf /tmp/metacubexd.tgz /tmp/metacubexd; echo -e "\nMetaCubeXD${GREEN} успешно установлен${NC}\n"; PAUSE; break ;; *) return ;; esac; done; }
-MIXOMO_RESTART() { if grep -qF "$CRON_CMD" "$CRON_FILE" 2>/dev/null; then sed -i "\|$CRON_CMD|d" "$CRON_FILE"; /etc/init.d/cron restart; echo -e "\n${GREEN}Автоперезапуск ${NC}Mihomo${GREEN} и ${NC}MagiTrickle${GREEN} отключен!${NC}\n"
+MIXOMO_RESTART() { if grep -qF "$CRON_CMD" "$CRON_FILE" 2>/dev/null; then sed -i "\|$CRON_CMD|d" "$CRON_FILE"; /etc/init.d/cron restart; echo -e "\n${GREEN}Автоперезапуск ${NC}Mihomo${GREEN} отключен!${NC}\n"
 PAUSE; return; fi; echo -e "\n${MAGENTA}Выбор режима автоперезапуска${NC}"; echo -e "${CYAN}1) ${GREEN}Каждые ${NC}2–22${GREEN} часа${NC}\n${CYAN}2) ${GREEN}Ежедневно в указанное время${NC}"
 echo -ne "${CYAN}Enter) ${GREEN}Выход в меню Mixomo${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read MODE; case "$MODE" in 1) while :; do echo -en "\n${YELLOW}Введите интервал (${NC}2,4,6,8,10,12,14,16,18,20,22${YELLOW}):${NC} "
 read HOURS; case "$HOURS" in 2|4|6|8|10|12|14|16|18|20|22) break ;; *) echo -e "\n${RED}Ошибка! Только чётные значения от ${NC}2 ${RED}до ${NC}22\n"; PAUSE; return ;; esac; done; echo "0 */$HOURS * * * $CRON_CMD" >> "$CRON_FILE"
-/etc/init.d/cron restart; echo -e "\n${GREEN}Автоперезапуск ${NC}Mihomo${GREEN} и ${NC}MagiTrickle${GREEN} включен!${NC}\n"; PAUSE ;; 2) while :; do echo -en "\n${YELLOW}Введите час перезапуска (${NC}0,1,...,22,23${YELLOW}):${NC} "
+/etc/init.d/cron restart; echo -e "\n${GREEN}Автоперезапуск ${NC}Mihomo ${GREEN}включен!${NC}\n"; PAUSE ;; 2) while :; do echo -en "\n${YELLOW}Введите час перезапуска (${NC}0,1,...,22,23${YELLOW}):${NC} "
 read HOUR; case "$HOUR" in ''|*[!0-9]*) echo -e "\n${RED}Ошибка! Введите число от ${NC}0 ${RED}до ${NC}23\n"; PAUSE; return ;; esac; HOUR=$((HOUR + 0)); if [ "$HOUR" -lt 0 ] || [ "$HOUR" -gt 23 ]
 then echo -e "\n${RED}Ошибка! Диапазон должен быть от ${NC}0 ${RED}до ${NC}23\n"; PAUSE; return; fi; break; done; echo "0 $HOUR * * * $CRON_CMD" >> "$CRON_FILE"; /etc/init.d/cron restart
-echo -e "\n${GREEN}Автоперезапуск ${NC}Mihomo${GREEN} и ${NC}MagiTrickle${GREEN} включен!${NC}\n"; PAUSE ;; *) return ;; esac; }
+echo -e "\n${GREEN}Автоперезапуск ${NC}Mihomo ${GREEN}включен!${NC}\n"; PAUSE ;; *) return ;; esac; }
 check_mihomo() { if [ ! -f /etc/init.d/mihomo ]; then echo -e "\n${RED}Mixomo не установлен!${NC}\n"; PAUSE; return 1; fi; return 0; }
 MIXOMO_MENU() { while true; do LINECRON=$(grep -F "/etc/init.d/mihomo restart" /etc/crontabs/root 2>/dev/null | head -n 1); if command -v apk >/dev/null 2>&1; then Magi_INSTALL_VER="$(apk info -v | grep '^magitrickle-' | cut -d- -f2)"
 else Magi_INSTALL_VER="$(opkg status magitrickle 2>/dev/null | awk '/^Version:/ {sub(/-1$/,"",$2); sub(/-r1$/,"",$2); print $2}')"; fi; clear; echo -e "${MAGENTA}Меню Mixomo${NC}\n"; check_status; [ -f /etc/mihomo/config.yaml ] && grep -q "engage.cloudflareclient.com" /etc/mihomo/config.yaml && echo -e "${YELLOW}WARP endpoint:       ${CYAN}Россия${NC}"
 if [ -f "$CONFIGPATH" ]; then grep -Fq 'name: Google_ai' "$CONFIGPATH" && echo -e "${YELLOW}Используется список: ${NC}ITDog"; grep -Fq 'name: Meta (WA+FB+Instagram)' "$CONFIGPATH" && echo -e "${YELLOW}Используется список: ${NC}Internet Helper #2"; grep -Fq 'url: https://sw.ext.io/ipset/ipset_cf.list' "$CONFIGPATH" && echo -e "${YELLOW}Используется список: ${NC}Internet Helper #1"; fi
-if [ -n "$LINECRON" ]; then HOURM=$(echo "$LINECRON" | awk '{print $2}'); if echo "$HOURM" | grep -q "/"; then INTERVAL=$(echo "$HOURM" | cut -d'/' -f2)
-echo -e "${YELLOW}Автоперезапуск Mihomo и MagiTrickle: ${GREEN}каждые ${NC}$INTERVAL ${GREEN}часа(ов)"; else echo -e "${YELLOW}Автоперезапуск Mihomo и MagiTrickle: ${GREEN}ежедневно в ${NC}$(printf "%02d" "$HOURM"):00"; fi; fi
+[ -f /root/WARP.conf ] && echo -e "${YELLOW}WARP.conf в /root/:${NC}     ${GREEN}присутствует${NC}"; if [ -n "$LINECRON" ]; then HOURM=$(echo "$LINECRON" | awk '{print $2}'); if echo "$HOURM" | grep -q "/"; then INTERVAL=$(echo "$HOURM" | cut -d'/' -f2)
+echo -e "${YELLOW}Автоперезапуск Mihomo: ${GREEN}каждые ${NC}$INTERVAL ${GREEN}часа(ов)"; else echo -e "${YELLOW}Автоперезапуск Mihomo: ${GREEN}ежедневно в ${NC}$(printf "%02d" "$HOURM"):00"; fi; fi
 [ -f /etc/mihomo/config.yaml ] && echo -e "${YELLOW}Web-интерфейс Mihomo:${NC}       ${CYAN}$LAN_IP:9090/ui${NC}"; [ -f "$CONFIGPATH" ] && echo -e "${YELLOW}Web-интерфейс MagiTrickle:${NC}  ${CYAN}$LAN_IP:8080${NC}"
 echo -e "\n${CYAN}1) ${GREEN}Установить ${NC}Mixomo"; echo -e "${CYAN}2) ${GREEN}Удалить ${NC}Mixomo"; echo -e "${CYAN}3) ${GREEN}Сменить список ${NC}MagiTrickle"; if [ -f /etc/mihomo/config.yaml ] && grep -q '^[[:space:]]*[^#].*url: "' /etc/mihomo/config.yaml
 then echo -e "${CYAN}4) ${GREEN}Сменить ${NC}VPN${GREEN} подписку${NC}"; else echo -e "${CYAN}4) ${GREEN}Интегрировать ${NC}VPN${GREEN} подписку в ${NC}Mihomo${NC}"; fi; echo -e "${CYAN}5) ${GREEN}Сгенерировать ${NC}WARP ${GREEN}в ${NC}/root/WARP.conf"
 echo -e "${CYAN}6) ${GREEN}Интегрировать ${NC}/root/WARP.conf${GREEN} в ${NC}Mihomo"; echo -e "${CYAN}7) ${GREEN}Выбрать и установить панель для ${NC}Mihomo"; if grep -qF "/etc/init.d/mihomo restart" /etc/crontabs/root 2>/dev/null
-then echo -e "${CYAN}8) ${GREEN}Выключить автоперезапуск ${NC}Mihomo ${GREEN}и${NC} MagiTrickle"; else echo -e "${CYAN}8) ${GREEN}Включить автоперезапуск ${NC}Mihomo${GREEN} и ${NC}MagiTrickle"; fi; [ -n "$Magi_INSTALL_VER" ] && { [ "$Magi_INSTALL_VER" != "$MT_VERSION" ] && echo -e "${CYAN}9) ${GREEN}Обновить ${NC}MagiTrickle"; }
+then echo -e "${CYAN}8) ${GREEN}Выключить автоперезапуск ${NC}Mihomo"; else echo -e "${CYAN}8) ${GREEN}Включить автоперезапуск ${NC}Mihomoe"; fi; [ -n "$Magi_INSTALL_VER" ] && { [ "$Magi_INSTALL_VER" != "$MT_VERSION" ] && echo -e "${CYAN}9) ${GREEN}Обновить ${NC}MagiTrickle"; }
 echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню\n"; echo -ne "${YELLOW}Выберите пункт: ${NC}"; read choiceM; case "$choiceM" in 1) sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/mixomo/mixomo_openwrt_install.sh); PAUSE ;;
 2) sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/mixomo/mixomo_openwrt_delete.sh); sed -i "\|$CRON_CMD|d" "$CRON_FILE"; /etc/init.d/cron restart; echo -e "\n${YELLOW}Рекомендую сделать перезагрузку роутера!${NC}\n"; PAUSE ;;
 3) check_mihomo || continue; magitrickle_config ;; 4) check_mihomo || continue; PODPISKA ;; 5) sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/mixomo/gen_WARP.sh); echo; PAUSE ;;
