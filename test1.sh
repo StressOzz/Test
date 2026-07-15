@@ -1,4 +1,5 @@
 #!/bin/sh
+USE_APK=0; if command -v apk > /dev/null 2>&1; then USE_APK=1; fi
 ARCH_MT=$(grep "^OPENWRT_ARCH=" /etc/os-release | cut -d'"' -f2); CONFIG_PATH="/etc/magitrickle/state/config.yaml"
 MT_VERSION="$(curl -Ls -o /dev/null -w '%{url_effective}' https://github.com/MagiTrickle/MagiTrickle/releases/latest | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
 URL_APK="https://github.com/MagiTrickle/MagiTrickle/releases/download/${MT_VERSION}/magitrickle_${MT_VERSION}-r1_openwrt_${ARCH_MT}.apk"
