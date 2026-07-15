@@ -704,7 +704,7 @@ STATUS=$(/etc/init.d/mihomo status 2>/dev/null); case "$STATUS" in running|activ
 if [ -x /etc/init.d/hev-socks5-tunnel ]; then STATUS=$(/etc/init.d/hev-socks5-tunnel status 2>/dev/null); case "$STATUS" in running|active) HEV_STATUS="${GREEN}запущен${NC}" ;;
 *) HEV_STATUS="${RED}остановлен${NC}" ;; esac; fi; if [ -x /etc/init.d/magitrickle ]; then STATUS=$(/etc/init.d/magitrickle status 2>/dev/null)
 case "$STATUS" in running|active) MAGITRICKLE_STATUS="${GREEN}запущен${NC}" ;; *) MAGITRICKLE_STATUS="${RED}остановлен${NC}" ;; esac; fi; echo -e "${YELLOW}Mihomo:${NC}              $MIHOMO_STATUS"
-echo -ne "${YELLOW}MagiTrickle:${NC}         $MAGITRICKLE_STATUS"; [ -n "$Magi_INSTALL_VER" ] && { if [ "$Magi_INSTALL_VER" != "$MT_VERSION" ]; then echo -e " / ${RED}версия устарела${NC}"; else echo -e " / ${GREEN}$Magi_INSTALL_VER${NC}"; fi; } || echo; echo -e "${YELLOW}HevSocks5Tunnel:${NC}     $HEV_STATUS"
+echo -ne "${YELLOW}MagiTrickle:${NC}         $MAGITRICKLE_STATUS"; [ -n "$Magi_INSTALL_VER" ] && { if [ "$Magi_INSTALL_VER" != "$MT_VERSION" ]; then echo -e " / ${RED}версия устарела${NC}"; else echo -e " / ${GREEN}$Magi_INSTALL_VER${NC}"; fi; } || echo; echo -e "${YELLOW}HevSocks5Tunnel:${NC}     $HEV_STATUS"; }
 PODPISKA() { echo -ne "\n${YELLOW}Введите ссылку на подписку (${CYAN}https://...${YELLOW}): ${NC}"; read -r SUB_URL; case "$SUB_URL" in http://*|https://*) ;;
 *) echo -e "\n${RED}Ошибка! Ссылка должна начинаться с ${NC}http:// ${RED}или ${NC}https://${NC}\n"; PAUSE; return ;; esac; /etc/init.d/mihomo stop; rm -rf /etc/mihomo/proxy-providers /etc/mihomo/proxies/
 SUB_URL_ESC=$(printf '%s' "$SUB_URL" | sed 's/[&|]/\\&/g'); if grep -q "^[[:space:]]*proxy-providers:" "$CONFIGMIX" 2>/dev/null; then TMP_FILE=$(mktemp)
