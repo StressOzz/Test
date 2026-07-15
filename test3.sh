@@ -707,7 +707,7 @@ case "$STATUS" in running|active) MAGITRICKLE_STATUS="${GREEN}запущен${NC
 
 
 
-echo -e "${YELLOW}MagiTrickle:${NC}         $MAGITRICKLE_STATUS / $Magi_INSTALL_VER"; [ "$Magi_INSTALL_VER" != "$MT_VERSION" ] && echo -e "${RED}(версия устарел)${NC}"
+echo -e "${YELLOW}MagiTrickle:${NC}         $MAGITRICKLE_STATUS"; [ "$Magi_INSTALL_VER" != "$MT_VERSION" ] && echo -e "/${RED}$Magi_INSTALL_VER версия устарел${NC}"; [ "$Magi_INSTALL_VER" = "$MT_VERSION" ] && echo -e "/${GREEN}$Magi_INSTALL_VER${NC}"
 
 
 
@@ -775,9 +775,9 @@ echo -e "\n${YELLOW}Рекомендую сделать перезагрузку
 9) check_mihomo || continue
 ARCH_MT=$(grep "^OPENWRT_ARCH=" /etc/os-release | cut -d'"' -f2); FILE_MT="/tmp/magitrickle.$APK_RAS"
 URL_MT="https://github.com/MagiTrickle/MagiTrickle/releases/download/${MT_VERSION}/magitrickle_${MT_VERSION}-${SUF_MT}1_openwrt_${ARCH_MT}.$APK_RAS"
-echo -e "\n${MAGENTA}Обновляем MagiTrickle\n${CYAN}Скачиваем:\n${NC}$URL_MT"
+echo -e "\n${MAGENTA}Обновляем MagiTrickle\n${CYAN}Скачиваем ${NC}MagiTrickle\n${NC}$URL_MT"
 curl -Lf --retry 3 --retry-delay 2 -o "$FILE_MT" "$URL_MT" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка скачивания${NC}\n"; exit 1; }
-echo -e "${CYAN}Устанавливем:\n${CYAN}$(basename "$URL_MT")${NC}"
+echo -e "${CYAN}Устанавливаем ${NC}MagiTrickle"
 $UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка обновления пакетов${NC}\n"; PAUSE; return 1; }
 $INSTALL "$FILE_MT" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка установки${NC}\n"; PAUSE; return 1; }
 echo -e "MagiTrickle ${GREEN}обновлён!${NC}\n"; PAUSE ;;
