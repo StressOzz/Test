@@ -1,5 +1,5 @@
 #!/bin/sh
-GREEN="\033[1;32m"; RED="\033[1;31m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; NC="\033[0m"
+GREEN="\033[1;32m"; RED="\033[1;31m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; NC="\033[0m"
 INSTALL="opkg install"; UPDATE="opkg update"; RAZ="ipk"; SUF=""
 command -v apk >/dev/null 2>&1 && INSTALL="apk add --allow-untrusted" && UPDATE="apk update" && RAZ="apk" && SUF="r"
 ARCH_MT=$(grep "^OPENWRT_ARCH=" /etc/os-release | cut -d'"' -f2)
