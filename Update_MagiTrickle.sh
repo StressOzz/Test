@@ -10,7 +10,7 @@ URL="https://github.com/MagiTrickle/MagiTrickle/releases/download/${MT_VERSION}/
 clear
 echo -e "${YELLOW}Скачиваем:\n${CYAN}$URL${NC}"
 curl -Lf --retry 3 --retry-delay 2 -o "$FILE_MT" "$URL" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка скачивания${NC}\n"; exit 1; }
-echo -e "${YELLOW}Устанавливем ${CYAN}$(basename "$URL")${NC}"
+echo -e "${YELLOW}Устанавливем:\n${CYAN}$(basename "$URL")${NC}"
 $UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка обновления пакетов${NC}\n"; exit 1; }
 $INSTALL "$FILE_MT" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка установки${NC}\n"; exit 1; }
 echo -e "\n${GREEN}MagiTrickle установлен (обновлён)${NC}\n"
