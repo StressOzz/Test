@@ -16,6 +16,8 @@ if [ "$USE_APK" -eq 1 ]; then
 
     FILE_MT="/tmp/magitrickle.apk"
 
+    clear
+
     echo "Скачивание:"
     echo "$URL_APK"
 
