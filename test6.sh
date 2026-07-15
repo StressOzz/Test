@@ -747,8 +747,8 @@ echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню\n"; echo -n
 3) check_mihomo || continue; magitrickle_config ;; 4) check_mihomo || continue; PODPISKA ;; 5) sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/mixomo/gen_WARP.sh); echo; PAUSE ;;
 6) check_mihomo || continue; sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/mixomo/WARP_to_conf.sh); echo; PAUSE ;; 7) check_mihomo || continue; UI_INSTALL ;; 8) check_mihomo || continue; MIXOMO_RESTART ;; 
 9) check_mihomo || continue; ARCH_MT=$(grep "^OPENWRT_ARCH=" /etc/os-release | cut -d'"' -f2); FILE_MT="/tmp/magitrickle.$APK_RAS"; URL_MT="https://github.com/MagiTrickle/MagiTrickle/releases/download/${MT_VERSION}/magitrickle_${MT_VERSION}-${SUF_MT}1_openwrt_${ARCH_MT}.$APK_RAS"
-echo -e "\n${MAGENTA}Обновляем MagiTrickle\n${CYAN}Скачиваем ${NC}MagiTrickle\n${NC}$URL_MT"; curl -Lf --retry 3 --retry-delay 2 -o "$FILE_MT" "$URL_MT" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка скачивания${NC}\n"; exit 1; }; echo -e "${CYAN}Устанавливаем ${NC}MagiTrickle"
-$UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка обновления пакетов${NC}\n"; PAUSE; return 1; }; $INSTALL "$FILE_MT" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка установки${NC}\n"; PAUSE; return 1; }; echo -e "MagiTrickle ${GREEN}обновлён!${NC}\n"; PAUSE ;; *) echo; return ;; esac; done; }
+echo -e "\n${MAGENTA}Обновляем MagiTrickle\n${CYAN}Скачиваем ${NC}MagiTrickle\n${NC}$URL_MT"; curl -Lf --retry 3 --retry-delay 2 -o "$FILE_MT" "$URL_MT" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка скачивания${NC}\n"; return 1; }; echo -e "${CYAN}Обновляем список пакетов${NC}"
+$UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка обновления пакетов${NC}\n"; PAUSE; return 1; }; echo -e "${CYAN}Устанавливаем ${NC}MagiTrickle"; $INSTALL "$FILE_MT" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка установки${NC}\n"; PAUSE; return 1; }; echo -e "MagiTrickle ${GREEN}обновлён!${NC}\n"; PAUSE ;; *) echo; return ;; esac; done; }
 # ==========================================
 # Главное меню
 # ==========================================
