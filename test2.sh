@@ -707,7 +707,7 @@ case "$STATUS" in running|active) MAGITRICKLE_STATUS="${GREEN}запущен${NC
 
 
 
-echo -e "${YELLOW}MagiTrickle:${NC}         $MAGITRICKLE_STATUS"; [ "$Magi_INSTALL_VER" != "$MT_VERSION" ] && echo -e "${RED}(версия устарел)${NC}"
+echo -e "${YELLOW}MagiTrickle:${NC}         $MAGITRICKLE_STATUS / $Magi_INSTALL_VER"; [ "$Magi_INSTALL_VER" != "$MT_VERSION" ] && echo -e "${RED}(версия устарел)${NC}"
 
 
 
