@@ -1,7 +1,7 @@
 #!/bin/sh
 
-INSTALL="opkg install"; UPDATE="opkg update"; RAZ="ipk"; SUF="r"
-command -v apk >/dev/null 2>&1 && INSTALL="apk add --allow-untrusted" && UPDATE="apk update" && RAZ="apk" && SUF="" 
+INSTALL="opkg install"; UPDATE="opkg update"; RAZ="ipk"; SUF=""
+command -v apk >/dev/null 2>&1 && INSTALL="apk add --allow-untrusted" && UPDATE="apk update" && RAZ="apk" && SUF="r"
 
 ARCH_MT=$(grep "^OPENWRT_ARCH=" /etc/os-release | cut -d'"' -f2)
 
