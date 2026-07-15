@@ -3,7 +3,7 @@
 # Zapret Manager by StressOzz
 # =========================================
 ZAPRET_MANAGER_VERSION="9.76"; STR_VERSION_AUTOINSTALL="v7"
-CRON_CMD="/etc/init.d/mihomo restart"; CONFIGPATH="/etc/magitrickle/state/config.yaml"
+CRON_CMD="/etc/init.d/mihomo restart; /etc/init.d/magitrickle restart"; CONFIGPATH="/etc/magitrickle/state/config.yaml"
 FLOWSEAL_STR_ZIP="https://github.com/StressOzz/Zapret-Manager/raw/refs/heads/files/flowseal-str.zip"
 URL_DEFAULT="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/mixomo/files/MagiTrickle/config.yaml"
 URL_ITDOG="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/mixomo/files/MagiTrickle/configAD.yaml"
@@ -153,14 +153,11 @@ switch_Dv() { select_Dv || return 1; grep -q -E '^[[:space:]]*--filter-tcp=2053,
 END=$(tail -n +"$START" "$CONF" | grep -n -m1 -E '^--new$|^#|^'\''$' | cut -d: -f1); END=$((START + END - 1)); sed -i "${START},$((END-1))d" "$CONF"; LINE=$START; echo "$NEW_STRAT" | while IFS= read -r l; do sed -i "${LINE}i$l" "$CONF"; LINE=$((LINE + 1)); done
 if grep -q -E '^#[[:space:]]*Dv' "$CONF"; then sed -i "s/^#[[:space:]]*Dv[0-9]\+/#Dv$NEW_NUM/" "$CONF"; else sed -i "$START i#Dv$NEW_NUM" "$CONF"; fi; echo -e "\n${MAGENTA}Меняем стратегию для discord.media${NC}"; ZAPRET_RESTART; echo -e "${GREEN}Стратегия ${NC}Dv$NEW_NUM${GREEN} применена!${NC}\n"; PAUSE; }
 toggle_finland_hosts() { if grep -q "$Fin_IP_Dis" /etc/hosts; then sed -i "/$Fin_IP_Dis/d" /etc/hosts; echo -e "\n${MAGENTA}Удаляем Финские IP${NC}"; /etc/init.d/dnsmasq restart 2>/dev/null
-echo -e "${GREEN}Финские ${NC}IP${GREEN} удалены${NC}\n"; else seq 10000 10199 | awk '{print "104.25.158.178 finland"$1".discord.media"}' | grep -vxFf /etc/hosts >> /etc/hosts; echo -e "\n${MAGENTA}Добавляем Финские IP${NC}"; /etc/init.d/dnsmasq restart 2>/dev/null
-echo -e "${GREEN}Финские ${NC}IP${GREEN} добавлены${NC}\n"; fi; PAUSE; }
+echo -e "${GREEN}Финские ${NC}IP${GREEN} удалены${NC}\n"; else seq 10000 10199 | awk '{print "104.25.158.178 finland"$1".discord.media"}' | grep -vxFf /etc/hosts >> /etc/hosts; echo -e "\n${MAGENTA}Добавляем Финские IP${NC}"; /etc/init.d/dnsmasq restart 2>/dev/null; echo -e "${GREEN}Финские ${NC}IP${GREEN} добавлены${NC}\n"; fi; PAUSE; }
 show_script_50() { [ -f "/opt/zapret/init.d/openwrt/custom.d/50-script.sh" ] || return; line=$(head -n1 /opt/zapret/init.d/openwrt/custom.d/50-script.sh)
 name=$(case "$line" in *QUIC*) echo "50-quic4all";; *stun*) echo "50-stun4all";; *"discord media"*) echo "50-discord-media";; *"discord subnets"*) echo "50-discord";; *) echo "";; esac); }
-Discord_menu() { [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }
-local NO_PAUSE=$1; while true; do [ "$NO_PAUSE" != "1" ] && clear && echo -e "${MAGENTA}Меню настройки Discord${NC}\n"; output_shown=false
-[ "$NO_PAUSE" != "1" ] && show_script_50 && [ -n "$name" ] && echo -e "${YELLOW}Установлен скрипт:${NC} $name" && output_shown=true
-[ "$NO_PAUSE" != "1" ] && grep -q "$Fin_IP_Dis" /etc/hosts && echo -e "${YELLOW}Финские IP для Discord: ${GREEN}включены${NC}" && output_shown=true
+Discord_menu() { [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }; local NO_PAUSE=$1; while true; do [ "$NO_PAUSE" != "1" ] && clear && echo -e "${MAGENTA}Меню настройки Discord${NC}\n"; output_shown=false
+[ "$NO_PAUSE" != "1" ] && show_script_50 && [ -n "$name" ] && echo -e "${YELLOW}Установлен скрипт:${NC} $name" && output_shown=true; [ "$NO_PAUSE" != "1" ] && grep -q "$Fin_IP_Dis" /etc/hosts && echo -e "${YELLOW}Финские IP для Discord: ${GREEN}включены${NC}" && output_shown=true
 [ "$NO_PAUSE" != "1" ] && FAKE_FILE=$(grep -m1 -- '--dpi-desync-fake-discord=' "$CONF" | sed 's|.*fake/||') && [ -n "$FAKE_FILE" ] && echo -e "${YELLOW}fake в discord,stun:${NC} $FAKE_FILE" && output_shown=true
 [ "$NO_PAUSE" != "1" ] && NUMDv=$(grep -o -E '^#[[:space:]]*Dv[0-9][0-9]*' "$CONF" | sed 's/[^0-9]//g' | head -n1) && [ -n "$NUMDv" ] && echo -e "${YELLOW}Стратегия для discord.media: ${CYAN}Dv$NUMDv${NC}"  && output_shown=true
 $output_shown && echo; if [ "$NO_PAUSE" = "1" ]; then SELECTED="50-stun4all"; URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-stun4all"; else
@@ -215,8 +212,7 @@ echo -e "\n${MAGENTA}Восстанавливаем настройки из ре
 stop_zapret() { local NO_PAUSE=$1; echo -e "\n${MAGENTA}Останавливаем Zapret${NC}\n${CYAN}Останавливаем ${NC}Zapret"; /etc/init.d/zapret stop >/dev/null 2>&1
 for pid in $(pgrep -f /opt/zapret 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done; echo -e "Zapret ${GREEN}остановлен!${NC}\n"; [ "$NO_PAUSE" != "1" ] && PAUSE; }
 start_zapret() { if [ -f /etc/init.d/zapret ]; then echo -e "\n${MAGENTA}Запускаем Zapret${NC}"; /etc/init.d/zapret start >/dev/null 2>&1; ZAPRET_RESTART;
-if /etc/init.d/zapret status >/dev/null 2>&1; then echo -e "Zapret ${GREEN}запущен!${NC}\n"; else echo -e "Zapret ${RED}не удалось запустить!${NC}\n"; fi
-else echo -e "\n${RED}Zapret не установлен!${NC}\n"; fi; [ "$NO_PAUSE" != "1" ] && PAUSE; }
+if /etc/init.d/zapret status >/dev/null 2>&1; then echo -e "Zapret ${GREEN}запущен!${NC}\n"; else echo -e "Zapret ${RED}не удалось запустить!${NC}\n"; fi; else echo -e "\n${RED}Zapret не установлен!${NC}\n"; fi; [ "$NO_PAUSE" != "1" ] && PAUSE; }
 # ==========================================
 # Удаление Zapret
 # ==========================================
@@ -588,14 +584,14 @@ install_TG_RS() { echo -e "\n${MAGENTA}Устанавливаем TG WS Proxy Ru
 DOWNLOAD_URL_RS="https://github.com/DaveFromSheffield/rezerv/raw/refs/heads/main/files/tg-ws-proxy-rs/tg-ws-proxy-rs-$ARCH_FILE_RS"; curl -L --fail -o "$BIN_PATH_RS" "$DOWNLOAD_URL_RS" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка скачивания${NC}\n"; PAUSE; return 1; }; chmod +x "$BIN_PATH_RS"
 printf '#!/bin/sh /etc/rc.common\nSTART=99\nUSE_PROCD=1\n\nstart_service() {\n    procd_open_instance\n    procd_set_param command /usr/bin/tg-ws-proxy-rs --host 0.0.0.0 --port 2443 --secret %s --default-domains --cf-balance --cf-priority\n    procd_set_param respawn\n    procd_close_instance\n}\n' "$SECRET" > /etc/init.d/tg-ws-proxy-rs
 chmod +x "$INIT_PATH_RS"; /etc/init.d/tg-ws-proxy-rs enable; /etc/init.d/tg-ws-proxy-rs start; if pidof tg-ws-proxy-rs >/dev/null 2>&1; then echo -e "${GREEN}Сервис ${NC}TG WS Proxy Rust${GREEN} запущен!${NC}\n"; else echo -e "\n${RED}Сервис TG WS Proxy Rust не запущен!${NC}\n"; fi; PAUSE; }
-# УСТАНОВКА GO
+# УСТАНОВКА SOCKS5
 get_arch_GO() { case "$ARCH" in aarch64*) echo "tg-ws-proxy-openwrt-aarch64" ;; arm*) echo "tg-ws-proxy-openwrt-armv7" ;; mipsel*) echo "tg-ws-proxy-openwrt-mipsel_24kc" ;; mips*) echo "tg-ws-proxy-openwrt-mips_24kc" ;; x86_64) echo "tg-ws-proxy-openwrt-x86_64" ;; *) echo "Неизвестная архитектура: $ARCH"; return 1 ;; esac }
 delete_TG_GO() { echo -e "\n${MAGENTA}Удаляем TG WS Proxy SOCKS5${NC}"; /etc/init.d/tg-ws-proxy-go stop >/dev/null 2>&1; /etc/init.d/tg-ws-proxy-go disable >/dev/null 2>&1; rm -rf "$BIN_PATH_GO" "$INIT_PATH_GO"; echo -e "TG WS Proxy SOCKS5 ${GREEN}удалён!${NC}\n"; PAUSE; }
 install_TG_GO() { echo -e "\n${MAGENTA}Устанавливаем TG WS Proxy SOCKS5${NC}"; ARCH_FILE_GO="$(get_arch_GO)" || { echo -e "\n${RED}Архитектура не поддерживается:${NC} $ARCH\n"; PAUSE; return 1; }; echo -e "${CYAN}Скачиваем и устанавливаем${NC} $ARCH_FILE_GO"; LATEST_TAG_GO="$(curl -Ls -o /dev/null -w '%{url_effective}' https://github.com/d0mhate/-tg-ws-proxy-Manager-go/releases/latest | sed 's#.*/tag/##')"
 [ -z "$LATEST_TAG_GO" ] && { echo -e "\n${RED}Не удалось получить версию${NC} TG WS Proxy SOCKS5\n"; PAUSE; return 1; }; DOWNLOAD_URL_GO="https://github.com/d0mhate/-tg-ws-proxy-Manager-go/releases/download/$LATEST_TAG_GO/$ARCH_FILE_GO"; curl -L --fail -o "$BIN_PATH_GO" "$DOWNLOAD_URL_GO" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка скачивания${NC}\n"; PAUSE; return 1; }; chmod +x "$BIN_PATH_GO"
 printf '#!/bin/sh /etc/rc.common\nSTART=99\nUSE_PROCD=1\n\nstart_service() {\n    procd_open_instance\n    procd_set_param command /usr/bin/tg-ws-proxy-go --host 0.0.0.0 --port 1080 --cf-proxy --cf-proxy-first --cf-balance\n    procd_set_param respawn\n    procd_close_instance\n}\n' > /etc/init.d/tg-ws-proxy-go
 chmod +x "$INIT_PATH_GO"; /etc/init.d/tg-ws-proxy-go enable; /etc/init.d/tg-ws-proxy-go start; if pidof tg-ws-proxy-go >/dev/null 2>&1; then echo -e "${GREEN}Сервис ${NC}TG WS Proxy SOCKS5${GREEN} запущен!${NC}\n"; else echo -e "\n${RED}Сервис TG WS Proxy SOCKS5 не запущен!${NC}\n"; fi; PAUSE; }
-# УСТАНОВКА GO MTProto
+# УСТАНОВКА MTProto
 install_update_TG_PKG() { AVAILABLE_SPACE=$(df /overlay 2>/dev/null | awk 'NR==2 {print $4}'); [ -z "$AVAILABLE_SPACE" ] && AVAILABLE_SPACE=$(df / 2>/dev/null | awk 'NR==2 {print $4}'); REQUIRED_SPACE=10000; if [ "$AVAILABLE_SPACE" -lt "$REQUIRED_SPACE" ]
 then echo -e "\n${RED}Недостаточно свободного места${NC}\n"; echo -e "${YELLOW}Доступно: ${NC}$((AVAILABLE_SPACE/1024))MB\n${YELLOW}Требуется: ${NC}$((REQUIRED_SPACE/1024))MB\n"; PAUSE; return; fi
 echo -e "\n${MAGENTA}Устанавливаем TG WS Proxy MTProto${NC}"; rm -f /etc/tg-ws-proxy.conf /etc/tg-ws-proxy.conf-opkg; URL="https://github.com/spatiumstas/tg-ws-proxy-go/releases/download/${GO_VER}/tg-ws-proxy_${GO_VER}-${GO_SUF}_openwrt_${ARCH_FULL}.${APK_RAS}"
@@ -726,25 +722,25 @@ do curl -fL --connect-timeout 3 --max-time 7 -o /tmp/metacubexd.tgz https://gith
 [ -f /tmp/metacubexd.tgz ] || { echo -e "\n${RED}Ошибка загрузки MetaCubeXD${NC}\n"; PAUSE; return; }; mkdir -p /etc/mihomo/ui; rm -rf /etc/mihomo/ui/*; rm -rf /tmp/metacubexd; mkdir -p /tmp/metacubexd
 tar -xzf /tmp/metacubexd.tgz -C /tmp/metacubexd || { echo -e "\n${RED}Ошибка распаковки архива${NC}\n"; rm -rf /tmp/metacubexd.tgz /tmp/metacubexd; PAUSE; return; }; cp -r /tmp/metacubexd/* /etc/mihomo/ui/
 rm -rf /tmp/metacubexd.tgz /tmp/metacubexd; echo -e "\nMetaCubeXD${GREEN} успешно установлен${NC}\n"; PAUSE; break ;; *) return ;; esac; done; }
-toggle_mihomo_autorestart() { if grep -qF "$CRON_CMD" "$CRON_FILE" 2>/dev/null; then sed -i "\|$CRON_CMD|d" "$CRON_FILE"; /etc/init.d/cron restart; echo -e "\n${GREEN}Автоперезапуск ${NC}Mihomo ${GREEN}отключен!${NC}\n"
-PAUSE; return; fi; echo; echo -e "${MAGENTA}Выбор режима автоперезапуска${NC}"; echo -e "${CYAN}1) ${GREEN}Каждые ${NC}2–22${GREEN} часа${NC}"; echo -e "${CYAN}2) ${GREEN}Ежедневно в указанное время${NC}"
+toggle_mihomo_autorestart() { if grep -qF "$CRON_CMD" "$CRON_FILE" 2>/dev/null; then sed -i "\|$CRON_CMD|d" "$CRON_FILE"; /etc/init.d/cron restart; echo -e "\n${GREEN}Автоперезапуск ${NC}Mihomo${GREEN} и ${NC}MagiTrickle${GREEN} отключен!${NC}\n"
+PAUSE; return; fi; echo -e "\n${MAGENTA}Выбор режима автоперезапуска${NC}"; echo -e "${CYAN}1) ${GREEN}Каждые ${NC}2–22${GREEN} часа${NC}\n${CYAN}2) ${GREEN}Ежедневно в указанное время${NC}"
 echo -ne "${CYAN}Enter) ${GREEN}Выход в меню Mixomo${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read MODE; case "$MODE" in 1) while :; do echo -en "\n${YELLOW}Введите интервал (${NC}2,4,6,8,10,12,14,16,18,20,22${YELLOW}):${NC} "
 read HOURS; case "$HOURS" in 2|4|6|8|10|12|14|16|18|20|22) break ;; *) echo -e "\n${RED}Ошибка! Только чётные значения от ${NC}2 ${RED}до ${NC}22\n"; PAUSE; return ;; esac; done; echo "0 */$HOURS * * * $CRON_CMD" >> "$CRON_FILE"
-/etc/init.d/cron restart; echo -e "\n${GREEN}Автоперезапуск ${NC}Mihomo${GREEN} включен${NC}\n"; PAUSE ;; 2) while :; do echo -en "\n${YELLOW}Введите час перезапуска (${NC}0,1,...,22,23${YELLOW}):${NC} "
+/etc/init.d/cron restart; echo -e "\n${GREEN}Автоперезапуск ${NC}Mihomo${GREEN} и ${NC}MagiTrickle${GREEN} включен${NC}\n"; PAUSE ;; 2) while :; do echo -en "\n${YELLOW}Введите час перезапуска (${NC}0,1,...,22,23${YELLOW}):${NC} "
 read HOUR; case "$HOUR" in ''|*[!0-9]*) echo -e "\n${RED}Ошибка! Введите число от ${NC}0 ${RED}до ${NC}23\n"; PAUSE; return ;; esac; HOUR=$((HOUR + 0)); if [ "$HOUR" -lt 0 ] || [ "$HOUR" -gt 23 ]
 then echo -e "\n${RED}Ошибка! Диапазон должен быть от ${NC}0 ${RED}до ${NC}23\n"; PAUSE; return; fi; break; done; echo "0 $HOUR * * * $CRON_CMD" >> "$CRON_FILE"; /etc/init.d/cron restart
-echo -e "\n${GREEN}Автоперезапуск ${NC}Mihomo${GREEN} включен${NC}\n"; PAUSE ;; *) return ;; esac; }
+echo -e "\n${GREEN}Автоперезапуск ${NC}Mihomo${GREEN} и ${NC}MagiTrickle${GREEN} включен${NC}\n"; PAUSE ;; *) return ;; esac; }
 check_mihomo() { if [ ! -f /etc/init.d/mihomo ]; then echo -e "\n${RED}Mixomo не установлен!${NC}\n"; PAUSE; return 1; fi; return 0; }
 MIXOMO_MENU() { while true; do LINECRON=$(grep -F "/etc/init.d/mihomo restart" /etc/crontabs/root 2>/dev/null | head -n 1); clear; echo -e "${MAGENTA}Меню Mixomo${NC}\n"; check_status
 [ -f /etc/mihomo/config.yaml ] && grep -q "engage.cloudflareclient.com" /etc/mihomo/config.yaml && echo -e "${YELLOW}WARP endpoint:       ${CYAN}Россия${NC}"
 if [ -f "$CONFIGPATH" ]; then grep -Fq 'name: Google_ai' "$CONFIGPATH" && echo -e "${YELLOW}Используется список: ${NC}ITDog"; grep -Fq 'name: Meta (WA+FB+Instagram)' "$CONFIGPATH" && echo -e "${YELLOW}Используется список: ${NC}Internet Helper #2"; grep -Fq 'url: https://sw.ext.io/ipset/ipset_cf.list' "$CONFIGPATH" && echo -e "${YELLOW}Используется список: ${NC}Internet Helper #1"; fi
 if [ -n "$LINECRON" ]; then HOURM=$(echo "$LINECRON" | awk '{print $2}'); if echo "$HOURM" | grep -q "/"; then INTERVAL=$(echo "$HOURM" | cut -d'/' -f2)
-echo -e "${YELLOW}Автоперезапуск Mihomo: ${GREEN}каждые ${NC}$INTERVAL ${GREEN}часа(ов)"; else echo -e "${YELLOW}Автоперезапуск Mihomo: ${GREEN}ежедневно в ${NC}$(printf "%02d" "$HOURM"):00"; fi; fi
+echo -e "${YELLOW}Автоперезапуск Mihomo и MagiTrickle: ${GREEN}каждые ${NC}$INTERVAL ${GREEN}часа(ов)"; else echo -e "${YELLOW}Автоперезапуск Mihomo и MagiTrickle: ${GREEN}ежедневно в ${NC}$(printf "%02d" "$HOURM"):00"; fi; fi
 [ -f /etc/mihomo/config.yaml ] && echo -e "${YELLOW}Web-интерфейс Mihomo:${NC}       ${CYAN}$LAN_IP:9090/ui${NC}"; [ -f "$CONFIGPATH" ] && echo -e "${YELLOW}Web-интерфейс MagiTrickle:${NC}  ${CYAN}$LAN_IP:8080${NC}"
 echo -e "\n${CYAN}1) ${GREEN}Установить ${NC}Mixomo"; echo -e "${CYAN}2) ${GREEN}Удалить ${NC}Mixomo"; echo -e "${CYAN}3) ${GREEN}Сменить список ${NC}MagiTrickle"; if [ -f /etc/mihomo/config.yaml ] && grep -q '^[[:space:]]*[^#].*url: "' /etc/mihomo/config.yaml
 then echo -e "${CYAN}4) ${GREEN}Сменить ${NC}VPN${GREEN} подписку${NC}"; else echo -e "${CYAN}4) ${GREEN}Интегрировать ${NC}VPN${GREEN} подписку в ${NC}Mihomo${NC}"; fi; echo -e "${CYAN}5) ${GREEN}Сгенерировать ${NC}WARP ${GREEN}в ${NC}/root/WARP.conf"
 echo -e "${CYAN}6) ${GREEN}Интегрировать ${NC}/root/WARP.conf${GREEN} в ${NC}Mihomo"; echo -e "${CYAN}7) ${GREEN}Выбрать и установить панель для ${NC}Mihomo"; if grep -qF "/etc/init.d/mihomo restart" /etc/crontabs/root 2>/dev/null
-then echo -e "${CYAN}8) ${GREEN}Выключить автоперезапуск ${NC}Mihomo"; else echo -e "${CYAN}8) ${GREEN}Включить автоперезапуск ${NC}Mihomo"; fi; echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню\n"
+then echo -e "${CYAN}8) ${GREEN}Выключить автоперезапуск ${NC}Mihomo ${GREEN}и${NC} MagiTrickle"; else echo -e "${CYAN}8) ${GREEN}Включить автоперезапуск ${NC}Mihomo${GREEN} и ${NC}MagiTrickle"; fi; echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню\n"
 echo -ne "${YELLOW}Выберите пункт: ${NC}"; read choiceM; case "$choiceM" in 1) sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/mixomo/mixomo_openwrt_install.sh); PAUSE ;;
 2) sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/mixomo/mixomo_openwrt_delete.sh); sed -i "\|$CRON_CMD|d" "$CRON_FILE"; /etc/init.d/cron restart
 echo -e "\n${YELLOW}Рекомендую сделать перезагрузку роутера!${NC}\n"; PAUSE ;; 3) check_mihomo || continue; magitrickle_config ;; 4) check_mihomo || continue; PODPISKA ;; 5) sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/mixomo/gen_WARP.sh); echo; PAUSE ;;
