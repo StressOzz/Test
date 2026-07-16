@@ -176,10 +176,21 @@ sed -i "/DISABLE_CUSTOM/s/'1'/'0'/" $CONF; ZAPRET_RESTART; [ "$NO_PAUSE" != "1" 
 remove_ports_if_present() { local OPTION="$1"; local PORTS="$2"; for p in $(echo "$PORTS" | tr ',' ' '); do sed -i "\#option $OPTION '#s#,$p##g" "$CONF"; done; sed -i "\#option $OPTION '#s#,,#,#g; s#,\$##" "$CONF"; }
 add_ports_if_missing() { local OPTION="$1"; local PORTS="$2"; for p in $(echo "$PORTS" | tr ',' ' '); do grep -q "option $OPTION '.*\b$p\b" "$CONF" || sed -i "\#option $OPTION '#s#'\$#,$p'#" "$CONF"; done; }
 strategy_TCP_common() { printf "%s\n" "--new" "--filter-tcp=$PORTS_TCP" "--dpi-desync-any-protocol=1" "--dpi-desync-cutoff=n5" "--dpi-desync=multisplit" "--dpi-desync-split-seqovl=582" "--dpi-desync-split-pos=1" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/stun.bin"; }
-strategy_Gv1() { printf "%s\n" "#Gv1" "--new" "--filter-udp=$PORTS_UDP" "--dpi-desync=fake" "--dpi-desync-cutoff=d2" "--dpi-desync-any-protocol=1" "--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/quic_initial_dbankcloud_ru.bin"; }
-strategy_Gv() { local N="$1"; printf "%s\n" "#Gv$N" "--new" "--filter-udp=$PORTS_UDP" "--dpi-desync=fake" "--dpi-desync-repeats=10" "--dpi-desync-any-protocol=1" "--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/quic_initial_dbankcloud_ru.bin" "--dpi-desync-cutoff=n$N"; }
+strategy_Gv1() { printf "%s\n" "#Gv1" "--new" "--filter-udp=$PORTS_UDP" "--dpi-desync=fake" "--dpi-desync-cutoff=d2" "--dpi-desync-any-protocol=1" "--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/stun.bin"; }
+strategy_Gv() { local N="$1"; printf "%s\n" "#Gv$N" "--new" "--filter-udp=$PORTS_UDP" "--dpi-desync=fake" "--dpi-desync-repeats=10" "--dpi-desync-any-protocol=1" "--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/stun.bin" "--dpi-desync-cutoff=n$N"; }
 GV_FAKE() { if ! grep -q "^#Gv" "$CONF" || ! grep -q -- "--dpi-desync-fake-unknown-udp=" "$CONF"; then echo -e "\n${RED}Блок ${NC}Gv${RED} не найден!${NC}\n"; PAUSE; return; fi
-echo -e "\n${MAGENTA}Выберите fake для игровой стратегии${NC}\n${CYAN}1) ${GREEN}Сменить на ${NC}stun.bin\n${CYAN}2) ${GREEN}Сменить на ${NC}quic_initial_4pda.to.bin\n${CYAN}3) ${GREEN}Сменить на ${NC}quic_initial_dbankcloud_ru.bin\n${CYAN}Enter) ${GREEN}Выход в меню стратегий${NC}"
+
+CURRENT_FAKE=$(grep -- "--dpi-desync-fake-unknown-udp=" "$CONF" | sed -n 's|.*--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/\([^ ]*\).*|\1|p')
+[ "$CURRENT_FAKE" = "stun.bin" ] && STUN="${GREEN}(активен)${NC}" || STUN=""
+[ "$CURRENT_FAKE" = "quic_initial_4pda.to.bin" ] && Q4PDA="${GREEN}(активен)${NC}" || Q4PDA=""
+[ "$CURRENT_FAKE" = "quic_initial_dbankcloud_ru.bin" ] && QDB="${GREEN}(активен)${NC}" || QDB=""
+
+echo -e "\n${MAGENTA}Выберите fake для игровой стратегии${NC}\n"
+echo -e "${CYAN}1) ${GREEN}Сменить на ${NC}stun.bin ${STUN}"
+echo -e "${CYAN}2) ${GREEN}Сменить на ${NC}quic_initial_4pda.to.bin ${Q4PDA}"
+echo -e "${CYAN}3) ${GREEN}Сменить на ${NC}quic_initial_dbankcloud_ru.bin ${QDB}"
+echo -e "${CYAN}Enter) ${GREEN}Выход в меню стратегий${NC}"
+
 echo -ne "\n${YELLOW}Выберите пункт:${NC} "; read -r choiceF; case "$choiceF" in 1) new_file="stun.bin" ;; 2) new_file="quic_initial_4pda.to.bin" ;; 3) new_file="quic_initial_dbankcloud_ru.bin" ;; *) return ;; esac; echo -e "\n${CYAN}Устанавливаем fake${NC} ${new_file}"
 awk -v new="$new_file" 'BEGIN{gv=0} /^#Gv/{gv=1} gv && /^--dpi-desync-fake-unknown-udp=/{sub(/\/opt\/zapret\/files\/fake\/[^ ]+/, "/opt/zapret/files/fake/" new); gv=0} {print}' "$CONF" > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"; ZAPRET_RESTART; echo -e "fake ${GREEN}изменён на ${NC}${new_file}${GREEN}!${NC}\n"; PAUSE; }
 fix_GAME() { local NO_PAUSE=$1; [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }; local CURRENT_GAME=""; for i in 1 2 3 4; do grep -q "^#Gv$i" "$CONF" && CURRENT_GAME="Gv$i"; done
@@ -263,18 +274,13 @@ if [ -f "$CONF" ] && { grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-use
 strategy_v1() { printf '%s\n' "#v1" "#Yv08" "--filter-tcp=443" "--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt" "--dpi-desync=hostfakesplit" "--dpi-desync-hostfakesplit-mod=host=google.com" "--dpi-desync-fooling=ts"
 printf '%s\n' "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=split2" "--dpi-desync-split-seqovl=681" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/stun.bin"; }
 strategy_v2() { printf '%s\n' "#v2" "#Yv08" "--filter-tcp=443" "--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt" "--dpi-desync=hostfakesplit" "--dpi-desync-hostfakesplit-mod=host=google.com" "--dpi-desync-fooling=ts"
-printf '%s\n' "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake,multisplit" "--dpi-desync-split-seqovl=681" "--dpi-desync-split-pos=1" "--dpi-desync-fooling=ts" "--dpi-desync-repeats=8" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/stun.bin" "--dpi-desync-fake-tls-mod=rnd,dupsid,sni=www.google.com" ; }
+printf '%s\n' "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake,multisplit" "--dpi-desync-split-seqovl=681" "--dpi-desync-split-pos=1" "--dpi-desync-fooling=ts" "--dpi-desync-repeats=8" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/stun.bin" "--dpi-desync-fake-tls-mod=rnd,dupsid,sni=www.google.com"; }
 strategy_v3() { printf '%s\n' "#v3" "#Yv08" "--filter-tcp=443" "--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt" "--dpi-desync=hostfakesplit" "--dpi-desync-hostfakesplit-mod=host=google.com" "--dpi-desync-fooling=ts"
-printf '%s\n' "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake,fakeddisorder" "--dpi-desync-split-pos=10,midsld" "--dpi-desync-fake-tls=/opt/zapret/files/fake/t2.bin"
-printf '%s\n' "--dpi-desync-fake-tls-mod=rnd,dupsid,sni=m.ok.ru" "--dpi-desync-fake-tls=0x0F0F0F0F" "--dpi-desync-fake-tls-mod=none" "--dpi-desync-fakedsplit-pattern=/opt/zapret/files/fake/tls_clienthello_vk_com.bin"
-printf '%s\n' "--dpi-desync-split-seqovl=336" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_gosuslugi_ru.bin" "--dpi-desync-fooling=badseq,badsum" "--dpi-desync-badseq-increment=0"
-printf '%s\n' "--new" "--filter-udp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake" "--dpi-desync-repeats=6" "--dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin"; }
+printf '%s\n' "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=hostfakesplit" "--dpi-desync-hostfakesplit-mod=host=ozon.ru" "--dpi-desync-repeats=4" "--dpi-desync-fooling=ts,md5sig" "--dpi-desync-badseq-increment=0"; }
 strategy_v4() { printf '%s\n' "#v4" "#Yv08" "--filter-tcp=443" "--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt" "--dpi-desync=hostfakesplit" "--dpi-desync-hostfakesplit-mod=host=google.com" "--dpi-desync-fooling=ts"
-printf '%s\n' "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=multisplit" "--dpi-desync-split-seqovl=582" "--dpi-desync-split-pos=1" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/stun.bin"
-printf '%s\n' "--new" "--filter-udp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake" "--dpi-desync-repeats=6" "--dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin"; }
+printf '%s\n' "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=multisplit" "--dpi-desync-split-seqovl=582" "--dpi-desync-split-pos=1" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/stun.bin"; }
 strategy_v5() { printf '%s\n' "#v5" "#Yv08" "--filter-tcp=443" "--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt" "--dpi-desync=hostfakesplit" "--dpi-desync-hostfakesplit-mod=host=google.com" "--dpi-desync-fooling=ts"
-printf '%s\n' "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake,fakeddisorder" "--dpi-desync-split-pos=1" "--dpi-desync-fake-tls=/opt/zapret/files/fake/stun.bin" "--dpi-desync-fake-tls-mod=none" "--dpi-desync-fakedsplit-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin" "--dpi-desync-fooling=badseq,badsum" "--dpi-desync-badseq-increment=0"
-printf '%s\n' "--new" "--filter-udp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake" "--dpi-desync-repeats=6" "--dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin"; }
+printf '%s\n' "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake,fakeddisorder" "--dpi-desync-split-pos=1" "--dpi-desync-fake-tls=/opt/zapret/files/fake/stun.bin" "--dpi-desync-fake-tls-mod=none" "--dpi-desync-fakedsplit-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin" "--dpi-desync-fooling=badseq,badsum" "--dpi-desync-badseq-increment=0"; }
 strategy_v6() { printf '%s\n' "#v6" "#Yv08" "--filter-tcp=443" "--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt" "--dpi-desync=hostfakesplit" "--dpi-desync-hostfakesplit-mod=host=google.com" "--dpi-desync-fooling=ts"
 printf '%s\n' "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=hostfakesplit" "--dpi-desync-hostfakesplit-mod=host=i2.photo.2gis.com" "--dpi-desync-hostfakesplit-midhost=host-2" "--dpi-desync-split-seqovl=726" "--dpi-desync-fooling=badsum,badseq" "--dpi-desync-badseq-increment=0"; }
 strategy_v7() { printf '%s\n' "#v7" "#Yv08" "--filter-tcp=443" "--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt" "--dpi-desync=hostfakesplit" "--dpi-desync-hostfakesplit-mod=host=google.com" "--dpi-desync-fooling=ts"
@@ -282,7 +288,7 @@ printf '%s\n' "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/z
 strategy_v8() { printf '%s\n' "#v8" "#Yv08" "--filter-tcp=443" "--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt" "--dpi-desync=hostfakesplit" "--dpi-desync-hostfakesplit-mod=host=google.com" "--dpi-desync-fooling=ts"
 printf '%s\n' "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake" "--dpi-desync-fooling=ts" "--dpi-desync-fake-tls=/opt/zapret/files/fake/4pda.bin" "--dpi-desync-fake-tls-mod=none"; }
 strategy_v9() { printf '%s\n' "#v9" "#Yv08" "--filter-tcp=443" "--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt" "--dpi-desync=hostfakesplit" "--dpi-desync-hostfakesplit-mod=host=google.com" "--dpi-desync-fooling=ts"
-printf '%s\n' "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=hostfakesplit" "--dpi-desync-fooling=badseq,badsum" "--dpi-desync-hostfakesplit-mod=host=mapgl.2gis.com" "--dpi-desync-badseq-increment=0"; }
+printf '%s\n' "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=hostfakesplit" "--dpi-desync-fooling=badseq,badsum" "--dpi-desync-hostfakesplit-mod=host=ozon.ru" "--dpi-desync-badseq-increment=0"; }
 # ==========================================
 # Cтратегии Flowseal
 # ==========================================
