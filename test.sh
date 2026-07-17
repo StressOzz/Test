@@ -1317,7 +1317,6 @@ MT_VERSION="0.7.0"
 [ -z "$MT_VERSION" ] && { echo "\n${RED}Не удалось определить версию${NC}\n"; exit 1; }
 FILE_MT="/tmp/magitrickle.$RAZ"
 URL="https://github.com/MagiTrickle/MagiTrickle/releases/download/${MT_VERSION}/magitrickle_${MT_VERSION}-${SUF}1_openwrt_${ARCH_MT}.$RAZ"
-clear
 echo -e "${YELLOW}Скачиваем:\n${CYAN}$URL${NC}"
 curl -Lf --retry 3 --retry-delay 2 -o "$FILE_MT" "$URL" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка скачивания${NC}\n"; exit 1; }
 echo -e "${YELLOW}Устанавливаем:\n${CYAN}$(basename "$URL")${NC}"
