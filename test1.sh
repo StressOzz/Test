@@ -1472,7 +1472,6 @@ cp -r /tmp/zashboard/* "$DIR1"/ 2>/dev/null || {
 rm -rf "$TMP1" "$TMP2"
 
 /etc/init.d/mihomo restart >/dev/null 2>&1
-/etc/init.d/hev-socks5-tunnel restart >/dev/null 2>&1
 
 ###################################################################################################
 
