@@ -664,17 +664,17 @@ echo -e "\nNetShift ${GREEN}$( [ "$ACTION" = "install" ] && echo "установ
 
 PODKOP_DELETE() { 
 echo -e "\n${MAGENTA}Удаляем старую версию NetShift${NC}"
+                echo -e "${CYAN}Останавливаем сервисы${NC}"
                 netshift stop >/dev/null 2>&1
                 netshift disable >/dev/null 2>&1
                 sing-box stop >/dev/null 2>&1
                 sing-box disable >/dev/null 2>&1
                 echo -e "${CYAN}Удаляем пакеты ${NC}NetShift"
-                $DELETE luci-i18n-netshift-ru >/dev/null 2>&1
-                $DELETE luci-app-netshift >/dev/null 2>&1
-                $DELETE netshift >/dev/null 2>&1
-                echo -e "\n${CYAN}Удаляем пакеты ${NC}sing-box"
+                $DELETE luci-i18n-netshift-ru luci-app-netshift netshift >/dev/null 2>&1
+                echo -e "${CYAN}Удаляем пакеты ${NC}sing-box"
                 $DELETE sing-box >/dev/null 2>&1
-                if [ "$ACTION" = "update" ]; then echo -e "Старая версия ${GREEN}удалена${NC}"; else rm -rf /etc/config/netshift* /usr/bin/netshift >/dev/null 2>&1; echo -e "Старая версия ${GREEN}удалена${NC}\n"; PAUSE; fi
+                rm -rf /etc/config/netshift* /usr/bin/netshift /etc/config/sing-box* /etc/sing-box >/dev/null 2>&1
+                echo -e "${GREEN}Старая версия ${NC}NetShift${GREEN} удалена!${NC}"; [ "$ACTION" != "update" ] && { echo; PAUSE; }
 }
 
 
