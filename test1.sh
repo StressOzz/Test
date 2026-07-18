@@ -679,13 +679,8 @@ echo -e "${CYAN}4) ${GREEN}Интегрировать ${NC}AWG${GREEN} в ${NC}N
 # Информация
 # ==========================================
 INFO_ZPR() { if [ -f /etc/init.d/zapret ]; then /etc/init.d/zapret status >/dev/null 2>&1 && ZAPRET_STATUS="${GREEN}запущен${NC} $NFQ_STAT" || ZAPRET_STATUS="${RED}остановлен${NC}"; if [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ]; then echo -e "${YELLOW}Zapret:${NC}              ${GREEN}$INSTALLED_VER${NC} / $ZAPRET_STATUS"
-else echo -e "${YELLOW}Zapret:${NC}              ${RED}$INSTALLED_VER (версия устарела)${NC} / $ZAPRET_STATUS"; fi; else echo -e "${YELLOW}Zapret:${NC}              ${RED}не установлен${NC}"; fi
-
-if [ -x /etc/init.d/magitrickle ]; then STATUS=$(/etc/init.d/magitrickle status 2>/dev/null)
-case "$STATUS" in running|active) MAGITRICKLE_STATUS="${GREEN}запущен${NC}" ;;
-*) MAGITRICKLE_STATUS="${RED}остановлен${NC}" ;; esac; fi
-[ -n "$Magi_INSTALL_VER" ] && { if [ "$Magi_INSTALL_VER" != "$MT_VERSION" ]; then echo -e "${YELLOW}MagiTrickle:${NC}        $MAGITRICKLE_STATUS / ${RED}$Magi_INSTALL_VER (версия устарела)${NC}"; else echo -e "${YELLOW}MagiTrickle:${NC}        $MAGITRICKLE_STATUS / ${GREEN}$Magi_INSTALL_VER${NC}"; fi; }
-
+else echo -e "${YELLOW}Zapret:${NC}              ${RED}$INSTALLED_VER (версия устарела)${NC} / $ZAPRET_STATUS"; fi; else echo -e "${YELLOW}Zapret:${NC}              ${RED}не установлен${NC}"; fi; if [ -x /etc/init.d/magitrickle ]; then STATUS=$(/etc/init.d/magitrickle status 2>/dev/null)
+case "$STATUS" in running|active) MAGITRICKLE_STATUS="${GREEN}запущен${NC}" ;; *) MAGITRICKLE_STATUS="${RED}остановлен${NC}" ;; esac; fi; [ -n "$Magi_INSTALL_VER" ] && { if [ "$Magi_INSTALL_VER" != "$MT_VERSION" ]; then echo -e "${YELLOW}MagiTrickle:${NC}        ${RED}$Magi_INSTALL_VER (версия устарела)${NC} / $MAGITRICKLE_STATUS"; else echo -e "${YELLOW}MagiTrickle:${NC}        ${GREEN}$Magi_INSTALL_VER${NC} / $MAGITRICKLE_STATUS"; fi; }
 TGSTATUS=""; pidof tg-ws-proxy-go >/dev/null 2>&1 && TGSTATUS="${TGSTATUS:+$TGSTATUS/}SOCKS5"; pidof tg-ws-proxy >/dev/null 2>&1 && TGSTATUS="${TGSTATUS:+$TGSTATUS/}MTProto"; pidof tg-ws-proxy-rs >/dev/null 2>&1 && TGSTATUS="${TGSTATUS:+$TGSTATUS/}Rust"; if [ -n "$TGSTATUS" ]; then echo -e "${YELLOW}TG WS Proxy:${NC}         ${GREEN}запущен [$TGSTATUS]${NC}"; fi
 if hosts_enabled; then echo -e "${YELLOW}Домены в hosts:      ${GREEN}$hosts_echo${NC}"; fi; [ -f "$DATE_FILE" ] && echo -e "${YELLOW}Резервная копия:${NC}     ${GREEN}сохранена"; show_script_50 && [ -n "$name" ] && echo -e "${YELLOW}Установлен скрипт:${NC}   $name"; grep -q "$Fin_IP_Dis" /etc/hosts && echo -e "${YELLOW}IP для Discord:      ${GREEN}включены${NC}"
 if [ -n "$DOH_STATUS" ]; then if [ "$PKG_IS_APK" -eq 1 ]; then apk info -e https-dns-proxy >/dev/null 2>&1 && echo -e "${YELLOW}DNS over HTTPS:${NC}      ${GREEN}$DOH_STATUS${NC}"; else opkg list-installed | grep -q '^https-dns-proxy ' && echo -e "${YELLOW}DNS over HTTPS:${NC}      ${GREEN}$DOH_STATUS${NC}"; fi; fi
@@ -752,7 +747,7 @@ echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню\n"; echo -n
 9) check_mihomo || continue; ARCH_MT=$(grep "^OPENWRT_ARCH=" /etc/os-release | cut -d'"' -f2); FILE_MT="/tmp/magitrickle.$APK_RAS"; URL_MT="https://github.com/MagiTrickle/MagiTrickle/releases/download/${MT_VERSION}/magitrickle_${MT_VERSION}-${SUF_MT}1_openwrt_${ARCH_MT}.$APK_RAS"
 echo -e "\n${MAGENTA}Обновляем MagiTrickle\n${CYAN}Скачиваем\n${NC}$URL_MT"; curl -Lf --connect-timeout 6 --retry 3 --retry-delay 1 -o "$FILE_MT" "$URL_MT" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка скачивания${NC}\n"; return 1; }; echo -e "${CYAN}Обновляем список пакетов${NC}"
 $UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка обновления пакетов${NC}\n"; PAUSE; return 1; }; echo -e "${CYAN}Обновляем ${NC}MagiTrickle"; $INSTALL "$FILE_MT" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка установки${NC} $(basename "$URL_MT")\n"; rm -f "$FILE_MT"; PAUSE; return 1; }
-/etc/init.d/magitrickle enable >/dev/null 2>&1; /etc/init.d/magitrickle restart >/dev/null 2>&1; echo -e "MagiTrickle ${GREEN}обновлён!${NC}\n"; rm -f "$FILE_MT"; PAUSE ;; *) echo; return ;; esac; done; }
+/etc/init.d/magitrickle enable >/dev/null 2>&1; /etc/init.d/magitrickle restart >/dev/null 2>&1; echo -e "MagiTrickle ${GREEN}обновлён!${NC}\n"; rm -f "$FILE_MT"; PAUSE ;; *) return ;; esac; done; }
 # ==========================================
 # Главное меню
 # ==========================================
