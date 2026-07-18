@@ -589,7 +589,7 @@ printf '#!/bin/sh /etc/rc.common\nSTART=99\nUSE_PROCD=1\n\nstart_service() {\n  
 chmod +x "$INIT_PATH_GO"; /etc/init.d/tg-ws-proxy-go enable; /etc/init.d/tg-ws-proxy-go start; if pidof tg-ws-proxy-go >/dev/null 2>&1; then echo -e "${GREEN}Сервис ${NC}TG WS Proxy SOCKS5${GREEN} запущен!${NC}\n"; else echo -e "\n${RED}Сервис TG WS Proxy SOCKS5 не запущен!${NC}\n"; fi; PAUSE; }
 # УСТАНОВКА MTProto
 install_update_TG_PKG() { AVAILABLE_SPACE=$(df /overlay 2>/dev/null | awk 'NR==2 {print $4}'); [ -z "$AVAILABLE_SPACE" ] && AVAILABLE_SPACE=$(df / 2>/dev/null | awk 'NR==2 {print $4}'); REQUIRED_SPACE=10000; if [ "$AVAILABLE_SPACE" -lt "$REQUIRED_SPACE" ]
-then echo -e "\n${RED}Недостаточно свободного места${NC}\n"; echo -e "${YELLOW}Доступно: ${NC}$((AVAILABLE_SPACE/1024))MB\n${YELLOW}Требуется: ${NC}$((REQUIRED_SPACE/1024))MB\n"; PAUSE; return; fi
+then echo -e "\n${RED}Недостаточно свободного места${NC}\n"; echo -e "${YELLOW}Доступно: ${NC}$((AVAILABLE_SPACE/1024)) MB\n${YELLOW}Требуется: ${NC}$((REQUIRED_SPACE/1024)) MB\n"; PAUSE; return; fi
 echo -e "\n${MAGENTA}Устанавливаем TG WS Proxy MTProto${NC}"; rm -f /etc/tg-ws-proxy.conf /etc/tg-ws-proxy.conf-opkg; URL="https://github.com/spatiumstas/tg-ws-proxy-go/releases/download/${GO_VER}/tg-ws-proxy_${GO_VER}-${GO_SUF}_openwrt_${ARCH_FULL}.${APK_RAS}"
 echo -e "${CYAN}Обновляем список пакетов${NC}"; $UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; PAUSE; return; }; FILE_NAME_GO="$(basename "$URL")"; echo -e "${CYAN}Скачиваем и устанавливаем${NC} $FILE_NAME_GO"
 wget -q -O "$TMP_FILE_GO" "$URL" || { echo -e "\n${RED}Ошибка скачивания $URL${NC}\n"; PAUSE; return 1; }; $INSTALL "$TMP_FILE_GO" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка установки $TMP_FILE_GO!${NC}\n"; rm -f "$TMP_FILE_GO"; PAUSE; return 1; }
@@ -624,11 +624,11 @@ AVAILABLE_SPACE=$(df /overlay 2>/dev/null | awk 'NR==2 {print $4}'); [ -z "$AVAI
 REQUIRED_SPACE=16000
 if [ "$AVAILABLE_SPACE" -lt "$REQUIRED_SPACE" ]; then
     echo -e "\n${RED}Недостаточно свободного места${NC}\n"
-    echo -e "${YELLOW}Доступно: ${NC}$((AVAILABLE_SPACE/1024))MB"
-    echo -e "${YELLOW}Требуется: ${NC}$((REQUIRED_SPACE/1024))MB\n"
+    echo -e "${YELLOW}Доступно: ${NC}$((AVAILABLE_SPACE/1024)) MB"
+    echo -e "${YELLOW}Требуется: ${NC}$((REQUIRED_SPACE/1024)) MB\n"
 
     if [ "$ACTION" = "update" ]; then
-        echo -ne "${YELLOW}Удалить старую версию NetShift и продолжить обновление? [y/N]: ${NC}"
+        echo -ne "${YELLOW}Удалить старую версию NetShift и продолжить обновление? (${NC}y/n${YELLOW}): ${NC}"
         read -r answer
         case "$answer" in
             y|Y|д|Д)
