@@ -625,7 +625,7 @@ if [ -z "$LOCALPOD" ]; then
     return
 fi
 
-if ! /etc/init.d/netshift status 2>/dev/null | grep -q "running"; then
+if ! /etc/init.d/netshift status 2>/dev/null | grep -q "^running$"; then
     PODKOP_STATUS="${RED}$LOCALPOD (не запущен)${NC}"
     return
 fi
