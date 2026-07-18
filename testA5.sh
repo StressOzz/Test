@@ -616,38 +616,12 @@ for s in /etc/init.d/tg-ws*; do [ -e "$s" ] || continue; "$s" stop >/dev/null 2>
 # PODKOP EVOLUTION и AWG
 # ==========================================
 pkg_is_installed () { local pkg_name="$1"; if [ "$PKG_IS_APK" -eq 1 ]; then apk info -e "$pkg_name" >/dev/null 2>&1; else opkg list-installed | grep -q "^$pkg_name"; fi }
-
 PODKOP_VER() { LOCALPOD="$(netshift show_version 2>/dev/null | cut -d'-' -f1 | sed 's/^v//')"; if [ -z "$LOCALPOD" ]; then PODKOP_STATUS="${RED}не установлен${NC}"; return; fi; if [ "$PODKOP_LATEST_VER" = "$LOCALPOD" ]
 then PODKOP_STATUS="${GREEN}$LOCALPOD${NC}"; else PODKOP_STATUS="${RED}$LOCALPOD (версия устарела)${NC}"; fi; }
-
 PODKOP_INSTALL() { if ! pkg_is_installed netshift; then ACTION="install"; elif [ "$PODKOP_LATEST_VER" != "$LOCALPOD" ]; then ACTION="update"; else ACTION="remove"; fi; if [ "$ACTION" = "install" ] || [ "$ACTION" = "update" ]; then rm -rf "$tmpDIR"; mkdir -p "$tmpDIR"
-
-AVAILABLE_SPACE=$(df /overlay 2>/dev/null | awk 'NR==2 {print $4}'); [ -z "$AVAILABLE_SPACE" ] && AVAILABLE_SPACE=$(df / 2>/dev/null | awk 'NR==2 {print $4}')
-REQUIRED_SPACE=20000
-if [ "$AVAILABLE_SPACE" -lt "$REQUIRED_SPACE" ]; then
-    echo -e "\n${RED}Недостаточно свободного места${NC}\n"
-    echo -e "${YELLOW}Доступно: ${NC}$((AVAILABLE_SPACE/1024)) MB"
-    echo -e "${YELLOW}Требуется: ${NC}$((REQUIRED_SPACE/1024)) MB\n"
-
-    if [ "$ACTION" = "update" ]; then
-        echo -ne "${YELLOW}Удалить старую версию NetShift и продолжить обновление? (${NC}y/n${YELLOW}): ${NC}"
-        read -r answer
-        case "$answer" in
-            y|Y|д|Д)
-                PODKOP_DELETE ;;
-            *)
-                echo -e "\n${RED}Обновление отменено!${NC}\n"
-                PAUSE
-                return
-                ;;
-        esac
-    else
-        PAUSE
-        return
-    fi
-fi
-
-
+AVAILABLE_SPACE=$(df /overlay 2>/dev/null | awk 'NR==2 {print $4}'); [ -z "$AVAILABLE_SPACE" ] && AVAILABLE_SPACE=$(df / 2>/dev/null | awk 'NR==2 {print $4}'); REQUIRED_SPACE=20000; if [ "$AVAILABLE_SPACE" -lt "$REQUIRED_SPACE" ]
+then echo -e "\n${RED}Недостаточно свободного места${NC}\n"; echo -e "${YELLOW}Доступно: ${NC}$((AVAILABLE_SPACE/1024)) MB"; echo -e "${YELLOW}Требуется: ${NC}$((REQUIRED_SPACE/1024)) MB\n"; if [ "$ACTION" = "update" ]
+then echo -ne "${YELLOW}Удалить старую версию NetShift и продолжить обновление? (${NC}y/n${YELLOW}): ${NC}"; read -r answer; case "$answer" in y|Y|д|Д) PODKOP_DELETE ;; *) echo -e "\n${RED}Обновление отменено!${NC}\n"; PAUSE; return ;; esac; else PAUSE; return; fi; fi
 if pkg_is_installed https-dns-proxy; then echo -e "\n${RED}Обнаружен ${NC}DNS over HTTPS${RED}!"; echo -e "${YELLOW}Удалите ${NC}DNS over HTTPS\n"; PAUSE; return; fi
 [ "$ACTION" = "install" ] && echo -e "\n${MAGENTA}Устанавливаем NetShift${NC}" || echo -e "\n${MAGENTA}Обновляем NetShift${NC}"
 echo -e "${CYAN}Обновляем список пакетов${NC}"; $UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; PAUSE; return; }
@@ -661,24 +635,9 @@ echo -en "${CYAN}Устанавливаем ${NC}NetShift\n${YELLOW}Подожд
 $INSTALL ./luci-app-netshift.$APK_RAS >/dev/null 2>&1 || { echo -e "\n\n${RED}Не удалось установить:\n${NC}$PODKOP_LUCI\n"; PAUSE; return; }
 $INSTALL ./luci-i18n-netshift-ru.$APK_RAS >/dev/null 2>&1 || { echo -e "\n\n${RED}Не удалось установить:\n${NC}$PODKOP_RUS\n"; PAUSE; return; }; rm -rf "$tmpDIR"
 echo -e "\nNetShift ${GREEN}$( [ "$ACTION" = "install" ] && echo "установлен" || echo "обновлён" )!${NC}\n"; PAUSE; else PODKOP_DELETE; fi; }
-
-PODKOP_DELETE() { 
-echo -e "\n${MAGENTA}Удаляем старую версию NetShift${NC}"
-                echo -e "${CYAN}Останавливаем сервисы${NC}"
-                netshift stop >/dev/null 2>&1
-                netshift disable >/dev/null 2>&1
-                sing-box stop >/dev/null 2>&1
-                sing-box disable >/dev/null 2>&1
-                echo -e "${CYAN}Удаляем пакеты ${NC}NetShift"
-                $DELETE luci-i18n-netshift-ru luci-app-netshift netshift >/dev/null 2>&1
-                echo -e "${CYAN}Удаляем пакеты ${NC}sing-box"
-                $DELETE sing-box >/dev/null 2>&1
-                rm -rf /etc/config/netshift* /usr/bin/netshift /etc/config/sing-box* /etc/sing-box >/dev/null 2>&1
-                echo -e "${GREEN}Старая версия ${NC}NetShift${GREEN} удалена!${NC}"; [ "$ACTION" != "update" ] && { echo; PAUSE; }
-}
-
-
-
+PODKOP_DELETE() { echo -e "\n${MAGENTA}Удаляем старую версию NetShift${NC}"; echo -e "${CYAN}Останавливаем сервисы${NC}"; netshift stop >/dev/null 2>&1; netshift disable >/dev/null 2>&1; sing-box stop >/dev/null 2>&1; sing-box disable >/dev/null 2>&1
+echo -e "${CYAN}Удаляем пакеты ${NC}NetShift"; $DELETE luci-i18n-netshift-ru luci-app-netshift netshift >/dev/null 2>&1; echo -e "${CYAN}Удаляем пакеты ${NC}sing-box"; $DELETE sing-box >/dev/null 2>&1
+rm -rf /etc/config/netshift* /usr/bin/netshift /etc/config/sing-box* /etc/sing-box >/dev/null 2>&1; echo -e "${GREEN}Старая версия ${NC}NetShift${GREEN} удалена!${NC}"; [ "$ACTION" != "update" ] && { echo; PAUSE; }; }
 install_AWG() { OWRT=$(grep '^DISTRIB_RELEASE=' /etc/openwrt_release | cut -d"'" -f2); ARCHAWG="$(grep DISTRIB_ARCH /etc/openwrt_release | cut -d"'" -f2)_$(grep DISTRIB_TARGET /etc/openwrt_release | cut -d"'" -f2 | tr '/' '_')"; if ! pkg_is_installed amneziawg-tools; then rm -rf "$tmpDIR"; mkdir -p "$tmpDIR"
 echo -e "\n${MAGENTA}Устанавливаем AWG и интерфейс AWG${NC}"; echo -e "${CYAN}Обновляем список пакетов${NC}"; $UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; PAUSE; return; }
 AWG_kmod="https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v$OWRT/kmod-amneziawg_v${OWRT}_$ARCHAWG.$APK_RAS"; AWG_tools="https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v$OWRT/amneziawg-tools_v${OWRT}_$ARCHAWG.$APK_RAS"
@@ -725,10 +684,7 @@ case "$(/etc/init.d/mihomo status 2>/dev/null)" in running) echo -e "${YELLOW}Mi
 TGSTATUS=""; pidof tg-ws-proxy-go >/dev/null 2>&1 && TGSTATUS="${TGSTATUS:+$TGSTATUS/}SOCKS5"; pidof tg-ws-proxy >/dev/null 2>&1 && TGSTATUS="${TGSTATUS:+$TGSTATUS/}MTProto"; pidof tg-ws-proxy-rs >/dev/null 2>&1 && TGSTATUS="${TGSTATUS:+$TGSTATUS/}Rust"; if [ -n "$TGSTATUS" ]; then echo -e "${YELLOW}TG WS Proxy:${NC}         ${GREEN}запущен [$TGSTATUS]${NC}"; fi
 if hosts_enabled; then echo -e "${YELLOW}Домены в hosts:      ${GREEN}$hosts_echo${NC}"; fi; [ -f "$DATE_FILE" ] && echo -e "${YELLOW}Резервная копия:${NC}     ${GREEN}сохранена"; show_script_50 && [ -n "$name" ] && echo -e "${YELLOW}Установлен скрипт:${NC}   $name"; grep -q "$Fin_IP_Dis" /etc/hosts && echo -e "${YELLOW}IP для Discord:      ${GREEN}включены${NC}"
 if [ -n "$DOH_STATUS" ]; then if [ "$PKG_IS_APK" -eq 1 ]; then apk info -e https-dns-proxy >/dev/null 2>&1 && echo -e "${YELLOW}DNS over HTTPS:${NC}      ${GREEN}$DOH_STATUS${NC}"; else opkg list-installed | grep -q '^https-dns-proxy ' && echo -e "${YELLOW}DNS over HTTPS:${NC}      ${GREEN}$DOH_STATUS${NC}"; fi; fi
-
-pkg_is_installed netshift && PODKOP_VER && echo -e "${YELLOW}NetShift:${NC}            $PODKOP_STATUS"
-
-if web_is_enabled; then echo -e "${YELLOW}Доступ из браузера:${NC}  $LAN_IP:7681"; fi; quic_is_blocked && if quic_is_blocked; then echo -e "${YELLOW}Блокировка QUIC:${NC}     ${GREEN}включена${NC}"; fi; if grep -q 'ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc
+pkg_is_installed netshift && PODKOP_VER && echo -e "${YELLOW}NetShift:${NC}            $PODKOP_STATUS"; if web_is_enabled; then echo -e "${YELLOW}Доступ из браузера:${NC}  $LAN_IP:7681"; fi; quic_is_blocked && if quic_is_blocked; then echo -e "${YELLOW}Блокировка QUIC:${NC}     ${GREEN}включена${NC}"; fi; if grep -q 'ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc
 then echo -e "${YELLOW}Flow Offloading FIX:${NC} ${GREEN}включён${NC}"; fi; if [ "$CURR" != "default / OpenWrt" ]; then echo -e "${YELLOW}Зеркало OpenWRT:${NC}     $CURR"; fi; if [ -f /etc/init.d/zapret ] && [ -f "$CONF" ] && grep -Eq "^[[:space:]]*option DISABLE_IPV6 '0'" "$CONF"; then echo -e "${YELLOW}IPv6 в Zapret:       ${GREEN}включён${NC}"; fi; INFO_ZPR_STR; }
 INFO_ZPR_STR() { if [ -f "$CONF" ]; then line=$(grep -m1 '^#general' "$CONF"); GEN="${line:+${line#?} / }"; current="$ver$( [ -n "$ver" ] && [ -n "$yv_ver" ] && echo " / " )$yv_ver"; DV=$(grep -o -E '^#Dv[0-9][0-9]*' "$CONF" | sed 's/^#[[:space:]]*/\/ /' | head -n1)
 GV=$(grep -o -E '^#Gv[0-9][0-9]*' "$CONF" | sed 's/^#/\/ /' | head -n1); UPD=$(grep -q '^#udp443' "$CONF" && echo '/ udp443'); WS=$(grep -q -- '--wssize 1:6' "$CONF" && echo '/ wssize'); ME=$(grep -q -- '--methodeol' "$CONF" && echo '/ methodeol'); if [ -n "$current" ]
