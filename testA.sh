@@ -638,7 +638,6 @@ if [ "$AVAILABLE_SPACE" -lt "$REQUIRED_SPACE" ]; then
                 $DELETE luci-i18n-netshift-ru >/dev/null 2>&1
                 $DELETE luci-app-netshift >/dev/null 2>&1
                 $DELETE netshift >/dev/null 2>&1
-                rm -rf /etc/config/netshift* /usr/bin/netshift >/dev/null 2>&1
                 echo -e "Старая версия ${GREEN}удалена${NC}\n"
                 ;;
             *)
