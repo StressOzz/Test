@@ -623,7 +623,7 @@ then PODKOP_STATUS="${GREEN}$LOCALPOD${NC}"; else PODKOP_STATUS="${RED}$LOCALPOD
 PODKOP_INSTALL() { if ! pkg_is_installed netshift; then ACTION="install"; elif [ "$PODKOP_LATEST_VER" != "$LOCALPOD" ]; then ACTION="update"; else ACTION="remove"; fi; if [ "$ACTION" = "install" ] || [ "$ACTION" = "update" ]; then rm -rf "$tmpDIR"; mkdir -p "$tmpDIR"
 
 AVAILABLE_SPACE=$(df /overlay 2>/dev/null | awk 'NR==2 {print $4}'); [ -z "$AVAILABLE_SPACE" ] && AVAILABLE_SPACE=$(df / 2>/dev/null | awk 'NR==2 {print $4}')
-REQUIRED_SPACE=25000
+REQUIRED_SPACE=20000
 if [ "$AVAILABLE_SPACE" -lt "$REQUIRED_SPACE" ]; then
     echo -e "\n${RED}Недостаточно свободного места${NC}\n"
     echo -e "${YELLOW}Доступно: ${NC}$((AVAILABLE_SPACE/1024)) MB"
