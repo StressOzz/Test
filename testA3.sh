@@ -616,8 +616,27 @@ for s in /etc/init.d/tg-ws*; do [ -e "$s" ] || continue; "$s" stop >/dev/null 2>
 # PODKOP EVOLUTION и AWG
 # ==========================================
 pkg_is_installed () { local pkg_name="$1"; if [ "$PKG_IS_APK" -eq 1 ]; then apk info -e "$pkg_name" >/dev/null 2>&1; else opkg list-installed | grep -q "^$pkg_name"; fi }
-PODKOP_VER() { LOCALPOD="$(netshift show_version 2>/dev/null | cut -d'-' -f1 | sed 's/^v//')"; if [ -z "$LOCALPOD" ]; then PODKOP_STATUS="${RED}не установлен${NC}"; return; fi; if [ "$PODKOP_LATEST_VER" = "$LOCALPOD" ]
-then PODKOP_STATUS="${GREEN}$LOCALPOD${NC}"; else PODKOP_STATUS="${RED}$LOCALPOD (версия устарела)${NC}"; fi; }
+
+PODKOP_VER() { 
+LOCALPOD="$(netshift show_version 2>/dev/null | cut -d'-' -f1 | sed 's/^v//')"
+
+if [ -z "$LOCALPOD" ]; then 
+    PODKOP_STATUS="${RED}не установлен${NC}"
+    return
+fi
+
+if ! /etc/init.d/netshift status 2>/dev/null | grep -q "running"; then
+    PODKOP_STATUS="${RED}$LOCALPOD (не запущен)${NC}"
+    return
+fi
+
+if [ "$PODKOP_LATEST_VER" = "$LOCALPOD" ]; then
+    PODKOP_STATUS="${GREEN}$LOCALPOD${NC}"
+else
+    PODKOP_STATUS="${RED}$LOCALPOD (версия устарела)${NC}"
+fi
+}
+
 PODKOP_INSTALL() { if ! pkg_is_installed netshift; then ACTION="install"; elif [ "$PODKOP_LATEST_VER" != "$LOCALPOD" ]; then ACTION="update"; else ACTION="remove"; fi; if [ "$ACTION" = "install" ] || [ "$ACTION" = "update" ]; then rm -rf "$tmpDIR"; mkdir -p "$tmpDIR"
 
 AVAILABLE_SPACE=$(df /overlay 2>/dev/null | awk 'NR==2 {print $4}'); [ -z "$AVAILABLE_SPACE" ] && AVAILABLE_SPACE=$(df / 2>/dev/null | awk 'NR==2 {print $4}')
@@ -632,13 +651,18 @@ if [ "$AVAILABLE_SPACE" -lt "$REQUIRED_SPACE" ]; then
         read -r answer
         case "$answer" in
             y|Y|д|Д)
-                echo -e "\n${CYAN}Удаляем старую версию NetShift${NC}"
+                echo -e "\n${MAGENTA}Удаляем старую версию NetShift${NC}"
                 netshift stop >/dev/null 2>&1
                 netshift disable >/dev/null 2>&1
+                sing-box stop >/dev/null 2>&1
+                sing-box disable >/dev/null 2>&1
+                echo -e "\n${MAGENTA}Удаляем пакеты ${NC}NetShift"
                 $DELETE luci-i18n-netshift-ru >/dev/null 2>&1
                 $DELETE luci-app-netshift >/dev/null 2>&1
                 $DELETE netshift >/dev/null 2>&1
-                echo -e "Старая версия ${GREEN}удалена${NC}\n"
+                echo -e "\n${MAGENTA}Удаляем пакеты ${NC}sing-box"
+                $DELETE sing-box >/dev/null 2>&1
+                echo -e "Старая версия ${GREEN}удалена${NC}"
                 ;;
             *)
                 echo -e "\n${RED}Обновление отменено!${NC}\n"
