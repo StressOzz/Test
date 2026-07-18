@@ -677,7 +677,7 @@ wget -q -U "Mozilla/5.0" -O luci-i18n-netshift-ru.$APK_RAS "$PODKOP_RUS" || { ec
 echo -en "${CYAN}Устанавливаем ${NC}NetShift\n${YELLOW}Подождите...${NC}"; $INSTALL ./netshift.$APK_RAS >/dev/null 2>&1 || { echo -e "\n\n${RED}Не удалось установить ${NC}$PODKOP_INST\n"; PAUSE; return; }
 $INSTALL ./luci-app-netshift.$APK_RAS >/dev/null 2>&1 || { echo -e "\n\n${RED}Не удалось установить ${NC}$PODKOP_LUCI\n"; PAUSE; return; }
 $INSTALL ./luci-i18n-netshift-ru.$APK_RAS >/dev/null 2>&1 || { echo -e "\n\n${RED}Не удалось установить ${NC}$PODKOP_RUS\n"; PAUSE; return; }; rm -rf "$tmpDIR"
-echo -e "\nNetShift ${GREEN}$( [ "$ACTION" = "install" ] && echo "установлен" || echo "обновлён" )!${NC}\n"; PAUSE; else PODKOP_DELETE; }
+echo -e "\nNetShift ${GREEN}$( [ "$ACTION" = "install" ] && echo "установлен" || echo "обновлён" )!${NC}\n"; PAUSE; else PODKOP_DELETE; fi; }
 
 PODKOP_DELETE() { 
 echo -e "\n${MAGENTA}Удаляем старую версию NetShift${NC}"
