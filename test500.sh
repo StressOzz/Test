@@ -13,4 +13,5 @@ curl -Lf --retry 3 --retry-delay 2 -o "$FILE_MT" "$URL" >/dev/null 2>&1 || { ech
 echo -e "${YELLOW}Устанавливаем:\n${CYAN}$(basename "$URL")${NC}"
 $UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка обновления пакетов${NC}\n"; exit 1; }
 $INSTALL "$FILE_MT" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка установки${NC}\n"; exit 1; }
+/etc/init.d/magitrickle restart
 echo -e "\n${GREEN}MagiTrickle установлен (обновлён)${NC}\n"
