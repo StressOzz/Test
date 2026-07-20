@@ -540,6 +540,26 @@ TEST_CUSTOM() {
         return
     fi
 
+if ! grep -q '^#' "$CUSTOM_STR_FILE"; then
+    echo -e "\n${RED}В файле не найдено ни одной стратегии!${NC}\n"
+    echo -e "${YELLOW}Каждая стратегия должна начинаться со строки - ${NC}#Название${NC}\n"
+    echo -e "${YELLOW}Пример формата стратегий:${NC}\n"
+    echo -e "${CYAN}#Strategy1${NC}"
+    echo -e "${CYAN}--filter-tcp=443${NC}"
+    echo -e "${CYAN}--dpi-desync=fake${NC}"
+    echo -e "${CYAN}. . .${NC}\n"
+    echo -e "${CYAN}#Strategy2${NC}"
+    echo -e "${CYAN}--filter-tcp=443${NC}"
+    echo -e "${CYAN}--dpi-desync=multidisorder${NC}"
+    echo -e "${CYAN}. . .${NC}\n"
+    PAUSE
+    return
+fi
+
+
+
+    
+
     clear; mkdir -p "$TMP_SF"
     echo -e "${MAGENTA}Тестирование пользовательских стратегий${NC}\n"
     rm -f "$RES_CUSTOM"
