@@ -2,6 +2,12 @@
 # ==========================================
 # Zapret Manager by StressOzz
 # =========================================
+
+    RES_CUSTOM="/opt/zapret/tmp/results_custom.txt"
+    CUSTOM_STR_FILE="/root/custom_test.txt"
+    CUSTOM_RESULTS="$RES_CUSTOM"
+    CUSTOM_BACK="/tmp/zapret_custom_backup.conf"
+
 ZAPRET_MANAGER_VERSION="9.76"; STR_VERSION_AUTOINSTALL="v7"
 CRON_CMD="/etc/init.d/mihomo restart"; CONFIGPATH="/etc/magitrickle/state/config.yaml"
 FLOWSEAL_STR_ZIP="https://github.com/StressOzz/Zapret-Manager/raw/refs/heads/files/flowseal-str.zip"
@@ -522,10 +528,6 @@ sort -t'/' -k1 -nr "$RESULTS" -o "$RESULTS"; mv -f "$BACK" "$CONF"; rm -f "$OUT_
 TEST_CUSTOM() {
     clear
     echo -e "${MAGENTA}Тестирование пользовательских стратегий${NC}\n"
-    RES_CUSTOM="/opt/zapret/tmp/results_custom.txt"
-    CUSTOM_STR_FILE="/root/custom_test.txt"
-    CUSTOM_RESULTS="$RES_CUSTOM"
-    CUSTOM_BACK="/tmp/zapret_custom_backup.conf"
 
     if [ ! -f "$CUSTOM_STR_FILE" ]; then
         echo -e "${RED}Файл ${NC}$CUSTOM_STR_FILE${RED} не найден!${NC}\n"
