@@ -557,7 +557,9 @@ fi
     echo -e "${MAGENTA}Тестирование пользовательских стратегий${NC}\n"
     rm -f "$RES_CUSTOM"
     
-    sed -i 's/\r$//' "$CUSTOM_STR_FILE"
+sed -i 's/\r$//' "$CUSTOM_STR_FILE"
+sed -i '/^[[:space:]]*$/d' "$CUSTOM_STR_FILE"
+sed -i 's/^[[:space:]]*//;s/[[:space:]]*$//' "$CUSTOM_STR_FILE"
 
     : > "$CUSTOM_RESULTS"
 
