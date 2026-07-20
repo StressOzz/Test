@@ -535,16 +535,16 @@ TEST_CUSTOM() {
 
 if ! grep -q '^#' "$CUSTOM_STR_FILE"; then
     echo -e "\n${RED}В файле не найдено ни одной стратегии!${NC}\n"
-    echo -e "${YELLOW}Каждая стратегия должна начинаться со строки - ${NC}#Название${NC}\n"
-    echo -e "${YELLOW}Пример формата стратегий:${NC}\n"
-    echo -e "${CYAN}#Strategy1${NC}"
-    echo -e "${CYAN}--filter-tcp=443${NC}"
-    echo -e "${CYAN}--dpi-desync=fake${NC}"
-    echo -e "${CYAN}. . .${NC}\n"
-    echo -e "${CYAN}#Strategy2${NC}"
-    echo -e "${CYAN}--filter-tcp=443${NC}"
-    echo -e "${CYAN}--dpi-desync=multidisorder${NC}"
-    echo -e "${CYAN}. . .${NC}\n"
+    echo -e "${YELLOW}Каждая стратегия должна начинаться со строки - ${NC}#Название${NC}"
+    echo -e "${CYAN}Пример содержимого ${NC}$CUSTOM_STR_FILE ${CYAN}:${NC}\n"
+    echo -e "#Strategy1"
+    echo -e "--filter-tcp=443"
+    echo -e "--dpi-desync=fake"
+    echo -e ". . ."
+    echo -e "#Strategy2"
+    echo -e "--filter-tcp=443"
+    echo -e "--dpi-desync=multidisorder"
+    echo -e ". . .\n"
     PAUSE
     return
 fi
