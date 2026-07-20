@@ -523,7 +523,7 @@ TEST_CUSTOM() {
     clear
     echo -e "${MAGENTA}Тестирование пользовательских стратегий${NC}\n"
     RES_CUSTOM="/opt/zapret/tmp/results_custom.txt"
-    CUSTOM_STR_FILE="/root/custom_test_str.txt"
+    CUSTOM_STR_FILE="/root/custom_test.txt"
     CUSTOM_RESULTS="$RES_CUSTOM"
     CUSTOM_BACK="/tmp/zapret_custom_backup.conf"
 
@@ -540,25 +540,21 @@ TEST_CUSTOM() {
     fi
 
     if ! grep -q '^#' "$CUSTOM_STR_FILE"; then
-        echo -e "${RED}В файле не найдено ни одной стратегии!${NC}"
-        echo -e "${YELLOW}Каждая стратегия должна начинаться со строки '#Название'.${NC}\n"
+        echo -e "\n${RED}В файле не найдено ни одной стратегии!${NC}"
+        echo -e "${YELLOW}Каждая стратегия должна начинаться со строки - ${NC}#Название${NC}\n"
         PAUSE
         return
     fi
 
-    # убираем CR если файл был создан в Windows
     sed -i 's/\r$//' "$CUSTOM_STR_FILE"
 
-    # очищаем старый результат
     : > "$CUSTOM_RESULTS"
 
-    # сохраняем текущие переменные
     OLD_STR_FILE="$STR_FILE"
     OLD_RESULTS="$RESULTS"
     OLD_BACK="$BACK"
     OLD_MODE="$MODE"
 
-    # свои значения для кастомного теста
     STR_FILE="$CUSTOM_STR_FILE"
     RESULTS="$CUSTOM_RESULTS"
     BACK="$CUSTOM_BACK"
@@ -568,7 +564,6 @@ TEST_CUSTOM() {
 
     run_test_core "$CUSTOM_RESULTS"
 
-    # возвращаем старые значения
     STR_FILE="$OLD_STR_FILE"
     RESULTS="$OLD_RESULTS"
     BACK="$OLD_BACK"
@@ -591,12 +586,12 @@ STATUS_V=""; STATUS_FLOW=""; STATUS_DOMAIN=""; if [ -s "$RES3" ]; then STATUS_V=
 [ -s "$RES1" ] && STATUS_FLOW="${GREEN}Flowseal${NC}" || STATUS_FLOW="${RED}Flowseal${NC}"; else STATUS_V="${RED}v${NC}"; STATUS_FLOW="${RED}Flowseal${NC}"; fi; [ -s "$RES_DOMAIN" ] && STATUS_DOMAIN="${GREEN}Domain${NC}" || STATUS_DOMAIN="${RED}Domain${NC}"; [ -s "$RES_CUSTOM" ] && STATUS_CUSTOM="${GREEN}Custom${NC}" || STATUS_CUSTOM="${RED}Custom${NC}"
 echo -e "${YELLOW}Тест пройден:${NC} ${STATUS_V} | ${STATUS_FLOW} | ${STATUS_DOMAIN} | ${STATUS_CUSTOM}\n\n${CYAN}1) ${GREEN}Тестировать стратегии ${NC}v\n${CYAN}2) ${GREEN}Тестировать стратегии ${NC}Flowseal\n${CYAN}3) ${GREEN}Тестировать ${NC}v${GREEN} и ${NC}Flowseal${GREEN} стратегии${NC}"
 echo -e "${CYAN}4) ${GREEN}Тестировать ${NC}текущую${GREEN} стратегию ${NC}\n${CYAN}5) ${GREEN}Тестировать стратегии ${NC}по домену${NC}\n${CYAN}6) ${GREEN}Тестировать стратегии для ${NC}YouTube\n${CYAN}7) ${GREEN}Тестировать стратегии из ${NC}/root/custom_test.txt"
-if [ -s "$RES_DOMAIN" ]; then echo -e "${CYAN}8) ${GREEN}Результаты тестирования по домену${NC}"; fi; if [ -s "$RES1" ] || [ -s "$RES2" ] || [ -s "$RES3" ]; then echo -e "${CYAN}9) ${GREEN}Результаты тестирования стратегий${NC}"; fi
-if [ -s "$RES_CUSTOM" ]; then echo -e "${CYAN}10) ${GREEN}Результаты Custom стратегий${NC}"; fi
-if [ -s "$RES1" ] || [ -s "$RES2" ] || [ -s "$RES3" ] || [ -s "$RES_DOMAIN" ]; then echo -e "${CYAN}0) ${GREEN}Удалить результаты тестирования${NC}"; fi; echo -ne "${CYAN}Enter) ${GREEN}Выход в меню стратегий${NC}\n\n${YELLOW}Выберите пункт:${NC} ";read -r t; case "$t" in
+if [ -s "$RES_DOMAIN" ]; then echo -e "${CYAN}8) ${GREEN}Результаты тестирования ${NC}по домену"; fi; if [ -s "$RES1" ] || [ -s "$RES2" ] || [ -s "$RES3" ]; then echo -e "${CYAN}9) ${GREEN}Результаты тестирования стратегий${NC}"; fi
+if [ -s "$RES_CUSTOM" ]; then echo -e "${CYAN}10) ${GREEN}Результаты ${NC}Custom${NC} стратегий${NC}"; fi
+if [ -s "$RES1" ] || [ -s "$RES2" ] || [ -s "$RES3" ] || [ -s "$RES_DOMAIN" ] || [ -s "$RES_CUSTOM" ]; then echo -e "${CYAN}10) ${GREEN}Удалить результаты тестирования${NC}"; fi; echo -ne "${CYAN}Enter) ${GREEN}Выход в меню стратегий${NC}\n\n${YELLOW}Выберите пункт:${NC} ";read -r t; case "$t" in
 1) rm -f "$RES3"; run_test_versions;; 2) rm -f "$RES3"; run_test_flowseal;; 3) rm -f "$RES1" "$RES2" "$RES3"; run_all_tests;; 4) check_current_strategy;; 5) run_test_by_domain;; 6) auto_stryou;;
-7) TEST_CUSTOM;; 10) show_single_result "$RES_CUSTOM";;
-8) show_domain_results;; 9) show_test_results;; 0) rm -f /opt/zapret/tmp/results*; echo -e "\n${GREEN}Результаты тестирования удалены!${NC}\n"; PAUSE;; *) break;; esac; done; }
+7) TEST_CUSTOM;; 0) show_single_result "$RES_CUSTOM";;
+8) show_domain_results;; 9) show_test_results;; 10) rm -f /opt/zapret/tmp/results*; echo -e "\n${GREEN}Результаты тестирования удалены!${NC}\n"; PAUSE;; *) break;; esac; done; }
 # ==========================================
 # Системная информация
 # ==========================================
