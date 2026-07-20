@@ -2,12 +2,6 @@
 # ==========================================
 # Zapret Manager by StressOzz
 # =========================================
-
-    RES_CUSTOM="/opt/zapret/tmp/results_custom.txt"
-    CUSTOM_STR_FILE="/root/custom_test.txt"
-    CUSTOM_RESULTS="$RES_CUSTOM"
-    CUSTOM_BACK="/tmp/zapret_custom_backup.conf"
-
 ZAPRET_MANAGER_VERSION="9.76"; STR_VERSION_AUTOINSTALL="v7"
 CRON_CMD="/etc/init.d/mihomo restart"; CONFIGPATH="/etc/magitrickle/state/config.yaml"
 FLOWSEAL_STR_ZIP="https://github.com/StressOzz/Zapret-Manager/raw/refs/heads/files/flowseal-str.zip"
@@ -29,6 +23,7 @@ RESULTS="/opt/zapret/tmp/zapret_bench.txt"; BACK="$TMP_SF/zapret_back.txt"; TMP_
 FINAL_STR="$TMP_SF/StrFINAL.txt"; NEW_STR="$TMP_SF/StrNEW.txt"; OLD_STR="$TMP_SF/StrOLD.txt"; SECRET_FILE="/etc/tg-ws-proxy/secret.conf"
 ARCH_FULL="$(cat /etc/openwrt_release | grep DISTRIB_ARCH | cut -d"'" -f2)"; MODEL="$(cat /tmp/sysinfo/model 2>/dev/null)"
 RES1="/opt/zapret/tmp/results_flowseal.txt"; RES2="/opt/zapret/tmp/results_versions.txt"; RES3="/opt/zapret/tmp/results_all.txt"
+RES_CUSTOM="/opt/zapret/tmp/results_custom.txt"; CUSTOM_STR_FILE="/root/custom_test.txt"; CUSTOM_RESULTS="$RES_CUSTOM"; CUSTOM_BACK="$TMP_SF/zapret_custom_backup.conf"
 RES_DOMAIN="/opt/zapret/tmp/results_domain.txt"; Fin_IP_Dis="104\.25\.158\.178 finland[0-9]\{5\}\.discord\.media"; PARALLEL=8
 RAW="https://raw.githubusercontent.com/hyperion-cs/dpi-checkers/refs/heads/main/ru/tcp-16-20/suite.v2.json"
 EXCLUDE_FILE="/opt/zapret/ipset/zapret-hosts-user-exclude.txt"; fileDoH="/etc/config/https-dns-proxy"
@@ -526,7 +521,7 @@ if [ "$OK" -eq "$TOTAL" ]; then COLOR="${GREEN}"; elif [ "$OK" -ge $((TOTAL/2)) 
 sort -t'/' -k1 -nr "$RESULTS" -o "$RESULTS"; mv -f "$BACK" "$CONF"; rm -f "$OUT_DPI"; ZAPRET_RESTART; [ -z "$NO_PAUSE" ] && show_single_result "$RESULTS"; }
 
 TEST_CUSTOM() {
-    clear
+    clear; mkdir -p "$TMP_SF"
     echo -e "${MAGENTA}Тестирование пользовательских стратегий${NC}\n"
 
     if [ ! -f "$CUSTOM_STR_FILE" ]; then
