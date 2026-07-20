@@ -523,27 +523,27 @@ TEST_CUSTOM() {
     clear
     echo -e "${MAGENTA}Тестирование пользовательских стратегий${NC}\n"
 
-    STR_FILE_CUS="/root/custom_test_str.txt"
+    STR_FILE="/root/custom_test_str.txt"
     RESULTS="/opt/zapret/tmp/results_custom.txt"
 
-    [ ! -f "$STR_FILE_CUS" ] && {
-        echo -e "${RED}Файл $STR_FILE_CUS не найден!${NC}\n"
+    if [ ! -f "$STR_FILE" ]; then
+        echo -e "${RED}Файл $STR_FILE не найден!${NC}\n"
         PAUSE
         return
-    }
+    fi
 
-    [ ! -s "$STR_FILE_CUS" ] && {
-        echo -e "${RED}Файл $STR_FILE_CUS пуст!${NC}\n"
+    if [ ! -s "$STR_FILE" ]; then
+        echo -e "${RED}Файл $STR_FILE пуст!${NC}\n"
         PAUSE
         return
-    }
+    fi
 
-    if ! grep -q '^#' "$STR_FILE_CUS"; then
+    if ! grep -q '^#' "$STR_FILE"; then
         echo -e "${RED}В файле не найдено ни одной стратегии!${NC}"
         echo -e "${YELLOW}Каждая стратегия должна начинаться со строки '#Название'.${NC}\n"
         PAUSE
         return
-    }
+    fi
 
     cp "$CONF" "$BACK"
 
@@ -552,9 +552,9 @@ TEST_CUSTOM() {
     rm -f "$OUT_DPI"
 
     [ -f "$BACK" ] && mv -f "$BACK" "$CONF"
+
     ZAPRET_RESTART
 }
-
 
 
 
