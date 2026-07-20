@@ -525,6 +525,7 @@ TEST_CUSTOM() {
 
     CUSTOM_STR_FILE="/root/custom_test_str.txt"
     CUSTOM_RESULTS="/opt/zapret/tmp/results_custom.txt"
+    CUSTOM_BACK="/tmp/zapret_custom_backup.conf"
 
     if [ ! -f "$CUSTOM_STR_FILE" ]; then
         echo -e "${RED}Файл $CUSTOM_STR_FILE не найден!${NC}\n"
@@ -545,23 +546,33 @@ TEST_CUSTOM() {
         return
     fi
 
-    CUSTOM_BACK="/tmp/zapret_custom_backup.conf"
+    # убираем CR если файл был создан в Windows
+    sed -i 's/\r$//' "$CUSTOM_STR_FILE"
 
-    cp "$CONF" "$CUSTOM_BACK"
+    # очищаем старый результат
+    : > "$CUSTOM_RESULTS"
 
+    # сохраняем текущие переменные
     OLD_STR_FILE="$STR_FILE"
     OLD_RESULTS="$RESULTS"
     OLD_BACK="$BACK"
+    OLD_MODE="$MODE"
 
+    # свои значения для кастомного теста
     STR_FILE="$CUSTOM_STR_FILE"
     RESULTS="$CUSTOM_RESULTS"
     BACK="$CUSTOM_BACK"
+    MODE="custom"
+
+    cp "$CONF" "$CUSTOM_BACK"
 
     run_test_core "$CUSTOM_RESULTS"
 
+    # возвращаем старые значения
     STR_FILE="$OLD_STR_FILE"
     RESULTS="$OLD_RESULTS"
     BACK="$OLD_BACK"
+    MODE="$OLD_MODE"
 
     rm -f "$OUT_DPI"
 
