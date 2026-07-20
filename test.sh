@@ -82,17 +82,17 @@ DELETE="opkg remove"; ARCH="$(opkg print-architecture | awk '{print $2}' | tail 
 APK_RAS="ipk"; TMP_FILE_GO="/tmp/tg-ws-proxy.ipk"; else PKG="apk"; GO_SUF="r1"; CONFZ="/etc/apk/repositories.d/distfeeds.list"; PKG_IS_APK=1
 UPDATE="apk update"; INSTALL="apk add --allow-untrusted"; DELETE="apk del"; ARCH="$(apk --print-arch 2>/dev/null)"; APK_RAS="apk"; VER_SUF="r1"; SUF_MT="r"; TMP_FILE_GO="/tmp/tg-ws-proxy.apk"; fi
 
-if ! curl --version >/dev/null 2>&1; then clear; echo -e "${RED}Обнаружен сбой ${NC}curl${RED} или он не установлен${NC}"; echo -e "\n${MAGENTA}Устанавливаем ${NC}curl"; 
+if ! curl --version >/dev/null 2>&1; then clear; echo -e "curl ${RED}отсутствует ${NC}или${RED} работает некорректно${NC}"; echo -e "\n${MAGENTA}Устанавливаем ${NC}curl"; 
 $DELETE curl libcurl >/dev/null 2>&1; echo -e "${CYAN}Обновляем список пакетов${NC}"; if ! $UPDATE >/dev/null 2>&1; then echo -e "\n${RED}Не удалось обновить пакеты!${NC}\n"; fi
 echo -e "${CYAN}Устанавливаем ${NC}curl"; if ! $INSTALL libcurl curl >/dev/null 2>&1; then echo -e "\n${RED}Не удалось установить curl!${NC}\n"; PAUSE; fi; fi
 
-ZAPRET_VERSION="72.20260307"; PODKOP_LATEST_VER="0.9.6"; GO_VER="0.9.2"; MT_VERSION="0.8.0"
+ZAPRET_VERSION="72.20260307"; PODKOP_LATEST_VER="0.9.6"; GO_VER="0.9.2"; MT_VERSION="0.8.2"
 get_ver() { URL="$1"; OUT_FILE="$2"; NAME="$3"; RESULT=$(curl -sIL --connect-timeout 3 --max-time 4 --retry 1 -w "%{url_effective}" -o /dev/null "$URL" 2>/dev/null); if [ $? -ne 0 ] || [ -z "$RESULT" ]; then
 echo -e "$NAME: ${RED}ошибка получения версии${NC}"; return 1; fi; VERSION="${RESULT##*/}"; VERSION="${VERSION#v}"; if [ -z "$VERSION" ]; then echo -e "$NAME - ${RED}не удалось извлечь версию${NC}"
 echo -e "${YELLOW}URL:${NC} $RESULT"; return 1; fi; echo "$VERSION" > "$OUT_FILE"; echo -e "$NAME: ${GREEN}$VERSION${NC}"; }
 clear ; echo -e "${CYAN}Cобираем версии:${NC}" ; TMP_VER="/tmp/zapret_version" ; TMP_VER_POD="/tmp/podkop_version"; TMP_VER_GO="/tmp/tg_ws_proxy_go_ver"; TMP_MAG_VER="/tmp/MagiTrickle_version"
-get_ver "https://github.com/MagiTrickle/MagiTrickle/releases/latest" "$TMP_MAG_VER" "MagiTrickle" & get_ver "https://github.com/yandexru45/netshift/releases/latest" "$TMP_VER_POD" "NetShift" & get_ver "https://github.com/remittor/zapret-openwrt/releases/latest" "$TMP_VER" "Zapret" & get_ver "https://github.com/spatiumstas/tg-ws-proxy-go/releases/latest" "$TMP_VER_GO" "TG-WS Proxy GO" &
-wait; [ -s "$TMP_VER" ] && ZAPRET_VERSION="$(cat "$TMP_VER")"; [ -s "$TMP_VER_POD" ] && PODKOP_LATEST_VER="$(cat "$TMP_VER_POD")"; [ -s "$TMP_VER_GO" ] && GO_VER="$(cat "$TMP_VER_GO")"; [ -s "$TMP_MAG_VER" ] && MT_VERSION="$(cat "$TMP_MAG_VER")"
+get_ver "https://github.com/MagiTrickle/MagiTrickle/releases/latest" "$TMP_MAG_VER" "MagiTrickle" & get_ver "https://github.com/yandexru45/netshift/releases/latest" "$TMP_VER_POD" "NetShift" & get_ver "https://github.com/remittor/zapret-openwrt/releases/latest" "$TMP_VER" "Zapret" & get_ver "https://github.com/spatiumstas/tg-ws-proxy-go/releases/latest" "$TMP_VER_GO" "TG-WS Proxy GO" & wait
+[ -s "$TMP_VER" ] && ZAPRET_VERSION="$(cat "$TMP_VER")"; [ -s "$TMP_VER_POD" ] && PODKOP_LATEST_VER="$(cat "$TMP_VER_POD")"; [ -s "$TMP_VER_GO" ] && GO_VER="$(cat "$TMP_VER_GO")"; [ -s "$TMP_MAG_VER" ] && MT_VERSION="$(cat "$TMP_MAG_VER")"
 
 echo 'sh <(wget -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/main/Zapret-Manager.sh)' > /usr/bin/zms; chmod +x /usr/bin/zms
 
@@ -518,6 +518,47 @@ skip && /^'\''$/ {skip=0; next}
 !skip {print}' "$CONF" > "${CONF}.tmp"; mv "${CONF}.tmp" "$CONF"; echo -e "\n${CYAN}Тестируем стратегию: ${YELLOW}${NAME}${NC} ($CUR/$TOTAL_STR)"; ZAPRET_RESTART; OK=0; LOG_TMP="/tmp/zapret_log_${CUR}"; : > "$LOG_TMP"; check_all_urls
 if [ "$OK" -eq "$TOTAL" ]; then COLOR="${GREEN}"; elif [ "$OK" -ge $((TOTAL/2)) ]; then COLOR="${YELLOW}"; else COLOR="${RED}"; fi; echo -e "${CYAN}Результат теста: ${COLOR}$OK/$TOTAL${NC}"; echo -e "${NAME} → ${OK}/${TOTAL}" >> "$RESULTS"; done
 sort -t'/' -k1 -nr "$RESULTS" -o "$RESULTS"; mv -f "$BACK" "$CONF"; rm -f "$OUT_DPI"; ZAPRET_RESTART; [ -z "$NO_PAUSE" ] && show_single_result "$RESULTS"; }
+
+TEST_CUSTOM() {
+    clear
+    echo -e "${MAGENTA}Тестирование пользовательских стратегий${NC}\n"
+
+    STR_FILE_CUS="/root/custom_test_str.txt"
+    RESULTS="/opt/zapret/tmp/results_custom.txt"
+
+    [ ! -f "$STR_FILE_CUS" ] && {
+        echo -e "${RED}Файл $STR_FILE_CUS не найден!${NC}\n"
+        PAUSE
+        return
+    }
+
+    [ ! -s "$STR_FILE_CUS" ] && {
+        echo -e "${RED}Файл $STR_FILE_CUS пуст!${NC}\n"
+        PAUSE
+        return
+    }
+
+    if ! grep -q '^#' "$STR_FILE_CUS"; then
+        echo -e "${RED}В файле не найдено ни одной стратегии!${NC}"
+        echo -e "${YELLOW}Каждая стратегия должна начинаться со строки '#Название'.${NC}\n"
+        PAUSE
+        return
+    }
+
+    cp "$CONF" "$BACK"
+
+    run_test_core "$RESULTS"
+
+    rm -f "$OUT_DPI"
+
+    [ -f "$BACK" ] && mv -f "$BACK" "$CONF"
+    ZAPRET_RESTART
+}
+
+
+
+
+
 TEST_menu() { [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }; while true; do show_current_strategy; RKN_Check; MODE="normal"; clear; echo -e "${MAGENTA}Меню тестирования стратегий${NC}\n"; 
 [ -f "$CONF" ] && line=$(grep -m1 '^#general' "$CONF") && [ -n "$line" ] && echo -e "${YELLOW}Используется стратегия:${NC}  ${CYAN}${line#?}$(grep -o -E '^#Gv[0-9][0-9]*' "$CONF" | sed 's/^#/ \/ /' | head -n1)${NC}"
 if [ -f "$CONF" ]; then current="$ver$( [ -n "$ver" ] && [ -n "$yv_ver" ] && echo " / " )$yv_ver"; DV=$(grep -o -E '^#[[:space:]]*Dv[0-9][0-9]*' "$CONF" | sed 's/^#[[:space:]]*/\/ /' | head -n1); GV=$(grep -o -E '^#Gv[0-9][0-9]*' "$CONF" | sed 's/^#/\/ /' | head -n1); if [ -n "$current" ]
@@ -529,6 +570,7 @@ echo -e "${CYAN}4) ${GREEN}Тестировать ${NC}текущую${GREEN} с
 if [ -s "$RES_DOMAIN" ]; then echo -e "${CYAN}8) ${GREEN}Результаты тестирования по домену${NC}"; fi; if [ -s "$RES1" ] || [ -s "$RES2" ] || [ -s "$RES3" ]; then echo -e "${CYAN}9) ${GREEN}Результаты тестирования стратегий${NC}"; fi
 if [ -s "$RES1" ] || [ -s "$RES2" ] || [ -s "$RES3" ] || [ -s "$RES_DOMAIN" ]; then echo -e "${CYAN}0) ${GREEN}Удалить результаты тестирования${NC}"; fi; echo -ne "${CYAN}Enter) ${GREEN}Выход в меню стратегий${NC}\n\n${YELLOW}Выберите пункт:${NC} ";read -r t; case "$t" in
 1) rm -f "$RES3"; run_test_versions;; 2) rm -f "$RES3"; run_test_flowseal;; 3) rm -f "$RES1" "$RES2" "$RES3"; run_all_tests;; 4) check_current_strategy;; 5) run_test_by_domain;; 6) auto_stryou;;
+99) TEST_CUSTOM;;
 8) show_domain_results;; 9) show_test_results;; 0) rm -f /opt/zapret/tmp/results*; echo -e "\n${GREEN}Результаты тестирования удалены!${NC}\n"; PAUSE;; *) break;; esac; done; }
 # ==========================================
 # Системная информация
@@ -679,8 +721,8 @@ echo -e "${CYAN}4) ${GREEN}Интегрировать ${NC}AWG${GREEN} в ${NC}N
 # Информация
 # ==========================================
 INFO_ZPR() { if [ -f /etc/init.d/zapret ]; then /etc/init.d/zapret status >/dev/null 2>&1 && ZAPRET_STATUS="${GREEN}запущен${NC} $NFQ_STAT" || ZAPRET_STATUS="${RED}остановлен${NC}"; if [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ]; then echo -e "${YELLOW}Zapret:${NC}              ${GREEN}$INSTALLED_VER${NC} / $ZAPRET_STATUS"
-else echo -e "${YELLOW}Zapret:${NC}              ${RED}$INSTALLED_VER (версия устарела)${NC} / $ZAPRET_STATUS"; fi; else echo -e "${YELLOW}Zapret:${NC}              ${RED}не установлен${NC}"; fi; if [ -x /etc/init.d/magitrickle ]; then STATUS=$(/etc/init.d/magitrickle status 2>/dev/null)
-case "$STATUS" in running|active) MAGITRICKLE_STATUS="${GREEN}запущен${NC}" ;; *) MAGITRICKLE_STATUS="${RED}остановлен${NC}" ;; esac; fi; [ -n "$Magi_INSTALL_VER" ] && { if [ "$Magi_INSTALL_VER" != "$MT_VERSION" ]; then echo -e "${YELLOW}MagiTrickle:${NC}        ${RED}$Magi_INSTALL_VER (версия устарела)${NC} / $MAGITRICKLE_STATUS"; else echo -e "${YELLOW}MagiTrickle:${NC}        ${GREEN}$Magi_INSTALL_VER${NC} / $MAGITRICKLE_STATUS"; fi; }
+else echo -e "${YELLOW}Zapret:${NC}              ${RED}$INSTALLED_VER (версия устарела)${NC} / $ZAPRET_STATUS"; fi; else echo -e "${YELLOW}Zapret:${NC}              ${RED}не установлен${NC}"; fi
+case "$(/etc/init.d/mihomo status 2>/dev/null)" in running) echo -e "${YELLOW}Mixomo:              ${GREEN}запущен${NC}" ;; inactive) echo -e "${YELLOW}Mixomo:              ${RED}остановлен${NC}" ;; esac
 TGSTATUS=""; pidof tg-ws-proxy-go >/dev/null 2>&1 && TGSTATUS="${TGSTATUS:+$TGSTATUS/}SOCKS5"; pidof tg-ws-proxy >/dev/null 2>&1 && TGSTATUS="${TGSTATUS:+$TGSTATUS/}MTProto"; pidof tg-ws-proxy-rs >/dev/null 2>&1 && TGSTATUS="${TGSTATUS:+$TGSTATUS/}Rust"; if [ -n "$TGSTATUS" ]; then echo -e "${YELLOW}TG WS Proxy:${NC}         ${GREEN}запущен [$TGSTATUS]${NC}"; fi
 if hosts_enabled; then echo -e "${YELLOW}Домены в hosts:      ${GREEN}$hosts_echo${NC}"; fi; [ -f "$DATE_FILE" ] && echo -e "${YELLOW}Резервная копия:${NC}     ${GREEN}сохранена"; show_script_50 && [ -n "$name" ] && echo -e "${YELLOW}Установлен скрипт:${NC}   $name"; grep -q "$Fin_IP_Dis" /etc/hosts && echo -e "${YELLOW}IP для Discord:      ${GREEN}включены${NC}"
 if [ -n "$DOH_STATUS" ]; then if [ "$PKG_IS_APK" -eq 1 ]; then apk info -e https-dns-proxy >/dev/null 2>&1 && echo -e "${YELLOW}DNS over HTTPS:${NC}      ${GREEN}$DOH_STATUS${NC}"; else opkg list-installed | grep -q '^https-dns-proxy ' && echo -e "${YELLOW}DNS over HTTPS:${NC}      ${GREEN}$DOH_STATUS${NC}"; fi; fi
@@ -730,8 +772,8 @@ read HOUR; case "$HOUR" in ''|*[!0-9]*) echo -e "\n${RED}Ошибка! Введ�
 then echo -e "\n${RED}Ошибка! Диапазон должен быть от ${NC}0 ${RED}до ${NC}23\n"; PAUSE; return; fi; break; done; echo "0 $HOUR * * * $CRON_CMD" >> "$CRON_FILE"; /etc/init.d/cron restart
 echo -e "\n${GREEN}Автоперезапуск ${NC}Mihomo ${GREEN}включен!${NC}\n"; PAUSE ;; *) return ;; esac; }
 check_mihomo() { if [ ! -f /etc/init.d/mihomo ]; then echo -e "\n${RED}Mixomo не установлен!${NC}\n"; PAUSE; return 1; fi; return 0; }
-MAG_VER_INST() { if command -v apk >/dev/null 2>&1; then Magi_INSTALL_VER="$(apk info -v 2>/dev/null | grep '^magitrickle-' | cut -d- -f2)"; else Magi_INSTALL_VER="$(opkg status magitrickle 2>/dev/null | awk '/^Version:/ {sub(/-1$/,"",$2); sub(/-r1$/,"",$2); print $2}')"; fi; }
-MIXOMO_MENU() { while true; do LINECRON=$(grep -F "/etc/init.d/mihomo restart" /etc/crontabs/root 2>/dev/null | head -n 1); MAG_VER_INST; clear; echo -e "${MAGENTA}Меню Mixomo${NC}\n"; check_status; [ -f /etc/mihomo/config.yaml ] && grep -q "engage.cloudflareclient.com" /etc/mihomo/config.yaml && echo -e "${YELLOW}WARP endpoint:       ${CYAN}Россия${NC}"
+MIXOMO_MENU() { while true; do LINECRON=$(grep -F "/etc/init.d/mihomo restart" /etc/crontabs/root 2>/dev/null | head -n 1); if command -v apk >/dev/null 2>&1; then Magi_INSTALL_VER="$(apk info -v 2>/dev/null | grep '^magitrickle-' | cut -d- -f2)"
+else Magi_INSTALL_VER="$(opkg status magitrickle 2>/dev/null | awk '/^Version:/ {sub(/-1$/,"",$2); sub(/-r1$/,"",$2); print $2}')"; fi; clear; echo -e "${MAGENTA}Меню Mixomo${NC}\n"; check_status; [ -f /etc/mihomo/config.yaml ] && grep -q "engage.cloudflareclient.com" /etc/mihomo/config.yaml && echo -e "${YELLOW}WARP endpoint:       ${CYAN}Россия${NC}"
 if [ -f "$CONFIGPATH" ]; then grep -Fq 'name: Google_ai' "$CONFIGPATH" && echo -e "${YELLOW}Используется список: ${NC}ITDog"; grep -Fq 'name: Meta (WA+FB+Instagram)' "$CONFIGPATH" && echo -e "${YELLOW}Используется список: ${NC}Internet Helper #2"; grep -Fq 'url: https://sw.ext.io/ipset/ipset_cf.list' "$CONFIGPATH" && echo -e "${YELLOW}Используется список: ${NC}Internet Helper #1"; fi
 [ -f /root/WARP.conf ] && echo -e "${YELLOW}WARP.conf в /root/:${NC}  ${GREEN}присутствует${NC}"; if [ -n "$LINECRON" ]; then HOURM=$(echo "$LINECRON" | awk '{print $2}'); if echo "$HOURM" | grep -q "/"; then INTERVAL=$(echo "$HOURM" | cut -d'/' -f2)
 echo -e "${YELLOW}Автоперезапуск Mihomo: ${GREEN}каждые ${NC}$INTERVAL ${GREEN}часа(ов)"; else echo -e "${YELLOW}Автоперезапуск Mihomo: ${GREEN}ежедневно в ${NC}$(printf "%02d" "$HOURM"):00"; fi; fi
@@ -739,9 +781,9 @@ echo -e "${YELLOW}Автоперезапуск Mihomo: ${GREEN}каждые ${NC
 echo -e "\n${CYAN}1) ${GREEN}Установить ${NC}Mixomo"; echo -e "${CYAN}2) ${GREEN}Удалить ${NC}Mixomo"; echo -e "${CYAN}3) ${GREEN}Сменить список ${NC}MagiTrickle"; if [ -f /etc/mihomo/config.yaml ] && grep -q '^[[:space:]]*[^#].*url: "' /etc/mihomo/config.yaml
 then echo -e "${CYAN}4) ${GREEN}Сменить ${NC}VPN${GREEN} подписку${NC}"; else echo -e "${CYAN}4) ${GREEN}Интегрировать ${NC}VPN${GREEN} подписку в ${NC}Mihomo${NC}"; fi; echo -e "${CYAN}5) ${GREEN}Сгенерировать ${NC}WARP ${GREEN}в ${NC}/root/WARP.conf"
 echo -e "${CYAN}6) ${GREEN}Интегрировать ${NC}/root/WARP.conf${GREEN} в ${NC}Mihomo"; echo -e "${CYAN}7) ${GREEN}Выбрать и установить панель для ${NC}Mihomo"; if grep -qF "/etc/init.d/mihomo restart" /etc/crontabs/root 2>/dev/null
-then echo -e "${CYAN}8) ${GREEN}Выключить автоперезапуск ${NC}Mihomo"; else echo -e "${CYAN}8) ${GREEN}Включить автоперезапуск ${NC}Mihomoe"; fi; [ -n "$Magi_INSTALL_VER" ] && { [ "$Magi_INSTALL_VER" != "$MT_VERSION" ] && echo -e "${CYAN}9) ${GREEN}Обновить ${NC}MagiTrickle"; }
+then echo -e "${CYAN}8) ${GREEN}Выключить автоперезапуск ${NC}Mihomo"; else echo -e "${CYAN}8) ${GREEN}Включить автоперезапуск ${NC}Mihomo"; fi; [ -n "$Magi_INSTALL_VER" ] && { [ "$Magi_INSTALL_VER" != "$MT_VERSION" ] && echo -e "${CYAN}9) ${GREEN}Обновить ${NC}MagiTrickle"; }
 echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню\n"; echo -ne "${YELLOW}Выберите пункт: ${NC}"; read choiceM; case "$choiceM" in 1) sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/mixomo/mixomo_openwrt_install.sh); PAUSE ;;
-2) sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/mixomo/mixomo_openwrt_delete.sh); sed -i "\|$CRON_CMD|d" "$CRON_FILE"; /etc/init.d/cron restart; echo -e "\n${YELLOW}Рекомендую сделать перезагрузку роутера!${NC}\n"; PAUSE ;;
+2) sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/mixomo/mixomo_openwrt_delete.sh); sed -i "\|$CRON_CMD|d" "$CRON_FILE" >/dev/null 2>&1; /etc/init.d/cron restart >/dev/null 2>&1; echo -e "\n${YELLOW}Рекомендую сделать перезагрузку роутера!${NC}\n"; PAUSE ;;
 3) check_mihomo || continue; magitrickle_config ;; 4) check_mihomo || continue; PODPISKA ;; 5) sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/mixomo/gen_WARP.sh); echo; PAUSE ;;
 6) check_mihomo || continue; sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/mixomo/WARP_to_conf.sh); echo; PAUSE ;; 7) check_mihomo || continue; UI_INSTALL ;; 8) check_mihomo || continue; MIXOMO_RESTART ;; 
 9) check_mihomo || continue; ARCH_MT=$(grep "^OPENWRT_ARCH=" /etc/os-release | cut -d'"' -f2); FILE_MT="/tmp/magitrickle.$APK_RAS"; URL_MT="https://github.com/MagiTrickle/MagiTrickle/releases/download/${MT_VERSION}/magitrickle_${MT_VERSION}-${SUF_MT}1_openwrt_${ARCH_MT}.$APK_RAS"
@@ -751,7 +793,7 @@ $UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка обновления 
 # ==========================================
 # Главное меню
 # ==========================================
-show_menu() { get_versions; get_doh_status; show_current_strategy; RKN_Check; MAG_VER_INST; mkdir -p "$TMP_SF"; CURR=$(curr_MIR); clear; echo -e "╔═══════════════════════════════╗\n║  ${BLUE}Zapret Manager by StressOzz${NC}  ║\n╚═══════════════════════════════╝\n"
+show_menu() { get_versions; get_doh_status; show_current_strategy; RKN_Check; mkdir -p "$TMP_SF"; CURR=$(curr_MIR); clear; echo -e "╔═══════════════════════════════╗\n║  ${BLUE}Zapret Manager by StressOzz${NC}  ║\n╚═══════════════════════════════╝\n"
 if [ -f /etc/init.d/zapret ] && [ -f "$CONF" ] && grep -Eq "^[[:space:]]*option DISABLE_IPV6 '1'" "$CONF" && ping -6 -c 1 -W 2 google.com >/dev/null 2>&1; then echo -e "${RED}Обнаружен IPv6! ${GREEN}Включите ${NC}IPv6${GREEN} в системном меню!${NC}\n"; fi
 if [ ! -f /etc/init.d/zapret ]; then Z_ACTION_TEXT="Установить"; Z_ACTION_FUNC="install_Zapret"; elif [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ]; then Z_ACTION_TEXT="Удалить" Z_ACTION_FUNC="uninstall_zapret"; else Z_ACTION_TEXT="Обновить"; Z_ACTION_FUNC="install_Zapret"; fi
 for pkg in byedpi youtubeUnblock; do if [ "$PKG_IS_APK" -eq 1 ]; then apk info -e "$pkg" >/dev/null 2>&1 && echo -e "${RED}Найден установленный ${NC}$pkg${RED}!${NC}\nZapret${RED} может работать некорректно с ${NC}$pkg${RED}!${NC}\n"
