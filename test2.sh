@@ -523,39 +523,52 @@ TEST_CUSTOM() {
     clear
     echo -e "${MAGENTA}Тестирование пользовательских стратегий${NC}\n"
 
-    STR_FILE="/root/custom_test_str.txt"
-    RESULTS="/opt/zapret/tmp/results_custom.txt"
+    CUSTOM_STR_FILE="/root/custom_test_str.txt"
+    CUSTOM_RESULTS="/opt/zapret/tmp/results_custom.txt"
 
-    if [ ! -f "$STR_FILE" ]; then
-        echo -e "${RED}Файл $STR_FILE не найден!${NC}\n"
+    if [ ! -f "$CUSTOM_STR_FILE" ]; then
+        echo -e "${RED}Файл $CUSTOM_STR_FILE не найден!${NC}\n"
         PAUSE
         return
     fi
 
-    if [ ! -s "$STR_FILE" ]; then
-        echo -e "${RED}Файл $STR_FILE пуст!${NC}\n"
+    if [ ! -s "$CUSTOM_STR_FILE" ]; then
+        echo -e "${RED}Файл $CUSTOM_STR_FILE пуст!${NC}\n"
         PAUSE
         return
     fi
 
-    if ! grep -q '^#' "$STR_FILE"; then
+    if ! grep -q '^#' "$CUSTOM_STR_FILE"; then
         echo -e "${RED}В файле не найдено ни одной стратегии!${NC}"
         echo -e "${YELLOW}Каждая стратегия должна начинаться со строки '#Название'.${NC}\n"
         PAUSE
         return
     fi
 
-    cp "$CONF" "$BACK"
+    CUSTOM_BACK="/tmp/zapret_custom_backup.conf"
 
-    run_test_core "$RESULTS"
+    cp "$CONF" "$CUSTOM_BACK"
+
+    OLD_STR_FILE="$STR_FILE"
+    OLD_RESULTS="$RESULTS"
+    OLD_BACK="$BACK"
+
+    STR_FILE="$CUSTOM_STR_FILE"
+    RESULTS="$CUSTOM_RESULTS"
+    BACK="$CUSTOM_BACK"
+
+    run_test_core "$CUSTOM_RESULTS"
+
+    STR_FILE="$OLD_STR_FILE"
+    RESULTS="$OLD_RESULTS"
+    BACK="$OLD_BACK"
 
     rm -f "$OUT_DPI"
 
-    [ -f "$BACK" ] && mv -f "$BACK" "$CONF"
+    [ -f "$CUSTOM_BACK" ] && mv -f "$CUSTOM_BACK" "$CONF"
 
     ZAPRET_RESTART
 }
-
 
 
 
