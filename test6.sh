@@ -528,13 +528,13 @@ TEST_CUSTOM() {
     CUSTOM_BACK="/tmp/zapret_custom_backup.conf"
 
     if [ ! -f "$CUSTOM_STR_FILE" ]; then
-        echo -e "${RED}Файл $CUSTOM_STR_FILE не найден!${NC}\n"
+        echo -e "${RED}Файл ${NC}$CUSTOM_STR_FILE${RED} не найден!${NC}\n"
         PAUSE
         return
     fi
 
     if [ ! -s "$CUSTOM_STR_FILE" ]; then
-        echo -e "${RED}Файл $CUSTOM_STR_FILE пуст!${NC}\n"
+        echo -e "${RED}Файл ${NC}$CUSTOM_STR_FILE ${RED}пуст!${NC}\n"
         PAUSE
         return
     fi
