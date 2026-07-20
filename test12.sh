@@ -533,13 +533,6 @@ TEST_CUSTOM() {
         return
     fi
 
-    if ! grep -q '^#' "$CUSTOM_STR_FILE"; then
-        echo -e "${RED}В файле не найдено ни одной стратегии!${NC}\n"
-        echo -e "${YELLOW}Каждая стратегия должна начинаться со строки - ${NC}#Название${NC}\n"
-        PAUSE
-        return
-    fi
-
 if ! grep -q '^#' "$CUSTOM_STR_FILE"; then
     echo -e "\n${RED}В файле не найдено ни одной стратегии!${NC}\n"
     echo -e "${YELLOW}Каждая стратегия должна начинаться со строки - ${NC}#Название${NC}\n"
