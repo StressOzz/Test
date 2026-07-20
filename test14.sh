@@ -535,8 +535,8 @@ TEST_CUSTOM() {
 
 if ! grep -q '^#' "$CUSTOM_STR_FILE"; then
     echo -e "\n${RED}В файле не найдено ни одной стратегии!${NC}\n"
-    echo -e "${YELLOW}Каждая стратегия должна начинаться со строки - ${NC}#Название${NC}"
-    echo -e "${CYAN}Пример содержимого ${NC}$CUSTOM_STR_FILE ${CYAN}:${NC}\n"
+    echo -e "${YELLOW}Каждая стратегия должна начинаться со строки ${NC}#Название${NC}"
+    echo -e "${CYAN}Пример содержимого ${NC}$CUSTOM_STR_FILE${CYAN}:${NC}"
     echo -e "#Strategy1"
     echo -e "--filter-tcp=443"
     echo -e "--dpi-desync=fake"
