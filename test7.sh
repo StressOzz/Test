@@ -326,7 +326,22 @@ else echo -e "\n${MAGENTA}Добавляем блок с --filter-udp=443\n${CYA
 sed -i "/^[[:space:]]*option NFQWS_OPT '/a\\#udp443\\n--filter-udp=443\\n--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt\\n--dpi-desync=fake\\n--dpi-desync-repeats=11\\n--dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin\\n--new" $CONF
 ZAPRET_RESTART; echo -e "${GREEN}Блок с ${NC}--filter-udp=443${GREEN} добавлен!${NC}\n"; PAUSE; fi ;; *) return;; esac; done }
 strategy_CHOUSE() { echo -ne "\n${YELLOW}Введите версию стратегии (${NC}1-10${YELLOW}):${NC} "; read -r choice; if [[ "$choice" =~ ^[0-9]+$ ]] && [[ "$choice" -ge 1 ]] && [[ "$choice" -le 10 ]]; then install_strategy "v$choice"; fi; }
-show_current_strategy() { [ -f "$CONF" ] || return; ver=""; for i in $(seq 1 99); do grep -q "#v$i" "$CONF" && { ver="v$i"; break; }; done; yv_ver=""; for i in $(seq -w 1 99); do grep -q "#Yv$i" "$CONF" && { yv_ver="Yv$i"; break; }; done; }
+# show_current_strategy() { [ -f "$CONF" ] || return; ver=""; for i in $(seq 1 99); do grep -q "#v$i" "$CONF" && { ver="v$i"; break; }; done; yv_ver=""; for i in $(seq -w 1 99); do grep -q "#Yv$i" "$CONF" && { yv_ver="Yv$i"; break; }; done; }
+
+show_current_strategy() {
+    [ -f "$CONF" ] || return
+    
+    # Ищем все совпадения #v с цифрами и берём максимальное число
+    ver=""
+    local max_ver=$(grep -o '#v[0-9]*' "$CONF" | sed 's/#v//' | sort -n | tail -1)
+    [ -n "$max_ver" ] && ver="v$max_ver"
+    
+    # Ищем все совпадения #Yv с цифрами и берём максимальное число
+    yv_ver=""
+    local max_yv=$(grep -o '#Yv[0-9]*' "$CONF" | sed 's/#Yv//' | sort -n | tail -1)
+    [ -n "$max_yv" ] && yv_ver="Yv$max_yv"
+}
+
 discord_str_add() { if ! grep -q "option NFQWS_PORTS_UDP.*19294-19344,50000-50100" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'$/,19294-19344,50000-50100'/" "$CONF"; fi
 if ! grep -q "option NFQWS_PORTS_TCP.*2053,2083,2087,2096,8443" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_TCP '/s/'$/,2053,2083,2087,2096,8443'/" "$CONF"; fi
 if ! grep -q -- "--filter-udp=19294-19344,50000-50100" "$CONF"; then last_line1=$(grep -n "^'$" "$CONF" | tail -n1 | cut -d: -f1); if [ -n "$last_line1" ]; then sed -i "${last_line1},\$d" "$CONF"; fi
