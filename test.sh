@@ -100,7 +100,8 @@ echo 'sh <(wget -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/
 # git="githubusercontent.com"; if ! grep -q "raw.$git" /etc/hosts; then echo -e "\n\033[1;36mДля корректной работы скрипта добавляем домены \033[0mGitHub\033[1;36m в \033[0m/etc/hosts\033[0m"
 # printf "#$git\n185.199.109.133 raw.$git release-assets.$git\n185.199.108.133 private-user-images.$git gist.$git avatars.$git\n" >> /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1; fi
 
-for f in quic_initial_dbankcloud_ru.bin quic_initial_4pda.to.bin; do [ -d /opt/zapret ] && [ ! -f "/opt/zapret/files/fake/$f" ] && { echo -e "${CYAN}Скачиваем ${NC}$f"; wget -q -U "Mozilla/5.0" -O "/opt/zapret/files/fake/$f" "https://github.com/StressOzz/Zapret-Manager/raw/refs/heads/main/files/$f" || { echo -e "\n${RED}Не удалось загрузить файл ${NC}$f\n"; }; }; done
+for f in ACTIVE_GAME_UDP.bin ACTIVE_DISCORD_UDP.bin stun2.bin quic_initial_tencent_com.bin quic_initial_steamcommunity_com.bin quic_initial_dbankcloud_ru.bin quic_initial_4pda.to.bin; do [ -d /opt/zapret ] && [ ! -f "/opt/zapret/files/fake/$f" ] && { echo -e "${CYAN}Скачиваем ${NC}$f"; wget -q -U "Mozilla/5.0" -O "/opt/zapret/files/fake/$f" "https://github.com/Flowseal/zapret-discord-youtube/raw/refs/heads/main/bin/$f" || { echo -e "\n${RED}Не удалось загрузить файл ${NC}$f\n"; }; }; done
+
 
 # ==========================================
 # Получение версии
@@ -121,7 +122,7 @@ echo -e "${CYAN}Скачиваем архив ${NC}$FILE_NAME"; wget -q -U "Mozi
 unzip -o "$FILE_NAME" >/dev/null; if [ "$PKG_IS_APK" -eq 1 ]; then PKG_PATH="$TMP_SF/apk"; for PKG in "$PKG_PATH"/zapret*; do [ -f "$PKG" ] || continue; echo "$PKG" | grep -q "luci" && continue; install_pkg "$(basename "$PKG")" "$PKG" || return; done
 for PKG in "$PKG_PATH"/luci*; do [ -f "$PKG" ] || continue; install_pkg "$(basename "$PKG")" "$PKG" || return; done; else PKG_PATH="$TMP_SF"; for PKG in "$PKG_PATH"/zapret_*.ipk; do [ -f "$PKG" ] || continue; install_pkg "$(basename "$PKG")" "$PKG" || return; done
 for PKG in "$PKG_PATH"/luci-app-zapret_*.ipk; do [ -f "$PKG" ] || continue; install_pkg "$(basename "$PKG")" "$PKG" || return; done; fi; 
-for f in quic_initial_dbankcloud_ru.bin quic_initial_4pda.to.bin; do echo -e "${CYAN}Скачиваем ${NC}$f"; wget -q -U "Mozilla/5.0" -O "/opt/zapret/files/fake/$f" "https://github.com/StressOzz/Zapret-Manager/raw/refs/heads/main/files/$f" || { echo -e "\n${RED}Не удалось загрузить файл ${NC}$f\n"; PAUSE; echo; }; done
+for f in ACTIVE_GAME_UDP.bin ACTIVE_DISCORD_UDP.bin stun2.bin quic_initial_tencent_com.bin quic_initial_steamcommunity_com.bin quic_initial_dbankcloud_ru.bin quic_initial_4pda.to.bin; do [ -d /opt/zapret ] && { echo -e "${CYAN}Скачиваем ${NC}$f"; wget -q -U "Mozilla/5.0" -O "/opt/zapret/files/fake/$f" "https://github.com/Flowseal/zapret-discord-youtube/raw/refs/heads/main/bin/$f" || { echo -e "\n${RED}Не удалось загрузить файл ${NC}$f\n"; }; }; done
 echo -e "${CYAN}Удаляем временные файлы${NC}"; cd /; rm -rf "$TMP_SF" /tmp/*.ipk /tmp/*.zip /tmp/*zapret* 2>/dev/null; echo -e "Zapret ${GREEN}установлен!${NC}\n"; [ "$NO_PAUSE" != "1" ] && PAUSE; }
 # ==========================================
 # Меню настройки Discord
@@ -297,11 +298,41 @@ download_strategies() { local NO_PAUSE=$1; [ "$NO_PAUSE" != "1" ] && echo -e "\n
 if ! command -v unzip >/dev/null 2>&1; then echo -e "${CYAN}Устанавливаем ${NC}unzip"; echo -e "${CYAN}Обновляем список пакетов${NC}"; $UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; PAUSE; return; }; $INSTALL unzip >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить unzip!${NC}\n"; PAUSE; return; }; fi
 unzip -oq "$ZIP" -d "$TMP_SF" || { echo -e "\n${RED}Не удалось распоковать файл${NC}\n"; PAUSE; return; }; BASE="$TMP_SF/zapret-discord-youtube-main";
 find "$BASE" -type f -name 'general*.bat' ! -name 'general (ALT5).bat' | while read -r F; do MATCH=$(grep -E '^--filter-udp=19294-19344,50000-50100|^--filter-tcp=2053,2083,2087,2096,8443|^--filter-tcp=443 --hostlist="%LISTS%list-google.txt"|^--filter-tcp=80,443 --hostlist="%LISTS%list-general.txt"' "$F")
-[ -z "$MATCH" ] && continue; NAME=$(basename "$F" .bat); { echo "#$NAME"; echo "$MATCH" | sed 's/--/\n--/g' | sed '/^$/d' | sed 's/[[:space:]]*$//'; echo; } >> "$OUT"; done; sed -i 's|"%BIN%tls_clienthello_www_google_com.bin"|/opt/zapret/files/fake/tls_clienthello_www_google_com.bin|g' "$OUT"; sed -i '/--hostlist="%LISTS%list-general.txt"/d' "$OUT"
-sed -i '/--hostlist="%LISTS%list-general-user.txt"/d' "$OUT"; sed -i '/--ipset-exclude="%LISTS%ipset-exclude.txt"/d' "$OUT"; sed -i '/--ipset-exclude="%LISTS%ipset-exclude-user.txt"/d' "$OUT"; sed -i '/--hostlist-exclude="%LISTS%list-exclude-user.txt"/d' "$OUT"; sed -i 's|"%LISTS%list-exclude.txt"|/opt/zapret/ipset/zapret-hosts-user-exclude.txt|g' "$OUT"
-sed -i 's/--new[[:space:]]\^/--new/g' "$OUT"; sed -i 's|"%LISTS%list-google.txt"|/opt/zapret/ipset/zapret-hosts-google.txt|g' "$OUT"; sed -i 's|"%BIN%quic_initial_dbankcloud_ru.bin"|/opt/zapret/files/fake/quic_initial_dbankcloud_ru.bin|g' "$OUT"; sed -i 's|"%BIN%stun.bin"|/opt/zapret/files/fake/stun.bin|g' "$OUT"; sed -i 's|"%BIN%tls_clienthello_4pda_to.bin"|/opt/zapret/files/fake/4pda.bin|g' "$OUT"
-sed -i 's|"%BIN%quic_initial_www_google_com.bin"|/opt/zapret/files/fake/quic_initial_www_google_com.bin|g' "$OUT"; sed -i 's|"%BIN%tls_clienthello_max_ru.bin"|/opt/zapret/files/fake/tls_clienthello_www_onetrust_com.bin|g' "$OUT"; sed -i 's|\^!|/opt/zapret/files/fake/tls_clienthello_www_google_com.bin|g' "$OUT"; sed -i 's/[[:space:]]\+$//g' "$OUT"
-sed -i '/^--new$/ { N; /^\--new\n$/d; }' "$OUT"; rm -rf "$TMP_SF/zapret-discord-youtube-main" "$ZIP"; [ "$NO_PAUSE" != "1" ] && echo -e "${GREEN}Стратегии сформированы!${NC}\n"; [ "$NO_PAUSE" != "1" ] && PAUSE; }
+[ -z "$MATCH" ] && continue; NAME=$(basename "$F" .bat); { echo "#$NAME"; echo "$MATCH" | sed 's/--/\n--/g' | sed '/^$/d' | sed 's/[[:space:]]*$//'; echo; } >> "$OUT"; done
+
+sed -i 's|"%BIN%tls_clienthello_www_google_com.bin"|/opt/zapret/files/fake/tls_clienthello_www_google_com.bin|g' "$OUT"
+sed -i '/--hostlist="%LISTS%list-general.txt"/d' "$OUT"
+sed -i '/--hostlist="%LISTS%list-general-user.txt"/d' "$OUT"
+sed -i '/--ipset-exclude="%LISTS%ipset-exclude.txt"/d' "$OUT"
+sed -i '/--ipset-exclude="%LISTS%ipset-exclude-user.txt"/d' "$OUT"
+sed -i '/--hostlist-exclude="%LISTS%list-exclude-user.txt"/d' "$OUT"
+sed -i 's|"%LISTS%list-exclude.txt"|/opt/zapret/ipset/zapret-hosts-user-exclude.txt|g' "$OUT"
+sed -i 's/--new[[:space:]]\^/--new/g' "$OUT"
+sed -i 's|"%LISTS%list-google.txt"|/opt/zapret/ipset/zapret-hosts-google.txt|g' "$OUT"
+sed -i 's|"%BIN%quic_initial_dbankcloud_ru.bin"|/opt/zapret/files/fake/quic_initial_dbankcloud_ru.bin|g' "$OUT"
+sed -i 's|"%BIN%stun.bin"|/opt/zapret/files/fake/stun.bin|g' "$OUT"
+sed -i 's|"%BIN%tls_clienthello_4pda_to.bin"|/opt/zapret/files/fake/4pda.bin|g' "$OUT"
+sed -i 's|"%BIN%quic_initial_www_google_com.bin"|/opt/zapret/files/fake/quic_initial_www_google_com.bin|g' "$OUT"
+
+
+sed -i 's|"%BIN%stun2.bin"|/opt/zapret/files/fake/stun2.bin|g' "$OUT"
+sed -i 's|"%BIN%quic_initial_tencent_com.bin"|/opt/zapret/files/fake/quic_initial_tencent_com.bin|g' "$OUT"
+sed -i 's|"%BIN%quic_initial_steamcommunity_com.bin"|/opt/zapret/files/fake/quic_initial_steamcommunity_com.bin|g' "$OUT"
+sed -i 's|"%BIN%quic_initial_4pda.to.bin"|/opt/zapret/files/fake/quic_initial_4pda.to.bin|g' "$OUT"
+sed -i 's|"%BIN%ACTIVE_DISCORD_UDP.bin"|/opt/zapret/files/fake/ACTIVE_DISCORD_UDP.bin|g' "$OUT"
+sed -i 's|"%BIN%ACTIVE_GAME_UDP.bin"|/opt/zapret/files/fake/ACTIVE_GAME_UDP.bin|g' "$OUT"
+
+
+sed -i 's|"%BIN%tls_clienthello_max_ru.bin"|/opt/zapret/files/fake/tls_clienthello_www_onetrust_com.bin|g' "$OUT"
+
+sed -i 's|\^!|/opt/zapret/files/fake/tls_clienthello_www_google_com.bin|g' "$OUT"
+
+sed -i 's/[[:space:]]\+$//g' "$OUT"
+sed -i '/^--new$/ { N; /^\--new\n$/d; }' "$OUT"; rm -rf "$TMP_SF/zapret-discord-youtube-main" "$ZIP"
+
+for f in ACTIVE_GAME_UDP.bin ACTIVE_DISCORD_UDP.bin stun2.bin quic_initial_tencent_com.bin quic_initial_steamcommunity_com.bin quic_initial_dbankcloud_ru.bin quic_initial_4pda.to.bin; do [ -d /opt/zapret ] && { echo -e "${CYAN}Скачиваем ${NC}$f"; wget -q -U "Mozilla/5.0" -O "/opt/zapret/files/fake/$f" "https://github.com/Flowseal/zapret-discord-youtube/raw/refs/heads/main/bin/$f" || { echo -e "\n${RED}Не удалось загрузить файл ${NC}$f\n"; }; }; done
+
+[ "$NO_PAUSE" != "1" ] && echo -e "${GREEN}Стратегии сформированы!${NC}\n"; [ "$NO_PAUSE" != "1" ] && PAUSE; }
 # ==========================================
 # Меню стратегий
 # ==========================================
@@ -532,8 +563,7 @@ if [ -f "$CONF" ]; then current="$ver$( [ -n "$ver" ] && [ -n "$yv_ver" ] && ech
 then echo -e "${YELLOW}Используется стратегия:${NC}  ${CYAN}$current${DV:+ $DV}${GV:+ $GV}${RKN_STATUS:+ $RKN_STATUS}${NC}"; elif [ -n "$RKN_STATUS" ]; then echo -e "${YELLOW}Используется стратегия:${NC}  ${CYAN}РКН${DV:+ $DV}${GV:+ $GV}${NC}"; fi; fi
 STATUS_V=""; STATUS_FLOW=""; STATUS_DOMAIN=""; if [ -s "$RES3" ]; then STATUS_V="${GREEN}v${NC}"; STATUS_FLOW="${GREEN}Flowseal${NC}"; elif [ -s "$RES2" ] || [ -s "$RES1" ]; then [ -s "$RES2" ] && STATUS_V="${GREEN}v${NC}" || STATUS_V="${RED}v${NC}"
 [ -s "$RES1" ] && STATUS_FLOW="${GREEN}Flowseal${NC}" || STATUS_FLOW="${RED}Flowseal${NC}"; else STATUS_V="${RED}v${NC}"; STATUS_FLOW="${RED}Flowseal${NC}"; fi; [ -s "$RES_DOMAIN" ] && STATUS_DOMAIN="${GREEN}Domain${NC}" || STATUS_DOMAIN="${RED}Domain${NC}"; [ -s "$RES_CUSTOM" ] && STATUS_CUSTOM="${GREEN}Custom${NC}" || STATUS_CUSTOM="${RED}Custom${NC}"
- [ -f /root/custom_test.txt ] && echo -e "${YELLOW}/root/custom_test.txt:  ${GREEN}присутствует${NC}"
-echo -e "${YELLOW}Тест пройден:${NC} ${STATUS_V} | ${STATUS_FLOW} | ${STATUS_DOMAIN} | ${STATUS_CUSTOM}\n\n${CYAN}1) ${GREEN}Тестировать стратегии ${NC}v\n${CYAN}2) ${GREEN}Тестировать стратегии ${NC}Flowseal\n${CYAN}3) ${GREEN}Тестировать ${NC}v${GREEN} и ${NC}Flowseal${GREEN} стратегии${NC}"
+[ -f /root/custom_test.txt ] && echo -e "${YELLOW}/root/custom_test.txt:  ${GREEN}присутствует${NC}"; echo -e "${YELLOW}Тест пройден:${NC} ${STATUS_V} | ${STATUS_FLOW} | ${STATUS_DOMAIN} | ${STATUS_CUSTOM}\n\n${CYAN}1) ${GREEN}Тестировать стратегии ${NC}v\n${CYAN}2) ${GREEN}Тестировать стратегии ${NC}Flowseal\n${CYAN}3) ${GREEN}Тестировать ${NC}v${GREEN} и ${NC}Flowseal${GREEN} стратегии${NC}"
 echo -e "${CYAN}4) ${GREEN}Тестировать ${NC}текущую${GREEN} стратегию ${NC}\n${CYAN}5) ${GREEN}Тестировать стратегии ${NC}по домену${NC}\n${CYAN}6) ${GREEN}Тестировать стратегии для ${NC}YouTube\n${CYAN}7) ${GREEN}Тестировать стратегии из ${NC}/root/custom_test.txt"
 if [ -s "$RES_DOMAIN" ]; then echo -e "${CYAN}8) ${GREEN}Результаты тестирования ${NC}по домену"; fi; if [ -s "$RES1" ] || [ -s "$RES2" ] || [ -s "$RES3" ]; then echo -e "${CYAN}9) ${GREEN}Результаты тестирования стратегий${NC}"; fi
 if [ -s "$RES_CUSTOM" ]; then echo -e "${CYAN}0) ${GREEN}Результаты тестирования ${NC}Custom${GREEN} стратегий${NC}"; fi
