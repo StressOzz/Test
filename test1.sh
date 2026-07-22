@@ -100,7 +100,7 @@ echo 'sh <(wget -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/
 # git="githubusercontent.com"; if ! grep -q "raw.$git" /etc/hosts; then echo -e "\n\033[1;36mДля корректной работы скрипта добавляем домены \033[0mGitHub\033[1;36m в \033[0m/etc/hosts\033[0m"
 # printf "#$git\n185.199.109.133 raw.$git release-assets.$git\n185.199.108.133 private-user-images.$git gist.$git avatars.$git\n" >> /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1; fi
 
-for f in ACTIVE_GAME_UDP.bin ACTIVE_DISCORD_UDP.bin stun2.bin quic_initial_tencent_com.bin quic_initial_steamcommunity_com.bin quic_initial_dbankcloud_ru.bin quic_initial_4pda.to.bin; do [ -d /opt/zapret ] && [ ! -f "/opt/zapret/files/fake/$f" ] && { echo -e "${CYAN}Скачиваем ${NC}$f"; wget -q -U "Mozilla/5.0" -O "/opt/zapret/files/fake/$f" "https://github.com/Flowseal/zapret-discord-youtube/raw/refs/heads/main/bin/$f" || { echo -e "\n${RED}Не удалось загрузить файл ${NC}$f\n"; }; }; done
+for f in stun2.bin quic_initial_tencent_com.bin quic_initial_steamcommunity_com.bin quic_initial_dbankcloud_ru.bin quic_initial_4pda.to.bin; do [ -d /opt/zapret ] && [ ! -f "/opt/zapret/files/fake/$f" ] && { echo -e "${CYAN}Скачиваем ${NC}$f"; wget -q -U "Mozilla/5.0" -O "/opt/zapret/files/fake/$f" "https://github.com/Flowseal/zapret-discord-youtube/raw/refs/heads/main/bin/$f" || { echo -e "\n${RED}Не удалось загрузить файл ${NC}$f\n"; }; }; done
 
 
 # ==========================================
@@ -122,7 +122,7 @@ echo -e "${CYAN}Скачиваем архив ${NC}$FILE_NAME"; wget -q -U "Mozi
 unzip -o "$FILE_NAME" >/dev/null; if [ "$PKG_IS_APK" -eq 1 ]; then PKG_PATH="$TMP_SF/apk"; for PKG in "$PKG_PATH"/zapret*; do [ -f "$PKG" ] || continue; echo "$PKG" | grep -q "luci" && continue; install_pkg "$(basename "$PKG")" "$PKG" || return; done
 for PKG in "$PKG_PATH"/luci*; do [ -f "$PKG" ] || continue; install_pkg "$(basename "$PKG")" "$PKG" || return; done; else PKG_PATH="$TMP_SF"; for PKG in "$PKG_PATH"/zapret_*.ipk; do [ -f "$PKG" ] || continue; install_pkg "$(basename "$PKG")" "$PKG" || return; done
 for PKG in "$PKG_PATH"/luci-app-zapret_*.ipk; do [ -f "$PKG" ] || continue; install_pkg "$(basename "$PKG")" "$PKG" || return; done; fi; 
-for f in ACTIVE_GAME_UDP.bin ACTIVE_DISCORD_UDP.bin stun2.bin quic_initial_tencent_com.bin quic_initial_steamcommunity_com.bin quic_initial_dbankcloud_ru.bin quic_initial_4pda.to.bin; do [ -d /opt/zapret ] && { echo -e "${CYAN}Скачиваем ${NC}$f"; wget -q -U "Mozilla/5.0" -O "/opt/zapret/files/fake/$f" "https://github.com/Flowseal/zapret-discord-youtube/raw/refs/heads/main/bin/$f" || { echo -e "\n${RED}Не удалось загрузить файл ${NC}$f\n"; }; }; done
+for f in stun2.bin quic_initial_tencent_com.bin quic_initial_steamcommunity_com.bin quic_initial_dbankcloud_ru.bin quic_initial_4pda.to.bin; do [ -d /opt/zapret ] && { echo -e "${CYAN}Скачиваем ${NC}$f"; wget -q -U "Mozilla/5.0" -O "/opt/zapret/files/fake/$f" "https://github.com/Flowseal/zapret-discord-youtube/raw/refs/heads/main/bin/$f" || { echo -e "\n${RED}Не удалось загрузить файл ${NC}$f\n"; }; }; done
 echo -e "${CYAN}Удаляем временные файлы${NC}"; cd /; rm -rf "$TMP_SF" /tmp/*.ipk /tmp/*.zip /tmp/*zapret* 2>/dev/null; echo -e "Zapret ${GREEN}установлен!${NC}\n"; [ "$NO_PAUSE" != "1" ] && PAUSE; }
 # ==========================================
 # Меню настройки Discord
@@ -145,8 +145,10 @@ Dv15=$'--filter-tcp=2053,2083,2087,2096,8443\n--hostlist-domains=discord.media\n
 Dv16=$'--filter-tcp=2053,2083,2087,2096,8443\n--hostlist-domains=discord.media\n--dpi-desync=fake,hostfakesplit\n--dpi-desync-fake-tls-mod=rnd,dupsid,sni=www.google.com\n--dpi-desync-hostfakesplit-mod=host=www.google.com,altorder=1\n--dpi-desync-fooling=ts'
 Dv17=$'--filter-tcp=2053,2083,2087,2096,8443\n--hostlist-domains=discord.media\n--dpi-desync=hostfakesplit\n--dpi-desync-repeats=4\n--dpi-desync-fooling=ts\n--dpi-desync-hostfakesplit-mod=host=www.google.com'
 DIC_FAKE() { if ! grep -q -- "--filter-l7=discord,stun" "$CONF" || ! grep -q -- "--dpi-desync-fake-discord=" "$CONF"; then echo -e "\n${RED}Блок ${NC}discord,stun${RED} не найден!${NC}\n"; PAUSE; return; fi; FAKE_DIC=$(grep -m1 -- '--dpi-desync-fake-discord=' "$CONF" | sed 's|.*fake/||'); stat_f() { [ "$FAKE_DIC" = "$1" ] && echo "${GREEN}(используется)${NC}"; }
-echo -e "\n${MAGENTA}Выберите fake для discord,stun${NC}\n${CYAN}1) ${GREEN}Сменить на ${NC}stun.bin $(stat_f stun.bin)\n${CYAN}2) ${GREEN}Сменить на ${NC}quic_initial_www_google_com.bin $(stat_f quic_initial_www_google_com.bin)\n${CYAN}3) ${GREEN}Сменить на ${NC}quic_initial_dbankcloud_ru.bin $(stat_f quic_initial_dbankcloud_ru.bin)\n${CYAN}Enter) ${GREEN}Выход в меню настройки Discord${NC}"
-echo -ne "\n${YELLOW}Выберите пункт:${NC} "; read -r choiceF; case "$choiceF" in 1) new_fileD="stun.bin" ;; 2) new_fileD="quic_initial_www_google_com.bin" ;; 3) new_fileD="quic_initial_dbankcloud_ru.bin" ;; *) return ;; esac; echo -e "\n${CYAN}Устанавливаем fake${NC} ${new_fileD}"
+echo -e "\n${MAGENTA}Выберите fake для discord,stun${NC}\n${CYAN}1) ${GREEN}Сменить на ${NC}stun.bin $(stat_f stun.bin)\n${CYAN}2) ${GREEN}Сменить на ${NC}stun2.bin $(stat_f stun.bin)\n${CYAN}3) ${GREEN}Сменить на ${NC}quic_initial_www_google_com.bin $(stat_f quic_initial_www_google_com.bin)\n${CYAN}4) ${GREEN}Сменить на ${NC}quic_initial_dbankcloud_ru.bin $(stat_f quic_initial_dbankcloud_ru.bin)"
+echo -e "${CYAN}5) ${GREEN}Сменить на ${NC}quic_initial_steamcommunity_com.bin $(stat_f quic_initial_steamcommunity_com.bin)\n${CYAN}6) ${GREEN}Сменить на ${NC}quic_initial_tencent_com.bin $(stat_f quic_initial_tencent_com.bin)\n${CYAN}Enter) ${GREEN}Выход в меню настройки Discord${NC}"
+echo -ne "\n${YELLOW}Выберите пункт:${NC} "; read -r choiceF; case "$choiceF" in 1) new_fileD="stun.bin";; 2) new_fileD="stun2.bin";; 3) new_fileD="quic_initial_www_google_com.bin";; 4) new_fileD="quic_initial_dbankcloud_ru.bin";; 
+5) new_fileD="quic_initial_steamcommunity_com.bin";; 6) new_fileD="quic_initial_tencent_com.bin";; *) return;; esac; echo -e "\n${CYAN}Устанавливаем fake${NC} ${new_fileD}"
 awk -v new="$new_fileD" 'BEGIN {blk=0} /^.*--filter-l7=discord,stun/ {blk=1} blk && /^.*--filter-l7=/ && $0 !~ /--filter-l7=discord,stun/ {blk=0} blk && $0 ~ "--dpi-desync-fake-discord=/opt/zapret/files/fake/" { sub(/\/opt\/zapret\/files\/fake\/[^ ]+/, "/opt/zapret/files/fake/" new) } blk && $0 ~ "--dpi-desync-fake-stun=/opt/zapret/files/fake/" { sub(/\/opt\/zapret\/files\/fake\/[^ ]+/, "/opt/zapret/files/fake/" new) } {print}' \
 "$CONF" > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"; ZAPRET_RESTART; echo -e "fake ${GREEN}изменён на ${NC}${new_fileD}${GREEN}!${NC}\n"; PAUSE; }
 select_Dv() { DVS=$(set | grep -E '^Dv[0-9]+=' | sed 's/=.*//' | sort -V); COUNT_dv=$(echo "$DVS" | wc -l); echo; echo -en "${YELLOW}Введите версию стратегии для discord.media (${NC}1-$COUNT_dv${YELLOW}):${NC} "; read CHOICE_DV </dev/tty
@@ -181,8 +183,9 @@ strategy_TCP_common() { printf "%s\n" "--new" "--filter-tcp=$PORTS_TCP" "--dpi-d
 strategy_Gv1() { printf "%s\n" "#Gv1" "--new" "--filter-udp=$PORTS_UDP" "--dpi-desync=fake" "--dpi-desync-cutoff=d2" "--dpi-desync-any-protocol=1" "--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/stun.bin"; }
 strategy_Gv() { local N="$1"; printf "%s\n" "#Gv$N" "--new" "--filter-udp=$PORTS_UDP" "--dpi-desync=fake" "--dpi-desync-repeats=10" "--dpi-desync-any-protocol=1" "--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/stun.bin" "--dpi-desync-cutoff=n$N"; }
 GV_FAKE() { if ! grep -q "^#Gv" "$CONF" || ! grep -q -- "--dpi-desync-fake-unknown-udp=" "$CONF"; then echo -e "\n${RED}Блок ${NC}Gv${RED} не найден!${NC}\n"; PAUSE; return; fi; CURRENT_FAKE=$(grep -m1 -- '--dpi-desync-fake-unknown-udp=' "$CONF" | sed 's|.*fake/||'); gv_fake() { [ "$CURRENT_FAKE" = "$1" ] && echo "${GREEN}(используется)${NC}"; }
-echo -e "\n${MAGENTA}Выберите fake для игровой стратегии${NC}\n${CYAN}1) ${GREEN}Сменить на ${NC}stun.bin $(gv_fake stun.bin)\n${CYAN}2) ${GREEN}Сменить на ${NC}quic_initial_4pda.to.bin $(gv_fake quic_initial_4pda.to.bin)\n${CYAN}3) ${GREEN}Сменить на ${NC}quic_initial_dbankcloud_ru.bin $(gv_fake quic_initial_dbankcloud_ru.bin)\n${CYAN}Enter) ${GREEN}Выход в меню стратегий${NC}"
-echo -ne "\n${YELLOW}Выберите пункт:${NC} "; read -r choiceF; case "$choiceF" in 1) new_file="stun.bin" ;; 2) new_file="quic_initial_4pda.to.bin" ;; 3) new_file="quic_initial_dbankcloud_ru.bin" ;; *) return ;; esac; echo -e "\n${CYAN}Устанавливаем fake${NC} ${new_file}"
+echo -e "\n${MAGENTA}Выберите fake для игровой стратегии${NC}\n${CYAN}1) ${GREEN}Сменить на ${NC}stun.bin $(gv_fake stun.bin)\n${CYAN}2) ${GREEN}Сменить на ${NC}stun2.bin $(gv_fake stun2.bin)\n${CYAN}3) ${GREEN}Сменить на ${NC}quic_initial_4pda.to.bin $(gv_fake quic_initial_4pda.to.bin)\n${CYAN}4) ${GREEN}Сменить на ${NC}quic_initial_dbankcloud_ru.bin $(gv_fake quic_initial_dbankcloud_ru.bin)"
+echo -e "${CYAN}5) ${GREEN}Сменить на ${NC}quic_initial_steamcommunity_com.bin $(gv_fake quic_initial_steamcommunity_com.bin)\n${CYAN}6) ${GREEN}Сменить на ${NC}quic_initial_tencent_com.bin $(gv_fake quic_initial_tencent_com.bin)\n${CYAN}Enter) ${GREEN}Выход в меню стратегий${NC}"; echo -ne "\n${YELLOW}Выберите пункт:${NC} "
+read -r choiceF; case "$choiceF" in 1) new_file="stun.bin";; 2) new_file="stun2.bin";; 3) new_file="quic_initial_4pda.to.bin";; 4) new_file="quic_initial_dbankcloud_ru.bin";; 1) new_file="quic_initial_steamcommunity_com.bin";; 1) new_file="quic_initial_tencent_com.bin";; *) return;; esac; echo -e "\n${CYAN}Устанавливаем fake${NC} ${new_file}"
 awk -v new="$new_file" 'BEGIN{gv=0} /^#Gv/{gv=1} gv && /^--dpi-desync-fake-unknown-udp=/{sub(/\/opt\/zapret\/files\/fake\/[^ ]+/, "/opt/zapret/files/fake/" new); gv=0} {print}' "$CONF" > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"; ZAPRET_RESTART; echo -e "fake ${GREEN}изменён на ${NC}${new_file}${GREEN}!${NC}\n"; PAUSE; }
 fix_GAME() { local NO_PAUSE=$1; [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }; local CURRENT_GAME=""; for i in 1 2 3 4; do grep -q "^#Gv$i" "$CONF" && CURRENT_GAME="Gv$i"; done
 if [ -n "$NO_PAUSE" ]; then GAME_CHOICE="$NO_PAUSE"; else echo -e "\n${MAGENTA}Меню управления стратегией для игр${NC}"; for i in $(seq 1 4); do if [ "$CURRENT_GAME" = "Gv$i" ]; then echo -e "${CYAN}$i) ${GREEN}Удалить ${NC}Gv$i"; else echo -e "${CYAN}$i) ${GREEN}Установить ${NC}Gv$i"; fi; done
@@ -203,8 +206,7 @@ hosts_add "$ALL_BLOCKS"; echo -e "${GREEN}Домены добавлены в ${N
 # ==========================================
 delete_backup() { if [ -d "$BACKUP_DIR" ]; then rm -rf "$BACKUP_DIR"; echo -e "\n${GREEN}Резервная копия удалена!${NC}\n"; else echo -e "\n${RED}Резервная копия не найдена!${NC}\n"; fi; PAUSE; }
 save_backup() { [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }; rm -rf "$BACKUP_DIR"; mkdir -p "$BACKUP_DIR"; tar -czf "$BACKUP_DIR/zapret.tar.gz" -C /opt zapret 2>/dev/null
-cp -p $CONF "$BACKUP_DIR/"; printf '%s / %s\n' "$(date '+%d.%m.%y')" "$(du -sh /opt/zapret_backup 2>/dev/null | cut -f1 | sed -E 's/\.0K$/K/;s/K$/ КБ/;s/M$/ МБ/')" > "$DATE_FILE"
-echo -e "\n${GREEN}Резервная копия настроек сохранена в${NC} $BACKUP_DIR\n"; PAUSE; }
+cp -p $CONF "$BACKUP_DIR/"; printf '%s / %s\n' "$(date '+%d.%m.%y')" "$(du -sh /opt/zapret_backup 2>/dev/null | cut -f1 | sed -E 's/\.0K$/K/;s/K$/ КБ/;s/M$/ МБ/')" > "$DATE_FILE"; echo -e "\n${GREEN}Резервная копия настроек сохранена в${NC} $BACKUP_DIR\n"; PAUSE; }
 restore_backup() { [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }; [ ! -f "$BACKUP_DIR/zapret.tar.gz" ] && { echo -e "\n${RED}Резервная копия не найдена!${NC}\n"; PAUSE; return; }
 echo -e "\n${MAGENTA}Восстанавливаем настройки из резервной копии${NC}"; /etc/init.d/zapret stop >/dev/null 2>&1; rm -rf /opt/zapret; rm -f $CONF; mkdir -p /opt; tar -xzf "$BACKUP_DIR/zapret.tar.gz" -C /opt 2>/dev/null
 [ -f "$BACKUP_DIR/zapret" ] && cp -p "$BACKUP_DIR/zapret" $CONF; echo -e "${CYAN}Применяем настройки${NC}"; ZAPRET_RESTART; echo -e "${GREEN}Настройки восстановлены из резервной копии!${NC}\n"; PAUSE; }
@@ -319,8 +321,9 @@ sed -i 's|"%BIN%stun2.bin"|/opt/zapret/files/fake/stun2.bin|g' "$OUT"
 sed -i 's|"%BIN%quic_initial_tencent_com.bin"|/opt/zapret/files/fake/quic_initial_tencent_com.bin|g' "$OUT"
 sed -i 's|"%BIN%quic_initial_steamcommunity_com.bin"|/opt/zapret/files/fake/quic_initial_steamcommunity_com.bin|g' "$OUT"
 sed -i 's|"%BIN%quic_initial_4pda.to.bin"|/opt/zapret/files/fake/quic_initial_4pda.to.bin|g' "$OUT"
-sed -i 's|"%BIN%ACTIVE_DISCORD_UDP.bin"|/opt/zapret/files/fake/ACTIVE_DISCORD_UDP.bin|g' "$OUT"
-sed -i 's|"%BIN%ACTIVE_GAME_UDP.bin"|/opt/zapret/files/fake/ACTIVE_GAME_UDP.bin|g' "$OUT"
+
+sed -i 's|"%BIN%ACTIVE_DISCORD_UDP.bin"|/opt/zapret/files/fake/quic_initial_steamcommunity_com.bin|g' "$OUT"
+sed -i 's|"%BIN%ACTIVE_GAME_UDP.bin"|/opt/zapret/files/fake/quic_initial_dbankcloud_ru.bin|g' "$OUT"
 
 
 sed -i 's|"%BIN%tls_clienthello_max_ru.bin"|/opt/zapret/files/fake/tls_clienthello_www_onetrust_com.bin|g' "$OUT"
@@ -330,7 +333,7 @@ sed -i 's|\^!|/opt/zapret/files/fake/tls_clienthello_www_google_com.bin|g' "$OUT
 sed -i 's/[[:space:]]\+$//g' "$OUT"
 sed -i '/^--new$/ { N; /^\--new\n$/d; }' "$OUT"; rm -rf "$TMP_SF/zapret-discord-youtube-main" "$ZIP"
 
-for f in ACTIVE_GAME_UDP.bin ACTIVE_DISCORD_UDP.bin stun2.bin quic_initial_tencent_com.bin quic_initial_steamcommunity_com.bin quic_initial_dbankcloud_ru.bin quic_initial_4pda.to.bin; do [ -d /opt/zapret ] && { echo -e "${CYAN}Скачиваем ${NC}$f"; wget -q -U "Mozilla/5.0" -O "/opt/zapret/files/fake/$f" "https://github.com/Flowseal/zapret-discord-youtube/raw/refs/heads/main/bin/$f" || { echo -e "\n${RED}Не удалось загрузить файл ${NC}$f\n"; }; }; done
+for f in stun2.bin quic_initial_tencent_com.bin quic_initial_steamcommunity_com.bin quic_initial_dbankcloud_ru.bin quic_initial_4pda.to.bin; do [ -d /opt/zapret ] && { echo -e "${CYAN}Скачиваем ${NC}$f"; wget -q -U "Mozilla/5.0" -O "/opt/zapret/files/fake/$f" "https://github.com/Flowseal/zapret-discord-youtube/raw/refs/heads/main/bin/$f" || { echo -e "\n${RED}Не удалось загрузить файл ${NC}$f\n"; }; }; done
 
 [ "$NO_PAUSE" != "1" ] && echo -e "${GREEN}Стратегии сформированы!${NC}\n"; [ "$NO_PAUSE" != "1" ] && PAUSE; }
 # ==========================================
