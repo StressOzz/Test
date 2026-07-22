@@ -100,8 +100,7 @@ echo 'sh <(wget -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/
 # git="githubusercontent.com"; if ! grep -q "raw.$git" /etc/hosts; then echo -e "\n\033[1;36mДля корректной работы скрипта добавляем домены \033[0mGitHub\033[1;36m в \033[0m/etc/hosts\033[0m"
 # printf "#$git\n185.199.109.133 raw.$git release-assets.$git\n185.199.108.133 private-user-images.$git gist.$git avatars.$git\n" >> /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1; fi
 
-for f in stun2.bin quic_initial_tencent_com.bin quic_initial_steamcommunity_com.bin quic_initial_dbankcloud_ru.bin quic_initial_4pda.to.bin; do [ -d /opt/zapret ] && [ ! -f "/opt/zapret/files/fake/$f" ] && { echo -e "${CYAN}Скачиваем ${NC}$f"; wget -q -U "Mozilla/5.0" -O "/opt/zapret/files/fake/$f" "https://github.com/Flowseal/zapret-discord-youtube/raw/refs/heads/main/bin/$f" || { echo -e "\n${RED}Не удалось загрузить файл ${NC}$f\n"; }; }; done
-
+MSG=0; for f in stun2.bin quic_initial_tencent_com.bin quic_initial_steamcommunity_com.bin quic_initial_dbankcloud_ru.bin quic_initial_4pda.to.bin; do [ -d /opt/zapret ] && [ ! -f "/opt/zapret/files/fake/$f" ] && { [ "$MSG" = 0 ] && { echo -e "${CYAN}Скачиваем ${NC}fake ${CYAN}файлы${NC}"; MSG=1; }; wget -q -U "Mozilla/5.0" -O "/opt/zapret/files/fake/$f" "https://github.com/Flowseal/zapret-discord-youtube/raw/refs/heads/main/bin/$f" || { echo -e "\n${RED}Не удалось загрузить файл ${NC}$f\n"; }; }; done
 
 # ==========================================
 # Получение версии
@@ -122,7 +121,7 @@ echo -e "${CYAN}Скачиваем архив ${NC}$FILE_NAME"; wget -q -U "Mozi
 unzip -o "$FILE_NAME" >/dev/null; if [ "$PKG_IS_APK" -eq 1 ]; then PKG_PATH="$TMP_SF/apk"; for PKG in "$PKG_PATH"/zapret*; do [ -f "$PKG" ] || continue; echo "$PKG" | grep -q "luci" && continue; install_pkg "$(basename "$PKG")" "$PKG" || return; done
 for PKG in "$PKG_PATH"/luci*; do [ -f "$PKG" ] || continue; install_pkg "$(basename "$PKG")" "$PKG" || return; done; else PKG_PATH="$TMP_SF"; for PKG in "$PKG_PATH"/zapret_*.ipk; do [ -f "$PKG" ] || continue; install_pkg "$(basename "$PKG")" "$PKG" || return; done
 for PKG in "$PKG_PATH"/luci-app-zapret_*.ipk; do [ -f "$PKG" ] || continue; install_pkg "$(basename "$PKG")" "$PKG" || return; done; fi; 
-for f in stun2.bin quic_initial_tencent_com.bin quic_initial_steamcommunity_com.bin quic_initial_dbankcloud_ru.bin quic_initial_4pda.to.bin; do [ -d /opt/zapret ] && { echo -e "${CYAN}Скачиваем ${NC}$f"; wget -q -U "Mozilla/5.0" -O "/opt/zapret/files/fake/$f" "https://github.com/Flowseal/zapret-discord-youtube/raw/refs/heads/main/bin/$f" || { echo -e "\n${RED}Не удалось загрузить файл ${NC}$f\n"; }; }; done
+MSG=0; for f in stun2.bin quic_initial_tencent_com.bin quic_initial_steamcommunity_com.bin quic_initial_dbankcloud_ru.bin quic_initial_4pda.to.bin; do [ -d /opt/zapret ] && [ ! -f "/opt/zapret/files/fake/$f" ] && { [ "$MSG" = 0 ] && { echo -e "${CYAN}Скачиваем ${NC}fake ${CYAN}файлы${NC}"; MSG=1; }; wget -q -U "Mozilla/5.0" -O "/opt/zapret/files/fake/$f" "https://github.com/Flowseal/zapret-discord-youtube/raw/refs/heads/main/bin/$f" || { echo -e "\n${RED}Не удалось загрузить файл ${NC}$f\n"; }; }; done
 echo -e "${CYAN}Удаляем временные файлы${NC}"; cd /; rm -rf "$TMP_SF" /tmp/*.ipk /tmp/*.zip /tmp/*zapret* 2>/dev/null; echo -e "Zapret ${GREEN}установлен!${NC}\n"; [ "$NO_PAUSE" != "1" ] && PAUSE; }
 # ==========================================
 # Меню настройки Discord
@@ -309,8 +308,8 @@ sed -i 's|"%BIN%quic_initial_www_google_com.bin"|/opt/zapret/files/fake/quic_ini
 sed -i 's|"%BIN%quic_initial_steamcommunity_com.bin"|/opt/zapret/files/fake/quic_initial_steamcommunity_com.bin|g' "$OUT"; sed -i 's|"%BIN%quic_initial_4pda.to.bin"|/opt/zapret/files/fake/quic_initial_4pda.to.bin|g' "$OUT"
 sed -i 's|"%BIN%ACTIVE_DISCORD_UDP.bin"|/opt/zapret/files/fake/quic_initial_steamcommunity_com.bin|g' "$OUT"; sed -i 's|"%BIN%ACTIVE_GAME_UDP.bin"|/opt/zapret/files/fake/quic_initial_dbankcloud_ru.bin|g' "$OUT"
 sed -i 's|"%BIN%tls_clienthello_max_ru.bin"|/opt/zapret/files/fake/tls_clienthello_www_onetrust_com.bin|g' "$OUT"; sed -i 's|\^!|/opt/zapret/files/fake/tls_clienthello_www_google_com.bin|g' "$OUT"; sed -i 's/[[:space:]]\+$//g' "$OUT"; sed -i '/^--new$/ { N; /^\--new\n$/d; }' "$OUT"; rm -rf "$TMP_SF/zapret-discord-youtube-main" "$ZIP";
-for f in stun2.bin quic_initial_tencent_com.bin quic_initial_steamcommunity_com.bin quic_initial_dbankcloud_ru.bin quic_initial_4pda.to.bin; do [ -d /opt/zapret ] && { echo -e "${CYAN}Скачиваем ${NC}$f"
-wget -q -U "Mozilla/5.0" -O "/opt/zapret/files/fake/$f" "https://github.com/Flowseal/zapret-discord-youtube/raw/refs/heads/main/bin/$f" || { echo -e "\n${RED}Не удалось загрузить файл ${NC}$f\n"; }; }; done; [ "$NO_PAUSE" != "1" ] && echo -e "${GREEN}Стратегии сформированы!${NC}\n"; [ "$NO_PAUSE" != "1" ] && PAUSE; }
+MSG=0; for f in stun2.bin quic_initial_tencent_com.bin quic_initial_steamcommunity_com.bin quic_initial_dbankcloud_ru.bin quic_initial_4pda.to.bin; do [ -d /opt/zapret ] && [ ! -f "/opt/zapret/files/fake/$f" ] && { [ "$MSG" = 0 ] && { echo -e "${CYAN}Скачиваем ${NC}fake ${CYAN}файлы${NC}"; MSG=1; }; wget -q -U "Mozilla/5.0" -O "/opt/zapret/files/fake/$f" "https://github.com/Flowseal/zapret-discord-youtube/raw/refs/heads/main/bin/$f" || { echo -e "\n${RED}Не удалось загрузить файл ${NC}$f\n"; }; }; done
+[ "$NO_PAUSE" != "1" ] && echo -e "${GREEN}Стратегии сформированы!${NC}\n"; [ "$NO_PAUSE" != "1" ] && PAUSE; }
 # ==========================================
 # Меню стратегий
 # ==========================================
