@@ -189,7 +189,7 @@ read -r choiceF; case "$choiceF" in 1) new_file="stun.bin";; 2) new_file="stun2.
 awk -v new="$new_file" 'BEGIN{gv=0} /^#Gv/{gv=1} gv && /^--dpi-desync-fake-unknown-udp=/{sub(/\/opt\/zapret\/files\/fake\/[^ ]+/, "/opt/zapret/files/fake/" new); gv=0} {print}' "$CONF" > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"; ZAPRET_RESTART; echo -e "fake ${GREEN}изменён на ${NC}${new_file}${GREEN}!${NC}\n"; PAUSE; }
 fix_GAME() { local NO_PAUSE=$1; [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }; local CURRENT_GAME=""; for i in 1 2 3 4; do grep -q "^#Gv$i" "$CONF" && CURRENT_GAME="Gv$i"; done
 if [ -n "$NO_PAUSE" ]; then GAME_CHOICE="$NO_PAUSE"; else echo -e "\n${MAGENTA}Меню управления стратегией для игр${NC}"; for i in $(seq 1 4); do if [ "$CURRENT_GAME" = "Gv$i" ]; then echo -e "${CYAN}$i) ${GREEN}Удалить ${NC}Gv$i"; else echo -e "${CYAN}$i) ${GREEN}Установить ${NC}Gv$i"; fi; done
-echo -e "${CYAN}5) ${GREEN}Выбрать и сменить ${NC}fake\n${CYAN}Enter) ${GREEN}Выход в меню стратегий"; echo -en "\n${YELLOW}Выберите пункт: ${NC}"; read GAME_CHOICE; fi; if [ "$GAME_CHOICE" = "5" ]; then GV_FAKE; return; fi; case "$GAME_CHOICE" in 1|2|3|4) ;; *) return;; esac; LAST_QUOTE=$(grep -n "^'\$" "$CONF" | tail -n1 | cut -d: -f1)
+echo -e "${CYAN}5) ${GREEN}Выбрать и сменить ${NC}fake${GREEN} для игровой стратегии\n${CYAN}Enter) ${GREEN}Выход в меню стратегий"; echo -en "\n${YELLOW}Выберите пункт: ${NC}"; read GAME_CHOICE; fi; if [ "$GAME_CHOICE" = "5" ]; then GV_FAKE; return; fi; case "$GAME_CHOICE" in 1|2|3|4) ;; *) return;; esac; LAST_QUOTE=$(grep -n "^'\$" "$CONF" | tail -n1 | cut -d: -f1)
 if grep -q "^#Gv" "$CONF"; then Gv_LINE=$(grep -n "^#Gv" "$CONF" | tail -n1 | cut -d: -f1); sed -i "${Gv_LINE},${LAST_QUOTE}d" "$CONF"; elif [ -n "$LAST_QUOTE" ]; then sed -i "${LAST_QUOTE},\$d" "$CONF"; fi
 if [ "$CURRENT_GAME" = "Gv$GAME_CHOICE" ]; then remove_ports_if_present NFQWS_PORTS_UDP "$PORTS_UDP"; remove_ports_if_present NFQWS_PORTS_TCP "$PORTS_TCP"; echo "'" >> "$CONF"; echo -e "\n${CYAN}Удаляем стратегию для игр ${NC}"; ZAPRET_RESTART
 echo -e "${GREEN}Стратегия для игр удалена!${NC}\n"; [ -z "$NO_PAUSE" ] && PAUSE; return; fi; if [ "$GAME_CHOICE" -eq 1 ]; then STRATEGY="$(strategy_Gv1; strategy_TCP_common)"; else STRATEGY="$(strategy_Gv "$GAME_CHOICE"; strategy_TCP_common)"; fi
@@ -301,41 +301,16 @@ if ! command -v unzip >/dev/null 2>&1; then echo -e "${CYAN}Устанавлив
 unzip -oq "$ZIP" -d "$TMP_SF" || { echo -e "\n${RED}Не удалось распоковать файл${NC}\n"; PAUSE; return; }; BASE="$TMP_SF/zapret-discord-youtube-main";
 find "$BASE" -type f -name 'general*.bat' ! -name 'general (ALT5).bat' | while read -r F; do MATCH=$(grep -E '^--filter-udp=19294-19344,50000-50100|^--filter-tcp=2053,2083,2087,2096,8443|^--filter-tcp=443 --hostlist="%LISTS%list-google.txt"|^--filter-tcp=80,443 --hostlist="%LISTS%list-general.txt"' "$F")
 [ -z "$MATCH" ] && continue; NAME=$(basename "$F" .bat); { echo "#$NAME"; echo "$MATCH" | sed 's/--/\n--/g' | sed '/^$/d' | sed 's/[[:space:]]*$//'; echo; } >> "$OUT"; done
-
-sed -i 's|"%BIN%tls_clienthello_www_google_com.bin"|/opt/zapret/files/fake/tls_clienthello_www_google_com.bin|g' "$OUT"
-sed -i '/--hostlist="%LISTS%list-general.txt"/d' "$OUT"
-sed -i '/--hostlist="%LISTS%list-general-user.txt"/d' "$OUT"
-sed -i '/--ipset-exclude="%LISTS%ipset-exclude.txt"/d' "$OUT"
-sed -i '/--ipset-exclude="%LISTS%ipset-exclude-user.txt"/d' "$OUT"
-sed -i '/--hostlist-exclude="%LISTS%list-exclude-user.txt"/d' "$OUT"
-sed -i 's|"%LISTS%list-exclude.txt"|/opt/zapret/ipset/zapret-hosts-user-exclude.txt|g' "$OUT"
-sed -i 's/--new[[:space:]]\^/--new/g' "$OUT"
-sed -i 's|"%LISTS%list-google.txt"|/opt/zapret/ipset/zapret-hosts-google.txt|g' "$OUT"
-sed -i 's|"%BIN%quic_initial_dbankcloud_ru.bin"|/opt/zapret/files/fake/quic_initial_dbankcloud_ru.bin|g' "$OUT"
-sed -i 's|"%BIN%stun.bin"|/opt/zapret/files/fake/stun.bin|g' "$OUT"
-sed -i 's|"%BIN%tls_clienthello_4pda_to.bin"|/opt/zapret/files/fake/4pda.bin|g' "$OUT"
-sed -i 's|"%BIN%quic_initial_www_google_com.bin"|/opt/zapret/files/fake/quic_initial_www_google_com.bin|g' "$OUT"
-
-
-sed -i 's|"%BIN%stun2.bin"|/opt/zapret/files/fake/stun2.bin|g' "$OUT"
-sed -i 's|"%BIN%quic_initial_tencent_com.bin"|/opt/zapret/files/fake/quic_initial_tencent_com.bin|g' "$OUT"
-sed -i 's|"%BIN%quic_initial_steamcommunity_com.bin"|/opt/zapret/files/fake/quic_initial_steamcommunity_com.bin|g' "$OUT"
-sed -i 's|"%BIN%quic_initial_4pda.to.bin"|/opt/zapret/files/fake/quic_initial_4pda.to.bin|g' "$OUT"
-
-sed -i 's|"%BIN%ACTIVE_DISCORD_UDP.bin"|/opt/zapret/files/fake/quic_initial_steamcommunity_com.bin|g' "$OUT"
-sed -i 's|"%BIN%ACTIVE_GAME_UDP.bin"|/opt/zapret/files/fake/quic_initial_dbankcloud_ru.bin|g' "$OUT"
-
-
-sed -i 's|"%BIN%tls_clienthello_max_ru.bin"|/opt/zapret/files/fake/tls_clienthello_www_onetrust_com.bin|g' "$OUT"
-
-sed -i 's|\^!|/opt/zapret/files/fake/tls_clienthello_www_google_com.bin|g' "$OUT"
-
-sed -i 's/[[:space:]]\+$//g' "$OUT"
-sed -i '/^--new$/ { N; /^\--new\n$/d; }' "$OUT"; rm -rf "$TMP_SF/zapret-discord-youtube-main" "$ZIP"
-
-for f in stun2.bin quic_initial_tencent_com.bin quic_initial_steamcommunity_com.bin quic_initial_dbankcloud_ru.bin quic_initial_4pda.to.bin; do [ -d /opt/zapret ] && { echo -e "${CYAN}Скачиваем ${NC}$f"; wget -q -U "Mozilla/5.0" -O "/opt/zapret/files/fake/$f" "https://github.com/Flowseal/zapret-discord-youtube/raw/refs/heads/main/bin/$f" || { echo -e "\n${RED}Не удалось загрузить файл ${NC}$f\n"; }; }; done
-
-[ "$NO_PAUSE" != "1" ] && echo -e "${GREEN}Стратегии сформированы!${NC}\n"; [ "$NO_PAUSE" != "1" ] && PAUSE; }
+sed -i 's|"%BIN%tls_clienthello_www_google_com.bin"|/opt/zapret/files/fake/tls_clienthello_www_google_com.bin|g' "$OUT"; sed -i '/--hostlist="%LISTS%list-general.txt"/d' "$OUT"; sed -i '/--hostlist="%LISTS%list-general-user.txt"/d' "$OUT"
+sed -i '/--ipset-exclude="%LISTS%ipset-exclude.txt"/d' "$OUT"; sed -i '/--ipset-exclude="%LISTS%ipset-exclude-user.txt"/d' "$OUT"; sed -i '/--hostlist-exclude="%LISTS%list-exclude-user.txt"/d' "$OUT"
+sed -i 's|"%LISTS%list-exclude.txt"|/opt/zapret/ipset/zapret-hosts-user-exclude.txt|g' "$OUT"; sed -i 's/--new[[:space:]]\^/--new/g' "$OUT"; sed -i 's|"%LISTS%list-google.txt"|/opt/zapret/ipset/zapret-hosts-google.txt|g' "$OUT"
+sed -i 's|"%BIN%quic_initial_dbankcloud_ru.bin"|/opt/zapret/files/fake/quic_initial_dbankcloud_ru.bin|g' "$OUT"; sed -i 's|"%BIN%stun.bin"|/opt/zapret/files/fake/stun.bin|g' "$OUT"; sed -i 's|"%BIN%tls_clienthello_4pda_to.bin"|/opt/zapret/files/fake/4pda.bin|g' "$OUT"
+sed -i 's|"%BIN%quic_initial_www_google_com.bin"|/opt/zapret/files/fake/quic_initial_www_google_com.bin|g' "$OUT"; sed -i 's|"%BIN%stun2.bin"|/opt/zapret/files/fake/stun2.bin|g' "$OUT"; sed -i 's|"%BIN%quic_initial_tencent_com.bin"|/opt/zapret/files/fake/quic_initial_tencent_com.bin|g' "$OUT"
+sed -i 's|"%BIN%quic_initial_steamcommunity_com.bin"|/opt/zapret/files/fake/quic_initial_steamcommunity_com.bin|g' "$OUT"; sed -i 's|"%BIN%quic_initial_4pda.to.bin"|/opt/zapret/files/fake/quic_initial_4pda.to.bin|g' "$OUT"
+sed -i 's|"%BIN%ACTIVE_DISCORD_UDP.bin"|/opt/zapret/files/fake/quic_initial_steamcommunity_com.bin|g' "$OUT"; sed -i 's|"%BIN%ACTIVE_GAME_UDP.bin"|/opt/zapret/files/fake/quic_initial_dbankcloud_ru.bin|g' "$OUT"
+sed -i 's|"%BIN%tls_clienthello_max_ru.bin"|/opt/zapret/files/fake/tls_clienthello_www_onetrust_com.bin|g' "$OUT"; sed -i 's|\^!|/opt/zapret/files/fake/tls_clienthello_www_google_com.bin|g' "$OUT"; sed -i 's/[[:space:]]\+$//g' "$OUT"; sed -i '/^--new$/ { N; /^\--new\n$/d; }' "$OUT"; rm -rf "$TMP_SF/zapret-discord-youtube-main" "$ZIP";
+for f in stun2.bin quic_initial_tencent_com.bin quic_initial_steamcommunity_com.bin quic_initial_dbankcloud_ru.bin quic_initial_4pda.to.bin; do [ -d /opt/zapret ] && { echo -e "${CYAN}Скачиваем ${NC}$f"
+wget -q -U "Mozilla/5.0" -O "/opt/zapret/files/fake/$f" "https://github.com/Flowseal/zapret-discord-youtube/raw/refs/heads/main/bin/$f" || { echo -e "\n${RED}Не удалось загрузить файл ${NC}$f\n"; }; }; done; [ "$NO_PAUSE" != "1" ] && echo -e "${GREEN}Стратегии сформированы!${NC}\n"; [ "$NO_PAUSE" != "1" ] && PAUSE; }
 # ==========================================
 # Меню стратегий
 # ==========================================
