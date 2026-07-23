@@ -132,8 +132,6 @@ install_awg() {
         "https://raw.githubusercontent.com/Slava-Shchipunov/awg-openwrt/refs/heads/master/amneziawg-install.sh"; then
       sh "$TMP/awg-install.sh" -n -e \
         || warn "AmneziaWG: установка не удалась — WARP-туннель не поднимется без kmod."
-      apk add luci-i18n-amneziawg-ru >/dev/null 2>&1 \
-        || warn "luci-i18n-amneziawg-ru недоступен — пропускаю."
     else
       err "Не удалось скачать установщик AmneziaWG (нет WARP без него)."
     fi
