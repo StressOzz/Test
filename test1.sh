@@ -50,7 +50,7 @@ WORKER_URL="${WORKER_URL:-https://wgcli.vercel.app}"
 # what makes it reachable where plain WireGuard is DPI-blocked. 162.159.195.1 is
 # a stable anycast WARP ingress; :500 is a widely-open port.
 WARP_EP="162.159.195.1:500"
-WARP_IFACE="warp0"
+WARP_IFACE="wg0"
 TMP="$(mktemp -d /tmp/splify.XXXXXX)"
 trap 'rm -rf "$TMP"' EXIT
 
@@ -286,8 +286,9 @@ create_warp_iface() {
   uci set "network.@${_pt}[-1].persistent_keepalive=25"
 
   uci commit network
-  /etc/init.d/network restart >/dev/null 2>&1
+  /etc/init.d/network restart
   sleep 3
+  
   ifup "$WARP_IFACE" >/dev/null 2>&1 || warn "ifup $WARP_IFACE не удался — проверьте в LuCI."
 }
 
