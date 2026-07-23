@@ -49,7 +49,7 @@ WORKER_URL="${WORKER_URL:-https://wgcli.vercel.app}"
 # WARP UDP endpoint for the tunnel itself. AWG obfuscation on the handshake is
 # what makes it reachable where plain WireGuard is DPI-blocked. 162.159.195.1 is
 # a stable anycast WARP ingress; :500 is a widely-open port.
-WARP_EP="162.159.195.1:500"
+WARP_EP="engage.cloudflareclient.com:4500"
 WARP_IFACE="warp0"
 TMP="$(mktemp -d /tmp/splify.XXXXXX)"
 trap 'rm -rf "$TMP"' EXIT
