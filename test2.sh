@@ -26,7 +26,6 @@
 # falls back gracefully if that is blocked.
 #
 #   wget -O - https://raw.githubusercontent.com/xyzmean/splify/main/easyinstall.sh | sh
-set -eu
 
 REPO="xyzmean/splify"
 API="https://api.github.com/repos/$REPO/releases/latest"
@@ -50,7 +49,7 @@ WORKER_URL="${WORKER_URL:-https://wgcli.vercel.app}"
 # what makes it reachable where plain WireGuard is DPI-blocked. 162.159.195.1 is
 # a stable anycast WARP ingress; :500 is a widely-open port.
 WARP_EP="162.159.195.1:500"
-WARP_IFACE="wg0"
+WARP_IFACE=""
 TMP="$(mktemp -d /tmp/splify.XXXXXX)"
 trap 'rm -rf "$TMP"' EXIT
 
@@ -299,7 +298,7 @@ register_in_splify() {
     say "endpoint $WARP_IFACE уже зарегистрирован в splify."
   else
     say "Регистрирую $WARP_IFACE как endpoint splify (приоритет 1)…"
-    # Append via a heredoc to /etc/config/splify — same shape as the default wg0.
+    # Append via a heredoc to /etc/config/splify — same shape as the default .
     cat >>/etc/config/splify <<EOF
 
 config endpoint
