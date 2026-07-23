@@ -368,6 +368,7 @@ setup_firewall() {
 
 # ──────────────────────────── main ──────────────────────────────────────────
 install_splify
+sleep 5
 install_awg
 register_warp
 create_warp_iface
