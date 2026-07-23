@@ -368,11 +368,15 @@ setup_firewall() {
 
 # ──────────────────────────── main ──────────────────────────────────────────
 install_splify
-sleep 5
+sleep 3
 install_awg
+sleep 3
 register_warp
+sleep 3
 create_warp_iface
+sleep 3
 register_in_splify
+sleep 3
 setup_firewall
 
 say "Готово! Настроен обфусцированный WARP-туннель $WARP_IFACE + splify routing."
