@@ -378,7 +378,9 @@ sleep 3
 register_in_splify
 sleep 3
 setup_firewall
-
+sleep 3
+/etc/init.d/splify restart; /etc/init.d/splify-agent restart
+sleep 5
 say "Готово! Настроен обфусцированный WARP-туннель $WARP_IFACE + splify routing."
 printf '  • Туннель:   %s (AmneziaWG + WARP, endpoint %s)\n' "$WARP_IFACE" "$WARP_EP"
 printf '  • Адрес:     %s%s\n' "$WARP_V4" "${WARP_V6:+, $WARP_V6}"
