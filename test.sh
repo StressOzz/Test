@@ -122,20 +122,9 @@ install_splify() {
 
 # ──────────────────────────── 3. install AmneziaWG ──────────────────────────
 install_awg() {
-  if apk info -e kmod-amneziawg >/dev/null 2>&1; then
-    say "AmneziaWG (kmod) уже установлен."
-  else
-    say "AmneziaWG не найден — устанавливаю поддержку…"
-    if wget -qO "$TMP/awg-install.sh" \
-        "https://raw.githubusercontent.com/Slava-Shchipunov/awg-openwrt/refs/heads/master/amneziawg-install.sh"; then
-      sh "$TMP/awg-install.sh" -n -e \
-        || warn "AmneziaWG: установка не удалась — WARP-туннель не поднимется без kmod."
-      apk add luci-i18n-amneziawg-ru >/dev/null 2>&1 \
-        || warn "luci-i18n-amneziawg-ru недоступен — пропускаю."
-    else
-      err "Не удалось скачать установщик AmneziaWG (нет WARP без него)."
-    fi
-  fi
+
+sh <(wget -O - https://raw.githubusercontent.com/Slava-Shchipunov/awg-openwrt/refs/heads/master/amneziawg-install.sh) -en
+
   # Load the kernel module NOW. awg-install.sh installs the kmod package but
   # never calls modprobe, and OpenWrt's /etc/init.d/kmod only loads modules at
   # boot — so on a fresh install the module is on disk but not in the kernel,
@@ -144,6 +133,7 @@ install_awg() {
   # its deps into the running kernel right away; it's a no-op if already loaded,
   # so this also covers a pre-installed-but-unloaded kmod. Verified on OpenWrt
   # 25.12 (kmod-amneziawg 6.12.87): handshakes pass in the same session, no reboot.
+  
   if ! lsmod 2>/dev/null | grep -q '^amneziawg '; then
     modprobe amneziawg 2>/dev/null \
       || insmod "/lib/modules/$(uname -r)/amneziawg.ko" 2>/dev/null \
