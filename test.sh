@@ -123,7 +123,7 @@ install_splify() {
 # ──────────────────────────── 3. install AmneziaWG ──────────────────────────
 install_awg() {
 
-sh <(wget -O - https://raw.githubusercontent.com/Slava-Shchipunov/awg-openwrt/refs/heads/master/amneziawg-install.sh) -en
+wget -qO- https://raw.githubusercontent.com/Slava-Shchipunov/awg-openwrt/refs/heads/master/amneziawg-install.sh | sh -s -e -n
 
   # Load the kernel module NOW. awg-install.sh installs the kmod package but
   # never calls modprobe, and OpenWrt's /etc/init.d/kmod only loads modules at
