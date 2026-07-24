@@ -183,13 +183,15 @@ sed -i "/DISABLE_CUSTOM/s/'1'/'0'/" $CONF; ZAPRET_RESTART; [ "$NO_PAUSE" != "1" 
 # FIX GAME
 # ==========================================
 
+
 GV_XTREME_FILE="/opt/zapret/tmp/GvXtreme"
 
-GV_XTREME_TCP_PORTS="80,88,500,443,444-65535"
-GV_XTREME_UDP_PORTS="80,88,500,444-65535"
+GV_XTREME_PORTS="80,88,500,444-65535"
+GV_XTREME_TCP_OPTION_PORTS="80,88,500,443,444-65535"
 
 
 Gv_Xtreme() {
+
 	[ ! -f /etc/init.d/zapret ] && {
 		echo -e "\n${RED}Zapret не установлен!${NC}\n"
 		PAUSE
@@ -199,7 +201,10 @@ Gv_Xtreme() {
 	mkdir -p "$(dirname "$GV_XTREME_FILE")"
 
 
-	# Отключение
+	# ==========================
+	# Отключение GvXtreme
+	# ==========================
+
 	if grep -q "^#GvXtreme$" "$CONF"; then
 
 		[ ! -f "$GV_XTREME_FILE" ] && {
@@ -207,6 +212,7 @@ Gv_Xtreme() {
 			PAUSE
 			return
 		}
+
 
 		echo -e "\n${MAGENTA}Отключаем GvXtreme${NC}"
 
@@ -216,39 +222,45 @@ Gv_Xtreme() {
 		OLD_TCP=$(sed -n '3p' "$GV_XTREME_FILE")
 
 
-		# восстановление Gv блока
+		OLD_UDP_PORTS="${OLD_UDP#--filter-udp=}"
+		OLD_TCP_PORTS="${OLD_TCP#--filter-tcp=}"
+
+
+		# восстановление блока Gv
 		awk \
-			-v gv="$OLD_GV" \
-			-v udp="$OLD_UDP" \
-			-v tcp="$OLD_TCP" '
-			/^#GvXtreme$/ {
-				print gv
-				restore=1
-				next
-			}
+		-v gv="$OLD_GV" \
+		-v udp="$OLD_UDP" \
+		-v tcp="$OLD_TCP" '
+		/^#GvXtreme$/ {
+			print gv
+			restore=1
+			next
+		}
 
-			restore && /^--filter-udp=/ {
-				print udp
-				next
-			}
+		restore && /^--filter-udp=/ {
+			print udp
+			next
+		}
 
-			restore && /^--filter-tcp=/ {
-				print tcp
-				restore=0
-				next
-			}
+		restore && /^--filter-tcp=/ {
+			print tcp
+			restore=0
+			next
+		}
 
-			{
-				print
-			}
-			' "$CONF" > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"
+		{
+			print
+		}
+		' "$CONF" > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"
+
 
 
 		# восстановление глобальных портов
 		sed -i \
-			-e "s|^[[:space:]]*option NFQWS_PORTS_TCP .*|	option NFQWS_PORTS_TCP '${OLD_TCP#--filter-tcp=}'|" \
-			-e "s|^[[:space:]]*option NFQWS_PORTS_UDP .*|	option NFQWS_PORTS_UDP '${OLD_UDP#--filter-udp=}'|" \
+			-e "s|^[[:space:]]*option NFQWS_PORTS_TCP .*|	option NFQWS_PORTS_TCP '$OLD_TCP_PORTS'|" \
+			-e "s|^[[:space:]]*option NFQWS_PORTS_UDP .*|	option NFQWS_PORTS_UDP '$OLD_UDP_PORTS'|" \
 			"$CONF"
+
 
 
 		rm -f "$GV_XTREME_FILE"
@@ -263,11 +275,15 @@ Gv_Xtreme() {
 
 
 
-	# Включение
+	# ==========================
+	# Включение GvXtreme
+	# ==========================
+
 	echo -e "\n${MAGENTA}Включаем GvXtreme${NC}"
 
 
-	# сохраняем текущие значения
+
+	# сохраняем текущий Gv блок
 	awk '
 	/^#Gv[0-9]+$/ {
 		gv=$0
@@ -293,40 +309,39 @@ Gv_Xtreme() {
 
 
 
-	# меняем глобальные порты
+	# меняем общие порты и название блока
 	sed -i \
-		-e "s|^[[:space:]]*option NFQWS_PORTS_TCP .*|	option NFQWS_PORTS_TCP '$GV_XTREME_TCP_PORTS'|" \
-		-e "s|^[[:space:]]*option NFQWS_PORTS_UDP .*|	option NFQWS_PORTS_UDP '$GV_XTREME_UDP_PORTS'|" \
+		-e "s|^[[:space:]]*option NFQWS_PORTS_TCP .*|	option NFQWS_PORTS_TCP '$GV_XTREME_TCP_OPTION_PORTS'|" \
+		-e "s|^[[:space:]]*option NFQWS_PORTS_UDP .*|	option NFQWS_PORTS_UDP '$GV_XTREME_PORTS'|" \
 		-e "s/^#Gv[0-9]\+\$/#GvXtreme/" \
 		"$CONF"
 
 
 
-	# меняем порты только внутри GvXtreme
+	# меняем только GvXtreme фильтры
 	awk \
-		-v udp="$GV_XTREME_UDP_PORTS" \
-		-v tcp="$GV_XTREME_TCP_PORTS" '
-		/^#GvXtreme$/ {
-			gv=1
-			print
-			next
-		}
+	-v ports="$GV_XTREME_PORTS" '
+	/^#GvXtreme$/ {
+		gv=1
+		print
+		next
+	}
 
-		gv && /^--filter-udp=/ {
-			print "--filter-udp=" udp
-			continue
-		}
+	gv && /^--filter-udp=/ {
+		print "--filter-udp=" ports
+		next
+	}
 
-		gv && /^--filter-tcp=/ {
-			print "--filter-tcp=" tcp
-			gv=0
-			continue
-		}
+	gv && /^--filter-tcp=/ {
+		print "--filter-tcp=" ports
+		gv=0
+		next
+	}
 
-		{
-			print
-		}
-		' "$CONF" > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"
+	{
+		print
+	}
+	' "$CONF" > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"
 
 
 
