@@ -186,8 +186,8 @@ sed -i "/DISABLE_CUSTOM/s/'1'/'0'/" $CONF; ZAPRET_RESTART; [ "$NO_PAUSE" != "1" 
 
 GV_XTREME_FILE="/opt/zapret/tmp/GvXtreme"
 
-GV_XTREME_PORTS="80,88,500,444-65535"
-GV_XTREME_TCP_OPTION_PORTS="80,88,500,443,444-65535"
+GV_XTREME_PORTS="80,88,444-65535"
+GV_XTREME_OPTION_PORTS="80,88,443-65535"
 
 
 Gv_Xtreme() {
@@ -331,8 +331,8 @@ Gv_Xtreme() {
 
 	# меняем глобальные NFQWS порты
 	sed -i \
-		-e "s|^[[:space:]]*option NFQWS_PORTS_TCP .*|	option NFQWS_PORTS_TCP '$GV_XTREME_TCP_OPTION_PORTS'|" \
-		-e "s|^[[:space:]]*option NFQWS_PORTS_UDP .*|	option NFQWS_PORTS_UDP '$GV_XTREME_PORTS'|" \
+		-e "s|^[[:space:]]*option NFQWS_PORTS_TCP .*|	option NFQWS_PORTS_TCP '$GV_XTREME_OPTION_PORTS'|" \
+		-e "s|^[[:space:]]*option NFQWS_PORTS_UDP .*|	option NFQWS_PORTS_UDP '$GV_XTREME_OPTION_PORTS'|" \
 		"$CONF"
 
 
