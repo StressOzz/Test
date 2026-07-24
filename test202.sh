@@ -184,7 +184,10 @@ sed -i "/DISABLE_CUSTOM/s/'1'/'0'/" $CONF; ZAPRET_RESTART; [ "$NO_PAUSE" != "1" 
 # ==========================================
 
 GV_XTREME_FILE="/opt/zapret/tmp/GvXtreme"
-GV_XTREME_PORTS="80,88,500,444-65535"
+
+GV_XTREME_TCP_PORTS="80,88,500,443,444-65535"
+GV_XTREME_UDP_PORTS="80,88,500,444-65535"
+
 
 Gv_Xtreme() {
 	[ ! -f /etc/init.d/zapret ] && {
@@ -193,7 +196,12 @@ Gv_Xtreme() {
 		return
 	}
 
-	if grep -q "^#GvXtreme" "$CONF"; then
+	mkdir -p "$(dirname "$GV_XTREME_FILE")"
+
+
+	# Отключение
+	if grep -q "^#GvXtreme$" "$CONF"; then
+
 		[ ! -f "$GV_XTREME_FILE" ] && {
 			echo -e "\n${RED}Файл восстановления не найден!${NC}\n"
 			PAUSE
@@ -202,70 +210,131 @@ Gv_Xtreme() {
 
 		echo -e "\n${MAGENTA}Отключаем GvXtreme${NC}"
 
+
 		OLD_GV=$(sed -n '1p' "$GV_XTREME_FILE")
-		OLD_TCP=$(sed -n '2p' "$GV_XTREME_FILE")
-		OLD_UDP=$(sed -n '3p' "$GV_XTREME_FILE")
-		OLD_FUDP=$(sed -n '4p' "$GV_XTREME_FILE")
-		OLD_FTCP=$(sed -n '5p' "$GV_XTREME_FILE")
+		OLD_UDP=$(sed -n '2p' "$GV_XTREME_FILE")
+		OLD_TCP=$(sed -n '3p' "$GV_XTREME_FILE")
 
-		sed -i "s/^#GvXtreme\$/$OLD_GV/" "$CONF"
-		sed -i "s|^[[:space:]]*option NFQWS_PORTS_TCP .*|$OLD_TCP|" "$CONF"
-		sed -i "s|^[[:space:]]*option NFQWS_PORTS_UDP .*|$OLD_UDP|" "$CONF"
 
-		awk -v fudp="$OLD_FUDP" -v ftcp="$OLD_FTCP" '
-		/^#Gv[0-9]+/ {gv=1}
-		gv && /^--filter-udp=/ {$0=fudp; gv=2}
-		gv==2 && /^--filter-tcp=/ {$0=ftcp; gv=0}
-		{print}
-		' "$CONF" > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"
+		# восстановление Gv блока
+		awk \
+			-v gv="$OLD_GV" \
+			-v udp="$OLD_UDP" \
+			-v tcp="$OLD_TCP" '
+			/^#GvXtreme$/ {
+				print gv
+				restore=1
+				next
+			}
+
+			restore && /^--filter-udp=/ {
+				print udp
+				next
+			}
+
+			restore && /^--filter-tcp=/ {
+				print tcp
+				restore=0
+				next
+			}
+
+			{
+				print
+			}
+			' "$CONF" > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"
+
+
+		# восстановление глобальных портов
+		sed -i \
+			-e "s|^[[:space:]]*option NFQWS_PORTS_TCP .*|	option NFQWS_PORTS_TCP '${OLD_TCP#--filter-tcp=}'|" \
+			-e "s|^[[:space:]]*option NFQWS_PORTS_UDP .*|	option NFQWS_PORTS_UDP '${OLD_UDP#--filter-udp=}'|" \
+			"$CONF"
+
 
 		rm -f "$GV_XTREME_FILE"
 
+
 		ZAPRET_RESTART
+
 		echo -e "${GREEN}GvXtreme отключён!${NC}\n"
 		PAUSE
 		return
 	fi
 
+
+
+	# Включение
 	echo -e "\n${MAGENTA}Включаем GvXtreme${NC}"
 
+
+	# сохраняем текущие значения
 	awk '
 	/^#Gv[0-9]+$/ {
-		print
 		gv=$0
+		found=1
 		next
 	}
-	/^[[:space:]]*option NFQWS_PORTS_TCP / && !tcp {tcp=$0}
-	/^[[:space:]]*option NFQWS_PORTS_UDP / && !udp {udp=$0}
-	gv && /^--filter-udp=/ && !fudp {fudp=$0}
-	gv && /^--filter-tcp=/ && !ftcp {ftcp=$0}
-	END{
+
+	found && /^--filter-udp=/ {
+		udp=$0
+	}
+
+	found && /^--filter-tcp=/ {
+		tcp=$0
+		exit
+	}
+
+	END {
 		print gv
-		print tcp
 		print udp
-		print fudp
-		print ftcp
+		print tcp
 	}
 	' "$CONF" > "$GV_XTREME_FILE"
 
+
+
+	# меняем глобальные порты
 	sed -i \
+		-e "s|^[[:space:]]*option NFQWS_PORTS_TCP .*|	option NFQWS_PORTS_TCP '$GV_XTREME_TCP_PORTS'|" \
+		-e "s|^[[:space:]]*option NFQWS_PORTS_UDP .*|	option NFQWS_PORTS_UDP '$GV_XTREME_UDP_PORTS'|" \
 		-e "s/^#Gv[0-9]\+\$/#GvXtreme/" \
-		-e "s|^[[:space:]]*option NFQWS_PORTS_TCP .*|	option NFQWS_PORTS_TCP '$GV_XTREME_PORTS'|" \
-		-e "s|^[[:space:]]*option NFQWS_PORTS_UDP .*|	option NFQWS_PORTS_UDP '$GV_XTREME_PORTS'|" \
 		"$CONF"
 
-	awk -v p="$GV_XTREME_PORTS" '
-	/^#GvXtreme$/ {gv=1}
-	gv && /^--filter-udp=/ {$0="--filter-udp=" p; gv=2}
-	gv==2 && /^--filter-tcp=/ {$0="--filter-tcp=" p; gv=0}
-	{print}
-	' "$CONF" > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"
+
+
+	# меняем порты только внутри GvXtreme
+	awk \
+		-v udp="$GV_XTREME_UDP_PORTS" \
+		-v tcp="$GV_XTREME_TCP_PORTS" '
+		/^#GvXtreme$/ {
+			gv=1
+			print
+			next
+		}
+
+		gv && /^--filter-udp=/ {
+			print "--filter-udp=" udp
+			continue
+		}
+
+		gv && /^--filter-tcp=/ {
+			print "--filter-tcp=" tcp
+			gv=0
+			continue
+		}
+
+		{
+			print
+		}
+		' "$CONF" > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"
+
+
 
 	ZAPRET_RESTART
+
 	echo -e "${GREEN}GvXtreme включён!${NC}\n"
 	PAUSE
 }
-
 
 
 
