@@ -201,6 +201,7 @@ Gv_Xtreme() {
 	mkdir -p "$(dirname "$GV_XTREME_FILE")"
 
 
+
 	# ==========================
 	# Отключение GvXtreme
 	# ==========================
@@ -220,13 +221,11 @@ Gv_Xtreme() {
 		OLD_GV=$(sed -n '1p' "$GV_XTREME_FILE")
 		OLD_UDP=$(sed -n '2p' "$GV_XTREME_FILE")
 		OLD_TCP=$(sed -n '3p' "$GV_XTREME_FILE")
+		OLD_TCP_OPTION=$(sed -n '4p' "$GV_XTREME_FILE")
+		OLD_UDP_OPTION=$(sed -n '5p' "$GV_XTREME_FILE")
 
 
-		OLD_UDP_PORTS="${OLD_UDP#--filter-udp=}"
-		OLD_TCP_PORTS="${OLD_TCP#--filter-tcp=}"
-
-
-		# восстановление блока Gv
+		# восстановление Gv блока
 		awk \
 		-v gv="$OLD_GV" \
 		-v udp="$OLD_UDP" \
@@ -255,10 +254,10 @@ Gv_Xtreme() {
 
 
 
-		# восстановление глобальных портов
+		# восстановление option NFQWS_PORTS
 		sed -i \
-			-e "s|^[[:space:]]*option NFQWS_PORTS_TCP .*|	option NFQWS_PORTS_TCP '$OLD_TCP_PORTS'|" \
-			-e "s|^[[:space:]]*option NFQWS_PORTS_UDP .*|	option NFQWS_PORTS_UDP '$OLD_UDP_PORTS'|" \
+			-e "s|^[[:space:]]*option NFQWS_PORTS_TCP .*|$OLD_TCP_OPTION|" \
+			-e "s|^[[:space:]]*option NFQWS_PORTS_UDP .*|$OLD_UDP_OPTION|" \
 			"$CONF"
 
 
@@ -268,10 +267,12 @@ Gv_Xtreme() {
 
 		ZAPRET_RESTART
 
+
 		echo -e "${GREEN}GvXtreme отключён!${NC}\n"
 		PAUSE
 		return
 	fi
+
 
 
 
@@ -283,7 +284,7 @@ Gv_Xtreme() {
 
 
 
-	# сохраняем текущий Gv блок
+	# сохраняем текущие настройки
 	awk '
 	/^#Gv[0-9]+$/ {
 		gv=$0
@@ -297,28 +298,45 @@ Gv_Xtreme() {
 
 	found && /^--filter-tcp=/ {
 		tcp=$0
-		exit
 	}
+
+
+	/^option NFQWS_PORTS_TCP / {
+		tcp_option=$0
+	}
+
+	/^option NFQWS_PORTS_UDP / {
+		udp_option=$0
+	}
+
 
 	END {
 		print gv
 		print udp
 		print tcp
+		print tcp_option
+		print udp_option
 	}
 	' "$CONF" > "$GV_XTREME_FILE"
 
 
 
-	# меняем общие порты и название блока
+	# меняем только option NFQWS_PORTS
 	sed -i \
 		-e "s|^[[:space:]]*option NFQWS_PORTS_TCP .*|	option NFQWS_PORTS_TCP '$GV_XTREME_TCP_OPTION_PORTS'|" \
 		-e "s|^[[:space:]]*option NFQWS_PORTS_UDP .*|	option NFQWS_PORTS_UDP '$GV_XTREME_PORTS'|" \
-		-e "s/^#Gv[0-9]\+\$/#GvXtreme/" \
 		"$CONF"
 
 
 
-	# меняем только GvXtreme фильтры
+	# переименовываем Gv блок
+	sed -i \
+		"s/^#Gv[0-9]\+\$/#GvXtreme/" \
+		"$CONF"
+
+
+
+	# GvXtreme фильтры НЕ меняем логику
 	awk \
 	-v ports="$GV_XTREME_PORTS" '
 	/^#GvXtreme$/ {
@@ -347,10 +365,10 @@ Gv_Xtreme() {
 
 	ZAPRET_RESTART
 
+
 	echo -e "${GREEN}GvXtreme включён!${NC}\n"
 	PAUSE
 }
-
 
 
 
