@@ -315,16 +315,16 @@ register_warp() {
 
   # WARP addresses come WITHOUT a prefix length (e.g. "172.16.0.2") — WireGuard
   # needs CIDR. Append /32 for IPv4 and /128 for IPv6 if none is present.
-case "$WARP_V4" in
-    */*) : ;;
-    *)   WARP_V4="$WARP_V4/32" ;;
-  esac
-  if [ -n "$WARP_V6" ]; then
-   case "$WARP_V6" in
-     */*) : ;;
-     *)   WARP_V6="$WARP_V6/128" ;;
-   esac
-fi
+# case "$WARP_V4" in
+#  */*) : ;;
+#   *)   WARP_V4="$WARP_V4/32" ;;
+# esac
+#  if [ -n "$WARP_V6" ]; then
+#   case "$WARP_V6" in
+#     */*) : ;;
+#     *)   WARP_V6="$WARP_V6/128" ;;
+#   esac
+# fi
 
 cat > /root/WARP.conf <<EOF
 [Interface]
