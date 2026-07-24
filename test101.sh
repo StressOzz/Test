@@ -162,14 +162,14 @@ DIC_FAKE() {
 		}
 	' "$CONF")
 
-	FAKE_DISABLED=$(
-		awk '
-			/--filter-l7=discord,stun/ {blk=1; next}
-			blk && /^.*--filter-l7=/ {exit}
-			blk && /--dpi-desync-fake-discord=/ {print 0; exit}
-			END {print 1}
-		' "$CONF"
-	)
+FAKE_DISABLED=$(
+awk '
+/--filter-l7=discord,stun/ {blk=1; next}
+blk && /^.*--filter-l7=/ {exit}
+blk && /--dpi-desync-fake-discord=/ {found=1; exit}
+END {print found ? 0 : 1}
+' "$CONF"
+)
 
 	stat_f() {
 		[ "$FAKE_DIC" = "$1" ] && [ "$FAKE_DISABLED" = 0 ] &&
@@ -209,69 +209,51 @@ DIC_FAKE() {
 		echo -e "\n${CYAN}Удаляем fake...${NC}" ||
 		echo -e "\n${CYAN}Устанавливаем fake${NC} ${new_fileD}"
 
+		
+if [ "$new_fileD" = "DELETE" ]; then
+
+	awk '
+BEGIN{blk=0}
+/--filter-l7=discord,stun/ {blk=1}
+blk && /^.*--filter-l7=/ && $0 !~ /--filter-l7=discord,stun/ {blk=0}
+blk && /--dpi-desync-fake-discord=/ {next}
+blk && /--dpi-desync-fake-stun=/ {next}
+{print}
+' "$CONF" > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"
+
+elif grep -A5 -- '--filter-l7=discord,stun' "$CONF" | grep -q -- '--dpi-desync-fake-discord='; then
+
+	# Уже есть fake — просто заменить (твой старый рабочий код)
 	awk -v new="$new_fileD" '
-BEGIN {
-	blk=0
-	have_dis=0
-	have_stun=0
-}
-
-/--filter-l7=discord,stun/ {
-	blk=1
-	have_dis=0
-	have_stun=0
-}
-
-blk && /^.*--filter-l7=/ && $0 !~ /--filter-l7=discord,stun/ {
-	if (new != "DELETE") {
-		if (!have_dis)
-			print "--dpi-desync-fake-discord=/opt/zapret/files/fake/" new
-		if (!have_stun)
-			print "--dpi-desync-fake-stun=/opt/zapret/files/fake/" new
-	}
-	blk=0
-}
-
-blk && /--dpi-desync=fake/ {
-	print
-
-	if (new != "DELETE" && !have_dis && !have_stun) {
-		print "--dpi-desync-fake-discord=/opt/zapret/files/fake/" new
-		print "--dpi-desync-fake-stun=/opt/zapret/files/fake/" new
-		have_dis=1
-		have_stun=1
-	}
-
-	next
-}
-
-blk && /--dpi-desync-fake-discord=/ {
-	have_dis=1
-	if (new == "DELETE")
-		next
+BEGIN {blk=0}
+/^.*--filter-l7=discord,stun/ {blk=1}
+blk && /^.*--filter-l7=/ && $0 !~ /--filter-l7=discord,stun/ {blk=0}
+blk && $0 ~ "--dpi-desync-fake-discord=/opt/zapret/files/fake/" {
 	sub(/\/opt\/zapret\/files\/fake\/[^ ]+/, "/opt/zapret/files/fake/" new)
 }
-
-blk && /--dpi-desync-fake-stun=/ {
-	have_stun=1
-	if (new == "DELETE")
-		next
+blk && $0 ~ "--dpi-desync-fake-stun=/opt/zapret/files/fake/" {
 	sub(/\/opt\/zapret\/files\/fake\/[^ ]+/, "/opt/zapret/files/fake/" new)
 }
+{print}
+' "$CONF" > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"
 
+else
+
+	# Fake отсутствует — добавить после --dpi-desync=fake
+	awk -v new="$new_fileD" '
+BEGIN{blk=0}
+/--filter-l7=discord,stun/ {blk=1}
+blk && /^.*--filter-l7=/ && $0 !~ /--filter-l7=discord,stun/ {blk=0}
 {
 	print
-}
-
-END {
-	if (blk && new != "DELETE") {
-		if (!have_dis)
-			print "--dpi-desync-fake-discord=/opt/zapret/files/fake/" new
-		if (!have_stun)
-			print "--dpi-desync-fake-stun=/opt/zapret/files/fake/" new
+	if (blk && /--dpi-desync=fake/) {
+		print "--dpi-desync-fake-discord=/opt/zapret/files/fake/" new
+		print "--dpi-desync-fake-stun=/opt/zapret/files/fake/" new
 	}
 }
 ' "$CONF" > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"
+
+fi
 
 	ZAPRET_RESTART
 
