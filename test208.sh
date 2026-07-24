@@ -206,7 +206,7 @@ Gv_Xtreme() {
 	# Отключение GvXtreme
 	# ==========================
 
-	if grep -q "^#GvXtreme$" "$CONF"; then
+	if grep -q "^#Gv[0-9]\+eXtreme$" "$CONF"; then
 
 		[ ! -f "$GV_XTREME_FILE" ] && {
 			echo -e "\n${RED}Файл восстановления не найден!${NC}\n"
@@ -232,7 +232,7 @@ Gv_Xtreme() {
 		-v gv="$OLD_GV" \
 		-v udp="$OLD_UDP" \
 		-v tcp="$OLD_TCP" '
-		/^#GvXtreme$/ {
+		/^#Gv[0-9]+eXtreme$/ {
 			print gv
 			restore=1
 			next
@@ -337,9 +337,9 @@ Gv_Xtreme() {
 
 
 
-	# переименовываем Gv блок
+	# меняем Gv1 -> Gv1eXtreme
 	sed -i \
-		"s/^#Gv[0-9]\+\$/#GvXtreme/" \
+		"s/^#\(Gv[0-9]\+\)$/#\1eXtreme/" \
 		"$CONF"
 
 
@@ -347,7 +347,7 @@ Gv_Xtreme() {
 	# меняем только фильтры GvXtreme
 	awk \
 	-v ports="$GV_XTREME_PORTS" '
-	/^#GvXtreme$/ {
+	/^#Gv[0-9]+eXtreme$/ {
 		gv=1
 		print
 		next
@@ -394,20 +394,20 @@ echo -en "${CYAN}Enter) ${GREEN}Выход в меню стратегий${NC}\n
 awk -v new="$new_file" 'BEGIN{gv=0} /^#Gv/{gv=1} gv && /^--dpi-desync-fake-unknown-udp=/{sub(/\/opt\/zapret\/files\/fake\/[^ ]+/, "/opt/zapret/files/fake/" new); gv=0} {print}' "$CONF" > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"; ZAPRET_RESTART; echo -e "fake ${GREEN}изменён на ${NC}${new_file}${GREEN}!${NC}\n"; PAUSE; }
 fix_GAME() { local NO_PAUSE=$1; [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }; local CURRENT_GAME=""; for i in 1 2 3 4; do grep -q "^#Gv$i" "$CONF" && CURRENT_GAME="Gv$i"; done
 if [ -n "$NO_PAUSE" ]; then GAME_CHOICE="$NO_PAUSE"; else echo -e "\n${MAGENTA}Меню управления стратегией для игр${NC}"; for i in $(seq 1 4); do if [ "$CURRENT_GAME" = "Gv$i" ]; then echo -e "${CYAN}$i) ${GREEN}Удалить ${NC}Gv$i"; else echo -e "${CYAN}$i) ${GREEN}Установить ${NC}Gv$i"; fi; done
-echo -e "${CYAN}5) ${GREEN}Выбрать и сменить ${NC}fake${GREEN} для игровой стратегии${NC}"
+
 
 grep -q "^#GvXtreme" "$CONF" &&
 	XTREME_TXT="${GREEN}Отключить ${NC}GvXtreme" ||
 	XTREME_TXT="${GREEN}Включить ${NC}GvXtreme"
 
-echo -e "${CYAN}6) $XTREME_TXT"
+echo -e "${CYAN}5) $XTREME_TXT"
 
-
+echo -e "${CYAN}6) ${GREEN}Выбрать и сменить ${NC}fake${GREEN} для игровой стратегии${NC}"
 
 echo -en "${CYAN}Enter) ${GREEN}Выход в меню стратегий\n\n${YELLOW}Выберите пункт: ${NC}"; read GAME_CHOICE; fi
 
-if [ "$GAME_CHOICE" = "5" ]; then GV_FAKE; return; fi
-if [ "$GAME_CHOICE" = "6" ]; then Gv_Xtreme; return; fi
+if [ "$GAME_CHOICE" = "6" ]; then GV_FAKE; return; fi
+if [ "$GAME_CHOICE" = "5" ]; then Gv_Xtreme; return; fi
 
 case "$GAME_CHOICE" in 1|2|3|4) ;; *) return;; esac; LAST_QUOTE=$(grep -n "^'\$" "$CONF" | tail -n1 | cut -d: -f1)
 if grep -q "^#Gv" "$CONF"; then Gv_LINE=$(grep -n "^#Gv" "$CONF" | tail -n1 | cut -d: -f1); sed -i "${Gv_LINE},${LAST_QUOTE}d" "$CONF"; elif [ -n "$LAST_QUOTE" ]; then sed -i "${LAST_QUOTE},\$d" "$CONF"; fi
@@ -925,14 +925,9 @@ if [ -n "$DOH_STATUS" ]; then if [ "$PKG_IS_APK" -eq 1 ]; then apk info -e https
 pkg_is_installed netshift && PODKOP_VER && echo -e "${YELLOW}NetShift:${NC}            $PODKOP_STATUS"; if web_is_enabled; then echo -e "${YELLOW}Доступ из браузера:${NC}  $LAN_IP:7681"; fi; quic_is_blocked && if quic_is_blocked; then echo -e "${YELLOW}Блокировка QUIC:${NC}     ${GREEN}включена${NC}"; fi; if grep -q 'ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc
 then echo -e "${YELLOW}Flow Offloading FIX:${NC} ${GREEN}включён${NC}"; fi; if [ "$CURR" != "default / OpenWrt" ]; then echo -e "${YELLOW}Зеркало OpenWRT:${NC}     $CURR"; fi; if [ -f /etc/init.d/zapret ] && [ -f "$CONF" ] && grep -Eq "^[[:space:]]*option DISABLE_IPV6 '0'" "$CONF"; then echo -e "${YELLOW}IPv6 в Zapret:       ${GREEN}включён${NC}"; fi; INFO_ZPR_STR; }
 INFO_ZPR_STR() { if [ -f "$CONF" ]; then line=$(grep -m1 '^#general' "$CONF"); GEN="${line:+${line#?} / }"; current="$ver$( [ -n "$ver" ] && [ -n "$yv_ver" ] && echo " / " )$yv_ver"; DV=$(grep -o -E '^#Dv[0-9][0-9]*' "$CONF" | sed 's/^#[[:space:]]*/\/ /' | head -n1)
-if grep -q '^#GvXtreme$' "$CONF"; then GV="/ GvXtreme"; else GV=$(grep -o -E '^#Gv[0-9][0-9]*' "$CONF" | sed 's/^#/\/ /' | head -n1); fi; UPD=$(grep -q '^#udp443' "$CONF" && echo '/ udp443'); WS=$(grep -q -- '--wssize 1:6' "$CONF" && echo '/ wssize'); ME=$(grep -q -- '--methodeol' "$CONF" && echo '/ methodeol'); if [ -n "$current" ]
+GV=$(grep -m1 '^#Gv' "$CONF" | sed 's/^#/\/ /'); UPD=$(grep -q '^#udp443' "$CONF" && echo '/ udp443'); WS=$(grep -q -- '--wssize 1:6' "$CONF" && echo '/ wssize'); ME=$(grep -q -- '--methodeol' "$CONF" && echo '/ methodeol'); if [ -n "$current" ]
 then echo -e "${YELLOW}Стратегия Zapret:${NC}    ${CYAN}${GEN}$current${DV:+ $DV}${GV:+ $GV}${UPD:+ $UPD}${WS:+ $WS}${ME:+ $ME}${RKN_STATUS:+ $RKN_STATUS}${NC}"; elif [ -n "$RKN_STATUS" ]
 then echo -e "${YELLOW}Стратегия Zapret:${NC}    ${CYAN}${GEN}РКН${DV:+ $DV}${GV:+ $GV}${UPD:+ $UPD}${WS:+ $WS}${ME:+ $ME}${NC}"; elif [ -n "$line" ]; then echo -e "${YELLOW}Стратегия Zapret:${NC}    ${CYAN}${line#?}${GV:+ $GV}${NC}"; fi; fi; }
-
-if grep -q '^#GvXtreme$' "$CONF"; then GV="/ GvXtreme"; else GV=$(grep -o -E '^#Gv[0-9][0-9]*' "$CONF" | sed 's/^#/\/ /' | head -n1); fi
-
-
-
 # ==========================================
 # Mixomo
 # ==========================================
