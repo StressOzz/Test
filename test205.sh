@@ -221,8 +221,10 @@ Gv_Xtreme() {
 		OLD_GV=$(sed -n '1p' "$GV_XTREME_FILE")
 		OLD_UDP=$(sed -n '2p' "$GV_XTREME_FILE")
 		OLD_TCP=$(sed -n '3p' "$GV_XTREME_FILE")
+
 		OLD_TCP_OPTION=$(sed -n '4p' "$GV_XTREME_FILE")
 		OLD_UDP_OPTION=$(sed -n '5p' "$GV_XTREME_FILE")
+
 
 
 		# восстановление Gv блока
@@ -255,9 +257,15 @@ Gv_Xtreme() {
 
 
 		# восстановление option NFQWS_PORTS
+		[ -n "$OLD_TCP_OPTION" ] && \
 		sed -i \
-			-e "s|^[[:space:]]*option NFQWS_PORTS_TCP .*|$OLD_TCP_OPTION|" \
-			-e "s|^[[:space:]]*option NFQWS_PORTS_UDP .*|$OLD_UDP_OPTION|" \
+			"s|^[[:space:]]*option NFQWS_PORTS_TCP .*|$OLD_TCP_OPTION|" \
+			"$CONF"
+
+
+		[ -n "$OLD_UDP_OPTION" ] && \
+		sed -i \
+			"s|^[[:space:]]*option NFQWS_PORTS_UDP .*|$OLD_UDP_OPTION|" \
 			"$CONF"
 
 
@@ -301,11 +309,11 @@ Gv_Xtreme() {
 	}
 
 
-	/^option NFQWS_PORTS_TCP / {
+	/^[[:space:]]*option NFQWS_PORTS_TCP / {
 		tcp_option=$0
 	}
 
-	/^option NFQWS_PORTS_UDP / {
+	/^[[:space:]]*option NFQWS_PORTS_UDP / {
 		udp_option=$0
 	}
 
@@ -321,7 +329,7 @@ Gv_Xtreme() {
 
 
 
-	# меняем только option NFQWS_PORTS
+	# меняем глобальные NFQWS порты
 	sed -i \
 		-e "s|^[[:space:]]*option NFQWS_PORTS_TCP .*|	option NFQWS_PORTS_TCP '$GV_XTREME_TCP_OPTION_PORTS'|" \
 		-e "s|^[[:space:]]*option NFQWS_PORTS_UDP .*|	option NFQWS_PORTS_UDP '$GV_XTREME_PORTS'|" \
@@ -336,7 +344,7 @@ Gv_Xtreme() {
 
 
 
-	# GvXtreme фильтры НЕ меняем логику
+	# меняем только фильтры GvXtreme
 	awk \
 	-v ports="$GV_XTREME_PORTS" '
 	/^#GvXtreme$/ {
