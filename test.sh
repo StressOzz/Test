@@ -75,14 +75,40 @@ err()  { printf '\033[1;31mОшибка:\033[0m %s\n' "$*" >&2; exit 1; }
 
 # ──────────────────────────── 1. environment checks ────────────────────────
 [ "$(id -u)" = "0" ] || err "запустите от root."
-command -v apk   >/dev/null 2>&1 || err "нужен OpenWrt 24.10+/25.12+ с менеджером apk."
+
+PKG_MANAGER=""
+PKG_EXT=""
+if command -v apk >/dev/null 2>&1; then
+    PKG_MANAGER="apk"
+    PKG_EXT="apk"
+elif command -v opkg >/dev/null 2>&1; then
+    PKG_MANAGER="opkg"
+    PKG_EXT="ipk"
+else
+    err "не найден пакетный менеджер (apk/opkg). Нужен OpenWrt."
+fi
+
 command -v wget  >/dev/null 2>&1 || err "не найден wget."
+
+if [ "$PKG_MANAGER" = "opkg" ]; then
+    if ! opkg list-installed 2>/dev/null | grep -q "^nftables "; then
+        say "nftables не найден. Пробую установить…"
+        opkg update >/dev/null 2>&1 || true
+        opkg install nftables >/dev/null 2>&1 || warn "Не удалось установить nftables — splify-firewall может не работать."
+    fi
+fi
+
 # curl + jq are needed for WARP registration; install them if missing (they are
-# not part of a minimal OpenWrt image, but apk pulls them quickly).
+# not part of a minimal OpenWrt image, but the package manager pulls them quickly).
 for _dep in curl jq; do
   if ! command -v "$_dep" >/dev/null 2>&1; then
     say "Ставлю зависимость: $_dep…"
-    apk add "$_dep" >/dev/null 2>&1 || err "не удалось установить $_dep (apk add $_dep)."
+    if [ "$PKG_MANAGER" = "apk" ]; then
+        apk add "$_dep" >/dev/null 2>&1 || err "не удалось установить $_dep (apk add $_dep)."
+    else
+        opkg update >/dev/null 2>&1 || true
+        opkg install "$_dep" >/dev/null 2>&1 || err "не удалось установить $_dep (opkg install $_dep)."
+    fi
   fi
 done
 
@@ -97,8 +123,8 @@ install_splify() {
   wget -qO "$META" "$API" || err "не удалось получить данные релиза (нет интернета?)."
   # GitHub may serve JSON as one line; split on commas so each asset URL is on
   # its own line, otherwise a greedy sed grabs only the last URL.
-  URLS="$(tr ',' '\n' <"$META" | sed -n 's/.*"browser_download_url": *"\([^"]*\.apk\)".*/\1/p')"
-  [ -n "$URLS" ] || err "в последнем релизе нет .apk. Возможно, релиз ещё не собран."
+  URLS="$(tr ',' '\n' <"$META" | sed -n 's/.*"browser_download_url": *"\([^"]*\.'$PKG_EXT'\)".*/\1/p')"
+  [ -n "$URLS" ] || err "в последнем релизе нет .$PKG_EXT. Возможно, релиз ещё не собран."
 
   say "Скачиваю пакеты…"
   for u in $URLS; do
@@ -107,11 +133,15 @@ install_splify() {
     esac
   done
   for pkg in splify- luci-app-splify- luci-i18n-splify-ru-; do
-    ls "$TMP/$pkg"*.apk >/dev/null 2>&1 || err "в релизе не хватает пакета $pkg*.apk"
+    ls "$TMP/$pkg"*.$PKG_EXT >/dev/null 2>&1 || err "в релизе не хватает пакета $pkg*.$PKG_EXT"
   done
 
   say "Устанавливаю splify…"
-  apk add --allow-untrusted "$TMP"/*.apk || err "apk add не выполнился."
+  if [ "$PKG_MANAGER" = "apk" ]; then
+    apk add --allow-untrusted "$TMP"/*.$PKG_EXT || err "apk add не выполнился."
+  else
+    opkg install "$TMP"/*.$PKG_EXT || err "opkg install не выполнился."
+  fi
 
   rm -f /tmp/luci-indexcache* /tmp/luci-modulecache* 2>/dev/null || true
   /etc/init.d/rpcd reload 2>/dev/null || /etc/init.d/rpcd restart 2>/dev/null || true
@@ -124,7 +154,14 @@ install_splify() {
 
 # ──────────────────────────── 3. install AmneziaWG ──────────────────────────
 install_awg() {
-  if apk info -e kmod-amneziawg >/dev/null 2>&1; then
+  _awg_installed=0
+  if [ "$PKG_MANAGER" = "apk" ]; then
+    apk info -e kmod-amneziawg >/dev/null 2>&1 && _awg_installed=1
+  else
+    opkg list-installed 2>/dev/null | grep -q "^kmod-amneziawg " && _awg_installed=1
+  fi
+
+  if [ "$_awg_installed" = "1" ]; then
     say "AmneziaWG (kmod) уже установлен."
   else
     say "AmneziaWG не найден — устанавливаю поддержку…"
@@ -172,6 +209,54 @@ reg_url() {
     printf '%s/api/%s' "${WORKER_URL%/}" "$1"
   else
     printf '%s/%s/%s' "$CF_DIRECT" "$CF_API_VERSION" "$1"
+  fi
+}
+
+find_best_endpoint() {
+  say "Подбираем лучший WARP эндпоинт (исключая DME)…"
+  _prefixes="188.114.96. 188.114.97. 188.114.98. 188.114.99. 162.159.192. 162.159.193. 162.159.195. 8.34.146. 8.39.214. 8.39.204. 8.6.112. 8.35.211. 8.39.125. 8.47.69."
+  
+  _candidates=$(awk -v prefixes="$_prefixes" 'BEGIN {
+      srand();
+      n = split(prefixes, arr, " ");
+      for (i=0; i<100; i++) {
+          idx = int(rand() * n) + 1;
+          last = int(rand() * 256);
+          print arr[idx] last;
+      }
+  }')
+  
+  _pings="$TMP/warp_pings"
+  _count=0
+  for ip in $_candidates; do
+    (
+      if trace_data=$(curl -s --connect-timeout 2 -w "\n%{time_total}" -H "Host: trace.cloudflare.com" "http://${ip}/cdn-cgi/trace"); then
+        colo=$(echo "$trace_data" | awk -F'=' '$1=="colo"{print $2}')
+        case "$colo" in
+          DME) exit 0 ;;
+          "")  exit 0 ;;
+        esac
+        # get ping from curl (time_total is the last line), convert to ms
+        ping_ms=$(echo "$trace_data" | tail -n 1 | awk '{printf "%d", $1 * 1000}')
+        [ -n "$ping_ms" ] && echo "$ping_ms $ip $colo" >> "$_pings"
+      fi
+    ) &
+    _count=$((_count + 1))
+    [ $((_count % 20)) -eq 0 ] && wait
+  done
+  wait
+  
+  if [ -s "$_pings" ]; then
+    _best=$(sort -n "$_pings" | head -n 1)
+    _best_ping=$(echo "$_best" | awk '{print $1}')
+    _best_ip=$(echo "$_best" | awk '{print $2}')
+    _best_colo=$(echo "$_best" | awk '{print $3}')
+    say "Выбран эндпоинт: $_best_ip (colo: $_best_colo, ping: ${_best_ping}ms)"
+    WARP_EP="${_best_ip}:500"
+  else
+    warn "Не удалось найти подходящий эндпоинт среди 100 проверенных."
+    warn "Часть ресурсов может не работать! Устанавливаем эндпоинт по умолчанию."
+    WARP_EP="engage.cloudflareclient.com:500"
   fi
 }
 
@@ -230,18 +315,42 @@ register_warp() {
 
   # WARP addresses come WITHOUT a prefix length (e.g. "172.16.0.2") — WireGuard
   # needs CIDR. Append /32 for IPv4 and /128 for IPv6 if none is present.
-  case "$WARP_V4" in
-    */*) : ;;
-    *)   WARP_V4="$WARP_V4/32" ;;
-  esac
-  if [ -n "$WARP_V6" ]; then
-    case "$WARP_V6" in
-      */*) : ;;
-      *)   WARP_V6="$WARP_V6/128" ;;
-    esac
-  fi
+#  case "$WARP_V4" in
+#    */*) : ;;
+#    *)   WARP_V4="$WARP_V4/32" ;;
+#  esac
+#  if [ -n "$WARP_V6" ]; then
+#   case "$WARP_V6" in
+#     */*) : ;;
+#     *)   WARP_V6="$WARP_V6/128" ;;
+#   esac
+# fi
 
-  say "WARP зарегистрирован: $WARP_V4${WARP_V6:+, $WARP_V6}"
+cat > /root/WARP_AWG.conf <<EOF
+[Interface]
+PrivateKey = $PRIV
+Address = $WARP_V4${WARP_V6:+, $WARP_V6}
+DNS = 1.1.1.1, 1.0.0.1, 2606:4700:4700::1111, 2606:4700:4700::1001
+MTU = 1280
+S1 = $AWG_S1
+S2 = $AWG_S2
+Jc = $AWG_JC
+Jmin = $AWG_JMIN
+Jmax = $AWG_JMAX
+H1 = $AWG_H1
+H2 = $AWG_H2
+H3 = $AWG_H3
+H4 = $AWG_H4
+I1 = $AWG_I1
+
+[Peer]
+PublicKey = $WARP_PEER
+AllowedIPs = 0.0.0.0/0, ::/0
+Endpoint = engage.cloudflareclient.com:4500
+PersistentKeepalive = 25
+EOF
+	say "WARP зарегистрирован: $WARP_V4${WARP_V6:+, $WARP_V6}"
+	say "WARP сохранён в /root/WARP.conf"
 }
 
 # ──────────────────────────── 5. create warp0 interface ─────────────────────
@@ -371,6 +480,8 @@ install_awg
 sleep 3
 register_warp
 sleep 3
+# find_best_endpoint
+# sleep 3
 create_warp_iface
 sleep 3
 register_in_splify
