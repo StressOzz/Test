@@ -138,9 +138,9 @@ install_splify() {
 
   say "Устанавливаю splify…"
   if [ "$PKG_MANAGER" = "apk" ]; then
-    apk add --allow-untrusted "$TMP"/*.$PKG_EXT || err "apk add не выполнился."
+    apk add --allow-untrusted "$TMP"/*.$PKG_EXT >/dev/null 2>&1 || err "apk add не выполнился."
   else
-    opkg install "$TMP"/*.$PKG_EXT || err "opkg install не выполнился."
+    opkg install "$TMP"/*.$PKG_EXT >/dev/null 2>&1 || err "opkg install не выполнился."
   fi
 
   rm -f /tmp/luci-indexcache* /tmp/luci-modulecache* 2>/dev/null || true
@@ -315,6 +315,7 @@ register_warp() {
 
   # WARP addresses come WITHOUT a prefix length (e.g. "172.16.0.2") — WireGuard
   # needs CIDR. Append /32 for IPv4 and /128 for IPv6 if none is present.
+  
 # case "$WARP_V4" in
 #  */*) : ;;
 #   *)   WARP_V4="$WARP_V4/32" ;;
@@ -468,7 +469,7 @@ setup_firewall() {
   if /usr/local/sbin/splify-firewall check "$WARP_IFACE" >/dev/null 2>&1; then
     say "Firewall-зона для $WARP_IFACE уже настроена."
   else
-    /usr/local/sbin/splify-firewall fix "$WARP_IFACE" \
+    /usr/local/sbin/splify-firewall fix "$WARP_IFACE" >/dev/null 2>&1 \
       || warn "splify-firewall fix не удался — проверьте зону для $WARP_IFACE в Сеть → Firewall."
   fi
 }
