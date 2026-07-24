@@ -188,7 +188,7 @@ END {print found ? 0 : 1}
 	echo -e "${CYAN}4) ${GREEN}Сменить на ${NC}quic_initial_dbankcloud_ru.bin $(stat_f quic_initial_dbankcloud_ru.bin)"
 	echo -e "${CYAN}5) ${GREEN}Сменить на ${NC}quic_initial_steamcommunity_com.bin $(stat_f quic_initial_steamcommunity_com.bin)"
 	echo -e "${CYAN}6) ${GREEN}Сменить на ${NC}quic_initial_tencent_com.bin $(stat_f quic_initial_tencent_com.bin)"
-	echo -e "${CYAN}7) ${RED}Удалить fake${NC} $(stat_del)"
+	echo -e "${CYAN}7) ${GREEN}Удалить ${NC}fake $(stat_del)"
 	echo -e "${CYAN}Enter) ${GREEN}Выход в меню настройки Discord${NC}"
 
 	echo -ne "\n${YELLOW}Выберите пункт:${NC} "
@@ -206,8 +206,8 @@ END {print found ? 0 : 1}
 	esac
 
 	[ "$new_fileD" = "DELETE" ] &&
-		echo -e "\n${CYAN}Удаляем fake...${NC}" ||
-		echo -e "\n${CYAN}Устанавливаем fake${NC} ${new_fileD}"
+		echo -e "\n${CYAN}Удаляем ${NC}fake" ||
+		echo -e "\n${CYAN}Устанавливаем${NC} ${new_fileD}"
 
 		
 if [ "$new_fileD" = "DELETE" ]; then
@@ -223,7 +223,6 @@ blk && /--dpi-desync-fake-stun=/ {next}
 
 elif grep -A5 -- '--filter-l7=discord,stun' "$CONF" | grep -q -- '--dpi-desync-fake-discord='; then
 
-	# Уже есть fake — просто заменить (твой старый рабочий код)
 	awk -v new="$new_fileD" '
 BEGIN {blk=0}
 /^.*--filter-l7=discord,stun/ {blk=1}
@@ -239,7 +238,6 @@ blk && $0 ~ "--dpi-desync-fake-stun=/opt/zapret/files/fake/" {
 
 else
 
-	# Fake отсутствует — добавить после --dpi-desync=fake
 	awk -v new="$new_fileD" '
 BEGIN{blk=0}
 /--filter-l7=discord,stun/ {blk=1}
@@ -279,7 +277,30 @@ show_script_50() { [ -f "/opt/zapret/init.d/openwrt/custom.d/50-script.sh" ] || 
 name=$(case "$line" in *QUIC*) echo "50-quic4all";; *stun*) echo "50-stun4all";; *"discord media"*) echo "50-discord-media";; *"discord subnets"*) echo "50-discord";; *) echo "";; esac); }
 Discord_menu() { [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }; local NO_PAUSE=$1; while true; do [ "$NO_PAUSE" != "1" ] && clear && echo -e "${MAGENTA}Меню настройки Discord${NC}\n"; output_shown=false
 [ "$NO_PAUSE" != "1" ] && show_script_50 && [ -n "$name" ] && echo -e "${YELLOW}Установлен скрипт:${NC} $name" && output_shown=true; [ "$NO_PAUSE" != "1" ] && grep -q "$Fin_IP_Dis" /etc/hosts && echo -e "${YELLOW}Финские IP для Discord: ${GREEN}включены${NC}" && output_shown=true
-[ "$NO_PAUSE" != "1" ] && FAKE_FILE=$(grep -m1 -- '--dpi-desync-fake-discord=' "$CONF" | sed 's|.*fake/||') && [ -n "$FAKE_FILE" ] && echo -e "${YELLOW}fake в discord,stun:${NC} $FAKE_FILE" && output_shown=true
+
+if [ "$NO_PAUSE" != "1" ]; then
+	FAKE_FILE=$(
+		awk '
+		/--filter-l7=discord,stun/ {blk=1; next}
+		blk && /^.*--filter-l7=/ {exit}
+		blk && /--dpi-desync-fake-discord=/ {
+			sub(/.*fake\//,"")
+			print
+			exit
+		}
+		' "$CONF"
+	)
+
+	if [ -n "$FAKE_FILE" ]; then
+		echo -e "${YELLOW}fake в discord,stun:${NC} $FAKE_FILE"
+	else
+		echo -e "${YELLOW}fake в discord,stun:${RED} отсутствует${NC}"
+	fi
+
+	output_shown=true
+fi
+
+
 [ "$NO_PAUSE" != "1" ] && NUMDv=$(grep -o -E '^#[[:space:]]*Dv[0-9][0-9]*' "$CONF" | sed 's/[^0-9]//g' | head -n1) && [ -n "$NUMDv" ] && echo -e "${YELLOW}Стратегия для discord.media: ${CYAN}Dv$NUMDv${NC}"  && output_shown=true
 $output_shown && echo; if [ "$NO_PAUSE" = "1" ]; then SELECTED="50-stun4all"; URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-stun4all"; else
 echo -e "${CYAN}1) ${GREEN}Установить скрипт ${NC}50-stun4all\n${CYAN}2) ${GREEN}Установить скрипт ${NC}50-quic4all\n${CYAN}3) ${GREEN}Установить скрипт ${NC}50-discord-media\n${CYAN}4) ${GREEN}Установить скрипт ${NC}50-discord\n${CYAN}5) ${GREEN}Удалить скрипт${NC}"
