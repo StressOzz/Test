@@ -182,6 +182,94 @@ sed -i "/DISABLE_CUSTOM/s/'1'/'0'/" $CONF; ZAPRET_RESTART; [ "$NO_PAUSE" != "1" 
 # ==========================================
 # FIX GAME
 # ==========================================
+
+GV_XTREME_FILE="/opt/zapret/tmp/GvXtreme"
+GV_XTREME_PORTS="80,88,500,444-65535"
+
+Gv_Xtreme() {
+	[ ! -f /etc/init.d/zapret ] && {
+		echo -e "\n${RED}Zapret не установлен!${NC}\n"
+		PAUSE
+		return
+	}
+
+	if grep -q "^#GvXtreme" "$CONF"; then
+		[ ! -f "$GV_XTREME_FILE" ] && {
+			echo -e "\n${RED}Файл восстановления не найден!${NC}\n"
+			PAUSE
+			return
+		}
+
+		echo -e "\n${MAGENTA}Отключаем GvXtreme${NC}"
+
+		OLD_GV=$(sed -n '1p' "$GV_XTREME_FILE")
+		OLD_TCP=$(sed -n '2p' "$GV_XTREME_FILE")
+		OLD_UDP=$(sed -n '3p' "$GV_XTREME_FILE")
+		OLD_FUDP=$(sed -n '4p' "$GV_XTREME_FILE")
+		OLD_FTCP=$(sed -n '5p' "$GV_XTREME_FILE")
+
+		sed -i "s/^#GvXtreme\$/$OLD_GV/" "$CONF"
+		sed -i "s|^[[:space:]]*option NFQWS_PORTS_TCP .*|$OLD_TCP|" "$CONF"
+		sed -i "s|^[[:space:]]*option NFQWS_PORTS_UDP .*|$OLD_UDP|" "$CONF"
+
+		awk -v fudp="$OLD_FUDP" -v ftcp="$OLD_FTCP" '
+		/^#Gv[0-9]+/ {gv=1}
+		gv && /^--filter-udp=/ {$0=fudp; gv=2}
+		gv==2 && /^--filter-tcp=/ {$0=ftcp; gv=0}
+		{print}
+		' "$CONF" > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"
+
+		rm -f "$GV_XTREME_FILE"
+
+		ZAPRET_RESTART
+		echo -e "${GREEN}GvXtreme отключён!${NC}\n"
+		PAUSE
+		return
+	fi
+
+	echo -e "\n${MAGENTA}Включаем GvXtreme${NC}"
+
+	awk '
+	/^#Gv[0-9]+$/ {
+		print
+		gv=$0
+		next
+	}
+	/^[[:space:]]*option NFQWS_PORTS_TCP / && !tcp {tcp=$0}
+	/^[[:space:]]*option NFQWS_PORTS_UDP / && !udp {udp=$0}
+	gv && /^--filter-udp=/ && !fudp {fudp=$0}
+	gv && /^--filter-tcp=/ && !ftcp {ftcp=$0}
+	END{
+		print gv
+		print tcp
+		print udp
+		print fudp
+		print ftcp
+	}
+	' "$CONF" > "$GV_XTREME_FILE"
+
+	sed -i \
+		-e "s/^#Gv[0-9]\+\$/#GvXtreme/" \
+		-e "s|^[[:space:]]*option NFQWS_PORTS_TCP .*|	option NFQWS_PORTS_TCP '$GV_XTREME_PORTS'|" \
+		-e "s|^[[:space:]]*option NFQWS_PORTS_UDP .*|	option NFQWS_PORTS_UDP '$GV_XTREME_PORTS'|" \
+		"$CONF"
+
+	awk -v p="$GV_XTREME_PORTS" '
+	/^#GvXtreme$/ {gv=1}
+	gv && /^--filter-udp=/ {$0="--filter-udp=" p; gv=2}
+	gv==2 && /^--filter-tcp=/ {$0="--filter-tcp=" p; gv=0}
+	{print}
+	' "$CONF" > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"
+
+	ZAPRET_RESTART
+	echo -e "${GREEN}GvXtreme включён!${NC}\n"
+	PAUSE
+}
+
+
+
+
+
 remove_ports_if_present() { local OPTION="$1"; local PORTS="$2"; for p in $(echo "$PORTS" | tr ',' ' '); do sed -i "\#option $OPTION '#s#,$p##g" "$CONF"; done; sed -i "\#option $OPTION '#s#,,#,#g; s#,\$##" "$CONF"; }
 add_ports_if_missing() { local OPTION="$1"; local PORTS="$2"; for p in $(echo "$PORTS" | tr ',' ' '); do grep -q "option $OPTION '.*\b$p\b" "$CONF" || sed -i "\#option $OPTION '#s#'\$#,$p'#" "$CONF"; done; }
 strategy_TCP_common() { printf "%s\n" "--new" "--filter-tcp=$PORTS_TCP" "--dpi-desync-any-protocol=1" "--dpi-desync-cutoff=n5" "--dpi-desync=multisplit" "--dpi-desync-split-seqovl=582" "--dpi-desync-split-pos=1" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/stun.bin"; }
@@ -196,7 +284,17 @@ echo -en "${CYAN}Enter) ${GREEN}Выход в меню стратегий${NC}\n
 awk -v new="$new_file" 'BEGIN{gv=0} /^#Gv/{gv=1} gv && /^--dpi-desync-fake-unknown-udp=/{sub(/\/opt\/zapret\/files\/fake\/[^ ]+/, "/opt/zapret/files/fake/" new); gv=0} {print}' "$CONF" > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"; ZAPRET_RESTART; echo -e "fake ${GREEN}изменён на ${NC}${new_file}${GREEN}!${NC}\n"; PAUSE; }
 fix_GAME() { local NO_PAUSE=$1; [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }; local CURRENT_GAME=""; for i in 1 2 3 4; do grep -q "^#Gv$i" "$CONF" && CURRENT_GAME="Gv$i"; done
 if [ -n "$NO_PAUSE" ]; then GAME_CHOICE="$NO_PAUSE"; else echo -e "\n${MAGENTA}Меню управления стратегией для игр${NC}"; for i in $(seq 1 4); do if [ "$CURRENT_GAME" = "Gv$i" ]; then echo -e "${CYAN}$i) ${GREEN}Удалить ${NC}Gv$i"; else echo -e "${CYAN}$i) ${GREEN}Установить ${NC}Gv$i"; fi; done
-echo -e "${CYAN}5) ${GREEN}Выбрать и сменить ${NC}fake${GREEN} для игровой стратегии\n${CYAN}Enter) ${GREEN}Выход в меню стратегий"; echo -en "\n${YELLOW}Выберите пункт: ${NC}"; read GAME_CHOICE; fi; if [ "$GAME_CHOICE" = "5" ]; then GV_FAKE; return; fi; case "$GAME_CHOICE" in 1|2|3|4) ;; *) return;; esac; LAST_QUOTE=$(grep -n "^'\$" "$CONF" | tail -n1 | cut -d: -f1)
+echo -e "${CYAN}5) ${GREEN}Выбрать и сменить ${NC}fake${GREEN} для игровой стратегии${NC}"
+
+grep -q "^#GvXtreme" "$CONF" &&
+	XTREME_TXT="${GREEN}Отключить ${NC}GvXtreme" ||
+	XTREME_TXT="${GREEN}Включить ${NC}GvXtreme"
+
+echo -e "${CYAN}6) $XTREME_TXT"
+
+
+
+echo -en "${CYAN}Enter) ${GREEN}Выход в меню стратегий\n\n${YELLOW}Выберите пункт: ${NC}"; read GAME_CHOICE; fi; if [ "$GAME_CHOICE" = "5" ]; then GV_FAKE; return; fi; case "$GAME_CHOICE" in 1|2|3|4) ;; *) return;; esac; LAST_QUOTE=$(grep -n "^'\$" "$CONF" | tail -n1 | cut -d: -f1)
 if grep -q "^#Gv" "$CONF"; then Gv_LINE=$(grep -n "^#Gv" "$CONF" | tail -n1 | cut -d: -f1); sed -i "${Gv_LINE},${LAST_QUOTE}d" "$CONF"; elif [ -n "$LAST_QUOTE" ]; then sed -i "${LAST_QUOTE},\$d" "$CONF"; fi
 if [ "$CURRENT_GAME" = "Gv$GAME_CHOICE" ]; then remove_ports_if_present NFQWS_PORTS_UDP "$PORTS_UDP"; remove_ports_if_present NFQWS_PORTS_TCP "$PORTS_TCP"; echo "'" >> "$CONF"; echo -e "\n${CYAN}Удаляем стратегию для игр ${NC}"; ZAPRET_RESTART
 echo -e "${GREEN}Стратегия для игр удалена!${NC}\n"; [ -z "$NO_PAUSE" ] && PAUSE; return; fi; if [ "$GAME_CHOICE" -eq 1 ]; then STRATEGY="$(strategy_Gv1; strategy_TCP_common)"; else STRATEGY="$(strategy_Gv "$GAME_CHOICE"; strategy_TCP_common)"; fi
