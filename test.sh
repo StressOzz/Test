@@ -7,7 +7,7 @@ CF_DIRECT="https://api.cloudflareclient.com"
 CF_UA="okhttp/3.12.1"
 CF_CLIENT_VER="a-6.3-1922"
 WORKER_URL="${WORKER_URL:-https://wgcli.vercel.app}"
-WARP_EP="engage.cloudflareclient.com:500"
+WARP_EP="engage.cloudflareclient.com:4500"
 WARP_IFACE="warp0"
 TMP="$(mktemp -d /tmp/splify.XXXXXX)"
 trap 'rm -rf "$TMP"' EXIT
