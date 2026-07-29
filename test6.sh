@@ -476,9 +476,9 @@ setup_firewall() {
 SPL_MENU() { while true; do clear
 echo -e "${MAGENTA}Меню Splify${NC}\n"
 
+echo -e "$SPL_INST_VER"
 
-
-echo -e "${CYAN}1) ${GREEN}Уставновить ${NC}Splify"
+echo -e "\n${CYAN}1) ${GREEN}Уставновить ${NC}Splify"
 echo -e "${CYAN}2) ${GREEN}Удалить ${NC}Splify"
 echo -e "${CYAN}3) ${GREEN}Сгененрировать и применить ${NC}WARP"
 echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read choiceSP; case "$choiceSP" in
@@ -507,7 +507,7 @@ PAUSE
 ;;
 
 2) 
-sh <(wget -q -O - https://raw.githubusercontent.com/xyzmean/splify/main/uninstall.sh)
+DELETE_SPL
 PAUSE
 ;;
 
@@ -531,22 +531,118 @@ esac; done
 }
 
 
+uget() { uci -q get "$1" 2>/dev/null; }
+DELETE_SPL() {
 
 
 
+# ──────────────────────────── 1. stop splify services ───────────────────────
+say "Останавливаю службы splify…"
+for s in splify splify-agent; do
+    if [ -x "/etc/init.d/$s" ]; then
+        "/etc/init.d/$s" stop    >/dev/null 2>&1
+        "/etc/init.d/$s" disable >/dev/null 2>&1
+    fi
+done
+
+if [ -x /etc/init.d/splify-singbox ]; then
+    /etc/init.d/splify-singbox stop    >/dev/null 2>&1
+    /etc/init.d/splify-singbox disable >/dev/null 2>&1
+fi
+
+# ──────────────────────────── 2. warp0 interface + peers ────────────────────
+if [ -n "$(uget "network.$WARP_IFACE")" ]; then
+    say "Удаляю интерфейс $WARP_IFACE…"
+    ifdown "$WARP_IFACE" >/dev/null 2>&1
+    uci -q delete "network.$WARP_IFACE"
+fi
+for _pt in amneziawg_"$WARP_IFACE" wireguard_"$WARP_IFACE"; do
+    while [ -n "$(uget "network.@${_pt}[0]")" ]; do
+        uci -q delete "network.@${_pt}[0]"
+    done
+done
+
+# ──────────────────────────── 3. firewall zone + forwardings ────────────────
+_ep_ifaces="$(uci show splify 2>/dev/null | sed -n "s/^splify\.[^=]*\.iface='\([^']*\)'\$/\1/p" | sort -u)"
+_ep_ifaces="$WARP_IFACE $_ep_ifaces"
+
+say "Чищу firewall-зоны для туннелей…"
+_zi=0
+while [ -n "$(uget "firewall.@zone[$_zi]")" ]; do
+    _zn="$(uget "firewall.@zone[$_zi].name")"
+    _znet="$(uget "firewall.@zone[$_zi].network")"
+    _zdev="$(uget "firewall.@zone[$_zi].device")"
+    _match=""
+    for _ep in $_ep_ifaces; do
+        [ -n "$_ep" ] || continue
+        if [ "$_zn" = "$_ep" ]; then _match=1; break; fi
+        case " $_znet " in *" $_ep "*) _match=1; break ;; esac
+        case " $_zdev " in *" $_ep "*) _match=1; break ;; esac
+    done
+    if [ -n "$_match" ]; then
+        uci -q delete "firewall.@zone[$_zi]"
+    else
+        _zi=$((_zi + 1))
+    fi
+done
+_fi=0
+while [ -n "$(uget "firewall.@forwarding[$_fi]")" ]; do
+    _fsrc="$(uget "firewall.@forwarding[$_fi].src")"
+    _fdest="$(uget "firewall.@forwarding[$_fi].dest")"
+    _match=""
+    for _ep in $_ep_ifaces; do
+        [ -n "$_ep" ] || continue
+        if [ "$_fsrc" = "$_ep" ] || [ "$_fdest" = "$_ep" ]; then _match=1; break; fi
+    done
+    if [ -n "$_match" ]; then
+        uci -q delete "firewall.@forwarding[$_fi]"
+    else
+        _fi=$((_fi + 1))
+    fi
+done
+
+# ──────────────────────────── 4. commit UCI + reload ────────────────────────
+uci -q commit network  2>/dev/null
+uci -q commit firewall 2>/dev/null
+/etc/init.d/network reload   >/dev/null 2>&1
+/etc/init.d/firewall reload  >/dev/null 2>&1
+
+# ──────────────────────────── 5. splify runtime (ip rules, nft, cron) ───────
+if [ -x /usr/local/sbin/splify-uninstall ]; then
+    say "Чищу runtime-состояние splify (ip rules, nft, cron)…"
+    /usr/local/sbin/splify-uninstall >/dev/null 2>&1
+else
+    say "Чищу runtime-состояние splify вручную…"
+    while ip -4 rule del priority 999   >/dev/null 2>&1; do :; done
+    while ip -4 rule del priority 1000  >/dev/null 2>&1; do :; done
+    ip -4 route flush table 200 >/dev/null 2>&1
+    rm -f /etc/nftables.d/30-splify.nft
+    rm -f /tmp/dnsmasq.d/splify-*.conf /tmp/dnsmasq.cfg*.d/splify-*.conf
+    if [ -f /etc/crontabs/root ]; then
+        grep -v 'splify-' /etc/crontabs/root > /tmp/splify-cron.uninst
+        cat /tmp/splify-cron.uninst > /etc/crontabs/root
+        rm -f /tmp/splify-cron.uninst
+        /etc/init.d/cron restart >/dev/null 2>&1
+    fi
+    rm -f /var/run/splify-state /var/run/splify-failcount /var/run/splify-events
+    /etc/init.d/firewall reload >/dev/null 2>&1
+    /etc/init.d/dnsmasq reload  >/dev/null 2>&1
+fi
+
+# ──────────────────────────── 6. remove splify packages ─────────────────────
+
+$DELETE luci-i18n-splify-ru luci-app-splify splify
 
 
+# ──────────────────────────── 7. remove AmneziaWG packages ──────────────────
 
+$DELETE luci-i18n-amneziawg-ru luci-proto-amneziawg amneziawg-tools kmod-amneziawg
 
-
-
-
-
-
-
-
-
-
+# ──────────────────────────── 8. splify config + leftover data ──────────────
+say "Удаляю конфигурацию и данные splify…"
+rm -rf /etc/splify* /etc/init.d/splify* /etc/config/splify* /var/run/splify /tmp/luci-indexcache* /tmp/luci-modulecache*
+/etc/init.d/rpcd reload 2>/dev/null || /etc/init.d/rpcd restart 2>/dev/null
+}
 
 
 
