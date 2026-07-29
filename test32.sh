@@ -284,6 +284,7 @@ choose_endpoint() {
 		2) WARP_EP_MODE=auto ;;
 		*) WARP_EP_MODE=engage ;;
   esac
+fi
 
   if [ "$WARP_EP_MODE" = engage ]; then
     WARP_EP="engage.cloudflareclient.com:4500"
