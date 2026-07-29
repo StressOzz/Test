@@ -629,14 +629,17 @@ else
     /etc/init.d/dnsmasq reload  >/dev/null 2>&1
 fi
 
-# ──────────────────────────── 6. remove splify packages ─────────────────────
+# ──────────────────────────── 6. remove packages ─────────────────────
 
-$DELETE luci-i18n-splify-ru luci-app-splify splify
+$DELETE luci-i18n-splify-ru >/dev/null 2>&1
+$DELETE luci-app-splify >/dev/null 2>&1
+$DELETE splify >/dev/null 2>&1
 
+$DELETE luci-i18n-amneziawg-ru >/dev/null 2>&1
+$DELETE luci-proto-amneziawg >/dev/null 2>&1
+$DELETE amneziawg-tools >/dev/null 2>&1
+$DELETE kmod-amneziawg >/dev/null 2>&1
 
-# ──────────────────────────── 7. remove AmneziaWG packages ──────────────────
-
-$DELETE luci-i18n-amneziawg-ru luci-proto-amneziawg amneziawg-tools kmod-amneziawg
 
 # ──────────────────────────── 8. splify config + leftover data ──────────────
 say "Удаляю конфигурацию и данные splify…"
