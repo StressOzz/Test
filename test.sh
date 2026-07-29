@@ -139,8 +139,6 @@ AWG_S1=0
 AWG_S2=0
 AWG_I1="<b 0xce000000010897a297ecc34cd6dd000044d0ec2e2e1ea2991f467ace4222129b5a098823784694b4897b9986ae0b7280135fa85e196d9ad980b150122129ce2a9379531b0fd3e871ca5fdb883c369832f730e272d7b8b74f393f9f0fa43f11e510ecb2219a52984410c204cf875585340c62238e14ad04dff382f2c200e0ee22fe743b9c6b8b043121c5710ec289f471c91ee414fca8b8be8419ae8ce7ffc53837f6ade262891895f3f4cecd31bc93ac5599e18e4f01b472362b8056c3172b513051f8322d1062997ef4a383b01706598d08d48c221d30e74c7ce000cdad36b706b1bf9b0607c32ec4b3203a4ee21ab64df336212b9758280803fcab14933b0e7ee1e04a7becce3e2633f4852585c567894a5f9efe9706a151b615856647e8b7dba69ab357b3982f554549bef9256111b2d67afde0b496f16962d4957ff654232aa9e845b61463908309cfd9de0a6abf5f425f577d7e5f6440652aa8da5f73588e82e9470f3b21b27b28c649506ae1a7f5f15b876f56abc4615f49911549b9bb39dd804fde182bd2dcec0c33bad9b138ca07d4a4a1650a2c2686acea05727e2a78962a840ae428f55627516e73c83dd8893b02358e81b524b4d99fda6df52b3a8d7a5291326e7ac9d773c5b43b8444554ef5aea104a738ed650aa979674bbed38da58ac29d87c29d387d80b526065baeb073ce65f075ccb56e47533aef357dceaa8293a523c5f6f790be90e4731123d3c6152a70576e90b4ab5bc5ead01576c68ab633ff7d36dcde2a0b2c68897e1acfc4d6483aaaeb635dd63c96b2b6a7a2bfe042f6aed82e5363aa850aace12ee3b1a93f30d8ab9537df483152a5527faca21efc9981b304f11fc95336f5b9637b174c5a0659e2b22e159a9fed4b8e93047371175b1d6d9cc8ab745f3b2281537d1c75fb9451871864efa5d184c38c185fd203de206751b92620f7c369e031d2041e152040920ac2c5ab5340bfc9d0561176abf10a147287ea90758575ac6a9f5ac9f390d0d5b23ee12af583383d994e22c0cf42383834bcd3ada1b3825a0664d8f3fb678261d57601ddf94a8a68a7c273a18c08aa99c7ad8c6c42eab67718843597ec9930457359dfdfbce024afc2dcf9348579a57d8d3490b2fa99f278f1c37d87dad9b221acd575192ffae1784f8e60ec7cee4068b6b988f0433d96d6a1b1865f4e155e9fe020279f434f3bf1bd117b717b92f6cd1cc9bea7d45978bcc3f24bda631a36910110a6ec06da35f8966c9279d130347594f13e9e07514fa370754d1424c0a1545c5070ef9fb2acd14233e8a50bfc5978b5bdf8bc1714731f798d21e2004117c61f2989dd44f0cf027b27d4019e81ed4b5c31db347c4a3a4d85048d7093cf16753d7b0d15e078f5c7a5205dc2f87e330a1f716738dce1c6180e9d02869b5546f1c4d2748f8c90d9693cba4e0079297d22fd61402dea32ff0eb69ebd65a5d0b687d87e3a8b2c42b648aa723c7c7daf37abcc4bb85caea2ee8f55bec20e913b3324ab8f5c3304f820d42ad1b9f2ffc1a3af9927136b4419e1e579ab4c2ae3c776d293d397d575df181e6cae0a4ada5d67ecea171cca3288d57c7bbdaee3befe745fb7d634f70386d873b90c4d6c6596bb65af68f9e5121e67ebf0d89d3c909ceedfb32ce9575a7758ff080724e1ab5d5f43074ecb53a479af21ed03d7b6899c36631c0166f9d47e5e1d4528a5d3d3f744029c4b1c190cbfbad06f5f83f7ad0429fa9a2719c56ffe3783460e166de2d8>"
 
-warn() { printf '\033[1;33mВнимание:\033[0m %s\n' "$*" >&2; }
-err()  { printf '\033[1;31mОшибка:\033[0m %s\n' "$*" >&2; exit 1; }
 
 # ──────────────────────────── 1. environment checks ────────────────────────
 
@@ -150,25 +148,25 @@ clear
 echo -e "${MAGENTA}Устанавливаем ${NC}splify"
 
 if ! command -v "jq" >/dev/null 2>&1; then
-  $UPDATE >/dev/null 2>&1
 echo -e "${CYAN}Ставим зависимость ${NC}jq"
-   $INSTALL jq >/dev/null 2>&1
+$UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; PAUSE; return 1; }
+	$INSTALL jq >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при установки!${NC}\n"; PAUSE; return 1; }
   fi
 
 echo -e "${CYAN}Проверяем версию ${NC}splify"
   META="$TMP_SPL/meta.json"
-  wget -qO "$META" "$API" || err "не удалось получить данные релиза (нет интернета?)."
+  wget -qO "$META" "$API" || { echo -e "\n${RED}Не удалось получить данные релиза!${NC}\n"; PAUSE; return 1; }
   URLS="$(tr ',' '\n' <"$META" | sed -n 's/.*"browser_download_url": *"\([^"]*\.'$RAZ'\)".*/\1/p')"
-  [ -n "$URLS" ] || err "в последнем релизе нет .$RAZ. Возможно, релиз ещё не собран."
+  [ -n "$URLS" ] || { echo -e "\n${RED}Возможно, релиз ещё не собран.!${NC}\n"; PAUSE; return 1; }
 
 echo -e "${CYAN}Скачиваем пакеты ${NC}splify"
   for u in $URLS; do
     case "$u" in
-      *splify*) wget -qO "$TMP_SPL/${u##*/}" "$u" || err "не удалось скачать $u" ;;
+      *splify*) wget -qO "$TMP_SPL/${u##*/}" "$u" || { echo -e "\n${RED}Не удалось скачать ${NC}$u\n"; PAUSE; return 1; }
     esac
   done
   for pkg in splify- luci-app-splify- luci-i18n-splify-ru-; do
-    ls "$TMP_SPL/$pkg"*.$RAZ >/dev/null 2>&1 || err "в релизе не хватает пакета $pkg*.$RAZ"
+    ls "$TMP_SPL/$pkg"*.$RAZ >/dev/null 2>&1 || { echo -e "\n${RED}В релизе не хватает пакета ${NC}$pkg*.$RAZ${RED}!${NC}\n"; PAUSE; return 1; }
   done
 
 echo -e "${CYAN}Устанавливаем ${NC}splify"
@@ -259,17 +257,16 @@ echo -e "\n${CYAN}Подбираем лучший ${NC}endpoint"
     _best_colo=$(echo "$_best" | awk '{print $3}')
 
 	
-echo -e "${CYAN}Используем endpoint:${NC} $_best_ip ($(colo_name "$_best_colo"), ping: ${_best_ping}ms)"
+echo -e "\n${CYAN}Используем:${NC} $_best_ip ($(colo_name "$_best_colo"), ping: ${_best_ping}ms)"
     WARP_EP="${_best_ip}:4500"
   else
-    warn "Не удалось найти подходящий эндпоинт среди 100 проверенных."
-    warn "Часть ресурсов может не работать! Устанавливаем эндпоинт по умолчанию."
     WARP_EP="engage.cloudflareclient.com:4500"
+	echo -e "\n${CYAN}Подбор не удался!\nИспользуем ${NC}endpoint${CYAN}:${NC} $WARP_EP"
   fi
 }
 
 choose_endpoint() {
-  echo -e "\n${MAGENTA}Меню выбора endpoint${NC}"
+  echo -e "\n${MAGENTA}Меню выбора endpoint${NC}\n"
   echo -e "${CYAN}1) ${GREEN}Использовать${NC} engage.cloudflareclient.com:4500"
   echo -e "${CYAN}2) ${GREEN}Подобрать автоматически${NC}"
   echo -en "\n${YELLOW}Выберите пункт (${NC}Enter = 1${YELLOW}): ${NC}"
@@ -282,7 +279,7 @@ choose_endpoint() {
       ;;
     *)
       WARP_EP="engage.cloudflareclient.com:4500"
-      echo -e "\n${CYAN}Используем endpoint:${NC} $WARP_EP"
+      echo -e "\n${CYAN}Используем ${NC}endpoint${CYAN}:${NC} $WARP_EP"
       ;;
   esac
 }
@@ -290,7 +287,7 @@ choose_endpoint() {
 register_warp() {
 echo -e "\n${MAGENTA}Генерируем WARP${NC}"
 echo -e "${CYAN}Регистрируем устройство в ${NC}Cloudflare"
-  [ -n "$WORKER_URL" ] && echo -e "${CYAN}Используем прокси: ${NC}$WORKER_URL" || warn "WORKER_URL не задан — пробую api.cloudflareclient.com напрямую (может быть заблокирован)."
+  [ -n "$WORKER_URL" ] && echo -e "${CYAN}Используем прокси: ${NC}$WORKER_URL" || echo -e "${CYAN}Прокси не найден!\nИспользуем: ${NC}api.cloudflareclient.com${NC}"
 
   if command -v awg >/dev/null 2>&1; then GEN=awg; else GEN=wg; fi
   PRIV="$("$GEN" genkey)"
@@ -300,12 +297,12 @@ echo -e "${CYAN}Регистрируем устройство в ${NC}Cloudflare
   REG="$TMP_SPL/reg.json"
   curl -fsSL --max-time 30 -X POST "$(reg_url reg)" -H "User-Agent: $CF_UA" -H "CF-Client-Version: $CF_CLIENT_VER" -H "Content-Type: application/json" \
     -H "Accept: application/json" -d "{\"key\":\"$PUB\",\"install_id\":\"\",\"fcm_token\":\"\",\"model\":\"PC\",\"locale\":\"en_US\",\"tos\":\"$TOS\",\"type\":\"Android\"}" \
-    -o "$REG" || err "регистрация WARP не удалась. Если API заблокирован вашим провайдером — задайте WORKER_URL (см. contrib/warp-api-proxy-vercel)."
+    -o "$REG" || { echo -e "\n${RED}Регистрация WARP не удалась!${NC}\n"; PAUSE; return 1; }
 
   REG_ID="$(jq -r '.id'    "$REG")"
   REG_TOK="$(jq -r '.token' "$REG")"
-  [ -n "$REG_ID" ] && [ "$REG_ID" != "null" ] || err "WARP: нет id в ответе."
-  [ -n "$REG_TOK" ] && [ "$REG_TOK" != "null" ] || err "WARP: нет token в ответе."
+  [ -n "$REG_ID" ] && [ "$REG_ID" != "null" ] || { echo -e "\n${RED}Нет id в ответе!${NC}\n"; PAUSE; return 1; }
+  [ -n "$REG_TOK" ] && [ "$REG_TOK" != "null" ] || { echo -e "\n${RED}Нет token в ответе!${NC}\n"; PAUSE; return 1; }
 
   WARP="$TMP_SPL/warp.json"
   if ! jq -e '.config.peers[0].public_key' "$REG" >/dev/null 2>&1; then
@@ -319,8 +316,8 @@ echo -e "${CYAN}Регистрируем устройство в ${NC}Cloudflare
   WARP_PEER="$(jq -r '.config.peers[0].public_key'               "$WARP")"
   WARP_V4="$(jq -r '.config.interface.addresses.v4'               "$WARP")"
   WARP_V6="$(jq -r '.config.interface.addresses.v6 // ""'         "$WARP")"
-  [ -n "$WARP_PEER" ] && [ "$WARP_PEER" != "null" ] || err "WARP: нет peer public_key в ответе."
-  [ -n "$WARP_V4" ]   && [ "$WARP_V4"   != "null" ] || err "WARP: нет client IPv4 в ответе."
+  [ -n "$WARP_PEER" ] && [ "$WARP_PEER" != "null" ] || { echo -e "\n${RED}Нет peer public_key в ответе!${NC}\n"; PAUSE; return 1; }
+  [ -n "$WARP_V4" ]   && [ "$WARP_V4"   != "null" ] || { echo -e "\n${RED}Нет client IPv4 в ответе!${NC}\n"; PAUSE; return 1; }
 
   case "$WARP_V4" in
     */*) : ;;
@@ -379,7 +376,7 @@ echo -e "${CYAN}Перезапускаем сеть${NC}"
 uci commit network
 /etc/init.d/network restart
 
-ifup "$WARP_IFACE" >/dev/null 2>&1 || warn "ifup $WARP_IFACE не удался — проверьте в LuCI."
+ifup "$WARP_IFACE" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось запустить ${NC}$WARP_IFACE\n"; PAUSE; return 1; }
 }
 
 # ──────────────────────────── 6. register endpoint in splify ────────────────
@@ -409,16 +406,12 @@ config endpoint
 EOF
   fi
   
-  if command -v splify-apply >/dev/null 2>&1; then
-    splify-apply >/dev/null 2>&1 || warn "splify-apply завершился с ошибкой — см. Сервисы → splify."
-  fi
+    /usr/local/sbin/splify-apply >/dev/null 2>&1
 	/etc/init.d/splify enable 2>/dev/null
 	sleep 3
 	/etc/init.d/splify restart 2>/dev/null
 	sleep 3
 	/etc/init.d/splify-agent restart 2>/dev/null
-	sleep 3
-	/etc/init.d/splify reload 2>/dev/null
 }
 
 # ──────────────────────────── 7. firewall zone ──────────────────────────────
@@ -429,7 +422,7 @@ echo -en "${YELLOW}Подождите...${NC}"
   if /usr/local/sbin/splify-firewall check "$WARP_IFACE" >/dev/null 2>&1; then
 echo -e "Firewall${CYAN} зона для ${NC}$WARP_IFACE уже настроена${NC}"
   else
-    /usr/local/sbin/splify-firewall fix "$WARP_IFACE" >/dev/null 2>&1 || warn "splify-firewall fix не удался — проверьте зону для $WARP_IFACE в Сеть → Firewall."
+    /usr/local/sbin/splify-firewall fix "$WARP_IFACE" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось создать зону ${NC}firewall${RED}!${NC}\n"; PAUSE; return 1; }
   fi
 }
 
@@ -474,8 +467,6 @@ echo -en "${YELLOW}Подождите...${NC}"
 sleep 8
 /etc/init.d/splify-agent restart
 sleep 8
-/etc/init.d/splify reload
-sleep 5
 echo -e "\n\nsplify ${GREEN}установлен!${NC}\n"
 
 PAUSE
@@ -501,8 +492,6 @@ echo -en "${YELLOW}Подождите...${NC}"
 sleep 8
 /etc/init.d/splify-agent restart
 sleep 8
-/etc/init.d/splify reload
-sleep 5
 echo -e "\n\nsplify ${GREEN}установлен!${NC}\n"
 
 PAUSE
