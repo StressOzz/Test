@@ -446,9 +446,9 @@ fi
 echo -e "${YELLOW}splify: $SPL_STATUS"
 
 if pkg_is_installed amneziawg-tools && pkg_is_installed luci-proto-amneziawg && pkg_is_installed kmod-amneziawg; then
-    echo -e "${YELLOW}AWG: ${GREEN}установлен${NC}"
+    echo -e "${YELLOW}AmneziaWG: ${GREEN}установлен${NC}"
 else
-    echo -e "${YELLOW}AWG: ${RED}не установлен${NC}"
+    echo -e "${YELLOW}AmneziaWG: ${RED}не установлен${NC}"
 fi
 
 if uci -q get network.warp0 >/dev/null 2>&1; then
@@ -456,6 +456,14 @@ if uci -q get network.warp0 >/dev/null 2>&1; then
 else
     echo -e "${YELLOW}Интерфейс: ${RED}не установлен${NC}"
 fi
+
+if uci show firewall | grep -q "network='.*warp0"; then
+    echo -e "${YELLOW}Зона Firewall: ${GREEN}есть${NC}"
+else
+    echo -e "${YELLOW}Зона Firewall: ${RED}отсутствует${NC}"
+fi
+
+
 
 if [ "$UPD_SPL" = "0" ]; then echo -e "\n${CYAN}1) ${GREEN}Установить ${NC}splify"; else echo -e "\n${CYAN}1) ${GREEN}Обновить ${NC}splify"; fi
 echo -e "${CYAN}2) ${GREEN}Удалить ${NC}splify"
