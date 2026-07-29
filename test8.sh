@@ -200,11 +200,8 @@ install_splify() {
   done
 
   say "Устанавливаю splify…"
-  if [ "$PKG_MANAGER" = "apk" ]; then
-    apk add --allow-untrusted "$TMP_SPL"/*.$PKG_EXT || err "apk add не выполнился."
-  else
-    opkg install "$TMP_SPL"/*.$PKG_EXT || err "opkg install не выполнился."
-  fi
+    $INSTALL "$TMP_SPL"/*.$PKG_EXT
+
 
   rm -f /tmp/luci-indexcache* /tmp/luci-modulecache* 2>/dev/null
   /etc/init.d/rpcd reload 2>/dev/null || /etc/init.d/rpcd restart 2>/dev/null
@@ -489,6 +486,7 @@ pre_inst_spl
 
 install_splify
 sleep 3
+echo -e "\n${MAGENTA}Устанавливаем AWG${NC}"
 install_AWG
 sleep 3
 register_warp
@@ -520,6 +518,8 @@ create_warp_iface
 sleep 3
 register_in_splify
 sleep 3
+/etc/init.d/splify restart; /etc/init.d/splify-agent restart
+sleep 5
 PAUSE
 ;;
 
@@ -1213,12 +1213,14 @@ echo -e "\nNetShift ${GREEN}$( [ "$ACTION" = "install" ] && echo "установ
 PODKOP_DELETE() { echo -e "\n${MAGENTA}Удаляем NetShift${NC}"; echo -e "${CYAN}Останавливаем сервисы${NC}"; netshift stop >/dev/null 2>&1; netshift disable >/dev/null 2>&1; sing-box stop >/dev/null 2>&1; sing-box disable >/dev/null 2>&1
 echo -e "${CYAN}Удаляем пакеты ${NC}NetShift"; $DELETE luci-i18n-netshift-ru luci-app-netshift netshift >/dev/null 2>&1; echo -e "${CYAN}Удаляем пакеты ${NC}sing-box"; $DELETE sing-box >/dev/null 2>&1
 echo -e "NetShift${GREEN} удалён!${NC}"; [ "$ACTION" != "update" ] && { rm -rf /etc/config/netshift* /usr/bin/netshift /etc/config/sing-box* /etc/sing-box >/dev/null 2>&1; echo; PAUSE; }; }
-install_AWG_INTER() { if ! pkg_is_installed amneziawg-tools; then install_AWG; echo -e "${CYAN}Создаем ${NC}интерфейс AWG"; if uci show network.$IF_NAME >/dev/null 2>&1; then echo -e "\n${RED}Интерфейс уже существует!${NC}"; else uci set network.$IF_NAME=interface
+
+install_AWG_INTER() { if ! pkg_is_installed amneziawg-tools; then echo -e "\n${MAGENTA}Устанавливаем AWG и интерфейс AWG${NC}"; install_AWG; echo -e "${CYAN}Создаем ${NC}интерфейс AWG"; if uci show network.$IF_NAME >/dev/null 2>&1; then echo -e "\n${RED}Интерфейс уже существует!${NC}"; else uci set network.$IF_NAME=interface
 uci set network.$IF_NAME.proto=$PROTO; uci set network.$IF_NAME.device=$DEV_NAME; uci commit network; fi; echo -en "${YELLOW}Перезапускаем сеть! Подождите...${NC}"; /etc/init.d/network restart >/dev/null 2>&1; echo -e "\nAWG ${GREEN}и${NC} интерфейс AWG ${GREEN}установлены!${NC}"; echo -e "\n${YELLOW}Необходимо в ${NC}LuCI${YELLOW} в интерфейс ${NC}AWG${YELLOW} загрузить файл ${NC}*.conf${YELLOW}:${NC}"
 echo -e "${NC}Network ${GREEN}→${NC} Interfaces ${GREEN}→${NC} AWG ${GREEN}→${NC} Edit ${GREEN}→${NC} Load configuration… ${GREEN}→${NC} Save ${GREEN}→${NC} Save & Apply\n"; PAUSE; rm -rf "$tmpDIR"; else 
 echo -e "\n${MAGENTA}Удаление AWG и интерфейс AWG${NC}"; echo -e "${CYAN}Удаляем ${NC}AWG"; $DELETE luci-i18n-amneziawg-ru >/dev/null 2>&1; $DELETE luci-proto-amneziawg >/dev/null 2>&1; $DELETE amneziawg-tools >/dev/null 2>&1; $DELETE kmod-amneziawg >/dev/null 2>&1; uci delete network.AWG >/dev/null 2>&1; uci commit network >/dev/null 2>&1
 for peer in $(uci show network | grep "interface='AWG'" | cut -d. -f2); do uci delete network.$peer; done; uci commit network >/dev/null 2>&1; echo -e "${CYAN}Удаляем ${NC}интерфейс AWG"; echo -en "${YELLOW}Перезапускаем сеть! Подождите...${NC}"; /etc/init.d/network restart; echo -e "\nAWG ${GREEN}и${NC} интерфейс AWG ${GREEN}удалены!${NC}\n"; PAUSE; fi }
-install_AWG() { rm -rf "$tmpDIR"; mkdir -p "$tmpDIR"; echo -e "\n${MAGENTA}Устанавливаем AWG и интерфейс AWG${NC}"; echo -e "${CYAN}Обновляем список пакетов${NC}"; $UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; PAUSE; return; }
+
+install_AWG() { rm -rf "$tmpDIR"; mkdir -p "$tmpDIR"; echo -e "${CYAN}Обновляем список пакетов${NC}"; $UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; PAUSE; return; }
 AWG_kmod="https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v$OWRTAWG/kmod-amneziawg_v${OWRTAWG}_$ARCHAWG.$APK_RAS"; AWG_tools="https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v$OWRTAWG/amneziawg-tools_v${OWRTAWG}_$ARCHAWG.$APK_RAS"
 AWG_luci="https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v$OWRTAWG/luci-proto-amneziawg_v${OWRTAWG}_$ARCHAWG.$APK_RAS"; AWG_ru="https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v$OWRTAWG/luci-i18n-amneziawg-ru_v${OWRTAWG}_$ARCHAWG.$APK_RAS"; cd "$tmpDIR"
 echo -e "${CYAN}Скачиваем ${NC}AWG"; wget -q -U "Mozilla/5.0" -O AWG_kmod.$APK_RAS "$AWG_kmod" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$AWG_kmod\n"; PAUSE; return; }; wget -q -U "Mozilla/5.0" -O AWG_tools.$APK_RAS "$AWG_tools" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$AWG_tools\n"; PAUSE; return; }; wget -q -U "Mozilla/5.0" -O AWG_luci.$APK_RAS "$AWG_luci" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$AWG_luci\n"; PAUSE; return; }
