@@ -416,11 +416,11 @@ EOF
 
 # ──────────────────────────── 7. firewall zone ──────────────────────────────
 setup_firewall() {
-echo -e "\n${MAGENTA}Создаём firewall зону${NC}"
-echo -e "${CYAN}Создаём ${NC}firewall${CYAN} зону для ${NC}$WARP_IFACE${NC}"
+echo -e "\n${MAGENTA}Создаём зону firewall${NC}"
+echo -e "${CYAN}Настраиваем зону ${NC}firewall${CYAN} для ${NC}$WARP_IFACE${NC}"
 echo -en "${YELLOW}Подождите...${NC}\n"
   if /usr/local/sbin/splify-firewall check "$WARP_IFACE" >/dev/null 2>&1; then
-echo -e "Firewall${CYAN} зона для ${NC}$WARP_IFACE уже настроена${NC}"
+echo -e "${CYAN}Зона${NC} firewall ${CYAN}для ${NC}$WARP_IFACE уже настроена${NC}"
   else
     /usr/local/sbin/splify-firewall fix "$WARP_IFACE" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось создать зону ${NC}firewall${RED}!${NC}\n"; PAUSE; return 1; }
   fi
@@ -458,9 +458,9 @@ else
 fi
 
 if uci show firewall | grep -q "network='.*warp0"; then
-    echo -e "${YELLOW}Зона Firewall: ${GREEN}есть${NC}"
+    echo -e "${YELLOW}Зона firewall: ${GREEN}настроена${NC}"
 else
-    echo -e "${YELLOW}Зона Firewall: ${RED}отсутствует${NC}"
+    echo -e "${YELLOW}Зона firewall: ${RED}не настроена${NC}"
 fi
 
 
@@ -516,7 +516,7 @@ uget() { uci -q get "$1" 2>/dev/null; }
 
 DELETE_SPL() {
 # ──────────────────────────── 1. stop splify services ───────────────────────
-echo -e "\n${MAGENTA}Удаляем splify, AWG, Интерфейс, firewall зону${NC}"
+echo -e "\n${MAGENTA}Удаляем splify, AWG, интерфейс, зону firewall${NC}"
 
 echo -e "${CYAN}Останавливаем службы${NC}"
 for s in splify splify-agent; do
