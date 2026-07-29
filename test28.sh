@@ -481,7 +481,7 @@ create_warp_iface || return
 register_in_splify || return
 setup_firewall || return
 
-echo -e "\n${MAGENTA}Применяем настройки${NC}"
+echo -e "\n\n${MAGENTA}Применяем настройки${NC}"
 echo -en "${YELLOW}Подождите...${NC}"
 /etc/init.d/splify restart
 sleep 8
@@ -489,7 +489,7 @@ sleep 8
 sleep 8
 /etc/init.d/splify reload
 sleep 5
-echo -e "\nsplify ${GREEN}установлен!${NC}\n"
+echo -e "\n\nsplify ${GREEN}установлен!${NC}\n"
 
 PAUSE
 ;;
@@ -500,7 +500,7 @@ DELETE_SPL
 
 3)
 if [ -z "$SPL_INST_VER" ]; then
-echo -e "\nsplify ${RED}не установлен${NC}\n"
+echo -e "\nsplify ${RED}не установлен!${NC}\n"
 PAUSE
 else
 register_warp || return
@@ -516,7 +516,7 @@ sleep 8
 sleep 8
 /etc/init.d/splify reload
 sleep 5
-echo -e "\nsplify ${GREEN}установлен!${NC}\n"
+echo -e "\n\nsplify ${GREEN}установлен!${NC}\n"
 
 PAUSE
 fi
