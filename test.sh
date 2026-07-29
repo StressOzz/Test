@@ -4,7 +4,6 @@
 # =========================================
 ZAPRET_MANAGER_VERSION="9.79"; STR_VERSION_AUTOINSTALL="v7"
 OWRTAWG=$(grep '^DISTRIB_RELEASE=' /etc/openwrt_release | cut -d"'" -f2); ARCHAWG="$(grep DISTRIB_ARCH /etc/openwrt_release | cut -d"'" -f2)_$(grep DISTRIB_TARGET /etc/openwrt_release | cut -d"'" -f2 | tr '/' '_')" 
-
 CRON_CMD="/etc/init.d/mihomo restart"; CONFIGPATH="/etc/magitrickle/state/config.yaml"
 FLOWSEAL_STR_ZIP="https://github.com/Flowseal/zapret-discord-youtube/archive/refs/heads/main.zip"
 URL_DEFAULT="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/files/MagiTrickle/config.yaml"
@@ -131,8 +130,8 @@ CF_CLIENT_VER="a-6.3-1922"
 WORKER_URL="${WORKER_URL:-https://wgcli.vercel.app}"
 WARP_EP="engage.cloudflareclient.com:500"
 WARP_IFACE="warp0"
-TMP="$(mktemp -d /tmp/splify.XXXXXX)"
-trap 'rm -rf "$TMP"' EXIT
+TMP_SPL="$(mktemp -d /tmp/splify.XXXXXX)"
+trap 'rm -rf "$TMP_SPL"' EXIT
 
 AWG_JC=4
 AWG_JMIN=40
@@ -169,7 +168,7 @@ command -v wget  >/dev/null 2>&1 || err "не найден wget."
 if [ "$PKG_MANAGER" = "opkg" ]; then
     if ! opkg list-installed 2>/dev/null | grep -q "^nftables "; then
         say "nftables не найден. Пробую установить…"
-        opkg update >/dev/null 2>&1 || true
+        opkg update >/dev/null 2>&1
         opkg install nftables >/dev/null 2>&1 || warn "Не удалось установить nftables — splify-firewall может не работать."
     fi
 fi
@@ -180,7 +179,7 @@ for _dep in curl jq; do
     if [ "$PKG_MANAGER" = "apk" ]; then
         apk add "$_dep" >/dev/null 2>&1 || err "не удалось установить $_dep (apk add $_dep)."
     else
-        opkg update >/dev/null 2>&1 || true
+        opkg update >/dev/null 2>&1
         opkg install "$_dep" >/dev/null 2>&1 || err "не удалось установить $_dep (opkg install $_dep)."
     fi
   fi
@@ -188,9 +187,8 @@ done
 
 # ──────────────────────────── 2. install splify packages ───────────────────
 install_splify() {
-
   say "Ищу последний релиз splify…"
-  META="$TMP/meta.json"
+  META="$TMP_SPL/meta.json"
   wget -qO "$META" "$API" || err "не удалось получить данные релиза (нет интернета?)."
   URLS="$(tr ',' '\n' <"$META" | sed -n 's/.*"browser_download_url": *"\([^"]*\.'$PKG_EXT'\)".*/\1/p')"
   [ -n "$URLS" ] || err "в последнем релизе нет .$PKG_EXT. Возможно, релиз ещё не собран."
@@ -198,25 +196,25 @@ install_splify() {
   say "Скачиваю пакеты…"
   for u in $URLS; do
     case "$u" in
-      *splify*) wget -qO "$TMP/${u##*/}" "$u" || err "не удалось скачать $u" ;;
+      *splify*) wget -qO "$TMP_SPL/${u##*/}" "$u" || err "не удалось скачать $u" ;;
     esac
   done
   for pkg in splify- luci-app-splify- luci-i18n-splify-ru-; do
-    ls "$TMP/$pkg"*.$PKG_EXT >/dev/null 2>&1 || err "в релизе не хватает пакета $pkg*.$PKG_EXT"
+    ls "$TMP_SPL/$pkg"*.$PKG_EXT >/dev/null 2>&1 || err "в релизе не хватает пакета $pkg*.$PKG_EXT"
   done
 
   say "Устанавливаю splify…"
   if [ "$PKG_MANAGER" = "apk" ]; then
-    apk add --allow-untrusted "$TMP"/*.$PKG_EXT || err "apk add не выполнился."
+    apk add --allow-untrusted "$TMP_SPL"/*.$PKG_EXT || err "apk add не выполнился."
   else
-    opkg install "$TMP"/*.$PKG_EXT || err "opkg install не выполнился."
+    opkg install "$TMP_SPL"/*.$PKG_EXT || err "opkg install не выполнился."
   fi
 
-  rm -f /tmp/luci-indexcache* /tmp/luci-modulecache* 2>/dev/null || true
-  /etc/init.d/rpcd reload 2>/dev/null || /etc/init.d/rpcd restart 2>/dev/null || true
+  rm -f /tmp/luci-indexcache* /tmp/luci-modulecache* 2>/dev/null
+  /etc/init.d/rpcd reload 2>/dev/null || /etc/init.d/rpcd restart 2>/dev/null
   for s in splify splify-agent; do
     if [ -x "/etc/init.d/$s" ] && "/etc/init.d/$s" enabled 2>/dev/null; then
-      "/etc/init.d/$s" restart 2>/dev/null || true
+      "/etc/init.d/$s" restart 2>/dev/null
     fi
   done
 }
@@ -244,7 +242,7 @@ find_best_endpoint() {
       }
   }')
   
-  _pings="$TMP/warp_pings"
+  _pings="$TMP_SPL/warp_pings"
   _count=0
   for ip in $_candidates; do
     (
@@ -316,7 +314,7 @@ register_warp() {
   PUB="$(printf '%s\n' "$PRIV" | "$GEN" pubkey)"
   TOS="$(date -u +%Y-%m-%dT%H:%M:%S.000000000Z)"
 
-  REG="$TMP/reg.json"
+  REG="$TMP_SPL/reg.json"
   curl -fsSL --max-time 30 -X POST "$(reg_url reg)" -H "User-Agent: $CF_UA" -H "CF-Client-Version: $CF_CLIENT_VER" -H "Content-Type: application/json" \
     -H "Accept: application/json" -d "{\"key\":\"$PUB\",\"install_id\":\"\",\"fcm_token\":\"\",\"model\":\"PC\",\"locale\":\"en_US\",\"tos\":\"$TOS\",\"type\":\"Android\"}" \
     -o "$REG" || err "регистрация WARP не удалась. Если API заблокирован вашим провайдером — задайте WORKER_URL (см. contrib/warp-api-proxy-vercel)."
@@ -326,7 +324,7 @@ register_warp() {
   [ -n "$REG_ID" ] && [ "$REG_ID" != "null" ] || err "WARP: нет id в ответе."
   [ -n "$REG_TOK" ] && [ "$REG_TOK" != "null" ] || err "WARP: нет token в ответе."
 
-  WARP="$TMP/warp.json"
+  WARP="$TMP_SPL/warp.json"
   if ! jq -e '.config.peers[0].public_key' "$REG" >/dev/null 2>&1; then
     if ! curl -fsSL --max-time 30 -X GET "$(reg_url "reg/$REG_ID")" -H "User-Agent: $CF_UA" -H "CF-Client-Version: $CF_CLIENT_VER" -H "Accept: application/json" -H "Authorization: Bearer $REG_TOK" -o "$WARP" 2>/dev/null; then
       cp "$REG" "$WARP"
@@ -359,17 +357,17 @@ register_warp() {
 create_warp_iface() {
   if [ -n "$(uci -q get "network.$WARP_IFACE")" ]; then
     say "Интерфейс $WARP_IFACE уже существует — перенастраиваю."
-    ifdown "$WARP_IFACE" >/dev/null 2>&1 || true
+    ifdown "$WARP_IFACE" >/dev/null 2>&1
   fi
 
   say "Создаю интерфейс $WARP_IFACE (AmneziaWG + WARP)…"
   uci -q set "network.$WARP_IFACE=interface"
   uci set "network.$WARP_IFACE.proto=amneziawg"
   uci set "network.$WARP_IFACE.private_key=$PRIV"
-  uci -q delete "network.$WARP_IFACE.addresses" || true
+  uci -q delete "network.$WARP_IFACE.addresses"
   uci add_list "network.$WARP_IFACE.addresses=$WARP_V4"
   [ -n "$WARP_V6" ] && uci add_list "network.$WARP_IFACE.addresses=$WARP_V6"
-  uci -q delete "network.$WARP_IFACE.dns" || true
+  uci -q delete "network.$WARP_IFACE.dns"
   uci add_list "network.$WARP_IFACE.dns=1.1.1.1"
   uci set "network.$WARP_IFACE.mtu=1280"
   uci set "network.$WARP_IFACE.route_allowed_ips=0"
@@ -386,10 +384,10 @@ create_warp_iface() {
   uci set "network.$WARP_IFACE.awg_i1=$AWG_I1"
 
   _pt="amneziawg_$WARP_IFACE"
-  while [ -n "$(uci -q get "network.@${_pt}[0]")" ]; do uci -q delete "network.@${_pt}[0]" || true; done
+  while [ -n "$(uci -q get "network.@${_pt}[0]")" ]; do uci -q delete "network.@${_pt}[0]"; done
   uci add network "$_pt" >/dev/null
   uci set "network.@${_pt}[-1].public_key=$WARP_PEER"
-  uci -q delete "network.@${_pt}[-1].allowed_ips" || true
+  uci -q delete "network.@${_pt}[-1].allowed_ips"
   uci add_list "network.@${_pt}[-1].allowed_ips=0.0.0.0/0"
   uci add_list "network.@${_pt}[-1].allowed_ips=::/0"
   uci set "network.@${_pt}[-1].endpoint_host=${WARP_EP%:*}"
@@ -409,7 +407,7 @@ register_in_splify() {
     _ei_if="$(uci -q get "splify.@endpoint[$_ei].iface" 2>/dev/null)"
     if [ -n "$_ei_if" ] && [ -z "$(uci -q get "network.$_ei_if" 2>/dev/null)" ]; then
       say "Удаляю фантомный endpoint $_ei_if (нет такого интерфейса в network)."
-      uci -q delete "splify.@endpoint[$_ei]" || true
+      uci -q delete "splify.@endpoint[$_ei]"
     else
       _ei=$((_ei + 1))
     fi
@@ -433,7 +431,7 @@ EOF
     splify-apply >/dev/null 2>&1 || warn "splify-apply завершился с ошибкой — см. Сервисы → splify."
   fi
   [ -x /etc/init.d/splify ] && { /etc/init.d/splify enabled 2>/dev/null || /etc/init.d/splify enable; }
-  /etc/init.d/splify restart 2>/dev/null || true
+  /etc/init.d/splify restart 2>/dev/null
 }
 
 # ──────────────────────────── 7. firewall zone ──────────────────────────────
@@ -483,16 +481,48 @@ echo -e "${MAGENTA}Меню Splify${NC}\n"
 
 
 
-echo -e "${CYAN}0) ${GREEN}Меню тестирования стратегий${NC}"
-echo -e "${CYAN}1) ${GREEN}Выбрать и установить стратегию ${NC}v1-v10"
-echo -e "${CYAN}2) ${GREEN}Выбрать и установить стратегию от ${NC}Flowseal"
-echo -e "${CYAN}3) ${GREEN}Выбрать и установить стратегию для ${NC}YouTube"
-echo -e "${CYAN}4) ${GREEN}Меню управления стратегией для ${NC}игр"
+echo -e "${CYAN}1) ${GREEN}Уставновить ${NC}Splify"
+echo -e "${CYAN}2) ${GREEN}Удалить ${NC}Splify"
+echo -e "${CYAN}3) ${GREEN}Сгененрировать и применить ${NC}WARP"
+echo -e "${CYAN}4) ${GREEN}Выбрать и установить стратегию для ${NC}YouTube"
+echo -e "${CYAN}5) ${GREEN}Меню управления стратегией для ${NC}игр"
 echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read choiceSP; case "$choiceSP" in
-1) strategy_CHOUSE;;
+
+1)
+install_splify
+sleep 3
+install_AWG
+sleep 3
+register_warp
+sleep 3
+choose_endpoint
+sleep 3
+create_warp_iface
+sleep 3
+register_in_splify
+sleep 3
+setup_firewall
+sleep 3
+/etc/init.d/splify restart; /etc/init.d/splify-agent restart
+sleep 5
+;;
+
 2) flowseal_menu;;
-3) choose_strategy_YOUTUBE;;
-4) fix_GAME;;
+
+3)
+register_warp
+sleep 3
+choose_endpoint
+sleep 3
+create_warp_iface
+sleep 3
+register_in_splify
+sleep 3
+;;
+
+
+
+
 *) return;;
 esac; done
 }
