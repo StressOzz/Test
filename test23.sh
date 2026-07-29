@@ -409,7 +409,7 @@ register_in_splify() {
   uci commit splify
 
   if grep -q "option iface '$WARP_IFACE'" /etc/config/splify 2>/dev/null; then
-echo -e "${CYAN}endpoint ${NC}$WARP_IFACE${CYAN} уже зарегистрирован в ${NC}splify."
+echo -e "${CYAN}Применяем ${NC}$endpoint${CYAN} "
   else
 echo -e "${CYAN}Регистрируем ${NC}$WARP_IFACE ${CYAN}в ${NC}splify"
 
@@ -425,13 +425,9 @@ EOF
     splify-apply >/dev/null 2>&1 || warn "splify-apply завершился с ошибкой — см. Сервисы → splify."
   fi
 	/etc/init.d/splify enable 2>/dev/null
-	/etc/init.d/splify status 2>/dev/null
-	/etc/init.d/splify reload 2>/dev/null
-	/etc/init.d/splify status 2>/dev/null
 	/etc/init.d/splify restart 2>/dev/null
-	/etc/init.d/splify status 2>/dev/null
 	/etc/init.d/splify-agent restart 2>/dev/null
-	/etc/init.d/splify status 2>/dev/null
+	/etc/init.d/splify reload 2>/dev/null
 }
 
 # ──────────────────────────── 7. firewall zone ──────────────────────────────
@@ -483,7 +479,13 @@ choose_endpoint || return
 create_warp_iface || return
 register_in_splify || return
 setup_firewall || return
-/etc/init.d/splify restart; /etc/init.d/splify-agent restart
+echo "0"
+/etc/init.d/splify restart
+echo "1"
+/etc/init.d/splify-agent restart
+echo "2"
+/etc/init.d/splify reload
+echo "3"
 sleep 5
 echo -e "\nsplify ${GREEN}установлен!${NC}\n"
 PAUSE
