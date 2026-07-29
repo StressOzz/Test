@@ -452,14 +452,14 @@ echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${
 
 1)
 if [ "$UPD_SPL" = "0" ]; then
-install_splify || return
+install_splify || break
 echo -e "\n${MAGENTA}Устанавливаем AWG${NC}"
-install_AWG || return
-register_warp || return
-# choose_endpoint || return
-create_warp_iface || return
-register_in_splify || return
-setup_firewall || return
+install_AWG || break
+register_warp || break
+# choose_endpoint || break
+create_warp_iface || break
+register_in_splify || break
+setup_firewall || break
 
 # echo -e "\n\n${MAGENTA}Применяем настройки${NC}"
 # echo -en "${YELLOW}Подождите...${NC}"
@@ -469,8 +469,8 @@ setup_firewall || return
 # sleep 8
 echo -e "\nsplify ${GREEN}установлен!${NC}\n"
 else
-install_splify || return
-register_in_splify || return
+install_splify || break
+register_in_splify || break
 echo -e "\nsplify ${GREEN}обновлён!${NC}\n"
 fi
 PAUSE
@@ -485,10 +485,10 @@ if [ -z "$SPL_INST_VER" ]; then
 echo -e "\nsplify ${RED}не установлен!${NC}\n"
 PAUSE
 else
-register_warp || return
-choose_endpoint || return
-create_warp_iface || return
-register_in_splify || return
+register_warp || break
+choose_endpoint || break
+create_warp_iface || break
+register_in_splify || break
 
 echo -e "\n${MAGENTA}Применяем настройки${NC}"
 echo -en "${YELLOW}Подождите...${NC}"
