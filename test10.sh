@@ -287,7 +287,7 @@ choose_endpoint() {
 register_warp() {
 echo -e "\n${MAGENTA}Генерируем WARP${NC}"
 echo -e "${CYAN}Регистрируем устройство в ${NC}Cloudflare"
-  [ -n "$WORKER_URL" ] && echo -e "${CYAN}Используем прокси: ${NC}$WORKER_URL" || echo -e "${CYAN}Прокси не найден!\nИспользуем: ${NC}api.cloudflareclient.com${NC}"
+[ -n "$WORKER_URL" ] && echo -e "${CYAN}Используем прокси: ${NC}$WORKER_URL" || echo -e "${CYAN}Прокси не найден!\nИспользуем: ${NC}api.cloudflareclient.com${NC}"
 
   if command -v awg >/dev/null 2>&1; then GEN=awg; else GEN=wg; fi
   PRIV="$("$GEN" genkey)"
@@ -476,6 +476,7 @@ install_splify || continue
 echo -e "\n${MAGENTA}Устанавливаем AWG${NC}"
 install_AWG || continue
 register_warp || continue
+echo -e "\n${CYAN}Используем ${NC}endpoint${CYAN}:${NC} $WARP_EP"
 # choose_endpoint || continue
 create_warp_iface || continue
 register_in_splify || continue
