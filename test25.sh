@@ -425,19 +425,19 @@ EOF
     splify-apply >/dev/null 2>&1 || warn "splify-apply завершился с ошибкой — см. Сервисы → splify."
   fi
 	/etc/init.d/splify enable 2>/dev/null
+	sleep 3
 	/etc/init.d/splify restart 2>/dev/null
+	sleep 3
 	/etc/init.d/splify-agent restart 2>/dev/null
+	sleep 3
 	/etc/init.d/splify reload 2>/dev/null
 }
 
 # ──────────────────────────── 7. firewall zone ──────────────────────────────
 setup_firewall() {
 echo -e "\n${MAGENTA}Создаём firewall зону${NC}"
-  if [ ! -x /usr/local/sbin/splify-firewall ]; then
-    warn "splify-firewall не найден — создайте зону для $WARP_IFACE вручную (masq + lan→зона)."
-    return 0
-  fi
 echo -e "${CYAN}Создаём ${NC}firewall${CYAN} зону для ${NC}$WARP_IFACE${NC}"
+echo -en "${YELLOW}Подождите...${NC}"
   if /usr/local/sbin/splify-firewall check "$WARP_IFACE" >/dev/null 2>&1; then
 echo -e "Firewall${CYAN} зона для ${NC}$WARP_IFACE уже настроена${NC}"
   else
@@ -484,8 +484,9 @@ echo -en "${YELLOW}Подождите...${NC}"
 /etc/init.d/splify restart
 sleep 8
 /etc/init.d/splify-agent restart
-skeep 8
+sleep 8
 /etc/init.d/splify reload
+sleep 5
 echo -e "\nsplify ${GREEN}установлен!${NC}\n"
 PAUSE
 ;;
@@ -495,11 +496,16 @@ DELETE_SPL
 ;;
 
 3)
+if [ -z "$SPL_INST_VER" ]; then
+echo -e "\nsplify ${RED}не установлен${NC}\n"
+PAUSE
+else
 register_warp || return
 choose_endpoint || return
 create_warp_iface || return
 register_in_splify || return
 PAUSE
+fi
 ;;
 
 *) return;;
