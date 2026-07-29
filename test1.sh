@@ -461,13 +461,13 @@ create_warp_iface || return
 register_in_splify || return
 setup_firewall || return
 
-echo -e "\n\n${MAGENTA}Применяем настройки${NC}"
-echo -en "${YELLOW}Подождите...${NC}"
-/etc/init.d/splify restart
-sleep 8
-/etc/init.d/splify-agent restart
-sleep 8
-echo -e "\n\nsplify ${GREEN}установлен!${NC}\n"
+# echo -e "\n\n${MAGENTA}Применяем настройки${NC}"
+# echo -en "${YELLOW}Подождите...${NC}"
+# /etc/init.d/splify restart
+# sleep 8
+# /etc/init.d/splify-agent restart
+# sleep 8
+# echo -e "\n\nsplify ${GREEN}установлен!${NC}\n"
 
 PAUSE
 ;;
@@ -486,13 +486,13 @@ choose_endpoint || return
 create_warp_iface || return
 register_in_splify || return
 
-echo -e "\n${MAGENTA}Применяем настройки${NC}"
-echo -en "${YELLOW}Подождите...${NC}"
-/etc/init.d/splify restart
-sleep 8
-/etc/init.d/splify-agent restart
-sleep 8
-echo -e "\n\nsplify ${GREEN}установлен!${NC}\n"
+# echo -e "\n${MAGENTA}Применяем настройки${NC}"
+# echo -en "${YELLOW}Подождите...${NC}"
+# /etc/init.d/splify restart
+# sleep 8
+# /etc/init.d/splify-agent restart
+# sleep 8
+# echo -e "\n\nsplify ${GREEN}установлен!${NC}\n"
 
 PAUSE
 fi
