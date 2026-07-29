@@ -481,8 +481,6 @@ echo -e "${MAGENTA}Меню Splify${NC}\n"
 echo -e "${CYAN}1) ${GREEN}Уставновить ${NC}Splify"
 echo -e "${CYAN}2) ${GREEN}Удалить ${NC}Splify"
 echo -e "${CYAN}3) ${GREEN}Сгененрировать и применить ${NC}WARP"
-echo -e "${CYAN}4) ${GREEN}Выбрать и установить стратегию для ${NC}YouTube"
-echo -e "${CYAN}5) ${GREEN}Меню управления стратегией для ${NC}игр"
 echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read choiceSP; case "$choiceSP" in
 
 1)
@@ -505,9 +503,13 @@ setup_firewall
 sleep 3
 /etc/init.d/splify restart; /etc/init.d/splify-agent restart
 sleep 5
+PAUSE
 ;;
 
-2) flowseal_menu;;
+2) 
+sh <(wget -q -O - https://raw.githubusercontent.com/xyzmean/splify/main/uninstall.sh)
+PAUSE
+;;
 
 3)
 register_warp
@@ -518,6 +520,7 @@ create_warp_iface
 sleep 3
 register_in_splify
 sleep 3
+PAUSE
 ;;
 
 
@@ -1111,24 +1114,17 @@ echo -e "\nNetShift ${GREEN}$( [ "$ACTION" = "install" ] && echo "установ
 PODKOP_DELETE() { echo -e "\n${MAGENTA}Удаляем NetShift${NC}"; echo -e "${CYAN}Останавливаем сервисы${NC}"; netshift stop >/dev/null 2>&1; netshift disable >/dev/null 2>&1; sing-box stop >/dev/null 2>&1; sing-box disable >/dev/null 2>&1
 echo -e "${CYAN}Удаляем пакеты ${NC}NetShift"; $DELETE luci-i18n-netshift-ru luci-app-netshift netshift >/dev/null 2>&1; echo -e "${CYAN}Удаляем пакеты ${NC}sing-box"; $DELETE sing-box >/dev/null 2>&1
 echo -e "NetShift${GREEN} удалён!${NC}"; [ "$ACTION" != "update" ] && { rm -rf /etc/config/netshift* /usr/bin/netshift /etc/config/sing-box* /etc/sing-box >/dev/null 2>&1; echo; PAUSE; }; }
-
-install_AWG_INTER() { if ! pkg_is_installed amneziawg-tools; then install_AWG
-echo -e "${CYAN}Создаем ${NC}интерфейс AWG"; if uci show network.$IF_NAME >/dev/null 2>&1; then echo -e "\n${RED}Интерфейс уже существует!${NC}"; else uci set network.$IF_NAME=interface
+install_AWG_INTER() { if ! pkg_is_installed amneziawg-tools; then install_AWG; echo -e "${CYAN}Создаем ${NC}интерфейс AWG"; if uci show network.$IF_NAME >/dev/null 2>&1; then echo -e "\n${RED}Интерфейс уже существует!${NC}"; else uci set network.$IF_NAME=interface
 uci set network.$IF_NAME.proto=$PROTO; uci set network.$IF_NAME.device=$DEV_NAME; uci commit network; fi; echo -en "${YELLOW}Перезапускаем сеть! Подождите...${NC}"; /etc/init.d/network restart >/dev/null 2>&1; echo -e "\nAWG ${GREEN}и${NC} интерфейс AWG ${GREEN}установлены!${NC}"; echo -e "\n${YELLOW}Необходимо в ${NC}LuCI${YELLOW} в интерфейс ${NC}AWG${YELLOW} загрузить файл ${NC}*.conf${YELLOW}:${NC}"
 echo -e "${NC}Network ${GREEN}→${NC} Interfaces ${GREEN}→${NC} AWG ${GREEN}→${NC} Edit ${GREEN}→${NC} Load configuration… ${GREEN}→${NC} Save ${GREEN}→${NC} Save & Apply\n"; PAUSE; rm -rf "$tmpDIR"; else 
 echo -e "\n${MAGENTA}Удаление AWG и интерфейс AWG${NC}"; echo -e "${CYAN}Удаляем ${NC}AWG"; $DELETE luci-i18n-amneziawg-ru >/dev/null 2>&1; $DELETE luci-proto-amneziawg >/dev/null 2>&1; $DELETE amneziawg-tools >/dev/null 2>&1; $DELETE kmod-amneziawg >/dev/null 2>&1; uci delete network.AWG >/dev/null 2>&1; uci commit network >/dev/null 2>&1
 for peer in $(uci show network | grep "interface='AWG'" | cut -d. -f2); do uci delete network.$peer; done; uci commit network >/dev/null 2>&1; echo -e "${CYAN}Удаляем ${NC}интерфейс AWG"; echo -en "${YELLOW}Перезапускаем сеть! Подождите...${NC}"; /etc/init.d/network restart; echo -e "\nAWG ${GREEN}и${NC} интерфейс AWG ${GREEN}удалены!${NC}\n"; PAUSE; fi }
-
-
 install_AWG() { rm -rf "$tmpDIR"; mkdir -p "$tmpDIR"; echo -e "\n${MAGENTA}Устанавливаем AWG и интерфейс AWG${NC}"; echo -e "${CYAN}Обновляем список пакетов${NC}"; $UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; PAUSE; return; }
 AWG_kmod="https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v$OWRTAWG/kmod-amneziawg_v${OWRTAWG}_$ARCHAWG.$APK_RAS"; AWG_tools="https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v$OWRTAWG/amneziawg-tools_v${OWRTAWG}_$ARCHAWG.$APK_RAS"
 AWG_luci="https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v$OWRTAWG/luci-proto-amneziawg_v${OWRTAWG}_$ARCHAWG.$APK_RAS"; AWG_ru="https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v$OWRTAWG/luci-i18n-amneziawg-ru_v${OWRTAWG}_$ARCHAWG.$APK_RAS"; cd "$tmpDIR"
 echo -e "${CYAN}Скачиваем ${NC}AWG"; wget -q -U "Mozilla/5.0" -O AWG_kmod.$APK_RAS "$AWG_kmod" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$AWG_kmod\n"; PAUSE; return; }; wget -q -U "Mozilla/5.0" -O AWG_tools.$APK_RAS "$AWG_tools" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$AWG_tools\n"; PAUSE; return; }; wget -q -U "Mozilla/5.0" -O AWG_luci.$APK_RAS "$AWG_luci" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$AWG_luci\n"; PAUSE; return; }
 wget -q -U "Mozilla/5.0" -O AWG_ru.$APK_RAS "$AWG_ru" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$AWG_ru\n"; PAUSE; return; }; echo -e "${CYAN}Устанавливаем ${NC}AWG"; $INSTALL ./AWG_kmod.$APK_RAS >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить:\n${NC}$AWG_kmod\n"; PAUSE; return; }; $INSTALL ./AWG_tools.$APK_RAS >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить:\n${NC}$AWG_tools\n"; PAUSE; return; }
-$INSTALL ./AWG_luci.$APK_RAS >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить:\n${NC}$AWG_luci\n"; PAUSE; return; }; $INSTALL ./AWG_ru.$APK_RAS >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить:\n${NC}$AWG_ru\n"; PAUSE; return; }; }
-
-
-
+$INSTALL ./AWG_luci.$APK_RAS >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить:\n${NC}$AWG_luci\n"; PAUSE; return; }; $INSTALL ./AWG_ru.$APK_RAS >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить:\n${NC}$AWG_ru\n"; PAUSE; return; }; rm -rf "$tmpDIR"; }
 integration_AWG() { if ! pkg_is_installed netshift; then echo -e "\n${RED}NetShift не установлен!${NC}\n"; PAUSE; return; fi; if ! awg --version >/dev/null 2>&1; then echo -e "\n${RED}AWG не установлен!${NC}\n"; PAUSE; return; fi; echo -e "\n${MAGENTA}Интегрируем AWG в NetShift${NC}"; echo -e "${CYAN}Меняем конфигурацию в ${NC}NetShift${NC}"
 printf "%s\n" "config settings 'settings'" "option dns_type 'udp'" "option dns_server '8.8.8.8'" "option bootstrap_dns_server '77.88.8.8'" "option dns_rewrite_ttl '60'" "list source_network_interfaces 'br-lan'" "option enable_output_network_interface '0'" "option enable_badwan_interface_monitoring '0'" "option enable_yacd '0'" "option disable_quic '0'" > /etc/config/netshift
 printf "%s\n" "option update_interval '1d'" "option download_lists_via_proxy '0'" "option dont_touch_dhcp '0'" "option config_path '/etc/sing-box/config.json'" "option cache_path '/tmp/sing-box/cache.db'" "option log_level 'warn'" "option exclude_ntp '0'" "option shutdown_correctly '0'" "" "config section 'StressAWG'" "option connection_type 'vpn'" >> /etc/config/netshift
@@ -1241,4 +1237,4 @@ then echo -e "${RED}Включён ${NC}Flow Offloading${RED}!${NC}\n${NC}Zapret
 INFO_ZPR; echo -e "\n${CYAN}1) ${GREEN}$Z_ACTION_TEXT${NC} Zapret\n${CYAN}2) ${GREEN}Меню стратегий${NC}\n${CYAN}3) ${GREEN}Меню ${NC}Mixomo\n${CYAN}4) ${GREEN}Меню ${NC}NetShift\n${CYAN}5) ${GREEN}Меню ${NC}TG WS Proxy\n${CYAN}6) ${GREEN}Меню ${NC}DNS over HTTPS\n${CYAN}7) ${GREEN}Меню настройки ${NC}Discord\n${CYAN}8) ${GREEN}Меню управления доменами в ${NC}hosts"
 echo -e "${CYAN}9) ${GREEN}Удалить ${NC}→${GREEN} установить ${NC}→${GREEN} настроить${NC} Zapret\n${CYAN}0) ${GREEN}Системное меню${NC}\n${CYAN}s) ${GREEN}$str_stp_zpr ${NC}Zapret" ; echo -ne "${CYAN}Enter) ${GREEN}Выход${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read choice
 case "$choice" in 999) echo; uninstall_zapret "1"; install_Zapret "1"; curl -fsSL https://raw.githubusercontent.com/StressOzz/Test/refs/heads/main/zapret -o "$CONF"; hosts_add "$ALL_BLOCKS"; rm -f "$EXCLUDE_FILE"; wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL"; ZAPRET_RESTART; PAUSE;;
-1) $Z_ACTION_FUNC;; s|S) pgrep -f /opt/zapret >/dev/null 2>&1 && stop_zapret || start_zapret;; 2) menu_str;; 3) MIXOMO_MENU;; 4) PODKOP_menu ;; 5) menu_TG;; 6) DoH_menu;; 7) Discord_menu;; 8) menu_hosts;; 9) zapret_key;; 0) sys_menu;; *) echo; exit 0;; esac; }; while true; do show_menu; done
+f|F) SPL_MENU;; ) $Z_ACTION_FUNC;; s|S) pgrep -f /opt/zapret >/dev/null 2>&1 && stop_zapret || start_zapret;; 2) menu_str;; 3) MIXOMO_MENU;; 4) PODKOP_menu ;; 5) menu_TG;; 6) DoH_menu;; 7) Discord_menu;; 8) menu_hosts;; 9) zapret_key;; 0) sys_menu;; *) echo; exit 0;; esac; }; while true; do show_menu; done
