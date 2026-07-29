@@ -144,9 +144,6 @@ AWG_I1="<b 0xce000000010897a297ecc34cd6dd000044d0ec2e2e1ea2991f467ace4222129b5a0
 
 # ──────────────────────────── 2. install splify packages ───────────────────
 install_splify() {
-clear
-echo -e "${MAGENTA}Устанавливаем ${NC}splify"
-
 if ! command -v "jq" >/dev/null 2>&1; then
 echo -e "${CYAN}Ставим зависимость ${NC}jq"
 $UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; PAUSE; return 1; }
@@ -397,6 +394,7 @@ echo -e "${CYAN}Применяем настройки${NC}"
   else
 echo -e "${CYAN}Регистрируем ${NC}$WARP_IFACE ${CYAN}в ${NC}splify"
 
+
     cat >>/etc/config/splify <<EOF
 
 config endpoint
@@ -405,12 +403,12 @@ config endpoint
 	option type 'wg'
 EOF
   fi
-  
+	echo -en "${YELLOW}Подождите...${NC}\n"  
     /usr/local/sbin/splify-apply >/dev/null 2>&1
 	/etc/init.d/splify enable 2>/dev/null
-	sleep 4
+	sleep 5
 	/etc/init.d/splify restart 2>/dev/null
-	sleep 4
+	sleep 5
 	/etc/init.d/splify-agent restart 2>/dev/null
 }
 
@@ -427,12 +425,10 @@ echo -e "${CYAN}Зона${NC} firewall ${CYAN}для ${NC}$WARP_IFACE уже н�
 }
 
 # ──────────────────────────── main ──────────────────────────────────────────
+SPL_V_VER() { if [ "$PKG_IS_APK" -eq 1 ]; then SPL_INST_VER=$(awk '$0=="P:splify"{f=1} f&&/^V:/{v=substr($0,3);sub(/-r[0-9]+$/,"",v);print v;exit}' /lib/apk/db/installed); else SPL_INST_VER=$(opkg list-installed splify 2>/dev/null | awk '{sub(/(-r[0-9]+|-[0-9]+)$/, "", $3); print $3}'); fi; }
 
 SPL_MENU() { while true; do
-
-
-if [ "$PKG_IS_APK" -eq 1 ]; then SPL_INST_VER=$(awk '$0=="P:splify"{f=1} f&&/^V:/{v=substr($0,3);sub(/-r[0-9]+$/,"",v);print v;exit}' /lib/apk/db/installed); else SPL_INST_VER=$(opkg list-installed splify 2>/dev/null | awk '{sub(/(-r[0-9]+|-[0-9]+)$/, "", $3); print $3}'); fi
-
+SPL_V_VER
 UPD_SPL="0"
 clear
 echo -e "${MAGENTA}Меню splify${NC}\n"
@@ -474,6 +470,8 @@ echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${
 
 1)
 if [ "$UPD_SPL" = "0" ]; then
+clear
+echo -e "${MAGENTA}Устанавливаем ${NC}splify"
 install_splify || continue
 echo -e "\n${MAGENTA}Устанавливаем AWG${NC}"
 install_AWG || continue
@@ -485,6 +483,7 @@ register_in_splify || continue
 setup_firewall || continue
 echo -e "\nsplify ${GREEN}установлен!${NC}\n"
 else
+echo -e "${MAGENTA}Обновляем ${NC}splify"
 install_splify || continue
 register_in_splify || continue
 echo -e "\nsplify ${GREEN}обновлён!${NC}\n"
@@ -1241,7 +1240,8 @@ echo -e "${CYAN}4) ${GREEN}Интегрировать ${NC}AWG${GREEN} в ${NC}N
 # Информация
 # ==========================================
 INFO_ZPR() { if [ -f /etc/init.d/zapret ]; then /etc/init.d/zapret status >/dev/null 2>&1 && ZAPRET_STATUS="${GREEN}запущен${NC} $NFQ_STAT" || ZAPRET_STATUS="${RED}остановлен${NC}"; if [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ]; then echo -e "${YELLOW}Zapret:${NC}              ${GREEN}$INSTALLED_VER${NC} / $ZAPRET_STATUS"
-else echo -e "${YELLOW}Zapret:${NC}              ${RED}$INSTALLED_VER (версия устарела)${NC} / $ZAPRET_STATUS"; fi; else echo -e "${YELLOW}Zapret:${NC}              ${RED}не установлен${NC}"; fi; [ -f /etc/init.d/splify ] && echo -e "${YELLOW}splify:${NC}              ${GREEN}установлен${NC}"
+else echo -e "${YELLOW}Zapret:${NC}              ${RED}$INSTALLED_VER (версия устарела)${NC} / $ZAPRET_STATUS"; fi; else echo -e "${YELLOW}Zapret:${NC}              ${RED}не установлен${NC}"; fi
+SPL_V_VER; [ -n "$SPL_INST_VER" ] && { [ "$SPL_VER" = "$SPL_INST_VER" ] && echo -e "${YELLOW}splify:${NC}              ${GREEN}$SPL_INST_VER${NC}" || echo -e "${YELLOW}splify:${NC}              ${RED}$SPL_INST_VER (версия устарела)${NC}"; }
 case "$(/etc/init.d/mihomo status 2>/dev/null)" in running) echo -e "${YELLOW}Mixomo:              ${GREEN}запущен${NC}" ;; inactive) echo -e "${YELLOW}Mixomo:              ${RED}остановлен${NC}" ;; esac
 TGSTATUS=""; pidof tg-ws-proxy-go >/dev/null 2>&1 && TGSTATUS="${TGSTATUS:+$TGSTATUS/}SOCKS5"; pidof tg-ws-proxy >/dev/null 2>&1 && TGSTATUS="${TGSTATUS:+$TGSTATUS/}MTProto"; pidof tg-ws-proxy-rs >/dev/null 2>&1 && TGSTATUS="${TGSTATUS:+$TGSTATUS/}Rust"; if [ -n "$TGSTATUS" ]; then echo -e "${YELLOW}TG WS Proxy:${NC}         ${GREEN}запущен [$TGSTATUS]${NC}"; fi
 if hosts_enabled; then echo -e "${YELLOW}Домены в hosts:      ${GREEN}$hosts_echo${NC}"; fi; [ -f "$DATE_FILE" ] && echo -e "${YELLOW}Резервная копия:${NC}     ${GREEN}сохранена"; show_script_50 && [ -n "$name" ] && echo -e "${YELLOW}Установлен скрипт:${NC}   $name"; grep -q "$Fin_IP_Dis" /etc/hosts && echo -e "${YELLOW}IP для Discord:      ${GREEN}включены${NC}"
