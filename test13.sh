@@ -147,20 +147,11 @@ err()  { printf '\033[1;31mОшибка:\033[0m %s\n' "$*" >&2; exit 1; }
 
 # ──────────────────────────── 1. environment checks ────────────────────────
 pre_inst_spl() {
-# if [ "$PKG" = "opkg" ]; then
-#     if ! opkg list-installed 2>/dev/null | grep -q "^nftables "; then
-#         say "nftables не найден. Пробую установить…"
-#         opkg update >/dev/null 2>&1
-#         opkg install nftables >/dev/null 2>&1 || warn "Не удалось установить nftables — splify-firewall может не работать."
-#     fi
-# fi
-
   if ! command -v "jq" >/dev/null 2>&1; then
   $UPDATE >/dev/null 2>&1
     say "Ставлю зависимость jq"
    $INSTALL jq >/dev/null 2>&1
   fi
-
 }
 # ──────────────────────────── 2. install splify packages ───────────────────
 install_splify() {
@@ -342,7 +333,7 @@ create_warp_iface() {
   uci add_list "network.$WARP_IFACE.addresses=$WARP_V4"
   [ -n "$WARP_V6" ] && uci add_list "network.$WARP_IFACE.addresses=$WARP_V6"
   uci -q delete "network.$WARP_IFACE.dns"
-  uci add_list "network.$WARP_IFACE.dns=1.1.1.1"
+  uci add_list "network.$WARP_IFACE.dns=8.8.8.8"
   uci set "network.$WARP_IFACE.mtu=1280"
   uci set "network.$WARP_IFACE.route_allowed_ips=0"
 
@@ -556,10 +547,10 @@ while [ -n "$(uget "firewall.@forwarding[$_fi]")" ]; do
 done
 
 # ──────────────────────────── 4. commit UCI + reload ────────────────────────
-uci -q commit network  2>/dev/null
+uci -q commit network 2>/dev/null
 uci -q commit firewall 2>/dev/null
-/etc/init.d/network reload   >/dev/null 2>&1
-/etc/init.d/firewall reload  >/dev/null 2>&1
+/etc/init.d/network restart >/dev/null 2>&1
+/etc/init.d/firewall reload >/dev/null 2>&1
 
 # ──────────────────────────── 5. splify runtime (ip rules, nft, cron) ───────
 if [ -x /usr/local/sbin/splify-uninstall ]; then
@@ -597,7 +588,7 @@ $DELETE kmod-amneziawg >/dev/null 2>&1
 
 # ──────────────────────────── 8. splify config + leftover data ──────────────
 say "Удаляю конфигурацию и данные splify…"
-rm -rf /etc/splify* /etc/init.d/splify* /etc/config/splify* /var/run/splify /tmp/luci-indexcache* /tmp/luci-modulecache*
+rm -rf /etc/splify* /etc/init.d/splify* /etc/config/splify* /var/run/splify* /tmp/luci-indexcache* /tmp/luci-modulecache*
 /etc/init.d/rpcd reload 2>/dev/null || /etc/init.d/rpcd restart 2>/dev/null
 }
 
