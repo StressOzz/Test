@@ -409,7 +409,7 @@ register_in_splify() {
   uci commit splify
 
   if grep -q "option iface '$WARP_IFACE'" /etc/config/splify 2>/dev/null; then
-echo -e "${CYAN}Применяем ${NC}$endpoint${CYAN} "
+echo -e "${CYAN}Применяем ${NC}$endpoint${NC}"
   else
 echo -e "${CYAN}Регистрируем ${NC}$WARP_IFACE ${CYAN}в ${NC}splify"
 
