@@ -186,23 +186,23 @@ echo -e "${CYAN}Устанавливаем ${NC}splify"
 
 colo_name() {
   case "$1" in
-    AMS) echo "Амстердам" ;;
-    ARN) echo "Стокгольм" ;;
-    ATH) echo "Афины" ;;
-    BUD) echo "Будапешт" ;;
-    FRA) echo "Франкфурт" ;;
-    HEL) echo "Хельсинки" ;;
-    IST) echo "Стамбул" ;;
-    KBP) echo "Киев" ;;
-    KIV) echo "Кишинёв" ;;
-    PRG) echo "Прага" ;;
-    RIX) echo "Рига" ;;
-    SOF) echo "София" ;;
-    TLL) echo "Таллин" ;;
-    VIE) echo "Вена" ;;
-    VNO) echo "Вильнюс" ;;
-    WAW) echo "Варшава" ;;
-    ZRH) echo "Цюрих" ;;
+    AMS) echo "Amsterdam" ;;
+    ARN) echo "Stockholm" ;;
+    ATH) echo "Athens" ;;
+    BUD) echo "Budapest" ;;
+    FRA) echo "Frankfurt" ;;
+    HEL) echo "Helsinki" ;;
+    IST) echo "Istanbul" ;;
+    KBP) echo "Kiev" ;;
+    KIV) echo "Chisinau" ;;
+    PRG) echo "Prague" ;;
+    RIX) echo "Riga" ;;
+    SOF) echo "Sofia" ;;
+    TLL) echo "Tallinn" ;;
+    VIE) echo "Vienna" ;;
+    VNO) echo "Vilnius" ;;
+    WAW) echo "Warsaw" ;;
+    ZRH) echo "Zurich" ;;
     *)   echo "$1" ;;
   esac
 }
@@ -476,7 +476,7 @@ install_splify || continue
 echo -e "\n${MAGENTA}Устанавливаем AWG${NC}"
 install_AWG || continue
 register_warp || continue
-echo -e "\n${CYAN}Используем ${NC}endpoint${CYAN}:${NC} $WARP_EP"
+echo -e "${CYAN}Используем ${NC}endpoint${CYAN}:${NC} $WARP_EP"
 # choose_endpoint || continue
 create_warp_iface || continue
 register_in_splify || continue
