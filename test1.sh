@@ -149,8 +149,7 @@ warn() { printf '\033[1;33mВнимание:\033[0m %s\n' "$*" >&2; }
 err()  { printf '\033[1;31mОшибка:\033[0m %s\n' "$*" >&2; exit 1; }
 
 # ──────────────────────────── 1. environment checks ────────────────────────
-[ "$(id -u)" = "0" ] || err "запустите от root."
-
+pre_inst_spl() {
 PKG_MANAGER=""
 PKG_EXT=""
 if command -v apk >/dev/null 2>&1; then
@@ -184,7 +183,7 @@ for _dep in curl jq; do
     fi
   fi
 done
-
+}
 # ──────────────────────────── 2. install splify packages ───────────────────
 install_splify() {
   say "Ищу последний релиз splify…"
@@ -449,28 +448,29 @@ setup_firewall() {
 }
 
 # ──────────────────────────── main ──────────────────────────────────────────
-install_splify
-sleep 3
-install_AWG
-sleep 3
-register_warp
-sleep 3
-choose_endpoint
-sleep 3
-create_warp_iface
-sleep 3
-register_in_splify
-sleep 3
-setup_firewall
-sleep 3
-/etc/init.d/splify restart; /etc/init.d/splify-agent restart
-sleep 5
-say "Готово! Настроен обфусцированный WARP-туннель $WARP_IFACE + splify routing."
 
-printf '  • Туннель:   %s (AmneziaWG + WARP, endpoint %s)\n' "$WARP_IFACE" "$WARP_EP"
-printf '  • Адрес:     %s%s\n' "$WARP_V4" "${WARP_V6:+, $WARP_V6}"
-printf '  • Endpoint:  Сервисы → splify → Главная (нажмите «Включить», если ещё не включён)\n'
-printf '  • Тюнинг:    Сервисы → splify → Дополнительно (режим, kill switch, списки)\n'
+# install_splify
+# sleep 3
+# install_AWG
+# sleep 3
+# register_warp
+# sleep 3
+# choose_endpoint
+# sleep 3
+# create_warp_iface
+# sleep 3
+# register_in_splify
+# sleep 3
+# setup_firewall
+# sleep 3
+# /etc/init.d/splify restart; /etc/init.d/splify-agent restart
+# sleep 5
+# say "Готово! Настроен обфусцированный WARP-туннель $WARP_IFACE + splify routing."
+
+# printf '  • Туннель:   %s (AmneziaWG + WARP, endpoint %s)\n' "$WARP_IFACE" "$WARP_EP"
+# printf '  • Адрес:     %s%s\n' "$WARP_V4" "${WARP_V6:+, $WARP_V6}"
+# printf '  • Endpoint:  Сервисы → splify → Главная (нажмите «Включить», если ещё не включён)\n'
+# printf '  • Тюнинг:    Сервисы → splify → Дополнительно (режим, kill switch, списки)\n'
 
 
 
@@ -489,6 +489,9 @@ echo -e "${CYAN}5) ${GREEN}Меню управления стратегией д
 echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read choiceSP; case "$choiceSP" in
 
 1)
+
+pre_inst_spl
+
 install_splify
 sleep 3
 install_AWG
