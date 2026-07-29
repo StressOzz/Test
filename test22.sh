@@ -425,13 +425,13 @@ EOF
     splify-apply >/dev/null 2>&1 || warn "splify-apply завершился с ошибкой — см. Сервисы → splify."
   fi
 	/etc/init.d/splify enable 2>/dev/null
-	sleep 3
+	/etc/init.d/splify status 2>/dev/null
 	/etc/init.d/splify reload 2>/dev/null
-	sleep 3
+	/etc/init.d/splify status 2>/dev/null
 	/etc/init.d/splify restart 2>/dev/null
-	sleep 3
-	/etc/init.d/splify-agent restart
-	sleep 3
+	/etc/init.d/splify status 2>/dev/null
+	/etc/init.d/splify-agent restart 2>/dev/null
+	/etc/init.d/splify status 2>/dev/null
 }
 
 # ──────────────────────────── 7. firewall zone ──────────────────────────────
