@@ -445,6 +445,18 @@ fi
 
 echo -e "${YELLOW}splify: $SPL_STATUS"
 
+if pkg_is_installed amneziawg-tools && pkg_is_installed luci-proto-amneziawg && pkg_is_installed kmod-amneziawg; then
+    echo -e "${YELLOW}AWG: ${GREEN}установлен${NC}"
+else
+    echo -e "${YELLOW}AWG: ${RED}не установлен${NC}"
+fi
+
+if uci -q get network.warp0 >/dev/null 2>&1; then
+    echo -e "${YELLOW}Интерфейс: ${GREEN}установлен${NC}"
+else
+    echo -e "${YELLOW}Интерфейс: ${RED}не установлен${NC}"
+fi
+
 if [ "$UPD_SPL" = "0" ]; then echo -e "\n${CYAN}1) ${GREEN}Установить ${NC}splify"; else echo -e "\n${CYAN}1) ${GREEN}Обновить ${NC}splify"; fi
 echo -e "${CYAN}2) ${GREEN}Удалить ${NC}splify"
 echo -e "${CYAN}3) ${GREEN}Сгенерировать и применить ${NC}WARP"
@@ -452,18 +464,18 @@ echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${
 
 1)
 if [ "$UPD_SPL" = "0" ]; then
-install_splify || break
+install_splify || continue
 echo -e "\n${MAGENTA}Устанавливаем AWG${NC}"
-install_AWG || break
-register_warp || break
-# choose_endpoint || break
-create_warp_iface || break
-setup_firewall || break
-register_in_splify || break
+install_AWG || continue
+register_warp || continue
+# choose_endpoint || continue
+create_warp_iface || continue
+setup_firewall || continue
+register_in_splify || continue
 echo -e "\nsplify ${GREEN}установлен!${NC}\n"
 else
-install_splify || break
-register_in_splify || break
+install_splify || continue
+register_in_splify || continue
 echo -e "\nsplify ${GREEN}обновлён!${NC}\n"
 fi
 PAUSE
@@ -477,10 +489,10 @@ DELETE_SPL
 if [ -z "$SPL_INST_VER" ]; then
 echo -e "\nsplify ${RED}не установлен!${NC}\n"
 else
-register_warp || break
-choose_endpoint || break
-create_warp_iface || break
-register_in_splify || break
+register_warp || continue
+choose_endpoint || continue
+create_warp_iface || continue
+register_in_splify || continue
 echo -e "\nWARP ${GREEN}изменён!${NC}\n"
 fi
 PAUSE
