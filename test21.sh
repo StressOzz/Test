@@ -283,8 +283,8 @@ choose_endpoint() {
 		_choice=""
         read -r _choice </dev/tty 2>/dev/null || _choice=""
         case "$_choice" in
-		*) WARP_EP_MODE=engage ;;
 		2) WARP_EP_MODE=auto ;;
+		*) WARP_EP_MODE=engage ;;
         esac
       else
         WARP_EP_MODE=auto
