@@ -220,7 +220,7 @@ reg_url() {
 }
 
 find_best_endpoint() {
-echo -e "${CYAN}Подбираем лучший ${NC}endpoint"
+echo -e "\n${CYAN}Подбираем лучший ${NC}endpoint"
   _prefixes="188.114.96. 188.114.97. 188.114.98. 188.114.99. 162.159.192. 162.159.193. 162.159.195. 8.34.146. 8.39.214. 8.39.204. 8.6.112. 8.35.211. 8.39.125. 8.47.69."
   
   _candidates=$(awk -v prefixes="$_prefixes" 'BEGIN {
@@ -278,23 +278,16 @@ choose_endpoint() {
     echo -e "\n${MAGENTA}Меню выбора endpoint${NC}"
     echo -e "${CYAN}1) ${GREEN}Использовать${NC} engage.cloudflareclient.com:4500"
     echo -e "${CYAN}2) ${GREEN}Подобрать автоматически${NC}"
-    echo -en "${YELLOW}Выберите пункт (${NC}Enter = 1${YELLOW}): ${NC}"
+    echo -en "\n${YELLOW}Выберите пункт (${NC}Enter = 1${YELLOW}): ${NC}"
 
-		_choice=""
-        read -r _choice </dev/tty 2>/dev/null || _choice=""
-        case "$_choice" in
+        read -r choiceWRP; case "$choiceWRP" in
 		2) WARP_EP_MODE=auto ;;
 		*) WARP_EP_MODE=engage ;;
-        esac
-      else
-        WARP_EP_MODE=auto
-      fi
-      ;;
   esac
 
   if [ "$WARP_EP_MODE" = engage ]; then
     WARP_EP="engage.cloudflareclient.com:4500"
-echo -e "${CYAN}Используем endpoint:${NC} $WARP_EP"
+echo -e "\n${CYAN}Используем endpoint:${NC} $WARP_EP"
   else
     find_best_endpoint
   fi
