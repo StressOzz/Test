@@ -456,7 +456,7 @@ install_splify || return
 echo -e "\n${MAGENTA}Устанавливаем AWG${NC}"
 install_AWG || return
 register_warp || return
-choose_endpoint || return
+# choose_endpoint || return
 create_warp_iface || return
 register_in_splify || return
 setup_firewall || return
@@ -467,7 +467,7 @@ setup_firewall || return
 # sleep 8
 # /etc/init.d/splify-agent restart
 # sleep 8
-# echo -e "\n\nsplify ${GREEN}установлен!${NC}\n"
+echo -e "\n\nsplify ${GREEN}установлен!${NC}\n"
 
 PAUSE
 ;;
@@ -486,14 +486,13 @@ choose_endpoint || return
 create_warp_iface || return
 register_in_splify || return
 
-# echo -e "\n${MAGENTA}Применяем настройки${NC}"
-# echo -en "${YELLOW}Подождите...${NC}"
-# /etc/init.d/splify restart
-# sleep 8
-# /etc/init.d/splify-agent restart
-# sleep 8
-# echo -e "\n\nsplify ${GREEN}установлен!${NC}\n"
-
+echo -e "\n${MAGENTA}Применяем настройки${NC}"
+echo -en "${YELLOW}Подождите...${NC}"
+/etc/init.d/splify restart
+sleep 8
+/etc/init.d/splify-agent restart
+sleep 8
+echo -e "\n\nWARP ${GREEN}изменён!${NC}\n"
 PAUSE
 fi
 ;;
