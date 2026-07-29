@@ -3,6 +3,7 @@
 # Zapret Manager by StressOzz
 # =========================================
 ZAPRET_MANAGER_VERSION="9.79"; STR_VERSION_AUTOINSTALL="v7"
+ERROR="0"
 OWRTAWG=$(grep '^DISTRIB_RELEASE=' /etc/openwrt_release | cut -d"'" -f2); ARCHAWG="$(grep DISTRIB_ARCH /etc/openwrt_release | cut -d"'" -f2)_$(grep DISTRIB_TARGET /etc/openwrt_release | cut -d"'" -f2 | tr '/' '_')" 
 CRON_CMD="/etc/init.d/mihomo restart"; CONFIGPATH="/etc/magitrickle/state/config.yaml"
 FLOWSEAL_STR_ZIP="https://github.com/Flowseal/zapret-discord-youtube/archive/refs/heads/main.zip"
@@ -461,15 +462,14 @@ echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${
 
 1)
 
-install_splify
+install_splify || return
 echo -e "\n${MAGENTA}Устанавливаем AWG${NC}"
-install_AWG
-register_warp
-choose_endpoint
-create_warp_iface
-register_in_splify
-setup_firewall
-/etc/init.d/splify restart; /etc/init.d/splify-agent restart
+install_AWG || return
+register_warp || return
+choose_endpoint || return
+create_warp_iface || return
+register_in_splify || return
+setup_firewall || return
 echo -e "splify ${GREEN}установлен!${NC}\n"
 PAUSE
 ;;
@@ -479,10 +479,10 @@ DELETE_SPL
 ;;
 
 3)
-register_warp
-choose_endpoint
-create_warp_iface
-register_in_splify
+register_warp || return
+choose_endpoint || return
+create_warp_iface || return
+register_in_splify || return
 /etc/init.d/splify restart; /etc/init.d/splify-agent restart
 PAUSE
 ;;
@@ -496,7 +496,7 @@ uget() { uci -q get "$1" 2>/dev/null; }
 
 DELETE_SPL() {
 # ──────────────────────────── 1. stop splify services ───────────────────────
-echo -e "${MAGENTA}Удаляем splify, AWG, Интерфейс, Firewall зону${NC}"
+echo -e "\n${MAGENTA}Удаляем splify, AWG, Интерфейс, Firewall зону${NC}"
 
 echo -e "${CYAN}Останавливаем службы${NC}"
 for s in splify splify-agent; do
@@ -1184,13 +1184,13 @@ echo -e "${NC}Network ${GREEN}→${NC} Interfaces ${GREEN}→${NC} AWG ${GREEN}�
 echo -e "\n${MAGENTA}Удаление AWG и интерфейс AWG${NC}"; echo -e "${CYAN}Удаляем ${NC}AWG"; $DELETE luci-i18n-amneziawg-ru >/dev/null 2>&1; $DELETE luci-proto-amneziawg >/dev/null 2>&1; $DELETE amneziawg-tools >/dev/null 2>&1; $DELETE kmod-amneziawg >/dev/null 2>&1; uci delete network.AWG >/dev/null 2>&1; uci commit network >/dev/null 2>&1
 for peer in $(uci show network | grep "interface='AWG'" | cut -d. -f2); do uci delete network.$peer; done; uci commit network >/dev/null 2>&1; echo -e "${CYAN}Удаляем ${NC}интерфейс AWG"; echo -en "${YELLOW}Перезапускаем сеть! Подождите...${NC}"; /etc/init.d/network restart; echo -e "\nAWG ${GREEN}и${NC} интерфейс AWG ${GREEN}удалены!${NC}\n"; PAUSE; fi }
 
-install_AWG() { rm -rf "$tmpDIR"; mkdir -p "$tmpDIR"; echo -e "${CYAN}Обновляем список пакетов${NC}"; $UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; PAUSE; return; }
+install_AWG() { rm -rf "$tmpDIR"; mkdir -p "$tmpDIR"; echo -e "${CYAN}Обновляем список пакетов${NC}"; $UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; PAUSE; return 1; }
 AWG_kmod="https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v$OWRTAWG/kmod-amneziawg_v${OWRTAWG}_$ARCHAWG.$RAZ"; AWG_tools="https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v$OWRTAWG/amneziawg-tools_v${OWRTAWG}_$ARCHAWG.$RAZ"
 AWG_luci="https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v$OWRTAWG/luci-proto-amneziawg_v${OWRTAWG}_$ARCHAWG.$RAZ"; AWG_ru="https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v$OWRTAWG/luci-i18n-amneziawg-ru_v${OWRTAWG}_$ARCHAWG.$RAZ"; cd "$tmpDIR"
-echo -e "${CYAN}Скачиваем ${NC}AWG"; wget -q -U "Mozilla/5.0" -O AWG_kmod.$RAZ "$AWG_kmod" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$AWG_kmod\n"; PAUSE; return; }; wget -q -U "Mozilla/5.0" -O AWG_tools.$RAZ "$AWG_tools" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$AWG_tools\n"; PAUSE; return; }; wget -q -U "Mozilla/5.0" -O AWG_luci.$RAZ "$AWG_luci" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$AWG_luci\n"; PAUSE; return; }
-wget -q -U "Mozilla/5.0" -O AWG_ru.$RAZ "$AWG_ru" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$AWG_ru\n"; PAUSE; return; }; echo -e "${CYAN}Устанавливаем ${NC}AWG"; $INSTALL ./AWG_kmod.$RAZ >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить:\n${NC}$AWG_kmod\n"; PAUSE; return; }; $INSTALL ./AWG_tools.$RAZ >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить:\n${NC}$AWG_tools\n"; PAUSE; return; }
-$INSTALL ./AWG_luci.$RAZ >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить:\n${NC}$AWG_luci\n"; PAUSE; return; }; $INSTALL ./AWG_ru.$RAZ >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить:\n${NC}$AWG_ru\n"; PAUSE; return; }; rm -rf "$tmpDIR"; }
-integration_AWG() { if ! pkg_is_installed netshift; then echo -e "\n${RED}NetShift не установлен!${NC}\n"; PAUSE; return; fi; if ! awg --version >/dev/null 2>&1; then echo -e "\n${RED}AWG не установлен!${NC}\n"; PAUSE; return; fi; echo -e "\n${MAGENTA}Интегрируем AWG в NetShift${NC}"; echo -e "${CYAN}Меняем конфигурацию в ${NC}NetShift${NC}"
+echo -e "${CYAN}Скачиваем ${NC}AWG"; wget -q -U "Mozilla/5.0" -O AWG_kmod.$RAZ "$AWG_kmod" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$AWG_kmod\n"; PAUSE; return 1; }; wget -q -U "Mozilla/5.0" -O AWG_tools.$RAZ "$AWG_tools" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$AWG_tools\n"; PAUSE; return 1; }; wget -q -U "Mozilla/5.0" -O AWG_luci.$RAZ "$AWG_luci" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$AWG_luci\n"; PAUSE; return 1; }
+wget -q -U "Mozilla/5.0" -O AWG_ru.$RAZ "$AWG_ru" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$AWG_ru\n"; PAUSE; return 1; }; echo -e "${CYAN}Устанавливаем ${NC}AWG"; $INSTALL ./AWG_kmod.$RAZ >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить:\n${NC}$AWG_kmod\n"; PAUSE; return 1; }; $INSTALL ./AWG_tools.$RAZ >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить:\n${NC}$AWG_tools\n"; PAUSE; return 1; }
+$INSTALL ./AWG_luci.$RAZ >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить:\n${NC}$AWG_luci\n"; PAUSE; return 1; }; $INSTALL ./AWG_ru.$RAZ >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить:\n${NC}$AWG_ru\n"; PAUSE; return 1; }; rm -rf "$tmpDIR"; }
+integration_AWG() { if ! pkg_is_installed netshift; then echo -e "\n${RED}NetShift не установлен!${NC}\n"; PAUSE; return 1; fi; if ! awg --version >/dev/null 2>&1; then echo -e "\n${RED}AWG не установлен!${NC}\n"; PAUSE; return 1; fi; echo -e "\n${MAGENTA}Интегрируем AWG в NetShift${NC}"; echo -e "${CYAN}Меняем конфигурацию в ${NC}NetShift${NC}"
 printf "%s\n" "config settings 'settings'" "option dns_type 'udp'" "option dns_server '8.8.8.8'" "option bootstrap_dns_server '77.88.8.8'" "option dns_rewrite_ttl '60'" "list source_network_interfaces 'br-lan'" "option enable_output_network_interface '0'" "option enable_badwan_interface_monitoring '0'" "option enable_yacd '0'" "option disable_quic '0'" > /etc/config/netshift
 printf "%s\n" "option update_interval '1d'" "option download_lists_via_proxy '0'" "option dont_touch_dhcp '0'" "option config_path '/etc/sing-box/config.json'" "option cache_path '/tmp/sing-box/cache.db'" "option log_level 'warn'" "option exclude_ntp '0'" "option shutdown_correctly '0'" "" "config section 'StressAWG'" "option connection_type 'vpn'" >> /etc/config/netshift
 printf "%s\n" "option interface 'AWG'" "option domain_resolver_enabled '0'" "list community_lists 'geoblock'" "list community_lists 'block'" "list community_lists 'porn'" "list community_lists 'news'" "list community_lists 'anime'" "list community_lists 'youtube'" "list community_lists 'discord'" "list community_lists 'meta'" "list community_lists 'twitter'" >> /etc/config/netshift
