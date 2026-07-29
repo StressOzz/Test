@@ -409,7 +409,7 @@ register_in_splify() {
   uci commit splify
 
   if grep -q "option iface '$WARP_IFACE'" /etc/config/splify 2>/dev/null; then
-echo -e "${CYAN}Применяем ${NC}$endpoint${NC}"
+echo -e "${CYAN}Применяем ${NC}endpoint"
   else
 echo -e "${CYAN}Регистрируем ${NC}$WARP_IFACE ${CYAN}в ${NC}splify"
 
@@ -421,6 +421,7 @@ config endpoint
 	option type 'wg'
 EOF
   fi
+  
   if command -v splify-apply >/dev/null 2>&1; then
     splify-apply >/dev/null 2>&1 || warn "splify-apply завершился с ошибкой — см. Сервисы → splify."
   fi
@@ -479,6 +480,7 @@ choose_endpoint || return
 create_warp_iface || return
 register_in_splify || return
 setup_firewall || return
+
 echo -e "\n${MAGENTA}Применяем настройки${NC}"
 echo -en "${YELLOW}Подождите...${NC}"
 /etc/init.d/splify restart
@@ -488,6 +490,7 @@ sleep 8
 /etc/init.d/splify reload
 sleep 5
 echo -e "\nsplify ${GREEN}установлен!${NC}\n"
+
 PAUSE
 ;;
 
@@ -504,6 +507,17 @@ register_warp || return
 choose_endpoint || return
 create_warp_iface || return
 register_in_splify || return
+
+echo -e "\n${MAGENTA}Применяем настройки${NC}"
+echo -en "${YELLOW}Подождите...${NC}"
+/etc/init.d/splify restart
+sleep 8
+/etc/init.d/splify-agent restart
+sleep 8
+/etc/init.d/splify reload
+sleep 5
+echo -e "\nsplify ${GREEN}установлен!${NC}\n"
+
 PAUSE
 fi
 ;;
