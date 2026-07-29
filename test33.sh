@@ -269,29 +269,22 @@ echo -e "${CYAN}Используем endpoint:${NC} $_best_ip ($(colo_name "$_be
 }
 
 choose_endpoint() {
-  case "${WARP_ENDPOINT:-}" in
-    auto)   WARP_EP_MODE=auto ;;
-    engage) WARP_EP_MODE=engage ;;
+  echo -e "\n${MAGENTA}Меню выбора endpoint${NC}"
+  echo -e "${CYAN}1) ${GREEN}Использовать${NC} engage.cloudflareclient.com:4500"
+  echo -e "${CYAN}2) ${GREEN}Подобрать автоматически${NC}"
+  echo -en "\n${YELLOW}Выберите пункт (${NC}Enter = 1${YELLOW}): ${NC}"
+
+  read -r choiceWRP
+
+  case "$choiceWRP" in
+    2)
+      find_best_endpoint
+      ;;
     *)
-      if { [ -r /dev/tty ] && [ -w /dev/tty ] && [ -c /dev/tty ]; } 2>/dev/null; then
-	  
-    echo -e "\n${MAGENTA}Меню выбора endpoint${NC}"
-    echo -e "${CYAN}1) ${GREEN}Использовать${NC} engage.cloudflareclient.com:4500"
-    echo -e "${CYAN}2) ${GREEN}Подобрать автоматически${NC}"
-    echo -en "\n${YELLOW}Выберите пункт (${NC}Enter = 1${YELLOW}): ${NC}"
-
-        read -r choiceWRP; case "$choiceWRP" in
-		2) WARP_EP_MODE=auto ;;
-		*) WARP_EP_MODE=engage ;;
+      WARP_EP="engage.cloudflareclient.com:4500"
+      echo -e "\n${CYAN}Используем endpoint:${NC} $WARP_EP"
+      ;;
   esac
-fi
-
-  if [ "$WARP_EP_MODE" = engage ]; then
-    WARP_EP="engage.cloudflareclient.com:4500"
-echo -e "\n${CYAN}Используем endpoint:${NC} $WARP_EP"
-  else
-    find_best_endpoint
-  fi
 }
 
 register_warp() {
