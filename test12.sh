@@ -313,16 +313,16 @@ register_warp() {
   [ -n "$WARP_PEER" ] && [ "$WARP_PEER" != "null" ] || err "WARP: нет peer public_key в ответе."
   [ -n "$WARP_V4" ]   && [ "$WARP_V4"   != "null" ] || err "WARP: нет client IPv4 в ответе."
 
-#  case "$WARP_V4" in
-#    */*) : ;;
-#    *)   WARP_V4="$WARP_V4/32" ;;
-#  esac
-#  if [ -n "$WARP_V6" ]; then
-#    case "$WARP_V6" in
-#      */*) : ;;
-#      *)   WARP_V6="$WARP_V6/128" ;;
-#    esac
-#  fi
+  case "$WARP_V4" in
+    */*) : ;;
+    *)   WARP_V4="$WARP_V4/32" ;;
+  esac
+  if [ -n "$WARP_V6" ]; then
+    case "$WARP_V6" in
+      */*) : ;;
+      *)   WARP_V6="$WARP_V6/128" ;;
+    esac
+  fi
 
   say "WARP зарегистрирован: $WARP_V4${WARP_V6:+, $WARP_V6}"
 }
@@ -369,7 +369,7 @@ create_warp_iface() {
   uci set "network.@${_pt}[-1].persistent_keepalive=25"
 
 uci commit network
-/etc/init.d/network reload
+/etc/init.d/network restart
 
 ifup "$WARP_IFACE" >/dev/null 2>&1 || warn "ifup $WARP_IFACE не удался — проверьте в LuCI."
 }
