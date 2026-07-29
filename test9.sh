@@ -387,8 +387,8 @@ create_warp_iface() {
   uci set "network.@${_pt}[-1].endpoint_port=${WARP_EP##*:}"
   uci set "network.@${_pt}[-1].persistent_keepalive=25"
 
-  uci commit network
-  /etc/init.d/network restart
+uci commit network
+/etc/init.d/network restart
   
   ifup "$WARP_IFACE" >/dev/null 2>&1 || warn "ifup $WARP_IFACE не удался — проверьте в LuCI."
 }
