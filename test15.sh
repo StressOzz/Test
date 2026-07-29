@@ -348,11 +348,11 @@ echo -e "${CYAN}Регистрируем устройство в ${NC}Cloudflare
 # ──────────────────────────── 5. create warp0 interface ─────────────────────
 create_warp_iface() {
 
-echo -e "${MAGENTA}Создаём интерфейс $WARP_IFACE"
+echo -e "${MAGENTA}Создаём интерфейс $WARP_IFACE${NC}"
 
   if [ -n "$(uci -q get "network.$WARP_IFACE")" ]; then
-echo -e "${CYAN}Интерфейс $WARP_IFACE уже существует — перенастраиваем"
-    ifdown "$WARP_IFACE" >/dev/null 2>&1
+echo -e "${CYAN}Перенастраиваем интерфейс ${NC}$WARP_IFACE"
+ifdown "$WARP_IFACE" >/dev/null 2>&1
   fi
   uci -q set "network.$WARP_IFACE=interface"
   uci set "network.$WARP_IFACE.proto=amneziawg"
@@ -422,7 +422,9 @@ EOF
     splify-apply >/dev/null 2>&1 || warn "splify-apply завершился с ошибкой — см. Сервисы → splify."
   fi
 	/etc/init.d/splify enable 2>/dev/null
+	sleep 3
 	/etc/init.d/splify reload 2>/dev/null
+	sleep 3
 	/etc/init.d/splify restart 2>/dev/null
 }
 
@@ -458,46 +460,30 @@ echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${
 pre_inst_spl
 
 install_splify
-sleep 5
 echo -e "\n${MAGENTA}Устанавливаем AWG${NC}"
 install_AWG
-sleep 5
 register_warp
-sleep 3
 choose_endpoint
-sleep 5
 create_warp_iface
-sleep 5
 register_in_splify
-sleep 5
 setup_firewall
-sleep 5
 /etc/init.d/splify restart; /etc/init.d/splify-agent restart
-sleep 10
+echo -e "splify ${GREEN}установлен!${NC}\n"
 PAUSE
 ;;
 
 2) 
 DELETE_SPL
-PAUSE
 ;;
 
 3)
 register_warp
-sleep 5
 choose_endpoint
-sleep 5
 create_warp_iface
-sleep 5
 register_in_splify
-sleep 5
 /etc/init.d/splify restart; /etc/init.d/splify-agent restart
-sleep 10
 PAUSE
 ;;
-
-
-
 
 *) return;;
 esac; done
@@ -505,10 +491,8 @@ esac; done
 
 
 uget() { uci -q get "$1" 2>/dev/null; }
+
 DELETE_SPL() {
-
-
-
 # ──────────────────────────── 1. stop splify services ───────────────────────
 echo -e "${MAGENTA}Удаляем splify, AWG, Интерфейс, Firewall зону${NC}"
 
@@ -541,7 +525,7 @@ done
 _ep_ifaces="$(uci show splify 2>/dev/null | sed -n "s/^splify\.[^=]*\.iface='\([^']*\)'\$/\1/p" | sort -u)"
 _ep_ifaces="$WARP_IFACE $_ep_ifaces"
 
-echo -e "${CYAN}Удаляем firewall зону${NC}"
+echo -e "${CYAN}Удаляем ${NC}firewall${CYAN} зону${NC}"
 _zi=0
 while [ -n "$(uget "firewall.@zone[$_zi]")" ]; do
     _zn="$(uget "firewall.@zone[$_zi].name")"
@@ -584,7 +568,7 @@ uci -q commit firewall 2>/dev/null
 
 # ──────────────────────────── 5. splify runtime (ip rules, nft, cron) ───────
 if [ -x /usr/local/sbin/splify-uninstall ]; then
-echo -e "${CYAN}Удаляем активные правила ${NC}splify"
+echo -e "${CYAN}Удаляем активные правила"
     /usr/local/sbin/splify-uninstall >/dev/null 2>&1
 else
     while ip -4 rule del priority 999   >/dev/null 2>&1; do :; done
@@ -604,11 +588,10 @@ else
 fi
 
 # ──────────────────────────── 6. remove packages ─────────────────────
-echo -e "${CYAN}Удаляем пакеты ${NC}splify"
+echo -e "${CYAN}Удаляем пакеты ${NC}splify${CYAN} и${NC}AWG"
 $DELETE luci-i18n-splify-ru >/dev/null 2>&1
 $DELETE luci-app-splify >/dev/null 2>&1
 $DELETE splify >/dev/null 2>&1
-echo -e "${CYAN}Удаляем пакеты ${NC}AWG"
 $DELETE luci-i18n-amneziawg-ru >/dev/null 2>&1
 $DELETE luci-proto-amneziawg >/dev/null 2>&1
 $DELETE amneziawg-tools >/dev/null 2>&1
@@ -619,6 +602,9 @@ $DELETE kmod-amneziawg >/dev/null 2>&1
 echo -e "${CYAN}Удаляем конфигурации и данные ${NC}splify"
 rm -rf /etc/splify* /etc/init.d/splify* /etc/config/splify* /var/run/splify* /tmp/luci-indexcache* /tmp/luci-modulecache*
 /etc/init.d/rpcd reload 2>/dev/null || /etc/init.d/rpcd restart 2>/dev/null
+
+echo -e "splify ${GREEN}удалён!${NC}\n"
+PAUSE
 }
 
 
