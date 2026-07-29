@@ -98,7 +98,7 @@ echo -e "${YELLOW}URL:${NC} $RESULT"; return 1; fi; echo "$VERSION" > "$OUT_FILE
 clear ; echo -e "${CYAN}Cобираем версии:${NC}" ; TMP_VER="/tmp/zapret_version" ; TMP_VER_POD="/tmp/podkop_version"; TMP_VER_GO="/tmp/tg_ws_proxy_go_ver"; TMP_MAG_VER="/tmp/MagiTrickle_version"; TMP_VER_SPL="/tmp/splify_version"
 get_ver "https://github.com/MagiTrickle/MagiTrickle/releases/latest" "$TMP_MAG_VER" "MagiTrickle" & get_ver "https://github.com/yandexru45/netshift/releases/latest" "$TMP_VER_POD" "NetShift" &
 get_ver "https://github.com/remittor/zapret-openwrt/releases/latest" "$TMP_VER" "Zapret" & get_ver "https://github.com/spatiumstas/tg-ws-proxy-go/releases/latest" "$TMP_VER_GO" "TG-WS Proxy GO" &
-get_ver "https://github.com/xyzmean/splify/releases/latest" "$TMP_VER_SPL" "Splify" & wait
+get_ver "https://github.com/xyzmean/splify/releases/latest" "$TMP_VER_SPL" "splify" & wait
 [ -s "$TMP_VER" ] && ZAPRET_VERSION="$(cat "$TMP_VER")"
 [ -s "$TMP_VER_POD" ] && PODKOP_LATEST_VER="$(cat "$TMP_VER_POD")"
 [ -s "$TMP_VER_GO" ] && GO_VER="$(cat "$TMP_VER_GO")"
@@ -113,7 +113,7 @@ echo 'sh <(wget -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/
 MSG=0; for f in stun2.bin quic_initial_tencent_com.bin quic_initial_steamcommunity_com.bin quic_initial_dbankcloud_ru.bin quic_initial_4pda.to.bin; do [ -d /opt/zapret ] && [ ! -f "/opt/zapret/files/fake/$f" ] && { [ "$MSG" = 0 ] && { echo -e "${CYAN}Скачиваем ${NC}fake ${CYAN}файлы${NC}"; MSG=1; }; wget -q -U "Mozilla/5.0" -O "/opt/zapret/files/fake/$f" "https://github.com/Flowseal/zapret-discord-youtube/raw/refs/heads/main/bin/$f" || { echo -e "\n${RED}Не удалось загрузить файл ${NC}$f\n"; }; }; done
 
 # ==========================================
-# Splify
+# splify
 # ==========================================
 
 SPL_INST_VER="$(awk '$0=="P:splify"{f=1} f&&/^V:/{v=substr($0,3);sub(/-r[0-9]+$/,"",v);print v;exit}' /lib/apk/db/installed)"
@@ -149,19 +149,20 @@ err()  { printf '\033[1;31mОшибка:\033[0m %s\n' "$*" >&2; exit 1; }
 pre_inst_spl() {
   if ! command -v "jq" >/dev/null 2>&1; then
   $UPDATE >/dev/null 2>&1
-    say "Ставлю зависимость jq"
+echo -e "${CYAN}Ставим зависимость ${NC}jq"
    $INSTALL jq >/dev/null 2>&1
   fi
 }
 # ──────────────────────────── 2. install splify packages ───────────────────
 install_splify() {
-  say "Ищу последний релиз splify…"
+echo -e "${MAGENTA}Устанавливаем ${NC}splify"
+echo -e "${CYAN}Проверяем версию ${NC}splify"
   META="$TMP_SPL/meta.json"
   wget -qO "$META" "$API" || err "не удалось получить данные релиза (нет интернета?)."
   URLS="$(tr ',' '\n' <"$META" | sed -n 's/.*"browser_download_url": *"\([^"]*\.'$RAZ'\)".*/\1/p')"
   [ -n "$URLS" ] || err "в последнем релизе нет .$RAZ. Возможно, релиз ещё не собран."
 
-  say "Скачиваю пакеты…"
+echo -e "${CYAN}Скачиваем пакеты ${NC}splify"
   for u in $URLS; do
     case "$u" in
       *splify*) wget -qO "$TMP_SPL/${u##*/}" "$u" || err "не удалось скачать $u" ;;
@@ -171,7 +172,7 @@ install_splify() {
     ls "$TMP_SPL/$pkg"*.$RAZ >/dev/null 2>&1 || err "в релизе не хватает пакета $pkg*.$RAZ"
   done
 
-  say "Устанавливаю splify…"
+echo -e "${CYAN}Устанавливаем ${NC}splify"
     $INSTALL "$TMP_SPL"/*.$RAZ >/dev/null 2>&1
 
 
@@ -185,6 +186,32 @@ install_splify() {
 }
 
 # ──────────────────────────── 4. register Cloudflare WARP ───────────────────
+
+colo_name() {
+  case "$1" in
+    AMS) echo "Амстердам" ;;
+    ARN) echo "Стокгольм" ;;
+    ATH) echo "Афины" ;;
+    BUD) echo "Будапешт" ;;
+    FRA) echo "Франкфурт" ;;
+    HEL) echo "Хельсинки" ;;
+    IST) echo "Стамбул" ;;
+    KBP) echo "Киев" ;;
+    KIV) echo "Кишинёв" ;;
+    PRG) echo "Прага" ;;
+    RIX) echo "Рига" ;;
+    SOF) echo "София" ;;
+    TLL) echo "Таллин" ;;
+    VIE) echo "Вена" ;;
+    VNO) echo "Вильнюс" ;;
+    WAW) echo "Варшава" ;;
+    ZRH) echo "Цюрих" ;;
+    *)   echo "$1" ;;
+  esac
+}
+
+
+
 reg_url() {
   if [ -n "$WORKER_URL" ]; then
     printf '%s/api/%s' "${WORKER_URL%/}" "$1"
@@ -194,7 +221,7 @@ reg_url() {
 }
 
 find_best_endpoint() {
-  say "Подбираем лучший WARP эндпоинт (исключая DME)…"
+echo -e "${CYAN}Подбираем лучший ${NC}WARP endpoint"
   _prefixes="188.114.96. 188.114.97. 188.114.98. 188.114.99. 162.159.192. 162.159.193. 162.159.195. 8.34.146. 8.39.214. 8.39.204. 8.6.112. 8.35.211. 8.39.125. 8.47.69."
   
   _candidates=$(awk -v prefixes="$_prefixes" 'BEGIN {
@@ -231,8 +258,10 @@ find_best_endpoint() {
     _best_ping=$(echo "$_best" | awk '{print $1}')
     _best_ip=$(echo "$_best" | awk '{print $2}')
     _best_colo=$(echo "$_best" | awk '{print $3}')
-    say "Выбран эндпоинт: $_best_ip (colo: $_best_colo, ping: ${_best_ping}ms)"
-    WARP_EP="${_best_ip}:500"
+
+	
+echo -e "${CYAN}Используем endpoint:${NC} $_best_ip ($(colo_name "$_best_colo"), ping: ${_best_ping}ms)"
+    WARP_EP="${_best_ip}:4500"
   else
     warn "Не удалось найти подходящий эндпоинт среди 100 проверенных."
     warn "Часть ресурсов может не работать! Устанавливаем эндпоинт по умолчанию."
@@ -264,15 +293,16 @@ choose_endpoint() {
 
   if [ "$WARP_EP_MODE" = engage ]; then
     WARP_EP="engage.cloudflareclient.com:4500"
-    say "Endpoint зафиксирован: $WARP_EP (без подбора)."
+echo -e "${CYAN}Используем endpoint:${NC} $WARP_EP"
   else
     find_best_endpoint
   fi
 }
 
 register_warp() {
-  say "Регистрирую устройство Cloudflare WARP…"
-  [ -n "$WORKER_URL" ] && say "Через прокси: $WORKER_URL" || warn "WORKER_URL не задан — пробую api.cloudflareclient.com напрямую (может быть заблокирован)."
+echo -e "${MAGENTA}Генерируем WARP${NC}"
+echo -e "${CYAN}Регистрируем устройство в ${NC}Cloudflare"
+  [ -n "$WORKER_URL" ] && echo -e "${CYAN}Используем прокси: ${NC}$WORKER_URL" || warn "WORKER_URL не задан — пробую api.cloudflareclient.com напрямую (может быть заблокирован)."
 
   if command -v awg >/dev/null 2>&1; then GEN=awg; else GEN=wg; fi
   PRIV="$("$GEN" genkey)"
@@ -314,18 +344,17 @@ register_warp() {
       *)   WARP_V6="$WARP_V6/128" ;;
     esac
   fi
-
-  say "WARP зарегистрирован: $WARP_V4${WARP_V6:+, $WARP_V6}"
 }
 
 # ──────────────────────────── 5. create warp0 interface ─────────────────────
 create_warp_iface() {
+
+echo -e "${MAGENTA}Создаём интерфейс $WARP_IFACE"
+
   if [ -n "$(uci -q get "network.$WARP_IFACE")" ]; then
-    say "Интерфейс $WARP_IFACE уже существует — перенастраиваю."
+echo -e "${CYAN}Интерфейс $WARP_IFACE уже существует — перенастраиваем"
     ifdown "$WARP_IFACE" >/dev/null 2>&1
   fi
-
-  say "Создаю интерфейс $WARP_IFACE (AmneziaWG + WARP)…"
   uci -q set "network.$WARP_IFACE=interface"
   uci set "network.$WARP_IFACE.proto=amneziawg"
   uci set "network.$WARP_IFACE.private_key=$PRIV"
@@ -336,7 +365,6 @@ create_warp_iface() {
   uci add_list "network.$WARP_IFACE.dns=8.8.8.8"
   uci set "network.$WARP_IFACE.mtu=1280"
   uci set "network.$WARP_IFACE.route_allowed_ips=0"
-
   uci set "network.$WARP_IFACE.awg_jc=$AWG_JC"
   uci set "network.$WARP_IFACE.awg_jmin=$AWG_JMIN"
   uci set "network.$WARP_IFACE.awg_jmax=$AWG_JMAX"
@@ -371,7 +399,6 @@ register_in_splify() {
   while [ -n "$(uci -q get "splify.@endpoint[$_ei]" 2>/dev/null)" ]; do
     _ei_if="$(uci -q get "splify.@endpoint[$_ei].iface" 2>/dev/null)"
     if [ -n "$_ei_if" ] && [ -z "$(uci -q get "network.$_ei_if" 2>/dev/null)" ]; then
-      say "Удаляю фантомный endpoint $_ei_if (нет такого интерфейса в network)."
       uci -q delete "splify.@endpoint[$_ei]"
     else
       _ei=$((_ei + 1))
@@ -380,9 +407,9 @@ register_in_splify() {
   uci commit splify
 
   if grep -q "option iface '$WARP_IFACE'" /etc/config/splify 2>/dev/null; then
-    say "endpoint $WARP_IFACE уже зарегистрирован в splify."
+echo -e "${CYAN}endpoint ${NC}$WARP_IFACE${CYAN} уже зарегистрирован в ${NC}splify."
   else
-    say "Регистрирую $WARP_IFACE как endpoint splify (приоритет 1)…"
+echo -e "${CYAN}Регистрируем ${NC}$WARP_IFACE ${CYAN}в ${NC}splify"
 
     cat >>/etc/config/splify <<EOF
 
@@ -402,27 +429,28 @@ EOF
 
 # ──────────────────────────── 7. firewall zone ──────────────────────────────
 setup_firewall() {
+echo -e "${MAGENTA}Создаём firewall зону для $WARP_IFACE${NC}"
   if [ ! -x /usr/local/sbin/splify-firewall ]; then
     warn "splify-firewall не найден — создайте зону для $WARP_IFACE вручную (masq + lan→зона)."
     return 0
   fi
-  say "Создаю firewall-зону для $WARP_IFACE…"
+echo -e "${CYAN}Создаём ${NC}firewall${CYAN} зону${NC}"
   if /usr/local/sbin/splify-firewall check "$WARP_IFACE" >/dev/null 2>&1; then
-    say "Firewall-зона для $WARP_IFACE уже настроена."
+echo -e "Firewall${CYAN} зона для ${NC}$WARP_IFACE уже настроена${NC}"
   else
-    /usr/local/sbin/splify-firewall fix "$WARP_IFACE" || warn "splify-firewall fix не удался — проверьте зону для $WARP_IFACE в Сеть → Firewall."
+    /usr/local/sbin/splify-firewall fix "$WARP_IFACE" >/dev/null 2>&1 || warn "splify-firewall fix не удался — проверьте зону для $WARP_IFACE в Сеть → Firewall."
   fi
 }
 
 # ──────────────────────────── main ──────────────────────────────────────────
 
 SPL_MENU() { while true; do clear
-echo -e "${MAGENTA}Меню Splify${NC}\n"
+echo -e "${MAGENTA}Меню splify${NC}\n"
 
 echo -e "$SPL_INST_VER"
 
-echo -e "\n${CYAN}1) ${GREEN}Уставновить ${NC}Splify"
-echo -e "${CYAN}2) ${GREEN}Удалить ${NC}Splify"
+echo -e "\n${CYAN}1) ${GREEN}Уставновить ${NC}splify"
+echo -e "${CYAN}2) ${GREEN}Удалить ${NC}splify"
 echo -e "${CYAN}3) ${GREEN}Сгененрировать и применить ${NC}WARP"
 echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read choiceSP; case "$choiceSP" in
 
@@ -483,7 +511,9 @@ DELETE_SPL() {
 
 
 # ──────────────────────────── 1. stop splify services ───────────────────────
-say "Останавливаю службы splify…"
+echo -e "${MAGENTA}Удаляем splify, AWG, Интерфейс, Firewall зону${NC}"
+
+echo -e "${CYAN}Останавливаем службы${NC}"
 for s in splify splify-agent; do
     if [ -x "/etc/init.d/$s" ]; then
         "/etc/init.d/$s" stop    >/dev/null 2>&1
@@ -498,7 +528,7 @@ fi
 
 # ──────────────────────────── 2. warp0 interface + peers ────────────────────
 if [ -n "$(uget "network.$WARP_IFACE")" ]; then
-    say "Удаляю интерфейс $WARP_IFACE…"
+echo -e "${CYAN}Удаляем интерфейс ${NC}$WARP_IFACE"
     ifdown "$WARP_IFACE" >/dev/null 2>&1
     uci -q delete "network.$WARP_IFACE"
 fi
@@ -512,7 +542,7 @@ done
 _ep_ifaces="$(uci show splify 2>/dev/null | sed -n "s/^splify\.[^=]*\.iface='\([^']*\)'\$/\1/p" | sort -u)"
 _ep_ifaces="$WARP_IFACE $_ep_ifaces"
 
-say "Чищу firewall-зоны для туннелей…"
+echo -e "${CYAN}Удаляем firewall зону${NC}"
 _zi=0
 while [ -n "$(uget "firewall.@zone[$_zi]")" ]; do
     _zn="$(uget "firewall.@zone[$_zi].name")"
@@ -555,10 +585,9 @@ uci -q commit firewall 2>/dev/null
 
 # ──────────────────────────── 5. splify runtime (ip rules, nft, cron) ───────
 if [ -x /usr/local/sbin/splify-uninstall ]; then
-    say "Чищу runtime-состояние splify (ip rules, nft, cron)…"
+echo -e "${CYAN}Удаляем активные правила ${NC}splify"
     /usr/local/sbin/splify-uninstall >/dev/null 2>&1
 else
-    say "Чищу runtime-состояние splify вручную…"
     while ip -4 rule del priority 999   >/dev/null 2>&1; do :; done
     while ip -4 rule del priority 1000  >/dev/null 2>&1; do :; done
     ip -4 route flush table 200 >/dev/null 2>&1
@@ -576,11 +605,11 @@ else
 fi
 
 # ──────────────────────────── 6. remove packages ─────────────────────
-
+echo -e "${CYAN}Удаляем пакеты ${NC}splify"
 $DELETE luci-i18n-splify-ru >/dev/null 2>&1
 $DELETE luci-app-splify >/dev/null 2>&1
 $DELETE splify >/dev/null 2>&1
-
+echo -e "${CYAN}Удаляем пакеты ${NC}AWG"
 $DELETE luci-i18n-amneziawg-ru >/dev/null 2>&1
 $DELETE luci-proto-amneziawg >/dev/null 2>&1
 $DELETE amneziawg-tools >/dev/null 2>&1
@@ -588,7 +617,7 @@ $DELETE kmod-amneziawg >/dev/null 2>&1
 
 
 # ──────────────────────────── 8. splify config + leftover data ──────────────
-say "Удаляю конфигурацию и данные splify…"
+echo -e "${CYAN}Удаляем конфигурации и данные ${NC}splify"
 rm -rf /etc/splify* /etc/init.d/splify* /etc/config/splify* /var/run/splify* /tmp/luci-indexcache* /tmp/luci-modulecache*
 /etc/init.d/rpcd reload 2>/dev/null || /etc/init.d/rpcd restart 2>/dev/null
 }
