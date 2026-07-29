@@ -125,7 +125,7 @@ CF_DIRECT="https://api.cloudflareclient.com"
 CF_UA="okhttp/3.12.1"
 CF_CLIENT_VER="a-6.3-1922"
 WORKER_URL="${WORKER_URL:-https://wgcli.vercel.app}"
-WARP_EP="engage.cloudflareclient.com:500"
+WARP_EP="engage.cloudflareclient.com:4500"
 WARP_IFACE="warp0"
 TMP_SPL="$(mktemp -d /tmp/splify.XXXXXX)"
 trap 'rm -rf "$TMP_SPL"' EXIT
@@ -245,7 +245,7 @@ find_best_endpoint() {
   else
     warn "Не удалось найти подходящий эндпоинт среди 100 проверенных."
     warn "Часть ресурсов может не работать! Устанавливаем эндпоинт по умолчанию."
-    WARP_EP="engage.cloudflareclient.com:500"
+    WARP_EP="engage.cloudflareclient.com:4500"
   fi
 }
 
@@ -272,7 +272,7 @@ choose_endpoint() {
   esac
 
   if [ "$WARP_EP_MODE" = engage ]; then
-    WARP_EP="engage.cloudflareclient.com:500"
+    WARP_EP="engage.cloudflareclient.com:4500"
     say "Endpoint зафиксирован: $WARP_EP (без подбора)."
   else
     find_best_endpoint
@@ -369,7 +369,8 @@ create_warp_iface() {
   uci set "network.@${_pt}[-1].persistent_keepalive=25"
 
 uci commit network
-/etc/init.d/network restart
+/etc/init.d/network reload
+
 ifup "$WARP_IFACE" >/dev/null 2>&1 || warn "ifup $WARP_IFACE не удался — проверьте в LuCI."
 }
 
@@ -438,22 +439,22 @@ echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${
 pre_inst_spl
 
 install_splify
-sleep 3
+sleep 5
 echo -e "\n${MAGENTA}Устанавливаем AWG${NC}"
 install_AWG
-sleep 3
+sleep 5
 register_warp
 sleep 3
 choose_endpoint
-sleep 3
-create_warp_iface
-sleep 3
-register_in_splify
-sleep 3
-setup_firewall
-sleep 3
-/etc/init.d/splify restart; /etc/init.d/splify-agent restart
 sleep 5
+create_warp_iface
+sleep 5
+register_in_splify
+sleep 5
+setup_firewall
+sleep 5
+/etc/init.d/splify restart; /etc/init.d/splify-agent restart
+sleep 10
 PAUSE
 ;;
 
@@ -464,15 +465,15 @@ PAUSE
 
 3)
 register_warp
-sleep 3
-choose_endpoint
-sleep 3
-create_warp_iface
-sleep 3
-register_in_splify
-sleep 3
-/etc/init.d/splify restart; /etc/init.d/splify-agent restart
 sleep 5
+choose_endpoint
+sleep 5
+create_warp_iface
+sleep 5
+register_in_splify
+sleep 5
+/etc/init.d/splify restart; /etc/init.d/splify-agent restart
+sleep 10
 PAUSE
 ;;
 
