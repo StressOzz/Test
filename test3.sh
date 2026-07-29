@@ -393,7 +393,7 @@ register_in_splify() {
   uci commit splify
 
   if grep -q "option iface '$WARP_IFACE'" /etc/config/splify 2>/dev/null; then
-echo -e "${CYAN}Применяем ${NC}endpoint"
+echo -e "${CYAN}Применяем настройки${NC}"
   else
 echo -e "${CYAN}Регистрируем ${NC}$WARP_IFACE ${CYAN}в ${NC}splify"
 
@@ -431,7 +431,7 @@ echo -e "Firewall${CYAN} зона для ${NC}$WARP_IFACE уже настрое�
 SPL_MENU() { while true; do
 
 SPL_INST_VER="$(awk '$0=="P:splify"{f=1} f&&/^V:/{v=substr($0,3);sub(/-r[0-9]+$/,"",v);print v;exit}' /lib/apk/db/installed)"
-
+UPD_SPL="0"
 clear
 echo -e "${MAGENTA}Меню splify${NC}\n"
 
@@ -440,18 +440,18 @@ if [ -z "$SPL_INST_VER" ]; then
 elif [ "$SPL_VER" = "$SPL_INST_VER" ]; then
   SPL_STATUS="${GREEN}$SPL_INST_VER${NC}"
 else
-  SPL_STATUS="${RED}$SPL_INST_VER (версия устарела)${NC}"
+  SPL_STATUS="${RED}$SPL_INST_VER (версия устарела)${NC}"; UPD_SPL="1"
 fi
 
 echo -e "${YELLOW}splify: $SPL_STATUS"
 
-echo -e "\n${CYAN}1) ${GREEN}Уставновить ${NC}splify"
+if [ "$UPD_SPL" = "0" ]; then echo -e "\n${CYAN}1) ${GREEN}Установить ${NC}splify"; else echo -e "\n${CYAN}1) ${GREEN}Обновить ${NC}splify"; fi
 echo -e "${CYAN}2) ${GREEN}Удалить ${NC}splify"
-echo -e "${CYAN}3) ${GREEN}Сгененрировать и применить ${NC}WARP"
+echo -e "${CYAN}3) ${GREEN}Сгенерировать и применить ${NC}WARP"
 echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read choiceSP; case "$choiceSP" in
 
 1)
-
+if [ "$UPD_SPL" = "0" ]; then
 install_splify || return
 echo -e "\n${MAGENTA}Устанавливаем AWG${NC}"
 install_AWG || return
@@ -467,8 +467,12 @@ setup_firewall || return
 # sleep 8
 # /etc/init.d/splify-agent restart
 # sleep 8
-echo -e "\n\nsplify ${GREEN}установлен!${NC}\n"
-
+echo -e "\nsplify ${GREEN}установлен!${NC}\n"
+else
+install_splify || return
+register_in_splify || return
+echo -e "\nsplify ${GREEN}обновлён!${NC}\n"
+fi
 PAUSE
 ;;
 
