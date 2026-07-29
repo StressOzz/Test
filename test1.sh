@@ -165,7 +165,7 @@ echo -e "${CYAN}Скачиваем пакеты ${NC}splify"
       *splify*) wget -qO "$TMP_SPL/${u##*/}" "$u" || { echo -e "\n${RED}Не удалось скачать ${NC}$u\n"; PAUSE; return 1; }
     esac
   done
-  for pkg in splify- luci-app-splify- luci-i18n-splify-ru-; do
+  for pkg in splify luci-app-splify luci-i18n-splify-ru; do
     ls "$TMP_SPL/$pkg"*.$RAZ >/dev/null 2>&1 || { echo -e "\n${RED}В релизе не хватает пакета ${NC}$pkg*.$RAZ${RED}!${NC}\n"; PAUSE; return 1; }
   done
 
