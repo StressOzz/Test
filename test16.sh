@@ -145,16 +145,17 @@ warn() { printf '\033[1;33mВнимание:\033[0m %s\n' "$*" >&2; }
 err()  { printf '\033[1;31mОшибка:\033[0m %s\n' "$*" >&2; exit 1; }
 
 # ──────────────────────────── 1. environment checks ────────────────────────
-pre_inst_spl() {
-  if ! command -v "jq" >/dev/null 2>&1; then
+
+# ──────────────────────────── 2. install splify packages ───────────────────
+install_splify() {
+echo -e "\n${MAGENTA}Устанавливаем ${NC}splify"
+
+if ! command -v "jq" >/dev/null 2>&1; then
   $UPDATE >/dev/null 2>&1
 echo -e "${CYAN}Ставим зависимость ${NC}jq"
    $INSTALL jq >/dev/null 2>&1
   fi
-}
-# ──────────────────────────── 2. install splify packages ───────────────────
-install_splify() {
-echo -e "${MAGENTA}Устанавливаем ${NC}splify"
+
 echo -e "${CYAN}Проверяем версию ${NC}splify"
   META="$TMP_SPL/meta.json"
   wget -qO "$META" "$API" || err "не удалось получить данные релиза (нет интернета?)."
@@ -220,7 +221,7 @@ reg_url() {
 }
 
 find_best_endpoint() {
-echo -e "${CYAN}Подбираем лучший ${NC}WARP endpoint"
+echo -e "${CYAN}Подбираем лучший ${NC}endpoint"
   _prefixes="188.114.96. 188.114.97. 188.114.98. 188.114.99. 162.159.192. 162.159.193. 162.159.195. 8.34.146. 8.39.214. 8.39.204. 8.6.112. 8.35.211. 8.39.125. 8.47.69."
   
   _candidates=$(awk -v prefixes="$_prefixes" 'BEGIN {
@@ -274,11 +275,13 @@ choose_endpoint() {
     engage) WARP_EP_MODE=engage ;;
     *)
       if { [ -r /dev/tty ] && [ -w /dev/tty ] && [ -c /dev/tty ]; } 2>/dev/null; then
-        printf '\033[1;36m==>\033[0m %s\n' "Выберите endpoint WARP:"
-        printf '  \033[1;32m1\033[0m) автоматически подобрать (рулетка по 100 IP, лучший по пингу)\n'
-        printf '  \033[1;32m2\033[0m) engage.cloudflareclient.com (стабильный anycast, без подбора)\n'
-        printf 'По умолчанию [\033[1;m2\033[0m]: '
-        _choice=""
+	  
+    echo -e "\n${MAGENTA}Меню выбора endpoint${NC}"
+    echo -e "${CYAN}1) ${GREEN}Использовать${NC} engage.cloudflareclient.com:4500"
+    echo -e "${CYAN}1) ${GREEN}Подобрать автоматически${NC}"
+    echo -en "${YELLOW}Выберите пункт (${NC}Enter = 1${YELLOW}): ${NC}"
+
+		_choice=""
         read -r _choice </dev/tty 2>/dev/null || _choice=""
         case "$_choice" in
           1) WARP_EP_MODE=auto ;;
@@ -299,7 +302,7 @@ echo -e "${CYAN}Используем endpoint:${NC} $WARP_EP"
 }
 
 register_warp() {
-echo -e "${MAGENTA}Генерируем WARP${NC}"
+echo -e "\n${MAGENTA}Генерируем WARP${NC}"
 echo -e "${CYAN}Регистрируем устройство в ${NC}Cloudflare"
   [ -n "$WORKER_URL" ] && echo -e "${CYAN}Используем прокси: ${NC}$WORKER_URL" || warn "WORKER_URL не задан — пробую api.cloudflareclient.com напрямую (может быть заблокирован)."
 
@@ -348,7 +351,7 @@ echo -e "${CYAN}Регистрируем устройство в ${NC}Cloudflare
 # ──────────────────────────── 5. create warp0 interface ─────────────────────
 create_warp_iface() {
 
-echo -e "${MAGENTA}Создаём интерфейс $WARP_IFACE${NC}"
+echo -e "\n${MAGENTA}Создаём интерфейс $WARP_IFACE${NC}"
 
   if [ -n "$(uci -q get "network.$WARP_IFACE")" ]; then
 echo -e "${CYAN}Перенастраиваем интерфейс ${NC}$WARP_IFACE"
@@ -385,7 +388,8 @@ ifdown "$WARP_IFACE" >/dev/null 2>&1
   uci set "network.@${_pt}[-1].endpoint_host=${WARP_EP%:*}"
   uci set "network.@${_pt}[-1].endpoint_port=${WARP_EP##*:}"
   uci set "network.@${_pt}[-1].persistent_keepalive=25"
-
+  
+echo -e "${CYAN}Перезапускаем сеть${NC}"
 uci commit network
 /etc/init.d/network restart
 
@@ -430,7 +434,7 @@ EOF
 
 # ──────────────────────────── 7. firewall zone ──────────────────────────────
 setup_firewall() {
-echo -e "${MAGENTA}Создаём firewall зону для $WARP_IFACE${NC}"
+echo -e "\n${MAGENTA}Создаём firewall зону для $WARP_IFACE${NC}"
   if [ ! -x /usr/local/sbin/splify-firewall ]; then
     warn "splify-firewall не найден — создайте зону для $WARP_IFACE вручную (masq + lan→зона)."
     return 0
@@ -456,8 +460,6 @@ echo -e "${CYAN}3) ${GREEN}Сгененрировать и применить ${
 echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read choiceSP; case "$choiceSP" in
 
 1)
-
-pre_inst_spl
 
 install_splify
 echo -e "\n${MAGENTA}Устанавливаем AWG${NC}"
@@ -561,6 +563,8 @@ while [ -n "$(uget "firewall.@forwarding[$_fi]")" ]; do
 done
 
 # ──────────────────────────── 4. commit UCI + reload ────────────────────────
+
+echo -e "${CYAN}Перезапускаем сеть${NC}"
 uci -q commit network 2>/dev/null
 uci -q commit firewall 2>/dev/null
 /etc/init.d/network restart >/dev/null 2>&1
@@ -588,7 +592,7 @@ else
 fi
 
 # ──────────────────────────── 6. remove packages ─────────────────────
-echo -e "${CYAN}Удаляем пакеты ${NC}splify${CYAN} и${NC}AWG"
+echo -e "${CYAN}Удаляем пакеты ${NC}splify${CYAN} и ${NC}AWG"
 $DELETE luci-i18n-splify-ru >/dev/null 2>&1
 $DELETE luci-app-splify >/dev/null 2>&1
 $DELETE splify >/dev/null 2>&1
@@ -599,7 +603,7 @@ $DELETE kmod-amneziawg >/dev/null 2>&1
 
 
 # ──────────────────────────── 8. splify config + leftover data ──────────────
-echo -e "${CYAN}Удаляем конфигурации и данные ${NC}splify"
+echo -e "${CYAN}Удаляем данные ${NC}splify"
 rm -rf /etc/splify* /etc/init.d/splify* /etc/config/splify* /var/run/splify* /tmp/luci-indexcache* /tmp/luci-modulecache*
 /etc/init.d/rpcd reload 2>/dev/null || /etc/init.d/rpcd restart 2>/dev/null
 
