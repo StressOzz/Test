@@ -479,14 +479,13 @@ choose_endpoint || return
 create_warp_iface || return
 register_in_splify || return
 setup_firewall || return
-echo "0"
+echo -e "\n${MAGENTA}Применяем настройки${NC}"
+echo -en "${YELLOW}Подождите...${NC}"
 /etc/init.d/splify restart
-echo "1"
+sleep 8
 /etc/init.d/splify-agent restart
-echo "2"
+skeep 8
 /etc/init.d/splify reload
-echo "3"
-sleep 5
 echo -e "\nsplify ${GREEN}установлен!${NC}\n"
 PAUSE
 ;;
@@ -512,7 +511,7 @@ uget() { uci -q get "$1" 2>/dev/null; }
 
 DELETE_SPL() {
 # ──────────────────────────── 1. stop splify services ───────────────────────
-echo -e "\n${MAGENTA}Удаляем splify, AWG, Интерфейс, Firewall зону${NC}"
+echo -e "\n${MAGENTA}Удаляем splify, AWG, Интерфейс, firewall зону${NC}"
 
 echo -e "${CYAN}Останавливаем службы${NC}"
 for s in splify splify-agent; do
