@@ -478,8 +478,8 @@ install_AWG || continue
 register_warp || continue
 # choose_endpoint || continue
 create_warp_iface || continue
-setup_firewall || continue
 register_in_splify || continue
+setup_firewall || continue
 echo -e "\nsplify ${GREEN}установлен!${NC}\n"
 else
 install_splify || continue
