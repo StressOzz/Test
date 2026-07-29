@@ -626,7 +626,7 @@ $DELETE kmod-amneziawg >/dev/null 2>&1
 
 # ──────────────────────────── 8. splify config + leftover data ──────────────
 echo -e "${CYAN}Удаляем данные ${NC}splify"
-rm -rf /etc/splify* /etc/init.d/splify* /etc/config/splify* /var/run/splify* /tmp/luci-indexcache* /tmp/luci-modulecache*
+rm -rf /etc/splify* /etc/init.d/splify* /etc/config/splify* /var/run/splify* /tmp/luci-indexcache* /tmp/luci-modulecache* /usr/local/sbin/splify*
 /etc/init.d/rpcd reload 2>/dev/null || /etc/init.d/rpcd restart 2>/dev/null
 
 echo -e "splify ${GREEN}удалён!${NC}\n"
