@@ -116,8 +116,6 @@ MSG=0; for f in stun2.bin quic_initial_tencent_com.bin quic_initial_steamcommuni
 # splify
 # ==========================================
 
-SPL_INST_VER="$(awk '$0=="P:splify"{f=1} f&&/^V:/{v=substr($0,3);sub(/-r[0-9]+$/,"",v);print v;exit}' /lib/apk/db/installed)"
-
 REPO="xyzmean/splify"
 API="https://api.github.com/repos/$REPO/releases/latest"
 CF_API_VERSION="v0a1922"
@@ -431,16 +429,19 @@ EOF
 	/etc/init.d/splify reload 2>/dev/null
 	sleep 3
 	/etc/init.d/splify restart 2>/dev/null
+	sleep 3
+	/etc/init.d/splify-agent restart
+	sleep 3
 }
 
 # ──────────────────────────── 7. firewall zone ──────────────────────────────
 setup_firewall() {
-echo -e "\n${MAGENTA}Создаём firewall зону для $WARP_IFACE${NC}"
+echo -e "\n${MAGENTA}Создаём firewall зону${NC}"
   if [ ! -x /usr/local/sbin/splify-firewall ]; then
     warn "splify-firewall не найден — создайте зону для $WARP_IFACE вручную (masq + lan→зона)."
     return 0
   fi
-echo -e "${CYAN}Создаём ${NC}firewall${CYAN} зону${NC}"
+echo -e "${CYAN}Создаём ${NC}firewall${CYAN} зону для ${NC}$WARP_IFACE${NC}"
   if /usr/local/sbin/splify-firewall check "$WARP_IFACE" >/dev/null 2>&1; then
 echo -e "Firewall${CYAN} зона для ${NC}$WARP_IFACE уже настроена${NC}"
   else
@@ -450,10 +451,22 @@ echo -e "Firewall${CYAN} зона для ${NC}$WARP_IFACE уже настрое�
 
 # ──────────────────────────── main ──────────────────────────────────────────
 
-SPL_MENU() { while true; do clear
+SPL_MENU() { while true; do
+
+SPL_INST_VER="$(awk '$0=="P:splify"{f=1} f&&/^V:/{v=substr($0,3);sub(/-r[0-9]+$/,"",v);print v;exit}' /lib/apk/db/installed)"
+
+clear
 echo -e "${MAGENTA}Меню splify${NC}\n"
 
-echo -e "$SPL_INST_VER"
+if [ -z "$SPL_INST_VER" ]; then
+  SPL_STATUS="${RED}не установлен${NC}"
+elif [ "$SPL_VER" = "$SPL_INST_VER" ]; then
+  SPL_STATUS="${GREEN}$SPL_INST_VER${NC}"
+else
+  SPL_STATUS="${RED}$SPL_INST_VER (версия устарела)${NC}"
+fi
+
+echo -e "splify: $SPL_STATUS"
 
 echo -e "\n${CYAN}1) ${GREEN}Уставновить ${NC}splify"
 echo -e "${CYAN}2) ${GREEN}Удалить ${NC}splify"
@@ -470,7 +483,9 @@ choose_endpoint || return
 create_warp_iface || return
 register_in_splify || return
 setup_firewall || return
-echo -e "splify ${GREEN}установлен!${NC}\n"
+/etc/init.d/splify restart; /etc/init.d/splify-agent restart
+sleep 5
+echo -e "\nsplify ${GREEN}установлен!${NC}\n"
 PAUSE
 ;;
 
@@ -483,7 +498,6 @@ register_warp || return
 choose_endpoint || return
 create_warp_iface || return
 register_in_splify || return
-/etc/init.d/splify restart; /etc/init.d/splify-agent restart
 PAUSE
 ;;
 
@@ -1225,7 +1239,7 @@ case "$(/etc/init.d/mihomo status 2>/dev/null)" in running) echo -e "${YELLOW}Mi
 TGSTATUS=""; pidof tg-ws-proxy-go >/dev/null 2>&1 && TGSTATUS="${TGSTATUS:+$TGSTATUS/}SOCKS5"; pidof tg-ws-proxy >/dev/null 2>&1 && TGSTATUS="${TGSTATUS:+$TGSTATUS/}MTProto"; pidof tg-ws-proxy-rs >/dev/null 2>&1 && TGSTATUS="${TGSTATUS:+$TGSTATUS/}Rust"; if [ -n "$TGSTATUS" ]; then echo -e "${YELLOW}TG WS Proxy:${NC}         ${GREEN}запущен [$TGSTATUS]${NC}"; fi
 if hosts_enabled; then echo -e "${YELLOW}Домены в hosts:      ${GREEN}$hosts_echo${NC}"; fi; [ -f "$DATE_FILE" ] && echo -e "${YELLOW}Резервная копия:${NC}     ${GREEN}сохранена"; show_script_50 && [ -n "$name" ] && echo -e "${YELLOW}Установлен скрипт:${NC}   $name"; grep -q "$Fin_IP_Dis" /etc/hosts && echo -e "${YELLOW}IP для Discord:      ${GREEN}включены${NC}"
 if [ -n "$DOH_STATUS" ]; then if [ "$PKG_IS_APK" -eq 1 ]; then apk info -e https-dns-proxy >/dev/null 2>&1 && echo -e "${YELLOW}DNS over HTTPS:${NC}      ${GREEN}$DOH_STATUS${NC}"; else opkg list-installed | grep -q '^https-dns-proxy ' && echo -e "${YELLOW}DNS over HTTPS:${NC}      ${GREEN}$DOH_STATUS${NC}"; fi; fi
-pkg_is_installed netshift && PODKOP_VER && echo -e "${YELLOW}NetShift:${NC}            $PODKOP_STATUS"; if web_is_enabled; then echo -e "${YELLOW}Доступ из браузера:${NC}  $LAN_IP:7681"; fi; quic_is_blocked && if quic_is_blocked; then echo -e "${YELLOW}Блокировка QUIC:${NC}     ${GREEN}включена${NC}"; fi; if grep -q 'ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc
+pkg_is_installed netshift && PODKOP_VER && echo -e "${YELLOW}NetShift:${NC}            $"; if web_is_enabled; then echo -e "${YELLOW}Доступ из браузера:${NC}  $LAN_IP:7681"; fi; quic_is_blocked && if quic_is_blocked; then echo -e "${YELLOW}Блокировка QUIC:${NC}     ${GREEN}включена${NC}"; fi; if grep -q 'ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc
 then echo -e "${YELLOW}Flow Offloading FIX:${NC} ${GREEN}включён${NC}"; fi; if [ "$CURR" != "default / OpenWrt" ]; then echo -e "${YELLOW}Зеркало OpenWRT:${NC}     $CURR"; fi; if [ -f /etc/init.d/zapret ] && [ -f "$CONF" ] && grep -Eq "^[[:space:]]*option DISABLE_IPV6 '0'" "$CONF"; then echo -e "${YELLOW}IPv6 в Zapret:       ${GREEN}включён${NC}"; fi; INFO_ZPR_STR; }
 INFO_ZPR_STR() { if [ -f "$CONF" ]; then line=$(grep -m1 '^#general' "$CONF"); GEN="${line:+${line#?} / }"; current="$ver$( [ -n "$ver" ] && [ -n "$yv_ver" ] && echo " / " )$yv_ver"; DV=$(grep -o -E '^#Dv[0-9][0-9]*' "$CONF" | sed 's/^#[[:space:]]*/\/ /' | head -n1)
 GV=$(grep -m1 '^#Gv' "$CONF" | sed 's/^#/\/ /'); UPD=$(grep -q '^#udp443' "$CONF" && echo '/ udp443'); WS=$(grep -q -- '--wssize 1:6' "$CONF" && echo '/ wssize'); ME=$(grep -q -- '--methodeol' "$CONF" && echo '/ methodeol'); if [ -n "$current" ]
