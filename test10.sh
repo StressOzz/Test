@@ -84,8 +84,8 @@ BIN_PATH_GO="/usr/bin/tg-ws-proxy-go"; INIT_PATH_GO="/etc/init.d/tg-ws-proxy-go"
 
 if command -v opkg >/dev/null 2>&1; then PKG="opkg"; GO_SUF="1"; CONFZ="/etc/opkg/distfeeds.conf"; PKG_IS_APK=0; UPDATE="opkg update"; INSTALL="opkg install"
 DELETE="opkg remove"; ARCH="$(opkg print-architecture | awk '{print $2}' | tail -n1)"; VER_SUF="r1-all"; SUF_MT=""
-APK_RAS="ipk"; TMP_FILE_GO="/tmp/tg-ws-proxy.ipk"; else PKG="apk"; GO_SUF="r1"; CONFZ="/etc/apk/repositories.d/distfeeds.list"; PKG_IS_APK=1
-UPDATE="apk update"; INSTALL="apk add --allow-untrusted"; DELETE="apk del"; ARCH="$(apk --print-arch 2>/dev/null)"; APK_RAS="apk"; VER_SUF="r1"; SUF_MT="r"; TMP_FILE_GO="/tmp/tg-ws-proxy.apk"; fi
+RAZ="ipk"; TMP_FILE_GO="/tmp/tg-ws-proxy.ipk"; else PKG="apk"; GO_SUF="r1"; CONFZ="/etc/apk/repositories.d/distfeeds.list"; PKG_IS_APK=1
+UPDATE="apk update"; INSTALL="apk add --allow-untrusted"; DELETE="apk del"; ARCH="$(apk --print-arch 2>/dev/null)"; RAZ="apk"; VER_SUF="r1"; SUF_MT="r"; TMP_FILE_GO="/tmp/tg-ws-proxy.apk"; fi
 
 if ! curl --version >/dev/null 2>&1; then clear; echo -e "curl ${RED}отсутствует ${NC}или${RED} работает некорректно${NC}"; echo -e "\n${MAGENTA}Устанавливаем ${NC}curl"; 
 $DELETE curl libcurl >/dev/null 2>&1; echo -e "${CYAN}Обновляем список пакетов${NC}"; if ! $UPDATE >/dev/null 2>&1; then echo -e "\n${RED}Не удалось обновить пакеты!${NC}\n"; fi
@@ -147,47 +147,28 @@ err()  { printf '\033[1;31mОшибка:\033[0m %s\n' "$*" >&2; exit 1; }
 
 # ──────────────────────────── 1. environment checks ────────────────────────
 pre_inst_spl() {
-PKG_MANAGER=""
-PKG_EXT=""
-if command -v apk >/dev/null 2>&1; then
-    PKG_MANAGER="apk"
-    PKG_EXT="apk"
-elif command -v opkg >/dev/null 2>&1; then
-    PKG_MANAGER="opkg"
-    PKG_EXT="ipk"
-else
-    err "не найден пакетный менеджер (apk/opkg). Нужен OpenWrt."
-fi
+# if [ "$PKG" = "opkg" ]; then
+#     if ! opkg list-installed 2>/dev/null | grep -q "^nftables "; then
+#         say "nftables не найден. Пробую установить…"
+#         opkg update >/dev/null 2>&1
+#         opkg install nftables >/dev/null 2>&1 || warn "Не удалось установить nftables — splify-firewall может не работать."
+#     fi
+# fi
 
-command -v wget  >/dev/null 2>&1 || err "не найден wget."
-
-if [ "$PKG_MANAGER" = "opkg" ]; then
-    if ! opkg list-installed 2>/dev/null | grep -q "^nftables "; then
-        say "nftables не найден. Пробую установить…"
-        opkg update >/dev/null 2>&1
-        opkg install nftables >/dev/null 2>&1 || warn "Не удалось установить nftables — splify-firewall может не работать."
-    fi
-fi
-
-for _dep in curl jq; do
-  if ! command -v "$_dep" >/dev/null 2>&1; then
-    say "Ставлю зависимость: $_dep…"
-    if [ "$PKG_MANAGER" = "apk" ]; then
-        apk add "$_dep" >/dev/null 2>&1 || err "не удалось установить $_dep (apk add $_dep)."
-    else
-        opkg update >/dev/null 2>&1
-        opkg install "$_dep" >/dev/null 2>&1 || err "не удалось установить $_dep (opkg install $_dep)."
-    fi
+  if ! command -v "jq" >/dev/null 2>&1; then
+  $UPDATE >/dev/null 2>&1
+    say "Ставлю зависимость jq"
+   $INSTALL jq >/dev/null 2>&1
   fi
-done
+
 }
 # ──────────────────────────── 2. install splify packages ───────────────────
 install_splify() {
   say "Ищу последний релиз splify…"
   META="$TMP_SPL/meta.json"
   wget -qO "$META" "$API" || err "не удалось получить данные релиза (нет интернета?)."
-  URLS="$(tr ',' '\n' <"$META" | sed -n 's/.*"browser_download_url": *"\([^"]*\.'$PKG_EXT'\)".*/\1/p')"
-  [ -n "$URLS" ] || err "в последнем релизе нет .$PKG_EXT. Возможно, релиз ещё не собран."
+  URLS="$(tr ',' '\n' <"$META" | sed -n 's/.*"browser_download_url": *"\([^"]*\.'$RAZ'\)".*/\1/p')"
+  [ -n "$URLS" ] || err "в последнем релизе нет .$RAZ. Возможно, релиз ещё не собран."
 
   say "Скачиваю пакеты…"
   for u in $URLS; do
@@ -196,11 +177,11 @@ install_splify() {
     esac
   done
   for pkg in splify- luci-app-splify- luci-i18n-splify-ru-; do
-    ls "$TMP_SPL/$pkg"*.$PKG_EXT >/dev/null 2>&1 || err "в релизе не хватает пакета $pkg*.$PKG_EXT"
+    ls "$TMP_SPL/$pkg"*.$RAZ >/dev/null 2>&1 || err "в релизе не хватает пакета $pkg*.$RAZ"
   done
 
   say "Устанавливаю splify…"
-    $INSTALL "$TMP_SPL"/*.$PKG_EXT
+    $INSTALL "$TMP_SPL"/*.$RAZ >/dev/null 2>&1
 
 
   rm -f /tmp/luci-indexcache* /tmp/luci-modulecache* 2>/dev/null
@@ -332,16 +313,16 @@ register_warp() {
   [ -n "$WARP_PEER" ] && [ "$WARP_PEER" != "null" ] || err "WARP: нет peer public_key в ответе."
   [ -n "$WARP_V4" ]   && [ "$WARP_V4"   != "null" ] || err "WARP: нет client IPv4 в ответе."
 
-  case "$WARP_V4" in
-    */*) : ;;
-    *)   WARP_V4="$WARP_V4/32" ;;
-  esac
-  if [ -n "$WARP_V6" ]; then
-    case "$WARP_V6" in
-      */*) : ;;
-      *)   WARP_V6="$WARP_V6/128" ;;
-    esac
-  fi
+#  case "$WARP_V4" in
+#    */*) : ;;
+#    *)   WARP_V4="$WARP_V4/32" ;;
+#  esac
+#  if [ -n "$WARP_V6" ]; then
+#    case "$WARP_V6" in
+#      */*) : ;;
+#      *)   WARP_V6="$WARP_V6/128" ;;
+#    esac
+#  fi
 
   say "WARP зарегистрирован: $WARP_V4${WARP_V6:+, $WARP_V6}"
 }
@@ -389,8 +370,7 @@ create_warp_iface() {
 
 uci commit network
 /etc/init.d/network restart
-  
-  ifup "$WARP_IFACE" >/dev/null 2>&1 || warn "ifup $WARP_IFACE не удался — проверьте в LuCI."
+ifup "$WARP_IFACE" >/dev/null 2>&1 || warn "ifup $WARP_IFACE не удался — проверьте в LuCI."
 }
 
 # ──────────────────────────── 6. register endpoint in splify ────────────────
@@ -442,33 +422,6 @@ setup_firewall() {
 }
 
 # ──────────────────────────── main ──────────────────────────────────────────
-
-# install_splify
-# sleep 3
-# install_AWG
-# sleep 3
-# register_warp
-# sleep 3
-# choose_endpoint
-# sleep 3
-# create_warp_iface
-# sleep 3
-# register_in_splify
-# sleep 3
-# setup_firewall
-# sleep 3
-# /etc/init.d/splify restart; /etc/init.d/splify-agent restart
-# sleep 5
-# say "Готово! Настроен обфусцированный WARP-туннель $WARP_IFACE + splify routing."
-
-# printf '  • Туннель:   %s (AmneziaWG + WARP, endpoint %s)\n' "$WARP_IFACE" "$WARP_EP"
-# printf '  • Адрес:     %s%s\n' "$WARP_V4" "${WARP_V6:+, $WARP_V6}"
-# printf '  • Endpoint:  Сервисы → splify → Главная (нажмите «Включить», если ещё не включён)\n'
-# printf '  • Тюнинг:    Сервисы → splify → Дополнительно (режим, kill switch, списки)\n'
-
-
-
-
 
 SPL_MENU() { while true; do clear
 echo -e "${MAGENTA}Меню Splify${NC}\n"
@@ -1165,7 +1118,7 @@ chmod +x "$INIT_PATH_GO"; /etc/init.d/tg-ws-proxy-go enable; /etc/init.d/tg-ws-p
 # УСТАНОВКА MTProto
 install_update_TG_PKG() { AVAILABLE_SPACE=$(df /overlay 2>/dev/null | awk 'NR==2 {print $4}'); [ -z "$AVAILABLE_SPACE" ] && AVAILABLE_SPACE=$(df / 2>/dev/null | awk 'NR==2 {print $4}'); REQUIRED_SPACE=10000; if [ "$AVAILABLE_SPACE" -lt "$REQUIRED_SPACE" ]
 then echo -e "\n${RED}Недостаточно свободного места${NC}\n"; echo -e "${YELLOW}Доступно: ${NC}$((AVAILABLE_SPACE/1024)) MB\n${YELLOW}Требуется: ${NC}$((REQUIRED_SPACE/1024)) MB\n"; PAUSE; return; fi
-echo -e "\n${MAGENTA}Устанавливаем TG WS Proxy MTProto${NC}"; rm -f /etc/tg-ws-proxy.conf /etc/tg-ws-proxy.conf-opkg; URL="https://github.com/spatiumstas/tg-ws-proxy-go/releases/download/${GO_VER}/tg-ws-proxy_${GO_VER}-${GO_SUF}_openwrt_${ARCH_FULL}.${APK_RAS}"
+echo -e "\n${MAGENTA}Устанавливаем TG WS Proxy MTProto${NC}"; rm -f /etc/tg-ws-proxy.conf /etc/tg-ws-proxy.conf-opkg; URL="https://github.com/spatiumstas/tg-ws-proxy-go/releases/download/${GO_VER}/tg-ws-proxy_${GO_VER}-${GO_SUF}_openwrt_${ARCH_FULL}.${RAZ}"
 echo -e "${CYAN}Обновляем список пакетов${NC}"; $UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; PAUSE; return; }; FILE_NAME_GO="$(basename "$URL")"; echo -e "${CYAN}Скачиваем и устанавливаем${NC} $FILE_NAME_GO"
 wget -q -O "$TMP_FILE_GO" "$URL" || { echo -e "\n${RED}Ошибка скачивания $URL${NC}\n"; PAUSE; return 1; }; $INSTALL "$TMP_FILE_GO" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка установки $TMP_FILE_GO!${NC}\n"; rm -f "$TMP_FILE_GO"; PAUSE; return 1; }
 rm -f "$TMP_FILE_GO"; if ! grep -q '^SECRET=.' "$SECRET_FILE" 2>/dev/null; then echo "SECRET=$SECRET" > "$SECRET_FILE"; fi; rm -f /etc/tg-ws-proxy.conf /etc/tg-ws-proxy.conf-opkg; /etc/init.d/tg-ws-proxy enable >/dev/null 2>&1; /etc/init.d/tg-ws-proxy restart >/dev/null 2>&1
@@ -1200,15 +1153,15 @@ then echo -ne "${YELLOW}Удалить старую версию NetShift и у�
 if pkg_is_installed https-dns-proxy; then echo -e "\n${RED}Обнаружен ${NC}DNS over HTTPS${RED}!"; echo -e "${YELLOW}Удалите ${NC}DNS over HTTPS\n"; PAUSE; return; fi
 [ "$ACTION" = "install" ] && echo -e "\n${MAGENTA}Устанавливаем NetShift${NC}" || echo -e "\n${MAGENTA}Обновляем NetShift${NC}"
 echo -e "${CYAN}Обновляем список пакетов${NC}"; $UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; PAUSE; return; }
-PODKOP_INST="https://github.com/yandexru45/netshift/releases/download/$PODKOP_LATEST_VER/netshift-$PODKOP_LATEST_VER-$VER_SUF.$APK_RAS"
-PODKOP_LUCI="https://github.com/yandexru45/netshift/releases/download/$PODKOP_LATEST_VER/luci-app-netshift-$PODKOP_LATEST_VER-$VER_SUF.$APK_RAS"
-PODKOP_RUS="https://github.com/yandexru45/netshift/releases/download/$PODKOP_LATEST_VER/luci-i18n-netshift-ru-$PODKOP_LATEST_VER.$APK_RAS"
-cd "$tmpDIR"; echo -e "${CYAN}Скачиваем ${NC}NetShift"; wget -q -U "Mozilla/5.0" -O netshift.$APK_RAS "$PODKOP_INST" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$PODKOP_INST\n"; PAUSE; return; }
-wget -q -U "Mozilla/5.0" -O luci-app-netshift.$APK_RAS "$PODKOP_LUCI" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$PODKOP_LUCI\n"; PAUSE; return; }
-wget -q -U "Mozilla/5.0" -O luci-i18n-netshift-ru.$APK_RAS "$PODKOP_RUS" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$PODKOP_RUS\n"; PAUSE; return; }
-echo -en "${CYAN}Устанавливаем ${NC}NetShift\n${YELLOW}Подождите...${NC}"; $INSTALL ./netshift.$APK_RAS >/dev/null 2>&1 || { echo -e "\n\n${RED}Не удалось установить:\n${NC}$PODKOP_INST\n"; PAUSE; return; }
-$INSTALL ./luci-app-netshift.$APK_RAS >/dev/null 2>&1 || { echo -e "\n\n${RED}Не удалось установить:\n${NC}$PODKOP_LUCI\n"; PAUSE; return; }
-$INSTALL ./luci-i18n-netshift-ru.$APK_RAS >/dev/null 2>&1 || { echo -e "\n\n${RED}Не удалось установить:\n${NC}$PODKOP_RUS\n"; PAUSE; return; }; rm -rf "$tmpDIR"
+PODKOP_INST="https://github.com/yandexru45/netshift/releases/download/$PODKOP_LATEST_VER/netshift-$PODKOP_LATEST_VER-$VER_SUF.$RAZ"
+PODKOP_LUCI="https://github.com/yandexru45/netshift/releases/download/$PODKOP_LATEST_VER/luci-app-netshift-$PODKOP_LATEST_VER-$VER_SUF.$RAZ"
+PODKOP_RUS="https://github.com/yandexru45/netshift/releases/download/$PODKOP_LATEST_VER/luci-i18n-netshift-ru-$PODKOP_LATEST_VER.$RAZ"
+cd "$tmpDIR"; echo -e "${CYAN}Скачиваем ${NC}NetShift"; wget -q -U "Mozilla/5.0" -O netshift.$RAZ "$PODKOP_INST" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$PODKOP_INST\n"; PAUSE; return; }
+wget -q -U "Mozilla/5.0" -O luci-app-netshift.$RAZ "$PODKOP_LUCI" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$PODKOP_LUCI\n"; PAUSE; return; }
+wget -q -U "Mozilla/5.0" -O luci-i18n-netshift-ru.$RAZ "$PODKOP_RUS" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$PODKOP_RUS\n"; PAUSE; return; }
+echo -en "${CYAN}Устанавливаем ${NC}NetShift\n${YELLOW}Подождите...${NC}"; $INSTALL ./netshift.$RAZ >/dev/null 2>&1 || { echo -e "\n\n${RED}Не удалось установить:\n${NC}$PODKOP_INST\n"; PAUSE; return; }
+$INSTALL ./luci-app-netshift.$RAZ >/dev/null 2>&1 || { echo -e "\n\n${RED}Не удалось установить:\n${NC}$PODKOP_LUCI\n"; PAUSE; return; }
+$INSTALL ./luci-i18n-netshift-ru.$RAZ >/dev/null 2>&1 || { echo -e "\n\n${RED}Не удалось установить:\n${NC}$PODKOP_RUS\n"; PAUSE; return; }; rm -rf "$tmpDIR"
 echo -e "\nNetShift ${GREEN}$( [ "$ACTION" = "install" ] && echo "установлен" || echo "обновлён" )!${NC}\n"; PAUSE; else PODKOP_DELETE; fi; }
 PODKOP_DELETE() { echo -e "\n${MAGENTA}Удаляем NetShift${NC}"; echo -e "${CYAN}Останавливаем сервисы${NC}"; netshift stop >/dev/null 2>&1; netshift disable >/dev/null 2>&1; sing-box stop >/dev/null 2>&1; sing-box disable >/dev/null 2>&1
 echo -e "${CYAN}Удаляем пакеты ${NC}NetShift"; $DELETE luci-i18n-netshift-ru luci-app-netshift netshift >/dev/null 2>&1; echo -e "${CYAN}Удаляем пакеты ${NC}sing-box"; $DELETE sing-box >/dev/null 2>&1
@@ -1221,11 +1174,11 @@ echo -e "\n${MAGENTA}Удаление AWG и интерфейс AWG${NC}"; echo 
 for peer in $(uci show network | grep "interface='AWG'" | cut -d. -f2); do uci delete network.$peer; done; uci commit network >/dev/null 2>&1; echo -e "${CYAN}Удаляем ${NC}интерфейс AWG"; echo -en "${YELLOW}Перезапускаем сеть! Подождите...${NC}"; /etc/init.d/network restart; echo -e "\nAWG ${GREEN}и${NC} интерфейс AWG ${GREEN}удалены!${NC}\n"; PAUSE; fi }
 
 install_AWG() { rm -rf "$tmpDIR"; mkdir -p "$tmpDIR"; echo -e "${CYAN}Обновляем список пакетов${NC}"; $UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; PAUSE; return; }
-AWG_kmod="https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v$OWRTAWG/kmod-amneziawg_v${OWRTAWG}_$ARCHAWG.$APK_RAS"; AWG_tools="https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v$OWRTAWG/amneziawg-tools_v${OWRTAWG}_$ARCHAWG.$APK_RAS"
-AWG_luci="https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v$OWRTAWG/luci-proto-amneziawg_v${OWRTAWG}_$ARCHAWG.$APK_RAS"; AWG_ru="https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v$OWRTAWG/luci-i18n-amneziawg-ru_v${OWRTAWG}_$ARCHAWG.$APK_RAS"; cd "$tmpDIR"
-echo -e "${CYAN}Скачиваем ${NC}AWG"; wget -q -U "Mozilla/5.0" -O AWG_kmod.$APK_RAS "$AWG_kmod" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$AWG_kmod\n"; PAUSE; return; }; wget -q -U "Mozilla/5.0" -O AWG_tools.$APK_RAS "$AWG_tools" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$AWG_tools\n"; PAUSE; return; }; wget -q -U "Mozilla/5.0" -O AWG_luci.$APK_RAS "$AWG_luci" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$AWG_luci\n"; PAUSE; return; }
-wget -q -U "Mozilla/5.0" -O AWG_ru.$APK_RAS "$AWG_ru" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$AWG_ru\n"; PAUSE; return; }; echo -e "${CYAN}Устанавливаем ${NC}AWG"; $INSTALL ./AWG_kmod.$APK_RAS >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить:\n${NC}$AWG_kmod\n"; PAUSE; return; }; $INSTALL ./AWG_tools.$APK_RAS >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить:\n${NC}$AWG_tools\n"; PAUSE; return; }
-$INSTALL ./AWG_luci.$APK_RAS >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить:\n${NC}$AWG_luci\n"; PAUSE; return; }; $INSTALL ./AWG_ru.$APK_RAS >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить:\n${NC}$AWG_ru\n"; PAUSE; return; }; rm -rf "$tmpDIR"; }
+AWG_kmod="https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v$OWRTAWG/kmod-amneziawg_v${OWRTAWG}_$ARCHAWG.$RAZ"; AWG_tools="https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v$OWRTAWG/amneziawg-tools_v${OWRTAWG}_$ARCHAWG.$RAZ"
+AWG_luci="https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v$OWRTAWG/luci-proto-amneziawg_v${OWRTAWG}_$ARCHAWG.$RAZ"; AWG_ru="https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v$OWRTAWG/luci-i18n-amneziawg-ru_v${OWRTAWG}_$ARCHAWG.$RAZ"; cd "$tmpDIR"
+echo -e "${CYAN}Скачиваем ${NC}AWG"; wget -q -U "Mozilla/5.0" -O AWG_kmod.$RAZ "$AWG_kmod" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$AWG_kmod\n"; PAUSE; return; }; wget -q -U "Mozilla/5.0" -O AWG_tools.$RAZ "$AWG_tools" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$AWG_tools\n"; PAUSE; return; }; wget -q -U "Mozilla/5.0" -O AWG_luci.$RAZ "$AWG_luci" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$AWG_luci\n"; PAUSE; return; }
+wget -q -U "Mozilla/5.0" -O AWG_ru.$RAZ "$AWG_ru" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$AWG_ru\n"; PAUSE; return; }; echo -e "${CYAN}Устанавливаем ${NC}AWG"; $INSTALL ./AWG_kmod.$RAZ >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить:\n${NC}$AWG_kmod\n"; PAUSE; return; }; $INSTALL ./AWG_tools.$RAZ >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить:\n${NC}$AWG_tools\n"; PAUSE; return; }
+$INSTALL ./AWG_luci.$RAZ >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить:\n${NC}$AWG_luci\n"; PAUSE; return; }; $INSTALL ./AWG_ru.$RAZ >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить:\n${NC}$AWG_ru\n"; PAUSE; return; }; rm -rf "$tmpDIR"; }
 integration_AWG() { if ! pkg_is_installed netshift; then echo -e "\n${RED}NetShift не установлен!${NC}\n"; PAUSE; return; fi; if ! awg --version >/dev/null 2>&1; then echo -e "\n${RED}AWG не установлен!${NC}\n"; PAUSE; return; fi; echo -e "\n${MAGENTA}Интегрируем AWG в NetShift${NC}"; echo -e "${CYAN}Меняем конфигурацию в ${NC}NetShift${NC}"
 printf "%s\n" "config settings 'settings'" "option dns_type 'udp'" "option dns_server '8.8.8.8'" "option bootstrap_dns_server '77.88.8.8'" "option dns_rewrite_ttl '60'" "list source_network_interfaces 'br-lan'" "option enable_output_network_interface '0'" "option enable_badwan_interface_monitoring '0'" "option enable_yacd '0'" "option disable_quic '0'" > /etc/config/netshift
 printf "%s\n" "option update_interval '1d'" "option download_lists_via_proxy '0'" "option dont_touch_dhcp '0'" "option config_path '/etc/sing-box/config.json'" "option cache_path '/tmp/sing-box/cache.db'" "option log_level 'warn'" "option exclude_ntp '0'" "option shutdown_correctly '0'" "" "config section 'StressAWG'" "option connection_type 'vpn'" >> /etc/config/netshift
@@ -1321,7 +1274,7 @@ echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню\n"; echo -n
 2) sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/files/Mixomo/mixomo_openwrt_delete.sh); sed -i "\|$CRON_CMD|d" "$CRON_FILE" >/dev/null 2>&1; /etc/init.d/cron restart >/dev/null 2>&1; echo -e "\n${YELLOW}Рекомендую сделать перезагрузку роутера!${NC}\n"; PAUSE ;;
 3) check_mihomo || continue; magitrickle_config ;; 4) check_mihomo || continue; PODPISKA ;; 5) sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/files/Mixomo/gen_WARP.sh); echo; PAUSE ;;
 6) check_mihomo || continue; sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/files/Mixomo/WARP_to_conf.sh); echo; PAUSE ;; 7) check_mihomo || continue; UI_INSTALL ;; 8) check_mihomo || continue; MIXOMO_RESTART ;; 
-9) check_mihomo || continue; ARCH_MT=$(grep "^OPENWRT_ARCH=" /etc/os-release | cut -d'"' -f2); FILE_MT="/tmp/magitrickle.$APK_RAS"; URL_MT="https://github.com/MagiTrickle/MagiTrickle/releases/download/${MT_VERSION}/magitrickle_${MT_VERSION}-${SUF_MT}1_openwrt_${ARCH_MT}.$APK_RAS"
+9) check_mihomo || continue; ARCH_MT=$(grep "^OPENWRT_ARCH=" /etc/os-release | cut -d'"' -f2); FILE_MT="/tmp/magitrickle.$RAZ"; URL_MT="https://github.com/MagiTrickle/MagiTrickle/releases/download/${MT_VERSION}/magitrickle_${MT_VERSION}-${SUF_MT}1_openwrt_${ARCH_MT}.$RAZ"
 echo -e "\n${MAGENTA}Обновляем MagiTrickle\n${CYAN}Скачиваем\n${NC}$URL_MT"; curl -Lf --connect-timeout 6 --retry 3 --retry-delay 1 -o "$FILE_MT" "$URL_MT" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка скачивания${NC}\n"; return 1; }; echo -e "${CYAN}Обновляем список пакетов${NC}"
 $UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка обновления пакетов${NC}\n"; PAUSE; return 1; }; echo -e "${CYAN}Обновляем ${NC}MagiTrickle"; $INSTALL "$FILE_MT" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка установки${NC} $(basename "$URL_MT")\n"; rm -f "$FILE_MT"; PAUSE; return 1; }
 /etc/init.d/magitrickle enable >/dev/null 2>&1; /etc/init.d/magitrickle restart >/dev/null 2>&1; echo -e "MagiTrickle ${GREEN}обновлён!${NC}\n"; rm -f "$FILE_MT"; PAUSE ;; *) return ;; esac; done; }
