@@ -408,9 +408,9 @@ EOF
   
     /usr/local/sbin/splify-apply >/dev/null 2>&1
 	/etc/init.d/splify enable 2>/dev/null
-	sleep 3
+	sleep 4
 	/etc/init.d/splify restart 2>/dev/null
-	sleep 3
+	sleep 4
 	/etc/init.d/splify-agent restart 2>/dev/null
 }
 
@@ -418,7 +418,7 @@ EOF
 setup_firewall() {
 echo -e "\n${MAGENTA}Создаём firewall зону${NC}"
 echo -e "${CYAN}Создаём ${NC}firewall${CYAN} зону для ${NC}$WARP_IFACE${NC}"
-echo -en "${YELLOW}Подождите...${NC}"
+echo -en "${YELLOW}Подождите...${NC}\n"
   if /usr/local/sbin/splify-firewall check "$WARP_IFACE" >/dev/null 2>&1; then
 echo -e "Firewall${CYAN} зона для ${NC}$WARP_IFACE уже настроена${NC}"
   else
@@ -458,15 +458,8 @@ install_AWG || break
 register_warp || break
 # choose_endpoint || break
 create_warp_iface || break
-register_in_splify || break
 setup_firewall || break
-
-# echo -e "\n\n${MAGENTA}Применяем настройки${NC}"
-# echo -en "${YELLOW}Подождите...${NC}"
-# /etc/init.d/splify restart
-# sleep 8
-# /etc/init.d/splify-agent restart
-# sleep 8
+register_in_splify || break
 echo -e "\nsplify ${GREEN}установлен!${NC}\n"
 else
 install_splify || break
@@ -483,22 +476,14 @@ DELETE_SPL
 3)
 if [ -z "$SPL_INST_VER" ]; then
 echo -e "\nsplify ${RED}не установлен!${NC}\n"
-PAUSE
 else
 register_warp || break
 choose_endpoint || break
 create_warp_iface || break
 register_in_splify || break
-
-echo -e "\n${MAGENTA}Применяем настройки${NC}"
-echo -en "${YELLOW}Подождите...${NC}"
-/etc/init.d/splify restart
-sleep 8
-/etc/init.d/splify-agent restart
-sleep 8
-echo -e "\n\nWARP ${GREEN}изменён!${NC}\n"
-PAUSE
+echo -e "\nWARP ${GREEN}изменён!${NC}\n"
 fi
+PAUSE
 ;;
 
 *) return;;
