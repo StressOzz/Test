@@ -147,7 +147,7 @@ err()  { printf '\033[1;31mОшибка:\033[0m %s\n' "$*" >&2; exit 1; }
 # ──────────────────────────── 2. install splify packages ───────────────────
 install_splify() {
 clear
-echo -e "\n${MAGENTA}Устанавливаем ${NC}splify"
+echo -e "${MAGENTA}Устанавливаем ${NC}splify"
 
 if ! command -v "jq" >/dev/null 2>&1; then
   $UPDATE >/dev/null 2>&1
@@ -1191,7 +1191,6 @@ echo -e "\nNetShift ${GREEN}$( [ "$ACTION" = "install" ] && echo "установ
 PODKOP_DELETE() { echo -e "\n${MAGENTA}Удаляем NetShift${NC}"; echo -e "${CYAN}Останавливаем сервисы${NC}"; netshift stop >/dev/null 2>&1; netshift disable >/dev/null 2>&1; sing-box stop >/dev/null 2>&1; sing-box disable >/dev/null 2>&1
 echo -e "${CYAN}Удаляем пакеты ${NC}NetShift"; $DELETE luci-i18n-netshift-ru luci-app-netshift netshift >/dev/null 2>&1; echo -e "${CYAN}Удаляем пакеты ${NC}sing-box"; $DELETE sing-box >/dev/null 2>&1
 echo -e "NetShift${GREEN} удалён!${NC}"; [ "$ACTION" != "update" ] && { rm -rf /etc/config/netshift* /usr/bin/netshift /etc/config/sing-box* /etc/sing-box >/dev/null 2>&1; echo; PAUSE; }; }
-
 install_AWG_INTER() { if ! pkg_is_installed amneziawg-tools; then echo -e "\n${MAGENTA}Устанавливаем AWG и интерфейс AWG${NC}"; install_AWG; echo -e "${CYAN}Создаем ${NC}интерфейс AWG"; if uci show network.$IF_NAME >/dev/null 2>&1; then echo -e "\n${RED}Интерфейс уже существует!${NC}"; else uci set network.$IF_NAME=interface
 uci set network.$IF_NAME.proto=$PROTO; uci set network.$IF_NAME.device=$DEV_NAME; uci commit network; fi; echo -en "${YELLOW}Перезапускаем сеть! Подождите...${NC}"; /etc/init.d/network restart >/dev/null 2>&1; echo -e "\nAWG ${GREEN}и${NC} интерфейс AWG ${GREEN}установлены!${NC}"; echo -e "\n${YELLOW}Необходимо в ${NC}LuCI${YELLOW} в интерфейс ${NC}AWG${YELLOW} загрузить файл ${NC}*.conf${YELLOW}:${NC}"
 echo -e "${NC}Network ${GREEN}→${NC} Interfaces ${GREEN}→${NC} AWG ${GREEN}→${NC} Edit ${GREEN}→${NC} Load configuration… ${GREEN}→${NC} Save ${GREEN}→${NC} Save & Apply\n"; PAUSE; rm -rf "$tmpDIR"; else 
