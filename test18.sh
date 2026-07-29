@@ -3,7 +3,6 @@
 # Zapret Manager by StressOzz
 # =========================================
 ZAPRET_MANAGER_VERSION="9.79"; STR_VERSION_AUTOINSTALL="v7"
-ERROR="0"
 OWRTAWG=$(grep '^DISTRIB_RELEASE=' /etc/openwrt_release | cut -d"'" -f2); ARCHAWG="$(grep DISTRIB_ARCH /etc/openwrt_release | cut -d"'" -f2)_$(grep DISTRIB_TARGET /etc/openwrt_release | cut -d"'" -f2 | tr '/' '_')" 
 CRON_CMD="/etc/init.d/mihomo restart"; CONFIGPATH="/etc/magitrickle/state/config.yaml"
 FLOWSEAL_STR_ZIP="https://github.com/Flowseal/zapret-discord-youtube/archive/refs/heads/main.zip"
@@ -149,6 +148,7 @@ err()  { printf '\033[1;31mОшибка:\033[0m %s\n' "$*" >&2; exit 1; }
 
 # ──────────────────────────── 2. install splify packages ───────────────────
 install_splify() {
+clear
 echo -e "\n${MAGENTA}Устанавливаем ${NC}splify"
 
 if ! command -v "jq" >/dev/null 2>&1; then
@@ -279,14 +279,14 @@ choose_endpoint() {
 	  
     echo -e "\n${MAGENTA}Меню выбора endpoint${NC}"
     echo -e "${CYAN}1) ${GREEN}Использовать${NC} engage.cloudflareclient.com:4500"
-    echo -e "${CYAN}1) ${GREEN}Подобрать автоматически${NC}"
+    echo -e "${CYAN}2) ${GREEN}Подобрать автоматически${NC}"
     echo -en "${YELLOW}Выберите пункт (${NC}Enter = 1${YELLOW}): ${NC}"
 
 		_choice=""
         read -r _choice </dev/tty 2>/dev/null || _choice=""
         case "$_choice" in
-          1) WARP_EP_MODE=auto ;;
-          *) WARP_EP_MODE=engage ;;
+		*) WARP_EP_MODE=engage ;;
+		2) WARP_EP_MODE=auto ;;
         esac
       else
         WARP_EP_MODE=auto
