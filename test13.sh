@@ -395,8 +395,9 @@ EOF
   if command -v splify-apply >/dev/null 2>&1; then
     splify-apply >/dev/null 2>&1 || warn "splify-apply завершился с ошибкой — см. Сервисы → splify."
   fi
-  [ -x /etc/init.d/splify ] && { /etc/init.d/splify enabled 2>/dev/null || /etc/init.d/splify enable; }
-  /etc/init.d/splify restart 2>/dev/null
+	/etc/init.d/splify enable 2>/dev/null
+	/etc/init.d/splify reload 2>/dev/null
+	/etc/init.d/splify restart 2>/dev/null
 }
 
 # ──────────────────────────── 7. firewall zone ──────────────────────────────
