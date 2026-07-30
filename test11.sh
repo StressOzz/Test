@@ -1331,17 +1331,33 @@ $UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка обновления 
 /etc/init.d/magitrickle enable >/dev/null 2>&1; /etc/init.d/magitrickle restart >/dev/null 2>&1; echo -e "MagiTrickle ${GREEN}обновлён!${NC}\n"; rm -f "$FILE_MT"; PAUSE ;; *) return ;; esac; done; }
 
 MIX_GEN_MENU() {
-echo -e "\n${MAGENTA}Меню генерации WARP${NC}\n"; echo -e "${CYAN}1) ${GREEN}Сгенерировать ${NC}WARP ${GREEN}при помощи ${NC}wgcli.vercel.app"; echo -e "${CYAN}2) ${GREEN}Сгенерировать ${NC}WARP ${GREEN}при помощи ${NC}api.cloudflareclient.com"
-echo -e "${CYAN}Enter) ${GREEN}Выход в Mixomo меню\n"; echo -ne "${YELLOW}Выберите пункт: ${NC}"; read choiceMG; case "$choiceMG" in
-1) 
-register_warp || continue
-choose_endpoint || continue
-WARP_TO_ROOT
-PAUSE
-;;
-2) sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/files/Mixomo/gen_WARP.sh); echo; PAUSE ;;
+while true; do
 
+echo -e "\n${MAGENTA}Меню генерации WARP${NC}\n"
+echo -e "${CYAN}1) ${GREEN}Сгенерировать ${NC}WARP ${GREEN}при помощи ${NC}wgcli.vercel.app"
+echo -e "${CYAN}2) ${GREEN}Сгенерировать ${NC}WARP ${GREEN}при помощи ${NC}api.cloudflareclient.com"
+echo -e "${CYAN}Enter) ${GREEN}Выход в Mixomo меню\n"
 
+echo -ne "${YELLOW}Выберите пункт: ${NC}"
+read choiceMG
+
+case "$choiceMG" in
+1)
+    register_warp || continue
+    choose_endpoint || continue
+    WARP_TO_ROOT
+    PAUSE
+    ;;
+2)
+    wget -qO- https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/files/Mixomo/gen_WARP.sh | sh
+    PAUSE
+    ;;
+	
+*) break
+    ;;
+esac
+done
+}
 
 # ==========================================
 # Главное меню
