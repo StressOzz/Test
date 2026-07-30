@@ -413,8 +413,6 @@ register_in_splify() {
 echo -e "${CYAN}Применяем настройки${NC}"
   else
 echo -e "${CYAN}Применяем настройки${NC}"
-
-
     cat >>/etc/config/splify <<EOF
 
 config endpoint
@@ -485,6 +483,7 @@ fi
 if [ "$UPD_SPL" = "0" ]; then echo -e "\n${CYAN}1) ${GREEN}Установить ${NC}splify"; else echo -e "\n${CYAN}1) ${GREEN}Обновить ${NC}splify"; fi
 echo -e "${CYAN}2) ${GREEN}Удалить ${NC}splify"
 echo -e "${CYAN}3) ${GREEN}Сгенерировать и применить ${NC}WARP"
+echo -e "${CYAN}4) ${GREEN}Перезапустить ${NC}splify"
 echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read choiceSP; case "$choiceSP" in
 
 1)
@@ -523,6 +522,14 @@ create_warp_iface || continue
 WARP_TO_ROOT
 register_in_splify || continue
 echo -e "\n\nWARP ${GREEN}изменён!${NC}\n"
+fi
+PAUSE
+;;
+
+4) 
+echo -e "\n${MAGENTA}Перезапускаем ${NC}splify"
+register_in_splify || continue
+echo -e "\n\nsplify ${GREEN}перезапущен!${NC}\n"
 fi
 PAUSE
 ;;
