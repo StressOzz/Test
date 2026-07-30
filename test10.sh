@@ -126,7 +126,6 @@ WORKER_URL="${WORKER_URL:-https://wgcli.vercel.app}"
 WARP_EP="engage.cloudflareclient.com:4500"
 WARP_IFACE="warp0"
 TMP_SPL="$(mktemp -d /tmp/splify.XXXXXX)"
-trap 'rm -rf "$TMP_SPL"' EXIT
 
 AWG_JC=4
 AWG_JMIN=40
@@ -314,17 +313,8 @@ echo -e "${CYAN}Регистрируем устройство в ${NC}Cloudflare
   [ -n "$WARP_PEER" ] && [ "$WARP_PEER" != "null" ] || { echo -e "\n${RED}Нет peer public_key в ответе!${NC}\n"; PAUSE; return 1; }
   [ -n "$WARP_V4" ]   && [ "$WARP_V4"   != "null" ] || { echo -e "\n${RED}Нет client IPv4 в ответе!${NC}\n"; PAUSE; return 1; }
 
-#  case "$WARP_V4" in
-#    */*) : ;;
-#    *)   WARP_V4="$WARP_V4/32" ;;
-#  esac
-#  if [ -n "$WARP_V6" ]; then
-#    case "$WARP_V6" in
-#      */*) : ;;
-#      *)   WARP_V6="$WARP_V6/128" ;;
-#    esac
-#  fi
 }
+
 WARP_TO_ROOT() {
 cat > /root/WARP.conf <<EOF
 [Interface]
@@ -359,8 +349,8 @@ create_warp_iface() {
 echo -e "\n${MAGENTA}Создаём интерфейс $WARP_IFACE${NC}"
 
   if [ -n "$(uci -q get "network.$WARP_IFACE")" ]; then
-echo -e "${CYAN}Перенастраиваем интерфейс ${NC}$WARP_IFACE"
-ifdown "$WARP_IFACE" >/dev/null 2>&1
+	echo -e "${CYAN}Перенастраиваем интерфейс ${NC}$WARP_IFACE"
+	ifdown "$WARP_IFACE" >/dev/null 2>&1
   fi
   uci -q set "network.$WARP_IFACE=interface"
   uci set "network.$WARP_IFACE.proto=amneziawg"
@@ -537,7 +527,6 @@ PAUSE
 *) return;;
 esac; done
 }
-
 
 uget() { uci -q get "$1" 2>/dev/null; }
 
@@ -1329,12 +1318,31 @@ echo -e "${CYAN}6) ${GREEN}Интегрировать ${NC}/root/WARP.conf${GREE
 then echo -e "${CYAN}8) ${GREEN}Выключить автоперезапуск ${NC}Mihomo"; else echo -e "${CYAN}8) ${GREEN}Включить автоперезапуск ${NC}Mihomo"; fi; [ -n "$Magi_INSTALL_VER" ] && { [ "$Magi_INSTALL_VER" != "$MT_VERSION" ] && echo -e "${CYAN}9) ${GREEN}Обновить ${NC}MagiTrickle"; }
 echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню\n"; echo -ne "${YELLOW}Выберите пункт: ${NC}"; read choiceM; case "$choiceM" in 1) sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/files/Mixomo/mixomo_openwrt_install.sh); PAUSE ;;
 2) sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/files/Mixomo/mixomo_openwrt_delete.sh); sed -i "\|$CRON_CMD|d" "$CRON_FILE" >/dev/null 2>&1; /etc/init.d/cron restart >/dev/null 2>&1; echo -e "\n${YELLOW}Рекомендую сделать перезагрузку роутера!${NC}\n"; PAUSE ;;
-3) check_mihomo || continue; magitrickle_config ;; 4) check_mihomo || continue; PODPISKA ;; 5) sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/files/Mixomo/gen_WARP.sh); echo; PAUSE ;;
+3) check_mihomo || continue; magitrickle_config ;; 4) check_mihomo || continue; PODPISKA ;;
+
+5) MIX_GEN_MENU
+
+# sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/files/Mixomo/gen_WARP.sh); echo; PAUSE ;;
+
 6) check_mihomo || continue; sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/files/Mixomo/WARP_to_conf.sh); echo; PAUSE ;; 7) check_mihomo || continue; UI_INSTALL ;; 8) check_mihomo || continue; MIXOMO_RESTART ;; 
 9) check_mihomo || continue; ARCH_MT=$(grep "^OPENWRT_ARCH=" /etc/os-release | cut -d'"' -f2); FILE_MT="/tmp/magitrickle.$RAZ"; URL_MT="https://github.com/MagiTrickle/MagiTrickle/releases/download/${MT_VERSION}/magitrickle_${MT_VERSION}-${SUF_MT}1_openwrt_${ARCH_MT}.$RAZ"
 echo -e "\n${MAGENTA}Обновляем MagiTrickle\n${CYAN}Скачиваем\n${NC}$URL_MT"; curl -Lf --connect-timeout 6 --retry 3 --retry-delay 1 -o "$FILE_MT" "$URL_MT" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка скачивания${NC}\n"; return 1; }; echo -e "${CYAN}Обновляем список пакетов${NC}"
 $UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка обновления пакетов${NC}\n"; PAUSE; return 1; }; echo -e "${CYAN}Обновляем ${NC}MagiTrickle"; $INSTALL "$FILE_MT" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка установки${NC} $(basename "$URL_MT")\n"; rm -f "$FILE_MT"; PAUSE; return 1; }
 /etc/init.d/magitrickle enable >/dev/null 2>&1; /etc/init.d/magitrickle restart >/dev/null 2>&1; echo -e "MagiTrickle ${GREEN}обновлён!${NC}\n"; rm -f "$FILE_MT"; PAUSE ;; *) return ;; esac; done; }
+
+MIX_GEN_MENU() {
+echo -e "\n${MAGENTA}Меню генерации WARP${NC}\n"; echo -e "${CYAN}1) ${GREEN}Сгенерировать ${NC}WARP ${GREEN}при помощи ${NC}wgcli.vercel.app"; echo -e "${CYAN}2) ${GREEN}Сгенерировать ${NC}WARP ${GREEN}при помощи ${NC}api.cloudflareclient.com"
+echo -e "${CYAN}Enter) ${GREEN}Выход в Mixomo меню\n"; echo -ne "${YELLOW}Выберите пункт: ${NC}"; read choiceMG; case "$choiceMG" in
+1) 
+register_warp || continue
+choose_endpoint || continue
+WARP_TO_ROOT
+PAUSE
+;;
+2) sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/files/Mixomo/gen_WARP.sh); echo; PAUSE ;;
+
+
+
 # ==========================================
 # Главное меню
 # ==========================================
