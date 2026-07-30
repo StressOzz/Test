@@ -339,7 +339,7 @@ AllowedIPs = 0.0.0.0/0, ::/0
 Endpoint = engage.cloudflareclient.com:2408
 PersistentKeepalive = 25
 EOF
-echo -e "\n${YELLOW}Файл сохранён:${NC} /root/WARP.conf"
+echo -e "${YELLOW}Файл сохранён:${NC} /root/WARP.conf"
 #  case "$WARP_V4" in
 #    */*) : ;;
 #    *)   WARP_V4="$WARP_V4/32" ;;
