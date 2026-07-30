@@ -126,7 +126,6 @@ WORKER_URL="${WORKER_URL:-https://wgcli.vercel.app}"
 WARP_EP="engage.cloudflareclient.com:4500"
 WARP_IFACE="warp0"
 TMP_SPL="$(mktemp -d /tmp/splify.XXXXXX)"
-trap 'rm -rf "$TMP_SPL"' EXIT
 
 AWG_JC=4
 AWG_JMIN=40
@@ -142,24 +141,27 @@ AWG_I1="<b 0xce000000010897a297ecc34cd6dd000044d0ec2e2e1ea2991f467ace4222129b5a0
 
 # ──────────────────────────── 1. environment checks ────────────────────────
 
-# ──────────────────────────── 2. install splify packages ───────────────────
-install_splify() {
+ZAVISIM() {
 if ! command -v "jq" >/dev/null 2>&1; then
 echo -e "${CYAN}Ставим зависимость ${NC}jq"
 	$UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; PAUSE; return 1; }
 	$INSTALL jq >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при установки!${NC}\n"; PAUSE; return 1; }
-  fi
+fi
+}
+# ──────────────────────────── 2. install splify packages ───────────────────
+install_splify() {
 
-SPL_SPL="https://github.com/xyzmean/splify/releases/download/v$SPL_VER/splify_$SPL_VER-1_$SPL_SUF.$RAZ"
-SPL_LUCI="https://github.com/xyzmean/splify/releases/download/v$SPL_VER/luci-app-splify_$SPL_VER-1_$SPL_SUF.$RAZ"
-SPL_RUS="https://github.com/xyzmean/splify/releases/download/v$SPL_VER/luci-i18n-splify-ru_$SPL_VER-1_$SPL_SUF.$RAZ"
-
-$UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; PAUSE; return 1; }
+ZAVISIM
+SPL_SPL="https://github.com/xyzmean/splify/releases/download/v$SPL_VER/splify-$SPL_VER-1_$SPL_SUF.$RAZ"
+SPL_LUCI="https://github.com/xyzmean/splify/releases/download/v$SPL_VER/luci-app-splify-$SPL_VER-1_$SPL_SUF.$RAZ"
+SPL_RUS="https://github.com/xyzmean/splify/releases/download/v$SPL_VER/luci-i18n-splify-ru-$SPL_VER-1_$SPL_SUF.$RAZ"
 
 echo -e "${CYAN}Скачиваем ${NC}splify"
 wget -q -U "Mozilla/5.0" -O "$TMP_SF/splify.$RAZ" "$SPL_SPL" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$SPL_SPL\n"; PAUSE; return 1; }
 wget -q -U "Mozilla/5.0" -O "$TMP_SF/luci-app-splify.$RAZ" "$SPL_LUCI" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$SPL_LUCI\n"; PAUSE; return 1; }
 wget -q -U "Mozilla/5.0" -O "$TMP_SF/luci-i18n-splify-ru.$RAZ" "$SPL_RUS" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$SPL_RUS\n"; PAUSE; return 1; }
+
+$UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; PAUSE; return 1; }
 
 echo -e "${CYAN}Устанавливаем ${NC}splify"
 $INSTALL "$TMP_SF/splify.$RAZ" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить:\n${NC}$SPL_SPL\n"; PAUSE; return 1; }
@@ -316,17 +318,8 @@ echo -e "${CYAN}Регистрируем устройство в ${NC}Cloudflare
   [ -n "$WARP_PEER" ] && [ "$WARP_PEER" != "null" ] || { echo -e "\n${RED}Нет peer public_key в ответе!${NC}\n"; PAUSE; return 1; }
   [ -n "$WARP_V4" ]   && [ "$WARP_V4"   != "null" ] || { echo -e "\n${RED}Нет client IPv4 в ответе!${NC}\n"; PAUSE; return 1; }
 
-#  case "$WARP_V4" in
-#    */*) : ;;
-#    *)   WARP_V4="$WARP_V4/32" ;;
-#  esac
-#  if [ -n "$WARP_V6" ]; then
-#    case "$WARP_V6" in
-#      */*) : ;;
-#      *)   WARP_V6="$WARP_V6/128" ;;
-#    esac
-#  fi
 }
+
 WARP_TO_ROOT() {
 cat > /root/WARP.conf <<EOF
 [Interface]
@@ -361,8 +354,8 @@ create_warp_iface() {
 echo -e "\n${MAGENTA}Создаём интерфейс $WARP_IFACE${NC}"
 
   if [ -n "$(uci -q get "network.$WARP_IFACE")" ]; then
-echo -e "${CYAN}Перенастраиваем интерфейс ${NC}$WARP_IFACE"
-ifdown "$WARP_IFACE" >/dev/null 2>&1
+	echo -e "${CYAN}Перенастраиваем интерфейс ${NC}$WARP_IFACE"
+	ifdown "$WARP_IFACE" >/dev/null 2>&1
   fi
   uci -q set "network.$WARP_IFACE=interface"
   uci set "network.$WARP_IFACE.proto=amneziawg"
@@ -420,8 +413,6 @@ register_in_splify() {
 echo -e "${CYAN}Применяем настройки${NC}"
   else
 echo -e "${CYAN}Применяем настройки${NC}"
-
-
     cat >>/etc/config/splify <<EOF
 
 config endpoint
@@ -492,6 +483,7 @@ fi
 if [ "$UPD_SPL" = "0" ]; then echo -e "\n${CYAN}1) ${GREEN}Установить ${NC}splify"; else echo -e "\n${CYAN}1) ${GREEN}Обновить ${NC}splify"; fi
 echo -e "${CYAN}2) ${GREEN}Удалить ${NC}splify"
 echo -e "${CYAN}3) ${GREEN}Сгенерировать и применить ${NC}WARP"
+echo -e "${CYAN}4) ${GREEN}Перезапустить ${NC}splify"
 echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read choiceSP; case "$choiceSP" in
 
 1)
@@ -499,16 +491,14 @@ if [ "$UPD_SPL" = "0" ]; then
 clear
 echo -e "${MAGENTA}Устанавливаем ${NC}splify"
 install_splify || continue
-echo -e "\n${MAGENTA}Устанавливаем AWG${NC}"
 install_AWG || continue
 register_warp || continue
 echo -e "${CYAN}Используем ${NC}endpoint${CYAN}:${NC} $WARP_EP"
-# choose_endpoint || continue
 create_warp_iface || continue
 WARP_TO_ROOT
 register_in_splify || continue
 setup_firewall || continue
-echo -e "\nsplify ${GREEN}установлен!${NC}\n"
+echo -e "\n\nsplify ${GREEN}установлен!${NC}\n"
 else
 echo -e "\n${MAGENTA}Обновляем ${NC}splify"
 install_splify || continue
@@ -536,16 +526,26 @@ fi
 PAUSE
 ;;
 
+4) 
+if [ -z "$SPL_INST_VER" ]; then
+echo -e "\nsplify ${RED}не установлен!${NC}\n"
+else
+echo -e "\n${MAGENTA}Перезапускаем ${NC}splify"
+register_in_splify || continue
+echo -e "\n\nsplify ${GREEN}перезапущен!${NC}\n"
+fi
+PAUSE
+;;
+
 *) return;;
 esac; done
 }
-
 
 uget() { uci -q get "$1" 2>/dev/null; }
 
 DELETE_SPL() {
 # ──────────────────────────── 1. stop splify services ───────────────────────
-echo -e "\n${MAGENTA}Удаляем splify, AWG, интерфейс, зону firewall${NC}"
+echo -e "\n${MAGENTA}Удаляем splify${NC}"
 
 echo -e "${CYAN}Останавливаем службы${NC}"
 for s in splify splify-agent; do
@@ -641,15 +641,18 @@ else
 fi
 
 # ──────────────────────────── 6. remove packages ─────────────────────
-echo -e "${CYAN}Удаляем пакеты ${NC}splify${CYAN} и ${NC}AWG"
+echo -e "${CYAN}Удаляем пакеты ${NC}splify"
 $DELETE luci-i18n-splify-ru >/dev/null 2>&1
 $DELETE luci-app-splify >/dev/null 2>&1
 $DELETE splify >/dev/null 2>&1
-$DELETE luci-i18n-amneziawg-ru >/dev/null 2>&1
-$DELETE luci-proto-amneziawg >/dev/null 2>&1
-$DELETE amneziawg-tools >/dev/null 2>&1
-$DELETE kmod-amneziawg >/dev/null 2>&1
 
+if ! pkg_is_installed netshift; then
+echo -e "${CYAN}Удаляем пакеты ${NC}AWG"
+    $DELETE luci-i18n-amneziawg-ru >/dev/null 2>&1
+    $DELETE luci-proto-amneziawg >/dev/null 2>&1
+    $DELETE amneziawg-tools >/dev/null 2>&1
+    $DELETE kmod-amneziawg >/dev/null 2>&1
+fi
 
 # ──────────────────────────── 8. splify config + leftover data ──────────────
 echo -e "${CYAN}Удаляем данные ${NC}splify"
@@ -1226,12 +1229,18 @@ echo -e "\nNetShift ${GREEN}$( [ "$ACTION" = "install" ] && echo "установ
 PODKOP_DELETE() { echo -e "\n${MAGENTA}Удаляем NetShift${NC}"; echo -e "${CYAN}Останавливаем сервисы${NC}"; netshift stop >/dev/null 2>&1; netshift disable >/dev/null 2>&1; sing-box stop >/dev/null 2>&1; sing-box disable >/dev/null 2>&1
 echo -e "${CYAN}Удаляем пакеты ${NC}NetShift"; $DELETE luci-i18n-netshift-ru luci-app-netshift netshift >/dev/null 2>&1; echo -e "${CYAN}Удаляем пакеты ${NC}sing-box"; $DELETE sing-box >/dev/null 2>&1
 echo -e "NetShift${GREEN} удалён!${NC}"; [ "$ACTION" != "update" ] && { rm -rf /etc/config/netshift* /usr/bin/netshift /etc/config/sing-box* /etc/sing-box >/dev/null 2>&1; echo; PAUSE; }; }
-install_AWG_INTER() { if ! pkg_is_installed amneziawg-tools; then echo -e "\n${MAGENTA}Устанавливаем AWG и интерфейс AWG${NC}"; install_AWG; echo -e "${CYAN}Создаем ${NC}интерфейс AWG"; if uci show network.$IF_NAME >/dev/null 2>&1; then echo -e "\n${RED}Интерфейс уже существует!${NC}"; else uci set network.$IF_NAME=interface
-uci set network.$IF_NAME.proto=$PROTO; uci set network.$IF_NAME.device=$DEV_NAME; uci commit network; fi; echo -en "${YELLOW}Перезапускаем сеть! Подождите...${NC}"; /etc/init.d/network restart >/dev/null 2>&1; echo -e "\nAWG ${GREEN}и${NC} интерфейс AWG ${GREEN}установлены!${NC}"; echo -e "\n${YELLOW}Необходимо в ${NC}LuCI${YELLOW} в интерфейс ${NC}AWG${YELLOW} загрузить файл ${NC}*.conf${YELLOW}:${NC}"
-echo -e "${NC}Network ${GREEN}→${NC} Interfaces ${GREEN}→${NC} AWG ${GREEN}→${NC} Edit ${GREEN}→${NC} Load configuration… ${GREEN}→${NC} Save ${GREEN}→${NC} Save & Apply\n"; PAUSE; rm -rf "$tmpDIR"; else 
-echo -e "\n${MAGENTA}Удаление AWG и интерфейс AWG${NC}"; echo -e "${CYAN}Удаляем ${NC}AWG"; $DELETE luci-i18n-amneziawg-ru >/dev/null 2>&1; $DELETE luci-proto-amneziawg >/dev/null 2>&1; $DELETE amneziawg-tools >/dev/null 2>&1; $DELETE kmod-amneziawg >/dev/null 2>&1; uci delete network.AWG >/dev/null 2>&1; uci commit network >/dev/null 2>&1
-for peer in $(uci show network | grep "interface='AWG'" | cut -d. -f2); do uci delete network.$peer; done; uci commit network >/dev/null 2>&1; echo -e "${CYAN}Удаляем ${NC}интерфейс AWG"; echo -en "${YELLOW}Перезапускаем сеть! Подождите...${NC}"; /etc/init.d/network restart; echo -e "\nAWG ${GREEN}и${NC} интерфейс AWG ${GREEN}удалены!${NC}\n"; PAUSE; fi }
-install_AWG() { rm -rf "$tmpDIR"; mkdir -p "$tmpDIR"; echo -e "${CYAN}Обновляем список пакетов${NC}"; $UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; PAUSE; return 1; }
+
+
+install_AWG_INTER() { echo -e "\n${MAGENTA}Устанавливаем интерфейс AWG${NC}"; echo -e "${CYAN}Создаем ${NC}интерфейс AWG"; if uci show network.$IF_NAME >/dev/null 2>&1; then echo -e "\n${RED}Интерфейс уже существует!${NC}"; else uci set network.$IF_NAME=interface
+uci set network.$IF_NAME.proto=$PROTO; uci set network.$IF_NAME.device=$DEV_NAME; uci commit network; fi; echo -en "${CYAN}Перезапускаем сеть${NC}"; /etc/init.d/network restart >/dev/null 2>&1; echo -e "\nИнтерфейс AWG ${GREEN}установлен!${NC}"; echo -e "\n${YELLOW}Необходимо в ${NC}LuCI${YELLOW} в интерфейс ${NC}AWG${YELLOW} загрузить файл ${NC}*.conf${YELLOW}:${NC}"
+echo -e "${NC}Network ${GREEN}→${NC} Interfaces ${GREEN}→${NC} AWG ${GREEN}→${NC} Edit ${GREEN}→${NC} Load configuration… ${GREEN}→${NC} Save ${GREEN}→${NC} Save & Apply\n"; PAUSE; rm -rf "$tmpDIR"; }
+
+AWG_DELETE(){ echo -e "\n${MAGENTA}Удаляем AmneziaWG${NC}"; $DELETE luci-i18n-amneziawg-ru >/dev/null 2>&1; $DELETE luci-proto-amneziawg >/dev/null 2>&1; $DELETE amneziawg-tools >/dev/null 2>&1; $DELETE kmod-amneziawg >/dev/null 2>&1; echo -e "AmneziaWG ${GREEN}удалён!${NC}\n"; PAUSE; }
+
+
+INT_DELETE(){ echo -e "\n${MAGENTA}Удаляем ${NC}интерфейс AWG"; uci delete network.AWG >/dev/null 2>&1; uci commit network >/dev/null 2>&1; for peer in $(uci show network | grep "interface='AWG'" | cut -d. -f2); do uci delete network.$peer; done; uci commit network >/dev/null 2>&1; echo -en "${CYAN}Перезапускаем сеть${NC}"; /etc/init.d/network restart; echo -e "интерфейс AWG ${GREEN}удалён!${NC}\n"; PAUSE; }
+
+install_AWG() { echo -e "\n${MAGENTA}Устанавливаем AmneziaWG${NC}"; rm -rf "$tmpDIR"; mkdir -p "$tmpDIR"; echo -e "${CYAN}Обновляем список пакетов${NC}"; $UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; PAUSE; return 1; }
 AWG_kmod="https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v$OWRTAWG/kmod-amneziawg_v${OWRTAWG}_$ARCHAWG.$RAZ"; AWG_tools="https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v$OWRTAWG/amneziawg-tools_v${OWRTAWG}_$ARCHAWG.$RAZ"
 AWG_luci="https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v$OWRTAWG/luci-proto-amneziawg_v${OWRTAWG}_$ARCHAWG.$RAZ"; AWG_ru="https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v$OWRTAWG/luci-i18n-amneziawg-ru_v${OWRTAWG}_$ARCHAWG.$RAZ"; cd "$tmpDIR"
 echo -e "${CYAN}Скачиваем ${NC}AWG"; wget -q -U "Mozilla/5.0" -O AWG_kmod.$RAZ "$AWG_kmod" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$AWG_kmod\n"; PAUSE; return 1; }; wget -q -U "Mozilla/5.0" -O AWG_tools.$RAZ "$AWG_tools" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$AWG_tools\n"; PAUSE; return 1; }; wget -q -U "Mozilla/5.0" -O AWG_luci.$RAZ "$AWG_luci" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$AWG_luci\n"; PAUSE; return 1; }
@@ -1258,11 +1267,55 @@ printf "%s\n" "list community_lists 'google_ai'" "list community_lists 'google_p
 printf "%s\n" "option user_subnet_list_type 'disabled'" "option mixed_proxy_enabled '0'" "option resolve_real_ip_for_routing '0'" "list subscription_filter_exclude_keywords '⬇️'" "list subscription_filter_exclude_keywords 'LTE'" "list subscription_filter_exclude_keywords '🇪🇺'" "list subscription_filter_exclude_keywords 'Мобильный'" "list subscription_filter_exclude_keywords 'SS'" "list subscription_filter_exclude_keywords 'Авто'" >> /etc/config/netshift
 fi; echo -e "${CYAN}Запускаем ${NC}NetShift${NC}"; netshift enable >/dev/null 2>&1; echo -e "${CYAN}Обновляем списки${NC}"; netshift list_update >/dev/null 2>&1; echo -en "${CYAN}Перезапускаем сервис${NC}\n${YELLOW}Подождите...${NC}"; netshift restart >/dev/null 2>&1; echo -e "\nVPN подписка ${GREEN}интегрирована в ${NC}NetShift${GREEN}!${NC}\n"; PAUSE; }
 PODKOP_menu() { while true; do openwrt_version=$(cat /etc/openwrt_release | grep DISTRIB_RELEASE | cut -d"'" -f2 | cut -d'.' -f1); if [ "$openwrt_version" = "23" ]; then echo -e "\n${RED}OpenWrt версии ниже 24 не поддерживаются!${NC}\n"; PAUSE; return; fi
-PODKOP_VER; clear; echo -e "${MAGENTA}Меню NetShift${NC}\n"; echo -e "${YELLOW}NetShift:${NC} $PODKOP_STATUS"; if { pkg_is_installed amneziawg-tools || command -v amneziawg >/dev/null 2>&1; } && uci -q get network.AWG >/dev/null; then echo -e "${YELLOW}AWG и интерфейс:  ${GREEN}установлены${NC}"; else echo -e "${YELLOW}AWG и интерфейс:  ${RED}не установлены${NC}"; fi
+PODKOP_VER; clear; echo -e "${MAGENTA}Меню NetShift${NC}\n"; echo -e "${YELLOW}NetShift:${NC} $PODKOP_STATUS";
+if pkg_is_installed amneziawg-tools && pkg_is_installed luci-proto-amneziawg && pkg_is_installed kmod-amneziawg; then
+    echo -e "${YELLOW}AmneziaWG: ${GREEN}установлен${NC}"
+else
+    echo -e "${YELLOW}AmneziaWG: ${RED}не установлен${NC}"
+fi
+
+if uci -q get network.AWG >/dev/null 2>&1; then
+    echo -e "${YELLOW}Интерфейс: ${GREEN}установлен${NC}"
+else
+    echo -e "${YELLOW}Интерфейс: ${RED}не установлен${NC}"
+fi
 if ! pkg_is_installed netshift; then echo -e "\n${CYAN}1) ${GREEN}Установить ${NC}NetShift"; elif [ "$PODKOP_LATEST_VER" != "$LOCALPOD" ]; then echo -e "\n${CYAN}1) ${GREEN}Обновить ${NC}NetShift"; else echo -e "\n${CYAN}1) ${GREEN}Удалить ${NC}NetShift"; fi
-if pkg_is_installed amneziawg-tools; then echo -e "${CYAN}2) ${GREEN}Удалить ${NC}AWG${GREEN} и ${NC}интерфейс AWG"; else echo -e "${CYAN}2) ${GREEN}Установить ${NC}AWG${GREEN} и ${NC}интерфейс AWG"; fi
-if [ -f /etc/config/netshift ] && grep -q "^[[:space:]]*option subscription_url" /etc/config/netshift; then echo -e "${CYAN}3) ${GREEN}Сменить ${NC}VPN подписку${GREEN} в ${NC}NetShift"; else echo -e "${CYAN}3) ${GREEN}Интегрировать ${NC}VPN подписку${GREEN} в ${NC}NetShift"; fi
-echo -e "${CYAN}4) ${GREEN}Интегрировать ${NC}AWG${GREEN} в ${NC}NetShift"; echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}"; echo -ne "\n${YELLOW}Выберите пункт:${NC} "; read choicePOD; case "$choicePOD" in 1) PODKOP_INSTALL ;; 2) install_AWG_INTER ;; 3) PODKOP_VPN ;; 4) integration_AWG ;; *) return ;; esac; done }
+
+if pkg_is_installed amneziawg-tools && pkg_is_installed luci-proto-amneziawg && pkg_is_installed kmod-amneziawg; then
+    echo -e "${CYAN}2) ${GREEN}Удалить ${NC}AmneziaWG"
+else
+    echo -e "${CYAN}2) ${GREEN}Установить ${NC}AmneziaWG"
+fi
+
+if uci -q get network.AWG >/dev/null 2>&1; then
+    echo -e "${CYAN}3) ${GREEN}Удалить ${NC}интерфейс AWG"
+else
+    echo -e "${CYAN}3) ${GREEN}Установить ${NC}интерфейс AWG"
+fi
+
+if [ -f /etc/config/netshift ] && grep -q "^[[:space:]]*option subscription_url" /etc/config/netshift; then echo -e "${CYAN}4) ${GREEN}Сменить ${NC}VPN подписку${GREEN} в ${NC}NetShift"; else echo -e "${CYAN}4) ${GREEN}Интегрировать ${NC}VPN подписку${GREEN} в ${NC}NetShift"; fi
+echo -e "${CYAN}5) ${GREEN}Интегрировать ${NC}AWG${GREEN} в ${NC}NetShift"; echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}"; echo -ne "\n${YELLOW}Выберите пункт:${NC} "; read choicePOD; case "$choicePOD" in 
+1) PODKOP_INSTALL ;;
+
+2)
+if pkg_is_installed amneziawg-tools && pkg_is_installed luci-proto-amneziawg && pkg_is_installed kmod-amneziawg; then
+AWG_DELETE
+else
+install_AWG
+echo -e "\nAmneziaWG ${GREEN}установлен!${NC}"
+fi ;;
+
+3)
+if uci -q get network.AWG >/dev/null 2>&1; then
+INT_DELETE
+else
+install_AWG_INTER
+echo -e "\n\nsplify ${GREEN}установлен!${NC}\n"
+fi
+;;
+
+4) PODKOP_VPN ;;
+5) integration_AWG ;; *) return ;; esac; done }
 # ==========================================
 # Информация
 # ==========================================
@@ -1326,17 +1379,65 @@ if [ -f "$CONFIGPATH" ]; then grep -Fq 'name: Google_ai' "$CONFIGPATH" && echo -
 echo -e "${YELLOW}Автоперезапуск Mihomo: ${GREEN}каждые ${NC}$INTERVAL ${GREEN}часа(ов)"; else echo -e "${YELLOW}Автоперезапуск Mihomo: ${GREEN}ежедневно в ${NC}$(printf "%02d" "$HOURM"):00"; fi; fi
 [ -f /etc/mihomo/config.yaml ] && echo -e "${YELLOW}Web-интерфейс Mihomo:${NC}       ${CYAN}$LAN_IP:9090/ui${NC}"; [ -f "$CONFIGPATH" ] && echo -e "${YELLOW}Web-интерфейс MagiTrickle:${NC}  ${CYAN}$LAN_IP:8080${NC}"
 echo -e "\n${CYAN}1) ${GREEN}Установить ${NC}Mixomo"; echo -e "${CYAN}2) ${GREEN}Удалить ${NC}Mixomo"; echo -e "${CYAN}3) ${GREEN}Сменить список ${NC}MagiTrickle"; if [ -f /etc/mihomo/config.yaml ] && grep -q '^[[:space:]]*[^#].*url: "' /etc/mihomo/config.yaml
-then echo -e "${CYAN}4) ${GREEN}Сменить ${NC}VPN${GREEN} подписку${NC}"; else echo -e "${CYAN}4) ${GREEN}Интегрировать ${NC}VPN${GREEN} подписку в ${NC}Mihomo${NC}"; fi; echo -e "${CYAN}5) ${GREEN}Сгенерировать ${NC}WARP ${GREEN}в ${NC}/root/WARP.conf"
+then echo -e "${CYAN}4) ${GREEN}Сменить ${NC}VPN${GREEN} подписку${NC}"; else echo -e "${CYAN}4) ${GREEN}Интегрировать ${NC}VPN${GREEN} подписку в ${NC}Mihomo${NC}"; fi; echo -e "${CYAN}5) ${GREEN}Меню генерации ${NC}WARP"
 echo -e "${CYAN}6) ${GREEN}Интегрировать ${NC}/root/WARP.conf${GREEN} в ${NC}Mihomo"; echo -e "${CYAN}7) ${GREEN}Выбрать и установить панель для ${NC}Mihomo"; if grep -qF "/etc/init.d/mihomo restart" /etc/crontabs/root 2>/dev/null
 then echo -e "${CYAN}8) ${GREEN}Выключить автоперезапуск ${NC}Mihomo"; else echo -e "${CYAN}8) ${GREEN}Включить автоперезапуск ${NC}Mihomo"; fi; [ -n "$Magi_INSTALL_VER" ] && { [ "$Magi_INSTALL_VER" != "$MT_VERSION" ] && echo -e "${CYAN}9) ${GREEN}Обновить ${NC}MagiTrickle"; }
 echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню\n"; echo -ne "${YELLOW}Выберите пункт: ${NC}"; read choiceM; case "$choiceM" in 1) sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/files/Mixomo/mixomo_openwrt_install.sh); PAUSE ;;
 2) sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/files/Mixomo/mixomo_openwrt_delete.sh); sed -i "\|$CRON_CMD|d" "$CRON_FILE" >/dev/null 2>&1; /etc/init.d/cron restart >/dev/null 2>&1; echo -e "\n${YELLOW}Рекомендую сделать перезагрузку роутера!${NC}\n"; PAUSE ;;
-3) check_mihomo || continue; magitrickle_config ;; 4) check_mihomo || continue; PODPISKA ;; 5) sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/files/Mixomo/gen_WARP.sh); echo; PAUSE ;;
+3) check_mihomo || continue; magitrickle_config ;; 4) check_mihomo || continue; PODPISKA ;;
+
+5) MIX_GEN_MENU ;;
+
+# sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/files/Mixomo/gen_WARP.sh); echo; PAUSE ;;
+
 6) check_mihomo || continue; sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/files/Mixomo/WARP_to_conf.sh); echo; PAUSE ;; 7) check_mihomo || continue; UI_INSTALL ;; 8) check_mihomo || continue; MIXOMO_RESTART ;; 
 9) check_mihomo || continue; ARCH_MT=$(grep "^OPENWRT_ARCH=" /etc/os-release | cut -d'"' -f2); FILE_MT="/tmp/magitrickle.$RAZ"; URL_MT="https://github.com/MagiTrickle/MagiTrickle/releases/download/${MT_VERSION}/magitrickle_${MT_VERSION}-${SUF_MT}1_openwrt_${ARCH_MT}.$RAZ"
 echo -e "\n${MAGENTA}Обновляем MagiTrickle\n${CYAN}Скачиваем\n${NC}$URL_MT"; curl -Lf --connect-timeout 6 --retry 3 --retry-delay 1 -o "$FILE_MT" "$URL_MT" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка скачивания${NC}\n"; return 1; }; echo -e "${CYAN}Обновляем список пакетов${NC}"
 $UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка обновления пакетов${NC}\n"; PAUSE; return 1; }; echo -e "${CYAN}Обновляем ${NC}MagiTrickle"; $INSTALL "$FILE_MT" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка установки${NC} $(basename "$URL_MT")\n"; rm -f "$FILE_MT"; PAUSE; return 1; }
 /etc/init.d/magitrickle enable >/dev/null 2>&1; /etc/init.d/magitrickle restart >/dev/null 2>&1; echo -e "MagiTrickle ${GREEN}обновлён!${NC}\n"; rm -f "$FILE_MT"; PAUSE ;; *) return ;; esac; done; }
+
+MIX_GEN_MENU() {
+while true; do
+
+echo -e "\n${MAGENTA}Меню генерации WARP${NC}"
+echo -e "${CYAN}1) ${GREEN}Сгенерировать ${NC}WARP ${GREEN}при помощи ${NC}wgcli.vercel.app"
+echo -e "${CYAN}2) ${GREEN}Сгенерировать ${NC}WARP ${GREEN}при помощи ${NC}api.cloudflareclient.com"
+echo -e "${CYAN}Enter) ${GREEN}Выход в меню Mixomo${NC}"
+echo -ne "${YELLOW}Выберите пункт: ${NC}"
+read choiceMG
+
+
+
+
+case "$choiceMG" in
+1)
+	ZAVISIM
+    register_warp || continue
+    choose_endpoint || continue
+    WARP_TO_ROOT
+	echo
+    PAUSE
+	break
+    ;;
+2)
+
+if pkg_is_installed splify; then
+echo -e "\n${RED}Генерация ${NC}WARP${RED} при установленном ${NC}splify${RED} невозможна!${NC}"
+echo -e "${YELLOW}Используйте генерацию при помощи ${NC}wgcli.vercel.app${NC}!\n"
+else
+    sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Mixomo-Manager/main/gen_WARP.sh)
+	echo
+fi
+    PAUSE
+	break
+    ;;
+	
+*) break
+    ;;
+esac
+done
+}
+
 # ==========================================
 # Главное меню
 # ==========================================
