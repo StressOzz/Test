@@ -150,59 +150,21 @@ echo -e "${CYAN}Ставим зависимость ${NC}jq"
 	$INSTALL jq >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при установки!${NC}\n"; PAUSE; return 1; }
   fi
 
-SPL_VER
-
-echo -e "${CYAN}Обновляем список пакетов${NC}"
-
 SPL_SPL="https://github.com/xyzmean/splify/releases/download/v$SPL_VER/splify_$SPL_VER-1_$SPl_SUF.$RAZ"
-		 https://github.com/xyzmean/splify/releases/download/v26.7.30.3/splify_26.7.30.3-1_all.ipk
-		 https://github.com/xyzmean/splify/releases/download/v26.7.30.3/splify_26.7.30.3-1_noarch.apk
+SPL_LUCI="https://github.com/xyzmean/splify/releases/download/v$SPL_VER/luci-app-splify_$SPL_VER-1_$SPl_SUF.$RAZ"
+SPL_RUS="https://github.com/xyzmean/splify/releases/download/v$SPL_VER/luci-i18n-splify-ru_$SPL_VER-1_all.$RAZ"
 
-SPL_LuC="https://github.com/xyzmean/splify/releases/download/v$SPL_VER/luci-app-splify_$SPL_VER-1_$SPl_SUF.$RAZ"
-		 https://github.com/xyzmean/splify/releases/download/v26.7.30.3/luci-app-splify_26.7.30.3-1_all.ipk
-		 https://github.com/xyzmean/splify/releases/download/v26.7.30.3/luci-app-splify_26.7.30.3-1_noarch.apk
-
-SPL_RUS="https://github.com/xyzmean/splify/releases/download/v$SPL_VER/splify_$SPL_VER-1_$SPl_SUF.$RAZ"
-		 https://github.com/xyzmean/splify/releases/download/v26.7.30.3/splify_26.7.30.3-1_all.ipk
-		 https://github.com/xyzmean/splify/releases/download/v26.7.30.3/splify_26.7.30.3-1_noarch.apk
-
-echo -e "${CYAN}Скачиваем ${NC}AWG"
-wget -q -U "Mozilla/5.0" -O AWG_kmod.$RAZ "$AWG_kmod" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$AWG_kmod\n"; PAUSE; return 1; }
-wget -q -U "Mozilla/5.0" -O AWG_tools.$RAZ "$AWG_tools" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$AWG_tools\n"; PAUSE; return 1; }
-wget -q -U "Mozilla/5.0" -O AWG_luci.$RAZ "$AWG_luci" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$AWG_luci\n"; PAUSE; return 1; }
-wget -q -U "Mozilla/5.0" -O AWG_ru.$RAZ "$AWG_ru" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$AWG_ru\n"; PAUSE; return 1; }
-echo -e "${CYAN}Устанавливаем ${NC}AWG"
-$INSTALL ./AWG_kmod.$RAZ >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить:\n${NC}$AWG_kmod\n"; PAUSE; return 1; }
-$INSTALL ./AWG_tools.$RAZ >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить:\n${NC}$AWG_tools\n"; PAUSE; return 1; }
-$INSTALL ./AWG_luci.$RAZ >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить:\n${NC}$AWG_luci\n"; PAUSE; return 1; }
-$INSTALL ./AWG_ru.$RAZ >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить:\n${NC}$AWG_ru\n"; PAUSE; return 1; }
-}
-
-
-
-
-
-echo -e "${CYAN}Проверяем версию ${NC}splify"
-  META="$TMP_SPL/meta.json"
-  wget -qO "$META" "$API" || { echo -e "\n${RED}Не удалось получить данные релиза!${NC}\n"; PAUSE; return 1; }
-  URLS="$(tr ',' '\n' <"$META" | sed -n 's/.*"browser_download_url": *"\([^"]*\.'$RAZ'\)".*/\1/p')"
-  [ -n "$URLS" ] || { echo -e "\n${RED}Возможно, релиз ещё не собран.!${NC}\n"; PAUSE; return 1; }
-
-echo -e "${CYAN}Скачиваем пакеты ${NC}splify"
-  for u in $URLS; do
-    case "$u" in
-      *splify*) wget -qO "$TMP_SPL/${u##*/}" "$u" || { echo -e "\n${RED}Не удалось скачать ${NC}$u\n"; PAUSE; return 1; }
-    esac
-  done
-  for pkg in splify luci-app-splify luci-i18n-splify-ru; do
-    ls "$TMP_SPL/$pkg"*.$RAZ >/dev/null 2>&1 || { echo -e "\n${RED}В релизе не хватает пакета ${NC}$pkg*.$RAZ${RED}!${NC}\n"; PAUSE; return 1; }
-  done
+echo -e "${CYAN}Скачиваем ${NC}splify"
+wget -q -U "Mozilla/5.0" -O "$TMP_SF/splify.$RAZ" "$SPL_SPL" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$SPL_SPL\n"; PAUSE; return 1; }
+wget -q -U "Mozilla/5.0" -O "$TMP_SF/luci-app-splify.$RAZ" "$SPL_LUCI" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$SPL_LUCI\n"; PAUSE; return 1; }
+wget -q -U "Mozilla/5.0" -O "$TMP_SF/luci-i18n-splify-ru.$RAZ" "$SPL_RUS" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$SPL_RUS\n"; PAUSE; return 1; }
 
 echo -e "${CYAN}Устанавливаем ${NC}splify"
-    $INSTALL "$TMP_SPL"/*.$RAZ >/dev/null 2>&1
+$INSTALL "$TMP_SF/splify.$RAZ" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить:\n${NC}$SPL_SPL\n"; PAUSE; return 1; }
+$INSTALL "$TMP_SF/luci-app-splify.$RAZ" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить:\n${NC}$SPL_LUCI\n"; PAUSE; return 1; }
+$INSTALL "$TMP_SF/luci-i18n-splify-ru.$RAZ" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить:\n${NC}$SPL_RUS\n"; PAUSE; return 1; }
 
-
-  rm -f /tmp/luci-indexcache* /tmp/luci-modulecache* 2>/dev/null
+rm -f /tmp/luci-indexcache* /tmp/luci-modulecache* 2>/dev/null
   /etc/init.d/rpcd reload 2>/dev/null || /etc/init.d/rpcd restart 2>/dev/null
   for s in splify splify-agent; do
     if [ -x "/etc/init.d/$s" ] && "/etc/init.d/$s" enabled 2>/dev/null; then
