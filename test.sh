@@ -1299,7 +1299,13 @@ echo -e "${CYAN}5) ${GREEN}Интегрировать ${NC}AWG${GREEN} в ${NC}N
 
 2)
 if pkg_is_installed amneziawg-tools && pkg_is_installed luci-proto-amneziawg && pkg_is_installed kmod-amneziawg; then
+
+if ! pkg_is_installed splify; then
 AWG_DELETE
+else
+echo -e "\n${RED}Удаление невозможно!${NC}\nAmneziaWG ${YELLOW}используется в ${NC}splify\n"
+PAUSE
+fi
 else
 install_AWG
 echo -e "\nAmneziaWG ${GREEN}установлен!${NC}"
