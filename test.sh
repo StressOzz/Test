@@ -83,8 +83,8 @@ PAUSE() { echo -ne "Нажмите Enter..."; read dummy; }; BACKUP_DIR="/opt/za
 BIN_PATH_GO="/usr/bin/tg-ws-proxy-go"; INIT_PATH_GO="/etc/init.d/tg-ws-proxy-go"; BIN_PATH_RS="/usr/bin/tg-ws-proxy-rs"; INIT_PATH_RS="/etc/init.d/tg-ws-proxy-rs"
 
 if command -v opkg >/dev/null 2>&1; then PKG="opkg"; GO_SUF="1"; CONFZ="/etc/opkg/distfeeds.conf"; PKG_IS_APK=0; UPDATE="opkg update"; INSTALL="opkg install"
-DELETE="opkg remove"; ARCH="$(opkg print-architecture | awk '{print $2}' | tail -n1)"; VER_SUF="r1-all"; SUF_MT=""
-RAZ="ipk"; TMP_FILE_GO="/tmp/tg-ws-proxy.ipk"; else PKG="apk"; GO_SUF="r1"; CONFZ="/etc/apk/repositories.d/distfeeds.list"; PKG_IS_APK=1
+DELETE="opkg remove"; ARCH="$(opkg print-architecture | awk '{print $2}' | tail -n1)"; VER_SUF="r1-all"; SUF_MT=""; SPL_SUF="all"
+RAZ="ipk"; TMP_FILE_GO="/tmp/tg-ws-proxy.ipk"; else PKG="apk"; GO_SUF="r1"; CONFZ="/etc/apk/repositories.d/distfeeds.list"; PKG_IS_APK=1; SPL_SUF="noarch"
 UPDATE="apk update"; INSTALL="apk add --allow-untrusted"; DELETE="apk del"; ARCH="$(apk --print-arch 2>/dev/null)"; RAZ="apk"; VER_SUF="r1"; SUF_MT="r"; TMP_FILE_GO="/tmp/tg-ws-proxy.apk"; fi
 
 if ! curl --version >/dev/null 2>&1; then clear; echo -e "curl ${RED}отсутствует ${NC}или${RED} работает некорректно${NC}"; echo -e "\n${MAGENTA}Устанавливаем ${NC}curl"; 
@@ -146,37 +146,35 @@ AWG_I1="<b 0xce000000010897a297ecc34cd6dd000044d0ec2e2e1ea2991f467ace4222129b5a0
 install_splify() {
 if ! command -v "jq" >/dev/null 2>&1; then
 echo -e "${CYAN}Ставим зависимость ${NC}jq"
-$UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; PAUSE; return 1; }
+	$UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; PAUSE; return 1; }
 	$INSTALL jq >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при установки!${NC}\n"; PAUSE; return 1; }
   fi
 
-echo -e "${CYAN}Проверяем версию ${NC}splify"
-  META="$TMP_SPL/meta.json"
-  wget -qO "$META" "$API" || { echo -e "\n${RED}Не удалось получить данные релиза!${NC}\n"; PAUSE; return 1; }
-  URLS="$(tr ',' '\n' <"$META" | sed -n 's/.*"browser_download_url": *"\([^"]*\.'$RAZ'\)".*/\1/p')"
-  [ -n "$URLS" ] || { echo -e "\n${RED}Возможно, релиз ещё не собран.!${NC}\n"; PAUSE; return 1; }
+SPL_SPL="https://github.com/xyzmean/splify/releases/download/v$SPL_VER/splify_$SPL_VER-1_$SPL_SUF.$RAZ"
+SPL_LUCI="https://github.com/xyzmean/splify/releases/download/v$SPL_VER/luci-app-splify_$SPL_VER-1_$SPL_SUF.$RAZ"
+SPL_RUS="https://github.com/xyzmean/splify/releases/download/v$SPL_VER/luci-i18n-splify-ru_$SPL_VER-1_$SPL_SUF.$RAZ"
 
-echo -e "${CYAN}Скачиваем пакеты ${NC}splify"
-  for u in $URLS; do
-    case "$u" in
-      *splify*) wget -qO "$TMP_SPL/${u##*/}" "$u" || { echo -e "\n${RED}Не удалось скачать ${NC}$u\n"; PAUSE; return 1; }
-    esac
-  done
-  for pkg in splify luci-app-splify luci-i18n-splify-ru; do
-    ls "$TMP_SPL/$pkg"*.$RAZ >/dev/null 2>&1 || { echo -e "\n${RED}В релизе не хватает пакета ${NC}$pkg*.$RAZ${RED}!${NC}\n"; PAUSE; return 1; }
-  done
+echo -e "${CYAN}Скачиваем ${NC}splify"
+wget -q -U "Mozilla/5.0" -O "$TMP_SF/splify.$RAZ" "$SPL_SPL" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$SPL_SPL\n"; PAUSE; return 1; }
+wget -q -U "Mozilla/5.0" -O "$TMP_SF/luci-app-splify.$RAZ" "$SPL_LUCI" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$SPL_LUCI\n"; PAUSE; return 1; }
+wget -q -U "Mozilla/5.0" -O "$TMP_SF/luci-i18n-splify-ru.$RAZ" "$SPL_RUS" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$SPL_RUS\n"; PAUSE; return 1; }
 
 echo -e "${CYAN}Устанавливаем ${NC}splify"
-    $INSTALL "$TMP_SPL"/*.$RAZ >/dev/null 2>&1
+$INSTALL "$TMP_SF/splify.$RAZ" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить:\n${NC}$SPL_SPL\n"; PAUSE; return 1; }
+$INSTALL "$TMP_SF/luci-app-splify.$RAZ" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить:\n${NC}$SPL_LUCI\n"; PAUSE; return 1; }
+$INSTALL "$TMP_SF/luci-i18n-splify-ru.$RAZ" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить:\n${NC}$SPL_RUS\n"; PAUSE; return 1; }
 
-
-  rm -f /tmp/luci-indexcache* /tmp/luci-modulecache* 2>/dev/null
+rm -f /tmp/luci-indexcache* /tmp/luci-modulecache* 2>/dev/null
   /etc/init.d/rpcd reload 2>/dev/null || /etc/init.d/rpcd restart 2>/dev/null
-  for s in splify splify-agent; do
-    if [ -x "/etc/init.d/$s" ] && "/etc/init.d/$s" enabled 2>/dev/null; then
-      "/etc/init.d/$s" restart 2>/dev/null
-    fi
-  done
+
+for s in splify splify-agent; do
+    "/etc/init.d/$s" enable 2>/dev/null
+done
+
+for s in splify splify-agent; do
+    "/etc/init.d/$s" restart 2>/dev/null
+done
+
 }
 
 # ──────────────────────────── 4. register Cloudflare WARP ───────────────────
@@ -263,10 +261,10 @@ echo -e "\n${CYAN}Используем:${NC} $_best_ip ($(colo_name "$_best_colo
 }
 
 choose_endpoint() {
-  echo -e "\n${MAGENTA}Меню выбора endpoint${NC}\n"
+  echo -e "\n${MAGENTA}Меню выбора endpoint${NC}"
   echo -e "${CYAN}1) ${GREEN}Использовать${NC} engage.cloudflareclient.com:4500"
   echo -e "${CYAN}2) ${GREEN}Подобрать автоматически${NC}"
-  echo -en "\n${YELLOW}Выберите пункт (${NC}Enter = 1${YELLOW}): ${NC}"
+  echo -en "${YELLOW}Выберите пункт (${NC}Enter = 1${YELLOW}): ${NC}"
 
   read -r choiceWRP
 
@@ -327,9 +325,7 @@ echo -e "${CYAN}Регистрируем устройство в ${NC}Cloudflare
 #    esac
 #  fi
 }
-
-# ──────────────────────────── 5. create warp0 interface ─────────────────────
-create_warp_iface() {
+WARP_TO_ROOT() {
 cat > /root/WARP.conf <<EOF
 [Interface]
 PrivateKey = $PRIV
@@ -354,6 +350,11 @@ Endpoint = $WARP_EP
 PersistentKeepalive = 25
 EOF
 echo -e "${YELLOW}Файл ${NC}WARP${YELLOW} сохранён в ${NC}/root/WARP.conf"
+}
+
+
+# ──────────────────────────── 5. create warp0 interface ─────────────────────
+create_warp_iface() {
 
 echo -e "\n${MAGENTA}Создаём интерфейс $WARP_IFACE${NC}"
 
@@ -416,7 +417,7 @@ register_in_splify() {
   if grep -q "option iface '$WARP_IFACE'" /etc/config/splify 2>/dev/null; then
 echo -e "${CYAN}Применяем настройки${NC}"
   else
-echo -e "${CYAN}Регистрируем ${NC}$WARP_IFACE ${CYAN}в ${NC}splify"
+echo -e "${CYAN}Применяем настройки${NC}"
 
 
     cat >>/etc/config/splify <<EOF
@@ -427,9 +428,8 @@ config endpoint
 	option type 'wg'
 EOF
   fi
-	echo -en "${YELLOW}Подождите...${NC}\n"  
+	echo -en "${YELLOW}Подождите...${NC}"
     /usr/local/sbin/splify-apply >/dev/null 2>&1
-	/etc/init.d/splify enable 2>/dev/null
 	sleep 5
 	/etc/init.d/splify restart 2>/dev/null
 	sleep 5
@@ -438,13 +438,13 @@ EOF
 
 # ──────────────────────────── 7. firewall zone ──────────────────────────────
 setup_firewall() {
-echo -e "\n${MAGENTA}Создаём зону firewall${NC}"
+echo -e "\n\n${MAGENTA}Создаём зону firewall${NC}"
 echo -e "${CYAN}Настраиваем зону ${NC}firewall${CYAN} для ${NC}$WARP_IFACE${NC}"
-echo -en "${YELLOW}Подождите...${NC}\n"
+echo -en "${YELLOW}Подождите...${NC}"
   if /usr/local/sbin/splify-firewall check "$WARP_IFACE" >/dev/null 2>&1; then
-echo -e "${CYAN}Зона${NC} firewall ${CYAN}для ${NC}$WARP_IFACE уже настроена${NC}"
+	echo -e "${CYAN}Зона${NC} firewall ${CYAN}для ${NC}$WARP_IFACE уже настроена${NC}"
   else
-    /usr/local/sbin/splify-firewall fix "$WARP_IFACE" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось создать зону ${NC}firewall${RED}!${NC}\n"; PAUSE; return 1; }
+	/usr/local/sbin/splify-firewall fix "$WARP_IFACE" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось создать зону ${NC}firewall${RED}!${NC}\n"; PAUSE; return 1; }
   fi
 }
 
@@ -465,7 +465,7 @@ else
   SPL_STATUS="${RED}$SPL_INST_VER (версия устарела)${NC}"; UPD_SPL="1"
 fi
 
-echo -e "${YELLOW}splify: $SPL_STATUS"
+echo -e "${YELLOW}splify:    $SPL_STATUS"
 
 if pkg_is_installed amneziawg-tools && pkg_is_installed luci-proto-amneziawg && pkg_is_installed kmod-amneziawg; then
     echo -e "${YELLOW}AmneziaWG: ${GREEN}установлен${NC}"
@@ -480,9 +480,9 @@ else
 fi
 
 if uci show firewall | grep -q "network='.*warp0"; then
-    echo -e "${YELLOW}Зона firewall: ${GREEN}настроена${NC}"
+    echo -e "${YELLOW}Firewall:  ${GREEN}настроен${NC}"
 else
-    echo -e "${YELLOW}Зона firewall: ${RED}не настроена${NC}"
+    echo -e "${YELLOW}Firewall:  ${RED}не настроен${NC}"
 fi
 
 
@@ -503,14 +503,15 @@ register_warp || continue
 echo -e "${CYAN}Используем ${NC}endpoint${CYAN}:${NC} $WARP_EP"
 # choose_endpoint || continue
 create_warp_iface || continue
+WARP_TO_ROOT
 register_in_splify || continue
 setup_firewall || continue
 echo -e "\nsplify ${GREEN}установлен!${NC}\n"
 else
-echo -e "${MAGENTA}Обновляем ${NC}splify"
+echo -e "\n${MAGENTA}Обновляем ${NC}splify"
 install_splify || continue
 register_in_splify || continue
-echo -e "\nsplify ${GREEN}обновлён!${NC}\n"
+echo -e "\n\nsplify ${GREEN}обновлён!${NC}\n"
 fi
 PAUSE
 ;;
@@ -526,8 +527,9 @@ else
 register_warp || continue
 choose_endpoint || continue
 create_warp_iface || continue
+WARP_TO_ROOT
 register_in_splify || continue
-echo -e "\nWARP ${GREEN}изменён!${NC}\n"
+echo -e "\n\nWARP ${GREEN}изменён!${NC}\n"
 fi
 PAUSE
 ;;
