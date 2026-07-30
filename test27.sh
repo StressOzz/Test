@@ -498,7 +498,7 @@ create_warp_iface || continue
 WARP_TO_ROOT
 register_in_splify || continue
 setup_firewall || continue
-echo -e "\nsplify ${GREEN}установлен!${NC}\n"
+echo -e "\n\nsplify ${GREEN}установлен!${NC}\n"
 else
 echo -e "\n${MAGENTA}Обновляем ${NC}splify"
 install_splify || continue
@@ -1299,9 +1299,16 @@ echo -e "${CYAN}5) ${GREEN}Интегрировать ${NC}AWG${GREEN} в ${NC}N
 
 2)
 if pkg_is_installed amneziawg-tools && pkg_is_installed luci-proto-amneziawg && pkg_is_installed kmod-amneziawg; then
+
+if ! pkg_is_installed splify; then
 AWG_DELETE
 else
+echo -e "\n${RED}Удаление невозможно!${NC}\nAmneziaWG ${YELLOW}используется в ${NC}splify"
+PAUSE
+fi
+else
 install_AWG
+echo -e "\nAmneziaWG ${GREEN}установлен!${NC}"
 fi ;;
 
 3)
@@ -1309,6 +1316,7 @@ if uci -q get network.AWG >/dev/null 2>&1; then
 INT_DELETE
 else
 install_AWG_INTER
+echo -e "\n\nsplify ${GREEN}установлен!${NC}\n"
 fi
 ;;
 
