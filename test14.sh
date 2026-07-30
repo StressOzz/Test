@@ -1346,11 +1346,15 @@ case "$choiceMG" in
     register_warp || continue
     choose_endpoint || continue
     WARP_TO_ROOT
+	echo
     PAUSE
+	break
     ;;
 2)
     wget -qO- https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/files/Mixomo/gen_WARP.sh | sh
+	echo
     PAUSE
+	break
     ;;
 	
 *) break
