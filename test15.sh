@@ -329,9 +329,7 @@ echo -e "${CYAN}Регистрируем устройство в ${NC}Cloudflare
 #    esac
 #  fi
 }
-
-# ──────────────────────────── 5. create warp0 interface ─────────────────────
-create_warp_iface() {
+WARP_TO_ROOT() {
 cat > /root/WARP.conf <<EOF
 [Interface]
 PrivateKey = $PRIV
@@ -356,6 +354,11 @@ Endpoint = $WARP_EP
 PersistentKeepalive = 25
 EOF
 echo -e "${YELLOW}Файл ${NC}WARP${YELLOW} сохранён в ${NC}/root/WARP.conf"
+}
+
+
+# ──────────────────────────── 5. create warp0 interface ─────────────────────
+create_warp_iface() {
 
 echo -e "\n${MAGENTA}Создаём интерфейс $WARP_IFACE${NC}"
 
@@ -418,7 +421,7 @@ register_in_splify() {
   if grep -q "option iface '$WARP_IFACE'" /etc/config/splify 2>/dev/null; then
 echo -e "${CYAN}Применяем настройки${NC}"
   else
-echo -e "${CYAN}Регистрируем ${NC}$WARP_IFACE ${CYAN}в ${NC}splify"
+echo -e "${CYAN}Применяем настройки${NC}"
 
 
     cat >>/etc/config/splify <<EOF
@@ -429,7 +432,7 @@ config endpoint
 	option type 'wg'
 EOF
   fi
-	echo -en "${YELLOW}Подождите...${NC}\n"  
+	echo -en "${YELLOW}Подождите...${NC}"
     /usr/local/sbin/splify-apply >/dev/null 2>&1
 	/etc/init.d/splify enable 2>/dev/null
 	sleep 5
@@ -440,9 +443,9 @@ EOF
 
 # ──────────────────────────── 7. firewall zone ──────────────────────────────
 setup_firewall() {
-echo -e "\n${MAGENTA}Создаём зону firewall${NC}"
+echo -e "\n\n${MAGENTA}Создаём зону firewall${NC}"
 echo -e "${CYAN}Настраиваем зону ${NC}firewall${CYAN} для ${NC}$WARP_IFACE${NC}"
-echo -en "${YELLOW}Подождите...${NC}\n"
+echo -en "${YELLOW}Подождите...${NC}"
   if /usr/local/sbin/splify-firewall check "$WARP_IFACE" >/dev/null 2>&1; then
 echo -e "${CYAN}Зона${NC} firewall ${CYAN}для ${NC}$WARP_IFACE уже настроена${NC}"
   else
@@ -505,6 +508,7 @@ register_warp || continue
 echo -e "${CYAN}Используем ${NC}endpoint${CYAN}:${NC} $WARP_EP"
 # choose_endpoint || continue
 create_warp_iface || continue
+WARP_TO_ROOT
 register_in_splify || continue
 setup_firewall || continue
 echo -e "\nsplify ${GREEN}установлен!${NC}\n"
@@ -512,7 +516,7 @@ else
 echo -e "\n${MAGENTA}Обновляем ${NC}splify"
 install_splify || continue
 register_in_splify || continue
-echo -e "\nsplify ${GREEN}обновлён!${NC}\n"
+echo -e "\n\nsplify ${GREEN}обновлён!${NC}\n"
 fi
 PAUSE
 ;;
@@ -528,8 +532,9 @@ else
 register_warp || continue
 choose_endpoint || continue
 create_warp_iface || continue
+WARP_TO_ROOT
 register_in_splify || continue
-echo -e "\nWARP ${GREEN}изменён!${NC}\n"
+echo -e "\n\nWARP ${GREEN}изменён!${NC}\n"
 fi
 PAUSE
 ;;
