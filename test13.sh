@@ -501,7 +501,7 @@ register_in_splify || continue
 setup_firewall || continue
 echo -e "\nsplify ${GREEN}установлен!${NC}\n"
 else
-echo -e "${MAGENTA}Обновляем ${NC}splify"
+echo -e "\n${MAGENTA}Обновляем ${NC}splify"
 install_splify || continue
 register_in_splify || continue
 echo -e "\nsplify ${GREEN}обновлён!${NC}\n"
