@@ -115,556 +115,86 @@ MSG=0; for f in stun2.bin quic_initial_tencent_com.bin quic_initial_steamcommuni
 # ==========================================
 # splify
 # ==========================================
-
-REPO="xyzmean/splify"
-API="https://api.github.com/repos/$REPO/releases/latest"
-CF_API_VERSION="v0a1922"
-CF_DIRECT="https://api.cloudflareclient.com"
-CF_UA="okhttp/3.12.1"
-CF_CLIENT_VER="a-6.3-1922"
-WORKER_URL="${WORKER_URL:-https://wgcli.vercel.app}"
-WARP_EP="engage.cloudflareclient.com:4500"
-WARP_IFACE="warp0"
-TMP_SPL="$(mktemp -d /tmp/splify.XXXXXX)"
-
-AWG_JC=4
-AWG_JMIN=40
-AWG_JMAX=70
-AWG_H1=1
-AWG_H2=2
-AWG_H3=3
-AWG_H4=4
-AWG_S1=0
-AWG_S2=0
+REPO="xyzmean/splify"; API="https://api.github.com/repos/$REPO/releases/latest"; CF_API_VERSION="v0a1922"; CF_DIRECT="https://api.cloudflareclient.com"; CF_UA="okhttp/3.12.1"; CF_CLIENT_VER="a-6.3-1922"
+WORKER_URL="${WORKER_URL:-https://wgcli.vercel.app}"; WARP_EP="engage.cloudflareclient.com:4500"; WARP_IFACE="warp0"; TMP_SPL="$(mktemp -d /tmp/splify.XXXXXX)"
+AWG_JC=4; AWG_JMIN=40; AWG_JMAX=70; AWG_H1=1; AWG_H2=2; AWG_H3=3; AWG_H4=4; AWG_S1=0; AWG_S2=0; AWG_JMAX=70; AWG_H1=1; AWG_H2=2; AWG_H3=3; AWG_H4=4; AWG_S1=0; AWG_S2=0
 AWG_I1="<b 0xce000000010897a297ecc34cd6dd000044d0ec2e2e1ea2991f467ace4222129b5a098823784694b4897b9986ae0b7280135fa85e196d9ad980b150122129ce2a9379531b0fd3e871ca5fdb883c369832f730e272d7b8b74f393f9f0fa43f11e510ecb2219a52984410c204cf875585340c62238e14ad04dff382f2c200e0ee22fe743b9c6b8b043121c5710ec289f471c91ee414fca8b8be8419ae8ce7ffc53837f6ade262891895f3f4cecd31bc93ac5599e18e4f01b472362b8056c3172b513051f8322d1062997ef4a383b01706598d08d48c221d30e74c7ce000cdad36b706b1bf9b0607c32ec4b3203a4ee21ab64df336212b9758280803fcab14933b0e7ee1e04a7becce3e2633f4852585c567894a5f9efe9706a151b615856647e8b7dba69ab357b3982f554549bef9256111b2d67afde0b496f16962d4957ff654232aa9e845b61463908309cfd9de0a6abf5f425f577d7e5f6440652aa8da5f73588e82e9470f3b21b27b28c649506ae1a7f5f15b876f56abc4615f49911549b9bb39dd804fde182bd2dcec0c33bad9b138ca07d4a4a1650a2c2686acea05727e2a78962a840ae428f55627516e73c83dd8893b02358e81b524b4d99fda6df52b3a8d7a5291326e7ac9d773c5b43b8444554ef5aea104a738ed650aa979674bbed38da58ac29d87c29d387d80b526065baeb073ce65f075ccb56e47533aef357dceaa8293a523c5f6f790be90e4731123d3c6152a70576e90b4ab5bc5ead01576c68ab633ff7d36dcde2a0b2c68897e1acfc4d6483aaaeb635dd63c96b2b6a7a2bfe042f6aed82e5363aa850aace12ee3b1a93f30d8ab9537df483152a5527faca21efc9981b304f11fc95336f5b9637b174c5a0659e2b22e159a9fed4b8e93047371175b1d6d9cc8ab745f3b2281537d1c75fb9451871864efa5d184c38c185fd203de206751b92620f7c369e031d2041e152040920ac2c5ab5340bfc9d0561176abf10a147287ea90758575ac6a9f5ac9f390d0d5b23ee12af583383d994e22c0cf42383834bcd3ada1b3825a0664d8f3fb678261d57601ddf94a8a68a7c273a18c08aa99c7ad8c6c42eab67718843597ec9930457359dfdfbce024afc2dcf9348579a57d8d3490b2fa99f278f1c37d87dad9b221acd575192ffae1784f8e60ec7cee4068b6b988f0433d96d6a1b1865f4e155e9fe020279f434f3bf1bd117b717b92f6cd1cc9bea7d45978bcc3f24bda631a36910110a6ec06da35f8966c9279d130347594f13e9e07514fa370754d1424c0a1545c5070ef9fb2acd14233e8a50bfc5978b5bdf8bc1714731f798d21e2004117c61f2989dd44f0cf027b27d4019e81ed4b5c31db347c4a3a4d85048d7093cf16753d7b0d15e078f5c7a5205dc2f87e330a1f716738dce1c6180e9d02869b5546f1c4d2748f8c90d9693cba4e0079297d22fd61402dea32ff0eb69ebd65a5d0b687d87e3a8b2c42b648aa723c7c7daf37abcc4bb85caea2ee8f55bec20e913b3324ab8f5c3304f820d42ad1b9f2ffc1a3af9927136b4419e1e579ab4c2ae3c776d293d397d575df181e6cae0a4ada5d67ecea171cca3288d57c7bbdaee3befe745fb7d634f70386d873b90c4d6c6596bb65af68f9e5121e67ebf0d89d3c909ceedfb32ce9575a7758ff080724e1ab5d5f43074ecb53a479af21ed03d7b6899c36631c0166f9d47e5e1d4528a5d3d3f744029c4b1c190cbfbad06f5f83f7ad0429fa9a2719c56ffe3783460e166de2d8>"
-
-
 # ──────────────────────────── 1. environment checks ────────────────────────
-
-ZAVISIM() {
-if ! command -v "jq" >/dev/null 2>&1; then
-echo -e "${CYAN}Ставим зависимость ${NC}jq"
-	$UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; PAUSE; return 1; }
-	$INSTALL jq >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при установки!${NC}\n"; PAUSE; return 1; }
-fi
-}
+ZAVISIM() { if ! command -v "jq" >/dev/null 2>&1; then echo -e "${CYAN}Ставим зависимость ${NC}jq"; $UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; PAUSE; return 1; }; $INSTALL jq >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при установки!${NC}\n"; PAUSE; return 1; }; fi; }
 # ──────────────────────────── 2. install splify packages ───────────────────
-install_splify() {
-
-ZAVISIM
-SPL_SPL="https://github.com/xyzmean/splify/releases/download/v$SPL_VER/splify-$SPL_VER-1_$SPL_SUF.$RAZ"
-SPL_LUCI="https://github.com/xyzmean/splify/releases/download/v$SPL_VER/luci-app-splify-$SPL_VER-1_$SPL_SUF.$RAZ"
-SPL_RUS="https://github.com/xyzmean/splify/releases/download/v$SPL_VER/luci-i18n-splify-ru-$SPL_VER-1_$SPL_SUF.$RAZ"
-
-echo -e "${CYAN}Скачиваем ${NC}splify"
-wget -q -U "Mozilla/5.0" -O "$TMP_SF/splify.$RAZ" "$SPL_SPL" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$SPL_SPL\n"; PAUSE; return 1; }
-wget -q -U "Mozilla/5.0" -O "$TMP_SF/luci-app-splify.$RAZ" "$SPL_LUCI" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$SPL_LUCI\n"; PAUSE; return 1; }
-wget -q -U "Mozilla/5.0" -O "$TMP_SF/luci-i18n-splify-ru.$RAZ" "$SPL_RUS" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$SPL_RUS\n"; PAUSE; return 1; }
-
-$UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; PAUSE; return 1; }
-
-echo -e "${CYAN}Устанавливаем ${NC}splify"
-$INSTALL "$TMP_SF/splify.$RAZ" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить:\n${NC}$SPL_SPL\n"; PAUSE; return 1; }
-$INSTALL "$TMP_SF/luci-app-splify.$RAZ" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить:\n${NC}$SPL_LUCI\n"; PAUSE; return 1; }
-$INSTALL "$TMP_SF/luci-i18n-splify-ru.$RAZ" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить:\n${NC}$SPL_RUS\n"; PAUSE; return 1; }
-
-rm -f /tmp/luci-indexcache* /tmp/luci-modulecache* 2>/dev/null
-  /etc/init.d/rpcd reload 2>/dev/null || /etc/init.d/rpcd restart 2>/dev/null
-
-for s in splify splify-agent; do
-    "/etc/init.d/$s" enable 2>/dev/null
-done
-
-for s in splify splify-agent; do
-    "/etc/init.d/$s" restart 2>/dev/null
-done
-
-}
-
+install_splify() { ZAVISIM; SPL_SPL="https://github.com/xyzmean/splify/releases/download/v$SPL_VER/splify-$SPL_VER-1_$SPL_SUF.$RAZ"; SPL_LUCI="https://github.com/xyzmean/splify/releases/download/v$SPL_VER/luci-app-splify-$SPL_VER-1_$SPL_SUF.$RAZ"
+SPL_RUS="https://github.com/xyzmean/splify/releases/download/v$SPL_VER/luci-i18n-splify-ru-$SPL_VER-1_$SPL_SUF.$RAZ"; echo -e "${CYAN}Скачиваем ${NC}splify"; wget -q -U "Mozilla/5.0" -O "$TMP_SF/splify.$RAZ" "$SPL_SPL" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$SPL_SPL\n"; PAUSE; return 1; }
+wget -q -U "Mozilla/5.0" -O "$TMP_SF/luci-app-splify.$RAZ" "$SPL_LUCI" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$SPL_LUCI\n"; PAUSE; return 1; }; wget -q -U "Mozilla/5.0" -O "$TMP_SF/luci-i18n-splify-ru.$RAZ" "$SPL_RUS" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$SPL_RUS\n"; PAUSE; return 1; }
+$UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; PAUSE; return 1; }; echo -e "${CYAN}Устанавливаем ${NC}splify"; $INSTALL "$TMP_SF/splify.$RAZ" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить:\n${NC}$SPL_SPL\n"; PAUSE; return 1; }
+$INSTALL "$TMP_SF/luci-app-splify.$RAZ" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить:\n${NC}$SPL_LUCI\n"; PAUSE; return 1; }; $INSTALL "$TMP_SF/luci-i18n-splify-ru.$RAZ" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить:\n${NC}$SPL_RUS\n"; PAUSE; return 1; }
+rm -f /tmp/luci-indexcache* /tmp/luci-modulecache* 2>/dev/null; /etc/init.d/rpcd reload 2>/dev/null || /etc/init.d/rpcd restart 2>/dev/null; for s in splify splify-agent; do "/etc/init.d/$s" enable 2>/dev/null; done; for s in splify splify-agent; do "/etc/init.d/$s" restart 2>/dev/null; done; }
 # ──────────────────────────── 4. register Cloudflare WARP ───────────────────
-
-colo_name() {
-  case "$1" in
-    AMS) echo "Amsterdam" ;;
-    ARN) echo "Stockholm" ;;
-    ATH) echo "Athens" ;;
-    BUD) echo "Budapest" ;;
-    FRA) echo "Frankfurt" ;;
-    HEL) echo "Helsinki" ;;
-    IST) echo "Istanbul" ;;
-    KBP) echo "Kiev" ;;
-    KIV) echo "Chisinau" ;;
-    PRG) echo "Prague" ;;
-    RIX) echo "Riga" ;;
-    SOF) echo "Sofia" ;;
-    TLL) echo "Tallinn" ;;
-    VIE) echo "Vienna" ;;
-    VNO) echo "Vilnius" ;;
-    WAW) echo "Warsaw" ;;
-    ZRH) echo "Zurich" ;;
-    *)   echo "$1" ;;
-  esac
-}
-
-
-
-reg_url() {
-  if [ -n "$WORKER_URL" ]; then
-    printf '%s/api/%s' "${WORKER_URL%/}" "$1"
-  else
-    printf '%s/%s/%s' "$CF_DIRECT" "$CF_API_VERSION" "$1"
-  fi
-}
-
-find_best_endpoint() {
-echo -e "\n${CYAN}Подбираем лучший ${NC}endpoint"
-  _prefixes="188.114.96. 188.114.97. 188.114.98. 188.114.99. 162.159.192. 162.159.193. 162.159.195. 8.34.146. 8.39.214. 8.39.204. 8.6.112. 8.35.211. 8.39.125. 8.47.69."
-  
-  _candidates=$(awk -v prefixes="$_prefixes" 'BEGIN {
-      srand();
-      n = split(prefixes, arr, " ");
-      for (i=0; i<100; i++) {
-          idx = int(rand() * n) + 1;
-          last = int(rand() * 256);
-          print arr[idx] last;
-      }
-  }')
-  
-  _pings="$TMP_SPL/warp_pings"
-  _count=0
-  for ip in $_candidates; do
-    (
-      if trace_data=$(curl -s --connect-timeout 2 -w "\n%{time_total}" -H "Host: trace.cloudflare.com" "http://${ip}/cdn-cgi/trace"); then
-        colo=$(echo "$trace_data" | awk -F'=' '$1=="colo"{print $2}')
-        case "$colo" in
-          DME) exit 0 ;;
-          "")  exit 0 ;;
-        esac
-        ping_ms=$(echo "$trace_data" | tail -n 1 | awk '{printf "%d", $1 * 1000}')
-        [ -n "$ping_ms" ] && echo "$ping_ms $ip $colo" >> "$_pings"
-      fi
-    ) &
-    _count=$((_count + 1))
-    [ $((_count % 20)) -eq 0 ] && wait
-  done
-  wait
-  
-  if [ -s "$_pings" ]; then
-    _best=$(sort -n "$_pings" | head -n 1)
-    _best_ping=$(echo "$_best" | awk '{print $1}')
-    _best_ip=$(echo "$_best" | awk '{print $2}')
-    _best_colo=$(echo "$_best" | awk '{print $3}')
-
-	
-echo -e "\n${CYAN}Используем:${NC} $_best_ip ($(colo_name "$_best_colo"), ping: ${_best_ping}ms)"
-    WARP_EP="${_best_ip}:4500"
-  else
-    WARP_EP="engage.cloudflareclient.com:4500"
-	echo -e "\n${CYAN}Подбор не удался!\nИспользуем ${NC}endpoint${CYAN}:${NC} $WARP_EP"
-  fi
-}
-
-choose_endpoint() {
-  echo -e "\n${MAGENTA}Меню выбора endpoint${NC}"
-  echo -e "${CYAN}1) ${GREEN}Использовать${NC} engage.cloudflareclient.com:4500"
-  echo -e "${CYAN}2) ${GREEN}Подобрать автоматически${NC}"
-  echo -en "${YELLOW}Выберите пункт (${NC}Enter = 1${YELLOW}): ${NC}"
-
-  read -r choiceWRP
-
-  case "$choiceWRP" in
-    2)
-      find_best_endpoint
-      ;;
-    *)
-      WARP_EP="engage.cloudflareclient.com:4500"
-      echo -e "\n${CYAN}Используем ${NC}endpoint${CYAN}:${NC} $WARP_EP"
-      ;;
-  esac
-}
-
-register_warp() {
-echo -e "\n${MAGENTA}Генерируем WARP${NC}"
-echo -e "${CYAN}Регистрируем устройство в ${NC}Cloudflare"
-[ -n "$WORKER_URL" ] && echo -e "${CYAN}Используем прокси: ${NC}$WORKER_URL" || echo -e "${CYAN}Прокси не найден!\nИспользуем: ${NC}api.cloudflareclient.com${NC}"
-
-  if command -v awg >/dev/null 2>&1; then GEN=awg; else GEN=wg; fi
-  PRIV="$("$GEN" genkey)"
-  PUB="$(printf '%s\n' "$PRIV" | "$GEN" pubkey)"
-  TOS="$(date -u +%Y-%m-%dT%H:%M:%S.000000000Z)"
-
-  REG="$TMP_SPL/reg.json"
-  curl -fsSL --max-time 30 -X POST "$(reg_url reg)" -H "User-Agent: $CF_UA" -H "CF-Client-Version: $CF_CLIENT_VER" -H "Content-Type: application/json" \
-    -H "Accept: application/json" -d "{\"key\":\"$PUB\",\"install_id\":\"\",\"fcm_token\":\"\",\"model\":\"PC\",\"locale\":\"en_US\",\"tos\":\"$TOS\",\"type\":\"Android\"}" \
-    -o "$REG" || { echo -e "\n${RED}Регистрация WARP не удалась!${NC}\n"; PAUSE; return 1; }
-
-  REG_ID="$(jq -r '.id'    "$REG")"
-  REG_TOK="$(jq -r '.token' "$REG")"
-  [ -n "$REG_ID" ] && [ "$REG_ID" != "null" ] || { echo -e "\n${RED}Нет id в ответе!${NC}\n"; PAUSE; return 1; }
-  [ -n "$REG_TOK" ] && [ "$REG_TOK" != "null" ] || { echo -e "\n${RED}Нет token в ответе!${NC}\n"; PAUSE; return 1; }
-
-  WARP="$TMP_SPL/warp.json"
-  if ! jq -e '.config.peers[0].public_key' "$REG" >/dev/null 2>&1; then
-    if ! curl -fsSL --max-time 30 -X GET "$(reg_url "reg/$REG_ID")" -H "User-Agent: $CF_UA" -H "CF-Client-Version: $CF_CLIENT_VER" -H "Accept: application/json" -H "Authorization: Bearer $REG_TOK" -o "$WARP" 2>/dev/null; then
-      cp "$REG" "$WARP"
-    fi
-  else
-    cp "$REG" "$WARP"
-  fi
-
-  WARP_PEER="$(jq -r '.config.peers[0].public_key'               "$WARP")"
-  WARP_V4="$(jq -r '.config.interface.addresses.v4'               "$WARP")"
-  WARP_V6="$(jq -r '.config.interface.addresses.v6 // ""'         "$WARP")"
-  [ -n "$WARP_PEER" ] && [ "$WARP_PEER" != "null" ] || { echo -e "\n${RED}Нет peer public_key в ответе!${NC}\n"; PAUSE; return 1; }
-  [ -n "$WARP_V4" ]   && [ "$WARP_V4"   != "null" ] || { echo -e "\n${RED}Нет client IPv4 в ответе!${NC}\n"; PAUSE; return 1; }
-
-}
-
-WARP_TO_ROOT() {
-cat > /root/WARP.conf <<EOF
-[Interface]
-PrivateKey = $PRIV
-Address = $WARP_V4${WARP_V6:+, $WARP_V6}
-DNS = 8.8.8.8, 8.8.4.4, 2001:4860:4860::8888, 2001:4860:4860::8844
-MTU = 1280
-S1 = $AWG_S1
-S2 = $AWG_S2
-Jc = $AWG_JC
-Jmin = $AWG_JMIN
-Jmax = $AWG_JMAX
-H1 = $AWG_H1
-H2 = $AWG_H2
-H3 = $AWG_H3
-H4 = $AWG_H4
-I1 = $AWG_I1
-
-[Peer]
-PublicKey = $WARP_PEER
-AllowedIPs = 0.0.0.0/0, ::/0
-Endpoint = $WARP_EP
-PersistentKeepalive = 25
-EOF
-echo -e "${YELLOW}Файл ${NC}WARP${YELLOW} сохранён в ${NC}/root/WARP.conf"
-}
-
-
+colo_name() { case "$1" in AMS) echo "Amsterdam" ;; ARN) echo "Stockholm" ;; ATH) echo "Athens" ;; BUD) echo "Budapest" ;; FRA) echo "Frankfurt" ;; HEL) echo "Helsinki" ;; IST) echo "Istanbul" ;; KBP) echo "Kiev" ;; KIV) echo "Chisinau" ;; PRG) echo "Prague" ;; RIX) echo "Riga" ;; SOF) echo "Sofia" ;; TLL) echo "Tallinn" ;; VIE) echo "Vienna" ;; VNO) echo "Vilnius" ;; WAW) echo "Warsaw" ;; ZRH) echo "Zurich" ;; *) echo "$1" ;; esac; }
+reg_url() { if [ -n "$WORKER_URL" ]; then printf '%s/api/%s' "${WORKER_URL%/}" "$1"; else printf '%s/%s/%s' "$CF_DIRECT" "$CF_API_VERSION" "$1"; fi; }
+find_best_endpoint() { echo -e "\n${CYAN}Подбираем лучший ${NC}endpoint"; _prefixes="188.114.96. 188.114.97. 188.114.98. 188.114.99. 162.159.192. 162.159.193. 162.159.195. 8.34.146. 8.39.214. 8.39.204. 8.6.112. 8.35.211. 8.39.125. 8.47.69."
+_candidates=$(awk -v prefixes="$_prefixes" 'BEGIN { srand(); n = split(prefixes, arr, " "); for (i=0; i<100; i++) { idx = int(rand() * n) + 1; last = int(rand() * 256); print arr[idx] last; } }'); _pings="$TMP_SPL/warp_pings"; _count=0
+for ip in $_candidates; do ( if trace_data=$(curl -s --connect-timeout 2 -w "\n%{time_total}" -H "Host: trace.cloudflare.com" "http://${ip}/cdn-cgi/trace"); then colo=$(echo "$trace_data" | awk -F'=' '$1=="colo"{print $2}'); case "$colo" in DME) exit 0 ;; "") exit 0 ;; esac
+ping_ms=$(echo "$trace_data" | tail -n 1 | awk '{printf "%d", $1 * 1000}'); [ -n "$ping_ms" ] && echo "$ping_ms $ip $colo" >> "$_pings"; fi ) &; _count=$((_count + 1)); [ $((_count % 20)) -eq 0 ] && wait; done; wait; if [ -s "$_pings" ]
+then _best=$(sort -n "$_pings" | head -n 1); _best_ping=$(echo "$_best" | awk '{print $1}'); _best_ip=$(echo "$_best" | awk '{print $2}'); _best_colo=$(echo "$_best" | awk '{print $3}'); echo -e "\n${CYAN}Используем:${NC} $_best_ip ($(colo_name "$_best_colo"), ping: ${_best_ping}ms)"
+WARP_EP="${_best_ip}:4500"; else WARP_EP="engage.cloudflareclient.com:4500"; echo -e "\n${CYAN}Подбор не удался!\nИспользуем ${NC}endpoint${CYAN}:${NC} $WARP_EP"; fi; }
+choose_endpoint() { echo -e "\n${MAGENTA}Меню выбора endpoint${NC}"; echo -e "${CYAN}1) ${GREEN}Использовать${NC} engage.cloudflareclient.com:4500"; echo -e "${CYAN}2) ${GREEN}Подобрать автоматически${NC}"; echo -en "${YELLOW}Выберите пункт (${NC}Enter = 1${YELLOW}): ${NC}"; read -r choiceWRP; case "$choiceWRP" in 2) find_best_endpoint ;; *) WARP_EP="engage.cloudflareclient.com:4500"; echo -e "\n${CYAN}Используем ${NC}endpoint${CYAN}:${NC} $WARP_EP" ;; esac; }
+register_warp() { echo -e "\n${MAGENTA}Генерируем WARP${NC}"; echo -e "${CYAN}Регистрируем устройство в ${NC}Cloudflare"; [ -n "$WORKER_URL" ] && echo -e "${CYAN}Используем прокси: ${NC}$WORKER_URL" || echo -e "${CYAN}Прокси не найден!\nИспользуем: ${NC}api.cloudflareclient.com${NC}"
+if command -v awg >/dev/null 2>&1; then GEN=awg; else GEN=wg; fi; PRIV="$("$GEN" genkey)"; PUB="$(printf '%s\n' "$PRIV" | "$GEN" pubkey)"; TOS="$(date -u +%Y-%m-%dT%H:%M:%S.000000000Z)"; REG="$TMP_SPL/reg.json"
+curl -fsSL --max-time 30 -X POST "$(reg_url reg)" -H "User-Agent: $CF_UA" -H "CF-Client-Version: $CF_CLIENT_VER" -H "Content-Type: application/json" -H "Accept: application/json" -d "{\"key\":\"$PUB\",\"install_id\":\"\",\"fcm_token\":\"\",\"model\":\"PC\",\"locale\":\"en_US\",\"tos\":\"$TOS\",\"type\":\"Android\"}" -o "$REG" || { echo -e "\n${RED}Регистрация WARP не удалась!${NC}\n"; PAUSE; return 1; }
+REG_ID="$(jq -r '.id' "$REG")"; REG_TOK="$(jq -r '.token' "$REG")"; [ -n "$REG_ID" ] && [ "$REG_ID" != "null" ] || { echo -e "\n${RED}Нет id в ответе!${NC}\n"; PAUSE; return 1; }; [ -n "$REG_TOK" ] && [ "$REG_TOK" != "null" ] || { echo -e "\n${RED}Нет token в ответе!${NC}\n"; PAUSE; return 1; }
+WARP="$TMP_SPL/warp.json"; if ! jq -e '.config.peers[0].public_key' "$REG" >/dev/null 2>&1; then if ! curl -fsSL --max-time 30 -X GET "$(reg_url "reg/$REG_ID")" -H "User-Agent: $CF_UA" -H "CF-Client-Version: $CF_CLIENT_VER" -H "Accept: application/json" -H "Authorization: Bearer $REG_TOK" -o "$WARP" 2>/dev/null
+then cp "$REG" "$WARP"; fi; else cp "$REG" "$WARP"; fi; WARP_PEER="$(jq -r '.config.peers[0].public_key' "$WARP")"; WARP_V4="$(jq -r '.config.interface.addresses.v4' "$WARP")"; WARP_V6="$(jq -r '.config.interface.addresses.v6 // ""' "$WARP")"
+[ -n "$WARP_PEER" ] && [ "$WARP_PEER" != "null" ] || { echo -e "\n${RED}Нет peer public_key в ответе!${NC}\n"; PAUSE; return 1; }; [ -n "$WARP_V4" ] && [ "$WARP_V4" != "null" ] || { echo -e "\n${RED}Нет client IPv4 в ответе!${NC}\n"; PAUSE; return 1; }; }
+WARP_TO_ROOT() { printf '%s\n' "[Interface]" "PrivateKey = $PRIV" "Address = $WARP_V4${WARP_V6:+, $WARP_V6}" "DNS = 8.8.8.8, 8.8.4.4, 2001:4860:4860::8888, 2001:4860:4860::8844" "MTU = 1280" "S1 = $AWG_S1" "S2 = $AWG_S2" "Jc = $AWG_JC" "Jmin = $AWG_JMIN" "Jmax = $AWG_JMAX" "H1 = $AWG_H1" "H2 = $AWG_H2" "H3 = $AWG_H3" "H4 = $AWG_H4" "I1 = $AWG_I1" "" "[Peer]" "PublicKey = $WARP_PEER" "AllowedIPs = 0.0.0.0/0, ::/0" "Endpoint = $WARP_EP" "PersistentKeepalive = 25" > /root/WARP.conf; echo -e "${YELLOW}Файл ${NC}WARP${YELLOW} сохранён в ${NC}/root/WARP.conf"; }
 # ──────────────────────────── 5. create warp0 interface ─────────────────────
-create_warp_iface() {
-
-echo -e "\n${MAGENTA}Создаём интерфейс $WARP_IFACE${NC}"
-
-  if [ -n "$(uci -q get "network.$WARP_IFACE")" ]; then
-	echo -e "${CYAN}Перенастраиваем интерфейс ${NC}$WARP_IFACE"
-	ifdown "$WARP_IFACE" >/dev/null 2>&1
-  fi
-  uci -q set "network.$WARP_IFACE=interface"
-  uci set "network.$WARP_IFACE.proto=amneziawg"
-  uci set "network.$WARP_IFACE.private_key=$PRIV"
-  uci -q delete "network.$WARP_IFACE.addresses"
-  uci add_list "network.$WARP_IFACE.addresses=$WARP_V4"
-  [ -n "$WARP_V6" ] && uci add_list "network.$WARP_IFACE.addresses=$WARP_V6"
-  uci -q delete "network.$WARP_IFACE.dns"
-  uci add_list "network.$WARP_IFACE.dns=8.8.8.8"
-  uci set "network.$WARP_IFACE.mtu=1280"
-  uci set "network.$WARP_IFACE.route_allowed_ips=0"
-  uci set "network.$WARP_IFACE.awg_jc=$AWG_JC"
-  uci set "network.$WARP_IFACE.awg_jmin=$AWG_JMIN"
-  uci set "network.$WARP_IFACE.awg_jmax=$AWG_JMAX"
-  uci set "network.$WARP_IFACE.awg_h1=$AWG_H1"
-  uci set "network.$WARP_IFACE.awg_h2=$AWG_H2"
-  uci set "network.$WARP_IFACE.awg_h3=$AWG_H3"
-  uci set "network.$WARP_IFACE.awg_h4=$AWG_H4"
-  uci set "network.$WARP_IFACE.awg_s1=$AWG_S1"
-  uci set "network.$WARP_IFACE.awg_s2=$AWG_S2"
-  uci set "network.$WARP_IFACE.awg_i1=$AWG_I1"
-
-  _pt="amneziawg_$WARP_IFACE"
-  while [ -n "$(uci -q get "network.@${_pt}[0]")" ]; do uci -q delete "network.@${_pt}[0]"; done
-  uci add network "$_pt" >/dev/null
-  uci set "network.@${_pt}[-1].public_key=$WARP_PEER"
-  uci -q delete "network.@${_pt}[-1].allowed_ips"
-  uci add_list "network.@${_pt}[-1].allowed_ips=0.0.0.0/0"
-  uci add_list "network.@${_pt}[-1].allowed_ips=::/0"
-  uci set "network.@${_pt}[-1].endpoint_host=${WARP_EP%:*}"
-  uci set "network.@${_pt}[-1].endpoint_port=${WARP_EP##*:}"
-  uci set "network.@${_pt}[-1].persistent_keepalive=25"
-  
-echo -e "${CYAN}Перезапускаем сеть${NC}"
-uci commit network
-/etc/init.d/network restart
-
-ifup "$WARP_IFACE" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось запустить ${NC}$WARP_IFACE\n"; PAUSE; return 1; }
-}
-
+create_warp_iface() { echo -e "\n${MAGENTA}Создаём интерфейс $WARP_IFACE${NC}"; if [ -n "$(uci -q get "network.$WARP_IFACE")" ]; then echo -e "${CYAN}Перенастраиваем интерфейс ${NC}$WARP_IFACE"; ifdown "$WARP_IFACE" >/dev/null 2>&1; fi
+uci -q set "network.$WARP_IFACE=interface"; uci set "network.$WARP_IFACE.proto=amneziawg"; uci set "network.$WARP_IFACE.private_key=$PRIV"; uci -q delete "network.$WARP_IFACE.addresses"; uci add_list "network.$WARP_IFACE.addresses=$WARP_V4"
+[ -n "$WARP_V6" ] && uci add_list "network.$WARP_IFACE.addresses=$WARP_V6"; uci -q delete "network.$WARP_IFACE.dns"; uci add_list "network.$WARP_IFACE.dns=8.8.8.8"; uci set "network.$WARP_IFACE.mtu=1280"
+uci set "network.$WARP_IFACE.route_allowed_ips=0"; uci set "network.$WARP_IFACE.awg_jc=$AWG_JC"; uci set "network.$WARP_IFACE.awg_jmin=$AWG_JMIN"; uci set "network.$WARP_IFACE.awg_jmax=$AWG_JMAX"; uci set "network.$WARP_IFACE.awg_h1=$AWG_H1"
+uci set "network.$WARP_IFACE.awg_h2=$AWG_H2"; uci set "network.$WARP_IFACE.awg_h3=$AWG_H3"; uci set "network.$WARP_IFACE.awg_h4=$AWG_H4"; uci set "network.$WARP_IFACE.awg_s1=$AWG_S1"; uci set "network.$WARP_IFACE.awg_s2=$AWG_S2"
+uci set "network.$WARP_IFACE.awg_i1=$AWG_I1"; _pt="amneziawg_$WARP_IFACE"; while [ -n "$(uci -q get "network.@${_pt}[0]")" ]; do uci -q delete "network.@${_pt}[0]"; done; uci add network "$_pt" >/dev/null; uci set "network.@${_pt}[-1].public_key=$WARP_PEER"
+uci -q delete "network.@${_pt}[-1].allowed_ips"; uci add_list "network.@${_pt}[-1].allowed_ips=0.0.0.0/0"; uci add_list "network.@${_pt}[-1].allowed_ips=::/0"; uci set "network.@${_pt}[-1].endpoint_host=${WARP_EP%:*}"
+uci set "network.@${_pt}[-1].endpoint_port=${WARP_EP##*:}"; uci set "network.@${_pt}[-1].persistent_keepalive=25"; echo -e "${CYAN}Перезапускаем сеть${NC}"; uci commit network; /etc/init.d/network restart; ifup "$WARP_IFACE" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось запустить ${NC}$WARP_IFACE\n"; PAUSE; return 1; }; }
 # ──────────────────────────── 6. register endpoint in splify ────────────────
-register_in_splify() {
-  _ei=0
-  while [ -n "$(uci -q get "splify.@endpoint[$_ei]" 2>/dev/null)" ]; do
-    _ei_if="$(uci -q get "splify.@endpoint[$_ei].iface" 2>/dev/null)"
-    if [ -n "$_ei_if" ] && [ -z "$(uci -q get "network.$_ei_if" 2>/dev/null)" ]; then
-      uci -q delete "splify.@endpoint[$_ei]"
-    else
-      _ei=$((_ei + 1))
-    fi
-  done
-  uci commit splify
-
-  if grep -q "option iface '$WARP_IFACE'" /etc/config/splify 2>/dev/null; then
-echo -e "${CYAN}Применяем настройки${NC}"
-  else
-echo -e "${CYAN}Применяем настройки${NC}"
-    cat >>/etc/config/splify <<EOF
-
-config endpoint
-	option iface '$WARP_IFACE'
-	option priority '1'
-	option type 'wg'
-EOF
-  fi
-	echo -en "${YELLOW}Подождите...${NC}"
-    /usr/local/sbin/splify-apply >/dev/null 2>&1
-	sleep 5
-	/etc/init.d/splify restart 2>/dev/null
-	sleep 5
-	/etc/init.d/splify-agent restart 2>/dev/null
-}
-
+register_in_splify() { _ei=0; while [ -n "$(uci -q get "splify.@endpoint[$_ei]" 2>/dev/null)" ]; do _ei_if="$(uci -q get "splify.@endpoint[$_ei].iface" 2>/dev/null)"; if [ -n "$_ei_if" ] && [ -z "$(uci -q get "network.$_ei_if" 2>/dev/null)" ]
+then uci -q delete "splify.@endpoint[$_ei]"; else _ei=$((_ei + 1)); fi; done; uci commit splify; if grep -q "option iface '$WARP_IFACE'" /etc/config/splify 2>/dev/null; then echo -e "${CYAN}Применяем настройки${NC}"; else echo -e "${CYAN}Применяем настройки${NC}"
+printf "\nconfig endpoint\n\toption iface '$WARP_IFACE'\n\toption priority '1'\n\toption type 'wg'\n" >> /etc/config/splify; fi; echo -en "${YELLOW}Подождите...${NC}"; /usr/local/sbin/splify-apply >/dev/null 2>&1; sleep 5; /etc/init.d/splify restart 2>/dev/null; sleep 5; /etc/init.d/splify-agent restart 2>/dev/null; }
 # ──────────────────────────── 7. firewall zone ──────────────────────────────
-setup_firewall() {
-echo -e "\n\n${MAGENTA}Создаём зону firewall${NC}"
-echo -e "${CYAN}Настраиваем зону ${NC}firewall${CYAN} для ${NC}$WARP_IFACE${NC}"
-echo -en "${YELLOW}Подождите...${NC}"
-  if /usr/local/sbin/splify-firewall check "$WARP_IFACE" >/dev/null 2>&1; then
-	echo -e "${CYAN}Зона${NC} firewall ${CYAN}для ${NC}$WARP_IFACE уже настроена${NC}"
-  else
-	/usr/local/sbin/splify-firewall fix "$WARP_IFACE" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось создать зону ${NC}firewall${RED}!${NC}\n"; PAUSE; return 1; }
-  fi
-}
-
+setup_firewall() { echo -e "\n\n${MAGENTA}Создаём зону firewall${NC}"; echo -e "${CYAN}Настраиваем зону ${NC}firewall${CYAN} для ${NC}$WARP_IFACE${NC}"; echo -en "${YELLOW}Подождите...${NC}"; if /usr/local/sbin/splify-firewall check "$WARP_IFACE" >/dev/null 2>&1
+then echo -e "${CYAN}Зона${NC} firewall ${CYAN}для ${NC}$WARP_IFACE уже настроена${NC}"; else /usr/local/sbin/splify-firewall fix "$WARP_IFACE" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось создать зону ${NC}firewall${RED}!${NC}\n"; PAUSE; return 1; }; fi; }
 # ──────────────────────────── main ──────────────────────────────────────────
 SPL_V_VER() { if [ "$PKG_IS_APK" -eq 1 ]; then SPL_INST_VER=$(awk '$0=="P:splify"{f=1} f&&/^V:/{v=substr($0,3);sub(/-r[0-9]+$/,"",v);print v;exit}' /lib/apk/db/installed); else SPL_INST_VER=$(opkg list-installed splify 2>/dev/null | awk '{sub(/(-r[0-9]+|-[0-9]+)$/, "", $3); print $3}'); fi; }
-
-SPL_MENU() { while true; do
-SPL_V_VER
-UPD_SPL="0"
-clear
-echo -e "${MAGENTA}Меню splify${NC}\n"
-
-if [ -z "$SPL_INST_VER" ]; then
-  SPL_STATUS="${RED}не установлен${NC}"
-elif [ "$SPL_VER" = "$SPL_INST_VER" ]; then
-  SPL_STATUS="${GREEN}$SPL_INST_VER${NC}"
-else
-  SPL_STATUS="${RED}$SPL_INST_VER (версия устарела)${NC}"; UPD_SPL="1"
-fi
-
-echo -e "${YELLOW}splify:    $SPL_STATUS"
-
-if pkg_is_installed amneziawg-tools && pkg_is_installed luci-proto-amneziawg && pkg_is_installed kmod-amneziawg; then
-    echo -e "${YELLOW}AmneziaWG: ${GREEN}установлен${NC}"
-else
-    echo -e "${YELLOW}AmneziaWG: ${RED}не установлен${NC}"
-fi
-
-if uci -q get network.warp0 >/dev/null 2>&1; then
-    echo -e "${YELLOW}Интерфейс: ${GREEN}установлен${NC}"
-else
-    echo -e "${YELLOW}Интерфейс: ${RED}не установлен${NC}"
-fi
-
-if uci show firewall | grep -q "network='.*warp0"; then
-    echo -e "${YELLOW}Firewall:  ${GREEN}настроен${NC}"
-else
-    echo -e "${YELLOW}Firewall:  ${RED}не настроен${NC}"
-fi
-
-
-
-if [ "$UPD_SPL" = "0" ]; then echo -e "\n${CYAN}1) ${GREEN}Установить ${NC}splify"; else echo -e "\n${CYAN}1) ${GREEN}Обновить ${NC}splify"; fi
-echo -e "${CYAN}2) ${GREEN}Удалить ${NC}splify"
-echo -e "${CYAN}3) ${GREEN}Сгенерировать и применить ${NC}WARP"
-echo -e "${CYAN}4) ${GREEN}Перезапустить ${NC}splify"
-echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read choiceSP; case "$choiceSP" in
-
-1)
-if [ "$UPD_SPL" = "0" ]; then
-clear
-echo -e "${MAGENTA}Устанавливаем ${NC}splify"
-install_splify || continue
-install_AWG || continue
-register_warp || continue
-echo -e "${CYAN}Используем ${NC}endpoint${CYAN}:${NC} $WARP_EP"
-create_warp_iface || continue
-WARP_TO_ROOT
-register_in_splify || continue
-setup_firewall || continue
-echo -e "\n\nsplify ${GREEN}установлен!${NC}\n"
-else
-echo -e "\n${MAGENTA}Обновляем ${NC}splify"
-install_splify || continue
-register_in_splify || continue
-echo -e "\n\nsplify ${GREEN}обновлён!${NC}\n"
-fi
-PAUSE
-;;
-
-2) 
-DELETE_SPL
-;;
-
-3)
-if [ -z "$SPL_INST_VER" ]; then
-echo -e "\nsplify ${RED}не установлен!${NC}\n"
-else
-register_warp || continue
-choose_endpoint || continue
-create_warp_iface || continue
-WARP_TO_ROOT
-register_in_splify || continue
-echo -e "\n\nWARP ${GREEN}изменён!${NC}\n"
-fi
-PAUSE
-;;
-
-4) 
-if [ -z "$SPL_INST_VER" ]; then
-echo -e "\nsplify ${RED}не установлен!${NC}\n"
-else
-echo -e "\n${MAGENTA}Перезапускаем ${NC}splify"
-register_in_splify || continue
-echo -e "\n\nsplify ${GREEN}перезапущен!${NC}\n"
-fi
-PAUSE
-;;
-
-*) return;;
-esac; done
-}
-
+SPL_MENU() { while true; do SPL_V_VER; UPD_SPL="0"; clear; echo -e "${MAGENTA}Меню splify${NC}\n"; if [ -z "$SPL_INST_VER" ]; then SPL_STATUS="${RED}не установлен${NC}"; elif [ "$SPL_VER" = "$SPL_INST_VER" ]; then SPL_STATUS="${GREEN}$SPL_INST_VER${NC}"
+else SPL_STATUS="${RED}$SPL_INST_VER (версия устарела)${NC}"; UPD_SPL="1"; fi; echo -e "${YELLOW}splify:    $SPL_STATUS"; if pkg_is_installed amneziawg-tools && pkg_is_installed luci-proto-amneziawg && pkg_is_installed kmod-amneziawg
+then echo -e "${YELLOW}AmneziaWG: ${GREEN}установлен${NC}"; else echo -e "${YELLOW}AmneziaWG: ${RED}не установлен${NC}"; fi; if uci -q get network.warp0 >/dev/null 2>&1; then echo -e "${YELLOW}Интерфейс: ${GREEN}установлен${NC}"
+else echo -e "${YELLOW}Интерфейс: ${RED}не установлен${NC}"; fi; if uci show firewall | grep -q "network='.*warp0"; then echo -e "${YELLOW}Firewall:  ${GREEN}настроен${NC}"; else echo -e "${YELLOW}Firewall:  ${RED}не настроен${NC}"; fi
+if [ "$UPD_SPL" = "0" ]; then echo -e "\n${CYAN}1) ${GREEN}Установить ${NC}splify"; else echo -e "\n${CYAN}1) ${GREEN}Обновить ${NC}splify"; fi; echo -e "${CYAN}2) ${GREEN}Удалить ${NC}splify"; echo -e "${CYAN}3) ${GREEN}Сгенерировать и применить ${NC}WARP"
+echo -e "${CYAN}4) ${GREEN}Перезапустить ${NC}splify"; echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read choiceSP; case "$choiceSP" in 1) if [ "$UPD_SPL" = "0" ]; then clear; echo -e "${MAGENTA}Устанавливаем ${NC}splify"
+install_splify || continue; install_AWG || continue; register_warp || continue; echo -e "${CYAN}Используем ${NC}endpoint${CYAN}:${NC} $WARP_EP"; create_warp_iface || continue; WARP_TO_ROOT; register_in_splify || continue; setup_firewall || continue; echo -e "\n\nsplify ${GREEN}установлен!${NC}\n"
+else echo -e "\n${MAGENTA}Обновляем ${NC}splify"; install_splify || continue; register_in_splify || continue; echo -e "\n\nsplify ${GREEN}обновлён!${NC}\n"; fi; PAUSE ;; 2) DELETE_SPL ;; 3) if [ -z "$SPL_INST_VER" ]; then echo -e "\nsplify ${RED}не установлен!${NC}\n"
+else register_warp || continue; choose_endpoint || continue; create_warp_iface || continue; WARP_TO_ROOT; register_in_splify || continue; echo -e "\n\nWARP ${GREEN}изменён!${NC}\n"; fi; PAUSE ;; 4) if [ -z "$SPL_INST_VER" ]; then echo -e "\nsplify ${RED}не установлен!${NC}\n"
+else echo -e "\n${MAGENTA}Перезапускаем ${NC}splify"; register_in_splify || continue; echo -e "\n\nsplify ${GREEN}перезапущен!${NC}\n"; fi; PAUSE ;; *) return ;; esac; done; }
 uget() { uci -q get "$1" 2>/dev/null; }
-
-DELETE_SPL() {
+DELETE_SPL() { echo -e "\n${MAGENTA}Удаляем splify${NC}"; 
 # ──────────────────────────── 1. stop splify services ───────────────────────
-echo -e "\n${MAGENTA}Удаляем splify${NC}"
-
-echo -e "${CYAN}Останавливаем службы${NC}"
-for s in splify splify-agent; do
-    if [ -x "/etc/init.d/$s" ]; then
-        "/etc/init.d/$s" stop    >/dev/null 2>&1
-        "/etc/init.d/$s" disable >/dev/null 2>&1
-    fi
-done
-
-if [ -x /etc/init.d/splify-singbox ]; then
-    /etc/init.d/splify-singbox stop    >/dev/null 2>&1
-    /etc/init.d/splify-singbox disable >/dev/null 2>&1
-fi
-
+echo -e "${CYAN}Останавливаем службы${NC}"; for s in splify splify-agent; do if [ -x "/etc/init.d/$s" ]; then "/etc/init.d/$s" stop >/dev/null 2>&1; "/etc/init.d/$s" disable >/dev/null 2>&1; fi; done; if [ -x /etc/init.d/splify-singbox ]; then /etc/init.d/splify-singbox stop >/dev/null 2>&1; /etc/init.d/splify-singbox disable >/dev/null 2>&1; fi
 # ──────────────────────────── 2. warp0 interface + peers ────────────────────
-if [ -n "$(uget "network.$WARP_IFACE")" ]; then
-echo -e "${CYAN}Удаляем интерфейс ${NC}$WARP_IFACE"
-    ifdown "$WARP_IFACE" >/dev/null 2>&1
-    uci -q delete "network.$WARP_IFACE"
-fi
-for _pt in amneziawg_"$WARP_IFACE" wireguard_"$WARP_IFACE"; do
-    while [ -n "$(uget "network.@${_pt}[0]")" ]; do
-        uci -q delete "network.@${_pt}[0]"
-    done
-done
-
+if [ -n "$(uget "network.$WARP_IFACE")" ]; then echo -e "${CYAN}Удаляем интерфейс ${NC}$WARP_IFACE"; ifdown "$WARP_IFACE" >/dev/null 2>&1; uci -q delete "network.$WARP_IFACE"; fi; for _pt in amneziawg_"$WARP_IFACE" wireguard_"$WARP_IFACE"; do while [ -n "$(uget "network.@${_pt}[0]")" ]; do uci -q delete "network.@${_pt}[0]"; done; done
 # ──────────────────────────── 3. firewall zone + forwardings ────────────────
-_ep_ifaces="$(uci show splify 2>/dev/null | sed -n "s/^splify\.[^=]*\.iface='\([^']*\)'\$/\1/p" | sort -u)"
-_ep_ifaces="$WARP_IFACE $_ep_ifaces"
-
-echo -e "${CYAN}Удаляем ${NC}firewall${CYAN} зону${NC}"
-_zi=0
-while [ -n "$(uget "firewall.@zone[$_zi]")" ]; do
-    _zn="$(uget "firewall.@zone[$_zi].name")"
-    _znet="$(uget "firewall.@zone[$_zi].network")"
-    _zdev="$(uget "firewall.@zone[$_zi].device")"
-    _match=""
-    for _ep in $_ep_ifaces; do
-        [ -n "$_ep" ] || continue
-        if [ "$_zn" = "$_ep" ]; then _match=1; break; fi
-        case " $_znet " in *" $_ep "*) _match=1; break ;; esac
-        case " $_zdev " in *" $_ep "*) _match=1; break ;; esac
-    done
-    if [ -n "$_match" ]; then
-        uci -q delete "firewall.@zone[$_zi]"
-    else
-        _zi=$((_zi + 1))
-    fi
-done
-_fi=0
-while [ -n "$(uget "firewall.@forwarding[$_fi]")" ]; do
-    _fsrc="$(uget "firewall.@forwarding[$_fi].src")"
-    _fdest="$(uget "firewall.@forwarding[$_fi].dest")"
-    _match=""
-    for _ep in $_ep_ifaces; do
-        [ -n "$_ep" ] || continue
-        if [ "$_fsrc" = "$_ep" ] || [ "$_fdest" = "$_ep" ]; then _match=1; break; fi
-    done
-    if [ -n "$_match" ]; then
-        uci -q delete "firewall.@forwarding[$_fi]"
-    else
-        _fi=$((_fi + 1))
-    fi
-done
-
+_ep_ifaces="$(uci show splify 2>/dev/null | sed -n "s/^splify\.[^=]*\.iface='\([^']*\)'\$/\1/p" | sort -u)"; _ep_ifaces="$WARP_IFACE $_ep_ifaces"; echo -e "${CYAN}Удаляем ${NC}firewall${CYAN} зону${NC}"; _zi=0; while [ -n "$(uget "firewall.@zone[$_zi]")" ]; do _zn="$(uget "firewall.@zone[$_zi].name")"; _znet="$(uget "firewall.@zone[$_zi].network")"
+_zdev="$(uget "firewall.@zone[$_zi].device")"; _match=""; for _ep in $_ep_ifaces; do [ -n "$_ep" ] || continue; if [ "$_zn" = "$_ep" ]; then _match=1; break; fi; case " $_znet " in *" $_ep "*) _match=1; break ;; esac; case " $_zdev " in *" $_ep "*) _match=1; break ;; esac; done; if [ -n "$_match" ]; then uci -q delete "firewall.@zone[$_zi]"
+else _zi=$((_zi + 1)); fi; done; _fi=0; while [ -n "$(uget "firewall.@forwarding[$_fi]")" ]; do _fsrc="$(uget "firewall.@forwarding[$_fi].src")"; _fdest="$(uget "firewall.@forwarding[$_fi].dest")"; _match=""; for _ep in $_ep_ifaces; do [ -n "$_ep" ] || continue; if [ "$_fsrc" = "$_ep" ] || [ "$_fdest" = "$_ep" ]; then _match=1; break; fi; done; if [ -n "$_match" ]; then uci -q delete "firewall.@forwarding[$_fi]"; else _fi=$((_fi + 1)); fi; done
 # ──────────────────────────── 4. commit UCI + reload ────────────────────────
-
-echo -e "${CYAN}Перезапускаем сеть${NC}"
-uci -q commit network 2>/dev/null
-uci -q commit firewall 2>/dev/null
-/etc/init.d/network restart >/dev/null 2>&1
-/etc/init.d/firewall reload >/dev/null 2>&1
-
+echo -e "${CYAN}Перезапускаем сеть${NC}"; uci -q commit network 2>/dev/null; uci -q commit firewall 2>/dev/null; /etc/init.d/network restart >/dev/null 2>&1; /etc/init.d/firewall reload >/dev/null 2>&1
 # ──────────────────────────── 5. splify runtime (ip rules, nft, cron) ───────
-if [ -x /usr/local/sbin/splify-uninstall ]; then
-echo -e "${CYAN}Удаляем активные правила"
-    /usr/local/sbin/splify-uninstall >/dev/null 2>&1
-else
-    while ip -4 rule del priority 999   >/dev/null 2>&1; do :; done
-    while ip -4 rule del priority 1000  >/dev/null 2>&1; do :; done
-    ip -4 route flush table 200 >/dev/null 2>&1
-    rm -f /etc/nftables.d/30-splify.nft
-    rm -f /tmp/dnsmasq.d/splify-*.conf /tmp/dnsmasq.cfg*.d/splify-*.conf
-    if [ -f /etc/crontabs/root ]; then
-        grep -v 'splify-' /etc/crontabs/root > /tmp/splify-cron.uninst
-        cat /tmp/splify-cron.uninst > /etc/crontabs/root
-        rm -f /tmp/splify-cron.uninst
-        /etc/init.d/cron restart >/dev/null 2>&1
-    fi
-    rm -f /var/run/splify-state /var/run/splify-failcount /var/run/splify-events
-    /etc/init.d/firewall reload >/dev/null 2>&1
-    /etc/init.d/dnsmasq reload  >/dev/null 2>&1
-fi
-
+if [ -x /usr/local/sbin/splify-uninstall ]; then echo -e "${CYAN}Удаляем активные правила"; /usr/local/sbin/splify-uninstall >/dev/null 2>&1; else while ip -4 rule del priority 999 >/dev/null 2>&1; do :; done
+while ip -4 rule del priority 1000 >/dev/null 2>&1; do :; done; ip -4 route flush table 200 >/dev/null 2>&1; rm -f /etc/nftables.d/30-splify.nft; rm -f /tmp/dnsmasq.d/splify-*.conf /tmp/dnsmasq.cfg*.d/splify-*.conf
+if [ -f /etc/crontabs/root ]; then grep -v 'splify-' /etc/crontabs/root > /tmp/splify-cron.uninst; cat /tmp/splify-cron.uninst > /etc/crontabs/root; rm -f /tmp/splify-cron.uninst; /etc/init.d/cron restart >/dev/null 2>&1; fi
+rm -f /var/run/splify-state /var/run/splify-failcount /var/run/splify-events; /etc/init.d/firewall reload >/dev/null 2>&1; /etc/init.d/dnsmasq reload >/dev/null 2>&1; fi
 # ──────────────────────────── 6. remove packages ─────────────────────
-echo -e "${CYAN}Удаляем пакеты ${NC}splify"
-$DELETE luci-i18n-splify-ru >/dev/null 2>&1
-$DELETE luci-app-splify >/dev/null 2>&1
-$DELETE splify >/dev/null 2>&1
-
-if ! pkg_is_installed netshift; then
-echo -e "${CYAN}Удаляем пакеты ${NC}AWG"
-    $DELETE luci-i18n-amneziawg-ru >/dev/null 2>&1
-    $DELETE luci-proto-amneziawg >/dev/null 2>&1
-    $DELETE amneziawg-tools >/dev/null 2>&1
-    $DELETE kmod-amneziawg >/dev/null 2>&1
-fi
-
+echo -e "${CYAN}Удаляем пакеты ${NC}splify"; $DELETE luci-i18n-splify-ru >/dev/null 2>&1; $DELETE luci-app-splify >/dev/null 2>&1; $DELETE splify >/dev/null 2>&1; if ! pkg_is_installed netshift; then echo -e "${CYAN}Удаляем пакеты ${NC}AWG"; $DELETE luci-i18n-amneziawg-ru >/dev/null 2>&1; $DELETE luci-proto-amneziawg >/dev/null 2>&1; $DELETE amneziawg-tools >/dev/null 2>&1; $DELETE kmod-amneziawg >/dev/null 2>&1; fi
 # ──────────────────────────── 8. splify config + leftover data ──────────────
-echo -e "${CYAN}Удаляем данные ${NC}splify"
-rm -rf /etc/splify* /etc/init.d/splify* /etc/config/splify* /var/run/splify* /tmp/luci-indexcache* /tmp/luci-modulecache* /usr/local/sbin/splify*
-/etc/init.d/rpcd reload 2>/dev/null || /etc/init.d/rpcd restart 2>/dev/null
-
-echo -e "splify ${GREEN}удалён!${NC}\n"
-PAUSE
-}
-
-
-
+echo -e "${CYAN}Удаляем данные ${NC}splify"; rm -rf /etc/splify* /etc/init.d/splify* /etc/config/splify* /var/run/splify* /tmp/luci-indexcache* /tmp/luci-modulecache* /usr/local/sbin/splify*; /etc/init.d/rpcd reload 2>/dev/null || /etc/init.d/rpcd restart 2>/dev/null; echo -e "splify ${GREEN}удалён!${NC}\n"; PAUSE; }
 # ==========================================
 # Получение версии
 # ==========================================
@@ -1229,17 +759,11 @@ echo -e "\nNetShift ${GREEN}$( [ "$ACTION" = "install" ] && echo "установ
 PODKOP_DELETE() { echo -e "\n${MAGENTA}Удаляем NetShift${NC}"; echo -e "${CYAN}Останавливаем сервисы${NC}"; netshift stop >/dev/null 2>&1; netshift disable >/dev/null 2>&1; sing-box stop >/dev/null 2>&1; sing-box disable >/dev/null 2>&1
 echo -e "${CYAN}Удаляем пакеты ${NC}NetShift"; $DELETE luci-i18n-netshift-ru luci-app-netshift netshift >/dev/null 2>&1; echo -e "${CYAN}Удаляем пакеты ${NC}sing-box"; $DELETE sing-box >/dev/null 2>&1
 echo -e "NetShift${GREEN} удалён!${NC}"; [ "$ACTION" != "update" ] && { rm -rf /etc/config/netshift* /usr/bin/netshift /etc/config/sing-box* /etc/sing-box >/dev/null 2>&1; echo; PAUSE; }; }
-
-
 install_AWG_INTER() { echo -e "\n${MAGENTA}Устанавливаем интерфейс AWG${NC}"; echo -e "${CYAN}Создаем ${NC}интерфейс AWG"; if uci show network.$IF_NAME >/dev/null 2>&1; then echo -e "\n${RED}Интерфейс уже существует!${NC}"; else uci set network.$IF_NAME=interface
 uci set network.$IF_NAME.proto=$PROTO; uci set network.$IF_NAME.device=$DEV_NAME; uci commit network; fi; echo -en "${CYAN}Перезапускаем сеть${NC}"; /etc/init.d/network restart >/dev/null 2>&1; echo -e "\nИнтерфейс AWG ${GREEN}установлен!${NC}"; echo -e "\n${YELLOW}Необходимо в ${NC}LuCI${YELLOW} в интерфейс ${NC}AWG${YELLOW} загрузить файл ${NC}*.conf${YELLOW}:${NC}"
 echo -e "${NC}Network ${GREEN}→${NC} Interfaces ${GREEN}→${NC} AWG ${GREEN}→${NC} Edit ${GREEN}→${NC} Load configuration… ${GREEN}→${NC} Save ${GREEN}→${NC} Save & Apply\n"; PAUSE; rm -rf "$tmpDIR"; }
-
 AWG_DELETE(){ echo -e "\n${MAGENTA}Удаляем AmneziaWG${NC}"; $DELETE luci-i18n-amneziawg-ru >/dev/null 2>&1; $DELETE luci-proto-amneziawg >/dev/null 2>&1; $DELETE amneziawg-tools >/dev/null 2>&1; $DELETE kmod-amneziawg >/dev/null 2>&1; echo -e "AmneziaWG ${GREEN}удалён!${NC}\n"; PAUSE; }
-
-
 INT_DELETE(){ echo -e "\n${MAGENTA}Удаляем ${NC}интерфейс AWG"; uci delete network.AWG >/dev/null 2>&1; uci commit network >/dev/null 2>&1; for peer in $(uci show network | grep "interface='AWG'" | cut -d. -f2); do uci delete network.$peer; done; uci commit network >/dev/null 2>&1; echo -en "${CYAN}Перезапускаем сеть${NC}"; /etc/init.d/network restart; echo -e "интерфейс AWG ${GREEN}удалён!${NC}\n"; PAUSE; }
-
 install_AWG() { echo -e "\n${MAGENTA}Устанавливаем AmneziaWG${NC}"; rm -rf "$tmpDIR"; mkdir -p "$tmpDIR"; echo -e "${CYAN}Обновляем список пакетов${NC}"; $UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; PAUSE; return 1; }
 AWG_kmod="https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v$OWRTAWG/kmod-amneziawg_v${OWRTAWG}_$ARCHAWG.$RAZ"; AWG_tools="https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v$OWRTAWG/amneziawg-tools_v${OWRTAWG}_$ARCHAWG.$RAZ"
 AWG_luci="https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v$OWRTAWG/luci-proto-amneziawg_v${OWRTAWG}_$ARCHAWG.$RAZ"; AWG_ru="https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v$OWRTAWG/luci-i18n-amneziawg-ru_v${OWRTAWG}_$ARCHAWG.$RAZ"; cd "$tmpDIR"
@@ -1267,61 +791,15 @@ printf "%s\n" "list community_lists 'google_ai'" "list community_lists 'google_p
 printf "%s\n" "option user_subnet_list_type 'disabled'" "option mixed_proxy_enabled '0'" "option resolve_real_ip_for_routing '0'" "list subscription_filter_exclude_keywords '⬇️'" "list subscription_filter_exclude_keywords 'LTE'" "list subscription_filter_exclude_keywords '🇪🇺'" "list subscription_filter_exclude_keywords 'Мобильный'" "list subscription_filter_exclude_keywords 'SS'" "list subscription_filter_exclude_keywords 'Авто'" >> /etc/config/netshift
 fi; echo -e "${CYAN}Запускаем ${NC}NetShift${NC}"; netshift enable >/dev/null 2>&1; echo -e "${CYAN}Обновляем списки${NC}"; netshift list_update >/dev/null 2>&1; echo -en "${CYAN}Перезапускаем сервис${NC}\n${YELLOW}Подождите...${NC}"; netshift restart >/dev/null 2>&1; echo -e "\nVPN подписка ${GREEN}интегрирована в ${NC}NetShift${GREEN}!${NC}\n"; PAUSE; }
 PODKOP_menu() { while true; do openwrt_version=$(cat /etc/openwrt_release | grep DISTRIB_RELEASE | cut -d"'" -f2 | cut -d'.' -f1); if [ "$openwrt_version" = "23" ]; then echo -e "\n${RED}OpenWrt версии ниже 24 не поддерживаются!${NC}\n"; PAUSE; return; fi
-PODKOP_VER; clear; echo -e "${MAGENTA}Меню NetShift${NC}\n"; echo -e "${YELLOW}NetShift:${NC} $PODKOP_STATUS";
-if pkg_is_installed amneziawg-tools && pkg_is_installed luci-proto-amneziawg && pkg_is_installed kmod-amneziawg; then
-    echo -e "${YELLOW}AmneziaWG: ${GREEN}установлен${NC}"
-else
-    echo -e "${YELLOW}AmneziaWG: ${RED}не установлен${NC}"
-fi
-
-if uci -q get network.AWG >/dev/null 2>&1; then
-    echo -e "${YELLOW}Интерфейс: ${GREEN}установлен${NC}"
-else
-    echo -e "${YELLOW}Интерфейс: ${RED}не установлен${NC}"
-fi
-if ! pkg_is_installed netshift; then echo -e "\n${CYAN}1) ${GREEN}Установить ${NC}NetShift"; elif [ "$PODKOP_LATEST_VER" != "$LOCALPOD" ]; then echo -e "\n${CYAN}1) ${GREEN}Обновить ${NC}NetShift"; else echo -e "\n${CYAN}1) ${GREEN}Удалить ${NC}NetShift"; fi
-
-if pkg_is_installed amneziawg-tools && pkg_is_installed luci-proto-amneziawg && pkg_is_installed kmod-amneziawg; then
-    echo -e "${CYAN}2) ${GREEN}Удалить ${NC}AmneziaWG"
-else
-    echo -e "${CYAN}2) ${GREEN}Установить ${NC}AmneziaWG"
-fi
-
-if uci -q get network.AWG >/dev/null 2>&1; then
-    echo -e "${CYAN}3) ${GREEN}Удалить ${NC}интерфейс AWG"
-else
-    echo -e "${CYAN}3) ${GREEN}Установить ${NC}интерфейс AWG"
-fi
-
-if [ -f /etc/config/netshift ] && grep -q "^[[:space:]]*option subscription_url" /etc/config/netshift; then echo -e "${CYAN}4) ${GREEN}Сменить ${NC}VPN подписку${GREEN} в ${NC}NetShift"; else echo -e "${CYAN}4) ${GREEN}Интегрировать ${NC}VPN подписку${GREEN} в ${NC}NetShift"; fi
-echo -e "${CYAN}5) ${GREEN}Интегрировать ${NC}AWG${GREEN} в ${NC}NetShift"; echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}"; echo -ne "\n${YELLOW}Выберите пункт:${NC} "; read choicePOD; case "$choicePOD" in 
-1) PODKOP_INSTALL ;;
-
-2)
-if pkg_is_installed amneziawg-tools && pkg_is_installed luci-proto-amneziawg && pkg_is_installed kmod-amneziawg; then
-
-if ! pkg_is_installed splify; then
-AWG_DELETE
-else
-echo -e "\n${RED}Удаление невозможно!${NC}\nAmneziaWG ${YELLOW}используется в ${NC}splify\n"
-PAUSE
-fi
-else
-install_AWG
-echo -e "\nAmneziaWG ${GREEN}установлен!${NC}"
-fi ;;
-
-3)
-if uci -q get network.AWG >/dev/null 2>&1; then
-INT_DELETE
-else
-install_AWG_INTER
-echo -e "\n\nsplify ${GREEN}установлен!${NC}\n"
-fi
-;;
-
-4) PODKOP_VPN ;;
-5) integration_AWG ;; *) return ;; esac; done }
+PODKOP_VER; clear; echo -e "${MAGENTA}Меню NetShift${NC}\n"; echo -e "${YELLOW}NetShift:${NC} $PODKOP_STATUS"; if pkg_is_installed amneziawg-tools && pkg_is_installed luci-proto-amneziawg && pkg_is_installed kmod-amneziawg; then echo -e "${YELLOW}AmneziaWG: ${GREEN}установлен${NC}"
+else echo -e "${YELLOW}AmneziaWG: ${RED}не установлен${NC}"; fi; if uci -q get network.AWG >/dev/null 2>&1; then echo -e "${YELLOW}Интерфейс: ${GREEN}установлен${NC}"; else echo -e "${YELLOW}Интерфейс: ${RED}не установлен${NC}"; fi; if ! pkg_is_installed netshift
+then echo -e "\n${CYAN}1) ${GREEN}Установить ${NC}NetShift"; elif [ "$PODKOP_LATEST_VER" != "$LOCALPOD" ]; then echo -e "\n${CYAN}1) ${GREEN}Обновить ${NC}NetShift"; else echo -e "\n${CYAN}1) ${GREEN}Удалить ${NC}NetShift"; fi
+if pkg_is_installed amneziawg-tools && pkg_is_installed luci-proto-amneziawg && pkg_is_installed kmod-amneziawg; then echo -e "${CYAN}2) ${GREEN}Удалить ${NC}AmneziaWG"; else echo -e "${CYAN}2) ${GREEN}Установить ${NC}AmneziaWG"; fi
+if uci -q get network.AWG >/dev/null 2>&1; then echo -e "${CYAN}3) ${GREEN}Удалить ${NC}интерфейс AWG"; else echo -e "${CYAN}3) ${GREEN}Установить ${NC}интерфейс AWG"; fi; if [ -f /etc/config/netshift ] && grep -q "^[[:space:]]*option subscription_url" /etc/config/netshift
+then echo -e "${CYAN}4) ${GREEN}Сменить ${NC}VPN подписку${GREEN} в ${NC}NetShift"; else echo -e "${CYAN}4) ${GREEN}Интегрировать ${NC}VPN подписку${GREEN} в ${NC}NetShift"; fi; echo -e "${CYAN}5) ${GREEN}Интегрировать ${NC}AWG${GREEN} в ${NC}NetShift"
+echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}"; echo -ne "\n${YELLOW}Выберите пункт:${NC} "; read choicePOD; case "$choicePOD" in 1) PODKOP_INSTALL ;; 2) if pkg_is_installed amneziawg-tools && pkg_is_installed luci-proto-amneziawg && pkg_is_installed kmod-amneziawg
+then if ! pkg_is_installed splify; then AWG_DELETE; else echo -e "\n${RED}Удаление невозможно!${NC}\nAmneziaWG ${YELLOW}используется в ${NC}splify\n"; PAUSE; fi; else install_AWG; echo -e "\nAmneziaWG ${GREEN}установлен!${NC}"; fi ;; 3) if uci -q get network.AWG >/dev/null 2>&1
+then INT_DELETE; else install_AWG_INTER; echo -e "\n\nИнтерфейс AWG ${GREEN}установлен!${NC}\n"; fi ;; 4) PODKOP_VPN ;; 5) integration_AWG ;; *) return ;; esac; done }
 # ==========================================
 # Информация
 # ==========================================
@@ -1332,7 +810,7 @@ case "$(/etc/init.d/mihomo status 2>/dev/null)" in running) echo -e "${YELLOW}Mi
 TGSTATUS=""; pidof tg-ws-proxy-go >/dev/null 2>&1 && TGSTATUS="${TGSTATUS:+$TGSTATUS/}SOCKS5"; pidof tg-ws-proxy >/dev/null 2>&1 && TGSTATUS="${TGSTATUS:+$TGSTATUS/}MTProto"; pidof tg-ws-proxy-rs >/dev/null 2>&1 && TGSTATUS="${TGSTATUS:+$TGSTATUS/}Rust"; if [ -n "$TGSTATUS" ]; then echo -e "${YELLOW}TG WS Proxy:${NC}         ${GREEN}запущен [$TGSTATUS]${NC}"; fi
 if hosts_enabled; then echo -e "${YELLOW}Домены в hosts:      ${GREEN}$hosts_echo${NC}"; fi; [ -f "$DATE_FILE" ] && echo -e "${YELLOW}Резервная копия:${NC}     ${GREEN}сохранена"; show_script_50 && [ -n "$name" ] && echo -e "${YELLOW}Установлен скрипт:${NC}   $name"; grep -q "$Fin_IP_Dis" /etc/hosts && echo -e "${YELLOW}IP для Discord:      ${GREEN}включены${NC}"
 if [ -n "$DOH_STATUS" ]; then if [ "$PKG_IS_APK" -eq 1 ]; then apk info -e https-dns-proxy >/dev/null 2>&1 && echo -e "${YELLOW}DNS over HTTPS:${NC}      ${GREEN}$DOH_STATUS${NC}"; else opkg list-installed | grep -q '^https-dns-proxy ' && echo -e "${YELLOW}DNS over HTTPS:${NC}      ${GREEN}$DOH_STATUS${NC}"; fi; fi
-pkg_is_installed netshift && PODKOP_VER && echo -e "${YELLOW}NetShift:${NC}            $"; if web_is_enabled; then echo -e "${YELLOW}Доступ из браузера:${NC}  $LAN_IP:7681"; fi; quic_is_blocked && if quic_is_blocked; then echo -e "${YELLOW}Блокировка QUIC:${NC}     ${GREEN}включена${NC}"; fi; if grep -q 'ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc
+pkg_is_installed netshift && PODKOP_VER && echo -e "${YELLOW}NetShift:${NC}            $PODKOP_STATUS"; if web_is_enabled; then echo -e "${YELLOW}Доступ из браузера:${NC}  $LAN_IP:7681"; fi; quic_is_blocked && if quic_is_blocked; then echo -e "${YELLOW}Блокировка QUIC:${NC}     ${GREEN}включена${NC}"; fi; if grep -q 'ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc
 then echo -e "${YELLOW}Flow Offloading FIX:${NC} ${GREEN}включён${NC}"; fi; if [ "$CURR" != "default / OpenWrt" ]; then echo -e "${YELLOW}Зеркало OpenWRT:${NC}     $CURR"; fi; if [ -f /etc/init.d/zapret ] && [ -f "$CONF" ] && grep -Eq "^[[:space:]]*option DISABLE_IPV6 '0'" "$CONF"; then echo -e "${YELLOW}IPv6 в Zapret:       ${GREEN}включён${NC}"; fi; INFO_ZPR_STR; }
 INFO_ZPR_STR() { if [ -f "$CONF" ]; then line=$(grep -m1 '^#general' "$CONF"); GEN="${line:+${line#?} / }"; current="$ver$( [ -n "$ver" ] && [ -n "$yv_ver" ] && echo " / " )$yv_ver"; DV=$(grep -o -E '^#Dv[0-9][0-9]*' "$CONF" | sed 's/^#[[:space:]]*/\/ /' | head -n1)
 GV=$(grep -m1 '^#Gv' "$CONF" | sed 's/^#/\/ /'); UPD=$(grep -q '^#udp443' "$CONF" && echo '/ udp443'); WS=$(grep -q -- '--wssize 1:6' "$CONF" && echo '/ wssize'); ME=$(grep -q -- '--methodeol' "$CONF" && echo '/ methodeol'); if [ -n "$current" ]
@@ -1390,60 +868,14 @@ echo -e "${CYAN}6) ${GREEN}Интегрировать ${NC}/root/WARP.conf${GREE
 then echo -e "${CYAN}8) ${GREEN}Выключить автоперезапуск ${NC}Mihomo"; else echo -e "${CYAN}8) ${GREEN}Включить автоперезапуск ${NC}Mihomo"; fi; [ -n "$Magi_INSTALL_VER" ] && { [ "$Magi_INSTALL_VER" != "$MT_VERSION" ] && echo -e "${CYAN}9) ${GREEN}Обновить ${NC}MagiTrickle"; }
 echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню\n"; echo -ne "${YELLOW}Выберите пункт: ${NC}"; read choiceM; case "$choiceM" in 1) sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/files/Mixomo/mixomo_openwrt_install.sh); PAUSE ;;
 2) sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/files/Mixomo/mixomo_openwrt_delete.sh); sed -i "\|$CRON_CMD|d" "$CRON_FILE" >/dev/null 2>&1; /etc/init.d/cron restart >/dev/null 2>&1; echo -e "\n${YELLOW}Рекомендую сделать перезагрузку роутера!${NC}\n"; PAUSE ;;
-3) check_mihomo || continue; magitrickle_config ;; 4) check_mihomo || continue; PODPISKA ;;
-
-5) MIX_GEN_MENU ;;
-
-# sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/files/Mixomo/gen_WARP.sh); echo; PAUSE ;;
-
-6) check_mihomo || continue; sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/files/Mixomo/WARP_to_conf.sh); echo; PAUSE ;; 7) check_mihomo || continue; UI_INSTALL ;; 8) check_mihomo || continue; MIXOMO_RESTART ;; 
-9) check_mihomo || continue; ARCH_MT=$(grep "^OPENWRT_ARCH=" /etc/os-release | cut -d'"' -f2); FILE_MT="/tmp/magitrickle.$RAZ"; URL_MT="https://github.com/MagiTrickle/MagiTrickle/releases/download/${MT_VERSION}/magitrickle_${MT_VERSION}-${SUF_MT}1_openwrt_${ARCH_MT}.$RAZ"
+3) check_mihomo || continue; magitrickle_config ;; 4) check_mihomo || continue; PODPISKA ;; 5) MIX_GEN_MENU ;; 6) check_mihomo || continue; sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/files/Mixomo/WARP_to_conf.sh); echo; PAUSE ;;
+7) check_mihomo || continue; UI_INSTALL ;; 8) check_mihomo || continue; MIXOMO_RESTART ;; 9) check_mihomo || continue; ARCH_MT=$(grep "^OPENWRT_ARCH=" /etc/os-release | cut -d'"' -f2); FILE_MT="/tmp/magitrickle.$RAZ"; URL_MT="https://github.com/MagiTrickle/MagiTrickle/releases/download/${MT_VERSION}/magitrickle_${MT_VERSION}-${SUF_MT}1_openwrt_${ARCH_MT}.$RAZ"
 echo -e "\n${MAGENTA}Обновляем MagiTrickle\n${CYAN}Скачиваем\n${NC}$URL_MT"; curl -Lf --connect-timeout 6 --retry 3 --retry-delay 1 -o "$FILE_MT" "$URL_MT" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка скачивания${NC}\n"; return 1; }; echo -e "${CYAN}Обновляем список пакетов${NC}"
 $UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка обновления пакетов${NC}\n"; PAUSE; return 1; }; echo -e "${CYAN}Обновляем ${NC}MagiTrickle"; $INSTALL "$FILE_MT" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка установки${NC} $(basename "$URL_MT")\n"; rm -f "$FILE_MT"; PAUSE; return 1; }
 /etc/init.d/magitrickle enable >/dev/null 2>&1; /etc/init.d/magitrickle restart >/dev/null 2>&1; echo -e "MagiTrickle ${GREEN}обновлён!${NC}\n"; rm -f "$FILE_MT"; PAUSE ;; *) return ;; esac; done; }
-
-MIX_GEN_MENU() {
-while true; do
-
-echo -e "\n${MAGENTA}Меню генерации WARP${NC}"
-echo -e "${CYAN}1) ${GREEN}Сгенерировать ${NC}WARP ${GREEN}при помощи ${NC}wgcli.vercel.app"
-echo -e "${CYAN}2) ${GREEN}Сгенерировать ${NC}WARP ${GREEN}при помощи ${NC}api.cloudflareclient.com"
-echo -e "${CYAN}Enter) ${GREEN}Выход в меню Mixomo${NC}"
-echo -ne "${YELLOW}Выберите пункт: ${NC}"
-read choiceMG
-
-
-
-
-case "$choiceMG" in
-1)
-	ZAVISIM
-    register_warp || continue
-    choose_endpoint || continue
-    WARP_TO_ROOT
-	echo
-    PAUSE
-	break
-    ;;
-2)
-
-if pkg_is_installed splify; then
-echo -e "\n${RED}Генерация ${NC}WARP${RED} при установленном ${NC}splify${RED} невозможна!${NC}"
-echo -e "${YELLOW}Используйте генерацию при помощи ${NC}wgcli.vercel.app${NC}!\n"
-else
-    sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Mixomo-Manager/main/gen_WARP.sh)
-	echo
-fi
-    PAUSE
-	break
-    ;;
-	
-*) break
-    ;;
-esac
-done
-}
-
+MIX_GEN_MENU() { while true; do echo -e "\n${MAGENTA}Меню генерации WARP${NC}"; echo -e "${CYAN}1) ${GREEN}Сгенерировать ${NC}WARP ${GREEN}при помощи ${NC}wgcli.vercel.app"; echo -e "${CYAN}2) ${GREEN}Сгенерировать ${NC}WARP ${GREEN}при помощи ${NC}api.cloudflareclient.com"
+echo -e "${CYAN}Enter) ${GREEN}Выход в меню Mixomo${NC}"; echo -ne "${YELLOW}Выберите пункт: ${NC}"; read choiceMG; case "$choiceMG" in 1) ZAVISIM; register_warp || continue; choose_endpoint || continue; WARP_TO_ROOT; echo; PAUSE; break ;; 2) if pkg_is_installed splify
+then echo -e "\n${RED}Генерация ${NC}WARP${RED} при установленном ${NC}splify${RED} невозможна!${NC}"; echo -e "${YELLOW}Используйте генерацию при помощи ${NC}wgcli.vercel.app${NC}!\n"; else sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Mixomo-Manager/main/gen_WARP.sh); echo; fi; PAUSE; break ;;*) break ;; esac; done; }
 # ==========================================
 # Главное меню
 # ==========================================
