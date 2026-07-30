@@ -1320,7 +1320,7 @@ echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню\n"; echo -n
 2) sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/files/Mixomo/mixomo_openwrt_delete.sh); sed -i "\|$CRON_CMD|d" "$CRON_FILE" >/dev/null 2>&1; /etc/init.d/cron restart >/dev/null 2>&1; echo -e "\n${YELLOW}Рекомендую сделать перезагрузку роутера!${NC}\n"; PAUSE ;;
 3) check_mihomo || continue; magitrickle_config ;; 4) check_mihomo || continue; PODPISKA ;;
 
-5) MIX_GEN_MENU
+5) check_mihomo || continue; MIX_GEN_MENU ;;
 
 # sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/files/Mixomo/gen_WARP.sh); echo; PAUSE ;;
 
