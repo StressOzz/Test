@@ -152,9 +152,9 @@ fi
 install_splify() {
 
 ZAVISIM
-SPL_SPL="https://github.com/xyzmean/splify/releases/download/v$SPL_VER/splify_$SPL_VER-1_$SPL_SUF.$RAZ"
-SPL_LUCI="https://github.com/xyzmean/splify/releases/download/v$SPL_VER/luci-app-splify_$SPL_VER-1_$SPL_SUF.$RAZ"
-SPL_RUS="https://github.com/xyzmean/splify/releases/download/v$SPL_VER/luci-i18n-splify-ru_$SPL_VER-1_$SPL_SUF.$RAZ"
+SPL_SPL="https://github.com/xyzmean/splify/releases/download/v$SPL_VER/splify-$SPL_VER-1_$SPL_SUF.$RAZ"
+SPL_LUCI="https://github.com/xyzmean/splify/releases/download/v$SPL_VER/luci-app-splify-$SPL_VER-1_$SPL_SUF.$RAZ"
+SPL_RUS="https://github.com/xyzmean/splify/releases/download/v$SPL_VER/luci-i18n-splify-ru-$SPL_VER-1_$SPL_SUF.$RAZ"
 
 echo -e "${CYAN}Скачиваем ${NC}splify"
 wget -q -U "Mozilla/5.0" -O "$TMP_SF/splify.$RAZ" "$SPL_SPL" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$SPL_SPL\n"; PAUSE; return 1; }
@@ -492,7 +492,6 @@ if [ "$UPD_SPL" = "0" ]; then
 clear
 echo -e "${MAGENTA}Устанавливаем ${NC}splify"
 install_splify || continue
-echo -e "\n${MAGENTA}Устанавливаем AWG${NC}"
 install_AWG || continue
 register_warp || continue
 echo -e "${CYAN}Используем ${NC}endpoint${CYAN}:${NC} $WARP_EP"
@@ -1229,9 +1228,9 @@ echo -e "${NC}Network ${GREEN}→${NC} Interfaces ${GREEN}→${NC} AWG ${GREEN}�
 AWG_DELETE(){ echo -e "\n${MAGENTA}Удаляем AmneziaWG${NC}"; $DELETE luci-i18n-amneziawg-ru >/dev/null 2>&1; $DELETE luci-proto-amneziawg >/dev/null 2>&1; $DELETE amneziawg-tools >/dev/null 2>&1; $DELETE kmod-amneziawg >/dev/null 2>&1; echo -e "AmneziaWG ${GREEN}удалён!${NC}\n"; PAUSE; }
 
 
-INT_DELETE(){ echo -e "${CYAN}Удаляем ${NC}интерфейс AWG"; uci delete network.AWG >/dev/null 2>&1; uci commit network >/dev/null 2>&1; for peer in $(uci show network | grep "interface='AWG'" | cut -d. -f2); do uci delete network.$peer; done; uci commit network >/dev/null 2>&1; echo -en "${CYAN}Перезапускаем сеть${NC}"; /etc/init.d/network restart; echo -e "интерфейс AWG ${GREEN}удалён!${NC}\n"; PAUSE; }
+INT_DELETE(){ echo -e "\n${MAGENTA}Удаляем ${NC}интерфейс AWG"; uci delete network.AWG >/dev/null 2>&1; uci commit network >/dev/null 2>&1; for peer in $(uci show network | grep "interface='AWG'" | cut -d. -f2); do uci delete network.$peer; done; uci commit network >/dev/null 2>&1; echo -en "${CYAN}Перезапускаем сеть${NC}"; /etc/init.d/network restart; echo -e "интерфейс AWG ${GREEN}удалён!${NC}\n"; PAUSE; }
 
-install_AWG() { rm -rf "$tmpDIR"; mkdir -p "$tmpDIR"; echo -e "${CYAN}Обновляем список пакетов${NC}"; $UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; PAUSE; return 1; }
+install_AWG() { echo -e "\n${MAGENTA}Устанавливаем AmneziaWG${NC}"; rm -rf "$tmpDIR"; mkdir -p "$tmpDIR"; echo -e "${CYAN}Обновляем список пакетов${NC}"; $UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; PAUSE; return 1; }
 AWG_kmod="https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v$OWRTAWG/kmod-amneziawg_v${OWRTAWG}_$ARCHAWG.$RAZ"; AWG_tools="https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v$OWRTAWG/amneziawg-tools_v${OWRTAWG}_$ARCHAWG.$RAZ"
 AWG_luci="https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v$OWRTAWG/luci-proto-amneziawg_v${OWRTAWG}_$ARCHAWG.$RAZ"; AWG_ru="https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v$OWRTAWG/luci-i18n-amneziawg-ru_v${OWRTAWG}_$ARCHAWG.$RAZ"; cd "$tmpDIR"
 echo -e "${CYAN}Скачиваем ${NC}AWG"; wget -q -U "Mozilla/5.0" -O AWG_kmod.$RAZ "$AWG_kmod" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$AWG_kmod\n"; PAUSE; return 1; }; wget -q -U "Mozilla/5.0" -O AWG_tools.$RAZ "$AWG_tools" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$AWG_tools\n"; PAUSE; return 1; }; wget -q -U "Mozilla/5.0" -O AWG_luci.$RAZ "$AWG_luci" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$AWG_luci\n"; PAUSE; return 1; }
