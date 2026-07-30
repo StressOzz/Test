@@ -527,9 +527,13 @@ PAUSE
 ;;
 
 4) 
+if [ -z "$SPL_INST_VER" ]; then
+echo -e "\nsplify ${RED}не установлен!${NC}\n"
+else
 echo -e "\n${MAGENTA}Перезапускаем ${NC}splify"
 register_in_splify || continue
 echo -e "\n\nsplify ${GREEN}перезапущен!${NC}\n"
+fi
 PAUSE
 ;;
 
