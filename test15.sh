@@ -141,14 +141,17 @@ AWG_I1="<b 0xce000000010897a297ecc34cd6dd000044d0ec2e2e1ea2991f467ace4222129b5a0
 
 # ──────────────────────────── 1. environment checks ────────────────────────
 
-# ──────────────────────────── 2. install splify packages ───────────────────
-install_splify() {
+ZAVISIM() {
 if ! command -v "jq" >/dev/null 2>&1; then
 echo -e "${CYAN}Ставим зависимость ${NC}jq"
 	$UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; PAUSE; return 1; }
 	$INSTALL jq >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при установки!${NC}\n"; PAUSE; return 1; }
-  fi
+fi
+}
+# ──────────────────────────── 2. install splify packages ───────────────────
+install_splify() {
 
+ZAVISIM
 SPL_SPL="https://github.com/xyzmean/splify/releases/download/v$SPL_VER/splify_$SPL_VER-1_$SPL_SUF.$RAZ"
 SPL_LUCI="https://github.com/xyzmean/splify/releases/download/v$SPL_VER/luci-app-splify_$SPL_VER-1_$SPL_SUF.$RAZ"
 SPL_RUS="https://github.com/xyzmean/splify/releases/download/v$SPL_VER/luci-i18n-splify-ru_$SPL_VER-1_$SPL_SUF.$RAZ"
@@ -157,6 +160,8 @@ echo -e "${CYAN}Скачиваем ${NC}splify"
 wget -q -U "Mozilla/5.0" -O "$TMP_SF/splify.$RAZ" "$SPL_SPL" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$SPL_SPL\n"; PAUSE; return 1; }
 wget -q -U "Mozilla/5.0" -O "$TMP_SF/luci-app-splify.$RAZ" "$SPL_LUCI" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$SPL_LUCI\n"; PAUSE; return 1; }
 wget -q -U "Mozilla/5.0" -O "$TMP_SF/luci-i18n-splify-ru.$RAZ" "$SPL_RUS" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$SPL_RUS\n"; PAUSE; return 1; }
+
+$UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при обновлении списка пакетов!${NC}\n"; PAUSE; return 1; }
 
 echo -e "${CYAN}Устанавливаем ${NC}splify"
 $INSTALL "$TMP_SF/splify.$RAZ" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить:\n${NC}$SPL_SPL\n"; PAUSE; return 1; }
@@ -1343,6 +1348,7 @@ read choiceMG
 
 case "$choiceMG" in
 1)
+	ZAVISIM
     register_warp || continue
     choose_endpoint || continue
     WARP_TO_ROOT
