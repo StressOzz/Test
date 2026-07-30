@@ -316,16 +316,40 @@ echo -e "${CYAN}Регистрируем устройство в ${NC}Cloudflare
   [ -n "$WARP_PEER" ] && [ "$WARP_PEER" != "null" ] || { echo -e "\n${RED}Нет peer public_key в ответе!${NC}\n"; PAUSE; return 1; }
   [ -n "$WARP_V4" ]   && [ "$WARP_V4"   != "null" ] || { echo -e "\n${RED}Нет client IPv4 в ответе!${NC}\n"; PAUSE; return 1; }
 
-  case "$WARP_V4" in
-    */*) : ;;
-    *)   WARP_V4="$WARP_V4/32" ;;
-  esac
-  if [ -n "$WARP_V6" ]; then
-    case "$WARP_V6" in
-      */*) : ;;
-      *)   WARP_V6="$WARP_V6/128" ;;
-    esac
-  fi
+cat > /root/WARP.conf <<EOF
+[Interface]
+PrivateKey = $PRIV
+Address = $WARP_V4${WARP_V6:+, $WARP_V6}
+DNS = 8.8.8.8, 8.8.4.4, 2001:4860:4860::8888, 2001:4860:4860::8844
+MTU = 1280
+S1 = $AWG_S1
+S2 = $AWG_S2
+Jc = $AWG_JC
+Jmin = $AWG_JMIN
+Jmax = $AWG_JMAX
+H1 = $AWG_H1
+H2 = $AWG_H2
+H3 = $AWG_H3
+H4 = $AWG_H4
+I1 = $AWG_I1
+
+[Peer]
+PublicKey = $WARP_PEER
+AllowedIPs = 0.0.0.0/0, ::/0
+Endpoint = engage.cloudflareclient.com:2408
+PersistentKeepalive = 25
+EOF
+echo -e "\n${YELLOW}Файл сохранён:${NC} /root/WARP.conf"
+#  case "$WARP_V4" in
+#    */*) : ;;
+#    *)   WARP_V4="$WARP_V4/32" ;;
+#  esac
+#  if [ -n "$WARP_V6" ]; then
+#    case "$WARP_V6" in
+#      */*) : ;;
+#      *)   WARP_V6="$WARP_V6/128" ;;
+#    esac
+#  fi
 }
 
 # ──────────────────────────── 5. create warp0 interface ─────────────────────
