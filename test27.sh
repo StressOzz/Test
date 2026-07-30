@@ -1303,7 +1303,7 @@ if pkg_is_installed amneziawg-tools && pkg_is_installed luci-proto-amneziawg && 
 if ! pkg_is_installed splify; then
 AWG_DELETE
 else
-echo -e "\n${RED}Удаление невозможно!${NC}\nAmneziaWG ${YELLOW}используется в ${NC}splify"
+echo -e "\n${RED}Удаление невозможно!${NC}\nAmneziaWG ${YELLOW}используется в ${NC}splify\n"
 PAUSE
 fi
 else
