@@ -174,11 +174,15 @@ echo 4
 
 rm -f /tmp/luci-indexcache* /tmp/luci-modulecache* 2>/dev/null
   /etc/init.d/rpcd reload 2>/dev/null || /etc/init.d/rpcd restart 2>/dev/null
-  for s in splify splify-agent; do
-    if [ -x "/etc/init.d/$s" ] && "/etc/init.d/$s" enabled 2>/dev/null; then
-      "/etc/init.d/$s" restart 2>/dev/null
-    fi
-  done
+
+for s in splify splify-agent; do
+    "/etc/init.d/$s" enable 2>/dev/null
+done
+
+for s in splify splify-agent; do
+    "/etc/init.d/$s" restart 2>/dev/null
+done
+
 }
 
 # ──────────────────────────── 4. register Cloudflare WARP ───────────────────
@@ -434,7 +438,6 @@ EOF
   fi
 	echo -en "${YELLOW}Подождите...${NC}"
     /usr/local/sbin/splify-apply >/dev/null 2>&1
-	/etc/init.d/splify enable 2>/dev/null
 	sleep 5
 	/etc/init.d/splify restart 2>/dev/null
 	sleep 5
@@ -447,9 +450,9 @@ echo -e "\n\n${MAGENTA}Создаём зону firewall${NC}"
 echo -e "${CYAN}Настраиваем зону ${NC}firewall${CYAN} для ${NC}$WARP_IFACE${NC}"
 echo -en "${YELLOW}Подождите...${NC}"
   if /usr/local/sbin/splify-firewall check "$WARP_IFACE" >/dev/null 2>&1; then
-echo -e "${CYAN}Зона${NC} firewall ${CYAN}для ${NC}$WARP_IFACE уже настроена${NC}"
+	echo -e "${CYAN}Зона${NC} firewall ${CYAN}для ${NC}$WARP_IFACE уже настроена${NC}"
   else
-    /usr/local/sbin/splify-firewall fix "$WARP_IFACE" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось создать зону ${NC}firewall${RED}!${NC}\n"; PAUSE; return 1; }
+	/usr/local/sbin/splify-firewall fix "$WARP_IFACE" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось создать зону ${NC}firewall${RED}!${NC}\n"; PAUSE; return 1; }
   fi
 }
 
