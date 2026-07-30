@@ -1359,7 +1359,7 @@ case "$choiceMG" in
 	break
     ;;
 2)
-    sh <(wget -O - https://raw.githubusercontent.com/StressOzz/Mixomo-Manager/main/gen_WARP.sh)
+    sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Mixomo-Manager/main/gen_WARP.sh)
 	echo
     PAUSE
 	break
