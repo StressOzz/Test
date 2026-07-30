@@ -496,7 +496,6 @@ echo -e "\n${MAGENTA}Устанавливаем AWG${NC}"
 install_AWG || continue
 register_warp || continue
 echo -e "${CYAN}Используем ${NC}endpoint${CYAN}:${NC} $WARP_EP"
-# choose_endpoint || continue
 create_warp_iface || continue
 WARP_TO_ROOT
 register_in_splify || continue
@@ -1359,8 +1358,14 @@ case "$choiceMG" in
 	break
     ;;
 2)
+
+if pkg_is_installed splify; then
+echo -e "\n${RED}Генерация ${NC}WARP${RED} при установленном ${NC}splify${RED} невозможна!${NC}"
+echo -e "${YELLOW}Используйте генерацию при помощи ${NC}wgcli.vercel.app${NC}!\n"
+else
     sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Mixomo-Manager/main/gen_WARP.sh)
 	echo
+fi
     PAUSE
 	break
     ;;
