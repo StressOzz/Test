@@ -480,9 +480,9 @@ else
 fi
 
 if uci show firewall | grep -q "network='.*warp0"; then
-    echo -e "${YELLOW}Firewall:   ${GREEN}настроен${NC}"
+    echo -e "${YELLOW}Firewall:  ${GREEN}настроен${NC}"
 else
-    echo -e "${YELLOW}Firewall:   ${RED}не настроен${NC}"
+    echo -e "${YELLOW}Firewall:  ${RED}не настроен${NC}"
 fi
 
 
