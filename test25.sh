@@ -530,7 +530,6 @@ PAUSE
 echo -e "\n${MAGENTA}Перезапускаем ${NC}splify"
 register_in_splify || continue
 echo -e "\n\nsplify ${GREEN}перезапущен!${NC}\n"
-fi
 PAUSE
 ;;
 
