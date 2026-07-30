@@ -1338,13 +1338,15 @@ $UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка обновления 
 MIX_GEN_MENU() {
 while true; do
 
-echo -e "\n${MAGENTA}Меню генерации WARP${NC}\n"
+echo -e "\n${MAGENTA}Меню генерации WARP${NC}"
 echo -e "${CYAN}1) ${GREEN}Сгенерировать ${NC}WARP ${GREEN}при помощи ${NC}wgcli.vercel.app"
 echo -e "${CYAN}2) ${GREEN}Сгенерировать ${NC}WARP ${GREEN}при помощи ${NC}api.cloudflareclient.com"
-echo -e "${CYAN}Enter) ${GREEN}Выход в Mixomo меню\n"
-
+echo -e "${CYAN}Enter) ${GREEN}Выход в меню Mixomo${NC}"
 echo -ne "${YELLOW}Выберите пункт: ${NC}"
 read choiceMG
+
+
+
 
 case "$choiceMG" in
 1)
@@ -1357,7 +1359,7 @@ case "$choiceMG" in
 	break
     ;;
 2)
-    wget -qO- https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/files/Mixomo/gen_WARP.sh | sh
+    sh <(wget -O - https://raw.githubusercontent.com/StressOzz/Mixomo-Manager/main/gen_WARP.sh)
 	echo
     PAUSE
 	break
