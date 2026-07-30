@@ -1296,12 +1296,12 @@ install_AWG
 fi ;;
 
 3)
-
 if uci -q get network.AWG >/dev/null 2>&1; then
 INT_DELETE
 else
 install_AWG_INTER
 fi
+;;
 
 4) PODKOP_VPN ;;
 5) integration_AWG ;; *) return ;; esac; done }
