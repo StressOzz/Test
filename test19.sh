@@ -261,10 +261,10 @@ echo -e "\n${CYAN}Используем:${NC} $_best_ip ($(colo_name "$_best_colo
 }
 
 choose_endpoint() {
-  echo -e "\n${MAGENTA}Меню выбора endpoint${NC}\n"
+  echo -e "\n${MAGENTA}Меню выбора endpoint${NC}"
   echo -e "${CYAN}1) ${GREEN}Использовать${NC} engage.cloudflareclient.com:4500"
   echo -e "${CYAN}2) ${GREEN}Подобрать автоматически${NC}"
-  echo -en "\n${YELLOW}Выберите пункт (${NC}Enter = 1${YELLOW}): ${NC}"
+  echo -en "${YELLOW}Выберите пункт (${NC}Enter = 1${YELLOW}): ${NC}"
 
   read -r choiceWRP
 
@@ -465,7 +465,7 @@ else
   SPL_STATUS="${RED}$SPL_INST_VER (версия устарела)${NC}"; UPD_SPL="1"
 fi
 
-echo -e "${YELLOW}splify: $SPL_STATUS"
+echo -e "${YELLOW}splify:    $SPL_STATUS"
 
 if pkg_is_installed amneziawg-tools && pkg_is_installed luci-proto-amneziawg && pkg_is_installed kmod-amneziawg; then
     echo -e "${YELLOW}AmneziaWG: ${GREEN}установлен${NC}"
@@ -480,9 +480,9 @@ else
 fi
 
 if uci show firewall | grep -q "network='.*warp0"; then
-    echo -e "${YELLOW}Firewall: ${GREEN}настроен${NC}"
+    echo -e "${YELLOW}Firewall:   ${GREEN}настроен${NC}"
 else
-    echo -e "${YELLOW}Firewall: ${RED}не настроен${NC}"
+    echo -e "${YELLOW}Firewall:   ${RED}не настроен${NC}"
 fi
 
 
