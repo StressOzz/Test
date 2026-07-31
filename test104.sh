@@ -192,7 +192,7 @@ rm -f /var/run/splify-state /var/run/splify-failcount /var/run/splify-events; /e
 # ──────────────────────────── 6. remove packages ─────────────────────
 echo -e "${CYAN}Удаляем пакеты ${NC}splify"; $DELETE luci-i18n-splify-ru >/dev/null 2>&1; $DELETE luci-app-splify >/dev/null 2>&1; $DELETE splify >/dev/null 2>&1; if ! pkg_is_installed netshift; then echo -e "${CYAN}Удаляем пакеты ${NC}AWG"; $DELETE luci-i18n-amneziawg-ru >/dev/null 2>&1; $DELETE luci-proto-amneziawg >/dev/null 2>&1; $DELETE amneziawg-tools >/dev/null 2>&1; $DELETE kmod-amneziawg >/dev/null 2>&1; fi
 # ──────────────────────────── 8. splify config + leftover data ──────────────
-echo -e "${CYAN}Удаляем данные ${NC}splify"; rm -rf /etc/splify* /etc/init.d/splify* /etc/config/splify* /var/run/splify* /tmp/luci-indexcache* /tmp/luci-modulecache* /usr/local/sbin/splify*; /etc/init.d/rpcd reload 2>/dev/null || /etc/init.d/rpcd restart 2>/dev/null; echo -e "splify ${GREEN}удалён!${NC}\n"; PAUSE; }
+echo -e "${CYAN}Удаляем данные ${NC}splify"; rm -rf /etc/splify* /etc/init.d/splify* /etc/config/splify* /var/run/splify* /tmp/luci-indexcache* /tmp/luci-modulecache* /usr/local/sbin/splify* /tmp/splify*; /etc/init.d/rpcd reload 2>/dev/null || /etc/init.d/rpcd restart 2>/dev/null; echo -e "splify ${GREEN}удалён!${NC}\n"; PAUSE; }
 # ==========================================
 # Получение версии
 # ==========================================
