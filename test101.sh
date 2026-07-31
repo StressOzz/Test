@@ -692,7 +692,7 @@ ok=$((ok+1)); else right_status="[${RED}FAIL${NC}]"; fi; checked=$((checked+1));
 # Смена зеркала
 # ==========================================
 set_mirror() { NEW_BASE="$1"; sed -i "s|https://.*/releases/|https://$NEW_BASE/releases/|g" "$CONFZ"; echo -e "\n${CYAN}Изменяем зеркало\nОбновляем список пакетов${NC}"
-PKGM="$(command -v apk >/dev/null 2>&1 && echo apk || echo opkg)"; if ! $PKGM update >/dev/null 2>&1; then echo -e "\n${RED}Ошибка! Зеркало не работает!\n${GREEN}Зеркало сброшено на ${NC}default ${GREEN}/${NC} OpenWrt${GREEN}!${NC}\n"
+if ! $UPDATE >/dev/null 2>&1; then echo -e "\n${RED}Ошибка! Зеркало не работает!\n${GREEN}Зеркало сброшено на ${NC}default ${GREEN}/${NC} OpenWrt${GREEN}!${NC}\n"
 sed -i "s|https://.*/releases/|https://downloads.openwrt.org/releases/|g" "$CONFZ"; PAUSE; return 1; fi; echo -e "${GREEN}Пакеты обновлены! Зеркало работает!${NC}\n"; PAUSE; }
 curr_MIR() { if [ -f "$CONFZ" ]; then URL=$(head -n1 "$CONFZ"); case "$URL" in *tiguinet.net*) echo "Belgium" ;; *utwente.nl*) echo "Netherlands" ;; *freifunk.net*) echo "Germany" ;; *ps.kz*) echo "Kazakhstan" ;;
 *sjtu.edu.cn*) echo "China" ;; *downloads.openwrt.org*) echo "default / OpenWrt" ;; *) echo "неизвестное" ;; esac; else echo "файл не найден"; fi; }
