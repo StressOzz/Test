@@ -180,12 +180,7 @@ register_warp() {
 
 
     # Основной источник wgcli
-    if register_request "$(reg_url reg)"; then
-
-        echo -e "${GREEN}Регистрация успешна!${NC}"
-
-
-    else
+    if register_request "$(reg_url reg)"; then :; else
 
         echo -e "${CYAN}Используем резервный адрес${NC}"
 
