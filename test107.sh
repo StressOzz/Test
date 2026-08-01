@@ -144,20 +144,22 @@ choose_endpoint() { echo -e "\n${MAGENTA}Меню выбора endpoint${NC}"; e
 
 register_request() {
 
-        curl -fsSL \
-            --max-time 30 \
-            -X POST "$1" \
-            -H "User-Agent: $CF_UA" \
-            -H "CF-Client-Version: $CF_CLIENT_VER" \
-            -H "Content-Type: application/json" \
-            -H "Accept: application/json" \
-            -d "{\"key\":\"$PUB\",\"install_id\":\"\",\"fcm_token\":\"\",\"model\":\"PC\",\"locale\":\"en_US\",\"tos\":\"$TOS\",\"type\":\"Android\"}" \
-            -o "$REG" \
-            >/dev/null 2>&1
+    curl -fsSL \
+        --max-time 30 \
+        -X POST "$1" \
+        -H "User-Agent: $CF_UA" \
+        -H "CF-Client-Version: $CF_CLIENT_VER" \
+        -H "Content-Type: application/json" \
+        -H "Accept: application/json" \
+        -d "{\"key\":\"$PUB\",\"install_id\":\"\",\"fcm_token\":\"\",\"model\":\"PC\",\"locale\":\"en_US\",\"tos\":\"$TOS\",\"type\":\"Android\"}" \
+        -o "$REG" \
+        >/dev/null 2>&1
 
-    }
+}
+
 
 register_warp() {
+
     echo -e "\n${MAGENTA}Генерируем WARP${NC}"
 
     if command -v awg >/dev/null 2>&1; then
@@ -173,11 +175,21 @@ register_warp() {
     REG="$TMP_SPL/reg.json"
     WARP="$TMP_SPL/warp.json"
 
+
     echo -e "${CYAN}Регистрируем устройство${NC}"
 
+
+    # Основной источник wgcli
     if register_request "$(reg_url reg)"; then
 
+        echo -e "${GREEN}Регистрация через wgcli успешна${NC}"
+
+
     else
+
+        echo -e "${YELLOW}wgcli недоступен${NC}"
+        echo -e "${CYAN}Используем резерв:${NC} https://santa-atmo.ru/warp/warp.php"
+
 
         if ! curl -fsSL \
             --max-time 60 \
@@ -185,11 +197,13 @@ register_warp() {
             -o "$REG" \
             >/dev/null 2>&1
         then
-            echo -e "${RED}Не удалось получить WARP${NC}"
+            echo -e "\n${RED}Не удалось получить WARP${NC}\n"
             PAUSE
             return 1
         fi
 
+
+        # Резерв сразу отдаёт готовый конфиг
         if jq -e '.result.config.peers[0].public_key' "$REG" >/dev/null 2>&1; then
 
             PRIV="$(jq -r '.result.key' "$REG")"
@@ -197,11 +211,13 @@ register_warp() {
             WARP_V4="$(jq -r '.result.config.interface.addresses.v4' "$REG")"
             WARP_V6="$(jq -r '.result.config.interface.addresses.v6 // empty' "$REG")"
 
+
             [ -n "$WARP_PEER" ] || {
                 echo -e "\n${RED}Нет peer public_key${NC}\n"
                 PAUSE
                 return 1
             }
+
 
             [ -n "$WARP_V4" ] || {
                 echo -e "\n${RED}Нет IPv4${NC}\n"
@@ -209,7 +225,10 @@ register_warp() {
                 return 1
             }
 
+
+            echo -e "${GREEN}WARP${NC} сгенерирован!"
             return 0
+
 
         else
 
@@ -220,7 +239,11 @@ register_warp() {
         fi
 
     fi
-    
+
+
+
+    # Получаем данные Cloudflare API
+
     REG_ID="$(jq -r '.id' "$REG")"
     REG_TOK="$(jq -r '.token' "$REG")"
 
@@ -231,11 +254,13 @@ register_warp() {
         return 1
     fi
 
+
     if [ -z "$REG_TOK" ] || [ "$REG_TOK" = "null" ]; then
         echo -e "\n${RED}Нет token в ответе${NC}\n"
         PAUSE
         return 1
     fi
+
 
 
     if ! jq -e '.config.peers[0].public_key' "$REG" >/dev/null 2>&1; then
@@ -259,9 +284,12 @@ register_warp() {
 
     fi
 
+
+
     WARP_PEER="$(jq -r '.config.peers[0].public_key' "$WARP")"
     WARP_V4="$(jq -r '.config.interface.addresses.v4' "$WARP")"
     WARP_V6="$(jq -r '.config.interface.addresses.v6 // empty' "$WARP")"
+
 
 
     if [ -z "$WARP_PEER" ] || [ "$WARP_PEER" = "null" ]; then
@@ -276,7 +304,11 @@ register_warp() {
         PAUSE
         return 1
     fi
+
+
+
     echo -e "${GREEN}WARP${NC} сгенерирован!"
+
 }
 
 restart splify() {
