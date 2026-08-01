@@ -300,16 +300,13 @@ echo -en "${YELLOW}Подождите...${NC}"
 
 /usr/local/sbin/splify-disable >/dev/null 2>&1
 /usr/local/sbin/splify-uninstall >/dev/null 2>&1
-
 /usr/local/sbin/splify enable >/dev/null 2>&1
 /usr/local/sbin/splify-agent enable >/dev/null 2>&1
-
 /usr/local/sbin/splify restart >/dev/null 2>&1
 /usr/local/sbin/splify-agent restart 2>/dev/null
-
 /usr/local/sbin/splify-apply >/dev/null 2>&1
-
 /usr/local/sbin/splify-update-domains >/dev/null 2>&1
+sleep 5
 echo -e "\n\nsplify ${GREEN}перезапущен!${NC}"
 }
 
