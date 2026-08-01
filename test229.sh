@@ -247,15 +247,15 @@ ifdown "$WARP_IFACE" >/dev/null 2>&1
 ifup "$WARP_IFACE" >/dev/null 2>&1
 /etc/init.d/ttyd restart >/dev/null 2>&1
 
-echo "списки"
+# echo "списки"
 
-/usr/local/sbin/splify-update-ru >/dev/null 2>&1
-/usr/local/sbin/splify-update-ipsum >/dev/null 2>&1
-/usr/local/sbin/splify-update-domains >/dev/null 2>&1
+# /usr/local/sbin/splify-update-ru >/dev/null 2>&1
+# /usr/local/sbin/splify-update-ipsum >/dev/null 2>&1
+# /usr/local/sbin/splify-update-domains >/dev/null 2>&1
 
-echo "telemetry"
+# echo "telemetry"
 
-/usr/local/sbin/splify-telemetry >/dev/null 2>&1
+# /usr/local/sbin/splify-telemetry >/dev/null 2>&1
 
 echo -e "\n\nsplify ${GREEN}перезапущен!${NC}"
 }
@@ -272,7 +272,7 @@ uci -q delete "network.@${_pt}[-1].allowed_ips"; uci add_list "network.@${_pt}[-
 uci set "network.@${_pt}[-1].endpoint_port=${WARP_EP##*:}"; uci set "network.@${_pt}[-1].persistent_keepalive=25"; echo -e "${CYAN}Перезапускаем сеть${NC}"; uci commit network; /etc/init.d/network restart; /etc/init.d/ttyd restart >/dev/null 2>&1; ifup "$WARP_IFACE" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось запустить ${NC}$WARP_IFACE\n"; PAUSE; return 1; }; }
 # ──────────────────────────── 6. register endpoint in splify ────────────────
 register_in_splify() { _ei=0; while [ -n "$(uci -q get "splify.@endpoint[$_ei]" 2>/dev/null)" ]; do _ei_if="$(uci -q get "splify.@endpoint[$_ei].iface" 2>/dev/null)"; if [ -n "$_ei_if" ] && [ -z "$(uci -q get "network.$_ei_if" 2>/dev/null)" ]
-then uci -q delete "splify.@endpoint[$_ei]"; else _ei=$((_ei + 1)); fi; done; uci commit splify; if grep -q "option iface '$WARP_IFACE'" /etc/config/splify 2>/dev/null; then :; else printf "\nconfig endpoint\n\toption iface '$WARP_IFACE'\n\toption priority '1'\n\toption type 'wg'\n" >> /etc/config/splify; fi; }
+then uci -q delete "splify.@endpoint[$_ei]"; else _ei=$((_ei + 1)); fi; done; uci commit splify; grep -q "option iface '$WARP_IFACE'" /etc/config/splify 2>/dev/null || printf "\nconfig endpoint\n\toption iface '$WARP_IFACE'\n\toption priority '1'\n\toption type 'wg'\n" >> /etc/config/splify; }
 # ──────────────────────────── 7. firewall zone ──────────────────────────────
 setup_firewall() { echo -e "\n${MAGENTA}Создаём зону firewall${NC}"; if /usr/local/sbin/splify-firewall check "$WARP_IFACE" >/dev/null 2>&1
 then echo -e "${CYAN}Зона${NC} firewall ${CYAN}для ${NC}$WARP_IFACE уже настроена${NC}"; else echo -e "${CYAN}Настраиваем зону ${NC}firewall${CYAN} для ${NC}$WARP_IFACE${NC}"; echo -en "${YELLOW}Подождите...${NC}"; /usr/local/sbin/splify-firewall fix "$WARP_IFACE" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось создать зону ${NC}firewall${RED}!${NC}\n"; PAUSE; return 1; }; echo; fi; }
