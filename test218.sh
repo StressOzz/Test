@@ -308,9 +308,11 @@ echo -en "${YELLOW}Подождите...${NC}"
 
 /usr/local/sbin/splify-apply >/dev/null 2>&1
 
+/usr/local/sbin/splify-update-ru >/dev/null 2>&1
+/usr/local/sbin/splify-update-ipsum >/dev/null 2>&1
 /usr/local/sbin/splify-update-domains >/dev/null 2>&1
+/usr/local/sbin/splify-telemetry >/dev/null 2>&1
 
-sleep 5
 echo -e "\n\nsplify ${GREEN}перезапущен!${NC}"
 }
 
