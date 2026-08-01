@@ -149,10 +149,7 @@ reg_url() { if [ -n "$WORKER_URL" ]; then printf '%s/api/%s' "${WORKER_URL%/}" "
             -H "Content-Type: application/json" \
             -H "Accept: application/json" \
             -d "{\"key\":\"$PUB\",\"install_id\":\"\",\"fcm_token\":\"\",\"model\":\"PC\",\"locale\":\"en_US\",\"tos\":\"$TOS\",\"type\":\"Android\"}" \
-            -o "$REG"
-            
-echo "Ответ wgcli:"
-cat "$REG"
+            -o "$REG" >/dev/null 2>&1
 
     }
 
@@ -191,17 +188,7 @@ echo -e "${CYAN}Регистрируем устройство${NC}"
 
     # Основной источник wgcli
     
-if register_request "$(reg_url reg)" && jq -e '.id and .token' "$REG"; then
-
-
-        echo -e "${GREEN}Используется:${NC} $WORKER_URL"
-
-
-    else
-
-        echo -e "${YELLOW}Ошибка регистрации через wgcli${NC}"
-        echo -e "${CYAN}Переключаемся на:${NC} https://santa-atmo.ru/warp/warp.php"
-
+if register_request "$(reg_url reg)" && jq -e '.id and .token' "$REG"; then :; else
 
         if ! curl -fsSL \
             --max-time 60 \
@@ -305,10 +292,6 @@ if register_request "$(reg_url reg)" && jq -e '.id and .token' "$REG"; then
 
 
     echo -e "${GREEN}WARP${NC} сгенерирован!"
-    echo -e "${CYAN}IPv4:${NC} $WARP_V4"
-    echo -e "${CYAN}IPv6:${NC} ${WARP_V6:-нет}"
-    echo -e "${CYAN}Peer:${NC} $WARP_PEER"
-
 }
 
 restart_splify() {
@@ -351,7 +334,7 @@ else echo -e "\n${MAGENTA}Обновляем ${NC}splify"; install_splify || con
 2) DELETE_SPL ;;
 
 3) if [ -z "$SPL_INST_VER" ]; then echo -e "\nsplify ${RED}не установлен!${NC}\n"
-else register_warp || continue; choose_endpoint || continue; create_warp_iface || continue; WARP_TO_ROOT; register_in_splify || continue; restart_splify; echo -e "\n\nWARP ${GREEN}изменён!${NC}\n"; fi; PAUSE ;;
+else register_warp || continue; choose_endpoint || continue; create_warp_iface || continue; WARP_TO_ROOT; register_in_splify || continue; restart_splify; echo -e "WARP ${GREEN}изменён!${NC}\n"; fi; PAUSE ;;
 
 4) if [ -z "$SPL_INST_VER" ]; then echo -e "\nsplify ${RED}не установлен!${NC}\n"
 else register_in_splify || continue; restart_splify; fi; PAUSE ;;
