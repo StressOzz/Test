@@ -164,7 +164,7 @@ register_warp() {
 
     mkdir -p "$(dirname "$REG")"
 
-    echo -e "\n${MAGENTA}Генерируем WARP${NC}"
+    echo -e "${MAGENTA}Генерируем WARP${NC}"
 
     if command -v awg >/dev/null 2>&1; then
         GEN=awg
@@ -318,7 +318,7 @@ else echo -e "${YELLOW}Интерфейс: ${RED}не установлен${NC}"
 if [ "$UPD_SPL" = "0" ]; then echo -e "\n${CYAN}1) ${GREEN}Установить ${NC}splify"; else echo -e "\n${CYAN}1) ${GREEN}Обновить ${NC}splify"; fi; echo -e "${CYAN}2) ${GREEN}Удалить ${NC}splify"; echo -e "${CYAN}3) ${GREEN}Сгенерировать и применить ${NC}WARP"
 echo -e "${CYAN}4) ${GREEN}Перезапустить ${NC}splify"; echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read choiceSP; case "$choiceSP" in
 1) if [ "$UPD_SPL" = "0" ]; then clear; echo -e "${MAGENTA}Устанавливаем ${NC}splify"
-install_splify || continue; install_AWG || continue; register_warp || continue; echo -e "${CYAN}Используем ${NC}endpoint${CYAN}:${NC} $WARP_EP"; create_warp_iface || continue; WARP_TO_ROOT; register_in_splify || continue; setup_firewall || continue; restart_splify; echo -e "splify ${GREEN}установлен!${NC}\n"
+install_splify || continue; install_AWG || continue; echo; register_warp || continue; echo -e "${CYAN}Используем ${NC}endpoint${CYAN}:${NC} $WARP_EP"; create_warp_iface || continue; WARP_TO_ROOT; register_in_splify || continue; setup_firewall || continue; restart_splify; echo -e "splify ${GREEN}установлен!${NC}\n"
 else echo -e "\n${MAGENTA}Обновляем ${NC}splify"; install_splify || continue; register_in_splify || continue; restart_splify; echo -e "splify ${GREEN}обновлён!${NC}\n"; fi; PAUSE ;;
 
 2) DELETE_SPL ;;
