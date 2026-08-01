@@ -188,7 +188,7 @@ echo -e "${CYAN}Регистрируем устройство${NC}"
 
     # Основной источник wgcli
     
-if register_request "$(reg_url reg)" && jq -e '.id and .token' "$REG"; then :; else
+if register_request "$(reg_url reg)" && jq -e '.id and .token' "$REG" >/dev/null 2>&1; then :; else
 
         if ! curl -fsSL \
             --max-time 60 \
