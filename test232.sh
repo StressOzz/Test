@@ -129,52 +129,12 @@ $INSTALL "$TMP_SF/luci-app-splify.$RAZ" >/dev/null 2>&1 || { echo -e "\n${RED}Н
 rm -f /tmp/luci-indexcache* /tmp/luci-modulecache* 2>/dev/null; /etc/init.d/rpcd reload 2>/dev/null || /etc/init.d/rpcd restart 2>/dev/null; sleep 5; }
 # ──────────────────────────── 4. register Cloudflare WARP ───────────────────
 colo_name() { case "$1" in AMS) echo "Amsterdam" ;; ARN) echo "Stockholm" ;; ATH) echo "Athens" ;; BUD) echo "Budapest" ;; FRA) echo "Frankfurt" ;; HEL) echo "Helsinki" ;; IST) echo "Istanbul" ;; KBP) echo "Kiev" ;; KIV) echo "Chisinau" ;; PRG) echo "Prague" ;; RIX) echo "Riga" ;; SOF) echo "Sofia" ;; TLL) echo "Tallinn" ;; VIE) echo "Vienna" ;; VNO) echo "Vilnius" ;; WAW) echo "Warsaw" ;; ZRH) echo "Zurich" ;; *) echo "$1" ;; esac; }
-
-find_best_endpoint() {
-    echo -e "\n${CYAN}Подбираем лучший ${NC}endpoint"
-
-    _prefixes="188.114.96. 188.114.97. 188.114.98. 188.114.99. 162.159.192. 162.159.193. 162.159.195."
-    _candidates=$(awk -v prefixes="$_prefixes" 'BEGIN {
-        srand()
-        n=split(prefixes,a," ")
-        for(i=0;i<50;i++)
-            print a[int(rand()*n)+1] int(rand()*256)
-    }')
-
-    _best=""
-    _ping=9999
-
-    for ip in $_candidates; do
-        trace=$(curl -s --connect-timeout 2 \
-            -H "Host: trace.cloudflare.com" \
-            "http://$ip/cdn-cgi/trace")
-
-        [ -z "$trace" ] && continue
-
-        colo=$(echo "$trace" | awk -F'=' '$1=="colo"{print $2}')
-
-        ping=$(curl -s \
-            --connect-timeout 2 \
-            -o /dev/null \
-            -w "%{time_total}" \
-            "http://$ip" | awk -v t="$ping" 'BEGIN {printf "%.0f", t*1000}')
-
-        [ -n "$ping" ] && [ "$ping" -lt "$_ping" ] && {
-            _ping="$ping"
-            _best="$ip"
-            _colo="$colo"
-        }
-    done
-
-    if [ -n "$_best" ]; then
-        WARP_EP="${_best}:4500"
-        echo -e "${GREEN}Найден:${NC} $WARP_EP ($(colo_name "$_colo"), ${_ping}ms)"
-    else
-        WARP_EP="engage.cloudflareclient.com:4500"
-        echo -e "${YELLOW}Не найден, используем:${NC} $WARP_EP"
-    fi
-}
-
+find_best_endpoint() { echo -e "\n${CYAN}Подбираем лучший ${NC}endpoint"; _prefixes="188.114.96. 188.114.97. 188.114.98. 188.114.99. 162.159.192. 162.159.193. 162.159.195. 8.34.146. 8.39.214. 8.39.204. 8.6.112. 8.35.211. 8.39.125. 8.47.69."
+_candidates=$(awk -v prefixes="$_prefixes" 'BEGIN { srand(); n = split(prefixes, arr, " "); for (i=0; i<100; i++) { idx = int(rand() * n) + 1; last = int(rand() * 256); print arr[idx] last; } }'); _pings="$TMP_SPL/warp_pings"; _count=0
+for ip in $_candidates; do ( if trace_data=$(curl -s --connect-timeout 2 -w "\n%{time_total}" -H "Host: trace.cloudflare.com" "http://${ip}/cdn-cgi/trace"); then colo=$(echo "$trace_data" | awk -F'=' '$1=="colo"{print $2}'); case "$colo" in DME) exit 0 ;; "") exit 0 ;; esac
+ping_ms=$(echo "$trace_data" | tail -n 1 | awk '{printf "%d", $1 * 1000}'); [ -n "$ping_ms" ] && echo "$ping_ms $ip $colo" >> "$_pings"; fi ) & _count=$((_count + 1)); [ $((_count % 20)) -eq 0 ] && wait; done; wait; if [ -s "$_pings" ]
+then _best=$(sort -n "$_pings" | head -n 1); _best_ping=$(echo "$_best" | awk '{print $1}'); _best_ip=$(echo "$_best" | awk '{print $2}'); _best_colo=$(echo "$_best" | awk '{print $3}'); echo -e "\n${CYAN}Используем:${NC} $_best_ip ($(colo_name "$_best_colo"), ping: ${_best_ping}ms)"
+WARP_EP="${_best_ip}:4500"; else WARP_EP="engage.cloudflareclient.com:4500"; echo -e "\n${CYAN}Подбор не удался!\nИспользуем ${NC}endpoint${CYAN}:${NC} $WARP_EP"; fi; }
 choose_endpoint() { echo -e "\n${MAGENTA}Меню выбора endpoint${NC}"; echo -e "${CYAN}1) ${GREEN}Использовать${NC} engage.cloudflareclient.com:4500\n${CYAN}2) ${GREEN}Подобрать ${NC}endpoint${GREEN} автоматически\n${CYAN}3) ${GREEN}Выход в меню splify${NC}"; echo -en "${YELLOW}Выберите пункт (${NC}Enter = 1${YELLOW}): ${NC}"; read -r choiceWRP; case "$choiceWRP" in 3) continue;; 2) find_best_endpoint ;; *) WARP_EP="engage.cloudflareclient.com:4500"; echo -e "\n${CYAN}Используем ${NC}endpoint${CYAN}:${NC} $WARP_EP" ;; esac; }
 
 register_request() {
@@ -268,35 +228,15 @@ register_warp() {
 restart_splify() {
 echo -e "\n${MAGENTA}Перезапускаем splify${NC}"
 echo -en "${YELLOW}Подождите...${NC}"
-
-echo "enable & restart"
-
 /etc/init.d/splify enable >/dev/null 2>&1
 /etc/init.d/splify-agent enable >/dev/null 2>&1
 /etc/init.d/splify restart >/dev/null 2>&1
 /etc/init.d/splify-agent restart 2>/dev/null
-
-echo "splify-apply"
-
 /usr/local/sbin/splify-apply >/dev/null 2>&1
-
-echo "commit network"
-
 uci commit network
 ifdown "$WARP_IFACE" >/dev/null 2>&1
 ifup "$WARP_IFACE" >/dev/null 2>&1
 /etc/init.d/ttyd restart >/dev/null 2>&1
-
-# echo "списки"
-
-# /usr/local/sbin/splify-update-ru >/dev/null 2>&1
-# /usr/local/sbin/splify-update-ipsum >/dev/null 2>&1
-# /usr/local/sbin/splify-update-domains >/dev/null 2>&1
-
-# echo "telemetry"
-
-# /usr/local/sbin/splify-telemetry >/dev/null 2>&1
-
 echo -e "\n\nsplify ${GREEN}перезапущен!${NC}"
 }
 
@@ -323,20 +263,10 @@ else SPL_STATUS="${RED}$SPL_INST_VER (версия устарела)${NC}"; UPD_
 then echo -e "${YELLOW}AmneziaWG: ${GREEN}установлен${NC}"; else echo -e "${YELLOW}AmneziaWG: ${RED}не установлен${NC}"; fi; if uci -q get network.warp0 >/dev/null 2>&1; then echo -e "${YELLOW}Интерфейс: ${GREEN}установлен${NC}"
 else echo -e "${YELLOW}Интерфейс: ${RED}не установлен${NC}"; fi; if uci show firewall | grep -q "network='.*warp0"; then echo -e "${YELLOW}Firewall:  ${GREEN}настроен${NC}"; else echo -e "${YELLOW}Firewall:  ${RED}не настроен${NC}"; fi
 if [ "$UPD_SPL" = "0" ]; then echo -e "\n${CYAN}1) ${GREEN}Установить ${NC}splify"; else echo -e "\n${CYAN}1) ${GREEN}Обновить ${NC}splify"; fi; echo -e "${CYAN}2) ${GREEN}Удалить ${NC}splify"; echo -e "${CYAN}3) ${GREEN}Сгенерировать и применить ${NC}WARP"
-echo -e "${CYAN}4) ${GREEN}Перезапустить ${NC}splify"; echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read choiceSP; case "$choiceSP" in
-1) if [ "$UPD_SPL" = "0" ]; then clear; echo -e "${MAGENTA}Устанавливаем ${NC}splify"
+echo -e "${CYAN}4) ${GREEN}Перезапустить ${NC}splify"; echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read choiceSP; case "$choiceSP" in 1) if [ "$UPD_SPL" = "0" ]; then clear; echo -e "${MAGENTA}Устанавливаем ${NC}splify"
 install_splify || continue; install_AWG || continue; echo; register_warp || continue; echo -e "${CYAN}Используем ${NC}endpoint${CYAN}:${NC} $WARP_EP"; create_warp_iface || continue; WARP_TO_ROOT; register_in_splify || continue; setup_firewall || continue; restart_splify; echo -e "splify ${GREEN}установлен!${NC}\n"
-else echo -e "\n${MAGENTA}Обновляем ${NC}splify"; install_splify || continue; register_in_splify || continue; restart_splify; echo -e "splify ${GREEN}обновлён!${NC}\n"; fi; PAUSE ;;
-
-2) DELETE_SPL ;;
-
-3) if [ -z "$SPL_INST_VER" ]; then echo -e "\nsplify ${RED}не установлен!${NC}\n"
-else clear; register_warp || continue; choose_endpoint || continue; create_warp_iface || continue; WARP_TO_ROOT; register_in_splify || continue; restart_splify; echo -e "\nWARP ${GREEN}изменён!${NC}\n"; fi; PAUSE ;;
-
-4) if [ -z "$SPL_INST_VER" ]; then echo -e "\nsplify ${RED}не установлен!${NC}\n"
-else register_in_splify || continue; restart_splify; fi; echo; PAUSE ;;
-
-*) return ;; esac; done; }
+else echo -e "\n${MAGENTA}Обновляем ${NC}splify"; install_splify || continue; register_in_splify || continue; restart_splify; echo -e "splify ${GREEN}обновлён!${NC}\n"; fi; PAUSE ;; 2) DELETE_SPL ;; 3) if [ -z "$SPL_INST_VER" ]; then echo -e "\nsplify ${RED}не установлен!${NC}\n"
+else clear; register_warp || continue; choose_endpoint || continue; create_warp_iface || continue; WARP_TO_ROOT; register_in_splify || continue; restart_splify; echo -e "\nWARP ${GREEN}изменён!${NC}\n"; fi; PAUSE ;; 4) if [ -z "$SPL_INST_VER" ]; then echo -e "\nsplify ${RED}не установлен!${NC}\n"; else register_in_splify || continue; restart_splify; fi; echo; PAUSE ;; *) return ;; esac; done; }
 uget() { uci -q get "$1" 2>/dev/null; }
 DELETE_SPL() { echo -e "\n${MAGENTA}Удаляем splify${NC}"; 
 # ──────────────────────────── 1. stop splify services ───────────────────────
