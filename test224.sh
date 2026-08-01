@@ -139,7 +139,7 @@ choose_endpoint() { echo -e "\n${MAGENTA}Меню выбора endpoint${NC}"; e
 
 reg_url() { if [ -n "$WORKER_URL" ]; then printf '%s/api/%s' "${WORKER_URL%/}" "$1"; else printf '%s/%s/%s' "$CF_DIRECT" "$CF_API_VERSION" "$1"; fi; }
 
-    register_request() {
+register_request() {
 
         curl -fsSL \
             --max-time 30 \
@@ -296,7 +296,6 @@ ifup "$WARP_IFACE" >/dev/null 2>&1
 
 /etc/init.d/ttyd restart >/dev/null 2>&1
 
-sleep 5
 echo -e "\n\nsplify ${GREEN}перезапущен!${NC}"
 }
 
