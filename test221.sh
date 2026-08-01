@@ -324,7 +324,7 @@ else echo -e "\n${MAGENTA}Обновляем ${NC}splify"; install_splify || con
 2) DELETE_SPL ;;
 
 3) if [ -z "$SPL_INST_VER" ]; then echo -e "\nsplify ${RED}не установлен!${NC}\n"
-else register_warp || continue; choose_endpoint || continue; create_warp_iface || continue; WARP_TO_ROOT; register_in_splify || continue; restart_splify; echo -e "WARP ${GREEN}изменён!${NC}\n"; fi; PAUSE ;;
+else clear; register_warp || continue; choose_endpoint || continue; create_warp_iface || continue; WARP_TO_ROOT; register_in_splify || continue; restart_splify; echo -e "\nWARP ${GREEN}изменён!${NC}\n"; fi; PAUSE ;;
 
 4) if [ -z "$SPL_INST_VER" ]; then echo -e "\nsplify ${RED}не установлен!${NC}\n"
 else register_in_splify || continue; restart_splify; fi; echo; PAUSE ;;
