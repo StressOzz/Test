@@ -173,12 +173,13 @@ register_warp() {
 
     echo -e "${CYAN}Регистрируем устройство${NC}"
 
+    echo -e "${CYAN}Используем основной сервер${NC}"
     if register_request && jq -e '.config.peers[0].public_key' "$REG" >/dev/null 2>&1; then
 
         :
 
     else
-
+    echo -e "${CYAN}Используем резервный сервер${NC}"
         if ! curl -fsSL \
             --max-time 60 \
             "$WARP_BACKUP_URL" \
@@ -231,23 +232,21 @@ echo -en "${YELLOW}Подождите...${NC}"
 
 /etc/init.d/splify enable >/dev/null 2>&1
 /etc/init.d/splify-agent enable >/dev/null 2>&1
+/etc/init.d/splify restart >/dev/null 2>&1
+/etc/init.d/splify-agent restart 2>/dev/null
+
+/usr/local/sbin/splify-apply >/dev/null 2>&1
 
 uci commit network
 ifdown "$WARP_IFACE" >/dev/null 2>&1
 ifup "$WARP_IFACE" >/dev/null 2>&1
-
-/etc/init.d/splify restart >/dev/null 2>&1
-/etc/init.d/splify-agent restart >/dev/null 2>&1
-
-/usr/local/sbin/splify-apply >/dev/null 2>&1
+/etc/init.d/ttyd restart >/dev/null 2>&1
 
 /usr/local/sbin/splify-update-ru >/dev/null 2>&1
 /usr/local/sbin/splify-update-ipsum >/dev/null 2>&1
 /usr/local/sbin/splify-update-domains >/dev/null 2>&1
 
 /usr/local/sbin/splify-telemetry >/dev/null 2>&1
-
-/etc/init.d/ttyd restart >/dev/null 2>&1
 
 echo -e "\n\nsplify ${GREEN}перезапущен!${NC}"
 }
