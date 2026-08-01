@@ -273,10 +273,8 @@ if register_request "$(reg_url reg)" && jq -e '.id and .token' "$REG" >/dev/null
 }
 
 restart_splify() {
-echo -e "\n${MAGENTA}Перезапускаем ${NC}splify"
+echo -e "\n${MAGENTA}Перезапускаем splify${NC}"
 echo -en "${YELLOW}Подождите...${NC}"
-
-/usr/local/sbin/splify-disable >/dev/null 2>&1
 
 /etc/init.d/splify enable >/dev/null 2>&1
 /etc/init.d/splify-agent enable >/dev/null 2>&1
