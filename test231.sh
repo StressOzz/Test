@@ -130,21 +130,49 @@ rm -f /tmp/luci-indexcache* /tmp/luci-modulecache* 2>/dev/null; /etc/init.d/rpcd
 # ──────────────────────────── 4. register Cloudflare WARP ───────────────────
 colo_name() { case "$1" in AMS) echo "Amsterdam" ;; ARN) echo "Stockholm" ;; ATH) echo "Athens" ;; BUD) echo "Budapest" ;; FRA) echo "Frankfurt" ;; HEL) echo "Helsinki" ;; IST) echo "Istanbul" ;; KBP) echo "Kiev" ;; KIV) echo "Chisinau" ;; PRG) echo "Prague" ;; RIX) echo "Riga" ;; SOF) echo "Sofia" ;; TLL) echo "Tallinn" ;; VIE) echo "Vienna" ;; VNO) echo "Vilnius" ;; WAW) echo "Warsaw" ;; ZRH) echo "Zurich" ;; *) echo "$1" ;; esac; }
 
-find_best_endpoint() { echo -e "\n${CYAN}Подбираем лучший ${NC}endpoint"; _prefixes="188.114.96. 188.114.97. 188.114.98. 188.114.99. 162.159.192. 162.159.193. 162.159.195."; _best=""; _ping=9999
+find_best_endpoint() {
+    echo -e "\n${CYAN}Подбираем лучший ${NC}endpoint"
 
-for ip in $(awk -v p="$_prefixes" 'BEGIN{srand();n=split(p,a," ");for(i=0;i<50;i++)print a[int(rand()*n)+1] int(rand()*256)}'); do
-    t=$(curl -s --connect-timeout 2 -w "%{time_total}" -H "Host: trace.cloudflare.com" "http://$ip/cdn-cgi/trace")
-    [ -n "$t" ] && ms=$(awk "BEGIN{printf \"%.0f\",$t*1000}") || continue
-    [ "$ms" -lt "$_ping" ] && _ping=$ms && _best=$ip
-done
+    _prefixes="188.114.96. 188.114.97. 188.114.98. 188.114.99. 162.159.192. 162.159.193. 162.159.195."
+    _candidates=$(awk -v prefixes="$_prefixes" 'BEGIN {
+        srand()
+        n=split(prefixes,a," ")
+        for(i=0;i<50;i++)
+            print a[int(rand()*n)+1] int(rand()*256)
+    }')
 
-if [ -n "$_best" ]; then
-    WARP_EP="${_best}:4500"
-    echo -e "${CYAN}Используем:${NC} $WARP_EP (${_ping}ms)"
-else
-    WARP_EP="engage.cloudflareclient.com:4500"
-    echo -e "${YELLOW}Используем стандартный:${NC} $WARP_EP"
-fi
+    _best=""
+    _ping=9999
+
+    for ip in $_candidates; do
+        trace=$(curl -s --connect-timeout 2 \
+            -H "Host: trace.cloudflare.com" \
+            "http://$ip/cdn-cgi/trace")
+
+        [ -z "$trace" ] && continue
+
+        colo=$(echo "$trace" | awk -F'=' '$1=="colo"{print $2}')
+
+        ping=$(curl -s \
+            --connect-timeout 2 \
+            -o /dev/null \
+            -w "%{time_total}" \
+            "http://$ip" | awk -v t="$ping" 'BEGIN {printf "%.0f", t*1000}')
+
+        [ -n "$ping" ] && [ "$ping" -lt "$_ping" ] && {
+            _ping="$ping"
+            _best="$ip"
+            _colo="$colo"
+        }
+    done
+
+    if [ -n "$_best" ]; then
+        WARP_EP="${_best}:4500"
+        echo -e "${GREEN}Найден:${NC} $WARP_EP ($(colo_name "$_colo"), ${_ping}ms)"
+    else
+        WARP_EP="engage.cloudflareclient.com:4500"
+        echo -e "${YELLOW}Не найден, используем:${NC} $WARP_EP"
+    fi
 }
 
 choose_endpoint() { echo -e "\n${MAGENTA}Меню выбора endpoint${NC}"; echo -e "${CYAN}1) ${GREEN}Использовать${NC} engage.cloudflareclient.com:4500\n${CYAN}2) ${GREEN}Подобрать ${NC}endpoint${GREEN} автоматически\n${CYAN}3) ${GREEN}Выход в меню splify${NC}"; echo -en "${YELLOW}Выберите пункт (${NC}Enter = 1${YELLOW}): ${NC}"; read -r choiceWRP; case "$choiceWRP" in 3) continue;; 2) find_best_endpoint ;; *) WARP_EP="engage.cloudflareclient.com:4500"; echo -e "\n${CYAN}Используем ${NC}endpoint${CYAN}:${NC} $WARP_EP" ;; esac; }
