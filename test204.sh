@@ -126,7 +126,7 @@ SPL_RUS="https://github.com/xyzmean/splify/releases/download/v$SPL_VER/luci-i18n
 wget -q -U "Mozilla/5.0" -O "$TMP_SF/luci-app-splify.$RAZ" "$SPL_LUCI" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$SPL_LUCI\n"; PAUSE; return 1; }; wget -q -U "Mozilla/5.0" -O "$TMP_SF/luci-i18n-splify-ru.$RAZ" "$SPL_RUS" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$SPL_RUS\n"; PAUSE; return 1; }
 update_packages || return 1; echo -e "${CYAN}Устанавливаем ${NC}splify"; $INSTALL "$TMP_SF/splify.$RAZ" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить:\n${NC}$SPL_SPL\n"; PAUSE; return 1; }
 $INSTALL "$TMP_SF/luci-app-splify.$RAZ" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить:\n${NC}$SPL_LUCI\n"; PAUSE; return 1; }; $INSTALL "$TMP_SF/luci-i18n-splify-ru.$RAZ" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить:\n${NC}$SPL_RUS\n"; PAUSE; return 1; }
-rm -f /tmp/luci-indexcache* /tmp/luci-modulecache* 2>/dev/null; /etc/init.d/rpcd reload 2>/dev/null || /etc/init.d/rpcd restart 2>/dev/null; }
+rm -f /tmp/luci-indexcache* /tmp/luci-modulecache* 2>/dev/null; /etc/init.d/rpcd reload 2>/dev/null || /etc/init.d/rpcd restart 2>/dev/null; sleep 5; }
 # ──────────────────────────── 4. register Cloudflare WARP ───────────────────
 colo_name() { case "$1" in AMS) echo "Amsterdam" ;; ARN) echo "Stockholm" ;; ATH) echo "Athens" ;; BUD) echo "Budapest" ;; FRA) echo "Frankfurt" ;; HEL) echo "Helsinki" ;; IST) echo "Istanbul" ;; KBP) echo "Kiev" ;; KIV) echo "Chisinau" ;; PRG) echo "Prague" ;; RIX) echo "Riga" ;; SOF) echo "Sofia" ;; TLL) echo "Tallinn" ;; VIE) echo "Vienna" ;; VNO) echo "Vilnius" ;; WAW) echo "Warsaw" ;; ZRH) echo "Zurich" ;; *) echo "$1" ;; esac; }
 find_best_endpoint() { echo -e "\n${CYAN}Подбираем лучший ${NC}endpoint"; _prefixes="188.114.96. 188.114.97. 188.114.98. 188.114.99. 162.159.192. 162.159.193. 162.159.195. 8.34.146. 8.39.214. 8.39.204. 8.6.112. 8.35.211. 8.39.125. 8.47.69."
@@ -138,6 +138,22 @@ WARP_EP="${_best_ip}:4500"; else WARP_EP="engage.cloudflareclient.com:4500"; ech
 choose_endpoint() { echo -e "\n${MAGENTA}Меню выбора endpoint${NC}"; echo -e "${CYAN}1) ${GREEN}Использовать${NC} engage.cloudflareclient.com:4500\n${CYAN}2) ${GREEN}Подобрать ${NC}endpoint${GREEN} автоматически\n${CYAN}3) ${GREEN}Выход в меню splify${NC}"; echo -en "${YELLOW}Выберите пункт (${NC}Enter = 1${YELLOW}): ${NC}"; read -r choiceWRP; case "$choiceWRP" in 3) continue;; 2) find_best_endpoint ;; *) WARP_EP="engage.cloudflareclient.com:4500"; echo -e "\n${CYAN}Используем ${NC}endpoint${CYAN}:${NC} $WARP_EP" ;; esac; }
 
 reg_url() { if [ -n "$WORKER_URL" ]; then printf '%s/api/%s' "${WORKER_URL%/}" "$1"; else printf '%s/%s/%s' "$CF_DIRECT" "$CF_API_VERSION" "$1"; fi; }
+
+    register_request() {
+
+        curl -fsSL \
+            --max-time 30 \
+            -X POST "$1" \
+            -H "User-Agent: $CF_UA" \
+            -H "CF-Client-Version: $CF_CLIENT_VER" \
+            -H "Content-Type: application/json" \
+            -H "Accept: application/json" \
+            -d "{\"key\":\"$PUB\",\"install_id\":\"\",\"fcm_token\":\"\",\"model\":\"PC\",\"locale\":\"en_US\",\"tos\":\"$TOS\",\"type\":\"Android\"}" \
+            -o "$REG" \
+            >/dev/null 2>&1
+
+    }
+
 register_warp() {
 
     echo -e "\n${MAGENTA}Генерируем WARP${NC}"
@@ -157,28 +173,12 @@ register_warp() {
 
     rm -f "$REG" "$WARP"
 
-
-    register_request() {
-
-        curl -fsSL \
-            --max-time 30 \
-            -X POST "$1" \
-            -H "User-Agent: $CF_UA" \
-            -H "CF-Client-Version: $CF_CLIENT_VER" \
-            -H "Content-Type: application/json" \
-            -H "Accept: application/json" \
-            -d "{\"key\":\"$PUB\",\"install_id\":\"\",\"fcm_token\":\"\",\"model\":\"PC\",\"locale\":\"en_US\",\"tos\":\"$TOS\",\"type\":\"Android\"}" \
-            -o "$REG" \
-            >/dev/null 2>&1
-
-    }
-
-
     echo -e "${CYAN}Регистрируем устройство${NC}"
 
 
     # Основной источник wgcli
-    if register_request "$(reg_url reg)" && jq -e '.id and .token' "$REG" >/dev/null 2>&1; then
+#################################################################    if register_request "$(reg_url reg)" && jq -e '.id and .token' "$REG" >/dev/null 2>&1; then
+if register_request "$(reg_url reg)"; then
 
         echo -e "${GREEN}Используется:${NC} $WORKER_URL"
 
