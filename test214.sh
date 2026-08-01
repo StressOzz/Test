@@ -298,17 +298,18 @@ restart_splify() {
 echo -e "\n${MAGENTA}Перезапускаем ${NC}splify"
 echo -en "${YELLOW}Подождите...${NC}"
 
-/usr/local/sbin/splify-disable 2>/dev/null
-/usr/local/sbin/splify-uninstall 2>/dev/null
+/usr/local/sbin/splify-disable >/dev/null 2>&1
+/usr/local/sbin/splify-uninstall >/dev/null 2>&1
 
-/usr/local/sbin/splify enable 2>/dev/null
-/usr/local/sbin/splify-agent enable 2>/dev/null
+/usr/local/sbin/splify enable >/dev/null 2>&1
+/usr/local/sbin/splify-agent enable >/dev/null 2>&1
 
-/usr/local/sbin/splify restart 2>/dev/null
+/usr/local/sbin/splify restart >/dev/null 2>&1
 /usr/local/sbin/splify-agent restart 2>/dev/null
 
 /usr/local/sbin/splify-apply >/dev/null 2>&1
 
+/usr/local/sbin/splify-update-domains >/dev/null 2>&1
 echo -e "\n\nsplify ${GREEN}перезапущен!${NC}"
 }
 
