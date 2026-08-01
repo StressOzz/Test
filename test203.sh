@@ -302,7 +302,6 @@ echo -e "\n${MAGENTA}Перезапускаем ${NC}splify"
 echo -en "${YELLOW}Подождите...${NC}"; 
 for s in splify splify-agent; do "/etc/init.d/$s" enable 2>/dev/null; done; for s in splify splify-agent; do "/etc/init.d/$s" restart 2>/dev/null; done
 /usr/local/sbin/splify-apply >/dev/null 2>&1
-echo -e "\n${MAGENTA}Перезапускаем ${NC}splify"
 echo -e "\n\nsplify ${GREEN}перезапущен!${NC}\n"
 }
 
@@ -321,7 +320,7 @@ register_in_splify() { _ei=0; while [ -n "$(uci -q get "splify.@endpoint[$_ei]" 
 then uci -q delete "splify.@endpoint[$_ei]"; else _ei=$((_ei + 1)); fi; done; uci commit splify; if grep -q "option iface '$WARP_IFACE'" /etc/config/splify 2>/dev/null; then echo -e "${CYAN}Применяем настройки${NC}"; else echo -e "${CYAN}Применяем настройки${NC}"
 printf "\nconfig endpoint\n\toption iface '$WARP_IFACE'\n\toption priority '1'\n\toption type 'wg'\n" >> /etc/config/splify; fi; }
 # ──────────────────────────── 7. firewall zone ──────────────────────────────
-setup_firewall() { echo -e "\n\n${MAGENTA}Создаём зону firewall${NC}"; if /usr/local/sbin/splify-firewall check "$WARP_IFACE" >/dev/null 2>&1
+setup_firewall() { echo -e "\n${MAGENTA}Создаём зону firewall${NC}"; if /usr/local/sbin/splify-firewall check "$WARP_IFACE" >/dev/null 2>&1
 then echo -e "${CYAN}Зона${NC} firewall ${CYAN}для ${NC}$WARP_IFACE уже настроена${NC}"; else echo -e "${CYAN}Настраиваем зону ${NC}firewall${CYAN} для ${NC}$WARP_IFACE${NC}"; echo -en "${YELLOW}Подождите...${NC}"; /usr/local/sbin/splify-firewall fix "$WARP_IFACE" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось создать зону ${NC}firewall${RED}!${NC}\n"; PAUSE; return 1; }; echo; fi; }
 # ──────────────────────────── main ──────────────────────────────────────────
 SPL_V_VER() { if [ "$PKG_IS_APK" -eq 1 ]; then SPL_INST_VER=$(awk '$0=="P:splify"{f=1} f&&/^V:/{v=substr($0,3);sub(/-r[0-9]+$/,"",v);print v;exit}' /lib/apk/db/installed); else SPL_INST_VER=$(opkg list-installed splify 2>/dev/null | awk '{sub(/(-r[0-9]+|-[0-9]+)$/, "", $3); print $3}'); fi; }
