@@ -149,13 +149,15 @@ reg_url() { if [ -n "$WORKER_URL" ]; then printf '%s/api/%s' "${WORKER_URL%/}" "
             -H "Content-Type: application/json" \
             -H "Accept: application/json" \
             -d "{\"key\":\"$PUB\",\"install_id\":\"\",\"fcm_token\":\"\",\"model\":\"PC\",\"locale\":\"en_US\",\"tos\":\"$TOS\",\"type\":\"Android\"}" \
-            -o "$REG" \
-            >/dev/null 2>&1
+            -o "$REG"
+            
+echo "Ответ wgcli:"
+cat "$REG"
 
     }
 
 register_warp() {
-
+    rm -f "$TMP_SPL/reg.json" "$TMP_SPL/warp.json"
     echo -e "\n${MAGENTA}Генерируем WARP${NC}"
 
     if command -v awg >/dev/null 2>&1; then
