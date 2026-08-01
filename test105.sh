@@ -142,6 +142,21 @@ then _best=$(sort -n "$_pings" | head -n 1); _best_ping=$(echo "$_best" | awk '{
 WARP_EP="${_best_ip}:4500"; else WARP_EP="engage.cloudflareclient.com:4500"; echo -e "\n${CYAN}Подбор не удался!\nИспользуем ${NC}endpoint${CYAN}:${NC} $WARP_EP"; fi; }
 choose_endpoint() { echo -e "\n${MAGENTA}Меню выбора endpoint${NC}"; echo -e "${CYAN}1) ${GREEN}Использовать${NC} engage.cloudflareclient.com:4500"; echo -e "${CYAN}2) ${GREEN}Подобрать ${NC}endpoint${GREEN} автоматически${NC}"; echo -en "${YELLOW}Выберите пункт (${NC}Enter = 1${YELLOW}): ${NC}"; read -r choiceWRP; case "$choiceWRP" in 3) continue;; 2) find_best_endpoint ;; *) WARP_EP="engage.cloudflareclient.com:4500"; echo -e "\n${CYAN}Используем ${NC}endpoint${CYAN}:${NC} $WARP_EP" ;; esac; }
 
+register_request() {
+
+        curl -fsSL \
+            --max-time 30 \
+            -X POST "$1" \
+            -H "User-Agent: $CF_UA" \
+            -H "CF-Client-Version: $CF_CLIENT_VER" \
+            -H "Content-Type: application/json" \
+            -H "Accept: application/json" \
+            -d "{\"key\":\"$PUB\",\"install_id\":\"\",\"fcm_token\":\"\",\"model\":\"PC\",\"locale\":\"en_US\",\"tos\":\"$TOS\",\"type\":\"Android\"}" \
+            -o "$REG" \
+            >/dev/null 2>&1
+
+    }
+
 register_warp() {
     echo -e "\n${MAGENTA}Генерируем WARP${NC}"
 
@@ -158,37 +173,11 @@ register_warp() {
     REG="$TMP_SPL/reg.json"
     WARP="$TMP_SPL/warp.json"
 
-
-    register_request() {
-
-        curl -fsSL \
-            --max-time 30 \
-            -X POST "$1" \
-            -H "User-Agent: $CF_UA" \
-            -H "CF-Client-Version: $CF_CLIENT_VER" \
-            -H "Content-Type: application/json" \
-            -H "Accept: application/json" \
-            -d "{\"key\":\"$PUB\",\"install_id\":\"\",\"fcm_token\":\"\",\"model\":\"PC\",\"locale\":\"en_US\",\"tos\":\"$TOS\",\"type\":\"Android\"}" \
-            -o "$REG" \
-            >/dev/null 2>&1
-
-    }
-
-
     echo -e "${CYAN}Регистрируем устройство${NC}"
 
-
-    # пробуем wgcli
     if register_request "$(reg_url reg)"; then
 
-        echo -e "${GREEN}Используется:${NC} $WORKER_URL"
-
-
     else
-
-        echo -e "${YELLOW}Ошибка регистрации через wgcli${NC}"
-        echo -e "${CYAN}Переключаемся на:${NC} https://santa-atmo.ru/warp/warp.php"
-
 
         if ! curl -fsSL \
             --max-time 60 \
@@ -201,11 +190,7 @@ register_warp() {
             return 1
         fi
 
-
-        # проверяем готовый конфиг
         if jq -e '.result.config.peers[0].public_key' "$REG" >/dev/null 2>&1; then
-
-            echo -e "${GREEN}Получена готовая конфигурация WARP${NC}"
 
             PRIV="$(jq -r '.result.key' "$REG")"
             WARP_PEER="$(jq -r '.result.config.peers[0].public_key' "$REG")"
@@ -213,12 +198,14 @@ register_warp() {
             WARP_V6="$(jq -r '.result.config.interface.addresses.v6 // empty' "$REG")"
 
             [ -n "$WARP_PEER" ] || {
-                echo -e "${RED}Нет peer public_key${NC}"
+                echo -e "\n${RED}Нет peer public_key${NC}\n"
+                PAUSE
                 return 1
             }
 
             [ -n "$WARP_V4" ] || {
-                echo -e "${RED}Нет IPv4${NC}"
+                echo -e "\n${RED}Нет IPv4${NC}\n"
+                PAUSE
                 return 1
             }
 
@@ -226,28 +213,27 @@ register_warp() {
 
         else
 
-            echo -e "${RED}Резервный источник вернул неверный формат${NC}"
+            echo -e "\n${RED}Резервный источник вернул неверный формат${NC}\n"
+            PAUSE
             return 1
 
         fi
 
     fi
-
-
-
-    # старый поток Cloudflare API
-
+    
     REG_ID="$(jq -r '.id' "$REG")"
     REG_TOK="$(jq -r '.token' "$REG")"
 
 
     if [ -z "$REG_ID" ] || [ "$REG_ID" = "null" ]; then
-        echo -e "${RED}Нет id в ответе${NC}"
+        echo -e "\n${RED}Нет id в ответе${NC}\n"
+        PAUSE
         return 1
     fi
 
     if [ -z "$REG_TOK" ] || [ "$REG_TOK" = "null" ]; then
-        echo -e "${RED}Нет token в ответе${NC}"
+        echo -e "\n${RED}Нет token в ответе${NC}\n"
+        PAUSE
         return 1
     fi
 
@@ -273,30 +259,24 @@ register_warp() {
 
     fi
 
-
-
     WARP_PEER="$(jq -r '.config.peers[0].public_key' "$WARP")"
     WARP_V4="$(jq -r '.config.interface.addresses.v4' "$WARP")"
     WARP_V6="$(jq -r '.config.interface.addresses.v6 // empty' "$WARP")"
 
 
     if [ -z "$WARP_PEER" ] || [ "$WARP_PEER" = "null" ]; then
-        echo -e "${RED}Нет peer public_key${NC}"
+        echo -e "\n${RED}Нет peer public_key${NC}\n"
+        PAUSE
         return 1
     fi
 
 
     if [ -z "$WARP_V4" ] || [ "$WARP_V4" = "null" ]; then
-        echo -e "${RED}Нет IPv4${NC}"
+        echo -e "\n${RED}Нет IPv4${NC}\n"
+        PAUSE
         return 1
     fi
-
-
-    echo -e "${GREEN}WARP получен${NC}"
-    echo -e "${CYAN}IPv4:${NC} $WARP_V4"
-    echo -e "${CYAN}IPv6:${NC} ${WARP_V6:-нет}"
-    echo -e "${CYAN}Peer:${NC} $WARP_PEER"
-
+    echo -e "${GREEN}WARP${NC} сгенерирован!"
 }
 
 
