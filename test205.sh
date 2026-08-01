@@ -171,14 +171,17 @@ register_warp() {
     REG="$TMP_SPL/reg.json"
     WARP="$TMP_SPL/warp.json"
 
-    rm -f "$REG" "$WARP"
+rm -f "$REG" "$WARP"
+: > "$REG"
+: > "$WARP"
 
-    echo -e "${CYAN}Регистрируем устройство${NC}"
+echo -e "${CYAN}Регистрируем устройство${NC}"
 
 
     # Основной источник wgcli
-#################################################################    if register_request "$(reg_url reg)" && jq -e '.id and .token' "$REG" >/dev/null 2>&1; then
-if register_request "$(reg_url reg)"; then
+    
+if register_request "$(reg_url reg)" && jq -e '.id and .token' "$REG"; then
+
 
         echo -e "${GREEN}Используется:${NC} $WORKER_URL"
 
@@ -302,7 +305,7 @@ echo -e "\n${MAGENTA}Перезапускаем ${NC}splify"
 echo -en "${YELLOW}Подождите...${NC}"; 
 for s in splify splify-agent; do "/etc/init.d/$s" enable 2>/dev/null; done; for s in splify splify-agent; do "/etc/init.d/$s" restart 2>/dev/null; done
 /usr/local/sbin/splify-apply >/dev/null 2>&1
-echo -e "\n\nsplify ${GREEN}перезапущен!${NC}\n"
+echo -e "\n\nsplify ${GREEN}перезапущен!${NC}"
 }
 
 WARP_TO_ROOT() { printf '%s\n' "[Interface]" "PrivateKey = $PRIV" "Address = $WARP_V4${WARP_V6:+, $WARP_V6}" "DNS = 8.8.8.8, 8.8.4.4, 2001:4860:4860::8888, 2001:4860:4860::8844" "MTU = 1280" "S1 = $AWG_S1" "S2 = $AWG_S2" "Jc = $AWG_JC" "Jmin = $AWG_JMIN" "Jmax = $AWG_JMAX" "H1 = $AWG_H1" "H2 = $AWG_H2" "H3 = $AWG_H3" "H4 = $AWG_H4" "I1 = $AWG_I1" "" "[Peer]" "PublicKey = $WARP_PEER" "AllowedIPs = 0.0.0.0/0, ::/0" "Endpoint = $WARP_EP" "PersistentKeepalive = 25" > /root/WARP.conf; echo -e "${YELLOW}Файл ${NC}WARP${YELLOW} сохранён в ${NC}/root/WARP.conf"; }
@@ -331,8 +334,8 @@ else echo -e "${YELLOW}Интерфейс: ${RED}не установлен${NC}"
 if [ "$UPD_SPL" = "0" ]; then echo -e "\n${CYAN}1) ${GREEN}Установить ${NC}splify"; else echo -e "\n${CYAN}1) ${GREEN}Обновить ${NC}splify"; fi; echo -e "${CYAN}2) ${GREEN}Удалить ${NC}splify"; echo -e "${CYAN}3) ${GREEN}Сгенерировать и применить ${NC}WARP"
 echo -e "${CYAN}4) ${GREEN}Перезапустить ${NC}splify"; echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read choiceSP; case "$choiceSP" in
 1) if [ "$UPD_SPL" = "0" ]; then clear; echo -e "${MAGENTA}Устанавливаем ${NC}splify"
-install_splify || continue; install_AWG || continue; register_warp || continue; echo -e "${CYAN}Используем ${NC}endpoint${CYAN}:${NC} $WARP_EP"; create_warp_iface || continue; WARP_TO_ROOT; register_in_splify || continue; setup_firewall || continue; restart_splify; echo -e "\nsplify ${GREEN}установлен!${NC}\n"
-else echo -e "\n${MAGENTA}Обновляем ${NC}splify"; install_splify || continue; register_in_splify || continue; echo -e "\n\nsplify ${GREEN}обновлён!${NC}\n"; fi; PAUSE ;;
+install_splify || continue; install_AWG || continue; register_warp || continue; echo -e "${CYAN}Используем ${NC}endpoint${CYAN}:${NC} $WARP_EP"; create_warp_iface || continue; WARP_TO_ROOT; register_in_splify || continue; setup_firewall || continue; restart_splify; echo -e "splify ${GREEN}установлен!${NC}\n"
+else echo -e "\n${MAGENTA}Обновляем ${NC}splify"; install_splify || continue; register_in_splify || continue; restart_splify; echo -e "splify ${GREEN}обновлён!${NC}\n"; fi; PAUSE ;;
 
 2) DELETE_SPL ;;
 
