@@ -112,8 +112,8 @@ MSG=0; for f in stun2.bin quic_initial_tencent_com.bin quic_initial_steamcommuni
 # ==========================================
 # splify
 # ==========================================
-REPO="xyzmean/splify"; API="https://api.github.com/repos/$REPO/releases/latest"; CF_API_VERSION="v0a1922"; CF_UA="okhttp/3.12.1"; CF_CLIENT_VER="a-6.3-1922"
-WORKER_URL="${WORKER_URL:-https://wgcli.vercel.app}"
+REPO="xyzmean/splify"; API="https://api.github.com/repos/$REPO/releases/latest"
+WORKER_URL="https://wgcli.vercel.app"
 WARP_BACKUP_URL="https://santa-atmo.ru/warp/warp.php"
 WARP_EP="engage.cloudflareclient.com:4500"; WARP_IFACE="warp0"; TMP_SPL="/tmp/splify"
 AWG_JC=4; AWG_JMIN=40; AWG_JMAX=70; AWG_H1=1; AWG_H2=2; AWG_H3=3; AWG_H4=4; AWG_S1=0; AWG_S2=0; AWG_JMAX=70; AWG_H1=1; AWG_H2=2; AWG_H3=3; AWG_H4=4; AWG_S1=0; AWG_S2=0
@@ -137,32 +137,27 @@ then _best=$(sort -n "$_pings" | head -n 1); _best_ping=$(echo "$_best" | awk '{
 WARP_EP="${_best_ip}:4500"; else WARP_EP="engage.cloudflareclient.com:4500"; echo -e "\n${CYAN}Подбор не удался!\nИспользуем ${NC}endpoint${CYAN}:${NC} $WARP_EP"; fi; }
 choose_endpoint() { echo -e "\n${MAGENTA}Меню выбора endpoint${NC}"; echo -e "${CYAN}1) ${GREEN}Использовать${NC} engage.cloudflareclient.com:4500\n${CYAN}2) ${GREEN}Подобрать ${NC}endpoint${GREEN} автоматически\n${CYAN}3) ${GREEN}Выход в меню splify${NC}"; echo -en "${YELLOW}Выберите пункт (${NC}Enter = 1${YELLOW}): ${NC}"; read -r choiceWRP; case "$choiceWRP" in 3) continue;; 2) find_best_endpoint ;; *) WARP_EP="engage.cloudflareclient.com:4500"; echo -e "\n${CYAN}Используем ${NC}endpoint${CYAN}:${NC} $WARP_EP" ;; esac; }
 
-reg_url() { if [ -n "$WORKER_URL" ]; then printf '%s/api/%s' "${WORKER_URL%/}" "$1"; else printf '%s/%s/%s' "$CF_DIRECT" "$CF_API_VERSION" "$1"; fi; }
-
 register_request() {
 
-        curl -fsSL \
-            --max-time 30 \
-            -X POST "$1" \
-            -H "User-Agent: $CF_UA" \
-            -H "CF-Client-Version: $CF_CLIENT_VER" \
-            -H "Content-Type: application/json" \
-            -H "Accept: application/json" \
-            -d "{\"key\":\"$PUB\",\"install_id\":\"\",\"fcm_token\":\"\",\"model\":\"PC\",\"locale\":\"en_US\",\"tos\":\"$TOS\",\"type\":\"Android\"}" \
-            -o "$REG" >/dev/null 2>&1
+    curl -fsSL \
+        --max-time 30 \
+        -X POST "${WORKER_URL%/}/api/reg" \
+        -H "User-Agent: $CF_UA" \
+        -H "CF-Client-Version: $CF_CLIENT_VER" \
+        -H "Content-Type: application/json" \
+        -H "Accept: application/json" \
+        -d "{\"key\":\"$PUB\",\"install_id\":\"\",\"fcm_token\":\"\",\"model\":\"PC\",\"locale\":\"en_US\",\"tos\":\"$TOS\",\"type\":\"Android\"}" \
+        -o "$REG" >/dev/null 2>&1
 
-    }
+}
 
 register_warp() {
 
     [ -d "$TMP_SPL" ] || mkdir -p "$TMP_SPL"
 
     REG="$TMP_SPL/reg.json"
-    WARP="$TMP_SPL/warp.json"
 
-    rm -f "$REG" "$WARP"
-
-    mkdir -p "$(dirname "$REG")"
+    rm -f "$REG"
 
     echo -e "${MAGENTA}Генерируем WARP${NC}"
 
@@ -176,101 +171,59 @@ register_warp() {
     PUB="$(printf '%s\n' "$PRIV" | "$GEN" pubkey)"
     TOS="$(date -u +%Y-%m-%dT%H:%M:%S.000000000Z)"
 
-    REG="$TMP_SPL/reg.json"
-    WARP="$TMP_SPL/warp.json"
+    echo -e "${CYAN}Регистрируем устройство${NC}"
 
-rm -f "$REG" "$WARP"
-: > "$REG"
-: > "$WARP"
+    if register_request && jq -e '.config.peers[0].public_key' "$REG" >/dev/null 2>&1; then
 
-echo -e "${CYAN}Регистрируем устройство${NC}"
-   
-if register_request "$(reg_url reg)" && jq -e '.id and .token' "$REG" >/dev/null 2>&1; then :; else
+        :
+
+    else
 
         if ! curl -fsSL \
             --max-time 60 \
-            "https://santa-atmo.ru/warp/warp.php" \
-            -o "$REG" \
-            >/dev/null 2>&1
+            "$WARP_BACKUP_URL" \
+            -o "$REG" >/dev/null 2>&1
         then
             echo -e "${RED}Не удалось получить WARP${NC}"
             PAUSE
             return 1
         fi
 
-        if jq -e '.result.config.peers[0].public_key' "$REG" >/dev/null 2>&1; then
-
-            PRIV="$(jq -r '.result.key' "$REG")"
-            WARP_PEER="$(jq -r '.result.config.peers[0].public_key' "$REG")"
-            WARP_V4="$(jq -r '.result.config.interface.addresses.v4' "$REG")"
-            WARP_V6="$(jq -r '.result.config.interface.addresses.v6 // empty' "$REG")"
-
-        else
-
+        if ! jq -e '.result.config.peers[0].public_key' "$REG" >/dev/null 2>&1; then
             echo -e "${RED}Резервный источник вернул неверный формат${NC}"
             PAUSE
             return 1
         fi
+
+        PRIV="$(jq -r '.result.key' "$REG")"
+        WARP_PEER="$(jq -r '.result.config.peers[0].public_key' "$REG")"
+        WARP_V4="$(jq -r '.result.config.interface.addresses.v4' "$REG")"
+        WARP_V6="$(jq -r '.result.config.interface.addresses.v6 // empty' "$REG")"
+
     fi
 
     if [ -z "$WARP_PEER" ]; then
-
-        REG_ID="$(jq -r '.id' "$REG")"
-        REG_TOK="$(jq -r '.token' "$REG")"
-
-        if [ -z "$REG_ID" ] || [ "$REG_ID" = "null" ]; then
-            echo -e "${RED}Нет id в ответе${NC}"
-            PAUSE
-            return 1
-        fi
-
-        if [ -z "$REG_TOK" ] || [ "$REG_TOK" = "null" ]; then
-            echo -e "${RED}Нет token в ответе${NC}"
-            PAUSE
-            return 1
-        fi
-
-        if ! jq -e '.config.peers[0].public_key' "$REG" >/dev/null 2>&1; then
-
-            if ! curl -fsSL \
-                --max-time 30 \
-                -X GET "$(reg_url "reg/$REG_ID")" \
-                -H "User-Agent: $CF_UA" \
-                -H "CF-Client-Version: $CF_CLIENT_VER" \
-                -H "Accept: application/json" \
-                -H "Authorization: Bearer $REG_TOK" \
-                -o "$WARP" \
-                >/dev/null 2>&1
-            then
-                cp "$REG" "$WARP"
-            fi
-
-        else
-
-            cp "$REG" "$WARP"
-
-        fi
-        
-        WARP_PEER="$(jq -r '.config.peers[0].public_key' "$WARP")"
-        WARP_V4="$(jq -r '.config.interface.addresses.v4' "$WARP")"
-        WARP_V6="$(jq -r '.config.interface.addresses.v6 // empty' "$WARP")"
-
+        WARP_PEER="$(jq -r '.config.peers[0].public_key' "$REG")"
+        WARP_V4="$(jq -r '.config.interface.addresses.v4' "$REG")"
+        WARP_V6="$(jq -r '.config.interface.addresses.v6 // empty' "$REG")"
     fi
 
-    if [ -z "$WARP_PEER" ] || [ "$WARP_PEER" = "null" ]; then
+    [ -n "$WARP_PEER" ] && [ "$WARP_PEER" != "null" ] || {
         echo -e "${RED}Нет peer public_key${NC}"
         PAUSE
         return 1
-    fi
+    }
 
-    if [ -z "$WARP_V4" ] || [ "$WARP_V4" = "null" ]; then
+    [ -n "$WARP_V4" ] && [ "$WARP_V4" != "null" ] || {
         echo -e "${RED}Нет IPv4${NC}"
         PAUSE
         return 1
-    fi
-    
+    }
+
     echo -e "${GREEN}WARP${NC} сгенерирован!"
 }
+
+
 
 restart_splify() {
 echo -e "\n${MAGENTA}Перезапускаем splify${NC}"
