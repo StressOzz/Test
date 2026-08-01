@@ -173,10 +173,9 @@ register_warp() {
 
     echo -e "${CYAN}Регистрируем устройство${NC}"
 
-    echo -e "${CYAN}Используем основной сервер${NC}"
     if register_request && jq -e '.config.peers[0].public_key' "$REG" >/dev/null 2>&1; then
 
-        :
+    echo -e "${CYAN}Используем основной сервер${NC}"
 
     else
     echo -e "${CYAN}Используем резервный сервер${NC}"
@@ -230,21 +229,31 @@ restart_splify() {
 echo -e "\n${MAGENTA}Перезапускаем splify${NC}"
 echo -en "${YELLOW}Подождите...${NC}"
 
+echo "enable & restart"
+
 /etc/init.d/splify enable >/dev/null 2>&1
 /etc/init.d/splify-agent enable >/dev/null 2>&1
 /etc/init.d/splify restart >/dev/null 2>&1
 /etc/init.d/splify-agent restart 2>/dev/null
 
+echo "splify-apply"
+
 /usr/local/sbin/splify-apply >/dev/null 2>&1
+
+echo "commit network"
 
 uci commit network
 ifdown "$WARP_IFACE" >/dev/null 2>&1
 ifup "$WARP_IFACE" >/dev/null 2>&1
 /etc/init.d/ttyd restart >/dev/null 2>&1
 
+echo "списки"
+
 /usr/local/sbin/splify-update-ru >/dev/null 2>&1
 /usr/local/sbin/splify-update-ipsum >/dev/null 2>&1
 /usr/local/sbin/splify-update-domains >/dev/null 2>&1
+
+echo "telemetry"
 
 /usr/local/sbin/splify-telemetry >/dev/null 2>&1
 
