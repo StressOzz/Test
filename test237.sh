@@ -239,9 +239,9 @@ echo -en "${YELLOW}Подождите...${NC}"
 uci commit network
 ifdown "$WARP_IFACE" >/dev/null 2>&1
 ifup "$WARP_IFACE" >/dev/null 2>&1
-/etc/init.d/ttyd restart >/dev/null 2>&1
 /etc/init.d/splify restart >/dev/null 2>&1
 /etc/init.d/splify-agent restart 2>/dev/null
+/usr/local/sbin/splify-apply >/dev/null 2>&1
 echo -e "\n\nsplify ${GREEN}перезапущен!${NC}"
 }
 
