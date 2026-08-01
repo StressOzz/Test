@@ -233,7 +233,7 @@ register_warp() {
 restart_splify() {
 echo -e "\n${MAGENTA}Перезапускаем splify${NC}"
 echo -en "${YELLOW}Подождите...${NC}"
-/usr/local/sbin/splify-disable
+/usr/local/sbin/splify-disable >/dev/null 2>&1
 /etc/init.d/splify enable >/dev/null 2>&1
 /etc/init.d/splify-agent enable >/dev/null 2>&1
 /usr/local/sbin/splify-apply >/dev/null 2>&1
@@ -241,7 +241,7 @@ uci commit network
 ifdown "$WARP_IFACE" >/dev/null 2>&1
 ifup "$WARP_IFACE" >/dev/null 2>&1
 /etc/init.d/splify restart >/dev/null 2>&1
-/etc/init.d/splify-agent restart 2>/dev/null
+/etc/init.d/splify-agent restart >/dev/null 2>&1
 /usr/local/sbin/splify-apply >/dev/null 2>&1
 echo -e "\n\nsplify ${GREEN}перезапущен!${NC}"
 }
