@@ -235,13 +235,13 @@ echo -e "\n${MAGENTA}Перезапускаем splify${NC}"
 echo -en "${YELLOW}Подождите...${NC}"
 /etc/init.d/splify enable >/dev/null 2>&1
 /etc/init.d/splify-agent enable >/dev/null 2>&1
-/etc/init.d/splify restart >/dev/null 2>&1
-/etc/init.d/splify-agent restart 2>/dev/null
 /usr/local/sbin/splify-apply >/dev/null 2>&1
 uci commit network
 ifdown "$WARP_IFACE" >/dev/null 2>&1
 ifup "$WARP_IFACE" >/dev/null 2>&1
 /etc/init.d/ttyd restart >/dev/null 2>&1
+/etc/init.d/splify restart >/dev/null 2>&1
+/etc/init.d/splify-agent restart 2>/dev/null
 echo -e "\n\nsplify ${GREEN}перезапущен!${NC}"
 }
 
