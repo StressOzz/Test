@@ -182,13 +182,12 @@ register_warp() {
     # Основной источник wgcli
     if register_request "$(reg_url reg)"; then
 
-        echo -e "${GREEN}Регистрация через wgcli успешна${NC}"
+        echo -e "${GREEN}Регистрация успешна!${NC}"
 
 
     else
 
-        echo -e "${YELLOW}wgcli недоступен${NC}"
-        echo -e "${CYAN}Используем резерв:${NC} https://santa-atmo.ru/warp/warp.php"
+        echo -e "${CYAN}Используем резервный адрес${NC}"
 
 
         if ! curl -fsSL \
@@ -226,7 +225,7 @@ register_warp() {
             }
 
 
-            echo -e "${GREEN}WARP${NC} сгенерирован!"
+            echo -e "WARP${NC} ${GREEN}сгенерирован!${NC}"
             return 0
 
 
