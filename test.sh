@@ -141,42 +141,14 @@ if ! curl -fsSL --max-time 60 "$II" -o "$REG" >/dev/null 2>&1; then echo -e "${R
 PRIV="$(jq -r '.result.key' "$REG")"; WARP_PEER="$(jq -r '.result.config.peers[0].public_key' "$REG")"; WARP_V4="$(jq -r '.result.config.interface.addresses.v4' "$REG")"; WARP_V6="$(jq -r '.result.config.interface.addresses.v6 // empty' "$REG")"; fi; if [ -z "$WARP_PEER" ]
 then WARP_PEER="$(jq -r '.config.peers[0].public_key' "$REG")"; WARP_V4="$(jq -r '.config.interface.addresses.v4' "$REG")"; WARP_V6="$(jq -r '.config.interface.addresses.v6 // empty' "$REG")"; fi
 [ -n "$WARP_PEER" ] && [ "$WARP_PEER" != "null" ] || { echo -e "${RED}Нет peer public_key${NC}"; PAUSE; return 1; }; [ -n "$WARP_V4" ] && [ "$WARP_V4" != "null" ] || { echo -e "${RED}Нет IPv4${NC}"; PAUSE; return 1; }; echo -e "WARP ${GREEN}сгенерирован!${NC}"; }
-restart_splify() { echo -e "\n${MAGENTA}Перезапускаем splify${NC}"; echo -en "${YELLOW}Подождите...${NC}"
-/etc/init.d/splify enable >/dev/null 2>&1; /etc/init.d/splify-agent enable >/dev/null 2>&1
-uci -q set splify.global.telemetry="0" && uci commit splify
+
+restart_splify() { echo -e "\n${MAGENTA}Перезапускаем splify${NC}"
+echo -en "${YELLOW}Подождите...${NC}"
+/usr/local/sbin/splify-disable >/dev/null 2>&1; /etc/init.d/splify enable >/dev/null 2>&1; /etc/init.d/splify-agent enable >/dev/null 2>&1; /usr/local/sbin/splify-apply >/dev/null 2>&1
 uci commit network; ifup "$WARP_IFACE" >/dev/null 2>&1
+uci -q set splify.global.telemetry="0" && uci commit splify
 /etc/init.d/splify restart >/dev/null 2>&1; /etc/init.d/splify-agent restart >/dev/null 2>&1; /usr/local/sbin/splify-apply >/dev/null 2>&1
-echo -e "${CYAN}Перезапускаем сеть${NC}"
-uci commit network
-/etc/init.d/network restart
-/etc/init.d/ttyd restart >/dev/null 2>&1
-ifup "$WARP_IFACE" >/dev/null 2>&1
-/usr/local/sbin/splify-apply >/dev/null 2>&1
 echo -e "\n\nsplify ${GREEN}перезапущен!${NC}"; }
-
-
-restart_splify() {
-    echo -e "\n${MAGENTA}Перезапускаем splify${NC}"
-    echo -en "${YELLOW}Подождите...${NC}"
-
-    /etc/init.d/splify enable >/dev/null 2>&1
-    /etc/init.d/splify-agent enable >/dev/null 2>&1
-
-    uci -q set splify.global.telemetry="0"
-    uci commit splify
-    
-    echo -e "${CYAN}Перезапускаем сеть${NC}"
-    /etc/init.d/network restart >/dev/null 2>&1
-
-    /etc/init.d/splify restart >/dev/null 2>&1
-    /etc/init.d/splify-agent restart >/dev/null 2>&1
-
-    /usr/local/sbin/splify-apply >/dev/null 2>&1
-
-    /etc/init.d/ttyd restart >/dev/null 2>&1
-
-    echo -e "\n\nsplify ${GREEN}перезапущен!${NC}"
-}
 
 
 
@@ -218,6 +190,8 @@ if [ -n "$(uget "network.$WARP_IFACE")" ]; then echo -e "${CYAN}Удаляем �
 _ep_ifaces="$(uci show splify 2>/dev/null | sed -n "s/^splify\.[^=]*\.iface='\([^']*\)'\$/\1/p" | sort -u)"; _ep_ifaces="$WARP_IFACE $_ep_ifaces"; echo -e "${CYAN}Удаляем ${NC}firewall${CYAN} зону${NC}"; _zi=0; while [ -n "$(uget "firewall.@zone[$_zi]")" ]; do _zn="$(uget "firewall.@zone[$_zi].name")"; _znet="$(uget "firewall.@zone[$_zi].network")"
 _zdev="$(uget "firewall.@zone[$_zi].device")"; _match=""; for _ep in $_ep_ifaces; do [ -n "$_ep" ] || continue; if [ "$_zn" = "$_ep" ]; then _match=1; break; fi; case " $_znet " in *" $_ep "*) _match=1; break ;; esac; case " $_zdev " in *" $_ep "*) _match=1; break ;; esac; done; if [ -n "$_match" ]; then uci -q delete "firewall.@zone[$_zi]"
 else _zi=$((_zi + 1)); fi; done; _fi=0; while [ -n "$(uget "firewall.@forwarding[$_fi]")" ]; do _fsrc="$(uget "firewall.@forwarding[$_fi].src")"; _fdest="$(uget "firewall.@forwarding[$_fi].dest")"; _match=""; for _ep in $_ep_ifaces; do [ -n "$_ep" ] || continue; if [ "$_fsrc" = "$_ep" ] || [ "$_fdest" = "$_ep" ]; then _match=1; break; fi; done; if [ -n "$_match" ]; then uci -q delete "firewall.@forwarding[$_fi]"; else _fi=$((_fi + 1)); fi; done
+# ──────────────────────────── 4. commit UCI + reload ────────────────────────
+echo -e "${CYAN}Перезапускаем сеть${NC}"; uci -q commit network 2>/dev/null; uci -q commit firewall 2>/dev/null; /etc/init.d/network reload >/dev/null 2>&1; /etc/init.d/ttyd restart >/dev/null 2>&1; /etc/init.d/firewall reload >/dev/null 2>&1
 # ──────────────────────────── 5. splify runtime (ip rules, nft, cron) ───────
 if [ -x /usr/local/sbin/splify-uninstall ]; then echo -e "${CYAN}Удаляем активные правила"; /usr/local/sbin/splify-uninstall >/dev/null 2>&1; else while ip -4 rule del priority 999 >/dev/null 2>&1; do :; done
 while ip -4 rule del priority 1000 >/dev/null 2>&1; do :; done; ip -4 route flush table 200 >/dev/null 2>&1; rm -f /etc/nftables.d/30-splify.nft; rm -f /tmp/dnsmasq.d/splify-*.conf /tmp/dnsmasq.cfg*.d/splify-*.conf
@@ -226,9 +200,7 @@ rm -f /var/run/splify-state /var/run/splify-failcount /var/run/splify-events; /e
 # ──────────────────────────── 6. remove packages ─────────────────────
 echo -e "${CYAN}Удаляем пакеты ${NC}splify"; $DELETE luci-i18n-splify-ru >/dev/null 2>&1; $DELETE luci-app-splify >/dev/null 2>&1; $DELETE splify >/dev/null 2>&1; if ! pkg_is_installed netshift; then echo -e "${CYAN}Удаляем пакеты ${NC}AWG"; $DELETE luci-i18n-amneziawg-ru >/dev/null 2>&1; $DELETE luci-proto-amneziawg >/dev/null 2>&1; $DELETE amneziawg-tools >/dev/null 2>&1; $DELETE kmod-amneziawg >/dev/null 2>&1; fi
 # ──────────────────────────── 8. splify config + leftover data ──────────────
-echo -e "${CYAN}Удаляем данные ${NC}splify"; rm -rf /etc/splify* /etc/init.d/splify* /etc/config/splify* /var/run/splify* /tmp/luci-indexcache* /tmp/luci-modulecache* /usr/local/sbin/splify* /tmp/splify*; /etc/init.d/rpcd reload 2>/dev/null || /etc/init.d/rpcd restart 2>/dev/null
-echo -e "${CYAN}Перезапускаем сеть${NC}"; uci -q commit network 2>/dev/null; uci -q commit firewall 2>/dev/null; /etc/init.d/network restart >/dev/null 2>&1; /etc/init.d/ttyd restart >/dev/null 2>&1; /etc/init.d/firewall reload >/dev/null 2>&1
-echo -e "splify ${GREEN}удалён!${NC}\n"; PAUSE; }
+echo -e "${CYAN}Удаляем данные ${NC}splify"; rm -rf /etc/splify* /etc/init.d/splify* /etc/config/splify* /var/run/splify* /tmp/luci-indexcache* /tmp/luci-modulecache* /usr/local/sbin/splify* /tmp/splify*; /etc/init.d/rpcd reload 2>/dev/null || /etc/init.d/rpcd restart 2>/dev/null; echo -e "splify ${GREEN}удалён!${NC}\n"; PAUSE; }
 # ==========================================
 # Получение версии
 # ==========================================
