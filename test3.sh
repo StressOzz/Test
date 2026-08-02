@@ -144,18 +144,21 @@ then WARP_PEER="$(jq -r '.config.peers[0].public_key' "$REG")"; WARP_V4="$(jq -r
 
 restart_splify() { echo -e "\n${MAGENTA}Перезапускаем splify${NC}"
 echo -en "${YELLOW}Подождите...${NC}"
-/usr/local/sbin/splify-disable >/dev/null 2>&1; /etc/init.d/splify enable >/dev/null 2>&1; /etc/init.d/splify-agent enable >/dev/null 2>&1; /usr/local/sbin/splify-apply >/dev/null 2>&1
+/etc/init.d/splify enable >/dev/null 2>&1
+/etc/init.d/splify-agent enable >/dev/null 2>&1
 uci commit network; ifup "$WARP_IFACE" >/dev/null 2>&1
 uci -q set splify.global.telemetry="0" && uci commit splify
-/etc/init.d/splify restart >/dev/null 2>&1; /etc/init.d/splify-agent restart >/dev/null 2>&1; /usr/local/sbin/splify-apply >/dev/null 2>&1
+/etc/init.d/splify restart >/dev/null 2>&1
+/etc/init.d/splify-agent restart >/dev/null 2>&1
+/usr/local/sbin/splify-apply >/dev/null 2>&1
 echo -e "\n\nsplify ${GREEN}перезапущен!${NC}"
 reboot_router
 }
 
 reboot_router() {
 echo -e "\n${MAGENTA}Перезагрузка роутера${NC}"
-echo -e "${CYAN}Для корректной работы splify требуется перезагрузить роутер!${NC}"
-read -rp "$(echo -en "${YELLOW}Перезагрузить роутер? [y/N]: ${NC}")" a
+echo -e "${CYAN}Для корректной работы ${NC}splify${CYAN} требуется перезагрузить роутер!${NC}"
+read -rp "$(echo -en "${YELLOW}Перезагрузить роутер? (${YELLOW}y/N${NC}): ${NC}")" a
 case "$a" in
 Y|y)
 echo -en "\n${YELLOW}Подождите...${NC}"
