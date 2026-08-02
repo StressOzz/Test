@@ -150,18 +150,19 @@ uci -q set splify.global.telemetry="0" && uci commit splify
 /etc/init.d/splify restart >/dev/null 2>&1; /etc/init.d/splify-agent restart >/dev/null 2>&1; /usr/local/sbin/splify-apply >/dev/null 2>&1
 echo -e "\n\nsplify ${GREEN}перезапущен!${NC}"
 reboot_router
-; }
+}
 
 reboot_router() {
 echo -e "\n${MAGENTA}Перезагрузка роутера${NC}"
-read -rp "$(echo -e "${YELLOW}Перезагрузить роутер? [y/N]: ${NC}")" a
+echo -e "${CYAN}Для корректной работы splify требуется перезагрузить роутер!${NC}"
+read -rp "$(echo -en "${YELLOW}Перезагрузить роутер? [y/N]: ${NC}")" a
 case "$a" in
-[yY]|[yY][eE][sS])
-echo -en "${YELLOW}Подождите...${NC}"
+Y|y)
+echo -en "\n${YELLOW}Подождите...${NC}"
 reboot
 ;;
 *)
-echo -e "\n${RED}Отменено.${NC}"
+echo -e "\n${RED}Отменено!${NC}"
 ;;
 esac
 }
