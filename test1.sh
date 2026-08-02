@@ -148,9 +148,23 @@ echo -en "${YELLOW}Подождите...${NC}"
 uci commit network; ifup "$WARP_IFACE" >/dev/null 2>&1
 uci -q set splify.global.telemetry="0" && uci commit splify
 /etc/init.d/splify restart >/dev/null 2>&1; /etc/init.d/splify-agent restart >/dev/null 2>&1; /usr/local/sbin/splify-apply >/dev/null 2>&1
-echo -e "\n\nsplify ${GREEN}перезапущен!${NC}"; }
+echo -e "\n\nsplify ${GREEN}перезапущен!${NC}"
+reboot_router
+; }
 
-
+reboot_router() {
+echo -e "\n${MAGENTA}Перезагрузка роутера${NC}"
+read -rp "$(echo -e "${YELLOW}Перезагрузить роутер? [y/N]: ${NC}")" a
+case "$a" in
+[yY]|[yY][eE][sS])
+echo -en "${YELLOW}Подождите...${NC}"
+reboot
+;;
+*)
+echo -e "\n${RED}Отменено.${NC}"
+;;
+esac
+}
 
 
 WARP_TO_ROOT() { printf '%s\n' "[Interface]" "PrivateKey = $PRIV" "Address = $WARP_V4${WARP_V6:+, $WARP_V6}" "DNS = 8.8.8.8, 8.8.4.4, 2001:4860:4860::8888, 2001:4860:4860::8844" "MTU = 1280" "S1 = $AWG_S1" "S2 = $AWG_S2" "Jc = $AWG_JC" "Jmin = $AWG_JMIN" "Jmax = $AWG_JMAX" "H1 = $AWG_H1" "H2 = $AWG_H2" "H3 = $AWG_H3" "H4 = $AWG_H4" "I1 = $AWG_I1" "" "[Peer]" "PublicKey = $WARP_PEER" "AllowedIPs = 0.0.0.0/0, ::/0" "Endpoint = $WARP_EP" "PersistentKeepalive = 25" > /root/WARP.conf; echo -e "${YELLOW}Файл ${NC}WARP${YELLOW} сохранён в ${NC}/root/WARP.conf"; }
