@@ -97,14 +97,16 @@ if ! curl --version >/dev/null 2>&1; then clear; echo -e "curl ${RED}отсут�
 $DELETE curl libcurl >/dev/null 2>&1; echo -e "${CYAN}Обновляем список пакетов${NC}"; if ! $UPDATE >/dev/null 2>&1; then echo -e "\n${RED}Ошибка обновления списка пакетов!!${NC}\n"; else PACKAGES_UPDATED=1; fi
 echo -e "${CYAN}Устанавливаем ${NC}curl"; if ! $INSTALL libcurl curl >/dev/null 2>&1; then echo -e "\n${RED}Не удалось установить curl!${NC}\n"; PAUSE; fi; fi
 
-ZAPRET_VERSION="72.20260307"; PODKOP_LATEST_VER="0.9.6"; GO_VER="0.9.2"; MT_VERSION="0.8.2"; SPL_VER="26.7.30.16"
+ZAPRET_VERSION="72.20260307"; PODKOP_LATEST_VER="0.9.6"; TG_MTProto="0.9.3"; MT_VERSION="0.8.2"; SPL_VER="26.8.1.3"
 get_ver() { URL="$1"; OUT_FILE="$2"; NAME="$3"; RESULT=$(curl -sIL --connect-timeout 3 --max-time 4 --retry 1 -w "%{url_effective}" -o /dev/null "$URL" 2>/dev/null); if [ $? -ne 0 ] || [ -z "$RESULT" ]; then
 echo -e "$NAME: ${RED}ошибка получения версии${NC}"; return 1; fi; VERSION="${RESULT##*/}"; VERSION="${VERSION#v}"; if [ -z "$VERSION" ]; then echo -e "$NAME - ${RED}не удалось извлечь версию${NC}"
 echo -e "${YELLOW}URL:${NC} $RESULT"; return 1; fi; echo "$VERSION" > "$OUT_FILE"; echo -e "$NAME: ${GREEN}$VERSION${NC}"; }
-clear ; echo -e "${CYAN}Cобираем версии:${NC}" ; TMP_VER="/tmp/zapret_version" ; TMP_VER_POD="/tmp/podkop_version"; TMP_VER_GO="/tmp/tg_ws_proxy_go_ver"; TMP_MAG_VER="/tmp/MagiTrickle_version"; TMP_VER_SPL="/tmp/splify_version"
-get_ver "https://github.com/MagiTrickle/MagiTrickle/releases/latest" "$TMP_MAG_VER" "MagiTrickle" & get_ver "https://github.com/yandexru45/netshift/releases/latest" "$TMP_VER_POD" "NetShift" &
-get_ver "https://github.com/remittor/zapret-openwrt/releases/latest" "$TMP_VER" "Zapret" & get_ver "https://github.com/spatiumstas/tg-ws-proxy-go/releases/latest" "$TMP_VER_GO" "TG-WS Proxy GO" & get_ver "https://github.com/xyzmean/splify/releases/latest" "$TMP_VER_SPL" "splify" & wait
-[ -s "$TMP_VER" ] && ZAPRET_VERSION="$(cat "$TMP_VER")"; [ -s "$TMP_VER_POD" ] && PODKOP_LATEST_VER="$(cat "$TMP_VER_POD")"; [ -s "$TMP_VER_GO" ] && GO_VER="$(cat "$TMP_VER_GO")"; [ -s "$TMP_MAG_VER" ] && MT_VERSION="$(cat "$TMP_MAG_VER")"; [ -s "$TMP_VER_SPL" ] && SPL_VER="$(cat "$TMP_VER_SPL")"
+clear ; echo -e "${CYAN}Cобираем версии:${NC}" ; TMP_VER="/tmp/zapret_version" ; TMP_VER_POD="/tmp/podkop_version"; TMP_VER_TG_MT="/tmp/tg_ws_proxy_MTp_ver"; TMP_MAG_VER="/tmp/MagiTrickle_version"; TMP_VER_SPL="/tmp/splify_version"
+# get_ver "https://github.com/MagiTrickle/MagiTrickle/releases/latest" "$TMP_MAG_VER" "MagiTrickle" &
+# get_ver "https://github.com/spatiumstas/tg-ws-proxy-go/releases/latest" "$TMP_VER_TG_MT" "TG-WS Proxy MTProto"
+get_ver "https://github.com/yandexru45/netshift/releases/latest" "$TMP_VER_POD" "NetShift" & get_ver "https://github.com/remittor/zapret-openwrt/releases/latest" "$TMP_VER" "Zapret" & get_ver "https://github.com/xyzmean/splify/releases/latest" "$TMP_VER_SPL" "splify" & wait
+# [ -s "$TMP_MAG_VER" ] && MT_VERSION="$(cat "$TMP_MAG_VER")"
+[ -s "$TMP_VER" ] && ZAPRET_VERSION="$(cat "$TMP_VER")"; [ -s "$TMP_VER_POD" ] && PODKOP_LATEST_VER="$(cat "$TMP_VER_POD")"; [ -s "$TMP_VER_TG_MT" ] && TG_MTProto="$(cat "$TMP_VER_TG_MT")"; [ -s "$TMP_VER_SPL" ] && SPL_VER="$(cat "$TMP_VER_SPL")"
 
 echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/main/Zapret-Manager.sh)' > /usr/bin/zms; chmod +x /usr/bin/zms
 
@@ -141,36 +143,10 @@ if ! curl -fsSL --max-time 60 "$II" -o "$REG" >/dev/null 2>&1; then echo -e "${R
 PRIV="$(jq -r '.result.key' "$REG")"; WARP_PEER="$(jq -r '.result.config.peers[0].public_key' "$REG")"; WARP_V4="$(jq -r '.result.config.interface.addresses.v4' "$REG")"; WARP_V6="$(jq -r '.result.config.interface.addresses.v6 // empty' "$REG")"; fi; if [ -z "$WARP_PEER" ]
 then WARP_PEER="$(jq -r '.config.peers[0].public_key' "$REG")"; WARP_V4="$(jq -r '.config.interface.addresses.v4' "$REG")"; WARP_V6="$(jq -r '.config.interface.addresses.v6 // empty' "$REG")"; fi
 [ -n "$WARP_PEER" ] && [ "$WARP_PEER" != "null" ] || { echo -e "${RED}Нет peer public_key${NC}"; PAUSE; return 1; }; [ -n "$WARP_V4" ] && [ "$WARP_V4" != "null" ] || { echo -e "${RED}Нет IPv4${NC}"; PAUSE; return 1; }; echo -e "WARP ${GREEN}сгенерирован!${NC}"; }
-
-restart_splify() { echo -e "\n${MAGENTA}Перезапускаем splify${NC}"
-echo -en "${YELLOW}Подождите...${NC}"
-/etc/init.d/splify enable >/dev/null 2>&1
-/etc/init.d/splify-agent enable >/dev/null 2>&1
-uci commit network; ifup "$WARP_IFACE" >/dev/null 2>&1
+restart_splify() { echo -e "\n${MAGENTA}Перезапускаем splify${NC}"; echo -en "${YELLOW}Подождите...${NC}"; /usr/local/sbin/splify-disable >/dev/null 2>&1; /etc/init.d/splify enable >/dev/null 2>&1; /etc/init.d/splify-agent enable >/dev/null 2>&1; /usr/local/sbin/splify-apply >/dev/null 2>&1
+uci commit network; ifdown "$WARP_IFACE" >/dev/null 2>&1; ifup "$WARP_IFACE" >/dev/null 2>&1; uci commit network
 uci -q set splify.global.telemetry="0" && uci commit splify
-/etc/init.d/splify restart >/dev/null 2>&1
-/etc/init.d/splify-agent restart >/dev/null 2>&1
-/usr/local/sbin/splify-apply >/dev/null 2>&1
-echo -e "\n\nsplify ${GREEN}перезапущен!${NC}"
-reboot_router
-}
-
-reboot_router() {
-echo -e "\n${MAGENTA}Перезагрузка роутера${NC}"
-echo -e "${CYAN}Для корректной работы ${NC}splify${CYAN} требуется перезагрузить роутер!${NC}"
-read -rp "$(echo -en "${YELLOW}Перезагрузить роутер? (${YELLOW}y/N${NC}): ${NC}")" a
-case "$a" in
-Y|y)
-echo -en "\n${YELLOW}Подождите...${NC}"
-reboot
-;;
-*)
-echo -e "\n${RED}Отменено!${NC}"
-;;
-esac
-}
-
-
+/etc/init.d/splify restart >/dev/null 2>&1; /etc/init.d/splify-agent restart >/dev/null 2>&1; /usr/local/sbin/splify-apply >/dev/null 2>&1; echo -e "\n\nsplify ${GREEN}перезапущен!${NC}"; }
 WARP_TO_ROOT() { printf '%s\n' "[Interface]" "PrivateKey = $PRIV" "Address = $WARP_V4${WARP_V6:+, $WARP_V6}" "DNS = 8.8.8.8, 8.8.4.4, 2001:4860:4860::8888, 2001:4860:4860::8844" "MTU = 1280" "S1 = $AWG_S1" "S2 = $AWG_S2" "Jc = $AWG_JC" "Jmin = $AWG_JMIN" "Jmax = $AWG_JMAX" "H1 = $AWG_H1" "H2 = $AWG_H2" "H3 = $AWG_H3" "H4 = $AWG_H4" "I1 = $AWG_I1" "" "[Peer]" "PublicKey = $WARP_PEER" "AllowedIPs = 0.0.0.0/0, ::/0" "Endpoint = $WARP_EP" "PersistentKeepalive = 25" > /root/WARP.conf; echo -e "${YELLOW}Файл ${NC}WARP${YELLOW} сохранён в ${NC}/root/WARP.conf"; }
 # ──────────────────────────── 5. create warp0 interface ─────────────────────
 create_warp_iface() { echo -e "\n${MAGENTA}Создаём интерфейс $WARP_IFACE${NC}"; if [ -n "$(uci -q get "network.$WARP_IFACE")" ]; then echo -e "${CYAN}Перенастраиваем интерфейс ${NC}$WARP_IFACE"; ifdown "$WARP_IFACE" >/dev/null 2>&1; fi
@@ -180,7 +156,7 @@ uci set "network.$WARP_IFACE.route_allowed_ips=0"; uci set "network.$WARP_IFACE.
 uci set "network.$WARP_IFACE.awg_h2=$AWG_H2"; uci set "network.$WARP_IFACE.awg_h3=$AWG_H3"; uci set "network.$WARP_IFACE.awg_h4=$AWG_H4"; uci set "network.$WARP_IFACE.awg_s1=$AWG_S1"; uci set "network.$WARP_IFACE.awg_s2=$AWG_S2"
 uci set "network.$WARP_IFACE.awg_i1=$AWG_I1"; _pt="amneziawg_$WARP_IFACE"; while [ -n "$(uci -q get "network.@${_pt}[0]")" ]; do uci -q delete "network.@${_pt}[0]"; done; uci add network "$_pt" >/dev/null; uci set "network.@${_pt}[-1].public_key=$WARP_PEER"
 uci -q delete "network.@${_pt}[-1].allowed_ips"; uci add_list "network.@${_pt}[-1].allowed_ips=0.0.0.0/0"; uci add_list "network.@${_pt}[-1].allowed_ips=::/0"; uci set "network.@${_pt}[-1].endpoint_host=${WARP_EP%:*}"
-uci set "network.@${_pt}[-1].endpoint_port=${WARP_EP##*:}"; uci set "network.@${_pt}[-1].persistent_keepalive=25"; echo -e "${CYAN}Перезапускаем сеть${NC}"; uci commit network; /etc/init.d/network reload; /etc/init.d/ttyd restart >/dev/null 2>&1; ifup "$WARP_IFACE" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось запустить ${NC}$WARP_IFACE\n"; PAUSE; return 1; }; }
+uci set "network.@${_pt}[-1].endpoint_port=${WARP_EP##*:}"; uci set "network.@${_pt}[-1].persistent_keepalive=25"; echo -e "${CYAN}Перезапускаем сеть${NC}"; uci commit network; /etc/init.d/network restart; /etc/init.d/ttyd restart >/dev/null 2>&1; ifup "$WARP_IFACE" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось запустить ${NC}$WARP_IFACE\n"; PAUSE; return 1; }; }
 # ──────────────────────────── 6. register endpoint in splify ────────────────
 register_in_splify() { _ei=0; while [ -n "$(uci -q get "splify.@endpoint[$_ei]" 2>/dev/null)" ]; do _ei_if="$(uci -q get "splify.@endpoint[$_ei].iface" 2>/dev/null)"; if [ -n "$_ei_if" ] && [ -z "$(uci -q get "network.$_ei_if" 2>/dev/null)" ]
 then uci -q delete "splify.@endpoint[$_ei]"; else _ei=$((_ei + 1)); fi; done; uci commit splify; grep -q "option iface '$WARP_IFACE'" /etc/config/splify 2>/dev/null || printf "\nconfig endpoint\n\toption iface '$WARP_IFACE'\n\toption priority '1'\n\toption type 'wg'\n" >> /etc/config/splify; }
@@ -209,7 +185,7 @@ _ep_ifaces="$(uci show splify 2>/dev/null | sed -n "s/^splify\.[^=]*\.iface='\([
 _zdev="$(uget "firewall.@zone[$_zi].device")"; _match=""; for _ep in $_ep_ifaces; do [ -n "$_ep" ] || continue; if [ "$_zn" = "$_ep" ]; then _match=1; break; fi; case " $_znet " in *" $_ep "*) _match=1; break ;; esac; case " $_zdev " in *" $_ep "*) _match=1; break ;; esac; done; if [ -n "$_match" ]; then uci -q delete "firewall.@zone[$_zi]"
 else _zi=$((_zi + 1)); fi; done; _fi=0; while [ -n "$(uget "firewall.@forwarding[$_fi]")" ]; do _fsrc="$(uget "firewall.@forwarding[$_fi].src")"; _fdest="$(uget "firewall.@forwarding[$_fi].dest")"; _match=""; for _ep in $_ep_ifaces; do [ -n "$_ep" ] || continue; if [ "$_fsrc" = "$_ep" ] || [ "$_fdest" = "$_ep" ]; then _match=1; break; fi; done; if [ -n "$_match" ]; then uci -q delete "firewall.@forwarding[$_fi]"; else _fi=$((_fi + 1)); fi; done
 # ──────────────────────────── 4. commit UCI + reload ────────────────────────
-echo -e "${CYAN}Перезапускаем сеть${NC}"; uci -q commit network 2>/dev/null; uci -q commit firewall 2>/dev/null; /etc/init.d/network reload >/dev/null 2>&1; /etc/init.d/ttyd restart >/dev/null 2>&1; /etc/init.d/firewall reload >/dev/null 2>&1
+echo -e "${CYAN}Перезапускаем сеть${NC}"; uci -q commit network 2>/dev/null; uci -q commit firewall 2>/dev/null; /etc/init.d/network restart >/dev/null 2>&1; /etc/init.d/ttyd restart >/dev/null 2>&1; /etc/init.d/firewall reload >/dev/null 2>&1
 # ──────────────────────────── 5. splify runtime (ip rules, nft, cron) ───────
 if [ -x /usr/local/sbin/splify-uninstall ]; then echo -e "${CYAN}Удаляем активные правила"; /usr/local/sbin/splify-uninstall >/dev/null 2>&1; else while ip -4 rule del priority 999 >/dev/null 2>&1; do :; done
 while ip -4 rule del priority 1000 >/dev/null 2>&1; do :; done; ip -4 route flush table 200 >/dev/null 2>&1; rm -f /etc/nftables.d/30-splify.nft; rm -f /tmp/dnsmasq.d/splify-*.conf /tmp/dnsmasq.cfg*.d/splify-*.conf
@@ -734,7 +710,7 @@ chmod +x "$INIT_PATH_GO"; /etc/init.d/tg-ws-proxy-go enable; /etc/init.d/tg-ws-p
 # УСТАНОВКА MTProto
 install_update_TG_PKG() { AVAILABLE_SPACE=$(df /overlay 2>/dev/null | awk 'NR==2 {print $4}'); [ -z "$AVAILABLE_SPACE" ] && AVAILABLE_SPACE=$(df / 2>/dev/null | awk 'NR==2 {print $4}'); REQUIRED_SPACE=10000; if [ "$AVAILABLE_SPACE" -lt "$REQUIRED_SPACE" ]
 then echo -e "\n${RED}Недостаточно свободного места${NC}\n"; echo -e "${YELLOW}Доступно: ${NC}$((AVAILABLE_SPACE/1024)) MB\n${YELLOW}Требуется: ${NC}$((REQUIRED_SPACE/1024)) MB\n"; PAUSE; return; fi
-echo -e "\n${MAGENTA}Устанавливаем TG WS Proxy MTProto${NC}"; rm -f /etc/tg-ws-proxy.conf /etc/tg-ws-proxy.conf-opkg; URL="https://github.com/spatiumstas/tg-ws-proxy-go/releases/download/${GO_VER}/tg-ws-proxy_${GO_VER}-${GO_SUF}_openwrt_${ARCH_FULL}.${RAZ}"
+echo -e "\n${MAGENTA}Устанавливаем TG WS Proxy MTProto${NC}"; rm -f /etc/tg-ws-proxy.conf /etc/tg-ws-proxy.conf-opkg; URL="https://github.com/spatiumstas/tg-ws-proxy-go/releases/download/${TG_MTProto}/tg-ws-proxy_${TG_MTProto}-${GO_SUF}_openwrt_${ARCH_FULL}.${RAZ}"
  update_packages || return; FILE_NAME_GO="$(basename "$URL")"; echo -e "${CYAN}Скачиваем и устанавливаем${NC} $FILE_NAME_GO"
 wget -q -O "$TMP_FILE_GO" "$URL" || { echo -e "\n${RED}Ошибка скачивания $URL${NC}\n"; PAUSE; return 1; }; $INSTALL "$TMP_FILE_GO" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка установки $TMP_FILE_GO!${NC}\n"; rm -f "$TMP_FILE_GO"; PAUSE; return 1; }
 rm -f "$TMP_FILE_GO"; if ! grep -q '^SECRET=.' "$SECRET_FILE" 2>/dev/null; then echo "SECRET=$SECRET" > "$SECRET_FILE"; fi; rm -f /etc/tg-ws-proxy.conf /etc/tg-ws-proxy.conf-opkg; /etc/init.d/tg-ws-proxy enable >/dev/null 2>&1; /etc/init.d/tg-ws-proxy restart >/dev/null 2>&1
@@ -742,7 +718,7 @@ if pidof tg-ws-proxy >/dev/null 2>&1; then echo -e "TG WS Proxy MTProto ${GREEN}
 remove_TG_PKG() { echo -e "\n${MAGENTA}Удаляем TG WS Proxy MTProto${NC}"; /etc/init.d/tg-ws-proxy stop >/dev/null 2>&1; /etc/init.d/tg-ws-proxy disable >/dev/null 2>&1; $DELETE tg-ws-proxy >/dev/null 2>&1; rm -rf /etc/tg-ws-proxy /etc/tg-ws-proxy.conf /etc/tg-ws-proxy.conf-opkg; echo -e "TG WS Proxy MTProto ${GREEN}удалён!${NC}\n"; PAUSE; }
 # МЕНЮ
 menu_TG() { while true; do SECRET="$(head -c16 /dev/urandom | hexdump -e '16/1 "%02x"')"; if command -v opkg >/dev/null 2>&1; then INSTALLED_VER_GO="$(opkg list-installed 2>/dev/null | grep '^tg-ws-proxy' | awk '{print $3}' | cut -d'-' -f1)"
-else INSTALLED_VER_GO="$(apk list -I 2>/dev/null | grep '^tg-ws-proxy-' | sed -E 's/tg-ws-proxy-([0-9.]+).*/\1/')"; fi; if [ -z "$INSTALLED_VER_GO" ]; then GO_ACTION="install"; elif [ "$INSTALLED_VER_GO" != "$GO_VER" ]; then GO_ACTION="update"; else GO_ACTION="installed"; fi
+else INSTALLED_VER_GO="$(apk list -I 2>/dev/null | grep '^tg-ws-proxy-' | sed -E 's/tg-ws-proxy-([0-9.]+).*/\1/')"; fi; if [ -z "$INSTALLED_VER_GO" ]; then GO_ACTION="install"; elif [ "$INSTALLED_VER_GO" != "$TG_MTProto" ]; then GO_ACTION="update"; else GO_ACTION="installed"; fi
 clear; echo -e "${MAGENTA}Меню TG WS Proxy${NC}\n"; TGSTATUS=""; pidof tg-ws-proxy-go >/dev/null 2>&1 && TGSTATUS="${TGSTATUS:+$TGSTATUS/}SOCKS5"; pidof tg-ws-proxy >/dev/null 2>&1 && TGSTATUS="${TGSTATUS:+$TGSTATUS/}MTProto"; pidof tg-ws-proxy-rs >/dev/null 2>&1 && TGSTATUS="${TGSTATUS:+$TGSTATUS/}Rust"
 if [ -n "$TGSTATUS" ]; then echo -e "${YELLOW}TG WS Proxy:${NC} ${GREEN}запущен [$TGSTATUS]${NC}"; else echo -e "${YELLOW}TG WS Proxy:${NC} ${RED}не установлен${NC}"; fi
 if [ -n "$INSTALLED_VER_GO" ]; then if [ "$GO_ACTION" = "update" ]; then echo -e "${YELLOW}TG WS Proxy MTProto версия:${NC} ${RED}$INSTALLED_VER_GO${NC}"; else echo -e "${YELLOW}TG WS Proxy MTProto версия:${NC} ${GREEN}$INSTALLED_VER_GO${NC}"; fi; fi
@@ -890,7 +866,7 @@ echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню\n"; echo -n
 2) sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/files/Mixomo/mixomo_openwrt_delete.sh); sed -i "\|$CRON_CMD|d" "$CRON_FILE" >/dev/null 2>&1; /etc/init.d/cron restart >/dev/null 2>&1; echo -e "\n${YELLOW}Рекомендую сделать перезагрузку роутера!${NC}\n"; PAUSE ;;
 3) check_mihomo || continue; magitrickle_config ;; 4) check_mihomo || continue; PODPISKA ;; 5) MIX_GEN_MENU ;; 6) check_mihomo || continue; sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/files/Mixomo/WARP_to_conf.sh); echo; PAUSE ;;
 7) check_mihomo || continue; UI_INSTALL ;; 8) check_mihomo || continue; MIXOMO_RESTART ;; 9) check_mihomo || continue; ARCH_MT=$(grep "^OPENWRT_ARCH=" /etc/os-release | cut -d'"' -f2); FILE_MT="/tmp/magitrickle.$RAZ"; URL_MT="https://github.com/MagiTrickle/MagiTrickle/releases/download/${MT_VERSION}/magitrickle_${MT_VERSION}-${SUF_MT}1_openwrt_${ARCH_MT}.$RAZ"
-echo -e "\n${MAGENTA}Обновляем MagiTrickle\n${CYAN}Скачиваем\n${NC}$URL_MT"; curl -Lf --connect-timeout 6 --retry 3 --retry-delay 1 -o "$FILE_MT" "$URL_MT" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка скачивания${NC}\n"; return 1; };  update_packages || return 1
+echo -e "\n${MAGENTA}Обновляем MagiTrickle\n${CYAN}Скачиваем\n${NC}$URL_MT"; curl -Lf --connect-timeout 6 --retry 3 --retry-delay 1 -o "$FILE_MT" "$URL_MT" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка скачивания${NC}\n"; PAUSE; return 1; };  update_packages || return 1
 echo -e "${CYAN}Обновляем ${NC}MagiTrickle"; $INSTALL "$FILE_MT" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка установки${NC} $(basename "$URL_MT")\n"; rm -f "$FILE_MT"; PAUSE; return 1; }; /etc/init.d/magitrickle enable >/dev/null 2>&1; /etc/init.d/magitrickle restart >/dev/null 2>&1; echo -e "MagiTrickle ${GREEN}обновлён!${NC}\n"; rm -f "$FILE_MT"; PAUSE ;; *) return ;; esac; done; }
 MIX_GEN_MENU() { while true; do echo -e "\n${MAGENTA}Меню генерации WARP${NC}"; echo -e "${CYAN}1) ${GREEN}Сгенерировать ${NC}WARP ${GREEN}при помощи ${NC}wgcli.vercel.app"; echo -e "${CYAN}2) ${GREEN}Сгенерировать ${NC}WARP ${GREEN}при помощи ${NC}api.cloudflareclient.com"
 echo -e "${CYAN}Enter) ${GREEN}Выход в меню Mixomo${NC}"; echo -ne "${YELLOW}Выберите пункт: ${NC}"; read choiceMG; case "$choiceMG" in 1) ZAVISIM; register_warp || continue; choose_endpoint || continue; WARP_TO_ROOT; echo; PAUSE; break ;; 2) if pkg_is_installed splify
