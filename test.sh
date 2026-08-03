@@ -162,7 +162,10 @@ uci set "network.@${_pt}[-1].endpoint_port=${WARP_EP##*:}"; uci set "network.@${
 echo -e "${CYAN}Перезапускаем сеть${NC}"; uci commit network; /etc/init.d/network reload; /etc/init.d/ttyd restart >/dev/null 2>&1; ifup "$WARP_IFACE" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось запустить ${NC}$WARP_IFACE\n"; PAUSE; return 1; }; }
 uci commit network >/dev/null 2>&1; ubus call network reload >/dev/null 2>&1; ifdown "$WARP_IFACE" >/dev/null 2>&1; ubus call network.interface."$WARP_IFACE" down >/dev/null 2>&1; ifup "$WARP_IFACE" >/dev/null 2>&1; ubus call network.interface."$WARP_IFACE" up >/dev/null 2>&1
 uci commit network >/dev/null 2>&1; killall netifd >/dev/null 2>&1; sleep 2; ifup "$WARP_IFACE" >/dev/null 2>&1; /etc/init.d/network reload
-
+uci commit network >/dev/null 2>&1
+killall netifd >/dev/null 2>&1
+sleep 3
+ifup "$WARP_IFACE" >/dev/null 2>&1
 
 # ──────────────────────────── 6. register endpoint in splify ────────────────
 register_in_splify() { _ei=0; while [ -n "$(uci -q get "splify.@endpoint[$_ei]" 2>/dev/null)" ]; do _ei_if="$(uci -q get "splify.@endpoint[$_ei].iface" 2>/dev/null)"; if [ -n "$_ei_if" ] && [ -z "$(uci -q get "network.$_ei_if" 2>/dev/null)" ]
