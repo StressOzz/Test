@@ -156,16 +156,15 @@ echo -en "${YELLOW}Подождите...${NC}"
 uci -q set splify.global.telemetry="0" && uci commit splify
 
 /etc/init.d/splify restart >/dev/null 2>&1
-sleep 2
+sleep 3
 /etc/init.d/splify-agent restart >/dev/null 2>&1
-sleep 2
+sleep 3
 
 /usr/local/sbin/splify-apply >/dev/null 2>&1
 sleep 10
 echo -e "\n\nsplify ${GREEN}перезапущен!${NC}"
-
+echo -e "\n${YELLOW}Инициализация splify может занять несколько минут!${NC}"
 }
-
 
 
 WARP_TO_ROOT() { printf '%s\n' "[Interface]" "PrivateKey = $PRIV" "Address = $WARP_V4${WARP_V6:+, $WARP_V6}" "DNS = 8.8.8.8, 8.8.4.4, 2001:4860:4860::8888, 2001:4860:4860::8844" "MTU = 1280" "S1 = $AWG_S1" "S2 = $AWG_S2" "Jc = $AWG_JC" "Jmin = $AWG_JMIN" "Jmax = $AWG_JMAX" "H1 = $AWG_H1" "H2 = $AWG_H2" "H3 = $AWG_H3" "H4 = $AWG_H4" "I1 = $AWG_I1" "" "[Peer]" "PublicKey = $WARP_PEER" "AllowedIPs = 0.0.0.0/0, ::/0" "Endpoint = $WARP_EP" "PersistentKeepalive = 25" > /root/WARP.conf; echo -e "${YELLOW}Файл ${NC}WARP${YELLOW} сохранён в ${NC}/root/WARP.conf"; }
@@ -372,10 +371,35 @@ nft list tables 2>/dev/null | awk '{print $2}' | grep -E '(zapret|ZAPRET)' | whi
 # ==========================================
 # Тест стратегии для Ютуб
 # ==========================================
-auto_stryou() { clear; echo -e "${MAGENTA}Тестируем стратегии для YouTube${NC}"
-awk '/^[[:space:]]*option NFQWS_OPT '\''/{flag=1} flag{print}' "$CONF" > "$OLD_STR"; curl -fsSL "$STR_URL" -o "$TMP_LIST" || { echo -e "\n${RED}Не удалось скачать список${NC}\n"; PAUSE </dev/tty; return 1; }
-TOTAL=$(grep -c '^Yv[0-9]\+' "$TMP_LIST"); echo -e "\n${CYAN}Найдено стратегий: ${NC}$TOTAL"; CURRENT_NAME=""; CURRENT_BODY=""; COUNT=0
-while IFS= read -r LINE || [ -n "$LINE" ]; do if echo "$LINE" | grep -q '^Yv[0-9]\+'; then if [ -n "$CURRENT_NAME" ]; then COUNT=$((COUNT + 1))
+auto_stryou() { 
+
+awk '/^[[:space:]]*option NFQWS_OPT '\''/{flag=1} flag{print}' "$CONF" > "$OLD_STR"; 
+
+echo -e "\n${MAGENTA}Выбирите источник стратегий:${NC}"
+echo -e "${CYAN}1) ${GREEN}Встроенные стратегии${NC}"
+echo -e "${CYAN}2) ${GREEN}Список из ${NC}/root/custom_test.txt"
+echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "
+
+case "$SRC" in
+    2)
+        if [ ! -s "$CUSTOM_STR_FILE" ]; then
+            echo -e "\n${RED}Файл ${NC}$CUSTOM_STR_FILE${RED} не найден!${NC}\n"            
+            PAUSE
+            return 1
+        fi
+        cp "$CUSTOM_STR_FILE" "$TMP_LIST"
+        ;;
+    2)
+        curl -fsSL "$STR_URL" -o "$TMP_LIST" || { echo -e "\n${RED}Не удалось скачать список стратегий!${NC}\n"; PAUSE; return 1; }
+        ;;
+        
+*) return ;;
+esac
+
+clear; echo -e "${MAGENTA}Тестируем стратегии для YouTube${NC}"
+
+TOTAL=$(grep -c '^#' "$TMP_LIST"); echo -e "\n${CYAN}Найдено стратегий: ${NC}$TOTAL"; CURRENT_NAME=""; CURRENT_BODY=""; COUNT=0
+while IFS= read -r LINE || [ -n "$LINE" ]; do if echo "$LINE" | grep -q '^#'; then if [ -n "$CURRENT_NAME" ]; then COUNT=$((COUNT + 1))
 echo -e "\n${CYAN}Тестируем стратегию: ${NC}$CURRENT_NAME ($COUNT/$TOTAL)"; apply_strategy "$CURRENT_NAME" "$CURRENT_BODY"; echo -e "${CYAN}Тестируем домены:${NC}"
 STATUS=$(check_access); if [ "$STATUS" = "ok" ]; then echo -e "\n${GREEN}Домены доступны!${NC}\n${YELLOW}Проверьте работу ${NC}YouTube${YELLOW} на устройствах!${NC}"
 echo -en "Enter${GREEN} - применить стратегию, ${NC}S/s${GREEN} - остановить, ${NC}N/n${GREEN} - продолжить тест:${NC} "; read -r ANSWER </dev/tty
