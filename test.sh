@@ -149,10 +149,19 @@ restart_splify() {
 echo -e "\n${MAGENTA}Перезапускаем splify${NC}"
 echo -en "${YELLOW}Подождите...${NC}"
 /usr/local/sbin/splify-disable >/dev/null 2>&1
+
+/etc/init.d/splify enable >/dev/null 2>&1
+/etc/init.d/splify-agent enable >/dev/null 2>&1
+
 uci -q set splify.global.telemetry="0" && uci commit splify
+
 /etc/init.d/splify restart >/dev/null 2>&1
+sleep 2
 /etc/init.d/splify-agent restart >/dev/null 2>&1
+sleep 2
+
 /usr/local/sbin/splify-apply >/dev/null 2>&1
+sleep 10
 echo -e "\n\nsplify ${GREEN}перезапущен!${NC}"
 
 }
@@ -176,13 +185,11 @@ uci commit network >/dev/null 2>&1
 /etc/init.d/rpcd restart >/dev/null 2>&1
 /etc/init.d/uhttpd restart >/dev/null 2>&1
 rm -rf /tmp/luci-* >/dev/null 2>&1
-
-# killall netifd >/dev/null 2>&1
-
 ip link del "$WARP_IFACE" >/dev/null 2>&1
-sleep 6
+killall netifd >/dev/null 2>&1
+sleep 3
 ifup "$WARP_IFACE" >/dev/null 2>&1
-sleep 6
+sleep 3
 
 }
 
