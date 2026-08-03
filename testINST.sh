@@ -53,7 +53,7 @@ for n in $ORDER; do
             exit 1
         }
 
-        echo -e "${GREEN}✓ ${CYAN}$NAME установлен${NC}"
+        echo -e "${GREEN}✓ ${CYAN}$NAME${GREEN} установлен${NC}"
         echo
     else
         echo -e "${RED}Неверный номер: $n${NC}"
