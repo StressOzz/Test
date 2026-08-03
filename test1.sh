@@ -372,32 +372,32 @@ nft list tables 2>/dev/null | awk '{print $2}' | grep -E '(zapret|ZAPRET)' | whi
 # Тест стратегии для Ютуб
 # ==========================================
 auto_stryou() { 
-
 awk '/^[[:space:]]*option NFQWS_OPT '\''/{flag=1} flag{print}' "$CONF" > "$OLD_STR"; 
-
 echo -e "\n${MAGENTA}Выбирите источник стратегий:${NC}"
 echo -e "${CYAN}1) ${GREEN}Встроенные стратегии${NC}"
 echo -e "${CYAN}2) ${GREEN}Список из ${NC}/root/custom_test.txt"
 echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "
-
-case "$SRC" in
+read -r SRC; case "$SRC" in
+    1)
+        curl -fsSL "$STR_URL" -o "$TMP_LIST" || {
+            echo -e "\n${RED}Не удалось скачать список стратегий!${NC}\n"
+            PAUSE
+            return 1
+        }
+        ;;
     2)
         if [ ! -s "$CUSTOM_STR_FILE" ]; then
-            echo -e "\n${RED}Файл ${NC}$CUSTOM_STR_FILE${RED} не найден!${NC}\n"            
+            echo -e "\n${RED}Файл ${NC}$CUSTOM_STR_FILE${RED} не найден!${NC}\n"
             PAUSE
             return 1
         fi
         cp "$CUSTOM_STR_FILE" "$TMP_LIST"
         ;;
-    2)
-        curl -fsSL "$STR_URL" -o "$TMP_LIST" || { echo -e "\n${RED}Не удалось скачать список стратегий!${NC}\n"; PAUSE; return 1; }
+    *)
+        return
         ;;
-        
-*) return ;;
 esac
-
 clear; echo -e "${MAGENTA}Тестируем стратегии для YouTube${NC}"
-
 TOTAL=$(grep -c '^#' "$TMP_LIST"); echo -e "\n${CYAN}Найдено стратегий: ${NC}$TOTAL"; CURRENT_NAME=""; CURRENT_BODY=""; COUNT=0
 while IFS= read -r LINE || [ -n "$LINE" ]; do if echo "$LINE" | grep -q '^#'; then if [ -n "$CURRENT_NAME" ]; then COUNT=$((COUNT + 1))
 echo -e "\n${CYAN}Тестируем стратегию: ${NC}$CURRENT_NAME ($COUNT/$TOTAL)"; apply_strategy "$CURRENT_NAME" "$CURRENT_BODY"; echo -e "${CYAN}Тестируем домены:${NC}"
