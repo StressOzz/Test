@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# Цвета
+
 RED='\033[1;31m'
 GREEN='\033[1;32m'
 YELLOW='\033[1;33m'
@@ -14,6 +14,8 @@ FILES=$(find /root -maxdepth 1 -type f -name "*.apk" | sort)
     echo -e "${RED}APK-файлы не найдены.${NC}"
     exit 1
 }
+
+clear
 
 echo -e "${MAGENTA}Найденные APK-файлы:${NC}"
 echo
