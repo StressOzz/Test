@@ -7,7 +7,7 @@
     </td>
     <td>
       <a href="https://github.com/StressOzz/StressKVN">
-        <img width="270" height="80" src="https://github.com/user-attachments/assets/7dbb964b-bb79-461a-9f47-9ca73323ebac">
+        <img width="280" height="130" alt="image" src="https://github.com/user-attachments/assets/519a126e-bd39-4f46-8a09-3f0d6e1dd8af">
       </a>
     </td>
   </tr>
