@@ -194,6 +194,10 @@ set_timezone() {
 }
 
 TIME_MENU() {
+
+$INSTALL zoneinfo-core zoneinfo-europe zoneinfo-asia
+
+
     while true; do
         clear
         echo -e "${MAGENTA}Меню настройки времени${NC}\n"
@@ -201,14 +205,12 @@ TIME_MENU() {
         TZ_CUR=$(uci -q get system.@system[0].timezone)
         [ -n "$TZ_CUR" ] && echo -e "${YELLOW}Часовой пояс:${NC} ${CYAN}$TZ_CUR${NC}"
         echo -e "\n${CYAN}1) ${GREEN}Синхронизировать время через ${NC}NTP"
-        echo -e "${CYAN}2) ${GREEN}Установить время вручную${NC}"
-        echo -e "${CYAN}3) ${GREEN}Установить часовой пояс${NC}"
+        echo -e "${CYAN}2) ${GREEN}Установить часовой пояс${NC}"
         echo -ne "${CYAN}Enter) ${GREEN}Выход${NC}\n\n${YELLOW}Выберите пункт:${NC} "
         read -r choiceTM
         case "$choiceTM" in
             1) sync_ntp ;;
-            2) set_manual_time ;;
-            3) set_timezone ;;
+            2) set_timezone ;;
             *) return ;;
         esac
     done
