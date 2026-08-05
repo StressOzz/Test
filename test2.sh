@@ -111,7 +111,7 @@ get_ver "https://github.com/yandexru45/netshift/releases/latest" "$TMP_VER_POD" 
 # [ -s "$TMP_MAG_VER" ] && MT_VERSION="$(cat "$TMP_MAG_VER")"
 [ -s "$TMP_VER" ] && ZAPRET_VERSION="$(cat "$TMP_VER")"; [ -s "$TMP_VER_POD" ] && PODKOP_LATEST_VER="$(cat "$TMP_VER_POD")"; [ -s "$TMP_VER_TG_MT" ] && TG_MTProto="$(cat "$TMP_VER_TG_MT")"; [ -s "$TMP_VER_SPL" ] && SPL_VER="$(cat "$TMP_VER_SPL")"
 
-echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test1.sh) "$@"' > /usr/bin/zms; chmod +x /usr/bin/zms
+echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test2.sh) "$@"' > /usr/bin/zms; chmod +x /usr/bin/zms
 
 # git="githubusercontent.com"; if ! grep -q "raw.$git" /etc/hosts; then echo -e "\n\033[1;36mДля корректной работы скрипта добавляем домены \033[0mGitHub\033[1;36m в \033[0m/etc/hosts\033[0m"
 # printf "#$git\n185.199.109.133 raw.$git release-assets.$git\n185.199.108.133 private-user-images.$git gist.$git avatars.$git\n" >> /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1; fi
@@ -148,32 +148,47 @@ set_manual_time() {
 }
 
 set_timezone() {
-    CUR_TZ=$(uci -q get system.@system[0].timezone)
+    CUR_TZ=$(uci -q get system.@system[0].zonename)
     echo -e "\n${YELLOW}Текущий часовой пояс:${NC} ${CUR_TZ:-не задан}\n"
-    echo -e "${CYAN}1) ${GREEN}Москва ${NC}(MSK-3)"
-    echo -e "${CYAN}2) ${GREEN}Калининград ${NC}(MSK-1-2)"
-    echo -e "${CYAN}3) ${GREEN}Екатеринбург ${NC}(MSK-2-5)"
-    echo -e "${CYAN}4) ${GREEN}Новосибирск ${NC}(MSK-4-7)"
-    echo -e "${CYAN}5) ${GREEN}Владивосток ${NC}(MSK-7-10)"
-    echo -e "${CYAN}6) ${GREEN}UTC${NC}"
-    echo -e "${CYAN}7) ${GREEN}Ввести вручную ${NC}(POSIX TZ)"
+
+    echo -e "${CYAN}1) ${GREEN}Калининград ${NC}(UTC+2)"
+    echo -e "${CYAN}2) ${GREEN}Москва ${NC}(UTC+3)"
+    echo -e "${CYAN}3) ${GREEN}Самара ${NC}(UTC+4)"
+    echo -e "${CYAN}4) ${GREEN}Екатеринбург ${NC}(UTC+5)"
+    echo -e "${CYAN}5) ${GREEN}Омск ${NC}(UTC+6)"
+    echo -e "${CYAN}6) ${GREEN}Красноярск ${NC}(UTC+7)"
+    echo -e "${CYAN}7) ${GREEN}Иркутск ${NC}(UTC+8)"
+    echo -e "${CYAN}8) ${GREEN}Якутск ${NC}(UTC+9)"
+    echo -e "${CYAN}9) ${GREEN}Владивосток ${NC}(UTC+10)"
+    echo -e "${CYAN}10) ${GREEN}Магадан ${NC}(UTC+11)"
+    echo -e "${CYAN}11) ${GREEN}Камчатка ${NC}(UTC+12)"
+    echo -e "${CYAN}12) ${GREEN}UTC${NC}"
+
     echo -ne "${CYAN}Enter) ${GREEN}Отмена${NC}\n\n${YELLOW}Выберите пункт:${NC} "
     read -r choiceTZ
+
     case "$choiceTZ" in
-        1) TZSTR="MSK-3"; ZONE="Europe/Moscow" ;;
-        2) TZSTR="MSK-1-2"; ZONE="Europe/Kaliningrad" ;;
-        3) TZSTR="MSK-2-5"; ZONE="Asia/Yekaterinburg" ;;
-        4) TZSTR="MSK-4-7"; ZONE="Asia/Novosibirsk" ;;
-        5) TZSTR="MSK-7-10"; ZONE="Asia/Vladivostok" ;;
-        6) TZSTR="UTC"; ZONE="UTC" ;;
-        7) echo -ne "\n${YELLOW}Введите POSIX TZ (например ${NC}MSK-3${YELLOW}): ${NC}"; read -r TZSTR
-           [ -z "$TZSTR" ] && return; ZONE="Custom/$TZSTR" ;;
+        1)  TZSTR="MSK-1";   ZONE="Europe/Kaliningrad" ;;
+        2)  TZSTR="MSK-3";   ZONE="Europe/Moscow" ;;
+        3)  TZSTR="MSK-4";   ZONE="Europe/Samara" ;;
+        4)  TZSTR="MSK-5";   ZONE="Asia/Yekaterinburg" ;;
+        5)  TZSTR="MSK-6";   ZONE="Asia/Omsk" ;;
+        6)  TZSTR="MSK-7";   ZONE="Asia/Krasnoyarsk" ;;
+        7)  TZSTR="MSK-8";   ZONE="Asia/Irkutsk" ;;
+        8)  TZSTR="MSK-9";   ZONE="Asia/Yakutsk" ;;
+        9)  TZSTR="MSK-10";  ZONE="Asia/Vladivostok" ;;
+        10) TZSTR="MSK-11";  ZONE="Asia/Magadan" ;;
+        11) TZSTR="MSK-12";  ZONE="Asia/Kamchatka" ;;
+        12) TZSTR="UTC";     ZONE="UTC" ;;
         *) return ;;
     esac
+
     uci set system.@system[0].timezone="$TZSTR"
     uci set system.@system[0].zonename="$ZONE"
     uci commit system
+
     /etc/init.d/system reload >/dev/null 2>&1
+
     echo -e "\n${GREEN}Часовой пояс установлен:${NC} $ZONE ($TZSTR)\n"
     PAUSE
 }
