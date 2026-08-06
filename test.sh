@@ -111,7 +111,7 @@ get_ver "https://github.com/yandexru45/netshift/releases/latest" "$TMP_VER_POD" 
 # [ -s "$TMP_MAG_VER" ] && MT_VERSION="$(cat "$TMP_MAG_VER")"
 [ -s "$TMP_VER" ] && ZAPRET_VERSION="$(cat "$TMP_VER")"; [ -s "$TMP_VER_POD" ] && PODKOP_LATEST_VER="$(cat "$TMP_VER_POD")"; [ -s "$TMP_VER_TG_MT" ] && TG_MTProto="$(cat "$TMP_VER_TG_MT")"; [ -s "$TMP_VER_SPL" ] && SPL_VER="$(cat "$TMP_VER_SPL")"
 
-echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test3.sh) "$@"' > /usr/bin/zms; chmod +x /usr/bin/zms
+echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test.sh) "$@"' > /usr/bin/zms; chmod +x /usr/bin/zms
 
 # git="githubusercontent.com"; if ! grep -q "raw.$git" /etc/hosts; then echo -e "\n\033[1;36mДля корректной работы скрипта добавляем домены \033[0mGitHub\033[1;36m в \033[0m/etc/hosts\033[0m"
 # printf "#$git\n185.199.109.133 raw.$git release-assets.$git\n185.199.108.133 private-user-images.$git gist.$git avatars.$git\n" >> /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1; fi
@@ -218,6 +218,19 @@ $INSTALL zoneinfo-core zoneinfo-europe zoneinfo-asia >/dev/null 2>&1
 # ==========================================
 # Автоподбор лучшей стратегии (v + Flowseal)
 # ==========================================
+
+# Корректно сортирует файл результатов по убыванию первого числа (OK),
+# независимо от того, чем начинается строка (v10, general (ALT11) и т.д.)
+sort_results_desc() {
+    local in="$1" out="$2" tmp="$TMP_SF/sort_res.$$"
+    awk '{
+        for (i = 1; i <= NF; i++) {
+            if ($i ~ /^[0-9]+$/) { print $i, $0; break }
+        }
+    }' "$in" | sort -k1,1 -nr | cut -d' ' -f2- > "$tmp"
+    mv "$tmp" "$out"
+}
+
 auto_apply_best_strategy() {
     mkdir -p "$TMP_SF" "/opt/zapret/tmp"
     : > "$AUTO_LOG"
@@ -286,8 +299,8 @@ skip && /^'\''$/ {skip=0; next}
             echo "Стратегия: ${NAME} = ${OK}/${TOTAL}"
         done
 
-        sort -t'/' -k1 -nr "$AUTO_RESULTS" -o "$AUTO_RESULTS"
-BEST_LINE=$(grep -v '^Контрольный тест' "$AUTO_RESULTS" | sort -t'/' -k2,2nr | head -n1)
+        sort_results_desc "$AUTO_RESULTS" "$AUTO_RESULTS"
+        BEST_LINE=$(grep -v '^Контрольный тест' "$AUTO_RESULTS" | head -n1)
 
         if [ -z "$BEST_LINE" ]; then
             echo "Не удалось определить лучшую стратегию, восстанавливаем прежнюю"
@@ -297,11 +310,11 @@ BEST_LINE=$(grep -v '^Контрольный тест' "$AUTO_RESULTS" | sort -t
             exit 1
         fi
 
-BEST_NAME=$(echo "$BEST_LINE" | awk -F'→' '{gsub(/^ +| +$/,"",$1); print $1}')
+        BEST_NAME=$(echo "$BEST_LINE" | cut -d'→' -f1 | sed 's/[[:space:]]*$//')
         echo "Лучшая стратегия: $BEST_LINE"
 
         mv -f "$AUTO_BACK" "$CONF"
-START=$(grep -n "^#${BEST_NAME}[[:space:]]*$" "$STR_FILE_AUTO" | head -n1 | cut -d: -f1)
+        START=$(grep -nxF "#${BEST_NAME}" "$STR_FILE_AUTO" | head -n1 | cut -d: -f1)
         if [ -n "$START" ]; then
             NEXT=$(echo "$LINES" | awk -v s="$START" '$1>s{print;exit}')
             if [ -z "$NEXT" ]; then
@@ -387,24 +400,22 @@ AUTO_BEST_MENU() {
         else
             echo -e "${YELLOW}Автоподбор:${NC} ${RED}отключен${NC}"
         fi
-        [ -f "$AUTO_LOG" ] && echo -e "${YELLOW}Лог последнего запуска:${NC} $AUTO_LOG"
-
-
-                      echo -e "${CYAN}1) ${GREEN}Настроить время на роутере${NC}"
-                    echo -e "\n${CYAN}2) ${GREEN}$( [ -n "$LINE" ] && echo "Изменить время автоподбора" || echo "Включить автоподбор" )${NC}"
-[ -n "$LINE" ] &&     echo -e "${CYAN}3) ${GREEN}Отключить автоподбор${NC}"
-                      echo -e "${CYAN}4) ${GREEN}Запустить сейчас (в фоне)${NC}"
-[ -f "$AUTO_LOG" ] && echo -e "${CYAN}5) ${GREEN}Показать лог последнего запуска${NC}"
-
-       
+        [ -s "$AUTO_RESULTS" ] && echo -e "${YELLOW}Результаты последнего теста:${NC} ${GREEN}есть${NC}"
+        echo -e "\n${CYAN}1) ${GREEN}$( [ -n "$LINE" ] && echo "Изменить время" || echo "Включить автоподбор" )${NC}"
+        [ -n "$LINE" ] && echo -e "${CYAN}2) ${GREEN}Отключить автоподбор${NC}"
+        echo -e "${CYAN}3) ${GREEN}Запустить сейчас (в фоне)${NC}"
+        [ -s "$AUTO_RESULTS" ] && echo -e "${CYAN}4) ${GREEN}Показать результаты последнего теста${NC}"
+        [ -f "$AUTO_LOG" ] && echo -e "${CYAN}5) ${GREEN}Показать полный лог (для отладки)${NC}"
+        echo -e "${CYAN}6) ${GREEN}Настроить время на роутере${NC}"
         echo -ne "${CYAN}Enter) ${GREEN}Выход в меню тестирования${NC}\n\n${YELLOW}Выберите пункт:${NC} "
         read -r choiceAB
         case "$choiceAB" in
-            2) set_auto_best_time ;;
-            3) [ -n "$LINE" ] && disable_auto_best ;;
-            4) run_auto_best_background ;;
-           5) [ -f "$AUTO_LOG" ] && { clear; cat "$AUTO_LOG"; echo; PAUSE; } ;;
-            1) TIME_MENU ;;
+            1) set_auto_best_time ;;
+            2) [ -n "$LINE" ] && disable_auto_best ;;
+            3) run_auto_best_background ;;
+            4) [ -s "$AUTO_RESULTS" ] && show_single_result "$AUTO_RESULTS" ;;
+            5) [ -f "$AUTO_LOG" ] && { clear; cat "$AUTO_LOG"; echo; PAUSE; } ;;
+            6) TIME_MENU ;;
             *) return ;;
         esac
     done
