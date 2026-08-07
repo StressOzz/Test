@@ -111,7 +111,7 @@ get_ver "https://github.com/yandexru45/netshift/releases/latest" "$TMP_VER_POD" 
 # [ -s "$TMP_MAG_VER" ] && MT_VERSION="$(cat "$TMP_MAG_VER")"
 [ -s "$TMP_VER" ] && ZAPRET_VERSION="$(cat "$TMP_VER")"; [ -s "$TMP_VER_POD" ] && PODKOP_LATEST_VER="$(cat "$TMP_VER_POD")"; [ -s "$TMP_VER_TG_MT" ] && TG_MTProto="$(cat "$TMP_VER_TG_MT")"; [ -s "$TMP_VER_SPL" ] && SPL_VER="$(cat "$TMP_VER_SPL")"
 
-echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test.sh) "$@"' > /usr/bin/zms; chmod +x /usr/bin/zms
+echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test33.sh) "$@"' > /usr/bin/zms; chmod +x /usr/bin/zms
 
 # git="githubusercontent.com"; if ! grep -q "raw.$git" /etc/hosts; then echo -e "\n\033[1;36mДля корректной работы скрипта добавляем домены \033[0mGitHub\033[1;36m в \033[0m/etc/hosts\033[0m"
 # printf "#$git\n185.199.109.133 raw.$git release-assets.$git\n185.199.108.133 private-user-images.$git gist.$git avatars.$git\n" >> /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1; fi
@@ -223,7 +223,7 @@ $INSTALL zoneinfo-core zoneinfo-europe zoneinfo-asia >/dev/null 2>&1
 # независимо от того, чем начинается строка (v10, general (ALT11) и т.д.)
 sort_results_desc() {
     local in="$1" out="$2" tmp="$TMP_SF/sort_res.$$"
-    awk '{
+    awk -F'[/ ]' '{
         for (i = 1; i <= NF; i++) {
             if ($i ~ /^[0-9]+$/) { print $i, $0; break }
         }
@@ -299,7 +299,14 @@ skip && /^'\''$/ {skip=0; next}
             echo "Стратегия: ${NAME} = ${OK}/${TOTAL}"
         done
 
-        sort_results_desc "$AUTO_RESULTS" "$AUTO_RESULTS"
+sort_results_desc "$AUTO_RESULTS" "$AUTO_RESULTS"
+
+        echo ""
+        echo "Результат тестирования стратегии"
+        echo ""
+        cat "$AUTO_RESULTS"
+        echo ""
+
         BEST_LINE=$(grep -v '^Контрольный тест' "$AUTO_RESULTS" | head -n1)
 
         if [ -z "$BEST_LINE" ]; then
