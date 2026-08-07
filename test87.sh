@@ -112,7 +112,7 @@ get_ver "https://github.com/yandexru45/netshift/releases/latest" "$TMP_VER_POD" 
 # [ -s "$TMP_MAG_VER" ] && MT_VERSION="$(cat "$TMP_MAG_VER")"
 [ -s "$TMP_VER" ] && ZAPRET_VERSION="$(cat "$TMP_VER")"; [ -s "$TMP_VER_POD" ] && PODKOP_LATEST_VER="$(cat "$TMP_VER_POD")"; [ -s "$TMP_VER_TG_MT" ] && TG_MTProto="$(cat "$TMP_VER_TG_MT")"; [ -s "$TMP_VER_SPL" ] && SPL_VER="$(cat "$TMP_VER_SPL")"
 
-echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test86.sh) "$@"' > /usr/bin/zms; chmod +x /usr/bin/zms
+echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test87.sh) "$@"' > /usr/bin/zms; chmod +x /usr/bin/zms
 
 # git="githubusercontent.com"; if ! grep -q "raw.$git" /etc/hosts; then echo -e "\n\033[1;36mДля корректной работы скрипта добавляем домены \033[0mGitHub\033[1;36m в \033[0m/etc/hosts\033[0m"
 # printf "#$git\n185.199.109.133 raw.$git release-assets.$git\n185.199.108.133 private-user-images.$git gist.$git avatars.$git\n" >> /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1; fi
@@ -421,11 +421,10 @@ run_auto_best_background() {
     echo -e "\n${MAGENTA}Запускаем автоподбор в фоне${NC}"
 
     (
-        echo $$ > "$AUTO_LOCK"
-        trap 'rm -f "$AUTO_LOCK"' EXIT
-
         $AUTO_CRON_CMD
     ) >/dev/null 2>&1 &
+
+    echo $! > "$AUTO_LOCK"
 
     echo -e "${GREEN}Задача автоподбора запущена!${NC}\n"
     PAUSE
@@ -454,11 +453,11 @@ AUTO_BEST_MENU() {
 
         echo -e "\n${CYAN}1) ${GREEN}$( [ -n "$LINE" ] && echo "Изменить время автоподбора" || echo "Включить автоподбор" )${NC}"
         [ -n "$LINE" ] && echo -e "${CYAN}2) ${GREEN}Отключить автоподбор${NC}"
-        if [ "$RUNNING" = "1" ]; then
-            echo -e "${CYAN}3) ${DGRAY}Тест уже выполняется...${NC}"
-        else
-            echo -e "${CYAN}3) ${GREEN}Запустить автоподбор в фоне${NC}"
-        fi
+if [ "$RUNNING" = "1" ]; then
+    echo -e "${CYAN}3) ${RED}Остановить фоновый автоподбор${NC}"
+else
+    echo -e "${CYAN}3) ${GREEN}Запустить сейчас автоподбор в фоне${NC}"
+fi
         [ -s "$AUTO_RESULTS" ] && echo -e "${CYAN}4) ${GREEN}Показать результаты последнего теста${NC}"
                 [ -f "$AUTO_LOG" ] && echo -e "${CYAN}5) ${GREEN}Показать полный лог (для отладки)${NC}"
         echo -e "${CYAN}6) ${GREEN}Настроить время на роутере${NC}"
@@ -467,17 +466,45 @@ AUTO_BEST_MENU() {
         case "$choiceAB" in
             1) set_auto_best_time ;;
             2) [ -n "$LINE" ] && disable_auto_best ;;
-            3) if [ "$RUNNING" = "1" ]; then
-                   echo -e "\n${YELLOW}Тест уже выполняется, дождитесь завершения${NC}\n"; PAUSE
-               else
-                   run_auto_best_background
-               fi ;;
+3) if [ "$RUNNING" = "1" ]; then
+       stop_auto_best
+   else
+       run_auto_best_background
+   fi ;;
             4) [ -s "$AUTO_RESULTS" ] && show_single_result "$AUTO_RESULTS" ;;
             5) [ -f "$AUTO_LOG" ] && { clear; cat "$AUTO_LOG"; echo; PAUSE; } ;;
             6) TIME_MENU ;;
             *) return ;;
         esac
     done
+}
+
+stop_auto_best() {
+    [ ! -f "$AUTO_LOCK" ] && return
+
+    PID=$(head -n1 "$AUTO_LOCK" 2>/dev/null)
+
+    echo -e "\n${YELLOW}Останавливаем автоподбор...${NC}"
+
+    if [ -n "$PID" ] && kill -0 "$PID" 2>/dev/null; then
+        kill "$PID" 2>/dev/null
+        sleep 2
+
+        # если не умер - принудительно
+        kill -9 "$PID" 2>/dev/null
+    fi
+
+    if [ -f "$AUTO_BACK" ]; then
+        cp -f "$AUTO_BACK" "$CONF"
+        echo -e "${GREEN}Сохранённый конфиг восстановлен${NC}"
+        ZAPRET_RESTART
+    fi
+
+    rm -f "$AUTO_LOCK"
+    rm -f "$OUT_DPI" "$TMP_SF/str_temp_auto.txt" "$AUTO_RESULTS" "$AUTO_BACK" "$AUTO_LOG" "$AUTO_LOCK"
+
+    echo -e "${GREEN}Автоподбор остановлен${NC}\n"
+    PAUSE
 }
 
 # ==========================================
