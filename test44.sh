@@ -88,6 +88,7 @@ AWG_I1="<b 0xce000000010897a297ecc34cd6dd000044d0ec2e2e1ea2991f467ace4222129b5a0
 
 AUTO_RESULTS="/opt/zapret/tmp/results_auto.txt"; AUTO_BACK="$TMP_SF/zapret_auto_back.txt"
 AUTO_LOG="/opt/zapret/tmp/auto_best.log"; AUTO_CRON_CMD="/usr/bin/zms --auto-best"
+AUTO_LOCK="/tmp/zapret_auto_best.lock"
 
 if command -v opkg >/dev/null 2>&1; then PKG="opkg"; GO_SUF="1"; CONFZ="/etc/opkg/distfeeds.conf"; PKG_IS_APK=0; UPDATE="opkg update"; INSTALL="opkg install"
 DELETE="opkg remove"; ARCH="$(opkg print-architecture | awk '{print $2}' | tail -n1)"; VER_SUF="r1-all"; SUF_MT=""; SPL_SUF="all"
@@ -111,7 +112,7 @@ get_ver "https://github.com/yandexru45/netshift/releases/latest" "$TMP_VER_POD" 
 # [ -s "$TMP_MAG_VER" ] && MT_VERSION="$(cat "$TMP_MAG_VER")"
 [ -s "$TMP_VER" ] && ZAPRET_VERSION="$(cat "$TMP_VER")"; [ -s "$TMP_VER_POD" ] && PODKOP_LATEST_VER="$(cat "$TMP_VER_POD")"; [ -s "$TMP_VER_TG_MT" ] && TG_MTProto="$(cat "$TMP_VER_TG_MT")"; [ -s "$TMP_VER_SPL" ] && SPL_VER="$(cat "$TMP_VER_SPL")"
 
-echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test33.sh) "$@"' > /usr/bin/zms; chmod +x /usr/bin/zms
+echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test44.sh) "$@"' > /usr/bin/zms; chmod +x /usr/bin/zms
 
 # git="githubusercontent.com"; if ! grep -q "raw.$git" /etc/hosts; then echo -e "\n\033[1;36mДля корректной работы скрипта добавляем домены \033[0mGitHub\033[1;36m в \033[0m/etc/hosts\033[0m"
 # printf "#$git\n185.199.109.133 raw.$git release-assets.$git\n185.199.108.133 private-user-images.$git gist.$git avatars.$git\n" >> /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1; fi
@@ -221,6 +222,25 @@ $INSTALL zoneinfo-core zoneinfo-europe zoneinfo-asia >/dev/null 2>&1
 
 # Корректно сортирует файл результатов по убыванию первого числа (OK),
 # независимо от того, чем начинается строка (v10, general (ALT11) и т.д.)
+# Возвращает 0, если процесс автоподбора реально жив (не просто есть файл блокировки)
+auto_best_running() {
+    [ -f "$AUTO_LOCK" ] || return 1
+    _lock_pid=$(head -n1 "$AUTO_LOCK" 2>/dev/null)
+    [ -n "$_lock_pid" ] && kill -0 "$_lock_pid" 2>/dev/null
+}
+
+# Сколько времени идёт тест, в человекочитаемом виде
+auto_best_elapsed() {
+    _lock_start=$(sed -n '2p' "$AUTO_LOCK" 2>/dev/null)
+    [ -z "$_lock_start" ] && return
+    _now=$(date +%s)
+    _diff=$(( _now - _lock_start ))
+    [ "$_diff" -lt 0 ] && _diff=0
+    _min=$(( _diff / 60 )); _sec=$(( _diff % 60 ))
+    printf '%d мин %d сек' "$_min" "$_sec"
+}
+
+
 sort_results_desc() {
     local in="$1" out="$2" tmp="$TMP_SF/sort_res.$$"
     awk -F'[/ ]' '{
@@ -232,6 +252,13 @@ sort_results_desc() {
 }
 
 auto_apply_best_strategy() {
+    if auto_best_running; then
+        echo "Автоподбор уже выполняется (PID $(head -n1 "$AUTO_LOCK")), повторный запуск отменён" >> "$AUTO_LOG" 2>/dev/null
+        return 1
+    fi
+    printf '%s\n%s\n' "$$" "$(date +%s)" > "$AUTO_LOCK"
+    trap 'rm -f "$AUTO_LOCK"' EXIT INT TERM
+
     mkdir -p "$TMP_SF" "/opt/zapret/tmp"
     : > "$AUTO_LOG"
     {
@@ -400,6 +427,14 @@ AUTO_BEST_MENU() {
     while true; do
         clear; echo -e "${MAGENTA}Меню автоподбора лучшей стратегии${NC}\n"
         echo -e "${YELLOW}Текущее время на роутере:${NC} ${CYAN}$(date '+%Y-%m-%d %H:%M:%S %Z')${NC}"
+
+        if auto_best_running; then
+            RUNNING=1
+            echo -e "${YELLOW}Статус:${NC} ${GREEN}● тест выполняется${NC} ${DGRAY}($(auto_best_elapsed))${NC}"
+        else
+            RUNNING=0
+        fi
+
         LINE=$(auto_best_cron_line)
         if [ -n "$LINE" ]; then
             HOUR=$(echo "$LINE" | awk '{print $2}')
@@ -408,9 +443,14 @@ AUTO_BEST_MENU() {
             echo -e "${YELLOW}Автоподбор:${NC} ${RED}отключен${NC}"
         fi
         [ -s "$AUTO_RESULTS" ] && echo -e "${YELLOW}Результаты последнего теста:${NC} ${GREEN}есть${NC}"
+
         echo -e "\n${CYAN}1) ${GREEN}$( [ -n "$LINE" ] && echo "Изменить время" || echo "Включить автоподбор" )${NC}"
         [ -n "$LINE" ] && echo -e "${CYAN}2) ${GREEN}Отключить автоподбор${NC}"
-        echo -e "${CYAN}3) ${GREEN}Запустить сейчас (в фоне)${NC}"
+        if [ "$RUNNING" = "1" ]; then
+            echo -e "${CYAN}3) ${DGRAY}Тест уже выполняется...${NC}"
+        else
+            echo -e "${CYAN}3) ${GREEN}Запустить сейчас (в фоне)${NC}"
+        fi
         [ -s "$AUTO_RESULTS" ] && echo -e "${CYAN}4) ${GREEN}Показать результаты последнего теста${NC}"
         [ -f "$AUTO_LOG" ] && echo -e "${CYAN}5) ${GREEN}Показать полный лог (для отладки)${NC}"
         echo -e "${CYAN}6) ${GREEN}Настроить время на роутере${NC}"
@@ -419,7 +459,11 @@ AUTO_BEST_MENU() {
         case "$choiceAB" in
             1) set_auto_best_time ;;
             2) [ -n "$LINE" ] && disable_auto_best ;;
-            3) run_auto_best_background ;;
+            3) if [ "$RUNNING" = "1" ]; then
+                   echo -e "\n${YELLOW}Тест уже выполняется, дождитесь завершения${NC}\n"; PAUSE
+               else
+                   run_auto_best_background
+               fi ;;
             4) [ -s "$AUTO_RESULTS" ] && show_single_result "$AUTO_RESULTS" ;;
             5) [ -f "$AUTO_LOG" ] && { clear; cat "$AUTO_LOG"; echo; PAUSE; } ;;
             6) TIME_MENU ;;
@@ -1203,7 +1247,9 @@ for pkg in byedpi youtubeUnblock; do if [ "$PKG_IS_APK" -eq 1 ]; then apk info -
 else opkg list-installed | grep -q "^$pkg" && echo -e "${RED}Найден установленный ${NC}$pkg${RED}!${NC}\nZapret${RED} может работать некорректно с ${NC}$pkg${RED}!${NC}\n"; fi; done; pgrep -f "/opt/zapret" >/dev/null 2>&1 && str_stp_zpr="Остановить" || str_stp_zpr="Запустить"
 if uci get firewall.@defaults[0].flow_offloading 2>/dev/null | grep -q '^1$' || uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null | grep -q '^1$'; then if ! grep -q 'meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc
 then echo -e "${RED}Включён ${NC}Flow Offloading${RED}!${NC}\n${NC}Zapret${RED} некорректно работает с включённым ${NC}Flow Offloading${RED}!\nПримените ${NC}FIX${RED} в системном меню!\n${NC}"; fi; fi
-INFO_ZPR; echo -e "\n${CYAN}1) ${GREEN}$Z_ACTION_TEXT${NC} Zapret\n${CYAN}2) ${GREEN}Меню стратегий${NC}\n${CYAN}3) ${GREEN}Меню ${NC}splify\n${CYAN}4) ${GREEN}Меню ${NC}Mixomo\n${CYAN}5) ${GREEN}Меню ${NC}NetShift\n${CYAN}6) ${GREEN}Меню ${NC}TG WS Proxy\n${CYAN}7) ${GREEN}Меню ${NC}DNS over HTTPS\n${CYAN}8) ${GREEN}Меню настройки ${NC}Discord\n${CYAN}9) ${GREEN}Меню управления доменами в ${NC}hosts"
+INFO_ZPR
+auto_best_running && echo -e "${YELLOW}Автоподбор стратегии:${NC} ${GREEN}● выполняется в фоне${NC} ${DGRAY}($(auto_best_elapsed))${NC}\n"
+echo -e "\n${CYAN}1) ${GREEN}$Z_ACTION_TEXT${NC} Zapret\n${CYAN}2) ${GREEN}Меню стратегий${NC}\n${CYAN}3) ${GREEN}Меню ${NC}splify\n${CYAN}4) ${GREEN}Меню ${NC}Mixomo\n${CYAN}5) ${GREEN}Меню ${NC}NetShift\n${CYAN}6) ${GREEN}Меню ${NC}TG WS Proxy\n${CYAN}7) ${GREEN}Меню ${NC}DNS over HTTPS\n${CYAN}8) ${GREEN}Меню настройки ${NC}Discord\n${CYAN}9) ${GREEN}Меню управления доменами в ${NC}hosts"
 echo -e "${CYAN}f) ${GREEN}Удалить ${NC}→${GREEN} установить ${NC}→${GREEN} настроить${NC} Zapret\n${CYAN}0) ${GREEN}Системное меню${NC}\n${CYAN}s) ${GREEN}$str_stp_zpr ${NC}Zapret" ; echo -ne "${CYAN}Enter) ${GREEN}Выход${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read choice
 case "$choice" in 999) echo; uninstall_zapret "1"; install_Zapret "1"; curl -fsSL https://raw.githubusercontent.com/StressOzz/Test/refs/heads/main/zapret -o "$CONF"; hosts_add "$ALL_BLOCKS"; rm -f "$EXCLUDE_FILE"; wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL"; ZAPRET_RESTART; PAUSE;;
 f|F|а|А) zapret_key;; s|S|ы|Ы) pgrep -f /opt/zapret >/dev/null 2>&1 && stop_zapret || start_zapret;; 1) $Z_ACTION_FUNC;; 2) menu_str;; 3) SPL_MENU ;; 4) MIXOMO_MENU;; 5) PODKOP_menu ;; 6) menu_TG;; 7) DoH_menu;; 8) Discord_menu;; 9) menu_hosts;; 0) sys_menu;; *) echo; exit 0;; esac; }
