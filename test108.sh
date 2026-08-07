@@ -88,7 +88,7 @@ AWG_I1="<b 0xce000000010897a297ecc34cd6dd000044d0ec2e2e1ea2991f467ace4222129b5a0
 
 AUTO_RESULTS="/opt/zapret/tmp/results_auto.txt"; AUTO_BACK="$TMP_SF/zapret_auto_back.txt"
 AUTO_LOG="/opt/zapret/tmp/auto_best.log"; AUTO_CRON_CMD="/usr/bin/zms --auto-best"
-AUTO_LOCK="/tmp/zapret_auto_best.lock"
+AUTO_LOCK="/tmp/zapret_auto_best.lock"; AUTO_STOP_FLAG="$TMP_SF/zapret_auto_best.stop"
 
 if command -v opkg >/dev/null 2>&1; then PKG="opkg"; GO_SUF="1"; CONFZ="/etc/opkg/distfeeds.conf"; PKG_IS_APK=0; UPDATE="opkg update"; INSTALL="opkg install"
 DELETE="opkg remove"; ARCH="$(opkg print-architecture | awk '{print $2}' | tail -n1)"; VER_SUF="r1-all"; SUF_MT=""; SPL_SUF="all"
@@ -112,7 +112,7 @@ get_ver "https://github.com/yandexru45/netshift/releases/latest" "$TMP_VER_POD" 
 # [ -s "$TMP_MAG_VER" ] && MT_VERSION="$(cat "$TMP_MAG_VER")"
 [ -s "$TMP_VER" ] && ZAPRET_VERSION="$(cat "$TMP_VER")"; [ -s "$TMP_VER_POD" ] && PODKOP_LATEST_VER="$(cat "$TMP_VER_POD")"; [ -s "$TMP_VER_TG_MT" ] && TG_MTProto="$(cat "$TMP_VER_TG_MT")"; [ -s "$TMP_VER_SPL" ] && SPL_VER="$(cat "$TMP_VER_SPL")"
 
-echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test107.sh) "$@"' > /usr/bin/zms; chmod +x /usr/bin/zms
+echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test108.sh) "$@"' > /usr/bin/zms; chmod +x /usr/bin/zms
 
 # git="githubusercontent.com"; if ! grep -q "raw.$git" /etc/hosts; then echo -e "\n\033[1;36mДля корректной работы скрипта добавляем домены \033[0mGitHub\033[1;36m в \033[0m/etc/hosts\033[0m"
 # printf "#$git\n185.199.109.133 raw.$git release-assets.$git\n185.199.108.133 private-user-images.$git gist.$git avatars.$git\n" >> /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1; fi
@@ -245,24 +245,21 @@ auto_best_stop_cleanup() {
 }
 
 stop_auto_best() {
-    PID=$(head -n1 "$AUTO_LOCK" 2>/dev/null)
-    [ -z "$PID" ] && return 1
+    touch "$AUTO_STOP_FLAG"
 
-    kill -TERM "$PID" 2>/dev/null
+    PID=$(head -n1 "$AUTO_LOCK" 2>/dev/null)
+    [ -n "$PID" ] && kill -TERM "$PID" 2>/dev/null
 
     _i=0
-    while kill -0 "$PID" 2>/dev/null && [ "$_i" -lt 10 ]; do
+    while auto_best_running && [ "$_i" -lt 8 ]; do
         sleep 1
         _i=$((_i + 1))
     done
-
-    kill -0 "$PID" 2>/dev/null && kill -KILL "$PID" 2>/dev/null
-    rm -f "$AUTO_LOCK"
 }
 
 auto_apply_best_strategy() {
     echo $$ > "$AUTO_LOCK"
-    trap 'auto_best_stop_cleanup; exit 1' TERM INT
+    rm -f "$AUTO_STOP_FLAG"
     trap 'rm -f "$AUTO_LOCK"' EXIT
     mkdir -p "$TMP_SF" "/opt/zapret/tmp"
     : > "$AUTO_LOG"
@@ -304,10 +301,26 @@ auto_apply_best_strategy() {
         : > "$AUTO_RESULTS"
         check_zpr_off
 
+        if [ -f "$AUTO_STOP_FLAG" ]; then
+            echo "Автоподбор остановлен пользователем"
+            rm -f "$AUTO_STOP_FLAG"
+            mv -f "$AUTO_BACK" "$CONF"
+            ZAPRET_RESTART
+            echo "Конфигурация восстановлена"
+            rm -f "$OUT_DPI"
+            exit 0
+        fi
+
         LINES=$(grep -n '^#' "$STR_FILE_AUTO" | cut -d: -f1)
         CUR=0
         echo "$LINES" | while read -r START; do
             CUR=$((CUR + 1))
+            if [ -f "$AUTO_STOP_FLAG" ]; then
+                echo "===> Получен сигнал остановки, прерываем тестирование"
+                break
+            fi
+
+            
             NEXT=$(echo "$LINES" | awk -v s="$START" '$1>s{print;exit}')
             if [ -z "$NEXT" ]; then
                 sed -n "${START},\$p" "$STR_FILE_AUTO" > "$TEMP_FILE_AUTO"
@@ -330,6 +343,16 @@ skip && /^'\''$/ {skip=0; next}
             echo "${NAME} → ${OK}/${TOTAL}" >> "$AUTO_RESULTS"
             echo "===> Стратегия: ${NAME} = ${OK}/${TOTAL}"
         done
+
+        if [ -f "$AUTO_STOP_FLAG" ]; then
+            echo "Автоподбор остановлен пользователем во время тестирования"
+            rm -f "$AUTO_STOP_FLAG"
+            mv -f "$AUTO_BACK" "$CONF"
+            ZAPRET_RESTART
+            echo "Конфигурация восстановлена"
+            rm -f "$OUT_DPI"
+            exit 0
+        fi
 
 sort_results_desc "$AUTO_RESULTS" "$AUTO_RESULTS"
 
@@ -481,7 +504,11 @@ fi
             3) if [ "$RUNNING" = "1" ]; then
                    echo -e "\n${MAGENTA}Останавливаем автоподбор${NC}"
                    stop_auto_best
-                   echo -e "${GREEN}Автоподбор остановлен, конфигурация восстановлена!${NC}\n"
+                   if auto_best_running; then
+                       echo -e "${YELLOW}Автоподбор завершится в течение минуты (тестируется текущая стратегия), конфигурация будет восстановлена автоматически${NC}\n"
+                   else
+                       echo -e "${GREEN}Автоподбор остановлен, конфигурация восстановлена!${NC}\n"
+                   fi
                    PAUSE
                else
                    run_auto_best_background
