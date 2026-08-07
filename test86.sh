@@ -112,7 +112,7 @@ get_ver "https://github.com/yandexru45/netshift/releases/latest" "$TMP_VER_POD" 
 # [ -s "$TMP_MAG_VER" ] && MT_VERSION="$(cat "$TMP_MAG_VER")"
 [ -s "$TMP_VER" ] && ZAPRET_VERSION="$(cat "$TMP_VER")"; [ -s "$TMP_VER_POD" ] && PODKOP_LATEST_VER="$(cat "$TMP_VER_POD")"; [ -s "$TMP_VER_TG_MT" ] && TG_MTProto="$(cat "$TMP_VER_TG_MT")"; [ -s "$TMP_VER_SPL" ] && SPL_VER="$(cat "$TMP_VER_SPL")"
 
-echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test85.sh) "$@"' > /usr/bin/zms; chmod +x /usr/bin/zms
+echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test86.sh) "$@"' > /usr/bin/zms; chmod +x /usr/bin/zms
 
 # git="githubusercontent.com"; if ! grep -q "raw.$git" /etc/hosts; then echo -e "\n\033[1;36mДля корректной работы скрипта добавляем домены \033[0mGitHub\033[1;36m в \033[0m/etc/hosts\033[0m"
 # printf "#$git\n185.199.109.133 raw.$git release-assets.$git\n185.199.108.133 private-user-images.$git gist.$git avatars.$git\n" >> /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1; fi
@@ -238,8 +238,15 @@ echo
 
 auto_best_running() {
     [ -f "$AUTO_LOCK" ] || return 1
+
     _lock_pid=$(head -n1 "$AUTO_LOCK" 2>/dev/null)
-    [ -n "$_lock_pid" ] && kill -0 "$_lock_pid" 2>/dev/null
+
+    if [ -n "$_lock_pid" ] && kill -0 "$_lock_pid" 2>/dev/null; then
+        return 0
+    fi
+
+    rm -f "$AUTO_LOCK"
+    return 1
 }
 
 sort_results_desc() {
@@ -253,6 +260,8 @@ sort_results_desc() {
 }
 
 auto_apply_best_strategy() {
+    echo $$ > "$AUTO_LOCK"
+    trap 'rm -f "$AUTO_LOCK"' EXIT
     mkdir -p "$TMP_SF" "/opt/zapret/tmp"
     : > "$AUTO_LOG"
     {
@@ -410,7 +419,14 @@ disable_auto_best() {
 
 run_auto_best_background() {
     echo -e "\n${MAGENTA}Запускаем автоподбор в фоне${NC}"
-    ( $AUTO_CRON_CMD >/dev/null 2>&1 & )
+
+    (
+        echo $$ > "$AUTO_LOCK"
+        trap 'rm -f "$AUTO_LOCK"' EXIT
+
+        $AUTO_CRON_CMD
+    ) >/dev/null 2>&1 &
+
     echo -e "${GREEN}Задача автоподбора запущена!${NC}\n"
     PAUSE
 }
