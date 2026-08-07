@@ -317,7 +317,7 @@ skip && /^'\''$/ {skip=0; next}
             : > "$LOG_TMP"
             check_all_urls
             echo "${NAME} → ${OK}/${TOTAL}" >> "$AUTO_RESULTS"
-            echo "Стратегия: ${NAME} = ${OK}/${TOTAL}"
+            echo "===> Стратегия: ${NAME} = ${OK}/${TOTAL}"
         done
 
 sort_results_desc "$AUTO_RESULTS" "$AUTO_RESULTS"
@@ -372,7 +372,6 @@ sort_results_desc "$AUTO_RESULTS" "$AUTO_RESULTS"
         fi
 
         rm -f "$OUT_DPI"
-        echo "=== $(date '+%Y-%m-%d %H:%M:%S') Автоподбор завершён ==="
     } >> "$AUTO_LOG" 2>&1
 }
 
@@ -411,8 +410,40 @@ disable_auto_best() {
 
 run_auto_best_background() {
     echo -e "\n${MAGENTA}Запускаем автоподбор в фоне${NC}"
+
+    cp -f "$CONF" "$AUTO_BACK"
+
     ( $AUTO_CRON_CMD >/dev/null 2>&1 & )
+
     echo -e "${GREEN}Задача автоподбора запущена!${NC}\n"
+    PAUSE
+}
+
+stop_auto_best() {
+    if [ -f "$AUTO_LOCK" ]; then
+        PID=$(head -n1 "$AUTO_LOCK")
+
+        if kill -0 "$PID" 2>/dev/null; then
+            echo -e "\n${YELLOW}Останавливаем автоподбор...${NC}"
+            kill "$PID" 2>/dev/null
+            sleep 2
+
+            kill -9 "$PID" 2>/dev/null
+        fi
+
+        rm -f "$AUTO_LOCK"
+    fi
+
+    if [ -f "$AUTO_BACK" ]; then
+        echo -e "${YELLOW}Восстанавливаем сохранённый конфиг...${NC}"
+        mv -f "$AUTO_BACK" "$CONF"
+        ZAPRET_RESTART
+        echo -e "${GREEN}Конфиг восстановлен${NC}"
+    else
+        echo -e "${YELLOW}Сохранённый конфиг не найден${NC}"
+    fi
+
+    echo
     PAUSE
 }
 
@@ -439,24 +470,24 @@ AUTO_BEST_MENU() {
 
         echo -e "\n${CYAN}1) ${GREEN}$( [ -n "$LINE" ] && echo "Изменить время автоподбора" || echo "Включить автоподбор" )${NC}"
         [ -n "$LINE" ] && echo -e "${CYAN}2) ${GREEN}Отключить автоподбор${NC}"
-        if [ "$RUNNING" = "1" ]; then
-            echo -e "${CYAN}3) ${DGRAY}Тест уже выполняется...${NC}"
-        else
-            echo -e "${CYAN}3) ${GREEN}Запустить автоподбор в фоне${NC}"
-        fi
+if [ "$RUNNING" = "1" ]; then
+    echo -e "${CYAN}3) ${GREEN}Остановить фоновый автоподбор${NC}"
+else
+    echo -e "${CYAN}3) ${GREEN}Запустить сейчас автоподбор в фоне${NC}"
+fi
         [ -s "$AUTO_RESULTS" ] && echo -e "${CYAN}4) ${GREEN}Показать результаты последнего теста${NC}"
-                [ -f "$AUTO_LOG" ] && echo -e "${CYAN}5) ${GREEN}Показать полный лог (для отладки)${NC}"
+        [ -f "$AUTO_LOG" ] && echo -e "${CYAN}5) ${GREEN}Показать полный лог (для отладки)${NC}"
         echo -e "${CYAN}6) ${GREEN}Настроить время на роутере${NC}"
         echo -ne "${CYAN}Enter) ${GREEN}Выход в меню тестирования${NC}\n\n${YELLOW}Выберите пункт:${NC} "
         read -r choiceAB
         case "$choiceAB" in
             1) set_auto_best_time ;;
             2) [ -n "$LINE" ] && disable_auto_best ;;
-            3) if [ "$RUNNING" = "1" ]; then
-                   echo -e "\n${YELLOW}Тест уже выполняется, дождитесь завершения${NC}\n"; PAUSE
-               else
-                   run_auto_best_background
-               fi ;;
+3) if [ "$RUNNING" = "1" ]; then
+       stop_auto_best
+   else
+       run_auto_best_background
+   fi ;;
             4) [ -s "$AUTO_RESULTS" ] && show_single_result "$AUTO_RESULTS" ;;
             5) [ -f "$AUTO_LOG" ] && { clear; cat "$AUTO_LOG"; echo; PAUSE; } ;;
             6) TIME_MENU ;;
