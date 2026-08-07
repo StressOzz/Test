@@ -112,7 +112,7 @@ get_ver "https://github.com/yandexru45/netshift/releases/latest" "$TMP_VER_POD" 
 # [ -s "$TMP_MAG_VER" ] && MT_VERSION="$(cat "$TMP_MAG_VER")"
 [ -s "$TMP_VER" ] && ZAPRET_VERSION="$(cat "$TMP_VER")"; [ -s "$TMP_VER_POD" ] && PODKOP_LATEST_VER="$(cat "$TMP_VER_POD")"; [ -s "$TMP_VER_TG_MT" ] && TG_MTProto="$(cat "$TMP_VER_TG_MT")"; [ -s "$TMP_VER_SPL" ] && SPL_VER="$(cat "$TMP_VER_SPL")"
 
-echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test95.sh) "$@"' > /usr/bin/zms; chmod +x /usr/bin/zms
+echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test100.sh) "$@"' > /usr/bin/zms; chmod +x /usr/bin/zms
 
 # git="githubusercontent.com"; if ! grep -q "raw.$git" /etc/hosts; then echo -e "\n\033[1;36mДля корректной работы скрипта добавляем домены \033[0mGitHub\033[1;36m в \033[0m/etc/hosts\033[0m"
 # printf "#$git\n185.199.109.133 raw.$git release-assets.$git\n185.199.108.133 private-user-images.$git gist.$git avatars.$git\n" >> /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1; fi
@@ -396,10 +396,10 @@ set_auto_best_time() {
         PAUSE
         return
     fi
-    echo -ne "\n${YELLOW}Введите час запуска (${NC}0-23${YELLOW}):${NC} "
+    echo -ne "\n${YELLOW}Введите час автозапуска (${NC}0-23${YELLOW}):${NC} "
     read -r HOUR
     case "$HOUR" in
-        ''|*[!0-9]*) echo -e "\n${RED}Ошибка! Введите число от ${NC}0${RED} до ${NC}23\n"; PAUSE; return ;;
+        ''|*[!0-9]*) echo -e "\n${RED}Введите число от ${NC}0${RED} до ${NC}23\n"; PAUSE; return ;;
     esac
     { [ "$HOUR" -ge 0 ] && [ "$HOUR" -le 23 ]; } || { echo -e "\n${RED}Ошибка! Диапазон ${NC}0-23\n"; PAUSE; return; }
 
@@ -428,19 +428,20 @@ run_auto_best_background() {
         $AUTO_CRON_CMD
     ) >/dev/null 2>&1 &
 
-    echo -e "${GREEN}Задача автоподбора запущена!${NC}\n"
+    echo -e "${GREEN}Автоподбор в фоне запущен!${NC}\n"
     PAUSE
 }
 
 AUTO_BEST_MENU() {
     [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }
     while true; do
-        clear; echo -e "${MAGENTA}Меню автоподбора стратегий по расписанию${NC}\n"
+        clear
+        echo -e "${MAGENTA}Меню автоподбора стратегий по расписанию${NC}\n"
         echo -e "${YELLOW}Текущее время на роутере:${NC} ${CYAN}$(date '+%Y-%m-%d %H:%M:%S')${NC}"
 
         if auto_best_running; then
             RUNNING=1
-            echo -e "${YELLOW}Статус:${NC} ${GREEN}тест выполняется${NC}"
+            echo -e "${YELLOW}Автоподбор в фоне:${NC} ${GREEN}тест выполняется${NC}"
         else
             RUNNING=0
         fi
@@ -448,20 +449,20 @@ AUTO_BEST_MENU() {
         LINE=$(auto_best_cron_line)
         if [ -n "$LINE" ]; then
             HOUR=$(echo "$LINE" | awk '{print $2}')
-            echo -e "${YELLOW}Автоподбор:${NC} ${GREEN}включён, ежедневно в $(printf "%02d" "$HOUR"):00${NC}"
+            echo -e "${YELLOW}Автоподбор:${NC} ${GREEN}ежедневно в $(printf "%02d" "$HOUR"):00${NC}"
         else
             echo -e "${YELLOW}Автоподбор:${NC} ${RED}отключен${NC}"
         fi
 
-        echo -e "\n${CYAN}1) ${GREEN}$( [ -n "$LINE" ] && echo "Изменить время автоподбора" || echo "Включить автоподбор" )${NC}"
-        [ -n "$LINE" ] && echo -e "${CYAN}2) ${GREEN}Отключить автоподбор${NC}"
+        echo -e "\n${CYAN}1) ${GREEN}$( [ -n "$LINE" ] && echo "Изменить время автоподбора по расписанию" || echo "Включить автоподбор по расписанию" )${NC}"
+        [ -n "$LINE" ] && echo -e "${CYAN}2) ${GREEN}Отключить автоподбор по расписанию${NC}"
         if [ "$RUNNING" = "1" ]; then
             echo -e "${CYAN}3) ${DGRAY}Тест уже выполняется...${NC}"
         else
-            echo -e "${CYAN}3) ${GREEN}Запустить автоподбор в фоне${NC}"
+            echo -e "${CYAN}3) ${GREEN}Запустить сейчас автоподбор в фоне${NC}"
         fi
         [ -s "$AUTO_RESULTS" ] && echo -e "${CYAN}4) ${GREEN}Показать результаты последнего теста${NC}"
-                [ -f "$AUTO_LOG" ] && echo -e "${CYAN}5) ${GREEN}Показать полный лог (для отладки)${NC}"
+                [ -f "$AUTO_LOG" ] && echo -e "${CYAN}5) ${GREEN}Показать полный лог${NC}"
         echo -e "${CYAN}6) ${GREEN}Настроить время на роутере${NC}"
         echo -ne "${CYAN}Enter) ${GREEN}Выход в меню тестирования${NC}\n\n${YELLOW}Выберите пункт:${NC} "
         read -r choiceAB
@@ -469,7 +470,7 @@ AUTO_BEST_MENU() {
             1) set_auto_best_time ;;
             2) [ -n "$LINE" ] && disable_auto_best ;;
             3) if [ "$RUNNING" = "1" ]; then
-                   echo -e "\n${YELLOW}Тест уже выполняется, дождитесь завершения${NC}\n"; PAUSE
+                   echo -e "\n${YELLOW}Тест уже выполняется, дождитесь завершения!${NC}\n"; PAUSE
                else
                    run_auto_best_background
                fi ;;
