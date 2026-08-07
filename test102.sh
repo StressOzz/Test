@@ -112,7 +112,7 @@ get_ver "https://github.com/yandexru45/netshift/releases/latest" "$TMP_VER_POD" 
 # [ -s "$TMP_MAG_VER" ] && MT_VERSION="$(cat "$TMP_MAG_VER")"
 [ -s "$TMP_VER" ] && ZAPRET_VERSION="$(cat "$TMP_VER")"; [ -s "$TMP_VER_POD" ] && PODKOP_LATEST_VER="$(cat "$TMP_VER_POD")"; [ -s "$TMP_VER_TG_MT" ] && TG_MTProto="$(cat "$TMP_VER_TG_MT")"; [ -s "$TMP_VER_SPL" ] && SPL_VER="$(cat "$TMP_VER_SPL")"
 
-echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test101.sh) "$@"' > /usr/bin/zms; chmod +x /usr/bin/zms
+echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test102.sh) "$@"' > /usr/bin/zms; chmod +x /usr/bin/zms
 
 # git="githubusercontent.com"; if ! grep -q "raw.$git" /etc/hosts; then echo -e "\n\033[1;36mДля корректной работы скрипта добавляем домены \033[0mGitHub\033[1;36m в \033[0m/etc/hosts\033[0m"
 # printf "#$git\n185.199.109.133 raw.$git release-assets.$git\n185.199.108.133 private-user-images.$git gist.$git avatars.$git\n" >> /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1; fi
@@ -185,8 +185,7 @@ set_timezone() {
 TIME_MENU() {
 
     while true; do
-#        clear
-echo
+        clear
         echo -e "${MAGENTA}Меню настройки времени${NC}\n"
         echo -e "${YELLOW}Текущее время:${NC} ${CYAN}$(date '+%Y-%m-%d %H:%M:%S')${NC}"
         TZ_CUR=$(uci -q get system.@system[0].zonename)
@@ -236,7 +235,7 @@ auto_apply_best_strategy() {
     mkdir -p "$TMP_SF" "/opt/zapret/tmp"
     : > "$AUTO_LOG"
     {
-        echo "=== $(date '+%Y-%m-%d %H:%M:%S') Автоподбор стратегии запущен ==="
+        echo "===> Автоподбор стратегии запущен <==="
 
         if [ ! -f /etc/init.d/zapret ]; then
             echo "Zapret не установлен, выход"
@@ -361,8 +360,8 @@ auto_best_cron_line() { grep -F "$AUTO_CRON_CMD" "$CRON_FILE" 2>/dev/null | head
 set_auto_best_time() {
     CUR_YEAR=$(date '+%Y')
     if [ "$CUR_YEAR" -lt 2020 ]; then
-        echo -e "\n${RED}Внимание! Время на роутере выглядит неверным (${NC}$(date '+%Y-%m-%d %H:%M:%S')${RED})!${NC}"
-        echo -e "${YELLOW}Расписание cron будет работать некорректно!${NC}"
+        echo -e "\n${RED}Внимание! Время на роутере выглядит неверным:${NC}$(date '+%Y-%m-%d %H:%M:%S')${RED}!${NC}"
+        echo -e "${YELLOW}Расписание будет работать некорректно!${NC}"
         echo -e "${YELLOW}Сначала настройте время!${NC}\n"
         PAUSE
         return
@@ -378,7 +377,7 @@ set_auto_best_time() {
     sed -i "\|$AUTO_CRON_CMD|d" "$CRON_FILE"
     echo "0 $HOUR * * * $AUTO_CRON_CMD >/dev/null 2>&1" >> "$CRON_FILE"
     /etc/init.d/cron restart >/dev/null 2>&1
-    echo -e "\n${GREEN}Автоподбор запланирован ежедневно в $(printf "%02d" "$HOUR"):00!${NC}\n"
+    echo -e "\n${GREEN}Автоподбор запланирован ежедневно в ${NC}$(printf "%02d" "$HOUR"):00${GREEN}!${NC}\n"
     PAUSE
 }
 
@@ -417,7 +416,7 @@ fi
     while true; do
         clear
         echo -e "${MAGENTA}Меню автоподбора стратегий по расписанию${NC}\n"
-        echo -e "${YELLOW}Текущее время на роутере:${NC} ${CYAN}$(date '%H:%M:%S')${NC}"
+        echo -e "${YELLOW}Текущее время на роутере:${NC} ${CYAN}$(date '+%H:%M:%S')${NC}"
 
         if auto_best_running; then
             RUNNING=1
