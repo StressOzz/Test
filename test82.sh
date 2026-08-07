@@ -152,17 +152,17 @@ set_timezone() {
     CUR_TZ=$(uci -q get system.@system[0].zonename)
     
     echo -e "\n${MAGENTA}Выберите часовой пояс${NC}"
-    echo -e "${CYAN}1) ${GREEN}Калининград ${NC}(UTC+2)"
-    echo -e "${CYAN}2) ${GREEN}Москва ${NC}(UTC+3)"
-    echo -e "${CYAN}3) ${GREEN}Самара ${NC}(UTC+4)"
-    echo -e "${CYAN}4) ${GREEN}Екатеринбург ${NC}(UTC+5)"
-    echo -e "${CYAN}5) ${GREEN}Омск ${NC}(UTC+6)"
-    echo -e "${CYAN}6) ${GREEN}Красноярск ${NC}(UTC+7)"
-    echo -e "${CYAN}7) ${GREEN}Иркутск ${NC}(UTC+8)"
-    echo -e "${CYAN}8) ${GREEN}Якутск ${NC}(UTC+9)"
-    echo -e "${CYAN}9) ${GREEN}Владивосток ${NC}(UTC+10)"
-    echo -e "${CYAN}10) ${GREEN}Магадан ${NC}(UTC+11)"
-    echo -e "${CYAN}11) ${GREEN}Камчатка ${NC}(UTC+12)"
+    echo -e " ${CYAN}1) ${GREEN}Калининград  ${NC}(UTC+2)"
+    echo -e " ${CYAN}2) ${GREEN}Москва       ${NC}(UTC+3)"
+    echo -e " ${CYAN}3) ${GREEN}Самара       ${NC}(UTC+4)"
+    echo -e " ${CYAN}4) ${GREEN}Екатеринбург ${NC}(UTC+5)"
+    echo -e " ${CYAN}5) ${GREEN}Омск         ${NC}(UTC+6)"
+    echo -e " ${CYAN}6) ${GREEN}Красноярск   ${NC}(UTC+7)"
+    echo -e " ${CYAN}7) ${GREEN}Иркутск      ${NC}(UTC+8)"
+    echo -e " ${CYAN}8) ${GREEN}Якутск       ${NC}(UTC+9)"
+    echo -e " ${CYAN}9) ${GREEN}Владивосток  ${NC}(UTC+10)"
+    echo -e "${CYAN}10) ${GREEN}Магадан      ${NC}(UTC+11)"
+    echo -e "${CYAN}11) ${GREEN}Камчатка     ${NC}(UTC+12)"
     echo -e "${CYAN}12) ${GREEN}UTC${NC}"
 
     echo -ne "${CYAN}Enter) ${GREEN}Отмена${NC}\n\n${YELLOW}Выберите пункт:${NC} "
@@ -190,7 +190,7 @@ set_timezone() {
 
     /etc/init.d/system reload >/dev/null 2>&1
 
-    echo -e "\n${GREEN}Часовой пояс установлен:${NC} $ZONE ($TZSTR)\n"
+    echo -e "\n${GREEN}Часовой пояс установлен:${NC} $ZONE\n"
     PAUSE
 }
 
@@ -214,7 +214,8 @@ if [ "$NEED_INSTALL" = "1" ]; then
 fi
 
     while true; do
-        clear
+#        clear
+echo
         echo -e "${MAGENTA}Меню настройки времени${NC}\n"
         echo -e "${YELLOW}Текущее время:${NC} ${CYAN}$(date '+%Y-%m-%d %H:%M:%S')${NC}"
         TZ_CUR=$(uci -q get system.@system[0].zonename)
@@ -252,13 +253,6 @@ sort_results_desc() {
 }
 
 auto_apply_best_strategy() {
-    if auto_best_running; then
-        echo "Автоподбор уже выполняется (PID $(head -n1 "$AUTO_LOCK")), повторный запуск отменён" >> "$AUTO_LOG" 2>/dev/null
-        return 1
-    fi
-    printf '%s\n%s\n' "$$" "$(date +%s)" > "$AUTO_LOCK"
-    trap 'rm -f "$AUTO_LOCK"' EXIT INT TERM
-
     mkdir -p "$TMP_SF" "/opt/zapret/tmp"
     : > "$AUTO_LOG"
     {
@@ -370,7 +364,6 @@ sort_results_desc "$AUTO_RESULTS" "$AUTO_RESULTS"
             if ! grep -q "option NFQWS_PORTS_TCP.*2053,2083,2087,2096,8443" "$CONF"; then
                 sed -i "/^[[:space:]]*option NFQWS_PORTS_TCP '/s/'\$/,2053,2083,2087,2096,8443'/" "$CONF"
             fi
-            ADD_Yv
             discord_str_add
             ZAPRET_RESTART
             echo "Стратегия '$BEST_NAME' применена и сохранена"
@@ -452,6 +445,7 @@ AUTO_BEST_MENU() {
             echo -e "${CYAN}3) ${GREEN}Запустить автоподбор в фоне${NC}"
         fi
         [ -s "$AUTO_RESULTS" ] && echo -e "${CYAN}4) ${GREEN}Показать результаты последнего теста${NC}"
+                [ -f "$AUTO_LOG" ] && echo -e "${CYAN}5) ${GREEN}Показать полный лог (для отладки)${NC}"
         echo -e "${CYAN}6) ${GREEN}Настроить время на роутере${NC}"
         echo -ne "${CYAN}Enter) ${GREEN}Выход в меню тестирования${NC}\n\n${YELLOW}Выберите пункт:${NC} "
         read -r choiceAB
@@ -464,6 +458,7 @@ AUTO_BEST_MENU() {
                    run_auto_best_background
                fi ;;
             4) [ -s "$AUTO_RESULTS" ] && show_single_result "$AUTO_RESULTS" ;;
+            5) [ -f "$AUTO_LOG" ] && { clear; cat "$AUTO_LOG"; echo; PAUSE; } ;;
             6) TIME_MENU ;;
             *) return ;;
         esac
