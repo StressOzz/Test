@@ -112,7 +112,7 @@ get_ver "https://github.com/yandexru45/netshift/releases/latest" "$TMP_VER_POD" 
 # [ -s "$TMP_MAG_VER" ] && MT_VERSION="$(cat "$TMP_MAG_VER")"
 [ -s "$TMP_VER" ] && ZAPRET_VERSION="$(cat "$TMP_VER")"; [ -s "$TMP_VER_POD" ] && PODKOP_LATEST_VER="$(cat "$TMP_VER_POD")"; [ -s "$TMP_VER_TG_MT" ] && TG_MTProto="$(cat "$TMP_VER_TG_MT")"; [ -s "$TMP_VER_SPL" ] && SPL_VER="$(cat "$TMP_VER_SPL")"
 
-echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test.sh) "$@"' > /usr/bin/zms; chmod +x /usr/bin/zms
+echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test1.sh) "$@"' > /usr/bin/zms; chmod +x /usr/bin/zms
 
 # git="githubusercontent.com"; if ! grep -q "raw.$git" /etc/hosts; then echo -e "\n\033[1;36mДля корректной работы скрипта добавляем домены \033[0mGitHub\033[1;36m в \033[0m/etc/hosts\033[0m"
 # printf "#$git\n185.199.109.133 raw.$git release-assets.$git\n185.199.108.133 private-user-images.$git gist.$git avatars.$git\n" >> /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1; fi
@@ -416,7 +416,7 @@ sort_results_desc "$AUTO_RESULTS" "$AUTO_RESULTS"
         BEST_NAME=$(echo "$BEST_LINE" | cut -d'→' -f1 | sed 's/[[:space:]]*$//')
         echo "Лучшая стратегия: $BEST_LINE"
 
-mv -f "$AUTO_BACK" "$CONF"
+        mv -f "$AUTO_BACK" "$CONF"
         START=$(grep -nxF "#${BEST_NAME}" "$STR_FILE_AUTO" | head -n1 | cut -d: -f1)
         if [ -n "$START" ]; then
             NEXT=$(echo "$LINES" | awk -v s="$START" '$1>s{print;exit}')
@@ -442,9 +442,6 @@ mv -f "$AUTO_BACK" "$CONF"
                 echo "'"
             } >> "$CONF"
 
-            ADD_GP_DOMAINS
-            rm -f "$EXCLUDE_FILE"
-            wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL"
             if ! grep -q "option NFQWS_PORTS_UDP.*19294-19344,50000-50100" "$CONF"; then
                 sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'\$/,19294-19344,50000-50100'/" "$CONF"
             fi
@@ -452,13 +449,10 @@ mv -f "$AUTO_BACK" "$CONF"
                 sed -i "/^[[:space:]]*option NFQWS_PORTS_TCP '/s/'\$/,2053,2083,2087,2096,8443'/" "$CONF"
             fi
             discord_str_add
-            ADD_Yv
 
             case "$BEST_NAME" in
                 v[0-9]*)
                     if [ -n "$ORIG_GV_BLOCK" ]; then
-                        # Gv у нас нет своего "--new" в конце, поэтому вставляем
-                        # его перед закрывающей кавычкой option NFQWS_OPT
                         LAST_QUOTE_LINE=$(grep -n "^'\$" "$CONF" | tail -n1 | cut -d: -f1)
                         if [ -n "$LAST_QUOTE_LINE" ]; then
                             sed -i "${LAST_QUOTE_LINE}d" "$CONF"
@@ -468,11 +462,13 @@ mv -f "$AUTO_BACK" "$CONF"
                     fi
                     ;;
             esac
+            
+ADD_Yv
 
             ZAPRET_RESTART
             echo "Стратегия '$BEST_NAME' применена и сохранена"
             [ -n "$ORIG_YV_BLOCK" ] && case "$BEST_NAME" in v[0-9]*) echo "Оригинальный блок Yv перенесён" ;; esac
-            [ -n "$ORIG_GV_BLOCK" ] && case "$BEST_NAME" in v[0-9]*) echo "Оригинальный блок Gv (игровая стратегия) перенесён" ;; esac
+            [ -n "$ORIG_GV_BLOCK" ] && case "$BEST_NAME" in v[0-9]*) echo "Оригинальный блок Gv перенесён" ;; esac
         else
             echo "Не удалось повторно найти блок стратегии '$BEST_NAME', конфиг восстановлен без применения"
         fi
@@ -574,7 +570,7 @@ if [ "$RUNNING" = "1" ]; then
             echo -e "${CYAN}3) ${GREEN}Запустить сейчас автоподбор в фоне${NC}"
         fi
         [ -s "$AUTO_RESULTS" ] && echo -e "${CYAN}4) ${GREEN}Показать результаты последнего теста${NC}"
-                [ -f "$AUTO_LOG" ] && echo -e "${CYAN}5) ${GREEN}Показать полный лог${NC}"
+                [ -f "$AUTO_LOG" ] && echo -e "${CYAN}5) ${GREEN}Показать полный лог последнего теста${NC}"
         echo -e "${CYAN}6) ${GREEN}Настроить время на роутере${NC}"
         
 if [ -s "$AUTO_RESULTS" ] || [ -f "$AUTO_LOG" ]; then
@@ -601,7 +597,7 @@ fi
             6) TIME_MENU ;;
             7) 
             
-            echo -e "\n${GREEN}Результаты теста и лог удалены${NC}\n"
+            echo -e "\n${GREEN}Результаты теста и лог удалены!${NC}\n"
             rm -rf "$AUTO_RESULTS" "$AUTO_BACK" "$AUTO_LOG" "$AUTO_LOCK" 
             PAUSE
             ;;
@@ -870,7 +866,7 @@ if [ -f "$CONF" ] && { grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-use
 # ==========================================
 # Стратегии
 # ==========================================
-ADD_Yv() { if ! grep -q "^#Yv08" "$CONF" && ! grep -q "^#general" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_OPT '/a\\#Yv08\\n--filter-tcp=443\\n--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt\\n--dpi-desync=hostfakesplit\\n--dpi-desync-hostfakesplit-mod=host=google.com\\n--dpi-desync-fooling=ts\\n--new" "$CONF"; fi; }
+ADD_Yv() { if ! grep -q "^#Yv" "$CONF" && ! grep -q "^#general" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_OPT '/a\\#Yv08\\n--filter-tcp=443\\n--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt\\n--dpi-desync=hostfakesplit\\n--dpi-desync-hostfakesplit-mod=host=google.com\\n--dpi-desync-fooling=ts\\n--new" "$CONF"; fi; }
 strategy_v1() { printf '%s\n' "#v1" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=split2" "--dpi-desync-split-seqovl=681" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/stun.bin"; }
 strategy_v2() { printf '%s\n' "#v2" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake,multisplit" "--dpi-desync-split-seqovl=681" "--dpi-desync-split-pos=1" "--dpi-desync-fooling=ts" "--dpi-desync-repeats=8" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/stun.bin" "--dpi-desync-fake-tls-mod=rnd,dupsid,sni=www.google.com"; }
 strategy_v3() { printf '%s\n' "#v3" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=hostfakesplit" "--dpi-desync-hostfakesplit-mod=host=ozon.ru" "--dpi-desync-repeats=4" "--dpi-desync-fooling=ts,md5sig" "--dpi-desync-badseq-increment=0"; }
