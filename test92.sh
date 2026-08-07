@@ -112,7 +112,7 @@ get_ver "https://github.com/yandexru45/netshift/releases/latest" "$TMP_VER_POD" 
 # [ -s "$TMP_MAG_VER" ] && MT_VERSION="$(cat "$TMP_MAG_VER")"
 [ -s "$TMP_VER" ] && ZAPRET_VERSION="$(cat "$TMP_VER")"; [ -s "$TMP_VER_POD" ] && PODKOP_LATEST_VER="$(cat "$TMP_VER_POD")"; [ -s "$TMP_VER_TG_MT" ] && TG_MTProto="$(cat "$TMP_VER_TG_MT")"; [ -s "$TMP_VER_SPL" ] && SPL_VER="$(cat "$TMP_VER_SPL")"
 
-echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test91.sh) "$@"' > /usr/bin/zms; chmod +x /usr/bin/zms
+echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test92.sh) "$@"' > /usr/bin/zms; chmod +x /usr/bin/zms
 
 # git="githubusercontent.com"; if ! grep -q "raw.$git" /etc/hosts; then echo -e "\n\033[1;36mДля корректной работы скрипта добавляем домены \033[0mGitHub\033[1;36m в \033[0m/etc/hosts\033[0m"
 # printf "#$git\n185.199.109.133 raw.$git release-assets.$git\n185.199.108.133 private-user-images.$git gist.$git avatars.$git\n" >> /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1; fi
@@ -260,17 +260,10 @@ sort_results_desc() {
 }
 
 auto_apply_best_strategy() {
-
-    if auto_best_running; then
-        echo "Автоподбор уже запущен"
-        exit 0
-    fi
-
-
     echo $$ > "$AUTO_LOCK"
     trap 'rm -f "$AUTO_LOCK"' EXIT
     mkdir -p "$TMP_SF" "/opt/zapret/tmp"
-[ -f "$AUTO_LOG" ] || touch "$AUTO_LOG"
+    : > "$AUTO_LOG"
     {
         echo "=== $(date '+%Y-%m-%d %H:%M:%S') Автоподбор стратегии запущен ==="
 
@@ -426,20 +419,14 @@ disable_auto_best() {
 }
 
 run_auto_best_background() {
-
-    if auto_best_running; then
-        echo -e "\n${YELLOW}Автоподбор уже выполняется!${NC}\n"
-        PAUSE
-        return
-    fi
-
     echo -e "\n${MAGENTA}Запускаем автоподбор в фоне${NC}"
 
     (
+        echo $$ > "$AUTO_LOCK"
+        trap 'rm -f "$AUTO_LOCK"' EXIT
+
         $AUTO_CRON_CMD
     ) >/dev/null 2>&1 &
-
-    echo $! > "$AUTO_LOCK"
 
     echo -e "${GREEN}Задача автоподбора запущена!${NC}\n"
     PAUSE
@@ -468,11 +455,11 @@ AUTO_BEST_MENU() {
 
         echo -e "\n${CYAN}1) ${GREEN}$( [ -n "$LINE" ] && echo "Изменить время автоподбора" || echo "Включить автоподбор" )${NC}"
         [ -n "$LINE" ] && echo -e "${CYAN}2) ${GREEN}Отключить автоподбор${NC}"
-if [ "$RUNNING" = "1" ]; then
-    echo -e "${CYAN}3) ${RED}Остановить фоновый автоподбор${NC}"
-else
-    echo -e "${CYAN}3) ${GREEN}Запустить сейчас автоподбор в фоне${NC}"
-fi
+        if [ "$RUNNING" = "1" ]; then
+            echo -e "${CYAN}3) ${DGRAY}Тест уже выполняется...${NC}"
+        else
+            echo -e "${CYAN}3) ${GREEN}Запустить автоподбор в фоне${NC}"
+        fi
         [ -s "$AUTO_RESULTS" ] && echo -e "${CYAN}4) ${GREEN}Показать результаты последнего теста${NC}"
                 [ -f "$AUTO_LOG" ] && echo -e "${CYAN}5) ${GREEN}Показать полный лог (для отладки)${NC}"
         echo -e "${CYAN}6) ${GREEN}Настроить время на роутере${NC}"
@@ -481,45 +468,17 @@ fi
         case "$choiceAB" in
             1) set_auto_best_time ;;
             2) [ -n "$LINE" ] && disable_auto_best ;;
-3) if [ "$RUNNING" = "1" ]; then
-       stop_auto_best
-   else
-       run_auto_best_background
-   fi ;;
+            3) if [ "$RUNNING" = "1" ]; then
+                   echo -e "\n${YELLOW}Тест уже выполняется, дождитесь завершения${NC}\n"; PAUSE
+               else
+                   run_auto_best_background
+               fi ;;
             4) [ -s "$AUTO_RESULTS" ] && show_single_result "$AUTO_RESULTS" ;;
             5) [ -f "$AUTO_LOG" ] && { clear; cat "$AUTO_LOG"; echo; PAUSE; } ;;
             6) TIME_MENU ;;
             *) return ;;
         esac
     done
-}
-
-stop_auto_best() {
-    [ ! -f "$AUTO_LOCK" ] && return
-
-    PID=$(head -n1 "$AUTO_LOCK" 2>/dev/null)
-
-    echo -e "\n${YELLOW}Останавливаем автоподбор...${NC}"
-
-    if [ -n "$PID" ] && kill -0 "$PID" 2>/dev/null; then
-        kill "$PID" 2>/dev/null
-        sleep 2
-
-        # если не умер - принудительно
-        kill -9 "$PID" 2>/dev/null
-    fi
-
-    if [ -f "$AUTO_BACK" ]; then
-        cp -f "$AUTO_BACK" "$CONF"
-        echo -e "${GREEN}Сохранённый конфиг восстановлен${NC}"
-        ZAPRET_RESTART
-    fi
-
-    rm -f "$AUTO_LOCK"
-    rm -f "$OUT_DPI" "$TMP_SF/str_temp_auto.txt" "$AUTO_RESULTS" "$AUTO_BACK" "$AUTO_LOG" "$AUTO_LOCK"
-
-    echo -e "${GREEN}Автоподбор остановлен${NC}\n"
-    PAUSE
 }
 
 # ==========================================
@@ -1242,18 +1201,7 @@ TGSTATUS=""; pidof tg-ws-proxy-go >/dev/null 2>&1 && TGSTATUS="${TGSTATUS:+$TGST
 if hosts_enabled; then echo -e "${YELLOW}Домены в hosts:      ${GREEN}$hosts_echo${NC}"; fi; [ -f "$DATE_FILE" ] && echo -e "${YELLOW}Резервная копия:${NC}     ${GREEN}сохранена"; show_script_50 && [ -n "$name" ] && echo -e "${YELLOW}Установлен скрипт:${NC}   $name"; grep -q "$Fin_IP_Dis" /etc/hosts && echo -e "${YELLOW}IP для Discord:      ${GREEN}включены${NC}"
 if [ -n "$DOH_STATUS" ]; then if [ "$PKG_IS_APK" -eq 1 ]; then apk info -e https-dns-proxy >/dev/null 2>&1 && echo -e "${YELLOW}DNS over HTTPS:${NC}      ${GREEN}$DOH_STATUS${NC}"; else opkg list-installed | grep -q '^https-dns-proxy ' && echo -e "${YELLOW}DNS over HTTPS:${NC}      ${GREEN}$DOH_STATUS${NC}"; fi; fi
 pkg_is_installed netshift && PODKOP_VER && echo -e "${YELLOW}NetShift:${NC}            $PODKOP_STATUS"; if web_is_enabled; then echo -e "${YELLOW}Доступ из браузера:${NC}  $LAN_IP:7681"; fi; quic_is_blocked && if quic_is_blocked; then echo -e "${YELLOW}Блокировка QUIC:${NC}     ${GREEN}включена${NC}"; fi; if grep -q 'ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc
-then echo -e "${YELLOW}Flow Offloading FIX:${NC} ${GREEN}включён${NC}"; fi; if [ "$CURR" != "default / OpenWrt" ]; then echo -e "${YELLOW}Зеркало OpenWRT:${NC}     $CURR"; fi; if [ -f /etc/init.d/zapret ] && [ -f "$CONF" ] && grep -Eq "^[[:space:]]*option DISABLE_IPV6 '0'" "$CONF"; then echo -e "${YELLOW}IPv6 в Zapret:       ${GREEN}включён${NC}"; fi
-
-if LINE=$(grep -F "$AUTO_CRON_CMD" "$CRON_FILE" 2>/dev/null | head -n1); then
-    if [ -n "$LINE" ]; then
-        CRON_MIN=$(echo "$LINE" | awk '{print $1}')
-        CRON_HOUR=$(echo "$LINE" | awk '{print $2}')
-
-        echo -e "${YELLOW}Автоподбор стратегий:${NC} ${GREEN}ежедневно в $(printf "%02d" "$CRON_HOUR"):$(printf "%02d" "$CRON_MIN")${NC}"
-    fi
-fi
-
-INFO_ZPR_STR; }
+then echo -e "${YELLOW}Flow Offloading FIX:${NC} ${GREEN}включён${NC}"; fi; if [ "$CURR" != "default / OpenWrt" ]; then echo -e "${YELLOW}Зеркало OpenWRT:${NC}     $CURR"; fi; if [ -f /etc/init.d/zapret ] && [ -f "$CONF" ] && grep -Eq "^[[:space:]]*option DISABLE_IPV6 '0'" "$CONF"; then echo -e "${YELLOW}IPv6 в Zapret:       ${GREEN}включён${NC}"; fi; INFO_ZPR_STR; }
 INFO_ZPR_STR() { if [ -f "$CONF" ]; then line=$(grep -m1 '^#general' "$CONF"); GEN="${line:+${line#?} / }"; current="$ver$( [ -n "$ver" ] && [ -n "$yv_ver" ] && echo " / " )$yv_ver"; DV=$(grep -o -E '^#Dv[0-9][0-9]*' "$CONF" | sed 's/^#[[:space:]]*/\/ /' | head -n1)
 GV=$(grep -m1 '^#Gv' "$CONF" | sed 's/^#/\/ /'); UPD=$(grep -q '^#udp443' "$CONF" && echo '/ udp443'); WS=$(grep -q -- '--wssize 1:6' "$CONF" && echo '/ wssize'); ME=$(grep -q -- '--methodeol' "$CONF" && echo '/ methodeol'); if [ -n "$current" ]
 then echo -e "${YELLOW}Стратегия Zapret:${NC}    ${CYAN}${GEN}$current${DV:+ $DV}${GV:+ $GV}${UPD:+ $UPD}${WS:+ $WS}${ME:+ $ME}${RKN_STATUS:+ $RKN_STATUS}${NC}"; elif [ -n "$RKN_STATUS" ]
