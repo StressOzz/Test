@@ -112,7 +112,7 @@ get_ver "https://github.com/yandexru45/netshift/releases/latest" "$TMP_VER_POD" 
 # [ -s "$TMP_MAG_VER" ] && MT_VERSION="$(cat "$TMP_MAG_VER")"
 [ -s "$TMP_VER" ] && ZAPRET_VERSION="$(cat "$TMP_VER")"; [ -s "$TMP_VER_POD" ] && PODKOP_LATEST_VER="$(cat "$TMP_VER_POD")"; [ -s "$TMP_VER_TG_MT" ] && TG_MTProto="$(cat "$TMP_VER_TG_MT")"; [ -s "$TMP_VER_SPL" ] && SPL_VER="$(cat "$TMP_VER_SPL")"
 
-echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test102.sh) "$@"' > /usr/bin/zms; chmod +x /usr/bin/zms
+echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test103.sh) "$@"' > /usr/bin/zms; chmod +x /usr/bin/zms
 
 # git="githubusercontent.com"; if ! grep -q "raw.$git" /etc/hosts; then echo -e "\n\033[1;36mДля корректной работы скрипта добавляем домены \033[0mGitHub\033[1;36m в \033[0m/etc/hosts\033[0m"
 # printf "#$git\n185.199.109.133 raw.$git release-assets.$git\n185.199.108.133 private-user-images.$git gist.$git avatars.$git\n" >> /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1; fi
@@ -983,17 +983,26 @@ INFO_ZPR_STR; STATUS_V=""; STATUS_FLOW=""; STATUS_DOMAIN=""; if [ -s "$RES3" ]; 
 [ -f /root/custom_test.txt ] && echo -e "${YELLOW}/root/custom_test.txt:  ${GREEN}присутствует${NC}"; echo -e "${YELLOW}Тест пройден:${NC} ${STATUS_V} | ${STATUS_FLOW} | ${STATUS_DOMAIN} | ${STATUS_CUSTOM}"
 
 echo -e "\n${CYAN}1) ${GREEN}Тестирование стратегий ${NC}v ${GREEN}/${NC} Flowseal${NC}"
-echo -e "${CYAN}4) ${GREEN}Тестировать ${NC}текущую${GREEN} стратегию ${NC}\n${CYAN}5) ${GREEN}Тестировать стратегии ${NC}по домену${NC}\n${CYAN}6) ${GREEN}Тестировать стратегии для ${NC}YouTube\n${CYAN}7) ${GREEN}Тестировать стратегии из ${NC}/root/custom_test.txt"
-if [ -s "$RES_DOMAIN" ]; then echo -e "${CYAN}8) ${GREEN}Результаты тестирования ${NC}по домену"; fi; if [ -s "$RES1" ] || [ -s "$RES2" ] || [ -s "$RES3" ]; then echo -e "${CYAN}9) ${GREEN}Результаты тестирования стратегий${NC}"; fi
+echo -e "${CYAN}2) ${GREEN}Тестировать ${NC}текущую${GREEN} стратегию ${NC}\n${CYAN}3) ${GREEN}Тестировать стратегии ${NC}по домену${NC}"
+echo -e "${CYAN}4) ${GREEN}Тестировать стратегии для ${NC}YouTube\n${CYAN}5) ${GREEN}Тестировать стратегии из ${NC}/root/custom_test.txt"
+echo -e "${CYAN}6) ${GREEN}Меню автоподбора стратегий по расписанию${NC}"
+if [ -s "$RES_DOMAIN" ]; then echo -e "${CYAN}7) ${GREEN}Результаты тестирования ${NC}по домену"; fi; if [ -s "$RES1" ] || [ -s "$RES2" ] || [ -s "$RES3" ]; then echo -e "${CYAN}8) ${GREEN}Результаты тестирования стратегий${NC}"; fi
 if [ -s "$RES_CUSTOM" ]; then echo -e "${CYAN}0) ${GREEN}Результаты тестирования ${NC}Custom${GREEN} стратегий${NC}"; fi
-if [ -s "$RES1" ] || [ -s "$RES2" ] || [ -s "$RES3" ] || [ -s "$RES_DOMAIN" ] || [ -s "$RES_CUSTOM" ]; then echo -e "${CYAN}10) ${GREEN}Удалить результаты тестирования${NC}"; fi
-echo -e "${CYAN}11) ${GREEN}Меню автоподбора стратегий по расписанию${NC}"
+if [ -s "$RES1" ] || [ -s "$RES2" ] || [ -s "$RES3" ] || [ -s "$RES_DOMAIN" ] || [ -s "$RES_CUSTOM" ]; then echo -e "${CYAN}9) ${GREEN}Удалить результаты тестирования${NC}"; fi
 echo -ne "${CYAN}Enter) ${GREEN}Выход в меню стратегий${NC}\n\n${YELLOW}Выберите пункт:${NC} ";read -r t; case "$t" in
 
 1) TEST_STRATEGY_MENU;;
+2) check_current_strategy;; 
+3) run_test_by_domain;; 
+4) auto_stryou;;
+5) TEST_CUSTOM;;
+6) AUTO_BEST_MENU;;
+0) show_single_result "$RES_CUSTOM";;
+7) show_domain_results;;
+8) show_test_results;;
+9) rm -f /opt/zapret/tmp/results*; echo -e "\n${GREEN}Результаты тестирования удалены!${NC}\n"; PAUSE;;
 
-4) check_current_strategy;; 5) run_test_by_domain;; 6) auto_stryou;;
-7) TEST_CUSTOM;; 0) show_single_result "$RES_CUSTOM";; 8) show_domain_results;; 9) show_test_results;; 10) rm -f /opt/zapret/tmp/results*; echo -e "\n${GREEN}Результаты тестирования удалены!${NC}\n"; PAUSE;; 11) AUTO_BEST_MENU;; *) break;; esac; done; }
+*) break;; esac; done; }
 
 TEST_STRATEGY_MENU() {
     while true; do
