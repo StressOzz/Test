@@ -112,7 +112,7 @@ get_ver "https://github.com/yandexru45/netshift/releases/latest" "$TMP_VER_POD" 
 # [ -s "$TMP_MAG_VER" ] && MT_VERSION="$(cat "$TMP_MAG_VER")"
 [ -s "$TMP_VER" ] && ZAPRET_VERSION="$(cat "$TMP_VER")"; [ -s "$TMP_VER_POD" ] && PODKOP_LATEST_VER="$(cat "$TMP_VER_POD")"; [ -s "$TMP_VER_TG_MT" ] && TG_MTProto="$(cat "$TMP_VER_TG_MT")"; [ -s "$TMP_VER_SPL" ] && SPL_VER="$(cat "$TMP_VER_SPL")"
 
-echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test100.sh) "$@"' > /usr/bin/zms; chmod +x /usr/bin/zms
+echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test101.sh) "$@"' > /usr/bin/zms; chmod +x /usr/bin/zms
 
 # git="githubusercontent.com"; if ! grep -q "raw.$git" /etc/hosts; then echo -e "\n\033[1;36mДля корректной работы скрипта добавляем домены \033[0mGitHub\033[1;36m в \033[0m/etc/hosts\033[0m"
 # printf "#$git\n185.199.109.133 raw.$git release-assets.$git\n185.199.108.133 private-user-images.$git gist.$git avatars.$git\n" >> /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1; fi
@@ -135,18 +135,6 @@ sync_ntp() {
     PAUSE
 }
 
-set_manual_time() {
-    echo -e "\n${YELLOW}Текущее время:${NC} $(date '+%Y-%m-%d %H:%M:%S')"
-    echo -ne "${YELLOW}Введите новую дату и время (${NC}ГГГГ-ММ-ДД ЧЧ:ММ:СС${YELLOW}): ${NC}"
-    read -r NEWTIME
-    [ -z "$NEWTIME" ] && return
-    if ! date -s "$NEWTIME" >/dev/null 2>&1; then
-        echo -e "\n${RED}Неверный формат даты!${NC}\n"; PAUSE; return
-    fi
-    command -v hwclock >/dev/null 2>&1 && hwclock -w >/dev/null 2>&1
-    echo -e "\n${GREEN}Время установлено:${NC} $(date '+%Y-%m-%d %H:%M:%S %Z')\n"
-    PAUSE
-}
 
 set_timezone() {
     CUR_TZ=$(uci -q get system.@system[0].zonename)
@@ -195,23 +183,6 @@ set_timezone() {
 }
 
 TIME_MENU() {
-
-NEED_INSTALL=0
-
-for pkg in zoneinfo-core zoneinfo-europe zoneinfo-asia; do
-    if [ "$PKG_IS_APK" = "1" ]; then
-        apk info -e "$pkg" >/dev/null 2>&1 || NEED_INSTALL=1
-    else
-        opkg status "$pkg" >/dev/null 2>&1 || NEED_INSTALL=1
-    fi
-done
-
-if [ "$NEED_INSTALL" = "1" ]; then
-    echo -e "\n${MAGENTA}Устанавливаем пакеты с часовыми поясами${NC}"
-    $INSTALL zoneinfo-core zoneinfo-europe zoneinfo-asia >/dev/null 2>&1
-    echo -e "${GREEN}Пакеты с часовыми поясами установлены${NC}\n"
-    PAUSE
-fi
 
     while true; do
 #        clear
@@ -434,10 +405,19 @@ run_auto_best_background() {
 
 AUTO_BEST_MENU() {
     [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }
+    
+if ! ( [ "$PKG_IS_APK" = "1" ] && apk info -e zoneinfo-core zoneinfo-europe zoneinfo-asia >/dev/null 2>&1 || opkg status zoneinfo-core zoneinfo-europe zoneinfo-asia >/dev/null 2>&1 ); then
+    echo -e "\n${MAGENTA}Устанавливаем пакеты с часовыми поясами${NC}"
+    update_packages
+    $INSTALL zoneinfo-core zoneinfo-europe zoneinfo-asia >/dev/null 2>&1
+    echo -e "${GREEN}Пакеты с часовыми поясами установлены${NC}\n"
+    PAUSE
+fi
+
     while true; do
         clear
         echo -e "${MAGENTA}Меню автоподбора стратегий по расписанию${NC}\n"
-        echo -e "${YELLOW}Текущее время на роутере:${NC} ${CYAN}$(date '+%Y-%m-%d %H:%M:%S')${NC}"
+        echo -e "${YELLOW}Текущее время на роутере:${NC} ${CYAN}$(date '%H:%M:%S')${NC}"
 
         if auto_best_running; then
             RUNNING=1
@@ -1206,14 +1186,14 @@ pkg_is_installed netshift && PODKOP_VER && echo -e "${YELLOW}NetShift:${NC}     
 then echo -e "${YELLOW}Flow Offloading FIX:${NC} ${GREEN}включён${NC}"; fi; if [ "$CURR" != "default / OpenWrt" ]; then echo -e "${YELLOW}Зеркало OpenWRT:${NC}     $CURR"; fi; if [ -f /etc/init.d/zapret ] && [ -f "$CONF" ] && grep -Eq "^[[:space:]]*option DISABLE_IPV6 '0'" "$CONF"; then echo -e "${YELLOW}IPv6 в Zapret:       ${GREEN}включён${NC}"; fi
 
 if auto_best_running; then
-    echo -e "${YELLOW}Автоподбор стратегий:${NC} ${GREEN}выполняется в фоне${NC}"
+    echo -e "${YELLOW}Автоподбор стратегий:${NC}${GREEN}выполняется в фоне${NC}"
 else
     if LINEA=$(grep -F "$AUTO_CRON_CMD" "$CRON_FILE" 2>/dev/null | head -n1); then
         if [ -n "$LINEA" ]; then
             CRON_MIN=$(echo "$LINEA" | awk '{print $1}')
             CRON_HOUR=$(echo "$LINEA" | awk '{print $2}')
 
-            echo -e "${YELLOW}Автоподбор стратегий:${NC} ${GREEN}ежедневно в $(printf "%02d" "$CRON_HOUR"):$(printf "%02d" "$CRON_MIN")${NC}"
+            echo -e "${YELLOW}Автоподбор стратегий:${NC}${GREEN}ежедневно в $(printf "%02d" "$CRON_HOUR"):$(printf "%02d" "$CRON_MIN")${NC}"
         fi
     fi
 fi
