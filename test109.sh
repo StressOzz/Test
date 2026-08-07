@@ -112,7 +112,7 @@ get_ver "https://github.com/yandexru45/netshift/releases/latest" "$TMP_VER_POD" 
 # [ -s "$TMP_MAG_VER" ] && MT_VERSION="$(cat "$TMP_MAG_VER")"
 [ -s "$TMP_VER" ] && ZAPRET_VERSION="$(cat "$TMP_VER")"; [ -s "$TMP_VER_POD" ] && PODKOP_LATEST_VER="$(cat "$TMP_VER_POD")"; [ -s "$TMP_VER_TG_MT" ] && TG_MTProto="$(cat "$TMP_VER_TG_MT")"; [ -s "$TMP_VER_SPL" ] && SPL_VER="$(cat "$TMP_VER_SPL")"
 
-echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test108.sh) "$@"' > /usr/bin/zms; chmod +x /usr/bin/zms
+echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test109.sh) "$@"' > /usr/bin/zms; chmod +x /usr/bin/zms
 
 # git="githubusercontent.com"; if ! grep -q "raw.$git" /etc/hosts; then echo -e "\n\033[1;36mДля корректной работы скрипта добавляем домены \033[0mGitHub\033[1;36m в \033[0m/etc/hosts\033[0m"
 # printf "#$git\n185.199.109.133 raw.$git release-assets.$git\n185.199.108.133 private-user-images.$git gist.$git avatars.$git\n" >> /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1; fi
@@ -122,6 +122,11 @@ MSG=0; for f in stun2.bin quic_initial_tencent_com.bin quic_initial_steamcommuni
 # ==========================================
 # Настройка времени на роутере
 # ==========================================
+AUTO_RESULTS="/opt/zapret/tmp/results_auto.txt"; AUTO_BACK="$TMP_SF/zapret_auto_back.txt"
+AUTO_LOG="/opt/zapret/tmp/auto_best.log"; AUTO_CRON_CMD="/usr/bin/zms --auto-best"
+AUTO_LOCK="/tmp/zapret_auto_best.lock"; AUTO_STOP_FLAG="$TMP_SF/zapret_auto_best.stop"
+
+
 sync_ntp() {
     echo -e "\n${MAGENTA}Синхронизируем время через NTP${NC}"
     if command -v ntpd >/dev/null 2>&1; then
@@ -247,14 +252,32 @@ auto_best_stop_cleanup() {
 stop_auto_best() {
     touch "$AUTO_STOP_FLAG"
 
-    PID=$(head -n1 "$AUTO_LOCK" 2>/dev/null)
-    [ -n "$PID" ] && kill -TERM "$PID" 2>/dev/null
-
+    # Сигналом НЕ убиваем: код восстановления конфига живёт в родительском
+    # процессе (после пайпа с while), и если убить процесс сигналом,
+    # он погибнет раньше, чем успеет дойти до restore. Просто ждём,
+    # пока процесс сам заметит флаг на следующей проверке и завершится штатно.
+    echo -en "${CYAN}Ожидаем завершения текущей проверки${NC}"
     _i=0
-    while auto_best_running && [ "$_i" -lt 8 ]; do
+    while auto_best_running && [ "$_i" -lt 90 ]; do
         sleep 1
         _i=$((_i + 1))
+        [ $((_i % 5)) -eq 0 ] && echo -n "."
     done
+    echo
+
+    if auto_best_running; then
+        # Процесс завис (например сеть подвисла дольше 90 сек) —
+        # крайняя мера: убиваем и восстанавливаем конфиг сами
+        PID=$(head -n1 "$AUTO_LOCK" 2>/dev/null)
+        [ -n "$PID" ] && kill -KILL "$PID" 2>/dev/null
+        rm -f "$AUTO_LOCK"
+        if [ -f "$AUTO_BACK" ]; then
+            mv -f "$AUTO_BACK" "$CONF"
+            ZAPRET_RESTART
+        fi
+    fi
+
+    rm -f "$AUTO_STOP_FLAG"
 }
 
 auto_apply_best_strategy() {
@@ -445,8 +468,23 @@ disable_auto_best() {
 
 run_auto_best_background() {
     echo -e "\n${MAGENTA}Запускаем автоподбор в фоне${NC}"
+    rm -f "$AUTO_LOCK"
     $AUTO_CRON_CMD >/dev/null 2>&1 &
-    echo -e "${GREEN}Автоподбор в фоне запущен!${NC}\n"
+
+    echo -en "${CYAN}Ожидаем запуск процесса${NC}"
+    _i=0
+    while [ ! -f "$AUTO_LOCK" ] && [ "$_i" -lt 20 ]; do
+        sleep 1
+        _i=$((_i + 1))
+        echo -n "."
+    done
+    echo
+
+    if auto_best_running; then
+        echo -e "${GREEN}Автоподбор в фоне запущен!${NC}\n"
+    else
+        echo -e "${YELLOW}Процесс запускается медленнее обычного, статус обновится при следующем открытии меню${NC}\n"
+    fi
     PAUSE
 }
 
@@ -501,18 +539,16 @@ fi
         case "$choiceAB" in
             1) set_auto_best_time ;;
             2) [ -n "$LINE" ] && disable_auto_best ;;
+            
             3) if [ "$RUNNING" = "1" ]; then
                    echo -e "\n${MAGENTA}Останавливаем автоподбор${NC}"
                    stop_auto_best
-                   if auto_best_running; then
-                       echo -e "${YELLOW}Автоподбор завершится в течение минуты (тестируется текущая стратегия), конфигурация будет восстановлена автоматически${NC}\n"
-                   else
-                       echo -e "${GREEN}Автоподбор остановлен, конфигурация восстановлена!${NC}\n"
-                   fi
+                   echo -e "${GREEN}Автоподбор остановлен, конфигурация восстановлена!${NC}\n"
                    PAUSE
                else
                    run_auto_best_background
                fi ;;
+               
             4) [ -s "$AUTO_RESULTS" ] && show_single_result "$AUTO_RESULTS" ;;
             5) [ -f "$AUTO_LOG" ] && { clear; cat "$AUTO_LOG"; echo; PAUSE; } ;;
             6) TIME_MENU ;;
