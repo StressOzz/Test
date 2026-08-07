@@ -112,7 +112,7 @@ get_ver "https://github.com/yandexru45/netshift/releases/latest" "$TMP_VER_POD" 
 # [ -s "$TMP_MAG_VER" ] && MT_VERSION="$(cat "$TMP_MAG_VER")"
 [ -s "$TMP_VER" ] && ZAPRET_VERSION="$(cat "$TMP_VER")"; [ -s "$TMP_VER_POD" ] && PODKOP_LATEST_VER="$(cat "$TMP_VER_POD")"; [ -s "$TMP_VER_TG_MT" ] && TG_MTProto="$(cat "$TMP_VER_TG_MT")"; [ -s "$TMP_VER_SPL" ] && SPL_VER="$(cat "$TMP_VER_SPL")"
 
-echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test104.sh) "$@"' > /usr/bin/zms; chmod +x /usr/bin/zms
+echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test105.sh) "$@"' > /usr/bin/zms; chmod +x /usr/bin/zms
 
 # git="githubusercontent.com"; if ! grep -q "raw.$git" /etc/hosts; then echo -e "\n\033[1;36mДля корректной работы скрипта добавляем домены \033[0mGitHub\033[1;36m в \033[0m/etc/hosts\033[0m"
 # printf "#$git\n185.199.109.133 raw.$git release-assets.$git\n185.199.108.133 private-user-images.$git gist.$git avatars.$git\n" >> /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1; fi
@@ -443,6 +443,11 @@ fi
         [ -s "$AUTO_RESULTS" ] && echo -e "${CYAN}4) ${GREEN}Показать результаты последнего теста${NC}"
                 [ -f "$AUTO_LOG" ] && echo -e "${CYAN}5) ${GREEN}Показать полный лог${NC}"
         echo -e "${CYAN}6) ${GREEN}Настроить время на роутере${NC}"
+        
+if [ -s "$AUTO_RESULTS" ] || [ -f "$AUTO_LOG" ]; then
+    echo -e "${CYAN}7) ${GREEN}Удалить результаты теста и лог${NC}"
+fi
+  
         echo -ne "${CYAN}Enter) ${GREEN}Выход в меню тестирования${NC}\n\n${YELLOW}Выберите пункт:${NC} "
         read -r choiceAB
         case "$choiceAB" in
@@ -456,7 +461,13 @@ fi
             4) [ -s "$AUTO_RESULTS" ] && show_single_result "$AUTO_RESULTS" ;;
             5) [ -f "$AUTO_LOG" ] && { clear; cat "$AUTO_LOG"; echo; PAUSE; } ;;
             6) TIME_MENU ;;
-            0) rm -rf "$AUTO_RESULTS" "$AUTO_BACK" "$AUTO_LOG" "$AUTO_LOCK" ;;
+            7) 
+            
+            echo -e "\n${GREEN}Результаты теста и лог удалены${NC}\n"
+            rm -rf "$AUTO_RESULTS" "$AUTO_BACK" "$AUTO_LOG" "$AUTO_LOCK" 
+            PAUSE
+            ;;
+            
             *) return ;;
         esac
     done
@@ -679,7 +690,7 @@ if /etc/init.d/zapret status >/dev/null 2>&1; then echo -e "Zapret ${GREEN}за�
 pkg_remove() { local pkg_name="$1"; $DELETE $pkg_name >/dev/null 2>&1; }
 uninstall_zapret() { local NO_PAUSE=$1; [ "$NO_PAUSE" != "1" ] && echo; echo -e "${MAGENTA}Удаляем Zapret${NC}\n${CYAN}Останавливаем ${NC}zapret"; /etc/init.d/zapret stop >/dev/null 2>&1; echo -e "${CYAN}Убиваем процессы${NC}"
 for pid in $(pgrep -f /opt/zapret 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done; echo -e "${CYAN}Удаляем пакеты${NC}"; pkg_remove zapret; pkg_remove luci-app-zapret; echo -e "${CYAN}Удаляем временные файлы${NC}"
-rm -rf /opt/zapret $CONF /etc/firewall.zapret /etc/init.d/zapret /tmp/*zapret* /var/run/*zapret* /tmp/*.ipk /tmp/*.zip 2>/dev/null; crontab -l 2>/dev/null | grep -v -i "zapret" | crontab - 2>/dev/null
+rm -rf /opt/zapret $CONF /etc/firewall.zapret /etc/init.d/zapret /tmp/*zapret* /var/run/*zapret* /tmp/*.ipk /tmp/*.zip 2>/dev/null; crontab -l 2>/dev/null | grep -v -i -E "zapret|/usr/bin/zms --auto-best" | crontab - 2>/dev/null; /etc/init.d/cron restart >/dev/null 2>&1
 nft list tables 2>/dev/null | awk '{print $2}' | grep -E '(zapret|ZAPRET)' | while read t; do [ -n "$t" ] && nft delete table "$t" 2>/dev/null; done; rm -rf -- "$TMP_SF" tmp/zapret* ; echo -e "Zapret ${GREEN}удалён!${NC}\n"; [ "$NO_PAUSE" != "1" ] && PAUSE; }
 # ==========================================
 # Тест стратегии для Ютуб
@@ -1027,7 +1038,7 @@ TEST_STRATEGY_MENU() {
                 run_all_tests
                 ;;
             *)
-                break
+                return
                 ;;
         esac
 }
