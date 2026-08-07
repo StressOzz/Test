@@ -209,7 +209,7 @@ done
 if [ "$NEED_INSTALL" = "1" ]; then
     echo -e "\n${MAGENTA}Устанавливаем пакеты с часовыми поясами${NC}"
     $INSTALL zoneinfo-core zoneinfo-europe zoneinfo-asia >/dev/null 2>&1
-    echo -e "\n${GREEN}Пакеты с часовыми поясами установлены${NC}"
+    echo -e "${GREEN}Пакеты с часовыми поясами установлены${NC}\n"
     PAUSE
 fi
 
