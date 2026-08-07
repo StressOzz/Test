@@ -112,7 +112,7 @@ get_ver "https://github.com/yandexru45/netshift/releases/latest" "$TMP_VER_POD" 
 # [ -s "$TMP_MAG_VER" ] && MT_VERSION="$(cat "$TMP_MAG_VER")"
 [ -s "$TMP_VER" ] && ZAPRET_VERSION="$(cat "$TMP_VER")"; [ -s "$TMP_VER_POD" ] && PODKOP_LATEST_VER="$(cat "$TMP_VER_POD")"; [ -s "$TMP_VER_TG_MT" ] && TG_MTProto="$(cat "$TMP_VER_TG_MT")"; [ -s "$TMP_VER_SPL" ] && SPL_VER="$(cat "$TMP_VER_SPL")"
 
-echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test66.sh) "$@"' > /usr/bin/zms; chmod +x /usr/bin/zms
+echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test78.sh) "$@"' > /usr/bin/zms; chmod +x /usr/bin/zms
 
 # git="githubusercontent.com"; if ! grep -q "raw.$git" /etc/hosts; then echo -e "\n\033[1;36mДля корректной работы скрипта добавляем домены \033[0mGitHub\033[1;36m в \033[0m/etc/hosts\033[0m"
 # printf "#$git\n185.199.109.133 raw.$git release-assets.$git\n185.199.108.133 private-user-images.$git gist.$git avatars.$git\n" >> /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1; fi
@@ -131,7 +131,7 @@ sync_ntp() {
         sleep 3
     fi
     command -v hwclock >/dev/null 2>&1 && hwclock -w >/dev/null 2>&1
-    echo -e "${GREEN}Готово!${NC} Текущее время: ${CYAN}$(date '+%Y-%m-%d %H:%M:%S %Z')${NC}\n"
+    echo -e "${GREEN}Время синхронизировано!${NC}\n"
     PAUSE
 }
 
@@ -221,7 +221,7 @@ fi
         [ -n "$TZ_CUR" ] && echo -e "${YELLOW}Часовой пояс:${NC} ${CYAN}$TZ_CUR${NC}"
         echo -e "\n${CYAN}1) ${GREEN}Синхронизировать время через ${NC}NTP"
         echo -e "${CYAN}2) ${GREEN}Установить часовой пояс${NC}"
-        echo -ne "${CYAN}Enter) ${GREEN}Выход${NC}\n\n${YELLOW}Выберите пункт:${NC} "
+        echo -ne "${CYAN}Enter) ${GREEN}Выход в меню автоподбора стратегий${NC}\n\n${YELLOW}Выберите пункт:${NC} "
         read -r choiceTM
         case "$choiceTM" in
             1) sync_ntp ;;
@@ -235,9 +235,6 @@ fi
 # Автоподбор лучшей стратегии (v + Flowseal)
 # ==========================================
 
-# Корректно сортирует файл результатов по убыванию первого числа (OK),
-# независимо от того, чем начинается строка (v10, general (ALT11) и т.д.)
-# Возвращает 0, если процесс автоподбора реально жив (не просто есть файл блокировки)
 auto_best_running() {
     [ -f "$AUTO_LOCK" ] || return 1
     _lock_pid=$(head -n1 "$AUTO_LOCK" 2>/dev/null)
@@ -392,8 +389,8 @@ set_auto_best_time() {
     CUR_YEAR=$(date '+%Y')
     if [ "$CUR_YEAR" -lt 2020 ]; then
         echo -e "\n${RED}Внимание! Время на роутере выглядит неверным (${NC}$(date '+%Y-%m-%d %H:%M:%S')${RED})!${NC}"
-        echo -e "${YELLOW}Расписание cron будет работать некорректно.${NC}"
-        echo -e "${YELLOW}Сначала настройте время: ${NC}Меню автоподбора → 5) Настроить время на роутере\n"
+        echo -e "${YELLOW}Расписание cron будет работать некорректно!${NC}"
+        echo -e "${YELLOW}Сначала настройте время!${NC}\n"
         PAUSE
         return
     fi
@@ -422,14 +419,14 @@ disable_auto_best() {
 run_auto_best_background() {
     echo -e "\n${MAGENTA}Запускаем автоподбор в фоне${NC}"
     ( $AUTO_CRON_CMD >/dev/null 2>&1 & )
-    echo -e "${GREEN}Задача запущена!${NC}\n${YELLOW}Результат появится в логе:${NC} $AUTO_LOG\n"
+    echo -e "${GREEN}Задача автоподбора запущена!${NC}\n"
     PAUSE
 }
 
 AUTO_BEST_MENU() {
     [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }
     while true; do
-        clear; echo -e "${MAGENTA}Меню автоподбора лучшей стратегии${NC}\n"
+        clear; echo -e "${MAGENTA}Меню автоподбора стратегий по расписанию${NC}\n"
         echo -e "${YELLOW}Текущее время на роутере:${NC} ${CYAN}$(date '+%Y-%m-%d %H:%M:%S')${NC}"
 
         if auto_best_running; then
@@ -442,11 +439,10 @@ AUTO_BEST_MENU() {
         LINE=$(auto_best_cron_line)
         if [ -n "$LINE" ]; then
             HOUR=$(echo "$LINE" | awk '{print $2}')
-            echo -e "${YELLOW}Автоподбор:${NC} ${GREEN}включен, ежедневно в $(printf "%02d" "$HOUR"):00${NC}"
+            echo -e "${YELLOW}Автоподбор:${NC} ${GREEN}включён, ежедневно в $(printf "%02d" "$HOUR"):00${NC}"
         else
             echo -e "${YELLOW}Автоподбор:${NC} ${RED}отключен${NC}"
         fi
-        [ -s "$AUTO_RESULTS" ] && echo -e "${YELLOW}Результаты последнего теста:${NC} ${GREEN}есть${NC}"
 
         echo -e "\n${CYAN}1) ${GREEN}$( [ -n "$LINE" ] && echo "Изменить время автоподбора" || echo "Включить автоподбор" )${NC}"
         [ -n "$LINE" ] && echo -e "${CYAN}2) ${GREEN}Отключить автоподбор${NC}"
@@ -699,7 +695,7 @@ nft list tables 2>/dev/null | awk '{print $2}' | grep -E '(zapret|ZAPRET)' | whi
 # ==========================================
 # Тест стратегии для Ютуб
 # ==========================================
-auto_stryou() { awk '/^[[:space:]]*option NFQWS_OPT '\''/{flag=1} flag{print}' "$CONF" > "$OLD_STR"; echo -e "\n${MAGENTA}Выбирите источник стратегий:${NC}"; echo -e "${CYAN}1) ${GREEN}Встроенные стратегии ${NC}Yv"; echo -e "${CYAN}2) ${GREEN}Стратегии из ${NC}/root/custom_test.txt"
+auto_stryou() { awk '/^[[:space:]]*option NFQWS_OPT '\''/{flag=1} flag{print}' "$CONF" > "$OLD_STR"; echo -e "\n${MAGENTA}Выберите источник стратегий:${NC}"; echo -e "${CYAN}1) ${GREEN}Встроенные стратегии ${NC}Yv"; echo -e "${CYAN}2) ${GREEN}Стратегии из ${NC}/root/custom_test.txt"
 echo -ne "${CYAN}Enter) ${GREEN}Выход в меню тестирования стратегий${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read -r SRC; case "$SRC" in 1) curl -fsSL "$STR_URL" -o "$TMP_LIST" || { echo -e "\n${RED}Не удалось скачать список стратегий!${NC}\n"; PAUSE; return 1; } ;;
 2) if [ ! -s "$CUSTOM_STR_FILE" ]; then echo -e "\n${RED}Файл ${NC}$CUSTOM_STR_FILE${RED} не найден!${NC}\n"; PAUSE; return 1; fi; cp "$CUSTOM_STR_FILE" "$TMP_LIST"; cp "$CUSTOM_STR_FILE" "$TMP_LIST"; sed -i 's/\r$//' "$TMP_LIST"
 sed -i '/^[[:space:]]*$/d' "$TMP_LIST"; sed -i 's/^[[:space:]]*//;s/[[:space:]]*$//' "$TMP_LIST" ;; *) return ;; esac; clear; echo -e "${MAGENTA}Тестируем стратегии для YouTube${NC}"
@@ -736,17 +732,17 @@ if [ -f "$CONF" ] && { grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-use
 # ==========================================
 # Стратегии
 # ==========================================
-ADD_Yv() { if ! grep -q "^#Yv08" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_OPT '/a\\#Yv08\\n--filter-tcp=443\\n--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt\\n--dpi-desync=hostfakesplit\\n--dpi-desync-hostfakesplit-mod=host=google.com\\n--dpi-desync-fooling=ts\\n--new" "$CONF"; fi; }
-strategy_v1() { printf '%s\n' "#v1" "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=split2" "--dpi-desync-split-seqovl=681" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/stun.bin"; }
-strategy_v2() { printf '%s\n' "#v2" "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake,multisplit" "--dpi-desync-split-seqovl=681" "--dpi-desync-split-pos=1" "--dpi-desync-fooling=ts" "--dpi-desync-repeats=8" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/stun.bin" "--dpi-desync-fake-tls-mod=rnd,dupsid,sni=www.google.com"; }
-strategy_v3() { printf '%s\n' "#v3" "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=hostfakesplit" "--dpi-desync-hostfakesplit-mod=host=ozon.ru" "--dpi-desync-repeats=4" "--dpi-desync-fooling=ts,md5sig" "--dpi-desync-badseq-increment=0"; }
-strategy_v4() { printf '%s\n' "#v4" "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=multisplit" "--dpi-desync-split-seqovl=582" "--dpi-desync-split-pos=1" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/stun.bin"; }
-strategy_v5() { printf '%s\n' "#v5" "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake,fakeddisorder" "--dpi-desync-split-pos=1" "--dpi-desync-fake-tls=/opt/zapret/files/fake/stun.bin" "--dpi-desync-fake-tls-mod=none" "--dpi-desync-fakedsplit-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin" "--dpi-desync-fooling=badseq,badsum" "--dpi-desync-badseq-increment=0"; }
-strategy_v6() { printf '%s\n' "#v6" "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=hostfakesplit" "--dpi-desync-hostfakesplit-mod=host=i2.photo.2gis.com" "--dpi-desync-hostfakesplit-midhost=host-2" "--dpi-desync-split-seqovl=726" "--dpi-desync-fooling=badsum,badseq" "--dpi-desync-badseq-increment=0"; }
-strategy_v7() { printf '%s\n' "#v7" "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake,multisplit" "--dpi-desync-split-seqovl=654" "--dpi-desync-split-pos=1" "--dpi-desync-fooling=badseq,badsum" "--dpi-desync-repeats=8" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/stun.bin" "--dpi-desync-fake-tls=/opt/zapret/files/fake/stun.bin" "--dpi-desync-badseq-increment=0"; }
-strategy_v8() { printf '%s\n' "#v8" "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake" "--dpi-desync-fooling=ts" "--dpi-desync-fake-tls=/opt/zapret/files/fake/4pda.bin" "--dpi-desync-fake-tls-mod=none"; }
-strategy_v9() { printf '%s\n' "#v9" "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=hostfakesplit" "--dpi-desync-fooling=badseq,badsum" "--dpi-desync-hostfakesplit-mod=host=ozon.ru" "--dpi-desync-badseq-increment=0"; }
-strategy_v10() { printf '%s\n' "#v10" "--new" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake,split2" "--dpi-desync-split-pos=2" "--dpi-desync-fake-tls=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin" "--dpi-desync-hostfakesplit-mod=host=maxcdn.bootstrapcdn.com" "--dpi-desync-fake-tls-mod=rnd,sni=maxcdn.bootstrapcdn.com" "--dpi-desync-fooling=ts"; }
+ADD_Yv() { if ! grep -q "^#Yv08" "$CONF" && ! grep -q "^#general" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_OPT '/a\\#Yv08\\n--filter-tcp=443\\n--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt\\n--dpi-desync=hostfakesplit\\n--dpi-desync-hostfakesplit-mod=host=google.com\\n--dpi-desync-fooling=ts\\n--new" "$CONF"; fi; }
+strategy_v1() { printf '%s\n' "#v1" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=split2" "--dpi-desync-split-seqovl=681" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/stun.bin"; }
+strategy_v2() { printf '%s\n' "#v2" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake,multisplit" "--dpi-desync-split-seqovl=681" "--dpi-desync-split-pos=1" "--dpi-desync-fooling=ts" "--dpi-desync-repeats=8" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/stun.bin" "--dpi-desync-fake-tls-mod=rnd,dupsid,sni=www.google.com"; }
+strategy_v3() { printf '%s\n' "#v3" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=hostfakesplit" "--dpi-desync-hostfakesplit-mod=host=ozon.ru" "--dpi-desync-repeats=4" "--dpi-desync-fooling=ts,md5sig" "--dpi-desync-badseq-increment=0"; }
+strategy_v4() { printf '%s\n' "#v4" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=multisplit" "--dpi-desync-split-seqovl=582" "--dpi-desync-split-pos=1" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/stun.bin"; }
+strategy_v5() { printf '%s\n' "#v5" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake,fakeddisorder" "--dpi-desync-split-pos=1" "--dpi-desync-fake-tls=/opt/zapret/files/fake/stun.bin" "--dpi-desync-fake-tls-mod=none" "--dpi-desync-fakedsplit-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin" "--dpi-desync-fooling=badseq,badsum" "--dpi-desync-badseq-increment=0"; }
+strategy_v6() { printf '%s\n' "#v6" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=hostfakesplit" "--dpi-desync-hostfakesplit-mod=host=i2.photo.2gis.com" "--dpi-desync-hostfakesplit-midhost=host-2" "--dpi-desync-split-seqovl=726" "--dpi-desync-fooling=badsum,badseq" "--dpi-desync-badseq-increment=0"; }
+strategy_v7() { printf '%s\n' "#v7" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake,multisplit" "--dpi-desync-split-seqovl=654" "--dpi-desync-split-pos=1" "--dpi-desync-fooling=badseq,badsum" "--dpi-desync-repeats=8" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/stun.bin" "--dpi-desync-fake-tls=/opt/zapret/files/fake/stun.bin" "--dpi-desync-badseq-increment=0"; }
+strategy_v8() { printf '%s\n' "#v8" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake" "--dpi-desync-fooling=ts" "--dpi-desync-fake-tls=/opt/zapret/files/fake/4pda.bin" "--dpi-desync-fake-tls-mod=none"; }
+strategy_v9() { printf '%s\n' "#v9" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=hostfakesplit" "--dpi-desync-fooling=badseq,badsum" "--dpi-desync-hostfakesplit-mod=host=ozon.ru" "--dpi-desync-badseq-increment=0"; }
+strategy_v10() { printf '%s\n' "#v10" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake,split2" "--dpi-desync-split-pos=2" "--dpi-desync-fake-tls=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin" "--dpi-desync-hostfakesplit-mod=host=maxcdn.bootstrapcdn.com" "--dpi-desync-fake-tls-mod=rnd,sni=maxcdn.bootstrapcdn.com" "--dpi-desync-fooling=ts"; }
 # ==========================================
 # Cтратегии Flowseal
 # ==========================================
@@ -998,16 +994,52 @@ if [ -f "$CONF" ]; then current="$ver$( [ -n "$ver" ] && [ -n "$yv_ver" ] && ech
 then echo -e "${YELLOW}Используется стратегия:${NC} ${CYAN}$current${DV:+ $DV}${GV:+ $GV}${RKN_STATUS:+ $RKN_STATUS}${NC}"; elif [ -n "$RKN_STATUS" ]; then echo -e "${YELLOW}Используется стратегия:${NC} ${CYAN}РКН${DV:+ $DV}${GV:+ $GV}${NC}"; fi; fi
 STATUS_V=""; STATUS_FLOW=""; STATUS_DOMAIN=""; if [ -s "$RES3" ]; then STATUS_V="${GREEN}v${NC}"; STATUS_FLOW="${GREEN}Flowseal${NC}"; elif [ -s "$RES2" ] || [ -s "$RES1" ]; then [ -s "$RES2" ] && STATUS_V="${GREEN}v${NC}" || STATUS_V="${RED}v${NC}"
 [ -s "$RES1" ] && STATUS_FLOW="${GREEN}Flowseal${NC}" || STATUS_FLOW="${RED}Flowseal${NC}"; else STATUS_V="${RED}v${NC}"; STATUS_FLOW="${RED}Flowseal${NC}"; fi; [ -s "$RES_DOMAIN" ] && STATUS_DOMAIN="${GREEN}Domain${NC}" || STATUS_DOMAIN="${RED}Domain${NC}"; [ -s "$RES_CUSTOM" ] && STATUS_CUSTOM="${GREEN}Custom${NC}" || STATUS_CUSTOM="${RED}Custom${NC}"
-[ -f /root/custom_test.txt ] && echo -e "${YELLOW}/root/custom_test.txt:  ${GREEN}присутствует${NC}"; echo -e "${YELLOW}Тест пройден:${NC} ${STATUS_V} | ${STATUS_FLOW} | ${STATUS_DOMAIN} | ${STATUS_CUSTOM}\n\n${CYAN}1) ${GREEN}Тестировать стратегии ${NC}v\n${CYAN}2) ${GREEN}Тестировать стратегии ${NC}Flowseal\n${CYAN}3) ${GREEN}Тестировать ${NC}v${GREEN} и ${NC}Flowseal${GREEN} стратегии${NC}"
+[ -f /root/custom_test.txt ] && echo -e "${YELLOW}/root/custom_test.txt:  ${GREEN}присутствует${NC}"; echo -e "${YELLOW}Тест пройден:${NC} ${STATUS_V} | ${STATUS_FLOW} | ${STATUS_DOMAIN} | ${STATUS_CUSTOM}"
+
+echo -e "\n${CYAN}1) ${GREEN}Тестирование стратегий ${NC}v ${GREEN}/${NC} Flowseal${NC}"
 echo -e "${CYAN}4) ${GREEN}Тестировать ${NC}текущую${GREEN} стратегию ${NC}\n${CYAN}5) ${GREEN}Тестировать стратегии ${NC}по домену${NC}\n${CYAN}6) ${GREEN}Тестировать стратегии для ${NC}YouTube\n${CYAN}7) ${GREEN}Тестировать стратегии из ${NC}/root/custom_test.txt"
 if [ -s "$RES_DOMAIN" ]; then echo -e "${CYAN}8) ${GREEN}Результаты тестирования ${NC}по домену"; fi; if [ -s "$RES1" ] || [ -s "$RES2" ] || [ -s "$RES3" ]; then echo -e "${CYAN}9) ${GREEN}Результаты тестирования стратегий${NC}"; fi
 if [ -s "$RES_CUSTOM" ]; then echo -e "${CYAN}0) ${GREEN}Результаты тестирования ${NC}Custom${GREEN} стратегий${NC}"; fi
-
 if [ -s "$RES1" ] || [ -s "$RES2" ] || [ -s "$RES3" ] || [ -s "$RES_DOMAIN" ] || [ -s "$RES_CUSTOM" ]; then echo -e "${CYAN}10) ${GREEN}Удалить результаты тестирования${NC}"; fi
-echo -e "${CYAN}11) ${GREEN}Автоподбор и установка лучшей стратегии по расписанию${NC}"
+echo -e "${CYAN}11) ${GREEN}Меню автоподбора стратегий по расписанию${NC}"
 echo -ne "${CYAN}Enter) ${GREEN}Выход в меню стратегий${NC}\n\n${YELLOW}Выберите пункт:${NC} ";read -r t; case "$t" in
-1) rm -f "$RES3"; run_test_versions;; 2) rm -f "$RES3"; run_test_flowseal;; 3) rm -f "$RES1" "$RES2" "$RES3"; run_all_tests;; 4) check_current_strategy;; 5) run_test_by_domain;; 6) auto_stryou;;
+
+1) TEST_STRATEGY_MENU;;
+
+4) check_current_strategy;; 5) run_test_by_domain;; 6) auto_stryou;;
 7) TEST_CUSTOM;; 0) show_single_result "$RES_CUSTOM";; 8) show_domain_results;; 9) show_test_results;; 10) rm -f /opt/zapret/tmp/results*; echo -e "\n${GREEN}Результаты тестирования удалены!${NC}\n"; PAUSE;; 11) AUTO_BEST_MENU;; *) break;; esac; done; }
+
+TEST_STRATEGY_MENU() {
+    while true; do
+        clear
+        echo -e "${MAGENTA}Выбор стратегий для тестирования${NC}"
+        echo -e "${CYAN}1) ${GREEN}Тестировать стратегии ${NC}v"
+        echo -e "${CYAN}2) ${GREEN}Тестировать стратегии ${NC}Flowseal"
+        echo -e "${CYAN}3) ${GREEN}Тестировать ${NC}v${GREEN} и ${NC}Flowseal${GREEN} стратегии${NC}"
+        echo -e "\n${CYAN}Enter) ${GREEN}Выход в меню тестирования стратегий${NC}\n"
+
+        echo -ne "${YELLOW}Выберите пункт:${NC} "
+        read -r t
+
+        case "$t" in
+            1)
+                rm -f "$RES3"
+                run_test_versions
+                ;;
+            2)
+                rm -f "$RES3"
+                run_test_flowseal
+                ;;
+            3)
+                rm -f "$RES1" "$RES2" "$RES3"
+                run_all_tests
+                ;;
+            *)
+                break
+                ;;
+        esac
+    done
+}
 
 # ==========================================
 # Системная информация
