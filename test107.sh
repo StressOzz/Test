@@ -112,7 +112,7 @@ get_ver "https://github.com/yandexru45/netshift/releases/latest" "$TMP_VER_POD" 
 # [ -s "$TMP_MAG_VER" ] && MT_VERSION="$(cat "$TMP_MAG_VER")"
 [ -s "$TMP_VER" ] && ZAPRET_VERSION="$(cat "$TMP_VER")"; [ -s "$TMP_VER_POD" ] && PODKOP_LATEST_VER="$(cat "$TMP_VER_POD")"; [ -s "$TMP_VER_TG_MT" ] && TG_MTProto="$(cat "$TMP_VER_TG_MT")"; [ -s "$TMP_VER_SPL" ] && SPL_VER="$(cat "$TMP_VER_SPL")"
 
-echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test105.sh) "$@"' > /usr/bin/zms; chmod +x /usr/bin/zms
+echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test107.sh) "$@"' > /usr/bin/zms; chmod +x /usr/bin/zms
 
 # git="githubusercontent.com"; if ! grep -q "raw.$git" /etc/hosts; then echo -e "\n\033[1;36mДля корректной работы скрипта добавляем домены \033[0mGitHub\033[1;36m в \033[0m/etc/hosts\033[0m"
 # printf "#$git\n185.199.109.133 raw.$git release-assets.$git\n185.199.108.133 private-user-images.$git gist.$git avatars.$git\n" >> /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1; fi
@@ -229,8 +229,40 @@ sort_results_desc() {
     mv "$tmp" "$out"
 }
 
+auto_best_stop_cleanup() {
+    {
+        echo ""
+        echo "=== $(date '+%Y-%m-%d %H:%M:%S') Автоподбор остановлен пользователем ==="
+        if [ -f "$AUTO_BACK" ]; then
+            echo "Восстанавливаем предыдущую конфигурацию"
+            mv -f "$AUTO_BACK" "$CONF"
+            ZAPRET_RESTART
+            echo "Конфигурация восстановлена"
+        else
+            echo "Файл резервной конфигурации не найден, восстановление невозможно"
+        fi
+    } >> "$AUTO_LOG" 2>&1
+}
+
+stop_auto_best() {
+    PID=$(head -n1 "$AUTO_LOCK" 2>/dev/null)
+    [ -z "$PID" ] && return 1
+
+    kill -TERM "$PID" 2>/dev/null
+
+    _i=0
+    while kill -0 "$PID" 2>/dev/null && [ "$_i" -lt 10 ]; do
+        sleep 1
+        _i=$((_i + 1))
+    done
+
+    kill -0 "$PID" 2>/dev/null && kill -KILL "$PID" 2>/dev/null
+    rm -f "$AUTO_LOCK"
+}
+
 auto_apply_best_strategy() {
     echo $$ > "$AUTO_LOCK"
+    trap 'auto_best_stop_cleanup; exit 1' TERM INT
     trap 'rm -f "$AUTO_LOCK"' EXIT
     mkdir -p "$TMP_SF" "/opt/zapret/tmp"
     : > "$AUTO_LOG"
@@ -390,14 +422,7 @@ disable_auto_best() {
 
 run_auto_best_background() {
     echo -e "\n${MAGENTA}Запускаем автоподбор в фоне${NC}"
-
-    (
-        echo $$ > "$AUTO_LOCK"
-        trap 'rm -f "$AUTO_LOCK"' EXIT
-
-        $AUTO_CRON_CMD
-    ) >/dev/null 2>&1 &
-
+    $AUTO_CRON_CMD >/dev/null 2>&1 &
     echo -e "${GREEN}Автоподбор в фоне запущен!${NC}\n"
     PAUSE
 }
@@ -435,8 +460,8 @@ fi
 
         echo -e "\n${CYAN}1) ${GREEN}$( [ -n "$LINE" ] && echo "Изменить время автоподбора по расписанию" || echo "Включить автоподбор по расписанию" )${NC}"
         [ -n "$LINE" ] && echo -e "${CYAN}2) ${GREEN}Отключить автоподбор по расписанию${NC}"
-        if [ "$RUNNING" = "1" ]; then
-            echo -e "${CYAN}3) ${DGRAY}Тест уже выполняется...${NC}"
+if [ "$RUNNING" = "1" ]; then
+            echo -e "${CYAN}3) ${GREEN}Остановить автоподбор в фоне${NC}"
         else
             echo -e "${CYAN}3) ${GREEN}Запустить сейчас автоподбор в фоне${NC}"
         fi
@@ -454,7 +479,10 @@ fi
             1) set_auto_best_time ;;
             2) [ -n "$LINE" ] && disable_auto_best ;;
             3) if [ "$RUNNING" = "1" ]; then
-                   echo -e "\n${YELLOW}Тест уже выполняется, дождитесь завершения!${NC}\n"; PAUSE
+                   echo -e "\n${MAGENTA}Останавливаем автоподбор${NC}"
+                   stop_auto_best
+                   echo -e "${GREEN}Автоподбор остановлен, конфигурация восстановлена!${NC}\n"
+                   PAUSE
                else
                    run_auto_best_background
                fi ;;
