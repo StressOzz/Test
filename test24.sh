@@ -1460,24 +1460,17 @@ wget -q -O "$TMP_FILE_GO" "$URL" || { echo -e "\n${RED}Ошибка скачив
 rm -f "$TMP_FILE_GO"; if ! grep -q '^SECRET=.' "$SECRET_FILE" 2>/dev/null; then echo "SECRET=$SECRET" > "$SECRET_FILE"; fi; rm -f /etc/tg-ws-proxy.conf /etc/tg-ws-proxy.conf-opkg; /etc/init.d/tg-ws-proxy enable >/dev/null 2>&1; /etc/init.d/tg-ws-proxy restart >/dev/null 2>&1
 if pidof tg-ws-proxy >/dev/null 2>&1; then echo -e "TG WS Proxy MTProto ${GREEN}установлен!${NC}\n"; else echo -e "${RED}TG WS Proxy MTProto не установлен!${NC}\n"; fi; PAUSE; }
 remove_TG_PKG() { echo -e "\n${MAGENTA}Удаляем TG WS Proxy MTProto${NC}"; /etc/init.d/tg-ws-proxy stop >/dev/null 2>&1; /etc/init.d/tg-ws-proxy disable >/dev/null 2>&1; $DELETE tg-ws-proxy >/dev/null 2>&1; rm -rf /etc/tg-ws-proxy /etc/tg-ws-proxy.conf /etc/tg-ws-proxy.conf-opkg; echo -e "TG WS Proxy MTProto ${GREEN}удалён!${NC}\n"; PAUSE; }
+
 # МЕНЮ
 menu_TG() {
     while true; do
         SECRET="$(head -c16 /dev/urandom | hexdump -e '16/1 "%02x"')"
-
-        # =========================================================
-        # Версии TG WS Proxy
-        # =========================================================
 
         INSTALLED_VER_GO=""
         INSTALLED_VER_RS=""
 
         [ -s "$BIN_VER_GO" ] && INSTALLED_VER_GO="$(cat "$BIN_VER_GO")"
         [ -s "$BIN_VER_RS" ] && INSTALLED_VER_RS="$(cat "$BIN_VER_RS")"
-
-        # =========================================================
-        # Проверяем TG WS Proxy MTProto
-        # =========================================================
 
         if command -v opkg >/dev/null 2>&1; then
             INSTALLED_VER_MT="$(opkg list-installed 2>/dev/null |
@@ -1498,10 +1491,6 @@ menu_TG() {
             MT_ACTION="installed"
         fi
 
-        # =========================================================
-        # Определяем состояние TG WS Proxy SOCKS5
-        # =========================================================
-
         if [ -f "$BIN_PATH_GO" ] && [ -f "$INIT_PATH_GO" ]; then
             if [ -n "$INSTALLED_VER_GO" ] &&
                [ "$INSTALLED_VER_GO" = "$TG_GO_VERSION" ]; then
@@ -1512,10 +1501,6 @@ menu_TG() {
         else
             GO_ACTION="install"
         fi
-
-        # =========================================================
-        # Определяем состояние TG WS Proxy Rust
-        # =========================================================
 
         if [ -f "$BIN_PATH_RS" ] && [ -f "$INIT_PATH_RS" ]; then
             if [ -n "$INSTALLED_VER_RS" ] &&
@@ -1528,17 +1513,9 @@ menu_TG() {
             RS_ACTION="install"
         fi
 
-        # =========================================================
-        # Меню
-        # =========================================================
-
         clear
 
         echo -e "${MAGENTA}Меню TG WS Proxy${NC}\n"
-
-        # =========================================================
-        # Статус сервисов
-        # =========================================================
 
         TGSTATUS=""
 
@@ -1557,10 +1534,6 @@ menu_TG() {
             echo -e "${YELLOW}TG WS Proxy:${NC} ${RED}не установлен${NC}"
         fi
 
-        # =========================================================
-        # Версия MTProto
-        # =========================================================
-
         if [ -n "$INSTALLED_VER_MT" ]; then
             if [ "$MT_ACTION" = "update" ]; then
                 echo -e "${YELLOW}TG WS Proxy MTProto версия:${NC} ${RED}$INSTALLED_VER_MT${NC} ${YELLOW}→${NC} ${GREEN}$TG_MTProto${NC}"
@@ -1568,10 +1541,6 @@ menu_TG() {
                 echo -e "${YELLOW}TG WS Proxy MTProto версия:${NC} ${GREEN}$INSTALLED_VER_MT${NC}"
             fi
         fi
-
-        # =========================================================
-        # Версия SOCKS5
-        # =========================================================
 
         if [ -n "$INSTALLED_VER_GO" ]; then
             if [ "$GO_ACTION" = "update" ]; then
@@ -1581,10 +1550,6 @@ menu_TG() {
             fi
         fi
 
-        # =========================================================
-        # Версия Rust
-        # =========================================================
-
         if [ -n "$INSTALLED_VER_RS" ]; then
             if [ "$RS_ACTION" = "update" ]; then
                 echo -e "${YELLOW}TG WS Proxy Rust версия:${NC} ${RED}$INSTALLED_VER_RS${NC} ${YELLOW}→${NC} ${GREEN}$TG_RS_VERSION${NC}"
@@ -1592,10 +1557,6 @@ menu_TG() {
                 echo -e "${YELLOW}TG WS Proxy Rust версия:${NC} ${GREEN}$INSTALLED_VER_RS${NC}"
             fi
         fi
-
-        # =========================================================
-        # Настройки SOCKS5
-        # =========================================================
 
         if pidof tg-ws-proxy-go >/dev/null 2>&1 &&
            [ -f "$BIN_PATH_GO" ] &&
@@ -1608,10 +1569,6 @@ menu_TG() {
             echo -e "${YELLOW}Ссылка для подключения:${NC}"
             echo -e "tg://socks?server=$LAN_IP&port=1080"
         fi
-
-        # =========================================================
-        # Настройки Rust
-        # =========================================================
 
         if pgrep -f tg-ws-proxy-rs >/dev/null 2>&1 &&
            [ -f "$BIN_PATH_RS" ] &&
@@ -1631,10 +1588,6 @@ menu_TG() {
             echo -e "tg://proxy?server=$LAN_IP&port=2443&secret=dd$SECRET_IN_RS"
         fi
 
-        # =========================================================
-        # Настройки MTProto
-        # =========================================================
-
         if pidof tg-ws-proxy >/dev/null 2>&1 &&
            [ -f "/etc/init.d/tg-ws-proxy" ]; then
 
@@ -1652,57 +1605,43 @@ menu_TG() {
             echo -e "tg://proxy?server=$LAN_IP&port=1443&secret=dd$SECRET_CONF"
         fi
 
-        # =========================================================
-        # Пункт 1 — SOCKS5
-        # =========================================================
-
         case "$GO_ACTION" in
             install)
                 echo -e "\n${CYAN}1)${GREEN} Установить ${NC}TG WS Proxy SOCKS5"
                 ;;
             update)
-                echo -e "\n${CYAN}1)${GREEN} Обновить ${NC}TG WS Proxy SOCKS5 ${YELLOW}(${INSTALLED_VER_GO} → ${TG_GO_VERSION})${NC}"
+                echo -e "\n${CYAN}1)${GREEN} Обновить ${NC}TG WS Proxy SOCKS5"
                 ;;
             installed)
                 echo -e "\n${CYAN}1)${GREEN} Удалить ${NC}TG WS Proxy SOCKS5"
                 ;;
         esac
 
-        # =========================================================
-        # Пункт 2 — Rust
-        # =========================================================
-
         case "$RS_ACTION" in
             install)
                 echo -e "${CYAN}2)${GREEN} Установить ${NC}TG WS Proxy Rust"
                 ;;
             update)
-                echo -e "${CYAN}2)${GREEN} Обновить ${NC}TG WS Proxy Rust ${YELLOW}(${INSTALLED_VER_RS} → ${TG_RS_VERSION})${NC}"
+                echo -e "${CYAN}2)${GREEN} Обновить ${NC}TG WS Proxy Rust"
                 ;;
             installed)
                 echo -e "${CYAN}2)${GREEN} Удалить ${NC}TG WS Proxy Rust"
                 ;;
         esac
 
-        # =========================================================
-        # Пункт 3 — MTProto
-        # =========================================================
 
         case "$MT_ACTION" in
             install)
                 echo -e "${CYAN}3)${GREEN} Установить ${NC}TG WS Proxy MTProto"
                 ;;
             update)
-                echo -e "${CYAN}3)${GREEN} Обновить ${NC}TG WS Proxy MTProto ${YELLOW}(${INSTALLED_VER_MT} → ${TG_MTProto})${NC}"
+                echo -e "${CYAN}3)${GREEN} Обновить ${NC}TG WS Proxy MTProto"
                 ;;
             installed)
                 echo -e "${CYAN}3)${GREEN} Удалить ${NC}TG WS Proxy MTProto"
                 ;;
         esac
 
-        # =========================================================
-        # Остальные пункты
-        # =========================================================
 
         echo -e "${CYAN}4)${GREEN} Удалить все ${NC}TG WS Proxy"
         echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n"
@@ -1711,10 +1650,6 @@ menu_TG() {
         read choice
 
         case "$choice" in
-
-            # =====================================================
-            # SOCKS5
-            # =====================================================
 
             1)
                 case "$GO_ACTION" in
@@ -1727,10 +1662,6 @@ menu_TG() {
                 esac
                 ;;
 
-            # =====================================================
-            # Rust
-            # =====================================================
-
             2)
                 case "$RS_ACTION" in
                     install|update)
@@ -1742,10 +1673,6 @@ menu_TG() {
                 esac
                 ;;
 
-            # =====================================================
-            # MTProto
-            # =====================================================
-
             3)
                 case "$MT_ACTION" in
                     install|update)
@@ -1756,10 +1683,6 @@ menu_TG() {
                         ;;
                 esac
                 ;;
-
-            # =====================================================
-            # Удалить всё
-            # =====================================================
 
             4)
                 echo -e "\n${MAGENTA}Удаляем все TG WS Proxy${NC}"
@@ -1861,9 +1784,30 @@ SPL_V_VER; [ -n "$SPL_INST_VER" ] && { [ "$SPL_VER" = "$SPL_INST_VER" ] && echo 
 case "$(/etc/init.d/mihomo status 2>/dev/null)" in running) echo -e "${YELLOW}Mixomo:              ${GREEN}запущен${NC}" ;; inactive) echo -e "${YELLOW}Mixomo:              ${RED}остановлен${NC}" ;; esac
 
 TGSTATUS=""
-pidof tg-ws-proxy-go >/dev/null 2>&1 && TGSTATUS="${TGSTATUS:+$TGSTATUS/}${NC}SOCKS5${GREEN}"
-pidof tg-ws-proxy >/dev/null 2>&1 && TGSTATUS="${TGSTATUS:+$TGSTATUS/}${NC}MTProto${GREEN}"
-pidof tg-ws-proxy-rs >/dev/null 2>&1 && TGSTATUS="${TGSTATUS:+$TGSTATUS/}${NC}Rust${GREEN}"
+
+if pidof tg-ws-proxy-go >/dev/null 2>&1; then
+    if [ "$INSTALLED_VER_GO" != "$TG_GO_VERSION" ]; then
+        TGSTATUS="${TGSTATUS:+$TGSTATUS/}${RED}SOCKS5 NEW${GREEN}"
+    else
+        TGSTATUS="${TGSTATUS:+$TGSTATUS/}${NC}SOCKS5${GREEN}"
+    fi
+fi
+
+if pidof tg-ws-proxy >/dev/null 2>&1; then
+    if [ "$INSTALLED_VER_MT" != "$TG_MTProto" ]; then
+        TGSTATUS="${TGSTATUS:+$TGSTATUS/}${RED}MTProto NEW${GREEN}"
+    else
+        TGSTATUS="${TGSTATUS:+$TGSTATUS/}${NC}MTProto${GREEN}"
+    fi
+fi
+
+if pidof tg-ws-proxy-rs >/dev/null 2>&1; then
+    if [ "$INSTALLED_VER_RS" != "$TG_RS_VERSION" ]; then
+        TGSTATUS="${TGSTATUS:+$TGSTATUS/}${RED}Rust NEW${GREEN}"
+    else
+        TGSTATUS="${TGSTATUS:+$TGSTATUS/}${NC}Rust${GREEN}"
+    fi
+fi
 
 if [ -n "$TGSTATUS" ]; then
     echo -e "${YELLOW}TG WS Proxy:${NC}         ${GREEN}запущен [${TGSTATUS}]${NC}"
