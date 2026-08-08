@@ -1786,7 +1786,9 @@ case "$(/etc/init.d/mihomo status 2>/dev/null)" in running) echo -e "${YELLOW}Mi
 TGSTATUS=""
 
 if pidof tg-ws-proxy-go >/dev/null 2>&1; then
-    if [ "$INSTALLED_VER_GO" != "$TG_GO_VERSION" ]; then
+    if [ -n "$INSTALLED_VER_GO" ] &&
+       [ -n "$TG_GO_VERSION" ] &&
+       [ "$INSTALLED_VER_GO" != "$TG_GO_VERSION" ]; then
         TGSTATUS="${TGSTATUS:+$TGSTATUS/}${RED}SOCKS5 NEW${GREEN}"
     else
         TGSTATUS="${TGSTATUS:+$TGSTATUS/}${NC}SOCKS5${GREEN}"
@@ -1794,7 +1796,9 @@ if pidof tg-ws-proxy-go >/dev/null 2>&1; then
 fi
 
 if pidof tg-ws-proxy >/dev/null 2>&1; then
-    if [ "$INSTALLED_VER_MT" != "$TG_MTProto" ]; then
+    if [ -n "$INSTALLED_VER_MT" ] &&
+       [ -n "$TG_MTProto" ] &&
+       [ "$INSTALLED_VER_MT" != "$TG_MTProto" ]; then
         TGSTATUS="${TGSTATUS:+$TGSTATUS/}${RED}MTProto NEW${GREEN}"
     else
         TGSTATUS="${TGSTATUS:+$TGSTATUS/}${NC}MTProto${GREEN}"
@@ -1802,7 +1806,9 @@ if pidof tg-ws-proxy >/dev/null 2>&1; then
 fi
 
 if pidof tg-ws-proxy-rs >/dev/null 2>&1; then
-    if [ "$INSTALLED_VER_RS" != "$TG_RS_VERSION" ]; then
+    if [ -n "$INSTALLED_VER_RS" ] &&
+       [ -n "$TG_RS_VERSION" ] &&
+       [ "$INSTALLED_VER_RS" != "$TG_RS_VERSION" ]; then
         TGSTATUS="${TGSTATUS:+$TGSTATUS/}${RED}Rust NEW${GREEN}"
     else
         TGSTATUS="${TGSTATUS:+$TGSTATUS/}${NC}Rust${GREEN}"
@@ -1812,6 +1818,9 @@ fi
 if [ -n "$TGSTATUS" ]; then
     echo -e "${YELLOW}TG WS Proxy:${NC}         ${GREEN}запущен [${TGSTATUS}]${NC}"
 fi
+
+
+
 
 if hosts_enabled; then echo -e "${YELLOW}Домены в hosts:      ${GREEN}$hosts_echo${NC}"; fi; [ -f "$DATE_FILE" ] && echo -e "${YELLOW}Резервная копия:${NC}     ${GREEN}сохранена"; show_script_50 && [ -n "$name" ] && echo -e "${YELLOW}Установлен скрипт:${NC}   $name"; grep -q "$Fin_IP_Dis" /etc/hosts && echo -e "${YELLOW}IP для Discord:      ${GREEN}включены${NC}"
 if [ -n "$DOH_STATUS" ]; then if [ "$PKG_IS_APK" -eq 1 ]; then apk info -e https-dns-proxy >/dev/null 2>&1 && echo -e "${YELLOW}DNS over HTTPS:${NC}      ${GREEN}$DOH_STATUS${NC}"; else opkg list-installed | grep -q '^https-dns-proxy ' && echo -e "${YELLOW}DNS over HTTPS:${NC}      ${GREEN}$DOH_STATUS${NC}"; fi; fi
