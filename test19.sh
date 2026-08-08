@@ -5,7 +5,7 @@
 ZAPRET_MANAGER_VERSION="9.80"; STR_VERSION_AUTOINSTALL="v7"
 
 ZAPRET_VERSION="72.20260307"; PODKOP_LATEST_VER="0.9.6"; TG_MTProto="0.9.3"; MT_VERSION="0.8.2"
-SPL_VER="26.8.1.3"; TG_GO_VERSION="1.4.1"; TG_RS_VERSION="2.1.2"; BYEDPI_LATEST_VER="0.17.3"
+SPL_VER="26.8.1.3"; TG_GO_VERSION="1.4.0"; TG_RS_VERSION="2.1.2"; BYEDPI_LATEST_VER="0.17.3"
 
 OWRTAWG=$(grep '^DISTRIB_RELEASE=' /etc/openwrt_release | cut -d"'" -f2); ARCHAWG="$(grep DISTRIB_ARCH /etc/openwrt_release | cut -d"'" -f2)_$(grep DISTRIB_TARGET /etc/openwrt_release | cut -d"'" -f2 | tr '/' '_')" 
 CRON_CMD="/etc/init.d/mihomo restart"; CONFIGPATH="/etc/magitrickle/state/config.yaml"; PACKAGES_UPDATED=0
@@ -150,8 +150,8 @@ get_ver "https://github.com/DPITrickster/ByeDPI-OpenWrt/releases/latest" "$TMP_V
 get_ver "https://github.com/yandexru45/netshift/releases/latest" "$TMP_VER_POD" "NetShift" &
 get_ver "https://github.com/remittor/zapret-openwrt/releases/latest" "$TMP_VER" "Zapret" &
 get_ver "https://github.com/xyzmean/splify/releases/latest" "$TMP_VER_SPL" "splify" &
-get_ver "https://github.com/d0mhate/-tg-ws-proxy-Manager-go/releases/latest" "$TMP_VER_TG_GO" "TG-WS Proxy SOCKS5" &
-get_ver "https://github.com/valnesfjord/tg-ws-proxy-rs/releases/latest" "$TMP_VER_TG_RS" "TG-WS Proxy Rust" &
+# get_ver "https://github.com/d0mhate/-tg-ws-proxy-Manager-go/releases/latest" "$TMP_VER_TG_GO" "TG-WS Proxy SOCKS5" &
+# get_ver "https://github.com/valnesfjord/tg-ws-proxy-rs/releases/latest" "$TMP_VER_TG_RS" "TG-WS Proxy Rust" &
 wait
 
 [ -s "$TMP_MAG_VER" ] && MT_VERSION="$(cat "$TMP_MAG_VER")"
@@ -160,8 +160,8 @@ wait
 [ -s "$TMP_VER_POD" ] && PODKOP_LATEST_VER="$(cat "$TMP_VER_POD")"
 [ -s "$TMP_VER_TG_MT" ] && TG_MTProto="$(cat "$TMP_VER_TG_MT")"
 [ -s "$TMP_VER_SPL" ] && SPL_VER="$(cat "$TMP_VER_SPL")"
-[ -s "$TMP_VER_TG_GO" ] && TG_GO_VERSION="$(cat "$TMP_VER_TG_GO")"
-[ -s "$TMP_VER_TG_RS" ] && TG_RS_VERSION="$(cat "$TMP_VER_TG_RS")"
+# [ -s "$TMP_VER_TG_GO" ] && TG_GO_VERSION="$(cat "$TMP_VER_TG_GO")"
+# [ -s "$TMP_VER_TG_RS" ] && TG_RS_VERSION="$(cat "$TMP_VER_TG_RS")"
 
 echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test19.sh)' > /usr/bin/zms; chmod +x /usr/bin/zms
 echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test19.sh) "$@"' > /usr/bin/zmsA; chmod +x /usr/bin/zmsA
