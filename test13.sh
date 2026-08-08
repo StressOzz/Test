@@ -1361,11 +1361,14 @@ then echo -e "${YELLOW}Flow Offloading FIX:${NC} ${GREEN}включён${NC}"; f
 
 
 if auto_best_running; then
-echo -e "${YELLOW}Автоподбор стратегий:${NC}${GREEN}выполняется в фоне${NC}"
+    echo -e "${YELLOW}Автоподбор стратегий: ${NC}${GREEN}выполняется в фоне${NC}"
 else
-LINEM=$(auto_best_cron_line)
-HOURM=$(echo "$LINEM" | awk '{print $2}')
-echo -e "${YELLOW}Автоподбор стратегий:${NC}${GREEN}ежедневно в ${NC}$(printf "%02d" "$HOURM"):00${NC}"
+    LINEM=$(auto_best_cron_line)
+    HOURM=$(echo "$LINEM" | awk '{print $2}')
+
+    if [ -n "$HOURM" ]; then
+        echo -e "${YELLOW}Автоподбор стратегий: ${NC}${GREEN}ежедневно в $(printf "%02d" "$HOURM"):00${NC}"
+    fi
 fi
 
 
