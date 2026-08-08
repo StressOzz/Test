@@ -343,8 +343,8 @@ auto_apply_best_strategy() {
         URLS="$(cat "$OUT_DPI")"
         TOTAL=$(grep -c "|" "$OUT_DPI")
         TOTAL_STR=$(grep -c '^#' "$STR_FILE_AUTO")
-        echo "Найдено стратегий: $TOTAL_STR / доменов для теста: $TOTAL"
-
+        echo "Найдено стратегий: $TOTAL_STR"
+        echo "Доменов для теста: $TOTAL"
         RESULTS="$AUTO_RESULTS"
         MODE="normal"
         : > "$AUTO_RESULTS"
