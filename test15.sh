@@ -150,8 +150,8 @@ get_ver "https://github.com/DPITrickster/ByeDPI-OpenWrt/releases/latest" "$TMP_V
 get_ver "https://github.com/yandexru45/netshift/releases/latest" "$TMP_VER_POD" "NetShift" &
 get_ver "https://github.com/remittor/zapret-openwrt/releases/latest" "$TMP_VER" "Zapret" &
 get_ver "https://github.com/xyzmean/splify/releases/latest" "$TMP_VER_SPL" "splify" &
-get_ver "https://github.com/d0mhate/-tg-ws-proxy-Manager-go/releases/latest" "$TMP_VER_TG_GO" "TG-WS Proxy SOCKS5" &
-get_ver "https://github.com/valnesfjord/tg-ws-proxy-rs/releases/latest" "$TMP_VER_TG_RS" "TG-WS Proxy Rust" &
+# get_ver "https://github.com/d0mhate/-tg-ws-proxy-Manager-go/releases/latest" "$TMP_VER_TG_GO" "TG-WS Proxy SOCKS5" &
+# get_ver "https://github.com/valnesfjord/tg-ws-proxy-rs/releases/latest" "$TMP_VER_TG_RS" "TG-WS Proxy Rust" &
 wait
 
 [ -s "$TMP_MAG_VER" ] && MT_VERSION="$(cat "$TMP_MAG_VER")"
@@ -1504,17 +1504,6 @@ menu_TG() {
         SECRET="$(head -c16 /dev/urandom | hexdump -e '16/1 "%02x"')"
 
 get_TG_versions
-
-        if command -v opkg >/dev/null 2>&1; then
-            INSTALLED_VER_MT="$(opkg list-installed 2>/dev/null |
-                grep '^tg-ws-proxy' |
-                awk '{print $3}' |
-                cut -d'-' -f1)"
-        else
-            INSTALLED_VER_MT="$(apk list -I 2>/dev/null |
-                grep '^tg-ws-proxy-' |
-                sed -E 's/tg-ws-proxy-([0-9.]+).*/\1/')"
-        fi
 
         if [ -z "$INSTALLED_VER_MT" ]; then
             MT_ACTION="install"
