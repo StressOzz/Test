@@ -1318,14 +1318,7 @@ echo -en "\n${YELLOW}Выберите зеркало: ${NC}"; read -r z; case "$
 BIN_VER_GO="/usr/bin/tg-ws-proxy-go_ver"
 BIN_VER_RS="/usr/bin/tg-ws-proxy-rs_ver"
 
-
-#!/bin/sh
-# ЗАМЕНА для функций delete_TG_RS / install_TG_RS / get_arch_GO / delete_TG_GO / install_TG_GO
-# Логика: скачиваем и переустанавливаем ТОЛЬКО если версия отличается от последней на GitHub.
-# Конфиги (init-скрипты и SECRET_FILE) не трогаем при обновлении — правим только бинарник и файл версии.
-
-# ===================== RUST =====================
-
+# УСТАНОВКА RUST
 get_arch_RS() {
     case "$ARCH" in
         aarch64*) echo "tg-ws-proxy-aarch64-unknown-linux-musl" ;;
@@ -1353,7 +1346,7 @@ install_TG_RS() {
     echo -e "\n${MAGENTA}Проверяем TG WS Proxy Rust${NC}"
 
     CUR_VER_RS=""
-    [ -f "$BIN_VER_RS" ] && CUR_VER_RS="$(cat "$BIN_VER_RS")"
+    [ -s "$BIN_VER_RS" ] && CUR_VER_RS="$(cat "$BIN_VER_RS")"
 
     if [ -n "$CUR_VER_RS" ] && [ "$CUR_VER_RS" = "$TG_RS_VERSION" ] && [ -x "$BIN_PATH_RS" ]; then
         echo -e "TG WS Proxy Rust уже ${GREEN}актуальной версии${NC} ($TG_RS_VERSION)\n"
@@ -1365,11 +1358,11 @@ install_TG_RS() {
 
     ARCH_FILE_RS="$(get_arch_RS)" || return 1
 
-    # Дефолты для путей, если не заданы выше по скрипту
     TMP_ARCHIVE_RS="${TMP_ARCHIVE_RS:-$TMP_SF/tg-ws-proxy-rs.tar.gz}"
     TMP_DIR_RS="${TMP_DIR_RS:-$TMP_SF/tg-ws-proxy-rs-extract}"
+    mkdir -p "$TMP_SF"
 
-    echo -e "${CYAN}Скачиваем${NC} $ARCH_FILE_RS"
+    echo -e "${CYAN}Скачиваем и устанавливаем${NC} $ARCH_FILE_RS"
 
     DOWNLOAD_URL_RS="https://github.com/valnesfjord/tg-ws-proxy-rs/releases/download/v${TG_RS_VERSION}/${ARCH_FILE_RS}.tar.gz"
 
@@ -1391,10 +1384,11 @@ install_TG_RS() {
         return 1
     }
 
-    # Останавливаем сервис перед заменой бинарника (если уже запущен)
+    # Останавливаем сервис перед заменой бинарника, если он уже был установлен
     [ -f "$INIT_PATH_RS" ] && "$INIT_PATH_RS" stop >/dev/null 2>&1
 
     rm -f "$BIN_PATH_RS"
+
     mv "$TMP_DIR_RS"/tg-ws-proxy* "$BIN_PATH_RS" || {
         echo -e "\n${RED}Ошибка установки бинарника${NC}\n"
         rm -rf "$TMP_DIR_RS" "$TMP_ARCHIVE_RS"
@@ -1403,19 +1397,17 @@ install_TG_RS() {
     }
 
     chmod +x "$BIN_PATH_RS"
+
     rm -rf "$TMP_DIR_RS" "$TMP_ARCHIVE_RS"
 
     echo "$TG_RS_VERSION" > "$BIN_VER_RS"
 
-    # Секрет: берём из уже существующего конфига, не перезаписываем его.
-    # Если файла ещё нет - генерируем один раз.
-    if [ ! -f "$SECRET_FILE" ]; then
-        mkdir -p "$(dirname "$SECRET_FILE")"
-        head -c16 /dev/urandom | od -An -tx1 | tr -d ' \n' > "$SECRET_FILE"
-    fi
-    SECRET="$(cat "$SECRET_FILE")"
+    # Секрет нужен только для ПЕРВОГО создания init-скрипта.
+    # Если SECRET уже задан (например, из меню) - используем его, иначе генерируем.
+    [ -z "$SECRET" ] && SECRET="$(head -c16 /dev/urandom | hexdump -e '16/1 "%02x"')"
 
-    # Init-скрипт создаём только если его ещё нет - существующий (и его настройки) не трогаем
+    # Если init-скрипта ещё нет — создаём его (шаблон 1 в 1 как в оригинале).
+    # При обновлении существующий скрипт НЕ трогаем.
     if [ ! -f "$INIT_PATH_RS" ]; then
         printf '#!/bin/sh /etc/rc.common
 START=99
@@ -1430,13 +1422,14 @@ start_service() {
 ' "$SECRET" > "$INIT_PATH_RS"
 
         chmod +x "$INIT_PATH_RS"
+
         "$INIT_PATH_RS" enable >/dev/null 2>&1
     fi
 
     "$INIT_PATH_RS" restart >/dev/null 2>&1
 
     if pidof tg-ws-proxy-rs >/dev/null 2>&1; then
-        echo -e "TG WS Proxy Rust ${GREEN}установлен/обновлён!${NC} ($TG_RS_VERSION)\n"
+        echo -e "TG WS Proxy Rust ${GREEN}установлен!${NC}\n"
     else
         echo -e "${RED}TG WS Proxy Rust не запущен!${NC}\n"
     fi
@@ -1444,8 +1437,7 @@ start_service() {
     PAUSE
 }
 
-# ===================== GO (SOCKS5) =====================
-
+# УСТАНОВКА SOCKS5
 get_arch_GO() {
     case "$ARCH" in
         aarch64*) echo "tg-ws-proxy-openwrt-aarch64" ;;
@@ -1473,7 +1465,7 @@ install_TG_GO() {
     echo -e "\n${MAGENTA}Проверяем TG WS Proxy SOCKS5${NC}"
 
     CUR_VER_GO=""
-    [ -f "$BIN_VER_GO" ] && CUR_VER_GO="$(cat "$BIN_VER_GO")"
+    [ -s "$BIN_VER_GO" ] && CUR_VER_GO="$(cat "$BIN_VER_GO")"
 
     if [ -n "$CUR_VER_GO" ] && [ "$CUR_VER_GO" = "$TG_GO_VERSION" ] && [ -x "$BIN_PATH_GO" ]; then
         echo -e "TG WS Proxy SOCKS5 уже ${GREEN}актуальной версии${NC} ($TG_GO_VERSION)\n"
@@ -1485,7 +1477,7 @@ install_TG_GO() {
 
     ARCH_FILE_GO="$(get_arch_GO)" || return 1
 
-    echo -e "${CYAN}Скачиваем${NC} $ARCH_FILE_GO"
+    echo -e "${CYAN}Скачиваем и устанавливаем${NC} $ARCH_FILE_GO"
 
     DOWNLOAD_URL_GO="https://github.com/d0mhate/-tg-ws-proxy-Manager-go/releases/download/v${TG_GO_VERSION}/${ARCH_FILE_GO}"
 
@@ -1500,7 +1492,7 @@ install_TG_GO() {
 
     chmod +x "$TMP_BIN_GO"
 
-    # Останавливаем сервис перед заменой бинарника (если уже запущен)
+    # Останавливаем сервис перед заменой бинарника, если он уже был установлен
     [ -f "$INIT_PATH_GO" ] && "$INIT_PATH_GO" stop >/dev/null 2>&1
 
     mv -f "$TMP_BIN_GO" "$BIN_PATH_GO"
@@ -1508,7 +1500,8 @@ install_TG_GO() {
 
     echo "$TG_GO_VERSION" > "$BIN_VER_GO"
 
-    # Init-скрипт создаём только если его ещё нет - существующий (и его настройки) не трогаем
+    # Если init-скрипта ещё нет — создаём его (шаблон 1 в 1 как в оригинале).
+    # При обновлении существующий скрипт НЕ изменяем.
     if [ ! -f "$INIT_PATH_GO" ]; then
         printf '#!/bin/sh /etc/rc.common
 START=99
@@ -1523,13 +1516,14 @@ start_service() {
 ' > "$INIT_PATH_GO"
 
         chmod +x "$INIT_PATH_GO"
+
         "$INIT_PATH_GO" enable >/dev/null 2>&1
     fi
 
     "$INIT_PATH_GO" restart >/dev/null 2>&1
 
     if pidof tg-ws-proxy-go >/dev/null 2>&1; then
-        echo -e "TG WS Proxy SOCKS5 ${GREEN}установлен/обновлён!${NC} ($TG_GO_VERSION)\n"
+        echo -e "TG WS Proxy SOCKS5 ${GREEN}установлен!${NC}\n"
     else
         echo -e "${RED}TG WS Proxy SOCKS5 не запущен!${NC}\n"
     fi
@@ -1537,8 +1531,7 @@ start_service() {
     PAUSE
 }
 
-
-# УСТАНОВКА MTProto
+# УСТАНОВКА MTProto (без изменений - у вас там уже сравнение версий через opkg/apk)
 install_update_TG_PKG() { AVAILABLE_SPACE=$(df /overlay 2>/dev/null | awk 'NR==2 {print $4}'); [ -z "$AVAILABLE_SPACE" ] && AVAILABLE_SPACE=$(df / 2>/dev/null | awk 'NR==2 {print $4}'); REQUIRED_SPACE=10000; if [ "$AVAILABLE_SPACE" -lt "$REQUIRED_SPACE" ]
 then echo -e "\n${RED}Недостаточно свободного места${NC}\n"; echo -e "${YELLOW}Доступно: ${NC}$((AVAILABLE_SPACE/1024)) MB\n${YELLOW}Требуется: ${NC}$((REQUIRED_SPACE/1024)) MB\n"; PAUSE; return; fi
 echo -e "\n${MAGENTA}Устанавливаем TG WS Proxy MTProto${NC}"; rm -f /etc/tg-ws-proxy.conf /etc/tg-ws-proxy.conf-opkg; URL="https://github.com/spatiumstas/tg-ws-proxy-go/releases/download/${TG_MTProto}/tg-ws-proxy_${TG_MTProto}-${GO_SUF}_openwrt_${ARCH_FULL}.${RAZ}"
@@ -1551,9 +1544,8 @@ remove_TG_PKG() { echo -e "\n${MAGENTA}Удаляем TG WS Proxy MTProto${NC}";
 # МЕНЮ
 menu_TG() {
     while true; do
-        SECRET="$(head -c16 /dev/urandom | hexdump -e '16/1 "%02x"')"
 
-get_TG_versions
+        get_TG_versions
 
         if command -v opkg >/dev/null 2>&1; then
             INSTALLED_VER_MT="$(opkg list-installed 2>/dev/null |
@@ -1641,11 +1633,16 @@ get_TG_versions
             fi
         fi
 
-        if pidof tg-ws-proxy-go >/dev/null 2>&1 &&
-           [ -f "$BIN_PATH_GO" ] &&
-           [ -f "$INIT_PATH_GO" ]; then
+        # Настройки показываем по факту установки (файлы на месте),
+        # а не только если процесс жив именно в момент отрисовки меню.
+        if [ "$GO_ACTION" != "install" ] && [ -f "$BIN_PATH_GO" ] && [ -f "$INIT_PATH_GO" ]; then
 
             echo -e "\n${YELLOW}Настройки ${CYAN}TG WS Proxy SOCKS5${YELLOW}:${NC}"
+            if pidof tg-ws-proxy-go >/dev/null 2>&1; then
+                echo -e "${YELLOW}Статус:${NC} ${GREEN}запущен${NC}"
+            else
+                echo -e "${YELLOW}Статус:${NC} ${RED}не запущен${NC}"
+            fi
             echo -e "${YELLOW}Тип прокси:${NC} SOCKS5"
             echo -e "${YELLOW}Хост:${NC} $LAN_IP"
             echo -e "${YELLOW}Порт:${NC} 1080"
@@ -1653,9 +1650,7 @@ get_TG_versions
             echo -e "tg://socks?server=$LAN_IP&port=1080"
         fi
 
-        if pgrep -f tg-ws-proxy-rs >/dev/null 2>&1 &&
-           [ -f "$BIN_PATH_RS" ] &&
-           [ -f "$INIT_PATH_RS" ]; then
+        if [ "$RS_ACTION" != "install" ] && [ -f "$BIN_PATH_RS" ] && [ -f "$INIT_PATH_RS" ]; then
 
             SECRET_IN_RS="$(
                 sed -n 's/.*--secret[[:space:]]*\([0-9a-fA-F]\{32\}\).*/\1/p' \
@@ -1663,6 +1658,11 @@ get_TG_versions
             )"
 
             echo -e "\n${YELLOW}Настройки ${CYAN}TG WS Proxy Rust${YELLOW}:${NC}"
+            if pgrep -f tg-ws-proxy-rs >/dev/null 2>&1; then
+                echo -e "${YELLOW}Статус:${NC} ${GREEN}запущен${NC}"
+            else
+                echo -e "${YELLOW}Статус:${NC} ${RED}не запущен${NC}"
+            fi
             echo -e "${YELLOW}Тип прокси:${NC} MTProto"
             echo -e "${YELLOW}Хост:${NC} $LAN_IP"
             echo -e "${YELLOW}Порт:${NC} 2443"
@@ -1671,8 +1671,7 @@ get_TG_versions
             echo -e "tg://proxy?server=$LAN_IP&port=2443&secret=dd$SECRET_IN_RS"
         fi
 
-        if pidof tg-ws-proxy >/dev/null 2>&1 &&
-           [ -f "/etc/init.d/tg-ws-proxy" ]; then
+        if [ "$MT_ACTION" != "install" ] && [ -f "/etc/init.d/tg-ws-proxy" ]; then
 
             SECRET_CONF="$(
                 grep '^SECRET=' "$SECRET_FILE" 2>/dev/null |
@@ -1680,6 +1679,11 @@ get_TG_versions
             )"
 
             echo -e "\n${YELLOW}Настройки ${CYAN}TG WS Proxy MTProto${YELLOW}:${NC}"
+            if pidof tg-ws-proxy >/dev/null 2>&1; then
+                echo -e "${YELLOW}Статус:${NC} ${GREEN}запущен${NC}"
+            else
+                echo -e "${YELLOW}Статус:${NC} ${RED}не запущен${NC}"
+            fi
             echo -e "${YELLOW}Тип прокси:${NC} MTProto"
             echo -e "${YELLOW}Хост:${NC} $LAN_IP"
             echo -e "${YELLOW}Порт:${NC} 1443"
@@ -1818,6 +1822,7 @@ get_TG_versions() {
         )"
     fi
 }
+
 
 # ==========================================
 # PODKOP EVOLUTION и AWG
