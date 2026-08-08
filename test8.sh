@@ -108,8 +108,8 @@ get_ver "https://github.com/yandexru45/netshift/releases/latest" "$TMP_VER_POD" 
 # [ -s "$TMP_MAG_VER" ] && MT_VERSION="$(cat "$TMP_MAG_VER")"
 [ -s "$TMP_VER" ] && ZAPRET_VERSION="$(cat "$TMP_VER")"; [ -s "$TMP_VER_POD" ] && PODKOP_LATEST_VER="$(cat "$TMP_VER_POD")"; [ -s "$TMP_VER_TG_MT" ] && TG_MTProto="$(cat "$TMP_VER_TG_MT")"; [ -s "$TMP_VER_SPL" ] && SPL_VER="$(cat "$TMP_VER_SPL")"
 
-echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test7.sh)' > /usr/bin/zms; chmod +x /usr/bin/zms
-echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test7.sh) "$@"' > /usr/bin/zmsA; chmod +x /usr/bin/zmsA
+echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test8.sh)' > /usr/bin/zms; chmod +x /usr/bin/zms
+echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test8.sh) "$@"' > /usr/bin/zmsA; chmod +x /usr/bin/zmsA
 
 # git="githubusercontent.com"; if ! grep -q "raw.$git" /etc/hosts; then echo -e "\n\033[1;36mДля корректной работы скрипта добавляем домены \033[0mGitHub\033[1;36m в \033[0m/etc/hosts\033[0m"
 # printf "#$git\n185.199.109.133 raw.$git release-assets.$git\n185.199.108.133 private-user-images.$git gist.$git avatars.$git\n" >> /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1; fi
@@ -440,9 +440,6 @@ sort_results_desc "$AUTO_RESULTS" "$AUTO_RESULTS"
 
             {
                 echo "  option NFQWS_OPT '"
-                # Если победила v-стратегия и был оригинальный кастомный Yv —
-                # переносим именно его, а не дефолтный, который добавит ADD_Yv.
-                # Порядок в файле: Yv → v
                 case "$BEST_NAME" in
                     v[0-9]*)
                         [ -n "$ORIG_YV_BLOCK" ] && echo "$ORIG_YV_BLOCK"
@@ -458,13 +455,7 @@ sort_results_desc "$AUTO_RESULTS" "$AUTO_RESULTS"
             if ! grep -q "option NFQWS_PORTS_TCP.*2053,2083,2087,2096,8443" "$CONF"; then
                 sed -i "/^[[:space:]]*option NFQWS_PORTS_TCP '/s/'\$/,2053,2083,2087,2096,8443'/" "$CONF"
             fi
-
-            # Добавляет discord-UDP блок + дефолтный Dv1 (порядок в файле: ... → Dv)
             discord_str_add
-
-            # Если был оригинальный кастомный Dv — заменяем им только что
-            # добавленный дефолтный Dv1 (маркер + тело), не трогая всё, что
-            # было записано до него (Yv, v, discord-UDP блок)
             case "$BEST_NAME" in
                 v[0-9]*)
                     if [ -n "$ORIG_DV_BLOCK" ]; then
@@ -478,9 +469,6 @@ sort_results_desc "$AUTO_RESULTS" "$AUTO_RESULTS"
                     fi
                     ;;
             esac
-
-            # Gv (игровая стратегия) всегда добавляется последней — в самом
-            # конце NFQWS_OPT, после Yv, v и Dv
             case "$BEST_NAME" in
                 v[0-9]*)
                     if [ -n "$ORIG_GV_BLOCK" ]; then
@@ -580,7 +568,7 @@ fi
         echo -e "${YELLOW}Текущее время на роутере:${NC} ${CYAN}$(date '+%H:%M:%S')${NC}"
 
 if auto_best_running; then
-    echo -e "${YELLOW}Автоподбор стратегий:${NC}${GREEN}выполняется в фоне${NC}"
+    echo -e "${YELLOW}Автоподбор стратегий:${NC} ${GREEN}выполняется в фоне${NC}"
 else
             LINEA=$(auto_best_cron_line)
             HOURA=$(echo "$LINEA" | awk '{print $2}')
@@ -1369,7 +1357,7 @@ if auto_best_running; then
 else
             LINEA=$(auto_best_cron_line)
             HOURA=$(echo "$LINEA" | awk '{print $2}')
-            echo -e "${YELLOW}Автоподбор стратегий:${NC} ${GREEN}ежедневно в ${NC}$(printf "%02d" "$HOURA"):00${NC}"
+            echo -e "${YELLOW}Автоподбор стратегий:${NC}${GREEN}ежедневно в ${NC}$(printf "%02d" "$HOURA"):00${NC}"
 fi
 
 
