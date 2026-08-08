@@ -154,7 +154,7 @@ install_splify() {
 clear
 
 echo -e "${MAGENTA}╔══════════════════════════════════════╗${NC}"
-echo -e "${MAGENTA}║${NC}       ${CYAN}Установка последних релизов${NC}      ${MAGENTA}║${NC}"
+echo -e "${MAGENTA}║${NC}      ${CYAN}Установка последних релизов${NC}     ${MAGENTA}║${NC}"
 echo -e "${MAGENTA}╚══════════════════════════════════════╝${NC}"
 
 echo -e "\n${YELLOW}Архитектура OpenWrt:${NC} ${GREEN}$ARCH${NC}"
