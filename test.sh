@@ -86,10 +86,6 @@ REPO="xyzmean/splify"; WARP_EP="engage.cloudflareclient.com:4500"; WARP_IFACE="w
 AWG_JC=4; AWG_JMIN=40; AWG_JMAX=70; AWG_H1=1; AWG_H2=2; AWG_H3=3; AWG_H4=4; AWG_S1=0; AWG_S2=0; AWG_JMAX=70; AWG_H1=1; AWG_H2=2; AWG_H3=3; AWG_H4=4; AWG_S1=0; AWG_S2=0
 AWG_I1="<b 0xce000000010897a297ecc34cd6dd000044d0ec2e2e1ea2991f467ace4222129b5a098823784694b4897b9986ae0b7280135fa85e196d9ad980b150122129ce2a9379531b0fd3e871ca5fdb883c369832f730e272d7b8b74f393f9f0fa43f11e510ecb2219a52984410c204cf875585340c62238e14ad04dff382f2c200e0ee22fe743b9c6b8b043121c5710ec289f471c91ee414fca8b8be8419ae8ce7ffc53837f6ade262891895f3f4cecd31bc93ac5599e18e4f01b472362b8056c3172b513051f8322d1062997ef4a383b01706598d08d48c221d30e74c7ce000cdad36b706b1bf9b0607c32ec4b3203a4ee21ab64df336212b9758280803fcab14933b0e7ee1e04a7becce3e2633f4852585c567894a5f9efe9706a151b615856647e8b7dba69ab357b3982f554549bef9256111b2d67afde0b496f16962d4957ff654232aa9e845b61463908309cfd9de0a6abf5f425f577d7e5f6440652aa8da5f73588e82e9470f3b21b27b28c649506ae1a7f5f15b876f56abc4615f49911549b9bb39dd804fde182bd2dcec0c33bad9b138ca07d4a4a1650a2c2686acea05727e2a78962a840ae428f55627516e73c83dd8893b02358e81b524b4d99fda6df52b3a8d7a5291326e7ac9d773c5b43b8444554ef5aea104a738ed650aa979674bbed38da58ac29d87c29d387d80b526065baeb073ce65f075ccb56e47533aef357dceaa8293a523c5f6f790be90e4731123d3c6152a70576e90b4ab5bc5ead01576c68ab633ff7d36dcde2a0b2c68897e1acfc4d6483aaaeb635dd63c96b2b6a7a2bfe042f6aed82e5363aa850aace12ee3b1a93f30d8ab9537df483152a5527faca21efc9981b304f11fc95336f5b9637b174c5a0659e2b22e159a9fed4b8e93047371175b1d6d9cc8ab745f3b2281537d1c75fb9451871864efa5d184c38c185fd203de206751b92620f7c369e031d2041e152040920ac2c5ab5340bfc9d0561176abf10a147287ea90758575ac6a9f5ac9f390d0d5b23ee12af583383d994e22c0cf42383834bcd3ada1b3825a0664d8f3fb678261d57601ddf94a8a68a7c273a18c08aa99c7ad8c6c42eab67718843597ec9930457359dfdfbce024afc2dcf9348579a57d8d3490b2fa99f278f1c37d87dad9b221acd575192ffae1784f8e60ec7cee4068b6b988f0433d96d6a1b1865f4e155e9fe020279f434f3bf1bd117b717b92f6cd1cc9bea7d45978bcc3f24bda631a36910110a6ec06da35f8966c9279d130347594f13e9e07514fa370754d1424c0a1545c5070ef9fb2acd14233e8a50bfc5978b5bdf8bc1714731f798d21e2004117c61f2989dd44f0cf027b27d4019e81ed4b5c31db347c4a3a4d85048d7093cf16753d7b0d15e078f5c7a5205dc2f87e330a1f716738dce1c6180e9d02869b5546f1c4d2748f8c90d9693cba4e0079297d22fd61402dea32ff0eb69ebd65a5d0b687d87e3a8b2c42b648aa723c7c7daf37abcc4bb85caea2ee8f55bec20e913b3324ab8f5c3304f820d42ad1b9f2ffc1a3af9927136b4419e1e579ab4c2ae3c776d293d397d575df181e6cae0a4ada5d67ecea171cca3288d57c7bbdaee3befe745fb7d634f70386d873b90c4d6c6596bb65af68f9e5121e67ebf0d89d3c909ceedfb32ce9575a7758ff080724e1ab5d5f43074ecb53a479af21ed03d7b6899c36631c0166f9d47e5e1d4528a5d3d3f744029c4b1c190cbfbad06f5f83f7ad0429fa9a2719c56ffe3783460e166de2d8>"
 
-AUTO_RESULTS="/opt/zapret/tmp/results_auto.txt"; AUTO_BACK="$TMP_SF/zapret_auto_back.txt"
-AUTO_LOG="/opt/zapret/tmp/auto_best.log"; AUTO_CRON_CMD="/usr/bin/zms --auto-best"
-AUTO_LOCK="/tmp/zapret_auto_best.lock"; AUTO_STOP_FLAG="$TMP_SF/zapret_auto_best.stop"
-
 if command -v opkg >/dev/null 2>&1; then PKG="opkg"; GO_SUF="1"; CONFZ="/etc/opkg/distfeeds.conf"; PKG_IS_APK=0; UPDATE="opkg update"; INSTALL="opkg install"
 DELETE="opkg remove"; ARCH="$(opkg print-architecture | awk '{print $2}' | tail -n1)"; VER_SUF="r1-all"; SUF_MT=""; SPL_SUF="all"
 RAZ="ipk"; TMP_FILE_GO="/tmp/tg-ws-proxy.ipk"; else PKG="apk"; GO_SUF="r1"; CONFZ="/etc/apk/repositories.d/distfeeds.list"; PKG_IS_APK=1; SPL_SUF="noarch"
@@ -101,18 +97,64 @@ if ! curl --version >/dev/null 2>&1; then clear; echo -e "curl ${RED}отсут�
 $DELETE curl libcurl >/dev/null 2>&1; echo -e "${CYAN}Обновляем список пакетов${NC}"; if ! $UPDATE >/dev/null 2>&1; then echo -e "\n${RED}Ошибка обновления списка пакетов!!${NC}\n"; else PACKAGES_UPDATED=1; fi
 echo -e "${CYAN}Устанавливаем ${NC}curl"; if ! $INSTALL libcurl curl >/dev/null 2>&1; then echo -e "\n${RED}Не удалось установить curl!${NC}\n"; PAUSE; fi; fi
 
-ZAPRET_VERSION="72.20260307"; PODKOP_LATEST_VER="0.9.6"; TG_MTProto="0.9.3"; MT_VERSION="0.8.2"; SPL_VER="26.8.1.3"
-get_ver() { URL="$1"; OUT_FILE="$2"; NAME="$3"; RESULT=$(curl -sIL --connect-timeout 3 --max-time 4 --retry 1 -w "%{url_effective}" -o /dev/null "$URL" 2>/dev/null); if [ $? -ne 0 ] || [ -z "$RESULT" ]; then
-echo -e "$NAME: ${RED}ошибка получения версии${NC}"; return 1; fi; VERSION="${RESULT##*/}"; VERSION="${VERSION#v}"; if [ -z "$VERSION" ]; then echo -e "$NAME - ${RED}не удалось извлечь версию${NC}"
-echo -e "${YELLOW}URL:${NC} $RESULT"; return 1; fi; echo "$VERSION" > "$OUT_FILE"; echo -e "$NAME: ${GREEN}$VERSION${NC}"; }
-clear ; echo -e "${CYAN}Cобираем версии:${NC}" ; TMP_VER="/tmp/zapret_version" ; TMP_VER_POD="/tmp/podkop_version"; TMP_VER_TG_MT="/tmp/tg_ws_proxy_MTp_ver"; TMP_MAG_VER="/tmp/MagiTrickle_version"; TMP_VER_SPL="/tmp/splify_version"
-# get_ver "https://github.com/MagiTrickle/MagiTrickle/releases/latest" "$TMP_MAG_VER" "MagiTrickle" &
-# get_ver "https://github.com/spatiumstas/tg-ws-proxy-go/releases/latest" "$TMP_VER_TG_MT" "TG-WS Proxy MTProto"
-get_ver "https://github.com/yandexru45/netshift/releases/latest" "$TMP_VER_POD" "NetShift" & get_ver "https://github.com/remittor/zapret-openwrt/releases/latest" "$TMP_VER" "Zapret" & get_ver "https://github.com/xyzmean/splify/releases/latest" "$TMP_VER_SPL" "splify" & wait
-# [ -s "$TMP_MAG_VER" ] && MT_VERSION="$(cat "$TMP_MAG_VER")"
-[ -s "$TMP_VER" ] && ZAPRET_VERSION="$(cat "$TMP_VER")"; [ -s "$TMP_VER_POD" ] && PODKOP_LATEST_VER="$(cat "$TMP_VER_POD")"; [ -s "$TMP_VER_TG_MT" ] && TG_MTProto="$(cat "$TMP_VER_TG_MT")"; [ -s "$TMP_VER_SPL" ] && SPL_VER="$(cat "$TMP_VER_SPL")"
+ZAPRET_VERSION="72.20260307"; PODKOP_LATEST_VER="0.9.6"; TG_MTProto="0.9.3"; MT_VERSION="0.8.2"; SPL_VER="26.8.1.3"; TG_GO_VERSION="1.4.1"; TG_RS_VERSION="2.0.0"
 
-echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test109.sh) "$@"' > /usr/bin/zms; chmod +x /usr/bin/zms
+get_ver() {
+    URL="$1"
+    OUT_FILE="$2"
+    NAME="$3"
+
+    RESULT=$(curl -sIL --connect-timeout 3 --max-time 4 --retry 1 -w "%{url_effective}" -o /dev/null "$URL" 2>/dev/null)
+
+    if [ $? -ne 0 ] || [ -z "$RESULT" ]; then
+        echo -e "$NAME: ${RED}ошибка получения версии${NC}"
+        return 1
+    fi
+
+    VERSION="${RESULT##*/}"
+    VERSION="${VERSION#v}"
+
+    if [ -z "$VERSION" ]; then
+        echo -e "$NAME - ${RED}не удалось извлечь версию${NC}"
+        echo -e "${YELLOW}URL:${NC} $RESULT"
+        return 1
+    fi
+
+    echo "$VERSION" > "$OUT_FILE"
+    echo -e "$NAME: ${GREEN}$VERSION${NC}"
+}
+
+clear
+echo -e "${CYAN}Cобираем версии:${NC}"
+
+TMP_VER="/tmp/zapret_version"
+TMP_VER_POD="/tmp/podkop_version"
+TMP_VER_TG_MT="/tmp/tg_ws_proxy_MTp_ver"
+TMP_VER_TG_GO="/tmp/tg_ws_proxy_GO_ver"
+TMP_VER_TG_RS="/tmp/tg_ws_proxy_RS_ver"
+TMP_MAG_VER="/tmp/MagiTrickle_version"
+TMP_VER_SPL="/tmp/splify_version"
+
+# get_ver "https://github.com/MagiTrickle/MagiTrickle/releases/latest" "$TMP_MAG_VER" "MagiTrickle" &
+# get_ver "https://github.com/spatiumstas/tg-ws-proxy-go/releases/latest" "$TMP_VER_TG_MT" "TG-WS Proxy MTProto" &
+
+get_ver "https://github.com/yandexru45/netshift/releases/latest" "$TMP_VER_POD" "NetShift" &
+get_ver "https://github.com/remittor/zapret-openwrt/releases/latest" "$TMP_VER" "Zapret" &
+get_ver "https://github.com/xyzmean/splify/releases/latest" "$TMP_VER_SPL" "splify" &
+get_ver "https://github.com/d0mhate/-tg-ws-proxy-Manager-go/releases/latest" "$TMP_VER_TG_GO" "TG-WS Proxy SOCKS5" &
+get_ver "https://github.com/valnesfjord/tg-ws-proxy-rs/releases/latest" "$TMP_VER_TG_RS" "TG-WS Proxy Rust" &
+wait
+
+# [ -s "$TMP_MAG_VER" ] && MT_VERSION="$(cat "$TMP_MAG_VER")"
+[ -s "$TMP_VER" ] && ZAPRET_VERSION="$(cat "$TMP_VER")"
+[ -s "$TMP_VER_POD" ] && PODKOP_LATEST_VER="$(cat "$TMP_VER_POD")"
+[ -s "$TMP_VER_TG_MT" ] && TG_MTProto="$(cat "$TMP_VER_TG_MT")"
+[ -s "$TMP_VER_SPL" ] && SPL_VER="$(cat "$TMP_VER_SPL")"
+[ -s "$TMP_VER_TG_GO" ] && TG_GO_VERSION="$(cat "$TMP_VER_TG_GO")"
+[ -s "$TMP_VER_TG_RS" ] && TG_RS_VERSION="$(cat "$TMP_VER_TG_RS")"
+
+echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test19.sh)' > /usr/bin/zms; chmod +x /usr/bin/zms
+echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test19.sh) "$@"' > /usr/bin/zmsA; chmod +x /usr/bin/zmsA
 
 # git="githubusercontent.com"; if ! grep -q "raw.$git" /etc/hosts; then echo -e "\n\033[1;36mДля корректной работы скрипта добавляем домены \033[0mGitHub\033[1;36m в \033[0m/etc/hosts\033[0m"
 # printf "#$git\n185.199.109.133 raw.$git release-assets.$git\n185.199.108.133 private-user-images.$git gist.$git avatars.$git\n" >> /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1; fi
@@ -123,9 +165,8 @@ MSG=0; for f in stun2.bin quic_initial_tencent_com.bin quic_initial_steamcommuni
 # Настройка времени на роутере
 # ==========================================
 AUTO_RESULTS="/opt/zapret/tmp/results_auto.txt"; AUTO_BACK="$TMP_SF/zapret_auto_back.txt"
-AUTO_LOG="/opt/zapret/tmp/auto_best.log"; AUTO_CRON_CMD="/usr/bin/zms --auto-best"
+AUTO_LOG="/opt/zapret/tmp/auto_best.log"; AUTO_CRON_CMD="/usr/bin/zmsA --auto-best"
 AUTO_LOCK="/tmp/zapret_auto_best.lock"; AUTO_STOP_FLAG="$TMP_SF/zapret_auto_best.stop"
-
 
 sync_ntp() {
     echo -e "\n${MAGENTA}Синхронизируем время через NTP${NC}"
@@ -211,6 +252,33 @@ TIME_MENU() {
 # Автоподбор лучшей стратегии (v + Flowseal)
 # ==========================================
 
+extract_yv_block() {
+    awk '
+        /^#Yv[0-9]/ { found=1 }
+        found { print; if ($0 == "--new") exit }
+    ' "$1"
+}
+
+extract_gv_block() {
+    awk '
+        /^#Gv[0-9]/ { found=1; print; next }
+        found {
+            if ($0 ~ /^#/ || $0 == "'"'"'") exit
+            print
+        }
+    ' "$1"
+}
+
+extract_dv_block() {
+    awk '
+        /^#Dv[0-9]/ { found=1; print; next }
+        found {
+            if ($0 ~ /^#/ || $0 == "'"'"'") exit
+            print
+        }
+    ' "$1"
+}
+
 auto_best_running() {
     [ -f "$AUTO_LOCK" ] || return 1
 
@@ -252,22 +320,16 @@ auto_best_stop_cleanup() {
 stop_auto_best() {
     touch "$AUTO_STOP_FLAG"
 
-    # Сигналом НЕ убиваем: код восстановления конфига живёт в родительском
-    # процессе (после пайпа с while), и если убить процесс сигналом,
-    # он погибнет раньше, чем успеет дойти до restore. Просто ждём,
-    # пока процесс сам заметит флаг на следующей проверке и завершится штатно.
     echo -en "${CYAN}Ожидаем завершения текущей проверки${NC}"
     _i=0
     while auto_best_running && [ "$_i" -lt 90 ]; do
         sleep 1
         _i=$((_i + 1))
-        [ $((_i % 5)) -eq 0 ] && echo -n "."
+        [ $((_i % 5)) -eq 0 ]
     done
     echo
 
     if auto_best_running; then
-        # Процесс завис (например сеть подвисла дольше 90 сек) —
-        # крайняя мера: убиваем и восстанавливаем конфиг сами
         PID=$(head -n1 "$AUTO_LOCK" 2>/dev/null)
         [ -n "$PID" ] && kill -KILL "$PID" 2>/dev/null
         rm -f "$AUTO_LOCK"
@@ -299,7 +361,16 @@ auto_apply_best_strategy() {
         : > "$STR_FILE_AUTO"
         cp "$CONF" "$AUTO_BACK"
 
+        ORIG_YV_BLOCK=""
+        ORIG_GV_BLOCK=""
+        ORIG_DV_BLOCK=""
+        grep -q "^#Yv[0-9]" "$AUTO_BACK" && ORIG_YV_BLOCK=$(extract_yv_block "$AUTO_BACK")
+        grep -q "^#Gv[0-9]" "$AUTO_BACK" && ORIG_GV_BLOCK=$(extract_gv_block "$AUTO_BACK")
+        grep -q "^#Dv[0-9]" "$AUTO_BACK" && ORIG_DV_BLOCK=$(extract_dv_block "$AUTO_BACK")
+
         echo "Собираем Flowseal стратегии"
+
+        
         download_strategies 1
         cat "$OUT" >> "$STR_FILE_AUTO"
 
@@ -317,8 +388,8 @@ auto_apply_best_strategy() {
         URLS="$(cat "$OUT_DPI")"
         TOTAL=$(grep -c "|" "$OUT_DPI")
         TOTAL_STR=$(grep -c '^#' "$STR_FILE_AUTO")
-        echo "Найдено стратегий: $TOTAL_STR / доменов для теста: $TOTAL"
-
+        echo "Найдено стратегий: $TOTAL_STR"
+        echo "Доменов для теста: $TOTAL"
         RESULTS="$AUTO_RESULTS"
         MODE="normal"
         : > "$AUTO_RESULTS"
@@ -409,12 +480,19 @@ sort_results_desc "$AUTO_RESULTS" "$AUTO_RESULTS"
             fi
             BLOCK=$(cat "$TEMP_FILE_AUTO")
 
-            sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
-            { echo "  option NFQWS_OPT '"; echo "$BLOCK"; echo "'"; } >> "$CONF"
+             sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
 
-            ADD_GP_DOMAINS
-            rm -f "$EXCLUDE_FILE"
-            wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL"
+            {
+                echo "  option NFQWS_OPT '"
+                case "$BEST_NAME" in
+                    v[0-9]*)
+                        [ -n "$ORIG_YV_BLOCK" ] && echo "$ORIG_YV_BLOCK"
+                        ;;
+                esac
+                echo "$BLOCK"
+                echo "'"
+            } >> "$CONF"
+
             if ! grep -q "option NFQWS_PORTS_UDP.*19294-19344,50000-50100" "$CONF"; then
                 sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'\$/,19294-19344,50000-50100'/" "$CONF"
             fi
@@ -422,9 +500,39 @@ sort_results_desc "$AUTO_RESULTS" "$AUTO_RESULTS"
                 sed -i "/^[[:space:]]*option NFQWS_PORTS_TCP '/s/'\$/,2053,2083,2087,2096,8443'/" "$CONF"
             fi
             discord_str_add
+            case "$BEST_NAME" in
+                v[0-9]*)
+                    if [ -n "$ORIG_DV_BLOCK" ]; then
+                        DV_MARKER_LINE=$(grep -n "^#Dv[0-9]" "$CONF" | tail -n1 | cut -d: -f1)
+                        LAST_QUOTE_LINE=$(grep -n "^'\$" "$CONF" | tail -n1 | cut -d: -f1)
+                        if [ -n "$DV_MARKER_LINE" ] && [ -n "$LAST_QUOTE_LINE" ] && [ "$LAST_QUOTE_LINE" -gt "$DV_MARKER_LINE" ]; then
+                            sed -i "${DV_MARKER_LINE},${LAST_QUOTE_LINE}d" "$CONF"
+                            printf "%s\n" "$ORIG_DV_BLOCK" >> "$CONF"
+                            echo "'" >> "$CONF"
+                        fi
+                    fi
+                    ;;
+            esac
+            case "$BEST_NAME" in
+                v[0-9]*)
+                    if [ -n "$ORIG_GV_BLOCK" ]; then
+                        LAST_QUOTE_LINE=$(grep -n "^'\$" "$CONF" | tail -n1 | cut -d: -f1)
+                        if [ -n "$LAST_QUOTE_LINE" ]; then
+                            sed -i "${LAST_QUOTE_LINE}d" "$CONF"
+                            printf "%s\n" "$ORIG_GV_BLOCK" >> "$CONF"
+                            echo "'" >> "$CONF"
+                        fi
+                    fi
+                    ;;
+            esac
+
             ADD_Yv
+
             ZAPRET_RESTART
             echo "Стратегия '$BEST_NAME' применена и сохранена"
+            [ -n "$ORIG_YV_BLOCK" ] && case "$BEST_NAME" in v[0-9]*) echo "Оригинальный блок Yv перенесён" ;; esac
+            [ -n "$ORIG_DV_BLOCK" ] && case "$BEST_NAME" in v[0-9]*) echo "Оригинальный блок Dv перенесён" ;; esac
+            [ -n "$ORIG_GV_BLOCK" ] && case "$BEST_NAME" in v[0-9]*) echo "Оригинальный блок Gv перенесён" ;; esac
         else
             echo "Не удалось повторно найти блок стратегии '$BEST_NAME', конфиг восстановлен без применения"
         fi
@@ -434,6 +542,8 @@ sort_results_desc "$AUTO_RESULTS" "$AUTO_RESULTS"
 }
 
 auto_best_cron_line() { grep -F "$AUTO_CRON_CMD" "$CRON_FILE" 2>/dev/null | head -n1; }
+LINECR=$(auto_best_cron_line)
+HOURC=$(echo "$LINECR" | awk '{print $2}')
 
 set_auto_best_time() {
     CUR_YEAR=$(date '+%Y')
@@ -476,7 +586,6 @@ run_auto_best_background() {
     while [ ! -f "$AUTO_LOCK" ] && [ "$_i" -lt 20 ]; do
         sleep 1
         _i=$((_i + 1))
-        echo -n "."
     done
     echo
 
@@ -506,7 +615,7 @@ fi
 
         if auto_best_running; then
             RUNNING=1
-            echo -e "${YELLOW}Автоподбор в фоне:${NC} ${GREEN}тест выполняется${NC}"
+            echo -e "${YELLOW}Автоподбор в фоне:${NC} ${GREEN}выполняется${NC}"
         else
             RUNNING=0
         fi
@@ -514,9 +623,9 @@ fi
         LINE=$(auto_best_cron_line)
         if [ -n "$LINE" ]; then
             HOUR=$(echo "$LINE" | awk '{print $2}')
-            echo -e "${YELLOW}Автоподбор:${NC} ${GREEN}ежедневно в $(printf "%02d" "$HOUR"):00${NC}"
+            echo -e "${YELLOW}Автоподбор стратегий:${NC} ${GREEN}ежедневно в ${NC}$(printf "%02d" "$HOUR"):00${NC}"
         else
-            echo -e "${YELLOW}Автоподбор:${NC} ${RED}отключен${NC}"
+            echo -e "${YELLOW}Автоподбор стратегий:${NC} ${RED}отключен${NC}"
         fi
 
         echo -e "\n${CYAN}1) ${GREEN}$( [ -n "$LINE" ] && echo "Изменить время автоподбора по расписанию" || echo "Включить автоподбор по расписанию" )${NC}"
@@ -524,10 +633,10 @@ fi
 if [ "$RUNNING" = "1" ]; then
             echo -e "${CYAN}3) ${GREEN}Остановить автоподбор в фоне${NC}"
         else
-            echo -e "${CYAN}3) ${GREEN}Запустить сейчас автоподбор в фоне${NC}"
+            echo -e "${CYAN}3) ${GREEN}Запустить автоподбор в фоне${NC}"
         fi
         [ -s "$AUTO_RESULTS" ] && echo -e "${CYAN}4) ${GREEN}Показать результаты последнего теста${NC}"
-                [ -f "$AUTO_LOG" ] && echo -e "${CYAN}5) ${GREEN}Показать полный лог${NC}"
+                [ -f "$AUTO_LOG" ] && echo -e "${CYAN}5) ${GREEN}Показать полный лог последнего теста${NC}"
         echo -e "${CYAN}6) ${GREEN}Настроить время на роутере${NC}"
         
 if [ -s "$AUTO_RESULTS" ] || [ -f "$AUTO_LOG" ]; then
@@ -543,7 +652,7 @@ fi
             3) if [ "$RUNNING" = "1" ]; then
                    echo -e "\n${MAGENTA}Останавливаем автоподбор${NC}"
                    stop_auto_best
-                   echo -e "${GREEN}Автоподбор остановлен, конфигурация восстановлена!${NC}\n"
+                   echo -e "${GREEN}Автоподбор в фоне остановлен!${NC}\n"
                    PAUSE
                else
                    run_auto_best_background
@@ -554,7 +663,7 @@ fi
             6) TIME_MENU ;;
             7) 
             
-            echo -e "\n${GREEN}Результаты теста и лог удалены${NC}\n"
+            echo -e "\n${GREEN}Результаты теста и лог удалены!${NC}\n"
             rm -rf "$AUTO_RESULTS" "$AUTO_BACK" "$AUTO_LOG" "$AUTO_LOCK" 
             PAUSE
             ;;
@@ -781,7 +890,7 @@ if /etc/init.d/zapret status >/dev/null 2>&1; then echo -e "Zapret ${GREEN}за�
 pkg_remove() { local pkg_name="$1"; $DELETE $pkg_name >/dev/null 2>&1; }
 uninstall_zapret() { local NO_PAUSE=$1; [ "$NO_PAUSE" != "1" ] && echo; echo -e "${MAGENTA}Удаляем Zapret${NC}\n${CYAN}Останавливаем ${NC}zapret"; /etc/init.d/zapret stop >/dev/null 2>&1; echo -e "${CYAN}Убиваем процессы${NC}"
 for pid in $(pgrep -f /opt/zapret 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done; echo -e "${CYAN}Удаляем пакеты${NC}"; pkg_remove zapret; pkg_remove luci-app-zapret; echo -e "${CYAN}Удаляем временные файлы${NC}"
-rm -rf /opt/zapret $CONF /etc/firewall.zapret /etc/init.d/zapret /tmp/*zapret* /var/run/*zapret* /tmp/*.ipk /tmp/*.zip 2>/dev/null; crontab -l 2>/dev/null | grep -v -i -E "zapret|/usr/bin/zms --auto-best" | crontab - 2>/dev/null; /etc/init.d/cron restart >/dev/null 2>&1
+rm -rf /opt/zapret $CONF /etc/firewall.zapret /etc/init.d/zapret /tmp/*zapret* /var/run/*zapret* /tmp/*.ipk /tmp/*.zip 2>/dev/null; crontab -l 2>/dev/null | grep -v -i -E "zapret|/usr/bin/zmsA --auto-best" | crontab - 2>/dev/null; /etc/init.d/cron restart >/dev/null 2>&1
 nft list tables 2>/dev/null | awk '{print $2}' | grep -E '(zapret|ZAPRET)' | while read t; do [ -n "$t" ] && nft delete table "$t" 2>/dev/null; done; rm -rf -- "$TMP_SF" tmp/zapret* ; echo -e "Zapret ${GREEN}удалён!${NC}\n"; [ "$NO_PAUSE" != "1" ] && PAUSE; }
 # ==========================================
 # Тест стратегии для Ютуб
@@ -823,7 +932,7 @@ if [ -f "$CONF" ] && { grep -q -- "--hostlist=/opt/zapret/ipset/zapret-hosts-use
 # ==========================================
 # Стратегии
 # ==========================================
-ADD_Yv() { if ! grep -q "^#Yv08" "$CONF" && ! grep -q "^#general" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_OPT '/a\\#Yv08\\n--filter-tcp=443\\n--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt\\n--dpi-desync=hostfakesplit\\n--dpi-desync-hostfakesplit-mod=host=google.com\\n--dpi-desync-fooling=ts\\n--new" "$CONF"; fi; }
+ADD_Yv() { if ! grep -q "^#Yv" "$CONF" && ! grep -q "^#general" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_OPT '/a\\#Yv08\\n--filter-tcp=443\\n--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt\\n--dpi-desync=hostfakesplit\\n--dpi-desync-hostfakesplit-mod=host=google.com\\n--dpi-desync-fooling=ts\\n--new" "$CONF"; fi; }
 strategy_v1() { printf '%s\n' "#v1" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=split2" "--dpi-desync-split-seqovl=681" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/stun.bin"; }
 strategy_v2() { printf '%s\n' "#v2" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake,multisplit" "--dpi-desync-split-seqovl=681" "--dpi-desync-split-pos=1" "--dpi-desync-fooling=ts" "--dpi-desync-repeats=8" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/stun.bin" "--dpi-desync-fake-tls-mod=rnd,dupsid,sni=www.google.com"; }
 strategy_v3() { printf '%s\n' "#v3" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=hostfakesplit" "--dpi-desync-hostfakesplit-mod=host=ozon.ru" "--dpi-desync-repeats=4" "--dpi-desync-fooling=ts,md5sig" "--dpi-desync-badseq-increment=0"; }
@@ -910,26 +1019,46 @@ grep -Fq "=ts" "$CONF" && echo -e "${YELLOW}Для работы этой стр�
 DoH_menu() { while true; do get_doh_status; clear; echo -e "${MAGENTA}Меню DNS over HTTPS${NC}\n"; if [ "$PKG_IS_APK" -eq 1 ]; then apk info -e https-dns-proxy >/dev/null 2>&1 && doh_st="Удалить" || doh_st="Установить"; else
 opkg list-installed | grep -q '^https-dns-proxy ' && doh_st="Удалить" || doh_st="Установить"; fi; if [ -n "$DOH_STATUS" ]; then if [ "$PKG_IS_APK" -eq 1 ]; then apk info -e https-dns-proxy >/dev/null 2>&1 && echo -e "${YELLOW}DNS over HTTPS: ${NC}$DOH_STATUS\n"
 else opkg list-installed | grep -q '^https-dns-proxy ' && echo -e "${YELLOW}DNS over HTTPS: ${NC}$DOH_STATUS\n"; fi; fi
-echo -e "${CYAN}1)${GREEN} $doh_st ${NC}DNS over HTTPS\n${CYAN}2)${GREEN} Настроить ${NC}Comss DNS\n${CYAN}3)${GREEN} Настроить ${NC}Xbox DNS\n${CYAN}4)${GREEN} Настроить ${NC}dns.malw.link"
-echo -e "${CYAN}5)${GREEN} Настроить ${NC}dns.malw.link (CloudFlare)\n${CYAN}6)${GREEN} Настроить ${NC}dns.mafioznik.xyz\n${CYAN}7)${GREEN} Настроить ${NC}dns.astracat.ru\n${CYAN}8)${GREEN} Настроить ${NC}dns.nullsproxy.com (Supercell)\n${CYAN}0)${GREEN} Вернуть ${NC}настройки по умолчанию"
+echo -e "${CYAN} 1)${GREEN} $doh_st ${NC}DNS over HTTPS\n${CYAN} 2)${GREEN} Настроить ${NC}Comss DNS\n${CYAN} 3)${GREEN} Настроить ${NC}Xbox DNS\n${CYAN} 4)${GREEN} Настроить ${NC}dns.malw.link"
+echo -e "${CYAN} 5)${GREEN} Настроить ${NC}dns.malw.link (CloudFlare)\n${CYAN} 6)${GREEN} Настроить ${NC}dns.mafioznik.xyz\n${CYAN} 7)${GREEN} Настроить ${NC}dns.astracat.ru"
+echo -e "${CYAN} 8)${GREEN} Настроить ${NC}dns.nullsproxy.com (Supercell)\n${CYAN} 9)${GREEN} Настроить ${NC}Cloudflare DNS\n${CYAN} 0)${GREEN} Настроить ${NC}Google DNS\n${CYAN}10)${GREEN} Вернуть ${NC}настройки по умолчанию"
 echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read -r choiceDOH; [ -z "$choiceDOH" ] && return; case "$choiceDOH" in 1) D_o_H;; 2) doh_install && setup_doh "$doh_comss" "Comss.one DNS";;
 3) doh_install && setup_doh "$doh_xbox" "Xbox DNS";; 4) doh_install && setup_doh "$doh_query" "dns.malw.link";; 5) doh_install && setup_doh "$doh_queryCF" "dns.malw.link (CloudFlare)";; 6) doh_install && setup_doh "$doh_mafioznik" "dns.mafioznik.xyz";;
-7) doh_install && setup_doh "$doh_astracat" "dns.astracat.ru";; 8) doh_install && setup_doh "$doh_nullsproxy" "dns.nullsproxy.com";; 0) doh_install && setup_doh "$doh_def" "настройки по умолчанию";; *) return;; esac; done; }
+7) doh_install && setup_doh "$doh_astracat" "dns.astracat.ru";; 8) doh_install && setup_doh "$doh_nullsproxy" "dns.nullsproxy.com";; 
+
+9) doh_install && setup_doh "$doh_CLF" "Cloudflare";;
+0) doh_install && setup_doh "$doh_GOO" "Google";;
+
+10) doh_install && setup_doh "$doh_def" "настройки по умолчанию";;
+
+*) return;; esac; done; }
 setup_doh() { local config="$1"; local name="$2"; echo -e "\n${MAGENTA}Настраиваем DNS over HTTPS${NC}\n${CYAN}Настраиваем ${NC}$name\n${CYAN}Применяем новые настройки${NC}"
 rm -f "$fileDoH"; printf '%s\n' "$doh_set" "$config" > "$fileDoH"; /etc/init.d/https-dns-proxy reload >/dev/null 2>&1; /etc/init.d/https-dns-proxy restart >/dev/null 2>&1; echo -e "DNS over HTTP ${GREEN}настроен!${NC}\n"; PAUSE; }
 get_doh_status() { DOH_STATUS=""; [ ! -f "$fileDoH" ] && return; if grep -q "dns.comss.one" "$fileDoH"; then DOH_STATUS="Comss DNS"; elif grep -q "xbox-dns.ru" "$fileDoH"; then DOH_STATUS="Xbox DNS"; elif grep -q "5u35p8m9i7.cloudflare-gateway.com" "$fileDoH"
-then DOH_STATUS="dns.malw.link (CloudFlare)"; elif grep -q "dns.malw.link" "$fileDoH"; then DOH_STATUS="dns.malw.link"; elif grep -q "dns.mafioznik.xyz" "$fileDoH"; then DOH_STATUS="dns.mafioznik.xyz"; elif grep -q "dns.astracat.ru" "$fileDoH"
-then DOH_STATUS="dns.astracat.ru"; elif grep -q "dns.nullsproxy.com" "$fileDoH"; then DOH_STATUS="dns.nullsproxy.com"; else DOH_STATUS="установлен"; fi; }
+then DOH_STATUS="dns.malw.link (CloudFlare)"; elif grep -q "dns.malw.link" "$fileDoH"; then DOH_STATUS="dns.malw.link"
+elif grep -q "dns.mafioznik.xyz" "$fileDoH"; then DOH_STATUS="dns.mafioznik.xyz"
+
+elif grep -q "cloudflare-dns.com" "$fileDoH" && grep -q "dns.google" "$fileDoH"; then DOH_STATUS="по умолчанию"
+elif grep -q "cloudflare-dns.com" "$fileDoH"; then DOH_STATUS="Cloudflare"
+elif grep -q "dns.google" "$fileDoH"; then DOH_STATUS="Google"
+
+
+elif grep -q "dns.astracat.ru" "$fileDoH"; then DOH_STATUS="dns.astracat.ru"
+elif grep -q "dns.nullsproxy.com" "$fileDoH"; then DOH_STATUS="dns.nullsproxy.com"; else DOH_STATUS="установлен"; fi; }
 D_o_H(){ if { [ "$PKG_IS_APK" -eq 1 ] && apk info -e https-dns-proxy >/dev/null 2>&1; } || { [ "$PKG_IS_APK" -eq 0 ] && opkg list-installed | grep -q '^https-dns-proxy '; }; then echo -e "\n${MAGENTA}Удаляем DNS over HTTPS${NC}\n${CYAN}Удаляем пакеты${NC}"
 $DELETE https-dns-proxy luci-app-https-dns-proxy >/dev/null 2>&1; echo -e "${CYAN}Удаляем файлы конфигурации${NC}"; rm -f /etc/config/https-dns-proxy /etc/init.d/https-dns-proxy; echo -e "DNS over HTTPS${GREEN} удалён!${NC}\n"; PAUSE
 else echo -e "\n${MAGENTA}Устанавливаем DNS over HTTPS${NC}"; update_packages || return; echo -e "${CYAN}Устанавливаем ${NC}https-dns-proxy"
 $INSTALL https-dns-proxy >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при установке!${NC}\n"; PAUSE; return; }; echo -e "${CYAN}Устанавливаем ${NC}luci-app-https-dns-proxy"; $INSTALL luci-app-https-dns-proxy >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при установке!${NC}\n"; PAUSE; return; }; echo -e "DNS over HTTPS${GREEN} установлен!${NC}\n"; PAUSE; fi; }
 doh_install() { [ -f "$fileDoH" ] && return 0; echo -e "\n${RED}DNS over HTTPS не установлен!${NC}\n"; PAUSE; return 1; }
-doh_set=$(printf "%s\n" "config main 'config'" "	option canary_domains_icloud '1'" "	option canary_domains_mozilla '1'" "	option dnsmasq_config_update '*'" "	option force_dns '1'" "	list force_dns_port '53'" "	list force_dns_port '853'" "	list force_dns_src_interface 'lan'" "	option procd_trigger_wan6 '0'" "	option heartbeat_domain 'heartbeat.melmac.ca'" "	option heartbeat_sleep_timeout '10'" "	option heartbeat_wait_timeout '10'" "	option user 'nobody'" "	option group 'nogroup'" "	option listen_addr '127.0.0.1'")
-doh_def=$(printf "%s\n" "" "config https-dns-proxy" "	option bootstrap_dns '1.1.1.1,1.0.0.1'" "	option resolver_url 'https://cloudflare-dns.com/dns-query'" "	option listen_port '5053'" "" "config https-dns-proxy" "	option bootstrap_dns '8.8.8.8,8.8.4.4'" "	option resolver_url 'https://dns.google/dns-query'" "	option listen_port '5054'")
-doh_comss=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://dns.comss.one/dns-query'"); doh_xbox=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://xbox-dns.ru/dns-query'"); doh_nullsproxy=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://dns.nullsproxy.com/dns-query'")
-doh_query=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://dns.malw.link/dns-query'"); doh_queryCF=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://5u35p8m9i7.cloudflare-gateway.com/dns-query'")
-doh_mafioznik=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://dns.mafioznik.xyz/dns-query'"); doh_astracat=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://dns.astracat.ru/dns-query'")
+doh_set=$(printf "%s\n" "config main 'config'" "	option canary_domains_icloud '1'" "	option canary_domains_mozilla '1'" "	option dnsmasq_config_update '*'" "	option force_dns '1'" "	option notrack_dns '1'" "	list force_dns_port '53'" "	list force_dns_port '853'" "	list force_dns_src_interface 'lan'" "	option procd_trigger_wan6 '0'" "	option heartbeat_domain 'heartbeat.mossdef.org'" "	option heartbeat_sleep_timeout '10'" "	option heartbeat_wait_timeout '10'" "	option user 'nobody'" "	option group 'nogroup'" "	option listen_addr '127.0.0.1'" "	option force_ip_family 'auto'")
+doh_def=$(printf "%s\n" "" "config https-dns-proxy" "	option bootstrap_dns '1.1.1.1,1.0.0.1,2606:4700:4700::1111,2606:4700:4700::1001'" "	option resolver_url 'https://cloudflare-dns.com/dns-query'" "	option listen_port '5053'" "" "config https-dns-proxy" "	option bootstrap_dns '8.8.8.8,8.8.4.4,2001:4860:4860::8888,2001:4860:4860::8844'" "	option resolver_url 'https://dns.google/dns-query'" "	option listen_port '5054'")
+doh_comss=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://dns.comss.one/dns-query'" "	option bootstrap_dns '92.38.152.163,93.115.24.204,2a03:90c0:56::1a5,2a02:7b40:5eb0:e95d::1'"); doh_xbox=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://xbox-dns.ru/dns-query'" "	option bootstrap_dns '8.8.8.8,8.8.4.4,2001:4860:4860::8888,2001:4860:4860::8844'"); doh_nullsproxy=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://dns.nullsproxy.com/dns-query'" "	option bootstrap_dns '8.8.8.8,8.8.4.4,2001:4860:4860::8888,2001:4860:4860::8844'")
+doh_query=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://dns.malw.link/dns-query'" "	option bootstrap_dns '8.8.8.8,8.8.4.4,2001:4860:4860::8888,2001:4860:4860::8844'"); doh_queryCF=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://5u35p8m9i7.cloudflare-gateway.com/dns-query'" "	option bootstrap_dns '8.8.8.8,8.8.4.4,2001:4860:4860::8888,2001:4860:4860::8844'")
+doh_mafioznik=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://dns.mafioznik.xyz/dns-query'" "	option bootstrap_dns '8.8.8.8,8.8.4.4,2001:4860:4860::8888,2001:4860:4860::8844'"); doh_astracat=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://dns.astracat.ru/dns-query'" "	option bootstrap_dns '8.8.8.8,8.8.4.4,2001:4860:4860::8888,2001:4860:4860::8844'")
+
+doh_CLF=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://cloudflare-dns.com/dns-query'" "	option bootstrap_dns '1.1.1.1,1.0.0.1,2606:4700:4700::1111,2606:4700:4700::1001'")
+doh_GOO=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://dns.google/dns-query'" "	option bootstrap_dns '8.8.8.8,8.8.4.4,2001:4860:4860::8888,2001:4860:4860::8844'")
+
 # ==========================================
 # Доступ из браузера
 # ==========================================
@@ -1176,46 +1305,460 @@ echo -en "\n${YELLOW}Выберите зеркало: ${NC}"; read -r z; case "$
 # ==========================================
 # МЕНЮ TG WS Proxy
 # ==========================================
+BIN_VER_GO="/usr/bin/tg-ws-proxy-go_ver"
+BIN_VER_RS="/usr/bin/tg-ws-proxy-rs_ver"
+
 # УСТАНОВКА RUST
-get_arch_RS() { case "$ARCH" in aarch64*) echo "tg-ws-proxy-aarch64-unknown-linux-musl.tar.gz" ;; x86_64) echo "tg-ws-proxy-x86_64-unknown-linux-musl.tar.gz" ;; arm*) echo "tg-ws-proxy-armv7-unknown-linux-musleabihf.tar.gz" ;; mipsel*) echo "tg-ws-proxy-mipsel-unknown-linux-musl.tar.gz" ;; mips*) echo "tg-ws-proxy-mips-unknown-linux-musl.tar.gz" ;; *) echo -e "\n${RED}Архитектура не поддерживается: ${NC}$ARCH\n"; PAUSE; return 1 ;; esac }
-delete_TG_RS() { echo -e "\n${MAGENTA}Удаляем TG WS Proxy Rust${NC}"; /etc/init.d/tg-ws-proxy-rs stop >/dev/null 2>&1; /etc/init.d/tg-ws-proxy-rs disable >/dev/null 2>&1; rm -rf "$BIN_PATH_RS" "$INIT_PATH_RS"; echo -e "TG WS Proxy Rust ${GREEN}удалён!${NC}\n"; PAUSE; }
-install_TG_RS() { echo -e "\n${MAGENTA}Устанавливаем TG WS Proxy Rust${NC}"; ARCH_FILE_RS="$(get_arch_RS)" || { echo -e "\n${RED}Архитектура не поддерживается:${NC} $ARCH\n"; PAUSE; return 1; }; echo -e "${CYAN}Скачиваем и устанавливаем${NC} $ARCH_FILE_RS"
-LATEST_TAG_RS="$(curl -Ls -o /dev/null -w '%{url_effective}' https://github.com/valnesfjord/tg-ws-proxy-rs/releases/latest | sed 's#.*/tag/##')"; [ -z "$LATEST_TAG_RS" ] && { echo -e "\n${RED}Не удалось получить версию${NC} TG WS Proxy Rust\n"; PAUSE; return 1; }; DOWNLOAD_URL_RS="https://github.com/valnesfjord/tg-ws-proxy-rs/releases/download/$LATEST_TAG_RS/$ARCH_FILE_RS"
-curl -L --fail -o "$TMP_ARCHIVE_RS" "$DOWNLOAD_URL_RS" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка скачивания${NC}\n"; PAUSE; return 1; }; rm -rf "$TMP_DIR_RS"; mkdir -p "$TMP_DIR_RS"; tar -xzf "$TMP_ARCHIVE_RS" -C "$TMP_DIR_RS" || { echo -e "\n${RED}Ошибка распаковки${NC}\n"; PAUSE; return 1; }; mv "$TMP_DIR_RS"/tg-ws-proxy* "$BIN_PATH_RS"; rm -rf "$TMP_DIR_RS"; rm -rf "$TMP_ARCHIVE_RS"; chmod +x "$BIN_PATH_RS"
-printf '#!/bin/sh /etc/rc.common\nSTART=99\nUSE_PROCD=1\n\nstart_service() {\n    procd_open_instance\n    procd_set_param command /usr/bin/tg-ws-proxy-rs --host 0.0.0.0 --port 2443 --secret %s --default-domains --cf-balance --cf-priority\n    procd_set_param respawn\n    procd_close_instance\n}\n' "$SECRET" > /etc/init.d/tg-ws-proxy-rs
-chmod +x "$INIT_PATH_RS"; /etc/init.d/tg-ws-proxy-rs enable; /etc/init.d/tg-ws-proxy-rs start; if pidof tg-ws-proxy-rs >/dev/null 2>&1; then echo -e "${GREEN}Сервис ${NC}TG WS Proxy Rust${GREEN} запущен!${NC}\n"; else echo -e "\n${RED}Сервис TG WS Proxy Rust не запущен!${NC}\n"; fi; PAUSE; }
+get_arch_RS() {
+    case "$ARCH" in
+        aarch64*) echo "tg-ws-proxy-aarch64-unknown-linux-musl" ;;
+        x86_64)   echo "tg-ws-proxy-x86_64-unknown-linux-musl" ;;
+        arm*)     echo "tg-ws-proxy-armv7-unknown-linux-musleabihf" ;;
+        mipsel*)  echo "tg-ws-proxy-mipsel-unknown-linux-musl" ;;
+        mips*)    echo "tg-ws-proxy-mips-unknown-linux-musl" ;;
+        *) echo -e "\n${RED}Архитектура не поддерживается: ${NC}$ARCH\n"; PAUSE; return 1 ;;
+    esac
+}
+
+delete_TG_RS() {
+    echo -e "\n${MAGENTA}Удаляем TG WS Proxy Rust${NC}"
+
+    /etc/init.d/tg-ws-proxy-rs stop >/dev/null 2>&1
+    /etc/init.d/tg-ws-proxy-rs disable >/dev/null 2>&1
+
+    rm -f "$BIN_PATH_RS" "$INIT_PATH_RS" "$BIN_VER_RS"
+
+    echo -e "TG WS Proxy Rust ${GREEN}удалён!${NC}\n"
+    PAUSE
+}
+
+install_TG_RS() {
+    echo -e "\n${MAGENTA}Устанавливаем TG WS Proxy Rust${NC}"
+
+    ARCH_FILE_RS="$(get_arch_RS)" || return 1
+
+    echo -e "${CYAN}Скачиваем и устанавливаем${NC} $ARCH_FILE_RS"
+
+    DOWNLOAD_URL_RS="https://github.com/valnesfjord/tg-ws-proxy-rs/releases/download/v${TG_RS_VERSION}/${ARCH_FILE_RS}.tar.gz"
+
+    curl -L --fail -o "$TMP_ARCHIVE_RS" "$DOWNLOAD_URL_RS" >/dev/null 2>&1 || {
+        echo -e "\n${RED}Ошибка скачивания${NC}\n"
+        PAUSE
+        return 1
+    }
+
+    rm -rf "$TMP_DIR_RS"
+    mkdir -p "$TMP_DIR_RS"
+
+    tar -xzf "$TMP_ARCHIVE_RS" -C "$TMP_DIR_RS" || {
+        echo -e "\n${RED}Ошибка распаковки${NC}\n"
+        rm -f "$TMP_ARCHIVE_RS"
+        PAUSE
+        return 1
+    }
+
+    rm -f "$BIN_PATH_RS"
+
+    mv "$TMP_DIR_RS"/tg-ws-proxy* "$BIN_PATH_RS" || {
+        echo -e "\n${RED}Ошибка установки бинарника${NC}\n"
+        rm -rf "$TMP_DIR_RS" "$TMP_ARCHIVE_RS"
+        PAUSE
+        return 1
+    }
+
+    chmod +x "$BIN_PATH_RS"
+
+    rm -rf "$TMP_DIR_RS" "$TMP_ARCHIVE_RS"
+
+    echo "$TG_RS_VERSION" > "$BIN_VER_RS"
+
+    # Если init-скрипта ещё нет — создаём его.
+    # При обновлении существующий скрипт НЕ трогаем.
+    if [ ! -f "$INIT_PATH_RS" ]; then
+        printf '#!/bin/sh /etc/rc.common
+START=99
+USE_PROCD=1
+
+start_service() {
+    procd_open_instance
+    procd_set_param command /usr/bin/tg-ws-proxy-rs --host 0.0.0.0 --port 2443 --secret %s --default-domains --cf-balance --cf-priority
+    procd_set_param respawn
+    procd_close_instance
+}
+' "$SECRET" > "$INIT_PATH_RS"
+
+        chmod +x "$INIT_PATH_RS"
+
+        "$INIT_PATH_RS" enable >/dev/null 2>&1
+    fi
+
+    "$INIT_PATH_RS" restart >/dev/null 2>&1
+
+    if pidof tg-ws-proxy-rs >/dev/null 2>&1; then
+        echo -e "TG WS Proxy Rust ${GREEN}установлен!${NC}\n"
+    else
+        echo -e "${RED}TG WS Proxy Rust не запущен!${NC}\n"
+    fi
+
+    PAUSE
+}
+
 # УСТАНОВКА SOCKS5
-get_arch_GO() { case "$ARCH" in aarch64*) echo "tg-ws-proxy-openwrt-aarch64" ;; arm*) echo "tg-ws-proxy-openwrt-armv7" ;; mipsel*) echo "tg-ws-proxy-openwrt-mipsel_24kc" ;; mips*) echo "tg-ws-proxy-openwrt-mips_24kc" ;; x86_64) echo "tg-ws-proxy-openwrt-x86_64" ;; *) echo "Неизвестная архитектура: $ARCH"; return 1 ;; esac }
-delete_TG_GO() { echo -e "\n${MAGENTA}Удаляем TG WS Proxy SOCKS5${NC}"; /etc/init.d/tg-ws-proxy-go stop >/dev/null 2>&1; /etc/init.d/tg-ws-proxy-go disable >/dev/null 2>&1; rm -rf "$BIN_PATH_GO" "$INIT_PATH_GO"; echo -e "TG WS Proxy SOCKS5 ${GREEN}удалён!${NC}\n"; PAUSE; }
-install_TG_GO() { echo -e "\n${MAGENTA}Устанавливаем TG WS Proxy SOCKS5${NC}"; ARCH_FILE_GO="$(get_arch_GO)" || { echo -e "\n${RED}Архитектура не поддерживается:${NC} $ARCH\n"; PAUSE; return 1; }; echo -e "${CYAN}Скачиваем и устанавливаем${NC} $ARCH_FILE_GO"; LATEST_TAG_GO="$(curl -Ls -o /dev/null -w '%{url_effective}' https://github.com/d0mhate/-tg-ws-proxy-Manager-go/releases/latest | sed 's#.*/tag/##')"
-[ -z "$LATEST_TAG_GO" ] && { echo -e "\n${RED}Не удалось получить версию${NC} TG WS Proxy SOCKS5\n"; PAUSE; return 1; }; DOWNLOAD_URL_GO="https://github.com/d0mhate/-tg-ws-proxy-Manager-go/releases/download/$LATEST_TAG_GO/$ARCH_FILE_GO"; curl -L --fail -o "$BIN_PATH_GO" "$DOWNLOAD_URL_GO" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка скачивания${NC}\n"; PAUSE; return 1; }; chmod +x "$BIN_PATH_GO"
-printf '#!/bin/sh /etc/rc.common\nSTART=99\nUSE_PROCD=1\n\nstart_service() {\n    procd_open_instance\n    procd_set_param command /usr/bin/tg-ws-proxy-go --host 0.0.0.0 --port 1080 --cf-proxy --cf-proxy-first --cf-balance\n    procd_set_param respawn\n    procd_close_instance\n}\n' > /etc/init.d/tg-ws-proxy-go
-chmod +x "$INIT_PATH_GO"; /etc/init.d/tg-ws-proxy-go enable; /etc/init.d/tg-ws-proxy-go start; if pidof tg-ws-proxy-go >/dev/null 2>&1; then echo -e "${GREEN}Сервис ${NC}TG WS Proxy SOCKS5${GREEN} запущен!${NC}\n"; else echo -e "\n${RED}Сервис TG WS Proxy SOCKS5 не запущен!${NC}\n"; fi; PAUSE; }
+get_arch_GO() {
+    case "$ARCH" in
+        aarch64*) echo "tg-ws-proxy-openwrt-aarch64" ;;
+        arm*)     echo "tg-ws-proxy-openwrt-armv7" ;;
+        mipsel*)  echo "tg-ws-proxy-openwrt-mipsel_24kc" ;;
+        mips*)    echo "tg-ws-proxy-openwrt-mips_24kc" ;;
+        x86_64)   echo "tg-ws-proxy-openwrt-x86_64" ;;
+        *) echo -e "\n${RED}Архитектура не поддерживается: ${NC}$ARCH\n"; PAUSE; return 1 ;;
+    esac
+}
+
+delete_TG_GO() {
+    echo -e "\n${MAGENTA}Удаляем TG WS Proxy SOCKS5${NC}"
+
+    /etc/init.d/tg-ws-proxy-go stop >/dev/null 2>&1
+    /etc/init.d/tg-ws-proxy-go disable >/dev/null 2>&1
+
+    rm -f "$BIN_PATH_GO" "$INIT_PATH_GO" "$BIN_VER_GO"
+
+    echo -e "TG WS Proxy SOCKS5 ${GREEN}удалён!${NC}\n"
+    PAUSE
+}
+
+install_TG_GO() {
+    echo -e "\n${MAGENTA}Устанавливаем TG WS Proxy SOCKS5${NC}"
+
+    ARCH_FILE_GO="$(get_arch_GO)" || return 1
+
+    echo -e "${CYAN}Скачиваем и устанавливаем${NC} $ARCH_FILE_GO"
+
+    DOWNLOAD_URL_GO="https://github.com/d0mhate/-tg-ws-proxy-Manager-go/releases/download/v${TG_GO_VERSION}/${ARCH_FILE_GO}"
+
+    curl -L --fail -o "$BIN_PATH_GO" "$DOWNLOAD_URL_GO" >/dev/null 2>&1 || {
+        echo -e "\n${RED}Ошибка скачивания${NC}\n"
+        rm -f "$BIN_PATH_GO"
+        PAUSE
+        return 1
+    }
+
+    chmod +x "$BIN_PATH_GO"
+
+    echo "$TG_GO_VERSION" > "$BIN_VER_GO"
+
+    # Если init-скрипта ещё нет — создаём его.
+    # При обновлении существующий скрипт НЕ изменяем.
+    if [ ! -f "$INIT_PATH_GO" ]; then
+        printf '#!/bin/sh /etc/rc.common
+START=99
+USE_PROCD=1
+
+start_service() {
+    procd_open_instance
+    procd_set_param command /usr/bin/tg-ws-proxy-go --host 0.0.0.0 --port 1080 --cf-proxy --cf-proxy-first --cf-balance
+    procd_set_param respawn
+    procd_close_instance
+}
+' > "$INIT_PATH_GO"
+
+        chmod +x "$INIT_PATH_GO"
+
+        "$INIT_PATH_GO" enable >/dev/null 2>&1
+    fi
+
+    "$INIT_PATH_GO" restart >/dev/null 2>&1
+
+    if pidof tg-ws-proxy-go >/dev/null 2>&1; then
+        echo -e "TG WS Proxy SOCKS5 ${GREEN}установлен!${NC}\n"
+    else
+        echo -e "${RED}TG WS Proxy SOCKS5 не запущен!${NC}\n"
+    fi
+
+    PAUSE
+}
+
 # УСТАНОВКА MTProto
 install_update_TG_PKG() { AVAILABLE_SPACE=$(df /overlay 2>/dev/null | awk 'NR==2 {print $4}'); [ -z "$AVAILABLE_SPACE" ] && AVAILABLE_SPACE=$(df / 2>/dev/null | awk 'NR==2 {print $4}'); REQUIRED_SPACE=10000; if [ "$AVAILABLE_SPACE" -lt "$REQUIRED_SPACE" ]
 then echo -e "\n${RED}Недостаточно свободного места${NC}\n"; echo -e "${YELLOW}Доступно: ${NC}$((AVAILABLE_SPACE/1024)) MB\n${YELLOW}Требуется: ${NC}$((REQUIRED_SPACE/1024)) MB\n"; PAUSE; return; fi
 echo -e "\n${MAGENTA}Устанавливаем TG WS Proxy MTProto${NC}"; rm -f /etc/tg-ws-proxy.conf /etc/tg-ws-proxy.conf-opkg; URL="https://github.com/spatiumstas/tg-ws-proxy-go/releases/download/${TG_MTProto}/tg-ws-proxy_${TG_MTProto}-${GO_SUF}_openwrt_${ARCH_FULL}.${RAZ}"
- update_packages || return; FILE_NAME_GO="$(basename "$URL")"; echo -e "${CYAN}Скачиваем и устанавливаем${NC} $FILE_NAME_GO"
+update_packages || return; FILE_NAME_GO="$(basename "$URL")"; echo -e "${CYAN}Скачиваем и устанавливаем${NC} $FILE_NAME_GO"
 wget -q -O "$TMP_FILE_GO" "$URL" || { echo -e "\n${RED}Ошибка скачивания $URL${NC}\n"; PAUSE; return 1; }; $INSTALL "$TMP_FILE_GO" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка установки $TMP_FILE_GO!${NC}\n"; rm -f "$TMP_FILE_GO"; PAUSE; return 1; }
 rm -f "$TMP_FILE_GO"; if ! grep -q '^SECRET=.' "$SECRET_FILE" 2>/dev/null; then echo "SECRET=$SECRET" > "$SECRET_FILE"; fi; rm -f /etc/tg-ws-proxy.conf /etc/tg-ws-proxy.conf-opkg; /etc/init.d/tg-ws-proxy enable >/dev/null 2>&1; /etc/init.d/tg-ws-proxy restart >/dev/null 2>&1
 if pidof tg-ws-proxy >/dev/null 2>&1; then echo -e "TG WS Proxy MTProto ${GREEN}установлен!${NC}\n"; else echo -e "${RED}TG WS Proxy MTProto не установлен!${NC}\n"; fi; PAUSE; }
 remove_TG_PKG() { echo -e "\n${MAGENTA}Удаляем TG WS Proxy MTProto${NC}"; /etc/init.d/tg-ws-proxy stop >/dev/null 2>&1; /etc/init.d/tg-ws-proxy disable >/dev/null 2>&1; $DELETE tg-ws-proxy >/dev/null 2>&1; rm -rf /etc/tg-ws-proxy /etc/tg-ws-proxy.conf /etc/tg-ws-proxy.conf-opkg; echo -e "TG WS Proxy MTProto ${GREEN}удалён!${NC}\n"; PAUSE; }
+
 # МЕНЮ
-menu_TG() { while true; do SECRET="$(head -c16 /dev/urandom | hexdump -e '16/1 "%02x"')"; if command -v opkg >/dev/null 2>&1; then INSTALLED_VER_GO="$(opkg list-installed 2>/dev/null | grep '^tg-ws-proxy' | awk '{print $3}' | cut -d'-' -f1)"
-else INSTALLED_VER_GO="$(apk list -I 2>/dev/null | grep '^tg-ws-proxy-' | sed -E 's/tg-ws-proxy-([0-9.]+).*/\1/')"; fi; if [ -z "$INSTALLED_VER_GO" ]; then GO_ACTION="install"; elif [ "$INSTALLED_VER_GO" != "$TG_MTProto" ]; then GO_ACTION="update"; else GO_ACTION="installed"; fi
-clear; echo -e "${MAGENTA}Меню TG WS Proxy${NC}\n"; TGSTATUS=""; pidof tg-ws-proxy-go >/dev/null 2>&1 && TGSTATUS="${TGSTATUS:+$TGSTATUS/}SOCKS5"; pidof tg-ws-proxy >/dev/null 2>&1 && TGSTATUS="${TGSTATUS:+$TGSTATUS/}MTProto"; pidof tg-ws-proxy-rs >/dev/null 2>&1 && TGSTATUS="${TGSTATUS:+$TGSTATUS/}Rust"
-if [ -n "$TGSTATUS" ]; then echo -e "${YELLOW}TG WS Proxy:${NC} ${GREEN}запущен [$TGSTATUS]${NC}"; else echo -e "${YELLOW}TG WS Proxy:${NC} ${RED}не установлен${NC}"; fi
-if [ -n "$INSTALLED_VER_GO" ]; then if [ "$GO_ACTION" = "update" ]; then echo -e "${YELLOW}TG WS Proxy MTProto версия:${NC} ${RED}$INSTALLED_VER_GO${NC}"; else echo -e "${YELLOW}TG WS Proxy MTProto версия:${NC} ${GREEN}$INSTALLED_VER_GO${NC}"; fi; fi
-if pidof tg-ws-proxy-go >/dev/null 2>&1 && [ -f "$BIN_PATH_GO" ] && [ -f "$INIT_PATH_GO" ]; then echo -e "\n${YELLOW}Настройки ${CYAN}TG WS Proxy SOCKS5${YELLOW}:${NC}\n${YELLOW}Тип прокси:${NC} SOCKS5\n${YELLOW}Хост:${NC} $LAN_IP\n${YELLOW}Порт:${NC} 1080${NC}\n${YELLOW}Ссылка для подключения:${NC}\ntg://socks?server=$LAN_IP&port=1080"; fi
-if pgrep -f tg-ws-proxy-rs >/dev/null 2>&1 && [ -f "$BIN_PATH_RS" ] && [ -f "$INIT_PATH_RS" ]; then SECRET_IN_RS="$(sed -n 's/.*--secret[[:space:]]*\([0-9a-fA-F]\{32\}\).*/\1/p' "$INIT_PATH_RS")"
-echo -e "\n${YELLOW}Настройки ${CYAN}TG WS Proxy Rust${YELLOW}:${NC}\n${YELLOW}Тип прокси:${NC} MTProto\n${YELLOW}Хост:${NC} $LAN_IP\n${YELLOW}Порт:${NC} 2443\n${YELLOW}Ключ:${NC} dd$SECRET_IN_RS\n${YELLOW}Ссылка для подключения:${NC}\ntg://proxy?server=$LAN_IP&port=2443&secret=dd$SECRET_IN_RS"; fi
-if pidof tg-ws-proxy >/dev/null 2>&1 && [ -f "/etc/init.d/tg-ws-proxy" ]; then SECRET_CONF="$(grep '^SECRET=' $SECRET_FILE 2>/dev/null | cut -d'=' -f2)"; echo -e "\n${YELLOW}Настройки ${CYAN}TG WS Proxy MTProto${YELLOW}:${NC}"; echo -e "${YELLOW}Тип прокси:${NC} MTProto"
-echo -e "${YELLOW}Хост:${NC} $LAN_IP"; echo -e "${YELLOW}Порт:${NC} 1443"; echo -e "${YELLOW}Ключ:${NC} dd$SECRET_CONF"; echo -e "${YELLOW}Ссылка для подключения:${NC}"; echo -e "tg://proxy?server=$LAN_IP&port=1443&secret=dd$SECRET_CONF"; fi
-echo -e "\n${CYAN}1)${GREEN} $( [ -f "$BIN_PATH_GO" ] && [ -f "$INIT_PATH_GO" ] && echo -e "Удалить ${NC}TG WS Proxy SOCKS5" || echo "Установить ${NC}TG WS Proxy SOCKS5" )"; echo -e "${CYAN}2)${GREEN} $( [ -f "$BIN_PATH_RS" ] && [ -f "$INIT_PATH_RS" ] && echo -e "Удалить ${NC}TG WS Proxy Rust" || echo "Установить ${NC}TG WS Proxy Rust" )"
-if [ "$GO_ACTION" = "install" ]; then echo -e "${CYAN}3)${GREEN} Установить ${NC}TG WS Proxy MTProto"; elif [ "$GO_ACTION" = "update" ]; then echo -e "${CYAN}3)${GREEN} Обновить ${NC}TG WS Proxy MTProto${NC}"; else echo -e "${CYAN}3)${GREEN} Удалить ${NC}TG WS Proxy MTProto${NC}"; fi
-echo -e "${CYAN}4)${GREEN} Удалить все ${NC}TG WS Proxy\n${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n"; echo -en "${YELLOW}Выберите пункт: ${NC}"; read choice; case "$choice" in 1) if [ -f "$BIN_PATH_GO" ] && [ -f "$INIT_PATH_GO" ]; then delete_TG_GO; else install_TG_GO; fi;;
-2) if [ -f "$BIN_PATH_RS" ] && [ -f "$INIT_PATH_RS" ]; then delete_TG_RS; else install_TG_RS; fi;; 3) if [ "$GO_ACTION" = "install" ] || [ "$GO_ACTION" = "update" ]; then install_update_TG_PKG; else remove_TG_PKG; fi ;; 4) echo -e "\n${MAGENTA}Удаляeм все TG WS Proxy${NC}"
-for s in /etc/init.d/tg-ws*; do [ -e "$s" ] || continue; "$s" stop >/dev/null 2>&1; "$s" disable >/dev/null 2>&1; done; $DELETE tg-ws* >/dev/null 2>&1; rm -rf /usr/bin/tg-ws* /etc/init.d/tg-ws* /etc/tg-ws* /etc/config/tg-ws*; echo -e "${GREEN}Все ${NC}TG WS Proxy ${GREEN}удалены!${NC}\n";PAUSE ;; *) break ;; esac; done; }
+menu_TG() {
+    while true; do
+        SECRET="$(head -c16 /dev/urandom | hexdump -e '16/1 "%02x"')"
+
+get_TG_versions
+
+        if command -v opkg >/dev/null 2>&1; then
+            INSTALLED_VER_MT="$(opkg list-installed 2>/dev/null |
+                grep '^tg-ws-proxy' |
+                awk '{print $3}' |
+                cut -d'-' -f1)"
+        else
+            INSTALLED_VER_MT="$(apk list -I 2>/dev/null |
+                grep '^tg-ws-proxy-' |
+                sed -E 's/tg-ws-proxy-([0-9.]+).*/\1/')"
+        fi
+
+        if [ -z "$INSTALLED_VER_MT" ]; then
+            MT_ACTION="install"
+        elif [ "$INSTALLED_VER_MT" != "$TG_MTProto" ]; then
+            MT_ACTION="update"
+        else
+            MT_ACTION="installed"
+        fi
+
+        if [ -f "$BIN_PATH_GO" ] && [ -f "$INIT_PATH_GO" ]; then
+            if [ -n "$INSTALLED_VER_GO" ] &&
+               [ "$INSTALLED_VER_GO" = "$TG_GO_VERSION" ]; then
+                GO_ACTION="installed"
+            else
+                GO_ACTION="update"
+            fi
+        else
+            GO_ACTION="install"
+        fi
+
+        if [ -f "$BIN_PATH_RS" ] && [ -f "$INIT_PATH_RS" ]; then
+            if [ -n "$INSTALLED_VER_RS" ] &&
+               [ "$INSTALLED_VER_RS" = "$TG_RS_VERSION" ]; then
+                RS_ACTION="installed"
+            else
+                RS_ACTION="update"
+            fi
+        else
+            RS_ACTION="install"
+        fi
+
+        clear
+
+        echo -e "${MAGENTA}Меню TG WS Proxy${NC}\n"
+
+        TGSTATUS=""
+
+        pidof tg-ws-proxy-go >/dev/null 2>&1 &&
+            TGSTATUS="${TGSTATUS:+$TGSTATUS/}${NC}SOCKS5${GREEN}"
+
+        pidof tg-ws-proxy >/dev/null 2>&1 &&
+            TGSTATUS="${TGSTATUS:+$TGSTATUS/}${NC}MTProto${GREEN}"
+
+        pidof tg-ws-proxy-rs >/dev/null 2>&1 &&
+            TGSTATUS="${TGSTATUS:+$TGSTATUS/}${NC}Rust${GREEN}"
+
+        if [ -n "$TGSTATUS" ]; then
+            echo -e "${YELLOW}TG WS Proxy:${NC} ${GREEN}запущен [${TGSTATUS}]${NC}"
+        else
+            echo -e "${YELLOW}TG WS Proxy:${NC} ${RED}не установлен${NC}"
+        fi
+
+        if [ -n "$INSTALLED_VER_MT" ]; then
+            if [ "$MT_ACTION" = "update" ]; then
+                echo -e "${YELLOW}TG WS Proxy MTProto версия:${NC} ${RED}$INSTALLED_VER_MT (версия устарела)${NC}"
+            else
+                echo -e "${YELLOW}TG WS Proxy MTProto версия:${NC} ${GREEN}$INSTALLED_VER_MT${NC}"
+            fi
+        fi
+
+        if [ -n "$INSTALLED_VER_GO" ]; then
+            if [ "$GO_ACTION" = "update" ]; then
+                echo -e "${YELLOW}TG WS Proxy SOCKS5 версия:${NC} ${RED}$INSTALLED_VER_GO (версия устарела)${NC}"
+            else
+                echo -e "${YELLOW}TG WS Proxy SOCKS5 версия:${NC} ${GREEN}$INSTALLED_VER_GO${NC}"
+            fi
+        fi
+
+        if [ -n "$INSTALLED_VER_RS" ]; then
+            if [ "$RS_ACTION" = "update" ]; then
+                echo -e "${YELLOW}TG WS Proxy Rust версия:${NC} ${RED}$INSTALLED_VER_RS (версия устарела)${NC}"
+            else
+                echo -e "${YELLOW}TG WS Proxy Rust версия:${NC} ${GREEN}$INSTALLED_VER_RS${NC}"
+            fi
+        fi
+
+        if pidof tg-ws-proxy-go >/dev/null 2>&1 &&
+           [ -f "$BIN_PATH_GO" ] &&
+           [ -f "$INIT_PATH_GO" ]; then
+
+            echo -e "\n${YELLOW}Настройки ${CYAN}TG WS Proxy SOCKS5${YELLOW}:${NC}"
+            echo -e "${YELLOW}Тип прокси:${NC} SOCKS5"
+            echo -e "${YELLOW}Хост:${NC} $LAN_IP"
+            echo -e "${YELLOW}Порт:${NC} 1080"
+            echo -e "${YELLOW}Ссылка для подключения:${NC}"
+            echo -e "tg://socks?server=$LAN_IP&port=1080"
+        fi
+
+        if pgrep -f tg-ws-proxy-rs >/dev/null 2>&1 &&
+           [ -f "$BIN_PATH_RS" ] &&
+           [ -f "$INIT_PATH_RS" ]; then
+
+            SECRET_IN_RS="$(
+                sed -n 's/.*--secret[[:space:]]*\([0-9a-fA-F]\{32\}\).*/\1/p' \
+                "$INIT_PATH_RS"
+            )"
+
+            echo -e "\n${YELLOW}Настройки ${CYAN}TG WS Proxy Rust${YELLOW}:${NC}"
+            echo -e "${YELLOW}Тип прокси:${NC} MTProto"
+            echo -e "${YELLOW}Хост:${NC} $LAN_IP"
+            echo -e "${YELLOW}Порт:${NC} 2443"
+            echo -e "${YELLOW}Ключ:${NC} dd$SECRET_IN_RS"
+            echo -e "${YELLOW}Ссылка для подключения:${NC}"
+            echo -e "tg://proxy?server=$LAN_IP&port=2443&secret=dd$SECRET_IN_RS"
+        fi
+
+        if pidof tg-ws-proxy >/dev/null 2>&1 &&
+           [ -f "/etc/init.d/tg-ws-proxy" ]; then
+
+            SECRET_CONF="$(
+                grep '^SECRET=' "$SECRET_FILE" 2>/dev/null |
+                cut -d'=' -f2
+            )"
+
+            echo -e "\n${YELLOW}Настройки ${CYAN}TG WS Proxy MTProto${YELLOW}:${NC}"
+            echo -e "${YELLOW}Тип прокси:${NC} MTProto"
+            echo -e "${YELLOW}Хост:${NC} $LAN_IP"
+            echo -e "${YELLOW}Порт:${NC} 1443"
+            echo -e "${YELLOW}Ключ:${NC} dd$SECRET_CONF"
+            echo -e "${YELLOW}Ссылка для подключения:${NC}"
+            echo -e "tg://proxy?server=$LAN_IP&port=1443&secret=dd$SECRET_CONF"
+        fi
+
+        case "$GO_ACTION" in
+            install)
+                echo -e "\n${CYAN}1)${GREEN} Установить ${NC}TG WS Proxy SOCKS5"
+                ;;
+            update)
+                echo -e "\n${CYAN}1)${GREEN} Обновить ${NC}TG WS Proxy SOCKS5"
+                ;;
+            installed)
+                echo -e "\n${CYAN}1)${GREEN} Удалить ${NC}TG WS Proxy SOCKS5"
+                ;;
+        esac
+
+        case "$RS_ACTION" in
+            install)
+                echo -e "${CYAN}2)${GREEN} Установить ${NC}TG WS Proxy Rust"
+                ;;
+            update)
+                echo -e "${CYAN}2)${GREEN} Обновить ${NC}TG WS Proxy Rust"
+                ;;
+            installed)
+                echo -e "${CYAN}2)${GREEN} Удалить ${NC}TG WS Proxy Rust"
+                ;;
+        esac
+
+
+        case "$MT_ACTION" in
+            install)
+                echo -e "${CYAN}3)${GREEN} Установить ${NC}TG WS Proxy MTProto"
+                ;;
+            update)
+                echo -e "${CYAN}3)${GREEN} Обновить ${NC}TG WS Proxy MTProto"
+                ;;
+            installed)
+                echo -e "${CYAN}3)${GREEN} Удалить ${NC}TG WS Proxy MTProto"
+                ;;
+        esac
+
+
+        echo -e "${CYAN}4)${GREEN} Удалить все ${NC}TG WS Proxy"
+        echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n"
+
+        echo -en "${YELLOW}Выберите пункт: ${NC}"
+        read choice
+
+        case "$choice" in
+
+            1)
+                case "$GO_ACTION" in
+                    install|update)
+                        install_TG_GO
+                        ;;
+                    installed)
+                        delete_TG_GO
+                        ;;
+                esac
+                ;;
+
+            2)
+                case "$RS_ACTION" in
+                    install|update)
+                        install_TG_RS
+                        ;;
+                    installed)
+                        delete_TG_RS
+                        ;;
+                esac
+                ;;
+
+            3)
+                case "$MT_ACTION" in
+                    install|update)
+                        install_update_TG_PKG
+                        ;;
+                    installed)
+                        remove_TG_PKG
+                        ;;
+                esac
+                ;;
+
+            4)
+                echo -e "\n${MAGENTA}Удаляем все TG WS Proxy${NC}"
+
+                for s in /etc/init.d/tg-ws*; do
+                    [ -e "$s" ] || continue
+                    "$s" stop >/dev/null 2>&1
+                    "$s" disable >/dev/null 2>&1
+                done
+
+                $DELETE tg-ws* >/dev/null 2>&1
+
+                rm -rf \
+                    /usr/bin/tg-ws* \
+                    /etc/init.d/tg-ws* \
+                    /etc/tg-ws* \
+                    /etc/config/tg-ws*
+
+                echo -e "${GREEN}Все ${NC}TG WS Proxy ${GREEN}удалены!${NC}\n"
+                PAUSE
+                ;;
+
+            *)
+                break
+                ;;
+        esac
+    done
+}
+
+get_TG_versions() {
+    INSTALLED_VER_GO=""
+    INSTALLED_VER_RS=""
+    INSTALLED_VER_MT=""
+
+    [ -s "$BIN_VER_GO" ] && INSTALLED_VER_GO="$(cat "$BIN_VER_GO")"
+    [ -s "$BIN_VER_RS" ] && INSTALLED_VER_RS="$(cat "$BIN_VER_RS")"
+
+    if command -v opkg >/dev/null 2>&1; then
+        INSTALLED_VER_MT="$(
+            opkg list-installed 2>/dev/null |
+            grep '^tg-ws-proxy' |
+            awk '{print $3}' |
+            cut -d'-' -f1
+        )"
+    else
+        INSTALLED_VER_MT="$(
+            apk list -I 2>/dev/null |
+            grep '^tg-ws-proxy-' |
+            sed -E 's/tg-ws-proxy-([0-9.]+).*/\1/'
+        )"
+    fi
+}
+
 # ==========================================
 # PODKOP EVOLUTION и AWG
 # ==========================================
@@ -1270,16 +1813,490 @@ printf "%s\n" "list community_lists 'porn'" "list community_lists 'news'" "list 
 printf "%s\n" "list community_lists 'google_ai'" "list community_lists 'google_play'" "list community_lists 'hodca'" "list community_lists 'roblox'" "list community_lists 'hetzner'" "list community_lists 'ovh'" "list community_lists 'digitalocean'" "list community_lists 'cloudfront'" "option user_domain_list_type 'disabled'" >> /etc/config/netshift
 printf "%s\n" "option user_subnet_list_type 'disabled'" "option mixed_proxy_enabled '0'" "option resolve_real_ip_for_routing '0'" "list subscription_filter_exclude_keywords '⬇️'" "list subscription_filter_exclude_keywords 'LTE'" "list subscription_filter_exclude_keywords '🇪🇺'" "list subscription_filter_exclude_keywords 'Мобильный'" "list subscription_filter_exclude_keywords 'SS'" "list subscription_filter_exclude_keywords 'Авто'" >> /etc/config/netshift
 fi; echo -e "${CYAN}Запускаем ${NC}NetShift${NC}"; netshift enable >/dev/null 2>&1; echo -e "${CYAN}Обновляем списки${NC}"; netshift list_update >/dev/null 2>&1; echo -en "${CYAN}Перезапускаем сервис${NC}\n${YELLOW}Подождите...${NC}"; netshift restart >/dev/null 2>&1; echo -e "\nVPN подписка ${GREEN}интегрирована в ${NC}NetShift${GREEN}!${NC}\n"; PAUSE; }
-PODKOP_menu() { while true; do openwrt_version=$(cat /etc/openwrt_release | grep DISTRIB_RELEASE | cut -d"'" -f2 | cut -d'.' -f1); if [ "$openwrt_version" = "23" ]; then echo -e "\n${RED}OpenWrt версии ниже 24 не поддерживаются!${NC}\n"; PAUSE; return; fi
-PODKOP_VER; clear; echo -e "${MAGENTA}Меню NetShift${NC}\n"; echo -e "${YELLOW}NetShift:${NC} $PODKOP_STATUS"; if pkg_is_installed amneziawg-tools && pkg_is_installed luci-proto-amneziawg && pkg_is_installed kmod-amneziawg; then echo -e "${YELLOW}AmneziaWG: ${GREEN}установлен${NC}"
-else echo -e "${YELLOW}AmneziaWG: ${RED}не установлен${NC}"; fi; if uci -q get network.AWG >/dev/null 2>&1; then echo -e "${YELLOW}Интерфейс: ${GREEN}установлен${NC}"; else echo -e "${YELLOW}Интерфейс: ${RED}не установлен${NC}"; fi; if ! pkg_is_installed netshift
-then echo -e "\n${CYAN}1) ${GREEN}Установить ${NC}NetShift"; elif [ "$PODKOP_LATEST_VER" != "$LOCALPOD" ]; then echo -e "\n${CYAN}1) ${GREEN}Обновить ${NC}NetShift"; else echo -e "\n${CYAN}1) ${GREEN}Удалить ${NC}NetShift"; fi
-if pkg_is_installed amneziawg-tools && pkg_is_installed luci-proto-amneziawg && pkg_is_installed kmod-amneziawg; then echo -e "${CYAN}2) ${GREEN}Удалить ${NC}AmneziaWG"; else echo -e "${CYAN}2) ${GREEN}Установить ${NC}AmneziaWG"; fi
-if uci -q get network.AWG >/dev/null 2>&1; then echo -e "${CYAN}3) ${GREEN}Удалить ${NC}интерфейс AWG"; else echo -e "${CYAN}3) ${GREEN}Установить ${NC}интерфейс AWG"; fi; if [ -f /etc/config/netshift ] && grep -q "^[[:space:]]*option subscription_url" /etc/config/netshift
-then echo -e "${CYAN}4) ${GREEN}Сменить ${NC}VPN подписку${GREEN} в ${NC}NetShift"; else echo -e "${CYAN}4) ${GREEN}Интегрировать ${NC}VPN подписку${GREEN} в ${NC}NetShift"; fi; echo -e "${CYAN}5) ${GREEN}Интегрировать ${NC}AWG${GREEN} в ${NC}NetShift"
-echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}"; echo -ne "\n${YELLOW}Выберите пункт:${NC} "; read choicePOD; case "$choicePOD" in 1) PODKOP_INSTALL ;; 2) if pkg_is_installed amneziawg-tools && pkg_is_installed luci-proto-amneziawg && pkg_is_installed kmod-amneziawg
-then if ! pkg_is_installed splify; then AWG_DELETE; else echo -e "\n${RED}Удаление невозможно!${NC}\nAmneziaWG ${YELLOW}используется в ${NC}splify\n"; PAUSE; fi; else install_AWG; echo -e "\nAmneziaWG ${GREEN}установлен!${NC}"; fi ;; 3) if uci -q get network.AWG >/dev/null 2>&1
-then INT_DELETE; else install_AWG_INTER; echo -e "\n\nИнтерфейс AWG ${GREEN}установлен!${NC}\n"; fi ;; 4) PODKOP_VPN ;; 5) integration_AWG ;; *) return ;; esac; done }
+
+```sh
+# ==========================================
+# ByeDPI
+# ==========================================
+
+BYEDPI_VER="0.17.3"
+BYEDPI_DNS_BACKUP="/etc/byedpi_dns_localuse"
+
+BYEDPI_STATUS() {
+    if pkg_is_installed byedpi; then
+        BYEDPI_INSTALLED_VER="$(
+            if [ "$PKG_IS_APK" -eq 1 ]; then
+                apk info -e byedpi 2>/dev/null
+                apk list -I 2>/dev/null |
+                    grep '^byedpi-' |
+                    head -1 |
+                    sed -E 's/^byedpi-//;s/-r[0-9]+.*//'
+            else
+                opkg list-installed 2>/dev/null |
+                    awk '$1=="byedpi" {print $3}' |
+                    sed 's/-r[0-9]\+$//'
+            fi
+        )"
+
+        [ -z "$BYEDPI_INSTALLED_VER" ] &&
+            BYEDPI_INSTALLED_VER="$BYEDPI_VER"
+
+        if [ "$BYEDPI_INSTALLED_VER" = "$BYEDPI_VER" ]; then
+            BYEDPI_STATUS="${GREEN}${BYEDPI_INSTALLED_VER}${NC}"
+        else
+            BYEDPI_STATUS="${RED}${BYEDPI_INSTALLED_VER} (устарела)${NC}"
+        fi
+    else
+        BYEDPI_INSTALLED_VER=""
+        BYEDPI_STATUS="${RED}не установлен${NC}"
+    fi
+}
+
+
+# ------------------------------------------
+# Сохранение localuse перед интеграцией
+# ------------------------------------------
+
+BYEDPI_SAVE_DNS_STATE() {
+    if [ ! -f "$BYEDPI_DNS_BACKUP" ]; then
+        DNS_LOCALUSE="$(uci -q get dhcp.@dnsmasq[0].localuse)"
+
+        if [ -n "$DNS_LOCALUSE" ]; then
+            echo "$DNS_LOCALUSE" > "$BYEDPI_DNS_BACKUP"
+        else
+            echo "__UNSET__" > "$BYEDPI_DNS_BACKUP"
+        fi
+    fi
+}
+
+
+# ------------------------------------------
+# Восстановление localuse
+# ------------------------------------------
+
+BYEDPI_RESTORE_DNS_STATE() {
+
+    [ ! -f "$BYEDPI_DNS_BACKUP" ] && return
+
+    DNS_LOCALUSE="$(cat "$BYEDPI_DNS_BACKUP" 2>/dev/null)"
+
+    echo -e "${CYAN}Восстанавливаем настройку локального DNS${NC}"
+
+    if [ "$DNS_LOCALUSE" = "__UNSET__" ]; then
+        uci delete dhcp.@dnsmasq[0].localuse >/dev/null 2>&1
+    else
+        uci set dhcp.@dnsmasq[0].localuse="$DNS_LOCALUSE"
+    fi
+
+    uci commit dhcp >/dev/null 2>&1
+
+    echo -e "${CYAN}Перезапускаем ${NC}dnsmasq"
+    /etc/init.d/dnsmasq restart >/dev/null 2>&1
+
+    rm -f "$BYEDPI_DNS_BACKUP"
+}
+
+
+# ------------------------------------------
+# Установка / удаление ByeDPI
+# ------------------------------------------
+
+BYEDPI_INSTALL() {
+
+    if pkg_is_installed byedpi; then
+        BYEDPI_DELETE
+        return
+    fi
+
+    echo -e "\n${MAGENTA}Установка ByeDPI${NC}"
+
+    rm -rf "$tmpDIR"
+    mkdir -p "$tmpDIR"
+
+    LOCAL_ARCH="$(
+        awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release
+    )"
+
+    if [ "$PKG_IS_APK" -eq 1 ]; then
+        RELEASE_TAG="v${BYEDPI_VER}-25.12"
+        PKG_EXT="apk"
+        INSTALL_BYEDPI="$INSTALL"
+    else
+        RELEASE_TAG="v${BYEDPI_VER}-24.10"
+        PKG_EXT="ipk"
+        INSTALL_BYEDPI="$INSTALL"
+    fi
+
+    BYEDPI_FILE="byedpi_${BYEDPI_VER}-r1_${LOCAL_ARCH}.${PKG_EXT}"
+
+    BYEDPI_URL="https://github.com/DPITrickster/ByeDPI-OpenWrt/releases/download/${RELEASE_TAG}/${BYEDPI_FILE}"
+
+    echo -e "${CYAN}Скачиваем ${NC}$BYEDPI_FILE"
+
+    cd "$tmpDIR" || return 1
+
+    wget -q -U "Mozilla/5.0" \
+        -O "$BYEDPI_FILE" \
+        "$BYEDPI_URL" || {
+
+        echo -e "\n${RED}Не удалось скачать:${NC}"
+        echo "$BYEDPI_URL"
+        rm -rf "$tmpDIR"
+        PAUSE
+        return 1
+    }
+
+    echo -e "${CYAN}Устанавливаем ${NC}ByeDPI"
+
+    if ! $INSTALL_BYEDPI "$BYEDPI_FILE" >/dev/null 2>&1; then
+        echo -e "\n${RED}Не удалось установить ByeDPI!${NC}"
+        rm -rf "$tmpDIR"
+        PAUSE
+        return 1
+    fi
+
+    rm -rf "$tmpDIR"
+
+    if [ -f /etc/init.d/byedpi ]; then
+        /etc/init.d/byedpi enable >/dev/null 2>&1
+        /etc/init.d/byedpi start >/dev/null 2>&1
+    fi
+
+    echo -e "\nByeDPI ${GREEN}установлен!${NC}"
+    PAUSE
+}
+
+
+# ------------------------------------------
+# Удаление ByeDPI
+# ------------------------------------------
+
+BYEDPI_DELETE() {
+
+    echo -e "\n${MAGENTA}Удаление ByeDPI${NC}"
+
+    echo -e "${CYAN}Останавливаем ByeDPI${NC}"
+    /etc/init.d/byedpi stop >/dev/null 2>&1
+    /etc/init.d/byedpi disable >/dev/null 2>&1
+
+    echo -e "${CYAN}Удаляем пакет ByeDPI${NC}"
+    $DELETE byedpi >/dev/null 2>&1
+
+    rm -f /etc/init.d/byedpi
+    rm -rf /opt/byedpi
+    rm -f /etc/config/byedpi
+
+    # Возвращаем DNS в состояние до интеграции
+    BYEDPI_RESTORE_DNS_STATE
+
+    echo -e "\nByeDPI ${GREEN}удалён!${NC}"
+    PAUSE
+}
+
+
+# ------------------------------------------
+# Интеграция ByeDPI в NetShift
+# ------------------------------------------
+
+BYEDPI_NETSHIFT() {
+
+    if ! pkg_is_installed byedpi; then
+        echo -e "\n${RED}ByeDPI не установлен!${NC}"
+        PAUSE
+        return
+    fi
+
+    if ! pkg_is_installed netshift; then
+        echo -e "\n${RED}NetShift не установлен!${NC}"
+        PAUSE
+        return
+    fi
+
+    echo -e "\n${MAGENTA}Интеграция ByeDPI в NetShift${NC}"
+
+    # --------------------------------------
+    # Сохраняем исходный localuse
+    # --------------------------------------
+
+    BYEDPI_SAVE_DNS_STATE
+
+    echo -e "${CYAN}Отключаем локальный ${NC}DNS"
+
+    uci set dhcp.@dnsmasq[0].localuse='0'
+    uci commit dhcp
+
+    echo -e "${CYAN}Перезапускаем ${NC}dnsmasq"
+    /etc/init.d/dnsmasq restart >/dev/null 2>&1
+
+    # --------------------------------------
+    # Устанавливаем рабочую стратегию ByeDPI
+    # --------------------------------------
+
+    echo -e "${CYAN}Настраиваем стратегию ${NC}ByeDPI"
+
+    if [ -f /etc/config/byedpi ]; then
+        sed -i \
+            "s|option cmd_opts .*|	option cmd_opts '-o1 -r-5+se -a1 -At,r,s -d1 -n google.com -Qr -f-1 -a1'|" \
+            /etc/config/byedpi
+    fi
+
+    # --------------------------------------
+    # Конфигурация NetShift
+    # --------------------------------------
+
+    echo -e "${CYAN}Меняем конфигурацию в ${NC}NetShift"
+
+    printf "%s\n" \
+        "config settings 'settings'" \
+        "option dns_type 'udp'" \
+        "option dns_server '8.8.8.8'" \
+        "option bootstrap_dns_server '77.88.8.8'" \
+        "option dns_rewrite_ttl '60'" \
+        "list source_network_interfaces 'br-lan'" \
+        "option enable_output_network_interface '0'" \
+        "option enable_badwan_interface_monitoring '0'" \
+        "option enable_yacd '0'" \
+        "option disable_quic '0'" \
+        "option update_interval '1d'" \
+        "option download_lists_via_proxy '0'" \
+        "option dont_touch_dhcp '0'" \
+        "option config_path '/etc/sing-box/config.json'" \
+        "option cache_path '/tmp/sing-box/cache.db'" \
+        "option log_level 'warn'" \
+        "option exclude_ntp '0'" \
+        "option shutdown_correctly '0'" \
+        "" \
+        "config section 'StressByeDPI'" \
+        "option connection_type 'proxy'" \
+        "option proxy_config_type 'outbound'" \
+        "option enable_udp_over_tcp '0'" \
+        "option outbound_json '{\"type\":\"socks\",\"server\":\"127.0.0.1\",\"server_port\":1080}'" \
+        "option user_domain_list_type 'disabled'" \
+        "option user_subnet_list_type 'disabled'" \
+        "option mixed_proxy_enabled '0'" \
+        "list community_lists 'youtube'" \
+        > /etc/config/netshift
+
+    echo -e "${CYAN}Запускаем ${NC}ByeDPI"
+    /etc/init.d/byedpi enable >/dev/null 2>&1
+    /etc/init.d/byedpi restart >/dev/null 2>&1
+
+    echo -e "${CYAN}Запускаем ${NC}NetShift"
+    netshift enable >/dev/null 2>&1
+
+    echo -e "${CYAN}Обновляем списки${NC}"
+    netshift list_update >/dev/null 2>&1
+
+    echo -e "${CYAN}Перезапускаем NetShift${NC}"
+    netshift restart >/dev/null 2>&1
+
+    echo -e "\nByeDPI ${GREEN}интегрирован в ${NC}NetShift${GREEN}!${NC}"
+
+    echo -e "\n${YELLOW}DNS:${NC}"
+    echo -e "localuse установлен в ${RED}0${NC}"
+    echo -e "${DGRAY}Исходное значение сохранено: $BYEDPI_DNS_BACKUP${NC}"
+
+    echo -ne "\n${YELLOW}Необходимо перезагрузить роутер. Перезагрузить сейчас? [y/N]: ${NC}"
+    read -r REBOOT_CHOICE
+
+    case "$REBOOT_CHOICE" in
+        y|Y)
+            echo -e "\n${GREEN}Перезагрузка роутера!${NC}"
+            reboot
+            exit 0
+            ;;
+        *)
+            echo -e "${YELLOW}Перезагрузка отложена!${NC}"
+            PAUSE
+            ;;
+    esac
+}
+
+
+# ==========================================
+# Меню NetShift
+# ==========================================
+
+PODKOP_menu() {
+
+    while true; do
+
+        openwrt_version=$(
+            grep DISTRIB_RELEASE /etc/openwrt_release |
+            cut -d"'" -f2 |
+            cut -d'.' -f1
+        )
+
+        if [ "$openwrt_version" = "23" ]; then
+            echo -e "\n${RED}OpenWrt версии ниже 24 не поддерживаются!${NC}\n"
+            PAUSE
+            return
+        fi
+
+        PODKOP_VER
+        BYEDPI_STATUS
+
+        clear
+
+        echo -e "${MAGENTA}Меню NetShift${NC}\n"
+
+        echo -e "${YELLOW}NetShift:${NC} $PODKOP_STATUS"
+        echo -e "${YELLOW}ByeDPI:${NC} $BYEDPI_STATUS"
+
+        if pkg_is_installed amneziawg-tools &&
+           pkg_is_installed luci-proto-amneziawg &&
+           pkg_is_installed kmod-amneziawg; then
+
+            echo -e "${YELLOW}AmneziaWG: ${GREEN}установлен${NC}"
+        else
+            echo -e "${YELLOW}AmneziaWG: ${RED}не установлен${NC}"
+        fi
+
+        if uci -q get network.AWG >/dev/null 2>&1; then
+            echo -e "${YELLOW}Интерфейс AWG: ${GREEN}установлен${NC}"
+        else
+            echo -e "${YELLOW}Интерфейс AWG: ${RED}не установлен${NC}"
+        fi
+
+
+        # --------------------------------------
+        # NetShift
+        # --------------------------------------
+
+        if ! pkg_is_installed netshift; then
+            echo -e "\n${CYAN}1) ${GREEN}Установить ${NC}NetShift"
+        elif [ "$PODKOP_LATEST_VER" != "$LOCALPOD" ]; then
+            echo -e "\n${CYAN}1) ${GREEN}Обновить ${NC}NetShift"
+        else
+            echo -e "\n${CYAN}1) ${GREEN}Удалить ${NC}NetShift"
+        fi
+
+
+        # --------------------------------------
+        # AmneziaWG
+        # --------------------------------------
+
+        if pkg_is_installed amneziawg-tools &&
+           pkg_is_installed luci-proto-amneziawg &&
+           pkg_is_installed kmod-amneziawg; then
+
+            echo -e "${CYAN}2) ${GREEN}Удалить ${NC}AmneziaWG"
+        else
+            echo -e "${CYAN}2) ${GREEN}Установить ${NC}AmneziaWG"
+        fi
+
+
+        # --------------------------------------
+        # Интерфейс AWG
+        # --------------------------------------
+
+        if uci -q get network.AWG >/dev/null 2>&1; then
+            echo -e "${CYAN}3) ${GREEN}Удалить ${NC}интерфейс AWG"
+        else
+            echo -e "${CYAN}3) ${GREEN}Установить ${NC}интерфейс AWG"
+        fi
+
+
+        # --------------------------------------
+        # VPN подписка
+        # --------------------------------------
+
+        if [ -f /etc/config/netshift ] &&
+           grep -q "^[[:space:]]*option subscription_url" /etc/config/netshift; then
+
+            echo -e "${CYAN}4) ${GREEN}Сменить ${NC}VPN подписку${GREEN} в ${NC}NetShift"
+        else
+            echo -e "${CYAN}4) ${GREEN}Интегрировать ${NC}VPN подписку${GREEN} в ${NC}NetShift"
+        fi
+
+
+        # --------------------------------------
+        # AWG → NetShift
+        # --------------------------------------
+
+        echo -e "${CYAN}5) ${GREEN}Интегрировать ${NC}AWG${GREEN} в ${NC}NetShift"
+
+
+        # --------------------------------------
+        # ByeDPI install/remove
+        # --------------------------------------
+
+        if pkg_is_installed byedpi; then
+            echo -e "${CYAN}6) ${GREEN}Удалить ${NC}ByeDPI"
+        else
+            echo -e "${CYAN}6) ${GREEN}Установить ${NC}ByeDPI"
+        fi
+
+
+        # --------------------------------------
+        # ByeDPI → NetShift
+        # --------------------------------------
+
+        echo -e "${CYAN}7) ${GREEN}Интегрировать ${NC}ByeDPI${GREEN} в ${NC}NetShift"
+
+        echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}"
+
+        echo -ne "\n${YELLOW}Выберите пункт:${NC} "
+        read -r choicePOD
+
+        case "$choicePOD" in
+
+            1)
+                PODKOP_INSTALL
+                ;;
+
+            2)
+                if pkg_is_installed amneziawg-tools &&
+                   pkg_is_installed luci-proto-amneziawg &&
+                   pkg_is_installed kmod-amneziawg; then
+
+                    if ! pkg_is_installed splify; then
+                        AWG_DELETE
+                    else
+                        echo -e "\n${RED}Удаление невозможно!${NC}"
+                        echo -e "AmneziaWG ${YELLOW}используется в ${NC}splify\n"
+                        PAUSE
+                    fi
+                else
+                    install_AWG
+                    echo -e "\nAmneziaWG ${GREEN}установлен!${NC}"
+                fi
+                ;;
+
+            3)
+                if uci -q get network.AWG >/dev/null 2>&1; then
+                    INT_DELETE
+                else
+                    install_AWG_INTER
+                    echo -e "\n\nИнтерфейс AWG ${GREEN}установлен!${NC}\n"
+                fi
+                ;;
+
+            4)
+                PODKOP_VPN
+                ;;
+
+            5)
+                integration_AWG
+                ;;
+
+            6)
+                BYEDPI_INSTALL
+                ;;
+
+            7)
+                BYEDPI_NETSHIFT
+                ;;
+
+            *)
+                return
+                ;;
+
+        esac
+
+    done
+}
+```
 # ==========================================
 # Информация
 # ==========================================
@@ -1287,24 +2304,73 @@ INFO_ZPR() { if [ -f /etc/init.d/zapret ]; then /etc/init.d/zapret status >/dev/
 else echo -e "${YELLOW}Zapret:${NC}              ${RED}$INSTALLED_VER (версия устарела)${NC} / $ZAPRET_STATUS"; fi; else echo -e "${YELLOW}Zapret:${NC}              ${RED}не установлен${NC}"; fi
 SPL_V_VER; [ -n "$SPL_INST_VER" ] && { [ "$SPL_VER" = "$SPL_INST_VER" ] && echo -e "${YELLOW}splify:${NC}              ${GREEN}$SPL_INST_VER${NC}" || echo -e "${YELLOW}splify:${NC}              ${RED}$SPL_INST_VER (версия устарела)${NC}"; }
 case "$(/etc/init.d/mihomo status 2>/dev/null)" in running) echo -e "${YELLOW}Mixomo:              ${GREEN}запущен${NC}" ;; inactive) echo -e "${YELLOW}Mixomo:              ${RED}остановлен${NC}" ;; esac
-TGSTATUS=""; pidof tg-ws-proxy-go >/dev/null 2>&1 && TGSTATUS="${TGSTATUS:+$TGSTATUS/}SOCKS5"; pidof tg-ws-proxy >/dev/null 2>&1 && TGSTATUS="${TGSTATUS:+$TGSTATUS/}MTProto"; pidof tg-ws-proxy-rs >/dev/null 2>&1 && TGSTATUS="${TGSTATUS:+$TGSTATUS/}Rust"; if [ -n "$TGSTATUS" ]; then echo -e "${YELLOW}TG WS Proxy:${NC}         ${GREEN}запущен [$TGSTATUS]${NC}"; fi
+
+get_TG_versions
+
+TGSTATUS=""
+
+if pidof tg-ws-proxy-go >/dev/null 2>&1; then
+    if [ -n "$INSTALLED_VER_GO" ] &&
+       [ -n "$TG_GO_VERSION" ] &&
+       [ "$INSTALLED_VER_GO" != "$TG_GO_VERSION" ]; then
+        TGSTATUS="${TGSTATUS:+$TGSTATUS/}${RED}SOCKS5 NEW${GREEN}"
+    else
+        TGSTATUS="${TGSTATUS:+$TGSTATUS/}${NC}SOCKS5${GREEN}"
+    fi
+fi
+
+if pidof tg-ws-proxy >/dev/null 2>&1; then
+    if [ -n "$INSTALLED_VER_MT" ] &&
+       [ -n "$TG_MTProto" ] &&
+       [ "$INSTALLED_VER_MT" != "$TG_MTProto" ]; then
+        TGSTATUS="${TGSTATUS:+$TGSTATUS/}${RED}MTProto NEW${GREEN}"
+    else
+        TGSTATUS="${TGSTATUS:+$TGSTATUS/}${NC}MTProto${GREEN}"
+    fi
+fi
+
+if pidof tg-ws-proxy-rs >/dev/null 2>&1; then
+    if [ -n "$INSTALLED_VER_RS" ] &&
+       [ -n "$TG_RS_VERSION" ] &&
+       [ "$INSTALLED_VER_RS" != "$TG_RS_VERSION" ]; then
+        TGSTATUS="${TGSTATUS:+$TGSTATUS/}${RED}Rust NEW${GREEN}"
+    else
+        TGSTATUS="${TGSTATUS:+$TGSTATUS/}${NC}Rust${GREEN}"
+    fi
+fi
+
+if [ -n "$TGSTATUS" ]; then
+    echo -e "${YELLOW}TG WS Proxy:${NC}         ${GREEN}запущен [${TGSTATUS}]${NC}"
+fi
+
+
+
+
 if hosts_enabled; then echo -e "${YELLOW}Домены в hosts:      ${GREEN}$hosts_echo${NC}"; fi; [ -f "$DATE_FILE" ] && echo -e "${YELLOW}Резервная копия:${NC}     ${GREEN}сохранена"; show_script_50 && [ -n "$name" ] && echo -e "${YELLOW}Установлен скрипт:${NC}   $name"; grep -q "$Fin_IP_Dis" /etc/hosts && echo -e "${YELLOW}IP для Discord:      ${GREEN}включены${NC}"
 if [ -n "$DOH_STATUS" ]; then if [ "$PKG_IS_APK" -eq 1 ]; then apk info -e https-dns-proxy >/dev/null 2>&1 && echo -e "${YELLOW}DNS over HTTPS:${NC}      ${GREEN}$DOH_STATUS${NC}"; else opkg list-installed | grep -q '^https-dns-proxy ' && echo -e "${YELLOW}DNS over HTTPS:${NC}      ${GREEN}$DOH_STATUS${NC}"; fi; fi
 pkg_is_installed netshift && PODKOP_VER && echo -e "${YELLOW}NetShift:${NC}            $PODKOP_STATUS"; if web_is_enabled; then echo -e "${YELLOW}Доступ из браузера:${NC}  $LAN_IP:7681"; fi; quic_is_blocked && if quic_is_blocked; then echo -e "${YELLOW}Блокировка QUIC:${NC}     ${GREEN}включена${NC}"; fi; if grep -q 'ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc
 then echo -e "${YELLOW}Flow Offloading FIX:${NC} ${GREEN}включён${NC}"; fi; if [ "$CURR" != "default / OpenWrt" ]; then echo -e "${YELLOW}Зеркало OpenWRT:${NC}     $CURR"; fi; if [ -f /etc/init.d/zapret ] && [ -f "$CONF" ] && grep -Eq "^[[:space:]]*option DISABLE_IPV6 '0'" "$CONF"; then echo -e "${YELLOW}IPv6 в Zapret:       ${GREEN}включён${NC}"; fi
 
-if auto_best_running; then
-    echo -e "${YELLOW}Автоподбор стратегий:${NC}${GREEN}выполняется в фоне${NC}"
-else
-    if LINEA=$(grep -F "$AUTO_CRON_CMD" "$CRON_FILE" 2>/dev/null | head -n1); then
-        if [ -n "$LINEA" ]; then
-            CRON_MIN=$(echo "$LINEA" | awk '{print $1}')
-            CRON_HOUR=$(echo "$LINEA" | awk '{print $2}')
 
-            echo -e "${YELLOW}Автоподбор стратегий:${NC}${GREEN}ежедневно в $(printf "%02d" "$CRON_HOUR"):$(printf "%02d" "$CRON_MIN")${NC}"
-        fi
+
+
+LINEAV=$(auto_best_cron_line)
+HOURAV=$(echo "$LINEAV" | awk '{print $2}')
+
+if auto_best_running; then
+    if [ -n "$HOURAV" ]; then
+        echo -e "${YELLOW}Автоподбор стратегий:${NC}${GREEN}выполняется в фоне ${NC}/${GREEN} ежедневно в ${NC}$(printf "%02d" "$HOURAV"):00${NC}"
+    else
+        echo -e "${YELLOW}Автоподбор стратегий:${NC}${GREEN}выполняется в фоне${NC}"
+    fi
+else
+    if [ -n "$HOURAV" ]; then
+        echo -e "${YELLOW}Автоподбор стратегий:${NC}${GREEN}ежедневно в ${NC}$(printf "%02d" "$HOURAV"):00"
     fi
 fi
+
+
+
 
 
 INFO_ZPR_STR; }
