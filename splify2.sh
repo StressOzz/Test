@@ -134,6 +134,19 @@ install_splify() {
         echo -e "${CYAN}Удаляем...${NC}"
 
         if apk del luci-app-splify2 >/dev/null 2>&1; then
+
+for DIR in /etc /usr /www /root /opt /tmp; do
+    [ -d "$DIR" ] || continue
+
+    find "$DIR" -depth \
+        \( -iname 'steer' -o -iname 'steer-*' \
+        -o -iname 'splify2' -o -iname 'splify2-*' \) \
+        -print 2>/dev/null |
+    while read -r FILE; do
+        echo -e "${RED}Удаляем:${NC} $FILE"
+        rm -rf -- "$FILE"
+    done
+done
             echo -e "${GREEN}✓ Splify2 успешно удалён${NC}"
         else
             echo -e "${RED}✗ Ошибка удаления Splify2${NC}"
