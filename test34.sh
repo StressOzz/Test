@@ -1021,7 +1021,7 @@ opkg list-installed | grep -q '^https-dns-proxy ' && doh_st="Удалить" || 
 else opkg list-installed | grep -q '^https-dns-proxy ' && echo -e "${YELLOW}DNS over HTTPS: ${NC}$DOH_STATUS\n"; fi; fi
 echo -e "${CYAN} 1)${GREEN} $doh_st ${NC}DNS over HTTPS\n${CYAN} 2)${GREEN} Настроить ${NC}Comss DNS\n${CYAN} 3)${GREEN} Настроить ${NC}Xbox DNS\n${CYAN} 4)${GREEN} Настроить ${NC}dns.malw.link"
 echo -e "${CYAN} 5)${GREEN} Настроить ${NC}dns.malw.link (CloudFlare)\n${CYAN} 6)${GREEN} Настроить ${NC}dns.mafioznik.xyz\n${CYAN} 7)${GREEN} Настроить ${NC}dns.astracat.ru"
-echo -e "${CYAN} 8)${GREEN} Настроить ${NC}dns.nullsproxy.com (Supercell)\n${CYAN} 9)${GREEN} Настроить ${NC}Cloudflare\n${CYAN} 0)${GREEN} Настроить ${NC}Google\n${CYAN}10)${GREEN} Вернуть ${NC}настройки по умолчанию"
+echo -e "${CYAN} 8)${GREEN} Настроить ${NC}dns.nullsproxy.com (Supercell)\n${CYAN} 9)${GREEN} Настроить ${NC}Cloudflare DNS\n${CYAN} 0)${GREEN} Настроить ${NC}Google DNS\n${CYAN}10)${GREEN} Вернуть ${NC}настройки по умолчанию"
 echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read -r choiceDOH; [ -z "$choiceDOH" ] && return; case "$choiceDOH" in 1) D_o_H;; 2) doh_install && setup_doh "$doh_comss" "Comss.one DNS";;
 3) doh_install && setup_doh "$doh_xbox" "Xbox DNS";; 4) doh_install && setup_doh "$doh_query" "dns.malw.link";; 5) doh_install && setup_doh "$doh_queryCF" "dns.malw.link (CloudFlare)";; 6) doh_install && setup_doh "$doh_mafioznik" "dns.mafioznik.xyz";;
 7) doh_install && setup_doh "$doh_astracat" "dns.astracat.ru";; 8) doh_install && setup_doh "$doh_nullsproxy" "dns.nullsproxy.com";; 
