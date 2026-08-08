@@ -1372,7 +1372,10 @@ install_TG_RS() {
 
     echo "$TG_RS_VERSION" > "$BIN_VER_RS"
 
-    printf '#!/bin/sh /etc/rc.common
+    # Если init-скрипта ещё нет — создаём его.
+    # При обновлении существующий скрипт НЕ трогаем.
+    if [ ! -f "$INIT_PATH_RS" ]; then
+        printf '#!/bin/sh /etc/rc.common
 START=99
 USE_PROCD=1
 
@@ -1384,9 +1387,11 @@ start_service() {
 }
 ' "$SECRET" > "$INIT_PATH_RS"
 
-    chmod +x "$INIT_PATH_RS"
+        chmod +x "$INIT_PATH_RS"
 
-    "$INIT_PATH_RS" enable >/dev/null 2>&1
+        "$INIT_PATH_RS" enable >/dev/null 2>&1
+    fi
+
     "$INIT_PATH_RS" restart >/dev/null 2>&1
 
     if pidof tg-ws-proxy-rs >/dev/null 2>&1; then
@@ -1442,7 +1447,10 @@ install_TG_GO() {
 
     echo "$TG_GO_VERSION" > "$BIN_VER_GO"
 
-    printf '#!/bin/sh /etc/rc.common
+    # Если init-скрипта ещё нет — создаём его.
+    # При обновлении существующий скрипт НЕ изменяем.
+    if [ ! -f "$INIT_PATH_GO" ]; then
+        printf '#!/bin/sh /etc/rc.common
 START=99
 USE_PROCD=1
 
@@ -1454,9 +1462,11 @@ start_service() {
 }
 ' > "$INIT_PATH_GO"
 
-    chmod +x "$INIT_PATH_GO"
+        chmod +x "$INIT_PATH_GO"
 
-    "$INIT_PATH_GO" enable >/dev/null 2>&1
+        "$INIT_PATH_GO" enable >/dev/null 2>&1
+    fi
+
     "$INIT_PATH_GO" restart >/dev/null 2>&1
 
     if pidof tg-ws-proxy-go >/dev/null 2>&1; then
@@ -1467,7 +1477,6 @@ start_service() {
 
     PAUSE
 }
-
 
 # УСТАНОВКА MTProto
 install_update_TG_PKG() { AVAILABLE_SPACE=$(df /overlay 2>/dev/null | awk 'NR==2 {print $4}'); [ -z "$AVAILABLE_SPACE" ] && AVAILABLE_SPACE=$(df / 2>/dev/null | awk 'NR==2 {print $4}'); REQUIRED_SPACE=10000; if [ "$AVAILABLE_SPACE" -lt "$REQUIRED_SPACE" ]
