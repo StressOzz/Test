@@ -1019,8 +1019,9 @@ grep -Fq "=ts" "$CONF" && echo -e "${YELLOW}Для работы этой стр�
 DoH_menu() { while true; do get_doh_status; clear; echo -e "${MAGENTA}Меню DNS over HTTPS${NC}\n"; if [ "$PKG_IS_APK" -eq 1 ]; then apk info -e https-dns-proxy >/dev/null 2>&1 && doh_st="Удалить" || doh_st="Установить"; else
 opkg list-installed | grep -q '^https-dns-proxy ' && doh_st="Удалить" || doh_st="Установить"; fi; if [ -n "$DOH_STATUS" ]; then if [ "$PKG_IS_APK" -eq 1 ]; then apk info -e https-dns-proxy >/dev/null 2>&1 && echo -e "${YELLOW}DNS over HTTPS: ${NC}$DOH_STATUS\n"
 else opkg list-installed | grep -q '^https-dns-proxy ' && echo -e "${YELLOW}DNS over HTTPS: ${NC}$DOH_STATUS\n"; fi; fi
-echo -e "${CYAN}1)${GREEN} $doh_st ${NC}DNS over HTTPS\n${CYAN}2)${GREEN} Настроить ${NC}Comss DNS\n${CYAN}3)${GREEN} Настроить ${NC}Xbox DNS\n${CYAN}4)${GREEN} Настроить ${NC}dns.malw.link"
-echo -e "${CYAN}5)${GREEN} Настроить ${NC}dns.malw.link (CloudFlare)\n${CYAN}6)${GREEN} Настроить ${NC}dns.mafioznik.xyz\n${CYAN}7)${GREEN} Настроить ${NC}dns.astracat.ru\n${CYAN}8)${GREEN} Настроить ${NC}dns.nullsproxy.com (Supercell)\n${CYAN}0)${GREEN} Вернуть ${NC}настройки по умолчанию"
+echo -e "${CYAN} 1)${GREEN} $doh_st ${NC}DNS over HTTPS\n${CYAN} 2)${GREEN} Настроить ${NC}Comss DNS\n${CYAN} 3)${GREEN} Настроить ${NC}Xbox DNS\n${CYAN} 4)${GREEN} Настроить ${NC}dns.malw.link"
+echo -e "${CYAN} 5)${GREEN} Настроить ${NC}dns.malw.link (CloudFlare)\n${CYAN} 6)${GREEN} Настроить ${NC}dns.mafioznik.xyz\n${CYAN} 7)${GREEN} Настроить ${NC}dns.astracat.ru"
+echo -e "${CYAN} 8)${GREEN} Настроить ${NC}dns.nullsproxy.com (Supercell)\n${CYAN} 9)${GREEN} Настроить ${NC}Cloudflare\n${CYAN} 0)${GREEN} Настроить ${NC}Google\n${CYAN}10)${GREEN} Вернуть ${NC}настройки по умолчанию"
 echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read -r choiceDOH; [ -z "$choiceDOH" ] && return; case "$choiceDOH" in 1) D_o_H;; 2) doh_install && setup_doh "$doh_comss" "Comss.one DNS";;
 3) doh_install && setup_doh "$doh_xbox" "Xbox DNS";; 4) doh_install && setup_doh "$doh_query" "dns.malw.link";; 5) doh_install && setup_doh "$doh_queryCF" "dns.malw.link (CloudFlare)";; 6) doh_install && setup_doh "$doh_mafioznik" "dns.mafioznik.xyz";;
 7) doh_install && setup_doh "$doh_astracat" "dns.astracat.ru";; 8) doh_install && setup_doh "$doh_nullsproxy" "dns.nullsproxy.com";; 
@@ -1028,6 +1029,7 @@ echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${
 9) doh_install && setup_doh "$doh_CLF" "Cloudflare";;
 0) doh_install && setup_doh "$doh_doh_GOO" "Google";;
 
+10) doh_install && setup_doh "$doh_def" "настройки по умолчанию";;
 
 *) return;; esac; done; }
 setup_doh() { local config="$1"; local name="$2"; echo -e "\n${MAGENTA}Настраиваем DNS over HTTPS${NC}\n${CYAN}Настраиваем ${NC}$name\n${CYAN}Применяем новые настройки${NC}"
@@ -1036,6 +1038,7 @@ get_doh_status() { DOH_STATUS=""; [ ! -f "$fileDoH" ] && return; if grep -q "dns
 then DOH_STATUS="dns.malw.link (CloudFlare)"; elif grep -q "dns.malw.link" "$fileDoH"; then DOH_STATUS="dns.malw.link"
 elif grep -q "dns.mafioznik.xyz" "$fileDoH"; then DOH_STATUS="dns.mafioznik.xyz"
 
+elif grep -q "cloudflare-dns.com" "$fileDoH" && grep -q "dns.google" "$fileDoH"; then DOH_STATUS="по умолчанию"
 elif grep -q "cloudflare-dns.com" "$fileDoH"; then DOH_STATUS="Cloudflare"
 elif grep -q "dns.google" "$fileDoH"; then DOH_STATUS="Google"
 
@@ -1053,10 +1056,7 @@ doh_comss=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'htt
 doh_query=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://dns.malw.link/dns-query'" "	option bootstrap_dns '8.8.8.8,8.8.4.4,2001:4860:4860::8888,2001:4860:4860::8844'"); doh_queryCF=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://5u35p8m9i7.cloudflare-gateway.com/dns-query'" "	option bootstrap_dns '8.8.8.8,8.8.4.4,2001:4860:4860::8888,2001:4860:4860::8844'")
 doh_mafioznik=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://dns.mafioznik.xyz/dns-query'" "	option bootstrap_dns '8.8.8.8,8.8.4.4,2001:4860:4860::8888,2001:4860:4860::8844'"); doh_astracat=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://dns.astracat.ru/dns-query'" "	option bootstrap_dns '8.8.8.8,8.8.4.4,2001:4860:4860::8888,2001:4860:4860::8844'")
 
-
-
 doh_CLF=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://cloudflare-dns.com/dns-query'" "	option bootstrap_dns '1.1.1.1,1.0.0.1,2606:4700:4700::1111,2606:4700:4700::1001'")
-
 doh_GOO=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://dns.google/dns-query'" "	option bootstrap_dns '8.8.8.8,8.8.4.4,2001:4860:4860::8888,2001:4860:4860::8844'")
 
 # ==========================================
