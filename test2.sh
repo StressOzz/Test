@@ -2035,7 +2035,7 @@ BYEDPI_NETSHIFT() {
 
     if [ -f /etc/config/byedpi ]; then
         sed -i \
-            "s|option cmd_opts .*|	option cmd_opts '-o1 -r-5+se -a1 -At,r,s -d1 -n google.com -Qr -f-1 -a1'|" \
+            "s|option cmd_opts .*|	option cmd_opts '-d1 -s1+s -d3+s -s6+s -d9+s -s12+s -d15+s -s20+s -d25+s -s30+s -d35+s -a1'|" \
             /etc/config/byedpi
     fi
 
@@ -2043,38 +2043,49 @@ BYEDPI_NETSHIFT() {
     # Конфигурация NetShift
     # --------------------------------------
 
-    echo -e "${CYAN}Меняем конфигурацию в ${NC}NetShift"
+echo -e "${CYAN}Меняем конфигурацию в ${NC}NetShift"
 
-    printf "%s\n" \
-        "config settings 'settings'" \
-        "option dns_type 'udp'" \
-        "option dns_server '8.8.8.8'" \
-        "option bootstrap_dns_server '77.88.8.8'" \
-        "option dns_rewrite_ttl '60'" \
-        "list source_network_interfaces 'br-lan'" \
-        "option enable_output_network_interface '0'" \
-        "option enable_badwan_interface_monitoring '0'" \
-        "option enable_yacd '0'" \
-        "option disable_quic '0'" \
-        "option update_interval '1d'" \
-        "option download_lists_via_proxy '0'" \
-        "option dont_touch_dhcp '0'" \
-        "option config_path '/etc/sing-box/config.json'" \
-        "option cache_path '/tmp/sing-box/cache.db'" \
-        "option log_level 'warn'" \
-        "option exclude_ntp '0'" \
-        "option shutdown_correctly '0'" \
-        "" \
-        "config section 'StressByeDPI'" \
-        "option connection_type 'proxy'" \
-        "option proxy_config_type 'outbound'" \
-        "option enable_udp_over_tcp '0'" \
-        "option outbound_json '{\"type\":\"socks\",\"server\":\"127.0.0.1\",\"server_port\":1080}'" \
-        "option user_domain_list_type 'disabled'" \
-        "option user_subnet_list_type 'disabled'" \
-        "option mixed_proxy_enabled '0'" \
-        "list community_lists 'youtube'" \
-        > /etc/config/netshift
+cat <<'EOF' > /etc/config/netshift
+config settings 'settings'
+	option dns_type 'doh'
+	option dns_server '8.8.8.8'
+	option bootstrap_dns_server '77.88.8.8'
+	option dns_rewrite_ttl '60'
+	list source_network_interfaces 'br-lan'
+	option enable_output_network_interface '0'
+	option enable_badwan_interface_monitoring '0'
+	option enable_yacd '0'
+	option disable_quic '0'
+	option update_interval '1d'
+	option download_lists_via_proxy '0'
+	option dont_touch_dhcp '0'
+	option config_path '/etc/sing-box/config.json'
+	option cache_path '/tmp/sing-box/cache.db'
+	option log_level 'warn'
+	option exclude_ntp '0'
+	option shutdown_correctly '0'
+	option block_doh '0'
+	option enable_ipv6 '0'
+	option dns_via_outbound '0'
+
+config section 'ByeDPI'
+	option connection_type 'proxy'
+	option proxy_config_type 'outbound'
+	option enable_udp_over_tcp '0'
+	option global_proxy '0'
+	option outbound_json '{
+"type": "socks",
+"server": "127.0.0.1",
+"server_port": 1080
+}'
+	option user_domain_list_type 'disabled'
+	option user_subnet_list_type 'disabled'
+	option mixed_proxy_enabled '0'
+	option resolve_real_ip_for_routing '0'
+	list community_lists 'youtube'
+EOF
+
+
 
     echo -e "${CYAN}Запускаем ${NC}ByeDPI"
     /etc/init.d/byedpi enable >/dev/null 2>&1
