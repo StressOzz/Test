@@ -1318,7 +1318,6 @@ install_TG_RS() {
     ARCH_FILE_RS="$(get_arch_RS)" || return 1
 
     echo -e "${CYAN}Скачиваем и устанавливаем${NC} $ARCH_FILE_RS"
-    echo -e "${YELLOW}Версия:${NC} $TG_RS_VERSION"
 
     DOWNLOAD_URL_RS="https://github.com/valnesfjord/tg-ws-proxy-rs/releases/download/v${TG_RS_VERSION}/${ARCH_FILE_RS}.tar.gz"
 
@@ -1371,9 +1370,9 @@ start_service() {
     "$INIT_PATH_RS" restart >/dev/null 2>&1
 
     if pidof tg-ws-proxy-rs >/dev/null 2>&1; then
-        echo -e "${GREEN}TG WS Proxy Rust установлен и запущен!${NC}"
+        echo -e "TG WS Proxy Rust ${GREEN}установлен!${NC}\n"
     else
-        echo -e "${RED}TG WS Proxy Rust не запущен!${NC}"
+        echo -e "${RED}TG WS Proxy Rust не запущен!${NC}\n"
     fi
 
     PAUSE
@@ -1409,7 +1408,6 @@ install_TG_GO() {
     ARCH_FILE_GO="$(get_arch_GO)" || return 1
 
     echo -e "${CYAN}Скачиваем и устанавливаем${NC} $ARCH_FILE_GO"
-    echo -e "${YELLOW}Версия:${NC} $TG_GO_VERSION"
 
     DOWNLOAD_URL_GO="https://github.com/d0mhate/-tg-ws-proxy-Manager-go/releases/download/v${TG_GO_VERSION}/${ARCH_FILE_GO}"
 
@@ -1442,9 +1440,9 @@ start_service() {
     "$INIT_PATH_GO" restart >/dev/null 2>&1
 
     if pidof tg-ws-proxy-go >/dev/null 2>&1; then
-        echo -e "${GREEN}TG WS Proxy SOCKS5 установлен и запущен!${NC}"
+        echo -e "TG WS Proxy SOCKS5 ${GREEN}установлен!${NC}\n"
     else
-        echo -e "${RED}TG WS Proxy SOCKS5 не запущен!${NC}"
+        echo -e "${RED}TG WS Proxy SOCKS5 не запущен!${NC}\n"
     fi
 
     PAUSE
@@ -1532,7 +1530,7 @@ get_TG_versions
 
         if [ -n "$INSTALLED_VER_MT" ]; then
             if [ "$MT_ACTION" = "update" ]; then
-                echo -e "${YELLOW}TG WS Proxy MTProto версия:${NC} ${RED}$INSTALLED_VER_MT${NC} ${YELLOW}→${NC} ${GREEN}$TG_MTProto${NC}"
+                echo -e "${YELLOW}TG WS Proxy MTProto версия:${NC} ${RED}$INSTALLED_VER_MT (версия устарела)${NC}"
             else
                 echo -e "${YELLOW}TG WS Proxy MTProto версия:${NC} ${GREEN}$INSTALLED_VER_MT${NC}"
             fi
@@ -1540,7 +1538,7 @@ get_TG_versions
 
         if [ -n "$INSTALLED_VER_GO" ]; then
             if [ "$GO_ACTION" = "update" ]; then
-                echo -e "${YELLOW}TG WS Proxy SOCKS5 версия:${NC} ${RED}$INSTALLED_VER_GO${NC} ${YELLOW}→${NC} ${GREEN}$TG_GO_VERSION${NC}"
+                echo -e "${YELLOW}TG WS Proxy SOCKS5 версия:${NC} ${RED}$INSTALLED_VER_GO (версия устарела)${NC}"
             else
                 echo -e "${YELLOW}TG WS Proxy SOCKS5 версия:${NC} ${GREEN}$INSTALLED_VER_GO${NC}"
             fi
@@ -1548,7 +1546,7 @@ get_TG_versions
 
         if [ -n "$INSTALLED_VER_RS" ]; then
             if [ "$RS_ACTION" = "update" ]; then
-                echo -e "${YELLOW}TG WS Proxy Rust версия:${NC} ${RED}$INSTALLED_VER_RS${NC} ${YELLOW}→${NC} ${GREEN}$TG_RS_VERSION${NC}"
+                echo -e "${YELLOW}TG WS Proxy Rust версия:${NC} ${RED}$INSTALLED_VER_RS (версия устарела)${NC}"
             else
                 echo -e "${YELLOW}TG WS Proxy Rust версия:${NC} ${GREEN}$INSTALLED_VER_RS${NC}"
             fi
