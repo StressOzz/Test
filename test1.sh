@@ -1814,7 +1814,6 @@ printf "%s\n" "list community_lists 'google_ai'" "list community_lists 'google_p
 printf "%s\n" "option user_subnet_list_type 'disabled'" "option mixed_proxy_enabled '0'" "option resolve_real_ip_for_routing '0'" "list subscription_filter_exclude_keywords '⬇️'" "list subscription_filter_exclude_keywords 'LTE'" "list subscription_filter_exclude_keywords '🇪🇺'" "list subscription_filter_exclude_keywords 'Мобильный'" "list subscription_filter_exclude_keywords 'SS'" "list subscription_filter_exclude_keywords 'Авто'" >> /etc/config/netshift
 fi; echo -e "${CYAN}Запускаем ${NC}NetShift${NC}"; netshift enable >/dev/null 2>&1; echo -e "${CYAN}Обновляем списки${NC}"; netshift list_update >/dev/null 2>&1; echo -en "${CYAN}Перезапускаем сервис${NC}\n${YELLOW}Подождите...${NC}"; netshift restart >/dev/null 2>&1; echo -e "\nVPN подписка ${GREEN}интегрирована в ${NC}NetShift${GREEN}!${NC}\n"; PAUSE; }
 
-```sh
 # ==========================================
 # ByeDPI
 # ==========================================
@@ -2296,7 +2295,7 @@ PODKOP_menu() {
 
     done
 }
-```
+
 # ==========================================
 # Информация
 # ==========================================
