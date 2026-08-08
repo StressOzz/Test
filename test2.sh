@@ -120,8 +120,8 @@ get_ver "https://github.com/d0mhate/-tg-ws-proxy-Manager-go/releases/latest" "$T
 [ -s "$TMP_VER" ] && ZAPRET_VERSION="$(cat "$TMP_VER")"; [ -s "$TMP_VER_POD" ] && PODKOP_LATEST_VER="$(cat "$TMP_VER_POD")"; [ -s "$TMP_VER_TG_MT" ] && TG_MTProto="$(cat "$TMP_VER_TG_MT")"
 [ -s "$TMP_VER_SPL" ] && SPL_VER="$(cat "$TMP_VER_SPL")"; [ -s "$TMP_VER_TG_GO" ] && TG_GO_VERSION="$(cat "$TMP_VER_TG_GO")"; [ -s "$TMP_VER_TG_RS" ] && TG_RS_VERSION="$(cat "$TMP_VER_TG_RS")"
 
-echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test1.sh)' > /usr/bin/zms; chmod +x /usr/bin/zms
-echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test1.sh) "$@"' > /usr/bin/zmsA; chmod +x /usr/bin/zmsA
+echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test2.sh)' > /usr/bin/zms; chmod +x /usr/bin/zms
+echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test2.sh) "$@"' > /usr/bin/zmsA; chmod +x /usr/bin/zmsA
 
 # git="githubusercontent.com"; if ! grep -q "raw.$git" /etc/hosts; then echo -e "\n\033[1;36mДля корректной работы скрипта добавляем домены \033[0mGitHub\033[1;36m в \033[0m/etc/hosts\033[0m"
 # printf "#$git\n185.199.109.133 raw.$git release-assets.$git\n185.199.108.133 private-user-images.$git gist.$git avatars.$git\n" >> /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1; fi
@@ -875,9 +875,50 @@ printf "%s\n" "list community_lists 'google_ai'" "list community_lists 'google_p
 printf "%s\n" "option user_subnet_list_type 'disabled'" "option mixed_proxy_enabled '0'" "option resolve_real_ip_for_routing '0'" "list subscription_filter_exclude_keywords '⬇️'" "list subscription_filter_exclude_keywords 'LTE'" "list subscription_filter_exclude_keywords '🇪🇺'" "list subscription_filter_exclude_keywords 'Мобильный'" "list subscription_filter_exclude_keywords 'SS'" "list subscription_filter_exclude_keywords 'Авто'" >> /etc/config/netshift
 fi; echo -e "${CYAN}Запускаем ${NC}NetShift${NC}"; netshift enable >/dev/null 2>&1; echo -e "${CYAN}Обновляем списки${NC}"; netshift list_update >/dev/null 2>&1; echo -en "${CYAN}Перезапускаем сервис${NC}\n${YELLOW}Подождите...${NC}"; netshift restart >/dev/null 2>&1; echo -e "\nVPN подписка ${GREEN}интегрирована в ${NC}NetShift${GREEN}!${NC}\n"; PAUSE; }
 BYEDPI_STATUS() { if pkg_is_installed byedpi; then if [ "$PKG_IS_APK" -eq 1 ]; then LOCAL_BYEDPI="$(apk list -I 2>/dev/null | grep '^byedpi-' | head -1 | sed -E 's/^byedpi-//;s/-r[0-9]+.*//')"; else LOCAL_BYEDPI="$(opkg list-installed 2>/dev/null | awk '$1=="byedpi" {print $3}' | sed 's/-r[0-9]\+$//')"; fi; [ "$LOCAL_BYEDPI" = "$BYEDPI_LATEST_VER" ] && BYEDPI_STATUS="${GREEN}${LOCAL_BYEDPI}${NC}" || BYEDPI_STATUS="${RED}${LOCAL_BYEDPI} (версия устарела)${NC}"; else BYEDPI_STATUS="${RED}не установлен${NC}"; fi; }
-BYEDPI_SAVE_DNS_STATE() { if [ ! -f "$BYEDPI_DNS_BACKUP" ]; then DNS_LOCALUSE="$(uci -q get dhcp.@dnsmasq[0].localuse)"; if [ -n "$DNS_LOCALUSE" ]; then echo "$DNS_LOCALUSE" > "$BYEDPI_DNS_BACKUP"; else echo "__UNSET__" > "$BYEDPI_DNS_BACKUP"; fi; fi; }
-BYEDPI_RESTORE_DNS_STATE() { [ ! -f "$BYEDPI_DNS_BACKUP" ] && return; DNS_LOCALUSE="$(cat "$BYEDPI_DNS_BACKUP" 2>/dev/null)"; echo -e "${CYAN}Восстанавливаем настройку ${NC}локального DNS"; if [ "$DNS_LOCALUSE" = "__UNSET__" ]
-then uci delete dhcp.@dnsmasq[0].localuse >/dev/null 2>&1; else uci set dhcp.@dnsmasq[0].localuse="$DNS_LOCALUSE"; fi; uci commit dhcp >/dev/null 2>&1; echo -e "${CYAN}Перезапускаем ${NC}dnsmasq"; /etc/init.d/dnsmasq restart >/dev/null 2>&1; rm -f "$BYEDPI_DNS_BACKUP"; }
+
+BYEDPI_SAVE_DNS_STATE() {
+    if [ ! -f "$BYEDPI_DNS_BACKUP" ]; then
+        {
+            echo "LOCALUSE=$(uci -q get dhcp.@dnsmasq[0].localuse 2>/dev/null || echo "__UNSET__")"
+            echo "SERVER=$(uci -q get dhcp.@dnsmasq[0].server 2>/dev/null || echo "__UNSET__")"
+            echo "NORESOLV=$(uci -q get dhcp.@dnsmasq[0].noresolv 2>/dev/null || echo "__UNSET__")"
+        } > "$BYEDPI_DNS_BACKUP"
+    fi
+}
+
+BYEDPI_RESTORE_DNS_STATE() {
+    [ ! -f "$BYEDPI_DNS_BACKUP" ] && return
+
+    . "$BYEDPI_DNS_BACKUP"
+
+    echo -e "${CYAN}Восстанавливаем настройки ${NC}DNS"
+
+    if [ "$LOCALUSE" = "__UNSET__" ]; then
+        uci -q delete dhcp.@dnsmasq[0].localuse
+    else
+        uci set dhcp.@dnsmasq[0].localuse="$LOCALUSE"
+    fi
+
+    if [ "$SERVER" = "__UNSET__" ]; then
+        uci -q delete dhcp.@dnsmasq[0].server
+    else
+        uci set dhcp.@dnsmasq[0].server="$SERVER"
+    fi
+
+    if [ "$NORESOLV" = "__UNSET__" ]; then
+        uci -q delete dhcp.@dnsmasq[0].noresolv
+    else
+        uci set dhcp.@dnsmasq[0].noresolv="$NORESOLV"
+    fi
+
+    uci commit dhcp >/dev/null 2>&1
+
+    echo -e "${CYAN}Перезапускаем ${NC}dnsmasq"
+    /etc/init.d/dnsmasq restart >/dev/null 2>&1
+
+    rm -f "$BYEDPI_DNS_BACKUP"
+}
+
 BYEDPI_INSTALL() { if pkg_is_installed byedpi; then BYEDPI_DELETE; return; fi; echo -e "\n${MAGENTA}Установка ByeDPI${NC}"; rm -rf "$tmpDIR"; mkdir -p "$tmpDIR"; BYEDPI_FILE="byedpi_${BYEDPI_LATEST_VER}-r1_${LOCAL_ARCH}.${RAZ}"
 BYEDPI_URL="https://github.com/DPITrickster/ByeDPI-OpenWrt/releases/download/${RELEASE_TAG}/${BYEDPI_FILE}"; echo -e "${CYAN}Скачиваем ${NC}$BYEDPI_FILE"; cd "$tmpDIR" || return 1; wget -q -U "Mozilla/5.0" -O "$BYEDPI_FILE" "$BYEDPI_URL" || { echo -e "\n${RED}Не удалось скачать:${NC}\n"; echo "$BYEDPI_URL"; rm -rf "$tmpDIR"; PAUSE; return 1; }
 echo -e "${CYAN}Устанавливаем ${NC}ByeDPI"; if ! $INSTALL "$BYEDPI_FILE" >/dev/null 2>&1; then echo -e "\n${RED}Не удалось установить ByeDPI!${NC}\n"; rm -rf "$tmpDIR"; PAUSE; return 1; fi; rm -rf "$tmpDIR"; if [ -f /etc/init.d/byedpi ]
@@ -885,7 +926,7 @@ then /etc/init.d/byedpi enable >/dev/null 2>&1; /etc/init.d/byedpi start >/dev/n
 BYEDPI_DELETE() { echo -e "\n${MAGENTA}Удаление ByeDPI${NC}"; echo -e "${CYAN}Останавливаем ${NC}ByeDPI"; /etc/init.d/byedpi stop >/dev/null 2>&1; /etc/init.d/byedpi disable >/dev/null 2>&1; echo -e "${CYAN}Удаляем пакет ${NC}ByeDPI"
 $DELETE byedpi >/dev/null 2>&1; rm -f /etc/init.d/byedpi; rm -rf /opt/byedpi; rm -f /etc/config/byedpi; BYEDPI_RESTORE_DNS_STATE; echo -e "ByeDPI ${GREEN}удалён!${NC}\n"; PAUSE; }
 BYEDPI_NETSHIFT() { if ! pkg_is_installed byedpi; then echo -e "\nByeDPI${RED} не установлен!${NC}\n"; PAUSE; return; fi; if ! pkg_is_installed netshift; then echo -e "\nNetShift${RED} не установлен!${NC}\n"; PAUSE; return; fi; echo -e "\n${MAGENTA}Интеграция ByeDPI в NetShift${NC}"
-BYEDPI_SAVE_DNS_STATE; echo -e "${CYAN}Отключаем локальный ${NC}DNS"; uci set dhcp.@dnsmasq[0].localuse='0'; uci commit dhcp; echo -e "${CYAN}Перезапускаем ${NC}dnsmasq"; /etc/init.d/dnsmasq restart >/dev/null 2>&1; echo -e "${CYAN}Настраиваем стратегию ${NC}ByeDPI"
+rm -f /tmp/byedpi_dns_backup; BYEDPI_SAVE_DNS_STATE; echo -e "${CYAN}Отключаем локальный ${NC}DNS"; uci set dhcp.@dnsmasq[0].localuse='0'; uci commit dhcp; echo -e "${CYAN}Перезапускаем ${NC}dnsmasq"; /etc/init.d/dnsmasq restart >/dev/null 2>&1; echo -e "${CYAN}Настраиваем стратегию ${NC}ByeDPI"
 if [ -f /etc/config/byedpi ]; then sed -i "s|option cmd_opts .*|	option cmd_opts '-d1 -s1+s -d3+s -s6+s -d9+s -s12+s -d15+s -s20+s -d25+s -s30+s -d35+s -a1'|" /etc/config/byedpi; fi; echo -e "${CYAN}Меняем конфигурацию в ${NC}NetShift"
 printf "config settings 'settings'\n\toption dns_type 'doh'\n\toption dns_server '8.8.8.8'\n\toption bootstrap_dns_server '77.88.8.8'\n\toption dns_rewrite_ttl '60'\n\tlist source_network_interfaces 'br-lan'\n\toption enable_output_network_interface '0'\n\toption enable_badwan_interface_monitoring '0'\n\toption enable_yacd '0'\n\toption disable_quic '0'\n\toption update_interval '1d'\n\toption download_lists_via_proxy '0'\n\toption dont_touch_dhcp '0'\n\toption config_path '/etc/sing-box/config.json'\n\toption cache_path '/tmp/sing-box/cache.db'\n\toption log_level 'warn'\n\toption exclude_ntp '0'\n\toption shutdown_correctly '0'\n\toption block_doh '0'\n\toption enable_ipv6 '0'\n\toption dns_via_outbound '0'\n\nconfig section 'ByeDPI'\n\toption connection_type 'proxy'\n\toption proxy_config_type 'outbound'\n\toption enable_udp_over_tcp '0'\n\toption global_proxy '0'\n\toption outbound_json '{\n\"type\": \"socks\",\n\"server\": \"127.0.0.1\",\n\"server_port\": 1080\n}'\n\toption user_domain_list_type 'disabled'\n\toption user_subnet_list_type 'disabled'\n\toption mixed_proxy_enabled '0'\n\toption resolve_real_ip_for_routing '0'\n\tlist community_lists 'youtube'\n" > /etc/config/netshift
 echo -e "${CYAN}Запускаем ${NC}ByeDPI"; /etc/init.d/byedpi enable >/dev/null 2>&1; /etc/init.d/byedpi restart >/dev/null 2>&1; echo -e "${CYAN}Запускаем ${NC}NetShift"; netshift enable >/dev/null 2>&1; echo -e "${CYAN}Обновляем списки${NC}"
