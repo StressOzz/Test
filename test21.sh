@@ -150,8 +150,8 @@ get_ver "https://github.com/DPITrickster/ByeDPI-OpenWrt/releases/latest" "$TMP_V
 get_ver "https://github.com/yandexru45/netshift/releases/latest" "$TMP_VER_POD" "NetShift" &
 get_ver "https://github.com/remittor/zapret-openwrt/releases/latest" "$TMP_VER" "Zapret" &
 get_ver "https://github.com/xyzmean/splify/releases/latest" "$TMP_VER_SPL" "splify" &
-# get_ver "https://github.com/d0mhate/-tg-ws-proxy-Manager-go/releases/latest" "$TMP_VER_TG_GO" "TG-WS Proxy SOCKS5" &
-# get_ver "https://github.com/valnesfjord/tg-ws-proxy-rs/releases/latest" "$TMP_VER_TG_RS" "TG-WS Proxy Rust" &
+get_ver "https://github.com/d0mhate/-tg-ws-proxy-Manager-go/releases/latest" "$TMP_VER_TG_GO" "TG-WS Proxy SOCKS5" &
+get_ver "https://github.com/valnesfjord/tg-ws-proxy-rs/releases/latest" "$TMP_VER_TG_RS" "TG-WS Proxy Rust" &
 wait
 
 [ -s "$TMP_MAG_VER" ] && MT_VERSION="$(cat "$TMP_MAG_VER")"
@@ -160,8 +160,8 @@ wait
 [ -s "$TMP_VER_POD" ] && PODKOP_LATEST_VER="$(cat "$TMP_VER_POD")"
 [ -s "$TMP_VER_TG_MT" ] && TG_MTProto="$(cat "$TMP_VER_TG_MT")"
 [ -s "$TMP_VER_SPL" ] && SPL_VER="$(cat "$TMP_VER_SPL")"
-# [ -s "$TMP_VER_TG_GO" ] && TG_GO_VERSION="$(cat "$TMP_VER_TG_GO")"
-# [ -s "$TMP_VER_TG_RS" ] && TG_RS_VERSION="$(cat "$TMP_VER_TG_RS")"
+[ -s "$TMP_VER_TG_GO" ] && TG_GO_VERSION="$(cat "$TMP_VER_TG_GO")"
+[ -s "$TMP_VER_TG_RS" ] && TG_RS_VERSION="$(cat "$TMP_VER_TG_RS")"
 
 echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test19.sh)' > /usr/bin/zms; chmod +x /usr/bin/zms
 echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test19.sh) "$@"' > /usr/bin/zmsA; chmod +x /usr/bin/zmsA
@@ -1467,7 +1467,7 @@ USE_PROCD=1
 
 start_service() {
     procd_open_instance
-    procd_set_param command /usr/bin/tg-ws-proxy-go --host 0.0.0.0 --port 1080 --cf-proxy --cf-proxy-first --cf-balance
+    procd_set_param command /usr/bin/tg-ws-proxy-go --host 0.0.0.0 --port 2080 --cf-proxy --cf-proxy-first --cf-balance
     procd_set_param respawn
     procd_close_instance
 }
@@ -1599,9 +1599,9 @@ get_TG_versions
             echo -e "\n${YELLOW}Настройки ${CYAN}TG WS Proxy SOCKS5${YELLOW}:${NC}"
             echo -e "${YELLOW}Тип прокси:${NC} SOCKS5"
             echo -e "${YELLOW}Хост:${NC} $LAN_IP"
-            echo -e "${YELLOW}Порт:${NC} 1080"
+            echo -e "${YELLOW}Порт:${NC} 2080"
             echo -e "${YELLOW}Ссылка для подключения:${NC}"
-            echo -e "tg://socks?server=$LAN_IP&port=1080"
+            echo -e "tg://socks?server=$LAN_IP&port=2080"
         fi
 
         if pgrep -f tg-ws-proxy-rs >/dev/null 2>&1 &&
@@ -1847,10 +1847,6 @@ BYEDPI_STATUS() {
     fi
 }
 
-# ------------------------------------------
-# Сохранение localuse перед интеграцией
-# ------------------------------------------
-
 BYEDPI_SAVE_DNS_STATE() {
     if [ ! -f "$BYEDPI_DNS_BACKUP" ]; then
         DNS_LOCALUSE="$(uci -q get dhcp.@dnsmasq[0].localuse)"
@@ -1863,10 +1859,6 @@ BYEDPI_SAVE_DNS_STATE() {
     fi
 }
 
-
-# ------------------------------------------
-# Восстановление localuse
-# ------------------------------------------
 
 BYEDPI_RESTORE_DNS_STATE() {
 
@@ -1890,10 +1882,6 @@ BYEDPI_RESTORE_DNS_STATE() {
     rm -f "$BYEDPI_DNS_BACKUP"
 }
 
-
-# ------------------------------------------
-# Установка / удаление ByeDPI
-# ------------------------------------------
 
 BYEDPI_INSTALL() {
 
@@ -2012,10 +2000,6 @@ BYEDPI_NETSHIFT() {
             /etc/config/byedpi
     fi
 
-    # --------------------------------------
-    # Конфигурация NetShift
-    # --------------------------------------
-
 echo -e "${CYAN}Меняем конфигурацию в ${NC}NetShift"
 
 cat <<'EOF' > /etc/config/netshift
@@ -2068,12 +2052,12 @@ EOF
     echo -e "${CYAN}Обновляем списки${NC}"
     netshift list_update >/dev/null 2>&1
 
-    echo -e "${CYAN}Перезапускаем NetShift${NC}"
+    echo -e "${CYAN}Перезапускаем ${NC}NetShift"
     netshift restart >/dev/null 2>&1
 
     echo -e "ByeDPI ${GREEN}интегрирован в ${NC}NetShift${GREEN}!${NC}"
 
-    echo -ne "\n${YELLOW}Необходимо перезагрузить роутер. Перезагрузить сейчас? [y/N]: ${NC}"
+    echo -ne "\n${YELLOW}Для работы ${NC}ByeDPI${YELLOW} необходимо перезагрузить роутер!\nПерезагрузить сейчас? [y/N]: ${NC}"
     read -r REBOOT_CHOICE
 
     case "$REBOOT_CHOICE" in
@@ -2083,7 +2067,7 @@ EOF
             exit 0
             ;;
         *)
-            echo -e "${YELLOW}Перезагрузка отложена!${NC}"
+            echo -e "\n${YELLOW}Перезагрузка отложена!${NC}\n"
             PAUSE
             ;;
     esac
@@ -2119,13 +2103,7 @@ fix_strategy() {
     PAUSE
 }
 
-
-
-
-
-# ==========================================
 # Меню NetShift
-# ==========================================
 
 PODKOP_menu() {
 
