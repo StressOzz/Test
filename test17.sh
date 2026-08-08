@@ -108,8 +108,8 @@ get_ver "https://github.com/yandexru45/netshift/releases/latest" "$TMP_VER_POD" 
 # [ -s "$TMP_MAG_VER" ] && MT_VERSION="$(cat "$TMP_MAG_VER")"
 [ -s "$TMP_VER" ] && ZAPRET_VERSION="$(cat "$TMP_VER")"; [ -s "$TMP_VER_POD" ] && PODKOP_LATEST_VER="$(cat "$TMP_VER_POD")"; [ -s "$TMP_VER_TG_MT" ] && TG_MTProto="$(cat "$TMP_VER_TG_MT")"; [ -s "$TMP_VER_SPL" ] && SPL_VER="$(cat "$TMP_VER_SPL")"
 
-echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test16.sh)' > /usr/bin/zms; chmod +x /usr/bin/zms
-echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test16.sh) "$@"' > /usr/bin/zmsA; chmod +x /usr/bin/zmsA
+echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test17.sh)' > /usr/bin/zms; chmod +x /usr/bin/zms
+echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test17.sh) "$@"' > /usr/bin/zmsA; chmod +x /usr/bin/zmsA
 
 # git="githubusercontent.com"; if ! grep -q "raw.$git" /etc/hosts; then echo -e "\n\033[1;36mДля корректной работы скрипта добавляем домены \033[0mGitHub\033[1;36m в \033[0m/etc/hosts\033[0m"
 # printf "#$git\n185.199.109.133 raw.$git release-assets.$git\n185.199.108.133 private-user-images.$git gist.$git avatars.$git\n" >> /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1; fi
@@ -1360,14 +1360,18 @@ then echo -e "${YELLOW}Flow Offloading FIX:${NC} ${GREEN}включён${NC}"; f
 
 
 
-if auto_best_running; then
-    echo -e "${YELLOW}Автоподбор стратегий:${NC}${GREEN}выполняется в фоне${NC}"
-else
-    LINEAV=$(auto_best_cron_line)
-    HOURAV=$(echo "$LINEAV" | awk '{print $2}')
+LINEAV=$(auto_best_cron_line)
+HOURAV=$(echo "$LINEAV" | awk '{print $2}')
 
+if auto_best_running; then
     if [ -n "$HOURAV" ]; then
-        echo -e "${YELLOW}Автоподбор стратегий:${NC}${GREEN}ежедневно в ${NC}$(printf "%02d" "$HOURAV"):00"
+        echo -e "${YELLOW}Автоподбор стратегий:${NC}${GREEN}выполняется в фоне / ежедневно в $(printf "%02d" "$HOURAV"):00${NC}"
+    else
+        echo -e "${YELLOW}Автоподбор стратегий:${NC}${GREEN}выполняется в фоне${NC}"
+    fi
+else
+    if [ -n "$HOURAV" ]; then
+        echo -e "${YELLOW}Автоподбор стратегий:${NC}${GREEN}ежедневно в $(printf "%02d" "$HOURAV"):00${NC}"
     fi
 fi
 
