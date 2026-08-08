@@ -1466,11 +1466,7 @@ menu_TG() {
     while true; do
         SECRET="$(head -c16 /dev/urandom | hexdump -e '16/1 "%02x"')"
 
-        INSTALLED_VER_GO=""
-        INSTALLED_VER_RS=""
-
-        [ -s "$BIN_VER_GO" ] && INSTALLED_VER_GO="$(cat "$BIN_VER_GO")"
-        [ -s "$BIN_VER_RS" ] && INSTALLED_VER_RS="$(cat "$BIN_VER_RS")"
+get_TG_versions
 
         if command -v opkg >/dev/null 2>&1; then
             INSTALLED_VER_MT="$(opkg list-installed 2>/dev/null |
@@ -1711,6 +1707,31 @@ menu_TG() {
         esac
     done
 }
+
+get_TG_versions() {
+    INSTALLED_VER_GO=""
+    INSTALLED_VER_RS=""
+    INSTALLED_VER_MT=""
+
+    [ -s "$BIN_VER_GO" ] && INSTALLED_VER_GO="$(cat "$BIN_VER_GO")"
+    [ -s "$BIN_VER_RS" ] && INSTALLED_VER_RS="$(cat "$BIN_VER_RS")"
+
+    if command -v opkg >/dev/null 2>&1; then
+        INSTALLED_VER_MT="$(
+            opkg list-installed 2>/dev/null |
+            grep '^tg-ws-proxy' |
+            awk '{print $3}' |
+            cut -d'-' -f1
+        )"
+    else
+        INSTALLED_VER_MT="$(
+            apk list -I 2>/dev/null |
+            grep '^tg-ws-proxy-' |
+            sed -E 's/tg-ws-proxy-([0-9.]+).*/\1/'
+        )"
+    fi
+}
+
 # ==========================================
 # PODKOP EVOLUTION и AWG
 # ==========================================
@@ -1782,6 +1803,8 @@ INFO_ZPR() { if [ -f /etc/init.d/zapret ]; then /etc/init.d/zapret status >/dev/
 else echo -e "${YELLOW}Zapret:${NC}              ${RED}$INSTALLED_VER (версия устарела)${NC} / $ZAPRET_STATUS"; fi; else echo -e "${YELLOW}Zapret:${NC}              ${RED}не установлен${NC}"; fi
 SPL_V_VER; [ -n "$SPL_INST_VER" ] && { [ "$SPL_VER" = "$SPL_INST_VER" ] && echo -e "${YELLOW}splify:${NC}              ${GREEN}$SPL_INST_VER${NC}" || echo -e "${YELLOW}splify:${NC}              ${RED}$SPL_INST_VER (версия устарела)${NC}"; }
 case "$(/etc/init.d/mihomo status 2>/dev/null)" in running) echo -e "${YELLOW}Mixomo:              ${GREEN}запущен${NC}" ;; inactive) echo -e "${YELLOW}Mixomo:              ${RED}остановлен${NC}" ;; esac
+
+get_TG_versions
 
 TGSTATUS=""
 
