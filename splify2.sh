@@ -190,7 +190,7 @@ install_splify() {
 clear
 
 echo -e "${MAGENTA}╔══════════════════════════════════════╗${NC}"
-echo -e "${MAGENTA}║${NC}  ${CYAN}Установка / удаление релизов${NC} splify2 ${MAGENTA}║${NC}"
+echo -e "${MAGENTA}║${NC} ${CYAN}Установка / удаление релизов${NC} splify2 ${MAGENTA}║${NC}"
 echo -e "${MAGENTA}╚══════════════════════════════════════╝${NC}"
 
 echo -e "\n${YELLOW}Архитектура OpenWrt:${NC} ${GREEN}$ARCH${NC}"
