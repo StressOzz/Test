@@ -1259,7 +1259,7 @@ chmod +x "$INIT_PATH_GO"; /etc/init.d/tg-ws-proxy-go enable; /etc/init.d/tg-ws-p
 install_update_TG_PKG() { AVAILABLE_SPACE=$(df /overlay 2>/dev/null | awk 'NR==2 {print $4}'); [ -z "$AVAILABLE_SPACE" ] && AVAILABLE_SPACE=$(df / 2>/dev/null | awk 'NR==2 {print $4}'); REQUIRED_SPACE=10000; if [ "$AVAILABLE_SPACE" -lt "$REQUIRED_SPACE" ]
 then echo -e "\n${RED}Недостаточно свободного места${NC}\n"; echo -e "${YELLOW}Доступно: ${NC}$((AVAILABLE_SPACE/1024)) MB\n${YELLOW}Требуется: ${NC}$((REQUIRED_SPACE/1024)) MB\n"; PAUSE; return; fi
 echo -e "\n${MAGENTA}Устанавливаем TG WS Proxy MTProto${NC}"; rm -f /etc/tg-ws-proxy.conf /etc/tg-ws-proxy.conf-opkg; URL="https://github.com/spatiumstas/tg-ws-proxy-go/releases/download/${TG_MTProto}/tg-ws-proxy_${TG_MTProto}-${GO_SUF}_openwrt_${ARCH_FULL}.${RAZ}"
- update_packages || return; FILE_NAME_GO="$(basename "$URL")"; echo -e "${CYAN}Скачиваем и устанавливаем${NC} $FILE_NAME_GO"
+update_packages || return; FILE_NAME_GO="$(basename "$URL")"; echo -e "${CYAN}Скачиваем и устанавливаем${NC} $FILE_NAME_GO"
 wget -q -O "$TMP_FILE_GO" "$URL" || { echo -e "\n${RED}Ошибка скачивания $URL${NC}\n"; PAUSE; return 1; }; $INSTALL "$TMP_FILE_GO" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка установки $TMP_FILE_GO!${NC}\n"; rm -f "$TMP_FILE_GO"; PAUSE; return 1; }
 rm -f "$TMP_FILE_GO"; if ! grep -q '^SECRET=.' "$SECRET_FILE" 2>/dev/null; then echo "SECRET=$SECRET" > "$SECRET_FILE"; fi; rm -f /etc/tg-ws-proxy.conf /etc/tg-ws-proxy.conf-opkg; /etc/init.d/tg-ws-proxy enable >/dev/null 2>&1; /etc/init.d/tg-ws-proxy restart >/dev/null 2>&1
 if pidof tg-ws-proxy >/dev/null 2>&1; then echo -e "TG WS Proxy MTProto ${GREEN}установлен!${NC}\n"; else echo -e "${RED}TG WS Proxy MTProto не установлен!${NC}\n"; fi; PAUSE; }
@@ -1268,10 +1268,8 @@ remove_TG_PKG() { echo -e "\n${MAGENTA}Удаляем TG WS Proxy MTProto${NC}";
 menu_TG() { while true; do SECRET="$(head -c16 /dev/urandom | hexdump -e '16/1 "%02x"')"; if command -v opkg >/dev/null 2>&1; then INSTALLED_VER_GO="$(opkg list-installed 2>/dev/null | grep '^tg-ws-proxy' | awk '{print $3}' | cut -d'-' -f1)"
 else INSTALLED_VER_GO="$(apk list -I 2>/dev/null | grep '^tg-ws-proxy-' | sed -E 's/tg-ws-proxy-([0-9.]+).*/\1/')"; fi; if [ -z "$INSTALLED_VER_GO" ]; then GO_ACTION="install"; elif [ "$INSTALLED_VER_GO" != "$TG_MTProto" ]; then GO_ACTION="update"; else GO_ACTION="installed"; fi
 clear; echo -e "${MAGENTA}Меню TG WS Proxy${NC}\n"
-
 TGSTATUS=""; pidof tg-ws-proxy-go >/dev/null 2>&1 && TGSTATUS="${TGSTATUS:+$TGSTATUS/}${NC}SOCKS5${GREEN}"; pidof tg-ws-proxy >/dev/null 2>&1 && TGSTATUS="${TGSTATUS:+$TGSTATUS/}${NC}MTProto${GREEN}"; pidof tg-ws-proxy-rs >/dev/null 2>&1 && TGSTATUS="${TGSTATUS:+$TGSTATUS/}${NC}Rust${GREEN}"
 if [ -n "$TGSTATUS" ]; then echo -e "${YELLOW}TG WS Proxy:${NC} ${GREEN}запущен [${TGSTATUS}]${NC}"; else echo -e "${YELLOW}TG WS Proxy:${NC} ${RED}не установлен${NC}"; fi
-
 if [ -n "$INSTALLED_VER_GO" ]; then if [ "$GO_ACTION" = "update" ]; then echo -e "${YELLOW}TG WS Proxy MTProto версия:${NC} ${RED}$INSTALLED_VER_GO${NC}"; else echo -e "${YELLOW}TG WS Proxy MTProto версия:${NC} ${GREEN}$INSTALLED_VER_GO${NC}"; fi; fi
 if pidof tg-ws-proxy-go >/dev/null 2>&1 && [ -f "$BIN_PATH_GO" ] && [ -f "$INIT_PATH_GO" ]; then echo -e "\n${YELLOW}Настройки ${CYAN}TG WS Proxy SOCKS5${YELLOW}:${NC}\n${YELLOW}Тип прокси:${NC} SOCKS5\n${YELLOW}Хост:${NC} $LAN_IP\n${YELLOW}Порт:${NC} 1080${NC}\n${YELLOW}Ссылка для подключения:${NC}\ntg://socks?server=$LAN_IP&port=1080"; fi
 if pgrep -f tg-ws-proxy-rs >/dev/null 2>&1 && [ -f "$BIN_PATH_RS" ] && [ -f "$INIT_PATH_RS" ]; then SECRET_IN_RS="$(sed -n 's/.*--secret[[:space:]]*\([0-9a-fA-F]\{32\}\).*/\1/p' "$INIT_PATH_RS")"
