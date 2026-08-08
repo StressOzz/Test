@@ -120,8 +120,8 @@ get_ver "https://github.com/d0mhate/-tg-ws-proxy-Manager-go/releases/latest" "$T
 [ -s "$TMP_VER" ] && ZAPRET_VERSION="$(cat "$TMP_VER")"; [ -s "$TMP_VER_POD" ] && PODKOP_LATEST_VER="$(cat "$TMP_VER_POD")"; [ -s "$TMP_VER_TG_MT" ] && TG_MTProto="$(cat "$TMP_VER_TG_MT")"
 [ -s "$TMP_VER_SPL" ] && SPL_VER="$(cat "$TMP_VER_SPL")"; [ -s "$TMP_VER_TG_GO" ] && TG_GO_VERSION="$(cat "$TMP_VER_TG_GO")"; [ -s "$TMP_VER_TG_RS" ] && TG_RS_VERSION="$(cat "$TMP_VER_TG_RS")"
 
-echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test.sh)' > /usr/bin/zms; chmod +x /usr/bin/zms
-echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test.sh) "$@"' > /usr/bin/zmsA; chmod +x /usr/bin/zmsA
+echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test1.sh)' > /usr/bin/zms; chmod +x /usr/bin/zms
+echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test1.sh) "$@"' > /usr/bin/zmsA; chmod +x /usr/bin/zmsA
 
 # git="githubusercontent.com"; if ! grep -q "raw.$git" /etc/hosts; then echo -e "\n\033[1;36mДля корректной работы скрипта добавляем домены \033[0mGitHub\033[1;36m в \033[0m/etc/hosts\033[0m"
 # printf "#$git\n185.199.109.133 raw.$git release-assets.$git\n185.199.108.133 private-user-images.$git gist.$git avatars.$git\n" >> /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1; fi
@@ -185,29 +185,7 @@ echo -e "${YELLOW}Сначала настройте время!${NC}\n"; PAUSE; 
 { [ "$HOUR" -ge 0 ] && [ "$HOUR" -le 23 ]; } || { echo -e "\n${RED}Ошибка! Диапазон ${NC}0-23\n"; PAUSE; return; }; mkdir -p "$(dirname "$CRON_FILE")"; touch "$CRON_FILE"; sed -i "\|$AUTO_CRON_CMD|d" "$CRON_FILE"
 echo "0 $HOUR * * * $AUTO_CRON_CMD >/dev/null 2>&1" >> "$CRON_FILE"; /etc/init.d/cron restart >/dev/null 2>&1; echo -e "\n${GREEN}Автоподбор запланирован ежедневно в ${NC}$(printf "%02d" "$HOUR"):00${GREEN}!${NC}\n"; PAUSE; }
 disable_auto_best() { sed -i "\|$AUTO_CRON_CMD|d" "$CRON_FILE"; /etc/init.d/cron restart >/dev/null 2>&1; echo -e "\n${GREEN}Автоподбор отключен!${NC}\n"; PAUSE; }
-run_auto_best_background() {
-    echo -e "\n${MAGENTA}Запускаем автоподбор в фоне${NC}"
-    rm -f "$AUTO_LOCK"
-    $AUTO_CRON_CMD >/dev/null 2>&1 &
-
-    echo -en "${CYAN}Ожидаем запуск процесса${NC}"
-    _i=0
-    while [ ! -f "$AUTO_LOCK" ] && [ "$_i" -lt 20 ]; do
-        sleep 1
-        _i=$((_i + 1))
-    done
-    echo
-
-    if auto_best_running; then
-        echo -e "${GREEN}Автоподбор в фоне запущен!${NC}\n"
-    else
-        echo -e "${YELLOW}Процесс запускается медленнее обычного, статус обновится при следующем открытии меню${NC}\n"
-    fi
-    PAUSE
-}
-
-
-
+run_auto_best_background() { echo -e "\n${MAGENTA}Запускаем автоподбор в фоне${NC}"; rm -f "$AUTO_LOCK"; $AUTO_CRON_CMD >/dev/null 2>&1 & echo -en "${CYAN}Ожидаем запуск процесса${NC}"; _i=0; while [ ! -f "$AUTO_LOCK" ] && [ "$_i" -lt 20 ]; do sleep 1; _i=$((_i + 1)); done; echo; if auto_best_running; then echo -e "${GREEN}Автоподбор в фоне запущен!${NC}\n"; else echo -e "${YELLOW}Процесс запускается медленнее обычного, статус обновится при следующем открытии меню${NC}\n"; fi; PAUSE; }
 AUTO_BEST_MENU() { [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }; if ! ( [ "$PKG_IS_APK" = "1" ] && apk info -e zoneinfo-core zoneinfo-europe zoneinfo-asia >/dev/null 2>&1 || opkg status zoneinfo-core zoneinfo-europe zoneinfo-asia >/dev/null 2>&1 )
 then echo -e "\n${MAGENTA}Устанавливаем пакеты с часовыми поясами${NC}"; update_packages; $INSTALL zoneinfo-core zoneinfo-europe zoneinfo-asia >/dev/null 2>&1; echo -e "${GREEN}Пакеты с часовыми поясами установлены${NC}\n"; PAUSE; fi
 while true; do clear; echo -e "${MAGENTA}Меню автоподбора стратегий по расписанию${NC}\n"; echo -e "${YELLOW}Текущее время на роутере:${NC} ${CYAN}$(date '+%H:%M:%S')${NC}"; if auto_best_running; then RUNNING=1
@@ -581,7 +559,7 @@ elif grep -q "cloudflare-dns.com" "$fileDoH" && grep -q "dns.google" "$fileDoH";
 elif grep -q "dns.google" "$fileDoH"; then DOH_STATUS="Google"; elif grep -q "dns.astracat.ru" "$fileDoH"; then DOH_STATUS="dns.astracat.ru"; elif grep -q "dns.nullsproxy.com" "$fileDoH"; then DOH_STATUS="dns.nullsproxy.com"; else DOH_STATUS="установлен"; fi; }
 D_o_H(){ if { [ "$PKG_IS_APK" -eq 1 ] && apk info -e https-dns-proxy >/dev/null 2>&1; } || { [ "$PKG_IS_APK" -eq 0 ] && opkg list-installed | grep -q '^https-dns-proxy '; }; then echo -e "\n${MAGENTA}Удаляем DNS over HTTPS${NC}\n${CYAN}Удаляем пакеты${NC}"
 $DELETE https-dns-proxy luci-app-https-dns-proxy >/dev/null 2>&1; echo -e "${CYAN}Удаляем файлы конфигурации${NC}"; rm -f /etc/config/https-dns-proxy /etc/init.d/https-dns-proxy; echo -e "DNS over HTTPS${GREEN} удалён!${NC}\n"; PAUSE
-else echo -e "\n${MAGENTA}Устанавливаем DNS over HTTPS${NC}"; update_packages || return; echo -e "${CYAN}Устанавливаем ${NC}https-dns-proxy"
+else echo -e "\n${MAGENTA}Устанавливаем DNS over HTTPS${NC}"; update_packages || return; if pkg_is_installed netshift; then echo -e "\n${RED}Обнаружен ${NC}NetShift${RED}!"; echo -e "${YELLOW}Удалите ${NC}NetShift\n"; PAUSE; return; fi; echo -e "${CYAN}Устанавливаем ${NC}https-dns-proxy"
 $INSTALL https-dns-proxy >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при установке!${NC}\n"; PAUSE; return; }; echo -e "${CYAN}Устанавливаем ${NC}luci-app-https-dns-proxy"; $INSTALL luci-app-https-dns-proxy >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при установке!${NC}\n"; PAUSE; return; }; echo -e "DNS over HTTPS${GREEN} установлен!${NC}\n"; PAUSE; fi; }
 doh_install() { [ -f "$fileDoH" ] && return 0; echo -e "\n${RED}DNS over HTTPS не установлен!${NC}\n"; PAUSE; return 1; }
 doh_set=$(printf "%s\n" "config main 'config'" "	option canary_domains_icloud '1'" "	option canary_domains_mozilla '1'" "	option dnsmasq_config_update '*'" "	option force_dns '1'" "	option notrack_dns '1'" "	list force_dns_port '53'" "	list force_dns_port '853'" "	list force_dns_src_interface 'lan'" "	option procd_trigger_wan6 '0'" "	option heartbeat_domain 'heartbeat.mossdef.org'" "	option heartbeat_sleep_timeout '10'" "	option heartbeat_wait_timeout '10'" "	option user 'nobody'" "	option group 'nogroup'" "	option listen_addr '127.0.0.1'" "	option force_ip_family 'auto'")
@@ -800,15 +778,12 @@ echo -en "\n${YELLOW}Выберите зеркало: ${NC}"; read -r z; case "$
 # УСТАНОВКА RUST
 get_arch_RS() { case "$ARCH" in aarch64*) echo "tg-ws-proxy-aarch64-unknown-linux-musl" ;; x86_64) echo "tg-ws-proxy-x86_64-unknown-linux-musl" ;; arm*) echo "tg-ws-proxy-armv7-unknown-linux-musleabihf" ;; mipsel*) echo "tg-ws-proxy-mipsel-unknown-linux-musl" ;; mips*) echo "tg-ws-proxy-mips-unknown-linux-musl" ;; *) echo -e "\n${RED}Архитектура не поддерживается: ${NC}$ARCH\n"; PAUSE; return 1 ;; esac; }
 delete_TG_RS() { echo -e "\n${MAGENTA}Удаляем TG WS Proxy Rust${NC}"; /etc/init.d/tg-ws-proxy-rs stop >/dev/null 2>&1; /etc/init.d/tg-ws-proxy-rs disable >/dev/null 2>&1; rm -f "$BIN_PATH_RS" "$INIT_PATH_RS" "$BIN_VER_RS"; echo -e "TG WS Proxy Rust ${GREEN}удалён!${NC}\n"; PAUSE; }
-
-
 install_TG_RS() { echo -e "\n${MAGENTA}Устанавливаем TG WS Proxy Rust${NC}"; ARCH_FILE_RS="$(get_arch_RS)" || return 1; echo -e "${CYAN}Скачиваем и устанавливаем${NC} $ARCH_FILE_RS"; DOWNLOAD_URL_RS="https://github.com/valnesfjord/tg-ws-proxy-rs/releases/download/v${TG_RS_VERSION}/${ARCH_FILE_RS}.tar.gz"
 curl -L --fail -o "$TMP_ARCHIVE_RS" "$DOWNLOAD_URL_RS" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка скачивания${NC}\n"; PAUSE; return 1; }; rm -rf "$TMP_DIR_RS"; mkdir -p "$TMP_DIR_RS"; tar -xzf "$TMP_ARCHIVE_RS" -C "$TMP_DIR_RS" || { echo -e "\n${RED}Ошибка распаковки${NC}\n"
 rm -f "$TMP_ARCHIVE_RS"; PAUSE; return 1; }; rm -f "$BIN_PATH_RS"; mv "$TMP_DIR_RS"/tg-ws-proxy* "$BIN_PATH_RS" || { echo -e "\n${RED}Ошибка установки бинарника${NC}\n"; rm -rf "$TMP_DIR_RS" "$TMP_ARCHIVE_RS"; PAUSE; return 1; }
 chmod +x "$BIN_PATH_RS"; rm -rf "$TMP_DIR_RS" "$TMP_ARCHIVE_RS"; echo "$TG_RS_VERSION" > "$BIN_VER_RS"; if [ ! -f "$INIT_PATH_RS" ]; then
 printf '#!/bin/sh /etc/rc.common\nSTART=99\nUSE_PROCD=1\n\nstart_service() {\n    procd_open_instance\n    procd_set_param command /usr/bin/tg-ws-proxy-rs --host 0.0.0.0 --port 2443 --secret %s --default-domains --cf-balance --cf-priority\n    procd_set_param respawn\n    procd_close_instance\n}\n' "$SECRET" > "$INIT_PATH_RS"
 chmod +x "$INIT_PATH_RS"; "$INIT_PATH_RS" enable >/dev/null 2>&1; fi; "$INIT_PATH_RS" restart >/dev/null 2>&1; if pidof tg-ws-proxy-rs >/dev/null 2>&1; then echo -e "TG WS Proxy Rust ${GREEN}установлен!${NC}\n"; else echo -e "${RED}TG WS Proxy Rust не запущен!${NC}\n"; fi; PAUSE; }
-
 # УСТАНОВКА SOCKS5
 get_arch_GO() { case "$ARCH" in aarch64*) echo "tg-ws-proxy-openwrt-aarch64" ;; arm*) echo "tg-ws-proxy-openwrt-armv7" ;; mipsel*) echo "tg-ws-proxy-openwrt-mipsel_24kc" ;; mips*) echo "tg-ws-proxy-openwrt-mips_24kc" ;; x86_64) echo "tg-ws-proxy-openwrt-x86_64" ;; *) echo -e "\n${RED}Архитектура не поддерживается: ${NC}$ARCH\n"; PAUSE; return 1 ;; esac; }
 delete_TG_GO() { echo -e "\n${MAGENTA}Удаляем TG WS Proxy SOCKS5${NC}"; /etc/init.d/tg-ws-proxy-go stop >/dev/null 2>&1; /etc/init.d/tg-ws-proxy-go disable >/dev/null 2>&1; rm -f "$BIN_PATH_GO" "$INIT_PATH_GO" "$BIN_VER_GO"; echo -e "TG WS Proxy SOCKS5 ${GREEN}удалён!${NC}\n"; PAUSE; }
@@ -816,7 +791,6 @@ install_TG_GO() { echo -e "\n${MAGENTA}Устанавливаем TG WS Proxy SO
 curl -L --fail -o "$BIN_PATH_GO" "$DOWNLOAD_URL_GO" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка скачивания${NC}\n"; rm -f "$BIN_PATH_GO"; PAUSE; return 1; }; chmod +x "$BIN_PATH_GO"; echo "$TG_GO_VERSION" > "$BIN_VER_GO"; if [ ! -f "$INIT_PATH_GO" ]; then
 printf '#!/bin/sh /etc/rc.common\nSTART=99\nUSE_PROCD=1\n\nstart_service() {\n    procd_open_instance\n    procd_set_param command /usr/bin/tg-ws-proxy-go --host 0.0.0.0 --port 2080 --cf-proxy --cf-proxy-first --cf-balance\n    procd_set_param respawn\n    procd_close_instance\n}\n' > "$INIT_PATH_GO"
 chmod +x "$INIT_PATH_GO"; "$INIT_PATH_GO" enable >/dev/null 2>&1; fi; "$INIT_PATH_GO" restart >/dev/null 2>&1; if pidof tg-ws-proxy-go >/dev/null 2>&1; then echo -e "TG WS Proxy SOCKS5 ${GREEN}установлен!${NC}\n"; else echo -e "${RED}TG WS Proxy SOCKS5 не запущен!${NC}\n"; fi; PAUSE; }
-
 # УСТАНОВКА MTProto
 install_update_TG_PKG() { AVAILABLE_SPACE=$(df /overlay 2>/dev/null | awk 'NR==2 {print $4}'); [ -z "$AVAILABLE_SPACE" ] && AVAILABLE_SPACE=$(df / 2>/dev/null | awk 'NR==2 {print $4}'); REQUIRED_SPACE=10000; if [ "$AVAILABLE_SPACE" -lt "$REQUIRED_SPACE" ]
 then echo -e "\n${RED}Недостаточно свободного места${NC}\n"; echo -e "${YELLOW}Доступно: ${NC}$((AVAILABLE_SPACE/1024)) MB\n${YELLOW}Требуется: ${NC}$((REQUIRED_SPACE/1024)) MB\n"; PAUSE; return; fi
@@ -826,6 +800,7 @@ wget -q -O "$TMP_FILE_GO" "$URL" || { echo -e "\n${RED}Ошибка скачив
 rm -f "$TMP_FILE_GO"; if ! grep -q '^SECRET=.' "$SECRET_FILE" 2>/dev/null; then echo "SECRET=$SECRET" > "$SECRET_FILE"; fi; rm -f /etc/tg-ws-proxy.conf /etc/tg-ws-proxy.conf-opkg; /etc/init.d/tg-ws-proxy enable >/dev/null 2>&1; /etc/init.d/tg-ws-proxy restart >/dev/null 2>&1
 if pidof tg-ws-proxy >/dev/null 2>&1; then echo -e "TG WS Proxy MTProto ${GREEN}установлен!${NC}\n"; else echo -e "${RED}TG WS Proxy MTProto не установлен!${NC}\n"; fi; PAUSE; }
 remove_TG_PKG() { echo -e "\n${MAGENTA}Удаляем TG WS Proxy MTProto${NC}"; /etc/init.d/tg-ws-proxy stop >/dev/null 2>&1; /etc/init.d/tg-ws-proxy disable >/dev/null 2>&1; $DELETE tg-ws-proxy >/dev/null 2>&1; rm -rf /etc/tg-ws-proxy /etc/tg-ws-proxy.conf /etc/tg-ws-proxy.conf-opkg; echo -e "TG WS Proxy MTProto ${GREEN}удалён!${NC}\n"; PAUSE; }
+# МЕНЮ
 menu_TG() { while true; do SECRET="$(head -c16 /dev/urandom | hexdump -e '16/1 "%02x"')"; get_TG_versions; if command -v opkg >/dev/null 2>&1; then INSTALLED_VER_MT="$(opkg list-installed 2>/dev/null | grep '^tg-ws-proxy' | awk '{print $3}' | cut -d'-' -f1)"; else INSTALLED_VER_MT="$(apk list -I 2>/dev/null | grep '^tg-ws-proxy-' | sed -E 's/tg-ws-proxy-([0-9.]+).*/\1/')"; fi
 if [ -z "$INSTALLED_VER_MT" ]; then MT_ACTION="install"; elif [ "$INSTALLED_VER_MT" != "$TG_MTProto" ]; then MT_ACTION="update"; else MT_ACTION="installed"; fi; if [ -f "$BIN_PATH_GO" ] && [ -f "$INIT_PATH_GO" ]; then if [ -n "$INSTALLED_VER_GO" ] && [ "$INSTALLED_VER_GO" = "$TG_GO_VERSION" ]; then GO_ACTION="installed"; else GO_ACTION="update"; fi; else GO_ACTION="install"; fi
 if [ -f "$BIN_PATH_RS" ] && [ -f "$INIT_PATH_RS" ]; then if [ -n "$INSTALLED_VER_RS" ] && [ "$INSTALLED_VER_RS" = "$TG_RS_VERSION" ]; then RS_ACTION="installed"; else RS_ACTION="update"; fi; else RS_ACTION="install"; fi; clear; echo -e "${MAGENTA}Меню TG WS Proxy${NC}\n"; TGSTATUS=""; pidof tg-ws-proxy-go >/dev/null 2>&1 && TGSTATUS="${TGSTATUS:+$TGSTATUS/}${NC}SOCKS5${GREEN}"
