@@ -108,8 +108,8 @@ get_ver "https://github.com/yandexru45/netshift/releases/latest" "$TMP_VER_POD" 
 # [ -s "$TMP_MAG_VER" ] && MT_VERSION="$(cat "$TMP_MAG_VER")"
 [ -s "$TMP_VER" ] && ZAPRET_VERSION="$(cat "$TMP_VER")"; [ -s "$TMP_VER_POD" ] && PODKOP_LATEST_VER="$(cat "$TMP_VER_POD")"; [ -s "$TMP_VER_TG_MT" ] && TG_MTProto="$(cat "$TMP_VER_TG_MT")"; [ -s "$TMP_VER_SPL" ] && SPL_VER="$(cat "$TMP_VER_SPL")"
 
-echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test9.sh)' > /usr/bin/zms; chmod +x /usr/bin/zms
-echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test9.sh) "$@"' > /usr/bin/zmsA; chmod +x /usr/bin/zmsA
+echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test10.sh)' > /usr/bin/zms; chmod +x /usr/bin/zms
+echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test10.sh) "$@"' > /usr/bin/zmsA; chmod +x /usr/bin/zmsA
 
 # git="githubusercontent.com"; if ! grep -q "raw.$git" /etc/hosts; then echo -e "\n\033[1;36mДля корректной работы скрипта добавляем домены \033[0mGitHub\033[1;36m в \033[0m/etc/hosts\033[0m"
 # printf "#$git\n185.199.109.133 raw.$git release-assets.$git\n185.199.108.133 private-user-images.$git gist.$git avatars.$git\n" >> /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1; fi
@@ -122,9 +122,6 @@ MSG=0; for f in stun2.bin quic_initial_tencent_com.bin quic_initial_steamcommuni
 AUTO_RESULTS="/opt/zapret/tmp/results_auto.txt"; AUTO_BACK="$TMP_SF/zapret_auto_back.txt"
 AUTO_LOG="/opt/zapret/tmp/auto_best.log"; AUTO_CRON_CMD="/usr/bin/zmsA --auto-best"
 AUTO_LOCK="/tmp/zapret_auto_best.lock"; AUTO_STOP_FLAG="$TMP_SF/zapret_auto_best.stop"
-
-LINECR=$(auto_best_cron_line)
-HOURC=$(echo "$LINECR" | awk '{print $2}')
 
 sync_ntp() {
     echo -e "\n${MAGENTA}Синхронизируем время через NTP${NC}"
@@ -500,6 +497,8 @@ sort_results_desc "$AUTO_RESULTS" "$AUTO_RESULTS"
 }
 
 auto_best_cron_line() { grep -F "$AUTO_CRON_CMD" "$CRON_FILE" 2>/dev/null | head -n1; }
+LINECR=$(auto_best_cron_line)
+HOURC=$(echo "$LINECR" | awk '{print $2}')
 
 set_auto_best_time() {
     CUR_YEAR=$(date '+%Y')
