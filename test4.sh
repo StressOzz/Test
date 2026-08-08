@@ -3,6 +3,10 @@
 # Zapret Manager by StressOzz
 # =========================================
 ZAPRET_MANAGER_VERSION="9.80"; STR_VERSION_AUTOINSTALL="v7"
+
+ZAPRET_VERSION="72.20260307"; PODKOP_LATEST_VER="0.9.6"; TG_MTProto="0.9.3"; MT_VERSION="0.8.2"
+SPL_VER="26.8.1.3"; TG_GO_VERSION="1.4.1"; TG_RS_VERSION="2.1.2"; BYEDPI_LATEST_VER="0.17.3"
+
 OWRTAWG=$(grep '^DISTRIB_RELEASE=' /etc/openwrt_release | cut -d"'" -f2); ARCHAWG="$(grep DISTRIB_ARCH /etc/openwrt_release | cut -d"'" -f2)_$(grep DISTRIB_TARGET /etc/openwrt_release | cut -d"'" -f2 | tr '/' '_')" 
 CRON_CMD="/etc/init.d/mihomo restart"; CONFIGPATH="/etc/magitrickle/state/config.yaml"; PACKAGES_UPDATED=0
 FLOWSEAL_STR_ZIP="https://github.com/Flowseal/zapret-discord-youtube/archive/refs/heads/main.zip"
@@ -86,9 +90,11 @@ REPO="xyzmean/splify"; WARP_EP="engage.cloudflareclient.com:4500"; WARP_IFACE="w
 AWG_JC=4; AWG_JMIN=40; AWG_JMAX=70; AWG_H1=1; AWG_H2=2; AWG_H3=3; AWG_H4=4; AWG_S1=0; AWG_S2=0; AWG_JMAX=70; AWG_H1=1; AWG_H2=2; AWG_H3=3; AWG_H4=4; AWG_S1=0; AWG_S2=0
 AWG_I1="<b 0xce000000010897a297ecc34cd6dd000044d0ec2e2e1ea2991f467ace4222129b5a098823784694b4897b9986ae0b7280135fa85e196d9ad980b150122129ce2a9379531b0fd3e871ca5fdb883c369832f730e272d7b8b74f393f9f0fa43f11e510ecb2219a52984410c204cf875585340c62238e14ad04dff382f2c200e0ee22fe743b9c6b8b043121c5710ec289f471c91ee414fca8b8be8419ae8ce7ffc53837f6ade262891895f3f4cecd31bc93ac5599e18e4f01b472362b8056c3172b513051f8322d1062997ef4a383b01706598d08d48c221d30e74c7ce000cdad36b706b1bf9b0607c32ec4b3203a4ee21ab64df336212b9758280803fcab14933b0e7ee1e04a7becce3e2633f4852585c567894a5f9efe9706a151b615856647e8b7dba69ab357b3982f554549bef9256111b2d67afde0b496f16962d4957ff654232aa9e845b61463908309cfd9de0a6abf5f425f577d7e5f6440652aa8da5f73588e82e9470f3b21b27b28c649506ae1a7f5f15b876f56abc4615f49911549b9bb39dd804fde182bd2dcec0c33bad9b138ca07d4a4a1650a2c2686acea05727e2a78962a840ae428f55627516e73c83dd8893b02358e81b524b4d99fda6df52b3a8d7a5291326e7ac9d773c5b43b8444554ef5aea104a738ed650aa979674bbed38da58ac29d87c29d387d80b526065baeb073ce65f075ccb56e47533aef357dceaa8293a523c5f6f790be90e4731123d3c6152a70576e90b4ab5bc5ead01576c68ab633ff7d36dcde2a0b2c68897e1acfc4d6483aaaeb635dd63c96b2b6a7a2bfe042f6aed82e5363aa850aace12ee3b1a93f30d8ab9537df483152a5527faca21efc9981b304f11fc95336f5b9637b174c5a0659e2b22e159a9fed4b8e93047371175b1d6d9cc8ab745f3b2281537d1c75fb9451871864efa5d184c38c185fd203de206751b92620f7c369e031d2041e152040920ac2c5ab5340bfc9d0561176abf10a147287ea90758575ac6a9f5ac9f390d0d5b23ee12af583383d994e22c0cf42383834bcd3ada1b3825a0664d8f3fb678261d57601ddf94a8a68a7c273a18c08aa99c7ad8c6c42eab67718843597ec9930457359dfdfbce024afc2dcf9348579a57d8d3490b2fa99f278f1c37d87dad9b221acd575192ffae1784f8e60ec7cee4068b6b988f0433d96d6a1b1865f4e155e9fe020279f434f3bf1bd117b717b92f6cd1cc9bea7d45978bcc3f24bda631a36910110a6ec06da35f8966c9279d130347594f13e9e07514fa370754d1424c0a1545c5070ef9fb2acd14233e8a50bfc5978b5bdf8bc1714731f798d21e2004117c61f2989dd44f0cf027b27d4019e81ed4b5c31db347c4a3a4d85048d7093cf16753d7b0d15e078f5c7a5205dc2f87e330a1f716738dce1c6180e9d02869b5546f1c4d2748f8c90d9693cba4e0079297d22fd61402dea32ff0eb69ebd65a5d0b687d87e3a8b2c42b648aa723c7c7daf37abcc4bb85caea2ee8f55bec20e913b3324ab8f5c3304f820d42ad1b9f2ffc1a3af9927136b4419e1e579ab4c2ae3c776d293d397d575df181e6cae0a4ada5d67ecea171cca3288d57c7bbdaee3befe745fb7d634f70386d873b90c4d6c6596bb65af68f9e5121e67ebf0d89d3c909ceedfb32ce9575a7758ff080724e1ab5d5f43074ecb53a479af21ed03d7b6899c36631c0166f9d47e5e1d4528a5d3d3f744029c4b1c190cbfbad06f5f83f7ad0429fa9a2719c56ffe3783460e166de2d8>"
 
+LOCAL_ARCH="$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release)"
+
 if command -v opkg >/dev/null 2>&1; then PKG="opkg"; GO_SUF="1"; CONFZ="/etc/opkg/distfeeds.conf"; PKG_IS_APK=0; UPDATE="opkg update"; INSTALL="opkg install"
-DELETE="opkg remove"; ARCH="$(opkg print-architecture | awk '{print $2}' | tail -n1)"; VER_SUF="r1-all"; SUF_MT=""; SPL_SUF="all"
-RAZ="ipk"; TMP_FILE_GO="/tmp/tg-ws-proxy.ipk"; else PKG="apk"; GO_SUF="r1"; CONFZ="/etc/apk/repositories.d/distfeeds.list"; PKG_IS_APK=1; SPL_SUF="noarch"
+DELETE="opkg remove"; ARCH="$(opkg print-architecture | awk '{print $2}' | tail -n1)"; VER_SUF="r1-all"; SUF_MT=""; SPL_SUF="all"; RELEASE_TAG="v${BYEDPI_LATEST_VER}-24.10"
+RAZ="ipk"; TMP_FILE_GO="/tmp/tg-ws-proxy.ipk"; else PKG="apk"; GO_SUF="r1"; CONFZ="/etc/apk/repositories.d/distfeeds.list"; PKG_IS_APK=1; SPL_SUF="noarch"; RELEASE_TAG="v${BYEDPI_LATEST_VER}-25.12"
 UPDATE="apk update"; INSTALL="apk add --allow-untrusted"; DELETE="apk del"; ARCH="$(apk --print-arch 2>/dev/null)"; RAZ="apk"; VER_SUF="r1"; SUF_MT="r"; TMP_FILE_GO="/tmp/tg-ws-proxy.apk"; fi
 
 update_packages(){ [ "$PACKAGES_UPDATED" = "1" ] && return 0; echo -e "${CYAN}Обновляем список пакетов${NC}"; $UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка обновления списка пакетов!${NC}\n"; PAUSE; return 1; }; PACKAGES_UPDATED=1; }
@@ -97,7 +103,6 @@ if ! curl --version >/dev/null 2>&1; then clear; echo -e "curl ${RED}отсут�
 $DELETE curl libcurl >/dev/null 2>&1; echo -e "${CYAN}Обновляем список пакетов${NC}"; if ! $UPDATE >/dev/null 2>&1; then echo -e "\n${RED}Ошибка обновления списка пакетов!!${NC}\n"; else PACKAGES_UPDATED=1; fi
 echo -e "${CYAN}Устанавливаем ${NC}curl"; if ! $INSTALL libcurl curl >/dev/null 2>&1; then echo -e "\n${RED}Не удалось установить curl!${NC}\n"; PAUSE; fi; fi
 
-ZAPRET_VERSION="72.20260307"; PODKOP_LATEST_VER="0.9.6"; TG_MTProto="0.9.3"; MT_VERSION="0.8.2"; SPL_VER="26.8.1.3"; TG_GO_VERSION="1.4.1"; TG_RS_VERSION="2.0.0"
 
 get_ver() {
     URL="$1"
@@ -134,10 +139,12 @@ TMP_VER_TG_GO="/tmp/tg_ws_proxy_GO_ver"
 TMP_VER_TG_RS="/tmp/tg_ws_proxy_RS_ver"
 TMP_MAG_VER="/tmp/MagiTrickle_version"
 TMP_VER_SPL="/tmp/splify_version"
+TMP_VER_BYEDPI="/tmp/byedpi_version"
 
 # get_ver "https://github.com/MagiTrickle/MagiTrickle/releases/latest" "$TMP_MAG_VER" "MagiTrickle" &
 # get_ver "https://github.com/spatiumstas/tg-ws-proxy-go/releases/latest" "$TMP_VER_TG_MT" "TG-WS Proxy MTProto" &
 
+get_ver "https://github.com/DPITrickster/ByeDPI-OpenWrt/releases/latest" "$TMP_VER_BYEDPI" "ByeDPI" &
 get_ver "https://github.com/yandexru45/netshift/releases/latest" "$TMP_VER_POD" "NetShift" &
 get_ver "https://github.com/remittor/zapret-openwrt/releases/latest" "$TMP_VER" "Zapret" &
 get_ver "https://github.com/xyzmean/splify/releases/latest" "$TMP_VER_SPL" "splify" &
@@ -145,7 +152,8 @@ get_ver "https://github.com/d0mhate/-tg-ws-proxy-Manager-go/releases/latest" "$T
 get_ver "https://github.com/valnesfjord/tg-ws-proxy-rs/releases/latest" "$TMP_VER_TG_RS" "TG-WS Proxy Rust" &
 wait
 
-# [ -s "$TMP_MAG_VER" ] && MT_VERSION="$(cat "$TMP_MAG_VER")"
+[ -s "$TMP_MAG_VER" ] && MT_VERSION="$(cat "$TMP_MAG_VER")"
+[ -s "$TMP_VER_BYEDPI" ] && BYEDPI_LATEST_VER="$(cat "$TMP_VER_BYEDPI")"
 [ -s "$TMP_VER" ] && ZAPRET_VERSION="$(cat "$TMP_VER")"
 [ -s "$TMP_VER_POD" ] && PODKOP_LATEST_VER="$(cat "$TMP_VER_POD")"
 [ -s "$TMP_VER_TG_MT" ] && TG_MTProto="$(cat "$TMP_VER_TG_MT")"
@@ -764,7 +772,7 @@ NFQ_ALL=${NFQ_ALL:-0}; NFQ_STAT=""; if [ "$NFQ_ALL" -gt 0 ]; then [ "$NFQ_RUN" -
 # Установка Zapret
 # ==========================================
 install_pkg() { local display_name="$1"; local pkg_file="$2"; echo -e "${CYAN}Устанавливаем ${NC}$display_name"; $INSTALL $pkg_file >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить ${NC}$display_name\n"; PAUSE; return 1; }; }
-install_Zapret() { get_versions; LOCAL_ARCH=$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release); LATEST_URL="https://github.com/remittor/zapret-openwrt/releases/download/v${ZAPRET_VERSION}/zapret_v${ZAPRET_VERSION}_${LOCAL_ARCH}.zip"
+install_Zapret() { get_versions; LATEST_URL="https://github.com/remittor/zapret-openwrt/releases/download/v${ZAPRET_VERSION}/zapret_v${ZAPRET_VERSION}_${LOCAL_ARCH}.zip"
 mkdir -p "$TMP_SF"; local NO_PAUSE=$1; [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ] && { echo -e "\n${GREEN}Zapret уже установлен!${NC}\n"; [ "$NO_PAUSE" != "1" ] && PAUSE; return; }; [ "$NO_PAUSE" != "1" ] && echo; echo -e "${MAGENTA}Устанавливаем Zapret${NC}"
 if [ -f /etc/init.d/zapret ]; then echo -e "${CYAN}Останавливаем ${NC}zapret"; /etc/init.d/zapret stop >/dev/null 2>&1; for pid in $(pgrep -f /opt/zapret 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done; fi;  update_packages || return
 rm -f "$TMP_SF"/* 2>/dev/null; cd "$TMP_SF" || return; FILE_NAME=$(basename "$LATEST_URL"); if ! command -v unzip >/dev/null 2>&1; then echo -e "${CYAN}Устанавливаем ${NC}unzip";  update_packages || return; $INSTALL unzip >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить ${NC}unzip\n"; PAUSE; return; }; fi
@@ -1818,39 +1826,23 @@ fi; echo -e "${CYAN}Запускаем ${NC}NetShift${NC}"; netshift enable >/de
 # ByeDPI
 # ==========================================
 
-BYEDPI_VER="0.17.3"
 BYEDPI_DNS_BACKUP="/etc/byedpi_dns_localuse"
 
 BYEDPI_STATUS() {
     if pkg_is_installed byedpi; then
-        BYEDPI_INSTALLED_VER="$(
-            if [ "$PKG_IS_APK" -eq 1 ]; then
-                apk info -e byedpi 2>/dev/null
-                apk list -I 2>/dev/null |
-                    grep '^byedpi-' |
-                    head -1 |
-                    sed -E 's/^byedpi-//;s/-r[0-9]+.*//'
-            else
-                opkg list-installed 2>/dev/null |
-                    awk '$1=="byedpi" {print $3}' |
-                    sed 's/-r[0-9]\+$//'
-            fi
-        )"
-
-        [ -z "$BYEDPI_INSTALLED_VER" ] &&
-            BYEDPI_INSTALLED_VER="$BYEDPI_VER"
-
-        if [ "$BYEDPI_INSTALLED_VER" = "$BYEDPI_VER" ]; then
-            BYEDPI_STATUS="${GREEN}${BYEDPI_INSTALLED_VER}${NC}"
+        if [ "$PKG_IS_APK" -eq 1 ]; then
+            LOCAL_BYEDPI="$(apk list -I 2>/dev/null | grep '^byedpi-' | head -1 | sed -E 's/^byedpi-//;s/-r[0-9]+.*//')"
         else
-            BYEDPI_STATUS="${RED}${BYEDPI_INSTALLED_VER} (устарела)${NC}"
+            LOCAL_BYEDPI="$(opkg list-installed 2>/dev/null | awk '$1=="byedpi" {print $3}' | sed 's/-r[0-9]\+$//')"
         fi
+
+        [ "$LOCAL_BYEDPI" = "$BYEDPI_LATEST_VER" ] &&
+            BYEDPI_STATUS="${GREEN}${LOCAL_BYEDPI}${NC}" ||
+            BYEDPI_STATUS="${RED}${LOCAL_BYEDPI} (версия устарела)${NC}"
     else
-        BYEDPI_INSTALLED_VER=""
         BYEDPI_STATUS="${RED}не установлен${NC}"
     fi
 }
-
 
 # ------------------------------------------
 # Сохранение localuse перед интеграцией
@@ -1912,21 +1904,7 @@ BYEDPI_INSTALL() {
     rm -rf "$tmpDIR"
     mkdir -p "$tmpDIR"
 
-    LOCAL_ARCH="$(
-        awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release
-    )"
-
-    if [ "$PKG_IS_APK" -eq 1 ]; then
-        RELEASE_TAG="v${BYEDPI_VER}-25.12"
-        PKG_EXT="apk"
-        INSTALL_BYEDPI="$INSTALL"
-    else
-        RELEASE_TAG="v${BYEDPI_VER}-24.10"
-        PKG_EXT="ipk"
-        INSTALL_BYEDPI="$INSTALL"
-    fi
-
-    BYEDPI_FILE="byedpi_${BYEDPI_VER}-r1_${LOCAL_ARCH}.${PKG_EXT}"
+    BYEDPI_FILE="byedpi_${BYEDPI_LATEST_VER}-r1_${LOCAL_ARCH}.${RAZ}"
 
     BYEDPI_URL="https://github.com/DPITrickster/ByeDPI-OpenWrt/releases/download/${RELEASE_TAG}/${BYEDPI_FILE}"
 
@@ -1947,7 +1925,7 @@ BYEDPI_INSTALL() {
 
     echo -e "${CYAN}Устанавливаем ${NC}ByeDPI"
 
-    if ! $INSTALL_BYEDPI "$BYEDPI_FILE" >/dev/null 2>&1; then
+    if ! $INSTALL "$BYEDPI_FILE" >/dev/null 2>&1; then
         echo -e "\n${RED}Не удалось установить ByeDPI!${NC}"
         rm -rf "$tmpDIR"
         PAUSE
@@ -2123,6 +2101,39 @@ EOF
 }
 
 
+fix_strategy() {
+    echo -e "\n${MAGENTA}Изменение стратегии ByeDPI${NC}"
+
+    if [ ! -f /etc/config/byedpi ]; then
+        echo -e "\n${RED}ByeDPI не установлен!${NC}"
+        PAUSE
+        return
+    fi
+
+    CURRENT_STRATEGY="$(grep "option cmd_opts" /etc/config/byedpi | sed -E "s/.*'(.+)'/\1/")"
+    [ -z "$CURRENT_STRATEGY" ] && CURRENT_STRATEGY="(не задана)"
+
+    echo -e "\n${GREEN}Текущая стратегия:${NC} $CURRENT_STRATEGY"
+    echo -ne "\n${YELLOW}Введите новую стратегию (Enter — оставить текущую):${NC} "
+    read -r NEW_STRATEGY
+    echo
+
+    if [ -z "$NEW_STRATEGY" ]; then
+        echo -e "${GREEN}Стратегия не изменена!${NC}"
+    else
+        sed -i "s|option cmd_opts .*|	option cmd_opts '$NEW_STRATEGY'|" /etc/config/byedpi
+        /etc/init.d/byedpi enable >/dev/null 2>&1
+        /etc/init.d/byedpi restart >/dev/null 2>&1
+        echo -e "${GREEN}Стратегия изменена на:${NC} $NEW_STRATEGY"
+    fi
+
+    PAUSE
+}
+
+
+
+
+
 # ==========================================
 # Меню NetShift
 # ==========================================
@@ -2152,6 +2163,12 @@ PODKOP_menu() {
 
         echo -e "${YELLOW}NetShift:${NC} $PODKOP_STATUS"
         echo -e "${YELLOW}ByeDPI:${NC} $BYEDPI_STATUS"
+if pkg_is_installed byedpi; then
+    CURRENT_STRATEGY="$(grep "option cmd_opts" /etc/config/byedpi 2>/dev/null | sed -E "s/.*'(.+)'/\1/")"
+    [ -z "$CURRENT_STRATEGY" ] && CURRENT_STRATEGY="(не задана)"
+
+    echo -e "${YELLOW}Стратегия ByeDPI:${NC} $CURRENT_STRATEGY"
+fi
 
         if pkg_is_installed amneziawg-tools &&
            pkg_is_installed luci-proto-amneziawg &&
@@ -2168,11 +2185,6 @@ PODKOP_menu() {
             echo -e "${YELLOW}Интерфейс AWG: ${RED}не установлен${NC}"
         fi
 
-
-        # --------------------------------------
-        # NetShift
-        # --------------------------------------
-
         if ! pkg_is_installed netshift; then
             echo -e "\n${CYAN}1) ${GREEN}Установить ${NC}NetShift"
         elif [ "$PODKOP_LATEST_VER" != "$LOCALPOD" ]; then
@@ -2182,67 +2194,48 @@ PODKOP_menu() {
         fi
 
 
-        # --------------------------------------
-        # AmneziaWG
-        # --------------------------------------
+        if pkg_is_installed byedpi; then
+            echo -e "${CYAN}2) ${GREEN}Удалить ${NC}ByeDPI"
+        else
+            echo -e "${CYAN}2) ${GREEN}Установить ${NC}ByeDPI"
+        fi
+
+
+
+
 
         if pkg_is_installed amneziawg-tools &&
            pkg_is_installed luci-proto-amneziawg &&
            pkg_is_installed kmod-amneziawg; then
 
-            echo -e "${CYAN}2) ${GREEN}Удалить ${NC}AmneziaWG"
+            echo -e "${CYAN}3) ${GREEN}Удалить ${NC}AmneziaWG"
         else
-            echo -e "${CYAN}2) ${GREEN}Установить ${NC}AmneziaWG"
+            echo -e "${CYAN}3) ${GREEN}Установить ${NC}AmneziaWG"
         fi
-
-
-        # --------------------------------------
-        # Интерфейс AWG
-        # --------------------------------------
 
         if uci -q get network.AWG >/dev/null 2>&1; then
-            echo -e "${CYAN}3) ${GREEN}Удалить ${NC}интерфейс AWG"
+            echo -e "${CYAN}4) ${GREEN}Удалить ${NC}интерфейс AWG"
         else
-            echo -e "${CYAN}3) ${GREEN}Установить ${NC}интерфейс AWG"
+            echo -e "${CYAN}4) ${GREEN}Установить ${NC}интерфейс AWG"
         fi
-
-
-        # --------------------------------------
-        # VPN подписка
-        # --------------------------------------
 
         if [ -f /etc/config/netshift ] &&
            grep -q "^[[:space:]]*option subscription_url" /etc/config/netshift; then
 
-            echo -e "${CYAN}4) ${GREEN}Сменить ${NC}VPN подписку${GREEN} в ${NC}NetShift"
+            echo -e "${CYAN}5) ${GREEN}Сменить ${NC}VPN подписку${GREEN} в ${NC}NetShift"
         else
-            echo -e "${CYAN}4) ${GREEN}Интегрировать ${NC}VPN подписку${GREEN} в ${NC}NetShift"
+            echo -e "${CYAN}5) ${GREEN}Интегрировать ${NC}VPN подписку${GREEN} в ${NC}NetShift"
         fi
 
+        echo -e "${CYAN}6) ${GREEN}Интегрировать ${NC}AWG${GREEN} в ${NC}NetShift"
 
-        # --------------------------------------
-        # AWG → NetShift
-        # --------------------------------------
-
-        echo -e "${CYAN}5) ${GREEN}Интегрировать ${NC}AWG${GREEN} в ${NC}NetShift"
-
-
-        # --------------------------------------
-        # ByeDPI install/remove
-        # --------------------------------------
-
-        if pkg_is_installed byedpi; then
-            echo -e "${CYAN}6) ${GREEN}Удалить ${NC}ByeDPI"
-        else
-            echo -e "${CYAN}6) ${GREEN}Установить ${NC}ByeDPI"
-        fi
-
-
-        # --------------------------------------
-        # ByeDPI → NetShift
-        # --------------------------------------
 
         echo -e "${CYAN}7) ${GREEN}Интегрировать ${NC}ByeDPI${GREEN} в ${NC}NetShift"
+
+if pkg_is_installed byedpi; then
+    echo -e "${CYAN}8) ${GREEN}Изменить стратегию ${NC}ByeDPI"
+fi
+
 
         echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}"
 
@@ -2256,6 +2249,10 @@ PODKOP_menu() {
                 ;;
 
             2)
+                BYEDPI_INSTALL
+                ;;
+
+            3)
                 if pkg_is_installed amneziawg-tools &&
                    pkg_is_installed luci-proto-amneziawg &&
                    pkg_is_installed kmod-amneziawg; then
@@ -2273,7 +2270,7 @@ PODKOP_menu() {
                 fi
                 ;;
 
-            3)
+            4)
                 if uci -q get network.AWG >/dev/null 2>&1; then
                     INT_DELETE
                 else
@@ -2282,22 +2279,23 @@ PODKOP_menu() {
                 fi
                 ;;
 
-            4)
+            5)
                 PODKOP_VPN
                 ;;
 
-            5)
-                integration_AWG
-                ;;
-
             6)
-                BYEDPI_INSTALL
+                integration_AWG
                 ;;
 
             7)
                 BYEDPI_NETSHIFT
                 ;;
-
+    8)
+        if pkg_is_installed byedpi; then
+            fix_strategy
+        fi
+        ;;
+		
             *)
                 return
                 ;;
