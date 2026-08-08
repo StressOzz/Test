@@ -568,20 +568,16 @@ fi
         echo -e "${MAGENTA}Меню автоподбора стратегий по расписанию${NC}\n"
         echo -e "${YELLOW}Текущее время на роутере:${NC} ${CYAN}$(date '+%H:%M:%S')${NC}"
 
-        if auto_best_running; then
-            RUNNING=1
-            echo -e "${YELLOW}Автоподбор в фоне:${NC} ${GREEN}тест выполняется${NC}"
-        else
-            RUNNING=0
-        fi
+if auto_best_running; then
+    echo -e "${YELLOW}Автоподбор стратегий:${NC} ${GREEN}выполняется в фоне${NC}"
+else
+    LINEAV=$(auto_best_cron_line)
+    HOURAV=$(echo "$LINEAV" | awk '{print $2}')
 
-        LINE=$(auto_best_cron_line)
-        if [ -n "$LINE" ]; then
-            HOUR=$(echo "$LINE" | awk '{print $2}')
-            echo -e "${YELLOW}Автоподбор:${NC} ${GREEN}ежедневно в $(printf "%02d" "$HOUR"):00${NC}"
-        else
-            echo -e "${YELLOW}Автоподбор:${NC} ${RED}отключен${NC}"
-        fi
+    if [ -n "$HOURAV" ]; then
+        echo -e "${YELLOW}Автоподбор стратегий:${NC} ${GREEN}ежедневно в ${NC}$(printf "%02d" "$HOURAV"):00"
+    fi
+fi
 
         echo -e "\n${CYAN}1) ${GREEN}$( [ -n "$LINE" ] && echo "Изменить время автоподбора по расписанию" || echo "Включить автоподбор по расписанию" )${NC}"
         [ -n "$LINE" ] && echo -e "${CYAN}2) ${GREEN}Отключить автоподбор по расписанию${NC}"
@@ -618,7 +614,7 @@ fi
             6) TIME_MENU ;;
             7) 
             
-            echo -e "\n${GREEN}Результаты теста и лог удалены${NC}\n"
+            echo -e "\n${GREEN}Результаты теста и лог удалены!${NC}\n"
             rm -rf "$AUTO_RESULTS" "$AUTO_BACK" "$AUTO_LOG" "$AUTO_LOCK" 
             PAUSE
             ;;
@@ -1361,13 +1357,13 @@ then echo -e "${YELLOW}Flow Offloading FIX:${NC} ${GREEN}включён${NC}"; f
 
 
 if auto_best_running; then
-    echo -e "${YELLOW}Автоподбор стратегий: ${NC}${GREEN}выполняется в фоне${NC}"
+    echo -e "${YELLOW}Автоподбор стратегий:${NC}${GREEN}выполняется в фоне${NC}"
 else
-    LINEM=$(auto_best_cron_line)
-    HOURM=$(echo "$LINEM" | awk '{print $2}')
+    LINEAV=$(auto_best_cron_line)
+    HOURAV=$(echo "$LINEAV" | awk '{print $2}')
 
-    if [ -n "$HOURM" ]; then
-        echo -e "${YELLOW}Автоподбор стратегий: ${NC}${GREEN}ежедневно в $(printf "%02d" "$HOURM"):00${NC}"
+    if [ -n "$HOURAV" ]; then
+        echo -e "${YELLOW}Автоподбор стратегий:${NC}${GREEN}ежедневно в ${NC}$(printf "%02d" "$HOURAV"):00"
     fi
 fi
 
