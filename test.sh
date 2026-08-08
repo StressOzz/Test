@@ -120,8 +120,8 @@ get_ver "https://github.com/d0mhate/-tg-ws-proxy-Manager-go/releases/latest" "$T
 [ -s "$TMP_VER" ] && ZAPRET_VERSION="$(cat "$TMP_VER")"; [ -s "$TMP_VER_POD" ] && PODKOP_LATEST_VER="$(cat "$TMP_VER_POD")"; [ -s "$TMP_VER_TG_MT" ] && TG_MTProto="$(cat "$TMP_VER_TG_MT")"
 [ -s "$TMP_VER_SPL" ] && SPL_VER="$(cat "$TMP_VER_SPL")"; [ -s "$TMP_VER_TG_GO" ] && TG_GO_VERSION="$(cat "$TMP_VER_TG_GO")"; [ -s "$TMP_VER_TG_RS" ] && TG_RS_VERSION="$(cat "$TMP_VER_TG_RS")"
 
-echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test1.sh)' > /usr/bin/zms; chmod +x /usr/bin/zms
-echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test1.sh) "$@"' > /usr/bin/zmsA; chmod +x /usr/bin/zmsA
+echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test.sh)' > /usr/bin/zms; chmod +x /usr/bin/zms
+echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test.sh) "$@"' > /usr/bin/zmsA; chmod +x /usr/bin/zmsA
 
 # git="githubusercontent.com"; if ! grep -q "raw.$git" /etc/hosts; then echo -e "\n\033[1;36mДля корректной работы скрипта добавляем домены \033[0mGitHub\033[1;36m в \033[0m/etc/hosts\033[0m"
 # printf "#$git\n185.199.109.133 raw.$git release-assets.$git\n185.199.108.133 private-user-images.$git gist.$git avatars.$git\n" >> /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1; fi
@@ -875,53 +875,11 @@ printf "%s\n" "list community_lists 'google_ai'" "list community_lists 'google_p
 printf "%s\n" "option user_subnet_list_type 'disabled'" "option mixed_proxy_enabled '0'" "option resolve_real_ip_for_routing '0'" "list subscription_filter_exclude_keywords '⬇️'" "list subscription_filter_exclude_keywords 'LTE'" "list subscription_filter_exclude_keywords '🇪🇺'" "list subscription_filter_exclude_keywords 'Мобильный'" "list subscription_filter_exclude_keywords 'SS'" "list subscription_filter_exclude_keywords 'Авто'" >> /etc/config/netshift
 fi; echo -e "${CYAN}Запускаем ${NC}NetShift${NC}"; netshift enable >/dev/null 2>&1; echo -e "${CYAN}Обновляем списки${NC}"; netshift list_update >/dev/null 2>&1; echo -en "${CYAN}Перезапускаем сервис${NC}\n${YELLOW}Подождите...${NC}"; netshift restart >/dev/null 2>&1; echo -e "\nVPN подписка ${GREEN}интегрирована в ${NC}NetShift${GREEN}!${NC}\n"; PAUSE; }
 BYEDPI_STATUS() { if pkg_is_installed byedpi; then if [ "$PKG_IS_APK" -eq 1 ]; then LOCAL_BYEDPI="$(apk list -I 2>/dev/null | grep '^byedpi-' | head -1 | sed -E 's/^byedpi-//;s/-r[0-9]+.*//')"; else LOCAL_BYEDPI="$(opkg list-installed 2>/dev/null | awk '$1=="byedpi" {print $3}' | sed 's/-r[0-9]\+$//')"; fi; [ "$LOCAL_BYEDPI" = "$BYEDPI_LATEST_VER" ] && BYEDPI_STATUS="${GREEN}${LOCAL_BYEDPI}${NC}" || BYEDPI_STATUS="${RED}${LOCAL_BYEDPI} (версия устарела)${NC}"; else BYEDPI_STATUS="${RED}не установлен${NC}"; fi; }
-
-BYEDPI_SAVE_DNS_STATE() {
-    if [ ! -f "$BYEDPI_DNS_BACKUP" ]; then
-        {
-            echo "LOCALUSE=$(uci -q get dhcp.@dnsmasq[0].localuse 2>/dev/null || echo "__UNSET__")"
-            echo "SERVER=$(uci -q get dhcp.@dnsmasq[0].server 2>/dev/null || echo "__UNSET__")"
-            echo "NORESOLV=$(uci -q get dhcp.@dnsmasq[0].noresolv 2>/dev/null || echo "__UNSET__")"
-            echo "NETSHIFT_NORESOLV=$(uci -q get dhcp.@dnsmasq[0].netshift_noresolv 2>/dev/null || echo "__UNSET__")"
-        } > "$BYEDPI_DNS_BACKUP"
-    fi
-}
-
-BYEDPI_RESTORE_DNS_STATE() {
-    [ ! -f "$BYEDPI_DNS_BACKUP" ] && return
-
-    . "$BYEDPI_DNS_BACKUP"
-
-    echo -e "${CYAN}Восстанавливаем настройки ${NC}DNS"
-
-    if [ "$LOCALUSE" = "__UNSET__" ]; then
-        uci -q delete dhcp.@dnsmasq[0].localuse
-    else
-        uci set dhcp.@dnsmasq[0].localuse="$LOCALUSE"
-    fi
-
-    if [ "$SERVER" = "__UNSET__" ]; then
-        uci -q delete dhcp.@dnsmasq[0].server
-    else
-        uci set dhcp.@dnsmasq[0].server="$SERVER"
-    fi
-
-    if [ "$NORESOLV" = "__UNSET__" ]; then
-        uci -q delete dhcp.@dnsmasq[0].noresolv
-    else
-        uci set dhcp.@dnsmasq[0].noresolv="$NORESOLV"
-    fi
-
-    uci -q delete dhcp.@dnsmasq[0].netshift_noresolv
-
-    uci commit dhcp >/dev/null 2>&1
-
-    echo -e "${CYAN}Перезапускаем ${NC}dnsmasq"
-    /etc/init.d/dnsmasq restart >/dev/null 2>&1
-
-    rm -f "$BYEDPI_DNS_BACKUP"
-}
-
+BYEDPI_SAVE_DNS_STATE() { if [ ! -f "$BYEDPI_DNS_BACKUP" ]; then { echo "LOCALUSE=$(uci -q get dhcp.@dnsmasq[0].localuse 2>/dev/null || echo "__UNSET__")"; echo "SERVER=$(uci -q get dhcp.@dnsmasq[0].server 2>/dev/null || echo "__UNSET__")"
+echo "NORESOLV=$(uci -q get dhcp.@dnsmasq[0].noresolv 2>/dev/null || echo "__UNSET__")"; echo "NETSHIFT_NORESOLV=$(uci -q get dhcp.@dnsmasq[0].netshift_noresolv 2>/dev/null || echo "__UNSET__")"; } > "$BYEDPI_DNS_BACKUP"; fi; }
+BYEDPI_RESTORE_DNS_STATE() { [ ! -f "$BYEDPI_DNS_BACKUP" ] && return; . "$BYEDPI_DNS_BACKUP"; echo -e "${CYAN}Восстанавливаем настройки ${NC}DNS"; if [ "$LOCALUSE" = "__UNSET__" ]; then uci -q delete dhcp.@dnsmasq[0].localuse
+else uci set dhcp.@dnsmasq[0].localuse="$LOCALUSE"; fi; if [ "$SERVER" = "__UNSET__" ]; then uci -q delete dhcp.@dnsmasq[0].server; else uci set dhcp.@dnsmasq[0].server="$SERVER"; fi; if [ "$NORESOLV" = "__UNSET__" ]
+then uci -q delete dhcp.@dnsmasq[0].noresolv; else uci set dhcp.@dnsmasq[0].noresolv="$NORESOLV"; fi; uci commit dhcp >/dev/null 2>&1; echo -e "${CYAN}Перезапускаем ${NC}dnsmasq"; /etc/init.d/dnsmasq restart >/dev/null 2>&1; rm -f "$BYEDPI_DNS_BACKUP"; }
 BYEDPI_INSTALL() { if pkg_is_installed byedpi; then BYEDPI_DELETE; return; fi; echo -e "\n${MAGENTA}Установка ByeDPI${NC}"; rm -rf "$tmpDIR"; mkdir -p "$tmpDIR"; BYEDPI_FILE="byedpi_${BYEDPI_LATEST_VER}-r1_${LOCAL_ARCH}.${RAZ}"
 BYEDPI_URL="https://github.com/DPITrickster/ByeDPI-OpenWrt/releases/download/${RELEASE_TAG}/${BYEDPI_FILE}"; echo -e "${CYAN}Скачиваем ${NC}$BYEDPI_FILE"; cd "$tmpDIR" || return 1; wget -q -U "Mozilla/5.0" -O "$BYEDPI_FILE" "$BYEDPI_URL" || { echo -e "\n${RED}Не удалось скачать:${NC}\n"; echo "$BYEDPI_URL"; rm -rf "$tmpDIR"; PAUSE; return 1; }
 echo -e "${CYAN}Устанавливаем ${NC}ByeDPI"; if ! $INSTALL "$BYEDPI_FILE" >/dev/null 2>&1; then echo -e "\n${RED}Не удалось установить ByeDPI!${NC}\n"; rm -rf "$tmpDIR"; PAUSE; return 1; fi; rm -rf "$tmpDIR"; if [ -f /etc/init.d/byedpi ]
