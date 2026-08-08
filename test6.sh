@@ -108,8 +108,8 @@ get_ver "https://github.com/yandexru45/netshift/releases/latest" "$TMP_VER_POD" 
 # [ -s "$TMP_MAG_VER" ] && MT_VERSION="$(cat "$TMP_MAG_VER")"
 [ -s "$TMP_VER" ] && ZAPRET_VERSION="$(cat "$TMP_VER")"; [ -s "$TMP_VER_POD" ] && PODKOP_LATEST_VER="$(cat "$TMP_VER_POD")"; [ -s "$TMP_VER_TG_MT" ] && TG_MTProto="$(cat "$TMP_VER_TG_MT")"; [ -s "$TMP_VER_SPL" ] && SPL_VER="$(cat "$TMP_VER_SPL")"
 
-echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test5.sh)' > /usr/bin/zms; chmod +x /usr/bin/zms
-echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test5.sh) "$@"' > /usr/bin/zmsA; chmod +x /usr/bin/zmsA
+echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test6.sh)' > /usr/bin/zms; chmod +x /usr/bin/zms
+echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test6.sh) "$@"' > /usr/bin/zmsA; chmod +x /usr/bin/zmsA
 
 # git="githubusercontent.com"; if ! grep -q "raw.$git" /etc/hosts; then echo -e "\n\033[1;36mДля корректной работы скрипта добавляем домены \033[0mGitHub\033[1;36m в \033[0m/etc/hosts\033[0m"
 # printf "#$git\n185.199.109.133 raw.$git release-assets.$git\n185.199.108.133 private-user-images.$git gist.$git avatars.$git\n" >> /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1; fi
@@ -581,7 +581,7 @@ fi
 
         if auto_best_running; then
             RUNNING=1
-            echo -e "${YELLOW}Автоподбор в фоне:${NC} ${GREEN}тест выполняется${NC}"
+            echo -e "${YELLOW}Автоподбор в фоне:${NC} ${GREEN}выполняется${NC}"
         else
             RUNNING=0
         fi
@@ -589,9 +589,9 @@ fi
         LINE=$(auto_best_cron_line)
         if [ -n "$LINE" ]; then
             HOUR=$(echo "$LINE" | awk '{print $2}')
-            echo -e "${YELLOW}Автоподбор:${NC} ${GREEN}ежедневно в $(printf "%02d" "$HOUR"):00${NC}"
+            echo -e "${YELLOW}Автоподбор стратегий:${NC} ${GREEN}ежедневно в ${NC}$(printf "%02d" "$HOUR"):00${NC}"
         else
-            echo -e "${YELLOW}Автоподбор:${NC} ${RED}отключен${NC}"
+            echo -e "${YELLOW}Автоподбор стратегий:${NC} ${RED}отключен${NC}"
         fi
 
         echo -e "\n${CYAN}1) ${GREEN}$( [ -n "$LINE" ] && echo "Изменить время автоподбора по расписанию" || echo "Включить автоподбор по расписанию" )${NC}"
@@ -599,7 +599,7 @@ fi
 if [ "$RUNNING" = "1" ]; then
             echo -e "${CYAN}3) ${GREEN}Остановить автоподбор в фоне${NC}"
         else
-            echo -e "${CYAN}3) ${GREEN}Запустить сейчас автоподбор в фоне${NC}"
+            echo -e "${CYAN}3) ${GREEN}Запустить автоподбор в фоне${NC}"
         fi
         [ -s "$AUTO_RESULTS" ] && echo -e "${CYAN}4) ${GREEN}Показать результаты последнего теста${NC}"
                 [ -f "$AUTO_LOG" ] && echo -e "${CYAN}5) ${GREEN}Показать полный лог последнего теста${NC}"
@@ -1368,17 +1368,15 @@ if [ -n "$DOH_STATUS" ]; then if [ "$PKG_IS_APK" -eq 1 ]; then apk info -e https
 pkg_is_installed netshift && PODKOP_VER && echo -e "${YELLOW}NetShift:${NC}            $PODKOP_STATUS"; if web_is_enabled; then echo -e "${YELLOW}Доступ из браузера:${NC}  $LAN_IP:7681"; fi; quic_is_blocked && if quic_is_blocked; then echo -e "${YELLOW}Блокировка QUIC:${NC}     ${GREEN}включена${NC}"; fi; if grep -q 'ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc
 then echo -e "${YELLOW}Flow Offloading FIX:${NC} ${GREEN}включён${NC}"; fi; if [ "$CURR" != "default / OpenWrt" ]; then echo -e "${YELLOW}Зеркало OpenWRT:${NC}     $CURR"; fi; if [ -f /etc/init.d/zapret ] && [ -f "$CONF" ] && grep -Eq "^[[:space:]]*option DISABLE_IPV6 '0'" "$CONF"; then echo -e "${YELLOW}IPv6 в Zapret:       ${GREEN}включён${NC}"; fi
 
+
+
+
 if auto_best_running; then
     echo -e "${YELLOW}Автоподбор стратегий:${NC}${GREEN}выполняется в фоне${NC}"
 else
-    if LINEA=$(grep -F "$AUTO_CRON_CMD" "$CRON_FILE" 2>/dev/null | head -n1); then
-        if [ -n "$LINEA" ]; then
-            CRON_MIN=$(echo "$LINEA" | awk '{print $1}')
-            CRON_HOUR=$(echo "$LINEA" | awk '{print $2}')
-
-            echo -e "${YELLOW}Автоподбор стратегий:${NC}${GREEN}ежедневно в $(printf "%02d" "$CRON_HOUR"):$(printf "%02d" "$CRON_MIN")${NC}"
-        fi
-    fi
+            LINEA=$(auto_best_cron_line)
+            HOURA=$(echo "$LINEA" | awk '{print $2}')
+            echo -e "${YELLOW}Автоподбор стратегий:${NC} ${GREEN}ежедневно в ${NC}$(printf "%02d" "$HOURA"):00${NC}"
 fi
 
 
