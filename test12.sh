@@ -1509,7 +1509,7 @@ USE_PROCD=1
 
 start_service() {
     procd_open_instance
-    procd_set_param command /usr/bin/tg-ws-proxy-go --host 0.0.0.0 --port 1080 --cf-proxy --cf-proxy-first --cf-balance
+    procd_set_param command /usr/bin/tg-ws-proxy-go --host 0.0.0.0 --port 2080 --cf-proxy --cf-proxy-first --cf-balance
     procd_set_param respawn
     procd_close_instance
 }
@@ -1645,9 +1645,9 @@ menu_TG() {
             fi
             echo -e "${YELLOW}Тип прокси:${NC} SOCKS5"
             echo -e "${YELLOW}Хост:${NC} $LAN_IP"
-            echo -e "${YELLOW}Порт:${NC} 1080"
+            echo -e "${YELLOW}Порт:${NC} 2080"
             echo -e "${YELLOW}Ссылка для подключения:${NC}"
-            echo -e "tg://socks?server=$LAN_IP&port=1080"
+            echo -e "tg://socks?server=$LAN_IP&port=2080"
         fi
 
         if [ "$RS_ACTION" != "install" ] && [ -f "$BIN_PATH_RS" ] && [ -f "$INIT_PATH_RS" ]; then
