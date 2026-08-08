@@ -119,6 +119,8 @@ get_ver() {
     VERSION="${RESULT##*/}"
     VERSION="${VERSION#v}"
 
+[ "$NAME" = "ByeDPI" ] && VERSION="${VERSION%%-*}"
+
     if [ -z "$VERSION" ]; then
         echo -e "$NAME - ${RED}не удалось извлечь версию${NC}"
         echo -e "${YELLOW}URL:${NC} $RESULT"
