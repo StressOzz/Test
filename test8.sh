@@ -1918,7 +1918,7 @@ BYEDPI_INSTALL() {
         -O "$BYEDPI_FILE" \
         "$BYEDPI_URL" || {
 
-        echo -e "\n${RED}Не удалось скачать:${NC}"
+        echo -e "\n${RED}Не удалось скачать:${NC}\n"
         echo "$BYEDPI_URL"
         rm -rf "$tmpDIR"
         PAUSE
@@ -1928,7 +1928,7 @@ BYEDPI_INSTALL() {
     echo -e "${CYAN}Устанавливаем ${NC}ByeDPI"
 
     if ! $INSTALL "$BYEDPI_FILE" >/dev/null 2>&1; then
-        echo -e "\n${RED}Не удалось установить ByeDPI!${NC}"
+        echo -e "\n${RED}Не удалось установить ByeDPI!${NC}\n"
         rm -rf "$tmpDIR"
         PAUSE
         return 1
@@ -1941,7 +1941,7 @@ BYEDPI_INSTALL() {
         /etc/init.d/byedpi start >/dev/null 2>&1
     fi
 
-    echo -e "\nByeDPI ${GREEN}установлен!${NC}"
+    echo -e "ByeDPI ${GREEN}установлен!${NC}\n"
     PAUSE
 }
 
@@ -1968,7 +1968,7 @@ BYEDPI_DELETE() {
     # Возвращаем DNS в состояние до интеграции
     BYEDPI_RESTORE_DNS_STATE
 
-    echo -e "\nByeDPI ${GREEN}удалён!${NC}"
+    echo -e "ByeDPI ${GREEN}удалён!${NC}\n"
     PAUSE
 }
 
@@ -1980,22 +1980,18 @@ BYEDPI_DELETE() {
 BYEDPI_NETSHIFT() {
 
     if ! pkg_is_installed byedpi; then
-        echo -e "\n${RED}ByeDPI не установлен!${NC}"
+        echo -e "\nByeDPI${RED} не установлен!${NC}\n"
         PAUSE
         return
     fi
 
     if ! pkg_is_installed netshift; then
-        echo -e "\n${RED}NetShift не установлен!${NC}"
+        echo -e "\nNetShift${RED} не установлен!${NC}\n"
         PAUSE
         return
     fi
 
     echo -e "\n${MAGENTA}Интеграция ByeDPI в NetShift${NC}"
-
-    # --------------------------------------
-    # Сохраняем исходный localuse
-    # --------------------------------------
 
     BYEDPI_SAVE_DNS_STATE
 
@@ -2006,10 +2002,6 @@ BYEDPI_NETSHIFT() {
 
     echo -e "${CYAN}Перезапускаем ${NC}dnsmasq"
     /etc/init.d/dnsmasq restart >/dev/null 2>&1
-
-    # --------------------------------------
-    # Устанавливаем рабочую стратегию ByeDPI
-    # --------------------------------------
 
     echo -e "${CYAN}Настраиваем стратегию ${NC}ByeDPI"
 
@@ -2065,8 +2057,6 @@ config section 'ByeDPI'
 	list community_lists 'youtube'
 EOF
 
-
-
     echo -e "${CYAN}Запускаем ${NC}ByeDPI"
     /etc/init.d/byedpi enable >/dev/null 2>&1
     /etc/init.d/byedpi restart >/dev/null 2>&1
@@ -2080,11 +2070,7 @@ EOF
     echo -e "${CYAN}Перезапускаем NetShift${NC}"
     netshift restart >/dev/null 2>&1
 
-    echo -e "\nByeDPI ${GREEN}интегрирован в ${NC}NetShift${GREEN}!${NC}"
-
-    echo -e "\n${YELLOW}DNS:${NC}"
-    echo -e "localuse установлен в ${RED}0${NC}"
-    echo -e "${DGRAY}Исходное значение сохранено: $BYEDPI_DNS_BACKUP${NC}"
+    echo -e "ByeDPI ${GREEN}интегрирован в ${NC}NetShift${GREEN}!${NC}"
 
     echo -ne "\n${YELLOW}Необходимо перезагрузить роутер. Перезагрузить сейчас? [y/N]: ${NC}"
     read -r REBOOT_CHOICE
@@ -2107,7 +2093,7 @@ fix_strategy() {
     echo -e "\n${MAGENTA}Изменение стратегии ByeDPI${NC}"
 
     if [ ! -f /etc/config/byedpi ]; then
-        echo -e "\n${RED}ByeDPI не установлен!${NC}"
+        echo -e "\n${RED}ByeDPI не установлен!${NC}\n"
         PAUSE
         return
     fi
@@ -2115,18 +2101,18 @@ fix_strategy() {
     CURRENT_STRATEGY="$(grep "option cmd_opts" /etc/config/byedpi | sed -E "s/.*'(.+)'/\1/")"
     [ -z "$CURRENT_STRATEGY" ] && CURRENT_STRATEGY="(не задана)"
 
-    echo -e "\n${GREEN}Текущая стратегия:${NC} $CURRENT_STRATEGY"
+    echo -e "${GREEN}Текущая стратегия:${NC} $CURRENT_STRATEGY"
     echo -ne "\n${YELLOW}Введите новую стратегию (Enter — оставить текущую):${NC} "
     read -r NEW_STRATEGY
     echo
 
     if [ -z "$NEW_STRATEGY" ]; then
-        echo -e "${GREEN}Стратегия не изменена!${NC}"
+        echo -e "\n${GREEN}Стратегия не изменена!${NC}\n"
     else
         sed -i "s|option cmd_opts .*|	option cmd_opts '$NEW_STRATEGY'|" /etc/config/byedpi
         /etc/init.d/byedpi enable >/dev/null 2>&1
         /etc/init.d/byedpi restart >/dev/null 2>&1
-        echo -e "${GREEN}Стратегия изменена на:${NC} $NEW_STRATEGY"
+        echo -e "\n${GREEN}Стратегия изменена на:${NC} $NEW_STRATEGY\n"
     fi
 
     PAUSE
@@ -2151,7 +2137,7 @@ PODKOP_menu() {
         )
 
         if [ "$openwrt_version" = "23" ]; then
-            echo -e "\n${RED}OpenWrt версии ниже 24 не поддерживаются!${NC}\n"
+            echo -e "\nOpenWrt${RED} версии ниже 24 не поддерживаются!${NC}\n"
             PAUSE
             return
         fi
@@ -2201,10 +2187,6 @@ fi
         else
             echo -e "${CYAN}2) ${GREEN}Установить ${NC}ByeDPI"
         fi
-
-
-
-
 
         if pkg_is_installed amneziawg-tools &&
            pkg_is_installed luci-proto-amneziawg &&
