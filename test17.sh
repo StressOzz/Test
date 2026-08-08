@@ -5,7 +5,7 @@
 ZAPRET_MANAGER_VERSION="9.80"; STR_VERSION_AUTOINSTALL="v7"
 
 ZAPRET_VERSION="72.20260307"; PODKOP_LATEST_VER="0.9.6"; TG_MTProto="0.9.3"; MT_VERSION="0.8.2"
-SPL_VER="26.8.1.3"; TG_GO_VERSION="1.4.0"; TG_RS_VERSION="2.1.2"; BYEDPI_LATEST_VER="0.17.3"
+SPL_VER="26.8.1.3"; TG_GO_VERSION="1.4.1"; TG_RS_VERSION="2.1.2"; BYEDPI_LATEST_VER="0.17.3"
 
 OWRTAWG=$(grep '^DISTRIB_RELEASE=' /etc/openwrt_release | cut -d"'" -f2); ARCHAWG="$(grep DISTRIB_ARCH /etc/openwrt_release | cut -d"'" -f2)_$(grep DISTRIB_TARGET /etc/openwrt_release | cut -d"'" -f2 | tr '/' '_')" 
 CRON_CMD="/etc/init.d/mihomo restart"; CONFIGPATH="/etc/magitrickle/state/config.yaml"; PACKAGES_UPDATED=0
@@ -150,8 +150,8 @@ get_ver "https://github.com/DPITrickster/ByeDPI-OpenWrt/releases/latest" "$TMP_V
 get_ver "https://github.com/yandexru45/netshift/releases/latest" "$TMP_VER_POD" "NetShift" &
 get_ver "https://github.com/remittor/zapret-openwrt/releases/latest" "$TMP_VER" "Zapret" &
 get_ver "https://github.com/xyzmean/splify/releases/latest" "$TMP_VER_SPL" "splify" &
-# get_ver "https://github.com/d0mhate/-tg-ws-proxy-Manager-go/releases/latest" "$TMP_VER_TG_GO" "TG-WS Proxy SOCKS5" &
-# get_ver "https://github.com/valnesfjord/tg-ws-proxy-rs/releases/latest" "$TMP_VER_TG_RS" "TG-WS Proxy Rust" &
+get_ver "https://github.com/d0mhate/-tg-ws-proxy-Manager-go/releases/latest" "$TMP_VER_TG_GO" "TG-WS Proxy SOCKS5" &
+get_ver "https://github.com/valnesfjord/tg-ws-proxy-rs/releases/latest" "$TMP_VER_TG_RS" "TG-WS Proxy Rust" &
 wait
 
 [ -s "$TMP_MAG_VER" ] && MT_VERSION="$(cat "$TMP_MAG_VER")"
@@ -1466,7 +1466,7 @@ USE_PROCD=1
 
 start_service() {
     procd_open_instance
-    procd_set_param command /usr/bin/tg-ws-proxy-go --host 0.0.0.0 --port 2080 --cf-proxy --cf-proxy-first --cf-balance
+    procd_set_param command /usr/bin/tg-ws-proxy-go --host 0.0.0.0 --port 1080 --cf-proxy --cf-proxy-first --cf-balance
     procd_set_param respawn
     procd_close_instance
 }
@@ -1504,6 +1504,17 @@ menu_TG() {
         SECRET="$(head -c16 /dev/urandom | hexdump -e '16/1 "%02x"')"
 
 get_TG_versions
+
+        if command -v opkg >/dev/null 2>&1; then
+            INSTALLED_VER_MT="$(opkg list-installed 2>/dev/null |
+                grep '^tg-ws-proxy' |
+                awk '{print $3}' |
+                cut -d'-' -f1)"
+        else
+            INSTALLED_VER_MT="$(apk list -I 2>/dev/null |
+                grep '^tg-ws-proxy-' |
+                sed -E 's/tg-ws-proxy-([0-9.]+).*/\1/')"
+        fi
 
         if [ -z "$INSTALLED_VER_MT" ]; then
             MT_ACTION="install"
@@ -1587,9 +1598,9 @@ get_TG_versions
             echo -e "\n${YELLOW}Настройки ${CYAN}TG WS Proxy SOCKS5${YELLOW}:${NC}"
             echo -e "${YELLOW}Тип прокси:${NC} SOCKS5"
             echo -e "${YELLOW}Хост:${NC} $LAN_IP"
-            echo -e "${YELLOW}Порт:${NC} 2080"
+            echo -e "${YELLOW}Порт:${NC} 1080"
             echo -e "${YELLOW}Ссылка для подключения:${NC}"
-            echo -e "tg://socks?server=$LAN_IP&port=2080"
+            echo -e "tg://socks?server=$LAN_IP&port=1080"
         fi
 
         if pgrep -f tg-ws-proxy-rs >/dev/null 2>&1 &&
