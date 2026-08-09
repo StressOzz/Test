@@ -373,7 +373,6 @@ add_ports_if_missing() { local OPTION="$1"; local PORTS="$2"; for p in $(echo "$
 strategy_TCP_common() { printf "%s\n" "--new" "--filter-tcp=$PORTS_TCP" "--dpi-desync-any-protocol=1" "--dpi-desync-cutoff=n5" "--dpi-desync=multisplit" "--dpi-desync-split-seqovl=582" "--dpi-desync-split-pos=1" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/stun.bin"; }
 strategy_Gv1() { printf "%s\n" "#Gv1" "--new" "--filter-udp=$PORTS_UDP" "--dpi-desync=fake" "--dpi-desync-cutoff=d2" "--dpi-desync-any-protocol=1" "--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/stun.bin"; }
 strategy_Gv() { local N="$1"; printf "%s\n" "#Gv$N" "--new" "--filter-udp=$PORTS_UDP" "--dpi-desync=fake" "--dpi-desync-repeats=10" "--dpi-desync-any-protocol=1" "--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/stun.bin" "--dpi-desync-cutoff=n$N"; }
-
 GV_FAKE() { if ! grep -q -- "--dpi-desync-fake-unknown-udp=" "$CONF"; then echo -e "\n${RED}Блок ${NC}dpi-desync-fake-unknown-udp${RED} не найден!${NC}\n"; PAUSE; return; fi; CURRENT_FAKE=$(grep -m1 -- '--dpi-desync-fake-unknown-udp=' "$CONF" | sed 's|.*fake/||'); gv_fake() { [ "$CURRENT_FAKE" = "$1" ] && echo "${GREEN}(используется)${NC}"; }
 echo -e "\n${MAGENTA}Выберите fake для игровой стратегии${NC}\n${CYAN}1) ${GREEN}Установить ${NC}stun.bin $(gv_fake stun.bin)\n${CYAN}2) ${GREEN}Установить ${NC}stun2.bin $(gv_fake stun2.bin)\n${CYAN}3) ${GREEN}Установить ${NC}quic_initial_4pda.to.bin $(gv_fake quic_initial_4pda.to.bin)"
 echo -e "${CYAN}4) ${GREEN}Установить ${NC}quic_initial_tencent_com.bin $(gv_fake quic_initial_tencent_com.bin)\n${CYAN}5) ${GREEN}Установить ${NC}quic_initial_dbankcloud_ru.bin $(gv_fake quic_initial_dbankcloud_ru.bin)"
@@ -381,8 +380,6 @@ echo -e "${CYAN}6) ${GREEN}Установить ${NC}quic_initial_www_google_com
 echo -e "${CYAN}8) ${GREEN}Установить ${NC}quic_initial_5ka_ru.bin $(gv_fake quic_initial_5ka_ru.bin)\n${CYAN}9) ${GREEN}Установить ${NC}quic_initial_rutube_ru.bin $(gv_fake quic_initial_rutube_ru.bin)"
 echo -en "${CYAN}Enter) ${GREEN}Выход в меню стратегий${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read -r choiceF; case "$choiceF" in 1) new_file="stun.bin";; 2) new_file="stun2.bin";; 3) new_file="quic_initial_4pda.to.bin";; 4) new_file="quic_initial_tencent_com.bin";; 5) new_file="quic_initial_dbankcloud_ru.bin";; 6) new_file="quic_initial_www_google_com.bin";; 7) new_file="quic_initial_steamcommunity_com.bin";; 8) new_file="quic_initial_5ka_ru.bin";; 9) new_file="quic_initial_rutube_ru.bin";; *) return;; esac; echo -e "\n${CYAN}Устанавливаем fake${NC} ${new_file}"
 awk -v new="$new_file" 'BEGIN{done=0} !done && /--dpi-desync-fake-unknown-udp=/{sub(/\/opt\/zapret\/files\/fake\/[^ ]+/, "/opt/zapret/files/fake/" new); done=1} {print}' "$CONF" > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"; ZAPRET_RESTART; echo -e "fake ${GREEN}изменён на ${NC}${new_file}${GREEN}!${NC}\n"; PAUSE; }
-
-
 fix_GAME() { local NO_PAUSE=$1; [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }; local CURRENT_GAME=""; for i in 1 2 3 4; do grep -q "^#Gv$i" "$CONF" && CURRENT_GAME="Gv$i"; done
 if [ -n "$NO_PAUSE" ]; then GAME_CHOICE="$NO_PAUSE"; else echo -e "\n${MAGENTA}Меню управления стратегией для игр${NC}"; for i in $(seq 1 4); do if [ "$CURRENT_GAME" = "Gv$i" ]; then echo -e "${CYAN}$i) ${GREEN}Удалить ${NC}Gv$i"; else echo -e "${CYAN}$i) ${GREEN}Установить ${NC}Gv$i"; fi; done
 grep -q "^#Gv[0-9]\+Xtreme" "$CONF" && XTREME_TXT="${GREEN}Отключить ${NC}Xtreme${GREEN} режим${NC}" ||	XTREME_TXT="${GREEN}Включить ${NC}Xtreme${GREEN} режим${NC}"; echo -e "${CYAN}5) $XTREME_TXT\n${CYAN}6) ${GREEN}Выбрать и сменить ${NC}fake${GREEN} для игровой стратегии${NC}"
@@ -489,7 +486,6 @@ download_strategies() { local NO_PAUSE=$1; [ "$NO_PAUSE" != "1" ] && echo -e "\n
 if ! command -v unzip >/dev/null 2>&1; then echo -e "${CYAN}Устанавливаем ${NC}unzip";  update_packages || return; $INSTALL unzip >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить unzip!${NC}\n"; PAUSE; return; }; fi
 unzip -oq "$ZIP" -d "$TMP_SF" || { echo -e "\n${RED}Не удалось распоковать файл${NC}\n"; PAUSE; return; }; BASE="$TMP_SF/zapret-discord-youtube-main";
 find "$BASE" -type f -name 'general*.bat' ! -name 'general (ALT5).bat' | while read -r F; do MATCH=$(grep -E '^--filter-udp=19294-19344,50000-50100|^--filter-tcp=%GameFilterTCP%|^--filter-udp=%GameFilterUDP%|^--filter-tcp=2053,2083,2087,2096,8443|^--filter-tcp=443 --hostlist="%LISTS%list-google.txt"|^--filter-tcp=80,443 --hostlist="%LISTS%list-general.txt"' "$F")
-
 
 [ -z "$MATCH" ] && continue; NAME=$(basename "$F" .bat); { echo "#$NAME"; echo "$MATCH" | sed 's/--/\n--/g' | sed '/^$/d' | sed 's/[[:space:]]*$//'; echo; } >> "$OUT"; done
 sed -i 's|"%BIN%tls_clienthello_www_google_com.bin"|/opt/zapret/files/fake/tls_clienthello_www_google_com.bin|g' "$OUT"
