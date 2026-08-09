@@ -480,7 +480,11 @@ echo -en "${CYAN}99) ${GREEN}Обновить стратегии${NC}\n${CYAN}En
 BLOCK=$(awk -v name="$SEL_NAME" '$0=="#"name {flag=1; print; next} /^#/ && flag {exit} flag {print}' "$OUT"); sed -i "/option NFQWS_OPT '/,\$d" "$CONF"; { echo "	option NFQWS_OPT '"; echo "$BLOCK"; echo "'"; } >> "$CONF"
 if ! grep -q "option NFQWS_PORTS_UDP.*19294-19344,50000-50100" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'$/,19294-19344,50000-50100'/" "$CONF"; fi; if ! grep -q "option NFQWS_PORTS_TCP.*2053,2083,2087,2096,8443" "$CONF"
 then sed -i "/^[[:space:]]*option NFQWS_PORTS_TCP '/s/'$/,2053,2083,2087,2096,8443'/" "$CONF"; fi; echo -e "\n${MAGENTA}Устанавливаем стратегию\n${CYAN}Добавляем домены в исключения${NC}"; ADD_GP_DOMAINS; rm -f "$EXCLUDE_FILE"
-wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL" || { echo -e "\n${RED}Не удалось загрузить exclude файл${NC}\n"; PAUSE; return; }; echo -e "${CYAN}Применяем стратегию${NC}"; ZAPRET_RESTART; echo -e "${GREEN}Стратегия ${NC}$SEL_NAME ${GREEN}установлена!${NC}\n"
+wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL" || { echo -e "\n${RED}Не удалось загрузить exclude файл${NC}\n"; PAUSE; return; }
+
+sed -i '/--new/{N;/--filter-tcp=2802/{s/--new/#Gv0\n--new/;};}' "$CONF"
+
+echo -e "${CYAN}Применяем стратегию${NC}"; ZAPRET_RESTART; echo -e "${GREEN}Стратегия ${NC}$SEL_NAME ${GREEN}установлена!${NC}\n"
 grep -Fq "=ts" "$CONF" && echo -e "${YELLOW}Для работы этой стратегии нужно один раз в терминале Windows выполнить:${NC}\nnetsh int tcp set global timestamps=enabled\n"; PAUSE; break; done; }
 download_strategies() { local NO_PAUSE=$1; [ "$NO_PAUSE" != "1" ] && echo -e "\n${MAGENTA}Скачиваем и формируем стратегии${NC}"; mkdir -p "$TMP_SF"; : > "$OUT"; wget -q -U "Mozilla/5.0" -O "$ZIP" "$FLOWSEAL_STR_ZIP" || { echo -e "\n${RED}Не удалось загрузить файл стратегий${NC}\n"; PAUSE; return; }
 if ! command -v unzip >/dev/null 2>&1; then echo -e "${CYAN}Устанавливаем ${NC}unzip";  update_packages || return; $INSTALL unzip >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить unzip!${NC}\n"; PAUSE; return; }; fi
