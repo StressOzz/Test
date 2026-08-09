@@ -486,16 +486,32 @@ grep -Fq "=ts" "$CONF" && echo -e "${YELLOW}Для работы этой стр�
 download_strategies() { local NO_PAUSE=$1; [ "$NO_PAUSE" != "1" ] && echo -e "\n${MAGENTA}Скачиваем и формируем стратегии${NC}"; mkdir -p "$TMP_SF"; : > "$OUT"; wget -q -U "Mozilla/5.0" -O "$ZIP" "$FLOWSEAL_STR_ZIP" || { echo -e "\n${RED}Не удалось загрузить файл стратегий${NC}\n"; PAUSE; return; }
 if ! command -v unzip >/dev/null 2>&1; then echo -e "${CYAN}Устанавливаем ${NC}unzip";  update_packages || return; $INSTALL unzip >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить unzip!${NC}\n"; PAUSE; return; }; fi
 unzip -oq "$ZIP" -d "$TMP_SF" || { echo -e "\n${RED}Не удалось распоковать файл${NC}\n"; PAUSE; return; }; BASE="$TMP_SF/zapret-discord-youtube-main";
-find "$BASE" -type f -name 'general*.bat' ! -name 'general (ALT5).bat' | while read -r F; do MATCH=$(grep -E '^--filter-udp=19294-19344,50000-50100|^--filter-tcp=2053,2083,2087,2096,8443|^--filter-tcp=443 --hostlist="%LISTS%list-google.txt"|^--filter-tcp=80,443 --hostlist="%LISTS%list-general.txt"' "$F")
+find "$BASE" -type f -name 'general*.bat' ! -name 'general (ALT5).bat' | while read -r F; do MATCH=$(grep -E '^--filter-udp=19294-19344,50000-50100|^--filter-tcp=%GameFilterTCP%|^--filter-udp=%GameFilterUDP%|^--filter-tcp=2053,2083,2087,2096,8443|^--filter-tcp=443 --hostlist="%LISTS%list-google.txt"|^--filter-tcp=80,443 --hostlist="%LISTS%list-general.txt"' "$F")
 [ -z "$MATCH" ] && continue; NAME=$(basename "$F" .bat); { echo "#$NAME"; echo "$MATCH" | sed 's/--/\n--/g' | sed '/^$/d' | sed 's/[[:space:]]*$//'; echo; } >> "$OUT"; done
-sed -i 's|"%BIN%tls_clienthello_www_google_com.bin"|/opt/zapret/files/fake/tls_clienthello_www_google_com.bin|g' "$OUT"; sed -i '/--hostlist="%LISTS%list-general.txt"/d' "$OUT"; sed -i '/--hostlist="%LISTS%list-general-user.txt"/d' "$OUT"
-sed -i '/--ipset-exclude="%LISTS%ipset-exclude.txt"/d' "$OUT"; sed -i '/--ipset-exclude="%LISTS%ipset-exclude-user.txt"/d' "$OUT"; sed -i '/--hostlist-exclude="%LISTS%list-exclude-user.txt"/d' "$OUT"
-sed -i 's|"%LISTS%list-exclude.txt"|/opt/zapret/ipset/zapret-hosts-user-exclude.txt|g' "$OUT"; sed -i 's/--new[[:space:]]\^/--new/g' "$OUT"; sed -i 's|"%LISTS%list-google.txt"|/opt/zapret/ipset/zapret-hosts-google.txt|g' "$OUT"
-sed -i 's|"%BIN%quic_initial_dbankcloud_ru.bin"|/opt/zapret/files/fake/quic_initial_dbankcloud_ru.bin|g' "$OUT"; sed -i 's|"%BIN%stun.bin"|/opt/zapret/files/fake/stun.bin|g' "$OUT"; sed -i 's|"%BIN%tls_clienthello_4pda_to.bin"|/opt/zapret/files/fake/4pda.bin|g' "$OUT"
-sed -i 's|"%BIN%quic_initial_www_google_com.bin"|/opt/zapret/files/fake/quic_initial_www_google_com.bin|g' "$OUT"; sed -i 's|"%BIN%stun2.bin"|/opt/zapret/files/fake/stun2.bin|g' "$OUT"; sed -i 's|"%BIN%quic_initial_tencent_com.bin"|/opt/zapret/files/fake/quic_initial_tencent_com.bin|g' "$OUT"
-sed -i 's|"%BIN%quic_initial_steamcommunity_com.bin"|/opt/zapret/files/fake/quic_initial_steamcommunity_com.bin|g' "$OUT"; sed -i 's|"%BIN%quic_initial_4pda.to.bin"|/opt/zapret/files/fake/quic_initial_4pda.to.bin|g' "$OUT"
-sed -i 's|"%BIN%ACTIVE_DISCORD_UDP.bin"|/opt/zapret/files/fake/quic_initial_steamcommunity_com.bin|g' "$OUT"; sed -i 's|"%BIN%ACTIVE_GAME_UDP.bin"|/opt/zapret/files/fake/quic_initial_dbankcloud_ru.bin|g' "$OUT"
-sed -i 's|"%BIN%tls_clienthello_max_ru.bin"|/opt/zapret/files/fake/tls_clienthello_www_onetrust_com.bin|g' "$OUT"; sed -i 's|\^!|/opt/zapret/files/fake/tls_clienthello_www_google_com.bin|g' "$OUT"; sed -i 's/[[:space:]]\+$//g' "$OUT"; sed -i '/^--new$/ { N; /^\--new\n$/d; }' "$OUT"; rm -rf "$TMP_SF/zapret-discord-youtube-main" "$ZIP";
+sed -i 's|"%BIN%tls_clienthello_www_google_com.bin"|/opt/zapret/files/fake/tls_clienthello_www_google_com.bin|g' "$OUT"
+sed -i '/--hostlist="%LISTS%list-general.txt"/d' "$OUT"
+sed -i '/--hostlist="%LISTS%list-general-user.txt"/d' "$OUT"
+sed -i '/--ipset-exclude="%LISTS%ipset-exclude.txt"/d' "$OUT"
+sed -i '/--ipset-exclude="%LISTS%ipset-exclude-user.txt"/d' "$OUT"
+sed -i '/--hostlist-exclude="%LISTS%list-exclude-user.txt"/d' "$OUT"
+sed -i 's|"%LISTS%list-exclude.txt"|/opt/zapret/ipset/zapret-hosts-user-exclude.txt|g' "$OUT"
+sed -i 's/--new[[:space:]]\^/--new/g' "$OUT"
+sed -i 's|"%LISTS%list-google.txt"|/opt/zapret/ipset/zapret-hosts-google.txt|g' "$OUT"
+sed -i 's|"%BIN%quic_initial_dbankcloud_ru.bin"|/opt/zapret/files/fake/quic_initial_dbankcloud_ru.bin|g' "$OUT"
+sed -i 's|"%BIN%stun.bin"|/opt/zapret/files/fake/stun.bin|g' "$OUT"
+sed -i 's|"%BIN%tls_clienthello_4pda_to.bin"|/opt/zapret/files/fake/4pda.bin|g' "$OUT"
+sed -i 's|"%BIN%quic_initial_www_google_com.bin"|/opt/zapret/files/fake/quic_initial_www_google_com.bin|g' "$OUT"
+sed -i 's|"%BIN%stun2.bin"|/opt/zapret/files/fake/stun2.bin|g' "$OUT"
+sed -i 's|"%BIN%quic_initial_tencent_com.bin"|/opt/zapret/files/fake/quic_initial_tencent_com.bin|g' "$OUT"
+sed -i 's|"%BIN%quic_initial_steamcommunity_com.bin"|/opt/zapret/files/fake/quic_initial_steamcommunity_com.bin|g' "$OUT"
+sed -i 's|"%BIN%quic_initial_4pda.to.bin"|/opt/zapret/files/fake/quic_initial_4pda.to.bin|g' "$OUT"
+sed -i 's|"%BIN%ACTIVE_DISCORD_UDP.bin"|/opt/zapret/files/fake/quic_initial_steamcommunity_com.bin|g' "$OUT"
+sed -i 's|"%BIN%ACTIVE_GAME_UDP.bin"|/opt/zapret/files/fake/quic_initial_dbankcloud_ru.bin|g' "$OUT"
+sed -i 's|"%BIN%tls_clienthello_max_ru.bin"|/opt/zapret/files/fake/tls_clienthello_www_onetrust_com.bin|g' "$OUT"
+sed -i 's|\^!|/opt/zapret/files/fake/tls_clienthello_www_google_com.bin|g' "$OUT"
+sed -i 's/[[:space:]]\+$//g' "$OUT"; sed -i '/^--new$/ { N; /^\--new\n$/d; }' "$OUT"
+rm -rf "$TMP_SF/zapret-discord-youtube-main" "$ZIP"
+
 MSG=0; for f in stun2.bin quic_initial_tencent_com.bin quic_initial_steamcommunity_com.bin quic_initial_dbankcloud_ru.bin quic_initial_4pda.to.bin; do [ -d /opt/zapret ] && [ ! -f "/opt/zapret/files/fake/$f" ] && { [ "$MSG" = 0 ] && { echo -e "${CYAN}Скачиваем ${NC}fake ${CYAN}файлы${NC}"; MSG=1; }; wget -q -U "Mozilla/5.0" -O "/opt/zapret/files/fake/$f" "https://github.com/Flowseal/zapret-discord-youtube/raw/refs/heads/main/bin/$f" || { echo -e "\n${RED}Не удалось загрузить файл ${NC}$f\n"; }; }; done
 [ "$NO_PAUSE" != "1" ] && echo -e "${GREEN}Стратегии сформированы!${NC}\n"; [ "$NO_PAUSE" != "1" ] && PAUSE; }
 # ==========================================
