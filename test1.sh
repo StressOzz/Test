@@ -120,8 +120,8 @@ get_ver "https://github.com/d0mhate/-tg-ws-proxy-Manager-go/releases/latest" "$T
 [ -s "$TMP_VER" ] && ZAPRET_VERSION="$(cat "$TMP_VER")"; [ -s "$TMP_VER_POD" ] && PODKOP_LATEST_VER="$(cat "$TMP_VER_POD")"; [ -s "$TMP_VER_TG_MT" ] && TG_MTProto="$(cat "$TMP_VER_TG_MT")"
 [ -s "$TMP_VER_SPL" ] && SPL_VER="$(cat "$TMP_VER_SPL")"; [ -s "$TMP_VER_TG_GO" ] && TG_GO_VERSION="$(cat "$TMP_VER_TG_GO")"; [ -s "$TMP_VER_TG_RS" ] && TG_RS_VERSION="$(cat "$TMP_VER_TG_RS")"
 
-echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test.sh)' > /usr/bin/zms; chmod +x /usr/bin/zms
-echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test.sh) "$@"' > /usr/bin/zmsA; chmod +x /usr/bin/zmsA
+echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test1.sh)' > /usr/bin/zms; chmod +x /usr/bin/zms
+echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test1.sh) "$@"' > /usr/bin/zmsA; chmod +x /usr/bin/zmsA
 
 # git="githubusercontent.com"; if ! grep -q "raw.$git" /etc/hosts; then echo -e "\n\033[1;36mДля корректной работы скрипта добавляем домены \033[0mGitHub\033[1;36m в \033[0m/etc/hosts\033[0m"
 # printf "#$git\n185.199.109.133 raw.$git release-assets.$git\n185.199.108.133 private-user-images.$git gist.$git avatars.$git\n" >> /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1; fi
@@ -169,16 +169,16 @@ BEST_NAME=$(echo "$BEST_LINE" | cut -d'→' -f1 | sed 's/[[:space:]]*$//'); echo
 START=$(grep -nxF "#${BEST_NAME}" "$STR_FILE_AUTO" | head -n1 | cut -d: -f1); if [ -n "$START" ]; then NEXT=$(echo "$LINES" | awk -v s="$START" '$1>s{print;exit}')
 if [ -z "$NEXT" ]; then sed -n "${START},\$p" "$STR_FILE_AUTO" > "$TEMP_FILE_AUTO"; else sed -n "${START},$((NEXT-1))p" "$STR_FILE_AUTO" > "$TEMP_FILE_AUTO"; fi
 BLOCK=$(cat "$TEMP_FILE_AUTO"); sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; { echo "  option NFQWS_OPT '"
-case "$BEST_NAME" in v[0-9]*) [ -n "$ORIG_YV_BLOCK" ] && echo "$ORIG_YV_BLOCK";; esac; echo "$BLOCK"; echo "'"; } >> "$CONF"
+[ -n "$ORIG_YV_BLOCK" ] && echo "$ORIG_YV_BLOCK"; echo "$BLOCK"; echo "'"; } >> "$CONF"
 if ! grep -q "option NFQWS_PORTS_UDP.*19294-19344,50000-50100" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'\$/,19294-19344,50000-50100'/" "$CONF"; fi
 if ! grep -q "option NFQWS_PORTS_TCP.*2053,2083,2087,2096,8443" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_TCP '/s/'\$/,2053,2083,2087,2096,8443'/" "$CONF"; fi
-discord_str_add; case "$BEST_NAME" in v[0-9]*) if [ -n "$ORIG_DV_BLOCK" ]; then DV_MARKER_LINE=$(grep -n "^#Dv[0-9]" "$CONF" | tail -n1 | cut -d: -f1)
+discord_str_add; if [ -n "$ORIG_DV_BLOCK" ]; then DV_MARKER_LINE=$(grep -n "^#Dv[0-9]" "$CONF" | tail -n1 | cut -d: -f1)
 LAST_QUOTE_LINE=$(grep -n "^'\$" "$CONF" | tail -n1 | cut -d: -f1); if [ -n "$DV_MARKER_LINE" ] && [ -n "$LAST_QUOTE_LINE" ] && [ "$LAST_QUOTE_LINE" -gt "$DV_MARKER_LINE" ]
-then sed -i "${DV_MARKER_LINE},${LAST_QUOTE_LINE}d" "$CONF"; printf "%s\n" "$ORIG_DV_BLOCK" >> "$CONF"; echo "'" >> "$CONF"; fi; fi;; esac
-case "$BEST_NAME" in v[0-9]*) if [ -n "$ORIG_GV_BLOCK" ]; then LAST_QUOTE_LINE=$(grep -n "^'\$" "$CONF" | tail -n1 | cut -d: -f1); if [ -n "$LAST_QUOTE_LINE" ]
-then sed -i "${LAST_QUOTE_LINE}d" "$CONF"; printf "%s\n" "$ORIG_GV_BLOCK" >> "$CONF"; echo "'" >> "$CONF"; fi; fi;; esac; ADD_Yv; ZAPRET_RESTART; echo "Стратегия '$BEST_NAME' применена и сохранена"
-[ -n "$ORIG_YV_BLOCK" ] && case "$BEST_NAME" in v[0-9]*) echo "Оригинальный блок Yv перенесён";; esac; [ -n "$ORIG_DV_BLOCK" ] && case "$BEST_NAME" in v[0-9]*) echo "Оригинальный блок Dv перенесён";; esac
-[ -n "$ORIG_GV_BLOCK" ] && case "$BEST_NAME" in v[0-9]*) echo "Оригинальный блок Gv перенесён";; esac; else echo "Не удалось повторно найти блок стратегии '$BEST_NAME', конфиг восстановлен без применения"; fi; rm -f "$OUT_DPI"; } >> "$AUTO_LOG" 2>&1; }
+then sed -i "${DV_MARKER_LINE},${LAST_QUOTE_LINE}d" "$CONF"; printf "%s\n" "$ORIG_DV_BLOCK" >> "$CONF"; echo "'" >> "$CONF"; fi; fi
+if [ -n "$ORIG_GV_BLOCK" ]; then LAST_QUOTE_LINE=$(grep -n "^'\$" "$CONF" | tail -n1 | cut -d: -f1); if [ -n "$LAST_QUOTE_LINE" ]
+then sed -i "${LAST_QUOTE_LINE}d" "$CONF"; printf "%s\n" "$ORIG_GV_BLOCK" >> "$CONF"; echo "'" >> "$CONF"; fi; fi; ADD_Yv; ZAPRET_RESTART; echo "Стратегия '$BEST_NAME' применена и сохранена"
+[ -n "$ORIG_YV_BLOCK" ] && echo "Оригинальный блок Yv перенесён"; [ -n "$ORIG_DV_BLOCK" ] && echo "Оригинальный блок Dv перенесён"
+[ -n "$ORIG_GV_BLOCK" ] && echo "Оригинальный блок Gv перенесён"; else echo "Не удалось повторно найти блок стратегии '$BEST_NAME', конфиг восстановлен без применения"; fi; rm -f "$OUT_DPI"; } >> "$AUTO_LOG" 2>&1; }
 auto_best_cron_line() { grep -F "$AUTO_CRON_CMD" "$CRON_FILE" 2>/dev/null | head -n1; }; LINECR=$(auto_best_cron_line); HOURC=$(echo "$LINECR" | awk '{print $2}')
 set_auto_best_time() { CUR_YEAR=$(date '+%Y'); if [ "$CUR_YEAR" -lt 2020 ]; then echo -e "\n${RED}Внимание! Время на роутере выглядит неверным:${NC}$(date '+%Y-%m-%d %H:%M:%S')${RED}!${NC}"; echo -e "${YELLOW}Расписание будет работать некорректно!${NC}"
 echo -e "${YELLOW}Сначала настройте время!${NC}\n"; PAUSE; return; fi; echo -ne "\n${YELLOW}Введите час автозапуска (${NC}0-23${YELLOW}):${NC} "; read -r HOUR; case "$HOUR" in ''|*[!0-9]*) echo -e "\n${RED}Введите число от ${NC}0${RED} до ${NC}23\n"; PAUSE; return ;; esac
