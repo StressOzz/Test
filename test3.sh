@@ -490,7 +490,7 @@ find "$BASE" -type f -name 'general*.bat' ! -name 'general (ALT5).bat' | while r
 [ -z "$MATCH" ] && continue; NAME=$(basename "$F" .bat); { echo "#$NAME"; echo "$MATCH" | sed 's/--/\n--/g' | sed '/^$/d' | sed 's/[[:space:]]*$//'; echo; } >> "$OUT"; done
 sed -i 's|"%BIN%tls_clienthello_www_google_com.bin"|/opt/zapret/files/fake/tls_clienthello_www_google_com.bin|g' "$OUT"
 sed -i '/--hostlist="%LISTS%list-general.txt"/d' "$OUT"
-sed -i '/--ipset="%LISTS%ipset-all.txt""/d' "$OUT"
+sed -i '/--ipset="%LISTS%ipset-all.txt"/d' "$OUT"
 sed -i '/--hostlist="%LISTS%list-general-user.txt"/d' "$OUT"
 sed -i '/--ipset-exclude="%LISTS%ipset-exclude.txt"/d' "$OUT"
 sed -i '/--ipset-exclude="%LISTS%ipset-exclude-user.txt"/d' "$OUT"
@@ -512,8 +512,8 @@ sed -i 's|"%BIN%tls_clienthello_max_ru.bin"|/opt/zapret/files/fake/tls_clienthel
 sed -i 's|"%BIN%quic_initial_5ka_ru.bin"|/opt/zapret/files/fake/quic_initial_5ka_ru.bin|g' "$OUT"
 sed -i 's|"%BIN%quic_initial_rutube_ru.bin"|/opt/zapret/files/fake/quic_initial_rutube_ru.bin|g' "$OUT"
 sed -i 's|"%BIN%stun.bin"|/opt/zapret/files/fake/stun.bin|g' "$OUT"
-sed -i "s|\"%GameFilterTCP%\"|$PORTS_TCP|g" "$OUT"
-sed -i "s|\"%GameFilterUDP%\"|$PORTS_UDP|g" "$OUT"
+sed -i "s|%GameFilterTCP%|$PORTS_TCP|g" "$OUT"
+sed -i "s|%GameFilterUDP%|$PORTS_UDP|g" "$OUT"
 
 sed -i 's|\^!|/opt/zapret/files/fake/tls_clienthello_www_google_com.bin|g' "$OUT"
 sed -i 's/[[:space:]]\+$//g' "$OUT"; sed -i '/^--new$/ { N; /^\--new\n$/d; }' "$OUT"
