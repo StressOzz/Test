@@ -53,6 +53,8 @@ esac
 # Вспомогательные функции
 # ==============================
 
+CACHE_TTL=300   # секунд, как долго доверять закэшированным версиям
+VERSIONS_TS=0
 STEER_TAG=""
 STEER_LATEST=""
 SPLIFY_TAG=""
@@ -64,7 +66,12 @@ get_latest_tag() {
          -o /dev/null -w '%{url_effective}' "$1" 2>/dev/null | sed 's#.*/tag/##'
 }
 
-check_versions() {
+versions_cache_fresh() {
+    NOW="$(date +%s 2>/dev/null || echo 0)"
+    [ -n "$STEER_TAG" ] && [ -n "$SPLIFY_TAG" ] && [ $((NOW - VERSIONS_TS)) -lt "$CACHE_TTL" ]
+}
+
+refresh_versions() {
     echo -e "${CYAN}Проверяем версии на GitHub...${NC}"
 
     get_latest_tag "https://github.com/xyzmean/steer/releases/latest" > "$TMP/steer_tag" &
@@ -75,6 +82,12 @@ check_versions() {
     SPLIFY_TAG="$(cat "$TMP/splify_tag" 2>/dev/null)"
     STEER_LATEST="${STEER_TAG#v}"
     SPLIFY_LATEST="${SPLIFY_TAG#v}"
+    VERSIONS_TS="$(date +%s 2>/dev/null || echo 0)"
+}
+
+ensure_versions() {
+    # Обновляет кэш только если он устарел или пуст
+    versions_cache_fresh || refresh_versions
 }
 
 get_installed_version() {
