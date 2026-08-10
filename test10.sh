@@ -168,24 +168,48 @@ BLOCK=$(cat "$TEMP_FILE_AUTO"); NAME=$(head -n1 "$TEMP_FILE_AUTO"); NAME="${NAME
 awk -v block="$BLOCK" 'BEGIN{skip=0} /option NFQWS_OPT '\''/ {printf "\toption NFQWS_OPT '\''\n%s\n'\''\n", block; skip=1; next} skip && /^'\''$/ {skip=0; next} !skip {print}' "$CONF" > "${CONF}.tmp" && mv "${CONF}.tmp" "$CONF"
 
 if [ "$NAME" = "general" ]; then
-    sed -i '/--new/{N;/--filter-tcp=2802/{s/--new/#Gv0\n--new/;};}' "$CONF"
-    if [ -n "$ORIG_GV_BLOCK" ]; then
-        awk -v block="$ORIG_GV_BLOCK" '
-        BEGIN { skip=0 }
-        /^#Gv0$/ {
+
+    if [ -n "$ORIG_YV_BLOCK" ]; then
+        awk -v block="$ORIG_YV_BLOCK" '
+        BEGIN { skip=0; inserted=0 }
+
+        skip {
+            if ($0 == "--new") {
+                skip=0
+                next
+            }
+            next
+        }
+
+        $0 == "--filter-tcp=443" {
+            getline n
+            if (n == "--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt") {
+                skip=1
+                next
+            }
+            print
+            print n
+            next
+        }
+
+        /^[[:space:]]*option NFQWS_OPT '\''$/ && !inserted {
+            print
             printf "%s\n", block
-            skip=1
+            inserted=1
             next
         }
-        skip && /^$/ {
-            skip=0
-            next
-        }
-        !skip { print }
+
+        { print }
         ' "$CONF" > "${CONF}.tmp" && mv "${CONF}.tmp" "$CONF"
     fi
-fi
 
+    sed -i '/--new/{N;/--filter-tcp=2802/{s/--new/#Gv0\n--new/;};}' "$CONF"
+
+    if [ -n "$ORIG_GV_BLOCK" ]; then
+        sed -i '/^#Gv0$/,$d' "$CONF"
+        printf "%s\n'\n" "$ORIG_GV_BLOCK" >> "$CONF"
+    fi
+fi
 
 ZAPRET_RESTART; OK=0; LOG_TMP="/tmp/zapret_log_auto_${CUR}"; : > "$LOG_TMP"; check_all_urls; echo "${NAME} → ${OK}/${TOTAL}" >> "$AUTO_RESULTS"; echo "===> Стратегия: ${NAME} = ${OK}/${TOTAL}"; done
 if [ -f "$AUTO_STOP_FLAG" ]; then echo "Автоподбор остановлен пользователем во время тестирования"; rm -f "$AUTO_STOP_FLAG"; mv -f "$AUTO_BACK" "$CONF"; ZAPRET_RESTART; echo "Конфигурация восстановлена"; rm -f "$OUT_DPI"; exit 0; fi
