@@ -120,8 +120,8 @@ get_ver "https://github.com/d0mhate/-tg-ws-proxy-Manager-go/releases/latest" "$T
 [ -s "$TMP_VER" ] && ZAPRET_VERSION="$(cat "$TMP_VER")"; [ -s "$TMP_VER_POD" ] && PODKOP_LATEST_VER="$(cat "$TMP_VER_POD")"; [ -s "$TMP_VER_TG_MT" ] && TG_MTProto="$(cat "$TMP_VER_TG_MT")"
 [ -s "$TMP_VER_SPL" ] && SPL_VER="$(cat "$TMP_VER_SPL")"; [ -s "$TMP_VER_TG_GO" ] && TG_GO_VERSION="$(cat "$TMP_VER_TG_GO")"; [ -s "$TMP_VER_TG_RS" ] && TG_RS_VERSION="$(cat "$TMP_VER_TG_RS")"
 
-echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/main/Zapret-Manager.sh)' > /usr/bin/zms; chmod +x /usr/bin/zms
-echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/main/Zapret-Manager.sh) "$@"' > /usr/bin/zmsA; chmod +x /usr/bin/zmsA
+echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/t3.sh)' > /usr/bin/zms; chmod +x /usr/bin/zms
+echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/t3.sh) "$@"' > /usr/bin/zmsA; chmod +x /usr/bin/zmsA
 
 # git="githubusercontent.com"; if ! grep -q "raw.$git" /etc/hosts; then echo -e "\n\033[1;36mДля корректной работы скрипта добавляем домены \033[0mGitHub\033[1;36m в \033[0m/etc/hosts\033[0m"
 # printf "#$git\n185.199.109.133 raw.$git release-assets.$git\n185.199.108.133 private-user-images.$git gist.$git avatars.$git\n" >> /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1; fi
@@ -169,14 +169,20 @@ awk -v block="$BLOCK" 'BEGIN{skip=0} /option NFQWS_OPT '\''/ {printf "\toption N
 
 if [ "$NAME" = "general" ]; then
 
+    # Если есть сохранённый Yv
     if [ -n "$ORIG_YV_BLOCK" ]; then
-        awk -v block="$ORIG_YV_BLOCK" '
-        BEGIN { skip=0; inserted=0 }
+
+        # Сначала удаляем из general:
+        # --filter-tcp=443
+        # --hostlist=/opt/zapret/ipset/zapret-hosts-google.txt
+        # и всё до следующего --new
+        awk '
+        BEGIN { skip=0 }
 
         skip {
             if ($0 == "--new") {
                 skip=0
-                next
+                print
             }
             next
         }
@@ -192,6 +198,13 @@ if [ "$NAME" = "general" ]; then
             next
         }
 
+        { print }
+        ' "$CONF" > "${CONF}.tmp" && mv "${CONF}.tmp" "$CONF"
+
+        # Теперь вставляем сохранённый Yv сразу после option NFQWS_OPT '
+        awk -v block="$ORIG_YV_BLOCK" '
+        BEGIN { inserted=0 }
+
         /^[[:space:]]*option NFQWS_OPT '\''$/ && !inserted {
             print
             printf "%s\n", block
@@ -203,8 +216,14 @@ if [ "$NAME" = "general" ]; then
         ' "$CONF" > "${CONF}.tmp" && mv "${CONF}.tmp" "$CONF"
     fi
 
+    # Добавляем Gv0 перед:
+    # --new
+    # --filter-tcp=2802
     sed -i '/--new/{N;/--filter-tcp=2802/{s/--new/#Gv0\n--new/;};}' "$CONF"
 
+    # Если есть сохранённый Gv —
+    # удаляем Gv0 и всё после него,
+    # затем возвращаем сохранённый Gv в конец
     if [ -n "$ORIG_GV_BLOCK" ]; then
         sed -i '/^#Gv0$/,$d' "$CONF"
         printf "%s\n'\n" "$ORIG_GV_BLOCK" >> "$CONF"
