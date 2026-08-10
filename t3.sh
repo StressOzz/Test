@@ -53,9 +53,41 @@ esac
 # Вспомогательные функции
 # ==============================
 
+CACHE_TTL=300   # секунд, как долго доверять закэшированным версиям
+VERSIONS_TS=0
+STEER_TAG=""
+STEER_LATEST=""
+SPLIFY_TAG=""
+SPLIFY_LATEST=""
+
 get_latest_tag() {
     # $1 - url вида https://github.com/<owner>/<repo>/releases/latest
-    curl -Ls -o /dev/null -w '%{url_effective}' "$1" | sed 's#.*/tag/##'
+    curl -Ls --connect-timeout 5 --max-time 8 \
+         -o /dev/null -w '%{url_effective}' "$1" 2>/dev/null | sed 's#.*/tag/##'
+}
+
+versions_cache_fresh() {
+    NOW="$(date +%s 2>/dev/null || echo 0)"
+    [ -n "$STEER_TAG" ] && [ -n "$SPLIFY_TAG" ] && [ $((NOW - VERSIONS_TS)) -lt "$CACHE_TTL" ]
+}
+
+refresh_versions() {
+    echo -e "${CYAN}Проверяем версии на GitHub...${NC}"
+
+    get_latest_tag "https://github.com/xyzmean/steer/releases/latest" > "$TMP/steer_tag" &
+    get_latest_tag "https://github.com/xyzmean/splify2/releases/latest" > "$TMP/splify_tag" &
+    wait
+
+    STEER_TAG="$(cat "$TMP/steer_tag" 2>/dev/null)"
+    SPLIFY_TAG="$(cat "$TMP/splify_tag" 2>/dev/null)"
+    STEER_LATEST="${STEER_TAG#v}"
+    SPLIFY_LATEST="${SPLIFY_TAG#v}"
+    VERSIONS_TS="$(date +%s 2>/dev/null || echo 0)"
+}
+
+ensure_versions() {
+    # Обновляет кэш только если он устарел или пуст
+    versions_cache_fresh || refresh_versions
 }
 
 get_installed_version() {
@@ -104,9 +136,9 @@ pause() {
 
 steer_install_or_update() {
     echo -e "\n${MAGENTA}━━━ Steer ━━━${NC}"
-    echo -e "${CYAN}Получаем последнюю версию...${NC}"
 
-    TAG="$(get_latest_tag "https://github.com/xyzmean/steer/releases/latest")"
+    ensure_versions
+    TAG="$STEER_TAG"
     if [ -z "$TAG" ]; then
         echo -e "${RED}✗ Не удалось определить версию Steer${NC}"
         return 1
@@ -194,9 +226,9 @@ steer_remove() {
 
 splify_install_or_update() {
     echo -e "\n${MAGENTA}━━━ Splify2 ━━━${NC}"
-    echo -e "${CYAN}Получаем последнюю версию...${NC}"
 
-    TAG="$(get_latest_tag "https://github.com/xyzmean/splify2/releases/latest")"
+    ensure_versions
+    TAG="$SPLIFY_TAG"
     if [ -z "$TAG" ]; then
         echo -e "${RED}✗ Не удалось определить версию Splify2${NC}"
         return 1
@@ -285,16 +317,12 @@ show_menu() {
     echo -e "${MAGENTA}╚══════════════════════════════════════╝${NC}"
     echo -e "\n${YELLOW}Архитектура OpenWrt:${NC} ${GREEN}$ARCH${NC}\n"
 
-    echo -e "${CYAN}Проверка версий...${NC}"
+    ensure_versions
 
     STEER_CUR="$(get_installed_version steer)"
     [ -z "$STEER_CUR" ] && STEER_CUR="$(get_installed_version steer-extended)"
-    STEER_TAG="$(get_latest_tag "https://github.com/xyzmean/steer/releases/latest")"
-    STEER_LATEST="${STEER_TAG#v}"
 
     SPLIFY_CUR="$(get_installed_version luci-app-splify2)"
-    SPLIFY_TAG="$(get_latest_tag "https://github.com/xyzmean/splify2/releases/latest")"
-    SPLIFY_LATEST="${SPLIFY_TAG#v}"
 
     echo ""
     print_status "Steer:  " "$STEER_CUR" "$STEER_LATEST"
@@ -322,8 +350,10 @@ show_menu() {
 
     echo -e " ${CYAN}5)${NC} Установить/обновить всё"
     echo -e " ${CYAN}6)${NC} Удалить всё"
+    echo -e " ${BLUE}7)${NC} Обновить версии сейчас (сбросить кэш)"
     echo -e " ${YELLOW}0)${NC} Выход"
     echo -e "${BLUE}────────────────────────────────────────${NC}"
+    echo -e "${BLUE}(версии кэшируются на ${CACHE_TTL}с, пункт 7 — форс-обновление)${NC}"
 }
 
 trap 'rm -rf "$TMP"' EXIT
@@ -340,6 +370,7 @@ while true; do
         4) splify_remove; pause ;;
         5) steer_install_or_update; splify_install_or_update; pause ;;
         6) steer_remove; splify_remove; pause ;;
+        7) refresh_versions; pause ;;
         0)
             echo -e "${GREEN}Выход.${NC}"
             exit 0
