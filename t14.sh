@@ -303,9 +303,9 @@ clear
 
         SPLIFY_CUR="$(get_version luci-app-splify2)"
 clear
-        echo -e "${BLUE}────────Steer & splify2────────${NC}"
+        echo -e "${BLUE}━━━━━━Steer & splify2━━━━━━${NC}"
         
-        echo -e   "  ${MAGENTA}Steer"
+        echo -e   "  ${MAGENTA}Steer${NC}"
         echo -e   "    Установлена: ${GREEN}${STEER_CUR:-нет}${NC}"
         echo -e   "    GitHub:      ${GREEN}${STEER_VER:-ошибка}${NC}"
 
@@ -338,10 +338,10 @@ clear
         echo -e "${GREEN}3)${NC} Установить / обновить Splify2"
         echo -e "${RED}4)${NC} Удалить Splify2"
         echo
-        echo -e "${YELLOW}Enter)${NC} Выход"
+        echo -e "${CYAN}Enter)${NC} Выход"
 
         echo
-        printf "${MAGENTA}➜ ${NC}"
+echo -en "${YELLOW}Выберите пункт:${NC} "
         read -r CHOICE
 
         case "$CHOICE" in
