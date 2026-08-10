@@ -303,39 +303,34 @@ MENU() {
 
         SPLIFY_CUR="$(get_version luci-app-splify2)"
 
-        echo -e "${MAGENTA}╔══════════════════════════════════════════════╗${NC}"
-        echo -e "${MAGENTA}║${NC}       ${CYAN}Установка / удаление релизов${NC}       ${MAGENTA}║${NC}"
-        echo -e "${MAGENTA}╚══════════════════════════════════════════════╝${NC}"
-
-        echo -e "\n${YELLOW}Архитектура OpenWrt:${NC} ${GREEN}$ARCH${NC}"
-
-        echo -e "\n${BLUE}┌──────────────────────────────────────────────┐${NC}"
-        echo -e "${BLUE}│${NC} ${MAGENTA}Steer${NC}"
-        echo -e "${BLUE}│${NC}   Установлена: ${GREEN}${STEER_CUR:-нет}${NC}"
-        echo -e "${BLUE}│${NC}   GitHub:      ${GREEN}${STEER_VER:-ошибка}${NC}"
+        echo -e "\n${BLUE}──────────────────────────────────────────────${NC}"
+        
+        echo -e   "  ${MAGENTA}Steer"
+        echo -e   "    Установлена: ${GREEN}${STEER_CUR:-нет}${NC}"
+        echo -e   "    GitHub:      ${GREEN}${STEER_VER:-ошибка}${NC}"
 
         if [ -z "$STEER_CUR" ]; then
-            echo -e "${BLUE}│${NC}   Статус:      ${RED}не установлен${NC}"
+            echo -e "    Статус:      ${RED}не установлен${NC}"
         elif version_match "$STEER_CUR" "$STEER_VER"; then
-            echo -e "${BLUE}│${NC}   Статус:      ${GREEN}актуален${NC}"
+            echo -e "    Статус:      ${GREEN}актуален${NC}"
         else
-            echo -e "${BLUE}│${NC}   Статус:      ${YELLOW}доступно обновление${NC}"
+            echo -e "    Статус:      ${YELLOW}доступно обновление${NC}"
         fi
 
-        echo -e "${BLUE}├──────────────────────────────────────────────┤${NC}"
-        echo -e "${BLUE}│${NC} ${MAGENTA}Splify2${NC}"
-        echo -e "${BLUE}│${NC}   Установлена: ${GREEN}${SPLIFY_CUR:-нет}${NC}"
-        echo -e "${BLUE}│${NC}   GitHub:      ${GREEN}${SPLIFY_VER:-ошибка}${NC}"
+        echo
+        echo -e "  ${MAGENTA}Splify2${NC}"
+        echo -e "    Установлена: ${GREEN}${SPLIFY_CUR:-нет}${NC}"
+        echo -e "    GitHub:      ${GREEN}${SPLIFY_VER:-ошибка}${NC}"
 
         if [ -z "$SPLIFY_CUR" ]; then
-            echo -e "${BLUE}│${NC}   Статус:      ${RED}не установлен${NC}"
+            echo -e "    Статус:      ${RED}не установлен${NC}"
         elif version_match "$SPLIFY_CUR" "$SPLIFY_VER"; then
-            echo -e "${BLUE}│${NC}   Статус:      ${GREEN}актуален${NC}"
+            echo -e "    Статус:      ${GREEN}актуален${NC}"
         else
-            echo -e "${BLUE}│${NC}   Статус:      ${YELLOW}доступно обновление${NC}"
+            echo -e "    Статус:      ${YELLOW}доступно обновление${NC}"
         fi
 
-        echo -e "${BLUE}└──────────────────────────────────────────────┘${NC}"
+        echo
 
         echo
         echo -e "${GREEN}1)${NC} Установить / обновить Steer"
@@ -344,7 +339,7 @@ MENU() {
         echo -e "${GREEN}3)${NC} Установить / обновить Splify2"
         echo -e "${RED}4)${NC} Удалить Splify2"
         echo
-        echo -e "${YELLOW}0)${NC} Выход"
+        echo -e "${YELLOW}Enter)${NC} Выход"
 
         echo
         printf "${MAGENTA}➜ ${NC}"
@@ -371,8 +366,7 @@ MENU() {
                 break
                 ;;
             *)
-                echo -e "${RED}✗ Неверный выбор${NC}"
-                sleep 1
+                exit 0
                 ;;
         esac
     done
