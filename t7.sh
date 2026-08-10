@@ -120,8 +120,8 @@ get_ver "https://github.com/d0mhate/-tg-ws-proxy-Manager-go/releases/latest" "$T
 [ -s "$TMP_VER" ] && ZAPRET_VERSION="$(cat "$TMP_VER")"; [ -s "$TMP_VER_POD" ] && PODKOP_LATEST_VER="$(cat "$TMP_VER_POD")"; [ -s "$TMP_VER_TG_MT" ] && TG_MTProto="$(cat "$TMP_VER_TG_MT")"
 [ -s "$TMP_VER_SPL" ] && SPL_VER="$(cat "$TMP_VER_SPL")"; [ -s "$TMP_VER_TG_GO" ] && TG_GO_VERSION="$(cat "$TMP_VER_TG_GO")"; [ -s "$TMP_VER_TG_RS" ] && TG_RS_VERSION="$(cat "$TMP_VER_TG_RS")"
 
-echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/t6.sh)' > /usr/bin/zms; chmod +x /usr/bin/zms
-echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/t6.sh) "$@"' > /usr/bin/zmsA; chmod +x /usr/bin/zmsA
+echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/t7.sh)' > /usr/bin/zms; chmod +x /usr/bin/zms
+echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/t7.sh) "$@"' > /usr/bin/zmsA; chmod +x /usr/bin/zmsA
 
 # git="githubusercontent.com"; if ! grep -q "raw.$git" /etc/hosts; then echo -e "\n\033[1;36mДля корректной работы скрипта добавляем домены \033[0mGitHub\033[1;36m в \033[0m/etc/hosts\033[0m"
 # printf "#$git\n185.199.109.133 raw.$git release-assets.$git\n185.199.108.133 private-user-images.$git gist.$git avatars.$git\n" >> /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1; fi
@@ -163,41 +163,38 @@ URLS="$(cat "$OUT_DPI")"; TOTAL=$(grep -c "|" "$OUT_DPI"); TOTAL_STR=$(grep -c '
 if [ -f "$AUTO_STOP_FLAG" ]; then echo "Автоподбор остановлен пользователем"; rm -f "$AUTO_STOP_FLAG"; mv -f "$AUTO_BACK" "$CONF"; ZAPRET_RESTART; echo "Конфигурация восстановлена"; rm -f "$OUT_DPI"; exit 0; fi
 LINES=$(grep -n '^#' "$STR_FILE_AUTO" | cut -d: -f1); CUR=0; echo "$LINES" | while read -r START; do CUR=$((CUR + 1)); if [ -f "$AUTO_STOP_FLAG" ]; then echo "===> Получен сигнал остановки, прерываем тестирование"; break; fi
 NEXT=$(echo "$LINES" | awk -v s="$START" '$1>s{print;exit}'); if [ -z "$NEXT" ]; then sed -n "${START},\$p" "$STR_FILE_AUTO" > "$TEMP_FILE_AUTO"; else sed -n "${START},$((NEXT-1))p" "$STR_FILE_AUTO" > "$TEMP_FILE_AUTO"; fi
-BLOCK=$(cat "$TEMP_FILE_AUTO"); NAME=$(head -n1 "$TEMP_FILE_AUTO"); NAME="${NAME#\#}"
+BLOCK=$(cat "$TEMP_FILE_AUTO"); NAME=$(head -n1 "$TEMP_FILE_AUTO"); NAME="${NAME#\#}"; awk -v block="$BLOCK" 'BEGIN{skip=0} /option NFQWS_OPT '\''/ {printf "\toption NFQWS_OPT '\''\n%s\n'\''\n", block; skip=1; next} skip && /^'\''$/ {skip=0; next} !skip {print}' "$CONF" > "${CONF}.tmp" && mv "${CONF}.tmp" "$CONF"
+ZAPRET_RESTART; OK=0; LOG_TMP="/tmp/zapret_log_auto_${CUR}"; : > "$LOG_TMP"; check_all_urls; echo "${NAME} → ${OK}/${TOTAL}" >> "$AUTO_RESULTS"; echo "===> Стратегия: ${NAME} = ${OK}/${TOTAL}"; done
+if [ -f "$AUTO_STOP_FLAG" ]; then echo "Автоподбор остановлен пользователем во время тестирования"; rm -f "$AUTO_STOP_FLAG"; mv -f "$AUTO_BACK" "$CONF"; ZAPRET_RESTART; echo "Конфигурация восстановлена"; rm -f "$OUT_DPI"; exit 0; fi
+sort_results_desc "$AUTO_RESULTS" "$AUTO_RESULTS"; echo ""; echo "Результат тестирования стратегии"; echo ""; cat "$AUTO_RESULTS"; echo ""; BEST_LINE=$(grep -v '^Контрольный тест' "$AUTO_RESULTS" | head -n1)
+if [ -z "$BEST_LINE" ]; then echo "Не удалось определить лучшую стратегию, восстанавливаем прежнюю"; mv -f "$AUTO_BACK" "$CONF"; ZAPRET_RESTART; rm -f "$OUT_DPI"; exit 1; fi
+BEST_NAME=$(echo "$BEST_LINE" | cut -d'→' -f1 | sed 's/[[:space:]]*$//'); echo "Лучшая стратегия: $BEST_LINE"; mv -f "$AUTO_BACK" "$CONF"
+START=$(grep -nxF "#${BEST_NAME}" "$STR_FILE_AUTO" | head -n1 | cut -d: -f1); if [ -n "$START" ]; then NEXT=$(echo "$LINES" | awk -v s="$START" '$1>s{print;exit}')
+if [ -z "$NEXT" ]; then sed -n "${START},\$p" "$STR_FILE_AUTO" > "$TEMP_FILE_AUTO"; else sed -n "${START},$((NEXT-1))p" "$STR_FILE_AUTO" > "$TEMP_FILE_AUTO"; fi
+BLOCK=$(cat "$TEMP_FILE_AUTO"); sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; { echo "  option NFQWS_OPT '"
+[ -n "$ORIG_YV_BLOCK" ] && echo "$ORIG_YV_BLOCK"; echo "$BLOCK"; echo "'"; } >> "$CONF"
 
-awk -v block="$BLOCK" 'BEGIN{skip=0} /option NFQWS_OPT '\''/ {printf "\toption NFQWS_OPT '\''\n%s\n'\''\n", block; skip=1; next} skip && /^'\''$/ {skip=0; next} !skip {print}' "$CONF" > "${CONF}.tmp" && mv "${CONF}.tmp" "$CONF"
-
-if [ "$NAME" = "general" ]; then
+if [ "$BEST_NAME" = "general" ]; then
 
     if [ -n "$ORIG_YV_BLOCK" ]; then
-
-        # Удаляем Google-блок ТОЛЬКО из #general*
-        # Удаляется:
-        # --new
-        # --filter-tcp=443
-        # --hostlist=/opt/zapret/ipset/zapret-hosts-google.txt
-        # и всё до следующего --new
         awk '
         BEGIN {
             in_general=0
             skip=0
         }
 
-        # Вход в #general*
         /^#general/ {
             in_general=1
             print
             next
         }
 
-        # Выход из #general* в следующий именованный блок
         in_general && /^#[A-Za-z0-9_-]+/ {
             in_general=0
             print
             next
         }
 
-        # Удаляем содержимое Google-блока
         in_general && skip {
             if ($0 == "--new") {
                 skip=0
@@ -206,10 +203,6 @@ if [ "$NAME" = "general" ]; then
             next
         }
 
-        # Ищем строго последовательность:
-        # --new
-        # --filter-tcp=443
-        # --hostlist=/opt/zapret/ipset/zapret-hosts-google.txt
         in_general && $0 == "--new" {
             getline line1
             getline line2
@@ -229,12 +222,8 @@ if [ "$NAME" = "general" ]; then
         { print }
         ' "$CONF" > "${CONF}.tmp" && mv "${CONF}.tmp" "$CONF"
 
-        # Вставляем сохранённый Yv сразу после:
-        # option NFQWS_OPT '
         awk -v block="$ORIG_YV_BLOCK" '
-        BEGIN {
-            inserted=0
-        }
+        BEGIN { inserted=0 }
 
         /^[[:space:]]*option NFQWS_OPT '\''$/ && !inserted {
             print
@@ -245,32 +234,19 @@ if [ "$NAME" = "general" ]; then
 
         { print }
         ' "$CONF" > "${CONF}.tmp" && mv "${CONF}.tmp" "$CONF"
-
     fi
 
-    # Добавляем Gv0 перед:
-    # --new
-    # --filter-tcp=2802
     sed -i '/--new/{N;/--filter-tcp=2802/{s/--new/#Gv0\n--new/;};}' "$CONF"
 
-    # Gv всегда последний:
-    # удаляем #Gv0 и всё после него,
-    # затем возвращаем сохранённый Gv
     if [ -n "$ORIG_GV_BLOCK" ]; then
         sed -i '/^#Gv0$/,$d' "$CONF"
         printf "%s\n'\n" "$ORIG_GV_BLOCK" >> "$CONF"
     fi
 
 fi
-ZAPRET_RESTART; OK=0; LOG_TMP="/tmp/zapret_log_auto_${CUR}"; : > "$LOG_TMP"; check_all_urls; echo "${NAME} → ${OK}/${TOTAL}" >> "$AUTO_RESULTS"; echo "===> Стратегия: ${NAME} = ${OK}/${TOTAL}"; done
-if [ -f "$AUTO_STOP_FLAG" ]; then echo "Автоподбор остановлен пользователем во время тестирования"; rm -f "$AUTO_STOP_FLAG"; mv -f "$AUTO_BACK" "$CONF"; ZAPRET_RESTART; echo "Конфигурация восстановлена"; rm -f "$OUT_DPI"; exit 0; fi
-sort_results_desc "$AUTO_RESULTS" "$AUTO_RESULTS"; echo ""; echo "Результат тестирования стратегии"; echo ""; cat "$AUTO_RESULTS"; echo ""; BEST_LINE=$(grep -v '^Контрольный тест' "$AUTO_RESULTS" | head -n1)
-if [ -z "$BEST_LINE" ]; then echo "Не удалось определить лучшую стратегию, восстанавливаем прежнюю"; mv -f "$AUTO_BACK" "$CONF"; ZAPRET_RESTART; rm -f "$OUT_DPI"; exit 1; fi
-BEST_NAME=$(echo "$BEST_LINE" | cut -d'→' -f1 | sed 's/[[:space:]]*$//'); echo "Лучшая стратегия: $BEST_LINE"; mv -f "$AUTO_BACK" "$CONF"
-START=$(grep -nxF "#${BEST_NAME}" "$STR_FILE_AUTO" | head -n1 | cut -d: -f1); if [ -n "$START" ]; then NEXT=$(echo "$LINES" | awk -v s="$START" '$1>s{print;exit}')
-if [ -z "$NEXT" ]; then sed -n "${START},\$p" "$STR_FILE_AUTO" > "$TEMP_FILE_AUTO"; else sed -n "${START},$((NEXT-1))p" "$STR_FILE_AUTO" > "$TEMP_FILE_AUTO"; fi
-BLOCK=$(cat "$TEMP_FILE_AUTO"); sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; { echo "  option NFQWS_OPT '"
-[ -n "$ORIG_YV_BLOCK" ] && echo "$ORIG_YV_BLOCK"; echo "$BLOCK"; echo "'"; } >> "$CONF"
+
+
+
 if ! grep -q "option NFQWS_PORTS_UDP.*19294-19344,50000-50100" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'\$/,19294-19344,50000-50100'/" "$CONF"; fi
 if ! grep -q "option NFQWS_PORTS_TCP.*2053,2083,2087,2096,8443" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_TCP '/s/'\$/,2053,2083,2087,2096,8443'/" "$CONF"; fi
 discord_str_add; if [ -n "$ORIG_DV_BLOCK" ]; then DV_MARKER_LINE=$(grep -n "^#Dv[0-9]" "$CONF" | tail -n1 | cut -d: -f1)
@@ -286,7 +262,7 @@ echo -e "${YELLOW}Сначала настройте время!${NC}\n"; PAUSE; 
 { [ "$HOUR" -ge 0 ] && [ "$HOUR" -le 23 ]; } || { echo -e "\n${RED}Ошибка! Диапазон ${NC}0-23\n"; PAUSE; return; }; mkdir -p "$(dirname "$CRON_FILE")"; touch "$CRON_FILE"; sed -i "\|$AUTO_CRON_CMD|d" "$CRON_FILE"
 echo "0 $HOUR * * * $AUTO_CRON_CMD >/dev/null 2>&1" >> "$CRON_FILE"; /etc/init.d/cron restart >/dev/null 2>&1; echo -e "\n${GREEN}Автоподбор запланирован ежедневно в ${NC}$(printf "%02d" "$HOUR"):00${GREEN}!${NC}\n"; PAUSE; }
 disable_auto_best() { sed -i "\|$AUTO_CRON_CMD|d" "$CRON_FILE"; /etc/init.d/cron restart >/dev/null 2>&1; echo -e "\n${GREEN}Автоподбор отключен!${NC}\n"; PAUSE; }
-run_auto_best_background() { echo -e "\n${MAGENTA}Запускаем автоподбор в фоне${NC}"; rm -f "$AUTO_LOCK"; $AUTO_CRON_CMD >/dev/null 2>&1 & echo -en "${CYAN}Запускаем фоновое выполнение${NC}"; _i=0; while [ ! -f "$AUTO_LOCK" ] && [ "$_i" -lt 20 ]; do sleep 1; _i=$((_i + 1)); done; echo; if auto_best_running; then echo -e "${GREEN}Автоподбор в фоне запущен!${NC}\n"; else echo -e "${YELLOW}Процесс запускается медленнее обычного, статус обновится при следующем открытии меню${NC}\n"; fi; PAUSE; }
+run_auto_best_background() { echo -e "\n${MAGENTA}Запускаем автоподбор в фоне${NC}"; rm -f "$AUTO_LOCK"; $AUTO_CRON_CMD >/dev/null 2>&1 & echo -en "${CYAN}Запускаем автоподбор в фоне${NC}"; _i=0; while [ ! -f "$AUTO_LOCK" ] && [ "$_i" -lt 20 ]; do sleep 1; _i=$((_i + 1)); done; echo; if auto_best_running; then echo -e "${GREEN}Автоподбор в фоне запущен!${NC}\n"; else echo -e "${YELLOW}Процесс запускается медленнее обычного, статус обновится при следующем открытии меню${NC}\n"; fi; PAUSE; }
 AUTO_BEST_MENU() { [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }; if ! ( [ "$PKG_IS_APK" = "1" ] && apk info -e zoneinfo-core zoneinfo-europe zoneinfo-asia >/dev/null 2>&1 || opkg status zoneinfo-core zoneinfo-europe zoneinfo-asia >/dev/null 2>&1 )
 then echo -e "\n${MAGENTA}Устанавливаем пакеты с часовыми поясами${NC}"; update_packages; $INSTALL zoneinfo-core zoneinfo-europe zoneinfo-asia >/dev/null 2>&1; echo -e "${GREEN}Пакеты с часовыми поясами установлены${NC}\n"; PAUSE; fi
 while true; do clear; echo -e "${MAGENTA}Меню автоподбора стратегий по расписанию${NC}\n"; echo -e "${YELLOW}Текущее время на роутере:${NC} ${CYAN}$(date '+%H:%M:%S')${NC}"; if auto_best_running; then RUNNING=1
