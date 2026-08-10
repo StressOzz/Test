@@ -221,26 +221,10 @@ if [ "$BEST_NAME" = "general" ]; then
 
         { print }
         ' "$CONF" > "${CONF}.tmp" && mv "${CONF}.tmp" "$CONF"
-
-        awk -v block="$ORIG_YV_BLOCK" '
-        BEGIN { inserted=0 }
-
-        /^[[:space:]]*option NFQWS_OPT '\''$/ && !inserted {
-            print
-            printf "%s\n", block
-            inserted=1
-            next
-        }
-
-        { print }
-        ' "$CONF" > "${CONF}.tmp" && mv "${CONF}.tmp" "$CONF"
     fi
 
-    sed -i '/--new/{N;/--filter-tcp=2802/{s/--new/#Gv0\n--new/;};}' "$CONF"
-
-    if [ -n "$ORIG_GV_BLOCK" ]; then
-        sed -i '/^#Gv0$/,$d' "$CONF"
-        printf "%s\n'\n" "$ORIG_GV_BLOCK" >> "$CONF"
+    if ! grep -q '^#Gv0$' "$CONF"; then
+        sed -i '/--new/{N;/--filter-tcp=2802/{s/--new/#Gv0\n--new/;};}' "$CONF"
     fi
 
 fi
@@ -249,13 +233,33 @@ fi
 
 if ! grep -q "option NFQWS_PORTS_UDP.*19294-19344,50000-50100" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'\$/,19294-19344,50000-50100'/" "$CONF"; fi
 if ! grep -q "option NFQWS_PORTS_TCP.*2053,2083,2087,2096,8443" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_TCP '/s/'\$/,2053,2083,2087,2096,8443'/" "$CONF"; fi
-discord_str_add; if [ -n "$ORIG_DV_BLOCK" ]; then DV_MARKER_LINE=$(grep -n "^#Dv[0-9]" "$CONF" | tail -n1 | cut -d: -f1)
-LAST_QUOTE_LINE=$(grep -n "^'\$" "$CONF" | tail -n1 | cut -d: -f1); if [ -n "$DV_MARKER_LINE" ] && [ -n "$LAST_QUOTE_LINE" ] && [ "$LAST_QUOTE_LINE" -gt "$DV_MARKER_LINE" ]
+
+discord_str_add
+
+if [ -n "$ORIG_DV_BLOCK" ]; then DV_MARKER_LINE=$(grep -n "^#Dv[0-9]" "$CONF" | tail -n1 | cut -d: -f1)
+LAST_QUOTE_LINE=$(grep -n "^'\$" "$CONF" | tail -n1 | cut -d: -f1)
+
+if [ -n "$DV_MARKER_LINE" ] && [ -n "$LAST_QUOTE_LINE" ] && [ "$LAST_QUOTE_LINE" -gt "$DV_MARKER_LINE" ]
 then sed -i "${DV_MARKER_LINE},${LAST_QUOTE_LINE}d" "$CONF"; printf "%s\n" "$ORIG_DV_BLOCK" >> "$CONF"; echo "'" >> "$CONF"; fi; fi
-if [ -n "$ORIG_GV_BLOCK" ]; then LAST_QUOTE_LINE=$(grep -n "^'\$" "$CONF" | tail -n1 | cut -d: -f1); if [ -n "$LAST_QUOTE_LINE" ]
-then sed -i "${LAST_QUOTE_LINE}d" "$CONF"; printf "%s\n" "$ORIG_GV_BLOCK" >> "$CONF"; echo "'" >> "$CONF"; fi; fi; ADD_Yv; ZAPRET_RESTART; echo "Стратегия '$BEST_NAME' применена и сохранена"
+
+if [ -n "$ORIG_GV_BLOCK" ]; then
+    LAST_QUOTE_LINE=$(grep -n "^'\$" "$CONF" | tail -n1 | cut -d: -f1)
+    if [ -n "$LAST_QUOTE_LINE" ]; then
+        sed -i "${LAST_QUOTE_LINE}d" "$CONF"
+        sed -i '/^#Gv0$/,$d' "$CONF"
+        printf "%s\n" "$ORIG_GV_BLOCK" >> "$CONF"
+        echo "'" >> "$CONF"
+    fi
+fi
+
+ADD_Yv; ZAPRET_RESTART
+
+echo "Стратегия '$BEST_NAME' применена и сохранена"
 [ -n "$ORIG_YV_BLOCK" ] && echo "Оригинальный блок Yv перенесён"; [ -n "$ORIG_DV_BLOCK" ] && echo "Оригинальный блок Dv перенесён"
 [ -n "$ORIG_GV_BLOCK" ] && echo "Оригинальный блок Gv перенесён"; else echo "Не удалось повторно найти блок стратегии '$BEST_NAME', конфиг восстановлен без применения"; fi; rm -f "$OUT_DPI"; } >> "$AUTO_LOG" 2>&1; }
+
+
+
 auto_best_cron_line() { grep -F "$AUTO_CRON_CMD" "$CRON_FILE" 2>/dev/null | head -n1; }; LINECR=$(auto_best_cron_line); HOURC=$(echo "$LINECR" | awk '{print $2}')
 set_auto_best_time() { CUR_YEAR=$(date '+%Y'); if [ "$CUR_YEAR" -lt 2020 ]; then echo -e "\n${RED}Внимание! Время на роутере выглядит неверным:${NC}$(date '+%Y-%m-%d %H:%M:%S')${RED}!${NC}"; echo -e "${YELLOW}Расписание будет работать некорректно!${NC}"
 echo -e "${YELLOW}Сначала настройте время!${NC}\n"; PAUSE; return; fi; echo -ne "\n${YELLOW}Введите час автозапуска (${NC}0-23${YELLOW}):${NC} "; read -r HOUR; case "$HOUR" in ''|*[!0-9]*) echo -e "\n${RED}Введите число от ${NC}0${RED} до ${NC}23\n"; PAUSE; return ;; esac
