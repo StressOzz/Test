@@ -286,7 +286,7 @@ remove_splify() {
 MENU() {
     while true; do
 clear
-        echo -e "${BLUE}────────────────${NC}Собираем информацию о версиях${BLUE}────────────────${NC}"
+        echo -e "${BLUE}Собираем информацию о версиях${NC}"
         STEER_TAG="$(get_latest_tag "https://github.com/xyzmean/steer/releases/latest")"
         STEER_VER="${STEER_TAG#v}"
 
@@ -303,7 +303,7 @@ clear
 
         SPLIFY_CUR="$(get_version luci-app-splify2)"
 clear
-        echo -e "${BLUE}────────────────Steer & splify2────────────────${NC}"
+        echo -e "${BLUE}────────Steer & splify2────────${NC}"
         
         echo -e   "  ${MAGENTA}Steer"
         echo -e   "    Установлена: ${GREEN}${STEER_CUR:-нет}${NC}"
@@ -332,7 +332,6 @@ clear
 
         echo
 
-        echo
         echo -e "${GREEN}1)${NC} Установить / обновить Steer"
         echo -e "${RED}2)${NC} Удалить Steer"
         echo
