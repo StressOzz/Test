@@ -120,8 +120,8 @@ get_ver "https://github.com/d0mhate/-tg-ws-proxy-Manager-go/releases/latest" "$T
 [ -s "$TMP_VER" ] && ZAPRET_VERSION="$(cat "$TMP_VER")"; [ -s "$TMP_VER_POD" ] && PODKOP_LATEST_VER="$(cat "$TMP_VER_POD")"; [ -s "$TMP_VER_TG_MT" ] && TG_MTProto="$(cat "$TMP_VER_TG_MT")"
 [ -s "$TMP_VER_SPL" ] && SPL_VER="$(cat "$TMP_VER_SPL")"; [ -s "$TMP_VER_TG_GO" ] && TG_GO_VERSION="$(cat "$TMP_VER_TG_GO")"; [ -s "$TMP_VER_TG_RS" ] && TG_RS_VERSION="$(cat "$TMP_VER_TG_RS")"
 
-echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/t1.sh)' > /usr/bin/zms; chmod +x /usr/bin/zms
-echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/t1.sh) "$@"' > /usr/bin/zmsA; chmod +x /usr/bin/zmsA
+echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/t3.sh)' > /usr/bin/zms; chmod +x /usr/bin/zms
+echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/t3.sh) "$@"' > /usr/bin/zmsA; chmod +x /usr/bin/zmsA
 
 # git="githubusercontent.com"; if ! grep -q "raw.$git" /etc/hosts; then echo -e "\n\033[1;36mДля корректной работы скрипта добавляем домены \033[0mGitHub\033[1;36m в \033[0m/etc/hosts\033[0m"
 # printf "#$git\n185.199.109.133 raw.$git release-assets.$git\n185.199.108.133 private-user-images.$git gist.$git avatars.$git\n" >> /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1; fi
@@ -155,6 +155,8 @@ auto_best_stop_cleanup() { { echo ""; echo "=== $(date '+%Y-%m-%d %H:%M:%S') А�
 mv -f "$AUTO_BACK" "$CONF"; ZAPRET_RESTART; echo "Конфигурация восстановлена"; else echo "Файл резервной конфигурации не найден, восстановление невозможно"; fi; } >> "$AUTO_LOG" 2>&1; }
 stop_auto_best() { touch "$AUTO_STOP_FLAG"; echo -en "${CYAN}Завершаем текущий автоподбор${NC}"; _i=0; while auto_best_running && [ "$_i" -lt 90 ]; do sleep 1; _i=$((_i + 1)); [ $((_i % 5)) -eq 0 ]; done
 echo; if auto_best_running; then PID=$(head -n1 "$AUTO_LOCK" 2>/dev/null); [ -n "$PID" ] && kill -KILL "$PID" 2>/dev/null; rm -f "$AUTO_LOCK"; if [ -f "$AUTO_BACK" ]; then mv -f "$AUTO_BACK" "$CONF"; ZAPRET_RESTART; fi; fi; rm -f "$AUTO_STOP_FLAG"; }
+
+
 auto_apply_best_strategy() { echo $$ > "$AUTO_LOCK"; rm -f "$AUTO_STOP_FLAG"; trap 'rm -f "$AUTO_LOCK"' EXIT; mkdir -p "$TMP_SF" "/opt/zapret/tmp"; : > "$AUTO_LOG"; { echo "===> Автоподбор стратегии запущен <==="; if [ ! -f /etc/init.d/zapret ]; then echo "Zapret не установлен, выход"; exit 0; fi
 STR_FILE_AUTO="$TMP_SF/str_auto.txt"; TEMP_FILE_AUTO="$TMP_SF/str_temp_auto.txt"; : > "$STR_FILE_AUTO"; cp "$CONF" "$AUTO_BACK"; ORIG_YV_BLOCK=""; ORIG_GV_BLOCK=""; ORIG_DV_BLOCK=""; grep -q "^#Yv[0-9]" "$AUTO_BACK" && ORIG_YV_BLOCK=$(extract_yv_block "$AUTO_BACK")
 grep -q "^#Gv[0-9]" "$AUTO_BACK" && ORIG_GV_BLOCK=$(extract_gv_block "$AUTO_BACK"); grep -q "^#Dv[0-9]" "$AUTO_BACK" && ORIG_DV_BLOCK=$(extract_dv_block "$AUTO_BACK"); echo "Собираем Flowseal стратегии"; download_strategies 1; cat "$OUT" >> "$STR_FILE_AUTO"
@@ -173,87 +175,77 @@ START=$(grep -nxF "#${BEST_NAME}" "$STR_FILE_AUTO" | head -n1 | cut -d: -f1); if
 if [ -z "$NEXT" ]; then sed -n "${START},\$p" "$STR_FILE_AUTO" > "$TEMP_FILE_AUTO"; else sed -n "${START},$((NEXT-1))p" "$STR_FILE_AUTO" > "$TEMP_FILE_AUTO"; fi
 
 
-BLOCK=$(cat "$TEMP_FILE_AUTO"); sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
-{
-    echo "  option NFQWS_OPT '"
-    # Для "general" Yv вставляется отдельно ниже (после удаления встроенного
-    # дефолтного youtube-hostlist блока), чтобы не дублировать его
-    case "$BEST_NAME" in
-        general) ;;
-        *) [ -n "$ORIG_YV_BLOCK" ] && echo "$ORIG_YV_BLOCK" ;;
-    esac
-    echo "$BLOCK"
-    echo "'"
-} >> "$CONF"
+BLOCK=$(cat "$TEMP_FILE_AUTO")
 
+# Определяем тип выбранной стратегии:
+# v-стратегии начинаются с #V / #v или имеют имя из strategy_v
+IS_V_STRATEGY=0
+echo "$NAME" | grep -qiE '^v[0-9]+$' && IS_V_STRATEGY=1
 
-if [ "$BEST_NAME" = "general" ]; then
+if [ "$IS_V_STRATEGY" -eq 1 ]; then
+    # ==============================
+    # Новая V-стратегия
+    # ==============================
 
-if [ -n "$ORIG_YV_BLOCK" ]; then
-        # 1. Удаляем встроенный дефолтный блок youtube-hostlist:
-        #    --new / --filter-tcp=443 / --hostlist=.../zapret-hosts-google.txt
-        #    и всё, что идёт после него, вплоть до следующего "--new" включительно.
-        #    Если закрывающий "--new" не найден — ничего не удаляем (безопасный откат).
-        awk '
-            { lines[NR] = $0 }
-            END {
-                total = NR
-                rs = 0; re = 0
-                for (i = 1; i <= total - 2; i++) {
-                    if (lines[i] == "--new" &&
-                        lines[i+1] == "--filter-tcp=443" &&
-                        lines[i+2] == "--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt") {
-                        rs = i
-                        break
-                    }
-                }
-                if (rs > 0) {
-                    for (j = rs + 3; j <= total; j++) {
-                        if (lines[j] == "--new") { re = j; break }
-                    }
-                }
-                for (i = 1; i <= total; i++) {
-                    if (rs > 0 && re > 0 && i >= rs && i <= re) continue
-                    print lines[i]
-                }
-            }
-        ' "$CONF" > "${CONF}.tmp" && mv "${CONF}.tmp" "$CONF"
+    sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
 
-        # 2. Вставляем сохранённый оригинальный блок Yv сразу следующей строкой
-        #    после "  option NFQWS_OPT '"
-        YV_INSERT_TMP="$TMP_SF/orig_yv_insert.txt"
-        printf '%s\n' "$ORIG_YV_BLOCK" > "$YV_INSERT_TMP"
-        sed -i "/^[[:space:]]*option NFQWS_OPT '/r $YV_INSERT_TMP" "$CONF"
-        rm -f "$YV_INSERT_TMP"
+    {
+        echo "  option NFQWS_OPT '"
+        [ -n "$ORIG_YV_BLOCK" ] && echo "$ORIG_YV_BLOCK"
+        echo "$BLOCK"
+        echo "'"
+    } >> "$CONF"
+
+    discord_str_add
+
+    # Возвращаем оригинальный Dv
+    if [ -n "$ORIG_DV_BLOCK" ]; then
+        DV_MARKER_LINE=$(grep -n "^#Dv[0-9]" "$CONF" | tail -n1 | cut -d: -f1)
+        LAST_QUOTE_LINE=$(grep -n "^'\$" "$CONF" | tail -n1 | cut -d: -f1)
+
+        if [ -n "$DV_MARKER_LINE" ] && [ -n "$LAST_QUOTE_LINE" ] && [ "$LAST_QUOTE_LINE" -gt "$DV_MARKER_LINE" ]; then
+            sed -i "${DV_MARKER_LINE},${LAST_QUOTE_LINE}d" "$CONF"
+            printf "%s\n" "$ORIG_DV_BLOCK" >> "$CONF"
+            echo "'" >> "$CONF"
+        fi
     fi
+
+    # Возвращаем оригинальный Gv
+    if [ -n "$ORIG_GV_BLOCK" ]; then
+        LAST_QUOTE_LINE=$(grep -n "^'\$" "$CONF" | tail -n1 | cut -d: -f1)
+
+        if [ -n "$LAST_QUOTE_LINE" ]; then
+            sed -i "${LAST_QUOTE_LINE}d" "$CONF"
+            printf "%s\n" "$ORIG_GV_BLOCK" >> "$CONF"
+            echo "'" >> "$CONF"
+        fi
+    fi
+
+    ADD_Yv
+
+else
+    # ==============================
+    # General / Flowseal стратегия
+    # ==============================
+
+    # Удаляем текущий NFQWS_OPT и вставляем
+    # найденную стратегию БЕЗ каких-либо изменений
+    # и без возврата Yv/Gv/Dv.
+    sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
+
+    {
+        echo "  option NFQWS_OPT '"
+        echo "$BLOCK"
+        echo "'"
+    } >> "$CONF"
 
     if ! grep -q '^#Gv0$' "$CONF"; then
         sed -i '/--new/{N;/--filter-tcp=2802/{s/--new/#Gv0\n--new/;};}' "$CONF"
     fi
-
+    
 fi
 
-# discord_str_add
-
-if [ -n "$ORIG_DV_BLOCK" ]; then DV_MARKER_LINE=$(grep -n "^#Dv[0-9]" "$CONF" | tail -n1 | cut -d: -f1)
-LAST_QUOTE_LINE=$(grep -n "^'\$" "$CONF" | tail -n1 | cut -d: -f1)
-
-if [ -n "$DV_MARKER_LINE" ] && [ -n "$LAST_QUOTE_LINE" ] && [ "$LAST_QUOTE_LINE" -gt "$DV_MARKER_LINE" ]
-then sed -i "${DV_MARKER_LINE},${LAST_QUOTE_LINE}d" "$CONF"; printf "%s\n" "$ORIG_DV_BLOCK" >> "$CONF"; echo "'" >> "$CONF"; fi; fi
-
-if [ -n "$ORIG_GV_BLOCK" ]; then
-    LAST_QUOTE_LINE=$(grep -n "^'\$" "$CONF" | tail -n1 | cut -d: -f1)
-    if [ -n "$LAST_QUOTE_LINE" ]; then
-        sed -i "${LAST_QUOTE_LINE}d" "$CONF"
-        sed -i '/^#Gv0$/,$d' "$CONF"
-        printf "%s\n" "$ORIG_GV_BLOCK" >> "$CONF"
-        echo "'" >> "$CONF"
-    fi
-fi
-
-ADD_Yv; ZAPRET_RESTART
-
-echo "Стратегия '$BEST_NAME' применена и сохранена"
+ZAPRET_RESTART; echo "Стратегия '$BEST_NAME' применена и сохранена"
 [ -n "$ORIG_YV_BLOCK" ] && echo "Оригинальный блок Yv перенесён"; [ -n "$ORIG_DV_BLOCK" ] && echo "Оригинальный блок Dv перенесён"
 [ -n "$ORIG_GV_BLOCK" ] && echo "Оригинальный блок Gv перенесён"; else echo "Не удалось повторно найти блок стратегии '$BEST_NAME', конфиг восстановлен без применения"; fi; rm -f "$OUT_DPI"; } >> "$AUTO_LOG" 2>&1; }
 
