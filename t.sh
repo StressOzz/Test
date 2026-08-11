@@ -171,56 +171,60 @@ if [ -z "$BEST_LINE" ]; then echo "Не удалось определить лу
 BEST_NAME=$(echo "$BEST_LINE" | cut -d'→' -f1 | sed 's/[[:space:]]*$//'); echo "Лучшая стратегия: $BEST_LINE"; mv -f "$AUTO_BACK" "$CONF"
 START=$(grep -nxF "#${BEST_NAME}" "$STR_FILE_AUTO" | head -n1 | cut -d: -f1); if [ -n "$START" ]; then NEXT=$(echo "$LINES" | awk -v s="$START" '$1>s{print;exit}')
 if [ -z "$NEXT" ]; then sed -n "${START},\$p" "$STR_FILE_AUTO" > "$TEMP_FILE_AUTO"; else sed -n "${START},$((NEXT-1))p" "$STR_FILE_AUTO" > "$TEMP_FILE_AUTO"; fi
-BLOCK=$(cat "$TEMP_FILE_AUTO"); sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; { echo "  option NFQWS_OPT '"
-[ -n "$ORIG_YV_BLOCK" ] && echo "$ORIG_YV_BLOCK"; echo "$BLOCK"; echo "'"; } >> "$CONF"
+
+
+BLOCK=$(cat "$TEMP_FILE_AUTO"); sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
+{
+    echo "  option NFQWS_OPT '"
+    # Для "general" Yv вставляется отдельно ниже (после удаления встроенного
+    # дефолтного youtube-hostlist блока), чтобы не дублировать его
+    case "$BEST_NAME" in
+        general) ;;
+        *) [ -n "$ORIG_YV_BLOCK" ] && echo "$ORIG_YV_BLOCK" ;;
+    esac
+    echo "$BLOCK"
+    echo "'"
+} >> "$CONF"
+
 
 if [ "$BEST_NAME" = "general" ]; then
 
-    if [ -n "$ORIG_YV_BLOCK" ]; then
+if [ -n "$ORIG_YV_BLOCK" ]; then
+        # 1. Удаляем встроенный дефолтный блок youtube-hostlist:
+        #    --new / --filter-tcp=443 / --hostlist=.../zapret-hosts-google.txt
+        #    и всё, что идёт после него, вплоть до следующего "--new" включительно.
+        #    Если закрывающий "--new" не найден — ничего не удаляем (безопасный откат).
         awk '
-        BEGIN {
-            in_general=0
-            skip=0
-        }
-
-        /^#general/ {
-            in_general=1
-            print
-            next
-        }
-
-        in_general && /^#[A-Za-z0-9_-]+/ {
-            in_general=0
-            print
-            next
-        }
-
-        in_general && skip {
-            if ($0 == "--new") {
-                skip=0
-                print
+            { lines[NR] = $0 }
+            END {
+                total = NR
+                rs = 0; re = 0
+                for (i = 1; i <= total - 2; i++) {
+                    if (lines[i] == "--new" &&
+                        lines[i+1] == "--filter-tcp=443" &&
+                        lines[i+2] == "--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt") {
+                        rs = i
+                        break
+                    }
+                }
+                if (rs > 0) {
+                    for (j = rs + 3; j <= total; j++) {
+                        if (lines[j] == "--new") { re = j; break }
+                    }
+                }
+                for (i = 1; i <= total; i++) {
+                    if (rs > 0 && re > 0 && i >= rs && i <= re) continue
+                    print lines[i]
+                }
             }
-            next
-        }
-
-        in_general && $0 == "--new" {
-            getline line1
-            getline line2
-
-            if (line1 == "--filter-tcp=443" &&
-                line2 == "--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt") {
-                skip=1
-                next
-            }
-
-            print
-            print line1
-            print line2
-            next
-        }
-
-        { print }
         ' "$CONF" > "${CONF}.tmp" && mv "${CONF}.tmp" "$CONF"
+
+        # 2. Вставляем сохранённый оригинальный блок Yv сразу следующей строкой
+        #    после "  option NFQWS_OPT '"
+        YV_INSERT_TMP="$TMP_SF/orig_yv_insert.txt"
+        printf '%s\n' "$ORIG_YV_BLOCK" > "$YV_INSERT_TMP"
+        sed -i "/^[[:space:]]*option NFQWS_OPT '/r $YV_INSERT_TMP" "$CONF"
+        rm -f "$YV_INSERT_TMP"
     fi
 
     if ! grep -q '^#Gv0$' "$CONF"; then
