@@ -146,33 +146,78 @@ get_auto_strategy_mode() {
 set_auto_strategy_mode() {
     while true; do
 
-        MODE=$(get_auto_strategy_mode)
+MODE=$(get_auto_strategy_mode)
 
-        echo -e "\n${MAGENTA}Выбор стратегий для тестирования${NC}\n"
-        echo -e "${CYAN}1) ${GREEN}Только стратегии v${NC}"
-        echo -e "${CYAN}2) ${GREEN}Только стратегии Flowseal${NC}"
-        echo -e "${CYAN}3) ${GREEN}v + Flowseal${NC} ${YELLOW}(как сейчас)${NC}"
-        echo
-        case "$MODE" in
-            1) echo -e "${YELLOW}Текущий выбор: ${GREEN}Только стратегии v${NC}" ;;
-            2) echo -e "${YELLOW}Текущий выбор: ${GREEN}Только стратегии Flowseal${NC}" ;;
-            *) echo -e "${YELLOW}Текущий выбор: ${GREEN}v + Flowseal${NC}" ;;
-        esac
-        echo
-        echo -ne "${CYAN}Enter) ${GREEN}Оставить текущую стратегию${NC}\n\n${YELLOW}Выберите пункт:${NC} "
-        read -r choiceSM
+MODE=$(get_auto_strategy_mode)
 
-        case "$choiceSM" in
-            1|2|3)
-                echo "$choiceSM" > "$AUTO_STRATEGY_MODE_FILE"
-                echo -e "\n${GREEN}Выбор сохранён!${NC}\n"
-                PAUSE
-                return
-                ;;
-            *)
-                return
-                ;;
-        esac
+case "$MODE" in
+    1)
+        echo "Режим тестирования: только v"
+        echo "Собираем v стратегии"
+        for N in $(seq 1 100); do
+            strategy_v"$N" >> "$STR_FILE_AUTO" 2>/dev/null || break
+        done
+        ;;
+    2)
+        echo "Режим тестирования: только Flowseal"
+        echo "Собираем Flowseal стратегии"
+        download_strategies 1
+        cat "$OUT" >> "$STR_FILE_AUTO"
+        ;;
+    3|*)
+        echo "Режим тестирования: v + Flowseal"
+        echo "Собираем Flowseal стратегии"
+        download_strategies 1
+        cat "$OUT" >> "$STR_FILE_AUTO"
+
+        echo "Собираем v стратегии"
+        for N in $(seq 1 100); do
+            strategy_v"$N" >> "$STR_FILE_AUTO" 2>/dev/null || break
+        done
+        ;;
+esac
+
+case "$MODE" in
+    1)
+        # Оставляем только v-стратегии
+        awk '
+            /^#v[0-9]+/ || /^#Yv[0-9]+/ {
+                found=1
+                print
+                next
+            }
+            found {
+                if ($0 ~ /^#/ && $0 !~ /^#v[0-9]+/ && $0 !~ /^#Yv[0-9]+/) {
+                    found=0
+                    next
+                }
+                if ($0 == "--new") {
+                    print
+                    found=0
+                    next
+                }
+                print
+            }
+        ' "$STR_FILE_AUTO" > "${STR_FILE_AUTO}.tmp"
+        mv -f "${STR_FILE_AUTO}.tmp" "$STR_FILE_AUTO"
+        ;;
+    2)
+        # Убираем v-стратегии
+        awk '
+            /^#v[0-9]+/ || /^#Yv[0-9]+/ {
+                skip=1
+                next
+            }
+            skip && /^--new$/ {
+                skip=0
+                next
+            }
+            !skip { print }
+        ' "$STR_FILE_AUTO" > "${STR_FILE_AUTO}.tmp"
+        mv -f "${STR_FILE_AUTO}.tmp" "$STR_FILE_AUTO"
+        ;;
+esac
+
     done
 }
 
