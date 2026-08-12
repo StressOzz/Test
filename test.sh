@@ -134,6 +134,36 @@ ADD_FAKE_FLOW
 # ==========================================
 # Автоподбор
 # ==========================================
+AUTO_MODE_FILE="/opt/zapret/tmp/auto_best_mode"
+get_auto_best_mode() { [ -f "$AUTO_MODE_FILE" ] && cat "$AUTO_MODE_FILE" 2>/dev/null || echo 3; }
+
+set_auto_best_mode() {
+    clear
+    CUR_MODE=$(get_auto_best_mode)
+    case "$CUR_MODE" in
+        1) CUR_TXT="Только v" ;;
+        2) CUR_TXT="Только Flowseal" ;;
+        *) CUR_TXT="v + Flowseal" ;;
+    esac
+    echo -e "${MAGENTA}Выбор стратегий для автоподбора${NC}\n"
+    echo -e "${YELLOW}Текущий режим:${NC} ${CYAN}$CUR_TXT${NC}\n"
+    echo -e "${CYAN}1) ${GREEN}Только стратегии v${NC}"
+    echo -e "${CYAN}2) ${GREEN}Только стратегии Flowseal${NC}"
+    echo -e "${CYAN}3) ${GREEN}v + Flowseal ${NC}(по умолчанию)"
+    echo -ne "${CYAN}Enter) ${GREEN}Отмена${NC}\n\n${YELLOW}Выберите пункт:${NC} "
+    read -r choiceMode
+    case "$choiceMode" in
+        1|2|3)
+            mkdir -p "$(dirname "$AUTO_MODE_FILE")"
+            echo "$choiceMode" > "$AUTO_MODE_FILE"
+            echo -e "\n${GREEN}Режим тестирования сохранён!${NC}\n"
+            ;;
+        *) return ;;
+    esac
+    PAUSE
+}
+
+
 sync_ntp() { echo -e "\n${MAGENTA}Синхронизируем время через NTP${NC}"; if command -v ntpd >/dev/null 2>&1; then ntpd -n -q -p 0.openwrt.pool.ntp.org -p 1.openwrt.pool.ntp.org >/dev/null 2>&1
 else /etc/init.d/sysntpd restart >/dev/null 2>&1; sleep 3; fi; command -v hwclock >/dev/null 2>&1 && hwclock -w >/dev/null 2>&1; echo -e "${GREEN}Время синхронизировано!${NC}\n"; PAUSE; }
 set_timezone() { CUR_TZ=$(uci -q get system.@system[0].zonename); echo -e "\n${MAGENTA}Выберите часовой пояс${NC}\n ${CYAN}1) ${GREEN}Калининград  ${NC}(UTC+2)\n ${CYAN}2) ${GREEN}Москва       ${NC}(UTC+3)"
@@ -157,8 +187,23 @@ stop_auto_best() { touch "$AUTO_STOP_FLAG"; echo -en "${CYAN}Завершаем 
 echo; if auto_best_running; then PID=$(head -n1 "$AUTO_LOCK" 2>/dev/null); [ -n "$PID" ] && kill -KILL "$PID" 2>/dev/null; rm -f "$AUTO_LOCK"; if [ -f "$AUTO_BACK" ]; then mv -f "$AUTO_BACK" "$CONF"; ZAPRET_RESTART; fi; fi; rm -f "$AUTO_STOP_FLAG"; }
 auto_apply_best_strategy() { echo $$ > "$AUTO_LOCK"; rm -f "$AUTO_STOP_FLAG"; trap 'rm -f "$AUTO_LOCK"' EXIT; mkdir -p "$TMP_SF" "/opt/zapret/tmp"; : > "$AUTO_LOG"; { echo "===> Автоподбор стратегии запущен <==="; if [ ! -f /etc/init.d/zapret ]; then echo "Zapret не установлен, выход"; exit 0; fi
 STR_FILE_AUTO="$TMP_SF/str_auto.txt"; TEMP_FILE_AUTO="$TMP_SF/str_temp_auto.txt"; : > "$STR_FILE_AUTO"; cp "$CONF" "$AUTO_BACK"; ORIG_YV_BLOCK=""; ORIG_GV_BLOCK=""; ORIG_DV_BLOCK=""; grep -q "^#Yv[0-9]" "$AUTO_BACK" && ORIG_YV_BLOCK=$(extract_yv_block "$AUTO_BACK")
-grep -q "^#Gv[0-9]" "$AUTO_BACK" && ORIG_GV_BLOCK=$(extract_gv_block "$AUTO_BACK"); grep -q "^#Dv[0-9]" "$AUTO_BACK" && ORIG_DV_BLOCK=$(extract_dv_block "$AUTO_BACK"); echo "Собираем Flowseal стратегии"; download_strategies 1; cat "$OUT" >> "$STR_FILE_AUTO"
-echo "Собираем v стратегии"; for N in $(seq 1 100); do strategy_v"$N" >> "$STR_FILE_AUTO" 2>/dev/null || break; done; sed -i '/#Y/d' "$STR_FILE_AUTO"; prepare_urls || { echo "Не удалось получить список для теста"; mv -f "$AUTO_BACK" "$CONF"; exit 1; }
+grep -q "^#Gv[0-9]" "$AUTO_BACK" && ORIG_GV_BLOCK=$(extract_gv_block "$AUTO_BACK"); grep -q "^#Dv[0-9]" "$AUTO_BACK" && ORIG_DV_BLOCK=$(extract_dv_block "$AUTO_BACK")
+
+MODE_SEL=$(get_auto_best_mode)
+case "$MODE_SEL" in
+    1) echo "Режим тестирования: только v" ;;
+    2) echo "Режим тестирования: только Flowseal" ;;
+    *) echo "Режим тестирования: v + Flowseal" ;;
+esac
+if [ "$MODE_SEL" != "1" ]; then
+    echo "Собираем Flowseal стратегии"; download_strategies 1; cat "$OUT" >> "$STR_FILE_AUTO"
+fi
+if [ "$MODE_SEL" != "2" ]; then
+    echo "Собираем v стратегии"; for N in $(seq 1 100); do strategy_v"$N" >> "$STR_FILE_AUTO" 2>/dev/null || break; done
+fi
+sed -i '/#Y/d' "$STR_FILE_AUTO"
+
+sed -i '/#Y/d' "$STR_FILE_AUTO"; prepare_urls || { echo "Не удалось получить список для теста"; mv -f "$AUTO_BACK" "$CONF"; exit 1; }
 URLS="$(cat "$OUT_DPI")"; TOTAL=$(grep -c "|" "$OUT_DPI"); TOTAL_STR=$(grep -c '^#' "$STR_FILE_AUTO"); echo "Найдено стратегий: $TOTAL_STR"; echo "Доменов для теста: $TOTAL"; RESULTS="$AUTO_RESULTS"; MODE="normal"; : > "$AUTO_RESULTS"; check_zpr_off
 if [ -f "$AUTO_STOP_FLAG" ]; then echo "Автоподбор остановлен пользователем"; rm -f "$AUTO_STOP_FLAG"; mv -f "$AUTO_BACK" "$CONF"; ZAPRET_RESTART; echo "Конфигурация восстановлена"; rm -f "$OUT_DPI"; exit 0; fi
 LINES=$(grep -n '^#' "$STR_FILE_AUTO" | cut -d: -f1); CUR=0; echo "$LINES" | while read -r START; do CUR=$((CUR + 1)); if [ -f "$AUTO_STOP_FLAG" ]; then echo "===> Получен сигнал остановки, прерываем тестирование"; break; fi
