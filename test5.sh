@@ -148,8 +148,6 @@ set_auto_strategy_mode() {
 
 MODE=$(get_auto_strategy_mode)
 
-MODE=$(get_auto_strategy_mode)
-
 case "$MODE" in
     1)
         echo "Режим тестирования: только v"
@@ -179,42 +177,10 @@ esac
 
 case "$MODE" in
     1)
-        # Оставляем только v-стратегии
-        awk '
-            /^#v[0-9]+/ || /^#Yv[0-9]+/ {
-                found=1
-                print
-                next
-            }
-            found {
-                if ($0 ~ /^#/ && $0 !~ /^#v[0-9]+/ && $0 !~ /^#Yv[0-9]+/) {
-                    found=0
-                    next
-                }
-                if ($0 == "--new") {
-                    print
-                    found=0
-                    next
-                }
-                print
-            }
-        ' "$STR_FILE_AUTO" > "${STR_FILE_AUTO}.tmp"
-        mv -f "${STR_FILE_AUTO}.tmp" "$STR_FILE_AUTO"
+        sed -i '/^#v[0-9]/!d' "$STR_FILE_AUTO"
         ;;
     2)
-        # Убираем v-стратегии
-        awk '
-            /^#v[0-9]+/ || /^#Yv[0-9]+/ {
-                skip=1
-                next
-            }
-            skip && /^--new$/ {
-                skip=0
-                next
-            }
-            !skip { print }
-        ' "$STR_FILE_AUTO" > "${STR_FILE_AUTO}.tmp"
-        mv -f "${STR_FILE_AUTO}.tmp" "$STR_FILE_AUTO"
+        sed -i '/^#v[0-9]/d' "$STR_FILE_AUTO"
         ;;
 esac
 
