@@ -120,8 +120,8 @@ get_ver "https://github.com/d0mhate/-tg-ws-proxy-Manager-go/releases/latest" "$T
 [ -s "$TMP_VER" ] && ZAPRET_VERSION="$(cat "$TMP_VER")"; [ -s "$TMP_VER_POD" ] && PODKOP_LATEST_VER="$(cat "$TMP_VER_POD")"; [ -s "$TMP_VER_TG_MT" ] && TG_MTProto="$(cat "$TMP_VER_TG_MT")"
 [ -s "$TMP_VER_SPL" ] && SPL_VER="$(cat "$TMP_VER_SPL")"; [ -s "$TMP_VER_TG_GO" ] && TG_GO_VERSION="$(cat "$TMP_VER_TG_GO")"; [ -s "$TMP_VER_TG_RS" ] && TG_RS_VERSION="$(cat "$TMP_VER_TG_RS")"
 
-echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test1.sh)' > /usr/bin/zms; chmod +x /usr/bin/zms
-echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test1.sh) "$@"' > /usr/bin/zmsA; chmod +x /usr/bin/zmsA
+echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test2.sh)' > /usr/bin/zms; chmod +x /usr/bin/zms
+echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test2.sh) "$@"' > /usr/bin/zmsA; chmod +x /usr/bin/zmsA
 
 # git="githubusercontent.com"; if ! grep -q "raw.$git" /etc/hosts; then echo -e "\n\033[1;36mДля корректной работы скрипта добавляем домены \033[0mGitHub\033[1;36m в \033[0m/etc/hosts\033[0m"
 # printf "#$git\n185.199.109.133 raw.$git release-assets.$git\n185.199.108.133 private-user-images.$git gist.$git avatars.$git\n" >> /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1; fi
@@ -135,7 +135,11 @@ ADD_FAKE_FLOW
 # ==========================================
 # Автоподбор
 # ==========================================
-AUTO_MODE_FILE="$(dirname "$AUTO_LOG")/auto_best_mode"
+
+# ==========================================
+# Автоподбор
+# ==========================================
+AUTO_MODE_FILE="$TMP_SF/auto_best_mode"
 get_auto_best_mode() {
     if [ -f "$AUTO_MODE_FILE" ]; then
         MODE_VAL=$(cat "$AUTO_MODE_FILE" 2>/dev/null)
@@ -161,7 +165,7 @@ set_auto_best_mode() {
     read -r choiceMode
     case "$choiceMode" in
         1|2|3)
-            mkdir -p "$(dirname "$AUTO_MODE_FILE")"
+            mkdir -p "$TMP_SF"
             echo "$choiceMode" > "$AUTO_MODE_FILE"
             echo -e "\n${GREEN}Режим тестирования сохранён: ${NC}$(auto_best_mode_text)\n"
             ;;
@@ -194,10 +198,7 @@ echo; if auto_best_running; then PID=$(head -n1 "$AUTO_LOCK" 2>/dev/null); [ -n 
 auto_apply_best_strategy() { echo $$ > "$AUTO_LOCK"; rm -f "$AUTO_STOP_FLAG"; trap 'rm -f "$AUTO_LOCK"' EXIT; mkdir -p "$TMP_SF" "/opt/zapret/tmp"; : > "$AUTO_LOG"; { echo "===> Автоподбор стратегии запущен <==="; if [ ! -f /etc/init.d/zapret ]; then echo "Zapret не установлен, выход"; exit 0; fi
 STR_FILE_AUTO="$TMP_SF/str_auto.txt"; TEMP_FILE_AUTO="$TMP_SF/str_temp_auto.txt"; : > "$STR_FILE_AUTO"; cp "$CONF" "$AUTO_BACK"; ORIG_YV_BLOCK=""; ORIG_GV_BLOCK=""; ORIG_DV_BLOCK=""; grep -q "^#Yv[0-9]" "$AUTO_BACK" && ORIG_YV_BLOCK=$(extract_yv_block "$AUTO_BACK")
 grep -q "^#Gv[0-9]" "$AUTO_BACK" && ORIG_GV_BLOCK=$(extract_gv_block "$AUTO_BACK"); grep -q "^#Dv[0-9]" "$AUTO_BACK" && ORIG_DV_BLOCK=$(extract_dv_block "$AUTO_BACK")
-
 MODE_SEL=$(get_auto_best_mode)
-echo "DEBUG: AUTO_MODE_FILE=$AUTO_MODE_FILE exists=$([ -f "$AUTO_MODE_FILE" ] && echo yes || echo no) content=$(cat "$AUTO_MODE_FILE" 2>/dev/null) MODE_SEL=$MODE_SEL"
-
 case "$MODE_SEL" in
     1) echo "Режим тестирования: только v" ;;
     2) echo "Режим тестирования: только Flowseal" ;;
