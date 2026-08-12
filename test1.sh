@@ -241,7 +241,10 @@ if [ "$RUNNING" = "1" ]; then echo -e "${CYAN}3) ${GREEN}Остановить а
 echo -ne "${CYAN}Enter) ${GREEN}Выход в меню тестирования${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read -r choiceAB; case "$choiceAB" in 1) set_auto_best_time ;; 2) [ -n "$LINE" ] && disable_auto_best ;;
 3) if [ "$RUNNING" = "1" ]; then echo -e "\n${MAGENTA}Останавливаем автоподбор${NC}"; stop_auto_best; echo -e "${GREEN}Автоподбор в фоне остановлен!${NC}\n"; PAUSE; else run_auto_best_background; fi ;;
 4) [ -s "$AUTO_RESULTS" ] && show_single_result "$AUTO_RESULTS" ;; 5) [ -f "$AUTO_LOG" ] && { clear; cat "$AUTO_LOG"; echo; PAUSE; } ;; 6) TIME_MENU ;;
-7) echo -e "\n${GREEN}Результаты теста и лог удалены!${NC}\n"; rm -rf "$AUTO_RESULTS" "$AUTO_BACK" "$AUTO_LOG" "$AUTO_LOCK"; PAUSE ;; *) return ;; esac; done; }
+7) echo -e "\n${GREEN}Результаты теста и лог удалены!${NC}\n"; rm -rf "$AUTO_RESULTS" "$AUTO_BACK" "$AUTO_LOG" "$AUTO_LOCK"; PAUSE ;; 
+8) set_auto_best_mode ;;
+
+*) return ;; esac; done; }
 # ==========================================
 # splify
 # ==========================================
