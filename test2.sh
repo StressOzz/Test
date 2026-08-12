@@ -131,22 +131,29 @@ do [ -d /opt/zapret ] && [ ! -f "/opt/zapret/files/fake/$f" ] && { [ "$MSG" = 0 
 
 ADD_FAKE_FLOW
 
+
 # ==========================================
 # Автоподбор
 # ==========================================
-AUTO_MODE_FILE="/opt/zapret/tmp/auto_best_mode"
-get_auto_best_mode() { [ -f "$AUTO_MODE_FILE" ] && cat "$AUTO_MODE_FILE" 2>/dev/null || echo 3; }
+AUTO_MODE_FILE="$TMP_SF/auto_best_mode"
+get_auto_best_mode() {
+    if [ -f "$AUTO_MODE_FILE" ]; then
+        MODE_VAL=$(cat "$AUTO_MODE_FILE" 2>/dev/null)
+    fi
+    case "$MODE_VAL" in 1|2|3) echo "$MODE_VAL" ;; *) echo 3 ;; esac
+}
+auto_best_mode_text() {
+    case "$(get_auto_best_mode)" in
+        1) echo "только v" ;;
+        2) echo "только Flowseal" ;;
+        *) echo "v + Flowseal" ;;
+    esac
+}
 
 set_auto_best_mode() {
     clear
-    CUR_MODE=$(get_auto_best_mode)
-    case "$CUR_MODE" in
-        1) CUR_TXT="Только v" ;;
-        2) CUR_TXT="Только Flowseal" ;;
-        *) CUR_TXT="v + Flowseal" ;;
-    esac
     echo -e "${MAGENTA}Выбор стратегий для автоподбора${NC}\n"
-    echo -e "${YELLOW}Текущий режим:${NC} ${CYAN}$CUR_TXT${NC}\n"
+    echo -e "${YELLOW}Текущий режим:${NC} ${CYAN}$(auto_best_mode_text)${NC}\n"
     echo -e "${CYAN}1) ${GREEN}Только стратегии v${NC}"
     echo -e "${CYAN}2) ${GREEN}Только стратегии Flowseal${NC}"
     echo -e "${CYAN}3) ${GREEN}v + Flowseal ${NC}(по умолчанию)"
@@ -154,15 +161,14 @@ set_auto_best_mode() {
     read -r choiceMode
     case "$choiceMode" in
         1|2|3)
-            mkdir -p "$(dirname "$AUTO_MODE_FILE")"
+            mkdir -p "$TMP_SF"
             echo "$choiceMode" > "$AUTO_MODE_FILE"
-            echo -e "\n${GREEN}Режим тестирования сохранён!${NC}\n"
+            echo -e "\n${GREEN}Режим тестирования сохранён: ${NC}$(auto_best_mode_text)\n"
             ;;
         *) return ;;
     esac
     PAUSE
 }
-
 
 sync_ntp() { echo -e "\n${MAGENTA}Синхронизируем время через NTP${NC}"; if command -v ntpd >/dev/null 2>&1; then ntpd -n -q -p 0.openwrt.pool.ntp.org -p 1.openwrt.pool.ntp.org >/dev/null 2>&1
 else /etc/init.d/sysntpd restart >/dev/null 2>&1; sleep 3; fi; command -v hwclock >/dev/null 2>&1 && hwclock -w >/dev/null 2>&1; echo -e "${GREEN}Время синхронизировано!${NC}\n"; PAUSE; }
@@ -188,22 +194,17 @@ echo; if auto_best_running; then PID=$(head -n1 "$AUTO_LOCK" 2>/dev/null); [ -n 
 auto_apply_best_strategy() { echo $$ > "$AUTO_LOCK"; rm -f "$AUTO_STOP_FLAG"; trap 'rm -f "$AUTO_LOCK"' EXIT; mkdir -p "$TMP_SF" "/opt/zapret/tmp"; : > "$AUTO_LOG"; { echo "===> Автоподбор стратегии запущен <==="; if [ ! -f /etc/init.d/zapret ]; then echo "Zapret не установлен, выход"; exit 0; fi
 STR_FILE_AUTO="$TMP_SF/str_auto.txt"; TEMP_FILE_AUTO="$TMP_SF/str_temp_auto.txt"; : > "$STR_FILE_AUTO"; cp "$CONF" "$AUTO_BACK"; ORIG_YV_BLOCK=""; ORIG_GV_BLOCK=""; ORIG_DV_BLOCK=""; grep -q "^#Yv[0-9]" "$AUTO_BACK" && ORIG_YV_BLOCK=$(extract_yv_block "$AUTO_BACK")
 grep -q "^#Gv[0-9]" "$AUTO_BACK" && ORIG_GV_BLOCK=$(extract_gv_block "$AUTO_BACK"); grep -q "^#Dv[0-9]" "$AUTO_BACK" && ORIG_DV_BLOCK=$(extract_dv_block "$AUTO_BACK")
-
 MODE_SEL=$(get_auto_best_mode)
 case "$MODE_SEL" in
     1) echo "Режим тестирования: только v" ;;
     2) echo "Режим тестирования: только Flowseal" ;;
     *) echo "Режим тестирования: v + Flowseal" ;;
 esac
-if [ "$MODE_SEL" != "1" ]; then
-    echo "Собираем Flowseal стратегии"; download_strategies 1; cat "$OUT" >> "$STR_FILE_AUTO"
-fi
-if [ "$MODE_SEL" != "2" ]; then
-    echo "Собираем v стратегии"; for N in $(seq 1 100); do strategy_v"$N" >> "$STR_FILE_AUTO" 2>/dev/null || break; done
-fi
+if [ "$MODE_SEL" != "1" ]; then echo "Собираем Flowseal стратегии"; download_strategies 1; cat "$OUT" >> "$STR_FILE_AUTO"; fi
+if [ "$MODE_SEL" != "2" ]; then echo "Собираем v стратегии"; for N in $(seq 1 100); do strategy_v"$N" >> "$STR_FILE_AUTO" 2>/dev/null || break; done; fi
 sed -i '/#Y/d' "$STR_FILE_AUTO"
-
-sed -i '/#Y/d' "$STR_FILE_AUTO"; prepare_urls || { echo "Не удалось получить список для теста"; mv -f "$AUTO_BACK" "$CONF"; exit 1; }
+if [ ! -s "$STR_FILE_AUTO" ]; then echo "Не удалось собрать ни одной стратегии для теста (проверьте выбранный режим)"; mv -f "$AUTO_BACK" "$CONF"; exit 1; fi
+prepare_urls || { echo "Не удалось получить список для теста"; mv -f "$AUTO_BACK" "$CONF"; exit 1; }
 URLS="$(cat "$OUT_DPI")"; TOTAL=$(grep -c "|" "$OUT_DPI"); TOTAL_STR=$(grep -c '^#' "$STR_FILE_AUTO"); echo "Найдено стратегий: $TOTAL_STR"; echo "Доменов для теста: $TOTAL"; RESULTS="$AUTO_RESULTS"; MODE="normal"; : > "$AUTO_RESULTS"; check_zpr_off
 if [ -f "$AUTO_STOP_FLAG" ]; then echo "Автоподбор остановлен пользователем"; rm -f "$AUTO_STOP_FLAG"; mv -f "$AUTO_BACK" "$CONF"; ZAPRET_RESTART; echo "Конфигурация восстановлена"; rm -f "$OUT_DPI"; exit 0; fi
 LINES=$(grep -n '^#' "$STR_FILE_AUTO" | cut -d: -f1); CUR=0; echo "$LINES" | while read -r START; do CUR=$((CUR + 1)); if [ -f "$AUTO_STOP_FLAG" ]; then echo "===> Получен сигнал остановки, прерываем тестирование"; break; fi
@@ -230,21 +231,71 @@ echo -e "${YELLOW}Сначала настройте время!${NC}\n"; PAUSE; 
 echo "0 $HOUR * * * $AUTO_CRON_CMD >/dev/null 2>&1" >> "$CRON_FILE"; /etc/init.d/cron restart >/dev/null 2>&1; echo -e "\n${GREEN}Автоподбор запланирован ежедневно в ${NC}$(printf "%02d" "$HOUR"):00${GREEN}!${NC}\n"; PAUSE; }
 disable_auto_best() { sed -i "\|$AUTO_CRON_CMD|d" "$CRON_FILE"; /etc/init.d/cron restart >/dev/null 2>&1; echo -e "\n${GREEN}Автоподбор отключен!${NC}\n"; PAUSE; }
 run_auto_best_background() { echo -e "\n${MAGENTA}Запускаем автоподбор в фоне${NC}"; rm -f "$AUTO_LOCK"; $AUTO_CRON_CMD >/dev/null 2>&1 & echo -en "${CYAN}Запускаем фоновое выполнение${NC}"; _i=0; while [ ! -f "$AUTO_LOCK" ] && [ "$_i" -lt 20 ]; do sleep 1; _i=$((_i + 1)); done; echo; if auto_best_running; then echo -e "${GREEN}Автоподбор в фоне запущен!${NC}\n"; else echo -e "${YELLOW}Процесс запускается медленнее обычного, статус обновится при следующем открытии меню${NC}\n"; fi; PAUSE; }
-AUTO_BEST_MENU() { [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }; if ! ( [ "$PKG_IS_APK" = "1" ] && apk info -e zoneinfo-core zoneinfo-europe zoneinfo-asia >/dev/null 2>&1 || opkg status zoneinfo-core zoneinfo-europe zoneinfo-asia >/dev/null 2>&1 )
-then echo -e "\n${MAGENTA}Устанавливаем пакеты с часовыми поясами${NC}"; update_packages; $INSTALL zoneinfo-core zoneinfo-europe zoneinfo-asia >/dev/null 2>&1; echo -e "${GREEN}Пакеты с часовыми поясами установлены${NC}\n"; PAUSE; fi
-while true; do clear; echo -e "${MAGENTA}Меню автоподбора стратегий по расписанию${NC}\n"; echo -e "${YELLOW}Текущее время на роутере:${NC} ${CYAN}$(date '+%H:%M:%S')${NC}"; if auto_best_running; then RUNNING=1
-echo -e "${YELLOW}Автоподбор в фоне:${NC} ${GREEN}выполняется${NC}"; else RUNNING=0; fi; LINE=$(auto_best_cron_line); if [ -n "$LINE" ]; then HOUR=$(echo "$LINE" | awk '{print $2}')
-echo -e "${YELLOW}Автоподбор стратегий:${NC} ${GREEN}ежедневно в ${NC}$(printf "%02d" "$HOUR"):00${NC}"; else echo -e "${YELLOW}Автоподбор стратегий:${NC} ${RED}отключен${NC}"; fi
-echo -e "\n${CYAN}1) ${GREEN}$( [ -n "$LINE" ] && echo "Изменить время автоподбора по расписанию" || echo "Включить автоподбор по расписанию" )${NC}"; [ -n "$LINE" ] && echo -e "${CYAN}2) ${GREEN}Отключить автоподбор по расписанию${NC}"
-if [ "$RUNNING" = "1" ]; then echo -e "${CYAN}3) ${GREEN}Остановить автоподбор в фоне${NC}"; else echo -e "${CYAN}3) ${GREEN}Запустить автоподбор в фоне${NC}"; fi; [ -s "$AUTO_RESULTS" ] && echo -e "${CYAN}4) ${GREEN}Показать результаты последнего теста${NC}"
-[ -f "$AUTO_LOG" ] && echo -e "${CYAN}5) ${GREEN}Показать полный лог последнего теста${NC}"; echo -e "${CYAN}6) ${GREEN}Настроить время на роутере${NC}"; if [ -s "$AUTO_RESULTS" ] || [ -f "$AUTO_LOG" ]; then echo -e "${CYAN}7) ${GREEN}Удалить результаты теста и лог${NC}"; fi
-echo -ne "${CYAN}Enter) ${GREEN}Выход в меню тестирования${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read -r choiceAB; case "$choiceAB" in 1) set_auto_best_time ;; 2) [ -n "$LINE" ] && disable_auto_best ;;
-3) if [ "$RUNNING" = "1" ]; then echo -e "\n${MAGENTA}Останавливаем автоподбор${NC}"; stop_auto_best; echo -e "${GREEN}Автоподбор в фоне остановлен!${NC}\n"; PAUSE; else run_auto_best_background; fi ;;
-4) [ -s "$AUTO_RESULTS" ] && show_single_result "$AUTO_RESULTS" ;; 5) [ -f "$AUTO_LOG" ] && { clear; cat "$AUTO_LOG"; echo; PAUSE; } ;; 6) TIME_MENU ;;
-7) echo -e "\n${GREEN}Результаты теста и лог удалены!${NC}\n"; rm -rf "$AUTO_RESULTS" "$AUTO_BACK" "$AUTO_LOG" "$AUTO_LOCK"; PAUSE ;; 
-8) set_auto_best_mode ;;
 
-*) return ;; esac; done; }
+AUTO_BEST_MENU() {
+    [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }
+    if ! ( [ "$PKG_IS_APK" = "1" ] && apk info -e zoneinfo-core zoneinfo-europe zoneinfo-asia >/dev/null 2>&1 || opkg status zoneinfo-core zoneinfo-europe zoneinfo-asia >/dev/null 2>&1 )
+    then
+        echo -e "\n${MAGENTA}Устанавливаем пакеты с часовыми поясами${NC}"
+        update_packages
+        $INSTALL zoneinfo-core zoneinfo-europe zoneinfo-asia >/dev/null 2>&1
+        echo -e "${GREEN}Пакеты с часовыми поясами установлены${NC}\n"
+        PAUSE
+    fi
+    while true; do
+        clear
+        echo -e "${MAGENTA}Меню автоподбора стратегий по расписанию${NC}\n"
+        echo -e "${YELLOW}Текущее время на роутере:${NC} ${CYAN}$(date '+%H:%M:%S')${NC}"
+        if auto_best_running; then RUNNING=1; echo -e "${YELLOW}Автоподбор в фоне:${NC} ${GREEN}выполняется${NC}"; else RUNNING=0; fi
+        LINE=$(auto_best_cron_line)
+        if [ -n "$LINE" ]; then
+            HOUR=$(echo "$LINE" | awk '{print $2}')
+            echo -e "${YELLOW}Автоподбор стратегий:${NC} ${GREEN}ежедневно в ${NC}$(printf "%02d" "$HOUR"):00${NC}"
+        else
+            echo -e "${YELLOW}Автоподбор стратегий:${NC} ${RED}отключен${NC}"
+        fi
+        echo -e "${YELLOW}Тестируемые стратегии:${NC} ${CYAN}$(auto_best_mode_text)${NC}"
+        echo ""
+
+        N=1
+        echo -e "${CYAN}${N}) ${GREEN}$( [ -n "$LINE" ] && echo "Изменить время автоподбора по расписанию" || echo "Включить автоподбор по расписанию" )${NC}"; OPT_TIME=$N; N=$((N+1))
+        if [ -n "$LINE" ]; then echo -e "${CYAN}${N}) ${GREEN}Отключить автоподбор по расписанию${NC}"; OPT_DISABLE=$N; N=$((N+1)); else OPT_DISABLE=""; fi
+        if [ "$RUNNING" = "1" ]; then echo -e "${CYAN}${N}) ${GREEN}Остановить автоподбор в фоне${NC}"; else echo -e "${CYAN}${N}) ${GREEN}Запустить автоподбор в фоне${NC}"; fi; OPT_RUN=$N; N=$((N+1))
+        if [ -s "$AUTO_RESULTS" ]; then echo -e "${CYAN}${N}) ${GREEN}Показать результаты последнего теста${NC}"; OPT_RESULTS=$N; N=$((N+1)); else OPT_RESULTS=""; fi
+        if [ -f "$AUTO_LOG" ]; then echo -e "${CYAN}${N}) ${GREEN}Показать полный лог последнего теста${NC}"; OPT_LOG=$N; N=$((N+1)); else OPT_LOG=""; fi
+        echo -e "${CYAN}${N}) ${GREEN}Настроить время на роутере${NC}"; OPT_TZ=$N; N=$((N+1))
+        echo -e "${CYAN}${N}) ${GREEN}Выбрать какие стратегии тестировать${NC}"; OPT_MODE=$N; N=$((N+1))
+        if [ -s "$AUTO_RESULTS" ] || [ -f "$AUTO_LOG" ]; then echo -e "${CYAN}${N}) ${GREEN}Удалить результаты теста и лог${NC}"; OPT_CLEAR=$N; N=$((N+1)); else OPT_CLEAR=""; fi
+
+        echo -ne "${CYAN}Enter) ${GREEN}Выход в меню тестирования${NC}\n\n${YELLOW}Выберите пункт:${NC} "
+        read -r choiceAB
+
+        if [ "$choiceAB" = "$OPT_TIME" ]; then
+            set_auto_best_time
+        elif [ -n "$OPT_DISABLE" ] && [ "$choiceAB" = "$OPT_DISABLE" ]; then
+            disable_auto_best
+        elif [ "$choiceAB" = "$OPT_RUN" ]; then
+            if [ "$RUNNING" = "1" ]; then
+                echo -e "\n${MAGENTA}Останавливаем автоподбор${NC}"; stop_auto_best; echo -e "${GREEN}Автоподбор в фоне остановлен!${NC}\n"; PAUSE
+            else
+                run_auto_best_background
+            fi
+        elif [ -n "$OPT_RESULTS" ] && [ "$choiceAB" = "$OPT_RESULTS" ]; then
+            show_single_result "$AUTO_RESULTS"
+        elif [ -n "$OPT_LOG" ] && [ "$choiceAB" = "$OPT_LOG" ]; then
+            clear; cat "$AUTO_LOG"; echo; PAUSE
+        elif [ "$choiceAB" = "$OPT_TZ" ]; then
+            TIME_MENU
+        elif [ "$choiceAB" = "$OPT_MODE" ]; then
+            set_auto_best_mode
+        elif [ -n "$OPT_CLEAR" ] && [ "$choiceAB" = "$OPT_CLEAR" ]; then
+            echo -e "\n${GREEN}Результаты теста и лог удалены!${NC}\n"; rm -rf "$AUTO_RESULTS" "$AUTO_BACK" "$AUTO_LOG" "$AUTO_LOCK"; PAUSE
+        else
+            return
+        fi
+    done
+}
+
 # ==========================================
 # splify
 # ==========================================
