@@ -120,8 +120,8 @@ get_ver "https://github.com/d0mhate/-tg-ws-proxy-Manager-go/releases/latest" "$T
 [ -s "$TMP_VER" ] && ZAPRET_VERSION="$(cat "$TMP_VER")"; [ -s "$TMP_VER_POD" ] && PODKOP_LATEST_VER="$(cat "$TMP_VER_POD")"; [ -s "$TMP_VER_TG_MT" ] && TG_MTProto="$(cat "$TMP_VER_TG_MT")"
 [ -s "$TMP_VER_SPL" ] && SPL_VER="$(cat "$TMP_VER_SPL")"; [ -s "$TMP_VER_TG_GO" ] && TG_GO_VERSION="$(cat "$TMP_VER_TG_GO")"; [ -s "$TMP_VER_TG_RS" ] && TG_RS_VERSION="$(cat "$TMP_VER_TG_RS")"
 
-echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test3.sh)' > /usr/bin/zms; chmod +x /usr/bin/zms
-echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test3.sh) "$@"' > /usr/bin/zmsA; chmod +x /usr/bin/zmsA
+echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test4.sh)' > /usr/bin/zms; chmod +x /usr/bin/zms
+echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test4.sh) "$@"' > /usr/bin/zmsA; chmod +x /usr/bin/zmsA
 
 # git="githubusercontent.com"; if ! grep -q "raw.$git" /etc/hosts; then echo -e "\n\033[1;36mДля корректной работы скрипта добавляем домены \033[0mGitHub\033[1;36m в \033[0m/etc/hosts\033[0m"
 # printf "#$git\n185.199.109.133 raw.$git release-assets.$git\n185.199.108.133 private-user-images.$git gist.$git avatars.$git\n" >> /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1; fi
@@ -143,8 +143,8 @@ get_auto_best_mode() {
 }
 auto_best_mode_text() {
     case "$(get_auto_best_mode)" in
-        1) echo "только v" ;;
-        2) echo "только Flowseal" ;;
+        1) echo "v" ;;
+        2) echo "Flowseal" ;;
         *) echo "v + Flowseal" ;;
     esac
 }
@@ -161,7 +161,6 @@ set_auto_best_mode() {
         1|2|3)
             mkdir -p "$TMP_SF"
             echo "$choiceMode" > "$AUTO_MODE_FILE"
-            echo -e "\n${GREEN}Режим тестирования сохранён: ${NC}$(auto_best_mode_text)\n"
             ;;
         *) return ;;
     esac
@@ -194,8 +193,8 @@ STR_FILE_AUTO="$TMP_SF/str_auto.txt"; TEMP_FILE_AUTO="$TMP_SF/str_temp_auto.txt"
 grep -q "^#Gv[0-9]" "$AUTO_BACK" && ORIG_GV_BLOCK=$(extract_gv_block "$AUTO_BACK"); grep -q "^#Dv[0-9]" "$AUTO_BACK" && ORIG_DV_BLOCK=$(extract_dv_block "$AUTO_BACK")
 MODE_SEL=$(get_auto_best_mode)
 case "$MODE_SEL" in
-    1) echo "Режим тестирования: только v" ;;
-    2) echo "Режим тестирования: только Flowseal" ;;
+    1) echo "Режим тестирования: v" ;;
+    2) echo "Режим тестирования: Flowseal" ;;
     *) echo "Режим тестирования: v + Flowseal" ;;
 esac
 if [ "$MODE_SEL" != "1" ]; then echo "Собираем Flowseal стратегии"; download_strategies 1; cat "$OUT" >> "$STR_FILE_AUTO"; fi
@@ -252,7 +251,7 @@ AUTO_BEST_MENU() {
         else
             echo -e "${YELLOW}Автоподбор стратегий:${NC} ${RED}отключен${NC}"
         fi
-        echo -e "${YELLOW}Тестируемые стратегии:${NC} ${CYAN}$(auto_best_mode_text)${NC}"
+        echo -e "${YELLOW}Тестируемые стратегии:${NC} $(auto_best_mode_text)"
         echo ""
 
         N=1
