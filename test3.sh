@@ -120,8 +120,8 @@ get_ver "https://github.com/d0mhate/-tg-ws-proxy-Manager-go/releases/latest" "$T
 [ -s "$TMP_VER" ] && ZAPRET_VERSION="$(cat "$TMP_VER")"; [ -s "$TMP_VER_POD" ] && PODKOP_LATEST_VER="$(cat "$TMP_VER_POD")"; [ -s "$TMP_VER_TG_MT" ] && TG_MTProto="$(cat "$TMP_VER_TG_MT")"
 [ -s "$TMP_VER_SPL" ] && SPL_VER="$(cat "$TMP_VER_SPL")"; [ -s "$TMP_VER_TG_GO" ] && TG_GO_VERSION="$(cat "$TMP_VER_TG_GO")"; [ -s "$TMP_VER_TG_RS" ] && TG_RS_VERSION="$(cat "$TMP_VER_TG_RS")"
 
-echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test2.sh)' > /usr/bin/zms; chmod +x /usr/bin/zms
-echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test2.sh) "$@"' > /usr/bin/zmsA; chmod +x /usr/bin/zmsA
+echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test3.sh)' > /usr/bin/zms; chmod +x /usr/bin/zms
+echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test3.sh) "$@"' > /usr/bin/zmsA; chmod +x /usr/bin/zmsA
 
 # git="githubusercontent.com"; if ! grep -q "raw.$git" /etc/hosts; then echo -e "\n\033[1;36mДля корректной работы скрипта добавляем домены \033[0mGitHub\033[1;36m в \033[0m/etc/hosts\033[0m"
 # printf "#$git\n185.199.109.133 raw.$git release-assets.$git\n185.199.108.133 private-user-images.$git gist.$git avatars.$git\n" >> /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1; fi
@@ -130,11 +130,6 @@ ADD_FAKE_FLOW() { MSG=0; for f in stun2.bin quic_initial_tencent_com.bin quic_in
 do [ -d /opt/zapret ] && [ ! -f "/opt/zapret/files/fake/$f" ] && { [ "$MSG" = 0 ] && { echo -e "${CYAN}Скачиваем ${NC}fake ${CYAN}файлы${NC}"; MSG=1; }; wget -q -U "Mozilla/5.0" -O "/opt/zapret/files/fake/$f" "https://github.com/Flowseal/zapret-discord-youtube/raw/refs/heads/main/bin/$f" || { echo -e "\n${RED}Не удалось загрузить файл ${NC}$f\n"; }; }; done; }
 
 ADD_FAKE_FLOW
-
-
-# ==========================================
-# Автоподбор
-# ==========================================
 
 # ==========================================
 # Автоподбор
@@ -155,13 +150,12 @@ auto_best_mode_text() {
 }
 
 set_auto_best_mode() {
-    clear
-    echo -e "${MAGENTA}Выбор стратегий для автоподбора${NC}\n"
-    echo -e "${YELLOW}Текущий режим:${NC} ${CYAN}$(auto_best_mode_text)${NC}\n"
-    echo -e "${CYAN}1) ${GREEN}Только стратегии v${NC}"
-    echo -e "${CYAN}2) ${GREEN}Только стратегии Flowseal${NC}"
-    echo -e "${CYAN}3) ${GREEN}v + Flowseal ${NC}(по умолчанию)"
-    echo -ne "${CYAN}Enter) ${GREEN}Отмена${NC}\n\n${YELLOW}Выберите пункт:${NC} "
+
+    echo -e "\n${MAGENTA}Выбор стратегий для автоподбора${NC}\n"
+    echo -e "${CYAN}1) ${GREEN}Только стратегии ${NC}v"
+    echo -e "${CYAN}2) ${GREEN}Только стратегии ${NC}Flowseal"
+    echo -e "${CYAN}3) ${GREEN}Стратегии ${NC}v ${GREEN}+ ${NC}Flowseal"
+    echo -ne "${CYAN}Enter) ${GREEN}Оставить текущую${NC}\n\n${YELLOW}Выберите пункт:${NC} "
     read -r choiceMode
     case "$choiceMode" in
         1|2|3)
@@ -268,7 +262,7 @@ AUTO_BEST_MENU() {
         if [ -s "$AUTO_RESULTS" ]; then echo -e "${CYAN}${N}) ${GREEN}Показать результаты последнего теста${NC}"; OPT_RESULTS=$N; N=$((N+1)); else OPT_RESULTS=""; fi
         if [ -f "$AUTO_LOG" ]; then echo -e "${CYAN}${N}) ${GREEN}Показать полный лог последнего теста${NC}"; OPT_LOG=$N; N=$((N+1)); else OPT_LOG=""; fi
         echo -e "${CYAN}${N}) ${GREEN}Настроить время на роутере${NC}"; OPT_TZ=$N; N=$((N+1))
-        echo -e "${CYAN}${N}) ${GREEN}Выбрать какие стратегии тестировать${NC}"; OPT_MODE=$N; N=$((N+1))
+        echo -e "${CYAN}${N}) ${GREEN}Выбрать стратегии для тестировать${NC}"; OPT_MODE=$N; N=$((N+1))
         if [ -s "$AUTO_RESULTS" ] || [ -f "$AUTO_LOG" ]; then echo -e "${CYAN}${N}) ${GREEN}Удалить результаты теста и лог${NC}"; OPT_CLEAR=$N; N=$((N+1)); else OPT_CLEAR=""; fi
 
         echo -ne "${CYAN}Enter) ${GREEN}Выход в меню тестирования${NC}\n\n${YELLOW}Выберите пункт:${NC} "
