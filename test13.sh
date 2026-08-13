@@ -164,7 +164,7 @@ AUTO_MODE_FILE="$TMP_SF/auto_best_mode"
 get_auto_best_mode() { if [ -f "$AUTO_MODE_FILE" ]; then MODE_VAL=$(cat "$AUTO_MODE_FILE" 2>/dev/null); fi; case "$MODE_VAL" in 1|2|3) echo "$MODE_VAL" ;; *) echo 3 ;; esac; }
 auto_best_mode_text() { case "$(get_auto_best_mode)" in 1) echo "v" ;; 2) echo "Flowseal" ;; *) echo "v + Flowseal" ;; esac; }
 set_auto_best_mode() { echo -e "\n${MAGENTA}Выберите стратегии для автоподбора${NC}"; echo -e "${CYAN}1) ${GREEN}Стратегии ${NC}v\n${CYAN}2) ${GREEN}Стратегии ${NC}Flowseal\n${CYAN}3) ${GREEN}Стратегии ${NC}v ${GREEN}+ ${NC}Flowseal"
-echo -ne "${CYAN}Enter) ${GREEN}Оставить текущую${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read -r choiceMode; case "$choiceMode" in 1|2|3) mkdir -p "$TMP_SF"; echo "$choiceMode" > "$AUTO_MODE_FILE"; echo -e "\n${GREEN}Выбраны стратегии: ${NC}$(auto_best_mode_text)" ;; *) return ;; esac; }
+echo -ne "${CYAN}Enter) ${GREEN}Оставить текущую${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read -r choiceMode; case "$choiceMode" in 1|2|3) mkdir -p "$TMP_SF"; echo "$choiceMode" > "$AUTO_MODE_FILE"; echo -e "\n${GREEN}Выбраны стратегии: ${NC}$(auto_best_mode_text)"; PAUSE;; *) return ;; esac; }
 sync_ntp() { echo -e "\n${MAGENTA}Синхронизируем время через NTP${NC}"; if command -v ntpd >/dev/null 2>&1; then ntpd -n -q -p 0.openwrt.pool.ntp.org -p 1.openwrt.pool.ntp.org >/dev/null 2>&1
 else /etc/init.d/sysntpd restart >/dev/null 2>&1; sleep 3; fi; command -v hwclock >/dev/null 2>&1 && hwclock -w >/dev/null 2>&1; echo -e "${GREEN}Время синхронизировано!${NC}\n"; PAUSE; }
 set_timezone() { CUR_TZ=$(uci -q get system.@system[0].zonename); echo -e "\n${MAGENTA}Выберите часовой пояс${NC}\n ${CYAN}1) ${GREEN}Калининград  ${NC}(UTC+2)\n ${CYAN}2) ${GREEN}Москва       ${NC}(UTC+3)"
