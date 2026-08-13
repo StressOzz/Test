@@ -104,20 +104,6 @@ if ! curl --version >/dev/null 2>&1; then clear; echo -e "curl ${RED}отсут�
 $DELETE curl libcurl >/dev/null 2>&1; echo -e "${CYAN}Обновляем список пакетов${NC}"; if ! $UPDATE >/dev/null 2>&1; then echo -e "\n${RED}Ошибка обновления списка пакетов!!${NC}\n"; else PACKAGES_UPDATED=1; fi
 echo -e "${CYAN}Устанавливаем ${NC}curl"; if ! $INSTALL libcurl curl >/dev/null 2>&1; then echo -e "\n${RED}Не удалось установить curl!${NC}\n"; PAUSE; fi; fi
 
-#get_zapret2_ver() {
-#	if [ "$PKG_IS_APK" -eq 1 ]; then
-#		IDX_URL2="https://packages.routerich.ru/25.12/mediatek/filogic/routerich/"
-#		FNAME2=$(curl -s --connect-timeout 3 --max-time 5 "$IDX_URL2" | grep -o "zapret2-[0-9][^\"]*\.apk" | head -n1)
-#	else
-#		IDX_URL2="https://packages.routerich.ru/24.10/mediatek/filogic/routerich/"
-#		FNAME2=$(curl -s --connect-timeout 3 --max-time 5 "$IDX_URL2" | grep -o "zapret2_[0-9][^\"]*_aarch64_cortex-a53\.ipk" | head -n1)
-#	fi
-#	VER2=$(echo "$FNAME2" | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)*-r[0-9]+')
-#	if [ -z "$VER2" ]; then echo -e "Zapret2: ${RED}ошибка получения версии${NC}"; return 1; fi
-#	echo "$VER2" > "$TMP_VER_Z2"; echo -e "Zapret2: ${GREEN}${VER2%-r*}${NC}"
-#}
-
-
 get_zapret2_ver() {
 	if [ "$PKG_IS_APK" -eq 1 ]; then
 		IDX_URL2="https://packages.routerich.ru/25.12/mediatek/filogic/routerich/"
@@ -171,8 +157,6 @@ ADD_FAKE_FLOW
 ZAPRET2_ARCH_SUFFIX="aarch64_cortex-a53"
 if [ "$PKG_IS_APK" -eq 1 ]; then ZAPRET2_BASE_URL="https://packages.routerich.ru/25.12/mediatek/filogic/routerich/"; else ZAPRET2_BASE_URL="https://packages.routerich.ru/24.10/mediatek/filogic/routerich/"; fi
 ZAPRET2_TMP_DIR="/tmp/routerich"; ZAPRET2_CACHE_FILE="$ZAPRET2_TMP_DIR/index.html"
-ZAPRET2_EXCLUDE_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/zapret-hosts-user-exclude.txt"
-
 zapret2_update_cache() { mkdir -p "$ZAPRET2_TMP_DIR"; curl -L -s --connect-timeout 10 "$ZAPRET2_BASE_URL" -o "$ZAPRET2_CACHE_FILE"; }
 
 zapret2_remote_file() { [ -f "$ZAPRET2_CACHE_FILE" ] || zapret2_update_cache
@@ -182,9 +166,6 @@ else grep -o "zapret2_[0-9][^\"]*_${ZAPRET2_ARCH_SUFFIX}\.${RAZ}" "$ZAPRET2_CACH
 zapret2_remote_luci_file() { [ -f "$ZAPRET2_CACHE_FILE" ] || zapret2_update_cache
 if [ "$PKG_IS_APK" -eq 1 ]; then grep -o "luci-app-zapret2-[0-9][^\"]*\.${RAZ}" "$ZAPRET2_CACHE_FILE" | head -n1
 else grep -o "luci-app-zapret2_[0-9][^\"]*_all\.${RAZ}" "$ZAPRET2_CACHE_FILE" | head -n1; fi; }
-
-# zapret2_local_version() { if [ "$PKG_IS_APK" -eq 1 ]; then apk list --installed 2>/dev/null | grep "^zapret2" | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)*-r[0-9]+' | head -n1
-# else opkg list-installed 2>/dev/null | grep "^zapret2 -" | awk '{print $3}'; fi; }
 
 zapret2_local_version() {
 	if [ "$PKG_IS_APK" -eq 1 ]; then
@@ -214,9 +195,12 @@ update_packages || return 1
 echo -e "${CYAN}Скачиваем ${NC}$MAIN_FILE2"; curl -L -s --connect-timeout 10 "${ZAPRET2_BASE_URL}${MAIN_FILE2}" -o "$ZAPRET2_TMP_DIR/$MAIN_FILE2" || { echo -e "\n${RED}Не удалось скачать ${NC}$MAIN_FILE2\n"; PAUSE; return 1; }
 if [ -n "$LUCI_FILE2" ]; then echo -e "${CYAN}Скачиваем ${NC}$LUCI_FILE2"; curl -L -s --connect-timeout 10 "${ZAPRET2_BASE_URL}${LUCI_FILE2}" -o "$ZAPRET2_TMP_DIR/$LUCI_FILE2"; fi
 echo -e "${CYAN}Устанавливаем ${NC}Zapret2"; $INSTALL "$ZAPRET2_TMP_DIR"/*.${RAZ} >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить ${NC}Zapret2\n"; rm -rf "$ZAPRET2_TMP_DIR"; PAUSE; return 1; }
-rm -rf "$ZAPRET2_TMP_DIR"; echo -e "${CYAN}Добавляем домены в исключения${NC}"; wget -q -U "Mozilla/5.0" -O /opt/zapret2/ipset/zapret_hosts_user_exclude.txt "$ZAPRET2_EXCLUDE_URL" >/dev/null 2>&1
+rm -rf "$ZAPRET2_TMP_DIR"; echo -e "${CYAN}Добавляем домены в исключения${NC}"
+
+wget -q -U "Mozilla/5.0" -O /opt/zapret2/ipset/zapret_hosts_user_exclude.txt "$EXCLUDE_URL" || echo -e "${RED}Не удалось загрузить exclude файл${NC}"
+
 echo -e "${CYAN}Включаем стратегию по умолчанию${NC}"; sed -i "/config strategy 'default'/,/config /s/option enabled '0'/option enabled '1'/" /etc/config/zapret2 >/dev/null 2>&1
-echo -e "${CYAN}Запускаем ${NC}Zapret2"; /etc/init.d/zapret2 restart >/dev/null 2>&1; echo -e "Zapret2 ${GREEN}установлен!${NC}\n"; PAUSE; }
+echo -e "${CYAN}Запускаем ${NC}Zapret2"; /etc/init.d/zapret2 enable >/dev/null 2>&1; /etc/init.d/zapret2 restart >/dev/null 2>&1; echo -e "Zapret2 ${GREEN}установлен!${NC}\n"; PAUSE; }
 
 remove_zapret2() { echo -e "\n${MAGENTA}Удаляем Zapret2${NC}"; echo -e "${CYAN}Останавливаем ${NC}zapret2"; /etc/init.d/zapret2 stop >/dev/null 2>&1
 echo -e "${CYAN}Удаляем пакеты${NC}"; $DELETE zapret2 >/dev/null 2>&1; zapret2_luci_installed && $DELETE luci-app-zapret2 >/dev/null 2>&1
@@ -526,15 +510,7 @@ NFQ_ALL=${NFQ_ALL:-0}; NFQ_STAT=""; if [ "$NFQ_ALL" -gt 0 ]; then [ "$NFQ_RUN" -
 # Установка Zapret
 # ==========================================
 install_pkg() { local display_name="$1"; local pkg_file="$2"; echo -e "${CYAN}Устанавливаем ${NC}$display_name"; $INSTALL $pkg_file >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить: ${NC}$display_name\n"; PAUSE; return 1; }; }
-install_Zapret() {
-
-    if [ -f /etc/init.d/zapret2 ]; then
-        echo -e "\n${RED}Установлен ${NC}Zapret2${RED}!${NC}"
-        echo -e "${YELLOW}Установка ${NC}Zapret${YELLOW} невозможна!${NC}\n"
-        PAUSE
-        return 1
-    fi
-
+install_Zapret() { if [ -f /etc/init.d/zapret2 ]; then echo -e "\n${RED}Установлен ${NC}Zapret2${RED}!${NC}"; echo -e "${YELLOW}Установка ${NC}Zapret${YELLOW} невозможна!${NC}\n"; PAUSE; return 1; fi
 get_versions; LATEST_URL="https://github.com/remittor/zapret-openwrt/releases/download/v${ZAPRET_VERSION}/zapret_v${ZAPRET_VERSION}_${LOCAL_ARCH}.zip"
 mkdir -p "$TMP_SF"; local NO_PAUSE=$1; [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ] && { echo -e "\n${GREEN}Zapret уже установлен!${NC}\n"; [ "$NO_PAUSE" != "1" ] && PAUSE; return; }; [ "$NO_PAUSE" != "1" ] && echo; echo -e "${MAGENTA}Устанавливаем Zapret${NC}"
 if [ -f /etc/init.d/zapret ]; then echo -e "${CYAN}Останавливаем ${NC}zapret"; /etc/init.d/zapret stop >/dev/null 2>&1; for pid in $(pgrep -f /opt/zapret 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done; fi;  update_packages || return
