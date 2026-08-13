@@ -114,7 +114,7 @@ get_zapret2_ver() {
 	fi
 	VER2=$(echo "$FNAME2" | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)*-r[0-9]+')
 	if [ -z "$VER2" ]; then echo -e "Zapret2: ${RED}ошибка получения версии${NC}"; return 1; fi
-	echo "$VER2" > "$TMP_VER_Z2"; echo -e "Zapret2: ${GREEN}$VER2${NC}"
+	echo "$VER2" > "$TMP_VER_Z2"; echo -e "Zapret2: ${GREEN}${VER2%-r*}${NC}"
 }
 
 get_ver() { URL="$1"; OUT_FILE="$2"; NAME="$3"; RESULT=$(curl -sIL --connect-timeout 3 --max-time 4 --retry 1 -w "%{url_effective}" -o /dev/null "$URL" 2>/dev/null)
@@ -147,8 +147,6 @@ ADD_FAKE_FLOW
 # ==========================================
 #ZAPRET2
 # ==========================================
-
-
 ZAPRET2_ARCH_SUFFIX="aarch64_cortex-a53"
 if [ "$PKG_IS_APK" -eq 1 ]; then ZAPRET2_BASE_URL="https://packages.routerich.ru/25.12/mediatek/filogic/routerich/"; else ZAPRET2_BASE_URL="https://packages.routerich.ru/24.10/mediatek/filogic/routerich/"; fi
 ZAPRET2_TMP_DIR="/tmp/routerich"; ZAPRET2_CACHE_FILE="$ZAPRET2_TMP_DIR/index.html"
@@ -169,7 +167,17 @@ else opkg list-installed 2>/dev/null | grep "^zapret2 -" | awk '{print $3}'; fi;
 
 zapret2_luci_installed() { if [ "$PKG_IS_APK" -eq 1 ]; then apk list --installed 2>/dev/null | grep -q "^luci-app-zapret2"; else opkg list-installed 2>/dev/null | grep -q "luci-app-zapret2"; fi; }
 
-install_zapret2() { echo -e "\n${MAGENTA}Устанавливаем Zapret2${NC}"; rm -rf "$ZAPRET2_TMP_DIR"; mkdir -p "$ZAPRET2_TMP_DIR"
+install_zapret2() { 
+
+
+    if [ -f /etc/init.d/zapret ]; then
+        echo -e "\n${RED}Установлен ${NC}Zapret1${RED}!${NC}"
+        echo -e "${YELLOW}Установка ${NC}Zapret2${YELLOW} невозможна!${NC}\n"
+        PAUSE
+        return 1
+    fi
+
+echo -e "\n${MAGENTA}Устанавливаем Zapret2${NC}"; rm -rf "$ZAPRET2_TMP_DIR"; mkdir -p "$ZAPRET2_TMP_DIR"
 zapret2_update_cache; MAIN_FILE2="$(zapret2_remote_file)"; LUCI_FILE2="$(zapret2_remote_luci_file)"
 if [ -z "$MAIN_FILE2" ]; then echo -e "\n${RED}Не удалось найти пакет ${NC}zapret2\n"; PAUSE; return 1; fi
 update_packages || return 1
