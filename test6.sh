@@ -162,8 +162,16 @@ zapret2_remote_luci_file() { [ -f "$ZAPRET2_CACHE_FILE" ] || zapret2_update_cach
 if [ "$PKG_IS_APK" -eq 1 ]; then grep -o "luci-app-zapret2-[0-9][^\"]*\.${RAZ}" "$ZAPRET2_CACHE_FILE" | head -n1
 else grep -o "luci-app-zapret2_[0-9][^\"]*_all\.${RAZ}" "$ZAPRET2_CACHE_FILE" | head -n1; fi; }
 
-zapret2_local_version() { if [ "$PKG_IS_APK" -eq 1 ]; then apk list --installed 2>/dev/null | grep "^zapret2" | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)*-r[0-9]+' | head -n1
-else opkg list-installed 2>/dev/null | grep "^zapret2 -" | awk '{print $3}'; fi; }
+# zapret2_local_version() { if [ "$PKG_IS_APK" -eq 1 ]; then apk list --installed 2>/dev/null | grep "^zapret2" | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)*-r[0-9]+' | head -n1
+# else opkg list-installed 2>/dev/null | grep "^zapret2 -" | awk '{print $3}'; fi; }
+
+zapret2_local_version() {
+	if [ "$PKG_IS_APK" -eq 1 ]; then
+		apk list --installed 2>/dev/null | grep "^zapret2" | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)*-r[0-9]+' | head -n1 | sed 's/-r[0-9]*$//'
+	else
+		opkg list-installed 2>/dev/null | grep "^zapret2 -" | awk '{print $3}' | sed 's/-r[0-9]*$//'
+	fi
+}
 
 zapret2_luci_installed() { if [ "$PKG_IS_APK" -eq 1 ]; then apk list --installed 2>/dev/null | grep -q "^luci-app-zapret2"; else opkg list-installed 2>/dev/null | grep -q "luci-app-zapret2"; fi; }
 
