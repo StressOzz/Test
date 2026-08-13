@@ -198,9 +198,10 @@ zapret2_luci_installed() { if [ "$PKG_IS_APK" -eq 1 ]; then apk list --installed
 
 install_zapret2() { 
 
+[ "$(grep '^DISTRIB_ARCH=' /etc/openwrt_release | cut -d"'" -f2)" = "aarch64_cortex-a53" ] || { echo -e "\n${RED}Архитектура не поддерживается!"; PAUSE; return 1; }
 
     if [ -f /etc/init.d/zapret ]; then
-        echo -e "\n${RED}Установлен ${NC}Zapret1${RED}!${NC}"
+        echo -e "\n${RED}Установлен ${NC}Zapret${RED}!${NC}"
         echo -e "${YELLOW}Установка ${NC}Zapret2${YELLOW} невозможна!${NC}\n"
         PAUSE
         return 1
@@ -529,7 +530,7 @@ install_Zapret() {
 
     if [ -f /etc/init.d/zapret2 ]; then
         echo -e "\n${RED}Установлен ${NC}Zapret2${RED}!${NC}"
-        echo -e "${YELLOW}Установка ${NC}Zapret1${YELLOW} невозможна!${NC}\n"
+        echo -e "${YELLOW}Установка ${NC}Zapret${YELLOW} невозможна!${NC}\n"
         PAUSE
         return 1
     fi
