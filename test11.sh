@@ -124,8 +124,8 @@ get_ver "https://github.com/d0mhate/-tg-ws-proxy-Manager-go/releases/latest" "$T
 [ -s "$TMP_VER" ] && ZAPRET_VERSION="$(cat "$TMP_VER")"; [ -s "$TMP_VER_POD" ] && PODKOP_LATEST_VER="$(cat "$TMP_VER_POD")"; [ -s "$TMP_VER_TG_MT" ] && TG_MTProto="$(cat "$TMP_VER_TG_MT")"
 [ -s "$TMP_VER_SPL" ] && SPL_VER="$(cat "$TMP_VER_SPL")"; [ -s "$TMP_VER_TG_GO" ] && TG_GO_VERSION="$(cat "$TMP_VER_TG_GO")"; [ -s "$TMP_VER_TG_RS" ] && TG_RS_VERSION="$(cat "$TMP_VER_TG_RS")"
 
-echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test10.sh)' > /usr/bin/zms; chmod +x /usr/bin/zms
-echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test10.sh) "$@"' > /usr/bin/zmsA; chmod +x /usr/bin/zmsA
+echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test11.sh)' > /usr/bin/zms; chmod +x /usr/bin/zms
+echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test11.sh) "$@"' > /usr/bin/zmsA; chmod +x /usr/bin/zmsA
 
 # git="githubusercontent.com"; if ! grep -q "raw.$git" /etc/hosts; then echo -e "\n\033[1;36mДля корректной работы скрипта добавляем домены \033[0mGitHub\033[1;36m в \033[0m/etc/hosts\033[0m"
 # printf "#$git\n185.199.109.133 raw.$git release-assets.$git\n185.199.108.133 private-user-images.$git gist.$git avatars.$git\n" >> /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1; fi
@@ -238,7 +238,7 @@ echo -ne "${CYAN}Enter) ${GREEN}Выход в меню тестирования 
 elif [ -n "$OPT_DISABLE" ] && [ "$choiceAB" = "$OPT_DISABLE" ]; then disable_auto_best; elif [ "$choiceAB" = "$OPT_RUN" ]; then if [ "$RUNNING" = "1" ]; then echo -e "\n${MAGENTA}Останавливаем автоподбор${NC}"; stop_auto_best; echo -e "${GREEN}Автоподбор в фоне остановлен!${NC}\n"; PAUSE
 else run_auto_best_background; fi; elif [ -n "$OPT_RESULTS" ] && [ "$choiceAB" = "$OPT_RESULTS" ]; then show_single_result "$AUTO_RESULTS"; elif [ -n "$OPT_LOG" ] && [ "$choiceAB" = "$OPT_LOG" ]; then
 clear; cat "$AUTO_LOG"; echo; PAUSE; elif [ "$choiceAB" = "$OPT_TZ" ]; then TIME_MENU; elif [ "$choiceAB" = "$OPT_MODE" ]; then set_auto_best_mode; elif [ -n "$OPT_CLEAR" ] && [ "$choiceAB" = "$OPT_CLEAR" ]; then
-echo -e "\n${GREEN}Результаты теста и лог удалены!${NC}\n"; rm -rf "$AUTO_RESULTS" "$AUTO_BACK" "$AUTO_LOG" "$AUTO_LOCK"; PAUSE; else; return; fi; done; }
+echo -e "\n${GREEN}Результаты теста и лог удалены!${NC}\n"; rm -rf "$AUTO_RESULTS" "$AUTO_BACK" "$AUTO_LOG" "$AUTO_LOCK"; PAUSE; else return; fi; done; }
 # ==========================================
 # splify
 # ==========================================
