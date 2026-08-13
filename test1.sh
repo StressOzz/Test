@@ -120,8 +120,8 @@ get_ver "https://github.com/d0mhate/-tg-ws-proxy-Manager-go/releases/latest" "$T
 [ -s "$TMP_VER" ] && ZAPRET_VERSION="$(cat "$TMP_VER")"; [ -s "$TMP_VER_POD" ] && PODKOP_LATEST_VER="$(cat "$TMP_VER_POD")"; [ -s "$TMP_VER_TG_MT" ] && TG_MTProto="$(cat "$TMP_VER_TG_MT")"
 [ -s "$TMP_VER_SPL" ] && SPL_VER="$(cat "$TMP_VER_SPL")"; [ -s "$TMP_VER_TG_GO" ] && TG_GO_VERSION="$(cat "$TMP_VER_TG_GO")"; [ -s "$TMP_VER_TG_RS" ] && TG_RS_VERSION="$(cat "$TMP_VER_TG_RS")"
 
-echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test.sh)' > /usr/bin/zms; chmod +x /usr/bin/zms
-echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test.sh) "$@"' > /usr/bin/zmsA; chmod +x /usr/bin/zmsA
+echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test1.sh)' > /usr/bin/zms; chmod +x /usr/bin/zms
+echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test1.sh) "$@"' > /usr/bin/zmsA; chmod +x /usr/bin/zmsA
 
 # git="githubusercontent.com"; if ! grep -q "raw.$git" /etc/hosts; then echo -e "\n\033[1;36mДля корректной работы скрипта добавляем домены \033[0mGitHub\033[1;36m в \033[0m/etc/hosts\033[0m"
 # printf "#$git\n185.199.109.133 raw.$git release-assets.$git\n185.199.108.133 private-user-images.$git gist.$git avatars.$git\n" >> /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1; fi
@@ -216,7 +216,7 @@ restore_yv_number() {
     done < "$TMP_LIST"
     sed -i "/^[[:space:]]*#Yv[0-9]\+/d" "$CONF"
     awk '{if(skip){if($0=="--new"||$0~/\047/){skip=0;next}if($0~/^[[:space:]]*$/)next;next}if($0=="--filter-tcp=443"){getline n;if(n=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt"){skip=1;next}else{print $0;print n;next}}if($0=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt")has_google=1;print}' "$CONF" > "$NEW_TMP"
-    awk -v sel="$SELECTED_NAME" -v savedfile="$SAVED" 'BEGIN{inserted=0;has_google=0} $0=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt"{has_google=1} $0~/^[[:space:]]*option NFQWS_OPT '\''$/&&!has_google&&!inserted{print;print sel;while((getline l<savedfile)>0)if(l!~/^[[:space:]]*$/)print l;inserted=1;next} {print}' "$NEW_TMP" > "$FINAL_TMP"
+    awk -v sel="$SELECTED_NAME" -v savedfile="$SAVED" 'BEGIN{inserted=0;has_google=0} $0=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt"{has_google=1} $0~/^[[:space:]]*option NFQWS_OPT '\''$/&&!has_google&&!inserted{print;print sel;while((getline l<savedfile)>0)if(l!~/^[[:space:]]*$/)print l;print "--new";inserted=1;next} {print}' "$NEW_TMP" > "$FINAL_TMP"
     grep -q "^[[:space:]]*'[[:space:]]*\$" "$FINAL_TMP" || echo "'" >> "$FINAL_TMP"
     mv "$FINAL_TMP" "$CONF"
 }
@@ -248,28 +248,34 @@ sort_results_desc "$AUTO_RESULTS" "$AUTO_RESULTS"; echo ""; echo "Результ
 if [ -z "$BEST_LINE" ]; then echo "Не удалось определить лучшую стратегию, восстанавливаем прежнюю"; mv -f "$AUTO_BACK" "$CONF"; ZAPRET_RESTART; rm -f "$OUT_DPI"; exit 1; fi
 BEST_NAME=$(echo "$BEST_LINE" | cut -d'→' -f1 | sed 's/[[:space:]]*$//'); echo "Лучшая стратегия: $BEST_LINE"; mv -f "$AUTO_BACK" "$CONF"; START=$(grep -nxF "#${BEST_NAME}" "$STR_FILE_AUTO" | head -n1 | cut -d: -f1)
 if [ -n "$START" ]; then NEXT=$(echo "$LINES" | awk -v s="$START" '$1>s{print;exit}'); if [ -z "$NEXT" ]; then sed -n "${START},\$p" "$STR_FILE_AUTO" > "$TEMP_FILE_AUTO"; else sed -n "${START},$((NEXT-1))p" "$STR_FILE_AUTO" > "$TEMP_FILE_AUTO"; fi
+
 BLOCK=$(cat "$TEMP_FILE_AUTO"); sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; { echo "  option NFQWS_OPT '"; echo "$BLOCK"; echo "'"; } >> "$CONF"
 if ! grep -q "option NFQWS_PORTS_UDP.*19294-19344,50000-50100" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'\$/,19294-19344,50000-50100'/" "$CONF"; fi; if ! grep -q "option NFQWS_PORTS_TCP.*2053,2083,2087,2096,8443" "$CONF"
 then sed -i "/^[[:space:]]*option NFQWS_PORTS_TCP '/s/'\$/,2053,2083,2087,2096,8443'/" "$CONF"; fi
-[ -n "$ORIG_YV_NUM" ] && restore_yv_number "$ORIG_YV_NUM"
+IS_GENERAL=0; grep -q '^#general' "$CONF" && IS_GENERAL=1
+[ -n "$ORIG_YV_NUM" ] && [ "$IS_GENERAL" = "0" ] && restore_yv_number "$ORIG_YV_NUM"
 [ -n "$ORIG_DV_NUM" ] && restore_dv_number "$ORIG_DV_NUM"
 case "$ORIG_GV_NUM" in 1|2|3|4) NEED_GV=1 ;; *) NEED_GV=0 ;; esac
-if grep -q '^#general' "$CONF"; then
-    sed -i '/--new/{N;/--filter-tcp=2802/{s/--new/#Gv0\n--new/;};}' "$CONF"
-elif [ "$NEED_GV" = "1" ]; then
-    fix_GAME "$ORIG_GV_NUM"
-fi
+[ "$IS_GENERAL" = "1" ] && sed -i '/--new/{N;/--filter-tcp=2802/{s/--new/#Gv0\n--new/;};}' "$CONF"
+[ "$NEED_GV" = "1" ] && fix_GAME "$ORIG_GV_NUM"
 ZAPRET_RESTART; echo "Стратегия '$BEST_NAME' применена и сохранена"
-[ -n "$ORIG_YV_NUM" ] && echo "Стратегия для YouTube восстановлена: Yv$ORIG_YV_NUM"
+[ -n "$ORIG_YV_NUM" ] && [ "$IS_GENERAL" = "0" ] && echo "Стратегия для YouTube восстановлена: Yv$ORIG_YV_NUM"
 [ -n "$ORIG_DV_NUM" ] && echo "Стратегия для discord.media восстановлена: Dv$ORIG_DV_NUM"
 [ "$NEED_GV" = "1" ] && echo "Игровая стратегия восстановлена: Gv$ORIG_GV_NUM"
 else echo "Не удалось повторно найти блок стратегии '$BEST_NAME', конфиг восстановлен без применения"; fi; rm -f "$OUT_DPI"; } >> "$AUTO_LOG" 2>&1; }
+
+
+
 auto_best_cron_line() { grep -F "$AUTO_CRON_CMD" "$CRON_FILE" 2>/dev/null | head -n1; }; LINECR=$(auto_best_cron_line); HOURC=$(echo "$LINECR" | awk '{print $2}')
 set_auto_best_time() { CUR_YEAR=$(date '+%Y'); if [ "$CUR_YEAR" -lt 2020 ]; then echo -e "\n${RED}Внимание! Время на роутере выглядит неверным:${NC}$(date '+%Y-%m-%d %H:%M:%S')${RED}!${NC}"; echo -e "${YELLOW}Расписание будет работать некорректно!${NC}"
 echo -e "${YELLOW}Сначала настройте время!${NC}\n"; PAUSE; return; fi; echo -ne "\n${YELLOW}Введите час автозапуска (${NC}0-23${YELLOW}):${NC} "; read -r HOUR; case "$HOUR" in ''|*[!0-9]*) echo -e "\n${RED}Введите число от ${NC}0${RED} до ${NC}23\n"; PAUSE; return ;; esac
 { [ "$HOUR" -ge 0 ] && [ "$HOUR" -le 23 ]; } || { echo -e "\n${RED}Ошибка! Диапазон ${NC}0-23\n"; PAUSE; return; }; mkdir -p "$(dirname "$CRON_FILE")"; touch "$CRON_FILE"; sed -i "\|$AUTO_CRON_CMD|d" "$CRON_FILE"
 echo "0 $HOUR * * * $AUTO_CRON_CMD >/dev/null 2>&1" >> "$CRON_FILE"; /etc/init.d/cron restart >/dev/null 2>&1; echo -e "\n${GREEN}Автоподбор запланирован ежедневно в ${NC}$(printf "%02d" "$HOUR"):00${GREEN}!${NC}\n"; PAUSE; }
+
+
 disable_auto_best() { sed -i "\|$AUTO_CRON_CMD|d" "$CRON_FILE"; /etc/init.d/cron restart >/dev/null 2>&1; echo -e "\n${GREEN}Автоподбор отключен!${NC}\n"; PAUSE; }
+
+
 run_auto_best_background() { echo -e "\n${MAGENTA}Запускаем автоподбор в фоне${NC}"; rm -f "$AUTO_LOCK"; $AUTO_CRON_CMD >/dev/null 2>&1 & echo -en "${CYAN}Запускаем фоновое выполнение${NC}"; _i=0; while [ ! -f "$AUTO_LOCK" ] && [ "$_i" -lt 20 ]; do sleep 1; _i=$((_i + 1)); done; echo; if auto_best_running; then echo -e "${GREEN}Автоподбор в фоне запущен!${NC}\n"; else echo -e "${YELLOW}Процесс запускается медленнее обычного, статус обновится при следующем открытии меню${NC}\n"; fi; PAUSE; }
 
 AUTO_BEST_MENU() {
