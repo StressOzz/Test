@@ -124,8 +124,8 @@ get_ver "https://github.com/d0mhate/-tg-ws-proxy-Manager-go/releases/latest" "$T
 [ -s "$TMP_VER" ] && ZAPRET_VERSION="$(cat "$TMP_VER")"; [ -s "$TMP_VER_POD" ] && PODKOP_LATEST_VER="$(cat "$TMP_VER_POD")"; [ -s "$TMP_VER_TG_MT" ] && TG_MTProto="$(cat "$TMP_VER_TG_MT")"
 [ -s "$TMP_VER_SPL" ] && SPL_VER="$(cat "$TMP_VER_SPL")"; [ -s "$TMP_VER_TG_GO" ] && TG_GO_VERSION="$(cat "$TMP_VER_TG_GO")"; [ -s "$TMP_VER_TG_RS" ] && TG_RS_VERSION="$(cat "$TMP_VER_TG_RS")"
 
-echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test4.sh)' > /usr/bin/zms; chmod +x /usr/bin/zms
-echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test4.sh) "$@"' > /usr/bin/zmsA; chmod +x /usr/bin/zmsA
+echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test5.sh)' > /usr/bin/zms; chmod +x /usr/bin/zms
+echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Test/main/test5.sh) "$@"' > /usr/bin/zmsA; chmod +x /usr/bin/zmsA
 
 # git="githubusercontent.com"; if ! grep -q "raw.$git" /etc/hosts; then echo -e "\n\033[1;36mДля корректной работы скрипта добавляем домены \033[0mGitHub\033[1;36m в \033[0m/etc/hosts\033[0m"
 # printf "#$git\n185.199.109.133 raw.$git release-assets.$git\n185.199.108.133 private-user-images.$git gist.$git avatars.$git\n" >> /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1; fi
@@ -198,7 +198,11 @@ sed -i '/#Y/d' "$STR_FILE_AUTO"; if [ ! -s "$STR_FILE_AUTO" ]; then echo "Не �
 URLS="$(cat "$OUT_DPI")"; TOTAL=$(grep -c "|" "$OUT_DPI"); TOTAL_STR=$(grep -c '^#' "$STR_FILE_AUTO"); echo "Найдено стратегий: $TOTAL_STR"; echo "Доменов для теста: $TOTAL"; RESULTS="$AUTO_RESULTS"; MODE="normal"; : > "$AUTO_RESULTS"; check_zpr_off
 if [ -f "$AUTO_STOP_FLAG" ]; then echo "Автоподбор остановлен пользователем"; rm -f "$AUTO_STOP_FLAG"; mv -f "$AUTO_BACK" "$CONF"; ZAPRET_RESTART; echo "Конфигурация восстановлена"; rm -f "$OUT_DPI"; exit 0; fi
 LINES=$(grep -n '^#' "$STR_FILE_AUTO" | cut -d: -f1); CUR=0; echo "$LINES" | while read -r START; do CUR=$((CUR + 1)); if [ -f "$AUTO_STOP_FLAG" ]; then echo "===> Получен сигнал остановки, прерываем тестирование"; break; fi
-NEXT=$(echo "$LINES" | awk -v s="$START" '$1>s{print;exit}'); if [ -z "$NEXT" ]; then sed -n "${START},\$p" "$STR_FILE_AUTO" > "$TEMP_FILE_AUTO"; else sed -n "${START},$((NEXT-1))p" "$STR_FILE_AUTO" > "$TEMP_FILE_AUTO"; fi; BLOCK=$(cat "$TEMP_FILE_AUTO"); NAME=$(head -n1 "$TEMP_FILE_AUTO"); NAME="${NAME#\#}"
+NEXT=$(echo "$LINES" | awk -v s="$START" '$1>s{print;exit}'); if [ -z "$NEXT" ]; then sed -n "${START},\$p" "$STR_FILE_AUTO" > "$TEMP_FILE_AUTO"; else sed -n "${START},$((NEXT-1))p" "$STR_FILE_AUTO" > "$TEMP_FILE_AUTO"; fi
+
+# BLOCK=$(cat "$TEMP_FILE_AUTO"); NAME=$(head -n1 "$TEMP_FILE_AUTO"); NAME="${NAME#\#}"
+BLOCK=$(sed "/^[[:space:]]*'$/d" "$TEMP_FILE_AUTO"); NAME=$(head -n1 "$TEMP_FILE_AUTO"); NAME="${NAME#\#}"
+
 awk -v block="$BLOCK" 'BEGIN{skip=0} /option NFQWS_OPT '\''/ {printf "\toption NFQWS_OPT '\''\n%s\n'\''\n", block; skip=1; next} skip && /^'\''$/ {skip=0; next} !skip {print}' "$CONF" > "${CONF}.tmp" && mv "${CONF}.tmp" "$CONF"
 ZAPRET_RESTART; OK=0; LOG_TMP="/tmp/zapret_log_auto_${CUR}"; : > "$LOG_TMP"; check_all_urls; echo "${NAME} → ${OK}/${TOTAL}" >> "$AUTO_RESULTS"; echo "===> Стратегия: ${NAME} = ${OK}/${TOTAL}"; done
 if [ -f "$AUTO_STOP_FLAG" ]; then echo "Автоподбор остановлен пользователем во время тестирования"; rm -f "$AUTO_STOP_FLAG"; mv -f "$AUTO_BACK" "$CONF"; ZAPRET_RESTART; echo "Конфигурация восстановлена"; rm -f "$OUT_DPI"; exit 0; fi
@@ -206,7 +210,12 @@ sort_results_desc "$AUTO_RESULTS" "$AUTO_RESULTS"; echo ""; echo "Результ
 if [ -z "$BEST_LINE" ]; then echo "Не удалось определить лучшую стратегию, восстанавливаем прежнюю"; mv -f "$AUTO_BACK" "$CONF"; ZAPRET_RESTART; rm -f "$OUT_DPI"; exit 1; fi
 BEST_NAME=$(echo "$BEST_LINE" | cut -d'→' -f1 | sed 's/[[:space:]]*$//'); echo "Лучшая стратегия: $BEST_LINE"; mv -f "$AUTO_BACK" "$CONF"; START=$(grep -nxF "#${BEST_NAME}" "$STR_FILE_AUTO" | head -n1 | cut -d: -f1)
 if [ -n "$START" ]; then NEXT=$(echo "$LINES" | awk -v s="$START" '$1>s{print;exit}'); if [ -z "$NEXT" ]; then sed -n "${START},\$p" "$STR_FILE_AUTO" > "$TEMP_FILE_AUTO"; else sed -n "${START},$((NEXT-1))p" "$STR_FILE_AUTO" > "$TEMP_FILE_AUTO"; fi
-BLOCK=$(cat "$TEMP_FILE_AUTO"); sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; { echo "  option NFQWS_OPT '"; echo "$BLOCK"; echo "'"; } >> "$CONF"
+
+
+# BLOCK=$(cat "$TEMP_FILE_AUTO"); sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; { echo "  option NFQWS_OPT '"; echo "$BLOCK"; echo "'"; } >> "$CONF"
+BLOCK=$(sed "/^[[:space:]]*'$/d" "$TEMP_FILE_AUTO"); sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; { echo "  option NFQWS_OPT '"; echo "$BLOCK"; echo "'"; } >> "$CONF"
+
+
 if ! grep -q "option NFQWS_PORTS_UDP.*19294-19344,50000-50100" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'\$/,19294-19344,50000-50100'/" "$CONF"; fi; if ! grep -q "option NFQWS_PORTS_TCP.*2053,2083,2087,2096,8443" "$CONF"
 then sed -i "/^[[:space:]]*option NFQWS_PORTS_TCP '/s/'\$/,2053,2083,2087,2096,8443'/" "$CONF"; fi; IS_GENERAL=0; grep -q '^#general' "$CONF" && IS_GENERAL=1; [ -n "$ORIG_YV_NUM" ] && restore_yv_number "$ORIG_YV_NUM"; [ -n "$ORIG_DV_NUM" ] && restore_dv_number "$ORIG_DV_NUM"
 case "$ORIG_GV_NUM" in 1|2|3|4) NEED_GV=1 ;; *) NEED_GV=0 ;; esac; [ "$IS_GENERAL" = "1" ] && sed -i '/--new/{N;/--filter-tcp=2802/{s/--new/#Gv0\n--new/;};}' "$CONF"; [ "$NEED_GV" = "1" ] && fix_GAME "$ORIG_GV_NUM"; ZAPRET_RESTART; echo "Стратегия '$BEST_NAME' применена и сохранена"
