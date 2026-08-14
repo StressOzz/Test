@@ -475,8 +475,13 @@ run_test_core_youtube() { local RESULTS="$1"; URLS=""; for d in $DOMAINS; do URL
 echo -e "${CYAN}Найдено стратегий: ${NC}$TOTAL_STR"; echo -e "${CYAN}Доменов для теста:${NC} $TOTAL"; : > "$RESULTS"; check_zpr_off; LINES=$(grep -n '^#' "$STR_FILE" | cut -d: -f1); CUR=0
 echo "$LINES" | while read START; do CUR=$((CUR+1)); NEXT=$(echo "$LINES" | awk -v s="$START" '$1>s{print;exit}'); if [ -z "$NEXT" ]; then
 sed -n "${START},\$p" "$STR_FILE" > "$TEMP_FILE"; else sed -n "${START},$((NEXT-1))p" "$STR_FILE" > "$TEMP_FILE"; fi
-BLOCK=$(cat "$TEMP_FILE"); NAME=$(head -n1 "$TEMP_FILE"); NAME="${NAME#\#}"; awk -v block="$BLOCK" 'BEGIN{skip=0} /option NFQWS_OPT '\''/ {printf "\toption NFQWS_OPT '\''\n%s\n'\''\n", block; skip=1; next} skip && /^'\''$/ {skip=0; next} !skip {print}' "$CONF" > "${CONF}.tmp"
-mv "${CONF}.tmp" "$CONF"; echo -e "\n${CYAN}Тестируем стратегию: ${YELLOW}${NAME}${NC} ($CUR/$TOTAL_STR)"; ZAPRET_RESTART; OK=0; LOG_TMP="/tmp/zapret_log_yt_${CUR}"; : > "$LOG_TMP"; check_all_urls
+
+BLOCK=$(cat "$TEMP_FILE"); NAME=$(head -n1 "$TEMP_FILE"); NAME="${NAME#\#}"; awk -v block="$BLOCK" 'BEGIN{skip=0}
+/option NFQWS_OPT '\''/ {printf "\toption NFQWS_OPT '\''\n%s\n'\''\n", block; skip=1; next}
+skip && /^'\''$/ {skip=0; next}
+!skip {print}' "$CONF" > "${CONF}.tmp"; mv "${CONF}.tmp" "$CONF"
+
+echo -e "\n${CYAN}Тестируем стратегию: ${YELLOW}${NAME}${NC} ($CUR/$TOTAL_STR)"; ZAPRET_RESTART; OK=0; LOG_TMP="/tmp/zapret_log_yt_${CUR}"; : > "$LOG_TMP"; check_all_urls
 if [ "$OK" -eq "$TOTAL" ]; then COLOR="${GREEN}"; elif [ "$OK" -ge $((TOTAL/2)) ]; then COLOR="${YELLOW}"; else COLOR="${RED}"; fi; echo -e "${CYAN}Результат теста: ${COLOR}$OK/$TOTAL${NC}"; echo -e "${NAME} → ${OK}/${TOTAL}" >> "$RESULTS"; done
 sort -t'/' -k1 -nr "$RESULTS" -o "$RESULTS"; mv -f "$BACK" "$CONF"; ZAPRET_RESTART; BEST_LINE=$(grep -v '^Контрольный тест' "$RESULTS" | head -n1)
 [ -n "$BEST_LINE" ] && echo -e "\n${GREEN}Лучшая стратегия для YouTube: ${NC}${BEST_LINE}"; show_single_result "$RESULTS"; }
