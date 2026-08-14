@@ -144,7 +144,7 @@ ADD_FAKE_FLOW
 YOUTUBE_TEST_MENU() { echo -e "\n${MAGENTA}Выберите способ тестирования YouTube${NC}"; echo -e "${CYAN}1) ${GREEN}Тестировать каждую стратегию отдельно${NC}"; echo -e "${CYAN}2) ${GREEN}Тестировать все стратегии сразу${NC}"
 echo -ne "${CYAN}Enter) ${GREEN}Выход в меню тестирования стратегий${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read -r yt_choice; case "$yt_choice" in 1) auto_stryou ;; 2) run_test_youtube_all ;; *) return ;; esac; }
 
-run_test_youtube_all() { clear; echo -e "${MAGENTA}Тестирование всех стратегий YouTube${NC}\n\n${MAGENTA}Выберите источник стратегий:${NC}"; echo -e "${CYAN}1) ${GREEN}Встроенные стратегии ${NC}Yv"; echo -e "${CYAN}2) ${GREEN}Стратегии из ${NC}/root/custom_test.txt"
+run_test_youtube_all() { echo -e "\n${MAGENTA}Выберите источник стратегий:${NC}"; echo -e "${CYAN}1) ${GREEN}Встроенные стратегии ${NC}Yv"; echo -e "${CYAN}2) ${GREEN}Стратегии из ${NC}/root/custom_test.txt"
 echo -ne "${CYAN}Enter) ${GREEN}Выход в меню тестирования стратегий${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read -r SRC; mkdir -p "$TMP_SF"; : > "$STR_FILE"; case "$SRC" in
 1) curl -fsSL "$STR_URL" -o "$STR_FILE" || { echo -e "\n${RED}Не удалось скачать список стратегий!${NC}\n"; PAUSE; return 1; } ;;
 2) if [ ! -s "$CUSTOM_STR_FILE" ]; then echo -e "\n${RED}Файл ${NC}$CUSTOM_STR_FILE${RED} не найден!${NC}\n"; PAUSE; return 1; fi; cp "$CUSTOM_STR_FILE" "$STR_FILE"; sed -i 's/\r$//' "$STR_FILE"
