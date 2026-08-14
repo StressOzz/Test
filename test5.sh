@@ -144,9 +144,13 @@ ADD_FAKE_FLOW
 YOUTUBE_TEST_MENU() { echo -e "\n${MAGENTA}Выберите способ тестирования YouTube${NC}"; echo -e "${CYAN}1) ${GREEN}Тестировать каждую стратегию отдельно${NC}"; echo -e "${CYAN}2) ${GREEN}Тестировать все стратегии сразу${NC}"
 echo -ne "${CYAN}Enter) ${GREEN}Выход в меню тестирования стратегий${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read -r yt_choice; case "$yt_choice" in 1) auto_stryou ;; 2) run_test_youtube_all ;; *) return ;; esac; }
 
+run_test_youtube_all() { clear; echo -e "${MAGENTA}Тестирование всех стратегий YouTube${NC}\n\n${MAGENTA}Выберите источник стратегий:${NC}"; echo -e "${CYAN}1) ${GREEN}Встроенные стратегии ${NC}Yv"; echo -e "${CYAN}2) ${GREEN}Стратегии из ${NC}/root/custom_test.txt"
+echo -ne "${CYAN}Enter) ${GREEN}Выход в меню тестирования стратегий${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read -r SRC; mkdir -p "$TMP_SF"; : > "$STR_FILE"; case "$SRC" in
+1) curl -fsSL "$STR_URL" -o "$STR_FILE" || { echo -e "\n${RED}Не удалось скачать список стратегий!${NC}\n"; PAUSE; return 1; } ;;
+2) if [ ! -s "$CUSTOM_STR_FILE" ]; then echo -e "\n${RED}Файл ${NC}$CUSTOM_STR_FILE${RED} не найден!${NC}\n"; PAUSE; return 1; fi; cp "$CUSTOM_STR_FILE" "$STR_FILE"; sed -i 's/\r$//' "$STR_FILE"
+sed -i '/^[[:space:]]*$/d' "$STR_FILE"; sed -i 's/^[[:space:]]*//;s/[[:space:]]*$//' "$STR_FILE" ;; *) return ;; esac
+clear; echo -e "${MAGENTA}Тестирование всех стратегий YouTube${NC}\n\n${CYAN}Собираем стратегии для теста${NC}"; cp "$CONF" "$BACK"; run_test_core_youtube "$RES_YOUTUBE"; }
 
-run_test_youtube_all() { clear; echo -e "${MAGENTA}Тестирование всех стратегий YouTube${NC}\n\n${CYAN}Собираем стратегии для теста${NC}"; mkdir -p "$TMP_SF"; : > "$STR_FILE"
-curl -fsSL "$STR_URL" -o "$STR_FILE" || { echo -e "\n${RED}Не удалось скачать список стратегий!${NC}\n"; PAUSE; return 1; }; cp "$CONF" "$BACK"; run_test_core_youtube "$RES_YOUTUBE"; }
 run_test_core_youtube() { local RESULTS="$1"; URLS=""; for d in $DOMAINS; do URLS="${URLS}${d}|https://${d}/
 "; done; TOTAL=$(echo $DOMAINS | wc -w); TOTAL_STR=$(grep -c '^#' "$STR_FILE")
 echo -e "${CYAN}Найдено стратегий: ${NC}$TOTAL_STR"; echo -e "${CYAN}Доменов для теста:${NC} $TOTAL"; : > "$RESULTS"; check_zpr_off; LINES=$(grep -n '^#' "$STR_FILE" | cut -d: -f1); CUR=0
@@ -159,11 +163,6 @@ skip && /^'\''$/ {skip=0; next}
 if [ "$OK" -eq "$TOTAL" ]; then COLOR="${GREEN}"; elif [ "$OK" -ge $((TOTAL/2)) ]; then COLOR="${YELLOW}"; else COLOR="${RED}"; fi; echo -e "${CYAN}Результат теста: ${COLOR}$OK/$TOTAL${NC}"; echo -e "${NAME} → ${OK}/${TOTAL}" >> "$RESULTS"; done
 sort -t'/' -k1 -nr "$RESULTS" -o "$RESULTS"; mv -f "$BACK" "$CONF"; ZAPRET_RESTART; BEST_LINE=$(grep -v '^Контрольный тест' "$RESULTS" | head -n1)
 [ -n "$BEST_LINE" ] && echo -e "\n${GREEN}Лучшая стратегия для YouTube: ${NC}${BEST_LINE}"; show_single_result "$RESULTS"; }
-
-
-
-
-
 
 
 # ==========================================
