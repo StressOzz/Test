@@ -138,33 +138,6 @@ do [ -d /opt/zapret ] && [ ! -f "/opt/zapret/files/fake/$f" ] && { [ "$MSG" = 0 
 
 ADD_FAKE_FLOW
 
-
-
-
-YOUTUBE_TEST_MENU() { echo -e "\n${MAGENTA}Выберите способ тестирования YouTube${NC}"; echo -e "${CYAN}1) ${GREEN}Тестировать каждую стратегию отдельно${NC}"; echo -e "${CYAN}2) ${GREEN}Тестировать все стратегии сразу${NC}"
-echo -ne "${CYAN}Enter) ${GREEN}Выход в меню тестирования стратегий${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read -r yt_choice; case "$yt_choice" in 1) auto_stryou ;; 2) run_test_youtube_all ;; *) return ;; esac; }
-
-run_test_youtube_all() { echo -e "\n${MAGENTA}Выберите источник стратегий:${NC}"; echo -e "${CYAN}1) ${GREEN}Встроенные стратегии ${NC}Yv"; echo -e "${CYAN}2) ${GREEN}Стратегии из ${NC}/root/custom_test.txt"
-echo -ne "${CYAN}Enter) ${GREEN}Выход в меню тестирования стратегий${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read -r SRC; mkdir -p "$TMP_SF"; : > "$STR_FILE"; case "$SRC" in
-1) curl -fsSL "$STR_URL" -o "$STR_FILE" || { echo -e "\n${RED}Не удалось скачать список стратегий!${NC}\n"; PAUSE; return 1; } ;;
-2) if [ ! -s "$CUSTOM_STR_FILE" ]; then echo -e "\n${RED}Файл ${NC}$CUSTOM_STR_FILE${RED} не найден!${NC}\n"; PAUSE; return 1; fi; cp "$CUSTOM_STR_FILE" "$STR_FILE"; sed -i 's/\r$//' "$STR_FILE"
-sed -i '/^[[:space:]]*$/d' "$STR_FILE"; sed -i 's/^[[:space:]]*//;s/[[:space:]]*$//' "$STR_FILE" ;; *) return ;; esac
-clear; echo -e "${MAGENTA}Тестирование всех стратегий YouTube${NC}\n\n${CYAN}Собираем стратегии для теста${NC}"; cp "$CONF" "$BACK"; run_test_core_youtube "$RES_YOUTUBE"; }
-
-run_test_core_youtube() { local RESULTS="$1"; URLS=""; for d in $DOMAINS; do URLS="${URLS}${d}|https://${d}/
-"; done; TOTAL=$(echo $DOMAINS | wc -w); TOTAL_STR=$(grep -c '^#' "$STR_FILE")
-echo -e "${CYAN}Найдено стратегий: ${NC}$TOTAL_STR"; echo -e "${CYAN}Доменов для теста:${NC} $TOTAL"; : > "$RESULTS"; check_zpr_off; LINES=$(grep -n '^#' "$STR_FILE" | cut -d: -f1); CUR=0
-echo "$LINES" | while read START; do CUR=$((CUR+1)); NEXT=$(echo "$LINES" | awk -v s="$START" '$1>s{print;exit}'); if [ -z "$NEXT" ]; then
-sed -n "${START},\$p" "$STR_FILE" > "$TEMP_FILE"; else sed -n "${START},$((NEXT-1))p" "$STR_FILE" > "$TEMP_FILE"; fi
-BLOCK=$(cat "$TEMP_FILE"); NAME=$(head -n1 "$TEMP_FILE"); NAME="${NAME#\#}"; awk -v block="$BLOCK" 'BEGIN{skip=0}
-/option NFQWS_OPT '\''/ {printf "\toption NFQWS_OPT '\''\n%s\n'\''\n", block; skip=1; next}
-skip && /^'\''$/ {skip=0; next}
-!skip {print}' "$CONF" > "${CONF}.tmp"; mv "${CONF}.tmp" "$CONF"; echo -e "\n${CYAN}Тестируем стратегию: ${YELLOW}${NAME}${NC} ($CUR/$TOTAL_STR)"; ZAPRET_RESTART; OK=0; LOG_TMP="/tmp/zapret_log_yt_${CUR}"; : > "$LOG_TMP"; check_all_urls
-if [ "$OK" -eq "$TOTAL" ]; then COLOR="${GREEN}"; elif [ "$OK" -ge $((TOTAL/2)) ]; then COLOR="${YELLOW}"; else COLOR="${RED}"; fi; echo -e "${CYAN}Результат теста: ${COLOR}$OK/$TOTAL${NC}"; echo -e "${NAME} → ${OK}/${TOTAL}" >> "$RESULTS"; done
-sort -t'/' -k1 -nr "$RESULTS" -o "$RESULTS"; mv -f "$BACK" "$CONF"; ZAPRET_RESTART; BEST_LINE=$(grep -v '^Контрольный тест' "$RESULTS" | head -n1)
-[ -n "$BEST_LINE" ] && echo -e "\n${GREEN}Лучшая стратегия для YouTube: ${NC}${BEST_LINE}"; show_single_result "$RESULTS"; }
-
-
 # ==========================================
 #ZAPRET2
 # ==========================================
@@ -253,11 +226,6 @@ echo "0 $HOUR * * * $AUTO_CRON_CMD >/dev/null 2>&1" >> "$CRON_FILE"; /etc/init.d
 disable_auto_best() { sed -i "\|$AUTO_CRON_CMD|d" "$CRON_FILE"; /etc/init.d/cron restart >/dev/null 2>&1; echo -e "\n${GREEN}Автоподбор отключен!${NC}\n"; PAUSE; }
 run_auto_best_background() { echo -e "\n${MAGENTA}Запускаем автоподбор в фоне${NC}"; rm -f "$AUTO_LOCK"; $AUTO_CRON_CMD >/dev/null 2>&1 & echo -en "${CYAN}Запускаем фоновое выполнение${NC}"; _i=0; while [ ! -f "$AUTO_LOCK" ] && [ "$_i" -lt 20 ]; do sleep 1; _i=$((_i + 1)); done; echo; if auto_best_running; then echo -e "${GREEN}Автоподбор в фоне запущен!${NC}\n"; else echo -e "${YELLOW}Процесс запускается медленнее обычного, статус обновится при следующем открытии меню${NC}\n"; fi; PAUSE; }
 AUTO_BEST_MENU() { [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }
-
-# if ! ( [ "$PKG_IS_APK" = "1" ] && apk info -e zoneinfo-core zoneinfo-europe zoneinfo-asia >/dev/null 2>&1 || opkg status zoneinfo-core zoneinfo-europe zoneinfo-asia >/dev/null 2>&1 )
-# then echo -e "\n${MAGENTA}Устанавливаем пакеты с часовыми поясами${NC}"; update_packages; $INSTALL zoneinfo-core zoneinfo-europe zoneinfo-asia >/dev/null 2>&1; echo -e "${GREEN}Пакеты с часовыми поясами установлены${NC}\n"; PAUSE; fi
-
-
 while true; do clear; echo -e "${MAGENTA}Меню автоподбора стратегий по расписанию${NC}\n"; echo -e "${YELLOW}Текущее время на роутере:${NC} ${CYAN}$(date '+%H:%M:%S')${NC}"; if auto_best_running; then RUNNING=1; echo -e "${YELLOW}Автоподбор в фоне:${NC} ${GREEN}выполняется${NC}"; else RUNNING=0; fi
 LINE=$(auto_best_cron_line); if [ -n "$LINE" ]; then HOUR=$(echo "$LINE" | awk '{print $2}'); echo -e "${YELLOW}Автоподбор стратегий:${NC} ${GREEN}ежедневно в ${NC}$(printf "%02d" "$HOUR"):00${NC}"
 else echo -e "${YELLOW}Автоподбор стратегий:${NC} ${RED}отключен${NC}"; fi; echo -e "${YELLOW}Тестируемые стратегии:${NC} $(auto_best_mode_text)"; echo ""; N=1
@@ -495,6 +463,23 @@ nft list tables 2>/dev/null | awk '{print $2}' | grep -E '(zapret|ZAPRET)' | whi
 # ==========================================
 # Тест стратегии для Ютуб
 # ==========================================
+YOUTUBE_TEST_MENU() { echo -e "\n${MAGENTA}Выберите способ тестирования YouTube${NC}"; echo -e "${CYAN}1) ${GREEN}Тестировать каждую стратегию отдельно${NC}"; echo -e "${CYAN}2) ${GREEN}Тестировать все стратегии сразу${NC}"
+echo -ne "${CYAN}Enter) ${GREEN}Выход в меню тестирования стратегий${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read -r yt_choice; case "$yt_choice" in 1) auto_stryou ;; 2) run_test_youtube_all ;; *) return ;; esac; }
+run_test_youtube_all() { echo -e "\n${MAGENTA}Выберите источник стратегий:${NC}"; echo -e "${CYAN}1) ${GREEN}Встроенные стратегии ${NC}Yv"; echo -e "${CYAN}2) ${GREEN}Стратегии из ${NC}/root/custom_test.txt"
+echo -ne "${CYAN}Enter) ${GREEN}Выход в меню тестирования стратегий${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read -r SRC; mkdir -p "$TMP_SF"; : > "$STR_FILE"; case "$SRC" in
+1) curl -fsSL "$STR_URL" -o "$STR_FILE" || { echo -e "\n${RED}Не удалось скачать список стратегий!${NC}\n"; PAUSE; return 1; } ;;
+2) if [ ! -s "$CUSTOM_STR_FILE" ]; then echo -e "\n${RED}Файл ${NC}$CUSTOM_STR_FILE${RED} не найден!${NC}\n"; PAUSE; return 1; fi; cp "$CUSTOM_STR_FILE" "$STR_FILE"; sed -i 's/\r$//' "$STR_FILE"
+sed -i '/^[[:space:]]*$/d' "$STR_FILE"; sed -i 's/^[[:space:]]*//;s/[[:space:]]*$//' "$STR_FILE" ;; *) return ;; esac
+clear; echo -e "${MAGENTA}Тестирование всех стратегий YouTube${NC}\n\n${CYAN}Собираем стратегии для теста${NC}"; cp "$CONF" "$BACK"; run_test_core_youtube "$RES_YOUTUBE"; }
+run_test_core_youtube() { local RESULTS="$1"; URLS=""; for d in $DOMAINS; do URLS="${URLS}${d}|https://${d}/"; done; TOTAL=$(echo $DOMAINS | wc -w); TOTAL_STR=$(grep -c '^#' "$STR_FILE")
+echo -e "${CYAN}Найдено стратегий: ${NC}$TOTAL_STR"; echo -e "${CYAN}Доменов для теста:${NC} $TOTAL"; : > "$RESULTS"; check_zpr_off; LINES=$(grep -n '^#' "$STR_FILE" | cut -d: -f1); CUR=0
+echo "$LINES" | while read START; do CUR=$((CUR+1)); NEXT=$(echo "$LINES" | awk -v s="$START" '$1>s{print;exit}'); if [ -z "$NEXT" ]; then
+sed -n "${START},\$p" "$STR_FILE" > "$TEMP_FILE"; else sed -n "${START},$((NEXT-1))p" "$STR_FILE" > "$TEMP_FILE"; fi
+BLOCK=$(cat "$TEMP_FILE"); NAME=$(head -n1 "$TEMP_FILE"); NAME="${NAME#\#}"; awk -v block="$BLOCK" 'BEGIN{skip=0} /option NFQWS_OPT '\''/ {printf "\toption NFQWS_OPT '\''\n%s\n'\''\n", block; skip=1; next} skip && /^'\''$/ {skip=0; next} !skip {print}' "$CONF" > "${CONF}.tmp"
+mv "${CONF}.tmp" "$CONF"; echo -e "\n${CYAN}Тестируем стратегию: ${YELLOW}${NAME}${NC} ($CUR/$TOTAL_STR)"; ZAPRET_RESTART; OK=0; LOG_TMP="/tmp/zapret_log_yt_${CUR}"; : > "$LOG_TMP"; check_all_urls
+if [ "$OK" -eq "$TOTAL" ]; then COLOR="${GREEN}"; elif [ "$OK" -ge $((TOTAL/2)) ]; then COLOR="${YELLOW}"; else COLOR="${RED}"; fi; echo -e "${CYAN}Результат теста: ${COLOR}$OK/$TOTAL${NC}"; echo -e "${NAME} → ${OK}/${TOTAL}" >> "$RESULTS"; done
+sort -t'/' -k1 -nr "$RESULTS" -o "$RESULTS"; mv -f "$BACK" "$CONF"; ZAPRET_RESTART; BEST_LINE=$(grep -v '^Контрольный тест' "$RESULTS" | head -n1)
+[ -n "$BEST_LINE" ] && echo -e "\n${GREEN}Лучшая стратегия для YouTube: ${NC}${BEST_LINE}"; show_single_result "$RESULTS"; }
 auto_stryou() { awk '/^[[:space:]]*option NFQWS_OPT '\''/{flag=1} flag{print}' "$CONF" > "$OLD_STR"; echo -e "\n${MAGENTA}Выберите источник стратегий:${NC}"; echo -e "${CYAN}1) ${GREEN}Встроенные стратегии ${NC}Yv"; echo -e "${CYAN}2) ${GREEN}Стратегии из ${NC}/root/custom_test.txt"
 echo -ne "${CYAN}Enter) ${GREEN}Выход в меню тестирования стратегий${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read -r SRC; case "$SRC" in 1) curl -fsSL "$STR_URL" -o "$TMP_LIST" || { echo -e "\n${RED}Не удалось скачать список стратегий!${NC}\n"; PAUSE; return 1; } ;;
 2) if [ ! -s "$CUSTOM_STR_FILE" ]; then echo -e "\n${RED}Файл ${NC}$CUSTOM_STR_FILE${RED} не найден!${NC}\n"; PAUSE; return 1; fi; cp "$CUSTOM_STR_FILE" "$TMP_LIST"; cp "$CUSTOM_STR_FILE" "$TMP_LIST"; sed -i 's/\r$//' "$TMP_LIST"
@@ -796,24 +781,16 @@ if ! grep -q '^#' "$CUSTOM_STR_FILE"; then echo -e "\n${RED}В файле не �
 clear; mkdir -p "$TMP_SF"; echo -e "${MAGENTA}Тестирование пользовательских стратегий${NC}\n"; rm -f "$RES_CUSTOM"; sed -i 's/\r$//' "$CUSTOM_STR_FILE"; sed -i '/^[[:space:]]*$/d' "$CUSTOM_STR_FILE"; sed -i 's/^[[:space:]]*//;s/[[:space:]]*$//' "$CUSTOM_STR_FILE"; : > "$CUSTOM_RESULTS"
 OLD_STR_FILE="$STR_FILE"; OLD_RESULTS="$RESULTS"; OLD_BACK="$BACK"; OLD_MODE="$MODE"; STR_FILE="$CUSTOM_STR_FILE"; RESULTS="$CUSTOM_RESULTS"; BACK="$CUSTOM_BACK"; MODE="custom"; cp "$CONF" "$CUSTOM_BACK"; run_test_core "$CUSTOM_RESULTS"; STR_FILE="$OLD_STR_FILE"; RESULTS="$OLD_RESULTS"; BACK="$OLD_BACK"; MODE="$OLD_MODE"; rm -f "$OUT_DPI"; [ -f "$CUSTOM_BACK" ] && mv -f "$CUSTOM_BACK" "$CONF"; ZAPRET_RESTART; }
 TEST_menu() { [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }; while true; do show_current_strategy; RKN_Check; MODE="normal"; clear; echo -e "${MAGENTA}Меню тестирования стратегий${NC}\n"; 
-INFO_ZPR_STR
-
-STATUS_V=""; STATUS_FLOW=""; STATUS_DOMAIN=""; if [ -s "$RES3" ]; then STATUS_V="${GREEN}v${NC}"; STATUS_FLOW="${GREEN}Flowseal${NC}"; elif [ -s "$RES2" ] || [ -s "$RES1" ]; then [ -s "$RES2" ] && STATUS_V="${GREEN}v${NC}" || STATUS_V="${RED}v${NC}"
+INFO_ZPR_STR; STATUS_V=""; STATUS_FLOW=""; STATUS_DOMAIN=""; if [ -s "$RES3" ]; then STATUS_V="${GREEN}v${NC}"; STATUS_FLOW="${GREEN}Flowseal${NC}"; elif [ -s "$RES2" ] || [ -s "$RES1" ]; then [ -s "$RES2" ] && STATUS_V="${GREEN}v${NC}" || STATUS_V="${RED}v${NC}"
 [ -s "$RES1" ] && STATUS_FLOW="${GREEN}Flowseal${NC}" || STATUS_FLOW="${RED}Flowseal${NC}"; else STATUS_V="${RED}v${NC}"; STATUS_FLOW="${RED}Flowseal${NC}"; fi; [ -s "$RES_DOMAIN" ] && STATUS_DOMAIN="${GREEN}Domain${NC}" || STATUS_DOMAIN="${RED}Domain${NC}"; [ -s "$RES_CUSTOM" ] && STATUS_CUSTOM="${GREEN}Custom${NC}" || STATUS_CUSTOM="${RED}Custom${NC}"; [ -s "$RES_YOUTUBE" ] && STATUS_YOUTUBE="${GREEN}YouTube${NC}" || STATUS_YOUTUBE="${RED}YouTube${NC}"
 [ -f /root/custom_test.txt ] && echo -e "${YELLOW}/root/custom_test.txt:  ${GREEN}присутствует${NC}"; echo -e "${YELLOW}Тест пройден:${NC} ${STATUS_V} | ${STATUS_FLOW} | ${STATUS_DOMAIN} | ${STATUS_CUSTOM} | ${STATUS_YOUTUBE}"
-
 echo -e "\n${CYAN}1) ${GREEN}Тестирование стратегий ${NC}v ${GREEN}/${NC} Flowseal${NC}\n${CYAN}2) ${GREEN}Тестировать ${NC}текущую${GREEN} стратегию ${NC}\n${CYAN}3) ${GREEN}Тестировать стратегии ${NC}по домену${NC}"
 echo -e "${CYAN}4) ${GREEN}Тестировать стратегии для ${NC}YouTube\n${CYAN}5) ${GREEN}Тестировать стратегии из ${NC}/root/custom_test.txt\n${CYAN}6) ${GREEN}Меню автоподбора стратегий по расписанию${NC}"
-
 if [ -s "$RES_DOMAIN" ]; then echo -e "${CYAN}7) ${GREEN}Результаты тестирования ${NC}по домену"; fi; if [ -s "$RES1" ] || [ -s "$RES2" ] || [ -s "$RES3" ]; then echo -e "${CYAN}8) ${GREEN}Результаты тестирования стратегий${NC}"; fi
-if [ -s "$RES_YOUTUBE" ]; then echo -e "${CYAN}9) ${GREEN}Результаты тестирования ${NC}YouTube"; fi
-if [ -s "$RES_CUSTOM" ]; then echo -e "${CYAN}0) ${GREEN}Результаты тестирования ${NC}Custom${GREEN} стратегий${NC}"; fi
+if [ -s "$RES_YOUTUBE" ]; then echo -e "${CYAN}9) ${GREEN}Результаты тестирования ${NC}YouTube"; fi; if [ -s "$RES_CUSTOM" ]; then echo -e "${CYAN}0) ${GREEN}Результаты тестирования ${NC}Custom${GREEN} стратегий${NC}"; fi
 if [ -s "$RES1" ] || [ -s "$RES2" ] || [ -s "$RES3" ] || [ -s "$RES_DOMAIN" ] || [ -s "$RES_CUSTOM" ] || [ -s "$RES_YOUTUBE" ]; then echo -e "${CYAN}10) ${GREEN}Удалить результаты тестирования${NC}"; fi
-echo -ne "${CYAN}Enter) ${GREEN}Выход в меню стратегий${NC}\n\n${YELLOW}Выберите пункт:${NC} ";read -r t; case "$t" in
-
-1) TEST_STRATEGY_MENU;; 2) check_current_strategy;; 3) run_test_by_domain;; 4) YOUTUBE_TEST_MENU;; 5) TEST_CUSTOM;; 6) AUTO_BEST_MENU;; 0) show_single_result "$RES_CUSTOM";; 9) show_single_result "$RES_YOUTUBE";;
+echo -ne "${CYAN}Enter) ${GREEN}Выход в меню стратегий${NC}\n\n${YELLOW}Выберите пункт:${NC} ";read -r t; case "$t" in 1) TEST_STRATEGY_MENU;; 2) check_current_strategy;; 3) run_test_by_domain;; 4) YOUTUBE_TEST_MENU;; 5) TEST_CUSTOM;; 6) AUTO_BEST_MENU;; 0) show_single_result "$RES_CUSTOM";; 9) show_single_result "$RES_YOUTUBE";;
 7) show_domain_results;; 8) show_test_results;;  10) rm -f /opt/zapret/tmp/results*; echo -e "\n${GREEN}Результаты тестирования удалены!${NC}\n"; PAUSE;; *) break;; esac; done; }
-
 TEST_STRATEGY_MENU() { echo -e "\n${MAGENTA}Выберите стратегии для тестирования${NC}"; echo -e "${CYAN}1) ${GREEN}Тестировать стратегии ${NC}v\n${CYAN}2) ${GREEN}Тестировать стратегии ${NC}Flowseal"
 echo -e "${CYAN}3) ${GREEN}Тестировать ${NC}v${GREEN} и ${NC}Flowseal${GREEN} стратегии${NC}\n${CYAN}Enter) ${GREEN}Выход в меню тестирования стратегий${NC}\n"; echo -ne "${YELLOW}Выберите пункт:${NC} "
 read -r t; case "$t" in 1) rm -f "$RES3"; run_test_versions ;; 2) rm -f "$RES3"; run_test_flowseal ;; 3) rm -f "$RES1" "$RES2" "$RES3"; run_all_tests ;; *) return ;; esac; }
@@ -1091,7 +1068,7 @@ else opkg list-installed | grep -q "^$pkg" && echo -e "${RED}Найден уст
 if uci get firewall.@defaults[0].flow_offloading 2>/dev/null | grep -q '^1$' || uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null | grep -q '^1$'; then if ! grep -q 'meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc
 then echo -e "${RED}Включён ${NC}Flow Offloading${RED}!${NC}\n${NC}Zapret${RED} некорректно работает с включённым ${NC}Flow Offloading${RED}!\nПримените ${NC}FIX${RED} в системном меню!\n${NC}"; fi; fi; INFO_ZPR
 echo -e "\n${CYAN}1) ${GREEN}$Z_ACTION_TEXT${NC} Zapret\n${CYAN}2) ${GREEN}$Z2_ACTION_TEXT${NC} Zapret2\n${CYAN}3) ${GREEN}Меню стратегий${NC} Zapret\n${CYAN}4) ${GREEN}Меню ${NC}splify\n${CYAN}5) ${GREEN}Меню ${NC}Mixomo\n${CYAN}6) ${GREEN}Меню ${NC}NetShift\n${CYAN}7) ${GREEN}Меню ${NC}TG WS Proxy\n${CYAN}8) ${GREEN}Меню ${NC}DNS over HTTPS\n${CYAN}9) ${GREEN}Меню настройки ${NC}Discord\n${CYAN}0) ${GREEN}Меню управления доменами в ${NC}hosts"
-echo -e "${CYAN}f) ${GREEN}Удалить ${NC}→${GREEN} установить ${NC}→${GREEN} настроить${NC} Zapret\n${CYAN}m) ${GREEN}Системное меню${NC}\n${CYAN}s) ${GREEN}$str_stp_zpr ${NC}Zapret" ; echo -ne "${CYAN}Enter) ${GREEN}Выход${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read choice
+echo -e "${CYAN}f) ${GREEN}Удалить ${NC}→${GREEN} установить ${NC}→${GREEN} настроить${NC} Zapret\n${CYAN}m) ${GREEN}Системное меню${NC}" ; echo -ne "${CYAN}Enter) ${GREEN}Выход${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read choice
 case "$choice" in 999) echo; uninstall_zapret "1"; install_Zapret "1"; curl -fsSL https://raw.githubusercontent.com/StressOzz/Test/refs/heads/main/zapret -o "$CONF"; hosts_add "$ALL_BLOCKS"; rm -f "$EXCLUDE_FILE"; wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL"; ZAPRET_RESTART; PAUSE;;
-2) $Z2_ACTION_FUNC;; f|F|а|А) zapret_key;; s|S|ы|Ы) pgrep -f /opt/zapret >/dev/null 2>&1 && stop_zapret || start_zapret;; 1) $Z_ACTION_FUNC;; 3) menu_str;; 4) SPL_MENU ;; 5) MIXOMO_MENU;; 6) PODKOP_menu ;; 7) menu_TG;; 8) DoH_menu;; 9) Discord_menu;; 0) menu_hosts;; m|M|ь|Ь) sys_menu;; r|R|к|К) show_menu;; *) echo; exit 0;; esac; }
+2) $Z2_ACTION_FUNC;; f|F|а|А) zapret_key;; 1) $Z_ACTION_FUNC;; 3) menu_str;; 4) SPL_MENU ;; 5) MIXOMO_MENU;; 6) PODKOP_menu ;; 7) menu_TG;; 8) DoH_menu;; 9) Discord_menu;; 0) menu_hosts;; m|M|ь|Ь) sys_menu;; r|R|к|К) show_menu;; *) echo; exit 0;; esac; }
 case "$1" in --auto-best) auto_apply_best_strategy; exit 0 ;; esac; while true; do show_menu; done
