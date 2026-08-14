@@ -141,6 +141,11 @@ ADD_FAKE_FLOW
 
 
 
+
+YOUTUBE_TEST_MENU() { echo -e "\n${MAGENTA}Выберите способ тестирования YouTube${NC}"; echo -e "${CYAN}1) ${GREEN}Тестировать каждую стратегию отдельно${NC}"; echo -e "${CYAN}2) ${GREEN}Тестировать все стратегии сразу${NC}"
+echo -ne "${CYAN}3) ${GREEN}Выход в меню тестирования стратегий${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read -r yt_choice; case "$yt_choice" in 1) auto_stryou ;; 2) run_test_youtube_all ;; *) return ;; esac; }
+
+
 run_test_youtube_all() { clear; echo -e "${MAGENTA}Тестирование всех стратегий YouTube${NC}\n\n${CYAN}Собираем стратегии для теста${NC}"; mkdir -p "$TMP_SF"; : > "$STR_FILE"
 curl -fsSL "$STR_URL" -o "$STR_FILE" || { echo -e "\n${RED}Не удалось скачать список стратегий!${NC}\n"; PAUSE; return 1; }; cp "$CONF" "$BACK"; run_test_core_youtube "$RES_YOUTUBE"; }
 run_test_core_youtube() { local RESULTS="$1"; URLS=""; for d in $DOMAINS; do URLS="${URLS}${d}|https://${d}/
@@ -801,18 +806,15 @@ STATUS_V=""; STATUS_FLOW=""; STATUS_DOMAIN=""; if [ -s "$RES3" ]; then STATUS_V=
 
 echo -e "\n${CYAN}1) ${GREEN}Тестирование стратегий ${NC}v ${GREEN}/${NC} Flowseal${NC}\n${CYAN}2) ${GREEN}Тестировать ${NC}текущую${GREEN} стратегию ${NC}\n${CYAN}3) ${GREEN}Тестировать стратегии ${NC}по домену${NC}"
 echo -e "${CYAN}4) ${GREEN}Тестировать стратегии для ${NC}YouTube\n${CYAN}5) ${GREEN}Тестировать стратегии из ${NC}/root/custom_test.txt\n${CYAN}6) ${GREEN}Меню автоподбора стратегий по расписанию${NC}"
-echo -e "${CYAN}a) ${GREEN}Тестировать все стратегии ${NC}YouTube"
+
 if [ -s "$RES_DOMAIN" ]; then echo -e "${CYAN}7) ${GREEN}Результаты тестирования ${NC}по домену"; fi; if [ -s "$RES1" ] || [ -s "$RES2" ] || [ -s "$RES3" ]; then echo -e "${CYAN}8) ${GREEN}Результаты тестирования стратегий${NC}"; fi
+if [ -s "$RES_YOUTUBE" ]; then echo -e "${CYAN}9) ${GREEN}Результаты тестирования ${NC}YouTube"; fi
 if [ -s "$RES_CUSTOM" ]; then echo -e "${CYAN}0) ${GREEN}Результаты тестирования ${NC}Custom${GREEN} стратегий${NC}"; fi
-if [ -s "$RES_YOUTUBE" ]; then echo -e "${CYAN}b) ${GREEN}Результаты тестирования ${NC}YouTube"; fi
-if [ -s "$RES1" ] || [ -s "$RES2" ] || [ -s "$RES3" ] || [ -s "$RES_DOMAIN" ] || [ -s "$RES_CUSTOM" ] || [ -s "$RES_YOUTUBE" ]; then echo -e "${CYAN}9) ${GREEN}Удалить результаты тестирования${NC}"; fi
+if [ -s "$RES1" ] || [ -s "$RES2" ] || [ -s "$RES3" ] || [ -s "$RES_DOMAIN" ] || [ -s "$RES_CUSTOM" ] || [ -s "$RES_YOUTUBE" ]; then echo -e "${CYAN}10) ${GREEN}Удалить результаты тестирования${NC}"; fi
 echo -ne "${CYAN}Enter) ${GREEN}Выход в меню стратегий${NC}\n\n${YELLOW}Выберите пункт:${NC} ";read -r t; case "$t" in
-1) TEST_STRATEGY_MENU;; 2) check_current_strategy;; 3) run_test_by_domain;; 4) auto_stryou;; 5) TEST_CUSTOM;; 6) AUTO_BEST_MENU;; 0) show_single_result "$RES_CUSTOM";;
 
-a) run_test_youtube_all;; b) show_single_result "$RES_YOUTUBE";;
-
-7) show_domain_results;; 8) show_test_results;;  9) rm -f /opt/zapret/tmp/results*; echo -e "\n${GREEN}Результаты тестирования удалены!${NC}\n"; PAUSE;; *) break;; esac; done; }
-
+1) TEST_STRATEGY_MENU;; 2) check_current_strategy;; 3) run_test_by_domain;; 4) YOUTUBE_TEST_MENU;; 5) TEST_CUSTOM;; 6) AUTO_BEST_MENU;; 0) show_single_result "$RES_CUSTOM";; 9) show_single_result "$RES_YOUTUBE";;
+7) show_domain_results;; 8) show_test_results;;  10) rm -f /opt/zapret/tmp/results*; echo -e "\n${GREEN}Результаты тестирования удалены!${NC}\n"; PAUSE;; *) break;; esac; done; }
 
 TEST_STRATEGY_MENU() { echo -e "\n${MAGENTA}Выберите стратегии для тестирования${NC}"; echo -e "${CYAN}1) ${GREEN}Тестировать стратегии ${NC}v\n${CYAN}2) ${GREEN}Тестировать стратегии ${NC}Flowseal"
 echo -e "${CYAN}3) ${GREEN}Тестировать ${NC}v${GREEN} и ${NC}Flowseal${GREEN} стратегии${NC}\n${CYAN}Enter) ${GREEN}Выход в меню тестирования стратегий${NC}\n"; echo -ne "${YELLOW}Выберите пункт:${NC} "
