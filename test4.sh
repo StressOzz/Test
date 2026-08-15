@@ -223,7 +223,7 @@ echo -e "${YELLOW}Сначала настройте время!${NC}\n"; PAUSE; 
 echo "0 $HOUR * * * $AUTO_CRON_CMD >/dev/null 2>&1" >> "$CRON_FILE"; /etc/init.d/cron restart >/dev/null 2>&1; echo -e "\n${GREEN}Автоподбор запланирован ежедневно в ${NC}$(printf "%02d" "$HOUR"):00${GREEN}!${NC}\n"; PAUSE; }
 disable_auto_best() { sed -i "\|$AUTO_CRON_CMD|d" "$CRON_FILE"; /etc/init.d/cron restart >/dev/null 2>&1; echo -e "\n${GREEN}Автоподбор отключен!${NC}\n"; PAUSE; }
 run_auto_best_background() { echo -e "\n${MAGENTA}Запускаем автоподбор в фоне${NC}"; rm -f "$AUTO_LOCK"; $AUTO_CRON_CMD >/dev/null 2>&1 & echo -en "${CYAN}Запускаем фоновое выполнение${NC}"; _i=0; while [ ! -f "$AUTO_LOCK" ] && [ "$_i" -lt 20 ]; do sleep 1; _i=$((_i + 1)); done; echo; if auto_best_running; then echo -e "${GREEN}Автоподбор в фоне запущен!${NC}\n"; else echo -e "${YELLOW}Процесс запускается медленнее обычного, статус обновится при следующем открытии меню${NC}\n"; fi; PAUSE; }
-AUTO_BEST_MENU() { [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }
+AUTO_BEST_MENU() { [ ! -f /etc/init.d/zapret ] && { echo -e "\nZapret ${RED}не установлен!${NC}\n"; PAUSE; return; }
 while true; do clear; echo -e "${MAGENTA}Меню автоподбора стратегий по расписанию${NC}\n"; echo -e "${YELLOW}Текущее время на роутере:${NC} ${CYAN}$(date '+%H:%M:%S')${NC}"; if auto_best_running; then RUNNING=1; echo -e "${YELLOW}Автоподбор в фоне:${NC} ${GREEN}выполняется${NC}"; else RUNNING=0; fi
 LINE=$(auto_best_cron_line); if [ -n "$LINE" ]; then HOUR=$(echo "$LINE" | awk '{print $2}'); echo -e "${YELLOW}Автоподбор стратегий:${NC} ${GREEN}ежедневно в ${NC}$(printf "%02d" "$HOUR"):00${NC}"
 else echo -e "${YELLOW}Автоподбор стратегий:${NC} ${RED}отключен${NC}"; fi; echo -e "${YELLOW}Тестируемые стратегии:${NC} $(auto_best_mode_text)"; echo ""; N=1
@@ -385,7 +385,7 @@ name=$(case "$line" in *QUIC*) echo "50-quic4all";; *stun*) echo "50-stun4all";;
 Discord_menu() { 
 
 if [ -f /etc/init.d/zapret2 ]; then echo -e "\n${RED}Установлен ${NC}Zapret2${RED}!${NC}"; echo -e "${YELLOW}Меню настройки Discord доступно только с ${NC}Zapret${NC}\n"; PAUSE; return 1; fi;
-[ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }
+[ ! -f /etc/init.d/zapret ] && { echo -e "\nZapret ${RED}не установлен!${NC}\n"; PAUSE; return; }
 
 local NO_PAUSE=$1; while true; do [ "$NO_PAUSE" != "1" ] && clear && echo -e "${MAGENTA}Меню настройки Discord${NC}\n"; output_shown=false
 [ "$NO_PAUSE" != "1" ] && show_script_50 && [ -n "$name" ] && echo -e "${YELLOW}Установлен скрипт:${NC} $name" && output_shown=true; [ "$NO_PAUSE" != "1" ] && grep -q "$Fin_IP_Dis" /etc/hosts && echo -e "${YELLOW}Финские IP для Discord: ${GREEN}включены${NC}" && output_shown=true
@@ -397,8 +397,8 @@ grep -q '104\.25\.158\.178 finland[0-9]\{5\}\.discord\.media' /etc/hosts && FIN_
 echo -e "${CYAN}6) $FIN_TXT\n${CYAN}7) ${GREEN}Выбрать и установить стратегию для ${NC}discord.media\n${CYAN}8) ${GREEN}Меню выбора ${NC}fake ${GREEN}для ${NC}discord,stun"; echo -en "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read choiceSC; case "$choiceSC" in
 1) SELECTED="50-stun4all"; URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-stun4all";; 2) SELECTED="50-quic4all"; URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-quic4all";;
 3) SELECTED="50-discord-media"; URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-discord-media";; 4) SELECTED="50-discord"; URL="https://raw.githubusercontent.com/bol-van/zapret/v70.5/init.d/custom.d.examples.linux/50-discord";;
-5) [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; continue; }; echo -e "\n${MAGENTA}Удаляем скрипт${NC}"; rm -f "$CUSTOM_DIR/50-script.sh" 2>/dev/null; sed -i "/DISABLE_CUSTOM/s/'0'/'1'/" $CONF; ZAPRET_RESTART; echo -e "${GREEN}Скрипт удалён!${NC}\n"; PAUSE; continue;;
-6) toggle_finland_hosts; continue;; 7) switch_Dv; continue;; 8) DIC_FAKE; continue;; *) return;; esac; fi; [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; continue; }
+5) [ ! -f /etc/init.d/zapret ] && { echo -e "\nZapret ${RED}не установлен!${NC}\n"; PAUSE; continue; }; echo -e "\n${MAGENTA}Удаляем скрипт${NC}"; rm -f "$CUSTOM_DIR/50-script.sh" 2>/dev/null; sed -i "/DISABLE_CUSTOM/s/'0'/'1'/" $CONF; ZAPRET_RESTART; echo -e "${GREEN}Скрипт удалён!${NC}\n"; PAUSE; continue;;
+6) toggle_finland_hosts; continue;; 7) switch_Dv; continue;; 8) DIC_FAKE; continue;; *) return;; esac; fi; [ ! -f /etc/init.d/zapret ] && { echo -e "\nZapret ${RED}не установлен!${NC}\n"; PAUSE; continue; }
 if wget -q -U "Mozilla/5.0" -O "$CUSTOM_DIR/50-script.sh" "$URL"; then [ "$NO_PAUSE" != "1" ] && echo; echo -e "${MAGENTA}Устанавливаем скрипт${NC}\n${GREEN}Скрипт ${NC}$SELECTED${GREEN} успешно установлен!${NC}\n"; else echo -e "\n${RED}Ошибка при скачивании скрипта!${NC}\n"; PAUSE; continue; fi
 sed -i "/DISABLE_CUSTOM/s/'1'/'0'/" $CONF; ZAPRET_RESTART; [ "$NO_PAUSE" != "1" ] && PAUSE; [ "$NO_PAUSE" = "1" ] && break; done; }
 # ==========================================
@@ -424,7 +424,7 @@ echo -e "${CYAN}6) ${GREEN}Установить ${NC}quic_initial_www_google_com
 echo -e "${CYAN}8) ${GREEN}Установить ${NC}quic_initial_5ka_ru.bin $(gv_fake quic_initial_5ka_ru.bin)\n${CYAN}9) ${GREEN}Установить ${NC}quic_initial_rutube_ru.bin $(gv_fake quic_initial_rutube_ru.bin)"
 echo -en "${CYAN}Enter) ${GREEN}Выход в меню стратегий${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read -r choiceF; case "$choiceF" in 1) new_file="stun.bin";; 2) new_file="stun2.bin";; 3) new_file="quic_initial_4pda.to.bin";; 4) new_file="quic_initial_tencent_com.bin";; 5) new_file="quic_initial_dbankcloud_ru.bin";; 6) new_file="quic_initial_www_google_com.bin";; 7) new_file="quic_initial_steamcommunity_com.bin";; 8) new_file="quic_initial_5ka_ru.bin";; 9) new_file="quic_initial_rutube_ru.bin";; *) return;; esac; echo -e "\n${CYAN}Устанавливаем fake${NC} ${new_file}"
 awk -v new="$new_file" 'BEGIN{done=0} !done && /--dpi-desync-fake-unknown-udp=/{sub(/\/opt\/zapret\/files\/fake\/[^ ]+/, "/opt/zapret/files/fake/" new); done=1} {print}' "$CONF" > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"; ZAPRET_RESTART; echo -e "fake ${GREEN}изменён на ${NC}${new_file}${GREEN}!${NC}\n"; PAUSE; }
-fix_GAME() { local NO_PAUSE=$1; [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }; local CURRENT_GAME=""; for i in 1 2 3 4; do grep -q "^#Gv$i" "$CONF" && CURRENT_GAME="Gv$i"; done
+fix_GAME() { local NO_PAUSE=$1; [ ! -f /etc/init.d/zapret ] && { echo -e "\nZapret ${RED}не установлен!${NC}\n"; PAUSE; return; }; local CURRENT_GAME=""; for i in 1 2 3 4; do grep -q "^#Gv$i" "$CONF" && CURRENT_GAME="Gv$i"; done
 if [ -n "$NO_PAUSE" ]; then GAME_CHOICE="$NO_PAUSE"; else echo -e "\n${MAGENTA}Меню управления стратегией для игр${NC}"; for i in $(seq 1 4); do if [ "$CURRENT_GAME" = "Gv$i" ]; then echo -e "${CYAN}$i) ${GREEN}Удалить ${NC}Gv$i"; else echo -e "${CYAN}$i) ${GREEN}Установить ${NC}Gv$i"; fi; done
 grep -q "^#Gv[0-9]\+Xtreme" "$CONF" && XTREME_TXT="${GREEN}Отключить ${NC}Xtreme${GREEN} режим${NC}" ||	XTREME_TXT="${GREEN}Включить ${NC}Xtreme${GREEN} режим${NC}"; echo -e "${CYAN}5) $XTREME_TXT\n${CYAN}6) ${GREEN}Выбрать и сменить ${NC}fake${GREEN} для игровой стратегии${NC}"
 echo -en "${CYAN}Enter) ${GREEN}Выход в меню стратегий\n\n${YELLOW}Выберите пункт: ${NC}"; read GAME_CHOICE; fi; if [ "$GAME_CHOICE" = "6" ]; then GV_FAKE; return; fi; if [ "$GAME_CHOICE" = "5" ]; then Gv_Xtreme; return; fi
@@ -437,15 +437,15 @@ echo "$STRATEGY" | sed '/^$/d' >> "$CONF"; echo "'" >> "$CONF"; add_ports_if_mis
 # Zapret под ключ
 # ==========================================
 zapret_key() { if [ -f /etc/init.d/zapret2 ]; then echo -e "\n${RED}Установлен ${NC}Zapret2${RED}!${NC}"; echo -e "${YELLOW}Установка ${NC}Zapret${YELLOW} невозможна!${NC}\n"; PAUSE; return 1; fi; clear; echo -e "${MAGENTA}Удаление, установка и настройка Zapret${NC}\n"; get_versions; uninstall_zapret "1"; install_Zapret "1"
-[ ! -f /etc/init.d/zapret ] && { echo -e "${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }; install_strategy $STR_VERSION_AUTOINSTALL "1"; echo -e "\n${MAGENTA}Редактируем hosts${NC}\n${CYAN}Добавляем домены в${NC} hosts"
+[ ! -f /etc/init.d/zapret ] && { echo -e "Zapret ${RED}не установлен!${NC}\n"; PAUSE; return; }; install_strategy $STR_VERSION_AUTOINSTALL "1"; echo -e "\n${MAGENTA}Редактируем hosts${NC}\n${CYAN}Добавляем домены в${NC} hosts"
 hosts_add "$ALL_BLOCKS"; echo -e "${GREEN}Домены добавлены в ${NC}hosts${GREEN}!${NC}\n"; Discord_menu "1"; echo -e "${MAGENTA}Настраиваем стратегию для игр${NC}"; fix_GAME "1"; echo -e "Zapret ${GREEN}установлен и настроен!${NC}\n"; PAUSE; }
 # ==========================================
 # Резервная копия
 # ==========================================
 delete_backup() { if [ -d "$BACKUP_DIR" ]; then rm -rf "$BACKUP_DIR"; echo -e "\n${GREEN}Резервная копия удалена!${NC}\n"; else echo -e "\n${RED}Резервная копия не найдена!${NC}\n"; fi; PAUSE; }
-save_backup() { [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }; rm -rf "$BACKUP_DIR"; mkdir -p "$BACKUP_DIR"; tar -czf "$BACKUP_DIR/zapret.tar.gz" -C /opt zapret 2>/dev/null
+save_backup() { [ ! -f /etc/init.d/zapret ] && { echo -e "\nZapret ${RED}не установлен!${NC}\n"; PAUSE; return; }; rm -rf "$BACKUP_DIR"; mkdir -p "$BACKUP_DIR"; tar -czf "$BACKUP_DIR/zapret.tar.gz" -C /opt zapret 2>/dev/null
 cp -p $CONF "$BACKUP_DIR/"; printf '%s / %s\n' "$(date '+%d.%m.%y')" "$(du -sh /opt/zapret_backup 2>/dev/null | cut -f1 | sed -E 's/\.0K$/K/;s/K$/ КБ/;s/M$/ МБ/')" > "$DATE_FILE"; echo -e "\n${GREEN}Резервная копия настроек сохранена в${NC} $BACKUP_DIR\n"; PAUSE; }
-restore_backup() { [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }; [ ! -f "$BACKUP_DIR/zapret.tar.gz" ] && { echo -e "\n${RED}Резервная копия не найдена!${NC}\n"; PAUSE; return; }
+restore_backup() { [ ! -f /etc/init.d/zapret ] && { echo -e "\nZapret ${RED}не установлен!${NC}\n"; PAUSE; return; }; [ ! -f "$BACKUP_DIR/zapret.tar.gz" ] && { echo -e "\n${RED}Резервная копия не найдена!${NC}\n"; PAUSE; return; }
 echo -e "\n${MAGENTA}Восстанавливаем настройки из резервной копии${NC}"; /etc/init.d/zapret stop >/dev/null 2>&1; rm -rf /opt/zapret; rm -f $CONF; mkdir -p /opt; tar -xzf "$BACKUP_DIR/zapret.tar.gz" -C /opt 2>/dev/null
 [ -f "$BACKUP_DIR/zapret" ] && cp -p "$BACKUP_DIR/zapret" $CONF; echo -e "${CYAN}Применяем настройки${NC}"; ZAPRET_RESTART; echo -e "${GREEN}Настройки восстановлены из резервной копии!${NC}\n"; PAUSE; }
 # ==========================================
@@ -454,7 +454,7 @@ echo -e "\n${MAGENTA}Восстанавливаем настройки из ре
 stop_zapret() { local NO_PAUSE=$1; echo -e "\n${MAGENTA}Останавливаем Zapret${NC}\n${CYAN}Останавливаем ${NC}Zapret"; /etc/init.d/zapret stop >/dev/null 2>&1
 for pid in $(pgrep -f /opt/zapret 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done; echo -e "Zapret ${GREEN}остановлен!${NC}\n"; [ "$NO_PAUSE" != "1" ] && PAUSE; }
 start_zapret() { if [ -f /etc/init.d/zapret ]; then echo -e "\n${MAGENTA}Запускаем Zapret${NC}"; /etc/init.d/zapret start >/dev/null 2>&1; ZAPRET_RESTART;
-if /etc/init.d/zapret status >/dev/null 2>&1; then echo -e "Zapret ${GREEN}запущен!${NC}\n"; else echo -e "Zapret ${RED}не удалось запустить!${NC}\n"; fi; else echo -e "\n${RED}Zapret не установлен!${NC}\n"; fi; [ "$NO_PAUSE" != "1" ] && PAUSE; }
+if /etc/init.d/zapret status >/dev/null 2>&1; then echo -e "Zapret ${GREEN}запущен!${NC}\n"; else echo -e "Zapret ${RED}не удалось запустить!${NC}\n"; fi; else echo -e "\nZapret ${RED}не установлен!${NC}\n"; fi; [ "$NO_PAUSE" != "1" ] && PAUSE; }
 toggle_zapret() { if [ -f /etc/init.d/zapret2 ]; then if /etc/init.d/zapret2 status >/dev/null 2>&1; then echo -e "\n${MAGENTA}Останавливаем Zapret2${NC}"; /etc/init.d/zapret2 stop >/dev/null 2>&1
 for pid in $(pgrep -f /opt/zapret2 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done; echo -e "Zapret2 ${GREEN}остановлен!${NC}\n"; else echo -e "\n${MAGENTA}Запускаем Zapret2${NC}"; /etc/init.d/zapret2 start >/dev/null 2>&1
 if /etc/init.d/zapret2 status >/dev/null 2>&1; then echo -e "Zapret2 ${GREEN}запущен!${NC}\n"; else echo -e "Zapret2 ${RED}не удалось запустить!${NC}\n"; fi; fi; PAUSE
@@ -583,7 +583,7 @@ add_wssize() { manage_block add "--filter-tcp=443" "--wssize 1:6"; }; remove_wss
 menu_str() { 
 
 if [ -f /etc/init.d/zapret2 ]; then echo -e "\n${RED}Установлен ${NC}Zapret2${RED}!${NC}"; echo -e "${YELLOW}Меню стратегий доступно только с ${NC}Zapret${NC}\n"; PAUSE; return 1; fi;
-[ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }
+[ ! -f /etc/init.d/zapret ] && { echo -e "\nZapret ${RED}не установлен!${NC}\n"; PAUSE; return; }
 
 
 
@@ -690,7 +690,7 @@ ping -6 -c 1 -W 2 google.com >/dev/null 2>&1 && echo -e "${CYAN}9) ${GREEN}Вк�
 FO=$(uci get firewall.@defaults[0].flow_offloading 2>/dev/null); FOHW=$(uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null); FIX=$(grep -q 'ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc && echo 1 || echo 0)
 if [ "$FO" = 1 ] || [ "$FOHW" = 1 ] || [ "$FIX" = 1 ]; then if [ "$FIX" = 1 ]; then echo -e "${CYAN}0) ${GREEN}Отключить${NC} FIX ${GREEN}для${NC} Flow Offloading"; else echo -e "${CYAN}0) ${GREEN}Применить${NC} FIX ${GREEN}для${NC} Flow Offloading"; fi; fi
 echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read -r choiceMN; case "$choiceMN" in 1) Sys_Info;; 2) toggle_web;; 3) toggle_quic;; 4) menu_MIR;;
-5) [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; continue; }; stop_zapret "1"; grep -q 'echo "Start Zapret"' /opt/zapret/blockcheck.sh || sed -i $'/^[[:space:]]*read A/a\\\t\techo "Start Zapret"; /etc/init.d/zapret restart >/dev/null 2>&1' /opt/zapret/blockcheck.sh
+5) [ ! -f /etc/init.d/zapret ] && { echo -e "\nZapret ${RED}не установлен!${NC}\n"; PAUSE; continue; }; stop_zapret "1"; grep -q 'echo "Start Zapret"' /opt/zapret/blockcheck.sh || sed -i $'/^[[:space:]]*read A/a\\\t\techo "Start Zapret"; /etc/init.d/zapret restart >/dev/null 2>&1' /opt/zapret/blockcheck.sh
 echo -e "${GREEN}Ctrl+C - oстановить blockcheck${NC}\n"; chmod +x /opt/zapret/blockcheck.sh; /opt/zapret/blockcheck.sh; start_zapret;; 6) uninstall_zapret_all;; 9) toggle_ipv6;;
 7) if [ -f "$DATE_FILE" ] && [ -f "$BACKUP_DIR/zapret.tar.gz" ] && [ -f "$BACKUP_DIR/zapret" ]; then CREATE_DATE=$(cat "$DATE_FILE"); delete_backup; else save_backup; fi;; 8) restore_backup ;;
 0) FO=$(uci get firewall.@defaults[0].flow_offloading 2>/dev/null); FOHW=$(uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null); if grep -q 'ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc; then echo -e "\n${MAGENTA}Отключаем FIX для Flow Offloading${NC}"
@@ -803,7 +803,7 @@ TEST_CUSTOM() { if [ ! -f "$CUSTOM_STR_FILE" ]; then echo -e "\n${RED}Файл $
 if ! grep -q '^#' "$CUSTOM_STR_FILE"; then echo -e "\n${RED}В файле не найдено ни одной стратегии!${NC}\n\n${YELLOW}Каждая стратегия должна начинаться со строки ${NC}#Название${NC}\n${CYAN}Пример содержимого ${NC}$CUSTOM_STR_FILE${CYAN}:${NC}\n#Strategy1\n--filter-tcp=443\n--dpi-desync=fake\n. . .\n#Strategy2\n--filter-tcp=443\n--dpi-desync=multidisorder\n. . .\n"; PAUSE; return; fi
 clear; mkdir -p "$TMP_SF"; echo -e "${MAGENTA}Тестирование пользовательских стратегий${NC}\n"; rm -f "$RES_CUSTOM"; sed -i 's/\r$//' "$CUSTOM_STR_FILE"; sed -i '/^[[:space:]]*$/d' "$CUSTOM_STR_FILE"; sed -i 's/^[[:space:]]*//;s/[[:space:]]*$//' "$CUSTOM_STR_FILE"; : > "$CUSTOM_RESULTS"
 OLD_STR_FILE="$STR_FILE"; OLD_RESULTS="$RESULTS"; OLD_BACK="$BACK"; OLD_MODE="$MODE"; STR_FILE="$CUSTOM_STR_FILE"; RESULTS="$CUSTOM_RESULTS"; BACK="$CUSTOM_BACK"; MODE="custom"; cp "$CONF" "$CUSTOM_BACK"; run_test_core "$CUSTOM_RESULTS"; STR_FILE="$OLD_STR_FILE"; RESULTS="$OLD_RESULTS"; BACK="$OLD_BACK"; MODE="$OLD_MODE"; rm -f "$OUT_DPI"; [ -f "$CUSTOM_BACK" ] && mv -f "$CUSTOM_BACK" "$CONF"; ZAPRET_RESTART; }
-TEST_menu() { [ ! -f /etc/init.d/zapret ] && { echo -e "\n${RED}Zapret не установлен!${NC}\n"; PAUSE; return; }; while true; do show_current_strategy; RKN_Check; MODE="normal"; clear; echo -e "${MAGENTA}Меню тестирования стратегий${NC}\n"; 
+TEST_menu() { [ ! -f /etc/init.d/zapret ] && { echo -e "\nZapret ${RED}не установлен!${NC}\n"; PAUSE; return; }; while true; do show_current_strategy; RKN_Check; MODE="normal"; clear; echo -e "${MAGENTA}Меню тестирования стратегий${NC}\n"; 
 INFO_ZPR_STR; STATUS_V=""; STATUS_FLOW=""; STATUS_DOMAIN=""; if [ -s "$RES3" ]; then STATUS_V="${GREEN}v${NC}"; STATUS_FLOW="${GREEN}Flowseal${NC}"; elif [ -s "$RES2" ] || [ -s "$RES1" ]; then [ -s "$RES2" ] && STATUS_V="${GREEN}v${NC}" || STATUS_V="${RED}v${NC}"
 [ -s "$RES1" ] && STATUS_FLOW="${GREEN}Flowseal${NC}" || STATUS_FLOW="${RED}Flowseal${NC}"; else STATUS_V="${RED}v${NC}"; STATUS_FLOW="${RED}Flowseal${NC}"; fi; [ -s "$RES_DOMAIN" ] && STATUS_DOMAIN="${GREEN}Domain${NC}" || STATUS_DOMAIN="${RED}Domain${NC}"; [ -s "$RES_CUSTOM" ] && STATUS_CUSTOM="${GREEN}Custom${NC}" || STATUS_CUSTOM="${RED}Custom${NC}"; [ -s "$RES_YOUTUBE" ] && STATUS_YOUTUBE="${GREEN}YouTube${NC}" || STATUS_YOUTUBE="${RED}YouTube${NC}"
 [ -f /root/custom_test.txt ] && echo -e "${YELLOW}/root/custom_test.txt:  ${GREEN}присутствует${NC}"; echo -e "${YELLOW}Тест пройден:${NC} ${STATUS_V} | ${STATUS_FLOW} | ${STATUS_DOMAIN} | ${STATUS_CUSTOM} | ${STATUS_YOUTUBE}"
