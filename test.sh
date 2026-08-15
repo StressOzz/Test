@@ -24,7 +24,7 @@ URL_ITDOG="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads
 EXCLUDE_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/zapret-hosts-user-exclude.txt"
 CRON_FILE="/etc/crontabs/root"; CONFIGMIX="/etc/mihomo/config.yaml"; LAN_IP=$(uci get network.lan.ipaddr 2>/dev/null | cut -d/ -f1)
 DOMAINS="youtu.be youtube.com i.ytimg.com i9.ytimg.com yt3.ggpht.com yt4.ggpht.com googleapis.com jnn-pa.googleapis.com googleusercontent.com signaler-pa.youtube.com youtubei.googleapis.com manifest.googlevideo.com yt3.googleusercontent.com rr4---sn-4g5e6nze.googlevideo.com rr4---sn-5go7yner.googlevideo.com rr4---sn-q4flrnsl.googlevideo.com rr5---sn-n8v7knez.googlevideo.com rr2---sn-q4fl6ndl.googlevideo.com rr1---sn-q4fl6n6y.googlevideo.com rr1---sn-aj5go5-53.googlevideo.com rr1---sn-4axm-n8vs.googlevideo.com rr14---sn-n8v7kn7r.googlevideo.com rr16---sn-axq7sn76.googlevideo.com rr4---sn-jvhnu5g-c35d.googlevideo.com rr1---sn-8ph2xajvh-5xge.googlevideo.com rr1---sn-xguxaxjvh-gufl.googlevideo.com rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com rr1---sn-gvnuxaxjvh-jx3l.googlevideo.com rr1---sn-gvnuxaxjvh-o8ge.googlevideo.com rr5---sn-gvnuxaxjvh-n8vk.googlevideo.com rr10---sn-gvnuxaxjvh-304z.googlevideo.com rr12---sn-gvnuxaxjvh-bvwz.googlevideo.com rr3---sn-ug5onuxaxjvh-n8v6.googlevideo.com rr1---sn-ug5onuxaxjvh-p5ge.googlevideo.com rr1---sn-ug5onuxaxjvh-p3ul.googlevideo.com rr1---sn-ug5onuxaxjvh-n8v6.googlevideo.com rr1---sn-u5uuxaxjvhg0-ocje.googlevideo.com"
-PORTS_UDP="88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535"; PORTS_TCP="2802,2302,2502,3724,6000-8000,8085,8090,8100,8903,8904,25565,27015-27030,27036-27037,50001,60442"
+PORTS_UDP="88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535"; PORTS_TCP="2802,2302,2502,3478-3480,3724,6000-8000,8085,8090,8100,8903,8904,25565,27015-27030,27036-27037,50001,60442"
 GREEN="\033[1;32m"; RED="\033[1;31m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
 CONF="/etc/config/zapret"; CUSTOM_DIR="/opt/zapret/init.d/openwrt/custom.d/"; HOSTLIST_FILE="/opt/zapret/ipset/zapret-hosts-user.txt"; fileGP="/opt/zapret/ipset/zapret-hosts-google.txt"
 TMP_SF="/tmp/zapret_temp"; HOSTS_FILE="/etc/hosts"; TMP_LIST="$TMP_SF/zapret_yt_list.txt"; tmpDIR="/tmp/PodkopAWG"
@@ -245,7 +245,7 @@ echo -e "\n${GREEN}Результаты теста и лог удалены!${NC
 # ──────────────────────────── 1. environment checks ────────────────────────
 ZAVISIM() { local NEED=""; command -v jq >/dev/null 2>&1 || NEED="$NEED jq"; command -v wg >/dev/null 2>&1 || NEED="$NEED wireguard-tools"; [ -z "$NEED" ] && return 0; echo -e "\n${MAGENTA}Ставим зависимости для генерации${NC}"; update_packages || return 1; echo -e "${CYAN}Ставим зависимости${NC}"; $INSTALL $NEED >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при установке!${NC}\n"; PAUSE; return 1; }; }
 # ──────────────────────────── 2. install splify packages ───────────────────
-install_splify() { ZAVISIM; SPL_SPL="https://github.com/xyzmean/splify/releases/download/v$SPL_VER/splify-$SPL_VER-1_$SPL_SUF.$RAZ"; SPL_LUCI="https://github.com/xyzmean/splify/releases/download/v$SPL_VER/luci-app-splify-$SPL_VER-1_$SPL_SUF.$RAZ"
+install_splify() { SPL_SPL="https://github.com/xyzmean/splify/releases/download/v$SPL_VER/splify-$SPL_VER-1_$SPL_SUF.$RAZ"; SPL_LUCI="https://github.com/xyzmean/splify/releases/download/v$SPL_VER/luci-app-splify-$SPL_VER-1_$SPL_SUF.$RAZ"
 SPL_RUS="https://github.com/xyzmean/splify/releases/download/v$SPL_VER/luci-i18n-splify-ru-$SPL_VER-1_$SPL_SUF.$RAZ"; echo -e "${CYAN}Скачиваем ${NC}splify"; wget -q -U "Mozilla/5.0" -O "$TMP_SF/splify.$RAZ" "$SPL_SPL" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$SPL_SPL\n"; PAUSE; return 1; }
 wget -q -U "Mozilla/5.0" -O "$TMP_SF/luci-app-splify.$RAZ" "$SPL_LUCI" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$SPL_LUCI\n"; PAUSE; return 1; }; wget -q -U "Mozilla/5.0" -O "$TMP_SF/luci-i18n-splify-ru.$RAZ" "$SPL_RUS" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$SPL_RUS\n"; PAUSE; return 1; }
 update_packages || return 1; echo -e "${CYAN}Устанавливаем ${NC}splify"; $INSTALL "$TMP_SF/splify.$RAZ" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить:\n${NC}$SPL_SPL\n"; PAUSE; return 1; }
@@ -261,12 +261,35 @@ then _best=$(sort -n "$_pings" | head -n 1); _best_ping=$(echo "$_best" | awk '{
 WARP_EP="${_best_ip}:4500"; else WARP_EP="engage.cloudflareclient.com:4500"; echo -e "\n${CYAN}Подбор не удался!\nИспользуем ${NC}endpoint${CYAN}:${NC} $WARP_EP"; fi; }
 choose_endpoint() { echo -e "\n${MAGENTA}Меню выбора endpoint${NC}"; echo -e "${CYAN}1) ${GREEN}Использовать${NC} engage.cloudflareclient.com:4500\n${CYAN}2) ${GREEN}Подобрать ${NC}endpoint${GREEN} автоматически\n${CYAN}3) ${GREEN}Выход в меню splify${NC}"; echo -en "${YELLOW}Выберите пункт (${NC}Enter = 1${YELLOW}): ${NC}"; read -r choiceWRP; case "$choiceWRP" in 3) continue;; 2) find_best_endpoint ;; *) WARP_EP="engage.cloudflareclient.com:4500"; echo -e "\n${CYAN}Используем ${NC}endpoint${CYAN}:${NC} $WARP_EP" ;; esac; }
 register_request() { curl -fsSL --max-time 30 -X POST "${W1%/}/api/reg" -H "Content-Type: application/json" -H "Accept: application/json" -d "{\"key\":\"$PUB\",\"install_id\":\"\",\"fcm_token\":\"\",\"model\":\"PC\",\"locale\":\"en_US\",\"tos\":\"$TOS\",\"type\":\"Android\"}" -o "$REG" >/dev/null 2>&1; }
-register_warp() { [ -d "$TMP_SPL" ] || mkdir -p "$TMP_SPL"; REG="$TMP_SPL/reg.json"; rm -f "$REG"; echo -e "\n${MAGENTA}Генерируем WARP${NC}"; if command -v awg >/dev/null 2>&1; then GEN=awg; else GEN=wg; fi; PRIV="$("$GEN" genkey 2>/dev/null)"; PUB="$(printf '%s\n' "$PRIV" | "$GEN" pubkey 2>/dev/null)"
-TOS="$(date -u +%Y-%m-%dT%H:%M:%S.000000000Z)"; echo -e "${CYAN}Регистрируем устройство${NC}"; if register_request && jq -e '.config.peers[0].public_key' "$REG" >/dev/null 2>&1; then echo -e "${CYAN}Используем основной сервер${NC}"; else echo -e "${CYAN}Используем резервный сервер${NC}"
-if ! curl -fsSL --max-time 60 "$II" -o "$REG" >/dev/null 2>&1; then echo -e "${RED}Не удалось получить WARP${NC}"; PAUSE; return 1; fi; if ! jq -e '.result.config.peers[0].public_key' "$REG" >/dev/null 2>&1; then echo -e "${RED}Резервный источник вернул неверный формат${NC}"; PAUSE; return 1; fi
-PRIV="$(jq -r '.result.key' "$REG")"; WARP_PEER="$(jq -r '.result.config.peers[0].public_key' "$REG")"; WARP_V4="$(jq -r '.result.config.interface.addresses.v4' "$REG")"; WARP_V6="$(jq -r '.result.config.interface.addresses.v6 // empty' "$REG")"; fi; if [ -z "$WARP_PEER" ]
-then WARP_PEER="$(jq -r '.config.peers[0].public_key' "$REG")"; WARP_V4="$(jq -r '.config.interface.addresses.v4' "$REG")"; WARP_V6="$(jq -r '.config.interface.addresses.v6 // empty' "$REG")"; fi
-[ -n "$WARP_PEER" ] && [ "$WARP_PEER" != "null" ] || { echo -e "${RED}Нет peer public_key${NC}"; PAUSE; return 1; }; [ -n "$WARP_V4" ] && [ "$WARP_V4" != "null" ] || { echo -e "${RED}Нет IPv4${NC}"; PAUSE; return 1; }; echo -e "WARP ${GREEN}сгенерирован!${NC}"; }
+
+register_warp() {
+	[ -d "$TMP_SPL" ] || mkdir -p "$TMP_SPL"; REG="$TMP_SPL/reg.json"; rm -f "$REG"
+	echo -e "\n${MAGENTA}Генерируем WARP${NC}"
+
+	# ── Быстрый метод: X2, без jq и wireguard-tools ──
+	echo -e "${CYAN}Пробуем быстрый метод (${NC}santa-atmo${CYAN})${NC}"
+	if curl -fsSL --max-time 30 "$II" -o "$REG" 2>/dev/null && grep -q '"public_key"' "$REG"; then
+		PRIV=$(grep -o '"key"[[:space:]]*:[[:space:]]*"[^"]*"' "$REG" | head -n1 | sed 's/.*:[[:space:]]*"//;s/"$//')
+		WARP_PEER=$(grep -o '"public_key"[[:space:]]*:[[:space:]]*"[^"]*"' "$REG" | head -n1 | sed 's/.*:[[:space:]]*"//;s/"$//')
+		WARP_V4=$(grep -o '"v4"[[:space:]]*:[[:space:]]*"[^"]*"' "$REG" | sed -n '2p' | sed 's/.*:[[:space:]]*"//;s/"$//')
+		WARP_V6=$(grep -o '"v6"[[:space:]]*:[[:space:]]*"[^"]*"' "$REG" | sed -n '2p' | sed 's/.*:[[:space:]]*"//;s/"$//')
+		if [ -n "$PRIV" ] && [ -n "$WARP_PEER" ] && [ -n "$WARP_V4" ]; then
+			echo -e "WARP ${GREEN}сгенерирован (быстрый метод, без jq/wg)!${NC}"; return 0
+		fi
+		echo -e "${YELLOW}Быстрый метод вернул неполные данные, переключаемся на стандартный${NC}"
+	else
+		echo -e "${YELLOW}Быстрый метод недоступен, переключаемся на стандартный${NC}"
+	fi
+
+	# ── Стандартный метод: требует jq и wireguard-tools ──
+	ZAVISIM || return 1
+	if command -v awg >/dev/null 2>&1; then GEN=awg; else GEN=wg; fi; PRIV="$("$GEN" genkey 2>/dev/null)"; PUB="$(printf '%s\n' "$PRIV" | "$GEN" pubkey 2>/dev/null)"
+	TOS="$(date -u +%Y-%m-%dT%H:%M:%S.000000000Z)"; echo -e "${CYAN}Регистрируем устройство${NC}"; if register_request && jq -e '.config.peers[0].public_key' "$REG" >/dev/null 2>&1; then echo -e "${CYAN}Используем основной сервер${NC}"; else echo -e "${CYAN}Используем резервный сервер${NC}"
+	if ! curl -fsSL --max-time 60 "$II" -o "$REG" >/dev/null 2>&1; then echo -e "${RED}Не удалось получить WARP${NC}"; PAUSE; return 1; fi; if ! jq -e '.result.config.peers[0].public_key' "$REG" >/dev/null 2>&1; then echo -e "${RED}Резервный источник вернул неверный формат${NC}"; PAUSE; return 1; fi
+	PRIV="$(jq -r '.result.key' "$REG")"; WARP_PEER="$(jq -r '.result.config.peers[0].public_key' "$REG")"; WARP_V4="$(jq -r '.result.config.interface.addresses.v4' "$REG")"; WARP_V6="$(jq -r '.result.config.interface.addresses.v6 // empty' "$REG")"; fi; if [ -z "$WARP_PEER" ]
+	then WARP_PEER="$(jq -r '.config.peers[0].public_key' "$REG")"; WARP_V4="$(jq -r '.config.interface.addresses.v4' "$REG")"; WARP_V6="$(jq -r '.config.interface.addresses.v6 // empty' "$REG")"; fi
+	[ -n "$WARP_PEER" ] && [ "$WARP_PEER" != "null" ] || { echo -e "${RED}Нет peer public_key${NC}"; PAUSE; return 1; }; [ -n "$WARP_V4" ] && [ "$WARP_V4" != "null" ] || { echo -e "${RED}Нет IPv4${NC}"; PAUSE; return 1; }; echo -e "WARP ${GREEN}сгенерирован!${NC}"
+}
 restart_splify() { echo -e "\n${MAGENTA}Перезапускаем splify${NC}"; echo -en "${YELLOW}Подождите...${NC}"; /usr/local/sbin/splify-disable >/dev/null 2>&1; /etc/init.d/splify enable >/dev/null 2>&1; /etc/init.d/splify-agent enable >/dev/null 2>&1
 uci -q set splify.global.telemetry="0" && uci commit splify; /etc/init.d/splify restart >/dev/null 2>&1; sleep 3; /etc/init.d/splify-agent restart >/dev/null 2>&1; sleep 3; /usr/local/sbin/splify-apply >/dev/null 2>&1
 sleep 10; echo -e "\n\nsplify ${GREEN}перезапущен!${NC}"; echo -e "\n${YELLOW}Инициализация splify может занять несколько минут!${NC}"; }
@@ -1064,7 +1087,7 @@ echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню\n"; echo -n
 echo -e "\n${MAGENTA}Обновляем MagiTrickle\n${CYAN}Скачиваем\n${NC}$URL_MT"; curl -Lf --connect-timeout 6 --retry 3 --retry-delay 1 -o "$FILE_MT" "$URL_MT" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка скачивания${NC}\n"; PAUSE; return 1; };  update_packages || return 1
 echo -e "${CYAN}Обновляем ${NC}MagiTrickle"; $INSTALL "$FILE_MT" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка установки${NC} $(basename "$URL_MT")\n"; rm -f "$FILE_MT"; PAUSE; return 1; }; /etc/init.d/magitrickle enable >/dev/null 2>&1; /etc/init.d/magitrickle restart >/dev/null 2>&1; echo -e "MagiTrickle ${GREEN}обновлён!${NC}\n"; rm -f "$FILE_MT"; PAUSE ;; *) return ;; esac; done; }
 MIX_GEN_MENU() { while true; do echo -e "\n${MAGENTA}Меню генерации WARP${NC}"; echo -e "${CYAN}1) ${GREEN}Сгенерировать ${NC}WARP ${GREEN}при помощи ${NC}Proxy"; echo -e "${CYAN}2) ${GREEN}Сгенерировать ${NC}WARP ${GREEN}при помощи ${NC}api.cloudflareclient"
-echo -e "${CYAN}Enter) ${GREEN}Выход в меню Mixomo${NC}"; echo -ne "${YELLOW}Выберите пункт: ${NC}"; read choiceMG; case "$choiceMG" in 1) ZAVISIM; register_warp || continue; choose_endpoint || continue; WARP_TO_ROOT; echo; PAUSE; break ;; 2) if pkg_is_installed splify
+echo -e "${CYAN}Enter) ${GREEN}Выход в меню Mixomo${NC}"; echo -ne "${YELLOW}Выберите пункт: ${NC}"; read choiceMG; case "$choiceMG" in 1) register_warp || continue; choose_endpoint || continue; WARP_TO_ROOT; echo; PAUSE; break ;; 2) if pkg_is_installed splify
 then echo -e "\n${RED}Генерация ${NC}WARP${RED} при установленном ${NC}splify${RED} невозможна!${NC}"; echo -e "${YELLOW}Используйте генерацию при помощи ${NC}Proxy${NC}!\n"; else sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Mixomo-Manager/main/gen_WARP.sh); echo; fi; PAUSE; break ;;*) break ;; esac; done; }
 # ==========================================
 # Главное меню
