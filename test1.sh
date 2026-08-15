@@ -261,35 +261,17 @@ then _best=$(sort -n "$_pings" | head -n 1); _best_ping=$(echo "$_best" | awk '{
 WARP_EP="${_best_ip}:4500"; else WARP_EP="engage.cloudflareclient.com:4500"; echo -e "\n${CYAN}Подбор не удался!\nИспользуем ${NC}endpoint${CYAN}:${NC} $WARP_EP"; fi; }
 choose_endpoint() { echo -e "\n${MAGENTA}Меню выбора endpoint${NC}"; echo -e "${CYAN}1) ${GREEN}Использовать${NC} engage.cloudflareclient.com:4500\n${CYAN}2) ${GREEN}Подобрать ${NC}endpoint${GREEN} автоматически\n${CYAN}3) ${GREEN}Выход в меню splify${NC}"; echo -en "${YELLOW}Выберите пункт (${NC}Enter = 1${YELLOW}): ${NC}"; read -r choiceWRP; case "$choiceWRP" in 3) continue;; 2) find_best_endpoint ;; *) WARP_EP="engage.cloudflareclient.com:4500"; echo -e "\n${CYAN}Используем ${NC}endpoint${CYAN}:${NC} $WARP_EP" ;; esac; }
 register_request() { curl -fsSL --max-time 30 -X POST "${W1%/}/api/reg" -H "Content-Type: application/json" -H "Accept: application/json" -d "{\"key\":\"$PUB\",\"install_id\":\"\",\"fcm_token\":\"\",\"model\":\"PC\",\"locale\":\"en_US\",\"tos\":\"$TOS\",\"type\":\"Android\"}" -o "$REG" >/dev/null 2>&1; }
-
-register_warp() {
-	[ -d "$TMP_SPL" ] || mkdir -p "$TMP_SPL"; REG="$TMP_SPL/reg.json"; rm -f "$REG"
-	echo -e "\n${MAGENTA}Генерируем WARP${NC}"
-
-	# ── Быстрый метод: X2, без jq и wireguard-tools ──
-	echo -e "${CYAN}Пробуем быстрый метод (${NC}santa-atmo${CYAN})${NC}"
-	if curl -fsSL --max-time 30 "$II" -o "$REG" 2>/dev/null && grep -q '"public_key"' "$REG"; then
-		PRIV=$(grep -o '"key"[[:space:]]*:[[:space:]]*"[^"]*"' "$REG" | head -n1 | sed 's/.*:[[:space:]]*"//;s/"$//')
-		WARP_PEER=$(grep -o '"public_key"[[:space:]]*:[[:space:]]*"[^"]*"' "$REG" | head -n1 | sed 's/.*:[[:space:]]*"//;s/"$//')
-		WARP_V4=$(grep -o '"v4"[[:space:]]*:[[:space:]]*"[^"]*"' "$REG" | sed -n '2p' | sed 's/.*:[[:space:]]*"//;s/"$//')
-		WARP_V6=$(grep -o '"v6"[[:space:]]*:[[:space:]]*"[^"]*"' "$REG" | sed -n '2p' | sed 's/.*:[[:space:]]*"//;s/"$//')
-		if [ -n "$PRIV" ] && [ -n "$WARP_PEER" ] && [ -n "$WARP_V4" ]; then
-			echo -e "WARP ${GREEN}сгенерирован (быстрый метод, без jq/wg)!${NC}"; return 0
-		fi
-		echo -e "${YELLOW}Быстрый метод вернул неполные данные, переключаемся на стандартный${NC}"
-	else
-		echo -e "${YELLOW}Быстрый метод недоступен, переключаемся на стандартный${NC}"
-	fi
-
-	# ── Стандартный метод: требует jq и wireguard-tools ──
-	ZAVISIM || return 1
-	if command -v awg >/dev/null 2>&1; then GEN=awg; else GEN=wg; fi; PRIV="$("$GEN" genkey 2>/dev/null)"; PUB="$(printf '%s\n' "$PRIV" | "$GEN" pubkey 2>/dev/null)"
-	TOS="$(date -u +%Y-%m-%dT%H:%M:%S.000000000Z)"; echo -e "${CYAN}Регистрируем устройство${NC}"; if register_request && jq -e '.config.peers[0].public_key' "$REG" >/dev/null 2>&1; then echo -e "${CYAN}Используем основной сервер${NC}"; else echo -e "${CYAN}Используем резервный сервер${NC}"
-	if ! curl -fsSL --max-time 60 "$II" -o "$REG" >/dev/null 2>&1; then echo -e "${RED}Не удалось получить WARP${NC}"; PAUSE; return 1; fi; if ! jq -e '.result.config.peers[0].public_key' "$REG" >/dev/null 2>&1; then echo -e "${RED}Резервный источник вернул неверный формат${NC}"; PAUSE; return 1; fi
-	PRIV="$(jq -r '.result.key' "$REG")"; WARP_PEER="$(jq -r '.result.config.peers[0].public_key' "$REG")"; WARP_V4="$(jq -r '.result.config.interface.addresses.v4' "$REG")"; WARP_V6="$(jq -r '.result.config.interface.addresses.v6 // empty' "$REG")"; fi; if [ -z "$WARP_PEER" ]
-	then WARP_PEER="$(jq -r '.config.peers[0].public_key' "$REG")"; WARP_V4="$(jq -r '.config.interface.addresses.v4' "$REG")"; WARP_V6="$(jq -r '.config.interface.addresses.v6 // empty' "$REG")"; fi
-	[ -n "$WARP_PEER" ] && [ "$WARP_PEER" != "null" ] || { echo -e "${RED}Нет peer public_key${NC}"; PAUSE; return 1; }; [ -n "$WARP_V4" ] && [ "$WARP_V4" != "null" ] || { echo -e "${RED}Нет IPv4${NC}"; PAUSE; return 1; }; echo -e "WARP ${GREEN}сгенерирован!${NC}"
-}
+register_warp() { [ -d "$TMP_SPL" ] || mkdir -p "$TMP_SPL"; REG="$TMP_SPL/reg.json"; rm -f "$REG"; echo -e "\n${MAGENTA}Генерируем WARP${NC}"; echo -e "${CYAN}Используем основной метод${NC}"; if curl -fsSL --max-time 30 "$II" -o "$REG" 2>/dev/null && grep -q '"public_key"' "$REG"; then
+PRIV=$(grep -o '"key"[[:space:]]*:[[:space:]]*"[^"]*"' "$REG" | head -n1 | sed 's/.*:[[:space:]]*"//;s/"$//'); WARP_PEER=$(grep -o '"public_key"[[:space:]]*:[[:space:]]*"[^"]*"' "$REG" | head -n1 | sed 's/.*:[[:space:]]*"//;s/"$//')
+WARP_V4=$(grep -o '"v4"[[:space:]]*:[[:space:]]*"[^"]*"' "$REG" | sed -n '2p' | sed 's/.*:[[:space:]]*"//;s/"$//'); WARP_V6=$(grep -o '"v6"[[:space:]]*:[[:space:]]*"[^"]*"' "$REG" | sed -n '2p' | sed 's/.*:[[:space:]]*"//;s/"$//')
+if [ -n "$PRIV" ] && [ -n "$WARP_PEER" ] && [ -n "$WARP_V4" ]; then echo -e "WARP ${GREEN}сгенерирован!${NC}"; return 0; fi; echo -e "${YELLOW}Основной метод вернул неполные данные, переключаемся на запасной${NC}"
+else; echo -e "${YELLOW}Основной метод недоступен, переключаемся на запасной${NC}"; fi
+ZAVISIM || return 1; if command -v awg >/dev/null 2>&1; then GEN=awg; else GEN=wg; fi; PRIV="$("$GEN" genkey 2>/dev/null)"; PUB="$(printf '%s\n' "$PRIV" | "$GEN" pubkey 2>/dev/null)"
+TOS="$(date -u +%Y-%m-%dT%H:%M:%S.000000000Z)"; echo -e "${CYAN}Регистрируем устройство${NC}"; if register_request && jq -e '.config.peers[0].public_key' "$REG" >/dev/null 2>&1; then echo -e "${CYAN}Используем основной сервер${NC}"; else echo -e "${CYAN}Используем резервный сервер${NC}"
+if ! curl -fsSL --max-time 60 "$II" -o "$REG" >/dev/null 2>&1; then echo -e "${RED}Не удалось получить WARP${NC}"; PAUSE; return 1; fi; if ! jq -e '.result.config.peers[0].public_key' "$REG" >/dev/null 2>&1; then echo -e "${RED}Резервный источник вернул неверный формат${NC}"; PAUSE; return 1; fi
+PRIV="$(jq -r '.result.key' "$REG")"; WARP_PEER="$(jq -r '.result.config.peers[0].public_key' "$REG")"; WARP_V4="$(jq -r '.result.config.interface.addresses.v4' "$REG")"; WARP_V6="$(jq -r '.result.config.interface.addresses.v6 // empty' "$REG")"; fi; if [ -z "$WARP_PEER" ]
+then WARP_PEER="$(jq -r '.config.peers[0].public_key' "$REG")"; WARP_V4="$(jq -r '.config.interface.addresses.v4' "$REG")"; WARP_V6="$(jq -r '.config.interface.addresses.v6 // empty' "$REG")"; fi
+[ -n "$WARP_PEER" ] && [ "$WARP_PEER" != "null" ] || { echo -e "${RED}Нет peer public_key${NC}"; PAUSE; return 1; }; [ -n "$WARP_V4" ] && [ "$WARP_V4" != "null" ] || { echo -e "${RED}Нет IPv4${NC}"; PAUSE; return 1; }; echo -e "WARP ${GREEN}сгенерирован!${NC}"; }
 restart_splify() { echo -e "\n${MAGENTA}Перезапускаем splify${NC}"; echo -en "${YELLOW}Подождите...${NC}"; /usr/local/sbin/splify-disable >/dev/null 2>&1; /etc/init.d/splify enable >/dev/null 2>&1; /etc/init.d/splify-agent enable >/dev/null 2>&1
 uci -q set splify.global.telemetry="0" && uci commit splify; /etc/init.d/splify restart >/dev/null 2>&1; sleep 3; /etc/init.d/splify-agent restart >/dev/null 2>&1; sleep 3; /usr/local/sbin/splify-apply >/dev/null 2>&1
 sleep 10; echo -e "\n\nsplify ${GREEN}перезапущен!${NC}"; echo -e "\n${YELLOW}Инициализация splify может занять несколько минут!${NC}"; }
