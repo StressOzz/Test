@@ -467,7 +467,16 @@ toggle_zapret() { if [ -f /etc/init.d/zapret2 ]; then if /etc/init.d/zapret2 sta
 for pid in $(pgrep -f /opt/zapret2 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done; echo -e "Zapret2 ${GREEN}остановлен!${NC}\n"; else echo -e "\n${MAGENTA}Запускаем Zapret2${NC}"; /etc/init.d/zapret2 start >/dev/null 2>&1
 if /etc/init.d/zapret2 status >/dev/null 2>&1; then echo -e "Zapret2 ${GREEN}запущен!${NC}\n"; else echo -e "Zapret2 ${RED}не удалось запустить!${NC}\n"; fi; fi; PAUSE
 elif [ -f /etc/init.d/zapret ]; then if pgrep -f "/opt/zapret" >/dev/null 2>&1; then stop_zapret; else start_zapret; fi; fi; }
-toggle_zapret1_only() { if pgrep -f "/opt/zapret" >/dev/null 2>&1; then stop_zapret; else start_zapret; fi; }
+
+toggle_zapret1_only() {
+if pgrep -f "/opt/zapret/" >/dev/null 2>&1; then
+echo -e "\n${MAGENTA}Останавливаем Zapret${NC}"; /etc/init.d/zapret stop >/dev/null 2>&1
+for pid in $(pgrep -f "/opt/zapret/" 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done
+echo -e "Zapret ${GREEN}остановлен!${NC}\n"
+else
+echo -e "\n${MAGENTA}Запускаем Zapret${NC}"; /etc/init.d/zapret start >/dev/null 2>&1; ZAPRET_RESTART
+if /etc/init.d/zapret status >/dev/null 2>&1; then echo -e "Zapret ${GREEN}запущен!${NC}\n"; else echo -e "Zapret ${RED}не удалось запустить!${NC}\n"; fi
+fi; PAUSE; }
 
 toggle_zapret2_only() { if /etc/init.d/zapret2 status >/dev/null 2>&1; then echo -e "\n${MAGENTA}Останавливаем Zapret2${NC}"; /etc/init.d/zapret2 stop >/dev/null 2>&1
 for pid in $(pgrep -f /opt/zapret2 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done; echo -e "Zapret2 ${GREEN}остановлен!${NC}\n"
@@ -687,13 +696,7 @@ sys_menu() { while true; do web_is_enabled && WEB_TEXT="Удалить дост�
 is_expert_mode && EXPERT_TEXT="${GREEN}Выключить${NC} expert mode" || EXPERT_TEXT="${GREEN}Включить${NC} expert mode"
 quic_is_blocked && QUIC_TEXT="${GREEN}Отключить блокировку${NC} QUIC ${GREEN}${NC}" || QUIC_TEXT="${GREEN}Включить блокировку${NC} QUIC ${GREEN}${NC}"
 CURR=$(curr_MIR); clear; echo -e "${MAGENTA}Системное меню${NC}\n"; if [ -f "$DATE_FILE" ] && [ -f "$BACKUP_DIR/zapret.tar.gz" ] && [ -f "$BACKUP_DIR/zapret" ]; then CREATE_DATE=$(cat "$DATE_FILE")
-
-is_expert_mode && echo -e "${YELLOW}Expert mode: ${GREEN}включён${NC}"
-
-echo -e "${YELLOW}Резервная копия:${NC} $CREATE_DATE"; else echo -e "${YELLOW}Резервная копия: ${RED}отсутствует${NC}"; fi
-
-is_expert_mode && echo -e "${YELLOW}Expert mode:${NC}         ${GREEN}включён${NC}"
-is_expert_mode && echo -e "${YELLOW}Expert mode: ${GREEN}включён${NC}"
+echo -e "${YELLOW}Резервная копия:${NC} $CREATE_DATE"; fi; is_expert_mode && echo -e "${YELLOW}Expert mode: ${GREEN}включён${NC}"
 
 if [ "$CURR" != "default / OpenWrt" ]; then echo -e "${YELLOW}Используется зеркало: ${NC}$CURR"; fi
 if web_is_enabled; then echo -e "${YELLOW}Доступ из браузера:${NC} $LAN_IP:7681"; fi; if grep -q 'ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc; then echo -e "${YELLOW}FIX для Flow Offloading:${NC} ${GREEN}включён${NC}"; fi
