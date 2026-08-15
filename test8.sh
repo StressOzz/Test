@@ -692,7 +692,7 @@ if grep -q 'ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/te
 if quic_is_blocked; then echo -e "${YELLOW}Блокировка QUIC: ${GREEN}включена${NC}" && OTSTUP=1; fi
 if [ -f /etc/init.d/zapret ] && [ -f "$CONF" ] && grep -Eq "^[[:space:]]*option DISABLE_IPV6 '0'" "$CONF"; then echo -e "${YELLOW}IPv6 в Zapret: ${GREEN}включён${NC}" && OTSTUP=1; fi
 
-[ "$OTSTUP" -eq 0 ] && echo
+[ "$OTSTUP" -eq 1 ] && echo
 
 echo -e "${CYAN}1) ${GREEN}Системная информация${NC}\n${CYAN}2) ${GREEN}$WEB_TEXT${NC}\n${CYAN}3) ${GREEN}$QUIC_TEXT${NC}\n${CYAN}4) ${GREEN}Меню выбора зеркала ${NC}OpenWrt\n${CYAN}5) ${GREEN}Запустить${NC} blockcheck\n${CYAN}6) ${GREEN}Удалить ${NC}Zapret ${GREEN}& ${NC}Zapret2"
 if [ -f "$DATE_FILE" ] && [ -f "$BACKUP_DIR/zapret.tar.gz" ] && [ -f "$BACKUP_DIR/zapret" ]; then CREATE_DATE=$(cat "$DATE_FILE"); echo -e "${CYAN}7) ${GREEN}Удалить резервную копию настроек${NC} Zapret"; else echo -e "${CYAN}7) ${GREEN}Сделать резервную копию настроек${NC} Zapret"; fi
