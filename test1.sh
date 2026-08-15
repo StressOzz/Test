@@ -43,7 +43,7 @@ EXCLUDE_FILE="/opt/zapret/ipset/zapret-hosts-user-exclude.txt"; fileDoH="/etc/co
 
 EXPERT_MODE_FILE="/etc/zapret_manager_expert_mode"
 is_expert_mode() { [ -f "$EXPERT_MODE_FILE" ]; }
-toggle_expert_mode() { if is_expert_mode; then rm -f "$EXPERT_MODE_FILE"; echo -e "\n${GREEN}Expert mode ${NC}выключен${GREEN}!${NC}\n"; else echo 1 > "$EXPERT_MODE_FILE"; echo -e "\n${GREEN}Expert mode ${NC}включён${GREEN}!${NC}\n"; fi; PAUSE; }
+toggle_expert_mode() { if is_expert_mode; then rm -f "$EXPERT_MODE_FILE"; echo -e "\nExpert mode ${GREEN}выключен!${NC}\n"; else echo 1 > "$EXPERT_MODE_FILE"; echo -e "\nExpert mode ${GREEN}включён!${NC}\n"; fi; PAUSE; }
 
 
 INSTAGRAM="#Instagram&Facebook\n57.144.222.34 instagram.com www.instagram.com\n157.240.9.174 instagram.com www.instagram.com\n157.240.245.174 instagram.com www.instagram.com b.i.instagram.com z-p42-chat-e2ee-ig.facebook.com help.instagram.com
