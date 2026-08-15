@@ -693,6 +693,7 @@ is_expert_mode && echo -e "${YELLOW}Expert mode: ${GREEN}включён${NC}"
 echo -e "${YELLOW}Резервная копия:${NC} $CREATE_DATE"; else echo -e "${YELLOW}Резервная копия: ${RED}отсутствует${NC}"; fi
 
 is_expert_mode && echo -e "${YELLOW}Expert mode:${NC}         ${GREEN}включён${NC}"
+is_expert_mode && echo -e "${YELLOW}Expert mode: ${GREEN}включён${NC}"
 
 if [ "$CURR" != "default / OpenWrt" ]; then echo -e "${YELLOW}Используется зеркало: ${NC}$CURR"; fi
 if web_is_enabled; then echo -e "${YELLOW}Доступ из браузера:${NC} $LAN_IP:7681"; fi; if grep -q 'ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc; then echo -e "${YELLOW}FIX для Flow Offloading:${NC} ${GREEN}включён${NC}"; fi
