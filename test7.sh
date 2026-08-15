@@ -146,7 +146,7 @@ zapret2_remote_file() { [ -f "$ZAPRET2_CACHE_FILE" ] || zapret2_update_cache; if
 zapret2_remote_luci_file() { [ -f "$ZAPRET2_CACHE_FILE" ] || zapret2_update_cache; if [ "$PKG_IS_APK" -eq 1 ]; then grep -o "luci-app-zapret2-[0-9][^\"]*\.${RAZ}" "$ZAPRET2_CACHE_FILE" | head -n1; else grep -o "luci-app-zapret2_[0-9][^\"]*_all\.${RAZ}" "$ZAPRET2_CACHE_FILE" | head -n1; fi; }
 zapret2_local_version() { if [ "$PKG_IS_APK" -eq 1 ]; then apk list --installed 2>/dev/null | grep "^zapret2" | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)*-r[0-9]+' | head -n1 | sed 's/-r[0-9]*$//'; else opkg list-installed 2>/dev/null | grep "^zapret2 -" | awk '{print $3}' | sed 's/-r[0-9]*$//'; fi; }
 zapret2_luci_installed() { if [ "$PKG_IS_APK" -eq 1 ]; then apk list --installed 2>/dev/null | grep -q "^luci-app-zapret2"; else opkg list-installed 2>/dev/null | grep -q "luci-app-zapret2"; fi; }
-install_zapret2() { [ "$(grep '^DISTRIB_ARCH=' /etc/openwrt_release | cut -d"'" -f2)" = "aarch64_cortex-a53" ] || { echo -e "\n${RED}Архитектура не поддерживается!"; PAUSE; return 1; }
+install_zapret2() { [ "$(grep '^DISTRIB_ARCH=' /etc/openwrt_release | cut -d"'" -f2)" = "aarch64_cortex-a53" ] || { echo -e "\n${RED}Архитектура не поддерживается!\n${YELLOW}Только для ${NC}aarch64_cortex-a53${YELLOW}!${NC}\n"; PAUSE; return 1; }
 if [ -f /etc/init.d/zapret ] && ! is_expert_mode; then echo -e "\n${RED}Установлен ${NC}Zapret${RED}!${NC}"; echo -e "${YELLOW}Установка ${NC}Zapret2${YELLOW} невозможна!${NC}\n"; PAUSE; return 1; fi
 echo -e "\n${MAGENTA}Устанавливаем Zapret2${NC}"; rm -rf "$ZAPRET2_TMP_DIR"; mkdir -p "$ZAPRET2_TMP_DIR"; zapret2_update_cache; MAIN_FILE2="$(zapret2_remote_file)"; LUCI_FILE2="$(zapret2_remote_luci_file)"
 if [ -z "$MAIN_FILE2" ]; then echo -e "\n${RED}Не удалось найти пакет ${NC}zapret2\n"; PAUSE; return 1; fi; update_packages || return 1
@@ -680,11 +680,21 @@ uci commit firewall >/dev/null 2>&1; /etc/init.d/firewall restart >/dev/null 2>&
 is_expert_mode() { [ -f "$EXPERT_MODE_FILE" ]; }; toggle_expert_mode() { if is_expert_mode; then rm -f "$EXPERT_MODE_FILE"; echo -e "\nExpert mode ${GREEN}выключен!${NC}\n"; else echo 1 > "$EXPERT_MODE_FILE"; echo -e "\nExpert mode ${GREEN}включён!${NC}\n"; fi; PAUSE; }
 sys_menu() { while true; do web_is_enabled && WEB_TEXT="Удалить доступ к скрипту из браузера" || WEB_TEXT="Активировать доступ к скрипту из браузера"; is_expert_mode && EXPERT_TEXT="${GREEN}Выключить${NC} expert mode" || EXPERT_TEXT="${GREEN}Включить${NC} expert mode"
 quic_is_blocked && QUIC_TEXT="${GREEN}Отключить блокировку${NC} QUIC ${GREEN}${NC}" || QUIC_TEXT="${GREEN}Включить блокировку${NC} QUIC ${GREEN}${NC}"
-CURR=$(curr_MIR); clear; echo -e "${MAGENTA}Системное меню${NC}\n"; if [ -f "$DATE_FILE" ] && [ -f "$BACKUP_DIR/zapret.tar.gz" ] && [ -f "$BACKUP_DIR/zapret" ]; then CREATE_DATE=$(cat "$DATE_FILE")
-echo -e "${YELLOW}Резервная копия:${NC} $CREATE_DATE"; fi; is_expert_mode && echo -e "${YELLOW}Expert mode: ${GREEN}включён${NC}"; if [ "$CURR" != "default / OpenWrt" ]; then echo -e "${YELLOW}Используется зеркало: ${NC}$CURR"; fi
-if web_is_enabled; then echo -e "${YELLOW}Доступ из браузера:${NC} $LAN_IP:7681"; fi; if grep -q 'ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc; then echo -e "${YELLOW}FIX для Flow Offloading:${NC} ${GREEN}включён${NC}"; fi
-if quic_is_blocked; then echo -e "${YELLOW}Блокировка QUIC: ${GREEN}включена${NC}"; fi; if [ -f /etc/init.d/zapret ] && [ -f "$CONF" ] && grep -Eq "^[[:space:]]*option DISABLE_IPV6 '0'" "$CONF"; then echo -e "${YELLOW}IPv6 в Zapret: ${GREEN}включён${NC}"; fi
-echo -e "\n${CYAN}1) ${GREEN}Системная информация${NC}\n${CYAN}2) ${GREEN}$WEB_TEXT${NC}\n${CYAN}3) ${GREEN}$QUIC_TEXT${NC}\n${CYAN}4) ${GREEN}Меню выбора зеркала ${NC}OpenWrt\n${CYAN}5) ${GREEN}Запустить${NC} blockcheck\n${CYAN}6) ${GREEN}Удалить ${NC}Zapret ${GREEN}& ${NC}Zapret2"
+CURR=$(curr_MIR); clear; OTSTUP=0; echo -e "${MAGENTA}Системное меню${NC}\n"
+
+if [ -f "$DATE_FILE" ] && [ -f "$BACKUP_DIR/zapret.tar.gz" ] && [ -f "$BACKUP_DIR/zapret" ]; then CREATE_DATE=$(cat "$DATE_FILE"); echo -e "${YELLOW}Резервная копия:${NC} $CREATE_DATE" && OTSTUP=1; fi
+
+is_expert_mode && echo -e "${YELLOW}Expert mode: ${GREEN}включён${NC}" && OTSTUP=1
+
+if [ "$CURR" != "default / OpenWrt" ]; then echo -e "${YELLOW}Используется зеркало: ${NC}$CURR" && OTSTUP=1; fi
+if web_is_enabled; then echo -e "${YELLOW}Доступ из браузера:${NC} $LAN_IP:7681" && OTSTUP=1; fi
+if grep -q 'ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc; then echo -e "${YELLOW}FIX для Flow Offloading:${NC} ${GREEN}включён${NC}" && OTSTUP=1; fi
+if quic_is_blocked; then echo -e "${YELLOW}Блокировка QUIC: ${GREEN}включена${NC}" && OTSTUP=1; fi
+if [ -f /etc/init.d/zapret ] && [ -f "$CONF" ] && grep -Eq "^[[:space:]]*option DISABLE_IPV6 '0'" "$CONF"; then echo -e "${YELLOW}IPv6 в Zapret: ${GREEN}включён${NC}" && OTSTUP=1; fi
+
+[ "$OTSTUP" -eq 0 ] && echo
+
+echo -e "${CYAN}1) ${GREEN}Системная информация${NC}\n${CYAN}2) ${GREEN}$WEB_TEXT${NC}\n${CYAN}3) ${GREEN}$QUIC_TEXT${NC}\n${CYAN}4) ${GREEN}Меню выбора зеркала ${NC}OpenWrt\n${CYAN}5) ${GREEN}Запустить${NC} blockcheck\n${CYAN}6) ${GREEN}Удалить ${NC}Zapret ${GREEN}& ${NC}Zapret2"
 if [ -f "$DATE_FILE" ] && [ -f "$BACKUP_DIR/zapret.tar.gz" ] && [ -f "$BACKUP_DIR/zapret" ]; then CREATE_DATE=$(cat "$DATE_FILE"); echo -e "${CYAN}7) ${GREEN}Удалить резервную копию настроек${NC} Zapret"; else echo -e "${CYAN}7) ${GREEN}Сделать резервную копию настроек${NC} Zapret"; fi
 if [ -f "$DATE_FILE" ] && [ -f "$BACKUP_DIR/zapret.tar.gz" ] && [ -f "$BACKUP_DIR/zapret" ]; then echo -e "${CYAN}8) ${GREEN}Восстановить настройки ${NC}Zapret${GREEN} из резервной копии${NC}"; fi
 if [ -f /etc/init.d/zapret ] && [ -f "$CONF" ]; then if grep -Eq "^[[:space:]]*option DISABLE_IPV6 '0'" "$CONF"; then echo -e "${CYAN}9) ${GREEN}Выключить ${NC}IPv6${GREEN} в ${NC}Zapret"; elif grep -Eq "^[[:space:]]*option DISABLE_IPV6 '1'" "$CONF"; then
