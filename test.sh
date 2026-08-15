@@ -1077,7 +1077,221 @@ echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню\n"; echo -n
 echo -e "\n${MAGENTA}Обновляем MagiTrickle\n${CYAN}Скачиваем\n${NC}$URL_MT"; curl -Lf --connect-timeout 6 --retry 3 --retry-delay 1 -o "$FILE_MT" "$URL_MT" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка скачивания${NC}\n"; PAUSE; return 1; };  update_packages || return 1
 echo -e "${CYAN}Обновляем ${NC}MagiTrickle"; $INSTALL "$FILE_MT" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка установки${NC} $(basename "$URL_MT")\n"; rm -f "$FILE_MT"; PAUSE; return 1; }; /etc/init.d/magitrickle enable >/dev/null 2>&1; /etc/init.d/magitrickle restart >/dev/null 2>&1; echo -e "MagiTrickle ${GREEN}обновлён!${NC}\n"; rm -f "$FILE_MT"; PAUSE ;; *) return ;; esac; done; }
 # ==========================================
-# Главное меню
+
+setup_warp_awg() {
+	# ---- базовые параметры ----
+	local WARP_IFACE="warp0"
+	local BASE_URL="https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/"
+	local OWRTAWG ARCHAWG TMP_SPL="/tmp/splify" tmpDIR="/tmp/AWG_install"
+	OWRTAWG=$(grep '^DISTRIB_RELEASE=' /etc/openwrt_release | cut -d"'" -f2)
+	ARCHAWG="$(grep DISTRIB_ARCH /etc/openwrt_release | cut -d"'" -f2)_$(grep DISTRIB_TARGET /etc/openwrt_release | cut -d"'" -f2 | tr '/' '_')"
+
+	local AWG_JC=4 AWG_JMIN=40 AWG_JMAX=70 AWG_H1=1 AWG_H2=2 AWG_H3=3 AWG_H4=4 AWG_S1=0 AWG_S2=0
+	local AWG_I1="<b 0xce000000010897a297ecc34cd6dd000044d0ec2e2e1ea2991f467ace4222129b5a098823784694b4897b9986ae0b7280135fa85e196d9ad980b150122129ce2a9379531b0fd3e871ca5fdb883c369832f730e272d7b8b74f393f9f0fa43f11e510ecb2219a52984410c204cf875585340c62238e14ad04dff382f2c200e0ee22fe743b9c6b8b043121c5710ec289f471c91ee414fca8b8be8419ae8ce7ffc53837f6ade262891895f3f4cecd31bc93ac5599e18e4f01b472362b8056c3172b513051f8322d1062997ef4a383b01706598d08d48c221d30e74c7ce000cdad36b706b1bf9b0607c32ec4b3203a4ee21ab64df336212b9758280803fcab14933b0e7ee1e04a7becce3e2633f4852585c567894a5f9efe9706a151b615856647e8b7dba69ab357b3982f554549bef9256111b2d67afde0b496f16962d4957ff654232aa9e845b61463908309cfd9de0a6abf5f425f577d7e5f6440652aa8da5f73588e82e9470f3b21b27b28c649506ae1a7f5f15b876f56abc4615f49911549b9bb39dd804fde182bd2dcec0c33bad9b138ca07d4a4a1650a2c2686acea05727e2a78962a840ae428f55627516e73c83dd8893b02358e81b524b4d99fda6df52b3a8d7a5291326e7ac9d773c5b43b8444554ef5aea104a738ed650aa979674bbed38da58ac29d87c29d387d80b526065baeb073ce65f075ccb56e47533aef357dceaa8293a523c5f6f790be90e4731123d3c6152a70576e90b4ab5bc5ead01576c68ab633ff7d36dcde2a0b2c68897e1acfc4d6483aaaeb635dd63c96b2b6a7a2bfe042f6aed82e5363aa850aace12ee3b1a93f30d8ab9537df483152a5527faca21efc9981b304f11fc95336f5b9637b174c5a0659e2b22e159a9fed4b8e93047371175b1d6d9cc8ab745f3b2281537d1c75fb9451871864efa5d184c38c185fd203de206751b92620f7c369e031d2041e152040920ac2c5ab5340bfc9d0561176abf10a147287ea90758575ac6a9f5ac9f390d0d5b23ee12af583383d994e22c0cf42383834bcd3ada1b3825a0664d8f3fb678261d57601ddf94a8a68a7c273a18c08aa99c7ad8c6c42eab67718843597ec9930457359dfdfbce024afc2dcf9348579a57d8d3490b2fa99f278f1c37d87dad9b221acd575192ffae1784f8e60ec7cee4068b6b988f0433d96d6a1b1865f4e155e9fe020279f434f3bf1bd117b717b92f6cd1cc9bea7d45978bcc3f24bda631a36910110a6ec06da35f8966c9279d130347594f13e9e07514fa370754d1424c0a1545c5070ef9fb2acd14233e8a50bfc5978b5bdf8bc1714731f798d21e2004117c61f2989dd44f0cf027b27d4019e81ed4b5c31db347c4a3a4d85048d7093cf16753d7b0d15e078f5c7a5205dc2f87e330a1f716738dce1c6180e9d02869b5546f1c4d2748f8c90d9693cba4e0079297d22fd61402dea32ff0eb69ebd65a5d0b687d87e3a8b2c42b648aa723c7c7daf37abcc4bb85caea2ee8f55bec20e913b3324ab8f5c3304f820d42ad1b9f2ffc1a3af9927136b4419e1e579ab4c2ae3c776d293d397d575df181e6cae0a4ada5d67ecea171cca3288d57c7bbdaee3befe745fb7d634f70386d873b90c4d6c6596bb65af68f9e5121e67ebf0d89d3c909ceedfb32ce9575a7758ff080724e1ab5d5f43074ecb53a479af21ed03d7b6899c36631c0166f9d47e5e1d4528a5d3d3f744029c4b1c190cbfbad06f5f83f7ad0429fa9a2719c56ffe3783460e166de2d8>"
+
+	# декодер hex-URL (как в оригинале)
+	local D() { printf '%b' "$(printf '%s' "$1" | sed 's/../\\x&/g')"; }
+	local X1="68747470733a2f2f7767636c692e76657263656c2e617070"
+	local X2="68747470733a2f2f73616e74612d61746d6f2e72752f776172702f776172702e706870"
+	local W1 II
+	W1="$(D "$X1")"; II="$(D "$X2")"
+
+	local WARP_EP="engage.cloudflareclient.com:4500"
+
+	# ================== 1. Установка AmneziaWG ==================
+	echo -e "\n${MAGENTA}Устанавливаем AmneziaWG${NC}"
+	rm -rf "$tmpDIR"; mkdir -p "$tmpDIR"
+	update_packages || return 1
+
+	local AWG_kmod="${BASE_URL}v$OWRTAWG/kmod-amneziawg_v${OWRTAWG}_$ARCHAWG.$RAZ"
+	local AWG_tools="${BASE_URL}v$OWRTAWG/amneziawg-tools_v${OWRTAWG}_$ARCHAWG.$RAZ"
+	local AWG_luci="${BASE_URL}v$OWRTAWG/luci-proto-amneziawg_v${OWRTAWG}_$ARCHAWG.$RAZ"
+	local AWG_ru="${BASE_URL}v$OWRTAWG/luci-i18n-amneziawg-ru_v${OWRTAWG}_$ARCHAWG.$RAZ"
+	cd "$tmpDIR" || return 1
+
+	echo -e "${CYAN}Скачиваем ${NC}AWG"
+	wget -q -U "Mozilla/5.0" -O AWG_kmod.$RAZ  "$AWG_kmod"  >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось скачать:\n${NC}$AWG_kmod\n";  PAUSE; return 1; }
+	wget -q -U "Mozilla/5.0" -O AWG_tools.$RAZ "$AWG_tools" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось скачать:\n${NC}$AWG_tools\n"; PAUSE; return 1; }
+	wget -q -U "Mozilla/5.0" -O AWG_luci.$RAZ  "$AWG_luci"  >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось скачать:\n${NC}$AWG_luci\n";  PAUSE; return 1; }
+	wget -q -U "Mozilla/5.0" -O AWG_ru.$RAZ    "$AWG_ru"    >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось скачать:\n${NC}$AWG_ru\n";    PAUSE; return 1; }
+
+	echo -e "${CYAN}Устанавливаем ${NC}AWG"
+	$INSTALL ./AWG_kmod.$RAZ  >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить:\n${NC}$AWG_kmod\n";  PAUSE; return 1; }
+	$INSTALL ./AWG_tools.$RAZ >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить:\n${NC}$AWG_tools\n"; PAUSE; return 1; }
+	$INSTALL ./AWG_luci.$RAZ  >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить:\n${NC}$AWG_luci\n";  PAUSE; return 1; }
+	$INSTALL ./AWG_ru.$RAZ    >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить:\n${NC}$AWG_ru\n";    PAUSE; return 1; }
+	rm -rf "$tmpDIR"
+	echo -e "AmneziaWG ${GREEN}установлен!${NC}"
+
+	# ================== 2. Генерация WARP ==================
+	echo -e "\n${MAGENTA}Генерируем WARP${NC}"
+	local PRIV PUB TOS REG WARP_PEER WARP_V4 WARP_V6
+
+	[ -d "$TMP_SPL" ] || mkdir -p "$TMP_SPL"
+	REG="$TMP_SPL/reg.json"; rm -f "$REG"
+
+	echo -e "${CYAN}Используем основной метод${NC}"
+	if curl -fsSL --max-time 30 "$II" -o "$REG" 2>/dev/null && grep -q '"public_key"' "$REG"; then
+		PRIV=$(grep -o '"key"[[:space:]]*:[[:space:]]*"[^"]*"' "$REG" | head -n1 | sed 's/.*:[[:space:]]*"//;s/"$//')
+		WARP_PEER=$(grep -o '"public_key"[[:space:]]*:[[:space:]]*"[^"]*"' "$REG" | head -n1 | sed 's/.*:[[:space:]]*"//;s/"$//')
+		WARP_V4=$(grep -o '"v4"[[:space:]]*:[[:space:]]*"[^"]*"' "$REG" | sed -n '2p' | sed 's/.*:[[:space:]]*"//;s/"$//')
+		WARP_V6=$(grep -o '"v6"[[:space:]]*:[[:space:]]*"[^"]*"' "$REG" | sed -n '2p' | sed 's/.*:[[:space:]]*"//;s/"$//')
+	fi
+
+	if [ -z "$PRIV" ] || [ -z "$WARP_PEER" ] || [ -z "$WARP_V4" ]; then
+		echo -e "${YELLOW}Основной метод недоступен, переключаемся на запасной${NC}"
+
+		# зависимости
+		local NEED=""
+		command -v jq >/dev/null 2>&1 || NEED="$NEED jq"
+		command -v wg >/dev/null 2>&1 || NEED="$NEED wireguard-tools"
+		if [ -n "$NEED" ]; then
+			echo -e "${CYAN}Ставим зависимости${NC}"
+			update_packages || return 1
+			$INSTALL $NEED >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при установке зависимостей!${NC}\n"; PAUSE; return 1; }
+		fi
+
+		local GEN
+		if command -v awg >/dev/null 2>&1; then GEN=awg; else GEN=wg; fi
+		PRIV="$("$GEN" genkey 2>/dev/null)"
+		PUB="$(printf '%s\n' "$PRIV" | "$GEN" pubkey 2>/dev/null)"
+		TOS="$(date -u +%Y-%m-%dT%H:%M:%S.000000000Z)"
+
+		echo -e "${CYAN}Регистрируем устройство${NC}"
+		curl -fsSL --max-time 30 -X POST "${W1%/}/api/reg" \
+			-H "Content-Type: application/json" -H "Accept: application/json" \
+			-d "{\"key\":\"$PUB\",\"install_id\":\"\",\"fcm_token\":\"\",\"model\":\"PC\",\"locale\":\"en_US\",\"tos\":\"$TOS\",\"type\":\"Android\"}" \
+			-o "$REG" >/dev/null 2>&1
+
+		if jq -e '.config.peers[0].public_key' "$REG" >/dev/null 2>&1; then
+			echo -e "${CYAN}Используем основной сервер${NC}"
+		else
+			echo -e "${CYAN}Используем резервный сервер${NC}"
+			if ! curl -fsSL --max-time 60 "$II" -o "$REG" >/dev/null 2>&1; then
+				echo -e "${RED}Не удалось получить WARP${NC}"; PAUSE; return 1
+			fi
+			if ! jq -e '.result.config.peers[0].public_key' "$REG" >/dev/null 2>&1; then
+				echo -e "${RED}Резервный источник вернул неверный формат${NC}"; PAUSE; return 1
+			fi
+			PRIV="$(jq -r '.result.key' "$REG")"
+			WARP_PEER="$(jq -r '.result.config.peers[0].public_key' "$REG")"
+			WARP_V4="$(jq -r '.result.config.interface.addresses.v4' "$REG")"
+			WARP_V6="$(jq -r '.result.config.interface.addresses.v6 // empty' "$REG")"
+		fi
+
+		if [ -z "$WARP_PEER" ]; then
+			WARP_PEER="$(jq -r '.config.peers[0].public_key' "$REG")"
+			WARP_V4="$(jq -r '.config.interface.addresses.v4' "$REG")"
+			WARP_V6="$(jq -r '.config.interface.addresses.v6 // empty' "$REG")"
+		fi
+
+		[ -n "$WARP_PEER" ] && [ "$WARP_PEER" != "null" ] || { echo -e "${RED}Нет peer public_key${NC}"; PAUSE; return 1; }
+		[ -n "$WARP_V4" ] && [ "$WARP_V4" != "null" ] || { echo -e "${RED}Нет IPv4${NC}"; PAUSE; return 1; }
+	fi
+	echo -e "WARP ${GREEN}сгенерирован!${NC}"
+
+	# ================== 3. Создание интерфейса warp0 ==================
+	echo -e "\n${MAGENTA}Создаём интерфейс $WARP_IFACE${NC}"
+	if [ -n "$(uci -q get "network.$WARP_IFACE")" ]; then
+		echo -e "${CYAN}Перенастраиваем интерфейс ${NC}$WARP_IFACE"
+		ifdown "$WARP_IFACE" >/dev/null 2>&1
+	fi
+
+	uci -q set "network.$WARP_IFACE=interface"
+	uci set "network.$WARP_IFACE.proto=amneziawg"
+	uci set "network.$WARP_IFACE.private_key=$PRIV"
+	uci -q delete "network.$WARP_IFACE.addresses"
+	uci add_list "network.$WARP_IFACE.addresses=$WARP_V4"
+	[ -n "$WARP_V6" ] && uci add_list "network.$WARP_IFACE.addresses=$WARP_V6"
+	uci -q delete "network.$WARP_IFACE.dns"
+	uci add_list "network.$WARP_IFACE.dns=8.8.8.8"
+	uci set "network.$WARP_IFACE.mtu=1280"
+	uci set "network.$WARP_IFACE.route_allowed_ips=0"
+	uci set "network.$WARP_IFACE.awg_jc=$AWG_JC"
+	uci set "network.$WARP_IFACE.awg_jmin=$AWG_JMIN"
+	uci set "network.$WARP_IFACE.awg_jmax=$AWG_JMAX"
+	uci set "network.$WARP_IFACE.awg_h1=$AWG_H1"
+	uci set "network.$WARP_IFACE.awg_h2=$AWG_H2"
+	uci set "network.$WARP_IFACE.awg_h3=$AWG_H3"
+	uci set "network.$WARP_IFACE.awg_h4=$AWG_H4"
+	uci set "network.$WARP_IFACE.awg_s1=$AWG_S1"
+	uci set "network.$WARP_IFACE.awg_s2=$AWG_S2"
+	uci set "network.$WARP_IFACE.awg_i1=$AWG_I1"
+
+	local _pt="amneziawg_$WARP_IFACE"
+	while [ -n "$(uci -q get "network.@${_pt}[0]")" ]; do uci -q delete "network.@${_pt}[0]"; done
+	uci add network "$_pt" >/dev/null
+	uci set "network.@${_pt}[-1].public_key=$WARP_PEER"
+	uci -q delete "network.@${_pt}[-1].allowed_ips"
+	uci add_list "network.@${_pt}[-1].allowed_ips=0.0.0.0/0"
+	uci add_list "network.@${_pt}[-1].allowed_ips=::/0"
+	uci set "network.@${_pt}[-1].endpoint_host=${WARP_EP%:*}"
+	uci set "network.@${_pt}[-1].endpoint_port=${WARP_EP##*:}"
+	uci set "network.@${_pt}[-1].persistent_keepalive=25"
+
+	echo -e "${CYAN}Перезапускаем сеть${NC}"
+	uci commit network >/dev/null 2>&1
+	/etc/init.d/rpcd restart >/dev/null 2>&1
+	/etc/init.d/uhttpd restart >/dev/null 2>&1
+	rm -rf /tmp/luci-* >/dev/null 2>&1
+	ip link del "$WARP_IFACE" >/dev/null 2>&1
+	killall netifd >/dev/null 2>&1
+	sleep 3
+	ifup "$WARP_IFACE" >/dev/null 2>&1
+	sleep 3
+	echo -e "Интерфейс $WARP_IFACE ${GREEN}создан и настроен!${NC}"
+
+	# ================== 4. Сохранение WARP.conf в /root ==================
+	printf '%s\n' \
+		"[Interface]" \
+		"PrivateKey = $PRIV" \
+		"Address = $WARP_V4${WARP_V6:+, $WARP_V6}" \
+		"DNS = 8.8.8.8, 8.8.4.4, 2001:4860:4860::8888, 2001:4860:4860::8844" \
+		"MTU = 1280" \
+		"S1 = $AWG_S1" "S2 = $AWG_S2" "Jc = $AWG_JC" "Jmin = $AWG_JMIN" "Jmax = $AWG_JMAX" \
+		"H1 = $AWG_H1" "H2 = $AWG_H2" "H3 = $AWG_H3" "H4 = $AWG_H4" "I1 = $AWG_I1" "" \
+		"[Peer]" \
+		"PublicKey = $WARP_PEER" \
+		"AllowedIPs = 0.0.0.0/0, ::/0" \
+		"Endpoint = $WARP_EP" \
+		"PersistentKeepalive = 25" > /root/WARP.conf
+	echo -e "${YELLOW}Файл ${NC}WARP${YELLOW} сохранён в ${NC}/root/WARP.conf"
+
+	# ================== 5. Настройка firewall для warp0 ==================
+	echo -e "\n${MAGENTA}Настраиваем firewall для $WARP_IFACE${NC}"
+	if ! uci show firewall | grep -q "\.name='$WARP_IFACE'"; then
+		uci add firewall zone >/dev/null
+		uci set firewall.@zone[-1].name="$WARP_IFACE"
+		uci set firewall.@zone[-1].input='REJECT'
+		uci set firewall.@zone[-1].output='ACCEPT'
+		uci set firewall.@zone[-1].forward='REJECT'
+		uci set firewall.@zone[-1].masq='1'
+		uci set firewall.@zone[-1].mtu_fix='1'
+		uci add_list firewall.@zone[-1].network="$WARP_IFACE"
+	fi
+	if ! uci show firewall | grep -q "\.src='lan'" ; then :; fi
+	# forwarding lan -> warp0 (создаём, если такой связки ещё нет)
+	local _has_fwd=0 _fi=0
+	while [ -n "$(uci -q get "firewall.@forwarding[$_fi]")" ]; do
+		if [ "$(uci -q get "firewall.@forwarding[$_fi].src")" = "lan" ] && [ "$(uci -q get "firewall.@forwarding[$_fi].dest")" = "$WARP_IFACE" ]; then
+			_has_fwd=1; break
+		fi
+		_fi=$((_fi + 1))
+	done
+	if [ "$_has_fwd" = "0" ]; then
+		uci add firewall forwarding >/dev/null
+		uci set firewall.@forwarding[-1].src='lan'
+		uci set firewall.@forwarding[-1].dest="$WARP_IFACE"
+	fi
+
+	uci commit firewall >/dev/null 2>&1
+	/etc/init.d/firewall restart >/dev/null 2>&1
+	echo -e "Firewall для $WARP_IFACE ${GREEN}настроен!${NC}"
+
+	echo -e "\nWARP ${GREEN}+ AmneziaWG полностью установлены и применены!${NC}\n"
+	PAUSE
+}
+
 # ==========================================
 show_menu() { get_versions; get_doh_status; show_current_strategy; RKN_Check; mkdir -p "$TMP_SF"; CURR=$(curr_MIR); clear; echo -e "╔═══════════════════════════════╗\n║  ${BLUE}Zapret Manager by StressOzz${NC}  ║\n╚═══════════════════════════════╝\n"
 if [ -f /etc/init.d/zapret ] && [ -f "$CONF" ] && grep -Eq "^[[:space:]]*option DISABLE_IPV6 '1'" "$CONF" && ping -6 -c 1 -W 2 google.com >/dev/null 2>&1; then echo -e "${RED}Обнаружен IPv6! ${GREEN}Включите ${NC}IPv6${GREEN} в системном меню!${NC}\n"; fi
@@ -1093,5 +1307,5 @@ INFO_ZPR; echo -e "\n${CYAN}1) ${GREEN}$Z_ACTION_TEXT${NC} Zapret\n${CYAN}2) ${G
 echo -e "${CYAN}f) ${GREEN}Удалить ${NC}→${GREEN} установить ${NC}→${GREEN} настроить${NC} Zapret\n${CYAN}m) ${GREEN}Системное меню${NC}"; [ "$SHOW_S" = "1" ] && echo -e "${CYAN}s) ${GREEN}$S_ACTION${NC} $S_NAME"
 [ "$SHOW_S" = "2" ] && echo -e "${CYAN}s1) ${GREEN}$S1_ACTION${NC} Zapret\n${CYAN}s2) ${GREEN}$S2_ACTION${NC} Zapret2"; echo -ne "${CYAN}Enter) ${GREEN}Выход${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read choice
 case "$choice" in 999) echo; uninstall_zapret "1"; install_Zapret "1"; curl -fsSL https://raw.githubusercontent.com/StressOzz/Test/refs/heads/main/zapret -o "$CONF"; hosts_add "$ALL_BLOCKS"; rm -f "$EXCLUDE_FILE"; wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL"; ZAPRET_RESTART; PAUSE;;
-2) $Z2_ACTION_FUNC;; s|S|ы|Ы) toggle_zapret;; f|F|а|А) zapret_key;; s1|S1|ы1|Ы1) toggle_zapret1_only;; s2|S2|ы2|Ы2) toggle_zapret2_only;; 1) $Z_ACTION_FUNC;; 3) menu_str;; 4) SPL_MENU ;; 5) MIXOMO_MENU;; 6) PODKOP_menu ;; 7) menu_TG;; 8) DoH_menu;; 9) Discord_menu;; 0) menu_hosts;; m|M|ь|Ь) sys_menu;; r|R|к|К) show_menu;; *) echo; exit 0;; esac; }
+123) setup_warp_awg;; 2) $Z2_ACTION_FUNC;; s|S|ы|Ы) toggle_zapret;; f|F|а|А) zapret_key;; s1|S1|ы1|Ы1) toggle_zapret1_only;; s2|S2|ы2|Ы2) toggle_zapret2_only;; 1) $Z_ACTION_FUNC;; 3) menu_str;; 4) SPL_MENU ;; 5) MIXOMO_MENU;; 6) PODKOP_menu ;; 7) menu_TG;; 8) DoH_menu;; 9) Discord_menu;; 0) menu_hosts;; m|M|ь|Ь) sys_menu;; r|R|к|К) show_menu;; *) echo; exit 0;; esac; }
 case "$1" in --auto-best) auto_apply_best_strategy; exit 0 ;; esac; while true; do show_menu; done
