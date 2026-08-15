@@ -680,21 +680,11 @@ uci commit firewall >/dev/null 2>&1; /etc/init.d/firewall restart >/dev/null 2>&
 is_expert_mode() { [ -f "$EXPERT_MODE_FILE" ]; }; toggle_expert_mode() { if is_expert_mode; then rm -f "$EXPERT_MODE_FILE"; echo -e "\nExpert mode ${GREEN}выключен!${NC}\n"; else echo 1 > "$EXPERT_MODE_FILE"; echo -e "\nExpert mode ${GREEN}включён!${NC}\n"; fi; PAUSE; }
 sys_menu() { while true; do web_is_enabled && WEB_TEXT="Удалить доступ к скрипту из браузера" || WEB_TEXT="Активировать доступ к скрипту из браузера"; is_expert_mode && EXPERT_TEXT="${GREEN}Выключить${NC} expert mode" || EXPERT_TEXT="${GREEN}Включить${NC} expert mode"
 quic_is_blocked && QUIC_TEXT="${GREEN}Отключить блокировку${NC} QUIC ${GREEN}${NC}" || QUIC_TEXT="${GREEN}Включить блокировку${NC} QUIC ${GREEN}${NC}"
-CURR=$(curr_MIR); clear; OTSTUP=0; echo -e "${MAGENTA}Системное меню${NC}\n"
-
-if [ -f "$DATE_FILE" ] && [ -f "$BACKUP_DIR/zapret.tar.gz" ] && [ -f "$BACKUP_DIR/zapret" ]; then CREATE_DATE=$(cat "$DATE_FILE"); echo -e "${YELLOW}Резервная копия:${NC} $CREATE_DATE" && OTSTUP=1; fi
-
-is_expert_mode && echo -e "${YELLOW}Expert mode: ${GREEN}включён${NC}" && OTSTUP=1
-
-if [ "$CURR" != "default / OpenWrt" ]; then echo -e "${YELLOW}Используется зеркало: ${NC}$CURR" && OTSTUP=1; fi
-if web_is_enabled; then echo -e "${YELLOW}Доступ из браузера:${NC} $LAN_IP:7681" && OTSTUP=1; fi
-if grep -q 'ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc; then echo -e "${YELLOW}FIX для Flow Offloading:${NC} ${GREEN}включён${NC}" && OTSTUP=1; fi
-if quic_is_blocked; then echo -e "${YELLOW}Блокировка QUIC: ${GREEN}включена${NC}" && OTSTUP=1; fi
-if [ -f /etc/init.d/zapret ] && [ -f "$CONF" ] && grep -Eq "^[[:space:]]*option DISABLE_IPV6 '0'" "$CONF"; then echo -e "${YELLOW}IPv6 в Zapret: ${GREEN}включён${NC}" && OTSTUP=1; fi
-
-[ "$OTSTUP" -eq 1 ] && echo
-
-echo -e "${CYAN}1) ${GREEN}Системная информация${NC}\n${CYAN}2) ${GREEN}$WEB_TEXT${NC}\n${CYAN}3) ${GREEN}$QUIC_TEXT${NC}\n${CYAN}4) ${GREEN}Меню выбора зеркала ${NC}OpenWrt\n${CYAN}5) ${GREEN}Запустить${NC} blockcheck\n${CYAN}6) ${GREEN}Удалить ${NC}Zapret ${GREEN}& ${NC}Zapret2"
+CURR=$(curr_MIR); clear; OTSTUP=0; echo -e "${MAGENTA}Системное меню${NC}\n"; if [ -f "$DATE_FILE" ] && [ -f "$BACKUP_DIR/zapret.tar.gz" ] && [ -f "$BACKUP_DIR/zapret" ]; then CREATE_DATE=$(cat "$DATE_FILE"); echo -e "${YELLOW}Резервная копия:${NC} $CREATE_DATE" && OTSTUP=1; fi
+is_expert_mode && echo -e "${YELLOW}Expert mode: ${GREEN}включён${NC}" && OTSTUP=1; if [ "$CURR" != "default / OpenWrt" ]; then echo -e "${YELLOW}Используется зеркало: ${NC}$CURR" && OTSTUP=1; fi
+if web_is_enabled; then echo -e "${YELLOW}Доступ из браузера:${NC} $LAN_IP:7681" && OTSTUP=1; fi; if grep -q 'ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc; then echo -e "${YELLOW}FIX для Flow Offloading:${NC} ${GREEN}включён${NC}" && OTSTUP=1; fi
+if quic_is_blocked; then echo -e "${YELLOW}Блокировка QUIC: ${GREEN}включена${NC}" && OTSTUP=1; fi; if [ -f /etc/init.d/zapret ] && [ -f "$CONF" ] && grep -Eq "^[[:space:]]*option DISABLE_IPV6 '0'" "$CONF"; then echo -e "${YELLOW}IPv6 в Zapret: ${GREEN}включён${NC}" && OTSTUP=1; fi
+[ "$OTSTUP" -eq 1 ] && echo; echo -e "${CYAN}1) ${GREEN}Системная информация${NC}\n${CYAN}2) ${GREEN}$WEB_TEXT${NC}\n${CYAN}3) ${GREEN}$QUIC_TEXT${NC}\n${CYAN}4) ${GREEN}Меню выбора зеркала ${NC}OpenWrt\n${CYAN}5) ${GREEN}Запустить${NC} blockcheck\n${CYAN}6) ${GREEN}Удалить ${NC}Zapret ${GREEN}& ${NC}Zapret2"
 if [ -f "$DATE_FILE" ] && [ -f "$BACKUP_DIR/zapret.tar.gz" ] && [ -f "$BACKUP_DIR/zapret" ]; then CREATE_DATE=$(cat "$DATE_FILE"); echo -e "${CYAN}7) ${GREEN}Удалить резервную копию настроек${NC} Zapret"; else echo -e "${CYAN}7) ${GREEN}Сделать резервную копию настроек${NC} Zapret"; fi
 if [ -f "$DATE_FILE" ] && [ -f "$BACKUP_DIR/zapret.tar.gz" ] && [ -f "$BACKUP_DIR/zapret" ]; then echo -e "${CYAN}8) ${GREEN}Восстановить настройки ${NC}Zapret${GREEN} из резервной копии${NC}"; fi
 if [ -f /etc/init.d/zapret ] && [ -f "$CONF" ]; then if grep -Eq "^[[:space:]]*option DISABLE_IPV6 '0'" "$CONF"; then echo -e "${CYAN}9) ${GREEN}Выключить ${NC}IPv6${GREEN} в ${NC}Zapret"; elif grep -Eq "^[[:space:]]*option DISABLE_IPV6 '1'" "$CONF"; then
