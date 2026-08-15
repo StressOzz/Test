@@ -690,7 +690,11 @@ CURR=$(curr_MIR); clear; echo -e "${MAGENTA}Системное меню${NC}\n";
 
 is_expert_mode && echo -e "${YELLOW}Expert mode: ${GREEN}включён${NC}"
 
-echo -e "${YELLOW}Резервная копия:${NC} $CREATE_DATE"; else echo -e "${YELLOW}Резервная копия: ${RED}отсутствует${NC}"; fi; if [ "$CURR" != "default / OpenWrt" ]; then echo -e "${YELLOW}Используется зеркало: ${NC}$CURR"; fi
+echo -e "${YELLOW}Резервная копия:${NC} $CREATE_DATE"; else echo -e "${YELLOW}Резервная копия: ${RED}отсутствует${NC}"; fi
+
+is_expert_mode && echo -e "${YELLOW}Expert mode:${NC}         ${GREEN}включён${NC}"
+
+if [ "$CURR" != "default / OpenWrt" ]; then echo -e "${YELLOW}Используется зеркало: ${NC}$CURR"; fi
 if web_is_enabled; then echo -e "${YELLOW}Доступ из браузера:${NC} $LAN_IP:7681"; fi; if grep -q 'ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc; then echo -e "${YELLOW}FIX для Flow Offloading:${NC} ${GREEN}включён${NC}"; fi
 if quic_is_blocked; then echo -e "${YELLOW}Блокировка QUIC: ${GREEN}включена${NC}"; fi; if [ -f /etc/init.d/zapret ] && [ -f "$CONF" ] && grep -Eq "^[[:space:]]*option DISABLE_IPV6 '0'" "$CONF"; then echo -e "${YELLOW}IPv6 в Zapret: ${GREEN}включён${NC}"; fi
 echo -e "\n${CYAN}1) ${GREEN}Системная информация${NC}\n${CYAN}2) ${GREEN}$WEB_TEXT${NC}\n${CYAN}3) ${GREEN}$QUIC_TEXT${NC}\n${CYAN}4) ${GREEN}Меню выбора зеркала ${NC}OpenWrt\n${CYAN}5) ${GREEN}Запустить${NC} blockcheck\n${CYAN}6) ${GREEN}Удалить ${NC}Zapret ${GREEN}& ${NC}Zapret2"
