@@ -336,7 +336,8 @@ echo -e "${CYAN}Удаляем данные ${NC}splify"; rm -rf /etc/splify* /e
 # Получение версии
 # ==========================================
 get_versions() { if [ "$PKG_IS_APK" -eq 1 ]; then INSTALLED_VER=$(apk info -v 2>/dev/null | grep '^zapret-' | head -n1 | cut -d'-' -f2 | sed 's/-r[0-9]\+$//'); else INSTALLED_VER=$(opkg list-installed zapret 2>/dev/null | awk '{sub(/-r[0-9]+$/, "", $3); print $3}'); fi
-INSTALLED_VER2="$(zapret2_local_version)"; command -v netshift >/dev/null 2>&1 && INST_VER_POD=$(netshift show_version 2>/dev/null) && VER_POD=$(netshift show_version 2>/dev/null); NFQ_RUN=$(pgrep -f nfqws 2>/dev/null | wc -l); NFQ_RUN=${NFQ_RUN:-0}; NFQ_ALL=$(/etc/init.d/zapret info 2>/dev/null | grep -o 'instance[0-9]\+' | wc -l)
+INSTALLED_VER2="$(zapret2_local_version)"; command -v netshift >/dev/null 2>&1 && INST_VER_POD=$(netshift show_version 2>/dev/null) && VER_POD=$(netshift show_version 2>/dev/null)
+NFQ_RUN=$(pgrep -f "/opt/zapret/.*nfqws" 2>/dev/null | wc -l); NFQ_RUN=${NFQ_RUN:-0}; NFQ_ALL=$(/etc/init.d/zapret info 2>/dev/null | grep -o 'instance[0-9]\+' | wc -l)
 NFQ_ALL=${NFQ_ALL:-0}; NFQ_STAT=""; if [ "$NFQ_ALL" -gt 0 ]; then [ "$NFQ_RUN" -eq "$NFQ_ALL" ] && NFQ_CLR="$GREEN" || NFQ_CLR="$RED"; NFQ_STAT="${NFQ_CLR}[${NFQ_RUN}/${NFQ_ALL}]${NC}"; fi; }
 # ==========================================
 # Установка Zapret
