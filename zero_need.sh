@@ -1,4 +1,14 @@
 #!/bin/sh
+clear
+
+echo -e "\n${CYAN}╭──────────────────────────────────────────────────────╮${NC}"
+
+echo -e "${CYAN}│${NC}                  ${GREEN}ZeroBlock${NC}                          ${CYAN}│${NC}"
+echo -e "${CYAN}│${NC}              ${YELLOW}Dependencies Installer${NC}              ${CYAN}│${NC}"
+echo -e "${CYAN}│${NC}                                                      ${CYAN}│${NC}"
+echo -e "${CYAN}╰──────────────────────────────────────────────────────╯${NC}\n"
+
+
 
 # ==========================================
 # ZeroBlock — зависимости
