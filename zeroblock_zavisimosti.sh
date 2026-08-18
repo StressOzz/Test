@@ -13,7 +13,7 @@ NC='\033[0m'
 
 clear
 echo -e "     ${GREEN}ZeroBlock${NC}"
-echo -e "${YELLOW}Dependencies Installer${NC}"
+echo -e "${YELLOW}Dependencies Installer${NC}\n"
 
 BASE_URL="https://downloads.openwrt.org/snapshots/packages/aarch64_cortex-a53"
 TMP_DIR="/tmp/zb-libs"
