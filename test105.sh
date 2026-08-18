@@ -670,7 +670,7 @@ PAUSE ;;
             3) run_awg_action; PAUSE ;;
             4) PODPISKA ;;
 			5) 
-echo -e "\n${YELLOW}!!! ВНИМАНИЕ !!!${NC}"
+echo -e "\n${YELLOW}ВНИМАНИЕ !!!${NC}"
 echo -e "${CYAN}Будут установлены дополнительные библиотеки из OpenWrt Snapshot:${NC}"
 echo
 echo -e "  ${YELLOW}•${NC} libubox20260721"
@@ -678,9 +678,9 @@ echo -e "  ${YELLOW}•${NC} libblobmsg-json20260721"
 echo -e "  ${YELLOW}•${NC} libubus20260628"
 echo -e "  ${YELLOW}•${NC} libyaml-0.2.5"
 echo
-echo -e "${YELLOW}Эти пакеты необходимы для работы ZeroBlock.${NC}"
+echo -e "${CYAN}Эти пакеты необходимы для работы ZeroBlock.${NC}"
 echo
-echo -ne "${CYAN}Продолжить установку? [Y/n]: ${NC}"
+echo -ne "${YELLOW}Продолжить установку? (${NC}Y/n${YELLOW}): ${NC}"
 read -r CONFIRM
 
 case "$CONFIRM" in
