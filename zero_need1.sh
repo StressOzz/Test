@@ -1,18 +1,19 @@
 #!/bin/sh
-clear
-
-echo -e "\n${CYAN}╭──────────────────────────────────────────────────────╮${NC}"
-
-echo -e "${CYAN}│${NC}                  ${GREEN}ZeroBlock${NC}                          ${CYAN}│${NC}"
-echo -e "${CYAN}│${NC}              ${YELLOW}Dependencies Installer${NC}              ${CYAN}│${NC}"
-echo -e "${CYAN}│${NC}                                                      ${CYAN}│${NC}"
-echo -e "${CYAN}╰──────────────────────────────────────────────────────╯${NC}\n"
-
-
 
 # ==========================================
 # ZeroBlock — зависимости
 # ==========================================
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+MAGENTA='\033[0;35m'
+NC='\033[0m'
+
+clear
+echo -e "     ${GREEN}ZeroBlock${NC}"
+echo -e "${YELLOW}Dependencies Installer${NC}"
 
 BASE_URL="https://downloads.openwrt.org/snapshots/packages/aarch64_cortex-a53"
 TMP_DIR="/tmp/zb-libs"
@@ -26,7 +27,7 @@ libyaml-0.2.5-r2.apk|packages
 
 # Проверка apk
 if ! command -v apk >/dev/null 2>&1; then
-    echo "Ошибка: apk не найден"
+    echo -e "${RED}Ошибка: apk не найден${NC}"
     exit 1
 fi
 
@@ -34,16 +35,16 @@ fi
 ARCH="$(awk -F= '/^DISTRIB_ARCH=/{gsub(/'\''/, "", $2); print $2}' /etc/openwrt_release)"
 
 if [ "$ARCH" != "aarch64_cortex-a53" ]; then
-    echo "Ошибка: неподдерживаемая архитектура: $ARCH"
+    echo -e "${RED}Ошибка: неподдерживаемая архитектура: ${YELLOW}$ARCH${NC}"
     exit 1
 fi
 
-echo "Архитектура: $ARCH"
+echo -e "${CYAN}Архитектура:${NC} ${GREEN}$ARCH${NC}"
 
 # Создаём временный каталог
 rm -rf "$TMP_DIR"
 mkdir -p "$TMP_DIR" || {
-    echo "Ошибка создания $TMP_DIR"
+    echo -e "${RED}Ошибка создания $TMP_DIR${NC}"
     exit 1
 }
 
@@ -53,23 +54,25 @@ for ITEM in $PACKAGES; do
     REPO="${ITEM#*|}"
     URL="$BASE_URL/$REPO/$FILE"
 
-    echo "Скачиваем: $FILE"
+    echo -e "${CYAN}Скачиваем:${NC} ${YELLOW}$FILE${NC}"
 
     wget -q "$URL" -O "$TMP_DIR/$FILE" || {
-        echo "Ошибка загрузки: $FILE"
+        echo -e "${RED}Ошибка загрузки:${NC} $FILE"
         rm -rf "$TMP_DIR"
         exit 1
     }
 
     [ -s "$TMP_DIR/$FILE" ] || {
-        echo "Ошибка: файл пустой: $FILE"
+        echo -e "${RED}Ошибка: файл пустой:${NC} $FILE"
         rm -rf "$TMP_DIR"
         exit 1
     }
+
+    echo -e "${GREEN}[ OK ]${NC} $FILE"
 done
 
 echo
-echo "Устанавливаем зависимости..."
+echo -e "${MAGENTA}Устанавливаем зависимости...${NC}"
 
 apk add --allow-untrusted \
     "$TMP_DIR/libubox20260721-2026.07.21~e7608b69-r1.apk" \
@@ -77,43 +80,43 @@ apk add --allow-untrusted \
     "$TMP_DIR/libubus20260628-2026.06.28~24864e78-r1.apk" \
     "$TMP_DIR/libyaml-0.2.5-r2.apk" || {
     echo
-    echo "Ошибка установки зависимостей"
+    echo -e "${RED}Ошибка установки зависимостей${NC}"
     rm -rf "$TMP_DIR"
     exit 1
 }
 
 echo
-echo "Проверяем установленные пакеты..."
+echo -e "${MAGENTA}Проверяем установленные пакеты...${NC}"
 
 if apk list --installed | grep -q '^libubox20260721-'; then
-    echo "[ OK ] libubox20260721"
+    echo -e "${GREEN}[ OK ]${NC} libubox20260721"
 else
-    echo "[FAIL] libubox20260721"
+    echo -e "${RED}[FAIL]${NC} libubox20260721"
     exit 1
 fi
 
 if apk list --installed | grep -q '^libblobmsg-json20260721-'; then
-    echo "[ OK ] libblobmsg-json20260721"
+    echo -e "${GREEN}[ OK ]${NC} libblobmsg-json20260721"
 else
-    echo "[FAIL] libblobmsg-json20260721"
+    echo -e "${RED}[FAIL]${NC} libblobmsg-json20260721"
     exit 1
 fi
 
 if apk list --installed | grep -q '^libubus20260628-'; then
-    echo "[ OK ] libubus20260628"
+    echo -e "${GREEN}[ OK ]${NC} libubus20260628"
 else
-    echo "[FAIL] libubus20260628"
+    echo -e "${RED}[FAIL]${NC} libubus20260628"
     exit 1
 fi
 
 if apk list --installed | grep -q '^libyaml-0.2.5-'; then
-    echo "[ OK ] libyaml-0.2.5"
+    echo -e "${GREEN}[ OK ]${NC} libyaml-0.2.5"
 else
-    echo "[FAIL] libyaml-0.2.5"
+    echo -e "${RED}[FAIL]${NC} libyaml-0.2.5"
     exit 1
 fi
 
 rm -rf "$TMP_DIR"
 
 echo
-echo "Все зависимости успешно установлены!"
+echo -e "${GREEN}Все зависимости успешно установлены!${NC}"
