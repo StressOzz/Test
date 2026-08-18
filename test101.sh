@@ -23,7 +23,7 @@ else
     PKG_REMOVE="apk del"
     PKG_TYPE="apk"
     ARCH_SUFFIX=""
-    ="apk "
+	UPDATE="apk update"
     CHECK_INSTALLED() { apk list --installed 2>/dev/null | grep -q "^$1"; }
 fi
 
