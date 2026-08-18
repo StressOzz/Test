@@ -671,14 +671,14 @@ PAUSE ;;
             4) PODPISKA ;;
 			5) 
 echo -e "\n${YELLOW}ВНИМАНИЕ !!!${NC}"
-echo -e "${CYAN}Будут установлены дополнительные библиотеки из OpenWrt Snapshot:${NC}"
+echo -e "${CYAN}Будут установлены дополнительные библиотеки из ${NC}OpenWrt Snapshot${CYAN}:${NC}"
 echo
 echo -e "  ${YELLOW}•${NC} libubox20260721"
 echo -e "  ${YELLOW}•${NC} libblobmsg-json20260721"
 echo -e "  ${YELLOW}•${NC} libubus20260628"
 echo -e "  ${YELLOW}•${NC} libyaml-0.2.5"
 echo
-echo -e "${CYAN}Эти пакеты необходимы для работы ZeroBlock.${NC}"
+echo -e "${CYAN}Эти пакеты необходимы для работы ${NC}ZeroBlock"
 echo
 echo -ne "${YELLOW}Продолжить установку? (${NC}Y/n${YELLOW}): ${NC}"
 read -r CONFIRM
