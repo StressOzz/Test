@@ -471,8 +471,8 @@ if /etc/init.d/zapret2 status >/dev/null 2>&1; then echo -e "Zapret2 ${GREEN}з�
 # Удаление Zapret
 # ==========================================
 uninstall_zapret() { local NO_PAUSE=$1; [ "$NO_PAUSE" != "1" ] && echo; echo -e "${MAGENTA}Удаляем Zapret${NC}\n${CYAN}Останавливаем ${NC}zapret"; /etc/init.d/zapret stop >/dev/null 2>&1; echo -e "${CYAN}Убиваем процессы${NC}"
-for pid in $(pgrep -f /opt/zapret 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done; echo -e "${CYAN}Удаляем пакеты${NC}"; $DELETE luci-app-zapret; $DELETE zapret; echo -e "${CYAN}Удаляем временные файлы${NC}"
-rm -rf /opt/zapret $CONF /etc/firewall.zapret /etc/init.d/zapret /tmp/*zapret* /var/run/*zapret* /tmp/*.ipk /tmp/*.zip 2>/dev/null; crontab -l 2>/dev/null | grep -v -i -E "zapret|/usr/bin/zmsA --auto-best" | crontab - 2>/dev/null; /etc/init.d/cron restart >/dev/null 2>&1
+for pid in $(pgrep -f /opt/zapret 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done; echo -e "${CYAN}Удаляем пакеты${NC}"; $DELETE luci-app-zapret >/dev/null 2>&1; $DELETE zapret >/dev/null 2>&1; echo -e "${CYAN}Удаляем временные файлы${NC}"
+rm -rf /opt/zapret $CONF /etc/firewall.zapret /etc/init.d/zapret /tmp/*.ipk /tmp/*.zip 2>/dev/null; crontab -l 2>/dev/null | grep -v -i -E "zapret|/usr/bin/zmsA --auto-best" | crontab - 2>/dev/null; /etc/init.d/cron restart >/dev/null 2>&1
 nft list tables 2>/dev/null | awk '{print $2}' | grep -E '(zapret|ZAPRET)' | while read t; do [ -n "$t" ] && nft delete table "$t" 2>/dev/null; done; rm -rf -- "$TMP_SF" tmp/zapret* ; echo -e "Zapret ${GREEN}удалён!${NC}\n"; [ "$NO_PAUSE" != "1" ] && PAUSE; }
 uninstall_zapret_all() { local NO_PAUSE=$1; [ "$NO_PAUSE" != "1" ] && echo; echo -e "${MAGENTA}Удаляем Zapret и Zapret2${NC}"
 echo -e "${CYAN}Останавливаем службы${NC}"; /etc/init.d/zapret stop >/dev/null 2>&1; /etc/init.d/zapret2 stop >/dev/null 2>&1; /etc/init.d/zapret disable >/dev/null 2>&1; /etc/init.d/zapret2 disable >/dev/null 2>&1
