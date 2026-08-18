@@ -671,7 +671,7 @@ PAUSE ;;
             4) PODPISKA ;;
 			5) 
 echo -e "\n${YELLOW}ВНИМАНИЕ !!!${NC}"
-echo -e "${CYAN}Будут установлены дополнительные библиотеки из ${NC}OpenWrt Snapshot${CYAN}:${NC}"
+echo -e "${CYAN}Будут установлены библиотеки из ${NC}OpenWrt Snapshot${CYAN}:${NC}"
 echo
 echo -e "  ${YELLOW}•${NC} libubox20260721"
 echo -e "  ${YELLOW}•${NC} libblobmsg-json20260721"
@@ -684,8 +684,8 @@ echo -ne "${YELLOW}Продолжить установку? (${NC}Y/n${YELLOW}):
 read -r CONFIRM
 
 case "$CONFIRM" in
-    n|N)
-        echo -e "${YELLOW}Установка отменена.${NC}"
+    n|N|т|Т)
+        echo -e "\n${RED}Установка отменена!${NC}"
 		PAUSE
 		continue
         ;;
