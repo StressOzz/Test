@@ -686,7 +686,7 @@ read -r CONFIRM
 case "$CONFIRM" in
     n|N)
         echo -e "${YELLOW}Установка отменена.${NC}"
-        break
+		PAUSE
         ;;
 esac
 			sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Z2R-Manager/main/ZeroBlock_zavisimosti.sh); PAUSE;;
