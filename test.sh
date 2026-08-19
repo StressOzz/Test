@@ -477,8 +477,8 @@ nft list tables 2>/dev/null | awk '{print $2}' | grep -E '(zapret|ZAPRET)' | whi
 uninstall_zapret_all() { local NO_PAUSE=$1; [ "$NO_PAUSE" != "1" ] && echo; echo -e "${MAGENTA}Удаляем Zapret и Zapret2${NC}"
 echo -e "${CYAN}Останавливаем службы${NC}"; /etc/init.d/zapret stop >/dev/null 2>&1; /etc/init.d/zapret2 stop >/dev/null 2>&1; /etc/init.d/zapret disable >/dev/null 2>&1; /etc/init.d/zapret2 disable >/dev/null 2>&1
 echo -e "${CYAN}Убиваем процессы${NC}"; for pid in $(pgrep -f /opt/zapret 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done; for pid in $(pgrep -f /opt/zapret2 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done; for pid in $(pgrep -f nfqws 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done
-echo -e "${CYAN}Удаляем пакеты${NC}"; $DELETE zapret >/dev/null 2>&1; $DELETE luci-app-zapret >/dev/null 2>&1; $DELETE luci-i18n-zapret-ru >/dev/null 2>&1; $DELETE zapret2 >/dev/null 2>&1; $DELETE luci-app-zapret2 >/dev/null 2>&1; $DELETE luci-i18n-zapret2-ru >/dev/null 2>&1
-echo -e "${CYAN}Удаляем папки и конфиги${NC}"; rm -rf /opt/zapret /opt/zapret2 2>/dev/null; rm -f /etc/config/zapret /etc/config/zapret2 2>/dev/null; rm -f /etc/firewall.zapret /etc/firewall.zapret2 2>/dev/null; rm -f /etc/init.d/zapret /etc/init.d/zapret2 2>/dev/null
+echo -e "${CYAN}Удаляем пакеты${NC}"; $DELETE zapret >/dev/null 2>&1; $DELETE luci-app-zapret >/dev/null 2>&1; $DELETE zapret2 >/dev/null 2>&1; $DELETE luci-app-zapret2 >/dev/null 2>&1
+echo -e "${CYAN}Удаляем папки и конфиги${NC}"; rm -rf /opt/zapret /opt/zapret2 2>/dev/null; rm -f /etc/config/zapret /etc/config/zapret2 2>/dev/null; rm -f /etc/firewall.zapret /etc/firewall.zapret2 2>/dev/null; rm -f /etc/init.d/zapret /etc/init.d/zapret2 2>/dev/null; rm -rf /tmp/*zapret*
 echo -e "${CYAN}Удаляем временные файлы, логи и резервные копии${NC}"; rm -rf /tmp/*zapret* /tmp/zapret_temp /tmp/routerich 2>/dev/null; rm -rf /var/run/*zapret* 2>/dev/null; rm -rf "$TMP_SF" 2>/dev/null; rm -f /tmp/*.ipk /tmp/*.apk /tmp/*.zip 2>/dev/null; rm -rf "$BACKUP_DIR" 2>/dev/null
 echo -e "${CYAN}Очищаем cron${NC}"; crontab -l 2>/dev/null | grep -v -i -E "zapret|/usr/bin/zmsA --auto-best" | crontab - 2>/dev/null; sed -i "\|$AUTO_CRON_CMD|d" "$CRON_FILE" 2>/dev/null; /etc/init.d/cron restart >/dev/null 2>&1
 echo -e "${CYAN}Удаляем nftables таблицы${NC}"; nft list tables 2>/dev/null | awk '{print $2}' | grep -Ei '^(zapret|zapret2)$' | while read -r t; do [ -n "$t" ] && nft delete table "$t" 2>/dev/null; done
@@ -594,10 +594,13 @@ INFO_ZPR_STR; echo -e "\n${CYAN}0) ${GREEN}Меню тестирования с�
 echo -e "${CYAN}5) ${NC}$RKN_TEXT_MENU${NC}\n${CYAN}6) ${GREEN}Обновить список исключений${NC}"; if grep -q -F -- "--wssize 1:6" "$CONF"; then WSSIZE_MENU_TEXT="${GREEN}Удалить из стратегии блок с ${NC}--wssize 1:6"; else WSSIZE_MENU_TEXT="${GREEN}Добавить в стратегию блок с ${NC}--wssize 1:6"; fi
 if grep -q -F -- "--methodeol" "$CONF"; then methodeol_MENU_TEXT="${GREEN}Удалить из стратегии блок с ${NC}--methodeol"; else methodeol_MENU_TEXT="${GREEN}Добавить в стратегию блок с ${NC}--methodeol"; fi
 echo -e "${CYAN}7) ${WSSIZE_MENU_TEXT}${NC}"; echo -e "${CYAN}8) ${methodeol_MENU_TEXT}${NC}"; if grep -q "^#udp443" $CONF; then echo -e "${CYAN}9) ${GREEN}Удалить из стратегии блок с ${NC}--filter-udp=443"; else echo -e "${CYAN}9) ${GREEN}Добавить в стратегию блок с ${NC}--filter-udp=443"; fi
+
+echo -e "${CYAN}c) ${GREEN}Собрать собственную стратегию${NC}"
+
 echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read choiceST; case "$choiceST" in 1) strategy_CHOUSE;; 2) flowseal_menu;; 3) choose_strategy_YOUTUBE;; 4) fix_GAME;;
 5) toggle_rkn_bypass; continue;; 6) echo -e "\n${MAGENTA}Обновляем список исключений${NC}\n${CYAN}Останавливаем ${NC}Zapret"; /etc/init.d/zapret stop >/dev/null 2>&1; echo -e "${CYAN}Добавляем домены в исключения${NC}"
 rm -f "$EXCLUDE_FILE"; wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL" || echo -e "\n${RED}Не удалось загрузить exclude файл${NC}\n"; echo -e "${CYAN}Перезапускаем ${NC}Zapret"; ZAPRET_RESTART; echo -e "${GREEN}Список исключений обновлён!${NC}\n"; PAUSE;;
-7) if grep -q -F -- "--wssize 1:6" "$CONF"; then remove_wssize; else add_wssize; fi; continue;; 8) if grep -q -F -- "--methodeol" "$CONF"; then remove_methodeol; else add_methodeol; fi; continue;; 0) TEST_menu;;
+c|C|с|С) build_custom_strategy;; 7) if grep -q -F -- "--wssize 1:6" "$CONF"; then remove_wssize; else add_wssize; fi; continue;; 8) if grep -q -F -- "--methodeol" "$CONF"; then remove_methodeol; else add_methodeol; fi; continue;; 0) TEST_menu;;
 9) if grep -q "^#udp443" $CONF; then echo -e "\n${MAGENTA}Удаляем блок с --filter-udp=443\n${CYAN}Удаляем блок из стратегии\nПерезапускаем ${NC}Zapret"; sed -i '/^#udp443$/,+6d' $CONF; ZAPRET_RESTART; echo -e "${GREEN}Блок с ${NC}--filter-udp=443${GREEN} удалён!${NC}\n"; PAUSE; else echo -e "\n${MAGENTA}Добавляем блок с --filter-udp=443\n${CYAN}Добавляем блок в стратегию\nПерезапускаем ${NC}Zapret"
 sed -i "/^[[:space:]]*option NFQWS_OPT '/a\\#udp443\\n--filter-udp=443\\n--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt\\n--dpi-desync=fake\\n--dpi-desync-repeats=11\\n--dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin\\n--new" $CONF
 ZAPRET_RESTART; echo -e "${GREEN}Блок с ${NC}--filter-udp=443${GREEN} добавлен!${NC}\n"; PAUSE; fi ;; *) return;; esac; done; }
@@ -657,7 +660,7 @@ doh_queryCF=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'h
 # Доступ из браузера
 # ==========================================
 web_is_enabled() { command -v ttyd >/dev/null 2>&1 && uci -q get ttyd.@ttyd[0].command | grep -q "/usr/bin/zms"; }
-toggle_web() { if web_is_enabled; then echo -e "\n${MAGENTA}Удаляем доступ из браузера${NC}"; $DELETE luci-app-ttyd ttyd >/dev/null 2>&1; rm -f /etc/config/ttyd
+toggle_web() { if web_is_enabled; then echo -e "\n${MAGENTA}Удаляем доступ из браузера${NC}"; $DELETE luci-app-ttyd >/dev/null 2>&1; $DELETE ttyd >/dev/null 2>&1; rm -f /etc/config/ttyd /etc/init.d/ttyd
 echo -e "${GREEN}Доступ удалён!${NC}\n"; PAUSE; else echo -e "\n${MAGENTA}Активируем доступ из браузера${NC}"; update_packages || return 1
 echo -e "${CYAN}Устанавливаем ${NC}ttyd"; $INSTALL ttyd >/dev/null 2>&1; $INSTALL luci-app-ttyd >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при установке ttyd!${NC}\n"; PAUSE; return; }; echo -e "${CYAN}Настраиваем ${NC}ttyd"; sed -i 's#/bin/login#-t fontSize=15 sh /usr/bin/zms#' /etc/config/ttyd; /etc/init.d/ttyd restart >/dev/null 2>&1; if pidof ttyd >/dev/null
 then echo -e "${GREEN}Служба запущена!${NC}\n\n${YELLOW}Доступ из браузера: ${NC}$LAN_IP:7681\n"; PAUSE; else echo -e "\n${RED}Ошибка! Служба не запущена!${NC}\n"; PAUSE; fi; fi; }
@@ -1075,6 +1078,132 @@ echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню\n"; echo -n
 7) check_mihomo || continue; UI_INSTALL ;; 8) check_mihomo || continue; MIXOMO_RESTART ;; 9) check_mihomo || continue; ARCH_MT=$(grep "^OPENWRT_ARCH=" /etc/os-release | cut -d'"' -f2); FILE_MT="/tmp/magitrickle.$RAZ"; URL_MT="https://github.com/MagiTrickle/MagiTrickle/releases/download/${MT_VERSION}/magitrickle_${MT_VERSION}-${SUF_MT}1_openwrt_${ARCH_MT}.$RAZ"
 echo -e "\n${MAGENTA}Обновляем MagiTrickle\n${CYAN}Скачиваем\n${NC}$URL_MT"; curl -Lf --connect-timeout 6 --retry 3 --retry-delay 1 -o "$FILE_MT" "$URL_MT" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка скачивания${NC}\n"; PAUSE; return 1; };  update_packages || return 1
 echo -e "${CYAN}Обновляем ${NC}MagiTrickle"; $INSTALL "$FILE_MT" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка установки${NC} $(basename "$URL_MT")\n"; rm -f "$FILE_MT"; PAUSE; return 1; }; /etc/init.d/magitrickle enable >/dev/null 2>&1; /etc/init.d/magitrickle restart >/dev/null 2>&1; echo -e "MagiTrickle ${GREEN}обновлён!${NC}\n"; rm -f "$FILE_MT"; PAUSE ;; *) return ;; esac; done; }
+
+# ==========================================
+# Собственная стратегия
+# ==========================================
+build_custom_strategy() {
+	[ ! -f /etc/init.d/zapret ] && { echo -e "\nZapret ${RED}не установлен!${NC}\n"; PAUSE; return; }
+	mkdir -p "$TMP_SF"; clear; echo -e "${MAGENTA}Собираем собственную стратегию${NC}"
+
+	# ---------- 1. Основная стратегия (v / Flowseal / нет) ----------
+	echo -e "\n${CYAN}[1/5] Основная стратегия${NC}"
+	echo -e "${CYAN}1) ${GREEN}Стратегия ${NC}v1-v10\n${CYAN}2) ${GREEN}Стратегия ${NC}Flowseal\n${CYAN}0) ${GREEN}Без основной стратегии${NC}"
+	echo -ne "\n${YELLOW}Выберите пункт:${NC} "; read -r MAIN_SRC
+	MAIN_BODY=""
+	case "$MAIN_SRC" in
+	1) echo -ne "\n${YELLOW}Введите версию (${NC}1-10${YELLOW}):${NC} "; read -r MV
+	   case "$MV" in 1|2|3|4|5|6|7|8|9|10) MAIN_BODY="$(strategy_v"$MV")" ;; esac ;;
+	2) [ ! -f "$OUT" ] && download_strategies 1
+	   FL_LIST_FILE="$TMP_SF/custom_flowseal_list.txt"; grep '^#' "$OUT" | sed 's/^#//' > "$FL_LIST_FILE"
+	   if [ ! -s "$FL_LIST_FILE" ]; then echo -e "\n${RED}Не удалось получить список Flowseal!${NC}\n"; PAUSE
+	   else i=1; while IFS= read -r l; do echo -e "${CYAN}$i) ${NC}$l"; i=$((i+1)); done < "$FL_LIST_FILE"
+	   echo -ne "\n${YELLOW}Выберите пункт:${NC} "; read -r FV; SEL_NAME=$(sed -n "${FV}p" "$FL_LIST_FILE")
+	   [ -n "$SEL_NAME" ] && MAIN_BODY=$(awk -v name="$SEL_NAME" '$0=="#"name {flag=1; next} /^#/ && flag {exit} flag {print}' "$OUT"); fi ;;
+	esac
+
+	# ---------- 2. Область применения основной стратегии ----------
+	TRAFFIC="all"
+	if [ -n "$MAIN_BODY" ]; then
+		echo -e "\n${CYAN}[2/5] Для какого трафика применить основную стратегию${NC}"
+		echo -e "${CYAN}1) ${GREEN}Весь трафик${NC}\n${CYAN}2) ${GREEN}Только по спискам ${NC}РКН\n${CYAN}3) ${GREEN}Только ${NC}Discord"
+		echo -ne "\n${YELLOW}Выберите пункт:${NC} "; read -r TR
+		case "$TR" in 2) TRAFFIC="rkn" ;; 3) TRAFFIC="discord" ;; *) TRAFFIC="all" ;; esac
+		case "$TRAFFIC" in
+		rkn) MAIN_BODY=$(printf '%s\n' "$MAIN_BODY" | sed 's|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt|') ;;
+		discord) MAIN_BODY=$(printf '%s\n' "$MAIN_BODY" | sed 's|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|--hostlist-domains=discord.com,discordapp.com,discord.gg|') ;;
+		esac
+	fi
+
+	# ---------- 3. Стратегия для YouTube (Yv) ----------
+	echo -e "\n${CYAN}[3/5] Стратегия для YouTube${NC}"
+	curl -fsSL "$STR_URL" -o "$TMP_LIST" 2>/dev/null
+	YV_LIST_FILE="$TMP_SF/custom_yv_list.txt"; : > "$YV_LIST_FILE"
+	[ -s "$TMP_LIST" ] && while IFS= read -r LINE; do case "$LINE" in \#Yv[0-9]*) echo "$LINE" >> "$YV_LIST_FILE";; esac; done < "$TMP_LIST"
+	YV_COUNT=$(wc -l < "$YV_LIST_FILE" 2>/dev/null); YV_COUNT=${YV_COUNT:-0}
+	YV_BODY=""; YV_NAME=""
+	if [ "$YV_COUNT" -gt 0 ]; then
+		i=1; while IFS= read -r l; do echo -e "${CYAN}$i) ${NC}${l#\#}"; i=$((i+1)); done < "$YV_LIST_FILE"
+		echo -ne "\n${CYAN}0) ${GREEN}Без стратегии для YouTube${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read -r YVCH
+		if [ -n "$YVCH" ] && [ "$YVCH" != "0" ]; then
+			YV_NAME=$(sed -n "${YVCH}p" "$YV_LIST_FILE")
+			if [ -n "$YV_NAME" ]; then
+				YV_BODY_FILE="$TMP_SF/custom_yv_body.txt"; : > "$YV_BODY_FILE"; FLAG=0
+				while IFS= read -r LINE; do [ "$LINE" = "$YV_NAME" ] && FLAG=1 && continue
+				case "$LINE" in \#Yv[0-9]*) FLAG=0;; esac
+				[ "$FLAG" -eq 1 ] && printf "%b\n" "$LINE" >> "$YV_BODY_FILE"; done < "$TMP_LIST"
+				YV_BODY=$(cat "$YV_BODY_FILE")
+			fi
+		fi
+	else
+		echo -e "${RED}Не удалось получить список стратегий для YouTube!${NC}"
+	fi
+
+	# ---------- 4. Игровая стратегия (Gv) ----------
+	echo -e "\n${CYAN}[4/5] Игровая стратегия${NC}"
+	echo -e "${CYAN}1) ${GREEN}Gv1${NC}\n${CYAN}2) ${GREEN}Gv2${NC}\n${CYAN}3) ${GREEN}Gv3${NC}\n${CYAN}4) ${GREEN}Gv4${NC}\n${CYAN}0) ${GREEN}Без игровой стратегии${NC}"
+	echo -ne "\n${YELLOW}Выберите пункт:${NC} "; read -r GVCH
+	GV_BODY=""
+	case "$GVCH" in
+	1) GV_BODY="$(strategy_Gv1; strategy_TCP_common)" ;;
+	2|3|4) GV_BODY="$(strategy_Gv "$GVCH"; strategy_TCP_common)" ;;
+	esac
+
+	# ---------- 5. Стратегия для discord.media (Dv) ----------
+	echo -e "\n${CYAN}[5/5] Стратегия для discord.media${NC}"
+	echo -ne "${YELLOW}Введите версию (${NC}1-17${YELLOW}) или ${NC}0${YELLOW} — без стратегии:${NC} "; read -r DVCH
+	DV_BODY=""; DISCORD_UDP_BODY=""
+	case "$DVCH" in
+	1|2|3|4|5|6|7|8|9|10|11|12|13|14|15|16|17)
+		DV_BODY=$(eval echo \"\$Dv$DVCH\")
+		DISCORD_UDP_BODY=$(printf '%s\n' "--filter-udp=19294-19344,50000-50100" "--filter-l7=discord,stun" "--dpi-desync=fake" "--dpi-desync-fake-discord=/opt/zapret/files/fake/stun.bin" "--dpi-desync-fake-stun=/opt/zapret/files/fake/stun.bin" "--dpi-desync-repeats=6")
+		;;
+	esac
+
+	# ---------- Проверка, что хоть что-то выбрано ----------
+	if [ -z "$MAIN_BODY" ] && [ -z "$YV_BODY" ] && [ -z "$GV_BODY" ] && [ -z "$DV_BODY" ]; then
+		echo -e "\n${RED}Не выбрано ни одной стратегии, отмена!${NC}\n"; PAUSE; return
+	fi
+
+	# ---------- Сборка итоговой стратегии ----------
+	echo -e "\n${MAGENTA}Применяем собственную стратегию${NC}"
+	sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
+	{
+		echo "  option NFQWS_OPT '"
+		[ -n "$YV_BODY" ] && { echo "$YV_NAME"; printf "%b\n" "$YV_BODY"; echo "--new"; }
+		[ -n "$MAIN_BODY" ] && printf "%s\n" "$MAIN_BODY"
+		[ -n "$GV_BODY" ] && { echo "--new"; printf "%s\n" "$GV_BODY"; }
+		[ -n "$DISCORD_UDP_BODY" ] && { echo "--new"; printf "%s\n" "$DISCORD_UDP_BODY"; echo "#Dv$DVCH"; echo "--new"; printf "%b\n" "$DV_BODY"; }
+		echo "'"
+	} >> "$CONF"
+
+	awk '{if($0=="--new"){if(prev!="--new")print}else print;prev=$0}' "$CONF" > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"
+	grep -q "^[[:space:]]*' *\$" "$CONF" || echo "'" >> "$CONF"
+
+	ADD_GP_DOMAINS
+	if [ "$TRAFFIC" = "rkn" ]; then
+		echo -e "${CYAN}Скачиваем список ${NC}РКН"
+		[ -f "$HOSTLIST_FILE" ] && cp "$HOSTLIST_FILE" "$BACKUP_FILE"
+		curl -fsSL "$RKN_URL" > "$HOSTLIST_FILE" || echo -e "${RED}Не удалось скачать список РКН${NC}"
+	else
+		echo -e "${CYAN}Добавляем домены в исключения${NC}"; rm -f "$EXCLUDE_FILE"
+		wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL" || echo -e "${RED}Не удалось загрузить exclude файл${NC}"
+	fi
+	if [ -n "$GV_BODY" ]; then add_ports_if_missing NFQWS_PORTS_UDP "$PORTS_UDP"; add_ports_if_missing NFQWS_PORTS_TCP "$PORTS_TCP"; fi
+	if [ -n "$DISCORD_UDP_BODY" ]; then
+		if ! grep -q "option NFQWS_PORTS_UDP.*19294-19344,50000-50100" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'\$/,19294-19344,50000-50100'/" "$CONF"; fi
+		if ! grep -q "option NFQWS_PORTS_TCP.*2053,2083,2087,2096,8443" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_TCP '/s/'\$/,2053,2083,2087,2096,8443'/" "$CONF"; fi
+	fi
+
+	ZAPRET_RESTART
+	echo -e "\n${GREEN}Собственная стратегия применена!${NC}"
+	grep -Fq "=ts" "$CONF" && echo -e "\n${YELLOW}Для работы этой стратегии нужно один раз в терминале Windows выполнить:${NC}\nnetsh int tcp set global timestamps=enabled"
+	echo; PAUSE
+}
+
+
+
+
 # ==========================================
 # Главное меню
 # ==========================================
