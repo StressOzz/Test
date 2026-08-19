@@ -1084,6 +1084,62 @@ echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню\n"; echo -n
 echo -e "\n${MAGENTA}Обновляем MagiTrickle\n${CYAN}Скачиваем\n${NC}$URL_MT"; curl -Lf --connect-timeout 6 --retry 3 --retry-delay 1 -o "$FILE_MT" "$URL_MT" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка скачивания${NC}\n"; PAUSE; return 1; };  update_packages || return 1
 echo -e "${CYAN}Обновляем ${NC}MagiTrickle"; $INSTALL "$FILE_MT" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка установки${NC} $(basename "$URL_MT")\n"; rm -f "$FILE_MT"; PAUSE; return 1; }; /etc/init.d/magitrickle enable >/dev/null 2>&1; /etc/init.d/magitrickle restart >/dev/null 2>&1; echo -e "MagiTrickle ${GREEN}обновлён!${NC}\n"; rm -f "$FILE_MT"; PAUSE ;; *) return ;; esac; done; }
 
+
+# ==========================================
+# Вспомогательные функции для сборки стратегии
+# ==========================================
+CUSTOM_DISCORD_MARKER="/opt/zapret/custom_discord_only"
+DISCORD_DEF_HOSTLIST="/opt/zapret/ipset_def/zapret-hosts-user.txt"
+
+# Убирает дубли/лишние --new в начале, конце и подряд идущие
+clean_new_lines() {
+	awk '
+	{ lines[NR]=$0 }
+	END {
+		n=NR; m=0
+		for(i=1;i<=n;i++){
+			if(lines[i]=="--new" && m>0 && out[m]=="--new") continue
+			m++; out[m]=lines[i]
+		}
+		start=1; end=m
+		while(start<=end && out[start]=="--new") start++
+		while(end>=start && out[end]=="--new") end--
+		for(i=start;i<=end;i++) print out[i]
+	}'
+}
+
+# Удаляет из тела Flowseal-стратегии уже встроенные блоки
+# Gv (игровой), Dv (discord.media) и Yv (google/YouTube),
+# чтобы на их место можно было подставить собственный выбор
+strip_embedded_blocks() {
+	local IN="$1" OUT="$2"
+	cp "$IN" "$OUT"
+	for PATTERN in '^--filter-udp=19294-19344,50000-50100$' '^--filter-tcp=2053,2083,2087,2096,8443$'; do
+		while true; do
+			START=$(grep -n -m1 -E "$PATTERN" "$OUT" | cut -d: -f1)
+			[ -z "$START" ] && break
+			REL_END=$(tail -n +"$START" "$OUT" | grep -n -m1 -E '^--new$' | cut -d: -f1)
+			if [ -n "$REL_END" ]; then END=$((START + REL_END - 2)); else END=$(wc -l < "$OUT"); fi
+			PREV=$((START - 1))
+			if [ "$PREV" -ge 1 ] && sed -n "${PREV}p" "$OUT" | grep -qx -- '--new'; then START=$PREV; fi
+			sed -i "${START},${END}d" "$OUT"
+		done
+	done
+	while true; do
+		START=$(awk '
+			prev=="--filter-tcp=443" && $0=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt" { print NR-1; exit }
+			{ prev=$0 }' "$OUT")
+		[ -z "$START" ] && break
+		REL_END=$(tail -n +"$START" "$OUT" | grep -n -m1 -E '^--new$' | cut -d: -f1)
+		if [ -n "$REL_END" ]; then END=$((START + REL_END - 2)); else END=$(wc -l < "$OUT"); fi
+		PREV=$((START - 1))
+		if [ "$PREV" -ge 1 ] && sed -n "${PREV}p" "$OUT" | grep -qx -- '--new'; then START=$PREV; fi
+		sed -i "${START},${END}d" "$OUT"
+	done
+	clean_new_lines < "$OUT" > "${OUT}.clean" && mv "${OUT}.clean" "$OUT"
+}
+
+
 # ==========================================
 # Собственная стратегия
 # ==========================================
@@ -1222,8 +1278,6 @@ build_custom_strategy() {
 	grep -Fq "=ts" "$CONF" && echo -e "\n${YELLOW}Для работы этой стратегии нужно один раз в терминале Windows выполнить:${NC}\nnetsh int tcp set global timestamps=enabled"
 	echo; PAUSE
 }
-
-
 
 
 # ==========================================
