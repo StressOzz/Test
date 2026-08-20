@@ -1137,8 +1137,12 @@ build_custom_strategy() {
 
 	# ---------- 1. Основная стратегия (v / нет) ----------
 echo -e "\n${CYAN}Основная стратегия${NC}"
-MV_MAX=$(set | sed -n 's/^strategy_v\([0-9][0-9]*\)[[:space:]]*().*/\1/p' | sort -n | tail -1)
-MV_MAX=${MV_MAX:-0}
+MV_MAX=0
+i=1
+while type "strategy_v$i" >/dev/null 2>&1; do
+	MV_MAX=$i
+	i=$((i + 1))
+done
 echo -ne "${YELLOW}Введите версию (${NC}1-$MV_MAX${YELLOW}) или ${NC}0${YELLOW} — без основной стратегии:${NC} "; read -r MV
 MAIN_BODY=""
 if [ "$MV" -ge 1 ] 2>/dev/null && [ "$MV" -le "$MV_MAX" ]; then
