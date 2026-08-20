@@ -1030,7 +1030,13 @@ else echo -e "${YELLOW}Автоподбор стратегий:${NC}${GREEN}вы
 INFO_ZPR_STR() { if [ -f "$CONF" ]; then line=$(grep -m1 '^#general' "$CONF"); GEN="${line:+${line#?} / }"; current="$ver$( [ -n "$ver" ] && [ -n "$yv_ver" ] && echo " / " )$yv_ver"; DV=$(grep -o -E '^#Dv[0-9][0-9]*' "$CONF" | sed 's/^#[[:space:]]*/\/ /' | head -n1)
 GV=$(grep -m1 '^#Gv' "$CONF" | sed 's/^#/\/ /'); [ "$GV" = "/ Gv0" ] && GV="/ GvF"; UPD=$(grep -q '^#udp443' "$CONF" && echo '/ udp443'); WS=$(grep -q -- '--wssize 1:6' "$CONF" && echo '/ wssize'); ME=$(grep -q -- '--methodeol' "$CONF" && echo '/ methodeol'); if [ -n "$current" ]
 then echo -e "${YELLOW}Стратегия Zapret:${NC}    ${CYAN}${GEN}$current${DV:+ $DV}${GV:+ $GV}${UPD:+ $UPD}${WS:+ $WS}${ME:+ $ME}${RKN_STATUS:+ $RKN_STATUS}${NC}"; elif [ -n "$RKN_STATUS" ]
-then echo -e "${YELLOW}Стратегия Zapret:${NC}    ${CYAN}${GEN}РКН${DV:+ $DV}${GV:+ $GV}${UPD:+ $UPD}${WS:+ $WS}${ME:+ $ME}${NC}"; elif [ -n "$line" ]; then echo -e "${YELLOW}Стратегия Zapret:${NC}    ${CYAN}${line#?}${GV:+ $GV}${NC}"; fi; fi
+then echo -e "${YELLOW}Стратегия Zapret:${NC}    ${CYAN}${GEN}РКН${DV:+ $DV}${GV:+ $GV}${UPD:+ $UPD}${WS:+ $WS}${ME:+ $ME}${NC}"; elif [ -n "$line" ]; then echo -e "${YELLOW}Стратегия Zapret:${NC}    ${CYAN}${line#?}${GV:+ $GV}${NC}"
+
+elif [ -n "$GV" ] || [ -n "$DV" ]; then
+    echo -e "${YELLOW}Стратегия Zapret:${NC}    ${CYAN}${GV}${DV:+ $DV}${UPD:+ $UPD}${WS:+ $WS}${ME:+ $ME}${NC}"
+
+
+fi; fi
 
 
 grep -Fq "$DISCORD_DEF_HOSTLIST" "$CONF" 2>/dev/null && echo -e "${YELLOW}Основная стратегия:${NC}  ${CYAN}только Discord${NC}"
