@@ -1032,9 +1032,8 @@ GV=$(grep -m1 '^#Gv' "$CONF" | sed 's/^#/\/ /'); [ "$GV" = "/ Gv0" ] && GV="/ Gv
 then echo -e "${YELLOW}Стратегия Zapret:${NC}    ${CYAN}${GEN}$current${DV:+ $DV}${GV:+ $GV}${UPD:+ $UPD}${WS:+ $WS}${ME:+ $ME}${RKN_STATUS:+ $RKN_STATUS}${NC}"; elif [ -n "$RKN_STATUS" ]
 then echo -e "${YELLOW}Стратегия Zapret:${NC}    ${CYAN}${GEN}РКН${DV:+ $DV}${GV:+ $GV}${UPD:+ $UPD}${WS:+ $WS}${ME:+ $ME}${NC}"; elif [ -n "$line" ]; then echo -e "${YELLOW}Стратегия Zapret:${NC}    ${CYAN}${line#?}${GV:+ $GV}${NC}"
 
-elif [ -n "$GV" ] || [ -n "$DV" ]; then
-    echo -e "${YELLOW}Стратегия Zapret:${NC}    ${CYAN}${GV}${DV:+ $DV}${UPD:+ $UPD}${WS:+ $WS}${ME:+ $ME}${NC}"
 
+elif [ -n "$GV" ] && [ -z "$DV" ]; then echo -e "${YELLOW}Стратегия Zapret:${NC}    ${CYAN}${GV#/ }${NC}"; elif [ -n "$DV" ] && [ -z "$GV" ]; then echo -e "${YELLOW}Стратегия Zapret:${NC}    ${CYAN}${DV#/ }${NC}"
 
 fi; fi
 
