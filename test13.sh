@@ -29,7 +29,7 @@ GREEN="\033[1;32m"; RED="\033[1;31m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MA
 CONF="/etc/config/zapret"; CUSTOM_DIR="/opt/zapret/init.d/openwrt/custom.d/"; HOSTLIST_FILE="/opt/zapret/ipset/zapret-hosts-user.txt"; fileGP="/opt/zapret/ipset/zapret-hosts-google.txt"
 TMP_SF="/tmp/zapret_temp"; HOSTS_FILE="/etc/hosts"; TMP_LIST="$TMP_SF/zapret_yt_list.txt"; tmpDIR="/tmp/PodkopAWG"
 GV_XTREME_FILE="/opt/zapret/tmp/GvXtreme"; GV_XTREME_PORTS="80,88,444-65535"; GV_XTREME_NFQWS_PORTS="80,88,443-65535"
-IF_NAME="AWG"; PROTO="amneziawg"; DEV_NAME="amneziawg0"
+IF_NAME="AWG"; PROTO="amneziawg"; DEV_NAME="amneziawg0"; DISCORD_DEF_HOSTLIST="/opt/zapret/ipset_def/zapret-hosts-user.txt"
 SAVED_STR="$TMP_SF/StrYou.txt"; HOSTS_USER="$TMP_SF/hosts-user.txt"; OUT_DPI="$TMP_SF/dpi_urls.txt"; OUT="$TMP_SF/str_flow.txt"; ZIP="$TMP_SF/repo.zip"
 BACKUP_FILE="/opt/zapret/tmp/hosts_temp.txt"; STR_FILE="$TMP_SF/str_test.txt"; TEMP_FILE="$TMP_SF/str_temp.txt"
 RESULTS="/opt/zapret/tmp/zapret_bench.txt"; BACK="$TMP_SF/zapret_back.txt"; TMP_RES="$TMP_SF/zapret_results_all.$$"
@@ -1033,8 +1033,7 @@ then echo -e "${YELLOW}Стратегия Zapret:${NC}    ${CYAN}${GEN}$current$
 then echo -e "${YELLOW}Стратегия Zapret:${NC}    ${CYAN}${GEN}РКН${DV:+ $DV}${GV:+ $GV}${UPD:+ $UPD}${WS:+ $WS}${ME:+ $ME}${NC}"; elif [ -n "$line" ]; then echo -e "${YELLOW}Стратегия Zapret:${NC}    ${CYAN}${line#?}${GV:+ $GV}${NC}"; fi; fi
 
 
-grep -Fq "$DISCORD_DEF_HOSTLIST" "$CONF" 2>/dev/null && echo -e "${YELLOW}Custom-стратегия:${NC} ${CYAN}только Discord${NC}"
-
+grep -Fq "$DISCORD_DEF_HOSTLIST" "$CONF" 2>/dev/null && echo -e "${YELLOW}Основная стратегия:${NC}  ${CYAN}только Discord${NC}"
 
 }
 # ==========================================
@@ -1100,8 +1099,6 @@ echo -e "${CYAN}Обновляем ${NC}MagiTrickle"; $INSTALL "$FILE_MT" >/dev/
 # ==========================================
 DISCORD_DEF_HOSTLIST="/opt/zapret/ipset_def/zapret-hosts-user.txt"
 
-# Убирает дубли/лишние --new в начале, конце, подряд идущие,
-# а также --new перед строкой-комментарием (#...), после которой сразу идёт ещё --new
 clean_new_lines() {
 	awk '
 	{ lines[NR]=$0 }
@@ -1126,6 +1123,15 @@ clean_new_lines() {
 		start=1; end=k
 		while (start<=end && res[start]=="--new") start++
 		while (end>=start && res[end]=="--new") end--
+
+		# 4. убираем --new сразу после ведущего комментария (в начале блока)
+		#    например: #Gv1 \n --new  ->  #Gv1
+		while (start<=end && res[start] ~ /^#/ && (start+1)<=end && res[start+1]=="--new") {
+			start2=start+1
+			for (j=start2; j<end; j++) res2[j]=res[j+1]
+			end=end-1
+			for (j=start2; j<=end; j++) res[j]=res2[j]
+		}
 
 		for (i=start; i<=end; i++) print res[i]
 	}'
