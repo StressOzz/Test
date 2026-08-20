@@ -1031,16 +1031,8 @@ INFO_ZPR_STR() { if [ -f "$CONF" ]; then line=$(grep -m1 '^#general' "$CONF"); G
 GV=$(grep -m1 '^#Gv' "$CONF" | sed 's/^#/\/ /'); [ "$GV" = "/ Gv0" ] && GV="/ GvF"; UPD=$(grep -q '^#udp443' "$CONF" && echo '/ udp443'); WS=$(grep -q -- '--wssize 1:6' "$CONF" && echo '/ wssize'); ME=$(grep -q -- '--methodeol' "$CONF" && echo '/ methodeol'); if [ -n "$current" ]
 then echo -e "${YELLOW}Стратегия Zapret:${NC}    ${CYAN}${GEN}$current${DV:+ $DV}${GV:+ $GV}${UPD:+ $UPD}${WS:+ $WS}${ME:+ $ME}${RKN_STATUS:+ $RKN_STATUS}${NC}"; elif [ -n "$RKN_STATUS" ]
 then echo -e "${YELLOW}Стратегия Zapret:${NC}    ${CYAN}${GEN}РКН${DV:+ $DV}${GV:+ $GV}${UPD:+ $UPD}${WS:+ $WS}${ME:+ $ME}${NC}"; elif [ -n "$line" ]; then echo -e "${YELLOW}Стратегия Zapret:${NC}    ${CYAN}${line#?}${GV:+ $GV}${NC}"
-
-
-elif [ -n "$GV" ] && [ -z "$DV" ]; then echo -e "${YELLOW}Стратегия Zapret:${NC}    ${CYAN}${GV#/ }${NC}"; elif [ -z "$GV" ] && [ -n "$DV" ]; then echo -e "${YELLOW}Стратегия Zapret:${NC}    ${CYAN}${DV#/ }${NC}"; elif [ -n "$GV" ] && [ -n "$DV" ]; then echo -e "${YELLOW}Стратегия Zapret:${NC}    ${CYAN}${GV#/ } / ${DV#/ }${NC}"
-
-fi; fi
-
-
-grep -Fq "$DISCORD_DEF_HOSTLIST" "$CONF" 2>/dev/null && echo -e "${YELLOW}Основная стратегия:${NC}  ${CYAN}только Discord${NC}"
-
-}
+elif [ -n "$GV" ] && [ -z "$DV" ]; then echo -e "${YELLOW}Стратегия Zapret:${NC}    ${CYAN}${GV#/ }${NC}"; elif [ -z "$GV" ] && [ -n "$DV" ]; then echo -e "${YELLOW}Стратегия Zapret:${NC}    ${CYAN}${DV#/ }${NC}"; elif [ -n "$GV" ] && [ -n "$DV" ]; then echo -e "${YELLOW}Стратегия Zapret:${NC}    ${CYAN}${GV#/ } / ${DV#/ }${NC}"; fi; fi
+grep -Fq "$DISCORD_DEF_HOSTLIST" "$CONF" 2>/dev/null && echo -e "${YELLOW}Основная стратегия:${NC}  ${CYAN}только Discord${NC}"; }
 # ==========================================
 # Mixomo
 # ==========================================
@@ -1098,12 +1090,9 @@ echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню\n"; echo -n
 7) check_mihomo || continue; UI_INSTALL ;; 8) check_mihomo || continue; MIXOMO_RESTART ;; 9) check_mihomo || continue; ARCH_MT=$(grep "^OPENWRT_ARCH=" /etc/os-release | cut -d'"' -f2); FILE_MT="/tmp/magitrickle.$RAZ"; URL_MT="https://github.com/MagiTrickle/MagiTrickle/releases/download/${MT_VERSION}/magitrickle_${MT_VERSION}-${SUF_MT}1_openwrt_${ARCH_MT}.$RAZ"
 echo -e "\n${MAGENTA}Обновляем MagiTrickle\n${CYAN}Скачиваем\n${NC}$URL_MT"; curl -Lf --connect-timeout 6 --retry 3 --retry-delay 1 -o "$FILE_MT" "$URL_MT" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка скачивания${NC}\n"; PAUSE; return 1; };  update_packages || return 1
 echo -e "${CYAN}Обновляем ${NC}MagiTrickle"; $INSTALL "$FILE_MT" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка установки${NC} $(basename "$URL_MT")\n"; rm -f "$FILE_MT"; PAUSE; return 1; }; /etc/init.d/magitrickle enable >/dev/null 2>&1; /etc/init.d/magitrickle restart >/dev/null 2>&1; echo -e "MagiTrickle ${GREEN}обновлён!${NC}\n"; rm -f "$FILE_MT"; PAUSE ;; *) return ;; esac; done; }
-
 # ==========================================
-# Вспомогательные функции для сборки стратегии
+# Собственная стратегия
 # ==========================================
-DISCORD_DEF_HOSTLIST="/opt/zapret/ipset_def/zapret-hosts-user.txt"
-
 clean_new_lines() {
 	awk '
 	{ lines[NR]=$0 }
@@ -1142,23 +1131,24 @@ clean_new_lines() {
 	}'
 }
 
-# ==========================================
-# Собственная стратегия
-# ==========================================
 build_custom_strategy() {
 	[ ! -f /etc/init.d/zapret ] && { echo -e "\nZapret ${RED}не установлен!${NC}\n"; PAUSE; return; }
 	mkdir -p "$TMP_SF"; clear; echo -e "${MAGENTA}Собираем собственную стратегию${NC}"
 
 	# ---------- 1. Основная стратегия (v / нет) ----------
-	echo -e "\n${CYAN}[1/5] Основная стратегия${NC}"
-	echo -ne "${YELLOW}Введите версию (${NC}1-10${YELLOW}) или ${NC}0${YELLOW} — без основной стратегии:${NC} "; read -r MV
-	MAIN_BODY=""
-	case "$MV" in 1|2|3|4|5|6|7|8|9|10) MAIN_BODY="$(strategy_v"$MV")" ;; esac
+echo -e "\n${CYAN}Основная стратегия${NC}"
+MV_MAX=$(set | grep -oE '^strategy_v[0-9]+\(\)' | sed 's/^strategy_v//;s/().*//' | sort -n | tail -1)
+MV_MAX=${MV_MAX:-0}
+echo -ne "${YELLOW}Введите версию (${NC}1-$MV_MAX${YELLOW}) или ${NC}0${YELLOW} — без стратегии:${NC} "; read -r MV
+MAIN_BODY=""
+if [ "$MV" -ge 1 ] 2>/dev/null && [ "$MV" -le "$MV_MAX" ]; then
+	MAIN_BODY="$(strategy_v"$MV")"
+fi
 
 	# ---------- 2. Область применения основной стратегии ----------
 	TRAFFIC="all"
 	if [ -n "$MAIN_BODY" ]; then
-		echo -e "\n${CYAN}[2/5] Для какого трафика применить основную стратегию${NC}"
+		echo -e "\n${CYAN}Выберите трафик для стратегии${NC}"
 		echo -e "${CYAN}1) ${GREEN}Весь трафик${NC}\n${CYAN}2) ${GREEN}Только по спискам ${NC}РКН\n${CYAN}3) ${GREEN}Только ${NC}Discord"
 		echo -ne "\n${YELLOW}Выберите пункт:${NC} "; read -r TR
 		case "$TR" in 2) TRAFFIC="rkn" ;; 3) TRAFFIC="discord" ;; *) TRAFFIC="all" ;; esac
@@ -1169,7 +1159,7 @@ build_custom_strategy() {
 	fi
 
 	# ---------- 3. Стратегия для YouTube (Yv) ----------
-	echo -e "\n${CYAN}[3/5] Стратегия для YouTube${NC}"
+	echo -e "\n${CYAN}Стратегия для YouTube${NC}"
 	curl -fsSL "$STR_URL" -o "$TMP_LIST" 2>/dev/null
 	YV_LIST_FILE="$TMP_SF/custom_yv_list.txt"; : > "$YV_LIST_FILE"
 	[ -s "$TMP_LIST" ] && while IFS= read -r LINE; do case "$LINE" in \#Yv[0-9]*) echo "$LINE" >> "$YV_LIST_FILE";; esac; done < "$TMP_LIST"
@@ -1188,11 +1178,11 @@ build_custom_strategy() {
 			fi
 		fi
 	else
-		echo -e "${RED}Не удалось получить список стратегий для YouTube!${NC}"
+		echo -e "\n${RED}Не удалось получить список стратегий для YouTube!${NC}\n"
 	fi
 
 	# ---------- 4. Игровая стратегия (Gv) ----------
-	echo -e "\n${CYAN}[4/5] Игровая стратегия${NC}"
+	echo -e "\n${CYAN}Игровая стратегия${NC}"
 	echo -ne "${YELLOW}Введите версию (${NC}1-4${YELLOW}) или ${NC}0${YELLOW} — без стратегии:${NC} "; read -r GVCH
 	GV_BODY=""
 	case "$GVCH" in
@@ -1201,16 +1191,16 @@ build_custom_strategy() {
 	esac
 
 	# ---------- 5. Стратегия для discord.media (Dv) ----------
-	echo -e "\n${CYAN}[5/5] Стратегия для discord.media${NC}"
-	echo -ne "${YELLOW}Введите версию (${NC}1-17${YELLOW}) или ${NC}0${YELLOW} — без стратегии:${NC} "; read -r DVCH
-	DV_SEG=""
-	case "$DVCH" in
-	1|2|3|4|5|6|7|8|9|10|11|12|13|14|15|16|17)
-		DV_BODY=$(eval echo \"\$Dv$DVCH\")
-		DISCORD_UDP_BODY=$(printf '%s\n' "--filter-udp=19294-19344,50000-50100" "--filter-l7=discord,stun" "--dpi-desync=fake" "--dpi-desync-fake-discord=/opt/zapret/files/fake/stun.bin" "--dpi-desync-fake-stun=/opt/zapret/files/fake/stun.bin" "--dpi-desync-repeats=6")
-		DV_SEG=$(printf '%s\n%s\n--new\n%s' "$DISCORD_UDP_BODY" "#Dv$DVCH" "$DV_BODY")
-		;;
-	esac
+echo -e "\n${CYAN}Стратегия для discord.media${NC}"
+DV_MAX=$(set | grep -oE '^Dv[0-9]+=' | sed 's/^Dv//;s/=//' | sort -n | tail -1)
+DV_MAX=${DV_MAX:-0}
+echo -ne "${YELLOW}Введите версию (${NC}1-$DV_MAX${YELLOW}) или ${NC}0${YELLOW} — без стратегии:${NC} "; read -r DVCH
+DV_SEG=""
+if [ "$DVCH" -ge 1 ] 2>/dev/null && [ "$DVCH" -le "$DV_MAX" ]; then
+	DV_BODY=$(eval "printf '%s' \"\$Dv$DVCH\"")
+	DISCORD_UDP_BODY=$(printf '%s\n' "--filter-udp=19294-19344,50000-50100" "--filter-l7=discord,stun" "--dpi-desync=fake" "--dpi-desync-fake-discord=/opt/zapret/files/fake/stun.bin" "--dpi-desync-fake-stun=/opt/zapret/files/fake/stun.bin" "--dpi-desync-repeats=6")
+	DV_SEG=$(printf '%s\n%s\n--new\n%s' "$DISCORD_UDP_BODY" "#Dv$DVCH" "$DV_BODY")
+fi
 
 	# ---------- Проверка, что хоть что-то выбрано ----------
 	if [ -z "$MAIN_BODY" ] && [ -z "$YV_BODY" ] && [ -z "$GV_BODY" ] && [ -z "$DV_SEG" ]; then
