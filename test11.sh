@@ -604,7 +604,6 @@ echo -e "${CYAN}c) ${GREEN}Собрать собственную стратег�
 echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read choiceST; case "$choiceST" in 1) strategy_CHOUSE;; 2) flowseal_menu;; 3) choose_strategy_YOUTUBE;; 4) fix_GAME;;
 
 
-echo -e "${CYAN}c) ${GREEN}Собрать собственную стратегию${NC}"
 
 c|C|с|С) build_custom_strategy;;
 
