@@ -1100,20 +1100,34 @@ echo -e "${CYAN}Обновляем ${NC}MagiTrickle"; $INSTALL "$FILE_MT" >/dev/
 # ==========================================
 DISCORD_DEF_HOSTLIST="/opt/zapret/ipset_def/zapret-hosts-user.txt"
 
-# Убирает дубли/лишние --new в начале, конце и подряд идущие
+# Убирает дубли/лишние --new в начале, конце, подряд идущие,
+# а также --new перед строкой-комментарием (#...), после которой сразу идёт ещё --new
 clean_new_lines() {
 	awk '
 	{ lines[NR]=$0 }
 	END {
-		n=NR; m=0
-		for(i=1;i<=n;i++){
-			if(lines[i]=="--new" && m>0 && out[m]=="--new") continue
+		n=NR
+
+		# 1. убираем --new, если следующая строка # ..., а через неё сразу снова --new
+		m=0
+		for (i=1; i<=n; i++) {
+			if (lines[i]=="--new" && (i+2)<=n && lines[i+1] ~ /^#/ && lines[i+2]=="--new") continue
 			m++; out[m]=lines[i]
 		}
-		start=1; end=m
-		while(start<=end && out[start]=="--new") start++
-		while(end>=start && out[end]=="--new") end--
-		for(i=start;i<=end;i++) print out[i]
+
+		# 2. убираем подряд идущие дубли --new
+		k=0
+		for (i=1; i<=m; i++) {
+			if (out[i]=="--new" && k>0 && res[k]=="--new") continue
+			k++; res[k]=out[i]
+		}
+
+		# 3. убираем --new в самом начале и в самом конце
+		start=1; end=k
+		while (start<=end && res[start]=="--new") start++
+		while (end>=start && res[end]=="--new") end--
+
+		for (i=start; i<=end; i++) print res[i]
 	}'
 }
 
