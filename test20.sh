@@ -1093,164 +1093,31 @@ echo -e "${CYAN}Обновляем ${NC}MagiTrickle"; $INSTALL "$FILE_MT" >/dev/
 # ==========================================
 # Собственная стратегия
 # ==========================================
-clean_new_lines() {
-	awk '
-	{ lines[NR]=$0 }
-	END {
-		n=NR
-
-		# 1. убираем --new, если следующая строка # ..., а через неё сразу снова --new
-		m=0
-		for (i=1; i<=n; i++) {
-			if (lines[i]=="--new" && (i+2)<=n && lines[i+1] ~ /^#/ && lines[i+2]=="--new") continue
-			m++; out[m]=lines[i]
-		}
-
-		# 2. убираем подряд идущие дубли --new
-		k=0
-		for (i=1; i<=m; i++) {
-			if (out[i]=="--new" && k>0 && res[k]=="--new") continue
-			k++; res[k]=out[i]
-		}
-
-		# 3. убираем --new в самом начале и в самом конце
-		start=1; end=k
-		while (start<=end && res[start]=="--new") start++
-		while (end>=start && res[end]=="--new") end--
-
-		# 4. убираем --new сразу после ведущего комментария (в начале блока)
-		#    например: #Gv1 \n --new  ->  #Gv1
-		while (start<=end && res[start] ~ /^#/ && (start+1)<=end && res[start+1]=="--new") {
-			start2=start+1
-			for (j=start2; j<end; j++) res2[j]=res[j+1]
-			end=end-1
-			for (j=start2; j<=end; j++) res[j]=res2[j]
-		}
-
-		for (i=start; i<=end; i++) print res[i]
-	}'
-}
-
-build_custom_strategy() {
-	[ ! -f /etc/init.d/zapret ] && { echo -e "\nZapret ${RED}не установлен!${NC}\n"; PAUSE; return; }
-	mkdir -p "$TMP_SF"; clear; echo -e "${MAGENTA}Собираем собственную стратегию${NC}"
-
-	# ---------- 1. Основная стратегия (v / нет) ----------
-echo -e "\n${CYAN}Основная стратегия${NC}"
-MV_MAX=0
-i=1
-while type "strategy_v$i" >/dev/null 2>&1; do
-	MV_MAX=$i
-	i=$((i + 1))
-done
-echo -ne "${YELLOW}Введите версию (${NC}1-$MV_MAX${YELLOW}) или ${NC}0${YELLOW} — без основной стратегии:${NC} "; read -r MV
-MAIN_BODY=""
-if [ "$MV" -ge 1 ] 2>/dev/null && [ "$MV" -le "$MV_MAX" ]; then
-	MAIN_BODY="$(strategy_v"$MV")"
-fi
-
-	# ---------- 2. Область применения основной стратегии ----------
-	TRAFFIC="all"
-	if [ -n "$MAIN_BODY" ]; then
-		echo -e "\n${CYAN}Выберите трафик для стратегии${NC}"
-		echo -e "${CYAN}1) ${GREEN}Весь трафик${NC}\n${CYAN}2) ${GREEN}Только по спискам ${NC}РКН\n${CYAN}3) ${GREEN}Только ${NC}Discord"
-		echo -ne "\n${YELLOW}Выберите пункт:${NC} "; read -r TR
-		case "$TR" in 2) TRAFFIC="rkn" ;; 3) TRAFFIC="discord" ;; *) TRAFFIC="all" ;; esac
-		case "$TRAFFIC" in
-		rkn) MAIN_BODY=$(printf '%s\n' "$MAIN_BODY" | sed 's|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt|') ;;
-		discord) MAIN_BODY=$(printf '%s\n' "$MAIN_BODY" | sed "s|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|--hostlist=$DISCORD_DEF_HOSTLIST|") ;;
-		esac
-	fi
-
-	# ---------- 3. Стратегия для YouTube (Yv) ----------
-	echo -e "\n${CYAN}Стратегия для YouTube${NC}"
-	curl -fsSL "$STR_URL" -o "$TMP_LIST" 2>/dev/null
-	YV_LIST_FILE="$TMP_SF/custom_yv_list.txt"; : > "$YV_LIST_FILE"
-	[ -s "$TMP_LIST" ] && while IFS= read -r LINE; do case "$LINE" in \#Yv[0-9]*) echo "$LINE" >> "$YV_LIST_FILE";; esac; done < "$TMP_LIST"
-	YV_COUNT=$(wc -l < "$YV_LIST_FILE" 2>/dev/null); YV_COUNT=${YV_COUNT:-0}
-	YV_BODY=""; YV_NAME=""
-	if [ "$YV_COUNT" -gt 0 ]; then
-		echo -ne "${YELLOW}Введите версию (${NC}1-$YV_COUNT${YELLOW}) или ${NC}0${YELLOW} — без стратегии:${NC} "; read -r YVCH
-		if [ -n "$YVCH" ] && [ "$YVCH" != "0" ]; then
-			YV_NAME=$(sed -n "${YVCH}p" "$YV_LIST_FILE")
-			if [ -n "$YV_NAME" ]; then
-				YV_BODY_FILE="$TMP_SF/custom_yv_body.txt"; : > "$YV_BODY_FILE"; FLAG=0
-				while IFS= read -r LINE; do [ "$LINE" = "$YV_NAME" ] && FLAG=1 && continue
-				case "$LINE" in \#Yv[0-9]*) FLAG=0;; esac
-				[ "$FLAG" -eq 1 ] && printf "%b\n" "$LINE" >> "$YV_BODY_FILE"; done < "$TMP_LIST"
-				YV_BODY=$(cat "$YV_BODY_FILE")
-			fi
-		fi
-	else
-		echo -e "\n${RED}Не удалось получить список стратегий для YouTube!${NC}\n"
-	fi
-
-	# ---------- 4. Игровая стратегия (Gv) ----------
-	echo -e "\n${CYAN}Игровая стратегия${NC}"
-	echo -ne "${YELLOW}Введите версию (${NC}1-4${YELLOW}) или ${NC}0${YELLOW} — без стратегии:${NC} "; read -r GVCH
-	GV_BODY=""
-	case "$GVCH" in
-	1) GV_BODY="$(strategy_Gv1; strategy_TCP_common)" ;;
-	2|3|4) GV_BODY="$(strategy_Gv "$GVCH"; strategy_TCP_common)" ;;
-	esac
-
-	# ---------- 5. Стратегия для discord.media (Dv) ----------
-echo -e "\n${CYAN}Стратегия для discord.media${NC}"
-DV_MAX=$(set | grep -oE '^Dv[0-9]+=' | sed 's/^Dv//;s/=//' | sort -n | tail -1)
-DV_MAX=${DV_MAX:-0}
-echo -ne "${YELLOW}Введите версию (${NC}1-$DV_MAX${YELLOW}) или ${NC}0${YELLOW} — без стратегии:${NC} "; read -r DVCH
-DV_SEG=""
-if [ "$DVCH" -ge 1 ] 2>/dev/null && [ "$DVCH" -le "$DV_MAX" ]; then
-	DV_BODY=$(eval "printf '%s' \"\$Dv$DVCH\"")
-	DISCORD_UDP_BODY=$(printf '%s\n' "--filter-udp=19294-19344,50000-50100" "--filter-l7=discord,stun" "--dpi-desync=fake" "--dpi-desync-fake-discord=/opt/zapret/files/fake/stun.bin" "--dpi-desync-fake-stun=/opt/zapret/files/fake/stun.bin" "--dpi-desync-repeats=6")
-	DV_SEG=$(printf '%s\n%s\n--new\n%s' "$DISCORD_UDP_BODY" "#Dv$DVCH" "$DV_BODY")
-fi
-
-	# ---------- Проверка, что хоть что-то выбрано ----------
-	if [ -z "$MAIN_BODY" ] && [ -z "$YV_BODY" ] && [ -z "$GV_BODY" ] && [ -z "$DV_SEG" ]; then
-		echo -e "\n${RED}Не выбрано ни одной стратегии, отмена!${NC}\n"; PAUSE; return
-	fi
-
-	# ---------- Сборка сегментов через --new (без хвостовых/двойных --new) ----------
-	FULL=""
-	add_segment() { seg="$1"; [ -z "$seg" ] && return
-		if [ -n "$FULL" ]; then FULL="$(printf '%s\n--new\n%s' "$FULL" "$seg")"; else FULL="$seg"; fi; }
-
-	[ -n "$YV_BODY" ] && add_segment "$(printf '%s\n%s' "$YV_NAME" "$YV_BODY")"
-	add_segment "$MAIN_BODY"
-	add_segment "$DV_SEG"
-	add_segment "$GV_BODY"
-
-	# ---------- Применяем ----------
-	echo -e "\n${MAGENTA}Применяем собственную стратегию${NC}"
-	sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
-	{ echo "  option NFQWS_OPT '"; printf '%s\n' "$FULL" | clean_new_lines; echo "'"; } >> "$CONF"
-
-	ADD_GP_DOMAINS
-	case "$TRAFFIC" in
-	rkn)
-		echo -e "${CYAN}Скачиваем список ${NC}РКН"
-		[ -f "$HOSTLIST_FILE" ] && cp "$HOSTLIST_FILE" "$BACKUP_FILE"
-		curl -fsSL "$RKN_URL" > "$HOSTLIST_FILE" || echo -e "${RED}Не удалось скачать список РКН${NC}" ;;
-	discord)
-		[ -f "$DISCORD_DEF_HOSTLIST" ] || echo -e "${RED}Файл ${NC}$DISCORD_DEF_HOSTLIST${RED} не найден!${NC}" ;;
-	*)
-		echo -e "${CYAN}Добавляем домены в исключения${NC}"; rm -f "$EXCLUDE_FILE"
-		wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL" || echo -e "${RED}Не удалось загрузить exclude файл${NC}" ;;
-	esac
-	if [ -n "$GV_BODY" ]; then add_ports_if_missing NFQWS_PORTS_UDP "$PORTS_UDP"; add_ports_if_missing NFQWS_PORTS_TCP "$PORTS_TCP"; fi
-	if [ -n "$DV_SEG" ]; then
-		if ! grep -q "option NFQWS_PORTS_UDP.*19294-19344,50000-50100" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'\$/,19294-19344,50000-50100'/" "$CONF"; fi
-		if ! grep -q "option NFQWS_PORTS_TCP.*2053,2083,2087,2096,8443" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_TCP '/s/'\$/,2053,2083,2087,2096,8443'/" "$CONF"; fi
-	fi
-
-	ZAPRET_RESTART
-	echo -e "\n${GREEN}Собственная стратегия применена!${NC}"
-	grep -Fq "$DISCORD_DEF_HOSTLIST" "$CONF" && echo -e "${YELLOW}Область применения:${NC} ${CYAN}только Discord${NC}"
-	grep -Fq "=ts" "$CONF" && echo -e "\n${YELLOW}Для работы этой стратегии нужно один раз в терминале Windows выполнить:${NC}\nnetsh int tcp set global timestamps=enabled"
-	echo; PAUSE
-}
-
+clean_new_lines() { awk '{ lines[NR]=$0 } END { n=NR; m=0; for (i=1; i<=n; i++) { if (lines[i]=="--new" && (i+2)<=n && lines[i+1] ~ /^#/ && lines[i+2]=="--new") continue; m++; out[m]=lines[i] } k=0; for (i=1; i<=m; i++) { if (out[i]=="--new" && k>0 && res[k]=="--new") continue; k++; res[k]=out[i] } start=1; end=k; while (start<=end && res[start]=="--new") start++; while (end>=start && res[end]=="--new") end--; while (start<=end && res[start] ~ /^#/ && (start+1)<=end && res[start+1]=="--new") { start2=start+1; for (j=start2; j<end; j++) res2[j]=res[j+1]; end=end-1; for (j=start2; j<=end; j++) res[j]=res2[j] } for (i=start; i<=end; i++) print res[i] }'; }
+build_custom_strategy() { [ ! -f /etc/init.d/zapret ] && { echo -e "\nZapret ${RED}не установлен!${NC}\n"; PAUSE; return; }; mkdir -p "$TMP_SF"; clear; echo -e "${MAGENTA}Собираем собственную стратегию${NC}"
+echo -e "\n${CYAN}Основная стратегия${NC}"; MV_MAX=0; i=1; while type "strategy_v$i" >/dev/null 2>&1; do MV_MAX=$i; i=$((i + 1)); done; echo -ne "${YELLOW}Введите версию (${NC}1-$MV_MAX${YELLOW}) или ${NC}0${YELLOW} — без основной стратегии:${NC} "; read -r MV
+MAIN_BODY=""; if [ "$MV" -ge 1 ] 2>/dev/null && [ "$MV" -le "$MV_MAX" ]; then MAIN_BODY="$(strategy_v"$MV")"; fi
+TRAFFIC="all"; if [ -n "$MAIN_BODY" ]; then; echo -e "\n${CYAN}Выберите трафик для стратегии${NC}"; echo -e "${CYAN}1) ${GREEN}Весь трафик${NC}\n${CYAN}2) ${GREEN}Только по спискам ${NC}РКН\n${CYAN}3) ${GREEN}Только ${NC}Discord"
+echo -ne "\n${YELLOW}Выберите пункт:${NC} "; read -r TR; case "$TR" in 2) TRAFFIC="rkn" ;; 3) TRAFFIC="discord" ;; *) TRAFFIC="all" ;; esac; case "$TRAFFIC" in rkn) MAIN_BODY=$(printf '%s\n' "$MAIN_BODY" | sed 's|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt|') ;;
+discord) MAIN_BODY=$(printf '%s\n' "$MAIN_BODY" | sed "s|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|--hostlist=$DISCORD_DEF_HOSTLIST|") ;; esac; fi
+echo -e "\n${CYAN}Стратегия для YouTube${NC}"; curl -fsSL "$STR_URL" -o "$TMP_LIST" 2>/dev/null; YV_LIST_FILE="$TMP_SF/custom_yv_list.txt"; : > "$YV_LIST_FILE"; [ -s "$TMP_LIST" ] && while IFS= read -r LINE; do case "$LINE" in \#Yv[0-9]*) echo "$LINE" >> "$YV_LIST_FILE";; esac; done < "$TMP_LIST"
+YV_COUNT=$(wc -l < "$YV_LIST_FILE" 2>/dev/null); YV_COUNT=${YV_COUNT:-0}; YV_BODY=""; YV_NAME=""; if [ "$YV_COUNT" -gt 0 ]; then echo -ne "${YELLOW}Введите версию (${NC}1-$YV_COUNT${YELLOW}) или ${NC}0${YELLOW} — без стратегии:${NC} "; read -r YVCH
+if [ -n "$YVCH" ] && [ "$YVCH" != "0" ]; then YV_NAME=$(sed -n "${YVCH}p" "$YV_LIST_FILE"); if [ -n "$YV_NAME" ]; then YV_BODY_FILE="$TMP_SF/custom_yv_body.txt"; : > "$YV_BODY_FILE"; FLAG=0; while IFS= read -r LINE; do [ "$LINE" = "$YV_NAME" ] && FLAG=1 && continue
+case "$LINE" in \#Yv[0-9]*) FLAG=0;; esac; [ "$FLAG" -eq 1 ] && printf "%b\n" "$LINE" >> "$YV_BODY_FILE"; done < "$TMP_LIST"; YV_BODY=$(cat "$YV_BODY_FILE"); fi; fi; else echo -e "\n${RED}Не удалось получить список стратегий для YouTube!${NC}\n"; fi
+echo -e "\n${CYAN}Игровая стратегия${NC}"; echo -ne "${YELLOW}Введите версию (${NC}1-4${YELLOW}) или ${NC}0${YELLOW} — без стратегии:${NC} "; read -r GVCH; GV_BODY=""; case "$GVCH" in 1) GV_BODY="$(strategy_Gv1; strategy_TCP_common)" ;; 2|3|4) GV_BODY="$(strategy_Gv "$GVCH"; strategy_TCP_common)" ;; esac
+echo -e "\n${CYAN}Стратегия для discord.media${NC}"; DV_MAX=$(set | grep -oE '^Dv[0-9]+=' | sed 's/^Dv//;s/=//' | sort -n | tail -1); DV_MAX=${DV_MAX:-0}; echo -ne "${YELLOW}Введите версию (${NC}1-$DV_MAX${YELLOW}) или ${NC}0${YELLOW} — без стратегии:${NC} "; read -r DVCH
+DV_SEG=""; if [ "$DVCH" -ge 1 ] 2>/dev/null && [ "$DVCH" -le "$DV_MAX" ]; then DV_BODY=$(eval "printf '%s' \"\$Dv$DVCH\"")
+DISCORD_UDP_BODY=$(printf '%s\n' "--filter-udp=19294-19344,50000-50100" "--filter-l7=discord,stun" "--dpi-desync=fake" "--dpi-desync-fake-discord=/opt/zapret/files/fake/stun.bin" "--dpi-desync-fake-stun=/opt/zapret/files/fake/stun.bin" "--dpi-desync-repeats=6")
+DV_SEG=$(printf '%s\n%s\n--new\n%s' "$DISCORD_UDP_BODY" "#Dv$DVCH" "$DV_BODY"); fi; if [ -z "$MAIN_BODY" ] && [ -z "$YV_BODY" ] && [ -z "$GV_BODY" ] && [ -z "$DV_SEG" ]; then echo -e "\n${RED}Не выбрано ни одной стратегии, отмена!${NC}\n"; PAUSE; return; fi
+FULL=""; add_segment() { seg="$1"; [ -z "$seg" ] && return; if [ -n "$FULL" ]; then FULL="$(printf '%s\n--new\n%s' "$FULL" "$seg")"; else FULL="$seg"; fi; }; [ -n "$YV_BODY" ] && add_segment "$(printf '%s\n%s' "$YV_NAME" "$YV_BODY")"
+add_segment "$MAIN_BODY"; add_segment "$DV_SEG"; add_segment "$GV_BODY"; echo -e "\n${MAGENTA}Применяем собственную стратегию${NC}"; sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; { echo "  option NFQWS_OPT '"; printf '%s\n' "$FULL" | clean_new_lines; echo "'"; } >> "$CONF"
+ADD_GP_DOMAINS; case "$TRAFFIC" in rkn) echo -e "${CYAN}Скачиваем список ${NC}РКН"; [ -f "$HOSTLIST_FILE" ] && cp "$HOSTLIST_FILE" "$BACKUP_FILE"; curl -fsSL "$RKN_URL" > "$HOSTLIST_FILE" || echo -e "${RED}Не удалось скачать список РКН${NC}" ;;
+discord) [ -f "$DISCORD_DEF_HOSTLIST" ] || echo -e "${RED}Файл ${NC}$DISCORD_DEF_HOSTLIST${RED} не найден!${NC}" ;; *) echo -e "${CYAN}Добавляем домены в исключения${NC}"; rm -f "$EXCLUDE_FILE"
+wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL" || echo -e "${RED}Не удалось загрузить exclude файл${NC}" ;; esac; if [ -n "$GV_BODY" ]; then add_ports_if_missing NFQWS_PORTS_UDP "$PORTS_UDP"; add_ports_if_missing NFQWS_PORTS_TCP "$PORTS_TCP"; fi
+if [ -n "$DV_SEG" ]; then if ! grep -q "option NFQWS_PORTS_UDP.*19294-19344,50000-50100" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'\$/,19294-19344,50000-50100'/" "$CONF"; fi
+if ! grep -q "option NFQWS_PORTS_TCP.*2053,2083,2087,2096,8443" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_TCP '/s/'\$/,2053,2083,2087,2096,8443'/" "$CONF"; fi; fi
+ZAPRET_RESTART; echo -e "\n${GREEN}Собственная стратегия применена!${NC}"; grep -Fq "$DISCORD_DEF_HOSTLIST" "$CONF" && echo -e "${YELLOW}Область применения:${NC} ${CYAN}только Discord${NC}"
+grep -Fq "=ts" "$CONF" && echo -e "\n${YELLOW}Для работы этой стратегии нужно один раз в терминале Windows выполнить:${NC}\nnetsh int tcp set global timestamps=enabled"; echo; PAUSE; }
 # ==========================================
 # Главное меню
 # ==========================================
