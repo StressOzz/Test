@@ -1033,7 +1033,7 @@ then echo -e "${YELLOW}Стратегия Zapret:${NC}    ${CYAN}${GEN}$current$
 then echo -e "${YELLOW}Стратегия Zapret:${NC}    ${CYAN}${GEN}РКН${DV:+ $DV}${GV:+ $GV}${UPD:+ $UPD}${WS:+ $WS}${ME:+ $ME}${NC}"; elif [ -n "$line" ]; then echo -e "${YELLOW}Стратегия Zapret:${NC}    ${CYAN}${line#?}${GV:+ $GV}${NC}"
 
 
-elif [ -n "$GV" ] && [ -z "$DV" ]; then echo -e "${YELLOW}Стратегия Zapret:${NC}    ${CYAN}${GV#/ }${NC}"; elif [ -n "$DV" ] && [ -z "$GV" ]; then echo -e "${YELLOW}Стратегия Zapret:${NC}    ${CYAN}${DV#/ }${NC}"
+elif [ -n "$GV" ] && [ -z "$DV" ]; then echo -e "${YELLOW}Стратегия Zapret:${NC}    ${CYAN}${GV#/ }${NC}"; elif [ -z "$GV" ] && [ -n "$DV" ]; then echo -e "${YELLOW}Стратегия Zapret:${NC}    ${CYAN}${DV#/ }${NC}"; elif [ -n "$GV" ] && [ -n "$DV" ]; then echo -e "${YELLOW}Стратегия Zapret:${NC}    ${CYAN}${GV#/ } / ${DV#/ }${NC}"
 
 fi; fi
 
