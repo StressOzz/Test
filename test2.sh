@@ -632,7 +632,7 @@ echo -e "\n${CYAN}Применяем стратегию: ${NC}$DISPLAY_NAME"; SA
 [ "$FLAG" -eq 1 ] && printf "%b\n" "$LINE" >> "$SAVED_STR"; done < "$TMP_LIST"; awk '/^[[:space:]]*option NFQWS_OPT '\''/{flag=1} flag{print}' "$CONF" > "$OLD_STR"; sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; sed -i "/^[[:space:]]*#Yv[0-9]\+/d" "$OLD_STR"
 awk '{if(skip){if($0=="--new"||$0~/\047/){skip=0;next}if($0~/^[[:space:]]*$/)next;next}if($0=="--filter-tcp=443"){getline n;if(n=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt"){skip=1;next}else{print $0;print n;next}}if($0=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt")has_google=1;if($0~/^[[:space:]]*#Yv/)next;print}' "$OLD_STR" > "$NEW_STR"
 awk 'BEGIN{inserted=0;has_google=0} $0=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt"{has_google=1} $0=="--new"&&!inserted{while((getline l<"'"$SAVED_STR"'")>0) if(l!~/^[[:space:]]*$/) print l; print "--new"; inserted=1; next} $0~/^[[:space:]]*option NFQWS_OPT \047$/&&!has_google&&!inserted{print; print "'"$SELECTED_NAME"'"; while((getline l<"'"$SAVED_STR"'")>0) if(l!~/^[[:space:]]*$/) print l; print "--new"; inserted=1; next} {print}' "$NEW_STR" > "$FINAL_STR"
-cat "$FINAL_STR" >> "$CONF"; awk '{if($0=="--new"){if(prev!="--new")print}else print;prev=$0}' "$CONF" > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"; grep -q "^[[:space:]]*' *\$" "$CONF" || echo "'" >> "$CONF"; ADD_GP_DOMAINS; ZAPRET_RESTART; echo -e "${GREEN}Стратегия применена!${NC}\n"; echo; show_ts_warning; PAUSE; }
+cat "$FINAL_STR" >> "$CONF"; awk '{if($0=="--new"){if(prev!="--new")print}else print;prev=$0}' "$CONF" > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"; grep -q "^[[:space:]]*' *\$" "$CONF" || echo "'" >> "$CONF"; ADD_GP_DOMAINS; ZAPRET_RESTART; echo -e "${GREEN}Стратегия применена!${NC}\n"; show_ts_warning; PAUSE; }
 # ==========================================
 # DNS over HTTPS
 # ==========================================
@@ -1114,7 +1114,7 @@ discord) [ -f "$DISCORD_DEF_HOSTLIST" ] || echo -e "${RED}Файл ${NC}$DISCORD
 wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL" || echo -e "${RED}Не удалось загрузить exclude файл${NC}" ;; esac; if [ -n "$GV_BODY" ]; then add_ports_if_missing NFQWS_PORTS_UDP "$PORTS_UDP"; add_ports_if_missing NFQWS_PORTS_TCP "$PORTS_TCP"; fi
 if [ -n "$DV_SEG" ]; then if ! grep -q "option NFQWS_PORTS_UDP.*19294-19344,50000-50100" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'\$/,19294-19344,50000-50100'/" "$CONF"; fi
 if ! grep -q "option NFQWS_PORTS_TCP.*2053,2083,2087,2096,8443" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_TCP '/s/'\$/,2053,2083,2087,2096,8443'/" "$CONF"; fi; fi
-ZAPRET_RESTART; echo -e "\n${GREEN}Собственная стратегия применена!${NC}"; grep -Fq "$DISCORD_DEF_HOSTLIST" "$CONF" && echo -e "${YELLOW}Область применения:${NC} ${CYAN}только Discord${NC}"; echo; show_ts_warning; PAUSE; }
+ZAPRET_RESTART; echo -e "\n${GREEN}Собственная стратегия применена!${NC}"; grep -Fq "$DISCORD_DEF_HOSTLIST" "$CONF" && echo -e "${YELLOW}Область применения:${NC} ${CYAN}только Discord${NC}\n"; show_ts_warning; PAUSE; }
 # ==========================================
 # Главное меню
 # ==========================================
