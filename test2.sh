@@ -147,7 +147,7 @@ do [ -d /opt/zapret ] && [ ! -f "/opt/zapret/files/fake/$f" ] && { [ "$MSG" = 0 
 ADD_FAKE_FLOW
 
 show_ts_warning() { grep -Fq "=ts" "$CONF" || return; [ -f "$TS_WARN_FLAG" ] && [ "$(cat "$TS_WARN_FLAG" 2>/dev/null)" = "1" ] && return
-mkdir -p "$(dirname "$TS_WARN_FLAG")"; echo 1 > "$TS_WARN_FLAG"; echo -e "\n${YELLOW}Для работы этой стратегии нужно один раз в терминале Windows выполнить:${NC}\nnetsh int tcp set global timestamps=enabled\n"; }
+mkdir -p "$(dirname "$TS_WARN_FLAG")"; echo 1 > "$TS_WARN_FLAG"; echo -e "\n${YELLOW}Для работы этой стратегии нужно один раз в терминале Windows выполнить:${NC}\nnetsh int tcp set global timestamps=enabled"; }
 
 # ==========================================
 #ZAPRET2
