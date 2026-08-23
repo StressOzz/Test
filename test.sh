@@ -29,7 +29,7 @@ GREEN="\033[1;32m"; RED="\033[1;31m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MA
 CONF="/etc/config/zapret"; CUSTOM_DIR="/opt/zapret/init.d/openwrt/custom.d/"; HOSTLIST_FILE="/opt/zapret/ipset/zapret-hosts-user.txt"; fileGP="/opt/zapret/ipset/zapret-hosts-google.txt"
 TMP_SF="/tmp/zapret_temp"; HOSTS_FILE="/etc/hosts"; TMP_LIST="$TMP_SF/zapret_yt_list.txt"; tmpDIR="/tmp/PodkopAWG"
 GV_XTREME_FILE="/opt/zapret/tmp/GvXtreme"; GV_XTREME_PORTS="80,88,444-65535"; GV_XTREME_NFQWS_PORTS="80,88,443-65535"
-IF_NAME="AWG"; PROTO="amneziawg"; DEV_NAME="amneziawg0"
+IF_NAME="AWG"; PROTO="amneziawg"; DEV_NAME="amneziawg0"; DISCORD_DEF_HOSTLIST="/opt/zapret/ipset_def/zapret-hosts-user.txt"
 SAVED_STR="$TMP_SF/StrYou.txt"; HOSTS_USER="$TMP_SF/hosts-user.txt"; OUT_DPI="$TMP_SF/dpi_urls.txt"; OUT="$TMP_SF/str_flow.txt"; ZIP="$TMP_SF/repo.zip"
 BACKUP_FILE="/opt/zapret/tmp/hosts_temp.txt"; STR_FILE="$TMP_SF/str_test.txt"; TEMP_FILE="$TMP_SF/str_temp.txt"
 RESULTS="/opt/zapret/tmp/zapret_bench.txt"; BACK="$TMP_SF/zapret_back.txt"; TMP_RES="$TMP_SF/zapret_results_all.$$"
@@ -46,45 +46,54 @@ TGWeb="#TelegramWeb\n149.154.167.220 core.telegram.org api.telegram.org flora.we
 149.154.167.220 kws4.web.telegram.org kws5-1.web.telegram.org kws5.web.telegram.org pluto-1.web.telegram.org pluto.web.telegram.org td.telegram.org telegram.dog
 149.154.167.220 telegram.me telegram.org telegram.space telesco.pe venus.web.telegram.org web.telegram.org zws1-1.web.telegram.org zws1.web.telegram.org
 149.154.167.220 tg.dev t.me zws2-1.web.telegram.org zws2.web.telegram.org zws4-1.web.telegram.org zws5-1.web.telegram.org zws5.web.telegram.org"
-NTC="#ntc.party\n130.255.77.28 ntc.party"; TWCH="#Twitch\n95.182.120.241 usher.ttvnw.net gql.twitch.tv"; NALOG="#Nalog\n213.24.64.175 lkfl2.nalog.ru\n213.24.64.181 lknpd.nalog.ru"
+NTC="#ntc.party\n130.255.77.28 ntc.party"; TWCH="#Twitch\n45.155.204.190 usher.ttvnw.net gql.twitch.tv"; NALOG="#Nalog\n213.24.64.175 lkfl2.nalog.ru\n213.24.64.181 lknpd.nalog.ru"
 RUTOR="#rutor\n173.245.58.219 rutor.info d.rutor.info"; LIBRUSEC="#lib.rus.ec\n185.39.18.98 lib.rus.ec www.lib.rus.ec"
-AI="#Gemini\n95.182.120.241 gemini.google.com\n#Grok\n95.182.120.241 grok.com accounts.x.ai assets.grok.com
-#OpenAI\n95.182.120.241 chatgpt.com ab.chatgpt.com auth.openai.com auth0.openai.com platform.openai.com cdn.oaistatic.com
-95.182.120.241 tcr9i.chat.openai.com webrtc.chatgpt.com android.chat.openai.com api.openai.com operator.chatgpt.com
-95.182.120.241 sora.chatgpt.com sora.com videos.openai.com ios.chat.openai.com cdn.auth0.com files.oaiusercontent.com
-#Microsoft\n95.182.120.241 copilot.microsoft.com sydney.bing.com edgeservices.bing.com rewards.bing.com
-95.182.120.241 xsts.auth.xboxlive.com xgpuwebf2p.gssv-play-prod.xboxlive.com xgpuweb.gssv-play-prod.xboxlive.com
-#ElevenLabs\n95.182.120.241 elevenlabs.io api.us.elevenlabs.io elevenreader.io api.elevenlabs.io help.elevenlabs.io
-#DeepL\n95.182.120.241 deepl.com www.deepl.com www2.deepl.com login-wall.deepl.com w.deepl.com dict.deepl.com ita-free.www.deepl.com
-95.182.120.241 write-free.www.deepl.com experimentation.deepl.com experimentation-grpc.deepl.com ita-free.app.deepl.com
-95.182.120.241 ott.deepl.com api-free.deepl.com backend.deepl.com clearance.deepl.com errortracking.deepl.com
-95.182.120.241 oneshot-free.www.deepl.com checkout.www.deepl.com gtm.deepl.com auth.deepl.com shield.deepl.com
-#Claude\n95.182.120.241 claude.ai console.anthropic.com api.anthropic.com
-#Trae.ai\n95.182.120.241 trae-api-sg.mchost.guru api.trae.ai api-sg-central.trae.ai api16-normal-alisg.mchost.guru
-#Windsurf\n95.182.120.241 windsurf.com codeium.com server.codeium.com web-backend.codeium.com  marketplace.windsurf.com
-95.182.120.241 unleash.codeium.com inference.codeium.com windsurf-stable.codeium.com
-144.31.14.104 windsurf-telemetry.codeium.com\n#Manus\n95.182.120.241 manus.im api.manus.im\n#Notion\n95.182.120.241 www.notion.so calendar.notion.so
-#AIStudio\n95.182.120.241 aistudio.google.com generativelanguage.googleapis.com aitestkitchen.withgoogle.com aisandbox-pa.googleapis.com xsts.auth.xboxlive.com
-95.182.120.241 webchannel-alkalimakersuite-pa.clients6.google.com alkalimakersuite-pa.clients6.google.com assistant-s3-pa.googleapis.com
-95.182.120.241 proactivebackend-pa.googleapis.com robinfrontend-pa.googleapis.com o.pki.goog labs.google labs.google.com notebooklm.google
-95.182.120.241 notebooklm.google.com jules.google.com stitch.withgoogle.com gemini.google.com copilot.microsoft.com edgeservices.bing.com
-95.182.120.241 rewards.bing.com sydney.bing.com xboxdesignlab.xbox.com xgpuweb.gssv-play-prod.xboxlive.com xgpuwebf2p.gssv-play-prod.xboxlive.com"
+AI="#Gemini\n45.155.204.190 gemini.google.com\n#Grok\n45.155.204.190 grok.com accounts.x.ai assets.grok.com
+#OpenAI\n45.155.204.190 chatgpt.com ab.chatgpt.com auth.openai.com auth0.openai.com platform.openai.com cdn.oaistatic.com
+45.155.204.190 tcr9i.chat.openai.com webrtc.chatgpt.com android.chat.openai.com api.openai.com operator.chatgpt.com
+45.155.204.190 sora.chatgpt.com sora.com videos.openai.com ios.chat.openai.com cdn.auth0.com files.oaiusercontent.com
+#Microsoft\n45.155.204.190 copilot.microsoft.com sydney.bing.com edgeservices.bing.com rewards.bing.com
+45.155.204.190 xsts.auth.xboxlive.com xgpuwebf2p.gssv-play-prod.xboxlive.com xgpuweb.gssv-play-prod.xboxlive.com
+#ElevenLabs\n45.155.204.190 elevenlabs.io api.us.elevenlabs.io elevenreader.io api.elevenlabs.io help.elevenlabs.io
+#DeepL\n45.155.204.190 deepl.com www.deepl.com www2.deepl.com login-wall.deepl.com w.deepl.com dict.deepl.com ita-free.www.deepl.com
+45.155.204.190 write-free.www.deepl.com experimentation.deepl.com experimentation-grpc.deepl.com ita-free.app.deepl.com
+45.155.204.190 ott.deepl.com api-free.deepl.com backend.deepl.com clearance.deepl.com errortracking.deepl.com
+45.155.204.190 oneshot-free.www.deepl.com checkout.www.deepl.com gtm.deepl.com auth.deepl.com shield.deepl.com
+#Claude\n45.155.204.190 claude.ai console.anthropic.com api.anthropic.com
+#Trae.ai\n45.155.204.190 trae-api-sg.mchost.guru api.trae.ai api-sg-central.trae.ai api16-normal-alisg.mchost.guru
+#Windsurf\n45.155.204.190 windsurf.com codeium.com server.codeium.com web-backend.codeium.com  marketplace.windsurf.com
+45.155.204.190 unleash.codeium.com inference.codeium.com windsurf-stable.codeium.com
+144.31.14.104 windsurf-telemetry.codeium.com\n#Manus\n45.155.204.190 manus.im api.manus.im\n#Notion\n45.155.204.190 www.notion.so calendar.notion.so
+#AIStudio\n45.155.204.190 aistudio.google.com generativelanguage.googleapis.com aitestkitchen.withgoogle.com aisandbox-pa.googleapis.com xsts.auth.xboxlive.com
+45.155.204.190 webchannel-alkalimakersuite-pa.clients6.google.com alkalimakersuite-pa.clients6.google.com assistant-s3-pa.googleapis.com
+45.155.204.190 proactivebackend-pa.googleapis.com robinfrontend-pa.googleapis.com o.pki.goog labs.google labs.google.com notebooklm.google
+45.155.204.190 notebooklm.google.com jules.google.com stitch.withgoogle.com gemini.google.com copilot.microsoft.com edgeservices.bing.com
+45.155.204.190 rewards.bing.com sydney.bing.com xboxdesignlab.xbox.com xgpuweb.gssv-play-prod.xboxlive.com xgpuwebf2p.gssv-play-prod.xboxlive.com"
 SCell="#Supercell\n103.27.157.38 accounts.supercell.com cdn.id.supercell.com clashofclans.inbox.supercell.com game-assets.brawlstarsgame.com
 103.27.157.38 game-assets.clashofclans.com game-assets.clashroyaleapp.com security.id.supercell.com store.supercell.com
 31.25.239.132 accounts.supercell.com cdn.id.supercell.com clashofclans.inbox.supercell.com game-assets.brawlstarsgame.com
 31.25.239.132 game-assets.clashofclans.com game-assets.clashroyaleapp.com game.boombeachgame.com game.mocogame.com security.id.supercell.com store.supercell.com
 185.246.223.127 game.brawlstarsgame.com\n62.133.62.97 game.clashroyaleapp.com\n193.23.209.189 gamea.clashofclans.com\n108.61.167.26 game.squadbustersgame.com"
-SPFY="#Spotify\n95.182.120.241 api.spotify.com login5.spotify.com encore.scdn.co gew1-spclient.spotify.com spclient.wg.spotify.com
-95.182.120.241 api-partner.spotify.com aet.spotify.com www.spotify.com accounts.spotify.com open.spotify.com
-95.182.120.241 accounts.scdn.co gew1-dealer.spotify.com open-exp.spotifycdn.com www-growth.scdn.co"; TAPEop="#tapeop.dev\n216.24.57.251 www.tapeop.dev tapeop.dev\n216.24.57.3 www.tapeop.dev tapeop.dev"
+SPFY="#Spotify\n45.155.204.190 api.spotify.com login5.spotify.com encore.scdn.co gew1-spclient.spotify.com spclient.wg.spotify.com
+45.155.204.190 api-partner.spotify.com aet.spotify.com www.spotify.com accounts.spotify.com open.spotify.com
+45.155.204.190 accounts.scdn.co gew1-dealer.spotify.com open-exp.spotifycdn.com www-growth.scdn.co"; TAPEop="#tapeop.dev\n216.24.57.251 www.tapeop.dev tapeop.dev\n216.24.57.3 www.tapeop.dev tapeop.dev"
+SPFYEXT="#SpotifyEXT\n45.155.204.190 spotify.com www.spotify.com accounts.spotify.com login.spotify.com login5.spotify.com login.app.spotify.com auth.spotify.com account.spotify.com api.spotify.com api-partner.spotify.com spclient.wg.spotify.com gew1-spclient.spotify.com
+45.155.204.190 guc3-spclient.spotify.com gae2-spclient.spotify.com gue1-spclient.spotify.com gnl-spclient.spotify.com spclient.spotify.com ap-gew1.spotify.com ap-gue1.spotify.com ap-gae2.spotify.com ap-gew4.spotify.com ap-sto3.spotify.com
+45.155.204.190 ap-guc3.spotify.com ap.spotify.com apresolve.spotify.com aet.spotify.com gew1-dealer.g2.spotify.com guc3-dealer.g2.spotify.com gue1-dealer.g2.spotify.com dealer.spotify.com dealer-wg.spotify.com edge-web.dual-gslb.spotify.com
+45.155.204.190 client.spotify.com web-partner.spotify.com connect.spotify.com gce.spotify.com clienttoken.spotify.com exp.wg.spotify.com pixel.spotify.com pixel-static.spotify.com image-upload.spotify.com content.spotify.com analytics.spotify.com
+45.155.204.190 crashdump.spotify.com log.spotify.com logger.spotify.com metrics.spotify.com desktop.spotify.com audio-fa-tls13.spotifycdn.com heads-fa-tls13.spotifycdn.com heads4-fa-tls13.spotifycdn.com image-cdn-fa.spotifycdn.com
+45.155.204.190 concerts.spotifycdn.com mrkt.spotifycdn.com pickasso.spotifycdn.com podz-content.spotifycdn.com seed-mix-image.spotifycdn.com thisis-images.spotifycdn.com wap.spotifycdn.com web-sdk-assets.spotifycdn.com spotifycdn.com spotifycdn.net
+35.186.224.24 open.spotify.com\n162.159.141.124 audio4-fa-tls13.spotifycdn.com audio-cf.spotifycdn.com open-exp.spotifycdn.com\n23.36.163.34 audio-ak-spotify-com.akamaized.net\n2.16.168.44 audio4-ak-spotify-com.akamaized.net
+199.232.210.248 scdn.co i.scdn.co line-up.scdn.co mosaic.scdn.co daily-mix.scdn.co lineup-images.scdn.co encore.scdn.co image-cdn-fa.scdn.co accounts.scdn.co www.scdn.co www-growth.scdn.co av.scdn.co seafoam.scdn.co
+23.48.23.145 heads-ak-spotify-com.akamaized.net\n45.155.204.190 xpui.app.spotify.com"
 GITH_RAW="#githubusercontent.com\n185.199.109.133 raw.githubusercontent.com release-assets.githubusercontent.com
 185.199.108.133 private-user-images.githubusercontent.com gist.githubusercontent.com avatars.githubusercontent.com"
 GITH="#github.com\n140.82.114.3 github.com\n185.199.110.154 github.githubassets.com\n185.199.110.133 camo.githubassets.com"
 USoft="#Ubisoft\n52.6.7.14 ubi.com\n172.67.139.108 r6s.com\n54.155.2.87 rainbow6.com\n52.222.149.31 ubisoft.com\n54.76.54.196 uplay.ubisoft.com\n2.23.89.92 static3.cdn.ubi.com
 18.209.141.203 connect.ubisoft.com\n2.23.89.244 ubiservices.cdn.ubi.com\n99.83.188.134 public-ubiservices.ubi.com\n3.33.249.140 public-ws-ubiservices.ubi.com\n"
-ALL_BLOCKS="$AI\n$INSTAGRAM\n$NTC\n$RUTOR\n$LIBRUSEC\n$TGWeb\n$TWCH\n$SCell\n$SPFY\n$GITH_RAW"; TMP_ARCHIVE_RS="/tmp/tg-ws-proxy-rs.tar.gz"; TMP_DIR_RS="/tmp/tg-ws-proxy-rs"
+ALL_BLOCKS="$AI\n$INSTAGRAM\n$NTC\n$LIBRUSEC\n$TGWeb\n$TWCH\n$SCell\n$SPFY\n$GITH_RAW"; TMP_ARCHIVE_RS="/tmp/tg-ws-proxy-rs.tar.gz"; TMP_DIR_RS="/tmp/tg-ws-proxy-rs"
 hosts_enabled() { if grep -q "### dns.malw.link" /etc/hosts; then hosts_echo="Malw.link"; return 0; elif grep -q "#mafioznik" /etc/hosts; then hosts_echo="Mafioznik"; return 0; elif grep -q "### dns.geohide.ru" /etc/hosts; then hosts_echo="GeoHide"; return 0
-elif grep -q "95.182.120.241\|instagram.com\|rutor.info\|lib.rus.ec\|ntc.party\|twitch.tv\|web.telegram.org\|www.spotify.com\|store.supercell.com\|raw.githubusercontent.com\|lkfl2.nalog.ru" /etc/hosts; then hosts_echo="добавлены"; return 0; fi; return 1; }
+elif grep -q "45.155.204.190\|instagram.com\|rutor.info\|lib.rus.ec\|ntc.party\|twitch.tv\|web.telegram.org\|www.spotify.com\|store.supercell.com\|raw.githubusercontent.com\|lkfl2.nalog.ru" /etc/hosts; then hosts_echo="добавлены"; return 0; fi; return 1; }
 hosts_add() { printf "%b\n" "$1" | while IFS= read -r L; do grep -qxF "$L" /etc/hosts || echo "$L" >> /etc/hosts; done; /etc/init.d/dnsmasq restart >/dev/null 2>&1; }; D() { printf '%b' "$(printf '%s' "$1" | sed 's/../\\x&/g')"; }
 ZAPRET_RESTART () { chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1; sleep 1; }
 PAUSE() { echo -ne "Нажмите Enter..."; read dummy; }; BACKUP_DIR="/opt/zapret_backup"; DATE_FILE="$BACKUP_DIR/date_backup.txt"
@@ -594,13 +603,10 @@ INFO_ZPR_STR; echo -e "\n${CYAN}0) ${GREEN}Меню тестирования с�
 echo -e "${CYAN}5) ${NC}$RKN_TEXT_MENU${NC}\n${CYAN}6) ${GREEN}Обновить список исключений${NC}"; if grep -q -F -- "--wssize 1:6" "$CONF"; then WSSIZE_MENU_TEXT="${GREEN}Удалить из стратегии блок с ${NC}--wssize 1:6"; else WSSIZE_MENU_TEXT="${GREEN}Добавить в стратегию блок с ${NC}--wssize 1:6"; fi
 if grep -q -F -- "--methodeol" "$CONF"; then methodeol_MENU_TEXT="${GREEN}Удалить из стратегии блок с ${NC}--methodeol"; else methodeol_MENU_TEXT="${GREEN}Добавить в стратегию блок с ${NC}--methodeol"; fi
 echo -e "${CYAN}7) ${WSSIZE_MENU_TEXT}${NC}"; echo -e "${CYAN}8) ${methodeol_MENU_TEXT}${NC}"; if grep -q "^#udp443" $CONF; then echo -e "${CYAN}9) ${GREEN}Удалить из стратегии блок с ${NC}--filter-udp=443"; else echo -e "${CYAN}9) ${GREEN}Добавить в стратегию блок с ${NC}--filter-udp=443"; fi
-
-echo -e "${CYAN}c) ${GREEN}Собрать собственную стратегию${NC}"
-
-echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read choiceST; case "$choiceST" in 1) strategy_CHOUSE;; 2) flowseal_menu;; 3) choose_strategy_YOUTUBE;; 4) fix_GAME;;
-5) toggle_rkn_bypass; continue;; 6) echo -e "\n${MAGENTA}Обновляем список исключений${NC}\n${CYAN}Останавливаем ${NC}Zapret"; /etc/init.d/zapret stop >/dev/null 2>&1; echo -e "${CYAN}Добавляем домены в исключения${NC}"
+echo -e "${CYAN}c) ${GREEN}Собрать собственную стратегию${NC}"; echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read choiceST; case "$choiceST" in 1) strategy_CHOUSE;; 2) flowseal_menu;; 3) choose_strategy_YOUTUBE;; 4) fix_GAME;;
+c|C|с|С) build_custom_strategy;; 5) toggle_rkn_bypass; continue;; 6) echo -e "\n${MAGENTA}Обновляем список исключений${NC}\n${CYAN}Останавливаем ${NC}Zapret"; /etc/init.d/zapret stop >/dev/null 2>&1; echo -e "${CYAN}Добавляем домены в исключения${NC}"
 rm -f "$EXCLUDE_FILE"; wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL" || echo -e "\n${RED}Не удалось загрузить exclude файл${NC}\n"; echo -e "${CYAN}Перезапускаем ${NC}Zapret"; ZAPRET_RESTART; echo -e "${GREEN}Список исключений обновлён!${NC}\n"; PAUSE;;
-c|C|с|С) build_custom_strategy;; 7) if grep -q -F -- "--wssize 1:6" "$CONF"; then remove_wssize; else add_wssize; fi; continue;; 8) if grep -q -F -- "--methodeol" "$CONF"; then remove_methodeol; else add_methodeol; fi; continue;; 0) TEST_menu;;
+7) if grep -q -F -- "--wssize 1:6" "$CONF"; then remove_wssize; else add_wssize; fi; continue;; 8) if grep -q -F -- "--methodeol" "$CONF"; then remove_methodeol; else add_methodeol; fi; continue;; 0) TEST_menu;;
 9) if grep -q "^#udp443" $CONF; then echo -e "\n${MAGENTA}Удаляем блок с --filter-udp=443\n${CYAN}Удаляем блок из стратегии\nПерезапускаем ${NC}Zapret"; sed -i '/^#udp443$/,+6d' $CONF; ZAPRET_RESTART; echo -e "${GREEN}Блок с ${NC}--filter-udp=443${GREEN} удалён!${NC}\n"; PAUSE; else echo -e "\n${MAGENTA}Добавляем блок с --filter-udp=443\n${CYAN}Добавляем блок в стратегию\nПерезапускаем ${NC}Zapret"
 sed -i "/^[[:space:]]*option NFQWS_OPT '/a\\#udp443\\n--filter-udp=443\\n--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt\\n--dpi-desync=fake\\n--dpi-desync-repeats=11\\n--dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin\\n--new" $CONF
 ZAPRET_RESTART; echo -e "${GREEN}Блок с ${NC}--filter-udp=443${GREEN} добавлен!${NC}\n"; PAUSE; fi ;; *) return;; esac; done; }
@@ -720,16 +726,16 @@ menu_hosts() { while true; do clear; S_ALL=$(status_block "$ALL_BLOCKS" && echo 
 echo -e "${MAGENTA}Меню управления доменами в hosts${NC}\n"; if hosts_enabled; then echo -e "${YELLOW}Домены в hosts: ${GREEN}$hosts_echo${NC}"; prin=1; fi; [ "$prin" -eq 1 ] && echo
 echo -e "${CYAN} 0) ${GREEN}$(get_state "$NALOG")${NC} nalog.ru\n${CYAN} 1) ${GREEN}$(get_state "$RUTOR")${NC} rutor.info\n${CYAN} 2) ${GREEN}$(get_state "$NTC")${NC} ntc.party"
 echo -e "${CYAN} 3) ${GREEN}$(get_state "$INSTAGRAM")${NC} Instagram & Facebook\n${CYAN} 4) ${GREEN}$(get_state "$LIBRUSEC")${NC} lib.rus.ec\n${CYAN} 5) ${GREEN}$(get_state "$AI")${NC} AI сервисы"
-echo -e "${CYAN} 6) ${GREEN}$(get_state "$TWCH")${NC} Twitch\n${CYAN} 7) ${GREEN}$(get_state "$TGWeb")${NC} Telegram Web\n${CYAN} 8) ${GREEN}$(get_state "$SPFY")${NC} Spotify\n${CYAN} 9) ${GREEN}$(get_state "$SCell")${NC} Supercell"
-echo -e "${CYAN}10) ${GREEN}$(get_state "$GITH_RAW")${NC} githubusercontent.com\n${CYAN}11) ${GREEN}$(get_state "$GITH")${NC} github.com\n${CYAN}12) ${GREEN}$(get_state "$USoft")${NC} Ubisoft"
-echo -e "${CYAN}13) ${GREEN}$(get_state "$TAPEop")${NC} tapeop.dev\n${CYAN}14) $S_ALL\n${CYAN}15) ${GREEN}Заменить ${NC}hosts${GREEN} на ${NC}GeoHide hosts"
-echo -e "${CYAN}16) ${GREEN}Заменить ${NC}hosts${GREEN} на ${NC}Mafioznik hosts\n${CYAN}17) ${GREEN}Заменить ${NC}hosts${GREEN} на ${NC}Malw.link hosts\n${CYAN}18) ${GREEN}Восстановить ${NC}hosts"
+echo -e "${CYAN} 6) ${GREEN}$(get_state "$TWCH")${NC} Twitch\n${CYAN} 7) ${GREEN}$(get_state "$TGWeb")${NC} Telegram Web\n${CYAN} 8) ${GREEN}$(get_state "$SPFY")${NC} Spotify\n${CYAN} 9) ${GREEN}$(get_state "$SPFYEXT")${NC} Spotify extended"
+echo -e "${CYAN}10) ${GREEN}$(get_state "$SCell")${NC} Supercell\n${CYAN}11) ${GREEN}$(get_state "$GITH_RAW")${NC} githubusercontent.com\n${CYAN}12) ${GREEN}$(get_state "$GITH")${NC} github.com\n${CYAN}13) ${GREEN}$(get_state "$USoft")${NC} Ubisoft"
+echo -e "${CYAN}14) ${GREEN}$(get_state "$TAPEop")${NC} tapeop.dev\n${CYAN}15) $S_ALL\n${CYAN}16) ${GREEN}Заменить ${NC}hosts${GREEN} на ${NC}GeoHide hosts"
+echo -e "${CYAN}17) ${GREEN}Заменить ${NC}hosts${GREEN} на ${NC}Mafioznik hosts\n${CYAN}18) ${GREEN}Заменить ${NC}hosts${GREEN} на ${NC}Malw.link hosts\n${CYAN}19) ${GREEN}Восстановить ${NC}hosts"
 echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} ";read -r c; case "$c" in 0) toggle_block "$NALOG";; 1) toggle_block "$RUTOR";; 2) toggle_block "$NTC";; 3) toggle_block "$INSTAGRAM";;
-4) toggle_block "$LIBRUSEC";; 5) toggle_block "$AI";; 6) toggle_block "$TWCH";; 7) toggle_block "$TGWeb";; 8) toggle_block "$SPFY";; 9) toggle_block "$SCell";; 10) toggle_block "$GITH_RAW";; 11) toggle_block "$GITH";;
-12) toggle_block "$USoft";; 13) toggle_block "$TAPEop";; 14) toggle_all;; 15) add_GEO_HOSTS;; 16) echo -e "\n${MAGENTA}Заменяем hosts на Mafioznik hosts${NC}"; wget -qO /etc/hosts https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/files/hosts_mafioznik.txt >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось скачать файл hosts${NC}\n"; PAUSE; }
-/etc/init.d/dnsmasq restart >/dev/null 2>&1; echo -e "hosts ${GREEN}заменён на ${NC}Mafioznik hosts${GREEN}!${NC}\n"; PAUSE;; 17) echo -e "\n${MAGENTA}Заменяем hosts на Malw.link hosts${NC}"
+4) toggle_block "$LIBRUSEC";; 5) toggle_block "$AI";; 6) toggle_block "$TWCH";; 7) toggle_block "$TGWeb";; 8) toggle_block "$SPFY";; 9) toggle_block "$SPFYEXT";; 10) toggle_block "$SCell";; 11) toggle_block "$GITH_RAW";; 12) toggle_block "$GITH";;
+13) toggle_block "$USoft";; 14) toggle_block "$TAPEop";; 15) toggle_all;; 16) add_GEO_HOSTS;; 17) echo -e "\n${MAGENTA}Заменяем hosts на Mafioznik hosts${NC}"; wget -qO /etc/hosts https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/files/hosts_mafioznik.txt >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось скачать файл hosts${NC}\n"; PAUSE; }
+/etc/init.d/dnsmasq restart >/dev/null 2>&1; echo -e "hosts ${GREEN}заменён на ${NC}Mafioznik hosts${GREEN}!${NC}\n"; PAUSE;; 18) echo -e "\n${MAGENTA}Заменяем hosts на Malw.link hosts${NC}"
 wget -qO /etc/hosts https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/files/hosts_malw.link.txt >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось скачать файл hosts${NC}\n"; PAUSE; }
-/etc/init.d/dnsmasq restart >/dev/null 2>&1; echo -e "hosts ${GREEN}заменён на ${NC}Malw.link hosts${GREEN}!${NC}\n"; PAUSE;; 18) hosts_reset;; *) break;; esac; done; }
+/etc/init.d/dnsmasq restart >/dev/null 2>&1; echo -e "hosts ${GREEN}заменён на ${NC}Malw.link hosts${GREEN}!${NC}\n"; PAUSE;; 19) hosts_reset;; *) break;; esac; done; }
 status_block() { local line; while IFS= read -r line; do [ -z "$line" ] && continue; grep -Fxq "$line" "$HOSTS_FILE" || return 1; done <<EOF
 $(printf '%b\n' "$1")
 EOF
@@ -996,7 +1002,7 @@ if [ -f /etc/config/netshift ] && grep -q "^[[:space:]]*option subscription_url"
 echo -e "${CYAN}6) ${GREEN}Интегрировать ${NC}AWG${GREEN} в ${NC}NetShift"; echo -e "${CYAN}7) ${GREEN}Интегрировать ${NC}ByeDPI${GREEN} в ${NC}NetShift"; if pkg_is_installed byedpi; then echo -e "${CYAN}8) ${GREEN}Изменить стратегию ${NC}ByeDPI"; fi
 echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}"; echo -ne "\n${YELLOW}Выберите пункт:${NC} "; read -r choicePOD; case "$choicePOD" in 1) PODKOP_INSTALL ;; 2) BYEDPI_INSTALL ;;
 3) if pkg_is_installed amneziawg-tools && pkg_is_installed luci-proto-amneziawg && pkg_is_installed kmod-amneziawg; then if ! pkg_is_installed splify; then AWG_DELETE
-else echo -e "\n${RED}Удаление невозможно!${NC}"; echo -e "AmneziaWG ${YELLOW}используется в ${NC}splify\n"; PAUSE; fi; else install_AWG; echo -e "\nAmneziaWG ${GREEN}установлен!${NC}"; fi ;;
+else echo -e "\n${RED}Удаление невозможно!${NC}"; echo -e "AmneziaWG ${YELLOW}используется в ${NC}splify\n"; PAUSE; fi; else install_AWG; echo -e "\nAmneziaWG ${GREEN}установлен!${NC}\n"; PAUSE; fi ;;
 4) if uci -q get network.AWG >/dev/null 2>&1; then INT_DELETE; else install_AWG_INTER; echo -e "\n\nИнтерфейс AWG ${GREEN}установлен!${NC}\n"; fi ;; 5) PODKOP_VPN ;; 6) integration_AWG ;; 7) BYEDPI_NETSHIFT ;; 8) if pkg_is_installed byedpi; then fix_strategy; fi ;; *) return ;; esac; done; }
 # ==========================================
 # Информация
@@ -1020,12 +1026,9 @@ else echo -e "${YELLOW}Автоподбор стратегий:${NC}${GREEN}вы
 INFO_ZPR_STR() { if [ -f "$CONF" ]; then line=$(grep -m1 '^#general' "$CONF"); GEN="${line:+${line#?} / }"; current="$ver$( [ -n "$ver" ] && [ -n "$yv_ver" ] && echo " / " )$yv_ver"; DV=$(grep -o -E '^#Dv[0-9][0-9]*' "$CONF" | sed 's/^#[[:space:]]*/\/ /' | head -n1)
 GV=$(grep -m1 '^#Gv' "$CONF" | sed 's/^#/\/ /'); [ "$GV" = "/ Gv0" ] && GV="/ GvF"; UPD=$(grep -q '^#udp443' "$CONF" && echo '/ udp443'); WS=$(grep -q -- '--wssize 1:6' "$CONF" && echo '/ wssize'); ME=$(grep -q -- '--methodeol' "$CONF" && echo '/ methodeol'); if [ -n "$current" ]
 then echo -e "${YELLOW}Стратегия Zapret:${NC}    ${CYAN}${GEN}$current${DV:+ $DV}${GV:+ $GV}${UPD:+ $UPD}${WS:+ $WS}${ME:+ $ME}${RKN_STATUS:+ $RKN_STATUS}${NC}"; elif [ -n "$RKN_STATUS" ]
-then echo -e "${YELLOW}Стратегия Zapret:${NC}    ${CYAN}${GEN}РКН${DV:+ $DV}${GV:+ $GV}${UPD:+ $UPD}${WS:+ $WS}${ME:+ $ME}${NC}"; elif [ -n "$line" ]; then echo -e "${YELLOW}Стратегия Zapret:${NC}    ${CYAN}${line#?}${GV:+ $GV}${NC}"; fi; fi
-
-[ -f "$CUSTOM_DISCORD_MARKER" ] && echo -e "${YELLOW}Custom-стратегия:${NC} ${CYAN}только Discord${NC}"
-
-
-}
+then echo -e "${YELLOW}Стратегия Zapret:${NC}    ${CYAN}${GEN}РКН${DV:+ $DV}${GV:+ $GV}${UPD:+ $UPD}${WS:+ $WS}${ME:+ $ME}${NC}"; elif [ -n "$line" ]; then echo -e "${YELLOW}Стратегия Zapret:${NC}    ${CYAN}${line#?}${GV:+ $GV}${NC}"
+elif [ -n "$GV" ] && [ -z "$DV" ]; then echo -e "${YELLOW}Стратегия Zapret:${NC}    ${CYAN}${GV#/ }${NC}"; elif [ -z "$GV" ] && [ -n "$DV" ]; then echo -e "${YELLOW}Стратегия Zapret:${NC}    ${CYAN}${DV#/ }${NC}"; elif [ -n "$GV" ] && [ -n "$DV" ]; then echo -e "${YELLOW}Стратегия Zapret:${NC}    ${CYAN}${GV#/ } / ${DV#/ }${NC}"; fi; fi
+grep -Fq "$DISCORD_DEF_HOSTLIST" "$CONF" 2>/dev/null && echo -e "${YELLOW}Основная стратегия:${NC}  ${CYAN}только Discord${NC}"; }
 # ==========================================
 # Mixomo
 # ==========================================
@@ -1083,203 +1086,34 @@ echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню\n"; echo -n
 7) check_mihomo || continue; UI_INSTALL ;; 8) check_mihomo || continue; MIXOMO_RESTART ;; 9) check_mihomo || continue; ARCH_MT=$(grep "^OPENWRT_ARCH=" /etc/os-release | cut -d'"' -f2); FILE_MT="/tmp/magitrickle.$RAZ"; URL_MT="https://github.com/MagiTrickle/MagiTrickle/releases/download/${MT_VERSION}/magitrickle_${MT_VERSION}-${SUF_MT}1_openwrt_${ARCH_MT}.$RAZ"
 echo -e "\n${MAGENTA}Обновляем MagiTrickle\n${CYAN}Скачиваем\n${NC}$URL_MT"; curl -Lf --connect-timeout 6 --retry 3 --retry-delay 1 -o "$FILE_MT" "$URL_MT" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка скачивания${NC}\n"; PAUSE; return 1; };  update_packages || return 1
 echo -e "${CYAN}Обновляем ${NC}MagiTrickle"; $INSTALL "$FILE_MT" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка установки${NC} $(basename "$URL_MT")\n"; rm -f "$FILE_MT"; PAUSE; return 1; }; /etc/init.d/magitrickle enable >/dev/null 2>&1; /etc/init.d/magitrickle restart >/dev/null 2>&1; echo -e "MagiTrickle ${GREEN}обновлён!${NC}\n"; rm -f "$FILE_MT"; PAUSE ;; *) return ;; esac; done; }
-
-
-# ==========================================
-# Вспомогательные функции для сборки стратегии
-# ==========================================
-CUSTOM_DISCORD_MARKER="/opt/zapret/custom_discord_only"
-DISCORD_DEF_HOSTLIST="/opt/zapret/ipset_def/zapret-hosts-user.txt"
-
-# Убирает дубли/лишние --new в начале, конце и подряд идущие
-clean_new_lines() {
-	awk '
-	{ lines[NR]=$0 }
-	END {
-		n=NR; m=0
-		for(i=1;i<=n;i++){
-			if(lines[i]=="--new" && m>0 && out[m]=="--new") continue
-			m++; out[m]=lines[i]
-		}
-		start=1; end=m
-		while(start<=end && out[start]=="--new") start++
-		while(end>=start && out[end]=="--new") end--
-		for(i=start;i<=end;i++) print out[i]
-	}'
-}
-
-# Удаляет из тела Flowseal-стратегии уже встроенные блоки
-# Gv (игровой), Dv (discord.media) и Yv (google/YouTube),
-# чтобы на их место можно было подставить собственный выбор
-strip_embedded_blocks() {
-	local IN="$1" OUT="$2"
-	cp "$IN" "$OUT"
-	for PATTERN in '^--filter-udp=19294-19344,50000-50100$' '^--filter-tcp=2053,2083,2087,2096,8443$'; do
-		while true; do
-			START=$(grep -n -m1 -E "$PATTERN" "$OUT" | cut -d: -f1)
-			[ -z "$START" ] && break
-			REL_END=$(tail -n +"$START" "$OUT" | grep -n -m1 -E '^--new$' | cut -d: -f1)
-			if [ -n "$REL_END" ]; then END=$((START + REL_END - 2)); else END=$(wc -l < "$OUT"); fi
-			PREV=$((START - 1))
-			if [ "$PREV" -ge 1 ] && sed -n "${PREV}p" "$OUT" | grep -qx -- '--new'; then START=$PREV; fi
-			sed -i "${START},${END}d" "$OUT"
-		done
-	done
-	while true; do
-		START=$(awk '
-			prev=="--filter-tcp=443" && $0=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt" { print NR-1; exit }
-			{ prev=$0 }' "$OUT")
-		[ -z "$START" ] && break
-		REL_END=$(tail -n +"$START" "$OUT" | grep -n -m1 -E '^--new$' | cut -d: -f1)
-		if [ -n "$REL_END" ]; then END=$((START + REL_END - 2)); else END=$(wc -l < "$OUT"); fi
-		PREV=$((START - 1))
-		if [ "$PREV" -ge 1 ] && sed -n "${PREV}p" "$OUT" | grep -qx -- '--new'; then START=$PREV; fi
-		sed -i "${START},${END}d" "$OUT"
-	done
-	clean_new_lines < "$OUT" > "${OUT}.clean" && mv "${OUT}.clean" "$OUT"
-}
-
-
 # ==========================================
 # Собственная стратегия
 # ==========================================
-build_custom_strategy() {
-	[ ! -f /etc/init.d/zapret ] && { echo -e "\nZapret ${RED}не установлен!${NC}\n"; PAUSE; return; }
-	mkdir -p "$TMP_SF"; clear; echo -e "${MAGENTA}Собираем собственную стратегию${NC}"
-
-	# ---------- 1. Основная стратегия (v / Flowseal / нет) ----------
-	echo -e "\n${CYAN}[1/5] Основная стратегия${NC}"
-	echo -e "${CYAN}1) ${GREEN}Стратегия ${NC}v1-v10\n${CYAN}2) ${GREEN}Стратегия ${NC}Flowseal\n${CYAN}0) ${GREEN}Без основной стратегии${NC}"
-	echo -ne "\n${YELLOW}Выберите пункт:${NC} "; read -r MAIN_SRC
-	MAIN_BODY=""; IS_FLOWSEAL=0
-	case "$MAIN_SRC" in
-	1) echo -ne "\n${YELLOW}Введите версию (${NC}1-10${YELLOW}):${NC} "; read -r MV
-	   case "$MV" in 1|2|3|4|5|6|7|8|9|10) MAIN_BODY="$(strategy_v"$MV")" ;; esac ;;
-	2) IS_FLOWSEAL=1; [ ! -f "$OUT" ] && download_strategies 1
-	   FL_LIST_FILE="$TMP_SF/custom_flowseal_list.txt"; grep '^#' "$OUT" | sed 's/^#//' > "$FL_LIST_FILE"
-	   FL_COUNT=$(wc -l < "$FL_LIST_FILE" 2>/dev/null); FL_COUNT=${FL_COUNT:-0}
-	   if [ "$FL_COUNT" -eq 0 ]; then echo -e "\n${RED}Не удалось получить список Flowseal!${NC}\n"; PAUSE
-	   else
-	   	echo -ne "\n${YELLOW}Введите номер стратегии Flowseal (${NC}1-$FL_COUNT${YELLOW}):${NC} "; read -r FV
-	   	SEL_NAME=$(sed -n "${FV}p" "$FL_LIST_FILE")
-	   	if [ -n "$SEL_NAME" ]; then
-	   		MAIN_BODY=$(awk -v name="$SEL_NAME" '$0=="#"name {flag=1; print; next} /^#/ && flag {exit} flag {print}' "$OUT")
-	   	fi
-	   fi ;;
-	esac
-
-	# ---------- 2. Область применения основной стратегии ----------
-	TRAFFIC="all"
-	if [ -n "$MAIN_BODY" ]; then
-		echo -e "\n${CYAN}[2/5] Для какого трафика применить основную стратегию${NC}"
-		echo -e "${CYAN}1) ${GREEN}Весь трафик${NC}\n${CYAN}2) ${GREEN}Только по спискам ${NC}РКН\n${CYAN}3) ${GREEN}Только ${NC}Discord"
-		echo -ne "\n${YELLOW}Выберите пункт:${NC} "; read -r TR
-		case "$TR" in 2) TRAFFIC="rkn" ;; 3) TRAFFIC="discord" ;; *) TRAFFIC="all" ;; esac
-		[ "$TRAFFIC" != "all" ] && MAIN_BODY=$(printf '%s\n' "$MAIN_BODY" | sed 's|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt|')
-	fi
-
-	# ---------- 3. Стратегия для YouTube (Yv) ----------
-	echo -e "\n${CYAN}[3/5] Стратегия для YouTube${NC}"
-	curl -fsSL "$STR_URL" -o "$TMP_LIST" 2>/dev/null
-	YV_LIST_FILE="$TMP_SF/custom_yv_list.txt"; : > "$YV_LIST_FILE"
-	[ -s "$TMP_LIST" ] && while IFS= read -r LINE; do case "$LINE" in \#Yv[0-9]*) echo "$LINE" >> "$YV_LIST_FILE";; esac; done < "$TMP_LIST"
-	YV_COUNT=$(wc -l < "$YV_LIST_FILE" 2>/dev/null); YV_COUNT=${YV_COUNT:-0}
-	YV_BODY=""; YV_NAME=""
-	if [ "$YV_COUNT" -gt 0 ]; then
-		echo -ne "${YELLOW}Введите версию (${NC}1-$YV_COUNT${YELLOW}) или ${NC}0${YELLOW} — без стратегии:${NC} "; read -r YVCH
-		if [ -n "$YVCH" ] && [ "$YVCH" != "0" ]; then
-			YV_NAME=$(sed -n "${YVCH}p" "$YV_LIST_FILE")
-			if [ -n "$YV_NAME" ]; then
-				YV_BODY_FILE="$TMP_SF/custom_yv_body.txt"; : > "$YV_BODY_FILE"; FLAG=0
-				while IFS= read -r LINE; do [ "$LINE" = "$YV_NAME" ] && FLAG=1 && continue
-				case "$LINE" in \#Yv[0-9]*) FLAG=0;; esac
-				[ "$FLAG" -eq 1 ] && printf "%b\n" "$LINE" >> "$YV_BODY_FILE"; done < "$TMP_LIST"
-				YV_BODY=$(cat "$YV_BODY_FILE")
-			fi
-		fi
-	else
-		echo -e "${RED}Не удалось получить список стратегий для YouTube!${NC}"
-	fi
-
-	# ---------- 4. Игровая стратегия (Gv) ----------
-	echo -e "\n${CYAN}[4/5] Игровая стратегия${NC}"
-	echo -ne "${YELLOW}Введите версию (${NC}1-4${YELLOW}) или ${NC}0${YELLOW} — без стратегии:${NC} "; read -r GVCH
-	GV_BODY=""
-	case "$GVCH" in
-	1) GV_BODY="$(strategy_Gv1; strategy_TCP_common)" ;;
-	2|3|4) GV_BODY="$(strategy_Gv "$GVCH"; strategy_TCP_common)" ;;
-	esac
-
-	# ---------- 5. Стратегия для discord.media (Dv) ----------
-	echo -e "\n${CYAN}[5/5] Стратегия для discord.media${NC}"
-	echo -ne "${YELLOW}Введите версию (${NC}1-17${YELLOW}) или ${NC}0${YELLOW} — без стратегии:${NC} "; read -r DVCH
-	DV_SEG=""
-	case "$DVCH" in
-	1|2|3|4|5|6|7|8|9|10|11|12|13|14|15|16|17)
-		DV_BODY=$(eval echo \"\$Dv$DVCH\")
-		DISCORD_UDP_BODY=$(printf '%s\n' "--filter-udp=19294-19344,50000-50100" "--filter-l7=discord,stun" "--dpi-desync=fake" "--dpi-desync-fake-discord=/opt/zapret/files/fake/stun.bin" "--dpi-desync-fake-stun=/opt/zapret/files/fake/stun.bin" "--dpi-desync-repeats=6")
-		DV_SEG=$(printf '%s\n%s\n--new\n%s' "$DISCORD_UDP_BODY" "#Dv$DVCH" "$DV_BODY")
-		;;
-	esac
-
-	# ---------- Если основная — Flowseal, вычищаем встроенные Yv/Gv/Dv блоки ----------
-	if [ "$IS_FLOWSEAL" = "1" ] && [ -n "$MAIN_BODY" ]; then
-		MB_IN="$TMP_SF/custom_main_raw.txt"; MB_OUT="$TMP_SF/custom_main_clean.txt"
-		printf '%s\n' "$MAIN_BODY" > "$MB_IN"
-		strip_embedded_blocks "$MB_IN" "$MB_OUT"
-		MAIN_BODY=$(cat "$MB_OUT")
-	fi
-
-	# ---------- Проверка, что хоть что-то выбрано ----------
-	if [ -z "$MAIN_BODY" ] && [ -z "$YV_BODY" ] && [ -z "$GV_BODY" ] && [ -z "$DV_SEG" ]; then
-		echo -e "\n${RED}Не выбрано ни одной стратегии, отмена!${NC}\n"; PAUSE; return
-	fi
-
-	# ---------- Сборка сегментов через --new (без хвостовых/двойных --new) ----------
-	FULL=""
-	add_segment() { seg="$1"; [ -z "$seg" ] && return
-		if [ -n "$FULL" ]; then FULL="$(printf '%s\n--new\n%s' "$FULL" "$seg")"; else FULL="$seg"; fi; }
-
-	[ -n "$YV_BODY" ] && add_segment "$(printf '%s\n%s' "$YV_NAME" "$YV_BODY")"
-	add_segment "$MAIN_BODY"
-	add_segment "$DV_SEG"
-	add_segment "$GV_BODY"
-
-	# ---------- Применяем ----------
-	echo -e "\n${MAGENTA}Применяем собственную стратегию${NC}"
-	sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
-	{ echo "  option NFQWS_OPT '"; printf '%s\n' "$FULL" | clean_new_lines; echo "'"; } >> "$CONF"
-
-	ADD_GP_DOMAINS
-	case "$TRAFFIC" in
-	rkn)
-		rm -f "$CUSTOM_DISCORD_MARKER"
-		echo -e "${CYAN}Скачиваем список ${NC}РКН"
-		[ -f "$HOSTLIST_FILE" ] && cp "$HOSTLIST_FILE" "$BACKUP_FILE"
-		curl -fsSL "$RKN_URL" > "$HOSTLIST_FILE" || echo -e "${RED}Не удалось скачать список РКН${NC}" ;;
-	discord)
-		echo -e "${CYAN}Применяем список ${NC}Discord ${CYAN}в ${NC}zapret-hosts-user.txt"
-		if [ -f "$DISCORD_DEF_HOSTLIST" ]; then cp "$DISCORD_DEF_HOSTLIST" "$HOSTLIST_FILE"; touch "$CUSTOM_DISCORD_MARKER"
-		else echo -e "${RED}Файл ${NC}$DISCORD_DEF_HOSTLIST${RED} не найден!${NC}"; fi ;;
-	*)
-		rm -f "$CUSTOM_DISCORD_MARKER"
-		echo -e "${CYAN}Добавляем домены в исключения${NC}"; rm -f "$EXCLUDE_FILE"
-		wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL" || echo -e "${RED}Не удалось загрузить exclude файл${NC}" ;;
-	esac
-	if [ -n "$GV_BODY" ]; then add_ports_if_missing NFQWS_PORTS_UDP "$PORTS_UDP"; add_ports_if_missing NFQWS_PORTS_TCP "$PORTS_TCP"; fi
-	if [ -n "$DV_SEG" ]; then
-		if ! grep -q "option NFQWS_PORTS_UDP.*19294-19344,50000-50100" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'\$/,19294-19344,50000-50100'/" "$CONF"; fi
-		if ! grep -q "option NFQWS_PORTS_TCP.*2053,2083,2087,2096,8443" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_TCP '/s/'\$/,2053,2083,2087,2096,8443'/" "$CONF"; fi
-	fi
-
-	ZAPRET_RESTART
-	echo -e "\n${GREEN}Собственная стратегия применена!${NC}"
-	[ "$TRAFFIC" = "discord" ] && echo -e "${YELLOW}Область применения:${NC} ${CYAN}только Discord${NC}"
-	grep -Fq "=ts" "$CONF" && echo -e "\n${YELLOW}Для работы этой стратегии нужно один раз в терминале Windows выполнить:${NC}\nnetsh int tcp set global timestamps=enabled"
-	echo; PAUSE
-}
-
-
+clean_new_lines() { awk '{ lines[NR]=$0 } END { n=NR; m=0; for (i=1; i<=n; i++) { if (lines[i]=="--new" && (i+2)<=n && lines[i+1] ~ /^#/ && lines[i+2]=="--new") continue; m++; out[m]=lines[i] } k=0; for (i=1; i<=m; i++) { if (out[i]=="--new" && k>0 && res[k]=="--new") continue; k++; res[k]=out[i] } start=1; end=k; while (start<=end && res[start]=="--new") start++; while (end>=start && res[end]=="--new") end--; while (start<=end && res[start] ~ /^#/ && (start+1)<=end && res[start+1]=="--new") { start2=start+1; for (j=start2; j<end; j++) res2[j]=res[j+1]; end=end-1; for (j=start2; j<=end; j++) res[j]=res2[j] } for (i=start; i<=end; i++) print res[i] }'; }
+build_custom_strategy() { [ ! -f /etc/init.d/zapret ] && { echo -e "\nZapret ${RED}не установлен!${NC}\n"; PAUSE; return; }; mkdir -p "$TMP_SF"; clear; echo -e "${MAGENTA}Собираем собственную стратегию${NC}"
+echo -e "\n${CYAN}Основная ${NC}v${CYAN} стратегия${NC}"; MV_MAX=0; i=1; while type "strategy_v$i" >/dev/null 2>&1; do MV_MAX=$i; i=$((i + 1)); done; echo -ne "${YELLOW}Введите версию (${NC}1-$MV_MAX${YELLOW}) или ${NC}0${YELLOW} — без стратегии:${NC} "; read -r MV
+MAIN_BODY=""; if [ "$MV" -ge 1 ] 2>/dev/null && [ "$MV" -le "$MV_MAX" ]; then MAIN_BODY="$(strategy_v"$MV")"; fi
+TRAFFIC="all"; if [ -n "$MAIN_BODY" ]; then echo -e "\n${CYAN}Выберите трафик для стратегии${NC}"; echo -e "${CYAN}1) ${GREEN}Весь трафик${NC}\n${CYAN}2) ${GREEN}Только по спискам ${NC}РКН\n${CYAN}3) ${GREEN}Только ${NC}Discord"
+echo -ne "\n${YELLOW}Выберите пункт:${NC} "; read -r TR; case "$TR" in 2) TRAFFIC="rkn" ;; 3) TRAFFIC="discord" ;; *) TRAFFIC="all" ;; esac; case "$TRAFFIC" in rkn) MAIN_BODY=$(printf '%s\n' "$MAIN_BODY" | sed 's|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt|') ;;
+discord) MAIN_BODY=$(printf '%s\n' "$MAIN_BODY" | sed "s|--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt|--hostlist=$DISCORD_DEF_HOSTLIST|") ;; esac; fi
+echo -e "\n${CYAN}Стратегия для ${NC}YouTube"; curl -fsSL "$STR_URL" -o "$TMP_LIST" 2>/dev/null; YV_LIST_FILE="$TMP_SF/custom_yv_list.txt"; : > "$YV_LIST_FILE"; [ -s "$TMP_LIST" ] && while IFS= read -r LINE; do case "$LINE" in \#Yv[0-9]*) echo "$LINE" >> "$YV_LIST_FILE";; esac; done < "$TMP_LIST"
+YV_COUNT=$(wc -l < "$YV_LIST_FILE" 2>/dev/null); YV_COUNT=${YV_COUNT:-0}; YV_BODY=""; YV_NAME=""; if [ "$YV_COUNT" -gt 0 ]; then echo -ne "${YELLOW}Введите версию (${NC}1-$YV_COUNT${YELLOW}) или ${NC}0${YELLOW} — без стратегии:${NC} "; read -r YVCH
+if [ -n "$YVCH" ] && [ "$YVCH" != "0" ]; then YV_NAME=$(sed -n "${YVCH}p" "$YV_LIST_FILE"); if [ -n "$YV_NAME" ]; then YV_BODY_FILE="$TMP_SF/custom_yv_body.txt"; : > "$YV_BODY_FILE"; FLAG=0; while IFS= read -r LINE; do [ "$LINE" = "$YV_NAME" ] && FLAG=1 && continue
+case "$LINE" in \#Yv[0-9]*) FLAG=0;; esac; [ "$FLAG" -eq 1 ] && printf "%b\n" "$LINE" >> "$YV_BODY_FILE"; done < "$TMP_LIST"; YV_BODY=$(cat "$YV_BODY_FILE"); fi; fi; else echo -e "\n${RED}Не удалось получить список стратегий для YouTube!${NC}\n"; fi
+echo -e "\n${CYAN}Cтратегия для ${NC}игр"; echo -ne "${YELLOW}Введите версию (${NC}1-4${YELLOW}) или ${NC}0${YELLOW} — без стратегии:${NC} "; read -r GVCH; GV_BODY=""; case "$GVCH" in 1) GV_BODY="$(strategy_Gv1; strategy_TCP_common)" ;; 2|3|4) GV_BODY="$(strategy_Gv "$GVCH"; strategy_TCP_common)" ;; esac
+echo -e "\n${CYAN}Стратегия для ${NC}discord.media"; DV_MAX=$(set | grep -oE '^Dv[0-9]+=' | sed 's/^Dv//;s/=//' | sort -n | tail -1); DV_MAX=${DV_MAX:-0}; echo -ne "${YELLOW}Введите версию (${NC}1-$DV_MAX${YELLOW}) или ${NC}0${YELLOW} — без стратегии:${NC} "; read -r DVCH
+DV_SEG=""; if [ "$DVCH" -ge 1 ] 2>/dev/null && [ "$DVCH" -le "$DV_MAX" ]; then DV_BODY=$(eval "printf '%s' \"\$Dv$DVCH\"")
+DISCORD_UDP_BODY=$(printf '%s\n' "--filter-udp=19294-19344,50000-50100" "--filter-l7=discord,stun" "--dpi-desync=fake" "--dpi-desync-fake-discord=/opt/zapret/files/fake/stun.bin" "--dpi-desync-fake-stun=/opt/zapret/files/fake/stun.bin" "--dpi-desync-repeats=6")
+DV_SEG=$(printf '%s\n%s\n--new\n%s' "$DISCORD_UDP_BODY" "#Dv$DVCH" "$DV_BODY"); fi; if [ -z "$MAIN_BODY" ] && [ -z "$YV_BODY" ] && [ -z "$GV_BODY" ] && [ -z "$DV_SEG" ]; then echo -e "\n${RED}Не выбрано ни одной стратегии, отмена!${NC}\n"; PAUSE; return; fi
+FULL=""; add_segment() { seg="$1"; [ -z "$seg" ] && return; if [ -n "$FULL" ]; then FULL="$(printf '%s\n--new\n%s' "$FULL" "$seg")"; else FULL="$seg"; fi; }; [ -n "$YV_BODY" ] && add_segment "$(printf '%s\n%s' "$YV_NAME" "$YV_BODY")"
+add_segment "$MAIN_BODY"; add_segment "$DV_SEG"; add_segment "$GV_BODY"; echo -e "\n${MAGENTA}Применяем собственную стратегию${NC}"; sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; { echo "  option NFQWS_OPT '"; printf '%s\n' "$FULL" | clean_new_lines; echo "'"; } >> "$CONF"
+ADD_GP_DOMAINS; case "$TRAFFIC" in rkn) echo -e "${CYAN}Скачиваем список ${NC}РКН"; [ -f "$HOSTLIST_FILE" ] && cp "$HOSTLIST_FILE" "$BACKUP_FILE"; curl -fsSL "$RKN_URL" > "$HOSTLIST_FILE" || echo -e "${RED}Не удалось скачать список РКН${NC}" ;;
+discord) [ -f "$DISCORD_DEF_HOSTLIST" ] || echo -e "${RED}Файл ${NC}$DISCORD_DEF_HOSTLIST${RED} не найден!${NC}" ;; *) echo -e "${CYAN}Добавляем домены в исключения${NC}"; rm -f "$EXCLUDE_FILE"
+wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL" || echo -e "${RED}Не удалось загрузить exclude файл${NC}" ;; esac; if [ -n "$GV_BODY" ]; then add_ports_if_missing NFQWS_PORTS_UDP "$PORTS_UDP"; add_ports_if_missing NFQWS_PORTS_TCP "$PORTS_TCP"; fi
+if [ -n "$DV_SEG" ]; then if ! grep -q "option NFQWS_PORTS_UDP.*19294-19344,50000-50100" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'\$/,19294-19344,50000-50100'/" "$CONF"; fi
+if ! grep -q "option NFQWS_PORTS_TCP.*2053,2083,2087,2096,8443" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_TCP '/s/'\$/,2053,2083,2087,2096,8443'/" "$CONF"; fi; fi
+ZAPRET_RESTART; echo -e "\n${GREEN}Собственная стратегия применена!${NC}"; grep -Fq "$DISCORD_DEF_HOSTLIST" "$CONF" && echo -e "${YELLOW}Область применения:${NC} ${CYAN}только Discord${NC}"
+grep -Fq "=ts" "$CONF" && echo -e "\n${YELLOW}Для работы этой стратегии нужно один раз в терминале Windows выполнить:${NC}\nnetsh int tcp set global timestamps=enabled"; echo; PAUSE; }
 # ==========================================
 # Главное меню
 # ==========================================
