@@ -1180,8 +1180,8 @@ else
     echo -e "${RED}Устройства не найдены!${NC}"
 fi
 
-        echo -e "\n${CYAN}a) ${GREEN}Добавить IP вручную${NC}"
-        echo -e "${CYAN}c) ${GREEN}Очистить все исключения${NC}"
+        echo -e "\n${CYAN}a) ${GREEN}Добавить ${NC}IP${GREEN} вручную${NC}"
+        echo -e "${CYAN}c) ${GREEN}Очистить ${NC}все${GREEN} исключения${NC}"
         echo -e "${CYAN}Enter) ${GREEN}Выход в системное меню${NC}\n"
         echo -ne "${YELLOW}Введите номер устройства:${NC} "
         read -r sel
