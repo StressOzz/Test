@@ -1237,7 +1237,7 @@ Exclusions_menu() {
         else
             : > "$EXCL_FILE"
         fi
-
+        echo -e "\n${CYAN}Применяем и перезапускаем ${NC}Zapret\n"
         ZAPRET_RESTART
         echo -e "\n${ACTION_MSG}\n"
         PAUSE
