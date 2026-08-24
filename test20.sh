@@ -1156,22 +1156,29 @@ Exclusions_menu() {
 
         [ -s "$DEV_LIST" ] && sort -t. -k1,1n -k2,2n -k3,3n -k4,4n -o "$DEV_LIST" "$DEV_LIST"
 
-        echo -e "${YELLOW}Обнаруженные устройства:${NC}"
-        i=1
-        IDX_LIST="$TMP_SF/zapret_excl_index.txt"
-        : > "$IDX_LIST"
+echo -e "${YELLOW}Обнаруженные устройства:${NC}"
+i=1
+IDX_LIST="$TMP_SF/zapret_excl_index.txt"
+: > "$IDX_LIST"
 
-        if [ -s "$DEV_LIST" ]; then
-            while IFS='|' read -r ip name; do
-                mark="${GREEN}⚫${NC}"
-                if [ -n "$CURRENT_EXCL" ] && echo "$CURRENT_EXCL" | grep -qx "$ip"; then mark="${RED}⚫${NC}"; fi
-printf '%b\n' "${CYAN}$(printf '%2d' "$i")) ${mark} ${ip} ${CYAN}-${NC} ${name}"
-                echo "$ip" >> "$IDX_LIST"
-                i=$((i + 1))
-            done < "$DEV_LIST"
-        else
-            echo -e "${RED}Устройства не найдены!${NC}"
+COUNT=$(wc -l < "$DEV_LIST")
+PAD=""
+[ "$COUNT" -ge 10 ] && PAD=" "
+
+if [ -s "$DEV_LIST" ]; then
+    while IFS='|' read -r ip name; do
+        mark="${GREEN}⚫${NC}"
+        if [ -n "$CURRENT_EXCL" ] && echo "$CURRENT_EXCL" | grep -qx "$ip"; then
+            mark="${RED}⚫${NC}"
         fi
+
+        echo -e "${CYAN}${PAD}${i}) ${mark} ${ip} ${CYAN}-${NC} ${name}"
+        echo "$ip" >> "$IDX_LIST"
+        i=$((i + 1))
+    done < "$DEV_LIST"
+else
+    echo -e "${RED}Устройства не найдены!${NC}"
+fi
 
         echo -e "\n${CYAN}a) ${GREEN}Добавить IP вручную${NC}"
         echo -e "${CYAN}c) ${GREEN}Очистить все исключения${NC}"
