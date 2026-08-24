@@ -1123,7 +1123,7 @@ ZAPRET_RESTART; echo -e "\n${GREEN}Собственная стратегия п�
 # ==========================================
 Exclusions_menu() {
 
-[ ! -f /etc/init.d/zapret ] && { echo -e "\nZapret ${RED}не установлен!${NC}\n"; PAUSE; return; }
+############################               [ ! -f /etc/init.d/zapret ] && { echo -e "\nZapret ${RED}не установлен!${NC}\n"; PAUSE; return; }
 
     local IPV4_RE='^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$'
     mkdir -p "$CUSTOM_DIR"
