@@ -1189,27 +1189,39 @@ Exclusions_menu() {
                 read -r manual_ip
                 if echo "$manual_ip" | grep -qE "$IPV4_RE"; then
                     CURRENT_EXCL=$(printf '%s\n%s\n' "$CURRENT_EXCL" "$manual_ip")
+                    ACTION_MSG="${GREEN}IP ${NC}${manual_ip}${GREEN} добавлен в исключения!${NC}"
                 else
-                    echo -e "\n${RED}Некорректный IPv4 адрес!${NC}"
-                    sleep 1
+                    echo -e "\n${RED}Некорректный IPv4 адрес!${NC}\n"
+                    PAUSE
                     rm -f "$DEV_LIST" "$IDX_LIST"
                     continue
                 fi
                 ;;
             c|C|с|С)
                 CURRENT_EXCL=""
+                ACTION_MSG="${GREEN}Все исключения очищены!${NC}"
                 ;;
             *)
+                CHANGED=0
                 for num in $sel; do
                     case "$num" in ''|*[!0-9]*) continue ;; esac
                     ip=$(sed -n "${num}p" "$IDX_LIST")
                     [ -z "$ip" ] && continue
                     if echo "$CURRENT_EXCL" | grep -qx "$ip"; then
                         CURRENT_EXCL=$(echo "$CURRENT_EXCL" | grep -vx "$ip")
+                        ACTION_MSG="${GREEN}IP ${NC}${ip}${GREEN} удалён из исключений!${NC}"
                     else
                         CURRENT_EXCL=$(printf '%s\n%s\n' "$CURRENT_EXCL" "$ip")
+                        ACTION_MSG="${GREEN}IP ${NC}${ip}${GREEN} добавлен в исключения!${NC}"
                     fi
+                    CHANGED=1
                 done
+                if [ "$CHANGED" -eq 0 ]; then
+                    echo -e "\n${RED}Некорректный ввод!${NC}\n"
+                    PAUSE
+                    rm -f "$DEV_LIST" "$IDX_LIST"
+                    continue
+                fi
                 ;;
         esac
 
@@ -1227,6 +1239,8 @@ Exclusions_menu() {
         fi
 
         ZAPRET_RESTART
+        echo -e "\n${ACTION_MSG}\n"
+        PAUSE
         rm -f "$DEV_LIST" "$IDX_LIST"
     done
 }
