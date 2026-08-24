@@ -1264,7 +1264,7 @@ then echo -e "${RED}Включён ${NC}Flow Offloading${RED}!${NC}\n${NC}Zapret
 INFO_ZPR
 
 if grep -qE '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' "$EXCL_FILE" 2>/dev/null; then
-    echo -e "${YELLOW}Исключения устройств: ${RED}есть${NC}"
+    echo -e "${YELLOW}Исключённые IP:      ${RED}есть${NC}"  
 fi
 
 
