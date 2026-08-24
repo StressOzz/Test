@@ -1123,61 +1123,83 @@ ZAPRET_RESTART; echo -e "\n${GREEN}Собственная стратегия п�
 # ==========================================
 Exclusions_menu() {
     local EXCL_FILE="${CUSTOM_DIR}20-script.sh"
+    local IPV4_RE='^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$'
     mkdir -p "$CUSTOM_DIR"
     [ -f "$EXCL_FILE" ] || touch "$EXCL_FILE"
+
     while true; do
         clear
         echo -e "${MAGENTA}Меню исключений IP из Zapret${NC}\n"
-        echo -e "${YELLOW}⚠ ВАЖНО:${NC} у устройств должен быть зарезервирован статический IP"
-        echo -e "   (Сеть → DHCP и DNS → Статические привязки)\n"
-        CURRENT_EXCL=$(grep -oE '([0-9]{1,3}\.){3}[0-9]{1,3}' "$EXCL_FILE" 2>/dev/null | sort -u)
-        : > /tmp/zapret_excl_devices.txt
+
+        CURRENT_EXCL=$(grep -oE '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' "$EXCL_FILE" 2>/dev/null | sort -u)
+
+        DEV_LIST="$TMP_SF/zapret_excl_devices.txt"
+        : > "$DEV_LIST"
+
         if [ -f /tmp/dhcp.leases ]; then
             while read -r _ts _mac _ip _name _rest; do
                 [ -z "$_ip" ] && continue
-                [ "$_name" = "*" ] && _name="Неизвестное устройство"
-                echo "${_ip}|${_mac}|${_name}" >> /tmp/zapret_excl_devices.txt
+                echo "$_ip" | grep -qE "$IPV4_RE" || continue
+                [ -z "$_name" ] || [ "$_name" = "*" ] && _name="Неизвестное устройство"
+                echo "${_ip}|${_name}" >> "$DEV_LIST"
             done < /tmp/dhcp.leases
         fi
+
         if [ -n "$CURRENT_EXCL" ]; then
             for ip in $CURRENT_EXCL; do
-                grep -q "^${ip}|" /tmp/zapret_excl_devices.txt 2>/dev/null || echo "${ip}|—|Устройство offline" >> /tmp/zapret_excl_devices.txt
+                grep -qxE "${ip}\|.*" "$DEV_LIST" 2>/dev/null || echo "${ip}|Устройство offline" >> "$DEV_LIST"
             done
         fi
-        [ -s /tmp/zapret_excl_devices.txt ] && sort -t. -k1,1n -k2,2n -k3,3n -k4,4n -o /tmp/zapret_excl_devices.txt /tmp/zapret_excl_devices.txt
 
-        i=1; : > /tmp/zapret_excl_index.txt
-        if [ -s /tmp/zapret_excl_devices.txt ]; then
-            while IFS='|' read -r ip mac name; do
+        [ -s "$DEV_LIST" ] && sort -t. -k1,1n -k2,2n -k3,3n -k4,4n -o "$DEV_LIST" "$DEV_LIST"
+
+        echo -e "${YELLOW}Обнаруженные устройства:${NC}"
+        i=1
+        IDX_LIST="$TMP_SF/zapret_excl_index.txt"
+        : > "$IDX_LIST"
+
+        if [ -s "$DEV_LIST" ]; then
+            while IFS='|' read -r ip name; do
                 mark=" "
                 if [ -n "$CURRENT_EXCL" ] && echo "$CURRENT_EXCL" | grep -qx "$ip"; then mark="x"; fi
-                printf "${CYAN}%2d) [%s] ${NC}%-15s %-18s %s\n" "$i" "$mark" "$ip" "$mac" "$name"
-                echo "$ip" >> /tmp/zapret_excl_index.txt
+                echo -e "${CYAN}${i}) ${NC}[${mark}] ${ip} - ${name}"
+                echo "$ip" >> "$IDX_LIST"
                 i=$((i + 1))
-            done < /tmp/zapret_excl_devices.txt
+            done < "$DEV_LIST"
         else
-            echo -e "${YELLOW}Устройства не найдены (нет данных DHCP)${NC}"
+            echo -e "${RED}Устройства не найдены (нет данных DHCP)${NC}"
         fi
 
-        echo -e "\n${CYAN}a) ${GREEN}Добавить IP вручную${NC}"
+        echo ""
+        echo -e "${CYAN}a) ${GREEN}Добавить IP вручную${NC}"
         echo -e "${CYAN}c) ${GREEN}Очистить все исключения${NC}"
-        echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Номера через пробел для переключения (например: ${NC}1 3 5${YELLOW}):${NC} "
+        echo -e "${CYAN}Enter) ${GREEN}Выход в системное меню${NC}"
+        echo ""
+        echo -ne "${YELLOW}Введите номер устройства:${NC} "
         read -r sel
+
         case "$sel" in
-            "") rm -f /tmp/zapret_excl_devices.txt /tmp/zapret_excl_index.txt; return ;;
+            "")
+                rm -f "$DEV_LIST" "$IDX_LIST"
+                return
+                ;;
             a|A|ф|Ф)
-                echo -ne "\n${YELLOW}Введите IP адрес: ${NC}"; read -r manual_ip
-                if echo "$manual_ip" | grep -qE '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
+                echo -ne "\n${YELLOW}Введите IPv4 адрес: ${NC}"
+                read -r manual_ip
+                if echo "$manual_ip" | grep -qE "$IPV4_RE"; then
                     CURRENT_EXCL=$(printf '%s\n%s\n' "$CURRENT_EXCL" "$manual_ip")
                 else
-                    echo -e "\n${RED}Некорректный IP!${NC}"; PAUSE
+                    echo -e "\n${RED}Некорректный IPv4 адрес!${NC}"
+                    PAUSE
                 fi
                 ;;
-            c|C|с|С) CURRENT_EXCL="" ;;
+            c|C|с|С)
+                CURRENT_EXCL=""
+                ;;
             *)
                 for num in $sel; do
                     case "$num" in ''|*[!0-9]*) continue ;; esac
-                    ip=$(sed -n "${num}p" /tmp/zapret_excl_index.txt)
+                    ip=$(sed -n "${num}p" "$IDX_LIST")
                     [ -z "$ip" ] && continue
                     if echo "$CURRENT_EXCL" | grep -qx "$ip"; then
                         CURRENT_EXCL=$(echo "$CURRENT_EXCL" | grep -vx "$ip")
@@ -1187,7 +1209,9 @@ Exclusions_menu() {
                 done
                 ;;
         esac
+
         CURRENT_EXCL=$(echo "$CURRENT_EXCL" | grep -v '^$' | sort -u)
+
         if [ -n "$CURRENT_EXCL" ]; then
             FORMATTED=$(echo "$CURRENT_EXCL" | tr '\n' ',' | sed 's/,$//' | sed 's/,/, /g')
             {
@@ -1198,12 +1222,15 @@ Exclusions_menu() {
         else
             : > "$EXCL_FILE"
         fi
+
         echo -e "\n${GREEN}Исключения обновлены!${NC}"
         echo -ne "${YELLOW}Перезапустить Zapret для применения? (${NC}y/N${YELLOW}): ${NC}"
         read -r restart_choice
         case "$restart_choice" in y|Y|д|Д) ZAPRET_RESTART; echo -e "${GREEN}Zapret перезапущен!${NC}" ;; esac
-        rm -f /tmp/zapret_excl_devices.txt /tmp/zapret_excl_index.txt
-        echo; PAUSE
+
+        rm -f "$DEV_LIST" "$IDX_LIST"
+        echo
+        PAUSE
     done
 }
 # ==========================================
