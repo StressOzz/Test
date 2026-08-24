@@ -1163,19 +1163,17 @@ Exclusions_menu() {
             while IFS='|' read -r ip name; do
                 mark="${GREEN}⚫${NC}"
                 if [ -n "$CURRENT_EXCL" ] && echo "$CURRENT_EXCL" | grep -qx "$ip"; then mark="${RED}⚫${NC}"; fi
-                echo -e "${CYAN}${i}) ${NC}[${mark}] ${ip} - ${name}"
+                echo -e "${CYAN}${i}) ${NC}[${mark}] ${ip} ${CYAN}-${NC} ${name}"
                 echo "$ip" >> "$IDX_LIST"
                 i=$((i + 1))
             done < "$DEV_LIST"
         else
-            echo -e "${RED}Устройства не найдены (нет данных DHCP)${NC}"
+            echo -e "${RED}Устройства не найдены!${NC}"
         fi
 
-        echo ""
-        echo -e "${CYAN}a) ${GREEN}Добавить IP вручную${NC}"
+        echo -e "\n${CYAN}a) ${GREEN}Добавить IP вручную${NC}"
         echo -e "${CYAN}c) ${GREEN}Очистить все исключения${NC}"
-        echo -e "${CYAN}Enter) ${GREEN}Выход в системное меню${NC}"
-        echo ""
+        echo -e "${CYAN}Enter) ${GREEN}Выход в системное меню${NC}\n"
         echo -ne "${YELLOW}Введите номер устройства:${NC} "
         read -r sel
 
@@ -1201,28 +1199,35 @@ Exclusions_menu() {
                 CURRENT_EXCL=""
                 ACTION_MSG="${GREEN}Все исключения очищены!${NC}"
                 ;;
-            *)
-                CHANGED=0
-                for num in $sel; do
-                    case "$num" in ''|*[!0-9]*) continue ;; esac
-                    ip=$(sed -n "${num}p" "$IDX_LIST")
-                    [ -z "$ip" ] && continue
-                    if echo "$CURRENT_EXCL" | grep -qx "$ip"; then
-                        CURRENT_EXCL=$(echo "$CURRENT_EXCL" | grep -vx "$ip")
-                        ACTION_MSG="${GREEN}IP ${NC}${ip}${GREEN} удалён из исключений!${NC}"
-                    else
-                        CURRENT_EXCL=$(printf '%s\n%s\n' "$CURRENT_EXCL" "$ip")
-                        ACTION_MSG="${GREEN}IP ${NC}${ip}${GREEN} добавлен в исключения!${NC}"
-                    fi
-                    CHANGED=1
-                done
-                if [ "$CHANGED" -eq 0 ]; then
-                    echo -e "\n${RED}Некорректный ввод!${NC}\n"
-                    PAUSE
-                    rm -f "$DEV_LIST" "$IDX_LIST"
-                    continue
-                fi
-                ;;
+*)
+    # Только цифры и пробелы между номерами
+    case "$sel" in
+        *[!0-9\ ]*)
+            rm -f "$DEV_LIST" "$IDX_LIST"
+            return
+            ;;
+    esac
+
+    CHANGED=0
+
+    for num in $sel; do
+        ip=$(sed -n "${num}p" "$IDX_LIST")
+        if [ -z "$ip" ]; then
+            rm -f "$DEV_LIST" "$IDX_LIST"
+            return
+        fi
+
+        if echo "$CURRENT_EXCL" | grep -qx "$ip"; then
+            CURRENT_EXCL=$(echo "$CURRENT_EXCL" | grep -vx "$ip")
+            ACTION_MSG="${GREEN}IP ${NC}${ip}${GREEN} удалён из исключений!${NC}"
+        else
+            CURRENT_EXCL=$(printf '%s\n%s\n' "$CURRENT_EXCL" "$ip")
+            ACTION_MSG="${GREEN}IP ${NC}${ip}${GREEN} добавлен в исключения!${NC}"
+        fi
+
+        CHANGED=1
+    done
+    ;;
         esac
 
         CURRENT_EXCL=$(echo "$CURRENT_EXCL" | grep -v '^$' | sort -u)
