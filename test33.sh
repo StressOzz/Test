@@ -10,8 +10,6 @@ SPL_VER="26.8.1.3"; TG_GO_VERSION="1.4.1"; TG_RS_VERSION="2.2.4"; BYEDPI_LATEST_
 echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/main/Zapret-Manager.sh)' > /usr/bin/zms; chmod +x /usr/bin/zms
 echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/main/Zapret-Manager.sh) "$@"' > /usr/bin/zmsA; chmod +x /usr/bin/zmsA
 
-OWRTAWG=$(grep '^DISTRIB_RELEASE=' /etc/openwrt_release | cut -d"'" -f2); ARCHAWG="$(grep DISTRIB_ARCH /etc/openwrt_release | cut -d"'" -f2)_$(grep DISTRIB_TARGET /etc/openwrt_release | cut -d"'" -f2 | tr '/' '_')" 
-CRON_CMD="/etc/init.d/mihomo restart"; CONFIGPATH="/etc/magitrickle/state/config.yaml"; PACKAGES_UPDATED=0
 BASE_URL="https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/"
 FLOWSEAL_STR_ZIP="https://github.com/Flowseal/zapret-discord-youtube/archive/refs/heads/main.zip"
 GEO_HOSTS="https://raw.githubusercontent.com/Internet-Helper/GeoHideDNS/refs/heads/main/hosts/hosts"
@@ -22,9 +20,12 @@ URL_OLD="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/m
 URL_DEFAULT="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/files/MagiTrickle/config.yaml"
 URL_ITDOG="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/files/MagiTrickle/configAD.yaml"
 EXCLUDE_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/zapret-hosts-user-exclude.txt"
-CRON_FILE="/etc/crontabs/root"; CONFIGMIX="/etc/mihomo/config.yaml"; LAN_IP=$(uci get network.lan.ipaddr 2>/dev/null | cut -d/ -f1)
-DOMAINS="youtu.be youtube.com i.ytimg.com i9.ytimg.com yt3.ggpht.com yt4.ggpht.com googleapis.com jnn-pa.googleapis.com googleusercontent.com signaler-pa.youtube.com youtubei.googleapis.com manifest.googlevideo.com yt3.googleusercontent.com rr4---sn-4g5e6nze.googlevideo.com rr4---sn-5go7yner.googlevideo.com rr4---sn-q4flrnsl.googlevideo.com rr5---sn-n8v7knez.googlevideo.com rr2---sn-q4fl6ndl.googlevideo.com rr1---sn-q4fl6n6y.googlevideo.com rr1---sn-aj5go5-53.googlevideo.com rr1---sn-4axm-n8vs.googlevideo.com rr14---sn-n8v7kn7r.googlevideo.com rr16---sn-axq7sn76.googlevideo.com rr4---sn-jvhnu5g-c35d.googlevideo.com rr1---sn-8ph2xajvh-5xge.googlevideo.com rr1---sn-xguxaxjvh-gufl.googlevideo.com rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com rr1---sn-gvnuxaxjvh-jx3l.googlevideo.com rr1---sn-gvnuxaxjvh-o8ge.googlevideo.com rr5---sn-gvnuxaxjvh-n8vk.googlevideo.com rr10---sn-gvnuxaxjvh-304z.googlevideo.com rr12---sn-gvnuxaxjvh-bvwz.googlevideo.com rr3---sn-ug5onuxaxjvh-n8v6.googlevideo.com rr1---sn-ug5onuxaxjvh-p5ge.googlevideo.com rr1---sn-ug5onuxaxjvh-p3ul.googlevideo.com rr1---sn-ug5onuxaxjvh-n8v6.googlevideo.com rr1---sn-u5uuxaxjvhg0-ocje.googlevideo.com"
 PORTS_UDP="88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535"; PORTS_TCP="2802,2302,2502,3478-3480,3724,6000-8000,8085,8090,8100,8903,8904,25565,27015-27030,27036-27037,50001,60442"
+DOMAINS="youtu.be youtube.com i.ytimg.com i9.ytimg.com yt3.ggpht.com yt4.ggpht.com googleapis.com jnn-pa.googleapis.com googleusercontent.com signaler-pa.youtube.com youtubei.googleapis.com manifest.googlevideo.com yt3.googleusercontent.com rr4---sn-4g5e6nze.googlevideo.com rr4---sn-5go7yner.googlevideo.com rr4---sn-q4flrnsl.googlevideo.com rr5---sn-n8v7knez.googlevideo.com rr2---sn-q4fl6ndl.googlevideo.com rr1---sn-q4fl6n6y.googlevideo.com rr1---sn-aj5go5-53.googlevideo.com rr1---sn-4axm-n8vs.googlevideo.com rr14---sn-n8v7kn7r.googlevideo.com rr16---sn-axq7sn76.googlevideo.com rr4---sn-jvhnu5g-c35d.googlevideo.com rr1---sn-8ph2xajvh-5xge.googlevideo.com rr1---sn-xguxaxjvh-gufl.googlevideo.com rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com rr1---sn-gvnuxaxjvh-jx3l.googlevideo.com rr1---sn-gvnuxaxjvh-o8ge.googlevideo.com rr5---sn-gvnuxaxjvh-n8vk.googlevideo.com rr10---sn-gvnuxaxjvh-304z.googlevideo.com rr12---sn-gvnuxaxjvh-bvwz.googlevideo.com rr3---sn-ug5onuxaxjvh-n8v6.googlevideo.com rr1---sn-ug5onuxaxjvh-p5ge.googlevideo.com rr1---sn-ug5onuxaxjvh-p3ul.googlevideo.com rr1---sn-ug5onuxaxjvh-n8v6.googlevideo.com rr1---sn-u5uuxaxjvhg0-ocje.googlevideo.com"
+
+OWRTAWG=$(grep '^DISTRIB_RELEASE=' /etc/openwrt_release | cut -d"'" -f2); ARCHAWG="$(grep DISTRIB_ARCH /etc/openwrt_release | cut -d"'" -f2)_$(grep DISTRIB_TARGET /etc/openwrt_release | cut -d"'" -f2 | tr '/' '_')" 
+CRON_CMD="/etc/init.d/mihomo restart"; CONFIGPATH="/etc/magitrickle/state/config.yaml"; PACKAGES_UPDATED=0; TS_WARN_FLAG="/opt/zapret/tmp/ts_warning_shown"
+CRON_FILE="/etc/crontabs/root"; CONFIGMIX="/etc/mihomo/config.yaml"; LAN_IP=$(uci get network.lan.ipaddr 2>/dev/null | cut -d/ -f1)
 GREEN="\033[1;32m"; RED="\033[1;31m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
 CONF="/etc/config/zapret"; CUSTOM_DIR="/opt/zapret/init.d/openwrt/custom.d/"; HOSTLIST_FILE="/opt/zapret/ipset/zapret-hosts-user.txt"; fileGP="/opt/zapret/ipset/zapret-hosts-google.txt"
 TMP_SF="/tmp/zapret_temp"; HOSTS_FILE="/etc/hosts"; TMP_LIST="$TMP_SF/zapret_yt_list.txt"; tmpDIR="/tmp/PodkopAWG"
@@ -46,43 +47,43 @@ TGWeb="#TelegramWeb\n149.154.167.220 core.telegram.org api.telegram.org flora.we
 149.154.167.220 kws4.web.telegram.org kws5-1.web.telegram.org kws5.web.telegram.org pluto-1.web.telegram.org pluto.web.telegram.org td.telegram.org telegram.dog
 149.154.167.220 telegram.me telegram.org telegram.space telesco.pe venus.web.telegram.org web.telegram.org zws1-1.web.telegram.org zws1.web.telegram.org
 149.154.167.220 tg.dev t.me zws2-1.web.telegram.org zws2.web.telegram.org zws4-1.web.telegram.org zws5-1.web.telegram.org zws5.web.telegram.org"
-NTC="#ntc.party\n130.255.77.28 ntc.party"; TWCH="#Twitch\n95.182.120.241 usher.ttvnw.net gql.twitch.tv"; NALOG="#Nalog\n213.24.64.175 lkfl2.nalog.ru\n213.24.64.181 lknpd.nalog.ru"
+NTC="#ntc.party\n130.255.77.28 ntc.party"; TWCH="#Twitch\n45.155.204.190 usher.ttvnw.net gql.twitch.tv"; NALOG="#Nalog\n213.24.64.175 lkfl2.nalog.ru\n213.24.64.181 lknpd.nalog.ru"
 RUTOR="#rutor\n173.245.58.219 rutor.info d.rutor.info"; LIBRUSEC="#lib.rus.ec\n185.39.18.98 lib.rus.ec www.lib.rus.ec"
-AI="#Gemini\n95.182.120.241 gemini.google.com\n#Grok\n95.182.120.241 grok.com accounts.x.ai assets.grok.com
-#OpenAI\n95.182.120.241 chatgpt.com ab.chatgpt.com auth.openai.com auth0.openai.com platform.openai.com cdn.oaistatic.com
-95.182.120.241 tcr9i.chat.openai.com webrtc.chatgpt.com android.chat.openai.com api.openai.com operator.chatgpt.com
-95.182.120.241 sora.chatgpt.com sora.com videos.openai.com ios.chat.openai.com cdn.auth0.com files.oaiusercontent.com
-#Microsoft\n95.182.120.241 copilot.microsoft.com sydney.bing.com edgeservices.bing.com rewards.bing.com
-95.182.120.241 xsts.auth.xboxlive.com xgpuwebf2p.gssv-play-prod.xboxlive.com xgpuweb.gssv-play-prod.xboxlive.com
-#ElevenLabs\n95.182.120.241 elevenlabs.io api.us.elevenlabs.io elevenreader.io api.elevenlabs.io help.elevenlabs.io
-#DeepL\n95.182.120.241 deepl.com www.deepl.com www2.deepl.com login-wall.deepl.com w.deepl.com dict.deepl.com ita-free.www.deepl.com
-95.182.120.241 write-free.www.deepl.com experimentation.deepl.com experimentation-grpc.deepl.com ita-free.app.deepl.com
-95.182.120.241 ott.deepl.com api-free.deepl.com backend.deepl.com clearance.deepl.com errortracking.deepl.com
-95.182.120.241 oneshot-free.www.deepl.com checkout.www.deepl.com gtm.deepl.com auth.deepl.com shield.deepl.com
-#Claude\n95.182.120.241 claude.ai console.anthropic.com api.anthropic.com
-#Trae.ai\n95.182.120.241 trae-api-sg.mchost.guru api.trae.ai api-sg-central.trae.ai api16-normal-alisg.mchost.guru
-#Windsurf\n95.182.120.241 windsurf.com codeium.com server.codeium.com web-backend.codeium.com  marketplace.windsurf.com
-95.182.120.241 unleash.codeium.com inference.codeium.com windsurf-stable.codeium.com
-144.31.14.104 windsurf-telemetry.codeium.com\n#Manus\n95.182.120.241 manus.im api.manus.im\n#Notion\n95.182.120.241 www.notion.so calendar.notion.so
-#AIStudio\n95.182.120.241 aistudio.google.com generativelanguage.googleapis.com aitestkitchen.withgoogle.com aisandbox-pa.googleapis.com xsts.auth.xboxlive.com
-95.182.120.241 webchannel-alkalimakersuite-pa.clients6.google.com alkalimakersuite-pa.clients6.google.com assistant-s3-pa.googleapis.com
-95.182.120.241 proactivebackend-pa.googleapis.com robinfrontend-pa.googleapis.com o.pki.goog labs.google labs.google.com notebooklm.google
-95.182.120.241 notebooklm.google.com jules.google.com stitch.withgoogle.com gemini.google.com copilot.microsoft.com edgeservices.bing.com
-95.182.120.241 rewards.bing.com sydney.bing.com xboxdesignlab.xbox.com xgpuweb.gssv-play-prod.xboxlive.com xgpuwebf2p.gssv-play-prod.xboxlive.com"
+AI="#Gemini\n45.155.204.190 gemini.google.com\n#Grok\n45.155.204.190 grok.com accounts.x.ai assets.grok.com
+#OpenAI\n45.155.204.190 chatgpt.com ab.chatgpt.com auth.openai.com auth0.openai.com platform.openai.com cdn.oaistatic.com
+45.155.204.190 tcr9i.chat.openai.com webrtc.chatgpt.com android.chat.openai.com api.openai.com operator.chatgpt.com
+45.155.204.190 sora.chatgpt.com sora.com videos.openai.com ios.chat.openai.com cdn.auth0.com files.oaiusercontent.com
+#Microsoft\n45.155.204.190 copilot.microsoft.com sydney.bing.com edgeservices.bing.com rewards.bing.com
+45.155.204.190 xsts.auth.xboxlive.com xgpuwebf2p.gssv-play-prod.xboxlive.com xgpuweb.gssv-play-prod.xboxlive.com
+#ElevenLabs\n45.155.204.190 elevenlabs.io api.us.elevenlabs.io elevenreader.io api.elevenlabs.io help.elevenlabs.io
+#DeepL\n45.155.204.190 deepl.com www.deepl.com www2.deepl.com login-wall.deepl.com w.deepl.com dict.deepl.com ita-free.www.deepl.com
+45.155.204.190 write-free.www.deepl.com experimentation.deepl.com experimentation-grpc.deepl.com ita-free.app.deepl.com
+45.155.204.190 ott.deepl.com api-free.deepl.com backend.deepl.com clearance.deepl.com errortracking.deepl.com
+45.155.204.190 oneshot-free.www.deepl.com checkout.www.deepl.com gtm.deepl.com auth.deepl.com shield.deepl.com
+#Claude\n45.155.204.190 claude.ai console.anthropic.com api.anthropic.com
+#Trae.ai\n45.155.204.190 trae-api-sg.mchost.guru api.trae.ai api-sg-central.trae.ai api16-normal-alisg.mchost.guru
+#Windsurf\n45.155.204.190 windsurf.com codeium.com server.codeium.com web-backend.codeium.com  marketplace.windsurf.com
+45.155.204.190 unleash.codeium.com inference.codeium.com windsurf-stable.codeium.com
+144.31.14.104 windsurf-telemetry.codeium.com\n#Manus\n45.155.204.190 manus.im api.manus.im\n#Notion\n45.155.204.190 www.notion.so calendar.notion.so
+#AIStudio\n45.155.204.190 aistudio.google.com generativelanguage.googleapis.com aitestkitchen.withgoogle.com aisandbox-pa.googleapis.com xsts.auth.xboxlive.com
+45.155.204.190 webchannel-alkalimakersuite-pa.clients6.google.com alkalimakersuite-pa.clients6.google.com assistant-s3-pa.googleapis.com
+45.155.204.190 proactivebackend-pa.googleapis.com robinfrontend-pa.googleapis.com o.pki.goog labs.google labs.google.com notebooklm.google
+45.155.204.190 notebooklm.google.com jules.google.com stitch.withgoogle.com gemini.google.com copilot.microsoft.com edgeservices.bing.com
+45.155.204.190 rewards.bing.com sydney.bing.com xboxdesignlab.xbox.com xgpuweb.gssv-play-prod.xboxlive.com xgpuwebf2p.gssv-play-prod.xboxlive.com"
 SCell="#Supercell\n103.27.157.38 accounts.supercell.com cdn.id.supercell.com clashofclans.inbox.supercell.com game-assets.brawlstarsgame.com
 103.27.157.38 game-assets.clashofclans.com game-assets.clashroyaleapp.com security.id.supercell.com store.supercell.com
 31.25.239.132 accounts.supercell.com cdn.id.supercell.com clashofclans.inbox.supercell.com game-assets.brawlstarsgame.com
 31.25.239.132 game-assets.clashofclans.com game-assets.clashroyaleapp.com game.boombeachgame.com game.mocogame.com security.id.supercell.com store.supercell.com
 185.246.223.127 game.brawlstarsgame.com\n62.133.62.97 game.clashroyaleapp.com\n193.23.209.189 gamea.clashofclans.com\n108.61.167.26 game.squadbustersgame.com"
-SPFY="#Spotify\n95.182.120.241 api.spotify.com login5.spotify.com encore.scdn.co gew1-spclient.spotify.com spclient.wg.spotify.com
-95.182.120.241 api-partner.spotify.com aet.spotify.com www.spotify.com accounts.spotify.com open.spotify.com
-95.182.120.241 accounts.scdn.co gew1-dealer.spotify.com open-exp.spotifycdn.com www-growth.scdn.co"; TAPEop="#tapeop.dev\n216.24.57.251 www.tapeop.dev tapeop.dev\n216.24.57.3 www.tapeop.dev tapeop.dev"
-SPFYEXT="#SpotifyEXT\n95.182.120.241 spotify.com www.spotify.com accounts.spotify.com login.spotify.com login5.spotify.com login.app.spotify.com auth.spotify.com account.spotify.com api.spotify.com api-partner.spotify.com spclient.wg.spotify.com gew1-spclient.spotify.com
-95.182.120.241 guc3-spclient.spotify.com gae2-spclient.spotify.com gue1-spclient.spotify.com gnl-spclient.spotify.com spclient.spotify.com ap-gew1.spotify.com ap-gue1.spotify.com ap-gae2.spotify.com ap-gew4.spotify.com ap-sto3.spotify.com
-95.182.120.241 ap-guc3.spotify.com ap.spotify.com apresolve.spotify.com aet.spotify.com gew1-dealer.g2.spotify.com guc3-dealer.g2.spotify.com gue1-dealer.g2.spotify.com dealer.spotify.com dealer-wg.spotify.com edge-web.dual-gslb.spotify.com
-95.182.120.241 client.spotify.com web-partner.spotify.com connect.spotify.com gce.spotify.com clienttoken.spotify.com exp.wg.spotify.com pixel.spotify.com pixel-static.spotify.com image-upload.spotify.com content.spotify.com analytics.spotify.com
-95.182.120.241 crashdump.spotify.com log.spotify.com logger.spotify.com metrics.spotify.com desktop.spotify.com audio-fa-tls13.spotifycdn.com heads-fa-tls13.spotifycdn.com heads4-fa-tls13.spotifycdn.com image-cdn-fa.spotifycdn.com
-95.182.120.241 concerts.spotifycdn.com mrkt.spotifycdn.com pickasso.spotifycdn.com podz-content.spotifycdn.com seed-mix-image.spotifycdn.com thisis-images.spotifycdn.com wap.spotifycdn.com web-sdk-assets.spotifycdn.com spotifycdn.com spotifycdn.net
+SPFY="#Spotify\n45.155.204.190 api.spotify.com login5.spotify.com encore.scdn.co gew1-spclient.spotify.com spclient.wg.spotify.com
+45.155.204.190 api-partner.spotify.com aet.spotify.com www.spotify.com accounts.spotify.com open.spotify.com
+45.155.204.190 accounts.scdn.co gew1-dealer.spotify.com open-exp.spotifycdn.com www-growth.scdn.co"; TAPEop="#tapeop.dev\n216.24.57.251 www.tapeop.dev tapeop.dev\n216.24.57.3 www.tapeop.dev tapeop.dev"
+SPFYEXT="#SpotifyEXT\n45.155.204.190 spotify.com www.spotify.com accounts.spotify.com login.spotify.com login5.spotify.com login.app.spotify.com auth.spotify.com account.spotify.com api.spotify.com api-partner.spotify.com spclient.wg.spotify.com gew1-spclient.spotify.com
+45.155.204.190 guc3-spclient.spotify.com gae2-spclient.spotify.com gue1-spclient.spotify.com gnl-spclient.spotify.com spclient.spotify.com ap-gew1.spotify.com ap-gue1.spotify.com ap-gae2.spotify.com ap-gew4.spotify.com ap-sto3.spotify.com
+45.155.204.190 ap-guc3.spotify.com ap.spotify.com apresolve.spotify.com aet.spotify.com gew1-dealer.g2.spotify.com guc3-dealer.g2.spotify.com gue1-dealer.g2.spotify.com dealer.spotify.com dealer-wg.spotify.com edge-web.dual-gslb.spotify.com
+45.155.204.190 client.spotify.com web-partner.spotify.com connect.spotify.com gce.spotify.com clienttoken.spotify.com exp.wg.spotify.com pixel.spotify.com pixel-static.spotify.com image-upload.spotify.com content.spotify.com analytics.spotify.com
+45.155.204.190 crashdump.spotify.com log.spotify.com logger.spotify.com metrics.spotify.com desktop.spotify.com audio-fa-tls13.spotifycdn.com heads-fa-tls13.spotifycdn.com heads4-fa-tls13.spotifycdn.com image-cdn-fa.spotifycdn.com
+45.155.204.190 concerts.spotifycdn.com mrkt.spotifycdn.com pickasso.spotifycdn.com podz-content.spotifycdn.com seed-mix-image.spotifycdn.com thisis-images.spotifycdn.com wap.spotifycdn.com web-sdk-assets.spotifycdn.com spotifycdn.com spotifycdn.net
 35.186.224.24 open.spotify.com\n162.159.141.124 audio4-fa-tls13.spotifycdn.com audio-cf.spotifycdn.com open-exp.spotifycdn.com\n23.36.163.34 audio-ak-spotify-com.akamaized.net\n2.16.168.44 audio4-ak-spotify-com.akamaized.net
 199.232.210.248 scdn.co i.scdn.co line-up.scdn.co mosaic.scdn.co daily-mix.scdn.co lineup-images.scdn.co encore.scdn.co image-cdn-fa.scdn.co accounts.scdn.co www.scdn.co www-growth.scdn.co av.scdn.co seafoam.scdn.co
 23.48.23.145 heads-ak-spotify-com.akamaized.net\n45.155.204.190 xpui.app.spotify.com"
@@ -91,9 +92,9 @@ GITH_RAW="#githubusercontent.com\n185.199.109.133 raw.githubusercontent.com rele
 GITH="#github.com\n140.82.114.3 github.com\n185.199.110.154 github.githubassets.com\n185.199.110.133 camo.githubassets.com"
 USoft="#Ubisoft\n52.6.7.14 ubi.com\n172.67.139.108 r6s.com\n54.155.2.87 rainbow6.com\n52.222.149.31 ubisoft.com\n54.76.54.196 uplay.ubisoft.com\n2.23.89.92 static3.cdn.ubi.com
 18.209.141.203 connect.ubisoft.com\n2.23.89.244 ubiservices.cdn.ubi.com\n99.83.188.134 public-ubiservices.ubi.com\n3.33.249.140 public-ws-ubiservices.ubi.com\n"
-ALL_BLOCKS="$AI\n$INSTAGRAM\n$NTC\n$RUTOR\n$LIBRUSEC\n$TGWeb\n$TWCH\n$SCell\n$SPFY\n$GITH_RAW"; TMP_ARCHIVE_RS="/tmp/tg-ws-proxy-rs.tar.gz"; TMP_DIR_RS="/tmp/tg-ws-proxy-rs"
+ALL_BLOCKS="$AI\n$INSTAGRAM\n$NTC\n$LIBRUSEC\n$TGWeb\n$TWCH\n$SCell\n$SPFY\n$GITH_RAW"; TMP_ARCHIVE_RS="/tmp/tg-ws-proxy-rs.tar.gz"; TMP_DIR_RS="/tmp/tg-ws-proxy-rs"
 hosts_enabled() { if grep -q "### dns.malw.link" /etc/hosts; then hosts_echo="Malw.link"; return 0; elif grep -q "#mafioznik" /etc/hosts; then hosts_echo="Mafioznik"; return 0; elif grep -q "### dns.geohide.ru" /etc/hosts; then hosts_echo="GeoHide"; return 0
-elif grep -q "95.182.120.241\|instagram.com\|rutor.info\|lib.rus.ec\|ntc.party\|twitch.tv\|web.telegram.org\|www.spotify.com\|store.supercell.com\|raw.githubusercontent.com\|lkfl2.nalog.ru" /etc/hosts; then hosts_echo="добавлены"; return 0; fi; return 1; }
+elif grep -q "45.155.204.190\|instagram.com\|rutor.info\|lib.rus.ec\|ntc.party\|twitch.tv\|web.telegram.org\|www.spotify.com\|store.supercell.com\|raw.githubusercontent.com\|lkfl2.nalog.ru" /etc/hosts; then hosts_echo="добавлены"; return 0; fi; return 1; }
 hosts_add() { printf "%b\n" "$1" | while IFS= read -r L; do grep -qxF "$L" /etc/hosts || echo "$L" >> /etc/hosts; done; /etc/init.d/dnsmasq restart >/dev/null 2>&1; }; D() { printf '%b' "$(printf '%s' "$1" | sed 's/../\\x&/g')"; }
 ZAPRET_RESTART () { chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1; sleep 1; }
 PAUSE() { echo -ne "Нажмите Enter..."; read dummy; }; BACKUP_DIR="/opt/zapret_backup"; DATE_FILE="$BACKUP_DIR/date_backup.txt"
@@ -140,10 +141,13 @@ get_ver "https://github.com/d0mhate/-tg-ws-proxy-Manager-go/releases/latest" "$T
 # git="githubusercontent.com"; if ! grep -q "raw.$git" /etc/hosts; then echo -e "\n\033[1;36mДля корректной работы скрипта добавляем домены \033[0mGitHub\033[1;36m в \033[0m/etc/hosts\033[0m"
 # printf "#$git\n185.199.109.133 raw.$git release-assets.$git\n185.199.108.133 private-user-images.$git gist.$git avatars.$git\n" >> /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1; fi
 
-ADD_FAKE_FLOW() { MSG=0; for f in stun2.bin quic_initial_tencent_com.bin quic_initial_steamcommunity_com.bin quic_initial_dbankcloud_ru.bin quic_initial_4pda.to.bin quic_initial_5ka_ru.bin tls_clienthello_5ka_ru.bin quic_initial_rutube_ru.bin
+ADD_FAKE_FLOW() { MSG=0; for f in stun2.bin quic_initial_tencent_com.bin quic_initial_steamcommunity_com.bin tls_clienthello_sochi_park.bin quic_initial_4pda_to.bin quic_initial_5ka_ru.bin tls_clienthello_5ka_ru.bin quic_initial_rutube_ru.bin
 do [ -d /opt/zapret ] && [ ! -f "/opt/zapret/files/fake/$f" ] && { [ "$MSG" = 0 ] && { echo -e "${CYAN}Скачиваем ${NC}fake ${CYAN}файлы${NC}"; MSG=1; }; wget -q -U "Mozilla/5.0" -O "/opt/zapret/files/fake/$f" "https://github.com/Flowseal/zapret-discord-youtube/raw/refs/heads/main/bin/$f" || { echo -e "\n${RED}Не удалось загрузить файл ${NC}$f\n"; }; }; done; }
 
 ADD_FAKE_FLOW
+
+show_ts_warning() { grep -Fq "=ts" "$CONF" || return; [ -f "$TS_WARN_FLAG" ] && [ "$(cat "$TS_WARN_FLAG" 2>/dev/null)" = "1" ] && return
+mkdir -p "$(dirname "$TS_WARN_FLAG")"; echo 1 > "$TS_WARN_FLAG"; echo -e "${YELLOW}Для работы этой стратегии нужно один раз в терминале Windows выполнить:${NC}\nnetsh int tcp set global timestamps=enabled\n"; }
 
 # ==========================================
 #ZAPRET2
@@ -379,11 +383,11 @@ stat_f() { [ "$FAKE_DIC" = "$1" ] && [ "$FAKE_DISABLED" = 0 ] && echo "${GREEN}(
 DIC_FAKE() { if ! grep -q -- "--filter-l7=discord,stun" "$CONF" || ! grep -q -- "--dpi-desync=fake" "$CONF"; then echo -e "\n${RED}Блок ${NC}discord,stun${RED} не найден!${NC}\n"; PAUSE; return; fi
 FAKE_DIC=$(awk '/--filter-l7=discord,stun/ {blk=1; next} blk && /^.*--filter-l7=/ {exit} blk && /--dpi-desync-fake-discord=/ {sub(/.*fake\//,""); print; exit}' "$CONF")
 FAKE_DISABLED=$(awk '/--filter-l7=discord,stun/ {blk=1; next} blk && /^.*--filter-l7=/ {exit} blk && /--dpi-desync-fake-discord=/ {found=1; exit} END {print found ? 0 : 1}' "$CONF")
-echo -e "\n${MAGENTA}Выберите fake для discord,stun${NC}\n${CYAN}1) ${GREEN}Установить ${NC}stun.bin $(stat_f stun.bin)\n${CYAN}2) ${GREEN}Установить ${NC}stun2.bin $(stat_f stun2.bin)\n${CYAN}3) ${GREEN}Установить ${NC}quic_initial_4pda.to.bin $(stat_f quic_initial_4pda.to.bin)"
-echo -e "${CYAN}4) ${GREEN}Установить ${NC}quic_initial_tencent_com.bin $(stat_f quic_initial_tencent_com.bin)\n${CYAN}5) ${GREEN}Установить ${NC}quic_initial_dbankcloud_ru.bin $(stat_f quic_initial_dbankcloud_ru.bin)"
+echo -e "\n${MAGENTA}Выберите fake для discord,stun${NC}\n${CYAN}1) ${GREEN}Установить ${NC}stun.bin $(stat_f stun.bin)\n${CYAN}2) ${GREEN}Установить ${NC}stun2.bin $(stat_f stun2.bin)\n${CYAN}3) ${GREEN}Установить ${NC}quic_initial_4pda_to.bin $(stat_f quic_initial_4pda_to.bin)"
+echo -e "${CYAN}4) ${GREEN}Установить ${NC}quic_initial_tencent_com.bin $(stat_f quic_initial_tencent_com.bin)\n${CYAN}5) ${GREEN}Установить ${NC}tls_clienthello_sochi_park.bin $(stat_f tls_clienthello_sochi_park.bin)"
 echo -e "${CYAN}6) ${GREEN}Установить ${NC}quic_initial_www_google_com.bin $(stat_f quic_initial_www_google_com.bin)\n${CYAN}7) ${GREEN}Установить ${NC}quic_initial_steamcommunity_com.bin $(stat_f quic_initial_steamcommunity_com.bin)"
 echo -e "${CYAN}8) ${GREEN}Установить ${NC}quic_initial_5ka_ru.bin $(stat_f quic_initial_5ka_ru.bin)\n${CYAN}9) ${GREEN}Установить ${NC}quic_initial_rutube_ru.bin $(stat_f quic_initial_rutube_ru.bin)\n${CYAN}0) ${GREEN}Удалить ${NC}fake $(stat_del)\n${CYAN}Enter) ${GREEN}Выход в меню настройки Discord${NC}"; echo -ne "\n${YELLOW}Выберите пункт:${NC} "; read -r choiceF; case "$choiceF" in 1) new_fileD="stun.bin";;
-2) new_fileD="stun2.bin";; 3) new_fileD="quic_initial_4pda.to.bin";; 4) new_fileD="quic_initial_tencent_com.bin";; 5) new_fileD="quic_initial_dbankcloud_ru.bin";; 6) new_fileD="quic_initial_www_google_com.bin";; 7) new_fileD="quic_initial_steamcommunity_com.bin";;
+2) new_fileD="stun2.bin";; 3) new_fileD="quic_initial_4pda_to.bin";; 4) new_fileD="quic_initial_tencent_com.bin";; 5) new_fileD="tls_clienthello_sochi_park.bin";; 6) new_fileD="quic_initial_www_google_com.bin";; 7) new_fileD="quic_initial_steamcommunity_com.bin";;
 8) new_fileD="quic_initial_5ka_ru.bin";; 9) new_fileD="quic_initial_rutube_ru.bin";; 0) new_fileD="DELETE";; *) return;; esac; [ "$new_fileD" = "DELETE" ] && echo -e "\n${CYAN}Удаляем ${NC}fake" || echo -e "\n${CYAN}Устанавливаем${NC} ${new_fileD}"; if [ "$new_fileD" = "DELETE" ]; then
 awk 'BEGIN{skip=0}{if(skip>0){skip--;next}if($0=="--filter-l7=discord,stun"){print;getline nextline;print nextline;if(nextline=="--dpi-desync=fake"){getline a;getline b;if(a~/^--dpi-desync-fake-discord=/&&b~/^--dpi-desync-fake-stun=/){next}if(a!="")print a;if(b!="")print b}next}print}' "$CONF" > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"; else
 awk -v new="$new_fileD" '{if($0=="--filter-l7=discord,stun"){print;getline;print;if($0=="--dpi-desync=fake"){getline nextline;if(nextline~/^--dpi-desync-fake-discord=/){print "--dpi-desync-fake-discord=/opt/zapret/files/fake/"new;getline;print "--dpi-desync-fake-stun=/opt/zapret/files/fake/"new}else{print "--dpi-desync-fake-discord=/opt/zapret/files/fake/"new;print "--dpi-desync-fake-stun=/opt/zapret/files/fake/"new;print nextline}}next}print}' "$CONF" > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"; fi
@@ -429,11 +433,11 @@ strategy_TCP_common() { printf "%s\n" "--new" "--filter-tcp=$PORTS_TCP" "--dpi-d
 strategy_Gv1() { printf "%s\n" "#Gv1" "--new" "--filter-udp=$PORTS_UDP" "--dpi-desync=fake" "--dpi-desync-cutoff=d2" "--dpi-desync-any-protocol=1" "--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/stun.bin"; }
 strategy_Gv() { local N="$1"; printf "%s\n" "#Gv$N" "--new" "--filter-udp=$PORTS_UDP" "--dpi-desync=fake" "--dpi-desync-repeats=10" "--dpi-desync-any-protocol=1" "--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/stun.bin" "--dpi-desync-cutoff=n$N"; }
 GV_FAKE() { if ! grep -q -- "--dpi-desync-fake-unknown-udp=" "$CONF"; then echo -e "\n${RED}Блок ${NC}dpi-desync-fake-unknown-udp${RED} не найден!${NC}\n"; PAUSE; return; fi; CURRENT_FAKE=$(grep -m1 -- '--dpi-desync-fake-unknown-udp=' "$CONF" | sed 's|.*fake/||'); gv_fake() { [ "$CURRENT_FAKE" = "$1" ] && echo "${GREEN}(используется)${NC}"; }
-echo -e "\n${MAGENTA}Выберите fake для игровой стратегии${NC}\n${CYAN}1) ${GREEN}Установить ${NC}stun.bin $(gv_fake stun.bin)\n${CYAN}2) ${GREEN}Установить ${NC}stun2.bin $(gv_fake stun2.bin)\n${CYAN}3) ${GREEN}Установить ${NC}quic_initial_4pda.to.bin $(gv_fake quic_initial_4pda.to.bin)"
-echo -e "${CYAN}4) ${GREEN}Установить ${NC}quic_initial_tencent_com.bin $(gv_fake quic_initial_tencent_com.bin)\n${CYAN}5) ${GREEN}Установить ${NC}quic_initial_dbankcloud_ru.bin $(gv_fake quic_initial_dbankcloud_ru.bin)"
+echo -e "\n${MAGENTA}Выберите fake для игровой стратегии${NC}\n${CYAN}1) ${GREEN}Установить ${NC}stun.bin $(gv_fake stun.bin)\n${CYAN}2) ${GREEN}Установить ${NC}stun2.bin $(gv_fake stun2.bin)\n${CYAN}3) ${GREEN}Установить ${NC}quic_initial_4pda_to.bin $(gv_fake quic_initial_4pda_to.bin)"
+echo -e "${CYAN}4) ${GREEN}Установить ${NC}quic_initial_tencent_com.bin $(gv_fake quic_initial_tencent_com.bin)\n${CYAN}5) ${GREEN}Установить ${NC}tls_clienthello_sochi_park.bin $(gv_fake tls_clienthello_sochi_park.bin)"
 echo -e "${CYAN}6) ${GREEN}Установить ${NC}quic_initial_www_google_com.bin $(gv_fake quic_initial_www_google_com.bin)\n${CYAN}7) ${GREEN}Установить ${NC}quic_initial_steamcommunity_com.bin $(gv_fake quic_initial_steamcommunity_com.bin)"
 echo -e "${CYAN}8) ${GREEN}Установить ${NC}quic_initial_5ka_ru.bin $(gv_fake quic_initial_5ka_ru.bin)\n${CYAN}9) ${GREEN}Установить ${NC}quic_initial_rutube_ru.bin $(gv_fake quic_initial_rutube_ru.bin)"
-echo -en "${CYAN}Enter) ${GREEN}Выход в меню стратегий${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read -r choiceF; case "$choiceF" in 1) new_file="stun.bin";; 2) new_file="stun2.bin";; 3) new_file="quic_initial_4pda.to.bin";; 4) new_file="quic_initial_tencent_com.bin";; 5) new_file="quic_initial_dbankcloud_ru.bin";; 6) new_file="quic_initial_www_google_com.bin";; 7) new_file="quic_initial_steamcommunity_com.bin";; 8) new_file="quic_initial_5ka_ru.bin";; 9) new_file="quic_initial_rutube_ru.bin";; *) return;; esac; echo -e "\n${CYAN}Устанавливаем fake${NC} ${new_file}"
+echo -en "${CYAN}Enter) ${GREEN}Выход в меню стратегий${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read -r choiceF; case "$choiceF" in 1) new_file="stun.bin";; 2) new_file="stun2.bin";; 3) new_file="quic_initial_4pda_to.bin";; 4) new_file="quic_initial_tencent_com.bin";; 5) new_file="tls_clienthello_sochi_park.bin";; 6) new_file="quic_initial_www_google_com.bin";; 7) new_file="quic_initial_steamcommunity_com.bin";; 8) new_file="quic_initial_5ka_ru.bin";; 9) new_file="quic_initial_rutube_ru.bin";; *) return;; esac; echo -e "\n${CYAN}Устанавливаем fake${NC} ${new_file}"
 awk -v new="$new_file" 'BEGIN{done=0} !done && /--dpi-desync-fake-unknown-udp=/{sub(/\/opt\/zapret\/files\/fake\/[^ ]+/, "/opt/zapret/files/fake/" new); done=1} {print}' "$CONF" > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"; ZAPRET_RESTART; echo -e "fake ${GREEN}изменён на ${NC}${new_file}${GREEN}!${NC}\n"; PAUSE; }
 fix_GAME() { local NO_PAUSE=$1; [ ! -f /etc/init.d/zapret ] && { echo -e "\nZapret ${RED}не установлен!${NC}\n"; PAUSE; return; }; local CURRENT_GAME=""; for i in 1 2 3 4; do grep -q "^#Gv$i" "$CONF" && CURRENT_GAME="Gv$i"; done
 if [ -n "$NO_PAUSE" ]; then GAME_CHOICE="$NO_PAUSE"; else echo -e "\n${MAGENTA}Меню управления стратегией для игр${NC}"; for i in $(seq 1 4); do if [ "$CURRENT_GAME" = "Gv$i" ]; then echo -e "${CYAN}$i) ${GREEN}Удалить ${NC}Gv$i"; else echo -e "${CYAN}$i) ${GREEN}Установить ${NC}Gv$i"; fi; done
@@ -448,7 +452,7 @@ echo "$STRATEGY" | sed '/^$/d' >> "$CONF"; echo "'" >> "$CONF"; add_ports_if_mis
 # Zapret под ключ
 # ==========================================
 zapret_key() { if [ -f /etc/init.d/zapret2 ] && ! is_expert_mode; then echo -e "\n${RED}Установлен ${NC}Zapret2${RED}!${NC}"; echo -e "${YELLOW}Установка ${NC}Zapret${YELLOW} невозможна!${NC}\n"; PAUSE; return 1; fi; clear; echo -e "${MAGENTA}Удаление, установка и настройка Zapret${NC}\n"; get_versions; uninstall_zapret "1"; install_Zapret "1"
-[ ! -f /etc/init.d/zapret ] && { echo -e "Zapret ${RED}не установлен!${NC}\n"; PAUSE; return; }; install_strategy $STR_VERSION_AUTOINSTALL "1"; echo -e "\n${MAGENTA}Редактируем hosts${NC}\n${CYAN}Добавляем домены в${NC} hosts"
+[ ! -f /etc/init.d/zapret ] && { echo -e "Zapret ${RED}не установлен!${NC}\n"; PAUSE; return; }; install_strategy $STR_VERSION_AUTOINSTALL "1"; echo -e "${MAGENTA}Редактируем hosts${NC}\n${CYAN}Добавляем домены в${NC} hosts"
 hosts_add "$ALL_BLOCKS"; echo -e "${GREEN}Домены добавлены в ${NC}hosts${GREEN}!${NC}\n"; Discord_menu "1"; echo -e "${MAGENTA}Настраиваем стратегию для игр${NC}"; fix_GAME "1"; echo -e "Zapret ${GREEN}установлен и настроен!${NC}\n"; PAUSE; }
 # ==========================================
 # Резервная копия
@@ -570,8 +574,8 @@ echo -en "${CYAN}99) ${GREEN}Обновить стратегии${NC}\n${CYAN}En
 BLOCK=$(awk -v name="$SEL_NAME" '$0=="#"name {flag=1; print; next} /^#/ && flag {exit} flag {print}' "$OUT"); sed -i "/option NFQWS_OPT '/,\$d" "$CONF"; { echo "	option NFQWS_OPT '"; echo "$BLOCK"; echo "'"; } >> "$CONF"
 if ! grep -q "option NFQWS_PORTS_UDP.*19294-19344,50000-50100" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'$/,19294-19344,50000-50100'/" "$CONF"; fi; if ! grep -q "option NFQWS_PORTS_TCP.*2053,2083,2087,2096,8443" "$CONF"
 then sed -i "/^[[:space:]]*option NFQWS_PORTS_TCP '/s/'$/,2053,2083,2087,2096,8443'/" "$CONF"; fi; echo -e "\n${MAGENTA}Устанавливаем стратегию\n${CYAN}Добавляем домены в исключения${NC}"; ADD_GP_DOMAINS; rm -f "$EXCLUDE_FILE"
-wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL" || { echo -e "\n${RED}Не удалось загрузить exclude файл${NC}\n"; PAUSE; return; }; sed -i '/--new/{N;/--filter-tcp=2802/{s/--new/#Gv0\n--new/;};}' "$CONF"; echo -e "${CYAN}Применяем стратегию${NC}"; ZAPRET_RESTART; echo -e "${GREEN}Стратегия ${NC}$SEL_NAME ${GREEN}установлена!${NC}\n"
-grep -Fq "=ts" "$CONF" && echo -e "${YELLOW}Для работы этой стратегии нужно один раз в терминале Windows выполнить:${NC}\nnetsh int tcp set global timestamps=enabled\n"; PAUSE; break; done; }
+wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL" || { echo -e "\n${RED}Не удалось загрузить exclude файл${NC}\n"; PAUSE; return; }; sed -i '/--new/{N;/--filter-tcp=2802/{s/--new/#Gv0\n--new/;};}' "$CONF"
+echo -e "${CYAN}Применяем стратегию${NC}"; ZAPRET_RESTART; echo -e "${GREEN}Стратегия ${NC}$SEL_NAME ${GREEN}установлена!${NC}\n"; show_ts_warning; PAUSE; break; done; }
 download_strategies() { local NO_PAUSE=$1; [ "$NO_PAUSE" != "1" ] && echo -e "\n${MAGENTA}Скачиваем и формируем стратегии${NC}"; mkdir -p "$TMP_SF"; : > "$OUT"; wget -q -U "Mozilla/5.0" -O "$ZIP" "$FLOWSEAL_STR_ZIP" || { echo -e "\n${RED}Не удалось загрузить файл стратегий${NC}\n"; PAUSE; return; }
 if ! command -v unzip >/dev/null 2>&1; then echo -e "${CYAN}Устанавливаем ${NC}unzip";  update_packages || return; $INSTALL unzip >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить unzip!${NC}\n"; PAUSE; return; }; fi
 unzip -oq "$ZIP" -d "$TMP_SF" || { echo -e "\n${RED}Не удалось распоковать файл${NC}\n"; PAUSE; return; }; BASE="$TMP_SF/zapret-discord-youtube-main"
@@ -580,10 +584,10 @@ find "$BASE" -type f -name 'general*.bat' ! -name 'general (ALT5).bat' | while r
 sed -i 's|"%BIN%tls_clienthello_www_google_com.bin"|/opt/zapret/files/fake/tls_clienthello_www_google_com.bin|g' "$OUT"; sed -i '/--hostlist="%LISTS%list-general.txt"/d' "$OUT"
 sed -i '/--ipset="%LISTS%ipset-all.txt"/d' "$OUT"; sed -i '/--hostlist="%LISTS%list-general-user.txt"/d' "$OUT"; sed -i '/--ipset-exclude="%LISTS%ipset-exclude.txt"/d' "$OUT"; sed -i '/--ipset-exclude="%LISTS%ipset-exclude-user.txt"/d' "$OUT"
 sed -i '/--hostlist-exclude="%LISTS%list-exclude-user.txt"/d' "$OUT"; sed -i 's|"%LISTS%list-exclude.txt"|/opt/zapret/ipset/zapret-hosts-user-exclude.txt|g' "$OUT"; sed -i 's/--new[[:space:]]\^/--new/g' "$OUT"; sed -i 's|"%LISTS%list-google.txt"|/opt/zapret/ipset/zapret-hosts-google.txt|g' "$OUT"
-sed -i 's|"%BIN%quic_initial_dbankcloud_ru.bin"|/opt/zapret/files/fake/quic_initial_dbankcloud_ru.bin|g' "$OUT"; sed -i 's|"%BIN%stun.bin"|/opt/zapret/files/fake/stun.bin|g' "$OUT"; sed -i 's|"%BIN%tls_clienthello_4pda_to.bin"|/opt/zapret/files/fake/4pda.bin|g' "$OUT"
+sed -i 's|"%BIN%tls_clienthello_sochi_park.bin"|/opt/zapret/files/fake/tls_clienthello_sochi_park.bin|g' "$OUT"; sed -i 's|"%BIN%stun.bin"|/opt/zapret/files/fake/stun.bin|g' "$OUT"; sed -i 's|"%BIN%tls_clienthello_4pda_to.bin"|/opt/zapret/files/fake/4pda.bin|g' "$OUT"
 sed -i 's|"%BIN%quic_initial_www_google_com.bin"|/opt/zapret/files/fake/quic_initial_www_google_com.bin|g' "$OUT"; sed -i 's|"%BIN%stun2.bin"|/opt/zapret/files/fake/stun2.bin|g' "$OUT"; sed -i 's|"%BIN%quic_initial_tencent_com.bin"|/opt/zapret/files/fake/quic_initial_tencent_com.bin|g' "$OUT"
-sed -i 's|"%BIN%quic_initial_steamcommunity_com.bin"|/opt/zapret/files/fake/quic_initial_steamcommunity_com.bin|g' "$OUT"; sed -i 's|"%BIN%quic_initial_4pda.to.bin"|/opt/zapret/files/fake/quic_initial_4pda.to.bin|g' "$OUT"
-sed -i 's|"%BIN%ACTIVE_DISCORD_UDP.bin"|/opt/zapret/files/fake/quic_initial_steamcommunity_com.bin|g' "$OUT"; sed -i 's|"%BIN%ACTIVE_GAME_UDP.bin"|/opt/zapret/files/fake/quic_initial_dbankcloud_ru.bin|g' "$OUT"
+sed -i 's|"%BIN%quic_initial_steamcommunity_com.bin"|/opt/zapret/files/fake/quic_initial_steamcommunity_com.bin|g' "$OUT"; sed -i 's|"%BIN%quic_initial_4pda_to.bin"|/opt/zapret/files/fake/quic_initial_4pda_to.bin|g' "$OUT"
+sed -i 's|"%BIN%ACTIVE_DISCORD_UDP.bin"|/opt/zapret/files/fake/quic_initial_steamcommunity_com.bin|g' "$OUT"; sed -i 's|"%BIN%ACTIVE_GAME_UDP.bin"|/opt/zapret/files/fake/quic_initial_4pda_to.bin|g' "$OUT"
 sed -i 's|"%BIN%tls_clienthello_max_ru.bin"|/opt/zapret/files/fake/tls_clienthello_www_onetrust_com.bin|g' "$OUT"; sed -i 's|"%BIN%quic_initial_5ka_ru.bin"|/opt/zapret/files/fake/quic_initial_5ka_ru.bin|g' "$OUT"; sed -i 's|"%BIN%quic_initial_rutube_ru.bin"|/opt/zapret/files/fake/quic_initial_rutube_ru.bin|g' "$OUT"
 sed -i "s|%GameFilterTCP%|$PORTS_TCP|g" "$OUT"; sed -i "s|%GameFilterUDP%|$PORTS_UDP|g" "$OUT"; sed -i 's|\^!|/opt/zapret/files/fake/tls_clienthello_www_google_com.bin|g' "$OUT"; sed -i 's/[[:space:]]\+$//' "$OUT"; sed -i '/^[[:space:]]*$/d' "$OUT"
 sed -i '/^--new$/ { N; /^\--new\n$/d; }' "$OUT"; rm -rf "$TMP_SF/zapret-discord-youtube-main" "$ZIP"; ADD_FAKE_FLOW; [ "$NO_PAUSE" != "1" ] && echo -e "${GREEN}Стратегии сформированы!${NC}\n"; [ "$NO_PAUSE" != "1" ] && PAUSE; }
@@ -619,8 +623,7 @@ printf "%s\n" "--new" "--filter-udp=19294-19344,50000-50100" "--filter-l7=discor
 "--dpi-desync-repeats=6" "#Dv1" "--new" "--filter-tcp=2053,2083,2087,2096,8443" "--hostlist-domains=discord.media" "--dpi-desync=multisplit" "--dpi-desync-split-seqovl=652" "--dpi-desync-split-pos=2" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin" "'" >> "$CONF"; fi; }
 install_strategy() { local version="$1"; local NO_PAUSE="${2:-0}"; [ "$NO_PAUSE" != "1" ] && echo; echo -e "${MAGENTA}Устанавливаем стратегию ${version}${NC}\n${CYAN}Меняем стратегию${NC}"; sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; { echo "  option NFQWS_OPT '"; strategy_"$version"; echo "'"; } >> "$CONF"
 ADD_GP_DOMAINS; echo -e "${CYAN}Добавляем домены в исключения${NC}"; rm -f "$EXCLUDE_FILE"; wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL" || { echo -e "\n${RED}Не удалось загрузить exclude файл${NC}\n"; PAUSE; return; }
-ADD_Yv; discord_str_add; echo -e "${CYAN}Применяем новую стратегию${NC}"; ZAPRET_RESTART; echo -e "${GREEN}Стратегия ${NC}${version}${GREEN} установлена!${NC}"
-grep -Fq "=ts" "$CONF" && echo -e "\n${YELLOW}Для работы этой стратегии нужно один раз в терминале Windows выполнить:${NC}\nnetsh int tcp set global timestamps=enabled"; [ "$NO_PAUSE" != "1" ] && echo && PAUSE; }
+ADD_Yv; discord_str_add; echo -e "${CYAN}Применяем новую стратегию${NC}"; ZAPRET_RESTART; echo -e "${GREEN}Стратегия ${NC}${version}${GREEN} установлена!${NC}\n"; show_ts_warning; [ "$NO_PAUSE" != "1" ] && PAUSE; }
 choose_strategy_YOUTUBE() { curl -fsSL "$STR_URL" -o "$TMP_LIST" || { echo -e "\n${RED}Не удалось скачать список${NC}\n"; PAUSE; return 1; }
 COUNT=0; > $TMP_SF/strategy_list; while IFS= read -r LINE; do case "$LINE" in \#Yv[0-9]*) COUNT=$((COUNT + 1)); echo "$LINE" >> $TMP_SF/strategy_list;; esac; done < "$TMP_LIST"
 [ "$COUNT" -eq 0 ] && echo -e "${RED}Стратегий не найдено!${NC}\n" && PAUSE && rm -f $TMP_SF/strategy_list && return 1; echo -en "\n${YELLOW}Введите версию стратегии для YouTube (${NC}1-$COUNT${YELLOW}):${NC} "
@@ -629,8 +632,7 @@ echo -e "\n${CYAN}Применяем стратегию: ${NC}$DISPLAY_NAME"; SA
 [ "$FLAG" -eq 1 ] && printf "%b\n" "$LINE" >> "$SAVED_STR"; done < "$TMP_LIST"; awk '/^[[:space:]]*option NFQWS_OPT '\''/{flag=1} flag{print}' "$CONF" > "$OLD_STR"; sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; sed -i "/^[[:space:]]*#Yv[0-9]\+/d" "$OLD_STR"
 awk '{if(skip){if($0=="--new"||$0~/\047/){skip=0;next}if($0~/^[[:space:]]*$/)next;next}if($0=="--filter-tcp=443"){getline n;if(n=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt"){skip=1;next}else{print $0;print n;next}}if($0=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt")has_google=1;if($0~/^[[:space:]]*#Yv/)next;print}' "$OLD_STR" > "$NEW_STR"
 awk 'BEGIN{inserted=0;has_google=0} $0=="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt"{has_google=1} $0=="--new"&&!inserted{while((getline l<"'"$SAVED_STR"'")>0) if(l!~/^[[:space:]]*$/) print l; print "--new"; inserted=1; next} $0~/^[[:space:]]*option NFQWS_OPT \047$/&&!has_google&&!inserted{print; print "'"$SELECTED_NAME"'"; while((getline l<"'"$SAVED_STR"'")>0) if(l!~/^[[:space:]]*$/) print l; print "--new"; inserted=1; next} {print}' "$NEW_STR" > "$FINAL_STR"
-cat "$FINAL_STR" >> "$CONF"; awk '{if($0=="--new"){if(prev!="--new")print}else print;prev=$0}' "$CONF" > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"; grep -q "^[[:space:]]*' *\$" "$CONF" || echo "'" >> "$CONF"; ADD_GP_DOMAINS; ZAPRET_RESTART; echo -e "${GREEN}Стратегия применена!${NC}\n"
-grep -Fq "=ts" "$CONF" && echo -e "${YELLOW}Для работы этой стратегии нужно один раз в терминале Windows выполнить:${NC}\nnetsh int tcp set global timestamps=enabled\n"; PAUSE; }
+cat "$FINAL_STR" >> "$CONF"; awk '{if($0=="--new"){if(prev!="--new")print}else print;prev=$0}' "$CONF" > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"; grep -q "^[[:space:]]*' *\$" "$CONF" || echo "'" >> "$CONF"; ADD_GP_DOMAINS; ZAPRET_RESTART; echo -e "${GREEN}Стратегия применена!${NC}\n"; show_ts_warning; PAUSE; }
 # ==========================================
 # DNS over HTTPS
 # ==========================================
@@ -699,9 +701,12 @@ if [ -f /etc/init.d/zapret ] && [ -f "$CONF" ]; then if grep -Eq "^[[:space:]]*o
 ping -6 -c 1 -W 2 google.com >/dev/null 2>&1 && echo -e "${CYAN}9) ${GREEN}Включить ${NC}IPv6${GREEN} в ${NC}Zapret"; fi; fi
 FO=$(uci get firewall.@defaults[0].flow_offloading 2>/dev/null); FOHW=$(uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null); FIX=$(grep -q 'ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc && echo 1 || echo 0)
 if [ "$FO" = 1 ] || [ "$FOHW" = 1 ] || [ "$FIX" = 1 ]; then if [ "$FIX" = 1 ]; then echo -e "${CYAN}0) ${GREEN}Отключить${NC} FIX ${GREEN}для${NC} Flow Offloading"; else echo -e "${CYAN}0) ${GREEN}Применить${NC} FIX ${GREEN}для${NC} Flow Offloading"; fi; fi
+
+echo -e "${CYAN}i) ${GREEN}Меню исключений ${NC}IP${GREEN} из ${NC}Zapret"
+
 echo -e "${CYAN}e) ${GREEN}$EXPERT_TEXT${NC}"; echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read -r choiceMN; case "$choiceMN" in 1) Sys_Info;; 2) toggle_web;; 3) toggle_quic;; 4) menu_MIR;; e|Е|у|У) toggle_expert_mode;;
 5) [ ! -f /etc/init.d/zapret ] && { echo -e "\nZapret ${RED}не установлен!${NC}\n"; PAUSE; continue; }; stop_zapret "1"; grep -q 'echo "Start Zapret"' /opt/zapret/blockcheck.sh || sed -i $'/^[[:space:]]*read A/a\\\t\techo "Start Zapret"; /etc/init.d/zapret restart >/dev/null 2>&1' /opt/zapret/blockcheck.sh
-echo -e "${GREEN}Ctrl+C - oстановить blockcheck${NC}\n"; chmod +x /opt/zapret/blockcheck.sh; /opt/zapret/blockcheck.sh; start_zapret;; 6) uninstall_zapret_all;; 9) toggle_ipv6;;
+echo -e "${GREEN}Ctrl+C - oстановить blockcheck${NC}\n"; chmod +x /opt/zapret/blockcheck.sh; /opt/zapret/blockcheck.sh; start_zapret;; 6) uninstall_zapret_all;; 9) toggle_ipv6;; i|I|Ш|ш) Exclusions_menu;;
 7) if [ -f "$DATE_FILE" ] && [ -f "$BACKUP_DIR/zapret.tar.gz" ] && [ -f "$BACKUP_DIR/zapret" ]; then CREATE_DATE=$(cat "$DATE_FILE"); delete_backup; else save_backup; fi;; 8) restore_backup ;;
 0) FO=$(uci get firewall.@defaults[0].flow_offloading 2>/dev/null); FOHW=$(uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null); if grep -q 'ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc; then echo -e "\n${MAGENTA}Отключаем FIX для Flow Offloading${NC}"
 sed -i 's/meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;/meta l4proto { tcp, udp } flow offload @ft;/' /usr/share/firewall4/templates/ruleset.uc; fw4 restart >/dev/null 2>&1; echo -e "FIX ${GREEN}отключён!${NC}\n"; PAUSE; elif [ "$FO" = 1 ] || [ "$FOHW" = 1 ]; then echo -e "\n${MAGENTA}Применяем FIX для Flow Offloading${NC}"
@@ -1002,7 +1007,7 @@ if [ -f /etc/config/netshift ] && grep -q "^[[:space:]]*option subscription_url"
 echo -e "${CYAN}6) ${GREEN}Интегрировать ${NC}AWG${GREEN} в ${NC}NetShift"; echo -e "${CYAN}7) ${GREEN}Интегрировать ${NC}ByeDPI${GREEN} в ${NC}NetShift"; if pkg_is_installed byedpi; then echo -e "${CYAN}8) ${GREEN}Изменить стратегию ${NC}ByeDPI"; fi
 echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}"; echo -ne "\n${YELLOW}Выберите пункт:${NC} "; read -r choicePOD; case "$choicePOD" in 1) PODKOP_INSTALL ;; 2) BYEDPI_INSTALL ;;
 3) if pkg_is_installed amneziawg-tools && pkg_is_installed luci-proto-amneziawg && pkg_is_installed kmod-amneziawg; then if ! pkg_is_installed splify; then AWG_DELETE
-else echo -e "\n${RED}Удаление невозможно!${NC}"; echo -e "AmneziaWG ${YELLOW}используется в ${NC}splify\n"; PAUSE; fi; else install_AWG; echo -e "\nAmneziaWG ${GREEN}установлен!${NC}"; fi ;;
+else echo -e "\n${RED}Удаление невозможно!${NC}"; echo -e "AmneziaWG ${YELLOW}используется в ${NC}splify\n"; PAUSE; fi; else install_AWG; echo -e "\nAmneziaWG ${GREEN}установлен!${NC}\n"; PAUSE; fi ;;
 4) if uci -q get network.AWG >/dev/null 2>&1; then INT_DELETE; else install_AWG_INTER; echo -e "\n\nИнтерфейс AWG ${GREEN}установлен!${NC}\n"; fi ;; 5) PODKOP_VPN ;; 6) integration_AWG ;; 7) BYEDPI_NETSHIFT ;; 8) if pkg_is_installed byedpi; then fix_strategy; fi ;; *) return ;; esac; done; }
 # ==========================================
 # Информация
@@ -1112,8 +1117,234 @@ discord) [ -f "$DISCORD_DEF_HOSTLIST" ] || echo -e "${RED}Файл ${NC}$DISCORD
 wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL" || echo -e "${RED}Не удалось загрузить exclude файл${NC}" ;; esac; if [ -n "$GV_BODY" ]; then add_ports_if_missing NFQWS_PORTS_UDP "$PORTS_UDP"; add_ports_if_missing NFQWS_PORTS_TCP "$PORTS_TCP"; fi
 if [ -n "$DV_SEG" ]; then if ! grep -q "option NFQWS_PORTS_UDP.*19294-19344,50000-50100" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'\$/,19294-19344,50000-50100'/" "$CONF"; fi
 if ! grep -q "option NFQWS_PORTS_TCP.*2053,2083,2087,2096,8443" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_TCP '/s/'\$/,2053,2083,2087,2096,8443'/" "$CONF"; fi; fi
-ZAPRET_RESTART; echo -e "\n${GREEN}Собственная стратегия применена!${NC}"; grep -Fq "$DISCORD_DEF_HOSTLIST" "$CONF" && echo -e "${YELLOW}Область применения:${NC} ${CYAN}только Discord${NC}"
-grep -Fq "=ts" "$CONF" && echo -e "\n${YELLOW}Для работы этой стратегии нужно один раз в терминале Windows выполнить:${NC}\nnetsh int tcp set global timestamps=enabled"; echo; PAUSE; }
+ZAPRET_RESTART; echo -e "\n${GREEN}Собственная стратегия применена!${NC}"; grep -Fq "$DISCORD_DEF_HOSTLIST" "$CONF" && echo -e "${YELLOW}Область применения:${NC} ${CYAN}только Discord${NC}\n"; show_ts_warning; PAUSE; }
+# ==========================================
+# Исключения IP
+# ==========================================
+Exclusions_menu() {
+    local EXCL_FILE="${CUSTOM_DIR}20-script.sh"
+    local IPV4_RE='^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$'
+
+    mkdir -p "$CUSTOM_DIR"
+    [ -f "$EXCL_FILE" ] || touch "$EXCL_FILE"
+
+    while true; do
+        clear
+        echo -e "${MAGENTA}Меню исключений IP из Zapret${NC}\n"
+
+        CURRENT_EXCL=$(grep -oE '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' \
+            "$EXCL_FILE" 2>/dev/null | sort -u)
+
+        DEV_LIST="$TMP_SF/zapret_excl_devices.txt"
+        IDX_LIST="$TMP_SF/zapret_excl_index.txt"
+
+        mkdir -p "$TMP_SF"
+        : > "$DEV_LIST"
+        : > "$IDX_LIST"
+
+        # ------------------------------------------
+        # Получаем соседей, реально видимых в сети
+        # ------------------------------------------
+        NEIGH_LIST="$TMP_SF/zapret_excl_neigh.txt"
+        : > "$NEIGH_LIST"
+
+        ip neigh show 2>/dev/null |
+        awk '
+            $1 ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/ &&
+            ($NF == "REACHABLE" ||
+             $NF == "STALE" ||
+             $NF == "DELAY" ||
+             $NF == "PROBE")
+            {
+                print $1
+            }
+        ' | sort -u > "$NEIGH_LIST"
+
+        # ------------------------------------------
+        # Сопоставляем IP с DHCP
+        # ------------------------------------------
+        if [ -f /tmp/dhcp.leases ] && [ -s "$NEIGH_LIST" ]; then
+            while read -r _ts _mac _ip _name _rest; do
+                [ -z "$_ip" ] && continue
+                echo "$_ip" | grep -qE "$IPV4_RE" || continue
+
+                # Показываем только IP, которые реально
+                # присутствуют в таблице соседей
+                grep -qx "$_ip" "$NEIGH_LIST" 2>/dev/null || continue
+
+                [ -z "$_name" ] || [ "$_name" = "*" ] &&
+                    _name="Неизвестное устройство"
+
+                printf '%s|%s\n' "$_ip" "$_name" >> "$DEV_LIST"
+            done < /tmp/dhcp.leases
+        fi
+
+        # ------------------------------------------
+        # Убираем дубликаты
+        # ------------------------------------------
+        if [ -s "$DEV_LIST" ]; then
+            sort -t'|' -k1,1 -u "$DEV_LIST" -o "$DEV_LIST"
+        fi
+
+        # ------------------------------------------
+        # Добавляем уже исключённые IP,
+        # даже если устройство сейчас offline
+        # ------------------------------------------
+        if [ -n "$CURRENT_EXCL" ]; then
+            for ip in $CURRENT_EXCL; do
+                if ! grep -q "^${ip}|" "$DEV_LIST" 2>/dev/null; then
+                    printf '%s|%s\n' "$ip" "Устройство offline" >> "$DEV_LIST"
+                fi
+            done
+        fi
+
+        # ------------------------------------------
+        # Сортировка IP
+        # ------------------------------------------
+        if [ -s "$DEV_LIST" ]; then
+            sort -t. -k1,1n -k2,2n -k3,3n -k4,4n \
+                "$DEV_LIST" -o "$DEV_LIST"
+        fi
+
+        echo -e "${YELLOW}Обнаруженные устройства:${NC}"
+
+        i=1
+
+        if [ -s "$DEV_LIST" ]; then
+            while IFS='|' read -r ip name; do
+                mark=" "
+
+                if [ -n "$CURRENT_EXCL" ] &&
+                   echo "$CURRENT_EXCL" | grep -qx "$ip"; then
+                    mark="x"
+                fi
+
+                # Онлайн / offline
+                if grep -qx "$ip" "$NEIGH_LIST" 2>/dev/null; then
+                    status="${GREEN}●${NC}"
+                else
+                    status="${RED}●${NC}"
+                fi
+
+                echo -e "${CYAN}${i}) ${NC}[${mark}] ${status} ${ip} - ${name}"
+
+                echo "$ip" >> "$IDX_LIST"
+
+                i=$((i + 1))
+            done < "$DEV_LIST"
+        else
+            echo -e "${RED}Устройства не найдены${NC}"
+        fi
+
+        echo ""
+        echo -e "${CYAN}a) ${GREEN}Добавить IP вручную${NC}"
+        echo -e "${CYAN}c) ${GREEN}Очистить все исключения${NC}"
+        echo -e "${CYAN}Enter) ${GREEN}Выход в системное меню${NC}"
+        echo ""
+        echo -ne "${YELLOW}Введите номер устройства:${NC} "
+        read -r sel
+
+        case "$sel" in
+            "")
+                rm -f "$DEV_LIST" "$IDX_LIST" "$NEIGH_LIST"
+                return
+                ;;
+
+            a|A|ф|Ф)
+                echo -ne "\n${YELLOW}Введите IPv4 адрес: ${NC}"
+                read -r manual_ip
+
+                if echo "$manual_ip" | grep -qE "$IPV4_RE"; then
+                    CURRENT_EXCL=$(printf '%s\n%s\n' \
+                        "$CURRENT_EXCL" "$manual_ip")
+
+                    ACTION_MSG="${GREEN}IP ${NC}${manual_ip}${GREEN} добавлен в исключения!${NC}"
+                else
+                    echo -e "\n${RED}Некорректный IPv4 адрес!${NC}\n"
+                    PAUSE
+
+                    rm -f "$DEV_LIST" "$IDX_LIST" "$NEIGH_LIST"
+                    continue
+                fi
+                ;;
+
+            c|C|с|С)
+                CURRENT_EXCL=""
+                ACTION_MSG="${GREEN}Все исключения очищены!${NC}"
+                ;;
+
+            *)
+                CHANGED=0
+
+                for num in $sel; do
+                    case "$num" in
+                        ''|*[!0-9]*)
+                            continue
+                            ;;
+                    esac
+
+                    ip=$(sed -n "${num}p" "$IDX_LIST")
+
+                    [ -z "$ip" ] && continue
+
+                    if echo "$CURRENT_EXCL" | grep -qx "$ip"; then
+                        CURRENT_EXCL=$(echo "$CURRENT_EXCL" |
+                            grep -vx "$ip")
+
+                        ACTION_MSG="${GREEN}IP ${NC}${ip}${GREEN} удалён из исключений!${NC}"
+                    else
+                        CURRENT_EXCL=$(printf '%s\n%s\n' \
+                            "$CURRENT_EXCL" "$ip")
+
+                        ACTION_MSG="${GREEN}IP ${NC}${ip}${GREEN} добавлен в исключения!${NC}"
+                    fi
+
+                    CHANGED=1
+                done
+
+                if [ "$CHANGED" -eq 0 ]; then
+                    echo -e "\n${RED}Некорректный ввод!${NC}\n"
+                    PAUSE
+
+                    rm -f "$DEV_LIST" "$IDX_LIST" "$NEIGH_LIST"
+                    continue
+                fi
+                ;;
+        esac
+
+        # ------------------------------------------
+        # Чистим список
+        # ------------------------------------------
+        CURRENT_EXCL=$(echo "$CURRENT_EXCL" |
+            grep -v '^$' |
+            sort -u)
+
+        # ------------------------------------------
+        # Сохраняем исключения
+        # ------------------------------------------
+        if [ -n "$CURRENT_EXCL" ]; then
+            FORMATTED=$(echo "$CURRENT_EXCL" |
+                tr '\n' ',' |
+                sed 's/,$//' |
+                sed 's/,/, /g')
+
+            {
+                echo "EXCEPT_SRC='{ $FORMATTED }'"
+                echo "nft insert rule inet zapret postrouting_hook index 0 \\"
+                echo "  ip saddr \$EXCEPT_SRC meta mark set meta mark \\| 0x40000000"
+            } > "$EXCL_FILE"
+        else
+            : > "$EXCL_FILE"
+        fi
+
+        ZAPRET_RESTART
+
+        echo -e "\n${ACTION_MSG}\n"
+        PAUSE
+
+        rm -f "$DEV_LIST" "$IDX_LIST" "$NEIGH_LIST"
+    done
+}
 # ==========================================
 # Главное меню
 # ==========================================
