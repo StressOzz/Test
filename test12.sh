@@ -39,7 +39,7 @@ ARCH_FULL="$(cat /etc/openwrt_release | grep DISTRIB_ARCH | cut -d"'" -f2)"; MOD
 RES1="/opt/zapret/tmp/results_flowseal.txt"; RES2="/opt/zapret/tmp/results_versions.txt"; RES3="/opt/zapret/tmp/results_all.txt"
 RES_CUSTOM="/opt/zapret/tmp/results_custom.txt"; CUSTOM_STR_FILE="/root/custom_test.txt"; CUSTOM_RESULTS="$RES_CUSTOM"; CUSTOM_BACK="$TMP_SF/zapret_custom_backup.conf"
 RES_DOMAIN="/opt/zapret/tmp/results_domain.txt"; RES_YOUTUBE="/opt/zapret/tmp/results_youtube.txt"; Fin_IP_Dis="104\.25\.158\.178 finland[0-9]\{5\}\.discord\.media"; PARALLEL=8
-EXCLUDE_FILE="/opt/zapret/ipset/zapret-hosts-user-exclude.txt"; fileDoH="/etc/config/https-dns-proxy"; EXPERT_MODE_FILE="/etc/zapret_manager_expert_mode"
+EXCLUDE_FILE="/opt/zapret/ipset/zapret-hosts-user-exclude.txt"; fileDoH="/etc/config/https-dns-proxy"; EXPERT_MODE_FILE="/etc/zapret_manager_expert_mode"; EXCL_FILE="${CUSTOM_DIR}20-script.sh"
 INSTAGRAM="#Instagram&Facebook\n57.144.222.34 instagram.com www.instagram.com\n157.240.9.174 instagram.com www.instagram.com\n157.240.245.174 instagram.com www.instagram.com b.i.instagram.com z-p42-chat-e2ee-ig.facebook.com help.instagram.com
 157.240.205.174 instagram.com www.instagram.com\n57.144.244.192 static.cdninstagram.com graph.instagram.com i.instagram.com api.instagram.com edge-chat.instagram.com\n31.13.66.63 scontent.cdninstagram.com scontent-hel3-1.cdninstagram.com
 57.144.244.1 facebook.com www.facebook.com fb.com fbsbx.com\n57.144.244.128 static.xx.fbcdn.net scontent.xx.fbcdn.net\n31.13.67.20 scontent-hel3-1.xx.fbcdn.net"
@@ -1122,7 +1122,6 @@ ZAPRET_RESTART; echo -e "\n${GREEN}Собственная стратегия п�
 # Исключения IP
 # ==========================================
 Exclusions_menu() {
-    local EXCL_FILE="${CUSTOM_DIR}20-script.sh"
     local IPV4_RE='^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$'
     mkdir -p "$CUSTOM_DIR"
     [ -f "$EXCL_FILE" ] || touch "$EXCL_FILE"
@@ -1253,6 +1252,11 @@ Exclusions_menu() {
 # Главное меню
 # ==========================================
 show_menu() { get_versions; get_doh_status; show_current_strategy; RKN_Check; mkdir -p "$TMP_SF"; CURR=$(curr_MIR); clear; echo -e "╔═══════════════════════════════╗\n║  ${BLUE}Zapret Manager by StressOzz${NC}  ║\n╚═══════════════════════════════╝\n"
+
+if grep -qE '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' "$EXCL_FILE" 2>/dev/null; then
+    echo -e "${YELLOW}Для некоторых устройств Zapret отключён${NC}\n"
+fi
+
 if [ -f /etc/init.d/zapret ] && [ -f "$CONF" ] && grep -Eq "^[[:space:]]*option DISABLE_IPV6 '1'" "$CONF" && ping -6 -c 1 -W 2 google.com >/dev/null 2>&1; then echo -e "${RED}Обнаружен IPv6! ${GREEN}Включите ${NC}IPv6${GREEN} в системном меню!${NC}\n"; fi
 if [ ! -f /etc/init.d/zapret ]; then Z_ACTION_TEXT="Установить"; Z_ACTION_FUNC="install_Zapret"; elif [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ]; then Z_ACTION_TEXT="Удалить" Z_ACTION_FUNC="uninstall_zapret"; else Z_ACTION_TEXT="Обновить"; Z_ACTION_FUNC="install_Zapret"; fi
 if [ ! -f /etc/init.d/zapret2 ]; then Z2_ACTION_TEXT="Установить"; Z2_ACTION_FUNC="install_zapret2"; elif [ "$INSTALLED_VER2" = "$ZAPRET2_VERSION" ]; then Z2_ACTION_TEXT="Удалить"; Z2_ACTION_FUNC="remove_zapret2"; else Z2_ACTION_TEXT="Обновить"; Z2_ACTION_FUNC="install_zapret2"; fi
