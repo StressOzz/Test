@@ -452,7 +452,7 @@ echo "$STRATEGY" | sed '/^$/d' >> "$CONF"; echo "'" >> "$CONF"; add_ports_if_mis
 # Zapret под ключ
 # ==========================================
 zapret_key() { if [ -f /etc/init.d/zapret2 ] && ! is_expert_mode; then echo -e "\n${RED}Установлен ${NC}Zapret2${RED}!${NC}"; echo -e "${YELLOW}Установка ${NC}Zapret${YELLOW} невозможна!${NC}\n"; PAUSE; return 1; fi; clear; echo -e "${MAGENTA}Удаление, установка и настройка Zapret${NC}\n"; get_versions; uninstall_zapret "1"; install_Zapret "1"
-[ ! -f /etc/init.d/zapret ] && { echo -e "Zapret ${RED}не установлен!${NC}\n"; PAUSE; return; }; install_strategy $STR_VERSION_AUTOINSTALL "1"; echo -e "\n${MAGENTA}Редактируем hosts${NC}\n${CYAN}Добавляем домены в${NC} hosts"
+[ ! -f /etc/init.d/zapret ] && { echo -e "Zapret ${RED}не установлен!${NC}\n"; PAUSE; return; }; install_strategy $STR_VERSION_AUTOINSTALL "1"; echo -e "${MAGENTA}Редактируем hosts${NC}\n${CYAN}Добавляем домены в${NC} hosts"
 hosts_add "$ALL_BLOCKS"; echo -e "${GREEN}Домены добавлены в ${NC}hosts${GREEN}!${NC}\n"; Discord_menu "1"; echo -e "${MAGENTA}Настраиваем стратегию для игр${NC}"; fix_GAME "1"; echo -e "Zapret ${GREEN}установлен и настроен!${NC}\n"; PAUSE; }
 # ==========================================
 # Резервная копия
@@ -701,9 +701,12 @@ if [ -f /etc/init.d/zapret ] && [ -f "$CONF" ]; then if grep -Eq "^[[:space:]]*o
 ping -6 -c 1 -W 2 google.com >/dev/null 2>&1 && echo -e "${CYAN}9) ${GREEN}Включить ${NC}IPv6${GREEN} в ${NC}Zapret"; fi; fi
 FO=$(uci get firewall.@defaults[0].flow_offloading 2>/dev/null); FOHW=$(uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null); FIX=$(grep -q 'ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc && echo 1 || echo 0)
 if [ "$FO" = 1 ] || [ "$FOHW" = 1 ] || [ "$FIX" = 1 ]; then if [ "$FIX" = 1 ]; then echo -e "${CYAN}0) ${GREEN}Отключить${NC} FIX ${GREEN}для${NC} Flow Offloading"; else echo -e "${CYAN}0) ${GREEN}Применить${NC} FIX ${GREEN}для${NC} Flow Offloading"; fi; fi
+
+echo -e "${CYAN}i) ${GREEN}Меню исключений ${NC}IP${GREEN} из ${NC}Zapret"
+
 echo -e "${CYAN}e) ${GREEN}$EXPERT_TEXT${NC}"; echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read -r choiceMN; case "$choiceMN" in 1) Sys_Info;; 2) toggle_web;; 3) toggle_quic;; 4) menu_MIR;; e|Е|у|У) toggle_expert_mode;;
 5) [ ! -f /etc/init.d/zapret ] && { echo -e "\nZapret ${RED}не установлен!${NC}\n"; PAUSE; continue; }; stop_zapret "1"; grep -q 'echo "Start Zapret"' /opt/zapret/blockcheck.sh || sed -i $'/^[[:space:]]*read A/a\\\t\techo "Start Zapret"; /etc/init.d/zapret restart >/dev/null 2>&1' /opt/zapret/blockcheck.sh
-echo -e "${GREEN}Ctrl+C - oстановить blockcheck${NC}\n"; chmod +x /opt/zapret/blockcheck.sh; /opt/zapret/blockcheck.sh; start_zapret;; 6) uninstall_zapret_all;; 9) toggle_ipv6;;
+echo -e "${GREEN}Ctrl+C - oстановить blockcheck${NC}\n"; chmod +x /opt/zapret/blockcheck.sh; /opt/zapret/blockcheck.sh; start_zapret;; 6) uninstall_zapret_all;; 9) toggle_ipv6;; i|I|Ш|ш) Exclusions_menu;;
 7) if [ -f "$DATE_FILE" ] && [ -f "$BACKUP_DIR/zapret.tar.gz" ] && [ -f "$BACKUP_DIR/zapret" ]; then CREATE_DATE=$(cat "$DATE_FILE"); delete_backup; else save_backup; fi;; 8) restore_backup ;;
 0) FO=$(uci get firewall.@defaults[0].flow_offloading 2>/dev/null); FOHW=$(uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null); if grep -q 'ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc; then echo -e "\n${MAGENTA}Отключаем FIX для Flow Offloading${NC}"
 sed -i 's/meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;/meta l4proto { tcp, udp } flow offload @ft;/' /usr/share/firewall4/templates/ruleset.uc; fw4 restart >/dev/null 2>&1; echo -e "FIX ${GREEN}отключён!${NC}\n"; PAUSE; elif [ "$FO" = 1 ] || [ "$FOHW" = 1 ]; then echo -e "\n${MAGENTA}Применяем FIX для Flow Offloading${NC}"
@@ -1115,6 +1118,94 @@ wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL" || echo -e "${RED}Н�
 if [ -n "$DV_SEG" ]; then if ! grep -q "option NFQWS_PORTS_UDP.*19294-19344,50000-50100" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'\$/,19294-19344,50000-50100'/" "$CONF"; fi
 if ! grep -q "option NFQWS_PORTS_TCP.*2053,2083,2087,2096,8443" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_TCP '/s/'\$/,2053,2083,2087,2096,8443'/" "$CONF"; fi; fi
 ZAPRET_RESTART; echo -e "\n${GREEN}Собственная стратегия применена!${NC}"; grep -Fq "$DISCORD_DEF_HOSTLIST" "$CONF" && echo -e "${YELLOW}Область применения:${NC} ${CYAN}только Discord${NC}\n"; show_ts_warning; PAUSE; }
+# ==========================================
+# Исключения IP
+# ==========================================
+Exclusions_menu() {
+    local EXCL_FILE="${CUSTOM_DIR}20-script.sh"
+    mkdir -p "$CUSTOM_DIR"
+    [ -f "$EXCL_FILE" ] || touch "$EXCL_FILE"
+    while true; do
+        clear
+        echo -e "${MAGENTA}Меню исключений IP из Zapret${NC}\n"
+        echo -e "${YELLOW}⚠ ВАЖНО:${NC} у устройств должен быть зарезервирован статический IP"
+        echo -e "   (Сеть → DHCP и DNS → Статические привязки)\n"
+        CURRENT_EXCL=$(grep -oE '([0-9]{1,3}\.){3}[0-9]{1,3}' "$EXCL_FILE" 2>/dev/null | sort -u)
+        : > /tmp/zapret_excl_devices.txt
+        if [ -f /tmp/dhcp.leases ]; then
+            while read -r _ts _mac _ip _name _rest; do
+                [ -z "$_ip" ] && continue
+                [ "$_name" = "*" ] && _name="Неизвестное устройство"
+                echo "${_ip}|${_mac}|${_name}" >> /tmp/zapret_excl_devices.txt
+            done < /tmp/dhcp.leases
+        fi
+        if [ -n "$CURRENT_EXCL" ]; then
+            for ip in $CURRENT_EXCL; do
+                grep -q "^${ip}|" /tmp/zapret_excl_devices.txt 2>/dev/null || echo "${ip}|—|Устройство offline" >> /tmp/zapret_excl_devices.txt
+            done
+        fi
+        [ -s /tmp/zapret_excl_devices.txt ] && sort -t. -k1,1n -k2,2n -k3,3n -k4,4n -o /tmp/zapret_excl_devices.txt /tmp/zapret_excl_devices.txt
+
+        i=1; : > /tmp/zapret_excl_index.txt
+        if [ -s /tmp/zapret_excl_devices.txt ]; then
+            while IFS='|' read -r ip mac name; do
+                mark=" "
+                if [ -n "$CURRENT_EXCL" ] && echo "$CURRENT_EXCL" | grep -qx "$ip"; then mark="x"; fi
+                printf "${CYAN}%2d) [%s] ${NC}%-15s %-18s %s\n" "$i" "$mark" "$ip" "$mac" "$name"
+                echo "$ip" >> /tmp/zapret_excl_index.txt
+                i=$((i + 1))
+            done < /tmp/zapret_excl_devices.txt
+        else
+            echo -e "${YELLOW}Устройства не найдены (нет данных DHCP)${NC}"
+        fi
+
+        echo -e "\n${CYAN}a) ${GREEN}Добавить IP вручную${NC}"
+        echo -e "${CYAN}c) ${GREEN}Очистить все исключения${NC}"
+        echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Номера через пробел для переключения (например: ${NC}1 3 5${YELLOW}):${NC} "
+        read -r sel
+        case "$sel" in
+            "") rm -f /tmp/zapret_excl_devices.txt /tmp/zapret_excl_index.txt; return ;;
+            a|A|ф|Ф)
+                echo -ne "\n${YELLOW}Введите IP адрес: ${NC}"; read -r manual_ip
+                if echo "$manual_ip" | grep -qE '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
+                    CURRENT_EXCL=$(printf '%s\n%s\n' "$CURRENT_EXCL" "$manual_ip")
+                else
+                    echo -e "\n${RED}Некорректный IP!${NC}"; PAUSE
+                fi
+                ;;
+            c|C|с|С) CURRENT_EXCL="" ;;
+            *)
+                for num in $sel; do
+                    case "$num" in ''|*[!0-9]*) continue ;; esac
+                    ip=$(sed -n "${num}p" /tmp/zapret_excl_index.txt)
+                    [ -z "$ip" ] && continue
+                    if echo "$CURRENT_EXCL" | grep -qx "$ip"; then
+                        CURRENT_EXCL=$(echo "$CURRENT_EXCL" | grep -vx "$ip")
+                    else
+                        CURRENT_EXCL=$(printf '%s\n%s\n' "$CURRENT_EXCL" "$ip")
+                    fi
+                done
+                ;;
+        esac
+        CURRENT_EXCL=$(echo "$CURRENT_EXCL" | grep -v '^$' | sort -u)
+        if [ -n "$CURRENT_EXCL" ]; then
+            FORMATTED=$(echo "$CURRENT_EXCL" | tr '\n' ',' | sed 's/,$//' | sed 's/,/, /g')
+            {
+                echo "EXCEPT_SRC='{ $FORMATTED }'"
+                echo "nft insert rule inet zapret postrouting_hook index 0 \\"
+                echo "  ip saddr \$EXCEPT_SRC meta mark set meta mark \\| 0x40000000"
+            } > "$EXCL_FILE"
+        else
+            : > "$EXCL_FILE"
+        fi
+        echo -e "\n${GREEN}Исключения обновлены!${NC}"
+        echo -ne "${YELLOW}Перезапустить Zapret для применения? (${NC}y/N${YELLOW}): ${NC}"
+        read -r restart_choice
+        case "$restart_choice" in y|Y|д|Д) ZAPRET_RESTART; echo -e "${GREEN}Zapret перезапущен!${NC}" ;; esac
+        rm -f /tmp/zapret_excl_devices.txt /tmp/zapret_excl_index.txt
+        echo; PAUSE
+    done
+}
 # ==========================================
 # Главное меню
 # ==========================================
