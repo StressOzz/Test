@@ -1134,6 +1134,7 @@ Exclusions_menu() {
         CURRENT_EXCL=$(grep -oE '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' "$EXCL_FILE" 2>/dev/null | sort -u)
 
         DEV_LIST="$TMP_SF/zapret_excl_devices.txt"
+        mkdir -p "$TMP_SF"
         : > "$DEV_LIST"
 
         if [ -f /tmp/dhcp.leases ]; then
@@ -1141,13 +1142,13 @@ Exclusions_menu() {
                 [ -z "$_ip" ] && continue
                 echo "$_ip" | grep -qE "$IPV4_RE" || continue
                 [ -z "$_name" ] || [ "$_name" = "*" ] && _name="Неизвестное устройство"
-                echo "${_ip}|${_name}" >> "$DEV_LIST"
+                printf '%s|%s\n' "$_ip" "$_name" >> "$DEV_LIST"
             done < /tmp/dhcp.leases
         fi
 
         if [ -n "$CURRENT_EXCL" ]; then
             for ip in $CURRENT_EXCL; do
-                grep -qxE "${ip}\|.*" "$DEV_LIST" 2>/dev/null || echo "${ip}|Устройство offline" >> "$DEV_LIST"
+                grep -qxE "${ip}\|.*" "$DEV_LIST" 2>/dev/null || printf '%s|%s\n' "$ip" "Устройство offline" >> "$DEV_LIST"
             done
         fi
 
@@ -1190,7 +1191,9 @@ Exclusions_menu() {
                     CURRENT_EXCL=$(printf '%s\n%s\n' "$CURRENT_EXCL" "$manual_ip")
                 else
                     echo -e "\n${RED}Некорректный IPv4 адрес!${NC}"
-                    PAUSE
+                    sleep 1
+                    rm -f "$DEV_LIST" "$IDX_LIST"
+                    continue
                 fi
                 ;;
             c|C|с|С)
@@ -1223,14 +1226,8 @@ Exclusions_menu() {
             : > "$EXCL_FILE"
         fi
 
-        echo -e "\n${GREEN}Исключения обновлены!${NC}"
-        echo -ne "${YELLOW}Перезапустить Zapret для применения? (${NC}y/N${YELLOW}): ${NC}"
-        read -r restart_choice
-        case "$restart_choice" in y|Y|д|Д) ZAPRET_RESTART; echo -e "${GREEN}Zapret перезапущен!${NC}" ;; esac
-
+        ZAPRET_RESTART
         rm -f "$DEV_LIST" "$IDX_LIST"
-        echo
-        PAUSE
     done
 }
 # ==========================================
