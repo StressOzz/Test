@@ -142,7 +142,7 @@ get_ver "https://github.com/d0mhate/-tg-ws-proxy-Manager-go/releases/latest" "$T
 # printf "#$git\n185.199.109.133 raw.$git release-assets.$git\n185.199.108.133 private-user-images.$git gist.$git avatars.$git\n" >> /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1; fi
 
 ADD_FAKE_FLOW() { MSG=0; for f in stun2.bin quic_initial_tencent_com.bin quic_initial_steamcommunity_com.bin tls_clienthello_sochi_park.bin quic_initial_4pda_to.bin quic_initial_5ka_ru.bin tls_clienthello_5ka_ru.bin quic_initial_rutube_ru.bin
-do [ -d /opt/zapret ] && [ ! -f "/opt/zapret/files/fake/$f" ] && { [ "$MSG" = 0 ] && { echo -e "${CYAN}Скачиваем ${NC}fake ${CYAN}файлы${NC}"; MSG=1; }; wget -q -U "Mozilla/5.0" -O "/opt/zapret/files/fake/$f" "https://github.com/Flowseal/zapret-discord-youtube/raw/refs/heads/main/bin/$f" || { echo -e "\n${RED}Не удалось загрузить файл ${NC}$f\n"; }; }; done; }
+do [ -d /opt/zapret ] && [ ! -f "/opt/zapret/files/fake/$f" ] && [ -f "$CONF" ] && { [ "$MSG" = 0 ] && { echo -e "${CYAN}Скачиваем ${NC}fake ${CYAN}файлы${NC}"; MSG=1; }; wget -q -U "Mozilla/5.0" -O "/opt/zapret/files/fake/$f" "https://github.com/Flowseal/zapret-discord-youtube/raw/refs/heads/main/bin/$f" || { echo -e "\n${RED}Не удалось загрузить файл ${NC}$f\n"; }; }; done; }
 
 ADD_FAKE_FLOW
 
