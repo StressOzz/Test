@@ -1162,7 +1162,7 @@ Exclusions_menu() {
             while IFS='|' read -r ip name; do
                 mark="${GREEN}⚫${NC}"
                 if [ -n "$CURRENT_EXCL" ] && echo "$CURRENT_EXCL" | grep -qx "$ip"; then mark="${RED}⚫${NC}"; fi
-                echo -e "${CYAN}${i}) ${mark} ${ip} ${CYAN}-${NC} ${name}"
+printf '%b\n' "${CYAN}$(printf '%2d' "$i")) ${mark} ${ip} ${CYAN}-${NC} ${name}"
                 echo "$ip" >> "$IDX_LIST"
                 i=$((i + 1))
             done < "$DEV_LIST"
