@@ -25,46 +25,33 @@ ASSETS_DIR="$SCRIPT_DIR/assets"
 bootstrap_if_needed() {
     [ -d "$LIB_DIR" ] && [ -d "$ASSETS_DIR" ] && return 0
 
-    echo "Файлы проекта не найдены рядом со скриптом — скачиваю с GitHub..."
+    echo "Скачивание файлов Mixomo..."
 
-    tmp_tar="/tmp/mixomo-src.tar.gz"
-    tmp_dir="/tmp/mixomo-src"
+    TMP="/tmp/Mixomo.tar.gz"
 
-    url="https://codeload.github.com/${REPO}/tar.gz/refs/heads/${BRANCH}"
+    curl -Lf -o "$TMP" \
+        "https://codeload.github.com/${REPO}/tar.gz/refs/heads/${BRANCH}" \
+        || wget -q -O "$TMP" \
+        "https://codeload.github.com/${REPO}/tar.gz/refs/heads/${BRANCH}" \
+        || exit 1
 
-    rm -rf "$tmp_tar" "$tmp_dir"
-    mkdir -p "$tmp_dir"
+    mkdir -p /tmp/Mixomo
 
-    if ! curl -Lf -s -o "$tmp_tar" "$url"; then
-        if ! wget -q -O "$tmp_tar" "$url"; then
-            echo "Не удалось скачать исходники репозитория." >&2
-            exit 1
-        fi
-    fi
+    tar -xzf "$TMP" \
+        -C /tmp/Mixomo \
+        --strip-components=3 \
+        "Test-main/files/Mixomo"
 
-    mkdir -p "$tmp_dir/extract"
+    rm -f "$TMP"
 
-    tar -xzf "$tmp_tar" -C "$tmp_dir/extract"
-
-    SRC_DIR=$(find "$tmp_dir/extract" -type d -path "*/${REPO_SUBDIR}" | head -n1)
-
-    if [ -z "$SRC_DIR" ] || [ ! -d "$SRC_DIR" ]; then
-        echo "Папка $REPO_SUBDIR не найдена в архиве." >&2
-        exit 1
-    fi
-
-    cp -a "$SRC_DIR" "$tmp_dir/Mixomo"
-
-    rm -rf "$tmp_tar" "$tmp_dir/extract"
-
-    SCRIPT_DIR="$tmp_dir/Mixomo"
+    SCRIPT_DIR="/tmp/Mixomo"
     LIB_DIR="$SCRIPT_DIR/lib"
     ASSETS_DIR="$SCRIPT_DIR/assets"
 
-    if [ ! -d "$LIB_DIR" ] || [ ! -d "$ASSETS_DIR" ]; then
-        echo "Не удалось подготовить файлы проекта." >&2
+    [ -d "$LIB_DIR" ] && [ -d "$ASSETS_DIR" ] || {
+        echo "Ошибка: файлы Mixomo не найдены"
         exit 1
-    fi
+    }
 }
 bootstrap_if_needed
 
