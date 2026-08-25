@@ -23,29 +23,26 @@ ASSETS_DIR="$SCRIPT_DIR/assets"
 
 # --- Автозагрузка недостающих файлов проекта (для запуска через curl|sh) ---
 bootstrap_if_needed() {
-    [ -d "$LIB_DIR" ] && [ -d "$ASSETS_DIR" ] && return 0
+    [ -f "$SCRIPT_DIR/common.sh" ] && return 0
 
     echo "Скачивание файлов Mixomo..."
 
-BASE="https://raw.githubusercontent.com/${REPO}/refs/heads/${BRANCH}/${REPO_SUBDIR}"
+    BASE="https://github.com/StressOzz/Test/raw/refs/heads/main/files/Mixomo"
 
-    mkdir -p /tmp/Mixomo/lib
-    mkdir -p /tmp/Mixomo/assets
+    mkdir -p "$SCRIPT_DIR"
 
     for f in \
-        install.sh \
-        lib/common.sh \
-        lib/mihomo.sh \
-        lib/hev_tunnel.sh \
-        lib/magitrickle.sh
+        common.sh \
+        mihomo.sh \
+        hev_tunnel.sh \
+        magitrickle.sh \
+        mixomo.zip
     do
-        mkdir -p "/tmp/Mixomo/$(dirname "$f")"
-        curl -fsSL "$BASE/$f" -o "/tmp/Mixomo/$f" || exit 1
+        curl -fsSL "$BASE/$f" -o "$SCRIPT_DIR/$f" || {
+            echo "Ошибка загрузки $f"
+            exit 1
+        }
     done
-
-    SCRIPT_DIR="/tmp/Mixomo"
-    LIB_DIR="$SCRIPT_DIR/lib"
-    ASSETS_DIR="$SCRIPT_DIR/assets"
 }
 bootstrap_if_needed
 
