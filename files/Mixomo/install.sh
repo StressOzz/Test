@@ -13,7 +13,7 @@
 # отдельно), install.sh сам подтянет недостающие assets/lib с GitHub.
 
 SCRIPT_VERSION="v0.3.0"
-REPO="StressOzz/Zapret-Manager"   # укажите свой репозиторий, если форкаете
+REPO="StressOzz/Test"   # укажите свой репозиторий, если форкаете
 BRANCH="main"
 REPO_SUBDIR="files/Mixomo"        # путь внутри репозитория до этой папки
 
