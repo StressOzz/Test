@@ -26,23 +26,45 @@ bootstrap_if_needed() {
     [ -d "$LIB_DIR" ] && [ -d "$ASSETS_DIR" ] && return 0
 
     echo "Файлы проекта не найдены рядом со скриптом — скачиваю с GitHub..."
+
     tmp_tar="/tmp/mixomo-src.tar.gz"
     tmp_dir="/tmp/mixomo-src"
+
     url="https://codeload.github.com/${REPO}/tar.gz/refs/heads/${BRANCH}"
 
-    rm -rf "$tmp_tar" "$tmp_dir"; mkdir -p "$tmp_dir"
-    if ! curl -Lf -s -o "$tmp_tar" "$url" && ! wget -q -O "$tmp_tar" "$url"; then
-        echo "Не удалось скачать исходники репозитория." >&2
+    rm -rf "$tmp_tar" "$tmp_dir"
+    mkdir -p "$tmp_dir"
+
+    if ! curl -Lf -s -o "$tmp_tar" "$url"; then
+        if ! wget -q -O "$tmp_tar" "$url"; then
+            echo "Не удалось скачать исходники репозитория." >&2
+            exit 1
+        fi
+    fi
+
+    mkdir -p "$tmp_dir/extract"
+
+    tar -xzf "$tmp_tar" -C "$tmp_dir/extract"
+
+    SRC_DIR=$(find "$tmp_dir/extract" -type d -path "*/${REPO_SUBDIR}" | head -n1)
+
+    if [ -z "$SRC_DIR" ] || [ ! -d "$SRC_DIR" ]; then
+        echo "Папка $REPO_SUBDIR не найдена в архиве." >&2
         exit 1
     fi
-    tar -xzf "$tmp_tar" -C "$tmp_dir" --strip-components=2 "*/${REPO_SUBDIR}" 2>/dev/null \
-        || tar -xzf "$tmp_tar" -C "$tmp_dir" --strip-components=1
-    rm -f "$tmp_tar"
 
-    SCRIPT_DIR="$tmp_dir"
+    cp -a "$SRC_DIR" "$tmp_dir/Mixomo"
+
+    rm -rf "$tmp_tar" "$tmp_dir/extract"
+
+    SCRIPT_DIR="$tmp_dir/Mixomo"
     LIB_DIR="$SCRIPT_DIR/lib"
     ASSETS_DIR="$SCRIPT_DIR/assets"
-    [ -d "$LIB_DIR" ] && [ -d "$ASSETS_DIR" ] || { echo "Не удалось подготовить файлы проекта." >&2; exit 1; }
+
+    if [ ! -d "$LIB_DIR" ] || [ ! -d "$ASSETS_DIR" ]; then
+        echo "Не удалось подготовить файлы проекта." >&2
+        exit 1
+    fi
 }
 bootstrap_if_needed
 
