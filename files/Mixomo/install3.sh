@@ -37,10 +37,10 @@ bootstrap_if_needed() {
 
     mkdir -p /tmp/Mixomo
 
-    tar -xzf "$TMP" \
-        -C /tmp/Mixomo \
-        --strip-components=3 \
-        "Test-main/files/Mixomo"
+tar -xzf "$TMP" -C /tmp/Mixomo
+
+mv /tmp/Mixomo/Test-main/files/Mixomo/* /tmp/Mixomo/
+rm -rf /tmp/Mixomo/Test-main
 
     rm -f "$TMP"
 
