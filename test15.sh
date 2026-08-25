@@ -1115,55 +1115,16 @@ wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL" || echo -e "${RED}Н�
 if [ -n "$DV_SEG" ]; then if ! grep -q "option NFQWS_PORTS_UDP.*19294-19344,50000-50100" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'\$/,19294-19344,50000-50100'/" "$CONF"; fi
 if ! grep -q "option NFQWS_PORTS_TCP.*2053,2083,2087,2096,8443" "$CONF"; then sed -i "/^[[:space:]]*option NFQWS_PORTS_TCP '/s/'\$/,2053,2083,2087,2096,8443'/" "$CONF"; fi; fi
 ZAPRET_RESTART; echo -e "\n${GREEN}Собственная стратегия применена!${NC}"; grep -Fq "$DISCORD_DEF_HOSTLIST" "$CONF" && echo -e "${YELLOW}Область применения:${NC} ${CYAN}только Discord${NC}\n"; show_ts_warning; PAUSE; }
-
 # ==========================================
 # Исключения IP
 # ==========================================
-Exclusions_menu() { [ ! -f /etc/init.d/zapret ] && { echo -e "\nZapret ${RED}не установлен!${NC}\n"; PAUSE; return; }; IPV4_RE='^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$'; EXCL_FILE="${CUSTOM_DIR}20-script.sh"; mkdir -p "$CUSTOM_DIR"; [ -f "$EXCL_FILE" ] || touch "$EXCL_FILE"
+Exclusions_menu() { [ ! -f /etc/init.d/zapret ] && { echo -e "\nZapret ${RED}не установлен!${NC}\n"; PAUSE; return; }; IPV4_RE='^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$'; mkdir -p "$CUSTOM_DIR"; [ -f "$EXCL_FILE" ] || touch "$EXCL_FILE"
 while true; do clear; echo -e "${MAGENTA}Меню исключений IP из Zapret${NC}\n"; CURRENT_EXCL=$(grep -oE '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' "$EXCL_FILE" 2>/dev/null | sort -u); DEV_LIST="$TMP_SF/zapret_excl_devices.txt"; LEASE_TMP="$TMP_SF/zapret_excl_leases.txt"
-mkdir -p "$TMP_SF"; : > "$DEV_LIST"; : > "$LEASE_TMP"
-if [ -f /tmp/dhcp.leases ]; then while read -r _ts _mac _ip _name _rest; do [ -z "$_ip" ] && continue; echo "$_ip" | grep -qE "$IPV4_RE" || continue; [ -z "$_name" ] || [ "$_name" = "*" ] && _name="Неизвестное устройство"
-printf '%s|%s|%s\n' "$_ip" "$_name" "$_mac" >> "$LEASE_TMP"; printf '%s|%s\n' "$_ip" "$_name" >> "$DEV_LIST"; done < /tmp/dhcp.leases; fi
-
-
-if [ -f /proc/net/arp ]; then
-    tail -n +2 /proc/net/arp | while read -r _ip _hwtype _flags _mac _mask _dev; do
-        [ -z "$_ip" ] && continue
-        [ "$_dev" = "br-lan" ] || continue
-        echo "$_ip" | grep -qE "$IPV4_RE" || continue
-        [ "$_flags" = "0x0" ] && continue
-
-        # Уже есть в DHCP leases
-        grep -qxE "${_ip}\|.*" "$DEV_LIST" 2>/dev/null && continue
-
-        # 1. Пытаемся найти имя по MAC в текущих DHCP leases
-        NAME_BY_MAC=$(grep -iF "|${_mac}" "$LEASE_TMP" 2>/dev/null |
-            head -n1 |
-            cut -d'|' -f2)
-
-        # 2. Если DHCP lease уже исчез —
-        #    ищем последнее DHCPACK в системном логе
-        if [ -z "$NAME_BY_MAC" ] || [ "$NAME_BY_MAC" = "Неизвестное устройство" ]; then
-            NAME_BY_MAC=$(logread 2>/dev/null |
-                grep -i "DHCPACK" |
-                grep -i "$_ip" |
-                grep -i "$_mac" |
-                tail -n1 |
-                awk '{print $NF}')
-        fi
-
-        # 3. Если имя всё равно не найдено
-        [ -n "$NAME_BY_MAC" ] || NAME_BY_MAC="Неизвестное устройство"
-
-        printf '%s|%s\n' "$_ip" "$NAME_BY_MAC" >> "$DEV_LIST"
-    done
-fi
-
-rm -f "$LEASE_TMP"
-
-
-
-
+mkdir -p "$TMP_SF"; : > "$DEV_LIST"; : > "$LEASE_TMP"; if [ -f /tmp/dhcp.leases ]; then while read -r _ts _mac _ip _name _rest; do [ -z "$_ip" ] && continue; echo "$_ip" | grep -qE "$IPV4_RE" || continue; [ -z "$_name" ] || [ "$_name" = "*" ] && _name="Неизвестное устройство"
+printf '%s|%s|%s\n' "$_ip" "$_name" "$_mac" >> "$LEASE_TMP"; printf '%s|%s\n' "$_ip" "$_name" >> "$DEV_LIST"; done < /tmp/dhcp.leases; fi; if [ -f /proc/net/arp ]; then tail -n +2 /proc/net/arp | while read -r _ip _hwtype _flags _mac _mask _dev
+do [ -z "$_ip" ] && continue; [ "$_dev" = "br-lan" ] || continue; echo "$_ip" | grep -qE "$IPV4_RE" || continue; [ "$_flags" = "0x0" ] && continue; grep -qxE "${_ip}\|.*" "$DEV_LIST" 2>/dev/null && continue
+NAME_BY_MAC=$(grep -iF "|${_mac}" "$LEASE_TMP" 2>/dev/null | head -n1 | cut -d'|' -f2); if [ -z "$NAME_BY_MAC" ] || [ "$NAME_BY_MAC" = "Неизвестное устройство" ]; then NAME_BY_MAC=$(logread 2>/dev/null | grep -i "DHCPACK" | grep -i "$_ip" | grep -i "$_mac" | tail -n1 | awk '{print $NF}'); fi
+[ -n "$NAME_BY_MAC" ] || NAME_BY_MAC="Неизвестное устройство"; printf '%s|%s\n' "$_ip" "$NAME_BY_MAC" >> "$DEV_LIST"; done; fi; rm -f "$LEASE_TMP"
 if [ -n "$CURRENT_EXCL" ]; then for ip in $CURRENT_EXCL; do grep -qxE "${ip}\|.*" "$DEV_LIST" 2>/dev/null || printf '%s|%s\n' "$ip" "Устройство offline" >> "$DEV_LIST"; done; fi
 [ -s "$DEV_LIST" ] && sort -t. -k1,1n -k2,2n -k3,3n -k4,4n -o "$DEV_LIST" "$DEV_LIST"; echo -e "${YELLOW}Обнаруженные устройства:${NC}"; i=1; IDX_LIST="$TMP_SF/zapret_excl_index.txt"; : > "$IDX_LIST"; COUNTI=$(wc -l < "$DEV_LIST")
 PAD=""; [ "$COUNTI" -ge 10 ] && PAD=" "; if [ -s "$DEV_LIST" ]; then while IFS='|' read -r ip name; do mark="${GREEN}⚫${NC}"; if [ -n "$CURRENT_EXCL" ] && echo "$CURRENT_EXCL" | grep -qx "$ip"; then mark="${RED}⚫${NC}"; fi
@@ -1178,9 +1139,6 @@ ip=$(sed -n "${num}p" "$IDX_LIST"); if [ -z "$ip" ]; then rm -f "$DEV_LIST" "$ID
 else CURRENT_EXCL=$(printf '%s\n%s\n' "$CURRENT_EXCL" "$ip"); ACTION_MSG="${GREEN}IP ${NC}${ip}${GREEN} добавлен в исключения!${NC}"; fi; CHANGED=1; done ;; esac; CURRENT_EXCL=$(echo "$CURRENT_EXCL" | grep -v '^$' | sort -u)
 if [ -n "$CURRENT_EXCL" ]; then FORMATTED=$(echo "$CURRENT_EXCL" | tr '\n' ',' | sed 's/,$//' | sed 's/,/, /g'); { echo "EXCEPT_SRC='{ $FORMATTED }'"; echo "nft insert rule inet zapret postrouting_hook index 0 \\"; echo "  ip saddr \$EXCEPT_SRC meta mark set meta mark \\| 0x40000000"; } > "$EXCL_FILE"; else : > "$EXCL_FILE"; fi
 echo -e "\n${CYAN}Применяем и перезапускаем ${NC}Zapret"; ZAPRET_RESTART; echo -e "\n${ACTION_MSG}\n"; PAUSE; rm -f "$DEV_LIST" "$IDX_LIST"; done; }
-
-
-
 # ==========================================
 # Главное меню
 # ==========================================
