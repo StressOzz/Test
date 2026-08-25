@@ -27,31 +27,25 @@ bootstrap_if_needed() {
 
     echo "Скачивание файлов Mixomo..."
 
-    TMP="/tmp/Mixomo.tar.gz"
+    BASE="https://raw.githubusercontent.com/${REPO}/${BRANCH}/${REPO_SUBDIR}"
 
-    curl -Lf -o "$TMP" \
-        "https://codeload.github.com/${REPO}/tar.gz/refs/heads/${BRANCH}" \
-        || wget -q -O "$TMP" \
-        "https://codeload.github.com/${REPO}/tar.gz/refs/heads/${BRANCH}" \
-        || exit 1
+    mkdir -p /tmp/Mixomo/lib
+    mkdir -p /tmp/Mixomo/assets
 
-    mkdir -p /tmp/Mixomo
-
-tar -xzf "$TMP" -C /tmp/Mixomo
-
-mv /tmp/Mixomo/Test-main/files/Mixomo/* /tmp/Mixomo/
-rm -rf /tmp/Mixomo/Test-main
-
-    rm -f "$TMP"
+    for f in \
+        install.sh \
+        lib/common.sh \
+        lib/mihomo.sh \
+        lib/hev_tunnel.sh \
+        lib/magitrickle.sh
+    do
+        mkdir -p "/tmp/Mixomo/$(dirname "$f")"
+        curl -fsSL "$BASE/$f" -o "/tmp/Mixomo/$f" || exit 1
+    done
 
     SCRIPT_DIR="/tmp/Mixomo"
     LIB_DIR="$SCRIPT_DIR/lib"
     ASSETS_DIR="$SCRIPT_DIR/assets"
-
-    [ -d "$LIB_DIR" ] && [ -d "$ASSETS_DIR" ] || {
-        echo "Ошибка: файлы Mixomo не найдены"
-        exit 1
-    }
 }
 bootstrap_if_needed
 
