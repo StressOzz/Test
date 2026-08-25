@@ -1129,6 +1129,7 @@ printf '%s|%s|%s\n' "$_ip" "$_name" "$_mac" >> "$LEASE_TMP"; printf '%s|%s\n' "$
 if [ -f /proc/net/arp ]; then
     tail -n +2 /proc/net/arp | while read -r _ip _hwtype _flags _mac _mask _dev; do
         [ -z "$_ip" ] && continue
+        [ "$_dev" = "br-lan" ] || continue
         echo "$_ip" | grep -qE "$IPV4_RE" || continue
         [ "$_flags" = "0x0" ] && continue
 
