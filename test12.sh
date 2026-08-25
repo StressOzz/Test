@@ -1122,6 +1122,9 @@ Exclusions_menu() { [ ! -f /etc/init.d/zapret ] && { echo -e "\nZapret ${RED}н�
 while true; do clear; echo -e "${MAGENTA}Меню исключений IP из Zapret${NC}\n"; CURRENT_EXCL=$(grep -oE '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' "$EXCL_FILE" 2>/dev/null | sort -u); DEV_LIST="$TMP_SF/zapret_excl_devices.txt"; LEASE_TMP="$TMP_SF/zapret_excl_leases.txt"
 mkdir -p "$TMP_SF"; : > "$DEV_LIST"; : > "$LEASE_TMP"
 
+# ==========================================
+# DHCPv4 устройства
+# ==========================================
 if [ -f /tmp/dhcp.leases ]; then
     while read -r _ts _mac _ip _name _rest; do
         [ -z "$_ip" ] && continue
@@ -1134,28 +1137,66 @@ if [ -f /tmp/dhcp.leases ]; then
     done < /tmp/dhcp.leases
 fi
 
+# ==========================================
+# ARP — устройства без активного DHCP lease
+# ==========================================
 if [ -f /proc/net/arp ]; then
     tail -n +2 /proc/net/arp | while read -r _ip _hwtype _flags _mac _mask _dev; do
         [ -z "$_ip" ] && continue
         echo "$_ip" | grep -qE "$IPV4_RE" || continue
         [ "$_flags" = "0x0" ] && continue
-        grep -qxE "${_ip}\|.*" "$DEV_LIST" 2>/dev/null && continue
 
-        NAME_BY_MAC=$(grep -iF "|${_mac}" "$LEASE_TMP" 2>/dev/null | head -n1 | cut -d'|' -f2)
+        # Уже есть в списке DHCP
+        grep -q "^${_ip}|" "$DEV_LIST" 2>/dev/null && continue
 
-        if [ -z "$NAME_BY_MAC" ] || [ "$NAME_BY_MAC" = "Неизвестное устройство" ]; then
-            NAME_BY_DNS=$(nslookup "$_ip" 127.0.0.1 2>/dev/null |
-                sed -n 's/^.*name = \(.*\)\.$/\1/p' |
-                head -n1)
-            [ -n "$NAME_BY_DNS" ] && NAME_BY_MAC="$NAME_BY_DNS"
+        NAME=""
+
+        # ------------------------------------------
+        # 1. Ищем hostname по MAC в DHCP leases
+        # ------------------------------------------
+        NAME=$(grep -iF "|${_mac}|" "$LEASE_TMP" 2>/dev/null |
+            head -n1 |
+            cut -d'|' -f2)
+
+        # ------------------------------------------
+        # 2. Ищем hostname по IP в dnsmasq hosts
+        # ------------------------------------------
+        if [ -z "$NAME" ] || [ "$NAME" = "Неизвестное устройство" ]; then
+            if [ -f /tmp/hosts/dhcp ]; then
+                NAME=$(awk -v ip="$_ip" '
+                    $1 == ip {
+                        if ($2 != "") {
+                            name=$2
+                            sub(/\..*$/, "", name)
+                            print name
+                            exit
+                        }
+                    }
+                ' /tmp/hosts/dhcp)
+            fi
         fi
 
-        [ -n "$NAME_BY_MAC" ] || NAME_BY_MAC="Неизвестное устройство"
+        # ------------------------------------------
+        # 3. Ищем имя через dnsmasq UCI hosts
+        # ------------------------------------------
+        if [ -z "$NAME" ] || [ "$NAME" = "Неизвестное устройство" ]; then
+            NAME=$(grep -RhsE "^[[:space:]]*$_ip[[:space:]]+" \
+                /tmp/hosts/ /etc/hosts 2>/dev/null |
+                awk 'NR==1 {
+                    name=$2
+                    sub(/\..*$/, "", name)
+                    print name
+                }')
+        fi
 
-        printf '%s|%s\n' "$_ip" "$NAME_BY_MAC" >> "$DEV_LIST"
+        # ------------------------------------------
+        # 4. Если ничего не нашли
+        # ------------------------------------------
+        [ -n "$NAME" ] || NAME="Неизвестное устройство"
+
+        printf '%s|%s\n' "$_ip" "$NAME" >> "$DEV_LIST"
     done
 fi
-
 
 rm -f "$LEASE_TMP"
 
