@@ -27,7 +27,7 @@ bootstrap_if_needed() {
 
     echo "Скачивание файлов Mixomo..."
 
-    BASE="https://raw.githubusercontent.com/${REPO}/${BRANCH}/${REPO_SUBDIR}"
+BASE="https://raw.githubusercontent.com/${REPO}/refs/heads/${BRANCH}/${REPO_SUBDIR}"
 
     mkdir -p /tmp/Mixomo/lib
     mkdir -p /tmp/Mixomo/assets
