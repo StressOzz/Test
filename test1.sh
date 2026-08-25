@@ -20,7 +20,9 @@ URL_OLD="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/m
 URL_DEFAULT="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/files/MagiTrickle/config.yaml"
 URL_ITDOG="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/files/MagiTrickle/configAD.yaml"
 EXCLUDE_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/zapret-hosts-user-exclude.txt"
+
 PORTS_UDP="88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535"; PORTS_TCP="2802,2302,2502,3478-3480,3724,6000-8000,8085,8090,8100,8903,8904,25565,27015-27030,27036-27037,50001,60442"
+
 DOMAINS="youtu.be youtube.com i.ytimg.com i9.ytimg.com yt3.ggpht.com yt4.ggpht.com googleapis.com jnn-pa.googleapis.com googleusercontent.com signaler-pa.youtube.com youtubei.googleapis.com manifest.googlevideo.com yt3.googleusercontent.com rr4---sn-4g5e6nze.googlevideo.com rr4---sn-5go7yner.googlevideo.com rr4---sn-q4flrnsl.googlevideo.com rr5---sn-n8v7knez.googlevideo.com rr2---sn-q4fl6ndl.googlevideo.com rr1---sn-q4fl6n6y.googlevideo.com rr1---sn-aj5go5-53.googlevideo.com rr1---sn-4axm-n8vs.googlevideo.com rr14---sn-n8v7kn7r.googlevideo.com rr16---sn-axq7sn76.googlevideo.com rr4---sn-jvhnu5g-c35d.googlevideo.com rr1---sn-8ph2xajvh-5xge.googlevideo.com rr1---sn-xguxaxjvh-gufl.googlevideo.com rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com rr1---sn-gvnuxaxjvh-jx3l.googlevideo.com rr1---sn-gvnuxaxjvh-o8ge.googlevideo.com rr5---sn-gvnuxaxjvh-n8vk.googlevideo.com rr10---sn-gvnuxaxjvh-304z.googlevideo.com rr12---sn-gvnuxaxjvh-bvwz.googlevideo.com rr3---sn-ug5onuxaxjvh-n8v6.googlevideo.com rr1---sn-ug5onuxaxjvh-p5ge.googlevideo.com rr1---sn-ug5onuxaxjvh-p3ul.googlevideo.com rr1---sn-ug5onuxaxjvh-n8v6.googlevideo.com rr1---sn-u5uuxaxjvhg0-ocje.googlevideo.com"
 
 OWRTAWG=$(grep '^DISTRIB_RELEASE=' /etc/openwrt_release | cut -d"'" -f2); ARCHAWG="$(grep DISTRIB_ARCH /etc/openwrt_release | cut -d"'" -f2)_$(grep DISTRIB_TARGET /etc/openwrt_release | cut -d"'" -f2 | tr '/' '_')" 
@@ -641,11 +643,11 @@ opkg list-installed | grep -q '^https-dns-proxy ' && doh_st="Удалить" || 
 else opkg list-installed | grep -q '^https-dns-proxy ' && echo -e "${YELLOW}DNS over HTTPS: ${NC}$DOH_STATUS\n"; fi; fi
 echo -e "${CYAN} 1)${GREEN} $doh_st ${NC}DNS over HTTPS\n${CYAN} 2)${GREEN} Настроить ${NC}Comss DNS\n${CYAN} 3)${GREEN} Настроить ${NC}Xbox DNS\n${CYAN} 4)${GREEN} Настроить ${NC}dns.malw.link"
 echo -e "${CYAN} 5)${GREEN} Настроить ${NC}dns.malw.link (CloudFlare)\n${CYAN} 6)${GREEN} Настроить ${NC}dns.mafioznik.xyz\n${CYAN} 7)${GREEN} Настроить ${NC}dns.astracat.ru"
-echo -e "${CYAN} 8)${GREEN} Настроить ${NC}dns.nullsproxy.com (Supercell)\n${CYAN} 9)${GREEN} Настроить ${NC}Cloudflare DNS\n${CYAN}10)${GREEN} Настроить ${NC}Google DNS\n${CYAN}11)${GREEN} Настроить ${NC}Quad 9 DNS\n${CYAN}12)${GREEN} Вернуть ${NC}настройки по умолчанию"
+echo -e "${CYAN} 8)${GREEN} Настроить ${NC}dns.nullsproxy.com (Supercell)\n${CYAN} 9)${GREEN} Настроить ${NC}Cloudflare DNS\n${CYAN}10)${GREEN} Настроить ${NC}Google DNS\n${CYAN}11)${GREEN} Настроить ${NC}Quad 9 DNS\n${CYAN}12)${GREEN} Настроить ${NC}GeoHide\n${CYAN}13)${GREEN} Вернуть ${NC}настройки по умолчанию"
 echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read -r choiceDOH; [ -z "$choiceDOH" ] && return; case "$choiceDOH" in 1) D_o_H;; 2) doh_install && setup_doh "$doh_comss" "Comss.one DNS";;
 3) doh_install && setup_doh "$doh_xbox" "Xbox DNS";; 4) doh_install && setup_doh "$doh_query" "dns.malw.link";; 5) doh_install && setup_doh "$doh_queryCF" "dns.malw.link (CloudFlare)";; 6) doh_install && setup_doh "$doh_mafioznik" "dns.mafioznik.xyz";;
 7) doh_install && setup_doh "$doh_astracat" "dns.astracat.ru";; 8) doh_install && setup_doh "$doh_nullsproxy" "dns.nullsproxy.com";; 9) doh_install && setup_doh "$doh_CLF" "Cloudflare DNS";;
-10) doh_install && setup_doh "$doh_GOO" "Google DNS";; 11) doh_install && setup_doh "$doh_Quad" "Quad 9";; 12) doh_install && setup_doh "$doh_def" "настройки по умолчанию";; *) return;; esac; done; }
+10) doh_install && setup_doh "$doh_GOO" "Google DNS";; 11) doh_install && setup_doh "$doh_Quad" "Quad 9";; 12) doh_install && setup_doh "$doh_GEOHIDE" "GeoHide";; 13) doh_install && setup_doh "$doh_def" "настройки по умолчанию";; *) return;; esac; done; }
 setup_doh() { local config="$1"; local name="$2"; echo -e "\n${MAGENTA}Настраиваем DNS over HTTPS${NC}\n${CYAN}Настраиваем ${NC}$name\n${CYAN}Применяем новые настройки${NC}"
 rm -f "$fileDoH"; printf '%s\n' "$doh_set" "$config" > "$fileDoH"; /etc/init.d/https-dns-proxy reload >/dev/null 2>&1; /etc/init.d/https-dns-proxy restart >/dev/null 2>&1; echo -e "DNS over HTTP ${GREEN}настроен!${NC}\n"; PAUSE; }
 get_doh_status() { DOH_STATUS=""; [ ! -f "$fileDoH" ] && return; if grep -q "dns.comss.one" "$fileDoH"; then DOH_STATUS="Comss DNS"; elif grep -q "xbox-dns.ru" "$fileDoH"; then DOH_STATUS="Xbox DNS"; elif grep -q "5u35p8m9i7.cloudflare-gateway.com" "$fileDoH"
@@ -659,11 +661,11 @@ $INSTALL https-dns-proxy >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка пр
 doh_install() { [ -f "$fileDoH" ] && return 0; echo -e "\n${RED}DNS over HTTPS не установлен!${NC}\n"; PAUSE; return 1; }
 doh_set=$(printf "%s\n" "config main 'config'" "	option canary_domains_icloud '1'" "	option canary_domains_mozilla '1'" "	option dnsmasq_config_update '*'" "	option force_dns '1'" "	option notrack_dns '1'" "	list force_dns_port '53'" "	list force_dns_port '853'" "	list force_dns_src_interface 'lan'" "	option procd_trigger_wan6 '0'" "	option heartbeat_domain 'heartbeat.mossdef.org'" "	option heartbeat_sleep_timeout '10'" "	option heartbeat_wait_timeout '10'" "	option user 'nobody'" "	option group 'nogroup'" "	option listen_addr '127.0.0.1'" "	option force_ip_family 'auto'")
 doh_def=$(printf "%s\n" "" "config https-dns-proxy" "	option bootstrap_dns '1.1.1.1,1.0.0.1,2606:4700:4700::1111,2606:4700:4700::1001'" "	option resolver_url 'https://cloudflare-dns.com/dns-query'" "	option listen_port '5053'" "" "config https-dns-proxy" "	option bootstrap_dns '8.8.8.8,8.8.4.4,2001:4860:4860::8888,2001:4860:4860::8844'" "	option resolver_url 'https://dns.google/dns-query'" "	option listen_port '5054'")
-doh_CLF=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://cloudflare-dns.com/dns-query'" "	option bootstrap_dns '1.1.1.1,1.0.0.1,2606:4700:4700::1111,2606:4700:4700::1001'"); doh_xbox=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://xbox-dns.ru/dns-query'" "	option bootstrap_dns '8.8.8.8,8.8.4.4,2001:4860:4860::8888,2001:4860:4860::8844'"); doh_nullsproxy=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://dns.nullsproxy.com/dns-query'" "	option bootstrap_dns '8.8.8.8,8.8.4.4,2001:4860:4860::8888,2001:4860:4860::8844'")
-doh_query=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://dns.malw.link/dns-query'" "	option bootstrap_dns '8.8.8.8,8.8.4.4,2001:4860:4860::8888,2001:4860:4860::8844'"); doh_comss=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://dns.comss.one/dns-query'" "	option bootstrap_dns '92.38.152.163,93.115.24.204,2a03:90c0:56::1a5,2a02:7b40:5eb0:e95d::1'")
-doh_mafioznik=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://dns.mafioznik.xyz/dns-query'" "	option bootstrap_dns '8.8.8.8,8.8.4.4,2001:4860:4860::8888,2001:4860:4860::8844'"); doh_astracat=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://dns.astracat.ru/dns-query'" "	option bootstrap_dns '8.8.8.8,8.8.4.4,2001:4860:4860::8888,2001:4860:4860::8844'")
+doh_CLF=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://cloudflare-dns.com/dns-query'" "	option bootstrap_dns '1.1.1.1,1.0.0.1,2606:4700:4700::1111,2606:4700:4700::1001'"); doh_xbox=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://xbox-dns.ru/dns-query'"); doh_nullsproxy=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://dns.nullsproxy.com/dns-query'")
+doh_query=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://dns.malw.link/dns-query'"); doh_comss=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://dns.comss.one/dns-query'" "	option bootstrap_dns '92.38.152.163,93.115.24.204,2a03:90c0:56::1a5,2a02:7b40:5eb0:e95d::1'")
+doh_mafioznik=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://dns.mafioznik.xyz/dns-query'"); doh_astracat=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://dns.astracat.ru/dns-query'")
 doh_GOO=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://dns.google/dns-query'" "	option bootstrap_dns '8.8.8.8,8.8.4.4,2001:4860:4860::8888,2001:4860:4860::8844'"); doh_Quad=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://dns.quad9.net/dns-query'" "	option bootstrap_dns '9.9.9.9,149.112.112.112,2620:fe::fe,2620:fe::9'")
-doh_queryCF=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://5u35p8m9i7.cloudflare-gateway.com/dns-query'" "	option bootstrap_dns '8.8.8.8,8.8.4.4,2001:4860:4860::8888,2001:4860:4860::8844'")
+doh_GEOHIDE=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://geohide.ru/dns-query'"); doh_queryCF=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://5u35p8m9i7.cloudflare-gateway.com/dns-query'" "	option bootstrap_dns '8.8.8.8,8.8.4.4,2001:4860:4860::8888,2001:4860:4860::8844'")
 # ==========================================
 # Доступ из браузера
 # ==========================================
@@ -701,10 +703,7 @@ if [ -f /etc/init.d/zapret ] && [ -f "$CONF" ]; then if grep -Eq "^[[:space:]]*o
 ping -6 -c 1 -W 2 google.com >/dev/null 2>&1 && echo -e "${CYAN}9) ${GREEN}Включить ${NC}IPv6${GREEN} в ${NC}Zapret"; fi; fi
 FO=$(uci get firewall.@defaults[0].flow_offloading 2>/dev/null); FOHW=$(uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null); FIX=$(grep -q 'ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc && echo 1 || echo 0)
 if [ "$FO" = 1 ] || [ "$FOHW" = 1 ] || [ "$FIX" = 1 ]; then if [ "$FIX" = 1 ]; then echo -e "${CYAN}0) ${GREEN}Отключить${NC} FIX ${GREEN}для${NC} Flow Offloading"; else echo -e "${CYAN}0) ${GREEN}Применить${NC} FIX ${GREEN}для${NC} Flow Offloading"; fi; fi
-
-echo -e "${CYAN}i) ${GREEN}Меню исключений ${NC}IP${GREEN} из ${NC}Zapret"
-
-echo -e "${CYAN}e) ${GREEN}$EXPERT_TEXT${NC}"; echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read -r choiceMN; case "$choiceMN" in 1) Sys_Info;; 2) toggle_web;; 3) toggle_quic;; 4) menu_MIR;; e|Е|у|У) toggle_expert_mode;;
+echo -e "${CYAN}i) ${GREEN}Меню исключений ${NC}IP${GREEN} из ${NC}Zapret\n${CYAN}e) ${GREEN}$EXPERT_TEXT${NC}"; echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read -r choiceMN; case "$choiceMN" in 1) Sys_Info;; 2) toggle_web;; 3) toggle_quic;; 4) menu_MIR;; e|Е|у|У) toggle_expert_mode;;
 5) [ ! -f /etc/init.d/zapret ] && { echo -e "\nZapret ${RED}не установлен!${NC}\n"; PAUSE; continue; }; stop_zapret "1"; grep -q 'echo "Start Zapret"' /opt/zapret/blockcheck.sh || sed -i $'/^[[:space:]]*read A/a\\\t\techo "Start Zapret"; /etc/init.d/zapret restart >/dev/null 2>&1' /opt/zapret/blockcheck.sh
 echo -e "${GREEN}Ctrl+C - oстановить blockcheck${NC}\n"; chmod +x /opt/zapret/blockcheck.sh; /opt/zapret/blockcheck.sh; start_zapret;; 6) uninstall_zapret_all;; 9) toggle_ipv6;; i|I|Ш|ш) Exclusions_menu;;
 7) if [ -f "$DATE_FILE" ] && [ -f "$BACKUP_DIR/zapret.tar.gz" ] && [ -f "$BACKUP_DIR/zapret" ]; then CREATE_DATE=$(cat "$DATE_FILE"); delete_backup; else save_backup; fi;; 8) restore_backup ;;
@@ -1121,144 +1120,21 @@ ZAPRET_RESTART; echo -e "\n${GREEN}Собственная стратегия п�
 # ==========================================
 # Исключения IP
 # ==========================================
-Exclusions_menu() {
-
-############################               [ ! -f /etc/init.d/zapret ] && { echo -e "\nZapret ${RED}не установлен!${NC}\n"; PAUSE; return; }
-    
-    
-    IPV4_RE='^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$'
-    mkdir -p "$CUSTOM_DIR"
-    [ -f "$EXCL_FILE" ] || touch "$EXCL_FILE"
-
-    while true; do
-        clear
-        echo -e "${MAGENTA}Меню исключений IP из Zapret${NC}\n"
-
-        CURRENT_EXCL=$(grep -oE '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' "$EXCL_FILE" 2>/dev/null | sort -u)
-
-        DEV_LIST="$TMP_SF/zapret_excl_devices.txt"
-        mkdir -p "$TMP_SF"
-        : > "$DEV_LIST"
-
-        if [ -f /tmp/dhcp.leases ]; then
-            while read -r _ts _mac _ip _name _rest; do
-                [ -z "$_ip" ] && continue
-                echo "$_ip" | grep -qE "$IPV4_RE" || continue
-                [ -z "$_name" ] || [ "$_name" = "*" ] && _name="Неизвестное устройство"
-                printf '%s|%s\n' "$_ip" "$_name" >> "$DEV_LIST"
-            done < /tmp/dhcp.leases
-        fi
-
-        if [ -n "$CURRENT_EXCL" ]; then
-            for ip in $CURRENT_EXCL; do
-                grep -qxE "${ip}\|.*" "$DEV_LIST" 2>/dev/null || printf '%s|%s\n' "$ip" "Устройство offline" >> "$DEV_LIST"
-            done
-        fi
-
-        [ -s "$DEV_LIST" ] && sort -t. -k1,1n -k2,2n -k3,3n -k4,4n -o "$DEV_LIST" "$DEV_LIST"
-
-echo -e "${YELLOW}Обнаруженные устройства:${NC}"
-i=1
-IDX_LIST="$TMP_SF/zapret_excl_index.txt"
-: > "$IDX_LIST"
-
-COUNTI=$(wc -l < "$DEV_LIST")
-PAD=""
-[ "$COUNTI" -ge 10 ] && PAD=" "
-
-if [ -s "$DEV_LIST" ]; then
-    while IFS='|' read -r ip name; do
-        mark="${GREEN}⚫${NC}"
-        if [ -n "$CURRENT_EXCL" ] && echo "$CURRENT_EXCL" | grep -qx "$ip"; then
-            mark="${RED}⚫${NC}"
-        fi
-
-        echo -e "${CYAN}${PAD}${i}) ${mark} ${ip} ${CYAN}-${NC} ${name}"
-        echo "$ip" >> "$IDX_LIST"
-        i=$((i + 1))
-    done < "$DEV_LIST"
-else
-    echo -e "${RED}Устройства не найдены!${NC}"
-fi
-
-        echo -e "\n${CYAN}a) ${GREEN}Добавить ${NC}IP${GREEN} вручную${NC}"
-        echo -e "${CYAN}c) ${GREEN}Очистить ${NC}все${GREEN} исключения${NC}"
-        echo -e "${CYAN}Enter) ${GREEN}Выход в системное меню${NC}\n"
-        echo -ne "${YELLOW}Введите номер устройства:${NC} "
-        read -r sel
-
-        case "$sel" in
-            "")
-                rm -f "$DEV_LIST" "$IDX_LIST"
-                return
-                ;;
-            a|A|ф|Ф)
-                echo -ne "\n${YELLOW}Введите IPv4 адрес: ${NC}"
-                read -r manual_ip
-                if echo "$manual_ip" | grep -qE "$IPV4_RE"; then
-                    CURRENT_EXCL=$(printf '%s\n%s\n' "$CURRENT_EXCL" "$manual_ip")
-                    ACTION_MSG="${GREEN}IP ${NC}${manual_ip}${GREEN} добавлен в исключения!${NC}"
-                else
-                    echo -e "\n${RED}Некорректный IPv4 адрес!${NC}\n"
-                    PAUSE
-                    rm -f "$DEV_LIST" "$IDX_LIST"
-                    continue
-                fi
-                ;;
-            c|C|с|С)
-                CURRENT_EXCL=""
-                ACTION_MSG="${GREEN}Все исключения очищены!${NC}"
-                ;;
-*)
-    # Только цифры и пробелы между номерами
-    case "$sel" in
-        *[!0-9\ ]*)
-            rm -f "$DEV_LIST" "$IDX_LIST"
-            return
-            ;;
-    esac
-
-    CHANGED=0
-
-    for num in $sel; do
-        ip=$(sed -n "${num}p" "$IDX_LIST")
-        if [ -z "$ip" ]; then
-            rm -f "$DEV_LIST" "$IDX_LIST"
-            return
-        fi
-
-        if echo "$CURRENT_EXCL" | grep -qx "$ip"; then
-            CURRENT_EXCL=$(echo "$CURRENT_EXCL" | grep -vx "$ip")
-            ACTION_MSG="${GREEN}IP ${NC}${ip}${GREEN} удалён из исключений!${NC}"
-        else
-            CURRENT_EXCL=$(printf '%s\n%s\n' "$CURRENT_EXCL" "$ip")
-            ACTION_MSG="${GREEN}IP ${NC}${ip}${GREEN} добавлен в исключения!${NC}"
-        fi
-
-        CHANGED=1
-    done
-    ;;
-        esac
-
-        CURRENT_EXCL=$(echo "$CURRENT_EXCL" | grep -v '^$' | sort -u)
-
-        if [ -n "$CURRENT_EXCL" ]; then
-            FORMATTED=$(echo "$CURRENT_EXCL" | tr '\n' ',' | sed 's/,$//' | sed 's/,/, /g')
-            {
-                echo "EXCEPT_SRC='{ $FORMATTED }'"
-                echo "nft insert rule inet zapret postrouting_hook index 0 \\"
-                echo "  ip saddr \$EXCEPT_SRC meta mark set meta mark \\| 0x40000000"
-            } > "$EXCL_FILE"
-        else
-            : > "$EXCL_FILE"
-        fi
-        echo -e "\n${CYAN}Применяем и перезапускаем ${NC}Zapret"
-        ZAPRET_RESTART
-        echo -e "\n${ACTION_MSG}\n"
-        PAUSE
-        rm -f "$DEV_LIST" "$IDX_LIST"
-    done
-}
+Exclusions_menu() { [ ! -f /etc/init.d/zapret ] && { echo -e "\nZapret ${RED}не установлен!${NC}\n"; PAUSE; return; }; IPV4_RE='^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$'; mkdir -p "$CUSTOM_DIR"; [ -f "$EXCL_FILE" ] || touch "$EXCL_FILE"
+while true; do clear; echo -e "${MAGENTA}Меню исключений IP из Zapret${NC}\n"; CURRENT_EXCL=$(grep -oE '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' "$EXCL_FILE" 2>/dev/null | sort -u); DEV_LIST="$TMP_SF/zapret_excl_devices.txt"
+mkdir -p "$TMP_SF"; : > "$DEV_LIST"; if [ -f /tmp/dhcp.leases ]; then while read -r _ts _mac _ip _name _rest; do [ -z "$_ip" ] && continue; echo "$_ip" | grep -qE "$IPV4_RE" || continue; [ -z "$_name" ] || [ "$_name" = "*" ] && _name="Неизвестное устройство"
+printf '%s|%s\n' "$_ip" "$_name" >> "$DEV_LIST"; done < /tmp/dhcp.leases; fi; if [ -n "$CURRENT_EXCL" ]; then for ip in $CURRENT_EXCL; do grep -qxE "${ip}\|.*" "$DEV_LIST" 2>/dev/null || printf '%s|%s\n' "$ip" "Устройство offline" >> "$DEV_LIST"; done; fi
+[ -s "$DEV_LIST" ] && sort -t. -k1,1n -k2,2n -k3,3n -k4,4n -o "$DEV_LIST" "$DEV_LIST"; echo -e "${YELLOW}Обнаруженные устройства:${NC}"; i=1; IDX_LIST="$TMP_SF/zapret_excl_index.txt"; : > "$IDX_LIST"; COUNTI=$(wc -l < "$DEV_LIST")
+PAD=""; [ "$COUNTI" -ge 10 ] && PAD=" "; if [ -s "$DEV_LIST" ]; then while IFS='|' read -r ip name; do mark="${GREEN}⚫${NC}"; if [ -n "$CURRENT_EXCL" ] && echo "$CURRENT_EXCL" | grep -qx "$ip"; then mark="${RED}⚫${NC}"; fi
+echo -e "${CYAN}${PAD}${i}) ${mark} ${ip} ${CYAN}-${NC} ${name}"; echo "$ip" >> "$IDX_LIST"; i=$((i + 1)); done < "$DEV_LIST"; else echo -e "${RED}Устройства не найдены!${NC}"; fi; echo -e "\n${CYAN}a) ${GREEN}Добавить ${NC}IP${GREEN} вручную${NC}"
+echo -e "${CYAN}c) ${GREEN}Очистить ${NC}все${GREEN} исключения\n${CYAN}Enter) ${GREEN}Выход в системное меню${NC}\n"; echo -ne "${YELLOW}Введите номер устройства:${NC} "; read -r sel; case "$sel" in
+"") rm -f "$DEV_LIST" "$IDX_LIST"; return;; a|A|ф|Ф) echo -ne "\n${YELLOW}Введите IPv4 адрес: ${NC}"; read -r manual_ip; if echo "$manual_ip" | grep -qE "$IPV4_RE"; then CURRENT_EXCL=$(printf '%s\n%s\n' "$CURRENT_EXCL" "$manual_ip")
+ACTION_MSG="${GREEN}IP ${NC}${manual_ip}${GREEN} добавлен в исключения!${NC}"; else echo -e "\n${RED}Некорректный IPv4 адрес!${NC}\n"; PAUSE; rm -f "$DEV_LIST" "$IDX_LIST"; continue; fi;;
+c|C|с|С) CURRENT_EXCL=""; ACTION_MSG="${GREEN}Все исключения очищены!${NC}";; *) case "$sel" in *[!0-9\ ]*) rm -f "$DEV_LIST" "$IDX_LIST"; return;; esac; CHANGED=0; for num in $sel; do
+ip=$(sed -n "${num}p" "$IDX_LIST"); if [ -z "$ip" ]; then rm -f "$DEV_LIST" "$IDX_LIST"; return; fi; if echo "$CURRENT_EXCL" | grep -qx "$ip"; then CURRENT_EXCL=$(echo "$CURRENT_EXCL" | grep -vx "$ip"); ACTION_MSG="${GREEN}IP ${NC}${ip}${GREEN} удалён из исключений!${NC}"
+else CURRENT_EXCL=$(printf '%s\n%s\n' "$CURRENT_EXCL" "$ip"); ACTION_MSG="${GREEN}IP ${NC}${ip}${GREEN} добавлен в исключения!${NC}"; fi; CHANGED=1; done ;; esac; CURRENT_EXCL=$(echo "$CURRENT_EXCL" | grep -v '^$' | sort -u)
+if [ -n "$CURRENT_EXCL" ]; then FORMATTED=$(echo "$CURRENT_EXCL" | tr '\n' ',' | sed 's/,$//' | sed 's/,/, /g'); { echo "EXCEPT_SRC='{ $FORMATTED }'"; echo "nft insert rule inet zapret postrouting_hook index 0 \\"; echo "  ip saddr \$EXCEPT_SRC meta mark set meta mark \\| 0x40000000"; } > "$EXCL_FILE"; else : > "$EXCL_FILE"; fi
+echo -e "\n${CYAN}Применяем и перезапускаем ${NC}Zapret"; ZAPRET_RESTART; echo -e "\n${ACTION_MSG}\n"; PAUSE; rm -f "$DEV_LIST" "$IDX_LIST"; done; }
 # ==========================================
 # Главное меню
 # ==========================================
@@ -1272,13 +1148,7 @@ pgrep -f "/opt/zapret" >/dev/null 2>&1 && S1_ACTION="Остановить" || S1
 elif [ -f /etc/init.d/zapret2 ]; then S_NAME="Zapret2"; /etc/init.d/zapret2 status >/dev/null 2>&1 && S_ACTION="Остановить" || S_ACTION="Запустить"; SHOW_S=1; elif [ -f /etc/init.d/zapret ]; then S_NAME="Zapret"; pgrep -f "/opt/zapret" >/dev/null 2>&1 && S_ACTION="Остановить" || S_ACTION="Запустить"; SHOW_S=1; else SHOW_S=0; fi
 if uci get firewall.@defaults[0].flow_offloading 2>/dev/null | grep -q '^1$' || uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null | grep -q '^1$'; then if ! grep -q 'meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc
 then echo -e "${RED}Включён ${NC}Flow Offloading${RED}!${NC}\n${NC}Zapret${RED} некорректно работает с включённым ${NC}Flow Offloading${RED}!\nПримените ${NC}FIX${RED} в системном меню!\n${NC}"; fi; fi
-INFO_ZPR
-
-if grep -qE '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' "$EXCL_FILE" 2>/dev/null; then
-    echo -e "${YELLOW}Исключённые IP:      ${RED}есть${NC}"  
-fi
-
-
+INFO_ZPR; if grep -qE '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' "$EXCL_FILE" 2>/dev/null; then echo -e "${YELLOW}Исключённые IP:      ${RED}есть${NC}"; fi
 echo -e "\n${CYAN}1) ${GREEN}$Z_ACTION_TEXT${NC} Zapret\n${CYAN}2) ${GREEN}$Z2_ACTION_TEXT${NC} Zapret2\n${CYAN}3) ${GREEN}Меню стратегий${NC} Zapret\n${CYAN}4) ${GREEN}Меню ${NC}splify\n${CYAN}5) ${GREEN}Меню ${NC}Mixomo\n${CYAN}6) ${GREEN}Меню ${NC}NetShift\n${CYAN}7) ${GREEN}Меню ${NC}TG WS Proxy\n${CYAN}8) ${GREEN}Меню ${NC}DNS over HTTPS\n${CYAN}9) ${GREEN}Меню настройки ${NC}Discord\n${CYAN}0) ${GREEN}Меню управления доменами в ${NC}hosts"
 echo -e "${CYAN}f) ${GREEN}Удалить ${NC}→${GREEN} установить ${NC}→${GREEN} настроить${NC} Zapret\n${CYAN}m) ${GREEN}Системное меню${NC}"; [ "$SHOW_S" = "1" ] && echo -e "${CYAN}s) ${GREEN}$S_ACTION${NC} $S_NAME"
 [ "$SHOW_S" = "2" ] && echo -e "${CYAN}s1) ${GREEN}$S1_ACTION${NC} Zapret\n${CYAN}s2) ${GREEN}$S2_ACTION${NC} Zapret2"; echo -ne "${CYAN}Enter) ${GREEN}Выход${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read choice
