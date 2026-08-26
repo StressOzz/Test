@@ -49,46 +49,46 @@ TGWeb="#TelegramWeb\n149.154.167.220 core.telegram.org api.telegram.org flora.we
 149.154.167.220 kws4.web.telegram.org kws5-1.web.telegram.org kws5.web.telegram.org pluto-1.web.telegram.org pluto.web.telegram.org td.telegram.org telegram.dog
 149.154.167.220 telegram.me telegram.org telegram.space telesco.pe venus.web.telegram.org web.telegram.org zws1-1.web.telegram.org zws1.web.telegram.org
 149.154.167.220 tg.dev t.me zws2-1.web.telegram.org zws2.web.telegram.org zws4-1.web.telegram.org zws5-1.web.telegram.org zws5.web.telegram.org"
-NTC="#ntc.party\n130.255.77.28 ntc.party"; TWCH="#Twitch\n111.88.96.50 usher.ttvnw.net gql.twitch.tv"; NALOG="#Nalog\n213.24.64.175 lkfl2.nalog.ru\n213.24.64.181 lknpd.nalog.ru"
+NTC="#ntc.party\n130.255.77.28 ntc.party"; TWCH="#Twitch\n45.155.204.190 usher.ttvnw.net gql.twitch.tv"; NALOG="#Nalog\n213.24.64.175 lkfl2.nalog.ru\n213.24.64.181 lknpd.nalog.ru"
 RUTOR="#rutor\n173.245.58.219 rutor.info d.rutor.info"; LIBRUSEC="#lib.rus.ec\n185.39.18.98 lib.rus.ec www.lib.rus.ec"
-AI="#Gemini\n111.88.96.50 gemini.google.com\n#Grok\n111.88.96.50 grok.com accounts.x.ai assets.grok.com
-#OpenAI\n111.88.96.50 chatgpt.com ab.chatgpt.com auth.openai.com auth0.openai.com platform.openai.com cdn.oaistatic.com
-111.88.96.50 tcr9i.chat.openai.com webrtc.chatgpt.com android.chat.openai.com api.openai.com operator.chatgpt.com
-111.88.96.50 sora.chatgpt.com sora.com videos.openai.com ios.chat.openai.com cdn.auth0.com files.oaiusercontent.com
-#Microsoft\n111.88.96.50 copilot.microsoft.com sydney.bing.com edgeservices.bing.com rewards.bing.com
-111.88.96.50 xsts.auth.xboxlive.com xgpuwebf2p.gssv-play-prod.xboxlive.com xgpuweb.gssv-play-prod.xboxlive.com
-#ElevenLabs\n111.88.96.50 elevenlabs.io api.us.elevenlabs.io elevenreader.io api.elevenlabs.io help.elevenlabs.io
-#DeepL\n111.88.96.50 deepl.com www.deepl.com www2.deepl.com login-wall.deepl.com w.deepl.com dict.deepl.com ita-free.www.deepl.com
-111.88.96.50 write-free.www.deepl.com experimentation.deepl.com experimentation-grpc.deepl.com ita-free.app.deepl.com
-111.88.96.50 ott.deepl.com api-free.deepl.com backend.deepl.com clearance.deepl.com errortracking.deepl.com
-111.88.96.50 oneshot-free.www.deepl.com checkout.www.deepl.com gtm.deepl.com auth.deepl.com shield.deepl.com
-#Claude\n111.88.96.50 claude.ai console.anthropic.com api.anthropic.com
-#Trae.ai\n111.88.96.50 trae-api-sg.mchost.guru api.trae.ai api-sg-central.trae.ai api16-normal-alisg.mchost.guru
-#Windsurf\n111.88.96.50 windsurf.com codeium.com server.codeium.com web-backend.codeium.com  marketplace.windsurf.com
-111.88.96.50 unleash.codeium.com inference.codeium.com windsurf-stable.codeium.com
-144.31.14.104 windsurf-telemetry.codeium.com\n#Manus\n111.88.96.50 manus.im api.manus.im\n#Notion\n111.88.96.50 www.notion.so calendar.notion.so
-#AIStudio\n111.88.96.50 aistudio.google.com generativelanguage.googleapis.com aitestkitchen.withgoogle.com aisandbox-pa.googleapis.com xsts.auth.xboxlive.com
-111.88.96.50 webchannel-alkalimakersuite-pa.clients6.google.com alkalimakersuite-pa.clients6.google.com assistant-s3-pa.googleapis.com
-111.88.96.50 proactivebackend-pa.googleapis.com robinfrontend-pa.googleapis.com o.pki.goog labs.google labs.google.com notebooklm.google
-111.88.96.50 notebooklm.google.com jules.google.com stitch.withgoogle.com gemini.google.com copilot.microsoft.com edgeservices.bing.com
-111.88.96.50 rewards.bing.com sydney.bing.com xboxdesignlab.xbox.com xgpuweb.gssv-play-prod.xboxlive.com xgpuwebf2p.gssv-play-prod.xboxlive.com"
+AI="#Gemini\n45.155.204.190 gemini.google.com\n#Grok\n45.155.204.190 grok.com accounts.x.ai assets.grok.com
+#OpenAI\n45.155.204.190 chatgpt.com ab.chatgpt.com auth.openai.com auth0.openai.com platform.openai.com cdn.oaistatic.com
+45.155.204.190 tcr9i.chat.openai.com webrtc.chatgpt.com android.chat.openai.com api.openai.com operator.chatgpt.com
+45.155.204.190 sora.chatgpt.com sora.com videos.openai.com ios.chat.openai.com cdn.auth0.com files.oaiusercontent.com
+#Microsoft\n45.155.204.190 copilot.microsoft.com sydney.bing.com edgeservices.bing.com rewards.bing.com
+45.155.204.190 xsts.auth.xboxlive.com xgpuwebf2p.gssv-play-prod.xboxlive.com xgpuweb.gssv-play-prod.xboxlive.com
+#ElevenLabs\n45.155.204.190 elevenlabs.io api.us.elevenlabs.io elevenreader.io api.elevenlabs.io help.elevenlabs.io
+#DeepL\n45.155.204.190 deepl.com www.deepl.com www2.deepl.com login-wall.deepl.com w.deepl.com dict.deepl.com ita-free.www.deepl.com
+45.155.204.190 write-free.www.deepl.com experimentation.deepl.com experimentation-grpc.deepl.com ita-free.app.deepl.com
+45.155.204.190 ott.deepl.com api-free.deepl.com backend.deepl.com clearance.deepl.com errortracking.deepl.com
+45.155.204.190 oneshot-free.www.deepl.com checkout.www.deepl.com gtm.deepl.com auth.deepl.com shield.deepl.com
+#Claude\n45.155.204.190 claude.ai console.anthropic.com api.anthropic.com
+#Trae.ai\n45.155.204.190 trae-api-sg.mchost.guru api.trae.ai api-sg-central.trae.ai api16-normal-alisg.mchost.guru
+#Windsurf\n45.155.204.190 windsurf.com codeium.com server.codeium.com web-backend.codeium.com  marketplace.windsurf.com
+45.155.204.190 unleash.codeium.com inference.codeium.com windsurf-stable.codeium.com
+144.31.14.104 windsurf-telemetry.codeium.com\n#Manus\n45.155.204.190 manus.im api.manus.im\n#Notion\n45.155.204.190 www.notion.so calendar.notion.so
+#AIStudio\n45.155.204.190 aistudio.google.com generativelanguage.googleapis.com aitestkitchen.withgoogle.com aisandbox-pa.googleapis.com xsts.auth.xboxlive.com
+45.155.204.190 webchannel-alkalimakersuite-pa.clients6.google.com alkalimakersuite-pa.clients6.google.com assistant-s3-pa.googleapis.com
+45.155.204.190 proactivebackend-pa.googleapis.com robinfrontend-pa.googleapis.com o.pki.goog labs.google labs.google.com notebooklm.google
+45.155.204.190 notebooklm.google.com jules.google.com stitch.withgoogle.com gemini.google.com copilot.microsoft.com edgeservices.bing.com
+45.155.204.190 rewards.bing.com sydney.bing.com xboxdesignlab.xbox.com xgpuweb.gssv-play-prod.xboxlive.com xgpuwebf2p.gssv-play-prod.xboxlive.com"
 SCell="#Supercell\n103.27.157.38 accounts.supercell.com cdn.id.supercell.com clashofclans.inbox.supercell.com game-assets.brawlstarsgame.com
 103.27.157.38 game-assets.clashofclans.com game-assets.clashroyaleapp.com security.id.supercell.com store.supercell.com
 31.25.239.132 accounts.supercell.com cdn.id.supercell.com clashofclans.inbox.supercell.com game-assets.brawlstarsgame.com
 31.25.239.132 game-assets.clashofclans.com game-assets.clashroyaleapp.com game.boombeachgame.com game.mocogame.com security.id.supercell.com store.supercell.com
 185.246.223.127 game.brawlstarsgame.com\n62.133.62.97 game.clashroyaleapp.com\n193.23.209.189 gamea.clashofclans.com\n108.61.167.26 game.squadbustersgame.com"
-SPFY="#Spotify\n111.88.96.50 api.spotify.com login5.spotify.com encore.scdn.co gew1-spclient.spotify.com spclient.wg.spotify.com
-111.88.96.50 api-partner.spotify.com aet.spotify.com www.spotify.com accounts.spotify.com open.spotify.com
-111.88.96.50 accounts.scdn.co gew1-dealer.spotify.com open-exp.spotifycdn.com www-growth.scdn.co"; TAPEop="#tapeop.dev\n216.24.57.251 www.tapeop.dev tapeop.dev\n216.24.57.3 www.tapeop.dev tapeop.dev"
-SPFYEXT="#SpotifyEXT\n111.88.96.50 spotify.com www.spotify.com accounts.spotify.com login.spotify.com login5.spotify.com login.app.spotify.com auth.spotify.com account.spotify.com api.spotify.com api-partner.spotify.com spclient.wg.spotify.com gew1-spclient.spotify.com
-111.88.96.50 guc3-spclient.spotify.com gae2-spclient.spotify.com gue1-spclient.spotify.com gnl-spclient.spotify.com spclient.spotify.com ap-gew1.spotify.com ap-gue1.spotify.com ap-gae2.spotify.com ap-gew4.spotify.com ap-sto3.spotify.com
-111.88.96.50 ap-guc3.spotify.com ap.spotify.com apresolve.spotify.com aet.spotify.com gew1-dealer.g2.spotify.com guc3-dealer.g2.spotify.com gue1-dealer.g2.spotify.com dealer.spotify.com dealer-wg.spotify.com edge-web.dual-gslb.spotify.com
-111.88.96.50 client.spotify.com web-partner.spotify.com connect.spotify.com gce.spotify.com clienttoken.spotify.com exp.wg.spotify.com pixel.spotify.com pixel-static.spotify.com image-upload.spotify.com content.spotify.com analytics.spotify.com
-111.88.96.50 crashdump.spotify.com log.spotify.com logger.spotify.com metrics.spotify.com desktop.spotify.com audio-fa-tls13.spotifycdn.com heads-fa-tls13.spotifycdn.com heads4-fa-tls13.spotifycdn.com image-cdn-fa.spotifycdn.com
-111.88.96.50 concerts.spotifycdn.com mrkt.spotifycdn.com pickasso.spotifycdn.com podz-content.spotifycdn.com seed-mix-image.spotifycdn.com thisis-images.spotifycdn.com wap.spotifycdn.com web-sdk-assets.spotifycdn.com spotifycdn.com spotifycdn.net
+SPFY="#Spotify\n45.155.204.190 api.spotify.com login5.spotify.com encore.scdn.co gew1-spclient.spotify.com spclient.wg.spotify.com
+45.155.204.190 api-partner.spotify.com aet.spotify.com www.spotify.com accounts.spotify.com open.spotify.com
+45.155.204.190 accounts.scdn.co gew1-dealer.spotify.com open-exp.spotifycdn.com www-growth.scdn.co"; TAPEop="#tapeop.dev\n216.24.57.251 www.tapeop.dev tapeop.dev\n216.24.57.3 www.tapeop.dev tapeop.dev"
+SPFYEXT="#SpotifyEXT\n45.155.204.190 spotify.com www.spotify.com accounts.spotify.com login.spotify.com login5.spotify.com login.app.spotify.com auth.spotify.com account.spotify.com api.spotify.com api-partner.spotify.com spclient.wg.spotify.com gew1-spclient.spotify.com
+45.155.204.190 guc3-spclient.spotify.com gae2-spclient.spotify.com gue1-spclient.spotify.com gnl-spclient.spotify.com spclient.spotify.com ap-gew1.spotify.com ap-gue1.spotify.com ap-gae2.spotify.com ap-gew4.spotify.com ap-sto3.spotify.com
+45.155.204.190 ap-guc3.spotify.com ap.spotify.com apresolve.spotify.com aet.spotify.com gew1-dealer.g2.spotify.com guc3-dealer.g2.spotify.com gue1-dealer.g2.spotify.com dealer.spotify.com dealer-wg.spotify.com edge-web.dual-gslb.spotify.com
+45.155.204.190 client.spotify.com web-partner.spotify.com connect.spotify.com gce.spotify.com clienttoken.spotify.com exp.wg.spotify.com pixel.spotify.com pixel-static.spotify.com image-upload.spotify.com content.spotify.com analytics.spotify.com
+45.155.204.190 crashdump.spotify.com log.spotify.com logger.spotify.com metrics.spotify.com desktop.spotify.com audio-fa-tls13.spotifycdn.com heads-fa-tls13.spotifycdn.com heads4-fa-tls13.spotifycdn.com image-cdn-fa.spotifycdn.com
+45.155.204.190 concerts.spotifycdn.com mrkt.spotifycdn.com pickasso.spotifycdn.com podz-content.spotifycdn.com seed-mix-image.spotifycdn.com thisis-images.spotifycdn.com wap.spotifycdn.com web-sdk-assets.spotifycdn.com spotifycdn.com spotifycdn.net
 35.186.224.24 open.spotify.com\n162.159.141.124 audio4-fa-tls13.spotifycdn.com audio-cf.spotifycdn.com open-exp.spotifycdn.com\n23.36.163.34 audio-ak-spotify-com.akamaized.net\n2.16.168.44 audio4-ak-spotify-com.akamaized.net
 199.232.210.248 scdn.co i.scdn.co line-up.scdn.co mosaic.scdn.co daily-mix.scdn.co lineup-images.scdn.co encore.scdn.co image-cdn-fa.scdn.co accounts.scdn.co www.scdn.co www-growth.scdn.co av.scdn.co seafoam.scdn.co
-23.48.23.145 heads-ak-spotify-com.akamaized.net\n111.88.96.50 xpui.app.spotify.com"
+23.48.23.145 heads-ak-spotify-com.akamaized.net\n45.155.204.190 xpui.app.spotify.com"
 GITH_RAW="#githubusercontent.com\n185.199.109.133 raw.githubusercontent.com release-assets.githubusercontent.com
 185.199.108.133 private-user-images.githubusercontent.com gist.githubusercontent.com avatars.githubusercontent.com"
 GITH="#github.com\n140.82.114.3 github.com\n185.199.110.154 github.githubassets.com\n185.199.110.133 camo.githubassets.com"
@@ -96,7 +96,7 @@ USoft="#Ubisoft\n52.6.7.14 ubi.com\n172.67.139.108 r6s.com\n54.155.2.87 rainbow6
 18.209.141.203 connect.ubisoft.com\n2.23.89.244 ubiservices.cdn.ubi.com\n99.83.188.134 public-ubiservices.ubi.com\n3.33.249.140 public-ws-ubiservices.ubi.com\n"
 ALL_BLOCKS="$AI\n$INSTAGRAM\n$NTC\n$LIBRUSEC\n$TGWeb\n$TWCH\n$SCell\n$SPFY\n$GITH_RAW"; TMP_ARCHIVE_RS="/tmp/tg-ws-proxy-rs.tar.gz"; TMP_DIR_RS="/tmp/tg-ws-proxy-rs"
 hosts_enabled() { if grep -q "### dns.malw.link" /etc/hosts; then hosts_echo="Malw.link"; return 0; elif grep -q "#mafioznik" /etc/hosts; then hosts_echo="Mafioznik"; return 0; elif grep -q "### dns.geohide.ru" /etc/hosts; then hosts_echo="GeoHide"; return 0
-elif grep -q "111.88.96.50\|instagram.com\|rutor.info\|lib.rus.ec\|ntc.party\|twitch.tv\|web.telegram.org\|www.spotify.com\|store.supercell.com\|raw.githubusercontent.com\|lkfl2.nalog.ru" /etc/hosts; then hosts_echo="добавлены"; return 0; fi; return 1; }
+elif grep -q "45.155.204.190\|instagram.com\|rutor.info\|lib.rus.ec\|ntc.party\|twitch.tv\|web.telegram.org\|www.spotify.com\|store.supercell.com\|raw.githubusercontent.com\|lkfl2.nalog.ru" /etc/hosts; then hosts_echo="добавлены"; return 0; fi; return 1; }
 hosts_add() { printf "%b\n" "$1" | while IFS= read -r L; do grep -qxF "$L" /etc/hosts || echo "$L" >> /etc/hosts; done; /etc/init.d/dnsmasq restart >/dev/null 2>&1; }; D() { printf '%b' "$(printf '%s' "$1" | sed 's/../\\x&/g')"; }
 ZAPRET_RESTART () { chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1; sleep 1; }
 PAUSE() { echo -ne "Нажмите Enter..."; read dummy; }; BACKUP_DIR="/opt/zapret_backup"; DATE_FILE="$BACKUP_DIR/date_backup.txt"
@@ -653,7 +653,9 @@ then DOH_STATUS="dns.malw.link (CloudFlare)"; elif grep -q "dns.malw.link" "$fil
 elif grep -q "geohide.ru" "$fileDoH"; then DOH_STATUS="GeoHide"; elif grep -q "cloudflare-dns.com" "$fileDoH" && grep -q "dns.google" "$fileDoH"; then DOH_STATUS="по умолчанию"; elif grep -q "cloudflare-dns.com" "$fileDoH"; then DOH_STATUS="Cloudflare"; elif grep -q "dns.quad9.net" "$fileDoH"; then DOH_STATUS="Quad 9"
 elif grep -q "dns.google" "$fileDoH"; then DOH_STATUS="Google"; elif grep -q "dns.astracat.ru" "$fileDoH"; then DOH_STATUS="dns.astracat.ru"; elif grep -q "dns.nullsproxy.com" "$fileDoH"; then DOH_STATUS="dns.nullsproxy.com"; else DOH_STATUS="установлен"; fi; }
 D_o_H(){ if { [ "$PKG_IS_APK" -eq 1 ] && apk info -e https-dns-proxy >/dev/null 2>&1; } || { [ "$PKG_IS_APK" -eq 0 ] && opkg list-installed | grep -q '^https-dns-proxy '; }; then echo -e "\n${MAGENTA}Удаляем DNS over HTTPS${NC}\n${CYAN}Удаляем пакеты${NC}"; $DELETE https-dns-proxy luci-app-https-dns-proxy >/dev/null 2>&1; echo -e "${CYAN}Удаляем файлы конфигурации${NC}"; rm -f /etc/config/https-dns-proxy /etc/init.d/https-dns-proxy
-sed -i -e "/option doh_backup_noresolv '-1'/d" -e "/option noresolv '1'/d" -e "/list doh_backup_server ''/d" -e "/list server '\/mask\.icloud\.com\/'/d" -e "/list server '\/mask-h2\.icloud\.com\/'/d" -e "/list server '\/use-application-dns\.net\/'/d" -e "/list server '127\.0\.0\.1#5053'/d" -e "/list server '127\.0\.0\.1#5054'/d" -e "/list doh_server '127\.0\.0\.1#5053'/d" -e "/list doh_server '127\.0\.0\.1#5054'/d" /etc/config/dhcp
+
+sed -i ':a;N;$!ba;s/^[[:space:]]*option doh_backup_noresolv '\''-1'\''\n[[:space:]]*option noresolv '\''1'\''\n[[:space:]]*list doh_backup_server '\'''\''\n[[:space:]]*list server '\''\/mask\.icloud\.com\/'\''\n[[:space:]]*list server '\''\/mask-h2\.icloud\.com\/'\''\n[[:space:]]*list server '\''\/use-application-dns\.net\/'\''\n[[:space:]]*list server '\''127\.0\.0\.1#5053'\''\n[[:space:]]*list server '\''127\.0\.0\.1#5054'\''\n[[:space:]]*list doh_server '\''127\.0\.0\.1#5053'\''\n[[:space:]]*list doh_server '\''127\.0\.0\.1#5054'\''//g' /etc/config/dhcp
+
 /etc/init.d/dnsmasq restart >/dev/null 2>&1; echo -e "DNS over HTTPS${GREEN} удалён!${NC}\n"; PAUSE; else if pkg_is_installed netshift; then echo -e "\n${RED}Обнаружен ${NC}NetShift${RED}!"; echo -e "${YELLOW}Удалите ${NC}NetShift\n"; PAUSE; return; fi; echo -e "\n${MAGENTA}Устанавливаем DNS over HTTPS${NC}"; update_packages || return; echo -e "${CYAN}Устанавливаем ${NC}https-dns-proxy"
 $INSTALL https-dns-proxy >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при установке!${NC}\n"; PAUSE; return; }; echo -e "${CYAN}Устанавливаем ${NC}luci-app-https-dns-proxy"; $INSTALL luci-app-https-dns-proxy >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при установке!${NC}\n"; PAUSE; return; }; echo -e "DNS over HTTPS${GREEN} установлен!${NC}\n"; PAUSE; fi; }
 doh_install() { [ -f "$fileDoH" ] && return 0; echo -e "\n${RED}DNS over HTTPS не установлен!${NC}\n"; PAUSE; return 1; }
