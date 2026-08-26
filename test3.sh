@@ -654,7 +654,17 @@ elif grep -q "geohide.ru" "$fileDoH"; then DOH_STATUS="GeoHide"; elif grep -q "c
 elif grep -q "dns.google" "$fileDoH"; then DOH_STATUS="Google"; elif grep -q "dns.astracat.ru" "$fileDoH"; then DOH_STATUS="dns.astracat.ru"; elif grep -q "dns.nullsproxy.com" "$fileDoH"; then DOH_STATUS="dns.nullsproxy.com"; else DOH_STATUS="установлен"; fi; }
 D_o_H(){ if { [ "$PKG_IS_APK" -eq 1 ] && apk info -e https-dns-proxy >/dev/null 2>&1; } || { [ "$PKG_IS_APK" -eq 0 ] && opkg list-installed | grep -q '^https-dns-proxy '; }; then echo -e "\n${MAGENTA}Удаляем DNS over HTTPS${NC}\n${CYAN}Удаляем пакеты${NC}"; $DELETE https-dns-proxy luci-app-https-dns-proxy >/dev/null 2>&1; echo -e "${CYAN}Удаляем файлы конфигурации${NC}"; rm -f /etc/config/https-dns-proxy /etc/init.d/https-dns-proxy
 
-sed -i ':a;N;$!ba;s/^[[:space:]]*option doh_backup_noresolv '\''-1'\''\n[[:space:]]*option noresolv '\''1'\''\n[[:space:]]*list doh_backup_server '\'''\''\n[[:space:]]*list server '\''\/mask\.icloud\.com\/'\''\n[[:space:]]*list server '\''\/mask-h2\.icloud\.com\/'\''\n[[:space:]]*list server '\''\/use-application-dns\.net\/'\''\n[[:space:]]*list server '\''127\.0\.0\.1#5053'\''\n[[:space:]]*list server '\''127\.0\.0\.1#5054'\''\n[[:space:]]*list doh_server '\''127\.0\.0\.1#5053'\''\n[[:space:]]*list doh_server '\''127\.0\.0\.1#5054'\''//g' /etc/config/dhcp
+
+cp /etc/config/dhcp /etc/config/dhcp.bak
+
+sed -i '
+/^[[:space:]]*option doh_backup_noresolv '\''-1'\''$/ {
+    N;N;N;N;N;N;N;N;N
+    /^[[:space:]]*option doh_backup_noresolv '\''-1'\''\n[[:space:]]*option noresolv '\''1'\''\n[[:space:]]*list doh_backup_server '\'\''\n[[:space:]]*list server '\''\/mask\.icloud\.com\/'\''\n[[:space:]]*list server '\''\/mask-h2\.icloud\.com\/'\''\n[[:space:]]*list server '\''\/use-application-dns\.net\/'\''\n[[:space:]]*list server '\''127\.0\.0\.1#5053'\''\n[[:space:]]*list server '\''127\.0\.0\.1#5054'\''\n[[:space:]]*list doh_server '\''127\.0\.0\.1#5053'\''\n[[:space:]]*list doh_server '\''127\.0\.0\.1#5054'\''$/d
+    P;D
+}
+' /etc/config/dhcp
+
 
 /etc/init.d/dnsmasq restart >/dev/null 2>&1; echo -e "DNS over HTTPS${GREEN} удалён!${NC}\n"; PAUSE; else if pkg_is_installed netshift; then echo -e "\n${RED}Обнаружен ${NC}NetShift${RED}!"; echo -e "${YELLOW}Удалите ${NC}NetShift\n"; PAUSE; return; fi; echo -e "\n${MAGENTA}Устанавливаем DNS over HTTPS${NC}"; update_packages || return; echo -e "${CYAN}Устанавливаем ${NC}https-dns-proxy"
 $INSTALL https-dns-proxy >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при установке!${NC}\n"; PAUSE; return; }; echo -e "${CYAN}Устанавливаем ${NC}luci-app-https-dns-proxy"; $INSTALL luci-app-https-dns-proxy >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при установке!${NC}\n"; PAUSE; return; }; echo -e "DNS over HTTPS${GREEN} установлен!${NC}\n"; PAUSE; fi; }
