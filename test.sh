@@ -653,19 +653,7 @@ then DOH_STATUS="dns.malw.link (CloudFlare)"; elif grep -q "dns.malw.link" "$fil
 elif grep -q "geohide.ru" "$fileDoH"; then DOH_STATUS="GeoHide"; elif grep -q "cloudflare-dns.com" "$fileDoH" && grep -q "dns.google" "$fileDoH"; then DOH_STATUS="по умолчанию"; elif grep -q "cloudflare-dns.com" "$fileDoH"; then DOH_STATUS="Cloudflare"; elif grep -q "dns.quad9.net" "$fileDoH"; then DOH_STATUS="Quad 9"
 elif grep -q "dns.google" "$fileDoH"; then DOH_STATUS="Google"; elif grep -q "dns.astracat.ru" "$fileDoH"; then DOH_STATUS="dns.astracat.ru"; elif grep -q "dns.nullsproxy.com" "$fileDoH"; then DOH_STATUS="dns.nullsproxy.com"; else DOH_STATUS="установлен"; fi; }
 D_o_H(){ if { [ "$PKG_IS_APK" -eq 1 ] && apk info -e https-dns-proxy >/dev/null 2>&1; } || { [ "$PKG_IS_APK" -eq 0 ] && opkg list-installed | grep -q '^https-dns-proxy '; }; then echo -e "\n${MAGENTA}Удаляем DNS over HTTPS${NC}\n${CYAN}Удаляем пакеты${NC}"; $DELETE https-dns-proxy luci-app-https-dns-proxy >/dev/null 2>&1; echo -e "${CYAN}Удаляем файлы конфигурации${NC}"; rm -f /etc/config/https-dns-proxy /etc/init.d/https-dns-proxy
-
-
-cp /etc/config/dhcp /etc/config/dhcp.bak
-
-sed -i '
-/^[[:space:]]*option doh_backup_noresolv '\''-1'\''$/ {
-    N;N;N;N;N;N;N;N;N
-    /^[[:space:]]*option doh_backup_noresolv '\''-1'\''\n[[:space:]]*option noresolv '\''1'\''\n[[:space:]]*list doh_backup_server '\'\''\n[[:space:]]*list server '\''\/mask\.icloud\.com\/'\''\n[[:space:]]*list server '\''\/mask-h2\.icloud\.com\/'\''\n[[:space:]]*list server '\''\/use-application-dns\.net\/'\''\n[[:space:]]*list server '\''127\.0\.0\.1#5053'\''\n[[:space:]]*list server '\''127\.0\.0\.1#5054'\''\n[[:space:]]*list doh_server '\''127\.0\.0\.1#5053'\''\n[[:space:]]*list doh_server '\''127\.0\.0\.1#5054'\''$/d
-    P;D
-}
-' /etc/config/dhcp
-
-
+sed -i -e "/option doh_backup_noresolv '-1'/d" -e "/option noresolv '1'/d" -e "/list doh_backup_server ''/d" -e "/list server '\/mask\.icloud\.com\/'/d" -e "/list server '\/mask-h2\.icloud\.com\/'/d" -e "/list server '\/use-application-dns\.net\/'/d" -e "/list server '127\.0\.0\.1#5053'/d" -e "/list server '127\.0\.0\.1#5054'/d" -e "/list doh_server '127\.0\.0\.1#5053'/d" -e "/list doh_server '127\.0\.0\.1#5054'/d" /etc/config/dhcp
 /etc/init.d/dnsmasq restart >/dev/null 2>&1; echo -e "DNS over HTTPS${GREEN} удалён!${NC}\n"; PAUSE; else if pkg_is_installed netshift; then echo -e "\n${RED}Обнаружен ${NC}NetShift${RED}!"; echo -e "${YELLOW}Удалите ${NC}NetShift\n"; PAUSE; return; fi; echo -e "\n${MAGENTA}Устанавливаем DNS over HTTPS${NC}"; update_packages || return; echo -e "${CYAN}Устанавливаем ${NC}https-dns-proxy"
 $INSTALL https-dns-proxy >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при установке!${NC}\n"; PAUSE; return; }; echo -e "${CYAN}Устанавливаем ${NC}luci-app-https-dns-proxy"; $INSTALL luci-app-https-dns-proxy >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при установке!${NC}\n"; PAUSE; return; }; echo -e "DNS over HTTPS${GREEN} установлен!${NC}\n"; PAUSE; fi; }
 doh_install() { [ -f "$fileDoH" ] && return 0; echo -e "\n${RED}DNS over HTTPS не установлен!${NC}\n"; PAUSE; return 1; }
@@ -1152,6 +1140,91 @@ else CURRENT_EXCL=$(printf '%s\n%s\n' "$CURRENT_EXCL" "$ip"); ACTION_MSG="${GREE
 if [ -n "$CURRENT_EXCL" ]; then FORMATTED=$(echo "$CURRENT_EXCL" | tr '\n' ',' | sed 's/,$//' | sed 's/,/, /g'); { echo "EXCEPT_SRC='{ $FORMATTED }'"; echo "nft insert rule inet zapret postrouting_hook index 0 \\"; echo "  ip saddr \$EXCEPT_SRC meta mark set meta mark \\| 0x40000000"; } > "$EXCL_FILE"; else : > "$EXCL_FILE"; fi
 echo -e "\n${CYAN}Применяем и перезапускаем ${NC}Zapret"; ZAPRET_RESTART; echo -e "\n${ACTION_MSG}\n"; PAUSE; rm -f "$DEV_LIST" "$IDX_LIST"; done; }
 # ==========================================
+# Ultimate / Standart Config
+# ==========================================
+Ultimate_Config_menu() {
+
+    local ZAPRET2_CONF="/etc/config/zapret2"
+    local ZAPRET2_BAK="/opt/zapret2/zapret2.bak"
+    local DISCORD_MEDIA="/opt/zapret2/init.d/openwrt/custom.d/50-discord_media.sh"
+    local DISCORD_HOSTS="/opt/zapret2/ipset/zapret_hosts_discord.txt"
+
+    local URL_DISCORD_MEDIA="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/files/Zapret2/50-discord_media.sh"
+    local URL_ZAPRET2="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/files/Zapret2/zapret2"
+    local URL_DISCORD_HOSTS="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/files/Zapret2/zapret_hosts_discord.txt"
+
+    # V_circular есть → Standart Config
+    if grep -qi 'V_circular' "$ZAPRET2_CONF" 2>/dev/null; then
+
+        echo -e "\nПрименение Standart Config..."
+
+        [ -f "$ZAPRET2_BAK" ] || {
+            echo -e "${RED}Резервная копия не найдена!${NC}"
+            PAUSE
+            return
+        }
+
+        cp "$ZAPRET2_BAK" "$ZAPRET2_CONF" || {
+            echo -e "${RED}Ошибка восстановления zapret2!${NC}"
+            PAUSE
+            return
+        }
+
+        /etc/init.d/zapret2 enable >/dev/null 2>&1
+        /etc/init.d/zapret2 restart >/dev/null 2>&1
+
+        echo -e "${GREEN}Standart Config применён!${NC}"
+        PAUSE
+        return
+    fi
+
+    # V_circular нет → Ultimate Config
+    echo -e "\nПрименение Ultimate Config..."
+
+    [ -f "$ZAPRET2_CONF" ] || {
+        echo -e "${RED}Файл $ZAPRET2_CONF не найден!${NC}"
+        PAUSE
+        return
+    }
+
+    # Сохраняем текущий zapret2
+    cp "$ZAPRET2_CONF" "$ZAPRET2_BAK" || {
+        echo -e "${RED}Не удалось создать резервную копию!${NC}"
+        PAUSE
+        return
+    }
+
+    # 50-discord_media.sh
+    wget -q -U "Mozilla/5.0" -O "$DISCORD_MEDIA" "$URL_DISCORD_MEDIA" || {
+        echo -e "${RED}Ошибка загрузки 50-discord_media.sh!${NC}"
+        PAUSE
+        return
+    }
+
+    chmod +x "$DISCORD_MEDIA"
+
+    # zapret2
+    wget -q -U "Mozilla/5.0" -O "$ZAPRET2_CONF" "$URL_ZAPRET2" || {
+        echo -e "${RED}Ошибка загрузки zapret2!${NC}"
+        PAUSE
+        return
+    }
+
+    # Discord hosts
+    wget -q -U "Mozilla/5.0" -O "$DISCORD_HOSTS" "$URL_DISCORD_HOSTS" || {
+        echo -e "${RED}Ошибка загрузки zapret_hosts_discord.txt!${NC}"
+        PAUSE
+        return
+    }
+
+    /etc/init.d/zapret2 enable >/dev/null 2>&1
+    /etc/init.d/zapret2 restart >/dev/null 2>&1
+
+    echo -e "${GREEN}Ultimate Config применён!${NC}"
+    PAUSE
+}
+
+# ==========================================
 # Главное меню
 # ==========================================
 show_menu() { get_versions; get_doh_status; show_current_strategy; RKN_Check; mkdir -p "$TMP_SF"; CURR=$(curr_MIR); clear; echo -e "╔═══════════════════════════════╗\n║  ${BLUE}Zapret Manager by StressOzz${NC}  ║\n╚═══════════════════════════════╝\n"
@@ -1165,9 +1238,25 @@ elif [ -f /etc/init.d/zapret2 ]; then S_NAME="Zapret2"; /etc/init.d/zapret2 stat
 if uci get firewall.@defaults[0].flow_offloading 2>/dev/null | grep -q '^1$' || uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null | grep -q '^1$'; then if ! grep -q 'meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc
 then echo -e "${RED}Включён ${NC}Flow Offloading${RED}!${NC}\n${NC}Zapret${RED} некорректно работает с включённым ${NC}Flow Offloading${RED}!\nПримените ${NC}FIX${RED} в системном меню!\n${NC}"; fi; fi
 INFO_ZPR; if grep -qE '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' "$EXCL_FILE" 2>/dev/null; then echo -e "${YELLOW}Исключённые IP:      ${RED}есть${NC}"; fi
-echo -e "\n${CYAN}1) ${GREEN}$Z_ACTION_TEXT${NC} Zapret\n${CYAN}2) ${GREEN}$Z2_ACTION_TEXT${NC} Zapret2\n${CYAN}3) ${GREEN}Меню стратегий${NC} Zapret\n${CYAN}4) ${GREEN}Меню ${NC}splify\n${CYAN}5) ${GREEN}Меню ${NC}Mixomo\n${CYAN}6) ${GREEN}Меню ${NC}NetShift\n${CYAN}7) ${GREEN}Меню ${NC}TG WS Proxy\n${CYAN}8) ${GREEN}Меню ${NC}DNS over HTTPS\n${CYAN}9) ${GREEN}Меню настройки ${NC}Discord\n${CYAN}0) ${GREEN}Меню управления доменами в ${NC}hosts"
+echo -e "\n${CYAN}1) ${GREEN}$Z_ACTION_TEXT${NC} Zapret\n${CYAN}2) ${GREEN}$Z2_ACTION_TEXT${NC} Zapret2"
+
+if [ -f /etc/init.d/zapret2 ] && [ -d /opt/zapret2 ]; then
+    if grep -qi 'V_circular' /etc/config/zapret2 2>/dev/null; then
+        echo "u) Применить Standart Config для Zapret2"
+    else
+        echo "u) Применить Ultimate Config для Zapret2"
+    fi
+fi
+
+echo -e "${CYAN}3) ${GREEN}Меню стратегий${NC} Zapret\n${CYAN}4) ${GREEN}Меню ${NC}splify\n${CYAN}5) ${GREEN}Меню ${NC}Mixomo\n${CYAN}6) ${GREEN}Меню ${NC}NetShift\n${CYAN}7) ${GREEN}Меню ${NC}TG WS Proxy\n${CYAN}8) ${GREEN}Меню ${NC}DNS over HTTPS\n${CYAN}9) ${GREEN}Меню настройки ${NC}Discord\n${CYAN}0) ${GREEN}Меню управления доменами в ${NC}hosts"
 echo -e "${CYAN}f) ${GREEN}Удалить ${NC}→${GREEN} установить ${NC}→${GREEN} настроить${NC} Zapret\n${CYAN}m) ${GREEN}Системное меню${NC}"; [ "$SHOW_S" = "1" ] && echo -e "${CYAN}s) ${GREEN}$S_ACTION${NC} $S_NAME"
 [ "$SHOW_S" = "2" ] && echo -e "${CYAN}s1) ${GREEN}$S1_ACTION${NC} Zapret\n${CYAN}s2) ${GREEN}$S2_ACTION${NC} Zapret2"; echo -ne "${CYAN}Enter) ${GREEN}Выход${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read choice
 case "$choice" in 999) echo; uninstall_zapret "1"; install_Zapret "1"; curl -fsSL https://raw.githubusercontent.com/StressOzz/Test/refs/heads/main/zapret -o "$CONF"; hosts_add "$ALL_BLOCKS"; rm -f "$EXCLUDE_FILE"; wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL"; ZAPRET_RESTART; PAUSE;;
+
+u|U|Г|г)
+    [ -f /etc/init.d/zapret2 ] && [ -d /opt/zapret2 ] || return
+    Ultimate_Config_menu
+    ;;
+
 2) $Z2_ACTION_FUNC;; s|S|ы|Ы) toggle_zapret;; f|F|а|А) zapret_key;; s1|S1|ы1|Ы1) toggle_zapret1_only;; s2|S2|ы2|Ы2) toggle_zapret2_only;; 1) $Z_ACTION_FUNC;; 3) menu_str;; 4) SPL_MENU ;; 5) MIXOMO_MENU;; 6) PODKOP_menu ;; 7) menu_TG;; 8) DoH_menu;; 9) Discord_menu;; 0) menu_hosts;; m|M|ь|Ь) sys_menu;; r|R|к|К) show_menu;; *) echo; exit 0;; esac; }
 case "$1" in --auto-best) auto_apply_best_strategy; exit 0 ;; esac; while true; do show_menu; done
