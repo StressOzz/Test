@@ -1012,7 +1012,16 @@ else echo -e "\n${RED}Удаление невозможно!${NC}"; echo -e "Amn
 INFO_ZPR() { if [ -f /etc/init.d/zapret ]; then /etc/init.d/zapret status >/dev/null 2>&1 && ZAPRET_STATUS="${GREEN}запущен${NC} $NFQ_STAT" || ZAPRET_STATUS="${RED}остановлен${NC}"; if [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ]; then echo -e "${YELLOW}Zapret:${NC}              ${GREEN}$INSTALLED_VER${NC} / $ZAPRET_STATUS"
 else echo -e "${YELLOW}Zapret:${NC}              ${RED}$INSTALLED_VER (версия устарела)${NC} / $ZAPRET_STATUS"; fi; fi
 if [ -f /etc/init.d/zapret2 ]; then /etc/init.d/zapret2 status >/dev/null 2>&1 && ZAPRET2_STATUS="${GREEN}запущен${NC}" || ZAPRET2_STATUS="${RED}остановлен${NC}"; if [ "$INSTALLED_VER2" = "$ZAPRET2_VERSION" ]; then echo -e "${YELLOW}Zapret2:${NC}             ${GREEN}$INSTALLED_VER2${NC} / $ZAPRET2_STATUS"
-else echo -e "${YELLOW}Zapret2:${NC}             ${RED}$INSTALLED_VER2 (версия устарела)${NC} / $ZAPRET2_STATUS"; fi; fi; is_expert_mode && echo -e "${YELLOW}Expert mode:${NC}         ${GREEN}включён${NC}"
+
+
+else echo -e "${YELLOW}Zapret2:${NC}             ${RED}$INSTALLED_VER2 (версия устарела)${NC} / $ZAPRET2_STATUS"; fi; fi
+if [ -f /etc/init.d/zapret2 ]; then
+	Z2_STR_LINE=$(z2_current_strategy_line)
+	[ -n "$Z2_STR_LINE" ] && echo -e "${YELLOW}Стратегия Zapret2:${NC}   ${CYAN}$Z2_STR_LINE${NC}"
+fi
+is_expert_mode && echo -e "${YELLOW}Expert mode:${NC}         ${GREEN}включён${NC}"
+
+
 SPL_V_VER; [ -n "$SPL_INST_VER" ] && { [ "$SPL_VER" = "$SPL_INST_VER" ] && echo -e "${YELLOW}splify:${NC}              ${GREEN}$SPL_INST_VER${NC}" || echo -e "${YELLOW}splify:${NC}              ${RED}$SPL_INST_VER (версия устарела)${NC}"; }
 case "$(/etc/init.d/mihomo status 2>/dev/null)" in running) echo -e "${YELLOW}Mixomo:              ${GREEN}запущен${NC}" ;; inactive) echo -e "${YELLOW}Mixomo:              ${RED}остановлен${NC}" ;; esac
 get_TG_versions; TGSTATUS=""; if pidof tg-ws-proxy-go >/dev/null 2>&1; then if [ -n "$INSTALLED_VER_GO" ] && [ -n "$TG_GO_VERSION" ] && [ "$INSTALLED_VER_GO" != "$TG_GO_VERSION" ]; then TGSTATUS="${TGSTATUS:+$TGSTATUS/}${RED}SOCKS5 NEW${GREEN}"
@@ -1139,89 +1148,245 @@ ip=$(sed -n "${num}p" "$IDX_LIST"); if [ -z "$ip" ]; then rm -f "$DEV_LIST" "$ID
 else CURRENT_EXCL=$(printf '%s\n%s\n' "$CURRENT_EXCL" "$ip"); ACTION_MSG="${GREEN}IP ${NC}${ip}${GREEN} добавлен в исключения!${NC}"; fi; CHANGED=1; done ;; esac; CURRENT_EXCL=$(echo "$CURRENT_EXCL" | grep -v '^$' | sort -u)
 if [ -n "$CURRENT_EXCL" ]; then FORMATTED=$(echo "$CURRENT_EXCL" | tr '\n' ',' | sed 's/,$//' | sed 's/,/, /g'); { echo "EXCEPT_SRC='{ $FORMATTED }'"; echo "nft insert rule inet zapret postrouting_hook index 0 \\"; echo "  ip saddr \$EXCEPT_SRC meta mark set meta mark \\| 0x40000000"; } > "$EXCL_FILE"; else : > "$EXCL_FILE"; fi
 echo -e "\n${CYAN}Применяем и перезапускаем ${NC}Zapret"; ZAPRET_RESTART; echo -e "\n${ACTION_MSG}\n"; PAUSE; rm -f "$DEV_LIST" "$IDX_LIST"; done; }
+
 # ==========================================
-# Ultimate / Standart Config
+# Zapret2: переменные, хелперы, тесты, меню
 # ==========================================
+ZAPRET2_CONF="/etc/config/zapret2"
+Z2_TEST_RESULTS="/opt/zapret2/tmp/results_test.txt"
+Z2_MAIN_LIST="V_circular Routerich_circular v1 v2 v3 v4 v5 v6 v7 v8 v9 v10"
+Z2_YOUTUBE_LIST="Yv_circular V_circular Yv01 Yv02 Yv03 Yv04 Yv05 Yv06 Yv07 Yv08 Yv09 Yv10 Yv11"
+
+# ---------- низкоуровневые хелперы ----------
+
+z2_list_strategies() { grep -E "^config strategy '" "$ZAPRET2_CONF" 2>/dev/null | sed -E "s/^config strategy '([^']+)'.*/\1/"; }
+
+# гасит option enabled ТОЛЬКО внутри блоков config strategy (не трогает main/list/blob/luascript)
+z2_disable_all_strategies() {
+awk '
+/^config strategy / { intarget=1; print; next }
+/^config / { intarget=0; print; next }
+intarget && /option enabled/ { sub(/option enabled[[:space:]]*'"'"'[01]'"'"'/, "option enabled '"'"'0'"'"'") }
+{ print }
+' "$ZAPRET2_CONF" > "$ZAPRET2_CONF.tmp" && mv "$ZAPRET2_CONF.tmp" "$ZAPRET2_CONF"
+}
+
+z2_enable_strategy() { local NAME="$1"
+awk -v name="$NAME" '
+$0 == "config strategy '"'"'" name "'"'"'" { intarget=1; print; next }
+/^config / { intarget=0; print; next }
+intarget && /option enabled/ { sub(/option enabled[[:space:]]*'"'"'[01]'"'"'/, "option enabled '"'"'1'"'"'") }
+{ print }
+' "$ZAPRET2_CONF" > "$ZAPRET2_CONF.tmp" && mv "$ZAPRET2_CONF.tmp" "$ZAPRET2_CONF"
+}
+
+z2_backup_conf()  { cp "$ZAPRET2_CONF" "$ZAPRET2_CONF.testback" 2>/dev/null; }
+z2_restore_conf() { [ -f "$ZAPRET2_CONF.testback" ] && mv -f "$ZAPRET2_CONF.testback" "$ZAPRET2_CONF"; }
+
+# ---------- какая стратегия сейчас включена ----------
+
+z2_current_strategy() {
+	[ -f "$ZAPRET2_CONF" ] || return
+	awk '
+	function flush() { if (name != "" && en == "1") print name; name=""; en="" }
+	/^config strategy '"'"'/ { flush(); name=$0; sub(/^config strategy '"'"'/,"",name); sub(/'"'"'.*/,"",name); next }
+	/^config / { flush(); next }
+	/option enabled/ { val=$0; sub(/.*option enabled[[:space:]]*'"'"'/,"",val); sub(/'"'"'.*/,"",val); en=val }
+	END { flush() }
+	' "$ZAPRET2_CONF" 2>/dev/null
+}
+
+z2_current_strategy_line() {
+	local list
+	list=$(z2_current_strategy | tr '\n' '/' | sed 's#/$##' | sed 's#/# / #g')
+	echo "$list"
+}
+
+# ---------- тест стратегий v / Yv по доменам ----------
+
+z2_run_test_by_pattern() {
+	local PATTERN="$1" LABEL="$2"
+	[ ! -f /etc/init.d/zapret2 ] && { echo -e "\nZapret2 ${RED}не установлен!${NC}\n"; PAUSE; return; }
+	clear; echo -e "${MAGENTA}Тестирование $LABEL (Zapret2)${NC}\n"
+	mkdir -p "$TMP_SF" "/opt/zapret2/tmp"
+	z2_backup_conf
+	prepare_urls || { z2_restore_conf; return 1; }
+	URLS="$(cat "$OUT_DPI")"; TOTAL=$(grep -c "|" "$OUT_DPI")
+	STR_LIST=$(z2_list_strategies | grep -E "$PATTERN")
+	TOTAL_STR=$(echo "$STR_LIST" | grep -c .)
+	if [ "$TOTAL_STR" -eq 0 ]; then echo -e "${RED}Стратегии не найдены!${NC}\n"; z2_restore_conf; rm -f "$OUT_DPI"; PAUSE; return; fi
+	echo -e "${CYAN}Найдено стратегий:${NC} $TOTAL_STR"
+	echo -e "${CYAN}Доменов для теста:${NC} $TOTAL"
+	: > "$Z2_TEST_RESULTS"
+	z2_disable_all_strategies; /etc/init.d/zapret2 restart >/dev/null 2>&1; sleep 1
+	OK=0; LOG_TMP="/tmp/zapret2_log_off"; : > "$LOG_TMP"; check_all_urls
+	echo -e "\n${CYAN}Контрольный тест (Zapret2 выключен): ${NC}$OK/$TOTAL"
+	echo "Контрольный тест (Zapret2 выключен) → ${OK}/${TOTAL}" >> "$Z2_TEST_RESULTS"
+	CUR=0
+	echo "$STR_LIST" | while IFS= read -r NAME; do
+		[ -z "$NAME" ] && continue
+		CUR=$((CUR + 1))
+		z2_disable_all_strategies
+		z2_enable_strategy "$NAME"
+		echo -e "\n${CYAN}Тестируем стратегию: ${YELLOW}${NAME}${NC} ($CUR/$TOTAL_STR)"
+		/etc/init.d/zapret2 restart >/dev/null 2>&1; sleep 1
+		OK=0; LOG_TMP="/tmp/zapret2_log_${CUR}"; : > "$LOG_TMP"; check_all_urls
+		if [ "$OK" -eq "$TOTAL" ]; then COLOR="${GREEN}"; elif [ "$OK" -ge $((TOTAL/2)) ]; then COLOR="${YELLOW}"; else COLOR="${RED}"; fi
+		echo -e "${CYAN}Результат теста: ${COLOR}$OK/$TOTAL${NC}"
+		echo "${NAME} → ${OK}/${TOTAL}" >> "$Z2_TEST_RESULTS"
+	done
+	sort -t'/' -k1 -nr "$Z2_TEST_RESULTS" -o "$Z2_TEST_RESULTS"
+	z2_restore_conf
+	/etc/init.d/zapret2 restart >/dev/null 2>&1
+	rm -f "$OUT_DPI"
+	show_single_result "$Z2_TEST_RESULTS"
+}
+
+z2_test_main_strategies()    { z2_run_test_by_pattern '^v[0-9]+$'  "стратегий v"; }
+z2_test_youtube_strategies() { z2_run_test_by_pattern '^Yv[0-9]+$' "стратегий Yv"; }
+
+# ---------- выбор и применение стратегии (основная / YouTube) ----------
+
+z2_select_and_apply() {
+	local TITLE="$1"; shift; local NAMES="$*"
+	[ ! -f /etc/init.d/zapret2 ] && { echo -e "\nZapret2 ${RED}не установлен!${NC}\n"; PAUSE; return; }
+	echo -e "\n${MAGENTA}$TITLE${NC}\n"
+	local i=1
+	for n in $NAMES; do
+		if grep -q "^config strategy '$n'" "$ZAPRET2_CONF" 2>/dev/null; then echo -e "${CYAN}$i) ${GREEN}$n${NC}"
+		else echo -e "${CYAN}$i) ${RED}$n (не найдена)${NC}"; fi
+		i=$((i + 1))
+	done
+	echo -ne "${CYAN}Enter) ${GREEN}Отмена${NC}\n\n${YELLOW}Выберите пункт:${NC} "
+	read -r CH; case "$CH" in ''|*[!0-9]*) return ;; esac
+	SEL=$(echo "$NAMES" | tr ' ' '\n' | sed -n "${CH}p")
+	[ -z "$SEL" ] && return
+	grep -q "^config strategy '$SEL'" "$ZAPRET2_CONF" 2>/dev/null || { echo -e "\n${RED}Стратегия ${NC}$SEL${RED} не найдена!${NC}\n"; PAUSE; return; }
+	echo -e "\n${CYAN}Применяем стратегию ${NC}$SEL"
+	z2_disable_all_strategies
+	z2_enable_strategy "$SEL"
+	z2_enable_strategy "Youtube_UDP"
+	z2_enable_strategy "Discord_circular"
+	/etc/init.d/zapret2 restart >/dev/null 2>&1
+	echo -e "${GREEN}Стратегия ${NC}$SEL${GREEN} применена (+ Youtube_UDP + Discord_circular)!${NC}\n"
+	PAUSE
+}
+
+z2_choose_main_strategy()    { z2_select_and_apply "Выбор основной стратегии Zapret2" "$Z2_MAIN_LIST"; }
+z2_choose_youtube_strategy() { z2_select_and_apply "Выбор стратегии для YouTube (Zapret2)" "$Z2_YOUTUBE_LIST"; }
+
+# ---------- Меню Zapret (пункт 1 главного меню) ----------
+
+menu_Zapret() {
+	while true; do
+		get_versions; clear; echo -e "${MAGENTA}Меню Zapret${NC}\n"
+		if [ ! -f /etc/init.d/zapret ]; then Z_ACTION_TEXT="Установить"; Z_ACTION_FUNC="install_Zapret"
+		elif [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ]; then Z_ACTION_TEXT="Удалить"; Z_ACTION_FUNC="uninstall_zapret"
+		else Z_ACTION_TEXT="Обновить"; Z_ACTION_FUNC="install_Zapret"; fi
+		echo -e "${CYAN}1) ${GREEN}$Z_ACTION_TEXT${NC} Zapret"
+		echo -e "${CYAN}2) ${GREEN}Меню стратегий${NC} Zapret"
+		echo -e "${CYAN}3) ${GREEN}Меню настройки${NC} Discord"
+		echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "
+		read -r cz
+		case "$cz" in
+			1) $Z_ACTION_FUNC ;;
+			2) menu_str ;;
+			3) Discord_menu ;;
+			*) return ;;
+		esac
+	done
+}
+
+# ---------- Меню Zapret2 (пункт 2 главного меню) ----------
+
+menu_Zapret2() {
+	while true; do
+		get_versions; clear; echo -e "${MAGENTA}Меню Zapret2${NC}\n"
+		if [ ! -f /etc/init.d/zapret2 ]; then Z2_ACTION_TEXT="Установить"; Z2_ACTION_FUNC="install_zapret2"
+		elif [ "$INSTALLED_VER2" = "$ZAPRET2_VERSION" ]; then Z2_ACTION_TEXT="Удалить"; Z2_ACTION_FUNC="remove_zapret2"
+		else Z2_ACTION_TEXT="Обновить"; Z2_ACTION_FUNC="install_zapret2"; fi
+		if [ -f /etc/init.d/zapret2 ]; then
+			Z2_STR_LINE=$(z2_current_strategy_line)
+			[ -n "$Z2_STR_LINE" ] && echo -e "${YELLOW}Стратегия Zapret2:${NC}   ${CYAN}$Z2_STR_LINE${NC}\n"
+		fi
+		echo -e "${CYAN}1) ${GREEN}$Z2_ACTION_TEXT${NC} Zapret2"
+		if [ -f /etc/init.d/zapret2 ]; then
+			if grep -qi 'V_circular' "$ZAPRET2_CONF" 2>/dev/null; then
+				echo -e "${CYAN}2) ${GREEN}Применить${NC} Standart Config"
+			else
+				echo -e "${CYAN}2) ${GREEN}Применить${NC} Ultimate Config"
+			fi
+		fi
+		echo -e "${CYAN}3) ${GREEN}Выбрать основную стратегию${NC}"
+		echo -e "${CYAN}4) ${GREEN}Выбрать стратегию для${NC} YouTube"
+		echo -e "${CYAN}5) ${GREEN}Тестировать стратегии${NC} v (по доменам)"
+		echo -e "${CYAN}6) ${GREEN}Тестировать стратегии${NC} Yv (по доменам)"
+		[ -s "$Z2_TEST_RESULTS" ] && echo -e "${CYAN}7) ${GREEN}Результаты последнего теста${NC}"
+		echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "
+		read -r c2
+		case "$c2" in
+			1) $Z2_ACTION_FUNC ;;
+			2) Ultimate_Config_menu ;;
+			3) z2_choose_main_strategy ;;
+			4) z2_choose_youtube_strategy ;;
+			5) z2_test_main_strategies ;;
+			6) z2_test_youtube_strategies ;;
+			7) show_single_result "$Z2_TEST_RESULTS" ;;
+			*) return ;;
+		esac
+	done
+}
+
 Ultimate_Config_menu() {
+	local ZAPRET2_BAK="/opt/zapret2/zapret2.bak"
+	local DISCORD_MEDIA="/opt/zapret2/init.d/openwrt/custom.d/50-discord_media.sh"
+	local DISCORD_HOSTS="/opt/zapret2/ipset/zapret_hosts_discord.txt"
+	local URL_DISCORD_MEDIA="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/files/Zapret2/50-discord_media.sh"
+	local URL_ZAPRET2="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/files/Zapret2/zapret2"
+	local URL_DISCORD_HOSTS="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/files/Zapret2/zapret_hosts_discord.txt"
 
-    local ZAPRET2_CONF="/etc/config/zapret2"
-    local ZAPRET2_BAK="/opt/zapret2/zapret2.bak"
-    local DISCORD_MEDIA="/opt/zapret2/init.d/openwrt/custom.d/50-discord_media.sh"
-    local DISCORD_HOSTS="/opt/zapret2/ipset/zapret_hosts_discord.txt"
+	[ ! -f /etc/init.d/zapret2 ] && { echo -e "\nZapret2 ${RED}не установлен!${NC}\n"; PAUSE; return; }
 
-    local URL_DISCORD_MEDIA="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/files/Zapret2/50-discord_media.sh"
-    local URL_ZAPRET2="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/files/Zapret2/zapret2"
-    local URL_DISCORD_HOSTS="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/files/Zapret2/zapret_hosts_discord.txt"
+	if grep -qi "V_circular" "$ZAPRET2_CONF" 2>/dev/null; then
+		echo -e "\n${MAGENTA}Применяем Standart Config${NC}"
+		[ -f "$ZAPRET2_BAK" ] || { echo -e "\n${RED}Резервная копия не найдена!${NC}\n"; PAUSE; return; }
+		echo -e "${CYAN}Останавливаем ${NC}Zapret2"; /etc/init.d/zapret2 stop >/dev/null 2>&1
+		echo -e "${CYAN}Восстанавливаем конфиг${NC}"
+		cp "$ZAPRET2_BAK" "$ZAPRET2_CONF" || { echo -e "\n${RED}Ошибка восстановления zapret2!${NC}\n"; PAUSE; return; }
+		echo -e "${CYAN}Запускаем ${NC}Zapret2"
+		/etc/init.d/zapret2 enable >/dev/null 2>&1
+		/etc/init.d/zapret2 restart >/dev/null 2>&1
+		echo -e "Standart Config ${GREEN}применён!${NC}\n"
+		PAUSE
+		return
+	fi
 
-    # V_circular есть → Standart Config
-    if grep -qi 'V_circular' "$ZAPRET2_CONF" 2>/dev/null; then
+	echo -e "\n${MAGENTA}Применяем Ultimate Config${NC}"
+	[ -f "$ZAPRET2_CONF" ] || { echo -e "\n${RED}Файл ${NC}$ZAPRET2_CONF${RED} не найден!${NC}\n"; PAUSE; return; }
 
-        echo -e "\nПрименение Standart Config..."
+	echo -e "${CYAN}Сохраняем текущий конфиг${NC}"
+	cp "$ZAPRET2_CONF" "$ZAPRET2_BAK" || { echo -e "\n${RED}Не удалось создать резервную копию!${NC}\n"; PAUSE; return; }
 
-        [ -f "$ZAPRET2_BAK" ] || {
-            echo -e "${RED}Резервная копия не найдена!${NC}"
-            PAUSE
-            return
-        }
+	mkdir -p "$(dirname "$DISCORD_MEDIA")" "$(dirname "$DISCORD_HOSTS")"
 
-        cp "$ZAPRET2_BAK" "$ZAPRET2_CONF" || {
-            echo -e "${RED}Ошибка восстановления zapret2!${NC}"
-            PAUSE
-            return
-        }
+	echo -e "${CYAN}Скачиваем ${NC}50-discord_media.sh"
+	wget -q -U "Mozilla/5.0" -O "$DISCORD_MEDIA" "$URL_DISCORD_MEDIA" || { echo -e "\n${RED}Ошибка загрузки ${NC}50-discord_media.sh${RED}!${NC}\n"; PAUSE; return; }
+	chmod +x "$DISCORD_MEDIA"
 
-        /etc/init.d/zapret2 enable >/dev/null 2>&1
-        /etc/init.d/zapret2 restart >/dev/null 2>&1
+	echo -e "${CYAN}Скачиваем ${NC}zapret2 (config)"
+	wget -q -U "Mozilla/5.0" -O "$ZAPRET2_CONF.new" "$URL_ZAPRET2" || { echo -e "\n${RED}Ошибка загрузки ${NC}zapret2${RED}!${NC}\n"; rm -f "$ZAPRET2_CONF.new"; PAUSE; return; }
+	[ -s "$ZAPRET2_CONF.new" ] || { echo -e "\n${RED}Скачанный конфиг пустой, отменяем!${NC}\n"; rm -f "$ZAPRET2_CONF.new"; PAUSE; return; }
+	mv -f "$ZAPRET2_CONF.new" "$ZAPRET2_CONF"
 
-        echo -e "${GREEN}Standart Config применён!${NC}"
-        PAUSE
-        return
-    fi
+	echo -e "${CYAN}Скачиваем ${NC}zapret_hosts_discord.txt"
+	wget -q -U "Mozilla/5.0" -O "$DISCORD_HOSTS" "$URL_DISCORD_HOSTS" || echo -e "${RED}Не удалось скачать ${NC}zapret_hosts_discord.txt${NC}"
 
-    # V_circular нет → Ultimate Config
-    echo -e "\nПрименение Ultimate Config..."
+	echo -e "${CYAN}Перезапускаем ${NC}Zapret2"
+	/etc/init.d/zapret2 enable >/dev/null 2>&1
+	/etc/init.d/zapret2 restart >/dev/null 2>&1
 
-    [ -f "$ZAPRET2_CONF" ] || {
-        echo -e "${RED}Файл $ZAPRET2_CONF не найден!${NC}"
-        PAUSE
-        return
-    }
-
-    # Сохраняем текущий zapret2
-    cp "$ZAPRET2_CONF" "$ZAPRET2_BAK" || {
-        echo -e "${RED}Не удалось создать резервную копию!${NC}"
-        PAUSE
-        return
-    }
-
-    # 50-discord_media.sh
-    wget -q -U "Mozilla/5.0" -O "$DISCORD_MEDIA" "$URL_DISCORD_MEDIA" || {
-        echo -e "${RED}Ошибка загрузки 50-discord_media.sh!${NC}"
-        PAUSE
-        return
-    }
-
-    chmod +x "$DISCORD_MEDIA"
-
-    # zapret2
-    wget -q -U "Mozilla/5.0" -O "$ZAPRET2_CONF" "$URL_ZAPRET2" || {
-        echo -e "${RED}Ошибка загрузки zapret2!${NC}"
-        PAUSE
-        return
-    }
-
-    # Discord hosts
-    wget -q -U "Mozilla/5.0" -O "$DISCORD_HOSTS" "$URL_DISCORD_HOSTS" || {
-        echo -e "${RED}Ошибка загрузки zapret_hosts_discord.txt!${NC}"
-        PAUSE
-        return
-    }
-
-    /etc/init.d/zapret2 enable >/dev/null 2>&1
-    /etc/init.d/zapret2 restart >/dev/null 2>&1
-
-    echo -e "${GREEN}Ultimate Config применён!${NC}"
-    PAUSE
+	echo -e "Ultimate Config ${GREEN}применён!${NC}\n"
+	PAUSE
 }
 
 # ==========================================
@@ -1238,25 +1403,18 @@ elif [ -f /etc/init.d/zapret2 ]; then S_NAME="Zapret2"; /etc/init.d/zapret2 stat
 if uci get firewall.@defaults[0].flow_offloading 2>/dev/null | grep -q '^1$' || uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null | grep -q '^1$'; then if ! grep -q 'meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc
 then echo -e "${RED}Включён ${NC}Flow Offloading${RED}!${NC}\n${NC}Zapret${RED} некорректно работает с включённым ${NC}Flow Offloading${RED}!\nПримените ${NC}FIX${RED} в системном меню!\n${NC}"; fi; fi
 INFO_ZPR; if grep -qE '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' "$EXCL_FILE" 2>/dev/null; then echo -e "${YELLOW}Исключённые IP:      ${RED}есть${NC}"; fi
-echo -e "\n${CYAN}1) ${GREEN}$Z_ACTION_TEXT${NC} Zapret\n${CYAN}2) ${GREEN}$Z2_ACTION_TEXT${NC} Zapret2"
 
-if [ -f /etc/init.d/zapret2 ] && [ -d /opt/zapret2 ]; then
-    if grep -qi 'V_circular' /etc/config/zapret2 2>/dev/null; then
-        echo "u) Применить Standart Config для Zapret2"
-    else
-        echo "u) Применить Ultimate Config для Zapret2"
-    fi
-fi
 
-echo -e "${CYAN}3) ${GREEN}Меню стратегий${NC} Zapret\n${CYAN}4) ${GREEN}Меню ${NC}splify\n${CYAN}5) ${GREEN}Меню ${NC}Mixomo\n${CYAN}6) ${GREEN}Меню ${NC}NetShift\n${CYAN}7) ${GREEN}Меню ${NC}TG WS Proxy\n${CYAN}8) ${GREEN}Меню ${NC}DNS over HTTPS\n${CYAN}9) ${GREEN}Меню настройки ${NC}Discord\n${CYAN}0) ${GREEN}Меню управления доменами в ${NC}hosts"
+echo -e "\n${CYAN}1) ${GREEN}Меню${NC} Zapret\n${CYAN}2) ${GREEN}Меню${NC} Zapret2"
+echo -e "${CYAN}3) ${GREEN}Меню ${NC}splify\n${CYAN}4) ${GREEN}Меню ${NC}Mixomo\n${CYAN}5) ${GREEN}Меню ${NC}NetShift\n${CYAN}6) ${GREEN}Меню ${NC}TG WS Proxy\n${CYAN}7) ${GREEN}Меню ${NC}DNS over HTTPS\n${CYAN}8) ${GREEN}Меню управления доменами в ${NC}hosts"
+
+
 echo -e "${CYAN}f) ${GREEN}Удалить ${NC}→${GREEN} установить ${NC}→${GREEN} настроить${NC} Zapret\n${CYAN}m) ${GREEN}Системное меню${NC}"; [ "$SHOW_S" = "1" ] && echo -e "${CYAN}s) ${GREEN}$S_ACTION${NC} $S_NAME"
 [ "$SHOW_S" = "2" ] && echo -e "${CYAN}s1) ${GREEN}$S1_ACTION${NC} Zapret\n${CYAN}s2) ${GREEN}$S2_ACTION${NC} Zapret2"; echo -ne "${CYAN}Enter) ${GREEN}Выход${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read choice
 case "$choice" in 999) echo; uninstall_zapret "1"; install_Zapret "1"; curl -fsSL https://raw.githubusercontent.com/StressOzz/Test/refs/heads/main/zapret -o "$CONF"; hosts_add "$ALL_BLOCKS"; rm -f "$EXCLUDE_FILE"; wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL"; ZAPRET_RESTART; PAUSE;;
 
-u|U|Г|г)
-    [ -f /etc/init.d/zapret2 ] && [ -d /opt/zapret2 ] || return
-    Ultimate_Config_menu
-    ;;
+s|S|ы|Ы) toggle_zapret;; f|F|а|А) zapret_key;; s1|S1|ы1|Ы1) toggle_zapret1_only;; s2|S2|ы2|Ы2) toggle_zapret2_only;;
+1) menu_Zapret ;; 2) menu_Zapret2 ;; 3) SPL_MENU ;; 4) MIXOMO_MENU;; 5) PODKOP_menu ;; 6) menu_TG;; 7) DoH_menu;; 8) menu_hosts;;
+m|M|ь|Ь) sys_menu;; r|R|к|К) show_menu;; *) echo; exit 0;; esac; }
 
-2) $Z2_ACTION_FUNC;; s|S|ы|Ы) toggle_zapret;; f|F|а|А) zapret_key;; s1|S1|ы1|Ы1) toggle_zapret1_only;; s2|S2|ы2|Ы2) toggle_zapret2_only;; 1) $Z_ACTION_FUNC;; 3) menu_str;; 4) SPL_MENU ;; 5) MIXOMO_MENU;; 6) PODKOP_menu ;; 7) menu_TG;; 8) DoH_menu;; 9) Discord_menu;; 0) menu_hosts;; m|M|ь|Ь) sys_menu;; r|R|к|К) show_menu;; *) echo; exit 0;; esac; }
 case "$1" in --auto-best) auto_apply_best_strategy; exit 0 ;; esac; while true; do show_menu; done
