@@ -116,19 +116,34 @@ RAZ="ipk"; TMP_FILE_GO="/tmp/tg-ws-proxy.ipk"; else PKG="apk"; GO_SUF="r1"; CONF
 UPDATE="apk update"; INSTALL="apk add --allow-untrusted"; DELETE="apk del"; ARCH="$(apk --print-arch 2>/dev/null)"; RAZ="apk"; VER_SUF="r1"; SUF_MT="r"; TMP_FILE_GO="/tmp/tg-ws-proxy.apk"; fi
 
 
+clear
+MIRROR=""
+CURRENT_MIRROR=$(head -n1 "$CONFZ" | sed 's|https://||;s|/releases/.*||')
 
-check_default_mirror() {
-    if ! wget -q --spider --timeout=5 https://downloads.openwrt.org/releases/ >/dev/null 2>&1; then
-        echo -e "${YELLOW}downloads.openwrt.org недоступен!${NC}"
-        echo -e "${CYAN}Переключаемся на mirror-03.infra.openwrt.org...${NC}"
-        sed -i 's|https://downloads.openwrt.org/releases/|https://mirror-03.infra.openwrt.org/releases/|g' "$CONFZ"
+echo -e "${CYAN}Проверяем доступность ${NC}$CURRENT_MIRROR"
+
+if ! wget -q --spider --timeout=5 "https://$CURRENT_MIRROR/releases/" >/dev/null 2>&1; then
+    echo -e "$CURRENT_MIRROR ${RED}недоступен!${NC}"
+
+    if wget -q --spider --timeout=5 "https://mirror-03.infra.openwrt.org/releases/" >/dev/null 2>&1; then
+        MIRROR="mirror-03.infra.openwrt.org"
+    elif wget -q --spider --timeout=5 "https://ftp.snt.utwente.nl/pub/software/openwrt/releases/" >/dev/null 2>&1; then
+        MIRROR="ftp.snt.utwente.nl/pub/software/openwrt"
+    elif wget -q --spider --timeout=5 "https://mirror.berlin.freifunk.net/downloads.openwrt.org/releases/" >/dev/null 2>&1; then
+        MIRROR="mirror.berlin.freifunk.net/downloads.openwrt.org"
+    elif wget -q --spider --timeout=5 "https://mirror.sjtu.edu.cn/openwrt/releases/" >/dev/null 2>&1; then
+        MIRROR="mirror.sjtu.edu.cn/openwrt"
     fi
-}
 
-check_default_mirror
-
-
-
+    if [ -n "$MIRROR" ]; then
+        echo -e "${CYAN}Переключаемся на ${NC}$MIRROR"
+        sed -i "s|https://.*/releases/|https://$MIRROR/releases/|g" "$CONFZ"
+    else
+        echo -e "${RED}Резервные зеркала недоступны!${NC}"
+    fi
+else
+    echo -e "$CURRENT_MIRROR ${GREEN}доступен!${NC}"
+fi
 
 update_packages(){ [ "$PACKAGES_UPDATED" = "1" ] && return 0; echo -e "${CYAN}Обновляем список пакетов${NC}"; $UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка обновления списка пакетов!${NC}\n"; PAUSE; return 1; }; PACKAGES_UPDATED=1; }
 
@@ -882,7 +897,7 @@ if ! $UPDATE >/dev/null 2>&1; then echo -e "\n${RED}Ошибка! Зеркало
 sed -i "s|https://.*/releases/|https://downloads.openwrt.org/releases/|g" "$CONFZ"; PAUSE; return 1; fi; echo -e "${GREEN}Пакеты обновлены! Зеркало работает!${NC}\n"; PAUSE; }
 
 curr_MIR() { if [ -f "$CONFZ" ]; then URL=$(head -n1 "$CONFZ"); case "$URL" in
-*mirror-03.infra.openwrt.org*) echo "OpenWrt Mirror" ;;
+*mirror-03.infra.openwrt.org*) echo "infra.openwrt.org" ;;
 *tiguinet.net*) echo "Belgium" ;;
 *utwente.nl*) echo "Netherlands" ;;
 *freifunk.net*) echo "Germany" ;;
@@ -892,7 +907,7 @@ curr_MIR() { if [ -f "$CONFZ" ]; then URL=$(head -n1 "$CONFZ"); case "$URL" in
 *) echo "неизвестное" ;;
 esac; else echo "файл не найден"; fi; }
 
-menu_MIR() { while true; do clear; CURR=$(curr_MIR); echo -e "${MAGENTA}Меню выбора зеркала OpenWrt${NC}\n\n${YELLOW}Используется зеркало: ${GREEN}$CURR${NC}\n\n${CYAN}1)${NC} OpenWrt Mirror\n${CYAN}2)${NC} China"
+menu_MIR() { while true; do clear; CURR=$(curr_MIR); echo -e "${MAGENTA}Меню выбора зеркала OpenWrt${NC}\n\n${YELLOW}Используется зеркало: ${GREEN}$CURR${NC}\n\n${CYAN}1)${NC} infra.openwrt.org\n${CYAN}2)${NC} China"
 echo -e "${CYAN}3)${NC} Germany\n${CYAN}4)${NC} Belgium\n${CYAN}5)${NC} Kazakhstan\n${CYAN}6)${NC} Netherlands\n${CYAN}7)${NC} default / OpenWrt${NC}"
 echo -en "\n${YELLOW}Выберите зеркало: ${NC}"; read -r z; case "$z" in
 1) set_mirror "mirror-03.infra.openwrt.org" ;;
