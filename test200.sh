@@ -18,12 +18,12 @@ if wget -q -T 2 -O /dev/null "$GH_CHECK_URL" 2>/dev/null; then
     GH_OK=1
     GH_RAW="$GH_RAW_HOST"
     GH_MAIN="$GH_MAIN_HOST"
-    echo -e "raw.githubusercontent.com ${GREEN}доступен!${NC}"
+    echo -e "raw.githubusercontent.com ${GREEN}доступен!${NC}\n"
 else
     GH_OK=0
     GH_RAW="${GH_PROXY}${GH_RAW_HOST}"
     GH_MAIN="${GH_PROXY}${GH_MAIN_HOST}"
-    echo -e "raw.githubusercontent.com ${RED}недоступен${CYAN} — ${YELLOW}используем прокси!${NC}"
+    echo -e "raw.githubusercontent.com ${RED}недоступен${CYAN} — ${YELLOW}используем прокси!${NC}\n"
 fi
 
 
@@ -156,19 +156,19 @@ if ! wget -q --spider --timeout=5 "https://$CURRENT_MIRROR/releases/" >/dev/null
     fi
 
     if [ -n "$MIRROR" ]; then
-        echo -e "${CYAN}Переключаемся на ${NC}$MIRROR"
+        echo -e "${CYAN}Переключаемся на ${NC}$MIRROR\n"
         sed -i "s|https://.*/releases/|https://$MIRROR/releases/|g" "$CONFZ"
     else
-        echo -e "${RED}Резервные зеркала недоступны!${NC}"
+        echo -e "${RED}Резервные зеркала недоступны!${NC}\n"
     fi
 else
-    echo -e "$CURRENT_MIRROR ${GREEN}доступен!${NC}"
+    echo -e "$CURRENT_MIRROR ${GREEN}доступен!${NC}\n"
 fi
 
 update_packages(){ [ "$PACKAGES_UPDATED" = "1" ] && return 0; echo -e "${CYAN}Обновляем список пакетов${NC}"; $UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка обновления списка пакетов!${NC}\n"; PAUSE; return 1; }; PACKAGES_UPDATED=1; }
 
-if ! curl --version >/dev/null 2>&1; then echo -e "curl ${RED}отсутствует ${NC}или${RED} работает некорректно${NC}"; echo -e "\n${MAGENTA}Устанавливаем ${NC}curl"
-$DELETE curl libcurl >/dev/null 2>&1; echo -e "${CYAN}Обновляем список пакетов${NC}"; if ! $UPDATE >/dev/null 2>&1; then echo -e "\n${RED}Ошибка обновления списка пакетов!!${NC}\n"; else PACKAGES_UPDATED=1; fi
+if ! curl --version >/dev/null 2>&1; then echo -e "curl ${RED}отсутствует ${NC}или${RED} работает некорректно${NC}"; echo -e "${MAGENTA}Устанавливаем ${NC}curl"
+$DELETE curl libcurl >/dev/null 2>&1; echo -e "${CYAN}Обновляем список пакетов${NC}"; if ! $UPDATE >/dev/null 2>&1; then echo -e "\n${RED}Ошибка обновления списка пакетов!${NC}\n"; else PACKAGES_UPDATED=1; fi
 echo -e "${CYAN}Устанавливаем ${NC}curl"; if ! $INSTALL libcurl curl >/dev/null 2>&1; then echo -e "\n${RED}Не удалось установить curl!${NC}\n"; PAUSE; fi; fi
 
 get_zapret2_ver() { if [ "$PKG_IS_APK" -eq 1 ]; then IDX_URL2="https://packages.routerich.ru/25.12/mediatek/filogic/routerich/"; FNAME2=$(curl -s --connect-timeout 3 --max-time 5 "$IDX_URL2" | grep -o "zapret2-[0-9][^\"]*\.apk" | head -n1)
@@ -183,7 +183,7 @@ if [ -z "$VERSION" ]; then echo -e "$NAME - ${RED}не удалось извле
 TMP_VER="/tmp/zapret_version"; TMP_VER_POD="/tmp/podkop_version"; TMP_VER_TG_MT="/tmp/tg_ws_proxy_MTp_ver"; TMP_VER_TG_GO="/tmp/tg_ws_proxy_GO_ver"
 TMP_VER_TG_RS="/tmp/tg_ws_proxy_RS_ver"; TMP_MAG_VER="/tmp/MagiTrickle_version"; TMP_VER_SPL="/tmp/splify_version"; TMP_VER_BYEDPI="/tmp/byedpi_version"; TMP_VER_Z2="/tmp/zapret2_version"
 if [ "$GH_OK" = "1" ]; then
-echo -e "${CYAN}Cобираем версии:${NC}"
+echo -e "\n${CYAN}Cобираем версии:${NC}"
 # get_ver "${GH_MAIN}/MagiTrickle/MagiTrickle/releases/latest" "$TMP_MAG_VER" "MagiTrickle" &
 # get_ver "${GH_MAIN}/spatiumstas/tg-ws-proxy-go/releases/latest" "$TMP_VER_TG_MT" "TG-WS Proxy MTProto" &
 get_ver "${GH_MAIN}/DPITrickster/ByeDPI-OpenWrt/releases/latest" "$TMP_VER_BYEDPI" "ByeDPI" & get_ver "${GH_MAIN}/yandexru45/netshift/releases/latest" "$TMP_VER_POD" "NetShift" &
@@ -193,7 +193,7 @@ get_ver "${GH_MAIN}/d0mhate/-tg-ws-proxy-Manager-go/releases/latest" "$TMP_VER_T
 [ -s "$TMP_VER" ] && ZAPRET_VERSION="$(cat "$TMP_VER")"; [ -s "$TMP_VER_POD" ] && PODKOP_LATEST_VER="$(cat "$TMP_VER_POD")"; [ -s "$TMP_VER_TG_MT" ] && TG_MTProto="$(cat "$TMP_VER_TG_MT")"
 [ -s "$TMP_VER_SPL" ] && SPL_VER="$(cat "$TMP_VER_SPL")"; [ -s "$TMP_VER_TG_GO" ] && TG_GO_VERSION="$(cat "$TMP_VER_TG_GO")"; [ -s "$TMP_VER_TG_RS" ] && TG_RS_VERSION="$(cat "$TMP_VER_TG_RS")"
 else
-echo -e "raw.githubusercontent.com ${RED}недоступен ${CYAN}— ${YELLOW}используются встроенные версии!${NC}"
+echo -e "\nraw.githubusercontent.com ${RED}недоступен ${CYAN}— ${YELLOW}используются встроенные версии!${NC}"
 fi
 
 # git="githubusercontent.com"; if ! grep -q "raw.$git" /etc/hosts; then echo -e "\n\033[1;36mДля корректной работы скрипта добавляем домены \033[0mGitHub\033[1;36m в \033[0m/etc/hosts\033[0m"
