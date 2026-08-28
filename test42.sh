@@ -352,7 +352,11 @@ PAUSE
 install_podkop() {
 echo -e "\n${MAGENTA}Установка Podkop${NC}"
 
-REPO="https://api.github.com/repos/itdoginfo/podkop/releases/latest"
+if [ "$GH_OK" -eq 1 ]; then
+    REPO="https://api.github.com/repos/itdoginfo/podkop/releases/latest"
+else
+    REPO="${GH_PROXY}https://api.github.com/repos/itdoginfo/podkop/releases/latest"
+fi
 
 PKG_IS_APK=0
 command -v apk >/dev/null 2>&1 && PKG_IS_APK=1
