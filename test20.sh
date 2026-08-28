@@ -8,7 +8,7 @@ ZAPRET_MANAGER_VERSION="9.84"; STR_VERSION_AUTOINSTALL="v7"
 GREEN="\033[1;32m"; RED="\033[1;31m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
 
 GH_RAW_HOST="https://raw.githubusercontent.com"; GH_MAIN_HOST="https://github.com"; GH_PROXY="https://gh-proxy.org/"; GH_CHECK_URL="${GH_RAW_HOST}/StressOzz/Zapret-Manager/refs/heads/main/Zapret-Manager.sh"
-echo -e "${CYAN}Проверяем доступность ${NC}raw.githubusercontent.com"; if wget -q -T 2 -O /dev/null "$GH_CHECK_URL" 2>/dev/null; then GH_OK=1; GH_RAW="$GH_RAW_HOST"
+echo -e "${CYAN}Проверяем доступность ${NC}raw.githubusercontent.com"; if wget -q -T 4 -O /dev/null "$GH_CHECK_URL" 2>/dev/null; then GH_OK=1; GH_RAW="$GH_RAW_HOST"
 GH_MAIN="$GH_MAIN_HOST"; echo -e "raw.githubusercontent.com ${GREEN}доступен!${NC}\n"; else GH_OK=0; GH_RAW="${GH_PROXY}${GH_RAW_HOST}"; GH_MAIN="${GH_PROXY}${GH_MAIN_HOST}"
 echo -e "raw.githubusercontent.com ${RED}недоступен${CYAN} — ${YELLOW}используем прокси!${NC}\n"; fi
 
@@ -128,13 +128,13 @@ echo -e "${CYAN}Проверяем доступность ${NC}$CURRENT_MIRROR"
 if ! wget -q --spider --timeout=2 "https://$CURRENT_MIRROR/releases/" >/dev/null 2>&1; then
     echo -e "$CURRENT_MIRROR ${RED}недоступен!${NC}"
 
-    if wget -q --spider --timeout=2 "https://mirror-03.infra.openwrt.org/releases/" >/dev/null 2>&1; then
+    if wget -q --spider --timeout=3 "https://mirror-03.infra.openwrt.org/releases/" >/dev/null 2>&1; then
         MIRROR="mirror-03.infra.openwrt.org"
-    elif wget -q --spider --timeout=2 "https://ftp.snt.utwente.nl/pub/software/openwrt/releases/" >/dev/null 2>&1; then
+    elif wget -q --spider --timeout=3 "https://ftp.snt.utwente.nl/pub/software/openwrt/releases/" >/dev/null 2>&1; then
         MIRROR="ftp.snt.utwente.nl/pub/software/openwrt"
-    elif wget -q --spider --timeout=2 "https://mirror.berlin.freifunk.net/downloads.openwrt/releases/" >/dev/null 2>&1; then
+    elif wget -q --spider --timeout=3 "https://mirror.berlin.freifunk.net/downloads.openwrt/releases/" >/dev/null 2>&1; then
         MIRROR="mirror.berlin.freifunk.net/downloads.openwrt"
-    elif wget -q --spider --timeout=2 "https://mirror.sjtu.edu.cn/openwrt/releases/" >/dev/null 2>&1; then
+    elif wget -q --spider --timeout=3 "https://mirror.sjtu.edu.cn/openwrt/releases/" >/dev/null 2>&1; then
         MIRROR="mirror.sjtu.edu.cn/openwrt"
     fi
 
