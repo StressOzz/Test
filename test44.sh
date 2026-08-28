@@ -349,102 +349,94 @@ PAUSE
 # ==========================================
 # Установка
 # ==========================================
+
 install_podkop() {
-echo -e "\n${MAGENTA}Установка Podkop${NC}"
-
-if [ "$PKG_IS_APK" -eq 1 ]; then
-    PKG_EXT="apk"
-else
-    PKG_EXT="ipk"
-fi
-
-[ -z "$PODKOP_LATEST_VER" ] && {
-    PODKOP_LATEST_VER="$(curl -Ls -o /dev/null -w '%{url_effective}' ${GH_MAIN}/itdoginfo/podkop/releases/latest | sed -E 's#.*/tag/v?##')"
-}
-
-if [ -z "$PODKOP_LATEST_VER" ]; then
-    echo -e "\n${RED}Не удалось определить последнюю версию Podkop!${NC}"
-    PAUSE
-    return
-fi
-
-echo -e "${CYAN}Получаем список файлов релиза ${NC}v${PODKOP_LATEST_VER}"
-
-ASSETS_PAGE="${GH_MAIN}/itdoginfo/podkop/releases/expanded_assets/v${PODKOP_LATEST_VER}"
-
-asset_html=""
-for attempt in 1 2 3; do
-    asset_html="$(wget -qO- --timeout=6 "$ASSETS_PAGE" 2>/dev/null)"
-    [ -n "$asset_html" ] && break
-    sleep 1
-done
-
-if [ -z "$asset_html" ]; then
-    echo -e "\n${RED}Не удалось получить список файлов релиза!${NC}"
-    PAUSE
-    return
-fi
-
-filenames=$(echo "$asset_html" | grep -oE "href=\"[^\"]+\.${PKG_EXT}\"" | sed -E 's/href="//;s/"$//' | xargs -n1 basename 2>/dev/null | sort -u)
-
-if [ -z "$filenames" ]; then
-    echo -e "\n${RED}Не найдено ни одного .${PKG_EXT} файла в релизе!${NC}"
-    PAUSE
-    return
-fi
-
-download_success=0
-for filename in $filenames; do
-    url="${GH_MAIN}/itdoginfo/podkop/releases/download/v${PODKOP_LATEST_VER}/${filename}"
-    filepath="$tmpDIR/$filename"
-    echo -e "${CYAN}Скачиваем ${NC}$filename"
-    ok=0
-    for attempt in 1 2 3; do
-        if wget -q --timeout=10 -O "$filepath" "$url" 2>/dev/null && [ -s "$filepath" ]; then
-            ok=1
-            break
-        fi
-        sleep 1
-    done
-    if [ "$ok" -eq 1 ]; then
-        download_success=1
+if ! command -v podkop >/dev/null 2>&1; then
+        ACTION="install"
+    elif [ "$PODKOP_LATEST_VER" != "$PODKOP_VER" ]; then
+        ACTION="update"
     else
-        echo -e "\n${RED}Ошибка скачивания ${NC}$filename${RED} после 3 попыток${NC}"
-        rm -f "$filepath"
+        ACTION="remove"
     fi
-done
 
-[ $download_success -eq 0 ] && {
-echo -e "\n${RED}Нет успешно скачанных пакетов${NC}"
-PAUSE
-return
-}
+    if [ "$ACTION" = "install" ] || [ "$ACTION" = "update" ]; then
 
-[ $download_success -eq 0 ] && {
-echo -e "\n${RED}Нет успешно скачанных пакетов${NC}"
-PAUSE
-return
-}
+        rm -rf "$tmpDIR"; mkdir -p "$tmpDIR"
 
-for pkg in podkop luci-app-podkop; do
-file=$(ls "$tmpDIR" | grep "^$pkg" | head -n 1)
-[ -n "$file" ] && pkg_install "$tmpDIR/$file"
-done
+        AVAILABLE_SPACE=$(df /overlay 2>/dev/null | awk 'NR==2 {print $4}')
+        [ -z "$AVAILABLE_SPACE" ] && AVAILABLE_SPACE=$(df / 2>/dev/null | awk 'NR==2 {print $4}')
+        REQUIRED_SPACE=26000
 
-ru=$(ls "$tmpDIR" | grep "luci-i18n-podkop-ru" | head -n 1)
-if [ -n "$ru" ]; then
-if pkg_is_installed luci-i18n-podkop-ru; then
-echo -e "${CYAN}Обновляем русский язык ${NC}$ru"
-pkg_remove luci-i18n-podkop* >/dev/null 2>&1
-pkg_install "$tmpDIR/$ru"
-else
-pkg_install "$tmpDIR/$ru"
+        if [ "$AVAILABLE_SPACE" -lt "$REQUIRED_SPACE" ]; then
+            echo -e "\n${RED}Недостаточно свободного места${NC}\n"
+            echo -e "${YELLOW}Доступно: ${NC}$((AVAILABLE_SPACE/1024)) MB"
+            echo -e "${YELLOW}Требуется: ${NC}$((REQUIRED_SPACE/1024)) MB\n"
+            if [ "$ACTION" = "update" ]; then
+                echo -ne "${YELLOW}Удалить старую версию Podkop и установить новую? (${NC}y/n${YELLOW}): ${NC}"
+                read -r answer
+                case "$answer" in
+                    y|Y) uninstall_podkop ;;
+                    *) echo -e "\n${RED}Обновление отменено!${NC}\n"; PAUSE; return ;;
+                esac
+            else
+                PAUSE; return
+            fi
+        fi
 
-fi
-fi
+        if pkg_is_installed https-dns-proxy; then
+            echo -e "\n${RED}Обнаружен конфликтный пакет ${NC}https-dns-proxy${NC}"
+            echo -e "${YELLOW}Удаляем...${NC}"
+            pkg_remove luci-app-https-dns-proxy
+            pkg_remove https-dns-proxy
+            pkg_remove luci-i18n-https-dns-proxy*
+        fi
 
-echo -e "Podkop ${GREEN}установлен!${NC}"
-PAUSE
+        nslookup google.com >/dev/null 2>&1 || {
+            echo -e "\n${RED}DNS не работает!${NC}"
+            PAUSE; return
+        }
+
+        [ "$ACTION" = "install" ] && echo -e "\n${MAGENTA}Устанавливаем Podkop${NC}" || echo -e "\n${MAGENTA}Обновляем Podkop${NC}"
+
+        echo -e "${CYAN}Обновляем список пакетов${NC}"
+        $UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось обновить список пакетов!${NC}"; PAUSE; return; }
+
+        if [ "$PKG_IS_APK" -eq 1 ]; then
+            PODKOP_FILE="podkop-${PODKOP_LATEST_VER}-${VER_SUF}.${RAZ}"
+            LUCI_FILE="luci-app-podkop-${PODKOP_LATEST_VER}-${VER_SUF}.${RAZ}"
+            RU_FILE="luci-i18n-podkop-ru-${PODKOP_LATEST_VER}-${VER_SUF}.${RAZ}"
+        else
+            PODKOP_FILE="podkop_${PODKOP_LATEST_VER}-${VER_SUF}_${SPL_SUF}.${RAZ}"
+            LUCI_FILE="luci-app-podkop_${PODKOP_LATEST_VER}-${VER_SUF}_${SPL_SUF}.${RAZ}"
+            RU_FILE="luci-i18n-podkop-ru_${PODKOP_LATEST_VER}_${SPL_SUF}.${RAZ}"
+        fi
+
+        PODKOP_INST="${GH_MAIN}/itdoginfo/podkop/releases/download/v${PODKOP_LATEST_VER}/${PODKOP_FILE}"
+        PODKOP_LUCI="${GH_MAIN}/itdoginfo/podkop/releases/download/v${PODKOP_LATEST_VER}/${LUCI_FILE}"
+        PODKOP_RUS="${GH_MAIN}/itdoginfo/podkop/releases/download/v${PODKOP_LATEST_VER}/${RU_FILE}"
+
+        cd "$tmpDIR" || return
+
+        echo -e "${CYAN}Скачиваем ${NC}Podkop"
+        wget -q -U "Mozilla/5.0" -O "$PODKOP_FILE" "$PODKOP_INST" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$PODKOP_INST\n"; PAUSE; return; }
+
+        echo -e "${CYAN}Скачиваем ${NC}luci-app-podkop"
+        wget -q -U "Mozilla/5.0" -O "$LUCI_FILE" "$PODKOP_LUCI" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$PODKOP_LUCI\n"; PAUSE; return; }
+
+        echo -e "${CYAN}Скачиваем ${NC}русский язык"
+        wget -q -U "Mozilla/5.0" -O "$RU_FILE" "$PODKOP_RUS" || echo -e "\n${YELLOW}Русский язык не скачан (необязательно)${NC}\n"
+
+        echo -en "${CYAN}Устанавливаем ${NC}Podkop\n${YELLOW}Подождите...${NC}"
+        $INSTALL "./$PODKOP_FILE" >/dev/null 2>&1 || { echo -e "\n\n${RED}Не удалось установить:\n${NC}$PODKOP_FILE\n"; PAUSE; return; }
+        $INSTALL "./$LUCI_FILE" >/dev/null 2>&1 || { echo -e "\n\n${RED}Не удалось установить:\n${NC}$LUCI_FILE\n"; PAUSE; return; }
+        [ -f "$RU_FILE" ] && $INSTALL "./$RU_FILE" >/dev/null 2>&1
+
+        rm -rf "$tmpDIR"
+        echo -e "\nPodkop ${GREEN}$( [ "$ACTION" = "install" ] && echo "установлен" || echo "обновлён" )!${NC}\n"
+        PAUSE
+    else
+        uninstall_podkop
+    fi
 }
 
 # ==========================================
