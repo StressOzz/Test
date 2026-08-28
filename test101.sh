@@ -215,7 +215,7 @@ install_mihomo() {
 
     echo "Получение номера последней версии"
     local RELEASE_TAG
-    RELEASE_TAG=$(curl -Ls -o /dev/null -w '%{url_effective}' ${GH_RAW}https://github.com/MetaCubeX/mihomo/releases/latest | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+    RELEASE_TAG=$(curl -Ls -o /dev/null -w '%{url_effective}' https://github.com/MetaCubeX/mihomo/releases/latest | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | head -1)
     if [ -z "$RELEASE_TAG" ]; then
         log_error "Не удалось определить версию. Проверьте интернет."
         return 1
@@ -1326,7 +1326,7 @@ PAUSE() { echo -ne "Нажмите Enter..."; read dummy; }
 INSTALL="opkg install"; RAZ="ipk"; SUF=""
 command -v apk >/dev/null 2>&1 && INSTALL="apk add --allow-untrusted" && RAZ="apk" && SUF="r"
 ARCH_MT=$(grep "^OPENWRT_ARCH=" /etc/os-release | cut -d'"' -f2)
-MT_VERSION="$(curl -Ls -o /dev/null -w '%{url_effective}' ${GH_RAW}https://github.com/MagiTrickle/MagiTrickle/releases/latest | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
+MT_VERSION="$(curl -Ls -o /dev/null -w '%{url_effective}' https://github.com/MagiTrickle/MagiTrickle/releases/latest | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
 # MT_VERSION="0.7.0"
 URL="${GH_RAW}https://github.com/MagiTrickle/MagiTrickle/releases/download/${MT_VERSION}/magitrickle_${MT_VERSION}-${SUF}1_openwrt_${ARCH_MT}.$RAZ"
 FILE_MT="/tmp/$(basename "$URL")"; echo -e "Скачиваем и устанавливаем:\n${CYAN}$URL${NC}"
