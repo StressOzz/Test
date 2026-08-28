@@ -14,7 +14,7 @@ GH_CHECK_URL="${GH_RAW_HOST}/StressOzz/Zapret-Manager/refs/heads/main/Zapret-Man
 
 echo -e "${CYAN}Проверяем доступность ${NC}raw.githubusercontent.com"
 
-if wget -q -T 3 -O /dev/null "$GH_CHECK_URL" 2>/dev/null; then
+if wget -q -T 2 -O /dev/null "$GH_CHECK_URL" 2>/dev/null; then
     GH_OK=1
     GH_RAW="$GH_RAW_HOST"
     GH_MAIN="$GH_MAIN_HOST"
