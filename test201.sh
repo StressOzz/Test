@@ -180,10 +180,10 @@ if [ $? -ne 0 ] || [ -z "$RESULT" ]; then echo -e "$NAME: ${RED}ошибка п�
 if [ -z "$VERSION" ]; then echo -e "$NAME - ${RED}не удалось извлечь версию${NC}"; echo -e "${YELLOW}URL:${NC} $RESULT"; return 1; fi; echo "$VERSION" > "$OUT_FILE"; echo -e "$NAME: ${GREEN}$VERSION${NC}"; }
 
 
-echo -e "${CYAN}Cобираем версии:${NC}"
 TMP_VER="/tmp/zapret_version"; TMP_VER_POD="/tmp/podkop_version"; TMP_VER_TG_MT="/tmp/tg_ws_proxy_MTp_ver"; TMP_VER_TG_GO="/tmp/tg_ws_proxy_GO_ver"
 TMP_VER_TG_RS="/tmp/tg_ws_proxy_RS_ver"; TMP_MAG_VER="/tmp/MagiTrickle_version"; TMP_VER_SPL="/tmp/splify_version"; TMP_VER_BYEDPI="/tmp/byedpi_version"; TMP_VER_Z2="/tmp/zapret2_version"
 if [ "$GH_OK" = "1" ]; then
+echo -e "${CYAN}Cобираем версии:${NC}"
 # get_ver "${GH_MAIN}/MagiTrickle/MagiTrickle/releases/latest" "$TMP_MAG_VER" "MagiTrickle" &
 # get_ver "${GH_MAIN}/spatiumstas/tg-ws-proxy-go/releases/latest" "$TMP_VER_TG_MT" "TG-WS Proxy MTProto" &
 get_ver "${GH_MAIN}/DPITrickster/ByeDPI-OpenWrt/releases/latest" "$TMP_VER_BYEDPI" "ByeDPI" & get_ver "${GH_MAIN}/yandexru45/netshift/releases/latest" "$TMP_VER_POD" "NetShift" &
