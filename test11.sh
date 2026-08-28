@@ -136,13 +136,42 @@ if ! curl --version >/dev/null 2>&1; then echo -e "\ncurl ${RED}отсутств
 $DELETE curl libcurl >/dev/null 2>&1; echo -e "${CYAN}Обновляем список пакетов${NC}"; if ! $UPDATE >/dev/null 2>&1; then echo -e "\n${RED}Ошибка обновления списка пакетов!${NC}\n"; else PACKAGES_UPDATED=1; fi
 echo -e "${CYAN}Устанавливаем ${NC}curl"; if ! $INSTALL libcurl curl >/dev/null 2>&1; then echo -e "\n${RED}Не удалось установить curl!${NC}\n"; PAUSE; fi; fi
 
-get_zapret2_ver() { if [ "$PKG_IS_APK" -eq 1 ]; then IDX_URL2="https://packages.routerich.ru/25.12/mediatek/filogic/routerich/"; FNAME2=$(curl -s --connect-timeout 3 --max-time 5 "$IDX_URL2" | grep -o "zapret2-[0-9][^\"]*\.apk" | head -n1)
-else IDX_URL2="https://packages.routerich.ru/24.10/mediatek/filogic/routerich/"; FNAME2=$(curl -s --connect-timeout 3 --max-time 5 "$IDX_URL2" | grep -o "zapret2_[0-9][^\"]*_aarch64_cortex-a53\.ipk" | head -n1); fi
-VER2=$(echo "$FNAME2" | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)*-r[0-9]+' | sed 's/-r[0-9]*$//'); if [ -z "$VER2" ]; then echo -e "Zapret2: ${RED}ошибка получения версии${NC}"; return 1; fi; echo "$VER2" > "$TMP_VER_Z2"; echo -e "Zapret2: ${GREEN}$VER2${NC}"; }
+get_zapret2_ver() {
+    if [ "$PKG_IS_APK" -eq 1 ]; then
+        IDX_URL2="https://packages.routerich.ru/25.12/mediatek/filogic/routerich/"
+        PATTERN='zapret2-[0-9][^"]*\.apk'
+    else
+        IDX_URL2="https://packages.routerich.ru/24.10/mediatek/filogic/routerich/"
+        PATTERN='zapret2_[0-9][^"]*_aarch64_cortex-a53\.ipk'
+    fi
 
+    FNAME2=""
+
+    for i in 1 2 3; do
+        FNAME2=$(curl -fsS --connect-timeout 3 --max-time 5 "$IDX_URL2" 2>/dev/null |
+            grep -oE "$PATTERN" | head -n1)
+
+        [ -n "$FNAME2" ] && break
+        sleep 1
+    done
+
+    VER2=$(printf '%s\n' "$FNAME2" |
+        grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)*-r[0-9]+' |
+        sed 's/-r[0-9]*$//')
+
+    if [ -z "$VER2" ]; then
+        echo -e "Zapret2: ${RED}ошибка получения версии${NC}"
+        return 1
+    fi
+
+    echo "$VER2" > "$TMP_VER_Z2"
+    echo -e "Zapret2: ${GREEN}$VER2${NC}"
+}
 get_ver() { URL="$1"; OUT_FILE="$2"; NAME="$3"; RESULT=$(curl -sIL --connect-timeout 3 --max-time 4 --retry 1 -w "%{url_effective}" -o /dev/null "$URL" 2>/dev/null)
 if [ $? -ne 0 ] || [ -z "$RESULT" ]; then echo -e "$NAME: ${RED}ошибка получения версии${NC}"; return 1; fi; VERSION="${RESULT##*/}"; VERSION="${VERSION#v}"; [ "$NAME" = "ByeDPI" ] && VERSION="${VERSION%%-*}"
 if [ -z "$VERSION" ]; then echo -e "$NAME - ${RED}не удалось извлечь версию${NC}"; echo -e "${YELLOW}URL:${NC} $RESULT"; return 1; fi; echo "$VERSION" > "$OUT_FILE"; echo -e "$NAME: ${GREEN}$VERSION${NC}"; }
+
+rm -f "$TMP_VER" "$TMP_VER_POD" "$TMP_VER_TG_MT" "$TMP_VER_TG_GO" "$TMP_VER_TG_RS" "$TMP_MAG_VER" "$TMP_VER_SPL" "$TMP_VER_BYEDPI" "$TMP_VER_Z2"
 
 echo -e "\n${CYAN}Cобираем версии:${NC}"
 TMP_VER="/tmp/zapret_version"; TMP_VER_POD="/tmp/podkop_version"; TMP_VER_TG_MT="/tmp/tg_ws_proxy_MTp_ver"; TMP_VER_TG_GO="/tmp/tg_ws_proxy_GO_ver"
