@@ -645,6 +645,40 @@ PAUSE
 }
 
 # ==========================================
+# Зеркало
+# ==========================================
+set_mirror() { NEW_BASE="$1"; echo -e "\n${CYAN}Проверяем доступность ${NC}$NEW_BASE"
+if ! wget -q --spider --timeout=5 "https://$NEW_BASE/releases/" >/dev/null 2>&1; then echo -e "${RED}Зеркало недоступно!${NC}\n"; PAUSE; return 1; fi
+sed -i "s|https://.*/releases/|https://$NEW_BASE/releases/|g" "$CONFZ"; echo -e "${GREEN}Зеркало доступно!${NC}\n${CYAN}Обновляем список пакетов${NC}"
+if ! $UPDATE >/dev/null 2>&1; then echo -e "\n${RED}Ошибка обновления списка пакетов!${NC}\n${GREEN}Зеркало сброшено на ${NC}default ${GREEN}/${NC} OpenWrt${GREEN}!${NC}\n"
+sed -i "s|https://.*/releases/|https://downloads.openwrt.org/releases/|g" "$CONFZ"; PAUSE; return 1; fi; echo -e "${GREEN}Пакеты обновлены! Зеркало работает!${NC}\n"; PAUSE; }
+
+
+curr_MIR() { if [ -f "$CONFZ" ]; then URL=$(head -n1 "$CONFZ"); case "$URL" in
+*mirror-03.infra.openwrt.org*) echo "infra.openwrt.org" ;;
+*tiguinet.net*) echo "Belgium" ;;
+*utwente.nl*) echo "Netherlands" ;;
+*freifunk.net*) echo "Germany" ;;
+*ps.kz*) echo "Kazakhstan" ;;
+*sjtu.edu.cn*) echo "China" ;;
+*downloads.openwrt.org*) echo "default / OpenWrt" ;;
+*) echo "неизвестное" ;;
+esac; else echo "файл не найден"; fi; }
+
+menu_MIR() { while true; do clear; CURR=$(curr_MIR); echo -e "${MAGENTA}Меню выбора зеркала OpenWrt${NC}\n\n${YELLOW}Используется зеркало: ${GREEN}$CURR${NC}\n\n${CYAN}1)${NC} infra.openwrt.org\n${CYAN}2)${NC} China"
+echo -e "${CYAN}3)${NC} Germany\n${CYAN}4)${NC} Belgium\n${CYAN}5)${NC} Kazakhstan\n${CYAN}6)${NC} Netherlands\n${CYAN}7)${NC} default / OpenWrt${NC}"
+echo -en "\n${YELLOW}Выберите зеркало: ${NC}"; read -r z; case "$z" in
+1) set_mirror "mirror-03.infra.openwrt.org" ;;
+2) set_mirror "mirror.sjtu.edu.cn/openwrt" ;;
+3) set_mirror "mirror.berlin.freifunk.net/downloads.openwrt.org" ;;
+4) set_mirror "mirror.tiguinet.net/openwrt" ;;
+5) set_mirror "mirror.ps.kz/openwrt" ;;
+6) set_mirror "ftp.snt.utwente.nl/pub/software/openwrt" ;;
+7) set_mirror "downloads.openwrt.org" ;;
+*) break ;;
+esac; done; }
+
+# ==========================================
 # Меню
 # ==========================================
 show_menu() {
@@ -683,7 +717,7 @@ echo -e "${CYAN}6) ${GREEN}Изменить стратегию ${NC}ByeDPI"
 echo -e "${CYAN}7) ${GREEN}Установить ${NC}AWG ${GREEN}и${NC} интерфейс AWG"
 echo -e "${CYAN}8) ${GREEN}Удалить ${NC}AWG ${GREEN}и${NC} интерфейс AWG"
 echo -e "${CYAN}9) ${GREEN}Интегрировать ${NC}AWG ${GREEN}в ${NC}Podkop"
-echo -e "${CYAN}0) ${GREEN}Перезагрузить устройство${NC}"
+echo -e "${CYAN}r) ${GREEN}Перезагрузить устройство${NC}"
 echo -e "${CYAN}Enter) ${GREEN}Выход${NC}"
 echo -ne "\n${YELLOW}Выберите пункт:${NC} "
 read choice
@@ -698,7 +732,8 @@ case "$choice" in
 7) install_AWG ;;
 8) uninstall_AWG ;;
 9) integration_AWG ;;
-0) echo -e "\n${GREEN}Перезагрузка!${NC}\n"; reboot; exit 0 ;;
+0)
+r|R|к|К) echo -e "\n${GREEN}Перезагрузка!${NC}\n"; reboot; exit 0 ;;
 *) exit 0 ;;
 esac
 }
