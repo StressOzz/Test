@@ -223,7 +223,7 @@ install_mihomo() {
     echo "Последняя версия: $RELEASE_TAG"
 
     local FILENAME="mihomo-linux-${MIHOMO_ARCH}-${RELEASE_TAG}.gz"
-    local DOWNLOAD_URL="${GH_RAW}https://github.com/MetaCubeX/mihomo/releases/download/${RELEASE_TAG}/${FILENAME}"
+    local DOWNLOAD_URL="${GH_MAIN}/MetaCubeX/mihomo/releases/download/${RELEASE_TAG}/${FILENAME}"
     local TMP_FILE="/tmp/mihomo.gz"
 
     log_online "Скачивание архива $FILENAME"
@@ -1328,7 +1328,7 @@ command -v apk >/dev/null 2>&1 && INSTALL="apk add --allow-untrusted" && RAZ="ap
 ARCH_MT=$(grep "^OPENWRT_ARCH=" /etc/os-release | cut -d'"' -f2)
 MT_VERSION="$(curl -Ls -o /dev/null -w '%{url_effective}' https://github.com/MagiTrickle/MagiTrickle/releases/latest | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
 # MT_VERSION="0.7.0"
-URL="${GH_RAW}https://github.com/MagiTrickle/MagiTrickle/releases/download/${MT_VERSION}/magitrickle_${MT_VERSION}-${SUF}1_openwrt_${ARCH_MT}.$RAZ"
+URL="${GH_MAIN}/MagiTrickle/MagiTrickle/releases/download/${MT_VERSION}/magitrickle_${MT_VERSION}-${SUF}1_openwrt_${ARCH_MT}.$RAZ"
 FILE_MT="/tmp/$(basename "$URL")"; echo -e "Скачиваем и устанавливаем:\n${CYAN}$URL${NC}"
 curl -Lf --retry 3 --retry-delay 2 -o "$FILE_MT" "$URL" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка скачивания${NC}\n"; PAUSE; exit 1; }
 $INSTALL "$FILE_MT" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка установки${NC}\n"; PAUSE; rm -f "$FILE_MT"; exit 1; }
@@ -1453,7 +1453,7 @@ done
 TMP1="/tmp/zashboard.zip"
 TMP2="/tmp/zashboard"
 DIR1="/etc/mihomo/ui"
-URL1="${GH_RAW}https://github.com/Zephyruso/zashboard/releases/latest/download/dist-cdn-fonts.zip"
+URL1="${GH_MAIN}/Zephyruso/zashboard/releases/latest/download/dist-cdn-fonts.zip"
 
 echo "Устанавка панели Zashboard для Mihomo"
 
