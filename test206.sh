@@ -1,23 +1,29 @@
 #!/bin/sh
-# ==========================================
+# =========================================
 # Zapret Manager by StressOzz
 # =========================================
+clear
+
 ZAPRET_MANAGER_VERSION="9.84"; STR_VERSION_AUTOINSTALL="v7"
+GREEN="\033[1;32m"; RED="\033[1;31m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
 
 GH_RAW_HOST="https://raw.githubusercontent.com"
 GH_MAIN_HOST="https://github.com"
 GH_PROXY="https://gh-proxy.org/"
 GH_CHECK_URL="${GH_RAW_HOST}/StressOzz/Zapret-Manager/refs/heads/main/Zapret-Manager.sh"
 
+echo -e "${CYAN}Проверяем доступность ${NC}raw.githubusercontent.com"
+
 if wget -q -T 5 -O /dev/null "$GH_CHECK_URL" 2>/dev/null; then
     GH_OK=1
     GH_RAW="$GH_RAW_HOST"
     GH_MAIN="$GH_MAIN_HOST"
+    echo -e "${GREEN}raw.githubusercontent.com ${GREEN}доступен!${NC}"
 else
     GH_OK=0
     GH_RAW="${GH_PROXY}${GH_RAW_HOST}"
     GH_MAIN="${GH_PROXY}${GH_MAIN_HOST}"
-    echo -e "\033[1;33mGitHub напрямую недоступен, используется прокси!\033[0m"
+    echo -e "raw.githubusercontent.com ${RED}недоступен${CYAN} — ${YELLOW}используем прокси!${NC}"
 fi
 
 
@@ -45,7 +51,6 @@ DOMAINS="youtu.be youtube.com i.ytimg.com i9.ytimg.com yt3.ggpht.com yt4.ggpht.c
 OWRTAWG=$(grep '^DISTRIB_RELEASE=' /etc/openwrt_release | cut -d"'" -f2); ARCHAWG="$(grep DISTRIB_ARCH /etc/openwrt_release | cut -d"'" -f2)_$(grep DISTRIB_TARGET /etc/openwrt_release | cut -d"'" -f2 | tr '/' '_')" 
 CRON_CMD="/etc/init.d/mihomo restart"; CONFIGPATH="/etc/magitrickle/state/config.yaml"; PACKAGES_UPDATED=0; TS_WARN_FLAG="/opt/zapret/tmp/ts_warning_shown"
 CRON_FILE="/etc/crontabs/root"; CONFIGMIX="/etc/mihomo/config.yaml"; LAN_IP=$(uci get network.lan.ipaddr 2>/dev/null | cut -d/ -f1)
-GREEN="\033[1;32m"; RED="\033[1;31m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
 CONF="/etc/config/zapret"; CUSTOM_DIR="/opt/zapret/init.d/openwrt/custom.d/"; HOSTLIST_FILE="/opt/zapret/ipset/zapret-hosts-user.txt"; fileGP="/opt/zapret/ipset/zapret-hosts-google.txt"
 TMP_SF="/tmp/zapret_temp"; HOSTS_FILE="/etc/hosts"; TMP_LIST="$TMP_SF/zapret_yt_list.txt"; tmpDIR="/tmp/PodkopAWG"
 GV_XTREME_FILE="/opt/zapret/tmp/GvXtreme"; GV_XTREME_PORTS="80,88,444-65535"; GV_XTREME_NFQWS_PORTS="80,88,443-65535"
@@ -177,7 +182,7 @@ if [ $? -ne 0 ] || [ -z "$RESULT" ]; then echo -e "$NAME: ${RED}ошибка п�
 if [ -z "$VERSION" ]; then echo -e "$NAME - ${RED}не удалось извлечь версию${NC}"; echo -e "${YELLOW}URL:${NC} $RESULT"; return 1; fi; echo "$VERSION" > "$OUT_FILE"; echo -e "$NAME: ${GREEN}$VERSION${NC}"; }
 
 
-clear; echo -e "${CYAN}Cобираем версии:${NC}"
+echo -e "${CYAN}Cобираем версии:${NC}"
 TMP_VER="/tmp/zapret_version"; TMP_VER_POD="/tmp/podkop_version"; TMP_VER_TG_MT="/tmp/tg_ws_proxy_MTp_ver"; TMP_VER_TG_GO="/tmp/tg_ws_proxy_GO_ver"
 TMP_VER_TG_RS="/tmp/tg_ws_proxy_RS_ver"; TMP_MAG_VER="/tmp/MagiTrickle_version"; TMP_VER_SPL="/tmp/splify_version"; TMP_VER_BYEDPI="/tmp/byedpi_version"; TMP_VER_Z2="/tmp/zapret2_version"
 if [ "$GH_OK" = "1" ]; then
@@ -190,7 +195,7 @@ get_ver "${GH_MAIN}/d0mhate/-tg-ws-proxy-Manager-go/releases/latest" "$TMP_VER_T
 [ -s "$TMP_VER" ] && ZAPRET_VERSION="$(cat "$TMP_VER")"; [ -s "$TMP_VER_POD" ] && PODKOP_LATEST_VER="$(cat "$TMP_VER_POD")"; [ -s "$TMP_VER_TG_MT" ] && TG_MTProto="$(cat "$TMP_VER_TG_MT")"
 [ -s "$TMP_VER_SPL" ] && SPL_VER="$(cat "$TMP_VER_SPL")"; [ -s "$TMP_VER_TG_GO" ] && TG_GO_VERSION="$(cat "$TMP_VER_TG_GO")"; [ -s "$TMP_VER_TG_RS" ] && TG_RS_VERSION="$(cat "$TMP_VER_TG_RS")"
 else
-echo -e "${YELLOW}GitHub недоступен напрямую — используются встроенные версии!${NC}"
+echo -e "raw.githubusercontent.com ${RED}недоступен ${CYAN}— ${YELLOW}используются встроенные версии!${NC}"
 fi
 
 # git="githubusercontent.com"; if ! grep -q "raw.$git" /etc/hosts; then echo -e "\n\033[1;36mДля корректной работы скрипта добавляем домены \033[0mGitHub\033[1;36m в \033[0m/etc/hosts\033[0m"
