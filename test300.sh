@@ -7,25 +7,10 @@ clear
 ZAPRET_MANAGER_VERSION="9.84"; STR_VERSION_AUTOINSTALL="v7"
 GREEN="\033[1;32m"; RED="\033[1;31m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
 
-GH_RAW_HOST="https://raw.githubusercontent.com"
-GH_MAIN_HOST="https://github.com"
-GH_PROXY="https://gh-proxy.org/"
-GH_CHECK_URL="${GH_RAW_HOST}/StressOzz/Zapret-Manager/refs/heads/main/Zapret-Manager.sh"
-
-echo -e "${CYAN}Проверяем доступность ${NC}raw.githubusercontent.com"
-
-if wget -q -T 2 -O /dev/null "$GH_CHECK_URL" 2>/dev/null; then
-    GH_OK=1
-    GH_RAW="$GH_RAW_HOST"
-    GH_MAIN="$GH_MAIN_HOST"
-    echo -e "raw.githubusercontent.com ${GREEN}доступен!${NC}\n"
-else
-    GH_OK=0
-    GH_RAW="${GH_PROXY}${GH_RAW_HOST}"
-    GH_MAIN="${GH_PROXY}${GH_MAIN_HOST}"
-    echo -e "raw.githubusercontent.com ${RED}недоступен${CYAN} — ${YELLOW}используем прокси!${NC}\n"
-fi
-
+GH_RAW_HOST="https://raw.githubusercontent.com"; GH_MAIN_HOST="https://github.com"; GH_PROXY="https://gh-proxy.org/"; GH_CHECK_URL="${GH_RAW_HOST}/StressOzz/Zapret-Manager/refs/heads/main/Zapret-Manager.sh"
+echo -e "${CYAN}Проверяем доступность ${NC}raw.githubusercontent.com"; if wget -q -T 2 -O /dev/null "$GH_CHECK_URL" 2>/dev/null; then GH_OK=1; GH_RAW="$GH_RAW_HOST"
+GH_MAIN="$GH_MAIN_HOST"; echo -e "raw.githubusercontent.com ${GREEN}доступен!${NC}\n"; else GH_OK=0; GH_RAW="${GH_PROXY}${GH_RAW_HOST}"; GH_MAIN="${GH_PROXY}${GH_MAIN_HOST}"
+echo -e "raw.githubusercontent.com ${RED}недоступен${CYAN} — ${YELLOW}используем прокси!${NC}\n"; fi
 
 ZAPRET_VERSION="72.20260307"; PODKOP_LATEST_VER="0.9.6"; TG_MTProto="0.9.3"; MT_VERSION="0.8.2"; ZAPRET2_VERSION="1.0.4"
 SPL_VER="26.8.1.3"; TG_GO_VERSION="1.4.1"; TG_RS_VERSION="2.2.5"; BYEDPI_LATEST_VER="0.17.3"
@@ -131,39 +116,20 @@ AUTO_RESULTS="/opt/zapret/tmp/results_auto.txt"; AUTO_BACK="$TMP_SF/zapret_auto_
 AUTO_LOCK="/tmp/zapret_auto_best.lock"; AUTO_STOP_FLAG="$TMP_SF/zapret_auto_best.stop"; LOCAL_ARCH="$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release)"
 BIN_VER_GO="/usr/bin/tg-ws-proxy-go_ver"; BIN_VER_RS="/usr/bin/tg-ws-proxy-rs_ver"; BYEDPI_DNS_BACKUP="/etc/byedpi_dns_localuse"
 
-
 if command -v opkg >/dev/null 2>&1; then PKG="opkg"; GO_SUF="1"; CONFZ="/etc/opkg/distfeeds.conf"; PKG_IS_APK=0; UPDATE="opkg update"; INSTALL="opkg install"
 DELETE="opkg remove"; ARCH="$(opkg print-architecture | awk '{print $2}' | tail -n1)"; VER_SUF="r1-all"; SUF_MT=""; SPL_SUF="all"; RELEASE_TAG="v${BYEDPI_LATEST_VER}-24.10"
 RAZ="ipk"; TMP_FILE_GO="/tmp/tg-ws-proxy.ipk"; else PKG="apk"; GO_SUF="r1"; CONFZ="/etc/apk/repositories.d/distfeeds.list"; PKG_IS_APK=1; SPL_SUF="noarch"; RELEASE_TAG="v${BYEDPI_LATEST_VER}-25.12"
 UPDATE="apk update"; INSTALL="apk add --allow-untrusted"; DELETE="apk del"; ARCH="$(apk --print-arch 2>/dev/null)"; RAZ="apk"; VER_SUF="r1"; SUF_MT="r"; TMP_FILE_GO="/tmp/tg-ws-proxy.apk"; fi
 
-MIRROR=""
-CURRENT_MIRROR=$(head -n1 "$CONFZ" | sed 's|https://||;s|/releases/.*||')
+MIRROR=""; CURRENT_MIRROR=$(head -n1 "$CONFZ" | sed 's|https://||;s|/releases/.*||'); echo -e "${CYAN}Проверяем доступность ${NC}$CURRENT_MIRROR"
+if ! wget -q --spider --timeout=2 "https://$CURRENT_MIRROR/releases/" >/dev/null 2>&1; then echo -e "$CURRENT_MIRROR ${RED}недоступен!${NC}"
+if wget -q --spider --timeout=2 "https://mirror-03.infra.openwrt.org/releases/" >/dev/null 2>&1; then MIRROR="mirror-03.infra.openwrt.org"
+elif wget -q --spider --timeout=2 "https://ftp.snt.utwente.nl/pub/software/openwrt/releases/" >/dev/null 2>&1; then MIRROR="ftp.snt.utwente.nl/pub/software/openwrt"
+elif wget -q --spider --timeout=2 "https://mirror.berlin.freifunk.net/downloads.openwrt.org/releases/" >/dev/null 2>&1; then MIRROR="mirror.berlin.freifunk.net/downloads.openwrt.org"
+elif wget -q --spider --timeout=2 "https://mirror.sjtu.edu.cn/openwrt/releases/" >/dev/null 2>&1; then MIRROR="mirror.sjtu.edu.cn/openwrt"; fi
 
-echo -e "${CYAN}Проверяем доступность ${NC}$CURRENT_MIRROR"
-
-if ! wget -q --spider --timeout=2 "https://$CURRENT_MIRROR/releases/" >/dev/null 2>&1; then
-    echo -e "$CURRENT_MIRROR ${RED}недоступен!${NC}"
-
-    if wget -q --spider --timeout=2 "https://mirror-03.infra.openwrt.org/releases/" >/dev/null 2>&1; then
-        MIRROR="mirror-03.infra.openwrt.org"
-    elif wget -q --spider --timeout=2 "https://ftp.snt.utwente.nl/pub/software/openwrt/releases/" >/dev/null 2>&1; then
-        MIRROR="ftp.snt.utwente.nl/pub/software/openwrt"
-    elif wget -q --spider --timeout=2 "https://mirror.berlin.freifunk.net/downloads.openwrt.org/releases/" >/dev/null 2>&1; then
-        MIRROR="mirror.berlin.freifunk.net/downloads.openwrt.org"
-    elif wget -q --spider --timeout=2 "https://mirror.sjtu.edu.cn/openwrt/releases/" >/dev/null 2>&1; then
-        MIRROR="mirror.sjtu.edu.cn/openwrt"
-    fi
-
-    if [ -n "$MIRROR" ]; then
-        echo -e "${CYAN}Переключаемся на ${NC}$MIRROR\n"
-        sed -i "s|https://.*/releases/|https://$MIRROR/releases/|g" "$CONFZ"
-    else
-        echo -e "${RED}Резервные зеркала недоступны!${NC}"
-    fi
-else
-    echo -e "$CURRENT_MIRROR ${GREEN}доступен!${NC}"
-fi
+if [ -n "$MIRROR" ]; then echo -e "${CYAN}Переключаемся на ${NC}$MIRROR\n"; sed -i "s|https://.*/releases/|https://$MIRROR/releases/|g" "$CONFZ"
+else echo -e "${RED}Резервные зеркала недоступны!${NC}"; fi; else echo -e "$CURRENT_MIRROR ${GREEN}доступен!${NC}"; fi
 
 update_packages(){ [ "$PACKAGES_UPDATED" = "1" ] && return 0; echo -e "${CYAN}Обновляем список пакетов${NC}"; $UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка обновления списка пакетов!${NC}\n"; PAUSE; return 1; }; PACKAGES_UPDATED=1; }
 
@@ -179,11 +145,9 @@ get_ver() { URL="$1"; OUT_FILE="$2"; NAME="$3"; RESULT=$(curl -sIL --connect-tim
 if [ $? -ne 0 ] || [ -z "$RESULT" ]; then echo -e "$NAME: ${RED}ошибка получения версии${NC}"; return 1; fi; VERSION="${RESULT##*/}"; VERSION="${VERSION#v}"; [ "$NAME" = "ByeDPI" ] && VERSION="${VERSION%%-*}"
 if [ -z "$VERSION" ]; then echo -e "$NAME - ${RED}не удалось извлечь версию${NC}"; echo -e "${YELLOW}URL:${NC} $RESULT"; return 1; fi; echo "$VERSION" > "$OUT_FILE"; echo -e "$NAME: ${GREEN}$VERSION${NC}"; }
 
-
 TMP_VER="/tmp/zapret_version"; TMP_VER_POD="/tmp/podkop_version"; TMP_VER_TG_MT="/tmp/tg_ws_proxy_MTp_ver"; TMP_VER_TG_GO="/tmp/tg_ws_proxy_GO_ver"
 TMP_VER_TG_RS="/tmp/tg_ws_proxy_RS_ver"; TMP_MAG_VER="/tmp/MagiTrickle_version"; TMP_VER_SPL="/tmp/splify_version"; TMP_VER_BYEDPI="/tmp/byedpi_version"; TMP_VER_Z2="/tmp/zapret2_version"
-if [ "$GH_OK" = "1" ]; then
-echo -e "\n${CYAN}Cобираем версии:${NC}"
+if [ "$GH_OK" = "1" ]; then echo -e "\n${CYAN}Cобираем версии:${NC}"
 # get_ver "${GH_MAIN}/MagiTrickle/MagiTrickle/releases/latest" "$TMP_MAG_VER" "MagiTrickle" &
 # get_ver "${GH_MAIN}/spatiumstas/tg-ws-proxy-go/releases/latest" "$TMP_VER_TG_MT" "TG-WS Proxy MTProto" &
 get_ver "${GH_MAIN}/DPITrickster/ByeDPI-OpenWrt/releases/latest" "$TMP_VER_BYEDPI" "ByeDPI" & get_ver "${GH_MAIN}/yandexru45/netshift/releases/latest" "$TMP_VER_POD" "NetShift" &
@@ -192,12 +156,7 @@ get_ver "${GH_MAIN}/d0mhate/-tg-ws-proxy-Manager-go/releases/latest" "$TMP_VER_T
 [ -s "$TMP_MAG_VER" ] && MT_VERSION="$(cat "$TMP_MAG_VER")"; [ -s "$TMP_VER_BYEDPI" ] && BYEDPI_LATEST_VER="$(cat "$TMP_VER_BYEDPI" | sed 's/^v//' | cut -d'-' -f1)"; [ -s "$TMP_VER_Z2" ] && ZAPRET2_VERSION="$(cat "$TMP_VER_Z2")"
 [ -s "$TMP_VER" ] && ZAPRET_VERSION="$(cat "$TMP_VER")"; [ -s "$TMP_VER_POD" ] && PODKOP_LATEST_VER="$(cat "$TMP_VER_POD")"; [ -s "$TMP_VER_TG_MT" ] && TG_MTProto="$(cat "$TMP_VER_TG_MT")"
 [ -s "$TMP_VER_SPL" ] && SPL_VER="$(cat "$TMP_VER_SPL")"; [ -s "$TMP_VER_TG_GO" ] && TG_GO_VERSION="$(cat "$TMP_VER_TG_GO")"; [ -s "$TMP_VER_TG_RS" ] && TG_RS_VERSION="$(cat "$TMP_VER_TG_RS")"
-else
-echo -e "\nraw.githubusercontent.com ${RED}недоступен ${CYAN}— ${YELLOW}используются встроенные версии!${NC}"
-fi
-
-# git="githubusercontent.com"; if ! grep -q "raw.$git" /etc/hosts; then echo -e "\n\033[1;36mДля корректной работы скрипта добавляем домены \033[0mGitHub\033[1;36m в \033[0m/etc/hosts\033[0m"
-# printf "#$git\n185.199.109.133 raw.$git release-assets.$git\n185.199.108.133 private-user-images.$git gist.$git avatars.$git\n" >> /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1; fi
+else echo -e "\nraw.githubusercontent.com ${RED}недоступен ${CYAN}— ${YELLOW}используются встроенные версии!${NC}"; fi
 
 ADD_FAKE_FLOW() { MSG=0; for f in stun2.bin quic_initial_tencent_com.bin quic_initial_steamcommunity_com.bin tls_clienthello_sochi_park.bin quic_initial_4pda_to.bin quic_initial_5ka_ru.bin tls_clienthello_5ka_ru.bin quic_initial_rutube_ru.bin
 do [ -d /opt/zapret ] && [ ! -f "/opt/zapret/files/fake/$f" ] && [ -f "$CONF" ] && { [ "$MSG" = 0 ] && { echo -e "${CYAN}Скачиваем ${NC}fake ${CYAN}файлы${NC}"; MSG=1; }; wget -q -U "Mozilla/5.0" -O "/opt/zapret/files/fake/$f" "${GH_MAIN}/Flowseal/zapret-discord-youtube/raw/refs/heads/main/bin/$f" || { echo -e "\n${RED}Не удалось загрузить файл ${NC}$f\n"; }; }; done; }
