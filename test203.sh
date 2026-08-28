@@ -7,7 +7,7 @@ ZAPRET_MANAGER_VERSION="9.84"; STR_VERSION_AUTOINSTALL="v7"
 GH_RAW_HOST="https://raw.githubusercontent.com"
 GH_MAIN_HOST="https://github.com"
 GH_PROXY="https://gh-proxy.org/"
-GH_CHECK_URL="${GH_RAW_HOST}/StressOzz/Zapret-Manager/refs/heads/main/Zapret-Manager.sh"
+GH_CHECK_URL="${GH_RAW_HOST}/StressOzz/Zapret-Manager/main/Zapret-Manager.sh"
 
 if wget -q -T 5 -t 2 -O /dev/null "$GH_CHECK_URL" 2>/dev/null; then
     GH_OK=1
