@@ -439,7 +439,7 @@ EOF
         local success=0
         
         for url in "https://cdn.jsdelivr.net/npm/ace-builds@${LATEST_ACE_VER}/src-min-noconflict/${file}" \
-                   "${GH_RAW}https://raw.githubusercontent.com/ajaxorg/ace-builds/master/src-min-noconflict/${file}" \
+                   "${GH_RAW}/ajaxorg/ace-builds/master/src-min-noconflict/${file}" \
                    "https://cdnjs.cloudflare.com/ajax/libs/ace/${CDNJS_ACE_VER}/${file}"; do
             
             log_online "Скачивание $file"
@@ -1426,7 +1426,7 @@ main() {
     install_magitrickle || step_fail
 ###################################################################################################
 CONFIG_PATH="/etc/magitrickle/state/config.yaml"
-confGIT="${GH_RAW}https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/files/MagiTrickle/configAD.yaml"
+confGIT="${GH_RAW}/StressOzz/Zapret-Manager/refs/heads/main/files/MagiTrickle/configAD.yaml"
 
 echo "Установка списка для MagiTrickle"
 
