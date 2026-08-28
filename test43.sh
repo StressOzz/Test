@@ -352,113 +352,73 @@ PAUSE
 install_podkop() {
 echo -e "\n${MAGENTA}Установка Podkop${NC}"
 
-if [ "$GH_OK" -eq 1 ]; then
-    REPO="https://api.github.com/repos/itdoginfo/podkop/releases/latest"
-else
-    REPO="${GH_PROXY}https://api.github.com/repos/itdoginfo/podkop/releases/latest"
-fi
-
-PKG_IS_APK=0
-command -v apk >/dev/null 2>&1 && PKG_IS_APK=1
-
-pkg_is_installed () {
-local pkg_name="$1"
 if [ "$PKG_IS_APK" -eq 1 ]; then
-apk list --installed | grep -q "$pkg_name"
+    PKG_EXT="apk"
 else
-opkg list-installed | grep -q "$pkg_name"
-fi
-}
-
-pkg_remove() {
-local pkg_name="$1"
-echo -e "${CYAN}Удаляем ${NC}$pkg_name"
-if [ "$PKG_IS_APK" -eq 1 ]; then
-apk del "$pkg_name" >/dev/null 2>&1
-else
-opkg remove --force-depends "$pkg_name" >/dev/null 2>&1
-fi
-}
-
-pkg_list_update() {
-echo -e "${CYAN}Обновляем список пакетов${NC}"
-if [ "$PKG_IS_APK" -eq 1 ]; then
-apk update >/dev/null 2>&1
-else
-opkg update >/dev/null 2>&1
-fi
-}
-
-pkg_install() {
-local pkg_file="$1"
-echo -e "${CYAN}Устанавливаем ${NC}$(basename "$pkg_file")"
-if [ "$PKG_IS_APK" -eq 1 ]; then
-apk add --allow-untrusted "$pkg_file" >/dev/null 2>&1
-else
-opkg install "$pkg_file" >/dev/null 2>&1
-fi
-}
-
-MODEL=$(cat /tmp/sysinfo/model 2>/dev/null || echo "не определено")
-AVAILABLE_SPACE=$(df /overlay | awk 'NR==2 {print $4}')
-REQUIRED_SPACE=26000
-
-[ "$AVAILABLE_SPACE" -lt "$REQUIRED_SPACE" ] && {
-echo -e "\n${RED}Недостаточно свободного места!${NC}"
-PAUSE
-return
-}
-
-nslookup google.com >/dev/null 2>&1 || {
-echo -e "\n${RED}DNS не работает!${NC}"
-PAUSE
-return
-}
-
-
-if pkg_is_installed https-dns-proxy; then
-echo -e "${RED}Обнаружен конфликтный пакет ${NC}https-dns-proxy${RED}. Удаляем...${NC}"
-pkg_remove luci-app-https-dns-proxy
-pkg_remove https-dns-proxy
-pkg_remove luci-i18n-https-dns-proxy*
+    PKG_EXT="ipk"
 fi
 
-if pkg_is_installed "^sing-box"; then
-sing_box_version=$(sing-box version | head -n 1 | awk '{print $3}')
-required_version="1.12.4"
-if [ "$(echo -e "$sing_box_version\n$required_version" | sort -V | head -n 1)" != "$required_version" ]; then
-echo -e "sing-box ${RED}устарел. Удаляем...${NC}"
-service podkop stop >/dev/null 2>&1
-pkg_remove sing-box
-fi
-fi
-
-/usr/sbin/ntpd -q -p 194.190.168.1 -p 216.239.35.0 -p 216.239.35.4 -p 162.159.200.1 -p 162.159.200.123 >/dev/null 2>&1
-
-pkg_list_update || {
-echo -e "\n${RED}Не удалось обновить список пакетов!${NC}"
-PAUSE
-return
+[ -z "$PODKOP_LATEST_VER" ] && {
+    PODKOP_LATEST_VER="$(curl -Ls -o /dev/null -w '%{url_effective}' ${GH_MAIN}/itdoginfo/podkop/releases/latest | sed -E 's#.*/tag/v?##')"
 }
 
-if [ "$PKG_IS_APK" -eq 1 ]; then
-grep_url_pattern='https://[^"[:space:]]*\.apk'
-else
-grep_url_pattern='https://[^"[:space:]]*\.ipk'
+if [ -z "$PODKOP_LATEST_VER" ]; then
+    echo -e "\n${RED}Не удалось определить последнюю версию Podkop!${NC}"
+    PAUSE
+    return
+fi
+
+echo -e "${CYAN}Получаем список файлов релиза ${NC}v${PODKOP_LATEST_VER}"
+
+ASSETS_PAGE="${GH_MAIN}/itdoginfo/podkop/releases/expanded_assets/v${PODKOP_LATEST_VER}"
+
+asset_html=""
+for attempt in 1 2 3; do
+    asset_html="$(wget -qO- --timeout=6 "$ASSETS_PAGE" 2>/dev/null)"
+    [ -n "$asset_html" ] && break
+    sleep 1
+done
+
+if [ -z "$asset_html" ]; then
+    echo -e "\n${RED}Не удалось получить список файлов релиза!${NC}"
+    PAUSE
+    return
+fi
+
+filenames=$(echo "$asset_html" | grep -oE "href=\"[^\"]+\.${PKG_EXT}\"" | sed -E 's/href="//;s/"$//' | xargs -n1 basename 2>/dev/null | sort -u)
+
+if [ -z "$filenames" ]; then
+    echo -e "\n${RED}Не найдено ни одного .${PKG_EXT} файла в релизе!${NC}"
+    PAUSE
+    return
 fi
 
 download_success=0
-urls=$(wget -qO- "$REPO" 2>/dev/null | grep -o "$grep_url_pattern")
-for url in $urls; do
-filename=$(basename "$url")
-filepath="$tmpDIR/$filename"
-echo -e "${CYAN}Скачиваем ${NC}$filename"
-if wget -q -O "$filepath" "$url" >/dev/null 2>&1 && [ -s "$filepath" ]; then
-download_success=1
-else
-echo -e "\n${RED}Ошибка скачивания ${NC}$filename"
-fi
+for filename in $filenames; do
+    url="${GH_MAIN}/itdoginfo/podkop/releases/download/v${PODKOP_LATEST_VER}/${filename}"
+    filepath="$tmpDIR/$filename"
+    echo -e "${CYAN}Скачиваем ${NC}$filename"
+    ok=0
+    for attempt in 1 2 3; do
+        if wget -q --timeout=10 -O "$filepath" "$url" 2>/dev/null && [ -s "$filepath" ]; then
+            ok=1
+            break
+        fi
+        sleep 1
+    done
+    if [ "$ok" -eq 1 ]; then
+        download_success=1
+    else
+        echo -e "\n${RED}Ошибка скачивания ${NC}$filename${RED} после 3 попыток${NC}"
+        rm -f "$filepath"
+    fi
 done
+
+[ $download_success -eq 0 ] && {
+echo -e "\n${RED}Нет успешно скачанных пакетов${NC}"
+PAUSE
+return
+}
 
 [ $download_success -eq 0 ] && {
 echo -e "\n${RED}Нет успешно скачанных пакетов${NC}"
