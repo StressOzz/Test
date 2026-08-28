@@ -123,29 +123,35 @@ UPDATE="apk update"; INSTALL="apk add --allow-untrusted"; DELETE="apk del"; ARCH
 
 MIRROR=""
 CURRENT_MIRROR=$(head -n1 "$CONFZ" | awk '{print $NF}' | sed 's|https://||;s|/releases/.*||')
-echo -e "${CYAN}Проверяем доступность ${NC}$CURRENT_MIRROR"
 
-if ! wget -q --spider --timeout=2 "https://$CURRENT_MIRROR/releases/" >/dev/null 2>&1; then
-    echo -e "$CURRENT_MIRROR ${RED}недоступен!${NC}"
+if grep -qE 'mirror-03\.infra\.openwrt\.org|ftp\.snt\.utwente\.nl/pub/software/openwrt|mirror\.berlin\.freifunk\.net/downloads\.openwrt|mirror\.sjtu\.edu\.cn/openwrt|downloads\.openwrt\.org' "$CONFZ"; then
 
-    if wget -q --spider --timeout=3 "https://mirror-03.infra.openwrt.org/releases/" >/dev/null 2>&1; then
-        MIRROR="mirror-03.infra.openwrt.org"
-    elif wget -q --spider --timeout=3 "https://ftp.snt.utwente.nl/pub/software/openwrt/releases/" >/dev/null 2>&1; then
-        MIRROR="ftp.snt.utwente.nl/pub/software/openwrt"
-    elif wget -q --spider --timeout=3 "https://mirror.berlin.freifunk.net/downloads.openwrt/releases/" >/dev/null 2>&1; then
-        MIRROR="mirror.berlin.freifunk.net/downloads.openwrt"
-    elif wget -q --spider --timeout=3 "https://mirror.sjtu.edu.cn/openwrt/releases/" >/dev/null 2>&1; then
-        MIRROR="mirror.sjtu.edu.cn/openwrt"
-    fi
+    echo -e "${CYAN}Проверяем доступность ${NC}$CURRENT_MIRROR"
 
-    if [ -n "$MIRROR" ]; then
-        echo -e "${CYAN}Переключаемся на ${NC}$MIRROR"
-        sed -i "s|https://.*/releases/|https://$MIRROR/releases/|g" "$CONFZ"
+    if ! wget -q --spider --timeout=2 "https://$CURRENT_MIRROR/releases/" >/dev/null 2>&1; then
+        echo -e "$CURRENT_MIRROR ${RED}недоступен!${NC}"
+
+        if wget -q --spider --timeout=3 "https://mirror-03.infra.openwrt.org/releases/" >/dev/null 2>&1; then
+            MIRROR="mirror-03.infra.openwrt.org"
+        elif wget -q --spider --timeout=3 "https://ftp.snt.utwente.nl/pub/software/openwrt/releases/" >/dev/null 2>&1; then
+            MIRROR="ftp.snt.utwente.nl/pub/software/openwrt"
+        elif wget -q --spider --timeout=3 "https://mirror.berlin.freifunk.net/downloads.openwrt/releases/" >/dev/null 2>&1; then
+            MIRROR="mirror.berlin.freifunk.net/downloads.openwrt"
+        elif wget -q --spider --timeout=3 "https://mirror.sjtu.edu.cn/openwrt/releases/" >/dev/null 2>&1; then
+            MIRROR="mirror.sjtu.edu.cn/openwrt"
+        elif wget -q --spider --timeout=3 "https://downloads.openwrt.org/releases/" >/dev/null 2>&1; then
+            MIRROR="downloads.openwrt.org"
+        fi
+
+        if [ -n "$MIRROR" ]; then
+            echo -e "${CYAN}Переключаемся на ${NC}$MIRROR"
+            sed -i "s|https://.*/releases/|https://$MIRROR/releases/|g" "$CONFZ"
+        else
+            echo -e "${RED}Резервные зеркала недоступны!${NC}"
+        fi
     else
-        echo -e "${RED}Резервные зеркала недоступны!${NC}"
+        echo -e "$CURRENT_MIRROR ${GREEN}доступен!${NC}"
     fi
-else
-    echo -e "$CURRENT_MIRROR ${GREEN}доступен!${NC}"
 fi
 
 update_packages(){ [ "$PACKAGES_UPDATED" = "1" ] && return 0; echo -e "${CYAN}Обновляем список пакетов${NC}"; $UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка обновления списка пакетов!${NC}\n"; PAUSE; return 1; }; PACKAGES_UPDATED=1; }
