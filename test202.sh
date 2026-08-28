@@ -17,7 +17,7 @@ else
     GH_OK=0
     GH_RAW="${GH_PROXY}${GH_RAW_HOST}"
     GH_MAIN="${GH_PROXY}${GH_MAIN_HOST}"
-    echo -e "\033[1;33mGitHub напрямую недоступен, используется прокси: ${GH_PROXY}\033[0m"
+    echo -e "\033[1;33mGitHub напрямую недоступен, используется прокси!\033[0m"
 fi
 
 
@@ -190,7 +190,7 @@ get_ver "${GH_MAIN}/d0mhate/-tg-ws-proxy-Manager-go/releases/latest" "$TMP_VER_T
 [ -s "$TMP_VER" ] && ZAPRET_VERSION="$(cat "$TMP_VER")"; [ -s "$TMP_VER_POD" ] && PODKOP_LATEST_VER="$(cat "$TMP_VER_POD")"; [ -s "$TMP_VER_TG_MT" ] && TG_MTProto="$(cat "$TMP_VER_TG_MT")"
 [ -s "$TMP_VER_SPL" ] && SPL_VER="$(cat "$TMP_VER_SPL")"; [ -s "$TMP_VER_TG_GO" ] && TG_GO_VERSION="$(cat "$TMP_VER_TG_GO")"; [ -s "$TMP_VER_TG_RS" ] && TG_RS_VERSION="$(cat "$TMP_VER_TG_RS")"
 else
-echo -e "${YELLOW}GitHub недоступен напрямую — версии берутся из значений по умолчанию, без проверки обновлений${NC}"
+echo -e "${YELLOW}GitHub недоступен напрямую — используются встроенные версии!${NC}"
 fi
 
 # git="githubusercontent.com"; if ! grep -q "raw.$git" /etc/hosts; then echo -e "\n\033[1;36mДля корректной работы скрипта добавляем домены \033[0mGitHub\033[1;36m в \033[0m/etc/hosts\033[0m"
