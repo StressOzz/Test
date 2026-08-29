@@ -732,7 +732,7 @@ case "$choice" in
 7) install_AWG ;;
 8) uninstall_AWG ;;
 9) integration_AWG ;;
-0)
+0) menu_MIR ;;
 r|R|к|К) echo -e "\n${GREEN}Перезагрузка!${NC}\n"; reboot; exit 0 ;;
 *) exit 0 ;;
 esac
