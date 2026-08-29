@@ -682,7 +682,7 @@ esac; done; }
 # Меню
 # ==========================================
 show_menu() {
-get_versions; curr_MIR
+get_versions; CURR=$(curr_MIR)
 
 clear
 echo -e "╔═══════════════════════════════╗"
