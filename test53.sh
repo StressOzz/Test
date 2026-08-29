@@ -124,8 +124,7 @@ UPDATE="apk update"; INSTALL="apk add --allow-untrusted"; DELETE="apk del"; ARCH
 MIRROR=""
 CURRENT_MIRROR=$(head -n1 "$CONFZ" | awk '{print $NF}' | sed 's|https://||;s|/releases/.*||')
 
-if grep -qE 'mirror-03\.infra\.openwrt\.org|ftp\.snt\.utwente\.nl/pub/software/openwrt|mirror\.berlin\.freifunk\.net/downloads\.openwrt|mirror\.sjtu\.edu\.cn/openwrt|downloads\.openwrt\.org' "$CONFZ"; then
-
+if grep -qE 'mirror-03\.infra\.openwrt\.org|ftp\.snt\.utwente\.nl/pub/software/openwrt|mirror\.berlin\.freifunk\.net/downloads\.openwrt|mirror\.sjtu\.edu\.cn/openwrt|ftp\.halifax\.rwth-aachen\.de/openwrt|mirror\.accum\.se/mirror/openwrt|downloads\.openwrt\.org' "$CONFZ"; then
     echo -e "${CYAN}Проверяем доступность ${NC}$CURRENT_MIRROR"
 
     if ! wget -q --spider --timeout=2 "https://$CURRENT_MIRROR" >/dev/null 2>&1; then
