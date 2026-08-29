@@ -682,7 +682,7 @@ esac; done; }
 # Меню
 # ==========================================
 show_menu() {
-get_versions
+get_versions; curr_MIR
 
 clear
 echo -e "╔═══════════════════════════════╗"
@@ -707,6 +707,8 @@ if uci -q get network.AWG >/dev/null; then
 else
     echo -e "${YELLOW}Интерфейс AWG: ${RED}не установлен${NC}"
 fi
+echo -e "${MAGENTA}--- зеркало OpenWRT ---${NC}"
+echo -e "${YELLOW}Зеркало: ${GREEN}$CURR${NC}"
 
 echo -e "\n${CYAN}1) ${GREEN}Установить ${NC}Podkop"
 echo -e "${CYAN}2) ${GREEN}Удалить ${NC}Podkop"
@@ -717,6 +719,7 @@ echo -e "${CYAN}6) ${GREEN}Изменить стратегию ${NC}ByeDPI"
 echo -e "${CYAN}7) ${GREEN}Установить ${NC}AWG ${GREEN}и${NC} интерфейс AWG"
 echo -e "${CYAN}8) ${GREEN}Удалить ${NC}AWG ${GREEN}и${NC} интерфейс AWG"
 echo -e "${CYAN}9) ${GREEN}Интегрировать ${NC}AWG ${GREEN}в ${NC}Podkop"
+echo -e "${CYAN}9) ${GREEN}Меню выбора зеркала ${NC}OpenWrt"
 echo -e "${CYAN}r) ${GREEN}Перезагрузить устройство${NC}"
 echo -e "${CYAN}Enter) ${GREEN}Выход${NC}"
 echo -ne "\n${YELLOW}Выберите пункт:${NC} "
