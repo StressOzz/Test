@@ -1,25 +1,34 @@
 #!/bin/sh
-# ==========================================
+# =========================================
 # Zapret Manager by StressOzz
 # =========================================
-ZAPRET_MANAGER_VERSION="9.83"; STR_VERSION_AUTOINSTALL="v7"
+clear
 
-ZAPRET_VERSION="72.20260307"; PODKOP_LATEST_VER="0.9.6"; TG_MTProto="0.9.3"; MT_VERSION="0.8.2"; ZAPRET2_VERSION="1.0.3"
-SPL_VER="26.8.1.3"; TG_GO_VERSION="1.4.1"; TG_RS_VERSION="2.2.4"; BYEDPI_LATEST_VER="0.17.3"
+ZAPRET_MANAGER_VERSION="9.84"; STR_VERSION_AUTOINSTALL="v7"
+GREEN="\033[1;32m"; RED="\033[1;31m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
 
-echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/main/Zapret-Manager.sh)' > /usr/bin/zms; chmod +x /usr/bin/zms
-echo 'sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/main/Zapret-Manager.sh) "$@"' > /usr/bin/zmsA; chmod +x /usr/bin/zmsA
+GH_RAW_HOST="https://raw.githubusercontent.com"; GH_MAIN_HOST="https://github.com"; GH_PROXY="https://gh-proxy.org/"; GH_CHECK_URL="${GH_RAW_HOST}/StressOzz/Zapret-Manager/refs/heads/main/Zapret-Manager.sh"
+echo -e "${CYAN}Проверяем доступность ${NC}raw.githubusercontent.com"; if wget -q -T 4 -O /dev/null "$GH_CHECK_URL" 2>/dev/null; then GH_OK=1; GH_RAW="$GH_RAW_HOST"
+GH_MAIN="$GH_MAIN_HOST"; echo -e "raw.githubusercontent.com ${GREEN}доступен!${NC}\n"; else GH_OK=0; GH_RAW="${GH_PROXY}${GH_RAW_HOST}"; GH_MAIN="${GH_PROXY}${GH_MAIN_HOST}"
+echo -e "raw.githubusercontent.com ${RED}недоступен${CYAN} — ${YELLOW}используем прокси!${NC}\n"; fi
 
-BASE_URL="https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/"
-FLOWSEAL_STR_ZIP="https://github.com/Flowseal/zapret-discord-youtube/archive/refs/heads/main.zip"
-GEO_HOSTS="https://raw.githubusercontent.com/Internet-Helper/GeoHideDNS/refs/heads/main/hosts/hosts"
-STR_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/files/StrYoutube"
-RAW="https://raw.githubusercontent.com/hyperion-cs/dpi-checkers/refs/heads/main/ru/tcp-16-20/suite.v2.json"
-RKN_URL="https://raw.githubusercontent.com/IndeecFOX/zapret4rocket/refs/heads/master/extra_strats/TCP/RKN/List.txt"
-URL_OLD="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/files/MagiTrickle/configOLD.yaml"
-URL_DEFAULT="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/files/MagiTrickle/config.yaml"
-URL_ITDOG="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/files/MagiTrickle/configAD.yaml"
-EXCLUDE_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/zapret-hosts-user-exclude.txt"
+ZAPRET_VERSION="72.20260307"; PODKOP_LATEST_VER="0.9.6"; TG_MTProto="0.9.3"; MT_VERSION="0.8.2"; ZAPRET2_VERSION="1.0.4"
+
+STEER_VER="0.0.0"; SPLIFY2_VER="0.0.0"; TG_GO_VERSION="1.4.1"; TG_RS_VERSION="2.2.5"; BYEDPI_LATEST_VER="0.17.3"
+
+echo "sh <(wget -q -O - ${GH_RAW}/StressOzz/Zapret-Manager/main/Zapret-Manager.sh)" > /usr/bin/zms; chmod +x /usr/bin/zms
+echo "sh <(wget -q -O - ${GH_RAW}/StressOzz/Zapret-Manager/main/Zapret-Manager.sh) \"\$@\"" > /usr/bin/zmsA; chmod +x /usr/bin/zmsA
+
+BASE_URL="${GH_MAIN}/Slava-Shchipunov/awg-openwrt/releases/download/"
+FLOWSEAL_STR_ZIP="${GH_MAIN}/Flowseal/zapret-discord-youtube/archive/refs/heads/main.zip"
+GEO_HOSTS="${GH_RAW}/Internet-Helper/GeoHideDNS/refs/heads/main/hosts/hosts"
+STR_URL="${GH_RAW}/StressOzz/Zapret-Manager/refs/heads/main/files/StrYoutube"
+RAW="${GH_RAW}/hyperion-cs/dpi-checkers/refs/heads/main/ru/tcp-16-20/suite.v2.json"
+RKN_URL="${GH_RAW}/IndeecFOX/zapret4rocket/refs/heads/master/extra_strats/TCP/RKN/List.txt"
+URL_OLD="${GH_RAW}/StressOzz/Zapret-Manager/refs/heads/main/files/MagiTrickle/configOLD.yaml"
+URL_DEFAULT="${GH_RAW}/StressOzz/Zapret-Manager/refs/heads/main/files/MagiTrickle/config.yaml"
+URL_ITDOG="${GH_RAW}/StressOzz/Zapret-Manager/refs/heads/main/files/MagiTrickle/configAD.yaml"
+EXCLUDE_URL="${GH_RAW}/StressOzz/Zapret-Manager/refs/heads/main/zapret-hosts-user-exclude.txt"
 
 PORTS_UDP="88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535"; PORTS_TCP="2802,2302,2502,3478-3480,3724,6000-8000,8085,8090,8100,8903,8904,25565,27015-27030,27036-27037,50001,60442"
 
@@ -28,7 +37,6 @@ DOMAINS="youtu.be youtube.com i.ytimg.com i9.ytimg.com yt3.ggpht.com yt4.ggpht.c
 OWRTAWG=$(grep '^DISTRIB_RELEASE=' /etc/openwrt_release | cut -d"'" -f2); ARCHAWG="$(grep DISTRIB_ARCH /etc/openwrt_release | cut -d"'" -f2)_$(grep DISTRIB_TARGET /etc/openwrt_release | cut -d"'" -f2 | tr '/' '_')" 
 CRON_CMD="/etc/init.d/mihomo restart"; CONFIGPATH="/etc/magitrickle/state/config.yaml"; PACKAGES_UPDATED=0; TS_WARN_FLAG="/opt/zapret/tmp/ts_warning_shown"
 CRON_FILE="/etc/crontabs/root"; CONFIGMIX="/etc/mihomo/config.yaml"; LAN_IP=$(uci get network.lan.ipaddr 2>/dev/null | cut -d/ -f1)
-GREEN="\033[1;32m"; RED="\033[1;31m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
 CONF="/etc/config/zapret"; CUSTOM_DIR="/opt/zapret/init.d/openwrt/custom.d/"; HOSTLIST_FILE="/opt/zapret/ipset/zapret-hosts-user.txt"; fileGP="/opt/zapret/ipset/zapret-hosts-google.txt"
 TMP_SF="/tmp/zapret_temp"; HOSTS_FILE="/etc/hosts"; TMP_LIST="$TMP_SF/zapret_yt_list.txt"; tmpDIR="/tmp/PodkopAWG"
 GV_XTREME_FILE="/opt/zapret/tmp/GvXtreme"; GV_XTREME_PORTS="80,88,444-65535"; GV_XTREME_NFQWS_PORTS="80,88,443-65535"
@@ -102,7 +110,10 @@ ZAPRET_RESTART () { chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config
 PAUSE() { echo -ne "Нажмите Enter..."; read dummy; }; BACKUP_DIR="/opt/zapret_backup"; DATE_FILE="$BACKUP_DIR/date_backup.txt"
 BIN_PATH_GO="/usr/bin/tg-ws-proxy-go"; INIT_PATH_GO="/etc/init.d/tg-ws-proxy-go"; BIN_PATH_RS="/usr/bin/tg-ws-proxy-rs"; INIT_PATH_RS="/etc/init.d/tg-ws-proxy-rs"
 X1="68747470733a2f2f7767636c692e76657263656c2e617070"; X2="68747470733a2f2f73616e74612d61746d6f2e72752f776172702f776172702e706870"
-REPO="xyzmean/splify"; WARP_EP="engage.cloudflareclient.com:4500"; WARP_IFACE="warp0"; TMP_SPL="/tmp/splify"; S101="$(D "$X1")"; S102="$(D "$X2")"; W1="$S101"; II="$S102"
+
+STEER_REPO="xyzmean/steer"; SPLIFY2_REPO="xyzmean/splify2"; GITLAB="https://gitlab.com"; SPLIFY2_INSTALL_URL="${GITLAB}/${SPLIFY2_REPO}/-/raw/main/install.sh"
+WARP_EP="engage.cloudflareclient.com:4500"; WARP_IFACE="warp0"; TMP_SPL="/tmp/splify2"; S101="$(D "$X1")"; S102="$(D "$X2")"; W1="$S101"; II="$S102"; SPEC_FILE="/etc/steer/spec.json"
+
 AWG_JC=4; AWG_JMIN=40; AWG_JMAX=70; AWG_H1=1; AWG_H2=2; AWG_H3=3; AWG_H4=4; AWG_S1=0; AWG_S2=0; AWG_JMAX=70; AWG_H1=1; AWG_H2=2; AWG_H3=3; AWG_H4=4; AWG_S1=0; AWG_S2=0
 AWG_I1="<b 0xce000000010897a297ecc34cd6dd000044d0ec2e2e1ea2991f467ace4222129b5a098823784694b4897b9986ae0b7280135fa85e196d9ad980b150122129ce2a9379531b0fd3e871ca5fdb883c369832f730e272d7b8b74f393f9f0fa43f11e510ecb2219a52984410c204cf875585340c62238e14ad04dff382f2c200e0ee22fe743b9c6b8b043121c5710ec289f471c91ee414fca8b8be8419ae8ce7ffc53837f6ade262891895f3f4cecd31bc93ac5599e18e4f01b472362b8056c3172b513051f8322d1062997ef4a383b01706598d08d48c221d30e74c7ce000cdad36b706b1bf9b0607c32ec4b3203a4ee21ab64df336212b9758280803fcab14933b0e7ee1e04a7becce3e2633f4852585c567894a5f9efe9706a151b615856647e8b7dba69ab357b3982f554549bef9256111b2d67afde0b496f16962d4957ff654232aa9e845b61463908309cfd9de0a6abf5f425f577d7e5f6440652aa8da5f73588e82e9470f3b21b27b28c649506ae1a7f5f15b876f56abc4615f49911549b9bb39dd804fde182bd2dcec0c33bad9b138ca07d4a4a1650a2c2686acea05727e2a78962a840ae428f55627516e73c83dd8893b02358e81b524b4d99fda6df52b3a8d7a5291326e7ac9d773c5b43b8444554ef5aea104a738ed650aa979674bbed38da58ac29d87c29d387d80b526065baeb073ce65f075ccb56e47533aef357dceaa8293a523c5f6f790be90e4731123d3c6152a70576e90b4ab5bc5ead01576c68ab633ff7d36dcde2a0b2c68897e1acfc4d6483aaaeb635dd63c96b2b6a7a2bfe042f6aed82e5363aa850aace12ee3b1a93f30d8ab9537df483152a5527faca21efc9981b304f11fc95336f5b9637b174c5a0659e2b22e159a9fed4b8e93047371175b1d6d9cc8ab745f3b2281537d1c75fb9451871864efa5d184c38c185fd203de206751b92620f7c369e031d2041e152040920ac2c5ab5340bfc9d0561176abf10a147287ea90758575ac6a9f5ac9f390d0d5b23ee12af583383d994e22c0cf42383834bcd3ada1b3825a0664d8f3fb678261d57601ddf94a8a68a7c273a18c08aa99c7ad8c6c42eab67718843597ec9930457359dfdfbce024afc2dcf9348579a57d8d3490b2fa99f278f1c37d87dad9b221acd575192ffae1784f8e60ec7cee4068b6b988f0433d96d6a1b1865f4e155e9fe020279f434f3bf1bd117b717b92f6cd1cc9bea7d45978bcc3f24bda631a36910110a6ec06da35f8966c9279d130347594f13e9e07514fa370754d1424c0a1545c5070ef9fb2acd14233e8a50bfc5978b5bdf8bc1714731f798d21e2004117c61f2989dd44f0cf027b27d4019e81ed4b5c31db347c4a3a4d85048d7093cf16753d7b0d15e078f5c7a5205dc2f87e330a1f716738dce1c6180e9d02869b5546f1c4d2748f8c90d9693cba4e0079297d22fd61402dea32ff0eb69ebd65a5d0b687d87e3a8b2c42b648aa723c7c7daf37abcc4bb85caea2ee8f55bec20e913b3324ab8f5c3304f820d42ad1b9f2ffc1a3af9927136b4419e1e579ab4c2ae3c776d293d397d575df181e6cae0a4ada5d67ecea171cca3288d57c7bbdaee3befe745fb7d634f70386d873b90c4d6c6596bb65af68f9e5121e67ebf0d89d3c909ceedfb32ce9575a7758ff080724e1ab5d5f43074ecb53a479af21ed03d7b6899c36631c0166f9d47e5e1d4528a5d3d3f744029c4b1c190cbfbad06f5f83f7ad0429fa9a2719c56ffe3783460e166de2d8>"
 AUTO_RESULTS="/opt/zapret/tmp/results_auto.txt"; AUTO_BACK="$TMP_SF/zapret_auto_back.txt"; AUTO_LOG="/opt/zapret/tmp/auto_best.log"; AUTO_CRON_CMD="/usr/bin/zmsA --auto-best"
@@ -114,37 +125,102 @@ DELETE="opkg remove"; ARCH="$(opkg print-architecture | awk '{print $2}' | tail 
 RAZ="ipk"; TMP_FILE_GO="/tmp/tg-ws-proxy.ipk"; else PKG="apk"; GO_SUF="r1"; CONFZ="/etc/apk/repositories.d/distfeeds.list"; PKG_IS_APK=1; SPL_SUF="noarch"; RELEASE_TAG="v${BYEDPI_LATEST_VER}-25.12"
 UPDATE="apk update"; INSTALL="apk add --allow-untrusted"; DELETE="apk del"; ARCH="$(apk --print-arch 2>/dev/null)"; RAZ="apk"; VER_SUF="r1"; SUF_MT="r"; TMP_FILE_GO="/tmp/tg-ws-proxy.apk"; fi
 
+MIRROR=""
+CURRENT_MIRROR=$(head -n1 "$CONFZ" | awk '{print $NF}' | sed 's|https://||;s|/releases/.*||')
+
+if grep -qE 'mirror-03\.infra\.openwrt\.org|ftp\.snt\.utwente\.nl/pub/software/openwrt|mirror\.berlin\.freifunk\.net/downloads\.openwrt|mirror\.sjtu\.edu\.cn/openwrt|ftp\.halifax\.rwth-aachen\.de/openwrt|mirror\.accum\.se/mirror/openwrt|downloads\.openwrt\.org' "$CONFZ"; then
+    echo -e "${CYAN}Проверяем доступность ${NC}$CURRENT_MIRROR"
+
+    if ! wget -q --spider --timeout=2 "https://$CURRENT_MIRROR/releases/" >/dev/null 2>&1; then
+        echo -e "$CURRENT_MIRROR ${RED}недоступен!${NC}"
+        echo -e "${CYAN}Подбираем зеркало ${NC}OpenWRT"
+        
+        if wget -q --spider --timeout=3 "https://mirror-03.infra.openwrt.org" >/dev/null 2>&1; then
+            MIRROR="mirror-03.infra.openwrt.org"          
+        elif wget -q --spider --timeout=3 "https://ftp.halifax.rwth-aachen.de/openwrt/releases/" >/dev/null 2>&1; then
+            MIRROR="ftp.halifax.rwth-aachen.de/openwrt"
+        elif wget -q --spider --timeout=3 "https://mirror.accum.se/mirror/openwrt.org/releases/" >/dev/null 2>&1; then
+            MIRROR="mirror.accum.se/mirror/openwrt.org"
+            
+        elif wget -q --spider --timeout=3 "https://ftp.snt.utwente.nl/pub/software/openwrt/releases/" >/dev/null 2>&1; then
+            MIRROR="ftp.snt.utwente.nl/pub/software/openwrt"
+        elif wget -q --spider --timeout=3 "https://mirror.berlin.freifunk.net/downloads.openwrt/releases/" >/dev/null 2>&1; then
+            MIRROR="mirror.berlin.freifunk.net/downloads.openwrt"
+        elif wget -q --spider --timeout=3 "https://mirror.sjtu.edu.cn/openwrt/releases/" >/dev/null 2>&1; then
+            MIRROR="mirror.sjtu.edu.cn/openwrt"
+        elif wget -q --spider --timeout=3 "https://downloads.openwrt.org/releases/" >/dev/null 2>&1; then
+            MIRROR="downloads.openwrt.org"
+        fi
+        
+        if [ -n "$MIRROR" ]; then
+            echo -e "${CYAN}Переключаемся на ${NC}$MIRROR"
+            sed -i "s|https://.*/releases/|https://$MIRROR/releases/|g" "$CONFZ"
+        else
+            echo -e "${RED}Резервные зеркала недоступны!${NC}"
+        fi
+    else
+        echo -e "$CURRENT_MIRROR ${GREEN}доступен!${NC}"
+    fi
+fi
+
 update_packages(){ [ "$PACKAGES_UPDATED" = "1" ] && return 0; echo -e "${CYAN}Обновляем список пакетов${NC}"; $UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка обновления списка пакетов!${NC}\n"; PAUSE; return 1; }; PACKAGES_UPDATED=1; }
 
-if ! curl --version >/dev/null 2>&1; then clear; echo -e "curl ${RED}отсутствует ${NC}или${RED} работает некорректно${NC}"; echo -e "\n${MAGENTA}Устанавливаем ${NC}curl"
-$DELETE curl libcurl >/dev/null 2>&1; echo -e "${CYAN}Обновляем список пакетов${NC}"; if ! $UPDATE >/dev/null 2>&1; then echo -e "\n${RED}Ошибка обновления списка пакетов!!${NC}\n"; else PACKAGES_UPDATED=1; fi
+if ! curl --version >/dev/null 2>&1; then echo -e "\ncurl ${RED}отсутствует ${NC}или${RED} работает некорректно${NC}\n"; echo -e "${MAGENTA}Устанавливаем ${NC}curl"
+$DELETE curl libcurl >/dev/null 2>&1; echo -e "${CYAN}Обновляем список пакетов${NC}"; if ! $UPDATE >/dev/null 2>&1; then echo -e "\n${RED}Ошибка обновления списка пакетов!${NC}\n"; else PACKAGES_UPDATED=1; fi
 echo -e "${CYAN}Устанавливаем ${NC}curl"; if ! $INSTALL libcurl curl >/dev/null 2>&1; then echo -e "\n${RED}Не удалось установить curl!${NC}\n"; PAUSE; fi; fi
 
-get_zapret2_ver() { if [ "$PKG_IS_APK" -eq 1 ]; then IDX_URL2="https://packages.routerich.ru/25.12/mediatek/filogic/routerich/"; FNAME2=$(curl -s --connect-timeout 3 --max-time 5 "$IDX_URL2" | grep -o "zapret2-[0-9][^\"]*\.apk" | head -n1)
-else IDX_URL2="https://packages.routerich.ru/24.10/mediatek/filogic/routerich/"; FNAME2=$(curl -s --connect-timeout 3 --max-time 5 "$IDX_URL2" | grep -o "zapret2_[0-9][^\"]*_aarch64_cortex-a53\.ipk" | head -n1); fi
-VER2=$(echo "$FNAME2" | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)*-r[0-9]+' | sed 's/-r[0-9]*$//'); if [ -z "$VER2" ]; then echo -e "Zapret2: ${RED}ошибка получения версии${NC}"; return 1; fi; echo "$VER2" > "$TMP_VER_Z2"; echo -e "Zapret2: ${GREEN}$VER2${NC}"; }
+get_zapret2_ver() {
+    if [ "$PKG_IS_APK" -eq 1 ]; then
+        IDX_URL2="https://packages.routerich.ru/25.12/mediatek/filogic/routerich/"
+        PATTERN='zapret2-[0-9][^"]*\.apk'
+    else
+        IDX_URL2="https://packages.routerich.ru/24.10/mediatek/filogic/routerich/"
+        PATTERN='zapret2_[0-9][^"]*_aarch64_cortex-a53\.ipk'
+    fi
 
+    FNAME2=""
+
+    for i in 1 2 3; do
+        FNAME2=$(curl -fsS --connect-timeout 3 --max-time 5 "$IDX_URL2" 2>/dev/null |
+            grep -oE "$PATTERN" | head -n1)
+
+        [ -n "$FNAME2" ] && break
+        sleep 1
+    done
+
+    VER2=$(printf '%s\n' "$FNAME2" |
+        grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)*-r[0-9]+' |
+        sed 's/-r[0-9]*$//')
+
+    if [ -z "$VER2" ]; then
+        echo -e "Zapret2: ${RED}ошибка получения версии${NC}"
+        return 1
+    fi
+
+    echo "$VER2" > "$TMP_VER_Z2"
+    echo -e "Zapret2: ${GREEN}$VER2${NC}"
+}
 get_ver() { URL="$1"; OUT_FILE="$2"; NAME="$3"; RESULT=$(curl -sIL --connect-timeout 3 --max-time 4 --retry 1 -w "%{url_effective}" -o /dev/null "$URL" 2>/dev/null)
 if [ $? -ne 0 ] || [ -z "$RESULT" ]; then echo -e "$NAME: ${RED}ошибка получения версии${NC}"; return 1; fi; VERSION="${RESULT##*/}"; VERSION="${VERSION#v}"; [ "$NAME" = "ByeDPI" ] && VERSION="${VERSION%%-*}"
 if [ -z "$VERSION" ]; then echo -e "$NAME - ${RED}не удалось извлечь версию${NC}"; echo -e "${YELLOW}URL:${NC} $RESULT"; return 1; fi; echo "$VERSION" > "$OUT_FILE"; echo -e "$NAME: ${GREEN}$VERSION${NC}"; }
 
-clear; echo -e "${CYAN}Cобираем версии:${NC}"
+rm -f "$TMP_VER" "$TMP_VER_POD" "$TMP_VER_TG_MT" "$TMP_VER_TG_GO" "$TMP_VER_TG_RS" "$TMP_MAG_VER" "$TMP_VER_SPL" "$TMP_VER_BYEDPI" "$TMP_VER_Z2"
+
+echo -e "\n${CYAN}Cобираем версии:${NC}"
 TMP_VER="/tmp/zapret_version"; TMP_VER_POD="/tmp/podkop_version"; TMP_VER_TG_MT="/tmp/tg_ws_proxy_MTp_ver"; TMP_VER_TG_GO="/tmp/tg_ws_proxy_GO_ver"
-TMP_VER_TG_RS="/tmp/tg_ws_proxy_RS_ver"; TMP_MAG_VER="/tmp/MagiTrickle_version"; TMP_VER_SPL="/tmp/splify_version"; TMP_VER_BYEDPI="/tmp/byedpi_version"; TMP_VER_Z2="/tmp/zapret2_version"
+TMP_VER_TG_RS="/tmp/tg_ws_proxy_RS_ver"; TMP_MAG_VER="/tmp/MagiTrickle_version"; TMP_VER_STEER="/tmp/steer_version"; TMP_VER_SPL2="/tmp/splify2_version"; TMP_VER_BYEDPI="/tmp/byedpi_version"; TMP_VER_Z2="/tmp/zapret2_version"
 # get_ver "https://github.com/MagiTrickle/MagiTrickle/releases/latest" "$TMP_MAG_VER" "MagiTrickle" &
 # get_ver "https://github.com/spatiumstas/tg-ws-proxy-go/releases/latest" "$TMP_VER_TG_MT" "TG-WS Proxy MTProto" &
 get_ver "https://github.com/DPITrickster/ByeDPI-OpenWrt/releases/latest" "$TMP_VER_BYEDPI" "ByeDPI" & get_ver "https://github.com/yandexru45/netshift/releases/latest" "$TMP_VER_POD" "NetShift" &
-get_ver "https://github.com/remittor/zapret-openwrt/releases/latest" "$TMP_VER" "Zapret" & get_ver "https://github.com/xyzmean/splify/releases/latest" "$TMP_VER_SPL" "splify" &
+get_ver "https://github.com/remittor/zapret-openwrt/releases/latest" "$TMP_VER" "Zapret" & get_ver "https://gitlab.com/xyzmean/steer/-/releases/permalink/latest" "$TMP_VER_STEER" "steer" &
+get_ver "https://gitlab.com/xyzmean/splify2/-/releases/permalink/latest" "$TMP_VER_SPL2" "splify2" &
 get_ver "https://github.com/d0mhate/-tg-ws-proxy-Manager-go/releases/latest" "$TMP_VER_TG_GO" "TG-WS Proxy SOCKS5" & get_ver "https://github.com/valnesfjord/tg-ws-proxy-rs/releases/latest" "$TMP_VER_TG_RS" "TG-WS Proxy Rust" & get_zapret2_ver & wait
 [ -s "$TMP_MAG_VER" ] && MT_VERSION="$(cat "$TMP_MAG_VER")"; [ -s "$TMP_VER_BYEDPI" ] && BYEDPI_LATEST_VER="$(cat "$TMP_VER_BYEDPI" | sed 's/^v//' | cut -d'-' -f1)"; [ -s "$TMP_VER_Z2" ] && ZAPRET2_VERSION="$(cat "$TMP_VER_Z2")"
 [ -s "$TMP_VER" ] && ZAPRET_VERSION="$(cat "$TMP_VER")"; [ -s "$TMP_VER_POD" ] && PODKOP_LATEST_VER="$(cat "$TMP_VER_POD")"; [ -s "$TMP_VER_TG_MT" ] && TG_MTProto="$(cat "$TMP_VER_TG_MT")"
-[ -s "$TMP_VER_SPL" ] && SPL_VER="$(cat "$TMP_VER_SPL")"; [ -s "$TMP_VER_TG_GO" ] && TG_GO_VERSION="$(cat "$TMP_VER_TG_GO")"; [ -s "$TMP_VER_TG_RS" ] && TG_RS_VERSION="$(cat "$TMP_VER_TG_RS")"
-
-# git="githubusercontent.com"; if ! grep -q "raw.$git" /etc/hosts; then echo -e "\n\033[1;36mДля корректной работы скрипта добавляем домены \033[0mGitHub\033[1;36m в \033[0m/etc/hosts\033[0m"
-# printf "#$git\n185.199.109.133 raw.$git release-assets.$git\n185.199.108.133 private-user-images.$git gist.$git avatars.$git\n" >> /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1; fi
+[ -s "$TMP_VER_STEER" ] && STEER_VER="$(cat "$TMP_VER_STEER")"; [ -s "$TMP_VER_SPL2" ] && SPLIFY2_VER="$(cat "$TMP_VER_SPL2")"; [ -s "$TMP_VER_TG_GO" ] && TG_GO_VERSION="$(cat "$TMP_VER_TG_GO")"; [ -s "$TMP_VER_TG_RS" ] && TG_RS_VERSION="$(cat "$TMP_VER_TG_RS")"
 
 ADD_FAKE_FLOW() { MSG=0; for f in stun2.bin quic_initial_tencent_com.bin quic_initial_steamcommunity_com.bin tls_clienthello_sochi_park.bin quic_initial_4pda_to.bin quic_initial_5ka_ru.bin tls_clienthello_5ka_ru.bin quic_initial_rutube_ru.bin
-do [ -d /opt/zapret ] && [ ! -f "/opt/zapret/files/fake/$f" ] && [ -f "$CONF" ] && { [ "$MSG" = 0 ] && { echo -e "${CYAN}Скачиваем ${NC}fake ${CYAN}файлы${NC}"; MSG=1; }; wget -q -U "Mozilla/5.0" -O "/opt/zapret/files/fake/$f" "https://github.com/Flowseal/zapret-discord-youtube/raw/refs/heads/main/bin/$f" || { echo -e "\n${RED}Не удалось загрузить файл ${NC}$f\n"; }; }; done; }
+do [ -d /opt/zapret ] && [ ! -f "/opt/zapret/files/fake/$f" ] && [ -f "$CONF" ] && { [ "$MSG" = 0 ] && { echo -e "${CYAN}Скачиваем ${NC}fake ${CYAN}файлы${NC}"; MSG=1; }; wget -q -U "Mozilla/5.0" -O "/opt/zapret/files/fake/$f" "${GH_MAIN}/Flowseal/zapret-discord-youtube/raw/refs/heads/main/bin/$f" || { echo -e "\n${RED}Не удалось загрузить файл ${NC}$f\n"; }; }; done; }
 
 ADD_FAKE_FLOW
 
@@ -254,92 +330,130 @@ elif [ -n "$OPT_DISABLE" ] && [ "$choiceAB" = "$OPT_DISABLE" ]; then disable_aut
 else run_auto_best_background; fi; elif [ -n "$OPT_RESULTS" ] && [ "$choiceAB" = "$OPT_RESULTS" ]; then show_single_result "$AUTO_RESULTS"; elif [ -n "$OPT_LOG" ] && [ "$choiceAB" = "$OPT_LOG" ]; then
 clear; cat "$AUTO_LOG"; echo; PAUSE; elif [ "$choiceAB" = "$OPT_TZ" ]; then TIME_MENU; elif [ "$choiceAB" = "$OPT_MODE" ]; then set_auto_best_mode; elif [ -n "$OPT_CLEAR" ] && [ "$choiceAB" = "$OPT_CLEAR" ]; then
 echo -e "\n${GREEN}Результаты теста и лог удалены!${NC}\n"; rm -rf "$AUTO_RESULTS" "$AUTO_BACK" "$AUTO_LOG" "$AUTO_LOCK"; PAUSE; else return; fi; done; }
+
 # ==========================================
-# splify
+# splify2 (steer + LuCI + WARP/AmneziaWG)
+# Источник: https://gitlab.com/xyzmean/splify2
 # ==========================================
-# ──────────────────────────── 1. environment checks ────────────────────────
-ZAVISIM() { local NEED=""; command -v jq >/dev/null 2>&1 || NEED="$NEED jq"; command -v wg >/dev/null 2>&1 || NEED="$NEED wireguard-tools"; [ -z "$NEED" ] && return 0; echo -e "\n${MAGENTA}Ставим зависимости для генерации${NC}"; update_packages || return 1; echo -e "${CYAN}Ставим зависимости${NC}"; $INSTALL $NEED >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при установке!${NC}\n"; PAUSE; return 1; }; }
-# ──────────────────────────── 2. install splify packages ───────────────────
-install_splify() { SPL_SPL="https://github.com/xyzmean/splify/releases/download/v$SPL_VER/splify-$SPL_VER-1_$SPL_SUF.$RAZ"; SPL_LUCI="https://github.com/xyzmean/splify/releases/download/v$SPL_VER/luci-app-splify-$SPL_VER-1_$SPL_SUF.$RAZ"
-SPL_RUS="https://github.com/xyzmean/splify/releases/download/v$SPL_VER/luci-i18n-splify-ru-$SPL_VER-1_$SPL_SUF.$RAZ"; echo -e "${CYAN}Скачиваем ${NC}splify"; wget -q -U "Mozilla/5.0" -O "$TMP_SF/splify.$RAZ" "$SPL_SPL" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$SPL_SPL\n"; PAUSE; return 1; }
-wget -q -U "Mozilla/5.0" -O "$TMP_SF/luci-app-splify.$RAZ" "$SPL_LUCI" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$SPL_LUCI\n"; PAUSE; return 1; }; wget -q -U "Mozilla/5.0" -O "$TMP_SF/luci-i18n-splify-ru.$RAZ" "$SPL_RUS" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$SPL_RUS\n"; PAUSE; return 1; }
-update_packages || return 1; echo -e "${CYAN}Устанавливаем ${NC}splify"; $INSTALL "$TMP_SF/splify.$RAZ" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить:\n${NC}$SPL_SPL\n"; PAUSE; return 1; }
-$INSTALL "$TMP_SF/luci-app-splify.$RAZ" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить:\n${NC}$SPL_LUCI\n"; PAUSE; return 1; }; $INSTALL "$TMP_SF/luci-i18n-splify-ru.$RAZ" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить:\n${NC}$SPL_RUS\n"; PAUSE; return 1; }
-rm -f /tmp/luci-indexcache* /tmp/luci-modulecache* 2>/dev/null; /etc/init.d/rpcd reload 2>/dev/null || /etc/init.d/rpcd restart 2>/dev/null; sleep 5; }
-# ──────────────────────────── 4. register Cloudflare WARP ───────────────────
-colo_name() { case "$1" in AMS) echo "Amsterdam" ;; ARN) echo "Stockholm" ;; ATH) echo "Athens" ;; BUD) echo "Budapest" ;; FRA) echo "Frankfurt" ;; HEL) echo "Helsinki" ;; IST) echo "Istanbul" ;; KBP) echo "Kiev" ;; KIV) echo "Chisinau" ;; PRG) echo "Prague" ;; RIX) echo "Riga" ;; SOF) echo "Sofia" ;; TLL) echo "Tallinn" ;; VIE) echo "Vienna" ;; VNO) echo "Vilnius" ;; WAW) echo "Warsaw" ;; ZRH) echo "Zurich" ;; *) echo "$1" ;; esac; }
-find_best_endpoint() { echo -e "\n${CYAN}Подбираем лучший ${NC}endpoint"; echo -en "${YELLOW}Подождите...${NC}"; _prefixes="188.114.96. 188.114.97. 188.114.98. 188.114.99. 162.159.192. 162.159.193. 162.159.195. 8.34.146. 8.39.214. 8.39.204. 8.6.112. 8.35.211. 8.39.125. 8.47.69."
-_candidates=$(awk -v prefixes="$_prefixes" 'BEGIN { srand(); n = split(prefixes, arr, " "); for (i=0; i<100; i++) { idx = int(rand() * n) + 1; last = int(rand() * 256); print arr[idx] last; } }'); _pings="$TMP_SPL/warp_pings"; _count=0
-for ip in $_candidates; do ( if trace_data=$(curl -s --connect-timeout 2 -w "\n%{time_total}" -H "Host: trace.cloudflare.com" "http://${ip}/cdn-cgi/trace"); then colo=$(echo "$trace_data" | awk -F'=' '$1=="colo"{print $2}'); case "$colo" in DME) exit 0 ;; "") exit 0 ;; esac
-ping_ms=$(echo "$trace_data" | tail -n 1 | awk '{printf "%d", $1 * 1000}'); [ -n "$ping_ms" ] && echo "$ping_ms $ip $colo" >> "$_pings"; fi ) & _count=$((_count + 1)); [ $((_count % 20)) -eq 0 ] && wait; done; wait; if [ -s "$_pings" ]
-then _best=$(sort -n "$_pings" | head -n 1); _best_ping=$(echo "$_best" | awk '{print $1}'); _best_ip=$(echo "$_best" | awk '{print $2}'); _best_colo=$(echo "$_best" | awk '{print $3}'); echo -e "\n\n${CYAN}Используем:${NC} $_best_ip ($(colo_name "$_best_colo"), ping: ${_best_ping}ms)"
-WARP_EP="${_best_ip}:4500"; else WARP_EP="engage.cloudflareclient.com:4500"; echo -e "\n${CYAN}Подбор не удался!\nИспользуем ${NC}endpoint${CYAN}:${NC} $WARP_EP"; fi; }
-choose_endpoint() { echo -e "\n${MAGENTA}Меню выбора endpoint${NC}"; echo -e "${CYAN}1) ${GREEN}Использовать${NC} engage.cloudflareclient.com:4500\n${CYAN}2) ${GREEN}Подобрать ${NC}endpoint${GREEN} автоматически${NC}\n"
-echo -en "${YELLOW}Выберите пункт: ${NC}"; read -r choiceWRP; case "$choiceWRP" in 2) find_best_endpoint ;; *) WARP_EP="engage.cloudflareclient.com:4500"; echo -e "\n${CYAN}Используем: ${NC}$WARP_EP" ;; esac; }
-register_request() { curl -fsSL --max-time 30 -X POST "${W1%/}/api/reg" -H "Content-Type: application/json" -H "Accept: application/json" -d "{\"key\":\"$PUB\",\"install_id\":\"\",\"fcm_token\":\"\",\"model\":\"PC\",\"locale\":\"en_US\",\"tos\":\"$TOS\",\"type\":\"Android\"}" -o "$REG" >/dev/null 2>&1; }
-register_warp() { [ -d "$TMP_SPL" ] || mkdir -p "$TMP_SPL"; REG="$TMP_SPL/reg.json"; rm -f "$REG"; echo -e "\n${MAGENTA}Генерируем WARP${NC}"; echo -e "${CYAN}Используем основной метод${NC}"; if curl -fsSL --max-time 30 "$II" -o "$REG" 2>/dev/null && grep -q '"public_key"' "$REG"; then
+SPL2_run_official() { echo -e "\n${MAGENTA}Запускаем официальный установщик splify2${NC}\n${CYAN}Источник:${NC} $SPLIFY2_INSTALL_URL\n"
+sh -c "$(wget -qO - "$SPLIFY2_INSTALL_URL")" || { echo -e "\n${RED}Не удалось выполнить официальный установщик!${NC}\n"; PAUSE; return 1; }
+echo -e "\nsplify2 ${GREEN}установлен официальным установщиком!${NC}\n"; PAUSE; }
+
+SPL2_local_ver() { local pfx="$1"; apk info -v 2>/dev/null | grep -E "^${pfx}[0-9]" | sed -E "s/^${pfx}//; s/-r[0-9]+\$//"; }
+
+SPL2_install_pkg() { local repo="$1" file="$2" name="$3"; TAG="v$(echo "$file" | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -n1)"
+URL="${GITLAB}/${repo}/-/releases/${TAG}/downloads/${file}"; mkdir -p "$TMP_SF"; echo -e "${CYAN}Скачиваем ${NC}$file"; curl -fL "$URL" -o "$TMP_SF/$file" 2>/dev/null
+if [ ! -s "$TMP_SF/$file" ]; then echo -e "\n${RED}Не удалось скачать: ${NC}$URL\n${YELLOW}Возможно изменился формат релиза — используйте официальный установщик (пункт${NC} 0${YELLOW})${NC}\n"; PAUSE; return 1; fi
+update_packages || return 1; echo -e "${CYAN}Устанавливаем ${NC}$name"; $INSTALL "$TMP_SF/$file" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить: ${NC}$file\n"; PAUSE; return 1; }; rm -f "$TMP_SF/$file"; }
+
+SPL2_install_steer() { mkdir -p "$TMP_SF"; STEER_LOCAL="$(SPL2_local_ver "steer-extended-")"; [ -z "$STEER_LOCAL" ] && STEER_LOCAL="$(SPL2_local_ver "steer-")"
+echo -e "\n${MAGENTA}Устанавливаем steer-extended${NC}"; if [ -z "$STEER_VER" ] || [ "$STEER_VER" = "0.0.0" ]; then echo -e "\n${RED}Не удалось получить версию steer!${NC}\n"; PAUSE; return 1; fi
+if [ "$STEER_LOCAL" = "$STEER_VER" ]; then echo -e "steer-extended ${GREEN}уже последней версии ($STEER_LOCAL)${NC}\n"; PAUSE; return 0; fi
+FILE="steer-extended-${STEER_VER}-1_${ARCH}.${RAZ}"; SPL2_install_pkg "$STEER_REPO" "$FILE" "steer-extended" || return 1
+/etc/init.d/rpcd restart >/dev/null 2>&1; [ -x /etc/init.d/steer ] && /etc/init.d/steer enable >/dev/null 2>&1
+echo -e "steer-extended ${GREEN}установлен!${NC}\n"; PAUSE; }
+
+SPL2_install_ui() { mkdir -p "$TMP_SF"; UI_LOCAL="$(SPL2_local_ver "luci-app-splify2-")"
+echo -e "\n${MAGENTA}Устанавливаем splify2 (LuCI)${NC}"; if [ -z "$SPLIFY2_VER" ] || [ "$SPLIFY2_VER" = "0.0.0" ]; then echo -e "\n${RED}Не удалось получить версию splify2!${NC}\n"; PAUSE; return 1; fi
+if [ "$UI_LOCAL" = "$SPLIFY2_VER" ]; then echo -e "splify2 ${GREEN}уже последней версии ($UI_LOCAL)${NC}\n"; PAUSE; return 0; fi
+FILE="luci-app-splify2-${SPLIFY2_VER}-1_${SPL_SUF}.${RAZ}"; SPL2_install_pkg "$SPLIFY2_REPO" "$FILE" "splify2" || return 1
+/etc/init.d/rpcd restart >/dev/null 2>&1; echo -e "splify2 ${GREEN}установлен!${NC}\n"; PAUSE; }
+
+ZAVISIM2() { local NEED=""; command -v jq >/dev/null 2>&1 || NEED="$NEED jq"; command -v wg >/dev/null 2>&1 || NEED="$NEED wireguard-tools"; [ -z "$NEED" ] && return 0
+echo -e "\n${MAGENTA}Ставим зависимости для генерации${NC}"; update_packages || return 1; echo -e "${CYAN}Ставим зависимости${NC}"; $INSTALL $NEED >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при установке!${NC}\n"; PAUSE; return 1; }; }
+
+SPL2_register_warp() { mkdir -p "$TMP_SPL"; REG="$TMP_SPL/reg.json"; rm -f "$REG"; echo -e "\n${MAGENTA}Генерируем WARP${NC}"; echo -e "${CYAN}Используем основной метод${NC}"
+if curl -fsSL --max-time 30 "$II" -o "$REG" 2>/dev/null && grep -q '"public_key"' "$REG"; then
 PRIV=$(grep -o '"key"[[:space:]]*:[[:space:]]*"[^"]*"' "$REG" | head -n1 | sed 's/.*:[[:space:]]*"//;s/"$//'); WARP_PEER=$(grep -o '"public_key"[[:space:]]*:[[:space:]]*"[^"]*"' "$REG" | head -n1 | sed 's/.*:[[:space:]]*"//;s/"$//')
 WARP_V4=$(grep -o '"v4"[[:space:]]*:[[:space:]]*"[^"]*"' "$REG" | sed -n '2p' | sed 's/.*:[[:space:]]*"//;s/"$//'); WARP_V6=$(grep -o '"v6"[[:space:]]*:[[:space:]]*"[^"]*"' "$REG" | sed -n '2p' | sed 's/.*:[[:space:]]*"//;s/"$//')
-if [ -n "$PRIV" ] && [ -n "$WARP_PEER" ] && [ -n "$WARP_V4" ]; then echo -e "WARP ${GREEN}сгенерирован!${NC}"; return 0; fi; echo -e "${YELLOW}Основной метод вернул неполные данные, переключаемся на запасной${NC}"; else echo -e "${YELLOW}Основной метод недоступен, переключаемся на запасной${NC}"; fi
-ZAVISIM || return 1; if command -v awg >/dev/null 2>&1; then GEN=awg; else GEN=wg; fi; PRIV="$("$GEN" genkey 2>/dev/null)"; PUB="$(printf '%s\n' "$PRIV" | "$GEN" pubkey 2>/dev/null)"
-TOS="$(date -u +%Y-%m-%dT%H:%M:%S.000000000Z)"; echo -e "${CYAN}Регистрируем устройство${NC}"; if register_request && jq -e '.config.peers[0].public_key' "$REG" >/dev/null 2>&1; then echo -e "${CYAN}Используем основной сервер${NC}"; else echo -e "${CYAN}Используем резервный сервер${NC}"
-if ! curl -fsSL --max-time 60 "$II" -o "$REG" >/dev/null 2>&1; then echo -e "${RED}Не удалось получить WARP${NC}"; PAUSE; return 1; fi; if ! jq -e '.result.config.peers[0].public_key' "$REG" >/dev/null 2>&1; then echo -e "${RED}Резервный источник вернул неверный формат${NC}"; PAUSE; return 1; fi
-PRIV="$(jq -r '.result.key' "$REG")"; WARP_PEER="$(jq -r '.result.config.peers[0].public_key' "$REG")"; WARP_V4="$(jq -r '.result.config.interface.addresses.v4' "$REG")"; WARP_V6="$(jq -r '.result.config.interface.addresses.v6 // empty' "$REG")"; fi; if [ -z "$WARP_PEER" ]
-then WARP_PEER="$(jq -r '.config.peers[0].public_key' "$REG")"; WARP_V4="$(jq -r '.config.interface.addresses.v4' "$REG")"; WARP_V6="$(jq -r '.config.interface.addresses.v6 // empty' "$REG")"; fi
-[ -n "$WARP_PEER" ] && [ "$WARP_PEER" != "null" ] || { echo -e "${RED}Нет peer public_key${NC}"; PAUSE; return 1; }; [ -n "$WARP_V4" ] && [ "$WARP_V4" != "null" ] || { echo -e "${RED}Нет IPv4${NC}"; PAUSE; return 1; }; echo -e "WARP ${GREEN}сгенерирован!${NC}"; }
-restart_splify() { echo -e "\n${MAGENTA}Перезапускаем splify${NC}"; echo -en "${YELLOW}Подождите...${NC}"; /usr/local/sbin/splify-disable >/dev/null 2>&1; /etc/init.d/splify enable >/dev/null 2>&1; /etc/init.d/splify-agent enable >/dev/null 2>&1
-uci -q set splify.global.telemetry="0" && uci commit splify; /etc/init.d/splify restart >/dev/null 2>&1; sleep 3; /etc/init.d/splify-agent restart >/dev/null 2>&1; sleep 3; /usr/local/sbin/splify-apply >/dev/null 2>&1
-sleep 10; echo -e "\n\nsplify ${GREEN}перезапущен!${NC}"; echo -e "\n${YELLOW}Инициализация splify может занять несколько минут!${NC}"; }
-WARP_TO_ROOT() { printf '%s\n' "[Interface]" "PrivateKey = $PRIV" "Address = $WARP_V4${WARP_V6:+, $WARP_V6}" "DNS = 8.8.8.8, 8.8.4.4, 2001:4860:4860::8888, 2001:4860:4860::8844" "MTU = 1280" "S1 = $AWG_S1" "S2 = $AWG_S2" "Jc = $AWG_JC" "Jmin = $AWG_JMIN" "Jmax = $AWG_JMAX" "H1 = $AWG_H1" "H2 = $AWG_H2" "H3 = $AWG_H3" "H4 = $AWG_H4" "I1 = $AWG_I1" "" "[Peer]" "PublicKey = $WARP_PEER" "AllowedIPs = 0.0.0.0/0, ::/0" "Endpoint = $WARP_EP" "PersistentKeepalive = 25" > /root/WARP.conf; echo -e "${YELLOW}Файл ${NC}WARP${YELLOW} сохранён в ${NC}/root/WARP.conf"; }
-# ──────────────────────────── 5. create warp0 interface ─────────────────────
-create_warp_iface() { echo -e "\n${MAGENTA}Создаём интерфейс $WARP_IFACE${NC}"; if [ -n "$(uci -q get "network.$WARP_IFACE")" ]; then echo -e "${CYAN}Перенастраиваем интерфейс ${NC}$WARP_IFACE"; ifdown "$WARP_IFACE" >/dev/null 2>&1; fi
-uci -q set "network.$WARP_IFACE=interface"; uci set "network.$WARP_IFACE.proto=amneziawg"; uci set "network.$WARP_IFACE.private_key=$PRIV"; uci -q delete "network.$WARP_IFACE.addresses"; uci add_list "network.$WARP_IFACE.addresses=$WARP_V4"
-[ -n "$WARP_V6" ] && uci add_list "network.$WARP_IFACE.addresses=$WARP_V6"; uci -q delete "network.$WARP_IFACE.dns"; uci add_list "network.$WARP_IFACE.dns=8.8.8.8"; uci set "network.$WARP_IFACE.mtu=1280"
-uci set "network.$WARP_IFACE.route_allowed_ips=0"; uci set "network.$WARP_IFACE.awg_jc=$AWG_JC"; uci set "network.$WARP_IFACE.awg_jmin=$AWG_JMIN"; uci set "network.$WARP_IFACE.awg_jmax=$AWG_JMAX"; uci set "network.$WARP_IFACE.awg_h1=$AWG_H1"
-uci set "network.$WARP_IFACE.awg_h2=$AWG_H2"; uci set "network.$WARP_IFACE.awg_h3=$AWG_H3"; uci set "network.$WARP_IFACE.awg_h4=$AWG_H4"; uci set "network.$WARP_IFACE.awg_s1=$AWG_S1"; uci set "network.$WARP_IFACE.awg_s2=$AWG_S2"
-uci set "network.$WARP_IFACE.awg_i1=$AWG_I1"; _pt="amneziawg_$WARP_IFACE"; while [ -n "$(uci -q get "network.@${_pt}[0]")" ]; do uci -q delete "network.@${_pt}[0]"; done; uci add network "$_pt" >/dev/null; uci set "network.@${_pt}[-1].public_key=$WARP_PEER"
+if [ -n "$PRIV" ] && [ -n "$WARP_PEER" ] && [ -n "$WARP_V4" ]; then echo -e "WARP ${GREEN}сгенерирован!${NC}"; return 0; fi; echo -e "${YELLOW}Основной метод вернул неполные данные, переключаемся на запасной${NC}"
+else echo -e "${YELLOW}Основной метод недоступен, переключаемся на запасной${NC}"; fi
+ZAVISIM2 || return 1; if command -v awg >/dev/null 2>&1; then GEN=awg; else GEN=wg; fi; PRIV="$("$GEN" genkey 2>/dev/null)"; PUB="$(printf '%s\n' "$PRIV" | "$GEN" pubkey 2>/dev/null)"
+TOS="$(date -u +%Y-%m-%dT%H:%M:%S.000000000Z)"; echo -e "${CYAN}Регистрируем устройство${NC}"
+curl -fsSL --max-time 30 -X POST "${W1%/}/api/reg" -H "Content-Type: application/json" -H "Accept: application/json" -d "{\"key\":\"$PUB\",\"install_id\":\"\",\"fcm_token\":\"\",\"model\":\"PC\",\"locale\":\"en_US\",\"tos\":\"$TOS\",\"type\":\"Android\"}" -o "$REG" >/dev/null 2>&1
+if jq -e '.config.peers[0].public_key' "$REG" >/dev/null 2>&1; then echo -e "${CYAN}Используем основной сервер${NC}"
+WARP_PEER="$(jq -r '.config.peers[0].public_key' "$REG")"; WARP_V4="$(jq -r '.config.interface.addresses.v4' "$REG")"; WARP_V6="$(jq -r '.config.interface.addresses.v6 // empty' "$REG")"
+else echo -e "${CYAN}Используем резервный сервер${NC}"; curl -fsSL --max-time 60 "$II" -o "$REG" >/dev/null 2>&1
+if ! jq -e '.result.config.peers[0].public_key' "$REG" >/dev/null 2>&1; then echo -e "\n${RED}Не удалось получить WARP${NC}\n"; PAUSE; return 1; fi
+PRIV="$(jq -r '.result.key' "$REG")"; WARP_PEER="$(jq -r '.result.config.peers[0].public_key' "$REG")"; WARP_V4="$(jq -r '.result.config.interface.addresses.v4' "$REG")"; WARP_V6="$(jq -r '.result.config.interface.addresses.v6 // empty' "$REG")"; fi
+[ -n "$WARP_PEER" ] && [ "$WARP_PEER" != "null" ] || { echo -e "\n${RED}Нет peer public_key${NC}\n"; PAUSE; return 1; }
+[ -n "$WARP_V4" ] && [ "$WARP_V4" != "null" ] || { echo -e "\n${RED}Нет IPv4${NC}\n"; PAUSE; return 1; }; echo -e "WARP ${GREEN}сгенерирован!${NC}"; }
+
+SPL2_create_iface() { echo -e "\n${MAGENTA}Создаём интерфейс $WARP_IFACE${NC}"; [ -n "$(uci -q get "network.$WARP_IFACE")" ] && ifdown "$WARP_IFACE" >/dev/null 2>&1
+uci -q set "network.$WARP_IFACE=interface"; uci set "network.$WARP_IFACE.proto=amneziawg"; uci set "network.$WARP_IFACE.private_key=$PRIV"; uci -q delete "network.$WARP_IFACE.addresses"
+uci add_list "network.$WARP_IFACE.addresses=$WARP_V4"; [ -n "$WARP_V6" ] && uci add_list "network.$WARP_IFACE.addresses=$WARP_V6"; uci -q delete "network.$WARP_IFACE.dns"; uci add_list "network.$WARP_IFACE.dns=8.8.8.8"
+uci set "network.$WARP_IFACE.mtu=1280"; uci set "network.$WARP_IFACE.route_allowed_ips=0"; uci set "network.$WARP_IFACE.awg_jc=$AWG_JC"; uci set "network.$WARP_IFACE.awg_jmin=$AWG_JMIN"; uci set "network.$WARP_IFACE.awg_jmax=$AWG_JMAX"
+uci set "network.$WARP_IFACE.awg_h1=$AWG_H1"; uci set "network.$WARP_IFACE.awg_h2=$AWG_H2"; uci set "network.$WARP_IFACE.awg_h3=$AWG_H3"; uci set "network.$WARP_IFACE.awg_h4=$AWG_H4"; uci set "network.$WARP_IFACE.awg_s1=$AWG_S1"; uci set "network.$WARP_IFACE.awg_s2=$AWG_S2"; uci set "network.$WARP_IFACE.awg_i1=$AWG_I1"
+_pt="amneziawg_$WARP_IFACE"; while [ -n "$(uci -q get "network.@${_pt}[0]")" ]; do uci -q delete "network.@${_pt}[0]"; done; uci add network "$_pt" >/dev/null; uci set "network.@${_pt}[-1].public_key=$WARP_PEER"
 uci -q delete "network.@${_pt}[-1].allowed_ips"; uci add_list "network.@${_pt}[-1].allowed_ips=0.0.0.0/0"; uci add_list "network.@${_pt}[-1].allowed_ips=::/0"; uci set "network.@${_pt}[-1].endpoint_host=${WARP_EP%:*}"
-uci set "network.@${_pt}[-1].endpoint_port=${WARP_EP##*:}"; uci set "network.@${_pt}[-1].persistent_keepalive=25"; echo -e "${CYAN}Перезапускаем сеть${NC}"; uci commit network >/dev/null 2>&1; /etc/init.d/rpcd restart >/dev/null 2>&1
-/etc/init.d/uhttpd restart >/dev/null 2>&1; rm -rf /tmp/luci-* >/dev/null 2>&1; ip link del "$WARP_IFACE" >/dev/null 2>&1; killall netifd >/dev/null 2>&1; sleep 3; ifup "$WARP_IFACE" >/dev/null 2>&1; sleep 3; }
-# ──────────────────────────── 6. register endpoint in splify ────────────────
-register_in_splify() { _ei=0; while [ -n "$(uci -q get "splify.@endpoint[$_ei]" 2>/dev/null)" ]; do _ei_if="$(uci -q get "splify.@endpoint[$_ei].iface" 2>/dev/null)"; if [ -n "$_ei_if" ] && [ -z "$(uci -q get "network.$_ei_if" 2>/dev/null)" ]
-then uci -q delete "splify.@endpoint[$_ei]"; else _ei=$((_ei + 1)); fi; done; uci commit splify; grep -q "option iface '$WARP_IFACE'" /etc/config/splify 2>/dev/null || printf "\nconfig endpoint\n\toption iface '$WARP_IFACE'\n\toption priority '1'\n\toption type 'wg'\n" >> /etc/config/splify; }
-# ──────────────────────────── 7. firewall zone ──────────────────────────────
-setup_firewall() { echo -e "\n${MAGENTA}Создаём зону firewall${NC}"; if /usr/local/sbin/splify-firewall check "$WARP_IFACE" >/dev/null 2>&1
-then echo -e "${CYAN}Зона${NC} firewall ${CYAN}для ${NC}$WARP_IFACE уже настроена${NC}"; else echo -e "${CYAN}Настраиваем зону ${NC}firewall${CYAN} для ${NC}$WARP_IFACE${NC}"; echo -en "${YELLOW}Подождите...${NC}"; /usr/local/sbin/splify-firewall fix "$WARP_IFACE" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось создать зону ${NC}firewall${RED}!${NC}\n"; PAUSE; return 1; }; echo; fi; }
-# ──────────────────────────── main ──────────────────────────────────────────
-SPL_V_VER() { if [ "$PKG_IS_APK" -eq 1 ]; then SPL_INST_VER=$(awk '$0=="P:splify"{f=1} f&&/^V:/{v=substr($0,3);sub(/-r[0-9]+$/,"",v);print v;exit}' /lib/apk/db/installed); else SPL_INST_VER=$(opkg list-installed splify 2>/dev/null | awk '{sub(/(-r[0-9]+|-[0-9]+)$/, "", $3); print $3}'); fi; }
-SPL_MENU() { while true; do SPL_V_VER; UPD_SPL="0"; mkdir -p "$TMP_SPL"; clear; echo -e "${MAGENTA}Меню splify${NC}\n"; if [ -z "$SPL_INST_VER" ]; then SPL_STATUS="${RED}не установлен${NC}"; elif [ "$SPL_VER" = "$SPL_INST_VER" ]; then SPL_STATUS="${GREEN}$SPL_INST_VER${NC}"
-else SPL_STATUS="${RED}$SPL_INST_VER (версия устарела)${NC}"; UPD_SPL="1"; fi; echo -e "${YELLOW}splify:    $SPL_STATUS"; if pkg_is_installed amneziawg-tools && pkg_is_installed luci-proto-amneziawg && pkg_is_installed kmod-amneziawg
-then echo -e "${YELLOW}AmneziaWG: ${GREEN}установлен${NC}"; else echo -e "${YELLOW}AmneziaWG: ${RED}не установлен${NC}"; fi; if uci -q get network.warp0 >/dev/null 2>&1; then echo -e "${YELLOW}Интерфейс: ${GREEN}установлен${NC}"
-else echo -e "${YELLOW}Интерфейс: ${RED}не установлен${NC}"; fi; if uci show firewall | grep -q "network='.*warp0"; then echo -e "${YELLOW}Firewall:  ${GREEN}настроен${NC}"; else echo -e "${YELLOW}Firewall:  ${RED}не настроен${NC}"; fi
-if [ "$UPD_SPL" = "0" ]; then echo -e "\n${CYAN}1) ${GREEN}Установить ${NC}splify"; else echo -e "\n${CYAN}1) ${GREEN}Обновить ${NC}splify"; fi; echo -e "${CYAN}2) ${GREEN}Удалить ${NC}splify"; echo -e "${CYAN}3) ${GREEN}Сгенерировать и применить ${NC}WARP"
-echo -e "${CYAN}4) ${GREEN}Перезапустить ${NC}splify"; echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read choiceSP; case "$choiceSP" in 1) if [ "$UPD_SPL" = "0" ]; then clear; echo -e "${MAGENTA}Устанавливаем ${NC}splify"
-install_splify || continue; install_AWG || continue; echo; register_warp || continue; echo -e "${CYAN}Используем ${NC}endpoint${CYAN}:${NC} $WARP_EP"; create_warp_iface || continue; WARP_TO_ROOT; register_in_splify; setup_firewall || continue; restart_splify; echo -e "splify ${GREEN}установлен!${NC}\n"
-else echo -e "\n${MAGENTA}Обновляем ${NC}splify"; install_splify || continue; register_in_splify; restart_splify; echo -e "splify ${GREEN}обновлён!${NC}\n"; fi; PAUSE ;; 2) DELETE_SPL ;; 3) if [ -z "$SPL_INST_VER" ]; then echo -e "\nsplify ${RED}не установлен!${NC}\n"
-else register_warp || continue; choose_endpoint || continue; create_warp_iface || continue; WARP_TO_ROOT; register_in_splify; restart_splify; echo -e "\nWARP ${GREEN}изменён!${NC}\n"; fi; PAUSE ;; 4) if [ -z "$SPL_INST_VER" ]; then echo -e "\nsplify ${RED}не установлен!${NC}\n"; else register_in_splify; restart_splify; fi; echo; PAUSE ;; *) return ;; esac; done; }
-uget() { uci -q get "$1" 2>/dev/null; }
-DELETE_SPL() { echo -e "\n${MAGENTA}Удаляем splify${NC}"; 
-# ──────────────────────────── 1. stop splify services ───────────────────────
-echo -e "${CYAN}Останавливаем службы${NC}"; for s in splify splify-agent; do if [ -x "/etc/init.d/$s" ]; then "/etc/init.d/$s" stop >/dev/null 2>&1; "/etc/init.d/$s" disable >/dev/null 2>&1; fi; done; if [ -x /etc/init.d/splify-singbox ]; then /etc/init.d/splify-singbox stop >/dev/null 2>&1; /etc/init.d/splify-singbox disable >/dev/null 2>&1; fi
-# ──────────────────────────── 2. warp0 interface + peers ────────────────────
-if [ -n "$(uget "network.$WARP_IFACE")" ]; then echo -e "${CYAN}Удаляем интерфейс ${NC}$WARP_IFACE"; ifdown "$WARP_IFACE" >/dev/null 2>&1; uci -q delete "network.$WARP_IFACE"; fi; for _pt in amneziawg_"$WARP_IFACE" wireguard_"$WARP_IFACE"; do while [ -n "$(uget "network.@${_pt}[0]")" ]; do uci -q delete "network.@${_pt}[0]"; done; done
-# ──────────────────────────── 3. firewall zone + forwardings ────────────────
-_ep_ifaces="$(uci show splify 2>/dev/null | sed -n "s/^splify\.[^=]*\.iface='\([^']*\)'\$/\1/p" | sort -u)"; _ep_ifaces="$WARP_IFACE $_ep_ifaces"; echo -e "${CYAN}Удаляем ${NC}firewall${CYAN} зону${NC}"; _zi=0; while [ -n "$(uget "firewall.@zone[$_zi]")" ]; do _zn="$(uget "firewall.@zone[$_zi].name")"; _znet="$(uget "firewall.@zone[$_zi].network")"
-_zdev="$(uget "firewall.@zone[$_zi].device")"; _match=""; for _ep in $_ep_ifaces; do [ -n "$_ep" ] || continue; if [ "$_zn" = "$_ep" ]; then _match=1; break; fi; case " $_znet " in *" $_ep "*) _match=1; break ;; esac; case " $_zdev " in *" $_ep "*) _match=1; break ;; esac; done; if [ -n "$_match" ]; then uci -q delete "firewall.@zone[$_zi]"
-else _zi=$((_zi + 1)); fi; done; _fi=0; while [ -n "$(uget "firewall.@forwarding[$_fi]")" ]; do _fsrc="$(uget "firewall.@forwarding[$_fi].src")"; _fdest="$(uget "firewall.@forwarding[$_fi].dest")"; _match=""; for _ep in $_ep_ifaces; do [ -n "$_ep" ] || continue; if [ "$_fsrc" = "$_ep" ] || [ "$_fdest" = "$_ep" ]; then _match=1; break; fi; done; if [ -n "$_match" ]; then uci -q delete "firewall.@forwarding[$_fi]"; else _fi=$((_fi + 1)); fi; done
-# ──────────────────────────── 4. commit UCI + reload ────────────────────────
-echo -e "${CYAN}Перезапускаем сеть${NC}"; uci commit network >/dev/null 2>&1; uci commit firewall >/dev/null 2>&1; /etc/init.d/rpcd restart >/dev/null 2>&1; /etc/init.d/uhttpd restart >/dev/null 2>&1
-rm -rf /tmp/luci-* >/dev/null 2>&1; ip link del "$WARP_IFACE" >/dev/null 2>&1; killall netifd >/dev/null 2>&1; /etc/init.d/ttyd restart >/dev/null 2>&1; /etc/init.d/firewall reload >/dev/null 2>&1
-# ──────────────────────────── 5. splify runtime (ip rules, nft, cron) ───────
-if [ -x /usr/local/sbin/splify-uninstall ]; then echo -e "${CYAN}Удаляем активные правила"; /usr/local/sbin/splify-uninstall >/dev/null 2>&1; else while ip -4 rule del priority 999 >/dev/null 2>&1; do :; done
-while ip -4 rule del priority 1000 >/dev/null 2>&1; do :; done; ip -4 route flush table 200 >/dev/null 2>&1; rm -f /etc/nftables.d/30-splify.nft; rm -f /tmp/dnsmasq.d/splify-*.conf /tmp/dnsmasq.cfg*.d/splify-*.conf
-if [ -f /etc/crontabs/root ]; then grep -v 'splify-' /etc/crontabs/root > /tmp/splify-cron.uninst; cat /tmp/splify-cron.uninst > /etc/crontabs/root; rm -f /tmp/splify-cron.uninst; /etc/init.d/cron restart >/dev/null 2>&1; fi
-rm -f /var/run/splify-state /var/run/splify-failcount /var/run/splify-events; /etc/init.d/firewall reload >/dev/null 2>&1; /etc/init.d/dnsmasq reload >/dev/null 2>&1; fi
-# ──────────────────────────── 6. remove packages ─────────────────────
-echo -e "${CYAN}Удаляем пакеты ${NC}splify"; $DELETE luci-i18n-splify-ru >/dev/null 2>&1; $DELETE luci-app-splify >/dev/null 2>&1; $DELETE splify >/dev/null 2>&1; if ! pkg_is_installed netshift; then echo -e "${CYAN}Удаляем пакеты ${NC}AWG"; $DELETE luci-i18n-amneziawg-ru >/dev/null 2>&1; $DELETE luci-proto-amneziawg >/dev/null 2>&1; $DELETE amneziawg-tools >/dev/null 2>&1; $DELETE kmod-amneziawg >/dev/null 2>&1; fi
-# ──────────────────────────── 8. splify config + leftover data ──────────────
-echo -e "${CYAN}Удаляем данные ${NC}splify"; rm -rf /etc/splify* /etc/init.d/splify* /etc/config/splify* /var/run/splify* /tmp/luci-indexcache* /tmp/luci-modulecache* /usr/local/sbin/splify* /tmp/splify*; /etc/init.d/rpcd reload 2>/dev/null || /etc/init.d/rpcd restart 2>/dev/null; echo -e "splify ${GREEN}удалён!${NC}\n"; PAUSE; }
+uci set "network.@${_pt}[-1].endpoint_port=${WARP_EP##*:}"; uci set "network.@${_pt}[-1].persistent_keepalive=25"; uci commit network >/dev/null 2>&1
+echo -e "${CYAN}Перезапускаем сеть${NC}"; /etc/init.d/rpcd restart >/dev/null 2>&1; /etc/init.d/uhttpd restart >/dev/null 2>&1; rm -rf /tmp/luci-* >/dev/null 2>&1; ip link del "$WARP_IFACE" >/dev/null 2>&1
+killall netifd >/dev/null 2>&1; sleep 3; ifup "$WARP_IFACE" >/dev/null 2>&1; sleep 3; }
+
+SPL2_setup_firewall() { echo -e "\n${MAGENTA}Настраиваем firewall${NC}"; if ! uci show firewall | grep -q "\.name='$WARP_IFACE'"; then uci add firewall zone >/dev/null
+uci set firewall.@zone[-1].name="$WARP_IFACE"; uci set firewall.@zone[-1].input='REJECT'; uci set firewall.@zone[-1].output='ACCEPT'; uci set firewall.@zone[-1].forward='REJECT'
+uci set firewall.@zone[-1].masq='1'; uci set firewall.@zone[-1].mtu_fix='1'; uci add_list firewall.@zone[-1].network="$WARP_IFACE"; fi
+_fi=0; _has_fwd=0; while [ -n "$(uci -q get "firewall.@forwarding[$_fi]")" ]; do [ "$(uci -q get "firewall.@forwarding[$_fi].src")" = "lan" ] && [ "$(uci -q get "firewall.@forwarding[$_fi].dest")" = "$WARP_IFACE" ] && _has_fwd=1 && break; _fi=$((_fi + 1)); done
+[ "$_has_fwd" = "0" ] && { uci add firewall forwarding >/dev/null; uci set firewall.@forwarding[-1].src='lan'; uci set firewall.@forwarding[-1].dest="$WARP_IFACE"; }
+uci commit firewall >/dev/null 2>&1; /etc/init.d/firewall restart >/dev/null 2>&1; echo -e "Firewall ${GREEN}настроен!${NC}"; }
+
+SPL2_warp_to_root() { printf '%s\n' "[Interface]" "PrivateKey = $PRIV" "Address = $WARP_V4${WARP_V6:+, $WARP_V6}" "DNS = 8.8.8.8, 8.8.4.4, 2001:4860:4860::8888, 2001:4860:4860::8844" "MTU = 1280" "S1 = $AWG_S1" "S2 = $AWG_S2" "Jc = $AWG_JC" "Jmin = $AWG_JMIN" "Jmax = $AWG_JMAX" "H1 = $AWG_H1" "H2 = $AWG_H2" "H3 = $AWG_H3" "H4 = $AWG_H4" "I1 = $AWG_I1" "" "[Peer]" "PublicKey = $WARP_PEER" "AllowedIPs = 0.0.0.0/0, ::/0" "Endpoint = $WARP_EP" "PersistentKeepalive = 25" > /root/WARP.conf
+echo -e "${YELLOW}Файл ${NC}WARP${YELLOW} сохранён в ${NC}/root/WARP.conf"; }
+
+SPL2_generate_warp() { SPL2_register_warp || return 1; SPL2_create_iface; SPL2_warp_to_root; SPL2_setup_firewall; echo -e "\nWARP ${GREEN}сгенерирован и применён!${NC}\n"; PAUSE; }
+
+SPL2_show_warpconf() { clear; echo -e "${MAGENTA}WARP.conf${NC}\n"; [ -f /root/WARP.conf ] && cat /root/WARP.conf || echo -e "${RED}Файл /root/WARP.conf не найден!${NC}"; echo; PAUSE; }
+
+SPL2_apply_spec() { echo -e "\n${MAGENTA}Записываем ${NC}$SPEC_FILE"; mkdir -p /etc/steer
+cat > "$SPEC_FILE" <<'SPECEOF'
+{"schema":1,"outputs":{"warp0":{"name":"warp0","kind":"interface","devices":["warp0"],"on_fail":"direct"}},"channels":[{"name":"правило1","match":{"prefixes_files":["/etc/steer/lists/telegram.lst","/etc/steer/lists/whatsapp.lst","/etc/steer/lists/meta.lst","/etc/steer/lists/discord.lst","/etc/steer/lists/twitter_x.lst","/etc/steer/lists/google.lst","/etc/steer/lists/rkn.lst"],"domains_files":["/etc/steer/lists/domains/svc_telegram.lst","/etc/steer/lists/domains/svc_meta.lst","/etc/steer/lists/domains/svc_discord.lst","/etc/steer/lists/domains/svc_twitter.lst","/etc/steer/lists/domains/svc_google_meet.lst","/etc/steer/lists/domains/svc_google_play.lst","/etc/steer/lists/domains/geoblock.lst","/etc/steer/lists/domains/block.lst"],"mode":"fakeip"},"out":"warp0"}]}
+SPECEOF
+echo -e "${CYAN}Перезапускаем службы${NC}"; command -v steer >/dev/null 2>&1 && steer apply >/dev/null 2>&1; /etc/init.d/steer restart >/dev/null 2>&1; /etc/init.d/rpcd restart >/dev/null 2>&1
+echo -e "spec.json ${GREEN}применён!${NC}\n"; PAUSE; }
+
+SPL2_delete() { echo -e "\n${MAGENTA}Удаляем splify2${NC}"; [ -x /etc/init.d/steer ] && /etc/init.d/steer stop >/dev/null 2>&1
+echo -e "${CYAN}Удаляем пакеты${NC}"; $DELETE luci-app-splify2 >/dev/null 2>&1; $DELETE steer-extended >/dev/null 2>&1; $DELETE steer >/dev/null 2>&1
+echo -e "${CYAN}Удаляем конфигурацию${NC}"; rm -rf /etc/steer /var/lib/steer; /etc/init.d/rpcd restart >/dev/null 2>&1; echo -e "splify2 ${GREEN}удалён!${NC}\n"; PAUSE; }
+
+SPL2_delete_warp() { echo -e "\n${MAGENTA}Удаляем интерфейс $WARP_IFACE и AmneziaWG${NC}"; ifdown "$WARP_IFACE" >/dev/null 2>&1; uci -q delete "network.$WARP_IFACE"
+_pt="amneziawg_$WARP_IFACE"; while [ -n "$(uci -q get "network.@${_pt}[0]")" ]; do uci -q delete "network.@${_pt}[0]"; done; uci commit network >/dev/null 2>&1
+_zi=0; while [ -n "$(uci -q get "firewall.@zone[$_zi]")" ]; do [ "$(uci -q get "firewall.@zone[$_zi].name")" = "$WARP_IFACE" ] && uci -q delete "firewall.@zone[$_zi]" || _zi=$((_zi + 1)); done
+_fi=0; while [ -n "$(uci -q get "firewall.@forwarding[$_fi]")" ]; do [ "$(uci -q get "firewall.@forwarding[$_fi].dest")" = "$WARP_IFACE" ] && uci -q delete "firewall.@forwarding[$_fi]" || _fi=$((_fi + 1)); done
+uci commit firewall >/dev/null 2>&1; /etc/init.d/network restart >/dev/null 2>&1; /etc/init.d/firewall restart >/dev/null 2>&1; sleep 3
+if ! pkg_is_installed netshift; then echo -e "${CYAN}Удаляем пакеты ${NC}AmneziaWG"; $DELETE luci-i18n-amneziawg-ru >/dev/null 2>&1; $DELETE luci-proto-amneziawg >/dev/null 2>&1; $DELETE amneziawg-tools >/dev/null 2>&1; $DELETE kmod-amneziawg >/dev/null 2>&1; fi
+rm -f /root/WARP.conf; echo -e "WARP ${GREEN}и AmneziaWG удалены!${NC}\n"; PAUSE; }
+
+SPL2_MENU() { while true; do clear; echo -e "${MAGENTA}Меню splify2${NC}\n${DGRAY}Источник: ${GITLAB}/${SPLIFY2_REPO}${NC}\n"
+STEER_LOCAL="$(SPL2_local_ver "steer-extended-")"; UI_LOCAL="$(SPL2_local_ver "luci-app-splify2-")"
+if [ -z "$STEER_LOCAL" ]; then echo -e "${YELLOW}steer:${NC}       ${RED}не установлен${NC}"; elif [ "$STEER_LOCAL" = "$STEER_VER" ]; then echo -e "${YELLOW}steer:${NC}       ${GREEN}$STEER_LOCAL${NC}"; else echo -e "${YELLOW}steer:${NC}       ${RED}$STEER_LOCAL (версия устарела)${NC}"; fi
+if [ -z "$UI_LOCAL" ]; then echo -e "${YELLOW}splify2:${NC}     ${RED}не установлен${NC}"; elif [ "$UI_LOCAL" = "$SPLIFY2_VER" ]; then echo -e "${YELLOW}splify2:${NC}     ${GREEN}$UI_LOCAL${NC}"; else echo -e "${YELLOW}splify2:${NC}     ${RED}$UI_LOCAL (версия устарела)${NC}"; fi
+if pkg_is_installed amneziawg-tools && pkg_is_installed luci-proto-amneziawg && pkg_is_installed kmod-amneziawg; then echo -e "${YELLOW}AmneziaWG:${NC}   ${GREEN}установлен${NC}"; else echo -e "${YELLOW}AmneziaWG:${NC}   ${RED}не установлен${NC}"; fi
+if [ -n "$(uci -q get "network.$WARP_IFACE.private_key" 2>/dev/null)" ]; then echo -e "${YELLOW}$WARP_IFACE:${NC}      ${GREEN}настроен${NC}"; else echo -e "${YELLOW}$WARP_IFACE:${NC}      ${RED}не настроен${NC}"; fi
+[ -f "$SPEC_FILE" ] && echo -e "${YELLOW}spec.json:${NC}   ${GREEN}применён${NC}"
+echo -e "\n${CYAN}0) ${GREEN}Установить/обновить всё одной командой ${NC}(официальный установщик с gitlab.com)"
+echo -e "${CYAN}1) ${GREEN}Установить/обновить ${NC}AmneziaWG"
+echo -e "${CYAN}2) ${GREEN}Сгенерировать и применить ${NC}WARP"
+echo -e "${CYAN}3) ${GREEN}Установить/обновить ${NC}steer"
+echo -e "${CYAN}4) ${GREEN}Установить/обновить ${NC}splify2 ${GREEN}(LuCI)${NC}"
+echo -e "${CYAN}5) ${GREEN}Применить конфигурацию ${NC}(spec.json)"
+echo -e "${CYAN}6) ${GREEN}Показать ${NC}WARP.conf"
+echo -e "${CYAN}7) ${GREEN}Удалить ${NC}splify2"
+echo -e "${CYAN}8) ${GREEN}Удалить ${NC}WARP ${GREEN}и ${NC}AmneziaWG"
+echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read -r choiceSP2
+case "$choiceSP2" in
+0) SPL2_run_official ;;
+1) install_AWG; echo -e "\nAmneziaWG ${GREEN}готов!${NC}\n"; PAUSE ;;
+2) SPL2_generate_warp ;;
+3) SPL2_install_steer ;;
+4) SPL2_install_ui ;;
+5) SPL2_apply_spec ;;
+6) SPL2_show_warpconf ;;
+7) SPL2_delete ;;
+8) SPL2_delete_warp ;;
+*) return ;;
+esac; done; }
+
+
 # ==========================================
 # Получение версии
 # ==========================================
@@ -352,7 +466,7 @@ NFQ_ALL=${NFQ_ALL:-0}; NFQ_STAT=""; if [ "$NFQ_ALL" -gt 0 ]; then [ "$NFQ_RUN" -
 # ==========================================
 install_pkg() { local display_name="$1"; local pkg_file="$2"; echo -e "${CYAN}Устанавливаем ${NC}$display_name"; $INSTALL $pkg_file >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить: ${NC}$display_name\n"; PAUSE; return 1; }; }
 install_Zapret() { if [ -f /etc/init.d/zapret2 ] && ! is_expert_mode; then echo -e "\n${RED}Установлен ${NC}Zapret2${RED}!${NC}"; echo -e "${YELLOW}Установка ${NC}Zapret${YELLOW} невозможна!${NC}\n"; PAUSE; return 1; fi
-get_versions; LATEST_URL="https://github.com/remittor/zapret-openwrt/releases/download/v${ZAPRET_VERSION}/zapret_v${ZAPRET_VERSION}_${LOCAL_ARCH}.zip"
+get_versions; LATEST_URL="${GH_MAIN}/remittor/zapret-openwrt/releases/download/v${ZAPRET_VERSION}/zapret_v${ZAPRET_VERSION}_${LOCAL_ARCH}.zip"
 mkdir -p "$TMP_SF"; local NO_PAUSE=$1; [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ] && { echo -e "\n${GREEN}Zapret уже установлен!${NC}\n"; [ "$NO_PAUSE" != "1" ] && PAUSE; return; }; [ "$NO_PAUSE" != "1" ] && echo; echo -e "${MAGENTA}Устанавливаем Zapret${NC}"
 if [ -f /etc/init.d/zapret ]; then echo -e "${CYAN}Останавливаем ${NC}zapret"; /etc/init.d/zapret stop >/dev/null 2>&1; for pid in $(pgrep -f /opt/zapret 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done; fi;  update_packages || return
 rm -f "$TMP_SF"/* 2>/dev/null; cd "$TMP_SF" || return; FILE_NAME=$(basename "$LATEST_URL"); if ! command -v unzip >/dev/null 2>&1; then echo -e "${CYAN}Устанавливаем ${NC}unzip";  update_packages || return; $INSTALL unzip >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить ${NC}unzip\n"; PAUSE; return; }; fi
@@ -408,12 +522,12 @@ Discord_menu() { if [ -f /etc/init.d/zapret2 ] && ! is_expert_mode; then echo -e
 [ "$NO_PAUSE" != "1" ] && show_script_50 && [ -n "$name" ] && echo -e "${YELLOW}Установлен скрипт:${NC} $name" && output_shown=true; [ "$NO_PAUSE" != "1" ] && grep -q "$Fin_IP_Dis" /etc/hosts && echo -e "${YELLOW}Финские IP для Discord: ${GREEN}включены${NC}" && output_shown=true
 if [ "$NO_PAUSE" != "1" ]; then FAKE_FILE=$(awk '/--filter-l7=discord,stun/ {blk=1; next} blk && /^.*--filter-l7=/ {exit} blk && /--dpi-desync-fake-discord=/ {sub(/.*fake\//,""); print; exit}' "$CONF"); if [ -n "$FAKE_FILE" ]; then echo -e "${YELLOW}fake в discord,stun:${NC} $FAKE_FILE"; else echo -e "${YELLOW}fake в discord,stun:${RED} отсутствует${NC}"; fi; output_shown=true; fi
 [ "$NO_PAUSE" != "1" ] && NUMDv=$(grep -o -E '^#[[:space:]]*Dv[0-9][0-9]*' "$CONF" | sed 's/[^0-9]//g' | head -n1) && [ -n "$NUMDv" ] && echo -e "${YELLOW}Стратегия для discord.media: ${CYAN}Dv$NUMDv${NC}"  && output_shown=true
-$output_shown && echo; if [ "$NO_PAUSE" = "1" ]; then SELECTED="50-stun4all"; URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-stun4all"; else
+$output_shown && echo; if [ "$NO_PAUSE" = "1" ]; then SELECTED="50-stun4all"; URL="${GH_RAW}/bol-van/zapret/master/init.d/custom.d.examples.linux/50-stun4all"; else
 echo -e "${CYAN}1) ${GREEN}Установить скрипт ${NC}50-stun4all\n${CYAN}2) ${GREEN}Установить скрипт ${NC}50-quic4all\n${CYAN}3) ${GREEN}Установить скрипт ${NC}50-discord-media\n${CYAN}4) ${GREEN}Установить скрипт ${NC}50-discord\n${CYAN}5) ${GREEN}Удалить скрипт${NC}"
 grep -q '104\.25\.158\.178 finland[0-9]\{5\}\.discord\.media' /etc/hosts && FIN_TXT="${GREEN}Удалить Финские ${NC}IP ${GREEN}из ${NC}hosts" || FIN_TXT="${GREEN}Добавить ${NC}Финские IP ${GREEN}в ${NC}hosts"
 echo -e "${CYAN}6) $FIN_TXT\n${CYAN}7) ${GREEN}Выбрать и установить стратегию для ${NC}discord.media\n${CYAN}8) ${GREEN}Меню выбора ${NC}fake ${GREEN}для ${NC}discord,stun"; echo -en "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read choiceSC; case "$choiceSC" in
-1) SELECTED="50-stun4all"; URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-stun4all";; 2) SELECTED="50-quic4all"; URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-quic4all";;
-3) SELECTED="50-discord-media"; URL="https://raw.githubusercontent.com/bol-van/zapret/master/init.d/custom.d.examples.linux/50-discord-media";; 4) SELECTED="50-discord"; URL="https://raw.githubusercontent.com/bol-van/zapret/v70.5/init.d/custom.d.examples.linux/50-discord";;
+1) SELECTED="50-stun4all"; URL="${GH_RAW}/bol-van/zapret/master/init.d/custom.d.examples.linux/50-stun4all";; 2) SELECTED="50-quic4all"; URL="${GH_RAW}/bol-van/zapret/master/init.d/custom.d.examples.linux/50-quic4all";;
+3) SELECTED="50-discord-media"; URL="${GH_RAW}/bol-van/zapret/master/init.d/custom.d.examples.linux/50-discord-media";; 4) SELECTED="50-discord"; URL="${GH_RAW}/bol-van/zapret/v70.5/init.d/custom.d.examples.linux/50-discord";;
 5) [ ! -f /etc/init.d/zapret ] && { echo -e "\nZapret ${RED}не установлен!${NC}\n"; PAUSE; continue; }; echo -e "\n${MAGENTA}Удаляем скрипт${NC}"; rm -f "$CUSTOM_DIR/50-script.sh" 2>/dev/null; sed -i "/DISABLE_CUSTOM/s/'0'/'1'/" $CONF; ZAPRET_RESTART; echo -e "${GREEN}Скрипт удалён!${NC}\n"; PAUSE; continue;;
 6) toggle_finland_hosts; continue;; 7) switch_Dv; continue;; 8) DIC_FAKE; continue;; *) return;; esac; fi; [ ! -f /etc/init.d/zapret ] && { echo -e "\nZapret ${RED}не установлен!${NC}\n"; PAUSE; continue; }
 if wget -q -U "Mozilla/5.0" -O "$CUSTOM_DIR/50-script.sh" "$URL"; then [ "$NO_PAUSE" != "1" ] && echo; echo -e "${MAGENTA}Устанавливаем скрипт${NC}\n${GREEN}Скрипт ${NC}$SELECTED${GREEN} успешно установлен!${NC}\n"; else echo -e "\n${RED}Ошибка при скачивании скрипта!${NC}\n"; PAUSE; continue; fi
@@ -734,9 +848,9 @@ echo -e "${CYAN}14) ${GREEN}$(get_state "$TAPEop")${NC} tapeop.dev\n${CYAN}15) $
 echo -e "${CYAN}17) ${GREEN}Заменить ${NC}hosts${GREEN} на ${NC}Mafioznik hosts\n${CYAN}18) ${GREEN}Заменить ${NC}hosts${GREEN} на ${NC}Malw.link hosts\n${CYAN}19) ${GREEN}Восстановить ${NC}hosts"
 echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} ";read -r c; case "$c" in 0) toggle_block "$NALOG";; 1) toggle_block "$RUTOR";; 2) toggle_block "$NTC";; 3) toggle_block "$INSTAGRAM";;
 4) toggle_block "$LIBRUSEC";; 5) toggle_block "$AI";; 6) toggle_block "$TWCH";; 7) toggle_block "$TGWeb";; 8) toggle_block "$SPFY";; 9) toggle_block "$SPFYEXT";; 10) toggle_block "$SCell";; 11) toggle_block "$GITH_RAW";; 12) toggle_block "$GITH";;
-13) toggle_block "$USoft";; 14) toggle_block "$TAPEop";; 15) toggle_all;; 16) add_GEO_HOSTS;; 17) echo -e "\n${MAGENTA}Заменяем hosts на Mafioznik hosts${NC}"; wget -qO /etc/hosts https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/files/hosts_mafioznik.txt >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось скачать файл hosts${NC}\n"; PAUSE; }
+13) toggle_block "$USoft";; 14) toggle_block "$TAPEop";; 15) toggle_all;; 16) add_GEO_HOSTS;; 17) echo -e "\n${MAGENTA}Заменяем hosts на Mafioznik hosts${NC}"; wget -qO /etc/hosts ${GH_RAW}/StressOzz/Zapret-Manager/refs/heads/main/files/hosts_mafioznik.txt >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось скачать файл hosts${NC}\n"; PAUSE; }
 /etc/init.d/dnsmasq restart >/dev/null 2>&1; echo -e "hosts ${GREEN}заменён на ${NC}Mafioznik hosts${GREEN}!${NC}\n"; PAUSE;; 18) echo -e "\n${MAGENTA}Заменяем hosts на Malw.link hosts${NC}"
-wget -qO /etc/hosts https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/files/hosts_malw.link.txt >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось скачать файл hosts${NC}\n"; PAUSE; }
+wget -qO /etc/hosts ${GH_RAW}/StressOzz/Zapret-Manager/refs/heads/main/files/hosts_malw.link.txt >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось скачать файл hosts${NC}\n"; PAUSE; }
 /etc/init.d/dnsmasq restart >/dev/null 2>&1; echo -e "hosts ${GREEN}заменён на ${NC}Malw.link hosts${GREEN}!${NC}\n"; PAUSE;; 19) hosts_reset;; *) break;; esac; done; }
 status_block() { local line; while IFS= read -r line; do [ -z "$line" ] && continue; grep -Fxq "$line" "$HOSTS_FILE" || return 1; done <<EOF
 $(printf '%b\n' "$1")
@@ -860,22 +974,48 @@ ok=$((ok+1)); else right_status="[${RED}FAIL${NC}]"; fi; checked=$((checked+1));
 # ==========================================
 # Смена зеркала
 # ==========================================
-set_mirror() { NEW_BASE="$1"; sed -i "s|https://.*/releases/|https://$NEW_BASE/releases/|g" "$CONFZ"; echo -e "\n${CYAN}Изменяем зеркало\nОбновляем список пакетов${NC}"
-if ! $UPDATE >/dev/null 2>&1; then echo -e "\n${RED}Ошибка! Зеркало не работает!\n${GREEN}Зеркало сброшено на ${NC}default ${GREEN}/${NC} OpenWrt${GREEN}!${NC}\n"
+
+set_mirror() { NEW_BASE="$1"; echo -e "\n${CYAN}Проверяем доступность ${NC}$NEW_BASE"
+if ! wget -q --spider --timeout=5 "https://$NEW_BASE/releases/" >/dev/null 2>&1; then echo -e "${RED}Зеркало недоступно!${NC}\n"; PAUSE; return 1; fi
+sed -i "s|https://.*/releases/|https://$NEW_BASE/releases/|g" "$CONFZ"; echo -e "${GREEN}Зеркало доступно!${NC}\n${CYAN}Обновляем список пакетов${NC}"
+if ! $UPDATE >/dev/null 2>&1; then echo -e "\n${RED}Ошибка обновления списка пакетов!${NC}\n${GREEN}Зеркало сброшено на ${NC}default ${GREEN}/${NC} OpenWrt${GREEN}!${NC}\n"
 sed -i "s|https://.*/releases/|https://downloads.openwrt.org/releases/|g" "$CONFZ"; PAUSE; return 1; fi; echo -e "${GREEN}Пакеты обновлены! Зеркало работает!${NC}\n"; PAUSE; }
-curr_MIR() { if [ -f "$CONFZ" ]; then URL=$(head -n1 "$CONFZ"); case "$URL" in *tiguinet.net*) echo "Belgium" ;; *utwente.nl*) echo "Netherlands" ;; *freifunk.net*) echo "Germany" ;; *ps.kz*) echo "Kazakhstan" ;;
-*sjtu.edu.cn*) echo "China" ;; *downloads.openwrt.org*) echo "default / OpenWrt" ;; *) echo "неизвестное" ;; esac; else echo "файл не найден"; fi; }
-menu_MIR() { while true; do clear; CURR=$(curr_MIR); echo -e "${MAGENTA}Меню выбора зеркала OpenWrt${NC}\n\n${YELLOW}Используется зеркало: ${GREEN}$CURR${NC}\n\n${CYAN}1)${NC} China"
-echo -e "${CYAN}2)${NC} Germany\n${CYAN}3)${NC} Belgium\n${CYAN}4)${NC} Kazakhstan\n${CYAN}5)${NC} Netherlands\n${CYAN}6)${NC} default / OpenWrt\n${CYAN}Enter)${GREEN} Выход в системное меню${NC}"
-echo -en "\n${YELLOW}Выберите зеркало: ${NC}"; read -r z; case "$z" in 1) set_mirror "mirror.sjtu.edu.cn/openwrt" ;; 2) set_mirror "mirror.berlin.freifunk.net/downloads.openwrt.org" ;;
-3) set_mirror "mirror.tiguinet.net/openwrt" ;; 4) set_mirror "mirror.ps.kz/openwrt" ;; 5) set_mirror "ftp.snt.utwente.nl/pub/software/openwrt" ;; 6) set_mirror "downloads.openwrt.org" ;; *) break ;; esac; done; }
+
+curr_MIR() { if [ -f "$CONFZ" ]; then URL=$(head -n1 "$CONFZ"); case "$URL" in
+*mirror-03.infra.openwrt.org*) echo "infra.openwrt.org" ;;
+*tiguinet.net*) echo "Belgium" ;;
+*utwente.nl*) echo "Netherlands" ;;
+*freifunk.net*) echo "Germany" ;;
+*rwth-aachen.de*) echo "Germany (RWTH Aachen)" ;;
+*ps.kz*) echo "Kazakhstan" ;;
+*sjtu.edu.cn*) echo "China" ;;
+*accum.se*) echo "Sweden" ;;
+*downloads.openwrt.org*) echo "default / OpenWrt" ;;
+*) echo "неизвестное" ;;
+esac; else echo "файл не найден"; fi; }
+
+menu_MIR() { while true; do clear; CURR=$(curr_MIR); echo -e "${MAGENTA}Меню выбора зеркала OpenWrt${NC}\n\n${YELLOW}Используется зеркало: ${GREEN}$CURR${NC}\n\n${CYAN}1)${NC} infra.openwrt.org\n${CYAN}2)${NC} China"
+echo -e "${CYAN}3)${NC} Germany\n${CYAN}4)${NC} Belgium\n${CYAN}5)${NC} Kazakhstan\n${CYAN}6)${NC} Netherlands\n${CYAN}7)${NC} Germany (RWTH Aachen)\n${CYAN}8)${NC} Sweden\n${CYAN}9)${NC} default / OpenWrt${NC}"
+echo -en "\n${YELLOW}Выберите зеркало: ${NC}"; read -r z; case "$z" in
+1) set_mirror "mirror-03.infra.openwrt.org" ;;
+2) set_mirror "mirror.sjtu.edu.cn/openwrt" ;;
+3) set_mirror "mirror.berlin.freifunk.net/downloads.openwrt.org" ;;
+4) set_mirror "mirror.tiguinet.net/openwrt" ;;
+5) set_mirror "mirror.ps.kz/openwrt" ;;
+6) set_mirror "ftp.snt.utwente.nl/pub/software/openwrt" ;;
+7) set_mirror "ftp.halifax.rwth-aachen.de/openwrt" ;;
+8) set_mirror "mirror.accum.se/mirror/openwrt.org" ;;
+9) set_mirror "downloads.openwrt.org" ;;
+*) break ;;
+esac; done; }
+
 # ==========================================
 # МЕНЮ TG WS Proxy
 # ==========================================
 # УСТАНОВКА RUST
 get_arch_RS() { case "$ARCH" in aarch64*) echo "tg-ws-proxy-aarch64-unknown-linux-musl" ;; x86_64) echo "tg-ws-proxy-x86_64-unknown-linux-musl" ;; arm*) echo "tg-ws-proxy-armv7-unknown-linux-musleabihf" ;; mipsel*) echo "tg-ws-proxy-mipsel-unknown-linux-musl" ;; mips*) echo "tg-ws-proxy-mips-unknown-linux-musl" ;; *) echo -e "\n${RED}Архитектура не поддерживается: ${NC}$ARCH\n"; PAUSE; return 1 ;; esac; }
 delete_TG_RS() { echo -e "\n${MAGENTA}Удаляем TG WS Proxy Rust${NC}"; /etc/init.d/tg-ws-proxy-rs stop >/dev/null 2>&1; /etc/init.d/tg-ws-proxy-rs disable >/dev/null 2>&1; rm -f "$BIN_PATH_RS" "$INIT_PATH_RS" "$BIN_VER_RS"; echo -e "TG WS Proxy Rust ${GREEN}удалён!${NC}\n"; PAUSE; }
-install_TG_RS() { echo -e "\n${MAGENTA}Устанавливаем TG WS Proxy Rust${NC}"; ARCH_FILE_RS="$(get_arch_RS)" || return 1; echo -e "${CYAN}Скачиваем и устанавливаем${NC} $ARCH_FILE_RS"; DOWNLOAD_URL_RS="https://github.com/valnesfjord/tg-ws-proxy-rs/releases/download/v${TG_RS_VERSION}/${ARCH_FILE_RS}.tar.gz"
+install_TG_RS() { echo -e "\n${MAGENTA}Устанавливаем TG WS Proxy Rust${NC}"; ARCH_FILE_RS="$(get_arch_RS)" || return 1; echo -e "${CYAN}Скачиваем и устанавливаем${NC} $ARCH_FILE_RS"; DOWNLOAD_URL_RS="${GH_MAIN}/valnesfjord/tg-ws-proxy-rs/releases/download/v${TG_RS_VERSION}/${ARCH_FILE_RS}.tar.gz"
 curl -L --fail -o "$TMP_ARCHIVE_RS" "$DOWNLOAD_URL_RS" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка скачивания${NC}\n"; PAUSE; return 1; }; rm -rf "$TMP_DIR_RS"; mkdir -p "$TMP_DIR_RS"; tar -xzf "$TMP_ARCHIVE_RS" -C "$TMP_DIR_RS" || { echo -e "\n${RED}Ошибка распаковки${NC}\n"
 rm -f "$TMP_ARCHIVE_RS"; PAUSE; return 1; }; rm -f "$BIN_PATH_RS"; mv "$TMP_DIR_RS"/tg-ws-proxy* "$BIN_PATH_RS" || { echo -e "\n${RED}Ошибка установки бинарника${NC}\n"; rm -rf "$TMP_DIR_RS" "$TMP_ARCHIVE_RS"; PAUSE; return 1; }
 chmod +x "$BIN_PATH_RS"; rm -rf "$TMP_DIR_RS" "$TMP_ARCHIVE_RS"; echo "$TG_RS_VERSION" > "$BIN_VER_RS"; if [ ! -f "$INIT_PATH_RS" ]; then
@@ -884,12 +1024,12 @@ chmod +x "$INIT_PATH_RS"; "$INIT_PATH_RS" enable >/dev/null 2>&1; fi; "$INIT_PAT
 # УСТАНОВКА SOCKS5
 get_arch_GO() { case "$ARCH" in aarch64*) echo "tg-ws-proxy-openwrt-aarch64" ;; arm*) echo "tg-ws-proxy-openwrt-armv7" ;; mipsel*) echo "tg-ws-proxy-openwrt-mipsel_24kc" ;; mips*) echo "tg-ws-proxy-openwrt-mips_24kc" ;; x86_64) echo "tg-ws-proxy-openwrt-x86_64" ;; *) echo -e "\n${RED}Архитектура не поддерживается: ${NC}$ARCH\n"; PAUSE; return 1 ;; esac; }
 delete_TG_GO() { echo -e "\n${MAGENTA}Удаляем TG WS Proxy SOCKS5${NC}"; /etc/init.d/tg-ws-proxy-go stop >/dev/null 2>&1; /etc/init.d/tg-ws-proxy-go disable >/dev/null 2>&1; rm -f "$BIN_PATH_GO" "$INIT_PATH_GO" "$BIN_VER_GO"; echo -e "TG WS Proxy SOCKS5 ${GREEN}удалён!${NC}\n"; PAUSE; }
-install_TG_GO() { echo -e "\n${MAGENTA}Устанавливаем TG WS Proxy SOCKS5${NC}"; ARCH_FILE_GO="$(get_arch_GO)" || return 1; echo -e "${CYAN}Скачиваем и устанавливаем${NC} $ARCH_FILE_GO"; DOWNLOAD_URL_GO="https://github.com/d0mhate/-tg-ws-proxy-Manager-go/releases/download/v${TG_GO_VERSION}/${ARCH_FILE_GO}"
+install_TG_GO() { echo -e "\n${MAGENTA}Устанавливаем TG WS Proxy SOCKS5${NC}"; ARCH_FILE_GO="$(get_arch_GO)" || return 1; echo -e "${CYAN}Скачиваем и устанавливаем${NC} $ARCH_FILE_GO"; DOWNLOAD_URL_GO="${GH_MAIN}/d0mhate/-tg-ws-proxy-Manager-go/releases/download/v${TG_GO_VERSION}/${ARCH_FILE_GO}"
 curl -L --fail -o "$BIN_PATH_GO" "$DOWNLOAD_URL_GO" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка скачивания${NC}\n"; rm -f "$BIN_PATH_GO"; PAUSE; return 1; }; chmod +x "$BIN_PATH_GO"; echo "$TG_GO_VERSION" > "$BIN_VER_GO"; if [ ! -f "$INIT_PATH_GO" ]; then
 printf '#!/bin/sh /etc/rc.common\nSTART=99\nUSE_PROCD=1\n\nstart_service() {\n    procd_open_instance\n    procd_set_param command /usr/bin/tg-ws-proxy-go --host 0.0.0.0 --port 2080 --cf-proxy --cf-proxy-first --cf-balance\n    procd_set_param respawn\n    procd_close_instance\n}\n' > "$INIT_PATH_GO"
 chmod +x "$INIT_PATH_GO"; "$INIT_PATH_GO" enable >/dev/null 2>&1; fi; "$INIT_PATH_GO" restart >/dev/null 2>&1; if pidof tg-ws-proxy-go >/dev/null 2>&1; then echo -e "TG WS Proxy SOCKS5 ${GREEN}установлен!${NC}\n"; else echo -e "${RED}TG WS Proxy SOCKS5 не запущен!${NC}\n"; fi; PAUSE; }
 # УСТАНОВКА MTProto
-install_update_TG_PKG() { echo -e "\n${MAGENTA}Устанавливаем TG WS Proxy MTProto${NC}"; rm -f /etc/tg-ws-proxy.conf /etc/tg-ws-proxy.conf-opkg; URL="https://github.com/spatiumstas/tg-ws-proxy-go/releases/download/${TG_MTProto}/tg-ws-proxy_${TG_MTProto}-${GO_SUF}_openwrt_${ARCH_FULL}.${RAZ}"
+install_update_TG_PKG() { echo -e "\n${MAGENTA}Устанавливаем TG WS Proxy MTProto${NC}"; rm -f /etc/tg-ws-proxy.conf /etc/tg-ws-proxy.conf-opkg; URL="${GH_MAIN}/spatiumstas/tg-ws-proxy-go/releases/download/${TG_MTProto}/tg-ws-proxy_${TG_MTProto}-${GO_SUF}_openwrt_${ARCH_FULL}.${RAZ}"
 update_packages || return; FILE_NAME_GO="$(basename "$URL")"; echo -e "${CYAN}Скачиваем и устанавливаем${NC} $FILE_NAME_GO"
 wget -q -O "$TMP_FILE_GO" "$URL" || { echo -e "\n${RED}Ошибка скачивания $URL${NC}\n"; PAUSE; return 1; }; $INSTALL "$TMP_FILE_GO" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка установки $TMP_FILE_GO!${NC}\n"; rm -f "$TMP_FILE_GO"; PAUSE; return 1; }
 rm -f "$TMP_FILE_GO"; if ! grep -q '^SECRET=.' "$SECRET_FILE" 2>/dev/null; then echo "SECRET=$SECRET" > "$SECRET_FILE"; fi; rm -f /etc/tg-ws-proxy.conf /etc/tg-ws-proxy.conf-opkg; /etc/init.d/tg-ws-proxy enable >/dev/null 2>&1; /etc/init.d/tg-ws-proxy restart >/dev/null 2>&1
@@ -927,8 +1067,8 @@ then echo -e "\n${RED}Недостаточно свободного места${
 then echo -ne "${YELLOW}Удалить старую версию NetShift и установить новую? (${NC}y/n${YELLOW}): ${NC}"; read -r answer; case "$answer" in y|Y) PODKOP_DELETE ;; *) echo -e "\n${RED}Обновление отменено!${NC}\n"; PAUSE; return ;; esac; else PAUSE; return; fi; fi
 if pkg_is_installed https-dns-proxy; then echo -e "\n${RED}Обнаружен ${NC}DNS over HTTPS${RED}!"; echo -e "${YELLOW}Удалите ${NC}DNS over HTTPS\n"; PAUSE; return; fi
 [ "$ACTION" = "install" ] && echo -e "\n${MAGENTA}Устанавливаем NetShift${NC}" || echo -e "\n${MAGENTA}Обновляем NetShift${NC}";  update_packages || return
-PODKOP_INST="https://github.com/yandexru45/netshift/releases/download/$PODKOP_LATEST_VER/netshift-$PODKOP_LATEST_VER-$VER_SUF.$RAZ"; PODKOP_LUCI="https://github.com/yandexru45/netshift/releases/download/$PODKOP_LATEST_VER/luci-app-netshift-$PODKOP_LATEST_VER-$VER_SUF.$RAZ"
-PODKOP_RUS="https://github.com/yandexru45/netshift/releases/download/$PODKOP_LATEST_VER/luci-i18n-netshift-ru-$PODKOP_LATEST_VER.$RAZ"; cd "$tmpDIR"; echo -e "${CYAN}Скачиваем ${NC}NetShift"; wget -q -U "Mozilla/5.0" -O netshift.$RAZ "$PODKOP_INST" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$PODKOP_INST\n"; PAUSE; return; }
+PODKOP_INST="${GH_MAIN}/yandexru45/netshift/releases/download/$PODKOP_LATEST_VER/netshift-$PODKOP_LATEST_VER-$VER_SUF.$RAZ"; PODKOP_LUCI="${GH_MAIN}/yandexru45/netshift/releases/download/$PODKOP_LATEST_VER/luci-app-netshift-$PODKOP_LATEST_VER-$VER_SUF.$RAZ"
+PODKOP_RUS="${GH_MAIN}/yandexru45/netshift/releases/download/$PODKOP_LATEST_VER/luci-i18n-netshift-ru-$PODKOP_LATEST_VER.$RAZ"; cd "$tmpDIR"; echo -e "${CYAN}Скачиваем ${NC}NetShift"; wget -q -U "Mozilla/5.0" -O netshift.$RAZ "$PODKOP_INST" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$PODKOP_INST\n"; PAUSE; return; }
 wget -q -U "Mozilla/5.0" -O luci-app-netshift.$RAZ "$PODKOP_LUCI" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$PODKOP_LUCI\n"; PAUSE; return; }
 wget -q -U "Mozilla/5.0" -O luci-i18n-netshift-ru.$RAZ "$PODKOP_RUS" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$PODKOP_RUS\n"; PAUSE; return; }
 echo -en "${CYAN}Устанавливаем ${NC}NetShift\n${YELLOW}Подождите...${NC}"; $INSTALL ./netshift.$RAZ >/dev/null 2>&1 || { echo -e "\n\n${RED}Не удалось установить:\n${NC}$PODKOP_INST\n"; PAUSE; return; }
@@ -944,31 +1084,31 @@ echo -e "${NC}Network ${GREEN}→${NC} Interfaces ${GREEN}→${NC} AWG ${GREEN}�
 AWG_DELETE(){ echo -e "\n${MAGENTA}Удаляем AmneziaWG${NC}"; $DELETE luci-i18n-amneziawg-ru >/dev/null 2>&1; $DELETE luci-proto-amneziawg >/dev/null 2>&1; $DELETE amneziawg-tools >/dev/null 2>&1; $DELETE kmod-amneziawg >/dev/null 2>&1; echo -e "AmneziaWG ${GREEN}удалён!${NC}\n"; PAUSE; }
 INT_DELETE(){ echo -e "\n${MAGENTA}Удаляем ${NC}интерфейс AWG"; uci delete network.AWG >/dev/null 2>&1; uci commit network >/dev/null 2>&1; for peer in $(uci show network | grep "interface='AWG'" | cut -d. -f2); do uci delete network.$peer; done; uci commit network >/dev/null 2>&1; echo -en "${CYAN}Перезапускаем сеть${NC}"; /etc/init.d/network restart; /etc/init.d/ttyd restart >/dev/null 2>&1; echo -e "интерфейс AWG ${GREEN}удалён!${NC}\n"; PAUSE; }
 install_AWG() { echo -e "\n${MAGENTA}Устанавливаем AmneziaWG${NC}"; rm -rf "$tmpDIR"; mkdir -p "$tmpDIR"; update_packages || return 1
-AWG_kmod="https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v$OWRTAWG/kmod-amneziawg_v${OWRTAWG}_$ARCHAWG.$RAZ"; AWG_tools="https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v$OWRTAWG/amneziawg-tools_v${OWRTAWG}_$ARCHAWG.$RAZ"
-AWG_luci="https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v$OWRTAWG/luci-proto-amneziawg_v${OWRTAWG}_$ARCHAWG.$RAZ"; AWG_ru="https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v$OWRTAWG/luci-i18n-amneziawg-ru_v${OWRTAWG}_$ARCHAWG.$RAZ"; cd "$tmpDIR"
+AWG_kmod="${GH_MAIN}/Slava-Shchipunov/awg-openwrt/releases/download/v$OWRTAWG/kmod-amneziawg_v${OWRTAWG}_$ARCHAWG.$RAZ"; AWG_tools="${GH_MAIN}/Slava-Shchipunov/awg-openwrt/releases/download/v$OWRTAWG/amneziawg-tools_v${OWRTAWG}_$ARCHAWG.$RAZ"
+AWG_luci="${GH_MAIN}/Slava-Shchipunov/awg-openwrt/releases/download/v$OWRTAWG/luci-proto-amneziawg_v${OWRTAWG}_$ARCHAWG.$RAZ"; AWG_ru="${GH_MAIN}/Slava-Shchipunov/awg-openwrt/releases/download/v$OWRTAWG/luci-i18n-amneziawg-ru_v${OWRTAWG}_$ARCHAWG.$RAZ"; cd "$tmpDIR"
 echo -e "${CYAN}Скачиваем ${NC}AWG"; wget -q -U "Mozilla/5.0" -O AWG_kmod.$RAZ "$AWG_kmod" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось скачать:\n${NC}$AWG_kmod\n"; PAUSE; return 1; }; wget -q -U "Mozilla/5.0" -O AWG_tools.$RAZ "$AWG_tools" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось скачать:\n${NC}$AWG_tools\n"; PAUSE; return 1; }; wget -q -U "Mozilla/5.0" -O AWG_luci.$RAZ "$AWG_luci" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось скачать:\n${NC}$AWG_luci\n"; PAUSE; return 1; }
 wget -q -U "Mozilla/5.0" -O AWG_ru.$RAZ "$AWG_ru" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось скачать:\n${NC}$AWG_ru\n"; PAUSE; return 1; }; echo -e "${CYAN}Устанавливаем ${NC}AWG"; $INSTALL ./AWG_kmod.$RAZ >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить:\n${NC}$AWG_kmod\n"; PAUSE; return 1; }; $INSTALL ./AWG_tools.$RAZ >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить:\n${NC}$AWG_tools\n"; PAUSE; return 1; }
 $INSTALL ./AWG_luci.$RAZ >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить:\n${NC}$AWG_luci\n"; PAUSE; return 1; }; $INSTALL ./AWG_ru.$RAZ >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить:\n${NC}$AWG_ru\n"; PAUSE; return 1; }; rm -rf "$tmpDIR"; }
 integration_AWG() { if ! pkg_is_installed netshift; then echo -e "\n${RED}NetShift не установлен!${NC}\n"; PAUSE; return 1; fi; if ! awg --version >/dev/null 2>&1; then echo -e "\n${RED}AWG не установлен!${NC}\n"; PAUSE; return 1; fi; echo -e "\n${MAGENTA}Интегрируем AWG в NetShift${NC}"; echo -e "${CYAN}Меняем конфигурацию в ${NC}NetShift${NC}"
 printf "%s\n" "config settings 'settings'" "option dns_type 'udp'" "option dns_server '8.8.8.8'" "option bootstrap_dns_server '77.88.8.8'" "option dns_rewrite_ttl '60'" "list source_network_interfaces 'br-lan'" "option enable_output_network_interface '0'" "option enable_badwan_interface_monitoring '0'" "option enable_yacd '0'" "option disable_quic '0'" > /etc/config/netshift
-printf "%s\n" "option update_interval '1d'" "option download_lists_via_proxy '0'" "option dont_touch_dhcp '0'" "option config_path '/etc/sing-box/config.json'" "option cache_path '/tmp/sing-box/cache.db'" "option log_level 'warn'" "option exclude_ntp '0'" "option shutdown_correctly '0'" "" "config section 'StressAWG'" "option connection_type 'vpn'" >> /etc/config/netshift
+printf "%s\n" "option update_interval '1d'" "option download_lists_via_proxy '1'" "option dont_touch_dhcp '0'" "option config_path '/etc/sing-box/config.json'" "option cache_path '/tmp/sing-box/cache.db'" "option log_level 'warn'" "option exclude_ntp '0'" "option shutdown_correctly '0'" "" "config section 'StressAWG'" "option connection_type 'vpn'" >> /etc/config/netshift
 printf "%s\n" "option interface 'AWG'" "option domain_resolver_enabled '0'" "list community_lists 'geoblock'" "list community_lists 'block'" "list community_lists 'porn'" "list community_lists 'news'" "list community_lists 'anime'" "list community_lists 'youtube'" "list community_lists 'discord'" "list community_lists 'meta'" "list community_lists 'twitter'" >> /etc/config/netshift
 printf "%s\n" "list community_lists 'hdrezka'" "list community_lists 'tiktok'" "list community_lists 'telegram'" "list community_lists 'cloudflare'" "list community_lists 'google_ai'" "list community_lists 'google_play'" "list community_lists 'hodca'" "list community_lists 'roblox'" "list community_lists 'hetzner'" "list community_lists 'ovh'" >> /etc/config/netshift
 printf "%s\n" "list community_lists 'digitalocean'" "list community_lists 'cloudfront'" "option user_domain_list_type 'disabled'" "option user_subnet_list_type 'disabled'" "option mixed_proxy_enabled '0'" >> /etc/config/netshift
-echo -e "${CYAN}Запускаем ${NC}NetShift${NC}"; netshift enable >/dev/null 2>&1; echo -e "${CYAN}Обновляем списки${NC}"; netshift list_update >/dev/null 2>&1; echo -en "${CYAN}Перезапускаем сервис${NC}\n${YELLOW}Подождите...${NC}"
+echo -e "${CYAN}Запускаем ${NC}NetShift${NC}"; netshift enable >/dev/null 2>&1; echo -en "${CYAN}Перезапускаем сервис${NC}\n${YELLOW}Подождите...${NC}"
 netshift restart >/dev/null 2>&1; echo -e "\nAWG ${GREEN}интегрирован в ${NC}NetShift${GREEN}!${NC}\n"; echo -e "${YELLOW}Необходимо в ${NC}LuCI${YELLOW} в интерфейс ${NC}AWG${YELLOW} загрузить файл ${NC}*.conf${YELLOW}:${NC}"
 echo -e "${NC}Network ${GREEN}→${NC} Interfaces ${GREEN}→${NC} AWG ${GREEN}→${NC} Edit ${GREEN}→${NC} Load configuration… ${GREEN}→${NC} Save ${GREEN}→${NC} Save & Apply\n"; PAUSE; }
 PODKOP_VPN() { if ! pkg_is_installed netshift; then echo -e "\n${RED}NetShift не установлен!${NC}\n"; PAUSE; return; fi; echo -e "\n${MAGENTA}Интегрируем VPN подписку в NetShift${NC}"; echo -ne "\n${YELLOW}Введите ссылку на подписку (${NC}https://...${YELLOW}): ${NC}"
 read -r SUB_URL; SUB_URL="$(echo "$SUB_URL" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"; echo "$SUB_URL" | grep -qE '^https?://' || { echo -e "\n${RED}Ошибка ввода! Только ${NC}http://${RED} или ${NC}https://${RED} ссылки!${NC}\n"; PAUSE; return; }; 
 if grep -q "^[[:space:]]*option subscription_url" /etc/config/netshift; then echo -e "${CYAN}Меняем подписку${NC}"; sed -i "s|^[[:space:]]*option subscription_url.*|	option subscription_url '$SUB_URL'|" /etc/config/netshift; else echo -e "\n${CYAN}Меняем конфигурацию в ${NC}NetShift${NC}"
 printf "%s\n" "config settings 'settings'" "option dns_type 'udp'" "option dns_server '8.8.8.8'" "option bootstrap_dns_server '77.88.8.8'" "option dns_rewrite_ttl '60'" "list source_network_interfaces 'br-lan'" "option enable_output_network_interface '0'" "option enable_badwan_interface_monitoring '0'" "option enable_yacd '0'" > /etc/config/netshift
-printf "%s\n" "option disable_quic '0'" "option update_interval '1d'" "option download_lists_via_proxy '0'" "option dont_touch_dhcp '0'" "option config_path '/etc/sing-box/config.json'" "option cache_path '/tmp/sing-box/cache.db'" "option log_level 'panic'" "option exclude_ntp '0'" "option shutdown_correctly '0'" >> /etc/config/netshift
+printf "%s\n" "option disable_quic '0'" "option update_interval '1d'" "option download_lists_via_proxy '1'" "option dont_touch_dhcp '0'" "option config_path '/etc/sing-box/config.json'" "option cache_path '/tmp/sing-box/cache.db'" "option log_level 'panic'" "option exclude_ntp '0'" "option shutdown_correctly '0'" >> /etc/config/netshift
 printf "%s\n" "option dns_via_outbound '0'" "option block_doh '0'" "option enable_ipv6 '0'" "" "config section 'StressKVN'" "option connection_type 'proxy'" "option proxy_config_type 'subscription'" "option subscription_url '$SUB_URL'" "option subscription_insecure '0'" "option subscription_update_interval '1h'" >> /etc/config/netshift
 printf "%s\n" "option subscription_group_by_countries '0'" "option urltest_check_interval '3m'" "option urltest_tolerance '100'" "option urltest_testing_url 'https://www.gstatic.com/generate_204'" "option enable_udp_over_tcp '0'" "option global_proxy '0'" "list community_lists 'geoblock'" "list community_lists 'block'" >> /etc/config/netshift
 printf "%s\n" "list community_lists 'porn'" "list community_lists 'news'" "list community_lists 'anime'" "list community_lists 'discord'" "list community_lists 'meta'" "list community_lists 'twitter'" "list community_lists 'hdrezka'" "list community_lists 'tiktok'" "list community_lists 'telegram'" "list community_lists 'cloudflare'" >> /etc/config/netshift
 printf "%s\n" "list community_lists 'google_ai'" "list community_lists 'google_play'" "list community_lists 'hodca'" "list community_lists 'roblox'" "list community_lists 'hetzner'" "list community_lists 'ovh'" "list community_lists 'digitalocean'" "list community_lists 'cloudfront'" "option user_domain_list_type 'disabled'" >> /etc/config/netshift
 printf "%s\n" "option user_subnet_list_type 'disabled'" "option mixed_proxy_enabled '0'" "option resolve_real_ip_for_routing '0'" "list subscription_filter_exclude_keywords '⬇️'" "list subscription_filter_exclude_keywords 'LTE'" "list subscription_filter_exclude_keywords '🇪🇺'" "list subscription_filter_exclude_keywords 'Мобильный'" "list subscription_filter_exclude_keywords 'SS'" "list subscription_filter_exclude_keywords 'Авто'" >> /etc/config/netshift
-fi; echo -e "${CYAN}Запускаем ${NC}NetShift${NC}"; netshift enable >/dev/null 2>&1; echo -e "${CYAN}Обновляем списки${NC}"; netshift list_update >/dev/null 2>&1; echo -en "${CYAN}Перезапускаем сервис${NC}\n${YELLOW}Подождите...${NC}"; netshift restart >/dev/null 2>&1; echo -e "\nVPN подписка ${GREEN}интегрирована в ${NC}NetShift${GREEN}!${NC}\n"; PAUSE; }
+fi; echo -e "${CYAN}Запускаем ${NC}NetShift${NC}"; netshift enable >/dev/null 2>&1; echo -en "${CYAN}Перезапускаем сервис${NC}\n${YELLOW}Подождите...${NC}"; netshift restart >/dev/null 2>&1; echo -e "\nVPN подписка ${GREEN}интегрирована в ${NC}NetShift${GREEN}!${NC}\n"; PAUSE; }
 BYEDPI_STATUS() { if pkg_is_installed byedpi; then if [ "$PKG_IS_APK" -eq 1 ]; then LOCAL_BYEDPI="$(apk list -I 2>/dev/null | grep '^byedpi-' | head -1 | sed -E 's/^byedpi-//;s/-r[0-9]+.*//')"; else LOCAL_BYEDPI="$(opkg list-installed 2>/dev/null | awk '$1=="byedpi" {print $3}' | sed 's/-r[0-9]\+$//')"; fi; [ "$LOCAL_BYEDPI" = "$BYEDPI_LATEST_VER" ] && BYEDPI_STATUS="${GREEN}${LOCAL_BYEDPI}${NC}" || BYEDPI_STATUS="${RED}${LOCAL_BYEDPI} (версия устарела)${NC}"; else BYEDPI_STATUS="${RED}не установлен${NC}"; fi; }
 BYEDPI_SAVE_DNS_STATE() { if [ ! -f "$BYEDPI_DNS_BACKUP" ]; then { echo "LOCALUSE=$(uci -q get dhcp.@dnsmasq[0].localuse 2>/dev/null || echo "__UNSET__")"; echo "SERVER=$(uci -q get dhcp.@dnsmasq[0].server 2>/dev/null || echo "__UNSET__")"
 echo "NORESOLV=$(uci -q get dhcp.@dnsmasq[0].noresolv 2>/dev/null || echo "__UNSET__")"; echo "NETSHIFT_NORESOLV=$(uci -q get dhcp.@dnsmasq[0].netshift_noresolv 2>/dev/null || echo "__UNSET__")"; } > "$BYEDPI_DNS_BACKUP"; fi; }
@@ -976,7 +1116,7 @@ BYEDPI_RESTORE_DNS_STATE() { [ ! -f "$BYEDPI_DNS_BACKUP" ] && return; . "$BYEDPI
 else uci set dhcp.@dnsmasq[0].localuse="$LOCALUSE"; fi; if [ "$SERVER" = "__UNSET__" ]; then uci -q delete dhcp.@dnsmasq[0].server; else uci set dhcp.@dnsmasq[0].server="$SERVER"; fi; if [ "$NORESOLV" = "__UNSET__" ]
 then uci -q delete dhcp.@dnsmasq[0].noresolv; else uci set dhcp.@dnsmasq[0].noresolv="$NORESOLV"; fi; uci commit dhcp >/dev/null 2>&1; echo -e "${CYAN}Перезапускаем ${NC}dnsmasq"; /etc/init.d/dnsmasq restart >/dev/null 2>&1; rm -f "$BYEDPI_DNS_BACKUP"; }
 BYEDPI_INSTALL() { if pkg_is_installed byedpi; then BYEDPI_DELETE; return; fi; echo -e "\n${MAGENTA}Установка ByeDPI${NC}"; rm -rf "$tmpDIR"; mkdir -p "$tmpDIR"; BYEDPI_FILE="byedpi_${BYEDPI_LATEST_VER}-r1_${LOCAL_ARCH}.${RAZ}"
-BYEDPI_URL="https://github.com/DPITrickster/ByeDPI-OpenWrt/releases/download/${RELEASE_TAG}/${BYEDPI_FILE}"; echo -e "${CYAN}Скачиваем ${NC}$BYEDPI_FILE"; cd "$tmpDIR" || return 1; wget -q -U "Mozilla/5.0" -O "$BYEDPI_FILE" "$BYEDPI_URL" || { echo -e "\n${RED}Не удалось скачать:${NC}\n"; echo "$BYEDPI_URL"; rm -rf "$tmpDIR"; PAUSE; return 1; }
+BYEDPI_URL="${GH_MAIN}/DPITrickster/ByeDPI-OpenWrt/releases/download/${RELEASE_TAG}/${BYEDPI_FILE}"; echo -e "${CYAN}Скачиваем ${NC}$BYEDPI_FILE"; cd "$tmpDIR" || return 1; wget -q -U "Mozilla/5.0" -O "$BYEDPI_FILE" "$BYEDPI_URL" || { echo -e "\n${RED}Не удалось скачать:${NC}\n"; echo "$BYEDPI_URL"; rm -rf "$tmpDIR"; PAUSE; return 1; }
 echo -e "${CYAN}Устанавливаем ${NC}ByeDPI"; if ! $INSTALL "$BYEDPI_FILE" >/dev/null 2>&1; then echo -e "\n${RED}Не удалось установить ByeDPI!${NC}\n"; rm -rf "$tmpDIR"; PAUSE; return 1; fi; rm -rf "$tmpDIR"; if [ -f /etc/init.d/byedpi ]
 then /etc/init.d/byedpi enable >/dev/null 2>&1; /etc/init.d/byedpi start >/dev/null 2>&1; fi; echo -e "ByeDPI ${GREEN}установлен!${NC}\n"; PAUSE; }
 BYEDPI_DELETE() { echo -e "\n${MAGENTA}Удаление ByeDPI${NC}"; echo -e "${CYAN}Останавливаем ${NC}ByeDPI"; /etc/init.d/byedpi stop >/dev/null 2>&1; /etc/init.d/byedpi disable >/dev/null 2>&1; echo -e "${CYAN}Удаляем пакет ${NC}ByeDPI"
@@ -984,9 +1124,9 @@ $DELETE byedpi >/dev/null 2>&1; rm -f /etc/init.d/byedpi; rm -rf /opt/byedpi; rm
 BYEDPI_NETSHIFT() { if ! pkg_is_installed byedpi; then echo -e "\nByeDPI${RED} не установлен!${NC}\n"; PAUSE; return; fi; if ! pkg_is_installed netshift; then echo -e "\nNetShift${RED} не установлен!${NC}\n"; PAUSE; return; fi; echo -e "\n${MAGENTA}Интеграция ByeDPI в NetShift${NC}"
 rm -f /tmp/byedpi_dns_backup; BYEDPI_SAVE_DNS_STATE; echo -e "${CYAN}Отключаем локальный ${NC}DNS"; uci set dhcp.@dnsmasq[0].localuse='0'; uci commit dhcp; echo -e "${CYAN}Перезапускаем ${NC}dnsmasq"; /etc/init.d/dnsmasq restart >/dev/null 2>&1; echo -e "${CYAN}Настраиваем стратегию ${NC}ByeDPI"
 if [ -f /etc/config/byedpi ]; then sed -i "s|option cmd_opts .*|	option cmd_opts '-d1 -s1+s -d3+s -s6+s -d9+s -s12+s -d15+s -s20+s -d25+s -s30+s -d35+s -a1'|" /etc/config/byedpi; fi; echo -e "${CYAN}Меняем конфигурацию в ${NC}NetShift"
-printf "config settings 'settings'\n\toption dns_type 'doh'\n\toption dns_server '8.8.8.8'\n\toption bootstrap_dns_server '77.88.8.8'\n\toption dns_rewrite_ttl '60'\n\tlist source_network_interfaces 'br-lan'\n\toption enable_output_network_interface '0'\n\toption enable_badwan_interface_monitoring '0'\n\toption enable_yacd '0'\n\toption disable_quic '0'\n\toption update_interval '1d'\n\toption download_lists_via_proxy '0'\n\toption dont_touch_dhcp '0'\n\toption config_path '/etc/sing-box/config.json'\n\toption cache_path '/tmp/sing-box/cache.db'\n\toption log_level 'warn'\n\toption exclude_ntp '0'\n\toption shutdown_correctly '0'\n\toption block_doh '0'\n\toption enable_ipv6 '0'\n\toption dns_via_outbound '0'\n\nconfig section 'ByeDPI'\n\toption connection_type 'proxy'\n\toption proxy_config_type 'outbound'\n\toption enable_udp_over_tcp '0'\n\toption global_proxy '0'\n\toption outbound_json '{\n\"type\": \"socks\",\n\"server\": \"127.0.0.1\",\n\"server_port\": 1080\n}'\n\toption user_domain_list_type 'disabled'\n\toption user_subnet_list_type 'disabled'\n\toption mixed_proxy_enabled '0'\n\toption resolve_real_ip_for_routing '0'\n\tlist community_lists 'youtube'\n" > /etc/config/netshift
-echo -e "${CYAN}Запускаем ${NC}ByeDPI"; /etc/init.d/byedpi enable >/dev/null 2>&1; /etc/init.d/byedpi restart >/dev/null 2>&1; echo -e "${CYAN}Запускаем ${NC}NetShift"; netshift enable >/dev/null 2>&1; echo -e "${CYAN}Обновляем списки${NC}"
-netshift list_update >/dev/null 2>&1; echo -e "${CYAN}Перезапускаем ${NC}NetShift"; netshift restart >/dev/null 2>&1; echo -e "ByeDPI ${GREEN}интегрирован в ${NC}NetShift${GREEN}!${NC}"
+printf "config settings 'settings'\n\toption dns_type 'doh'\n\toption dns_server '8.8.8.8'\n\toption bootstrap_dns_server '77.88.8.8'\n\toption dns_rewrite_ttl '60'\n\tlist source_network_interfaces 'br-lan'\n\toption enable_output_network_interface '0'\n\toption enable_badwan_interface_monitoring '0'\n\toption enable_yacd '0'\n\toption disable_quic '0'\n\toption update_interval '1d'\n\toption download_lists_via_proxy '1'\n\toption dont_touch_dhcp '0'\n\toption config_path '/etc/sing-box/config.json'\n\toption cache_path '/tmp/sing-box/cache.db'\n\toption log_level 'warn'\n\toption exclude_ntp '0'\n\toption shutdown_correctly '0'\n\toption block_doh '0'\n\toption enable_ipv6 '0'\n\toption dns_via_outbound '0'\n\nconfig section 'ByeDPI'\n\toption connection_type 'proxy'\n\toption proxy_config_type 'outbound'\n\toption enable_udp_over_tcp '0'\n\toption global_proxy '0'\n\toption outbound_json '{\n\"type\": \"socks\",\n\"server\": \"127.0.0.1\",\n\"server_port\": 1080\n}'\n\toption user_domain_list_type 'disabled'\n\toption user_subnet_list_type 'disabled'\n\toption mixed_proxy_enabled '0'\n\toption resolve_real_ip_for_routing '0'\n\tlist community_lists 'youtube'\n" > /etc/config/netshift
+echo -e "${CYAN}Запускаем ${NC}ByeDPI"; /etc/init.d/byedpi enable >/dev/null 2>&1; /etc/init.d/byedpi restart >/dev/null 2>&1; echo -e "${CYAN}Запускаем ${NC}NetShift"; netshift enable >/dev/null 2>&1
+echo -e "${CYAN}Перезапускаем ${NC}NetShift"; netshift restart >/dev/null 2>&1; echo -e "ByeDPI ${GREEN}интегрирован в ${NC}NetShift${GREEN}!${NC}"
 echo -ne "\n${YELLOW}Для работы ${NC}ByeDPI${YELLOW} необходимо перезагрузить роутер!\nПерезагрузить сейчас? (${NC}y/N${YELLOW}): ${NC}"; read -r REBOOT_CHOICE; case "$REBOOT_CHOICE" in y|Y) echo -e "\n${GREEN}Перезагрузка роутера!${NC}"; reboot; exit 0 ;; *) echo -e "\n${YELLOW}Перезагрузка отложена!${NC}\n"; PAUSE ;; esac; }
 fix_strategy() { echo -e "\n${MAGENTA}Изменение стратегии ByeDPI${NC}"; if [ ! -f /etc/config/byedpi ]; then echo -e "\n${RED}ByeDPI не установлен!${NC}\n"; PAUSE; return; fi; CURRENT_STRATEGY="$(grep "option cmd_opts" /etc/config/byedpi | sed -E "s/.*'(.+)'/\1/")"
 [ -z "$CURRENT_STRATEGY" ] && CURRENT_STRATEGY="(не задана)"; echo -e "${GREEN}Текущая стратегия:${NC} $CURRENT_STRATEGY"; echo -ne "\n${YELLOW}Введите новую стратегию (Enter — оставить текущую):${NC} "; read -r NEW_STRATEGY; echo; if [ -z "$NEW_STRATEGY" ]
@@ -1012,16 +1152,7 @@ else echo -e "\n${RED}Удаление невозможно!${NC}"; echo -e "Amn
 INFO_ZPR() { if [ -f /etc/init.d/zapret ]; then /etc/init.d/zapret status >/dev/null 2>&1 && ZAPRET_STATUS="${GREEN}запущен${NC} $NFQ_STAT" || ZAPRET_STATUS="${RED}остановлен${NC}"; if [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ]; then echo -e "${YELLOW}Zapret:${NC}              ${GREEN}$INSTALLED_VER${NC} / $ZAPRET_STATUS"
 else echo -e "${YELLOW}Zapret:${NC}              ${RED}$INSTALLED_VER (версия устарела)${NC} / $ZAPRET_STATUS"; fi; fi
 if [ -f /etc/init.d/zapret2 ]; then /etc/init.d/zapret2 status >/dev/null 2>&1 && ZAPRET2_STATUS="${GREEN}запущен${NC}" || ZAPRET2_STATUS="${RED}остановлен${NC}"; if [ "$INSTALLED_VER2" = "$ZAPRET2_VERSION" ]; then echo -e "${YELLOW}Zapret2:${NC}             ${GREEN}$INSTALLED_VER2${NC} / $ZAPRET2_STATUS"
-
-
-else echo -e "${YELLOW}Zapret2:${NC}             ${RED}$INSTALLED_VER2 (версия устарела)${NC} / $ZAPRET2_STATUS"; fi; fi
-if [ -f /etc/init.d/zapret2 ]; then
-	Z2_STR_LINE=$(z2_current_strategy_line)
-	[ -n "$Z2_STR_LINE" ] && echo -e "${YELLOW}Стратегия Zapret2:${NC}   ${CYAN}$Z2_STR_LINE${NC}"
-fi
-is_expert_mode && echo -e "${YELLOW}Expert mode:${NC}         ${GREEN}включён${NC}"
-
-
+else echo -e "${YELLOW}Zapret2:${NC}             ${RED}$INSTALLED_VER2 (версия устарела)${NC} / $ZAPRET2_STATUS"; fi; fi; is_expert_mode && echo -e "${YELLOW}Expert mode:${NC}         ${GREEN}включён${NC}"
 SPL_V_VER; [ -n "$SPL_INST_VER" ] && { [ "$SPL_VER" = "$SPL_INST_VER" ] && echo -e "${YELLOW}splify:${NC}              ${GREEN}$SPL_INST_VER${NC}" || echo -e "${YELLOW}splify:${NC}              ${RED}$SPL_INST_VER (версия устарела)${NC}"; }
 case "$(/etc/init.d/mihomo status 2>/dev/null)" in running) echo -e "${YELLOW}Mixomo:              ${GREEN}запущен${NC}" ;; inactive) echo -e "${YELLOW}Mixomo:              ${RED}остановлен${NC}" ;; esac
 get_TG_versions; TGSTATUS=""; if pidof tg-ws-proxy-go >/dev/null 2>&1; then if [ -n "$INSTALLED_VER_GO" ] && [ -n "$TG_GO_VERSION" ] && [ "$INSTALLED_VER_GO" != "$TG_GO_VERSION" ]; then TGSTATUS="${TGSTATUS:+$TGSTATUS/}${RED}SOCKS5 NEW${GREEN}"
@@ -1058,16 +1189,16 @@ PODPISKA() { echo -ne "\n${YELLOW}Введите ссылку на подпис�
 SUB_URL_ESC=$(printf '%s' "$SUB_URL" | sed 's/[&|]/\\&/g'); if grep -q "^[[:space:]]*proxy-providers:" "$CONFIGMIX" 2>/dev/null; then TMP_FILE=$(mktemp)
 if awk -v url="$SUB_URL_ESC" 'BEGIN { updated = 0 } { if ($0 ~ /^[[:space:]]*type:[[:space:]]*http[[:space:]]*$/) { print; getline; if ($0 ~ /^[[:space:]]*url:[[:space:]]*"/) { sub(/url:[[:space:]]*".*"/, "url: \"" url "\""); updated = 1 } print; next } print } END { exit (updated ? 0 : 1) }' "$CONFIGMIX" > "$TMP_FILE"
 then mv "$TMP_FILE" "$CONFIGMIX"; /etc/init.d/mihomo reload >/dev/null 2>&1; /etc/init.d/mihomo restart >/dev/null 2>&1; echo -e "\n${GREEN}Подписка успешно обновлена!${NC}\n"; PAUSE; rm -f "$TMP_FILE"; return; else rm -f "$TMP_FILE"; echo -e "\n${YELLOW}Не удалось обновить URL в конфиге, создаем новый конфиг${NC}\n"; fi; fi
-printf '%s\n' 'mode: rule' 'ipv6: false' 'mixed-port: 7890' 'log-level: error' 'allow-lan: false' 'unified-delay: true' 'tcp-concurrent: false' 'find-process-mode: off' 'external-controller: 0.0.0.0:9090' 'external-ui: ./ui' 'routing-mark: 2' 'profile:' '  store-selected: true' '  store-fake-ip: true' '  tracing: true' 'sniffer:' '  enable: true' '  force-dns-mapping: true' '  parse-pure-ip: true' '  sniff:' '    HTTP:' '      ports: [80]' '      override-destination: true' '    TLS:' '      ports: [443, 8443]' '    QUIC:' '      ports: [443, 8443]' '  skip-domain:' '    - Mijia Cloud' '    - +.lan' '    - +.local' '    - +.msftconnecttest.com' '    - +.msftncsi.com' '    - +.3gppnetwork.org' '    - +.openwrt.org' '    - +.vsean.net' '    - cudy.net' '' 'hosts:' '  ntc.party: 130.255.77.28' '' 'proxies:' '' '  - name: "Домашний интернет"' '    type: direct' '' 'proxy-providers:' '' '  Подписка:' '    type: http' "    url: \"$SUB_URL\"" '    exclude-filter: "LTE|Мобильный|🇪🇺"' '    path: ./proxy-providers/sub.yaml' '    interval: 86400' '    health-check:' '      enable: true' '      url: http://www.gstatic.com/generate_204' '      interval: 300' '      timeout: 5000' '      lazy: true' '' 'proxy-groups:' '' '  - name: "Сервер для YouTube"' '    type: select' '    icon: https://www.clashverge.dev/assets/icons/youtube.svg' '    proxies:' '      - "Домашний интернет"' '    use:' '      - "Подписка"' '' '  - name: "Сервер для остального трафика"' '    type: select' '    icon: https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.3/assets/svg/1f310.svg' '    use:' '      - "Подписка"' '' 'rule-providers:' '' '  youtube:' '    type: http' '    format: yaml' '    behavior: classical' '    url: "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/YouTube/YouTube.yaml"' '    path: ./rule-providers/youtube-list.yaml' '    interval: 86400' '' 'rules:' '  - RULE-SET,youtube,Сервер для YouTube' '  - MATCH,Сервер для остального трафика' > "$CONFIGMIX"
+printf '%s\n' 'mode: rule' 'ipv6: false' 'mixed-port: 7890' 'log-level: error' 'allow-lan: false' 'unified-delay: true' 'tcp-concurrent: false' 'find-process-mode: off' 'external-controller: 0.0.0.0:9090' 'external-ui: ./ui' 'routing-mark: 2' 'profile:' '  store-selected: true' '  store-fake-ip: true' '  tracing: true' 'sniffer:' '  enable: true' '  force-dns-mapping: true' '  parse-pure-ip: true' '  sniff:' '    HTTP:' '      ports: [80]' '      override-destination: true' '    TLS:' '      ports: [443, 8443]' '    QUIC:' '      ports: [443, 8443]' '  skip-domain:' '    - Mijia Cloud' '    - +.lan' '    - +.local' '    - +.msftconnecttest.com' '    - +.msftncsi.com' '    - +.3gppnetwork.org' '    - +.openwrt.org' '    - +.vsean.net' '    - cudy.net' '' 'hosts:' '  ntc.party: 130.255.77.28' '' 'proxies:' '' '  - name: "Домашний интернет"' '    type: direct' '' 'proxy-providers:' '' '  Подписка:' '    type: http' "    url: \"$SUB_URL\"" '    exclude-filter: "LTE|Мобильный|🇪🇺"' '    path: ./proxy-providers/sub.yaml' '    interval: 86400' '    health-check:' '      enable: true' '      url: http://www.gstatic.com/generate_204' '      interval: 300' '      timeout: 5000' '      lazy: true' '' 'proxy-groups:' '' '  - name: "Сервер для YouTube"' '    type: select' '    icon: https://www.clashverge.dev/assets/icons/youtube.svg' '    proxies:' '      - "Домашний интернет"' '    use:' '      - "Подписка"' '' '  - name: "Сервер для остального трафика"' '    type: select' '    icon: https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.3/assets/svg/1f310.svg' '    use:' '      - "Подписка"' '' 'rule-providers:' '' '  youtube:' '    type: http' '    format: yaml' '    behavior: classical' '    url: "${GH_RAW}/blackmatrix7/ios_rule_script/master/rule/Clash/YouTube/YouTube.yaml"' '    path: ./rule-providers/youtube-list.yaml' '    interval: 86400' '' 'rules:' '  - RULE-SET,youtube,Сервер для YouTube' '  - MATCH,Сервер для остального трафика' > "$CONFIGMIX"
 /etc/init.d/mihomo reload >/dev/null 2>&1; /etc/init.d/mihomo restart >/dev/null 2>&1; echo -e "\n${GREEN}Подписка успешно применена!${NC}\n"; PAUSE; }
 UI_INSTALL() { while true; do echo -e "\n${MAGENTA}Выбор панели для Mihomo${NC} "; echo -e "${CYAN}1) ${GREEN}Установить ${NC}Zashboard"; echo -e "${CYAN}2) ${GREEN}Установить ${NC}MetaCubeXD"
 echo -e "${CYAN}Enter) ${GREEN}Выход в меню Mixomo${NC}\n"; echo -en "${YELLOW}Выберите пункт:${NC} "; read -r choice; case "$choice" in 1) echo -e "\n${MAGENTA}Устанавливаем Zashboard${NC}"
-rm -rf /etc/mihomo/ui; for i in 1 2 3; do curl -fL --connect-timeout 3 --max-time 7 -o /tmp/zashboard.zip https://github.com/Zephyruso/zashboard/releases/latest/download/dist-cdn-fonts.zip >/dev/null 2>&1 && break
+rm -rf /etc/mihomo/ui; for i in 1 2 3; do curl -fL --connect-timeout 3 --max-time 7 -o /tmp/zashboard.zip ${GH_MAIN}/Zephyruso/zashboard/releases/latest/download/dist-cdn-fonts.zip >/dev/null 2>&1 && break
 sleep 1; done; [ -f /tmp/zashboard.zip ] || { echo -e "\n${RED}Ошибка загрузки Zashboard${NC}\n"; PAUSE; return; }; mkdir -p /etc/mihomo/ui; rm -rf /etc/mihomo/ui/*; rm -rf /tmp/zashboard
 if ! command -v unzip >/dev/null 2>&1; then echo -e "${CYAN}Устанавливаем ${NC}unzip"; update_packages || return; $INSTALL unzip >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить ${NC}unzip\n"; PAUSE; return; }; fi
 unzip -oq /tmp/zashboard.zip -d /tmp/zashboard || { echo -e "\n${RED}Ошибка распаковки архива${NC}\n"; rm -rf /tmp/zashboard.zip /tmp/zashboard; PAUSE; return; }; cp -r /tmp/zashboard/dist/* /etc/mihomo/ui/
 rm -rf /tmp/zashboard.zip /tmp/zashboard; echo -e "\nZashboard${GREEN} успешно установлен${NC}\n"; PAUSE; break ;; 2) echo -e "\n${MAGENTA}Устанавливаем MetaCubeXD${NC}"; rm -rf /etc/mihomo/ui; for i in 1 2 3
-do curl -fL --connect-timeout 3 --max-time 7 -o /tmp/metacubexd.tgz https://github.com/MetaCubeX/metacubexd/releases/latest/download/compressed-dist.tgz >/dev/null 2>&1 && break; sleep 1; done
+do curl -fL --connect-timeout 3 --max-time 7 -o /tmp/metacubexd.tgz ${GH_MAIN}/MetaCubeX/metacubexd/releases/latest/download/compressed-dist.tgz >/dev/null 2>&1 && break; sleep 1; done
 [ -f /tmp/metacubexd.tgz ] || { echo -e "\n${RED}Ошибка загрузки MetaCubeXD${NC}\n"; PAUSE; return; }; mkdir -p /etc/mihomo/ui; rm -rf /etc/mihomo/ui/*; rm -rf /tmp/metacubexd; mkdir -p /tmp/metacubexd
 tar -xzf /tmp/metacubexd.tgz -C /tmp/metacubexd || { echo -e "\n${RED}Ошибка распаковки архива${NC}\n"; rm -rf /tmp/metacubexd.tgz /tmp/metacubexd; PAUSE; return; }; cp -r /tmp/metacubexd/* /etc/mihomo/ui/
 rm -rf /tmp/metacubexd.tgz /tmp/metacubexd; echo -e "\nMetaCubeXD${GREEN} успешно установлен${NC}\n"; PAUSE; break ;; *) return ;; esac; done; }
@@ -1091,10 +1222,10 @@ echo -e "\n${CYAN}1) ${GREEN}Установить ${NC}Mixomo"; echo -e "${CYAN}
 then echo -e "${CYAN}4) ${GREEN}Сменить ${NC}VPN${GREEN} подписку${NC}"; else echo -e "${CYAN}4) ${GREEN}Интегрировать ${NC}VPN${GREEN} подписку в ${NC}Mihomo${NC}"; fi; echo -e "${CYAN}5) ${GREEN}Сгенерировать ${NC}WARP"
 echo -e "${CYAN}6) ${GREEN}Интегрировать ${NC}/root/WARP.conf${GREEN} в ${NC}Mihomo"; echo -e "${CYAN}7) ${GREEN}Выбрать и установить панель для ${NC}Mihomo"; if grep -qF "/etc/init.d/mihomo restart" /etc/crontabs/root 2>/dev/null
 then echo -e "${CYAN}8) ${GREEN}Выключить автоперезапуск ${NC}Mihomo"; else echo -e "${CYAN}8) ${GREEN}Включить автоперезапуск ${NC}Mihomo"; fi; [ -n "$Magi_INSTALL_VER" ] && { [ "$Magi_INSTALL_VER" != "$MT_VERSION" ] && echo -e "${CYAN}9) ${GREEN}Обновить ${NC}MagiTrickle"; }
-echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню\n"; echo -ne "${YELLOW}Выберите пункт: ${NC}"; read choiceM; case "$choiceM" in 1) wget -q -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/files/Mixomo/mixomo_openwrt_install.sh | sh; PAUSE ;;
-2) wget -q -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/files/Mixomo/mixomo_openwrt_delete.sh | sh; sed -i "\|$CRON_CMD|d" "$CRON_FILE" >/dev/null 2>&1; /etc/init.d/cron restart >/dev/null 2>&1; echo -e "\n${YELLOW}Рекомендую сделать перезагрузку роутера!${NC}\n"; PAUSE ;;
-3) check_mihomo || continue; magitrickle_config ;; 4) check_mihomo || continue; PODPISKA ;; 5) register_warp || return 1; choose_endpoint || return 1; WARP_TO_ROOT; echo; PAUSE ;; 6) check_mihomo || continue; wget -q -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/files/Mixomo/WARP_to_conf.sh | sh; echo; PAUSE ;;
-7) check_mihomo || continue; UI_INSTALL ;; 8) check_mihomo || continue; MIXOMO_RESTART ;; 9) check_mihomo || continue; ARCH_MT=$(grep "^OPENWRT_ARCH=" /etc/os-release | cut -d'"' -f2); FILE_MT="/tmp/magitrickle.$RAZ"; URL_MT="https://github.com/MagiTrickle/MagiTrickle/releases/download/${MT_VERSION}/magitrickle_${MT_VERSION}-${SUF_MT}1_openwrt_${ARCH_MT}.$RAZ"
+echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню\n"; echo -ne "${YELLOW}Выберите пункт: ${NC}"; read choiceM; case "$choiceM" in 1) wget -q -O - ${GH_RAW}/StressOzz/Zapret-Manager/refs/heads/main/files/Mixomo/mixomo_openwrt_install.sh | sh; PAUSE ;;
+2) wget -q -O - ${GH_RAW}/StressOzz/Zapret-Manager/refs/heads/main/files/Mixomo/mixomo_openwrt_delete.sh | sh; sed -i "\|$CRON_CMD|d" "$CRON_FILE" >/dev/null 2>&1; /etc/init.d/cron restart >/dev/null 2>&1; echo -e "\n${YELLOW}Рекомендую сделать перезагрузку роутера!${NC}\n"; PAUSE ;;
+3) check_mihomo || continue; magitrickle_config ;; 4) check_mihomo || continue; PODPISKA ;; 5) register_warp || return 1; choose_endpoint || return 1; WARP_TO_ROOT; echo; PAUSE ;; 6) check_mihomo || continue; wget -q -O - ${GH_RAW}/StressOzz/Zapret-Manager/refs/heads/main/files/Mixomo/WARP_to_conf.sh | sh; echo; PAUSE ;;
+7) check_mihomo || continue; UI_INSTALL ;; 8) check_mihomo || continue; MIXOMO_RESTART ;; 9) check_mihomo || continue; ARCH_MT=$(grep "^OPENWRT_ARCH=" /etc/os-release | cut -d'"' -f2); FILE_MT="/tmp/magitrickle.$RAZ"; URL_MT="${GH_MAIN}/MagiTrickle/MagiTrickle/releases/download/${MT_VERSION}/magitrickle_${MT_VERSION}-${SUF_MT}1_openwrt_${ARCH_MT}.$RAZ"
 echo -e "\n${MAGENTA}Обновляем MagiTrickle\n${CYAN}Скачиваем\n${NC}$URL_MT"; curl -Lf --connect-timeout 6 --retry 3 --retry-delay 1 -o "$FILE_MT" "$URL_MT" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка скачивания${NC}\n"; PAUSE; return 1; };  update_packages || return 1
 echo -e "${CYAN}Обновляем ${NC}MagiTrickle"; $INSTALL "$FILE_MT" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка установки${NC} $(basename "$URL_MT")\n"; rm -f "$FILE_MT"; PAUSE; return 1; }; /etc/init.d/magitrickle enable >/dev/null 2>&1; /etc/init.d/magitrickle restart >/dev/null 2>&1; echo -e "MagiTrickle ${GREEN}обновлён!${NC}\n"; rm -f "$FILE_MT"; PAUSE ;; *) return ;; esac; done; }
 # ==========================================
@@ -1148,247 +1279,6 @@ ip=$(sed -n "${num}p" "$IDX_LIST"); if [ -z "$ip" ]; then rm -f "$DEV_LIST" "$ID
 else CURRENT_EXCL=$(printf '%s\n%s\n' "$CURRENT_EXCL" "$ip"); ACTION_MSG="${GREEN}IP ${NC}${ip}${GREEN} добавлен в исключения!${NC}"; fi; CHANGED=1; done ;; esac; CURRENT_EXCL=$(echo "$CURRENT_EXCL" | grep -v '^$' | sort -u)
 if [ -n "$CURRENT_EXCL" ]; then FORMATTED=$(echo "$CURRENT_EXCL" | tr '\n' ',' | sed 's/,$//' | sed 's/,/, /g'); { echo "EXCEPT_SRC='{ $FORMATTED }'"; echo "nft insert rule inet zapret postrouting_hook index 0 \\"; echo "  ip saddr \$EXCEPT_SRC meta mark set meta mark \\| 0x40000000"; } > "$EXCL_FILE"; else : > "$EXCL_FILE"; fi
 echo -e "\n${CYAN}Применяем и перезапускаем ${NC}Zapret"; ZAPRET_RESTART; echo -e "\n${ACTION_MSG}\n"; PAUSE; rm -f "$DEV_LIST" "$IDX_LIST"; done; }
-
-# ==========================================
-# Zapret2: переменные, хелперы, тесты, меню
-# ==========================================
-ZAPRET2_CONF="/etc/config/zapret2"
-Z2_TEST_RESULTS="/opt/zapret2/tmp/results_test.txt"
-Z2_MAIN_LIST="V_circular Routerich_circular v1 v2 v3 v4 v5 v6 v7 v8 v9 v10"
-Z2_YOUTUBE_LIST="Yv_circular V_circular Yv01 Yv02 Yv03 Yv04 Yv05 Yv06 Yv07 Yv08 Yv09 Yv10 Yv11"
-
-# ---------- низкоуровневые хелперы ----------
-
-z2_list_strategies() { grep -E "^config strategy '" "$ZAPRET2_CONF" 2>/dev/null | sed -E "s/^config strategy '([^']+)'.*/\1/"; }
-
-# гасит option enabled ТОЛЬКО внутри блоков config strategy (не трогает main/list/blob/luascript)
-z2_disable_all_strategies() {
-awk '
-/^config strategy / { intarget=1; print; next }
-/^config / { intarget=0; print; next }
-intarget && /option enabled/ { sub(/option enabled[[:space:]]*'"'"'[01]'"'"'/, "option enabled '"'"'0'"'"'") }
-{ print }
-' "$ZAPRET2_CONF" > "$ZAPRET2_CONF.tmp" && mv "$ZAPRET2_CONF.tmp" "$ZAPRET2_CONF"
-}
-
-z2_enable_strategy() { local NAME="$1"
-awk -v name="$NAME" '
-$0 == "config strategy '"'"'" name "'"'"'" { intarget=1; print; next }
-/^config / { intarget=0; print; next }
-intarget && /option enabled/ { sub(/option enabled[[:space:]]*'"'"'[01]'"'"'/, "option enabled '"'"'1'"'"'") }
-{ print }
-' "$ZAPRET2_CONF" > "$ZAPRET2_CONF.tmp" && mv "$ZAPRET2_CONF.tmp" "$ZAPRET2_CONF"
-}
-
-z2_backup_conf()  { cp "$ZAPRET2_CONF" "$ZAPRET2_CONF.testback" 2>/dev/null; }
-z2_restore_conf() { [ -f "$ZAPRET2_CONF.testback" ] && mv -f "$ZAPRET2_CONF.testback" "$ZAPRET2_CONF"; }
-
-# ---------- какая стратегия сейчас включена ----------
-
-z2_current_strategy() {
-	[ -f "$ZAPRET2_CONF" ] || return
-	awk '
-	function flush() { if (name != "" && en == "1") print name; name=""; en="" }
-	/^config strategy '"'"'/ { flush(); name=$0; sub(/^config strategy '"'"'/,"",name); sub(/'"'"'.*/,"",name); next }
-	/^config / { flush(); next }
-	/option enabled/ { val=$0; sub(/.*option enabled[[:space:]]*'"'"'/,"",val); sub(/'"'"'.*/,"",val); en=val }
-	END { flush() }
-	' "$ZAPRET2_CONF" 2>/dev/null
-}
-
-z2_current_strategy_line() {
-	local list
-	list=$(z2_current_strategy | tr '\n' '/' | sed 's#/$##' | sed 's#/# / #g')
-	echo "$list"
-}
-
-# ---------- тест стратегий v / Yv по доменам ----------
-
-z2_run_test_by_pattern() {
-	local PATTERN="$1" LABEL="$2"
-	[ ! -f /etc/init.d/zapret2 ] && { echo -e "\nZapret2 ${RED}не установлен!${NC}\n"; PAUSE; return; }
-	clear; echo -e "${MAGENTA}Тестирование $LABEL (Zapret2)${NC}\n"
-	mkdir -p "$TMP_SF" "/opt/zapret2/tmp"
-	z2_backup_conf
-	prepare_urls || { z2_restore_conf; return 1; }
-	URLS="$(cat "$OUT_DPI")"; TOTAL=$(grep -c "|" "$OUT_DPI")
-	STR_LIST=$(z2_list_strategies | grep -E "$PATTERN")
-	TOTAL_STR=$(echo "$STR_LIST" | grep -c .)
-	if [ "$TOTAL_STR" -eq 0 ]; then echo -e "${RED}Стратегии не найдены!${NC}\n"; z2_restore_conf; rm -f "$OUT_DPI"; PAUSE; return; fi
-	echo -e "${CYAN}Найдено стратегий:${NC} $TOTAL_STR"
-	echo -e "${CYAN}Доменов для теста:${NC} $TOTAL"
-	: > "$Z2_TEST_RESULTS"
-	z2_disable_all_strategies; /etc/init.d/zapret2 restart >/dev/null 2>&1; sleep 1
-	OK=0; LOG_TMP="/tmp/zapret2_log_off"; : > "$LOG_TMP"; check_all_urls
-	echo -e "\n${CYAN}Контрольный тест (Zapret2 выключен): ${NC}$OK/$TOTAL"
-	echo "Контрольный тест (Zapret2 выключен) → ${OK}/${TOTAL}" >> "$Z2_TEST_RESULTS"
-	CUR=0
-	echo "$STR_LIST" | while IFS= read -r NAME; do
-		[ -z "$NAME" ] && continue
-		CUR=$((CUR + 1))
-		z2_disable_all_strategies
-		z2_enable_strategy "$NAME"
-		echo -e "\n${CYAN}Тестируем стратегию: ${YELLOW}${NAME}${NC} ($CUR/$TOTAL_STR)"
-		/etc/init.d/zapret2 restart >/dev/null 2>&1; sleep 1
-		OK=0; LOG_TMP="/tmp/zapret2_log_${CUR}"; : > "$LOG_TMP"; check_all_urls
-		if [ "$OK" -eq "$TOTAL" ]; then COLOR="${GREEN}"; elif [ "$OK" -ge $((TOTAL/2)) ]; then COLOR="${YELLOW}"; else COLOR="${RED}"; fi
-		echo -e "${CYAN}Результат теста: ${COLOR}$OK/$TOTAL${NC}"
-		echo "${NAME} → ${OK}/${TOTAL}" >> "$Z2_TEST_RESULTS"
-	done
-	sort -t'/' -k1 -nr "$Z2_TEST_RESULTS" -o "$Z2_TEST_RESULTS"
-	z2_restore_conf
-	/etc/init.d/zapret2 restart >/dev/null 2>&1
-	rm -f "$OUT_DPI"
-	show_single_result "$Z2_TEST_RESULTS"
-}
-
-z2_test_main_strategies()    { z2_run_test_by_pattern '^v[0-9]+$'  "стратегий v"; }
-z2_test_youtube_strategies() { z2_run_test_by_pattern '^Yv[0-9]+$' "стратегий Yv"; }
-
-# ---------- выбор и применение стратегии (основная / YouTube) ----------
-
-z2_select_and_apply() {
-	local TITLE="$1"; shift; local NAMES="$*"
-	[ ! -f /etc/init.d/zapret2 ] && { echo -e "\nZapret2 ${RED}не установлен!${NC}\n"; PAUSE; return; }
-	echo -e "\n${MAGENTA}$TITLE${NC}\n"
-	local i=1
-	for n in $NAMES; do
-		if grep -q "^config strategy '$n'" "$ZAPRET2_CONF" 2>/dev/null; then echo -e "${CYAN}$i) ${GREEN}$n${NC}"
-		else echo -e "${CYAN}$i) ${RED}$n (не найдена)${NC}"; fi
-		i=$((i + 1))
-	done
-	echo -ne "${CYAN}Enter) ${GREEN}Отмена${NC}\n\n${YELLOW}Выберите пункт:${NC} "
-	read -r CH; case "$CH" in ''|*[!0-9]*) return ;; esac
-	SEL=$(echo "$NAMES" | tr ' ' '\n' | sed -n "${CH}p")
-	[ -z "$SEL" ] && return
-	grep -q "^config strategy '$SEL'" "$ZAPRET2_CONF" 2>/dev/null || { echo -e "\n${RED}Стратегия ${NC}$SEL${RED} не найдена!${NC}\n"; PAUSE; return; }
-	echo -e "\n${CYAN}Применяем стратегию ${NC}$SEL"
-	z2_disable_all_strategies
-	z2_enable_strategy "$SEL"
-	z2_enable_strategy "Youtube_UDP"
-	z2_enable_strategy "Discord_circular"
-	/etc/init.d/zapret2 restart >/dev/null 2>&1
-	echo -e "${GREEN}Стратегия ${NC}$SEL${GREEN} применена (+ Youtube_UDP + Discord_circular)!${NC}\n"
-	PAUSE
-}
-
-z2_choose_main_strategy()    { z2_select_and_apply "Выбор основной стратегии Zapret2" "$Z2_MAIN_LIST"; }
-z2_choose_youtube_strategy() { z2_select_and_apply "Выбор стратегии для YouTube (Zapret2)" "$Z2_YOUTUBE_LIST"; }
-
-# ---------- Меню Zapret (пункт 1 главного меню) ----------
-
-menu_Zapret() {
-	while true; do
-		get_versions; clear; echo -e "${MAGENTA}Меню Zapret${NC}\n"
-		if [ ! -f /etc/init.d/zapret ]; then Z_ACTION_TEXT="Установить"; Z_ACTION_FUNC="install_Zapret"
-		elif [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ]; then Z_ACTION_TEXT="Удалить"; Z_ACTION_FUNC="uninstall_zapret"
-		else Z_ACTION_TEXT="Обновить"; Z_ACTION_FUNC="install_Zapret"; fi
-		echo -e "${CYAN}1) ${GREEN}$Z_ACTION_TEXT${NC} Zapret"
-		echo -e "${CYAN}2) ${GREEN}Меню стратегий${NC} Zapret"
-		echo -e "${CYAN}3) ${GREEN}Меню настройки${NC} Discord"
-		echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "
-		read -r cz
-		case "$cz" in
-			1) $Z_ACTION_FUNC ;;
-			2) menu_str ;;
-			3) Discord_menu ;;
-			*) return ;;
-		esac
-	done
-}
-
-# ---------- Меню Zapret2 (пункт 2 главного меню) ----------
-
-menu_Zapret2() {
-	while true; do
-		get_versions; clear; echo -e "${MAGENTA}Меню Zapret2${NC}\n"
-		if [ ! -f /etc/init.d/zapret2 ]; then Z2_ACTION_TEXT="Установить"; Z2_ACTION_FUNC="install_zapret2"
-		elif [ "$INSTALLED_VER2" = "$ZAPRET2_VERSION" ]; then Z2_ACTION_TEXT="Удалить"; Z2_ACTION_FUNC="remove_zapret2"
-		else Z2_ACTION_TEXT="Обновить"; Z2_ACTION_FUNC="install_zapret2"; fi
-		if [ -f /etc/init.d/zapret2 ]; then
-			Z2_STR_LINE=$(z2_current_strategy_line)
-			[ -n "$Z2_STR_LINE" ] && echo -e "${YELLOW}Стратегия Zapret2:${NC}   ${CYAN}$Z2_STR_LINE${NC}\n"
-		fi
-		echo -e "${CYAN}1) ${GREEN}$Z2_ACTION_TEXT${NC} Zapret2"
-		if [ -f /etc/init.d/zapret2 ]; then
-			if grep -qi 'V_circular' "$ZAPRET2_CONF" 2>/dev/null; then
-				echo -e "${CYAN}2) ${GREEN}Применить${NC} Standart Config"
-			else
-				echo -e "${CYAN}2) ${GREEN}Применить${NC} Ultimate Config"
-			fi
-		fi
-		echo -e "${CYAN}3) ${GREEN}Выбрать основную стратегию${NC}"
-		echo -e "${CYAN}4) ${GREEN}Выбрать стратегию для${NC} YouTube"
-		echo -e "${CYAN}5) ${GREEN}Тестировать стратегии${NC} v (по доменам)"
-		echo -e "${CYAN}6) ${GREEN}Тестировать стратегии${NC} Yv (по доменам)"
-		[ -s "$Z2_TEST_RESULTS" ] && echo -e "${CYAN}7) ${GREEN}Результаты последнего теста${NC}"
-		echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "
-		read -r c2
-		case "$c2" in
-			1) $Z2_ACTION_FUNC ;;
-			2) Ultimate_Config_menu ;;
-			3) z2_choose_main_strategy ;;
-			4) z2_choose_youtube_strategy ;;
-			5) z2_test_main_strategies ;;
-			6) z2_test_youtube_strategies ;;
-			7) show_single_result "$Z2_TEST_RESULTS" ;;
-			*) return ;;
-		esac
-	done
-}
-
-Ultimate_Config_menu() {
-	local ZAPRET2_BAK="/opt/zapret2/zapret2.bak"
-	local DISCORD_MEDIA="/opt/zapret2/init.d/openwrt/custom.d/50-discord_media.sh"
-	local DISCORD_HOSTS="/opt/zapret2/ipset/zapret_hosts_discord.txt"
-	local URL_DISCORD_MEDIA="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/files/Zapret2/50-discord_media.sh"
-	local URL_ZAPRET2="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/files/Zapret2/zapret2"
-	local URL_DISCORD_HOSTS="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/files/Zapret2/zapret_hosts_discord.txt"
-
-	[ ! -f /etc/init.d/zapret2 ] && { echo -e "\nZapret2 ${RED}не установлен!${NC}\n"; PAUSE; return; }
-
-	if grep -qi "V_circular" "$ZAPRET2_CONF" 2>/dev/null; then
-		echo -e "\n${MAGENTA}Применяем Standart Config${NC}"
-		[ -f "$ZAPRET2_BAK" ] || { echo -e "\n${RED}Резервная копия не найдена!${NC}\n"; PAUSE; return; }
-		echo -e "${CYAN}Останавливаем ${NC}Zapret2"; /etc/init.d/zapret2 stop >/dev/null 2>&1
-		echo -e "${CYAN}Восстанавливаем конфиг${NC}"
-		cp "$ZAPRET2_BAK" "$ZAPRET2_CONF" || { echo -e "\n${RED}Ошибка восстановления zapret2!${NC}\n"; PAUSE; return; }
-		echo -e "${CYAN}Запускаем ${NC}Zapret2"
-		/etc/init.d/zapret2 enable >/dev/null 2>&1
-		/etc/init.d/zapret2 restart >/dev/null 2>&1
-		echo -e "Standart Config ${GREEN}применён!${NC}\n"
-		PAUSE
-		return
-	fi
-
-	echo -e "\n${MAGENTA}Применяем Ultimate Config${NC}"
-	[ -f "$ZAPRET2_CONF" ] || { echo -e "\n${RED}Файл ${NC}$ZAPRET2_CONF${RED} не найден!${NC}\n"; PAUSE; return; }
-
-	echo -e "${CYAN}Сохраняем текущий конфиг${NC}"
-	cp "$ZAPRET2_CONF" "$ZAPRET2_BAK" || { echo -e "\n${RED}Не удалось создать резервную копию!${NC}\n"; PAUSE; return; }
-
-	mkdir -p "$(dirname "$DISCORD_MEDIA")" "$(dirname "$DISCORD_HOSTS")"
-
-	echo -e "${CYAN}Скачиваем ${NC}50-discord_media.sh"
-	wget -q -U "Mozilla/5.0" -O "$DISCORD_MEDIA" "$URL_DISCORD_MEDIA" || { echo -e "\n${RED}Ошибка загрузки ${NC}50-discord_media.sh${RED}!${NC}\n"; PAUSE; return; }
-	chmod +x "$DISCORD_MEDIA"
-
-	echo -e "${CYAN}Скачиваем ${NC}zapret2 (config)"
-	wget -q -U "Mozilla/5.0" -O "$ZAPRET2_CONF.new" "$URL_ZAPRET2" || { echo -e "\n${RED}Ошибка загрузки ${NC}zapret2${RED}!${NC}\n"; rm -f "$ZAPRET2_CONF.new"; PAUSE; return; }
-	[ -s "$ZAPRET2_CONF.new" ] || { echo -e "\n${RED}Скачанный конфиг пустой, отменяем!${NC}\n"; rm -f "$ZAPRET2_CONF.new"; PAUSE; return; }
-	mv -f "$ZAPRET2_CONF.new" "$ZAPRET2_CONF"
-
-	echo -e "${CYAN}Скачиваем ${NC}zapret_hosts_discord.txt"
-	wget -q -U "Mozilla/5.0" -O "$DISCORD_HOSTS" "$URL_DISCORD_HOSTS" || echo -e "${RED}Не удалось скачать ${NC}zapret_hosts_discord.txt${NC}"
-
-	echo -e "${CYAN}Перезапускаем ${NC}Zapret2"
-	/etc/init.d/zapret2 enable >/dev/null 2>&1
-	/etc/init.d/zapret2 restart >/dev/null 2>&1
-
-	echo -e "Ultimate Config ${GREEN}применён!${NC}\n"
-	PAUSE
-}
-
 # ==========================================
 # Главное меню
 # ==========================================
@@ -1403,18 +1293,9 @@ elif [ -f /etc/init.d/zapret2 ]; then S_NAME="Zapret2"; /etc/init.d/zapret2 stat
 if uci get firewall.@defaults[0].flow_offloading 2>/dev/null | grep -q '^1$' || uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null | grep -q '^1$'; then if ! grep -q 'meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc
 then echo -e "${RED}Включён ${NC}Flow Offloading${RED}!${NC}\n${NC}Zapret${RED} некорректно работает с включённым ${NC}Flow Offloading${RED}!\nПримените ${NC}FIX${RED} в системном меню!\n${NC}"; fi; fi
 INFO_ZPR; if grep -qE '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' "$EXCL_FILE" 2>/dev/null; then echo -e "${YELLOW}Исключённые IP:      ${RED}есть${NC}"; fi
-
-
-echo -e "\n${CYAN}1) ${GREEN}Меню${NC} Zapret\n${CYAN}2) ${GREEN}Меню${NC} Zapret2"
-echo -e "${CYAN}3) ${GREEN}Меню ${NC}splify\n${CYAN}4) ${GREEN}Меню ${NC}Mixomo\n${CYAN}5) ${GREEN}Меню ${NC}NetShift\n${CYAN}6) ${GREEN}Меню ${NC}TG WS Proxy\n${CYAN}7) ${GREEN}Меню ${NC}DNS over HTTPS\n${CYAN}8) ${GREEN}Меню управления доменами в ${NC}hosts"
-
-
+echo -e "\n${CYAN}1) ${GREEN}$Z_ACTION_TEXT${NC} Zapret\n${CYAN}2) ${GREEN}$Z2_ACTION_TEXT${NC} Zapret2\n${CYAN}3) ${GREEN}Меню стратегий${NC} Zapret\n${CYAN}4) ${GREEN}Меню ${NC}splify\n${CYAN}5) ${GREEN}Меню ${NC}Mixomo\n${CYAN}6) ${GREEN}Меню ${NC}NetShift\n${CYAN}7) ${GREEN}Меню ${NC}TG WS Proxy\n${CYAN}8) ${GREEN}Меню ${NC}DNS over HTTPS\n${CYAN}9) ${GREEN}Меню настройки ${NC}Discord\n${CYAN}0) ${GREEN}Меню управления доменами в ${NC}hosts"
 echo -e "${CYAN}f) ${GREEN}Удалить ${NC}→${GREEN} установить ${NC}→${GREEN} настроить${NC} Zapret\n${CYAN}m) ${GREEN}Системное меню${NC}"; [ "$SHOW_S" = "1" ] && echo -e "${CYAN}s) ${GREEN}$S_ACTION${NC} $S_NAME"
 [ "$SHOW_S" = "2" ] && echo -e "${CYAN}s1) ${GREEN}$S1_ACTION${NC} Zapret\n${CYAN}s2) ${GREEN}$S2_ACTION${NC} Zapret2"; echo -ne "${CYAN}Enter) ${GREEN}Выход${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read choice
-case "$choice" in 999) echo; uninstall_zapret "1"; install_Zapret "1"; curl -fsSL https://raw.githubusercontent.com/StressOzz/Test/refs/heads/main/zapret -o "$CONF"; hosts_add "$ALL_BLOCKS"; rm -f "$EXCLUDE_FILE"; wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL"; ZAPRET_RESTART; PAUSE;;
-
-s|S|ы|Ы) toggle_zapret;; f|F|а|А) zapret_key;; s1|S1|ы1|Ы1) toggle_zapret1_only;; s2|S2|ы2|Ы2) toggle_zapret2_only;;
-1) menu_Zapret ;; 2) menu_Zapret2 ;; 3) SPL_MENU ;; 4) MIXOMO_MENU;; 5) PODKOP_menu ;; 6) menu_TG;; 7) DoH_menu;; 8) menu_hosts;;
-m|M|ь|Ь) sys_menu;; r|R|к|К) show_menu;; *) echo; exit 0;; esac; }
-
+case "$choice" in 999) echo; uninstall_zapret "1"; install_Zapret "1"; curl -fsSL ${GH_RAW}/StressOzz/Test/refs/heads/main/zapret -o "$CONF"; hosts_add "$ALL_BLOCKS"; rm -f "$EXCLUDE_FILE"; wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL"; ZAPRET_RESTART; PAUSE;;
+2) $Z2_ACTION_FUNC;; s|S|ы|Ы) toggle_zapret;; f|F|а|А) zapret_key;; s1|S1|ы1|Ы1) toggle_zapret1_only;; s2|S2|ы2|Ы2) toggle_zapret2_only;; 1) $Z_ACTION_FUNC;; 3) menu_str;; 4) SPL_MENU ;; 5) MIXOMO_MENU;; 6) PODKOP_menu ;; 7) menu_TG;; 8) DoH_menu;; 9) Discord_menu;; 0) menu_hosts;; m|M|ь|Ь) sys_menu;; r|R|к|К) show_menu;; *) echo; exit 0;; esac; }
 case "$1" in --auto-best) auto_apply_best_strategy; exit 0 ;; esac; while true; do show_menu; done
