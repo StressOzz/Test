@@ -392,17 +392,28 @@ echo -e "${CYAN}3) ${GREEN}Установить ${NC}splify2"
 echo -e "${CYAN}4) ${GREEN}Удалить ${NC}splify2"
 echo -e "${CYAN}5) ${GREEN}Сгенерировать и применить ${NC}WARP ${GREEN}для${NC} splify"
 echo -e "${CYAN}6) ${GREEN}Перезапустить ${NC}splify"
-echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read choiceSP; case "$choiceSP" in 1) if [ "$UPD_SPL" = "0" ]; then clear; echo -e "${MAGENTA}Устанавливаем ${NC}splify"
+echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read choiceSP; case "$choiceSP" in 
+
+1) 
+if [ -f /etc/init.d/steer ]; then echo -e "\n${RED}установлен${NC} splify2"\n; PAUSE; return; fi
+
+if [ "$UPD_SPL" = "0" ]; then clear; echo -e "${MAGENTA}Устанавливаем ${NC}splify"
 install_splify || continue; install_AWG || continue; echo; register_warp || continue; echo -e "${CYAN}Используем ${NC}endpoint${CYAN}:${NC} $WARP_EP"; create_warp_iface || continue; WARP_TO_ROOT; register_in_splify; setup_firewall || continue; restart_splify; echo -e "splify ${GREEN}установлен!${NC}\n"
 else echo -e "\n${MAGENTA}Обновляем ${NC}splify"; install_splify || continue; register_in_splify; restart_splify; echo -e "splify ${GREEN}обновлён!${NC}\n"; fi; PAUSE ;; 2) DELETE_SPL ;; 
-3) clear; echo -e "${MAGENTA}Запускаем официальный установщик splify2${NC}\n"; sh -c "$(wget -qO- https://gitlab.com/xyzmean/splify2/-/raw/main/install.sh)"; echo; PAUSE ;;
-4) clear; echo -e "\n${MAGENTA}Удаляем splify2${NC}"
+3) 
+if [ -f /etc/init.d/splify ]; then echo -e "\n${RED}установлен${NC} splify"\n; PAUSE; return; fi
+
+clear; echo -e "${MAGENTA}Запускаем официальный установщик splify2${NC}\n"
+echo -e "${YELLOW}При выборе движка выбирайте ${NC}1\n"
+sh -c "$(wget -qO- https://gitlab.com/xyzmean/splify2/-/raw/main/install.sh)"; echo; PAUSE ;;
+4) echo -e "\n${MAGENTA}Удаляем splify2${NC}"
 "/etc/init.d/steer" stop >/dev/null 2>&1
 "/etc/init.d/steer" disable >/dev/null 2>&1
 $DELETE steer-extended >/dev/null 2>&1
 $DELETE steer >/dev/null 2>&1
 $DELETE luci-app-splify2 >/dev/null 2>&1
 rm -f /etc/config/steer* /etc/config/splify2* 2>/dev/null; rm -f /etc/init.d/steer; rm -rf /tmp/*steer*; rm -rf /tmp/*splify2*
+echo -e "splify2 ${GREEN}удалён!${NC}\n"; PAUSE;
 ;;
 5) if [ -z "$SPL_INST_VER" ]; then echo -e "\nsplify ${RED}не установлен!${NC}\n"
 else register_warp || continue; choose_endpoint || continue; create_warp_iface || continue; WARP_TO_ROOT; register_in_splify; restart_splify; echo -e "\nWARP ${GREEN}изменён!${NC}\n"; fi; PAUSE ;;
