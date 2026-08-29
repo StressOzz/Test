@@ -932,39 +932,110 @@ ok=$((ok+1)); else right_status="[${RED}FAIL${NC}]"; fi; checked=$((checked+1));
 # Смена зеркала
 # ==========================================
 
+# Единственный источник правды — все остальные функции строятся на основе этого массива.
+# Формат: "Название|хост". Порядок в массиве = порядок в меню.
+MIRRORS=(
+"infra.openwrt.org|mirror-03.infra.openwrt.org"
+"China|mirror.sjtu.edu.cn/openwrt"
+"Germany|mirror.berlin.freifunk.net/downloads.openwrt.org"
+"Belgium|mirror.tiguinet.net/openwrt"
+"Kazakhstan|mirror.ps.kz/openwrt"
+"Netherlands|ftp.snt.utwente.nl/pub/software/openwrt"
+"Germany (RWTH Aachen)|ftp.halifax.rwth-aachen.de/openwrt"
+"Sweden|mirror.accum.se/mirror/openwrt"
+"default / OpenWrt|downloads.openwrt.org"
+)
+
+# Строит regex-паттерн из хостов MIRRORS (экранируя точки), для grep -E
+build_mirror_pattern() {
+local pattern=""
+for entry in "${MIRRORS[@]}"; do
+HOST="${entry#*|}"
+ESCAPED="${HOST//./\\.}"
+if [ -z "$pattern" ]; then pattern="$ESCAPED"; else pattern="$pattern|$ESCAPED"; fi
+done
+echo "$pattern"
+}
+
+# Определяет название текущего зеркала по URL в $CONFZ, сверяясь с MIRRORS
+curr_MIR() {
+if [ ! -f "$CONFZ" ]; then echo "файл не найден"; return; fi
+URL=$(head -n1 "$CONFZ")
+for entry in "${MIRRORS[@]}"; do
+NAME="${entry%%|*}"; HOST="${entry#*|}"
+case "$URL" in
+*"$HOST"*) echo "$NAME"; return ;;
+esac
+done
+echo "неизвестное"
+}
+
 set_mirror() { NEW_BASE="$1"; echo -e "\n${CYAN}Проверяем доступность ${NC}$NEW_BASE"
 if ! wget -q --spider --timeout=5 "https://$NEW_BASE/releases/" >/dev/null 2>&1; then echo -e "${RED}Зеркало недоступно!${NC}\n"; PAUSE; return 1; fi
 sed -i "s|https://.*/releases/|https://$NEW_BASE/releases/|g" "$CONFZ"; echo -e "${GREEN}Зеркало доступно!${NC}\n${CYAN}Обновляем список пакетов${NC}"
 if ! $UPDATE >/dev/null 2>&1; then echo -e "\n${RED}Ошибка обновления списка пакетов!${NC}\n${GREEN}Зеркало сброшено на ${NC}default ${GREEN}/${NC} OpenWrt${GREEN}!${NC}\n"
 sed -i "s|https://.*/releases/|https://downloads.openwrt.org/releases/|g" "$CONFZ"; PAUSE; return 1; fi; echo -e "${GREEN}Пакеты обновлены! Зеркало работает!${NC}\n"; PAUSE; }
 
-curr_MIR() { if [ -f "$CONFZ" ]; then URL=$(head -n1 "$CONFZ"); case "$URL" in
-*mirror-03.infra.openwrt.org*) echo "infra.openwrt.org" ;;
-*tiguinet.net*) echo "Belgium" ;;
-*utwente.nl*) echo "Netherlands" ;;
-*freifunk.net*) echo "Germany" ;;
-*rwth-aachen.de*) echo "Germany (RWTH Aachen)" ;;
-*ps.kz*) echo "Kazakhstan" ;;
-*sjtu.edu.cn*) echo "China" ;;
-*accum.se*) echo "Sweden" ;;
-*downloads.openwrt.org*) echo "default / OpenWrt" ;;
-*) echo "неизвестное" ;;
-esac; else echo "файл не найден"; fi; }
+test_all_mirrors() {
+clear
+echo -e "${MAGENTA}Тестируем все зеркала, это может занять время...${NC}\n"
+RESULTS=()
+BEST_TIME=""
+BEST_HOST=""
+BEST_NAME=""
 
-menu_MIR() { while true; do clear; CURR=$(curr_MIR); echo -e "${MAGENTA}Меню выбора зеркала OpenWrt${NC}\n\n${YELLOW}Используется зеркало: ${GREEN}$CURR${NC}\n\n${CYAN}1)${NC} infra.openwrt.org\n${CYAN}2)${NC} China"
-echo -e "${CYAN}3)${NC} Germany\n${CYAN}4)${NC} Belgium\n${CYAN}5)${NC} Kazakhstan\n${CYAN}6)${NC} Netherlands\n${CYAN}7)${NC} Germany (RWTH Aachen)\n${CYAN}8)${NC} Sweden\n${CYAN}9)${NC} default / OpenWrt${NC}"
-echo -en "\n${YELLOW}Выберите зеркало: ${NC}"; read -r z; case "$z" in
-1) set_mirror "mirror-03.infra.openwrt.org" ;;
-2) set_mirror "mirror.sjtu.edu.cn/openwrt" ;;
-3) set_mirror "mirror.berlin.freifunk.net/downloads.openwrt.org" ;;
-4) set_mirror "mirror.tiguinet.net/openwrt" ;;
-5) set_mirror "mirror.ps.kz/openwrt" ;;
-6) set_mirror "ftp.snt.utwente.nl/pub/software/openwrt" ;;
-7) set_mirror "ftp.halifax.rwth-aachen.de/openwrt" ;;
-8) set_mirror "mirror.accum.se/mirror/openwrt.org" ;;
-9) set_mirror "downloads.openwrt.org" ;;
-*) break ;;
-esac; done; }
+for entry in "${MIRRORS[@]}"; do
+NAME="${entry%%|*}"; HOST="${entry#*|}"
+echo -en "${CYAN}Проверка:${NC} $NAME ($HOST) ... "
+START=$(date +%s%N)
+if wget -q --spider --timeout=5 "https://$HOST/releases/" >/dev/null 2>&1; then
+END=$(date +%s%N)
+MS=$(( (END-START)/1000000 ))
+echo -e "${GREEN}${MS} мс${NC}"
+RESULTS+=("$MS|$NAME|$HOST")
+if [ -z "$BEST_TIME" ] || [ "$MS" -lt "$BEST_TIME" ]; then
+BEST_TIME=$MS; BEST_HOST=$HOST; BEST_NAME=$NAME
+fi
+else
+echo -e "${RED}недоступно${NC}"
+fi
+done
+
+echo -e "\n${YELLOW}Итоги проверки (по возрастанию времени):${NC}"
+if [ "${#RESULTS[@]}" -gt 0 ]; then
+printf '%s\n' "${RESULTS[@]}" | sort -t'|' -k1 -n | while IFS='|' read -r M N H; do
+echo -e "  ${GREEN}✓${NC} $N — ${M} мс"
+done
+fi
+
+if [ -z "$BEST_HOST" ]; then
+echo -e "\n${RED}Ни одно зеркало не отвечает!${NC}\n"
+PAUSE; return 1
+fi
+
+echo -e "\n${GREEN}Лучшее зеркало: ${NC}$BEST_NAME ${YELLOW}(${BEST_TIME} мс)${NC}\n"
+set_mirror "$BEST_HOST"
+}
+
+# Меню строится динамически из MIRRORS — добавление зеркала в массив
+# автоматически появляется в меню без правки этой функции
+menu_MIR() { while true; do clear; CURR=$(curr_MIR)
+echo -e "${MAGENTA}Меню выбора зеркала OpenWrt${NC}\n"
+echo -e "${YELLOW}Используется зеркало: ${GREEN}$CURR${NC}\n"
+i=1
+for entry in "${MIRRORS[@]}"; do
+NAME="${entry%%|*}"
+echo -e "${CYAN}$i)${NC} $NAME"
+i=$((i+1))
+done
+echo -e "${CYAN}0)${NC} ${GREEN}Автотест и выбор лучшего зеркала${NC}"
+echo -en "\n${YELLOW}Выберите зеркало (Enter - выход): ${NC}"; read -r z
+[ -z "$z" ] && break
+if [ "$z" = "0" ]; then test_all_mirrors; continue; fi
+if ! [[ "$z" =~ ^[0-9]+$ ]] || [ "$z" -lt 1 ] || [ "$z" -gt "${#MIRRORS[@]}" ]; then continue; fi
+entry="${MIRRORS[$((z-1))]}"; HOST="${entry#*|}"
+set_mirror "$HOST"
+done; }
 
 # ==========================================
 # МЕНЮ TG WS Proxy
