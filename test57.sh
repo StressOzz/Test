@@ -7,10 +7,24 @@ clear
 ZAPRET_MANAGER_VERSION="9.84"; STR_VERSION_AUTOINSTALL="v7"
 GREEN="\033[1;32m"; RED="\033[1;31m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
 
-GH_RAW_HOST="https://raw.githubusercontent.com"; GH_MAIN_HOST="https://github.com"; GH_PROXY="https://gh-proxy.org/"; GH_CHECK_URL="${GH_RAW_HOST}/StressOzz/Zapret-Manager/refs/heads/main/Zapret-Manager.sh"
-echo -e "${CYAN}Проверяем доступность ${NC}raw.githubusercontent.com"; if wget -q -T 4 -O /dev/null "$GH_CHECK_URL" 2>/dev/null; then GH_OK=1; GH_RAW="$GH_RAW_HOST"
-GH_MAIN="$GH_MAIN_HOST"; echo -e "raw.githubusercontent.com ${GREEN}доступен!${NC}\n"; else GH_OK=0; GH_RAW="${GH_PROXY}${GH_RAW_HOST}"; GH_MAIN="${GH_PROXY}${GH_MAIN_HOST}"
-echo -e "raw.githubusercontent.com ${RED}недоступен${CYAN} — ${YELLOW}используем прокси!${NC}\n"; fi
+GH_RAW_HOST="https://raw.githubusercontent.com"
+GH_MAIN_HOST="https://github.com"
+GH_PROXY="https://gh-proxy.org/"
+GH_CHECK_URL="${GH_RAW_HOST}/StressOzz/Zapret-Manager/refs/heads/main/Zapret-Manager.sh"
+
+echo -e "${CYAN}Проверяем доступность ${NC}raw.githubusercontent.com"
+
+if wget -q -T 4 -O /dev/null "$GH_CHECK_URL" 2>/dev/null; then
+    GH_PROXY_MODE=0
+    GH_RAW="$GH_RAW_HOST"
+    GH_MAIN="$GH_MAIN_HOST"
+    echo -e "raw.githubusercontent.com ${GREEN}доступен!${NC}\n"
+else
+    GH_PROXY_MODE=1
+    GH_RAW="${GH_PROXY}${GH_RAW_HOST}"
+    GH_MAIN="${GH_PROXY}${GH_MAIN_HOST}"
+    echo -e "raw.githubusercontent.com ${RED}недоступен${NC} — ${YELLOW}используем прокси!${NC}\n"
+fi
 
 ZAPRET_VERSION="72.20260307"; PODKOP_LATEST_VER="0.9.6"; TG_MTProto="0.9.3"; MT_VERSION="0.8.2"; ZAPRET2_VERSION="1.0.4"
 SPL_VER="26.8.1.3"; TG_GO_VERSION="1.4.1"; TG_RS_VERSION="2.2.5"; BYEDPI_LATEST_VER="0.17.3"
@@ -932,119 +946,39 @@ ok=$((ok+1)); else right_status="[${RED}FAIL${NC}]"; fi; checked=$((checked+1));
 # Смена зеркала
 # ==========================================
 
-# Единственный источник правды. Формат: "Название|хост", по одной записи на строку.
-MIRRORS='infra.openwrt.org|mirror-03.infra.openwrt.org
-China|mirror.sjtu.edu.cn/openwrt
-Germany|mirror.berlin.freifunk.net/downloads.openwrt.org
-Belgium|mirror.tiguinet.net/openwrt
-Kazakhstan|mirror.ps.kz/openwrt
-Netherlands|ftp.snt.utwente.nl/pub/software/openwrt
-Germany (RWTH Aachen)|ftp.halifax.rwth-aachen.de/openwrt
-Sweden|mirror.accum.se/mirror/openwrt
-default / OpenWrt|downloads.openwrt.org'
-
-# Строит regex-паттерн из хостов MIRRORS (экранируя точки), для grep -E
-build_mirror_pattern() {
-pattern=""
-while IFS='|' read -r NAME HOST; do
-[ -z "$HOST" ] && continue
-ESCAPED=$(echo "$HOST" | sed 's/\./\\./g')
-if [ -z "$pattern" ]; then pattern="$ESCAPED"; else pattern="$pattern|$ESCAPED"; fi
-done <<EOF
-$MIRRORS
-EOF
-echo "$pattern"
-}
-
-# Определяет название текущего зеркала по URL в $CONFZ
-curr_MIR() {
-if [ ! -f "$CONFZ" ]; then echo "файл не найден"; return; fi
-URL=$(head -n1 "$CONFZ")
-while IFS='|' read -r NAME HOST; do
-[ -z "$HOST" ] && continue
-case "$URL" in
-*"$HOST"*) echo "$NAME"; return ;;
-esac
-done <<EOF
-$MIRRORS
-EOF
-echo "неизвестное"
-}
-
 set_mirror() { NEW_BASE="$1"; echo -e "\n${CYAN}Проверяем доступность ${NC}$NEW_BASE"
 if ! wget -q --spider --timeout=5 "https://$NEW_BASE/releases/" >/dev/null 2>&1; then echo -e "${RED}Зеркало недоступно!${NC}\n"; PAUSE; return 1; fi
 sed -i "s|https://.*/releases/|https://$NEW_BASE/releases/|g" "$CONFZ"; echo -e "${GREEN}Зеркало доступно!${NC}\n${CYAN}Обновляем список пакетов${NC}"
 if ! $UPDATE >/dev/null 2>&1; then echo -e "\n${RED}Ошибка обновления списка пакетов!${NC}\n${GREEN}Зеркало сброшено на ${NC}default ${GREEN}/${NC} OpenWrt${GREEN}!${NC}\n"
 sed -i "s|https://.*/releases/|https://downloads.openwrt.org/releases/|g" "$CONFZ"; PAUSE; return 1; fi; echo -e "${GREEN}Пакеты обновлены! Зеркало работает!${NC}\n"; PAUSE; }
 
-test_all_mirrors() {
-clear
-echo -e "${MAGENTA}Тестируем все зеркала, это может занять время...${NC}\n"
-RESULTS_FILE=$(mktemp)
-BEST_TIME=""
-BEST_HOST=""
-BEST_NAME=""
+curr_MIR() { if [ -f "$CONFZ" ]; then URL=$(head -n1 "$CONFZ"); case "$URL" in
+*mirror-03.infra.openwrt.org*) echo "infra.openwrt.org" ;;
+*tiguinet.net*) echo "Belgium" ;;
+*utwente.nl*) echo "Netherlands" ;;
+*freifunk.net*) echo "Germany" ;;
+*rwth-aachen.de*) echo "Germany (RWTH Aachen)" ;;
+*ps.kz*) echo "Kazakhstan" ;;
+*sjtu.edu.cn*) echo "China" ;;
+*accum.se*) echo "Sweden" ;;
+*downloads.openwrt.org*) echo "default / OpenWrt" ;;
+*) echo "неизвестное" ;;
+esac; else echo "файл не найден"; fi; }
 
-while IFS='|' read -r NAME HOST; do
-[ -z "$HOST" ] && continue
-echo -en "${CYAN}Проверка:${NC} $NAME ($HOST) ... "
-START=$(date +%s%N)
-if wget -q --spider --timeout=5 "https://$HOST/releases/" >/dev/null 2>&1; then
-END=$(date +%s%N)
-MS=$(( (END-START)/1000000 ))
-echo -e "${GREEN}${MS} мс${NC}"
-echo "$MS|$NAME|$HOST" >> "$RESULTS_FILE"
-if [ -z "$BEST_TIME" ] || [ "$MS" -lt "$BEST_TIME" ]; then
-BEST_TIME=$MS; BEST_HOST=$HOST; BEST_NAME=$NAME
-fi
-else
-echo -e "${RED}недоступно${NC}"
-fi
-done <<EOF
-$MIRRORS
-EOF
-
-echo -e "\n${YELLOW}Итоги проверки (по возрастанию времени):${NC}"
-if [ -s "$RESULTS_FILE" ]; then
-sort -t'|' -k1 -n "$RESULTS_FILE" | while IFS='|' read -r M N H; do
-echo -e "  ${GREEN}✓${NC} $N — ${M} мс"
-done
-fi
-rm -f "$RESULTS_FILE"
-
-if [ -z "$BEST_HOST" ]; then
-echo -e "\n${RED}Ни одно зеркало не отвечает!${NC}\n"
-PAUSE; return 1
-fi
-
-echo -e "\n${GREEN}Лучшее зеркало: ${NC}$BEST_NAME ${YELLOW}(${BEST_TIME} мс)${NC}\n"
-set_mirror "$BEST_HOST"
-}
-
-menu_MIR() { while true; do clear; CURR=$(curr_MIR)
-echo -e "${MAGENTA}Меню выбора зеркала OpenWrt${NC}\n"
-echo -e "${YELLOW}Используется зеркало: ${GREEN}$CURR${NC}\n"
-i=1
-while IFS='|' read -r NAME HOST; do
-[ -z "$HOST" ] && continue
-echo -e "${CYAN}$i)${NC} $NAME"
-i=$((i+1))
-done <<EOF
-$MIRRORS
-EOF
-echo -e "${CYAN}0)${NC} ${GREEN}Автотест и выбор лучшего зеркала${NC}"
-echo -en "\n${YELLOW}Выберите зеркало (Enter - выход): ${NC}"; read -r z
-[ -z "$z" ] && break
-if [ "$z" = "0" ]; then test_all_mirrors; continue; fi
-case "$z" in
-''|*[!0-9]*) continue ;;
-esac
-TOTAL=$(echo "$MIRRORS" | grep -c '|')
-if [ "$z" -lt 1 ] || [ "$z" -gt "$TOTAL" ]; then continue; fi
-SELECTED=$(echo "$MIRRORS" | sed -n "${z}p")
-HOST="${SELECTED#*|}"
-set_mirror "$HOST"
-done; }
+menu_MIR() { while true; do clear; CURR=$(curr_MIR); echo -e "${MAGENTA}Меню выбора зеркала OpenWrt${NC}\n\n${YELLOW}Используется зеркало: ${GREEN}$CURR${NC}\n\n${CYAN}1)${NC} infra.openwrt.org\n${CYAN}2)${NC} China"
+echo -e "${CYAN}3)${NC} Germany\n${CYAN}4)${NC} Belgium\n${CYAN}5)${NC} Kazakhstan\n${CYAN}6)${NC} Netherlands\n${CYAN}7)${NC} Germany (RWTH Aachen)\n${CYAN}8)${NC} Sweden\n${CYAN}9)${NC} default / OpenWrt${NC}"
+echo -en "\n${YELLOW}Выберите зеркало: ${NC}"; read -r z; case "$z" in
+1) set_mirror "mirror-03.infra.openwrt.org" ;;
+2) set_mirror "mirror.sjtu.edu.cn/openwrt" ;;
+3) set_mirror "mirror.berlin.freifunk.net/downloads.openwrt.org" ;;
+4) set_mirror "mirror.tiguinet.net/openwrt" ;;
+5) set_mirror "mirror.ps.kz/openwrt" ;;
+6) set_mirror "ftp.snt.utwente.nl/pub/software/openwrt" ;;
+7) set_mirror "ftp.halifax.rwth-aachen.de/openwrt" ;;
+8) set_mirror "mirror.accum.se/mirror/openwrt.org" ;;
+9) set_mirror "downloads.openwrt.org" ;;
+*) break ;;
+esac; done; }
 
 # ==========================================
 # МЕНЮ TG WS Proxy
@@ -1316,6 +1250,21 @@ ip=$(sed -n "${num}p" "$IDX_LIST"); if [ -z "$ip" ]; then rm -f "$DEV_LIST" "$ID
 else CURRENT_EXCL=$(printf '%s\n%s\n' "$CURRENT_EXCL" "$ip"); ACTION_MSG="${GREEN}IP ${NC}${ip}${GREEN} добавлен в исключения!${NC}"; fi; CHANGED=1; done ;; esac; CURRENT_EXCL=$(echo "$CURRENT_EXCL" | grep -v '^$' | sort -u)
 if [ -n "$CURRENT_EXCL" ]; then FORMATTED=$(echo "$CURRENT_EXCL" | tr '\n' ',' | sed 's/,$//' | sed 's/,/, /g'); { echo "EXCEPT_SRC='{ $FORMATTED }'"; echo "nft insert rule inet zapret postrouting_hook index 0 \\"; echo "  ip saddr \$EXCEPT_SRC meta mark set meta mark \\| 0x40000000"; } > "$EXCL_FILE"; else : > "$EXCL_FILE"; fi
 echo -e "\n${CYAN}Применяем и перезапускаем ${NC}Zapret"; ZAPRET_RESTART; echo -e "\n${ACTION_MSG}\n"; PAUSE; rm -f "$DEV_LIST" "$IDX_LIST"; done; }
+
+toggle_github_proxy() {
+    if [ "$GH_PROXY_MODE" = "1" ]; then
+        GH_PROXY_MODE=0
+        GH_RAW="$GH_RAW_HOST"
+        GH_MAIN="$GH_MAIN_HOST"
+    else
+        GH_PROXY_MODE=1
+        GH_RAW="${GH_PROXY}${GH_RAW_HOST}"
+        GH_MAIN="${GH_PROXY}${GH_MAIN_HOST}"
+    fi
+}
+
+
+
 # ==========================================
 # Главное меню
 # ==========================================
@@ -1332,7 +1281,25 @@ then echo -e "${RED}Включён ${NC}Flow Offloading${RED}!${NC}\n${NC}Zapret
 INFO_ZPR; if grep -qE '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' "$EXCL_FILE" 2>/dev/null; then echo -e "${YELLOW}Исключённые IP:      ${RED}есть${NC}"; fi
 echo -e "\n${CYAN}1) ${GREEN}$Z_ACTION_TEXT${NC} Zapret\n${CYAN}2) ${GREEN}$Z2_ACTION_TEXT${NC} Zapret2\n${CYAN}3) ${GREEN}Меню стратегий${NC} Zapret\n${CYAN}4) ${GREEN}Меню ${NC}splify\n${CYAN}5) ${GREEN}Меню ${NC}Mixomo\n${CYAN}6) ${GREEN}Меню ${NC}NetShift\n${CYAN}7) ${GREEN}Меню ${NC}TG WS Proxy\n${CYAN}8) ${GREEN}Меню ${NC}DNS over HTTPS\n${CYAN}9) ${GREEN}Меню настройки ${NC}Discord\n${CYAN}0) ${GREEN}Меню управления доменами в ${NC}hosts"
 echo -e "${CYAN}f) ${GREEN}Удалить ${NC}→${GREEN} установить ${NC}→${GREEN} настроить${NC} Zapret\n${CYAN}m) ${GREEN}Системное меню${NC}"; [ "$SHOW_S" = "1" ] && echo -e "${CYAN}s) ${GREEN}$S_ACTION${NC} $S_NAME"
-[ "$SHOW_S" = "2" ] && echo -e "${CYAN}s1) ${GREEN}$S1_ACTION${NC} Zapret\n${CYAN}s2) ${GREEN}$S2_ACTION${NC} Zapret2"; echo -ne "${CYAN}Enter) ${GREEN}Выход${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read choice
+[ "$SHOW_S" = "2" ] && echo -e "${CYAN}s1) ${GREEN}$S1_ACTION${NC} Zapret\n${CYAN}s2) ${GREEN}$S2_ACTION${NC} Zapret2"
+
+if [ "$GH_PROXY_MODE" = "1" ]; then
+    GH_STATUS="${GREEN}Выключить прокси для ${NC}github"
+else
+    GH_STATUS="${GREEN}Включить прокси для ${NC}github"
+fi
+
+echo -e "g) $GH_STATUS"
+
+echo -ne "${CYAN}Enter) ${GREEN}Выход${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read choice
 case "$choice" in 999) echo; uninstall_zapret "1"; install_Zapret "1"; curl -fsSL ${GH_RAW}/StressOzz/Test/refs/heads/main/zapret -o "$CONF"; hosts_add "$ALL_BLOCKS"; rm -f "$EXCLUDE_FILE"; wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL"; ZAPRET_RESTART; PAUSE;;
-2) $Z2_ACTION_FUNC;; s|S|ы|Ы) toggle_zapret;; f|F|а|А) zapret_key;; s1|S1|ы1|Ы1) toggle_zapret1_only;; s2|S2|ы2|Ы2) toggle_zapret2_only;; 1) $Z_ACTION_FUNC;; 3) menu_str;; 4) SPL_MENU ;; 5) MIXOMO_MENU;; 6) PODKOP_menu ;; 7) menu_TG;; 8) DoH_menu;; 9) Discord_menu;; 0) menu_hosts;; m|M|ь|Ь) sys_menu;; r|R|к|К) show_menu;; *) echo; exit 0;; esac; }
+2) $Z2_ACTION_FUNC;; s|S|ы|Ы) toggle_zapret;; f|F|а|А) zapret_key;; s1|S1|ы1|Ы1) toggle_zapret1_only;; s2|S2|ы2|Ы2) toggle_zapret2_only;; 1) $Z_ACTION_FUNC;; 3) menu_str;; 4) SPL_MENU ;; 5) MIXOMO_MENU;; 6) PODKOP_menu ;; 7) menu_TG;; 8) DoH_menu;; 9) Discord_menu;;
+
+
+g|G|П|п)
+    toggle_github_proxy
+    continue
+    ;;
+
+0) menu_hosts;; m|M|ь|Ь) sys_menu;; r|R|к|К) show_menu;; *) echo; exit 0;; esac; }
 case "$1" in --auto-best) auto_apply_best_strategy; exit 0 ;; esac; while true; do show_menu; done
