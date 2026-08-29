@@ -932,41 +932,42 @@ ok=$((ok+1)); else right_status="[${RED}FAIL${NC}]"; fi; checked=$((checked+1));
 # Смена зеркала
 # ==========================================
 
-# Единственный источник правды — все остальные функции строятся на основе этого массива.
-# Формат: "Название|хост". Порядок в массиве = порядок в меню.
-MIRRORS=(
-"infra.openwrt.org|mirror-03.infra.openwrt.org"
-"China|mirror.sjtu.edu.cn/openwrt"
-"Germany|mirror.berlin.freifunk.net/downloads.openwrt.org"
-"Belgium|mirror.tiguinet.net/openwrt"
-"Kazakhstan|mirror.ps.kz/openwrt"
-"Netherlands|ftp.snt.utwente.nl/pub/software/openwrt"
-"Germany (RWTH Aachen)|ftp.halifax.rwth-aachen.de/openwrt"
-"Sweden|mirror.accum.se/mirror/openwrt"
-"default / OpenWrt|downloads.openwrt.org"
-)
+# Единственный источник правды. Формат: "Название|хост", по одной записи на строку.
+MIRRORS='infra.openwrt.org|mirror-03.infra.openwrt.org
+China|mirror.sjtu.edu.cn/openwrt
+Germany|mirror.berlin.freifunk.net/downloads.openwrt.org
+Belgium|mirror.tiguinet.net/openwrt
+Kazakhstan|mirror.ps.kz/openwrt
+Netherlands|ftp.snt.utwente.nl/pub/software/openwrt
+Germany (RWTH Aachen)|ftp.halifax.rwth-aachen.de/openwrt
+Sweden|mirror.accum.se/mirror/openwrt
+default / OpenWrt|downloads.openwrt.org'
 
 # Строит regex-паттерн из хостов MIRRORS (экранируя точки), для grep -E
 build_mirror_pattern() {
-local pattern=""
-for entry in "${MIRRORS[@]}"; do
-HOST="${entry#*|}"
-ESCAPED="${HOST//./\\.}"
+pattern=""
+while IFS='|' read -r NAME HOST; do
+[ -z "$HOST" ] && continue
+ESCAPED=$(echo "$HOST" | sed 's/\./\\./g')
 if [ -z "$pattern" ]; then pattern="$ESCAPED"; else pattern="$pattern|$ESCAPED"; fi
-done
+done <<EOF
+$MIRRORS
+EOF
 echo "$pattern"
 }
 
-# Определяет название текущего зеркала по URL в $CONFZ, сверяясь с MIRRORS
+# Определяет название текущего зеркала по URL в $CONFZ
 curr_MIR() {
 if [ ! -f "$CONFZ" ]; then echo "файл не найден"; return; fi
 URL=$(head -n1 "$CONFZ")
-for entry in "${MIRRORS[@]}"; do
-NAME="${entry%%|*}"; HOST="${entry#*|}"
+while IFS='|' read -r NAME HOST; do
+[ -z "$HOST" ] && continue
 case "$URL" in
 *"$HOST"*) echo "$NAME"; return ;;
 esac
-done
+done <<EOF
+$MIRRORS
+EOF
 echo "неизвестное"
 }
 
@@ -979,34 +980,37 @@ sed -i "s|https://.*/releases/|https://downloads.openwrt.org/releases/|g" "$CONF
 test_all_mirrors() {
 clear
 echo -e "${MAGENTA}Тестируем все зеркала, это может занять время...${NC}\n"
-RESULTS=()
+RESULTS_FILE=$(mktemp)
 BEST_TIME=""
 BEST_HOST=""
 BEST_NAME=""
 
-for entry in "${MIRRORS[@]}"; do
-NAME="${entry%%|*}"; HOST="${entry#*|}"
+while IFS='|' read -r NAME HOST; do
+[ -z "$HOST" ] && continue
 echo -en "${CYAN}Проверка:${NC} $NAME ($HOST) ... "
 START=$(date +%s%N)
 if wget -q --spider --timeout=5 "https://$HOST/releases/" >/dev/null 2>&1; then
 END=$(date +%s%N)
 MS=$(( (END-START)/1000000 ))
 echo -e "${GREEN}${MS} мс${NC}"
-RESULTS+=("$MS|$NAME|$HOST")
+echo "$MS|$NAME|$HOST" >> "$RESULTS_FILE"
 if [ -z "$BEST_TIME" ] || [ "$MS" -lt "$BEST_TIME" ]; then
 BEST_TIME=$MS; BEST_HOST=$HOST; BEST_NAME=$NAME
 fi
 else
 echo -e "${RED}недоступно${NC}"
 fi
-done
+done <<EOF
+$MIRRORS
+EOF
 
 echo -e "\n${YELLOW}Итоги проверки (по возрастанию времени):${NC}"
-if [ "${#RESULTS[@]}" -gt 0 ]; then
-printf '%s\n' "${RESULTS[@]}" | sort -t'|' -k1 -n | while IFS='|' read -r M N H; do
+if [ -s "$RESULTS_FILE" ]; then
+sort -t'|' -k1 -n "$RESULTS_FILE" | while IFS='|' read -r M N H; do
 echo -e "  ${GREEN}✓${NC} $N — ${M} мс"
 done
 fi
+rm -f "$RESULTS_FILE"
 
 if [ -z "$BEST_HOST" ]; then
 echo -e "\n${RED}Ни одно зеркало не отвечает!${NC}\n"
@@ -1017,23 +1021,28 @@ echo -e "\n${GREEN}Лучшее зеркало: ${NC}$BEST_NAME ${YELLOW}(${BEST
 set_mirror "$BEST_HOST"
 }
 
-# Меню строится динамически из MIRRORS — добавление зеркала в массив
-# автоматически появляется в меню без правки этой функции
 menu_MIR() { while true; do clear; CURR=$(curr_MIR)
 echo -e "${MAGENTA}Меню выбора зеркала OpenWrt${NC}\n"
 echo -e "${YELLOW}Используется зеркало: ${GREEN}$CURR${NC}\n"
 i=1
-for entry in "${MIRRORS[@]}"; do
-NAME="${entry%%|*}"
+while IFS='|' read -r NAME HOST; do
+[ -z "$HOST" ] && continue
 echo -e "${CYAN}$i)${NC} $NAME"
 i=$((i+1))
-done
+done <<EOF
+$MIRRORS
+EOF
 echo -e "${CYAN}0)${NC} ${GREEN}Автотест и выбор лучшего зеркала${NC}"
 echo -en "\n${YELLOW}Выберите зеркало (Enter - выход): ${NC}"; read -r z
 [ -z "$z" ] && break
 if [ "$z" = "0" ]; then test_all_mirrors; continue; fi
-if ! [[ "$z" =~ ^[0-9]+$ ]] || [ "$z" -lt 1 ] || [ "$z" -gt "${#MIRRORS[@]}" ]; then continue; fi
-entry="${MIRRORS[$((z-1))]}"; HOST="${entry#*|}"
+case "$z" in
+''|*[!0-9]*) continue ;;
+esac
+TOTAL=$(echo "$MIRRORS" | grep -c '|')
+if [ "$z" -lt 1 ] || [ "$z" -gt "$TOTAL" ]; then continue; fi
+SELECTED=$(echo "$MIRRORS" | sed -n "${z}p")
+HOST="${SELECTED#*|}"
 set_mirror "$HOST"
 done; }
 
