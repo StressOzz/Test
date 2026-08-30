@@ -96,8 +96,8 @@ SPFYEXT="#SpotifyEXT\n45.155.204.190 spotify.com www.spotify.com accounts.spotif
 35.186.224.24 open.spotify.com\n162.159.141.124 audio4-fa-tls13.spotifycdn.com audio-cf.spotifycdn.com open-exp.spotifycdn.com\n23.36.163.34 audio-ak-spotify-com.akamaized.net\n2.16.168.44 audio4-ak-spotify-com.akamaized.net
 199.232.210.248 scdn.co i.scdn.co line-up.scdn.co mosaic.scdn.co daily-mix.scdn.co lineup-images.scdn.co encore.scdn.co image-cdn-fa.scdn.co accounts.scdn.co www.scdn.co www-growth.scdn.co av.scdn.co seafoam.scdn.co
 23.48.23.145 heads-ak-spotify-com.akamaized.net\n45.155.204.190 xpui.app.spotify.com"
-GITH_RAW="#githubusercontent.com\n185.199.109.133 raw.githubusercontent.com release-assets.githubusercontent.com
-185.199.108.133 private-user-images.githubusercontent.com gist.githubusercontent.com avatars.githubusercontent.com"
+GITH_RAW="#githubusercontent.com\n146.75.22.132 objects.githubusercontent.com release-assets.githubusercontent.com raw.githubusercontent.com private-user-images.githubusercontent.com gist.githubusercontent.com
+146.75.22.132 avatars.githubusercontent.com avatars0.githubusercontent.com avatars1.githubusercontent.com avatars2.githubusercontent.com avatars3.githubusercontent.com avatars4.githubusercontent.com avatars5.githubusercontent.com"
 GITH="#github.com\n140.82.114.3 github.com\n185.199.110.154 github.githubassets.com\n185.199.110.133 camo.githubassets.com"
 USoft="#Ubisoft\n52.6.7.14 ubi.com\n172.67.139.108 r6s.com\n54.155.2.87 rainbow6.com\n52.222.149.31 ubisoft.com\n54.76.54.196 uplay.ubisoft.com\n2.23.89.92 static3.cdn.ubi.com
 18.209.141.203 connect.ubisoft.com\n2.23.89.244 ubiservices.cdn.ubi.com\n99.83.188.134 public-ubiservices.ubi.com\n3.33.249.140 public-ws-ubiservices.ubi.com\n"
@@ -1001,13 +1001,61 @@ esac; done; }
 # ==========================================
 # УСТАНОВКА RUST
 get_arch_RS() { case "$ARCH" in aarch64*) echo "tg-ws-proxy-aarch64-unknown-linux-musl" ;; x86_64) echo "tg-ws-proxy-x86_64-unknown-linux-musl" ;; arm*) echo "tg-ws-proxy-armv7-unknown-linux-musleabihf" ;; mipsel*) echo "tg-ws-proxy-mipsel-unknown-linux-musl" ;; mips*) echo "tg-ws-proxy-mips-unknown-linux-musl" ;; *) echo -e "\n${RED}Архитектура не поддерживается: ${NC}$ARCH\n"; PAUSE; return 1 ;; esac; }
-delete_TG_RS() { echo -e "\n${MAGENTA}Удаляем TG WS Proxy Rust${NC}"; /etc/init.d/tg-ws-proxy-rs stop >/dev/null 2>&1; /etc/init.d/tg-ws-proxy-rs disable >/dev/null 2>&1; rm -f "$BIN_PATH_RS" "$INIT_PATH_RS" "$BIN_VER_RS"; echo -e "TG WS Proxy Rust ${GREEN}удалён!${NC}\n"; PAUSE; }
-install_TG_RS() { echo -e "\n${MAGENTA}Устанавливаем TG WS Proxy Rust${NC}"; ARCH_FILE_RS="$(get_arch_RS)" || return 1; echo -e "${CYAN}Скачиваем и устанавливаем${NC} $ARCH_FILE_RS"; DOWNLOAD_URL_RS="${GH_MAIN}/valnesfjord/tg-ws-proxy-rs/releases/download/v${TG_RS_VERSION}/${ARCH_FILE_RS}.tar.gz"
-curl -L --fail -o "$TMP_ARCHIVE_RS" "$DOWNLOAD_URL_RS" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка скачивания${NC}\n"; PAUSE; return 1; }; rm -rf "$TMP_DIR_RS"; mkdir -p "$TMP_DIR_RS"; tar -xzf "$TMP_ARCHIVE_RS" -C "$TMP_DIR_RS" || { echo -e "\n${RED}Ошибка распаковки${NC}\n"
-rm -f "$TMP_ARCHIVE_RS"; PAUSE; return 1; }; rm -f "$BIN_PATH_RS"; mv "$TMP_DIR_RS"/tg-ws-proxy* "$BIN_PATH_RS" || { echo -e "\n${RED}Ошибка установки бинарника${NC}\n"; rm -rf "$TMP_DIR_RS" "$TMP_ARCHIVE_RS"; PAUSE; return 1; }
-chmod +x "$BIN_PATH_RS"; rm -rf "$TMP_DIR_RS" "$TMP_ARCHIVE_RS"; echo "$TG_RS_VERSION" > "$BIN_VER_RS"; if [ ! -f "$INIT_PATH_RS" ]; then
-printf '#!/bin/sh /etc/rc.common\nSTART=99\nUSE_PROCD=1\n\nstart_service() {\n    procd_open_instance\n    procd_set_param command /usr/bin/tg-ws-proxy-rs --host 0.0.0.0 --port 2443 --secret %s --default-domains --cf-balance --cf-priority\n    procd_set_param respawn\n    procd_close_instance\n}\n' "$SECRET" > "$INIT_PATH_RS"
-chmod +x "$INIT_PATH_RS"; "$INIT_PATH_RS" enable >/dev/null 2>&1; fi; "$INIT_PATH_RS" restart >/dev/null 2>&1; if pidof tg-ws-proxy-rs >/dev/null 2>&1; then echo -e "TG WS Proxy Rust ${GREEN}установлен!${NC}\n"; else echo -e "${RED}TG WS Proxy Rust не запущен!${NC}\n"; fi; PAUSE; }
+
+delete_TG_RS() {
+	echo -e "\n${MAGENTA}Удаляем TG WS Proxy Rust${NC}"
+	/etc/init.d/tg-ws-proxy-rs stop >/dev/null 2>&1
+	/etc/init.d/tg-ws-proxy-rs disable >/dev/null 2>&1
+	$DELETE luci-app-tg-ws-proxy-rs >/dev/null 2>&1
+	rm -f "$BIN_PATH_RS" "$INIT_PATH_RS" "$BIN_VER_RS"
+	echo -e "TG WS Proxy Rust ${GREEN}удалён!${NC}\n"
+	PAUSE
+}
+
+install_TG_RS() {
+	echo -e "\n${MAGENTA}Устанавливаем TG WS Proxy Rust${NC}"
+	ARCH_FILE_RS="$(get_arch_RS)" || return 1
+	echo -e "${CYAN}Скачиваем и устанавливаем${NC} $ARCH_FILE_RS"
+	DOWNLOAD_URL_RS="${GH_MAIN}/valnesfjord/tg-ws-proxy-rs/releases/download/v${TG_RS_VERSION}/${ARCH_FILE_RS}.tar.gz"
+	curl -L --fail -o "$TMP_ARCHIVE_RS" "$DOWNLOAD_URL_RS" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка скачивания${NC}\n"; PAUSE; return 1; }
+	rm -rf "$TMP_DIR_RS"; mkdir -p "$TMP_DIR_RS"
+	tar -xzf "$TMP_ARCHIVE_RS" -C "$TMP_DIR_RS" || { echo -e "\n${RED}Ошибка распаковки${NC}\n"; rm -f "$TMP_ARCHIVE_RS"; PAUSE; return 1; }
+	rm -f "$BIN_PATH_RS"
+	mv "$TMP_DIR_RS"/tg-ws-proxy* "$BIN_PATH_RS" || { echo -e "\n${RED}Ошибка установки бинарника${NC}\n"; rm -rf "$TMP_DIR_RS" "$TMP_ARCHIVE_RS"; PAUSE; return 1; }
+	chmod +x "$BIN_PATH_RS"; rm -rf "$TMP_DIR_RS" "$TMP_ARCHIVE_RS"; echo "$TG_RS_VERSION" > "$BIN_VER_RS"
+
+	# --- luci пакет ---
+	if [ "$PKG_IS_APK" -eq 1 ]; then
+		LUCI_FILE_RS="luci-app-tg-ws-proxy-rs-${TG_RS_VERSION}-r1.apk"
+	else
+		LUCI_FILE_RS="luci-app-tg-ws-proxy-rs_${TG_RS_VERSION}-r1_all.ipk"
+	fi
+	LUCI_URL_RS="${GH_MAIN}/valnesfjord/tg-ws-proxy-rs/releases/download/v${TG_RS_VERSION}/${LUCI_FILE_RS}"
+	LUCI_TMP_RS="/tmp/${LUCI_FILE_RS}"
+	echo -e "${CYAN}Скачиваем ${NC}$LUCI_FILE_RS"
+	if curl -fsSL --fail -o "$LUCI_TMP_RS" "$LUCI_URL_RS"; then
+		update_packages
+		echo -e "${CYAN}Устанавливаем ${NC}$LUCI_FILE_RS"
+		$INSTALL "$LUCI_TMP_RS" >/dev/null 2>&1 || echo -e "\n${RED}Не удалось установить ${NC}$LUCI_FILE_RS\n"
+	else
+		echo -e "\n${RED}Не удалось скачать ${NC}$LUCI_FILE_RS\n"
+	fi
+	rm -f "$LUCI_TMP_RS"
+	# ------------------
+
+	if [ ! -f "$INIT_PATH_RS" ]; then
+		printf '#!/bin/sh /etc/rc.common\nSTART=99\nUSE_PROCD=1\n\nstart_service() {\n    procd_open_instance\n    procd_set_param command /usr/bin/tg-ws-proxy-rs --host 0.0.0.0 --port 2443 --secret %s --default-domains --cf-balance --cf-priority\n    procd_set_param respawn\n    procd_close_instance\n}\n' "$SECRET" > "$INIT_PATH_RS"
+		chmod +x "$INIT_PATH_RS"; "$INIT_PATH_RS" enable >/dev/null 2>&1
+	fi
+	"$INIT_PATH_RS" restart >/dev/null 2>&1
+	if pidof tg-ws-proxy-rs >/dev/null 2>&1; then
+		echo -e "TG WS Proxy Rust ${GREEN}установлен!${NC}\n"
+	else
+		echo -e "${RED}TG WS Proxy Rust не запущен!${NC}\n"
+	fi
+	PAUSE
+}
+
 # УСТАНОВКА SOCKS5
 get_arch_GO() { case "$ARCH" in aarch64*) echo "tg-ws-proxy-openwrt-aarch64" ;; arm*) echo "tg-ws-proxy-openwrt-armv7" ;; mipsel*) echo "tg-ws-proxy-openwrt-mipsel_24kc" ;; mips*) echo "tg-ws-proxy-openwrt-mips_24kc" ;; x86_64) echo "tg-ws-proxy-openwrt-x86_64" ;; *) echo -e "\n${RED}Архитектура не поддерживается: ${NC}$ARCH\n"; PAUSE; return 1 ;; esac; }
 delete_TG_GO() { echo -e "\n${MAGENTA}Удаляем TG WS Proxy SOCKS5${NC}"; /etc/init.d/tg-ws-proxy-go stop >/dev/null 2>&1; /etc/init.d/tg-ws-proxy-go disable >/dev/null 2>&1; rm -f "$BIN_PATH_GO" "$INIT_PATH_GO" "$BIN_VER_GO"; echo -e "TG WS Proxy SOCKS5 ${GREEN}удалён!${NC}\n"; PAUSE; }
