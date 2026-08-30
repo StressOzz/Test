@@ -1277,12 +1277,12 @@ echo -e "${MAGENTA}Установка пакетов из ${NC}/root/\n"
 
 FILES=$(find /root -maxdepth 1 -type f -name "*.${RAZ}" | sort)
 [ -z "$FILES" ] && {
-    echo -e "${RED}Файлы ${NC}.${RAZ}${RED} не найдены в${NC} /root\n"
+    echo -e "${RED}Файлы ${NC}*.${RAZ}${RED} не найдены в${NC} /root\n"
     PAUSE
     return
 }
 
-echo -e "${YELLOW}Найденные пакеты ${NC}.${RAZ}${YELLOW}:${NC}\n"
+echo -e "${YELLOW}Найденные пакеты ${NC}*.${RAZ}${YELLOW}:${NC}\n"
 
 OLD_IFS=$IFS
 IFS='
