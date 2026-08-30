@@ -1279,6 +1279,7 @@ FILES=$(find /root -maxdepth 1 -type f -name "*.${RAZ}" | sort)
 [ -z "$FILES" ] && {
     echo -e "${RED}Файлы ${NC}.${RAZ}${RED} не найдены в${NC} /root\n"
     PAUSE
+    return
 }
 
 echo -e "${YELLOW}Найденные файлы .${RAZ}:${NC}\n"
@@ -1326,6 +1327,7 @@ for n in $ORDER; do
         $INSTALL "$FILE" >/dev/null 2>&1 || {
             echo -e "\n${RED}Ошибка установки${NC} $NAME\n"
             PAUSE
+            return
         }
         echo -e "$NAME ${GREEN}установлен!${NC}\n"
     else
