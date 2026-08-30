@@ -4,7 +4,7 @@
 # =========================================
 clear
 
-ZAPRET_MANAGER_VERSION="9.84"; STR_VERSION_AUTOINSTALL="v7"
+ZAPRET_MANAGER_VERSION="9.85"; STR_VERSION_AUTOINSTALL="v7"
 GREEN="\033[1;32m"; RED="\033[1;31m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
 
 GH_RAW_HOST="https://raw.githubusercontent.com"; GH_MAIN_HOST="https://github.com"; GH_PROXY="https://gh-proxy.org/"; GH_CHECK_URL="${GH_RAW_HOST}/StressOzz/Zapret-Manager/refs/heads/main/Zapret-Manager.sh"
@@ -13,8 +13,7 @@ GH_MAIN="$GH_MAIN_HOST"; echo -e "raw.githubusercontent.com ${GREEN}доступ
 echo -e "raw.githubusercontent.com ${RED}недоступен${CYAN} — ${YELLOW}используем прокси!${NC}\n"; fi
 
 ZAPRET_VERSION="72.20260307"; PODKOP_LATEST_VER="0.9.6"; TG_MTProto="0.9.3"; MT_VERSION="0.8.2"; ZAPRET2_VERSION="1.0.4"
-
-STEER_VER="0.0.0"; SPLIFY2_VER="0.0.0"; TG_GO_VERSION="1.4.1"; TG_RS_VERSION="2.2.5"; BYEDPI_LATEST_VER="0.17.3"
+SPL_VER="26.8.1.3"; TG_GO_VERSION="1.4.1"; TG_RS_VERSION="2.2.5"; BYEDPI_LATEST_VER="0.17.3"
 
 echo "sh <(wget -q -O - ${GH_RAW}/StressOzz/Zapret-Manager/main/Zapret-Manager.sh)" > /usr/bin/zms; chmod +x /usr/bin/zms
 echo "sh <(wget -q -O - ${GH_RAW}/StressOzz/Zapret-Manager/main/Zapret-Manager.sh) \"\$@\"" > /usr/bin/zmsA; chmod +x /usr/bin/zmsA
@@ -102,7 +101,7 @@ GITH_RAW="#githubusercontent.com\n185.199.109.133 raw.githubusercontent.com rele
 GITH="#github.com\n140.82.114.3 github.com\n185.199.110.154 github.githubassets.com\n185.199.110.133 camo.githubassets.com"
 USoft="#Ubisoft\n52.6.7.14 ubi.com\n172.67.139.108 r6s.com\n54.155.2.87 rainbow6.com\n52.222.149.31 ubisoft.com\n54.76.54.196 uplay.ubisoft.com\n2.23.89.92 static3.cdn.ubi.com
 18.209.141.203 connect.ubisoft.com\n2.23.89.244 ubiservices.cdn.ubi.com\n99.83.188.134 public-ubiservices.ubi.com\n3.33.249.140 public-ws-ubiservices.ubi.com\n"
-ALL_BLOCKS="$AI\n$INSTAGRAM\n$NTC\n$LIBRUSEC\n$TGWeb\n$TWCH\n$SCell\n$SPFY\n$GITH_RAW"; TMP_ARCHIVE_RS="/tmp/tg-ws-proxy-rs.tar.gz"; TMP_DIR_RS="/tmp/tg-ws-proxy-rs"
+ALL_BLOCKS="$AI\n$INSTAGRAM\n$NTC\n$LIBRUSEC\n$TGWeb\n$TWCH\n$SCell\n$SPFY"; TMP_ARCHIVE_RS="/tmp/tg-ws-proxy-rs.tar.gz"; TMP_DIR_RS="/tmp/tg-ws-proxy-rs"
 hosts_enabled() { if grep -q "### dns.malw.link" /etc/hosts; then hosts_echo="Malw.link"; return 0; elif grep -q "#mafioznik" /etc/hosts; then hosts_echo="Mafioznik"; return 0; elif grep -q "### dns.geohide.ru" /etc/hosts; then hosts_echo="GeoHide"; return 0
 elif grep -q "45.155.204.190\|instagram.com\|rutor.info\|lib.rus.ec\|ntc.party\|twitch.tv\|web.telegram.org\|www.spotify.com\|store.supercell.com\|raw.githubusercontent.com\|lkfl2.nalog.ru" /etc/hosts; then hosts_echo="добавлены"; return 0; fi; return 1; }
 hosts_add() { printf "%b\n" "$1" | while IFS= read -r L; do grep -qxF "$L" /etc/hosts || echo "$L" >> /etc/hosts; done; /etc/init.d/dnsmasq restart >/dev/null 2>&1; }; D() { printf '%b' "$(printf '%s' "$1" | sed 's/../\\x&/g')"; }
@@ -110,10 +109,7 @@ ZAPRET_RESTART () { chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config
 PAUSE() { echo -ne "Нажмите Enter..."; read dummy; }; BACKUP_DIR="/opt/zapret_backup"; DATE_FILE="$BACKUP_DIR/date_backup.txt"
 BIN_PATH_GO="/usr/bin/tg-ws-proxy-go"; INIT_PATH_GO="/etc/init.d/tg-ws-proxy-go"; BIN_PATH_RS="/usr/bin/tg-ws-proxy-rs"; INIT_PATH_RS="/etc/init.d/tg-ws-proxy-rs"
 X1="68747470733a2f2f7767636c692e76657263656c2e617070"; X2="68747470733a2f2f73616e74612d61746d6f2e72752f776172702f776172702e706870"
-
-STEER_REPO="xyzmean/steer"; SPLIFY2_REPO="xyzmean/splify2"; GITLAB="https://gitlab.com"; SPLIFY2_INSTALL_URL="${GITLAB}/${SPLIFY2_REPO}/-/raw/main/install.sh"
-WARP_EP="engage.cloudflareclient.com:4500"; WARP_IFACE="warp0"; TMP_SPL="/tmp/splify2"; S101="$(D "$X1")"; S102="$(D "$X2")"; W1="$S101"; II="$S102"; SPEC_FILE="/etc/steer/spec.json"
-
+REPO="xyzmean/splify"; WARP_EP="engage.cloudflareclient.com:4500"; WARP_IFACE="warp0"; TMP_SPL="/tmp/splify"; S101="$(D "$X1")"; S102="$(D "$X2")"; W1="$S101"; II="$S102"
 AWG_JC=4; AWG_JMIN=40; AWG_JMAX=70; AWG_H1=1; AWG_H2=2; AWG_H3=3; AWG_H4=4; AWG_S1=0; AWG_S2=0; AWG_JMAX=70; AWG_H1=1; AWG_H2=2; AWG_H3=3; AWG_H4=4; AWG_S1=0; AWG_S2=0
 AWG_I1="<b 0xce000000010897a297ecc34cd6dd000044d0ec2e2e1ea2991f467ace4222129b5a098823784694b4897b9986ae0b7280135fa85e196d9ad980b150122129ce2a9379531b0fd3e871ca5fdb883c369832f730e272d7b8b74f393f9f0fa43f11e510ecb2219a52984410c204cf875585340c62238e14ad04dff382f2c200e0ee22fe743b9c6b8b043121c5710ec289f471c91ee414fca8b8be8419ae8ce7ffc53837f6ade262891895f3f4cecd31bc93ac5599e18e4f01b472362b8056c3172b513051f8322d1062997ef4a383b01706598d08d48c221d30e74c7ce000cdad36b706b1bf9b0607c32ec4b3203a4ee21ab64df336212b9758280803fcab14933b0e7ee1e04a7becce3e2633f4852585c567894a5f9efe9706a151b615856647e8b7dba69ab357b3982f554549bef9256111b2d67afde0b496f16962d4957ff654232aa9e845b61463908309cfd9de0a6abf5f425f577d7e5f6440652aa8da5f73588e82e9470f3b21b27b28c649506ae1a7f5f15b876f56abc4615f49911549b9bb39dd804fde182bd2dcec0c33bad9b138ca07d4a4a1650a2c2686acea05727e2a78962a840ae428f55627516e73c83dd8893b02358e81b524b4d99fda6df52b3a8d7a5291326e7ac9d773c5b43b8444554ef5aea104a738ed650aa979674bbed38da58ac29d87c29d387d80b526065baeb073ce65f075ccb56e47533aef357dceaa8293a523c5f6f790be90e4731123d3c6152a70576e90b4ab5bc5ead01576c68ab633ff7d36dcde2a0b2c68897e1acfc4d6483aaaeb635dd63c96b2b6a7a2bfe042f6aed82e5363aa850aace12ee3b1a93f30d8ab9537df483152a5527faca21efc9981b304f11fc95336f5b9637b174c5a0659e2b22e159a9fed4b8e93047371175b1d6d9cc8ab745f3b2281537d1c75fb9451871864efa5d184c38c185fd203de206751b92620f7c369e031d2041e152040920ac2c5ab5340bfc9d0561176abf10a147287ea90758575ac6a9f5ac9f390d0d5b23ee12af583383d994e22c0cf42383834bcd3ada1b3825a0664d8f3fb678261d57601ddf94a8a68a7c273a18c08aa99c7ad8c6c42eab67718843597ec9930457359dfdfbce024afc2dcf9348579a57d8d3490b2fa99f278f1c37d87dad9b221acd575192ffae1784f8e60ec7cee4068b6b988f0433d96d6a1b1865f4e155e9fe020279f434f3bf1bd117b717b92f6cd1cc9bea7d45978bcc3f24bda631a36910110a6ec06da35f8966c9279d130347594f13e9e07514fa370754d1424c0a1545c5070ef9fb2acd14233e8a50bfc5978b5bdf8bc1714731f798d21e2004117c61f2989dd44f0cf027b27d4019e81ed4b5c31db347c4a3a4d85048d7093cf16753d7b0d15e078f5c7a5205dc2f87e330a1f716738dce1c6180e9d02869b5546f1c4d2748f8c90d9693cba4e0079297d22fd61402dea32ff0eb69ebd65a5d0b687d87e3a8b2c42b648aa723c7c7daf37abcc4bb85caea2ee8f55bec20e913b3324ab8f5c3304f820d42ad1b9f2ffc1a3af9927136b4419e1e579ab4c2ae3c776d293d397d575df181e6cae0a4ada5d67ecea171cca3288d57c7bbdaee3befe745fb7d634f70386d873b90c4d6c6596bb65af68f9e5121e67ebf0d89d3c909ceedfb32ce9575a7758ff080724e1ab5d5f43074ecb53a479af21ed03d7b6899c36631c0166f9d47e5e1d4528a5d3d3f744029c4b1c190cbfbad06f5f83f7ad0429fa9a2719c56ffe3783460e166de2d8>"
 AUTO_RESULTS="/opt/zapret/tmp/results_auto.txt"; AUTO_BACK="$TMP_SF/zapret_auto_back.txt"; AUTO_LOG="/opt/zapret/tmp/auto_best.log"; AUTO_CRON_CMD="/usr/bin/zmsA --auto-best"
@@ -208,16 +204,15 @@ rm -f "$TMP_VER" "$TMP_VER_POD" "$TMP_VER_TG_MT" "$TMP_VER_TG_GO" "$TMP_VER_TG_R
 
 echo -e "\n${CYAN}Cобираем версии:${NC}"
 TMP_VER="/tmp/zapret_version"; TMP_VER_POD="/tmp/podkop_version"; TMP_VER_TG_MT="/tmp/tg_ws_proxy_MTp_ver"; TMP_VER_TG_GO="/tmp/tg_ws_proxy_GO_ver"
-TMP_VER_TG_RS="/tmp/tg_ws_proxy_RS_ver"; TMP_MAG_VER="/tmp/MagiTrickle_version"; TMP_VER_STEER="/tmp/steer_version"; TMP_VER_SPL2="/tmp/splify2_version"; TMP_VER_BYEDPI="/tmp/byedpi_version"; TMP_VER_Z2="/tmp/zapret2_version"
+TMP_VER_TG_RS="/tmp/tg_ws_proxy_RS_ver"; TMP_MAG_VER="/tmp/MagiTrickle_version"; TMP_VER_SPL="/tmp/splify_version"; TMP_VER_BYEDPI="/tmp/byedpi_version"; TMP_VER_Z2="/tmp/zapret2_version"
 # get_ver "https://github.com/MagiTrickle/MagiTrickle/releases/latest" "$TMP_MAG_VER" "MagiTrickle" &
 # get_ver "https://github.com/spatiumstas/tg-ws-proxy-go/releases/latest" "$TMP_VER_TG_MT" "TG-WS Proxy MTProto" &
 get_ver "https://github.com/DPITrickster/ByeDPI-OpenWrt/releases/latest" "$TMP_VER_BYEDPI" "ByeDPI" & get_ver "https://github.com/yandexru45/netshift/releases/latest" "$TMP_VER_POD" "NetShift" &
-get_ver "https://github.com/remittor/zapret-openwrt/releases/latest" "$TMP_VER" "Zapret" & get_ver "https://gitlab.com/xyzmean/steer/-/releases/permalink/latest" "$TMP_VER_STEER" "steer" &
-get_ver "https://gitlab.com/xyzmean/splify2/-/releases/permalink/latest" "$TMP_VER_SPL2" "splify2" &
+get_ver "https://github.com/remittor/zapret-openwrt/releases/latest" "$TMP_VER" "Zapret" & get_ver "https://github.com/xyzmean/splify/releases/latest" "$TMP_VER_SPL" "splify" &
 get_ver "https://github.com/d0mhate/-tg-ws-proxy-Manager-go/releases/latest" "$TMP_VER_TG_GO" "TG-WS Proxy SOCKS5" & get_ver "https://github.com/valnesfjord/tg-ws-proxy-rs/releases/latest" "$TMP_VER_TG_RS" "TG-WS Proxy Rust" & get_zapret2_ver & wait
 [ -s "$TMP_MAG_VER" ] && MT_VERSION="$(cat "$TMP_MAG_VER")"; [ -s "$TMP_VER_BYEDPI" ] && BYEDPI_LATEST_VER="$(cat "$TMP_VER_BYEDPI" | sed 's/^v//' | cut -d'-' -f1)"; [ -s "$TMP_VER_Z2" ] && ZAPRET2_VERSION="$(cat "$TMP_VER_Z2")"
 [ -s "$TMP_VER" ] && ZAPRET_VERSION="$(cat "$TMP_VER")"; [ -s "$TMP_VER_POD" ] && PODKOP_LATEST_VER="$(cat "$TMP_VER_POD")"; [ -s "$TMP_VER_TG_MT" ] && TG_MTProto="$(cat "$TMP_VER_TG_MT")"
-[ -s "$TMP_VER_STEER" ] && STEER_VER="$(cat "$TMP_VER_STEER")"; [ -s "$TMP_VER_SPL2" ] && SPLIFY2_VER="$(cat "$TMP_VER_SPL2")"; [ -s "$TMP_VER_TG_GO" ] && TG_GO_VERSION="$(cat "$TMP_VER_TG_GO")"; [ -s "$TMP_VER_TG_RS" ] && TG_RS_VERSION="$(cat "$TMP_VER_TG_RS")"
+[ -s "$TMP_VER_SPL" ] && SPL_VER="$(cat "$TMP_VER_SPL")"; [ -s "$TMP_VER_TG_GO" ] && TG_GO_VERSION="$(cat "$TMP_VER_TG_GO")"; [ -s "$TMP_VER_TG_RS" ] && TG_RS_VERSION="$(cat "$TMP_VER_TG_RS")"
 
 ADD_FAKE_FLOW() { MSG=0; for f in stun2.bin quic_initial_tencent_com.bin quic_initial_steamcommunity_com.bin tls_clienthello_sochi_park.bin quic_initial_4pda_to.bin quic_initial_5ka_ru.bin tls_clienthello_5ka_ru.bin quic_initial_rutube_ru.bin
 do [ -d /opt/zapret ] && [ ! -f "/opt/zapret/files/fake/$f" ] && [ -f "$CONF" ] && { [ "$MSG" = 0 ] && { echo -e "${CYAN}Скачиваем ${NC}fake ${CYAN}файлы${NC}"; MSG=1; }; wget -q -U "Mozilla/5.0" -O "/opt/zapret/files/fake/$f" "${GH_MAIN}/Flowseal/zapret-discord-youtube/raw/refs/heads/main/bin/$f" || { echo -e "\n${RED}Не удалось загрузить файл ${NC}$f\n"; }; }; done; }
@@ -330,130 +325,121 @@ elif [ -n "$OPT_DISABLE" ] && [ "$choiceAB" = "$OPT_DISABLE" ]; then disable_aut
 else run_auto_best_background; fi; elif [ -n "$OPT_RESULTS" ] && [ "$choiceAB" = "$OPT_RESULTS" ]; then show_single_result "$AUTO_RESULTS"; elif [ -n "$OPT_LOG" ] && [ "$choiceAB" = "$OPT_LOG" ]; then
 clear; cat "$AUTO_LOG"; echo; PAUSE; elif [ "$choiceAB" = "$OPT_TZ" ]; then TIME_MENU; elif [ "$choiceAB" = "$OPT_MODE" ]; then set_auto_best_mode; elif [ -n "$OPT_CLEAR" ] && [ "$choiceAB" = "$OPT_CLEAR" ]; then
 echo -e "\n${GREEN}Результаты теста и лог удалены!${NC}\n"; rm -rf "$AUTO_RESULTS" "$AUTO_BACK" "$AUTO_LOG" "$AUTO_LOCK"; PAUSE; else return; fi; done; }
-
 # ==========================================
-# splify2 (steer + LuCI + WARP/AmneziaWG)
-# Источник: https://gitlab.com/xyzmean/splify2
+# splify
 # ==========================================
-SPL2_run_official() { echo -e "\n${MAGENTA}Запускаем официальный установщик splify2${NC}\n${CYAN}Источник:${NC} $SPLIFY2_INSTALL_URL\n"
-sh -c "$(wget -qO - "$SPLIFY2_INSTALL_URL")" || { echo -e "\n${RED}Не удалось выполнить официальный установщик!${NC}\n"; PAUSE; return 1; }
-echo -e "\nsplify2 ${GREEN}установлен официальным установщиком!${NC}\n"; PAUSE; }
-
-SPL2_local_ver() { local pfx="$1"; apk info -v 2>/dev/null | grep -E "^${pfx}[0-9]" | sed -E "s/^${pfx}//; s/-r[0-9]+\$//"; }
-
-SPL2_install_pkg() { local repo="$1" file="$2" name="$3"; TAG="v$(echo "$file" | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -n1)"
-URL="${GITLAB}/${repo}/-/releases/${TAG}/downloads/${file}"; mkdir -p "$TMP_SF"; echo -e "${CYAN}Скачиваем ${NC}$file"; curl -fL "$URL" -o "$TMP_SF/$file" 2>/dev/null
-if [ ! -s "$TMP_SF/$file" ]; then echo -e "\n${RED}Не удалось скачать: ${NC}$URL\n${YELLOW}Возможно изменился формат релиза — используйте официальный установщик (пункт${NC} 0${YELLOW})${NC}\n"; PAUSE; return 1; fi
-update_packages || return 1; echo -e "${CYAN}Устанавливаем ${NC}$name"; $INSTALL "$TMP_SF/$file" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить: ${NC}$file\n"; PAUSE; return 1; }; rm -f "$TMP_SF/$file"; }
-
-SPL2_install_steer() { mkdir -p "$TMP_SF"; STEER_LOCAL="$(SPL2_local_ver "steer-extended-")"; [ -z "$STEER_LOCAL" ] && STEER_LOCAL="$(SPL2_local_ver "steer-")"
-echo -e "\n${MAGENTA}Устанавливаем steer-extended${NC}"; if [ -z "$STEER_VER" ] || [ "$STEER_VER" = "0.0.0" ]; then echo -e "\n${RED}Не удалось получить версию steer!${NC}\n"; PAUSE; return 1; fi
-if [ "$STEER_LOCAL" = "$STEER_VER" ]; then echo -e "steer-extended ${GREEN}уже последней версии ($STEER_LOCAL)${NC}\n"; PAUSE; return 0; fi
-FILE="steer-extended-${STEER_VER}-1_${ARCH}.${RAZ}"; SPL2_install_pkg "$STEER_REPO" "$FILE" "steer-extended" || return 1
-/etc/init.d/rpcd restart >/dev/null 2>&1; [ -x /etc/init.d/steer ] && /etc/init.d/steer enable >/dev/null 2>&1
-echo -e "steer-extended ${GREEN}установлен!${NC}\n"; PAUSE; }
-
-SPL2_install_ui() { mkdir -p "$TMP_SF"; UI_LOCAL="$(SPL2_local_ver "luci-app-splify2-")"
-echo -e "\n${MAGENTA}Устанавливаем splify2 (LuCI)${NC}"; if [ -z "$SPLIFY2_VER" ] || [ "$SPLIFY2_VER" = "0.0.0" ]; then echo -e "\n${RED}Не удалось получить версию splify2!${NC}\n"; PAUSE; return 1; fi
-if [ "$UI_LOCAL" = "$SPLIFY2_VER" ]; then echo -e "splify2 ${GREEN}уже последней версии ($UI_LOCAL)${NC}\n"; PAUSE; return 0; fi
-FILE="luci-app-splify2-${SPLIFY2_VER}-1_${SPL_SUF}.${RAZ}"; SPL2_install_pkg "$SPLIFY2_REPO" "$FILE" "splify2" || return 1
-/etc/init.d/rpcd restart >/dev/null 2>&1; echo -e "splify2 ${GREEN}установлен!${NC}\n"; PAUSE; }
-
-ZAVISIM2() { local NEED=""; command -v jq >/dev/null 2>&1 || NEED="$NEED jq"; command -v wg >/dev/null 2>&1 || NEED="$NEED wireguard-tools"; [ -z "$NEED" ] && return 0
-echo -e "\n${MAGENTA}Ставим зависимости для генерации${NC}"; update_packages || return 1; echo -e "${CYAN}Ставим зависимости${NC}"; $INSTALL $NEED >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при установке!${NC}\n"; PAUSE; return 1; }; }
-
-SPL2_register_warp() { mkdir -p "$TMP_SPL"; REG="$TMP_SPL/reg.json"; rm -f "$REG"; echo -e "\n${MAGENTA}Генерируем WARP${NC}"; echo -e "${CYAN}Используем основной метод${NC}"
-if curl -fsSL --max-time 30 "$II" -o "$REG" 2>/dev/null && grep -q '"public_key"' "$REG"; then
+# ──────────────────────────── 1. environment checks ────────────────────────
+ZAVISIM() { local NEED=""; command -v jq >/dev/null 2>&1 || NEED="$NEED jq"; command -v wg >/dev/null 2>&1 || NEED="$NEED wireguard-tools"; [ -z "$NEED" ] && return 0; echo -e "\n${MAGENTA}Ставим зависимости для генерации${NC}"; update_packages || return 1; echo -e "${CYAN}Ставим зависимости${NC}"; $INSTALL $NEED >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при установке!${NC}\n"; PAUSE; return 1; }; }
+# ──────────────────────────── 2. install splify packages ───────────────────
+install_splify() { SPL_SPL="${GH_MAIN}/xyzmean/splify/releases/download/v$SPL_VER/splify-$SPL_VER-1_$SPL_SUF.$RAZ"; SPL_LUCI="${GH_MAIN}/xyzmean/splify/releases/download/v$SPL_VER/luci-app-splify-$SPL_VER-1_$SPL_SUF.$RAZ"
+SPL_RUS="${GH_MAIN}/xyzmean/splify/releases/download/v$SPL_VER/luci-i18n-splify-ru-$SPL_VER-1_$SPL_SUF.$RAZ"; echo -e "${CYAN}Скачиваем ${NC}splify"; wget -q -U "Mozilla/5.0" -O "$TMP_SF/splify.$RAZ" "$SPL_SPL" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$SPL_SPL\n"; PAUSE; return 1; }
+wget -q -U "Mozilla/5.0" -O "$TMP_SF/luci-app-splify.$RAZ" "$SPL_LUCI" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$SPL_LUCI\n"; PAUSE; return 1; }; wget -q -U "Mozilla/5.0" -O "$TMP_SF/luci-i18n-splify-ru.$RAZ" "$SPL_RUS" || { echo -e "\n${RED}Не удалось скачать:\n${NC}$SPL_RUS\n"; PAUSE; return 1; }
+update_packages || return 1; echo -e "${CYAN}Устанавливаем ${NC}splify"; $INSTALL "$TMP_SF/splify.$RAZ" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить:\n${NC}$SPL_SPL\n"; PAUSE; return 1; }
+$INSTALL "$TMP_SF/luci-app-splify.$RAZ" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить:\n${NC}$SPL_LUCI\n"; PAUSE; return 1; }; $INSTALL "$TMP_SF/luci-i18n-splify-ru.$RAZ" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить:\n${NC}$SPL_RUS\n"; PAUSE; return 1; }
+rm -f /tmp/luci-indexcache* /tmp/luci-modulecache* 2>/dev/null; /etc/init.d/rpcd reload 2>/dev/null || /etc/init.d/rpcd restart 2>/dev/null; sleep 5; }
+# ──────────────────────────── 4. register Cloudflare WARP ───────────────────
+colo_name() { case "$1" in AMS) echo "Amsterdam" ;; ARN) echo "Stockholm" ;; ATH) echo "Athens" ;; BUD) echo "Budapest" ;; FRA) echo "Frankfurt" ;; HEL) echo "Helsinki" ;; IST) echo "Istanbul" ;; KBP) echo "Kiev" ;; KIV) echo "Chisinau" ;; PRG) echo "Prague" ;; RIX) echo "Riga" ;; SOF) echo "Sofia" ;; TLL) echo "Tallinn" ;; VIE) echo "Vienna" ;; VNO) echo "Vilnius" ;; WAW) echo "Warsaw" ;; ZRH) echo "Zurich" ;; *) echo "$1" ;; esac; }
+find_best_endpoint() { echo -e "\n${CYAN}Подбираем лучший ${NC}endpoint"; echo -en "${YELLOW}Подождите...${NC}"; _prefixes="188.114.96. 188.114.97. 188.114.98. 188.114.99. 162.159.192. 162.159.193. 162.159.195. 8.34.146. 8.39.214. 8.39.204. 8.6.112. 8.35.211. 8.39.125. 8.47.69."
+_candidates=$(awk -v prefixes="$_prefixes" 'BEGIN { srand(); n = split(prefixes, arr, " "); for (i=0; i<100; i++) { idx = int(rand() * n) + 1; last = int(rand() * 256); print arr[idx] last; } }'); _pings="$TMP_SPL/warp_pings"; _count=0
+for ip in $_candidates; do ( if trace_data=$(curl -s --connect-timeout 2 -w "\n%{time_total}" -H "Host: trace.cloudflare.com" "http://${ip}/cdn-cgi/trace"); then colo=$(echo "$trace_data" | awk -F'=' '$1=="colo"{print $2}'); case "$colo" in DME) exit 0 ;; "") exit 0 ;; esac
+ping_ms=$(echo "$trace_data" | tail -n 1 | awk '{printf "%d", $1 * 1000}'); [ -n "$ping_ms" ] && echo "$ping_ms $ip $colo" >> "$_pings"; fi ) & _count=$((_count + 1)); [ $((_count % 20)) -eq 0 ] && wait; done; wait; if [ -s "$_pings" ]
+then _best=$(sort -n "$_pings" | head -n 1); _best_ping=$(echo "$_best" | awk '{print $1}'); _best_ip=$(echo "$_best" | awk '{print $2}'); _best_colo=$(echo "$_best" | awk '{print $3}'); echo -e "\n\n${CYAN}Используем:${NC} $_best_ip ($(colo_name "$_best_colo"), ping: ${_best_ping}ms)"
+WARP_EP="${_best_ip}:4500"; else WARP_EP="engage.cloudflareclient.com:4500"; echo -e "\n${CYAN}Подбор не удался!\nИспользуем ${NC}endpoint${CYAN}:${NC} $WARP_EP"; fi; }
+choose_endpoint() { echo -e "\n${MAGENTA}Меню выбора endpoint${NC}"; echo -e "${CYAN}1) ${GREEN}Использовать${NC} engage.cloudflareclient.com:4500\n${CYAN}2) ${GREEN}Подобрать ${NC}endpoint${GREEN} автоматически${NC}\n"
+echo -en "${YELLOW}Выберите пункт: ${NC}"; read -r choiceWRP; case "$choiceWRP" in 2) find_best_endpoint ;; *) WARP_EP="engage.cloudflareclient.com:4500"; echo -e "\n${CYAN}Используем: ${NC}$WARP_EP" ;; esac; }
+register_request() { curl -fsSL --max-time 30 -X POST "${W1%/}/api/reg" -H "Content-Type: application/json" -H "Accept: application/json" -d "{\"key\":\"$PUB\",\"install_id\":\"\",\"fcm_token\":\"\",\"model\":\"PC\",\"locale\":\"en_US\",\"tos\":\"$TOS\",\"type\":\"Android\"}" -o "$REG" >/dev/null 2>&1; }
+register_warp() { [ -d "$TMP_SPL" ] || mkdir -p "$TMP_SPL"; REG="$TMP_SPL/reg.json"; rm -f "$REG"; echo -e "\n${MAGENTA}Генерируем WARP${NC}"; echo -e "${CYAN}Используем основной метод${NC}"; if curl -fsSL --max-time 30 "$II" -o "$REG" 2>/dev/null && grep -q '"public_key"' "$REG"; then
 PRIV=$(grep -o '"key"[[:space:]]*:[[:space:]]*"[^"]*"' "$REG" | head -n1 | sed 's/.*:[[:space:]]*"//;s/"$//'); WARP_PEER=$(grep -o '"public_key"[[:space:]]*:[[:space:]]*"[^"]*"' "$REG" | head -n1 | sed 's/.*:[[:space:]]*"//;s/"$//')
 WARP_V4=$(grep -o '"v4"[[:space:]]*:[[:space:]]*"[^"]*"' "$REG" | sed -n '2p' | sed 's/.*:[[:space:]]*"//;s/"$//'); WARP_V6=$(grep -o '"v6"[[:space:]]*:[[:space:]]*"[^"]*"' "$REG" | sed -n '2p' | sed 's/.*:[[:space:]]*"//;s/"$//')
-if [ -n "$PRIV" ] && [ -n "$WARP_PEER" ] && [ -n "$WARP_V4" ]; then echo -e "WARP ${GREEN}сгенерирован!${NC}"; return 0; fi; echo -e "${YELLOW}Основной метод вернул неполные данные, переключаемся на запасной${NC}"
-else echo -e "${YELLOW}Основной метод недоступен, переключаемся на запасной${NC}"; fi
-ZAVISIM2 || return 1; if command -v awg >/dev/null 2>&1; then GEN=awg; else GEN=wg; fi; PRIV="$("$GEN" genkey 2>/dev/null)"; PUB="$(printf '%s\n' "$PRIV" | "$GEN" pubkey 2>/dev/null)"
-TOS="$(date -u +%Y-%m-%dT%H:%M:%S.000000000Z)"; echo -e "${CYAN}Регистрируем устройство${NC}"
-curl -fsSL --max-time 30 -X POST "${W1%/}/api/reg" -H "Content-Type: application/json" -H "Accept: application/json" -d "{\"key\":\"$PUB\",\"install_id\":\"\",\"fcm_token\":\"\",\"model\":\"PC\",\"locale\":\"en_US\",\"tos\":\"$TOS\",\"type\":\"Android\"}" -o "$REG" >/dev/null 2>&1
-if jq -e '.config.peers[0].public_key' "$REG" >/dev/null 2>&1; then echo -e "${CYAN}Используем основной сервер${NC}"
-WARP_PEER="$(jq -r '.config.peers[0].public_key' "$REG")"; WARP_V4="$(jq -r '.config.interface.addresses.v4' "$REG")"; WARP_V6="$(jq -r '.config.interface.addresses.v6 // empty' "$REG")"
-else echo -e "${CYAN}Используем резервный сервер${NC}"; curl -fsSL --max-time 60 "$II" -o "$REG" >/dev/null 2>&1
-if ! jq -e '.result.config.peers[0].public_key' "$REG" >/dev/null 2>&1; then echo -e "\n${RED}Не удалось получить WARP${NC}\n"; PAUSE; return 1; fi
-PRIV="$(jq -r '.result.key' "$REG")"; WARP_PEER="$(jq -r '.result.config.peers[0].public_key' "$REG")"; WARP_V4="$(jq -r '.result.config.interface.addresses.v4' "$REG")"; WARP_V6="$(jq -r '.result.config.interface.addresses.v6 // empty' "$REG")"; fi
-[ -n "$WARP_PEER" ] && [ "$WARP_PEER" != "null" ] || { echo -e "\n${RED}Нет peer public_key${NC}\n"; PAUSE; return 1; }
-[ -n "$WARP_V4" ] && [ "$WARP_V4" != "null" ] || { echo -e "\n${RED}Нет IPv4${NC}\n"; PAUSE; return 1; }; echo -e "WARP ${GREEN}сгенерирован!${NC}"; }
-
-SPL2_create_iface() { echo -e "\n${MAGENTA}Создаём интерфейс $WARP_IFACE${NC}"; [ -n "$(uci -q get "network.$WARP_IFACE")" ] && ifdown "$WARP_IFACE" >/dev/null 2>&1
-uci -q set "network.$WARP_IFACE=interface"; uci set "network.$WARP_IFACE.proto=amneziawg"; uci set "network.$WARP_IFACE.private_key=$PRIV"; uci -q delete "network.$WARP_IFACE.addresses"
-uci add_list "network.$WARP_IFACE.addresses=$WARP_V4"; [ -n "$WARP_V6" ] && uci add_list "network.$WARP_IFACE.addresses=$WARP_V6"; uci -q delete "network.$WARP_IFACE.dns"; uci add_list "network.$WARP_IFACE.dns=8.8.8.8"
-uci set "network.$WARP_IFACE.mtu=1280"; uci set "network.$WARP_IFACE.route_allowed_ips=0"; uci set "network.$WARP_IFACE.awg_jc=$AWG_JC"; uci set "network.$WARP_IFACE.awg_jmin=$AWG_JMIN"; uci set "network.$WARP_IFACE.awg_jmax=$AWG_JMAX"
-uci set "network.$WARP_IFACE.awg_h1=$AWG_H1"; uci set "network.$WARP_IFACE.awg_h2=$AWG_H2"; uci set "network.$WARP_IFACE.awg_h3=$AWG_H3"; uci set "network.$WARP_IFACE.awg_h4=$AWG_H4"; uci set "network.$WARP_IFACE.awg_s1=$AWG_S1"; uci set "network.$WARP_IFACE.awg_s2=$AWG_S2"; uci set "network.$WARP_IFACE.awg_i1=$AWG_I1"
-_pt="amneziawg_$WARP_IFACE"; while [ -n "$(uci -q get "network.@${_pt}[0]")" ]; do uci -q delete "network.@${_pt}[0]"; done; uci add network "$_pt" >/dev/null; uci set "network.@${_pt}[-1].public_key=$WARP_PEER"
+if [ -n "$PRIV" ] && [ -n "$WARP_PEER" ] && [ -n "$WARP_V4" ]; then echo -e "WARP ${GREEN}сгенерирован!${NC}"; return 0; fi; echo -e "${YELLOW}Основной метод вернул неполные данные, переключаемся на запасной${NC}"; else echo -e "${YELLOW}Основной метод недоступен, переключаемся на запасной${NC}"; fi
+ZAVISIM || return 1; if command -v awg >/dev/null 2>&1; then GEN=awg; else GEN=wg; fi; PRIV="$("$GEN" genkey 2>/dev/null)"; PUB="$(printf '%s\n' "$PRIV" | "$GEN" pubkey 2>/dev/null)"
+TOS="$(date -u +%Y-%m-%dT%H:%M:%S.000000000Z)"; echo -e "${CYAN}Регистрируем устройство${NC}"; if register_request && jq -e '.config.peers[0].public_key' "$REG" >/dev/null 2>&1; then echo -e "${CYAN}Используем основной сервер${NC}"; else echo -e "${CYAN}Используем резервный сервер${NC}"
+if ! curl -fsSL --max-time 60 "$II" -o "$REG" >/dev/null 2>&1; then echo -e "${RED}Не удалось получить WARP${NC}"; PAUSE; return 1; fi; if ! jq -e '.result.config.peers[0].public_key' "$REG" >/dev/null 2>&1; then echo -e "${RED}Резервный источник вернул неверный формат${NC}"; PAUSE; return 1; fi
+PRIV="$(jq -r '.result.key' "$REG")"; WARP_PEER="$(jq -r '.result.config.peers[0].public_key' "$REG")"; WARP_V4="$(jq -r '.result.config.interface.addresses.v4' "$REG")"; WARP_V6="$(jq -r '.result.config.interface.addresses.v6 // empty' "$REG")"; fi; if [ -z "$WARP_PEER" ]
+then WARP_PEER="$(jq -r '.config.peers[0].public_key' "$REG")"; WARP_V4="$(jq -r '.config.interface.addresses.v4' "$REG")"; WARP_V6="$(jq -r '.config.interface.addresses.v6 // empty' "$REG")"; fi
+[ -n "$WARP_PEER" ] && [ "$WARP_PEER" != "null" ] || { echo -e "${RED}Нет peer public_key${NC}"; PAUSE; return 1; }; [ -n "$WARP_V4" ] && [ "$WARP_V4" != "null" ] || { echo -e "${RED}Нет IPv4${NC}"; PAUSE; return 1; }; echo -e "WARP ${GREEN}сгенерирован!${NC}"; }
+restart_splify() { echo -e "\n${MAGENTA}Перезапускаем splify${NC}"; echo -en "${YELLOW}Подождите...${NC}"; /usr/local/sbin/splify-disable >/dev/null 2>&1; /etc/init.d/splify enable >/dev/null 2>&1; /etc/init.d/splify-agent enable >/dev/null 2>&1
+uci -q set splify.global.telemetry="0" && uci commit splify; /etc/init.d/splify restart >/dev/null 2>&1; sleep 3; /etc/init.d/splify-agent restart >/dev/null 2>&1; sleep 3; /usr/local/sbin/splify-apply >/dev/null 2>&1
+sleep 10; echo -e "\n\nsplify ${GREEN}перезапущен!${NC}"; echo -e "\n${YELLOW}Инициализация splify может занять несколько минут!${NC}"; }
+WARP_TO_ROOT() { printf '%s\n' "[Interface]" "PrivateKey = $PRIV" "Address = $WARP_V4${WARP_V6:+, $WARP_V6}" "DNS = 8.8.8.8, 8.8.4.4, 2001:4860:4860::8888, 2001:4860:4860::8844" "MTU = 1280" "S1 = $AWG_S1" "S2 = $AWG_S2" "Jc = $AWG_JC" "Jmin = $AWG_JMIN" "Jmax = $AWG_JMAX" "H1 = $AWG_H1" "H2 = $AWG_H2" "H3 = $AWG_H3" "H4 = $AWG_H4" "I1 = $AWG_I1" "" "[Peer]" "PublicKey = $WARP_PEER" "AllowedIPs = 0.0.0.0/0, ::/0" "Endpoint = $WARP_EP" "PersistentKeepalive = 25" > /root/WARP.conf; echo -e "${YELLOW}Файл ${NC}WARP${YELLOW} сохранён в ${NC}/root/WARP.conf"; }
+# ──────────────────────────── 5. create warp0 interface ─────────────────────
+create_warp_iface() { echo -e "\n${MAGENTA}Создаём интерфейс $WARP_IFACE${NC}"; if [ -n "$(uci -q get "network.$WARP_IFACE")" ]; then echo -e "${CYAN}Перенастраиваем интерфейс ${NC}$WARP_IFACE"; ifdown "$WARP_IFACE" >/dev/null 2>&1; fi
+uci -q set "network.$WARP_IFACE=interface"; uci set "network.$WARP_IFACE.proto=amneziawg"; uci set "network.$WARP_IFACE.private_key=$PRIV"; uci -q delete "network.$WARP_IFACE.addresses"; uci add_list "network.$WARP_IFACE.addresses=$WARP_V4"
+[ -n "$WARP_V6" ] && uci add_list "network.$WARP_IFACE.addresses=$WARP_V6"; uci -q delete "network.$WARP_IFACE.dns"; uci add_list "network.$WARP_IFACE.dns=8.8.8.8"; uci set "network.$WARP_IFACE.mtu=1280"
+uci set "network.$WARP_IFACE.route_allowed_ips=0"; uci set "network.$WARP_IFACE.awg_jc=$AWG_JC"; uci set "network.$WARP_IFACE.awg_jmin=$AWG_JMIN"; uci set "network.$WARP_IFACE.awg_jmax=$AWG_JMAX"; uci set "network.$WARP_IFACE.awg_h1=$AWG_H1"
+uci set "network.$WARP_IFACE.awg_h2=$AWG_H2"; uci set "network.$WARP_IFACE.awg_h3=$AWG_H3"; uci set "network.$WARP_IFACE.awg_h4=$AWG_H4"; uci set "network.$WARP_IFACE.awg_s1=$AWG_S1"; uci set "network.$WARP_IFACE.awg_s2=$AWG_S2"
+uci set "network.$WARP_IFACE.awg_i1=$AWG_I1"; _pt="amneziawg_$WARP_IFACE"; while [ -n "$(uci -q get "network.@${_pt}[0]")" ]; do uci -q delete "network.@${_pt}[0]"; done; uci add network "$_pt" >/dev/null; uci set "network.@${_pt}[-1].public_key=$WARP_PEER"
 uci -q delete "network.@${_pt}[-1].allowed_ips"; uci add_list "network.@${_pt}[-1].allowed_ips=0.0.0.0/0"; uci add_list "network.@${_pt}[-1].allowed_ips=::/0"; uci set "network.@${_pt}[-1].endpoint_host=${WARP_EP%:*}"
-uci set "network.@${_pt}[-1].endpoint_port=${WARP_EP##*:}"; uci set "network.@${_pt}[-1].persistent_keepalive=25"; uci commit network >/dev/null 2>&1
-echo -e "${CYAN}Перезапускаем сеть${NC}"; /etc/init.d/rpcd restart >/dev/null 2>&1; /etc/init.d/uhttpd restart >/dev/null 2>&1; rm -rf /tmp/luci-* >/dev/null 2>&1; ip link del "$WARP_IFACE" >/dev/null 2>&1
-killall netifd >/dev/null 2>&1; sleep 3; ifup "$WARP_IFACE" >/dev/null 2>&1; sleep 3; }
+uci set "network.@${_pt}[-1].endpoint_port=${WARP_EP##*:}"; uci set "network.@${_pt}[-1].persistent_keepalive=25"; echo -e "${CYAN}Перезапускаем сеть${NC}"; uci commit network >/dev/null 2>&1; /etc/init.d/rpcd restart >/dev/null 2>&1
+/etc/init.d/uhttpd restart >/dev/null 2>&1; rm -rf /tmp/luci-* >/dev/null 2>&1; ip link del "$WARP_IFACE" >/dev/null 2>&1; killall netifd >/dev/null 2>&1; sleep 3; ifup "$WARP_IFACE" >/dev/null 2>&1; sleep 3; }
+# ──────────────────────────── 6. register endpoint in splify ────────────────
+register_in_splify() { _ei=0; while [ -n "$(uci -q get "splify.@endpoint[$_ei]" 2>/dev/null)" ]; do _ei_if="$(uci -q get "splify.@endpoint[$_ei].iface" 2>/dev/null)"; if [ -n "$_ei_if" ] && [ -z "$(uci -q get "network.$_ei_if" 2>/dev/null)" ]
+then uci -q delete "splify.@endpoint[$_ei]"; else _ei=$((_ei + 1)); fi; done; uci commit splify; grep -q "option iface '$WARP_IFACE'" /etc/config/splify 2>/dev/null || printf "\nconfig endpoint\n\toption iface '$WARP_IFACE'\n\toption priority '1'\n\toption type 'wg'\n" >> /etc/config/splify; }
+# ──────────────────────────── 7. firewall zone ──────────────────────────────
+setup_firewall() { echo -e "\n${MAGENTA}Создаём зону firewall${NC}"; if /usr/local/sbin/splify-firewall check "$WARP_IFACE" >/dev/null 2>&1
+then echo -e "${CYAN}Зона${NC} firewall ${CYAN}для ${NC}$WARP_IFACE уже настроена${NC}"; else echo -e "${CYAN}Настраиваем зону ${NC}firewall${CYAN} для ${NC}$WARP_IFACE${NC}"; echo -en "${YELLOW}Подождите...${NC}"; /usr/local/sbin/splify-firewall fix "$WARP_IFACE" >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось создать зону ${NC}firewall${RED}!${NC}\n"; PAUSE; return 1; }; echo; fi; }
+# ──────────────────────────── main ──────────────────────────────────────────
+SPL_V_VER() { if [ "$PKG_IS_APK" -eq 1 ]; then SPL_INST_VER=$(awk '$0=="P:splify"{f=1} f&&/^V:/{v=substr($0,3);sub(/-r[0-9]+$/,"",v);print v;exit}' /lib/apk/db/installed); else SPL_INST_VER=$(opkg list-installed splify 2>/dev/null | awk '{sub(/(-r[0-9]+|-[0-9]+)$/, "", $3); print $3}'); fi; }
+SPL_MENU() { while true; do SPL_V_VER; UPD_SPL="0"; mkdir -p "$TMP_SPL"; clear; echo -e "${MAGENTA}Меню splify${NC}\n"; if [ -z "$SPL_INST_VER" ]; then SPL_STATUS="${RED}не установлен${NC}"; elif [ "$SPL_VER" = "$SPL_INST_VER" ]; then SPL_STATUS="${GREEN}$SPL_INST_VER${NC}"
+else SPL_STATUS="${RED}$SPL_INST_VER (версия устарела)${NC}"; UPD_SPL="1"; fi; echo -e "${YELLOW}splify:    $SPL_STATUS" 
+if [ -f /etc/init.d/steer ]; then echo -e "${YELLOW}splify2:${NC}   ${GREEN}установлен${NC}"; fi
+if pkg_is_installed amneziawg-tools && pkg_is_installed luci-proto-amneziawg && pkg_is_installed kmod-amneziawg
+then echo -e "${YELLOW}AmneziaWG: ${GREEN}установлен${NC}"; else echo -e "${YELLOW}AmneziaWG: ${RED}не установлен${NC}"; fi; if uci -q get network.warp0 >/dev/null 2>&1; then echo -e "${YELLOW}Интерфейс: ${GREEN}установлен${NC}"
+else echo -e "${YELLOW}Интерфейс: ${RED}не установлен${NC}"; fi; if uci show firewall | grep -q "network='.*warp0"; then echo -e "${YELLOW}Firewall:  ${GREEN}настроен${NC}"; else echo -e "${YELLOW}Firewall:  ${RED}не настроен${NC}"; fi
+if [ "$UPD_SPL" = "0" ]; then echo -e "\n${CYAN}1) ${GREEN}Установить ${NC}splify"; else echo -e "\n${CYAN}1) ${GREEN}Обновить ${NC}splify"; fi
+echo -e "${CYAN}2) ${GREEN}Удалить ${NC}splify"
+echo -e "${CYAN}3) ${GREEN}Установить ${NC}splify2"
+echo -e "${CYAN}4) ${GREEN}Удалить ${NC}splify2"
+echo -e "${CYAN}5) ${GREEN}Сгенерировать и применить ${NC}WARP ${GREEN}для${NC} splify"
+echo -e "${CYAN}6) ${GREEN}Перезапустить ${NC}splify"
+echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read choiceSP; case "$choiceSP" in 
 
-SPL2_setup_firewall() { echo -e "\n${MAGENTA}Настраиваем firewall${NC}"; if ! uci show firewall | grep -q "\.name='$WARP_IFACE'"; then uci add firewall zone >/dev/null
-uci set firewall.@zone[-1].name="$WARP_IFACE"; uci set firewall.@zone[-1].input='REJECT'; uci set firewall.@zone[-1].output='ACCEPT'; uci set firewall.@zone[-1].forward='REJECT'
-uci set firewall.@zone[-1].masq='1'; uci set firewall.@zone[-1].mtu_fix='1'; uci add_list firewall.@zone[-1].network="$WARP_IFACE"; fi
-_fi=0; _has_fwd=0; while [ -n "$(uci -q get "firewall.@forwarding[$_fi]")" ]; do [ "$(uci -q get "firewall.@forwarding[$_fi].src")" = "lan" ] && [ "$(uci -q get "firewall.@forwarding[$_fi].dest")" = "$WARP_IFACE" ] && _has_fwd=1 && break; _fi=$((_fi + 1)); done
-[ "$_has_fwd" = "0" ] && { uci add firewall forwarding >/dev/null; uci set firewall.@forwarding[-1].src='lan'; uci set firewall.@forwarding[-1].dest="$WARP_IFACE"; }
-uci commit firewall >/dev/null 2>&1; /etc/init.d/firewall restart >/dev/null 2>&1; echo -e "Firewall ${GREEN}настроен!${NC}"; }
+1) 
+if [ -f /etc/init.d/steer ]; then echo -e "\n${RED}установлен${NC} splify2\n"; PAUSE; continue; fi
 
-SPL2_warp_to_root() { printf '%s\n' "[Interface]" "PrivateKey = $PRIV" "Address = $WARP_V4${WARP_V6:+, $WARP_V6}" "DNS = 8.8.8.8, 8.8.4.4, 2001:4860:4860::8888, 2001:4860:4860::8844" "MTU = 1280" "S1 = $AWG_S1" "S2 = $AWG_S2" "Jc = $AWG_JC" "Jmin = $AWG_JMIN" "Jmax = $AWG_JMAX" "H1 = $AWG_H1" "H2 = $AWG_H2" "H3 = $AWG_H3" "H4 = $AWG_H4" "I1 = $AWG_I1" "" "[Peer]" "PublicKey = $WARP_PEER" "AllowedIPs = 0.0.0.0/0, ::/0" "Endpoint = $WARP_EP" "PersistentKeepalive = 25" > /root/WARP.conf
-echo -e "${YELLOW}Файл ${NC}WARP${YELLOW} сохранён в ${NC}/root/WARP.conf"; }
+if [ "$UPD_SPL" = "0" ]; then clear; echo -e "${MAGENTA}Устанавливаем ${NC}splify"
+install_splify || continue; install_AWG || continue; echo; register_warp || continue; echo -e "${CYAN}Используем ${NC}endpoint${CYAN}:${NC} $WARP_EP"; create_warp_iface || continue; WARP_TO_ROOT; register_in_splify; setup_firewall || continue; restart_splify; echo -e "splify ${GREEN}установлен!${NC}\n"
+else echo -e "\n${MAGENTA}Обновляем ${NC}splify"; install_splify || continue; register_in_splify; restart_splify; echo -e "splify ${GREEN}обновлён!${NC}\n"; fi; PAUSE ;; 2) DELETE_SPL ;; 
+3) 
+if [ -f /etc/init.d/splify ]; then echo -e "\n${RED}установлен${NC} splify"\n; PAUSE; continue; fi
 
-SPL2_generate_warp() { SPL2_register_warp || return 1; SPL2_create_iface; SPL2_warp_to_root; SPL2_setup_firewall; echo -e "\nWARP ${GREEN}сгенерирован и применён!${NC}\n"; PAUSE; }
-
-SPL2_show_warpconf() { clear; echo -e "${MAGENTA}WARP.conf${NC}\n"; [ -f /root/WARP.conf ] && cat /root/WARP.conf || echo -e "${RED}Файл /root/WARP.conf не найден!${NC}"; echo; PAUSE; }
-
-SPL2_apply_spec() { echo -e "\n${MAGENTA}Записываем ${NC}$SPEC_FILE"; mkdir -p /etc/steer
-cat > "$SPEC_FILE" <<'SPECEOF'
-{"schema":1,"outputs":{"warp0":{"name":"warp0","kind":"interface","devices":["warp0"],"on_fail":"direct"}},"channels":[{"name":"правило1","match":{"prefixes_files":["/etc/steer/lists/telegram.lst","/etc/steer/lists/whatsapp.lst","/etc/steer/lists/meta.lst","/etc/steer/lists/discord.lst","/etc/steer/lists/twitter_x.lst","/etc/steer/lists/google.lst","/etc/steer/lists/rkn.lst"],"domains_files":["/etc/steer/lists/domains/svc_telegram.lst","/etc/steer/lists/domains/svc_meta.lst","/etc/steer/lists/domains/svc_discord.lst","/etc/steer/lists/domains/svc_twitter.lst","/etc/steer/lists/domains/svc_google_meet.lst","/etc/steer/lists/domains/svc_google_play.lst","/etc/steer/lists/domains/geoblock.lst","/etc/steer/lists/domains/block.lst"],"mode":"fakeip"},"out":"warp0"}]}
-SPECEOF
-echo -e "${CYAN}Перезапускаем службы${NC}"; command -v steer >/dev/null 2>&1 && steer apply >/dev/null 2>&1; /etc/init.d/steer restart >/dev/null 2>&1; /etc/init.d/rpcd restart >/dev/null 2>&1
-echo -e "spec.json ${GREEN}применён!${NC}\n"; PAUSE; }
-
-SPL2_delete() { echo -e "\n${MAGENTA}Удаляем splify2${NC}"; [ -x /etc/init.d/steer ] && /etc/init.d/steer stop >/dev/null 2>&1
-echo -e "${CYAN}Удаляем пакеты${NC}"; $DELETE luci-app-splify2 >/dev/null 2>&1; $DELETE steer-extended >/dev/null 2>&1; $DELETE steer >/dev/null 2>&1
-echo -e "${CYAN}Удаляем конфигурацию${NC}"; rm -rf /etc/steer /var/lib/steer; /etc/init.d/rpcd restart >/dev/null 2>&1; echo -e "splify2 ${GREEN}удалён!${NC}\n"; PAUSE; }
-
-SPL2_delete_warp() { echo -e "\n${MAGENTA}Удаляем интерфейс $WARP_IFACE и AmneziaWG${NC}"; ifdown "$WARP_IFACE" >/dev/null 2>&1; uci -q delete "network.$WARP_IFACE"
-_pt="amneziawg_$WARP_IFACE"; while [ -n "$(uci -q get "network.@${_pt}[0]")" ]; do uci -q delete "network.@${_pt}[0]"; done; uci commit network >/dev/null 2>&1
-_zi=0; while [ -n "$(uci -q get "firewall.@zone[$_zi]")" ]; do [ "$(uci -q get "firewall.@zone[$_zi].name")" = "$WARP_IFACE" ] && uci -q delete "firewall.@zone[$_zi]" || _zi=$((_zi + 1)); done
-_fi=0; while [ -n "$(uci -q get "firewall.@forwarding[$_fi]")" ]; do [ "$(uci -q get "firewall.@forwarding[$_fi].dest")" = "$WARP_IFACE" ] && uci -q delete "firewall.@forwarding[$_fi]" || _fi=$((_fi + 1)); done
-uci commit firewall >/dev/null 2>&1; /etc/init.d/network restart >/dev/null 2>&1; /etc/init.d/firewall restart >/dev/null 2>&1; sleep 3
-if ! pkg_is_installed netshift; then echo -e "${CYAN}Удаляем пакеты ${NC}AmneziaWG"; $DELETE luci-i18n-amneziawg-ru >/dev/null 2>&1; $DELETE luci-proto-amneziawg >/dev/null 2>&1; $DELETE amneziawg-tools >/dev/null 2>&1; $DELETE kmod-amneziawg >/dev/null 2>&1; fi
-rm -f /root/WARP.conf; echo -e "WARP ${GREEN}и AmneziaWG удалены!${NC}\n"; PAUSE; }
-
-SPL2_MENU() { while true; do clear; echo -e "${MAGENTA}Меню splify2${NC}\n${DGRAY}Источник: ${GITLAB}/${SPLIFY2_REPO}${NC}\n"
-STEER_LOCAL="$(SPL2_local_ver "steer-extended-")"; UI_LOCAL="$(SPL2_local_ver "luci-app-splify2-")"
-if [ -z "$STEER_LOCAL" ]; then echo -e "${YELLOW}steer:${NC}       ${RED}не установлен${NC}"; elif [ "$STEER_LOCAL" = "$STEER_VER" ]; then echo -e "${YELLOW}steer:${NC}       ${GREEN}$STEER_LOCAL${NC}"; else echo -e "${YELLOW}steer:${NC}       ${RED}$STEER_LOCAL (версия устарела)${NC}"; fi
-if [ -z "$UI_LOCAL" ]; then echo -e "${YELLOW}splify2:${NC}     ${RED}не установлен${NC}"; elif [ "$UI_LOCAL" = "$SPLIFY2_VER" ]; then echo -e "${YELLOW}splify2:${NC}     ${GREEN}$UI_LOCAL${NC}"; else echo -e "${YELLOW}splify2:${NC}     ${RED}$UI_LOCAL (версия устарела)${NC}"; fi
-if pkg_is_installed amneziawg-tools && pkg_is_installed luci-proto-amneziawg && pkg_is_installed kmod-amneziawg; then echo -e "${YELLOW}AmneziaWG:${NC}   ${GREEN}установлен${NC}"; else echo -e "${YELLOW}AmneziaWG:${NC}   ${RED}не установлен${NC}"; fi
-if [ -n "$(uci -q get "network.$WARP_IFACE.private_key" 2>/dev/null)" ]; then echo -e "${YELLOW}$WARP_IFACE:${NC}      ${GREEN}настроен${NC}"; else echo -e "${YELLOW}$WARP_IFACE:${NC}      ${RED}не настроен${NC}"; fi
-[ -f "$SPEC_FILE" ] && echo -e "${YELLOW}spec.json:${NC}   ${GREEN}применён${NC}"
-echo -e "\n${CYAN}0) ${GREEN}Установить/обновить всё одной командой ${NC}(официальный установщик с gitlab.com)"
-echo -e "${CYAN}1) ${GREEN}Установить/обновить ${NC}AmneziaWG"
-echo -e "${CYAN}2) ${GREEN}Сгенерировать и применить ${NC}WARP"
-echo -e "${CYAN}3) ${GREEN}Установить/обновить ${NC}steer"
-echo -e "${CYAN}4) ${GREEN}Установить/обновить ${NC}splify2 ${GREEN}(LuCI)${NC}"
-echo -e "${CYAN}5) ${GREEN}Применить конфигурацию ${NC}(spec.json)"
-echo -e "${CYAN}6) ${GREEN}Показать ${NC}WARP.conf"
-echo -e "${CYAN}7) ${GREEN}Удалить ${NC}splify2"
-echo -e "${CYAN}8) ${GREEN}Удалить ${NC}WARP ${GREEN}и ${NC}AmneziaWG"
-echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read -r choiceSP2
-case "$choiceSP2" in
-0) SPL2_run_official ;;
-1) install_AWG; echo -e "\nAmneziaWG ${GREEN}готов!${NC}\n"; PAUSE ;;
-2) SPL2_generate_warp ;;
-3) SPL2_install_steer ;;
-4) SPL2_install_ui ;;
-5) SPL2_apply_spec ;;
-6) SPL2_show_warpconf ;;
-7) SPL2_delete ;;
-8) SPL2_delete_warp ;;
-*) return ;;
-esac; done; }
-
-
+clear; echo -e "${MAGENTA}Запускаем официальный установщик splify2${NC}\n"
+echo -e "${YELLOW}При выборе движка выбирайте ${NC}1\n"
+sh -c "$(wget -qO- https://gitlab.com/xyzmean/splify2/-/raw/main/install.sh)"; echo; PAUSE ;;
+4) echo -e "\n${MAGENTA}Удаляем splify2${NC}"
+/etc/init.d/steer stop >/dev/null 2>&1
+/etc/init.d/steer disable >/dev/null 2>&1
+$DELETE steer-extended >/dev/null 2>&1
+$DELETE steer >/dev/null 2>&1
+$DELETE luci-app-splify2 >/dev/null 2>&1
+rm -rf /etc/config/steer* /etc/config/splify2* /etc/init.d/steer /tmp/*steer* /tmp/*splify2* /etc/steer* /etc/splify2* 2>/dev/null
+echo -e "splify2 ${GREEN}удалён!${NC}\n"; PAUSE
+;;
+5) if [ -z "$SPL_INST_VER" ]; then echo -e "\nsplify ${RED}не установлен!${NC}\n"
+else register_warp || continue; choose_endpoint || continue; create_warp_iface || continue; WARP_TO_ROOT; register_in_splify; restart_splify; echo -e "\nWARP ${GREEN}изменён!${NC}\n"; fi; PAUSE ;;
+6) if [ -z "$SPL_INST_VER" ]; then echo -e "\nsplify ${RED}не установлен!${NC}\n"; else register_in_splify; restart_splify; fi; echo; PAUSE ;; *) return ;; esac; done; }
+uget() { uci -q get "$1" 2>/dev/null; }
+DELETE_SPL() { echo -e "\n${MAGENTA}Удаляем splify${NC}"; 
+# ──────────────────────────── 1. stop splify services ───────────────────────
+echo -e "${CYAN}Останавливаем службы${NC}"; for s in splify splify-agent; do if [ -x "/etc/init.d/$s" ]; then "/etc/init.d/$s" stop >/dev/null 2>&1; "/etc/init.d/$s" disable >/dev/null 2>&1; fi; done; if [ -x /etc/init.d/splify-singbox ]; then /etc/init.d/splify-singbox stop >/dev/null 2>&1; /etc/init.d/splify-singbox disable >/dev/null 2>&1; fi
+# ──────────────────────────── 2. warp0 interface + peers ────────────────────
+if [ -n "$(uget "network.$WARP_IFACE")" ]; then echo -e "${CYAN}Удаляем интерфейс ${NC}$WARP_IFACE"; ifdown "$WARP_IFACE" >/dev/null 2>&1; uci -q delete "network.$WARP_IFACE"; fi; for _pt in amneziawg_"$WARP_IFACE" wireguard_"$WARP_IFACE"; do while [ -n "$(uget "network.@${_pt}[0]")" ]; do uci -q delete "network.@${_pt}[0]"; done; done
+# ──────────────────────────── 3. firewall zone + forwardings ────────────────
+_ep_ifaces="$(uci show splify 2>/dev/null | sed -n "s/^splify\.[^=]*\.iface='\([^']*\)'\$/\1/p" | sort -u)"; _ep_ifaces="$WARP_IFACE $_ep_ifaces"; echo -e "${CYAN}Удаляем ${NC}firewall${CYAN} зону${NC}"; _zi=0; while [ -n "$(uget "firewall.@zone[$_zi]")" ]; do _zn="$(uget "firewall.@zone[$_zi].name")"; _znet="$(uget "firewall.@zone[$_zi].network")"
+_zdev="$(uget "firewall.@zone[$_zi].device")"; _match=""; for _ep in $_ep_ifaces; do [ -n "$_ep" ] || continue; if [ "$_zn" = "$_ep" ]; then _match=1; break; fi; case " $_znet " in *" $_ep "*) _match=1; break ;; esac; case " $_zdev " in *" $_ep "*) _match=1; break ;; esac; done; if [ -n "$_match" ]; then uci -q delete "firewall.@zone[$_zi]"
+else _zi=$((_zi + 1)); fi; done; _fi=0; while [ -n "$(uget "firewall.@forwarding[$_fi]")" ]; do _fsrc="$(uget "firewall.@forwarding[$_fi].src")"; _fdest="$(uget "firewall.@forwarding[$_fi].dest")"; _match=""; for _ep in $_ep_ifaces; do [ -n "$_ep" ] || continue; if [ "$_fsrc" = "$_ep" ] || [ "$_fdest" = "$_ep" ]; then _match=1; break; fi; done; if [ -n "$_match" ]; then uci -q delete "firewall.@forwarding[$_fi]"; else _fi=$((_fi + 1)); fi; done
+# ──────────────────────────── 4. commit UCI + reload ────────────────────────
+echo -e "${CYAN}Перезапускаем сеть${NC}"; uci commit network >/dev/null 2>&1; uci commit firewall >/dev/null 2>&1; /etc/init.d/rpcd restart >/dev/null 2>&1; /etc/init.d/uhttpd restart >/dev/null 2>&1
+rm -rf /tmp/luci-* >/dev/null 2>&1; ip link del "$WARP_IFACE" >/dev/null 2>&1; killall netifd >/dev/null 2>&1; /etc/init.d/ttyd restart >/dev/null 2>&1; /etc/init.d/firewall reload >/dev/null 2>&1
+# ──────────────────────────── 5. splify runtime (ip rules, nft, cron) ───────
+if [ -x /usr/local/sbin/splify-uninstall ]; then echo -e "${CYAN}Удаляем активные правила"; /usr/local/sbin/splify-uninstall >/dev/null 2>&1; else while ip -4 rule del priority 999 >/dev/null 2>&1; do :; done
+while ip -4 rule del priority 1000 >/dev/null 2>&1; do :; done; ip -4 route flush table 200 >/dev/null 2>&1; rm -f /etc/nftables.d/30-splify.nft; rm -f /tmp/dnsmasq.d/splify-*.conf /tmp/dnsmasq.cfg*.d/splify-*.conf
+if [ -f /etc/crontabs/root ]; then grep -v 'splify-' /etc/crontabs/root > /tmp/splify-cron.uninst; cat /tmp/splify-cron.uninst > /etc/crontabs/root; rm -f /tmp/splify-cron.uninst; /etc/init.d/cron restart >/dev/null 2>&1; fi
+rm -f /var/run/splify-state /var/run/splify-failcount /var/run/splify-events; /etc/init.d/firewall reload >/dev/null 2>&1; /etc/init.d/dnsmasq reload >/dev/null 2>&1; fi
+# ──────────────────────────── 6. remove packages ─────────────────────
+echo -e "${CYAN}Удаляем пакеты ${NC}splify"; $DELETE luci-i18n-splify-ru >/dev/null 2>&1; $DELETE luci-app-splify >/dev/null 2>&1; $DELETE splify >/dev/null 2>&1; if ! pkg_is_installed netshift; then echo -e "${CYAN}Удаляем пакеты ${NC}AWG"; $DELETE luci-i18n-amneziawg-ru >/dev/null 2>&1; $DELETE luci-proto-amneziawg >/dev/null 2>&1; $DELETE amneziawg-tools >/dev/null 2>&1; $DELETE kmod-amneziawg >/dev/null 2>&1; fi
+# ──────────────────────────── 8. splify config + leftover data ──────────────
+echo -e "${CYAN}Удаляем данные ${NC}splify"; rm -rf /etc/splify* /etc/init.d/splify* /etc/config/splify* /var/run/splify* /tmp/luci-indexcache* /tmp/luci-modulecache* /usr/local/sbin/splify* /tmp/splify*; /etc/init.d/rpcd reload 2>/dev/null || /etc/init.d/rpcd restart 2>/dev/null; echo -e "splify ${GREEN}удалён!${NC}\n"; PAUSE; }
 # ==========================================
 # Получение версии
 # ==========================================
@@ -889,7 +875,8 @@ EOF
 wait; OK=$(wc -l < "$TMP_OK" | tr -d ' '); rm -f "$TMP_OK"; }
 prepare_urls() { : > "$OUT_DPI"; printf '%s\n' "gosuslugi.ru|https://www.gosuslugi.ru" "esia.gosuslugi.ru|https://esia.gosuslugi.ru" "nalog.ru|https://nalog.ru" "lkfl2.nalog.ru|https://lkfl2.nalog.ru" "rutube.ru|https://rutube.ru" "ntc.party|https://ntc.party/" "instagram.com|https://instagram.com" "facebook.com|https://facebook.com" "rutor.info|https://rutor.info" "rutracker.org|https://rutracker.org" \
 "epidemz.net.co|https://epidemz.net.co" "nnmclub.to|https://nnmclub.to" "openwrt.org|https://openwrt.org" "sxyprn.net|https://sxyprn.net" "spankbang.com|https://ru.spankbang.com" "pornhub.com|https://pornhub.com" "discord.com|https://discord.com" "x.com|https://x.com" "filmix.my|https://filmix.my" "flightradar24.com|https://flightradar24.com" "play.google.com|https://play.google.com" \
-"anitokyo.tv|https://anitokyo.tv" "cub.red|https://cub.red" >> "$OUT_DPI"; curl -fsSL "$RAW" | sed -n 's/.*"id":[[:space:]]*"\([^"]*\)".*"host":[[:space:]]*"\([^"]*\)".*/\1|\2/p' >> "$OUT_DPI" || { echo -e "\n${RED}Ошибка загрузки DPI списка${NC}\n"; PAUSE; return 1; }; TOTAL=$(grep -c "|" "$OUT_DPI"); }
+"anitokyo.tv|https://anitokyo.tv" "cub.red|https://cub.red" "downloads.openwrt.org|https://downloads.openwrt.org" "raw.githubusercontent.com|https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Zapret-Manager.sh" >> "$OUT_DPI"
+curl -fsSL "$RAW" | sed -n 's/.*"id":[[:space:]]*"\([^"]*\)".*"host":[[:space:]]*"\([^"]*\)".*/\1|\2/p' >> "$OUT_DPI" || { echo -e "\n${RED}Ошибка загрузки DPI списка${NC}\n"; PAUSE; return 1; }; TOTAL=$(grep -c "|" "$OUT_DPI"); }
 check_current_strategy() { clear; echo -e "${MAGENTA}Тестирование текущей стратегии${NC}\n"; prepare_urls; URLS="$(cat "$OUT_DPI")"; OK=0; URLS="$(cat "$OUT_DPI")"; TOTAL=$(grep -c "|" "$OUT_DPI"); echo -e "${CYAN}Доменов для теста:${NC} $TOTAL\n"; LOG_TMP="/tmp/zapret_log_${CUR}"; : > "$LOG_TMP"
 check_all_urls; if [ "$OK" -eq "$TOTAL" ]; then COLOR="${GREEN}"; elif [ "$OK" -ge $((TOTAL/2)) ]; then COLOR="${YELLOW}"; else COLOR="${RED}"; fi; echo -e "\n${CYAN}Результат теста: ${COLOR}$OK/$TOTAL${NC}\n"; rm -f "$OUT_DPI"; PAUSE; }
 show_test_results() { clear; echo -e "${MAGENTA}Результаты тестирования стратегий${NC}\n"; TMP_RES="/tmp/zapret_results_show.$$"; : > "$TMP_RES"; if [ -s "$RES3" ]; then cat "$RES3" > "$TMP_RES"; else [ -s "$RES1" ] && cat "$RES1" >> "$TMP_RES"
@@ -966,7 +953,7 @@ echo -e "\n${GREEN}===== Настройки Zapret =====${NC}"; INFO_ZPR; if [ -
 UDP_VAL=$(grep -E "^[[:space:]]*option NFQWS_PORTS_UDP[[:space:]]+'" "$CONF" | sed "s/.*'\(.*\)'.*/\1/"); echo -e "TCP: ${GREEN}$TCP_VAL${NC}\nUDP: ${GREEN}$UDP_VAL${NC}"; echo -e "\n${GREEN}===== Стратегия =====${NC}"
 awk '/^[[:space:]]*option[[:space:]]+NFQWS_OPT[[:space:]]*'\''/ {flag=1; sub(/^[[:space:]]*option[[:space:]]+NFQWS_OPT[[:space:]]*'\''/, ""); next} flag {if(/'\''/) {sub(/'\''$/, ""); print; exit} print}' "$CONF"; fi
 grep -q '^#' /etc/hosts && ! grep -qE 'dns\.geohide\.ru|mafioznik|dns\.malw\.link' /etc/hosts && { echo -e "\n${GREEN}===== Домены в hosts =====${NC}"; grep '^#' /etc/hosts | cut -c2- | awk '{printf "%-23s", $0; if (++n % 3 == 0) printf "\n"} END {if (n % 3) printf "\n"}'; }
-echo -e "\n${GREEN}===== Доступность сайтов =====${NC}"; prepare_urls; total=$(wc -l < "$OUT_DPI"); half=$(( (total + 1) / 2 )); COL_OFFSET=25; checked=0; ok=0; for idx in $(seq 1 $half); do left_line=$(sed -n "${idx}p" "$OUT_DPI")
+echo -e "\n${GREEN}===== Доступность доменов =====${NC}"; prepare_urls; total=$(wc -l < "$OUT_DPI"); half=$(( (total + 1) / 2 )); COL_OFFSET=25; checked=0; ok=0; for idx in $(seq 1 $half); do left_line=$(sed -n "${idx}p" "$OUT_DPI")
 left_name=$(echo "$left_line" | cut -d'|' -f1); left_url=$(echo "$left_line" | cut -d'|' -f2); right_idx=$((idx + half)); right_line=$(sed -n "${right_idx}p" "$OUT_DPI"); right_name=$(echo "$right_line" | cut -d'|' -f1); right_url=$(echo "$right_line" | cut -d'|' -f2)
 if curl -sL --connect-timeout 2 --max-time 3 --speed-time 3 --speed-limit 1 --range 0-65535 -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) curl/8.0" -o /dev/null "$left_url" >/dev/null 2>&1; then left_status="[${GREEN} OK ${NC}]"; ok=$((ok+1)); else left_status="[${RED}FAIL${NC}]"; fi
 checked=$((checked+1)); if [ -n "$right_url" ]; then if curl -sL --connect-timeout 2 --max-time 3 --speed-time 3 --speed-limit 1 --range 0-65535 -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) curl/8.0" -o /dev/null "$right_url" >/dev/null 2>&1; then right_status="[${GREEN} OK ${NC}]"
@@ -1154,6 +1141,7 @@ else echo -e "${YELLOW}Zapret:${NC}              ${RED}$INSTALLED_VER (верс�
 if [ -f /etc/init.d/zapret2 ]; then /etc/init.d/zapret2 status >/dev/null 2>&1 && ZAPRET2_STATUS="${GREEN}запущен${NC}" || ZAPRET2_STATUS="${RED}остановлен${NC}"; if [ "$INSTALLED_VER2" = "$ZAPRET2_VERSION" ]; then echo -e "${YELLOW}Zapret2:${NC}             ${GREEN}$INSTALLED_VER2${NC} / $ZAPRET2_STATUS"
 else echo -e "${YELLOW}Zapret2:${NC}             ${RED}$INSTALLED_VER2 (версия устарела)${NC} / $ZAPRET2_STATUS"; fi; fi; is_expert_mode && echo -e "${YELLOW}Expert mode:${NC}         ${GREEN}включён${NC}"
 SPL_V_VER; [ -n "$SPL_INST_VER" ] && { [ "$SPL_VER" = "$SPL_INST_VER" ] && echo -e "${YELLOW}splify:${NC}              ${GREEN}$SPL_INST_VER${NC}" || echo -e "${YELLOW}splify:${NC}              ${RED}$SPL_INST_VER (версия устарела)${NC}"; }
+if [ -f /etc/init.d/steer ]; then echo -e "${YELLOW}splify2:${NC}             ${GREEN}установлен${NC}"; fi
 case "$(/etc/init.d/mihomo status 2>/dev/null)" in running) echo -e "${YELLOW}Mixomo:              ${GREEN}запущен${NC}" ;; inactive) echo -e "${YELLOW}Mixomo:              ${RED}остановлен${NC}" ;; esac
 get_TG_versions; TGSTATUS=""; if pidof tg-ws-proxy-go >/dev/null 2>&1; then if [ -n "$INSTALLED_VER_GO" ] && [ -n "$TG_GO_VERSION" ] && [ "$INSTALLED_VER_GO" != "$TG_GO_VERSION" ]; then TGSTATUS="${TGSTATUS:+$TGSTATUS/}${RED}SOCKS5 NEW${GREEN}"
 else TGSTATUS="${TGSTATUS:+$TGSTATUS/}${NC}SOCKS5${GREEN}"; fi; fi; if pidof tg-ws-proxy >/dev/null 2>&1; then if [ -n "$INSTALLED_VER_MT" ] && [ -n "$TG_MTProto" ] && [ "$INSTALLED_VER_MT" != "$TG_MTProto" ]; then TGSTATUS="${TGSTATUS:+$TGSTATUS/}${RED}MTProto NEW${GREEN}"
@@ -1297,5 +1285,5 @@ echo -e "\n${CYAN}1) ${GREEN}$Z_ACTION_TEXT${NC} Zapret\n${CYAN}2) ${GREEN}$Z2_A
 echo -e "${CYAN}f) ${GREEN}Удалить ${NC}→${GREEN} установить ${NC}→${GREEN} настроить${NC} Zapret\n${CYAN}m) ${GREEN}Системное меню${NC}"; [ "$SHOW_S" = "1" ] && echo -e "${CYAN}s) ${GREEN}$S_ACTION${NC} $S_NAME"
 [ "$SHOW_S" = "2" ] && echo -e "${CYAN}s1) ${GREEN}$S1_ACTION${NC} Zapret\n${CYAN}s2) ${GREEN}$S2_ACTION${NC} Zapret2"; echo -ne "${CYAN}Enter) ${GREEN}Выход${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read choice
 case "$choice" in 999) echo; uninstall_zapret "1"; install_Zapret "1"; curl -fsSL ${GH_RAW}/StressOzz/Test/refs/heads/main/zapret -o "$CONF"; hosts_add "$ALL_BLOCKS"; rm -f "$EXCLUDE_FILE"; wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL"; ZAPRET_RESTART; PAUSE;;
-2) $Z2_ACTION_FUNC;; s|S|ы|Ы) toggle_zapret;; f|F|а|А) zapret_key;; s1|S1|ы1|Ы1) toggle_zapret1_only;; s2|S2|ы2|Ы2) toggle_zapret2_only;; 1) $Z_ACTION_FUNC;; 3) menu_str;; 4) SPL2_MENU ;; 5) MIXOMO_MENU;; 6) PODKOP_menu ;; 7) menu_TG;; 8) DoH_menu;; 9) Discord_menu;; 0) menu_hosts;; m|M|ь|Ь) sys_menu;; r|R|к|К) show_menu;; *) echo; exit 0;; esac; }
+2) $Z2_ACTION_FUNC;; s|S|ы|Ы) toggle_zapret;; f|F|а|А) zapret_key;; s1|S1|ы1|Ы1) toggle_zapret1_only;; s2|S2|ы2|Ы2) toggle_zapret2_only;; 1) $Z_ACTION_FUNC;; 3) menu_str;; 4) SPL_MENU ;; 5) MIXOMO_MENU;; 6) PODKOP_menu ;; 7) menu_TG;; 8) DoH_menu;; 9) Discord_menu;; 0) menu_hosts;; m|M|ь|Ь) sys_menu;; r|R|к|К) show_menu;; *) echo; exit 0;; esac; }
 case "$1" in --auto-best) auto_apply_best_strategy; exit 0 ;; esac; while true; do show_menu; done
