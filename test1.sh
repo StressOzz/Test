@@ -1277,9 +1277,8 @@ echo -e "${MAGENTA}Поиск пакетов${NC}\n"
 
 FILES=$(find /root -maxdepth 1 -type f -name "*.${RAZ}" | sort)
 [ -z "$FILES" ] && {
-    echo -e "${RED}Файлы .${RAZ} не найдены в${NC} /root\n"
+    echo -e "${RED}Файлы ${NC}.${RAZ}${RED} не найдены в${NC} /root\n"
     PAUSE
-    exit 1
 }
 
 echo -e "${YELLOW}Найденные файлы .${RAZ}:${NC}\n"
@@ -1327,7 +1326,6 @@ for n in $ORDER; do
         $INSTALL "$FILE" >/dev/null 2>&1 || {
             echo -e "\n${RED}Ошибка установки${NC} $NAME\n"
             PAUSE
-            exit 1
         }
         echo -e "$NAME ${GREEN}установлен!${NC}\n"
     else
