@@ -1273,7 +1273,7 @@ echo -e "\n${CYAN}Применяем и перезапускаем ${NC}Zapret";
 # ==========================================
 PAKET_INSTALL() {
 clear
-echo -e "${MAGENTA}Установка пакетов из ${NC}/root/"
+echo -e "${MAGENTA}Установка пакетов из ${NC}/root/\n"
 
 FILES=$(find /root -maxdepth 1 -type f -name "*.${RAZ}" | sort)
 [ -z "$FILES" ] && {
@@ -1282,7 +1282,7 @@ FILES=$(find /root -maxdepth 1 -type f -name "*.${RAZ}" | sort)
     return
 }
 
-echo -e "${YELLOW}Найденные файлы .${RAZ}:${NC}\n"
+echo -e "${YELLOW}Найденные пакеты ${NC}.${RAZ}${YELLOW}:${NC}\n"
 
 OLD_IFS=$IFS
 IFS='
@@ -1297,12 +1297,11 @@ for f in "$@"; do
     i=$((i + 1))
 done
 
-echo -ne "\n${YELLOW}Введите порядок установки (например: 2 1 3):${NC} "
+echo -ne "\n${YELLOW}Введите порядок установки (${NC}например: 2 1 3${YELLOW}):${NC} "
 read ORDER
 echo
 
 update_packages
-echo -e "${CYAN}Установка пакетов${NC}\n"
 
 for n in $ORDER; do
     case "$n" in
