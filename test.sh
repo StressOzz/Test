@@ -7,10 +7,13 @@ clear
 ZAPRET_MANAGER_VERSION="9.85"; STR_VERSION_AUTOINSTALL="v7"
 GREEN="\033[1;32m"; RED="\033[1;31m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
 
-GH_RAW_HOST="https://raw.githubusercontent.com"; GH_MAIN_HOST="https://github.com"; GH_PROXY="https://gh-proxy.org/"; GH_CHECK_URL="${GH_RAW_HOST}/StressOzz/Zapret-Manager/refs/heads/main/Zapret-Manager.sh"
-echo -e "${CYAN}Проверяем доступность ${NC}raw.githubusercontent.com"; if wget -q -T 4 -O /dev/null "$GH_CHECK_URL" 2>/dev/null; then GH_OK=1; GH_RAW="$GH_RAW_HOST"
-GH_MAIN="$GH_MAIN_HOST"; echo -e "raw.githubusercontent.com ${GREEN}доступен!${NC}\n"; else GH_OK=0; GH_RAW="${GH_PROXY}${GH_RAW_HOST}"; GH_MAIN="${GH_PROXY}${GH_MAIN_HOST}"
-echo -e "raw.githubusercontent.com ${RED}недоступен${CYAN} — ${YELLOW}используем прокси!${NC}\n"; fi
+GH_RAW_HOST="https://raw.githubusercontent.com"; GH_MAIN_HOST="https://github.com"
+# GH_PROXY="https://gh-proxy.org/"; GH_CHECK_URL="${GH_RAW_HOST}/StressOzz/Zapret-Manager/refs/heads/main/Zapret-Manager.sh"
+# echo -e "${CYAN}Проверяем доступность ${NC}raw.githubusercontent.com"; if wget -q -T 4 -O /dev/null "$GH_CHECK_URL" 2>/dev/null; then GH_OK=1
+GH_RAW="$GH_RAW_HOST"
+GH_MAIN="$GH_MAIN_HOST"
+# echo -e "raw.githubusercontent.com ${GREEN}доступен!${NC}\n"; else GH_OK=0; GH_RAW="${GH_PROXY}${GH_RAW_HOST}"; GH_MAIN="${GH_PROXY}${GH_MAIN_HOST}"
+# echo -e "raw.githubusercontent.com ${RED}недоступен${CYAN} — ${YELLOW}используем прокси!${NC}\n"; fi
 
 ZAPRET_VERSION="72.20260307"; PODKOP_LATEST_VER="0.9.6"; TG_MTProto="0.9.3"; MT_VERSION="0.8.2"; ZAPRET2_VERSION="1.0.4"
 SPL_VER="26.8.1.3"; TG_GO_VERSION="1.4.1"; TG_RS_VERSION="2.2.5"; BYEDPI_LATEST_VER="0.17.3"
@@ -18,7 +21,7 @@ SPL_VER="26.8.1.3"; TG_GO_VERSION="1.4.1"; TG_RS_VERSION="2.2.5"; BYEDPI_LATEST_
 echo "sh <(wget -q -O - ${GH_RAW}/StressOzz/Zapret-Manager/main/Zapret-Manager.sh)" > /usr/bin/zms; chmod +x /usr/bin/zms
 echo "sh <(wget -q -O - ${GH_RAW}/StressOzz/Zapret-Manager/main/Zapret-Manager.sh) \"\$@\"" > /usr/bin/zmsA; chmod +x /usr/bin/zmsA
 
-BASE_URL="${GH_MAIN}/Slava-Shchipunov/awg-openwrt/releases/download/"
+BASE_URL="${GH_MAIN}/2Grey/awg-openwrt/releases/download/"
 FLOWSEAL_STR_ZIP="${GH_MAIN}/Flowseal/zapret-discord-youtube/archive/refs/heads/main.zip"
 GEO_HOSTS="${GH_RAW}/Internet-Helper/GeoHideDNS/refs/heads/main/hosts/hosts"
 STR_URL="${GH_RAW}/StressOzz/Zapret-Manager/refs/heads/main/files/StrYoutube"
@@ -97,7 +100,7 @@ SPFYEXT="#SpotifyEXT\n45.155.204.190 spotify.com www.spotify.com accounts.spotif
 199.232.210.248 scdn.co i.scdn.co line-up.scdn.co mosaic.scdn.co daily-mix.scdn.co lineup-images.scdn.co encore.scdn.co image-cdn-fa.scdn.co accounts.scdn.co www.scdn.co www-growth.scdn.co av.scdn.co seafoam.scdn.co
 23.48.23.145 heads-ak-spotify-com.akamaized.net\n45.155.204.190 xpui.app.spotify.com"
 GITH_RAW="#githubusercontent.com\n146.75.22.132 objects.githubusercontent.com release-assets.githubusercontent.com raw.githubusercontent.com private-user-images.githubusercontent.com gist.githubusercontent.com
-146.75.22.132 avatars.githubusercontent.com avatars0.githubusercontent.com avatars1.githubusercontent.com avatars2.githubusercontent.com avatars3.githubusercontent.com avatars4.githubusercontent.com avatars5.githubusercontent.com"
+146.75.22.132 camo.githubusercontent.com avatars.githubusercontent.com avatars0.githubusercontent.com avatars1.githubusercontent.com avatars2.githubusercontent.com avatars3.githubusercontent.com avatars4.githubusercontent.com avatars5.githubusercontent.com"
 GITH="#github.com\n140.82.114.3 github.com\n185.199.110.154 github.githubassets.com\n185.199.110.133 camo.githubassets.com"
 USoft="#Ubisoft\n52.6.7.14 ubi.com\n172.67.139.108 r6s.com\n54.155.2.87 rainbow6.com\n52.222.149.31 ubisoft.com\n54.76.54.196 uplay.ubisoft.com\n2.23.89.92 static3.cdn.ubi.com
 18.209.141.203 connect.ubisoft.com\n2.23.89.244 ubiservices.cdn.ubi.com\n99.83.188.134 public-ubiservices.ubi.com\n3.33.249.140 public-ws-ubiservices.ubi.com\n"
@@ -983,7 +986,8 @@ esac; else echo "файл не найден"; fi; }
 
 menu_MIR() { while true; do clear; CURR=$(curr_MIR); echo -e "${MAGENTA}Меню выбора зеркала OpenWrt${NC}\n\n${YELLOW}Используется зеркало: ${GREEN}$CURR${NC}\n\n${CYAN}1)${NC} infra.openwrt.org\n${CYAN}2)${NC} China"
 echo -e "${CYAN}3)${NC} Germany\n${CYAN}4)${NC} Belgium\n${CYAN}5)${NC} Kazakhstan\n${CYAN}6)${NC} Netherlands\n${CYAN}7)${NC} Germany (RWTH Aachen)\n${CYAN}8)${NC} Sweden\n${CYAN}9)${NC} default / OpenWrt${NC}"
-echo -en "\n${YELLOW}Выберите зеркало: ${NC}"; read -r z; case "$z" in
+echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n"
+echo -en "${YELLOW}Выберите зеркало: ${NC}"; read -r z; case "$z" in
 1) set_mirror "mirror-03.infra.openwrt.org" ;;
 2) set_mirror "mirror.sjtu.edu.cn/openwrt" ;;
 3) set_mirror "mirror.berlin.freifunk.net/downloads.openwrt.org" ;;
@@ -1006,14 +1010,14 @@ install_TG_RS() { echo -e "\n${MAGENTA}Устанавливаем TG WS Proxy Ru
 curl -L --fail -o "$TMP_ARCHIVE_RS" "$DOWNLOAD_URL_RS" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка скачивания${NC}\n"; PAUSE; return 1; }; rm -rf "$TMP_DIR_RS"; mkdir -p "$TMP_DIR_RS"; tar -xzf "$TMP_ARCHIVE_RS" -C "$TMP_DIR_RS" || { echo -e "\n${RED}Ошибка распаковки${NC}\n"
 rm -f "$TMP_ARCHIVE_RS"; PAUSE; return 1; }; rm -f "$BIN_PATH_RS"; mv "$TMP_DIR_RS"/tg-ws-proxy* "$BIN_PATH_RS" || { echo -e "\n${RED}Ошибка установки бинарника${NC}\n"; rm -rf "$TMP_DIR_RS" "$TMP_ARCHIVE_RS"; PAUSE; return 1; }
 chmod +x "$BIN_PATH_RS"; rm -rf "$TMP_DIR_RS" "$TMP_ARCHIVE_RS"; echo "$TG_RS_VERSION" > "$BIN_VER_RS"; if [ ! -f "$INIT_PATH_RS" ]; then
-printf '#!/bin/sh /etc/rc.common\nSTART=99\nUSE_PROCD=1\n\nstart_service() {\n    procd_open_instance\n    procd_set_param command /usr/bin/tg-ws-proxy-rs --host 0.0.0.0 --port 2443 --secret %s --default-domains\n    procd_set_param respawn\n    procd_close_instance\n}\n' "$SECRET" > "$INIT_PATH_RS"
+printf '#!/bin/sh /etc/rc.common\nSTART=99\nUSE_PROCD=1\n\nstart_service() {\n    procd_open_instance\n    procd_set_param command /usr/bin/tg-ws-proxy-rs --host 0.0.0.0 --port 2443 --secret %s --default-domains --cf-balance --cf-priority\n    procd_set_param respawn\n    procd_close_instance\n}\n' "$SECRET" > "$INIT_PATH_RS"
 chmod +x "$INIT_PATH_RS"; "$INIT_PATH_RS" enable >/dev/null 2>&1; fi; "$INIT_PATH_RS" restart >/dev/null 2>&1; if pidof tg-ws-proxy-rs >/dev/null 2>&1; then echo -e "TG WS Proxy Rust ${GREEN}установлен!${NC}\n"; else echo -e "${RED}TG WS Proxy Rust не запущен!${NC}\n"; fi; PAUSE; }
 # УСТАНОВКА SOCKS5
 get_arch_GO() { case "$ARCH" in aarch64*) echo "tg-ws-proxy-openwrt-aarch64" ;; arm*) echo "tg-ws-proxy-openwrt-armv7" ;; mipsel*) echo "tg-ws-proxy-openwrt-mipsel_24kc" ;; mips*) echo "tg-ws-proxy-openwrt-mips_24kc" ;; x86_64) echo "tg-ws-proxy-openwrt-x86_64" ;; *) echo -e "\n${RED}Архитектура не поддерживается: ${NC}$ARCH\n"; PAUSE; return 1 ;; esac; }
 delete_TG_GO() { echo -e "\n${MAGENTA}Удаляем TG WS Proxy SOCKS5${NC}"; /etc/init.d/tg-ws-proxy-go stop >/dev/null 2>&1; /etc/init.d/tg-ws-proxy-go disable >/dev/null 2>&1; rm -f "$BIN_PATH_GO" "$INIT_PATH_GO" "$BIN_VER_GO"; echo -e "TG WS Proxy SOCKS5 ${GREEN}удалён!${NC}\n"; PAUSE; }
 install_TG_GO() { echo -e "\n${MAGENTA}Устанавливаем TG WS Proxy SOCKS5${NC}"; ARCH_FILE_GO="$(get_arch_GO)" || return 1; echo -e "${CYAN}Скачиваем и устанавливаем${NC} $ARCH_FILE_GO"; DOWNLOAD_URL_GO="${GH_MAIN}/d0mhate/-tg-ws-proxy-Manager-go/releases/download/v${TG_GO_VERSION}/${ARCH_FILE_GO}"
 curl -L --fail -o "$BIN_PATH_GO" "$DOWNLOAD_URL_GO" >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка скачивания${NC}\n"; rm -f "$BIN_PATH_GO"; PAUSE; return 1; }; chmod +x "$BIN_PATH_GO"; echo "$TG_GO_VERSION" > "$BIN_VER_GO"; if [ ! -f "$INIT_PATH_GO" ]; then
-printf '#!/bin/sh /etc/rc.common\nSTART=99\nUSE_PROCD=1\n\nstart_service() {\n    procd_open_instance\n    procd_set_param command /usr/bin/tg-ws-proxy-go --host 0.0.0.0 --port 2080\n    procd_set_param respawn\n    procd_close_instance\n}\n' > "$INIT_PATH_GO"
+printf '#!/bin/sh /etc/rc.common\nSTART=99\nUSE_PROCD=1\n\nstart_service() {\n    procd_open_instance\n    procd_set_param command /usr/bin/tg-ws-proxy-go --host 0.0.0.0 --port 2080 --cf-proxy --cf-proxy-first --cf-balance\n    procd_set_param respawn\n    procd_close_instance\n}\n' > "$INIT_PATH_GO"
 chmod +x "$INIT_PATH_GO"; "$INIT_PATH_GO" enable >/dev/null 2>&1; fi; "$INIT_PATH_GO" restart >/dev/null 2>&1; if pidof tg-ws-proxy-go >/dev/null 2>&1; then echo -e "TG WS Proxy SOCKS5 ${GREEN}установлен!${NC}\n"; else echo -e "${RED}TG WS Proxy SOCKS5 не запущен!${NC}\n"; fi; PAUSE; }
 # УСТАНОВКА MTProto
 install_update_TG_PKG() { echo -e "\n${MAGENTA}Устанавливаем TG WS Proxy MTProto${NC}"; rm -f /etc/tg-ws-proxy.conf /etc/tg-ws-proxy.conf-opkg; URL="${GH_MAIN}/spatiumstas/tg-ws-proxy-go/releases/download/${TG_MTProto}/tg-ws-proxy_${TG_MTProto}-${GO_SUF}_openwrt_${ARCH_FULL}.${RAZ}"
@@ -1255,7 +1259,7 @@ NAME_BY_MAC=$(grep -iF "|${_mac}" "$LEASE_TMP" 2>/dev/null | head -n1 | cut -d'|
 [ "$NAME_BY_MAC" = "$_mac" ] && NAME_BY_MAC=""; fi; [ -n "$NAME_BY_MAC" ] || NAME_BY_MAC="Неизвестное устройство"; printf '%s|%s\n' "$_ip" "$NAME_BY_MAC" >> "$DEV_LIST"; done; fi; rm -f "$LEASE_TMP"
 if [ -n "$CURRENT_EXCL" ]; then for ip in $CURRENT_EXCL; do grep -qxE "${ip}\|.*" "$DEV_LIST" 2>/dev/null || printf '%s|%s\n' "$ip" "Устройство offline" >> "$DEV_LIST"; done; fi
 [ -s "$DEV_LIST" ] && sort -t. -k1,1n -k2,2n -k3,3n -k4,4n -o "$DEV_LIST" "$DEV_LIST"; echo -e "${YELLOW}Обнаруженные устройства:${NC}"; i=1; IDX_LIST="$TMP_SF/zapret_excl_index.txt"; : > "$IDX_LIST"; COUNTI=$(wc -l < "$DEV_LIST")
-PAD=""; [ "$COUNTI" -ge 10 ] && PAD=" "; if [ -s "$DEV_LIST" ]; then while IFS='|' read -r ip name; do mark="${GREEN}⚫${NC}"; if [ -n "$CURRENT_EXCL" ] && echo "$CURRENT_EXCL" | grep -qx "$ip"; then mark="${RED}⚫${NC}"; fi
+PAD=""; [ "$COUNTI" -ge 10 ] && PAD=" "; if [ -s "$DEV_LIST" ]; then while IFS='|' read -r ip name; do mark="${GREEN}●${NC}"; if [ -n "$CURRENT_EXCL" ] && echo "$CURRENT_EXCL" | grep -qx "$ip"; then mark="${RED}●${NC}"; fi
 echo -e "${CYAN}${PAD}${i}) ${mark} ${ip} ${CYAN}-${NC} ${name}"; echo "$ip" >> "$IDX_LIST"; i=$((i + 1)); done < "$DEV_LIST"; else echo -e "${RED}Устройства не найдены!${NC}"; fi; echo -e "\n${CYAN}a) ${GREEN}Добавить ${NC}IP${GREEN} вручную${NC}"
 echo -e "${CYAN}c) ${GREEN}Очистить ${NC}все${GREEN} исключения\n${CYAN}r) ${GREEN}Обновить ${NC}список${GREEN} устройств\n${CYAN}Enter) ${GREEN}Выход в системное меню${NC}\n"; echo -ne "${YELLOW}Выберите пункт:${NC} "; read -r sel; case "$sel" in
 "") rm -f "$DEV_LIST" "$IDX_LIST"; return;; r|R|к|К) rm -f "$DEV_LIST" "$IDX_LIST"; BASE=$(echo "${LAN_IP:-192.168.1.1}" | cut -d. -f1-3); echo -en "\n${CYAN}Сканируем локальную сеть\n${YELLOW}Подождите...${NC}"
