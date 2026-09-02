@@ -8,12 +8,12 @@ ZAPRET_MANAGER_VERSION="9.85"; STR_VERSION_AUTOINSTALL="v7"
 GREEN="\033[1;32m"; RED="\033[1;31m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
 
 GH_RAW_HOST="https://raw.githubusercontent.com"; GH_MAIN_HOST="https://github.com"
-# GH_PROXY="https://gh-proxy.org/"; GH_CHECK_URL="${GH_RAW_HOST}/StressOzz/Zapret-Manager/refs/heads/main/Zapret-Manager.sh"
-# echo -e "${CYAN}Проверяем доступность ${NC}raw.githubusercontent.com"; if wget -q -T 4 -O /dev/null "$GH_CHECK_URL" 2>/dev/null; then GH_OK=1
+GH_PROXY="https://gh-proxy.org/"; GH_CHECK_URL="${GH_RAW_HOST}/StressOzz/Zapret-Manager/refs/heads/main/Zapret-Manager.sh"
+echo -e "${CYAN}Проверяем доступность ${NC}raw.githubusercontent.com"; if wget -q -T 4 -O /dev/null "$GH_CHECK_URL" 2>/dev/null; then GH_OK=1
 GH_RAW="$GH_RAW_HOST"
 GH_MAIN="$GH_MAIN_HOST"
-# echo -e "raw.githubusercontent.com ${GREEN}доступен!${NC}\n"; else GH_OK=0; GH_RAW="${GH_PROXY}${GH_RAW_HOST}"; GH_MAIN="${GH_PROXY}${GH_MAIN_HOST}"
-# echo -e "raw.githubusercontent.com ${RED}недоступен${CYAN} — ${YELLOW}используем прокси!${NC}\n"; fi
+echo -e "raw.githubusercontent.com ${GREEN}доступен!${NC}\n"; else GH_OK=0; GH_RAW="${GH_PROXY}${GH_RAW_HOST}"; GH_MAIN="${GH_PROXY}${GH_MAIN_HOST}"
+echo -e "raw.githubusercontent.com ${RED}недоступен${CYAN} — ${YELLOW}используем прокси!${NC}\n"; fi
 
 ZAPRET_VERSION="72.20260307"; PODKOP_LATEST_VER="0.9.6"; TG_MTProto="0.9.3"; MT_VERSION="0.8.2"; ZAPRET2_VERSION="1.0.4"
 SPL_VER="26.8.1.3"; TG_GO_VERSION="1.4.1"; TG_RS_VERSION="2.2.5"; BYEDPI_LATEST_VER="0.17.3"
@@ -124,37 +124,37 @@ DELETE="opkg remove"; ARCH="$(opkg print-architecture | awk '{print $2}' | tail 
 RAZ="ipk"; TMP_FILE_GO="/tmp/tg-ws-proxy.ipk"; else PKG="apk"; GO_SUF="r1"; CONFZ="/etc/apk/repositories.d/distfeeds.list"; PKG_IS_APK=1; SPL_SUF="noarch"; RELEASE_TAG="v${BYEDPI_LATEST_VER}-25.12"
 UPDATE="apk update"; INSTALL="apk add --allow-untrusted"; DELETE="apk del"; ARCH="$(apk --print-arch 2>/dev/null)"; RAZ="apk"; VER_SUF="r1"; SUF_MT="r"; TMP_FILE_GO="/tmp/tg-ws-proxy.apk"; fi
 
-# MIRROR=""; CURRENT_MIRROR=$(head -n1 "$CONFZ" | awk '{print $NF}' | sed 's|https://||;s|/releases/.*||')
-# if grep -qE 'mirror-03\.infra\.openwrt\.org|ftp\.snt\.utwente\.nl/pub/software/openwrt|mirror\.berlin\.freifunk\.net/downloads\.openwrt|mirror\.sjtu\.edu\.cn/openwrt|ftp\.halifax\.rwth-aachen\.de/openwrt|mirror\.accum\.se/mirror/openwrt|downloads\.openwrt\.org' "$CONFZ"; then
-#     echo -e "${CYAN}Проверяем доступность ${NC}$CURRENT_MIRROR"
-#     if ! wget -q --spider --timeout=2 "https://$CURRENT_MIRROR/releases/" >/dev/null 2>&1; then
-#         echo -e "$CURRENT_MIRROR ${RED}недоступен!${NC}"
-#         echo -e "${CYAN}Подбираем зеркало ${NC}OpenWRT"
-#         if wget -q --spider --timeout=3 "https://mirror-03.infra.openwrt.org" >/dev/null 2>&1; then
-#             MIRROR="mirror-03.infra.openwrt.org"          
-#         elif wget -q --spider --timeout=3 "https://ftp.halifax.rwth-aachen.de/openwrt/releases/" >/dev/null 2>&1; then
-#             MIRROR="ftp.halifax.rwth-aachen.de/openwrt"
-#         elif wget -q --spider --timeout=3 "https://mirror.accum.se/mirror/openwrt.org/releases/" >/dev/null 2>&1; then
-#             MIRROR="mirror.accum.se/mirror/openwrt.org"
-#         elif wget -q --spider --timeout=3 "https://ftp.snt.utwente.nl/pub/software/openwrt/releases/" >/dev/null 2>&1; then
-#             MIRROR="ftp.snt.utwente.nl/pub/software/openwrt"
-#         elif wget -q --spider --timeout=3 "https://mirror.berlin.freifunk.net/downloads.openwrt/releases/" >/dev/null 2>&1; then
-#             MIRROR="mirror.berlin.freifunk.net/downloads.openwrt"
-#         elif wget -q --spider --timeout=3 "https://mirror.sjtu.edu.cn/openwrt/releases/" >/dev/null 2>&1; then
-#             MIRROR="mirror.sjtu.edu.cn/openwrt"
-#         elif wget -q --spider --timeout=3 "https://downloads.openwrt.org/releases/" >/dev/null 2>&1; then
-#             MIRROR="downloads.openwrt.org"
-#         fi
-#         if [ -n "$MIRROR" ]; then
-#             echo -e "${CYAN}Переключаемся на ${NC}$MIRROR"
-#             sed -i "s|https://.*/releases/|https://$MIRROR/releases/|g" "$CONFZ"
-#         else
-#             echo -e "${RED}Резервные зеркала недоступны!${NC}"
-#         fi
-#     else
-#         echo -e "$CURRENT_MIRROR ${GREEN}доступен!${NC}"
-#     fi
-# fi
+MIRROR=""; CURRENT_MIRROR=$(head -n1 "$CONFZ" | awk '{print $NF}' | sed 's|https://||;s|/releases/.*||')
+if grep -qE 'mirror-03\.infra\.openwrt\.org|ftp\.snt\.utwente\.nl/pub/software/openwrt|mirror\.berlin\.freifunk\.net/downloads\.openwrt|mirror\.sjtu\.edu\.cn/openwrt|ftp\.halifax\.rwth-aachen\.de/openwrt|mirror\.accum\.se/mirror/openwrt|downloads\.openwrt\.org' "$CONFZ"; then
+   echo -e "${CYAN}Проверяем доступность ${NC}$CURRENT_MIRROR"
+   if ! wget -q --spider --timeout=2 "https://$CURRENT_MIRROR/releases/" >/dev/null 2>&1; then
+       echo -e "$CURRENT_MIRROR ${RED}недоступен!${NC}"
+       echo -e "${CYAN}Подбираем зеркало ${NC}OpenWRT"
+       if wget -q --spider --timeout=3 "https://mirror-03.infra.openwrt.org" >/dev/null 2>&1; then
+           MIRROR="mirror-03.infra.openwrt.org"          
+       elif wget -q --spider --timeout=3 "https://ftp.halifax.rwth-aachen.de/openwrt/releases/" >/dev/null 2>&1; then
+           MIRROR="ftp.halifax.rwth-aachen.de/openwrt"
+       elif wget -q --spider --timeout=3 "https://mirror.accum.se/mirror/openwrt.org/releases/" >/dev/null 2>&1; then
+           MIRROR="mirror.accum.se/mirror/openwrt.org"
+       elif wget -q --spider --timeout=3 "https://ftp.snt.utwente.nl/pub/software/openwrt/releases/" >/dev/null 2>&1; then
+           MIRROR="ftp.snt.utwente.nl/pub/software/openwrt"
+       elif wget -q --spider --timeout=3 "https://mirror.berlin.freifunk.net/downloads.openwrt/releases/" >/dev/null 2>&1; then
+           MIRROR="mirror.berlin.freifunk.net/downloads.openwrt"
+       elif wget -q --spider --timeout=3 "https://mirror.sjtu.edu.cn/openwrt/releases/" >/dev/null 2>&1; then
+           MIRROR="mirror.sjtu.edu.cn/openwrt"
+       elif wget -q --spider --timeout=3 "https://downloads.openwrt.org/releases/" >/dev/null 2>&1; then
+           MIRROR="downloads.openwrt.org"
+       fi
+       if [ -n "$MIRROR" ]; then
+           echo -e "${CYAN}Переключаемся на ${NC}$MIRROR"
+           sed -i "s|https://.*/releases/|https://$MIRROR/releases/|g" "$CONFZ"
+       else
+           echo -e "${RED}Резервные зеркала недоступны!${NC}"
+       fi
+   else
+       echo -e "$CURRENT_MIRROR ${GREEN}доступен!${NC}"
+   fi
+fi
 
 update_packages(){ [ "$PACKAGES_UPDATED" = "1" ] && return 0; echo -e "${CYAN}Обновляем список пакетов${NC}"; $UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка обновления списка пакетов!${NC}\n"; PAUSE; return 1; }; PACKAGES_UPDATED=1; }
 
@@ -961,165 +961,40 @@ ok=$((ok+1)); else right_status="[${RED}FAIL${NC}]"; fi; checked=$((checked+1));
 # Смена зеркала
 # ==========================================
 
-# =========================================
-# Единый список зеркал: host|Название
-# Добавить/убрать зеркало = одна строка здесь,
-# меню и автоподбор перестраиваются сами.
-# =========================================
-MIRRORS="mirror-03.infra.openwrt.org|infra.openwrt.org
-mirror.sjtu.edu.cn/openwrt|China
-mirror.berlin.freifunk.net/downloads.openwrt.org|Germany
-mirror.tiguinet.net/openwrt|Belgium
-mirror.ps.kz/openwrt|Kazakhstan
-ftp.snt.utwente.nl/pub/software/openwrt|Netherlands
-ftp.halifax.rwth-aachen.de/openwrt|Germany (RWTH Aachen)
-mirror.accum.se/mirror/openwrt.org|Sweden
-downloads.openwrt.org|default / OpenWrt"
+set_mirror() { NEW_BASE="$1"; echo -e "\n${CYAN}Проверяем доступность ${NC}$NEW_BASE"
+if ! wget -q --spider --timeout=5 "https://$NEW_BASE/releases/" >/dev/null 2>&1; then echo -e "${RED}Зеркало недоступно!${NC}\n"; PAUSE; return 1; fi
+sed -i "s|https://.*/releases/|https://$NEW_BASE/releases/|g" "$CONFZ"; echo -e "${GREEN}Зеркало доступно!${NC}"
+if ! update_packages; then echo -e "\n${RED}Ошибка обновления списка пакетов!${NC}\n${GREEN}Зеркало сброшено на ${NC}default ${GREEN}/${NC} OpenWrt${GREEN}!${NC}\n"
+sed -i "s|https://.*/releases/|https://downloads.openwrt.org/releases/|g" "$CONFZ"; PAUSE; return 1; fi; echo -e "${GREEN}Пакеты обновлены! Зеркало работает!${NC}\n"; PAUSE; }
 
-DEFAULT_MIRROR="downloads.openwrt.org"
-MIRROR_TIMEOUT=5
+curr_MIR() { if [ -f "$CONFZ" ]; then URL=$(head -n1 "$CONFZ"); case "$URL" in
+*mirror-03.infra.openwrt.org*) echo "infra.openwrt.org" ;;
+*tiguinet.net*) echo "Belgium" ;;
+*utwente.nl*) echo "Netherlands" ;;
+*freifunk.net*) echo "Germany" ;;
+*rwth-aachen.de*) echo "Germany (RWTH Aachen)" ;;
+*ps.kz*) echo "Kazakhstan" ;;
+*sjtu.edu.cn*) echo "China" ;;
+*accum.se*) echo "Sweden" ;;
+*downloads.openwrt.org*) echo "default / OpenWrt" ;;
+*) echo "неизвестное" ;;
+esac; else echo "файл не найден"; fi; }
 
-# =========================================
-# Проверка одного зеркала: доступность -> применить -> update
-# Возвращает 0 если зеркало рабочее, 1 если нет
-# =========================================
-try_mirror() {
-    HOST="$1"; NAME="${2:-$1}"
-
-    echo -e "${CYAN}Проверяем зеркало:${NC} $NAME ${DGRAY}($HOST)${NC}"
-    echo -ne "  доступность ... "
-    if ! wget -q --spider --timeout="$MIRROR_TIMEOUT" "https://$HOST/releases/" >/dev/null 2>&1; then
-        echo -e "${RED}недоступно${NC}"
-        return 1
-    fi
-    echo -e "${GREEN}OK${NC}"
-
-    sed -i "s|https://.*/releases/|https://$HOST/releases/|g" "$CONFZ"
-
-    echo -ne "  обновление списка пакетов ... "
-    if $UPDATE >/dev/null 2>&1; then
-        echo -e "${GREEN}успешно${NC}"
-        return 0
-    else
-        echo -e "${RED}ошибка!${NC}"
-        return 1
-    fi
-}
-
-reset_to_default() {
-    sed -i "s|https://.*/releases/|https://$DEFAULT_MIRROR/releases/|g" "$CONFZ"
-}
-
-# =========================================
-# Ручной выбор одного зеркала (из меню)
-# =========================================
-set_mirror() {
-    HOST="$1"; NAME="$2"
-    echo ""
-    if try_mirror "$HOST" "$NAME"; then
-        echo -e "${GREEN}Пакеты обновлены! Зеркало работает!${NC}\n"
-    else
-        echo -e "\n${RED}Зеркало не подходит!${NC}\n${GREEN}Зеркало сброшено на ${NC}default ${GREEN}/${NC} OpenWrt${GREEN}!${NC}\n"
-        reset_to_default
-    fi
-    PAUSE
-}
-
-# =========================================
-# Текущее зеркало по конфигу (сверяется с MIRRORS)
-# =========================================
-curr_MIR() {
-    [ -f "$CONFZ" ] || { echo "файл не найден"; return; }
-    URL=$(head -n1 "$CONFZ")
-    OLDIFS="$IFS"; IFS='
-'
-    for line in $MIRRORS; do
-        HOST="${line%%|*}"; NAME="${line#*|}"
-        case "$URL" in
-            *"$HOST"*) IFS="$OLDIFS"; echo "$NAME"; return ;;
-        esac
-    done
-    IFS="$OLDIFS"
-    echo "неизвестное"
-}
-
-# =========================================
-# Автоподбор: перебор по MIRRORS, доступность -> update,
-# провал -> следующее, без повторов
-# =========================================
-auto_MIR() {
-    echo -e "\n${MAGENTA}Автоматический подбор рабочего зеркала${NC}\n"
-    FOUND=""
-    OLDIFS="$IFS"; IFS='
-'
-    for line in $MIRRORS; do
-        HOST="${line%%|*}"; NAME="${line#*|}"
-        if try_mirror "$HOST" "$NAME"; then
-            FOUND="$NAME"
-            break
-        fi
-        echo -e "  ${YELLOW}пропускаем, пробуем следующее зеркало${NC}"
-    done
-    IFS="$OLDIFS"
-
-    echo ""
-    if [ -n "$FOUND" ]; then
-        echo -e "${GREEN}Рабочее зеркало найдено и применено:${NC} $FOUND\n"
-    else
-        echo -e "${RED}Ни одно зеркало не прошло проверку!${NC}\n${GREEN}Зеркало сброшено на ${NC}default ${GREEN}/${NC} OpenWrt${GREEN}!${NC}\n"
-        reset_to_default
-    fi
-    PAUSE
-}
-
-# =========================================
-# Меню — пункты 1..N строятся из MIRRORS автоматически
-# =========================================
-menu_MIR() {
-    while true; do
-        clear
-        CURR=$(curr_MIR)
-        echo -e "${MAGENTA}Меню выбора зеркала OpenWrt${NC}\n"
-        echo -e "${YELLOW}Используется зеркало: ${GREEN}$CURR${NC}\n"
-        echo -e "${CYAN}0)${NC} Автоподбор рабочего зеркала ${DGRAY}(рекомендуется)${NC}\n"
-
-        i=1
-        OLDIFS="$IFS"; IFS='
-'
-        for line in $MIRRORS; do
-            NAME="${line#*|}"
-            echo -e "${CYAN}$i)${NC} $NAME"
-            i=$((i+1))
-        done
-        IFS="$OLDIFS"
-
-        echo -e "\n${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n"
-        echo -en "${YELLOW}Выберите зеркало: ${NC}"
-        read -r z
-
-        case "$z" in
-            0)
-                auto_MIR
-                ;;
-            1|2|3|4|5|6|7|8|9)
-                i=1
-                OLDIFS="$IFS"; IFS='
-'
-                MATCH=""
-                for line in $MIRRORS; do
-                    [ "$i" = "$z" ] && MATCH="$line" && break
-                    i=$((i+1))
-                done
-                IFS="$OLDIFS"
-                [ -n "$MATCH" ] && set_mirror "${MATCH%%|*}" "${MATCH#*|}"
-                ;;
-            *)
-                break
-                ;;
-        esac
-    done
-}
-
+menu_MIR() { while true; do clear; CURR=$(curr_MIR); echo -e "${MAGENTA}Меню выбора зеркала OpenWrt${NC}\n\n${YELLOW}Используется зеркало: ${GREEN}$CURR${NC}\n\n${CYAN}1)${NC} infra.openwrt.org\n${CYAN}2)${NC} China"
+echo -e "${CYAN}3)${NC} Germany\n${CYAN}4)${NC} Belgium\n${CYAN}5)${NC} Kazakhstan\n${CYAN}6)${NC} Netherlands\n${CYAN}7)${NC} Germany (RWTH Aachen)\n${CYAN}8)${NC} Sweden\n${CYAN}9)${NC} default / OpenWrt${NC}"
+echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n"
+echo -en "${YELLOW}Выберите зеркало: ${NC}"; read -r z; case "$z" in
+1) set_mirror "mirror-03.infra.openwrt.org" ;;
+2) set_mirror "mirror.sjtu.edu.cn/openwrt" ;;
+3) set_mirror "mirror.berlin.freifunk.net/downloads.openwrt.org" ;;
+4) set_mirror "mirror.tiguinet.net/openwrt" ;;
+5) set_mirror "mirror.ps.kz/openwrt" ;;
+6) set_mirror "ftp.snt.utwente.nl/pub/software/openwrt" ;;
+7) set_mirror "ftp.halifax.rwth-aachen.de/openwrt" ;;
+8) set_mirror "mirror.accum.se/mirror/openwrt.org" ;;
+9) set_mirror "downloads.openwrt.org" ;;
+*) break ;;
+esac; done; }
 # ==========================================
 # МЕНЮ TG WS Proxy
 # ==========================================
