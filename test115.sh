@@ -128,64 +128,42 @@ UPDATE="apk update"; INSTALL="apk add --allow-untrusted"; DELETE="apk del"; ARCH
 
 update_packages() {
     [ "$PACKAGES_UPDATED" = "1" ] && return 0
-
     echo -e "${CYAN}Обновляем список пакетов${NC}"
-
-    # Сначала пробуем текущее зеркало
     if $UPDATE >/dev/null 2>&1; then
         PACKAGES_UPDATED=1
         return 0
     fi
-
     echo -e "${RED}Ошибка обновления списка пакетов!${NC}"
-    echo -e "${CYAN}Подбираем рабочее зеркало OpenWRT...${NC}"
+    echo -e "${CYAN}Подбираем рабочее зеркало ${NC}OpenWRT"
 
     [ -f "$CONFZ" ] || {
-        echo -e "${RED}Файл репозиториев не найден: $CONFZ${NC}"
+        echo -e "\n${RED}Файл репозиториев не найден: $CONFZ${NC}\n"
         PAUSE
         return 1
     }
-
     CURRENT_MIRROR=$(head -n1 "$CONFZ" 2>/dev/null | awk '{print $NF}' | sed 's|https\://||;s|/releases/.*||')
-
-    # Сохраняем рабочий конфиг
     cp "$CONFZ" /tmp/distfeeds.conf.bak
 
-    # Функция проверки зеркала
-    try_mirror() {
+try_mirror() {
         MIRROR="$1"
-
         echo -e "${CYAN}Проверяем ${NC}$MIRROR"
-
-        # Проверяем доступность зеркала
         if ! wget -q --spider --timeout=3 "https://$MIRROR/releases/" >/dev/null 2>&1; then
-            echo -e "$MIRROR ${RED}недоступен${NC}"
+            echo -e "$MIRROR ${RED}недоступен!${NC}"
             return 1
-        fi
-
-        echo -e "$MIRROR ${GREEN}доступен${NC}"
-
-        # Подставляем зеркало
+        fi      
+        echo -e "$MIRROR ${GREEN}доступен!${NC}"
         sed -i "s|https://.*/releases/|https://$MIRROR/releases/|g" "$CONFZ"
-
-        echo -e "${CYAN}Проверяем UPDATE...${NC}"
-
-        # Проверяем уже реальное обновление пакетов
+        echo -e "${CYAN}Проверяем обновление пакетов${NC}"
         if $UPDATE >/dev/null 2>&1; then
-            echo -e "${GREEN}UPDATE успешно выполнен!${NC}"
-            echo -e "${GREEN}Используем зеркало: ${NC}$MIRROR"
+            echo -e "${GREEN}Обновление пакетов выполнено успешно!${NC}"
+            echo -e "${CYAN}Используем зеркало: ${NC}$MIRROR"
             return 0
         fi
-
-        echo -e "$MIRROR ${RED}не прошло UPDATE${NC}"
-
-        # Возвращаем предыдущий конфиг
+        echo -e "${RED}Ошибка обновления пакетов!${NC}"
         cp /tmp/distfeeds.conf.bak "$CONFZ"
-
         return 1
-    }
+}
 
-    # Список зеркал
     for MIRROR in \
         "mirror-03.infra.openwrt.org" \
         "ftp.halifax.rwth-aachen.de/openwrt" \
@@ -195,20 +173,15 @@ update_packages() {
         "mirror.sjtu.edu.cn/openwrt" \
         "downloads.openwrt.org"
     do
-        # Текущее зеркало уже проверили выше
         [ "$MIRROR" = "$CURRENT_MIRROR" ] && continue
-
         if try_mirror "$MIRROR"; then
             rm -f /tmp/distfeeds.conf.bak
             PACKAGES_UPDATED=1
             return 0
         fi
     done
-
-    # Ни одно зеркало не подошло — возвращаем исходный конфиг
     cp /tmp/distfeeds.conf.bak "$CONFZ"
     rm -f /tmp/distfeeds.conf.bak
-
     echo -e "\n${RED}Не удалось найти рабочее зеркало OpenWRT!${NC}\n"
     PAUSE
     return 1
