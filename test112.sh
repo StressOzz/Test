@@ -105,7 +105,9 @@ GITH="#github.com\n140.82.114.3 github.com\n185.199.110.154 github.githubassets.
 USoft="#Ubisoft\n52.6.7.14 ubi.com\n172.67.139.108 r6s.com\n54.155.2.87 rainbow6.com\n52.222.149.31 ubisoft.com\n54.76.54.196 uplay.ubisoft.com\n2.23.89.92 static3.cdn.ubi.com
 18.209.141.203 connect.ubisoft.com\n2.23.89.244 ubiservices.cdn.ubi.com\n99.83.188.134 public-ubiservices.ubi.com\n3.33.249.140 public-ws-ubiservices.ubi.com\n"
 ALL_BLOCKS="$AI\n$INSTAGRAM\n$NTC\n$LIBRUSEC\n$TGWeb\n$TWCH\n$SCell\n$SPFY"; TMP_ARCHIVE_RS="/tmp/tg-ws-proxy-rs.tar.gz"; TMP_DIR_RS="/tmp/tg-ws-proxy-rs"
-hosts_enabled() { if grep -q "### dns.malw.link" /etc/hosts; then hosts_echo="Malw.link"; return 0; elif grep -q "#mafioznik" /etc/hosts; then hosts_echo="Mafioznik"; return 0; elif grep -q "### dns.geohide.ru" /etc/hosts; then hosts_echo="GeoHide"; return 0
+hosts_enabled() { if grep -q "### dns.malw.link" /etc/hosts; then hosts_echo="Malw.link"; return 0; elif grep -q "#mafioznik" /etc/hosts; then hosts_echo="Mafioznik"; return 0
+elif grep -q "### geohide.ru: hosts file" /etc/hosts; then if grep -q "^# Регион серверов: US$" /etc/hosts; then hosts_echo="GeoHide US"; elif grep -q "^# Регион серверов: EU$" /etc/hosts
+then hosts_echo="GeoHide EU"; elif grep -q "^# Регион серверов: RU$" /etc/hosts; then hosts_echo="GeoHide RU"; else hosts_echo="GeoHide"; fi; return 0
 elif grep -q "45.155.204.190\|instagram.com\|rutor.info\|lib.rus.ec\|ntc.party\|twitch.tv\|web.telegram.org\|www.spotify.com\|store.supercell.com\|raw.githubusercontent.com\|lkfl2.nalog.ru" /etc/hosts; then hosts_echo="добавлены"; return 0; fi; return 1; }
 hosts_add() { printf "%b\n" "$1" | while IFS= read -r L; do grep -qxF "$L" /etc/hosts || echo "$L" >> /etc/hosts; done; /etc/init.d/dnsmasq restart >/dev/null 2>&1; }; D() { printf '%b' "$(printf '%s' "$1" | sed 's/../\\x&/g')"; }
 ZAPRET_RESTART () { chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1; sleep 1; }
@@ -737,13 +739,14 @@ else opkg list-installed | grep -q '^https-dns-proxy ' && echo -e "${YELLOW}DNS 
 echo -e "${CYAN} 4)${GREEN} Настроить ${NC}Google\n${CYAN} 5)${GREEN} Настроить ${NC}Quad 9\n${CYAN} 6)${GREEN} Настроить ${NC}GeoHide\n${CYAN} 7)${GREEN} Настроить ${NC}Cloudflare\n${CYAN} 8)${GREEN} Настроить ${NC}dns.malw.link\n${CYAN} 9)${GREEN} Настроить ${NC}dns.astracat.ru"
 echo -e "${CYAN}10)${GREEN} Настроить ${NC}dns.mafioznik.xyz\n${CYAN}11)${GREEN} Настроить ${NC}dns.malw.link (CloudFlare)\n${CYAN}12)${GREEN} Настроить ${NC}dns.nullsproxy.com (Supercell)\n${CYAN}13)${GREEN} Вернуть ${NC}настройки по умолчанию"
 echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read -r choiceDOH; [ -z "$choiceDOH" ] && return; case "$choiceDOH" in 1) D_o_H;; 2) doh_install && setup_doh "$doh_xbox" "Xbox";; 3) doh_install && setup_doh "$doh_comss" "Comss.one";;
-4) doh_install && setup_doh "$doh_GOO" "Google";; 5) doh_install && setup_doh "$doh_Quad" "Quad 9";; 6) doh_install && setup_doh "$doh_GEOHIDE" "GeoHide";; 7) doh_install && setup_doh "$doh_CLF" "Cloudflare";; 8) doh_install && setup_doh "$doh_query" "dns.malw.link";;
+4) doh_install && setup_doh "$doh_GOO" "Google";; 5) doh_install && setup_doh "$doh_Quad" "Quad 9";; 6) doh_install && menu_GEOHIDE_DOH;; 7) doh_install && setup_doh "$doh_CLF" "Cloudflare";; 8) doh_install && setup_doh "$doh_query" "dns.malw.link";;
 9) doh_install && setup_doh "$doh_astracat" "dns.astracat.ru";; 10) doh_install && setup_doh "$doh_mafioznik" "dns.mafioznik.xyz";; 11) doh_install && setup_doh "$doh_queryCF" "dns.malw.link (CloudFlare)";; 12) doh_install && setup_doh "$doh_nullsproxy" "dns.nullsproxy.com";; 13) doh_install && setup_doh "$doh_def" "настройки по умолчанию";; *) return;; esac; done; }
 setup_doh() { local config="$1"; local name="$2"; echo -e "\n${MAGENTA}Настраиваем DNS over HTTPS${NC}\n${CYAN}Настраиваем ${NC}$name\n${CYAN}Применяем новые настройки${NC}"
 rm -f "$fileDoH"; printf '%s\n' "$doh_set" "$config" > "$fileDoH"; /etc/init.d/https-dns-proxy reload >/dev/null 2>&1; /etc/init.d/https-dns-proxy restart >/dev/null 2>&1; /etc/init.d/dnsmasq restart >/dev/null 2>&1; echo -e "DNS over HTTP ${GREEN}настроен!${NC}\n"; PAUSE; }
 get_doh_status() { DOH_STATUS=""; [ ! -f "$fileDoH" ] && return; if grep -q "dns.comss.one" "$fileDoH"; then DOH_STATUS="Comss"; elif grep -q "xbox-dns.ru" "$fileDoH"; then DOH_STATUS="Xbox"; elif grep -q "5u35p8m9i7.cloudflare-gateway.com" "$fileDoH"
 then DOH_STATUS="dns.malw.link (CloudFlare)"; elif grep -q "dns.malw.link" "$fileDoH"; then DOH_STATUS="dns.malw.link"; elif grep -q "dns.mafioznik.xyz" "$fileDoH"; then DOH_STATUS="dns.mafioznik.xyz"
-elif grep -q "geohide.ru" "$fileDoH"; then DOH_STATUS="GeoHide"; elif grep -q "cloudflare-dns.com" "$fileDoH" && grep -q "dns.google" "$fileDoH"; then DOH_STATUS="по умолчанию"; elif grep -q "cloudflare-dns.com" "$fileDoH"; then DOH_STATUS="Cloudflare"; elif grep -q "dns.quad9.net" "$fileDoH"; then DOH_STATUS="Quad 9"
+elif grep -q "eu.geohide.ru" "$fileDoH"; then DOH_STATUS="GeoHide EU"; elif grep -q "us.geohide.ru" "$fileDoH"; then DOH_STATUS="GeoHide US"; elif grep -q "geohide.ru" "$fileDoH"
+then DOH_STATUS="GeoHide RU"; elif grep -q "cloudflare-dns.com" "$fileDoH" && grep -q "dns.google" "$fileDoH"; then DOH_STATUS="по умолчанию"; elif grep -q "cloudflare-dns.com" "$fileDoH"; then DOH_STATUS="Cloudflare"; elif grep -q "dns.quad9.net" "$fileDoH"; then DOH_STATUS="Quad 9"
 elif grep -q "dns.google" "$fileDoH"; then DOH_STATUS="Google"; elif grep -q "dns.astracat.ru" "$fileDoH"; then DOH_STATUS="dns.astracat.ru"; elif grep -q "dns.nullsproxy.com" "$fileDoH"; then DOH_STATUS="dns.nullsproxy.com"; else DOH_STATUS="установлен"; fi; }
 D_o_H(){ if { [ "$PKG_IS_APK" -eq 1 ] && apk info -e https-dns-proxy >/dev/null 2>&1; } || { [ "$PKG_IS_APK" -eq 0 ] && opkg list-installed | grep -q '^https-dns-proxy '; }; then echo -e "\n${MAGENTA}Удаляем DNS over HTTPS${NC}\n${CYAN}Удаляем пакеты${NC}"; $DELETE https-dns-proxy luci-app-https-dns-proxy >/dev/null 2>&1; echo -e "${CYAN}Удаляем файлы конфигурации${NC}"; rm -f /etc/config/https-dns-proxy /etc/init.d/https-dns-proxy
 sed -i -e "/option doh_backup_noresolv '-1'/d" -e "/option noresolv '1'/d" -e "/list doh_backup_server ''/d" -e "/list server '\/mask\.icloud\.com\/'/d" -e "/list server '\/mask-h2\.icloud\.com\/'/d" -e "/list server '\/use-application-dns\.net\/'/d" -e "/list server '127\.0\.0\.1#5053'/d" -e "/list server '127\.0\.0\.1#5054'/d" -e "/list doh_server '127\.0\.0\.1#5053'/d" -e "/list doh_server '127\.0\.0\.1#5054'/d" /etc/config/dhcp
@@ -756,7 +759,27 @@ doh_CLF=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https
 doh_query=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://dns.malw.link/dns-query'"); doh_comss=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://dns.comss.one/dns-query'" "	option bootstrap_dns '92.38.152.163,93.115.24.204,2a03:90c0:56::1a5,2a02:7b40:5eb0:e95d::1'")
 doh_mafioznik=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://dns.mafioznik.xyz/dns-query'"); doh_astracat=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://dns.astracat.ru/dns-query'")
 doh_GOO=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://dns.google/dns-query'" "	option bootstrap_dns '8.8.8.8,8.8.4.4,2001:4860:4860::8888,2001:4860:4860::8844'"); doh_Quad=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://dns.quad9.net/dns-query'" "	option bootstrap_dns '9.9.9.9,149.112.112.112,2620:fe::fe,2620:fe::9'")
-doh_GEOHIDE=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://geohide.ru/dns-query'"); doh_queryCF=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://5u35p8m9i7.cloudflare-gateway.com/dns-query'" "	option bootstrap_dns '8.8.8.8,8.8.4.4,2001:4860:4860::8888,2001:4860:4860::8844'")
+doh_queryCF=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://5u35p8m9i7.cloudflare-gateway.com/dns-query'")
+doh_GEOHIDE_RU=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://geohide.ru/dns-query'")
+doh_GEOHIDE_EU=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://eu.geohide.ru/dns-query'")
+doh_GEOHIDE_US=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://us.geohide.ru/dns-query'")
+menu_GEOHIDE_DOH() {
+    while true; do
+        echo -e "\n${MAGENTA}Выберите сервер GeoHide DNS${NC}"
+        echo -e "${CYAN}1) ${GREEN}GeoHide RU${NC}"
+        echo -e "${CYAN}2) ${GREEN}GeoHide EU${NC}"
+        echo -e "${CYAN}3) ${GREEN}GeoHide US${NC}"
+        echo -e "${CYAN}Enter) ${GREEN}Отменить выбор${NC}\n"
+        echo -ne "${YELLOW}Выберите пункт:${NC} "
+        read -r c
+        case "$c" in
+            1) setup_doh "$doh_GEOHIDE_RU" "GeoHide RU";;
+            2) setup_doh "$doh_GEOHIDE_EU" "GeoHide EU";;
+            3) setup_doh "$doh_GEOHIDE_US" "GeoHide US";;
+            *) break;;
+        esac
+    done
+}
 # ==========================================
 # Доступ из браузера
 # ==========================================
@@ -837,7 +860,7 @@ EOF
 }
 menu_GEO_HOSTS() {
     while true; do
-        echo -e "${MAGENTA}Выбор GeoHide hosts${NC}"
+        echo -e "\n${MAGENTA}Выберите сервер GeoHide${NC}"
         echo -e "${CYAN}1) ${GREEN}GeoHide ${NC}RU"
         echo -e "${CYAN}2) ${GREEN}GeoHide ${NC}EU"
         echo -e "${CYAN}3) ${GREEN}GeoHide ${NC}US"
@@ -850,23 +873,17 @@ menu_GEO_HOSTS() {
             3) GEO_FILE="$GH_RAW/StressOzz/Zapret-Manager/refs/heads/main/files/GeoHide_hosts_US"; GEO_NAME="US";;
             *) break;;
         esac
-
         echo -e "\n${MAGENTA}Заменяем hosts на GeoHide ${GEO_NAME} hosts${NC}"
-
         GEO_TMP="/tmp/GeoHide_hosts"
-
         if wget -q -U "Mozilla/5.0" -O "$GEO_TMP" "$GEO_FILE" >/dev/null 2>&1 &&
            [ -s "$GEO_TMP" ]; then
-
             mv "$GEO_TMP" /etc/hosts
             /etc/init.d/dnsmasq restart >/dev/null 2>&1
-
             echo -e "hosts ${GREEN}заменён на ${NC}GeoHide ${GEO_NAME} hosts${GREEN}!${NC}\n"
         else
             rm -f "$GEO_TMP"
             echo -e "\n${RED}Не удалось скачать GeoHide ${GEO_NAME} hosts${NC}\n"
         fi
-
         PAUSE
         return
     done
