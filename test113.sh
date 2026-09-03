@@ -759,27 +759,10 @@ doh_CLF=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https
 doh_query=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://dns.malw.link/dns-query'"); doh_comss=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://dns.comss.one/dns-query'" "	option bootstrap_dns '92.38.152.163,93.115.24.204,2a03:90c0:56::1a5,2a02:7b40:5eb0:e95d::1'")
 doh_mafioznik=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://dns.mafioznik.xyz/dns-query'"); doh_astracat=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://dns.astracat.ru/dns-query'")
 doh_GOO=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://dns.google/dns-query'" "	option bootstrap_dns '8.8.8.8,8.8.4.4,2001:4860:4860::8888,2001:4860:4860::8844'"); doh_Quad=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://dns.quad9.net/dns-query'" "	option bootstrap_dns '9.9.9.9,149.112.112.112,2620:fe::fe,2620:fe::9'")
-doh_queryCF=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://5u35p8m9i7.cloudflare-gateway.com/dns-query'")
-doh_GEOHIDE_RU=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://geohide.ru/dns-query'")
-doh_GEOHIDE_EU=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://eu.geohide.ru/dns-query'")
-doh_GEOHIDE_US=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://us.geohide.ru/dns-query'")
-menu_GEOHIDE_DOH() {
-    while true; do
-        echo -e "\n${MAGENTA}Выберите сервер GeoHide DNS${NC}"
-        echo -e "${CYAN}1) ${GREEN}GeoHide RU${NC}"
-        echo -e "${CYAN}2) ${GREEN}GeoHide EU${NC}"
-        echo -e "${CYAN}3) ${GREEN}GeoHide US${NC}"
-        echo -e "${CYAN}Enter) ${GREEN}Отменить выбор${NC}\n"
-        echo -ne "${YELLOW}Выберите пункт:${NC} "
-        read -r c
-        case "$c" in
-            1) setup_doh "$doh_GEOHIDE_RU" "GeoHide RU";;
-            2) setup_doh "$doh_GEOHIDE_EU" "GeoHide EU";;
-            3) setup_doh "$doh_GEOHIDE_US" "GeoHide US";;
-            *) break;;
-        esac
-    done
-}
+doh_queryCF=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://5u35p8m9i7.cloudflare-gateway.com/dns-query'"); doh_GEOHIDE_RU=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://geohide.ru/dns-query'")
+doh_GEOHIDE_EU=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://eu.geohide.ru/dns-query'"); doh_GEOHIDE_US=$(printf "%s\n" "" "config https-dns-proxy" "	option resolver_url 'https://us.geohide.ru/dns-query'")
+menu_GEOHIDE_DOH() { echo -e "\n${MAGENTA}Выберите сервер GeoHide DNS${NC}"; echo -e "${CYAN}1) ${GREEN}GeoHide ${NC}RU\n${CYAN}2) ${GREEN}GeoHide ${NC}EU\n${CYAN}3) ${GREEN}GeoHide ${NC}US\n${CYAN}Enter) ${GREEN}Отменить выбор${NC}\n"
+echo -ne "${YELLOW}Выберите пункт:${NC} "; read -r c; case "$c" in 1) setup_doh "$doh_GEOHIDE_RU" "GeoHide RU";; 2) setup_doh "$doh_GEOHIDE_EU" "GeoHide EU";; 3) setup_doh "$doh_GEOHIDE_US" "GeoHide US";; esac; }
 # ==========================================
 # Доступ из браузера
 # ==========================================
