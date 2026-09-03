@@ -8,12 +8,12 @@ ZAPRET_MANAGER_VERSION="9.85"; STR_VERSION_AUTOINSTALL="v7"
 GREEN="\033[1;32m"; RED="\033[1;31m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
 
 GH_RAW_HOST="https://raw.githubusercontent.com"; GH_MAIN_HOST="https://github.com"
-GH_PROXY="https://gh-proxy.org/"; GH_CHECK_URL="${GH_RAW_HOST}/StressOzz/Zapret-Manager/refs/heads/main/Zapret-Manager.sh"
-echo -e "${CYAN}Проверяем доступность ${NC}raw.githubusercontent.com"; if wget -q -T 4 -O /dev/null "$GH_CHECK_URL" 2>/dev/null; then GH_OK=1
+# GH_PROXY="https://gh-proxy.org/"; GH_CHECK_URL="${GH_RAW_HOST}/StressOzz/Zapret-Manager/refs/heads/main/Zapret-Manager.sh"
+# echo -e "${CYAN}Проверяем доступность ${NC}raw.githubusercontent.com"; if wget -q -T 4 -O /dev/null "$GH_CHECK_URL" 2>/dev/null; then GH_OK=1
 GH_RAW="$GH_RAW_HOST"
 GH_MAIN="$GH_MAIN_HOST"
-echo -e "raw.githubusercontent.com ${GREEN}доступен!${NC}\n"; else GH_OK=0; GH_RAW="${GH_PROXY}${GH_RAW_HOST}"; GH_MAIN="${GH_PROXY}${GH_MAIN_HOST}"
-echo -e "raw.githubusercontent.com ${RED}недоступен${CYAN} — ${YELLOW}используем прокси!${NC}\n"; fi
+# echo -e "raw.githubusercontent.com ${GREEN}доступен!${NC}\n"; else GH_OK=0; GH_RAW="${GH_PROXY}${GH_RAW_HOST}"; GH_MAIN="${GH_PROXY}${GH_MAIN_HOST}"
+# echo -e "raw.githubusercontent.com ${RED}недоступен${CYAN} — ${YELLOW}используем прокси!${NC}\n"; fi
 
 ZAPRET_VERSION="72.20260307"; PODKOP_LATEST_VER="0.9.6"; TG_MTProto="0.9.3"; MT_VERSION="0.8.2"; ZAPRET2_VERSION="1.0.4"
 SPL_VER="26.8.1.3"; TG_GO_VERSION="1.4.1"; TG_RS_VERSION="2.2.5"; BYEDPI_LATEST_VER="0.17.3"
@@ -124,37 +124,37 @@ DELETE="opkg remove"; ARCH="$(opkg print-architecture | awk '{print $2}' | tail 
 RAZ="ipk"; TMP_FILE_GO="/tmp/tg-ws-proxy.ipk"; else PKG="apk"; GO_SUF="r1"; CONFZ="/etc/apk/repositories.d/distfeeds.list"; PKG_IS_APK=1; SPL_SUF="noarch"; RELEASE_TAG="v${BYEDPI_LATEST_VER}-25.12"
 UPDATE="apk update"; INSTALL="apk add --allow-untrusted"; DELETE="apk del"; ARCH="$(apk --print-arch 2>/dev/null)"; RAZ="apk"; VER_SUF="r1"; SUF_MT="r"; TMP_FILE_GO="/tmp/tg-ws-proxy.apk"; fi
 
-MIRROR=""; CURRENT_MIRROR=$(head -n1 "$CONFZ" | awk '{print $NF}' | sed 's|https://||;s|/releases/.*||')
-if grep -qE 'mirror-03\.infra\.openwrt\.org|ftp\.snt\.utwente\.nl/pub/software/openwrt|mirror\.berlin\.freifunk\.net/downloads\.openwrt|mirror\.sjtu\.edu\.cn/openwrt|ftp\.halifax\.rwth-aachen\.de/openwrt|mirror\.accum\.se/mirror/openwrt|downloads\.openwrt\.org' "$CONFZ"; then
-   echo -e "${CYAN}Проверяем доступность ${NC}$CURRENT_MIRROR"
-   if ! wget -q --spider --timeout=2 "https://$CURRENT_MIRROR/releases/" >/dev/null 2>&1; then
-       echo -e "$CURRENT_MIRROR ${RED}недоступен!${NC}"
-       echo -e "${CYAN}Подбираем зеркало ${NC}OpenWRT"
-       if wget -q --spider --timeout=3 "https://mirror-03.infra.openwrt.org" >/dev/null 2>&1; then
-           MIRROR="mirror-03.infra.openwrt.org"          
-       elif wget -q --spider --timeout=3 "https://ftp.halifax.rwth-aachen.de/openwrt/releases/" >/dev/null 2>&1; then
-           MIRROR="ftp.halifax.rwth-aachen.de/openwrt"
-       elif wget -q --spider --timeout=3 "https://mirror.accum.se/mirror/openwrt.org/releases/" >/dev/null 2>&1; then
-           MIRROR="mirror.accum.se/mirror/openwrt.org"
-       elif wget -q --spider --timeout=3 "https://ftp.snt.utwente.nl/pub/software/openwrt/releases/" >/dev/null 2>&1; then
-           MIRROR="ftp.snt.utwente.nl/pub/software/openwrt"
-       elif wget -q --spider --timeout=3 "https://mirror.berlin.freifunk.net/downloads.openwrt/releases/" >/dev/null 2>&1; then
-           MIRROR="mirror.berlin.freifunk.net/downloads.openwrt"
-       elif wget -q --spider --timeout=3 "https://mirror.sjtu.edu.cn/openwrt/releases/" >/dev/null 2>&1; then
-           MIRROR="mirror.sjtu.edu.cn/openwrt"
-       elif wget -q --spider --timeout=3 "https://downloads.openwrt.org/releases/" >/dev/null 2>&1; then
-           MIRROR="downloads.openwrt.org"
-       fi
-       if [ -n "$MIRROR" ]; then
-           echo -e "${CYAN}Переключаемся на ${NC}$MIRROR"
-           sed -i "s|https://.*/releases/|https://$MIRROR/releases/|g" "$CONFZ"
-       else
-           echo -e "${RED}Резервные зеркала недоступны!${NC}"
-       fi
-   else
-       echo -e "$CURRENT_MIRROR ${GREEN}доступен!${NC}"
-   fi
-fi
+# MIRROR=""; CURRENT_MIRROR=$(head -n1 "$CONFZ" | awk '{print $NF}' | sed 's|https://||;s|/releases/.*||')
+# if grep -qE 'mirror-03\.infra\.openwrt\.org|ftp\.snt\.utwente\.nl/pub/software/openwrt|mirror\.berlin\.freifunk\.net/downloads\.openwrt|mirror\.sjtu\.edu\.cn/openwrt|ftp\.halifax\.rwth-aachen\.de/openwrt|mirror\.accum\.se/mirror/openwrt|downloads\.openwrt\.org' "$CONFZ"; then
+#     echo -e "${CYAN}Проверяем доступность ${NC}$CURRENT_MIRROR"
+#     if ! wget -q --spider --timeout=2 "https://$CURRENT_MIRROR/releases/" >/dev/null 2>&1; then
+#         echo -e "$CURRENT_MIRROR ${RED}недоступен!${NC}"
+#         echo -e "${CYAN}Подбираем зеркало ${NC}OpenWRT"
+#         if wget -q --spider --timeout=3 "https://mirror-03.infra.openwrt.org" >/dev/null 2>&1; then
+#             MIRROR="mirror-03.infra.openwrt.org"          
+#         elif wget -q --spider --timeout=3 "https://ftp.halifax.rwth-aachen.de/openwrt/releases/" >/dev/null 2>&1; then
+#             MIRROR="ftp.halifax.rwth-aachen.de/openwrt"
+#         elif wget -q --spider --timeout=3 "https://mirror.accum.se/mirror/openwrt.org/releases/" >/dev/null 2>&1; then
+#             MIRROR="mirror.accum.se/mirror/openwrt.org"
+#         elif wget -q --spider --timeout=3 "https://ftp.snt.utwente.nl/pub/software/openwrt/releases/" >/dev/null 2>&1; then
+#             MIRROR="ftp.snt.utwente.nl/pub/software/openwrt"
+#         elif wget -q --spider --timeout=3 "https://mirror.berlin.freifunk.net/downloads.openwrt/releases/" >/dev/null 2>&1; then
+#             MIRROR="mirror.berlin.freifunk.net/downloads.openwrt"
+#         elif wget -q --spider --timeout=3 "https://mirror.sjtu.edu.cn/openwrt/releases/" >/dev/null 2>&1; then
+#             MIRROR="mirror.sjtu.edu.cn/openwrt"
+#         elif wget -q --spider --timeout=3 "https://downloads.openwrt.org/releases/" >/dev/null 2>&1; then
+#             MIRROR="downloads.openwrt.org"
+#         fi
+#         if [ -n "$MIRROR" ]; then
+#             echo -e "${CYAN}Переключаемся на ${NC}$MIRROR"
+#             sed -i "s|https://.*/releases/|https://$MIRROR/releases/|g" "$CONFZ"
+#         else
+#             echo -e "${RED}Резервные зеркала недоступны!${NC}"
+#         fi
+#     else
+#         echo -e "$CURRENT_MIRROR ${GREEN}доступен!${NC}"
+#     fi
+# fi
 
 update_packages(){ [ "$PACKAGES_UPDATED" = "1" ] && return 0; echo -e "${CYAN}Обновляем список пакетов${NC}"; $UPDATE >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка обновления списка пакетов!${NC}\n"; PAUSE; return 1; }; PACKAGES_UPDATED=1; }
 
@@ -833,13 +833,52 @@ echo -e "${CYAN}14) ${GREEN}$(get_state "$TAPEop")${NC} tapeop.dev\n${CYAN}15) $
 echo -e "${CYAN}17) ${GREEN}Заменить ${NC}hosts${GREEN} на ${NC}Mafioznik hosts\n${CYAN}18) ${GREEN}Заменить ${NC}hosts${GREEN} на ${NC}Malw.link hosts\n${CYAN}19) ${GREEN}Восстановить ${NC}hosts"
 echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} ";read -r c; case "$c" in 0) toggle_block "$NALOG";; 1) toggle_block "$RUTOR";; 2) toggle_block "$NTC";; 3) toggle_block "$INSTAGRAM";;
 4) toggle_block "$LIBRUSEC";; 5) toggle_block "$AI";; 6) toggle_block "$TWCH";; 7) toggle_block "$TGWeb";; 8) toggle_block "$SPFY";; 9) toggle_block "$SPFYEXT";; 10) toggle_block "$SCell";; 11) toggle_block "$GITH_RAW";; 12) toggle_block "$GITH";;
-13) toggle_block "$USoft";; 14) toggle_block "$TAPEop";; 15) toggle_all;; 16) add_GEO_HOSTS;; 17) echo -e "\n${MAGENTA}Заменяем hosts на Mafioznik hosts${NC}"; wget -qO /etc/hosts ${GH_RAW}/StressOzz/Zapret-Manager/refs/heads/main/files/hosts_mafioznik.txt >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось скачать файл hosts${NC}\n"; PAUSE; }
+13) toggle_block "$USoft";; 14) toggle_block "$TAPEop";; 15) toggle_all;; 16) menu_GEO_HOSTS;; 17) echo -e "\n${MAGENTA}Заменяем hosts на Mafioznik hosts${NC}"; wget -qO /etc/hosts ${GH_RAW}/StressOzz/Zapret-Manager/refs/heads/main/files/hosts_mafioznik.txt >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось скачать файл hosts${NC}\n"; PAUSE; }
 /etc/init.d/dnsmasq restart >/dev/null 2>&1; echo -e "hosts ${GREEN}заменён на ${NC}Mafioznik hosts${GREEN}!${NC}\n"; PAUSE;; 18) echo -e "\n${MAGENTA}Заменяем hosts на Malw.link hosts${NC}"
 wget -qO /etc/hosts ${GH_RAW}/StressOzz/Zapret-Manager/refs/heads/main/files/hosts_malw.link.txt >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось скачать файл hosts${NC}\n"; PAUSE; }
 /etc/init.d/dnsmasq restart >/dev/null 2>&1; echo -e "hosts ${GREEN}заменён на ${NC}Malw.link hosts${GREEN}!${NC}\n"; PAUSE;; 19) hosts_reset;; *) break;; esac; done; }
 status_block() { local line; while IFS= read -r line; do [ -z "$line" ] && continue; grep -Fxq "$line" "$HOSTS_FILE" || return 1; done <<EOF
 $(printf '%b\n' "$1")
 EOF
+}
+menu_GEO_HOSTS() {
+    while true; do
+        clear
+        echo -e "${MAGENTA}Выбор GeoHide hosts${NC}\n"
+
+        echo -e "${CYAN}1) ${GREEN}GeoHide RU${NC}"
+        echo -e "${CYAN}2) ${GREEN}GeoHide EU${NC}"
+        echo -e "${CYAN}3) ${GREEN}GeoHide US${NC}"
+        echo -e "${CYAN}Enter) ${GREEN}Назад${NC}\n"
+
+        echo -ne "${YELLOW}Выберите регион:${NC} "
+        read -r c
+
+        case "$c" in
+            1) GEO_FILE="$GH_RAW/StressOzz/Zapret-Manager/refs/heads/main/files/GeoHide_hosts_RU"; GEO_NAME="RU";;
+            2) GEO_FILE="$GH_RAW/StressOzz/Zapret-Manager/refs/heads/main/files/GeoHide_hosts_EU"; GEO_NAME="EU";;
+            3) GEO_FILE="$GH_RAW/StressOzz/Zapret-Manager/refs/heads/main/files/GeoHide_hosts_US"; GEO_NAME="US";;
+            *) break;;
+        esac
+
+        echo -e "\n${MAGENTA}Заменяем hosts на GeoHide ${GEO_NAME} hosts${NC}"
+
+        GEO_TMP="/tmp/GeoHide_hosts"
+
+        if wget -q -U "Mozilla/5.0" -O "$GEO_TMP" "$GEO_FILE" >/dev/null 2>&1 &&
+           [ -s "$GEO_TMP" ]; then
+
+            mv "$GEO_TMP" /etc/hosts
+            /etc/init.d/dnsmasq restart >/dev/null 2>&1
+
+            echo -e "hosts ${GREEN}заменён на ${NC}GeoHide ${GEO_NAME} hosts${GREEN}!${NC}\n"
+        else
+            rm -f "$GEO_TMP"
+            echo -e "\n${RED}Не удалось скачать GeoHide ${GEO_NAME} hosts${NC}\n"
+        fi
+
+        PAUSE
+    done
 }
 # ==========================================
 # Тест стратегий
@@ -1284,7 +1323,6 @@ ip=$(sed -n "${num}p" "$IDX_LIST"); if [ -z "$ip" ]; then rm -f "$DEV_LIST" "$ID
 else CURRENT_EXCL=$(printf '%s\n%s\n' "$CURRENT_EXCL" "$ip"); ACTION_MSG="${GREEN}IP ${NC}${ip}${GREEN} добавлен в исключения!${NC}"; fi; CHANGED=1; done ;; esac; CURRENT_EXCL=$(echo "$CURRENT_EXCL" | grep -v '^$' | sort -u)
 if [ -n "$CURRENT_EXCL" ]; then FORMATTED=$(echo "$CURRENT_EXCL" | tr '\n' ',' | sed 's/,$//' | sed 's/,/, /g'); { echo "EXCEPT_SRC='{ $FORMATTED }'"; echo "nft insert rule inet zapret postrouting_hook index 0 \\"; echo "  ip saddr \$EXCEPT_SRC meta mark set meta mark \\| 0x40000000"; } > "$EXCL_FILE"; else : > "$EXCL_FILE"; fi
 echo -e "\n${CYAN}Применяем и перезапускаем ${NC}Zapret"; ZAPRET_RESTART; echo -e "\n${ACTION_MSG}\n"; PAUSE; rm -f "$DEV_LIST" "$IDX_LIST"; done; }
-
 # ==========================================
 # Package Installer
 # ==========================================
