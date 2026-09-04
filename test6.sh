@@ -127,7 +127,9 @@ BIN_VER_GO="/usr/bin/tg-ws-proxy-go_ver"; BIN_VER_RS="/usr/bin/tg-ws-proxy-rs_ve
 
 if command -v opkg >/dev/null 2>&1; then PKG="opkg"; GO_SUF="1"; CONFZ="/etc/opkg/distfeeds.conf"; PKG_IS_APK=0; UPDATE="opkg update"; INSTALL="opkg install"
 DELETE="opkg remove"; ARCH="$(opkg print-architecture | awk '{print $2}' | tail -n1)"; VER_SUF="r1-all"; SUF_MT=""; SPL_SUF="all"; RELEASE_TAG="v${BYEDPI_LATEST_VER}-24.10"
+INSTALLED_VER_TGWS="$(opkg list-installed 2>/dev/null | awk '$1=="tgws"{print $3}' | sed 's/-r[0-9]\+$//')"
 RAZ="ipk"; TMP_FILE_GO="/tmp/tg-ws-proxy.ipk"; else PKG="apk"; GO_SUF="r1"; CONFZ="/etc/apk/repositories.d/distfeeds.list"; PKG_IS_APK=1; SPL_SUF="noarch"; RELEASE_TAG="v${BYEDPI_LATEST_VER}-25.12"
+INSTALLED_VER_TGWS="$(apk list -I 2>/dev/null | grep '^tgws-' | sed -E 's/tgws-([0-9.]+).*/\1/')"
 UPDATE="apk update"; INSTALL="apk add --allow-untrusted"; DELETE="apk del"; ARCH="$(apk --print-arch 2>/dev/null)"; RAZ="apk"; VER_SUF="r1"; SUF_MT="r"; TMP_FILE_GO="/tmp/tg-ws-proxy.apk"; fi
 
 update_packages() {
@@ -1059,14 +1061,6 @@ esac; done; }
 # МЕНЮ TG WS Proxy
 # ==========================================
 # УСТАНОВКА sTGWS
-get_TGWS_version() {
-    if [ "$PKG_IS_APK" -eq 1 ]; then
-        INSTALLED_VER_TGWS="$(apk list -I 2>/dev/null | grep '^tgws-' | sed -E 's/tgws-([0-9.]+).*/\1/')"
-    else
-        INSTALLED_VER_TGWS="$(opkg list-installed 2>/dev/null | awk '$1=="tgws"{print $3}' | sed 's/-r[0-9]\+$//')"
-    fi
-}
-
 get_TGWS_domain() {
     TGWS_DOMAIN="$(tgws status 2>/dev/null | sed -n 's/^[[:space:]]*домен:[[:space:]]*//p' | head -n1)"
 }
@@ -1077,7 +1071,7 @@ tgws_latest_version() {
 
 install_update_TGWS() {
     echo -e "\n${MAGENTA}Устанавливаем sTGWS${NC}"
-    echo -e "${CYAN}Запускаем оригинальный установщик...${NC}"
+    echo -e "${CYAN}Запускаем оригинальный установщик${NC}"
 
     wget -q -O - "$TGWS_INSTALL_URL" 2>/dev/null | sh >/dev/null 2>&1
 
@@ -1086,17 +1080,17 @@ install_update_TGWS() {
 
     TGWS_STARTED=0
 
-    for i in $(seq 1 20); do
+    for i in $(seq 1 30); do
         if [ -n "$(tgws status 2>/dev/null)" ]; then
             TGWS_STARTED=1
             break
         fi
-        sleep 3
+        sleep 2
     done
 
     if [ "$TGWS_STARTED" = "1" ]; then
         get_TGWS_domain
-        echo -e "Домен: ${GREEN}${TGWS_DOMAIN:-не определён}${NC}"
+        echo -e "${CYAN}Используем домен: ${NC}${TGWS_DOMAIN:-не определён}"
         echo -e "sTGWS ${GREEN}установлен и запущен!${NC}\n"
     else
         echo -e "\n${RED}Не удалось подобрать домен!${NC}\n"
@@ -1127,7 +1121,6 @@ restart_TGWS() {
 
         if [ -n "$(tgws status 2>/dev/null)" ]; then
             get_TGWS_domain
-            echo -e "Домен: ${GREEN}${TGWS_DOMAIN:-не определён}${NC}"
             echo -e "sTGWS ${GREEN}перезапущен!${NC}\n"
         else
             echo -e "${RED}sTGWS не запущен!${NC}\n"
@@ -1138,9 +1131,8 @@ restart_TGWS() {
 
     PAUSE
 }
-
 reconfigure_TGWS() {
-    echo -e "\n${MAGENTA}Подбираем домен заново${NC}"
+    echo -e "\n${MAGENTA}Подбираем новый домен${NC}"
     echo -ne "${YELLOW}Подождите...${NC}\n"
 
     if command -v tgws >/dev/null 2>&1; then
@@ -1150,10 +1142,10 @@ reconfigure_TGWS() {
         get_TGWS_domain
 
         if [ -n "$(tgws status 2>/dev/null)" ] && [ -n "$TGWS_DOMAIN" ]; then
-            echo -e "Новый домен: ${GREEN}${TGWS_DOMAIN}${NC}"
-            echo -e "Домен ${GREEN}подобран заново!${NC}\n"
+            echo -e "${CYAN}Новый домен: ${NC}${TGWS_DOMAIN}"
+            echo -e "Домен ${GREEN}перенастроен!${NC}\n"
         else
-            echo -e "${RED}Не удалось подтвердить новый домен!${NC}\n"
+            echo -e "\n${RED}Не удалось подобрать домен!${NC}\n"
         fi
     else
         echo -e "${RED}sTGWS не установлен!${NC}\n"
@@ -1164,7 +1156,6 @@ reconfigure_TGWS() {
 
 menu_TGWS() {
     while true; do
-        get_TGWS_version
         LATEST_TGWS="$(tgws_latest_version)"
         [ -z "$LATEST_TGWS" ] && LATEST_TGWS="$TGWS_VERSION"
 
