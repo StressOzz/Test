@@ -1058,7 +1058,7 @@ esac; done; }
 # ==========================================
 # МЕНЮ TG WS Proxy
 # ==========================================
-# УСТАНОВКА TG WS 
+# УСТАНОВКА sTGWS
 get_TGWS_version() {
     if [ "$PKG_IS_APK" -eq 1 ]; then
         INSTALLED_VER_TGWS="$(apk list -I 2>/dev/null | grep '^tgws-' | sed -E 's/tgws-([0-9.]+).*/\1/')"
@@ -1066,15 +1066,24 @@ get_TGWS_version() {
         INSTALLED_VER_TGWS="$(opkg list-installed 2>/dev/null | awk '$1=="tgws"{print $3}' | sed 's/-r[0-9]\+$//')"
     fi
 }
-tgws_latest_version() { curl -fsSL --connect-timeout 3 --max-time 5 "${TGWS_DIST_URL}/latest.txt" 2>/dev/null | head -n1 | tr -d ' \t\r\n'; }
+
+get_TGWS_domain() {
+    TGWS_DOMAIN="$(tgws status 2>/dev/null | sed -n 's/^[[:space:]]*домен:[[:space:]]*//p' | head -n1)"
+}
+
+tgws_latest_version() {
+    curl -fsSL --connect-timeout 3 --max-time 5 "${TGWS_DIST_URL}/latest.txt" 2>/dev/null | head -n1 | tr -d ' \t\r\n'
+}
+
 install_update_TGWS() {
-    echo -e "\n${MAGENTA}Устанавливаем TG WS Proxy${NC}"
+    echo -e "\n${MAGENTA}Устанавливаем sTGWS${NC}"
     echo -e "${CYAN}Запускаем оригинальный установщик...${NC}"
 
     wget -q -O - "$TGWS_INSTALL_URL" 2>/dev/null | sh >/dev/null 2>&1
 
     echo -e "${CYAN}Подбираем домен${NC}"
-    echo -ne "${YELLOW}Подождите...${NC}"
+    echo -ne "${YELLOW}Подождите...${NC}\n"
+
     TGWS_STARTED=0
 
     for i in $(seq 1 20); do
@@ -1086,48 +1095,114 @@ install_update_TGWS() {
     done
 
     if [ "$TGWS_STARTED" = "1" ]; then
-        echo -e "${YELLOW}TG WS Proxy:${NC} ${GREEN}запущен${NC}"
+        get_TGWS_domain
+        echo -e "Домен: ${GREEN}${TGWS_DOMAIN:-не определён}${NC}"
+        echo -e "sTGWS ${GREEN}установлен и запущен!${NC}\n"
     else
-        echo -e "${YELLOW}TG WS Proxy:${NC} ${RED}не запустился за 60 секунд${NC}"
+        echo -e "\n${RED}Не удалось подобрать домен!${NC}\n"
     fi
 
     PAUSE
 }
+
 remove_TGWS() {
-    echo -e "\n${MAGENTA}Удаляем TG WS Proxy${NC}\n${CYAN}Удаляем пакет${NC}"
-    $DELETE tgws >/dev/null 2>&1; rm -rf /etc/tgws /etc/config/tgws
-    echo -e "TG WS Proxy ${GREEN}удалён!${NC}\n"; PAUSE
-}
-restart_TGWS() {
-    echo -e "\n${MAGENTA}Перезапускаем TG WS Proxy${NC}"
-    if [ -x /etc/init.d/tgws ]; then
-        /etc/init.d/tgws restart >/dev/null 2>&1; sleep 1
-        pidof tgws >/dev/null 2>&1 && echo -e "TG WS Proxy ${GREEN}перезапущен!${NC}\n" || echo -e "${RED}TG WS Proxy не запущен!${NC}\n"
-    else
-        echo -e "${RED}TG WS Proxy не установлен!${NC}\n"
-    fi
+    echo -e "\n${MAGENTA}Удаляем sTGWS${NC}\n${CYAN}Удаляем пакет${NC}"
+
+    /etc/init.d/tgws disable
+    /etc/init.d/tgws stop
+
+    $DELETE tgws >/dev/null 2>&1
+    rm -rf /etc/tgws /etc/config/tgws
+
+    echo -e "sTGWS ${GREEN}удалён!${NC}\n"
     PAUSE
 }
+
+restart_TGWS() {
+    echo -e "\n${MAGENTA}Перезапускаем sTGWS${NC}"
+
+    if [ -x /etc/init.d/tgws ]; then
+        /etc/init.d/tgws restart >/dev/null 2>&1
+        sleep 5
+
+        if [ -n "$(tgws status 2>/dev/null)" ]; then
+            get_TGWS_domain
+            echo -e "Домен: ${GREEN}${TGWS_DOMAIN:-не определён}${NC}"
+            echo -e "sTGWS ${GREEN}перезапущен!${NC}\n"
+        else
+            echo -e "${RED}sTGWS не запущен!${NC}\n"
+        fi
+    else
+        echo -e "${RED}sTGWS не установлен!${NC}\n"
+    fi
+
+    PAUSE
+}
+
 reconfigure_TGWS() {
     echo -e "\n${MAGENTA}Подбираем домен заново${NC}"
-    if command -v tgws >/dev/null 2>&1; then tgws pick; echo -e "\nДомен ${GREEN}подобран заново!${NC}\n"; else echo -e "${RED}TG WS Proxy не установлен!${NC}\n"; fi
+    echo -ne "${YELLOW}Подождите...${NC}\n"
+
+    if command -v tgws >/dev/null 2>&1; then
+        tgws pick >/dev/null 2>&1
+
+        sleep 2
+        get_TGWS_domain
+
+        if [ -n "$(tgws status 2>/dev/null)" ] && [ -n "$TGWS_DOMAIN" ]; then
+            echo -e "Новый домен: ${GREEN}${TGWS_DOMAIN}${NC}"
+            echo -e "Домен ${GREEN}подобран заново!${NC}\n"
+        else
+            echo -e "${RED}Не удалось подтвердить новый домен!${NC}\n"
+        fi
+    else
+        echo -e "${RED}sTGWS не установлен!${NC}\n"
+    fi
+
     PAUSE
 }
+
 menu_TGWS() {
     while true; do
-        get_TGWS_version; LATEST_TGWS="$(tgws_latest_version)"; [ -z "$LATEST_TGWS" ] && LATEST_TGWS="$TGWS_VERSION"
-        clear; echo -e "${MAGENTA}Меню TG WS Proxy${NC}\n"
-        [ -n "$(tgws status 2>/dev/null)" ] && echo -e "${YELLOW}TG WS Proxy:${NC} ${GREEN}запущен${NC}" || echo -e "${YELLOW}TG WS Proxy:${NC} ${RED}не запущен${NC}"
-        if [ -n "$INSTALLED_VER_TGWS" ]; then
-            if [ "$INSTALLED_VER_TGWS" = "$LATEST_TGWS" ]; then echo -e "${YELLOW}Версия:${NC} ${GREEN}$INSTALLED_VER_TGWS${NC}"
-            else echo -e "${YELLOW}Версия:${NC} ${RED}$INSTALLED_VER_TGWS (доступно обновление: $LATEST_TGWS)${NC}"; fi
+        get_TGWS_version
+        LATEST_TGWS="$(tgws_latest_version)"
+        [ -z "$LATEST_TGWS" ] && LATEST_TGWS="$TGWS_VERSION"
+
+        get_TGWS_domain
+
+        clear
+        echo -e "${MAGENTA}Меню sTGWS${NC}\n"
+
+        if [ -n "$(tgws status 2>/dev/null)" ]; then
+            echo -e "${YELLOW}sTGWS:${NC} ${GREEN}запущен${NC}"
+            [ -n "$TGWS_DOMAIN" ] && echo -e "${YELLOW}Домен sTGWS:${NC} ${GREEN}${TGWS_DOMAIN}${NC}"
+        else
+            echo -e "${YELLOW}sTGWS:${NC} ${RED}не запущен${NC}"
         fi
-        if [ -z "$INSTALLED_VER_TGWS" ]; then echo -e "\n${CYAN}1)${GREEN} Установить${NC}"
-        elif [ "$INSTALLED_VER_TGWS" != "$LATEST_TGWS" ]; then echo -e "\n${CYAN}1)${GREEN} Обновить${NC}"
-        else echo -e "\n${CYAN}1)${GREEN} Переустановить${NC}"; fi
-        echo -e "${CYAN}2)${GREEN} Удалить${NC}\n${CYAN}3)${GREEN} Перезапустить${NC}\n${CYAN}4)${GREEN} Перенастроить домен${NC}"
+
+        if [ -n "$INSTALLED_VER_TGWS" ]; then
+            if [ "$INSTALLED_VER_TGWS" = "$LATEST_TGWS" ]; then
+                echo -e "${YELLOW}Версия sTGWS:${NC} ${GREEN}$INSTALLED_VER_TGWS${NC}"
+            else
+                echo -e "${YELLOW}Версия sTGWS:${NC} ${RED}$INSTALLED_VER_TGWS (доступно обновление: $LATEST_TGWS)${NC}"
+            fi
+        fi
+
+        if [ -z "$INSTALLED_VER_TGWS" ]; then
+            echo -e "\n${CYAN}1)${GREEN} Установить${NC}"
+        elif [ "$INSTALLED_VER_TGWS" != "$LATEST_TGWS" ]; then
+            echo -e "\n${CYAN}1)${GREEN} Обновить${NC}"
+        else
+            echo -e "\n${CYAN}1)${GREEN} Переустановить${NC}"
+        fi
+
+        echo -e "${CYAN}2)${GREEN} Удалить${NC}"
+        echo -e "${CYAN}3)${GREEN} Перезапустить${NC}"
+        echo -e "${CYAN}4)${GREEN} Перенастроить домен${NC}"
         echo -ne "${CYAN}Enter) ${GREEN}Выход в меню TG WS Proxy${NC}\n\n${YELLOW}Выберите пункт:${NC} "
+
         read -r choiceTGWS
+
         case "$choiceTGWS" in
             1) install_update_TGWS ;;
             2) remove_TGWS ;;
@@ -1137,6 +1212,9 @@ menu_TGWS() {
         esac
     done
 }
+
+
+#######################################################################################################
 restart_all_TG() {
     echo -e "\n${MAGENTA}Перезапускаем все TG WS Proxy${NC}"
     for s in /etc/init.d/tg-ws-proxy /etc/init.d/tg-ws-proxy-go /etc/init.d/tg-ws-proxy-rs; do
