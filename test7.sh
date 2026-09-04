@@ -127,9 +127,7 @@ BIN_VER_GO="/usr/bin/tg-ws-proxy-go_ver"; BIN_VER_RS="/usr/bin/tg-ws-proxy-rs_ve
 
 if command -v opkg >/dev/null 2>&1; then PKG="opkg"; GO_SUF="1"; CONFZ="/etc/opkg/distfeeds.conf"; PKG_IS_APK=0; UPDATE="opkg update"; INSTALL="opkg install"
 DELETE="opkg remove"; ARCH="$(opkg print-architecture | awk '{print $2}' | tail -n1)"; VER_SUF="r1-all"; SUF_MT=""; SPL_SUF="all"; RELEASE_TAG="v${BYEDPI_LATEST_VER}-24.10"
-INSTALLED_VER_TGWS="$(opkg list-installed 2>/dev/null | awk '$1=="tgws"{print $3}' | sed 's/-r[0-9]\+$//')"
 RAZ="ipk"; TMP_FILE_GO="/tmp/tg-ws-proxy.ipk"; else PKG="apk"; GO_SUF="r1"; CONFZ="/etc/apk/repositories.d/distfeeds.list"; PKG_IS_APK=1; SPL_SUF="noarch"; RELEASE_TAG="v${BYEDPI_LATEST_VER}-25.12"
-INSTALLED_VER_TGWS="$(apk list -I 2>/dev/null | grep '^tgws-' | sed -E 's/tgws-([0-9.]+).*/\1/')"
 UPDATE="apk update"; INSTALL="apk add --allow-untrusted"; DELETE="apk del"; ARCH="$(apk --print-arch 2>/dev/null)"; RAZ="apk"; VER_SUF="r1"; SUF_MT="r"; TMP_FILE_GO="/tmp/tg-ws-proxy.apk"; fi
 
 update_packages() {
@@ -1061,6 +1059,14 @@ esac; done; }
 # МЕНЮ TG WS Proxy
 # ==========================================
 # УСТАНОВКА sTGWS
+get_TGWS_version() {
+    if [ "$PKG_IS_APK" -eq 1 ]; then
+        INSTALLED_VER_TGWS="$(apk list -I 2>/dev/null | grep '^tgws-' | sed -E 's/tgws-([0-9.]+).*/\1/')"
+    else
+        INSTALLED_VER_TGWS="$(opkg list-installed 2>/dev/null | awk '$1=="tgws"{print $3}' | sed 's/-r[0-9]\+$//')"
+    fi
+}
+
 get_TGWS_domain() {
     TGWS_DOMAIN="$(tgws status 2>/dev/null | sed -n 's/^[[:space:]]*домен:[[:space:]]*//p' | head -n1)"
 }
@@ -1156,6 +1162,7 @@ reconfigure_TGWS() {
 
 menu_TGWS() {
     while true; do
+get_TGWS_version
         LATEST_TGWS="$(tgws_latest_version)"
         [ -z "$LATEST_TGWS" ] && LATEST_TGWS="$TGWS_VERSION"
 
