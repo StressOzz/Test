@@ -1069,7 +1069,7 @@ get_TGWS_version() {
 tgws_latest_version() { curl -fsSL --connect-timeout 3 --max-time 5 "${TGWS_DIST_URL}/latest.txt" 2>/dev/null | head -n1 | tr -d ' \t\r\n'; }
 install_update_TGWS() {
     echo -e "\n${MAGENTA}Устанавливаем TG WS Proxy${NC}\n${CYAN}Запускаем установщик${NC}"
-    if command -v curl >/dev/null 2>&1; then curl -fsSL "$TGWS_INSTALL_URL" | sh; else wget -q -O - "$TGWS_INSTALL_URL" | sh; fi
+    wget -q -O - "$TGWS_INSTALL_URL" | sh
     if command -v tgws >/dev/null 2>&1; then echo -e "\nTG WS Proxy ${GREEN}установлен!${NC}\n"; else echo -e "\n${RED}Не удалось установить TG WS Proxy!${NC}\n"; fi
     PAUSE
 }
@@ -1096,8 +1096,8 @@ reconfigure_TGWS() {
 menu_TGWS() {
     while true; do
         get_TGWS_version; LATEST_TGWS="$(tgws_latest_version)"; [ -z "$LATEST_TGWS" ] && LATEST_TGWS="$TGWS_VERSION"
-        clear; echo -e "${MAGENTA}Меню TG WS Proxy${NC} ${CYAN}(только Telegram)${NC}\n"
-        pidof tgws >/dev/null 2>&1 && echo -e "${YELLOW}TG WS Proxy:${NC} ${GREEN}запущен${NC}" || echo -e "${YELLOW}TG WS Proxy:${NC} ${RED}не запущен${NC}"
+        clear; echo -e "${MAGENTA}Меню TG WS Proxy${NC}\n"
+        [ -n "$(tgws status 2>/dev/null)" ] && echo -e "${YELLOW}TG WS Proxy:${NC} ${GREEN}запущен${NC}" || echo -e "${YELLOW}TG WS Proxy:${NC} ${RED}не запущен${NC}"
         if [ -n "$INSTALLED_VER_TGWS" ]; then
             if [ "$INSTALLED_VER_TGWS" = "$LATEST_TGWS" ]; then echo -e "${YELLOW}Версия:${NC} ${GREEN}$INSTALLED_VER_TGWS${NC}"
             else echo -e "${YELLOW}Версия:${NC} ${RED}$INSTALLED_VER_TGWS (доступно обновление: $LATEST_TGWS)${NC}"; fi
