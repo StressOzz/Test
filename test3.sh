@@ -1068,9 +1068,29 @@ get_TGWS_version() {
 }
 tgws_latest_version() { curl -fsSL --connect-timeout 3 --max-time 5 "${TGWS_DIST_URL}/latest.txt" 2>/dev/null | head -n1 | tr -d ' \t\r\n'; }
 install_update_TGWS() {
-    echo -e "\n${MAGENTA}Устанавливаем TG WS Proxy${NC}\n${CYAN}Запускаем установщик${NC}"
-    wget -q -O - "$TGWS_INSTALL_URL" | sh
-    if command -v tgws >/dev/null 2>&1; then echo -e "\nTG WS Proxy ${GREEN}установлен!${NC}\n"; else echo -e "\n${RED}Не удалось установить TG WS Proxy!${NC}\n"; fi
+    echo -e "\n${MAGENTA}Устанавливаем TG WS Proxy${NC}"
+    echo -e "${CYAN}Запускаем оригинальный установщик...${NC}"
+
+    wget -q -O - "$TGWS_INSTALL_URL" 2>/dev/null | sh >/dev/null 2>&1
+
+    echo -e "${CYAN}Подбираем домен${NC}"
+    echo -ne "${YELLOW}Подождите...${NC}"
+    TGWS_STARTED=0
+
+    for i in $(seq 1 20); do
+        if [ -n "$(tgws status 2>/dev/null)" ]; then
+            TGWS_STARTED=1
+            break
+        fi
+        sleep 3
+    done
+
+    if [ "$TGWS_STARTED" = "1" ]; then
+        echo -e "${YELLOW}TG WS Proxy:${NC} ${GREEN}запущен${NC}"
+    else
+        echo -e "${YELLOW}TG WS Proxy:${NC} ${RED}не запустился за 60 секунд${NC}"
+    fi
+
     PAUSE
 }
 remove_TGWS() {
