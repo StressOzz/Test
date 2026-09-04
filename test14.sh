@@ -1610,36 +1610,10 @@ PAUSE
 # ==========================================
 # Главное меню
 # ==========================================
-MENU_ZAPRET() {
-    while true; do
-        get_versions
-        if [ ! -f /etc/init.d/zapret ]; then Z_ACTION_TEXT="Установить"; Z_ACTION_FUNC="install_Zapret"
-        elif [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ]; then Z_ACTION_TEXT="Удалить"; Z_ACTION_FUNC="uninstall_zapret"
-        else Z_ACTION_TEXT="Обновить"; Z_ACTION_FUNC="install_Zapret"; fi
-        clear; echo -e "${MAGENTA}Меню Zapret${NC}\n"
-        echo -e "${CYAN}1) ${GREEN}$Z_ACTION_TEXT${NC} Zapret"
-        echo -e "${CYAN}2) ${GREEN}Меню стратегий${NC} Zapret"
-        echo -e "${CYAN}3) ${GREEN}Меню настройки${NC} Discord"
-        echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "
-        read -r choiceZ1
-        case "$choiceZ1" in 1) $Z_ACTION_FUNC ;; 2) menu_str ;; 3) Discord_menu ;; *) return ;; esac
-    done
-}
-MENU_ZAPRET2() {
-    while true; do
-        get_versions
-        if [ ! -f /etc/init.d/zapret2 ]; then Z2_ACTION_TEXT="Установить"; Z2_ACTION_FUNC="install_zapret2"
-        elif [ "$INSTALLED_VER2" = "$ZAPRET2_VERSION" ]; then Z2_ACTION_TEXT="Удалить"; Z2_ACTION_FUNC="remove_zapret2"
-        else Z2_ACTION_TEXT="Обновить"; Z2_ACTION_FUNC="install_zapret2"; fi
-        clear; echo -e "${MAGENTA}Меню Zapret2${NC}\n"
-        echo -e "${CYAN}1) ${GREEN}$Z2_ACTION_TEXT${NC} Zapret2"
-        echo -ne "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "
-        read -r choiceZ2
-        case "$choiceZ2" in 1) $Z2_ACTION_FUNC ;; *) return ;; esac
-    done
-}
 show_menu() { get_versions; get_doh_status; show_current_strategy; RKN_Check; mkdir -p "$TMP_SF"; CURR=$(curr_MIR); clear; echo -e "╔═══════════════════════════════╗\n║  ${BLUE}Zapret Manager by StressOzz${NC}  ║\n╚═══════════════════════════════╝\n"
 if [ -f /etc/init.d/zapret ] && [ -f "$CONF" ] && grep -Eq "^[[:space:]]*option DISABLE_IPV6 '1'" "$CONF" && ping -6 -c 1 -W 2 google.com >/dev/null 2>&1; then echo -e "${RED}Обнаружен IPv6! ${GREEN}Включите ${NC}IPv6${GREEN} в системном меню!${NC}\n"; fi
+if [ ! -f /etc/init.d/zapret ]; then Z_ACTION_TEXT="Установить"; Z_ACTION_FUNC="install_Zapret"; elif [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ]; then Z_ACTION_TEXT="Удалить" Z_ACTION_FUNC="uninstall_zapret"; else Z_ACTION_TEXT="Обновить"; Z_ACTION_FUNC="install_Zapret"; fi
+if [ ! -f /etc/init.d/zapret2 ]; then Z2_ACTION_TEXT="Установить"; Z2_ACTION_FUNC="install_zapret2"; elif [ "$INSTALLED_VER2" = "$ZAPRET2_VERSION" ]; then Z2_ACTION_TEXT="Удалить"; Z2_ACTION_FUNC="remove_zapret2"; else Z2_ACTION_TEXT="Обновить"; Z2_ACTION_FUNC="install_zapret2"; fi
 for pkg in byedpi youtubeUnblock; do if [ "$PKG_IS_APK" -eq 1 ]; then apk info -e "$pkg" >/dev/null 2>&1 && echo -e "${RED}Найден установленный ${NC}$pkg${RED}!${NC}\nZapret${RED} может работать некорректно с ${NC}$pkg${RED}!${NC}\n"
 else opkg list-installed | grep -q "^$pkg" && echo -e "${RED}Найден установленный ${NC}$pkg${RED}!${NC}\nZapret${RED} может работать некорректно с ${NC}$pkg${RED}!${NC}\n"; fi; done; if is_expert_mode && [ -f /etc/init.d/zapret2 ] && [ -f /etc/init.d/zapret ]; then SHOW_S=2
 pgrep -f "/opt/zapret" >/dev/null 2>&1 && S1_ACTION="Остановить" || S1_ACTION="Запустить"; /etc/init.d/zapret2 status >/dev/null 2>&1 && S2_ACTION="Остановить" || S2_ACTION="Запустить"
@@ -1647,9 +1621,9 @@ elif [ -f /etc/init.d/zapret2 ]; then S_NAME="Zapret2"; /etc/init.d/zapret2 stat
 if uci get firewall.@defaults[0].flow_offloading 2>/dev/null | grep -q '^1$' || uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null | grep -q '^1$'; then if ! grep -q 'meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc
 then echo -e "${RED}Включён ${NC}Flow Offloading${RED}!${NC}\n${NC}Zapret${RED} некорректно работает с включённым ${NC}Flow Offloading${RED}!\nПримените ${NC}FIX${RED} в системном меню!\n${NC}"; fi; fi
 INFO_ZPR; if grep -qE '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' "$EXCL_FILE" 2>/dev/null; then echo -e "${YELLOW}Исключённые IP:      ${RED}есть${NC}"; fi
-echo -e "\n${CYAN}1) ${GREEN}Меню${NC} Zapret\n${CYAN}2) ${GREEN}Меню${NC} Zapret2\n${CYAN}4) ${GREEN}Меню ${NC}splify\n${CYAN}5) ${GREEN}Меню ${NC}Mixomo\n${CYAN}6) ${GREEN}Меню ${NC}NetShift\n${CYAN}7) ${GREEN}Меню ${NC}TG WS Proxy\n${CYAN}8) ${GREEN}Меню ${NC}DNS over HTTPS\n${CYAN}0) ${GREEN}Меню управления доменами в ${NC}hosts"
+echo -e "\n${CYAN}1) ${GREEN}$Z_ACTION_TEXT${NC} Zapret\n${CYAN}2) ${GREEN}$Z2_ACTION_TEXT${NC} Zapret2\n${CYAN}3) ${GREEN}Меню стратегий${NC} Zapret\n${CYAN}4) ${GREEN}Меню ${NC}splify\n${CYAN}5) ${GREEN}Меню ${NC}Mixomo\n${CYAN}6) ${GREEN}Меню ${NC}NetShift\n${CYAN}7) ${GREEN}Меню ${NC}TG WS Proxy\n${CYAN}8) ${GREEN}Меню ${NC}DNS over HTTPS\n${CYAN}9) ${GREEN}Меню настройки ${NC}Discord\n${CYAN}0) ${GREEN}Меню управления доменами в ${NC}hosts"
 echo -e "${CYAN}f) ${GREEN}Удалить ${NC}→${GREEN} установить ${NC}→${GREEN} настроить${NC} Zapret\n${CYAN}m) ${GREEN}Системное меню${NC}"; [ "$SHOW_S" = "1" ] && echo -e "${CYAN}s) ${GREEN}$S_ACTION${NC} $S_NAME"
 [ "$SHOW_S" = "2" ] && echo -e "${CYAN}s1) ${GREEN}$S1_ACTION${NC} Zapret\n${CYAN}s2) ${GREEN}$S2_ACTION${NC} Zapret2"; echo -e "${CYAN}i) ${GREEN}Установить пакеты из ${NC}/root/"; echo -ne "${CYAN}Enter) ${GREEN}Выход${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read choice
 case "$choice" in 999) echo; uninstall_zapret "1"; install_Zapret "1"; curl -fsSL ${GH_RAW}/StressOzz/Test/refs/heads/main/zapret -o "$CONF"; hosts_add "$ALL_BLOCKS"; rm -f "$EXCLUDE_FILE"; wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL"; ZAPRET_RESTART; PAUSE;;
-I|i|ш|Ш) PAKET_INSTALL;; s|S|ы|Ы) toggle_zapret;; f|F|а|А) zapret_key;; s1|S1|ы1|Ы1) toggle_zapret1_only;; s2|S2|ы2|Ы2) toggle_zapret2_only;; 1) MENU_ZAPRET;; 2) MENU_ZAPRET2;; 4) SPL_MENU ;; 5) MIXOMO_MENU;; 6) PODKOP_menu ;; 7) menu_TG;; 8) DoH_menu;; 0) menu_hosts;; m|M|ь|Ь) sys_menu;; r|R|к|К) show_menu;; *) echo; exit 0;; esac; }
+2) $Z2_ACTION_FUNC;; I|i|ш|Ш) PAKET_INSTALL;; s|S|ы|Ы) toggle_zapret;; f|F|а|А) zapret_key;; s1|S1|ы1|Ы1) toggle_zapret1_only;; s2|S2|ы2|Ы2) toggle_zapret2_only;; 1) $Z_ACTION_FUNC;; 3) menu_str;; 4) SPL_MENU ;; 5) MIXOMO_MENU;; 6) PODKOP_menu ;; 7) menu_TG;; 8) DoH_menu;; 9) Discord_menu;; 0) menu_hosts;; m|M|ь|Ь) sys_menu;; r|R|к|К) show_menu;; *) echo; exit 0;; esac; }
 case "$1" in --auto-best) auto_apply_best_strategy; exit 0 ;; esac; while true; do show_menu; done
