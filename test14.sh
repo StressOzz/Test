@@ -165,12 +165,13 @@ try_mirror() {
         return 1
 }
     for MIRROR in \
-        "mirror-03.infra.openwrt.org" \
+        "openwrt.c3sl.ufpr.br" \
+        "mirrors.ustc.edu.cn/openwrt" \
+        "openwrt.tetaneutral.net" \
+        "openwrt.mirror.garr.it/mirrors/openwrt" \
+        "mirror.marwan.ma/openwrt" \
+        "openwrt.pixeldeck.net" \
         "ftp.halifax.rwth-aachen.de/openwrt" \
-        "mirror.accum.se/mirror/openwrt.org" \
-        "ftp.snt.utwente.nl/pub/software/openwrt" \
-        "mirror.berlin.freifunk.net/downloads.openwrt" \
-        "mirror.sjtu.edu.cn/openwrt" \
         "downloads.openwrt.org"
     do
         [ "$MIRROR" = "$CURRENT_MIRROR" ] && continue
