@@ -1048,14 +1048,14 @@ sed -i "s|https://.*/releases/|https://$NEW_BASE/releases/|g" "$CONFZ"; echo -e 
 if ! update_packages; then echo -e "\n${RED}Ошибка обновления списка пакетов!${NC}\n${GREEN}Зеркало сброшено на ${NC}default ${GREEN}/${NC} OpenWrt${GREEN}!${NC}\n"
 sed -i "s|https://.*/releases/|https://downloads.openwrt.org/releases/|g" "$CONFZ"; PAUSE; return 1; fi; echo -e "${GREEN}Пакеты обновлены! Зеркало работает!${NC}\n"; PAUSE; }
 curr_MIR() { if [ -f "$CONFZ" ]; then URL=$(head -n1 "$CONFZ"); case "$URL" in
-*mirror-03.infra.openwrt.org*) echo "infra.openwrt.org" ;;
+*mirror-03.infra.openwrt.org*) echo "Infra OpenWrt" ;;
 *c3sl.ufpr.br*) echo "Brazil" ;;
 *ustc.edu.cn*) echo "China" ;;
 *tetaneutral.net*) echo "France" ;;
 *garr.it*) echo "Italy" ;;
 *marwan.ma*) echo "Morocco" ;;
 *pixeldeck.net*) echo "USA" ;;
-*rwth-aachen.de*) echo "Germany (RWTH Aachen)" ;;
+*rwth-aachen.de*) echo "Germany" ;;
 *downloads.openwrt.org*) echo "default / OpenWrt" ;;
 *) echo "неизвестное" ;;
 esac; else echo "файл не найден"; fi; }
