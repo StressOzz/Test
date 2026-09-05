@@ -1651,19 +1651,16 @@ PAKET_INSTALL() {
         read ORDER
         echo
 
-        # Enter — назад
         if [ -z "$ORDER" ]; then
             return
         fi
 
-        # Неверные символы — остаёмся в этом меню
         if ! echo "$ORDER" | grep -qE '^[0-9]+([[:space:]]+[0-9]+)*$'; then
             echo -e "${RED}Введите только числа через пробел!${NC}\n"
             PAUSE
             continue
         fi
 
-        # Проверяем все номера
         INVALID=0
 
         for n in $ORDER; do
@@ -1674,16 +1671,14 @@ PAKET_INSTALL() {
             fi
         done
 
-        # Неверный номер — снова это же меню
         if [ "$INVALID" = "1" ]; then
             PAUSE
             continue
         fi
 
-        # Обновляем список пакетов только после корректного ввода
+
         update_packages
 
-        # Устанавливаем в указанном порядке
         for n in $ORDER; do
             eval "FILE=\$$n"
 
@@ -1695,20 +1690,20 @@ PAKET_INSTALL() {
                 $INSTALL "$FILE" >/dev/null 2>&1 || {
                     echo -e "\n${RED}Ошибка установки${NC} $NAME\n"
                     PAUSE
-                    return
+                    continue
                 }
 
                 echo -e "$NAME ${GREEN}установлен!${NC}\n"
             else
                 echo -e "${RED}Файл не найден:${NC} $FILE\n"
                 PAUSE
-                return
+                continue
             fi
         done
 
         echo -e "${GREEN}Установка завершена!${NC}\n"
         PAUSE
-        return
+        continue
     done
 }
 # ==========================================
