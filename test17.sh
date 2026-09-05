@@ -1689,7 +1689,8 @@ MENU_ZAPRET() {
         elif [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ]; then Z_ACTION_TEXT="Удалить"; Z_ACTION_FUNC="uninstall_zapret"
         else Z_ACTION_TEXT="Обновить"; Z_ACTION_FUNC="install_Zapret"; fi
         clear; echo -e "${MAGENTA}Меню Zapret${NC}\n"
-        echo -e "${CYAN}1) ${GREEN}$Z_ACTION_TEXT${NC} Zapret"
+        INFO_ZPR "1"
+        echo -e "\n${CYAN}1) ${GREEN}$Z_ACTION_TEXT${NC} Zapret"
         echo -e "${CYAN}2) ${GREEN}Меню стратегий${NC} Zapret"
         echo -e "${CYAN}3) ${GREEN}Меню тестирования стратегий${NC}"
         echo -e "${CYAN}4) ${GREEN}Меню автоподбора стратегий по расписанию${NC}"
