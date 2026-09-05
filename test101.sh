@@ -1056,8 +1056,7 @@ set_mirror() {
     sed -i "s|https://.*/releases/|https://$NEW_BASE/releases/|g" "$CONFZ"
     echo -e "${CYAN}Проверяем обновление пакетов${NC}"
     if $UPDATE >/dev/null 2>&1; then
-        echo -e "${GREEN}Обновление пакетов выполнено успешно!${NC}"
-        echo -e "${CYAN}Используем зеркало: ${NC}$NEW_BASE"
+        echo -e "${GREEN}Обновление пакетов выполнено успешно!${NC}\n"
         rm -f /tmp/distfeeds.conf.bak
         PACKAGES_UPDATED=1
         PAUSE
