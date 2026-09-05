@@ -127,6 +127,26 @@ DELETE="opkg remove"; ARCH="$(opkg print-architecture | awk '{print $2}' | tail 
 RAZ="ipk"; TMP_FILE_GO="/tmp/tg-ws-proxy.ipk"; else PKG="apk"; GO_SUF="r1"; CONFZ="/etc/apk/repositories.d/distfeeds.list"; PKG_IS_APK=1; SPL_SUF="noarch"; RELEASE_TAG="v${BYEDPI_LATEST_VER}-25.12"
 UPDATE="apk update"; INSTALL="apk add --allow-untrusted"; DELETE="apk del"; ARCH="$(apk --print-arch 2>/dev/null)"; RAZ="apk"; VER_SUF="r1"; SUF_MT="r"; TMP_FILE_GO="/tmp/tg-ws-proxy.apk"; fi
 
+try_mirror() {
+    MIRROR="$1"
+    echo -e "\n${CYAN}Проверяем ${NC}$MIRROR"
+    if ! wget -q --spider --timeout=3 "https://$MIRROR/releases/" >/dev/null 2>&1; then
+        echo -e "$MIRROR ${RED}недоступен!${NC}"
+        return 1
+    fi
+    echo -e "$MIRROR ${GREEN}доступен!${NC}"
+    sed -i "s|https://.*/releases/|https://$MIRROR/releases/|g" "$CONFZ"
+    echo -e "${CYAN}Проверяем обновление пакетов${NC}"
+    if $UPDATE >/dev/null 2>&1; then
+        echo -e "${GREEN}Обновление пакетов выполнено успешно!${NC}"
+        echo -e "${CYAN}Используем зеркало: ${NC}$MIRROR"
+        return 0
+    fi
+    echo -e "${RED}Ошибка обновления пакетов!${NC}"
+    cp /tmp/distfeeds.conf.bak "$CONFZ"
+    return 1
+}
+
 update_packages() {
     [ "$PACKAGES_UPDATED" = "1" ] && return 0
     echo -e "${CYAN}Обновляем список пакетов${NC}"
@@ -136,7 +156,6 @@ update_packages() {
     fi
     echo -e "${RED}Ошибка обновления списка пакетов!${NC}"
     echo -e "\n${CYAN}Подбираем рабочее зеркало ${NC}OpenWRT"
-
     [ -f "$CONFZ" ] || {
         echo -e "\n${RED}Файл репозиториев не найден: $CONFZ${NC}\n"
         PAUSE
@@ -145,25 +164,6 @@ update_packages() {
     CURRENT_MIRROR=$(head -n1 "$CONFZ" 2>/dev/null | awk '{print $NF}' | sed 's|https\://||;s|/releases/.*||')
     cp "$CONFZ" /tmp/distfeeds.conf.bak
 
-try_mirror() {
-        MIRROR="$1"
-        echo -e "\n${CYAN}Проверяем ${NC}$MIRROR"
-        if ! wget -q --spider --timeout=3 "https://$MIRROR/releases/" >/dev/null 2>&1; then
-            echo -e "$MIRROR ${RED}недоступен!${NC}"
-            return 1
-        fi      
-        echo -e "$MIRROR ${GREEN}доступен!${NC}"
-        sed -i "s|https://.*/releases/|https://$MIRROR/releases/|g" "$CONFZ"
-        echo -e "${CYAN}Проверяем обновление пакетов${NC}"
-        if $UPDATE >/dev/null 2>&1; then
-            echo -e "${GREEN}Обновление пакетов выполнено успешно!${NC}"
-            echo -e "${CYAN}Используем зеркало: ${NC}$MIRROR"
-            return 0
-        fi
-        echo -e "${RED}Ошибка обновления пакетов!${NC}"
-        cp /tmp/distfeeds.conf.bak "$CONFZ"
-        return 1
-}
     for MIRROR in \
         "openwrt.c3sl.ufpr.br" \
         "mirrors.ustc.edu.cn/openwrt" \
@@ -172,6 +172,7 @@ try_mirror() {
         "mirror.marwan.ma/openwrt" \
         "openwrt.pixeldeck.net" \
         "ftp.halifax.rwth-aachen.de/openwrt" \
+        "mirror-03.infra.openwrt.org" \
         "downloads.openwrt.org"
     do
         [ "$MIRROR" = "$CURRENT_MIRROR" ] && continue
@@ -1048,28 +1049,28 @@ if ! update_packages; then echo -e "\n${RED}Ошибка обновления с
 sed -i "s|https://.*/releases/|https://downloads.openwrt.org/releases/|g" "$CONFZ"; PAUSE; return 1; fi; echo -e "${GREEN}Пакеты обновлены! Зеркало работает!${NC}\n"; PAUSE; }
 curr_MIR() { if [ -f "$CONFZ" ]; then URL=$(head -n1 "$CONFZ"); case "$URL" in
 *mirror-03.infra.openwrt.org*) echo "infra.openwrt.org" ;;
-*tiguinet.net*) echo "Belgium" ;;
-*utwente.nl*) echo "Netherlands" ;;
-*freifunk.net*) echo "Germany" ;;
+*c3sl.ufpr.br*) echo "Brazil" ;;
+*ustc.edu.cn*) echo "China" ;;
+*tetaneutral.net*) echo "France" ;;
+*garr.it*) echo "Italy" ;;
+*marwan.ma*) echo "Morocco" ;;
+*pixeldeck.net*) echo "USA" ;;
 *rwth-aachen.de*) echo "Germany (RWTH Aachen)" ;;
-*ps.kz*) echo "Kazakhstan" ;;
-*sjtu.edu.cn*) echo "China" ;;
-*accum.se*) echo "Sweden" ;;
 *downloads.openwrt.org*) echo "default / OpenWrt" ;;
 *) echo "неизвестное" ;;
 esac; else echo "файл не найден"; fi; }
-menu_MIR() { while true; do clear; CURR=$(curr_MIR); echo -e "${MAGENTA}Меню выбора зеркала OpenWrt${NC}\n\n${YELLOW}Используется зеркало: ${GREEN}$CURR${NC}\n\n${CYAN}1)${NC} infra.openwrt.org\n${CYAN}2)${NC} China"
-echo -e "${CYAN}3)${NC} Germany\n${CYAN}4)${NC} Belgium\n${CYAN}5)${NC} Kazakhstan\n${CYAN}6)${NC} Netherlands\n${CYAN}7)${NC} Germany (RWTH Aachen)\n${CYAN}8)${NC} Sweden\n${CYAN}9)${NC} default / OpenWrt${NC}"
+menu_MIR() { while true; do clear; CURR=$(curr_MIR); echo -e "${MAGENTA}Меню выбора зеркала OpenWrt${NC}\n\n${YELLOW}Используется зеркало: ${GREEN}$CURR${NC}\n\n${CYAN}1)${NC} infra.openwrt.org\n${CYAN}2)${NC} Brazil"
+echo -e "${CYAN}3)${NC} China\n${CYAN}4)${NC} France\n${CYAN}5)${NC} Italy\n${CYAN}6)${NC} Morocco\n${CYAN}7)${NC} USA\n${CYAN}8)${NC} Germany (RWTH Aachen)\n${CYAN}9)${NC} default / OpenWrt${NC}"
 echo -e "${CYAN}Enter) ${GREEN}Выход в главное меню${NC}\n"
 echo -en "${YELLOW}Выберите зеркало: ${NC}"; read -r z; case "$z" in
 1) set_mirror "mirror-03.infra.openwrt.org" ;;
-2) set_mirror "mirror.sjtu.edu.cn/openwrt" ;;
-3) set_mirror "mirror.berlin.freifunk.net/downloads.openwrt.org" ;;
-4) set_mirror "mirror.tiguinet.net/openwrt" ;;
-5) set_mirror "mirror.ps.kz/openwrt" ;;
-6) set_mirror "ftp.snt.utwente.nl/pub/software/openwrt" ;;
-7) set_mirror "ftp.halifax.rwth-aachen.de/openwrt" ;;
-8) set_mirror "mirror.accum.se/mirror/openwrt.org" ;;
+2) set_mirror "openwrt.c3sl.ufpr.br" ;;
+3) set_mirror "mirrors.ustc.edu.cn/openwrt" ;;
+4) set_mirror "openwrt.tetaneutral.net" ;;
+5) set_mirror "openwrt.mirror.garr.it/mirrors/openwrt" ;;
+6) set_mirror "mirror.marwan.ma/openwrt" ;;
+7) set_mirror "openwrt.pixeldeck.net" ;;
+8) set_mirror "ftp.halifax.rwth-aachen.de/openwrt" ;;
 9) set_mirror "downloads.openwrt.org" ;;
 *) break ;;
 esac; done; }
