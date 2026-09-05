@@ -1654,14 +1654,14 @@ fi
 
 
 if ! echo "$ORDER" | grep -qE '^[0-9]+([[:space:]]+[0-9]+)*$'; then
-    echo -e "\n${RED}Ошибка: введите только числа через пробел!${NC}"
+    echo -e "\n${RED}Введите только числа через пробел!${NC}\n"
     PAUSE
     return
 fi
 
 for n in $ORDER; do
     if [ "$n" -lt 1 ] || [ "$n" -gt "$TOTAL" ]; then
-        echo -e "\n${RED}Неверный номер:${NC} $n (допустимы номера от 1 до $TOTAL)"
+        echo -e "\n${RED}Неверный номер! ${YELLOW}Введите номер от ${NC}1 ${YELLOW}до ${NC}$TOTAL\n"
         PAUSE
         return
     fi
