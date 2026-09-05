@@ -1619,74 +1619,97 @@ echo -e "\n${CYAN}Применяем и перезапускаем ${NC}Zapret";
 # Package Installer
 # ==========================================
 PAKET_INSTALL() {
-clear
-echo -e "${MAGENTA}Установка пакетов из ${NC}/root/\n"
+    while true; do
+        clear
+        echo -e "${MAGENTA}Установка пакетов из ${NC}/root/\n"
 
-FILES=$(find /root -maxdepth 1 -type f -name "*.${RAZ}" | sort)
-[ -z "$FILES" ] && {
-    echo -e "${RED}Файлы ${NC}*.${RAZ}${RED} не найдены в${NC} /root\n"
-    PAUSE
-    return
-}
-
-echo -e "${YELLOW}Найденные пакеты ${NC}*.${RAZ}${YELLOW}:${NC}\n"
-
-OLD_IFS=$IFS
-IFS='
-'
-set -- $FILES
-IFS=$OLD_IFS
-TOTAL=$#
-
-i=1
-for f in "$@"; do
-    echo -e "${CYAN}$i) ${GREEN}$(basename "$f")${NC}"
-    i=$((i + 1))
-done
-echo -e "${CYAN}Enter) ${GREEN}Вернуться в предыдущее меню${NC}"
-
-echo -ne "\n${YELLOW}Введите порядок установки (${NC}например: 2 1 3${YELLOW}):${NC} "
-read ORDER
-
-if [ -z "$ORDER" ]; then
-    return
-fi
-
-
-if ! echo "$ORDER" | grep -qE '^[0-9]+([[:space:]]+[0-9]+)*$'; then
-    echo -e "\n${RED}Введите только числа через пробел!${NC}\n"
-    PAUSE
-    break
-fi
-
-for n in $ORDER; do
-    if [ "$n" -lt 1 ] || [ "$n" -gt "$TOTAL" ]; then
-        echo -e "\n${RED}Неверный номер! ${YELLOW}Введите номер от ${NC}1 ${YELLOW}до ${NC}$TOTAL\n"
-        PAUSE
-        break
-    fi
-    
-    update_packages
-    
-    eval "FILE=\$$n"
-    if [ -f "$FILE" ]; then
-        NAME=$(basename "$FILE")
-        echo -e "${CYAN}Устанавливаем: ${NC}$NAME"
-        $INSTALL "$FILE" >/dev/null 2>&1 || {
-            echo -e "\n${RED}Ошибка установки${NC} $NAME\n"
+        FILES=$(find /root -maxdepth 1 -type f -name "*.${RAZ}" | sort)
+        [ -z "$FILES" ] && {
+            echo -e "${RED}Файлы ${NC}*.${RAZ}${RED} не найдены в${NC} /root\n"
             PAUSE
             return
         }
-        echo -e "$NAME ${GREEN}установлен!${NC}\n"
-    else
-        echo -e "${RED}Файл не найден:${NC} $FILE\n"
+
+        OLD_IFS=$IFS
+        IFS='
+'
+        set -- $FILES
+        IFS=$OLD_IFS
+        TOTAL=$#
+
+        echo -e "${YELLOW}Найденные пакеты ${NC}*.${RAZ}${YELLOW}:${NC}\n"
+
+        i=1
+        for f in "$@"; do
+            echo -e "${CYAN}$i) ${GREEN}$(basename "$f")${NC}"
+            i=$((i + 1))
+        done
+
+        echo -e "${CYAN}Enter) ${GREEN}Вернуться в предыдущее меню${NC}"
+
+        echo -ne "\n${YELLOW}Введите порядок установки (${NC}например: 2 1 3${YELLOW}):${NC} "
+        read ORDER
+        echo
+
+        # Enter — назад
+        if [ -z "$ORDER" ]; then
+            return
+        fi
+
+        # Неверные символы — остаёмся в этом меню
+        if ! echo "$ORDER" | grep -qE '^[0-9]+([[:space:]]+[0-9]+)*$'; then
+            echo -e "${RED}Введите только числа через пробел!${NC}\n"
+            PAUSE
+            continue
+        fi
+
+        # Проверяем все номера
+        INVALID=0
+
+        for n in $ORDER; do
+            if [ "$n" -lt 1 ] || [ "$n" -gt "$TOTAL" ]; then
+                echo -e "${RED}Неверный номер! ${YELLOW}Введите номер от ${NC}1 ${YELLOW}до ${NC}$TOTAL${NC}\n"
+                INVALID=1
+                break
+            fi
+        done
+
+        # Неверный номер — снова это же меню
+        if [ "$INVALID" = "1" ]; then
+            PAUSE
+            continue
+        fi
+
+        # Обновляем список пакетов только после корректного ввода
+        update_packages
+
+        # Устанавливаем в указанном порядке
+        for n in $ORDER; do
+            eval "FILE=\$$n"
+
+            if [ -f "$FILE" ]; then
+                NAME=$(basename "$FILE")
+
+                echo -e "${CYAN}Устанавливаем: ${NC}$NAME"
+
+                $INSTALL "$FILE" >/dev/null 2>&1 || {
+                    echo -e "\n${RED}Ошибка установки${NC} $NAME\n"
+                    PAUSE
+                    return
+                }
+
+                echo -e "$NAME ${GREEN}установлен!${NC}\n"
+            else
+                echo -e "${RED}Файл не найден:${NC} $FILE\n"
+                PAUSE
+                return
+            fi
+        done
+
+        echo -e "${GREEN}Установка завершена!${NC}\n"
         PAUSE
         return
-    fi
-done
-
-echo -e "${GREEN}Установка завершена!${NC}\n"
-PAUSE
+    done
 }
 # ==========================================
 # Главное меню
