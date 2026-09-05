@@ -1659,15 +1659,15 @@ if ! echo "$ORDER" | grep -qE '^[0-9]+([[:space:]]+[0-9]+)*$'; then
     return
 fi
 
-update_packages
-
 for n in $ORDER; do
     if [ "$n" -lt 1 ] || [ "$n" -gt "$TOTAL" ]; then
         echo -e "\n${RED}Неверный номер:${NC} $n (допустимы номера от 1 до $TOTAL)"
         PAUSE
         return
     fi
-
+    
+    update_packages
+    
     eval "FILE=\$$n"
     if [ -f "$FILE" ]; then
         NAME=$(basename "$FILE")
