@@ -1043,11 +1043,34 @@ ok=$((ok+1)); else right_status="[${RED}FAIL${NC}]"; fi; checked=$((checked+1));
 # ==========================================
 # Смена зеркала
 # ==========================================
-set_mirror() { NEW_BASE="$1"; echo -e "\n${CYAN}Проверяем доступность ${NC}$NEW_BASE"
-if ! wget -q --spider --timeout=5 "https://$NEW_BASE/releases/" >/dev/null 2>&1; then echo -e "${RED}Зеркало недоступно!${NC}\n"; PAUSE; return 1; fi
-sed -i "s|https://.*/releases/|https://$NEW_BASE/releases/|g" "$CONFZ"; echo -e "${GREEN}Зеркало доступно!${NC}"
-if ! update_packages; then echo -e "\n${RED}Ошибка обновления списка пакетов!${NC}\n${GREEN}Зеркало сброшено на ${NC}default ${GREEN}/${NC} OpenWrt${GREEN}!${NC}\n"
-sed -i "s|https://.*/releases/|https://downloads.openwrt.org/releases/|g" "$CONFZ"; PAUSE; return 1; fi; echo -e "${GREEN}Пакеты обновлены! Зеркало работает!${NC}\n"; PAUSE; }
+set_mirror() {
+    NEW_BASE="$1"
+    echo -e "\n${CYAN}Проверяем ${NC}$NEW_BASE"
+    if ! wget -q --spider --timeout=3 "https://$NEW_BASE/releases/" >/dev/null 2>&1; then
+        echo -e "$NEW_BASE ${RED}недоступен!${NC}\n"
+        PAUSE
+        return 1
+    fi
+    echo -e "$NEW_BASE ${GREEN}доступен!${NC}"
+    cp "$CONFZ" /tmp/distfeeds.conf.bak
+    sed -i "s|https://.*/releases/|https://$NEW_BASE/releases/|g" "$CONFZ"
+    echo -e "${CYAN}Проверяем обновление пакетов${NC}"
+    if $UPDATE >/dev/null 2>&1; then
+        echo -e "${GREEN}Обновление пакетов выполнено успешно!${NC}"
+        echo -e "${CYAN}Используем зеркало: ${NC}$NEW_BASE"
+        rm -f /tmp/distfeeds.conf.bak
+        PACKAGES_UPDATED=1
+        PAUSE
+        return 0
+    fi
+    echo -e "${RED}Ошибка обновления пакетов!${NC}"
+    echo -e "${CYAN}Возвращаем предыдущее зеркало${NC}"
+    cp /tmp/distfeeds.conf.bak "$CONFZ"
+    rm -f /tmp/distfeeds.conf.bak
+    echo -e "${GREEN}Предыдущее зеркало восстановлено!${NC}\n"
+    PAUSE
+    return 1
+}
 curr_MIR() { if [ -f "$CONFZ" ]; then URL=$(head -n1 "$CONFZ"); case "$URL" in
 *mirror-03.infra.openwrt.org*) echo "Infra OpenWrt" ;;
 *c3sl.ufpr.br*) echo "Brazil" ;;
