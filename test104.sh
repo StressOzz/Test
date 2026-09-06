@@ -1643,14 +1643,14 @@ echo -e "\n${CYAN}Применяем и перезапускаем ${NC}Zapret";
 SHOW_OUTPUT=${SHOW_OUTPUT:-0}
 PAKET_INSTALL() {
     while true; do
-        clear
-        echo -e "${MAGENTA}Установка пакетов из ${NC}/root/\n"
-        FILES=$(find /root -maxdepth 1 -type f -name "*.${RAZ}" | sort)
         [ -z "$FILES" ] && {
-            echo -e "${RED}Файлы ${NC}*.${RAZ}${RED} не найдены в${NC} /root\n"
+            echo -e "\n${RED}Файлы ${NC}*.${RAZ}${RED} не найдены в${NC} /root\n"
             PAUSE
             return
         }
+        clear
+        echo -e "${MAGENTA}Установка пакетов из ${NC}/root/\n"
+        FILES=$(find /root -maxdepth 1 -type f -name "*.${RAZ}" | sort)
         OLD_IFS=$IFS
         IFS='
 '
