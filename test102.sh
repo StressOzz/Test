@@ -1640,35 +1640,36 @@ echo -e "\n${CYAN}Применяем и перезапускаем ${NC}Zapret";
 # ==========================================
 # Package Installer
 # ==========================================
+SHOW_OUTPUT=${SHOW_OUTPUT:-0}
 PAKET_INSTALL() {
     while true; do
         clear
         echo -e "${MAGENTA}Установка пакетов из ${NC}/root/\n"
-
         FILES=$(find /root -maxdepth 1 -type f -name "*.${RAZ}" | sort)
         [ -z "$FILES" ] && {
             echo -e "${RED}Файлы ${NC}*.${RAZ}${RED} не найдены в${NC} /root\n"
             PAUSE
             return
         }
-
         OLD_IFS=$IFS
         IFS='
 '
         set -- $FILES
         IFS=$OLD_IFS
         TOTAL=$#
-
         echo -e "${YELLOW}Найденные пакеты ${NC}*.${RAZ}${YELLOW}:${NC}\n"
-
         i=1
         for f in "$@"; do
             echo -e "${CYAN}$i) ${GREEN}$(basename "$f")${NC}"
             i=$((i + 1))
         done
-
+        if [ "$SHOW_OUTPUT" = "1" ]; then
+            STATE="${GREEN}ВКЛ${NC}"
+        else
+            STATE="${RED}ВЫКЛ${NC}"
+        fi
+        echo -e "${CYAN}0) ${YELLOW}Вывод установки: ${NC}$STATE"
         echo -e "${CYAN}Enter) ${GREEN}Вернуться в предыдущее меню${NC}"
-
         echo -ne "\n${YELLOW}Введите порядок установки (${NC}например: 2 1 3${YELLOW}):${NC} "
         read ORDER
         echo
@@ -1677,14 +1678,21 @@ PAKET_INSTALL() {
             return
         fi
 
+        if [ "$ORDER" = "0" ]; then
+            if [ "$SHOW_OUTPUT" = "1" ]; then
+                SHOW_OUTPUT=0
+            else
+                SHOW_OUTPUT=1
+            fi
+            continue
+        fi
+
         if ! echo "$ORDER" | grep -qE '^[0-9]+([[:space:]]+[0-9]+)*$'; then
             echo -e "${RED}Введите только числа через пробел!${NC}\n"
             PAUSE
             continue
         fi
-
         INVALID=0
-
         for n in $ORDER; do
             if [ "$n" -lt 1 ] || [ "$n" -gt "$TOTAL" ]; then
                 echo -e "${RED}Неверный номер! ${YELLOW}Введите номер от ${NC}1 ${YELLOW}до ${NC}$TOTAL${NC}\n"
@@ -1692,29 +1700,29 @@ PAKET_INSTALL() {
                 break
             fi
         done
-
         if [ "$INVALID" = "1" ]; then
             PAUSE
             continue
         fi
-
-
         update_packages
-
         for n in $ORDER; do
             eval "FILE=\$$n"
-
             if [ -f "$FILE" ]; then
                 NAME=$(basename "$FILE")
-
                 echo -e "${CYAN}Устанавливаем: ${NC}$NAME"
-
-                $INSTALL "$FILE" >/dev/null 2>&1 || {
-                    echo -e "\n${RED}Ошибка установки${NC} $NAME\n"
-                    PAUSE
-                    continue
-                }
-
+                if [ "$SHOW_OUTPUT" = "1" ]; then
+                    $INSTALL "$FILE" || {
+                        echo -e "\n${RED}Ошибка установки${NC} $NAME\n"
+                        PAUSE
+                        continue
+                    }
+                else
+                    $INSTALL "$FILE" >/dev/null 2>&1 || {
+                        echo -e "\n${RED}Ошибка установки${NC} $NAME\n"
+                        PAUSE
+                        continue
+                    }
+                fi
                 echo -e "$NAME ${GREEN}установлен!${NC}\n"
             else
                 echo -e "${RED}Файл не найден:${NC} $FILE\n"
@@ -1722,7 +1730,6 @@ PAKET_INSTALL() {
                 continue
             fi
         done
-
         echo -e "${GREEN}Установка завершена!${NC}\n"
         PAUSE
         continue
