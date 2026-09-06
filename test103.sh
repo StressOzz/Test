@@ -1664,11 +1664,11 @@ PAKET_INSTALL() {
             i=$((i + 1))
         done
         if [ "$SHOW_OUTPUT" = "1" ]; then
-            STATE="${GREEN}ВКЛ${NC}"
+            STATE="ВКЛ"
         else
-            STATE="${RED}ВЫКЛ${NC}"
+            STATE="ВЫКЛ"
         fi
-        echo -e "${CYAN}0) ${YELLOW}Вывод установки: ${NC}$STATE"
+        echo -e "\n${CYAN}0) ${GREEN}Вывод установки: ${NC}$STATE"
         echo -e "${CYAN}Enter) ${GREEN}Вернуться в предыдущее меню${NC}"
         echo -ne "\n${YELLOW}Введите порядок установки (${NC}например: 2 1 3${YELLOW}):${NC} "
         read ORDER
