@@ -650,7 +650,7 @@ echo -e "Zapret ${GREEN}и${NC} Zapret2 ${GREEN}полностью удален�
 # ==========================================
 # Тест стратегии для Ютуб
 # ==========================================
-YOUTUBE_TEST_MENU() { echo -e "\n${MAGENTA}Выберите способ тестирования стратегий для Youtube${NC}"; echo -e "${CYAN}1) ${GREEN}Тестировать каждую стратегию отдельно${NC}"; echo -e "${CYAN}2) ${GREEN}Тестировать все стратегии сразу${NC}"; echo -e "${CYAN}3) ${GREEN}Тестировать стратегии из ${NC}/root/custom_test.txt${GREEN} по очереди${NC}"
+YOUTUBE_TEST_MENU() { echo -e "\n${MAGENTA}Выберите способ тестирования стратегий для Youtube${NC}"; echo -e "${CYAN}1) ${GREEN}Тестировать каждую стратегию отдельно${NC}"; echo -e "${CYAN}2) ${GREEN}Тестировать все стратегии сразу${NC}"; echo -e "${CYAN}3) ${GREEN}Тестировать стратегии из ${NC}/root/custom_test.txt"
 echo -ne "${CYAN}Enter) ${GREEN}Вернуться в предыдущее меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read -r yt_choice; case "$yt_choice" in 1) auto_stryou ;; 2) run_test_youtube_all ;; 3) run_test_youtube_custom ;; *) return ;; esac; }
 run_test_youtube_custom() { if [ ! -s "$CUSTOM_STR_FILE" ]; then echo -e "\n${RED}Файл ${NC}$CUSTOM_STR_FILE${RED} не найден!${NC}\n"; PAUSE; return 1; fi
 mkdir -p "$TMP_SF"; : > "$STR_FILE"; cp "$CUSTOM_STR_FILE" "$STR_FILE"; sed -i 's/\r$//' "$STR_FILE"; sed -i '/^[[:space:]]*$/d' "$STR_FILE"; sed -i 's/^[[:space:]]*//;s/[[:space:]]*$//' "$STR_FILE"
