@@ -291,7 +291,11 @@ echo -e "${CYAN}Скачиваем ${NC}$MAIN_FILE2"; curl -L -s --connect-timeo
 if [ -n "$LUCI_FILE2" ]; then echo -e "${CYAN}Скачиваем ${NC}$LUCI_FILE2"; curl -L -s --connect-timeout 10 "${ZAPRET2_BASE_URL}${LUCI_FILE2}" -o "$ZAPRET2_TMP_DIR/$LUCI_FILE2"; fi
 echo -e "${CYAN}Устанавливаем ${NC}Zapret2"; $INSTALL "$ZAPRET2_TMP_DIR"/*.${RAZ} >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось установить ${NC}Zapret2\n"; rm -rf "$ZAPRET2_TMP_DIR"; PAUSE; return 1; }
 rm -rf "$ZAPRET2_TMP_DIR"; echo -e "${CYAN}Добавляем домены в исключения${NC}"; wget -q -U "Mozilla/5.0" -O /opt/zapret2/ipset/zapret_hosts_user_exclude.txt "$EXCLUDE_URL" || echo -e "${RED}Не удалось загрузить exclude файл${NC}"
-echo -e "${CYAN}Включаем стратегию по умолчанию${NC}"; sed -i "/config strategy 'default'/,/config /s/option enabled '0'/option enabled '1'/" /etc/config/zapret2 >/dev/null 2>&1
+# echo -e "${CYAN}Включаем стратегию по умолчанию${NC}"; sed -i "/config strategy 'default'/,/config /s/option enabled '0'/option enabled '1'/" /etc/config/zapret2 >/dev/null 2>&1
+echo -e "${CYAN}Настраиваем стратегии${NC}"
+wget -q -U "Mozilla/5.0" -O /opt/zapret2/init.d/openwrt/custom.d/50-discord_media.sh "https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/files/Zapret2/50-discord_media.sh" || echo -e "${RED}Не удалось загрузить ${NC}50-discord_media.sh"
+wget -q -U "Mozilla/5.0" -O /etc/config/zapret2 "https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/files/Zapret2/zapret2" || echo -e "${RED}Не удалось загрузить ${NC}zapret2"
+wget -q -U "Mozilla/5.0" -O /opt/zapret2/ipset/zapret_hosts_discord.txt "https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/files/Zapret2/zapret_hosts_discord.txt" || echo -e "${RED}Не удалось загрузить ${NC}zapret_hosts_discord.txt"
 echo -e "${CYAN}Запускаем ${NC}Zapret2"; /etc/init.d/zapret2 enable >/dev/null 2>&1; /etc/init.d/zapret2 restart >/dev/null 2>&1; echo -e "Zapret2 ${GREEN}установлен!${NC}\n"; PAUSE; }
 remove_zapret2() { echo -e "\n${MAGENTA}Удаляем Zapret2${NC}"; echo -e "${CYAN}Останавливаем ${NC}zapret2"; /etc/init.d/zapret2 stop >/dev/null 2>&1
 echo -e "${CYAN}Удаляем пакеты${NC}"; $DELETE luci-app-zapret2 >/dev/null 2>&1; $DELETE zapret2 >/dev/null 2>&1; echo -e "${CYAN}Удаляем файлы${NC}"; rm -f /etc/config/zapret2; rm -rf /opt/zapret2; echo -e "Zapret2 ${GREEN}удалён!${NC}\n"; PAUSE; }
