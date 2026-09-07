@@ -105,7 +105,7 @@ GITH_RAW="#githubusercontent.com\n146.75.22.132 objects.githubusercontent.com re
 GITH="#github.com\n140.82.114.3 github.com\n185.199.110.154 github.githubassets.com\n185.199.110.133 camo.githubassets.com"
 USoft="#Ubisoft\n52.6.7.14 ubi.com\n172.67.139.108 r6s.com\n54.155.2.87 rainbow6.com\n52.222.149.31 ubisoft.com\n54.76.54.196 uplay.ubisoft.com\n2.23.89.92 static3.cdn.ubi.com
 18.209.141.203 connect.ubisoft.com\n2.23.89.244 ubiservices.cdn.ubi.com\n99.83.188.134 public-ubiservices.ubi.com\n3.33.249.140 public-ws-ubiservices.ubi.com\n"
-updDIS="#updates.discord.com\n162.159.138.232 updates.discord.com\n162.159.137.232 updates.discord.com\n162.159.128.233 updates.discord.com\n162.159.135.232 updates.discord.com"
+updDIShost="#updates.discord.com\n162.159.138.232 updates.discord.com\n162.159.137.232 updates.discord.com\n162.159.128.233 updates.discord.com\n162.159.135.232 updates.discord.com"
 ROBLOXhost="#tr.rbxcdn.com\n108.156.22.8 tr.rbxcdn.com\n108.157.32.114 tr.rbxcdn.com\n18.65.147.108 tr.rbxcdn.com\n18.65.147.112 tr.rbxcdn.com\n13.224.181.18 tr.rbxcdn.com\n13.224.181.74 tr.rbxcdn.com\n
 54.230.253.22 tr.rbxcdn.com\n54.230.253.81 tr.rbxcdn.com\n54.230.253.48 tr.rbxcdn.com\n54.230.253.59 tr.rbxcdn.com\n143.204.214.34 tr.rbxcdn.com\n143.204.214.67 tr.rbxcdn.com\n
 143.204.214.92 tr.rbxcdn.com\n99.84.181.25 tr.rbxcdn.com\n99.84.181.63 tr.rbxcdn.com\n65.8.158.45 tr.rbxcdn.com\n65.8.158.112 tr.rbxcdn.com"
@@ -883,11 +883,11 @@ echo -e "${CYAN} 0) ${GREEN}$(get_state "$NALOG")${NC} nalog.ru\n${CYAN} 1) ${GR
 echo -e "${CYAN} 3) ${GREEN}$(get_state "$INSTAGRAM")${NC} Instagram & Facebook\n${CYAN} 4) ${GREEN}$(get_state "$LIBRUSEC")${NC} lib.rus.ec\n${CYAN} 5) ${GREEN}$(get_state "$AI")${NC} AI сервисы"
 echo -e "${CYAN} 6) ${GREEN}$(get_state "$TWCH")${NC} Twitch\n${CYAN} 7) ${GREEN}$(get_state "$TGWeb")${NC} Telegram Web\n${CYAN} 8) ${GREEN}$(get_state "$SPFY")${NC} Spotify\n${CYAN} 9) ${GREEN}$(get_state "$SPFYEXT")${NC} Spotify extended"
 echo -e "${CYAN}10) ${GREEN}$(get_state "$SCell")${NC} Supercell\n${CYAN}11) ${GREEN}$(get_state "$GITH_RAW")${NC} githubusercontent.com\n${CYAN}12) ${GREEN}$(get_state "$GITH")${NC} github.com\n${CYAN}13) ${GREEN}$(get_state "$USoft")${NC} Ubisoft"
-echo -e "${CYAN}14) ${GREEN}$(get_state "$TAPEop")${NC} tapeop.dev\n${CYAN}15) ${GREEN}$(get_state "$ROBLOXhost")${NC} картинки Roblox\n${CYAN}16) ${GREEN}$(get_state "$updDIS")${NC} updates.discord.com\n${CYAN}17) $S_ALL\n${CYAN}18) ${GREEN}Заменить ${NC}hosts${GREEN} на ${NC}GeoHide hosts"
+echo -e "${CYAN}14) ${GREEN}$(get_state "$TAPEop")${NC} tapeop.dev\n${CYAN}15) ${GREEN}$(get_state "$ROBLOXhost")${NC} картинки Roblox\n${CYAN}16) ${GREEN}$(get_state "$updDIShost")${NC} updates.discord.com\n${CYAN}17) $S_ALL\n${CYAN}18) ${GREEN}Заменить ${NC}hosts${GREEN} на ${NC}GeoHide hosts"
 echo -e "${CYAN}19) ${GREEN}Заменить ${NC}hosts${GREEN} на ${NC}Mafioznik hosts\n${CYAN}20) ${GREEN}Заменить ${NC}hosts${GREEN} на ${NC}Malw.link hosts\n${CYAN}21) ${GREEN}Восстановить ${NC}hosts"
 echo -ne "${CYAN}Enter) ${GREEN}Вернуться в предыдущее меню${NC}\n\n${YELLOW}Выберите пункт:${NC} ";read -r c; case "$c" in 0) toggle_block "$NALOG";; 1) toggle_block "$RUTOR";; 2) toggle_block "$NTC";; 3) toggle_block "$INSTAGRAM";;
 4) toggle_block "$LIBRUSEC";; 5) toggle_block "$AI";; 6) toggle_block "$TWCH";; 7) toggle_block "$TGWeb";; 8) toggle_block "$SPFY";; 9) toggle_block "$SPFYEXT";; 10) toggle_block "$SCell";; 11) toggle_block "$GITH_RAW";; 12) toggle_block "$GITH";;
-13) toggle_block "$USoft";; 14) toggle_block "$TAPEop";; 15) toggle_block "$ROBLOXhost";; 16) toggle_block "$updDIS";; 17) toggle_all;; 18) menu_GEO_HOSTS;;
+13) toggle_block "$USoft";; 14) toggle_block "$TAPEop";; 15) toggle_block "$ROBLOXhost";; 16) toggle_block "$updDIShost";; 17) toggle_all;; 18) menu_GEO_HOSTS;;
 19) echo -e "\n${MAGENTA}Заменяем hosts на Mafioznik hosts${NC}"; wget -qO /etc/hosts ${GH_RAW}/StressOzz/Zapret-Manager/refs/heads/main/files/hosts_mafioznik.txt >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось скачать файл hosts${NC}\n"; PAUSE; }
 /etc/init.d/dnsmasq restart >/dev/null 2>&1; echo -e "hosts ${GREEN}заменён на ${NC}Mafioznik hosts${GREEN}!${NC}\n"; PAUSE;; 20) echo -e "\n${MAGENTA}Заменяем hosts на Malw.link hosts${NC}"
 wget -qO /etc/hosts ${GH_RAW}/StressOzz/Zapret-Manager/refs/heads/main/files/hosts_malw.link.txt >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось скачать файл hosts${NC}\n"; PAUSE; }
