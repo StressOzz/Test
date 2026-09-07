@@ -1137,7 +1137,7 @@ install_update_TGWS() {
 
     TGWS_STARTED=0
 
-    for i in $(seq 1 30); do
+    for i in $(seq 1 40); do
         if [ -n "$(tgws status 2>/dev/null)" ]; then
             TGWS_STARTED=1
             break
