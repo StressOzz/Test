@@ -1425,6 +1425,7 @@ else echo -e "\n${RED}Удаление невозможно!${NC}"; echo -e "Amn
 # Информация
 # ==========================================
 INFO_ZPR() {
+get_TGWS_version
     local ONLY_ZAPRET="$1"
     if [ -f /etc/init.d/zapret ]; then
         /etc/init.d/zapret status >/dev/null 2>&1 && ZAPRET_STATUS="${GREEN}запущен${NC} $NFQ_STAT" || ZAPRET_STATUS="${RED}остановлен${NC}"
