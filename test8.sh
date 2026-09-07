@@ -1479,12 +1479,14 @@ get_TGWS_version
 
         
 if [ -n "$(tgws status 2>/dev/null)" ]; then
-    if [ -n "$INSTALLED_VER_TGWS" ] && [ -n "$TG_TGWS_VERSION" ] && [ "$INSTALLED_VER_TGWS" != "$TG_TGWS_VERSION" ]; then
+    if [ -n "$INSTALLED_VER_TGWS" ] && [ -n "$TGWS_VERSION" ] && [ "$INSTALLED_VER_TGWS" != "$TGWS_VERSION" ]; then
         TGSTATUS="${TGSTATUS:+$TGSTATUS/}${RED}sTGWS NEW${GREEN}"
     else
         TGSTATUS="${TGSTATUS:+$TGSTATUS/}${NC}sTGWS${GREEN}"
     fi
 fi
+
+
 
         
         if [ -n "$TGSTATUS" ]; then
