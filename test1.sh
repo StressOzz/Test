@@ -1198,7 +1198,7 @@ reconfigure_TGWS() {
     if command -v tgws >/dev/null 2>&1; then
         tgws pick >/dev/null 2>&1
 
-        sleep 5
+        sleep 6
         /etc/init.d/tgws restart >/dev/null 2>&1
         sleep 3
         get_TGWS_domain
@@ -1329,7 +1329,7 @@ else echo -e "${YELLOW}TG WS Proxy Rust версия:${NC} ${GREEN}$INSTALLED_VE
 echo -e "${YELLOW}Ссылка для подключения:${NC}"; echo -e "tg://socks?server=$LAN_IP&port=2080"; fi; if pgrep -f tg-ws-proxy-rs >/dev/null 2>&1 && [ -f "$BIN_PATH_RS" ] && [ -f "$INIT_PATH_RS" ]; then SECRET_IN_RS="$(sed -n 's/.*--secret[[:space:]]*\([0-9a-fA-F]\{32\}\).*/\1/p' "$INIT_PATH_RS")"; echo -e "\n${YELLOW}Настройки ${CYAN}TG WS Proxy Rust${YELLOW}:${NC}"
 echo -e "${YELLOW}Тип прокси:${NC} MTProto\n${YELLOW}Хост:${NC} $LAN_IP\n${YELLOW}Порт:${NC} 2443\n${YELLOW}Ключ:${NC} dd$SECRET_IN_RS\n${YELLOW}Ссылка для подключения:${NC}\ntg://proxy?server=$LAN_IP&port=2443&secret=dd$SECRET_IN_RS"; fi; if pidof tg-ws-proxy >/dev/null 2>&1 && [ -f "/etc/init.d/tg-ws-proxy" ]
 then SECRET_CONF="$(grep '^SECRET=' "$SECRET_FILE" 2>/dev/null | cut -d'=' -f2)"; echo -e "\n${YELLOW}Настройки ${CYAN}TG WS Proxy MTProto${YELLOW}:${NC}\n${YELLOW}Тип прокси:${NC} MTProto\n${YELLOW}Хост:${NC} $LAN_IP\n${YELLOW}Порт:${NC} 1443\n${YELLOW}Ключ:${NC} dd$SECRET_CONF"
-echo -e "${YELLOW}Ссылка для подключения:${NC}\ntg://proxy?server=$LAN_IP&port=1443&secret=dd$SECRET_CONF"; fi; echo -e "\n${CYAN}1)${GREEN} Меню ${NC}sTGWS${NC}"
+echo -e "${YELLOW}Ссылка для подключения:${NC}\ntg://proxy?server=$LAN_IP&port=1443&secret=dd$SECRET_CONF"; fi; echo -e "\n${CYAN}1)${GREEN} Меню ${NC}sTGWS${NC} ${GREEN}(${NC}beta${GREEN})${NC}"
 case "$GO_ACTION" in install) echo -e "${CYAN}2)${GREEN} Установить ${NC}TG WS Proxy SOCKS5" ;; update) echo -e "${CYAN}2)${GREEN} Обновить ${NC}TG WS Proxy SOCKS5" ;;
 installed) echo -e "${CYAN}2)${GREEN} Удалить ${NC}TG WS Proxy SOCKS5" ;; esac; case "$RS_ACTION" in install) echo -e "${CYAN}3)${GREEN} Установить ${NC}TG WS Proxy Rust" ;; update) echo -e "${CYAN}3)${GREEN} Обновить ${NC}TG WS Proxy Rust" ;;
 installed) echo -e "${CYAN}3)${GREEN} Удалить ${NC}TG WS Proxy Rust" ;; esac; case "$MT_ACTION" in install) echo -e "${CYAN}4)${GREEN} Установить ${NC}TG WS Proxy MTProto" ;; update) echo -e "${CYAN}4)${GREEN} Обновить ${NC}TG WS Proxy MTProto" ;;
