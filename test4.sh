@@ -1137,7 +1137,7 @@ install_update_TGWS() {
         PAUSE
         return
         else
-       echo -e "\nsTGWS ${GREEN}установлен!${NC}\n"     
+       echo -e "sTGWS ${GREEN}установлен!${NC}"     
     fi
 
     echo -e "${CYAN}Подбираем домен${NC}"
@@ -1180,6 +1180,13 @@ remove_TGWS() {
 }
 
 restart_TGWS() {
+    if [ ! -x /etc/init.d/tgws ]; then
+        echo -e "\nsTGWS ${RED}не установлен!${NC}\n"
+        PAUSE
+        return   
+    fi
+    
+    
     echo -e "\n${MAGENTA}Перезапускаем sTGWS${NC}"
 
     if [ -x /etc/init.d/tgws ]; then
@@ -1200,6 +1207,13 @@ restart_TGWS() {
 }
 
 reconfigure_TGWS() {
+
+    if [ ! -x /etc/init.d/tgws ]; then
+        echo -e "\nsTGWS ${RED}не установлен!${NC}\n"
+        PAUSE
+        return   
+    fi
+    
     echo -e "\n${MAGENTA}Подбираем новый домен${NC}"
     echo -ne "${YELLOW}Подождите...${NC}\n"
 
