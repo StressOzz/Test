@@ -1130,14 +1130,21 @@ install_update_TGWS() {
     echo -e "\n${MAGENTA}Устанавливаем sTGWS${NC}"
     echo -e "${CYAN}Запускаем оригинальный установщик${NC}"
 
-    wget -q -O - "$TGWS_INSTALL_URL" 2>/dev/null | sh >/dev/null 2>&1
+    if ! wget -q -U "Mozilla/5.0" -O /tmp/tgws.sh "https://gitlab.com/xyzmean/brb/-/raw/main/install-tgws.sh"; then
+        echo -e "\n${RED}Не удалось скачать установщик sTGWS!${NC}\n"
+        rm -f /tmp/tgws.sh
+        PAUSE
+        return
+    fi
+
+    sh /tmp/tgws.sh >/dev/null 2>&1
+    rm -f /tmp/tgws.sh
+    
 
     if [ ! -x /etc/init.d/tgws ]; then
         echo -e "\n${RED}Установка sTGWS не удалась!${NC}\n"
         PAUSE
-        return
-        else
-       echo -e "sTGWS ${GREEN}установлен!${NC}"     
+        return  
     fi
 
     echo -e "${CYAN}Подбираем домен${NC}"
