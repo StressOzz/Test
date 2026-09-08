@@ -17,7 +17,7 @@ TGWS_BASE="https://gitlab.com/xyzmean/brb/-/raw/main"
 TGWS_INSTALL_URL="${TGWS_BASE}/install-tgws.sh"
 
 ZAPRET_VERSION="72.20260307"; PODKOP_LATEST_VER="0.9.6"; TG_MTProto="0.10"; MT_VERSION="0.8.2"; ZAPRET2_VERSION="1.0.4"
-SPL_VER="26.8.1.3"; TG_GO_VERSION="1.4.1"; TG_RS_VERSION="2.2.5"; BYEDPI_LATEST_VER="0.17.3"; TGWS_VERSION="0.2.1"
+SPL_VER="26.8.1.3"; TG_GO_VERSION="1.4.1"; TG_RS_VERSION="2.2.5"; BYEDPI_LATEST_VER="0.17.3"; TGWS_VERSION="0.2.3"
 
 echo "sh <(wget -q -O - ${GH_RAW}/StressOzz/Zapret-Manager/main/Zapret-Manager.sh)" > /usr/bin/zms; chmod +x /usr/bin/zms
 echo "sh <(wget -q -O - ${GH_RAW}/StressOzz/Zapret-Manager/main/Zapret-Manager.sh) \"\$@\"" > /usr/bin/zmsA; chmod +x /usr/bin/zmsA
@@ -437,7 +437,7 @@ then echo -e "${CYAN}Зона${NC} firewall ${CYAN}для ${NC}$WARP_IFACE уж�
 # ──────────────────────────── main ──────────────────────────────────────────
 SPL_V_VER() { if [ "$PKG_IS_APK" -eq 1 ]; then SPL_INST_VER=$(awk '$0=="P:splify"{f=1} f&&/^V:/{v=substr($0,3);sub(/-r[0-9]+$/,"",v);print v;exit}' /lib/apk/db/installed); else SPL_INST_VER=$(opkg list-installed splify 2>/dev/null | awk '{sub(/(-r[0-9]+|-[0-9]+)$/, "", $3); print $3}'); fi; }
 SPL_MENU() { while true; do SPL_V_VER; UPD_SPL="0"; mkdir -p "$TMP_SPL"; clear; echo -e "${MAGENTA}Меню splify${NC}\n"; if [ -z "$SPL_INST_VER" ]; then SPL_STATUS="${RED}не установлен${NC}"; elif [ "$SPL_VER" = "$SPL_INST_VER" ]; then SPL_STATUS="${GREEN}$SPL_INST_VER${NC}"
-else SPL_STATUS="${RED}$SPL_INST_VER (версия устарела)${NC}"; UPD_SPL="1"; fi; echo -e "${YELLOW}splify:    $SPL_STATUS" 
+else SPL_STATUS="${RED}$SPL_INST_VER (доступно обновление)${NC}"; UPD_SPL="1"; fi; echo -e "${YELLOW}splify:    $SPL_STATUS" 
 if [ -f /etc/init.d/steer ]; then echo -e "${YELLOW}splify2:${NC}   ${GREEN}установлен${NC}"; fi
 if pkg_is_installed amneziawg-tools && pkg_is_installed luci-proto-amneziawg && pkg_is_installed kmod-amneziawg
 then echo -e "${YELLOW}AmneziaWG: ${GREEN}установлен${NC}"; else echo -e "${YELLOW}AmneziaWG: ${RED}не установлен${NC}"; fi; if uci -q get network.warp0 >/dev/null 2>&1; then echo -e "${YELLOW}Интерфейс: ${GREEN}установлен${NC}"
@@ -1133,16 +1133,18 @@ install_update_TGWS() {
     wget -q -O - "$TGWS_INSTALL_URL" 2>/dev/null | sh >/dev/null 2>&1
 
     echo -e "${CYAN}Подбираем домен${NC}"
+    /etc/init.d/tgws enable >/dev/null 2>&1    
+    /etc/init.d/tgws restart >/dev/null 2>&1
     echo -ne "${YELLOW}Подождите...${NC}\n"
-
+    tgws pick >/dev/null 2>&1
     TGWS_STARTED=0
 
-    for i in $(seq 1 40); do
+    for i in $(seq 1 20); do
         if [ -n "$(tgws status 2>/dev/null)" ]; then
             TGWS_STARTED=1
             break
         fi
-        sleep 2
+        sleep 5
     done
 
     if [ "$TGWS_STARTED" = "1" ]; then
@@ -1224,7 +1226,7 @@ menu_TGWS() {
 
         if [ -n "$(tgws status 2>/dev/null)" ]; then
             echo -e "\n${YELLOW}sTGWS:${NC} ${GREEN}запущен${NC}"
-            [ -n "$TGWS_DOMAIN" ] && echo -e "${YELLOW}Домен sTGWS:${NC} ${GREEN}${TGWS_DOMAIN}${NC}"
+            [ -n "$TGWS_DOMAIN" ] && echo -e "${YELLOW}Домен sTGWS: ${NC}${TGWS_DOMAIN}"
         fi
 
         if [ -n "$INSTALLED_VER_TGWS" ]; then
@@ -1321,8 +1323,8 @@ if [ -n "$(tgws status 2>/dev/null)" ]; then
     fi
 fi
 if [ -n "$TGSTATUS" ]; then echo -e "${YELLOW}TG WS Proxy:${NC} ${GREEN}запущен [${TGSTATUS}]${NC}"; fi
-if [ -n "$INSTALLED_VER_MT" ]; then if [ "$MT_ACTION" = "update" ]; then echo -e "${YELLOW}TG WS Proxy MTProto версия:${NC} ${RED}$INSTALLED_VER_MT (версия устарела)${NC}"; else echo -e "${YELLOW}TG WS Proxy MTProto версия:${NC} ${GREEN}$INSTALLED_VER_MT${NC}"; fi; fi; if [ -n "$INSTALLED_VER_GO" ]; then if [ "$GO_ACTION" = "update" ]
-then echo -e "${YELLOW}TG WS Proxy SOCKS5 версия:${NC} ${RED}$INSTALLED_VER_GO (версия устарела)${NC}"; else echo -e "${YELLOW}TG WS Proxy SOCKS5 версия:${NC} ${GREEN}$INSTALLED_VER_GO${NC}"; fi; fi; if [ -n "$INSTALLED_VER_RS" ]; then if [ "$RS_ACTION" = "update" ]; then echo -e "${YELLOW}TG WS Proxy Rust версия:${NC} ${RED}$INSTALLED_VER_RS (версия устарела)${NC}"
+if [ -n "$INSTALLED_VER_MT" ]; then if [ "$MT_ACTION" = "update" ]; then echo -e "${YELLOW}TG WS Proxy MTProto версия:${NC} ${RED}$INSTALLED_VER_MT (доступно обновление)${NC}"; else echo -e "${YELLOW}TG WS Proxy MTProto версия:${NC} ${GREEN}$INSTALLED_VER_MT${NC}"; fi; fi; if [ -n "$INSTALLED_VER_GO" ]; then if [ "$GO_ACTION" = "update" ]
+then echo -e "${YELLOW}TG WS Proxy SOCKS5 версия:${NC} ${RED}$INSTALLED_VER_GO (доступно обновление)${NC}"; else echo -e "${YELLOW}TG WS Proxy SOCKS5 версия:${NC} ${GREEN}$INSTALLED_VER_GO${NC}"; fi; fi; if [ -n "$INSTALLED_VER_RS" ]; then if [ "$RS_ACTION" = "update" ]; then echo -e "${YELLOW}TG WS Proxy Rust версия:${NC} ${RED}$INSTALLED_VER_RS (доступно обновление)${NC}"
 else echo -e "${YELLOW}TG WS Proxy Rust версия:${NC} ${GREEN}$INSTALLED_VER_RS${NC}"; fi; fi; if pidof tg-ws-proxy-go >/dev/null 2>&1 && [ -f "$BIN_PATH_GO" ] && [ -f "$INIT_PATH_GO" ]; then echo -e "\n${YELLOW}Настройки ${CYAN}TG WS Proxy SOCKS5${YELLOW}:${NC}\n${YELLOW}Тип прокси:${NC} SOCKS5\n${YELLOW}Хост:${NC} $LAN_IP\n${YELLOW}Порт:${NC} 2080"
 echo -e "${YELLOW}Ссылка для подключения:${NC}"; echo -e "tg://socks?server=$LAN_IP&port=2080"; fi; if pgrep -f tg-ws-proxy-rs >/dev/null 2>&1 && [ -f "$BIN_PATH_RS" ] && [ -f "$INIT_PATH_RS" ]; then SECRET_IN_RS="$(sed -n 's/.*--secret[[:space:]]*\([0-9a-fA-F]\{32\}\).*/\1/p' "$INIT_PATH_RS")"; echo -e "\n${YELLOW}Настройки ${CYAN}TG WS Proxy Rust${YELLOW}:${NC}"
 echo -e "${YELLOW}Тип прокси:${NC} MTProto\n${YELLOW}Хост:${NC} $LAN_IP\n${YELLOW}Порт:${NC} 2443\n${YELLOW}Ключ:${NC} dd$SECRET_IN_RS\n${YELLOW}Ссылка для подключения:${NC}\ntg://proxy?server=$LAN_IP&port=2443&secret=dd$SECRET_IN_RS"; fi; if pidof tg-ws-proxy >/dev/null 2>&1 && [ -f "/etc/init.d/tg-ws-proxy" ]
@@ -1342,7 +1344,7 @@ then INSTALLED_VER_MT="$(opkg list-installed 2>/dev/null | grep '^tg-ws-proxy' |
 # ==========================================
 pkg_is_installed () { local pkg_name="$1"; if [ "$PKG_IS_APK" -eq 1 ]; then apk info -e "$pkg_name" >/dev/null 2>&1; else opkg list-installed | grep -q "^$pkg_name"; fi }
 PODKOP_VER() { LOCALPOD="$(netshift show_version 2>/dev/null | cut -d'-' -f1 | sed 's/^v//')"; if [ -z "$LOCALPOD" ]; then PODKOP_STATUS="${RED}не установлен${NC}"; return; fi; if [ "$PODKOP_LATEST_VER" = "$LOCALPOD" ]
-then PODKOP_STATUS="${GREEN}$LOCALPOD${NC}"; else PODKOP_STATUS="${RED}$LOCALPOD (версия устарела)${NC}"; fi; }
+then PODKOP_STATUS="${GREEN}$LOCALPOD${NC}"; else PODKOP_STATUS="${RED}$LOCALPOD (доступно обновление)${NC}"; fi; }
 PODKOP_INSTALL() { if ! pkg_is_installed netshift; then ACTION="install"; elif [ "$PODKOP_LATEST_VER" != "$LOCALPOD" ]; then ACTION="update"; else ACTION="remove"; fi; if [ "$ACTION" = "install" ] || [ "$ACTION" = "update" ]; then rm -rf "$tmpDIR"; mkdir -p "$tmpDIR"
 AVAILABLE_SPACE=$(df /overlay 2>/dev/null | awk 'NR==2 {print $4}'); [ -z "$AVAILABLE_SPACE" ] && AVAILABLE_SPACE=$(df / 2>/dev/null | awk 'NR==2 {print $4}'); REQUIRED_SPACE=20000; if [ "$AVAILABLE_SPACE" -lt "$REQUIRED_SPACE" ]
 then echo -e "\n${RED}Недостаточно свободного места${NC}\n"; echo -e "${YELLOW}Доступно: ${NC}$((AVAILABLE_SPACE/1024)) MB"; echo -e "${YELLOW}Требуется: ${NC}$((REQUIRED_SPACE/1024)) MB\n"; if [ "$ACTION" = "update" ]
@@ -1391,7 +1393,7 @@ printf "%s\n" "list community_lists 'porn'" "list community_lists 'news'" "list 
 printf "%s\n" "list community_lists 'google_ai'" "list community_lists 'google_play'" "list community_lists 'hodca'" "list community_lists 'roblox'" "list community_lists 'hetzner'" "list community_lists 'ovh'" "list community_lists 'digitalocean'" "list community_lists 'cloudfront'" "option user_domain_list_type 'disabled'" >> /etc/config/netshift
 printf "%s\n" "option user_subnet_list_type 'disabled'" "option mixed_proxy_enabled '0'" "option resolve_real_ip_for_routing '0'" "list subscription_filter_exclude_keywords '⬇️'" "list subscription_filter_exclude_keywords 'LTE'" "list subscription_filter_exclude_keywords '🇪🇺'" "list subscription_filter_exclude_keywords 'Мобильный'" "list subscription_filter_exclude_keywords 'SS'" "list subscription_filter_exclude_keywords 'Авто'" >> /etc/config/netshift
 fi; echo -e "${CYAN}Запускаем ${NC}NetShift${NC}"; netshift enable >/dev/null 2>&1; echo -en "${CYAN}Перезапускаем сервис${NC}\n${YELLOW}Подождите...${NC}"; netshift restart >/dev/null 2>&1; echo -e "\nVPN подписка ${GREEN}интегрирована в ${NC}NetShift${GREEN}!${NC}\n"; PAUSE; }
-BYEDPI_STATUS() { if pkg_is_installed byedpi; then if [ "$PKG_IS_APK" -eq 1 ]; then LOCAL_BYEDPI="$(apk list -I 2>/dev/null | grep '^byedpi-' | head -1 | sed -E 's/^byedpi-//;s/-r[0-9]+.*//')"; else LOCAL_BYEDPI="$(opkg list-installed 2>/dev/null | awk '$1=="byedpi" {print $3}' | sed 's/-r[0-9]\+$//')"; fi; [ "$LOCAL_BYEDPI" = "$BYEDPI_LATEST_VER" ] && BYEDPI_STATUS="${GREEN}${LOCAL_BYEDPI}${NC}" || BYEDPI_STATUS="${RED}${LOCAL_BYEDPI} (версия устарела)${NC}"; else BYEDPI_STATUS="${RED}не установлен${NC}"; fi; }
+BYEDPI_STATUS() { if pkg_is_installed byedpi; then if [ "$PKG_IS_APK" -eq 1 ]; then LOCAL_BYEDPI="$(apk list -I 2>/dev/null | grep '^byedpi-' | head -1 | sed -E 's/^byedpi-//;s/-r[0-9]+.*//')"; else LOCAL_BYEDPI="$(opkg list-installed 2>/dev/null | awk '$1=="byedpi" {print $3}' | sed 's/-r[0-9]\+$//')"; fi; [ "$LOCAL_BYEDPI" = "$BYEDPI_LATEST_VER" ] && BYEDPI_STATUS="${GREEN}${LOCAL_BYEDPI}${NC}" || BYEDPI_STATUS="${RED}${LOCAL_BYEDPI} (доступно обновление)${NC}"; else BYEDPI_STATUS="${RED}не установлен${NC}"; fi; }
 BYEDPI_SAVE_DNS_STATE() { if [ ! -f "$BYEDPI_DNS_BACKUP" ]; then { echo "LOCALUSE=$(uci -q get dhcp.@dnsmasq[0].localuse 2>/dev/null || echo "__UNSET__")"; echo "SERVER=$(uci -q get dhcp.@dnsmasq[0].server 2>/dev/null || echo "__UNSET__")"
 echo "NORESOLV=$(uci -q get dhcp.@dnsmasq[0].noresolv 2>/dev/null || echo "__UNSET__")"; echo "NETSHIFT_NORESOLV=$(uci -q get dhcp.@dnsmasq[0].netshift_noresolv 2>/dev/null || echo "__UNSET__")"; } > "$BYEDPI_DNS_BACKUP"; fi; }
 BYEDPI_RESTORE_DNS_STATE() { [ ! -f "$BYEDPI_DNS_BACKUP" ] && return; . "$BYEDPI_DNS_BACKUP"; echo -e "${CYAN}Восстанавливаем настройки ${NC}DNS"; if [ "$LOCALUSE" = "__UNSET__" ]; then uci -q delete dhcp.@dnsmasq[0].localuse
@@ -1440,7 +1442,7 @@ get_TG_versions
         if [ "$INSTALLED_VER" = "$ZAPRET_VERSION" ]; then
             echo -e "${YELLOW}Zapret:${NC}              ${GREEN}$INSTALLED_VER${NC} / $ZAPRET_STATUS"
         else
-            echo -e "${YELLOW}Zapret:${NC}              ${RED}$INSTALLED_VER (версия устарела)${NC} / $ZAPRET_STATUS"
+            echo -e "${YELLOW}Zapret:${NC}              ${RED}$INSTALLED_VER (доступно обновление)${NC} / $ZAPRET_STATUS"
         fi
     fi
     if [ "$ONLY_ZAPRET" != "1" ]; then
@@ -1449,12 +1451,12 @@ get_TG_versions
             if [ "$INSTALLED_VER2" = "$ZAPRET2_VERSION" ]; then
                 echo -e "${YELLOW}Zapret2:${NC}             ${GREEN}$INSTALLED_VER2${NC} / $ZAPRET2_STATUS"
             else
-                echo -e "${YELLOW}Zapret2:${NC}             ${RED}$INSTALLED_VER2 (версия устарела)${NC} / $ZAPRET2_STATUS"
+                echo -e "${YELLOW}Zapret2:${NC}             ${RED}$INSTALLED_VER2 (доступно обновление)${NC} / $ZAPRET2_STATUS"
             fi
         fi
         is_expert_mode && echo -e "${YELLOW}Expert mode:${NC}         ${GREEN}включён${NC}"
         SPL_V_VER
-        [ -n "$SPL_INST_VER" ] && { [ "$SPL_VER" = "$SPL_INST_VER" ] && echo -e "${YELLOW}splify:${NC}              ${GREEN}$SPL_INST_VER${NC}" || echo -e "${YELLOW}splify:${NC}              ${RED}$SPL_INST_VER (версия устарела)${NC}"; }
+        [ -n "$SPL_INST_VER" ] && { [ "$SPL_VER" = "$SPL_INST_VER" ] && echo -e "${YELLOW}splify:${NC}              ${GREEN}$SPL_INST_VER${NC}" || echo -e "${YELLOW}splify:${NC}              ${RED}$SPL_INST_VER (доступно обновление)${NC}"; }
 
         if [ -f /etc/init.d/steer ]; then echo -e "${YELLOW}splify2:${NC}             ${GREEN}установлен${NC}"; fi
         case "$(/etc/init.d/mihomo status 2>/dev/null)" in
@@ -1550,7 +1552,7 @@ STATUS=$(/etc/init.d/mihomo status 2>/dev/null); case "$STATUS" in running|activ
 if [ -x /etc/init.d/hev-socks5-tunnel ]; then STATUS=$(/etc/init.d/hev-socks5-tunnel status 2>/dev/null); case "$STATUS" in running|active) HEV_STATUS="${GREEN}запущен${NC}" ;;
 *) HEV_STATUS="${RED}остановлен${NC}" ;; esac; fi; if [ -x /etc/init.d/magitrickle ]; then STATUS=$(/etc/init.d/magitrickle status 2>/dev/null)
 case "$STATUS" in running|active) MAGITRICKLE_STATUS="${GREEN}запущен${NC}" ;; *) MAGITRICKLE_STATUS="${RED}остановлен${NC}" ;; esac; fi; echo -e "${YELLOW}Mihomo:${NC}              $MIHOMO_STATUS"
-echo -ne "${YELLOW}MagiTrickle:${NC}         $MAGITRICKLE_STATUS"; [ -n "$Magi_INSTALL_VER" ] && { if [ "$Magi_INSTALL_VER" != "$MT_VERSION" ]; then echo -e " / ${RED}$Magi_INSTALL_VER (версия устарела)${NC}"; else echo -e " / ${GREEN}$Magi_INSTALL_VER${NC}"; fi; } || echo; echo -e "${YELLOW}HevSocks5Tunnel:${NC}     $HEV_STATUS"; }
+echo -ne "${YELLOW}MagiTrickle:${NC}         $MAGITRICKLE_STATUS"; [ -n "$Magi_INSTALL_VER" ] && { if [ "$Magi_INSTALL_VER" != "$MT_VERSION" ]; then echo -e " / ${RED}$Magi_INSTALL_VER (доступно обновление)${NC}"; else echo -e " / ${GREEN}$Magi_INSTALL_VER${NC}"; fi; } || echo; echo -e "${YELLOW}HevSocks5Tunnel:${NC}     $HEV_STATUS"; }
 PODPISKA() { echo -ne "\n${YELLOW}Введите ссылку на подписку (${CYAN}https://...${YELLOW}): ${NC}"; read -r SUB_URL; case "$SUB_URL" in http://*|https://*) ;;
 *) echo -e "\n${RED}Ошибка! Ссылка должна начинаться с ${NC}http:// ${RED}или ${NC}https://${NC}\n"; PAUSE; return ;; esac; /etc/init.d/mihomo stop; rm -rf /etc/mihomo/proxy-providers /etc/mihomo/proxies/
 SUB_URL_ESC=$(printf '%s' "$SUB_URL" | sed 's/[&|]/\\&/g'); if grep -q "^[[:space:]]*proxy-providers:" "$CONFIGMIX" 2>/dev/null; then TMP_FILE=$(mktemp)
