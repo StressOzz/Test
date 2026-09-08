@@ -1169,8 +1169,8 @@ install_update_TGWS() {
 remove_TGWS() {
     echo -e "\n${MAGENTA}Удаляем sTGWS${NC}\n${CYAN}Удаляем пакет${NC}"
 
-    /etc/init.d/tgws disable
-    /etc/init.d/tgws stop
+    /etc/init.d/tgws disable >/dev/null 2>&1
+    /etc/init.d/tgws stop >/dev/null 2>&1
 
     $DELETE tgws >/dev/null 2>&1
     rm -rf /etc/tgws /etc/config/tgws
