@@ -1132,6 +1132,14 @@ install_update_TGWS() {
 
     wget -q -O - "$TGWS_INSTALL_URL" 2>/dev/null | sh >/dev/null 2>&1
 
+    if [ ! -x /etc/init.d/tgws ]; then
+        echo -e "\n${RED}Установка sTGWS не удалась!${NC}\n"
+        PAUSE
+        return
+        else
+       echo -e "\nsTGWS ${GREEN}установлен!${NC}\n"     
+    fi
+
     echo -e "${CYAN}Подбираем домен${NC}"
     /etc/init.d/tgws enable >/dev/null 2>&1    
     /etc/init.d/tgws restart >/dev/null 2>&1
