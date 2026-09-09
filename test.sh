@@ -122,6 +122,7 @@ X1="68747470733a2f2f7767636c692e76657263656c2e617070"; X2="68747470733a2f2f73616
 REPO="xyzmean/splify"; WARP_EP="engage.cloudflareclient.com:4500"; WARP_IFACE="warp0"; TMP_SPL="/tmp/splify"; S101="$(D "$X1")"; S102="$(D "$X2")"; W1="$S101"; II="$S102"
 AWG_JC=4; AWG_JMIN=40; AWG_JMAX=70; AWG_H1=1; AWG_H2=2; AWG_H3=3; AWG_H4=4; AWG_S1=0; AWG_S2=0; AWG_JMAX=70; AWG_H1=1; AWG_H2=2; AWG_H3=3; AWG_H4=4; AWG_S1=0; AWG_S2=0
 AWG_I1="<b 0xce000000010897a297ecc34cd6dd000044d0ec2e2e1ea2991f467ace4222129b5a098823784694b4897b9986ae0b7280135fa85e196d9ad980b150122129ce2a9379531b0fd3e871ca5fdb883c369832f730e272d7b8b74f393f9f0fa43f11e510ecb2219a52984410c204cf875585340c62238e14ad04dff382f2c200e0ee22fe743b9c6b8b043121c5710ec289f471c91ee414fca8b8be8419ae8ce7ffc53837f6ade262891895f3f4cecd31bc93ac5599e18e4f01b472362b8056c3172b513051f8322d1062997ef4a383b01706598d08d48c221d30e74c7ce000cdad36b706b1bf9b0607c32ec4b3203a4ee21ab64df336212b9758280803fcab14933b0e7ee1e04a7becce3e2633f4852585c567894a5f9efe9706a151b615856647e8b7dba69ab357b3982f554549bef9256111b2d67afde0b496f16962d4957ff654232aa9e845b61463908309cfd9de0a6abf5f425f577d7e5f6440652aa8da5f73588e82e9470f3b21b27b28c649506ae1a7f5f15b876f56abc4615f49911549b9bb39dd804fde182bd2dcec0c33bad9b138ca07d4a4a1650a2c2686acea05727e2a78962a840ae428f55627516e73c83dd8893b02358e81b524b4d99fda6df52b3a8d7a5291326e7ac9d773c5b43b8444554ef5aea104a738ed650aa979674bbed38da58ac29d87c29d387d80b526065baeb073ce65f075ccb56e47533aef357dceaa8293a523c5f6f790be90e4731123d3c6152a70576e90b4ab5bc5ead01576c68ab633ff7d36dcde2a0b2c68897e1acfc4d6483aaaeb635dd63c96b2b6a7a2bfe042f6aed82e5363aa850aace12ee3b1a93f30d8ab9537df483152a5527faca21efc9981b304f11fc95336f5b9637b174c5a0659e2b22e159a9fed4b8e93047371175b1d6d9cc8ab745f3b2281537d1c75fb9451871864efa5d184c38c185fd203de206751b92620f7c369e031d2041e152040920ac2c5ab5340bfc9d0561176abf10a147287ea90758575ac6a9f5ac9f390d0d5b23ee12af583383d994e22c0cf42383834bcd3ada1b3825a0664d8f3fb678261d57601ddf94a8a68a7c273a18c08aa99c7ad8c6c42eab67718843597ec9930457359dfdfbce024afc2dcf9348579a57d8d3490b2fa99f278f1c37d87dad9b221acd575192ffae1784f8e60ec7cee4068b6b988f0433d96d6a1b1865f4e155e9fe020279f434f3bf1bd117b717b92f6cd1cc9bea7d45978bcc3f24bda631a36910110a6ec06da35f8966c9279d130347594f13e9e07514fa370754d1424c0a1545c5070ef9fb2acd14233e8a50bfc5978b5bdf8bc1714731f798d21e2004117c61f2989dd44f0cf027b27d4019e81ed4b5c31db347c4a3a4d85048d7093cf16753d7b0d15e078f5c7a5205dc2f87e330a1f716738dce1c6180e9d02869b5546f1c4d2748f8c90d9693cba4e0079297d22fd61402dea32ff0eb69ebd65a5d0b687d87e3a8b2c42b648aa723c7c7daf37abcc4bb85caea2ee8f55bec20e913b3324ab8f5c3304f820d42ad1b9f2ffc1a3af9927136b4419e1e579ab4c2ae3c776d293d397d575df181e6cae0a4ada5d67ecea171cca3288d57c7bbdaee3befe745fb7d634f70386d873b90c4d6c6596bb65af68f9e5121e67ebf0d89d3c909ceedfb32ce9575a7758ff080724e1ab5d5f43074ecb53a479af21ed03d7b6899c36631c0166f9d47e5e1d4528a5d3d3f744029c4b1c190cbfbad06f5f83f7ad0429fa9a2719c56ffe3783460e166de2d8>"
+AWG_I1="$AWG_I1_STATIC"; AWG_I2=""; AWG_I3=""; AWG_I4=""; AWG_I5=""; AWG_S3=0; AWG_S4=0
 AUTO_RESULTS="/opt/zapret/tmp/results_auto.txt"; AUTO_BACK="$TMP_SF/zapret_auto_back.txt"; AUTO_LOG="/opt/zapret/tmp/auto_best.log"; AUTO_CRON_CMD="/usr/bin/zmsA --auto-best"
 AUTO_LOCK="/tmp/zapret_auto_best.lock"; AUTO_STOP_FLAG="$TMP_SF/zapret_auto_best.stop"; LOCAL_ARCH="$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release)"
 BIN_VER_GO="/usr/bin/tg-ws-proxy-go_ver"; BIN_VER_RS="/usr/bin/tg-ws-proxy-rs_ver"; BYEDPI_DNS_BACKUP="/etc/byedpi_dns_localuse"
@@ -400,7 +401,7 @@ _candidates=$(awk -v prefixes="$_prefixes" 'BEGIN { srand(); n = split(prefixes,
 for ip in $_candidates; do ( if trace_data=$(curl -s --connect-timeout 2 -w "\n%{time_total}" -H "Host: trace.cloudflare.com" "http://${ip}/cdn-cgi/trace"); then colo=$(echo "$trace_data" | awk -F'=' '$1=="colo"{print $2}'); case "$colo" in DME) exit 0 ;; "") exit 0 ;; esac
 ping_ms=$(echo "$trace_data" | tail -n 1 | awk '{printf "%d", $1 * 1000}'); [ -n "$ping_ms" ] && echo "$ping_ms $ip $colo" >> "$_pings"; fi ) & _count=$((_count + 1)); [ $((_count % 20)) -eq 0 ] && wait; done; wait; if [ -s "$_pings" ]
 then _best=$(sort -n "$_pings" | head -n 1); _best_ping=$(echo "$_best" | awk '{print $1}'); _best_ip=$(echo "$_best" | awk '{print $2}'); _best_colo=$(echo "$_best" | awk '{print $3}'); echo -e "\n\n${CYAN}Используем:${NC} $_best_ip ($(colo_name "$_best_colo"), ping: ${_best_ping}ms)"
-WARP_EP="${_best_ip}:4500"; else WARP_EP="engage.cloudflareclient.com:4500"; echo -e "\n${CYAN}Подбор не удался!\nИспользуем ${NC}endpoint${CYAN}:${NC} $WARP_EP"; fi; }
+WARP_EP="${_best_ip}:${WARP_PORT:-4500}"; else WARP_EP="engage.cloudflareclient.com:${WARP_PORT:-4500}"; echo -e "\n${CYAN}Подбор не удался!\nИспользуем ${NC}endpoint${CYAN}:${NC} $WARP_EP"; fi; }
 choose_endpoint() { echo -e "\n${MAGENTA}Меню выбора endpoint${NC}"; echo -e "${CYAN}1) ${GREEN}Использовать${NC} engage.cloudflareclient.com:4500\n${CYAN}2) ${GREEN}Подобрать ${NC}endpoint${GREEN} автоматически${NC}\n"
 echo -en "${YELLOW}Выберите пункт: ${NC}"; read -r choiceWRP; case "$choiceWRP" in 2) find_best_endpoint ;; *) WARP_EP="engage.cloudflareclient.com:4500"; echo -e "\n${CYAN}Используем: ${NC}$WARP_EP" ;; esac; }
 register_request() { curl -fsSL --max-time 30 -X POST "${W1%/}/api/reg" -H "Content-Type: application/json" -H "Accept: application/json" -d "{\"key\":\"$PUB\",\"install_id\":\"\",\"fcm_token\":\"\",\"model\":\"PC\",\"locale\":\"en_US\",\"tos\":\"$TOS\",\"type\":\"Android\"}" -o "$REG" >/dev/null 2>&1; }
@@ -417,14 +418,51 @@ then WARP_PEER="$(jq -r '.config.peers[0].public_key' "$REG")"; WARP_V4="$(jq -r
 restart_splify() { echo -e "\n${MAGENTA}Перезапускаем splify${NC}"; echo -en "${YELLOW}Подождите...${NC}"; /usr/local/sbin/splify-disable >/dev/null 2>&1; /etc/init.d/splify enable >/dev/null 2>&1; /etc/init.d/splify-agent enable >/dev/null 2>&1
 uci -q set splify.global.telemetry="0" && uci commit splify; /etc/init.d/splify restart >/dev/null 2>&1; sleep 3; /etc/init.d/splify-agent restart >/dev/null 2>&1; sleep 3; /usr/local/sbin/splify-apply >/dev/null 2>&1
 sleep 10; echo -e "\n\nsplify ${GREEN}перезапущен!${NC}"; echo -e "\n${YELLOW}Инициализация splify может занять несколько минут!${NC}"; }
-WARP_TO_ROOT() { printf '%s\n' "[Interface]" "PrivateKey = $PRIV" "Address = $WARP_V4${WARP_V6:+, $WARP_V6}" "DNS = 9.9.9.9" "MTU = 1280" "S1 = $AWG_S1" "S2 = $AWG_S2" "Jc = $AWG_JC" "Jmin = $AWG_JMIN" "Jmax = $AWG_JMAX" "H1 = $AWG_H1" "H2 = $AWG_H2" "H3 = $AWG_H3" "H4 = $AWG_H4" "I1 = $AWG_I1" "" "[Peer]" "PublicKey = $WARP_PEER" "AllowedIPs = 0.0.0.0/0, ::/0" "Endpoint = $WARP_EP" "PersistentKeepalive = 25" > /root/WARP.conf; echo -e "${YELLOW}Файл ${NC}WARP${YELLOW} сохранён в ${NC}/root/WARP.conf"; }
+WARP_TO_ROOT() {
+    : "${WARP_DNS:=9.9.9.9}"; : "${AWG_MTU:=1280}"; : "${AWG_S3:=0}"; : "${AWG_S4:=0}"
+    {
+        echo "[Interface]"
+        echo "PrivateKey = $PRIV"
+        echo "Address = $WARP_V4${WARP_V6:+, $WARP_V6}"
+        echo "DNS = $WARP_DNS"
+        echo "MTU = $AWG_MTU"
+        echo "S1 = $AWG_S1"
+        echo "S2 = $AWG_S2"
+        echo "Jc = $AWG_JC"
+        echo "Jmin = $AWG_JMIN"
+        echo "Jmax = $AWG_JMAX"
+        echo "H1 = $AWG_H1"
+        echo "H2 = $AWG_H2"
+        echo "H3 = $AWG_H3"
+        echo "H4 = $AWG_H4"
+        [ -n "$AWG_I1" ] && echo "I1 = $AWG_I1"
+        [ -n "$AWG_I2" ] && echo "I2 = $AWG_I2"
+        [ -n "$AWG_I3" ] && echo "I3 = $AWG_I3"
+        [ -n "$AWG_I4" ] && echo "I4 = $AWG_I4"
+        [ -n "$AWG_I5" ] && echo "I5 = $AWG_I5"
+        echo ""
+        echo "[Peer]"
+        echo "PublicKey = $WARP_PEER"
+        echo "AllowedIPs = 0.0.0.0/0, ::/0"
+        echo "Endpoint = $WARP_EP"
+        echo "PersistentKeepalive = 25"
+    } > /root/WARP.conf
+    echo -e "${YELLOW}Файл ${NC}WARP${YELLOW} сохранён в ${NC}/root/WARP.conf"
+}
+
 # ──────────────────────────── 5. create warp0 interface ─────────────────────
 create_warp_iface() { echo -e "\n${MAGENTA}Создаём интерфейс $WARP_IFACE${NC}"; if [ -n "$(uci -q get "network.$WARP_IFACE")" ]; then echo -e "${CYAN}Перенастраиваем интерфейс ${NC}$WARP_IFACE"; ifdown "$WARP_IFACE" >/dev/null 2>&1; fi
 uci -q set "network.$WARP_IFACE=interface"; uci set "network.$WARP_IFACE.proto=amneziawg"; uci set "network.$WARP_IFACE.private_key=$PRIV"; uci -q delete "network.$WARP_IFACE.addresses"; uci add_list "network.$WARP_IFACE.addresses=$WARP_V4"
 [ -n "$WARP_V6" ] && uci add_list "network.$WARP_IFACE.addresses=$WARP_V6"; uci -q delete "network.$WARP_IFACE.dns"; uci add_list "network.$WARP_IFACE.dns=9.9.9.9"; uci set "network.$WARP_IFACE.mtu=1280"
 uci set "network.$WARP_IFACE.route_allowed_ips=0"; uci set "network.$WARP_IFACE.awg_jc=$AWG_JC"; uci set "network.$WARP_IFACE.awg_jmin=$AWG_JMIN"; uci set "network.$WARP_IFACE.awg_jmax=$AWG_JMAX"; uci set "network.$WARP_IFACE.awg_h1=$AWG_H1"
 uci set "network.$WARP_IFACE.awg_h2=$AWG_H2"; uci set "network.$WARP_IFACE.awg_h3=$AWG_H3"; uci set "network.$WARP_IFACE.awg_h4=$AWG_H4"; uci set "network.$WARP_IFACE.awg_s1=$AWG_S1"; uci set "network.$WARP_IFACE.awg_s2=$AWG_S2"
-uci set "network.$WARP_IFACE.awg_i1=$AWG_I1"; _pt="amneziawg_$WARP_IFACE"; while [ -n "$(uci -q get "network.@${_pt}[0]")" ]; do uci -q delete "network.@${_pt}[0]"; done; uci add network "$_pt" >/dev/null; uci set "network.@${_pt}[-1].public_key=$WARP_PEER"
+uci set "network.$WARP_IFACE.awg_i1=$AWG_I1"
+[ -n "$AWG_I2" ] && uci set "network.$WARP_IFACE.awg_i2=$AWG_I2"
+[ -n "$AWG_I3" ] && uci set "network.$WARP_IFACE.awg_i3=$AWG_I3"
+[ -n "$AWG_I4" ] && uci set "network.$WARP_IFACE.awg_i4=$AWG_I4"
+[ -n "$AWG_I5" ] && uci set "network.$WARP_IFACE.awg_i5=$AWG_I5"
+_pt="amneziawg_$WARP_IFACE"
+while [ -n "$(uci -q get "network.@${_pt}[0]")" ]; do uci -q delete "network.@${_pt}[0]"; done; uci add network "$_pt" >/dev/null; uci set "network.@${_pt}[-1].public_key=$WARP_PEER"
 uci -q delete "network.@${_pt}[-1].allowed_ips"; uci add_list "network.@${_pt}[-1].allowed_ips=0.0.0.0/0"; uci add_list "network.@${_pt}[-1].allowed_ips=::/0"; uci set "network.@${_pt}[-1].endpoint_host=${WARP_EP%:*}"
 uci set "network.@${_pt}[-1].endpoint_port=${WARP_EP##*:}"; uci set "network.@${_pt}[-1].persistent_keepalive=25"; echo -e "${CYAN}Перезапускаем сеть${NC}"; uci commit network >/dev/null 2>&1; /etc/init.d/rpcd restart >/dev/null 2>&1
 /etc/init.d/uhttpd restart >/dev/null 2>&1; rm -rf /tmp/luci-* >/dev/null 2>&1; ip link del "$WARP_IFACE" >/dev/null 2>&1; killall netifd >/dev/null 2>&1; sleep 3; ifup "$WARP_IFACE" >/dev/null 2>&1; sleep 3; }
@@ -1775,6 +1813,362 @@ FILES=$(find /root -maxdepth 1 -type f -name "*.${RAZ}" | sort)
         continue
     done
 }
+
+# ==========================================
+# Меню WARP (AmneziaWG)
+# ==========================================
+resolve_host_ip() {
+    local host="$1" ip=""
+    if command -v nslookup >/dev/null 2>&1; then
+        ip=$(nslookup "$host" 2>/dev/null | awk '/^Name:/{f=1} f && /Address/{l=$0; sub(/^Address[ 0-9]*:[ \t]*/,"",l); sub(/#.*/,"",l); if (l ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/) {print l; exit}}')
+    fi
+    echo "$ip"
+}
+
+choose_warp_port() {
+    WARP_PORTS_LIST="2408 500 1701 4500 4443 8443 8886 8854 2371"
+    echo -e "\n${MAGENTA}Выберите порт${NC} WARP"
+    i=1; for p in $WARP_PORTS_LIST; do echo -e "${CYAN}$i) ${GREEN}$p${NC}"; i=$((i + 1)); done
+    echo -e "${CYAN}0) ${GREEN}Ввести порт вручную${NC}"
+    echo -ne "${CYAN}Enter) ${GREEN}Порт по умолчанию (${NC}4500${GREEN})${NC}\n\n${YELLOW}Выберите пункт:${NC} "
+    read -r pch
+    if [ -z "$pch" ]; then WARP_PORT=4500; echo -e "${CYAN}Используем порт:${NC} $WARP_PORT"; return; fi
+    if [ "$pch" = "0" ]; then
+        echo -ne "\n${YELLOW}Введите порт (${NC}1-65535${YELLOW}):${NC} "; read -r cp
+        case "$cp" in ''|*[!0-9]*) WARP_PORT=4500 ;; *) if [ "$cp" -ge 1 ] 2>/dev/null && [ "$cp" -le 65535 ]; then WARP_PORT="$cp"; else WARP_PORT=4500; fi ;; esac
+        echo -e "${CYAN}Используем порт:${NC} $WARP_PORT"; return
+    fi
+    idx=1; for p in $WARP_PORTS_LIST; do [ "$idx" = "$pch" ] && { WARP_PORT="$p"; echo -e "${CYAN}Используем порт:${NC} $WARP_PORT"; return; }; idx=$((idx + 1)); done
+    WARP_PORT=4500; echo -e "${CYAN}Используем порт:${NC} $WARP_PORT"
+}
+
+choose_warp_dns() {
+    echo -e "\n${MAGENTA}Выберите${NC} DNS ${MAGENTA}для WARP${NC}"
+    echo -e "${CYAN}1) ${GREEN}Cloudflare${NC} (по умолчанию)\n${CYAN}2) ${GREEN}Google${NC}\n${CYAN}3) ${GREEN}Яндекс${NC}\n${CYAN}4) ${GREEN}AdGuard${NC}\n${CYAN}5) ${GREEN}Quad9${NC}\n${CYAN}6) ${GREEN}Comss.one${NC}\n${CYAN}7) ${GREEN}malw.link${NC}"
+    echo -ne "${CYAN}Enter) ${GREEN}Cloudflare${NC}\n\n${YELLOW}Выберите пункт:${NC} "
+    read -r dch
+    case "$dch" in
+        2) WARP_DNS="8.8.8.8,8.8.4.4" ;;
+        3) WARP_DNS="77.88.8.8,77.88.8.1" ;;
+        4) WARP_DNS="94.140.14.14,94.140.15.15" ;;
+        5) WARP_DNS="9.9.9.9,149.112.112.112" ;;
+        6) ip="$(resolve_host_ip dns.comss.one)"; [ -z "$ip" ] && ip="92.38.152.163"; WARP_DNS="$ip" ;;
+        7) ip="$(resolve_host_ip dns.malw.link)"; [ -z "$ip" ] && ip="1.1.1.1"; WARP_DNS="$ip" ;;
+        *) WARP_DNS="1.1.1.1,1.0.0.1" ;;
+    esac
+    echo -e "${CYAN}Используем ${NC}DNS${CYAN}:${NC} $WARP_DNS"
+}
+
+choose_awg_density_preset() {
+    echo -e "\n${MAGENTA}Выберите плотность junk-пакетов${NC} (Jc/Jmin/Jmax)"
+    echo -e "${CYAN}1) ${GREEN}Стандартный${NC} (Jc=4, Jmin=40, Jmax=70) ${GREEN}— рекомендуется${NC}"
+    echo -e "${CYAN}2) ${GREEN}Лёгкий${NC} (Jc=3, Jmin=1, Jmax=3)"
+    echo -e "${CYAN}3) ${GREEN}Тяжёлый${NC} (Jc=5, Jmin=10, Jmax=40)"
+    echo -e "${CYAN}4) ${GREEN}Мобильный${NC} (Jc=3, Jmin=64, Jmax=128, MTU=1280)"
+    echo -e "${CYAN}5) ${GREEN}Свой${NC} (ввести вручную)"
+    echo -ne "${CYAN}Enter) ${GREEN}Стандартный${NC}\n\n${YELLOW}Выберите пункт:${NC} "
+    read -r apch
+    AWG_H1=1; AWG_H2=2; AWG_H3=3; AWG_H4=4; AWG_S1=0; AWG_S2=0; AWG_S3=0; AWG_S4=0; AWG_MTU=1280
+    case "$apch" in
+        2) AWG_JC=3; AWG_JMIN=1; AWG_JMAX=3 ;;
+        3) AWG_JC=5; AWG_JMIN=10; AWG_JMAX=40 ;;
+        4) AWG_JC=3; AWG_JMIN=64; AWG_JMAX=128 ;;
+        5)
+            echo -ne "\n${YELLOW}Jc (1-128, кол-во junk-пакетов):${NC} "; read -r cjc
+            echo -ne "${YELLOW}Jmin (мин. размер junk-пакета):${NC} "; read -r cjmin
+            echo -ne "${YELLOW}Jmax (макс. размер junk-пакета, ${NC}<=1280${YELLOW}):${NC} "; read -r cjmax
+            case "$cjc" in ''|*[!0-9]*) cjc=4 ;; esac; case "$cjmin" in ''|*[!0-9]*) cjmin=40 ;; esac; case "$cjmax" in ''|*[!0-9]*) cjmax=70 ;; esac
+            AWG_JC="$cjc"; AWG_JMIN="$cjmin"; AWG_JMAX="$cjmax" ;;
+        *) AWG_JC=4; AWG_JMIN=40; AWG_JMAX=70 ;;
+    esac
+    echo -e "${CYAN}Плотность:${NC} Jc=$AWG_JC Jmin=$AWG_JMIN Jmax=$AWG_JMAX"
+}
+
+choose_cps_format() {
+    echo -e "\n${MAGENTA}Выберите формат маскировки перед хендшейком${NC} (CPS / I1-I5)"
+    echo -e "${CYAN}1) ${GREEN}Без ${NC}CPS ${GREEN}(v1, только Jc/Jmin/Jmax)${NC}"
+    echo -e "${CYAN}2) ${GREEN}I1 ${NC}(v1.5, классика — статичный ${NC}WARP QUIC${GREEN}, как в старых версиях этого скрипта)"
+    echo -e "${CYAN}3) ${GREEN}I1-I5 ${NC}(v1.5/2.0, полная цепочка ${NC}CPS${GREEN}, генерируется заново при каждом запуске) ${NC}— рекомендуется"
+    echo -ne "${CYAN}Enter) ${GREEN}I1-I5${NC}\n\n${YELLOW}Выберите пункт:${NC} "
+    read -r cch
+    case "$cch" in
+        1) AWG_I1=""; AWG_I2=""; AWG_I3=""; AWG_I4=""; AWG_I5=""
+           echo -e "${CYAN}CPS отключен${NC}" ;;
+        2) AWG_I1="$AWG_I1_STATIC"; AWG_I2=""; AWG_I3=""; AWG_I4=""; AWG_I5=""
+           echo -e "${YELLOW}Внимание:${NC} это значение одинаково у всех, кто пользуется этим скриптом — само по себе может служить сигнатурой при массовом использовании." ;;
+        *)
+           r1=$(( (RANDOM % 9) + 8 )); r2=$(( (RANDOM % 40) + 16 )); r3=$(( (RANDOM % 32) + 8 )); r4=$(( (RANDOM % 48) + 16 ))
+           AWG_I1="<b 0xc30000000108><r ${r1}><b 0x08><r 8><b 0x0045dc><t><r ${r1}>"
+           AWG_I2="<r ${r2}><t>"
+           AWG_I3="<rd ${r3}>"
+           AWG_I4="<rc ${r4}>"
+           AWG_I5="<r 8><t><r 8>"
+           echo -e "${GREEN}Сгенерирована уникальная цепочка ${NC}I1-I5${GREEN} (QUIC-инициация + случайные данные/timestamp)${NC}"
+           echo -e "${YELLOW}Если после подключения нет интернета — проверьте версию ${NC}luci-proto-amneziawg${YELLOW} на роутере (нужна поддержка ${NC}I2-I5${YELLOW}), иначе выберите пункт ${NC}2${YELLOW}.${NC}" ;;
+    esac
+}
+
+# Header Protection (AWG 3.0/3.1) и ненулевые S1-S4 намеренно НЕ используются:
+# WARP-сервер Cloudflare — обычный WireGuard-пир, эти расширения AmneziaWG
+# он не поддерживает, их включение полностью ломает подключение.
+WARP_choose_endpoint_full() {
+    echo -e "\n${MAGENTA}Меню выбора${NC} endpoint"
+    echo -e "${CYAN}1) ${GREEN}Использовать${NC} engage.cloudflareclient.com"
+    echo -e "${CYAN}2) ${GREEN}Подобрать ${NC}endpoint${GREEN} автоматически (по пингу)${NC}"
+    echo -e "${CYAN}3) ${GREEN}Ввести ${NC}IP${GREEN} / хост вручную${NC}"
+    echo -ne "\n${YELLOW}Выберите пункт:${NC} "
+    read -r ech
+    choose_warp_port
+    case "$ech" in
+        2) find_best_endpoint ;;
+        3) echo -ne "\n${YELLOW}Введите IP или домен endpoint:${NC} "; read -r wh
+           [ -z "$wh" ] && wh="engage.cloudflareclient.com"
+           WARP_EP="${wh}:${WARP_PORT}"; echo -e "\n${CYAN}Используем ${NC}endpoint${CYAN}:${NC} $WARP_EP" ;;
+        *) WARP_EP="engage.cloudflareclient.com:${WARP_PORT}"; echo -e "\n${CYAN}Используем ${NC}endpoint${CYAN}:${NC} $WARP_EP" ;;
+    esac
+}
+
+generate_WARP() {
+    echo -e "\n${MAGENTA}Генерация конфигурации ${NC}WARP"
+    echo -e "${YELLOW}Примечание:${NC} Header Protection (AWG 3.0/3.1) и ненулевые S1-S4 не используются — сервер Cloudflare WARP работает как обычный WireGuard-пир и не поддерживает эти расширения, их включение полностью сломает подключение. Маскировка строится на Jc/Jmin/Jmax и I1-I5 (CPS) — они совместимы с любым WireGuard-сервером."
+    choose_awg_density_preset
+    choose_cps_format
+    WARP_choose_endpoint_full
+    choose_warp_dns
+    register_warp || return 1
+    WARP_TO_ROOT
+    echo -e "\nWARP ${GREEN}сгенерирован и сохранён в${NC} /root/WARP.conf${GREEN}!${NC}\n"
+    PAUSE
+}
+
+list_awg_interfaces() { uci show network 2>/dev/null | sed -n "s/^network\.\([^.=]*\)\.proto='amneziawg'\$/\1/p"; }
+
+create_awg_zone() {
+    local IFACE="$1" ZONE="zone_$1"
+    uci show firewall 2>/dev/null | grep -q "\.name='$ZONE'" && return 0
+    uci add firewall zone >/dev/null 2>&1
+    uci set firewall.@zone[-1].name="$ZONE"
+    uci set firewall.@zone[-1].input='REJECT'
+    uci set firewall.@zone[-1].output='ACCEPT'
+    uci set firewall.@zone[-1].forward='REJECT'
+    uci set firewall.@zone[-1].masq='1'
+    uci set firewall.@zone[-1].mtu_fix='1'
+    uci add_list firewall.@zone[-1].network="$IFACE" >/dev/null 2>&1
+    uci add firewall forwarding >/dev/null 2>&1
+    uci set firewall.@forwarding[-1].src='lan'
+    uci set firewall.@forwarding[-1].dest="$ZONE"
+    uci commit firewall >/dev/null 2>&1
+    /etc/init.d/firewall reload >/dev/null 2>&1
+}
+
+create_awg_skeleton_iface() {
+    local IFACE="$1"
+    if uci -q get "network.$IFACE" >/dev/null 2>&1; then echo -e "\n${RED}Интерфейс ${NC}$IFACE${RED} уже существует!${NC}\n"; PAUSE; return 1; fi
+    echo -e "\n${MAGENTA}Создаём интерфейс${NC} $IFACE"
+    local GEN=wg; command -v awg >/dev/null 2>&1 && GEN=awg
+    local PRIVATE_KEY; PRIVATE_KEY="$("$GEN" genkey 2>/dev/null)"
+    [ -z "$PRIVATE_KEY" ] && { echo -e "\n${RED}Не удалось сгенерировать ключ! Убедитесь что установлен ${NC}AmneziaWG${NC}\n"; PAUSE; return 1; }
+    uci set "network.$IFACE=interface"; uci set "network.$IFACE.proto=amneziawg"
+    uci set "network.$IFACE.private_key=$PRIVATE_KEY"; uci set "network.$IFACE.mtu=1280"
+    uci set "network.$IFACE.route_allowed_ips=0"; uci commit network >/dev/null 2>&1
+    /etc/init.d/network reload >/dev/null 2>&1
+    create_awg_zone "$IFACE"
+    echo -e "\nИнтерфейс ${NC}$IFACE ${GREEN}создан!${NC}"
+    echo -e "\n${YELLOW}Теперь используйте пункт${NC} «Интегрировать WARP в интерфейс»${YELLOW}, чтобы применить ${NC}WARP.conf${YELLOW}.${NC}\n"
+    PAUSE
+}
+
+apply_warp_conf_to_iface() {
+    local IFACE="$1" FILE="/root/WARP.conf"
+    [ -f "$FILE" ] || { echo -e "\n${RED}Файл${NC} /root/WARP.conf ${RED}не найден!${NC}\n"; PAUSE; return 1; }
+    local PRIVATE_KEY ADDR DNS_LINE MTU_V JC JMIN JMAX S1 S2 H1 H2 H3 H4 I1_V I2_V I3_V I4_V I5_V PEER_PUB ENDPOINT_V
+    PRIVATE_KEY=$(awk -F'= ' '/^PrivateKey/{print $2; exit}' "$FILE")
+    ADDR=$(awk -F'= ' '/^Address/{print $2; exit}' "$FILE")
+    DNS_LINE=$(awk -F'= ' '/^DNS/{print $2; exit}' "$FILE")
+    MTU_V=$(awk -F'= ' '/^MTU/{print $2; exit}' "$FILE")
+    JC=$(awk -F'= ' '/^Jc/{print $2; exit}' "$FILE")
+    JMIN=$(awk -F'= ' '/^Jmin/{print $2; exit}' "$FILE")
+    JMAX=$(awk -F'= ' '/^Jmax/{print $2; exit}' "$FILE")
+    S1=$(awk -F'= ' '/^S1/{print $2; exit}' "$FILE")
+    S2=$(awk -F'= ' '/^S2/{print $2; exit}' "$FILE")
+    H1=$(awk -F'= ' '/^H1/{print $2; exit}' "$FILE")
+    H2=$(awk -F'= ' '/^H2/{print $2; exit}' "$FILE")
+    H3=$(awk -F'= ' '/^H3/{print $2; exit}' "$FILE")
+    H4=$(awk -F'= ' '/^H4/{print $2; exit}' "$FILE")
+    I1_V=$(awk -F'= ' '/^I1/{print $2; exit}' "$FILE")
+    I2_V=$(awk -F'= ' '/^I2/{print $2; exit}' "$FILE")
+    I3_V=$(awk -F'= ' '/^I3/{print $2; exit}' "$FILE")
+    I4_V=$(awk -F'= ' '/^I4/{print $2; exit}' "$FILE")
+    I5_V=$(awk -F'= ' '/^I5/{print $2; exit}' "$FILE")
+    PEER_PUB=$(awk -F'= ' '/^PublicKey/{print $2; exit}' "$FILE")
+    ENDPOINT_V=$(awk -F'= ' '/^Endpoint/{print $2; exit}' "$FILE")
+    if [ -z "$PRIVATE_KEY" ] || [ -z "$PEER_PUB" ] || [ -z "$ENDPOINT_V" ]; then echo -e "\n${RED}Не удалось прочитать ${NC}WARP.conf${RED}!${NC}\n"; PAUSE; return 1; fi
+    echo -e "\n${MAGENTA}Интегрируем WARP в интерфейс${NC} $IFACE"
+    ifdown "$IFACE" >/dev/null 2>&1
+    uci -q set "network.$IFACE=interface"; uci set "network.$IFACE.proto=amneziawg"
+    uci set "network.$IFACE.private_key=$PRIVATE_KEY"
+    uci -q delete "network.$IFACE.addresses"
+    OLD_IFS=$IFS; IFS=','; for a in $ADDR; do a=$(echo "$a" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'); [ -n "$a" ] && uci add_list "network.$IFACE.addresses=$a"; done; IFS=$OLD_IFS
+    uci -q delete "network.$IFACE.dns"
+    OLD_IFS=$IFS; IFS=','; for d in $DNS_LINE; do d=$(echo "$d" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'); [ -n "$d" ] && uci add_list "network.$IFACE.dns=$d"; done; IFS=$OLD_IFS
+    uci set "network.$IFACE.mtu=${MTU_V:-1280}"; uci set "network.$IFACE.route_allowed_ips=0"
+    [ -n "$JC" ] && uci set "network.$IFACE.awg_jc=$JC"
+    [ -n "$JMIN" ] && uci set "network.$IFACE.awg_jmin=$JMIN"
+    [ -n "$JMAX" ] && uci set "network.$IFACE.awg_jmax=$JMAX"
+    [ -n "$H1" ] && uci set "network.$IFACE.awg_h1=$H1"
+    [ -n "$H2" ] && uci set "network.$IFACE.awg_h2=$H2"
+    [ -n "$H3" ] && uci set "network.$IFACE.awg_h3=$H3"
+    [ -n "$H4" ] && uci set "network.$IFACE.awg_h4=$H4"
+    [ -n "$S1" ] && uci set "network.$IFACE.awg_s1=$S1"
+    [ -n "$S2" ] && uci set "network.$IFACE.awg_s2=$S2"
+    if [ -n "$I1_V" ]; then uci set "network.$IFACE.awg_i1=$I1_V"; else uci -q delete "network.$IFACE.awg_i1"; fi
+    if [ -n "$I2_V" ]; then uci set "network.$IFACE.awg_i2=$I2_V"; else uci -q delete "network.$IFACE.awg_i2"; fi
+    if [ -n "$I3_V" ]; then uci set "network.$IFACE.awg_i3=$I3_V"; else uci -q delete "network.$IFACE.awg_i3"; fi
+    if [ -n "$I4_V" ]; then uci set "network.$IFACE.awg_i4=$I4_V"; else uci -q delete "network.$IFACE.awg_i4"; fi
+    if [ -n "$I5_V" ]; then uci set "network.$IFACE.awg_i5=$I5_V"; else uci -q delete "network.$IFACE.awg_i5"; fi
+    local PT="amneziawg_$IFACE"
+    while [ -n "$(uci -q get "network.@${PT}[0]")" ]; do uci -q delete "network.@${PT}[0]"; done
+    uci add network "$PT" >/dev/null
+    uci set "network.@${PT}[-1].public_key=$PEER_PUB"
+    uci -q delete "network.@${PT}[-1].allowed_ips"
+    uci add_list "network.@${PT}[-1].allowed_ips=0.0.0.0/0"
+    uci add_list "network.@${PT}[-1].allowed_ips=::/0"
+    uci set "network.@${PT}[-1].endpoint_host=${ENDPOINT_V%:*}"
+    uci set "network.@${PT}[-1].endpoint_port=${ENDPOINT_V##*:}"
+    uci set "network.@${PT}[-1].persistent_keepalive=25"
+    uci commit network >/dev/null 2>&1
+    echo -e "${CYAN}Перезапускаем сеть${NC}"
+    /etc/init.d/rpcd restart >/dev/null 2>&1; /etc/init.d/uhttpd restart >/dev/null 2>&1
+    rm -rf /tmp/luci-* >/dev/null 2>&1; ip link del "$IFACE" >/dev/null 2>&1; killall netifd >/dev/null 2>&1
+    sleep 3; ifup "$IFACE" >/dev/null 2>&1; sleep 2
+    create_awg_zone "$IFACE"
+    echo -e "\nWARP ${GREEN}интегрирован в интерфейс${NC} $IFACE${GREEN}!${NC}\n"
+    PAUSE
+}
+
+install_awg_interface_menu() {
+    if ! pkg_is_installed amneziawg-tools || ! pkg_is_installed kmod-amneziawg; then echo -e "\n${RED}Сначала установите ${NC}AmneziaWG${RED}!${NC}\n"; PAUSE; return; fi
+    echo -ne "\n${YELLOW}Введите название интерфейса (${NC}латиница/цифры, до ${YELLOW}15${NC} символов, напр. ${GREEN}WARP${YELLOW}):${NC} "
+    read -r IFNAME
+    case "$IFNAME" in ''|*[!a-zA-Z0-9_]*) echo -e "\n${RED}Некорректное имя!${NC}\n"; PAUSE; return ;; esac
+    [ "${#IFNAME}" -gt 15 ] && { echo -e "\n${RED}Имя слишком длинное (макс. ${NC}15${RED})!${NC}\n"; PAUSE; return; }
+    create_awg_skeleton_iface "$IFNAME"
+}
+
+delete_awg_interface_menu() {
+    IFACES=$(list_awg_interfaces); [ -z "$IFACES" ] && { echo -e "\n${RED}Интерфейсы ${NC}AmneziaWG${RED} не найдены!${NC}\n"; PAUSE; return; }
+    echo -e "\n${MAGENTA}Выберите интерфейс для удаления${NC}\n"; i=1; : > "$TMP_SF/awg_ifaces_del.txt"
+    for f in $IFACES; do echo -e "${CYAN}$i) ${GREEN}$f${NC}"; echo "$f" >> "$TMP_SF/awg_ifaces_del.txt"; i=$((i + 1)); done
+    echo -ne "${CYAN}Enter) ${GREEN}Отмена${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read -r ich
+    case "$ich" in ''|*[!0-9]*) return ;; esac
+    SEL=$(sed -n "${ich}p" "$TMP_SF/awg_ifaces_del.txt"); [ -z "$SEL" ] && return
+    echo -e "\n${MAGENTA}Удаляем интерфейс${NC} $SEL"
+    ifdown "$SEL" >/dev/null 2>&1; uci -q delete "network.$SEL"
+    PT="amneziawg_$SEL"; while [ -n "$(uci -q get "network.@${PT}[0]")" ]; do uci -q delete "network.@${PT}[0]"; done
+    ZONE="zone_$SEL"; zi=0
+    while [ -n "$(uci -q get "firewall.@zone[$zi]")" ]; do
+        zn=$(uci -q get "firewall.@zone[$zi].name"); if [ "$zn" = "$ZONE" ]; then uci -q delete "firewall.@zone[$zi]"; else zi=$((zi + 1)); fi
+    done
+    fi_=0
+    while [ -n "$(uci -q get "firewall.@forwarding[$fi_]")" ]; do
+        fd=$(uci -q get "firewall.@forwarding[$fi_].dest"); if [ "$fd" = "$ZONE" ]; then uci -q delete "firewall.@forwarding[$fi_]"; else fi_=$((fi_ + 1)); fi
+    done
+    uci commit network >/dev/null 2>&1; uci commit firewall >/dev/null 2>&1
+    /etc/init.d/network reload >/dev/null 2>&1; /etc/init.d/firewall reload >/dev/null 2>&1
+    echo -e "\nИнтерфейс ${NC}$SEL ${GREEN}удалён!${NC}\n"; PAUSE
+}
+
+integrate_warp_menu() {
+    [ -f /root/WARP.conf ] || { echo -e "\n${RED}Файл ${NC}/root/WARP.conf${RED} не найден!${NC}\n${YELLOW}Сначала сгенерируйте${NC} WARP${YELLOW} (пункт 1)${NC}\n"; PAUSE; return; }
+    IFACES=$(list_awg_interfaces)
+    if [ -z "$IFACES" ]; then
+        echo -e "\n${RED}Интерфейсы ${NC}AmneziaWG${RED} не найдены!${NC}"
+        echo -ne "\n${YELLOW}Создать новый интерфейс сейчас? (${NC}y/N${YELLOW}): ${NC}"; read -r ans
+        case "$ans" in y|Y) install_awg_interface_menu; IFACES=$(list_awg_interfaces); [ -z "$IFACES" ] && return ;; *) return ;; esac
+    fi
+    if [ "$(echo "$IFACES" | wc -l)" -eq 1 ]; then TARGET="$IFACES"; else
+        echo -e "\n${MAGENTA}Выберите интерфейс для интеграции${NC}\n"; i=1; : > "$TMP_SF/awg_ifaces_int.txt"
+        for f in $IFACES; do echo -e "${CYAN}$i) ${GREEN}$f${NC}"; echo "$f" >> "$TMP_SF/awg_ifaces_int.txt"; i=$((i + 1)); done
+        echo -ne "${CYAN}Enter) ${GREEN}Отмена${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read -r ich
+        case "$ich" in ''|*[!0-9]*) return ;; esac
+        TARGET=$(sed -n "${ich}p" "$TMP_SF/awg_ifaces_int.txt"); [ -z "$TARGET" ] && return
+    fi
+    apply_warp_conf_to_iface "$TARGET"
+}
+
+show_warp_conf() { [ -f /root/WARP.conf ] || { echo -e "\n${RED}Файл ${NC}/root/WARP.conf${RED} не найден!${NC}\n"; PAUSE; return; }
+clear; echo -e "${MAGENTA}Содержимое${NC} /root/WARP.conf\n"; cat /root/WARP.conf; echo; PAUSE; }
+
+show_awg_status() {
+    IFACES=$(list_awg_interfaces); clear; echo -e "${MAGENTA}Статус интерфейсов${NC} AmneziaWG\n"
+    [ -z "$IFACES" ] && echo -e "${RED}Интерфейсы не найдены!${NC}"
+    for f in $IFACES; do
+        DEV=$(uci -q get "network.$f.device"); [ -z "$DEV" ] && DEV="$f"
+        if ip link show "$DEV" >/dev/null 2>&1; then ST="${GREEN}up${NC}"; else ST="${RED}down${NC}"; fi
+        IP4=$(uci -q get "network.$f.addresses" 2>/dev/null | head -n1)
+        EP=$(uci -q get "network.@amneziawg_${f}[0].endpoint_host" 2>/dev/null)
+        EPP=$(uci -q get "network.@amneziawg_${f}[0].endpoint_port" 2>/dev/null)
+        echo -e "${YELLOW}$f:${NC} $ST  ${CYAN}Address:${NC} ${IP4:-—}  ${CYAN}Endpoint:${NC} ${EP:+$EP:$EPP}"
+    done; echo; PAUSE
+}
+
+test_warp_interface() {
+    IFACES=$(list_awg_interfaces); [ -z "$IFACES" ] && { echo -e "\n${RED}Интерфейсы ${NC}AmneziaWG${RED} не найдены!${NC}\n"; PAUSE; return; }
+    if [ "$(echo "$IFACES" | wc -l)" -eq 1 ]; then TARGET="$IFACES"; else
+        echo -e "\n${MAGENTA}Выберите интерфейс для проверки${NC}\n"; i=1; : > "$TMP_SF/awg_ifaces_test.txt"
+        for f in $IFACES; do echo -e "${CYAN}$i) ${GREEN}$f${NC}"; echo "$f" >> "$TMP_SF/awg_ifaces_test.txt"; i=$((i + 1)); done
+        echo -ne "${CYAN}Enter) ${GREEN}Отмена${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read -r ich
+        case "$ich" in ''|*[!0-9]*) return ;; esac
+        TARGET=$(sed -n "${ich}p" "$TMP_SF/awg_ifaces_test.txt"); [ -z "$TARGET" ] && return
+    fi
+    echo -e "\n${MAGENTA}Проверяем интерфейс${NC} $TARGET"
+    DEV=$(uci -q get "network.$TARGET.device"); [ -z "$DEV" ] && DEV="$TARGET"
+    ip link show "$DEV" >/dev/null 2>&1 || { echo -e "${YELLOW}Интерфейс не поднят, поднимаем...${NC}"; ifup "$TARGET" >/dev/null 2>&1; sleep 3; }
+    RESULT=$(curl -s --interface "$DEV" --connect-timeout 5 --max-time 8 https://www.cloudflare.com/cdn-cgi/trace 2>/dev/null)
+    [ -z "$RESULT" ] && RESULT=$(curl -s --interface "$TARGET" --connect-timeout 5 --max-time 8 https://www.cloudflare.com/cdn-cgi/trace 2>/dev/null)
+    [ -z "$RESULT" ] && { echo -e "\n${RED}Не удалось получить ответ через интерфейс!${NC}\n"; PAUSE; return; }
+    WARP_STAT=$(echo "$RESULT" | grep '^warp=' | cut -d= -f2); IP_STAT=$(echo "$RESULT" | grep '^ip=' | cut -d= -f2)
+    echo -e "\n${YELLOW}Внешний IP:${NC} $IP_STAT"
+    case "$WARP_STAT" in on|plus) echo -e "${YELLOW}WARP:${NC} ${GREEN}активен ($WARP_STAT)${NC}\n" ;; *) echo -e "${YELLOW}WARP:${NC} ${RED}не активен ($WARP_STAT)${NC}\n" ;; esac
+    PAUSE
+}
+
+menu_WARP() {
+    while true; do
+        clear; echo -e "${MAGENTA}Меню WARP (AmneziaWG)${NC}\n"
+        [ -f /root/WARP.conf ] && echo -e "${YELLOW}WARP.conf в /root/:${NC} ${GREEN}присутствует${NC}"
+        if pkg_is_installed amneziawg-tools && pkg_is_installed luci-proto-amneziawg && pkg_is_installed kmod-amneziawg; then
+            echo -e "${YELLOW}AmneziaWG:${NC} ${GREEN}установлен${NC}"; AWG_INST=1
+        else echo -e "${YELLOW}AmneziaWG:${NC} ${RED}не установлен${NC}"; AWG_INST=0; fi
+        IFL=$(list_awg_interfaces); [ -n "$IFL" ] && echo -e "${YELLOW}Интерфейсы:${NC} ${GREEN}$(echo "$IFL" | tr '\n' ' ')${NC}"
+        echo -e "\n${CYAN}1) ${GREEN}Сгенерировать ${NC}WARP${GREEN} в ${NC}/root"
+        if [ "$AWG_INST" = "1" ]; then echo -e "${CYAN}2) ${GREEN}Удалить ${NC}AmneziaWG"; else echo -e "${CYAN}2) ${GREEN}Установить ${NC}AmneziaWG"; fi
+        echo -e "${CYAN}3) ${GREEN}Установить ${NC}интерфейс${GREEN} с ${NC}AmneziaWG"
+        echo -e "${CYAN}4) ${GREEN}Удалить ${NC}интерфейс${GREEN} ${NC}AmneziaWG"
+        echo -e "${CYAN}5) ${GREEN}Интегрировать ${NC}WARP${GREEN} в интерфейс${NC}"
+        echo -e "${CYAN}6) ${GREEN}Показать ${NC}WARP.conf"
+        echo -e "${CYAN}7) ${GREEN}Статус интерфейсов${NC}"
+        echo -e "${CYAN}8) ${GREEN}Проверить работу ${NC}WARP${GREEN} через интерфейс${NC}"
+        echo -ne "${CYAN}Enter) ${GREEN}Вернуться в предыдущее меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "
+        read -r choiceW
+        case "$choiceW" in
+            1) generate_WARP ;;
+            2) if [ "$AWG_INST" = "1" ]; then
+                   if ! pkg_is_installed splify; then AWG_DELETE
+                   else echo -e "\n${RED}Удаление невозможно!${NC}\nAmneziaWG ${YELLOW}используется в ${NC}splify\n"; PAUSE; fi
+               else install_AWG; echo -e "\nAmneziaWG ${GREEN}установлен!${NC}\n"; PAUSE; fi ;;
+            3) install_awg_interface_menu ;;
+            4) delete_awg_interface_menu ;;
+            5) integrate_warp_menu ;;
+            6) show_warp_conf ;;
+            7) show_awg_status ;;
+            8) test_warp_interface ;;
+            *) return ;;
+        esac
+    done
+}
+
+
 # ==========================================
 # Главное меню
 # ==========================================
@@ -1813,7 +2207,9 @@ elif [ -f /etc/init.d/zapret2 ]; then S_NAME="Zapret2"; /etc/init.d/zapret2 stat
 if uci get firewall.@defaults[0].flow_offloading 2>/dev/null | grep -q '^1$' || uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null | grep -q '^1$'; then if ! grep -q 'meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc
 then echo -e "${RED}Включён ${NC}Flow Offloading${RED}!${NC}\n${NC}Zapret${RED} некорректно работает с включённым ${NC}Flow Offloading${RED}!\nПримените ${NC}FIX${RED} в системном меню!\n${NC}"; fi; fi
 INFO_ZPR; if grep -qE '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' "$EXCL_FILE" 2>/dev/null; then echo -e "${YELLOW}Исключённые IP:      ${RED}есть${NC}"; fi
-echo -e "\n${CYAN}1) ${GREEN}Меню${NC} Zapret\n${CYAN}2) ${GREEN}$Z2_ACTION_TEXT${NC} Zapret2\n${CYAN}3) ${GREEN}Меню ${NC}splify\n${CYAN}4) ${GREEN}Меню ${NC}Mixomo\n${CYAN}5) ${GREEN}Меню ${NC}NetShift\n${CYAN}6) ${GREEN}Меню ${NC}TG WS Proxy\n${CYAN}7) ${GREEN}Меню ${NC}DNS over HTTPS\n${CYAN}8) ${GREEN}Меню управления доменами в ${NC}hosts"
+
+echo -e "\n${CYAN}1) ${GREEN}Меню${NC} Zapret\n${CYAN}2) ${GREEN}$Z2_ACTION_TEXT${NC} Zapret2\n${CYAN}3) ${GREEN}Меню ${NC}splify\n${CYAN}4) ${GREEN}Меню ${NC}Mixomo\n${CYAN}5) ${GREEN}Меню ${NC}NetShift\n${CYAN}6) ${GREEN}Меню ${NC}TG WS Proxy\n${CYAN}7) ${GREEN}Меню ${NC}DNS over HTTPS\n${CYAN}8) ${GREEN}Меню управления доменами в ${NC}hosts\n${CYAN}9) ${GREEN}Меню ${NC}WARP ${GREEN}(${NC}AmneziaWG${GREEN})${NC}"
+
 echo -e "${CYAN}f) ${GREEN}Удалить ${NC}→${GREEN} установить ${NC}→${GREEN} настроить${NC} Zapret\n${CYAN}m) ${GREEN}Системное меню${NC}"; [ "$SHOW_S" = "1" ] && echo -e "${CYAN}s) ${GREEN}$S_ACTION${NC} $S_NAME"
 [ "$SHOW_S" = "2" ] && echo -e "${CYAN}s1) ${GREEN}$S1_ACTION${NC} Zapret\n${CYAN}s2) ${GREEN}$S2_ACTION${NC} Zapret2"; echo -ne "${CYAN}Enter) ${GREEN}Выход${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read choice
 case "$choice" in 999) echo; uninstall_zapret "1"; install_Zapret "1"; curl -fsSL ${GH_RAW}/StressOzz/Test/refs/heads/main/zapret -o "$CONF"; hosts_add "$ALL_BLOCKS"; rm -f "$EXCLUDE_FILE"; wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL"; ZAPRET_RESTART; PAUSE;;
@@ -1825,6 +2221,7 @@ case "$choice" in 999) echo; uninstall_zapret "1"; install_Zapret "1"; curl -fsS
 6) menu_TG;;
 7) DoH_menu;;
 8) menu_hosts;;
+9) menu_WARP;;
 f|F|а|А) zapret_key;;
 m|M|ь|Ь) sys_menu;;
 s|S|ы|Ы) toggle_zapret;;
