@@ -1938,13 +1938,27 @@ choose_awg_density_preset() {
     echo -e "${CYAN}Плотность:${NC} Jc=$AWG_JC Jmin=$AWG_JMIN Jmax=$AWG_JMAX"
 }
 
+_str_to_hex() {
+    # Кодирует строку в hex без зависимости от od/xxd — только printf/awk, есть везде.
+    if command -v od >/dev/null 2>&1; then
+        printf '%s' "$1" | od -An -tx1 | tr -d ' \n'
+    elif command -v hexdump >/dev/null 2>&1; then
+        printf '%s' "$1" | hexdump -v -e '/1 "%02x"'
+    else
+        printf '%s' "$1" | awk '
+            BEGIN { for (i = 0; i < 256; i++) hex[sprintf("%c", i)] = sprintf("%02x", i) }
+            { for (i = 1; i <= length($0); i++) printf "%s", hex[substr($0, i, 1)] }
+        '
+    fi
+}
+
 _dns_encode_domain() {
     local domain="$1" out="" label len hexlen hexlabel OLDIFS
     OLDIFS=$IFS; IFS='.'
     for label in $domain; do
         len=${#label}
         hexlen=$(printf '%02x' "$len")
-        hexlabel=$(printf '%s' "$label" | od -An -tx1 | tr -d ' \n')
+        hexlabel=$(_str_to_hex "$label")
         out="${out}${hexlen}${hexlabel}"
     done
     IFS=$OLDIFS
