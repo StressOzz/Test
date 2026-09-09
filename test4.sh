@@ -1938,27 +1938,58 @@ choose_awg_density_preset() {
     echo -e "${CYAN}Плотность:${NC} Jc=$AWG_JC Jmin=$AWG_JMIN Jmax=$AWG_JMAX"
 }
 
+_dns_encode_domain() {
+    local domain="$1" out="" label len hexlen hexlabel OLDIFS
+    OLDIFS=$IFS; IFS='.'
+    for label in $domain; do
+        len=${#label}
+        hexlen=$(printf '%02x' "$len")
+        hexlabel=$(printf '%s' "$label" | od -An -tx1 | tr -d ' \n')
+        out="${out}${hexlen}${hexlabel}"
+    done
+    IFS=$OLDIFS
+    echo "${out}00"
+}
+
+build_dns_i1() {
+    local domains="www.google.com www.microsoft.com www.cloudflare.com www.apple.com www.amazon.com api.github.com fonts.googleapis.com www.wikipedia.org"
+    local n picked tid qname
+    n=$(( (RANDOM % 8) + 1 ))
+    picked=$(printf '%s\n' $domains | sed -n "${n}p")
+    [ -z "$picked" ] && picked="www.google.com"
+    tid=$(printf '%04x' $(( RANDOM % 65536 )))
+    qname=$(_dns_encode_domain "$picked")
+    printf '<b 0x%s01000001000000000000%s00010001>' "$tid" "$qname"
+}
+
+_fill_i2_i5_random() {
+    r2=$(( (RANDOM % 40) + 16 )); r3=$(( (RANDOM % 32) + 8 )); r4=$(( (RANDOM % 48) + 16 ))
+    AWG_I2="<r ${r2}><t>"
+    AWG_I3="<rd ${r3}>"
+    AWG_I4="<rc ${r4}>"
+    AWG_I5="<r 8><t><r 8>"
+}
+
 choose_cps_format() {
     echo -e "\n${MAGENTA}Выберите формат маскировки перед хендшейком${NC} (CPS / I1-I5)"
     echo -e "${CYAN}1) ${GREEN}Без ${NC}CPS ${GREEN}(v1, только Jc/Jmin/Jmax)${NC}"
-    echo -e "${CYAN}2) ${GREEN}I1 ${NC}(v1.5, классика — статичный ${NC}WARP QUIC${GREEN}, как в старых версиях этого скрипта)"
-    echo -e "${CYAN}3) ${GREEN}I1-I5 ${NC}(v1.5/2.0, полная цепочка ${NC}CPS${GREEN}, генерируется заново при каждом запуске) ${NC}— рекомендуется"
-    echo -ne "${CYAN}Enter) ${GREEN}I1-I5${NC}\n\n${YELLOW}Выберите пункт:${NC} "
+    echo -e "${CYAN}2) ${GREEN}I1 ${NC}— настоящий захват ${NC}WARP QUIC${GREEN} (как в старых версиях этого скрипта, без I2-I5)${NC}"
+    echo -e "${CYAN}3) ${GREEN}I1${NC} (тот же настоящий захват ${NC}WARP QUIC${GREEN}) ${NC}+ I2-I5 ${GREEN}случайная энтропия${NC}"
+    echo -e "${CYAN}4) ${GREEN}I1 ${NC}— валидный ${NC}DNS-запрос${GREEN} к случайному домену${GREEN} + I2-I5 ${NC}(уникально каждый запуск) ${GREEN}— рекомендуется${NC}"
+    echo -ne "${CYAN}Enter) ${GREEN}пункт 4${NC}\n\n${YELLOW}Выберите пункт:${NC} "
     read -r cch
+    AWG_I2=""; AWG_I3=""; AWG_I4=""; AWG_I5=""
     case "$cch" in
-        1) AWG_I1=""; AWG_I2=""; AWG_I3=""; AWG_I4=""; AWG_I5=""
+        1) AWG_I1=""
            echo -e "${CYAN}CPS отключен${NC}" ;;
-        2) AWG_I1="$AWG_I1_STATIC"; AWG_I2=""; AWG_I3=""; AWG_I4=""; AWG_I5=""
-           echo -e "${YELLOW}Внимание:${NC} это значение одинаково у всех, кто пользуется этим скриптом — само по себе может служить сигнатурой при массовом использовании." ;;
-        *)
-           r1=$(( (RANDOM % 9) + 8 )); r2=$(( (RANDOM % 40) + 16 )); r3=$(( (RANDOM % 32) + 8 )); r4=$(( (RANDOM % 48) + 16 ))
-           AWG_I1="<b 0xc30000000108><r ${r1}><b 0x08><r 8><b 0x0045dc><t><r ${r1}>"
-           AWG_I2="<r ${r2}><t>"
-           AWG_I3="<rd ${r3}>"
-           AWG_I4="<rc ${r4}>"
-           AWG_I5="<r 8><t><r 8>"
-           echo -e "${GREEN}Сгенерирована уникальная цепочка ${NC}I1-I5${GREEN} (QUIC-инициация + случайные данные/timestamp)${NC}"
-           echo -e "${YELLOW}Если после подключения нет интернета — проверьте версию ${NC}luci-proto-amneziawg${YELLOW} на роутере (нужна поддержка ${NC}I2-I5${YELLOW}), иначе выберите пункт ${NC}2${YELLOW}.${NC}" ;;
+        2) AWG_I1="$AWG_I1_STATIC"
+           echo -e "${YELLOW}Внимание:${NC} этот ${NC}I1${YELLOW} одинаков у всех, кто пользуется этим скриптом." ;;
+        3) AWG_I1="$AWG_I1_STATIC"
+           _fill_i2_i5_random
+           echo -e "${GREEN}I1${NC} — реальный захват ${NC}WARP QUIC${GREEN}, ${NC}I2-I5${GREEN} — случайная энтропия (генерируется заново)${NC}" ;;
+        *) AWG_I1="$(build_dns_i1)"
+           _fill_i2_i5_random
+           echo -e "${GREEN}I1${NC} — синтаксически корректный DNS-запрос к случайному домену, ${NC}I2-I5${GREEN} — случайная энтропия. Всё уникально при каждой генерации${NC}" ;;
     esac
 }
 
