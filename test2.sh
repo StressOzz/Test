@@ -405,16 +405,70 @@ WARP_EP="${_best_ip}:${WARP_PORT:-4500}"; else WARP_EP="engage.cloudflareclient.
 choose_endpoint() { echo -e "\n${MAGENTA}Меню выбора endpoint${NC}"; echo -e "${CYAN}1) ${GREEN}Использовать${NC} engage.cloudflareclient.com:4500\n${CYAN}2) ${GREEN}Подобрать ${NC}endpoint${GREEN} автоматически${NC}\n"
 echo -en "${YELLOW}Выберите пункт: ${NC}"; read -r choiceWRP; case "$choiceWRP" in 2) find_best_endpoint ;; *) WARP_EP="engage.cloudflareclient.com:4500"; echo -e "\n${CYAN}Используем: ${NC}$WARP_EP" ;; esac; }
 register_request() { curl -fsSL --max-time 30 -X POST "${W1%/}/api/reg" -H "Content-Type: application/json" -H "Accept: application/json" -d "{\"key\":\"$PUB\",\"install_id\":\"\",\"fcm_token\":\"\",\"model\":\"PC\",\"locale\":\"en_US\",\"tos\":\"$TOS\",\"type\":\"Android\"}" -o "$REG" >/dev/null 2>&1; }
-register_warp() { [ -d "$TMP_SPL" ] || mkdir -p "$TMP_SPL"; REG="$TMP_SPL/reg.json"; rm -f "$REG"; echo -e "\n${MAGENTA}Генерируем WARP${NC}"; echo -e "${CYAN}Используем основной метод${NC}"; if curl -fsSL --max-time 30 "$II" -o "$REG" 2>/dev/null && grep -q '"public_key"' "$REG"; then
-PRIV=$(grep -o '"key"[[:space:]]*:[[:space:]]*"[^"]*"' "$REG" | head -n1 | sed 's/.*:[[:space:]]*"//;s/"$//'); WARP_PEER=$(grep -o '"public_key"[[:space:]]*:[[:space:]]*"[^"]*"' "$REG" | head -n1 | sed 's/.*:[[:space:]]*"//;s/"$//')
-WARP_V4=$(grep -o '"v4"[[:space:]]*:[[:space:]]*"[^"]*"' "$REG" | sed -n '2p' | sed 's/.*:[[:space:]]*"//;s/"$//'); WARP_V6=$(grep -o '"v6"[[:space:]]*:[[:space:]]*"[^"]*"' "$REG" | sed -n '2p' | sed 's/.*:[[:space:]]*"//;s/"$//')
-if [ -n "$PRIV" ] && [ -n "$WARP_PEER" ] && [ -n "$WARP_V4" ]; then echo -e "WARP ${GREEN}сгенерирован!${NC}"; return 0; fi; echo -e "${YELLOW}Основной метод вернул неполные данные, переключаемся на запасной${NC}"; else echo -e "${YELLOW}Основной метод недоступен, переключаемся на запасной${NC}"; fi
-ZAVISIM || return 1; if command -v awg >/dev/null 2>&1; then GEN=awg; else GEN=wg; fi; PRIV="$("$GEN" genkey 2>/dev/null)"; PUB="$(printf '%s\n' "$PRIV" | "$GEN" pubkey 2>/dev/null)"
-TOS="$(date -u +%Y-%m-%dT%H:%M:%S.000000000Z)"; echo -e "${CYAN}Регистрируем устройство${NC}"; if register_request && jq -e '.config.peers[0].public_key' "$REG" >/dev/null 2>&1; then echo -e "${CYAN}Используем основной сервер${NC}"; else echo -e "${CYAN}Используем резервный сервер${NC}"
-if ! curl -fsSL --max-time 60 "$II" -o "$REG" >/dev/null 2>&1; then echo -e "${RED}Не удалось получить WARP${NC}"; PAUSE; return 1; fi; if ! jq -e '.result.config.peers[0].public_key' "$REG" >/dev/null 2>&1; then echo -e "${RED}Резервный источник вернул неверный формат${NC}"; PAUSE; return 1; fi
-PRIV="$(jq -r '.result.key' "$REG")"; WARP_PEER="$(jq -r '.result.config.peers[0].public_key' "$REG")"; WARP_V4="$(jq -r '.result.config.interface.addresses.v4' "$REG")"; WARP_V6="$(jq -r '.result.config.interface.addresses.v6 // empty' "$REG")"; fi; if [ -z "$WARP_PEER" ]
-then WARP_PEER="$(jq -r '.config.peers[0].public_key' "$REG")"; WARP_V4="$(jq -r '.config.interface.addresses.v4' "$REG")"; WARP_V6="$(jq -r '.config.interface.addresses.v6 // empty' "$REG")"; fi
-[ -n "$WARP_PEER" ] && [ "$WARP_PEER" != "null" ] || { echo -e "${RED}Нет peer public_key${NC}"; PAUSE; return 1; }; [ -n "$WARP_V4" ] && [ "$WARP_V4" != "null" ] || { echo -e "${RED}Нет IPv4${NC}"; PAUSE; return 1; }; echo -e "WARP ${GREEN}сгенерирован!${NC}"; }
+
+
+register_warp() {
+    [ -d "$TMP_SPL" ] || mkdir -p "$TMP_SPL"
+    REG="$TMP_SPL/reg.json"; rm -f "$REG"
+    WARP_SUGGESTED_EP=""
+    echo -e "\n${MAGENTA}Генерируем WARP${NC}"
+    ZAVISIM || return 1
+    if command -v awg >/dev/null 2>&1; then GEN=awg; else GEN=wg; fi
+    PRIV="$("$GEN" genkey 2>/dev/null)"
+    PUB="$(printf '%s\n' "$PRIV" | "$GEN" pubkey 2>/dev/null)"
+    if [ -z "$PRIV" ] || [ -z "$PUB" ]; then echo -e "${RED}Не удалось сгенерировать ключи! Установлен ли ${NC}wg${RED}/${NC}awg${RED}?${NC}\n"; PAUSE; return 1; fi
+    TOS="$(date -u +%Y-%m-%dT%H:%M:%S.000Z)"
+    BODY="{\"key\":\"$PUB\",\"install_id\":\"\",\"fcm_token\":\"\",\"tos\":\"$TOS\",\"type\":\"Android\",\"locale\":\"en_US\"}"
+
+    _warp_finalize() {
+        case "$WARP_V4" in */*) ;; *) WARP_V4="${WARP_V4}/32" ;; esac
+        if [ -n "$WARP_V6" ] && [ "$WARP_V6" != "null" ]; then case "$WARP_V6" in */*) ;; *) WARP_V6="${WARP_V6}/128" ;; esac; else WARP_V6=""; fi
+    }
+
+    echo -e "${CYAN}Регистрируем устройство в ${NC}Cloudflare${CYAN} (официальный API)${NC}"
+    HCODE=$(curl -sS --tlsv1.2 --tls-max 1.2 --max-time 20 \
+        -A "okhttp/3.12.1" -H "CF-Client-Version: a-6.3-1922" -H "Content-Type: application/json; charset=UTF-8" \
+        -X POST "https://api.cloudflareclient.com/v0a1922/reg" -d "$BODY" \
+        -o "$REG" -w "%{http_code}" 2>/dev/null)
+    if [ "$HCODE" != "200" ] || [ ! -s "$REG" ]; then
+        echo -e "${YELLOW}Первая попытка не удалась (код: ${HCODE:-нет соединения}), пробуем без жёсткого ограничения TLS${NC}"
+        HCODE=$(curl -sS --max-time 20 -A "okhttp/3.12.1" -H "CF-Client-Version: a-6.3-1922" -H "Content-Type: application/json; charset=UTF-8" \
+            -X POST "https://api.cloudflareclient.com/v0a1922/reg" -d "$BODY" \
+            -o "$REG" -w "%{http_code}" 2>/dev/null)
+    fi
+    if [ "$HCODE" = "200" ] && jq -e '.config.peers[0].public_key' "$REG" >/dev/null 2>&1; then
+        WARP_PEER=$(jq -r '.config.peers[0].public_key' "$REG")
+        WARP_V4=$(jq -r '.config.interface.addresses.v4' "$REG")
+        WARP_V6=$(jq -r '.config.interface.addresses.v6 // empty' "$REG")
+        WARP_SUGGESTED_EP=$(jq -r '.config.peers[0].endpoint.host // empty' "$REG")
+        if [ -n "$WARP_PEER" ] && [ "$WARP_PEER" != "null" ] && [ -n "$WARP_V4" ] && [ "$WARP_V4" != "null" ]; then
+            _warp_finalize; echo -e "WARP ${GREEN}зарегистрирован через официальный API!${NC}"; return 0
+        fi
+    fi
+
+    echo -e "${YELLOW}Официальный API не ответил (код: ${HCODE:-?}). Пробуем резервные сервисы${NC}"
+    if curl -fsSL --max-time 20 "$II" -o "$REG" 2>/dev/null && grep -q '"public_key"' "$REG"; then
+        PRIV=$(grep -o '"key"[[:space:]]*:[[:space:]]*"[^"]*"' "$REG" | head -n1 | sed 's/.*:[[:space:]]*"//;s/"$//')
+        WARP_PEER=$(grep -o '"public_key"[[:space:]]*:[[:space:]]*"[^"]*"' "$REG" | head -n1 | sed 's/.*:[[:space:]]*"//;s/"$//')
+        WARP_V4=$(grep -o '"v4"[[:space:]]*:[[:space:]]*"[^"]*"' "$REG" | sed -n '2p' | sed 's/.*:[[:space:]]*"//;s/"$//')
+        WARP_V6=$(grep -o '"v6"[[:space:]]*:[[:space:]]*"[^"]*"' "$REG" | sed -n '2p' | sed 's/.*:[[:space:]]*"//;s/"$//')
+        if [ -n "$PRIV" ] && [ -n "$WARP_PEER" ] && [ -n "$WARP_V4" ]; then _warp_finalize; echo -e "WARP ${GREEN}сгенерирован через резервный сервис!${NC}"; return 0; fi
+    fi
+    if curl -fsSL --max-time 20 -X POST "${W1%/}/api/reg" -H "Content-Type: application/json" -d "$BODY" -o "$REG" 2>/dev/null; then
+        if jq -e '.result.config.peers[0].public_key' "$REG" >/dev/null 2>&1; then
+            WARP_PEER=$(jq -r '.result.config.peers[0].public_key' "$REG"); WARP_V4=$(jq -r '.result.config.interface.addresses.v4' "$REG"); WARP_V6=$(jq -r '.result.config.interface.addresses.v6 // empty' "$REG")
+        elif jq -e '.config.peers[0].public_key' "$REG" >/dev/null 2>&1; then
+            WARP_PEER=$(jq -r '.config.peers[0].public_key' "$REG"); WARP_V4=$(jq -r '.config.interface.addresses.v4' "$REG"); WARP_V6=$(jq -r '.config.interface.addresses.v6 // empty' "$REG")
+        fi
+        if [ -n "$WARP_PEER" ] && [ "$WARP_PEER" != "null" ] && [ -n "$WARP_V4" ] && [ "$WARP_V4" != "null" ]; then _warp_finalize; echo -e "WARP ${GREEN}сгенерирован через резервный сервис!${NC}"; return 0; fi
+    fi
+
+    echo -e "\n${RED}Не удалось зарегистрировать устройство ни одним способом!${NC}"
+    echo -e "${YELLOW}Проверьте: доступен ли ${NC}api.cloudflareclient.com${YELLOW} с роутера (${NC}curl -I https://api.cloudflareclient.com${YELLOW}), не заблокирован ли он у провайдера, и не устарела ли версия ${NC}API${YELLOW} (${NC}v0a1922${YELLOW}) — Cloudflare периодически поднимает минимальную версию клиента.${NC}\n"
+    PAUSE; return 1
+}
+
+
 restart_splify() { echo -e "\n${MAGENTA}Перезапускаем splify${NC}"; echo -en "${YELLOW}Подождите...${NC}"; /usr/local/sbin/splify-disable >/dev/null 2>&1; /etc/init.d/splify enable >/dev/null 2>&1; /etc/init.d/splify-agent enable >/dev/null 2>&1
 uci -q set splify.global.telemetry="0" && uci commit splify; /etc/init.d/splify restart >/dev/null 2>&1; sleep 3; /etc/init.d/splify-agent restart >/dev/null 2>&1; sleep 3; /usr/local/sbin/splify-apply >/dev/null 2>&1
 sleep 10; echo -e "\n\nsplify ${GREEN}перезапущен!${NC}"; echo -e "\n${YELLOW}Инициализация splify может занять несколько минут!${NC}"; }
@@ -1826,7 +1880,7 @@ resolve_host_ip() {
 }
 
 choose_warp_port() {
-    WARP_PORTS_LIST="2408 500 1701 4500 4443 8443 8886 8854 2371"
+    WARP_PORTS_LIST="2408 500 1701 4500 1074 894 8886 8854 2371"
     echo -e "\n${MAGENTA}Выберите порт${NC} WARP"
     i=1; for p in $WARP_PORTS_LIST; do echo -e "${CYAN}$i) ${GREEN}$p${NC}"; i=$((i + 1)); done
     echo -e "${CYAN}0) ${GREEN}Ввести порт вручную${NC}"
@@ -1913,11 +1967,15 @@ choose_cps_format() {
 # он не поддерживает, их включение полностью ломает подключение.
 WARP_choose_endpoint_full() {
     echo -e "\n${MAGENTA}Меню выбора${NC} endpoint"
+    [ -n "$WARP_SUGGESTED_EP" ] && echo -e "${CYAN}0) ${GREEN}Сервер, выданный Cloudflare при регистрации: ${NC}$WARP_SUGGESTED_EP ${GREEN}— рекомендуется${NC}"
     echo -e "${CYAN}1) ${GREEN}Использовать${NC} engage.cloudflareclient.com"
     echo -e "${CYAN}2) ${GREEN}Подобрать ${NC}endpoint${GREEN} автоматически (по пингу)${NC}"
     echo -e "${CYAN}3) ${GREEN}Ввести ${NC}IP${GREEN} / хост вручную${NC}"
     echo -ne "\n${YELLOW}Выберите пункт:${NC} "
     read -r ech
+    if [ "$ech" = "0" ] && [ -n "$WARP_SUGGESTED_EP" ]; then
+        WARP_EP="$WARP_SUGGESTED_EP"; echo -e "\n${CYAN}Используем ${NC}endpoint${CYAN}:${NC} $WARP_EP"; return
+    fi
     choose_warp_port
     case "$ech" in
         2) find_best_endpoint ;;
@@ -1933,9 +1991,9 @@ generate_WARP_local() {
     echo -e "${YELLOW}Примечание:${NC} Header Protection (AWG 3.0/3.1) и ненулевые S1-S4 не используются — сервер Cloudflare WARP работает как обычный WireGuard-пир и не поддерживает эти расширения, их включение полностью сломает подключение. Маскировка строится на Jc/Jmin/Jmax и I1-I5 (CPS) — они совместимы с любым WireGuard-сервером."
     choose_awg_density_preset
     choose_cps_format
+    register_warp || return 1
     WARP_choose_endpoint_full
     choose_warp_dns
-    register_warp || return 1
     WARP_TO_ROOT
     echo -e "\nWARP ${GREEN}сгенерирован и сохранён в${NC} /root/WARP.conf${GREEN}!${NC}\n"
     PAUSE
