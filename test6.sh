@@ -1880,7 +1880,7 @@ resolve_host_ip() {
 }
 
 choose_warp_port() {
-    WARP_PORTS_LIST="2408 500 1701 4500 1074 894 8886 8854 2371"
+    WARP_PORTS_LIST="2408 500 4500"
     echo -e "\n${MAGENTA}Выберите порт${NC} WARP"
     i=1; for p in $WARP_PORTS_LIST; do echo -e "${CYAN}$i) ${GREEN}$p${NC}"; i=$((i + 1)); done
     echo -e "${CYAN}0) ${GREEN}Ввести порт вручную${NC}"
