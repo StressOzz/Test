@@ -1,7 +1,5 @@
 #!/bin/sh
-# Zapret Manager LuCI installer — самодостаточный скрипт (все файлы зашиты внутри).
-# Использование на роутере (по SSH): sh install-zapret-manager.sh
-# Или: wget -O - https://raw.githubusercontent.com/<user>/<repo>/main/install-zapret-manager.sh | sh
+# Zapret Manager by StressOzz LuCI installer — самодостаточный скрипт (все файлы зашиты внутри).
 set -e
 
 echo "==> Устанавливаем Zapret Manager (LuCI)"
@@ -22,14 +20,6 @@ rm -rf \
 
 mkdir -p /usr/lib/zapret-manager
 cat > '/usr/lib/zapret-manager/backend.sh' << 'ZM_INSTALLER_EOF'
-#!/bin/sh
-# ==========================================================================
-# Zapret Manager — non-interactive backend library
-# Called ONLY by /usr/libexec/rpcd/zapret-manager (ubus).
-# Every function/branch prints a single line of valid JSON to stdout.
-# Long-running actions are started in background via job_start() and
-# polled by the frontend through job_status()/log_tail().
-# ==========================================================================
 
 CONF="/etc/config/zapret"
 GH_RAW="https://raw.githubusercontent.com"
