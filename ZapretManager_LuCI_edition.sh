@@ -1586,7 +1586,7 @@ do_doh_install() {
 	$UPDATE >/dev/null 2>&1
 	echo "==> Устанавливаем https-dns-proxy и luci-app-https-dns-proxy"
 	$INSTALL https-dns-proxy luci-app-https-dns-proxy >/dev/null 2>&1 || { echo "ОШИБКА установки"; return 1; }
-	echo "==> Готово, DNS over HTTPS установлен — выберите провайдера ниже"
+	echo "==> Готово, DNS over HTTPS установлен"
 }
 
 do_doh_remove() {
