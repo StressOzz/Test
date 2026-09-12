@@ -850,11 +850,11 @@ LUCI_EDITION="/usr/libexec/rpcd/zapret-manager"
 install_zapret_manager_luci() {
     if [ -e "$LUCI_EDITION" ]; then
         echo -e "\n${MAGENTA}Удаляем Zapret Manager LuCI${NC}"
-rm -rf /usr/lib/zapret-manager /usr/libexec/rpcd/zapret-manager /usr/share/luci/menu.d/luci-app-zapret-manager.json /usr/share/rpcd/acl.d/luci-app-zapret-manager.json /www/luci-static/resources/view/zapret-manager /www/luci-static/resources/zapret-manager /tmp/zapret-manager /tmp/luci-indexcache* /tmp/luci-modulecache/* && /etc/init.d/rpcd restart && /etc/init.d/uhttpd restart
+        rm -rf /usr/lib/zapret-manager /usr/libexec/rpcd/zapret-manager /usr/share/luci/menu.d/luci-app-zapret-manager.json /usr/share/rpcd/acl.d/luci-app-zapret-manager.json /www/luci-static/resources/view/zapret-manager /www/luci-static/resources/zapret-manager /tmp/zapret-manager /tmp/luci-indexcache* /tmp/luci-modulecache/* && /etc/init.d/rpcd restart && /etc/init.d/uhttpd restart
         echo -e "Zapret Manager LuCI ${GREEN}удалён!${NC}\n"
     else
         echo -e "\n${MAGENTA}Устанавливаем Zapret Manager LuCI${NC}"
-        sh <(wget -qO - https://raw.githubusercontent.com/StressOzz/Test/refs/heads/main/ZapretManager_LuCI_edition.sh)
+        sh <(wget -qO - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/main/ZapretManager_LuCI.sh)
         echo -e "Zapret Manager LuCI ${GREEN}установлен!${NC}\n"
     fi
     PAUSE
