@@ -85,6 +85,16 @@ job_start() {
 	local name="$1"; shift
 	local log="$JOBS_DIR/$name.log"
 	local pid="$JOBS_DIR/$name.pid"
+	# Если задача с таким именем уже выполняется (двойной клик, гонка на
+	# фронтенде и т.п.) — НЕ запускаем вторую копию поверх первой: обе будут
+	# писать в одни и те же временные файлы одновременно, что даёт задвоенный
+	# вывод и задвоенные результаты. Вместо этого просто подключаемся к уже
+	# идущей задаче тем же job-именем (started:true — фронтенд и так просто
+	# продолжит опрашивать её через pollJob, ничего менять не нужно).
+	if [ -f "$pid" ] && kill -0 "$(cat "$pid" 2>/dev/null)" 2>/dev/null; then
+		printf '{"started":true,"job":"%s","already_running":true}\n' "$name"
+		return 0
+	fi
 	: > "$log"
 	( "$@" >>"$log" 2>&1; echo "__DONE__ $?" >>"$log" ) &
 	echo $! > "$pid"
@@ -206,20 +216,18 @@ do_install_zapret() {
 	fi
 
 	echo "==> Скачиваем $url"
-	local attempt=1 max_attempts=3
+	local attempt=1 max_attempts=5
 	while [ "$attempt" -le "$max_attempts" ]; do
-		[ "$attempt" -gt 1 ] && echo "==> Попытка $attempt из $max_attempts (предыдущая загрузка оказалась повреждена — возможно, нестабильная сеть)"
 		rm -f zapret.zip
-		wget -q -U "Mozilla/5.0" -O zapret.zip "$url" || { echo "ОШИБКА: скачивание не удалось"; attempt=$((attempt + 1)); continue; }
+		wget -q -U "Mozilla/5.0" -O zapret.zip "$url" >/dev/null 2>&1
 		command -v unzip >/dev/null 2>&1 || { echo "==> Устанавливаем unzip"; $INSTALL unzip >/dev/null 2>&1; }
 		if [ -s zapret.zip ] && unzip -tq zapret.zip >/dev/null 2>&1; then
 			break
 		fi
-		echo "!! Скачанный архив повреждён (проверка целостности не прошла)"
 		attempt=$((attempt + 1))
 	done
 	if [ "$attempt" -gt "$max_attempts" ]; then
-		echo "ОШИБКА: не удалось скачать целый архив за $max_attempts попытки — проверьте соединение с GitHub"
+		echo "ОШИБКА: не удалось скачать целый архив за $max_attempts попыток — проверьте соединение с GitHub"
 		return 1
 	fi
 	unzip -o zapret.zip >/dev/null 2>&1
@@ -498,24 +506,22 @@ do_add_fake_flow() {
 
 do_flowseal_download() {
 	_ensure_deps
-	local out zip tmp attempt=1 max_attempts=3
+	local out zip tmp attempt=1 max_attempts=5
 	out="$(_flowseal_file)"; zip="$JOBS_DIR/flowseal.zip"; tmp="$JOBS_DIR/flowseal_src"
 	echo "==> Скачиваем список стратегий Flowseal"
 	rm -rf "$tmp" "$zip"; : > "$out"
 	command -v unzip >/dev/null 2>&1 || $INSTALL unzip >/dev/null 2>&1
 
 	while [ "$attempt" -le "$max_attempts" ]; do
-		[ "$attempt" -gt 1 ] && echo "==> Попытка $attempt из $max_attempts (предыдущая загрузка оказалась повреждена — возможно, нестабильная сеть)"
 		rm -f "$zip"
-		wget -q -U "Mozilla/5.0" -O "$zip" "$FLOWSEAL_ZIP" || { echo "ОШИБКА скачивания"; attempt=$((attempt + 1)); continue; }
+		wget -q -U "Mozilla/5.0" -O "$zip" "$FLOWSEAL_ZIP" >/dev/null 2>&1
 		if [ -s "$zip" ] && unzip -tq "$zip" >/dev/null 2>&1; then
 			break
 		fi
-		echo "!! Скачанный архив повреждён (проверка целостности не прошла)"
 		attempt=$((attempt + 1))
 	done
 	if [ "$attempt" -gt "$max_attempts" ]; then
-		echo "ОШИБКА: не удалось скачать целый архив за $max_attempts попытки — проверьте соединение с GitHub"
+		echo "ОШИБКА: не удалось скачать целый архив за $max_attempts попыток — проверьте соединение с GitHub"
 		return 1
 	fi
 
