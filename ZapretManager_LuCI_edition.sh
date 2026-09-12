@@ -2083,7 +2083,16 @@ function refreshBanner(message) {
 		E('span', {}, message || 'Список меню LuCI мог измениться — выйдите и зайдите заново, чтобы увидеть изменения.'),
 		E('button', {
 			'class': 'cbi-button cbi-button-positive',
-			'click': function() { location.href = L.url('admin/logout'); }
+			'click': function() {
+				// Разрываем сессию в фоне, затем перезагружаем ИМЕННО текущую
+				// страницу (а не отдельный URL logout) — LuCI при недействительной
+				// сессии сама показывает форму входа прямо на этом адресе и после
+				// успешного входа возвращает сюда же (штатное поведение при
+				// истечении сессии, тут просто используем его напрямую).
+				fetch(L.url('admin/logout'), { credentials: 'same-origin' }).catch(function() {}).then(function() {
+					location.reload();
+				});
+			}
 		}, 'Выйти из LuCI')
 	]);
 }
