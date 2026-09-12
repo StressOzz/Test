@@ -1325,7 +1325,7 @@ rm -rf /usr/lib/zapret-manager /usr/libexec/rpcd/zapret-manager \
 rm -f "$0"
 ZM_UNINSTALL_EOF
 	chmod 0755 "$script"
-	nohup sh "$script" >/dev/null 2>&1 &
+	( sh "$script" >/dev/null 2>&1 & )
 	printf '{"ok":true}\n'
 }
 
@@ -3560,10 +3560,12 @@ return view.extend({
 						zm.toast('Удаляем Zapret Manager из LuCI', 'warning');
 						zm.systemUninstallPanel().then(function(res) {
 							if (res.error) { zm.renderLog(uninstallLog, '==> ОШИБКА: ' + res.error); zm.toast(res.error, 'error'); return; }
-							zm.renderLog(uninstallLog, '==> Готово. Панель удалена, страница больше не будет отвечать.');
+							zm.renderLog(uninstallLog, '==> Готово. Панель удалена, страница больше не будет отвечать. Выходим из LuCI');
 							zm.toast('Zapret Manager удалён из LuCI', 'info');
+							setTimeout(function() { location.href = L.url('admin/logout'); }, 2500);
 						}).catch(function() {
-							zm.renderLog(uninstallLog, '==> Готово (соединение прервано — это ожидаемо, панель уже удалена).');
+							zm.renderLog(uninstallLog, '==> Готово (соединение прервано — это ожидаемо, панель уже удалена). Выходим из LuCI');
+							setTimeout(function() { location.href = L.url('admin/logout'); }, 2500);
 						});
 					}
 				}, 'Удалить панель из LuCI')
