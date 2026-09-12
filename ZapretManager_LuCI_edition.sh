@@ -2080,11 +2080,11 @@ function pollJob(job, logEl, onDone, onTick) {
 
 function refreshBanner(message) {
 	return E('div', { 'class': 'zm-refresh-banner zm-show' }, [
-		E('span', {}, message || 'Список меню LuCI мог измениться — обновите страницу (Ctrl+F5), чтобы увидеть изменения.'),
+		E('span', {}, message || 'Список меню LuCI мог измениться — выйдите и зайдите заново, чтобы увидеть изменения.'),
 		E('button', {
 			'class': 'cbi-button cbi-button-positive',
-			'click': function() { location.reload(); }
-		}, 'Обновить страницу')
+			'click': function() { location.href = L.url('admin/logout'); }
+		}, 'Выйти из LuCI')
 	]);
 }
 
@@ -2404,7 +2404,7 @@ return view.extend({
 					view.refreshOverview();
 					if (ok && (action === 'install' || action === 'remove')) {
 						view.bannerEl.innerHTML = '';
-						view.bannerEl.appendChild(zm.refreshBanner('Пункт меню Zapret в LuCI мог измениться — обновите страницу.'));
+						view.bannerEl.appendChild(zm.refreshBanner('Пункт меню Zapret в LuCI мог измениться — выйдите и зайдите заново.'));
 					}
 				});
 			} else if (res) {
@@ -2433,7 +2433,7 @@ return view.extend({
 					view.refreshOverview();
 					if (ok && (action === 'install' || action === 'remove')) {
 						view.bannerEl.innerHTML = '';
-						view.bannerEl.appendChild(zm.refreshBanner('Пункт меню Zapret2 в LuCI мог измениться — обновите страницу.'));
+						view.bannerEl.appendChild(zm.refreshBanner('Пункт меню Zapret2 в LuCI мог измениться — выйдите и зайдите заново.'));
 					}
 				});
 			} else if (res) {
@@ -2594,7 +2594,7 @@ return view.extend({
 							zm.toast(ok ? 'DNS over HTTPS установлен' : 'Ошибка установки', ok ? 'info' : 'error');
 							if (ok) {
 								bannerEl.innerHTML = '';
-								bannerEl.appendChild(zm.refreshBanner('Пункт меню DNS over HTTPS в LuCI мог измениться — обновите страницу.'));
+								bannerEl.appendChild(zm.refreshBanner('Пункт меню DNS over HTTPS в LuCI мог измениться — выйдите и зайдите заново.'));
 							}
 						});
 					} else {
@@ -2618,7 +2618,7 @@ return view.extend({
 							zm.toast(ok ? 'DNS over HTTPS удалён' : 'Ошибка удаления', ok ? 'info' : 'error');
 							if (ok) {
 								bannerEl.innerHTML = '';
-								bannerEl.appendChild(zm.refreshBanner('Пункт меню DNS over HTTPS в LuCI мог измениться — обновите страницу.'));
+								bannerEl.appendChild(zm.refreshBanner('Пункт меню DNS over HTTPS в LuCI мог измениться — выйдите и зайдите заново.'));
 							}
 						});
 					} else {
