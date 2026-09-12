@@ -2585,7 +2585,7 @@ return view.extend({
 		var dvCard = E('div', { 'class': 'zm-card' }, [
 			E('h3', {}, 'Стратегия для discord.media'),
 			dvGrid,
-			E('p', { 'class': 'zm-hint' }, 'Нужна базовая стратегия с блоком discord.media (например Flowseal general).')
+			E('p', { 'class': 'zm-hint' }, 'Нужна базовая стратегия с блоком discord.media')
 		]);
 
 		var fakeCard = E('div', { 'class': 'zm-card' }, [
@@ -3013,7 +3013,7 @@ return view.extend({
 			E('h3', {}, 'Заменить hosts на GeoHide'),
 			E('p', { 'class': 'zm-hint' }, 'Внимание: это ПОЛНОСТЬЮ заменит файл /etc/hosts на список от GeoHide DNS — все блоки выше и любые ваши собственные записи будут удалены.'),
 			geoGrid,
-			E('p', { 'class': 'zm-hint' }, 'Или восстановить hosts к чистому виду (только localhost — так же, как пункт «Восстановить hosts» в оригинальном Zapret Manager). Уберёт и блоки выше, и GeoHide.'),
+			E('p', { 'class': 'zm-hint' }, 'Или восстановить hosts к чистому виду. Уберёт и блоки выше, и GeoHide.'),
 			E('div', { 'class': 'zm-actions' }, [ resetBtn ]),
 			geoLogEl
 		]);
@@ -3534,9 +3534,7 @@ return view.extend({
 			E('p', { 'class': 'zm-hint' },
 				'Уберёт только веб-интерфейс (эту панель) — саму программу-оболочку из LuCI. ' +
 				'Zapret, Zapret2, DNS over HTTPS и TG WS Proxy, если они были установлены через ' +
-				'панель, останутся на роутере без изменений и продолжат работать. После удаления ' +
-				'эта страница станет недоступна — управлять оставшимися компонентами можно будет ' +
-				'через SSH, либо поставить панель заново.'
+				'панель, останутся на роутере без изменений и продолжат работать.'
 			),
 			E('div', { 'class': 'zm-actions' }, [
 				E('button', {
