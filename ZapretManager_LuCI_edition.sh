@@ -14,7 +14,11 @@ rm -rf \
 	/usr/share/rpcd/acl.d/luci-app-zapret-manager.json \
 	/www/luci-static/resources/view/zapret-manager \
 	/www/luci-static/resources/zapret-manager \
-	/tmp/zapret-manager
+	/tmp/zapret-manager \
+	/tmp/luci-indexcache* \
+	/tmp/luci-modulecache/* 2>/dev/null
+/etc/init.d/rpcd restart >/dev/null 2>&1 || true
+/etc/init.d/uhttpd restart >/dev/null 2>&1 || true
 
 mkdir -p /usr/lib/zapret-manager
 cat > '/usr/lib/zapret-manager/backend.sh' << 'ZM_INSTALLER_EOF'
@@ -1299,6 +1303,32 @@ system_toggle_expert_mode() {
 	fi
 }
 
+system_uninstall_panel() {
+	# Панель удаляет саму себя — включая собственный rpcd-скрипт и этот файл.
+	# Делать rm -rf прямо здесь небезопасно (шелл ещё читает этот же файл),
+	# поэтому копируем действие в отдельный скрипт в /tmp (вне удаляемых
+	# путей), запускаем его отсоединённым фоновым процессом с небольшой
+	# задержкой (чтобы успеть отдать ответ браузеру) и сразу возвращаем ok —
+	# дальше приложение уже недоступно, поэтому опрашивать тут нечего.
+	local script="/tmp/zm_uninstall_panel.sh"
+	cat > "$script" << 'ZM_UNINSTALL_EOF'
+#!/bin/sh
+sleep 1
+rm -rf /usr/lib/zapret-manager /usr/libexec/rpcd/zapret-manager \
+	/usr/share/luci/menu.d/luci-app-zapret-manager.json \
+	/usr/share/rpcd/acl.d/luci-app-zapret-manager.json \
+	/www/luci-static/resources/view/zapret-manager \
+	/www/luci-static/resources/zapret-manager \
+	/tmp/zapret-manager /tmp/luci-indexcache* /tmp/luci-modulecache/* 2>/dev/null
+/etc/init.d/rpcd restart >/dev/null 2>&1
+/etc/init.d/uhttpd restart >/dev/null 2>&1
+rm -f "$0"
+ZM_UNINSTALL_EOF
+	chmod 0755 "$script"
+	nohup sh "$script" >/dev/null 2>&1 &
+	printf '{"ok":true}\n'
+}
+
 # ---------- OpenWrt mirror selection (ported from menu_MIR / set_mirror) --
 
 _confz() {
@@ -1745,6 +1775,7 @@ case "$cmd" in
 	system_toggle_ipv6)                         system_toggle_ipv6 ;;
 	system_toggle_flow_offloading_fix)           system_toggle_flow_offloading_fix ;;
 	system_toggle_expert_mode)                    system_toggle_expert_mode ;;
+	system_uninstall_panel)                        system_uninstall_panel ;;
 	mirror_status)                                     mirror_status ;;
 	mirror_set)                                          mirror_set "$1" ;;
 	exclusions_status)                                     exclusions_status ;;
@@ -1804,6 +1835,7 @@ list_methods() {
 	json_add_object "system_toggle_ipv6";          json_close_object
 	json_add_object "system_toggle_flow_offloading_fix"; json_close_object
 	json_add_object "system_toggle_expert_mode";   json_close_object
+	json_add_object "system_uninstall_panel";      json_close_object
 	json_add_object "mirror_status";               json_close_object
 	json_add_object "mirror_set";                  json_add_string "id" "string"; json_close_object
 	json_add_object "exclusions_status";           json_close_object
@@ -1856,6 +1888,7 @@ call_method() {
 		system_toggle_ipv6)            "$BACKEND" system_toggle_ipv6 ;;
 		system_toggle_flow_offloading_fix) "$BACKEND" system_toggle_flow_offloading_fix ;;
 		system_toggle_expert_mode)     "$BACKEND" system_toggle_expert_mode ;;
+		system_uninstall_panel)        "$BACKEND" system_uninstall_panel ;;
 		mirror_status)                 "$BACKEND" mirror_status ;;
 		mirror_set)                    json_get_var id id;           "$BACKEND" mirror_set "$id" ;;
 		exclusions_status)             "$BACKEND" exclusions_status ;;
@@ -1909,7 +1942,7 @@ cat > '/usr/share/rpcd/acl.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF'
 					"hosts_toggle", "doh_set", "hosts_replace_geohide", "hosts_reset", "doh_install", "doh_remove",
 					"game_set", "game_set_fake", "game_toggle_xtreme",
 					"system_check_connectivity", "system_toggle_quic", "system_toggle_ipv6",
-					"system_toggle_flow_offloading_fix", "system_toggle_expert_mode",
+					"system_toggle_flow_offloading_fix", "system_toggle_expert_mode", "system_uninstall_panel",
 					"mirror_set", "exclusions_toggle", "exclusions_clear",
 					"tg_action", "tg_restart_all"
 				]
@@ -2016,6 +2049,7 @@ var callSystemToggleQuic = rpc.declare({ object: 'zapret-manager', method: 'syst
 var callSystemToggleIpv6 = rpc.declare({ object: 'zapret-manager', method: 'system_toggle_ipv6', expect: {} });
 var callSystemToggleFlowOffloadingFix = rpc.declare({ object: 'zapret-manager', method: 'system_toggle_flow_offloading_fix', expect: {} });
 var callSystemToggleExpertMode = rpc.declare({ object: 'zapret-manager', method: 'system_toggle_expert_mode', expect: {} });
+var callSystemUninstallPanel = rpc.declare({ object: 'zapret-manager', method: 'system_uninstall_panel', expect: {} });
 var callMirrorStatus = rpc.declare({ object: 'zapret-manager', method: 'mirror_status', expect: {} });
 var callMirrorSet = rpc.declare({ object: 'zapret-manager', method: 'mirror_set', params: ['id'], expect: {} });
 var callExclusionsStatus = rpc.declare({ object: 'zapret-manager', method: 'exclusions_status', expect: {} });
@@ -2202,6 +2236,7 @@ return baseclass.extend({
 	systemToggleIpv6: callSystemToggleIpv6,
 	systemToggleFlowOffloadingFix: callSystemToggleFlowOffloadingFix,
 	systemToggleExpertMode: callSystemToggleExpertMode,
+	systemUninstallPanel: callSystemUninstallPanel,
 	mirrorStatus: callMirrorStatus,
 	mirrorSet: callMirrorSet,
 	exclusionsStatus: callExclusionsStatus,
@@ -3359,7 +3394,7 @@ var MIRRORS = [
 	{ id: 'italy', label: 'Italy' },
 	{ id: 'morocco', label: 'Morocco' },
 	{ id: 'usa', label: 'USA' },
-	{ id: 'germany_rwth', label: 'Germany (RWTH Aachen)' },
+	{ id: 'germany_rwth', label: 'Germany' },
 	{ id: 'default', label: 'default / OpenWrt' }
 ];
 
@@ -3463,16 +3498,21 @@ return view.extend({
 
 		var mirrorGrid = E('div', { 'class': 'zm-grid' });
 		var mirrorCurrentEl = E('span', {}, mirrorData.current);
+		var mirrorBusy = false;
 		MIRRORS.forEach(function(m) {
 			mirrorGrid.appendChild(E('div', {
 				'class': 'zm-tile' + (mirrorData.current === m.label ? ' zm-active' : ''),
 				'click': function() {
+					if (mirrorBusy) { zm.toast('Дождитесь завершения переключения зеркала', 'warning'); return; }
+					if (mirrorData.current === m.label) { zm.toast('Это зеркало уже выбрано', 'info'); return; }
+					mirrorBusy = true;
 					zm.toast('Переключаем зеркало на «' + m.label + '»', 'warning');
 					mirrorLog.classList.add('zm-show');
-					mirrorLog.textContent = 'Проверяем и переключаем';
+					zm.renderLog(mirrorLog, '==> Проверяем и переключаем');
 					zm.mirrorSet(m.id).then(function(res) {
-						if (res.error) { zm.toast(res.error, 'error'); return; }
+						if (res.error) { mirrorBusy = false; zm.toast(res.error, 'error'); return; }
 						zm.pollJob('mirror_set', mirrorLog, function(ok) {
+							mirrorBusy = false;
 							zm.toast(ok ? ('Зеркало переключено на «' + m.label + '»') : 'Не удалось переключить зеркало', ok ? 'info' : 'error');
 							if (!ok) return;
 							zm.mirrorStatus().then(function(res2) {
@@ -3483,7 +3523,7 @@ return view.extend({
 								});
 							});
 						});
-					});
+					}).catch(function() { mirrorBusy = false; });
 				}
 			}, m.label));
 		});
@@ -3497,6 +3537,40 @@ return view.extend({
 			mirrorLog
 		]);
 		wrap.appendChild(mirrorCard);
+
+		var uninstallLog = E('pre', { 'class': 'zm-log' });
+		var uninstallCard = E('div', { 'class': 'zm-card' }, [
+			E('h3', {}, 'Удалить Zapret Manager из LuCI'),
+			E('p', { 'class': 'zm-hint' },
+				'Уберёт только веб-интерфейс (эту панель) — саму программу-оболочку из LuCI. ' +
+				'Zapret, Zapret2, DNS over HTTPS и TG WS Proxy, если они были установлены через ' +
+				'панель, останутся на роутере без изменений и продолжат работать. После удаления ' +
+				'эта страница станет недоступна — управлять оставшимися компонентами можно будет ' +
+				'через SSH, либо поставить панель заново.'
+			),
+			E('div', { 'class': 'zm-actions' }, [
+				E('button', {
+					'class': 'cbi-button cbi-button-remove',
+					'click': function() {
+						if (!confirm('Удалить веб-интерфейс Zapret Manager из LuCI?\n\nСам Zapret и остальные установленные через панель компоненты не пострадают. Действие необратимо — панель придётся ставить заново.')) {
+							return;
+						}
+						uninstallLog.classList.add('zm-show');
+						zm.renderLog(uninstallLog, '==> Удаляем веб-интерфейс Zapret Manager');
+						zm.toast('Удаляем Zapret Manager из LuCI', 'warning');
+						zm.systemUninstallPanel().then(function(res) {
+							if (res.error) { zm.renderLog(uninstallLog, '==> ОШИБКА: ' + res.error); zm.toast(res.error, 'error'); return; }
+							zm.renderLog(uninstallLog, '==> Готово. Панель удалена, страница больше не будет отвечать.');
+							zm.toast('Zapret Manager удалён из LuCI', 'info');
+						}).catch(function() {
+							zm.renderLog(uninstallLog, '==> Готово (соединение прервано — это ожидаемо, панель уже удалена).');
+						});
+					}
+				}, 'Удалить панель из LuCI')
+			]),
+			uninstallLog
+		]);
+		wrap.appendChild(uninstallCard);
 
 		return wrap;
 	}
@@ -3785,4 +3859,3 @@ command -v unzip >/dev/null 2>&1 || $INSTALL unzip >/dev/null 2>&1 || true
 echo
 echo "==> Готово! Откройте LuCI -> Services -> Zapret Manager"
 echo "    (если пункт меню не появился сразу - обновите страницу LuCI, Ctrl+Shift+R)"
-
