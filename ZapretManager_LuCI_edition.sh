@@ -6,7 +6,15 @@ set -e
 
 echo "==> Устанавливаем Zapret Manager (LuCI)"
 
-rm -rf /usr/lib/zapret-manager /usr/libexec/rpcd/zapret-manager /usr/share/luci/menu.d/luci-app-zapret-manager.json /usr/share/rpcd/acl.d/luci-app-zapret-manager.json /www/luci-static/resources/view/zapret-manager /www/luci-static/resources/zapret-manager /tmp/zapret-manager && /etc/init.d/rpcd restart && /etc/init.d/uhttpd restart
+echo "==> Убираем предыдущую установку (если была)"
+rm -rf \
+	/usr/lib/zapret-manager \
+	/usr/libexec/rpcd/zapret-manager \
+	/usr/share/luci/menu.d/luci-app-zapret-manager.json \
+	/usr/share/rpcd/acl.d/luci-app-zapret-manager.json \
+	/www/luci-static/resources/view/zapret-manager \
+	/www/luci-static/resources/zapret-manager \
+	/tmp/zapret-manager
 
 mkdir -p /usr/lib/zapret-manager
 cat > '/usr/lib/zapret-manager/backend.sh' << 'ZM_INSTALLER_EOF'
@@ -1586,7 +1594,7 @@ do_doh_install() {
 	$UPDATE >/dev/null 2>&1
 	echo "==> Устанавливаем https-dns-proxy и luci-app-https-dns-proxy"
 	$INSTALL https-dns-proxy luci-app-https-dns-proxy >/dev/null 2>&1 || { echo "ОШИБКА установки"; return 1; }
-	echo "==> Готово, DNS over HTTPS установлен"
+	echo "==> Готово, DNS over HTTPS установлен — выберите провайдера ниже"
 }
 
 do_doh_remove() {
@@ -2380,50 +2388,60 @@ return view.extend({
 
 	doAction: function(action) {
 		var view = this;
+		if (view.busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
 		var job = (action === 'install' || action === 'update') ? 'install_zapret'
 			: (action === 'remove') ? 'remove_zapret' : null;
-		var LABELS = { install: 'Устанавливаем Zapret...', update: 'Обновляем Zapret...', remove: 'Удаляем Zapret...', start: 'Запускаем Zapret...', stop: 'Останавливаем Zapret...' };
-		zm.toast(LABELS[action] || 'Выполняем...', 'warning');
+		var LABELS = { install: 'Устанавливаем Zapret', update: 'Обновляем Zapret', remove: 'Удаляем Zapret', start: 'Запускаем Zapret', stop: 'Останавливаем Zapret' };
+		zm.toast(LABELS[action] || 'Выполняем', 'warning');
+		if (job) view.busy = true;
 
 		zm.zapretAction(action).then(function(res) {
 			if (job && res && res.started) {
 				zm.pollJob(job, view.logEl, function(ok) {
+					view.busy = false;
 					zm.toast(ok ? 'Готово' : 'Операция завершилась с ошибкой', ok ? 'info' : 'error');
 					zm.status().then(function(d) { view.renderCards(d); });
 					view.refreshOverview();
 					if (ok && (action === 'install' || action === 'remove')) {
+						view.bannerEl.innerHTML = '';
 						view.bannerEl.appendChild(zm.refreshBanner('Пункт меню Zapret в LuCI мог измениться — обновите страницу.'));
 					}
 				});
 			} else if (res) {
+				view.busy = false;
 				view.renderCards(res);
 				view.refreshOverview();
 			}
-		});
+		}).catch(function() { view.busy = false; });
 	},
 
 	doAction2: function(action) {
 		var view = this;
+		if (view.busy2) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
 		var job = (action === 'install' || action === 'update') ? 'install_zapret2'
 			: (action === 'remove') ? 'remove_zapret2' : null;
-		var LABELS = { install: 'Устанавливаем Zapret2...', update: 'Обновляем Zapret2...', remove: 'Удаляем Zapret2...', start: 'Запускаем Zapret2...', stop: 'Останавливаем Zapret2...' };
-		zm.toast(LABELS[action] || 'Выполняем...', 'warning');
+		var LABELS = { install: 'Устанавливаем Zapret2', update: 'Обновляем Zapret2', remove: 'Удаляем Zapret2', start: 'Запускаем Zapret2', stop: 'Останавливаем Zapret2' };
+		zm.toast(LABELS[action] || 'Выполняем', 'warning');
+		if (job) view.busy2 = true;
 
 		zm.zapret2Action(action).then(function(res) {
 			if (job && res && res.started) {
 				zm.pollJob(job, view.logEl, function(ok) {
+					view.busy2 = false;
 					zm.toast(ok ? 'Готово' : 'Операция завершилась с ошибкой', ok ? 'info' : 'error');
 					zm.status().then(function(d) { view.renderCards(d); });
 					view.refreshOverview();
 					if (ok && (action === 'install' || action === 'remove')) {
+						view.bannerEl.innerHTML = '';
 						view.bannerEl.appendChild(zm.refreshBanner('Пункт меню Zapret2 в LuCI мог измениться — обновите страницу.'));
 					}
 				});
 			} else if (res) {
+				view.busy2 = false;
 				view.renderCards(res);
 				view.refreshOverview();
 			}
-		});
+		}).catch(function() { view.busy2 = false; });
 	}
 });
 ZM_INSTALLER_EOF
@@ -2459,7 +2477,7 @@ return view.extend({
 				dvGrid.appendChild(E('div', {
 					'class': 'zm-tile' + (data.current === dv ? ' zm-active' : ''),
 					'click': function() {
-						zm.toast('Применяем стратегию ' + dv + '...', 'warning');
+						zm.toast('Применяем стратегию ' + dv + '', 'warning');
 						zm.discordSetDv(num).then(function(res) {
 							if (!zm.notifyStrategyResult(res, dv)) return;
 							refreshState();
@@ -2475,7 +2493,7 @@ return view.extend({
 				fakeGrid.appendChild(E('div', {
 					'class': 'zm-tile' + (data.current_fake === f ? ' zm-active' : ''),
 					'click': function() {
-						zm.toast('Меняем fake-файл на ' + f + '...', 'warning');
+						zm.toast('Меняем fake-файл на ' + f + '', 'warning');
 						zm.discordSetFake(f).then(function(res) {
 							if (!zm.notifyStrategyResult(res, f)) return;
 							refreshState();
@@ -2540,6 +2558,7 @@ return view.extend({
 		var wrap = E('div', { 'class': 'zm-wrap' });
 		var logEl = E('pre', { 'class': 'zm-log' });
 		var bannerEl = E('div', {});
+		var busy = false;
 
 		var grid = E('div', { 'class': 'zm-grid' });
 		function renderGrid() {
@@ -2548,7 +2567,8 @@ return view.extend({
 				grid.appendChild(E('div', {
 					'class': 'zm-tile' + (data.current === p.id ? ' zm-active' : ''),
 					'click': function() {
-						zm.toast('Меняем DNS на ' + p.label + '...', 'warning');
+						if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+						zm.toast('Меняем DNS на ' + p.label, 'warning');
 						zm.dohSet(p.id).then(function(res) {
 							if (res.error) { zm.toast(res.error, 'error'); return; }
 							zm.toast(p.label + ' применён', 'info');
@@ -2563,36 +2583,48 @@ return view.extend({
 		var installBtn = E('button', {
 			'class': 'cbi-button cbi-button-positive',
 			'click': function() {
-				zm.toast('Устанавливаем DNS over HTTPS...', 'warning');
+				if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+				zm.toast('Устанавливаем DNS over HTTPS', 'warning');
+				busy = true;
 				zm.dohInstall().then(function(res) {
-					if (res.error) { zm.toast(res.error, 'error'); return; }
+					if (res.error) { busy = false; zm.toast(res.error, 'error'); return; }
 					if (res.started) {
 						zm.pollJob('doh_install', logEl, function(ok) {
+							busy = false;
 							zm.toast(ok ? 'DNS over HTTPS установлен' : 'Ошибка установки', ok ? 'info' : 'error');
 							if (ok) {
+								bannerEl.innerHTML = '';
 								bannerEl.appendChild(zm.refreshBanner('Пункт меню DNS over HTTPS в LuCI мог измениться — обновите страницу.'));
 							}
 						});
+					} else {
+						busy = false;
 					}
-				});
+				}).catch(function() { busy = false; });
 			}
 		}, 'Установить DNS over HTTPS');
 
 		var removeBtn = E('button', {
 			'class': 'cbi-button cbi-button-remove',
 			'click': function() {
-				zm.toast('Удаляем DNS over HTTPS...', 'warning');
+				if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+				zm.toast('Удаляем DNS over HTTPS', 'warning');
+				busy = true;
 				zm.dohRemove().then(function(res) {
-					if (res.error) { zm.toast(res.error, 'error'); return; }
+					if (res.error) { busy = false; zm.toast(res.error, 'error'); return; }
 					if (res.started) {
 						zm.pollJob('doh_remove', logEl, function(ok) {
+							busy = false;
 							zm.toast(ok ? 'DNS over HTTPS удалён' : 'Ошибка удаления', ok ? 'info' : 'error');
 							if (ok) {
+								bannerEl.innerHTML = '';
 								bannerEl.appendChild(zm.refreshBanner('Пункт меню DNS over HTTPS в LuCI мог измениться — обновите страницу.'));
 							}
 						});
+					} else {
+						busy = false;
 					}
-				});
+				}).catch(function() { busy = false; });
 			}
 		}, 'Удалить');
 
@@ -2645,7 +2677,7 @@ return view.extend({
 				grid.appendChild(E('div', {
 					'class': 'zm-tile' + (d.excluded ? ' zm-active' : ''),
 					'click': function() {
-						zm.toast('Переключаем исключение для ' + d.ip + '...', 'warning');
+						zm.toast('Переключаем исключение для ' + d.ip + '', 'warning');
 						zm.exclusionsToggle(d.ip).then(function(res) {
 							if (res.error) { zm.toast(res.error, 'error'); return; }
 							zm.toast(d.ip + (res.excluded ? ' исключён' : ' больше не исключён'), 'info');
@@ -2670,7 +2702,7 @@ return view.extend({
 				E('button', {
 					'class': 'cbi-button',
 					'click': function() {
-						zm.toast('Обновляем список устройств...', 'warning');
+						zm.toast('Обновляем список устройств', 'warning');
 						zm.exclusionsStatus().then(function(res) {
 							renderGrid(res.devices);
 							zm.toast('Список устройств обновлён', 'info');
@@ -2686,7 +2718,7 @@ return view.extend({
 							zm.toast('Некорректный IPv4 адрес', 'error');
 							return;
 						}
-						zm.toast('Добавляем ' + ip + ' в исключения...', 'warning');
+						zm.toast('Добавляем ' + ip + ' в исключения', 'warning');
 						zm.exclusionsToggle(ip).then(function(res) {
 							if (res.error) { zm.toast(res.error, 'error'); return; }
 							manualInput.value = '';
@@ -2698,7 +2730,7 @@ return view.extend({
 				E('button', {
 					'class': 'cbi-button cbi-button-remove',
 					'click': function() {
-						zm.toast('Очищаем все исключения...', 'warning');
+						zm.toast('Очищаем все исключения', 'warning');
 						zm.exclusionsClear().then(function() {
 							zm.toast('Все исключения очищены', 'info');
 							zm.exclusionsStatus().then(function(res) { renderGrid(res.devices); });
@@ -2745,7 +2777,7 @@ return view.extend({
 				gvGrid.appendChild(E('div', {
 					'class': 'zm-tile' + (data.current === ('Gv' + n) ? ' zm-active' : ''),
 					'click': function() {
-						zm.toast('Применяем игровую стратегию Gv' + n + '...', 'warning');
+						zm.toast('Применяем игровую стратегию Gv' + n + '', 'warning');
 						zm.gameSet(String(n)).then(function(res) {
 							if (res.error) { zm.toast(res.error, 'error'); return; }
 							zm.toast(res.game === 'none' ? 'Игровая стратегия снята' : res.game + ' применена', 'info');
@@ -2768,7 +2800,7 @@ return view.extend({
 				E('button', {
 					'class': xtreme ? 'cbi-button cbi-button-remove' : 'cbi-button cbi-button-positive',
 					'click': function() {
-						zm.toast(xtreme ? 'Выключаем Xtreme...' : 'Включаем Xtreme...', 'warning');
+						zm.toast(xtreme ? 'Выключаем Xtreme' : 'Включаем Xtreme', 'warning');
 						zm.gameToggleXtreme().then(function(res) {
 							if (res.error) { zm.toast(res.error, 'error'); return; }
 							zm.toast(res.xtreme ? 'Xtreme включён' : 'Xtreme выключен', 'info');
@@ -2785,7 +2817,7 @@ return view.extend({
 				fakeGrid.appendChild(E('div', {
 					'class': 'zm-tile' + (data.fake === f ? ' zm-active' : ''),
 					'click': function() {
-						zm.toast('Меняем fake-файл на ' + f + '...', 'warning');
+						zm.toast('Меняем fake-файл на ' + f + '', 'warning');
 						zm.gameSetFake(f).then(function(res) {
 							if (res.error) { zm.toast(res.error, 'error'); return; }
 							zm.toast(f + ' установлен', 'info');
@@ -2846,7 +2878,7 @@ var LABELS = {
 	ntc: 'ntc.party',
 	instagram: 'Instagram & Facebook',
 	librusec: 'lib.rus.ec',
-	ai: 'AI сервисы (ChatGPT, Claude, Gemini...)',
+	ai: 'AI сервисы (ChatGPT, Claude, Gemini)',
 	twitch: 'Twitch',
 	telegram: 'Telegram Web',
 	spotify: 'Spotify',
@@ -2876,7 +2908,7 @@ return view.extend({
 				grid.appendChild(E('div', {
 					'class': 'zm-tile' + (it.enabled ? ' zm-active' : ''),
 					'click': function() {
-						zm.toast('Переключаем ' + (LABELS[it.id] || it.id) + '...', 'warning');
+						zm.toast('Переключаем ' + (LABELS[it.id] || it.id) + '', 'warning');
 						zm.hostsToggle(it.id).then(function(res) {
 							if (res.error) { zm.toast(res.error, 'error'); return; }
 							zm.toast((LABELS[it.id] || it.id) + (res.enabled ? ' включён' : ' выключен'), 'info');
@@ -2928,9 +2960,9 @@ return view.extend({
 		}
 
 		function replaceGeohide(region) {
-			zm.toast('Заменяем hosts на GeoHide ' + region.toUpperCase() + '...', 'warning');
+			zm.toast('Заменяем hosts на GeoHide ' + region.toUpperCase() + '', 'warning');
 			geoLogEl.classList.add('zm-show');
-			zm.renderLog(geoLogEl, '==> Скачиваем и заменяем /etc/hosts...');
+			zm.renderLog(geoLogEl, '==> Скачиваем и заменяем /etc/hosts');
 			zm.hostsReplaceGeohide(region).then(function(res) {
 				if (res.error) { zm.renderLog(geoLogEl, '==> ОШИБКА: ' + res.error); zm.toast(res.error, 'error'); return; }
 				zm.renderLog(geoLogEl, '==> Готово — hosts заменён на GeoHide ' + region.toUpperCase() + '.');
@@ -2940,9 +2972,9 @@ return view.extend({
 		}
 
 		function resetHosts() {
-			zm.toast('Восстанавливаем hosts...', 'warning');
+			zm.toast('Восстанавливаем hosts', 'warning');
 			geoLogEl.classList.add('zm-show');
-			zm.renderLog(geoLogEl, '==> Восстанавливаем hosts...');
+			zm.renderLog(geoLogEl, '==> Восстанавливаем hosts');
 			zm.hostsReset().then(function(res) {
 				if (res.error) { zm.renderLog(geoLogEl, '==> ОШИБКА: ' + res.error); zm.toast(res.error, 'error'); return; }
 				zm.renderLog(geoLogEl, '==> Готово — hosts восстановлен.');
@@ -2990,8 +3022,8 @@ return view.extend({
 				E('button', {
 					'class': 'cbi-button',
 					'click': function() {
-						zm.toast('Обновляем список Flowseal...', 'warning');
-						fGrid.innerHTML = 'Загрузка списка...';
+						zm.toast('Обновляем список Flowseal', 'warning');
+						fGrid.innerHTML = 'Загрузка списка';
 						zm.strategyListFlowseal().then(function(res) {
 							if (res.started) {
 								zm.pollJob('flowseal_download', logEl, function(ok) {
@@ -3027,7 +3059,7 @@ return view.extend({
 				vGrid.appendChild(E('div', {
 					'class': 'zm-tile' + (!status.flowseal && words.indexOf(' ' + it.id + ' ') !== -1 ? ' zm-active' : ''),
 					'click': function() {
-						zm.toast('Применяем стратегию ' + it.id + '...', 'warning');
+						zm.toast('Применяем стратегию ' + it.id + '', 'warning');
 						zm.strategySetV(it.id).then(function(res) {
 							if (!zm.notifyStrategyResult(res, it.id)) return;
 							refreshState();
@@ -3044,7 +3076,7 @@ return view.extend({
 				fGrid.appendChild(E('div', {
 					'class': 'zm-tile' + (status.flowseal === it.id ? ' zm-active' : ''),
 					'click': function() {
-						zm.toast('Применяем стратегию ' + it.label + '...', 'warning');
+						zm.toast('Применяем стратегию ' + it.label + '', 'warning');
 						zm.strategySetFlowseal(it.id).then(function(r2) {
 							if (!zm.notifyStrategyResult(r2, it.id)) return;
 							refreshState();
@@ -3319,7 +3351,7 @@ return view.extend({
 					E('button', {
 						'class': d.quic_blocked ? 'cbi-button cbi-button-remove' : 'cbi-button',
 						'click': function() {
-							zm.toast(d.quic_blocked ? 'Выключаем блокировку QUIC...' : 'Включаем блокировку QUIC...', 'warning');
+							zm.toast(d.quic_blocked ? 'Выключаем блокировку QUIC' : 'Включаем блокировку QUIC', 'warning');
 							zm.systemToggleQuic().then(function(res) {
 								zm.toast(d.quic_blocked ? 'Блокировка QUIC выключена' : 'Блокировка QUIC включена', 'info');
 								zm.systemStatus().then(refresh);
@@ -3329,7 +3361,7 @@ return view.extend({
 					E('button', {
 						'class': 'cbi-button',
 						'click': function() {
-							zm.toast(d.ipv6_enabled ? 'Выключаем IPv6 в Zapret...' : 'Включаем IPv6 в Zapret...', 'warning');
+							zm.toast(d.ipv6_enabled ? 'Выключаем IPv6 в Zapret' : 'Включаем IPv6 в Zapret', 'warning');
 							zm.systemToggleIpv6().then(function(res) {
 								if (res.error) { zm.toast(res.error, 'error'); return; }
 								zm.toast(res.ipv6_enabled ? 'IPv6 в Zapret включён' : 'IPv6 в Zapret выключен', 'info');
@@ -3340,7 +3372,7 @@ return view.extend({
 					E('button', {
 						'class': 'cbi-button',
 						'click': function() {
-							zm.toast(d.flow_offloading_fix ? 'Отключаем Fix Flow Offloading...' : 'Применяем Fix Flow Offloading...', 'warning');
+							zm.toast(d.flow_offloading_fix ? 'Отключаем Fix Flow Offloading' : 'Применяем Fix Flow Offloading', 'warning');
 							zm.systemToggleFlowOffloadingFix().then(function(res) {
 								if (res.error) { zm.toast(res.error, 'error'); return; }
 								zm.toast(res.flow_offloading_fix ? 'Fix для Flow Offloading применён' : 'Fix для Flow Offloading отключён', 'info');
@@ -3367,8 +3399,8 @@ return view.extend({
 				E('button', {
 					'class': 'cbi-button',
 					'click': function() {
-						netEl.textContent = 'Проверяем...';
-						zm.toast('Проверяем IPv4/IPv6...', 'warning');
+						netEl.textContent = 'Проверяем';
+						zm.toast('Проверяем IPv4/IPv6', 'warning');
 						zm.systemCheckConnectivity().then(function(res) {
 							netEl.innerHTML = '';
 							netEl.appendChild(E('div', { 'class': 'zm-row' }, [
@@ -3392,9 +3424,9 @@ return view.extend({
 			mirrorGrid.appendChild(E('div', {
 				'class': 'zm-tile' + (mirrorData.current === m.label ? ' zm-active' : ''),
 				'click': function() {
-					zm.toast('Переключаем зеркало на «' + m.label + '»...', 'warning');
+					zm.toast('Переключаем зеркало на «' + m.label + '»', 'warning');
 					mirrorLog.classList.add('zm-show');
-					mirrorLog.textContent = 'Проверяем и переключаем...';
+					mirrorLog.textContent = 'Проверяем и переключаем';
 					zm.mirrorSet(m.id).then(function(res) {
 						if (res.error) { zm.toast(res.error, 'error'); return; }
 						zm.pollJob('mirror_set', mirrorLog, function(ok) {
@@ -3562,7 +3594,7 @@ return view.extend({
 		function doAction(variantId, action) {
 			var job = action === 'remove' ? ('tg_remove_' + (variantId === 'mtproto' ? 'mtproto' : variantId))
 				: ('tg_install_' + (variantId === 'mtproto' ? 'mtproto' : variantId));
-			zm.toast((action === 'remove' ? 'Удаляем ' : action === 'update' ? 'Обновляем ' : 'Устанавливаем ') + variantId + '...', 'warning');
+			zm.toast((action === 'remove' ? 'Удаляем ' : action === 'update' ? 'Обновляем ' : 'Устанавливаем ') + variantId + '', 'warning');
 			zm.tgAction(variantId, action).then(function(res) {
 				if (res.error) { zm.toast(res.error, 'error'); return; }
 				if (res.started) {
@@ -3586,7 +3618,7 @@ return view.extend({
 				E('button', {
 					'class': 'cbi-button',
 					'click': function() {
-						zm.toast('Перезапускаем TG WS Proxy...', 'warning');
+						zm.toast('Перезапускаем TG WS Proxy', 'warning');
 						zm.tgRestartAll().then(function() {
 							zm.toast('Все запущенные TG WS Proxy перезапущены', 'info');
 						});
@@ -3635,7 +3667,7 @@ return view.extend({
 				grid.appendChild(E('div', {
 					'class': 'zm-tile' + (current === it.id ? ' zm-active' : ''),
 					'click': function() {
-						zm.toast('Применяем стратегию ' + it.id + '...', 'warning');
+						zm.toast('Применяем стратегию ' + it.id + '', 'warning');
 						zm.strategySetYoutube(it.id).then(function(r2) {
 							if (!zm.notifyStrategyResult(r2, it.id)) return;
 							refreshState();
@@ -3662,8 +3694,8 @@ return view.extend({
 				E('button', {
 					'class': 'cbi-button',
 					'click': function() {
-						zm.toast('Обновляем список YouTube-стратегий...', 'warning');
-						grid.innerHTML = 'Загрузка списка...';
+						zm.toast('Обновляем список YouTube-стратегий', 'warning');
+						grid.innerHTML = 'Загрузка списка';
 						zm.strategyListYoutube().then(function(res) {
 							if (res.started) {
 								zm.pollJob('youtube_download', logEl, function(ok) {
