@@ -8,6 +8,8 @@ GREEN="\033[1;32m"; RED="\033[1;31m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MA
 
 echo -e "${YELLOW}==> ${CYAN}Устанавливаем Zapret Manager (LuCI)${NC}"
 
+rm -rf /usr/lib/zapret-manager /usr/libexec/rpcd/zapret-manager /usr/share/luci/menu.d/luci-app-zapret-manager.json /usr/share/rpcd/acl.d/luci-app-zapret-manager.json /www/luci-static/resources/view/zapret-manager /www/luci-static/resources/zapret-manager && /etc/init.d/rpcd restart && /etc/init.d/uhttpd restart
+
 mkdir -p /usr/lib/zapret-manager
 cat > '/usr/lib/zapret-manager/backend.sh' << 'ZM_INSTALLER_EOF'
 #!/bin/sh
