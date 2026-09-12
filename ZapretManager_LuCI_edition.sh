@@ -2411,8 +2411,8 @@ return view.extend({
 			E('h2', {}, 'Zapret Manager'),
 			E('span', { 'class': 'zm-header-by' }, 'by StressOzz'),
 			E('div', { 'class': 'zm-header-links' }, [
+				E('a', { 'href': 'http://stresskvn.lol/', 'target': '_blank', 'rel': 'noreferrer' }, 'StressKVN - Обход белых списков! Подключайся!')
 				E('a', { 'href': 'https://t.me/stressozz_manager', 'target': '_blank', 'rel': 'noreferrer' }, 'Сообщество Telegram'),
-				E('a', { 'href': 'http://stresskvn.lol/', 'target': '_blank', 'rel': 'noreferrer' }, 'StressKVN')
 			])
 		]));
 		wrap.appendChild(overviewEl);
