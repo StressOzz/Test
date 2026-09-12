@@ -540,7 +540,7 @@ do_flowseal_download() {
 		{ echo "#$NAME"; echo "$MATCH" | sed 's/--/\n--/g' | sed '/^$/d' | sed 's/[[:space:]]*$//'; echo; } >> "$out"
 	done
 
-	echo "==> Приводим пути и плейсхолдеры к реальным (как в оригинальном download_strategies)"
+	echo "==> Приводим пути и плейсхолдеры к реальным"
 	# служебные списки/ipset — заменяем на реальные пути или вычищаем
 	sed -i '/--hostlist="%LISTS%list-general.txt"/d' "$out"
 	sed -i '/--ipset="%LISTS%ipset-all.txt"/d' "$out"
