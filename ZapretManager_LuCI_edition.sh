@@ -1,10 +1,12 @@
 #!/bin/sh
 # Zapret Manager LuCI installer — самодостаточный скрипт (все файлы зашиты внутри).
+# Использование на роутере (по SSH): sh install-zapret-manager.sh
+# Или: wget -O - https://raw.githubusercontent.com/<user>/<repo>/main/install-zapret-manager.sh | sh
 set -e
 
 echo "==> Устанавливаем Zapret Manager (LuCI)"
 
-rm -rf /usr/lib/zapret-manager /usr/libexec/rpcd/zapret-manager /usr/share/luci/menu.d/luci-app-zapret-manager.json /usr/share/rpcd/acl.d/luci-app-zapret-manager.json /www/luci-static/resources/view/zapret-manager /www/luci-static/resources/zapret-manager && /etc/init.d/rpcd restart && /etc/init.d/uhttpd restart
+rm -rf /usr/lib/zapret-manager /usr/libexec/rpcd/zapret-manager /usr/share/luci/menu.d/luci-app-zapret-manager.json /usr/share/rpcd/acl.d/luci-app-zapret-manager.json /www/luci-static/resources/view/zapret-manager /www/luci-static/resources/zapret-manager /tmp/zapret-manager && /etc/init.d/rpcd restart && /etc/init.d/uhttpd restart
 
 mkdir -p /usr/lib/zapret-manager
 cat > '/usr/lib/zapret-manager/backend.sh' << 'ZM_INSTALLER_EOF'
@@ -230,6 +232,7 @@ do_install_zapret() {
 	unzip -o zapret.zip >/dev/null 2>&1
 
 	echo "==> Устанавливаем пакеты"
+	echo "!! Пакет luci-app-zapret перезапустит rpcd — текущая сессия входа в LuCI может сброситься, попросит перезайти. Это нормально."
 	if [ "$PKG" = "apk" ]; then
 		for p in apk/zapret*; do
 			[ -f "$p" ] || continue
@@ -270,6 +273,7 @@ do_remove_zapret() {
 	/etc/init.d/zapret stop >/dev/null 2>&1
 	for p in $(pgrep -f /opt/zapret 2>/dev/null); do kill -9 "$p" 2>/dev/null; done
 	echo "==> Удаляем пакеты"
+	echo "!! Удаление luci-app-zapret перезапустит rpcd — текущая сессия входа в LuCI может сброситься. Это нормально."
 	$DELETE luci-app-zapret >/dev/null 2>&1
 	$DELETE zapret >/dev/null 2>&1
 	echo "==> Удаляем файлы"
@@ -343,6 +347,7 @@ do_install_zapret2() {
 	$UPDATE
 
 	echo "==> Устанавливаем"
+	echo "!! Пакет luci-app-zapret2 перезапустит rpcd — текущая сессия входа в LuCI может сброситься. Это нормально."
 	$INSTALL ./*."$raz" || { echo "ОШИБКА установки"; return 1; }
 
 	echo "==> Добавляем домены в исключения"
@@ -373,6 +378,7 @@ do_remove_zapret2() {
 	echo "==> Останавливаем Zapret2"
 	/etc/init.d/zapret2 stop >/dev/null 2>&1
 	echo "==> Удаляем пакеты"
+	echo "!! Удаление luci-app-zapret2 перезапустит rpcd — текущая сессия входа в LuCI может сброситься. Это нормально."
 	$DELETE luci-app-zapret2 >/dev/null 2>&1
 	$DELETE zapret2 >/dev/null 2>&1
 	echo "==> Удаляем файлы"
@@ -1611,6 +1617,7 @@ do_doh_install() {
 	echo "==> Обновляем список пакетов"
 	$UPDATE >/dev/null 2>&1
 	echo "==> Устанавливаем https-dns-proxy и luci-app-https-dns-proxy"
+	echo "!! luci-app-https-dns-proxy сам перезапускает rpcd при установке — это сбрасывает текущую сессию входа в LuCI, попросит перезайти. Это нормально, не ошибка."
 	$INSTALL https-dns-proxy luci-app-https-dns-proxy >/dev/null 2>&1 || { echo "ОШИБКА установки"; return 1; }
 	_reregister_rpcd
 	echo "==> Готово, DNS over HTTPS установлен — выберите провайдера ниже"
@@ -1619,6 +1626,7 @@ do_doh_install() {
 do_doh_remove() {
 	echo "==> Удаляем DNS over HTTPS"
 	echo "==> Удаляем пакеты"
+	echo "!! Удаление luci-app-https-dns-proxy перезапустит rpcd — текущая сессия входа в LuCI может сброситься. Это нормально."
 	$DELETE https-dns-proxy luci-app-https-dns-proxy >/dev/null 2>&1
 	echo "==> Удаляем файлы конфигурации"
 	rm -f /etc/config/https-dns-proxy /etc/init.d/https-dns-proxy
