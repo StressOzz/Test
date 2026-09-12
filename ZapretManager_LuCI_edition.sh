@@ -1,13 +1,5 @@
 #!/bin/sh
-# ----------------------------------------------------------------------------
-# Zapret Manager LuCI installer — самодостаточный скрипт (все файлы зашиты
-# внутри, ничего дополнительно скачивать не нужно).
-#
-# Использование на роутере (по SSH):
-#   sh install-zapret-manager.sh
-# Или одной строкой, скачав прямо с GitHub:
-#   wget -O - https://raw.githubusercontent.com/<user>/<repo>/main/install-zapret-manager.sh | sh
-# ----------------------------------------------------------------------------
+# Zapret Manager LuCI installer — самодостаточный скрипт (все файлы зашиты внутри).
 set -e
 
 echo "==> Устанавливаем Zapret Manager (LuCI)"
@@ -84,6 +76,10 @@ _reregister_rpcd() {
 	# собственный ubus-объект "zapret-manager" остаётся незарегистрированным
 	# (ошибка в LuCI: "Object not found"). Перезапускаем rpcd сами и реально
 	# ПРОВЕРЯЕМ, что объект снова на месте — а не просто ждём и надеемся.
+	# ВАЖНО: uhttpd НЕ перезапускаем — это обрывает текущую HTTP-сессию LuCI
+	# и выкидывает пользователя с просьбой перезайти, а для регистрации
+	# ubus-объекта в rpcd он не нужен (uhttpd лишь обращается к тому, что
+	# на текущий момент зарегистрировано в rpcd, при каждом запросе заново).
 	echo "==> Перерегистрируем rpcd"
 	rm -f /tmp/luci-indexcache* /tmp/luci-modulecache/* 2>/dev/null
 	/etc/init.d/rpcd restart >/dev/null 2>&1
@@ -99,7 +95,6 @@ _reregister_rpcd() {
 		echo "!! rpcd не ответил за 10 секунд — перезапускаем ещё раз"
 		/etc/init.d/rpcd restart >/dev/null 2>&1
 	fi
-	/etc/init.d/uhttpd restart >/dev/null 2>&1
 }
 
 
