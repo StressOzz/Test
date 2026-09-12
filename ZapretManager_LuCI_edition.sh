@@ -71,34 +71,6 @@ _ensure_deps() {
 	$INSTALL $need >/dev/null 2>&1
 }
 
-_reregister_rpcd() {
-	# Установка/удаление другого luci-app-* пакета (например
-	# luci-app-https-dns-proxy) обычно перезапускает rpcd в своём postinst —
-	# и иногда этот перезапуск происходит с гонкой/сбоем, из-за чего наш
-	# собственный ubus-объект "zapret-manager" остаётся незарегистрированным
-	# (ошибка в LuCI: "Object not found"). Перезапускаем rpcd сами и реально
-	# ПРОВЕРЯЕМ, что объект снова на месте — а не просто ждём и надеемся.
-	# ВАЖНО: uhttpd НЕ перезапускаем — это обрывает текущую HTTP-сессию LuCI
-	# и выкидывает пользователя с просьбой перезайти, а для регистрации
-	# ubus-объекта в rpcd он не нужен (uhttpd лишь обращается к тому, что
-	# на текущий момент зарегистрировано в rpcd, при каждом запросе заново).
-	echo "==> Перерегистрируем rpcd"
-	rm -f /tmp/luci-indexcache* /tmp/luci-modulecache/* 2>/dev/null
-	/etc/init.d/rpcd restart >/dev/null 2>&1
-	local i=0
-	while [ "$i" -lt 10 ]; do
-		ubus list zapret-manager >/dev/null 2>&1 && break
-		sleep 1
-		i=$((i + 1))
-	done
-	if ubus list zapret-manager >/dev/null 2>&1; then
-		echo "==> rpcd перерегистрирован успешно"
-	else
-		echo "!! rpcd не ответил за 10 секунд — перезапускаем ещё раз"
-		/etc/init.d/rpcd restart >/dev/null 2>&1
-	fi
-}
-
 
 job_start() {
 	# job_start <job-name> <function-to-run-in-background>
@@ -232,7 +204,6 @@ do_install_zapret() {
 	unzip -o zapret.zip >/dev/null 2>&1
 
 	echo "==> Устанавливаем пакеты"
-	echo "!! Пакет luci-app-zapret перезапустит rpcd — текущая сессия входа в LuCI может сброситься, попросит перезайти. Это нормально."
 	if [ "$PKG" = "apk" ]; then
 		for p in apk/zapret*; do
 			[ -f "$p" ] || continue
@@ -273,7 +244,6 @@ do_remove_zapret() {
 	/etc/init.d/zapret stop >/dev/null 2>&1
 	for p in $(pgrep -f /opt/zapret 2>/dev/null); do kill -9 "$p" 2>/dev/null; done
 	echo "==> Удаляем пакеты"
-	echo "!! Удаление luci-app-zapret перезапустит rpcd — текущая сессия входа в LuCI может сброситься. Это нормально."
 	$DELETE luci-app-zapret >/dev/null 2>&1
 	$DELETE zapret >/dev/null 2>&1
 	echo "==> Удаляем файлы"
@@ -347,7 +317,6 @@ do_install_zapret2() {
 	$UPDATE
 
 	echo "==> Устанавливаем"
-	echo "!! Пакет luci-app-zapret2 перезапустит rpcd — текущая сессия входа в LuCI может сброситься. Это нормально."
 	$INSTALL ./*."$raz" || { echo "ОШИБКА установки"; return 1; }
 
 	echo "==> Добавляем домены в исключения"
@@ -378,7 +347,6 @@ do_remove_zapret2() {
 	echo "==> Останавливаем Zapret2"
 	/etc/init.d/zapret2 stop >/dev/null 2>&1
 	echo "==> Удаляем пакеты"
-	echo "!! Удаление luci-app-zapret2 перезапустит rpcd — текущая сессия входа в LuCI может сброситься. Это нормально."
 	$DELETE luci-app-zapret2 >/dev/null 2>&1
 	$DELETE zapret2 >/dev/null 2>&1
 	echo "==> Удаляем файлы"
@@ -1617,21 +1585,17 @@ do_doh_install() {
 	echo "==> Обновляем список пакетов"
 	$UPDATE >/dev/null 2>&1
 	echo "==> Устанавливаем https-dns-proxy и luci-app-https-dns-proxy"
-	echo "!! luci-app-https-dns-proxy сам перезапускает rpcd при установке — это сбрасывает текущую сессию входа в LuCI, попросит перезайти. Это нормально, не ошибка."
 	$INSTALL https-dns-proxy luci-app-https-dns-proxy >/dev/null 2>&1 || { echo "ОШИБКА установки"; return 1; }
-	_reregister_rpcd
 	echo "==> Готово, DNS over HTTPS установлен — выберите провайдера ниже"
 }
 
 do_doh_remove() {
 	echo "==> Удаляем DNS over HTTPS"
 	echo "==> Удаляем пакеты"
-	echo "!! Удаление luci-app-https-dns-proxy перезапустит rpcd — текущая сессия входа в LuCI может сброситься. Это нормально."
 	$DELETE https-dns-proxy luci-app-https-dns-proxy >/dev/null 2>&1
 	echo "==> Удаляем файлы конфигурации"
 	rm -f /etc/config/https-dns-proxy /etc/init.d/https-dns-proxy
 	/etc/init.d/dnsmasq restart >/dev/null 2>&1
-	_reregister_rpcd
 	echo "==> Готово, DNS over HTTPS удалён"
 }
 
@@ -2100,7 +2064,7 @@ function pollJob(job, logEl, onDone, onTick) {
 			failCount++;
 			if (failCount >= 8) {
 				clearInterval(timer);
-				toast('Роутер не отвечает — операция может ещё выполняться в фоне. Обновите страницу через полминуты, чтобы проверить результат.', 'warning');
+				toast('Роутер не отвечает — операция может ещё выполняться в фоне. Обновите страницу через полминуты, чтобы проверить результат.', 'warning', 25000);
 			}
 		});
 	}, 1200);
@@ -2128,7 +2092,7 @@ function toastContainer() {
 	return c;
 }
 
-function toast(message, kind) {
+function toast(message, kind, duration) {
 	var container = toastContainer();
 	var el = E('div', { 'class': 'zm-toast zm-toast-' + (kind || 'info') }, [
 		E('span', { 'class': 'zm-toast-icon' }, kind === 'error' ? '✕' : (kind === 'warning' ? '!' : '✓')),
@@ -2141,7 +2105,7 @@ function toast(message, kind) {
 		setTimeout(function() { el.parentNode && el.parentNode.removeChild(el); }, 250);
 	};
 	el.addEventListener('click', hide);
-	setTimeout(hide, kind === 'error' ? 14000 : 9000);
+	setTimeout(hide, duration || (kind === 'error' ? 14000 : 9000));
 }
 
 function notifyStrategyResult(res, okLabel) {
