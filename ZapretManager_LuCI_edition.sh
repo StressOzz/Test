@@ -2388,7 +2388,7 @@ return view.extend({
 						? zm.badge(d.zapret2_running === true, 'запущен', 'остановлен')
 						: zm.badge(false, '', 'не установлен')
 				]),
-				E('p', { 'class': 'zm-hint' }, 'Только для архитектуры aarch64_cortex-a53. Несовместим с основным Zapret.'),
+				E('p', { 'class': 'zm-hint' }, 'Только для архитектуры aarch64_cortex-a53. Несовместим с Zapret.'),
 				E('div', { 'class': 'zm-actions' }, z2Actions)
 			]);
 
@@ -3818,7 +3818,7 @@ return view.extend({
 				}, 'Обновить список')
 			]),
 			grid,
-			E('p', { 'class': 'zm-hint' }, 'Применяется поверх текущей стратегии — заменяет только YouTube-часть (--filter-tcp=443 + список google), остальное сохраняется.')
+			E('p', { 'class': 'zm-hint' }, 'Применяется поверх текущей стратегии — заменяет только YouTube-часть.')
 		]);
 
 		wrap.appendChild(card);
