@@ -2,15 +2,11 @@
 # ----------------------------------------------------------------------------
 # Zapret Manager LuCI installer — самодостаточный скрипт (все файлы зашиты
 # внутри, ничего дополнительно скачивать не нужно).
-#
-# Использование на роутере (по SSH):
-#   sh install-zapret-manager.sh
-# Или одной строкой, скачав прямо с GitHub:
-#   wget -O - https://raw.githubusercontent.com/<user>/<repo>/main/install-zapret-manager.sh | sh
 # ----------------------------------------------------------------------------
 set -e
+GREEN="\033[1;32m"; RED="\033[1;31m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
 
-echo "==> Устанавливаем Zapret Manager (LuCI)"
+echo -e "${YELLOW}==> ${CYAN}Устанавливаем Zapret Manager (LuCI)${NC}"
 
 mkdir -p /usr/lib/zapret-manager
 cat > '/usr/lib/zapret-manager/backend.sh' << 'ZM_INSTALLER_EOF'
@@ -113,6 +109,21 @@ zapret_restart() {
 
 # ---------- status -------------------------------------------------------
 
+system_info() {
+	local model arch owrt df_out tmp_used tmp_free root_used root_free
+	model=$(cat /tmp/sysinfo/model 2>/dev/null)
+	arch=$(grep DISTRIB_ARCH /etc/openwrt_release 2>/dev/null | cut -d"'" -f2)
+	owrt=$(grep '^DISTRIB_RELEASE=' /etc/openwrt_release 2>/dev/null | cut -d"'" -f2)
+	df_out=$(df -h /tmp / 2>/dev/null)
+	tmp_used=$(echo "$df_out" | awk 'NR==2{print $3}')
+	tmp_free=$(echo "$df_out" | awk 'NR==2{print $4}')
+	root_used=$(echo "$df_out" | awk 'NR==3{print $3}')
+	root_free=$(echo "$df_out" | awk 'NR==3{print $4}')
+	printf '{"model":"%s","arch":"%s","openwrt":"%s","tmp_used":"%s","tmp_free":"%s","root_used":"%s","root_free":"%s"}\n' \
+		"$(esc "$model")" "$(esc "$arch")" "$(esc "$owrt")" \
+		"$(esc "$tmp_used")" "$(esc "$tmp_free")" "$(esc "$root_used")" "$(esc "$root_free")"
+}
+
 status() {
 	local zr="not_installed" zr_running="false" zr_ver=""
 	if [ -f /etc/init.d/zapret ]; then
@@ -145,8 +156,17 @@ status() {
 # ---------- install / remove / start / stop -------------------------------
 
 _zapret_latest_version() {
-	curl -fsS --connect-timeout 4 --max-time 6 -o /dev/null -w '%{url_effective}' -sIL \
-		"https://github.com/remittor/zapret-openwrt/releases/latest" 2>/dev/null | sed 's#.*/v##'
+	local ver
+	# Читаем заголовок Location из редиректа напрямую (без -L + url_effective) —
+	# надёжнее: не все сборки curl одинаково ведут себя со связкой -w
+	# url_effective + HEAD-запрос + редирект.
+	ver=$(curl -fsSI --connect-timeout 4 --max-time 6 \
+		"https://github.com/remittor/zapret-openwrt/releases/latest" 2>/dev/null \
+		| tr -d '\r' | awk -F': ' 'tolower($1)=="location"{print $2}' | tail -n1 | sed 's#.*/v##')
+	# Санити-проверка: версия zapret всегда вида NN.NNNNNNNN — если извлечь
+	# не удалось (пусто, или всё ещё похоже на URL), лучше не показывать
+	# ничего, чем сырую ссылку.
+	echo "$ver" | grep -qE '^[0-9]+\.[0-9]+$' && echo "$ver" || echo ""
 }
 
 zapret_latest_version() {
@@ -156,7 +176,7 @@ zapret_latest_version() {
 do_install_zapret() {
 	_ensure_deps
 	if [ -f /etc/init.d/zapret2 ] && [ ! -f "$EXPERT_MODE_FILE" ]; then
-		echo "ОШИБКА: установлен Zapret2, он несовместим с Zapret — сначала удалите Zapret2 (или включите Expert mode в разделе Система)"
+		echo "ОШИБКА: установлен Zapret2, он несовместим с Zapret — сначала удалите Zapret2"
 		return 1
 	fi
 	echo "==> Определяем версию Zapret"
@@ -241,7 +261,7 @@ zapret_action() {
 			/etc/init.d/zapret stop >/dev/null 2>&1
 			for p in $(pgrep -f /opt/zapret 2>/dev/null); do kill -9 "$p" 2>/dev/null; done
 			status ;;
-		*) echo '{"error":"unknown action"}' ;;
+		*) echo '{"error":"неизвестное действие"}' ;;
 	esac
 }
 
@@ -258,7 +278,7 @@ do_install_zapret2() {
 		return 1
 	fi
 	if [ -f /etc/init.d/zapret ] && [ ! -f "$EXPERT_MODE_FILE" ]; then
-		echo "ОШИБКА: установлен основной Zapret, он несовместим с Zapret2 — сначала удалите Zapret (или включите Expert mode в разделе Система)"
+		echo "ОШИБКА: установлен основной Zapret, он несовместим с Zapret2 — сначала удалите Zapret"
 		return 1
 	fi
 
@@ -341,7 +361,7 @@ zapret2_action() {
 		remove)         job_start remove_zapret2  do_remove_zapret2 ;;
 		start)          /etc/init.d/zapret2 start >/dev/null 2>&1; status ;;
 		stop)           /etc/init.d/zapret2 stop >/dev/null 2>&1; status ;;
-		*) echo '{"error":"unknown action"}' ;;
+		*) echo '{"error":"неизвестное действие"}' ;;
 	esac
 }
 
@@ -420,8 +440,8 @@ strategy_list_v() {
 
 strategy_set_v() {
 	local version="$1"
-	echo "$version" | grep -qE '^v([1-9]|10)$' || { echo '{"error":"bad version"}'; return 1; }
-	[ -f "$CONF" ] || { echo '{"error":"zapret not installed"}'; return 1; }
+	echo "$version" | grep -qE '^v([1-9]|10)$' || { echo '{"error":"некорректная версия"}'; return 1; }
+	[ -f "$CONF" ] || { echo '{"error":"Zapret не установлен"}'; return 1; }
 	sed -i '/^# ZMFS:/d' "$CONF"
 	sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
 	{ echo "  option NFQWS_OPT '"; strategy_"$version"; echo "'"; } >> "$CONF"
@@ -536,10 +556,10 @@ strategy_list_flowseal() {
 strategy_set_flowseal() {
 	local name="$1" f block
 	f="$(_flowseal_file)"
-	[ -s "$f" ] || { echo '{"error":"list not loaded, refresh first"}'; return 1; }
-	[ -f "$CONF" ] || { echo '{"error":"zapret not installed"}'; return 1; }
+	[ -s "$f" ] || { echo '{"error":"список не загружен — сначала обновите"}'; return 1; }
+	[ -f "$CONF" ] || { echo '{"error":"Zapret не установлен"}'; return 1; }
 	block=$(awk -v n="#$name" '$0==n{flag=1; print; next} /^#/ && flag{exit} flag{print}' "$f")
-	[ -z "$block" ] && { echo '{"error":"strategy not found"}'; return 1; }
+	[ -z "$block" ] && { echo '{"error":"стратегия не найдена"}'; return 1; }
 	sed -i '/^# ZMFS:/d' "$CONF"
 	{ printf '# ZMFS:%s\n' "$name"; cat "$CONF"; } > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"
 	sed -i "/option NFQWS_OPT '/,\$d" "$CONF"
@@ -586,10 +606,10 @@ strategy_list_youtube() {
 strategy_set_youtube() {
 	local name="$1" f selected
 	f="$(_yv_file)"
-	[ -s "$f" ] || { echo '{"error":"list not loaded, refresh first"}'; return 1; }
-	[ -f "$CONF" ] || { echo '{"error":"zapret not installed"}'; return 1; }
+	[ -s "$f" ] || { echo '{"error":"список не загружен — сначала обновите"}'; return 1; }
+	[ -f "$CONF" ] || { echo '{"error":"Zapret не установлен"}'; return 1; }
 	selected="#$name"
-	grep -qxF "$selected" "$f" || { echo '{"error":"strategy not found"}'; return 1; }
+	grep -qxF "$selected" "$f" || { echo '{"error":"стратегия не найдена"}'; return 1; }
 
 	local saved="$JOBS_DIR/yv_saved" newtmp="$JOBS_DIR/yv_new" finaltmp="$JOBS_DIR/yv_final" oldtmp="$JOBS_DIR/yv_old"
 	local awk_strip="$JOBS_DIR/yv_strip.awk" awk_insert="$JOBS_DIR/yv_insert.awk" awk_dedup="$JOBS_DIR/yv_dedup.awk"
@@ -706,11 +726,11 @@ discord_status() {
 
 discord_set_dv() {
 	local num="$1" strat
-	echo "$num" | grep -qE '^(1[0-7]|[1-9])$' || { echo '{"error":"bad Dv number"}'; return 1; }
-	[ -f "$CONF" ] || { echo '{"error":"zapret not installed"}'; return 1; }
+	echo "$num" | grep -qE '^(1[0-7]|[1-9])$' || { echo '{"error":"некорректный номер Dv"}'; return 1; }
+	[ -f "$CONF" ] || { echo '{"error":"Zapret не установлен"}'; return 1; }
 	strat="$(Dv"$num")"
 	grep -q -E '^[[:space:]]*--filter-tcp=2053,2083,2087,2096,8443' "$CONF" || {
-		echo '{"error":"discord.media block not present, install a base strategy with Discord support first"}'; return 1; }
+		echo '{"error":"блок discord.media отсутствует — сначала установите базовую стратегию с поддержкой Discord"}'; return 1; }
 	local start end line
 	start=$(grep -n -E '^[[:space:]]*--filter-tcp=2053,2083,2087,2096,8443' "$CONF" | head -n1 | cut -d: -f1)
 	end=$(tail -n +"$start" "$CONF" | grep -n -m1 -E '^--new$|^#|^'"'"'$' | cut -d: -f1)
@@ -731,10 +751,10 @@ discord_set_fake() {
 	local file="$1"
 	case "$file" in
 		stun.bin|stun2.bin|quic_initial_4pda_to.bin|quic_initial_tencent_com.bin|tls_clienthello_sochi_park.bin|quic_initial_www_google_com.bin|quic_initial_steamcommunity_com.bin|quic_initial_5ka_ru.bin|quic_initial_rutube_ru.bin) ;;
-		*) echo '{"error":"unknown fake file"}'; return 1 ;;
+		*) echo '{"error":"неизвестный fake-файл"}'; return 1 ;;
 	esac
-	[ -f "$CONF" ] || { echo '{"error":"zapret not installed"}'; return 1; }
-	grep -q -- "--filter-l7=discord,stun" "$CONF" || { echo '{"error":"discord,stun block not found"}'; return 1; }
+	[ -f "$CONF" ] || { echo '{"error":"Zapret не установлен"}'; return 1; }
+	grep -q -- "--filter-l7=discord,stun" "$CONF" || { echo '{"error":"блок discord,stun не найден"}'; return 1; }
 	awk -v new="$file" '{
 		if ($0 == "--filter-l7=discord,stun") { print; getline; print;
 			if ($0 == "--dpi-desync=fake") { getline a; getline b;
@@ -941,7 +961,7 @@ hosts_status() {
 
 hosts_toggle() {
 	local block="$1" content line enabled
-	content="$(_hosts_block "$block")" || { echo '{"error":"unknown block"}'; return 1; }
+	content="$(_hosts_block "$block")" || { echo '{"error":"неизвестный блок"}'; return 1; }
 	enabled="$(_hosts_block_status "$block")"
 	if [ "$enabled" = "true" ]; then
 		while IFS= read -r line; do [ -z "$line" ] && continue; sed -i "\\|^$line\$|d" "$HOSTS_FILE"; done <<-EOF
@@ -962,7 +982,7 @@ hosts_replace_geohide() {
 		ru) url="${GH_RAW}/Internet-Helper/GeoHideDNS/refs/heads/main/hosts/hosts" ;;
 		eu) url="${GH_RAW}/Internet-Helper/GeoHideDNS/refs/heads/main/hosts/eu/hosts" ;;
 		us) url="${GH_RAW}/Internet-Helper/GeoHideDNS/refs/heads/main/hosts/us/hosts" ;;
-		*) echo '{"error":"unknown region"}'; return 1 ;;
+		*) echo '{"error":"неизвестный регион"}'; return 1 ;;
 	esac
 	tmp="$JOBS_DIR/geohide_hosts.tmp"
 	wget -q -U "Mozilla/5.0" -O "$tmp" "$url" >/dev/null 2>&1
@@ -1029,8 +1049,8 @@ game_status() {
 
 game_set() {
 	local choice="$1" current="" i
-	echo "$choice" | grep -qE '^[1-4]$' || { echo '{"error":"bad Gv number"}'; return 1; }
-	[ -f "$CONF" ] || { echo '{"error":"zapret not installed"}'; return 1; }
+	echo "$choice" | grep -qE '^[1-4]$' || { echo '{"error":"некорректный номер Gv"}'; return 1; }
+	[ -f "$CONF" ] || { echo '{"error":"Zapret не установлен"}'; return 1; }
 	for i in 1 2 3 4; do grep -q "^#Gv$i\$" "$CONF" && current="Gv$i"; done
 
 	local last_quote gv_line
@@ -1066,24 +1086,24 @@ game_set_fake() {
 	local file="$1"
 	case "$file" in
 		stun.bin|stun2.bin|quic_initial_4pda_to.bin|quic_initial_tencent_com.bin|tls_clienthello_sochi_park.bin|quic_initial_www_google_com.bin|quic_initial_steamcommunity_com.bin|quic_initial_5ka_ru.bin|quic_initial_rutube_ru.bin) ;;
-		*) echo '{"error":"unknown fake file"}'; return 1 ;;
+		*) echo '{"error":"неизвестный fake-файл"}'; return 1 ;;
 	esac
-	[ -f "$CONF" ] || { echo '{"error":"zapret not installed"}'; return 1; }
-	grep -q -- '--dpi-desync-fake-unknown-udp=' "$CONF" || { echo '{"error":"no game strategy installed"}'; return 1; }
+	[ -f "$CONF" ] || { echo '{"error":"Zapret не установлен"}'; return 1; }
+	grep -q -- '--dpi-desync-fake-unknown-udp=' "$CONF" || { echo '{"error":"игровая стратегия не установлена"}'; return 1; }
 	awk -v new="$file" 'BEGIN{done=0} !done && /--dpi-desync-fake-unknown-udp=/{sub(/\/opt\/zapret\/files\/fake\/[^ ]+/, "/opt/zapret/files/fake/" new); done=1} {print}' "$CONF" > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"
 	zapret_restart
 	printf '{"ok":true,"fake":"%s"}\n' "$(esc "$file")"
 }
 
 game_toggle_xtreme() {
-	[ -f "$CONF" ] || { echo '{"error":"zapret not installed"}'; return 1; }
+	[ -f "$CONF" ] || { echo '{"error":"Zapret не установлен"}'; return 1; }
 	local xfile="/opt/zapret/tmp/GvXtreme"
 	local xports="80,88,444-65535"
 	local xnfqws="80,88,443-65535"
 	mkdir -p "$(dirname "$xfile")"
 
 	if grep -q "^#Gv[0-9]\+Xtreme\$" "$CONF"; then
-		[ -f "$xfile" ] || { echo '{"error":"restore file missing"}'; return 1; }
+		[ -f "$xfile" ] || { echo '{"error":"файл восстановления отсутствует"}'; return 1; }
 		local old_gv old_udp old_tcp old_tcp_opt old_udp_opt
 		old_gv=$(sed -n '1p' "$xfile")
 		old_udp=$(sed -n '2p' "$xfile")
@@ -1104,7 +1124,7 @@ game_toggle_xtreme() {
 		return
 	fi
 
-	grep -q "^#Gv[0-9]\+\$" "$CONF" || { echo '{"error":"no game strategy installed"}'; return 1; }
+	grep -q "^#Gv[0-9]\+\$" "$CONF" || { echo '{"error":"игровая стратегия не установлена"}'; return 1; }
 	awk '
 		/^#Gv[0-9]+$/ { gv = $0; found = 1; next }
 		found && /^--filter-udp=/ { udp = $0 }
@@ -1194,7 +1214,7 @@ system_toggle_quic() {
 }
 
 system_toggle_ipv6() {
-	[ -f "$CONF" ] || { echo '{"error":"zapret not installed"}'; return 1; }
+	[ -f "$CONF" ] || { echo '{"error":"Zapret не установлен"}'; return 1; }
 	if grep -q "option DISABLE_IPV6 '0'" "$CONF"; then
 		sed -i "s/option DISABLE_IPV6 '0'/option DISABLE_IPV6 '1'/" "$CONF"
 		zapret_restart
@@ -1214,7 +1234,7 @@ system_toggle_ipv6() {
 
 system_toggle_flow_offloading_fix() {
 	local template="/usr/share/firewall4/templates/ruleset.uc"
-	[ -f "$template" ] || { echo '{"error":"firewall4 template not found"}'; return 1; }
+	[ -f "$template" ] || { echo '{"error":"шаблон firewall4 не найден"}'; return 1; }
 	if grep -q 'ct original packets ge 30 flow offload @ft;' "$template"; then
 		sed -i 's/meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;/meta l4proto { tcp, udp } flow offload @ft;/' "$template"
 		fw4 restart >/dev/null 2>&1
@@ -1296,7 +1316,7 @@ mirror_set() {
 		usa)          host="openwrt.pixeldeck.net" ;;
 		germany_rwth) host="ftp.halifax.rwth-aachen.de/openwrt" ;;
 		default)      host="downloads.openwrt.org" ;;
-		*) echo '{"error":"unknown mirror"}'; return 1 ;;
+		*) echo '{"error":"неизвестное зеркало"}'; return 1 ;;
 	esac
 	job_start mirror_set do_mirror_set "$host"
 }
@@ -1330,7 +1350,7 @@ _excl_write() {
 }
 
 exclusions_status() {
-	[ -f /etc/init.d/zapret ] || { echo '{"error":"zapret not installed"}'; return 1; }
+	[ -f /etc/init.d/zapret ] || { echo '{"error":"Zapret не установлен"}'; return 1; }
 	local current devjson="" first=1 ip name ts mac rest
 
 	current=$(_excl_current)
@@ -1361,8 +1381,8 @@ exclusions_status() {
 
 exclusions_toggle() {
 	local ip="$1" current new_list excluded="false"
-	echo "$ip" | grep -qE '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$' || { echo '{"error":"bad ip"}'; return 1; }
-	[ -f /etc/init.d/zapret ] || { echo '{"error":"zapret not installed"}'; return 1; }
+	echo "$ip" | grep -qE '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$' || { echo '{"error":"некорректный IP-адрес"}'; return 1; }
+	[ -f /etc/init.d/zapret ] || { echo '{"error":"Zapret не установлен"}'; return 1; }
 	current=$(_excl_current)
 	if printf '%s\n' "$current" | grep -qx "$ip"; then
 		new_list=$(printf '%s\n' "$current" | grep -vx "$ip")
@@ -1376,7 +1396,7 @@ exclusions_toggle() {
 }
 
 exclusions_clear() {
-	[ -f /etc/init.d/zapret ] || { echo '{"error":"zapret not installed"}'; return 1; }
+	[ -f /etc/init.d/zapret ] || { echo '{"error":"Zapret не установлен"}'; return 1; }
 	_excl_write ""
 	zapret_restart
 	printf '{"ok":true}\n'
@@ -1538,7 +1558,7 @@ tg_action() {
 		socks5:remove)                  job_start tg_remove_socks5 do_tg_remove_socks5 ;;
 		rust:install|rust:update)       job_start tg_install_rust do_tg_install_rust ;;
 		rust:remove)                    job_start tg_remove_rust do_tg_remove_rust ;;
-		*) echo '{"error":"unknown variant/action"}' ;;
+		*) echo '{"error":"неизвестный вариант/действие"}' ;;
 	esac
 }
 
@@ -1612,12 +1632,12 @@ doh_set() {
 		geohide_ru)  url="https://geohide.ru/dns-query" ;;
 		geohide_eu)  url="https://eu.geohide.ru/dns-query" ;;
 		geohide_us)  url="https://us.geohide.ru/dns-query" ;;
-		*) echo '{"error":"unknown provider"}'; return 1 ;;
+		*) echo '{"error":"неизвестный провайдер"}'; return 1 ;;
 	esac
 	local installed; installed=$(doh_status | grep -o '"installed":[a-z]*' | cut -d: -f2)
 	if [ "$installed" != "true" ]; then
-		$UPDATE >/dev/null 2>&1
-		$INSTALL https-dns-proxy luci-app-https-dns-proxy >/dev/null 2>&1 || { echo '{"error":"install failed"}'; return 1; }
+		echo '{"error":"DNS over HTTPS не установлен — сначала нажмите «Установить DNS over HTTPS»"}'
+		return 1
 	fi
 	{
 		# базовый блок config main — дословно как в оригинальном doh_set,
@@ -1657,6 +1677,7 @@ doh_set() {
 cmd="$1"; shift
 case "$cmd" in
 	status)                  status ;;
+	system_info)             system_info ;;
 	job_status)               job_status "$1" ;;
 	log_tail)                  log_tail "$1" ;;
 	zapret_action)              zapret_action "$1" ;;
@@ -1697,7 +1718,7 @@ case "$cmd" in
 	doh_remove)                          doh_remove ;;
 	doh_status)                          doh_status ;;
 	doh_set)                              doh_set "$1" ;;
-	*) echo '{"error":"unknown command"}'; exit 1 ;;
+	*) echo '{"error":"неизвестная команда"}'; exit 1 ;;
 esac
 ZM_INSTALLER_EOF
 chmod 0755 '/usr/lib/zapret-manager/backend.sh'
@@ -1715,6 +1736,7 @@ BACKEND="/usr/lib/zapret-manager/backend.sh"
 list_methods() {
 	json_init
 	json_add_object "status";                 json_close_object
+	json_add_object "system_info";            json_close_object
 	json_add_object "job_status";             json_add_string "job" "string"; json_close_object
 	json_add_object "log_tail";               json_add_string "job" "string"; json_close_object
 	json_add_object "zapret_action";          json_add_string "action" "string"; json_close_object
@@ -1766,6 +1788,7 @@ call_method() {
 
 	case "$method" in
 		status)                 "$BACKEND" status ;;
+		system_info)            "$BACKEND" system_info ;;
 		job_status)             json_get_var job job;         "$BACKEND" job_status "$job" ;;
 		log_tail)                json_get_var job job;         "$BACKEND" log_tail "$job" ;;
 		zapret_action)           json_get_var action action;   "$BACKEND" zapret_action "$action" ;;
@@ -1826,7 +1849,7 @@ cat > '/usr/share/rpcd/acl.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF'
 		"read": {
 			"ubus": {
 				"zapret-manager": [
-					"status", "job_status", "log_tail",
+					"status", "job_status", "log_tail", "system_info",
 					"strategy_list_v", "strategy_list_flowseal", "strategy_list_youtube",
 					"discord_status", "hosts_status", "doh_status", "game_status",
 					"system_status", "mirror_status", "exclusions_status", "tg_status",
@@ -1925,6 +1948,7 @@ cat > '/www/luci-static/resources/zapret-manager/common.js' << 'ZM_INSTALLER_EOF
 'require ui';
 
 var callStatus = rpc.declare({ object: 'zapret-manager', method: 'status', expect: {} });
+var callSystemInfo = rpc.declare({ object: 'zapret-manager', method: 'system_info', expect: {} });
 var callJobStatus = rpc.declare({ object: 'zapret-manager', method: 'job_status', params: ['job'], expect: {} });
 var callLogTail = rpc.declare({ object: 'zapret-manager', method: 'log_tail', params: ['job'], expect: {} });
 var callZapretAction = rpc.declare({ object: 'zapret-manager', method: 'zapret_action', params: ['action'], expect: {} });
@@ -2101,6 +2125,7 @@ return baseclass.extend({
 	toast: toast,
 	notifyStrategyResult: notifyStrategyResult,
 	status: callStatus,
+	systemInfo: callSystemInfo,
 	jobStatus: callJobStatus,
 	logTail: callLogTail,
 	zapretAction: callZapretAction,
@@ -2159,7 +2184,8 @@ return view.extend({
 			zm.dohStatus().catch(function() { return {}; }),
 			zm.hostsStatus().catch(function() { return { items: [] }; }),
 			zm.systemStatus().catch(function() { return {}; }),
-			zm.zapretLatestVersion().catch(function() { return {}; })
+			zm.zapretLatestVersion().catch(function() { return {}; }),
+			zm.systemInfo().catch(function() { return {}; })
 		]);
 	},
 
@@ -2167,6 +2193,7 @@ return view.extend({
 		var view = this;
 		var data = all[0], dohData = all[1], hostsData = all[2], sysData = all[3];
 		var latestVersion = (all[4] && all[4].version) || '';
+		var sysInfo = all[5] || {};
 		var wrap = E('div', { 'class': 'zm-wrap' });
 		var overviewEl = E('div', {});
 		var cards = E('div', { 'class': 'zm-cards' });
@@ -2182,17 +2209,13 @@ return view.extend({
 			if (sys.quic_blocked) sysFlags.push('QUIC заблокирован');
 			if (sys.ipv6_enabled) sysFlags.push('IPv6 в Zapret включён');
 			if (sys.flow_offloading_fix) sysFlags.push('Flow Offloading fix');
-			if (sys.expert_mode) sysFlags.push('Expert mode');
 
 			return E('div', { 'class': 'zm-card', 'style': 'margin-bottom:4px' }, [
 				E('h3', {}, 'Обзор'),
 				E('div', { 'class': 'zm-row' }, [
 					E('span', { 'class': 'zm-label' }, 'Zapret'),
 					d.zapret === 'installed'
-						? E('span', {}, [
-							zm.badge(d.zapret_running === true, 'запущен', 'остановлен'),
-							d.strategy ? E('span', { 'style': 'margin-left:8px; opacity:.75' }, 'стратегия: ' + d.strategy) : E([])
-						])
+						? zm.badge(d.zapret_running === true, 'запущен', 'остановлен')
 						: zm.badge(false, '', 'не установлен')
 				]),
 				d.zapret2 === 'installed' ? E('div', { 'class': 'zm-row' }, [
@@ -2207,9 +2230,11 @@ return view.extend({
 				]),
 				E('div', { 'class': 'zm-row' }, [
 					E('span', { 'class': 'zm-label' }, 'Домены в hosts'),
-					hostsTotal
-						? zm.badge(hostsEnabled > 0, hostsEnabled + ' из ' + hostsTotal + ' включено', 'ничего не включено')
-						: E('span', {}, '—')
+					hosts.geohide
+						? zm.badge(true, 'GeoHide ' + hosts.geohide.toUpperCase(), '')
+						: hostsTotal
+							? zm.badge(hostsEnabled > 0, hostsEnabled + ' из ' + hostsTotal + ' включено', 'ничего не включено')
+							: E('span', {}, '—')
 				]),
 				sysFlags.length ? E('div', { 'class': 'zm-row' }, [
 					E('span', { 'class': 'zm-label' }, 'Система'),
@@ -2227,7 +2252,7 @@ return view.extend({
 					'class': 'cbi-button cbi-button-remove',
 					'click': ui.createHandlerFn(view, 'doAction', 'remove')
 				}, 'Удалить'));
-				if (latestVersion && d.zapret_version && latestVersion !== d.zapret_version) {
+				if (/^[0-9]+\.[0-9]+$/.test(latestVersion) && d.zapret_version && latestVersion !== d.zapret_version) {
 					zActions.push(E('button', {
 						'class': 'cbi-button',
 						'click': ui.createHandlerFn(view, 'doAction', 'update')
@@ -2290,17 +2315,30 @@ return view.extend({
 				E('div', { 'class': 'zm-actions' }, z2Actions)
 			]);
 
-			var pkgCard = E('div', { 'class': 'zm-card' }, [
-				E('h3', {}, 'Пакетный менеджер'),
+			var sysCard = E('div', { 'class': 'zm-card' }, [
 				E('div', { 'class': 'zm-row' }, [
-					E('span', { 'class': 'zm-label' }, 'Используется'),
-					E('span', {}, (d.pkg || '').toUpperCase())
+					E('span', { 'class': 'zm-label' }, 'Модель:'), E('span', {}, sysInfo.model || '—')
+				]),
+				E('div', { 'class': 'zm-row' }, [
+					E('span', { 'class': 'zm-label' }, 'Архитектура:'), E('span', {}, sysInfo.arch || '—')
+				]),
+				E('div', { 'class': 'zm-row' }, [
+					E('span', { 'class': 'zm-label' }, 'OpenWrt:'), E('span', {}, sysInfo.openwrt || '—')
+				]),
+				E('p', { 'class': 'zm-hint', 'style': 'margin-top:10px; margin-bottom:2px' }, 'Место на роутере:'),
+				E('div', { 'class': 'zm-row' }, [
+					E('span', { 'class': 'zm-label' }, '/tmp'),
+					E('span', {}, sysInfo.tmp_free ? ('занято ' + sysInfo.tmp_used + ' · свободно ' + sysInfo.tmp_free) : '—')
+				]),
+				E('div', { 'class': 'zm-row' }, [
+					E('span', { 'class': 'zm-label' }, '/root'),
+					E('span', {}, sysInfo.root_free ? ('занято ' + sysInfo.root_used + ' · свободно ' + sysInfo.root_free) : '—')
 				])
 			]);
 
 			cards.appendChild(zCard);
 			cards.appendChild(z2Card);
-			cards.appendChild(pkgCard);
+			cards.appendChild(sysCard);
 		}
 
 		function refreshOverview() {
@@ -2317,6 +2355,14 @@ return view.extend({
 
 		overviewEl.appendChild(renderOverview(data, dohData, hostsData, sysData));
 		renderCards(data);
+		wrap.appendChild(E('div', { 'class': 'zm-header' }, [
+			E('h2', {}, 'Zapret Manager'),
+			E('span', { 'class': 'zm-header-by' }, 'by StressOzz'),
+			E('div', { 'class': 'zm-header-links' }, [
+				E('a', { 'href': 'https://t.me/stressozz_manager', 'target': '_blank', 'rel': 'noreferrer' }, 'Сообщество Telegram'),
+				E('a', { 'href': 'http://stresskvn.lol/', 'target': '_blank', 'rel': 'noreferrer' }, 'StressKVN')
+			])
+		]));
 		wrap.appendChild(overviewEl);
 		wrap.appendChild(cards);
 		wrap.appendChild(logEl);
@@ -2339,7 +2385,7 @@ return view.extend({
 		zm.zapretAction(action).then(function(res) {
 			if (job && res && res.started) {
 				zm.pollJob(job, view.logEl, function(ok) {
-					zm.toast(ok ? 'Готово' : 'Операция завершилась с ошибкой — смотрите лог выше', ok ? 'info' : 'error');
+					zm.toast(ok ? 'Готово' : 'Операция завершилась с ошибкой', ok ? 'info' : 'error');
 					zm.status().then(function(d) { view.renderCards(d); });
 					view.refreshOverview();
 					if (ok && (action === 'install' || action === 'remove')) {
@@ -2361,7 +2407,7 @@ return view.extend({
 		zm.zapret2Action(action).then(function(res) {
 			if (job && res && res.started) {
 				zm.pollJob(job, view.logEl, function(ok) {
-					zm.toast(ok ? 'Готово' : 'Операция завершилась с ошибкой — смотрите лог выше', ok ? 'info' : 'error');
+					zm.toast(ok ? 'Готово' : 'Операция завершилась с ошибкой', ok ? 'info' : 'error');
 					zm.status().then(function(d) { view.renderCards(d); });
 					view.refreshOverview();
 					if (ok && (action === 'install' || action === 'remove')) {
@@ -2398,49 +2444,56 @@ return view.extend({
 
 	render: function(data) {
 		var wrap = E('div', { 'class': 'zm-wrap' });
-
-		var bannerContent = data.current
-			? [ 'Сейчас: ', E('b', {}, data.current) ]
-			: [ 'Discord-стратегия ещё не выбрана' ];
-		if (data.current && data.current_fake) {
-			bannerContent.push(', fake: ');
-			bannerContent.push(E('b', {}, data.current_fake));
-		}
-		var currentBanner = E('div', { 'class': 'zm-current-banner' + (data.current ? '' : ' zm-current-empty') }, bannerContent);
-		wrap.appendChild(currentBanner);
-
 		var dvGrid = E('div', { 'class': 'zm-grid' });
-		(data.available || []).forEach(function(dv) {
-			var num = dv.replace('Dv', '');
-			dvGrid.appendChild(E('div', {
-				'class': 'zm-tile' + (data.current === dv ? ' zm-active' : ''),
-				'click': function() {
-					zm.discordSetDv(num).then(function(res) {
-						if (!zm.notifyStrategyResult(res, dv)) return;
-						setTimeout(function() { location.reload(); }, 900);
-					});
-				}
-			}, dv));
-		});
+		var fakeGrid = E('div', { 'class': 'zm-grid' });
+
+		function renderDv() {
+			dvGrid.innerHTML = '';
+			(data.available || []).forEach(function(dv) {
+				var num = dv.replace('Dv', '');
+				dvGrid.appendChild(E('div', {
+					'class': 'zm-tile' + (data.current === dv ? ' zm-active' : ''),
+					'click': function() {
+						zm.discordSetDv(num).then(function(res) {
+							if (!zm.notifyStrategyResult(res, dv)) return;
+							refreshState();
+						});
+					}
+				}, dv));
+			});
+		}
+
+		function renderFake() {
+			fakeGrid.innerHTML = '';
+			FAKES.forEach(function(f) {
+				fakeGrid.appendChild(E('div', {
+					'class': 'zm-tile' + (data.current_fake === f ? ' zm-active' : ''),
+					'click': function() {
+						zm.discordSetFake(f).then(function(res) {
+							if (!zm.notifyStrategyResult(res, f)) return;
+							refreshState();
+						});
+					}
+				}, f));
+			});
+		}
+
+		function refreshState() {
+			zm.discordStatus().then(function(res) {
+				data = res;
+				renderDv();
+				renderFake();
+			});
+		}
+
+		renderDv();
+		renderFake();
 
 		var dvCard = E('div', { 'class': 'zm-card' }, [
 			E('h3', {}, 'Стратегия для discord.media'),
 			dvGrid,
 			E('p', { 'class': 'zm-hint' }, 'Нужна базовая стратегия с блоком discord.media (например Flowseal general).')
 		]);
-
-		var fakeGrid = E('div', { 'class': 'zm-grid' });
-		FAKES.forEach(function(f) {
-			fakeGrid.appendChild(E('div', {
-				'class': 'zm-tile' + (data.current_fake === f ? ' zm-active' : ''),
-				'click': function() {
-					zm.discordSetFake(f).then(function(res) {
-						zm.notifyStrategyResult(res, f);
-						if (!res.error) setTimeout(function() { location.reload(); }, 900);
-					});
-				}
-			}, f));
-		});
 
 		var fakeCard = E('div', { 'class': 'zm-card' }, [
 			E('h3', {}, 'Fake-файл для discord,stun'),
@@ -2470,9 +2523,6 @@ var PROVIDERS = [
 	{ id: 'geohide_us', label: 'GeoHide US' }
 ];
 
-var LABELS = {};
-PROVIDERS.forEach(function(p) { LABELS[p.id] = p.label; });
-
 return view.extend({
 	load: function() {
 		zm.injectCss();
@@ -2484,26 +2534,23 @@ return view.extend({
 		var logEl = E('pre', { 'class': 'zm-log' });
 		var bannerEl = E('div', {});
 
-		var currentBanner = E('div', { 'class': 'zm-current-banner' + (data.installed && data.current ? '' : ' zm-current-empty') },
-			data.installed && data.current
-				? [ 'Сейчас используется: ', E('b', {}, LABELS[data.current] || data.current) ]
-				: [ 'DNS over HTTPS не настроен' ]
-		);
-		wrap.appendChild(currentBanner);
-
 		var grid = E('div', { 'class': 'zm-grid' });
-		PROVIDERS.forEach(function(p) {
-			grid.appendChild(E('div', {
-				'class': 'zm-tile' + (data.current === p.id ? ' zm-active' : ''),
-				'click': function() {
-					zm.dohSet(p.id).then(function(res) {
-						if (res.error) { zm.toast(res.error, 'error'); return; }
-						zm.toast(p.label + ' применён', 'info');
-						setTimeout(function() { location.reload(); }, 900);
-					});
-				}
-			}, p.label));
-		});
+		function renderGrid() {
+			grid.innerHTML = '';
+			PROVIDERS.forEach(function(p) {
+				grid.appendChild(E('div', {
+					'class': 'zm-tile' + (data.current === p.id ? ' zm-active' : ''),
+					'click': function() {
+						zm.dohSet(p.id).then(function(res) {
+							if (res.error) { zm.toast(res.error, 'error'); return; }
+							zm.toast(p.label + ' применён', 'info');
+							zm.dohStatus().then(function(res2) { data = res2; renderGrid(); });
+						});
+					}
+				}, p.label));
+			});
+		}
+		renderGrid();
 
 		var installBtn = E('button', {
 			'class': 'cbi-button cbi-button-positive',
@@ -2512,7 +2559,7 @@ return view.extend({
 					if (res.error) { zm.toast(res.error, 'error'); return; }
 					if (res.started) {
 						zm.pollJob('doh_install', logEl, function(ok) {
-							zm.toast(ok ? 'DNS over HTTPS установлен' : 'Ошибка установки — смотрите лог', ok ? 'info' : 'error');
+							zm.toast(ok ? 'DNS over HTTPS установлен' : 'Ошибка установки', ok ? 'info' : 'error');
 							if (ok) {
 								bannerEl.appendChild(zm.refreshBanner('Пункт меню DNS over HTTPS в LuCI мог измениться — обновите страницу.'));
 							}
@@ -2529,7 +2576,7 @@ return view.extend({
 					if (res.error) { zm.toast(res.error, 'error'); return; }
 					if (res.started) {
 						zm.pollJob('doh_remove', logEl, function(ok) {
-							zm.toast(ok ? 'DNS over HTTPS удалён' : 'Ошибка удаления — смотрите лог', ok ? 'info' : 'error');
+							zm.toast(ok ? 'DNS over HTTPS удалён' : 'Ошибка удаления', ok ? 'info' : 'error');
 							if (ok) {
 								bannerEl.appendChild(zm.refreshBanner('Пункт меню DNS over HTTPS в LuCI мог измениться — обновите страницу.'));
 							}
@@ -2588,8 +2635,10 @@ return view.extend({
 				grid.appendChild(E('div', {
 					'class': 'zm-tile' + (d.excluded ? ' zm-active' : ''),
 					'click': function() {
-						zm.exclusionsToggle(d.ip).then(function() {
-							zm.exclusionsStatus().then(function(res) { renderGrid(res.devices); });
+						zm.exclusionsToggle(d.ip).then(function(res) {
+							if (res.error) { zm.toast(res.error, 'error'); return; }
+							zm.toast(d.ip + (res.excluded ? ' исключён' : ' больше не исключён'), 'info');
+							zm.exclusionsStatus().then(function(r) { renderGrid(r.devices); });
 						});
 					}
 				}, [ E('div', {}, d.ip), E('div', { 'class': 'zm-hint' }, d.name) ]));
@@ -2625,9 +2674,11 @@ return view.extend({
 							zm.toast('Некорректный IPv4 адрес', 'error');
 							return;
 						}
-						zm.exclusionsToggle(ip).then(function() {
+						zm.exclusionsToggle(ip).then(function(res) {
+							if (res.error) { zm.toast(res.error, 'error'); return; }
 							manualInput.value = '';
-							zm.exclusionsStatus().then(function(res) { renderGrid(res.devices); });
+							zm.toast(ip + (res.excluded ? ' добавлен в исключения' : ' убран из исключений'), 'info');
+							zm.exclusionsStatus().then(function(r) { renderGrid(r.devices); });
 						});
 					}
 				}, 'Добавить вручную'),
@@ -2669,22 +2720,77 @@ return view.extend({
 	},
 
 	render: function(data) {
-		var view = this;
 		var wrap = E('div', { 'class': 'zm-wrap' });
-
 		var gvGrid = E('div', { 'class': 'zm-grid' });
-		[1, 2, 3, 4].forEach(function(n) {
-			gvGrid.appendChild(E('div', {
-				'class': 'zm-tile' + (data.current === ('Gv' + n) ? ' zm-active' : ''),
-				'click': function() {
-					zm.gameSet(String(n)).then(function(res) {
-						if (res.error) { zm.toast(res.error, 'error'); return; }
-						zm.toast(res.game === 'none' ? 'Игровая стратегия снята' : res.game + ' применена', 'info');
-						setTimeout(function() { location.reload(); }, 900);
-					});
-				}
-			}, 'Gv' + n));
-		});
+		var xtremeRow = E('div', {});
+		var fakeGrid = E('div', { 'class': 'zm-grid' });
+
+		function renderGv() {
+			gvGrid.innerHTML = '';
+			[1, 2, 3, 4].forEach(function(n) {
+				gvGrid.appendChild(E('div', {
+					'class': 'zm-tile' + (data.current === ('Gv' + n) ? ' zm-active' : ''),
+					'click': function() {
+						zm.gameSet(String(n)).then(function(res) {
+							if (res.error) { zm.toast(res.error, 'error'); return; }
+							zm.toast(res.game === 'none' ? 'Игровая стратегия снята' : res.game + ' применена', 'info');
+							refreshState();
+						});
+					}
+				}, 'Gv' + n));
+			});
+		}
+
+		function renderXtreme() {
+			var xtreme = data.xtreme === true;
+			xtremeRow.innerHTML = '';
+			xtremeRow.appendChild(E('div', { 'class': 'zm-row' }, [
+				E('span', { 'class': 'zm-label' }, 'Статус'),
+				zm.badge(xtreme, 'включён', 'выключен')
+			]));
+			xtremeRow.appendChild(E('p', { 'class': 'zm-hint' }, 'Внимание: может повлиять на работу приложений и соединений — используйте только для проверки игр.'));
+			xtremeRow.appendChild(E('div', { 'class': 'zm-actions' }, [
+				E('button', {
+					'class': xtreme ? 'cbi-button cbi-button-remove' : 'cbi-button cbi-button-positive',
+					'click': function() {
+						zm.gameToggleXtreme().then(function(res) {
+							if (res.error) { zm.toast(res.error, 'error'); return; }
+							zm.toast(res.xtreme ? 'Xtreme включён' : 'Xtreme выключен', 'info');
+							refreshState();
+						});
+					}
+				}, xtreme ? 'Выключить Xtreme' : 'Включить Xtreme')
+			]));
+		}
+
+		function renderFake() {
+			fakeGrid.innerHTML = '';
+			FAKES.forEach(function(f) {
+				fakeGrid.appendChild(E('div', {
+					'class': 'zm-tile' + (data.fake === f ? ' zm-active' : ''),
+					'click': function() {
+						zm.gameSetFake(f).then(function(res) {
+							if (res.error) { zm.toast(res.error, 'error'); return; }
+							zm.toast(f + ' установлен', 'info');
+							refreshState();
+						});
+					}
+				}, f));
+			});
+		}
+
+		function refreshState() {
+			zm.gameStatus().then(function(res) {
+				data = res;
+				renderGv();
+				renderXtreme();
+				renderFake();
+			});
+		}
+
+		renderGv();
+		renderXtreme();
+		renderFake();
 
 		var gvCard = E('div', { 'class': 'zm-card' }, [
 			E('h3', {}, 'Игровая стратегия'),
@@ -2692,41 +2798,10 @@ return view.extend({
 			E('p', { 'class': 'zm-hint' }, 'Повторный клик по уже выбранной — снимает игровую стратегию.')
 		]);
 
-		var xtreme = data.xtreme === true;
 		var xtremeCard = E('div', { 'class': 'zm-card' }, [
 			E('h3', {}, 'Xtreme режим'),
-			E('div', { 'class': 'zm-row' }, [
-				E('span', { 'class': 'zm-label' }, 'Статус'),
-				zm.badge(xtreme, 'включён', 'выключен')
-			]),
-			E('p', { 'class': 'zm-hint' }, 'Внимание: может повлиять на работу приложений и соединений — используйте только для проверки игр.'),
-			E('div', { 'class': 'zm-actions' }, [
-				E('button', {
-					'class': xtreme ? 'cbi-button cbi-button-remove' : 'cbi-button cbi-button-positive',
-					'click': function() {
-						zm.gameToggleXtreme().then(function(res) {
-							if (res.error) { zm.toast(res.error, 'error'); return; }
-							zm.toast(res.xtreme ? 'Xtreme включён' : 'Xtreme выключен', 'info');
-							setTimeout(function() { location.reload(); }, 900);
-						});
-					}
-				}, xtreme ? 'Выключить Xtreme' : 'Включить Xtreme')
-			])
+			xtremeRow
 		]);
-
-		var fakeGrid = E('div', { 'class': 'zm-grid' });
-		FAKES.forEach(function(f) {
-			fakeGrid.appendChild(E('div', {
-				'class': 'zm-tile' + (data.fake === f ? ' zm-active' : ''),
-				'click': function() {
-					zm.gameSetFake(f).then(function(res) {
-						if (res.error) { zm.toast(res.error, 'error'); return; }
-						zm.toast(f + ' установлен', 'info');
-						setTimeout(function() { location.reload(); }, 900);
-					});
-				}
-			}, f));
-		});
 
 		var fakeCard = E('div', { 'class': 'zm-card' }, [
 			E('h3', {}, 'Fake-файл для игровой стратегии'),
@@ -2768,8 +2843,6 @@ var LABELS = {
 	updatesdiscord: 'Discord (updates.discord.com)'
 };
 
-var GEO_LABELS = { ru: 'GeoHide RU', eu: 'GeoHide EU', us: 'GeoHide US', unknown: 'GeoHide' };
-
 return view.extend({
 	load: function() {
 		zm.injectCss();
@@ -2779,14 +2852,6 @@ return view.extend({
 	render: function(data) {
 		var wrap = E('div', { 'class': 'zm-wrap' });
 		var grid = E('div', { 'class': 'zm-grid' });
-		var geoButtons = {};
-
-		var geoBanner = E('div', { 'class': 'zm-current-banner' + (data.geohide ? '' : ' zm-current-empty') },
-			data.geohide
-				? [ 'Сейчас активен: ', E('b', {}, GEO_LABELS[data.geohide] || data.geohide) ]
-				: [ 'GeoHide hosts не применён — используются блоки ниже' ]
-		);
-		wrap.appendChild(geoBanner);
 
 		function renderGrid(items) {
 			grid.innerHTML = '';
@@ -2794,8 +2859,10 @@ return view.extend({
 				grid.appendChild(E('div', {
 					'class': 'zm-tile' + (it.enabled ? ' zm-active' : ''),
 					'click': function() {
-						zm.hostsToggle(it.id).then(function() {
-							zm.hostsStatus().then(function(res) { renderGrid(res.items); });
+						zm.hostsToggle(it.id).then(function(res) {
+							if (res.error) { zm.toast(res.error, 'error'); return; }
+							zm.toast((LABELS[it.id] || it.id) + (res.enabled ? ' включён' : ' выключен'), 'info');
+							zm.hostsStatus().then(function(r) { renderGrid(r.items); });
 						});
 					}
 				}, LABELS[it.id] || it.id));
@@ -2812,20 +2879,35 @@ return view.extend({
 		wrap.appendChild(card);
 
 		var geoLogEl = E('pre', { 'class': 'zm-log' });
-		geoButtons.ru = E('button', { 'class': 'cbi-button' + (data.geohide === 'ru' ? ' cbi-button-positive' : ''), 'click': function() { replaceGeohide('ru'); } }, 'GeoHide RU');
-		geoButtons.eu = E('button', { 'class': 'cbi-button' + (data.geohide === 'eu' ? ' cbi-button-positive' : ''), 'click': function() { replaceGeohide('eu'); } }, 'GeoHide EU');
-		geoButtons.us = E('button', { 'class': 'cbi-button' + (data.geohide === 'us' ? ' cbi-button-positive' : ''), 'click': function() { replaceGeohide('us'); } }, 'GeoHide US');
+		var geoGrid = E('div', { 'class': 'zm-grid' });
+
+		function renderGeoGrid() {
+			geoGrid.innerHTML = '';
+			geoGrid.appendChild(E('div', { 'class': 'zm-tile' + (data.geohide === 'ru' ? ' zm-active' : ''), 'click': function() { replaceGeohide('ru'); } }, 'GeoHide RU'));
+			geoGrid.appendChild(E('div', { 'class': 'zm-tile' + (data.geohide === 'eu' ? ' zm-active' : ''), 'click': function() { replaceGeohide('eu'); } }, 'GeoHide EU'));
+			geoGrid.appendChild(E('div', { 'class': 'zm-tile' + (data.geohide === 'us' ? ' zm-active' : ''), 'click': function() { replaceGeohide('us'); } }, 'GeoHide US'));
+		}
+		renderGeoGrid();
+
 		var resetBtn = E('button', { 'class': 'cbi-button cbi-button-remove', 'click': resetHosts }, 'Восстановить hosts');
 
 		var geoCard = E('div', { 'class': 'zm-card' }, [
 			E('h3', {}, 'Заменить hosts на GeoHide'),
 			E('p', { 'class': 'zm-hint' }, 'Внимание: это ПОЛНОСТЬЮ заменит файл /etc/hosts на список от GeoHide DNS — все блоки выше и любые ваши собственные записи будут удалены.'),
-			E('div', { 'class': 'zm-actions' }, [ geoButtons.ru, geoButtons.eu, geoButtons.us ]),
+			geoGrid,
 			E('p', { 'class': 'zm-hint' }, 'Или восстановить hosts к чистому виду (только localhost — так же, как пункт «Восстановить hosts» в оригинальном Zapret Manager). Уберёт и блоки выше, и GeoHide.'),
 			E('div', { 'class': 'zm-actions' }, [ resetBtn ]),
 			geoLogEl
 		]);
 		wrap.appendChild(geoCard);
+
+		function refreshAll() {
+			zm.hostsStatus().then(function(res) {
+				data = res;
+				renderGrid(res.items);
+				renderGeoGrid();
+			});
+		}
 
 		function replaceGeohide(region) {
 			geoLogEl.classList.add('zm-show');
@@ -2834,7 +2916,7 @@ return view.extend({
 				if (res.error) { zm.renderLog(geoLogEl, '==> ОШИБКА: ' + res.error); zm.toast(res.error, 'error'); return; }
 				zm.renderLog(geoLogEl, '==> Готово — hosts заменён на GeoHide ' + region.toUpperCase() + '.');
 				zm.toast('hosts заменён на GeoHide ' + region.toUpperCase(), 'info');
-				setTimeout(function() { location.reload(); }, 900);
+				refreshAll();
 			});
 		}
 
@@ -2845,7 +2927,7 @@ return view.extend({
 				if (res.error) { zm.renderLog(geoLogEl, '==> ОШИБКА: ' + res.error); zm.toast(res.error, 'error'); return; }
 				zm.renderLog(geoLogEl, '==> Готово — hosts восстановлен.');
 				zm.toast('hosts восстановлен', 'info');
-				setTimeout(function() { location.reload(); }, 900);
+				refreshAll();
 			});
 		}
 
@@ -2868,54 +2950,20 @@ return view.extend({
 
 	render: function(data) {
 		var status = data[0], vList = data[1];
+		var lastFlowseal = null;
 		var wrap = E('div', { 'class': 'zm-wrap' });
 		var logEl = E('pre', { 'class': 'zm-log' });
 
-		var currentBanner = E('div', { 'class': 'zm-current-banner' + (status.strategy ? '' : ' zm-current-empty') },
-			status.strategy
-				? [ 'Сейчас применено: ', E('b', {}, status.strategy) ]
-				: [ 'Стратегия ещё не выбрана' ]
-		);
+		var currentBanner = E('div', { 'class': 'zm-current-banner' });
 		wrap.appendChild(currentBanner);
 
 		var vGrid = E('div', { 'class': 'zm-grid' });
-		(vList.items || []).forEach(function(it) {
-			var words = (' ' + (status.strategy || '') + ' ');
-			vGrid.appendChild(E('div', {
-				'class': 'zm-tile' + (!status.flowseal && words.indexOf(' ' + it.id + ' ') !== -1 ? ' zm-active' : ''),
-				'click': function() {
-					zm.strategySetV(it.id).then(function(res) {
-						if (!zm.notifyStrategyResult(res, it.id)) return;
-						setTimeout(function() { location.reload(); }, 900);
-					});
-				}
-			}, it.id));
-		});
-
 		var vCard = E('div', { 'class': 'zm-card' }, [
 			E('h3', {}, 'Стратегии v1 – v10'),
 			vGrid
 		]);
 
 		var fGrid = E('div', { 'class': 'zm-grid' });
-
-		function renderFlowseal(res) {
-			fGrid.innerHTML = '';
-			(res.items || []).forEach(function(it) {
-				fGrid.appendChild(E('div', {
-					'class': 'zm-tile' + (status.flowseal === it.id ? ' zm-active' : ''),
-					'click': function() {
-						zm.strategySetFlowseal(it.id).then(function(r2) {
-							if (!zm.notifyStrategyResult(r2, it.id)) return;
-							setTimeout(function() { location.reload(); }, 900);
-						});
-					}
-				}, it.label));
-			});
-			if (!res.items || !res.items.length)
-				fGrid.appendChild(E('p', { 'class': 'zm-hint' }, 'Список пуст — нажмите «Обновить список».'));
-		}
-
 		var fCard = E('div', { 'class': 'zm-card' }, [
 			E('h3', {}, 'Стратегии Flowseal'),
 			E('div', { 'class': 'zm-actions' }, [
@@ -2925,11 +2973,13 @@ return view.extend({
 						fGrid.innerHTML = 'Загрузка списка...';
 						zm.strategyListFlowseal().then(function(res) {
 							if (res.started) {
-								zm.pollJob('flowseal_download', logEl, function() {
+								zm.pollJob('flowseal_download', logEl, function(ok) {
+									zm.toast(ok ? 'Список Flowseal обновлён' : 'Не удалось обновить список', ok ? 'info' : 'error');
 									zm.strategyListFlowseal().then(renderFlowseal);
 								});
 							} else {
 								renderFlowseal(res);
+								zm.toast('Список Flowseal обновлён', 'info');
 							}
 						});
 					}
@@ -2937,6 +2987,63 @@ return view.extend({
 			]),
 			fGrid
 		]);
+
+		function renderBanner() {
+			currentBanner.className = 'zm-current-banner' + (status.strategy ? '' : ' zm-current-empty');
+			currentBanner.innerHTML = '';
+			if (status.strategy) {
+				currentBanner.appendChild(E('span', {}, 'Сейчас применено: '));
+				currentBanner.appendChild(E('b', {}, status.strategy));
+			} else {
+				currentBanner.appendChild(E('span', {}, 'Стратегия ещё не выбрана'));
+			}
+		}
+
+		function renderV() {
+			vGrid.innerHTML = '';
+			(vList.items || []).forEach(function(it) {
+				var words = (' ' + (status.strategy || '') + ' ');
+				vGrid.appendChild(E('div', {
+					'class': 'zm-tile' + (!status.flowseal && words.indexOf(' ' + it.id + ' ') !== -1 ? ' zm-active' : ''),
+					'click': function() {
+						zm.strategySetV(it.id).then(function(res) {
+							if (!zm.notifyStrategyResult(res, it.id)) return;
+							refreshState();
+						});
+					}
+				}, it.id));
+			});
+		}
+
+		function renderFlowseal(res) {
+			lastFlowseal = res;
+			fGrid.innerHTML = '';
+			(res.items || []).forEach(function(it) {
+				fGrid.appendChild(E('div', {
+					'class': 'zm-tile' + (status.flowseal === it.id ? ' zm-active' : ''),
+					'click': function() {
+						zm.strategySetFlowseal(it.id).then(function(r2) {
+							if (!zm.notifyStrategyResult(r2, it.id)) return;
+							refreshState();
+						});
+					}
+				}, it.label));
+			});
+			if (!res.items || !res.items.length)
+				fGrid.appendChild(E('p', { 'class': 'zm-hint' }, 'Список пуст — нажмите «Обновить список».'));
+		}
+
+		function refreshState() {
+			zm.status().then(function(s) {
+				status = s;
+				renderBanner();
+				renderV();
+				if (lastFlowseal) renderFlowseal(lastFlowseal);
+			});
+		}
+
+		renderBanner();
+		renderV();
 
 		wrap.appendChild(vCard);
 		wrap.appendChild(fCard);
@@ -2955,6 +3062,17 @@ ZM_INSTALLER_EOF
 mkdir -p /www/luci-static/resources/view/zapret-manager
 cat > '/www/luci-static/resources/view/zapret-manager/style.css' << 'ZM_INSTALLER_EOF'
 .zm-wrap { display: flex; flex-direction: column; gap: 16px; max-width: 1100px; }
+
+.zm-header { display: flex; align-items: baseline; gap: 10px; margin-bottom: -4px; flex-wrap: wrap; }
+.zm-header h2 { margin: 0; font-size: 22px; font-weight: 700; }
+.zm-header-by { font-size: 13px; opacity: .55; }
+.zm-header-links { display: flex; gap: 8px; margin-left: auto; flex-wrap: wrap; }
+.zm-header-links a {
+	font-size: 12.5px; font-weight: 600; text-decoration: none;
+	color: #229ed9; background: rgba(34,158,217,.1); border: 1px solid rgba(34,158,217,.25);
+	border-radius: 999px; padding: 5px 13px; transition: background .15s;
+}
+.zm-header-links a:hover { background: rgba(34,158,217,.18); }
 
 .zm-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
 
@@ -3012,7 +3130,12 @@ cat > '/www/luci-static/resources/view/zapret-manager/style.css' << 'ZM_INSTALLE
 	background: var(--background-color-low, #fafafa);
 }
 .zm-tile:hover { border-color: #1a7f37; transform: translateY(-1px); }
-.zm-tile.zm-active { border-color: #1a7f37; background: rgba(26,127,55,.08); font-weight: 600; }
+.zm-tile.zm-active {
+	border-color: #1a7f37; background: rgba(26,127,55,.16);
+	font-weight: 700; color: #15803d;
+	box-shadow: 0 0 0 2px rgba(26,127,55,.35);
+}
+.zm-tile.zm-active::before { content: "✓ "; }
 .zm-tile.zm-tile-pending { opacity: .55; border-style: dashed; cursor: not-allowed; }
 .zm-tile.zm-tile-pending:hover { border-color: rgba(0,0,0,.1); transform: none; }
 
@@ -3114,6 +3237,14 @@ cat > '/www/luci-static/resources/view/zapret-manager/style.css' << 'ZM_INSTALLE
 .zm-current-banner.zm-current-empty {
 	background: rgba(110,118,129,.08); border-color: rgba(110,118,129,.2);
 }
+
+/* Наши страницы не используют UCI-формы LuCI (никакие uci.set/save не
+   вызываются) — стандартная панель "Save & Apply / Save / Reset" здесь
+   ничего не делает и только сбивает с толку. Скрываем её, пока наш CSS
+   загружен (то есть только на страницах Zapret Manager — при переходе на
+   любую другую страницу LuCI загружается заново без нашего style.css, и
+   панель снова появится там, где она реально нужна). */
+.cbi-page-actions { display: none !important; }
 ZM_INSTALLER_EOF
 
 mkdir -p /www/luci-static/resources/view/zapret-manager
@@ -3144,14 +3275,11 @@ return view.extend({
 		var sysData = data[0], mirrorData = data[1];
 		var view = this;
 		var wrap = E('div', { 'class': 'zm-wrap' });
-		var netEl = E('div', { 'class': 'zm-row' }, [ E('span', { 'class': 'zm-label' }, 'Нажмите «Проверить», чтобы протестировать IPv4/IPv6') ]);
+		var netEl = E('div', {}, [ E('p', { 'class': 'zm-hint' }, 'Нажмите «Проверить», чтобы протестировать IPv4/IPv6') ]);
 
 		function renderStatusCard(d) {
 			var card = E('div', { 'class': 'zm-card' }, [
 				E('h3', {}, 'Система'),
-				E('div', { 'class': 'zm-row' }, [
-					E('span', { 'class': 'zm-label' }, 'Пакетный менеджер'), E('span', {}, (d.pkg || '').toUpperCase())
-				]),
 				E('div', { 'class': 'zm-row' }, [
 					E('span', { 'class': 'zm-label' }, 'Блокировка QUIC'),
 					zm.badge(d.quic_blocked === true, 'включена', 'выключена')
@@ -3163,10 +3291,6 @@ return view.extend({
 				E('div', { 'class': 'zm-row' }, [
 					E('span', { 'class': 'zm-label' }, 'Fix для Flow Offloading'),
 					zm.badge(d.flow_offloading_fix === true, 'применён', 'не применён')
-				]),
-				E('div', { 'class': 'zm-row' }, [
-					E('span', { 'class': 'zm-label' }, 'Expert mode'),
-					zm.badge(d.expert_mode === true, 'включён', 'выключен')
 				]),
 				E('div', { 'class': 'zm-actions' }, [
 					E('button', {
@@ -3197,16 +3321,7 @@ return view.extend({
 								zm.systemStatus().then(refresh);
 							});
 						}
-					}, d.flow_offloading_fix ? 'Отключить Fix Flow Offloading' : 'Применить Fix Flow Offloading'),
-					E('button', {
-						'class': 'cbi-button',
-						'click': function() {
-							zm.systemToggleExpertMode().then(function(res) {
-								zm.toast(res.expert_mode ? 'Expert mode включён' : 'Expert mode выключен', 'info');
-								zm.systemStatus().then(refresh);
-							});
-						}
-					}, d.expert_mode ? 'Выключить Expert mode' : 'Включить Expert mode')
+					}, d.flow_offloading_fix ? 'Отключить Fix Flow Offloading' : 'Применить Fix Flow Offloading')
 				])
 			]);
 			return card;
@@ -3255,7 +3370,7 @@ return view.extend({
 					zm.mirrorSet(m.id).then(function(res) {
 						if (res.error) { zm.toast(res.error, 'error'); return; }
 						zm.pollJob('mirror_set', mirrorLog, function(ok) {
-							zm.toast(ok ? ('Зеркало переключено на «' + m.label + '»') : 'Не удалось переключить зеркало — смотрите лог', ok ? 'info' : 'error');
+							zm.toast(ok ? ('Зеркало переключено на «' + m.label + '»') : 'Не удалось переключить зеркало', ok ? 'info' : 'error');
 							if (!ok) return;
 							zm.mirrorStatus().then(function(res2) {
 								mirrorData.current = res2.current;
@@ -3423,7 +3538,7 @@ return view.extend({
 				if (res.error) { zm.toast(res.error, 'error'); return; }
 				if (res.started) {
 					zm.pollJob(job, logEl, function(ok) {
-						zm.toast(ok ? 'Готово' : 'Ошибка — смотрите лог', ok ? 'info' : 'error');
+						zm.toast(ok ? 'Готово' : 'Ошибка', ok ? 'info' : 'error');
 						zm.tgStatus().then(function(d) { renderCards(d); renderLinks(d); });
 					});
 				}
@@ -3472,6 +3587,8 @@ return view.extend({
 		var wrap = E('div', { 'class': 'zm-wrap' });
 		var logEl = E('pre', { 'class': 'zm-log' });
 		var grid = E('div', { 'class': 'zm-grid' });
+		var lastList = null;
+		var current = '';
 
 		function currentYv(s) {
 			var words = (s.strategy || '').split(' ');
@@ -3481,15 +3598,8 @@ return view.extend({
 			return '';
 		}
 
-		var current = currentYv(status);
-		var currentBanner = E('div', { 'class': 'zm-current-banner' + (current ? '' : ' zm-current-empty') },
-			current
-				? [ 'Сейчас применено: ', E('b', {}, current) ]
-				: [ 'YouTube-стратегия ещё не выбрана (используется базовая часть текущей стратегии)' ]
-		);
-		wrap.appendChild(currentBanner);
-
 		function renderGrid(res) {
+			lastList = res;
 			grid.innerHTML = '';
 			(res.items || []).forEach(function(it) {
 				grid.appendChild(E('div', {
@@ -3497,7 +3607,7 @@ return view.extend({
 					'click': function() {
 						zm.strategySetYoutube(it.id).then(function(r2) {
 							if (!zm.notifyStrategyResult(r2, it.id)) return;
-							location.reload();
+							refreshState();
 						});
 					}
 				}, it.id));
@@ -3505,6 +3615,15 @@ return view.extend({
 			if (!res.items || !res.items.length)
 				grid.appendChild(E('p', { 'class': 'zm-hint' }, 'Список пуст — нажмите «Обновить список».'));
 		}
+
+		function refreshState() {
+			zm.status().then(function(s) {
+				current = currentYv(s);
+				if (lastList) renderGrid(lastList);
+			});
+		}
+
+		current = currentYv(status);
 
 		var card = E('div', { 'class': 'zm-card' }, [
 			E('h3', {}, 'Стратегии для YouTube'),
@@ -3515,11 +3634,13 @@ return view.extend({
 						grid.innerHTML = 'Загрузка списка...';
 						zm.strategyListYoutube().then(function(res) {
 							if (res.started) {
-								zm.pollJob('youtube_download', logEl, function() {
+								zm.pollJob('youtube_download', logEl, function(ok) {
+									zm.toast(ok ? 'Список YouTube-стратегий обновлён' : 'Не удалось обновить список', ok ? 'info' : 'error');
 									zm.strategyListYoutube().then(renderGrid);
 								});
 							} else {
 								renderGrid(res);
+								zm.toast('Список YouTube-стратегий обновлён', 'info');
 							}
 						});
 					}
@@ -3543,18 +3664,17 @@ return view.extend({
 });
 ZM_INSTALLER_EOF
 
-echo "==> Перезапускаем rpcd и uhttpd"
+echo -e "${YELLOW}==> ${CYAN}Перезапускаем rpcd и uhttpd${NC}"
 rm -f /tmp/luci-indexcache* /tmp/luci-modulecache/* 2>/dev/null || true
 /etc/init.d/rpcd restart >/dev/null 2>&1
 /etc/init.d/uhttpd restart >/dev/null 2>&1
 
-echo "==> Проверяем зависимости (curl, unzip, wget-ssl)"
+echo -e "${YELLOW}==> ${CYAN}Проверяем зависимости${NC}"
 if command -v apk >/dev/null 2>&1; then PM="apk"; INSTALL="apk add"
 else PM="opkg"; INSTALL="opkg install"; fi
 command -v curl >/dev/null 2>&1 || $INSTALL curl >/dev/null 2>&1 || true
 command -v unzip >/dev/null 2>&1 || $INSTALL unzip >/dev/null 2>&1 || true
 
 echo
-echo "==> Готово! Откройте LuCI -> Services -> Zapret Manager"
-echo "    (если пункт меню не появился сразу - обновите страницу LuCI, Ctrl+Shift+R)"
-
+echo -e "${YELLOW}==> ${GREEN}Zapret Manager LuCI установлен!${NC}"
+echo -e "Откройте LuCI -> Services -> Zapret Manager (если пункт меню не появился сразу - обновите страницу LuCI)"
