@@ -2,11 +2,15 @@
 # ----------------------------------------------------------------------------
 # Zapret Manager LuCI installer — самодостаточный скрипт (все файлы зашиты
 # внутри, ничего дополнительно скачивать не нужно).
+#
+# Использование на роутере (по SSH):
+#   sh install-zapret-manager.sh
+# Или одной строкой, скачав прямо с GitHub:
+#   wget -O - https://raw.githubusercontent.com/<user>/<repo>/main/install-zapret-manager.sh | sh
 # ----------------------------------------------------------------------------
 set -e
-GREEN="\033[1;32m"; RED="\033[1;31m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
 
-echo -e "${YELLOW}==> ${CYAN}Устанавливаем Zapret Manager (LuCI)${NC}"
+echo "==> Устанавливаем Zapret Manager (LuCI)"
 
 rm -rf /usr/lib/zapret-manager /usr/libexec/rpcd/zapret-manager /usr/share/luci/menu.d/luci-app-zapret-manager.json /usr/share/rpcd/acl.d/luci-app-zapret-manager.json /www/luci-static/resources/view/zapret-manager /www/luci-static/resources/zapret-manager && /etc/init.d/rpcd restart && /etc/init.d/uhttpd restart
 
@@ -72,6 +76,32 @@ _ensure_deps() {
 	updated=1
 	$INSTALL $need >/dev/null 2>&1
 }
+
+_reregister_rpcd() {
+	# Установка/удаление другого luci-app-* пакета (например
+	# luci-app-https-dns-proxy) обычно перезапускает rpcd в своём postinst —
+	# и иногда этот перезапуск происходит с гонкой/сбоем, из-за чего наш
+	# собственный ubus-объект "zapret-manager" остаётся незарегистрированным
+	# (ошибка в LuCI: "Object not found"). Перезапускаем rpcd сами и реально
+	# ПРОВЕРЯЕМ, что объект снова на месте — а не просто ждём и надеемся.
+	echo "==> Перерегистрируем rpcd"
+	rm -f /tmp/luci-indexcache* /tmp/luci-modulecache/* 2>/dev/null
+	/etc/init.d/rpcd restart >/dev/null 2>&1
+	local i=0
+	while [ "$i" -lt 10 ]; do
+		ubus list zapret-manager >/dev/null 2>&1 && break
+		sleep 1
+		i=$((i + 1))
+	done
+	if ubus list zapret-manager >/dev/null 2>&1; then
+		echo "==> rpcd перерегистрирован успешно"
+	else
+		echo "!! rpcd не ответил за 10 секунд — перезапускаем ещё раз"
+		/etc/init.d/rpcd restart >/dev/null 2>&1
+	fi
+	/etc/init.d/uhttpd restart >/dev/null 2>&1
+}
+
 
 job_start() {
 	# job_start <job-name> <function-to-run-in-background>
@@ -1587,6 +1617,7 @@ do_doh_install() {
 	$UPDATE >/dev/null 2>&1
 	echo "==> Устанавливаем https-dns-proxy и luci-app-https-dns-proxy"
 	$INSTALL https-dns-proxy luci-app-https-dns-proxy >/dev/null 2>&1 || { echo "ОШИБКА установки"; return 1; }
+	_reregister_rpcd
 	echo "==> Готово, DNS over HTTPS установлен — выберите провайдера ниже"
 }
 
@@ -1597,6 +1628,7 @@ do_doh_remove() {
 	echo "==> Удаляем файлы конфигурации"
 	rm -f /etc/config/https-dns-proxy /etc/init.d/https-dns-proxy
 	/etc/init.d/dnsmasq restart >/dev/null 2>&1
+	_reregister_rpcd
 	echo "==> Готово, DNS over HTTPS удалён"
 }
 
@@ -3666,17 +3698,18 @@ return view.extend({
 });
 ZM_INSTALLER_EOF
 
-echo -e "${YELLOW}==> ${CYAN}Перезапускаем rpcd и uhttpd${NC}"
+echo "==> Перезапускаем rpcd и uhttpd"
 rm -f /tmp/luci-indexcache* /tmp/luci-modulecache/* 2>/dev/null || true
 /etc/init.d/rpcd restart >/dev/null 2>&1
 /etc/init.d/uhttpd restart >/dev/null 2>&1
 
-echo -e "${YELLOW}==> ${CYAN}Проверяем зависимости${NC}"
+echo "==> Проверяем зависимости (curl, unzip, wget-ssl)"
 if command -v apk >/dev/null 2>&1; then PM="apk"; INSTALL="apk add"
 else PM="opkg"; INSTALL="opkg install"; fi
 command -v curl >/dev/null 2>&1 || $INSTALL curl >/dev/null 2>&1 || true
 command -v unzip >/dev/null 2>&1 || $INSTALL unzip >/dev/null 2>&1 || true
 
 echo
-echo -e "${YELLOW}==> ${GREEN}Zapret Manager LuCI установлен!${NC}"
-echo -e "Откройте LuCI -> Services -> Zapret Manager (если пункт меню не появился сразу - обновите страницу LuCI)"
+echo "==> Готово! Откройте LuCI -> Services -> Zapret Manager"
+echo "    (если пункт меню не появился сразу - обновите страницу LuCI, Ctrl+Shift+R)"
+
