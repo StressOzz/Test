@@ -1,5 +1,7 @@
 #!/bin/sh
-# Zapret Manager by StressOzz LuCI installer — самодостаточный скрипт (все файлы зашиты внутри).
+# Zapret Manager LuCI installer — самодостаточный скрипт (все файлы зашиты внутри).
+# Использование на роутере (по SSH): sh install-zapret-manager.sh
+# Или: wget -O - https://raw.githubusercontent.com/<user>/<repo>/main/install-zapret-manager.sh | sh
 set -e
 
 echo "==> Устанавливаем Zapret Manager (LuCI)"
@@ -45,13 +47,12 @@ else
 	RAZ="apk"
 fi
 
-# ---------- helpers ----------------------------------------------------
 
-esc() { # JSON-escape a string (arg1) for embedding inside "..." — однострочные значения
+esc() {
 	printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g' | tr '\n' ' '
 }
 
-esc_ml() { # то же самое, но СОХРАНЯЕТ переносы строк (как \n для JSON) — для лога
+esc_ml() {
 	printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g' | sed ':a;N;$!ba;s/\n/\\n/g'
 }
 
@@ -61,8 +62,6 @@ _pkg_is_installed() {
 }
 
 _ensure_deps() {
-	# curl и unzip нужны почти всем install-операциям (скачивание релизов,
-	# распаковка Flowseal и т.д.) — ставим один раз в начале.
 	local need="" updated=0
 	command -v curl >/dev/null 2>&1 || need="$need curl"
 	command -v unzip >/dev/null 2>&1 || need="$need unzip"
@@ -75,16 +74,9 @@ _ensure_deps() {
 
 
 job_start() {
-	# job_start <job-name> <function-to-run-in-background>
 	local name="$1"; shift
 	local log="$JOBS_DIR/$name.log"
 	local pid="$JOBS_DIR/$name.pid"
-	# Если задача с таким именем уже выполняется (двойной клик, гонка на
-	# фронтенде и т.п.) — НЕ запускаем вторую копию поверх первой: обе будут
-	# писать в одни и те же временные файлы одновременно, что даёт задвоенный
-	# вывод и задвоенные результаты. Вместо этого просто подключаемся к уже
-	# идущей задаче тем же job-именем (started:true — фронтенд и так просто
-	# продолжит опрашивать её через pollJob, ничего менять не нужно).
 	if [ -f "$pid" ] && kill -0 "$(cat "$pid" 2>/dev/null)" 2>/dev/null; then
 		printf '{"started":true,"job":"%s","already_running":true}\n' "$name"
 		return 0
@@ -120,7 +112,6 @@ zapret_restart() {
 	/etc/init.d/zapret restart >/dev/null 2>&1
 }
 
-# ---------- status -------------------------------------------------------
 
 system_info() {
 	local model arch owrt df_out tmp_used tmp_free root_used root_free
@@ -166,19 +157,12 @@ status() {
 		"$PKG" "$zr" "$zr_running" "$(esc "$zr_ver")" "$zr2" "$zr2_running" "$(esc "$strat")" "$(esc "$fs_marker")"
 }
 
-# ---------- install / remove / start / stop -------------------------------
 
 _zapret_latest_version() {
 	local ver
-	# Читаем заголовок Location из редиректа напрямую (без -L + url_effective) —
-	# надёжнее: не все сборки curl одинаково ведут себя со связкой -w
-	# url_effective + HEAD-запрос + редирект.
 	ver=$(curl -fsSI --connect-timeout 4 --max-time 6 \
 		"https://github.com/remittor/zapret-openwrt/releases/latest" 2>/dev/null \
 		| tr -d '\r' | awk -F': ' 'tolower($1)=="location"{print $2}' | tail -n1 | sed 's#.*/v##')
-	# Санити-проверка: версия zapret всегда вида NN.NNNNNNNN — если извлечь
-	# не удалось (пусто, или всё ещё похоже на URL), лучше не показывать
-	# ничего, чем сырую ссылку.
 	echo "$ver" | grep -qE '^[0-9]+\.[0-9]+$' && echo "$ver" || echo ""
 }
 
@@ -262,6 +246,33 @@ do_install_zapret() {
 	echo "==> Готово, Zapret установлен ($ver)"
 }
 
+do_install_zapret_full() {
+	do_install_zapret || return 1
+	[ -f /etc/init.d/zapret ] || return 1
+
+	echo "==> Применяем базовую стратегию v7"
+	strategy_set_v v7 >/dev/null
+
+	echo "==> Добавляем домены в hosts"
+	local b
+	for b in ai instagram ntc librusec telegram twitch scell spotify; do
+		local content line
+		content="$(_hosts_block "$b")"
+		while IFS= read -r line; do
+			[ -z "$line" ] && continue
+			grep -Fxq "$line" "$HOSTS_FILE" || echo "$line" >> "$HOSTS_FILE"
+		done <<-HOSTBLOCK
+		$content
+		HOSTBLOCK
+	done
+	/etc/init.d/dnsmasq restart >/dev/null 2>&1
+
+	echo "==> Настраиваем игровую стратегию Gv1"
+	game_set 1 >/dev/null
+
+	echo "==> Готово, Zapret установлен и настроен"
+}
+
 do_remove_zapret() {
 	echo "==> Останавливаем Zapret"
 	/etc/init.d/zapret stop >/dev/null 2>&1
@@ -278,7 +289,8 @@ do_remove_zapret() {
 zapret_action() {
 	local action="$1"
 	case "$action" in
-		install|update) job_start install_zapret do_install_zapret ;;
+		install)        job_start install_zapret do_install_zapret_full ;;
+		update)         job_start install_zapret do_install_zapret ;;
 		remove)         job_start remove_zapret  do_remove_zapret ;;
 		start)          /etc/init.d/zapret start >/dev/null 2>&1; zapret_restart; status ;;
 		stop)
@@ -289,9 +301,6 @@ zapret_action() {
 	esac
 }
 
-# ---------- Zapret2 install / remove / start / stop ------------------------
-# Zapret2 is a routerich.ru-packaged alternative to Zapret, only available
-# for aarch64_cortex-a53 and mutually exclusive with the main Zapret.
 
 do_install_zapret2() {
 	_ensure_deps
@@ -389,7 +398,6 @@ zapret2_action() {
 	esac
 }
 
-# ---------- strategies v1..v10 (constants copied verbatim from the CLI) --
 
 strategy_v1()  { printf '%s\n' "#v1"  "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=split2" "--dpi-desync-split-seqovl=681" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/stun.bin"; }
 strategy_v2()  { printf '%s\n' "#v2"  "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake,multisplit" "--dpi-desync-split-seqovl=681" "--dpi-desync-split-pos=1" "--dpi-desync-fooling=ts" "--dpi-desync-repeats=8" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/stun.bin" "--dpi-desync-fake-tls-mod=rnd,dupsid,sni=www.google.com"; }
@@ -402,7 +410,6 @@ strategy_v8()  { printf '%s\n' "#v8"  "--filter-tcp=443" "--hostlist-exclude=/op
 strategy_v9()  { printf '%s\n' "#v9"  "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=hostfakesplit" "--dpi-desync-fooling=badseq,badsum" "--dpi-desync-hostfakesplit-mod=host=ozon.ru" "--dpi-desync-badseq-increment=0"; }
 strategy_v10() { printf '%s\n' "#v10" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake,split2" "--dpi-desync-split-pos=2" "--dpi-desync-fake-tls=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin" "--dpi-desync-hostfakesplit-mod=host=maxcdn.bootstrapcdn.com" "--dpi-desync-fake-tls-mod=rnd,sni=maxcdn.bootstrapcdn.com" "--dpi-desync-fooling=ts"; }
 
-# ---------- shared post-apply helpers (verbatim behaviour from CLI) ------
 
 _add_gp_domains() {
 	local f="/opt/zapret/ipset/zapret-hosts-google.txt"
@@ -421,14 +428,12 @@ _refresh_exclude_file() {
 }
 
 _add_yv_default() {
-	# adds a basic YouTube (Yv08) block if the strategy has none and isn't a Flowseal "general" one
 	if ! grep -q "^#Yv" "$CONF" && ! grep -q "^#general" "$CONF"; then
 		sed -i "/^[[:space:]]*option NFQWS_OPT '/a\\#Yv08\\n--filter-tcp=443\\n--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt\\n--dpi-desync=hostfakesplit\\n--dpi-desync-hostfakesplit-mod=host=google.com\\n--dpi-desync-fooling=ts\\n--new" "$CONF"
 	fi
 }
 
 _discord_str_add() {
-	# adds the base discord,stun UDP block + a default Dv1 discord.media block if missing
 	if ! grep -q "option NFQWS_PORTS_UDP.*19294-19344,50000-50100" "$CONF"; then
 		sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'\$/,19294-19344,50000-50100'/" "$CONF"
 	fi
@@ -477,13 +482,10 @@ strategy_set_v() {
 	printf '{"ok":true,"strategy":"%s","ts_warning":%s}\n' "$version" "$(_ts_warning)"
 }
 
-# ---------- Flowseal strategies -----------------------------------------
 
 _flowseal_file() { echo "$JOBS_DIR/flowseal_strategies.txt"; }
 
 do_add_fake_flow() {
-	# Порт ADD_FAKE_FLOW: докачивает дополнительные fake-файлы, которых нет
-	# в базовом пакете Zapret, но на которые ссылаются стратегии Flowseal.
 	[ -d /opt/zapret ] || return 0
 	[ -f "$CONF" ] || return 0
 	local f msg=0
@@ -530,8 +532,7 @@ do_flowseal_download() {
 		{ echo "#$NAME"; echo "$MATCH" | sed 's/--/\n--/g' | sed '/^$/d' | sed 's/[[:space:]]*$//'; echo; } >> "$out"
 	done
 
-	echo "==> Приводим пути и плейсхолдеры к реальным"
-	# служебные списки/ipset — заменяем на реальные пути или вычищаем
+	echo "==> Приводим пути и плейсхолдеры к реальным (как в оригинальном download_strategies)"
 	sed -i '/--hostlist="%LISTS%list-general.txt"/d' "$out"
 	sed -i '/--ipset="%LISTS%ipset-all.txt"/d' "$out"
 	sed -i '/--hostlist="%LISTS%list-general-user.txt"/d' "$out"
@@ -542,7 +543,6 @@ do_flowseal_download() {
 	sed -i 's|"%LISTS%list-google.txt"|/opt/zapret/ipset/zapret-hosts-google.txt|g' "$out"
 	sed -i 's/--new[[:space:]]\^/--new/g' "$out"
 
-	# fake-бинарники — каждый плейсхолдер на свой реальный путь в /opt/zapret/files/fake
 	sed -i 's|"%BIN%tls_clienthello_www_google_com.bin"|/opt/zapret/files/fake/tls_clienthello_www_google_com.bin|g' "$out"
 	sed -i 's|"%BIN%tls_clienthello_sochi_park.bin"|/opt/zapret/files/fake/tls_clienthello_sochi_park.bin|g' "$out"
 	sed -i 's|"%BIN%stun.bin"|/opt/zapret/files/fake/stun.bin|g' "$out"
@@ -559,11 +559,9 @@ do_flowseal_download() {
 	sed -i 's|"%BIN%quic_initial_rutube_ru.bin"|/opt/zapret/files/fake/quic_initial_rutube_ru.bin|g' "$out"
 	sed -i 's|\^!|/opt/zapret/files/fake/tls_clienthello_www_google_com.bin|g' "$out"
 
-	# игровые порты
 	sed -i "s|%GameFilterTCP%|$PORTS_TCP|g" "$out"
 	sed -i "s|%GameFilterUDP%|$PORTS_UDP|g" "$out"
 
-	# финальная зачистка: хвостовые пробелы, пустые строки, дублирующиеся --new подряд
 	sed -i 's/[[:space:]]\+$//' "$out"
 	sed -i '/^[[:space:]]*$/d' "$out"
 	sed -i '/^--new$/ { N; /^--new\n$/d; }' "$out"
@@ -609,13 +607,11 @@ strategy_set_flowseal() {
 	fi
 	_add_gp_domains
 	_refresh_exclude_file
-	# помечаем базовую игровую секцию (Gv0) — как в оригинальном flowseal_menu
 	sed -i '/--new/{N;/--filter-tcp=2802/{s/--new/#Gv0\n--new/;};}' "$CONF"
 	zapret_restart
 	printf '{"ok":true,"strategy":"%s","ts_warning":%s}\n' "$(esc "$name")" "$(_ts_warning)"
 }
 
-# ---------- YouTube Yv strategies (ported from choose_strategy_YOUTUBE) --
 
 _yv_file() { echo "$JOBS_DIR/youtube_strategies.txt"; }
 
@@ -658,7 +654,6 @@ strategy_set_youtube() {
 		[ "$flag" -eq 1 ] && printf '%s\n' "$line" >> "$saved"
 	done < "$f"
 
-	# 1) вырезаем текущий блок option NFQWS_OPT '...' в отдельный файл, чистим от старых #Yv
 	local awk_cut="$JOBS_DIR/yv_cut.awk"
 	cat > "$awk_cut" << 'AWK_CUT_EOF'
 /^[ \t]*option NFQWS_OPT '$/ { flag = 1 }
@@ -669,7 +664,6 @@ AWK_CUT_EOF
 	sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
 	sed -i "/^[[:space:]]*#Yv[0-9]\+/d" "$oldtmp"
 
-	# 2) вырезаем существующую YouTube-секцию (--filter-tcp=443 + hostlist=google), если была
 	cat > "$awk_strip" << 'AWK_STRIP_EOF'
 {
 	if (skip) {
@@ -689,8 +683,6 @@ AWK_CUT_EOF
 AWK_STRIP_EOF
 	awk -f "$awk_strip" "$oldtmp" > "$newtmp"
 
-	# 3) вставляем выбранную Yv-стратегию: сразу после первого "--new" (если секция уже была),
-	#    иначе сразу после открывающей строки option NFQWS_OPT '
 	cat > "$awk_insert" << 'AWK_INSERT_EOF'
 BEGIN { inserted = 0; has_google = 0 }
 $0 == "--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt" { has_google = 1 }
@@ -714,7 +706,6 @@ AWK_INSERT_EOF
 
 	cat "$finaltmp" >> "$CONF"
 
-	# 4) убираем случайные дубликаты подряд идущих "--new"
 	cat > "$awk_dedup" << 'AWK_DEDUP_EOF'
 {
 	if ($0 == "--new") { if (prev != "--new") print }
@@ -732,7 +723,6 @@ AWK_DEDUP_EOF
 	printf '{"ok":true,"strategy":"%s","ts_warning":%s}\n' "$(esc "$name")" "$(_ts_warning)"
 }
 
-# ---------- Discord Dv strategies (all 17, verbatim from CLI) -----------
 
 Dv1()  { printf '%s\n' "--filter-tcp=2053,2083,2087,2096,8443" "--hostlist-domains=discord.media" "--dpi-desync=multisplit" "--dpi-desync-split-seqovl=652" "--dpi-desync-split-pos=2" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin"; }
 Dv2()  { printf '%s\n' "--filter-tcp=2053,2083,2087,2096,8443" "--hostlist-domains=discord.media" "--dpi-desync=fake,multisplit" "--dpi-desync-split-seqovl=681" "--dpi-desync-split-pos=1" "--dpi-desync-fooling=ts" "--dpi-desync-repeats=8" "--dpi-desync-split-seqovl-pattern=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin" "--dpi-desync-fake-tls-mod=rnd,dupsid,sni=www.google.com"; }
@@ -808,7 +798,6 @@ discord_set_fake() {
 	printf '{"ok":true,"fake":"%s"}\n' "$(esc "$file")"
 }
 
-# ---------- hosts blocks (subset, verbatim constants from CLI) -----------
 
 _hosts_block() {
 	case "$1" in
@@ -1039,7 +1028,6 @@ hosts_reset() {
 	printf '{"ok":true}\n'
 }
 
-# ---------- Gv game strategy (ported from fix_GAME / Gv_Xtreme / GV_FAKE) --
 
 _remove_ports_if_present() {
 	local option="$1" ports="$2" p
@@ -1100,7 +1088,6 @@ game_set() {
 	fi
 
 	if [ "$current" = "Gv$choice" ]; then
-		# повторный выбор той же стратегии = снять игровую стратегию
 		_remove_ports_if_present NFQWS_PORTS_UDP "$PORTS_UDP"
 		_remove_ports_if_present NFQWS_PORTS_TCP "$PORTS_TCP"
 		echo "'" >> "$CONF"
@@ -1183,7 +1170,6 @@ game_toggle_xtreme() {
 	printf '{"ok":true,"xtreme":true}\n'
 }
 
-# ---------- System (ported from Sys_Info / sys_menu) ---------------------
 
 _quic_blocked() {
 	uci show firewall 2>/dev/null | grep -q "name='Block_UDP_80'" \
@@ -1294,15 +1280,8 @@ system_toggle_expert_mode() {
 }
 
 system_uninstall_panel() {
-	# Панель удаляет саму себя — включая собственный rpcd-скрипт и этот файл.
-	# Делать rm -rf прямо здесь небезопасно (шелл ещё читает этот же файл),
-	# поэтому копируем действие в отдельный скрипт в /tmp (вне удаляемых
-	# путей), запускаем его отсоединённым фоновым процессом с небольшой
-	# задержкой (чтобы успеть отдать ответ браузеру) и сразу возвращаем ok —
-	# дальше приложение уже недоступно, поэтому опрашивать тут нечего.
 	local script="/tmp/zm_uninstall_panel.sh"
 	cat > "$script" << 'ZM_UNINSTALL_EOF'
-#!/bin/sh
 sleep 1
 rm -rf /usr/lib/zapret-manager /usr/libexec/rpcd/zapret-manager \
 	/usr/share/luci/menu.d/luci-app-zapret-manager.json \
@@ -1319,7 +1298,6 @@ ZM_UNINSTALL_EOF
 	printf '{"ok":true}\n'
 }
 
-# ---------- OpenWrt mirror selection (ported from menu_MIR / set_mirror) --
 
 _confz() {
 	if [ "$PKG" = "apk" ]; then echo "/etc/apk/repositories.d/distfeeds.list"
@@ -1384,7 +1362,6 @@ mirror_set() {
 	job_start mirror_set do_mirror_set "$host"
 }
 
-# ---------- IP exclusions (ported from Exclusions_menu) ------------------
 
 _excl_dir() { echo "/opt/zapret/init.d/openwrt/custom.d"; }
 _excl_file() { echo "$(_excl_dir)/20-script.sh"; }
@@ -1465,7 +1442,6 @@ exclusions_clear() {
 	printf '{"ok":true}\n'
 }
 
-# ---------- TG WS Proxy: MTProto / SOCKS5 / Rust (ported from menu_TG) ---
 
 TG_MTPROTO_VER="0.10"
 TG_GO_VER="1.4.1"
@@ -1632,7 +1608,6 @@ tg_restart_all() {
 	printf '{"ok":true}\n'
 }
 
-# ---------- DNS over HTTPS (subset, verbatim constants from CLI) --------
 
 _doh_file="/etc/config/https-dns-proxy"
 
@@ -1703,9 +1678,6 @@ doh_set() {
 		return 1
 	fi
 	{
-		# базовый блок config main — дословно как в оригинальном doh_set,
-		# критично: force_dns_port (без него принудительное перенаправление
-		# DNS-трафика на прокси может не сработать)
 		echo "config main 'config'"
 		echo "	option canary_domains_icloud '1'"
 		echo "	option canary_domains_mozilla '1'"
@@ -1735,7 +1707,6 @@ doh_set() {
 }
 
 
-# ---------- dispatch -------------------------------------------------------
 
 cmd="$1"; shift
 case "$cmd" in
@@ -1790,8 +1761,6 @@ chmod 0755 '/usr/lib/zapret-manager/backend.sh'
 mkdir -p /usr/libexec/rpcd
 cat > '/usr/libexec/rpcd/zapret-manager' << 'ZM_INSTALLER_EOF'
 #!/bin/sh
-# rpcd ubus backend for luci-app-zapret-manager
-# Bridges LuCI JS (ubus calls) to /usr/lib/zapret-manager/backend.sh
 
 . /usr/share/libubox/jshn.sh
 
@@ -2343,7 +2312,7 @@ return view.extend({
 				zActions.push(E('button', {
 					'class': 'cbi-button cbi-button-positive',
 					'click': ui.createHandlerFn(view, 'doAction', 'install')
-				}, 'Установить'));
+				}, 'Установить и настроить'));
 			}
 
 			var zCard = E('div', { 'class': 'zm-card' }, [
@@ -2388,7 +2357,7 @@ return view.extend({
 						? zm.badge(d.zapret2_running === true, 'запущен', 'остановлен')
 						: zm.badge(false, '', 'не установлен')
 				]),
-				E('p', { 'class': 'zm-hint' }, 'Только для архитектуры aarch64_cortex-a53. Несовместим с Zapret.'),
+				E('p', { 'class': 'zm-hint' }, 'Только для архитектуры aarch64_cortex-a53. Несовместим с основным Zapret.'),
 				E('div', { 'class': 'zm-actions' }, z2Actions)
 			]);
 
@@ -2459,7 +2428,7 @@ return view.extend({
 		if (view.busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
 		var job = (action === 'install' || action === 'update') ? 'install_zapret'
 			: (action === 'remove') ? 'remove_zapret' : null;
-		var LABELS = { install: 'Устанавливаем Zapret', update: 'Обновляем Zapret', remove: 'Удаляем Zapret', start: 'Запускаем Zapret', stop: 'Останавливаем Zapret' };
+		var LABELS = { install: 'Устанавливаем и настраиваем Zapret', update: 'Обновляем Zapret', remove: 'Удаляем Zapret', start: 'Запускаем Zapret', stop: 'Останавливаем Zapret' };
 		zm.toast(LABELS[action] || 'Выполняем', 'warning');
 		if (job) view.busy = true;
 
@@ -2585,7 +2554,7 @@ return view.extend({
 		var dvCard = E('div', { 'class': 'zm-card' }, [
 			E('h3', {}, 'Стратегия для discord.media'),
 			dvGrid,
-			E('p', { 'class': 'zm-hint' }, 'Нужна базовая стратегия с блоком discord.media')
+			E('p', { 'class': 'zm-hint' }, 'Нужна базовая стратегия с блоком discord.media (например Flowseal general).')
 		]);
 
 		var fakeCard = E('div', { 'class': 'zm-card' }, [
@@ -2743,7 +2712,7 @@ return view.extend({
 			grid.innerHTML = '';
 			(devices || []).forEach(function(d) {
 				grid.appendChild(E('div', {
-					'class': 'zm-tile' + (d.excluded ? ' zm-active' : ''),
+					'class': 'zm-tile' + (d.excluded ? ' zm-active' : ' zm-tile-off'),
 					'click': function() {
 						zm.toast('Переключаем исключение для ' + d.ip + '', 'warning');
 						zm.exclusionsToggle(d.ip).then(function(res) {
@@ -3013,7 +2982,7 @@ return view.extend({
 			E('h3', {}, 'Заменить hosts на GeoHide'),
 			E('p', { 'class': 'zm-hint' }, 'Внимание: это ПОЛНОСТЬЮ заменит файл /etc/hosts на список от GeoHide DNS — все блоки выше и любые ваши собственные записи будут удалены.'),
 			geoGrid,
-			E('p', { 'class': 'zm-hint' }, 'Или восстановить hosts к чистому виду. Уберёт и блоки выше, и GeoHide.'),
+			E('p', { 'class': 'zm-hint' }, 'Или восстановить hosts к чистому виду (только localhost — так же, как пункт «Восстановить hosts» в оригинальном Zapret Manager). Уберёт и блоки выше, и GeoHide.'),
 			E('div', { 'class': 'zm-actions' }, [ resetBtn ]),
 			geoLogEl
 		]);
@@ -3259,6 +3228,15 @@ cat > '/www/luci-static/resources/view/zapret-manager/style.css' << 'ZM_INSTALLE
 	box-shadow: 0 0 0 2px rgba(26,127,55,.35);
 }
 .zm-tile.zm-active::before { content: "✓ "; }
+
+/* Отдельное состояние для "выключено/не исключено" (например, Исключения IP) —
+   красным с крестиком, отличное от обычного нейтрального "не активно". */
+.zm-tile.zm-tile-off {
+	border-color: rgba(207,34,46,.35); background: rgba(207,34,46,.08);
+	color: #cf222e; font-weight: 600;
+}
+.zm-tile.zm-tile-off::before { content: "✗ "; }
+.zm-tile.zm-tile-off:hover { border-color: #cf222e; }
 .zm-tile.zm-tile-pending { opacity: .55; border-style: dashed; cursor: not-allowed; }
 .zm-tile.zm-tile-pending:hover { border-color: rgba(0,0,0,.1); transform: none; }
 
@@ -3534,7 +3512,9 @@ return view.extend({
 			E('p', { 'class': 'zm-hint' },
 				'Уберёт только веб-интерфейс (эту панель) — саму программу-оболочку из LuCI. ' +
 				'Zapret, Zapret2, DNS over HTTPS и TG WS Proxy, если они были установлены через ' +
-				'панель, останутся на роутере без изменений и продолжат работать.'
+				'панель, останутся на роутере без изменений и продолжат работать. После удаления ' +
+				'эта страница станет недоступна — управлять оставшимися компонентами можно будет ' +
+				'через SSH, либо поставить панель заново.'
 			),
 			E('div', { 'class': 'zm-actions' }, [
 				E('button', {
@@ -3818,7 +3798,7 @@ return view.extend({
 				}, 'Обновить список')
 			]),
 			grid,
-			E('p', { 'class': 'zm-hint' }, 'Применяется поверх текущей стратегии — заменяет только YouTube-часть.')
+			E('p', { 'class': 'zm-hint' }, 'Применяется поверх текущей стратегии — заменяет только YouTube-часть (--filter-tcp=443 + список google), остальное сохраняется.')
 		]);
 
 		wrap.appendChild(card);
