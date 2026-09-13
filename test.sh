@@ -16,8 +16,16 @@ GH_MAIN="$GH_MAIN_HOST"
 TGWS_BASE="https://gitlab.com/xyzmean/brb/-/raw/main"
 TGWS_INSTALL_URL="${TGWS_BASE}/install-tgws.sh"
 
-ZAPRET_VERSION="72.20260307"; PODKOP_LATEST_VER="0.9.6"; TG_MTProto="0.10"; MT_VERSION="0.8.2"; ZAPRET2_VERSION="1.0.4"
-SPL_VER="26.8.1.3"; TG_GO_VERSION="1.4.1"; TG_RS_VERSION="2.2.5"; BYEDPI_LATEST_VER="0.17.3"; TGWS_VERSION="0.2.3"
+ZAPRET_VERSION="72.20260307"
+ZAPRET2_VERSION="1.0.4"
+PODKOP_LATEST_VER="0.9.7"
+BYEDPI_LATEST_VER="0.17.3"
+MT_VERSION="0.8.2"
+SPL_VER="26.8.1.3"
+TG_RS_VERSION="2.3.3"
+TG_GO_VERSION="1.4.1"
+TG_MTProto="0.10"
+TGWS_VERSION="0.2.4"
 
 echo "sh <(wget -q -O - ${GH_RAW}/StressOzz/Zapret-Manager/main/Zapret-Manager.sh)" > /usr/bin/zms; chmod +x /usr/bin/zms
 echo "sh <(wget -q -O - ${GH_RAW}/StressOzz/Zapret-Manager/main/Zapret-Manager.sh) \"\$@\"" > /usr/bin/zmsA; chmod +x /usr/bin/zmsA
@@ -39,7 +47,7 @@ DOMAINS="youtu.be youtube.com i.ytimg.com i9.ytimg.com yt3.ggpht.com yt4.ggpht.c
 OWRTAWG=$(grep '^DISTRIB_RELEASE=' /etc/openwrt_release | cut -d"'" -f2); ARCHAWG="$(grep DISTRIB_ARCH /etc/openwrt_release | cut -d"'" -f2)_$(grep DISTRIB_TARGET /etc/openwrt_release | cut -d"'" -f2 | tr '/' '_')" 
 CRON_CMD="/etc/init.d/mihomo restart"; CONFIGPATH="/etc/magitrickle/state/config.yaml"; PACKAGES_UPDATED=0; TS_WARN_FLAG="/opt/zapret/tmp/ts_warning_shown"
 CRON_FILE="/etc/crontabs/root"; CONFIGMIX="/etc/mihomo/config.yaml"; LAN_IP=$(uci get network.lan.ipaddr 2>/dev/null | cut -d/ -f1)
-CONF="/etc/config/zapret"; CUSTOM_DIR="/opt/zapret/init.d/openwrt/custom.d/"; HOSTLIST_FILE="/opt/zapret/ipset/zapret-hosts-user.txt"; fileGP="/opt/zapret/ipset/zapret-hosts-google.txt"
+CONF="/etc/config/zapret"; CUSTOM_DIR="/opt/zapret/init.d/openwrt/custom.d/"; EXCL_FILE="${CUSTOM_DIR}20-script.sh"; HOSTLIST_FILE="/opt/zapret/ipset/zapret-hosts-user.txt"; fileGP="/opt/zapret/ipset/zapret-hosts-google.txt"
 TMP_SF="/tmp/zapret_temp"; HOSTS_FILE="/etc/hosts"; TMP_LIST="$TMP_SF/zapret_yt_list.txt"; tmpDIR="/tmp/PodkopAWG"
 GV_XTREME_FILE="/opt/zapret/tmp/GvXtreme"; GV_XTREME_PORTS="80,88,444-65535"; GV_XTREME_NFQWS_PORTS="80,88,443-65535"
 IF_NAME="AWG"; PROTO="amneziawg"; DEV_NAME="amneziawg0"; DISCORD_DEF_HOSTLIST="/opt/zapret/ipset_def/zapret-hosts-user.txt"
@@ -509,6 +517,7 @@ echo -e "${CYAN}Скачиваем архив ${NC}$FILE_NAME"; wget -q -U "Mozi
 unzip -o "$FILE_NAME" >/dev/null; if [ "$PKG_IS_APK" -eq 1 ]; then PKG_PATH="$TMP_SF/apk"; for PKG in "$PKG_PATH"/zapret*; do [ -f "$PKG" ] || continue; echo "$PKG" | grep -q "luci" && continue; install_pkg "$(basename "$PKG")" "$PKG" || return; done
 for PKG in "$PKG_PATH"/luci*; do [ -f "$PKG" ] || continue; install_pkg "$(basename "$PKG")" "$PKG" || return; done; else PKG_PATH="$TMP_SF"; for PKG in "$PKG_PATH"/zapret_*.ipk; do [ -f "$PKG" ] || continue; install_pkg "$(basename "$PKG")" "$PKG" || return; done
 for PKG in "$PKG_PATH"/luci-app-zapret_*.ipk; do [ -f "$PKG" ] || continue; install_pkg "$(basename "$PKG")" "$PKG" || return; done; fi; ADD_FAKE_FLOW
+uci set zapret.@main[0].DISABLE_CUSTOM='0'; uci commit zapret; ZAPRET_RESTART
 echo -e "${CYAN}Удаляем временные файлы${NC}"; cd /; rm -rf "$TMP_SF" /tmp/*.ipk /tmp/*.zip /tmp/*zapret* 2>/dev/null; mkdir -p "$TMP_SF"; echo -e "Zapret ${GREEN}установлен!${NC}\n"; [ "$NO_PAUSE" != "1" ] && PAUSE; }
 # ==========================================
 # Меню настройки Discord
@@ -850,17 +859,28 @@ LUCI_EDITION="/usr/libexec/rpcd/zapret-manager"
 install_zapret_manager_luci() {
     if [ -e "$LUCI_EDITION" ]; then
         echo -e "\n${MAGENTA}Удаляем Zapret Manager для LuCI${NC}"
-        rm -rf /usr/lib/zapret-manager /usr/libexec/rpcd/zapret-manager /usr/share/luci/menu.d/luci-app-zapret-manager.json /usr/share/rpcd/acl.d/luci-app-zapret-manager.json /www/luci-static/resources/view/zapret-manager /www/luci-static/resources/zapret-manager /tmp/zapret-manager /tmp/luci-indexcache* /tmp/luci-modulecache/* && /etc/init.d/rpcd restart && /etc/init.d/uhttpd restart
+rm -rf \
+	/usr/lib/zapret-manager* \
+	/usr/libexec/rpcd/zapret-manager* \
+	/usr/share/luci/menu.d/luci-app-zapret-manager.json \
+	/usr/share/rpcd/acl.d/luci-app-zapret-manager.json \
+	/www/luci-static/resources/view/zapret-manager* \
+	/www/luci-static/resources/zapret-manager* \
+	/etc/zapret_manager_expert_mode* \
+	/tmp/zapret-manager* \
+	/tmp/zm_uninstall_panel.sh \
+	/tmp/luci-indexcache* \
+	/tmp/luci-modulecache/* 2>/dev/null
+/etc/init.d/rpcd restart >/dev/null 2>&1
+/etc/init.d/uhttpd restart >/dev/null 2>&1             
         echo -e "Zapret Manager ${GREEN}для ${NC}LuCI ${GREEN}удалён!${NC}\n"
     else
-        echo -e "\n${MAGENTA}Устанавливаем Zapret Manager LuCI${NC}"
         sh <(wget -qO - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/main/ZapretManager_LuCI.sh)
-        echo -e "Zapret Manager ${GREEN}для ${NC}LuCI ${GREEN}установлен!${NC}\n"
     fi
     PAUSE
 }
-is_expert_mode() { [ -f "$EXPERT_MODE_FILE" ]; }; toggle_expert_mode() { [ ! -f /etc/init.d/zapret ] && { echo -e "\nZapret ${RED}не установлен!${NC}\n"; PAUSE; return; }; if is_expert_mode; then rm -f "$EXPERT_MODE_FILE"; echo -e "\nExpert mode ${GREEN}выключен!${NC}\n"; else echo 1 > "$EXPERT_MODE_FILE"; echo -e "\nExpert mode ${GREEN}включён!${NC}\n"; fi; PAUSE; }
-sys_menu() { while true; do web_is_enabled && WEB_TEXT="Удалить доступ к скрипту из браузера" || WEB_TEXT="Активировать доступ к скрипту из браузера"; is_expert_mode && EXPERT_TEXT="${GREEN}Выключить${NC} expert mode" || EXPERT_TEXT="${GREEN}Включить${NC} expert mode"
+is_expert_mode() { [ -f "$EXPERT_MODE_FILE" ]; }; toggle_expert_mode() { if is_expert_mode; then rm -f "$EXPERT_MODE_FILE"; echo -e "\nExpert mode ${GREEN}выключен!${NC}\n"; else echo 1 > "$EXPERT_MODE_FILE"; echo -e "\nExpert mode ${GREEN}включён!${NC}\n"; fi; PAUSE; }
+sys_menu() { while true; do web_is_enabled && WEB_TEXT="Удалить доступ к скрипту из браузера" || WEB_TEXT="Активировать доступ к скрипту из браузера"; is_expert_mode && EXPERT_TEXT="${GREEN}Выключить${NC} Expert mode" || EXPERT_TEXT="${GREEN}Включить${NC} Expert mode"
 quic_is_blocked && QUIC_TEXT="${GREEN}Отключить блокировку${NC} QUIC ${GREEN}${NC}" || QUIC_TEXT="${GREEN}Включить блокировку${NC} QUIC ${GREEN}${NC}"
 CURR=$(curr_MIR); clear; OTSTUP=0; echo -e "${MAGENTA}Системное меню${NC}\n"; if [ -f "$DATE_FILE" ] && [ -f "$BACKUP_DIR/zapret.tar.gz" ] && [ -f "$BACKUP_DIR/zapret" ]; then CREATE_DATE=$(cat "$DATE_FILE"); echo -e "${YELLOW}Резервная копия:${NC} $CREATE_DATE" && OTSTUP=1; fi
 is_expert_mode && echo -e "${YELLOW}Expert mode: ${GREEN}включён${NC}" && OTSTUP=1; if [ "$CURR" != "default / OpenWrt" ]; then echo -e "${YELLOW}Используется зеркало: ${NC}$CURR" && OTSTUP=1; fi
@@ -873,7 +893,7 @@ if [ -f /etc/init.d/zapret ] && [ -f "$CONF" ]; then if grep -Eq "^[[:space:]]*o
 ping -6 -c 1 -W 2 google.com >/dev/null 2>&1 && echo -e "${CYAN}9) ${GREEN}Включить ${NC}IPv6${GREEN} в ${NC}Zapret"; fi; fi
 FO=$(uci get firewall.@defaults[0].flow_offloading 2>/dev/null); FOHW=$(uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null); FIX=$(grep -q 'ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc && echo 1 || echo 0)
 if [ "$FO" = 1 ] || [ "$FOHW" = 1 ] || [ "$FIX" = 1 ]; then if [ "$FIX" = 1 ]; then echo -e "${CYAN}0) ${GREEN}Отключить${NC} FIX ${GREEN}для${NC} Flow Offloading"; else echo -e "${CYAN}0) ${GREEN}Применить${NC} FIX ${GREEN}для${NC} Flow Offloading"; fi; fi
-echo -e "${CYAN}i) ${GREEN}Меню исключений ${NC}IP${GREEN} из ${NC}Zapret\n${CYAN}e) ${GREEN}$EXPERT_TEXT${NC}"; echo -e "${CYAN}y) ${GREEN}Установить пакеты из ${NC}/root/"
+echo -e "${CYAN}i) ${GREEN}Меню исключений ${NC}устройств${GREEN} из ${NC}Zapret\n${CYAN}e) ${GREEN}$EXPERT_TEXT${NC}"; echo -e "${CYAN}y) ${GREEN}Установить пакеты из ${NC}/root/"
 echo -e "${CYAN}w)${GREEN} $( [ -e "$LUCI_EDITION" ] && echo -e "Удалить ${NC}Zapret Manager ${GREEN}для ${NC}LuCI" || echo -e "Установить ${NC}Zapret Manager ${GREEN}для ${NC}LuCI" )"
 echo -ne "${CYAN}Enter) ${GREEN}Вернуться в предыдущее меню${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read -r choiceMN; case "$choiceMN" in 1) Sys_Info;; 2) toggle_web;; 3) toggle_quic;; 4) menu_MIR;; e|Е|у|У) toggle_expert_mode;;
 5) [ ! -f /etc/init.d/zapret ] && { echo -e "\nZapret ${RED}не установлен!${NC}\n"; PAUSE; continue; }; stop_zapret "1"; grep -q 'echo "Start Zapret"' /opt/zapret/blockcheck.sh || sed -i $'/^[[:space:]]*read A/a\\\t\techo "Start Zapret"; /etc/init.d/zapret restart >/dev/null 2>&1' /opt/zapret/blockcheck.sh
@@ -1687,8 +1707,8 @@ ZAPRET_RESTART; echo -e "\n${GREEN}Собственная стратегия п�
 # ==========================================
 # Исключения IP
 # ==========================================
-Exclusions_menu() { [ ! -f /etc/init.d/zapret ] && { echo -e "\nZapret ${RED}не установлен!${NC}\n"; PAUSE; return; }; IPV4_RE='^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$'; EXCL_FILE="${CUSTOM_DIR}20-script.sh"; LAN_DEV=$(uci -q get network.lan.device); [ -z "$LAN_DEV" ] && LAN_DEV="br-lan"; mkdir -p "$CUSTOM_DIR"; [ -f "$EXCL_FILE" ] || touch "$EXCL_FILE"
-while true; do clear; echo -e "${MAGENTA}Меню исключений IP из Zapret${NC}\n"; CURRENT_EXCL=$(grep -oE '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' "$EXCL_FILE" 2>/dev/null | sort -u); DEV_LIST="$TMP_SF/zapret_excl_devices.txt"; LEASE_TMP="$TMP_SF/zapret_excl_leases.txt"
+Exclusions_menu() { [ ! -f /etc/init.d/zapret ] && { echo -e "\nZapret ${RED}не установлен!${NC}\n"; PAUSE; return; }; IPV4_RE='^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$'; LAN_DEV=$(uci -q get network.lan.device); [ -z "$LAN_DEV" ] && LAN_DEV="br-lan"; mkdir -p "$CUSTOM_DIR"; [ -f "$EXCL_FILE" ] || touch "$EXCL_FILE"
+while true; do clear; echo -e "${MAGENTA}Меню исключений устройств из Zapret${NC}\n"; CURRENT_EXCL=$(grep -oE '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' "$EXCL_FILE" 2>/dev/null | sort -u); DEV_LIST="$TMP_SF/zapret_excl_devices.txt"; LEASE_TMP="$TMP_SF/zapret_excl_leases.txt"
 mkdir -p "$TMP_SF"; : > "$DEV_LIST"; : > "$LEASE_TMP"; if [ -f /tmp/dhcp.leases ]; then while read -r _ts _mac _ip _name _rest; do [ -z "$_ip" ] && continue; echo "$_ip" | grep -qE "$IPV4_RE" || continue; [ -z "$_name" ] || [ "$_name" = "*" ] && _name="Неизвестное устройство"
 printf '%s|%s|%s\n' "$_ip" "$_name" "$_mac" >> "$LEASE_TMP"; printf '%s|%s\n' "$_ip" "$_name" >> "$DEV_LIST"; done < /tmp/dhcp.leases; fi; if [ -f /proc/net/arp ]; then tail -n +2 /proc/net/arp | while read -r _ip _hwtype _flags _mac _mask _dev
 do [ -z "$_ip" ] && continue; [ "$_dev" = "$LAN_DEV" ] || continue; echo "$_ip" | grep -qE "$IPV4_RE" || continue; [ "$_flags" = "0x0" ] && continue; grep -qxE "${_ip}\|.*" "$DEV_LIST" 2>/dev/null && continue
@@ -1838,7 +1858,7 @@ show_menu() { get_versions; get_doh_status; show_current_strategy; RKN_Check; mk
 if [ -f /etc/init.d/zapret ] && [ -f "$CONF" ] && grep -Eq "^[[:space:]]*option DISABLE_IPV6 '1'" "$CONF" && ping -6 -c 1 -W 2 google.com >/dev/null 2>&1; then echo -e "${RED}Обнаружен IPv6! ${GREEN}Включите ${NC}IPv6${GREEN} в системном меню!${NC}\n"; fi
 if [ ! -f /etc/init.d/zapret2 ]; then Z2_ACTION_TEXT="Установить"; Z2_ACTION_FUNC="install_zapret2"; elif [ "$INSTALLED_VER2" = "$ZAPRET2_VERSION" ]; then Z2_ACTION_TEXT="Удалить"; Z2_ACTION_FUNC="remove_zapret2"; else Z2_ACTION_TEXT="Обновить"; Z2_ACTION_FUNC="install_zapret2"; fi
 for pkg in byedpi youtubeUnblock; do if [ "$PKG_IS_APK" -eq 1 ]; then apk info -e "$pkg" >/dev/null 2>&1 && echo -e "${RED}Найден установленный ${NC}$pkg${RED}!${NC}\nZapret${RED} может работать некорректно с ${NC}$pkg${RED}!${NC}\n"
-else opkg list-installed | grep -q "^$pkg" && echo -e "${RED}Найден установленный ${NC}$pkg${RED}!${NC}\nZapret${RED} может работать некорректно с ${NC}$pkg${RED}!${NC}\n"; fi; done; if is_expert_mode && [ -f /etc/init.d/zapret2 ] && [ -f /etc/init.d/zapret ]; then SHOW_S=2
+else opkg list-installed | grep -q "^$pkg" && echo -e "${RED}Найден установленный ${NC}$pkg${RED}!${NC}\nZapret${RED} может работать некорректно с ${NC}$pkg${RED}!${NC}\n"; fi; done; if [ -f /etc/init.d/zapret2 ] && [ -f /etc/init.d/zapret ]; then SHOW_S=2
 pgrep -f "/opt/zapret" >/dev/null 2>&1 && S1_ACTION="Остановить" || S1_ACTION="Запустить"; /etc/init.d/zapret2 status >/dev/null 2>&1 && S2_ACTION="Остановить" || S2_ACTION="Запустить"
 elif [ -f /etc/init.d/zapret2 ]; then S_NAME="Zapret2"; /etc/init.d/zapret2 status >/dev/null 2>&1 && S_ACTION="Остановить" || S_ACTION="Запустить"; SHOW_S=1; elif [ -f /etc/init.d/zapret ]; then S_NAME="Zapret"; pgrep -f "/opt/zapret" >/dev/null 2>&1 && S_ACTION="Остановить" || S_ACTION="Запустить"; SHOW_S=1; else SHOW_S=0; fi
 if uci get firewall.@defaults[0].flow_offloading 2>/dev/null | grep -q '^1$' || uci get firewall.@defaults[0].flow_offloading_hw 2>/dev/null | grep -q '^1$'; then if ! grep -q 'meta l4proto { tcp, udp } ct original packets ge 30 flow offload @ft;' /usr/share/firewall4/templates/ruleset.uc
