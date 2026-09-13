@@ -1452,6 +1452,8 @@ TG_BIN_RS="/usr/bin/tg-ws-proxy-rs"
 TG_INIT_RS="/etc/init.d/tg-ws-proxy-rs"
 TG_SECRET_RS_FILE="/etc/tg-ws-proxy-rs.secret"
 TG_SECRET_MT_FILE="/etc/tg-ws-proxy/secret.conf"
+TG_VER_GO_FILE="/usr/bin/tg-ws-proxy-go.ver"
+TG_VER_RS_FILE="/usr/bin/tg-ws-proxy-rs.ver"
 
 _tg_arch_rs() {
 	case "$TG_ARCH" in
@@ -1476,21 +1478,37 @@ _tg_arch_go() {
 }
 
 tg_status() {
-	local mt="not_installed" mt_running="false"
-	local go="not_installed" go_running="false"
-	local rs="not_installed" rs_running="false"
+	local mt="not_installed" mt_running="false" mt_ver=""
+	local go="not_installed" go_running="false" go_ver=""
+	local rs="not_installed" rs_running="false" rs_ver=""
 	local secret_mt="" secret_rs="" lan_ip
 
-	if [ -f /etc/init.d/tg-ws-proxy ]; then mt="installed"; pidof tg-ws-proxy >/dev/null 2>&1 && mt_running="true"; fi
-	if [ -f "$TG_INIT_GO" ]; then go="installed"; pidof tg-ws-proxy-go >/dev/null 2>&1 && go_running="true"; fi
-	if [ -f "$TG_INIT_RS" ]; then rs="installed"; pidof tg-ws-proxy-rs >/dev/null 2>&1 && rs_running="true"; fi
+	if [ -f /etc/init.d/tg-ws-proxy ]; then
+		mt="installed"; pidof tg-ws-proxy >/dev/null 2>&1 && mt_running="true"
+		if [ "$PKG" = "apk" ]; then
+			mt_ver=$(apk info -v 2>/dev/null | grep '^tg-ws-proxy-' | grep -v '^tg-ws-proxy-go' | head -n1 | sed -E 's/^tg-ws-proxy-([0-9.]+).*/\1/')
+		else
+			mt_ver=$(opkg list-installed 2>/dev/null | awk '$1=="tg-ws-proxy"{print $3}' | cut -d'-' -f1)
+		fi
+	fi
+	if [ -f "$TG_INIT_GO" ]; then
+		go="installed"; pidof tg-ws-proxy-go >/dev/null 2>&1 && go_running="true"
+		[ -f "$TG_VER_GO_FILE" ] && go_ver=$(cat "$TG_VER_GO_FILE")
+	fi
+	if [ -f "$TG_INIT_RS" ]; then
+		rs="installed"; pidof tg-ws-proxy-rs >/dev/null 2>&1 && rs_running="true"
+		[ -f "$TG_VER_RS_FILE" ] && rs_ver=$(cat "$TG_VER_RS_FILE")
+	fi
 
 	[ -f "$TG_SECRET_MT_FILE" ] && secret_mt=$(grep '^SECRET=' "$TG_SECRET_MT_FILE" | cut -d= -f2)
 	[ -f "$TG_SECRET_RS_FILE" ] && secret_rs=$(cat "$TG_SECRET_RS_FILE")
 	lan_ip=$(uci -q get network.lan.ipaddr 2>/dev/null | cut -d/ -f1)
 
-	printf '{"mtproto":"%s","mtproto_running":%s,"socks5":"%s","socks5_running":%s,"rust":"%s","rust_running":%s,"lan_ip":"%s","secret_mtproto":"%s","secret_rust":"%s"}\n' \
-		"$mt" "$mt_running" "$go" "$go_running" "$rs" "$rs_running" "$(esc "$lan_ip")" "$(esc "$secret_mt")" "$(esc "$secret_rs")"
+	printf '{"mtproto":"%s","mtproto_running":%s,"mtproto_version":"%s","mtproto_latest":"%s","socks5":"%s","socks5_running":%s,"socks5_version":"%s","socks5_latest":"%s","rust":"%s","rust_running":%s,"rust_version":"%s","rust_latest":"%s","lan_ip":"%s","secret_mtproto":"%s","secret_rust":"%s"}\n' \
+		"$mt" "$mt_running" "$(esc "$mt_ver")" "$TG_MTPROTO_VER" \
+		"$go" "$go_running" "$(esc "$go_ver")" "$TG_GO_VER" \
+		"$rs" "$rs_running" "$(esc "$rs_ver")" "$TG_RS_VER" \
+		"$(esc "$lan_ip")" "$(esc "$secret_mt")" "$(esc "$secret_rs")"
 }
 
 do_tg_install_mtproto() {
@@ -1541,13 +1559,14 @@ do_tg_install_socks5() {
 		"$TG_INIT_GO" enable >/dev/null 2>&1
 	fi
 	"$TG_INIT_GO" restart >/dev/null 2>&1
+	echo "$TG_GO_VER" > "$TG_VER_GO_FILE"
 	echo "==> Готово"
 }
 
 do_tg_remove_socks5() {
 	echo "==> Удаляем TG WS Proxy SOCKS5"
 	[ -x "$TG_INIT_GO" ] && { "$TG_INIT_GO" stop >/dev/null 2>&1; "$TG_INIT_GO" disable >/dev/null 2>&1; }
-	rm -f "$TG_BIN_GO" "$TG_INIT_GO"
+	rm -f "$TG_BIN_GO" "$TG_INIT_GO" "$TG_VER_GO_FILE"
 	echo "==> Готово"
 }
 
@@ -1578,13 +1597,14 @@ do_tg_install_rust() {
 		"$TG_INIT_RS" enable >/dev/null 2>&1
 	fi
 	"$TG_INIT_RS" restart >/dev/null 2>&1
+	echo "$TG_RS_VER" > "$TG_VER_RS_FILE"
 	echo "==> Готово"
 }
 
 do_tg_remove_rust() {
 	echo "==> Удаляем TG WS Proxy Rust"
 	[ -x "$TG_INIT_RS" ] && { "$TG_INIT_RS" stop >/dev/null 2>&1; "$TG_INIT_RS" disable >/dev/null 2>&1; }
-	rm -f "$TG_BIN_RS" "$TG_INIT_RS" "$TG_SECRET_RS_FILE"
+	rm -f "$TG_BIN_RS" "$TG_INIT_RS" "$TG_SECRET_RS_FILE" "$TG_VER_RS_FILE"
 	echo "==> Готово"
 }
 
@@ -2506,6 +2526,7 @@ return view.extend({
 		var wrap = E('div', { 'class': 'zm-wrap' });
 		var dvGrid = E('div', { 'class': 'zm-grid' });
 		var fakeGrid = E('div', { 'class': 'zm-grid' });
+		var busy = false;
 
 		function renderDv() {
 			dvGrid.innerHTML = '';
@@ -2514,11 +2535,14 @@ return view.extend({
 				dvGrid.appendChild(E('div', {
 					'class': 'zm-tile' + (data.current === dv ? ' zm-active' : ''),
 					'click': function() {
+						if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+						busy = true;
 						zm.toast('Применяем стратегию ' + dv + '', 'warning');
 						zm.discordSetDv(num).then(function(res) {
+							busy = false;
 							if (!zm.notifyStrategyResult(res, dv)) return;
 							refreshState();
-						});
+						}).catch(function() { busy = false; });
 					}
 				}, dv));
 			});
@@ -2530,11 +2554,14 @@ return view.extend({
 				fakeGrid.appendChild(E('div', {
 					'class': 'zm-tile' + (data.current_fake === f ? ' zm-active' : ''),
 					'click': function() {
+						if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+						busy = true;
 						zm.toast('Меняем fake-файл на ' + f + '', 'warning');
 						zm.discordSetFake(f).then(function(res) {
+							busy = false;
 							if (!zm.notifyStrategyResult(res, f)) return;
 							refreshState();
-						});
+						}).catch(function() { busy = false; });
 					}
 				}, f));
 			});
@@ -2605,12 +2632,14 @@ return view.extend({
 					'class': 'zm-tile' + (data.current === p.id ? ' zm-active' : ''),
 					'click': function() {
 						if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+						busy = true;
 						zm.toast('Меняем DNS на ' + p.label, 'warning');
 						zm.dohSet(p.id).then(function(res) {
+							busy = false;
 							if (res.error) { zm.toast(res.error, 'error'); return; }
 							zm.toast(p.label + ' применён', 'info');
 							zm.dohStatus().then(function(res2) { data = res2; renderGrid(); });
-						});
+						}).catch(function() { busy = false; });
 					}
 				}, p.label));
 			});
@@ -2707,19 +2736,23 @@ return view.extend({
 		}
 
 		var grid = E('div', { 'class': 'zm-grid' });
+		var busy = false;
 
 		function renderGrid(devices) {
 			grid.innerHTML = '';
 			(devices || []).forEach(function(d) {
 				grid.appendChild(E('div', {
-					'class': 'zm-tile' + (d.excluded ? ' zm-active' : ' zm-tile-off'),
+					'class': 'zm-tile' + (d.excluded ? ' zm-tile-off' : ''),
 					'click': function() {
+						if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+						busy = true;
 						zm.toast('Переключаем исключение для ' + d.ip + '', 'warning');
 						zm.exclusionsToggle(d.ip).then(function(res) {
+							busy = false;
 							if (res.error) { zm.toast(res.error, 'error'); return; }
 							zm.toast(d.ip + (res.excluded ? ' исключён' : ' больше не исключён'), 'info');
 							zm.exclusionsStatus().then(function(r) { renderGrid(r.devices); });
-						});
+						}).catch(function() { busy = false; });
 					}
 				}, [ E('div', {}, d.ip), E('div', { 'class': 'zm-hint' }, d.name) ]));
 			});
@@ -2739,39 +2772,48 @@ return view.extend({
 				E('button', {
 					'class': 'cbi-button',
 					'click': function() {
+						if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+						busy = true;
 						zm.toast('Обновляем список устройств', 'warning');
 						zm.exclusionsStatus().then(function(res) {
+							busy = false;
 							renderGrid(res.devices);
 							zm.toast('Список устройств обновлён', 'info');
-						});
+						}).catch(function() { busy = false; });
 					}
 				}, 'Обновить список'),
 				manualInput,
 				E('button', {
 					'class': 'cbi-button',
 					'click': function() {
+						if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
 						var ip = manualInput.value.trim();
 						if (!/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(ip)) {
 							zm.toast('Некорректный IPv4 адрес', 'error');
 							return;
 						}
+						busy = true;
 						zm.toast('Добавляем ' + ip + ' в исключения', 'warning');
 						zm.exclusionsToggle(ip).then(function(res) {
+							busy = false;
 							if (res.error) { zm.toast(res.error, 'error'); return; }
 							manualInput.value = '';
 							zm.toast(ip + (res.excluded ? ' добавлен в исключения' : ' убран из исключений'), 'info');
 							zm.exclusionsStatus().then(function(r) { renderGrid(r.devices); });
-						});
+						}).catch(function() { busy = false; });
 					}
 				}, 'Добавить вручную'),
 				E('button', {
 					'class': 'cbi-button cbi-button-remove',
 					'click': function() {
+						if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+						busy = true;
 						zm.toast('Очищаем все исключения', 'warning');
 						zm.exclusionsClear().then(function() {
+							busy = false;
 							zm.toast('Все исключения очищены', 'info');
 							zm.exclusionsStatus().then(function(res) { renderGrid(res.devices); });
-						});
+						}).catch(function() { busy = false; });
 					}
 				}, 'Очистить все')
 			])
@@ -2807,6 +2849,7 @@ return view.extend({
 		var gvGrid = E('div', { 'class': 'zm-grid' });
 		var xtremeRow = E('div', {});
 		var fakeGrid = E('div', { 'class': 'zm-grid' });
+		var busy = false;
 
 		function renderGv() {
 			gvGrid.innerHTML = '';
@@ -2814,12 +2857,15 @@ return view.extend({
 				gvGrid.appendChild(E('div', {
 					'class': 'zm-tile' + (data.current === ('Gv' + n) ? ' zm-active' : ''),
 					'click': function() {
+						if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+						busy = true;
 						zm.toast('Применяем игровую стратегию Gv' + n + '', 'warning');
 						zm.gameSet(String(n)).then(function(res) {
+							busy = false;
 							if (res.error) { zm.toast(res.error, 'error'); return; }
 							zm.toast(res.game === 'none' ? 'Игровая стратегия снята' : res.game + ' применена', 'info');
 							refreshState();
-						});
+						}).catch(function() { busy = false; });
 					}
 				}, 'Gv' + n));
 			});
@@ -2837,12 +2883,15 @@ return view.extend({
 				E('button', {
 					'class': xtreme ? 'cbi-button cbi-button-remove' : 'cbi-button cbi-button-positive',
 					'click': function() {
+						if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+						busy = true;
 						zm.toast(xtreme ? 'Выключаем Xtreme' : 'Включаем Xtreme', 'warning');
 						zm.gameToggleXtreme().then(function(res) {
+							busy = false;
 							if (res.error) { zm.toast(res.error, 'error'); return; }
 							zm.toast(res.xtreme ? 'Xtreme включён' : 'Xtreme выключен', 'info');
 							refreshState();
-						});
+						}).catch(function() { busy = false; });
 					}
 				}, xtreme ? 'Выключить Xtreme' : 'Включить Xtreme')
 			]));
@@ -2854,12 +2903,15 @@ return view.extend({
 				fakeGrid.appendChild(E('div', {
 					'class': 'zm-tile' + (data.fake === f ? ' zm-active' : ''),
 					'click': function() {
+						if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+						busy = true;
 						zm.toast('Меняем fake-файл на ' + f + '', 'warning');
 						zm.gameSetFake(f).then(function(res) {
+							busy = false;
 							if (res.error) { zm.toast(res.error, 'error'); return; }
 							zm.toast(f + ' установлен', 'info');
 							refreshState();
-						});
+						}).catch(function() { busy = false; });
 					}
 				}, f));
 			});
@@ -2938,6 +2990,7 @@ return view.extend({
 	render: function(data) {
 		var wrap = E('div', { 'class': 'zm-wrap' });
 		var grid = E('div', { 'class': 'zm-grid' });
+		var busy = false;
 
 		function renderGrid(items) {
 			grid.innerHTML = '';
@@ -2945,12 +2998,15 @@ return view.extend({
 				grid.appendChild(E('div', {
 					'class': 'zm-tile' + (it.enabled ? ' zm-active' : ''),
 					'click': function() {
+						if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+						busy = true;
 						zm.toast('Переключаем ' + (LABELS[it.id] || it.id) + '', 'warning');
 						zm.hostsToggle(it.id).then(function(res) {
+							busy = false;
 							if (res.error) { zm.toast(res.error, 'error'); return; }
 							zm.toast((LABELS[it.id] || it.id) + (res.enabled ? ' включён' : ' выключен'), 'info');
 							zm.hostsStatus().then(function(r) { renderGrid(r.items); });
-						});
+						}).catch(function() { busy = false; });
 					}
 				}, LABELS[it.id] || it.id));
 			});
@@ -2997,27 +3053,33 @@ return view.extend({
 		}
 
 		function replaceGeohide(region) {
+			if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+			busy = true;
 			zm.toast('Заменяем hosts на GeoHide ' + region.toUpperCase() + '', 'warning');
 			geoLogEl.classList.add('zm-show');
 			zm.renderLog(geoLogEl, '==> Скачиваем и заменяем /etc/hosts');
 			zm.hostsReplaceGeohide(region).then(function(res) {
+				busy = false;
 				if (res.error) { zm.renderLog(geoLogEl, '==> ОШИБКА: ' + res.error); zm.toast(res.error, 'error'); return; }
 				zm.renderLog(geoLogEl, '==> Готово — hosts заменён на GeoHide ' + region.toUpperCase() + '.');
 				zm.toast('hosts заменён на GeoHide ' + region.toUpperCase(), 'info');
 				refreshAll();
-			});
+			}).catch(function() { busy = false; });
 		}
 
 		function resetHosts() {
+			if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+			busy = true;
 			zm.toast('Восстанавливаем hosts', 'warning');
 			geoLogEl.classList.add('zm-show');
 			zm.renderLog(geoLogEl, '==> Восстанавливаем hosts');
 			zm.hostsReset().then(function(res) {
+				busy = false;
 				if (res.error) { zm.renderLog(geoLogEl, '==> ОШИБКА: ' + res.error); zm.toast(res.error, 'error'); return; }
 				zm.renderLog(geoLogEl, '==> Готово — hosts восстановлен.');
 				zm.toast('hosts восстановлен', 'info');
 				refreshAll();
-			});
+			}).catch(function() { busy = false; });
 		}
 
 		return wrap;
@@ -3042,6 +3104,7 @@ return view.extend({
 		var lastFlowseal = null;
 		var wrap = E('div', { 'class': 'zm-wrap' });
 		var logEl = E('pre', { 'class': 'zm-log' });
+		var busy = false;
 
 		var currentBanner = E('div', { 'class': 'zm-current-banner' });
 		wrap.appendChild(currentBanner);
@@ -3059,19 +3122,23 @@ return view.extend({
 				E('button', {
 					'class': 'cbi-button',
 					'click': function() {
+						if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+						busy = true;
 						zm.toast('Обновляем список Flowseal', 'warning');
 						fGrid.innerHTML = 'Загрузка списка';
 						zm.strategyListFlowseal().then(function(res) {
 							if (res.started) {
 								zm.pollJob('flowseal_download', logEl, function(ok) {
+									busy = false;
 									zm.toast(ok ? 'Список Flowseal обновлён' : 'Не удалось обновить список', ok ? 'info' : 'error');
 									zm.strategyListFlowseal().then(renderFlowseal);
 								});
 							} else {
+								busy = false;
 								renderFlowseal(res);
 								zm.toast('Список Flowseal обновлён', 'info');
 							}
-						});
+						}).catch(function() { busy = false; });
 					}
 				}, 'Обновить список')
 			]),
@@ -3096,11 +3163,14 @@ return view.extend({
 				vGrid.appendChild(E('div', {
 					'class': 'zm-tile' + (!status.flowseal && words.indexOf(' ' + it.id + ' ') !== -1 ? ' zm-active' : ''),
 					'click': function() {
+						if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+						busy = true;
 						zm.toast('Применяем стратегию ' + it.id + '', 'warning');
 						zm.strategySetV(it.id).then(function(res) {
+							busy = false;
 							if (!zm.notifyStrategyResult(res, it.id)) return;
 							refreshState();
-						});
+						}).catch(function() { busy = false; });
 					}
 				}, it.id));
 			});
@@ -3113,11 +3183,14 @@ return view.extend({
 				fGrid.appendChild(E('div', {
 					'class': 'zm-tile' + (status.flowseal === it.id ? ' zm-active' : ''),
 					'click': function() {
+						if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+						busy = true;
 						zm.toast('Применяем стратегию ' + it.label + '', 'warning');
 						zm.strategySetFlowseal(it.id).then(function(r2) {
+							busy = false;
 							if (!zm.notifyStrategyResult(r2, it.id)) return;
 							refreshState();
-						});
+						}).catch(function() { busy = false; });
 					}
 				}, it.label));
 			});
@@ -3378,6 +3451,7 @@ return view.extend({
 		var wrap = E('div', { 'class': 'zm-wrap' });
 		var netEl = E('div', {}, [ E('p', { 'class': 'zm-hint' }, 'Нажмите «Проверить», чтобы протестировать IPv4/IPv6') ]);
 
+		var toggleBusy = false;
 		function renderStatusCard(d) {
 			var card = E('div', { 'class': 'zm-card' }, [
 				E('h3', {}, 'Система'),
@@ -3397,33 +3471,42 @@ return view.extend({
 					E('button', {
 						'class': d.quic_blocked ? 'cbi-button cbi-button-remove' : 'cbi-button',
 						'click': function() {
+							if (toggleBusy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+							toggleBusy = true;
 							zm.toast(d.quic_blocked ? 'Выключаем блокировку QUIC' : 'Включаем блокировку QUIC', 'warning');
 							zm.systemToggleQuic().then(function(res) {
+								toggleBusy = false;
 								zm.toast(d.quic_blocked ? 'Блокировка QUIC выключена' : 'Блокировка QUIC включена', 'info');
 								zm.systemStatus().then(refresh);
-							});
+							}).catch(function() { toggleBusy = false; });
 						}
 					}, d.quic_blocked ? 'Выключить блокировку QUIC' : 'Включить блокировку QUIC'),
 					E('button', {
 						'class': 'cbi-button',
 						'click': function() {
+							if (toggleBusy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+							toggleBusy = true;
 							zm.toast(d.ipv6_enabled ? 'Выключаем IPv6 в Zapret' : 'Включаем IPv6 в Zapret', 'warning');
 							zm.systemToggleIpv6().then(function(res) {
+								toggleBusy = false;
 								if (res.error) { zm.toast(res.error, 'error'); return; }
 								zm.toast(res.ipv6_enabled ? 'IPv6 в Zapret включён' : 'IPv6 в Zapret выключен', 'info');
 								zm.systemStatus().then(refresh);
-							});
+							}).catch(function() { toggleBusy = false; });
 						}
 					}, d.ipv6_enabled ? 'Выключить IPv6 в Zapret' : 'Включить IPv6 в Zapret'),
 					E('button', {
 						'class': 'cbi-button',
 						'click': function() {
+							if (toggleBusy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+							toggleBusy = true;
 							zm.toast(d.flow_offloading_fix ? 'Отключаем Fix Flow Offloading' : 'Применяем Fix Flow Offloading', 'warning');
 							zm.systemToggleFlowOffloadingFix().then(function(res) {
+								toggleBusy = false;
 								if (res.error) { zm.toast(res.error, 'error'); return; }
 								zm.toast(res.flow_offloading_fix ? 'Fix для Flow Offloading применён' : 'Fix для Flow Offloading отключён', 'info');
 								zm.systemStatus().then(refresh);
-							});
+							}).catch(function() { toggleBusy = false; });
 						}
 					}, d.flow_offloading_fix ? 'Отключить Fix Flow Offloading' : 'Применить Fix Flow Offloading')
 				])
@@ -3438,6 +3521,7 @@ return view.extend({
 
 		wrap.appendChild(renderStatusCard(sysData));
 
+		var netBusy = false;
 		var netCard = E('div', { 'class': 'zm-card' }, [
 			E('h3', {}, 'Проверка сети'),
 			netEl,
@@ -3445,9 +3529,12 @@ return view.extend({
 				E('button', {
 					'class': 'cbi-button',
 					'click': function() {
+						if (netBusy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+						netBusy = true;
 						netEl.textContent = 'Проверяем';
 						zm.toast('Проверяем IPv4/IPv6', 'warning');
 						zm.systemCheckConnectivity().then(function(res) {
+							netBusy = false;
 							netEl.innerHTML = '';
 							netEl.appendChild(E('div', { 'class': 'zm-row' }, [
 								E('span', { 'class': 'zm-label' }, 'IPv4 (google.com)'),
@@ -3457,7 +3544,7 @@ return view.extend({
 								E('span', { 'class': 'zm-label' }, 'IPv6 (google.com)'),
 								zm.badge(res.ipv6_ok === true, 'ok, ' + res.ipv6_ms + ' ms', 'недоступен')
 							]));
-						});
+						}).catch(function() { netBusy = false; });
 					}
 				}, 'Проверить IPv4 / IPv6')
 			])
@@ -3606,9 +3693,9 @@ return view.extend({
 		var logEl = E('pre', { 'class': 'zm-log' });
 
 		function statusOf(d, id) {
-			if (id === 'mtproto') return { installed: d.mtproto === 'installed', running: d.mtproto_running === true, secret: d.secret_mtproto };
-			if (id === 'socks5') return { installed: d.socks5 === 'installed', running: d.socks5_running === true, secret: '' };
-			return { installed: d.rust === 'installed', running: d.rust_running === true, secret: d.secret_rust };
+			if (id === 'mtproto') return { installed: d.mtproto === 'installed', running: d.mtproto_running === true, secret: d.secret_mtproto, version: d.mtproto_version, latest: d.mtproto_latest };
+			if (id === 'socks5') return { installed: d.socks5 === 'installed', running: d.socks5_running === true, secret: '', version: d.socks5_version, latest: d.socks5_latest };
+			return { installed: d.rust === 'installed', running: d.rust_running === true, secret: d.secret_rust, version: d.rust_version, latest: d.rust_latest };
 		}
 
 		function renderLinks(d) {
@@ -3647,6 +3734,8 @@ return view.extend({
 			}
 		}
 
+		var busyMap = {};
+
 		function renderCards(d) {
 			cards.innerHTML = '';
 			VARIANTS.forEach(function(v) {
@@ -3657,10 +3746,14 @@ return view.extend({
 						'class': 'cbi-button cbi-button-remove',
 						'click': function() { doAction(v.id, 'remove'); }
 					}, 'Удалить'));
-					actions.push(E('button', {
-						'class': 'cbi-button',
-						'click': function() { doAction(v.id, 'update'); }
-					}, 'Обновить'));
+					// "Обновить" показываем только если реально есть более новая версия —
+					// иначе кнопка вводит в заблуждение, будто обновляться есть на что.
+					if (st.version && st.latest && st.version !== st.latest) {
+						actions.push(E('button', {
+							'class': 'cbi-button',
+							'click': function() { doAction(v.id, 'update'); }
+						}, 'Обновить до ' + st.latest));
+					}
 				} else {
 					actions.push(E('button', {
 						'class': 'cbi-button cbi-button-positive',
@@ -3673,24 +3766,32 @@ return view.extend({
 						E('span', { 'class': 'zm-label' }, 'Статус'),
 						st.installed ? zm.badge(st.running, 'запущен', 'остановлен') : zm.badge(false, '', 'не установлен')
 					]),
+					st.installed && st.version ? E('div', { 'class': 'zm-row' }, [
+						E('span', { 'class': 'zm-label' }, 'Версия'), E('span', {}, st.version)
+					]) : E([]),
 					E('div', { 'class': 'zm-actions' }, actions)
 				]));
 			});
 		}
 
 		function doAction(variantId, action) {
+			if (busyMap[variantId]) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+			busyMap[variantId] = true;
 			var job = action === 'remove' ? ('tg_remove_' + (variantId === 'mtproto' ? 'mtproto' : variantId))
 				: ('tg_install_' + (variantId === 'mtproto' ? 'mtproto' : variantId));
 			zm.toast((action === 'remove' ? 'Удаляем ' : action === 'update' ? 'Обновляем ' : 'Устанавливаем ') + variantId + '', 'warning');
 			zm.tgAction(variantId, action).then(function(res) {
-				if (res.error) { zm.toast(res.error, 'error'); return; }
+				if (res.error) { busyMap[variantId] = false; zm.toast(res.error, 'error'); return; }
 				if (res.started) {
 					zm.pollJob(job, logEl, function(ok) {
+						busyMap[variantId] = false;
 						zm.toast(ok ? 'Готово' : 'Ошибка', ok ? 'info' : 'error');
 						zm.tgStatus().then(function(d) { renderCards(d); renderLinks(d); });
 					});
+				} else {
+					busyMap[variantId] = false;
 				}
-			});
+			}).catch(function() { busyMap[variantId] = false; });
 		}
 
 		renderLinks(data);
@@ -3699,16 +3800,20 @@ return view.extend({
 		wrap.appendChild(cards);
 		wrap.appendChild(logEl);
 
+		var restartBusy = false;
 		wrap.appendChild(E('div', { 'class': 'zm-card' }, [
 			E('h3', {}, 'Общие действия'),
 			E('div', { 'class': 'zm-actions' }, [
 				E('button', {
 					'class': 'cbi-button',
 					'click': function() {
+						if (restartBusy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+						restartBusy = true;
 						zm.toast('Перезапускаем TG WS Proxy', 'warning');
 						zm.tgRestartAll().then(function() {
+							restartBusy = false;
 							zm.toast('Все запущенные TG WS Proxy перезапущены', 'info');
-						});
+						}).catch(function() { restartBusy = false; });
 					}
 				}, 'Перезапустить все')
 			])
@@ -3738,6 +3843,7 @@ return view.extend({
 		var grid = E('div', { 'class': 'zm-grid' });
 		var lastList = null;
 		var current = '';
+		var busy = false;
 
 		function currentYv(s) {
 			var words = (s.strategy || '').split(' ');
@@ -3754,11 +3860,14 @@ return view.extend({
 				grid.appendChild(E('div', {
 					'class': 'zm-tile' + (current === it.id ? ' zm-active' : ''),
 					'click': function() {
+						if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+						busy = true;
 						zm.toast('Применяем стратегию ' + it.id + '', 'warning');
 						zm.strategySetYoutube(it.id).then(function(r2) {
+							busy = false;
 							if (!zm.notifyStrategyResult(r2, it.id)) return;
 							refreshState();
-						});
+						}).catch(function() { busy = false; });
 					}
 				}, it.id));
 			});
@@ -3781,19 +3890,23 @@ return view.extend({
 				E('button', {
 					'class': 'cbi-button',
 					'click': function() {
+						if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+						busy = true;
 						zm.toast('Обновляем список YouTube-стратегий', 'warning');
 						grid.innerHTML = 'Загрузка списка';
 						zm.strategyListYoutube().then(function(res) {
 							if (res.started) {
 								zm.pollJob('youtube_download', logEl, function(ok) {
+									busy = false;
 									zm.toast(ok ? 'Список YouTube-стратегий обновлён' : 'Не удалось обновить список', ok ? 'info' : 'error');
 									zm.strategyListYoutube().then(renderGrid);
 								});
 							} else {
+								busy = false;
 								renderGrid(res);
 								zm.toast('Список YouTube-стратегий обновлён', 'info');
 							}
-						});
+						}).catch(function() { busy = false; });
 					}
 				}, 'Обновить список')
 			]),
@@ -3829,4 +3942,3 @@ command -v unzip >/dev/null 2>&1 || $INSTALL unzip >/dev/null 2>&1 || true
 echo
 echo "==> Готово! Откройте LuCI -> Services -> Zapret Manager"
 echo "    (если пункт меню не появился сразу - обновите страницу LuCI, Ctrl+Shift+R)"
-
