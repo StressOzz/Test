@@ -1870,8 +1870,6 @@ if grep -qE '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' "$EXCL_FILE" 2>/dev
     else
         echo -e "${YELLOW}Исключённые IP:      ${GREEN}есть${NC}"
     fi
-f
-
 echo -e "\n${CYAN}1) ${GREEN}Меню${NC} Zapret\n${CYAN}2) ${GREEN}$Z2_ACTION_TEXT${NC} Zapret2\n${CYAN}3) ${GREEN}Меню ${NC}splify\n${CYAN}4) ${GREEN}Меню ${NC}Mixomo\n${CYAN}5) ${GREEN}Меню ${NC}NetShift\n${CYAN}6) ${GREEN}Меню ${NC}TG WS Proxy\n${CYAN}7) ${GREEN}Меню ${NC}DNS over HTTPS\n${CYAN}8) ${GREEN}Меню управления доменами в ${NC}hosts"
 echo -e "${CYAN}f) ${GREEN}Удалить ${NC}→${GREEN} установить ${NC}→${GREEN} настроить${NC} Zapret\n${CYAN}m) ${GREEN}Системное меню${NC}"; [ "$SHOW_S" = "1" ] && echo -e "${CYAN}s) ${GREEN}$S_ACTION${NC} $S_NAME"
 [ "$SHOW_S" = "2" ] && echo -e "${CYAN}s1) ${GREEN}$S1_ACTION${NC} Zapret\n${CYAN}s2) ${GREEN}$S2_ACTION${NC} Zapret2"; echo -ne "${CYAN}Enter) ${GREEN}Выход${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read choice
