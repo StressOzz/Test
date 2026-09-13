@@ -3829,3 +3829,4 @@ command -v unzip >/dev/null 2>&1 || $INSTALL unzip >/dev/null 2>&1 || true
 echo
 echo "==> Готово! Откройте LuCI -> Services -> Zapret Manager"
 echo "    (если пункт меню не появился сразу - обновите страницу LuCI, Ctrl+Shift+R)"
+
