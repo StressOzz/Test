@@ -1,8 +1,10 @@
 #!/bin/sh
 # Zapret Manager LuCI installer — самодостаточный скрипт (все файлы зашиты внутри).
-# Использование на роутере (по SSH): sh install-zapret-manager.sh
-# Или: wget -O - https://raw.githubusercontent.com/<user>/<repo>/main/install-zapret-manager.sh | sh
 set -e
+
+GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
+
+echo -e "\n${MAGENTA}Устанавливаем Zapret Manager для LuCI${NC}"
 
 rm -rf \
 	/usr/lib/zapret-manager* \
@@ -3914,8 +3916,11 @@ rm -f /tmp/luci-indexcache* /tmp/luci-modulecache/* 2>/dev/null || true
 /etc/init.d/rpcd restart >/dev/null 2>&1
 /etc/init.d/uhttpd restart >/dev/null 2>&1
 
+echo -e "${CYAN}Ставим зависимости${NC}"
+
 if command -v apk >/dev/null 2>&1; then PM="apk"; INSTALL="apk add"
 else PM="opkg"; INSTALL="opkg install"; fi
 command -v curl >/dev/null 2>&1 || $INSTALL curl >/dev/null 2>&1 || true
 command -v unzip >/dev/null 2>&1 || $INSTALL unzip >/dev/null 2>&1 || true
 
+echo -e "Zapret Manager ${GREEN}для ${NC}LuCI ${GREEN}установлен!${NC}\n"
