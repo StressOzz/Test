@@ -1,21 +1,26 @@
 #!/bin/sh
-# Zapret Manager by StressOzz for LuCI — самодостаточный скрипт (все файлы зашиты внутри).
+# Zapret Manager LuCI installer — самодостаточный скрипт (все файлы зашиты внутри).
+# Использование на роутере (по SSH): sh install-zapret-manager.sh
+# Или: wget -O - https://raw.githubusercontent.com/<user>/<repo>/main/install-zapret-manager.sh | sh
 set -e
 
+echo "==> Устанавливаем Zapret Manager (LuCI)"
+
+echo "==> Убираем предыдущую установку (если была)"
 rm -rf \
-	/usr/lib/zapret-manager* \
-	/usr/libexec/rpcd/zapret-manager* \
+	/usr/lib/zapret-manager \
+	/usr/libexec/rpcd/zapret-manager \
 	/usr/share/luci/menu.d/luci-app-zapret-manager.json \
 	/usr/share/rpcd/acl.d/luci-app-zapret-manager.json \
-	/www/luci-static/resources/view/zapret-manager* \
-	/www/luci-static/resources/zapret-manager* \
-	/etc/zapret_manager_expert_mode* \
-	/tmp/zapret-manager* \
+	/www/luci-static/resources/view/zapret-manager \
+	/www/luci-static/resources/zapret-manager \
+	/etc/zapret_manager_expert_mode \
+	/tmp/zapret-manager \
 	/tmp/zm_uninstall_panel.sh \
 	/tmp/luci-indexcache* \
 	/tmp/luci-modulecache/* 2>/dev/null
-/etc/init.d/rpcd restart >/dev/null 2>&1
-/etc/init.d/uhttpd restart >/dev/null 2>&1
+/etc/init.d/rpcd restart >/dev/null 2>&1 || true
+/etc/init.d/uhttpd restart >/dev/null 2>&1 || true
 
 mkdir -p /usr/lib/zapret-manager
 cat > '/usr/lib/zapret-manager/backend.sh' << 'ZM_INSTALLER_EOF'
@@ -143,11 +148,10 @@ status() {
 		/etc/init.d/zapret2 status >/dev/null 2>&1 && zr2_running="true"
 	fi
 
-	local strat="" fs_marker
+	local strat="" fs_marker=""
 	if [ -f "$CONF" ]; then
+		strat=$(sed -n "/^[[:space:]]*option NFQWS_OPT '\$/,/^[[:space:]]*'\$/p" "$CONF" | grep '^#' | sed 's/^#//' | tr '\n' ' ' | sed 's/ $//')
 		fs_marker=$(grep -m1 '^# ZMFS:' "$CONF" | sed 's/^# ZMFS://')
-		strat=$(grep -oE '#v[0-9]+|#Yv[0-9]+|#Gv[1-4]|#Dv[0-9]+' "$CONF" | sed 's/^#//' | tr '\n' ' ' | sed 's/ $//')
-		[ -n "$fs_marker" ] && strat="$fs_marker${strat:+ $strat}"
 	fi
 
 	printf '{"pkg":"%s","zapret":"%s","zapret_running":%s,"zapret_version":"%s","zapret2":"%s","zapret2_running":%s,"strategy":"%s","flowseal":"%s"}\n' \
@@ -1477,7 +1481,16 @@ tg_status() {
 	fi
 
 	[ -f "$TG_SECRET_MT_FILE" ] && secret_mt=$(grep '^SECRET=' "$TG_SECRET_MT_FILE" | cut -d= -f2)
-	[ -f "$TG_SECRET_RS_FILE" ] && secret_rs=$(cat "$TG_SECRET_RS_FILE")
+	# Ключ Rust-прокси. Оригинальный консольный скрипт никогда не писал его в
+	# отдельный файл — он всегда встроен прямо в команду запуска init.d-скрипта
+	# (--secret <hex>). Если установка была сделана через SSH оригинальным
+	# скриптом (а не через эту панель), нашего файла $TG_SECRET_RS_FILE попросту
+	# не существует — поэтому читаем ключ из самого init.d-скрипта, это работает
+	# независимо от того, чем ставили: нашей панелью или оригинальным SSH-скриптом.
+	if [ -f "$TG_INIT_RS" ]; then
+		secret_rs=$(sed -n 's/.*--secret[[:space:]]*\([0-9a-fA-F]\{32\}\).*/\1/p' "$TG_INIT_RS" | head -n1)
+	fi
+	[ -z "$secret_rs" ] && [ -f "$TG_SECRET_RS_FILE" ] && secret_rs=$(cat "$TG_SECRET_RS_FILE")
 	lan_ip=$(uci -q get network.lan.ipaddr 2>/dev/null | cut -d/ -f1)
 
 	printf '{"mtproto":"%s","mtproto_running":%s,"mtproto_version":"%s","mtproto_latest":"%s","socks5":"%s","socks5_running":%s,"socks5_version":"%s","socks5_latest":"%s","rust":"%s","rust_running":%s,"rust_version":"%s","rust_latest":"%s","lan_ip":"%s","secret_mtproto":"%s","secret_rust":"%s"}\n' \
@@ -3900,11 +3913,17 @@ return view.extend({
 });
 ZM_INSTALLER_EOF
 
+echo "==> Перезапускаем rpcd и uhttpd"
 rm -f /tmp/luci-indexcache* /tmp/luci-modulecache/* 2>/dev/null || true
 /etc/init.d/rpcd restart >/dev/null 2>&1
 /etc/init.d/uhttpd restart >/dev/null 2>&1
 
+echo "==> Проверяем зависимости (curl, unzip, wget-ssl)"
 if command -v apk >/dev/null 2>&1; then PM="apk"; INSTALL="apk add"
 else PM="opkg"; INSTALL="opkg install"; fi
 command -v curl >/dev/null 2>&1 || $INSTALL curl >/dev/null 2>&1 || true
 command -v unzip >/dev/null 2>&1 || $INSTALL unzip >/dev/null 2>&1 || true
+
+echo
+echo "==> Готово! Откройте LuCI -> Services -> Zapret Manager"
+echo "    (если пункт меню не появился сразу - обновите страницу LuCI, Ctrl+Shift+R)"
