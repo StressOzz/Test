@@ -8,17 +8,19 @@ echo "==> Устанавливаем Zapret Manager (LuCI)"
 
 echo "==> Убираем предыдущую установку (если была)"
 rm -rf \
-	/usr/lib/zapret-manager \
-	/usr/libexec/rpcd/zapret-manager \
+	/usr/lib/zapret-manager* \
+	/usr/libexec/rpcd/zapret-manager* \
 	/usr/share/luci/menu.d/luci-app-zapret-manager.json \
 	/usr/share/rpcd/acl.d/luci-app-zapret-manager.json \
-	/www/luci-static/resources/view/zapret-manager \
-	/www/luci-static/resources/zapret-manager \
-	/tmp/zapret-manager \
+	/www/luci-static/resources/view/zapret-manager* \
+	/www/luci-static/resources/zapret-manager* \
+	/etc/zapret_manager_expert_mode* \
+	/tmp/zapret-manager* \
+	/tmp/zm_uninstall_panel.sh \
 	/tmp/luci-indexcache* \
-	/tmp/luci-modulecache/* 2>/dev/null
-/etc/init.d/rpcd restart >/dev/null 2>&1 || true
-/etc/init.d/uhttpd restart >/dev/null 2>&1 || true
+	/tmp/luci-modulecache/*
+/etc/init.d/rpcd restart
+/etc/init.d/uhttpd restart
 
 mkdir -p /usr/lib/zapret-manager
 cat > '/usr/lib/zapret-manager/backend.sh' << 'ZM_INSTALLER_EOF'
