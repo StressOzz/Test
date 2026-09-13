@@ -1,12 +1,7 @@
 #!/bin/sh
-# Zapret Manager LuCI installer — самодостаточный скрипт (все файлы зашиты внутри).
-# Использование на роутере (по SSH): sh install-zapret-manager.sh
-# Или: wget -O - https://raw.githubusercontent.com/<user>/<repo>/main/install-zapret-manager.sh | sh
+# Zapret Manager by StressOzz for LuCI — самодостаточный скрипт (все файлы зашиты внутри).
 set -e
 
-echo "==> Устанавливаем Zapret Manager (LuCI)"
-
-echo "==> Убираем предыдущую установку (если была)"
 rm -rf \
 	/usr/lib/zapret-manager* \
 	/usr/libexec/rpcd/zapret-manager* \
@@ -18,9 +13,9 @@ rm -rf \
 	/tmp/zapret-manager* \
 	/tmp/zm_uninstall_panel.sh \
 	/tmp/luci-indexcache* \
-	/tmp/luci-modulecache/*
-/etc/init.d/rpcd restart
-/etc/init.d/uhttpd restart
+	/tmp/luci-modulecache/* 2>/dev/null
+/etc/init.d/rpcd restart >/dev/null 2>&1
+/etc/init.d/uhttpd restart >/dev/null 2>&1
 
 mkdir -p /usr/lib/zapret-manager
 cat > '/usr/lib/zapret-manager/backend.sh' << 'ZM_INSTALLER_EOF'
@@ -807,9 +802,6 @@ _hosts_block() {
 			"#Nalog" \
 			"213.24.64.175 lkfl2.nalog.ru" \
 			"213.24.64.181 lknpd.nalog.ru" ;;
-		rutor) printf '%s\n' \
-			"#rutor" \
-			"173.245.58.219 rutor.info d.rutor.info" ;;
 		ntc) printf '%s\n' \
 			"#ntc.party" \
 			"130.255.77.28 ntc.party" ;;
@@ -912,18 +904,6 @@ _hosts_block() {
 			"140.82.114.3 github.com" \
 			"185.199.110.154 github.githubassets.com" \
 			"185.199.110.133 camo.githubassets.com" ;;
-		ubisoft) printf '%s\n' \
-			"#Ubisoft" \
-			"52.6.7.14 ubi.com" \
-			"172.67.139.108 r6s.com" \
-			"54.155.2.87 rainbow6.com" \
-			"52.222.149.31 ubisoft.com" \
-			"54.76.54.196 uplay.ubisoft.com" \
-			"2.23.89.92 static3.cdn.ubi.com" \
-			"18.209.141.203 connect.ubisoft.com" \
-			"2.23.89.244 ubiservices.cdn.ubi.com" \
-			"99.83.188.134 public-ubiservices.ubi.com" \
-			"3.33.249.140 public-ws-ubiservices.ubi.com" ;;
 		tapeop) printf '%s\n' \
 			"#tapeop.dev" \
 			"216.24.57.251 www.tapeop.dev tapeop.dev" \
@@ -947,12 +927,6 @@ _hosts_block() {
 			"99.84.181.63 tr.rbxcdn.com" \
 			"65.8.158.45 tr.rbxcdn.com" \
 			"65.8.158.112 tr.rbxcdn.com" ;;
-		updatesdiscord) printf '%s\n' \
-			"#updates.discord.com" \
-			"162.159.138.232 updates.discord.com" \
-			"162.159.137.232 updates.discord.com" \
-			"162.159.128.233 updates.discord.com" \
-			"162.159.135.232 updates.discord.com" ;;
 		*) return 1 ;;
 	esac
 }
@@ -970,7 +944,7 @@ _hosts_block_status() {
 }
 
 hosts_status() {
-	local blocks="nalog rutor ntc instagram librusec ai twitch telegram spotify spotifyext scell githubraw github ubisoft tapeop roblox updatesdiscord" b first=1
+	local blocks="nalog ntc instagram librusec ai twitch telegram spotify spotifyext scell githubraw github tapeop roblox" b first=1
 	local geohide=""
 	if grep -q '^### geohide.ru: hosts file' "$HOSTS_FILE" 2>/dev/null; then
 		if grep -q '^# Регион серверов: US$' "$HOSTS_FILE" 2>/dev/null; then geohide="us"
@@ -2583,7 +2557,7 @@ return view.extend({
 		var dvCard = E('div', { 'class': 'zm-card' }, [
 			E('h3', {}, 'Стратегия для discord.media'),
 			dvGrid,
-			E('p', { 'class': 'zm-hint' }, 'Нужна базовая стратегия с блоком discord.media (например Flowseal general).')
+			E('p', { 'class': 'zm-hint' }, 'Нужна базовая стратегия с блоком discord.media .')
 		]);
 
 		var fakeCard = E('div', { 'class': 'zm-card' }, [
@@ -2769,7 +2743,7 @@ return view.extend({
 		var card = E('div', { 'class': 'zm-card' }, [
 			E('h3', {}, 'Исключения IP из Zapret'),
 			grid,
-			E('p', { 'class': 'zm-hint' }, 'Клик по устройству — включить/выключить исключение (трафик этого IP не проходит через Zapret).'),
+			E('p', { 'class': 'zm-hint' }, 'Клик по устройству — включить/выключить исключение (трафик этого IP не будет проходить через Zapret).'),
 			E('div', { 'class': 'zm-actions' }, [
 				E('button', {
 					'class': 'cbi-button',
@@ -2965,7 +2939,6 @@ cat > '/www/luci-static/resources/view/zapret-manager/hosts.js' << 'ZM_INSTALLER
 
 var LABELS = {
 	nalog: 'Налог.ру',
-	rutor: 'RUTOR',
 	ntc: 'ntc.party',
 	instagram: 'Instagram & Facebook',
 	librusec: 'lib.rus.ec',
@@ -2977,10 +2950,8 @@ var LABELS = {
 	scell: 'Supercell (Clash, Brawl Stars)',
 	githubraw: 'githubusercontent.com',
 	github: 'GitHub',
-	ubisoft: 'Ubisoft',
 	tapeop: 'tapeop.dev',
-	roblox: 'Roblox',
-	updatesdiscord: 'Discord (updates.discord.com)'
+	roblox: 'Roblox'
 };
 
 return view.extend({
@@ -3040,7 +3011,7 @@ return view.extend({
 			E('h3', {}, 'Заменить hosts на GeoHide'),
 			E('p', { 'class': 'zm-hint' }, 'Внимание: это ПОЛНОСТЬЮ заменит файл /etc/hosts на список от GeoHide DNS — все блоки выше и любые ваши собственные записи будут удалены.'),
 			geoGrid,
-			E('p', { 'class': 'zm-hint' }, 'Или восстановить hosts к чистому виду (только localhost — так же, как пункт «Восстановить hosts» в оригинальном Zapret Manager). Уберёт и блоки выше, и GeoHide.'),
+			E('p', { 'class': 'zm-hint' }, 'Или восстановить hosts к чистому виду. Уберёт и блоки выше, и GeoHide.'),
 			E('div', { 'class': 'zm-actions' }, [ resetBtn ]),
 			geoLogEl
 		]);
@@ -3602,8 +3573,7 @@ return view.extend({
 				'Уберёт только веб-интерфейс (эту панель) — саму программу-оболочку из LuCI. ' +
 				'Zapret, Zapret2, DNS over HTTPS и TG WS Proxy, если они были установлены через ' +
 				'панель, останутся на роутере без изменений и продолжат работать. После удаления ' +
-				'эта страница станет недоступна — управлять оставшимися компонентами можно будет ' +
-				'через SSH, либо поставить панель заново.'
+				'эта страница станет недоступна.'
 			),
 			E('div', { 'class': 'zm-actions' }, [
 				E('button', {
@@ -3913,7 +3883,7 @@ return view.extend({
 				}, 'Обновить список')
 			]),
 			grid,
-			E('p', { 'class': 'zm-hint' }, 'Применяется поверх текущей стратегии — заменяет только YouTube-часть (--filter-tcp=443 + список google), остальное сохраняется.')
+			E('p', { 'class': 'zm-hint' }, 'Применяется поверх текущей стратегии — заменяет только YouTube-часть.')
 		]);
 
 		wrap.appendChild(card);
@@ -3930,17 +3900,11 @@ return view.extend({
 });
 ZM_INSTALLER_EOF
 
-echo "==> Перезапускаем rpcd и uhttpd"
 rm -f /tmp/luci-indexcache* /tmp/luci-modulecache/* 2>/dev/null || true
 /etc/init.d/rpcd restart >/dev/null 2>&1
 /etc/init.d/uhttpd restart >/dev/null 2>&1
 
-echo "==> Проверяем зависимости (curl, unzip, wget-ssl)"
 if command -v apk >/dev/null 2>&1; then PM="apk"; INSTALL="apk add"
 else PM="opkg"; INSTALL="opkg install"; fi
 command -v curl >/dev/null 2>&1 || $INSTALL curl >/dev/null 2>&1 || true
 command -v unzip >/dev/null 2>&1 || $INSTALL unzip >/dev/null 2>&1 || true
-
-echo
-echo "==> Готово! Откройте LuCI -> Services -> Zapret Manager"
-echo "    (если пункт меню не появился сразу - обновите страницу LuCI, Ctrl+Shift+R)"
