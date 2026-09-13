@@ -3916,8 +3916,6 @@ rm -f /tmp/luci-indexcache* /tmp/luci-modulecache/* 2>/dev/null || true
 /etc/init.d/rpcd restart >/dev/null 2>&1
 /etc/init.d/uhttpd restart >/dev/null 2>&1
 
-echo -e "${CYAN}Ставим зависимости${NC}"
-
 if command -v apk >/dev/null 2>&1; then PM="apk"; INSTALL="apk add"
 else PM="opkg"; INSTALL="opkg install"; fi
 command -v curl >/dev/null 2>&1 || $INSTALL curl >/dev/null 2>&1 || true
