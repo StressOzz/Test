@@ -1,8 +1,8 @@
 #!/bin/sh
-# Zapret Manager LuCI installer — самодостаточный скрипт (все файлы зашиты внутри).
+# Zapret Manager by StressOZZ for LuCI installer — самодостаточный скрипт (все файлы зашиты внутри).
 set -e
 
-GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
+GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; NC="\033[0m"
 
 echo -e "\n${MAGENTA}Устанавливаем Zapret Manager для LuCI${NC}"
 
