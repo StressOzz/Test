@@ -789,7 +789,9 @@ printf "%s\n" "--new" "--filter-udp=19294-19344,50000-50100" "--filter-l7=discor
 # при смене стратегии (переносится в самый верх новой стратегии)
 # ==========================================
 CUSTOM_BLOCK_FILE="$TMP_SF/custom_block_saved.txt"
-save_custom_block() { mkdir -p "$TMP_SF"; rm -f "$CUSTOM_BLOCK_FILE"; awk '/^#CustomStart[[:space:]]*$/{f=1} f{print} /^#CustomEnd[[:space:]]*$/{f=0}' "$CONF" > "$CUSTOM_BLOCK_FILE" 2>/dev/null; [ -s "$CUSTOM_BLOCK_FILE" ] || rm -f "$CUSTOM_BLOCK_FILE"; }
+save_custom_block() { mkdir -p "$TMP_SF"; rm -f "$CUSTOM_BLOCK_FILE"; awk '/^#CustomStart[[:space:]]*$/{f=1} f{print} /^#CustomEnd[[:space:]]*$/{f=0}' "$CONF" > "$CUSTOM_BLOCK_FILE" 2>/dev/null
+if [ -s "$CUSTOM_BLOCK_FILE" ]; then sed -i '1{/^#CustomStart[[:space:]]*$/{N;/\n--new[[:space:]]*$/{s/\n--new[[:space:]]*$//}}}' "$CUSTOM_BLOCK_FILE"; fi
+[ -s "$CUSTOM_BLOCK_FILE" ] || rm -f "$CUSTOM_BLOCK_FILE"; }
 restore_custom_block() { [ -s "$CUSTOM_BLOCK_FILE" ] || return 0; sed -i "/^[[:space:]]*option NFQWS_OPT '/r $CUSTOM_BLOCK_FILE" "$CONF"; rm -f "$CUSTOM_BLOCK_FILE"; fix_custom_block_new; }
 fix_custom_block_new() { awk '
 { a[NR]=$0 }
