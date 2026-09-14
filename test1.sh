@@ -790,7 +790,29 @@ printf "%s\n" "--new" "--filter-udp=19294-19344,50000-50100" "--filter-l7=discor
 # ==========================================
 CUSTOM_BLOCK_FILE="$TMP_SF/custom_block_saved.txt"
 save_custom_block() { mkdir -p "$TMP_SF"; rm -f "$CUSTOM_BLOCK_FILE"; awk '/^#CustomStart[[:space:]]*$/{f=1} f{print} /^#CustomEnd[[:space:]]*$/{f=0}' "$CONF" > "$CUSTOM_BLOCK_FILE" 2>/dev/null; [ -s "$CUSTOM_BLOCK_FILE" ] || rm -f "$CUSTOM_BLOCK_FILE"; }
-restore_custom_block() { [ -s "$CUSTOM_BLOCK_FILE" ] || return 0; sed -i "/^[[:space:]]*option NFQWS_OPT '/r $CUSTOM_BLOCK_FILE" "$CONF"; rm -f "$CUSTOM_BLOCK_FILE"; }
+restore_custom_block() { [ -s "$CUSTOM_BLOCK_FILE" ] || return 0; sed -i "/^[[:space:]]*option NFQWS_OPT '/r $CUSTOM_BLOCK_FILE" "$CONF"; rm -f "$CUSTOM_BLOCK_FILE"; fix_custom_block_new; }
+fix_custom_block_new() { awk '
+{ a[NR]=$0 }
+END {
+  n=NR
+  for(i=1;i<=n;i++){
+    line=a[i]
+    if(line ~ /^#CustomStart[[:space:]]*$/){
+      prev=(i>1)?a[i-1]:""
+      if(prev !~ /option[[:space:]]+NFQWS_OPT[[:space:]]*'\''[[:space:]]*$/ && prev != "--new"){
+        print "--new"
+      }
+    }
+    print line
+    if(line ~ /^#CustomEnd[[:space:]]*$/){
+      nxt=(i<n)?a[i+1]:""
+      if(nxt != "--new" && nxt !~ /^[[:space:]]*'\''[[:space:]]*$/){
+        print "--new"
+      }
+    }
+  }
+}
+' "$CONF" > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"; }
 install_strategy() { local version="$1"; local NO_PAUSE="${2:-0}"; [ "$NO_PAUSE" != "1" ] && echo; echo -e "${MAGENTA}Устанавливаем стратегию ${version}${NC}\n${CYAN}Меняем стратегию${NC}"; save_custom_block; sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; { echo "  option NFQWS_OPT '"; strategy_"$version"; echo "'"; } >> "$CONF"
 ADD_GP_DOMAINS; echo -e "${CYAN}Добавляем домены в исключения${NC}"; rm -f "$EXCLUDE_FILE"; wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL" || { echo -e "\n${RED}Не удалось загрузить exclude файл${NC}\n"; PAUSE; return; }
 ADD_Yv; discord_str_add; restore_custom_block; echo -e "${CYAN}Применяем новую стратегию${NC}"; ZAPRET_RESTART; echo -e "${GREEN}Стратегия ${NC}${version}${GREEN} установлена!${NC}\n"; show_ts_warning; [ "$NO_PAUSE" != "1" ] && PAUSE; }
