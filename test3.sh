@@ -790,7 +790,21 @@ printf "%s\n" "--new" "--filter-udp=19294-19344,50000-50100" "--filter-l7=discor
 # ==========================================
 CUSTOM_BLOCK_FILE="$TMP_SF/custom_block_saved.txt"
 save_custom_block() { mkdir -p "$TMP_SF"; rm -f "$CUSTOM_BLOCK_FILE"; awk '/^#CustomStart[[:space:]]*$/{f=1} f{print} /^#CustomEnd[[:space:]]*$/{f=0}' "$CONF" > "$CUSTOM_BLOCK_FILE" 2>/dev/null
-if [ -s "$CUSTOM_BLOCK_FILE" ]; then sed -i '1{/^#CustomStart[[:space:]]*$/{N;/\n--new[[:space:]]*$/{s/\n--new[[:space:]]*$//}}}' "$CUSTOM_BLOCK_FILE"; fi
+if [ -s "$CUSTOM_BLOCK_FILE" ]; then awk '
+{ a[NR]=$0 }
+END {
+  n=NR
+  if (n<=2) { for(i=1;i<=n;i++) print a[i] }
+  else {
+    lo=2; hi=n-1
+    if (a[lo]=="--new") lo++
+    if (hi>=lo && a[hi]=="--new") hi--
+    print a[1]
+    for(i=lo;i<=hi;i++) print a[i]
+    print a[n]
+  }
+}
+' "$CUSTOM_BLOCK_FILE" > "$CUSTOM_BLOCK_FILE.tmp" && mv "$CUSTOM_BLOCK_FILE.tmp" "$CUSTOM_BLOCK_FILE"; fi
 [ -s "$CUSTOM_BLOCK_FILE" ] || rm -f "$CUSTOM_BLOCK_FILE"; }
 restore_custom_block() { [ -s "$CUSTOM_BLOCK_FILE" ] || return 0; sed -i "/^[[:space:]]*option NFQWS_OPT '/r $CUSTOM_BLOCK_FILE" "$CONF"; rm -f "$CUSTOM_BLOCK_FILE"; fix_custom_block_new; }
 fix_custom_block_new() { awk '
