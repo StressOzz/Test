@@ -1,5 +1,5 @@
 #!/bin/sh
-# Zapret Manager LuCI installer — самодостаточный скрипт (все файлы зашиты внутри).
+# Zapret Manager by StressOzz for LuCI installer
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -1370,7 +1370,7 @@ _excl_write() {
 
 exclusions_status() {
 	[ -f /etc/init.d/zapret ] || { echo '{"error":"Zapret не установлен"}'; return 1; }
-	local current devjson="" first=1 ip name ts mac rest
+	local current devjson="" first=1 ip name ts mac rest aip ahw aflags amac amask adev aname
 
 	current=$(_excl_current)
 
@@ -1384,6 +1384,38 @@ exclusions_status() {
 			first=0
 			devjson="$devjson{\"ip\":\"$ip\",\"name\":\"$(esc "$name")\",\"excluded\":$(printf '%s\n' "$current" | grep -qx "$ip" && echo true || echo false)}"
 		done < /tmp/dhcp.leases
+	fi
+
+	local lan_dev arp_tmp
+	lan_dev=$(uci -q get network.lan.device)
+	[ -z "$lan_dev" ] && lan_dev="br-lan"
+	arp_tmp="$JOBS_DIR/excl_arp_tmp"
+	rm -f "$arp_tmp"
+	if [ -f /proc/net/arp ]; then
+		tail -n +2 /proc/net/arp | while read -r aip ahw aflags amac amask adev; do
+			[ -z "$aip" ] && continue
+			[ "$adev" = "$lan_dev" ] || continue
+			echo "$aip" | grep -qE '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$' || continue
+			[ "$aflags" = "0x0" ] && continue
+			printf '%s' "$devjson" | grep -q "\"ip\":\"$aip\"" && continue
+			aname=""
+			[ -f /tmp/dhcp.leases ] && aname=$(awk -v mac="$amac" 'tolower($2)==tolower(mac){print $4; exit}' /tmp/dhcp.leases)
+			if [ -z "$aname" ] || [ "$aname" = "*" ]; then
+				aname=$(logread 2>/dev/null | grep -i "DHCPACK" | grep -i "$aip" | grep -i "$amac" | tail -n1 | awk '{print $NF}')
+			fi
+			[ "$aname" = "$amac" ] && aname=""
+			[ -n "$aname" ] || aname="Неизвестное устройство"
+			printf '%s|%s\n' "$aip" "$aname" >> "$arp_tmp"
+		done
+	fi
+	if [ -f "$arp_tmp" ]; then
+		while IFS='|' read -r aip aname; do
+			[ -z "$aip" ] && continue
+			[ "$first" -eq 1 ] || devjson="$devjson,"
+			first=0
+			devjson="$devjson{\"ip\":\"$aip\",\"name\":\"$(esc "$aname")\",\"excluded\":$(printf '%s\n' "$current" | grep -qx "$aip" && echo true || echo false)}"
+		done < "$arp_tmp"
+		rm -f "$arp_tmp"
 	fi
 
 	local ip2
@@ -1423,6 +1455,8 @@ exclusions_clear() {
 
 
 TG_MTPROTO_VER="0.10"
+TGWS_INSTALL_URL="https://gitlab.com/xyzmean/brb/-/raw/main/install-tgws.sh"
+TGWS_VERSION_URL="https://gitlab.com/xyzmean/brb/-/raw/main/VERSION"
 TG_GO_VER="1.4.1"
 TG_RS_VER="2.3.3"
 TG_BIN_GO="/usr/bin/tg-ws-proxy-go"
@@ -1607,7 +1641,122 @@ tg_restart_all() {
 	[ -x /etc/init.d/tg-ws-proxy ] && /etc/init.d/tg-ws-proxy restart >/dev/null 2>&1
 	[ -x "$TG_INIT_GO" ] && "$TG_INIT_GO" restart >/dev/null 2>&1
 	[ -x "$TG_INIT_RS" ] && "$TG_INIT_RS" restart >/dev/null 2>&1
+	[ -x /etc/init.d/tgws ] && /etc/init.d/tgws restart >/dev/null 2>&1
 	printf '{"ok":true}\n'
+}
+
+_tgws_domain() {
+	tgws status 2>/dev/null | sed -n 's/^[[:space:]]*домен:[[:space:]]*//p' | head -n1
+}
+
+tgws_status() {
+	local installed="not_installed" ver="" domain="" running="false" latest=""
+	if [ "$PKG" = "apk" ]; then
+		ver=$(apk info -v 2>/dev/null | grep '^tgws-' | sed -E 's/^tgws-([0-9.]+).*/\1/')
+	else
+		ver=$(opkg list-installed 2>/dev/null | awk '$1=="tgws"{print $3}' | sed 's/-r[0-9]\+$//')
+	fi
+	if [ -x /etc/init.d/tgws ]; then
+		installed="installed"
+		[ -n "$(tgws status 2>/dev/null)" ] && running="true"
+		domain=$(_tgws_domain)
+	fi
+	latest=$(curl -fsSL --connect-timeout 4 --max-time 6 "$TGWS_VERSION_URL" 2>/dev/null | tr -d '[:space:]')
+	printf '{"installed":"%s","running":%s,"version":"%s","latest":"%s","domain":"%s"}\n' "$installed" "$running" "$(esc "$ver")" "$(esc "$latest")" "$(esc "$domain")"
+}
+
+do_tgws_install() {
+	echo "==> Устанавливаем sTGWS"
+	rm -f /tmp/tgws_install.sh
+	wget -q -U "Mozilla/5.0" -O /tmp/tgws_install.sh "$TGWS_INSTALL_URL" || { echo "ОШИБКА: не удалось скачать установщик sTGWS"; rm -f /tmp/tgws_install.sh; return 1; }
+	sh /tmp/tgws_install.sh >/dev/null 2>&1
+	rm -f /tmp/tgws_install.sh
+	if [ ! -x /etc/init.d/tgws ]; then
+		echo "ОШИБКА: установка sTGWS не удалась"
+		return 1
+	fi
+	echo "==> Подбираем домен"
+	/etc/init.d/tgws enable >/dev/null 2>&1
+	/etc/init.d/tgws restart >/dev/null 2>&1
+	tgws pick >/dev/null 2>&1
+	local i started=0
+	for i in $(seq 1 20); do
+		if [ -n "$(tgws status 2>/dev/null)" ]; then
+			started=1
+			break
+		fi
+		sleep 5
+	done
+	if [ "$started" != "1" ]; then
+		echo "ОШИБКА: не удалось подобрать домен"
+		return 1
+	fi
+	local domain
+	domain=$(_tgws_domain)
+	echo "==> Используем домен: ${domain:-не определён}"
+	echo "==> Готово, sTGWS установлен и запущен"
+}
+
+do_tgws_remove() {
+	echo "==> Удаляем sTGWS"
+	/etc/init.d/tgws disable >/dev/null 2>&1
+	/etc/init.d/tgws stop >/dev/null 2>&1
+	$DELETE tgws >/dev/null 2>&1
+	/usr/sbin/stgws apply --spec /dev/null --state-dir /var/lib/stgws >/dev/null 2>&1
+	/usr/sbin/tgws apply --spec /dev/null --state-dir /var/lib/tgws >/dev/null 2>&1
+	killall tgws >/dev/null 2>&1
+	killall stgws >/dev/null 2>&1
+	nft delete table inet stgws >/dev/null 2>&1
+	nft delete table inet tgws >/dev/null 2>&1
+	rm -rf /etc/*tgws*
+	rm -rf /var/lib/*tgws*
+	rm -rf /var/lock/*tgws*
+	rm -rf /etc/rc.d/*tgws*
+	rm -rf /etc/init.d/*tgws*
+	rm -rf /usr/sbin/*tgws*
+	rm -rf /usr/bin/*tgws*
+	rm -rf /etc/config/*tgws*
+	echo "==> Готово, sTGWS удалён"
+}
+
+do_tgws_restart() {
+	[ -x /etc/init.d/tgws ] || { echo "ОШИБКА: sTGWS не установлен"; return 1; }
+	echo "==> Перезапускаем sTGWS"
+	/etc/init.d/tgws restart >/dev/null 2>&1
+	sleep 5
+	if [ -z "$(tgws status 2>/dev/null)" ]; then
+		echo "ОШИБКА: sTGWS не запущен после перезапуска"
+		return 1
+	fi
+	echo "==> Готово, sTGWS перезапущен"
+}
+
+do_tgws_reconfigure() {
+	[ -x /etc/init.d/tgws ] || { echo "ОШИБКА: sTGWS не установлен"; return 1; }
+	echo "==> Подбираем новый домен"
+	tgws pick >/dev/null 2>&1
+	sleep 6
+	/etc/init.d/tgws restart >/dev/null 2>&1
+	sleep 3
+	local domain
+	domain=$(_tgws_domain)
+	if [ -z "$(tgws status 2>/dev/null)" ] || [ -z "$domain" ]; then
+		echo "ОШИБКА: не удалось подобрать домен"
+		return 1
+	fi
+	echo "==> Новый домен: $domain"
+	echo "==> Готово, домен перенастроен"
+}
+
+tgws_action() {
+	local action="$1"
+	case "$action" in
+		install|update) job_start tgws_install do_tgws_install ;;
+		remove)         job_start tgws_remove do_tgws_remove ;;
+		restart)        job_start tgws_restart do_tgws_restart ;;
+		reconfigure)    job_start tgws_reconfigure do_tgws_reconfigure ;;
+		*) echo '{"error":"неизвестное действие"}' ;;
+	esac
 }
 
 
@@ -1747,6 +1896,8 @@ case "$cmd" in
 	tg_status)                                                   tg_status ;;
 	tg_action)                                                    tg_action "$1" "$2" ;;
 	tg_restart_all)                                                tg_restart_all ;;
+	tgws_status)                                                    tgws_status ;;
+	tgws_action)                                                     tgws_action "$1" ;;
 	hosts_status)                      hosts_status ;;
 	hosts_toggle)                       hosts_toggle "$1" ;;
 	hosts_replace_geohide)              hosts_replace_geohide "$1" ;;
@@ -1805,6 +1956,8 @@ list_methods() {
 	json_add_object "tg_status";                   json_close_object
 	json_add_object "tg_action";                   json_add_string "variant" "string"; json_add_string "action" "string"; json_close_object
 	json_add_object "tg_restart_all";              json_close_object
+	json_add_object "tgws_status";                 json_close_object
+	json_add_object "tgws_action";                 json_add_string "action" "string"; json_close_object
 	json_add_object "hosts_status";           json_close_object
 	json_add_object "hosts_toggle";           json_add_string "block" "string"; json_close_object
 	json_add_object "hosts_replace_geohide";  json_add_string "region" "string"; json_close_object
@@ -1858,6 +2011,8 @@ call_method() {
 		tg_status)                     "$BACKEND" tg_status ;;
 		tg_action)                     json_get_var variant variant; json_get_var action action; "$BACKEND" tg_action "$variant" "$action" ;;
 		tg_restart_all)                "$BACKEND" tg_restart_all ;;
+		tgws_status)                   "$BACKEND" tgws_status ;;
+		tgws_action)                   json_get_var action action;   "$BACKEND" tgws_action "$action" ;;
 		hosts_status)            "$BACKEND" hosts_status ;;
 		hosts_toggle)            json_get_var block block;     "$BACKEND" hosts_toggle "$block" ;;
 		hosts_replace_geohide)   json_get_var region region;   "$BACKEND" hosts_replace_geohide "$region" ;;
@@ -1889,7 +2044,7 @@ cat > '/usr/share/rpcd/acl.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF'
 					"status", "job_status", "log_tail", "system_info",
 					"strategy_list_v", "strategy_list_flowseal", "strategy_list_youtube",
 					"discord_status", "hosts_status", "doh_status", "game_status",
-					"system_status", "mirror_status", "exclusions_status", "tg_status",
+					"system_status", "mirror_status", "exclusions_status", "tg_status", "tgws_status",
 					"zapret_latest_version"
 				]
 			}
@@ -1905,7 +2060,7 @@ cat > '/usr/share/rpcd/acl.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF'
 					"system_check_connectivity", "system_toggle_quic", "system_toggle_ipv6",
 					"system_toggle_flow_offloading_fix", "system_toggle_expert_mode", "system_uninstall_panel",
 					"mirror_set", "exclusions_toggle", "exclusions_clear",
-					"tg_action", "tg_restart_all"
+					"tg_action", "tg_restart_all", "tgws_action"
 				]
 			}
 		}
@@ -1970,7 +2125,7 @@ cat > '/usr/share/luci/menu.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF
 		"action": { "type": "view", "path": "zapret-manager/system" }
 	},
 	"admin/services/zapret-manager/exclusions": {
-		"title": "Исключения устройств",
+		"title": "Исключение устройств",
 		"order": 70,
 		"action": { "type": "view", "path": "zapret-manager/exclusions" }
 	}
@@ -2019,6 +2174,8 @@ var callExclusionsClear = rpc.declare({ object: 'zapret-manager', method: 'exclu
 var callTgStatus = rpc.declare({ object: 'zapret-manager', method: 'tg_status', expect: {} });
 var callTgAction = rpc.declare({ object: 'zapret-manager', method: 'tg_action', params: ['variant', 'action'], expect: {} });
 var callTgRestartAll = rpc.declare({ object: 'zapret-manager', method: 'tg_restart_all', expect: {} });
+var callTgwsStatus = rpc.declare({ object: 'zapret-manager', method: 'tgws_status', expect: {} });
+var callTgwsAction = rpc.declare({ object: 'zapret-manager', method: 'tgws_action', params: ['action'], expect: {} });
 var callHostsStatus = rpc.declare({ object: 'zapret-manager', method: 'hosts_status', expect: {} });
 var callHostsToggle = rpc.declare({ object: 'zapret-manager', method: 'hosts_toggle', params: ['block'], expect: {} });
 var callHostsReplaceGeohide = rpc.declare({ object: 'zapret-manager', method: 'hosts_replace_geohide', params: ['region'], expect: {} });
@@ -2214,6 +2371,8 @@ return baseclass.extend({
 	tgStatus: callTgStatus,
 	tgAction: callTgAction,
 	tgRestartAll: callTgRestartAll,
+	tgwsStatus: callTgwsStatus,
+	tgwsAction: callTgwsAction,
 	hostsStatus: callHostsStatus,
 	hostsToggle: callHostsToggle,
 	hostsReplaceGeohide: callHostsReplaceGeohide,
@@ -2571,7 +2730,7 @@ return view.extend({
 		var dvCard = E('div', { 'class': 'zm-card' }, [
 			E('h3', {}, 'Стратегия для discord.media'),
 			dvGrid,
-			E('p', { 'class': 'zm-hint' }, 'Нужна базовая стратегия с блоком discord.media .')
+			E('p', { 'class': 'zm-hint' }, 'Нужна базовая стратегия с блоком discord.media.')
 		]);
 
 		var fakeCard = E('div', { 'class': 'zm-card' }, [
@@ -2719,7 +2878,7 @@ return view.extend({
 
 		if (data.error) {
 			wrap.appendChild(E('div', { 'class': 'zm-card' }, [
-				E('h3', {}, 'Исключения устройств'),
+				E('h3', {}, 'Исключение устройств'),
 				E('p', { 'class': 'zm-hint' }, data.error)
 			]));
 			return wrap;
@@ -2755,7 +2914,7 @@ return view.extend({
 		var manualInput = E('input', { 'type': 'text', 'placeholder': '192.168.1.100', 'class': 'cbi-input-text' });
 
 		var card = E('div', { 'class': 'zm-card' }, [
-			E('h3', {}, 'Исключения устройств из Zapret'),
+			E('h3', {}, 'Исключение устройств из Zapret'),
 			grid,
 			E('p', { 'class': 'zm-hint' }, 'Клик по устройству — включить/выключить исключение (трафик этого IP не будет проходить через Zapret).'),
 			E('div', { 'class': 'zm-actions' }, [
@@ -3652,11 +3811,13 @@ function fallbackCopy(text) {
 return view.extend({
 	load: function() {
 		zm.injectCss();
-		return zm.tgStatus();
+		return Promise.all([ zm.tgStatus(), zm.tgwsStatus().catch(function() { return {}; }) ]);
 	},
 
-	render: function(data) {
+	render: function(all) {
 		var view = this;
+		var data = all[0];
+		var tgwsData = all[1] || {};
 		var wrap = E('div', { 'class': 'zm-wrap' });
 		var cards = E('div', { 'class': 'zm-cards' });
 		var linksWrap = E('div', {});
@@ -3768,6 +3929,85 @@ return view.extend({
 		wrap.appendChild(cards);
 		wrap.appendChild(logEl);
 
+		var tgwsCard = E('div', { 'class': 'zm-card' });
+		var tgwsBusy = false;
+
+		function renderTgws(d) {
+			var installed = d.installed === 'installed';
+			var actions = [];
+			if (installed) {
+				actions.push(E('button', {
+					'class': 'cbi-button cbi-button-remove',
+					'click': function() { doTgwsAction('remove'); }
+				}, 'Удалить'));
+				if (d.version && d.latest && d.version !== d.latest) {
+					actions.push(E('button', {
+						'class': 'cbi-button',
+						'click': function() { doTgwsAction('update'); }
+					}, 'Обновить до ' + d.latest));
+				}
+				actions.push(E('button', {
+					'class': 'cbi-button',
+					'click': function() { doTgwsAction('restart'); }
+				}, 'Перезапустить'));
+				actions.push(E('button', {
+					'class': 'cbi-button',
+					'click': function() { doTgwsAction('reconfigure'); }
+				}, 'Подобрать новый домен'));
+			} else {
+				actions.push(E('button', {
+					'class': 'cbi-button cbi-button-positive',
+					'click': function() { doTgwsAction('install'); }
+				}, 'Установить'));
+			}
+			tgwsCard.innerHTML = '';
+			tgwsCard.appendChild(E('h3', {}, 'sTGWS (бета)'));
+			tgwsCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Бета-версия. В отдельных случаях может потребоваться сброс роутера до заводских настроек. Не устанавливайте, если не уверены, что сможете устранить возможные проблемы — рекомендуется использовать другие варианты TG WS Proxy выше.'));
+			tgwsCard.appendChild(E('div', { 'class': 'zm-row' }, [
+				E('span', { 'class': 'zm-label' }, 'Статус'),
+				installed ? zm.badge(d.running === true, 'запущен', 'остановлен') : zm.badge(false, '', 'не установлен')
+			]));
+			if (installed && d.version) {
+				tgwsCard.appendChild(E('div', { 'class': 'zm-row' }, [
+					E('span', { 'class': 'zm-label' }, 'Версия'), E('span', {}, d.version)
+				]));
+			}
+			if (installed && d.domain) {
+				tgwsCard.appendChild(E('div', { 'class': 'zm-row' }, [
+					E('span', { 'class': 'zm-label' }, 'Домен'), E('span', {}, d.domain)
+				]));
+			}
+			tgwsCard.appendChild(E('div', { 'class': 'zm-actions' }, actions));
+		}
+
+		function doTgwsAction(action) {
+			if (tgwsBusy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+			tgwsBusy = true;
+			var job = action === 'remove' ? 'tgws_remove'
+				: action === 'restart' ? 'tgws_restart'
+				: action === 'reconfigure' ? 'tgws_reconfigure' : 'tgws_install';
+			var label = action === 'remove' ? 'Удаляем sTGWS'
+				: action === 'restart' ? 'Перезапускаем sTGWS'
+				: action === 'reconfigure' ? 'Подбираем новый домен sTGWS'
+				: action === 'update' ? 'Обновляем sTGWS' : 'Устанавливаем sTGWS';
+			zm.toast(label, 'warning');
+			zm.tgwsAction(action).then(function(res) {
+				if (res.error) { tgwsBusy = false; zm.toast(res.error, 'error'); return; }
+				if (res.started) {
+					zm.pollJob(job, logEl, function(ok) {
+						tgwsBusy = false;
+						zm.toast(ok ? 'Готово' : 'Ошибка', ok ? 'info' : 'error');
+						zm.tgwsStatus().then(function(d) { renderTgws(d); });
+					});
+				} else {
+					tgwsBusy = false;
+				}
+			}).catch(function() { tgwsBusy = false; });
+		}
+
+		renderTgws(tgwsData);
+		wrap.appendChild(tgwsCard);
+
 		var restartBusy = false;
 		wrap.appendChild(E('div', { 'class': 'zm-card' }, [
 			E('h3', {}, 'Общие действия'),
@@ -3781,6 +4021,7 @@ return view.extend({
 						zm.tgRestartAll().then(function() {
 							restartBusy = false;
 							zm.toast('Все запущенные TG WS Proxy перезапущены', 'info');
+							zm.tgwsStatus().then(function(d) { renderTgws(d); });
 						}).catch(function() { restartBusy = false; });
 					}
 				}, 'Перезапустить все')
@@ -3906,3 +4147,4 @@ command -v curl >/dev/null 2>&1 || $INSTALL curl >/dev/null 2>&1 || true
 command -v unzip >/dev/null 2>&1 || $INSTALL unzip >/dev/null 2>&1 || true
 
 echo -e "Zapret Manager ${GREEN}для ${NC}LuCI ${GREEN}установлен!${NC}\n"
+
