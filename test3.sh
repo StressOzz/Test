@@ -127,6 +127,8 @@ start_test_trap() { mkdir -p "$TMP_SF"; rm -f "$TEST_STOP_FLAG"; trap 'touch "$T
 stop_test_trap() { trap - INT; rm -f "$TEST_STOP_FLAG"; }
 test_interrupted() { [ -f "$TEST_STOP_FLAG" ]; }
 restore_after_test_interrupt() { local BAK="$1"; stop_test_trap; if [ -n "$BAK" ] && [ -f "$BAK" ]; then mv -f "$BAK" "$CONF"; fi; ZAPRET_RESTART; echo -e "\n${YELLOW}Тестирование остановлено${NC}\n"; [ -z "$NO_PAUSE" ] && PAUSE; }
+kill_pid_tree() { local pid="$1"; [ -n "$pid" ] || return 0; local ch; ch=$(cat "/proc/$pid/task/$pid/children" 2>/dev/null); for c in $ch; do kill_pid_tree "$c"; done; kill -9 "$pid" 2>/dev/null; }
+kill_bg_jobs() { local pf="$1"; [ -s "$pf" ] || return 0; while IFS= read -r pid; do [ -n "$pid" ] && kill_pid_tree "$pid"; done < "$pf"; wait 2>/dev/null; }
 PAUSE() { echo -ne "Нажмите Enter..."; read dummy; }; BACKUP_DIR="/opt/zapret_backup"; DATE_FILE="$BACKUP_DIR/date_backup.txt"
 BIN_PATH_GO="/usr/bin/tg-ws-proxy-go"; INIT_PATH_GO="/etc/init.d/tg-ws-proxy-go"; BIN_PATH_RS="/usr/bin/tg-ws-proxy-rs"; INIT_PATH_RS="/etc/init.d/tg-ws-proxy-rs"
 X1="68747470733a2f2f7767636c692e76657263656c2e617070"; X2="68747470733a2f2f73616e74612d61746d6f2e72752f776172702f776172702e706870"
@@ -676,7 +678,7 @@ run_test_youtube_all() { local SRC="$1"; mkdir -p "$TMP_SF"; : > "$STR_FILE"; ca
 sed -i '/^[[:space:]]*$/d' "$STR_FILE"; sed -i 's/^[[:space:]]*//;s/[[:space:]]*$//' "$STR_FILE" ;; *) return ;; esac
 clear; echo -e "${MAGENTA}Тестирование всех стратегий YouTube${NC}\n\n${CYAN}Собираем стратегии для теста${NC}"; cp "$CONF" "$BACK"; run_test_core_youtube "$RES_YOUTUBE"; }
 run_test_core_youtube() { local RESULTS="$1"; URLS=""; for d in $DOMAINS; do URLS="${URLS}${d}|https://${d}/
-"; done; TOTAL=$(echo $DOMAINS | wc -w); TOTAL_STR=$(grep -c '^#' "$STR_FILE"); echo -e "${CYAN}Найдено стратегий: ${NC}$TOTAL_STR"; echo -e "${CYAN}Доменов для теста:${NC} $TOTAL"; : > "$RESULTS"; check_zpr_off; LINES=$(grep -n '^#' "$STR_FILE" | cut -d: -f1); CUR=0; start_test_trap
+"; done; TOTAL=$(echo $DOMAINS | wc -w); TOTAL_STR=$(grep -c '^#' "$STR_FILE"); echo -e "${CYAN}Найдено стратегий: ${NC}$TOTAL_STR"; echo -e "${CYAN}Доменов для теста:${NC} $TOTAL"; : > "$RESULTS"; start_test_trap; check_zpr_off; LINES=$(grep -n '^#' "$STR_FILE" | cut -d: -f1); CUR=0
 echo "$LINES" | while read START; do CUR=$((CUR+1)); test_interrupted && break; NEXT=$(echo "$LINES" | awk -v s="$START" '$1>s{print;exit}'); if [ -z "$NEXT" ]; then
 sed -n "${START},\$p" "$STR_FILE" > "$TEMP_FILE"; else sed -n "${START},$((NEXT-1))p" "$STR_FILE" > "$TEMP_FILE"; fi; BLOCK=$(cat "$TEMP_FILE"); NAME=$(head -n1 "$TEMP_FILE"); NAME="${NAME#\#}"
 awk -v block="$BLOCK" 'BEGIN{skip=0} /option NFQWS_OPT '\''/ {printf "\toption NFQWS_OPT '\''\n%s\n'\''\n", block; skip=1; next} skip && /^'\''$/ {skip=0; next} !skip {print}' "$CONF" > "${CONF}.tmp" && mv "${CONF}.tmp" "$CONF"
@@ -1032,7 +1034,7 @@ INPUT="$(printf "%s" "$INPUT" | tr -s ' ')"; [ -z "$INPUT" ] && return; URLS="";
 HOST=$(printf "%s\n" "$TARGET" | sed -E 's#^https?://##; s#/.*##'); URLS="${URLS}${HOST}|https://${HOST}/"$'\n'; COUNT=$((COUNT+1)); done; TOTAL="$COUNT"; [ "$TOTAL" -eq 0 ] && { echo -e "\n${RED}Домены введены неверно${NC}\n"; PAUSE; return; }
 RESULTS="$RES_DOMAIN"; : > "$RESULTS"; : > "$STR_FILE"; cp "$CONF" "$BACK"; echo -e "\n${CYAN}Собираем ${NC}Flowseal${CYAN} стратегии${NC}"; download_strategies 1; cp "$OUT" "$STR_FILE"
 echo -e "${CYAN}Собираем ${NC}v${CYAN} стратегии${NC}"; for N in $(seq 1 100); do strategy_v$N >> "$STR_FILE" 2>/dev/null || break; done; sed -i '/#Y/d' "$STR_FILE"; LINES=$(grep -n '^#' "$STR_FILE" | cut -d: -f1); CUR=0; TOTAL_STR=$(grep -c '^#' "$STR_FILE")
-echo -e "${CYAN}Найдено стратегий:${NC} $TOTAL_STR\n${CYAN}Доменов для теста:${NC} $TOTAL"; check_zpr_off; start_test_trap; echo "$LINES" | while read -r START; do CUR=$((CUR+1)); test_interrupted && break; NEXT=$(echo "$LINES" | awk -v s="$START" '$1>s{print;exit}'); if [ -z "$NEXT" ]; then
+echo -e "${CYAN}Найдено стратегий:${NC} $TOTAL_STR\n${CYAN}Доменов для теста:${NC} $TOTAL"; start_test_trap; check_zpr_off; echo "$LINES" | while read -r START; do CUR=$((CUR+1)); test_interrupted && break; NEXT=$(echo "$LINES" | awk -v s="$START" '$1>s{print;exit}'); if [ -z "$NEXT" ]; then
 sed -n "${START},\$p" "$STR_FILE" > "$TEMP_FILE"; else sed -n "${START},$((NEXT-1))p" "$STR_FILE" > "$TEMP_FILE"; fi; BLOCK=$(cat "$TEMP_FILE"); NAME=$(head -n1 "$TEMP_FILE"); NAME="${NAME#\#}"; awk -v block="$BLOCK" 'BEGIN{skip=0}
 /option NFQWS_OPT '\''/ {printf "\toption NFQWS_OPT '\''\n%s\n'\''\n", block; skip=1; next}
 skip && /^'\''$/ {skip=0; next}
@@ -1045,11 +1047,11 @@ check_zpr_off() { echo -e "\n${CYAN}Контрольный тест: ${YELLOW}Za
 if [ "$OK" -eq "$TOTAL" ]; then COLOR="${GREEN}"; elif [ "$OK" -ge $((TOTAL/2)) ]; then COLOR="${YELLOW}"; else COLOR="${RED}"; fi; echo -e "${CYAN}Результат теста: ${COLOR}$OK/$TOTAL${NC}"
 if [ "$MODE" = "domain" ]; then { echo "Контрольный тест (Zapret выключен) → ${OK}/${TOTAL}"; cat "$LOG_TMP"; echo; } >> "$RESULTS"; else echo "Контрольный тест (Zapret выключен) → ${OK}/${TOTAL}" >> "$RESULTS"; fi; /etc/init.d/zapret start >/dev/null 2>&1; }
 check_url() { TEXT=$(echo "$1" | cut -d"|" -f1); LINK=$(echo "$1" | cut -d"|" -f2); if curl -sL --connect-timeout 4 --max-time 6 --speed-time 3 --speed-limit 1 --range 0-65535 -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) curl/8.0" -o /dev/null "$LINK" >/dev/null 2>&1; then echo 1 >> "$TMP_OK"; echo -e "${GREEN}[ OK ]${NC} $TEXT"; echo "[ OK ] $TEXT" >> "$LOG_TMP"; else echo -e "${RED}[FAIL]${NC} $TEXT";echo "[FAIL] $TEXT" >> "$LOG_TMP"; fi; }
-check_all_urls() { TMP_OK="$TMP_SF/z_ok.$$"; : > "$TMP_OK"; RUN=0; while IFS= read -r URL; do [ -z "$URL" ] && continue; check_url "$URL" & RUN=$((RUN+1)); if [ "$RUN" -ge "$PARALLEL" ]; then wait; RUN=0; fi
+check_all_urls() { TMP_OK="$TMP_SF/z_ok.$$"; TMP_PIDS="$TMP_SF/z_pids.$$"; : > "$TMP_OK"; : > "$TMP_PIDS"; RUN=0; while IFS= read -r URL; do [ -z "$URL" ] && continue; test_interrupted && break; check_url "$URL" & echo $! >> "$TMP_PIDS"; RUN=$((RUN+1)); if [ "$RUN" -ge "$PARALLEL" ]; then wait; RUN=0; test_interrupted && break; fi
 done <<EOF
 $URLS
 EOF
-wait; OK=$(wc -l < "$TMP_OK" | tr -d ' '); rm -f "$TMP_OK"; }
+if test_interrupted; then kill_bg_jobs "$TMP_PIDS"; else wait; fi; OK=$(wc -l < "$TMP_OK" | tr -d ' '); rm -f "$TMP_OK" "$TMP_PIDS"; }
 prepare_urls() { : > "$OUT_DPI"; printf '%s\n' "gosuslugi.ru|https://www.gosuslugi.ru" "esia.gosuslugi.ru|https://esia.gosuslugi.ru" "nalog.ru|https://nalog.ru" "lkfl2.nalog.ru|https://lkfl2.nalog.ru" "rutube.ru|https://rutube.ru" "ntc.party|https://ntc.party/" "instagram.com|https://instagram.com" "facebook.com|https://facebook.com" "rutor.info|https://rutor.info" "rutracker.org|https://rutracker.org" \
 "epidemz.net.co|https://epidemz.net.co" "nnmclub.to|https://nnmclub.to" "openwrt.org|https://openwrt.org" "sxyprn.net|https://sxyprn.net" "spankbang.com|https://ru.spankbang.com" "pornhub.com|https://pornhub.com" "discord.com|https://discord.com" "x.com|https://x.com" "filmix.my|https://filmix.my" "forum.ru-board.com|https://forum.ru-board.com" "play.google.com|https://play.google.com" \
 "anitokyo.tv|https://anitokyo.tv" "cub.red|https://cub.red" "downloads.openwrt.org|https://downloads.openwrt.org" "githubusercontent.com|https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/Zapret-Manager.sh" >> "$OUT_DPI"
@@ -1075,7 +1077,7 @@ for N in $(seq 1 100); do strategy_v$N >> "$STR_FILE" 2>/dev/null || break; done
 run_all_tests() { clear; echo -e "${MAGENTA}Тестирование всех стратегий${NC}\n"; RESULTS="/opt/zapret/tmp/results_all.txt"; : > "$STR_FILE"; [ -f "$BACK" ] || cp "$CONF" "$BACK"; echo -e "${CYAN}Собираем ${NC}Flowseal${CYAN} стратегии${NC}"
 download_strategies 1; cat "$OUT" >> "$STR_FILE"; echo -e "${CYAN}Собираем ${NC}v${CYAN} стратегии${NC}"; for N in $(seq 1 100); do strategy_v$N >> "$STR_FILE" 2>/dev/null || break; done; sed -i '/#Y/d' "$STR_FILE"; LINES=$(grep -n '^#' "$STR_FILE" | cut -d: -f1)
 CUR=0; TOTAL_STR=$(grep -c '^#' "$STR_FILE"); echo -e "${CYAN}Найдено стратегий:${NC} $TOTAL_STR"; prepare_urls || return 1; URLS="$(cat "$OUT_DPI")"; TOTAL=$(grep -c "|" "$OUT_DPI"); echo -e "${CYAN}Доменов для теста:${NC} $TOTAL"
-check_zpr_off; start_test_trap; echo "$LINES" | while read -r START; do CUR=$((CUR+1)); test_interrupted && break; NEXT=$(echo "$LINES" | awk -v s="$START" '$1>s{print;exit}'); if [ -z "$NEXT" ]; then sed -n "${START},\$p" "$STR_FILE" > "$TEMP_FILE"; else sed -n "${START},$((NEXT-1))p" "$STR_FILE" > "$TEMP_FILE"; fi
+start_test_trap; check_zpr_off; echo "$LINES" | while read -r START; do CUR=$((CUR+1)); test_interrupted && break; NEXT=$(echo "$LINES" | awk -v s="$START" '$1>s{print;exit}'); if [ -z "$NEXT" ]; then sed -n "${START},\$p" "$STR_FILE" > "$TEMP_FILE"; else sed -n "${START},$((NEXT-1))p" "$STR_FILE" > "$TEMP_FILE"; fi
 BLOCK=$(cat "$TEMP_FILE"); NAME=$(head -n1 "$TEMP_FILE"); NAME="${NAME#\#}"; awk -v block="$BLOCK" 'BEGIN{skip=0}
 /option NFQWS_OPT '\''/ {printf "\toption NFQWS_OPT '\''\n%s\n'\''\n", block; skip=1; next}
 skip && /^'\''$/ {skip=0; next}
@@ -1084,7 +1086,7 @@ test_interrupted && break; if [ "$OK" -eq "$TOTAL" ]; then COLOR="${GREEN}"; eli
 if test_interrupted; then restore_after_test_interrupt "$BACK"; return 1; fi
 stop_test_trap; sort -t'/' -k1 -nr "$RESULTS" -o "$RESULTS"; [ -f "$BACK" ] && mv -f "$BACK" "$CONF"; ZAPRET_RESTART; show_single_result "$RESULTS"; }
 run_test_core() { local RESULTS="$1"; prepare_urls || return 1; URLS="$(cat "$OUT_DPI")"; TOTAL=$(grep -c "|" "$OUT_DPI"); TOTAL_STR=$(grep -c '^#' "$STR_FILE")
-echo -e "${CYAN}Найдено стратегий: ${NC}$TOTAL_STR"; echo -e "${CYAN}Доменов для теста:${NC} $TOTAL"; : > "$RESULTS"; check_zpr_off; LINES=$(grep -n '^#' "$STR_FILE" | cut -d: -f1); CUR=0; start_test_trap
+echo -e "${CYAN}Найдено стратегий: ${NC}$TOTAL_STR"; echo -e "${CYAN}Доменов для теста:${NC} $TOTAL"; : > "$RESULTS"; start_test_trap; check_zpr_off; LINES=$(grep -n '^#' "$STR_FILE" | cut -d: -f1); CUR=0
 echo "$LINES" | while read START; do CUR=$((CUR+1)); test_interrupted && break; NEXT=$(echo "$LINES" | awk -v s="$START" '$1>s{print;exit}'); if [ -z "$NEXT" ]; then
 sed -n "${START},\$p" "$STR_FILE" > "$TEMP_FILE"; else sed -n "${START},$((NEXT-1))p" "$STR_FILE" > "$TEMP_FILE"; fi
 BLOCK=$(cat "$TEMP_FILE"); NAME=$(head -n1 "$TEMP_FILE"); NAME="${NAME#\#}"; awk -v block="$BLOCK" 'BEGIN{skip=0}
