@@ -1,6 +1,6 @@
 #!/bin/sh
 # Zapret Manager by StressOzz for LuCI installer
-# Version: 1.00
+# Version: 1.01
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -26,7 +26,7 @@ mkdir -p /usr/lib/zapret-manager
 cat > '/usr/lib/zapret-manager/backend.sh' << 'ZM_INSTALLER_EOF'
 
 CONF="/etc/config/zapret"
-ZM_VERSION="1.00"
+ZM_VERSION="1.01"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
@@ -1994,45 +1994,22 @@ do_test_run() {
 
 	if [ -f "$TEST_STOP_FLAG" ]; then
 		echo "==> Тестирование остановлено пользователем, восстанавливаем конфигурацию"
-		cp "$TEST_BACKUP" "$CONF"
-		zapret_restart
-		rm -f "$TEST_STOP_FLAG" "$TEST_BACKUP"
-		echo "==> Готово, конфигурация восстановлена"
-		return 0
+		rm -f "$TEST_STOP_FLAG"
+	else
+		echo "==> Тестирование завершено, восстанавливаем конфигурацию"
 	fi
 
 	echo "==> Результаты теста"
 	_test_sort_results "$TEST_RESULTS"
 	cat "$TEST_RESULTS"
-	local best_line best_name start2 next2 block
+	local best_line
 	best_line=$(grep -v '^Контрольный тест' "$TEST_RESULTS" | head -n1)
-	if [ -z "$best_line" ]; then
-		echo "ОШИБКА: не удалось определить лучшую стратегию, восстанавливаем исходную конфигурацию"
-		cp "$TEST_BACKUP" "$CONF"
-		zapret_restart
-		rm -f "$TEST_BACKUP"
-		return 1
-	fi
-	best_name=$(echo "$best_line" | cut -d'→' -f1 | sed 's/[[:space:]]*$//')
-	echo "==> Лучшая стратегия: $best_line"
-	start2=$(grep -nxF "#${best_name}" "$cand" | head -n1 | cut -d: -f1)
-	if [ -n "$start2" ]; then
-		next2=$(echo "$lines" | awk -v s="$start2" '$1>s{print;exit}')
-		if [ -z "$next2" ]; then
-			sed -n "${start2},\$p" "$cand" > "$TEST_DIR/block.txt"
-		else
-			sed -n "${start2},$((next2-1))p" "$cand" > "$TEST_DIR/block.txt"
-		fi
-		block=$(cat "$TEST_DIR/block.txt")
-		_test_apply_block "$block"
-		zapret_restart
-		echo "==> Готово, применена стратегия: $best_name"
-	else
-		echo "ОШИБКА: не удалось повторно найти блок лучшей стратегии, восстанавливаем исходную конфигурацию"
-		cp "$TEST_BACKUP" "$CONF"
-		zapret_restart
-	fi
+	[ -n "$best_line" ] && echo "==> Лучшая стратегия по результатам теста: $best_line"
+
+	cp "$TEST_BACKUP" "$CONF"
+	zapret_restart
 	rm -f "$TEST_BACKUP"
+	echo "==> Готово, конфигурация восстановлена"
 }
 
 test_action() {
@@ -4214,7 +4191,7 @@ return view.extend({
 		function renderMain() {
 			mainCard.innerHTML = '';
 			mainCard.appendChild(E('h3', {}, 'Тест стратегий v / Flowseal'));
-			mainCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Тест идёт в фоне — переключение вкладок или закрытие LuCI его не прервёт. По окончании автоматически применяется лучшая найденная стратегия. Кнопка «Остановить» вернёт конфигурацию, которая была до начала теста.'));
+			mainCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Тест идёт в фоне — переключение вкладок или закрытие LuCI его не прервёт. По окончании конфигурация всегда возвращается к тому, что было до начала теста — стратегии только тестируются, лучшую нужно применить вручную на странице «Стратегии».'));
 			if (busy && curMode !== 'youtube') {
 				mainCard.appendChild(E('div', { 'class': 'zm-row' }, [
 					E('span', { 'class': 'zm-label' }, 'Статус'),
