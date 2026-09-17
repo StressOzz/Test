@@ -1,6 +1,6 @@
 #!/bin/sh
 # Zapret Manager by StressOzz for LuCI installer
-# Version: 1.01
+# Version: 1.03
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -26,7 +26,7 @@ mkdir -p /usr/lib/zapret-manager
 cat > '/usr/lib/zapret-manager/backend.sh' << 'ZM_INSTALLER_EOF'
 
 CONF="/etc/config/zapret"
-ZM_VERSION="1.01"
+ZM_VERSION="1.03"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
@@ -415,14 +415,18 @@ strategy_v10() { printf '%s\n' "#v10" "--filter-tcp=443" "--hostlist-exclude=/op
 
 
 _add_gp_domains() {
-	local f="/opt/zapret/ipset/zapret-hosts-google.txt"
-	mkdir -p "$(dirname "$f")"; touch "$f"
-	printf '%s\n' "gvt1.com" "googleplay.com" "play.google.com" "beacons.gvt2.com" \
-		"play.googleapis.com" "play-fe.googleapis.com" "lh3.googleusercontent.com" \
-		"android.clients.google.com" "connectivitycheck.gstatic.com" \
-		"play-lh.googleusercontent.com" "play-games.googleusercontent.com" \
-		"prod-lt-playstoregatewayadapter-pa.googleapis.com" "youtubei.youtube.com" \
-		| grep -Fxv -f "$f" 2>/dev/null >> "$f"
+	local f="/opt/zapret/ipset/zapret-hosts-google.txt" tmp
+	mkdir -p "$(dirname "$f")"
+	tmp="$f.tmp"
+	{
+		[ -f "$f" ] && cat "$f"
+		printf '%s\n' "gvt1.com" "googleplay.com" "play.google.com" "beacons.gvt2.com" \
+			"play.googleapis.com" "play-fe.googleapis.com" "lh3.googleusercontent.com" \
+			"android.clients.google.com" "connectivitycheck.gstatic.com" \
+			"play-lh.googleusercontent.com" "play-games.googleusercontent.com" \
+			"prod-lt-playstoregatewayadapter-pa.googleapis.com" "youtubei.youtube.com"
+	} | sort -u > "$tmp"
+	mv "$tmp" "$f"
 }
 
 _refresh_exclude_file() {
@@ -1925,6 +1929,8 @@ do_test_run() {
 	echo "$mode" > "$TEST_MODE_FILE"
 	[ -f "$CONF" ] || { echo "ОШИБКА: Zapret не установлен"; return 1; }
 	cp "$CONF" "$TEST_BACKUP"
+	_add_gp_domains
+	_refresh_exclude_file
 
 	local cand="$TEST_DIR/candidates.txt"
 	echo "==> Собираем стратегии для теста"
@@ -2598,27 +2604,42 @@ function renderLog(logEl, text) {
 	logEl.scrollTop = logEl.scrollHeight;
 }
 
+var _activePolls = {};
+
 function pollJob(job, logEl, onDone, onTick) {
+	if (_activePolls[job]) {
+		clearInterval(_activePolls[job]);
+		delete _activePolls[job];
+	}
 	logEl.classList.add('zm-show');
 	var failCount = 0;
+	var finished = false;
 	var timer = setInterval(function() {
+		if (finished) return;
 		Promise.all([ callJobStatus(job), callLogTail(job) ]).then(function(res) {
+			if (finished) return;
 			failCount = 0;
 			var st = res[0], lg = res[1];
 			renderLog(logEl, (lg && lg.lines) || '');
 			if (typeof onTick === 'function') onTick();
 			if (st && st.done === true) {
+				finished = true;
 				clearInterval(timer);
+				delete _activePolls[job];
 				onDone(st.rc === '0');
 			}
 		}).catch(function() {
+			if (finished) return;
 			failCount++;
 			if (failCount >= 8) {
+				finished = true;
 				clearInterval(timer);
+				delete _activePolls[job];
 				toast('Роутер не отвечает — операция может ещё выполняться в фоне. Обновите страницу через полминуты, чтобы проверить результат.', 'warning', 25000);
 			}
 		});
 	}, 1200);
+	_activePolls[job] = timer;
 }
 
 function refreshBanner(message) {
@@ -4266,9 +4287,43 @@ return view.extend({
 		}
 
 		var resultsVisible = false;
+		function renderResultsColored(el, text) {
+			el.innerHTML = '';
+			var lines = (text || '').split('\n');
+			var first = true;
+			lines.forEach(function(line) {
+				if (!line) return;
+				var div = document.createElement('div');
+				var m = line.match(/^(.*?)\s*→\s*(\d+)\/(\d+)\s*$/);
+				if (m) {
+					var name = m[1], ok = +m[2], total = +m[3];
+					var pct = total > 0 ? (ok / total) : 0;
+					var isControl = /^Контрольный тест/.test(name);
+					var nameSpan = document.createElement('span');
+					nameSpan.textContent = name + ' → ';
+					var scoreSpan = document.createElement('span');
+					scoreSpan.textContent = ok + '/' + total;
+					if (isControl) {
+						div.className = 'zm-log-code';
+					} else {
+						if (pct >= 0.8) scoreSpan.className = 'zm-log-msg-ok';
+						else if (pct >= 0.4) scoreSpan.className = 'zm-log-msg-warn';
+						else scoreSpan.className = 'zm-log-msg-error';
+						if (first) { nameSpan.style.fontWeight = '700'; first = false; }
+					}
+					div.appendChild(nameSpan);
+					div.appendChild(scoreSpan);
+				} else {
+					div.className = 'zm-log-code';
+					div.textContent = line;
+				}
+				el.appendChild(div);
+			});
+		}
+
 		function refreshResults() {
 			zm.testResults().then(function(res) {
-				zm.renderLog(resultsEl, res.lines || '');
+				renderResultsColored(resultsEl, res.lines || '');
 			});
 		}
 
