@@ -123,10 +123,10 @@ then hosts_echo="GeoHide EU"; elif grep -q "^# Регион серверов: RU
 elif grep -q "45.155.204.190\|instagram.com\|rutor.info\|lib.rus.ec\|ntc.party\|twitch.tv\|web.telegram.org\|www.spotify.com\|store.supercell.com\|raw.githubusercontent.com\|lkfl2.nalog.ru" /etc/hosts; then hosts_echo="добавлены"; return 0; fi; return 1; }
 hosts_add() { printf "%b\n" "$1" | while IFS= read -r L; do grep -qxF "$L" /etc/hosts || echo "$L" >> /etc/hosts; done; /etc/init.d/dnsmasq restart >/dev/null 2>&1; }; D() { printf '%b' "$(printf '%s' "$1" | sed 's/../\\x&/g')"; }
 ZAPRET_RESTART () { chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1; sleep 1; }
-start_test_trap() { mkdir -p "$TMP_SF"; rm -f "$TEST_STOP_FLAG"; echo -e "\nCtrl+C - ${YELLOW}остановить тестирование${NC}"; trap 'touch "$TEST_STOP_FLAG" 2>/dev/null' INT; }
+start_test_trap() { mkdir -p "$TMP_SF"; rm -f "$TEST_STOP_FLAG"; echo -e "${GREEN}Ctrl+C - остановить тестирование${NC}\n"; trap 'touch "$TEST_STOP_FLAG" 2>/dev/null' INT; }
 stop_test_trap() { trap - INT; rm -f "$TEST_STOP_FLAG"; }
 test_interrupted() { [ -f "$TEST_STOP_FLAG" ]; }
-restore_after_test_interrupt() { local BAK="$1"; stop_test_trap; if [ -n "$BAK" ] && [ -f "$BAK" ]; then mv -f "$BAK" "$CONF"; fi; echo -e "\n${YELLOW}Остановливаем тестирование${CYAN}\nВостанавливаем конфигурацию${NC}"; ZAPRET_RESTART; echo -e "\n${GREEN}Тестирование остановлено!${NC}"; [ -z "$NO_PAUSE" ] && PAUSE; }
+restore_after_test_interrupt() { local BAK="$1"; stop_test_trap; if [ -n "$BAK" ] && [ -f "$BAK" ]; then mv -f "$BAK" "$CONF"; fi; ZAPRET_RESTART; echo -e "\n${YELLOW}Тестирование остановлено${NC}\n"; [ -z "$NO_PAUSE" ] && PAUSE; }
 kill_pid_tree() { local pid="$1"; [ -n "$pid" ] || return 0; local ch; ch=$(cat "/proc/$pid/task/$pid/children" 2>/dev/null); for c in $ch; do kill_pid_tree "$c"; done; kill -9 "$pid" 2>/dev/null; }
 kill_bg_jobs() { local pf="$1"; [ -s "$pf" ] || return 0; while IFS= read -r pid; do [ -n "$pid" ] && kill_pid_tree "$pid"; done < "$pf"; wait 2>/dev/null; }
 PAUSE() { echo -ne "Нажмите Enter..."; read dummy; }; BACKUP_DIR="/opt/zapret_backup"; DATE_FILE="$BACKUP_DIR/date_backup.txt"
@@ -564,7 +564,7 @@ switch_Dv() { select_Dv || return 1; grep -q -E '^[[:space:]]*--filter-tcp=2053,
 END=$(tail -n +"$START" "$CONF" | grep -n -m1 -E '^--new$|^#|^'\''$' | cut -d: -f1); END=$((START + END - 1)); sed -i "${START},$((END-1))d" "$CONF"; LINE=$START; echo "$NEW_STRAT" | while IFS= read -r l; do sed -i "${LINE}i$l" "$CONF"; LINE=$((LINE + 1)); done
 if grep -q -E '^#[[:space:]]*Dv' "$CONF"; then sed -i "s/^#[[:space:]]*Dv[0-9]\+/#Dv$NEW_NUM/" "$CONF"; else sed -i "$START i#Dv$NEW_NUM" "$CONF"; fi; echo -e "\n${MAGENTA}Меняем стратегию для discord.media${NC}"; ZAPRET_RESTART; echo -e "${GREEN}Стратегия ${NC}Dv$NEW_NUM${GREEN} применена!${NC}\n"; PAUSE; }
 toggle_finland_hosts() { if grep -q "$Fin_IP_Dis" /etc/hosts; then sed -i "/$Fin_IP_Dis/d" /etc/hosts; echo -e "\n${MAGENTA}Удаляем Финские IP${NC}"; /etc/init.d/dnsmasq restart 2>/dev/null
-echo -e "${GREEN}Финские ${NC}IP${GREEN} удалены${NC}\n"; else seq 10000 10199 | awk '{print "104.25.158.178 finland"$1".discord.media"}' | grep -vxFf /etc/hosts >> /etc/hosts; echo -e "\n${MAGENTA}Добавляем Финские IP${NC}"; /etc/init.d/dnsmasq restart 2>/dev/null; echo -e "${GREEN}Финские ${NC}IP${GREEN} добавлены${NC}\n"; fi; PAUSE; }
+echo -e "${GREEN}Финские ${NC}IP${GREEN} удалены${NC}\n"; else FIN_TMP="$TMP_SF/finland_new.$$"; mkdir -p "$TMP_SF"; seq 10000 10199 | awk '{print "104.25.158.178 finland"$1".discord.media"}' | grep -vxFf /etc/hosts > "$FIN_TMP"; cat "$FIN_TMP" >> /etc/hosts; rm -f "$FIN_TMP"; echo -e "\n${MAGENTA}Добавляем Финские IP${NC}"; /etc/init.d/dnsmasq restart 2>/dev/null; echo -e "${GREEN}Финские ${NC}IP${GREEN} добавлены${NC}\n"; fi; PAUSE; }
 show_script_50() { [ -f "/opt/zapret/init.d/openwrt/custom.d/50-script.sh" ] || return; line=$(head -n1 /opt/zapret/init.d/openwrt/custom.d/50-script.sh)
 name=$(case "$line" in *QUIC*) echo "50-quic4all";; *stun*) echo "50-stun4all";; *"discord media"*) echo "50-discord-media";; *"discord subnets"*) echo "50-discord";; *) echo "";; esac); }
 Discord_menu() { if [ -f /etc/init.d/zapret2 ] && ! is_expert_mode; then echo -e "\n${RED}Установлен ${NC}Zapret2${RED}!${NC}"; echo -e "${YELLOW}Меню настройки Discord доступно только с ${NC}Zapret${NC}\n"; PAUSE; return 1; fi;
@@ -707,9 +707,9 @@ awk 'BEGIN{inserted=0;has_google=0}$0=="--hostlist=/opt/zapret/ipset/zapret-host
 sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; cat "$FINAL_STR" >> "$CONF"; awk '{if($0=="--new"){if(prev!="--new")print}else print;prev=$0}' "$CONF" > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"
 grep -q "^[[:space:]]*' *\$" "$CONF" || echo "'" >> "$CONF"; ZAPRET_RESTART; echo -e "${GREEN}Стратегия применена!${NC}\n"; PAUSE </dev/tty; return 0; elif [[ "$ANSWER" =~ ^[Ss]$ ]]; then sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; 
 cat "$OLD_STR" >> "$CONF"; ZAPRET_RESTART; echo -e "\n${GREEN}Тест остановлен!${NC}\n"; PAUSE </dev/tty; return 1; fi; else echo -e "${RED}Видео не открывается...${NC}\n"; fi; fi; sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; cat "$OLD_STR" >> "$CONF"; ZAPRET_RESTART; echo -e "\n${RED}Рабочая стратегия для YouTube не найдена!${NC}\n"; PAUSE </dev/tty; return 1; }
-check_access() { ANY_OK=0; ALL_OK=1; for domain in $DOMAINS; do echo -ne "$domain" >&2; if curl -s --connect-timeout 1 -m 2 "https://$domain" >/dev/null; then echo -ne " - ${GREEN}доступен${NC}\n" >&2; ANY_OK=1; else echo -ne " - ${RED}недоступен${NC}\n" >&2; ALL_OK=0; fi; done
-if [ "$ALL_OK" -ne 1 ] && [ "$ANY_OK" -eq 1 ]; then echo -e "\n${RED}Не все домены доступны, возможны проблемы с воспроизведением видео!${NC}" >&2; fi; [ "$ANY_OK" = "1" ] && echo "ok" || echo "fail"; }
-apply_strategy() { NAME="$1"; BODY="$2"; sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; { echo "  option NFQWS_OPT '"; echo "#AUTO $NAME"; printf "%b\n" "$BODY"; echo "'"; } >> "$CONF"; ZAPRET_RESTART; }
+check_access() { OK_N=0; TOTAL_N=0; for domain in $DOMAINS; do TOTAL_N=$((TOTAL_N + 1)); echo -ne "$domain" >&2; if curl -s --connect-timeout 1 -m 2 "https://$domain" >/dev/null; then echo -ne " - ${GREEN}доступен${NC}\n" >&2; OK_N=$((OK_N + 1)); else echo -ne " - ${RED}недоступен${NC}\n" >&2; fi; done
+if [ "$OK_N" -lt "$TOTAL_N" ] && [ "$OK_N" -ge $((TOTAL_N/2)) ]; then echo -e "\n${RED}Не все домены доступны, возможны проблемы с воспроизведением видео!${NC}" >&2; fi; [ "$OK_N" -ge $((TOTAL_N/2)) ] && echo "ok" || echo "fail"; }
+apply_strategy() { NAME="${1#\#}"; BODY="$2"; sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"; { echo "  option NFQWS_OPT '"; echo "#AUTO $NAME"; printf "%b\n" "$BODY"; echo "'"; } >> "$CONF"; ZAPRET_RESTART; }
 # ==========================================
 # РКН список ВКЛ / ВЫКЛ
 # ==========================================
@@ -766,7 +766,7 @@ sed -i '/^--new$/ { N; /^\--new\n$/d; }' "$OUT"; rm -rf "$TMP_SF/zapret-discord-
 # ==========================================
 # Меню стратегий
 # ==========================================
-ADD_GP_DOMAINS() { printf '%s\n' "gvt1.com" "googleplay.com" "play.google.com" "beacons.gvt2.com" "play.googleapis.com" "play-fe.googleapis.com" "lh3.googleusercontent.com" "android.clients.google.com" "connectivitycheck.gstatic.com" "play-lh.googleusercontent.com" "play-games.googleusercontent.com" "prod-lt-playstoregatewayadapter-pa.googleapis.com" "youtubei.youtube.com" | grep -Fxv -f "$fileGP" 2>/dev/null >> "$fileGP"; }
+ADD_GP_DOMAINS() { GP_TMP="$TMP_SF/gp_new.$$"; mkdir -p "$TMP_SF"; printf '%s\n' "gvt1.com" "googleplay.com" "play.google.com" "beacons.gvt2.com" "play.googleapis.com" "play-fe.googleapis.com" "lh3.googleusercontent.com" "android.clients.google.com" "connectivitycheck.gstatic.com" "play-lh.googleusercontent.com" "play-games.googleusercontent.com" "prod-lt-playstoregatewayadapter-pa.googleapis.com" "youtubei.youtube.com" | grep -Fxv -f "$fileGP" 2>/dev/null > "$GP_TMP"; cat "$GP_TMP" >> "$fileGP" 2>/dev/null; rm -f "$GP_TMP"; }
 manage_block() { action="$1"; f1="$2"; f2="$3"; if [ "$action" = "add" ]; then echo -e "\n${MAGENTA}Добавляем блок с ${f2}\n${CYAN}Добавляем блок в стратегию\nПерезапускаем ${NC}Zapret"; last_line=$(grep -n "^'$" "$CONF" | tail -n1 | cut -d: -f1)
 [ -n "$last_line" ] && sed -i "${last_line},\$d" "$CONF"; printf "%s\n" "--new" "$f1" "$f2" "'" >> "$CONF"; ZAPRET_RESTART; echo -e "${GREEN}Блок с ${NC}${f2}${GREEN} добавлен!${NC}"
 echo -e "\n${YELLOW}Блок может влиять на скорость и стабильность интернета!${NC}\n"; PAUSE; fi; if [ "$action" = "remove" ]; then echo -e "\n${MAGENTA}Удаляем блок с ${f2}${NC}\n${CYAN}Удаляем блок из стратегию\nПерезапускаем ${NC}Zapret"
@@ -920,7 +920,6 @@ rm -rf \
 	/usr/share/rpcd/acl.d/luci-app-zapret-manager.json \
 	/www/luci-static/resources/view/zapret-manager* \
 	/www/luci-static/resources/zapret-manager* \
-	/etc/zapret_manager_expert_mode* \
 	/tmp/zapret-manager* \
 	/tmp/zm_uninstall_panel.sh \
 	/tmp/luci-indexcache* \
@@ -929,7 +928,7 @@ rm -rf \
 /etc/init.d/uhttpd restart >/dev/null 2>&1             
         echo -e "Zapret Manager ${GREEN}для ${NC}LuCI ${GREEN}удалён!${NC}\n"
     else
-        sh <(wget -qO - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/main/ZapretManager_LuCI.sh)
+        sh <(wget -qO - "${GH_RAW}/StressOzz/Zapret-Manager/main/ZapretManager_LuCI.sh")
     fi
     PAUSE
 }
