@@ -123,10 +123,10 @@ then hosts_echo="GeoHide EU"; elif grep -q "^# Регион серверов: RU
 elif grep -q "45.155.204.190\|instagram.com\|rutor.info\|lib.rus.ec\|ntc.party\|twitch.tv\|web.telegram.org\|www.spotify.com\|store.supercell.com\|raw.githubusercontent.com\|lkfl2.nalog.ru" /etc/hosts; then hosts_echo="добавлены"; return 0; fi; return 1; }
 hosts_add() { printf "%b\n" "$1" | while IFS= read -r L; do grep -qxF "$L" /etc/hosts || echo "$L" >> /etc/hosts; done; /etc/init.d/dnsmasq restart >/dev/null 2>&1; }; D() { printf '%b' "$(printf '%s' "$1" | sed 's/../\\x&/g')"; }
 ZAPRET_RESTART () { chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config.sh; /etc/init.d/zapret restart >/dev/null 2>&1; sleep 1; }
-start_test_trap() { mkdir -p "$TMP_SF"; rm -f "$TEST_STOP_FLAG"; trap 'touch "$TEST_STOP_FLAG" 2>/dev/null' INT; }
+start_test_trap() { mkdir -p "$TMP_SF"; rm -f "$TEST_STOP_FLAG"; echo -e "${GREEN}Ctrl+C - остановить тестирование${NC}\n"; trap 'touch "$TEST_STOP_FLAG" 2>/dev/null' INT; }
 stop_test_trap() { trap - INT; rm -f "$TEST_STOP_FLAG"; }
 test_interrupted() { [ -f "$TEST_STOP_FLAG" ]; }
-restore_after_test_interrupt() { local BAK="$1"; stop_test_trap; if [ -n "$BAK" ] && [ -f "$BAK" ]; then mv -f "$BAK" "$CONF"; fi; ZAPRET_RESTART; echo -e "\n${YELLOW}Тестирование остановлено!${NC}\n"; [ -z "$NO_PAUSE" ] && PAUSE; }
+restore_after_test_interrupt() { local BAK="$1"; stop_test_trap; if [ -n "$BAK" ] && [ -f "$BAK" ]; then mv -f "$BAK" "$CONF"; fi; ZAPRET_RESTART; echo -e "\n${YELLOW}Тестирование остановлено${NC}\n"; [ -z "$NO_PAUSE" ] && PAUSE; }
 kill_pid_tree() { local pid="$1"; [ -n "$pid" ] || return 0; local ch; ch=$(cat "/proc/$pid/task/$pid/children" 2>/dev/null); for c in $ch; do kill_pid_tree "$c"; done; kill -9 "$pid" 2>/dev/null; }
 kill_bg_jobs() { local pf="$1"; [ -s "$pf" ] || return 0; while IFS= read -r pid; do [ -n "$pid" ] && kill_pid_tree "$pid"; done < "$pf"; wait 2>/dev/null; }
 PAUSE() { echo -ne "Нажмите Enter..."; read dummy; }; BACKUP_DIR="/opt/zapret_backup"; DATE_FILE="$BACKUP_DIR/date_backup.txt"
