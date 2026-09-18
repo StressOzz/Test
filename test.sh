@@ -126,8 +126,8 @@ ZAPRET_RESTART () { chmod +x /opt/zapret/sync_config.sh; /opt/zapret/sync_config
 start_test_trap() { mkdir -p "$TMP_SF"; rm -f "$TEST_STOP_FLAG"; echo -e "\nCtrl+C - ${YELLOW}остановить тестирование${NC}"; trap 'touch "$TEST_STOP_FLAG" 2>/dev/null' INT; }
 stop_test_trap() { trap - INT; rm -f "$TEST_STOP_FLAG"; }
 test_interrupted() { [ -f "$TEST_STOP_FLAG" ]; }
-restore_after_test_interrupt() { local BAK="$1"; stop_test_trap; if [ -n "$BAK" ] && [ -f "$BAK" ]; then mv -f "$BAK" "$CONF"; fi; echo -e "\n${YELLOW}Остановливаем тестирование${CYAN}\nВостанавливаем конфигурацию${NC}"; ZAPRET_RESTART; echo -e "${GREEN}Тестирование остановлено!\n${NC}"; [ -z "$NO_PAUSE" ] && PAUSE; }
-_stryou_restore_interrupt() { stop_test_trap; sed -i "/^[[:space:]]*option NFQWS_OPT '/,/^[[:space:]]*'[[:space:]]*\$/d" "$CONF"; cat "$OLD_STR" >> "$CONF"; echo -e "\n${YELLOW}Остановливаем тестирование${CYAN}\nВостанавливаем конфигурацию${NC}"; ZAPRET_RESTART; echo -e "${GREEN}Тестирование остановлено!\n${NC}"; PAUSE </dev/tty; }
+restore_after_test_interrupt() { local BAK="$1"; stop_test_trap; if [ -n "$BAK" ] && [ -f "$BAK" ]; then mv -f "$BAK" "$CONF"; fi; echo; echo -e "\n${YELLOW}Останавливаем тестирование${CYAN}\nВостанавливаем конфигурацию${NC}"; ZAPRET_RESTART; echo -e "${GREEN}Тестирование остановлено!\n${NC}"; [ -z "$NO_PAUSE" ] && PAUSE; }
+_stryou_restore_interrupt() { stop_test_trap; sed -i "/^[[:space:]]*option NFQWS_OPT '/,/^[[:space:]]*'[[:space:]]*\$/d" "$CONF"; cat "$OLD_STR" >> "$CONF"; echo; echo -e "\n${YELLOW}Останавливаем тестирование${CYAN}\nВостанавливаем конфигурацию${NC}"; ZAPRET_RESTART; echo -e "${GREEN}Тестирование остановлено!\n${NC}"; PAUSE </dev/tty; }
 kill_pid_tree() { local pid="$1"; [ -n "$pid" ] || return 0; local ch; ch=$(cat "/proc/$pid/task/$pid/children" 2>/dev/null); for c in $ch; do kill_pid_tree "$c"; done; kill -9 "$pid" 2>/dev/null; }
 kill_bg_jobs() { local pf="$1"; [ -s "$pf" ] || return 0; while IFS= read -r pid; do [ -n "$pid" ] && kill_pid_tree "$pid"; done < "$pf"; wait 2>/dev/null; }
 PAUSE() { echo -ne "Нажмите Enter..."; read dummy; }; BACKUP_DIR="/opt/zapret_backup"; DATE_FILE="$BACKUP_DIR/date_backup.txt"
@@ -684,7 +684,7 @@ while read START; do CUR=$((CUR+1)); test_interrupted && break; NEXT=$(echo "$LI
 sed -n "${START},\$p" "$STR_FILE" > "$TEMP_FILE"; else sed -n "${START},$((NEXT-1))p" "$STR_FILE" > "$TEMP_FILE"; fi; BLOCK=$(cat "$TEMP_FILE"); NAME=$(head -n1 "$TEMP_FILE"); NAME="${NAME#\#}"
 awk -v block="$BLOCK" 'BEGIN{skip=0} /option NFQWS_OPT '\''/ {printf "\toption NFQWS_OPT '\''\n%s\n'\''\n", block; skip=1; next} skip && /^'\''$/ {skip=0; next} !skip {print}' "$CONF" > "${CONF}.tmp" && mv "${CONF}.tmp" "$CONF"
 echo -e "\n${CYAN}Тестируем стратегию: ${YELLOW}${NAME}${NC} ($CUR/$TOTAL_STR)"; ZAPRET_RESTART; OK=0; LOG_TMP="/tmp/zapret_log_yt_${CUR}"; : > "$LOG_TMP"; check_all_urls
-test_interrupted && break; if [ "$OK" -eq "$TOTAL" ]; then COLOR="${GREEN}"; elif [ "$OK" -ge $((TOTAL/2)) ]; then COLOR="${YELLOW}"; else COLOR="${RED}"; fi; echo -e "${CYAN}Результат теста: ${COLOR}$OK/$TOTAL${NC}"; echo -e "${NAME} → ${OK}/${TOTAL}" >> "$RESULTS"; done < <(printf '%s\n' "$LINES")
+test_interrupted && break; if [ "$OK" -eq "$TOTAL" ]; then COLOR="${GREEN}"; elif [ "$OK" -lt "$CTRL_OK" ]; then COLOR="${RED}"; else COLOR="${YELLOW}"; fi; echo -e "${CYAN}Результат теста: ${COLOR}$OK/$TOTAL${NC}"; echo -e "${NAME} → ${OK}/${TOTAL}" >> "$RESULTS"; done < <(printf '%s\n' "$LINES")
 if test_interrupted; then restore_after_test_interrupt "$BACK"; return 1; fi
 stop_test_trap; sort -t'/' -k1 -nr "$RESULTS" -o "$RESULTS"; mv -f "$BACK" "$CONF"; ZAPRET_RESTART; BEST_LINE=$(grep -v '^Контрольный тест' "$RESULTS" | head -n1)
 [ -n "$BEST_LINE" ] && echo -e "\n${GREEN}Лучшая стратегия для YouTube: ${NC}${BEST_LINE}"; show_single_result "$RESULTS"; }
@@ -993,14 +993,17 @@ echo -e "${CYAN} 3) ${GREEN}$(get_state "$INSTAGRAM")${NC} Instagram & Facebook\
 echo -e "${CYAN} 6) ${GREEN}$(get_state "$TWCH")${NC} Twitch\n${CYAN} 7) ${GREEN}$(get_state "$TGWeb")${NC} Telegram Web\n${CYAN} 8) ${GREEN}$(get_state "$SPFY")${NC} Spotify\n${CYAN} 9) ${GREEN}$(get_state "$SPFYEXT")${NC} Spotify extended"
 echo -e "${CYAN}10) ${GREEN}$(get_state "$SCell")${NC} Supercell\n${CYAN}11) ${GREEN}$(get_state "$GITH_RAW")${NC} githubusercontent.com\n${CYAN}12) ${GREEN}$(get_state "$GITH")${NC} github.com\n${CYAN}13) ${GREEN}$(get_state "$USoft")${NC} Ubisoft ${GREEN}(${NC}может не работать${GREEN})${NC}"
 echo -e "${CYAN}14) ${GREEN}$(get_state "$TAPEop")${NC} tapeop.dev\n${CYAN}15) ${GREEN}$(get_state "$ROBLOXhost")${NC} картинки Roblox\n${CYAN}16) ${GREEN}$(get_state "$updDIShost")${NC} updates.discord.com\n${CYAN}17) $S_ALL\n${CYAN}18) ${GREEN}Заменить ${NC}hosts${GREEN} на ${NC}GeoHide hosts"
-echo -e "${CYAN}19) ${GREEN}Заменить ${NC}hosts${GREEN} на ${NC}Mafioznik hosts\n${CYAN}20) ${GREEN}Заменить ${NC}hosts${GREEN} на ${NC}Malw.link hosts\n${CYAN}21) ${GREEN}Восстановить ${NC}hosts"
+echo -e "${CYAN}19) ${GREEN}Заменить ${NC}hosts${GREEN} на ${NC}Mafioznik hosts\n${CYAN}20) ${GREEN}Заменить ${NC}hosts${GREEN} на ${NC}Malw.link hosts"
+grep -q '104\.25\.158\.178 finland[0-9]\{5\}\.discord\.media' /etc/hosts && echo -e "${CYAN}21) ${GREEN}Удалить Финские ${NC}IP ${GREEN}из ${NC}hosts\n${CYAN}21) ${GREEN}Восстановить ${NC}hosts"" || echo -e "${CYAN}21) ${GREEN}Добавить ${NC}Финские IP ${GREEN}в ${NC}hosts\n${CYAN}22) ${GREEN}Восстановить ${NC}hosts""
 echo -ne "${CYAN}Enter) ${GREEN}Вернуться в предыдущее меню${NC}\n\n${YELLOW}Выберите пункт:${NC} ";read -r c; case "$c" in 0) toggle_block "$NALOG";; 1) toggle_block "$RUTOR";; 2) toggle_block "$NTC";; 3) toggle_block "$INSTAGRAM";;
 4) toggle_block "$LIBRUSEC";; 5) toggle_block "$AI";; 6) toggle_block "$TWCH";; 7) toggle_block "$TGWeb";; 8) toggle_block "$SPFY";; 9) toggle_block "$SPFYEXT";; 10) toggle_block "$SCell";; 11) toggle_block "$GITH_RAW";; 12) toggle_block "$GITH";;
 13) toggle_block "$USoft";; 14) toggle_block "$TAPEop";; 15) toggle_block "$ROBLOXhost";; 16) toggle_block "$updDIShost";; 17) toggle_all;; 18) menu_GEO_HOSTS;;
 19) echo -e "\n${MAGENTA}Заменяем hosts на Mafioznik hosts${NC}"; wget -qO /etc/hosts ${GH_RAW}/StressOzz/Zapret-Manager/refs/heads/main/files/hosts_mafioznik.txt >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось скачать файл hosts${NC}\n"; PAUSE; }
 /etc/init.d/dnsmasq restart >/dev/null 2>&1; echo -e "hosts ${GREEN}заменён на ${NC}Mafioznik hosts${GREEN}!${NC}\n"; PAUSE;; 20) echo -e "\n${MAGENTA}Заменяем hosts на Malw.link hosts${NC}"
 wget -qO /etc/hosts ${GH_RAW}/StressOzz/Zapret-Manager/refs/heads/main/files/hosts_malw.link.txt >/dev/null 2>&1 || { echo -e "\n${RED}Не удалось скачать файл hosts${NC}\n"; PAUSE; }
-/etc/init.d/dnsmasq restart >/dev/null 2>&1; echo -e "hosts ${GREEN}заменён на ${NC}Malw.link hosts${GREEN}!${NC}\n"; PAUSE;; 21) hosts_reset;; *) break;; esac; done; }
+/etc/init.d/dnsmasq restart >/dev/null 2>&1; echo -e "hosts ${GREEN}заменён на ${NC}Malw.link hosts${GREEN}!${NC}\n"; PAUSE;; 
+21) toggle_finland_hosts;;
+22) hosts_reset;; *) break;; esac; done; }
 status_block() { local line; while IFS= read -r line; do [ -z "$line" ] && continue; grep -Fxq "$line" "$HOSTS_FILE" || return 1; done <<EOF
 $(printf '%b\n' "$1")
 EOF
@@ -1039,11 +1042,11 @@ menu_GEO_HOSTS() {
 # Тест стратегий
 # ==========================================
 show_domain_results(){ clear; echo -e "${MAGENTA}Результат тестирования по домену${NC}\n"; FILE="$RES_DOMAIN"; [ ! -s "$FILE" ] && { echo -e "${RED}Результат не найден!${NC}\n"; PAUSE; return; }
-while IFS= read -r line; do if echo "$line" | grep -q "^Контрольный тест"; then LEFT=$(echo "$line" | cut -d'→' -f1); RIGHT=$(echo "$line" | cut -d'→' -f2); RIGHT_CLEAN=$(echo "$RIGHT" | tr -cd '0-9/')
-OK=$(echo "$RIGHT_CLEAN" | cut -d'/' -f1); TOTAL=$(echo "$RIGHT_CLEAN" | cut -d'/' -f2); [ -z "$OK" ] && OK=0; [ -z "$TOTAL" ] && TOTAL=0; if [ "$OK" -eq "$TOTAL" ] && [ "$TOTAL" -ne 0 ]; then COLOR="$GREEN"
+DOM_CTRL_OK=0; while IFS= read -r line; do if echo "$line" | grep -q "^Контрольный тест"; then LEFT=$(echo "$line" | cut -d'→' -f1); RIGHT=$(echo "$line" | cut -d'→' -f2); RIGHT_CLEAN=$(echo "$RIGHT" | tr -cd '0-9/')
+OK=$(echo "$RIGHT_CLEAN" | cut -d'/' -f1); TOTAL=$(echo "$RIGHT_CLEAN" | cut -d'/' -f2); [ -z "$OK" ] && OK=0; [ -z "$TOTAL" ] && TOTAL=0; DOM_CTRL_OK=$OK; if [ "$OK" -eq "$TOTAL" ] && [ "$TOTAL" -ne 0 ]; then COLOR="$GREEN"
 elif [ "$OK" -eq 0 ]; then COLOR="$RED"; else COLOR="$YELLOW"; fi; echo -e "${CYAN}${LEFT}→ ${COLOR}${OK}/${TOTAL}${NC}"; continue; fi; if echo "$line" | grep -q "→"; then LEFT=$(echo "$line" | cut -d'→' -f1)
 RIGHT=$(echo "$line" | cut -d'→' -f2); RIGHT_CLEAN=$(echo "$RIGHT" | tr -cd '0-9/'); OK=$(echo "$RIGHT_CLEAN" | cut -d'/' -f1); TOTAL=$(echo "$RIGHT_CLEAN" | cut -d'/' -f2); [ -z "$OK" ] && OK=0
-[ -z "$TOTAL" ] && TOTAL=0; if [ "$OK" -eq "$TOTAL" ] && [ "$TOTAL" -ne 0 ]; then COLOR="$GREEN"; elif [ "$OK" -eq 0 ]; then COLOR="$RED"; else COLOR="$YELLOW"; fi; echo -e "${LEFT}→ ${COLOR}${OK}/${TOTAL}${NC}"; continue; fi
+[ -z "$TOTAL" ] && TOTAL=0; if [ "$OK" -eq "$TOTAL" ] && [ "$TOTAL" -ne 0 ]; then COLOR="$GREEN"; elif [ "$OK" -lt "$DOM_CTRL_OK" ]; then COLOR="$RED"; else COLOR="$YELLOW"; fi; echo -e "${LEFT}→ ${COLOR}${OK}/${TOTAL}${NC}"; continue; fi
 if echo "$line" | grep -q "\[ OK \]"; then echo -e "${GREEN}${line}${NC}"; elif echo "$line" | grep -q "\[FAIL\]"; then echo -e "${RED}${line}${NC}"; else echo "$line"; fi; done < "$FILE"; PAUSE; }
 run_test_by_domain() { MODE="domain"; clear; echo -e "${MAGENTA}Тестирование стратегий по домену${NC}\n\n${CYAN}Введите один или несколько доменов через пробел (${NC}x.com vk.com${CYAN})${NC}\n"; echo -ne "${YELLOW}Введите домен: ${NC}"; read -r INPUT
 INPUT="$(printf "%s" "$INPUT" | tr -s ' ')"; [ -z "$INPUT" ] && return; URLS=""; COUNT=0; for item in $INPUT; do item="$(printf "%s" "$item" | tr -d ' \t\r\n')"; [ -z "$item" ] && continue; case "$item" in http://*|https://*) TARGET="$item" ;; *) TARGET="https://$item" ;; esac
@@ -1055,11 +1058,11 @@ sed -n "${START},\$p" "$STR_FILE" > "$TEMP_FILE"; else sed -n "${START},$((NEXT-
 /option NFQWS_OPT '\''/ {printf "\toption NFQWS_OPT '\''\n%s\n'\''\n", block; skip=1; next}
 skip && /^'\''$/ {skip=0; next}
 !skip {print}' "$CONF" > "${CONF}.tmp"; mv "${CONF}.tmp" "$CONF"; echo -e "\n${CYAN}Тестируем стратегию:${NC} ${YELLOW}${NAME}${NC} ($CUR/$TOTAL_STR)"; ZAPRET_RESTART; OK=0;
-LOG_TMP="/tmp/zapret_log_${CUR}"; : > "$LOG_TMP"; check_all_urls; test_interrupted && break; if [ "$OK" -eq 0 ]; then COLOR="${RED}"; elif [ "$OK" -eq "$TOTAL" ]; then COLOR="${GREEN}"; else COLOR="${YELLOW}"; fi; echo -e "${CYAN}Результат теста:${NC} ${COLOR}$OK/$TOTAL${NC}"
+LOG_TMP="/tmp/zapret_log_${CUR}"; : > "$LOG_TMP"; check_all_urls; test_interrupted && break; if [ "$OK" -eq "$TOTAL" ]; then COLOR="${GREEN}"; elif [ "$OK" -lt "$CTRL_OK" ]; then COLOR="${RED}"; else COLOR="${YELLOW}"; fi; echo -e "${CYAN}Результат теста:${NC} ${COLOR}$OK/$TOTAL${NC}"
 { echo "${NAME} → ${OK}/${TOTAL}"; cat "$LOG_TMP"; echo; } >> "$RESULTS"; done < <(printf '%s\n' "$LINES")
 if test_interrupted; then restore_after_test_interrupt "$BACK"; return 1; fi
 stop_test_trap; [ -f "$BACK" ] && mv -f "$BACK" "$CONF"; ZAPRET_RESTART; show_single_result "$RESULTS"; }
-check_zpr_off() { echo -e "\n${CYAN}Контрольный тест: ${YELLOW}Zapret выключен${NC}"; /etc/init.d/zapret stop >/dev/null 2>&1; OK=0; LOG_TMP="/tmp/zapret_log_${CUR}"; : > "$LOG_TMP"; check_all_urls
+check_zpr_off() { echo -e "\n${CYAN}Контрольный тест: ${YELLOW}Zapret выключен${NC}"; /etc/init.d/zapret stop >/dev/null 2>&1; OK=0; LOG_TMP="/tmp/zapret_log_${CUR}"; : > "$LOG_TMP"; check_all_urls; CTRL_OK=$OK
 if [ "$OK" -eq "$TOTAL" ]; then COLOR="${GREEN}"; elif [ "$OK" -ge $((TOTAL/2)) ]; then COLOR="${YELLOW}"; else COLOR="${RED}"; fi; echo -e "${CYAN}Результат теста: ${COLOR}$OK/$TOTAL${NC}"
 if [ "$MODE" = "domain" ]; then { echo "Контрольный тест (Zapret выключен) → ${OK}/${TOTAL}"; cat "$LOG_TMP"; echo; } >> "$RESULTS"; else echo "Контрольный тест (Zapret выключен) → ${OK}/${TOTAL}" >> "$RESULTS"; fi; /etc/init.d/zapret start >/dev/null 2>&1; }
 check_url() { TEXT=$(echo "$1" | cut -d"|" -f1); LINK=$(echo "$1" | cut -d"|" -f2); if curl -sL --connect-timeout 4 --max-time 6 --speed-time 3 --speed-limit 1 --range 0-65535 -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) curl/8.0" -o /dev/null "$LINK" >/dev/null 2>&1; then echo 1 >> "$TMP_OK"; echo -e "${GREEN}[ OK ]${NC} $TEXT"; echo "[ OK ] $TEXT" >> "$LOG_TMP"; else echo -e "${RED}[FAIL]${NC} $TEXT";echo "[FAIL] $TEXT" >> "$LOG_TMP"; fi; }
@@ -1079,13 +1082,13 @@ echo -e "\n${MAGENTA}Тестируем текущую стратегию по �
 check_all_urls; if [ "$OK" -eq "$TOTAL" ]; then COLOR="${GREEN}"; elif [ "$OK" -ge $((TOTAL/2)) ]; then COLOR="${YELLOW}"; else COLOR="${RED}"; fi; echo -e "\n${CYAN}Результат теста YouTube: ${COLOR}$OK/$TOTAL${NC}\n"; rm -f "$OUT_DPI"; PAUSE; }
 show_test_results() { clear; echo -e "${MAGENTA}Результаты тестирования стратегий${NC}\n"; TMP_RES="/tmp/zapret_results_show.$$"; : > "$TMP_RES"; if [ -s "$RES3" ]; then cat "$RES3" > "$TMP_RES"; else [ -s "$RES1" ] && cat "$RES1" >> "$TMP_RES"
 [ -s "$RES2" ] && cat "$RES2" >> "$TMP_RES"; [ ! -s "$TMP_RES" ] && { rm -f "$TMP_RES"; echo -e "${RED}Результаты не найдены!${NC}\n"; PAUSE; return; }; fi; awk '!seen && /^Контрольный тест/ {print; seen=1; next} !/^Контрольный тест/ {print}' "$TMP_RES" > "${TMP_RES}.u"
-mv "${TMP_RES}.u" "$TMP_RES"; TOTAL=$(head -n1 "$TMP_RES" | cut -d'/' -f2); awk -F'[/ ]' '{for(i=1;i<=NF;i++) if($i~/^[0-9]+$/){print $i "/" $(i+1), $0; break}}' "$TMP_RES" | sort -nr -k1,1 | while read -r line; do COUNT=$(echo "$line" | awk -F'/' '{print $1}')
-TEXT=$(echo "$line" | cut -d' ' -f2-); if echo "$TEXT" | grep -q Zapret; then COLOR="$CYAN"; elif [ "$COUNT" -eq "$TOTAL" ]; then COLOR="$GREEN"; elif [ "$COUNT" -gt $((TOTAL/2)) ]; then COLOR="$YELLOW"; else COLOR="$RED"; fi
+mv "${TMP_RES}.u" "$TMP_RES"; TOTAL=$(head -n1 "$TMP_RES" | cut -d'/' -f2); SHOW_CTRL_OK=$(head -n1 "$TMP_RES" | awk -F'[/ ]' '{for(i=1;i<=NF;i++) if($i~/^[0-9]+$/){print $i; break}}'); [ -z "$SHOW_CTRL_OK" ] && SHOW_CTRL_OK=0; awk -F'[/ ]' '{for(i=1;i<=NF;i++) if($i~/^[0-9]+$/){print $i "/" $(i+1), $0; break}}' "$TMP_RES" | sort -nr -k1,1 | while read -r line; do COUNT=$(echo "$line" | awk -F'/' '{print $1}')
+TEXT=$(echo "$line" | cut -d' ' -f2-); if echo "$TEXT" | grep -q Zapret; then COLOR="$CYAN"; elif [ "$COUNT" -eq "$TOTAL" ]; then COLOR="$GREEN"; elif [ "$COUNT" -lt "$SHOW_CTRL_OK" ]; then COLOR="$RED"; else COLOR="$YELLOW"; fi
 echo -e "${COLOR}${TEXT}${NC}"; done; rm -f "$TMP_RES"; echo; PAUSE; }
 show_single_result() { clear; echo -e "${MAGENTA}Результат тестирования стратегии${NC}\n"; local FILE="$1"; [ ! -s "$FILE" ] && { echo -e "${RED}Результат не найден!${NC}\n"; [ -z "$NO_PAUSE" ] && PAUSE; return; }; TMP_RES="/tmp/zapret_results_single.$$"
-cat "$FILE" > "$TMP_RES"; awk '!seen && /^Контрольный тест/ {print; seen=1; next} !/^Контрольный тест/ {print}' "$TMP_RES" > "${TMP_RES}.u"; mv "${TMP_RES}.u" "$TMP_RES"; TOTAL=$(head -n1 "$TMP_RES" | cut -d'/' -f2); awk -F'[/ ]' '{for(i=1;i<=NF;i++) if($i~/^[0-9]+$/){print $i "/" $(i+1), $0; break}}' "$TMP_RES" |
-sort -nr -k1,1 | while read -r line; do COUNT=$(echo "$line" | awk -F'/' '{print $1}'); TEXT=$(echo "$line" | cut -d' ' -f2-); if echo "$TEXT" | grep -q Zapret; then COLOR="$CYAN"; elif [ "$COUNT" -eq "$TOTAL" ]; then COLOR="$GREEN"; elif [ "$COUNT" -gt $((TOTAL/2)) ]; then
-COLOR="$YELLOW"; else COLOR="$RED"; fi; echo -e "${COLOR}${TEXT}${NC}"; done; rm -f "$TMP_RES"; [ -z "$NO_PAUSE" ] && echo && PAUSE; }
+cat "$FILE" > "$TMP_RES"; awk '!seen && /^Контрольный тест/ {print; seen=1; next} !/^Контрольный тест/ {print}' "$TMP_RES" > "${TMP_RES}.u"; mv "${TMP_RES}.u" "$TMP_RES"; TOTAL=$(head -n1 "$TMP_RES" | cut -d'/' -f2); SHOW_CTRL_OK=$(head -n1 "$TMP_RES" | awk -F'[/ ]' '{for(i=1;i<=NF;i++) if($i~/^[0-9]+$/){print $i; break}}'); [ -z "$SHOW_CTRL_OK" ] && SHOW_CTRL_OK=0; awk -F'[/ ]' '{for(i=1;i<=NF;i++) if($i~/^[0-9]+$/){print $i "/" $(i+1), $0; break}}' "$TMP_RES" |
+sort -nr -k1,1 | while read -r line; do COUNT=$(echo "$line" | awk -F'/' '{print $1}'); TEXT=$(echo "$line" | cut -d' ' -f2-); if echo "$TEXT" | grep -q Zapret; then COLOR="$CYAN"; elif [ "$COUNT" -eq "$TOTAL" ]; then COLOR="$GREEN"; elif [ "$COUNT" -lt "$SHOW_CTRL_OK" ]; then
+COLOR="$RED"; else COLOR="$YELLOW"; fi; echo -e "${COLOR}${TEXT}${NC}"; done; rm -f "$TMP_RES"; [ -z "$NO_PAUSE" ] && echo && PAUSE; }
 run_test_flowseal() { clear; echo -e "${MAGENTA}Тестирование стратегий Flowseal${NC}\n\n${CYAN}Собираем стратегии для теста${NC}"; RESULTS="/opt/zapret/tmp/results_flowseal.txt"; rm -rf "$TMP_SF"; mkdir -p "$TMP_SF"
 download_strategies 1; cp "$OUT" "$STR_FILE"; cp "$CONF" "$BACK"; sed -i '/#Y/d' "$STR_FILE"; run_test_core "$RESULTS"; }
 run_test_versions() { clear; echo -e "${MAGENTA}Тестирование стратегий v${NC}\n\n${CYAN}Собираем стратегии для теста${NC}"; RESULTS="/opt/zapret/tmp/results_versions.txt"; : > "$STR_FILE"; cp "$CONF" "$BACK"
@@ -1101,7 +1104,7 @@ BLOCK=$(cat "$TEMP_FILE"); NAME=$(head -n1 "$TEMP_FILE"); NAME="${NAME#\#}"; awk
 /option NFQWS_OPT '\''/ {printf "\toption NFQWS_OPT '\''\n%s\n'\''\n", block; skip=1; next}
 skip && /^'\''$/ {skip=0; next}
 !skip {print}' "$CONF" > "${CONF}.tmp"; mv "${CONF}.tmp" "$CONF"; echo -e "\n${CYAN}Тестируем стратегию: ${YELLOW}${NAME}${NC} ($CUR/$TOTAL_STR)"; ZAPRET_RESTART; OK=0; LOG_TMP="/tmp/zapret_log_${CUR}"; : > "$LOG_TMP"; check_all_urls
-test_interrupted && break; if [ "$OK" -eq "$TOTAL" ]; then COLOR="${GREEN}"; elif [ "$OK" -ge $((TOTAL/2)) ]; then COLOR="${YELLOW}"; else COLOR="${RED}"; fi; echo -e "${CYAN}Результат теста: ${COLOR}$OK/$TOTAL${NC}"; echo -e "${NAME} → ${OK}/${TOTAL}" >> "$RESULTS"; done < <(printf '%s\n' "$LINES")
+test_interrupted && break; if [ "$OK" -eq "$TOTAL" ]; then COLOR="${GREEN}"; elif [ "$OK" -lt "$CTRL_OK" ]; then COLOR="${RED}"; else COLOR="${YELLOW}"; fi; echo -e "${CYAN}Результат теста: ${COLOR}$OK/$TOTAL${NC}"; echo -e "${NAME} → ${OK}/${TOTAL}" >> "$RESULTS"; done < <(printf '%s\n' "$LINES")
 if test_interrupted; then rm -f "$OUT_DPI"; restore_after_test_interrupt "$BACK"; return 1; fi
 stop_test_trap; sort -t'/' -k1 -nr "$RESULTS" -o "$RESULTS"; mv -f "$BACK" "$CONF"; rm -f "$OUT_DPI"; ZAPRET_RESTART; [ -z "$NO_PAUSE" ] && show_single_result "$RESULTS"; }
 TEST_CUSTOM() { if [ ! -f "$CUSTOM_STR_FILE" ]; then echo -e "\n${RED}Файл ${NC}$CUSTOM_STR_FILE${RED} не найден!${NC}\n"; PAUSE; return; fi; if [ ! -s "$CUSTOM_STR_FILE" ]; then echo -e "\n${RED}Файл ${NC}$CUSTOM_STR_FILE ${RED}пустой!${NC}\n"; PAUSE; return; fi
