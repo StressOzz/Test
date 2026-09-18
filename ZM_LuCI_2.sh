@@ -1,6 +1,6 @@
 #!/bin/sh
 # Zapret Manager by StressOzz for LuCI installer
-# Version: 1.09
+# Version: 1.10
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -26,7 +26,7 @@ mkdir -p /usr/lib/zapret-manager
 cat > '/usr/lib/zapret-manager/backend.sh' << 'ZM_INSTALLER_EOF'
 
 CONF="/etc/config/zapret"
-ZM_VERSION="1.09"
+ZM_VERSION="1.10"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
@@ -2119,23 +2119,15 @@ zm_update_status() {
 }
 
 do_zm_update() {
-	echo "==> Скачиваем новую версию установщика"
+	echo "==> Скачиваем и устанавливаем новую версию панели"
 	local tmp="/tmp/zm_update_install.sh"
 	rm -f "$tmp"
 	wget -q -U "Mozilla/5.0" -O "$tmp" "$ZM_SCRIPT_URL" || { echo "ОШИБКА: не удалось скачать установщик"; rm -f "$tmp"; return 1; }
 	[ -s "$tmp" ] || { echo "ОШИБКА: скачался пустой файл"; rm -f "$tmp"; return 1; }
 	head -c 200 "$tmp" | grep -q '^#!/bin/sh' || { echo "ОШИБКА: скачанный файл не похож на установщик"; rm -f "$tmp"; return 1; }
-	chmod +x "$tmp"
-	echo "==> Запускаем установку новой версии в фоне"
-	(
-		sleep 1
-		sh "$tmp" >/tmp/zm_update_install.log 2>&1
-		rm -f /tmp/luci-indexcache* /tmp/luci-modulecache/* 2>/dev/null
-		/etc/init.d/rpcd restart >/dev/null 2>&1
-		/etc/init.d/uhttpd restart >/dev/null 2>&1
-		rm -f "$tmp"
-	) &
-	echo "==> Готово, обновление запущено — панель станет недоступна на несколько секунд, затем обновите страницу"
+	sh "$tmp"
+	rm -f "$tmp"
+	echo "==> Готово"
 }
 
 zm_update_action() {
@@ -2977,6 +2969,115 @@ mixomo_apply_subscription() {
 	printf '{"ok":true,"mode":"created"}\n'
 }
 
+MAGITRICKLE_CONF="/etc/magitrickle/state/config.yaml"
+MAGITRICKLE_PORT="8080"
+MAGITRICKLE_PRESET_DEFAULT="${GH_RAW}/StressOzz/Zapret-Manager/refs/heads/main/files/MagiTrickle/config.yaml"
+MAGITRICKLE_PRESET_ITDOG="${GH_RAW}/StressOzz/Zapret-Manager/refs/heads/main/files/MagiTrickle/configAD.yaml"
+MAGITRICKLE_PRESET_OLD="${GH_RAW}/StressOzz/Zapret-Manager/refs/heads/main/files/MagiTrickle/configOLD.yaml"
+
+do_magitrickle_install() {
+	_ensure_deps
+	echo "==> Определяем архитектуру и формат пакета"
+	local pkg_install raz suf arch_mt
+	if [ "$PKG" = "apk" ]; then pkg_install="apk add --allow-untrusted"; raz="apk"; suf="r"
+	else pkg_install="opkg install"; raz="ipk"; suf=""; fi
+	arch_mt=$(grep '^OPENWRT_ARCH=' /etc/os-release 2>/dev/null | cut -d'"' -f2)
+	[ -n "$arch_mt" ] || { echo "ОШИБКА: не удалось определить архитектуру из /etc/os-release"; return 1; }
+	echo "==> Архитектура: $arch_mt"
+
+	echo "==> Определяем последнюю версию MagiTrickle"
+	local mt_version
+	mt_version=$(curl -Ls -o /dev/null -w '%{url_effective}' https://github.com/MagiTrickle/MagiTrickle/releases/latest 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+	[ -n "$mt_version" ] || { echo "ОШИБКА: не удалось определить версию MagiTrickle"; return 1; }
+	echo "==> Версия: $mt_version"
+
+	local url file
+	url="${GH_MAIN}/MagiTrickle/MagiTrickle/releases/download/${mt_version}/magitrickle_${mt_version}-${suf}1_openwrt_${arch_mt}.${raz}"
+	file="/tmp/$(basename "$url")"
+	echo "==> Скачиваем $(basename "$url")"
+	curl -Lf --retry 3 --retry-delay 2 -o "$file" "$url" >/dev/null 2>&1 || { echo "ОШИБКА: не удалось скачать пакет"; rm -f "$file"; return 1; }
+
+	echo "==> Устанавливаем пакет"
+	$pkg_install "$file" >/dev/null 2>&1 || { echo "ОШИБКА: менеджер пакетов отказался ставить"; rm -f "$file"; return 1; }
+	rm -f "$file"
+
+	if [ ! -x /etc/init.d/magitrickle ]; then
+		echo "ОШИБКА: установка не удалась — служба magitrickle не появилась"
+		return 1
+	fi
+	/etc/init.d/magitrickle enable >/dev/null 2>&1
+	/etc/init.d/magitrickle restart >/dev/null 2>&1
+	echo "==> Готово, MagiTrickle установлен"
+}
+
+do_magitrickle_remove() {
+	echo "==> Останавливаем MagiTrickle"
+	if [ -x /etc/init.d/magitrickle ]; then
+		/etc/init.d/magitrickle stop >/dev/null 2>&1
+		/etc/init.d/magitrickle disable >/dev/null 2>&1
+	fi
+	$DELETE magitrickle >/dev/null 2>&1
+	rm -rf /etc/magitrickle
+	echo "==> Готово, MagiTrickle удалён"
+}
+
+magitrickle_status() {
+	local installed="not_installed" running="false" version=""
+	if [ -x /etc/init.d/magitrickle ]; then
+		installed="installed"
+		case "$(/etc/init.d/magitrickle status 2>/dev/null)" in running|active) running="true" ;; esac
+		if [ "$PKG" = "apk" ]; then
+			version=$(apk info -v 2>/dev/null | grep '^magitrickle-' | cut -d- -f2)
+		else
+			version=$(opkg status magitrickle 2>/dev/null | awk '/^Version:/ {sub(/-[a-zA-Z]*1$/,"",$2); print $2}')
+		fi
+	fi
+	local has_config="false"
+	[ -s "$MAGITRICKLE_CONF" ] && has_config="true"
+	printf '{"installed":"%s","running":%s,"version":"%s","has_config":%s,"port":"%s"}\n' \
+		"$installed" "$running" "$(esc "$version")" "$has_config" "$MAGITRICKLE_PORT"
+}
+
+magitrickle_action() {
+	local action="$1"
+	case "$action" in
+		install|update) job_start magitrickle_install do_magitrickle_install ;;
+		remove)         job_start magitrickle_remove do_magitrickle_remove ;;
+		start)
+			[ -x /etc/init.d/magitrickle ] || { echo '{"error":"MagiTrickle не установлен"}'; return 1; }
+			/etc/init.d/magitrickle start >/dev/null 2>&1
+			magitrickle_status ;;
+		stop)
+			[ -x /etc/init.d/magitrickle ] || { echo '{"error":"MagiTrickle не установлен"}'; return 1; }
+			/etc/init.d/magitrickle stop >/dev/null 2>&1
+			magitrickle_status ;;
+		restart)
+			[ -x /etc/init.d/magitrickle ] || { echo '{"error":"MagiTrickle не установлен"}'; return 1; }
+			/etc/init.d/magitrickle restart >/dev/null 2>&1
+			magitrickle_status ;;
+		*) echo '{"error":"неизвестное действие"}' ;;
+	esac
+}
+
+magitrickle_apply_preset() {
+	local preset="$1" url
+	case "$preset" in
+		default) url="$MAGITRICKLE_PRESET_DEFAULT" ;;
+		itdog)   url="$MAGITRICKLE_PRESET_ITDOG" ;;
+		old)     url="$MAGITRICKLE_PRESET_OLD" ;;
+		*) echo '{"error":"неизвестный список"}'; return 1 ;;
+	esac
+	[ -x /etc/init.d/magitrickle ] || { echo '{"error":"MagiTrickle не установлен"}'; return 1; }
+	mkdir -p "$(dirname "$MAGITRICKLE_CONF")"
+	wget -q -O "$MAGITRICKLE_CONF" "$url" || { echo '{"error":"не удалось скачать список"}'; return 1; }
+	[ -s "$MAGITRICKLE_CONF" ] || { echo '{"error":"скачался пустой файл"}'; return 1; }
+	/etc/init.d/magitrickle enable >/dev/null 2>&1
+	/etc/init.d/magitrickle reload >/dev/null 2>&1
+	/etc/init.d/magitrickle start >/dev/null 2>&1
+	/etc/init.d/magitrickle restart >/dev/null 2>&1
+	printf '{"ok":true}\n'
+}
+
 _doh_file="/etc/config/https-dns-proxy"
 
 do_doh_install() {
@@ -3133,6 +3234,9 @@ case "$cmd" in
 	mixomo_config_get)                    mixomo_config_get ;;
 	mixomo_config_set)                    mixomo_config_set "$1" ;;
 	mixomo_apply_subscription)            mixomo_apply_subscription "$1" ;;
+	magitrickle_status)                   magitrickle_status ;;
+	magitrickle_action)                   magitrickle_action "$1" ;;
+	magitrickle_apply_preset)             magitrickle_apply_preset "$1" ;;
 	*) echo '{"error":"неизвестная команда"}'; exit 1 ;;
 esac
 ZM_INSTALLER_EOF
@@ -3203,6 +3307,9 @@ list_methods() {
 	json_add_object "mixomo_config_get";       json_close_object
 	json_add_object "mixomo_config_set";       json_add_string "content" "string"; json_close_object
 	json_add_object "mixomo_apply_subscription"; json_add_string "url" "string"; json_close_object
+	json_add_object "magitrickle_status";      json_close_object
+	json_add_object "magitrickle_action";      json_add_string "action" "string"; json_close_object
+	json_add_object "magitrickle_apply_preset"; json_add_string "preset" "string"; json_close_object
 	json_dump
 }
 
@@ -3268,6 +3375,9 @@ call_method() {
 		mixomo_config_get)       "$BACKEND" mixomo_config_get ;;
 		mixomo_config_set)       json_get_var content content; "$BACKEND" mixomo_config_set "$content" ;;
 		mixomo_apply_subscription) json_get_var url url; "$BACKEND" mixomo_apply_subscription "$url" ;;
+		magitrickle_status)      "$BACKEND" magitrickle_status ;;
+		magitrickle_action)      json_get_var action action; "$BACKEND" magitrickle_action "$action" ;;
+		magitrickle_apply_preset) json_get_var preset preset; "$BACKEND" magitrickle_apply_preset "$preset" ;;
 		*) echo '{"error":"unknown method"}'; return 1 ;;
 	esac
 }
@@ -3293,6 +3403,7 @@ cat > '/usr/share/rpcd/acl.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF'
 					"discord_status", "hosts_status", "doh_status", "game_status",
 					"system_status", "mirror_status", "exclusions_status", "tg_status", "tgws_status",
 					"test_status", "test_results", "zm_update_status", "mixomo_status", "mixomo_config_get",
+					"magitrickle_status",
 					"zapret_latest_version"
 				]
 			}
@@ -3309,7 +3420,8 @@ cat > '/usr/share/rpcd/acl.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF'
 					"system_toggle_flow_offloading_fix", "system_toggle_expert_mode", "system_uninstall_panel",
 					"mirror_set", "exclusions_toggle", "exclusions_clear",
 					"tg_action", "tg_restart_all", "tgws_action", "test_action", "zm_update_action",
-					"mixomo_action", "mixomo_config_set", "mixomo_apply_subscription"
+					"mixomo_action", "mixomo_config_set", "mixomo_apply_subscription",
+					"magitrickle_action", "magitrickle_apply_preset"
 				]
 			}
 		}
@@ -3453,6 +3565,9 @@ var callMixomoAction = rpc.declare({ object: 'zapret-manager', method: 'mixomo_a
 var callMixomoConfigGet = rpc.declare({ object: 'zapret-manager', method: 'mixomo_config_get', expect: {} });
 var callMixomoConfigSet = rpc.declare({ object: 'zapret-manager', method: 'mixomo_config_set', params: ['content'], expect: {} });
 var callMixomoApplySubscription = rpc.declare({ object: 'zapret-manager', method: 'mixomo_apply_subscription', params: ['url'], expect: {} });
+var callMagitrickleStatus = rpc.declare({ object: 'zapret-manager', method: 'magitrickle_status', expect: {} });
+var callMagitrickleAction = rpc.declare({ object: 'zapret-manager', method: 'magitrickle_action', params: ['action'], expect: {} });
+var callMagitrickleApplyPreset = rpc.declare({ object: 'zapret-manager', method: 'magitrickle_apply_preset', params: ['preset'], expect: {} });
 
 function detectMissingThemeVar() {
 	if (document.documentElement.hasAttribute('data-zm-theme-checked')) return;
@@ -3674,7 +3789,10 @@ return baseclass.extend({
 	mixomoAction: callMixomoAction,
 	mixomoConfigGet: callMixomoConfigGet,
 	mixomoConfigSet: callMixomoConfigSet,
-	mixomoApplySubscription: callMixomoApplySubscription
+	mixomoApplySubscription: callMixomoApplySubscription,
+	magitrickleStatus: callMagitrickleStatus,
+	magitrickleAction: callMagitrickleAction,
+	magitrickleApplyPreset: callMagitrickleApplyPreset
 });
 ZM_INSTALLER_EOF
 
@@ -3870,6 +3988,8 @@ return view.extend({
 
 		overviewEl.appendChild(renderOverview(data, dohData, hostsData, sysData));
 		renderCards(data);
+		var updateEl = E('div', {});
+		wrap.appendChild(updateEl);
 		wrap.appendChild(E('div', { 'class': 'zm-header' }, [
 			E('h2', {}, 'Zapret Manager'),
 			E('span', { 'class': 'zm-header-by' }, 'by StressOzz'),
@@ -3889,13 +4009,10 @@ return view.extend({
 		this.renderCards = renderCards;
 		this.refreshOverview = refreshOverview;
 
-		var updateEl = E('div', {});
-		wrap.appendChild(updateEl);
-
 		var zmUpdateBusy = false;
 		function waitForServerAndReload() {
 			var attempts = 0;
-			var maxAttempts = 20;
+			var maxAttempts = 30;
 			var target = L.resource('view/zapret-manager/dashboard.js') + '?_zmcheck=' + Date.now();
 			var timer = setInterval(function() {
 				attempts++;
@@ -3913,7 +4030,7 @@ return view.extend({
 						zm.toast('Панель обновлена, но страница пока не отвечает — обновите вручную (F5)', 'warning', 15000);
 					}
 				});
-			}, 2000);
+			}, 700);
 		}
 		function renderZmUpdate() {
 			updateEl.innerHTML = '';
@@ -4600,11 +4717,13 @@ cat > '/www/luci-static/resources/view/zapret-manager/mixomo.js' << 'ZM_INSTALLE
 return view.extend({
 	load: function() {
 		zm.injectCss();
-		return zm.mixomoStatus();
+		return Promise.all([ zm.mixomoStatus(), zm.magitrickleStatus().catch(function() { return {}; }) ]);
 	},
 
-	render: function(data) {
+	render: function(all) {
 		var view = this;
+		var data = all[0];
+		var mtData = all[1] || {};
 		var wrap = E('div', { 'class': 'zm-wrap' });
 		var logEl = E('pre', { 'class': 'zm-log' });
 		var busy = false;
@@ -4751,6 +4870,139 @@ return view.extend({
 			}, 'Сохранить и перезапустить')
 		]));
 
+		var mtLogEl = E('pre', { 'class': 'zm-log' });
+		var mtBusy = false;
+		var mtStatusCard = E('div', { 'class': 'zm-card' });
+		var mtPresetCard = E('div', { 'class': 'zm-card' });
+		var mtOpenCard = E('div', { 'class': 'zm-card' });
+
+		function renderMtStatus(d) {
+			mtStatusCard.innerHTML = '';
+			var installed = d.installed === 'installed';
+			var actions = [];
+			if (installed) {
+				actions.push(E('button', {
+					'class': 'cbi-button cbi-button-remove',
+					'click': function() { doMtAction('remove'); }
+				}, 'Удалить'));
+				actions.push(E('button', {
+					'class': 'cbi-button',
+					'click': function() { doMtAction(d.running ? 'stop' : 'start'); }
+				}, d.running ? 'Остановить' : 'Запустить'));
+				actions.push(E('button', {
+					'class': 'cbi-button',
+					'click': function() { doMtAction('restart'); }
+				}, 'Перезапустить'));
+				actions.push(E('button', {
+					'class': 'cbi-button',
+					'click': function() { doMtAction('update'); }
+				}, 'Переустановить/обновить'));
+			} else {
+				actions.push(E('button', {
+					'class': 'cbi-button cbi-button-positive',
+					'click': function() { doMtAction('install'); }
+				}, 'Установить'));
+			}
+			mtStatusCard.appendChild(E('h3', {}, 'MagiTrickle'));
+			mtStatusCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Направляет в Mixomo только выбранные сайты и адреса — остальной трафик идёт напрямую через провайдера. Собственный веб-интерфейс на порту ' + d.port + ' — ниже можно быстро выбрать готовый список или открыть полноценное управление.'));
+			mtStatusCard.appendChild(E('div', { 'class': 'zm-row' }, [
+				E('span', { 'class': 'zm-label' }, 'Статус'),
+				installed ? zm.badge(d.running === true, 'запущен', 'остановлен') : zm.badge(false, '', 'не установлен')
+			]));
+			if (installed && d.version) {
+				mtStatusCard.appendChild(E('div', { 'class': 'zm-row' }, [
+					E('span', { 'class': 'zm-label' }, 'Версия'), E('span', {}, d.version)
+				]));
+			}
+			if (installed) {
+				mtStatusCard.appendChild(E('div', { 'class': 'zm-row' }, [
+					E('span', { 'class': 'zm-label' }, 'Список доменов'),
+					zm.badge(d.has_config === true, 'настроен', 'не настроен')
+				]));
+			}
+			mtStatusCard.appendChild(E('div', { 'class': 'zm-actions' }, actions));
+		}
+
+		function doMtAction(action) {
+			if (mtBusy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+			var job = action === 'remove' ? 'magitrickle_remove' : 'magitrickle_install';
+			var isBg = action === 'install' || action === 'update' || action === 'remove';
+			mtBusy = true;
+			zm.toast(
+				action === 'remove' ? 'Удаляем MagiTrickle'
+				: action === 'update' ? 'Переустанавливаем MagiTrickle'
+				: action === 'install' ? 'Устанавливаем MagiTrickle'
+				: action === 'start' ? 'Запускаем MagiTrickle'
+				: action === 'stop' ? 'Останавливаем MagiTrickle'
+				: 'Перезапускаем MagiTrickle',
+				'warning'
+			);
+			zm.magitrickleAction(action).then(function(res) {
+				if (res.error) { mtBusy = false; zm.toast(res.error, 'error'); return; }
+				if (isBg && res.started) {
+					zm.pollJob(job, mtLogEl, function(ok) {
+						mtBusy = false;
+						zm.toast(ok ? 'Готово' : 'Ошибка', ok ? 'info' : 'error');
+						zm.magitrickleStatus().then(function(d) { renderMtStatus(d); renderMtOpen(d); });
+					});
+				} else {
+					mtBusy = false;
+					renderMtStatus(res);
+					renderMtOpen(res);
+					zm.toast('Готово', 'info');
+				}
+			}).catch(function() { mtBusy = false; });
+		}
+
+		var PRESETS = [
+			{ id: 'default', label: 'Список по умолчанию' },
+			{ id: 'itdog', label: 'Список ITDog' },
+			{ id: 'old', label: 'Список Internet Helper (старый)' }
+		];
+		mtPresetCard.appendChild(E('h3', {}, 'Готовые списки доменов'));
+		mtPresetCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Быстрая замена текущего списка доменов MagiTrickle на один из готовых наборов. Для собственного точного списка сайтов используйте полноценный интерфейс MagiTrickle ниже.'));
+		mtPresetCard.appendChild(E('div', { 'class': 'zm-actions' }, PRESETS.map(function(p) {
+			return E('button', {
+				'class': 'cbi-button',
+				'click': function() {
+					if (mtBusy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+					mtBusy = true;
+					zm.toast('Применяем список: ' + p.label, 'warning');
+					zm.magitrickleApplyPreset(p.id).then(function(res) {
+						mtBusy = false;
+						if (res.error) { zm.toast(res.error, 'error'); return; }
+						zm.toast('Список применён: ' + p.label, 'info');
+						zm.magitrickleStatus().then(renderMtStatus);
+					}).catch(function() { mtBusy = false; });
+				}
+			}, p.label);
+		})));
+
+		function renderMtOpen(d) {
+			mtOpenCard.innerHTML = '';
+			mtOpenCard.appendChild(E('h3', {}, 'Управление списками MagiTrickle'));
+			if (d.installed !== 'installed') {
+				mtOpenCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Установите MagiTrickle, чтобы открыть его собственный интерфейс управления группами и подписками.'));
+				return;
+			}
+			var host = window.location.hostname;
+			var url = 'http://' + host + ':' + (d.port || '8080');
+			if (window.location.protocol === 'https:') {
+				mtOpenCard.appendChild(E('p', { 'class': 'zm-hint' }, 'HTTPS-соединение блокирует встроенный интерфейс MagiTrickle внутри страницы. Откройте его в новой вкладке для полноценного управления «Группами» и «Подписками».'));
+				mtOpenCard.appendChild(E('div', { 'class': 'zm-actions' }, [
+					E('a', { 'class': 'cbi-button cbi-button-positive', 'href': url, 'target': '_blank', 'rel': 'noreferrer' }, 'Открыть MagiTrickle')
+				]));
+			} else {
+				mtOpenCard.appendChild(E('iframe', {
+					'src': url,
+					'style': 'width:100%; height:640px; border:1px solid rgba(0,0,0,.1); border-radius:10px'
+				}));
+			}
+		}
+
+		renderMtStatus(mtData);
+		renderMtOpen(mtData);
+
 		renderStatus(data);
 		refreshConfig();
 
@@ -4758,6 +5010,10 @@ return view.extend({
 		wrap.appendChild(subCard);
 		wrap.appendChild(logEl);
 		wrap.appendChild(configCard);
+		wrap.appendChild(mtStatusCard);
+		wrap.appendChild(mtPresetCard);
+		wrap.appendChild(mtLogEl);
+		wrap.appendChild(mtOpenCard);
 		return wrap;
 	}
 });
