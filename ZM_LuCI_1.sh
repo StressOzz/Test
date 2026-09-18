@@ -1,6 +1,6 @@
 #!/bin/sh
 # Zapret Manager by StressOzz for LuCI installer
-# Version: 1.06
+# Version: 1.09
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -26,15 +26,24 @@ mkdir -p /usr/lib/zapret-manager
 cat > '/usr/lib/zapret-manager/backend.sh' << 'ZM_INSTALLER_EOF'
 
 CONF="/etc/config/zapret"
-ZM_VERSION="1.06"
+ZM_VERSION="1.09"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
+MT_URL_ITDOG="${GH_RAW}/StressOzz/Zapret-Manager/refs/heads/main/files/MagiTrickle/configAD.yaml"
+MT_URL_IH1="${GH_RAW}/StressOzz/Zapret-Manager/refs/heads/main/files/MagiTrickle/config.yaml"
+MT_URL_IH2="${GH_RAW}/StressOzz/Zapret-Manager/refs/heads/main/files/MagiTrickle/configOLD.yaml"
 EXCLUDE_URL="${GH_RAW}/StressOzz/Zapret-Manager/refs/heads/main/zapret-hosts-user-exclude.txt"
 FLOWSEAL_ZIP="${GH_MAIN}/Flowseal/zapret-discord-youtube/archive/refs/heads/main.zip"
 FLOWSEAL_FAKE_RAW="${GH_MAIN}/Flowseal/zapret-discord-youtube/raw/refs/heads/main/bin"
 STR_URL="${GH_RAW}/StressOzz/Zapret-Manager/refs/heads/main/files/StrYoutube"
 JOBS_DIR="/tmp/zapret-manager"
+CRON_FILE="/etc/crontabs/root"
+MIHOMO_DIR="/etc/mihomo"
+MIHOMO_BIN="/usr/bin/mihomo"
+MIHOMO_CONF="/etc/mihomo/config.yaml"
+MAGITRICKLE_CONF="/etc/magitrickle/state/config.yaml"
+MIXOMO_CRON_CMD="/etc/init.d/mihomo restart"
 HOSTS_FILE="/etc/hosts"
 EXPERT_MODE_FILE="/etc/zapret_manager_expert_mode"
 PORTS_UDP="88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535"
@@ -2102,6 +2111,9 @@ test_results() {
 zm_update_status() {
 	local latest_line latest=""
 	latest_line=$(curl -fsSL --connect-timeout 5 --max-time 8 -r 0-400 "$ZM_SCRIPT_URL" 2>/dev/null | grep -m1 '^# Version:')
+	if [ -z "$latest_line" ]; then
+		latest_line=$(curl -fsSL --connect-timeout 5 --max-time 10 "$ZM_SCRIPT_URL" 2>/dev/null | grep -m1 '^# Version:')
+	fi
 	latest=$(echo "$latest_line" | sed 's/^# Version:[[:space:]]*//')
 	printf '{"current":"%s","latest":"%s"}\n' "$(esc "$ZM_VERSION")" "$(esc "$latest")"
 }
@@ -2115,12 +2127,854 @@ do_zm_update() {
 	head -c 200 "$tmp" | grep -q '^#!/bin/sh' || { echo "ОШИБКА: скачанный файл не похож на установщик"; rm -f "$tmp"; return 1; }
 	chmod +x "$tmp"
 	echo "==> Запускаем установку новой версии в фоне"
-	( sleep 1; sh "$tmp" >/tmp/zm_update_install.log 2>&1; rm -f "$tmp" ) &
+	(
+		sleep 1
+		sh "$tmp" >/tmp/zm_update_install.log 2>&1
+		rm -f /tmp/luci-indexcache* /tmp/luci-modulecache/* 2>/dev/null
+		/etc/init.d/rpcd restart >/dev/null 2>&1
+		/etc/init.d/uhttpd restart >/dev/null 2>&1
+		rm -f "$tmp"
+	) &
 	echo "==> Готово, обновление запущено — панель станет недоступна на несколько секунд, затем обновите страницу"
 }
 
 zm_update_action() {
 	job_start zm_update do_zm_update
+}
+
+_mixomo_lan_ip() { uci -q get network.lan.ipaddr 2>/dev/null | cut -d/ -f1; }
+
+_mixomo_arch() {
+	local arch endian_byte
+	arch=$(uname -m)
+	endian_byte=$(hexdump -s 5 -n 1 -e '1/1 "%d"' /bin/busybox 2>/dev/null || echo "0")
+	case "$arch" in
+		x86_64)
+			if grep -q avx2 /proc/cpuinfo 2>/dev/null; then echo "amd64"; else echo "amd64-compatible"; fi
+			;;
+		i?86) echo "386" ;;
+		aarch64|arm64) echo "arm64" ;;
+		armv7*) echo "armv7" ;;
+		armv5*|armv4*) echo "armv5" ;;
+		mips*)
+			local fpu floattype
+			fpu=$(grep -c FPU /proc/cpuinfo 2>/dev/null || echo 0)
+			floattype="softfloat"
+			[ "$fpu" -gt 0 ] && floattype="hardfloat"
+			if [ "$endian_byte" = "1" ]; then echo "mipsle-${floattype}"; else echo "mips-${floattype}"; fi
+			;;
+		riscv64) echo "riscv64" ;;
+		*) return 1 ;;
+	esac
+}
+
+mixomo_status() {
+	local mihomo="not_installed" mihomo_running="false"
+	local magitrickle="not_installed" magitrickle_running="false" mt_ver="" mt_latest=""
+	local hev="not_installed" hev_running="false"
+	local lan_ip subscription="false" mt_list="" autorestart=""
+
+	if [ -x "$MIHOMO_BIN" ]; then
+		mihomo="installed"
+		pidof mihomo >/dev/null 2>&1 && mihomo_running="true"
+	fi
+	if [ -x /etc/init.d/magitrickle ]; then
+		magitrickle="installed"
+		/etc/init.d/magitrickle status >/dev/null 2>&1 && magitrickle_running="true"
+		if [ "$PKG" = "apk" ]; then
+			mt_ver=$(apk info -v 2>/dev/null | grep '^magitrickle-' | cut -d- -f2)
+		else
+			mt_ver=$(opkg status magitrickle 2>/dev/null | awk '/^Version:/ {sub(/-1$/,"",$2); sub(/-r1$/,"",$2); print $2}')
+		fi
+		mt_latest=$(curl -fsSL --connect-timeout 4 --max-time 6 -o /dev/null -w '%{url_effective}' "https://github.com/MagiTrickle/MagiTrickle/releases/latest" 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+	fi
+	if [ -x /etc/init.d/hev-socks5-tunnel ]; then
+		hev="installed"
+		/etc/init.d/hev-socks5-tunnel status >/dev/null 2>&1 && hev_running="true"
+	fi
+
+	lan_ip=$(_mixomo_lan_ip)
+	[ -f "$MIHOMO_CONF" ] && grep -q '^[[:space:]]*[^#].*url: "' "$MIHOMO_CONF" && subscription="true"
+
+	if [ -f "$MAGITRICKLE_CONF" ]; then
+		if grep -Fq 'name: Google_ai' "$MAGITRICKLE_CONF"; then mt_list="itdog"
+		elif grep -Fq 'name: Meta (WA+FB+Instagram)' "$MAGITRICKLE_CONF"; then mt_list="ih2"
+		elif grep -Fq 'url: https://sw.ext.io/ipset/ipset_cf.list' "$MAGITRICKLE_CONF"; then mt_list="ih1"
+		fi
+	fi
+
+	local cronline hourm
+	cronline=$(grep -F "$MIXOMO_CRON_CMD" "$CRON_FILE" 2>/dev/null | head -n1)
+	if [ -n "$cronline" ]; then
+		hourm=$(echo "$cronline" | awk '{print $2}')
+		case "$hourm" in
+			*/*) autorestart="every:$(echo "$hourm" | cut -d'/' -f2)" ;;
+			*) autorestart="daily:$hourm" ;;
+		esac
+	fi
+
+	printf '{"mihomo":"%s","mihomo_running":%s,"magitrickle":"%s","magitrickle_running":%s,"magitrickle_version":"%s","magitrickle_latest":"%s","hev":"%s","hev_running":%s,"lan_ip":"%s","subscription":%s,"magitrickle_list":"%s","autorestart":"%s"}\n' \
+		"$mihomo" "$mihomo_running" "$magitrickle" "$magitrickle_running" "$(esc "$mt_ver")" "$(esc "$mt_latest")" "$hev" "$hev_running" "$(esc "$lan_ip")" "$subscription" "$mt_list" "$(esc "$autorestart")"
+}
+
+do_mixomo_install() {
+	_ensure_deps
+	echo "==> Устанавливаем Mixomo (Mihomo + hev-socks5-tunnel + MagiTrickle)"
+
+	command -v curl >/dev/null 2>&1 || { echo "ОШИБКА: не найден curl"; return 1; }
+	if [ ! -f /etc/ssl/certs/ca-certificates.crt ] && [ ! -f /etc/ssl/certs/ca-bundle.crt ]; then
+		echo "ОШИБКА: не найден пакет ca-certificates"
+		return 1
+	fi
+	if [ ! -c /dev/net/tun ]; then
+		modprobe tun >/dev/null 2>&1
+		[ -c /dev/net/tun ] || { echo "ОШИБКА: в ядре нет поддержки TUN"; return 1; }
+	fi
+
+	local avail_tmp avail_root
+	avail_tmp=$(df -k /tmp | awk 'NR==2{print $4}')
+	if [ "$avail_tmp" -lt 16000 ]; then
+		echo "ОШИБКА: недостаточно места в /tmp (нужно около 16 МБ свободных)"
+		return 1
+	fi
+	avail_root=$(df -k /usr/bin | awk 'NR==2{print $4}')
+	if [ "$avail_root" -lt 18000 ]; then
+		echo "ОШИБКА: недостаточно места на диске (нужно около 18 МБ свободных)"
+		return 1
+	fi
+
+	[ -f /etc/init.d/mihomo ] && /etc/init.d/mihomo stop >/dev/null 2>&1
+
+	local arch
+	arch=$(_mixomo_arch) || { echo "ОШИБКА: архитектура $(uname -m) не распознана"; return 1; }
+	echo "==> Архитектура: $(uname -m) -> $arch"
+
+	mkdir -p "$MIHOMO_DIR" "$MIHOMO_DIR/proxy-providers" "$MIHOMO_DIR/rule-providers" "$MIHOMO_DIR/rule-files"
+	echo "$arch" > "$MIHOMO_DIR/.arch"
+
+	echo "==> Определяем последнюю версию Mihomo"
+	local tag
+	tag=$(curl -Ls -o /dev/null -w '%{url_effective}' "https://github.com/MetaCubeX/mihomo/releases/latest" 2>/dev/null | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+	[ -n "$tag" ] || { echo "ОШИБКА: не удалось определить версию Mihomo"; return 1; }
+	echo "==> Версия: $tag"
+
+	local file url tmp
+	file="mihomo-linux-${arch}-${tag}.gz"
+	url="${GH_MAIN}/MetaCubeX/mihomo/releases/download/${tag}/${file}"
+	tmp="/tmp/mihomo.gz"
+	echo "==> Скачиваем $file"
+	curl -Lf --retry 3 --retry-delay 2 "$url" -o "$tmp" >/dev/null 2>&1 || { echo "ОШИБКА: не удалось скачать $file"; return 1; }
+	gunzip -c "$tmp" > "$MIHOMO_BIN" 2>/dev/null || { echo "ОШИБКА: не удалось распаковать архив"; rm -f "$tmp"; return 1; }
+	chmod +x "$MIHOMO_BIN"
+	rm -f "$tmp"
+	"$MIHOMO_BIN" -v >/dev/null 2>&1 || { echo "ОШИБКА: ядро Mihomo не запускается — возможно, неверная архитектура"; return 1; }
+
+	if [ -f "$MIHOMO_CONF" ] && grep -q "mixed-port: 7890" "$MIHOMO_CONF"; then
+		echo "==> Используем существующую конфигурацию"
+	else
+		if [ -f "$MIHOMO_CONF" ]; then
+			cp "$MIHOMO_CONF" "$MIHOMO_CONF.bak"
+			echo "==> Найден старый конфиг без mixed-port — сохранён как config.yaml.bak"
+		fi
+		echo "==> Создаём базовую конфигурацию"
+		printf '%s\n' \
+			'mode: rule' 'ipv6: false' 'mixed-port: 7890' 'log-level: error' 'allow-lan: true' \
+			'unified-delay: true' 'tcp-concurrent: false' 'find-process-mode: off' \
+			'external-controller: 0.0.0.0:9090' 'external-ui: ./ui' 'routing-mark: 2' \
+			'profile:' '  store-selected: true' '  store-fake-ip: true' '  tracing: true' \
+			'sniffer:' '  enable: true' '  force-dns-mapping: true' '  parse-pure-ip: true' \
+			'  sniff:' '    HTTP:' '      ports: [80]' '      override-destination: true' \
+			'    TLS:' '      ports: [443, 8443]' '    QUIC:' '      ports: [443, 8443]' \
+			'  skip-domain:' '    - Mijia Cloud' '    - +.lan' '    - +.local' \
+			'    - +.msftconnecttest.com' '    - +.msftncsi.com' '    - +.3gppnetwork.org' \
+			'    - +.openwrt.org' '    - +.vsean.net' '    - cudy.net' '' \
+			'dns:' '  enable: true' '  listen: 0.0.0.0:7880' '  ipv6: false' '  nameserver:' \
+			'    - https://8.8.8.8/dns-query' '    - https://8.8.4.4/dns-query' \
+			'    - https://1.1.1.1/dns-query' '    - https://1.0.0.1/dns-query' \
+			'    - https://9.9.9.9/dns-query' '    - https://149.112.112.112/dns-query' \
+			'    - https://94.140.14.140/dns-query' '    - https://94.140.14.141/dns-query' \
+			'    - https://77.88.8.8/dns-query' '    - https://77.88.8.1/dns-query' '' \
+			'proxies:' '  - name: Домашний интернет' '    type: direct' '' \
+			'proxy-groups:' '' 'rule-providers:' '' 'rules:' '  - MATCH,Домашний интернет' \
+			> "$MIHOMO_CONF"
+	fi
+
+	echo "==> Создаём службу mihomo"
+	printf '%s\n' '#!/bin/sh /etc/rc.common' 'START=99' 'USE_PROCD=1' '' \
+		"MIHOMO_BIN=\"$MIHOMO_BIN\"" "MIHOMO_DIR=\"$MIHOMO_DIR\"" "MIHOMO_CONF=\"$MIHOMO_CONF\"" '' \
+		'start_service() {' '	[ -x "$MIHOMO_BIN" ] || return 1' '	[ -s "$MIHOMO_CONF" ] || return 1' '' \
+		'	procd_open_instance "main"' '	procd_set_param command "$MIHOMO_BIN" -d "$MIHOMO_DIR" -f "$MIHOMO_CONF"' \
+		'	procd_set_param stdout 1' '	procd_set_param stderr 1' '	procd_set_param respawn' '	procd_close_instance' '}' '' \
+		'service_triggers() {' '	procd_add_reload_trigger "mihomo"' '}' \
+		> /etc/init.d/mihomo
+	chmod +x /etc/init.d/mihomo
+	/etc/init.d/mihomo enable >/dev/null 2>&1
+
+	echo "==> Устанавливаем hev-socks5-tunnel"
+	$UPDATE >/dev/null 2>&1
+	$INSTALL hev-socks5-tunnel >/dev/null 2>&1
+	mkdir -p /etc/hev-socks5-tunnel
+	printf '%s\n' 'tunnel:' '  name: Mihomo' '  mtu: 8500' '  multi-queue: false' '  ipv4: 198.18.0.1' \
+		'socks5:' '  port: 7890' '  address: 127.0.0.1' "  udp: 'udp'" > /etc/hev-socks5-tunnel/main.yml
+	chmod 600 /etc/hev-socks5-tunnel/main.yml
+
+	echo "==> Настраиваем сетевой интерфейс и firewall"
+	uci -q delete network.Mihomo
+	local fw_section
+	for fw_section in $(uci show firewall 2>/dev/null | grep -E "\.name='Mihomo'" | sed "s/\.name.*//"); do
+		uci -q delete "$fw_section"
+	done
+	for fw_section in $(uci show firewall 2>/dev/null | grep -E "\.(src|dest)='Mihomo'" | sed -E "s/\.(src|dest).*//"); do
+		uci -q delete "$fw_section"
+	done
+	uci -q delete firewall.Mihomo
+	uci -q delete firewall.lan_to_Mihomo
+	uci commit firewall
+	/etc/init.d/firewall restart >/dev/null 2>&1
+	sleep 1
+
+	if ! uci -q get hev-socks5-tunnel.@instance[0] >/dev/null 2>&1; then
+		uci add hev-socks5-tunnel instance >/dev/null
+	fi
+	uci set hev-socks5-tunnel.@instance[0].enabled='1'
+	uci set hev-socks5-tunnel.@instance[0].conffile='/etc/hev-socks5-tunnel/main.yml'
+	uci commit hev-socks5-tunnel
+	/etc/init.d/hev-socks5-tunnel restart >/dev/null 2>&1
+	sleep 2
+
+	uci set network.Mihomo=interface
+	uci set network.Mihomo.proto='none'
+	uci set network.Mihomo.device='Mihomo'
+	uci commit network
+	/etc/init.d/network reload >/dev/null 2>&1
+
+	local fw_zone fw_fwd
+	fw_zone=$(uci add firewall zone)
+	uci set "firewall.${fw_zone}.name=Mihomo"
+	uci set "firewall.${fw_zone}.input=REJECT"
+	uci set "firewall.${fw_zone}.output=REJECT"
+	uci set "firewall.${fw_zone}.forward=REJECT"
+	uci set "firewall.${fw_zone}.masq=1"
+	uci set "firewall.${fw_zone}.mtu_fix=1"
+	uci add_list "firewall.${fw_zone}.network=Mihomo"
+	fw_fwd=$(uci add firewall forwarding)
+	uci set "firewall.${fw_fwd}.src=lan"
+	uci set "firewall.${fw_fwd}.dest=Mihomo"
+	uci commit firewall
+	/etc/init.d/firewall restart >/dev/null 2>&1
+
+	echo "==> Устанавливаем MagiTrickle"
+	local arch_mt mt_ver_latest file_mt url_mt suf
+	arch_mt=$(grep '^OPENWRT_ARCH=' /etc/os-release 2>/dev/null | cut -d'"' -f2)
+	suf=""
+	[ "$PKG" = "apk" ] && suf="r"
+	mt_ver_latest=$(curl -Ls -o /dev/null -w '%{url_effective}' "https://github.com/MagiTrickle/MagiTrickle/releases/latest" 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+	if [ -n "$mt_ver_latest" ] && [ -n "$arch_mt" ]; then
+		file_mt="magitrickle_${mt_ver_latest}-${suf}1_openwrt_${arch_mt}.${RAZ}"
+		url_mt="${GH_MAIN}/MagiTrickle/MagiTrickle/releases/download/${mt_ver_latest}/${file_mt}"
+		tmp="/tmp/$file_mt"
+		echo "==> Скачиваем $file_mt"
+		if curl -Lf --retry 3 --retry-delay 2 -o "$tmp" "$url_mt" >/dev/null 2>&1; then
+			$INSTALL "$tmp" >/dev/null 2>&1 || echo "!! Не удалось установить MagiTrickle"
+			rm -f "$tmp"
+		else
+			echo "!! Не удалось скачать MagiTrickle"
+		fi
+	else
+		echo "!! Не удалось определить версию или архитектуру MagiTrickle"
+	fi
+
+	echo "==> Запускаем сервисы"
+	/etc/init.d/mihomo restart >/dev/null 2>&1
+	if [ -x /etc/init.d/magitrickle ]; then
+		/etc/init.d/magitrickle enable >/dev/null 2>&1
+		/etc/init.d/magitrickle restart >/dev/null 2>&1
+	fi
+	echo "==> Готово, Mixomo установлен"
+}
+
+do_mixomo_remove() {
+	echo "==> Удаляем Mixomo"
+	if [ -x /etc/init.d/mihomo ]; then
+		/etc/init.d/mihomo stop >/dev/null 2>&1
+		/etc/init.d/mihomo disable >/dev/null 2>&1
+	fi
+	rm -f /etc/init.d/mihomo "$MIHOMO_BIN"
+	rm -rf "$MIHOMO_DIR"
+
+	[ -x /etc/init.d/hev-socks5-tunnel ] && /etc/init.d/hev-socks5-tunnel stop >/dev/null 2>&1
+	$DELETE hev-socks5-tunnel >/dev/null 2>&1
+	rm -rf /etc/hev-socks5-tunnel
+	uci -q delete hev-socks5-tunnel.@instance[0]
+	uci commit hev-socks5-tunnel 2>/dev/null
+
+	uci -q delete network.Mihomo
+	local fw_section
+	for fw_section in $(uci show firewall 2>/dev/null | grep -E "\.name='Mihomo'" | sed "s/\.name.*//"); do
+		uci -q delete "$fw_section"
+	done
+	for fw_section in $(uci show firewall 2>/dev/null | grep -E "\.(src|dest)='Mihomo'" | sed -E "s/\.(src|dest).*//"); do
+		uci -q delete "$fw_section"
+	done
+	uci -q delete firewall.Mihomo
+	uci -q delete firewall.lan_to_Mihomo
+	uci commit network
+	uci commit firewall
+	/etc/init.d/network reload >/dev/null 2>&1
+	/etc/init.d/firewall restart >/dev/null 2>&1
+
+	if [ -x /etc/init.d/magitrickle ]; then
+		/etc/init.d/magitrickle stop >/dev/null 2>&1
+		/etc/init.d/magitrickle disable >/dev/null 2>&1
+	fi
+	$DELETE magitrickle >/dev/null 2>&1
+	rm -rf /etc/magitrickle
+
+	sed -i "\\|$MIXOMO_CRON_CMD|d" "$CRON_FILE" 2>/dev/null
+	/etc/init.d/cron restart >/dev/null 2>&1
+
+	echo "==> Готово, Mixomo удалён. Рекомендуется перезагрузить роутер"
+}
+
+mixomo_action() {
+	local action="$1"
+	case "$action" in
+		install) job_start mixomo_install do_mixomo_install ;;
+		remove)  job_start mixomo_remove do_mixomo_remove ;;
+		*) echo '{"error":"неизвестное действие"}' ;;
+	esac
+}
+
+mixomo_config_get() {
+	[ -f "$MIHOMO_CONF" ] || { echo '{"error":"конфигурация не найдена"}'; return 1; }
+	printf '{"content":"%s"}\n' "$(esc_ml "$(cat "$MIHOMO_CONF")")"
+}
+
+mixomo_config_set() {
+	local content="$1"
+	[ -x /etc/init.d/mihomo ] || { echo '{"error":"Mixomo не установлен"}'; return 1; }
+	cp "$MIHOMO_CONF" "$MIHOMO_CONF.bak" 2>/dev/null
+	printf '%s' "$content" > "$MIHOMO_CONF"
+	/etc/init.d/mihomo restart >/dev/null 2>&1
+	sleep 1
+	if pidof mihomo >/dev/null 2>&1; then
+		printf '{"ok":true}\n'
+	else
+		cp "$MIHOMO_CONF.bak" "$MIHOMO_CONF" 2>/dev/null
+		/etc/init.d/mihomo restart >/dev/null 2>&1
+		echo '{"error":"mihomo не запустился с новой конфигурацией — изменения отменены, проверьте синтаксис"}'
+		return 1
+	fi
+}
+
+mixomo_subscription_set() {
+	local sub_url="$1"
+	case "$sub_url" in
+		http://*|https://*) ;;
+		*) echo '{"error":"ссылка должна начинаться с http:// или https://"}'; return 1 ;;
+	esac
+	[ -x /etc/init.d/mihomo ] || { echo '{"error":"Mixomo не установлен"}'; return 1; }
+	/etc/init.d/mihomo stop >/dev/null 2>&1
+	rm -rf "$MIHOMO_DIR/proxy-providers" "$MIHOMO_DIR/proxies"
+
+	if grep -q '^[[:space:]]*proxy-providers:' "$MIHOMO_CONF" 2>/dev/null; then
+		local tmp
+		tmp=$(mktemp)
+		if awk -v url="$sub_url" 'BEGIN { updated = 0 } { if ($0 ~ /^[[:space:]]*type:[[:space:]]*http[[:space:]]*$/) { print; getline; if ($0 ~ /^[[:space:]]*url:[[:space:]]*"/) { sub(/url:[[:space:]]*".*"/, "url: \"" url "\""); updated = 1 } print; next } print } END { exit (updated ? 0 : 1) }' "$MIHOMO_CONF" > "$tmp"
+		then
+			mv "$tmp" "$MIHOMO_CONF"
+			/etc/init.d/mihomo restart >/dev/null 2>&1
+			printf '{"ok":true,"mode":"updated"}\n'
+			return 0
+		fi
+		rm -f "$tmp"
+	fi
+
+	printf '%s\n' \
+		'mode: rule' 'ipv6: false' 'mixed-port: 7890' 'log-level: error' 'allow-lan: false' \
+		'unified-delay: true' 'tcp-concurrent: false' 'find-process-mode: off' \
+		'external-controller: 0.0.0.0:9090' 'external-ui: ./ui' 'routing-mark: 2' \
+		'profile:' '  store-selected: true' '  store-fake-ip: true' '  tracing: true' \
+		'sniffer:' '  enable: true' '  force-dns-mapping: true' '  parse-pure-ip: true' \
+		'  sniff:' '    HTTP:' '      ports: [80]' '      override-destination: true' \
+		'    TLS:' '      ports: [443, 8443]' '    QUIC:' '      ports: [443, 8443]' \
+		'  skip-domain:' '    - Mijia Cloud' '    - +.lan' '    - +.local' \
+		'    - +.msftconnecttest.com' '    - +.msftncsi.com' '    - +.3gppnetwork.org' \
+		'    - +.openwrt.org' '    - +.vsean.net' '    - cudy.net' '' \
+		'hosts:' '  ntc.party: 130.255.77.28' '' \
+		'proxies:' '' '  - name: "Домашний интернет"' '    type: direct' '' \
+		'proxy-providers:' '' '  Подписка:' '    type: http' "    url: \"$sub_url\"" \
+		'    path: ./proxy-providers/sub.yaml' '    interval: 86400' '    health-check:' \
+		'      enable: true' '      url: http://www.gstatic.com/generate_204' \
+		'      interval: 300' '      timeout: 5000' '      lazy: true' '' \
+		'proxy-groups:' '' '  - name: "Сервер для YouTube"' '    type: select' \
+		'    icon: https://www.clashverge.dev/assets/icons/youtube.svg' '    proxies:' \
+		'      - "Домашний интернет"' '    use:' '      - "Подписка"' '' \
+		'  - name: "Сервер для остального трафика"' '    type: select' \
+		'    icon: https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.3/assets/svg/1f310.svg' \
+		'    use:' '      - "Подписка"' '' \
+		'rule-providers:' '' '  youtube:' '    type: http' '    format: yaml' \
+		'    behavior: classical' \
+		'    url: "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/YouTube/YouTube.yaml"' \
+		'    path: ./rule-providers/youtube-list.yaml' '    interval: 86400' '' \
+		'rules:' '  - RULE-SET,youtube,Сервер для YouTube' '  - MATCH,Сервер для остального трафика' \
+		> "$MIHOMO_CONF"
+	/etc/init.d/mihomo restart >/dev/null 2>&1
+	printf '{"ok":true,"mode":"created"}\n'
+}
+
+mixomo_magitrickle_list_set() {
+	local id="$1" url
+	case "$id" in
+		itdog) url="$MT_URL_ITDOG" ;;
+		ih1) url="$MT_URL_IH1" ;;
+		ih2) url="$MT_URL_IH2" ;;
+		*) echo '{"error":"неизвестный список"}'; return 1 ;;
+	esac
+	[ -x /etc/init.d/magitrickle ] || { echo '{"error":"MagiTrickle не установлен"}'; return 1; }
+	wget -q -O "$MAGITRICKLE_CONF" "$url" || { echo '{"error":"не удалось скачать список"}'; return 1; }
+	[ -s "$MAGITRICKLE_CONF" ] || { echo '{"error":"скачанный файл пуст"}'; return 1; }
+	/etc/init.d/magitrickle enable >/dev/null 2>&1
+	/etc/init.d/magitrickle restart >/dev/null 2>&1
+	printf '{"ok":true}\n'
+}
+
+mixomo_autorestart_set() {
+	local mode="$1" value="$2"
+	mkdir -p "$(dirname "$CRON_FILE")"
+	sed -i "\\|$MIXOMO_CRON_CMD|d" "$CRON_FILE" 2>/dev/null
+	case "$mode" in
+		off) ;;
+		every)
+			case "$value" in
+				2|4|6|8|10|12|14|16|18|20|22) echo "0 */$value * * * $MIXOMO_CRON_CMD" >> "$CRON_FILE" ;;
+				*) echo '{"error":"допустимы только чётные значения от 2 до 22"}'; return 1 ;;
+			esac
+			;;
+		daily)
+			case "$value" in
+				''|*[!0-9]*) echo '{"error":"введите число от 0 до 23"}'; return 1 ;;
+			esac
+			if [ "$value" -lt 0 ] || [ "$value" -gt 23 ]; then
+				echo '{"error":"допустимый диапазон 0-23"}'
+				return 1
+			fi
+			echo "0 $value * * * $MIXOMO_CRON_CMD" >> "$CRON_FILE"
+			;;
+		*) echo '{"error":"неизвестный режим"}'; return 1 ;;
+	esac
+	/etc/init.d/cron restart >/dev/null 2>&1
+	printf '{"ok":true}\n'
+}
+
+do_mixomo_ui_install() {
+	local which="$1"
+	[ -d "$MIHOMO_DIR" ] || { echo "ОШИБКА: Mixomo не установлен"; return 1; }
+	rm -rf "$MIHOMO_DIR/ui"
+	mkdir -p "$MIHOMO_DIR/ui"
+	case "$which" in
+		zashboard)
+			echo "==> Скачиваем Zashboard"
+			local tmp="/tmp/zashboard.zip" ok=0 i
+			for i in 1 2 3; do
+				curl -fL --connect-timeout 3 --max-time 7 -o "$tmp" "${GH_MAIN}/Zephyruso/zashboard/releases/latest/download/dist-cdn-fonts.zip" >/dev/null 2>&1 && { ok=1; break; }
+				sleep 1
+			done
+			[ "$ok" = "1" ] || { echo "ОШИБКА: не удалось скачать Zashboard"; return 1; }
+			command -v unzip >/dev/null 2>&1 || $INSTALL unzip >/dev/null 2>&1
+			rm -rf /tmp/zashboard
+			unzip -oq "$tmp" -d /tmp/zashboard || { echo "ОШИБКА: не удалось распаковать архив"; rm -rf "$tmp" /tmp/zashboard; return 1; }
+			cp -r /tmp/zashboard/dist/* "$MIHOMO_DIR/ui/"
+			rm -rf "$tmp" /tmp/zashboard
+			echo "==> Готово, Zashboard установлен"
+			;;
+		metacubexd)
+			echo "==> Скачиваем MetaCubeXD"
+			local tmp="/tmp/metacubexd.tgz" ok=0 i
+			for i in 1 2 3; do
+				curl -fL --connect-timeout 3 --max-time 7 -o "$tmp" "${GH_MAIN}/MetaCubeX/metacubexd/releases/latest/download/compressed-dist.tgz" >/dev/null 2>&1 && { ok=1; break; }
+				sleep 1
+			done
+			[ "$ok" = "1" ] || { echo "ОШИБКА: не удалось скачать MetaCubeXD"; return 1; }
+			rm -rf /tmp/metacubexd; mkdir -p /tmp/metacubexd
+			tar -xzf "$tmp" -C /tmp/metacubexd || { echo "ОШИБКА: не удалось распаковать архив"; rm -rf "$tmp" /tmp/metacubexd; return 1; }
+			cp -r /tmp/metacubexd/* "$MIHOMO_DIR/ui/"
+			rm -rf "$tmp" /tmp/metacubexd
+			echo "==> Готово, MetaCubeXD установлен"
+			;;
+		*) echo "ОШИБКА: неизвестная панель"; return 1 ;;
+	esac
+}
+
+mixomo_ui_action() {
+	job_start mixomo_ui_install do_mixomo_ui_install "$1"
+}
+
+MIHOMO_DIR="/etc/mihomo"
+MIHOMO_BIN="/usr/bin/mihomo"
+MIHOMO_CONF="/etc/mihomo/config.yaml"
+
+_mixomo_detect_arch() {
+	local arch endian_byte fpu floattype
+	arch=$(uname -m)
+	endian_byte=$(hexdump -s 5 -n 1 -e '1/1 "%d"' /bin/busybox 2>/dev/null || echo "0")
+	case "$arch" in
+		x86_64)
+			if grep -q "avx2" /proc/cpuinfo 2>/dev/null; then echo "amd64"
+			else echo "amd64-compatible"; fi ;;
+		i?86) echo "386" ;;
+		aarch64|arm64) echo "arm64" ;;
+		armv7*) echo "armv7" ;;
+		armv5*|armv4*) echo "armv5" ;;
+		mips*)
+			fpu=$(grep -c "FPU" /proc/cpuinfo 2>/dev/null || echo 0)
+			floattype="softfloat"
+			[ "$fpu" -gt 0 ] && floattype="hardfloat"
+			if [ "$endian_byte" = "1" ]; then echo "mipsle-${floattype}"
+			else echo "mips-${floattype}"; fi ;;
+		riscv64) echo "riscv64" ;;
+		*) return 1 ;;
+	esac
+}
+
+_mixomo_deps_ok() {
+	command -v curl >/dev/null 2>&1 || return 1
+	[ -f /etc/ssl/certs/ca-certificates.crt ] || [ -f /etc/ssl/certs/ca-bundle.crt ] || return 1
+	[ -c /dev/net/tun ] || { modprobe tun >/dev/null 2>&1; [ -c /dev/net/tun ]; } || return 1
+	return 0
+}
+
+_mixomo_default_config() {
+	cat << 'MIXOMO_CONF_EOF'
+mode: rule
+ipv6: false
+mixed-port: 7890
+log-level: error
+allow-lan: true
+unified-delay: true
+tcp-concurrent: false
+find-process-mode: off
+external-controller: 0.0.0.0:9090
+external-ui: ./ui
+routing-mark: 2
+profile:
+  store-selected: true
+  store-fake-ip: true
+  tracing: true
+sniffer:
+  enable: true
+  force-dns-mapping: true
+  parse-pure-ip: true
+  sniff:
+    HTTP:
+      ports: [80]
+      override-destination: true
+    TLS:
+      ports: [443, 8443]
+    QUIC:
+      ports: [443, 8443]
+  skip-domain:
+    - Mijia Cloud
+    - +.lan
+    - +.local
+    - +.msftconnecttest.com
+    - +.msftncsi.com
+    - +.3gppnetwork.org
+    - +.openwrt.org
+    - +.vsean.net
+    - cudy.net
+
+dns:
+  enable: true
+  listen: 0.0.0.0:7880
+  ipv6: false
+  nameserver:
+    - https://8.8.8.8/dns-query
+    - https://8.8.4.4/dns-query
+    - https://1.1.1.1/dns-query
+    - https://1.0.0.1/dns-query
+    - https://9.9.9.9/dns-query
+    - https://149.112.112.112/dns-query
+
+proxies:
+  - name: Домашний интернет
+    type: direct
+
+proxy-groups:
+
+rule-providers:
+
+rules:
+  - MATCH,Домашний интернет
+MIXOMO_CONF_EOF
+}
+
+_mixomo_subscription_config() {
+	local url="$1"
+	cat << MIXOMO_SUB_EOF
+mode: rule
+ipv6: false
+mixed-port: 7890
+log-level: error
+allow-lan: false
+unified-delay: true
+tcp-concurrent: false
+find-process-mode: off
+external-controller: 0.0.0.0:9090
+external-ui: ./ui
+routing-mark: 2
+profile:
+  store-selected: true
+  store-fake-ip: true
+  tracing: true
+sniffer:
+  enable: true
+  force-dns-mapping: true
+  parse-pure-ip: true
+  sniff:
+    HTTP:
+      ports: [80]
+      override-destination: true
+    TLS:
+      ports: [443, 8443]
+    QUIC:
+      ports: [443, 8443]
+  skip-domain:
+    - Mijia Cloud
+    - +.lan
+    - +.local
+    - +.msftconnecttest.com
+    - +.msftncsi.com
+    - +.3gppnetwork.org
+    - +.openwrt.org
+    - +.vsean.net
+    - cudy.net
+
+proxies:
+
+  - name: "Домашний интернет"
+    type: direct
+
+proxy-providers:
+
+  Подписка:
+    type: http
+    url: "${url}"
+    path: ./proxy-providers/sub.yaml
+    interval: 86400
+    health-check:
+      enable: true
+      url: http://www.gstatic.com/generate_204
+      interval: 300
+      timeout: 5000
+      lazy: true
+
+proxy-groups:
+
+  - name: "Сервер для YouTube"
+    type: select
+    proxies:
+      - "Домашний интернет"
+    use:
+      - "Подписка"
+
+  - name: "Сервер для остального трафика"
+    type: select
+    use:
+      - "Подписка"
+
+rule-providers:
+
+  youtube:
+    type: http
+    format: yaml
+    behavior: classical
+    url: "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/YouTube/YouTube.yaml"
+    path: ./rule-providers/youtube-list.yaml
+    interval: 86400
+
+rules:
+  - RULE-SET,youtube,Сервер для YouTube
+  - MATCH,Сервер для остального трафика
+MIXOMO_SUB_EOF
+}
+
+_mixomo_write_initd() {
+	cat > /etc/init.d/mihomo << 'MIXOMO_INITD_EOF'
+#!/bin/sh /etc/rc.common
+START=99
+USE_PROCD=1
+
+MIHOMO_BIN="/usr/bin/mihomo"
+MIHOMO_DIR="/etc/mihomo"
+MIHOMO_CONF="/etc/mihomo/config.yaml"
+
+start_service() {
+	[ -x "$MIHOMO_BIN" ] || return 1
+	[ -s "$MIHOMO_CONF" ] || return 1
+	procd_open_instance "main"
+	procd_set_param command "$MIHOMO_BIN" -d "$MIHOMO_DIR" -f "$MIHOMO_CONF"
+	procd_set_param stdout 1
+	procd_set_param stderr 1
+	procd_set_param respawn
+	procd_close_instance
+}
+
+service_triggers() {
+	procd_add_reload_trigger "mihomo"
+}
+MIXOMO_INITD_EOF
+	chmod +x /etc/init.d/mihomo
+}
+
+do_mixomo_install() {
+	_ensure_deps
+	echo "==> Устанавливаем зависимости"
+	$UPDATE >/dev/null 2>&1
+	if [ "$PKG" = "apk" ]; then
+		$INSTALL unzip ca-certificates kmod-tun kmod-nft-tproxy kmod-nft-nat curl >/dev/null 2>&1
+	else
+		$INSTALL unzip ca-certificates kmod-tun kmod-nft-tproxy kmod-nft-nat curl libcurl4 ca-bundle >/dev/null 2>&1
+	fi
+	if ! _mixomo_deps_ok; then
+		echo "ОШИБКА: не удалось подтвердить необходимые зависимости (curl/ca-certificates/TUN в ядре)"
+		return 1
+	fi
+
+	echo "==> Определяем архитектуру"
+	local arch
+	arch=$(_mixomo_detect_arch) || { echo "ОШИБКА: архитектура $(uname -m) не поддерживается"; return 1; }
+	echo "==> Архитектура: $arch"
+
+	[ -x /etc/init.d/mihomo ] && /etc/init.d/mihomo stop >/dev/null 2>&1
+
+	mkdir -p "$MIHOMO_DIR" "$MIHOMO_DIR/proxy-providers" "$MIHOMO_DIR/rule-providers" "$MIHOMO_DIR/rule-files"
+	echo "$arch" > "$MIHOMO_DIR/.arch"
+
+	echo "==> Определяем последнюю версию Mihomo"
+	local release_tag
+	release_tag=$(curl -Ls -o /dev/null -w '%{url_effective}' https://github.com/MetaCubeX/mihomo/releases/latest 2>/dev/null | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+	[ -n "$release_tag" ] || { echo "ОШИБКА: не удалось определить версию Mihomo — проверьте интернет"; return 1; }
+	echo "==> Версия: $release_tag"
+
+	local filename url tmp
+	filename="mihomo-linux-${arch}-${release_tag}.gz"
+	url="${GH_MAIN}/MetaCubeX/mihomo/releases/download/${release_tag}/${filename}"
+	tmp="/tmp/mihomo.gz"
+
+	echo "==> Скачиваем $filename"
+	curl -Lf --retry 3 --retry-delay 2 "$url" -o "$tmp" >/dev/null 2>&1 || { echo "ОШИБКА: не удалось скачать $filename — проверьте, есть ли такой файл в релизах"; rm -f "$tmp"; return 1; }
+
+	echo "==> Распаковываем"
+	gunzip -c "$tmp" > "$MIHOMO_BIN" 2>/dev/null || { echo "ОШИБКА: не удалось распаковать архив"; rm -f "$tmp"; return 1; }
+	chmod +x "$MIHOMO_BIN"
+	rm -f "$tmp"
+
+	echo "==> Проверяем работу ядра"
+	"$MIHOMO_BIN" -v >/dev/null 2>&1 || { echo "ОШИБКА: ядро не запускается — возможно, выбрана неверная архитектура"; return 1; }
+
+	if [ ! -s "$MIHOMO_CONF" ]; then
+		echo "==> Создаём конфигурацию по умолчанию"
+		_mixomo_default_config > "$MIHOMO_CONF"
+	fi
+
+	[ -x /etc/init.d/mihomo ] || { echo "==> Создаём службу"; _mixomo_write_initd; }
+	/etc/init.d/mihomo enable >/dev/null 2>&1
+	/etc/init.d/mihomo restart >/dev/null 2>&1
+	echo "==> Готово, Mixomo установлен"
+}
+
+do_mixomo_remove() {
+	echo "==> Останавливаем Mixomo"
+	if [ -x /etc/init.d/mihomo ]; then
+		/etc/init.d/mihomo stop >/dev/null 2>&1
+		/etc/init.d/mihomo disable >/dev/null 2>&1
+	fi
+	rm -f /etc/init.d/mihomo "$MIHOMO_BIN"
+	rm -rf "$MIHOMO_DIR"
+	echo "==> Готово, Mixomo удалён"
+}
+
+mixomo_status() {
+	local installed="not_installed" running="false" version="" has_sub="false"
+	if [ -x "$MIHOMO_BIN" ]; then
+		installed="installed"
+		version=$("$MIHOMO_BIN" -v 2>/dev/null | head -n1 | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+		pidof mihomo >/dev/null 2>&1 && running="true"
+	fi
+	if [ -f "$MIHOMO_CONF" ] && grep -qE '^[[:space:]]*url:[[:space:]]*"https?://' "$MIHOMO_CONF" 2>/dev/null; then
+		has_sub="true"
+	fi
+	printf '{"installed":"%s","running":%s,"version":"%s","has_subscription":%s}\n' "$installed" "$running" "$(esc "$version")" "$has_sub"
+}
+
+mixomo_action() {
+	local action="$1"
+	case "$action" in
+		install|update) job_start mixomo_install do_mixomo_install ;;
+		remove)         job_start mixomo_remove do_mixomo_remove ;;
+		start)
+			[ -x /etc/init.d/mihomo ] || { echo '{"error":"Mixomo не установлен"}'; return 1; }
+			/etc/init.d/mihomo start >/dev/null 2>&1
+			mixomo_status ;;
+		stop)
+			[ -x /etc/init.d/mihomo ] || { echo '{"error":"Mixomo не установлен"}'; return 1; }
+			/etc/init.d/mihomo stop >/dev/null 2>&1
+			mixomo_status ;;
+		restart)
+			[ -x /etc/init.d/mihomo ] || { echo '{"error":"Mixomo не установлен"}'; return 1; }
+			/etc/init.d/mihomo restart >/dev/null 2>&1
+			mixomo_status ;;
+		*) echo '{"error":"неизвестное действие"}' ;;
+	esac
+}
+
+mixomo_config_get() {
+	[ -f "$MIHOMO_CONF" ] || { echo '{"error":"конфигурация не найдена — установите Mixomo"}'; return 1; }
+	printf '{"content":"%s"}\n' "$(esc_ml "$(cat "$MIHOMO_CONF")")"
+}
+
+mixomo_config_set() {
+	local content="$1"
+	[ -x /etc/init.d/mihomo ] || { echo '{"error":"Mixomo не установлен"}'; return 1; }
+	[ -n "$content" ] || { echo '{"error":"пустая конфигурация — сохранение отменено"}'; return 1; }
+	cp "$MIHOMO_CONF" "$MIHOMO_CONF.bak" 2>/dev/null
+	printf '%s' "$content" > "$MIHOMO_CONF"
+	/etc/init.d/mihomo restart >/dev/null 2>&1
+	sleep 1
+	if pidof mihomo >/dev/null 2>&1; then
+		printf '{"ok":true,"running":true}\n'
+	else
+		printf '{"ok":true,"running":false,"warning":"Mihomo не запустился после сохранения — проверьте синтаксис конфигурации. Резервная копия сохранена в config.yaml.bak"}\n'
+	fi
+}
+
+mixomo_apply_subscription() {
+	local url="$1" url_esc tmp
+	case "$url" in
+		http://*|https://*) ;;
+		*) echo '{"error":"ссылка должна начинаться с http:// или https://"}'; return 1 ;;
+	esac
+	[ -x /etc/init.d/mihomo ] || { echo '{"error":"Mixomo не установлен"}'; return 1; }
+	/etc/init.d/mihomo stop >/dev/null 2>&1
+	rm -rf "$MIHOMO_DIR/proxy-providers" "$MIHOMO_DIR/proxies"
+	mkdir -p "$MIHOMO_DIR/proxy-providers"
+
+	url_esc=$(printf '%s' "$url" | sed 's/[&|]/\\&/g')
+	if grep -q "^[[:space:]]*proxy-providers:" "$MIHOMO_CONF" 2>/dev/null; then
+		tmp=$(mktemp)
+		if awk -v url="$url_esc" 'BEGIN { updated = 0 } { if ($0 ~ /^[[:space:]]*type:[[:space:]]*http[[:space:]]*$/) { print; getline; if ($0 ~ /^[[:space:]]*url:[[:space:]]*"/) { sub(/url:[[:space:]]*".*"/, "url: \"" url "\""); updated = 1 } print; next } print } END { exit (updated ? 0 : 1) }' "$MIHOMO_CONF" > "$tmp"; then
+			mv "$tmp" "$MIHOMO_CONF"
+			/etc/init.d/mihomo restart >/dev/null 2>&1
+			printf '{"ok":true,"mode":"updated"}\n'
+			return 0
+		fi
+		rm -f "$tmp"
+	fi
+
+	_mixomo_subscription_config "$url" > "$MIHOMO_CONF"
+	/etc/init.d/mihomo restart >/dev/null 2>&1
+	printf '{"ok":true,"mode":"created"}\n'
 }
 
 _doh_file="/etc/config/https-dns-proxy"
@@ -2274,6 +3128,11 @@ case "$cmd" in
 	test_results)                         test_results "$1" ;;
 	zm_update_status)                     zm_update_status ;;
 	zm_update_action)                     zm_update_action ;;
+	mixomo_status)                        mixomo_status ;;
+	mixomo_action)                        mixomo_action "$1" ;;
+	mixomo_config_get)                    mixomo_config_get ;;
+	mixomo_config_set)                    mixomo_config_set "$1" ;;
+	mixomo_apply_subscription)            mixomo_apply_subscription "$1" ;;
 	*) echo '{"error":"неизвестная команда"}'; exit 1 ;;
 esac
 ZM_INSTALLER_EOF
@@ -2339,6 +3198,11 @@ list_methods() {
 	json_add_object "test_results";            json_add_string "mode" "string"; json_close_object
 	json_add_object "zm_update_status";        json_close_object
 	json_add_object "zm_update_action";        json_close_object
+	json_add_object "mixomo_status";           json_close_object
+	json_add_object "mixomo_action";           json_add_string "action" "string"; json_close_object
+	json_add_object "mixomo_config_get";       json_close_object
+	json_add_object "mixomo_config_set";       json_add_string "content" "string"; json_close_object
+	json_add_object "mixomo_apply_subscription"; json_add_string "url" "string"; json_close_object
 	json_dump
 }
 
@@ -2399,6 +3263,11 @@ call_method() {
 		test_results)            json_get_var mode mode; "$BACKEND" test_results "$mode" ;;
 		zm_update_status)        "$BACKEND" zm_update_status ;;
 		zm_update_action)        "$BACKEND" zm_update_action ;;
+		mixomo_status)           "$BACKEND" mixomo_status ;;
+		mixomo_action)           json_get_var action action; "$BACKEND" mixomo_action "$action" ;;
+		mixomo_config_get)       "$BACKEND" mixomo_config_get ;;
+		mixomo_config_set)       json_get_var content content; "$BACKEND" mixomo_config_set "$content" ;;
+		mixomo_apply_subscription) json_get_var url url; "$BACKEND" mixomo_apply_subscription "$url" ;;
 		*) echo '{"error":"unknown method"}'; return 1 ;;
 	esac
 }
@@ -2423,7 +3292,7 @@ cat > '/usr/share/rpcd/acl.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF'
 					"strategy_list_v", "strategy_list_flowseal", "strategy_list_youtube",
 					"discord_status", "hosts_status", "doh_status", "game_status",
 					"system_status", "mirror_status", "exclusions_status", "tg_status", "tgws_status",
-					"test_status", "test_results", "zm_update_status",
+					"test_status", "test_results", "zm_update_status", "mixomo_status", "mixomo_config_get",
 					"zapret_latest_version"
 				]
 			}
@@ -2439,7 +3308,8 @@ cat > '/usr/share/rpcd/acl.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF'
 					"system_check_connectivity", "system_toggle_quic", "system_toggle_ipv6",
 					"system_toggle_flow_offloading_fix", "system_toggle_expert_mode", "system_uninstall_panel",
 					"mirror_set", "exclusions_toggle", "exclusions_clear",
-					"tg_action", "tg_restart_all", "tgws_action", "test_action", "zm_update_action"
+					"tg_action", "tg_restart_all", "tgws_action", "test_action", "zm_update_action",
+					"mixomo_action", "mixomo_config_set", "mixomo_apply_subscription"
 				]
 			}
 		}
@@ -2512,6 +3382,11 @@ cat > '/usr/share/luci/menu.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF
 		"title": "Исключение устройств",
 		"order": 70,
 		"action": { "type": "view", "path": "zapret-manager/exclusions" }
+	},
+	"admin/services/zapret-manager/mixomo": {
+		"title": "Mixomo",
+		"order": 57,
+		"action": { "type": "view", "path": "zapret-manager/mixomo" }
 	}
 }
 ZM_INSTALLER_EOF
@@ -2573,6 +3448,11 @@ var callTestAction = rpc.declare({ object: 'zapret-manager', method: 'test_actio
 var callTestResults = rpc.declare({ object: 'zapret-manager', method: 'test_results', params: ['mode'], expect: {} });
 var callZmUpdateStatus = rpc.declare({ object: 'zapret-manager', method: 'zm_update_status', expect: {} });
 var callZmUpdateAction = rpc.declare({ object: 'zapret-manager', method: 'zm_update_action', expect: {} });
+var callMixomoStatus = rpc.declare({ object: 'zapret-manager', method: 'mixomo_status', expect: {} });
+var callMixomoAction = rpc.declare({ object: 'zapret-manager', method: 'mixomo_action', params: ['action'], expect: {} });
+var callMixomoConfigGet = rpc.declare({ object: 'zapret-manager', method: 'mixomo_config_get', expect: {} });
+var callMixomoConfigSet = rpc.declare({ object: 'zapret-manager', method: 'mixomo_config_set', params: ['content'], expect: {} });
+var callMixomoApplySubscription = rpc.declare({ object: 'zapret-manager', method: 'mixomo_apply_subscription', params: ['url'], expect: {} });
 
 function detectMissingThemeVar() {
 	if (document.documentElement.hasAttribute('data-zm-theme-checked')) return;
@@ -2789,7 +3669,12 @@ return baseclass.extend({
 	testAction: callTestAction,
 	testResults: callTestResults,
 	zmUpdateStatus: callZmUpdateStatus,
-	zmUpdateAction: callZmUpdateAction
+	zmUpdateAction: callZmUpdateAction,
+	mixomoStatus: callMixomoStatus,
+	mixomoAction: callMixomoAction,
+	mixomoConfigGet: callMixomoConfigGet,
+	mixomoConfigSet: callMixomoConfigSet,
+	mixomoApplySubscription: callMixomoApplySubscription
 });
 ZM_INSTALLER_EOF
 
@@ -2840,14 +3725,7 @@ return view.extend({
 				E('h3', {}, 'Обзор'),
 				E('div', { 'class': 'zm-row' }, [
 					E('span', { 'class': 'zm-label' }, 'Zapret Manager LuCI'),
-					E('span', {}, [
-						E('span', {}, 'v' + (zmUpdate.current || '?') + ' '),
-						E('button', {
-							'class': 'cbi-button',
-							'style': 'padding:2px 10px; font-size:12px',
-							'click': function() { checkForUpdates(true); }
-						}, 'Проверить обновления')
-					])
+					E('span', {}, 'v' + (zmUpdate.current || '?'))
 				]),
 				E('div', { 'class': 'zm-row' }, [
 					E('span', { 'class': 'zm-label' }, 'Zapret'),
@@ -2978,8 +3856,6 @@ return view.extend({
 			cards.appendChild(sysCard);
 		}
 
-		var lastD = data, lastDoh = dohData, lastHosts = hostsData, lastSys = sysData;
-
 		function refreshOverview() {
 			Promise.all([
 				zm.status(),
@@ -2987,7 +3863,6 @@ return view.extend({
 				zm.hostsStatus().catch(function() { return { items: [] }; }),
 				zm.systemStatus().catch(function() { return {}; })
 			]).then(function(res) {
-				lastD = res[0]; lastDoh = res[1]; lastHosts = res[2]; lastSys = res[3];
 				overviewEl.innerHTML = '';
 				overviewEl.appendChild(renderOverview(res[0], res[1], res[2], res[3]));
 			});
@@ -3018,6 +3893,28 @@ return view.extend({
 		wrap.appendChild(updateEl);
 
 		var zmUpdateBusy = false;
+		function waitForServerAndReload() {
+			var attempts = 0;
+			var maxAttempts = 20;
+			var target = L.resource('view/zapret-manager/dashboard.js') + '?_zmcheck=' + Date.now();
+			var timer = setInterval(function() {
+				attempts++;
+				fetch(target, { credentials: 'same-origin', cache: 'no-store' }).then(function(resp) {
+					if (resp.ok) {
+						clearInterval(timer);
+						location.reload();
+					} else if (attempts >= maxAttempts) {
+						clearInterval(timer);
+						zm.toast('Панель обновлена, но страница пока не отвечает — обновите вручную (F5)', 'warning', 15000);
+					}
+				}).catch(function() {
+					if (attempts >= maxAttempts) {
+						clearInterval(timer);
+						zm.toast('Панель обновлена, но страница пока не отвечает — обновите вручную (F5)', 'warning', 15000);
+					}
+				});
+			}, 2000);
+		}
 		function renderZmUpdate() {
 			updateEl.innerHTML = '';
 			if (!zmUpdate.latest || zmUpdate.latest === zmUpdate.current) return;
@@ -3036,8 +3933,8 @@ return view.extend({
 							zm.pollJob('zm_update', log, function(ok) {
 								zmUpdateBusy = false;
 								if (ok) {
-									zm.toast('Обновление запущено — подождите около 20 секунд, затем обновите страницу', 'info', 20000);
-									setTimeout(function() { location.reload(); }, 20000);
+									zm.toast('Обновление скачано, ждём перезапуска панели...', 'info', 15000);
+									waitForServerAndReload();
 								} else {
 									zm.toast('Не удалось скачать обновление', 'error');
 								}
@@ -3049,30 +3946,6 @@ return view.extend({
 			updateEl.appendChild(log);
 		}
 		renderZmUpdate();
-
-		var checkBusy = false;
-		function checkForUpdates(manual) {
-			if (checkBusy) { zm.toast('Дождитесь завершения проверки', 'warning'); return; }
-			checkBusy = true;
-			if (manual) zm.toast('Проверяем обновления', 'warning');
-			zm.zmUpdateStatus().then(function(res) {
-				checkBusy = false;
-				zmUpdate = res || {};
-				overviewEl.innerHTML = '';
-				overviewEl.appendChild(renderOverview(lastD, lastDoh, lastHosts, lastSys));
-				renderZmUpdate();
-				if (manual) {
-					if (zmUpdate.latest && zmUpdate.latest !== zmUpdate.current) {
-						zm.toast('Доступна новая версия: ' + zmUpdate.latest, 'info');
-					} else {
-						zm.toast('У вас установлена последняя версия', 'info');
-					}
-				}
-			}).catch(function() {
-				checkBusy = false;
-				if (manual) zm.toast('Не удалось проверить обновления', 'error');
-			});
-		}
 
 		return wrap;
 	},
@@ -3719,6 +4592,178 @@ return view.extend({
 ZM_INSTALLER_EOF
 
 mkdir -p /www/luci-static/resources/view/zapret-manager
+cat > '/www/luci-static/resources/view/zapret-manager/mixomo.js' << 'ZM_INSTALLER_EOF'
+'use strict';
+'require view';
+'require zapret-manager.common as zm';
+
+return view.extend({
+	load: function() {
+		zm.injectCss();
+		return zm.mixomoStatus();
+	},
+
+	render: function(data) {
+		var view = this;
+		var wrap = E('div', { 'class': 'zm-wrap' });
+		var logEl = E('pre', { 'class': 'zm-log' });
+		var busy = false;
+
+		var statusCard = E('div', { 'class': 'zm-card' });
+		var subCard = E('div', { 'class': 'zm-card' });
+		var configCard = E('div', { 'class': 'zm-card' });
+
+		function renderStatus(d) {
+			statusCard.innerHTML = '';
+			var installed = d.installed === 'installed';
+			var actions = [];
+			if (installed) {
+				actions.push(E('button', {
+					'class': 'cbi-button cbi-button-remove',
+					'click': function() { doAction('remove'); }
+				}, 'Удалить'));
+				actions.push(E('button', {
+					'class': 'cbi-button',
+					'click': function() { doAction(d.running ? 'stop' : 'start'); }
+				}, d.running ? 'Остановить' : 'Запустить'));
+				actions.push(E('button', {
+					'class': 'cbi-button',
+					'click': function() { doAction('restart'); }
+				}, 'Перезапустить'));
+				actions.push(E('button', {
+					'class': 'cbi-button',
+					'click': function() { doAction('update'); }
+				}, 'Переустановить/обновить'));
+			} else {
+				actions.push(E('button', {
+					'class': 'cbi-button cbi-button-positive',
+					'click': function() { doAction('install'); }
+				}, 'Установить'));
+			}
+			statusCard.appendChild(E('h3', {}, 'Mixomo (Mihomo)'));
+			statusCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Движок прокси-проксирования Mihomo (Clash Meta). Даёт готовый SOCKS/HTTP-прокси и веб-панель управления на порту 9090 — маршрутизацию конкретных сайтов настраивайте через подписку ниже или вручную в конфигурации.'));
+			statusCard.appendChild(E('div', { 'class': 'zm-row' }, [
+				E('span', { 'class': 'zm-label' }, 'Статус'),
+				installed ? zm.badge(d.running === true, 'запущен', 'остановлен') : zm.badge(false, '', 'не установлен')
+			]));
+			if (installed && d.version) {
+				statusCard.appendChild(E('div', { 'class': 'zm-row' }, [
+					E('span', { 'class': 'zm-label' }, 'Версия'), E('span', {}, d.version)
+				]));
+			}
+			if (installed) {
+				statusCard.appendChild(E('div', { 'class': 'zm-row' }, [
+					E('span', { 'class': 'zm-label' }, 'Подписка'),
+					zm.badge(d.has_subscription === true, 'настроена', 'не настроена')
+				]));
+			}
+			statusCard.appendChild(E('div', { 'class': 'zm-actions' }, actions));
+		}
+
+		function doAction(action) {
+			if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+			var job = action === 'remove' ? 'mixomo_remove' : 'mixomo_install';
+			var isBg = action === 'install' || action === 'update' || action === 'remove';
+			busy = true;
+			zm.toast(
+				action === 'remove' ? 'Удаляем Mixomo'
+				: action === 'update' ? 'Переустанавливаем Mixomo'
+				: action === 'install' ? 'Устанавливаем Mixomo'
+				: action === 'start' ? 'Запускаем Mixomo'
+				: action === 'stop' ? 'Останавливаем Mixomo'
+				: 'Перезапускаем Mixomo',
+				'warning'
+			);
+			zm.mixomoAction(action).then(function(res) {
+				if (res.error) { busy = false; zm.toast(res.error, 'error'); return; }
+				if (isBg && res.started) {
+					zm.pollJob(job, logEl, function(ok) {
+						busy = false;
+						zm.toast(ok ? 'Готово' : 'Ошибка', ok ? 'info' : 'error');
+						zm.mixomoStatus().then(renderStatus);
+					});
+				} else {
+					busy = false;
+					renderStatus(res);
+					zm.toast('Готово', 'info');
+				}
+			}).catch(function() { busy = false; });
+		}
+
+		var subInput = E('input', { 'type': 'text', 'placeholder': 'https://...', 'class': 'cbi-input-text' });
+		var subBusy = false;
+		subCard.appendChild(E('h3', {}, 'Подписка'));
+		subCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Вставьте ссылку на VPN-подписку — если в конфигурации уже настроен провайдер подписки, обновится только ссылка; если нет, будет создана готовая конфигурация с раздельной маршрутизацией YouTube и остального трафика через подписку.'));
+		subCard.appendChild(E('div', { 'class': 'zm-actions' }, [
+			subInput,
+			E('button', {
+				'class': 'cbi-button cbi-button-positive',
+				'click': function() {
+					if (subBusy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+					var url = subInput.value.trim();
+					if (!/^https?:\/\//.test(url)) { zm.toast('Ссылка должна начинаться с http:// или https://', 'error'); return; }
+					subBusy = true;
+					zm.toast('Применяем подписку', 'warning');
+					zm.mixomoApplySubscription(url).then(function(res) {
+						subBusy = false;
+						if (res.error) { zm.toast(res.error, 'error'); return; }
+						zm.toast(res.mode === 'updated' ? 'Ссылка на подписку обновлена' : 'Подписка применена, создана новая конфигурация', 'info');
+						zm.mixomoStatus().then(renderStatus);
+						refreshConfig();
+					}).catch(function() { subBusy = false; });
+				}
+			}, 'Применить подписку')
+		]));
+
+		var configEl = E('textarea', { 'class': 'zm-config-editor', 'spellcheck': 'false' });
+		var configBusy = false;
+		var configHint = E('p', { 'class': 'zm-hint' }, 'Прямое редактирование /etc/mihomo/config.yaml. Сохранение перезапускает Mixomo — при ошибке синтаксиса старая версия остаётся в config.yaml.bak.');
+
+		function refreshConfig() {
+			zm.mixomoConfigGet().then(function(res) {
+				if (res.error) { configEl.value = ''; configEl.placeholder = res.error; return; }
+				configEl.value = res.content || '';
+			});
+		}
+
+		configCard.appendChild(E('h3', {}, 'Редактор конфигурации'));
+		configCard.appendChild(configHint);
+		configCard.appendChild(configEl);
+		configCard.appendChild(E('div', { 'class': 'zm-actions' }, [
+			E('button', {
+				'class': 'cbi-button',
+				'click': function() { refreshConfig(); zm.toast('Конфигурация перечитана с диска', 'info'); }
+			}, 'Обновить из файла'),
+			E('button', {
+				'class': 'cbi-button cbi-button-positive',
+				'click': function() {
+					if (configBusy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+					configBusy = true;
+					zm.toast('Сохраняем конфигурацию', 'warning');
+					zm.mixomoConfigSet(configEl.value).then(function(res) {
+						configBusy = false;
+						if (res.error) { zm.toast(res.error, 'error'); return; }
+						if (res.warning) { zm.toast(res.warning, 'warning', 14000); }
+						else { zm.toast('Сохранено, Mixomo перезапущен', 'info'); }
+						zm.mixomoStatus().then(renderStatus);
+					}).catch(function() { configBusy = false; });
+				}
+			}, 'Сохранить и перезапустить')
+		]));
+
+		renderStatus(data);
+		refreshConfig();
+
+		wrap.appendChild(statusCard);
+		wrap.appendChild(subCard);
+		wrap.appendChild(logEl);
+		wrap.appendChild(configCard);
+		return wrap;
+	}
+});
+ZM_INSTALLER_EOF
+
+mkdir -p /www/luci-static/resources/view/zapret-manager
 cat > '/www/luci-static/resources/view/zapret-manager/strategy.js' << 'ZM_INSTALLER_EOF'
 'use strict';
 'require view';
@@ -3964,6 +5009,17 @@ html.zm-theme-dark .zm-tile:not(.zm-active):not(.zm-tile-off) {
 }
 .zm-log.zm-show { display: block; }
 .zm-log:empty::before { content: "Ожидание вывода..."; opacity: .4; }
+
+.zm-config-editor {
+	width: 100%; box-sizing: border-box; min-height: 420px;
+	background: #0d1117; color: #e6edf3;
+	font-family: ui-monospace, "SF Mono", "Cascadia Code", Consolas, "Liberation Mono", monospace;
+	font-size: 13px; line-height: 1.6;
+	border: 1px solid rgba(255,255,255,.1); border-radius: 10px;
+	padding: 14px 16px; margin: 10px 0;
+	white-space: pre; overflow: auto; resize: vertical;
+}
+html.zm-theme-dark .zm-config-editor { border-color: rgba(255,255,255,.14); }
 
 .zm-log-arrow { color: #56d4dd; font-weight: 700; }
 .zm-log-msg-info { color: #e3c04a; }
@@ -4650,7 +5706,7 @@ return view.extend({
 			}
 			tgwsCard.innerHTML = '';
 			tgwsCard.appendChild(E('h3', {}, 'sTGWS (бета)'));
-			tgwsCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Бета-версия. В отдельных случаях может потребоваться сброс роутера до заводских настроек. Не устанавливайте, если не уверены, что сможете устранить возможные проблемы.'));
+			tgwsCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Бета-версия. В отдельных случаях может потребоваться сброс роутера до заводских настроек. Не устанавливайте, если не уверены, что сможете устранить возможные проблемы — рекомендуется использовать другие варианты TG WS Proxy выше.'));
 			tgwsCard.appendChild(E('div', { 'class': 'zm-row' }, [
 				E('span', { 'class': 'zm-label' }, 'Статус'),
 				installed ? zm.badge(d.running === true, 'запущен', 'остановлен') : zm.badge(false, '', 'не установлен')
