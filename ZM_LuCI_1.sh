@@ -1,6 +1,6 @@
 #!/bin/sh
 # Zapret Manager by StressOzz for LuCI installer
-# Version: 1.03
+# Version: 1.05
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -26,7 +26,7 @@ mkdir -p /usr/lib/zapret-manager
 cat > '/usr/lib/zapret-manager/backend.sh' << 'ZM_INSTALLER_EOF'
 
 CONF="/etc/config/zapret"
-ZM_VERSION="1.03"
+ZM_VERSION="1.05"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
@@ -1857,6 +1857,23 @@ _test_yt_urls() {
 	done
 }
 
+_test_kill_pid_tree() {
+	local pid="$1" ch c
+	[ -n "$pid" ] || return 0
+	ch=$(cat "/proc/$pid/task/$pid/children" 2>/dev/null)
+	for c in $ch; do _test_kill_pid_tree "$c"; done
+	kill -9 "$pid" 2>/dev/null
+}
+
+_test_kill_bg_jobs() {
+	local pf="$1" pid
+	[ -s "$pf" ] || return 0
+	while IFS= read -r pid; do
+		[ -n "$pid" ] && _test_kill_pid_tree "$pid"
+	done < "$pf"
+	wait 2>/dev/null
+}
+
 _test_check_url() {
 	local entry="$1" okfile="$2" logfile="$3" text link
 	text=$(echo "$entry" | cut -d'|' -f1)
@@ -1870,21 +1887,33 @@ _test_check_url() {
 }
 
 _test_check_all_urls() {
-	local urls="$1" logfile="$2" okfile total run=0 ok entry
+	local urls="$1" logfile="$2" okfile pidfile total run=0 ok entry
 	okfile="$TEST_DIR/ok.$$"
+	pidfile="$TEST_DIR/pids.$$"
 	: > "$okfile"
+	: > "$pidfile"
 	total=$(printf '%s\n' "$urls" | grep -c '|')
 	while IFS= read -r entry; do
 		[ -z "$entry" ] && continue
+		[ -f "$TEST_STOP_FLAG" ] && break
 		_test_check_url "$entry" "$okfile" "$logfile" &
+		echo $! >> "$pidfile"
 		run=$((run + 1))
-		if [ "$run" -ge "$TEST_PARALLEL" ]; then wait; run=0; fi
+		if [ "$run" -ge "$TEST_PARALLEL" ]; then
+			wait
+			run=0
+			[ -f "$TEST_STOP_FLAG" ] && break
+		fi
 	done <<-TEST_URLS_EOF
 	$urls
 	TEST_URLS_EOF
-	wait
+	if [ -f "$TEST_STOP_FLAG" ]; then
+		_test_kill_bg_jobs "$pidfile"
+	else
+		wait
+	fi
 	ok=$(wc -l < "$okfile" | tr -d ' ')
-	rm -f "$okfile"
+	rm -f "$okfile" "$pidfile"
 	printf '%s %s\n' "$ok" "$total"
 }
 
@@ -2954,13 +2983,30 @@ return view.extend({
 		wrap.appendChild(logEl);
 		var bannerEl = E('div', {});
 		wrap.appendChild(bannerEl);
-		var updateEl = E('div', {});
-		wrap.appendChild(updateEl);
 
 		this.logEl = logEl;
 		this.bannerEl = bannerEl;
 		this.renderCards = renderCards;
 		this.refreshOverview = refreshOverview;
+
+		var versionRow = E('div', { 'class': 'zm-row' }, [
+			E('span', { 'class': 'zm-label' }, 'Версия'), E('span', {}, 'v' + (zmUpdate.current || '?'))
+		]);
+		var checkBusy = false;
+		var versionCard = E('div', { 'class': 'zm-card' }, [
+			E('h3', {}, 'Zapret Manager by StressOzz for LuCI'),
+			versionRow,
+			E('div', { 'class': 'zm-actions' }, [
+				E('button', {
+					'class': 'cbi-button',
+					'click': function() { checkForUpdates(true); }
+				}, 'Проверить обновления')
+			])
+		]);
+		wrap.appendChild(versionCard);
+
+		var updateEl = E('div', {});
+		wrap.appendChild(updateEl);
 
 		var zmUpdateBusy = false;
 		function renderZmUpdate() {
@@ -2994,6 +3040,28 @@ return view.extend({
 			updateEl.appendChild(log);
 		}
 		renderZmUpdate();
+
+		function checkForUpdates(manual) {
+			if (checkBusy) { zm.toast('Дождитесь завершения проверки', 'warning'); return; }
+			checkBusy = true;
+			if (manual) zm.toast('Проверяем обновления', 'warning');
+			zm.zmUpdateStatus().then(function(res) {
+				checkBusy = false;
+				zmUpdate = res || {};
+				versionRow.lastChild.textContent = 'v' + (zmUpdate.current || '?');
+				renderZmUpdate();
+				if (manual) {
+					if (zmUpdate.latest && zmUpdate.latest !== zmUpdate.current) {
+						zm.toast('Доступна новая версия: ' + zmUpdate.latest, 'info');
+					} else {
+						zm.toast('У вас установлена последняя версия', 'info');
+					}
+				}
+			}).catch(function() {
+				checkBusy = false;
+				if (manual) zm.toast('Не удалось проверить обновления', 'error');
+			});
+		}
 
 		return wrap;
 	},
