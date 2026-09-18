@@ -1,6 +1,6 @@
 #!/bin/sh
 # Zapret Manager by StressOzz for LuCI installer
-# Version: 1.05
+# Version: 1.06
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -26,7 +26,7 @@ mkdir -p /usr/lib/zapret-manager
 cat > '/usr/lib/zapret-manager/backend.sh' << 'ZM_INSTALLER_EOF'
 
 CONF="/etc/config/zapret"
-ZM_VERSION="1.05"
+ZM_VERSION="1.06"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
@@ -1809,7 +1809,7 @@ tgws_action() {
 
 
 TEST_DIR="$JOBS_DIR/strategy_test"
-TEST_RESULTS="$TEST_DIR/results.txt"
+_test_results_file() { echo "$TEST_DIR/results_$1.txt"; }
 TEST_BACKUP="$TEST_DIR/backup.conf"
 TEST_STOP_FLAG="$TEST_DIR/stop"
 TEST_MODE_FILE="$TEST_DIR/mode"
@@ -1951,10 +1951,11 @@ _test_apply_block() {
 }
 
 do_test_run() {
-	local mode="$1"
+	local mode="$1" results
 	mkdir -p "$TEST_DIR"
 	rm -f "$TEST_STOP_FLAG"
-	: > "$TEST_RESULTS"
+	results="$(_test_results_file "$mode")"
+	: > "$results"
 	echo "$mode" > "$TEST_MODE_FILE"
 	[ -f "$CONF" ] || { echo "ОШИБКА: Zapret не установлен"; return 1; }
 	cp "$CONF" "$TEST_BACKUP"
@@ -1993,7 +1994,7 @@ do_test_run() {
 	ctrl_res=$(_test_check_all_urls "$urls" "$ctrl_log")
 	ctrl_ok=$(echo "$ctrl_res" | cut -d' ' -f1)
 	ctrl_total=$(echo "$ctrl_res" | cut -d' ' -f2)
-	echo "Контрольный тест (Zapret выключен) → ${ctrl_ok}/${ctrl_total}" >> "$TEST_RESULTS"
+	echo "Контрольный тест (Zapret выключен) → ${ctrl_ok}/${ctrl_total}" >> "$results"
 	echo "==> Результат: ${ctrl_ok}/${ctrl_total}"
 	/etc/init.d/zapret start >/dev/null 2>&1
 
@@ -2024,7 +2025,7 @@ do_test_run() {
 		ok=$(echo "$res" | cut -d' ' -f1)
 		tot=$(echo "$res" | cut -d' ' -f2)
 		echo "==> Результат: ${ok}/${tot}"
-		echo "${name} → ${ok}/${tot}" >> "$TEST_RESULTS"
+		echo "${name} → ${ok}/${tot}" >> "$results"
 	done
 
 	if [ -f "$TEST_STOP_FLAG" ]; then
@@ -2035,10 +2036,10 @@ do_test_run() {
 	fi
 
 	echo "==> Результаты теста"
-	_test_sort_results "$TEST_RESULTS"
-	cat "$TEST_RESULTS"
+	_test_sort_results "$results"
+	cat "$results"
 	local best_line
-	best_line=$(grep -v '^Контрольный тест' "$TEST_RESULTS" | head -n1)
+	best_line=$(grep -v '^Контрольный тест' "$results" | head -n1)
 	[ -n "$best_line" ] && echo "==> Лучшая стратегия по результатам теста: $best_line"
 
 	cp "$TEST_BACKUP" "$CONF"
@@ -2067,7 +2068,10 @@ test_action() {
 			printf '{"ok":true}\n'
 			;;
 		clear)
-			rm -f "$TEST_RESULTS"
+			case "$mode" in
+				v|flowseal|v_flowseal|youtube) rm -f "$(_test_results_file "$mode")" ;;
+				*) rm -f "$TEST_DIR"/results_*.txt ;;
+			esac
 			printf '{"ok":true}\n'
 			;;
 		*) echo '{"error":"неизвестное действие"}' ;;
@@ -2080,12 +2084,19 @@ test_status() {
 		running="true"
 	fi
 	[ -f "$TEST_MODE_FILE" ] && mode=$(cat "$TEST_MODE_FILE")
-	printf '{"running":%s,"mode":"%s","has_results":%s}\n' "$running" "$(esc "$mode")" "$([ -s "$TEST_RESULTS" ] && echo true || echo false)"
+	printf '{"running":%s,"mode":"%s","has_results_v":%s,"has_results_flowseal":%s,"has_results_v_flowseal":%s,"has_results_youtube":%s}\n' \
+		"$running" "$(esc "$mode")" \
+		"$([ -s "$(_test_results_file v)" ] && echo true || echo false)" \
+		"$([ -s "$(_test_results_file flowseal)" ] && echo true || echo false)" \
+		"$([ -s "$(_test_results_file v_flowseal)" ] && echo true || echo false)" \
+		"$([ -s "$(_test_results_file youtube)" ] && echo true || echo false)"
 }
 
 test_results() {
-	[ -s "$TEST_RESULTS" ] || { echo '{"lines":""}'; return; }
-	printf '{"lines":"%s"}\n' "$(esc_ml "$(cat "$TEST_RESULTS")")"
+	local mode="$1" f
+	f="$(_test_results_file "$mode")"
+	[ -s "$f" ] || { echo '{"lines":""}'; return; }
+	printf '{"lines":"%s"}\n' "$(esc_ml "$(cat "$f")")"
 }
 
 zm_update_status() {
@@ -2260,7 +2271,7 @@ case "$cmd" in
 	doh_set)                              doh_set "$1" ;;
 	test_status)                          test_status ;;
 	test_action)                          test_action "$1" "$2" ;;
-	test_results)                         test_results ;;
+	test_results)                         test_results "$1" ;;
 	zm_update_status)                     zm_update_status ;;
 	zm_update_action)                     zm_update_action ;;
 	*) echo '{"error":"неизвестная команда"}'; exit 1 ;;
@@ -2325,7 +2336,7 @@ list_methods() {
 	json_add_object "doh_set";                json_add_string "provider" "string"; json_close_object
 	json_add_object "test_status";             json_close_object
 	json_add_object "test_action";             json_add_string "action" "string"; json_add_string "mode" "string"; json_close_object
-	json_add_object "test_results";            json_close_object
+	json_add_object "test_results";            json_add_string "mode" "string"; json_close_object
 	json_add_object "zm_update_status";        json_close_object
 	json_add_object "zm_update_action";        json_close_object
 	json_dump
@@ -2385,7 +2396,7 @@ call_method() {
 		doh_set)                 json_get_var provider provider; "$BACKEND" doh_set "$provider" ;;
 		test_status)             "$BACKEND" test_status ;;
 		test_action)             json_get_var action action; json_get_var mode mode; "$BACKEND" test_action "$action" "$mode" ;;
-		test_results)            "$BACKEND" test_results ;;
+		test_results)            json_get_var mode mode; "$BACKEND" test_results "$mode" ;;
 		zm_update_status)        "$BACKEND" zm_update_status ;;
 		zm_update_action)        "$BACKEND" zm_update_action ;;
 		*) echo '{"error":"unknown method"}'; return 1 ;;
@@ -2559,7 +2570,7 @@ var callDohRemove = rpc.declare({ object: 'zapret-manager', method: 'doh_remove'
 var callDohSet = rpc.declare({ object: 'zapret-manager', method: 'doh_set', params: ['provider'], expect: {} });
 var callTestStatus = rpc.declare({ object: 'zapret-manager', method: 'test_status', expect: {} });
 var callTestAction = rpc.declare({ object: 'zapret-manager', method: 'test_action', params: ['action', 'mode'], expect: {} });
-var callTestResults = rpc.declare({ object: 'zapret-manager', method: 'test_results', expect: {} });
+var callTestResults = rpc.declare({ object: 'zapret-manager', method: 'test_results', params: ['mode'], expect: {} });
 var callZmUpdateStatus = rpc.declare({ object: 'zapret-manager', method: 'zm_update_status', expect: {} });
 var callZmUpdateAction = rpc.declare({ object: 'zapret-manager', method: 'zm_update_action', expect: {} });
 
@@ -2828,6 +2839,17 @@ return view.extend({
 			return E('div', { 'class': 'zm-card', 'style': 'margin-bottom:4px' }, [
 				E('h3', {}, 'Обзор'),
 				E('div', { 'class': 'zm-row' }, [
+					E('span', { 'class': 'zm-label' }, 'Zapret Manager LuCI'),
+					E('span', {}, [
+						E('span', {}, 'v' + (zmUpdate.current || '?') + ' '),
+						E('button', {
+							'class': 'cbi-button',
+							'style': 'padding:2px 10px; font-size:12px',
+							'click': function() { checkForUpdates(true); }
+						}, 'Проверить обновления')
+					])
+				]),
+				E('div', { 'class': 'zm-row' }, [
 					E('span', { 'class': 'zm-label' }, 'Zapret'),
 					d.zapret === 'installed'
 						? zm.badge(d.zapret_running === true, 'запущен', 'остановлен')
@@ -2956,6 +2978,8 @@ return view.extend({
 			cards.appendChild(sysCard);
 		}
 
+		var lastD = data, lastDoh = dohData, lastHosts = hostsData, lastSys = sysData;
+
 		function refreshOverview() {
 			Promise.all([
 				zm.status(),
@@ -2963,6 +2987,7 @@ return view.extend({
 				zm.hostsStatus().catch(function() { return { items: [] }; }),
 				zm.systemStatus().catch(function() { return {}; })
 			]).then(function(res) {
+				lastD = res[0]; lastDoh = res[1]; lastHosts = res[2]; lastSys = res[3];
 				overviewEl.innerHTML = '';
 				overviewEl.appendChild(renderOverview(res[0], res[1], res[2], res[3]));
 			});
@@ -2988,22 +3013,6 @@ return view.extend({
 		this.bannerEl = bannerEl;
 		this.renderCards = renderCards;
 		this.refreshOverview = refreshOverview;
-
-		var versionRow = E('div', { 'class': 'zm-row' }, [
-			E('span', { 'class': 'zm-label' }, 'Версия'), E('span', {}, 'v' + (zmUpdate.current || '?'))
-		]);
-		var checkBusy = false;
-		var versionCard = E('div', { 'class': 'zm-card' }, [
-			E('h3', {}, 'Zapret Manager by StressOzz for LuCI'),
-			versionRow,
-			E('div', { 'class': 'zm-actions' }, [
-				E('button', {
-					'class': 'cbi-button',
-					'click': function() { checkForUpdates(true); }
-				}, 'Проверить обновления')
-			])
-		]);
-		wrap.appendChild(versionCard);
 
 		var updateEl = E('div', {});
 		wrap.appendChild(updateEl);
@@ -3041,6 +3050,7 @@ return view.extend({
 		}
 		renderZmUpdate();
 
+		var checkBusy = false;
 		function checkForUpdates(manual) {
 			if (checkBusy) { zm.toast('Дождитесь завершения проверки', 'warning'); return; }
 			checkBusy = true;
@@ -3048,7 +3058,8 @@ return view.extend({
 			zm.zmUpdateStatus().then(function(res) {
 				checkBusy = false;
 				zmUpdate = res || {};
-				versionRow.lastChild.textContent = 'v' + (zmUpdate.current || '?');
+				overviewEl.innerHTML = '';
+				overviewEl.appendChild(renderOverview(lastD, lastDoh, lastHosts, lastSys));
 				renderZmUpdate();
 				if (manual) {
 					if (zmUpdate.latest && zmUpdate.latest !== zmUpdate.current) {
@@ -4256,6 +4267,8 @@ var MODE_LABELS = {
 	v: 'v', flowseal: 'Flowseal', v_flowseal: 'v + Flowseal', youtube: 'YouTube'
 };
 
+var RESULT_MODES = ['v', 'flowseal', 'v_flowseal', 'youtube'];
+
 return view.extend({
 	load: function() {
 		zm.injectCss();
@@ -4269,9 +4282,11 @@ return view.extend({
 		var resultsEl = E('pre', { 'class': 'zm-log' });
 		var busy = data.running === true;
 		var curMode = data.mode || '';
+		var status = data;
 
 		var mainCard = E('div', { 'class': 'zm-card' });
 		var ytCard = E('div', { 'class': 'zm-card' });
+		var resultsButtonsEl = E('div', {});
 
 		function stopButton() {
 			return E('button', { 'class': 'cbi-button cbi-button-remove', 'click': doStop }, 'Остановить тестирование стратегий');
@@ -4329,7 +4344,10 @@ return view.extend({
 				zm.toast(ok ? 'Тест завершён' : 'Тест завершился с ошибкой', ok ? 'info' : 'error');
 				renderMain();
 				renderYt();
-				refreshResults();
+				zm.testStatus().then(function(res) {
+					status = res;
+					renderResultsButtons();
+				});
 			});
 		}
 
@@ -4354,18 +4372,20 @@ return view.extend({
 			});
 		}
 
-		var resultsVisible = false;
 		function renderResultsColored(el, text) {
 			el.innerHTML = '';
-			var lines = (text || '').split('\n');
+			var lines = (text || '').split('\n').filter(function(l) { return l; });
+			var controlOk = null;
+			lines.forEach(function(line) {
+				var m = line.match(/^(.*?)\s*→\s*(\d+)\/(\d+)\s*$/);
+				if (m && /^Контрольный тест/.test(m[1])) controlOk = +m[2];
+			});
 			var first = true;
 			lines.forEach(function(line) {
-				if (!line) return;
 				var div = document.createElement('div');
 				var m = line.match(/^(.*?)\s*→\s*(\d+)\/(\d+)\s*$/);
 				if (m) {
 					var name = m[1], ok = +m[2], total = +m[3];
-					var pct = total > 0 ? (ok / total) : 0;
 					var isControl = /^Контрольный тест/.test(name);
 					var nameSpan = document.createElement('span');
 					nameSpan.textContent = name + ' → ';
@@ -4374,9 +4394,9 @@ return view.extend({
 					if (isControl) {
 						div.className = 'zm-log-code';
 					} else {
-						if (pct >= 0.8) scoreSpan.className = 'zm-log-msg-ok';
-						else if (pct >= 0.4) scoreSpan.className = 'zm-log-msg-warn';
-						else scoreSpan.className = 'zm-log-msg-error';
+						if (ok === total) scoreSpan.className = 'zm-log-msg-ok';
+						else if (controlOk !== null && ok < controlOk) scoreSpan.className = 'zm-log-msg-error';
+						else scoreSpan.className = 'zm-log-msg-warn';
 						if (first) { nameSpan.style.fontWeight = '700'; first = false; }
 					}
 					div.appendChild(nameSpan);
@@ -4389,29 +4409,39 @@ return view.extend({
 			});
 		}
 
-		function refreshResults() {
-			zm.testResults().then(function(res) {
+		function showResultsFor(mode) {
+			zm.testResults(mode).then(function(res) {
+				resultsEl.classList.add('zm-show');
 				renderResultsColored(resultsEl, res.lines || '');
 			});
 		}
 
+		function renderResultsButtons() {
+			resultsButtonsEl.innerHTML = '';
+			var actions = [];
+			RESULT_MODES.forEach(function(m) {
+				if (!status['has_results_' + m]) return;
+				actions.push(E('button', {
+					'class': 'cbi-button',
+					'click': function() { showResultsFor(m); }
+				}, 'Показать результаты: ' + MODE_LABELS[m]));
+			});
+			if (actions.length) {
+				resultsButtonsEl.appendChild(E('div', { 'class': 'zm-actions' }, actions));
+			} else {
+				resultsButtonsEl.appendChild(E('p', { 'class': 'zm-hint' }, 'Пока нет сохранённых результатов — запустите тест.'));
+			}
+		}
+
 		var resultsCard = E('div', { 'class': 'zm-card' }, [
 			E('h3', {}, 'Результаты тестирования'),
-			E('div', { 'class': 'zm-actions' }, [
-				E('button', {
-					'class': 'cbi-button',
-					'click': function() {
-						resultsVisible = !resultsVisible;
-						if (resultsVisible) { refreshResults(); resultsEl.classList.add('zm-show'); }
-						else { resultsEl.classList.remove('zm-show'); }
-					}
-				}, 'Показать результаты тестирования')
-			]),
+			resultsButtonsEl,
 			resultsEl
 		]);
 
 		renderMain();
 		renderYt();
+		renderResultsButtons();
 
 		if (busy) { startPolling(); }
 
