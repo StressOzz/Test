@@ -1,6 +1,6 @@
 #!/bin/sh
 # Zapret Manager by StressOzz for LuCI installer
-# Version: 1.17
+# Version: 1.18
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -26,7 +26,7 @@ mkdir -p /usr/lib/zapret-manager
 cat > '/usr/lib/zapret-manager/backend.sh' << 'ZM_INSTALLER_EOF'
 
 CONF="/etc/config/zapret"
-ZM_VERSION="1.17"
+ZM_VERSION="1.18"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
@@ -50,12 +50,18 @@ PORTS_UDP="88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535"
 PORTS_TCP="2802,2302,2502,3478-3480,3724,6000-8000,8085,8090,8100,8903,8904,25565,27015-27030,27036-27037,35500-35600,50001,60442"
 mkdir -p "$JOBS_DIR"
 
+if command -v timeout >/dev/null 2>&1; then
+	T90="timeout 90"; T60="timeout 60"
+else
+	T90=""; T60=""
+fi
+
 if command -v opkg >/dev/null 2>&1; then
-	PKG="opkg"; INSTALL="timeout 90 opkg install"; DELETE="timeout 60 opkg remove"; UPDATE="timeout 60 opkg update"
+	PKG="opkg"; INSTALL="$T90 opkg install"; DELETE="$T60 opkg remove"; UPDATE="$T60 opkg update"
 	TG_ARCH="$(opkg print-architecture 2>/dev/null | awk '{print $2}' | tail -n1)"
 	RAZ="ipk"
 else
-	PKG="apk"; INSTALL="timeout 90 apk add --allow-untrusted"; DELETE="timeout 60 apk del"; UPDATE="timeout 60 apk update"
+	PKG="apk"; INSTALL="$T90 apk add --allow-untrusted"; DELETE="$T60 apk del"; UPDATE="$T60 apk update"
 	TG_ARCH="$(apk --print-arch 2>/dev/null)"
 	RAZ="apk"
 fi
