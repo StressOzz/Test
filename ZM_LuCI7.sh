@@ -3852,7 +3852,7 @@ return view.extend({
 		wrap.appendChild(updateEl);
 		wrap.appendChild(E('div', { 'class': 'zm-header' }, [
 			E('h2', {}, 'Zapret Manager'),
-			E('span', { 'class': 'zm-header-by' }, 'by StressOzz'),
+			E('span', { 'class': 'zm-header-by' }, 'by 111111StressOzz'),
 			E('div', { 'class': 'zm-header-links' }, [
 				E('a', { 'href': 'http://stresskvn.lol/', 'target': '_blank', 'rel': 'noreferrer' }, 'StressKVN — обход белых списков!'),
 				E('a', { 'href': 'https://t.me/stressozz_manager', 'target': '_blank', 'rel': 'noreferrer' }, 'Сообщество Telegram')
