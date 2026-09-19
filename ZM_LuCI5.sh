@@ -1,6 +1,6 @@
 #!/bin/sh
 # Zapret Manager by StressOzz for LuCI installer
-# Version: 1.21
+# Version: 1.22
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -15,10 +15,11 @@ rm -rf \
 	/tmp/luci-modulecache/* 2>/dev/null
 
 mkdir -p /usr/lib/zapret-manager
+chmod 0755 /usr/lib/zapret-manager
 cat > '/usr/lib/zapret-manager/backend.sh' << 'ZM_INSTALLER_EOF'
 
 CONF="/etc/config/zapret"
-ZM_VERSION="1.21"
+ZM_VERSION="1.22"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
@@ -3068,6 +3069,7 @@ ZM_INSTALLER_EOF
 chmod 0755 '/usr/lib/zapret-manager/backend.sh'
 
 mkdir -p /usr/libexec/rpcd
+chmod 0755 /usr/libexec/rpcd
 cat > '/usr/libexec/rpcd/zapret-manager' << 'ZM_INSTALLER_EOF'
 #!/bin/sh
 
@@ -3224,6 +3226,7 @@ ZM_INSTALLER_EOF
 chmod 0755 '/usr/libexec/rpcd/zapret-manager'
 
 mkdir -p /usr/share/rpcd/acl.d
+chmod 0755 /usr/share/rpcd/acl.d
 cat > '/usr/share/rpcd/acl.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF'
 {
 	"luci-app-zapret-manager": {
@@ -3262,8 +3265,10 @@ cat > '/usr/share/rpcd/acl.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF'
 	}
 }
 ZM_INSTALLER_EOF
+chmod 0644 '/usr/share/rpcd/acl.d/luci-app-zapret-manager.json'
 
 mkdir -p /usr/share/luci/menu.d
+chmod 0755 /usr/share/luci/menu.d
 cat > '/usr/share/luci/menu.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF'
 {
 	"admin/services/zapret-manager": {
@@ -3336,8 +3341,10 @@ cat > '/usr/share/luci/menu.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF
 	}
 }
 ZM_INSTALLER_EOF
+chmod 0644 '/usr/share/luci/menu.d/luci-app-zapret-manager.json'
 
 mkdir -p /www/luci-static/resources/zapret-manager
+chmod 0755 /www/luci-static/resources/zapret-manager
 cat > '/www/luci-static/resources/zapret-manager/common.js' << 'ZM_INSTALLER_EOF'
 'use strict';
 'require baseclass';
@@ -3637,8 +3644,10 @@ return baseclass.extend({
 	mixomoWarpConfigSet: callMixomoWarpConfigSet
 });
 ZM_INSTALLER_EOF
+chmod 0644 '/www/luci-static/resources/zapret-manager/common.js'
 
 mkdir -p /www/luci-static/resources/view/zapret-manager
+chmod 0755 /www/luci-static/resources/view/zapret-manager
 cat > '/www/luci-static/resources/view/zapret-manager/dashboard.js' << 'ZM_INSTALLER_EOF'
 'use strict';
 'require view';
@@ -3982,8 +3991,10 @@ return view.extend({
 	}
 });
 ZM_INSTALLER_EOF
+chmod 0644 '/www/luci-static/resources/view/zapret-manager/dashboard.js'
 
 mkdir -p /www/luci-static/resources/view/zapret-manager
+chmod 0755 /www/luci-static/resources/view/zapret-manager
 cat > '/www/luci-static/resources/view/zapret-manager/discord.js' << 'ZM_INSTALLER_EOF'
 'use strict';
 'require view';
@@ -4075,8 +4086,10 @@ return view.extend({
 	}
 });
 ZM_INSTALLER_EOF
+chmod 0644 '/www/luci-static/resources/view/zapret-manager/discord.js'
 
 mkdir -p /www/luci-static/resources/view/zapret-manager
+chmod 0755 /www/luci-static/resources/view/zapret-manager
 cat > '/www/luci-static/resources/view/zapret-manager/doh.js' << 'ZM_INSTALLER_EOF'
 'use strict';
 'require view';
@@ -4191,8 +4204,10 @@ return view.extend({
 	}
 });
 ZM_INSTALLER_EOF
+chmod 0644 '/www/luci-static/resources/view/zapret-manager/doh.js'
 
 mkdir -p /www/luci-static/resources/view/zapret-manager
+chmod 0755 /www/luci-static/resources/view/zapret-manager
 cat > '/www/luci-static/resources/view/zapret-manager/exclusions.js' << 'ZM_INSTALLER_EOF'
 'use strict';
 'require view';
@@ -4304,8 +4319,10 @@ return view.extend({
 	}
 });
 ZM_INSTALLER_EOF
+chmod 0644 '/www/luci-static/resources/view/zapret-manager/exclusions.js'
 
 mkdir -p /www/luci-static/resources/view/zapret-manager
+chmod 0755 /www/luci-static/resources/view/zapret-manager
 cat > '/www/luci-static/resources/view/zapret-manager/game.js' << 'ZM_INSTALLER_EOF'
 'use strict';
 'require view';
@@ -4434,8 +4451,10 @@ return view.extend({
 	}
 });
 ZM_INSTALLER_EOF
+chmod 0644 '/www/luci-static/resources/view/zapret-manager/game.js'
 
 mkdir -p /www/luci-static/resources/view/zapret-manager
+chmod 0755 /www/luci-static/resources/view/zapret-manager
 cat > '/www/luci-static/resources/view/zapret-manager/hosts.js' << 'ZM_INSTALLER_EOF'
 'use strict';
 'require view';
@@ -4563,8 +4582,10 @@ return view.extend({
 	}
 });
 ZM_INSTALLER_EOF
+chmod 0644 '/www/luci-static/resources/view/zapret-manager/hosts.js'
 
 mkdir -p /www/luci-static/resources/view/zapret-manager
+chmod 0755 /www/luci-static/resources/view/zapret-manager
 cat > '/www/luci-static/resources/view/zapret-manager/mixomo.js' << 'ZM_INSTALLER_EOF'
 'use strict';
 'require view';
@@ -5095,8 +5116,10 @@ return view.extend({
 	}
 });
 ZM_INSTALLER_EOF
+chmod 0644 '/www/luci-static/resources/view/zapret-manager/mixomo.js'
 
 mkdir -p /www/luci-static/resources/view/zapret-manager
+chmod 0755 /www/luci-static/resources/view/zapret-manager
 cat > '/www/luci-static/resources/view/zapret-manager/strategy.js' << 'ZM_INSTALLER_EOF'
 'use strict';
 'require view';
@@ -5232,8 +5255,10 @@ return view.extend({
 	}
 });
 ZM_INSTALLER_EOF
+chmod 0644 '/www/luci-static/resources/view/zapret-manager/strategy.js'
 
 mkdir -p /www/luci-static/resources/view/zapret-manager
+chmod 0755 /www/luci-static/resources/view/zapret-manager
 cat > '/www/luci-static/resources/view/zapret-manager/style.css' << 'ZM_INSTALLER_EOF'
 .zm-wrap { display: flex; flex-direction: column; gap: 16px; max-width: 1100px; }
 
@@ -5427,8 +5452,10 @@ html.zm-theme-dark .zm-config-editor { border-color: rgba(255,255,255,.14); }
 
 .cbi-page-actions { display: none !important; }
 ZM_INSTALLER_EOF
+chmod 0644 '/www/luci-static/resources/view/zapret-manager/style.css'
 
 mkdir -p /www/luci-static/resources/view/zapret-manager
+chmod 0755 /www/luci-static/resources/view/zapret-manager
 cat > '/www/luci-static/resources/view/zapret-manager/system.js' << 'ZM_INSTALLER_EOF'
 'use strict';
 'require view';
@@ -5639,8 +5666,10 @@ return view.extend({
 	}
 });
 ZM_INSTALLER_EOF
+chmod 0644 '/www/luci-static/resources/view/zapret-manager/system.js'
 
 mkdir -p /www/luci-static/resources/view/zapret-manager
+chmod 0755 /www/luci-static/resources/view/zapret-manager
 cat > '/www/luci-static/resources/view/zapret-manager/test.js' << 'ZM_INSTALLER_EOF'
 'use strict';
 'require view';
@@ -5842,8 +5871,10 @@ return view.extend({
 	}
 });
 ZM_INSTALLER_EOF
+chmod 0644 '/www/luci-static/resources/view/zapret-manager/test.js'
 
 mkdir -p /www/luci-static/resources/view/zapret-manager
+chmod 0755 /www/luci-static/resources/view/zapret-manager
 cat > '/www/luci-static/resources/view/zapret-manager/tgproxy.js' << 'ZM_INSTALLER_EOF'
 'use strict';
 'require view';
@@ -6109,8 +6140,10 @@ return view.extend({
 	}
 });
 ZM_INSTALLER_EOF
+chmod 0644 '/www/luci-static/resources/view/zapret-manager/tgproxy.js'
 
 mkdir -p /www/luci-static/resources/view/zapret-manager
+chmod 0755 /www/luci-static/resources/view/zapret-manager
 cat > '/www/luci-static/resources/view/zapret-manager/youtube.js' << 'ZM_INSTALLER_EOF'
 'use strict';
 'require view';
@@ -6213,6 +6246,7 @@ return view.extend({
 	}
 });
 ZM_INSTALLER_EOF
+chmod 0644 '/www/luci-static/resources/view/zapret-manager/youtube.js'
 
 rm -f /tmp/luci-indexcache* /tmp/luci-modulecache/* 2>/dev/null || true
 /etc/init.d/rpcd reload >/dev/null 2>&1 || /etc/init.d/rpcd restart >/dev/null 2>&1
