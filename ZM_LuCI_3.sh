@@ -1,6 +1,6 @@
 #!/bin/sh
 # Zapret Manager by StressOzz for LuCI installer
-# Version: 1.12
+# Version: 1.13
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -26,7 +26,7 @@ mkdir -p /usr/lib/zapret-manager
 cat > '/usr/lib/zapret-manager/backend.sh' << 'ZM_INSTALLER_EOF'
 
 CONF="/etc/config/zapret"
-ZM_VERSION="1.12"
+ZM_VERSION="1.13"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
@@ -2161,14 +2161,17 @@ _mixomo_arch() {
 }
 
 mixomo_status() {
-	local mihomo="not_installed" mihomo_running="false"
+	local mihomo="not_installed" mihomo_running="false" mihomo_ver="" mihomo_latest=""
 	local magitrickle="not_installed" magitrickle_running="false" mt_ver="" mt_latest=""
-	local hev="not_installed" hev_running="false"
-	local lan_ip subscription="false" mt_list="" autorestart=""
+	local hev="not_installed" hev_running="false" hev_ver=""
+	local lan_ip subscription="false" mt_list="" autorestart="" ui_panel=""
 
 	if [ -x "$MIHOMO_BIN" ]; then
 		mihomo="installed"
 		pidof mihomo >/dev/null 2>&1 && mihomo_running="true"
+		mihomo_ver=$("$MIHOMO_BIN" -v 2>/dev/null | head -n1 | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+		mihomo_latest=$(curl -Ls --connect-timeout 4 --max-time 6 -o /dev/null -w '%{url_effective}' "https://github.com/MetaCubeX/mihomo/releases/latest" 2>/dev/null | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+		[ -f "$MIHOMO_DIR/.ui_panel" ] && ui_panel=$(cat "$MIHOMO_DIR/.ui_panel")
 	fi
 	if [ -x /etc/init.d/magitrickle ]; then
 		magitrickle="installed"
@@ -2183,6 +2186,11 @@ mixomo_status() {
 	if [ -x /etc/init.d/hev-socks5-tunnel ]; then
 		hev="installed"
 		/etc/init.d/hev-socks5-tunnel status >/dev/null 2>&1 && hev_running="true"
+		if [ "$PKG" = "apk" ]; then
+			hev_ver=$(apk info -v 2>/dev/null | grep '^hev-socks5-tunnel-' | cut -d- -f4-)
+		else
+			hev_ver=$(opkg status hev-socks5-tunnel 2>/dev/null | awk '/^Version:/ {print $2}')
+		fi
 	fi
 
 	lan_ip=$(_mixomo_lan_ip)
@@ -2205,8 +2213,11 @@ mixomo_status() {
 		esac
 	fi
 
-	printf '{"mihomo":"%s","mihomo_running":%s,"magitrickle":"%s","magitrickle_running":%s,"magitrickle_version":"%s","magitrickle_latest":"%s","hev":"%s","hev_running":%s,"lan_ip":"%s","subscription":%s,"magitrickle_list":"%s","autorestart":"%s"}\n' \
-		"$mihomo" "$mihomo_running" "$magitrickle" "$magitrickle_running" "$(esc "$mt_ver")" "$(esc "$mt_latest")" "$hev" "$hev_running" "$(esc "$lan_ip")" "$subscription" "$mt_list" "$(esc "$autorestart")"
+	printf '{"mihomo":"%s","mihomo_running":%s,"mihomo_version":"%s","mihomo_latest":"%s","magitrickle":"%s","magitrickle_running":%s,"magitrickle_version":"%s","magitrickle_latest":"%s","hev":"%s","hev_running":%s,"hev_version":"%s","lan_ip":"%s","subscription":%s,"magitrickle_list":"%s","autorestart":"%s","ui_panel":"%s"}\n' \
+		"$mihomo" "$mihomo_running" "$(esc "$mihomo_ver")" "$(esc "$mihomo_latest")" \
+		"$magitrickle" "$magitrickle_running" "$(esc "$mt_ver")" "$(esc "$mt_latest")" \
+		"$hev" "$hev_running" "$(esc "$hev_ver")" \
+		"$(esc "$lan_ip")" "$subscription" "$mt_list" "$(esc "$autorestart")" "$(esc "$ui_panel")"
 }
 
 do_mixomo_install() {
@@ -2390,6 +2401,12 @@ do_mixomo_install() {
 		/etc/init.d/magitrickle enable >/dev/null 2>&1
 		/etc/init.d/magitrickle restart >/dev/null 2>&1
 	fi
+
+	if [ ! -f "$MIHOMO_DIR/.ui_panel" ]; then
+		echo "==> Устанавливаем веб-панель Zashboard (по умолчанию)"
+		do_mixomo_ui_install zashboard || echo "!! Не удалось установить веб-панель — можно поставить позже вручную"
+	fi
+
 	echo "==> Готово, Mixomo установлен"
 }
 
@@ -2604,6 +2621,7 @@ do_mixomo_ui_install() {
 			unzip -oq "$tmp" -d /tmp/zashboard || { echo "ОШИБКА: не удалось распаковать архив"; rm -rf "$tmp" /tmp/zashboard; return 1; }
 			cp -r /tmp/zashboard/dist/* "$MIHOMO_DIR/ui/"
 			rm -rf "$tmp" /tmp/zashboard
+			echo "zashboard" > "$MIHOMO_DIR/.ui_panel"
 			echo "==> Готово, Zashboard установлен"
 			;;
 		metacubexd)
@@ -2618,6 +2636,7 @@ do_mixomo_ui_install() {
 			tar -xzf "$tmp" -C /tmp/metacubexd || { echo "ОШИБКА: не удалось распаковать архив"; rm -rf "$tmp" /tmp/metacubexd; return 1; }
 			cp -r /tmp/metacubexd/* "$MIHOMO_DIR/ui/"
 			rm -rf "$tmp" /tmp/metacubexd
+			echo "metacubexd" > "$MIHOMO_DIR/.ui_panel"
 			echo "==> Готово, MetaCubeXD установлен"
 			;;
 		*) echo "ОШИБКА: неизвестная панель"; return 1 ;;
@@ -2626,6 +2645,244 @@ do_mixomo_ui_install() {
 
 mixomo_ui_action() {
 	job_start mixomo_ui_install do_mixomo_ui_install "$1"
+}
+
+MIXOMO_WARP_CONF="/root/WARP.conf"
+MIXOMO_WARP_PRIMARY="https://santa-atmo.ru/warp/warp.php"
+MIXOMO_WARP_SECONDARY="https://wgcli.vercel.app"
+MIXOMO_AWG_JC=4
+MIXOMO_AWG_JMIN=40
+MIXOMO_AWG_JMAX=70
+MIXOMO_AWG_H1=1
+MIXOMO_AWG_H2=2
+MIXOMO_AWG_H3=3
+MIXOMO_AWG_H4=4
+MIXOMO_AWG_S1=0
+MIXOMO_AWG_S2=0
+
+mixomo_warp_status() {
+	local exists="false" content=""
+	if [ -s "$MIXOMO_WARP_CONF" ]; then
+		exists="true"
+		content=$(cat "$MIXOMO_WARP_CONF")
+	fi
+	printf '{"exists":%s,"content":"%s"}\n' "$exists" "$(esc_ml "$content")"
+}
+
+_mixomo_warp_best_endpoint() {
+	local warp_tmp="$JOBS_DIR/mixomo_warp"
+	local prefixes="188.114.96. 188.114.97. 188.114.98. 188.114.99. 162.159.192. 162.159.193. 162.159.195. 8.34.146. 8.39.214. 8.39.204. 8.6.112. 8.35.211. 8.39.125. 8.47.69."
+	local pings="$warp_tmp/pings" candidates count=0 ip
+	mkdir -p "$warp_tmp"
+	rm -f "$pings"
+	candidates=$(awk -v prefixes="$prefixes" 'BEGIN { srand(); n = split(prefixes, arr, " "); for (i = 0; i < 60; i++) { idx = int(rand() * n) + 1; last = int(rand() * 256); print arr[idx] last } }')
+	for ip in $candidates; do
+		(
+			trace_data=$(curl -s --connect-timeout 2 -w "\n%{time_total}" -H "Host: trace.cloudflare.com" "http://${ip}/cdn-cgi/trace" 2>/dev/null)
+			[ -n "$trace_data" ] || exit 0
+			colo=$(echo "$trace_data" | awk -F'=' '$1=="colo"{print $2}')
+			[ "$colo" = "DME" ] && exit 0
+			[ -z "$colo" ] && exit 0
+			ping_ms=$(echo "$trace_data" | tail -n1 | awk '{printf "%d", $1 * 1000}')
+			[ -n "$ping_ms" ] && echo "$ping_ms $ip $colo" >> "$pings"
+		) &
+		count=$((count + 1))
+		[ $((count % 20)) -eq 0 ] && wait
+	done
+	wait
+	if [ -s "$pings" ]; then
+		sort -n "$pings" | head -n1 | awk '{print $2":4500"}'
+	else
+		echo "engage.cloudflareclient.com:4500"
+	fi
+}
+
+do_mixomo_warp_register() {
+	local endpoint_mode="$1" warp_tmp="$JOBS_DIR/mixomo_warp" reg
+	mkdir -p "$warp_tmp"
+	reg="$warp_tmp/reg.json"
+	rm -f "$reg"
+
+	echo "==> Генерируем WARP"
+	echo "==> Используем основной метод"
+	local priv="" peer="" v4="" v6=""
+	if curl -fsSL --max-time 30 "$MIXOMO_WARP_PRIMARY" -o "$reg" 2>/dev/null && grep -q '"public_key"' "$reg"; then
+		priv=$(grep -o '"key"[[:space:]]*:[[:space:]]*"[^"]*"' "$reg" | head -n1 | sed 's/.*:[[:space:]]*"//;s/"$//')
+		peer=$(grep -o '"public_key"[[:space:]]*:[[:space:]]*"[^"]*"' "$reg" | head -n1 | sed 's/.*:[[:space:]]*"//;s/"$//')
+		v4=$(grep -o '"v4"[[:space:]]*:[[:space:]]*"[^"]*"' "$reg" | sed -n '2p' | sed 's/.*:[[:space:]]*"//;s/"$//')
+		v6=$(grep -o '"v6"[[:space:]]*:[[:space:]]*"[^"]*"' "$reg" | sed -n '2p' | sed 's/.*:[[:space:]]*"//;s/"$//')
+	fi
+
+	if [ -z "$priv" ] || [ -z "$peer" ] || [ -z "$v4" ]; then
+		echo "==> Основной метод не сработал, пробуем резервный"
+		command -v jq >/dev/null 2>&1 || $INSTALL jq >/dev/null 2>&1
+		command -v wg >/dev/null 2>&1 || command -v awg >/dev/null 2>&1 || $INSTALL wireguard-tools >/dev/null 2>&1
+		command -v jq >/dev/null 2>&1 || { echo "ОШИБКА: не удалось установить jq для резервного метода"; return 1; }
+		local gen=wg
+		command -v awg >/dev/null 2>&1 && gen=awg
+		command -v "$gen" >/dev/null 2>&1 || { echo "ОШИБКА: не удалось установить wireguard-tools для резервного метода"; return 1; }
+		priv=$("$gen" genkey 2>/dev/null)
+		if ! curl -fsSL --max-time 60 "$MIXOMO_WARP_SECONDARY" -o "$reg" 2>/dev/null; then
+			echo "ОШИБКА: не удалось получить WARP через резервный метод"
+			return 1
+		fi
+		if jq -e '.result.config.peers[0].public_key' "$reg" >/dev/null 2>&1; then
+			priv=$(jq -r '.result.key' "$reg")
+			peer=$(jq -r '.result.config.peers[0].public_key' "$reg")
+			v4=$(jq -r '.result.config.interface.addresses.v4' "$reg")
+			v6=$(jq -r '.result.config.interface.addresses.v6 // empty' "$reg")
+		elif jq -e '.config.peers[0].public_key' "$reg" >/dev/null 2>&1; then
+			peer=$(jq -r '.config.peers[0].public_key' "$reg")
+			v4=$(jq -r '.config.interface.addresses.v4' "$reg")
+			v6=$(jq -r '.config.interface.addresses.v6 // empty' "$reg")
+		else
+			echo "ОШИБКА: резервный источник вернул неверный формат"
+			return 1
+		fi
+	fi
+
+	[ -n "$peer" ] && [ "$peer" != "null" ] || { echo "ОШИБКА: не получен публичный ключ сервера"; return 1; }
+	[ -n "$v4" ] && [ "$v4" != "null" ] || { echo "ОШИБКА: не получен IPv4-адрес"; return 1; }
+	echo "==> WARP сгенерирован"
+
+	local ep
+	if [ "$endpoint_mode" = "auto" ]; then
+		echo "==> Подбираем лучший endpoint"
+		ep=$(_mixomo_warp_best_endpoint)
+	else
+		ep="engage.cloudflareclient.com:4500"
+	fi
+	echo "==> Используем endpoint: $ep"
+
+	printf '%s\n' \
+		"[Interface]" "PrivateKey = $priv" "Address = ${v4}${v6:+, $v6}" "DNS = 9.9.9.9" "MTU = 1280" \
+		"S1 = $MIXOMO_AWG_S1" "S2 = $MIXOMO_AWG_S2" "Jc = $MIXOMO_AWG_JC" "Jmin = $MIXOMO_AWG_JMIN" "Jmax = $MIXOMO_AWG_JMAX" \
+		"H1 = $MIXOMO_AWG_H1" "H2 = $MIXOMO_AWG_H2" "H3 = $MIXOMO_AWG_H3" "H4 = $MIXOMO_AWG_H4" "" \
+		"[Peer]" "PublicKey = $peer" "AllowedIPs = 0.0.0.0/0, ::/0" "Endpoint = $ep" "PersistentKeepalive = 25" \
+		> "$MIXOMO_WARP_CONF"
+	echo "==> Готово, файл сохранён в $MIXOMO_WARP_CONF"
+}
+
+mixomo_warp_action() {
+	local endpoint_mode="$1"
+	job_start mixomo_warp do_mixomo_warp_register "$endpoint_mode"
+}
+
+do_mixomo_warp_integrate() {
+	[ -s "$MIXOMO_WARP_CONF" ] || { echo "ОШИБКА: сначала сгенерируйте WARP.conf"; return 1; }
+	[ -x /etc/init.d/mihomo ] || { echo "ОШИБКА: Mixomo не установлен"; return 1; }
+	echo "==> Интегрируем WARP.conf в Mihomo"
+	local tmp; tmp=$(mktemp)
+	awk -v OUT="$tmp" '
+	function trim(s){ gsub(/^[ \t\r\n]+|[ \t\r\n]+$/, "", s); return s }
+	function lc(s){ return tolower(s) }
+	function yaml_quote(s){ gsub(/\\/,"\\\\",s); gsub(/"/,"\\\"",s); gsub(/\r/,"",s); return "\"" s "\"" }
+	function split_endpoint(s,    a,n){ s=trim(s); n=split(s,a,":"); if(n<2){ host=s; port="" } else { port=a[n]; host=a[1]; for(i=2;i<n;i++) host=host ":" a[i] } }
+	BEGIN{ sec=""; addr4=""; addr6=""; priv=""; pub=""; psk=""; allowed=""; endpoint=""; keep=""; s1=""; s2=""; jc=""; jmin=""; jmax=""; h1=""; h2=""; h3=""; h4=""; mtu="" }
+	{
+		line=$0; sub(/[;#].*$/, "", line); line=trim(line)
+		if(line=="") next
+		if(line ~ /^\[.*\]$/){ sec=lc(trim(substr(line,2,length(line)-2))); next }
+		if(index(line,"=")==0) next
+		key=trim(substr(line,1,index(line,"=")-1)); val=trim(substr(line,index(line,"=")+1)); k=lc(key)
+		if(sec=="interface"){
+			if(k=="address"){ gsub(/,/, " ", val); n=split(val, a, /[ \t]+/); for(i=1;i<=n;i++){ if(a[i] ~ /:/) addr6=a[i]; else addr4=a[i] } }
+			else if(k=="privatekey") priv=val
+			else if(k=="mtu") mtu=val
+			else if(k=="s1") s1=val
+			else if(k=="s2") s2=val
+			else if(k=="jc") jc=val
+			else if(k=="jmin") jmin=val
+			else if(k=="jmax") jmax=val
+			else if(k=="h1") h1=val
+			else if(k=="h2") h2=val
+			else if(k=="h3") h3=val
+			else if(k=="h4") h4=val
+		} else if(sec=="peer"){
+			if(k=="publickey") pub=val
+			else if(k=="presharedkey") psk=val
+			else if(k=="allowedips") { gsub(/[ \t]+/, "", val); allowed=val }
+			else if(k=="endpoint") endpoint=val
+			else if(k=="persistentkeepalive") keep=val
+		}
+	}
+	END{
+		if(priv=="" || pub=="" || endpoint==""){ print "нет обязательных полей" > "/dev/stderr"; exit 2 }
+		split_endpoint(endpoint)
+		ip=addr4; sub(/\/32$/, "", ip)
+		ipv6=addr6; sub(/\/128$/, "", ipv6)
+		if(allowed=="") allowed="0.0.0.0/0,::/0"
+		n=split(allowed, aip, ",")
+		allowed_block=""
+		for(i=1;i<=n;i++){ if(aip[i]=="") continue; allowed_block = allowed_block "      - " yaml_quote(aip[i]) "\n" }
+
+		print "mixed-port: 7890" > OUT
+		print "allow-lan: false" >> OUT
+		print "tcp-concurrent: true" >> OUT
+		print "mode: rule" >> OUT
+		print "log-level: error" >> OUT
+		print "ipv6: false" >> OUT
+		print "external-controller: 0.0.0.0:9090" >> OUT
+		print "external-ui: ./ui" >> OUT
+		print "unified-delay: true" >> OUT
+		print "profile:" >> OUT
+		print "  store-selected: true" >> OUT
+		print "  store-fake-ip: true" >> OUT
+		print "" >> OUT
+		print "proxy-groups:" >> OUT
+		print "  - name: GLOBAL" >> OUT
+		print "    type: select" >> OUT
+		print "    proxies:" >> OUT
+		print "      - WARP" >> OUT
+		print "      - REJECT" >> OUT
+		print "" >> OUT
+		print "rules:" >> OUT
+		print "  - \"MATCH,GLOBAL\"" >> OUT
+		print "" >> OUT
+		print "proxies:" >> OUT
+		print "  - name: WARP" >> OUT
+		print "    type: wireguard" >> OUT
+		print "    server: " host >> OUT
+		if(port!="") print "    port: " port >> OUT
+		print "    private-key: " yaml_quote(priv) >> OUT
+		print "    udp: true" >> OUT
+		if(ip!="") print "    ip: " ip >> OUT
+		if(ipv6!="") print "    ipv6: " ipv6 >> OUT
+		print "    public-key: " yaml_quote(pub) >> OUT
+		if(psk!="") print "    pre-shared-key: " yaml_quote(psk) >> OUT
+		print "    allowed-ips:" >> OUT
+		printf "%s", allowed_block >> OUT
+		if(mtu!="") print "    mtu: " mtu >> OUT
+		if(keep!="") print "    persistent-keepalive: " keep >> OUT
+		if(s1!="" || s2!="" || jc!="" || jmin!="" || jmax!="" || h1!="" || h2!="" || h3!="" || h4!=""){
+			print "    amnezia-wg-option:" >> OUT
+			if(s1!="") print "      s1: " s1 >> OUT
+			if(s2!="") print "      s2: " s2 >> OUT
+			if(jc!="") print "      jc: " jc >> OUT
+			if(jmin!="") print "      jmin: " jmin >> OUT
+			if(jmax!="") print "      jmax: " jmax >> OUT
+			if(h1!="") print "      h1: " h1 >> OUT
+			if(h2!="") print "      h2: " h2 >> OUT
+			if(h3!="") print "      h3: " h3 >> OUT
+			if(h4!="") print "      h4: " h4 >> OUT
+		}
+	}' "$MIXOMO_WARP_CONF" 2>"$tmp.err"
+	if [ -s "$tmp.err" ]; then
+		echo "ОШИБКА: в WARP.conf отсутствуют обязательные поля"
+		rm -f "$tmp" "$tmp.err"
+		return 1
+	fi
+	rm -f "$tmp.err"
+	cp "$MIHOMO_CONF" "$MIHOMO_CONF.bak" 2>/dev/null
+	chmod 600 "$tmp"
+	mv -f "$tmp" "$MIHOMO_CONF"
+	/etc/init.d/mihomo reload >/dev/null 2>&1
+	/etc/init.d/mihomo restart >/dev/null 2>&1
+	echo "==> Готово, WARP интегрирован в Mihomo"
+}
+
+mixomo_warp_integrate_action() {
+	job_start mixomo_warp_integrate do_mixomo_warp_integrate
 }
 
 _doh_file="/etc/config/https-dns-proxy"
@@ -2787,6 +3044,9 @@ case "$cmd" in
 	mixomo_magitrickle_list_set)          mixomo_magitrickle_list_set "$1" ;;
 	mixomo_autorestart_set)               mixomo_autorestart_set "$1" "$2" ;;
 	mixomo_ui_action)                     mixomo_ui_action "$1" ;;
+	mixomo_warp_status)                   mixomo_warp_status ;;
+	mixomo_warp_action)                   mixomo_warp_action "$1" ;;
+	mixomo_warp_integrate_action)         mixomo_warp_integrate_action ;;
 	*) echo '{"error":"неизвестная команда"}'; exit 1 ;;
 esac
 ZM_INSTALLER_EOF
@@ -2860,6 +3120,9 @@ list_methods() {
 	json_add_object "mixomo_magitrickle_list_set"; json_add_string "id" "string"; json_close_object
 	json_add_object "mixomo_autorestart_set";  json_add_string "mode" "string"; json_add_string "value" "string"; json_close_object
 	json_add_object "mixomo_ui_action";        json_add_string "which" "string"; json_close_object
+	json_add_object "mixomo_warp_status";      json_close_object
+	json_add_object "mixomo_warp_action";      json_add_string "endpoint_mode" "string"; json_close_object
+	json_add_object "mixomo_warp_integrate_action"; json_close_object
 	json_dump
 }
 
@@ -2928,6 +3191,9 @@ call_method() {
 		mixomo_magitrickle_list_set) json_get_var id id; "$BACKEND" mixomo_magitrickle_list_set "$id" ;;
 		mixomo_autorestart_set)  json_get_var mode mode; json_get_var value value; "$BACKEND" mixomo_autorestart_set "$mode" "$value" ;;
 		mixomo_ui_action)        json_get_var which which; "$BACKEND" mixomo_ui_action "$which" ;;
+		mixomo_warp_status)      "$BACKEND" mixomo_warp_status ;;
+		mixomo_warp_action)      json_get_var endpoint_mode endpoint_mode; "$BACKEND" mixomo_warp_action "$endpoint_mode" ;;
+		mixomo_warp_integrate_action) "$BACKEND" mixomo_warp_integrate_action ;;
 		*) echo '{"error":"unknown method"}'; return 1 ;;
 	esac
 }
@@ -2953,6 +3219,7 @@ cat > '/usr/share/rpcd/acl.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF'
 					"discord_status", "hosts_status", "doh_status", "game_status",
 					"system_status", "mirror_status", "exclusions_status", "tg_status", "tgws_status",
 					"test_status", "test_results", "zm_update_status", "mixomo_status", "mixomo_config_get",
+					"mixomo_warp_status",
 					"zapret_latest_version"
 				]
 			}
@@ -2970,7 +3237,8 @@ cat > '/usr/share/rpcd/acl.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF'
 					"mirror_set", "exclusions_toggle", "exclusions_clear",
 					"tg_action", "tg_restart_all", "tgws_action", "test_action", "zm_update_action",
 					"mixomo_action", "mixomo_config_set", "mixomo_subscription_set",
-					"mixomo_magitrickle_list_set", "mixomo_autorestart_set", "mixomo_ui_action"
+					"mixomo_magitrickle_list_set", "mixomo_autorestart_set", "mixomo_ui_action",
+					"mixomo_warp_action", "mixomo_warp_integrate_action"
 				]
 			}
 		}
@@ -3117,6 +3385,9 @@ var callMixomoApplySubscription = rpc.declare({ object: 'zapret-manager', method
 var callMixomoMagitrickleListSet = rpc.declare({ object: 'zapret-manager', method: 'mixomo_magitrickle_list_set', params: ['id'], expect: {} });
 var callMixomoAutorestartSet = rpc.declare({ object: 'zapret-manager', method: 'mixomo_autorestart_set', params: ['mode', 'value'], expect: {} });
 var callMixomoUiAction = rpc.declare({ object: 'zapret-manager', method: 'mixomo_ui_action', params: ['which'], expect: {} });
+var callMixomoWarpStatus = rpc.declare({ object: 'zapret-manager', method: 'mixomo_warp_status', expect: {} });
+var callMixomoWarpAction = rpc.declare({ object: 'zapret-manager', method: 'mixomo_warp_action', params: ['endpoint_mode'], expect: {} });
+var callMixomoWarpIntegrateAction = rpc.declare({ object: 'zapret-manager', method: 'mixomo_warp_integrate_action', expect: {} });
 
 function detectMissingThemeVar() {
 	if (document.documentElement.hasAttribute('data-zm-theme-checked')) return;
@@ -3341,7 +3612,10 @@ return baseclass.extend({
 	mixomoApplySubscription: callMixomoApplySubscription,
 	mixomoMagitrickleListSet: callMixomoMagitrickleListSet,
 	mixomoAutorestartSet: callMixomoAutorestartSet,
-	mixomoUiAction: callMixomoUiAction
+	mixomoUiAction: callMixomoUiAction,
+	mixomoWarpStatus: callMixomoWarpStatus,
+	mixomoWarpAction: callMixomoWarpAction,
+	mixomoWarpIntegrateAction: callMixomoWarpIntegrateAction
 });
 ZM_INSTALLER_EOF
 
@@ -4269,30 +4543,68 @@ var PRESETS = [
 	{ id: 'ih2', label: 'Internet Helper (старый)' }
 ];
 
+var TABS = [
+	{ id: 'main', label: 'Mixomo' },
+	{ id: 'config', label: 'Конфигурация Mihomo' },
+	{ id: 'magitrickle', label: 'MagiTrickle' },
+	{ id: 'warp', label: 'WARP' }
+];
+
 return view.extend({
 	load: function() {
 		zm.injectCss();
-		return zm.mixomoStatus();
+		return Promise.all([ zm.mixomoStatus(), zm.mixomoWarpStatus().catch(function() { return {}; }) ]);
 	},
 
-	render: function(data) {
+	render: function(all) {
 		var view = this;
+		var data = all[0];
+		var warpData = all[1] || {};
 		var wrap = E('div', { 'class': 'zm-wrap' });
-		var logEl = E('pre', { 'class': 'zm-log' });
 		var busy = false;
+		var activeTab = 'main';
 
+		var tabBar = E('div', { 'class': 'zm-actions', 'style': 'margin-bottom:14px' });
+		var panels = {};
+		TABS.forEach(function(t) {
+			panels[t.id] = E('div', { 'style': t.id === activeTab ? '' : 'display:none' });
+		});
+
+		function renderTabBar() {
+			tabBar.innerHTML = '';
+			TABS.forEach(function(t) {
+				tabBar.appendChild(E('button', {
+					'class': 'cbi-button' + (t.id === activeTab ? ' cbi-button-positive' : ''),
+					'click': function() {
+						activeTab = t.id;
+						TABS.forEach(function(t2) { panels[t2.id].style.display = t2.id === activeTab ? '' : 'none'; });
+						renderTabBar();
+					}
+				}, t.label));
+			});
+		}
+
+		var mainLogEl = E('pre', { 'class': 'zm-log' });
 		var statusCard = E('div', { 'class': 'zm-card' });
+		var panelCard = E('div', { 'class': 'zm-card' });
 		var subCard = E('div', { 'class': 'zm-card' });
-		var configCard = E('div', { 'class': 'zm-card' });
-		var presetCard = E('div', { 'class': 'zm-card' });
-		var embedCard = E('div', { 'class': 'zm-card' });
 		var autoCard = E('div', { 'class': 'zm-card' });
-		var uiCard = E('div', { 'class': 'zm-card' });
+
+		function verRow(label, ver, latest) {
+			var text = ver || '—';
+			if (ver && latest && ver !== latest) text += ' (доступно ' + latest + ')';
+			return E('div', { 'class': 'zm-row' }, [
+				E('span', { 'class': 'zm-label' }, label),
+				E('span', {}, text)
+			]);
+		}
 
 		function renderStatus(d) {
 			statusCard.innerHTML = '';
 			var installed = d.mihomo === 'installed';
 			var allRunning = d.mihomo_running === true && d.hev_running === true && d.magitrickle_running === true;
+			var hasUpdate = (d.mihomo_version && d.mihomo_latest && d.mihomo_version !== d.mihomo_latest) ||
+				(d.magitrickle_version && d.magitrickle_latest && d.magitrickle_version !== d.magitrickle_latest);
 			var actions = [];
 			if (installed) {
 				actions.push(E('button', {
@@ -4308,9 +4620,16 @@ return view.extend({
 					'click': function() { doAction('restart'); }
 				}, 'Перезапустить'));
 				actions.push(E('button', {
-					'class': 'cbi-button',
+					'class': hasUpdate ? 'cbi-button cbi-button-positive' : 'cbi-button',
 					'click': function() { doAction('update'); }
-				}, 'Переустановить/обновить'));
+				}, hasUpdate ? 'Обновить (есть новые версии)' : 'Переустановить/обновить'));
+				if (d.mihomo_running) {
+					actions.push(E('a', {
+						'class': 'cbi-button',
+						'href': 'http://' + window.location.hostname + ':9090/ui',
+						'target': '_blank', 'rel': 'noreferrer'
+					}, 'Войти в панель Mihomo'));
+				}
 			} else {
 				actions.push(E('button', {
 					'class': 'cbi-button cbi-button-positive',
@@ -4318,32 +4637,72 @@ return view.extend({
 				}, 'Установить'));
 			}
 			statusCard.appendChild(E('h3', {}, 'Mixomo'));
-			statusCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Связка из трёх программ: Mihomo (прокси-ядро) + hev-socks5-tunnel (мост в туннель) + MagiTrickle (направляет в туннель только выбранные сайты). Устанавливаются и удаляются вместе, одной кнопкой.'));
+			statusCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Связка из трёх программ: Mihomo (прокси-ядро) + hev-socks5-tunnel (мост в туннель) + MagiTrickle (направляет в туннель только выбранные сайты). Устанавливаются, обновляются и удаляются вместе, одной кнопкой.'));
 			statusCard.appendChild(E('div', { 'class': 'zm-row' }, [
 				E('span', { 'class': 'zm-label' }, 'Mihomo'),
 				installed ? zm.badge(d.mihomo_running === true, 'запущен', 'остановлен') : zm.badge(false, '', 'не установлен')
 			]));
 			if (installed) {
+				statusCard.appendChild(verRow('Версия Mihomo', d.mihomo_version, d.mihomo_latest));
 				statusCard.appendChild(E('div', { 'class': 'zm-row' }, [
 					E('span', { 'class': 'zm-label' }, 'hev-socks5-tunnel'),
 					zm.badge(d.hev === 'installed' && d.hev_running === true, d.hev === 'installed' ? 'запущен' : '', d.hev === 'installed' ? 'остановлен' : 'не установлен')
 				]));
+				if (d.hev_version) {
+					statusCard.appendChild(E('div', { 'class': 'zm-row' }, [
+						E('span', { 'class': 'zm-label' }, 'Версия hev-socks5-tunnel'), E('span', {}, d.hev_version)
+					]));
+				}
 				statusCard.appendChild(E('div', { 'class': 'zm-row' }, [
 					E('span', { 'class': 'zm-label' }, 'MagiTrickle'),
 					zm.badge(d.magitrickle === 'installed' && d.magitrickle_running === true, d.magitrickle === 'installed' ? 'запущен' : '', d.magitrickle === 'installed' ? 'остановлен' : 'не установлен')
 				]));
-				if (d.magitrickle_version) {
-					statusCard.appendChild(E('div', { 'class': 'zm-row' }, [
-						E('span', { 'class': 'zm-label' }, 'Версия MagiTrickle'),
-						E('span', {}, d.magitrickle_version + (d.magitrickle_latest && d.magitrickle_latest !== d.magitrickle_version ? ' (доступно ' + d.magitrickle_latest + ')' : ''))
-					]));
-				}
+				if (d.magitrickle_version) statusCard.appendChild(verRow('Версия MagiTrickle', d.magitrickle_version, d.magitrickle_latest));
 				statusCard.appendChild(E('div', { 'class': 'zm-row' }, [
 					E('span', { 'class': 'zm-label' }, 'Подписка'),
 					zm.badge(d.subscription === true, 'настроена', 'не настроена')
 				]));
 			}
 			statusCard.appendChild(E('div', { 'class': 'zm-actions' }, actions));
+		}
+
+		var uiBusy = false;
+		function renderPanel(d) {
+			panelCard.innerHTML = '';
+			panelCard.appendChild(E('h3', {}, 'Веб-панель Mihomo'));
+			panelCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Собственный веб-интерфейс Mihomo (статистика, выбор прокси вручную). По умолчанию ставится Zashboard.'));
+			if (d.mihomo !== 'installed') {
+				panelCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Установите Mixomo, чтобы выбрать панель.'));
+				return;
+			}
+			panelCard.appendChild(E('div', { 'class': 'zm-row' }, [
+				E('span', { 'class': 'zm-label' }, 'Сейчас установлена'),
+				E('span', {}, d.ui_panel === 'zashboard' ? 'Zashboard' : d.ui_panel === 'metacubexd' ? 'MetaCubeXD' : 'не выбрана')
+			]));
+			panelCard.appendChild(E('div', { 'class': 'zm-grid' }, [
+				E('div', {
+					'class': 'zm-tile' + (d.ui_panel === 'zashboard' ? ' zm-active' : ''),
+					'click': function() { doUi('zashboard'); }
+				}, 'Zashboard'),
+				E('div', {
+					'class': 'zm-tile' + (d.ui_panel === 'metacubexd' ? ' zm-active' : ''),
+					'click': function() { doUi('metacubexd'); }
+				}, 'MetaCubeXD')
+			]));
+		}
+
+		function doUi(which) {
+			if (uiBusy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+			uiBusy = true;
+			zm.toast('Устанавливаем панель', 'warning');
+			zm.mixomoUiAction(which).then(function(res) {
+				if (res.error) { uiBusy = false; zm.toast(res.error, 'error'); return; }
+				zm.pollJob('mixomo_ui_install', mainLogEl, function(ok) {
+					uiBusy = false;
+					zm.toast(ok ? 'Панель установлена' : 'Ошибка установки', ok ? 'info' : 'error');
+					zm.mixomoStatus().then(renderPanel);
+				});
+			}).catch(function() { uiBusy = false; });
 		}
 
 		function doAction(action) {
@@ -4353,7 +4712,7 @@ return view.extend({
 			busy = true;
 			zm.toast(
 				action === 'remove' ? 'Удаляем Mixomo'
-				: action === 'update' ? 'Переустанавливаем Mixomo'
+				: action === 'update' ? 'Обновляем Mixomo (три программы, может занять пару минут)'
 				: action === 'install' ? 'Устанавливаем Mixomo (три программы, может занять пару минут)'
 				: action === 'start' ? 'Запускаем Mixomo'
 				: action === 'stop' ? 'Останавливаем Mixomo'
@@ -4363,16 +4722,14 @@ return view.extend({
 			zm.mixomoAction(action).then(function(res) {
 				if (res.error) { busy = false; zm.toast(res.error, 'error'); return; }
 				if (isBg && res.started) {
-					zm.pollJob(job, logEl, function(ok) {
+					zm.pollJob(job, mainLogEl, function(ok) {
 						busy = false;
 						zm.toast(ok ? 'Готово' : 'Ошибка', ok ? 'info' : 'error');
 						refreshAll();
 					});
 				} else {
 					busy = false;
-					renderStatus(res);
-					renderPresets(res);
-					renderEmbed(res);
+					refreshAll();
 					zm.toast('Готово', 'info');
 				}
 			}).catch(function() { busy = false; });
@@ -4381,8 +4738,11 @@ return view.extend({
 		function refreshAll() {
 			zm.mixomoStatus().then(function(d) {
 				renderStatus(d);
+				renderPanel(d);
 				renderPresets(d);
 				renderEmbed(d);
+				renderAuto(d);
+				renderMtStatus(d);
 			});
 		}
 
@@ -4411,10 +4771,57 @@ return view.extend({
 			}, 'Применить подписку')
 		]));
 
+		var autoBusy = false;
+		function renderAuto(d) {
+			autoCard.innerHTML = '';
+			autoCard.appendChild(E('h3', {}, 'Автоперезапуск Mihomo'));
+			autoCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Периодический перезапуск по расписанию — полезно для VPN-подписок, у которых иногда «зависает» соединение.'));
+			var cur = d.autorestart || '';
+			autoCard.appendChild(E('div', { 'class': 'zm-row' }, [
+				E('span', { 'class': 'zm-label' }, 'Сейчас'),
+				E('span', {}, cur === '' ? 'выключен' : (cur.indexOf('every:') === 0 ? 'каждые ' + cur.split(':')[1] + ' ч.' : 'ежедневно в ' + cur.split(':')[1].padStart(2, '0') + ':00'))
+			]));
+			var hourInput = E('input', { 'type': 'number', 'min': '0', 'max': '23', 'placeholder': 'час (0-23)', 'class': 'cbi-input-text', 'style': 'max-width:120px' });
+			autoCard.appendChild(E('div', { 'class': 'zm-actions' }, [
+				E('button', { 'class': 'cbi-button', 'click': function() { doAuto('off', ''); } }, 'Выключить'),
+				E('button', { 'class': 'cbi-button', 'click': function() { doAuto('every', '2'); } }, 'Каждые 2 часа'),
+				E('button', { 'class': 'cbi-button', 'click': function() { doAuto('every', '6'); } }, 'Каждые 6 часов'),
+				hourInput,
+				E('button', {
+					'class': 'cbi-button',
+					'click': function() {
+						var h = hourInput.value.trim();
+						if (!/^\d+$/.test(h) || +h < 0 || +h > 23) { zm.toast('Введите час от 0 до 23', 'error'); return; }
+						doAuto('daily', h);
+					}
+				}, 'Ежедневно в это время')
+			]));
+		}
+
+		function doAuto(mode, value) {
+			if (autoBusy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+			autoBusy = true;
+			zm.toast('Настраиваем автоперезапуск', 'warning');
+			zm.mixomoAutorestartSet(mode, value).then(function(res) {
+				autoBusy = false;
+				if (res.error) { zm.toast(res.error, 'error'); return; }
+				zm.toast('Автоперезапуск настроен', 'info');
+				zm.mixomoStatus().then(renderAuto);
+			}).catch(function() { autoBusy = false; });
+		}
+
+		panels.main.appendChild(statusCard);
+		panels.main.appendChild(mainLogEl);
+		panels.main.appendChild(panelCard);
+		panels.main.appendChild(subCard);
+		panels.main.appendChild(autoCard);
+
 		var configEl = E('textarea', { 'class': 'zm-config-editor', 'spellcheck': 'false' });
 		var configBusy = false;
-		configCard.appendChild(E('h3', {}, 'Редактор конфигурации Mihomo'));
-		configCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Прямое редактирование /etc/mihomo/config.yaml. Сохранение перезапускает Mihomo — если он не запустится с новой конфигурацией, изменения автоматически отменяются.'));
+		var configCard = E('div', { 'class': 'zm-card' }, [
+			E('h3', {}, 'Редактор конфигурации Mihomo'),
+			E('p', { 'class': 'zm-hint' }, 'Прямое редактирование /etc/mihomo/config.yaml. Проверка — как в оригинальном установщике: сохранение перезапускает Mihomo, и если он не поднимается с новой конфигурацией, изменения автоматически откатываются, а рабочая версия остаётся нетронутой.')
+		]);
 		configCard.appendChild(configEl);
 
 		function refreshConfig() {
@@ -4434,22 +4841,42 @@ return view.extend({
 				'click': function() {
 					if (configBusy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
 					configBusy = true;
-					zm.toast('Сохраняем конфигурацию', 'warning');
+					zm.toast('Сохраняем и проверяем конфигурацию', 'warning');
 					zm.mixomoConfigSet(configEl.value).then(function(res) {
 						configBusy = false;
 						if (res.error) { zm.toast(res.error, 'error', 12000); return; }
-						zm.toast('Сохранено, Mihomo перезапущен', 'info');
+						zm.toast('Проверка пройдена, Mihomo перезапущен с новой конфигурацией', 'info');
 						refreshAll();
 					}).catch(function() { configBusy = false; });
 				}
-			}, 'Сохранить и перезапустить')
+			}, 'Сохранить и применить')
 		]));
+		panels.config.appendChild(configCard);
+
+		var mtStatusCard = E('div', { 'class': 'zm-card' });
+		var presetCard = E('div', { 'class': 'zm-card' });
+		var embedCard = E('div', { 'class': 'zm-card' });
+
+		function renderMtStatus(d) {
+			mtStatusCard.innerHTML = '';
+			mtStatusCard.appendChild(E('h3', {}, 'MagiTrickle'));
+			mtStatusCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Направляет в туннель Mixomo только выбранные сайты и адреса — остальной трафик идёт напрямую через провайдера. Устанавливается вместе с Mixomo на вкладке «Mixomo».'));
+			mtStatusCard.appendChild(E('div', { 'class': 'zm-row' }, [
+				E('span', { 'class': 'zm-label' }, 'Статус'),
+				d.magitrickle === 'installed' ? zm.badge(d.magitrickle_running === true, 'запущен', 'остановлен') : zm.badge(false, '', 'не установлен')
+			]));
+			if (d.magitrickle_version) mtStatusCard.appendChild(verRow('Версия', d.magitrickle_version, d.magitrickle_latest));
+		}
 
 		var presetBusy = false;
 		function renderPresets(d) {
 			presetCard.innerHTML = '';
-			presetCard.appendChild(E('h3', {}, 'Готовые списки доменов MagiTrickle'));
-			presetCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Быстрая замена текущего списка на один из готовых наборов — зелёным отмечен список, применённый сейчас. Для собственного точного набора сайтов используйте окно MagiTrickle ниже.'));
+			presetCard.appendChild(E('h3', {}, 'Готовые списки доменов'));
+			presetCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Быстрая замена текущего списка на один из готовых наборов — зелёным отмечен список, применённый сейчас. Для собственного точного набора сайтов используйте окно ниже.'));
+			if (d.magitrickle !== 'installed') {
+				presetCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Установите Mixomo на вкладке «Mixomo», чтобы выбрать список.'));
+				return;
+			}
 			presetCard.appendChild(E('div', { 'class': 'zm-grid' }, PRESETS.map(function(p) {
 				return E('div', {
 					'class': 'zm-tile' + (d.magitrickle_list === p.id ? ' zm-active' : ''),
@@ -4461,7 +4888,7 @@ return view.extend({
 							presetBusy = false;
 							if (res.error) { zm.toast(res.error, 'error'); return; }
 							zm.toast('Список применён: ' + p.label, 'info');
-							zm.mixomoStatus().then(function(d2) { renderPresets(d2); });
+							zm.mixomoStatus().then(renderPresets);
 							refreshMtEmbed();
 						}).catch(function() { presetBusy = false; });
 					}
@@ -4502,95 +4929,91 @@ return view.extend({
 			}
 		}
 
-		var autoBusy = false;
-		function renderAuto(d) {
-			autoCard.innerHTML = '';
-			autoCard.appendChild(E('h3', {}, 'Автоперезапуск Mihomo'));
-			autoCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Периодический перезапуск по расписанию — полезно для VPN-подписок, у которых иногда «зависает» соединение.'));
-			var cur = d.autorestart || '';
-			autoCard.appendChild(E('div', { 'class': 'zm-row' }, [
-				E('span', { 'class': 'zm-label' }, 'Сейчас'),
-				E('span', {}, cur === '' ? 'выключен' : (cur.indexOf('every:') === 0 ? 'каждые ' + cur.split(':')[1] + ' ч.' : 'ежедневно в ' + cur.split(':')[1].padStart(2, '0') + ':00'))
+		panels.magitrickle.appendChild(mtStatusCard);
+		panels.magitrickle.appendChild(presetCard);
+		panels.magitrickle.appendChild(embedCard);
+
+		var warpLogEl = E('pre', { 'class': 'zm-log' });
+		var warpStatusCard = E('div', { 'class': 'zm-card' });
+		var warpConfCard = E('div', { 'class': 'zm-card' });
+		var warpBusy = false;
+		var warpIntegrateBusy = false;
+
+		function renderWarpStatus(w) {
+			warpStatusCard.innerHTML = '';
+			warpStatusCard.appendChild(E('h3', {}, 'WARP'));
+			warpStatusCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Генерирует бесплатный ключ Cloudflare WARP и сохраняет его в /root/WARP.conf. Дальше файл можно интегрировать в Mihomo как ещё один прокси-выход.'));
+			warpStatusCard.appendChild(E('div', { 'class': 'zm-row' }, [
+				E('span', { 'class': 'zm-label' }, 'WARP.conf'),
+				zm.badge(w.exists === true, 'сгенерирован', 'не сгенерирован')
 			]));
-			var hourInput = E('input', { 'type': 'number', 'min': '0', 'max': '23', 'placeholder': 'час (0-23)', 'class': 'cbi-input-text', 'style': 'max-width:120px' });
-			autoCard.appendChild(E('div', { 'class': 'zm-actions' }, [
+			warpStatusCard.appendChild(E('div', { 'class': 'zm-actions' }, [
+				E('button', {
+					'class': 'cbi-button cbi-button-positive',
+					'click': function() { doWarpGenerate('fixed'); }
+				}, 'Сгенерировать WARP'),
 				E('button', {
 					'class': 'cbi-button',
-					'click': function() { doAuto('off', ''); }
-				}, 'Выключить'),
-				E('button', {
-					'class': 'cbi-button',
-					'click': function() { doAuto('every', '2'); }
-				}, 'Каждые 2 часа'),
-				E('button', {
-					'class': 'cbi-button',
-					'click': function() { doAuto('every', '6'); }
-				}, 'Каждые 6 часов'),
-				hourInput,
+					'click': function() { doWarpGenerate('auto'); }
+				}, 'Сгенерировать с подбором endpoint'),
 				E('button', {
 					'class': 'cbi-button',
 					'click': function() {
-						var h = hourInput.value.trim();
-						if (!/^\d+$/.test(h) || +h < 0 || +h > 23) { zm.toast('Введите час от 0 до 23', 'error'); return; }
-						doAuto('daily', h);
+						if (warpIntegrateBusy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+						if (w.exists !== true) { zm.toast('Сначала сгенерируйте WARP.conf', 'error'); return; }
+						warpIntegrateBusy = true;
+						zm.toast('Интегрируем WARP в Mihomo', 'warning');
+						zm.mixomoWarpIntegrateAction().then(function(res) {
+							if (res.error) { warpIntegrateBusy = false; zm.toast(res.error, 'error'); return; }
+							zm.pollJob('mixomo_warp_integrate', warpLogEl, function(ok) {
+								warpIntegrateBusy = false;
+								zm.toast(ok ? 'WARP добавлен в Mihomo как прокси' : 'Ошибка интеграции', ok ? 'info' : 'error');
+								if (ok) refreshConfig();
+							});
+						}).catch(function() { warpIntegrateBusy = false; });
 					}
-				}, 'Ежедневно в это время')
+				}, 'Интегрировать в Mihomo')
 			]));
 		}
 
-		function doAuto(mode, value) {
-			if (autoBusy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
-			autoBusy = true;
-			zm.toast('Настраиваем автоперезапуск', 'warning');
-			zm.mixomoAutorestartSet(mode, value).then(function(res) {
-				autoBusy = false;
-				if (res.error) { zm.toast(res.error, 'error'); return; }
-				zm.toast('Автоперезапуск настроен', 'info');
-				zm.mixomoStatus().then(renderAuto);
-			}).catch(function() { autoBusy = false; });
-		}
-
-		var uiBusy = false;
-		uiCard.appendChild(E('h3', {}, 'Веб-панель Mihomo'));
-		uiCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Необязательно: собственный веб-интерфейс Mihomo (порт 9090) для просмотра статистики и выбора прокси вручную.'));
-		uiCard.appendChild(E('div', { 'class': 'zm-actions' }, [
-			E('button', {
-				'class': 'cbi-button',
-				'click': function() { doUi('zashboard'); }
-			}, 'Установить Zashboard'),
-			E('button', {
-				'class': 'cbi-button',
-				'click': function() { doUi('metacubexd'); }
-			}, 'Установить MetaCubeXD')
-		]));
-
-		function doUi(which) {
-			if (uiBusy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
-			uiBusy = true;
-			zm.toast('Устанавливаем веб-панель', 'warning');
-			zm.mixomoUiAction(which).then(function(res) {
-				if (res.error) { uiBusy = false; zm.toast(res.error, 'error'); return; }
-				zm.pollJob('mixomo_ui_install', logEl, function(ok) {
-					uiBusy = false;
-					zm.toast(ok ? 'Панель установлена' : 'Ошибка установки', ok ? 'info' : 'error');
+		function doWarpGenerate(mode) {
+			if (warpBusy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+			warpBusy = true;
+			zm.toast(mode === 'auto' ? 'Подбираем сервер и генерируем WARP (может занять минуту)' : 'Генерируем WARP', 'warning');
+			zm.mixomoWarpAction(mode).then(function(res) {
+				if (res.error) { warpBusy = false; zm.toast(res.error, 'error'); return; }
+				zm.pollJob('mixomo_warp', warpLogEl, function(ok) {
+					warpBusy = false;
+					zm.toast(ok ? 'WARP сгенерирован' : 'Не удалось сгенерировать WARP', ok ? 'info' : 'error');
+					zm.mixomoWarpStatus().then(function(w) { renderWarpStatus(w); renderWarpConf(w); });
 				});
-			}).catch(function() { uiBusy = false; });
+			}).catch(function() { warpBusy = false; });
 		}
 
+		function renderWarpConf(w) {
+			warpConfCard.innerHTML = '';
+			warpConfCard.appendChild(E('h3', {}, 'Содержимое WARP.conf'));
+			var pre = E('pre', { 'class': 'zm-log zm-show' }, w.content || 'ещё не сгенерирован');
+			warpConfCard.appendChild(pre);
+		}
+
+		panels.warp.appendChild(warpStatusCard);
+		panels.warp.appendChild(warpLogEl);
+		panels.warp.appendChild(warpConfCard);
+
+		renderTabBar();
 		renderStatus(data);
+		renderPanel(data);
 		renderPresets(data);
 		renderEmbed(data);
 		renderAuto(data);
+		renderMtStatus(data);
+		renderWarpStatus(warpData);
+		renderWarpConf(warpData);
 		refreshConfig();
 
-		wrap.appendChild(statusCard);
-		wrap.appendChild(logEl);
-		wrap.appendChild(subCard);
-		wrap.appendChild(configCard);
-		wrap.appendChild(presetCard);
-		wrap.appendChild(embedCard);
-		wrap.appendChild(autoCard);
-		wrap.appendChild(uiCard);
+		wrap.appendChild(tabBar);
+		TABS.forEach(function(t) { wrap.appendChild(panels[t.id]); });
 		return wrap;
 	}
 });
