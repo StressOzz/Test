@@ -1,6 +1,6 @@
 #!/bin/sh
 # Zapret Manager by StressOzz for LuCI installer
-# Version: 1.20
+# Version: 1.21
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -8,12 +8,6 @@ GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"
 echo -e "\n${MAGENTA}Устанавливаем Zapret Manager для LuCI${NC}"
 
 rm -rf \
-	/usr/lib/zapret-manager* \
-	/usr/libexec/rpcd/zapret-manager* \
-	/usr/share/luci/menu.d/luci-app-zapret-manager.json \
-	/usr/share/rpcd/acl.d/luci-app-zapret-manager.json \
-	/www/luci-static/resources/view/zapret-manager* \
-	/www/luci-static/resources/zapret-manager* \
 	/etc/zapret_manager_expert_mode* \
 	/tmp/zapret-manager* \
 	/tmp/zm_uninstall_panel.sh \
@@ -24,7 +18,7 @@ mkdir -p /usr/lib/zapret-manager
 cat > '/usr/lib/zapret-manager/backend.sh' << 'ZM_INSTALLER_EOF'
 
 CONF="/etc/config/zapret"
-ZM_VERSION="1.20"
+ZM_VERSION="1.21"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
