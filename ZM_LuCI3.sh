@@ -1,6 +1,6 @@
 #!/bin/sh
 # Zapret Manager by StressOzz for LuCI installer
-# Version: 1.19
+# Version: 1.20
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -24,7 +24,7 @@ mkdir -p /usr/lib/zapret-manager
 cat > '/usr/lib/zapret-manager/backend.sh' << 'ZM_INSTALLER_EOF'
 
 CONF="/etc/config/zapret"
-ZM_VERSION="1.19"
+ZM_VERSION="1.20"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
@@ -2575,6 +2575,7 @@ mixomo_magitrickle_list_set() {
 	[ -s "$MAGITRICKLE_CONF" ] || { echo '{"error":"скачанный файл пуст"}'; return 1; }
 	/etc/init.d/magitrickle enable >/dev/null 2>&1
 	/etc/init.d/magitrickle restart >/dev/null 2>&1
+	[ -x /etc/init.d/mihomo ] && /etc/init.d/mihomo restart >/dev/null 2>&1
 	printf '{"ok":true}\n'
 }
 
@@ -2896,7 +2897,6 @@ do_mixomo_warp_integrate() {
 	cp "$MIHOMO_CONF" "$MIHOMO_CONF.bak" 2>/dev/null
 	chmod 600 "$tmp"
 	mv -f "$tmp" "$MIHOMO_CONF"
-	/etc/init.d/mihomo reload >/dev/null 2>&1
 	/etc/init.d/mihomo restart >/dev/null 2>&1
 	echo "==> Готово, WARP интегрирован в Mihomo"
 }
@@ -3869,14 +3869,17 @@ return view.extend({
 		var zmUpdateBusy = false;
 		function waitForServerAndReload() {
 			var attempts = 0;
-			var maxAttempts = 40;
+			var maxAttempts = 50;
 			var sawRestart = false;
-			var target = L.resource('view/zapret-manager/dashboard.js') + '?_zmcheck=' + Date.now();
+			var consecutiveOk = 0;
+			var neededOk = 3;
+			var target = L.resource('view/zapret-manager/dashboard.js');
 			var timer = setInterval(function() {
 				attempts++;
-				fetch(target, { credentials: 'same-origin', cache: 'no-store' }).then(function(resp) {
+				fetch(target + '?_zmcheck=' + Date.now(), { credentials: 'same-origin', cache: 'no-store' }).then(function(resp) {
 					if (resp.ok) {
-						if (sawRestart) {
+						consecutiveOk++;
+						if (sawRestart && consecutiveOk >= neededOk) {
 							clearInterval(timer);
 							location.reload();
 						} else if (attempts >= maxAttempts) {
@@ -3885,6 +3888,7 @@ return view.extend({
 						}
 					} else {
 						sawRestart = true;
+						consecutiveOk = 0;
 						if (attempts >= maxAttempts) {
 							clearInterval(timer);
 							zm.toast('Панель обновлена, но страница пока не отвечает — обновите вручную (F5)', 'warning', 15000);
@@ -3892,6 +3896,7 @@ return view.extend({
 					}
 				}).catch(function() {
 					sawRestart = true;
+					consecutiveOk = 0;
 					if (attempts >= maxAttempts) {
 						clearInterval(timer);
 						zm.toast('Панель обновлена, но страница пока не отвечает — обновите вручную (F5)', 'warning', 15000);
@@ -6217,7 +6222,6 @@ ZM_INSTALLER_EOF
 
 rm -f /tmp/luci-indexcache* /tmp/luci-modulecache/* 2>/dev/null || true
 /etc/init.d/rpcd reload >/dev/null 2>&1 || /etc/init.d/rpcd restart >/dev/null 2>&1
-/etc/init.d/uhttpd restart >/dev/null 2>&1
 
 if command -v apk >/dev/null 2>&1; then PM="apk"; INSTALL="apk add"
 else PM="opkg"; INSTALL="opkg install"; fi
