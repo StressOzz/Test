@@ -1,6 +1,6 @@
 #!/bin/sh
 # Zapret Manager by StressOzz for LuCI installer
-# Version: 1.18
+# Version: 1.19
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -19,14 +19,12 @@ rm -rf \
 	/tmp/zm_uninstall_panel.sh \
 	/tmp/luci-indexcache* \
 	/tmp/luci-modulecache/* 2>/dev/null
-/etc/init.d/rpcd restart >/dev/null 2>&1
-/etc/init.d/uhttpd restart >/dev/null 2>&1
 
 mkdir -p /usr/lib/zapret-manager
 cat > '/usr/lib/zapret-manager/backend.sh' << 'ZM_INSTALLER_EOF'
 
 CONF="/etc/config/zapret"
-ZM_VERSION="1.18"
+ZM_VERSION="1.19"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
@@ -2855,7 +2853,7 @@ do_mixomo_warp_integrate() {
 		print "    type: select" >> OUT
 		print "    proxies:" >> OUT
 		print "      - WARP" >> OUT
-		print "      - REJECT" >> OUT
+		print "      - DIRECT" >> OUT
 		print "" >> OUT
 		print "rules:" >> OUT
 		print "  - \"MATCH,GLOBAL\"" >> OUT
@@ -3904,7 +3902,6 @@ return view.extend({
 		function renderZmUpdate() {
 			updateEl.innerHTML = '';
 			if (!zmUpdate.latest || zmUpdate.latest === zmUpdate.current) return;
-			var log = E('pre', { 'class': 'zm-log' });
 			updateEl.appendChild(E('div', { 'class': 'zm-refresh-banner zm-show' }, [
 				E('span', {}, 'Доступна новая версия панели Zapret Manager: ' + zmUpdate.latest + ' (у вас установлена ' + zmUpdate.current + ').'),
 				E('button', {
@@ -3912,24 +3909,15 @@ return view.extend({
 					'click': function() {
 						if (zmUpdateBusy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
 						zmUpdateBusy = true;
-						log.classList.add('zm-show');
-						zm.toast('Скачиваем и запускаем обновление панели', 'warning');
+						zm.toast('Обновление запущено — страница перезагрузится автоматически, когда панель будет готова. Не заходите на другие вкладки, чтобы не потерять сессию', 'warning', 12000);
 						zm.zmUpdateAction().then(function(res) {
-							if (res.error) { zmUpdateBusy = false; zm.toast(res.error, 'error'); return; }
-							zm.pollJob('zm_update', log, function(ok) {
-								zmUpdateBusy = false;
-								if (ok) {
-									zm.toast('Обновление скачано, ждём перезапуска панели...', 'info', 15000);
-									waitForServerAndReload();
-								} else {
-									zm.toast('Не удалось скачать обновление', 'error');
-								}
-							});
+							zmUpdateBusy = false;
+							if (res.error) { zm.toast(res.error, 'error'); return; }
+							waitForServerAndReload();
 						}).catch(function() { zmUpdateBusy = false; });
 					}
 				}, 'Обновить панель')
 			]));
-			updateEl.appendChild(log);
 		}
 		renderZmUpdate();
 
@@ -4952,13 +4940,14 @@ return view.extend({
 			var timer = setInterval(function() {
 				attempts++;
 				zm.mixomoStatus().then(function(d) {
-					renderPresets(d);
 					if (d.magitrickle_list === presetId) {
 						clearInterval(timer);
-						refreshMtEmbed();
+						renderPresets(d);
+						setTimeout(refreshMtEmbed, 2500);
 					} else if (attempts >= maxAttempts) {
 						clearInterval(timer);
-						refreshMtEmbed();
+						renderPresets(d);
+						setTimeout(refreshMtEmbed, 2500);
 					}
 				});
 			}, 500);
@@ -6227,7 +6216,7 @@ return view.extend({
 ZM_INSTALLER_EOF
 
 rm -f /tmp/luci-indexcache* /tmp/luci-modulecache/* 2>/dev/null || true
-/etc/init.d/rpcd restart >/dev/null 2>&1
+/etc/init.d/rpcd reload >/dev/null 2>&1 || /etc/init.d/rpcd restart >/dev/null 2>&1
 /etc/init.d/uhttpd restart >/dev/null 2>&1
 
 if command -v apk >/dev/null 2>&1; then PM="apk"; INSTALL="apk add"
