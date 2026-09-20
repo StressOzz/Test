@@ -68,7 +68,8 @@ YTB_FILES="/etc/config/ytbypass /etc/init.d/ytbypass /etc/hotplug.d/firewall/90-
 /usr/bin/ytbypass /usr/libexec/ytbypass /usr/share/ytbypass
 /usr/share/nftables.d/chain-pre/forward/50-ytbypass.nft
 /usr/share/luci/menu.d/luci-app-ytbypass.json /usr/share/rpcd/acl.d/luci-app-ytbypass.json
-/www/luci-static/resources/view/ytbypass /var/etc/ytbypass /var/run/ytbypass.started /tmp/ytbypass-test"
+/www/luci-static/resources/view/ytbypass /www/luci-static/resources/ytbypass /var/etc/ytbypass /var/run/ytbypass.started /tmp/ytbypass-test
+/etc/ytbypass /lib/upgrade/keep.d/ytbypass"
 
 do_uninstall() {
 	say "Останавливаю и удаляю YouTube Bypass"
@@ -388,6 +389,11 @@ service_triggers() {
 }
 YTB_FILE_END_7f3a9c
 	chmod 755 "$R/etc/init.d/ytbypass"
+	mkdir -p "$R/lib/upgrade/keep.d"
+	cat > "$R/lib/upgrade/keep.d/ytbypass" <<'YTB_FILE_END_7f3a9c'
+/etc/ytbypass/
+YTB_FILE_END_7f3a9c
+	chmod 644 "$R/lib/upgrade/keep.d/ytbypass"
 	mkdir -p "$R/usr/bin"
 	cat > "$R/usr/bin/ytbypass" <<'YTB_FILE_END_7f3a9c'
 #!/bin/sh
@@ -396,7 +402,8 @@ YTB_FILE_END_7f3a9c
 #   ytbypass flush    — очистить наборы IP (клиентам нужно заново резолвить домены)
 #   ytbypass list     — показать IP в наборах
 #   ytbypass diag [IP|MAC|имя] [сек] — диагностика клиента: куда идёт его DNS и :443-трафик (без аргумента — список клиентов)
-#   ytbypass test …   — тест стратегий ByeDPI (start|stop|status|log|results|clear)
+#   ytbypass test …   — тест стратегий ByeDPI (start|stop|status|log|results|clear|list)
+#   ytbypass test list get|set|reset strategies|domains [текст] — свои списки для теста
 #   ytbypass set-strategy "<параметры ciadpi>" — записать стратегию и перезапустить службу
 
 . /lib/functions.sh
@@ -795,6 +802,9 @@ YTB_FILE_END_7f3a9c
 # Тест стратегий ByeDPI.
 #   ytbypass test start | stop | status | log | results | clear
 #
+# Списки стратегий и доменов: свои (/etc/ytbypass/, переживают обновление) или встроенные.
+#   ytbypass test list get|set|reset strategies|domains [текст]
+#
 # Каждая стратегия запускается во ВРЕМЕННОМ экземпляре ciadpi на отдельном порту,
 # домены проверяются через него по curl --socks5. Боевой сервис и трафик клиентов
 # не затрагиваются, конфигурация не меняется. Сначала контрольный замер без обхода.
@@ -809,8 +819,9 @@ RES="$TEST_DIR/results.txt"
 RAW="$TEST_DIR/results.raw"
 STOP="$TEST_DIR/stop"
 CPID="$TEST_DIR/ciadpi.pid"
-STRATS=/usr/share/ytbypass/strategies.txt
-DOMS=/usr/share/ytbypass/test-domains.txt
+USER_DIR=/etc/ytbypass
+STRATS_DEFAULT=/usr/share/ytbypass/strategies.txt
+DOMS_DEFAULT=/usr/share/ytbypass/test-domains.txt
 PORT_BASE=22000
 UA='Mozilla/5.0 (Windows NT 10.0; Win64; x64) curl/8.0'
 TAB=$(printf '\t')
@@ -821,6 +832,132 @@ is_running() {
 
 count_lines() { # файл -> число строк без пустых и комментариев
 	sed 's/#.*//' "$1" 2>/dev/null | tr -d '\r' | grep -c '[^[:space:]]'
+}
+
+# ---------------------------------------------------------------- списки
+# имя файла у пользователя
+list_name() {
+	case "$1" in
+		strategies) echo strategies.txt ;;
+		domains)    echo test-domains.txt ;;
+	esac
+}
+
+# путь действующего списка: свой (если есть и не пуст), иначе встроенный
+list_file() {
+	local nm
+	nm=$(list_name "$1")
+	if [ -n "$nm" ] && [ -s "$USER_DIR/$nm" ]; then
+		echo "$USER_DIR/$nm"
+	else
+		case "$1" in
+			strategies) echo "$STRATS_DEFAULT" ;;
+			domains)    echo "$DOMS_DEFAULT" ;;
+		esac
+	fi
+}
+
+list_is_custom() { # kind
+	local nm
+	nm=$(list_name "$1")
+	[ -n "$nm" ] && [ -s "$USER_DIR/$nm" ]
+}
+
+json_esc() {
+	printf '%s' "$1" | tr -d '\000-\037' | sed 's/\\/\\\\/g; s/"/\\"/g'
+}
+
+# домены: по одному в строке; допускаем ссылки, *.домен, запятые/пробелы; комментарии (#) сохраняем.
+# Первая некорректная запись пишется в файл $1.
+norm_domains() {
+	awk -v badf="$1" '
+	{
+		gsub(/\r/, "")
+		line = $0
+		sub(/^[ \t]+/, "", line); sub(/[ \t]+$/, "", line)
+		if (line == "") next
+		if (substr(line, 1, 1) == "#") { print line; next }
+		sub(/#.*/, "", line)
+		n = split(line, tok, /[ \t,;]+/)
+		for (i = 1; i <= n; i++) {
+			d = tolower(tok[i])
+			if (d == "") continue
+			sub(/^[a-z][a-z0-9+.-]*:\/\//, "", d)
+			sub(/[\/?#].*$/, "", d)
+			sub(/^\*?\./, "", d)
+			if (d ~ /^[a-z0-9]([a-z0-9._-]*[a-z0-9])?$/ && index(d, ".") > 0) {
+				if (!(d in seen)) { seen[d] = 1; print d }
+			} else if (!bad) { bad = 1; print tok[i] > badf }
+		}
+	}'
+}
+
+# стратегии: по одной в строке, пробелы схлопываются, дубли убираются, комментарии (#) сохраняем
+norm_strategies() {
+	awk '
+	{
+		gsub(/\r/, ""); gsub(/[ \t]+/, " ")
+		line = $0; sub(/^ /, "", line); sub(/ $/, "", line)
+		if (line == "") next
+		if (substr(line, 1, 1) == "#") { print line; next }
+		if (!(line in seen)) { seen[line] = 1; print line }
+	}'
+}
+
+cmd_list() {
+	local action="$1" kind="$2" text="$3" nm tmp bad n
+	nm=$(list_name "$kind")
+	if [ -z "$nm" ]; then
+		echo '{"error":"неизвестный список"}'
+		return 0
+	fi
+	case "$action" in
+	get)
+		local f
+		f=$(list_file "$kind")
+		[ -f "$f" ] && cat "$f"
+		;;
+	set)
+		if is_running; then
+			echo '{"error":"тест выполняется — остановите его перед сохранением списка"}'
+			return 0
+		fi
+		mkdir -p "$TEST_DIR"
+		tmp="$TEST_DIR/list.$$"; bad="$TEST_DIR/bad.$$"; : > "$bad"
+		if [ "$kind" = "domains" ]; then
+			printf '%s\n' "$text" | norm_domains "$bad" > "$tmp"
+		else
+			printf '%s\n' "$text" | norm_strategies > "$tmp"
+		fi
+		if [ -s "$bad" ]; then
+			printf '{"error":"Некорректный домен: %s"}\n' "$(json_esc "$(head -n 1 "$bad")")"
+			rm -f "$tmp" "$bad"
+			return 0
+		fi
+		rm -f "$bad"
+		n=$(count_lines "$tmp")
+		if [ "${n:-0}" -le 0 ]; then
+			echo '{"error":"список пуст — чтобы вернуть встроенный, нажмите «Сбросить к встроенному»"}'
+			rm -f "$tmp"
+			return 0
+		fi
+		mkdir -p "$USER_DIR"
+		mv "$tmp" "$USER_DIR/$nm"
+		printf '{"ok":true,"count":%s,"custom":true}\n' "$n"
+		;;
+	reset)
+		if is_running; then
+			echo '{"error":"тест выполняется — остановите его перед сбросом списка"}'
+			return 0
+		fi
+		rm -f "$USER_DIR/$nm"
+		printf '{"ok":true,"count":%s,"custom":false}\n' "$(count_lines "$(list_file "$kind")")"
+		;;
+	*)
+		echo '{"error":"неизвестное действие"}'
+		;;
+	esac
+	return 0
 }
 
 # ---------------------------------------------------------------- управление
@@ -856,8 +993,11 @@ cmd_status() {
 	[ -s "$RES" ] && has=true
 	command -v curl >/dev/null 2>&1 && cu=true
 	[ -f "$LOGF" ] && rc=$(grep '^__DONE__' "$LOGF" | tail -n 1 | awk '{print $2}')
-	printf '{"running":%s,"has_results":%s,"curl":%s,"strategies":%s,"domains":%s,"rc":"%s"}\n' \
-		"$running" "$has" "$cu" "$(count_lines "$STRATS")" "$(count_lines "$DOMS")" "$rc"
+	local sc=false dc=false
+	list_is_custom strategies && sc=true
+	list_is_custom domains && dc=true
+	printf '{"running":%s,"has_results":%s,"curl":%s,"strategies":%s,"domains":%s,"strategies_custom":%s,"domains_custom":%s,"rc":"%s"}\n' \
+		"$running" "$has" "$cu" "$(count_lines "$(list_file strategies)")" "$(count_lines "$(list_file domains)")" "$sc" "$dc" "$rc"
 }
 
 cmd_log() {
@@ -955,7 +1095,7 @@ cmd_run() {
 
 	echo "==> Собираем стратегии для теста"
 	# текущая стратегия идёт первой, затем список; дубликаты (без учёта кавычек) отбрасываем
-	{ printf '%s\n' "$CUR"; cat "$STRATS"; } | tr -d '\r' | while IFS= read -r line; do
+	{ printf '%s\n' "$CUR"; cat "$(list_file strategies)"; } | tr -d '\r' | while IFS= read -r line; do
 		line=$(printf '%s' "$line" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
 		case "$line" in ''|'#'*) continue ;; esac
 		k=$(byedpi_opts_clean "$line")
@@ -968,7 +1108,7 @@ cmd_run() {
 	[ "$total" -gt 0 ] || { echo "ОШИБКА: нет стратегий для теста"; exit 1; }
 
 	echo "==> Собираем список доменов"
-	tr -d '\r' < "$DOMS" | sed 's/#.*//; s/^[[:space:]]*//; s/[[:space:]]*$//' \
+	tr -d '\r' < "$(list_file domains)" | sed 's/#.*//; s/^[[:space:]]*//; s/[[:space:]]*$//' \
 		| grep -E '^[A-Za-z0-9._-]+$' | awk '!s[$0]++' | sed 's#.*#&|https://&/#' > "$urls"
 	ntot=$(wc -l < "$urls" | tr -d ' ')
 	[ "$ntot" -gt 0 ] || { echo "ОШИБКА: нет доменов для теста"; exit 1; }
@@ -1047,8 +1187,9 @@ case "$1" in
 	log)     cmd_log ;;
 	results) cmd_results ;;
 	clear)   cmd_clear ;;
+	list)    shift; cmd_list "$@" ;;
 	run)     cmd_run ;;
-	*) echo "usage: ytbypass test start|stop|status|log|results|clear" >&2; exit 1 ;;
+	*) echo "usage: ytbypass test start|stop|status|log|results|clear|list" >&2; exit 1 ;;
 esac
 exit 0
 YTB_FILE_END_7f3a9c
@@ -1806,11 +1947,18 @@ function renderLog(el, text) {
 
 return view.extend({
 	load: function() {
-		return Promise.all([ callJson([ 'test', 'status' ]), uci.load('ytbypass') ]);
+		return Promise.all([
+			callJson([ 'test', 'status' ]),
+			uci.load('ytbypass'),
+			callText([ 'test', 'list', 'get', 'strategies' ]),
+			callText([ 'test', 'list', 'get', 'domains' ])
+		]);
 	},
 
 	render: function(data) {
 		var status = data[0] || {};
+		var texts = { strategies: data[2] || '', domains: data[3] || '' };
+		var editors = {};
 		var running = status.running === true;
 		var curOpts = presets.clean(uci.get('ytbypass', 'main', 'byedpi_opts'));
 		var wasRunning = running;
@@ -1823,6 +1971,13 @@ return view.extend({
 		});
 		var resultsEl = E('div');
 
+		function listState(kind) {
+			var isS = kind === 'strategies';
+			var n = (isS ? status.strategies : status.domains) || 0;
+			var custom = isS ? status.strategies_custom : status.domains_custom;
+			return { n: n, custom: !!custom, text: n + ' (' + (custom ? _('свой список') : _('встроенный')) + ')' };
+		}
+
 		function renderInfo() {
 			var t = _('Каждая стратегия запускается во временном экземпляре ByeDPI на отдельном порту, а домены ' +
 				'проверяются через него. Основной сервис и трафик клиентов не затрагиваются, настройки не меняются. ' +
@@ -1830,10 +1985,101 @@ return view.extend({
 			dom.content(infoEl, [
 				t,
 				E('br'),
-				E('em', {}, _('Стратегий: ') + (status.strategies || 0) + _(', доменов: ') + (status.domains || 0) +
-					_(' (файлы /usr/share/ytbypass/strategies.txt и test-domains.txt)'))
+				E('em', {}, [ _('Стратегий: ') + listState('strategies').text + _(', доменов: ') + listState('domains').text ])
 			]);
 		}
+
+		/* ---- редакторы списков: по одной стратегии / одному домену в строке ---- */
+		function makeEditor(kind, title, hint, opts) {
+			var attrs = {
+				'class': 'cbi-input-textarea',
+				'rows': opts.rows,
+				'wrap': opts.wrap ? 'soft' : 'off',
+				'spellcheck': 'false',
+				'style': 'font-family:monospace;' + (opts.cols ? '' : 'width:100%;')
+			};
+			if (opts.cols) attrs.cols = opts.cols;
+			var ta = E('textarea', attrs, [ texts[kind] ]);
+			var meta = E('div', { 'class': 'cbi-section-descr', 'style': 'margin:4px 0' });
+			var saveBtn = E('button', { 'class': 'cbi-button cbi-button-save', 'click': function() { doSaveList(kind); } }, _('Сохранить'));
+			var resetBtn = E('button', { 'class': 'cbi-button', 'click': function() { doResetList(kind); } }, _('Сбросить к встроенному'));
+			var node = E('div', { 'style': opts.box }, [
+				E('strong', {}, [ title ]),
+				E('div', { 'class': 'cbi-section-descr' }, [ hint ]),
+				ta, meta,
+				E('div', {}, [ saveBtn, ' ', resetBtn ])
+			]);
+			return { node: node, ta: ta, meta: meta, saveBtn: saveBtn, resetBtn: resetBtn };
+		}
+
+		/* доступность правки: во время теста списки менять нельзя */
+		function syncEditors() {
+			[ 'strategies', 'domains' ].forEach(function(k) {
+				var ed = editors[k];
+				if (!ed) return;
+				var st = listState(k);
+				dom.content(ed.meta, [ (st.custom ? _('Свой список') : _('Встроенный список')) + ' · ' + st.n + ' ' +
+					(k === 'strategies' ? _('стратегий') : _('доменов')) ]);
+				ed.ta.disabled = running;
+				ed.saveBtn.disabled = running;
+				ed.resetBtn.disabled = running || !st.custom;
+			});
+		}
+
+		function reloadList(kind) {
+			return callText([ 'test', 'list', 'get', kind ]).then(function(t) { editors[kind].ta.value = t; });
+		}
+
+		function setListState(kind, res) {
+			if (kind === 'strategies') { status.strategies = res.count; status.strategies_custom = res.custom; }
+			else { status.domains = res.count; status.domains_custom = res.custom; }
+		}
+
+		function doSaveList(kind) {
+			var ed = editors[kind];
+			if (!ed.ta.value.trim()) {
+				toast(false, _('Список пуст. Чтобы вернуть встроенный, нажмите «Сбросить к встроенному».'));
+				return;
+			}
+			callJson([ 'test', 'list', 'set', kind, ed.ta.value ]).then(function(res) {
+				if (res.error) { toast(false, res.error); return; }
+				setListState(kind, res);
+				reloadList(kind).then(function() {
+					renderInfo(); syncEditors();
+					toast(true, _('Список сохранён.'));
+				});
+			});
+		}
+
+		function doResetList(kind) {
+			if (!confirm(_('Вернуть встроенный список? Ваши правки будут удалены.'))) return;
+			callJson([ 'test', 'list', 'reset', kind ]).then(function(res) {
+				if (res.error) { toast(false, res.error); return; }
+				setListState(kind, res);
+				reloadList(kind).then(function() {
+					renderInfo(); syncEditors();
+					toast(true, _('Возвращён встроенный список.'));
+				});
+			});
+		}
+
+		editors.strategies = makeEditor('strategies', _('Стратегии'),
+			_('Одна стратегия (параметры ciadpi) в строке.'),
+			{ rows: 14, wrap: true, box: 'flex:2 1 420px;min-width:0' });
+		editors.domains = makeEditor('domains', _('Домены для проверки'),
+			_('Один домен в строке; можно вставлять ссылки.'),
+			{ rows: 14, cols: 36, wrap: false, box: 'flex:1 1 260px;min-width:0' });
+
+		var listsEl = E('details', { 'style': 'margin:10px 0' }, [
+			E('summary', { 'style': 'cursor:pointer;font-weight:bold' }, [ _('Списки для теста — стратегии и домены (редактировать)') ]),
+			E('p', { 'class': 'cbi-section-descr' }, [
+				_('Свои списки хранятся в /etc/ytbypass/ и не затираются при обновлении. Строки, начинающиеся с #, — комментарии. ' +
+				  'Домены нужны только для проверки доступности при тесте и на маршрутизацию не влияют. ' +
+				  'Пока идёт тест, списки менять нельзя.')
+			]),
+			E('div', { 'style': 'display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start' },
+				[ editors.strategies.node, editors.domains.node ])
+		]);
 
 		function renderButtons() {
 			var els = [];
@@ -1857,6 +2103,7 @@ return view.extend({
 				}
 			}
 			dom.content(buttonsEl, els);
+			syncEditors();
 		}
 
 		function renderResults(text) {
@@ -1983,7 +2230,7 @@ return view.extend({
 
 		return E([
 			E('h2', {}, _('Тест стратегий ByeDPI')),
-			E('div', { 'class': 'cbi-section' }, [ infoEl, buttonsEl, logEl ]),
+			E('div', { 'class': 'cbi-section' }, [ infoEl, buttonsEl, listsEl, logEl ]),
 			E('div', { 'class': 'cbi-section' }, [ E('h3', {}, _('Результаты')), resultsEl ])
 		]);
 	},
