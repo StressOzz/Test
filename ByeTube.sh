@@ -1753,6 +1753,16 @@ return view.extend({
 			  'Добавляются к встроенному списку. Можно вставлять и ссылки — из них берётся домен.'));
 		o.rows = 8;
 		o.cols = 36;          /* с cols LuCI не растягивает поле на всю ширину */
+		/* тема может задавать textarea свой width и игнорировать cols — фиксируем ширину явно */
+		o.renderWidget = function() {
+			var fix = function(n) {
+				var ta = n && n.querySelector ? n.querySelector('textarea') : null;
+				if (ta) { ta.style.width = '40ch'; ta.style.maxWidth = '100%'; }
+				return n;
+			};
+			var node = form.TextValue.prototype.renderWidget.apply(this, arguments);
+			return (node && typeof node.then === 'function') ? node.then(fix) : fix(node);
+		};
 		o.wrap = false;
 		o.monospace = true;
 		o.placeholder = 'example.com\nanother.org';
@@ -1996,16 +2006,18 @@ return view.extend({
 				'rows': opts.rows,
 				'wrap': opts.wrap ? 'soft' : 'off',
 				'spellcheck': 'false',
-				'style': 'font-family:monospace;' + (opts.cols ? '' : 'width:100%;')
+				/* ширина — явным стилем (theme задаёт свой width для textarea); display:block и max-width
+				   не дают полю выйти за пределы страницы */
+				'style': 'display:block;box-sizing:border-box;max-width:100%;resize:vertical;' +
+					'font-family:monospace;font-size:13px;line-height:1.5;' + opts.width
 			};
-			if (opts.cols) attrs.cols = opts.cols;
 			var ta = E('textarea', attrs, [ texts[kind] ]);
 			var meta = E('div', { 'class': 'cbi-section-descr', 'style': 'margin:4px 0' });
 			var saveBtn = E('button', { 'class': 'cbi-button cbi-button-save', 'click': function() { doSaveList(kind); } }, _('Сохранить'));
 			var resetBtn = E('button', { 'class': 'cbi-button', 'click': function() { doResetList(kind); } }, _('Сбросить к встроенному'));
-			var node = E('div', { 'style': opts.box }, [
+			var node = E('div', { 'style': 'margin:14px 0 18px 0' }, [
 				E('strong', {}, [ title ]),
-				E('div', { 'class': 'cbi-section-descr' }, [ hint ]),
+				E('div', { 'class': 'cbi-section-descr', 'style': 'margin:2px 0 6px 0' }, [ hint ]),
 				ta, meta,
 				E('div', {}, [ saveBtn, ' ', resetBtn ])
 			]);
@@ -2064,11 +2076,11 @@ return view.extend({
 		}
 
 		editors.strategies = makeEditor('strategies', _('Стратегии'),
-			_('Одна стратегия (параметры ciadpi) в строке.'),
-			{ rows: 14, wrap: true, box: 'flex:2 1 420px;min-width:0' });
+			_('Одна стратегия (параметры ciadpi) в строке. Длинные строки переносятся на экране, но остаются одной стратегией.'),
+			{ rows: 14, wrap: true, width: 'width:100%;' });
 		editors.domains = makeEditor('domains', _('Домены для проверки'),
 			_('Один домен в строке; можно вставлять ссылки.'),
-			{ rows: 14, cols: 36, wrap: false, box: 'flex:1 1 260px;min-width:0' });
+			{ rows: 10, wrap: false, width: 'width:40ch;' });
 
 		var listsEl = E('details', { 'style': 'margin:10px 0' }, [
 			E('summary', { 'style': 'cursor:pointer;font-weight:bold' }, [ _('Списки для теста — стратегии и домены (редактировать)') ]),
@@ -2077,8 +2089,7 @@ return view.extend({
 				  'Домены нужны только для проверки доступности при тесте и на маршрутизацию не влияют. ' +
 				  'Пока идёт тест, списки менять нельзя.')
 			]),
-			E('div', { 'style': 'display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start' },
-				[ editors.strategies.node, editors.domains.node ])
+			E('div', {}, [ editors.strategies.node, editors.domains.node ])
 		]);
 
 		function renderButtons() {
@@ -2124,6 +2135,9 @@ return view.extend({
 				sp(_('   При равенстве выше стоит стратегия, что раньше в списке.'), C.gray));
 			var head = E('div', { 'style': 'margin-bottom:8px' }, headKids);
 
+			/* обычная таблица с фиксированной раскладкой: длинные стратегии переносятся внутри своей ячейки */
+			var CELL = 'padding:7px 8px 7px 0;border:0;border-top:1px solid #1e1e1e;vertical-align:top;' +
+				'background:transparent;color:inherit;';
 			var rows = res.rows.map(function(r, i) {
 				var p = presets.find(r.opts);
 				var isCur = presets.clean(r.opts) === curOpts;
@@ -2133,22 +2147,28 @@ return view.extend({
 						p ? p.name : '',
 						isCur ? sp((p ? '  ' : '') + _('(текущая)'), C.cyan, true) : ''
 					]));
-				body.push(E('div', { 'style': 'color:' + C.white + ';white-space:pre-wrap;word-break:break-word' }, [ r.opts ]));
+				body.push(E('div', {
+					'style': 'color:' + C.white + ';white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere'
+				}, [ r.opts ]));
 
-				return E('div', {
-					'style': 'display:flex;gap:10px;align-items:flex-start;padding:7px 0;border-top:1px solid #1e1e1e'
-				}, [
-					E('div', { 'style': 'width:2em;color:' + C.gray }, [ String(i + 1) ]),
-					E('div', {}, chip(r.ok + '/' + r.total, scoreColor(r.ok, r.total, controlOk))),
-					E('div', { 'style': 'flex:1;min-width:0' }, body),
-					E('div', {}, isCur ? '' : E('button', {
-						'class': 'cbi-button cbi-button-apply',
-						'click': function() { doApply(r.opts); }
-					}, _('Применить')))
+				return E('tr', {}, [
+					E('td', { 'style': CELL + 'width:2.6em;color:' + C.gray }, [ String(i + 1) ]),
+					E('td', { 'style': CELL + 'width:6.6em' }, [ chip(r.ok + '/' + r.total, scoreColor(r.ok, r.total, controlOk)) ]),
+					E('td', { 'style': CELL }, body),
+					E('td', { 'style': CELL + 'width:9em;text-align:right;padding-right:0' }, [
+						isCur ? '' : E('button', {
+							'class': 'cbi-button cbi-button-apply',
+							'click': function() { doApply(r.opts); }
+						}, _('Применить'))
+					])
 				]);
 			});
 
-			dom.content(resultsEl, E('div', { 'style': TERM }, [ head ].concat(rows)));
+			var table = E('table', {
+				'style': 'width:100%;table-layout:fixed;border-collapse:collapse;border-spacing:0;margin:0;background:transparent'
+			}, [ E('tbody', {}, rows) ]);
+
+			dom.content(resultsEl, E('div', { 'style': TERM }, [ head, table ]));
 		}
 
 		function refreshResults() {
@@ -2396,15 +2416,12 @@ echo "  IP youtube.com в наборе после тестового резол�
 
 cat <<MSG
 
-Готово!
-
-Веб-интерфейс: LuCI -> Службы -> YouTube Bypass
-
-Команды:
+Готово. Веб-интерфейс: LuCI -> Службы -> YouTube Bypass (вкладки «Настройки» и «Тест стратегий»).
+Проверка: откройте YouTube на устройстве в LAN (DNS — роутер), затем на роутере:
   ytbypass status       состояние
   ytbypass list         IP, попавшие в наборы
   logread -e ytbypass   логи
 
-Удаление:
-sh <(wget -O - https://raw.githubusercontent.com/StressOzz/Test/main/ByeTube.sh) --uninstall
+Если клиент уже держал IP YouTube в DNS-кэше — перезапустите браузер / переподключите Wi-Fi.
+Удаление: sh install.sh --uninstall
 MSG
