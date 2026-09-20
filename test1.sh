@@ -239,7 +239,21 @@ collect_domains() {
 	} | sed 's/#.*//; s/^[[:space:]]*//; s/[[:space:]]*$//' \
 	  | tr 'A-Z' 'a-z' \
 	  | grep -E '^[a-z0-9]([a-z0-9._-]*[a-z0-9])?$' \
-	  | sort -u
+	  | sort -u \
+	  | awk '
+		{ name[NR] = $0; have[$0] = 1 }
+		END {
+			for (i = 1; i <= NR; i++) {
+				n = split(name[i], p, ".")
+				suf = ""; redundant = 0
+				# proper-суффиксы справа налево: если родительский домен уже в списке — запись избыточна
+				for (j = n; j >= 2; j--) {
+					suf = (suf == "") ? p[j] : p[j] "." suf
+					if (suf in have) { redundant = 1; break }
+				}
+				if (!redundant) print name[i]
+			}
+		}'
 }
 
 dns_remove() {
@@ -250,21 +264,32 @@ dns_remove() {
 	/etc/init.d/dnsmasq restart >/dev/null 2>&1
 }
 
-# записать nftset-правило для dnsmasq; dnsmasq перезапускается только при изменении
+# Записать nftset-правила для dnsmasq; dnsmasq перезапускается только при изменении.
+# Строка конфига dnsmasq не может быть длиннее ~1 КБ (иначе dnsmasq вообще не запустится),
+# поэтому домены разбиваются на несколько строк nftset= по <= 800 байт.
 dns_apply() {
-	local ipv6="$1" conf domains line old
+	local ipv6="$1" conf domains suffix new old
 	conf="$(dnsmasq_confdir)/ytbypass.conf"
-	domains=$(collect_domains | tr '\n' '/')
+	domains=$(collect_domains)
 	if [ -z "$domains" ]; then
 		dns_remove
 		return 0
 	fi
-	line="nftset=/${domains}4#inet#${NFT_TABLE}#yt4"
-	[ "$ipv6" = "1" ] && line="$line,6#inet#${NFT_TABLE}#yt6"
+	suffix="4#inet#${NFT_TABLE}#yt4"
+	[ "$ipv6" = "1" ] && suffix="$suffix,6#inet#${NFT_TABLE}#yt6"
+	new=$(printf '%s\n' "$domains" | awk -v suffix="$suffix" -v max=800 '
+		{
+			if (cur != "" && length("nftset=/" cur "/" $0 "/" suffix) > max) {
+				print "nftset=/" cur "/" suffix
+				cur = ""
+			}
+			cur = (cur == "") ? $0 : cur "/" $0
+		}
+		END { if (cur != "") print "nftset=/" cur "/" suffix }')
 	old=$(cat "$conf" 2>/dev/null)
-	if [ "$old" != "$line" ]; then
+	if [ "$old" != "$new" ]; then
 		mkdir -p "$(dirname "$conf")"
-		echo "$line" > "$conf"
+		printf '%s\n' "$new" > "$conf"
 		/etc/init.d/dnsmasq restart >/dev/null 2>&1
 	fi
 }
@@ -1088,20 +1113,220 @@ YTB_FILE_END_7f3a9c
 	chmod 644 "$R/usr/share/rpcd/acl.d/luci-app-ytbypass.json"
 	mkdir -p "$R/usr/share/ytbypass"
 	cat > "$R/usr/share/ytbypass/domains.list" <<'YTB_FILE_END_7f3a9c'
-# Домены YouTube (поддомены подхватываются автоматически)
-youtube.com
+# Домены YouTube и связанных сервисов Google (поддомены подхватываются автоматически).
+# Список объединяется с «Дополнительными доменами» из настроек. Вложенные записи
+# (например, i.ytimg.com при наличии ytimg.com) сервис сам отбрасывает как избыточные.
+android.clients.google.com
+beacons.gvt2.com
+cdn.youtube.com
+connectivitycheck.gstatic.com
+fonts.googleapis.com
+fonts.gstatic.com
+ggpht.com
+googleapis.com
+googleplay.com
+googleusercontent.com
+googlevideo.com
+gvt1.com
+i.ytimg.com
+i9.ytimg.com
+jnn-pa.googleapis.com
+kids.youtube.com
+lh3.googleusercontent.com
+m.youtube.com
+manifest.googlevideo.com
+music.youtube.com
+nhacmp3youtube.com
+play-fe.googleapis.com
+play-games.googleusercontent.com
+play-lh.googleusercontent.com
+play.google.com
+play.googleapis.com
+prod-lt-playstoregatewayadapter-pa.googleapis.com
+returnyoutubedislikeapi.com
+s.ytimg.com
+signaler-pa.youtube.com
+studio.youtube.com
+tv.youtube.com
+wide-youtube.l.google.com
+withyoutube.com
 youtu.be
 youtube-nocookie.com
-youtubei.googleapis.com
+youtube-ui.l.google.com
+youtube.ae
+youtube.al
+youtube.am
+youtube.at
+youtube.az
+youtube.ba
+youtube.be
+youtube.bg
+youtube.bh
+youtube.bo
+youtube.by
+youtube.ca
+youtube.cat
+youtube.ch
+youtube.cl
+youtube.co
+youtube.co.ae
+youtube.co.at
+youtube.co.cr
+youtube.co.hu
+youtube.co.id
+youtube.co.il
+youtube.co.in
+youtube.co.jp
+youtube.co.ke
+youtube.co.kr
+youtube.co.ma
+youtube.co.nz
+youtube.co.th
+youtube.co.tz
+youtube.co.ug
+youtube.co.uk
+youtube.co.ve
+youtube.co.za
+youtube.co.zw
+youtube.com
+youtube.com.ar
+youtube.com.au
+youtube.com.az
+youtube.com.bd
+youtube.com.bh
+youtube.com.bo
+youtube.com.br
+youtube.com.by
+youtube.com.co
+youtube.com.do
+youtube.com.ec
+youtube.com.ee
+youtube.com.eg
+youtube.com.es
+youtube.com.gh
+youtube.com.gr
+youtube.com.gt
+youtube.com.hk
+youtube.com.hn
+youtube.com.hr
+youtube.com.jm
+youtube.com.jo
+youtube.com.kw
+youtube.com.lb
+youtube.com.lv
+youtube.com.ly
+youtube.com.mk
+youtube.com.mt
+youtube.com.mx
+youtube.com.my
+youtube.com.ng
+youtube.com.ni
+youtube.com.om
+youtube.com.pa
+youtube.com.pe
+youtube.com.ph
+youtube.com.pk
+youtube.com.pt
+youtube.com.py
+youtube.com.qa
+youtube.com.ro
+youtube.com.sa
+youtube.com.sg
+youtube.com.sv
+youtube.com.tn
+youtube.com.tr
+youtube.com.tw
+youtube.com.ua
+youtube.com.uy
+youtube.com.ve
+youtube.cr
+youtube.cz
+youtube.de
+youtube.dk
+youtube.ee
+youtube.es
+youtube.fi
+youtube.fr
+youtube.ge
 youtube.googleapis.com
-googlevideo.com
-ytimg.com
-ggpht.com
-yt3.googleusercontent.com
+youtube.gr
+youtube.gt
+youtube.hk
+youtube.hr
+youtube.hu
+youtube.ie
+youtube.in
+youtube.iq
+youtube.is
+youtube.it
+youtube.jo
+youtube.jp
+youtube.kr
+youtube.kz
+youtube.la
+youtube.lk
+youtube.lt
+youtube.lu
+youtube.lv
+youtube.ly
+youtube.ma
+youtube.md
+youtube.me
+youtube.mk
+youtube.mn
+youtube.mx
+youtube.my
+youtube.ng
+youtube.ni
+youtube.nl
+youtube.no
+youtube.pa
+youtube.pe
+youtube.ph
+youtube.pk
+youtube.pl
+youtube.pr
+youtube.pt
+youtube.qa
+youtube.ro
+youtube.rs
+youtube.ru
+youtube.sa
+youtube.se
+youtube.sg
+youtube.si
+youtube.sk
+youtube.sn
+youtube.soy
+youtube.sv
+youtube.tn
+youtube.tv
+youtube.ua
+youtube.ug
+youtube.uy
+youtube.vn
 youtubeeducation.com
+youtubeembeddedplayer.googleapis.com
+youtubefanfest.com
+youtubegaming.com
+youtubego.co.id
+youtubego.co.in
+youtubego.com
+youtubego.com.br
+youtubego.id
+youtubego.in
+youtubei.googleapis.com
+youtubei.youtube.com
 youtubekids.com
-withyoutube.com
+youtubemobilesupport.com
+yt-video-upload.l.google.com
 yt.be
+yt3.ggpht.com
+yt3.googleusercontent.com
+yt4.ggpht.com
+ytimg.com
+ytimg.l.google.com
+yting.com
 YTB_FILE_END_7f3a9c
 	chmod 644 "$R/usr/share/ytbypass/domains.list"
 	mkdir -p "$R/usr/share/ytbypass"
@@ -1222,6 +1447,29 @@ YTB_FILE_END_7f3a9c
 
 var CTL = '/usr/bin/ytbypass';
 var INIT = '/etc/init.d/ytbypass';
+
+/* ---- дополнительные домены: по одному в строке ---- */
+var DOMAIN_RE = /^[a-z0-9]([a-z0-9._-]*[a-z0-9])?$/;
+
+/* привести введённое к домену: https://Foo.com/path -> foo.com, *.foo.com / .foo.com -> foo.com */
+function normDomain(s) {
+	return String(s).trim().toLowerCase()
+		.replace(/^[a-z][a-z0-9+.-]*:\/\//, '')
+		.replace(/[\/?#].*$/, '')
+		.replace(/^\*?\./, '');
+}
+
+/* текст -> { list: уникальные домены по порядку, bad: некорректные записи } */
+function parseDomains(text) {
+	var list = [], bad = [], seen = {};
+	String(text == null ? '' : text).split(/[\s,;]+/).forEach(function(tok) {
+		if (!tok) return;
+		var d = normDomain(tok);
+		if (!d || d.indexOf('.') < 0 || !DOMAIN_RE.test(d)) { bad.push(tok); return; }
+		if (!seen[d]) { seen[d] = true; list.push(d); }
+	});
+	return { list: list, bad: bad };
+}
 
 function getStatus() {
 	return fs.exec_direct(CTL, [ 'status' ], 'json').catch(function() { return null; });
@@ -1351,14 +1599,37 @@ return view.extend({
 		o.rmempty = false;
 
 		o = s.option(form.Flag, 'default_domains', _('Встроенный список доменов'),
-			_('youtube.com, googlevideo.com, ytimg.com, ggpht.com, youtu.be и др.'));
+			_('YouTube, googlevideo, ytimg, ggpht и связанные сервисы Google (googleapis, googleusercontent, ' +
+			  'gstatic для шрифтов, Google Play). Полный список: /usr/share/ytbypass/domains.list. ' +
+			  'Сервисы Google часто делят IP-адреса, поэтому часть трафика Google (не только YouTube) тоже пойдёт через обход, ' +
+			  'а QUIC (UDP/443) к этим адресам будет блокироваться.'));
 		o.default = '1';
 		o.rmempty = false;
 
-		o = s.option(form.DynamicList, 'domain', _('Дополнительные домены'),
-			_('Поддомены подхватываются автоматически. Например: example.com'));
-		o.datatype = 'hostname';
-		o.placeholder = 'example.com';
+		/* Как поле параметров ByeDPI, только уже: один домен на строку. В UCI это list domain. */
+		o = s.option(form.TextValue, 'domain', _('Дополнительные домены'),
+			_('По одному домену в строке; поддомены подхватываются автоматически. ' +
+			  'Добавляются к встроенному списку. Можно вставлять и ссылки — из них берётся домен.'));
+		o.rows = 8;
+		o.cols = 36;          /* с cols LuCI не растягивает поле на всю ширину */
+		o.wrap = false;
+		o.monospace = true;
+		o.placeholder = 'example.com\nanother.org';
+		o.cfgvalue = function(section_id) {
+			var v = uci.get('ytbypass', section_id, 'domain');
+			return Array.isArray(v) ? v.join('\n') : (v || '');
+		};
+		o.validate = function(section_id, value) {
+			var r = parseDomains(value);
+			if (r.bad.length)
+				return _('Некорректный домен: ') + r.bad[0];
+			return true;
+		};
+		o.write = function(section_id, value) {
+			var list = parseDomains(value).list;
+			return this.map.data.set(this.uciconfig || this.section.uciconfig || this.map.config,
+				section_id, this.ucioption || this.option, list.length ? list : null);
+		};
 
 		o = s.option(form.Button, '_restart', _('Служба'));
 		o.inputtitle = _('Перезапустить');
