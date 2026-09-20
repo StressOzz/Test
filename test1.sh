@@ -57,9 +57,9 @@ pkg_del() { if [ "$PM" = apk ]; then apk del "$@"; else opkg remove "$@"; fi; }
 
 fetch() { # fetch URL OUT   (OUT="-" — в stdout)
 	if command -v curl >/dev/null 2>&1; then
-		curl -fsSL --connect-timeout 15 -o "$2" "$1"
+		curl -fsSL --connect-timeout 30 -o "$2" "$1"
 	else
-		wget -q -T 20 -O "$2" "$1"
+		wget -q -T 30 -O "$2" "$1"
 	fi
 }
 
