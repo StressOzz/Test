@@ -68,10 +68,11 @@ YTB_FILES="/etc/config/ytbypass /etc/init.d/ytbypass /etc/hotplug.d/firewall/90-
 /usr/bin/ytbypass /usr/libexec/ytbypass /usr/share/ytbypass
 /usr/share/nftables.d/chain-pre/forward/50-ytbypass.nft
 /usr/share/luci/menu.d/luci-app-ytbypass.json /usr/share/rpcd/acl.d/luci-app-ytbypass.json
-/www/luci-static/resources/view/ytbypass /var/etc/ytbypass /var/run/ytbypass.started"
+/www/luci-static/resources/view/ytbypass /var/etc/ytbypass /var/run/ytbypass.started /tmp/ytbypass-test"
 
 do_uninstall() {
 	say "Останавливаю и удаляю YouTube Bypass"
+	[ -x /usr/bin/ytbypass ] && /usr/bin/ytbypass test stop >/dev/null 2>&1
 	if [ -x /etc/init.d/ytbypass ]; then
 		/etc/init.d/ytbypass stop >/dev/null 2>&1
 		/etc/init.d/ytbypass disable >/dev/null 2>&1
@@ -185,8 +186,8 @@ config ytbypass 'main'
 	option enabled '1'
 	# локальный порт SOCKS5 у ByeDPI (отдельный экземпляр, штатный byedpi не трогаем)
 	option byedpi_port '1088'
-	# стратегия обхода DPI, подбирается под провайдера
-	option byedpi_opts '--split 1 --disorder 3+s --mod-http=h,d --auto=torst --tlsrec 1+s'
+	# стратегия обхода DPI, подбирается под провайдера (вкладка «Тест стратегий»)
+	option byedpi_opts '-o1 -r-5+se -a1 -At,r,s -d1 -n "google.com" -Qr -f-1 -a1'
 	# заворачивать IPv6-адреса YouTube (0 — только IPv4)
 	option ipv6 '1'
 	# QUIC (UDP/443): block — отбрасывать, чтобы клиент откатился на TCP; proxy — гнать через ByeDPI
@@ -227,14 +228,6 @@ STARTED_FLAG=/var/run/ytbypass.started
 
 log() { logger -t "$NAME" "$*"; }
 _echo() { echo "$1"; }
-
-find_byedpi() {
-	local b
-	for b in /usr/bin/ciadpi /usr/bin/byedpi; do
-		[ -x "$b" ] && { echo "$b"; return 0; }
-	done
-	command -v ciadpi
-}
 
 # итоговый список доменов: встроенный + свои, только валидные имена
 collect_domains() {
@@ -317,6 +310,7 @@ start_service() {
 
 	config_get byedpi_port main byedpi_port 1088
 	config_get byedpi_opts main byedpi_opts ""
+	byedpi_opts=$(byedpi_opts_clean "$byedpi_opts")
 	config_get ipv6 main ipv6 1
 	[ -f /proc/net/if_inet6 ] || ipv6=0
 
@@ -376,6 +370,8 @@ YTB_FILE_END_7f3a9c
 #   ytbypass status   — состояние в JSON
 #   ytbypass flush    — очистить наборы IP (клиентам нужно заново резолвить домены)
 #   ytbypass list     — показать IP в наборах
+#   ytbypass test …   — тест стратегий ByeDPI (start|stop|status|log|results|clear)
+#   ytbypass set-strategy "<параметры ciadpi>" — записать стратегию и перезапустить службу
 
 . /lib/functions.sh
 . /usr/libexec/ytbypass/common.sh
@@ -423,8 +419,22 @@ list)
 	nft list set inet "$NFT_TABLE" yt4 2>/dev/null
 	nft list set inet "$NFT_TABLE" yt6 2>/dev/null
 	;;
+test)
+	shift
+	exec /usr/libexec/ytbypass/test.sh "$@"
+	;;
+set-strategy)
+	opts="$2"
+	if [ -z "$opts" ] || [ "$(printf '%s' "$opts" | wc -l)" -gt 0 ]; then
+		echo '{"error":"пустая или многострочная стратегия"}'
+		exit 0
+	fi
+	uci set ytbypass.main.byedpi_opts="$opts" && uci commit ytbypass
+	/etc/init.d/ytbypass restart >/dev/null 2>&1
+	echo '{"ok":true}'
+	;;
 *)
-	echo "usage: ytbypass status|flush|list" >&2
+	echo "usage: ytbypass status|flush|list|test|set-strategy" >&2
 	exit 1
 	;;
 esac
@@ -453,6 +463,22 @@ dnsmasq_confdir() {
 # dnsmasq собран с nftset (dnsmasq-full)?
 dnsmasq_has_nftset() {
 	dnsmasq --version 2>/dev/null | grep -Eq '(^| )nftset( |$)'
+}
+
+# путь к бинарнику ByeDPI
+find_byedpi() {
+	local b
+	for b in /usr/bin/ciadpi /usr/bin/byedpi; do
+		[ -x "$b" ] && { echo "$b"; return 0; }
+	done
+	command -v ciadpi
+}
+
+# Параметры ByeDPI приходят из UCI как строка, а раскрываются без eval (по пробелам).
+# Кавычки вроде -n "google.com" при этом остались бы в аргументе буквально,
+# поэтому их убираем: у аргументов ciadpi пробелов внутри не бывает.
+byedpi_opts_clean() {
+	printf '%s' "$1" | tr -d "\"'" | tr '\n\r\t' '   ' | sed 's/^ *//; s/ *$//; s/  */ /g'
 }
 YTB_FILE_END_7f3a9c
 	chmod 755 "$R/usr/libexec/ytbypass/common.sh"
@@ -572,6 +598,259 @@ echo 2 > "/proc/sys/net/ipv4/conf/$TUN/rp_filter" 2>/dev/null
 exit 0
 YTB_FILE_END_7f3a9c
 	chmod 755 "$R/usr/libexec/ytbypass/route-up.sh"
+	mkdir -p "$R/usr/libexec/ytbypass"
+	cat > "$R/usr/libexec/ytbypass/test.sh" <<'YTB_FILE_END_7f3a9c'
+#!/bin/sh
+# Тест стратегий ByeDPI.
+#   ytbypass test start | stop | status | log | results | clear
+#
+# Каждая стратегия запускается во ВРЕМЕННОМ экземпляре ciadpi на отдельном порту,
+# домены проверяются через него по curl --socks5. Боевой сервис и трафик клиентов
+# не затрагиваются, конфигурация не меняется. Сначала контрольный замер без обхода.
+
+. /lib/functions.sh
+. /usr/libexec/ytbypass/common.sh
+
+TEST_DIR=/tmp/ytbypass-test
+PIDF="$TEST_DIR/job.pid"
+LOGF="$TEST_DIR/job.log"
+RES="$TEST_DIR/results.txt"
+RAW="$TEST_DIR/results.raw"
+STOP="$TEST_DIR/stop"
+CPID="$TEST_DIR/ciadpi.pid"
+STRATS=/usr/share/ytbypass/strategies.txt
+DOMS=/usr/share/ytbypass/test-domains.txt
+PORT_BASE=22000
+UA='Mozilla/5.0 (Windows NT 10.0; Win64; x64) curl/8.0'
+TAB=$(printf '\t')
+
+is_running() {
+	[ -f "$PIDF" ] && kill -0 "$(cat "$PIDF" 2>/dev/null)" 2>/dev/null
+}
+
+count_lines() { # файл -> число строк без пустых и комментариев
+	sed 's/#.*//' "$1" 2>/dev/null | tr -d '\r' | grep -c '[^[:space:]]'
+}
+
+# ---------------------------------------------------------------- управление
+cmd_start() {
+	if is_running; then
+		echo '{"started":true,"already_running":true}'
+		return 0
+	fi
+	command -v curl >/dev/null 2>&1 || { echo '{"error":"не установлен curl (apk add curl / opkg install curl)"}'; return 0; }
+	[ -n "$(find_byedpi)" ] || { echo '{"error":"не найден ciadpi (пакет byedpi)"}'; return 0; }
+	mkdir -p "$TEST_DIR"
+	rm -f "$STOP"
+	: > "$LOGF"
+	# полностью отвязываем от stdin/stdout, иначе rpcd будет ждать завершения
+	( "$0" run >>"$LOGF" 2>&1; echo "__DONE__ $?" >>"$LOGF" ) >/dev/null 2>&1 </dev/null &
+	echo $! > "$PIDF"
+	echo '{"started":true}'
+}
+
+cmd_stop() {
+	if ! is_running; then
+		echo '{"error":"тест не запущен"}'
+		return 0
+	fi
+	touch "$STOP"
+	[ -f "$CPID" ] && kill "$(cat "$CPID" 2>/dev/null)" 2>/dev/null
+	echo '{"ok":true}'
+}
+
+cmd_status() {
+	local running=false has=false cu=false rc=""
+	is_running && running=true
+	[ -s "$RES" ] && has=true
+	command -v curl >/dev/null 2>&1 && cu=true
+	[ -f "$LOGF" ] && rc=$(grep '^__DONE__' "$LOGF" | tail -n 1 | awk '{print $2}')
+	printf '{"running":%s,"has_results":%s,"curl":%s,"strategies":%s,"domains":%s,"rc":"%s"}\n' \
+		"$running" "$has" "$cu" "$(count_lines "$STRATS")" "$(count_lines "$DOMS")" "$rc"
+}
+
+cmd_log() {
+	[ -f "$LOGF" ] && tail -n 200 "$LOGF" | grep -v '^__DONE__'
+	return 0
+}
+
+cmd_results() {
+	[ -s "$RES" ] && cat "$RES"
+	return 0
+}
+
+cmd_clear() {
+	if is_running; then
+		echo '{"error":"тест выполняется"}'
+		return 0
+	fi
+	rm -f "$RES" "$RAW"
+	echo '{"ok":true}'
+}
+
+# ---------------------------------------------------------------- движок
+# check_url ЗАПИСЬ OKFILE LOGFILE [socks host:port]
+check_url() {
+	local entry="$1" okfile="$2" logfile="$3" proxy="$4" host url rc
+	host="${entry%%|*}"
+	url="${entry#*|}"
+	if [ -n "$proxy" ]; then
+		curl -4 -sL --socks5 "$proxy" --connect-timeout 4 --max-time 6 --speed-time 3 --speed-limit 1 \
+			--range 0-65535 -A "$UA" -o /dev/null "$url" </dev/null >/dev/null 2>&1
+	else
+		curl -4 -sL --connect-timeout 4 --max-time 6 --speed-time 3 --speed-limit 1 \
+			--range 0-65535 -A "$UA" -o /dev/null "$url" </dev/null >/dev/null 2>&1
+	fi
+	rc=$?
+	if [ "$rc" -eq 0 ]; then
+		echo 1 >> "$okfile"
+		echo "[ OK ] $host" >> "$logfile"
+	else
+		echo "[FAIL] $host" >> "$logfile"
+	fi
+}
+
+# check_all ФАЙЛ_URL LOGFILE [socks] -> "ok total"
+check_all() {
+	local urls="$1" logfile="$2" proxy="$3" okf run=0 total=0 ok entry
+	okf="$TEST_DIR/ok.$$"
+	: > "$okf"
+	: > "$logfile"
+	while IFS= read -r entry; do
+		[ -n "$entry" ] || continue
+		[ -f "$STOP" ] && break
+		total=$((total + 1))
+		check_url "$entry" "$okf" "$logfile" "$proxy" &
+		run=$((run + 1))
+		if [ "$run" -ge "$PARALLEL" ]; then
+			wait
+			run=0
+		fi
+	done < "$urls"
+	wait
+	ok=$(wc -l < "$okf" | tr -d ' ')
+	rm -f "$okf"
+	echo "$ok $total"
+}
+
+cleanup() {
+	[ -f "$CPID" ] && kill "$(cat "$CPID" 2>/dev/null)" 2>/dev/null
+	rm -f "$CPID"
+}
+
+cmd_run() {
+	local BIN cand keys urls line k opts port idx total ntot res ok tot cok ctot cpid skipped=0 best
+
+	set -f      # параметры ciadpi раскрываем по пробелам без glob
+	trap cleanup EXIT
+	trap 'exit 130' INT TERM
+
+	config_load ytbypass
+	config_get PARALLEL main test_parallel 8
+	config_get CUR main byedpi_opts ""
+	case "$PARALLEL" in ''|*[!0-9]*) PARALLEL=8 ;; esac
+	[ "$PARALLEL" -ge 1 ] || PARALLEL=8
+
+	BIN=$(find_byedpi)
+	[ -n "$BIN" ] || { echo "ОШИБКА: ciadpi не найден"; exit 1; }
+	command -v curl >/dev/null 2>&1 || { echo "ОШИБКА: не установлен curl"; exit 1; }
+
+	mkdir -p "$TEST_DIR"
+	rm -f "$STOP"
+	cand="$TEST_DIR/candidates.txt"
+	keys="$TEST_DIR/keys.txt"
+	urls="$TEST_DIR/urls.txt"
+	: > "$cand"; : > "$keys"; : > "$RAW"
+
+	echo "==> Собираем стратегии для теста"
+	# текущая стратегия идёт первой, затем список; дубликаты (без учёта кавычек) отбрасываем
+	{ printf '%s\n' "$CUR"; cat "$STRATS"; } | tr -d '\r' | while IFS= read -r line; do
+		line=$(printf '%s' "$line" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
+		case "$line" in ''|'#'*) continue ;; esac
+		k=$(byedpi_opts_clean "$line")
+		[ -n "$k" ] || continue
+		grep -qxF -- "$k" "$keys" && continue
+		echo "$k" >> "$keys"
+		echo "$line" >> "$cand"
+	done
+	total=$(wc -l < "$cand" | tr -d ' ')
+	[ "$total" -gt 0 ] || { echo "ОШИБКА: нет стратегий для теста"; exit 1; }
+
+	echo "==> Собираем список доменов"
+	tr -d '\r' < "$DOMS" | sed 's/#.*//; s/^[[:space:]]*//; s/[[:space:]]*$//' \
+		| grep -E '^[A-Za-z0-9._-]+$' | awk '!s[$0]++' | sed 's#.*#&|https://&/#' > "$urls"
+	ntot=$(wc -l < "$urls" | tr -d ' ')
+	[ "$ntot" -gt 0 ] || { echo "ОШИБКА: нет доменов для теста"; exit 1; }
+	echo "==> Стратегий: $total, доменов: $ntot, параллельно: $PARALLEL"
+
+	echo "==> Контрольный тест: без обхода"
+	res=$(check_all "$urls" "$TEST_DIR/log_control.txt" "")
+	cok=${res% *}; ctot=${res#* }
+	echo "==> Результат: $cok/$ctot"
+
+	idx=0
+	while IFS= read -r line; do
+		[ -f "$STOP" ] && break
+		idx=$((idx + 1))
+		opts=$(byedpi_opts_clean "$line")
+		port=$((PORT_BASE + idx))
+		echo "==> [$idx/$total] $line"
+		"$BIN" -i 127.0.0.1 -p "$port" $opts >/dev/null 2>&1 </dev/null &
+		cpid=$!
+		echo "$cpid" > "$CPID"
+		sleep 1
+		if ! kill -0 "$cpid" 2>/dev/null; then
+			echo "    пропуск: ciadpi не запустился с этими параметрами"
+			skipped=$((skipped + 1))
+			continue
+		fi
+		res=$(check_all "$urls" "$TEST_DIR/log_$idx.txt" "127.0.0.1:$port")
+		kill "$cpid" 2>/dev/null
+		wait "$cpid" 2>/dev/null
+		rm -f "$CPID"
+		[ -f "$STOP" ] && break
+		ok=${res% *}; tot=${res#* }
+		echo "    результат: $ok/$tot"
+		printf '%s\t%s\t%s\t%s\n' "$ok" "$idx" "$tot" "$line" >> "$RAW"
+	done < "$cand"
+
+	if [ -f "$STOP" ]; then
+		echo "==> Тест остановлен пользователем, показываю то, что успели проверить"
+		rm -f "$STOP"
+	else
+		echo "==> Тест завершён"
+	fi
+	[ "$skipped" -gt 0 ] && echo "==> Пропущено стратегий (не запустились): $skipped"
+
+	# итог: по убыванию числа доступных доменов, при равенстве — в порядке списка
+	{
+		echo "Контрольный тест (без обхода) → $cok/$ctot"
+		sort -t "$TAB" -k1,1nr -k2,2n "$RAW" | while IFS="$TAB" read -r ok idx tot line; do
+			echo "$line → $ok/$tot"
+		done
+	} > "$RES"
+
+	echo "==> Результаты"
+	cat "$RES"
+	best=$(sed -n '2p' "$RES")
+	[ -n "$best" ] && echo "==> Лучшая стратегия: $best"
+	echo "==> Основной сервис и его настройки не менялись. Применить стратегию можно кнопкой на вкладке «Тест стратегий»."
+	return 0
+}
+
+case "$1" in
+	start)   cmd_start ;;
+	stop)    cmd_stop ;;
+	status)  cmd_status ;;
+	log)     cmd_log ;;
+	results) cmd_results ;;
+	clear)   cmd_clear ;;
+	run)     cmd_run ;;
+	*) echo "usage: ytbypass test start|stop|status|log|results|clear" >&2; exit 1 ;;
+esac
+exit 0
+YTB_FILE_END_7f3a9c
+	chmod 755 "$R/usr/libexec/ytbypass/test.sh"
 	mkdir -p "$R/usr/share/luci/menu.d"
 	cat > "$R/usr/share/luci/menu.d/luci-app-ytbypass.json" <<'YTB_FILE_END_7f3a9c'
 {
@@ -579,12 +858,28 @@ YTB_FILE_END_7f3a9c
 		"title": "YouTube Bypass",
 		"order": 60,
 		"action": {
-			"type": "view",
-			"path": "ytbypass/main"
+			"type": "alias",
+			"path": "admin/services/ytbypass/settings"
 		},
 		"depends": {
 			"acl": [ "luci-app-ytbypass" ],
 			"uci": { "ytbypass": true }
+		}
+	},
+	"admin/services/ytbypass/settings": {
+		"title": "Настройки",
+		"order": 10,
+		"action": {
+			"type": "view",
+			"path": "ytbypass/main"
+		}
+	},
+	"admin/services/ytbypass/test": {
+		"title": "Тест стратегий",
+		"order": 20,
+		"action": {
+			"type": "view",
+			"path": "ytbypass/test"
 		}
 	}
 }
@@ -632,6 +927,109 @@ withyoutube.com
 yt.be
 YTB_FILE_END_7f3a9c
 	chmod 644 "$R/usr/share/ytbypass/domains.list"
+	mkdir -p "$R/usr/share/ytbypass"
+	cat > "$R/usr/share/ytbypass/strategies.txt" <<'YTB_FILE_END_7f3a9c'
+-f-200 -Qr -s3:5+sm -a1 -As -d1 -s4+sm -s8+sh -f-300 -d6+sh -a1 -At,r,s -o2 -f-30 -As -r5 -Mh -r6+sh -f-250 -s2:7+s -s3:6+sm -a1 -At,r,s -s3:5+sm -s6+s -s7:9+s -q30+sm -a1
+-d1 -d3+s -s6+s -d9+s -s12+s -d15+s -s20+s -d25+s -s30+s -d35+s -r1+s -S -a1 -As -d1 -d3+s -s6+s -d9+s -s12+s -d15+s -s20+s -d25+s -s30+s -d35+s -S -a1
+-q2 -s2 -s3+s -r3 -s4 -r4 -s5+s -r5+s -s6 -s7+s -r8 -s9+s -Qr -Mh,d,r -a1 -At,r -s2+s -r2 -d2 -s3 -r3 -r4 -s4 -d5+s -r5 -d6 -s7+s -d7 -a1
+-o1 -d1 -a1 -At,r,s -s1 -d1 -s5+s -s10+s -s15+s -s20+s -r1+s -S -a1 -As -s1 -d1 -s5+s -s10+s -s15+s -s20+s -S -a1
+-n "google.com" -Qr -f-204 -s1:5+sm -a1 -As -d1 -s3+s -s5+s -q7 -a1 -As -o2 -f-43 -a1 -As -r5 -Mh -s1:5+s -s3:7+sm -a1
+-n "google.com" -Qr -f-205 -a1 -As -s1:3+sm -a1 -As -s5:8+sm -a1 -As -d3 -q7 -o2 -f-43 -f-85 -f-165 -r5 -Mh -a1
+-d1+s -s50+s -a1 -As -f20 -r2+s -a1 -At -d2 -s1+s -s5+s -s10+s -s15+s -s25+s -s35+s -s50+s -s60+s -a1
+-o1 -a1 -At,r,s -f-1 -a1 -At,r,s -d1:11+sm -S -a1 -At,r,s -n "google.com" -Qr -f1 -d1:11+sm -s1:11+sm -S -a1
+-d1 -s1 -q1 -a1 -Ar -s5 -o1+s -d3+s -s6+s -d9+s -s12+s -d15+s -s20+s -d25+s -s30+s -d35+s -a1
+-f1+nme -t6 -a1 -As -n "google.com" -Qr -s1:6+sm -a1 -As -s5:12+sm -a1 -As -d3 -q7 -r6 -Mh -a1
+-d1 -s1+s -d3+s -s6+s -d9+s -s12+s -d15+s -s20+s -d25+s -s30+s -d35+s -a1
+-d1 -s1+s -d1+s -s3+s -d6+s -s12+s -d14+s -s20+s -d24+s -s30+s -a1
+-o1 -a1 -At,r,s -f-1 -a1 -Ar,s -o1 -a1 -At -r1+s -f-1 -t6 -a1
+-d1 -s1+s -s3+s -s6+s -s9+s -s12+s -s15+s -s20+s -s30+s -a1
+-d1 -d3+s -s6+s -d6+s -s7+s -d8+s -s10+s -a1 -t12 -At,s -r3
+-f1 -t5 -n "google.com" -q3+h -Qr -f2 -q1 -r1+s -t15 -q1 -o2 -a1
+-n "google.com" -d2:5:2+h -f-3 -r2+sm -o2 -o50+s -r2+s -f-4 -a1
+-f-1 -Qr -s1+sm -d3+s -s5+sm -o2 -a1 -As -r1+s -d8+s -a1
+-r-1+s -o20+sm -s3:7+sm -d5:3+sm -f300+s -Qr -f-1 -a1
+-o2 -O4 -s1 -q1 -a1 -Ar -s5 -o1+s -f1+s -r20+s -a1
+-o1 -r-5+se -a1 -At,r,s -d1 -n "google.com" -Qr -f-1 -a1
+--fake -1 --ttl 8 --split 1+s --disorder 3+s -a1
+-n "google.com" -Qr -f6+nr -d2 -d11 -f9+hm -o3 -t7 -a1
+-r5+s -s25+s -a1 -At,r,s -s50 -r5+s -s50+s -a1
+-d1 -d3+s -s6+s -d9+s -s20+s -d25+s -s30+s -a1
+-d9+s -q20+s -s25+s -t5 -a1 -At,r,s -r1+h -a1
+-q1+s -s29+s -s30+s -s14+s -o5+s -f-1 -S -a1
+-d1 -s1+s -r1+s -e1 -m1 -o1+s -f-1 -t2 -a1
+-d1 -o1 -a1 -Ar -o1 -a1 -At -f-1 -r1+s -a1
+-d1 -s4 -d8 -s1+s -d5+s -s10+s -d20+s -a1
+-f-1 -n "google.com" -Qr -s2+s -r3 -o20 -t4 -a1
+-n "google.com" -Qr -d5+sm -f3+sm -o2 -t4 -a1
+-o1 -a1 -Ar -q1 -a1 -At -f-1 -r1+s -a1
+-q1 -a1 -Ar -o1 -a1 -At -f-1 -r1+s -a1
+-s4+sn -r9+s -Qr -n "google.com" -S -a1
+-o1 -d1 -r1+s -S -s1+s -d3+s -a1
+-q1+s -s29+s -o5+s -f-1 -S -a1
+-n "google.com" -Qr -m2 -f-1 -d7 -a1
+-d1 -s1+s -r1+s -f-1 -t8 -a1
+-o1 -a1 -An -f1+nme -t6 -a1
+-n "google.com" -Qr -f-1 -r1+s -a1
+-n "google.com" -Qr -d1:3 -f-1 -a1
+-s1 -d3+s -a1 -At -r1+s -a1
+-f-1 -t8 -n "google.com" -s1+s -a1
+-n "google.com" -Qr -d1 -f-1 -a1
+-f64+se -n "google.com" -t5 -a1
+-o1 -a1 -At,r,s -d1 -a1
+-d1+s -o2 -s5 -r5 -a1
+-r8 -o2 -s7 -q4+s -a1
+-o1 -f-1 -r-5+se -a1
+-d6+s -q4+hm -o2 -a1
+-s5+s -s35+s -m4 -a1
+-f-1+sm -t7 -m2 -a1
+-o1 -r-5+se -a1
+-o1+s -d3+s -a1
+-o1 -s4 -s6 -a1
+-q1 -r25+s -a1
+-d1 -s3+s -a1
+-o3 -d7 -a1
+-d7 -s2 -a1
+YTB_FILE_END_7f3a9c
+	chmod 644 "$R/usr/share/ytbypass/strategies.txt"
+	mkdir -p "$R/usr/share/ytbypass"
+	cat > "$R/usr/share/ytbypass/test-domains.txt" <<'YTB_FILE_END_7f3a9c'
+# Google and Youtube
+youtu.be
+youtube.com
+i.ytimg.com
+i9.ytimg.com
+yt3.ggpht.com
+yt4.ggpht.com
+googleapis.com
+jnn-pa.googleapis.com
+googleusercontent.com
+signaler-pa.youtube.com
+youtubei.googleapis.com
+manifest.googlevideo.com
+yt3.googleusercontent.com
+
+# Googlevideo
+rr1---sn-4axm-n8vs.googlevideo.com
+rr1---sn-gvnuxaxjvh-o8ge.googlevideo.com
+rr1---sn-ug5onuxaxjvh-p3ul.googlevideo.com
+rr1---sn-ug5onuxaxjvh-n8v6.googlevideo.com
+rr4---sn-q4flrnsl.googlevideo.com
+rr10---sn-gvnuxaxjvh-304z.googlevideo.com
+rr14---sn-n8v7kn7r.googlevideo.com
+rr16---sn-axq7sn76.googlevideo.com
+rr1---sn-8ph2xajvh-5xge.googlevideo.com
+rr1---sn-gvnuxaxjvh-5gie.googlevideo.com
+rr12---sn-gvnuxaxjvh-bvwz.googlevideo.com
+rr5---sn-n8v7knez.googlevideo.com
+rr1---sn-u5uuxaxjvhg0-ocje.googlevideo.com
+rr2---sn-q4fl6ndl.googlevideo.com
+rr5---sn-gvnuxaxjvh-n8vk.googlevideo.com
+rr4---sn-jvhnu5g-c35d.googlevideo.com
+rr1---sn-q4fl6n6y.googlevideo.com
+rr2---sn-hgn7ynek.googlevideo.com
+rr1---sn-xguxaxjvh-gufl.googlevideo.com
+YTB_FILE_END_7f3a9c
+	chmod 644 "$R/usr/share/ytbypass/test-domains.txt"
 	mkdir -p "$R/www/luci-static/resources/view/ytbypass"
 	cat > "$R/www/luci-static/resources/view/ytbypass/main.js" <<'YTB_FILE_END_7f3a9c'
 'use strict';
@@ -645,9 +1043,10 @@ YTB_FILE_END_7f3a9c
 var CTL = '/usr/bin/ytbypass';
 var INIT = '/etc/init.d/ytbypass';
 
-/* Готовые стратегии ByeDPI — отправные точки, под своего провайдера подбирайте сами */
-var PRESET_1 = '--split 1 --disorder 3+s --mod-http=h,d --auto=torst --tlsrec 1+s';
-var PRESET_2 = '-s1 -d1 -r1+s -a1 -Ar -o1 -a1 -At -f-1 -r1+s -a1';
+/* Стратегии ByeDPI. Под своего провайдера лучше подобрать на вкладке «Тест стратегий». */
+var PRESET_DEFAULT = '-o1 -r-5+se -a1 -At,r,s -d1 -n "google.com" -Qr -f-1 -a1';
+var PRESET_2 = '--split 1 --disorder 3+s --mod-http=h,d --auto=torst --tlsrec 1+s';
+var PRESET_3 = '-s1 -d1 -r1+s -a1 -Ar -o1 -a1 -At -f-1 -r1+s -a1';
 
 function getStatus() {
 	return fs.exec_direct(CTL, [ 'status' ], 'json').catch(function() { return null; });
@@ -719,10 +1118,11 @@ return view.extend({
 
 		o = s.option(form.Value, 'byedpi_opts', _('Стратегия ByeDPI'),
 			_('Параметры командной строки ciadpi. Можно выбрать готовую или вписать свою. ' +
-			  'Стратегия зависит от провайдера — подбирайте (например, через ByeByeDPI).'));
-		o.value(PRESET_1, _('Вариант 1: split + disorder + tlsrec'));
-		o.value(PRESET_2, _('Вариант 2: split/disorder + fake (из issue #357 ByeDPI)'));
-		o.default = PRESET_1;
+			  'Стратегия зависит от провайдера — лучшую найдёт вкладка «Тест стратегий».'));
+		o.value(PRESET_DEFAULT, _('По умолчанию'));
+		o.value(PRESET_2, _('Запасная 1: split + disorder + tlsrec'));
+		o.value(PRESET_3, _('Запасная 2: split/disorder + fake (issue #357 ByeDPI)'));
+		o.default = PRESET_DEFAULT;
 		o.rmempty = false;
 		o.validate = function(section_id, value) {
 			if (/[\r\n]/.test(value))
@@ -798,6 +1198,253 @@ return view.extend({
 });
 YTB_FILE_END_7f3a9c
 	chmod 644 "$R/www/luci-static/resources/view/ytbypass/main.js"
+	mkdir -p "$R/www/luci-static/resources/view/ytbypass"
+	cat > "$R/www/luci-static/resources/view/ytbypass/test.js" <<'YTB_FILE_END_7f3a9c'
+'use strict';
+'require view';
+'require fs';
+'require poll';
+'require ui';
+'require uci';
+'require dom';
+
+var CTL = '/usr/bin/ytbypass';
+
+/* Вызов ytbypass с JSON-ответом */
+function callJson(args) {
+	return fs.exec(CTL, args).then(function(r) {
+		var out = (r.stdout || '').trim();
+		try { return JSON.parse(out); }
+		catch (e) { return { error: out || r.stderr || _('нет ответа') }; }
+	}).catch(function(e) { return { error: e.message }; });
+}
+
+/* Вызов ytbypass с текстовым ответом */
+function callText(args) {
+	return fs.exec(CTL, args).then(function(r) { return r.stdout || ''; })
+		.catch(function() { return ''; });
+}
+
+/* Тот же алгоритм, что и в бэкенде: без кавычек, пробелы схлопнуты */
+function cleanOpts(s) {
+	return String(s || '').replace(/["']/g, '').replace(/\s+/g, ' ').trim();
+}
+
+/* «стратегия → ok/total»; контрольная строка отдельно */
+function parseResults(text) {
+	var rows = [], control = null;
+	(text || '').split('\n').forEach(function(line) {
+		var m = line.match(/^(.*?)\s*→\s*(\d+)\/(\d+)\s*$/);
+		if (!m) return;
+		if (/^Контрольный тест/.test(m[1]))
+			control = { ok: +m[2], total: +m[3] };
+		else
+			rows.push({ opts: m[1], ok: +m[2], total: +m[3] });
+	});
+	return { control: control, rows: rows };
+}
+
+function scoreColor(ok, total, controlOk) {
+	if (ok === total) return '#2e9c4b';
+	if (controlOk !== null && ok > controlOk) return '#d68910';
+	return '#c0392b';
+}
+
+function badge(text, color) {
+	return E('span', {
+		'style': 'display:inline-block;padding:2px 8px;border-radius:3px;color:#fff;background:' + color
+	}, text);
+}
+
+function toast(ok, text) {
+	ui.addNotification(null, E('p', text), ok ? 'info' : 'danger');
+}
+
+return view.extend({
+	load: function() {
+		return Promise.all([ callJson([ 'test', 'status' ]), uci.load('ytbypass') ]);
+	},
+
+	render: function(data) {
+		var status = data[0] || {};
+		var running = status.running === true;
+		var curOpts = cleanOpts(uci.get('ytbypass', 'main', 'byedpi_opts'));
+		var wasRunning = running;
+
+		var infoEl = E('p', { 'class': 'cbi-section-descr' });
+		var buttonsEl = E('div', { 'style': 'margin:8px 0' });
+		var logEl = E('pre', {
+			'style': 'display:none;max-height:340px;overflow:auto;white-space:pre-wrap;margin-top:10px;padding:8px;' +
+				'border:1px solid rgba(128,128,128,.4);border-radius:4px'
+		});
+		var resultsEl = E('div');
+
+		function renderInfo() {
+			var t = _('Каждая стратегия запускается во временном экземпляре ByeDPI на отдельном порту, а домены ' +
+				'проверяются через него. Основной сервис и трафик клиентов не затрагиваются, настройки не меняются. ' +
+				'Сначала делается контрольный замер без обхода. Тест идёт в фоне — вкладку можно закрыть.');
+			dom.content(infoEl, [
+				t,
+				E('br'),
+				E('em', {}, _('Стратегий: ') + (status.strategies || 0) + _(', доменов: ') + (status.domains || 0) +
+					_(' (файлы /usr/share/ytbypass/strategies.txt и test-domains.txt)'))
+			]);
+		}
+
+		function renderButtons() {
+			var els = [];
+			if (status.curl === false) {
+				els.push(E('em', { 'style': 'color:#c0392b' },
+					_('Не установлен curl — он нужен для теста: apk add curl (или opkg install curl).')));
+			} else if (running) {
+				els.push(badge(_('тест выполняется'), '#2e9c4b'));
+				els.push(' ');
+				els.push(E('button', { 'class': 'cbi-button cbi-button-remove', 'click': doStop },
+					_('Остановить тест')));
+			} else {
+				els.push(E('button', { 'class': 'cbi-button cbi-button-positive', 'click': doStart },
+					_('Запустить тест')));
+				if (status.has_results) {
+					els.push(' ');
+					els.push(E('button', { 'class': 'cbi-button', 'click': doClear },
+						_('Очистить результаты')));
+				}
+			}
+			dom.content(buttonsEl, els);
+		}
+
+		function renderResults(text) {
+			var res = parseResults(text);
+			if (!res.rows.length && !res.control) {
+				dom.content(resultsEl, E('p', { 'class': 'cbi-section-descr' },
+					_('Пока нет результатов — запустите тест.')));
+				return;
+			}
+
+			var controlOk = res.control ? res.control.ok : null;
+			var head = [];
+			if (res.control)
+				head.push(E('p', {}, [
+					_('Контрольный замер (без обхода): '),
+					badge(res.control.ok + '/' + res.control.total, '#7f8c8d')
+				]));
+			head.push(E('p', { 'class': 'cbi-section-descr' },
+				_('Зелёный — доступны все домены, оранжевый — лучше контрольного замера, красный — не лучше. ' +
+				  'Чем выше результат, тем лучше; при равенстве выше стоит стратегия, что раньше в списке.')));
+
+			var rows = res.rows.map(function(r, i) {
+				var isCur = cleanOpts(r.opts) === curOpts;
+				return E('tr', { 'class': 'tr' }, [
+					E('td', { 'class': 'td', 'style': 'width:2em;vertical-align:top' }, String(i + 1)),
+					E('td', { 'class': 'td', 'style': 'vertical-align:top' }, [
+						E('code', { 'style': 'word-break:break-all;white-space:normal' }, r.opts),
+						isCur ? E('span', { 'style': 'margin-left:6px;opacity:.7' }, _('(текущая)')) : ''
+					]),
+					E('td', { 'class': 'td', 'style': 'white-space:nowrap;vertical-align:top' },
+						badge(r.ok + '/' + r.total, scoreColor(r.ok, r.total, controlOk))),
+					E('td', { 'class': 'td', 'style': 'white-space:nowrap;vertical-align:top' },
+						isCur ? '' : E('button', {
+							'class': 'cbi-button cbi-button-apply',
+							'click': function() { doApply(r.opts); }
+						}, _('Применить')))
+				]);
+			});
+
+			dom.content(resultsEl, [
+				E('div', {}, head),
+				rows.length ? E('table', { 'class': 'table' }, rows) : ''
+			]);
+		}
+
+		function refreshResults() {
+			return callText([ 'test', 'results' ]).then(renderResults);
+		}
+
+		function refreshLog() {
+			return callText([ 'test', 'log' ]).then(function(t) {
+				var atBottom = logEl.scrollTop + logEl.clientHeight >= logEl.scrollHeight - 20;
+				logEl.style.display = t ? '' : 'none';
+				logEl.textContent = t;
+				if (atBottom) logEl.scrollTop = logEl.scrollHeight;
+			});
+		}
+
+		function doStart() {
+			callJson([ 'test', 'start' ]).then(function(res) {
+				if (res.error) { toast(false, res.error); return; }
+				running = true;
+				wasRunning = true;
+				status.has_results = false;
+				dom.content(resultsEl, '');
+				renderButtons();
+				refreshLog();
+				toast(true, _('Тест запущен.'));
+			});
+		}
+
+		function doStop() {
+			callJson([ 'test', 'stop' ]).then(function(res) {
+				if (res.error) { toast(false, res.error); return; }
+				toast(true, _('Останавливаю тест…'));
+			});
+		}
+
+		function doClear() {
+			callJson([ 'test', 'clear' ]).then(function(res) {
+				if (res.error) { toast(false, res.error); return; }
+				status.has_results = false;
+				renderButtons();
+				renderResults('');
+				logEl.style.display = 'none';
+			});
+		}
+
+		function doApply(opts) {
+			if (!confirm(_('Применить стратегию и перезапустить службу?\n\n') + opts)) return;
+			callJson([ 'set-strategy', opts ]).then(function(res) {
+				if (res.error) { toast(false, res.error); return; }
+				curOpts = cleanOpts(opts);
+				toast(true, _('Стратегия применена, служба перезапущена.'));
+				refreshResults();
+			});
+		}
+
+		function tick() {
+			return callJson([ 'test', 'status' ]).then(function(st) {
+				if (st.error) return;
+				status = st;
+				running = st.running === true;
+				renderInfo();
+				renderButtons();
+				if (running || wasRunning)
+					refreshLog();
+				if (wasRunning && !running) {
+					wasRunning = false;
+					refreshResults();
+					toast(st.rc === '0' || st.rc === '', _('Тест завершён.'));
+				}
+			});
+		}
+
+		renderInfo();
+		renderButtons();
+		refreshLog();
+		refreshResults();
+		poll.add(tick, 3);
+
+		return E([
+			E('h2', {}, _('Тест стратегий ByeDPI')),
+			E('div', { 'class': 'cbi-section' }, [ infoEl, buttonsEl, logEl ]),
+			E('div', { 'class': 'cbi-section' }, [ E('h3', {}, _('Результаты')), resultsEl ])
+		]);
+	},
+
+	handleSaveApply: null,
+	handleSave: null,
+	handleReset: null
+});
+YTB_FILE_END_7f3a9c
+	chmod 644 "$R/www/luci-static/resources/view/ytbypass/test.js"
 }
 
 # ================================================================ установка
@@ -812,6 +1459,11 @@ if ! pkg_has hev-socks5-tunnel; then
 fi
 install_byedpi
 
+# curl (с SOCKS5) и корневые сертификаты нужны вкладке «Тест стратегий»
+for p in ca-bundle curl; do
+	pkg_has "$p" || pkg_add "$p" >/dev/null 2>&1 || warn "не удалось поставить $p — тест стратегий работать не будет (остальное — да)"
+done
+
 # свежепоставленные пакеты стартуют со своими дефолтами — гасим, наш экземпляр запускает ytbypass
 if [ "$NEW_BYEDPI" = 1 ] && [ -x /etc/init.d/byedpi ]; then
 	/etc/init.d/byedpi stop >/dev/null 2>&1; /etc/init.d/byedpi disable >/dev/null 2>&1
@@ -824,6 +1476,14 @@ say "Устанавливаю YouTube Bypass (сервис + LuCI)"
 install_payload
 rm -rf /tmp/luci-indexcache* /tmp/luci-modulecache
 /etc/init.d/rpcd reload >/dev/null 2>&1
+
+# стратегия по умолчанию сменилась: обновляем, только если стоял прежний дефолт (пользовательскую не трогаем)
+OLD_DEFAULT='--split 1 --disorder 3+s --mod-http=h,d --auto=torst --tlsrec 1+s'
+NEW_DEFAULT='-o1 -r-5+se -a1 -At,r,s -d1 -n "google.com" -Qr -f-1 -a1'
+if [ "$(uci -q get ytbypass.main.byedpi_opts)" = "$OLD_DEFAULT" ]; then
+	uci set ytbypass.main.byedpi_opts="$NEW_DEFAULT" && uci commit ytbypass
+	say "Стратегия по умолчанию обновлена"
+fi
 /etc/init.d/ytbypass enable
 
 if [ "$NOSTART" = 1 ]; then
@@ -860,7 +1520,7 @@ echo "  IP youtube.com в наборе после тестового резол�
 
 cat <<MSG
 
-Готово. Веб-интерфейс: LuCI -> Службы -> YouTube Bypass.
+Готово. Веб-интерфейс: LuCI -> Службы -> YouTube Bypass (вкладки «Настройки» и «Тест стратегий»).
 Проверка: откройте YouTube на устройстве в LAN (DNS — роутер), затем на роутере:
   ytbypass status       состояние
   ytbypass list         IP, попавшие в наборы
