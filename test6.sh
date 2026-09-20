@@ -187,7 +187,7 @@ config ytbypass 'main'
 	# локальный порт SOCKS5 у ByeDPI (отдельный экземпляр, штатный byedpi не трогаем)
 	option byedpi_port '1088'
 	# стратегия обхода DPI, подбирается под провайдера (вкладка «Тест стратегий»)
-	option byedpi_opts '-o1 -r-5+se -a1 -At,r,s -d1 -n "google.com" -Qr -f-1 -a1'
+	option byedpi_opts '-d1 -d3+s -s6+s -d9+s -s12+s -d15+s -s20+s -d25+s -s30+s -d35+s -r1+s -S -a1 -As -d1 -d3+s -s6+s -d9+s -s12+s -d15+s -s20+s -d25+s -s30+s -d35+s -S -a1'
 	# заворачивать IPv6-адреса YouTube (0 — только IPv4)
 	option ipv6 '1'
 	# QUIC (UDP/443): block — отбрасывать, чтобы клиент откатился на TCP; proxy — гнать через ByeDPI
@@ -836,7 +836,7 @@ cmd_status() {
 }
 
 cmd_log() {
-	[ -f "$LOGF" ] && tail -n 200 "$LOGF" | grep -v '^__DONE__'
+	[ -f "$LOGF" ] && tail -n 400 "$LOGF" | grep -v '^__DONE__'
 	return 0
 }
 
@@ -1155,6 +1155,7 @@ YTB_FILE_END_7f3a9c
 -d1 -s3+s -a1
 -o3 -d7 -a1
 -d7 -s2 -a1
+-o1 -a1 -r-5+se
 YTB_FILE_END_7f3a9c
 	chmod 644 "$R/usr/share/ytbypass/strategies.txt"
 	mkdir -p "$R/usr/share/ytbypass"
@@ -1205,14 +1206,11 @@ YTB_FILE_END_7f3a9c
 'require poll';
 'require ui';
 'require dom';
+'require uci';
+'require ytbypass.presets as presets';
 
 var CTL = '/usr/bin/ytbypass';
 var INIT = '/etc/init.d/ytbypass';
-
-/* Стратегии ByeDPI. Под своего провайдера лучше подобрать на вкладке «Тест стратегий». */
-var PRESET_DEFAULT = '-o1 -r-5+se -a1 -At,r,s -d1 -n "google.com" -Qr -f-1 -a1';
-var PRESET_2 = '--split 1 --disorder 3+s --mod-http=h,d --auto=torst --tlsrec 1+s';
-var PRESET_3 = '-s1 -d1 -r1+s -a1 -Ar -o1 -a1 -At -f-1 -r1+s -a1';
 
 function getStatus() {
 	return fs.exec_direct(CTL, [ 'status' ], 'json').catch(function() { return null; });
@@ -1282,18 +1280,45 @@ return view.extend({
 		o.rmempty = false;
 		o.default = '1';
 
-		o = s.option(form.Value, 'byedpi_opts', _('Стратегия ByeDPI'),
-			_('Параметры командной строки ciadpi. Можно выбрать готовую или вписать свою. ' +
-			  'Стратегия зависит от провайдера — лучшую найдёт вкладка «Тест стратегий».'));
-		o.value(PRESET_DEFAULT, _('По умолчанию'));
-		o.value(PRESET_2, _('Запасная 1: split + disorder + tlsrec'));
-		o.value(PRESET_3, _('Запасная 2: split/disorder + fake (issue #357 ByeDPI)'));
-		o.default = PRESET_DEFAULT;
+		/* Список с короткими именами — удобно выбирать; полная команда видна в поле ниже */
+		o = s.option(form.ListValue, '_preset', _('Готовая стратегия'),
+			_('Выберите вариант — его параметры подставятся в поле ниже. ' +
+			  'Лучшую под вашего провайдера найдёт вкладка «Тест стратегий».'));
+		presets.list.forEach(function(p) { o.value(p.id, p.name); });
+		o.value('custom', _('Своя (редактируется в поле ниже)'));
+		o.cfgvalue = function(section_id) {
+			var p = presets.find(uci.get('ytbypass', section_id, 'byedpi_opts'));
+			return p ? p.id : 'custom';
+		};
+		o.write = function() {};   /* служебное поле, в UCI не пишется */
+		o.remove = function() {};
+		o.onchange = function(ev, section_id, value) {
+			var p = presets.byId(value);
+			var ta = this.section.getUIElement(section_id, 'byedpi_opts');
+			if (p && ta) ta.setValue(p.opts);
+		};
+
+		o = s.option(form.TextValue, 'byedpi_opts', _('Параметры ByeDPI (ciadpi)'),
+			_('Командная строка ciadpi одной строкой, переносы для удобства чтения — на экране. ' +
+			  'Можно править вручную; список выше тогда переключится на «Своя».'));
+		o.rows = 5;
+		o.wrap = true;
+		o.monospace = true;
+		o.default = presets.DEFAULT;
 		o.rmempty = false;
 		o.validate = function(section_id, value) {
-			if (/[\r\n]/.test(value))
-				return _('Параметры должны быть в одной строке');
+			if (!presets.norm(value))
+				return _('Параметры не могут быть пустыми');
 			return true;
+		};
+		/* пробелы и переводы строк схлопываем, кавычки (-n "google.com") сохраняем */
+		o.write = function(section_id, value) {
+			return form.TextValue.prototype.write.call(this, section_id, presets.norm(value));
+		};
+		o.onchange = function(ev, section_id, value) {
+			var p = presets.find(value);
+			var sel = this.section.getUIElement(section_id, '_preset');
+			if (sel) sel.setValue(p ? p.id : 'custom');
 		};
 
 		o = s.option(form.Value, 'byedpi_port', _('Порт SOCKS5 ByeDPI'),
@@ -1373,8 +1398,17 @@ YTB_FILE_END_7f3a9c
 'require ui';
 'require uci';
 'require dom';
+'require ytbypass.presets as presets';
 
 var CTL = '/usr/bin/ytbypass';
+
+/* палитра «терминала» на чёрном фоне */
+var C = {
+	fg: '#d0d0d0', green: '#4ade80', orange: '#fbbf24', red: '#f87171',
+	cyan: '#22d3ee', yellow: '#facc15', gray: '#8b949e', white: '#ffffff'
+};
+var TERM = 'background:#000;color:' + C.fg + ';font-family:monospace;font-size:13px;line-height:1.5;' +
+	'border:1px solid #222;border-radius:4px;padding:10px 12px;';
 
 /* Вызов ytbypass с JSON-ответом */
 function callJson(args) {
@@ -1391,11 +1425,6 @@ function callText(args) {
 		.catch(function() { return ''; });
 }
 
-/* Тот же алгоритм, что и в бэкенде: без кавычек, пробелы схлопнуты */
-function cleanOpts(s) {
-	return String(s || '').replace(/["']/g, '').replace(/\s+/g, ' ').trim();
-}
-
 /* «стратегия → ok/total»; контрольная строка отдельно */
 function parseResults(text) {
 	var rows = [], control = null;
@@ -1410,20 +1439,85 @@ function parseResults(text) {
 	return { control: control, rows: rows };
 }
 
+/* зелёный — все домены; оранжевый — лучше контрольного замера; красный — не лучше */
 function scoreColor(ok, total, controlOk) {
-	if (ok === total) return '#2e9c4b';
-	if (controlOk !== null && ok > controlOk) return '#d68910';
-	return '#c0392b';
+	if (ok === total) return C.green;
+	if (controlOk !== null && controlOk !== undefined) return ok > controlOk ? C.orange : C.red;
+	return ok > 0 ? C.orange : C.red;
 }
 
-function badge(text, color) {
+function sp(text, color, bold) {
+	return E('span', { 'style': 'color:' + color + (bold ? ';font-weight:bold' : '') }, text);
+}
+
+function chip(text, color) {
 	return E('span', {
-		'style': 'display:inline-block;padding:2px 8px;border-radius:3px;color:#fff;background:' + color
+		'style': 'display:inline-block;min-width:4.4em;text-align:center;padding:1px 7px;border-radius:3px;' +
+			'font-weight:bold;color:#000;background:' + color
 	}, text);
 }
 
 function toast(ok, text) {
 	ui.addNotification(null, E('p', text), ok ? 'info' : 'danger');
+}
+
+/* ---- цветной вывод лога ---- */
+function logLine(line, ctx) {
+	var m, kids;
+
+	if ((m = line.match(/^==> \[(\d+)\/(\d+)\] (.*)$/))) {
+		var p = presets.find(m[3]);
+		kids = [ sp('==> ', C.cyan, true), sp('[' + m[1] + '/' + m[2] + '] ', C.yellow, true), sp(m[3], C.white) ];
+		if (p) kids.push(sp('   ← ' + p.name, C.gray));
+	}
+	else if ((m = line.match(/^==> Результат: (\d+)\/(\d+)$/))) {
+		ctx.ctrl = +m[1];
+		kids = [ sp('==> ', C.cyan, true), sp('Результат контрольного замера: ', C.gray), sp(m[1] + '/' + m[2], C.white, true) ];
+	}
+	else if ((m = line.match(/^(\s+)результат: (\d+)\/(\d+)$/))) {
+		kids = [ sp(m[1] + 'результат: ', C.gray), sp(m[2] + '/' + m[3], scoreColor(+m[2], +m[3], ctx.ctrl), true) ];
+	}
+	else if (/^\s+пропуск:/.test(line)) {
+		kids = [ sp(line, C.yellow) ];
+	}
+	else if ((m = line.match(/^==> Лучшая стратегия: (.*?)\s*→\s*(\d+)\/(\d+)\s*$/))) {
+		kids = [ sp('==> Лучшая стратегия: ', C.green, true), sp(m[1] + ' ', C.white),
+			sp('→ ', C.gray), sp(m[2] + '/' + m[3], scoreColor(+m[2], +m[3], ctx.ctrl), true) ];
+	}
+	else if (/^==> Тест завершён/.test(line)) {
+		kids = [ sp(line, C.green, true) ];
+	}
+	else if (/^==> Тест остановлен/.test(line) || /^==> Пропущено/.test(line)) {
+		kids = [ sp(line, C.yellow, true) ];
+	}
+	else if (/^==> Результаты$/.test(line)) {
+		kids = [ sp(line, C.cyan, true) ];
+	}
+	else if ((m = line.match(/^(.*?)\s*→\s*(\d+)\/(\d+)\s*$/))) {
+		if (/^Контрольный тест/.test(m[1])) {
+			ctx.ctrl = +m[2];
+			kids = [ sp(m[1] + ' → ', C.gray), sp(m[2] + '/' + m[3], C.white, true) ];
+		} else {
+			kids = [ sp(m[1] + ' ', C.fg), sp('→ ', C.gray),
+				sp(m[2] + '/' + m[3], scoreColor(+m[2], +m[3], ctx.ctrl), true) ];
+		}
+	}
+	else if (/^ОШИБКА/.test(line)) {
+		kids = [ sp(line, C.red, true) ];
+	}
+	else if (/^==> /.test(line)) {
+		kids = [ sp('==> ', C.cyan, true), sp(line.slice(4), C.fg) ];
+	}
+	else {
+		kids = [ sp(line, C.fg) ];
+	}
+	return E('div', {}, kids);
+}
+
+function renderLog(el, text) {
+	var ctx = { ctrl: null };
+	dom.content(el, (text || '').split('\n').filter(function(l) { return l !== ''; })
+		.map(function(l) { return logLine(l, ctx); }));
 }
 
 return view.extend({
@@ -1434,14 +1528,14 @@ return view.extend({
 	render: function(data) {
 		var status = data[0] || {};
 		var running = status.running === true;
-		var curOpts = cleanOpts(uci.get('ytbypass', 'main', 'byedpi_opts'));
+		var curOpts = presets.clean(uci.get('ytbypass', 'main', 'byedpi_opts'));
 		var wasRunning = running;
 
 		var infoEl = E('p', { 'class': 'cbi-section-descr' });
 		var buttonsEl = E('div', { 'style': 'margin:8px 0' });
-		var logEl = E('pre', {
-			'style': 'display:none;max-height:340px;overflow:auto;white-space:pre-wrap;margin-top:10px;padding:8px;' +
-				'border:1px solid rgba(128,128,128,.4);border-radius:4px'
+		var logEl = E('div', {
+			'style': TERM + 'display:none;max-height:380px;overflow:auto;white-space:pre-wrap;' +
+				'word-break:break-word;margin-top:10px'
 		});
 		var resultsEl = E('div');
 
@@ -1463,7 +1557,9 @@ return view.extend({
 				els.push(E('em', { 'style': 'color:#c0392b' },
 					_('Не установлен curl — он нужен для теста: apk add curl (или opkg install curl).')));
 			} else if (running) {
-				els.push(badge(_('тест выполняется'), '#2e9c4b'));
+				els.push(E('span', {
+					'style': 'display:inline-block;padding:2px 8px;border-radius:3px;color:#000;background:' + C.green
+				}, _('тест выполняется')));
 				els.push(' ');
 				els.push(E('button', { 'class': 'cbi-button cbi-button-remove', 'click': doStop },
 					_('Остановить тест')));
@@ -1488,38 +1584,40 @@ return view.extend({
 			}
 
 			var controlOk = res.control ? res.control.ok : null;
-			var head = [];
-			if (res.control)
-				head.push(E('p', {}, [
-					_('Контрольный замер (без обхода): '),
-					badge(res.control.ok + '/' + res.control.total, '#7f8c8d')
-				]));
-			head.push(E('p', { 'class': 'cbi-section-descr' },
-				_('Зелёный — доступны все домены, оранжевый — лучше контрольного замера, красный — не лучше. ' +
-				  'Чем выше результат, тем лучше; при равенстве выше стоит стратегия, что раньше в списке.')));
+			var head = E('div', { 'style': 'margin-bottom:8px' }, [
+				res.control ? [ sp(_('Контрольный замер (без обхода): '), C.gray),
+					chip(res.control.ok + '/' + res.control.total, C.gray), E('br') ] : '',
+				sp(_('Цвет: '), C.gray), chip(_('все домены'), C.green), ' ',
+				chip(_('лучше контроля'), C.orange), ' ', chip(_('не лучше'), C.red),
+				E('span', { 'style': 'color:' + C.gray },
+					_('   При равенстве выше стоит стратегия, что раньше в списке.'))
+			]);
 
 			var rows = res.rows.map(function(r, i) {
-				var isCur = cleanOpts(r.opts) === curOpts;
-				return E('tr', { 'class': 'tr' }, [
-					E('td', { 'class': 'td', 'style': 'width:2em;vertical-align:top' }, String(i + 1)),
-					E('td', { 'class': 'td', 'style': 'vertical-align:top' }, [
-						E('code', { 'style': 'word-break:break-all;white-space:normal' }, r.opts),
-						isCur ? E('span', { 'style': 'margin-left:6px;opacity:.7' }, _('(текущая)')) : ''
-					]),
-					E('td', { 'class': 'td', 'style': 'white-space:nowrap;vertical-align:top' },
-						badge(r.ok + '/' + r.total, scoreColor(r.ok, r.total, controlOk))),
-					E('td', { 'class': 'td', 'style': 'white-space:nowrap;vertical-align:top' },
-						isCur ? '' : E('button', {
-							'class': 'cbi-button cbi-button-apply',
-							'click': function() { doApply(r.opts); }
-						}, _('Применить')))
+				var p = presets.find(r.opts);
+				var isCur = presets.clean(r.opts) === curOpts;
+				var body = [];
+				if (p || isCur)
+					body.push(E('div', { 'style': 'color:' + C.gray + ';margin-bottom:2px' }, [
+						p ? p.name : '',
+						isCur ? sp((p ? '  ' : '') + _('(текущая)'), C.cyan, true) : ''
+					]));
+				body.push(E('div', { 'style': 'color:' + C.white + ';white-space:pre-wrap;word-break:break-word' }, r.opts));
+
+				return E('div', {
+					'style': 'display:flex;gap:10px;align-items:flex-start;padding:7px 0;border-top:1px solid #1e1e1e'
+				}, [
+					E('div', { 'style': 'width:2em;color:' + C.gray }, String(i + 1)),
+					E('div', {}, chip(r.ok + '/' + r.total, scoreColor(r.ok, r.total, controlOk))),
+					E('div', { 'style': 'flex:1;min-width:0' }, body),
+					E('div', {}, isCur ? '' : E('button', {
+						'class': 'cbi-button cbi-button-apply',
+						'click': function() { doApply(r.opts); }
+					}, _('Применить')))
 				]);
 			});
 
-			dom.content(resultsEl, [
-				E('div', {}, head),
-				rows.length ? E('table', { 'class': 'table' }, rows) : ''
-			]);
+			dom.content(resultsEl, E('div', { 'style': TERM }, [ head, rows ]));
 		}
 
 		function refreshResults() {
@@ -1530,7 +1628,7 @@ return view.extend({
 			return callText([ 'test', 'log' ]).then(function(t) {
 				var atBottom = logEl.scrollTop + logEl.clientHeight >= logEl.scrollHeight - 20;
 				logEl.style.display = t ? '' : 'none';
-				logEl.textContent = t;
+				renderLog(logEl, t);
 				if (atBottom) logEl.scrollTop = logEl.scrollHeight;
 			});
 		}
@@ -1566,10 +1664,11 @@ return view.extend({
 		}
 
 		function doApply(opts) {
-			if (!confirm(_('Применить стратегию и перезапустить службу?\n\n') + opts)) return;
+			var p = presets.find(opts);
+			if (!confirm(_('Применить стратегию и перезапустить службу?\n\n') + (p ? p.name + '\n' : '') + opts)) return;
 			callJson([ 'set-strategy', opts ]).then(function(res) {
 				if (res.error) { toast(false, res.error); return; }
-				curOpts = cleanOpts(opts);
+				curOpts = presets.clean(opts);
 				toast(true, _('Стратегия применена, служба перезапущена.'));
 				refreshResults();
 			});
@@ -1611,6 +1710,84 @@ return view.extend({
 });
 YTB_FILE_END_7f3a9c
 	chmod 644 "$R/www/luci-static/resources/view/ytbypass/test.js"
+	mkdir -p "$R/www/luci-static/resources/ytbypass"
+	cat > "$R/www/luci-static/resources/ytbypass/presets.js" <<'YTB_FILE_END_7f3a9c'
+'use strict';
+'require baseclass';
+
+/*
+ * Готовые стратегии ByeDPI (параметры ciadpi).
+ * name — короткое имя для списка, чтобы не читать длинную командную строку;
+ * опции подставляются в поле «Параметры ByeDPI».
+ * Под своего провайдера лучшую стратегию подбирает вкладка «Тест стратегий».
+ */
+var LIST = [
+	{
+		id: 'p1',
+		name: '1 · Каскад disorder/split + tlsrec + md5sig, авто-режим -As (по умолчанию)',
+		opts: '-d1 -d3+s -s6+s -d9+s -s12+s -d15+s -s20+s -d25+s -s30+s -d35+s -r1+s -S -a1 -As -d1 -d3+s -s6+s -d9+s -s12+s -d15+s -s20+s -d25+s -s30+s -d35+s -S -a1'
+	},
+	{
+		id: 'p2',
+		name: '2 · Короткая: OOB + tlsrec у SNI',
+		opts: '-o1 -a1 -r-5+se'
+	},
+	{
+		id: 'p3',
+		name: '3 · Fake SNI google.com + disorder/OOB (TTL 4)',
+		opts: '-n "google.com" -Qr -d5+sm -f3+sm -o2 -t4 -a1'
+	},
+	{
+		id: 'p4',
+		name: '4 · Каскад disorder/split без tlsrec и авто-режима',
+		opts: '-d1 -s1+s -d3+s -s6+s -d9+s -s12+s -d15+s -s20+s -d25+s -s30+s -d35+s -a1'
+	},
+	{
+		id: 'p5',
+		name: '5 · Fake + disoob + tlsrec (TTL 5 и 15)',
+		opts: '-f1 -t5 -n "google.com" -q3+h -Qr -f2 -q1 -r1+s -t15 -q1 -o2 -a1'
+	},
+	{
+		id: 'p6',
+		name: '6 · OOB + tlsrec + авто-режим -At,r,s, fake google.com',
+		opts: '-o1 -r-5+se -a1 -At,r,s -d1 -n "google.com" -Qr -f-1 -a1'
+	}
+];
+
+/* для сравнения: без кавычек, пробелы схлопнуты (так же, как в бэкенде) */
+function clean(s) {
+	return String(s == null ? '' : s).replace(/["']/g, '').replace(/\s+/g, ' ').trim();
+}
+
+/* для хранения: только пробелы, кавычки остаются как ввёл пользователь */
+function norm(s) {
+	return String(s == null ? '' : s).replace(/\s+/g, ' ').trim();
+}
+
+function find(opts) {
+	var c = clean(opts);
+	if (!c) return null;
+	for (var i = 0; i < LIST.length; i++)
+		if (clean(LIST[i].opts) === c) return LIST[i];
+	return null;
+}
+
+function byId(id) {
+	for (var i = 0; i < LIST.length; i++)
+		if (LIST[i].id === id) return LIST[i];
+	return null;
+}
+
+return baseclass.extend({
+	list: LIST,
+	DEFAULT: LIST[0].opts,
+	clean: clean,
+	norm: norm,
+	find: find,
+	byId: byId
+});
+YTB_FILE_END_7f3a9c
+	chmod 644 "$R/www/luci-static/resources/ytbypass/presets.js"
 }
 
 # ================================================================ установка
@@ -1643,10 +1820,12 @@ install_payload
 rm -rf /tmp/luci-indexcache* /tmp/luci-modulecache
 /etc/init.d/rpcd reload >/dev/null 2>&1
 
-# стратегия по умолчанию сменилась: обновляем, только если стоял прежний дефолт (пользовательскую не трогаем)
-OLD_DEFAULT='--split 1 --disorder 3+s --mod-http=h,d --auto=torst --tlsrec 1+s'
-NEW_DEFAULT='-o1 -r-5+se -a1 -At,r,s -d1 -n "google.com" -Qr -f-1 -a1'
-if [ "$(uci -q get ytbypass.main.byedpi_opts)" = "$OLD_DEFAULT" ]; then
+# стратегия по умолчанию сменилась: обновляем, только если стоял один из прежних дефолтов (свою не трогаем)
+OLD_DEFAULT_1='--split 1 --disorder 3+s --mod-http=h,d --auto=torst --tlsrec 1+s'
+OLD_DEFAULT_2='-o1 -r-5+se -a1 -At,r,s -d1 -n "google.com" -Qr -f-1 -a1'
+NEW_DEFAULT='-d1 -d3+s -s6+s -d9+s -s12+s -d15+s -s20+s -d25+s -s30+s -d35+s -r1+s -S -a1 -As -d1 -d3+s -s6+s -d9+s -s12+s -d15+s -s20+s -d25+s -s30+s -d35+s -S -a1'
+CUR_OPTS=$(uci -q get ytbypass.main.byedpi_opts)
+if [ "$CUR_OPTS" = "$OLD_DEFAULT_1" ] || [ "$CUR_OPTS" = "$OLD_DEFAULT_2" ]; then
 	uci set ytbypass.main.byedpi_opts="$NEW_DEFAULT" && uci commit ytbypass
 	say "Стратегия по умолчанию обновлена"
 fi
