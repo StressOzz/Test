@@ -370,6 +370,7 @@ YTB_FILE_END_7f3a9c
 #   ytbypass status   — состояние в JSON
 #   ytbypass flush    — очистить наборы IP (клиентам нужно заново резолвить домены)
 #   ytbypass list     — показать IP в наборах
+#   ytbypass diag [IP-клиента] — диагностика (для клиента: куда идёт его DNS и :443-трафик)
 #   ytbypass test …   — тест стратегий ByeDPI (start|stop|status|log|results|clear)
 #   ytbypass set-strategy "<параметры ciadpi>" — записать стратегию и перезапустить службу
 
@@ -419,6 +420,80 @@ list)
 	nft list set inet "$NFT_TABLE" yt4 2>/dev/null
 	nft list set inet "$NFT_TABLE" yt6 2>/dev/null
 	;;
+diag)
+	client="$2"
+	echo "=== YouTube Bypass: диагностика ==="
+	"$0" status
+	echo
+	echo "--- счётчики nft (растут, когда трафик попадает под правила) ---"
+	{ nft list chain inet "$NFT_TABLE" prerouting; nft list chain inet "$NFT_TABLE" forward; } 2>/dev/null \
+		| grep counter | sed 's/^[[:space:]]*//'
+	echo
+	echo "--- какие DNS раздаются клиентам по DHCP ---"
+	uci -q show dhcp | grep -E 'dhcp_option|\.dns=' || echo "своих dhcp_option/dns нет (клиенты получают DNS роутера)"
+	echo "--- IPv6: маршрут по умолчанию: $(ip -6 route show default 2>/dev/null | head -n 1)"
+	if [ -n "$client" ]; then
+		CT="${YTB_CT:-/proc/net/nf_conntrack}"
+		lan_ip=$(uci -q get network.lan.ipaddr | sed 's#/.*##')
+		[ -n "$lan_ip" ] || lan_ip=$(ip -4 addr show br-lan 2>/dev/null | sed -n 's/.*inet \([0-9.]*\).*/\1/p' | head -n 1)
+		# все адреса устройства: IPv4 + его глобальные IPv6 (по MAC)
+		mac=$(ip neigh show 2>/dev/null | awk -v ip="$client" '$1==ip {for(i=1;i<=NF;i++) if($i=="lladdr") print $(i+1)}' | head -n 1)
+		ips="$client"
+		[ -n "$mac" ] && ips="$ips $(ip -6 neigh show 2>/dev/null | awk -v m="$mac" 'tolower($0) ~ tolower(m) {print $1}' | grep -v '^fe80' | tr '\n' ' ')"
+		echo
+		echo "=== клиент: $ips (MAC: ${mac:-не найден}), роутер: ${lan_ip:-?} ==="
+		out="/tmp/ytb-diag.$$"
+		awk -v ips=" $ips " '
+		{
+			proto=$3; src=""; dst=""; dport=""; mark=0
+			for (i=1;i<=NF;i++) {
+				if (src=="" && $i ~ /^src=/) src=substr($i,5)
+				else if (dst=="" && $i ~ /^dst=/) dst=substr($i,5)
+				else if (dport=="" && $i ~ /^dport=/) dport=substr($i,7)
+				else if ($i ~ /^mark=/) mark=substr($i,6)+0
+			}
+			if (index(ips, " " src " ") == 0) next
+			if (dport=="53" || dport=="853") c["DNS " proto " " dst ":" dport]++
+			else if (dport=="443") c["443 " proto " " ((int(mark/65536)%2==1) ? "tunnel" : "direct") " " dst]++
+		}
+		END { for (k in c) print k, c[k] }' "$CT" 2>/dev/null | sort > "$out"
+
+		echo "--- DNS-запросы клиента (куда он реально их шлёт) ---"
+		if grep -q '^DNS' "$out"; then
+			grep '^DNS' "$out" | while read -r _ proto target n; do
+				host="${target%:*}"; port="${target##*:}"
+				if [ "$port" = "853" ]; then who="DNS-over-TLS (Частный DNS) — МИМО роутера"
+				elif [ "$host" = "$lan_ip" ]; then who="роутер (ок)"
+				else who="НЕ роутер — набор не заполнится"; fi
+				echo "  $proto $target x$n — $who"
+			done
+		else
+			echo "  записей нет (UDP/53 живёт в conntrack ~30 с): откройте YouTube на телефоне и запустите diag сразу"
+		fi
+
+		echo "--- соединения клиента на :443 ---"
+		for pr in tcp udp; do
+			t=$(awk -v p="$pr" '$1=="443" && $2==p && $3=="tunnel" {s+=$NF} END{print s+0}' "$out")
+			d=$(awk -v p="$pr" '$1=="443" && $2==p && $3=="direct" {s+=$NF} END{print s+0}' "$out")
+			echo "  $pr: через туннель — $t, напрямую — $d"
+		done
+		echo "--- топ прямых TCP/443 (нет ли среди них YouTube/Google?) ---"
+		grep '^443 tcp direct' "$out" | sort -k5,5nr | head -n 8 | while read -r _ _ _ dst n; do
+			fam=yt4; case "$dst" in *:*) fam=yt6 ;; esac
+			if nft get element inet "$NFT_TABLE" "$fam" "{ $dst }" >/dev/null 2>&1; then
+				st="в наборе, но трафик не помечен"
+			else
+				st="не в наборе"
+			fi
+			echo "  $dst x$n — $st"
+		done
+		echo "--- топ UDP/443 (QUIC) ---"
+		grep '^443 udp' "$out" | sort -k5,5nr | head -n 5 | while read -r _ _ kind dst n; do
+			echo "  $dst x$n ($kind)"
+		done
+		rm -f "$out"
+	fi
+	;;
 test)
 	shift
 	exec /usr/libexec/ytbypass/test.sh "$@"
@@ -434,7 +509,7 @@ set-strategy)
 	echo '{"ok":true}'
 	;;
 *)
-	echo "usage: ytbypass status|flush|list|test|set-strategy" >&2
+	echo "usage: ytbypass status|flush|list|diag|test|set-strategy" >&2
 	exit 1
 	;;
 esac
@@ -506,7 +581,7 @@ rules_del() {
 	ip -6 route del default dev "$TUN" table "$TABLE" 2>/dev/null
 }
 
-set_mark_stmt="ct mark set ct mark | $MARK meta mark set meta mark | $MARK"
+set_mark_stmt="counter ct mark set ct mark | $MARK meta mark set meta mark | $MARK"
 
 gen_ruleset() {
 	cat <<NFT
@@ -539,8 +614,8 @@ NFT
 		cat <<NFT
 	chain forward {
 		type filter hook forward priority filter - 10; policy accept;
-		udp dport 443 ip daddr @yt4 reject
-		udp dport 443 ip6 daddr @yt6 reject
+		udp dport 443 ip daddr @yt4 counter reject
+		udp dport 443 ip6 daddr @yt6 counter reject
 	}
 NFT
 	fi
