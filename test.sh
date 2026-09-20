@@ -1,6 +1,6 @@
 #!/bin/sh
 # ByeTube for LuCI installer
-# Version: 1.01
+# Version: 1.00
 
 GREEN="\033[1;32m"; MAGENTA="\033[1;35m"; NC="\033[0m"
 
@@ -349,6 +349,7 @@ BT_FILE_END_7f3a9c
 . "${BT_FUNCTIONS:-/lib/functions.sh}"
 . "${BT_HOME:-/opt/ByeTube}/lib/common.sh"
 . "$BT_HOME/lib/lists.sh"
+. "$BT_HOME/lib/update.sh"
 
 svc_running() {
 	ubus call service list '{"name":"byetube"}' 2>/dev/null \
@@ -478,6 +479,10 @@ ips)
 list)
 	shift
 	cmd_list "$@"
+	;;
+update)
+	shift
+	cmd_update "$@"
 	;;
 diag)
 	arg="$2"; secs="${3:-20}"
@@ -659,7 +664,7 @@ version)
 	echo "$BT_VERSION"
 	;;
 *)
-	echo "usage: byetube status|config|service|flush|ips|list|diag|test|set-strategy|version" >&2
+	echo "usage: byetube status|config|service|flush|ips|list|update|diag|test|set-strategy|version" >&2
 	exit 1
 	;;
 esac
@@ -991,7 +996,8 @@ BT_TMP="${BT_TMP:-/tmp/ByeTube}"
 BT_FUNCTIONS="${BT_FUNCTIONS:-/lib/functions.sh}"
 BT_DEFAULT="$BT_HOME/default"
 BT_CUSTOM="$BT_HOME/custom"
-BT_VERSION="1.01"
+BT_VERSION="1.00"
+BT_UPDATE_URL="${BT_UPDATE_URL:-https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ByeTube.sh}"
 
 TUN=byetube0
 MARK=0x10000
@@ -1637,6 +1643,98 @@ esac
 exit 0
 BT_FILE_END_7f3a9c
 	chmod 755 "$R/opt/ByeTube/lib/test.sh"
+	mkdir -p "$R/opt/ByeTube/lib"
+	cat > "$R/opt/ByeTube/lib/update.sh" <<'BT_FILE_END_7f3a9c'
+fetch_stdout() {
+	if command -v curl >/dev/null 2>&1; then
+		curl -fsSL --connect-timeout 5 --max-time "${3:-8}" ${2:+-r "$2"} "$1" 2>/dev/null
+	else
+		wget -q -T "${3:-8}" -U "Mozilla/5.0" -O - "$1" 2>/dev/null
+	fi
+}
+
+fetch_file() {
+	if command -v curl >/dev/null 2>&1; then
+		curl -fsSL --connect-timeout 10 --max-time 60 -o "$2" "$1" 2>/dev/null
+	else
+		wget -q -T 30 -U "Mozilla/5.0" -O "$2" "$1" 2>/dev/null
+	fi
+}
+
+remote_version() {
+	local line
+	line=$(fetch_stdout "$BT_UPDATE_URL" 0-400 8 | head -c 600 | grep -m1 '^# Version:')
+	[ -n "$line" ] || line=$(fetch_stdout "$BT_UPDATE_URL" "" 10 | head -c 2000 | grep -m1 '^# Version:')
+	printf '%s' "$line" | tr -d '\r' | sed 's/^# Version:[[:space:]]*//; s/[[:space:]]*$//'
+}
+
+ver_newer() {
+	case "$1$2" in ''|*[!0-9.]*) return 1 ;; esac
+	awk -v a="$1" -v b="$2" 'BEGIN { exit !(a + 0 > b + 0) }'
+}
+
+update_running() {
+	[ -f "$BT_TMP/update.pid" ] && kill -0 "$(cat "$BT_TMP/update.pid" 2>/dev/null)" 2>/dev/null
+}
+
+update_status() {
+	local latest upd=false
+	latest=$(remote_version)
+	ver_newer "$latest" "$BT_VERSION" && upd=true
+	printf '{"current":"%s","latest":"%s","update":%s}\n' "$(json_esc "$BT_VERSION")" "$(json_esc "$latest")" "$upd"
+}
+
+update_run() {
+	local tmp="$BT_TMP/update.sh" log="$BT_TMP/update.log"
+	if update_running; then
+		echo '{"started":true,"already_running":true}'
+		return 0
+	fi
+	bt_prepare
+	rm -f "$tmp"
+	if ! fetch_file "$BT_UPDATE_URL" "$tmp"; then
+		rm -f "$tmp"
+		echo '{"error":"Не удалось скачать установщик"}'
+		return 0
+	fi
+	if [ ! -s "$tmp" ]; then
+		rm -f "$tmp"
+		echo '{"error":"Скачался пустой файл"}'
+		return 0
+	fi
+	if ! head -c 300 "$tmp" | grep -q '^#!/bin/sh' || ! head -c 300 "$tmp" | grep -q '^# Version:'; then
+		rm -f "$tmp"
+		echo '{"error":"Скачанный файл не похож на установщик ByeTube"}'
+		return 0
+	fi
+	: > "$log"
+	( sh "$tmp" >>"$log" 2>&1; echo "__DONE__ $?" >>"$log"; rm -f "$tmp" ) >/dev/null 2>&1 </dev/null &
+	echo $! > "$BT_TMP/update.pid"
+	echo '{"started":true}'
+}
+
+update_state() {
+	local log="$BT_TMP/update.log" running=false done=false rc="" msg=""
+	update_running && running=true
+	if [ -f "$log" ]; then
+		rc=$(grep '^__DONE__' "$log" | tail -n 1 | awk '{print $2}')
+		[ -n "$rc" ] && done=true
+		msg=$(grep -v '^__DONE__' "$log" | grep -v '^[[:space:]]*$' | tail -n 1 | tr -d '\033' | sed 's/\[[0-9;]*m//g')
+	fi
+	printf '{"running":%s,"done":%s,"rc":"%s","message":"%s"}\n' "$running" "$done" "$rc" "$(json_esc "$msg")"
+}
+
+cmd_update() {
+	case "$1" in
+		status) update_status ;;
+		run)    update_run ;;
+		state)  update_state ;;
+		*)      echo '{"error":"неизвестное действие"}' ;;
+	esac
+	return 0
+}
+BT_FILE_END_7f3a9c
+	chmod 755 "$R/opt/ByeTube/lib/update.sh"
 	mkdir -p "$R/opt/ByeTube"
 	cat > "$R/opt/ByeTube/uninstall.sh" <<'BT_FILE_END_7f3a9c'
 #!/bin/sh
@@ -1995,7 +2093,10 @@ return baseclass.extend({
 	testStop: function() { return callJson([ 'test', 'stop' ]); },
 	testClear: function() { return callJson([ 'test', 'clear' ]); },
 	testLog: function() { return callText([ 'test', 'log' ]); },
-	testResults: function() { return callText([ 'test', 'results' ]); }
+	testResults: function() { return callText([ 'test', 'results' ]); },
+	updateStatus: function() { return callJson([ 'update', 'status' ]); },
+	updateRun: function() { return callJson([ 'update', 'run' ]); },
+	updateState: function() { return callJson([ 'update', 'state' ]); }
 });
 BT_FILE_END_7f3a9c
 	chmod 644 "$R/www/luci-static/resources/byetube/common.js"
@@ -2007,8 +2108,8 @@ BT_FILE_END_7f3a9c
 var LIST = [
 	{
 		id: 'p1',
-		label: 'Стратегия 1',
-		name: 'Стратегия 1',
+		label: 'Стратегия 1 (по умолчанию)',
+		name: 'Стратегия 1 (по умолчанию)',
 		opts: '-d1 -d3+s -s6+s -d9+s -s12+s -d15+s -s20+s -d25+s -s30+s -d35+s -r1+s -S -a1 -As -d1 -d3+s -s6+s -d9+s -s12+s -d15+s -s20+s -d25+s -s30+s -d35+s -S -a1'
 	},
 	{
@@ -2137,15 +2238,6 @@ function btn(label, cls, onclick) {
 	return E('button', { 'class': 'cbi-button' + (cls ? ' ' + cls : ''), 'click': onclick }, [ label ]);
 }
 
-function cmdNodes(text) {
-	var out = [];
-	String(text).split(' ').forEach(function(tok, i) {
-		if (i) out.push(' ');
-		out.push(E('span', { 'class': 'bt-tok' }, [ tok ]));
-	});
-	return out;
-}
-
 function hint(text) {
 	return E('p', { 'class': 'zm-hint' }, [ text ]);
 }
@@ -2205,6 +2297,74 @@ return view.extend({
 
 		function isWorking() {
 			return !!(st.enabled && st.byedpi && st.hev && st.tun && st.nft && st.rule && st.route && st.dns && st.fw);
+		}
+
+		var update = null;
+		var updateBusy = false;
+		var updateEl = E('div', {});
+
+		function pollUpdate() {
+			var fails = 0, tries = 0, finished = false;
+			var timer = setInterval(function() {
+				if (finished) return;
+				tries++;
+				bt.updateState().then(function(s) {
+					if (finished) return;
+					if (s.error) fails++;
+					else fails = 0;
+					if (!s.error && s.done) {
+						finished = true;
+						clearInterval(timer);
+						updateBusy = false;
+						if (s.rc === '0') {
+							bt.toast('ByeTube обновлён — страница перезагружается', 'info');
+							setTimeout(function() { location.reload(); }, 1500);
+						} else {
+							bt.toast('Обновление не удалось' + (s.message ? ': ' + s.message : ''), 'error', 20000);
+						}
+					} else if (fails >= 10 || tries > 150) {
+						finished = true;
+						clearInterval(timer);
+						updateBusy = false;
+						bt.toast('Не удалось дождаться конца обновления — обновите страницу (F5) и проверьте версию', 'warning', 15000);
+					}
+				});
+			}, 2000);
+		}
+
+		function doUpdate() {
+			if (updateBusy) {
+				bt.toast('Дождитесь завершения текущей операции', 'warning');
+				return;
+			}
+			updateBusy = true;
+			bt.toast('Обновление запущено — страница перезагрузится автоматически', 'warning', 30000);
+			bt.updateRun().then(function(res) {
+				if (res.error) {
+					updateBusy = false;
+					bt.toast(res.error, 'error');
+					return;
+				}
+				pollUpdate();
+			});
+		}
+
+		function renderUpdate() {
+			fill(updateEl, []);
+			if (!update || !update.update) return;
+			updateEl.appendChild(E('div', { 'class': 'zm-refresh-banner zm-show', 'style': 'margin-bottom:14px' }, [
+				E('span', {}, [ 'Доступна новая версия ByeTube: ' + update.latest + ' (у вас установлена ' + update.current + ').' ]),
+				btn('Обновить', 'cbi-button-positive', doUpdate)
+			]));
+		}
+
+		function checkUpdate() {
+			bt.updateStatus().then(function(r) {
+				if (!r || r.error) return;
+				update = r;
+				renderUpdate();
+				renderMain();
+			});
 		}
 
 		var portDirty = false;
@@ -2281,6 +2441,9 @@ return view.extend({
 				: bt.badge(st.dns, 'домены загружены', 'нет')));
 			items.push(row('Firewall forward', bt.badge(st.fw, 'разрешён', 'нет')));
 			items.push(row('IP в наборах', E('span', {}, [ 'IPv4: ' + (st.ips4 || 0) + (st.ipv6 ? ', IPv6: ' + (st.ips6 || 0) : '') ])));
+			var verKids = [ 'v' + (st.version || '?') ];
+			if (update && update.latest && !update.update) verKids.push(E('span', { 'style': 'margin-left:10px' }, [ bt.badge(true, 'актуальная', '') ]));
+			items.push(row('Версия', E('span', {}, verKids)));
 			var half = Math.ceil(items.length / 2);
 			var kids = [ E('div', { 'class': 'bt-cols' }, [
 				E('div', { 'class': 'bt-col' }, items.slice(0, half)),
@@ -2372,9 +2535,9 @@ return view.extend({
 		function renderStrategy() {
 			var cur = currentPreset();
 			fill(bannerEl, cfg.byedpi_opts
-				? [ E('div', { 'class': 'bt-current-label' }, [ 'Сейчас применено' ]), E('div', { 'class': 'bt-current-cmd' }, cmdNodes(cfg.byedpi_opts)) ]
+				? [ E('span', {}, [ 'Сейчас применено: ' ]), E('b', {}, [ cur ? cur.name : 'своя стратегия' ]) ]
 				: [ E('span', {}, [ 'Стратегия ещё не выбрана' ]) ]);
-			bannerEl.className = 'zm-current-banner bt-current' + (cfg.byedpi_opts ? '' : ' zm-current-empty');
+			bannerEl.className = 'zm-current-banner' + (cfg.byedpi_opts ? '' : ' zm-current-empty');
 
 			fill(presetsCard, [
 				E('h3', {}, [ 'Готовые стратегии' ]),
@@ -2383,6 +2546,7 @@ return view.extend({
 						setStrategy(p.opts, p.label);
 					}, p.name + '\n' + p.opts);
 				})),
+				cfg.byedpi_opts ? E('div', { 'class': 'bt-cmd-line' }, [ cfg.byedpi_opts ]) : '',
 				hint('Стратегия зависит от провайдера — лучшую под вашего провайдера найдёт вкладка «Тест стратегий».')
 			]);
 		}
@@ -2558,12 +2722,23 @@ return view.extend({
 		function renderResults(text) {
 			resultsText = text || '';
 			var res = bt.parseResults(resultsText);
-			if (!res.rows.length) {
+			if (!res.rows.length && !res.control) {
 				fill(testResults, [ E('h3', {}, [ 'Результаты' ]), hint(running ? 'Тест выполняется…' : 'Пока нет результатов — запустите тест.') ]);
 				return;
 			}
 			var controlOk = res.control ? res.control.ok : null;
 			var curClean = presets.clean(cfg.byedpi_opts);
+
+			var legend = E('div', { 'class': 'bt-legend' }, []);
+			if (res.control) {
+				legend.appendChild(document.createTextNode('Контрольный замер (без обхода): '));
+				legend.appendChild(E('span', { 'class': 'bt-chip bt-chip-off' }, [ res.control.ok + '/' + res.control.total ]));
+				legend.appendChild(E('br'));
+			}
+			legend.appendChild(E('span', { 'class': 'bt-chip bt-chip-ok' }, [ 'все домены' ]));
+			legend.appendChild(E('span', { 'class': 'bt-chip bt-chip-warn' }, [ 'лучше контроля' ]));
+			legend.appendChild(E('span', { 'class': 'bt-chip bt-chip-bad' }, [ 'не лучше' ]));
+			legend.appendChild(document.createTextNode('При равенстве выше стоит стратегия, что раньше в списке.'));
 
 			var rows = res.rows.map(function(r, i) {
 				var p = presets.find(r.opts);
@@ -2574,7 +2749,7 @@ return view.extend({
 					if (isCur) nm.appendChild(bt.span('bt-c-cur', (p ? '  ' : '') + '(текущая)'));
 					body.push(nm);
 				}
-				body.push(E('div', { 'class': 'bt-cmd' }, cmdNodes(r.opts)));
+				body.push(E('div', { 'class': 'bt-cmd' }, [ r.opts ]));
 				return E('tr', {}, [
 					E('td', { 'class': 'bt-td-n' }, [ String(i + 1) ]),
 					E('td', { 'class': 'bt-td-s' }, [ E('span', { 'class': bt.chipClass(r.ok, r.total, controlOk) }, [ r.ok + '/' + r.total ]) ]),
@@ -2591,6 +2766,7 @@ return view.extend({
 			fill(testResults, [
 				E('h3', {}, [ 'Результаты' ]),
 				E('div', { 'class': 'zm-log zm-show bt-panel' }, [
+					legend,
 					E('table', { 'class': 'bt-table' }, [ E('tbody', {}, rows) ])
 				])
 			]);
@@ -2680,6 +2856,7 @@ return view.extend({
 			E('h2', {}, [ 'ByeTube' ]),
 			E('span', { 'class': 'zm-header-by' }, [ 'by StressOzz' ])
 		]));
+		wrap.appendChild(updateEl);
 		wrap.appendChild(tabBar);
 		TABS.forEach(function(t) { wrap.appendChild(panels[t.id]); });
 
@@ -2691,6 +2868,8 @@ return view.extend({
 		refreshLog();
 		if (running) renderResults('');
 		else refreshResults();
+
+		checkUpdate();
 
 		poll.add(function() {
 			return Promise.all([ refreshState(), tick() ]);
@@ -2833,6 +3012,13 @@ html.zm-theme-dark .zm-config-editor { border-color: rgba(255,255,255,.14); }
 
 .zm-hint { font-size: 12px; opacity: .65; margin-top: 6px; line-height: 1.5; overflow-wrap: break-word; }
 
+.zm-refresh-banner {
+	display: flex; align-items: center; justify-content: space-between; gap: 14px;
+	background: rgba(191,135,0,.12); border: 2px solid rgba(191,135,0,.35);
+	color: #9a6700; border-radius: 12px; padding: 16px 20px; font-size: 15px; font-weight: 500;
+	margin-top: 12px;
+}
+.zm-refresh-banner button { flex-shrink: 0; }
 
 #zm-toast-container {
 	position: fixed; top: 20px; right: 20px; z-index: 10000;
@@ -2875,16 +3061,6 @@ html.zm-theme-dark .zm-config-editor { border-color: rgba(255,255,255,.14); }
 	.bt-cols { grid-template-columns: 1fr; }
 	.bt-col .zm-row { justify-content: space-between; }
 	.bt-col .zm-label { flex: 0 1 auto; }
-	.bt-col .zm-row > :last-child { margin-left: auto; }
-}
-.bt-current { flex-direction: column; align-items: stretch; gap: 8px; padding: 14px 18px; }
-.bt-current-label { font-size: 13px; font-weight: 700; }
-.bt-current-cmd {
-	background: #0d1117; color: #7ee787;
-	font-family: ui-monospace, "SF Mono", "Cascadia Code", Consolas, "Liberation Mono", monospace;
-	font-size: 14px; line-height: 1.65;
-	border-radius: 8px; padding: 12px 14px;
-	white-space: normal; user-select: all;
 }
 .bt-panel { display: block; max-height: none; min-height: 0; margin-top: 10px; }
 .bt-table { width: 100%; table-layout: fixed; border-collapse: collapse; border-spacing: 0; margin: 0; background: transparent; }
@@ -2900,8 +3076,7 @@ html.zm-theme-dark .zm-config-editor { border-color: rgba(255,255,255,.14); }
 	.bt-table td { display: block; width: auto; border: 0 !important; padding: 0 !important; }
 	.bt-table td.bt-td-c { grid-column: 1 / -1; grid-row: 2; margin-top: 7px; }
 }
-.bt-cmd { color: #e6edf3; white-space: normal; }
-.bt-tok { white-space: nowrap; }
+.bt-cmd { color: #e6edf3; white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; }
 .bt-name { color: #8b949e; margin-bottom: 2px; }
 .bt-chip { display: inline-block; min-width: 4.4em; text-align: center; padding: 1px 8px; border-radius: 5px; font-weight: 700; color: #0d1117; }
 .bt-chip-ok { background: #3fb950; }
@@ -2915,7 +3090,10 @@ html.zm-theme-dark .zm-config-editor { border-color: rgba(255,255,255,.14); }
 .bt-c-white { color: #e6edf3; }
 .bt-c-key { color: #e3c04a; font-weight: 700; }
 .bt-c-cur { color: #56d4dd; font-weight: 700; }
+.bt-legend { margin-bottom: 10px; color: #8b949e; }
+.bt-legend .bt-chip { margin-right: 6px; }
 .bt-input { width: 110px; box-sizing: border-box; }
+.bt-cmd-line { font-family: ui-monospace, "SF Mono", "Cascadia Code", Consolas, "Liberation Mono", monospace; font-size: 12px; opacity: .75; overflow-wrap: anywhere; margin-top: 6px; }
 .cbi-page-actions { display: none !important; }
 BT_FILE_END_7f3a9c
 	chmod 644 "$R/www/luci-static/resources/view/byetube/style.css"
