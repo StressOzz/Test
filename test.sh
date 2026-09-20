@@ -547,7 +547,7 @@ EOF_DNS
 	echo "  tcp: через туннель — $tcp_t, напрямую — $tcp_d;  udp/443 (QUIC): $udp_n"
 
 	echo "--- топ прямых TCP/443 (нет ли среди них YouTube/Google?) ---"
-	grep '^443 tcp direct' "$out" | sort -k5,5nr | head -n 8 | while read -r _ _ _ dst n; do
+	grep '^443 tcp direct' "$out" | awk '{printf "%09d %s\n", 999999999-$NF, $0}' | sort | head -n 8 | cut -d' ' -f2- | while read -r _ _ _ dst n; do
 		fam=yt4; case "$dst" in *:*) fam=yt6 ;; esac
 		if nft get element inet "$NFT_TABLE" "$fam" "{ $dst }" >/dev/null 2>&1; then
 			echo "  $dst x$n — в наборе, но трафик не помечен" | tee -a "$ins"
@@ -951,6 +951,11 @@ cmd_run() {
 
 	echo "==> Контрольный тест: без обхода"
 	res=$(check_all "$urls" "$TEST_DIR/log_control.txt" "")
+	if [ -f "$STOP" ]; then
+		echo "==> Тест остановлен на контрольном замере, результатов нет"
+		rm -f "$STOP"
+		return 0
+	fi
 	cok=${res% *}; ctot=${res#* }
 	echo "==> Результат: $cok/$ctot"
 
@@ -974,10 +979,16 @@ cmd_run() {
 		kill "$cpid" 2>/dev/null
 		wait "$cpid" 2>/dev/null
 		rm -f "$CPID"
-		[ -f "$STOP" ] && break
+		if [ -f "$STOP" ]; then
+			echo "    прервано — эта стратегия в результаты не входит"
+			break
+		fi
 		ok=${res% *}; tot=${res#* }
+		ok=${ok:-0}
 		echo "    результат: $ok/$tot"
-		printf '%s\t%s\t%s\t%s\n' "$ok" "$idx" "$tot" "$line" >> "$RAW"
+		# ключ сортировки: (999999-ok) и номер — при обычном лексикографическом sort получается
+		# «больше ok выше, при равенстве раньше в списке». sort -k/-n в busybox OpenWrt может не работать.
+		printf '%06d\t%06d\t%s\t%s\t%s\n' "$((999999 - ok))" "$idx" "$ok" "$tot" "$line" >> "$RAW"
 	done < "$cand"
 
 	if [ -f "$STOP" ]; then
@@ -991,7 +1002,7 @@ cmd_run() {
 	# итог: по убыванию числа доступных доменов, при равенстве — в порядке списка
 	{
 		echo "Контрольный тест (без обхода) → $cok/$ctot"
-		sort -t "$TAB" -k1,1nr -k2,2n "$RAW" | while IFS="$TAB" read -r ok idx tot line; do
+		sort "$RAW" | while IFS="$TAB" read -r _ _ ok tot line; do
 			echo "$line → $ok/$tot"
 		done
 	} > "$RES"
@@ -1436,6 +1447,8 @@ function parseResults(text) {
 		else
 			rows.push({ opts: m[1], ok: +m[2], total: +m[3] });
 	});
+	rows.forEach(function(r, i) { r.i = i; });
+	rows.sort(function(a, b) { return (b.ok - a.ok) || (a.i - b.i); });
 	return { control: control, rows: rows };
 }
 
@@ -1447,14 +1460,14 @@ function scoreColor(ok, total, controlOk) {
 }
 
 function sp(text, color, bold) {
-	return E('span', { 'style': 'color:' + color + (bold ? ';font-weight:bold' : '') }, text);
+	return E('span', { 'style': 'color:' + color + (bold ? ';font-weight:bold' : '') }, [ text ]);
 }
 
 function chip(text, color) {
 	return E('span', {
 		'style': 'display:inline-block;min-width:4.4em;text-align:center;padding:1px 7px;border-radius:3px;' +
 			'font-weight:bold;color:#000;background:' + color
-	}, text);
+	}, [ text ]);
 }
 
 function toast(ok, text) {
@@ -1477,7 +1490,7 @@ function logLine(line, ctx) {
 	else if ((m = line.match(/^(\s+)результат: (\d+)\/(\d+)$/))) {
 		kids = [ sp(m[1] + 'результат: ', C.gray), sp(m[2] + '/' + m[3], scoreColor(+m[2], +m[3], ctx.ctrl), true) ];
 	}
-	else if (/^\s+пропуск:/.test(line)) {
+	else if (/^\s+(пропуск|прервано)/.test(line)) {
 		kids = [ sp(line, C.yellow) ];
 	}
 	else if ((m = line.match(/^==> Лучшая стратегия: (.*?)\s*→\s*(\d+)\/(\d+)\s*$/))) {
@@ -1584,14 +1597,14 @@ return view.extend({
 			}
 
 			var controlOk = res.control ? res.control.ok : null;
-			var head = E('div', { 'style': 'margin-bottom:8px' }, [
-				res.control ? [ sp(_('Контрольный замер (без обхода): '), C.gray),
-					chip(res.control.ok + '/' + res.control.total, C.gray), E('br') ] : '',
-				sp(_('Цвет: '), C.gray), chip(_('все домены'), C.green), ' ',
+			var headKids = [];
+			if (res.control)
+				headKids.push(sp(_('Контрольный замер (без обхода): '), C.gray),
+					chip(res.control.ok + '/' + res.control.total, C.gray), E('br'));
+			headKids.push(sp(_('Цвет: '), C.gray), chip(_('все домены'), C.green), ' ',
 				chip(_('лучше контроля'), C.orange), ' ', chip(_('не лучше'), C.red),
-				E('span', { 'style': 'color:' + C.gray },
-					_('   При равенстве выше стоит стратегия, что раньше в списке.'))
-			]);
+				sp(_('   При равенстве выше стоит стратегия, что раньше в списке.'), C.gray));
+			var head = E('div', { 'style': 'margin-bottom:8px' }, headKids);
 
 			var rows = res.rows.map(function(r, i) {
 				var p = presets.find(r.opts);
@@ -1602,12 +1615,12 @@ return view.extend({
 						p ? p.name : '',
 						isCur ? sp((p ? '  ' : '') + _('(текущая)'), C.cyan, true) : ''
 					]));
-				body.push(E('div', { 'style': 'color:' + C.white + ';white-space:pre-wrap;word-break:break-word' }, r.opts));
+				body.push(E('div', { 'style': 'color:' + C.white + ';white-space:pre-wrap;word-break:break-word' }, [ r.opts ]));
 
 				return E('div', {
 					'style': 'display:flex;gap:10px;align-items:flex-start;padding:7px 0;border-top:1px solid #1e1e1e'
 				}, [
-					E('div', { 'style': 'width:2em;color:' + C.gray }, String(i + 1)),
+					E('div', { 'style': 'width:2em;color:' + C.gray }, [ String(i + 1) ]),
 					E('div', {}, chip(r.ok + '/' + r.total, scoreColor(r.ok, r.total, controlOk))),
 					E('div', { 'style': 'flex:1;min-width:0' }, body),
 					E('div', {}, isCur ? '' : E('button', {
@@ -1617,7 +1630,7 @@ return view.extend({
 				]);
 			});
 
-			dom.content(resultsEl, E('div', { 'style': TERM }, [ head, rows ]));
+			dom.content(resultsEl, E('div', { 'style': TERM }, [ head ].concat(rows)));
 		}
 
 		function refreshResults() {
