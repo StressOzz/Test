@@ -370,7 +370,7 @@ YTB_FILE_END_7f3a9c
 #   ytbypass status   — состояние в JSON
 #   ytbypass flush    — очистить наборы IP (клиентам нужно заново резолвить домены)
 #   ytbypass list     — показать IP в наборах
-#   ytbypass diag [IP-клиента] — диагностика (для клиента: куда идёт его DNS и :443-трафик)
+#   ytbypass diag [IP|MAC|имя] [сек] — диагностика клиента: куда идёт его DNS и :443-трафик (без аргумента — список клиентов)
 #   ytbypass test …   — тест стратегий ByeDPI (start|stop|status|log|results|clear)
 #   ytbypass set-strategy "<параметры ciadpi>" — записать стратегию и перезапустить службу
 
@@ -421,7 +421,11 @@ list)
 	nft list set inet "$NFT_TABLE" yt6 2>/dev/null
 	;;
 diag)
-	client="$2"
+	arg="$2"; secs="${3:-20}"
+	LEASES="${YTB_LEASES:-/tmp/dhcp.leases}"
+	CT="${YTB_CT:-/proc/net/nf_conntrack}"
+	case "$secs" in ''|*[!0-9]*) secs=20 ;; esac
+
 	echo "=== YouTube Bypass: диагностика ==="
 	"$0" status
 	echo
@@ -432,67 +436,154 @@ diag)
 	echo "--- какие DNS раздаются клиентам по DHCP ---"
 	uci -q show dhcp | grep -E 'dhcp_option|\.dns=' || echo "своих dhcp_option/dns нет (клиенты получают DNS роутера)"
 	echo "--- IPv6: маршрут по умолчанию: $(ip -6 route show default 2>/dev/null | head -n 1)"
-	if [ -n "$client" ]; then
-		CT="${YTB_CT:-/proc/net/nf_conntrack}"
-		lan_ip=$(uci -q get network.lan.ipaddr | sed 's#/.*##')
-		[ -n "$lan_ip" ] || lan_ip=$(ip -4 addr show br-lan 2>/dev/null | sed -n 's/.*inet \([0-9.]*\).*/\1/p' | head -n 1)
-		# все адреса устройства: IPv4 + его глобальные IPv6 (по MAC)
-		mac=$(ip neigh show 2>/dev/null | awk -v ip="$client" '$1==ip {for(i=1;i<=NF;i++) if($i=="lladdr") print $(i+1)}' | head -n 1)
-		ips="$client"
-		[ -n "$mac" ] && ips="$ips $(ip -6 neigh show 2>/dev/null | awk -v m="$mac" 'tolower($0) ~ tolower(m) {print $1}' | grep -v '^fe80' | tr '\n' ' ')"
-		echo
-		echo "=== клиент: $ips (MAC: ${mac:-не найден}), роутер: ${lan_ip:-?} ==="
-		out="/tmp/ytb-diag.$$"
-		awk -v ips=" $ips " '
-		{
-			proto=$3; src=""; dst=""; dport=""; mark=0
-			for (i=1;i<=NF;i++) {
-				if (src=="" && $i ~ /^src=/) src=substr($i,5)
-				else if (dst=="" && $i ~ /^dst=/) dst=substr($i,5)
-				else if (dport=="" && $i ~ /^dport=/) dport=substr($i,7)
-				else if ($i ~ /^mark=/) mark=substr($i,6)+0
-			}
-			if (index(ips, " " src " ") == 0) next
-			if (dport=="53" || dport=="853") c["DNS " proto " " dst ":" dport]++
-			else if (dport=="443") c["443 " proto " " ((int(mark/65536)%2==1) ? "tunnel" : "direct") " " dst]++
-		}
-		END { for (k in c) print k, c[k] }' "$CT" 2>/dev/null | sort > "$out"
 
-		echo "--- DNS-запросы клиента (куда он реально их шлёт) ---"
-		if grep -q '^DNS' "$out"; then
-			grep '^DNS' "$out" | while read -r _ proto target n; do
-				host="${target%:*}"; port="${target##*:}"
-				if [ "$port" = "853" ]; then who="DNS-over-TLS (Частный DNS) — МИМО роутера"
-				elif [ "$host" = "$lan_ip" ]; then who="роутер (ок)"
-				else who="НЕ роутер — набор не заполнится"; fi
-				echo "  $proto $target x$n — $who"
-			done
+	router_addrs=$(ip -o addr show 2>/dev/null | awk '{print $4}' | sed 's#/.*##' | tr '\n' ' ')
+	lan_ip=$(uci -q get network.lan.ipaddr | sed 's#/.*##')
+	[ -n "$lan_ip" ] && router_addrs="$router_addrs $lan_ip"
+
+	list_leases() {
+		echo "--- клиенты в DHCP ---"
+		if [ -s "$LEASES" ]; then
+			awk '{printf "  %-16s %-18s %s\n", $3, $2, $4}' "$LEASES"
 		else
-			echo "  записей нет (UDP/53 живёт в conntrack ~30 с): откройте YouTube на телефоне и запустите diag сразу"
+			echo "  (файл аренд пуст — смотрите IP в LuCI: Состояние → Обзор)"
 		fi
+	}
 
-		echo "--- соединения клиента на :443 ---"
-		for pr in tcp udp; do
-			t=$(awk -v p="$pr" '$1=="443" && $2==p && $3=="tunnel" {s+=$NF} END{print s+0}' "$out")
-			d=$(awk -v p="$pr" '$1=="443" && $2==p && $3=="direct" {s+=$NF} END{print s+0}' "$out")
-			echo "  $pr: через туннель — $t, напрямую — $d"
-		done
-		echo "--- топ прямых TCP/443 (нет ли среди них YouTube/Google?) ---"
-		grep '^443 tcp direct' "$out" | sort -k5,5nr | head -n 8 | while read -r _ _ _ dst n; do
-			fam=yt4; case "$dst" in *:*) fam=yt6 ;; esac
-			if nft get element inet "$NFT_TABLE" "$fam" "{ $dst }" >/dev/null 2>&1; then
-				st="в наборе, но трафик не помечен"
-			else
-				st="не в наборе"
-			fi
-			echo "  $dst x$n — $st"
-		done
-		echo "--- топ UDP/443 (QUIC) ---"
-		grep '^443 udp' "$out" | sort -k5,5nr | head -n 5 | while read -r _ _ kind dst n; do
-			echo "  $dst x$n ($kind)"
-		done
-		rm -f "$out"
+	if [ -z "$arg" ]; then
+		echo
+		list_leases
+		echo
+		echo "Запустите: ytbypass diag <IP|MAC|имя телефона> [секунд, по умолчанию 20]"
+		exit 0
 	fi
+
+	# имя/MAC -> IP через аренды DHCP
+	client="$arg"
+	if ! printf '%s' "$arg" | grep -Eq '^[0-9]+(\.[0-9]+){3}$'; then
+		found=$(grep -i -- "$arg" "$LEASES" 2>/dev/null)
+		n=$(printf '%s\n' "$found" | grep -c .)
+		if [ "$n" -eq 0 ]; then
+			echo; echo "«$arg» не найден в DHCP-арендах."; list_leases; exit 0
+		elif [ "$n" -gt 1 ]; then
+			echo; echo "«$arg» подходит нескольким клиентам — уточните:"; list_leases; exit 0
+		fi
+		client=$(printf '%s\n' "$found" | awk '{print $3}')
+	fi
+	case " $router_addrs " in
+		*" $client "*)
+			echo
+			echo "$client — это адрес самого РОУТЕРА. Нужен IP телефона:"
+			list_leases
+			exit 0 ;;
+	esac
+
+	# все адреса устройства: IPv4 + его глобальные IPv6 (по MAC)
+	mac=$(ip neigh show 2>/dev/null | awk -v ip="$client" '$1==ip {for(i=1;i<=NF;i++) if($i=="lladdr") print $(i+1)}' | head -n 1)
+	ips="$client"
+	[ -n "$mac" ] && ips="$ips $(ip -6 neigh show 2>/dev/null | awk -v m="$mac" 'tolower($0) ~ tolower(m) {print $1}' | grep -v '^fe80' | tr '\n' ' ')"
+	echo
+	echo "=== клиент: $ips (MAC: ${mac:-не найден}) ==="
+	echo ">>> Собираю данные ${secs} с. ОТКРОЙТЕ YouTube НА ТЕЛЕФОНЕ (перезапустите приложение / обновите страницу) <<<"
+
+	raw="/tmp/ytb-ct.$$"; out="/tmp/ytb-diag.$$"; ins="/tmp/ytb-ins.$$"
+	: > "$raw"; : > "$ins"
+	i=0
+	while [ "$i" -lt "$secs" ]; do
+		cat "$CT" >> "$raw" 2>/dev/null
+		i=$((i + 1))
+		[ "$i" -lt "$secs" ] && sleep 1
+	done
+
+	# каждый поток считаем один раз; «в туннеле», если у него хоть раз была метка
+	awk -v ips=" $ips " '
+	{
+		proto=$3; src=""; dst=""; sport=""; dport=""; mark=0
+		for (i=1;i<=NF;i++) {
+			if (src=="" && $i ~ /^src=/) src=substr($i,5)
+			else if (dst=="" && $i ~ /^dst=/) dst=substr($i,5)
+			else if (sport=="" && $i ~ /^sport=/) sport=substr($i,7)
+			else if (dport=="" && $i ~ /^dport=/) dport=substr($i,7)
+			else if ($i ~ /^mark=/) mark=substr($i,6)+0
+		}
+		if (index(ips, " " src " ") == 0) next
+		key=proto " " src " " sport " " dst " " dport
+		if (!(key in P)) { P[key]=proto; D[key]=dst; Q[key]=dport; M[key]=0 }
+		if (int(mark/65536)%2==1) M[key]=1
+	}
+	END {
+		for (k in P) {
+			if (Q[k]=="53" || Q[k]=="853") c["DNS " P[k] " " D[k] ":" Q[k]]++
+			else if (Q[k]=="443") c["443 " P[k] " " (M[k] ? "tunnel" : "direct") " " D[k]]++
+		}
+		for (k in c) print k, c[k]
+	}' "$raw" 2>/dev/null | sort > "$out"
+
+	echo
+	echo "--- DNS-запросы клиента (куда он реально их шлёт) ---"
+	dns_ok=0; dns_bad=0
+	if grep -q '^DNS' "$out"; then
+		while read -r _ proto target n; do
+			host="${target%:*}"; port="${target##*:}"
+			if [ "$port" = "853" ]; then
+				who="DNS-over-TLS (Частный DNS) — МИМО роутера"; dns_bad=1
+			elif case " $router_addrs " in *" $host "*) true ;; *) false ;; esac; then
+				who="роутер (ок)"; dns_ok=1
+			else
+				who="НЕ роутер — набор для этого клиента не заполнится"; dns_bad=1
+			fi
+			echo "  $proto $target x$n — $who"
+		done <<EOF_DNS
+$(grep '^DNS' "$out")
+EOF_DNS
+	else
+		echo "  DNS-запросов не было (клиент мог отвечать из кэша или использует DoH по :443)"
+	fi
+
+	echo "--- соединения клиента на :443 ---"
+	tcp_t=$(awk '$1=="443" && $2=="tcp" && $3=="tunnel" {s+=$NF} END{print s+0}' "$out")
+	tcp_d=$(awk '$1=="443" && $2=="tcp" && $3=="direct" {s+=$NF} END{print s+0}' "$out")
+	udp_n=$(awk '$1=="443" && $2=="udp" {s+=$NF} END{print s+0}' "$out")
+	echo "  tcp: через туннель — $tcp_t, напрямую — $tcp_d;  udp/443 (QUIC): $udp_n"
+
+	echo "--- топ прямых TCP/443 (нет ли среди них YouTube/Google?) ---"
+	grep '^443 tcp direct' "$out" | sort -k5,5nr | head -n 8 | while read -r _ _ _ dst n; do
+		fam=yt4; case "$dst" in *:*) fam=yt6 ;; esac
+		if nft get element inet "$NFT_TABLE" "$fam" "{ $dst }" >/dev/null 2>&1; then
+			echo "  $dst x$n — в наборе, но трафик не помечен" | tee -a "$ins"
+		else
+			echo "  $dst x$n — не в наборе"
+		fi
+	done
+	in_set=$(grep -c . "$ins")
+
+	echo
+	found_any=0
+	if [ "$dns_bad" -eq 1 ]; then
+		found_any=1
+		if [ "$dns_ok" -eq 0 ]; then
+			echo "ВЫВОД: телефон шлёт DNS мимо роутера (Частный DNS / DoT / внешний DNS) — набор не заполняется, YouTube идёт напрямую."
+		else
+			echo "ВЫВОД: часть DNS-запросов телефона идёт мимо роутера (Частный DNS / DoT / внешний DNS) — для таких имён набор не заполнится."
+		fi
+		echo "       Отключите «Частный DNS» и «Безопасный DNS» в Chrome, уберите статический DNS/VPN/AdGuard и переподключите Wi-Fi."
+	fi
+	if [ "$in_set" -gt 0 ]; then
+		found_any=1
+		echo "ВЫВОД: есть соединения на IP из набора, но без метки — пришлите этот вывод целиком."
+	fi
+	if [ "$tcp_t" -gt 0 ]; then
+		found_any=1
+		echo "ИНФО: часть трафика YouTube от телефона идёт через туннель — маршрутизация работает."
+		[ "$dns_bad" -eq 0 ] && [ "$in_set" -eq 0 ] && \
+			echo "      Если видео всё равно не грузится — стратегия ByeDPI (вкладка «Тест стратегий») или домены, которых нет в списке."
+	fi
+	if [ "$tcp_t" -eq 0 ] && [ "$tcp_d" -eq 0 ] && [ "$dns_ok" -eq 0 ] && [ "$dns_bad" -eq 0 ]; then
+		found_any=1
+		echo "ВЫВОД: от этого клиента не было ни DNS, ни :443-трафика. Проверьте IP/MAC, что телефон в этой сети, и откройте YouTube во время сбора."
+	fi
+	[ "$found_any" -eq 1 ] || echo "ВЫВОД: однозначно определить не удалось — пришлите этот вывод целиком."
+	rm -f "$raw" "$out" "$ins"
 	;;
 test)
 	shift
