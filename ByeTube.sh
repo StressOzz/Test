@@ -2416,12 +2416,10 @@ echo "  IP youtube.com в наборе после тестового резол�
 
 cat <<MSG
 
-Готово. Веб-интерфейс: LuCI -> Службы -> YouTube Bypass (вкладки «Настройки» и «Тест стратегий»).
-Проверка: откройте YouTube на устройстве в LAN (DNS — роутер), затем на роутере:
-  ytbypass status       состояние
-  ytbypass list         IP, попавшие в наборы
-  logread -e ytbypass   логи
+Готово!
+Веб-интерфейс:
+LuCI -> Службы -> YouTube Bypass (вкладки «Настройки» и «Тест стратегий»).
 
-Если клиент уже держал IP YouTube в DNS-кэше — перезапустите браузер / переподключите Wi-Fi.
-Удаление: sh install.sh --uninstall
+Удаление:
+sh <(wget -qO - https://raw.githubusercontent.com/StressOzz/Test/main/ByeTube.sh) --uninstall
 MSG
