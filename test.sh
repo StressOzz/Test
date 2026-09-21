@@ -3022,323 +3022,270 @@ doh_set() {
 
 
 
-# ================================================================ ByeTube (YouTube Bypass: ByeDPI + hev-socks5-tunnel)
-# Перенесено ЦЕЛИКОМ из проверенного на реальном железе ByeTube.sh (версия 1.01).
-# Системные пути и вся логика (CLI, init.d, common.sh/dns.sh/lists.sh/net.sh,
-# nftables-таблица byetube, TUN byetube0, /etc/config/byetube) идентичны
-# оригинальному установщику. Отдельная от Mixomo реализация hev-socks5-tunnel:
-# у ByeTube свой procd-инстанс "hev" внутри собственного /etc/init.d/byetube,
-# Mixomo управляет штатным /etc/init.d/hev-socks5-tunnel — не пересекаются.
+# ================================================================ YouTube Bypass (ytbypass)
+# Перенесено 1:1 из install.sh (ByeDPI/ciadpi + hev-socks5-tunnel + nftables + dnsmasq-nftset).
+# Логика ниже НЕ переработана: это те же функции/heredoc-блоки, что и в оригинальном install.sh,
+# просто обёрнутые в функции backend.sh и вызываемые через RPC вместо самостоятельного запуска.
+#!/bin/sh
+# YouTube Bypass — установщик для OpenWrt
+# ByeDPI (DPITrickster/ByeDPI-OpenWrt) + hev-socks5-tunnel + LuCI-приложение.
+# В обход DPI заворачиваются только домены YouTube, остальной трафик идёт напрямую.
 #
-# Хардening поверх оригинала (не меняет проверенную логику, только подстраховывает):
-#  - после каждого restart/start сервиса и после set-strategy добавлен прогрев DNS
-#    (nslookup youtube.com 127.0.0.1) — без него наборы nftables (yt4/yt6) остаются
-#    пустыми на чистом роутере, пока клиент сам не обратится за DNS;
-#  - финальная проверка после установки НЕ фатальна: при неудаче — мягкое
-#    предупреждение с повторной попыткой прогрева, а не аварийное завершение.
+#   sh install.sh               установить и запустить
+#   sh install.sh --no-start    установить, но не запускать
+#   sh install.sh --uninstall   удалить (пакеты byedpi и hev остаются)
+#   sh install.sh --purge       удалить вместе с пакетами byedpi и hev-socks5-tunnel
+#
+# Переменные окружения:
+#   BYEDPI_URL=<ссылка на .ipk/.apk>   поставить byedpi с конкретной ссылки
+#   FORCE_BYEDPI=1                     переустановить byedpi
 
-BT_DIR=/opt/ByeTube
-BT_BIN="$BT_DIR/bin/byetube"
-BT_INITD=/etc/init.d/byetube
-BT_TMP_DIR=/tmp/ByeTube
-BT_BYEDPI_REPO="DPITrickster/ByeDPI-OpenWrt"
-BT_NEW_BYEDPI=0
-BT_NEW_HEV=0
-BT_LEGACY=0
+BYEDPI_REPO="DPITrickster/ByeDPI-OpenWrt"
+NEW_BYEDPI=0
+NEW_HEV=0
 
-BT_PRESET_1='-d1 -d3+s -s6+s -d9+s -s12+s -d15+s -s20+s -d25+s -s30+s -d35+s -r1+s -S -a1 -As -d1 -d3+s -s6+s -d9+s -s12+s -d15+s -s20+s -d25+s -s30+s -d35+s -S -a1'
-BT_PRESET_2='-d1 -s1+s -d3+s -s6+s -d9+s -s12+s -d15+s -s20+s -d25+s -s30+s -d35+s -a1'
-BT_PRESET_3='-d1 -s1+s -d1+s -s3+s -d6+s -s12+s -d14+s -s20+s -d24+s -s30+s -a1'
-BT_PRESET_4='-d1 -s1+s -s3+s -s6+s -s9+s -s12+s -s15+s -s20+s -s30+s -a1'
-BT_PRESET_5='-d1 -s4 -d8 -s1+s -d5+s -s10+s -d20+s -a1'
-BT_PRESET_6='-o1 -r-5+se -a1 -At,r,s -d1 -n "google.com" -Qr -f-1 -a1'
-BT_PRESET_7='-f-1 -n "google.com" -Qr -s2+s -r3 -o20 -t4 -a1'
-BT_PRESET_8='-f64+se -n "google.com" -t5 -a1'
-BT_PRESET_9='-o1 -r-5+se -a1'
-BT_PRESET_10='-o1 -a1 -r-5+se'
+say()  { printf '\033[1;32m==>\033[0m %s\n' "$*"; }
+warn() { printf '\033[1;33m!! \033[0m%s\n' "$*" >&2; }
+die()  { printf '\033[1;31mОшибка:\033[0m %s\n' "$*" >&2; exit 1; }
 
-byetube_installed() { [ -x "$BT_INITD" ] && [ -x "$BT_BIN" ]; }
-
-byetube_warmup_dns() {
-	# Прогрев DNS: без реального запроса dnsmasq не заполнит nftables-наборы
-	# (yt4/yt6) через nftset, и трафик YouTube пойдёт мимо туннеля.
-	sleep 3
-	nslookup youtube.com 127.0.0.1 >/dev/null 2>&1
-	sleep 1
+pkg_has() {
+	if [ "$PM" = apk ]; then apk info -e "$1" >/dev/null 2>&1
+	else opkg list-installed 2>/dev/null | grep -q "^$1 - "; fi
 }
+pkg_add() { if [ "$PM" = apk ]; then apk add "$@"; else opkg install "$@"; fi; }
+pkg_del() { if [ "$PM" = apk ]; then apk del "$@"; else opkg remove "$@"; fi; }
 
-byetube_status() {
-	if ! byetube_installed; then
-		printf '{"installed":false}\n'
-		return 0
-	fi
-	local st
-	st=$("$BT_BIN" status 2>/dev/null)
-	case "$st" in
-		\{*\}) printf '{"installed":true,%s\n' "${st#\{}" ;;
-		*) printf '{"installed":true,"error":"нет ответа от byetube status"}\n' ;;
-	esac
-}
-
-byetube_get_presets() {
-	local i opts out=""
-	i=1
-	while [ "$i" -le 10 ]; do
-		eval "opts=\$BT_PRESET_$i"
-		[ "$i" -gt 1 ] && out="$out,"
-		out="$out{\"id\":\"p$i\",\"name\":\"Стратегия $i\",\"opts\":\"$(esc "$opts")\"}"
-		i=$((i + 1))
-	done
-	printf '{"presets":[%s]}\n' "$out"
-}
-
-byetube_set_strategy() {
-	local opts="$1"
-	byetube_installed || { echo '{"error":"ByeTube не установлен"}'; return 1; }
-	# CLI сам перезапускает службу и делает прогрев DNS (см. байнарник byetube: set-strategy)
-	"$BT_BIN" set-strategy "$opts"
-}
-
-byetube_config_get() {
-	byetube_installed || { echo '{"error":"ByeTube не установлен"}'; return 1; }
-	"$BT_BIN" config get
-}
-
-# byetube_config_set <ipv6> <quic> <default_domains> <byedpi_port> <byedpi_opts> <enabled>
-# Каждый параметр — либо новое значение, либо пустая строка ("" => не менять).
-# Допустимые значения (см. cfg_valid в CLI): ipv6/default_domains/enabled — 0|1,
-# quic — block|proxy, byedpi_port — 1-65535, byedpi_opts — строка параметров ByeDPI.
-byetube_config_set() {
-	byetube_installed || { echo '{"error":"ByeTube не установлен"}'; return 1; }
-	local ipv6="$1" quic="$2" default_domains="$3" byedpi_port="$4" byedpi_opts="$5" enabled="$6"
-	local args="" res
-	[ -n "$ipv6" ] && args="$args ipv6 $ipv6"
-	[ -n "$quic" ] && args="$args quic $quic"
-	[ -n "$default_domains" ] && args="$args default_domains $default_domains"
-	[ -n "$byedpi_port" ] && args="$args byedpi_port $byedpi_port"
-	[ -n "$enabled" ] && args="$args enabled $enabled"
-	if [ -n "$args" ]; then
-		# shellcheck disable=SC2086
-		res=$("$BT_BIN" config set $args)
-		case "$res" in
-			*'"error"'*) echo "$res"; return 0 ;;
-		esac
-	fi
-	if [ -n "$byedpi_opts" ]; then
-		res=$("$BT_BIN" config set byedpi_opts "$byedpi_opts")
-		case "$res" in
-			*'"error"'*) echo "$res"; return 0 ;;
-		esac
-	fi
-	# Изменение ipv6/quic/enabled требует пересборки nftables-правил — перезапускаем
-	# и прогреваем DNS, иначе наборы останутся пустыми до первого DNS-запроса клиента.
-	"$BT_INITD" restart >/dev/null 2>&1
-	byetube_warmup_dns
-	byetube_status
-}
-
-# byetube_lists_get <kind>   kind: youtube|extra|strategies|test-domains
-byetube_lists_get() {
-	byetube_installed || { echo '{"error":"ByeTube не установлен"}'; return 1; }
-	local raw
-	raw=$("$BT_BIN" list get "$1")
-	printf '{"content":"%s"}\n' "$(esc_ml "$raw")"
-}
-
-# byetube_lists_set <kind> <content>   (пустой content => сброс на встроенный список)
-byetube_lists_set() {
-	local kind="$1" content="$2"
-	byetube_installed || { echo '{"error":"ByeTube не установлен"}'; return 1; }
-	if [ -z "$content" ]; then
-		"$BT_BIN" list reset "$kind"
+fetch() { # fetch URL OUT   (OUT="-" — в stdout)
+	if command -v curl >/dev/null 2>&1; then
+		curl -fsSL --connect-timeout 15 -o "$2" "$1"
 	else
-		"$BT_BIN" list set "$kind" "$content"
+		wget -q -T 20 -O "$2" "$1"
 	fi
 }
 
-byetube_action() {
-	local action="$1"
-	case "$action" in
-		install|update)
-			job_start byetube_install do_byetube_install ;;
-		remove)
-			job_start byetube_remove do_byetube_remove ;;
-		start)
-			byetube_installed || { echo '{"error":"ByeTube не установлен"}'; return 1; }
-			"$BT_INITD" start >/dev/null 2>&1
-			byetube_warmup_dns
-			byetube_status ;;
-		stop)
-			byetube_installed || { echo '{"error":"ByeTube не установлен"}'; return 1; }
-			"$BT_INITD" stop >/dev/null 2>&1
-			byetube_status ;;
-		restart)
-			byetube_installed || { echo '{"error":"ByeTube не установлен"}'; return 1; }
-			"$BT_INITD" restart >/dev/null 2>&1
-			byetube_warmup_dns
-			byetube_status ;;
-		*) echo '{"error":"неизвестное действие"}'; return 1 ;;
-	esac
+# ---------------------------------------------------------------- удаление
+YTB_FILES="/etc/config/ytbypass /etc/init.d/ytbypass /etc/hotplug.d/firewall/90-ytbypass
+/usr/bin/ytbypass /usr/libexec/ytbypass /usr/share/ytbypass
+/usr/share/nftables.d/chain-pre/forward/50-ytbypass.nft
+/usr/share/luci/menu.d/luci-app-ytbypass.json /usr/share/rpcd/acl.d/luci-app-ytbypass.json
+/www/luci-static/resources/view/ytbypass /www/luci-static/resources/ytbypass /var/etc/ytbypass /var/run/ytbypass.started /tmp/ytbypass-test
+/etc/ytbypass /lib/upgrade/keep.d/ytbypass"
+
+do_uninstall() {
+	say "Останавливаю и удаляю YouTube Bypass"
+	[ -x /usr/bin/ytbypass ] && /usr/bin/ytbypass test stop >/dev/null 2>&1
+	if [ -x /etc/init.d/ytbypass ]; then
+		/etc/init.d/ytbypass stop >/dev/null 2>&1
+		/etc/init.d/ytbypass disable >/dev/null 2>&1
+	fi
+	if [ -x /usr/libexec/ytbypass/net.sh ]; then
+		/usr/libexec/ytbypass/net.sh purge >/dev/null 2>&1
+		. /usr/libexec/ytbypass/common.sh
+		rm -f "$(dnsmasq_confdir)/ytbypass.conf"
+	fi
+	# shellcheck disable=SC2086
+	rm -rf $YTB_FILES
+	/etc/init.d/dnsmasq restart >/dev/null 2>&1
+	/etc/init.d/firewall reload >/dev/null 2>&1
+	rm -rf /tmp/luci-indexcache* /tmp/luci-modulecache
+	/etc/init.d/rpcd reload >/dev/null 2>&1
+	if [ "$MODE" = purge ]; then
+		say "Удаляю пакеты byedpi и hev-socks5-tunnel"
+		pkg_del byedpi hev-socks5-tunnel >/dev/null 2>&1
+	fi
+	say "Готово."
+	exit 0
 }
 
-byetube_fix_resolv() {
+# ---------------------------------------------------------------- dnsmasq-full
+fix_resolv() {
 	rm -f /tmp/resolv.conf
-	if grep -qs '^nameserver' /tmp/resolv.conf.d/resolv.conf.auto 2>/dev/null; then
+	if grep -qs '^nameserver' /tmp/resolv.conf.d/resolv.conf.auto; then
 		cp /tmp/resolv.conf.d/resolv.conf.auto /tmp/resolv.conf
 	else
 		printf 'nameserver 1.1.1.1\nnameserver 8.8.8.8\n' > /tmp/resolv.conf
 	fi
 }
 
-byetube_ensure_dnsmasq_full() {
+ensure_dnsmasq_full() {
 	if dnsmasq --version 2>/dev/null | grep -Eq '(^| )nftset( |$)'; then
-		echo "==> dnsmasq с поддержкой nftset уже установлен"
+		say "dnsmasq с поддержкой nftset уже установлен"
 		return 0
 	fi
-	echo "==> Заменяю dnsmasq на dnsmasq-full (нужен nftset для ByeTube)"
-	mkdir -p "$BT_TMP_DIR"
-	cp /etc/config/dhcp "$BT_TMP_DIR/dhcp.bak" 2>/dev/null
+	say "Заменяю dnsmasq на dnsmasq-full (нужен nftset)"
+	cp /etc/config/dhcp /tmp/dhcp.ytb.bak 2>/dev/null
 	for p in dnsmasq dnsmasq-dhcpv6; do
-		_pkg_is_installed "$p" && $DELETE "$p" >/dev/null 2>&1
+		pkg_has "$p" && pkg_del "$p" >/dev/null 2>&1
 	done
-	byetube_fix_resolv
-	if ! $INSTALL dnsmasq-full >/dev/null 2>&1; then
-		echo "!! не удалось поставить dnsmasq-full, возвращаю обычный dnsmasq"
-		byetube_fix_resolv
-		$INSTALL dnsmasq >/dev/null 2>&1
-		[ -f /etc/config/dhcp ] || cp "$BT_TMP_DIR/dhcp.bak" /etc/config/dhcp 2>/dev/null
+	fix_resolv
+	if ! pkg_add dnsmasq-full; then
+		warn "не удалось поставить dnsmasq-full, возвращаю обычный dnsmasq"
+		fix_resolv
+		pkg_add dnsmasq
+		[ -f /etc/config/dhcp ] || cp /tmp/dhcp.ytb.bak /etc/config/dhcp 2>/dev/null
 		/etc/init.d/dnsmasq restart >/dev/null 2>&1
-		echo "ОШИБКА: dnsmasq-full не установлен"
-		return 1
+		die "dnsmasq-full не установлен"
 	fi
-	[ -f /etc/config/dhcp ] || cp "$BT_TMP_DIR/dhcp.bak" /etc/config/dhcp 2>/dev/null
+	[ -f /etc/config/dhcp ] || cp /tmp/dhcp.ytb.bak /etc/config/dhcp 2>/dev/null
 	/etc/init.d/dnsmasq enable >/dev/null 2>&1
 	/etc/init.d/dnsmasq restart >/dev/null 2>&1
-	return 0
 }
 
-byetube_install_byedpi() {
-	local arch="$1" ext="$2" relmm="$3" url json cands f
-	if [ -x /usr/bin/ciadpi ] || [ -x /usr/bin/byedpi ]; then
-		echo "==> ByeDPI уже установлен"
+# ---------------------------------------------------------------- byedpi
+install_byedpi() {
+	if [ -x /usr/bin/ciadpi ] && [ "${FORCE_BYEDPI:-0}" != 1 ]; then
+		say "ByeDPI уже установлен"
 		return 0
 	fi
-	echo "==> Ищу пакет byedpi ($arch, .$ext) в $BT_BYEDPI_REPO"
-	json=$(curl -fsSL --connect-timeout 15 "https://api.github.com/repos/$BT_BYEDPI_REPO/releases?per_page=40" 2>/dev/null)
-	cands=$(printf '%s\n' "$json" \
-		| grep -o '"browser_download_url": *"[^"]*"' \
-		| sed 's/^[^:]*: *"//; s/"$//' \
-		| grep -E "/byedpi_[^/]*_${arch}\.${ext}\$")
-	url=$(printf '%s\n' "$cands" | grep -F "$relmm" | head -n 1)
-	[ -n "$url" ] || url=$(printf '%s\n' "$cands" | head -n 1)
+	url="${BYEDPI_URL:-}"
 	if [ -z "$url" ]; then
-		echo "ОШИБКА: не найден пакет byedpi для $arch (.$ext) в $BT_BYEDPI_REPO. Скачайте вручную с https://github.com/$BT_BYEDPI_REPO/releases"
-		return 1
+		say "Ищу пакет byedpi ($ARCH, .$EXT) в $BYEDPI_REPO"
+		json=$(fetch "https://api.github.com/repos/$BYEDPI_REPO/releases?per_page=40" - 2>/dev/null)
+		cands=$(printf '%s\n' "$json" \
+			| grep -o '"browser_download_url": *"[^"]*"' \
+			| sed 's/^[^:]*: *"//; s/"$//' \
+			| grep -E "/byedpi_[^/]*_${ARCH}\.${EXT}\$")
+		# предпочитаем релиз под вашу версию OpenWrt, иначе самый свежий
+		url=$(printf '%s\n' "$cands" | grep -F "$REL_MM" | head -n 1)
+		[ -n "$url" ] || url=$(printf '%s\n' "$cands" | head -n 1)
 	fi
-	echo "==> Скачиваю $url"
-	mkdir -p "$BT_TMP_DIR/dl"
-	f="$BT_TMP_DIR/dl/$(basename "$url")"
-	curl -fsSL --connect-timeout 15 -o "$f" "$url" || { echo "ОШИБКА: не удалось скачать byedpi"; return 1; }
-	$INSTALL "$f" >/dev/null 2>&1 || { echo "ОШИБКА: не удалось установить byedpi"; return 1; }
-	rm -rf "$BT_TMP_DIR/dl"
-	BT_NEW_BYEDPI=1
-	return 0
+	[ -n "$url" ] || die "не нашёл пакет byedpi для $ARCH (.$EXT). Скачайте вручную с https://github.com/$BYEDPI_REPO/releases и запустите: BYEDPI_URL=<ссылка> sh install.sh"
+	say "Скачиваю $url"
+	mkdir -p /tmp/ytb-dl
+	f="/tmp/ytb-dl/$(basename "$url")"
+	fetch "$url" "$f" || die "не удалось скачать byedpi"
+	if [ "$PM" = apk ]; then apk add --allow-untrusted "$f"; else opkg install "$f"; fi \
+		|| die "не удалось установить byedpi"
+	NEW_BYEDPI=1
 }
 
-byetube_migrate_legacy() {
-	local f
-	if [ ! -e /etc/config/ytbypass ] && [ ! -e /etc/init.d/ytbypass ] \
-		&& [ ! -d /usr/libexec/ytbypass ] && [ ! -e /usr/bin/ytbypass ]; then
-		return 0
-	fi
-	BT_LEGACY=1
-	echo "==> Обнаружен старый ytbypass — переношу настройки в ByeTube"
-	if [ -f /etc/config/ytbypass ] && [ ! -f /etc/config/byetube ]; then
-		mkdir -p /etc/config
-		sed 's/^config ytbypass\([[:space:]]\)/config byetube\1/' /etc/config/ytbypass > /etc/config/byetube
-	fi
-	for f in strategies.txt test-domains.txt; do
-		if [ -s "/etc/ytbypass/$f" ] && [ ! -e "$BT_DIR/custom/$f" ]; then
-			mkdir -p "$BT_DIR/custom"
-			cp "/etc/ytbypass/$f" "$BT_DIR/custom/$f"
-		fi
-	done
-	return 0
-}
-
-byetube_finish_legacy() {
-	[ "$BT_LEGACY" = 1 ] || return 0
-	echo "==> Удаляю файлы старого ytbypass"
-	if [ -x /etc/init.d/ytbypass ]; then
-		/etc/init.d/ytbypass stop >/dev/null 2>&1
-		/etc/init.d/ytbypass disable >/dev/null 2>&1
-	fi
-	rm -rf /etc/config/ytbypass /etc/init.d/ytbypass /etc/hotplug.d/firewall/90-ytbypass \
-		/usr/bin/ytbypass /usr/libexec/ytbypass /usr/share/ytbypass \
-		/usr/share/nftables.d/chain-pre/forward/50-ytbypass.nft \
-		/usr/share/luci/menu.d/luci-app-ytbypass.json /usr/share/rpcd/acl.d/luci-app-ytbypass.json \
-		/www/luci-static/resources/view/ytbypass /www/luci-static/resources/ytbypass \
-		/var/etc/ytbypass /var/run/ytbypass.started /tmp/ytbypass-test /etc/ytbypass /lib/upgrade/keep.d/ytbypass
-}
-
-# Если стояла ранняя версия стратегии по умолчанию — обновить на актуальную (ByeTube.sh 1.01)
-byetube_update_default_strategy() {
-	local old new cur
-	old='--split 1 --disorder 3+s --mod-http=h,d --auto=torst --tlsrec 1+s'
-	new="$BT_PRESET_1"
-	cur=$(uci -q get byetube.main.byedpi_opts)
-	if [ "$cur" = "$old" ]; then
-		uci set byetube.main.byedpi_opts="$new" && uci commit byetube
-	fi
-}
-
-byetube_install_payload() {
-	mkdir -p "/etc/config"
-	[ -f "/etc/config/byetube" ] || cat > "/etc/config/byetube" <<'BYT_FILE_END_7f3a9c'
-config byetube 'main'
+# ---------------------------------------------------------------- payload
+# Файлы приложения вшиты обычным текстом (без base64/tar — их может не быть в busybox).
+install_payload() {
+	R="${YTB_ROOT:-}"
+	mkdir -p "$R/etc/config"
+	[ -f "$R/etc/config/ytbypass" ] || cat > "$R/etc/config/ytbypass" <<'YTB_FILE_END_7f3a9c'
+config ytbypass 'main'
 	option enabled '1'
+	# локальный порт SOCKS5 у ByeDPI (отдельный экземпляр, штатный byedpi не трогаем)
 	option byedpi_port '1088'
+	# стратегия обхода DPI, подбирается под провайдера (вкладка «Тест стратегий»)
 	option byedpi_opts '-d1 -d3+s -s6+s -d9+s -s12+s -d15+s -s20+s -d25+s -s30+s -d35+s -r1+s -S -a1 -As -d1 -d3+s -s6+s -d9+s -s12+s -d15+s -s20+s -d25+s -s30+s -d35+s -S -a1'
+	# заворачивать IPv6-адреса YouTube (0 — только IPv4)
 	option ipv6 '1'
+	# QUIC (UDP/443): block — отбрасывать, чтобы клиент откатился на TCP; proxy — гнать через ByeDPI
 	option quic 'block'
+	# использовать встроенный список доменов YouTube
 	option default_domains '1'
-BYT_FILE_END_7f3a9c
-	chmod 644 "/etc/config/byetube"
-	mkdir -p "/etc/hotplug.d/firewall"
-	cat > "/etc/hotplug.d/firewall/90-byetube" <<'BYT_FILE_END_7f3a9c'
+	# дополнительные домены:
+	# list domain 'example.com'
+YTB_FILE_END_7f3a9c
+	chmod 644 "$R/etc/config/ytbypass"
+	mkdir -p "$R/etc/hotplug.d/firewall"
+	cat > "$R/etc/hotplug.d/firewall/90-ytbypass" <<'YTB_FILE_END_7f3a9c'
 #!/bin/sh
-[ -f /tmp/ByeTube/started ] || exit 0
-nft list table inet byetube >/dev/null 2>&1 && exit 0
-logger -t byetube "таблица nft пропала после reload firewall — восстанавливаю"
-/etc/init.d/byetube restart >/dev/null 2>&1
+# Если после reload firewall наша таблица пропала — восстановить.
+[ -f /var/run/ytbypass.started ] || exit 0
+nft list table inet ytbypass >/dev/null 2>&1 && exit 0
+logger -t ytbypass "таблица nft пропала после reload firewall — восстанавливаю"
+/etc/init.d/ytbypass restart >/dev/null 2>&1
 exit 0
-BYT_FILE_END_7f3a9c
-	chmod 755 "/etc/hotplug.d/firewall/90-byetube"
-	mkdir -p "/etc/init.d"
-	cat > "/etc/init.d/byetube" <<'BYT_FILE_END_7f3a9c'
+YTB_FILE_END_7f3a9c
+	chmod 755 "$R/etc/hotplug.d/firewall/90-ytbypass"
+	mkdir -p "$R/etc/init.d"
+	cat > "$R/etc/init.d/ytbypass" <<'YTB_FILE_END_7f3a9c'
 #!/bin/sh /etc/rc.common
+# YouTube Bypass: ByeDPI + hev-socks5-tunnel, маршрутизация только доменов YouTube
 
 START=99
 STOP=10
 USE_PROCD=1
 
-NAME=byetube
+NAME=ytbypass
+LIBEXEC=/usr/libexec/ytbypass
+RUNDIR=/var/etc/ytbypass
+DOMAINS_DEFAULT=/usr/share/ytbypass/domains.list
+STARTED_FLAG=/var/run/ytbypass.started
 
-[ -r /opt/ByeTube/lib/common.sh ] || exit 0
-. /opt/ByeTube/lib/common.sh
-. /opt/ByeTube/lib/dns.sh
+. "$LIBEXEC/common.sh"
 
 log() { logger -t "$NAME" "$*"; }
+_echo() { echo "$1"; }
+
+# итоговый список доменов: встроенный + свои, только валидные имена
+collect_domains() {
+	local use_default
+	config_get use_default main default_domains 1
+	{
+		[ "$use_default" = "1" ] && [ -f "$DOMAINS_DEFAULT" ] && cat "$DOMAINS_DEFAULT"
+		config_list_foreach main domain _echo
+	} | sed 's/#.*//; s/^[[:space:]]*//; s/[[:space:]]*$//' \
+	  | tr 'A-Z' 'a-z' \
+	  | grep -E '^[a-z0-9]([a-z0-9._-]*[a-z0-9])?$' \
+	  | sort -u \
+	  | awk '
+		{ name[NR] = $0; have[$0] = 1 }
+		END {
+			for (i = 1; i <= NR; i++) {
+				n = split(name[i], p, ".")
+				suf = ""; redundant = 0
+				# proper-суффиксы справа налево: если родительский домен уже в списке — запись избыточна
+				for (j = n; j >= 2; j--) {
+					suf = (suf == "") ? p[j] : p[j] "." suf
+					if (suf in have) { redundant = 1; break }
+				}
+				if (!redundant) print name[i]
+			}
+		}'
+}
+
+dns_remove() {
+	local conf
+	conf="$(dnsmasq_confdir)/ytbypass.conf"
+	[ -f "$conf" ] || return 0
+	rm -f "$conf"
+	/etc/init.d/dnsmasq restart >/dev/null 2>&1
+}
+
+# Записать nftset-правила для dnsmasq; dnsmasq перезапускается только при изменении.
+# Строка конфига dnsmasq не может быть длиннее ~1 КБ (иначе dnsmasq вообще не запустится),
+# поэтому домены разбиваются на несколько строк nftset= по <= 800 байт.
+dns_apply() {
+	local ipv6="$1" conf domains suffix new old
+	conf="$(dnsmasq_confdir)/ytbypass.conf"
+	domains=$(collect_domains)
+	if [ -z "$domains" ]; then
+		dns_remove
+		return 0
+	fi
+	suffix="4#inet#${NFT_TABLE}#yt4"
+	[ "$ipv6" = "1" ] && suffix="$suffix,6#inet#${NFT_TABLE}#yt6"
+	new=$(printf '%s\n' "$domains" | awk -v suffix="$suffix" -v max=800 '
+		{
+			if (cur != "" && length("nftset=/" cur "/" $0 "/" suffix) > max) {
+				print "nftset=/" cur "/" suffix
+				cur = ""
+			}
+			cur = (cur == "") ? $0 : cur "/" $0
+		}
+		END { if (cur != "") print "nftset=/" cur "/" suffix }')
+	old=$(cat "$conf" 2>/dev/null)
+	if [ "$old" != "$new" ]; then
+		mkdir -p "$(dirname "$conf")"
+		printf '%s\n' "$new" > "$conf"
+		/etc/init.d/dnsmasq restart >/dev/null 2>&1
+	fi
+}
 
 write_hev_conf() {
-	local port="$1" ipv6="$2" f="$BT_TMP/hev.yml"
+	local port="$1" ipv6="$2" f="$RUNDIR/hev.yml"
 	{
 		echo "tunnel:"
 		echo "  name: $TUN"
 		echo "  mtu: 1500"
 		echo "  ipv4: 198.18.0.1"
 		[ "$ipv6" = "1" ] && echo "  ipv6: 'fc00::1'"
-		echo "  post-up-script: $BT_HOME/lib/route-up.sh"
+		echo "  post-up-script: $LIBEXEC/route-up.sh"
 		echo "socks5:"
 		echo "  port: $port"
 		echo "  address: 127.0.0.1"
@@ -3348,10 +3295,11 @@ write_hev_conf() {
 	} > "$f"
 }
 
+# правило forward в fw4 (иначе policy drop не пропустит LAN -> tun)
 ensure_fw4_include() {
 	command -v fw4 >/dev/null 2>&1 || { log "fw4 не найден — нужен OpenWrt 22.03+"; return 0; }
-	nft list chain inet fw4 forward 2>/dev/null | grep -q "byetube" && return 0
-	[ -f /usr/share/nftables.d/chain-pre/forward/50-byetube.nft ] || return 0
+	nft list chain inet fw4 forward 2>/dev/null | grep -q "ytbypass" && return 0
+	[ -f /usr/share/nftables.d/chain-pre/forward/50-ytbypass.nft ] || return 0
 	log "перезагружаю firewall, чтобы подхватить правило forward"
 	/etc/init.d/firewall reload >/dev/null 2>&1
 }
@@ -3362,7 +3310,7 @@ start_service() {
 	config_load "$NAME"
 	config_get enabled main enabled 0
 	if [ "$enabled" != "1" ]; then
-		"$BT_HOME/lib/net.sh" purge
+		"$LIBEXEC/net.sh" purge
 		dns_remove
 		rm -f "$STARTED_FLAG"
 		return 0
@@ -3385,24 +3333,27 @@ start_service() {
 	dnsmasq_has_nftset || { log "dnsmasq без поддержки nftset: установите dnsmasq-full"; return 1; }
 	[ -c /dev/net/tun ] || modprobe tun 2>/dev/null
 
-	bt_prepare
+	mkdir -p "$RUNDIR"
 	write_hev_conf "$byedpi_port" "$ipv6"
 
-	"$BT_HOME/lib/net.sh" up || { log "не удалось настроить nftables/маршрутизацию"; return 1; }
+	"$LIBEXEC/net.sh" up || { log "не удалось настроить nftables/маршрутизацию"; return 1; }
 	ensure_fw4_include
 	dns_apply "$ipv6"
 
+	# --- ByeDPI: локальный SOCKS5 с десинхронизацией ---
 	procd_open_instance byedpi
 	procd_set_param command "$byedpi" -i 127.0.0.1 -p "$byedpi_port"
 	set -f
+	# shellcheck disable=SC2086
 	[ -n "$byedpi_opts" ] && procd_append_param command $byedpi_opts
 	set +f
 	procd_set_param respawn 3600 5 0
 	procd_set_param stderr 1
 	procd_close_instance
 
+	# --- hev-socks5-tunnel: TUN -> SOCKS5 ByeDPI ---
 	procd_open_instance hev
-	procd_set_param command "$hev" "$BT_TMP/hev.yml"
+	procd_set_param command "$hev" "$RUNDIR/hev.yml"
 	procd_set_param respawn 3600 5 0
 	procd_set_param stderr 1
 	procd_close_instance
@@ -3412,30 +3363,37 @@ start_service() {
 
 stop_service() {
 	rm -f "$STARTED_FLAG"
-	"$BT_HOME/lib/net.sh" down
+	"$LIBEXEC/net.sh" down
 }
 
 service_triggers() {
 	procd_add_reload_trigger "$NAME"
 }
-BYT_FILE_END_7f3a9c
-	chmod 755 "/etc/init.d/byetube"
-	mkdir -p "/lib/upgrade/keep.d"
-	cat > "/lib/upgrade/keep.d/byetube" <<'BYT_FILE_END_7f3a9c'
-/opt/ByeTube/custom/
-/etc/config/byetube
-BYT_FILE_END_7f3a9c
-	chmod 644 "/lib/upgrade/keep.d/byetube"
-	mkdir -p "$BT_DIR/bin"
-	cat > "$BT_DIR/bin/byetube" <<'BYT_FILE_END_7f3a9c'
+YTB_FILE_END_7f3a9c
+	chmod 755 "$R/etc/init.d/ytbypass"
+	mkdir -p "$R/lib/upgrade/keep.d"
+	cat > "$R/lib/upgrade/keep.d/ytbypass" <<'YTB_FILE_END_7f3a9c'
+/etc/ytbypass/
+YTB_FILE_END_7f3a9c
+	chmod 644 "$R/lib/upgrade/keep.d/ytbypass"
+	mkdir -p "$R/usr/bin"
+	cat > "$R/usr/bin/ytbypass" <<'YTB_FILE_END_7f3a9c'
 #!/bin/sh
-. "${BT_FUNCTIONS:-/lib/functions.sh}"
-. "${BT_HOME:-/opt/ByeTube}/lib/common.sh"
-. "$BT_HOME/lib/lists.sh"
+# Вспомогательная утилита YouTube Bypass (используется LuCI и для отладки)
+#   ytbypass status   — состояние в JSON
+#   ytbypass flush    — очистить наборы IP (клиентам нужно заново резолвить домены)
+#   ytbypass list     — показать IP в наборах
+#   ytbypass diag [IP|MAC|имя] [сек] — диагностика клиента: куда идёт его DNS и :443-трафик (без аргумента — список клиентов)
+#   ytbypass test …   — тест стратегий ByeDPI (start|stop|status|log|results|clear|list)
+#   ytbypass test list get|set|reset strategies|domains [текст] — свои списки для теста
+#   ytbypass set-strategy "<параметры ciadpi>" — записать стратегию и перезапустить службу
+
+. /lib/functions.sh
+. /usr/libexec/ytbypass/common.sh
 
 svc_running() {
-	ubus call service list '{"name":"byetube"}' 2>/dev/null \
-		| jsonfilter -e "@.byetube.instances.$1.running" 2>/dev/null | grep -q true
+	ubus call service list '{"name":"ytbypass"}' 2>/dev/null \
+		| jsonfilter -e "@.ytbypass.instances.$1.running" 2>/dev/null | grep -q true
 }
 
 count_set() {
@@ -3444,82 +3402,12 @@ count_set() {
 
 b() { if [ "$1" = "1" ]; then echo true; else echo false; fi; }
 
-extra_count() {
-	config_list_foreach main domain _extra_inc
-	echo "$_extra_n"
-}
-_extra_n=0
-_extra_inc() { _extra_n=$((_extra_n + 1)); }
-
-cfg_valid() {
-	local v
-	case "$1" in
-		enabled|ipv6|default_domains)
-			case "$2" in 0|1) printf '%s' "$2" ;; *) return 1 ;; esac ;;
-		quic)
-			case "$2" in block|proxy) printf '%s' "$2" ;; *) return 1 ;; esac ;;
-		byedpi_port)
-			case "$2" in ''|*[!0-9]*) return 1 ;; esac
-			[ "$2" -ge 1 ] && [ "$2" -le 65535 ] || return 1
-			printf '%s' "$2" ;;
-		byedpi_opts)
-			v=$(printf '%s' "$2" | tr '\n\r\t' '   ' | sed 's/  */ /g; s/^ //; s/ $//')
-			[ -n "$v" ] || return 1
-			printf '%s' "$v" ;;
-		*) return 1 ;;
-	esac
-}
-
-cmd_config() {
-	local action="$1" k v nv args="" err="" ipv6s=false
-	shift
-	case "$action" in
-	get)
-		config_load byetube
-		config_get enabled main enabled 0
-		config_get byedpi_opts main byedpi_opts ""
-		config_get byedpi_port main byedpi_port 1088
-		config_get quic main quic block
-		config_get ipv6 main ipv6 1
-		config_get default_domains main default_domains 1
-		case "$byedpi_port" in ''|*[!0-9]*) byedpi_port=1088 ;; esac
-		[ -f /proc/net/if_inet6 ] && ipv6s=true
-		printf '{"enabled":%s,"byedpi_opts":"%s","byedpi_port":%s,"quic":"%s","ipv6":%s,"ipv6_supported":%s,"default_domains":%s}\n' \
-			"$(b "$enabled")" "$(json_esc "$byedpi_opts")" "$byedpi_port" "$quic" "$(b "$ipv6")" "$ipv6s" "$(b "$default_domains")"
-		;;
-	set)
-		while [ $# -ge 2 ]; do
-			k="$1"; v="$2"; shift 2
-			if ! nv=$(cfg_valid "$k" "$v"); then
-				err="$k"
-				break
-			fi
-			args="$args
-$k=$nv"
-		done
-		if [ -n "$err" ]; then
-			printf '{"error":"Неверное значение параметра: %s"}\n' "$(json_esc "$err")"
-			return 0
-		fi
-		printf '%s\n' "$args" | while IFS='=' read -r k v; do
-			[ -n "$k" ] && uci set "byetube.main.$k=$v"
-		done
-		uci commit byetube
-		echo '{"ok":true}'
-		;;
-	*)
-		echo '{"error":"неизвестное действие"}'
-		;;
-	esac
-}
-
 case "$1" in
 status)
-	config_load byetube
+	config_load ytbypass
 	config_get enabled main enabled 0
 	config_get ipv6 main ipv6 1
 	config_get quic main quic block
-	config_get default_domains main default_domains 1
 
 	v_byedpi=0; svc_running byedpi && v_byedpi=1
 	v_hev=0;    svc_running hev && v_hev=1
@@ -3527,53 +3415,29 @@ status)
 	v_nft=0;    nft list table inet "$NFT_TABLE" >/dev/null 2>&1 && v_nft=1
 	v_rule=0;   ip rule show 2>/dev/null | grep -q "lookup $TABLE" && v_rule=1
 	v_route=0;  ip route show table "$TABLE" 2>/dev/null | grep -q "$TUN" && v_route=1
-	v_dns=0;    [ -s "$(dnsmasq_confdir)/byetube.conf" ] && v_dns=1
+	v_dns=0;    [ -s "$(dnsmasq_confdir)/ytbypass.conf" ] && v_dns=1
 	v_nftset=0; dnsmasq_has_nftset && v_nftset=1
-	v_fw=0;     nft list chain inet fw4 forward 2>/dev/null | grep -q byetube && v_fw=1
+	v_fw=0;     nft list chain inet fw4 forward 2>/dev/null | grep -q ytbypass && v_fw=1
 	v_bin=0;    { [ -x /usr/bin/ciadpi ] || [ -x /usr/bin/byedpi ]; } && [ -x /usr/bin/hev-socks5-tunnel ] && v_bin=1
-	v_ycust=0;  list_is_custom youtube && v_ycust=1
 
-	printf '{"version":"%s","enabled":%s,"byedpi":%s,"hev":%s,"tun":%s,"nft":%s,"rule":%s,"route":%s,"dns":%s,"dnsmasq_nftset":%s,"fw":%s,"binaries":%s,"ipv6":%s,"quic":"%s","default_domains":%s,"youtube_count":%s,"youtube_custom":%s,"extra_count":%s,"ips4":%s,"ips6":%s}\n' \
-		"$BT_VERSION" "$(b "$enabled")" "$(b $v_byedpi)" "$(b $v_hev)" "$(b $v_tun)" "$(b $v_nft)" \
+	printf '{"enabled":%s,"byedpi":%s,"hev":%s,"tun":%s,"nft":%s,"rule":%s,"route":%s,"dns":%s,"dnsmasq_nftset":%s,"fw":%s,"binaries":%s,"ipv6":%s,"quic":"%s","ips4":%s,"ips6":%s}\n' \
+		"$(b "$enabled")" "$(b $v_byedpi)" "$(b $v_hev)" "$(b $v_tun)" "$(b $v_nft)" \
 		"$(b $v_rule)" "$(b $v_route)" "$(b $v_dns)" "$(b $v_nftset)" "$(b $v_fw)" "$(b $v_bin)" \
-		"$(b "$ipv6")" "$quic" "$(b "$default_domains")" "$(count_lines "$(list_file youtube)")" "$(b $v_ycust)" "$(extra_count)" \
-		"$(count_set yt4)" "$(count_set yt6)"
-	;;
-config)
-	shift
-	cmd_config "$@"
-	;;
-service)
-	case "$2" in
-		start|restart)
-			/etc/init.d/byetube "$2" >/dev/null 2>&1
-			sleep 3
-			# прогрев DNS: без реального запроса nftables-наборы (yt4/yt6) останутся пустыми на чистом роутере
-			nslookup youtube.com 127.0.0.1 >/dev/null 2>&1
-			sleep 1
-			echo '{"ok":true}'
-			;;
-		stop) /etc/init.d/byetube stop >/dev/null 2>&1; echo '{"ok":true}' ;;
-		*) echo '{"error":"неизвестное действие"}' ;;
-	esac
+		"$(b "$ipv6")" "$quic" "$(count_set yt4)" "$(count_set yt6)"
 	;;
 flush)
 	nft flush set inet "$NFT_TABLE" yt4 2>/dev/null
 	nft flush set inet "$NFT_TABLE" yt6 2>/dev/null
-	echo '{"ok":true}'
+	echo "наборы очищены"
 	;;
-ips)
+list)
 	nft list set inet "$NFT_TABLE" yt4 2>/dev/null
 	nft list set inet "$NFT_TABLE" yt6 2>/dev/null
 	;;
-list)
-	shift
-	cmd_list "$@"
-	;;
 diag)
 	arg="$2"; secs="${3:-20}"
-	LEASES="${BT_LEASES:-/tmp/dhcp.leases}"
-	CT="${BT_CT:-/proc/net/nf_conntrack}"
+	LEASES="${YTB_LEASES:-/tmp/dhcp.leases}"
+	CT="${YTB_CT:-/proc/net/nf_conntrack}"
 	case "$secs" in ''|*[!0-9]*) secs=20 ;; esac
 
 	echo "=== YouTube Bypass: диагностика ==="
@@ -3604,10 +3468,11 @@ diag)
 		echo
 		list_leases
 		echo
-		echo "Запустите: byetube diag <IP|MAC|имя телефона> [секунд, по умолчанию 20]"
+		echo "Запустите: ytbypass diag <IP|MAC|имя телефона> [секунд, по умолчанию 20]"
 		exit 0
 	fi
 
+	# имя/MAC -> IP через аренды DHCP
 	client="$arg"
 	if ! printf '%s' "$arg" | grep -Eq '^[0-9]+(\.[0-9]+){3}$'; then
 		found=$(grep -i -- "$arg" "$LEASES" 2>/dev/null)
@@ -3627,6 +3492,7 @@ diag)
 			exit 0 ;;
 	esac
 
+	# все адреса устройства: IPv4 + его глобальные IPv6 (по MAC)
 	mac=$(ip neigh show 2>/dev/null | awk -v ip="$client" '$1==ip {for(i=1;i<=NF;i++) if($i=="lladdr") print $(i+1)}' | head -n 1)
 	ips="$client"
 	[ -n "$mac" ] && ips="$ips $(ip -6 neigh show 2>/dev/null | awk -v m="$mac" 'tolower($0) ~ tolower(m) {print $1}' | grep -v '^fe80' | tr '\n' ' ')"
@@ -3643,6 +3509,7 @@ diag)
 		[ "$i" -lt "$secs" ] && sleep 1
 	done
 
+	# каждый поток считаем один раз; «в туннеле», если у него хоть раз была метка
 	awk -v ips=" $ips " '
 	{
 		proto=$3; src=""; dst=""; sport=""; dport=""; mark=0
@@ -3732,36 +3599,646 @@ EOF_DNS
 	[ "$found_any" -eq 1 ] || echo "ВЫВОД: однозначно определить не удалось — пришлите этот вывод целиком."
 	rm -f "$raw" "$out" "$ins"
 	;;
-
 test)
 	shift
-	exec "$BT_HOME/lib/test.sh" "$@"
+	exec /usr/libexec/ytbypass/test.sh "$@"
 	;;
 set-strategy)
-	if nv=$(cfg_valid byedpi_opts "$2"); then
-		uci set "byetube.main.byedpi_opts=$nv" && uci commit byetube
-		/etc/init.d/byetube restart >/dev/null 2>&1
-		sleep 3
-		# прогрев DNS: без реального запроса nftables-наборы (yt4/yt6) останутся пустыми на чистом роутере
-		nslookup youtube.com 127.0.0.1 >/dev/null 2>&1
-		sleep 1
-		echo '{"ok":true}'
-	else
-		echo '{"error":"пустая стратегия"}'
+	opts="$2"
+	if [ -z "$opts" ] || [ "$(printf '%s' "$opts" | wc -l)" -gt 0 ]; then
+		echo '{"error":"пустая или многострочная стратегия"}'
+		exit 0
 	fi
-	;;
-version)
-	echo "$BT_VERSION"
+	uci set ytbypass.main.byedpi_opts="$opts" && uci commit ytbypass
+	/etc/init.d/ytbypass restart >/dev/null 2>&1
+	echo '{"ok":true}'
 	;;
 *)
-	echo "usage: byetube status|config|service|flush|ips|list|diag|test|set-strategy|version" >&2
+	echo "usage: ytbypass status|flush|list|diag|test|set-strategy" >&2
 	exit 1
 	;;
 esac
-BYT_FILE_END_7f3a9c
-	chmod 755 "$BT_DIR/bin/byetube"
-	mkdir -p "$BT_DIR/default"
-	cat > "$BT_DIR/default/domains.list" <<'BYT_FILE_END_7f3a9c'
+YTB_FILE_END_7f3a9c
+	chmod 755 "$R/usr/bin/ytbypass"
+	mkdir -p "$R/usr/libexec/ytbypass"
+	cat > "$R/usr/libexec/ytbypass/common.sh" <<'YTB_FILE_END_7f3a9c'
+#!/bin/sh
+# Общие константы и функции YouTube Bypass
+
+TUN=ytb0            # имя TUN-интерфейса hev-socks5-tunnel
+MARK=0x10000        # fwmark (один выделенный бит)
+MASK=0x10000
+TABLE=89            # таблица маршрутизации
+PREF=8900           # приоритет ip rule
+NFT_TABLE=ytbypass
+
+# каталог conf-dir, который читает dnsmasq
+dnsmasq_confdir() {
+	local d
+	d=$(sed -n 's/^conf-dir=\([^,]*\).*/\1/p' /var/etc/dnsmasq.conf.* 2>/dev/null | head -n 1)
+	[ -n "$d" ] || d=/tmp/dnsmasq.d
+	echo "$d"
+}
+
+# dnsmasq собран с nftset (dnsmasq-full)?
+dnsmasq_has_nftset() {
+	dnsmasq --version 2>/dev/null | grep -Eq '(^| )nftset( |$)'
+}
+
+# путь к бинарнику ByeDPI
+find_byedpi() {
+	local b
+	for b in /usr/bin/ciadpi /usr/bin/byedpi; do
+		[ -x "$b" ] && { echo "$b"; return 0; }
+	done
+	command -v ciadpi
+}
+
+# Параметры ByeDPI приходят из UCI как строка, а раскрываются без eval (по пробелам).
+# Кавычки вроде -n "google.com" при этом остались бы в аргументе буквально,
+# поэтому их убираем: у аргументов ciadpi пробелов внутри не бывает.
+byedpi_opts_clean() {
+	printf '%s' "$1" | tr -d "\"'" | tr '\n\r\t' '   ' | sed 's/^ *//; s/ *$//; s/  */ /g'
+}
+YTB_FILE_END_7f3a9c
+	chmod 755 "$R/usr/libexec/ytbypass/common.sh"
+	mkdir -p "$R/usr/libexec/ytbypass"
+	cat > "$R/usr/libexec/ytbypass/net.sh" <<'YTB_FILE_END_7f3a9c'
+#!/bin/sh
+# Настройка nftables и policy routing.
+# Использование: net.sh up | down | purge
+#   up    — создать таблицу inet ytbypass и ip rule
+#   down  — убрать правила маркировки и ip rule (наборы IP остаются, чтобы dnsmasq не сыпал ошибками)
+#   purge — удалить всё, включая таблицу
+
+. /lib/functions.sh
+. /usr/libexec/ytbypass/common.sh
+
+config_load ytbypass
+config_get IPV6 main ipv6 1
+config_get QUIC main quic block
+[ -f /proc/net/if_inet6 ] || IPV6=0
+
+rules_del() {
+	while ip rule del pref "$PREF" 2>/dev/null; do :; done
+	while ip -6 rule del pref "$PREF" 2>/dev/null; do :; done
+	ip route del default dev "$TUN" table "$TABLE" 2>/dev/null
+	ip -6 route del default dev "$TUN" table "$TABLE" 2>/dev/null
+}
+
+set_mark_stmt="counter ct mark set ct mark | $MARK meta mark set meta mark | $MARK"
+
+gen_ruleset() {
+	cat <<NFT
+table inet $NFT_TABLE {
+	set yt4 {
+		type ipv4_addr
+		flags timeout
+		timeout 12h
+		size 65535
+	}
+	set yt6 {
+		type ipv6_addr
+		flags timeout
+		timeout 12h
+		size 65535
+	}
+	chain prerouting {
+		type filter hook prerouting priority mangle; policy accept;
+		iifname "$TUN" return
+		ct mark & $MASK == $MARK meta mark set meta mark | $MARK return
+		meta l4proto tcp ip daddr @yt4 $set_mark_stmt
+NFT
+	[ "$IPV6" = "1" ] && echo "		meta l4proto tcp ip6 daddr @yt6 $set_mark_stmt"
+	if [ "$QUIC" = "proxy" ]; then
+		echo "		udp dport 443 ip daddr @yt4 $set_mark_stmt"
+		[ "$IPV6" = "1" ] && echo "		udp dport 443 ip6 daddr @yt6 $set_mark_stmt"
+	fi
+	echo "	}"
+	if [ "$QUIC" != "proxy" ]; then
+		cat <<NFT
+	chain forward {
+		type filter hook forward priority filter - 10; policy accept;
+		udp dport 443 ip daddr @yt4 counter reject
+		udp dport 443 ip6 daddr @yt6 counter reject
+	}
+NFT
+	fi
+	echo "}"
+}
+
+case "$1" in
+up)
+	rules_del
+	nft delete table inet "$NFT_TABLE" 2>/dev/null
+	gen_ruleset | nft -f - || exit 1
+	ip rule add pref "$PREF" fwmark "$MARK/$MASK" lookup "$TABLE" || exit 1
+	[ "$IPV6" = "1" ] && ip -6 rule add pref "$PREF" fwmark "$MARK/$MASK" lookup "$TABLE"
+	# если туннель уже поднят — сразу добавить маршрут (иначе это сделает post-up hev)
+	ip link show "$TUN" >/dev/null 2>&1 && /usr/libexec/ytbypass/route-up.sh "$TUN"
+	exit 0
+	;;
+down)
+	rules_del
+	nft flush chain inet "$NFT_TABLE" prerouting 2>/dev/null
+	nft flush chain inet "$NFT_TABLE" forward 2>/dev/null
+	;;
+purge)
+	rules_del
+	nft delete table inet "$NFT_TABLE" 2>/dev/null
+	;;
+*)
+	echo "usage: $0 up|down|purge" >&2
+	exit 1
+	;;
+esac
+exit 0
+YTB_FILE_END_7f3a9c
+	chmod 755 "$R/usr/libexec/ytbypass/net.sh"
+	mkdir -p "$R/usr/libexec/ytbypass"
+	cat > "$R/usr/libexec/ytbypass/route-up.sh" <<'YTB_FILE_END_7f3a9c'
+#!/bin/sh
+# Вызывается hev-socks5-tunnel после подъёма TUN (и из net.sh up).
+# Если туннель упадёт, маршрут исчезнет вместе с интерфейсом, и помеченный
+# трафик уйдёт по основной таблице напрямую (fail-open).
+
+. /lib/functions.sh
+. /usr/libexec/ytbypass/common.sh
+
+config_load ytbypass
+config_get IPV6 main ipv6 1
+[ -f /proc/net/if_inet6 ] || IPV6=0
+
+ip link set "$TUN" up 2>/dev/null
+ip route replace default dev "$TUN" table "$TABLE"
+[ "$IPV6" = "1" ] && ip -6 route replace default dev "$TUN" table "$TABLE"
+
+# ответы приходят с адресов YouTube на TUN — нужен нестрогий rp_filter (2 = loose)
+echo 2 > "/proc/sys/net/ipv4/conf/$TUN/rp_filter" 2>/dev/null
+exit 0
+YTB_FILE_END_7f3a9c
+	chmod 755 "$R/usr/libexec/ytbypass/route-up.sh"
+	mkdir -p "$R/usr/libexec/ytbypass"
+	cat > "$R/usr/libexec/ytbypass/test.sh" <<'YTB_FILE_END_7f3a9c'
+#!/bin/sh
+# Тест стратегий ByeDPI.
+#   ytbypass test start | stop | status | log | results | clear
+#
+# Списки стратегий и доменов: свои (/etc/ytbypass/, переживают обновление) или встроенные.
+#   ytbypass test list get|set|reset strategies|domains [текст]
+#
+# Каждая стратегия запускается во ВРЕМЕННОМ экземпляре ciadpi на отдельном порту,
+# домены проверяются через него по curl --socks5. Боевой сервис и трафик клиентов
+# не затрагиваются, конфигурация не меняется. Сначала контрольный замер без обхода.
+
+. /lib/functions.sh
+. /usr/libexec/ytbypass/common.sh
+
+TEST_DIR=/tmp/ytbypass-test
+PIDF="$TEST_DIR/job.pid"
+LOGF="$TEST_DIR/job.log"
+RES="$TEST_DIR/results.txt"
+RAW="$TEST_DIR/results.raw"
+STOP="$TEST_DIR/stop"
+CPID="$TEST_DIR/ciadpi.pid"
+USER_DIR=/etc/ytbypass
+STRATS_DEFAULT=/usr/share/ytbypass/strategies.txt
+DOMS_DEFAULT=/usr/share/ytbypass/test-domains.txt
+PORT_BASE=22000
+UA='Mozilla/5.0 (Windows NT 10.0; Win64; x64) curl/8.0'
+TAB=$(printf '\t')
+
+is_running() {
+	[ -f "$PIDF" ] && kill -0 "$(cat "$PIDF" 2>/dev/null)" 2>/dev/null
+}
+
+count_lines() { # файл -> число строк без пустых и комментариев
+	sed 's/#.*//' "$1" 2>/dev/null | tr -d '\r' | grep -c '[^[:space:]]'
+}
+
+# ---------------------------------------------------------------- списки
+# имя файла у пользователя
+list_name() {
+	case "$1" in
+		strategies) echo strategies.txt ;;
+		domains)    echo test-domains.txt ;;
+	esac
+}
+
+# путь действующего списка: свой (если есть и не пуст), иначе встроенный
+list_file() {
+	local nm
+	nm=$(list_name "$1")
+	if [ -n "$nm" ] && [ -s "$USER_DIR/$nm" ]; then
+		echo "$USER_DIR/$nm"
+	else
+		case "$1" in
+			strategies) echo "$STRATS_DEFAULT" ;;
+			domains)    echo "$DOMS_DEFAULT" ;;
+		esac
+	fi
+}
+
+list_is_custom() { # kind
+	local nm
+	nm=$(list_name "$1")
+	[ -n "$nm" ] && [ -s "$USER_DIR/$nm" ]
+}
+
+json_esc() {
+	printf '%s' "$1" | tr -d '\000-\037' | sed 's/\\/\\\\/g; s/"/\\"/g'
+}
+
+# домены: по одному в строке; допускаем ссылки, *.домен, запятые/пробелы; комментарии (#) сохраняем.
+# Первая некорректная запись пишется в файл $1.
+norm_domains() {
+	awk -v badf="$1" '
+	{
+		gsub(/\r/, "")
+		line = $0
+		sub(/^[ \t]+/, "", line); sub(/[ \t]+$/, "", line)
+		if (line == "") next
+		if (substr(line, 1, 1) == "#") { print line; next }
+		sub(/#.*/, "", line)
+		n = split(line, tok, /[ \t,;]+/)
+		for (i = 1; i <= n; i++) {
+			d = tolower(tok[i])
+			if (d == "") continue
+			sub(/^[a-z][a-z0-9+.-]*:\/\//, "", d)
+			sub(/[\/?#].*$/, "", d)
+			sub(/^\*?\./, "", d)
+			if (d ~ /^[a-z0-9]([a-z0-9._-]*[a-z0-9])?$/ && index(d, ".") > 0) {
+				if (!(d in seen)) { seen[d] = 1; print d }
+			} else if (!bad) { bad = 1; print tok[i] > badf }
+		}
+	}'
+}
+
+# стратегии: по одной в строке, пробелы схлопываются, дубли убираются, комментарии (#) сохраняем
+norm_strategies() {
+	awk '
+	{
+		gsub(/\r/, ""); gsub(/[ \t]+/, " ")
+		line = $0; sub(/^ /, "", line); sub(/ $/, "", line)
+		if (line == "") next
+		if (substr(line, 1, 1) == "#") { print line; next }
+		if (!(line in seen)) { seen[line] = 1; print line }
+	}'
+}
+
+cmd_list() {
+	local action="$1" kind="$2" text="$3" nm tmp bad n
+	nm=$(list_name "$kind")
+	if [ -z "$nm" ]; then
+		echo '{"error":"неизвестный список"}'
+		return 0
+	fi
+	case "$action" in
+	get)
+		local f
+		f=$(list_file "$kind")
+		[ -f "$f" ] && cat "$f"
+		;;
+	set)
+		if is_running; then
+			echo '{"error":"тест выполняется — остановите его перед сохранением списка"}'
+			return 0
+		fi
+		mkdir -p "$TEST_DIR"
+		tmp="$TEST_DIR/list.$$"; bad="$TEST_DIR/bad.$$"; : > "$bad"
+		if [ "$kind" = "domains" ]; then
+			printf '%s\n' "$text" | norm_domains "$bad" > "$tmp"
+		else
+			printf '%s\n' "$text" | norm_strategies > "$tmp"
+		fi
+		if [ -s "$bad" ]; then
+			printf '{"error":"Некорректный домен: %s"}\n' "$(json_esc "$(head -n 1 "$bad")")"
+			rm -f "$tmp" "$bad"
+			return 0
+		fi
+		rm -f "$bad"
+		n=$(count_lines "$tmp")
+		if [ "${n:-0}" -le 0 ]; then
+			echo '{"error":"список пуст — чтобы вернуть встроенный, нажмите «Сбросить к встроенному»"}'
+			rm -f "$tmp"
+			return 0
+		fi
+		mkdir -p "$USER_DIR"
+		mv "$tmp" "$USER_DIR/$nm"
+		printf '{"ok":true,"count":%s,"custom":true}\n' "$n"
+		;;
+	reset)
+		if is_running; then
+			echo '{"error":"тест выполняется — остановите его перед сбросом списка"}'
+			return 0
+		fi
+		rm -f "$USER_DIR/$nm"
+		printf '{"ok":true,"count":%s,"custom":false}\n' "$(count_lines "$(list_file "$kind")")"
+		;;
+	*)
+		echo '{"error":"неизвестное действие"}'
+		;;
+	esac
+	return 0
+}
+
+# ---------------------------------------------------------------- управление
+cmd_start() {
+	if is_running; then
+		echo '{"started":true,"already_running":true}'
+		return 0
+	fi
+	command -v curl >/dev/null 2>&1 || { echo '{"error":"не установлен curl (apk add curl / opkg install curl)"}'; return 0; }
+	[ -n "$(find_byedpi)" ] || { echo '{"error":"не найден ciadpi (пакет byedpi)"}'; return 0; }
+	mkdir -p "$TEST_DIR"
+	rm -f "$STOP"
+	: > "$LOGF"
+	# полностью отвязываем от stdin/stdout, иначе rpcd будет ждать завершения
+	( "$0" run >>"$LOGF" 2>&1; echo "__DONE__ $?" >>"$LOGF" ) >/dev/null 2>&1 </dev/null &
+	echo $! > "$PIDF"
+	echo '{"started":true}'
+}
+
+cmd_stop() {
+	if ! is_running; then
+		echo '{"error":"тест не запущен"}'
+		return 0
+	fi
+	touch "$STOP"
+	[ -f "$CPID" ] && kill "$(cat "$CPID" 2>/dev/null)" 2>/dev/null
+	echo '{"ok":true}'
+}
+
+cmd_status() {
+	local running=false has=false cu=false rc=""
+	is_running && running=true
+	[ -s "$RES" ] && has=true
+	command -v curl >/dev/null 2>&1 && cu=true
+	[ -f "$LOGF" ] && rc=$(grep '^__DONE__' "$LOGF" | tail -n 1 | awk '{print $2}')
+	local sc=false dc=false
+	list_is_custom strategies && sc=true
+	list_is_custom domains && dc=true
+	printf '{"running":%s,"has_results":%s,"curl":%s,"strategies":%s,"domains":%s,"strategies_custom":%s,"domains_custom":%s,"rc":"%s"}\n' \
+		"$running" "$has" "$cu" "$(count_lines "$(list_file strategies)")" "$(count_lines "$(list_file domains)")" "$sc" "$dc" "$rc"
+}
+
+cmd_log() {
+	[ -f "$LOGF" ] && tail -n 400 "$LOGF" | grep -v '^__DONE__'
+	return 0
+}
+
+cmd_results() {
+	[ -s "$RES" ] && cat "$RES"
+	return 0
+}
+
+cmd_clear() {
+	if is_running; then
+		echo '{"error":"тест выполняется"}'
+		return 0
+	fi
+	rm -f "$RES" "$RAW"
+	echo '{"ok":true}'
+}
+
+# ---------------------------------------------------------------- движок
+# check_url ЗАПИСЬ OKFILE LOGFILE [socks host:port]
+check_url() {
+	local entry="$1" okfile="$2" logfile="$3" proxy="$4" host url rc
+	host="${entry%%|*}"
+	url="${entry#*|}"
+	if [ -n "$proxy" ]; then
+		curl -4 -sL --socks5 "$proxy" --connect-timeout 4 --max-time 6 --speed-time 3 --speed-limit 1 \
+			--range 0-65535 -A "$UA" -o /dev/null "$url" </dev/null >/dev/null 2>&1
+	else
+		curl -4 -sL --connect-timeout 4 --max-time 6 --speed-time 3 --speed-limit 1 \
+			--range 0-65535 -A "$UA" -o /dev/null "$url" </dev/null >/dev/null 2>&1
+	fi
+	rc=$?
+	if [ "$rc" -eq 0 ]; then
+		echo 1 >> "$okfile"
+		echo "[ OK ] $host" >> "$logfile"
+	else
+		echo "[FAIL] $host" >> "$logfile"
+	fi
+}
+
+# check_all ФАЙЛ_URL LOGFILE [socks] -> "ok total"
+check_all() {
+	local urls="$1" logfile="$2" proxy="$3" okf run=0 total=0 ok entry
+	okf="$TEST_DIR/ok.$$"
+	: > "$okf"
+	: > "$logfile"
+	while IFS= read -r entry; do
+		[ -n "$entry" ] || continue
+		[ -f "$STOP" ] && break
+		total=$((total + 1))
+		check_url "$entry" "$okf" "$logfile" "$proxy" &
+		run=$((run + 1))
+		if [ "$run" -ge "$PARALLEL" ]; then
+			wait
+			run=0
+		fi
+	done < "$urls"
+	wait
+	ok=$(wc -l < "$okf" | tr -d ' ')
+	rm -f "$okf"
+	echo "$ok $total"
+}
+
+cleanup() {
+	[ -f "$CPID" ] && kill "$(cat "$CPID" 2>/dev/null)" 2>/dev/null
+	rm -f "$CPID"
+}
+
+cmd_run() {
+	local BIN cand keys urls line k opts port idx total ntot res ok tot cok ctot cpid skipped=0 best
+
+	set -f      # параметры ciadpi раскрываем по пробелам без glob
+	trap cleanup EXIT
+	trap 'exit 130' INT TERM
+
+	config_load ytbypass
+	config_get PARALLEL main test_parallel 8
+	config_get CUR main byedpi_opts ""
+	case "$PARALLEL" in ''|*[!0-9]*) PARALLEL=8 ;; esac
+	[ "$PARALLEL" -ge 1 ] || PARALLEL=8
+
+	BIN=$(find_byedpi)
+	[ -n "$BIN" ] || { echo "ОШИБКА: ciadpi не найден"; exit 1; }
+	command -v curl >/dev/null 2>&1 || { echo "ОШИБКА: не установлен curl"; exit 1; }
+
+	mkdir -p "$TEST_DIR"
+	rm -f "$STOP"
+	cand="$TEST_DIR/candidates.txt"
+	keys="$TEST_DIR/keys.txt"
+	urls="$TEST_DIR/urls.txt"
+	: > "$cand"; : > "$keys"; : > "$RAW"
+
+	echo "==> Собираем стратегии для теста"
+	# текущая стратегия идёт первой, затем список; дубликаты (без учёта кавычек) отбрасываем
+	{ printf '%s\n' "$CUR"; cat "$(list_file strategies)"; } | tr -d '\r' | while IFS= read -r line; do
+		line=$(printf '%s' "$line" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
+		case "$line" in ''|'#'*) continue ;; esac
+		k=$(byedpi_opts_clean "$line")
+		[ -n "$k" ] || continue
+		grep -qxF -- "$k" "$keys" && continue
+		echo "$k" >> "$keys"
+		echo "$line" >> "$cand"
+	done
+	total=$(wc -l < "$cand" | tr -d ' ')
+	[ "$total" -gt 0 ] || { echo "ОШИБКА: нет стратегий для теста"; exit 1; }
+
+	echo "==> Собираем список доменов"
+	tr -d '\r' < "$(list_file domains)" | sed 's/#.*//; s/^[[:space:]]*//; s/[[:space:]]*$//' \
+		| grep -E '^[A-Za-z0-9._-]+$' | awk '!s[$0]++' | sed 's#.*#&|https://&/#' > "$urls"
+	ntot=$(wc -l < "$urls" | tr -d ' ')
+	[ "$ntot" -gt 0 ] || { echo "ОШИБКА: нет доменов для теста"; exit 1; }
+	echo "==> Стратегий: $total, доменов: $ntot, параллельно: $PARALLEL"
+
+	echo "==> Контрольный тест: без обхода"
+	res=$(check_all "$urls" "$TEST_DIR/log_control.txt" "")
+	if [ -f "$STOP" ]; then
+		echo "==> Тест остановлен на контрольном замере, результатов нет"
+		rm -f "$STOP"
+		return 0
+	fi
+	cok=${res% *}; ctot=${res#* }
+	echo "==> Результат: $cok/$ctot"
+
+	idx=0
+	while IFS= read -r line; do
+		[ -f "$STOP" ] && break
+		idx=$((idx + 1))
+		opts=$(byedpi_opts_clean "$line")
+		port=$((PORT_BASE + idx))
+		echo "==> [$idx/$total] $line"
+		"$BIN" -i 127.0.0.1 -p "$port" $opts >/dev/null 2>&1 </dev/null &
+		cpid=$!
+		echo "$cpid" > "$CPID"
+		sleep 1
+		if ! kill -0 "$cpid" 2>/dev/null; then
+			echo "    пропуск: ciadpi не запустился с этими параметрами"
+			skipped=$((skipped + 1))
+			continue
+		fi
+		res=$(check_all "$urls" "$TEST_DIR/log_$idx.txt" "127.0.0.1:$port")
+		kill "$cpid" 2>/dev/null
+		wait "$cpid" 2>/dev/null
+		rm -f "$CPID"
+		if [ -f "$STOP" ]; then
+			echo "    прервано — эта стратегия в результаты не входит"
+			break
+		fi
+		ok=${res% *}; tot=${res#* }
+		ok=${ok:-0}
+		echo "    результат: $ok/$tot"
+		# ключ сортировки: (999999-ok) и номер — при обычном лексикографическом sort получается
+		# «больше ok выше, при равенстве раньше в списке». sort -k/-n в busybox OpenWrt может не работать.
+		printf '%06d\t%06d\t%s\t%s\t%s\n' "$((999999 - ok))" "$idx" "$ok" "$tot" "$line" >> "$RAW"
+	done < "$cand"
+
+	if [ -f "$STOP" ]; then
+		echo "==> Тест остановлен пользователем, показываю то, что успели проверить"
+		rm -f "$STOP"
+	else
+		echo "==> Тест завершён"
+	fi
+	[ "$skipped" -gt 0 ] && echo "==> Пропущено стратегий (не запустились): $skipped"
+
+	# итог: по убыванию числа доступных доменов, при равенстве — в порядке списка
+	{
+		echo "Контрольный тест (без обхода) → $cok/$ctot"
+		sort "$RAW" | while IFS="$TAB" read -r _ _ ok tot line; do
+			echo "$line → $ok/$tot"
+		done
+	} > "$RES"
+
+	echo "==> Результаты"
+	cat "$RES"
+	best=$(sed -n '2p' "$RES")
+	[ -n "$best" ] && echo "==> Лучшая стратегия: $best"
+	echo "==> Основной сервис и его настройки не менялись. Применить стратегию можно кнопкой на вкладке «Тест стратегий»."
+	return 0
+}
+
+case "$1" in
+	start)   cmd_start ;;
+	stop)    cmd_stop ;;
+	status)  cmd_status ;;
+	log)     cmd_log ;;
+	results) cmd_results ;;
+	clear)   cmd_clear ;;
+	list)    shift; cmd_list "$@" ;;
+	run)     cmd_run ;;
+	*) echo "usage: ytbypass test start|stop|status|log|results|clear|list" >&2; exit 1 ;;
+esac
+exit 0
+YTB_FILE_END_7f3a9c
+	chmod 755 "$R/usr/libexec/ytbypass/test.sh"
+	mkdir -p "$R/usr/share/luci/menu.d"
+	cat > "$R/usr/share/luci/menu.d/luci-app-ytbypass.json" <<'YTB_FILE_END_7f3a9c'
+{
+	"admin/services/ytbypass": {
+		"title": "YouTube Bypass",
+		"order": 60,
+		"action": {
+			"type": "alias",
+			"path": "admin/services/ytbypass/settings"
+		},
+		"depends": {
+			"acl": [ "luci-app-ytbypass" ],
+			"uci": { "ytbypass": true }
+		}
+	},
+	"admin/services/ytbypass/settings": {
+		"title": "Настройки",
+		"order": 10,
+		"action": {
+			"type": "view",
+			"path": "ytbypass/main"
+		}
+	},
+	"admin/services/ytbypass/test": {
+		"title": "Тест стратегий",
+		"order": 20,
+		"action": {
+			"type": "view",
+			"path": "ytbypass/test"
+		}
+	}
+}
+YTB_FILE_END_7f3a9c
+	chmod 644 "$R/usr/share/luci/menu.d/luci-app-ytbypass.json"
+	mkdir -p "$R/usr/share/nftables.d/chain-pre/forward"
+	cat > "$R/usr/share/nftables.d/chain-pre/forward/50-ytbypass.nft" <<'YTB_FILE_END_7f3a9c'
+oifname "ytb0" accept comment "ytbypass"
+YTB_FILE_END_7f3a9c
+	chmod 644 "$R/usr/share/nftables.d/chain-pre/forward/50-ytbypass.nft"
+	mkdir -p "$R/usr/share/rpcd/acl.d"
+	cat > "$R/usr/share/rpcd/acl.d/luci-app-ytbypass.json" <<'YTB_FILE_END_7f3a9c'
+{
+	"luci-app-ytbypass": {
+		"description": "YouTube Bypass (ByeDPI + hev-socks5-tunnel)",
+		"read": {
+			"file": {
+				"/usr/bin/ytbypass": [ "exec" ],
+				"/etc/init.d/ytbypass": [ "exec" ]
+			},
+			"uci": [ "ytbypass" ]
+		},
+		"write": {
+			"uci": [ "ytbypass" ]
+		}
+	}
+}
+YTB_FILE_END_7f3a9c
+	chmod 644 "$R/usr/share/rpcd/acl.d/luci-app-ytbypass.json"
+	mkdir -p "$R/usr/share/ytbypass"
+	cat > "$R/usr/share/ytbypass/domains.list" <<'YTB_FILE_END_7f3a9c'
+# Домены YouTube и связанных сервисов Google (поддомены подхватываются автоматически).
+# Список объединяется с «Дополнительными доменами» из настроек. Вложенные записи
+# (например, i.ytimg.com при наличии ytimg.com) сервис сам отбрасывает как избыточные.
 android.clients.google.com
 beacons.gvt2.com
 cdn.youtube.com
@@ -3973,10 +4450,10 @@ yt4.ggpht.com
 ytimg.com
 ytimg.l.google.com
 yting.com
-BYT_FILE_END_7f3a9c
-	chmod 644 "$BT_DIR/default/domains.list"
-	mkdir -p "$BT_DIR/default"
-	cat > "$BT_DIR/default/strategies.txt" <<'BYT_FILE_END_7f3a9c'
+YTB_FILE_END_7f3a9c
+	chmod 644 "$R/usr/share/ytbypass/domains.list"
+	mkdir -p "$R/usr/share/ytbypass"
+	cat > "$R/usr/share/ytbypass/strategies.txt" <<'YTB_FILE_END_7f3a9c'
 -f-200 -Qr -s3:5+sm -a1 -As -d1 -s4+sm -s8+sh -f-300 -d6+sh -a1 -At,r,s -o2 -f-30 -As -r5 -Mh -r6+sh -f-250 -s2:7+s -s3:6+sm -a1 -At,r,s -s3:5+sm -s6+s -s7:9+s -q30+sm -a1
 -d1 -d3+s -s6+s -d9+s -s12+s -d15+s -s20+s -d25+s -s30+s -d35+s -r1+s -S -a1 -As -d1 -d3+s -s6+s -d9+s -s12+s -d15+s -s20+s -d25+s -s30+s -d35+s -S -a1
 -q2 -s2 -s3+s -r3 -s4 -r4 -s5+s -r5+s -s6 -s7+s -r8 -s9+s -Qr -Mh,d,r -a1 -At,r -s2+s -r2 -d2 -s3 -r3 -r4 -s4 -d5+s -r5 -d6 -s7+s -d7 -a1
@@ -4038,10 +4515,10 @@ BYT_FILE_END_7f3a9c
 -o3 -d7 -a1
 -d7 -s2 -a1
 -o1 -a1 -r-5+se
-BYT_FILE_END_7f3a9c
-	chmod 644 "$BT_DIR/default/strategies.txt"
-	mkdir -p "$BT_DIR/default"
-	cat > "$BT_DIR/default/test-domains.txt" <<'BYT_FILE_END_7f3a9c'
+YTB_FILE_END_7f3a9c
+	chmod 644 "$R/usr/share/ytbypass/strategies.txt"
+	mkdir -p "$R/usr/share/ytbypass"
+	cat > "$R/usr/share/ytbypass/test-domains.txt" <<'YTB_FILE_END_7f3a9c'
 # Google and Youtube
 youtu.be
 youtube.com
@@ -4077,876 +4554,1009 @@ rr4---sn-jvhnu5g-c35d.googlevideo.com
 rr1---sn-q4fl6n6y.googlevideo.com
 rr2---sn-hgn7ynek.googlevideo.com
 rr1---sn-xguxaxjvh-gufl.googlevideo.com
-BYT_FILE_END_7f3a9c
-	chmod 644 "$BT_DIR/default/test-domains.txt"
-	mkdir -p "$BT_DIR/lib"
-	cat > "$BT_DIR/lib/common.sh" <<'BYT_FILE_END_7f3a9c'
-BT_HOME="${BT_HOME:-/opt/ByeTube}"
-BT_TMP="${BT_TMP:-/tmp/ByeTube}"
-BT_FUNCTIONS="${BT_FUNCTIONS:-/lib/functions.sh}"
-BT_DEFAULT="$BT_HOME/default"
-BT_CUSTOM="$BT_HOME/custom"
-BT_VERSION="1.01"
+YTB_FILE_END_7f3a9c
+	chmod 644 "$R/usr/share/ytbypass/test-domains.txt"
+	mkdir -p "$R/www/luci-static/resources/view/ytbypass"
+	cat > "$R/www/luci-static/resources/view/ytbypass/main.js" <<'YTB_FILE_END_7f3a9c'
+'use strict';
+'require view';
+'require form';
+'require fs';
+'require poll';
+'require ui';
+'require dom';
+'require uci';
+'require ytbypass.presets as presets';
 
-TUN=byetube0
-MARK=0x10000
-MASK=0x10000
-TABLE=89
-PREF=8900
-NFT_TABLE=byetube
-STARTED_FLAG="$BT_TMP/started"
-TEST_DIR="$BT_TMP/test"
+var CTL = '/usr/bin/ytbypass';
+var INIT = '/etc/init.d/ytbypass';
 
-bt_prepare() {
-	mkdir -p "$BT_TMP"
+/* ---- дополнительные домены: по одному в строке ---- */
+var DOMAIN_RE = /^[a-z0-9]([a-z0-9._-]*[a-z0-9])?$/;
+
+/* привести введённое к домену: https://Foo.com/path -> foo.com, *.foo.com / .foo.com -> foo.com */
+function normDomain(s) {
+	return String(s).trim().toLowerCase()
+		.replace(/^[a-z][a-z0-9+.-]*:\/\//, '')
+		.replace(/[\/?#].*$/, '')
+		.replace(/^\*?\./, '');
 }
 
-dnsmasq_confdir() {
-	local d
-	d=$(sed -n 's/^conf-dir=\([^,]*\).*/\1/p' /var/etc/dnsmasq.conf.* 2>/dev/null | head -n 1)
-	[ -n "$d" ] || d=/tmp/dnsmasq.d
-	echo "$d"
+/* текст -> { list: уникальные домены по порядку, bad: некорректные записи } */
+function parseDomains(text) {
+	var list = [], bad = [], seen = {};
+	String(text == null ? '' : text).split(/[\s,;]+/).forEach(function(tok) {
+		if (!tok) return;
+		var d = normDomain(tok);
+		if (!d || d.indexOf('.') < 0 || !DOMAIN_RE.test(d)) { bad.push(tok); return; }
+		if (!seen[d]) { seen[d] = true; list.push(d); }
+	});
+	return { list: list, bad: bad };
 }
 
-dnsmasq_has_nftset() {
-	dnsmasq --version 2>/dev/null | grep -Eq '(^| )nftset( |$)'
+function getStatus() {
+	return fs.exec_direct(CTL, [ 'status' ], 'json').catch(function() { return null; });
 }
 
-find_byedpi() {
-	local b
-	for b in /usr/bin/ciadpi /usr/bin/byedpi; do
-		[ -x "$b" ] && { echo "$b"; return 0; }
-	done
-	command -v ciadpi
+function badge(ok, okText, badText) {
+	return E('span', {
+		'style': 'display:inline-block;padding:2px 8px;border-radius:3px;color:#fff;background:' +
+			(ok ? '#2e9c4b' : '#c0392b')
+	}, ok ? okText : badText);
 }
 
-byedpi_opts_clean() {
-	printf '%s' "$1" | tr -d "\"'" | tr '\n\r\t' '   ' | sed 's/^ *//; s/ *$//; s/  */ /g'
+function row(label, node) {
+	return E('tr', { 'class': 'tr' }, [
+		E('td', { 'class': 'td left', 'style': 'width:38%' }, label),
+		E('td', { 'class': 'td left' }, node)
+	]);
 }
 
-json_esc() {
-	printf '%s' "$1" | tr -d '\000-\037' | sed 's/\\/\\\\/g; s/"/\\"/g'
+function renderStatus(st) {
+	if (!st)
+		return E('em', {}, _('Не удалось получить состояние (проверьте, что установлен rpcd-mod-file и ACL применён).'));
+
+	var working = st.enabled && st.byedpi && st.hev && st.tun && st.nft && st.rule && st.route && st.dns && st.fw;
+	var rows = [
+		row(_('Итог'), working
+			? badge(true, _('Работает'))
+			: badge(false, '', st.enabled ? _('Не полностью запущен') : _('Выключен'))),
+		row(_('ByeDPI (ciadpi)'), badge(st.byedpi, _('запущен'), _('не запущен'))),
+		row(_('hev-socks5-tunnel'), badge(st.hev, _('запущен'), _('не запущен'))),
+		row(_('Интерфейс ytb0'), badge(st.tun, _('поднят'), _('нет'))),
+		row(_('Маркировка nftables'), badge(st.nft, _('активна'), _('нет'))),
+		row(_('Policy routing'), badge(st.rule && st.route, _('активен'), _('нет'))),
+		row(_('dnsmasq → nftset'), st.dnsmasq_nftset
+			? badge(st.dns, _('домены загружены'), _('нет'))
+			: badge(false, '', _('нужен dnsmasq-full'))),
+		row(_('Firewall forward'), badge(st.fw, _('разрешён'), _('нет'))),
+		row(_('IP в наборах'), 'IPv4: ' + st.ips4 + (st.ipv6 ? ', IPv6: ' + st.ips6 : ''))
+	];
+
+	if (!st.binaries)
+		rows.unshift(row(_('Пакеты'), badge(false, '', _('не найден byedpi или hev-socks5-tunnel'))));
+
+	return E('table', { 'class': 'table' }, rows);
 }
 
-count_lines() {
-	sed 's/#.*//' "$1" 2>/dev/null | tr -d '\r' | grep -c '[^[:space:]]'
+function notify(ok, text) {
+	ui.addNotification(null, E('p', text), ok ? 'info' : 'danger');
 }
 
-list_name() {
-	case "$1" in
-		youtube)      echo domains.list ;;
-		strategies)   echo strategies.txt ;;
-		test-domains) echo test-domains.txt ;;
-	esac
+return view.extend({
+	load: function() {
+		return getStatus();
+	},
+
+	render: function(st) {
+		var m, s, o;
+
+		m = new form.Map('ytbypass', _('YouTube Bypass'),
+			_('Трафик только до доменов YouTube проходит через TUN-интерфейс (hev-socks5-tunnel) в локальный SOCKS5 ByeDPI. ' +
+			  'Остальной трафик идёт напрямую. Клиенты должны использовать DNS роутера (dnsmasq).'));
+
+		s = m.section(form.NamedSection, 'main', 'ytbypass', _('Настройки'));
+		s.addremove = false;
+
+		o = s.option(form.Flag, 'enabled', _('Включить'));
+		o.rmempty = false;
+		o.default = '1';
+
+		/* Список с короткими именами — удобно выбирать; полная команда видна в поле ниже */
+		o = s.option(form.ListValue, '_preset', _('Готовая стратегия'),
+			_('Выберите вариант — его параметры подставятся в поле ниже. ' +
+			  'Лучшую под вашего провайдера найдёт вкладка «Тест стратегий».'));
+		presets.list.forEach(function(p) { o.value(p.id, p.name); });
+		o.value('custom', _('Своя (редактируется в поле ниже)'));
+		o.cfgvalue = function(section_id) {
+			var p = presets.find(uci.get('ytbypass', section_id, 'byedpi_opts'));
+			return p ? p.id : 'custom';
+		};
+		o.write = function() {};   /* служебное поле, в UCI не пишется */
+		o.remove = function() {};
+		o.onchange = function(ev, section_id, value) {
+			var p = presets.byId(value);
+			var ta = this.section.getUIElement(section_id, 'byedpi_opts');
+			if (p && ta) ta.setValue(p.opts);
+		};
+
+		o = s.option(form.TextValue, 'byedpi_opts', _('Параметры ByeDPI (ciadpi)'),
+			_('Командная строка ciadpi одной строкой, переносы для удобства чтения — на экране. ' +
+			  'Можно править вручную; список выше тогда переключится на «Своя».'));
+		o.rows = 5;
+		o.wrap = true;
+		o.monospace = true;
+		o.default = presets.DEFAULT;
+		o.rmempty = false;
+		o.validate = function(section_id, value) {
+			if (!presets.norm(value))
+				return _('Параметры не могут быть пустыми');
+			return true;
+		};
+		/* пробелы и переводы строк схлопываем, кавычки (-n "google.com") сохраняем */
+		o.write = function(section_id, value) {
+			return form.TextValue.prototype.write.call(this, section_id, presets.norm(value));
+		};
+		o.onchange = function(ev, section_id, value) {
+			var p = presets.find(value);
+			var sel = this.section.getUIElement(section_id, '_preset');
+			if (sel) sel.setValue(p ? p.id : 'custom');
+		};
+
+		o = s.option(form.Value, 'byedpi_port', _('Порт SOCKS5 ByeDPI'),
+			_('Локальный порт (127.0.0.1). Отдельный экземпляр, штатная служба byedpi не затрагивается.'));
+		o.datatype = 'port';
+		o.default = '1088';
+		o.rmempty = false;
+
+		o = s.option(form.ListValue, 'quic', _('QUIC (UDP/443) до YouTube'),
+			_('«Блокировать» — клиент быстро откатится на TCP, который обрабатывает ByeDPI (рекомендуется). ' +
+			  '«Через прокси» — пробовать пропускать UDP через ByeDPI.'));
+		o.value('block', _('Блокировать (рекомендуется)'));
+		o.value('proxy', _('Через прокси'));
+		o.default = 'block';
+
+		o = s.option(form.Flag, 'ipv6', _('IPv6'),
+			_('Заворачивать IPv6-адреса YouTube. Если IPv6 у вас нет — отключите.'));
+		o.default = '1';
+		o.rmempty = false;
+
+		o = s.option(form.Flag, 'default_domains', _('Встроенный список доменов'),
+			_('YouTube, googlevideo, ytimg, ggpht и связанные сервисы Google (googleapis, googleusercontent, ' +
+			  'gstatic для шрифтов, Google Play). Полный список: /usr/share/ytbypass/domains.list. ' +
+			  'Сервисы Google часто делят IP-адреса, поэтому часть трафика Google (не только YouTube) тоже пойдёт через обход, ' +
+			  'а QUIC (UDP/443) к этим адресам будет блокироваться.'));
+		o.default = '1';
+		o.rmempty = false;
+
+		/* Как поле параметров ByeDPI, только уже: один домен на строку. В UCI это list domain. */
+		o = s.option(form.TextValue, 'domain', _('Дополнительные домены'),
+			_('По одному домену в строке; поддомены подхватываются автоматически. ' +
+			  'Добавляются к встроенному списку. Можно вставлять и ссылки — из них берётся домен.'));
+		o.rows = 8;
+		o.cols = 36;          /* с cols LuCI не растягивает поле на всю ширину */
+		/* тема может задавать textarea свой width и игнорировать cols — фиксируем ширину явно */
+		o.renderWidget = function() {
+			var fix = function(n) {
+				var ta = n && n.querySelector ? n.querySelector('textarea') : null;
+				if (ta) { ta.style.width = '40ch'; ta.style.maxWidth = '100%'; }
+				return n;
+			};
+			var node = form.TextValue.prototype.renderWidget.apply(this, arguments);
+			return (node && typeof node.then === 'function') ? node.then(fix) : fix(node);
+		};
+		o.wrap = false;
+		o.monospace = true;
+		o.placeholder = 'example.com\nanother.org';
+		o.cfgvalue = function(section_id) {
+			var v = uci.get('ytbypass', section_id, 'domain');
+			return Array.isArray(v) ? v.join('\n') : (v || '');
+		};
+		o.validate = function(section_id, value) {
+			var r = parseDomains(value);
+			if (r.bad.length)
+				return _('Некорректный домен: ') + r.bad[0];
+			return true;
+		};
+		o.write = function(section_id, value) {
+			var list = parseDomains(value).list;
+			return this.map.data.set(this.uciconfig || this.section.uciconfig || this.map.config,
+				section_id, this.ucioption || this.option, list.length ? list : null);
+		};
+
+		o = s.option(form.Button, '_restart', _('Служба'));
+		o.inputtitle = _('Перезапустить');
+		o.inputstyle = 'apply';
+		o.onclick = function() {
+			return fs.exec(INIT, [ 'restart' ]).then(function() {
+				notify(true, _('Служба перезапущена.'));
+			}).catch(function(e) {
+				notify(false, _('Ошибка: ') + e.message);
+			});
+		};
+
+		o = s.option(form.Button, '_flush', _('Наборы IP'));
+		o.inputtitle = _('Очистить');
+		o.inputstyle = 'reset';
+		o.onclick = function() {
+			return fs.exec(CTL, [ 'flush' ]).then(function() {
+				notify(true, _('Наборы очищены. Обновите DNS-кэш на клиентах или перезапустите браузер.'));
+			}).catch(function(e) {
+				notify(false, _('Ошибка: ') + e.message);
+			});
+		};
+
+		return m.render().then(function(mapEl) {
+			var statusEl = E('div', {}, renderStatus(st));
+
+			poll.add(function() {
+				return getStatus().then(function(res) {
+					dom.content(statusEl, renderStatus(res));
+				});
+			}, 5);
+
+			return E([
+				E('div', { 'class': 'cbi-section' }, [ E('h3', _('Состояние')), statusEl ]),
+				mapEl
+			]);
+		});
+	}
+});
+YTB_FILE_END_7f3a9c
+	chmod 644 "$R/www/luci-static/resources/view/ytbypass/main.js"
+	mkdir -p "$R/www/luci-static/resources/view/ytbypass"
+	cat > "$R/www/luci-static/resources/view/ytbypass/test.js" <<'YTB_FILE_END_7f3a9c'
+'use strict';
+'require view';
+'require fs';
+'require poll';
+'require ui';
+'require uci';
+'require dom';
+'require ytbypass.presets as presets';
+
+var CTL = '/usr/bin/ytbypass';
+
+/* палитра «терминала» на чёрном фоне */
+var C = {
+	fg: '#d0d0d0', green: '#4ade80', orange: '#fbbf24', red: '#f87171',
+	cyan: '#22d3ee', yellow: '#facc15', gray: '#8b949e', white: '#ffffff'
+};
+var TERM = 'background:#000;color:' + C.fg + ';font-family:monospace;font-size:13px;line-height:1.5;' +
+	'border:1px solid #222;border-radius:4px;padding:10px 12px;';
+
+/* Вызов ytbypass с JSON-ответом */
+function callJson(args) {
+	return fs.exec(CTL, args).then(function(r) {
+		var out = (r.stdout || '').trim();
+		try { return JSON.parse(out); }
+		catch (e) { return { error: out || r.stderr || _('нет ответа') }; }
+	}).catch(function(e) { return { error: e.message }; });
 }
 
-list_file() {
-	local nm
-	nm=$(list_name "$1")
-	[ -n "$nm" ] || return 1
-	if [ -s "$BT_CUSTOM/$nm" ]; then
-		echo "$BT_CUSTOM/$nm"
-	else
-		echo "$BT_DEFAULT/$nm"
-	fi
+/* Вызов ytbypass с текстовым ответом */
+function callText(args) {
+	return fs.exec(CTL, args).then(function(r) { return r.stdout || ''; })
+		.catch(function() { return ''; });
 }
 
-list_is_custom() {
-	local nm
-	nm=$(list_name "$1")
-	[ -n "$nm" ] && [ -s "$BT_CUSTOM/$nm" ]
-}
-
-test_is_running() {
-	[ -f "$TEST_DIR/job.pid" ] && kill -0 "$(cat "$TEST_DIR/job.pid" 2>/dev/null)" 2>/dev/null
-}
-
-norm_domains() {
-	awk -v badf="$1" '
-	{
-		gsub(/\r/, "")
-		line = $0
-		sub(/^[ \t]+/, "", line); sub(/[ \t]+$/, "", line)
-		if (line == "") next
-		if (substr(line, 1, 1) == "#") { print line; next }
-		sub(/#.*/, "", line)
-		n = split(line, tok, /[ \t,;]+/)
-		for (i = 1; i <= n; i++) {
-			d = tolower(tok[i])
-			if (d == "") continue
-			sub(/^[a-z][a-z0-9+.-]*:\/\//, "", d)
-			sub(/[\/?#].*$/, "", d)
-			sub(/^\*?\./, "", d)
-			if (d ~ /^[a-z0-9]([a-z0-9._-]*[a-z0-9])?$/ && index(d, ".") > 0) {
-				if (!(d in seen)) { seen[d] = 1; print d }
-			} else if (!bad) { bad = 1; print tok[i] > badf }
-		}
-	}'
-}
-
-norm_strategies() {
-	awk '
-	{
-		gsub(/\r/, ""); gsub(/[ \t]+/, " ")
-		line = $0; sub(/^ /, "", line); sub(/ $/, "", line)
-		if (line == "") next
-		if (substr(line, 1, 1) == "#") { print line; next }
-		if (!(line in seen)) { seen[line] = 1; print line }
-	}'
-}
-BYT_FILE_END_7f3a9c
-	chmod 644 "$BT_DIR/lib/common.sh"
-	mkdir -p "$BT_DIR/lib"
-	cat > "$BT_DIR/lib/dns-apply.sh" <<'BYT_FILE_END_7f3a9c'
-#!/bin/sh
-. "${BT_FUNCTIONS:-/lib/functions.sh}"
-. "${BT_HOME:-/opt/ByeTube}/lib/common.sh"
-. "$BT_HOME/lib/dns.sh"
-
-config_load byetube
-config_get enabled main enabled 0
-[ "$enabled" = "1" ] || exit 0
-config_get ipv6 main ipv6 1
-[ -f /proc/net/if_inet6 ] || ipv6=0
-dns_apply "$ipv6"
-exit 0
-BYT_FILE_END_7f3a9c
-	chmod 755 "$BT_DIR/lib/dns-apply.sh"
-	mkdir -p "$BT_DIR/lib"
-	cat > "$BT_DIR/lib/dns.sh" <<'BYT_FILE_END_7f3a9c'
-_echo() { echo "$1"; }
-
-collect_domains() {
-	local use_default
-	config_get use_default main default_domains 1
-	{
-		[ "$use_default" = "1" ] && cat "$(list_file youtube)" 2>/dev/null
-		config_list_foreach main domain _echo
-	} | sed 's/#.*//; s/^[[:space:]]*//; s/[[:space:]]*$//' \
-	  | tr '[:upper:]' '[:lower:]' \
-	  | grep -E '^[a-z0-9]([a-z0-9._-]*[a-z0-9])?$' \
-	  | sort -u \
-	  | awk '
-		{ name[NR] = $0; have[$0] = 1 }
-		END {
-			for (i = 1; i <= NR; i++) {
-				n = split(name[i], p, ".")
-				suf = ""; redundant = 0
-				for (j = n; j >= 2; j--) {
-					suf = (suf == "") ? p[j] : p[j] "." suf
-					if (suf in have) { redundant = 1; break }
-				}
-				if (!redundant) print name[i]
-			}
-		}'
-}
-
-dns_remove() {
-	local conf
-	conf="$(dnsmasq_confdir)/byetube.conf"
-	[ -f "$conf" ] || return 0
-	rm -f "$conf"
-	/etc/init.d/dnsmasq restart >/dev/null 2>&1
-}
-
-dns_apply() {
-	local ipv6="$1" conf domains suffix new old
-	conf="$(dnsmasq_confdir)/byetube.conf"
-	domains=$(collect_domains)
-	if [ -z "$domains" ]; then
-		dns_remove
-		return 0
-	fi
-	suffix="4#inet#${NFT_TABLE}#yt4"
-	[ "$ipv6" = "1" ] && suffix="$suffix,6#inet#${NFT_TABLE}#yt6"
-	new=$(printf '%s\n' "$domains" | awk -v suffix="$suffix" -v max=800 '
-		{
-			if (cur != "" && length("nftset=/" cur "/" $0 "/" suffix) > max) {
-				print "nftset=/" cur "/" suffix
-				cur = ""
-			}
-			cur = (cur == "") ? $0 : cur "/" $0
-		}
-		END { if (cur != "") print "nftset=/" cur "/" suffix }')
-	old=$(cat "$conf" 2>/dev/null)
-	if [ "$old" != "$new" ]; then
-		mkdir -p "$(dirname "$conf")"
-		printf '%s\n' "$new" > "$conf"
-		/etc/init.d/dnsmasq restart >/dev/null 2>&1
-	fi
-}
-BYT_FILE_END_7f3a9c
-	chmod 644 "$BT_DIR/lib/dns.sh"
-	mkdir -p "$BT_DIR/lib"
-	cat > "$BT_DIR/lib/lists.sh" <<'BYT_FILE_END_7f3a9c'
-list_apply_dns() {
-	local en
-	"$BT_HOME/lib/dns-apply.sh" >/dev/null 2>&1
-	en=$(uci -q get byetube.main.enabled)
-	[ "$en" = "1" ]
-}
-
-list_extra_get() {
-	uci -q get byetube.main.domain | tr ' ' '\n' | grep -v '^$'
-}
-
-list_extra_write() {
-	local file="$1" d
-	uci -q delete byetube.main.domain
-	while IFS= read -r d; do
-		[ -n "$d" ] && uci add_list "byetube.main.domain=$d"
-	done < "$file"
-	uci commit byetube
-}
-
-cmd_list() {
-	local action="$1" kind="$2" text="$3" nm tmp bad n f applied=false custom=false
-
-	case "$kind" in
-		youtube|strategies|test-domains|extra) ;;
-		*) echo '{"error":"неизвестный список"}'; return 0 ;;
-	esac
-
-	case "$action" in
-	get)
-		if [ "$kind" = "extra" ]; then
-			list_extra_get
+/* «стратегия → ok/total»; контрольная строка отдельно */
+function parseResults(text) {
+	var rows = [], control = null;
+	(text || '').split('\n').forEach(function(line) {
+		var m = line.match(/^(.*?)\s*→\s*(\d+)\/(\d+)\s*$/);
+		if (!m) return;
+		if (/^Контрольный тест/.test(m[1]))
+			control = { ok: +m[2], total: +m[3] };
 		else
-			f=$(list_file "$kind")
-			[ -f "$f" ] && cat "$f"
-		fi
-		return 0
-		;;
-	set|reset)
-		;;
-	*)
-		echo '{"error":"неизвестное действие"}'
-		return 0
-		;;
-	esac
+			rows.push({ opts: m[1], ok: +m[2], total: +m[3] });
+	});
+	rows.forEach(function(r, i) { r.i = i; });
+	rows.sort(function(a, b) { return (b.ok - a.ok) || (a.i - b.i); });
+	return { control: control, rows: rows };
+}
 
-	case "$kind" in
-		strategies|test-domains)
-			if test_is_running; then
-				echo '{"error":"тест выполняется — остановите его перед изменением списка"}'
-				return 0
-			fi
+/* зелёный — все домены; оранжевый — лучше контрольного замера; красный — не лучше */
+function scoreColor(ok, total, controlOk) {
+	if (ok === total) return C.green;
+	if (controlOk !== null && controlOk !== undefined) return ok > controlOk ? C.orange : C.red;
+	return ok > 0 ? C.orange : C.red;
+}
+
+function sp(text, color, bold) {
+	return E('span', { 'style': 'color:' + color + (bold ? ';font-weight:bold' : '') }, [ text ]);
+}
+
+function chip(text, color) {
+	return E('span', {
+		'style': 'display:inline-block;min-width:4.4em;text-align:center;padding:1px 7px;border-radius:3px;' +
+			'font-weight:bold;color:#000;background:' + color
+	}, [ text ]);
+}
+
+function toast(ok, text) {
+	ui.addNotification(null, E('p', text), ok ? 'info' : 'danger');
+}
+
+/* ---- цветной вывод лога ---- */
+function logLine(line, ctx) {
+	var m, kids;
+
+	if ((m = line.match(/^==> \[(\d+)\/(\d+)\] (.*)$/))) {
+		var p = presets.find(m[3]);
+		kids = [ sp('==> ', C.cyan, true), sp('[' + m[1] + '/' + m[2] + '] ', C.yellow, true), sp(m[3], C.white) ];
+		if (p) kids.push(sp('   ← ' + p.name, C.gray));
+	}
+	else if ((m = line.match(/^==> Результат: (\d+)\/(\d+)$/))) {
+		ctx.ctrl = +m[1];
+		kids = [ sp('==> ', C.cyan, true), sp('Результат контрольного замера: ', C.gray), sp(m[1] + '/' + m[2], C.white, true) ];
+	}
+	else if ((m = line.match(/^(\s+)результат: (\d+)\/(\d+)$/))) {
+		kids = [ sp(m[1] + 'результат: ', C.gray), sp(m[2] + '/' + m[3], scoreColor(+m[2], +m[3], ctx.ctrl), true) ];
+	}
+	else if (/^\s+(пропуск|прервано)/.test(line)) {
+		kids = [ sp(line, C.yellow) ];
+	}
+	else if ((m = line.match(/^==> Лучшая стратегия: (.*?)\s*→\s*(\d+)\/(\d+)\s*$/))) {
+		kids = [ sp('==> Лучшая стратегия: ', C.green, true), sp(m[1] + ' ', C.white),
+			sp('→ ', C.gray), sp(m[2] + '/' + m[3], scoreColor(+m[2], +m[3], ctx.ctrl), true) ];
+	}
+	else if (/^==> Тест завершён/.test(line)) {
+		kids = [ sp(line, C.green, true) ];
+	}
+	else if (/^==> Тест остановлен/.test(line) || /^==> Пропущено/.test(line)) {
+		kids = [ sp(line, C.yellow, true) ];
+	}
+	else if (/^==> Результаты$/.test(line)) {
+		kids = [ sp(line, C.cyan, true) ];
+	}
+	else if ((m = line.match(/^(.*?)\s*→\s*(\d+)\/(\d+)\s*$/))) {
+		if (/^Контрольный тест/.test(m[1])) {
+			ctx.ctrl = +m[2];
+			kids = [ sp(m[1] + ' → ', C.gray), sp(m[2] + '/' + m[3], C.white, true) ];
+		} else {
+			kids = [ sp(m[1] + ' ', C.fg), sp('→ ', C.gray),
+				sp(m[2] + '/' + m[3], scoreColor(+m[2], +m[3], ctx.ctrl), true) ];
+		}
+	}
+	else if (/^ОШИБКА/.test(line)) {
+		kids = [ sp(line, C.red, true) ];
+	}
+	else if (/^==> /.test(line)) {
+		kids = [ sp('==> ', C.cyan, true), sp(line.slice(4), C.fg) ];
+	}
+	else {
+		kids = [ sp(line, C.fg) ];
+	}
+	return E('div', {}, kids);
+}
+
+function renderLog(el, text) {
+	var ctx = { ctrl: null };
+	dom.content(el, (text || '').split('\n').filter(function(l) { return l !== ''; })
+		.map(function(l) { return logLine(l, ctx); }));
+}
+
+return view.extend({
+	load: function() {
+		return Promise.all([
+			callJson([ 'test', 'status' ]),
+			uci.load('ytbypass'),
+			callText([ 'test', 'list', 'get', 'strategies' ]),
+			callText([ 'test', 'list', 'get', 'domains' ])
+		]);
+	},
+
+	render: function(data) {
+		var status = data[0] || {};
+		var texts = { strategies: data[2] || '', domains: data[3] || '' };
+		var editors = {};
+		var running = status.running === true;
+		var curOpts = presets.clean(uci.get('ytbypass', 'main', 'byedpi_opts'));
+		var wasRunning = running;
+
+		var infoEl = E('p', { 'class': 'cbi-section-descr' });
+		var buttonsEl = E('div', { 'style': 'margin:8px 0' });
+		var logEl = E('div', {
+			'style': TERM + 'display:none;max-height:380px;overflow:auto;white-space:pre-wrap;' +
+				'word-break:break-word;margin-top:10px'
+		});
+		var resultsEl = E('div');
+
+		function listState(kind) {
+			var isS = kind === 'strategies';
+			var n = (isS ? status.strategies : status.domains) || 0;
+			var custom = isS ? status.strategies_custom : status.domains_custom;
+			return { n: n, custom: !!custom, text: n + ' (' + (custom ? _('свой список') : _('встроенный')) + ')' };
+		}
+
+		function renderInfo() {
+			var t = _('Каждая стратегия запускается во временном экземпляре ByeDPI на отдельном порту, а домены ' +
+				'проверяются через него. Основной сервис и трафик клиентов не затрагиваются, настройки не меняются. ' +
+				'Сначала делается контрольный замер без обхода. Тест идёт в фоне — вкладку можно закрыть.');
+			dom.content(infoEl, [
+				t,
+				E('br'),
+				E('em', {}, [ _('Стратегий: ') + listState('strategies').text + _(', доменов: ') + listState('domains').text ])
+			]);
+		}
+
+		/* ---- редакторы списков: по одной стратегии / одному домену в строке ---- */
+		function makeEditor(kind, title, hint, opts) {
+			var attrs = {
+				'class': 'cbi-input-textarea',
+				'rows': opts.rows,
+				'wrap': opts.wrap ? 'soft' : 'off',
+				'spellcheck': 'false',
+				/* ширина — явным стилем (theme задаёт свой width для textarea); display:block и max-width
+				   не дают полю выйти за пределы страницы */
+				'style': 'display:block;box-sizing:border-box;max-width:100%;resize:vertical;' +
+					'font-family:monospace;font-size:13px;line-height:1.5;' + opts.width
+			};
+			var ta = E('textarea', attrs, [ texts[kind] ]);
+			var meta = E('div', { 'class': 'cbi-section-descr', 'style': 'margin:4px 0' });
+			var saveBtn = E('button', { 'class': 'cbi-button cbi-button-save', 'click': function() { doSaveList(kind); } }, _('Сохранить'));
+			var resetBtn = E('button', { 'class': 'cbi-button', 'click': function() { doResetList(kind); } }, _('Сбросить к встроенному'));
+			var node = E('div', { 'style': 'margin:14px 0 18px 0' }, [
+				E('strong', {}, [ title ]),
+				E('div', { 'class': 'cbi-section-descr', 'style': 'margin:2px 0 6px 0' }, [ hint ]),
+				ta, meta,
+				E('div', {}, [ saveBtn, ' ', resetBtn ])
+			]);
+			return { node: node, ta: ta, meta: meta, saveBtn: saveBtn, resetBtn: resetBtn };
+		}
+
+		/* доступность правки: во время теста списки менять нельзя */
+		function syncEditors() {
+			[ 'strategies', 'domains' ].forEach(function(k) {
+				var ed = editors[k];
+				if (!ed) return;
+				var st = listState(k);
+				dom.content(ed.meta, [ (st.custom ? _('Свой список') : _('Встроенный список')) + ' · ' + st.n + ' ' +
+					(k === 'strategies' ? _('стратегий') : _('доменов')) ]);
+				ed.ta.disabled = running;
+				ed.saveBtn.disabled = running;
+				ed.resetBtn.disabled = running || !st.custom;
+			});
+		}
+
+		function reloadList(kind) {
+			return callText([ 'test', 'list', 'get', kind ]).then(function(t) { editors[kind].ta.value = t; });
+		}
+
+		function setListState(kind, res) {
+			if (kind === 'strategies') { status.strategies = res.count; status.strategies_custom = res.custom; }
+			else { status.domains = res.count; status.domains_custom = res.custom; }
+		}
+
+		function doSaveList(kind) {
+			var ed = editors[kind];
+			if (!ed.ta.value.trim()) {
+				toast(false, _('Список пуст. Чтобы вернуть встроенный, нажмите «Сбросить к встроенному».'));
+				return;
+			}
+			callJson([ 'test', 'list', 'set', kind, ed.ta.value ]).then(function(res) {
+				if (res.error) { toast(false, res.error); return; }
+				setListState(kind, res);
+				reloadList(kind).then(function() {
+					renderInfo(); syncEditors();
+					toast(true, _('Список сохранён.'));
+				});
+			});
+		}
+
+		function doResetList(kind) {
+			if (!confirm(_('Вернуть встроенный список? Ваши правки будут удалены.'))) return;
+			callJson([ 'test', 'list', 'reset', kind ]).then(function(res) {
+				if (res.error) { toast(false, res.error); return; }
+				setListState(kind, res);
+				reloadList(kind).then(function() {
+					renderInfo(); syncEditors();
+					toast(true, _('Возвращён встроенный список.'));
+				});
+			});
+		}
+
+		editors.strategies = makeEditor('strategies', _('Стратегии'),
+			_('Одна стратегия (параметры ciadpi) в строке. Длинные строки переносятся на экране, но остаются одной стратегией.'),
+			{ rows: 14, wrap: true, width: 'width:100%;' });
+		editors.domains = makeEditor('domains', _('Домены для проверки'),
+			_('Один домен в строке; можно вставлять ссылки.'),
+			{ rows: 10, wrap: false, width: 'width:40ch;' });
+
+		var listsEl = E('details', { 'style': 'margin:10px 0' }, [
+			E('summary', { 'style': 'cursor:pointer;font-weight:bold' }, [ _('Списки для теста — стратегии и домены (редактировать)') ]),
+			E('p', { 'class': 'cbi-section-descr' }, [
+				_('Свои списки хранятся в /etc/ytbypass/ и не затираются при обновлении. Строки, начинающиеся с #, — комментарии. ' +
+				  'Домены нужны только для проверки доступности при тесте и на маршрутизацию не влияют. ' +
+				  'Пока идёт тест, списки менять нельзя.')
+			]),
+			E('div', {}, [ editors.strategies.node, editors.domains.node ])
+		]);
+
+		function renderButtons() {
+			var els = [];
+			if (status.curl === false) {
+				els.push(E('em', { 'style': 'color:#c0392b' },
+					_('Не установлен curl — он нужен для теста: apk add curl (или opkg install curl).')));
+			} else if (running) {
+				els.push(E('span', {
+					'style': 'display:inline-block;padding:2px 8px;border-radius:3px;color:#000;background:' + C.green
+				}, _('тест выполняется')));
+				els.push(' ');
+				els.push(E('button', { 'class': 'cbi-button cbi-button-remove', 'click': doStop },
+					_('Остановить тест')));
+			} else {
+				els.push(E('button', { 'class': 'cbi-button cbi-button-positive', 'click': doStart },
+					_('Запустить тест')));
+				if (status.has_results) {
+					els.push(' ');
+					els.push(E('button', { 'class': 'cbi-button', 'click': doClear },
+						_('Очистить результаты')));
+				}
+			}
+			dom.content(buttonsEl, els);
+			syncEditors();
+		}
+
+		function renderResults(text) {
+			var res = parseResults(text);
+			if (!res.rows.length && !res.control) {
+				dom.content(resultsEl, E('p', { 'class': 'cbi-section-descr' },
+					_('Пока нет результатов — запустите тест.')));
+				return;
+			}
+
+			var controlOk = res.control ? res.control.ok : null;
+			var headKids = [];
+			if (res.control)
+				headKids.push(sp(_('Контрольный замер (без обхода): '), C.gray),
+					chip(res.control.ok + '/' + res.control.total, C.gray), E('br'));
+			headKids.push(sp(_('Цвет: '), C.gray), chip(_('все домены'), C.green), ' ',
+				chip(_('лучше контроля'), C.orange), ' ', chip(_('не лучше'), C.red),
+				sp(_('   При равенстве выше стоит стратегия, что раньше в списке.'), C.gray));
+			var head = E('div', { 'style': 'margin-bottom:8px' }, headKids);
+
+			/* обычная таблица с фиксированной раскладкой: длинные стратегии переносятся внутри своей ячейки */
+			var CELL = 'padding:7px 8px 7px 0;border:0;border-top:1px solid #1e1e1e;vertical-align:top;' +
+				'background:transparent;color:inherit;';
+			var rows = res.rows.map(function(r, i) {
+				var p = presets.find(r.opts);
+				var isCur = presets.clean(r.opts) === curOpts;
+				var body = [];
+				if (p || isCur)
+					body.push(E('div', { 'style': 'color:' + C.gray + ';margin-bottom:2px' }, [
+						p ? p.name : '',
+						isCur ? sp((p ? '  ' : '') + _('(текущая)'), C.cyan, true) : ''
+					]));
+				body.push(E('div', {
+					'style': 'color:' + C.white + ';white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere'
+				}, [ r.opts ]));
+
+				return E('tr', {}, [
+					E('td', { 'style': CELL + 'width:2.6em;color:' + C.gray }, [ String(i + 1) ]),
+					E('td', { 'style': CELL + 'width:6.6em' }, [ chip(r.ok + '/' + r.total, scoreColor(r.ok, r.total, controlOk)) ]),
+					E('td', { 'style': CELL }, body),
+					E('td', { 'style': CELL + 'width:9em;text-align:right;padding-right:0' }, [
+						isCur ? '' : E('button', {
+							'class': 'cbi-button cbi-button-apply',
+							'click': function() { doApply(r.opts); }
+						}, _('Применить'))
+					])
+				]);
+			});
+
+			var table = E('table', {
+				'style': 'width:100%;table-layout:fixed;border-collapse:collapse;border-spacing:0;margin:0;background:transparent'
+			}, [ E('tbody', {}, rows) ]);
+
+			dom.content(resultsEl, E('div', { 'style': TERM }, [ head, table ]));
+		}
+
+		function refreshResults() {
+			return callText([ 'test', 'results' ]).then(renderResults);
+		}
+
+		function refreshLog() {
+			return callText([ 'test', 'log' ]).then(function(t) {
+				var atBottom = logEl.scrollTop + logEl.clientHeight >= logEl.scrollHeight - 20;
+				logEl.style.display = t ? '' : 'none';
+				renderLog(logEl, t);
+				if (atBottom) logEl.scrollTop = logEl.scrollHeight;
+			});
+		}
+
+		function doStart() {
+			callJson([ 'test', 'start' ]).then(function(res) {
+				if (res.error) { toast(false, res.error); return; }
+				running = true;
+				wasRunning = true;
+				status.has_results = false;
+				dom.content(resultsEl, '');
+				renderButtons();
+				refreshLog();
+				toast(true, _('Тест запущен.'));
+			});
+		}
+
+		function doStop() {
+			callJson([ 'test', 'stop' ]).then(function(res) {
+				if (res.error) { toast(false, res.error); return; }
+				toast(true, _('Останавливаю тест…'));
+			});
+		}
+
+		function doClear() {
+			callJson([ 'test', 'clear' ]).then(function(res) {
+				if (res.error) { toast(false, res.error); return; }
+				status.has_results = false;
+				renderButtons();
+				renderResults('');
+				logEl.style.display = 'none';
+			});
+		}
+
+		function doApply(opts) {
+			var p = presets.find(opts);
+			if (!confirm(_('Применить стратегию и перезапустить службу?\n\n') + (p ? p.name + '\n' : '') + opts)) return;
+			callJson([ 'set-strategy', opts ]).then(function(res) {
+				if (res.error) { toast(false, res.error); return; }
+				curOpts = presets.clean(opts);
+				toast(true, _('Стратегия применена, служба перезапущена.'));
+				refreshResults();
+			});
+		}
+
+		function tick() {
+			return callJson([ 'test', 'status' ]).then(function(st) {
+				if (st.error) return;
+				status = st;
+				running = st.running === true;
+				renderInfo();
+				renderButtons();
+				if (running || wasRunning)
+					refreshLog();
+				if (wasRunning && !running) {
+					wasRunning = false;
+					refreshResults();
+					toast(st.rc === '0' || st.rc === '', _('Тест завершён.'));
+				}
+			});
+		}
+
+		renderInfo();
+		renderButtons();
+		refreshLog();
+		refreshResults();
+		poll.add(tick, 3);
+
+		return E([
+			E('h2', {}, _('Тест стратегий ByeDPI')),
+			E('div', { 'class': 'cbi-section' }, [ infoEl, buttonsEl, listsEl, logEl ]),
+			E('div', { 'class': 'cbi-section' }, [ E('h3', {}, _('Результаты')), resultsEl ])
+		]);
+	},
+
+	handleSaveApply: null,
+	handleSave: null,
+	handleReset: null
+});
+YTB_FILE_END_7f3a9c
+	chmod 644 "$R/www/luci-static/resources/view/ytbypass/test.js"
+	mkdir -p "$R/www/luci-static/resources/ytbypass"
+	cat > "$R/www/luci-static/resources/ytbypass/presets.js" <<'YTB_FILE_END_7f3a9c'
+'use strict';
+'require baseclass';
+
+/*
+ * Готовые стратегии ByeDPI (параметры ciadpi).
+ * name — короткое имя для списка, чтобы не читать длинную командную строку;
+ * опции подставляются в поле «Параметры ByeDPI».
+ * Под своего провайдера лучшую стратегию подбирает вкладка «Тест стратегий».
+ */
+var LIST = [
+	{
+		id: 'p1',
+		name: '1 · Каскад disorder/split + tlsrec + md5sig, авто-режим -As (по умолчанию)',
+		opts: '-d1 -d3+s -s6+s -d9+s -s12+s -d15+s -s20+s -d25+s -s30+s -d35+s -r1+s -S -a1 -As -d1 -d3+s -s6+s -d9+s -s12+s -d15+s -s20+s -d25+s -s30+s -d35+s -S -a1'
+	},
+	{
+		id: 'p2',
+		name: '2 · Короткая: OOB + tlsrec у SNI',
+		opts: '-o1 -a1 -r-5+se'
+	},
+	{
+		id: 'p3',
+		name: '3 · Fake SNI google.com + disorder/OOB (TTL 4)',
+		opts: '-n "google.com" -Qr -d5+sm -f3+sm -o2 -t4 -a1'
+	},
+	{
+		id: 'p4',
+		name: '4 · Каскад disorder/split без tlsrec и авто-режима',
+		opts: '-d1 -s1+s -d3+s -s6+s -d9+s -s12+s -d15+s -s20+s -d25+s -s30+s -d35+s -a1'
+	},
+	{
+		id: 'p5',
+		name: '5 · Fake + disoob + tlsrec (TTL 5 и 15)',
+		opts: '-f1 -t5 -n "google.com" -q3+h -Qr -f2 -q1 -r1+s -t15 -q1 -o2 -a1'
+	},
+	{
+		id: 'p6',
+		name: '6 · OOB + tlsrec + авто-режим -At,r,s, fake google.com',
+		opts: '-o1 -r-5+se -a1 -At,r,s -d1 -n "google.com" -Qr -f-1 -a1'
+	}
+];
+
+/* для сравнения: без кавычек, пробелы схлопнуты (так же, как в бэкенде) */
+function clean(s) {
+	return String(s == null ? '' : s).replace(/["']/g, '').replace(/\s+/g, ' ').trim();
+}
+
+/* для хранения: только пробелы, кавычки остаются как ввёл пользователь */
+function norm(s) {
+	return String(s == null ? '' : s).replace(/\s+/g, ' ').trim();
+}
+
+function find(opts) {
+	var c = clean(opts);
+	if (!c) return null;
+	for (var i = 0; i < LIST.length; i++)
+		if (clean(LIST[i].opts) === c) return LIST[i];
+	return null;
+}
+
+function byId(id) {
+	for (var i = 0; i < LIST.length; i++)
+		if (LIST[i].id === id) return LIST[i];
+	return null;
+}
+
+return baseclass.extend({
+	list: LIST,
+	DEFAULT: LIST[0].opts,
+	clean: clean,
+	norm: norm,
+	find: find,
+	byId: byId
+});
+YTB_FILE_END_7f3a9c
+	chmod 644 "$R/www/luci-static/resources/ytbypass/presets.js"
+}
+
+# ---------------------------------------------------------------- обёртка: install (1:1 логика install.sh)
+do_ytbypass_install() {
+# ---------------------------------------------------------------- окружение
+[ "$(id -u)" = "0" ] || die "нужны права root"
+[ -f /etc/openwrt_release ] || die "это не OpenWrt"
+. /etc/openwrt_release
+ARCH="$DISTRIB_ARCH"
+REL_MM=$(echo "$DISTRIB_RELEASE" | cut -d. -f1,2)
+
+if command -v apk >/dev/null 2>&1; then
+	PM=apk;  EXT=apk
+elif command -v opkg >/dev/null 2>&1; then
+	PM=opkg; EXT=ipk
+else
+	die "не найден ни apk, ни opkg"
+fi
+
+# ---------------------------------------------------------------- проверки
+say "OpenWrt $DISTRIB_RELEASE, архитектура $ARCH, менеджер пакетов: $PM"
+command -v fw4 >/dev/null 2>&1 || die "нужен firewall4 (OpenWrt 22.03+); hev-socks5-tunnel в пакетах — с 24.10"
+command -v nft >/dev/null 2>&1 || die "не найден nft"
+[ -d /www/luci-static/resources ] || warn "LuCI не найден — веб-интерфейс работать не будет (установите luci)"
+
+if ip rule add pref 8999 fwmark 0x10000/0x10000 lookup 89 2>/dev/null; then
+	ip rule del pref 8999 2>/dev/null
+else
+	die "ваш ip не поддерживает fwmark с маской. Установите ip-full: замените ip-tiny на ip-full и запустите установщик снова"
+fi
+
+say "Обновляю списки пакетов"
+if [ "$PM" = apk ]; then apk update >/dev/null 2>&1 || warn "apk update не удался"
+else opkg update >/dev/null 2>&1 || warn "opkg update не удался"; fi
+
+# ================================================================ установка
+[ "$PM" = apk ] || true
+pkg_has kmod-tun || { say "Ставлю kmod-tun"; pkg_add kmod-tun || die "kmod-tun не установлен"; }
+ensure_dnsmasq_full
+
+if ! pkg_has hev-socks5-tunnel; then
+	say "Ставлю hev-socks5-tunnel"
+	pkg_add hev-socks5-tunnel || die "hev-socks5-tunnel не найден в репозитории (есть в feeds OpenWrt 24.10+)"
+	NEW_HEV=1
+fi
+install_byedpi
+
+# curl (с SOCKS5) и корневые сертификаты нужны вкладке «Тест стратегий»
+for p in ca-bundle curl; do
+	pkg_has "$p" || pkg_add "$p" >/dev/null 2>&1 || warn "не удалось поставить $p — тест стратегий работать не будет (остальное — да)"
+done
+
+# свежепоставленные пакеты стартуют со своими дефолтами — гасим, наш экземпляр запускает ytbypass
+if [ "$NEW_BYEDPI" = 1 ] && [ -x /etc/init.d/byedpi ]; then
+	/etc/init.d/byedpi stop >/dev/null 2>&1; /etc/init.d/byedpi disable >/dev/null 2>&1
+fi
+if [ "$NEW_HEV" = 1 ] && [ -x /etc/init.d/hev-socks5-tunnel ]; then
+	/etc/init.d/hev-socks5-tunnel stop >/dev/null 2>&1; /etc/init.d/hev-socks5-tunnel disable >/dev/null 2>&1
+fi
+
+say "Устанавливаю YouTube Bypass (сервис + LuCI)"
+install_payload
+rm -rf /tmp/luci-indexcache* /tmp/luci-modulecache
+/etc/init.d/rpcd reload >/dev/null 2>&1
+
+# стратегия по умолчанию сменилась: обновляем, только если стоял один из прежних дефолтов (свою не трогаем)
+OLD_DEFAULT_1='--split 1 --disorder 3+s --mod-http=h,d --auto=torst --tlsrec 1+s'
+OLD_DEFAULT_2='-o1 -r-5+se -a1 -At,r,s -d1 -n "google.com" -Qr -f-1 -a1'
+NEW_DEFAULT='-d1 -d3+s -s6+s -d9+s -s12+s -d15+s -s20+s -d25+s -s30+s -d35+s -r1+s -S -a1 -As -d1 -d3+s -s6+s -d9+s -s12+s -d15+s -s20+s -d25+s -s30+s -d35+s -S -a1'
+CUR_OPTS=$(uci -q get ytbypass.main.byedpi_opts)
+if [ "$CUR_OPTS" = "$OLD_DEFAULT_1" ] || [ "$CUR_OPTS" = "$OLD_DEFAULT_2" ]; then
+	uci set ytbypass.main.byedpi_opts="$NEW_DEFAULT" && uci commit ytbypass
+	say "Стратегия по умолчанию обновлена"
+fi
+/etc/init.d/ytbypass enable
+
+if [ "$NOSTART" = 1 ]; then
+	say "Установлено. Запуск пропущен (--no-start): /etc/init.d/ytbypass start"
+	exit 0
+fi
+
+say "Запускаю"
+/etc/init.d/ytbypass restart
+sleep 4
+
+# проверка цепочки DNS -> nftset
+nslookup youtube.com 127.0.0.1 >/dev/null 2>&1
+sleep 1
+ST=$(/usr/bin/ytbypass status 2>/dev/null)
+show() { # ключ, описание
+	if [ "$(jsonfilter -s "$ST" -e "@.$1" 2>/dev/null)" = "true" ]; then
+		printf '  \033[32m[ok]\033[0m %s\n' "$2"
+	else
+		printf '  \033[31m[--]\033[0m %s\n' "$2"
+	fi
+}
+echo
+say "Состояние:"
+show byedpi         "ByeDPI (ciadpi)"
+show hev            "hev-socks5-tunnel"
+show tun            "интерфейс ytb0"
+show nft            "правила nftables"
+show route          "policy routing"
+show dns            "dnsmasq -> nftset"
+show fw             "firewall forward"
+IPS=$(jsonfilter -s "$ST" -e '@.ips4' 2>/dev/null)
+echo "  IP youtube.com в наборе после тестового резолва: ${IPS:-0}"
+
+cat <<MSG
+
+Готово. Веб-интерфейс: LuCI -> Службы -> YouTube Bypass (вкладки «Настройки» и «Тест стратегий»).
+Проверка: откройте YouTube на устройстве в LAN (DNS — роутер), затем на роутере:
+  ytbypass status       состояние
+  ytbypass list         IP, попавшие в наборы
+  logread -e ytbypass   логи
+
+Если клиент уже держал IP YouTube в DNS-кэше — перезапустите браузер / переподключите Wi-Fi.
+Удаление: sh install.sh --uninstall
+MSG
+}
+
+# ---------------------------------------------------------------- обёртка: uninstall/purge (1:1 do_uninstall из install.sh)
+do_ytbypass_uninstall() {
+	MODE="${1:-uninstall}"
+	do_uninstall
+}
+
+# ---------------------------------------------------------------- RPC-обвязка (не логика install.sh, а вызовы CLI/файлов)
+ytbypass_status() {
+	if [ -x /usr/bin/ytbypass ]; then
+		local st opts rest
+		st=$(/usr/bin/ytbypass status 2>/dev/null)
+		# byedpi_opts не входит в вывод "ytbypass status" — читаем uci отдельно
+		# (только чтение, CLI/логика install.sh этим не затрагиваются)
+		opts=$(uci -q get ytbypass.main.byedpi_opts)
+		if [ -n "$st" ]; then
+			rest="${st#\{}"
+			printf '{"installed":true,"byedpi_opts":"%s",%s' "$(esc "$opts")" "$rest"
+		else
+			echo '{"installed":true,"error":"ytbypass status вернул пустой ответ"}'
+		fi
+	else
+		echo '{"installed":false}'
+	fi
+}
+
+ytbypass_action() {
+	local action="$1"
+	case "$action" in
+		install|update)
+			job_start ytbypass_install do_ytbypass_install
+			;;
+		remove)
+			job_start ytbypass_remove do_ytbypass_uninstall uninstall
+			;;
+		purge)
+			job_start ytbypass_purge do_ytbypass_uninstall purge
+			;;
+		start|restart)
+			/etc/init.d/ytbypass "$action" >/dev/null 2>&1
+			sleep 4
+			nslookup youtube.com 127.0.0.1 >/dev/null 2>&1
+			sleep 1
+			ytbypass_status
+			;;
+		stop)
+			/etc/init.d/ytbypass stop >/dev/null 2>&1
+			ytbypass_status
+			;;
+		*)
+			echo '{"error":"неизвестное действие"}'
 			;;
 	esac
+}
 
-	nm=$(list_name "$kind")
-	mkdir -p "$BT_TMP"
-	tmp="$BT_TMP/list.$$"
-	bad="$BT_TMP/bad.$$"
-
-	if [ "$action" = "reset" ]; then
-		if [ "$kind" = "extra" ]; then
-			: > "$tmp"
-			list_extra_write "$tmp"
-			rm -f "$tmp"
-			n=0
-		else
-			rm -f "$BT_CUSTOM/$nm"
-			n=$(count_lines "$(list_file "$kind")")
-		fi
-	else
-		: > "$bad"
-		case "$kind" in
-			strategies) printf '%s\n' "$text" | norm_strategies > "$tmp" ;;
-			extra)      printf '%s\n' "$text" | norm_domains "$bad" | grep -v '^#' > "$tmp" ;;
-			*)          printf '%s\n' "$text" | norm_domains "$bad" > "$tmp" ;;
+ytbypass_get_presets() {
+	local ids="p1 p2 p3 p4 p5 p6" id name opts first=1
+	printf '['
+	for id in $ids; do
+		case "$id" in
+			p1) name='1 · Каскад disorder/split + tlsrec + md5sig, авто-режим -As (по умолчанию)'
+			    opts='-d1 -d3+s -s6+s -d9+s -s12+s -d15+s -s20+s -d25+s -s30+s -d35+s -r1+s -S -a1 -As -d1 -d3+s -s6+s -d9+s -s12+s -d15+s -s20+s -d25+s -s30+s -d35+s -S -a1' ;;
+			p2) name='2 · Короткая: OOB + tlsrec у SNI'
+			    opts='-o1 -a1 -r-5+se' ;;
+			p3) name='3 · Fake SNI google.com + disorder/OOB (TTL 4)'
+			    opts='-n "google.com" -Qr -d5+sm -f3+sm -o2 -t4 -a1' ;;
+			p4) name='4 · Каскад disorder/split без tlsrec и авто-режима'
+			    opts='-d1 -s1+s -d3+s -s6+s -d9+s -s12+s -d15+s -s20+s -d25+s -s30+s -d35+s -a1' ;;
+			p5) name='5 · Fake + disoob + tlsrec (TTL 5 и 15)'
+			    opts='-f1 -t5 -n "google.com" -q3+h -Qr -f2 -q1 -r1+s -t15 -q1 -o2 -a1' ;;
+			p6) name='6 · OOB + tlsrec + авто-режим -At,r,s, fake google.com'
+			    opts='-o1 -r-5+se -a1 -At,r,s -d1 -n "google.com" -Qr -f-1 -a1' ;;
 		esac
-		if [ -s "$bad" ]; then
-			printf '{"error":"Некорректный домен: %s"}\n' "$(json_esc "$(head -n 1 "$bad")")"
-			rm -f "$tmp" "$bad"
-			return 0
-		fi
-		rm -f "$bad"
-		n=$(count_lines "$tmp")
-		if [ "$kind" = "extra" ]; then
-			list_extra_write "$tmp"
-			rm -f "$tmp"
-		else
-			if [ "${n:-0}" -le 0 ]; then
-				echo '{"error":"список пуст — чтобы вернуть встроенный, нажмите «Восстановить встроенный»"}'
-				rm -f "$tmp"
-				return 0
-			fi
-			mkdir -p "$BT_CUSTOM"
-			mv "$tmp" "$BT_CUSTOM/$nm"
-		fi
-	fi
-
-	case "$kind" in
-		youtube|extra) list_apply_dns && applied=true ;;
-	esac
-	if [ "$kind" != "extra" ] && list_is_custom "$kind"; then
-		custom=true
-	fi
-	[ "$kind" = "extra" ] && [ "${n:-0}" -gt 0 ] && custom=true
-	printf '{"ok":true,"count":%s,"custom":%s,"applied":%s}\n' "${n:-0}" "$custom" "$applied"
-	return 0
-}
-BYT_FILE_END_7f3a9c
-	chmod 644 "$BT_DIR/lib/lists.sh"
-	mkdir -p "$BT_DIR/lib"
-	cat > "$BT_DIR/lib/net.sh" <<'BYT_FILE_END_7f3a9c'
-#!/bin/sh
-. "${BT_FUNCTIONS:-/lib/functions.sh}"
-. "${BT_HOME:-/opt/ByeTube}/lib/common.sh"
-
-config_load byetube
-config_get IPV6 main ipv6 1
-config_get QUIC main quic block
-[ -f /proc/net/if_inet6 ] || IPV6=0
-
-rules_del() {
-	while ip rule del pref "$PREF" 2>/dev/null; do :; done
-	while ip -6 rule del pref "$PREF" 2>/dev/null; do :; done
-	ip route del default dev "$TUN" table "$TABLE" 2>/dev/null
-	ip -6 route del default dev "$TUN" table "$TABLE" 2>/dev/null
+		[ "$first" = 1 ] || printf ','
+		first=0
+		printf '{"id":"%s","name":"%s","opts":"%s"}' "$id" "$(esc "$name")" "$(esc "$opts")"
+	done
+	printf ']\n'
 }
 
-set_mark_stmt="counter ct mark set ct mark | $MARK meta mark set meta mark | $MARK"
-
-gen_ruleset() {
-	cat <<NFT
-table inet $NFT_TABLE {
-	set yt4 {
-		type ipv4_addr
-		flags timeout
-		timeout 12h
-		size 65535
-	}
-	set yt6 {
-		type ipv6_addr
-		flags timeout
-		timeout 12h
-		size 65535
-	}
-	chain prerouting {
-		type filter hook prerouting priority mangle; policy accept;
-		iifname "$TUN" return
-		ct mark & $MASK == $MARK meta mark set meta mark | $MARK return
-		meta l4proto tcp ip daddr @yt4 $set_mark_stmt
-NFT
-	[ "$IPV6" = "1" ] && echo "		meta l4proto tcp ip6 daddr @yt6 $set_mark_stmt"
-	if [ "$QUIC" = "proxy" ]; then
-		echo "		udp dport 443 ip daddr @yt4 $set_mark_stmt"
-		[ "$IPV6" = "1" ] && echo "		udp dport 443 ip6 daddr @yt6 $set_mark_stmt"
-	fi
-	echo "	}"
-	if [ "$QUIC" != "proxy" ]; then
-		cat <<NFT
-	chain forward {
-		type filter hook forward priority filter - 10; policy accept;
-		udp dport 443 ip daddr @yt4 counter reject
-		udp dport 443 ip6 daddr @yt6 counter reject
-	}
-NFT
-	fi
-	echo "}"
-}
-
-case "$1" in
-up)
-	rules_del
-	nft delete table inet "$NFT_TABLE" 2>/dev/null
-	gen_ruleset | nft -f - || exit 1
-	ip rule add pref "$PREF" fwmark "$MARK/$MASK" lookup "$TABLE" || exit 1
-	[ "$IPV6" = "1" ] && ip -6 rule add pref "$PREF" fwmark "$MARK/$MASK" lookup "$TABLE"
-	ip link show "$TUN" >/dev/null 2>&1 && "$BT_HOME/lib/route-up.sh" "$TUN"
-	exit 0
-	;;
-down)
-	rules_del
-	nft flush chain inet "$NFT_TABLE" prerouting 2>/dev/null
-	nft flush chain inet "$NFT_TABLE" forward 2>/dev/null
-	;;
-purge)
-	rules_del
-	nft delete table inet "$NFT_TABLE" 2>/dev/null
-	;;
-*)
-	echo "usage: $0 up|down|purge" >&2
-	exit 1
-	;;
-esac
-exit 0
-BYT_FILE_END_7f3a9c
-	chmod 755 "$BT_DIR/lib/net.sh"
-	mkdir -p "$BT_DIR/lib"
-	cat > "$BT_DIR/lib/route-up.sh" <<'BYT_FILE_END_7f3a9c'
-#!/bin/sh
-. "${BT_FUNCTIONS:-/lib/functions.sh}"
-. "${BT_HOME:-/opt/ByeTube}/lib/common.sh"
-
-config_load byetube
-config_get IPV6 main ipv6 1
-[ -f /proc/net/if_inet6 ] || IPV6=0
-
-ip link set "$TUN" up 2>/dev/null
-ip route replace default dev "$TUN" table "$TABLE"
-[ "$IPV6" = "1" ] && ip -6 route replace default dev "$TUN" table "$TABLE"
-
-echo 2 > "/proc/sys/net/ipv4/conf/$TUN/rp_filter" 2>/dev/null
-exit 0
-BYT_FILE_END_7f3a9c
-	chmod 755 "$BT_DIR/lib/route-up.sh"
-	mkdir -p "$BT_DIR/lib"
-	cat > "$BT_DIR/lib/test.sh" <<'BYT_FILE_END_7f3a9c'
-#!/bin/sh
-. "${BT_FUNCTIONS:-/lib/functions.sh}"
-. "${BT_HOME:-/opt/ByeTube}/lib/common.sh"
-
-PIDF="$TEST_DIR/job.pid"
-LOGF="$TEST_DIR/job.log"
-RES="$TEST_DIR/results.txt"
-RAW="$TEST_DIR/results.raw"
-STOP="$TEST_DIR/stop"
-CPID="$TEST_DIR/ciadpi.pid"
-PORT_BASE=22000
-UA='Mozilla/5.0 (Windows NT 10.0; Win64; x64) curl/8.0'
-TAB=$(printf '\t')
-
-cmd_start() {
-	if test_is_running; then
-		echo '{"started":true,"already_running":true}'
+ytbypass_set_strategy() {
+	local opts="$1" out
+	if [ ! -x /usr/bin/ytbypass ]; then
+		echo '{"error":"ytbypass не установлен"}'
 		return 0
 	fi
-	command -v curl >/dev/null 2>&1 || { echo '{"error":"не установлен curl (apk add curl / opkg install curl)"}'; return 0; }
-	[ -n "$(find_byedpi)" ] || { echo '{"error":"не найден ciadpi (пакет byedpi)"}'; return 0; }
-	mkdir -p "$TEST_DIR"
-	rm -f "$STOP"
-	: > "$LOGF"
-	( "$0" run >>"$LOGF" 2>&1; echo "__DONE__ $?" >>"$LOGF" ) >/dev/null 2>&1 </dev/null &
-	echo $! > "$PIDF"
-	echo '{"started":true}'
+	out=$(/usr/bin/ytbypass set-strategy "$opts")
+	# после смены стратегии init.d сам делает restart — довешиваем такой же прогрев DNS, как после install.sh
+	sleep 4
+	nslookup youtube.com 127.0.0.1 >/dev/null 2>&1
+	sleep 1
+	printf '%s' "$out"
 }
 
-cmd_stop() {
-	if ! test_is_running; then
-		echo '{"error":"тест не запущен"}'
+ytbypass_domains_get() {
+	local f=/usr/share/ytbypass/domains.list n
+	if [ ! -f "$f" ]; then
+		echo '{"error":"файл списка доменов не найден — YouTube Bypass не установлен"}'
 		return 0
 	fi
-	touch "$STOP"
-	[ -f "$CPID" ] && kill "$(cat "$CPID" 2>/dev/null)" 2>/dev/null
-	echo '{"ok":true}'
+	n=$(sed 's/#.*//' "$f" | grep -c '[^[:space:]]')
+	printf '{"count":%s,"content":"%s"}\n' "$n" "$(esc_ml "$(cat "$f")")"
 }
 
-cmd_status() {
-	local running=false has=false cu=false rc="" sc=false dc=false
-	test_is_running && running=true
-	[ -s "$RES" ] && has=true
-	command -v curl >/dev/null 2>&1 && cu=true
-	[ -f "$LOGF" ] && rc=$(grep '^__DONE__' "$LOGF" | tail -n 1 | awk '{print $2}')
-	list_is_custom strategies && sc=true
-	list_is_custom test-domains && dc=true
-	printf '{"running":%s,"has_results":%s,"curl":%s,"strategies":%s,"test_domains":%s,"strategies_custom":%s,"test_domains_custom":%s,"rc":"%s"}\n' \
-		"$running" "$has" "$cu" "$(count_lines "$(list_file strategies)")" "$(count_lines "$(list_file test-domains)")" "$sc" "$dc" "$rc"
+ytbypass_diag() {
+	local arg="$1" secs="$2"
+	job_start ytbypass_diag /usr/bin/ytbypass diag "$arg" "$secs"
 }
 
-cmd_log() {
-	[ -f "$LOGF" ] && tail -n 400 "$LOGF" | grep -v '^__DONE__'
-	return 0
-}
-
-cmd_results() {
-	[ -s "$RES" ] && cat "$RES"
-	return 0
-}
-
-cmd_clear() {
-	if test_is_running; then
-		echo '{"error":"тест выполняется"}'
+ytbypass_test_action() {
+	local action="$1"
+	if [ ! -x /usr/bin/ytbypass ]; then
+		echo '{"error":"ytbypass не установлен"}'
 		return 0
 	fi
-	rm -f "$RES" "$RAW"
-	echo '{"ok":true}'
-}
-
-check_url() {
-	local entry="$1" okfile="$2" logfile="$3" proxy="$4" host url rc
-	host="${entry%%|*}"
-	url="${entry#*|}"
-	if [ -n "$proxy" ]; then
-		curl -4 -sL --socks5 "$proxy" --connect-timeout 4 --max-time 6 --speed-time 3 --speed-limit 1 \
-			--range 0-65535 -A "$UA" -o /dev/null "$url" </dev/null >/dev/null 2>&1
-	else
-		curl -4 -sL --connect-timeout 4 --max-time 6 --speed-time 3 --speed-limit 1 \
-			--range 0-65535 -A "$UA" -o /dev/null "$url" </dev/null >/dev/null 2>&1
-	fi
-	rc=$?
-	if [ "$rc" -eq 0 ]; then
-		echo 1 >> "$okfile"
-		echo "[ OK ] $host" >> "$logfile"
-	else
-		echo "[FAIL] $host" >> "$logfile"
-	fi
-}
-
-check_all() {
-	local urls="$1" logfile="$2" proxy="$3" okf run=0 total=0 ok entry
-	okf="$TEST_DIR/ok.$$"
-	: > "$okf"
-	: > "$logfile"
-	while IFS= read -r entry; do
-		[ -n "$entry" ] || continue
-		[ -f "$STOP" ] && break
-		total=$((total + 1))
-		check_url "$entry" "$okf" "$logfile" "$proxy" &
-		run=$((run + 1))
-		if [ "$run" -ge "$PARALLEL" ]; then
-			wait
-			run=0
-		fi
-	done < "$urls"
-	wait
-	ok=$(wc -l < "$okf" | tr -d ' ')
-	rm -f "$okf"
-	echo "$ok $total"
-}
-
-cleanup() {
-	[ -f "$CPID" ] && kill "$(cat "$CPID" 2>/dev/null)" 2>/dev/null
-	rm -f "$CPID"
-}
-
-cmd_run() {
-	local BIN cand keys urls line k opts port idx total ntot res ok tot cok ctot cpid skipped=0 best
-
-	set -f
-	trap cleanup EXIT
-	trap 'exit 130' INT TERM
-
-	config_load byetube
-	config_get PARALLEL main test_parallel 8
-	config_get CUR main byedpi_opts ""
-	case "$PARALLEL" in ''|*[!0-9]*) PARALLEL=8 ;; esac
-	[ "$PARALLEL" -ge 1 ] || PARALLEL=8
-
-	BIN=$(find_byedpi)
-	[ -n "$BIN" ] || { echo "ОШИБКА: ciadpi не найден"; exit 1; }
-	command -v curl >/dev/null 2>&1 || { echo "ОШИБКА: не установлен curl"; exit 1; }
-
-	mkdir -p "$TEST_DIR"
-	rm -f "$STOP"
-	cand="$TEST_DIR/candidates.txt"
-	keys="$TEST_DIR/keys.txt"
-	urls="$TEST_DIR/urls.txt"
-	: > "$cand"; : > "$keys"; : > "$RAW"
-
-	echo "==> Собираем стратегии для теста"
-	{ printf '%s\n' "$CUR"; cat "$(list_file strategies)"; } | tr -d '\r' | while IFS= read -r line; do
-		line=$(printf '%s' "$line" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
-		case "$line" in ''|'#'*) continue ;; esac
-		k=$(byedpi_opts_clean "$line")
-		[ -n "$k" ] || continue
-		grep -qxF -- "$k" "$keys" && continue
-		echo "$k" >> "$keys"
-		echo "$line" >> "$cand"
-	done
-	total=$(wc -l < "$cand" | tr -d ' ')
-	[ "$total" -gt 0 ] || { echo "ОШИБКА: нет стратегий для теста"; exit 1; }
-
-	echo "==> Собираем список доменов"
-	tr -d '\r' < "$(list_file test-domains)" | sed 's/#.*//; s/^[[:space:]]*//; s/[[:space:]]*$//' \
-		| grep -E '^[A-Za-z0-9._-]+$' | awk '!s[$0]++' | sed 's#.*#&|https://&/#' > "$urls"
-	ntot=$(wc -l < "$urls" | tr -d ' ')
-	[ "$ntot" -gt 0 ] || { echo "ОШИБКА: нет доменов для теста"; exit 1; }
-	echo "==> Стратегий: $total, доменов: $ntot, параллельно: $PARALLEL"
-
-	echo "==> Контрольный тест: без обхода"
-	res=$(check_all "$urls" "$TEST_DIR/log_control.txt" "")
-	if [ -f "$STOP" ]; then
-		echo "==> Тест остановлен на контрольном замере, результатов нет"
-		rm -f "$STOP"
-		return 0
-	fi
-	cok=${res% *}; ctot=${res#* }
-	echo "==> Результат: $cok/$ctot"
-
-	idx=0
-	while IFS= read -r line; do
-		[ -f "$STOP" ] && break
-		idx=$((idx + 1))
-		opts=$(byedpi_opts_clean "$line")
-		port=$((PORT_BASE + idx))
-		echo "==> [$idx/$total] $line"
-		"$BIN" -i 127.0.0.1 -p "$port" $opts >/dev/null 2>&1 </dev/null &
-		cpid=$!
-		echo "$cpid" > "$CPID"
-		sleep 1
-		if ! kill -0 "$cpid" 2>/dev/null; then
-			echo "    пропуск: ciadpi не запустился с этими параметрами"
-			skipped=$((skipped + 1))
-			continue
-		fi
-		res=$(check_all "$urls" "$TEST_DIR/log_$idx.txt" "127.0.0.1:$port")
-		kill "$cpid" 2>/dev/null
-		wait "$cpid" 2>/dev/null
-		rm -f "$CPID"
-		if [ -f "$STOP" ]; then
-			echo "    прервано — эта стратегия в результаты не входит"
-			break
-		fi
-		ok=${res% *}; tot=${res#* }
-		ok=${ok:-0}
-		echo "    результат: $ok/$tot"
-		printf '%06d\t%06d\t%s\t%s\t%s\n' "$((999999 - ok))" "$idx" "$ok" "$tot" "$line" >> "$RAW"
-	done < "$cand"
-
-	if [ -f "$STOP" ]; then
-		echo "==> Тест остановлен пользователем, показываю то, что успели проверить"
-		rm -f "$STOP"
-	else
-		echo "==> Тест завершён"
-	fi
-	[ "$skipped" -gt 0 ] && echo "==> Пропущено стратегий (не запустились): $skipped"
-
-	{
-		echo "Контрольный тест (без обхода) → $cok/$ctot"
-		sort "$RAW" | while IFS="$TAB" read -r _ _ ok tot line; do
-			echo "$line → $ok/$tot"
-		done
-	} > "$RES"
-
-	echo "==> Результаты"
-	cat "$RES"
-	best=$(sed -n '2p' "$RES")
-	[ -n "$best" ] && echo "==> Лучшая стратегия: $best"
-	echo "==> Основной сервис и его настройки не менялись. Применить стратегию можно кнопкой «Применить» в результатах."
-	return 0
-}
-
-case "$1" in
-	start)   cmd_start ;;
-	stop)    cmd_stop ;;
-	status)  cmd_status ;;
-	log)     cmd_log ;;
-	results) cmd_results ;;
-	clear)   cmd_clear ;;
-	run)     cmd_run ;;
-	*) echo "usage: byetube test start|stop|status|log|results|clear" >&2; exit 1 ;;
-esac
-exit 0
-BYT_FILE_END_7f3a9c
-	chmod 755 "$BT_DIR/lib/test.sh"
-	mkdir -p "$BT_DIR"
-	cat > "$BT_DIR/uninstall.sh" <<'BYT_FILE_END_7f3a9c'
-#!/bin/sh
-R="${BT_ROOT:-}"
-MODE="$1"
-
-CURRENT_PATHS="/opt/ByeTube /tmp/ByeTube /etc/init.d/byetube /etc/config/byetube /etc/hotplug.d/firewall/90-byetube /usr/share/nftables.d/chain-pre/forward/50-byetube.nft /usr/share/luci/menu.d/luci-app-byetube.json /usr/share/rpcd/acl.d/luci-app-byetube.json /www/luci-static/resources/view/byetube /www/luci-static/resources/byetube /lib/upgrade/keep.d/byetube"
-
-LEGACY_PATHS="/etc/init.d/ytbypass /etc/config/ytbypass /etc/hotplug.d/firewall/90-ytbypass /usr/bin/ytbypass /usr/libexec/ytbypass /usr/share/ytbypass /usr/share/nftables.d/chain-pre/forward/50-ytbypass.nft /usr/share/luci/menu.d/luci-app-ytbypass.json /usr/share/rpcd/acl.d/luci-app-ytbypass.json /www/luci-static/resources/view/ytbypass /www/luci-static/resources/ytbypass /lib/upgrade/keep.d/ytbypass /etc/ytbypass /var/etc/ytbypass /var/run/ytbypass.started /tmp/ytbypass-test"
-
-live() { [ -z "$R" ]; }
-
-confdir() {
-	local d
-	d=$(sed -n 's/^conf-dir=\([^,]*\).*/\1/p' "$R"/var/etc/dnsmasq.conf.* 2>/dev/null | head -n 1)
-	[ -n "$d" ] || d=/tmp/dnsmasq.d
-	echo "$d"
-}
-
-drop_ip_rules() {
-	live || return 0
-	while ip rule del pref 8900 2>/dev/null; do :; done
-	while ip -6 rule del pref 8900 2>/dev/null; do :; done
-}
-
-drop_dev() {
-	live || return 0
-	ip route del default dev "$1" table 89 2>/dev/null
-	ip -6 route del default dev "$1" table 89 2>/dev/null
-	nft delete table inet "$2" 2>/dev/null
-}
-
-stop_service() {
-	live || return 0
-	[ -x "/etc/init.d/$1" ] || return 0
-	"/etc/init.d/$1" stop >/dev/null 2>&1
-	"/etc/init.d/$1" disable >/dev/null 2>&1
-}
-
-remove_dnsmasq_conf() {
-	local d f changed=0
-	d="$R$(confdir)"
-	for f in "$@"; do
-		if [ -f "$d/$f" ]; then
-			rm -f "$d/$f"
-			changed=1
-		fi
-	done
-	[ "$changed" = "1" ]
-}
-
-remove_paths() {
-	local p
-	for p in "$@"; do
-		rm -rf "$R$p"
-	done
-}
-
-dns_changed=0
-
-if [ "$MODE" != "--legacy" ]; then
-	stop_service byetube
-	drop_ip_rules
-	drop_dev byetube0 byetube
-	remove_dnsmasq_conf byetube.conf && dns_changed=1
-fi
-
-stop_service ytbypass
-if [ "$MODE" != "--legacy" ] || [ ! -f "$R/tmp/ByeTube/started" ]; then
-	drop_ip_rules
-fi
-drop_dev ytb0 ytbypass
-remove_dnsmasq_conf ytbypass.conf && dns_changed=1
-
-if [ "$MODE" = "--legacy" ]; then
-	remove_paths $LEGACY_PATHS
-else
-	remove_paths $CURRENT_PATHS $LEGACY_PATHS
-fi
-
-if live; then
-	[ "$dns_changed" = "1" ] && /etc/init.d/dnsmasq restart >/dev/null 2>&1
-	/etc/init.d/firewall reload >/dev/null 2>&1
-	rm -rf /tmp/luci-indexcache* /tmp/luci-modulecache
-	/etc/init.d/rpcd reload >/dev/null 2>&1
-fi
-exit 0
-BYT_FILE_END_7f3a9c
-	chmod 755 "$BT_DIR/uninstall.sh"
-	mkdir -p "$BT_DIR/custom"
-}
-do_byetube_install() {
-	BT_NEW_BYEDPI=0
-	BT_NEW_HEV=0
-	BT_LEGACY=0
-
-	echo "==> Проверяю окружение"
-	command -v fw4 >/dev/null 2>&1 || { echo "ОШИБКА: нужен firewall4 (OpenWrt 22.03+); hev-socks5-tunnel в пакетах — с 24.10"; return 1; }
-	command -v nft >/dev/null 2>&1 || { echo "ОШИБКА: не найден nft"; return 1; }
-	if ip rule add pref 8999 fwmark 0x10000/0x10000 lookup 89 2>/dev/null; then
-		ip rule del pref 8999 2>/dev/null
-	else
-		echo "ОШИБКА: ваш ip не поддерживает fwmark с маской. Замените ip-tiny на ip-full и повторите установку"
-		return 1
-	fi
-
-	_ensure_deps
-
-	local arch relmm ext
-	arch="$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release)"
-	relmm="$(awk -F\' '/DISTRIB_RELEASE/ {print $2}' /etc/openwrt_release | cut -d. -f1,2)"
-	ext="$RAZ"
-
-	echo "==> Обновляем список пакетов"
-	$UPDATE >/dev/null 2>&1
-
-	_pkg_is_installed kmod-tun || { echo "==> Ставим kmod-tun"; $INSTALL kmod-tun >/dev/null 2>&1 || { echo "ОШИБКА: kmod-tun не установлен"; return 1; }; }
-
-	byetube_ensure_dnsmasq_full || return 1
-
-	if ! _pkg_is_installed hev-socks5-tunnel; then
-		echo "==> Ставим hev-socks5-tunnel"
-		$INSTALL hev-socks5-tunnel >/dev/null 2>&1 || { echo "ОШИБКА: hev-socks5-tunnel не найден в репозитории (есть в feeds OpenWrt 24.10+)"; return 1; }
-		BT_NEW_HEV=1
-	fi
-
-	byetube_install_byedpi "$arch" "$ext" "$relmm" || return 1
-
-	echo "==> Устанавливаем curl/ca-bundle (для диагностики)"
-	for p in ca-bundle curl; do
-		_pkg_is_installed "$p" || $INSTALL "$p" >/dev/null 2>&1
-	done
-
-	# свежепоставленные пакеты стартуют со своими дефолтами — гасим их: ByeTube
-	# запускает byedpi/hev через собственные procd_open_instance в /etc/init.d/byetube
-	# (см. common.sh: TUN=byetube0). Штатный /etc/init.d/hev-socks5-tunnel, которым
-	# управляет вкладка Mixomo, не трогаем.
-	if [ "$BT_NEW_BYEDPI" = 1 ] && [ -x /etc/init.d/byedpi ]; then
-		/etc/init.d/byedpi stop >/dev/null 2>&1; /etc/init.d/byedpi disable >/dev/null 2>&1
-	fi
-	if [ "$BT_NEW_HEV" = 1 ] && [ -x /etc/init.d/hev-socks5-tunnel ] && ! uci -q get hev-socks5-tunnel.@instance[0] >/dev/null 2>&1; then
-		/etc/init.d/hev-socks5-tunnel stop >/dev/null 2>&1; /etc/init.d/hev-socks5-tunnel disable >/dev/null 2>&1
-	fi
-
-	byetube_migrate_legacy
-
-	echo "==> Устанавливаем файлы сервиса ByeTube"
-	byetube_install_payload
-
-	byetube_finish_legacy
-
-	rm -rf /tmp/luci-indexcache* /tmp/luci-modulecache
-	/etc/init.d/rpcd reload >/dev/null 2>&1
-
-	byetube_update_default_strategy
-	/etc/init.d/byetube enable >/dev/null 2>&1
-
-	echo "==> Запускаю ByeTube"
-	/etc/init.d/byetube restart >/dev/null 2>&1
-	byetube_warmup_dns
-
-	echo "==> Проверяю состояние"
-	local st tries
-	st=$("$BT_BIN" status 2>/dev/null)
-	tries=0
-	# Мягкая (не фатальная) проверка: если после первого прогрева служба ещё не
-	# поднялась — даём ещё до 2 попыток перезапуска + прогрева, но НЕ прерываем
-	# установку по exit 1 (в отличие от die() в оригинальном install.sh).
-	while [ "$tries" -lt 2 ]; do
-		case "$st" in
-			*'"byedpi":true'*'"hev":true'*'"tun":true'*) break ;;
-		esac
-		tries=$((tries + 1))
-		echo "!! Служба ещё не поднялась (попытка $tries/2) — повторяю restart и прогрев DNS"
-		/etc/init.d/byetube restart >/dev/null 2>&1
-		byetube_warmup_dns
-		st=$("$BT_BIN" status 2>/dev/null)
-	done
-	case "$st" in
-		*'"byedpi":true'*'"hev":true'*'"tun":true'*) echo "==> ByeTube запущен" ;;
-		*) echo "ВНИМАНИЕ: ByeTube установлен, но служба пока не поднялась полностью. Смотрите logread -e byetube и повторите запуск вручную из вкладки ByeTube." ;;
-	esac
-	echo "$st"
-	echo "==> Готово. Вкладка LuCI: Службы -> Zapret Manager -> ByeTube"
-}
-
-do_byetube_remove() {
-	echo "==> Останавливаю и удаляю ByeTube"
-	[ -x "$BT_BIN" ] && "$BT_BIN" test stop >/dev/null 2>&1
-	if [ -x "$BT_INITD" ]; then
-		"$BT_INITD" stop >/dev/null 2>&1
-		"$BT_INITD" disable >/dev/null 2>&1
-	fi
-	while ip rule del pref 8900 2>/dev/null; do :; done
-	while ip -6 rule del pref 8900 2>/dev/null; do :; done
-	ip route del default dev byetube0 table 89 2>/dev/null
-	ip -6 route del default dev byetube0 table 89 2>/dev/null
-	nft delete table inet byetube 2>/dev/null
-	local confdir
-	confdir=$(sed -n 's/^conf-dir=\([^,]*\).*/\1/p' /var/etc/dnsmasq.conf.* 2>/dev/null | head -n 1)
-	[ -n "$confdir" ] || confdir=/tmp/dnsmasq.d
-	if [ -f "$confdir/byetube.conf" ]; then
-		rm -f "$confdir/byetube.conf"
-		/etc/init.d/dnsmasq restart >/dev/null 2>&1
-	fi
-	rm -rf "$BT_DIR" "$BT_TMP_DIR" /etc/init.d/byetube /etc/config/byetube \
-		/etc/hotplug.d/firewall/90-byetube \
-		/usr/share/nftables.d/chain-pre/forward/50-byetube.nft \
-		/usr/share/luci/menu.d/luci-app-byetube.json /usr/share/rpcd/acl.d/luci-app-byetube.json \
-		/www/luci-static/resources/view/byetube /www/luci-static/resources/byetube \
-		/lib/upgrade/keep.d/byetube
-	/etc/init.d/firewall reload >/dev/null 2>&1
-	rm -rf /tmp/luci-indexcache* /tmp/luci-modulecache
-	/etc/init.d/rpcd reload >/dev/null 2>&1
-	echo "==> Готово (пакеты byedpi и hev-socks5-tunnel оставлены — общие для системы)"
+	/usr/bin/ytbypass test "$action"
 }
 cmd="$1"; shift
 case "$cmd" in
@@ -5014,14 +5624,13 @@ case "$cmd" in
 	mixomo_warp_action)                   mixomo_warp_action "$1" ;;
 	mixomo_warp_integrate_action)         mixomo_warp_integrate_action ;;
 	mixomo_warp_config_set)               mixomo_warp_config_set "$1" ;;
-	byetube_status)                       byetube_status ;;
-	byetube_action)                       byetube_action "$1" ;;
-	byetube_get_presets)                  byetube_get_presets ;;
-	byetube_set_strategy)                 byetube_set_strategy "$1" ;;
-	byetube_config_get)                   byetube_config_get ;;
-	byetube_config_set)                   byetube_config_set "$1" "$2" "$3" "$4" "$5" "$6" ;;
-	byetube_lists_get)                    byetube_lists_get "$1" ;;
-	byetube_lists_set)                    byetube_lists_set "$1" "$2" ;;
+	ytbypass_status)                      ytbypass_status ;;
+	ytbypass_action)                      ytbypass_action "$1" ;;
+	ytbypass_get_presets)                 ytbypass_get_presets ;;
+	ytbypass_set_strategy)                ytbypass_set_strategy "$1" ;;
+	ytbypass_domains_get)                 ytbypass_domains_get ;;
+	ytbypass_diag)                        ytbypass_diag "$1" "$2" ;;
+	ytbypass_test_action)                 ytbypass_test_action "$1" ;;
 	*) echo '{"error":"неизвестная команда"}'; exit 1 ;;
 esac
 ZM_INSTALLER_EOF
@@ -5102,14 +5711,13 @@ list_methods() {
 	json_add_object "mixomo_warp_action";      json_add_string "endpoint_mode" "string"; json_close_object
 	json_add_object "mixomo_warp_integrate_action"; json_close_object
 	json_add_object "mixomo_warp_config_set"; json_add_string "content" "string"; json_close_object
-	json_add_object "byetube_status";        json_close_object
-	json_add_object "byetube_action";        json_add_string "action" "string"; json_close_object
-	json_add_object "byetube_get_presets";   json_close_object
-	json_add_object "byetube_set_strategy";  json_add_string "opts" "string"; json_close_object
-	json_add_object "byetube_config_get";    json_close_object
-	json_add_object "byetube_config_set";    json_add_string "ipv6" "string"; json_add_string "quic" "string"; json_add_string "default_domains" "string"; json_add_string "byedpi_port" "string"; json_add_string "byedpi_opts" "string"; json_add_string "enabled" "string"; json_close_object
-	json_add_object "byetube_lists_get";     json_add_string "kind" "string"; json_close_object
-	json_add_object "byetube_lists_set";     json_add_string "kind" "string"; json_add_string "content" "string"; json_close_object
+	json_add_object "ytbypass_status";        json_close_object
+	json_add_object "ytbypass_action";        json_add_string "action" "string"; json_close_object
+	json_add_object "ytbypass_get_presets";   json_close_object
+	json_add_object "ytbypass_set_strategy";  json_add_string "opts" "string"; json_close_object
+	json_add_object "ytbypass_domains_get";   json_close_object
+	json_add_object "ytbypass_diag";          json_add_string "arg" "string"; json_add_string "secs" "string"; json_close_object
+	json_add_object "ytbypass_test_action";   json_add_string "action" "string"; json_close_object
 	json_dump
 }
 
@@ -5184,14 +5792,13 @@ call_method() {
 		mixomo_warp_action)      json_get_var endpoint_mode endpoint_mode; "$BACKEND" mixomo_warp_action "$endpoint_mode" ;;
 		mixomo_warp_integrate_action) "$BACKEND" mixomo_warp_integrate_action ;;
 		mixomo_warp_config_set) json_get_var content content; "$BACKEND" mixomo_warp_config_set "$content" ;;
-		byetube_status)          "$BACKEND" byetube_status ;;
-		byetube_action)          json_get_var action action; "$BACKEND" byetube_action "$action" ;;
-		byetube_get_presets)     "$BACKEND" byetube_get_presets ;;
-		byetube_set_strategy)    json_get_var opts opts; "$BACKEND" byetube_set_strategy "$opts" ;;
-		byetube_config_get)      "$BACKEND" byetube_config_get ;;
-		byetube_config_set)      json_get_var ipv6 ipv6; json_get_var quic quic; json_get_var default_domains default_domains; json_get_var byedpi_port byedpi_port; json_get_var byedpi_opts byedpi_opts; json_get_var enabled enabled; "$BACKEND" byetube_config_set "$ipv6" "$quic" "$default_domains" "$byedpi_port" "$byedpi_opts" "$enabled" ;;
-		byetube_lists_get)       json_get_var kind kind; "$BACKEND" byetube_lists_get "$kind" ;;
-		byetube_lists_set)       json_get_var kind kind; json_get_var content content; "$BACKEND" byetube_lists_set "$kind" "$content" ;;
+		ytbypass_status)         "$BACKEND" ytbypass_status ;;
+		ytbypass_action)         json_get_var action action; "$BACKEND" ytbypass_action "$action" ;;
+		ytbypass_get_presets)    "$BACKEND" ytbypass_get_presets ;;
+		ytbypass_set_strategy)   json_get_var opts opts; "$BACKEND" ytbypass_set_strategy "$opts" ;;
+		ytbypass_domains_get)    "$BACKEND" ytbypass_domains_get ;;
+		ytbypass_diag)           json_get_var arg arg; json_get_var secs secs; "$BACKEND" ytbypass_diag "$arg" "$secs" ;;
+		ytbypass_test_action)    json_get_var action action; "$BACKEND" ytbypass_test_action "$action" ;;
 		*) echo '{"error":"unknown method"}'; return 1 ;;
 	esac
 }
@@ -5220,7 +5827,7 @@ cat > '/usr/share/rpcd/acl.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF'
 					"test_status", "test_results", "zm_update_status", "mixomo_status", "mixomo_config_get",
 					"mixomo_warp_status",
 					"zapret_latest_version",
-					"byetube_status", "byetube_get_presets", "byetube_config_get", "byetube_lists_get"
+					"ytbypass_status", "ytbypass_get_presets", "ytbypass_domains_get"
 				]
 			}
 		},
@@ -5239,7 +5846,7 @@ cat > '/usr/share/rpcd/acl.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF'
 					"mixomo_action", "mixomo_config_set", "mixomo_subscription_set",
 					"mixomo_magitrickle_list_set", "mixomo_autorestart_set", "mixomo_ui_action",
 					"mixomo_warp_action", "mixomo_warp_integrate_action", "mixomo_warp_config_set",
-					"byetube_action", "byetube_set_strategy", "byetube_config_set", "byetube_lists_set"
+					"ytbypass_action", "ytbypass_set_strategy", "ytbypass_diag", "ytbypass_test_action"
 				]
 			}
 		}
@@ -5295,10 +5902,10 @@ cat > '/usr/share/luci/menu.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF
 		"order": 57,
 		"action": { "type": "view", "path": "zapret-manager/mixomo" }
 	},
-	"admin/services/zapret-manager/byetube": {
-		"title": "ByeTube",
+	"admin/services/zapret-manager/ytbypass": {
+		"title": "YouTube Bypass",
 		"order": 58,
-		"action": { "type": "view", "path": "zapret-manager/byetube" }
+		"action": { "type": "view", "path": "zapret-manager/ytbypass" }
 	}
 }
 ZM_INSTALLER_EOF
@@ -5376,14 +5983,13 @@ var callMixomoWarpStatus = rpc.declare({ object: 'zapret-manager', method: 'mixo
 var callMixomoWarpAction = rpc.declare({ object: 'zapret-manager', method: 'mixomo_warp_action', params: ['endpoint_mode'], expect: {} });
 var callMixomoWarpIntegrateAction = rpc.declare({ object: 'zapret-manager', method: 'mixomo_warp_integrate_action', expect: {} });
 var callMixomoWarpConfigSet = rpc.declare({ object: 'zapret-manager', method: 'mixomo_warp_config_set', params: ['content'], expect: {} });
-var callByetubeStatus = rpc.declare({ object: 'zapret-manager', method: 'byetube_status', expect: {} });
-var callByetubeAction = rpc.declare({ object: 'zapret-manager', method: 'byetube_action', params: ['action'], expect: {} });
-var callByetubeGetPresets = rpc.declare({ object: 'zapret-manager', method: 'byetube_get_presets', expect: {} });
-var callByetubeSetStrategy = rpc.declare({ object: 'zapret-manager', method: 'byetube_set_strategy', params: ['opts'], expect: {} });
-var callByetubeConfigGet = rpc.declare({ object: 'zapret-manager', method: 'byetube_config_get', expect: {} });
-var callByetubeConfigSet = rpc.declare({ object: 'zapret-manager', method: 'byetube_config_set', params: ['ipv6', 'quic', 'default_domains', 'byedpi_port', 'byedpi_opts', 'enabled'], expect: {} });
-var callByetubeListsGet = rpc.declare({ object: 'zapret-manager', method: 'byetube_lists_get', params: ['kind'], expect: {} });
-var callByetubeListsSet = rpc.declare({ object: 'zapret-manager', method: 'byetube_lists_set', params: ['kind', 'content'], expect: {} });
+var callYtbypassStatus = rpc.declare({ object: 'zapret-manager', method: 'ytbypass_status', expect: {} });
+var callYtbypassAction = rpc.declare({ object: 'zapret-manager', method: 'ytbypass_action', params: ['action'], expect: {} });
+var callYtbypassGetPresets = rpc.declare({ object: 'zapret-manager', method: 'ytbypass_get_presets', expect: {} });
+var callYtbypassSetStrategy = rpc.declare({ object: 'zapret-manager', method: 'ytbypass_set_strategy', params: ['opts'], expect: {} });
+var callYtbypassDomainsGet = rpc.declare({ object: 'zapret-manager', method: 'ytbypass_domains_get', expect: {} });
+var callYtbypassDiag = rpc.declare({ object: 'zapret-manager', method: 'ytbypass_diag', params: ['arg', 'secs'], expect: {} });
+var callYtbypassTestAction = rpc.declare({ object: 'zapret-manager', method: 'ytbypass_test_action', params: ['action'], expect: {} });
 
 function detectMissingThemeVar() {
 	if (document.documentElement.hasAttribute('data-zm-theme-checked')) return;
@@ -5615,14 +6221,13 @@ return baseclass.extend({
 	mixomoWarpAction: callMixomoWarpAction,
 	mixomoWarpIntegrateAction: callMixomoWarpIntegrateAction,
 	mixomoWarpConfigSet: callMixomoWarpConfigSet,
-	byetubeStatus: callByetubeStatus,
-	byetubeAction: callByetubeAction,
-	byetubeGetPresets: callByetubeGetPresets,
-	byetubeSetStrategy: callByetubeSetStrategy,
-	byetubeConfigGet: callByetubeConfigGet,
-	byetubeConfigSet: callByetubeConfigSet,
-	byetubeListsGet: callByetubeListsGet,
-	byetubeListsSet: callByetubeListsSet
+	ytbypassStatus: callYtbypassStatus,
+	ytbypassAction: callYtbypassAction,
+	ytbypassGetPresets: callYtbypassGetPresets,
+	ytbypassSetStrategy: callYtbypassSetStrategy,
+	ytbypassDomainsGet: callYtbypassDomainsGet,
+	ytbypassDiag: callYtbypassDiag,
+	ytbypassTestAction: callYtbypassTestAction
 });
 ZM_INSTALLER_EOF
 chmod 0644 '/www/luci-static/resources/zapret-manager/common.js'
@@ -6057,298 +6662,6 @@ return view.extend({
 });
 ZM_INSTALLER_EOF
 chmod 0644 '/www/luci-static/resources/view/zapret-manager/doh.js'
-
-cat > '/www/luci-static/resources/view/zapret-manager/byetube.js' << 'ZM_INSTALLER_EOF'
-'use strict';
-'require view';
-'require zapret-manager.common as zm';
-
-return view.extend({
-	load: function() {
-		zm.injectCss();
-		return zm.byetubeStatus();
-	},
-
-	render: function(data) {
-		var wrap = E('div', { 'class': 'zm-wrap' });
-		var logEl = E('pre', { 'class': 'zm-log' });
-		var bannerEl = E('div', {});
-		var busy = false;
-
-		var installBtn = E('button', {
-			'class': 'cbi-button cbi-button-positive',
-			'click': function() {
-				if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
-				busy = true;
-				zm.toast('Устанавливаем ByeTube (ByeDPI + hev-socks5-tunnel)', 'warning');
-				zm.byetubeAction('install').then(function(res) {
-					if (res.error) { busy = false; zm.toast(res.error, 'error'); return; }
-					if (res.started) {
-						zm.pollJob('byetube_install', logEl, function(ok) {
-							busy = false;
-							zm.toast(ok ? 'ByeTube установлен и запущен' : 'Ошибка установки', ok ? 'info' : 'error');
-							if (ok) {
-								bannerEl.innerHTML = '';
-								bannerEl.appendChild(zm.refreshBanner('Пункт меню ByeTube в LuCI мог измениться — выйдите и зайдите заново.'));
-							}
-							zm.byetubeStatus().then(function(res2) { data = res2; renderAll(); });
-						});
-					} else {
-						busy = false;
-					}
-				}).catch(function() { busy = false; });
-			}
-		}, 'Установить ByeTube');
-
-		var removeBtn = E('button', {
-			'class': 'cbi-button cbi-button-remove',
-			'click': function() {
-				if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
-				busy = true;
-				zm.toast('Удаляем ByeTube', 'warning');
-				zm.byetubeAction('remove').then(function(res) {
-					if (res.error) { busy = false; zm.toast(res.error, 'error'); return; }
-					if (res.started) {
-						zm.pollJob('byetube_remove', logEl, function(ok) {
-							busy = false;
-							zm.toast(ok ? 'ByeTube удалён' : 'Ошибка удаления', ok ? 'info' : 'error');
-							if (ok) {
-								bannerEl.innerHTML = '';
-								bannerEl.appendChild(zm.refreshBanner('Пункт меню ByeTube в LuCI мог измениться — выйдите и зайдите заново.'));
-							}
-							zm.byetubeStatus().then(function(res2) { data = res2; renderAll(); });
-						});
-					} else {
-						busy = false;
-					}
-				}).catch(function() { busy = false; });
-			}
-		}, 'Удалить');
-
-		function svcAction(action, label) {
-			if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
-			busy = true;
-			zm.toast(label + '… (перезапуск + прогрев DNS может занять несколько секунд)', 'warning');
-			zm.byetubeAction(action).then(function(res) {
-				busy = false;
-				if (res && res.error) { zm.toast(res.error, 'error'); return; }
-				zm.toast(label + ' выполнено', 'info');
-				data = res;
-				renderAll();
-			}).catch(function() { busy = false; });
-		}
-
-		var startBtn = E('button', { 'class': 'cbi-button', 'click': function() { svcAction('start', 'Запуск'); } }, 'Запустить');
-		var stopBtn = E('button', { 'class': 'cbi-button', 'click': function() { svcAction('stop', 'Остановка'); } }, 'Остановить');
-		var restartBtn = E('button', { 'class': 'cbi-button cbi-button-action', 'click': function() { svcAction('restart', 'Перезапуск'); } }, 'Перезапустить (+ прогрев DNS)');
-
-		var card = E('div', { 'class': 'zm-card' });
-		var presetsCard = E('div', { 'class': 'zm-card', 'style': 'display:none' });
-		var configCard = E('div', { 'class': 'zm-card', 'style': 'display:none' });
-		var listsCard = E('div', { 'class': 'zm-card', 'style': 'display:none' });
-
-		function renderCard() {
-			card.innerHTML = '';
-			card.appendChild(E('h3', {}, 'ByeTube — обход блокировки YouTube'));
-			card.appendChild(E('p', { 'class': 'zm-hint' },
-				'ByeDPI (ciadpi) в роли локального SOCKS5 с десинхронизацией пакетов + hev-socks5-tunnel ' +
-				'как TUN-мост (интерфейс byetube0). В обход заворачиваются только домены YouTube/Google ' +
-				'(nftables-таблица byetube, наборы yt4/yt6, policy routing, таблица маршрутизации 89) — их наполняет ' +
-				'dnsmasq-full через nftset по DNS-ответам клиентов. Отдельный TUN и procd-инстанс — не конфликтует ' +
-				'с hev-socks5-tunnel вкладки Mixomo.'));
-
-			if (!data.installed) {
-				card.appendChild(E('div', { 'class': 'zm-row' }, [
-					E('span', { 'class': 'zm-label' }, 'Статус'),
-					zm.badge(false, '', 'не установлен')
-				]));
-				card.appendChild(E('div', { 'class': 'zm-actions' }, [ installBtn ]));
-				card.appendChild(logEl);
-				presetsCard.style.display = 'none';
-				configCard.style.display = 'none';
-				listsCard.style.display = 'none';
-				return;
-			}
-
-			card.appendChild(E('div', { 'class': 'zm-row' }, [ E('span', { 'class': 'zm-label' }, 'ByeDPI (ciadpi)'), zm.badge(data.byedpi === true, 'работает', 'остановлен') ]));
-			card.appendChild(E('div', { 'class': 'zm-row' }, [ E('span', { 'class': 'zm-label' }, 'hev-socks5-tunnel'), zm.badge(data.hev === true, 'работает', 'остановлен') ]));
-			card.appendChild(E('div', { 'class': 'zm-row' }, [ E('span', { 'class': 'zm-label' }, 'Интерфейс byetube0'), zm.badge(data.tun === true, 'поднят', 'нет') ]));
-			card.appendChild(E('div', { 'class': 'zm-row' }, [ E('span', { 'class': 'zm-label' }, 'nftables'), zm.badge(data.nft === true, 'ок', 'нет') ]));
-			card.appendChild(E('div', { 'class': 'zm-row' }, [ E('span', { 'class': 'zm-label' }, 'Policy routing'), zm.badge(data.route === true, 'ок', 'нет') ]));
-			card.appendChild(E('div', { 'class': 'zm-row' }, [ E('span', { 'class': 'zm-label' }, 'dnsmasq -> nftset'), zm.badge(data.dns === true, 'ок', 'нет') ]));
-			card.appendChild(E('div', { 'class': 'zm-row' }, [ E('span', { 'class': 'zm-label' }, 'Firewall forward'), zm.badge(data.fw === true, 'ок', 'нет') ]));
-			card.appendChild(E('div', { 'class': 'zm-row' }, [ E('span', { 'class': 'zm-label' }, 'dnsmasq умеет nftset'), zm.badge(data.dnsmasq_nftset === true, 'ок', 'нет (нужен dnsmasq-full)') ]));
-			card.appendChild(E('div', { 'class': 'zm-row' }, [ E('span', { 'class': 'zm-label' }, 'Бинарники (byedpi/hev)'), zm.badge(data.binaries === true, 'на месте', 'нет') ]));
-			card.appendChild(E('div', { 'class': 'zm-row' }, [
-				E('span', { 'class': 'zm-label' }, 'IP в наборах (yt4 / yt6)'),
-				E('span', {}, (data.ips4 != null ? data.ips4 : '0') + ' / ' + (data.ips6 != null ? data.ips6 : '0'))
-			]));
-			card.appendChild(E('div', { 'class': 'zm-row' }, [
-				E('span', { 'class': 'zm-label' }, 'Список YouTube'),
-				E('span', {}, (data.youtube_count != null ? data.youtube_count : '?') + ' доменов' + (data.youtube_custom === true ? ' (свой список)' : ' (встроенный)'))
-			]));
-			card.appendChild(E('div', { 'class': 'zm-row' }, [
-				E('span', { 'class': 'zm-label' }, 'Доп. домены'),
-				E('span', {}, (data.extra_count != null ? data.extra_count : '0'))
-			]));
-			card.appendChild(E('div', { 'class': 'zm-row' }, [
-				E('span', { 'class': 'zm-label' }, 'IPv6'),
-				zm.badge(data.ipv6 === true, 'включён', 'выключен')
-			]));
-			card.appendChild(E('div', { 'class': 'zm-row' }, [
-				E('span', { 'class': 'zm-label' }, 'QUIC (UDP/443)'),
-				E('span', {}, data.quic === 'proxy' ? 'через ByeDPI' : 'блокируется (клиент откатится на TCP)')
-			]));
-
-			card.appendChild(E('div', { 'class': 'zm-actions' }, [ startBtn, stopBtn, restartBtn, removeBtn ]));
-			card.appendChild(logEl);
-			presetsCard.style.display = '';
-			configCard.style.display = '';
-			listsCard.style.display = '';
-		}
-
-		function renderPresets(pdata) {
-			presetsCard.innerHTML = '';
-			presetsCard.appendChild(E('h3', {}, 'Стратегия ByeDPI'));
-			presetsCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Выберите готовую стратегию — служба перезапустится и DNS будет прогрет автоматически (иначе наборы IP останутся пустыми).'));
-			var grid = E('div', { 'class': 'zm-grid' });
-			(pdata.presets || []).forEach(function(p) {
-				var isCur = data.byedpi_opts != null && String(data.byedpi_opts).replace(/["']/g, '').replace(/\s+/g, ' ').trim() ===
-					String(p.opts).replace(/["']/g, '').replace(/\s+/g, ' ').trim();
-				grid.appendChild(E('div', {
-					'class': 'zm-tile' + (isCur ? ' zm-active' : ''),
-					'click': function() {
-						if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
-						busy = true;
-						zm.toast('Применяем стратегию: ' + p.name, 'warning');
-						zm.byetubeSetStrategy(p.opts).then(function(res) {
-							busy = false;
-							if (res.error) { zm.toast(res.error, 'error'); return; }
-							zm.toast('Стратегия применена, DNS прогрет', 'info');
-							zm.byetubeStatus().then(function(res2) { data = res2; renderAll(); });
-						}).catch(function() { busy = false; });
-					}
-				}, p.name));
-			});
-			presetsCard.appendChild(grid);
-		}
-
-		function renderConfig() {
-			configCard.innerHTML = '';
-			configCard.appendChild(E('h3', {}, 'Настройки'));
-			configCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Изменение любой из настроек перезапускает службу и прогревает DNS.'));
-
-			function toggleRow(label, curVal, onKey) {
-				var btn = E('button', { 'class': 'cbi-button' + (curVal ? ' cbi-button-positive' : '') },
-					curVal ? 'включено' : 'выключено');
-				btn.addEventListener('click', function() {
-					if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
-					busy = true;
-					var payload = { ipv6: '', quic: '', default_domains: '', byedpi_port: '', byedpi_opts: '', enabled: '' };
-					payload[onKey] = curVal ? '0' : '1';
-					zm.byetubeConfigSet(payload.ipv6, payload.quic, payload.default_domains, payload.byedpi_port, payload.byedpi_opts, payload.enabled).then(function(res) {
-						busy = false;
-						if (res.error) { zm.toast(res.error, 'error'); return; }
-						zm.toast('Настройка применена', 'info');
-						data = res;
-						renderAll();
-					}).catch(function() { busy = false; });
-				});
-				configCard.appendChild(E('div', { 'class': 'zm-row' }, [ E('span', { 'class': 'zm-label' }, label), btn ]));
-			}
-
-			toggleRow('Заворачивать IPv6', data.ipv6 === true, 'ipv6');
-			toggleRow('Встроенный список YouTube', data.default_domains === true, 'default_domains');
-
-			var quicBtn = E('button', { 'class': 'cbi-button' }, data.quic === 'proxy' ? 'через ByeDPI' : 'блокируется');
-			quicBtn.addEventListener('click', function() {
-				if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
-				busy = true;
-				var next = data.quic === 'proxy' ? 'block' : 'proxy';
-				zm.byetubeConfigSet('', next, '', '', '', '').then(function(res) {
-					busy = false;
-					if (res.error) { zm.toast(res.error, 'error'); return; }
-					zm.toast('QUIC: ' + (next === 'proxy' ? 'через ByeDPI' : 'блокируется'), 'info');
-					data = res;
-					renderAll();
-				}).catch(function() { busy = false; });
-			});
-			configCard.appendChild(E('div', { 'class': 'zm-row' }, [ E('span', { 'class': 'zm-label' }, 'QUIC (UDP/443)'), quicBtn ]));
-		}
-
-		function listEditor(title, hint, kind, isMultiline) {
-			var ta = E('textarea', { 'rows': isMultiline ? 10 : 6, 'style': 'width:100%;font-family:monospace' }, '');
-			var saveBtn = E('button', { 'class': 'cbi-button cbi-button-save' }, 'Сохранить');
-			var resetBtn = E('button', { 'class': 'cbi-button' }, 'Восстановить встроенный');
-			var box = E('div', { 'class': 'zm-row', 'style': 'flex-direction:column;align-items:stretch' }, [
-				E('h4', {}, title),
-				E('p', { 'class': 'zm-hint' }, hint),
-				ta,
-				E('div', { 'class': 'zm-actions' }, [ saveBtn, resetBtn ])
-			]);
-
-			function load() {
-				zm.byetubeListsGet(kind).then(function(res) {
-					ta.value = (res && res.content != null) ? res.content : '';
-				});
-			}
-
-			saveBtn.addEventListener('click', function() {
-				if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
-				busy = true;
-				zm.byetubeListsSet(kind, ta.value).then(function(res) {
-					busy = false;
-					if (res && res.error) { zm.toast(res.error, 'error'); return; }
-					zm.toast('Список сохранён', 'info');
-					zm.byetubeStatus().then(function(res2) { data = res2; renderAll(); });
-				}).catch(function() { busy = false; });
-			});
-			resetBtn.addEventListener('click', function() {
-				if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
-				busy = true;
-				zm.byetubeListsSet(kind, '').then(function(res) {
-					busy = false;
-					if (res && res.error) { zm.toast(res.error, 'error'); return; }
-					zm.toast('Список сброшен на встроенный', 'info');
-					load();
-					zm.byetubeStatus().then(function(res2) { data = res2; renderAll(); });
-				}).catch(function() { busy = false; });
-			});
-
-			load();
-			return box;
-		}
-
-		function renderLists() {
-			listsCard.innerHTML = '';
-			listsCard.appendChild(E('h3', {}, 'Списки доменов и стратегий'));
-			listsCard.appendChild(listEditor('YouTube — домены', 'Встроенный список доменов YouTube/Google. Можно заменить своим (по одному домену в строке).', 'youtube', true));
-			listsCard.appendChild(listEditor('Дополнительные домены', 'Свои домены, добавляются поверх списка YouTube (не заменяют его).', 'extra', false));
-			listsCard.appendChild(listEditor('Стратегии для теста', 'Список стратегий ByeDPI для вкладки диагностики/подбора (byetube test).', 'strategies', true));
-			listsCard.appendChild(listEditor('Тестовые домены', 'Домены, которые используются для проверки стратегий во время теста.', 'test-domains', true));
-		}
-
-		function renderAll() {
-			renderCard();
-			if (data.installed) {
-				renderConfig();
-				renderLists();
-				zm.byetubeGetPresets().then(function(pdata) { renderPresets(pdata); });
-			}
-		}
-
-		renderAll();
-		wrap.appendChild(card);
-		wrap.appendChild(presetsCard);
-		wrap.appendChild(configCard);
-		wrap.appendChild(listsCard);
-		wrap.appendChild(bannerEl);
-
-		return wrap;
-	}
-});
-ZM_INSTALLER_EOF
-chmod 0644 '/www/luci-static/resources/view/zapret-manager/byetube.js'
 
 mkdir -p /www/luci-static/resources/view/zapret-manager
 chmod 0755 /www/luci-static/resources/view/zapret-manager
@@ -7820,6 +8133,354 @@ return view.extend({
 });
 ZM_INSTALLER_EOF
 chmod 0644 '/www/luci-static/resources/view/zapret-manager/strategy.js'
+
+mkdir -p /www/luci-static/resources/view/zapret-manager
+chmod 0755 /www/luci-static/resources/view/zapret-manager
+cat > '/www/luci-static/resources/view/zapret-manager/ytbypass.js' << 'ZM_INSTALLER_EOF'
+'use strict';
+'require view';
+'require zapret-manager.common as zm';
+
+var TABS = [
+	{ id: 'status', label: 'Статус' },
+	{ id: 'strategy', label: 'Стратегия' },
+	{ id: 'domains', label: 'Домены' },
+	{ id: 'diag', label: 'Диагностика' }
+];
+
+var STATUS_FIELDS = [
+	{ key: 'byedpi', label: 'ByeDPI (ciadpi)' },
+	{ key: 'hev', label: 'hev-socks5-tunnel' },
+	{ key: 'tun', label: 'Интерфейс ytb0' },
+	{ key: 'nft', label: 'Правила nftables' },
+	{ key: 'route', label: 'Policy routing' },
+	{ key: 'dns', label: 'dnsmasq -> nftset' },
+	{ key: 'fw', label: 'Firewall forward' }
+];
+
+return view.extend({
+	load: function() {
+		zm.injectCss();
+		return Promise.all([
+			zm.ytbypassStatus(),
+			zm.ytbypassGetPresets().catch(function() { return []; })
+		]);
+	},
+
+	render: function(all) {
+		var view = this;
+		var presets = all[1] || [];
+		var wrap = E('div', { 'class': 'zm-wrap' });
+		var activeTab = 'status';
+		view.busy = false;
+
+		var tabBar = E('div', { 'class': 'zm-actions', 'style': 'margin-bottom:14px' });
+		var panels = {};
+		TABS.forEach(function(t) {
+			panels[t.id] = E('div', { 'style': t.id === activeTab ? '' : 'display:none' });
+		});
+
+		function renderTabBar() {
+			tabBar.innerHTML = '';
+			TABS.forEach(function(t) {
+				tabBar.appendChild(E('button', {
+					'class': 'cbi-button' + (t.id === activeTab ? ' cbi-button-positive' : ''),
+					'click': function() {
+						activeTab = t.id;
+						TABS.forEach(function(t2) { panels[t2.id].style.display = t2.id === activeTab ? '' : 'none'; });
+						renderTabBar();
+					}
+				}, t.label));
+			});
+		}
+		renderTabBar();
+
+		/* ---------------------------------------------------------- Статус */
+		var statusCard = E('div', { 'class': 'zm-card' });
+		var statusLog = E('pre', { 'class': 'zm-log' });
+		panels.status.appendChild(E('p', { 'class': 'zm-hint' },
+			'YouTube Bypass: ByeDPI (ciadpi) + hev-socks5-tunnel + nftables/dnsmasq-nftset. ' +
+			'В обход DPI заворачиваются только домены YouTube (список из встроенного domains.list), остальной трафик идёт напрямую. ' +
+			'Установка и вся системная логика перенесены из install.sh без изменений.'));
+		panels.status.appendChild(statusCard);
+		panels.status.appendChild(statusLog);
+
+		function renderStatus(d) {
+			statusCard.innerHTML = '';
+			var installed = d && d.installed === true;
+			if (!installed) {
+				statusCard.appendChild(E('h3', {}, 'YouTube Bypass'));
+				statusCard.appendChild(zm.badge(false, '', 'не установлен'));
+				statusCard.appendChild(E('div', { 'class': 'zm-actions' }, [
+					E('button', {
+						'class': 'cbi-button cbi-button-positive',
+						'click': function() { doAction('install'); }
+					}, 'Установить')
+				]));
+				return;
+			}
+			var enabled = d.enabled === true;
+			statusCard.appendChild(E('h3', {}, 'YouTube Bypass'));
+			statusCard.appendChild(E('div', { 'class': 'zm-row' }, [
+				E('span', { 'class': 'zm-label' }, 'Служба'),
+				zm.badge(enabled, 'включена', 'выключена')
+			]));
+			STATUS_FIELDS.forEach(function(f) {
+				statusCard.appendChild(E('div', { 'class': 'zm-row' }, [
+					E('span', { 'class': 'zm-label' }, f.label),
+					zm.badge(d[f.key] === true, 'ок', 'нет')
+				]));
+			});
+			statusCard.appendChild(E('div', { 'class': 'zm-row' }, [
+				E('span', { 'class': 'zm-label' }, 'IPv4/IPv6 в наборах'),
+				E('span', {}, (d.ips4 || '0') + ' / ' + (d.ips6 || '0'))
+			]));
+			statusCard.appendChild(E('div', { 'class': 'zm-row' }, [
+				E('span', { 'class': 'zm-label' }, 'QUIC (UDP/443)'),
+				E('span', {}, d.quic === 'proxy' ? 'через ByeDPI' : 'блокируется (клиент откатится на TCP)')
+			]));
+			if (d.byedpi_opts) {
+				statusCard.appendChild(E('div', { 'class': 'zm-row' }, [
+					E('span', { 'class': 'zm-label' }, 'Текущая стратегия'),
+					E('span', { 'style': 'word-break:break-all' }, d.byedpi_opts)
+				]));
+			}
+			var actions = [
+				E('button', {
+					'class': 'cbi-button cbi-button-remove',
+					'click': function() { doAction('remove'); }
+				}, 'Удалить'),
+				E('button', {
+					'class': 'cbi-button',
+					'click': function() { doAction(enabled ? 'stop' : 'start'); }
+				}, enabled ? 'Остановить' : 'Запустить'),
+				E('button', {
+					'class': 'cbi-button',
+					'click': function() { doAction('restart'); }
+				}, 'Перезапустить'),
+				E('button', {
+					'class': 'cbi-button',
+					'click': function() { doAction('update'); }
+				}, 'Переустановить')
+			];
+			statusCard.appendChild(E('div', { 'class': 'zm-actions' }, actions));
+		}
+
+		function refreshStatus() {
+			return zm.ytbypassStatus().then(function(d) { renderStatus(d); return d; });
+		}
+
+		function doAction(action) {
+			if (view.busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+			var job = (action === 'install' || action === 'update') ? 'ytbypass_install'
+				: (action === 'remove') ? 'ytbypass_remove' : null;
+			var LABELS = {
+				install: 'Устанавливаем YouTube Bypass (это может занять пару минут)',
+				update: 'Переустанавливаем YouTube Bypass',
+				remove: 'Удаляем YouTube Bypass',
+				start: 'Запускаем службу',
+				stop: 'Останавливаем службу',
+				restart: 'Перезапускаем службу (с прогревом DNS)'
+			};
+			zm.toast(LABELS[action] || 'Выполняем', 'warning');
+			if (job) view.busy = true;
+
+			zm.ytbypassAction(action).then(function(res) {
+				if (job && res && res.started) {
+					zm.pollJob(job, statusLog, function(ok) {
+						view.busy = false;
+						zm.toast(ok ? 'Готово' : 'Операция завершилась с ошибкой', ok ? 'info' : 'error');
+						refreshStatus();
+						if (ok && (action === 'install' || action === 'remove')) {
+							view.bannerEl && (view.bannerEl.innerHTML = '');
+						}
+					});
+				} else {
+					view.busy = false;
+					if (res && res.error) zm.toast(res.error, 'error');
+					else zm.toast('Готово', 'info');
+					renderStatus(res && res.installed !== undefined ? res : null);
+					if (!res || res.installed === undefined) refreshStatus();
+				}
+			}).catch(function() { view.busy = false; });
+		}
+
+		refreshStatus();
+
+		/* ---------------------------------------------------------- Стратегия */
+		var stratCard = E('div', { 'class': 'zm-card' });
+		panels.strategy.appendChild(E('p', { 'class': 'zm-hint' },
+			'Готовые стратегии ByeDPI (те же 6 пресетов, что и в install.sh/presets.js). ' +
+			'Если ни одна не подошла — подберите под своего провайдера и введите строку параметров ciadpi вручную.'));
+		panels.strategy.appendChild(stratCard);
+
+		var presetsBox = E('div', {});
+		presets.forEach(function(p) {
+			presetsBox.appendChild(E('div', { 'class': 'zm-row' }, [
+				E('span', {}, p.name),
+				E('button', {
+					'class': 'cbi-button cbi-button-positive',
+					'click': function() { applyStrategy(p.opts, stratLog); }
+				}, 'Применить')
+			]));
+		});
+		stratCard.appendChild(E('h3', {}, 'Готовые стратегии'));
+		stratCard.appendChild(presetsBox);
+
+		var customInput = E('textarea', { 'style': 'width:100%; min-height:70px; font-family:monospace' });
+		stratCard.appendChild(E('h3', {}, 'Своя стратегия'));
+		stratCard.appendChild(customInput);
+		stratCard.appendChild(E('div', { 'class': 'zm-actions' }, [
+			E('button', {
+				'class': 'cbi-button cbi-button-positive',
+				'click': function() { applyStrategy(customInput.value, stratLog); }
+			}, 'Применить свою строку')
+		]));
+		var stratLog = E('pre', { 'class': 'zm-log' });
+		panels.strategy.appendChild(stratLog);
+
+		function applyStrategy(opts, logEl) {
+			if (!opts || !opts.trim()) { zm.toast('Введите параметры стратегии', 'warning'); return; }
+			zm.toast('Применяем стратегию (служба перезапустится, DNS будет прогрет)', 'warning');
+			logEl.classList.add('zm-show');
+			logEl.textContent = '';
+			zm.ytbypassSetStrategy(opts.trim()).then(function(res) {
+				if (res && res.error) {
+					zm.toast(res.error, 'error');
+					logEl.textContent = res.error;
+				} else {
+					zm.toast('Стратегия применена', 'info');
+					logEl.textContent = 'ok';
+					customInput.value = opts.trim();
+				}
+				refreshStatus();
+			}).catch(function() { zm.toast('Не удалось применить стратегию', 'error'); });
+		}
+
+		/* ---------------------------------------------------------- Домены */
+		var domCard = E('div', { 'class': 'zm-card' });
+		panels.domains.appendChild(E('p', { 'class': 'zm-hint' },
+			'Встроенный список доменов YouTube (usr/share/ytbypass/domains.list). ' +
+			'install.sh не даёт способа редактировать этот список через CLI, поэтому здесь он показан только для просмотра.'));
+		panels.domains.appendChild(domCard);
+		var domCount = E('div', { 'class': 'zm-row' }, [ E('span', { 'class': 'zm-label' }, 'Доменов в списке'), E('span', {}, '…') ]);
+		var domText = E('textarea', { 'readonly': 'readonly', 'style': 'width:100%; min-height:320px; font-family:monospace' });
+		domCard.appendChild(E('h3', {}, 'Список доменов (только чтение)'));
+		domCard.appendChild(domCount);
+		domCard.appendChild(domText);
+
+		zm.ytbypassDomainsGet().then(function(res) {
+			if (res && res.error) {
+				domText.value = res.error;
+			} else if (res) {
+				domCount.lastChild.textContent = res.count;
+				domText.value = res.content || '';
+			}
+		}).catch(function() { domText.value = 'не удалось загрузить список'; });
+
+		/* ---------------------------------------------------------- Диагностика */
+		var diagCard = E('div', { 'class': 'zm-card' });
+		panels.diag.appendChild(E('p', { 'class': 'zm-hint' },
+			'"ytbypass diag" — покажет, куда реально идут DNS-запросы и трафик :443 выбранного клиента. ' +
+			'Без адреса — просто список клиентов из DHCP-аренд.'));
+		panels.diag.appendChild(diagCard);
+		var diagArg = E('input', { 'type': 'text', 'placeholder': 'IP, MAC или имя устройства (можно пусто)' });
+		var diagSecs = E('input', { 'type': 'text', 'placeholder': '20', 'style': 'width:70px' });
+		diagCard.appendChild(E('h3', {}, 'Диагностика клиента'));
+		diagCard.appendChild(E('div', { 'class': 'zm-row' }, [ E('span', { 'class': 'zm-label' }, 'Клиент'), diagArg ]));
+		diagCard.appendChild(E('div', { 'class': 'zm-row' }, [ E('span', { 'class': 'zm-label' }, 'Секунд сбора'), diagSecs ]));
+		var diagLog = E('pre', { 'class': 'zm-log' });
+		var diagBusy = false;
+		diagCard.appendChild(E('div', { 'class': 'zm-actions' }, [
+			E('button', {
+				'class': 'cbi-button cbi-button-positive',
+				'click': function() {
+					if (diagBusy) { zm.toast('Диагностика уже выполняется', 'warning'); return; }
+					diagBusy = true;
+					zm.toast('Запускаю диагностику' + (diagArg.value ? ' — откройте YouTube на устройстве сейчас' : ''), 'warning');
+					zm.ytbypassDiag(diagArg.value || '', diagSecs.value || '20').then(function(res) {
+						if (res && res.started) {
+							zm.pollJob('ytbypass_diag', diagLog, function() { diagBusy = false; });
+						} else {
+							diagBusy = false;
+							if (res && res.error) zm.toast(res.error, 'error');
+						}
+					}).catch(function() { diagBusy = false; });
+				}
+			}, 'Запустить диагностику')
+		]));
+		panels.diag.appendChild(diagLog);
+
+		var testCard = E('div', { 'class': 'zm-card' });
+		testCard.appendChild(E('h3', {}, 'Тест стратегий ByeDPI (ytbypass test)'));
+		testCard.appendChild(E('p', { 'class': 'zm-hint' },
+			'Перебирает стратегии из встроенного strategies.txt по доменам из test-domains.txt через временный ciadpi — боевой сервис не трогает.'));
+		var testLog = E('pre', { 'class': 'zm-log zm-show' });
+		var testPoll = null;
+		function stopTestPoll() { if (testPoll) { clearInterval(testPoll); testPoll = null; } }
+		function refreshTest() {
+			return Promise.all([ zm.ytbypassTestAction('status'), zm.ytbypassTestAction('log') ]).then(function(res) {
+				var st = res[0], lg = res[1];
+				if (lg && typeof lg === 'string') testLog.textContent = lg;
+				else if (lg && lg.lines !== undefined) testLog.textContent = lg.lines;
+				if (st && st.running !== true) stopTestPoll();
+				return st;
+			});
+		}
+		testCard.appendChild(E('div', { 'class': 'zm-actions' }, [
+			E('button', {
+				'class': 'cbi-button cbi-button-positive',
+				'click': function() {
+					zm.ytbypassTestAction('start').then(function(res) {
+						if (res && res.error) { zm.toast(res.error, 'error'); return; }
+						zm.toast('Тест запущен', 'info');
+						stopTestPoll();
+						testPoll = setInterval(refreshTest, 2000);
+						refreshTest();
+					});
+				}
+			}, 'Старт'),
+			E('button', {
+				'class': 'cbi-button cbi-button-remove',
+				'click': function() {
+					zm.ytbypassTestAction('stop').then(function(res) {
+						if (res && res.error) zm.toast(res.error, 'error');
+						else zm.toast('Остановлено', 'info');
+					});
+				}
+			}, 'Стоп'),
+			E('button', {
+				'class': 'cbi-button',
+				'click': function() { refreshTest(); }
+			}, 'Обновить лог'),
+			E('button', {
+				'class': 'cbi-button',
+				'click': function() {
+					zm.ytbypassTestAction('results').then(function(res) {
+						testLog.textContent = (res && res.lines !== undefined) ? res.lines : (typeof res === 'string' ? res : JSON.stringify(res));
+					});
+				}
+			}, 'Показать результаты'),
+			E('button', {
+				'class': 'cbi-button',
+				'click': function() {
+					zm.ytbypassTestAction('clear').then(function(res) {
+						if (res && res.error) zm.toast(res.error, 'error');
+						else { zm.toast('Результаты очищены', 'info'); testLog.textContent = ''; }
+					});
+				}
+			}, 'Очистить результаты')
+		]));
+		testCard.appendChild(testLog);
+		panels.diag.appendChild(testCard);
+
+		TABS.forEach(function(t) { wrap.appendChild(panels[t.id]); });
+		var page = E('div', {}, [ tabBar, wrap ]);
+		return page;
+	}
+});
+ZM_INSTALLER_EOF
+chmod 0644 '/www/luci-static/resources/view/zapret-manager/ytbypass.js'
 
 mkdir -p /www/luci-static/resources/view/zapret-manager
 chmod 0755 /www/luci-static/resources/view/zapret-manager
