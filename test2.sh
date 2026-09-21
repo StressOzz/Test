@@ -1,6 +1,6 @@
 #!/bin/sh
 # Zapret Manager by StressOzz for LuCI installer
-# Version: 1.29
+# Version: 1.28
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -5498,7 +5498,7 @@ ytbypass_action() {
 
 ytbypass_get_presets() {
 	local ids="p1 p2 p3 p4 p5 p6" id name opts first=1
-	printf '['
+	printf '{"items":['
 	for id in $ids; do
 		case "$id" in
 			p1) name='1 · Каскад disorder/split + tlsrec + md5sig, авто-режим -As (по умолчанию)'
@@ -5518,7 +5518,7 @@ ytbypass_get_presets() {
 		first=0
 		printf '{"id":"%s","name":"%s","opts":"%s"}' "$id" "$(esc "$name")" "$(esc "$opts")"
 	done
-	printf ']\n'
+	printf ']}\n'
 }
 
 ytbypass_set_strategy() {
@@ -8169,7 +8169,7 @@ return view.extend({
 
 	render: function(all) {
 		var view = this;
-		var presets = all[1] || [];
+		var presets = (all[1] && all[1].items) || [];
 		var wrap = E('div', { 'class': 'zm-wrap' });
 		var activeTab = 'status';
 		view.busy = false;
