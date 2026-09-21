@@ -3028,7 +3028,7 @@ main() {
 	/etc/init.d/byetube enable >/dev/null 2>&1
 
 	if [ "$NOSTART" != 1 ]; then
-		local i ok
+		local i ok ST
 		/etc/init.d/byetube restart >/dev/null 2>&1
 		ok=0
 		i=0
@@ -3037,11 +3037,44 @@ main() {
 			if verify_running; then ok=1; break; fi
 			i=$((i + 1))
 		done
+
+		# Прогреваем dnsmasq -> nftset: набор IP для youtube.com заполняется только
+		# когда dnsmasq САМ резолвит домен. На чистом роутере до этого момента никто
+		# ещё не спрашивал youtube.com через роутер, и набор пустой. Без этого шага
+		# первое открытие YouTube может пойти напрямую (мимо ByeDPI) и не открыться,
+		# если у клиента уже есть закэшированный DNS-ответ.
+		nslookup youtube.com 127.0.0.1 >/dev/null 2>&1
+		sleep 1
+
 		if [ "$ok" != 1 ]; then
 			printf '%b\n' "${YELLOW}Предупреждение:${NC} служба ещё не поднялась полностью через 16 секунд после запуска."
 			printf '%b\n' "Это не обязательно ошибка — kmod-tun/hev-socks5-tunnel после свежей установки иногда стартуют дольше."
 			printf '%b\n' "Проверьте через минуту: byetube status  или  logread -e byetube"
 		fi
+
+		ST=$("$BT_DIR/bin/byetube" status 2>/dev/null)
+		show() { # ключ, описание
+			case "$ST" in
+				*"\"$1\":true"*) printf '  \033[32m[ok]\033[0m %s\n' "$2" ;;
+				*)                printf '  \033[31m[--]\033[0m %s\n' "$2" ;;
+			esac
+		}
+		echo
+		printf '%b\n' "${MAGENTA}Состояние:${NC}"
+		show byedpi "ByeDPI (ciadpi)"
+		show hev    "hev-socks5-tunnel"
+		show tun    "интерфейс byetube0"
+		show nft    "правила nftables"
+		show route  "policy routing"
+		show dns    "dnsmasq -> nftset"
+		show fw     "firewall forward"
+		echo
+		echo "Проверка: откройте YouTube на устройстве в LAN (DNS — роутер), затем на роутере:"
+		echo "  byetube status        состояние"
+		echo "  byetube ips           IP, попавшие в наборы"
+		echo "  logread -e byetube    логи"
+		echo
+		echo "Если клиент уже держал IP YouTube в DNS-кэше — перезапустите браузер / переподключите Wi-Fi."
 	fi
 
 	printf '%b\n' "ByeTube ${GREEN}установлен!${NC}\n"
