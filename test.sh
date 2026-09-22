@@ -1,6 +1,6 @@
 #!/bin/sh
 # Zapret Manager by StressOzz for LuCI installer
-# Version: 1.30
+# Version: 1.28
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -30,7 +30,7 @@ chmod 0755 /opt/zapret-manager-luci
 cat > '/opt/zapret-manager-luci/backend.sh' << 'ZM_INSTALLER_EOF'
 
 CONF="/etc/config/zapret"
-ZM_VERSION="1.30"
+ZM_VERSION="1.28"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
@@ -1490,6 +1490,7 @@ exclusions_file_get() {
 
 exclusions_file_set() {
 	local content="$1"
+	[ -x /etc/init.d/zapret ] || { echo '{"error":"Zapret не установлен"}'; return 1; }
 	mkdir -p "$(dirname "$EXCLUDE_DOMAINS_FILE")"
 	printf '%s' "$content" > "$EXCLUDE_DOMAINS_FILE"
 	zapret_restart
@@ -1497,6 +1498,7 @@ exclusions_file_set() {
 }
 
 exclusions_file_restore() {
+	[ -x /etc/init.d/zapret ] || { echo '{"error":"Zapret не установлен"}'; return 1; }
 	mkdir -p "$(dirname "$EXCLUDE_DOMAINS_FILE")"
 	rm -f "$EXCLUDE_DOMAINS_FILE"
 	wget -q --timeout=20 -U "Mozilla/5.0" -O "$EXCLUDE_DOMAINS_FILE" "$EXCLUDE_URL"
@@ -6331,8 +6333,9 @@ return view.extend({
 		var latestVersion = (all[7] && all[7].version) || '';
 		var wrap = E('div', { 'class': 'zm-wrap' });
 		var activeTab = 'strategy';
+		var zapretInstalled = statusData.zapret === 'installed';
 
-		var tabBar = E('div', { 'class': 'zm-actions', 'style': 'margin:0 0 8px' });
+		var tabBar = E('div', { 'class': 'zm-actions', 'style': 'margin:0 0 2px' });
 		var panels = {};
 		TABS.forEach(function(t) {
 			panels[t.id] = E('div', { 'style': t.id === activeTab ? '' : 'display:none' });
@@ -6398,7 +6401,7 @@ return view.extend({
 				if (d.zapret_version) fields.push(E('span', {}, [ E('span', { 'class': 'zm-label' }, 'Версия: '), E('span', {}, d.zapret_version) ]));
 				if (d.strategy) fields.push(E('span', {}, [ E('span', { 'class': 'zm-label' }, 'Стратегия: '), E('span', {}, d.strategy) ]));
 
-				zCardWrap.appendChild(E('div', { 'class': 'zm-card', 'style': 'margin-bottom:8px' }, [
+				zCardWrap.appendChild(E('div', { 'class': 'zm-card', 'style': 'margin-bottom:4px' }, [
 					E('h3', {}, 'Zapret'),
 					E('div', { 'class': 'zm-row', 'style': 'justify-content:space-between; width:100%' }, [
 						E('div', { 'style': 'display:flex; gap:22px; flex-wrap:wrap; align-items:center' }, fields),
@@ -7141,9 +7144,11 @@ return view.extend({
 			panels.exclusions.appendChild(card);
 		})();
 
-		renderTabBar();
-		wrap.appendChild(tabBar);
-		TABS.forEach(function(t) { wrap.appendChild(panels[t.id]); });
+		if (zapretInstalled) {
+			renderTabBar();
+			wrap.appendChild(tabBar);
+			TABS.forEach(function(t) { wrap.appendChild(panels[t.id]); });
+		}
 		return wrap;
 	}
 });
