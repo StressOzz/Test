@@ -6332,6 +6332,7 @@ return view.extend({
 		var statusData = all[0], vListData = all[1], testData = all[2], ytInitialData = all[3], gameData = all[4], discordData = all[5], exclusionsData = all[6];
 		var latestVersion = (all[7] && all[7].version) || '';
 		var wrap = E('div', { 'class': 'zm-wrap' });
+		var mainSection = E('div', {});
 		var activeTab = 'strategy';
 		var zapretInstalled = statusData.zapret === 'installed';
 
@@ -6440,9 +6441,9 @@ return view.extend({
 			}
 
 			renderZCard(status);
-			wrap.appendChild(zCardWrap);
-			wrap.appendChild(zLogEl);
-			wrap.appendChild(zBannerEl);
+			mainSection.appendChild(zCardWrap);
+			mainSection.appendChild(zLogEl);
+			mainSection.appendChild(zBannerEl);
 
 			var currentBanner = E('div', { 'class': 'zm-current-banner' });
 			panels.strategy.appendChild(currentBanner);
@@ -7146,9 +7147,10 @@ return view.extend({
 
 		if (zapretInstalled) {
 			renderTabBar();
-			wrap.appendChild(tabBar);
-			TABS.forEach(function(t) { wrap.appendChild(panels[t.id]); });
+			mainSection.appendChild(tabBar);
+			TABS.forEach(function(t) { mainSection.appendChild(panels[t.id]); });
 		}
+		wrap.appendChild(mainSection);
 		return wrap;
 	}
 });
