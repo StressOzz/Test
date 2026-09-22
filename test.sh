@@ -1,6 +1,6 @@
 #!/bin/sh
 # Zapret Manager by StressOzz for LuCI installer
-# Version: 1.28
+# Version: 1.30
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -30,7 +30,7 @@ chmod 0755 /opt/zapret-manager-luci
 cat > '/opt/zapret-manager-luci/backend.sh' << 'ZM_INSTALLER_EOF'
 
 CONF="/etc/config/zapret"
-ZM_VERSION="1.28"
+ZM_VERSION="1.30"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
@@ -1484,7 +1484,7 @@ exclusions_clear() {
 EXCLUDE_DOMAINS_FILE="/opt/zapret/ipset/zapret-hosts-user-exclude.txt"
 
 exclusions_file_get() {
-	[ -f "$EXCLUDE_DOMAINS_FILE" ] || { echo '{"error":"файл исключений не найден"}'; return 1; }
+	[ -f "$EXCLUDE_DOMAINS_FILE" ] || { printf '{"content":""}\n'; return 0; }
 	printf '{"content":"%s"}\n' "$(esc_ml "$(cat "$EXCLUDE_DOMAINS_FILE")")"
 }
 
@@ -4400,9 +4400,9 @@ do_bytetube_install() {
 	rm -rf /tmp/luci-indexcache* /tmp/luci-modulecache
 	/etc/init.d/rpcd reload >/dev/null 2>&1
 
-	/etc/init.d/ytbypass enable
+	/etc/init.d/ytbypass enable >/dev/null 2>&1
 	echo "==> Запускаю"
-	/etc/init.d/ytbypass restart
+	/etc/init.d/ytbypass restart >/dev/null 2>&1
 	sleep 4
 	nslookup youtube.com 127.0.0.1 >/dev/null 2>&1
 	sleep 1
@@ -6332,7 +6332,7 @@ return view.extend({
 		var wrap = E('div', { 'class': 'zm-wrap' });
 		var activeTab = 'strategy';
 
-		var tabBar = E('div', { 'class': 'zm-actions', 'style': 'margin:4px 0 8px' });
+		var tabBar = E('div', { 'class': 'zm-actions', 'style': 'margin:0 0 8px' });
 		var panels = {};
 		TABS.forEach(function(t) {
 			panels[t.id] = E('div', { 'style': t.id === activeTab ? '' : 'display:none' });
@@ -6398,7 +6398,7 @@ return view.extend({
 				if (d.zapret_version) fields.push(E('span', {}, [ E('span', { 'class': 'zm-label' }, 'Версия: '), E('span', {}, d.zapret_version) ]));
 				if (d.strategy) fields.push(E('span', {}, [ E('span', { 'class': 'zm-label' }, 'Стратегия: '), E('span', {}, d.strategy) ]));
 
-				zCardWrap.appendChild(E('div', { 'class': 'zm-card', 'style': 'margin-bottom:14px' }, [
+				zCardWrap.appendChild(E('div', { 'class': 'zm-card', 'style': 'margin-bottom:8px' }, [
 					E('h3', {}, 'Zapret'),
 					E('div', { 'class': 'zm-row', 'style': 'justify-content:space-between; width:100%' }, [
 						E('div', { 'style': 'display:flex; gap:22px; flex-wrap:wrap; align-items:center' }, fields),
