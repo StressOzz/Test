@@ -2055,7 +2055,7 @@ do_test_run() {
 	if [ "$mode" = "current" ]; then
 		_add_gp_domains
 		_refresh_exclude_file
-		echo "==> Проверяем текущую применённую стратегию (конфигурация не изменяется)"
+		echo "==> Проверяем текущую применённую стратегию"
 		zapret_restart
 
 		local urls_file="$TEST_DIR/urls.txt" dpi_urls yt_urls
@@ -2066,7 +2066,7 @@ do_test_run() {
 
 		local dpi_log="$TEST_DIR/log_current_dpi.txt" dpi_res dpi_ok dpi_total
 		: > "$dpi_log"
-		echo "==> Тест по доменам DPI"
+		echo "==> Идёт тест по доменам DPI"
 		dpi_res=$(_test_check_all_urls "$dpi_urls" "$dpi_log")
 		dpi_ok=$(echo "$dpi_res" | cut -d' ' -f1)
 		dpi_total=$(echo "$dpi_res" | cut -d' ' -f2)
@@ -2082,7 +2082,7 @@ do_test_run() {
 
 		local yt_log="$TEST_DIR/log_current_yt.txt" yt_res yt_ok yt_total
 		: > "$yt_log"
-		echo "==> Тест по доменам YouTube"
+		echo "==> Идёт тест по доменам YouTube"
 		yt_res=$(_test_check_all_urls "$yt_urls" "$yt_log")
 		yt_ok=$(echo "$yt_res" | cut -d' ' -f1)
 		yt_total=$(echo "$yt_res" | cut -d' ' -f2)
@@ -6693,11 +6693,11 @@ return view.extend({
 								refreshNfqwsOpt();
 								renderNfqwsCard();
 							}
-						}, 'Редактировать текущую стратегию')
+						}, 'Открыть редактор стратегии')
 					]));
 					return;
 				}
-				nfqwsCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Содержимое между "option NFQWS_OPT \'" и закрывающей "\'" в /etc/config/zapret. Сохранение применяет изменения через sync_config.sh и перезапускает Zapret.'));
+				nfqwsCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Содержимое в /etc/config/zapret. Сохранение применяет изменения и перезапускает Zapret.'));
 				nfqwsEl.style.display = '';
 				nfqwsCard.appendChild(nfqwsEl);
 				nfqwsCard.appendChild(E('div', { 'class': 'zm-actions' }, [
@@ -9504,4 +9504,3 @@ command -v curl >/dev/null 2>&1 || $INSTALL curl >/dev/null 2>&1 || true
 command -v unzip >/dev/null 2>&1 || $INSTALL unzip >/dev/null 2>&1 || true
 
 echo -e "Zapret Manager ${GREEN}для ${NC}LuCI ${GREEN}установлен!${NC}\n"
-
