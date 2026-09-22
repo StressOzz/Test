@@ -6336,7 +6336,7 @@ return view.extend({
 		var activeTab = 'strategy';
 		var zapretInstalled = statusData.zapret === 'installed';
 
-		var tabBar = E('div', { 'class': 'zm-actions', 'style': 'margin:7px 0' });
+		var tabBar = E('div', { 'class': 'zm-actions', 'style': 'margin:10px 0' });
 		var panels = {};
 		TABS.forEach(function(t) {
 			panels[t.id] = E('div', { 'style': t.id === activeTab ? '' : 'display:none' });
@@ -6402,7 +6402,7 @@ return view.extend({
 				if (d.zapret_version) fields.push(E('span', {}, [ E('span', { 'class': 'zm-label' }, 'Версия: '), E('span', {}, d.zapret_version) ]));
 				if (d.strategy) fields.push(E('span', {}, [ E('span', { 'class': 'zm-label' }, 'Стратегия: '), E('span', {}, d.strategy) ]));
 
-				zCardWrap.appendChild(E('div', { 'class': 'zm-card', 'style': 'margin-bottom:7px' }, [
+				zCardWrap.appendChild(E('div', { 'class': 'zm-card', 'style': 'margin-bottom:10px' }, [
 					E('h3', {}, 'Zapret'),
 					E('div', { 'class': 'zm-row', 'style': 'justify-content:space-between; width:100%' }, [
 						E('div', { 'style': 'display:flex; gap:22px; flex-wrap:wrap; align-items:center' }, fields),
