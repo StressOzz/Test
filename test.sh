@@ -2943,7 +2943,7 @@ BYEDPI_REPO="DPITrickster/ByeDPI-OpenWrt"
 
 _bytetube_fetch() { # URL OUT
 	if command -v curl >/dev/null 2>&1; then
-		curl -fsSL --connect-timeout 15 -o "$2" "$1"
+		curl -fsSL --connect-timeout 15 --max-time 90 -o "$2" "$1"
 	else
 		wget -q -T 20 -O "$2" "$1"
 	fi
@@ -5105,7 +5105,8 @@ function pollJob(job, logEl, onDone, onTick) {
 				finished = true;
 				clearInterval(timer);
 				delete _activePolls[job];
-				toast('Роутер не отвечает — операция может ещё выполняться в фоне. Обновите страницу через полминуты, чтобы проверить результат.', 'warning', 25000);
+				renderLog(logEl, '==> ОШИБКА: роутер не отвечает, не удалось получить статус операции.');
+				onDone(false);
 			}
 		});
 	}, 1200);
@@ -6331,7 +6332,7 @@ return view.extend({
 		var wrap = E('div', { 'class': 'zm-wrap' });
 		var activeTab = 'strategy';
 
-		var tabBar = E('div', { 'class': 'zm-actions', 'style': 'margin-bottom:14px' });
+		var tabBar = E('div', { 'class': 'zm-actions', 'style': 'margin:4px 0 8px' });
 		var panels = {};
 		TABS.forEach(function(t) {
 			panels[t.id] = E('div', { 'style': t.id === activeTab ? '' : 'display:none' });
@@ -6995,8 +6996,7 @@ return view.extend({
 
 		(function buildDomainsExcludePanel() {
 			var editorCard = E('div', { 'class': 'zm-card' });
-			var editorOpen = false;
-			var contentEl = E('textarea', { 'class': 'zm-config-editor', 'spellcheck': 'false', 'style': 'display:none' });
+			var contentEl = E('textarea', { 'class': 'zm-config-editor', 'spellcheck': 'false' });
 			var editorBusy = false;
 
 			function refreshFile() {
@@ -7006,65 +7006,40 @@ return view.extend({
 				});
 			}
 
-			function renderEditorCard() {
-				editorCard.innerHTML = '';
-				editorCard.appendChild(E('h3', {}, 'Домены исключения'));
-				if (!editorOpen) {
-					editorCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Редактирование /opt/zapret/ipset/zapret-hosts-user-exclude.txt — домены, для которых Zapret не применяется.'));
-					editorCard.appendChild(E('div', { 'class': 'zm-actions' }, [
-						E('button', {
-							'class': 'cbi-button',
-							'click': function() {
-								editorOpen = true;
-								refreshFile();
-								renderEditorCard();
-							}
-						}, 'Открыть редактор')
-					]));
-					return;
-				}
-				editorCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Сохранение перезапускает Zapret.'));
-				contentEl.style.display = '';
-				editorCard.appendChild(contentEl);
-				editorCard.appendChild(E('div', { 'class': 'zm-actions' }, [
-					E('button', {
-						'class': 'cbi-button',
-						'click': function() { refreshFile(); zm.toast('Содержимое перечитано с диска', 'info'); }
-					}, 'Обновить из файла'),
-					E('button', {
-						'class': 'cbi-button cbi-button-positive',
-						'click': function() {
-							if (editorBusy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
-							editorBusy = true;
-							zm.toast('Сохраняем и перезапускаем Zapret', 'warning');
-							zm.exclusionsFileSet(contentEl.value).then(function(res) {
-								editorBusy = false;
-								if (res.error) { zm.toast(res.error, 'error'); return; }
-								zm.toast('Список исключений сохранён, Zapret перезапущен', 'info');
-							}).catch(function() { editorBusy = false; });
-						}
-					}, 'Сохранить и применить'),
-					E('button', {
-						'class': 'cbi-button',
-						'click': function() {
-							if (editorBusy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
-							editorBusy = true;
-							zm.toast('Восстанавливаем список исключений', 'warning');
-							zm.exclusionsFileRestore().then(function(res) {
-								editorBusy = false;
-								if (res.error) { zm.toast(res.error, 'error'); return; }
-								contentEl.value = res.content || '';
-								zm.toast('Список исключений восстановлен', 'info');
-							}).catch(function() { editorBusy = false; });
-						}
-					}, 'Восстановить исключения'),
-					E('button', {
-						'class': 'cbi-button',
-						'click': function() { editorOpen = false; renderEditorCard(); }
-					}, 'Свернуть')
-				]));
-			}
-			renderEditorCard();
+			editorCard.appendChild(E('h3', {}, 'Домены исключения'));
+			editorCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Редактирование /opt/zapret/ipset/zapret-hosts-user-exclude.txt — домены, для которых Zapret не применяется. Сохранение перезапускает Zapret.'));
+			editorCard.appendChild(contentEl);
+			editorCard.appendChild(E('div', { 'class': 'zm-actions' }, [
+				E('button', {
+					'class': 'cbi-button cbi-button-positive',
+					'click': function() {
+						if (editorBusy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+						editorBusy = true;
+						zm.toast('Сохраняем и перезапускаем Zapret', 'warning');
+						zm.exclusionsFileSet(contentEl.value).then(function(res) {
+							editorBusy = false;
+							if (res.error) { zm.toast(res.error, 'error'); return; }
+							zm.toast('Список исключений сохранён, Zapret перезапущен', 'info');
+						}).catch(function() { editorBusy = false; });
+					}
+				}, 'Сохранить и применить'),
+				E('button', {
+					'class': 'cbi-button',
+					'click': function() {
+						if (editorBusy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+						editorBusy = true;
+						zm.toast('Восстанавливаем список исключений', 'warning');
+						zm.exclusionsFileRestore().then(function(res) {
+							editorBusy = false;
+							if (res.error) { zm.toast(res.error, 'error'); return; }
+							contentEl.value = res.content || '';
+							zm.toast('Список исключений восстановлен', 'info');
+						}).catch(function() { editorBusy = false; });
+					}
+				}, 'Восстановить исключения')
+			]));
+
+			refreshFile();
 			panels.domains_exclude.appendChild(editorCard);
 		})();
 
