@@ -1,6 +1,6 @@
 #!/bin/sh
 # Zapret Manager by StressOzz for LuCI installer
-# Version: 1.31
+# Version: 1.32
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -30,7 +30,7 @@ chmod 0755 /opt/zapret-manager-luci
 cat > '/opt/zapret-manager-luci/backend.sh' << 'ZM_INSTALLER_EOF'
 
 CONF="/etc/config/zapret"
-ZM_VERSION="1.31"
+ZM_VERSION="1.32"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
@@ -1506,6 +1506,27 @@ exclusions_file_restore() {
 	printf '{"content":"%s"}\n' "$(esc_ml "$(cat "$EXCLUDE_DOMAINS_FILE")")"
 }
 
+nfqws_opt_get() {
+	[ -f "$CONF" ] || { printf '{"content":""}\n'; return 0; }
+	local content
+	content=$(sed -n "/^[[:space:]]*option NFQWS_OPT '\$/,/^[[:space:]]*'\$/p" "$CONF" | sed '1d;$d')
+	printf '{"content":"%s"}\n' "$(esc_ml "$content")"
+}
+
+nfqws_opt_set() {
+	local content="$1"
+	[ -x /etc/init.d/zapret ] || { echo '{"error":"Zapret не установлен"}'; return 1; }
+	[ -f "$CONF" ] || { echo '{"error":"конфигурация Zapret не найдена"}'; return 1; }
+	grep -q "^[[:space:]]*option NFQWS_OPT '\$" "$CONF" || { echo '{"error":"в конфигурации не найден блок NFQWS_OPT"}'; return 1; }
+	sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
+	{ echo "	option NFQWS_OPT '"; printf '%s\n' "$content"; echo "'"; } >> "$CONF"
+	chmod +x /opt/zapret/sync_config.sh
+	/opt/zapret/sync_config.sh
+	/etc/init.d/zapret restart >/dev/null 2>&1
+	sleep 1
+	printf '{"ok":true}\n'
+}
+
 
 TG_MTPROTO_VER="0.10"
 TGWS_VERSION="0.2.5"
@@ -2005,6 +2026,49 @@ do_test_run() {
 	: > "$results"
 	echo "$mode" > "$TEST_MODE_FILE"
 	[ -f "$CONF" ] || { echo "ОШИБКА: Zapret не установлен"; return 1; }
+
+	if [ "$mode" = "current" ]; then
+		_add_gp_domains
+		_refresh_exclude_file
+		echo "==> Проверяем текущую применённую стратегию (конфигурация не изменяется)"
+		zapret_restart
+
+		local urls_file="$TEST_DIR/urls.txt" dpi_urls yt_urls
+		echo "==> Собираем список доменов DPI"
+		_test_prepare_urls "$urls_file"
+		dpi_urls="$(cat "$urls_file")"
+		yt_urls="$(_test_yt_urls)"
+
+		local dpi_log="$TEST_DIR/log_current_dpi.txt" dpi_res dpi_ok dpi_total
+		: > "$dpi_log"
+		echo "==> Тест по доменам DPI"
+		dpi_res=$(_test_check_all_urls "$dpi_urls" "$dpi_log")
+		dpi_ok=$(echo "$dpi_res" | cut -d' ' -f1)
+		dpi_total=$(echo "$dpi_res" | cut -d' ' -f2)
+		echo "==> Результат (DPI): ${dpi_ok}/${dpi_total}"
+		echo "Текущая стратегия — домены DPI → ${dpi_ok}/${dpi_total}" >> "$results"
+
+		if [ -f "$TEST_STOP_FLAG" ]; then
+			echo "==> Тестирование остановлено пользователем"
+			rm -f "$TEST_STOP_FLAG"
+			echo "==> Готово"
+			return 0
+		fi
+
+		local yt_log="$TEST_DIR/log_current_yt.txt" yt_res yt_ok yt_total
+		: > "$yt_log"
+		echo "==> Тест по доменам YouTube"
+		yt_res=$(_test_check_all_urls "$yt_urls" "$yt_log")
+		yt_ok=$(echo "$yt_res" | cut -d' ' -f1)
+		yt_total=$(echo "$yt_res" | cut -d' ' -f2)
+		echo "==> Результат (YouTube): ${yt_ok}/${yt_total}"
+		echo "Текущая стратегия — домены YouTube → ${yt_ok}/${yt_total}" >> "$results"
+
+		rm -f "$TEST_STOP_FLAG"
+		echo "==> Готово"
+		return 0
+	fi
+
 	cp "$CONF" "$TEST_BACKUP"
 	_add_gp_domains
 	_refresh_exclude_file
@@ -2100,7 +2164,7 @@ test_action() {
 	case "$action" in
 		start)
 			case "$mode" in
-				v|flowseal|v_flowseal|youtube) ;;
+				v|flowseal|v_flowseal|youtube|current) ;;
 				*) echo '{"error":"неизвестный режим теста"}'; return 1 ;;
 			esac
 			job_start strategy_test do_test_run "$mode"
@@ -2116,7 +2180,7 @@ test_action() {
 			;;
 		clear)
 			case "$mode" in
-				v|flowseal|v_flowseal|youtube) rm -f "$(_test_results_file "$mode")" ;;
+				v|flowseal|v_flowseal|youtube|current) rm -f "$(_test_results_file "$mode")" ;;
 				*) rm -f "$TEST_DIR"/results_*.txt ;;
 			esac
 			printf '{"ok":true}\n'
@@ -2131,12 +2195,13 @@ test_status() {
 		running="true"
 	fi
 	[ -f "$TEST_MODE_FILE" ] && mode=$(cat "$TEST_MODE_FILE")
-	printf '{"running":%s,"mode":"%s","has_results_v":%s,"has_results_flowseal":%s,"has_results_v_flowseal":%s,"has_results_youtube":%s}\n' \
+	printf '{"running":%s,"mode":"%s","has_results_v":%s,"has_results_flowseal":%s,"has_results_v_flowseal":%s,"has_results_youtube":%s,"has_results_current":%s}\n' \
 		"$running" "$(esc "$mode")" \
 		"$([ -s "$(_test_results_file v)" ] && echo true || echo false)" \
 		"$([ -s "$(_test_results_file flowseal)" ] && echo true || echo false)" \
 		"$([ -s "$(_test_results_file v_flowseal)" ] && echo true || echo false)" \
-		"$([ -s "$(_test_results_file youtube)" ] && echo true || echo false)"
+		"$([ -s "$(_test_results_file youtube)" ] && echo true || echo false)" \
+		"$([ -s "$(_test_results_file current)" ] && echo true || echo false)"
 }
 
 test_results() {
@@ -4618,6 +4683,8 @@ case "$cmd" in
 	exclusions_file_get)                             exclusions_file_get ;;
 	exclusions_file_set)                             exclusions_file_set "$1" ;;
 	exclusions_file_restore)                         exclusions_file_restore ;;
+	nfqws_opt_get)                                   nfqws_opt_get ;;
+	nfqws_opt_set)                                   nfqws_opt_set "$1" ;;
 	tg_status)                                                   tg_status ;;
 	tg_action)                                                    tg_action "$1" "$2" ;;
 	tg_restart_all)                                                tg_restart_all ;;
@@ -4703,6 +4770,8 @@ list_methods() {
 	json_add_object "exclusions_file_get";         json_close_object
 	json_add_object "exclusions_file_set";         json_add_string "content" "string"; json_close_object
 	json_add_object "exclusions_file_restore";     json_close_object
+	json_add_object "nfqws_opt_get";               json_close_object
+	json_add_object "nfqws_opt_set";               json_add_string "content" "string"; json_close_object
 	json_add_object "tg_status";                   json_close_object
 	json_add_object "tg_action";                   json_add_string "variant" "string"; json_add_string "action" "string"; json_close_object
 	json_add_object "tg_restart_all";              json_close_object
@@ -4782,6 +4851,8 @@ call_method() {
 		exclusions_file_get)           "$BACKEND" exclusions_file_get ;;
 		exclusions_file_set)           json_get_var content content; "$BACKEND" exclusions_file_set "$content" ;;
 		exclusions_file_restore)       "$BACKEND" exclusions_file_restore ;;
+		nfqws_opt_get)                 "$BACKEND" nfqws_opt_get ;;
+		nfqws_opt_set)                 json_get_var content content; "$BACKEND" nfqws_opt_set "$content" ;;
 		tg_status)                     "$BACKEND" tg_status ;;
 		tg_action)                     json_get_var variant variant; json_get_var action action; "$BACKEND" tg_action "$variant" "$action" ;;
 		tg_restart_all)                "$BACKEND" tg_restart_all ;;
@@ -4840,7 +4911,7 @@ cat > '/usr/share/rpcd/acl.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF'
 					"status", "job_status", "log_tail", "system_info",
 					"strategy_list_v", "strategy_list_flowseal", "strategy_list_youtube",
 					"discord_status", "hosts_status", "hosts_file_get", "doh_status", "game_status",
-					"system_status", "mirror_status", "exclusions_status", "exclusions_file_get", "tg_status", "tgws_status",
+					"system_status", "mirror_status", "exclusions_status", "exclusions_file_get", "nfqws_opt_get", "tg_status", "tgws_status",
 					"test_status", "test_results", "zm_update_status", "mixomo_status", "mixomo_config_get",
 					"mixomo_warp_status",
 					"zapret_latest_version", "bytetube_installed"
@@ -4862,7 +4933,7 @@ cat > '/usr/share/rpcd/acl.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF'
 					"game_set", "game_set_fake", "game_toggle_xtreme",
 					"system_check_connectivity", "system_toggle_quic", "system_toggle_ipv6",
 					"system_toggle_flow_offloading_fix", "system_toggle_expert_mode", "system_uninstall_panel",
-					"mirror_set", "exclusions_toggle", "exclusions_clear", "exclusions_file_set", "exclusions_file_restore",
+					"mirror_set", "exclusions_toggle", "exclusions_clear", "exclusions_file_set", "exclusions_file_restore", "nfqws_opt_set",
 					"tg_action", "tg_restart_all", "tgws_action", "test_action", "zm_update_action",
 					"mixomo_action", "mixomo_config_set", "mixomo_subscription_set",
 					"mixomo_magitrickle_list_set", "mixomo_autorestart_set", "mixomo_ui_action",
@@ -4981,6 +5052,8 @@ var callExclusionsClear = rpc.declare({ object: 'zapret-manager', method: 'exclu
 var callExclusionsFileGet = rpc.declare({ object: 'zapret-manager', method: 'exclusions_file_get', expect: {} });
 var callExclusionsFileSet = rpc.declare({ object: 'zapret-manager', method: 'exclusions_file_set', params: ['content'], expect: {} });
 var callExclusionsFileRestore = rpc.declare({ object: 'zapret-manager', method: 'exclusions_file_restore', expect: {} });
+var callNfqwsOptGet = rpc.declare({ object: 'zapret-manager', method: 'nfqws_opt_get', expect: {} });
+var callNfqwsOptSet = rpc.declare({ object: 'zapret-manager', method: 'nfqws_opt_set', params: ['content'], expect: {} });
 var callTgStatus = rpc.declare({ object: 'zapret-manager', method: 'tg_status', expect: {} });
 var callTgAction = rpc.declare({ object: 'zapret-manager', method: 'tg_action', params: ['variant', 'action'], expect: {} });
 var callTgRestartAll = rpc.declare({ object: 'zapret-manager', method: 'tg_restart_all', expect: {} });
@@ -5217,6 +5290,8 @@ return baseclass.extend({
 	exclusionsFileGet: callExclusionsFileGet,
 	exclusionsFileSet: callExclusionsFileSet,
 	exclusionsFileRestore: callExclusionsFileRestore,
+	nfqwsOptGet: callNfqwsOptGet,
+	nfqwsOptSet: callNfqwsOptSet,
 	tgStatus: callTgStatus,
 	tgAction: callTgAction,
 	tgRestartAll: callTgRestartAll,
@@ -6310,9 +6385,10 @@ var TEST_MODES = [
 	{ id: 'v_flowseal', label: 'Тестировать v + Flowseal' }
 ];
 var TEST_MODE_LABELS = {
-	v: 'v', flowseal: 'Flowseal', v_flowseal: 'v + Flowseal', youtube: 'YouTube'
+	v: 'v', flowseal: 'Flowseal', v_flowseal: 'v + Flowseal', youtube: 'YouTube', current: 'Текущая стратегия'
 };
-var TEST_RESULT_MODES = ['v', 'flowseal', 'v_flowseal', 'youtube'];
+var TEST_RESULT_MODES = ['v', 'flowseal', 'v_flowseal', 'youtube', 'current'];
+var TEST_MAIN_MODES = ['v', 'flowseal', 'v_flowseal'];
 
 var GAME_FAKES = [
 	'stun.bin', 'stun2.bin', 'quic_initial_4pda_to.bin',
@@ -6566,6 +6642,66 @@ return view.extend({
 				if (!res.started) renderFlowseal(res);
 				else fGrid.appendChild(E('p', { 'class': 'zm-hint' }, 'Список ещё не загружен — нажмите «Обновить список».'));
 			});
+
+			var nfqwsCard = E('div', { 'class': 'zm-card' });
+			var nfqwsOpen = false;
+			var nfqwsEl = E('textarea', { 'class': 'zm-config-editor', 'spellcheck': 'false', 'style': 'display:none' });
+			var nfqwsBusy = false;
+
+			function refreshNfqwsOpt() {
+				zm.nfqwsOptGet().then(function(res) {
+					if (res.error) { zm.toast(res.error, 'error'); return; }
+					nfqwsEl.value = res.content || '';
+				});
+			}
+
+			function renderNfqwsCard() {
+				nfqwsCard.innerHTML = '';
+				nfqwsCard.appendChild(E('h3', {}, 'Редактировать текущую стратегию'));
+				if (!nfqwsOpen) {
+					nfqwsCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Прямое редактирование параметров NFQWS_OPT в /etc/config/zapret — для опытных пользователей.'));
+					nfqwsCard.appendChild(E('div', { 'class': 'zm-actions' }, [
+						E('button', {
+							'class': 'cbi-button',
+							'click': function() {
+								nfqwsOpen = true;
+								refreshNfqwsOpt();
+								renderNfqwsCard();
+							}
+						}, 'Редактировать текущую стратегию')
+					]));
+					return;
+				}
+				nfqwsCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Содержимое между "option NFQWS_OPT \'" и закрывающей "\'" в /etc/config/zapret. Сохранение применяет изменения через sync_config.sh и перезапускает Zapret.'));
+				nfqwsEl.style.display = '';
+				nfqwsCard.appendChild(nfqwsEl);
+				nfqwsCard.appendChild(E('div', { 'class': 'zm-actions' }, [
+					E('button', {
+						'class': 'cbi-button',
+						'click': function() { refreshNfqwsOpt(); zm.toast('Содержимое перечитано с диска', 'info'); }
+					}, 'Обновить из файла'),
+					E('button', {
+						'class': 'cbi-button cbi-button-positive',
+						'click': function() {
+							if (nfqwsBusy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+							nfqwsBusy = true;
+							zm.toast('Сохраняем стратегию', 'warning');
+							zm.nfqwsOptSet(nfqwsEl.value).then(function(res) {
+								nfqwsBusy = false;
+								if (res.error) { zm.toast(res.error, 'error'); return; }
+								zm.toast('Сохранено, Zapret перезапущен', 'info');
+								refreshState();
+							}).catch(function() { nfqwsBusy = false; });
+						}
+					}, 'Сохранить и применить'),
+					E('button', {
+						'class': 'cbi-button',
+						'click': function() { nfqwsOpen = false; renderNfqwsCard(); }
+					}, 'Свернуть')
+				]));
+			}
+			renderNfqwsCard();
+			panels.strategy.appendChild(nfqwsCard);
 		})();
 
 		(function buildTestPanel() {
@@ -6577,6 +6713,7 @@ return view.extend({
 
 			var mainCard = E('div', { 'class': 'zm-card' });
 			var ytCard = E('div', { 'class': 'zm-card' });
+			var curCard = E('div', { 'class': 'zm-card' });
 			var resultsButtonsEl = E('div', {});
 
 			function stopButton() {
@@ -6587,14 +6724,14 @@ return view.extend({
 				mainCard.innerHTML = '';
 				mainCard.appendChild(E('h3', {}, 'Тест стратегий v / Flowseal'));
 				mainCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Тест идёт в фоне — переключение вкладок или закрытие LuCI его не прервёт. По окончании конфигурация всегда возвращается к тому, что было до начала теста — стратегии только тестируются, лучшую нужно применить вручную на странице «Стратегии».'));
-				if (busy && curMode !== 'youtube') {
+				if (busy && TEST_MAIN_MODES.indexOf(curMode) !== -1) {
 					mainCard.appendChild(E('div', { 'class': 'zm-row' }, [
 						E('span', { 'class': 'zm-label' }, 'Статус'),
 						zm.badge(true, 'тест выполняется (' + (TEST_MODE_LABELS[curMode] || curMode) + ')', '')
 					]));
 					mainCard.appendChild(E('div', { 'class': 'zm-actions' }, [ stopButton() ]));
 				} else if (busy) {
-					mainCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Сейчас выполняется тест YouTube — дождитесь его завершения.'));
+					mainCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Сейчас выполняется другой тест — дождитесь его завершения.'));
 				} else {
 					mainCard.appendChild(E('div', { 'class': 'zm-actions' }, TEST_MODES.map(function(m) {
 						return E('button', {
@@ -6616,13 +6753,35 @@ return view.extend({
 					]));
 					ytCard.appendChild(E('div', { 'class': 'zm-actions' }, [ stopButton() ]));
 				} else if (busy) {
-					ytCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Сейчас выполняется тест v/Flowseal — дождитесь его завершения.'));
+					ytCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Сейчас выполняется другой тест — дождитесь его завершения.'));
 				} else {
 					ytCard.appendChild(E('div', { 'class': 'zm-actions' }, [
 						E('button', {
 							'class': 'cbi-button cbi-button-positive',
 							'click': function() { doStart('youtube'); }
 						}, 'Тестировать YouTube')
+					]));
+				}
+			}
+
+			function renderCur() {
+				curCard.innerHTML = '';
+				curCard.appendChild(E('h3', {}, 'Тест текущей стратегии'));
+				curCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Проверяет уже применённую сейчас стратегию (конфигурация не переключается) по доменам DPI и отдельно по доменам YouTube.'));
+				if (busy && curMode === 'current') {
+					curCard.appendChild(E('div', { 'class': 'zm-row' }, [
+						E('span', { 'class': 'zm-label' }, 'Статус'),
+						zm.badge(true, 'тест выполняется', '')
+					]));
+					curCard.appendChild(E('div', { 'class': 'zm-actions' }, [ stopButton() ]));
+				} else if (busy) {
+					curCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Сейчас выполняется другой тест — дождитесь его завершения.'));
+				} else {
+					curCard.appendChild(E('div', { 'class': 'zm-actions' }, [
+						E('button', {
+							'class': 'cbi-button cbi-button-positive',
+							'click': function() { doStart('current'); }
+						}, 'Тестировать текущую стратегию')
 					]));
 				}
 			}
@@ -6635,6 +6794,7 @@ return view.extend({
 					zm.toast(ok ? 'Тест завершён' : 'Тест завершился с ошибкой', ok ? 'info' : 'error');
 					renderMain();
 					renderYt();
+					renderCur();
 					zm.testStatus().then(function(res) {
 						status = res;
 						renderResultsButtons();
@@ -6648,11 +6808,12 @@ return view.extend({
 				curMode = mode;
 				renderMain();
 				renderYt();
+				renderCur();
 				zm.toast('Запускаем тест стратегий', 'warning');
 				zm.testAction('start', mode).then(function(res) {
-					if (res.error) { busy = false; curMode = ''; zm.toast(res.error, 'error'); renderMain(); renderYt(); return; }
+					if (res.error) { busy = false; curMode = ''; zm.toast(res.error, 'error'); renderMain(); renderYt(); renderCur(); return; }
 					startPolling();
-				}).catch(function() { busy = false; curMode = ''; renderMain(); renderYt(); });
+				}).catch(function() { busy = false; curMode = ''; renderMain(); renderYt(); renderCur(); });
 			}
 
 			function doStop() {
@@ -6732,12 +6893,14 @@ return view.extend({
 
 			renderMain();
 			renderYt();
+			renderCur();
 			renderResultsButtons();
 
 			if (busy) { startPolling(); }
 
 			panels.test.appendChild(mainCard);
 			panels.test.appendChild(ytCard);
+			panels.test.appendChild(curCard);
 			panels.test.appendChild(logEl);
 			panels.test.appendChild(resultsCard);
 		})();
@@ -7323,6 +7486,22 @@ html.zm-theme-dark .zm-card {
 .zm-grid-devices { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 9px; }
 .zm-grid-devices .zm-tile { flex: none; min-width: 0; width: 100%; box-sizing: border-box; }
 
+.zm-credits-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+@media (max-width: 720px) { .zm-credits-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 460px) { .zm-credits-grid { grid-template-columns: 1fr; } }
+.zm-credit-tile {
+	border: 1px solid rgba(0,0,0,.1);
+	border-radius: 10px;
+	padding: 12px 14px;
+	text-align: center;
+	background: rgba(0,0,0,.02);
+}
+html.zm-theme-dark .zm-credit-tile { border-color: rgba(255,255,255,.12); background: rgba(255,255,255,.03); }
+.zm-credit-tile.zm-credit-self { border-color: rgba(26,127,55,.35); background: rgba(26,127,55,.06); }
+.zm-credit-product { font-weight: 700; font-size: 13.5px; margin-bottom: 2px; }
+.zm-credit-author { font-size: 12px; opacity: .75; margin-bottom: 6px; }
+.zm-credit-tile a { font-size: 12px; word-break: break-all; }
+
 .zm-tile {
 	flex: 0 1 auto;
 	min-width: 90px;
@@ -7445,6 +7624,9 @@ html.zm-theme-dark .zm-config-editor { border-color: rgba(255,255,255,.14); }
 }
 .zm-tg-link-row { display: flex; align-items: flex-start; gap: 10px; }
 .zm-tg-link-row .zm-tg-link-box { flex: 1 1 auto; }
+.zm-tg-qr-btn { white-space: nowrap; }
+.zm-tg-qr-box { margin-top: 10px; text-align: center; }
+.zm-tg-qr-box img { border-radius: 8px; background: #fff; padding: 8px; box-shadow: 0 0 0 1px rgba(0,0,0,.08); }
 
 .zm-current-banner {
 	display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
@@ -7678,6 +7860,32 @@ return view.extend({
 		]);
 		wrap.appendChild(uninstallCard);
 
+		var CREDITS = [
+			{ product: 'Zapret Manager LuCI', author: 'StressOzz', url: 'https://github.com/StressOzz', self: true },
+			{ product: 'zapret-openwrt', author: 'remittor', url: 'https://github.com/remittor/zapret-openwrt' },
+			{ product: 'zapret-discord-youtube', author: 'Flowseal', url: 'https://github.com/Flowseal/zapret-discord-youtube' },
+			{ product: 'ByeDPI-OpenWrt', author: 'DPITrickster', url: 'https://github.com/DPITrickster/ByeDPI-OpenWrt' },
+			{ product: 'mihomo', author: 'MetaCubeX', url: 'https://github.com/MetaCubeX/mihomo' },
+			{ product: 'MagiTrickle', author: 'MagiTrickle', url: 'https://github.com/MagiTrickle/MagiTrickle' },
+			{ product: 'brb (sTGWS)', author: 'xyzmean', url: 'https://gitlab.com/xyzmean/brb' },
+			{ product: 'GeoHideDNS', author: 'Internet-Helper', url: 'https://github.com/Internet-Helper/GeoHideDNS' },
+			{ product: 'dpi-checkers', author: 'hyperion-cs', url: 'https://github.com/hyperion-cs/dpi-checkers' }
+		];
+		var creditsGrid = E('div', { 'class': 'zm-credits-grid' });
+		CREDITS.forEach(function(c) {
+			creditsGrid.appendChild(E('div', { 'class': 'zm-credit-tile' + (c.self ? ' zm-credit-self' : '') }, [
+				E('div', { 'class': 'zm-credit-product' }, c.product),
+				E('div', { 'class': 'zm-credit-author' }, c.author),
+				E('a', { 'href': c.url, 'target': '_blank', 'rel': 'noreferrer' }, c.url.replace(/^https?:\/\//, ''))
+			]));
+		});
+		var creditsCard = E('div', { 'class': 'zm-card' }, [
+			E('h3', {}, 'Спасибо'),
+			E('p', { 'class': 'zm-hint' }, 'Zapret Manager LuCI объединяет и упаковывает в один интерфейс наработки этих проектов и их авторов.'),
+			creditsGrid
+		]);
+		wrap.appendChild(creditsCard);
+
 		return wrap;
 	}
 });
@@ -7766,6 +7974,22 @@ return view.extend({
 					extra = 'Хост: ' + d.lan_ip + '   Порт: ' + v.port + '   Ключ: ' + secretPrefixed;
 				}
 
+				var qrBox = E('div', { 'class': 'zm-tg-qr-box', 'style': 'display:none' });
+				var qrShown = false;
+
+				function toggleQr() {
+					qrShown = !qrShown;
+					qrBox.style.display = qrShown ? '' : 'none';
+					if (qrShown && !qrBox.firstChild) {
+						qrBox.appendChild(E('img', {
+							'src': 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=8&data=' + encodeURIComponent(link),
+							'alt': 'QR-код',
+							'width': '220',
+							'height': '220'
+						}));
+					}
+				}
+
 				linksWrap.appendChild(E('div', { 'class': 'zm-tg-link-card' }, [
 					E('h4', {}, v.title),
 					E('p', { 'class': 'zm-tg-link-hint' }, 'Откройте эту ссылку на телефоне/компьютере с Telegram — прокси подключится автоматически. Либо скопируйте и вставьте её в браузер/Telegram вручную.'),
@@ -7774,9 +7998,15 @@ return view.extend({
 						E('button', {
 							'class': 'cbi-button cbi-button-positive',
 							'click': function() { copyToClipboard(link); }
-						}, 'Скопировать')
+						}, 'Скопировать'),
+						E('button', {
+							'class': 'cbi-button zm-tg-qr-btn',
+							'title': 'Показать QR-код',
+							'click': function() { toggleQr(); }
+						}, 'QR-код')
 					]),
-					E('p', { 'class': 'zm-hint' }, extra)
+					E('p', { 'class': 'zm-hint' }, extra),
+					qrBox
 				]));
 			});
 		}
