@@ -8708,7 +8708,6 @@ function renderInstalled(all) {
 
 		function removeByeTube() {
 			if (removeBusy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
-			if (!confirm('Удалить ByeTube?\n\nБудут удалены настройки и служба ByeTube. Пакеты byedpi и hev-socks5-tunnel будут удалены тоже, если они не используются другими компонентами панели (например, Mixomo). Действие необратимо.')) return;
 			removeBusy = true;
 			zm.toast('Удаляем ByeTube', 'warning');
 			callBytetubeAction('purge').then(function(res) {
