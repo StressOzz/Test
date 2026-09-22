@@ -3659,7 +3659,14 @@ cat > '/www/luci-static/resources/view/zapret-manager/dashboard.js' << 'ZM_INSTA
 'use strict';
 'require view';
 'require ui';
+'require fs';
 'require zapret-manager.common as zm';
+
+function byetubeStatus() {
+	return fs.exec('/usr/bin/ytbypass', ['status']).then(function(r) {
+		try { return JSON.parse((r.stdout || '').trim()); } catch (e) { return {}; }
+	}).catch(function() { return {}; });
+}
 
 return view.extend({
 	load: function() {
@@ -3672,7 +3679,9 @@ return view.extend({
 			zm.zapretLatestVersion().catch(function() { return {}; }),
 			zm.systemInfo().catch(function() { return {}; }),
 			zm.zmUpdateStatus().catch(function() { return {}; }),
-			zm.mixomoStatus().catch(function() { return {}; })
+			zm.mixomoStatus().catch(function() { return {}; }),
+			zm.tgwsStatus().catch(function() { return {}; }),
+			byetubeStatus()
 		]);
 	},
 
@@ -3683,6 +3692,8 @@ return view.extend({
 		var sysInfo = all[5] || {};
 		var zmUpdate = all[6] || {};
 		var mixomoData = all[7] || {};
+		var tgwsData = all[8] || {};
+		var byetubeData = all[9] || {};
 		var wrap = E('div', { 'class': 'zm-wrap' });
 		var overviewEl = E('div', {});
 		var cards = E('div', { 'class': 'zm-cards' });
@@ -3690,7 +3701,7 @@ return view.extend({
 
 		var DOH_LABELS = { cloudflare: 'Cloudflare', google: 'Google', quad9: 'Quad9', xbox: 'XBOX', geohide_ru: 'GeoHide RU', geohide_eu: 'GeoHide EU', geohide_us: 'GeoHide US' };
 
-		function renderOverview(d, doh, hosts, sys, mixomo) {
+		function renderOverview(d, doh, hosts, sys, mixomo, tgws, byetube) {
 			var hostsEnabled = (hosts.items || []).filter(function(it) { return it.enabled; }).length;
 			var hostsTotal = (hosts.items || []).length;
 
@@ -3699,14 +3710,16 @@ return view.extend({
 			if (sys.ipv6_enabled) sysFlags.push('IPv6 в Zapret включён');
 			if (sys.flow_offloading_fix) sysFlags.push('Flow Offloading fix');
 
+			var mixomoInstalled = mixomo.mihomo === 'installed';
 			var mixomoRunning = mixomo.mihomo_running === true && mixomo.hev_running === true && mixomo.magitrickle_running === true;
 
-			return E('div', { 'class': 'zm-card', 'style': 'margin-bottom:4px' }, [
-				E('h3', {}, 'Обзор'),
-				E('div', { 'class': 'zm-row' }, [
-					E('span', { 'class': 'zm-label' }, 'Zapret Manager LuCI'),
-					E('span', {}, 'v' + (zmUpdate.current || '?'))
-				]),
+			var tgwsInstalled = tgws.installed === 'installed';
+			var tgwsRunning = tgws.running === true;
+
+			var byetubeInstalled = !!byetube && byetube.binaries !== undefined;
+			var byetubeRunning = byetube.byedpi === true && byetube.hev === true;
+
+			var colLeft = [
 				E('div', { 'class': 'zm-row' }, [
 					E('span', { 'class': 'zm-label' }, 'Zapret'),
 					d.zapret === 'installed'
@@ -3716,10 +3729,6 @@ return view.extend({
 				d.zapret2 === 'installed' ? E('div', { 'class': 'zm-row' }, [
 					E('span', { 'class': 'zm-label' }, 'Zapret2'),
 					zm.badge(d.zapret2_running === true, 'запущен', 'остановлен')
-				]) : E([]),
-				mixomo.mihomo === 'installed' ? E('div', { 'class': 'zm-row' }, [
-					E('span', { 'class': 'zm-label' }, 'Mixomo'),
-					zm.badge(mixomoRunning, 'запущен', 'остановлен')
 				]) : E([]),
 				E('div', { 'class': 'zm-row' }, [
 					E('span', { 'class': 'zm-label' }, 'DNS over HTTPS'),
@@ -3734,6 +3743,28 @@ return view.extend({
 						: hostsTotal
 							? zm.badge(hostsEnabled > 0, hostsEnabled + ' из ' + hostsTotal + ' включено', 'ничего не включено')
 							: E('span', {}, '—')
+				])
+			];
+
+			var colRight = [
+				E('div', { 'class': 'zm-row' }, [
+					E('span', { 'class': 'zm-label' }, 'Mixomo'),
+					mixomoInstalled ? zm.badge(mixomoRunning, 'запущен', 'остановлен') : zm.badge(false, '', 'не установлен')
+				]),
+				E('div', { 'class': 'zm-row' }, [
+					E('span', { 'class': 'zm-label' }, 'TG WS Proxy'),
+					tgwsInstalled ? zm.badge(tgwsRunning, 'запущен', 'остановлен') : zm.badge(false, '', 'не установлен')
+				]),
+				E('div', { 'class': 'zm-row' }, [
+					E('span', { 'class': 'zm-label' }, 'ByeTube'),
+					byetubeInstalled ? zm.badge(byetubeRunning, 'запущен', 'остановлен') : zm.badge(false, '', 'не установлен')
+				])
+			];
+
+			return E('div', { 'class': 'zm-card', 'style': 'margin-bottom:4px' }, [
+				E('div', { 'class': 'bt-cols' }, [
+					E('div', { 'class': 'bt-col' }, colLeft),
+					E('div', { 'class': 'bt-col' }, colRight)
 				]),
 				sysFlags.length ? E('div', { 'class': 'zm-row' }, [
 					E('span', { 'class': 'zm-label' }, 'Система'),
@@ -3846,20 +3877,22 @@ return view.extend({
 				zm.dohStatus().catch(function() { return {}; }),
 				zm.hostsStatus().catch(function() { return { items: [] }; }),
 				zm.systemStatus().catch(function() { return {}; }),
-				zm.mixomoStatus().catch(function() { return {}; })
+				zm.mixomoStatus().catch(function() { return {}; }),
+				zm.tgwsStatus().catch(function() { return {}; }),
+				byetubeStatus()
 			]).then(function(res) {
 				overviewEl.innerHTML = '';
-				overviewEl.appendChild(renderOverview(res[0], res[1], res[2], res[3], res[4]));
+				overviewEl.appendChild(renderOverview(res[0], res[1], res[2], res[3], res[4], res[5], res[6]));
 			});
 		}
 
-		overviewEl.appendChild(renderOverview(data, dohData, hostsData, sysData, mixomoData));
+		overviewEl.appendChild(renderOverview(data, dohData, hostsData, sysData, mixomoData, tgwsData, byetubeData));
 		renderCards(data);
 		var updateEl = E('div', {});
 		wrap.appendChild(updateEl);
 		wrap.appendChild(E('div', { 'class': 'zm-header' }, [
-			E('h2', {}, 'Zapret Manager'),
-			E('span', { 'class': 'zm-header-by' }, 'by StressOzz'),
+			E('h2', {}, 'Zapret Manager LuCI'),
+			E('span', { 'class': 'zm-header-by' }, 'by StressOzz · v' + (zmUpdate.current || '?')),
 			E('div', { 'class': 'zm-header-links' }, [
 				E('a', { 'href': 'http://stresskvn.lol/', 'target': '_blank', 'rel': 'noreferrer' }, 'StressKVN — обход белых списков!'),
 				E('a', { 'href': 'https://t.me/stressozz_manager', 'target': '_blank', 'rel': 'noreferrer' }, 'Сообщество Telegram')
@@ -5977,7 +6010,7 @@ return view.extend({
 
 		var uninstallLog = E('pre', { 'class': 'zm-log' });
 		var uninstallCard = E('div', { 'class': 'zm-card' }, [
-			E('h3', {}, 'Удалить Zapret Manager из LuCI'),
+			E('h3', {}, 'Удалить Zapret Manager LuCI'),
 			E('p', { 'class': 'zm-hint' },
 				'Уберёт только веб-интерфейс (эту панель) — саму программу-оболочку из LuCI. ' +
 				'Zapret, Zapret2, DNS over HTTPS и TG WS Proxy, если они были установлены через ' +
@@ -5988,16 +6021,16 @@ return view.extend({
 				E('button', {
 					'class': 'cbi-button cbi-button-remove',
 					'click': function() {
-						if (!confirm('Удалить веб-интерфейс Zapret Manager из LuCI?\n\nСам Zapret и остальные установленные через панель компоненты не пострадают. Действие необратимо — панель придётся ставить заново.')) {
+						if (!confirm('Удалить веб-интерфейс Zapret Manager LuCI?\n\nСам Zapret и остальные установленные через панель компоненты не пострадают. Действие необратимо — панель придётся ставить заново.')) {
 							return;
 						}
 						uninstallLog.classList.add('zm-show');
-						zm.renderLog(uninstallLog, '==> Удаляем веб-интерфейс Zapret Manager');
-						zm.toast('Удаляем Zapret Manager из LuCI', 'warning');
+						zm.renderLog(uninstallLog, '==> Удаляем веб-интерфейс Zapret Manager LuCI');
+						zm.toast('Удаляем Zapret Manager LuCI', 'warning');
 						zm.systemUninstallPanel().then(function(res) {
 							if (res.error) { zm.renderLog(uninstallLog, '==> ОШИБКА: ' + res.error); zm.toast(res.error, 'error'); return; }
 							zm.renderLog(uninstallLog, '==> Готово. Панель удалена, страница больше не будет отвечать. Выходим из LuCI');
-							zm.toast('Zapret Manager удалён из LuCI', 'info');
+							zm.toast('Zapret Manager LuCI удалён', 'info');
 							setTimeout(function() { location.href = L.url('admin/logout'); }, 2500);
 						}).catch(function() {
 							zm.renderLog(uninstallLog, '==> Готово (соединение прервано — это ожидаемо, панель уже удалена). Выходим из LuCI');
@@ -7462,8 +7495,6 @@ cmd_run() {
 		done
 	} > "$RES"
 
-	echo "==> Результаты"
-	cat "$RES"
 	best=$(sed -n '2p' "$RES")
 	[ -n "$best" ] && echo "==> Лучшая стратегия: $best"
 	echo "==> Основной сервис и его настройки не менялись. Применить стратегию можно кнопкой на вкладке «Тест стратегий»."
@@ -7487,9 +7518,9 @@ YTB_FILE_END_7f3a9c
 	mkdir -p "$R/usr/share/luci/menu.d"
 	cat > "$R/usr/share/luci/menu.d/luci-app-ytbypass.json" <<'YTB_FILE_END_7f3a9c'
 {
-	"admin/services/ytbypass": {
+	"admin/services/zapret-manager/byetube": {
 		"title": "ByeTube",
-		"order": 60,
+		"order": 58,
 		"action": {
 			"type": "view",
 			"path": "ytbypass/main"
@@ -8236,7 +8267,7 @@ return view.extend({
 
 		editors['strategies'] = makeEditor({
 			kind: 'strategies', title: 'Стратегии для теста', height: 260, wrap: true,
-			hint: 'Одна стратегия (параметры ciadpi) в строке. Строки, начинающиеся с #, — комментарии.',
+			hint: 'Одна стратегия (параметры ciadpi) в строке.',
 			info: function() { return { count: tst.strategies || 0, custom: !!tst.strategies_custom }; },
 			meta: listMeta('стратегий'),
 			apply: function(res) { tst.strategies = res.count; tst.strategies_custom = res.custom; }
