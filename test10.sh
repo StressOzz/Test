@@ -4462,7 +4462,7 @@ do_bytetube_purge() {
 	do_bytetube_uninstall
 	echo "==> Удаляю пакет byedpi"
 	$DELETE byedpi >/dev/null 2>&1
-	if [ -x "$MIHOMO_BIN" ]; then
+	if [ -x "$MIHOMO_BIN" ] && [ -x /etc/init.d/magitrickle ]; then
 		echo "==> hev-socks5-tunnel используется Mixomo — оставляю пакет"
 	else
 		echo "==> Удаляю пакет hev-socks5-tunnel"
