@@ -8217,6 +8217,7 @@ cat > '/www/luci-static/resources/bytetube/common.js' << 'ZM_INSTALLER_EOF'
 'require fs';
 'require uci';
 'require rpc';
+'require ui';
 
 var callUciCommit = rpc.declare({ object: 'uci', method: 'commit', params: [ 'config' ] });
 
@@ -8454,6 +8455,10 @@ function configSet(pairs) {
 		return uci.save().then(function() {
 			return callUciCommit(CONF);
 		}).then(function() {
+			/* save() уже показал в шапке индикатор "Unsaved changes" — мы его сразу
+			   закоммитили напрямую (без штатного uci.apply()), поэтому явно гасим
+			   индикатор здесь, иначе он останется висеть до следующего обновления */
+			try { ui.changes.setIndicator(0); } catch (e) {}
 			return { ok: true };
 		});
 	}).catch(function(e) { return { error: e.message }; });
