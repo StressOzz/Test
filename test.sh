@@ -277,7 +277,7 @@ do_install_zapret_full() {
 
 	echo "==> Добавляем домены в hosts"
 	local b
-	for b in ai instagram ntc librusec telegram twitch scell spotify; do
+	for b in ai instagram ntc librusec telegram twitch scell spotify rutor; do
 		local content line
 		content="$(_hosts_block "$b")"
 		while IFS= read -r line; do
@@ -5276,10 +5276,18 @@ return view.extend({
 						? zm.badge(d.zapret_running === true, 'запущен', 'остановлен')
 						: zm.badge(false, '', 'не установлен')
 				]),
-				d.zapret2 === 'installed' ? E('div', { 'class': 'zm-row' }, [
-					E('span', { 'class': 'zm-label' }, 'Zapret2'),
-					zm.badge(d.zapret2_running === true, 'запущен', 'остановлен')
+				d.zapret === 'installed' && d.zapret_version ? E('div', { 'class': 'zm-row' }, [
+					E('span', { 'class': 'zm-label' }, 'Версия Zapret'), E('span', {}, d.zapret_version)
 				]) : E([]),
+				d.zapret === 'installed' && d.strategy ? E('div', { 'class': 'zm-row' }, [
+					E('span', { 'class': 'zm-label' }, 'Стратегия'), E('span', {}, d.strategy)
+				]) : E([]),
+				E('div', { 'class': 'zm-row' }, [
+					E('span', { 'class': 'zm-label' }, 'Zapret2'),
+					d.zapret2 === 'installed'
+						? zm.badge(d.zapret2_running === true, 'запущен', 'остановлен')
+						: zm.badge(false, '', 'не установлен')
+				]),
 				E('div', { 'class': 'zm-row' }, [
 					E('span', { 'class': 'zm-label' }, 'DNS over HTTPS'),
 					doh.installed
@@ -5532,7 +5540,7 @@ var LABELS = {
 	twitch: 'Twitch',
 	telegram: 'Telegram Web',
 	spotify: 'Spotify',
-	rutor: 'rutor',
+	rutor: 'rutor.info',
 	scell: 'Supercell (Clash, Brawl Stars)',
 	githubraw: 'githubusercontent.com',
 	github: 'GitHub',
@@ -6407,9 +6415,9 @@ return view.extend({
 			}
 
 			renderZCard(status);
-			panels.strategy.appendChild(zCardWrap);
-			panels.strategy.appendChild(zLogEl);
-			panels.strategy.appendChild(zBannerEl);
+			wrap.appendChild(zCardWrap);
+			wrap.appendChild(zLogEl);
+			wrap.appendChild(zBannerEl);
 
 			var currentBanner = E('div', { 'class': 'zm-current-banner' });
 			panels.strategy.appendChild(currentBanner);
@@ -8548,9 +8556,6 @@ function renderNotInstalled() {
 			}, [ 'Установить' ])
 		])
 	]);
-	wrap.appendChild(E('div', { 'class': 'zm-header' }, [
-		E('h2', {}, [ 'ByeTube' ])
-	]));
 	wrap.appendChild(card);
 	wrap.appendChild(logEl);
 	return wrap;
@@ -9070,9 +9075,6 @@ function renderInstalled(all) {
 		panels['domains'].appendChild(domainsToggleCard);
 		panels['domains'].appendChild(extraDomainsCard);
 
-		wrap.appendChild(E('div', { 'class': 'zm-header' }, [
-			E('h2', {}, [ 'ByeTube' ])
-		]));
 		wrap.appendChild(tabBar);
 		TABS.forEach(function(t) { wrap.appendChild(panels[t.id]); });
 
