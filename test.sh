@@ -1481,6 +1481,29 @@ exclusions_clear() {
 	printf '{"ok":true}\n'
 }
 
+EXCLUDE_DOMAINS_FILE="/opt/zapret/ipset/zapret-hosts-user-exclude.txt"
+
+exclusions_file_get() {
+	[ -f "$EXCLUDE_DOMAINS_FILE" ] || { echo '{"error":"файл исключений не найден"}'; return 1; }
+	printf '{"content":"%s"}\n' "$(esc_ml "$(cat "$EXCLUDE_DOMAINS_FILE")")"
+}
+
+exclusions_file_set() {
+	local content="$1"
+	mkdir -p "$(dirname "$EXCLUDE_DOMAINS_FILE")"
+	printf '%s' "$content" > "$EXCLUDE_DOMAINS_FILE"
+	zapret_restart
+	printf '{"ok":true}\n'
+}
+
+exclusions_file_restore() {
+	mkdir -p "$(dirname "$EXCLUDE_DOMAINS_FILE")"
+	rm -f "$EXCLUDE_DOMAINS_FILE"
+	wget -q --timeout=20 -U "Mozilla/5.0" -O "$EXCLUDE_DOMAINS_FILE" "$EXCLUDE_URL"
+	[ -s "$EXCLUDE_DOMAINS_FILE" ] || { echo '{"error":"не удалось скачать список исключений"}'; return 1; }
+	printf '{"content":"%s"}\n' "$(esc_ml "$(cat "$EXCLUDE_DOMAINS_FILE")")"
+}
+
 
 TG_MTPROTO_VER="0.10"
 TGWS_VERSION="0.2.5"
@@ -4581,6 +4604,9 @@ case "$cmd" in
 	exclusions_status)                                     exclusions_status ;;
 	exclusions_toggle)                                       exclusions_toggle "$1" ;;
 	exclusions_clear)                                          exclusions_clear ;;
+	exclusions_file_get)                             exclusions_file_get ;;
+	exclusions_file_set)                             exclusions_file_set "$1" ;;
+	exclusions_file_restore)                         exclusions_file_restore ;;
 	tg_status)                                                   tg_status ;;
 	tg_action)                                                    tg_action "$1" "$2" ;;
 	tg_restart_all)                                                tg_restart_all ;;
@@ -4663,6 +4689,9 @@ list_methods() {
 	json_add_object "exclusions_status";           json_close_object
 	json_add_object "exclusions_toggle";           json_add_string "ip" "string"; json_close_object
 	json_add_object "exclusions_clear";            json_close_object
+	json_add_object "exclusions_file_get";         json_close_object
+	json_add_object "exclusions_file_set";         json_add_string "content" "string"; json_close_object
+	json_add_object "exclusions_file_restore";     json_close_object
 	json_add_object "tg_status";                   json_close_object
 	json_add_object "tg_action";                   json_add_string "variant" "string"; json_add_string "action" "string"; json_close_object
 	json_add_object "tg_restart_all";              json_close_object
@@ -4739,6 +4768,9 @@ call_method() {
 		exclusions_status)             "$BACKEND" exclusions_status ;;
 		exclusions_toggle)             json_get_var ip ip;          "$BACKEND" exclusions_toggle "$ip" ;;
 		exclusions_clear)              "$BACKEND" exclusions_clear ;;
+		exclusions_file_get)           "$BACKEND" exclusions_file_get ;;
+		exclusions_file_set)           json_get_var content content; "$BACKEND" exclusions_file_set "$content" ;;
+		exclusions_file_restore)       "$BACKEND" exclusions_file_restore ;;
 		tg_status)                     "$BACKEND" tg_status ;;
 		tg_action)                     json_get_var variant variant; json_get_var action action; "$BACKEND" tg_action "$variant" "$action" ;;
 		tg_restart_all)                "$BACKEND" tg_restart_all ;;
@@ -4797,7 +4829,7 @@ cat > '/usr/share/rpcd/acl.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF'
 					"status", "job_status", "log_tail", "system_info",
 					"strategy_list_v", "strategy_list_flowseal", "strategy_list_youtube",
 					"discord_status", "hosts_status", "hosts_file_get", "doh_status", "game_status",
-					"system_status", "mirror_status", "exclusions_status", "tg_status", "tgws_status",
+					"system_status", "mirror_status", "exclusions_status", "exclusions_file_get", "tg_status", "tgws_status",
 					"test_status", "test_results", "zm_update_status", "mixomo_status", "mixomo_config_get",
 					"mixomo_warp_status",
 					"zapret_latest_version", "bytetube_installed"
@@ -4819,7 +4851,7 @@ cat > '/usr/share/rpcd/acl.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF'
 					"game_set", "game_set_fake", "game_toggle_xtreme",
 					"system_check_connectivity", "system_toggle_quic", "system_toggle_ipv6",
 					"system_toggle_flow_offloading_fix", "system_toggle_expert_mode", "system_uninstall_panel",
-					"mirror_set", "exclusions_toggle", "exclusions_clear",
+					"mirror_set", "exclusions_toggle", "exclusions_clear", "exclusions_file_set", "exclusions_file_restore",
 					"tg_action", "tg_restart_all", "tgws_action", "test_action", "zm_update_action",
 					"mixomo_action", "mixomo_config_set", "mixomo_subscription_set",
 					"mixomo_magitrickle_list_set", "mixomo_autorestart_set", "mixomo_ui_action",
@@ -4935,6 +4967,9 @@ var callMirrorSet = rpc.declare({ object: 'zapret-manager', method: 'mirror_set'
 var callExclusionsStatus = rpc.declare({ object: 'zapret-manager', method: 'exclusions_status', expect: {} });
 var callExclusionsToggle = rpc.declare({ object: 'zapret-manager', method: 'exclusions_toggle', params: ['ip'], expect: {} });
 var callExclusionsClear = rpc.declare({ object: 'zapret-manager', method: 'exclusions_clear', expect: {} });
+var callExclusionsFileGet = rpc.declare({ object: 'zapret-manager', method: 'exclusions_file_get', expect: {} });
+var callExclusionsFileSet = rpc.declare({ object: 'zapret-manager', method: 'exclusions_file_set', params: ['content'], expect: {} });
+var callExclusionsFileRestore = rpc.declare({ object: 'zapret-manager', method: 'exclusions_file_restore', expect: {} });
 var callTgStatus = rpc.declare({ object: 'zapret-manager', method: 'tg_status', expect: {} });
 var callTgAction = rpc.declare({ object: 'zapret-manager', method: 'tg_action', params: ['variant', 'action'], expect: {} });
 var callTgRestartAll = rpc.declare({ object: 'zapret-manager', method: 'tg_restart_all', expect: {} });
@@ -5167,6 +5202,9 @@ return baseclass.extend({
 	exclusionsStatus: callExclusionsStatus,
 	exclusionsToggle: callExclusionsToggle,
 	exclusionsClear: callExclusionsClear,
+	exclusionsFileGet: callExclusionsFileGet,
+	exclusionsFileSet: callExclusionsFileSet,
+	exclusionsFileRestore: callExclusionsFileRestore,
 	tgStatus: callTgStatus,
 	tgAction: callTgAction,
 	tgRestartAll: callTgRestartAll,
@@ -5262,53 +5300,34 @@ return view.extend({
 			var mixomoInstalled = mixomo && mixomo.mihomo === 'installed';
 			var bytetubeInstalled = bytetube && bytetube.installed === true;
 
-			var modItems = [
-				row('TG WS Proxy', zm.badge(tgInstalled, 'установлен', 'не установлен')),
-				row('Mixomo', zm.badge(mixomoInstalled, 'установлен', 'не установлен')),
-				row('ByeTube', zm.badge(bytetubeInstalled, 'установлен', 'не установлен'))
-			];
-			var half = Math.ceil(modItems.length / 2);
+			var items = [];
+			items.push(row('Zapret', d.zapret === 'installed'
+				? zm.badge(d.zapret_running === true, 'запущен', 'остановлен')
+				: zm.badge(false, '', 'не установлен')));
+			if (d.zapret === 'installed' && d.zapret_version) items.push(row('Версия Zapret', E('span', {}, d.zapret_version)));
+			if (d.zapret === 'installed' && d.strategy) items.push(row('Стратегия', E('span', {}, d.strategy)));
+			items.push(row('Zapret2', d.zapret2 === 'installed'
+				? zm.badge(d.zapret2_running === true, 'запущен', 'остановлен')
+				: zm.badge(false, '', 'не установлен')));
+			items.push(row('DNS over HTTPS', doh.installed
+				? zm.badge(true, DOH_LABELS[doh.current] || doh.current || 'установлен, провайдер не определён', '')
+				: zm.badge(false, '', 'не установлен')));
+			items.push(row('Домены в hosts', hosts.geohide
+				? zm.badge(true, 'GeoHide ' + hosts.geohide.toUpperCase(), '')
+				: hostsTotal
+					? zm.badge(hostsEnabled > 0, hostsEnabled + ' из ' + hostsTotal + ' включено', 'ничего не включено')
+					: E('span', {}, '—')));
+			if (sysFlags.length) items.push(row('Система', E('span', { 'style': 'overflow-wrap:anywhere' }, sysFlags.join(', '))));
+			items.push(row('TG WS Proxy', zm.badge(tgInstalled, 'установлен', 'не установлен')));
+			items.push(row('Mixomo', zm.badge(mixomoInstalled, 'установлен', 'не установлен')));
+			items.push(row('ByeTube', zm.badge(bytetubeInstalled, 'установлен', 'не установлен')));
+
+			var half = Math.ceil(items.length / 2);
 
 			return E('div', { 'class': 'zm-card', 'style': 'margin-bottom:4px' }, [
-				E('div', { 'class': 'zm-row' }, [
-					E('span', { 'class': 'zm-label' }, 'Zapret'),
-					d.zapret === 'installed'
-						? zm.badge(d.zapret_running === true, 'запущен', 'остановлен')
-						: zm.badge(false, '', 'не установлен')
-				]),
-				d.zapret === 'installed' && d.zapret_version ? E('div', { 'class': 'zm-row' }, [
-					E('span', { 'class': 'zm-label' }, 'Версия Zapret'), E('span', {}, d.zapret_version)
-				]) : E([]),
-				d.zapret === 'installed' && d.strategy ? E('div', { 'class': 'zm-row' }, [
-					E('span', { 'class': 'zm-label' }, 'Стратегия'), E('span', {}, d.strategy)
-				]) : E([]),
-				E('div', { 'class': 'zm-row' }, [
-					E('span', { 'class': 'zm-label' }, 'Zapret2'),
-					d.zapret2 === 'installed'
-						? zm.badge(d.zapret2_running === true, 'запущен', 'остановлен')
-						: zm.badge(false, '', 'не установлен')
-				]),
-				E('div', { 'class': 'zm-row' }, [
-					E('span', { 'class': 'zm-label' }, 'DNS over HTTPS'),
-					doh.installed
-						? zm.badge(true, DOH_LABELS[doh.current] || doh.current || 'установлен, провайдер не определён', '')
-						: zm.badge(false, '', 'не установлен')
-				]),
-				E('div', { 'class': 'zm-row' }, [
-					E('span', { 'class': 'zm-label' }, 'Домены в hosts'),
-					hosts.geohide
-						? zm.badge(true, 'GeoHide ' + hosts.geohide.toUpperCase(), '')
-						: hostsTotal
-							? zm.badge(hostsEnabled > 0, hostsEnabled + ' из ' + hostsTotal + ' включено', 'ничего не включено')
-							: E('span', {}, '—')
-				]),
-				sysFlags.length ? E('div', { 'class': 'zm-row' }, [
-					E('span', { 'class': 'zm-label' }, 'Система'),
-					E('span', { 'style': 'overflow-wrap:anywhere' }, sysFlags.join(', '))
-				]) : E([]),
-				E('div', { 'class': 'bt-cols', 'style': 'margin-top:8px' }, [
-					E('div', { 'class': 'bt-col' }, modItems.slice(0, half)),
-					E('div', { 'class': 'bt-col' }, modItems.slice(half))
+				E('div', { 'class': 'bt-cols' }, [
+					E('div', { 'class': 'bt-col' }, items.slice(0, half)),
+					E('div', { 'class': 'bt-col' }, items.slice(half))
 				])
 			]);
 		}
@@ -6269,6 +6288,7 @@ var TABS = [
 	{ id: 'youtube', label: 'YouTube' },
 	{ id: 'game', label: 'Игры' },
 	{ id: 'discord', label: 'Discord' },
+	{ id: 'domains_exclude', label: 'Домены исключения' },
 	{ id: 'exclusions', label: 'Исключение устройств' }
 ];
 
@@ -6367,21 +6387,22 @@ return view.extend({
 					}, 'Установить и настроить'));
 				}
 
-				zCardWrap.appendChild(E('div', { 'class': 'zm-card', 'style': 'margin-bottom:14px' }, [
-					E('h3', {}, 'Zapret'),
-					E('div', { 'class': 'zm-row' }, [
-						E('span', { 'class': 'zm-label' }, 'Статус'),
+				var fields = [
+					E('span', {}, [ E('span', { 'class': 'zm-label' }, 'Статус: '),
 						d.zapret === 'installed'
 							? zm.badge(d.zapret_running === true, 'запущен', 'остановлен')
 							: zm.badge(false, '', 'не установлен')
-					]),
-					d.zapret_version ? E('div', { 'class': 'zm-row' }, [
-						E('span', { 'class': 'zm-label' }, 'Версия'), E('span', {}, d.zapret_version)
-					]) : E([]),
-					d.strategy ? E('div', { 'class': 'zm-row' }, [
-						E('span', { 'class': 'zm-label' }, 'Стратегия'), E('span', {}, d.strategy)
-					]) : E([]),
-					E('div', { 'class': 'zm-actions' }, zActions)
+					])
+				];
+				if (d.zapret_version) fields.push(E('span', {}, [ E('span', { 'class': 'zm-label' }, 'Версия: '), E('span', {}, d.zapret_version) ]));
+				if (d.strategy) fields.push(E('span', {}, [ E('span', { 'class': 'zm-label' }, 'Стратегия: '), E('span', {}, d.strategy) ]));
+
+				zCardWrap.appendChild(E('div', { 'class': 'zm-card', 'style': 'margin-bottom:14px' }, [
+					E('h3', {}, 'Zapret'),
+					E('div', { 'class': 'zm-row', 'style': 'justify-content:space-between; width:100%' }, [
+						E('div', { 'style': 'display:flex; gap:22px; flex-wrap:wrap; align-items:center' }, fields),
+						E('div', { 'class': 'zm-actions', 'style': 'margin:0' }, zActions)
+					])
 				]));
 			}
 
@@ -6972,6 +6993,81 @@ return view.extend({
 			panels.discord.appendChild(fakeCard);
 		})();
 
+		(function buildDomainsExcludePanel() {
+			var editorCard = E('div', { 'class': 'zm-card' });
+			var editorOpen = false;
+			var contentEl = E('textarea', { 'class': 'zm-config-editor', 'spellcheck': 'false', 'style': 'display:none' });
+			var editorBusy = false;
+
+			function refreshFile() {
+				zm.exclusionsFileGet().then(function(res) {
+					if (res.error) { zm.toast(res.error, 'error'); return; }
+					contentEl.value = res.content || '';
+				});
+			}
+
+			function renderEditorCard() {
+				editorCard.innerHTML = '';
+				editorCard.appendChild(E('h3', {}, 'Домены исключения'));
+				if (!editorOpen) {
+					editorCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Редактирование /opt/zapret/ipset/zapret-hosts-user-exclude.txt — домены, для которых Zapret не применяется.'));
+					editorCard.appendChild(E('div', { 'class': 'zm-actions' }, [
+						E('button', {
+							'class': 'cbi-button',
+							'click': function() {
+								editorOpen = true;
+								refreshFile();
+								renderEditorCard();
+							}
+						}, 'Открыть редактор')
+					]));
+					return;
+				}
+				editorCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Сохранение перезапускает Zapret.'));
+				contentEl.style.display = '';
+				editorCard.appendChild(contentEl);
+				editorCard.appendChild(E('div', { 'class': 'zm-actions' }, [
+					E('button', {
+						'class': 'cbi-button',
+						'click': function() { refreshFile(); zm.toast('Содержимое перечитано с диска', 'info'); }
+					}, 'Обновить из файла'),
+					E('button', {
+						'class': 'cbi-button cbi-button-positive',
+						'click': function() {
+							if (editorBusy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+							editorBusy = true;
+							zm.toast('Сохраняем и перезапускаем Zapret', 'warning');
+							zm.exclusionsFileSet(contentEl.value).then(function(res) {
+								editorBusy = false;
+								if (res.error) { zm.toast(res.error, 'error'); return; }
+								zm.toast('Список исключений сохранён, Zapret перезапущен', 'info');
+							}).catch(function() { editorBusy = false; });
+						}
+					}, 'Сохранить и применить'),
+					E('button', {
+						'class': 'cbi-button',
+						'click': function() {
+							if (editorBusy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+							editorBusy = true;
+							zm.toast('Восстанавливаем список исключений', 'warning');
+							zm.exclusionsFileRestore().then(function(res) {
+								editorBusy = false;
+								if (res.error) { zm.toast(res.error, 'error'); return; }
+								contentEl.value = res.content || '';
+								zm.toast('Список исключений восстановлен', 'info');
+							}).catch(function() { editorBusy = false; });
+						}
+					}, 'Восстановить исключения'),
+					E('button', {
+						'class': 'cbi-button',
+						'click': function() { editorOpen = false; renderEditorCard(); }
+					}, 'Свернуть')
+				]));
+			}
+			renderEditorCard();
+			panels.domains_exclude.appendChild(editorCard);
+		})();
+
 		(function buildExclusionsPanel() {
 			var data = exclusionsData;
 
@@ -7135,9 +7231,6 @@ return view.extend({
 		}
 
 		renderCards(data);
-		wrap.appendChild(E('div', { 'class': 'zm-header' }, [
-			E('h2', {}, 'Zapret2')
-		]));
 		wrap.appendChild(cards);
 		wrap.appendChild(logEl);
 		wrap.appendChild(bannerEl);
