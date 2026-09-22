@@ -242,7 +242,6 @@ USE_PROCD=1
 
 NAME=byetube
 
-. /lib/functions.sh
 [ -r /opt/ByeTube/lib/common.sh ] || exit 0
 . /opt/ByeTube/lib/common.sh
 . /opt/ByeTube/lib/dns.sh
