@@ -3047,6 +3047,36 @@ _bytetube_fetch() { # URL OUT
 	fi
 }
 
+health() {
+	# Быстрая сводка без сетевых запросов: 0 — не установлено, 1 — работает, 2 — установлено, но не работает
+	local zr=0 zr2=0 bt=0 tg=0 mx=0 doh=0 hs=0 inst=0 bad=0 out=""
+	if [ -f /etc/init.d/zapret ]; then zr=2; pgrep -f "/opt/zapret/" >/dev/null 2>&1 && zr=1; fi
+	if [ -f /etc/init.d/zapret2 ]; then zr2=2; /etc/init.d/zapret2 status >/dev/null 2>&1 && zr2=1; fi
+	if [ -x /usr/bin/bytetube ]; then
+		bt=2
+		out=$(/usr/bin/bytetube status 2>/dev/null)
+		case "$out" in *'"enabled":true'*'"byedpi":true'*'"hev":true'*) bt=1 ;; esac
+	fi
+	if [ -f /etc/init.d/tg-ws-proxy ]; then inst=1; pidof tg-ws-proxy >/dev/null 2>&1 || bad=1; fi
+	if [ -f "$TG_INIT_GO" ]; then inst=1; pidof tg-ws-proxy-go >/dev/null 2>&1 || bad=1; fi
+	if [ -f "$TG_INIT_RS" ]; then inst=1; pidof tg-ws-proxy-rs >/dev/null 2>&1 || bad=1; fi
+	if [ -x /etc/init.d/tgws ]; then inst=1; [ -n "$(tgws status 2>/dev/null)" ] || bad=1; fi
+	if [ "$inst" = "1" ]; then tg=1; [ "$bad" = "1" ] && tg=2; fi
+	if [ -x "$MIHOMO_BIN" ]; then
+		mx=1
+		pidof mihomo >/dev/null 2>&1 || mx=2
+		if [ -x /etc/init.d/magitrickle ]; then /etc/init.d/magitrickle status >/dev/null 2>&1 || mx=2; fi
+		if [ -x /etc/init.d/hev-socks5-tunnel ]; then /etc/init.d/hev-socks5-tunnel status >/dev/null 2>&1 || mx=2; fi
+	fi
+	if [ "$PKG" = "apk" ]; then apk info -e https-dns-proxy >/dev/null 2>&1 && doh=2
+	else opkg list-installed 2>/dev/null | grep -q '^https-dns-proxy ' && doh=2; fi
+	if [ "$doh" = "2" ]; then pidof https-dns-proxy >/dev/null 2>&1 && doh=1; fi
+	out=$(hosts_status 2>/dev/null)
+	case "$out" in *'"enabled":true'*|*'"geohide":"'[a-z]*) hs=1 ;; esac
+	printf '{"zapret":%s,"zapret2":%s,"bytetube":%s,"tg":%s,"mixomo":%s,"doh":%s,"hosts":%s}\n' \
+		"$zr" "$zr2" "$bt" "$tg" "$mx" "$doh" "$hs"
+}
+
 bytetube_installed() {
 	if [ -x /usr/bin/bytetube ]; then
 		printf '{"installed":true}\n'
@@ -4745,6 +4775,7 @@ case "$cmd" in
 	mixomo_warp_integrate_action)         mixomo_warp_integrate_action ;;
 	mixomo_warp_config_set)               mixomo_warp_config_set "$1" ;;
 	bytetube_installed)                   bytetube_installed ;;
+	health)                               health ;;
 	bytetube_action)                      bytetube_action "$1" ;;
 	*) echo '{"error":"неизвестная команда"}'; exit 1 ;;
 esac
@@ -4832,6 +4863,7 @@ list_methods() {
 	json_add_object "mixomo_warp_integrate_action"; json_close_object
 	json_add_object "mixomo_warp_config_set"; json_add_string "content" "string"; json_close_object
 	json_add_object "bytetube_installed";     json_close_object
+	json_add_object "health";                 json_close_object
 	json_add_object "bytetube_action";        json_add_string "action" "string"; json_close_object
 	json_dump
 }
@@ -4913,6 +4945,7 @@ call_method() {
 		mixomo_warp_integrate_action) "$BACKEND" mixomo_warp_integrate_action ;;
 		mixomo_warp_config_set) json_get_var content content; "$BACKEND" mixomo_warp_config_set "$content" ;;
 		bytetube_installed)      "$BACKEND" bytetube_installed ;;
+		health)                  "$BACKEND" health ;;
 		bytetube_action)         json_get_var action action; "$BACKEND" bytetube_action "$action" ;;
 		*) echo '{"error":"unknown method"}'; return 1 ;;
 	esac
@@ -4941,8 +4974,9 @@ cat > '/usr/share/rpcd/acl.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF'
 					"system_status", "mirror_status", "exclusions_status", "exclusions_file_get", "nfqws_opt_get", "tg_status", "tgws_status",
 					"test_status", "test_results", "zm_update_status", "mixomo_status", "mixomo_config_get",
 					"mixomo_warp_status",
-					"zapret_latest_version", "bytetube_installed"
-				]
+					"zapret_latest_version", "bytetube_installed", "health"
+				],
+				"system": [ "info" ]
 			},
 			"uci": [ "bytetube" ],
 			"file": {
@@ -5114,6 +5148,33 @@ var callMixomoWarpAction = rpc.declare({ object: 'zapret-manager', method: 'mixo
 var callMixomoWarpIntegrateAction = rpc.declare({ object: 'zapret-manager', method: 'mixomo_warp_integrate_action', expect: {} });
 var callMixomoWarpConfigSet = rpc.declare({ object: 'zapret-manager', method: 'mixomo_warp_config_set', params: ['content'], expect: {} });
 var callBytetubeInstalled = rpc.declare({ object: 'zapret-manager', method: 'bytetube_installed', expect: {} });
+var callHealth = rpc.declare({ object: 'zapret-manager', method: 'health', expect: {} });
+var callBoardInfo = rpc.declare({ object: 'system', method: 'info', expect: {} });
+
+function parseSize(v) {
+	var m = String(v == null ? '' : v).trim().match(/^([\d.,]+)\s*([KMGT]?)i?B?$/i);
+	if (!m) return NaN;
+	return parseFloat(m[1].replace(',', '.')) * ({ '': 1, K: 1024, M: 1048576, G: 1073741824, T: 1099511627776 })[m[2].toUpperCase()];
+}
+
+function fmtSize(b) {
+	if (!isFinite(b)) return '—';
+	var u = [ 'Б', 'КБ', 'МБ', 'ГБ', 'ТБ' ], i = 0;
+	while (b >= 1024 && i < u.length - 1) { b /= 1024; i++; }
+	return (b >= 100 || i === 0 ? Math.round(b) : b.toFixed(1).replace(/\.0$/, '')) + ' ' + u[i];
+}
+
+function usageText(used, total) {
+	if (!isFinite(used) || !isFinite(total) || total <= 0) return '—';
+	return fmtSize(used) + ' из ' + fmtSize(total) + ' (' + Math.round(used / total * 100) + '%)';
+}
+
+/* Единый бейдж состояния службы: 1 — запущен, 2 — остановлен, 0 — не установлен */
+function stateBadge(st, textOk) {
+	if (st === 1) return badge(true, textOk || 'запущен', '');
+	if (st === 2) return badge(false, '', 'остановлен');
+	return badge(false, '', 'не установлен');
+}
 
 function detectMissingThemeVar() {
 	if (document.documentElement.hasAttribute('data-zm-theme-checked')) return;
@@ -5147,7 +5208,7 @@ function injectCss() {
 }
 
 function badge(ok, textOk, textBad) {
-	var cls = ok ? 'zm-ok' : 'zm-bad';
+	var cls = ok ? 'zm-ok' : (textBad === 'не установлен' ? 'zm-off' : 'zm-bad');
 	return E('span', { 'class': 'zm-badge ' + cls }, [
 		E('span', { 'class': 'zm-dot' }),
 		ok ? textOk : textBad
@@ -5351,7 +5412,13 @@ return baseclass.extend({
 	mixomoWarpAction: callMixomoWarpAction,
 	mixomoWarpIntegrateAction: callMixomoWarpIntegrateAction,
 	mixomoWarpConfigSet: callMixomoWarpConfigSet,
-	bytetubeInstalled: callBytetubeInstalled
+	bytetubeInstalled: callBytetubeInstalled,
+	health: callHealth,
+	boardInfo: callBoardInfo,
+	parseSize: parseSize,
+	fmtSize: fmtSize,
+	usageText: usageText,
+	stateBadge: stateBadge
 });
 ZM_INSTALLER_EOF
 chmod 0644 '/www/luci-static/resources/zapret-manager/common.js'
@@ -5374,10 +5441,8 @@ return view.extend({
 			zm.systemStatus().catch(function() { return {}; }),
 			zm.systemInfo().catch(function() { return {}; }),
 			zm.zmUpdateStatus().catch(function() { return {}; }),
-			zm.mixomoStatus().catch(function() { return {}; }),
-			zm.tgStatus().catch(function() { return {}; }),
-			zm.tgwsStatus().catch(function() { return {}; }),
-			zm.bytetubeInstalled().catch(function() { return {}; })
+			zm.health().catch(function() { return {}; }),
+			zm.boardInfo().catch(function() { return {}; })
 		]);
 	},
 
@@ -5386,10 +5451,8 @@ return view.extend({
 		var data = all[0], dohData = all[1], hostsData = all[2], sysData = all[3];
 		var sysInfo = all[4] || {};
 		var zmUpdate = all[5] || {};
-		var mixomoData = all[6] || {};
-		var tgData = all[7] || {};
-		var tgwsData = all[8] || {};
-		var bytetubeData = all[9] || {};
+		var healthData = all[6] || {};
+		var boardInfo = all[7] || {};
 		var wrap = E('div', { 'class': 'zm-wrap' });
 		var overviewEl = E('div', {});
 		var cards = E('div', { 'class': 'zm-cards' });
@@ -5400,7 +5463,11 @@ return view.extend({
 			return E('div', { 'class': 'zm-row' }, [ E('span', { 'class': 'zm-label' }, label), node ]);
 		}
 
-		function renderOverview(d, doh, hosts, sys, tg, tgws, mixomo, bytetube) {
+		function st(h, key, fallback) {
+			return (h && typeof h[key] === 'number') ? h[key] : fallback;
+		}
+
+		function renderOverview(d, doh, hosts, sys, h) {
 			var hostsEnabled = (hosts.items || []).filter(function(it) { return it.enabled; }).length;
 			var hostsTotal = (hosts.items || []).length;
 
@@ -5409,36 +5476,34 @@ return view.extend({
 			if (sys.ipv6_enabled) sysFlags.push('IPv6 в Zapret включён');
 			if (sys.flow_offloading_fix) sysFlags.push('Flow Offloading fix');
 
-			var tgInstalled = !!(tg && (tg.mtproto === 'installed' || tg.socks5 === 'installed' || tg.rust === 'installed'))
-				|| !!(tgws && tgws.installed === 'installed');
-			var mixomoInstalled = mixomo && mixomo.mihomo === 'installed';
-			var bytetubeInstalled = bytetube && bytetube.installed === true;
+			var zrSt = st(h, 'zapret', d.zapret === 'installed' ? (d.zapret_running ? 1 : 2) : 0);
+			var zr2St = st(h, 'zapret2', d.zapret2 === 'installed' ? (d.zapret2_running ? 1 : 2) : 0);
+			var dohSt = st(h, 'doh', doh.installed ? 1 : 0);
+			var dohNode = zm.stateBadge(dohSt);
+			if (dohSt !== 0) dohNode = E('span', { 'style': 'display:inline-flex; align-items:center; gap:8px; flex-wrap:wrap' }, [
+				dohNode, E('span', {}, DOH_LABELS[doh.current] || doh.current || 'провайдер не определён')
+			]);
 
 			var items = [];
-			items.push(row('Zapret', d.zapret === 'installed'
-				? zm.badge(d.zapret_running === true, 'запущен', 'остановлен')
-				: zm.badge(false, '', 'не установлен')));
-			if (d.zapret === 'installed' && d.zapret_version) items.push(row('Версия Zapret', E('span', {}, d.zapret_version)));
-			if (d.zapret === 'installed' && d.strategy) items.push(row('Стратегия', E('span', {}, d.strategy)));
-			items.push(row('Zapret2', d.zapret2 === 'installed'
-				? zm.badge(d.zapret2_running === true, 'запущен', 'остановлен')
-				: zm.badge(false, '', 'не установлен')));
-			items.push(row('DNS over HTTPS', doh.installed
-				? zm.badge(true, DOH_LABELS[doh.current] || doh.current || 'установлен, провайдер не определён', '')
-				: zm.badge(false, '', 'не установлен')));
+			items.push(row('Zapret', zm.stateBadge(zrSt)));
+			if (zrSt !== 0 && d.zapret_version) items.push(row('Версия Zapret', E('span', {}, d.zapret_version)));
+			if (zrSt !== 0 && d.strategy) items.push(row('Стратегия', E('span', {}, d.strategy)));
+			items.push(row('Zapret2', zm.stateBadge(zr2St)));
+			items.push(row('ByeTube', zm.stateBadge(st(h, 'bytetube', 0))));
+			items.push(row('TG WS Proxy', zm.stateBadge(st(h, 'tg', 0))));
+			items.push(row('Mixomo', zm.stateBadge(st(h, 'mixomo', 0))));
+			items.push(row('DNS over HTTPS', dohNode));
 			items.push(row('Домены в hosts', hosts.geohide
 				? zm.badge(true, 'GeoHide ' + hosts.geohide.toUpperCase(), '')
 				: hostsTotal
-					? zm.badge(hostsEnabled > 0, hostsEnabled + ' из ' + hostsTotal + ' включено', 'ничего не включено')
+					? (hostsEnabled > 0 ? zm.badge(true, 'включено ' + hostsEnabled + ' из ' + hostsTotal, '') : E('span', { 'class': 'zm-badge zm-off' }, [ E('span', { 'class': 'zm-dot' }), 'ничего не включено' ]))
 					: E('span', {}, '—')));
 			if (sysFlags.length) items.push(row('Система', E('span', { 'style': 'overflow-wrap:anywhere' }, sysFlags.join(', '))));
-			items.push(row('TG WS Proxy', zm.badge(tgInstalled, 'установлен', 'не установлен')));
-			items.push(row('Mixomo', zm.badge(mixomoInstalled, 'установлен', 'не установлен')));
-			items.push(row('ByeTube', zm.badge(bytetubeInstalled, 'установлен', 'не установлен')));
 
 			var half = Math.ceil(items.length / 2);
 
 			return E('div', { 'class': 'zm-card', 'style': 'margin-bottom:4px' }, [
+				E('h3', {}, 'Компоненты'),
 				E('div', { 'class': 'bt-cols' }, [
 					E('div', { 'class': 'bt-col' }, items.slice(0, half)),
 					E('div', { 'class': 'bt-col' }, items.slice(half))
@@ -5449,29 +5514,28 @@ return view.extend({
 		function renderCards() {
 			cards.innerHTML = '';
 
-			var sysCard = E('div', { 'class': 'zm-card' }, [
-				E('h3', {}, 'Система'),
-				E('div', { 'class': 'zm-row' }, [
-					E('span', { 'class': 'zm-label' }, 'Модель:'), E('span', {}, sysInfo.model || '—')
-				]),
-				E('div', { 'class': 'zm-row' }, [
-					E('span', { 'class': 'zm-label' }, 'Архитектура:'), E('span', {}, sysInfo.arch || '—')
-				]),
-				E('div', { 'class': 'zm-row' }, [
-					E('span', { 'class': 'zm-label' }, 'OpenWrt:'), E('span', {}, sysInfo.openwrt || '—')
-				]),
-				E('p', { 'class': 'zm-hint', 'style': 'margin-top:10px; margin-bottom:2px' }, 'Место на роутере:'),
-				E('div', { 'class': 'zm-row' }, [
-					E('span', { 'class': 'zm-label' }, '/tmp'),
-					E('span', {}, sysInfo.tmp_free ? ('занято ' + sysInfo.tmp_used + ' · свободно ' + sysInfo.tmp_free) : '—')
-				]),
-				E('div', { 'class': 'zm-row' }, [
-					E('span', { 'class': 'zm-label' }, '/root'),
-					E('span', {}, sysInfo.root_free ? ('занято ' + sysInfo.root_used + ' · свободно ' + sysInfo.root_free) : '—')
-				])
-			]);
+			var mem = boardInfo.memory || {};
+			var ramAvail = mem.available != null ? mem.available : ((mem.free || 0) + (mem.buffered || 0) + (mem.cached || 0));
+			var ru = zm.parseSize(sysInfo.root_used), rf = zm.parseSize(sysInfo.root_free);
+			var tu = zm.parseSize(sysInfo.tmp_used), tf = zm.parseSize(sysInfo.tmp_free);
 
-			cards.appendChild(sysCard);
+			var rows = [
+				row('Модель', E('span', {}, sysInfo.model || '—')),
+				row('Архитектура', E('span', {}, sysInfo.arch || '—')),
+				row('OpenWrt', E('span', {}, sysInfo.openwrt || '—'))
+			];
+			var memRows = [];
+			if (mem.total) memRows.push(row('ОЗУ', E('span', {}, zm.usageText(mem.total - ramAvail, mem.total))));
+			memRows.push(row('Флеш', E('span', {}, zm.usageText(ru, ru + rf))));
+			memRows.push(row('/tmp', E('span', {}, zm.usageText(tu, tu + tf))));
+
+			cards.appendChild(E('div', { 'class': 'zm-card' }, [
+				E('h3', {}, 'Система'),
+				E('div', { 'class': 'bt-cols' }, [
+					E('div', { 'class': 'bt-col' }, rows),
+					E('div', { 'class': 'bt-col' }, memRows)
+				])
+			]));
 		}
 
 		function refreshOverview() {
@@ -5480,17 +5544,14 @@ return view.extend({
 				zm.dohStatus().catch(function() { return {}; }),
 				zm.hostsStatus().catch(function() { return { items: [] }; }),
 				zm.systemStatus().catch(function() { return {}; }),
-				zm.mixomoStatus().catch(function() { return {}; }),
-				zm.tgStatus().catch(function() { return {}; }),
-				zm.tgwsStatus().catch(function() { return {}; }),
-				zm.bytetubeInstalled().catch(function() { return {}; })
+				zm.health().catch(function() { return {}; })
 			]).then(function(res) {
 				overviewEl.innerHTML = '';
-				overviewEl.appendChild(renderOverview(res[0], res[1], res[2], res[3], res[5], res[6], res[4], res[7]));
+				overviewEl.appendChild(renderOverview(res[0], res[1], res[2], res[3], res[4]));
 			});
 		}
 
-		overviewEl.appendChild(renderOverview(data, dohData, hostsData, sysData, tgData, tgwsData, mixomoData, bytetubeData));
+		overviewEl.appendChild(renderOverview(data, dohData, hostsData, sysData, healthData));
 		renderCards();
 		var updateEl = E('div', {});
 		wrap.appendChild(updateEl);
@@ -6002,7 +6063,7 @@ return view.extend({
 				return;
 			}
 			panelCard.appendChild(E('div', { 'class': 'zm-row' }, [
-				E('span', { 'class': 'zm-label' }, 'Сейчас установлена'),
+				E('span', { 'class': 'zm-label' }, 'Сейчас'),
 				E('span', {}, d.ui_panel === 'zashboard' ? 'Zashboard' : d.ui_panel === 'metacubexd' ? 'MetaCubeXD' : 'не выбрана')
 			]));
 			panelCard.appendChild(E('div', { 'class': 'zm-grid' }, [
@@ -6103,25 +6164,38 @@ return view.extend({
 			autoCard.appendChild(E('h3', {}, 'Автоперезапуск Mihomo'));
 			autoCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Периодический перезапуск по расписанию — полезно для VPN-подписок, у которых иногда «зависает» соединение.'));
 			var cur = d.autorestart || '';
-			autoCard.appendChild(E('div', { 'class': 'zm-row' }, [
-				E('span', { 'class': 'zm-label' }, 'Сейчас'),
-				E('span', {}, cur === '' ? 'выключен' : (cur.indexOf('every:') === 0 ? 'каждые ' + cur.split(':')[1] + ' ч.' : 'ежедневно в ' + cur.split(':')[1].padStart(2, '0') + ':00'))
-			]));
-			var hourInput = E('input', { 'type': 'number', 'min': '0', 'max': '23', 'placeholder': 'час (0-23)', 'class': 'cbi-input-text', 'style': 'max-width:120px' });
-			autoCard.appendChild(E('div', { 'class': 'zm-actions' }, [
-				E('button', { 'class': 'cbi-button', 'click': function() { doAuto('off', ''); } }, 'Выключить'),
-				E('button', { 'class': 'cbi-button', 'click': function() { doAuto('every', '2'); } }, 'Каждые 2 часа'),
-				E('button', { 'class': 'cbi-button', 'click': function() { doAuto('every', '6'); } }, 'Каждые 6 часов'),
-				hourInput,
+			var mode = cur === '' ? 'off' : (cur.indexOf('every:') === 0 ? 'every' + cur.split(':')[1] : 'daily');
+			var curHour = mode === 'daily' ? parseInt(cur.split(':')[1], 10) : 4;
+			if (isNaN(curHour) || curHour < 0 || curHour > 23) curHour = 4;
+			function hh(h) { return (h < 10 ? '0' : '') + h + ':00'; }
+
+			var opts = [];
+			for (var h = 0; h < 24; h++)
+				opts.push(E('option', { 'value': String(h), 'selected': h === curHour ? 'selected' : null }, hh(h)));
+			var hourSel = E('select', { 'class': 'cbi-input-select zm-hour-select' }, opts);
+
+			var dailyRow = E('div', { 'class': 'zm-actions', 'style': mode === 'daily' ? '' : 'display:none' }, [
+				E('span', { 'class': 'zm-label' }, 'Время перезапуска'),
+				hourSel,
 				E('button', {
-					'class': 'cbi-button',
-					'click': function() {
-						var h = hourInput.value.trim();
-						if (!/^\d+$/.test(h) || +h < 0 || +h > 23) { zm.toast('Введите час от 0 до 23', 'error'); return; }
-						doAuto('daily', h);
-					}
-				}, 'Ежедневно в это время')
+					'class': 'cbi-button cbi-button-positive',
+					'click': function() { doAuto('daily', hourSel.value); }
+				}, mode === 'daily' ? 'Сохранить время' : 'Включить')
+			]);
+
+			function tile(id, label, onclick) {
+				return E('div', { 'class': 'zm-tile' + (mode === id ? ' zm-active' : ''), 'click': onclick }, label);
+			}
+			autoCard.appendChild(E('div', { 'class': 'zm-grid' }, [
+				tile('off', 'Выключен', function() { if (mode !== 'off') doAuto('off', ''); }),
+				tile('every2', 'Каждые 2 часа', function() { if (mode !== 'every2') doAuto('every', '2'); }),
+				tile('every6', 'Каждые 6 часов', function() { if (mode !== 'every6') doAuto('every', '6'); }),
+				tile('daily', mode === 'daily' ? 'Ежедневно в ' + hh(curHour) : 'Ежедневно в заданное время', function() {
+					dailyRow.style.display = '';
+					hourSel.focus();
+				})
 			]));
+			autoCard.appendChild(dailyRow);
 		}
 
 		function doAuto(mode, value) {
@@ -6506,14 +6580,14 @@ return view.extend({
 				}
 
 				var fields = [
-					E('span', {}, [ E('span', { 'class': 'zm-label' }, 'Статус: '),
+					E('span', { 'style': 'display:inline-flex; align-items:center; gap:8px' }, [ E('span', { 'class': 'zm-label' }, 'Статус'),
 						d.zapret === 'installed'
 							? zm.badge(d.zapret_running === true, 'запущен', 'остановлен')
 							: zm.badge(false, '', 'не установлен')
 					])
 				];
-				if (d.zapret_version) fields.push(E('span', {}, [ E('span', { 'class': 'zm-label' }, 'Версия: '), E('span', {}, d.zapret_version) ]));
-				if (d.strategy) fields.push(E('span', {}, [ E('span', { 'class': 'zm-label' }, 'Стратегия: '), E('span', {}, d.strategy) ]));
+				if (d.zapret_version) fields.push(E('span', { 'style': 'display:inline-flex; align-items:center; gap:8px' }, [ E('span', { 'class': 'zm-label' }, 'Версия'), E('span', {}, d.zapret_version) ]));
+				if (d.strategy) fields.push(E('span', { 'style': 'display:inline-flex; align-items:center; gap:8px' }, [ E('span', { 'class': 'zm-label' }, 'Стратегия'), E('span', {}, d.strategy) ]));
 
 				zCardWrap.appendChild(E('div', { 'class': 'zm-card', 'style': 'margin-bottom:10px' }, [
 					E('h3', {}, 'Zapret'),
@@ -7807,11 +7881,11 @@ return view.extend({
 							netEl.innerHTML = '';
 							netEl.appendChild(E('div', { 'class': 'zm-row' }, [
 								E('span', { 'class': 'zm-label' }, 'IPv4 (google.com)'),
-								zm.badge(res.ipv4_ok === true, 'ok, ' + res.ipv4_ms + ' ms', 'недоступен')
+								zm.badge(res.ipv4_ok === true, 'доступен, ' + res.ipv4_ms + ' мс', 'недоступен')
 							]));
 							netEl.appendChild(E('div', { 'class': 'zm-row' }, [
 								E('span', { 'class': 'zm-label' }, 'IPv6 (google.com)'),
-								zm.badge(res.ipv6_ok === true, 'ok, ' + res.ipv6_ms + ' ms', 'недоступен')
+								zm.badge(res.ipv6_ok === true, 'доступен, ' + res.ipv6_ms + ' мс', 'недоступен')
 							]));
 						}).catch(function() { netBusy = false; });
 					}
@@ -7855,7 +7929,7 @@ return view.extend({
 		var mirrorCard = E('div', { 'class': 'zm-card' }, [
 			E('h3', {}, 'Зеркало OpenWrt'),
 			E('div', { 'class': 'zm-row' }, [
-				E('span', { 'class': 'zm-label' }, 'Текущее'), mirrorCurrentEl
+				E('span', { 'class': 'zm-label' }, 'Сейчас'), mirrorCurrentEl
 			]),
 			mirrorGrid,
 			mirrorLog
@@ -8282,7 +8356,7 @@ function injectCss() {
 }
 
 function badge(ok, textOk, textBad) {
-	var cls = ok ? 'zm-ok' : 'zm-bad';
+	var cls = ok ? 'zm-ok' : (textBad === 'не установлен' ? 'zm-off' : 'zm-bad');
 	return E('span', { 'class': 'zm-badge ' + cls }, [
 		E('span', { 'class': 'zm-dot' }),
 		ok ? textOk : textBad
@@ -9960,6 +10034,13 @@ function postPatch(name, inst) {
 				E('button', { 'class': 'cbi-button cbi-button-positive', 'click': function () { location.reload(); } }, 'Обновить')
 			]);
 		};
+		var origPoll = inst.pollJob;
+		inst.pollJob = function (job, logEl, onDone, onTick) {
+			return origPoll.call(this, job, logEl, function (ok) {
+				try { if (typeof onDone === 'function') onDone(ok); }
+				finally { setTimeout(function () { refreshShellStatus(); refreshMemory(); }, 1000); }
+			}, onTick);
+		};
 		setTimeout(refreshShellStatus, 300);
 	}
 	return inst;
@@ -10086,11 +10167,11 @@ var ROUTES = [
 	{ id: 'dashboard', title: 'Дашборд', sub: 'Состояние всех компонентов', icon: 'dashboard', group: 'Обзор' },
 	{ id: 'strategy', title: 'Zapret', sub: 'Стратегии, тесты, YouTube, игры, Discord и исключения', icon: 'shield', group: 'Обход блокировок', dot: 'zapret' },
 	{ id: 'zapret2', title: 'Zapret2', sub: 'Установка и управление Zapret2', icon: 'bolt', group: 'Обход блокировок', dot: 'zapret2' },
-	{ id: 'bytetube', title: 'ByeTube', sub: 'YouTube через ByeDPI', icon: 'play', group: 'Обход блокировок' },
-	{ id: 'tgproxy', title: 'TG WS Proxy', sub: 'Прокси для Telegram', icon: 'send', group: 'Обход блокировок' },
-	{ id: 'mixomo', title: 'Mixomo', sub: 'Mihomo, MagiTrickle и WARP', icon: 'layers', group: 'Обход блокировок' },
-	{ id: 'hosts', title: 'Hosts', sub: 'Домены в hosts и списки GeoHide', icon: 'list', group: 'Сеть' },
-	{ id: 'doh', title: 'DNS over HTTPS', sub: 'Шифрованный DNS для всей сети', icon: 'globe', group: 'Сеть' },
+	{ id: 'bytetube', title: 'ByeTube', sub: 'YouTube через ByeDPI', icon: 'play', group: 'Обход блокировок', dot: 'bytetube' },
+	{ id: 'tgproxy', title: 'TG WS Proxy', sub: 'Прокси для Telegram', icon: 'send', group: 'Обход блокировок', dot: 'tg' },
+	{ id: 'mixomo', title: 'Mixomo', sub: 'Mihomo, MagiTrickle и WARP', icon: 'layers', group: 'Обход блокировок', dot: 'mixomo' },
+	{ id: 'hosts', title: 'Hosts', sub: 'Домены в hosts и списки GeoHide', icon: 'list', group: 'Сеть', dot: 'hosts' },
+	{ id: 'doh', title: 'DNS over HTTPS', sub: 'Шифрованный DNS для всей сети', icon: 'globe', group: 'Сеть', dot: 'doh' },
 	{ id: 'system', title: 'Система', sub: 'Параметры роутера, зеркала и обслуживание', icon: 'cpu', group: 'Сервис' }
 ];
 var ROUTE_BY_ID = {};
@@ -10122,7 +10203,6 @@ function buildShell() {
 		nav.appendChild(a);
 	});
 
-	statusPill = E('a', { 'class': 'zmw-pill zmw-pill-off', 'href': '#/strategy' }, [ E('span', { 'class': 'zmw-pill-dot' }), E('span', { 'class': 'zmw-pill-text' }, [ 'Zapret: …' ]) ]);
 	deviceEl = E('div', { 'class': 'zmw-device' }, [ E('div', { 'class': 'zmw-device-model' }, [ 'Роутер' ]), E('div', { 'class': 'zmw-device-sub' }, [ location.hostname ]) ]);
 	verEl = E('div', { 'class': 'zmw-brand-sub' }, [ 'Web UI' ]);
 	updateEl = E('a', { 'class': 'zmw-update', 'href': '#/dashboard', 'hidden': '' }, [ 'Доступно обновление' ]);
@@ -10137,7 +10217,6 @@ function buildShell() {
 		updateEl,
 		nav,
 		E('div', { 'class': 'zmw-side-foot' }, [
-			statusPill,
 			deviceEl,
 			memEl,
 			E('div', { 'class': 'zmw-side-links' }, [
@@ -10190,6 +10269,7 @@ function closeDrawer() { document.body.classList.remove('zmw-drawer-open'); }
 
 var callStatus = declare({ object: 'zapret-manager', method: 'status', expect: {} });
 var callSysInfo = declare({ object: 'zapret-manager', method: 'system_info', expect: {} });
+var callHealth = declare({ object: 'zapret-manager', method: 'health', expect: {} });
 var callUpd = declare({ object: 'zapret-manager', method: 'zm_update_status', expect: {} });
 var callBoardInfo = declare({ object: 'system', method: 'info', expect: {} });
 
@@ -10217,9 +10297,12 @@ function memRow(key, label, used, total) {
 				E('div', { 'class': 'zmw-mem-bar' }, [ E('i') ])
 			])
 		};
-		memEl.appendChild(r.el);
+		r.order = key === 'ram' ? 0 : key === 'flash' ? 1 : 2;
+		var before = null;
+		Object.keys(memRows).forEach(function (k) { var o = memRows[k]; if (o !== r && o.el.parentNode && o.order > r.order && (!before || o.order < before.order)) before = o; });
+		memEl.insertBefore(r.el, before ? before.el : null);
 	}
-	r.el.querySelector('.zmw-mem-val').textContent = fmtSize(used) + ' / ' + fmtSize(total);
+	r.el.querySelector('.zmw-mem-val').textContent = fmtSize(used) + ' из ' + fmtSize(total);
 	var bar = r.el.querySelector('i');
 	bar.style.width = pct.toFixed(1) + '%';
 	r.el.classList.toggle('zmw-mem-hi', pct >= 85);
@@ -10242,26 +10325,28 @@ function refreshMemory() {
 }
 
 var statusBusy = false;
+var DOT_TEXT = { 1: 'работает', 2: 'не работает' };
 function refreshShellStatus() {
 	if (!shell || !sid || statusBusy) return;
 	statusBusy = true;
-	callStatus().then(function (d) {
-		d = d || {};
-		setDot(navDots.zapret, d.zapret === 'installed', d.zapret_running === true);
-		setDot(navDots.zapret2, d.zapret2 === 'installed', d.zapret2_running === true);
-		var cls, txt;
-		if (d.zapret !== 'installed') { cls = 'zmw-pill-off'; txt = 'Zapret не установлен'; }
-		else if (d.zapret_running) { cls = 'zmw-pill-ok'; txt = 'Zapret работает'; }
-		else { cls = 'zmw-pill-bad'; txt = 'Zapret остановлен'; }
-		statusPill.className = 'zmw-pill ' + cls;
-		statusPill.querySelector('.zmw-pill-text').textContent = txt;
-		statusPill.title = d.strategy ? ('Стратегия: ' + d.strategy) : '';
+	callHealth().then(function (h) {
+		if (h && typeof h.zapret === 'number') return h;
+		/* старый бэкенд без health — хотя бы Zapret/Zapret2 */
+		return callStatus().then(function (d) {
+			d = d || {};
+			return {
+				zapret: d.zapret === 'installed' ? (d.zapret_running ? 1 : 2) : 0,
+				zapret2: d.zapret2 === 'installed' ? (d.zapret2_running ? 1 : 2) : 0
+			};
+		});
+	}).then(function (h) {
+		Object.keys(navDots).forEach(function (k) { setDot(navDots[k], h[k]); });
 	}).catch(function () {}).then(function () { statusBusy = false; });
 }
-function setDot(el, installed, running) {
+function setDot(el, st) {
 	if (!el) return;
-	el.className = 'zmw-nav-dot ' + (!installed ? '' : running ? 'zmw-on' : 'zmw-stop');
-	el.title = !installed ? 'не установлен' : running ? 'запущен' : 'остановлен';
+	el.className = 'zmw-nav-dot' + (st === 1 ? ' zmw-on' : st === 2 ? ' zmw-stop' : '');
+	el.title = DOT_TEXT[st] || '';
 }
 
 function loadShellInfo() {
@@ -10327,6 +10412,7 @@ function route(force) {
 
 	poll._reset();
 	ui.hideModal();
+	refreshShellStatus();
 	viewEl.innerHTML = '';
 	viewEl.appendChild(skeleton());
 	if (!force) window.scrollTo(0, 0);
@@ -10729,9 +10815,11 @@ body.zmw-locked .zmw-shell { filter: blur(6px); pointer-events: none; }
 	background: var(--grad); color: #fff; border-color: transparent;
 	box-shadow: 0 6px 16px -6px rgba(99,102,241,.8);
 }
-.zmw-nav-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--off-bg); box-shadow: 0 0 0 1px var(--border-2) inset; flex-shrink: 0; }
+.zmw-nav-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; display: none; }
+.zmw-nav-dot.zmw-on, .zmw-nav-dot.zmw-stop { display: block; }
 .zmw-nav-dot.zmw-on { background: var(--ok-dot); box-shadow: 0 0 0 3px var(--ok-bg), 0 0 10px var(--ok-dot); }
-.zmw-nav-dot.zmw-stop { background: var(--bad-dot); box-shadow: 0 0 0 3px var(--bad-bg); }
+.zmw-nav-dot.zmw-stop { background: var(--bad-dot); box-shadow: 0 0 0 3px var(--bad-bg), 0 0 10px var(--bad-dot); animation: zmw-blink 1.6s ease-in-out infinite; }
+@keyframes zmw-blink { 50% { opacity: .45; } }
 
 .zmw-side-foot { display: flex; flex-direction: column; gap: 9px; padding: 14px 6px 0; margin-top: 12px; border-top: 1px solid var(--border); }
 .zmw-pill {
@@ -11108,6 +11196,15 @@ html[data-theme="dark"] #zmw-view .cbi-button-positive {
 	transition: border-color .15s, box-shadow .15s;
 	max-width: 100%;
 }
+#zmw-view select, .zmw-modal select {
+	-webkit-appearance: none; appearance: none; cursor: pointer;
+	padding-right: 38px;
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238a93a8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+	background-repeat: no-repeat; background-position: right 12px center; background-size: 16px;
+}
+#zmw-view select option { background: var(--surface-solid); color: var(--text); }
+#zmw-view .zm-hour-select { min-width: 120px; font-variant-numeric: tabular-nums; }
+#zmw-view .zm-actions > .cbi-input-text[type="text"] { flex: 1 1 240px; min-width: 0; }
 #zmw-view .cbi-input-text:focus, #zmw-view input:focus, #zmw-view select:focus, #zmw-view .bt-input:focus { border-color: var(--a1); box-shadow: var(--ring); }
 #zmw-view input::placeholder { color: var(--muted); opacity: .7; }
 
