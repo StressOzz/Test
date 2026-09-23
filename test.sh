@@ -1,6 +1,6 @@
 #!/bin/sh
 # Zapret Manager by StressOzz for LuCI installer
-# Version: 1.35
+# Version: 1.36
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -53,7 +53,7 @@ chmod 0755 /opt/zapret-manager-luci
 cat > '/opt/zapret-manager-luci/backend.sh' << 'ZM_INSTALLER_EOF'
 
 CONF="/etc/config/zapret"
-ZM_VERSION="1.35"
+ZM_VERSION="1.36"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
@@ -5305,6 +5305,65 @@ ZM_UC_EOF
 	fi
 }
 
+# ── «Установить WARP для splify2»: всё одной кнопкой ──
+_spl_wait_object() {
+	local i=0
+	while [ "$i" -lt 20 ]; do _spl_present && return 0; sleep 1; i=$((i + 1)); done
+	return 1
+}
+
+do_warp_splify2() {
+	echo "==> Шаг 1 из 5: splify2 и движок steer"
+	if _spl_installed && [ -n "$(_spl_engine_pkg)" ]; then
+		echo "==> Уже установлены: $(_spl_engine_pkg) $(_pkg_version "$(_spl_engine_pkg)")"
+		[ -x /etc/init.d/steer ] && /etc/init.d/steer enable >/dev/null 2>&1
+	else
+		do_splify2_install ext || return 1
+	fi
+	_spl_wait_object || { /etc/init.d/rpcd restart >/dev/null 2>&1; sleep 3; _spl_wait_object; } || {
+		echo "ОШИБКА: rpcd не видит splify2 — перезагрузите роутер и нажмите кнопку ещё раз"; return 1; }
+
+	echo "==> Шаг 2 из 5: пакеты AmneziaWG"
+	if _awg_pkgs_installed; then
+		echo "==> Уже установлены: $(awg --version 2>/dev/null | head -n1)"
+	else
+		do_awg_install || return 1
+	fi
+
+	echo "==> Шаг 3 из 5: ключ WARP"
+	if [ -s "$MIXOMO_WARP_CONF" ]; then
+		echo "==> Уже есть $MIXOMO_WARP_CONF — используем его"
+	else
+		do_mixomo_warp_register auto || return 1
+	fi
+
+	echo "==> Шаг 4 из 5: интерфейс AWGz"
+	if _awg_iface_exists && [ -n "$(_awg_handshake_age)" ]; then
+		echo "==> AWGz уже работает — не трогаем"
+	else
+		cp "$MIXOMO_WARP_CONF" "$AWG_IMPORT_CONF"; chmod 600 "$AWG_IMPORT_CONF"
+		do_awg_iface_create "$AWG_IMPORT_CONF" warp || return 1
+		if [ -z "$(_awg_handshake_age)" ]; then
+			echo "==> Сервер не ответил — генерируем новый WARP с подбором endpoint и пробуем ещё раз"
+			do_mixomo_warp_register auto || return 1
+			cp "$MIXOMO_WARP_CONF" "$AWG_IMPORT_CONF"
+			do_awg_iface_create "$AWG_IMPORT_CONF" warp || return 1
+			[ -n "$(_awg_handshake_age)" ] || echo "!! Рукопожатия так и нет — WARP может быть заблокирован у провайдера. Выход всё равно добавим: заработает, как только туннель поднимется"
+		fi
+	fi
+
+	echo "==> Шаг 5 из 5: выход AWGz в splify2"
+	do_splify2_awgz add || return 1
+	echo "==> Готово! WARP подключён к splify2. Осталось в splify2 отметить сервисы (YouTube, Discord…) и выбрать для них выход AWGz"
+}
+
+do_warp_splify2_remove() {
+	echo "==> Убираем выход AWGz из splify2"
+	if _spl_spec_has_awgz; then do_splify2_awgz remove || return 1; fi
+	_awg_iface_delete
+	echo "==> Готово: WARP отключён от splify2, интерфейс AWGz удалён (пакеты AmneziaWG и WARP.conf оставлены)"
+}
+
 splify2_action() {
 	case "$1" in
 		install_ext)  job_start splify2 do_splify2_install ext ;;
@@ -5313,6 +5372,8 @@ splify2_action() {
 		remove)       job_start splify2 do_splify2_remove ;;
 		awgz_add)     job_start splify2_awgz do_splify2_awgz add ;;
 		awgz_remove)  job_start splify2_awgz do_splify2_awgz remove ;;
+		warp_install) job_start warp_splify2 do_warp_splify2 ;;
+		warp_remove)  job_start warp_splify2 do_warp_splify2_remove ;;
 		start|stop)
 			if _spl_has_method engine_start; then ubus -t 60 call splify2 "engine_$1" >/dev/null 2>&1
 			elif [ -x /etc/init.d/steer ]; then
@@ -7504,7 +7565,6 @@ return view.extend({
 	render: function(data) {
 		var wrap = E('div', { 'class': 'zm-wrap' });
 		var busy = false;
-		var variant = 'ext';
 
 		var statusCard = E('div', { 'class': 'zm-card' });
 		var logEl = E('pre', { 'class': 'zm-log' });
@@ -7581,27 +7641,11 @@ return view.extend({
 			var installed = d.ui === true || !!d.engine;
 			if (!installed) {
 				statusCard.appendChild(row('Статус', zm.badge(false, '', 'не установлен')));
-				statusCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:10px' }, 'Какой движок поставить:'));
-				var tiles = E('div', { 'class': 'zm-grid' });
-				function renderTiles() {
-					tiles.innerHTML = '';
-					[
-						{ id: 'ext', label: 'Расширенный — со встроенным VLESS/Reality' },
-						{ id: 'base', label: 'Базовый — только маршрутизация (для AWGz/WireGuard)' }
-					].forEach(function(t) {
-						tiles.appendChild(E('div', {
-							'class': 'zm-tile' + (variant === t.id ? ' zm-active' : ''),
-							'click': function() { variant = t.id; renderTiles(); }
-						}, t.label));
-					});
-				}
-				renderTiles();
-				statusCard.appendChild(tiles);
-				statusCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Расширенный больше примерно на 250 КБ, зато умеет сам поднимать туннель по ссылке подписки. Если туннелем будет только AWGz — хватит базового. Вариант можно сменить позже.'));
+				statusCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Нужен WARP — жмите «Установить WARP для splify2» выше, splify2 поставится сам. Если туннель у вас свой (VLESS-подписка), поставьте только splify2:'));
 				statusCard.appendChild(E('div', { 'class': 'zm-actions' }, [
-					E('button', { 'class': 'cbi-button cbi-button-positive', 'click': function() {
-						job(variant === 'ext' ? 'install_ext' : 'install_base', 'splify2', 'splify2 установлен', 'Ошибка установки', 'Устанавливаем splify2 и движок steer');
-					} }, 'Установить splify2')
+					E('button', { 'class': 'cbi-button', 'click': function() {
+						job('install_ext', 'splify2', 'splify2 установлен', 'Ошибка установки', 'Устанавливаем splify2 и движок steer');
+					} }, 'Установить только splify2')
 				]));
 				return;
 			}
@@ -7662,32 +7706,38 @@ return view.extend({
 			});
 		}
 
-		/* ── AWGz как выход ── */
+		/* ── Главное: WARP для splify2 одной кнопкой ── */
 		function renderAwg(d) {
 			awgCard.innerHTML = '';
-			awgCard.appendChild(E('h3', {}, 'WARP (AWGz) как выход'));
-			awgCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Добавляет в правила splify2 выход «AWGz» (kind: interface, устройство AWGz, при падении туннеля трафик блокируется, а не утекает). Спеку проверяет сам движок, так что сломать настройку нельзя.'));
-			var ifaceNode = d.awgz !== true ? zm.badge(false, '', 'не создан')
-				: zm.badge(d.awgz_up === true, 'поднят', 'опущен');
-			awgCard.appendChild(row('Интерфейс AWGz', ifaceNode));
-			awgCard.appendChild(row('Выход в splify2', zm.badge(d.awgz_in_spec === true, 'подключён', 'не подключён')));
+			var installed = d.ui === true || !!d.engine;
+			var ready = d.awgz_in_spec === true && d.awgz_up === true;
+			awgCard.appendChild(E('h3', {}, 'WARP для splify2'));
+			awgCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Одна кнопка делает всё сама: ставит splify2 и движок (если их нет), пакеты AmneziaWG, получает ключ WARP, поднимает туннель AWGz и добавляет его в splify2 как выход. Если сервер WARP не ответил — подбирает другой. Ничего настраивать и удалять руками не нужно.'));
+			function step(label, ok) { return row(label, zm.badge(ok, 'готово', 'нет')); }
+			awgCard.appendChild(E('div', { 'class': 'bt-cols' }, [
+				E('div', { 'class': 'bt-col' }, [
+					step('splify2 + steer', installed),
+					step('Туннель AWGz', d.awgz === true && d.awgz_up === true)
+				]),
+				E('div', { 'class': 'bt-col' }, [
+					step('Выход в splify2', d.awgz_in_spec === true)
+				])
+			]));
 			var actions = [];
-			if (!(d.ui === true || d.engine)) {
-				awgCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Установите splify2 выше.'));
-			} else if (d.awgz_in_spec === true) {
+			actions.push(E('button', { 'class': 'cbi-button cbi-button-positive', 'click': function() {
+				job('warp_install', 'warp_splify2', 'WARP подключён к splify2', 'Не получилось — смотрите журнал ниже', 'Устанавливаем WARP для splify2 (пара минут, связь может мигнуть)');
+			} }, ready ? 'Переустановить WARP для splify2' : 'Установить WARP для splify2'));
+			if (d.awgz_in_spec === true || d.awgz === true) {
 				actions.push(E('button', { 'class': 'cbi-button cbi-button-remove', 'click': function() {
-					job('awgz_remove', 'splify2_awgz', 'AWGz убран из splify2', 'Не удалось убрать выход', 'Убираем AWGz из splify2');
-				} }, 'Отключить AWGz'));
-				actions.push(openBtn('Настроить правила в splify2'));
-			} else if (d.awgz === true) {
-				actions.push(E('button', { 'class': 'cbi-button cbi-button-positive', 'click': function() {
-					job('awgz_add', 'splify2_awgz', 'AWGz подключён к splify2', 'Не удалось подключить выход', 'Добавляем AWGz в splify2');
-				} }, 'Подключить AWGz к splify2'));
+					if (!confirm('Отключить WARP от splify2 и удалить туннель AWGz?')) return;
+					job('warp_remove', 'warp_splify2', 'WARP отключён', 'Не получилось — смотрите журнал ниже', 'Отключаем WARP');
+				} }, 'Отключить WARP'));
 			}
-			actions.push(E('a', { 'class': 'cbi-button' + (d.awgz === true ? '' : ' cbi-button-positive'), 'href': zm.pageUrl('amneziawg') }, d.awgz === true ? 'WARP / AmneziaWG' : 'Создать AWGz с WARP'));
+			if (ready) actions.push(openBtn('Выбрать сервисы в splify2'));
 			awgCard.appendChild(E('div', { 'class': 'zm-actions' }, actions));
-			if (d.awgz_in_spec === true)
-				awgCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Дальше в splify2: «Правила» → выберите сервисы и выход AWGz → «Применить».'));
+			if (ready)
+				awgCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Готово. Последний шаг — в splify2 отметьте сервисы (YouTube, Discord…) и выберите для них выход AWGz.'));
+			awgCard.appendChild(logEl);
 		}
 
 		/* ── Выходы и правила из спеки ── */
@@ -7759,9 +7809,8 @@ return view.extend({
 
 		renderAll(data || {});
 		wrap.appendChild(warnEl);
-		wrap.appendChild(statusCard);
-		wrap.appendChild(logEl);
 		wrap.appendChild(awgCard);
+		wrap.appendChild(statusCard);
 		wrap.appendChild(routeCard);
 		wrap.appendChild(extraCard);
 		return wrap;
