@@ -1,6 +1,6 @@
 #!/bin/sh
 # Zapret Manager by StressOzz for LuCI installer
-# Version: 1.34
+# Version: 1.28
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -53,7 +53,7 @@ chmod 0755 /opt/zapret-manager-luci
 cat > '/opt/zapret-manager-luci/backend.sh' << 'ZM_INSTALLER_EOF'
 
 CONF="/etc/config/zapret"
-ZM_VERSION="1.34"
+ZM_VERSION="1.28"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
@@ -10001,6 +10001,7 @@ var ICONS = {
 	lock: '<rect x="4.5" y="10.5" width="15" height="10" rx="2.5"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/>',
 	arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>',
 	alert: '<path d="M12 3.5l9.5 16.5h-19L12 3.5z"/><path d="M12 10v4.5M12 17.3v.2"/>',
+	rocket: '<path d="M14.5 4.2c2.6-1.1 5-1.2 5.3-.9.3.3.2 2.7-.9 5.3-1 2.4-3.1 4.9-6.2 6.9l-3.2-3.2c2-3.1 4.5-5.2 6.9-6.2z"/><circle cx="15.2" cy="8.8" r="1.6"/><path d="M9.5 12.3l-3.6-.4 2.4-3.2 3.3-.2M11.7 14.5l.4 3.6 3.2-2.4.2-3.3"/><path d="M6.8 16.2c-1.3.4-2.1 2.2-2.3 3.3 1.1-.2 2.9-1 3.3-2.3"/>',
 	telegram: '<path d="M21 4.5L2.8 11.4c-.8.3-.8 1.4 0 1.7l4.4 1.5 1.7 5.3c.2.7 1.1.9 1.6.4l2.5-2.4 4.6 3.4c.6.4 1.4.1 1.6-.6L22.3 5.8c.2-.9-.6-1.6-1.3-1.3z"/><path d="M7.3 14.6l10-6.6-7.4 8"/>'
 };
 
@@ -10018,9 +10019,18 @@ function icon(name, cls) {
 	return s;
 }
 
+var logoSeq = 0;
 function logo(cls) {
+	var id = 'zmwz' + (++logoSeq);
 	return E('div', { 'class': 'zmw-logo' + (cls ? ' ' + cls : '') }, [
-		E('<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M17.6 4.5L7.5 18h8l-1.7 9.5L24.5 14h-8.1l1.2-9.5z" fill="#fff"/></svg>')
+		E('<svg viewBox="0 0 1254 1254" aria-hidden="true">' +
+			'<defs><linearGradient id="' + id + '" x1="0" y1="0" x2="0.35" y2="1">' +
+			'<stop offset="0" stop-color="#5fd8ff"/><stop offset=".5" stop-color="#1aa3ff"/><stop offset="1" stop-color="#0a7cff"/>' +
+			'</linearGradient></defs>' +
+			'<g fill="url(#' + id + ')" stroke="#04101f" stroke-width="22" stroke-linejoin="miter">' +
+			'<path d="M455 170L1072 118L1240 18L685 615L30 1240L742 335L258 385Z"/>' +
+			'<path d="M1030 458L722 862L1222 797L1008 1022L310 1100Z"/>' +
+			'</g></svg>')
 	]);
 }
 
@@ -10077,10 +10087,10 @@ var ROUTES = [
 	{ id: 'strategy', title: 'Zapret', sub: 'Стратегии, тесты, YouTube, игры, Discord и исключения', icon: 'shield', group: 'Обход блокировок', dot: 'zapret' },
 	{ id: 'zapret2', title: 'Zapret2', sub: 'Установка и управление Zapret2', icon: 'bolt', group: 'Обход блокировок', dot: 'zapret2' },
 	{ id: 'bytetube', title: 'ByeTube', sub: 'YouTube через ByeDPI', icon: 'play', group: 'Обход блокировок' },
+	{ id: 'tgproxy', title: 'TG WS Proxy', sub: 'Прокси для Telegram', icon: 'send', group: 'Обход блокировок' },
+	{ id: 'mixomo', title: 'Mixomo', sub: 'Mihomo, MagiTrickle и WARP', icon: 'layers', group: 'Обход блокировок' },
 	{ id: 'hosts', title: 'Hosts', sub: 'Домены в hosts и списки GeoHide', icon: 'list', group: 'Сеть' },
 	{ id: 'doh', title: 'DNS over HTTPS', sub: 'Шифрованный DNS для всей сети', icon: 'globe', group: 'Сеть' },
-	{ id: 'tgproxy', title: 'TG WS Proxy', sub: 'Прокси для Telegram', icon: 'send', group: 'Сеть' },
-	{ id: 'mixomo', title: 'Mixomo', sub: 'Mihomo, MagiTrickle и WARP', icon: 'layers', group: 'Сеть' },
 	{ id: 'system', title: 'Система', sub: 'Параметры роутера, зеркала и обслуживание', icon: 'cpu', group: 'Сервис' }
 ];
 var ROUTE_BY_ID = {};
@@ -10093,7 +10103,7 @@ function currentRoute() {
 
 /* ───────────────────────── Оболочка ───────────────────────── */
 
-var root, shell = null, viewEl, titleEl, subEl, navLinks = {}, navDots = {}, statusPill, deviceEl, verEl, updateEl;
+var root, shell = null, viewEl, titleEl, subEl, navLinks = {}, navDots = {}, statusPill, deviceEl, verEl, updateEl, memEl;
 
 function buildShell() {
 	var nav = E('nav', { 'class': 'zmw-nav', 'aria-label': 'Разделы' });
@@ -10116,6 +10126,7 @@ function buildShell() {
 	deviceEl = E('div', { 'class': 'zmw-device' }, [ E('div', { 'class': 'zmw-device-model' }, [ 'Роутер' ]), E('div', { 'class': 'zmw-device-sub' }, [ location.hostname ]) ]);
 	verEl = E('div', { 'class': 'zmw-brand-sub' }, [ 'Web UI' ]);
 	updateEl = E('a', { 'class': 'zmw-update', 'href': '#/dashboard', 'hidden': '' }, [ 'Доступно обновление' ]);
+	memEl = E('div', { 'class': 'zmw-mem' });
 
 	var side = E('aside', { 'class': 'zmw-side', 'id': 'zmw-side' }, [
 		E('div', { 'class': 'zmw-brand' }, [
@@ -10128,9 +10139,9 @@ function buildShell() {
 		E('div', { 'class': 'zmw-side-foot' }, [
 			statusPill,
 			deviceEl,
+			memEl,
 			E('div', { 'class': 'zmw-side-links' }, [
-				E('a', { 'href': 'https://t.me/stressozz_manager', 'target': '_blank', 'rel': 'noreferrer' }, [ icon('telegram'), 'Сообщество' ]),
-				E('a', { 'href': luciUrl(), 'target': '_blank', 'rel': 'noreferrer' }, [ icon('external'), 'LuCI' ])
+				E('a', { 'href': luciUrl(), 'target': '_blank', 'rel': 'noreferrer' }, [ icon('external'), 'Открыть LuCI' ])
 			]),
 			E('div', { 'class': 'zmw-credit' }, [ 'by StressOzz' ])
 		])
@@ -10145,6 +10156,13 @@ function buildShell() {
 		E('button', { 'class': 'zmw-icon-btn zmw-burger', 'type': 'button', 'aria-label': 'Меню', 'click': openDrawer }, [ icon('menu') ]),
 		E('div', { 'class': 'zmw-titles' }, [ titleEl, subEl ]),
 		E('div', { 'class': 'zmw-top-actions' }, [
+			E('a', { 'class': 'zmw-icon-btn zmw-link-btn zmw-link-kvn', 'href': 'http://stresskvn.lol/', 'target': '_blank', 'rel': 'noreferrer', 'title': 'StressKVN — обход белых списков!' }, [
+				icon('rocket'), E('span', { 'class': 'zmw-lbl-full' }, [ 'StressKVN — обход белых списков!' ]), E('span', { 'class': 'zmw-lbl-short' }, [ 'StressKVN' ])
+			]),
+			E('a', { 'class': 'zmw-icon-btn zmw-link-btn zmw-link-tg', 'href': 'https://t.me/stressozz_manager', 'target': '_blank', 'rel': 'noreferrer', 'title': 'Сообщество Telegram' }, [
+				icon('telegram'), E('span', { 'class': 'zmw-lbl-full' }, [ 'Сообщество Telegram' ]), E('span', { 'class': 'zmw-lbl-short' }, [ 'Telegram' ])
+			]),
+			E('span', { 'class': 'zmw-top-sep' }),
 			E('button', { 'class': 'zmw-icon-btn', 'type': 'button', 'title': 'Обновить страницу', 'click': function (ev) {
 				var b = ev.currentTarget; b.classList.add('zmw-spin'); setTimeout(function () { b.classList.remove('zmw-spin'); }, 700);
 				route(true);
@@ -10173,6 +10191,55 @@ function closeDrawer() { document.body.classList.remove('zmw-drawer-open'); }
 var callStatus = declare({ object: 'zapret-manager', method: 'status', expect: {} });
 var callSysInfo = declare({ object: 'zapret-manager', method: 'system_info', expect: {} });
 var callUpd = declare({ object: 'zapret-manager', method: 'zm_update_status', expect: {} });
+var callBoardInfo = declare({ object: 'system', method: 'info', expect: {} });
+
+function parseSize(v) {
+	var m = String(v || '').trim().match(/^([\d.,]+)\s*([KMGT]?)i?B?$/i);
+	if (!m) return NaN;
+	var n = parseFloat(m[1].replace(',', '.'));
+	var mul = { '': 1, K: 1024, M: 1048576, G: 1073741824, T: 1099511627776 }[m[2].toUpperCase()];
+	return n * mul;
+}
+function fmtSize(b) {
+	if (!isFinite(b)) return '—';
+	var u = [ 'Б', 'КБ', 'МБ', 'ГБ', 'ТБ' ], i = 0;
+	while (b >= 1024 && i < u.length - 1) { b /= 1024; i++; }
+	return (b >= 100 || i === 0 ? Math.round(b) : b.toFixed(1).replace(/\.0$/, '')) + ' ' + u[i];
+}
+var memRows = {};
+function memRow(key, label, used, total) {
+	var pct = total > 0 ? Math.max(0, Math.min(100, used / total * 100)) : 0;
+	var r = memRows[key];
+	if (!r) {
+		r = memRows[key] = {
+			el: E('div', { 'class': 'zmw-mem-row' }, [
+				E('div', { 'class': 'zmw-mem-head' }, [ E('span', { 'class': 'zmw-mem-label' }, [ label ]), E('span', { 'class': 'zmw-mem-val' }) ]),
+				E('div', { 'class': 'zmw-mem-bar' }, [ E('i') ])
+			])
+		};
+		memEl.appendChild(r.el);
+	}
+	r.el.querySelector('.zmw-mem-val').textContent = fmtSize(used) + ' / ' + fmtSize(total);
+	var bar = r.el.querySelector('i');
+	bar.style.width = pct.toFixed(1) + '%';
+	r.el.classList.toggle('zmw-mem-hi', pct >= 85);
+	r.el.classList.toggle('zmw-mem-mid', pct >= 65 && pct < 85);
+	r.el.title = label + ': занято ' + Math.round(pct) + '%';
+}
+function refreshMemory() {
+	if (!shell || !sid) return;
+	callBoardInfo().then(function (i) {
+		var m = i && i.memory;
+		if (!m || !m.total) return;
+		var avail = m.available != null ? m.available : (m.free + (m.buffered || 0) + (m.cached || 0));
+		memRow('ram', 'ОЗУ', m.total - avail, m.total);
+	}).catch(function () {});
+	callSysInfo().then(function (i) {
+		if (!i || i.error) return;
+		var ru = parseSize(i.root_used), rf = parseSize(i.root_free);
+		if (isFinite(ru) && isFinite(rf)) memRow('flash', 'Флеш', ru, ru + rf);
+	}).catch(function () {});
+}
 
 var statusBusy = false;
 function refreshShellStatus() {
@@ -10200,7 +10267,8 @@ function setDot(el, installed, running) {
 function loadShellInfo() {
 	callSysInfo().then(function (i) {
 		if (!i || i.error) return;
-		deviceEl.firstChild.textContent = i.model || 'Роутер';
+		deviceEl.firstChild.textContent = String(i.model || 'Роутер').replace(/\s*\(.*\)\s*$/, '') || i.model;
+		deviceEl.title = [ i.model, i.openwrt ? 'OpenWrt ' + i.openwrt : '', i.arch ].filter(Boolean).join('\n');
 		deviceEl.lastChild.textContent = [ i.openwrt ? 'OpenWrt ' + i.openwrt : '', i.arch || '' ].filter(Boolean).join(' · ') || location.hostname;
 	}).catch(function () {});
 	callUpd().then(function (u) {
@@ -10216,7 +10284,7 @@ function loadShellInfo() {
 var shellTimer = null;
 function startShellPolling() {
 	if (shellTimer) return;
-	shellTimer = setInterval(function () { if (!document.hidden) refreshShellStatus(); }, 15000);
+	shellTimer = setInterval(function () { if (!document.hidden) { refreshShellStatus(); refreshMemory(); } }, 15000);
 }
 
 /* ───────────────────────── Рендер страниц ───────────────────────── */
@@ -10404,6 +10472,7 @@ function startApp() {
 	}
 	loadShellInfo();
 	refreshShellStatus();
+	refreshMemory();
 	route();
 }
 
@@ -10554,18 +10623,27 @@ a { color: inherit; }
 /* ───────────── Логотип ───────────── */
 
 .zmw-logo {
-	width: 40px; height: 40px; border-radius: 12px;
-	background: var(--grad);
+	width: 42px; height: 42px; border-radius: 13px;
+	background:
+		radial-gradient(120% 90% at 30% 0%, rgba(56,189,248,.35), transparent 60%),
+		linear-gradient(160deg, #13223f 0%, #0a1426 55%, #060c18 100%);
 	display: grid; place-items: center; flex-shrink: 0;
-	box-shadow: 0 8px 24px -8px rgba(99,102,241,.75), inset 0 1px 0 rgba(255,255,255,.35);
+	box-shadow: 0 8px 22px -8px rgba(14,165,233,.75), inset 0 1px 0 rgba(255,255,255,.14), inset 0 0 0 1px rgba(56,189,248,.28);
 	position: relative;
+	overflow: visible;
 }
-.zmw-logo svg { width: 24px; height: 24px; filter: drop-shadow(0 1px 1px rgba(0,0,0,.25)); }
-.zmw-logo-lg { width: 64px; height: 64px; border-radius: 20px; margin: 0 auto 18px; }
-.zmw-logo-lg svg { width: 38px; height: 38px; }
+.zmw-logo svg { width: 32px; height: 32px; filter: drop-shadow(0 0 6px rgba(56,189,248,.55)) drop-shadow(0 2px 2px rgba(0,0,0,.45)); }
+.zmw-logo-lg { width: 76px; height: 76px; border-radius: 22px; margin: 0 auto 18px; }
+.zmw-logo-lg svg { width: 58px; height: 58px; animation: zmw-zap 4.5s ease-in-out infinite; }
 .zmw-logo-lg::after {
-	content: ""; position: absolute; inset: -10px; border-radius: 28px;
-	background: var(--grad); filter: blur(22px); opacity: .45; z-index: -1;
+	content: ""; position: absolute; inset: -12px; border-radius: 30px;
+	background: radial-gradient(circle, rgba(14,165,233,.55), rgba(124,92,255,.25) 60%, transparent 75%);
+	filter: blur(18px); z-index: -1;
+}
+@keyframes zmw-zap {
+	0%, 86%, 100% { filter: drop-shadow(0 0 8px rgba(56,189,248,.55)) drop-shadow(0 2px 2px rgba(0,0,0,.45)); }
+	90% { filter: drop-shadow(0 0 18px rgba(125,211,252,1)) drop-shadow(0 0 4px #fff); }
+	94% { filter: drop-shadow(0 0 6px rgba(56,189,248,.45)) drop-shadow(0 2px 2px rgba(0,0,0,.45)); }
 }
 
 /* ───────────── Кнопки-иконки ───────────── */
@@ -10604,7 +10682,7 @@ body.zmw-locked .zmw-shell { filter: blur(6px); pointer-events: none; }
 	overflow-y: auto;
 }
 
-.zmw-brand { display: flex; align-items: center; gap: 12px; padding: 2px 8px 18px; }
+.zmw-brand { display: flex; align-items: center; gap: 12px; padding: 2px 8px 14px; }
 .zmw-brand-text { min-width: 0; flex: 1; }
 .zmw-brand-name { font-weight: 750; font-size: 16px; letter-spacing: -.01em; }
 .zmw-brand-sub { font-size: 12px; color: var(--muted); margin-top: 1px; }
@@ -10621,20 +10699,20 @@ body.zmw-locked .zmw-shell { filter: blur(6px); pointer-events: none; }
 .zmw-nav { display: flex; flex-direction: column; gap: 2px; flex: 1; }
 .zmw-nav-group {
 	font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
-	color: var(--muted); opacity: .8; padding: 16px 12px 6px;
+	color: var(--muted); opacity: .8; padding: 12px 12px 4px;
 }
 .zmw-nav-group:first-child { padding-top: 4px; }
 .zmw-nav-item {
 	position: relative;
 	display: flex; align-items: center; gap: 12px;
-	padding: 9px 12px; border-radius: 12px;
+	padding: 6px 12px; border-radius: 12px;
 	text-decoration: none; color: var(--text-2);
 	font-weight: 550; font-size: 14px;
 	transition: background .15s, color .15s;
 }
 .zmw-nav-item:hover { background: var(--surface-2); color: var(--text); }
 .zmw-nav-ico {
-	width: 32px; height: 32px; border-radius: 10px;
+	width: 30px; height: 30px; border-radius: 10px;
 	display: grid; place-items: center; flex-shrink: 0;
 	background: var(--surface-2); border: 1px solid var(--border);
 	color: var(--muted);
@@ -10655,10 +10733,10 @@ body.zmw-locked .zmw-shell { filter: blur(6px); pointer-events: none; }
 .zmw-nav-dot.zmw-on { background: var(--ok-dot); box-shadow: 0 0 0 3px var(--ok-bg), 0 0 10px var(--ok-dot); }
 .zmw-nav-dot.zmw-stop { background: var(--bad-dot); box-shadow: 0 0 0 3px var(--bad-bg); }
 
-.zmw-side-foot { display: flex; flex-direction: column; gap: 10px; padding: 16px 6px 0; margin-top: 16px; border-top: 1px solid var(--border); }
+.zmw-side-foot { display: flex; flex-direction: column; gap: 9px; padding: 14px 6px 0; margin-top: 12px; border-top: 1px solid var(--border); }
 .zmw-pill {
 	display: flex; align-items: center; gap: 10px;
-	padding: 10px 12px; border-radius: 12px; text-decoration: none;
+	padding: 8px 12px; border-radius: 12px; text-decoration: none;
 	font-weight: 650; font-size: 13px;
 	border: 1px solid var(--border);
 	background: var(--surface-2);
@@ -10675,17 +10753,26 @@ body.zmw-locked .zmw-shell { filter: blur(6px); pointer-events: none; }
 	100% { box-shadow: 0 0 0 0 rgba(16,185,129,0); }
 }
 .zmw-device { padding: 2px 6px; }
-.zmw-device-model { font-size: 13px; font-weight: 650; color: var(--text); overflow-wrap: anywhere; }
-.zmw-device-sub { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.zmw-device-model { font-size: 12.5px; line-height: 1.35; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 650; color: var(--text); overflow-wrap: anywhere; }
+.zmw-device-sub { font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .zmw-side-links { display: flex; gap: 6px; }
 .zmw-side-links a {
-	flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+	flex: 1; padding: 8px 10px !important; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
 	padding: 7px 8px; border-radius: 10px; border: 1px solid var(--border);
 	font-size: 12.5px; font-weight: 600; text-decoration: none; color: var(--text-2);
 	transition: background .15s, color .15s;
 }
 .zmw-side-links a:hover { background: var(--surface-2); color: var(--text); }
 .zmw-side-links .zmw-i { width: 15px; height: 15px; }
+.zmw-mem { display: flex; flex-direction: column; gap: 9px; padding: 2px 6px; }
+.zmw-mem:empty { display: none; }
+.zmw-mem-head { display: flex; justify-content: space-between; gap: 8px; font-size: 11.5px; margin-bottom: 4px; }
+.zmw-mem-label { color: var(--muted); font-weight: 600; }
+.zmw-mem-val { color: var(--text-2); font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.zmw-mem-bar { height: 6px; border-radius: 6px; background: var(--surface-3); overflow: hidden; }
+.zmw-mem-bar i { display: block; height: 100%; width: 0; border-radius: 6px; background: var(--grad); transition: width .6s cubic-bezier(.2,.8,.2,1); }
+.zmw-mem-mid .zmw-mem-bar i { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+.zmw-mem-hi .zmw-mem-bar i { background: linear-gradient(90deg, #ef4444, #f87171); }
 .zmw-credit { font-size: 11.5px; color: var(--muted); text-align: center; opacity: .7; }
 
 .zmw-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
@@ -10704,6 +10791,22 @@ html[data-theme="light"] .zmw-top { background: linear-gradient(to bottom, rgba(
 .zmw-sub { font-size: 13px; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .zmw-top-actions { display: flex; gap: 8px; align-items: center; }
 .zmw-logout span { padding-right: 2px; }
+.zmw-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.zmw-link-btn { text-decoration: none; padding: 0 13px; }
+.zmw-link-btn .zmw-i { width: 18px; height: 18px; }
+.zmw-lbl-short { display: none; }
+.zmw-link-kvn {
+	color: #fff; border-color: transparent;
+	background: var(--grad); background-size: 160% 100%;
+	box-shadow: 0 8px 20px -10px rgba(99,102,241,.9), inset 0 1px 0 rgba(255,255,255,.22);
+	transition: background-position .35s, transform .1s, box-shadow .2s;
+}
+.zmw-link-kvn:hover { color: #fff; border-color: transparent; background: var(--grad); background-size: 160% 100%; background-position: 100% 0; box-shadow: 0 10px 24px -10px rgba(99,102,241,1), inset 0 1px 0 rgba(255,255,255,.22); }
+.zmw-link-tg { color: #229ed9; border-color: rgba(34,158,217,.35); background: rgba(34,158,217,.10); }
+.zmw-link-tg:hover { color: #229ed9; border-color: rgba(34,158,217,.6); background: rgba(34,158,217,.16); }
+html[data-theme="dark"] .zmw-link-tg, html[data-theme="dark"] .zmw-link-tg:hover { color: #5cc1f0; }
+.zmw-top-sep { width: 1px; height: 24px; background: var(--border-2); margin: 0 4px; }
+#zmw-view .zm-header-links { display: none; }
 
 .zmw-view { padding: 6px 32px 24px; flex: 1; width: 100%; max-width: 1320px; }
 .zmw-foot { padding: 8px 32px 24px; font-size: 12px; color: var(--muted); opacity: .6; }
@@ -10881,13 +10984,14 @@ html[data-theme="light"] .zmw-orbs i { opacity: .28; }
 }
 #zmw-view .zm-header-links a:hover { border-color: var(--a1); transform: translateY(-1px); background: var(--surface-solid); }
 
-#zmw-view :not(.zm-cards):not(.bt-cols) > .zm-card + .zm-card,
 #zmw-view :not(.zm-cards) > .zm-card + .zm-current-banner,
 #zmw-view .zm-current-banner + .zm-card,
 #zmw-view :not(.zm-cards) > .zm-card + .zm-log,
 #zmw-view .zm-card + .zm-refresh-banner,
 #zmw-view .zm-card + .zm-cards,
 #zmw-view .zm-cards + .zm-card { margin-top: 18px; }
+#zmw-view .zm-wrap > * + * { margin-top: 0 !important; }
+#zmw-view :not(.zm-cards):not(.bt-cols):not(.zm-wrap) > .zm-card:not(:last-child) { margin-bottom: 18px; }
 #zmw-view .zm-current-banner { margin-bottom: 0; }
 
 #zmw-view .zm-cards { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; }
@@ -11140,8 +11244,17 @@ html[data-theme="dark"] #zmw-view .zm-tile.zm-active::before { color: #a594ff; }
 
 /* ───────────── Адаптив ───────────── */
 
-@media (max-width: 1100px) {
+@media (max-width: 1360px) {
+	.zmw-lbl-full { display: none; }
+	.zmw-lbl-short { display: inline; }
+}
+@media (max-width: 1180px) {
 	.zmw-logout span { display: none; }
+}
+@media (max-width: 1080px) and (min-width: 961px), (max-width: 760px) {
+	.zmw-lbl-short { display: none; }
+	.zmw-link-btn { padding: 0 10px; }
+	.zmw-sub { display: none; }
 }
 
 @media (max-width: 960px) {
@@ -11171,8 +11284,12 @@ html[data-theme="dark"] #zmw-view .zm-tile.zm-active::before { color: #a594ff; }
 
 @media (max-width: 600px) {
 	.zmw-sub { display: none; }
-	.zmw-top-actions { gap: 6px; }
-	.zmw-icon-btn { height: 38px; min-width: 38px; padding: 0 9px; }
+	.zmw-top-actions { gap: 5px; }
+	.zmw-top-sep { display: none; }
+	.zmw-icon-btn { height: 36px; min-width: 36px; padding: 0 8px; border-radius: 11px; }
+	.zmw-link-btn { padding: 0 8px; }
+	.zmw-top { gap: 8px; }
+	.zmw-title { font-size: 18px; }
 	#zmw-view .zm-card { padding: 18px 16px; border-radius: 16px; }
 	#zmw-view .zm-cards { grid-template-columns: 1fr; }
 	#zmw-view .zm-header { padding: 16px; }
@@ -11201,7 +11318,8 @@ cat > '/www/zm-webui.html' << 'ZM_INSTALLER_EOF'
 <meta name="theme-color" content="#0a0c12">
 <meta name="robots" content="noindex, nofollow">
 <title>Zapret Manager</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%237c5cff'/%3E%3Cstop offset='.55' stop-color='%233b82f6'/%3E%3Cstop offset='1' stop-color='%2322d3ee'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='9' fill='url(%23g)'/%3E%3Cpath d='M17.6 4.5L7.5 18h8l-1.7 9.5L24.5 14h-8.1l1.2-9.5z' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20viewBox=%270%200%201254%201254%27%3E%3Cdefs%3E%3ClinearGradient%20id=%27b%27%20x1=%270%27%20y1=%270%27%20x2=%270%27%20y2=%271%27%3E%3Cstop%20offset=%270%27%20stop-color=%27%2315264a%27/%3E%3Cstop%20offset=%271%27%20stop-color=%27%23060c18%27/%3E%3C/linearGradient%3E%3ClinearGradient%20id=%27z%27%20x1=%270%27%20y1=%270%27%20x2=%27.35%27%20y2=%271%27%3E%3Cstop%20offset=%270%27%20stop-color=%27%235fd8ff%27/%3E%3Cstop%20offset=%27.5%27%20stop-color=%27%231aa3ff%27/%3E%3Cstop%20offset=%271%27%20stop-color=%27%230a7cff%27/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect%20width=%271254%27%20height=%271254%27%20rx=%27280%27%20fill=%27url%28%23b%29%27/%3E%3Cg%20transform=%27translate%2890%2090%29%20scale%28.856%29%27%20fill=%27url%28%23z%29%27%20stroke=%27%2304101f%27%20stroke-width=%2726%27%20stroke-linejoin=%27miter%27%3E%3Cpath%20d=%27M455%20170L1072%20118L1240%2018L685%20615L30%201240L742%20335L258%20385Z%27/%3E%3Cpath%20d=%27M1030%20458L722%20862L1222%20797L1008%201022L310%201100Z%27/%3E%3C/g%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20viewBox=%270%200%201254%201254%27%3E%3Cdefs%3E%3ClinearGradient%20id=%27b%27%20x1=%270%27%20y1=%270%27%20x2=%270%27%20y2=%271%27%3E%3Cstop%20offset=%270%27%20stop-color=%27%2315264a%27/%3E%3Cstop%20offset=%271%27%20stop-color=%27%23060c18%27/%3E%3C/linearGradient%3E%3ClinearGradient%20id=%27z%27%20x1=%270%27%20y1=%270%27%20x2=%27.35%27%20y2=%271%27%3E%3Cstop%20offset=%270%27%20stop-color=%27%235fd8ff%27/%3E%3Cstop%20offset=%27.5%27%20stop-color=%27%231aa3ff%27/%3E%3Cstop%20offset=%271%27%20stop-color=%27%230a7cff%27/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect%20width=%271254%27%20height=%271254%27%20rx=%27280%27%20fill=%27url%28%23b%29%27/%3E%3Cg%20transform=%27translate%2890%2090%29%20scale%28.856%29%27%20fill=%27url%28%23z%29%27%20stroke=%27%2304101f%27%20stroke-width=%2726%27%20stroke-linejoin=%27miter%27%3E%3Cpath%20d=%27M455%20170L1072%20118L1240%2018L685%20615L30%201240L742%20335L258%20385Z%27/%3E%3Cpath%20d=%27M1030%20458L722%20862L1222%20797L1008%201022L310%201100Z%27/%3E%3C/g%3E%3C/svg%3E">
 <link rel="stylesheet" href="/zm/app.css?v=__ZMW_BUILD__">
 <script>
 (function(){try{var t=localStorage.getItem('zmw.theme')||sessionStorage.getItem('zmw.theme');if(t!=='light'&&t!=='dark')t=(window.matchMedia&&!matchMedia('(prefers-color-scheme: dark)').matches)?'light':'dark';document.documentElement.setAttribute('data-theme',t);if(t==='dark')document.documentElement.classList.add('zm-theme-dark');}catch(e){}})();
