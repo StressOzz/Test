@@ -1,6 +1,6 @@
 #!/bin/sh
 # Zapret Manager by StressOzz for LuCI installer
-# Version: 1.28
+# Version: 1.35
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -53,7 +53,7 @@ chmod 0755 /opt/zapret-manager-luci
 cat > '/opt/zapret-manager-luci/backend.sh' << 'ZM_INSTALLER_EOF'
 
 CONF="/etc/config/zapret"
-ZM_VERSION="1.28"
+ZM_VERSION="1.35"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
@@ -150,7 +150,7 @@ log_tail() {
 	local name="$1"
 	local log="$JOBS_DIR/$name.log"
 	[ -f "$log" ] || { echo '{"lines":""}'; return; }
-	printf '{"lines":"%s"}\n' "$(esc_ml "$(tail -n 300 "$log" | grep -v '^__DONE__')")"
+	printf '{"lines":"%s"}\n' "$(esc_ml "$(tail -n 300 "$log" | grep -v '^__DONE__' | sed "s/$(printf '\033')\[[0-9;]*[mK]//g")")"
 }
 
 zapret_restart() {
@@ -2238,6 +2238,10 @@ test_results() {
 	printf '{"lines":"%s"}\n' "$(esc_ml "$(cat "$f")")"
 }
 
+_ver_gt() { # A > B (числовое сравнение по точкам)
+	[ "$1" != "$2" ] && [ "$(printf '%s\n%s\n' "$1" "$2" | sort -t. -k1,1n -k2,2n -k3,3n -k4,4n | tail -n1)" = "$1" ]
+}
+
 zm_update_status() {
 	local latest_line latest=""
 	latest_line=$(curl -fsSL --connect-timeout 5 --max-time 8 -r 0-400 "$ZM_SCRIPT_URL" 2>/dev/null | grep -m1 '^# Version:')
@@ -2245,6 +2249,8 @@ zm_update_status() {
 		latest_line=$(curl -fsSL --connect-timeout 5 --max-time 10 "$ZM_SCRIPT_URL" 2>/dev/null | grep -m1 '^# Version:')
 	fi
 	latest=$(echo "$latest_line" | sed 's/^# Version:[[:space:]]*//')
+	# Показываем обновление, только если версия в сети новее — иначе «обновление» откатило бы локальные правки
+	if [ -n "$latest" ] && ! _ver_gt "$latest" "$ZM_VERSION"; then latest="$ZM_VERSION"; fi
 	printf '{"current":"%s","latest":"%s"}\n' "$(esc "$ZM_VERSION")" "$(esc "$latest")"
 }
 
@@ -2352,6 +2358,7 @@ mixomo_status() {
 
 do_mixomo_install() {
 	_ensure_deps
+	_spl_coexist_warn "Mixomo (MagiTrickle + hev-socks5-tunnel)"
 	echo "==> Устанавливаем Mixomo (Mihomo + hev-socks5-tunnel + MagiTrickle)"
 
 	echo "==> Устанавливаем зависимости (unzip, ca-certificates, модули ядра TUN/nftables)"
@@ -3073,8 +3080,11 @@ health() {
 	if [ "$doh" = "2" ]; then pidof https-dns-proxy >/dev/null 2>&1 && doh=1; fi
 	out=$(hosts_status 2>/dev/null)
 	case "$out" in *'"enabled":true'*|*'"geohide":"'[a-z]*) hs=1 ;; esac
-	printf '{"zapret":%s,"zapret2":%s,"bytetube":%s,"tg":%s,"mixomo":%s,"doh":%s,"hosts":%s}\n' \
-		"$zr" "$zr2" "$bt" "$tg" "$mx" "$doh" "$hs"
+	local spl=0 awg=0
+	if [ -x /etc/init.d/steer ] || _pkg_is_installed luci-app-splify2; then spl=2; _spl_running && spl=1; fi
+	if _awg_pkgs_installed || _awg_iface_exists; then awg=2; _awg_iface_up && [ -n "$(_awg_handshake_age)" ] && awg=1; fi
+	printf '{"zapret":%s,"zapret2":%s,"bytetube":%s,"tg":%s,"mixomo":%s,"doh":%s,"hosts":%s,"splify2":%s,"awg":%s}\n' \
+		"$zr" "$zr2" "$bt" "$tg" "$mx" "$doh" "$hs" "$spl" "$awg"
 }
 
 bytetube_installed() {
@@ -4484,6 +4494,7 @@ YTB_FILE_END_7f3a9c
 }
 
 do_bytetube_install() {
+	_spl_coexist_warn "ByeTube"
 	NEW_BYEDPI=0
 	NEW_HEV=0
 	command -v fw4 >/dev/null 2>&1 || { echo "ОШИБКА: нужен firewall4 (OpenWrt 22.03+); hev-socks5-tunnel в пакетах — с 24.10"; return 1; }
@@ -4622,6 +4633,10 @@ do_doh_install() {
 }
 
 do_doh_remove() {
+	if _spl_installed; then
+		echo "ОШИБКА: https-dns-proxy — зависимость splify2, удалить его нельзя. Чтобы вернуть обычный DNS, выберите «Системный DNS»"
+		return 1
+	fi
 	echo "==> Удаляем DNS over HTTPS"
 	echo "==> Удаляем пакеты"
 	$DELETE https-dns-proxy luci-app-https-dns-proxy >/dev/null 2>&1
@@ -4639,10 +4654,26 @@ doh_install() {
 	job_start doh_install do_doh_install
 }
 
+_doh_delegated() { _spl_present && _spl_has_method doh_state && _spl_has_method doh_set; }
+
 doh_status() {
 	local installed="false" current=""
 	if [ "$PKG" = "apk" ]; then apk info -e https-dns-proxy >/dev/null 2>&1 && installed="true"
 	else opkg list-installed 2>/dev/null | grep -q '^https-dns-proxy ' && installed="true"; fi
+	if _doh_delegated; then
+		# Установлен splify2: настройкой https-dns-proxy управляет он (иначе force_dns отнимает порт 53 у резолвера steer)
+		local st title
+		st=$(ubus -t 20 call splify2 doh_state 2>/dev/null)
+		case "$st" in \{*) ;; *) st="null" ;; esac
+		if [ "$st" != "null" ]; then
+			current=$(echo "$st" | jsonfilter -e '@.active' 2>/dev/null)
+			[ -n "$current" ] && title=$(echo "$st" | jsonfilter -e "@.providers[@.id='$current'].title" 2>/dev/null)
+			[ "$(echo "$st" | jsonfilter -e '@.managed' 2>/dev/null)" = "false" ] && { current="system"; title="Системный DNS"; }
+		fi
+		printf '{"installed":%s,"current":"%s","current_title":"%s","delegated":true,"state":%s}\n' \
+			"$installed" "$(esc "$current")" "$(esc "$title")" "$st"
+		return 0
+	fi
 	if [ -f "$_doh_file" ]; then
 		if grep -q "eu.geohide.ru" "$_doh_file"; then current="geohide_eu"
 		elif grep -q "us.geohide.ru" "$_doh_file"; then current="geohide_us"
@@ -4652,11 +4683,33 @@ doh_status() {
 		elif grep -q "dns.google" "$_doh_file"; then current="google"
 		elif grep -q "dns.quad9.net" "$_doh_file"; then current="quad9"; fi
 	fi
-	printf '{"installed":%s,"current":"%s"}\n' "$installed" "$(esc "$current")"
+	printf '{"installed":%s,"current":"%s","delegated":false}\n' "$installed" "$(esc "$current")"
+}
+
+_doh_set_delegated() {
+	local provider="$1" out
+	case "$provider" in
+		__off)   out=$(ubus -t 60 call splify2 doh_off 2>&1) ;;
+		__fix)   out=$(ubus -t 60 call splify2 doh_force_fix 2>&1) ;;
+		__start) out=$(ubus -t 60 call splify2 doh_start 2>&1) ;;
+		__stop)  out=$(ubus -t 60 call splify2 doh_stop 2>&1) ;;
+		*)
+			case "$provider" in ''|*[!A-Za-z0-9_]*) echo '{"error":"неизвестный провайдер"}'; return 1 ;; esac
+			out=$(ubus -t 60 call splify2 doh_set "{\"provider\":\"$provider\"}" 2>&1) ;;
+	esac
+	if [ "$(echo "$out" | jsonfilter -e '@.ok' 2>/dev/null)" = "false" ] || ! echo "$out" | grep -q '"ok"'; then
+		printf '{"error":"splify2: %s"}\n' "$(esc "$(echo "$out" | jsonfilter -e '@.error' 2>/dev/null || echo "$out")")"
+		return 1
+	fi
+	printf '{"ok":true,"provider":"%s","delegated":true}\n' "$(esc "$provider")"
 }
 
 doh_set() {
 	local provider="$1" url bootstrap=""
+	if _doh_delegated; then
+		_doh_set_delegated "$provider"
+		return $?
+	fi
 	case "$provider" in
 		cloudflare)  url="https://cloudflare-dns.com/dns-query"; bootstrap="1.1.1.1,1.0.0.1,2606:4700:4700::1111,2606:4700:4700::1001" ;;
 		google)      url="https://dns.google/dns-query";         bootstrap="8.8.8.8,8.8.4.4,2001:4860:4860::8888,2001:4860:4860::8844" ;;
@@ -4701,6 +4754,581 @@ doh_set() {
 	printf '{"ok":true,"provider":"%s"}\n' "$provider"
 }
 
+
+
+# ================================================================ WARP / AmneziaWG (интерфейс AWGz)
+AWG_IF="AWGz"
+AWG_PEER_TYPE="amneziawg_AWGz"
+AWG_INSTALLER_URL="${GH_RAW}/2Grey/awg-openwrt/refs/heads/master/amneziawg-install.sh"
+AWG_INSTALLER_CDN="https://cdn.jsdelivr.net/gh/2Grey/awg-openwrt@master/amneziawg-install.sh"
+AWG_IMPORT_CONF="/opt/zapret-manager-luci/awgz_import.conf"
+
+_awg_pkgs_installed() { _pkg_is_installed kmod-amneziawg && _pkg_is_installed amneziawg-tools; }
+_awg_iface_exists() { [ "$(uci -q get network.$AWG_IF.proto)" = "amneziawg" ]; }
+_awg_iface_up() { [ "$(ifstatus "$AWG_IF" 2>/dev/null | jsonfilter -e '@.up' 2>/dev/null)" = "true" ]; }
+
+# Секция firewall (зона/перенаправление) по значению name — и безымянная, и именованная
+_fw_by_name() {
+	uci -q show firewall 2>/dev/null | sed -n "s/^\(firewall\.[^.]*\)\.name='$1'\$/\1/p" | head -n1
+}
+
+_awg_handshake_age() {
+	local hs now
+	command -v awg >/dev/null 2>&1 || return 0
+	hs=$(awg show "$AWG_IF" latest-handshakes 2>/dev/null | awk '{print $2}' | sort -n | tail -n1)
+	now=$(date +%s)
+	case "$hs" in ''|0|*[!0-9]*) return 0 ;; esac
+	echo $((now - hs))
+}
+
+awg_status() {
+	local kmod="false" tools="false" luci="false" tools_ver="" mod_ver="" owrt="" target="" proto="false"
+	local iface="false" up="false" hs_age="" rx=0 tx=0 endpoint="" addr="" in_spl="false" warp="false" spl="false" src=""
+	_pkg_is_installed kmod-amneziawg && kmod="true"
+	_pkg_is_installed amneziawg-tools && tools="true"
+	{ _pkg_is_installed luci-proto-amneziawg || _pkg_is_installed luci-app-amneziawg; } && luci="true"
+	command -v awg >/dev/null 2>&1 && tools_ver=$(awg --version 2>/dev/null | grep -oE 'v[0-9][0-9.]*' | head -n1)
+	[ -r /sys/module/amneziawg/version ] && mod_ver=$(cat /sys/module/amneziawg/version 2>/dev/null)
+	owrt=$(ubus call system board 2>/dev/null | jsonfilter -e '@.release.version' 2>/dev/null)
+	target=$(ubus call system board 2>/dev/null | jsonfilter -e '@.release.target' 2>/dev/null)
+	ubus call network get_proto_handlers 2>/dev/null | grep -q '"amneziawg"' && proto="true"
+	[ -s "$MIXOMO_WARP_CONF" ] && warp="true"
+	if _awg_iface_exists; then
+		iface="true"
+		addr=$(uci -q get network.$AWG_IF.addresses)
+		endpoint="$(uci -q get "network.@${AWG_PEER_TYPE}[0].endpoint_host"):$(uci -q get "network.@${AWG_PEER_TYPE}[0].endpoint_port")"
+		src=$(cat /opt/zapret-manager-luci/awgz_source 2>/dev/null)
+		_awg_iface_up && up="true"
+		hs_age=$(_awg_handshake_age)
+		if command -v awg >/dev/null 2>&1; then
+			set -- $(awg show "$AWG_IF" transfer 2>/dev/null | awk '{r+=$2; t+=$3} END {print r+0, t+0}')
+			rx="${1:-0}"; tx="${2:-0}"
+		fi
+	fi
+	{ [ -x /etc/init.d/steer ] || _pkg_is_installed luci-app-splify2; } && spl="true"
+	_spl_spec_has_awgz && in_spl="true"
+	printf '{"pkg":"%s","kmod":%s,"tools":%s,"luci":%s,"tools_version":"%s","module_version":"%s","openwrt":"%s","target":"%s","proto":%s,"warp":%s,"iface":%s,"up":%s,"handshake_age":%s,"rx":%s,"tx":%s,"endpoint":"%s","addresses":"%s","source":"%s","splify2":%s,"in_splify2":%s}\n' \
+		"$PKG" "$kmod" "$tools" "$luci" "$(esc "$tools_ver")" "$(esc "$mod_ver")" "$(esc "$owrt")" "$(esc "$target")" "$proto" "$warp" \
+		"$iface" "$up" "${hs_age:-null}" "$rx" "$tx" "$(esc "$endpoint")" "$(esc "$addr")" "$(esc "$src")" "$spl" "$in_spl"
+}
+
+do_awg_install() {
+	_ensure_deps
+	local tmp="$JOBS_DIR/amneziawg-install.sh" rc
+	echo "==> Скачиваем установщик AmneziaWG (2Grey/awg-openwrt)"
+	rm -f "$tmp"
+	curl -fsSL --connect-timeout 10 --max-time 60 -o "$tmp" "$AWG_INSTALLER_URL" 2>/dev/null || \
+		curl -fsSL --connect-timeout 10 --max-time 60 -o "$tmp" "$AWG_INSTALLER_CDN" 2>/dev/null
+	if [ ! -s "$tmp" ] || ! head -c 100 "$tmp" | grep -q '^#!/bin/sh'; then
+		echo "ОШИБКА: не удалось скачать установщик — проверьте доступ к GitHub"
+		rm -f "$tmp"
+		return 1
+	fi
+	echo "==> Устанавливаем kmod-amneziawg, amneziawg-tools и luci-proto-amneziawg"
+	echo "!! Модуль ядра собран под конкретную версию OpenWrt: если для вашей версии сборки нет, установка остановится с ошибкой"
+	# -e: без вопроса о русификации, -n: без интерактивной настройки интерфейса (его создаём сами, без захвата всего трафика)
+	sh "$tmp" -e -n </dev/null 2>&1
+	rc=$?
+	rm -f "$tmp"
+	if [ "$rc" != "0" ] || ! _awg_pkgs_installed; then
+		echo "ОШИБКА: пакеты AmneziaWG не установились (код $rc)"
+		return 1
+	fi
+	_pkg_is_installed luci-i18n-amneziawg-ru || $INSTALL luci-i18n-amneziawg-ru >/dev/null 2>&1
+	modprobe amneziawg >/dev/null 2>&1
+	rm -f /tmp/luci-indexcache* /tmp/luci-modulecache/* 2>/dev/null
+	echo "==> Готово, AmneziaWG установлен: $(awg --version 2>/dev/null | head -n1)"
+}
+
+_awg_iface_delete() {
+	local sec
+	if _awg_iface_exists || uci -q get "network.@${AWG_PEER_TYPE}[0]" >/dev/null 2>&1; then
+		echo "==> Удаляем интерфейс $AWG_IF"
+		ifdown "$AWG_IF" >/dev/null 2>&1
+		uci -q delete "network.$AWG_IF"
+		while uci -q delete "network.@${AWG_PEER_TYPE}[0]"; do :; done
+		uci commit network
+		/etc/init.d/network reload >/dev/null 2>&1
+	fi
+	sec=$(_fw_by_name "${AWG_IF}-lan"); [ -n "$sec" ] && uci -q delete "$sec"
+	sec=$(_fw_by_name "$AWG_IF"); [ -n "$sec" ] && uci -q delete "$sec"
+	uci commit firewall
+	/etc/init.d/firewall reload >/dev/null 2>&1
+	rm -f /opt/zapret-manager-luci/awgz_source
+}
+
+do_awg_iface_remove() {
+	if _spl_spec_has_awgz; then
+		echo "ОШИБКА: интерфейс $AWG_IF подключён к splify2 как выход — сначала отключите его на вкладке splify2"
+		return 1
+	fi
+	_awg_iface_delete
+	echo "==> Готово, интерфейс $AWG_IF удалён"
+}
+
+do_awg_remove() {
+	if _spl_spec_has_awgz; then
+		echo "ОШИБКА: интерфейс $AWG_IF подключён к splify2 как выход — сначала отключите его на вкладке splify2"
+		return 1
+	fi
+	_awg_iface_delete
+	local p list=""
+	for p in luci-i18n-amneziawg-ru luci-proto-amneziawg luci-app-amneziawg amneziawg-tools kmod-amneziawg; do
+		_pkg_is_installed "$p" && list="$list $p"
+	done
+	if [ -n "$list" ]; then
+		echo "==> Удаляем пакеты:$list"
+		$DELETE $list >/dev/null 2>&1 || { echo "ОШИБКА: не удалось удалить пакеты"; return 1; }
+	fi
+	rm -f /tmp/luci-indexcache* /tmp/luci-modulecache/* 2>/dev/null
+	echo "==> Готово, AmneziaWG удалён"
+}
+
+# Разбор .conf AmneziaWG: строки «секция<TAB>ключ<TAB>значение», учитывается только первый [Peer]
+_awg_conf_kv() {
+	awk '
+	function trim(s) { gsub(/^[ \t\r]+|[ \t\r]+$/, "", s); return s }
+	{ sub(/\r$/, "") }
+	/^[ \t]*[#;]/ { next }
+	/^[ \t]*\[/ { l = $0; gsub(/[][ \t]/, "", l); sec = tolower(l); if (sec == "peer") pc++; next }
+	{
+		i = index($0, "="); if (!i || sec == "") next
+		if (sec == "peer" && pc != 1) next
+		k = tolower(trim(substr($0, 1, i - 1))); v = trim(substr($0, i + 1))
+		if (k != "" && v != "") print sec "\t" k "\t" v
+	}' "$1"
+}
+
+do_awg_iface_create() {
+	local f="$1" origin="$2" kv="$JOBS_DIR/awgz_kv" priv addr pub psk ep host port keep allowed mtu v a pair sec ps i
+	[ -s "$f" ] || { echo "ОШИБКА: нет файла конфигурации ($f)"; return 1; }
+	_awg_pkgs_installed || { echo "ОШИБКА: сначала установите пакеты AmneziaWG на вкладке «Установка AWG»"; return 1; }
+	echo "==> Разбираем конфигурацию"
+	_awg_conf_kv "$f" > "$kv"
+	_kv() { awk -v s="$1" -v k="$2" 'BEGIN { FS = "\t" } $1 == s && $2 == k { print $3; exit }' "$kv"; }
+	priv=$(_kv interface privatekey); addr=$(_kv interface address)
+	pub=$(_kv peer publickey); ep=$(_kv peer endpoint)
+	if [ -z "$priv" ] || [ -z "$addr" ] || [ -z "$pub" ] || [ -z "$ep" ]; then
+		echo "ОШИБКА: в конфигурации нет PrivateKey / Address / PublicKey / Endpoint"
+		rm -f "$kv"; return 1
+	fi
+	case "$ep" in
+		\[*\]:*) host=${ep#\[}; host=${host%%\]*}; port=${ep##*\]:} ;;
+		*:*) host=${ep%:*}; port=${ep##*:} ;;
+		*) echo "ОШИБКА: в Endpoint не указан порт: $ep"; rm -f "$kv"; return 1 ;;
+	esac
+	case "$port" in ''|*[!0-9]*) echo "ОШИБКА: неверный порт в Endpoint: $ep"; rm -f "$kv"; return 1 ;; esac
+	if [ -n "$(_kv interface headerprotectionkey)$(_kv interface contentpaddingaddition)$(_kv interface randomtrailers)" ] && \
+		! awg --version 2>/dev/null | grep -q 'v3\.'; then
+		echo "!! В конфигурации есть параметры AWG 3.x, а установленные пакеты старее — переустановите AmneziaWG"
+	fi
+
+	echo "==> Создаём интерфейс $AWG_IF (proto amneziawg, без захвата всего трафика)"
+	ifdown "$AWG_IF" >/dev/null 2>&1
+	uci -q delete "network.$AWG_IF"
+	while uci -q delete "network.@${AWG_PEER_TYPE}[0]"; do :; done
+	uci set "network.$AWG_IF=interface"
+	uci set "network.$AWG_IF.proto=amneziawg"
+	uci set "network.$AWG_IF.private_key=$priv"
+	for a in $(echo "$addr" | tr ',' ' '); do
+		case "$a" in */*) ;; *:*) a="$a/128" ;; *) a="$a/32" ;; esac
+		uci add_list "network.$AWG_IF.addresses=$a"
+	done
+	mtu=$(_kv interface mtu); [ -n "$mtu" ] && uci set "network.$AWG_IF.mtu=$mtu"
+	for pair in jc:awg_jc jmin:awg_jmin jmax:awg_jmax s1:awg_s1 s2:awg_s2 s3:awg_s3 s4:awg_s4 \
+		h1:awg_h1 h2:awg_h2 h3:awg_h3 h4:awg_h4 i1:awg_i1 i2:awg_i2 i3:awg_i3 i4:awg_i4 i5:awg_i5 \
+		headerprotectionkey:awg_header_protection_key contentpaddingaddition:awg_content_padding_addition \
+		rekeyaftertime:awg_rekey_after_time rekeytimeout:awg_rekey_timeout rejectaftertime:awg_reject_after_time \
+		keepalivetimeout:awg_keepalive_timeout maxhandshakeattempts:awg_max_handshake_attempts \
+		randomtrailers:awg_random_trailers disablecookies:awg_disable_cookies; do
+		v=$(_kv interface "${pair%%:*}")
+		[ -n "$v" ] || continue
+		case "${pair#*:}" in
+			awg_random_trailers|awg_disable_cookies)
+				case "$v" in 1|on|ON|On|true) v=on ;; *) v=off ;; esac ;;
+		esac
+		uci set "network.$AWG_IF.${pair#*:}=$v"
+	done
+
+	ps=$(uci add network "$AWG_PEER_TYPE")
+	uci set "network.$ps.description=$([ "$origin" = warp ] && echo WARP || echo AWGz)"
+	uci set "network.$ps.public_key=$pub"
+	psk=$(_kv peer presharedkey); [ -n "$psk" ] && uci set "network.$ps.preshared_key=$psk"
+	uci set "network.$ps.endpoint_host=$host"
+	uci set "network.$ps.endpoint_port=$port"
+	keep=$(_kv peer persistentkeepalive); [ -n "$keep" ] || keep=25
+	uci set "network.$ps.persistent_keepalive=$keep"
+	# Маршруты не ставим: трафик в AWGz направляет splify2 (или вы сами), а не маршрут по умолчанию
+	uci set "network.$ps.route_allowed_ips=0"
+	allowed=$(_kv peer allowedips); [ -n "$allowed" ] || allowed="0.0.0.0/0, ::/0"
+	for a in $(echo "$allowed" | tr ',' ' '); do uci add_list "network.$ps.allowed_ips=$a"; done
+	uci commit network
+	rm -f "$kv"
+
+	echo "==> Настраиваем зону firewall $AWG_IF (NAT + разрешение lan → $AWG_IF)"
+	sec=$(_fw_by_name "$AWG_IF")
+	[ -n "$sec" ] || { uci set firewall.zm_awgz=zone; sec="firewall.zm_awgz"; }
+	uci set "$sec.name=$AWG_IF"
+	uci -q delete "$sec.network"
+	uci add_list "$sec.network=$AWG_IF"
+	uci set "$sec.input=REJECT"
+	uci set "$sec.output=ACCEPT"
+	uci set "$sec.forward=REJECT"
+	uci set "$sec.masq=1"
+	uci set "$sec.mtu_fix=1"
+	sec=$(_fw_by_name "${AWG_IF}-lan")
+	[ -n "$sec" ] || { uci set firewall.zm_awgz_fwd=forwarding; sec="firewall.zm_awgz_fwd"; }
+	uci set "$sec.name=${AWG_IF}-lan"
+	uci set "$sec.src=lan"
+	uci set "$sec.dest=$AWG_IF"
+	uci commit firewall
+
+	if ubus call network get_proto_handlers 2>/dev/null | grep -q '"amneziawg"'; then
+		/etc/init.d/network reload >/dev/null 2>&1
+	else
+		echo "==> Перезапускаем сеть, чтобы netifd подхватил протокол amneziawg (связь пропадёт на несколько секунд)"
+		modprobe amneziawg >/dev/null 2>&1
+		/etc/init.d/network restart >/dev/null 2>&1
+		sleep 5
+	fi
+	/etc/init.d/firewall reload >/dev/null 2>&1
+	ifup "$AWG_IF" >/dev/null 2>&1
+	echo "${origin:-conf}" > /opt/zapret-manager-luci/awgz_source
+
+	echo "==> Ждём рукопожатия с сервером ($ep)"
+	i=0
+	while [ "$i" -lt 25 ]; do
+		[ -n "$(_awg_handshake_age)" ] && break
+		sleep 1; i=$((i + 1))
+	done
+	if [ -n "$(_awg_handshake_age)" ]; then
+		echo "==> Готово: туннель $AWG_IF поднят, рукопожатие с сервером получено"
+	else
+		echo "!! Интерфейс создан, но рукопожатия пока нет. Проверьте Endpoint или сгенерируйте WARP заново с подбором endpoint"
+	fi
+	if _spl_spec_has_awgz && _spl_present; then
+		echo "==> Туннель уже подключён к splify2 — применяем правила заново"
+		ubus -t 120 call splify2 apply >/dev/null 2>&1
+	fi
+}
+
+awg_iface_create() {
+	local source="$1" content="$2" f
+	case "$source" in
+		warp)
+			[ -s "$MIXOMO_WARP_CONF" ] || { echo '{"error":"сначала сгенерируйте WARP на вкладке «WARP»"}'; return 1; }
+			cp "$MIXOMO_WARP_CONF" "$AWG_IMPORT_CONF"
+			;;
+		conf)
+			[ -n "$content" ] || { echo '{"error":"вставьте содержимое .conf"}'; return 1; }
+			echo "$content" | grep -qi '^\[Interface\]' || { echo '{"error":"в файле нет секции [Interface]"}'; return 1; }
+			echo "$content" | grep -qi '^\[Peer\]' || { echo '{"error":"в файле нет секции [Peer]"}'; return 1; }
+			printf '%s\n' "$content" > "$AWG_IMPORT_CONF"
+			;;
+		*) echo '{"error":"неизвестный источник"}'; return 1 ;;
+	esac
+	chmod 600 "$AWG_IMPORT_CONF"
+	job_start awg_iface do_awg_iface_create "$AWG_IMPORT_CONF" "$source"
+}
+
+awg_action() {
+	case "$1" in
+		install)      job_start awg_install do_awg_install ;;
+		remove)       job_start awg_install do_awg_remove ;;
+		iface_remove) job_start awg_iface do_awg_iface_remove ;;
+		up)      _awg_iface_exists || { echo '{"error":"интерфейс AWGz не создан"}'; return 1; }
+		         ifup "$AWG_IF" >/dev/null 2>&1; printf '{"ok":true}\n' ;;
+		down)    ifdown "$AWG_IF" >/dev/null 2>&1; printf '{"ok":true}\n' ;;
+		restart) _awg_iface_exists || { echo '{"error":"интерфейс AWGz не создан"}'; return 1; }
+		         ifdown "$AWG_IF" >/dev/null 2>&1; sleep 1; ifup "$AWG_IF" >/dev/null 2>&1; printf '{"ok":true}\n' ;;
+		*) echo '{"error":"неизвестное действие"}'; return 1 ;;
+	esac
+}
+
+# WARP теперь живёт в разделе «WARP / AmneziaWG»; старые методы mixomo_warp_* оставлены для совместимости
+warp_status()     { mixomo_warp_status; }
+warp_config_set() { mixomo_warp_config_set "$1"; }
+warp_action()     { job_start warp do_mixomo_warp_register "$1"; }
+
+
+# ================================================================ splify2 + steer
+SPL_REPO_UI="xyzmean/splify2"
+SPL_REPO_ENGINE="xyzmean/steer"
+SPL_OUT="AWGz"
+
+_spl_present() { ubus list splify2 >/dev/null 2>&1; }
+_spl_has_method() { ubus -v list splify2 2>/dev/null | grep -q "\"$1\""; }
+_spl_installed() { [ -x /etc/init.d/steer ] || _pkg_is_installed luci-app-splify2; }
+_spl_engine_pkg() {
+	if _pkg_is_installed steer-extended; then echo steer-extended
+	elif _pkg_is_installed steer; then echo steer; fi
+}
+_spl_running() {
+	ubus call service list '{"name":"steer"}' 2>/dev/null | jsonfilter -e '@.steer.instances[*].running' 2>/dev/null | grep -q true
+}
+_spl_spec_has_awgz() {
+	[ -s /etc/steer/spec.json ] || return 1
+	jsonfilter -i /etc/steer/spec.json -e '@.outputs[*].devices[*]' -e '@.outputs[*].device' 2>/dev/null | grep -qx "$AWG_IF"
+}
+
+_pkg_version() {
+	if [ "$PKG" = "apk" ]; then
+		apk info -v 2>/dev/null | grep "^$1-[0-9]" | head -n1 | sed "s/^$1-//; s/-r[0-9]*\$//"
+	else
+		opkg list-installed "$1" 2>/dev/null | awk '{print $3}' | sed 's/-[0-9]*$//'
+	fi
+}
+
+_gh_latest() {
+	curl -fsSI --connect-timeout 4 --max-time 7 "${GH_MAIN}/$1/releases/latest" 2>/dev/null \
+		| tr -d '\r' | awk -F': ' 'tolower($1)=="location"{print $2}' | tail -n1 \
+		| sed 's#.*/tag/##; s#^v##' | grep -E '^[0-9][0-9.]*$'
+}
+
+# Установлен splify2 — предупреждаем тех, кто ставит рядом другой перехват DNS/маршрутов
+_spl_coexist_warn() {
+	_spl_installed || return 0
+	echo "!! Внимание: установлен splify2 (steer). $1 тоже перехватывает DNS и использует адреса 198.18.x.x из диапазона fake-IP steer — вместе они могут мешать друг другу. Лучше оставить что-то одно"
+}
+
+_spl_conflicts() {
+	[ -x "$MIHOMO_BIN" ] && echo mixomo
+	[ -x /usr/bin/bytetube ] && echo bytetube
+	if pidof https-dns-proxy >/dev/null 2>&1 && ! _spl_has_method doh_state; then
+		[ "$(uci -q get https-dns-proxy.config.force_dns)" = "0" ] || echo doh
+	fi
+	return 0
+}
+
+splify2_status() {
+	local ui="false" ui_ver="" eng="" eng_ver="" obj="false" running="false" enabled="false"
+	local latest_ui="" latest_eng="" awg_if="false" awg_up="false" in_spec="false" live="null" spec="null" zm_fix="null" conflicts t
+	_pkg_is_installed luci-app-splify2 && { ui="true"; ui_ver=$(_pkg_version luci-app-splify2); }
+	eng=$(_spl_engine_pkg); [ -n "$eng" ] && eng_ver=$(_pkg_version "$eng")
+	_spl_present && obj="true"
+	_spl_running && running="true"
+	[ -x /etc/init.d/steer ] && /etc/init.d/steer enabled 2>/dev/null && enabled="true"
+	if [ "$obj" = "true" ]; then
+		live=$(ubus -t 15 call splify2 live '{"fast":true}' 2>/dev/null)
+		case "$live" in \{*) ;; *) live="null" ;; esac
+		spec=$(ubus -t 15 call splify2 spec_get 2>/dev/null)
+		case "$spec" in \{*) ;; *) spec="null" ;; esac
+		zm_fix=$(ubus -t 10 call splify2 zm_fix 2>/dev/null | jsonfilter -e '@.on' 2>/dev/null)
+		case "$zm_fix" in true|false) ;; *) zm_fix="null" ;; esac
+	fi
+	if [ "$spec" = "null" ] && [ -s /etc/steer/spec.json ] && jsonfilter -i /etc/steer/spec.json -e '@.schema' >/dev/null 2>&1; then
+		spec=$(cat /etc/steer/spec.json)
+	fi
+	t="$JOBS_DIR/spl_latest"
+	rm -f "$t.ui" "$t.eng"
+	( _gh_latest "$SPL_REPO_UI" > "$t.ui" ) &
+	( _gh_latest "$SPL_REPO_ENGINE" > "$t.eng" ) &
+	wait
+	latest_ui=$(cat "$t.ui" 2>/dev/null); latest_eng=$(cat "$t.eng" 2>/dev/null)
+	rm -f "$t.ui" "$t.eng"
+	_awg_iface_exists && awg_if="true"
+	_awg_iface_up && awg_up="true"
+	_spl_spec_has_awgz && in_spec="true"
+	conflicts=$(_spl_conflicts | awk 'BEGIN { printf "[" } { printf "%s\"%s\"", (NR > 1 ? "," : ""), $0 } END { printf "]" }')
+	printf '{"pkg":"%s","ui":%s,"ui_version":"%s","ui_latest":"%s","engine":"%s","engine_version":"%s","engine_latest":"%s","object":%s,"running":%s,"enabled":%s,"awgz":%s,"awgz_up":%s,"awgz_in_spec":%s,"zm_fix":%s,"conflicts":%s,"live":%s,"spec":%s}\n' \
+		"$PKG" "$ui" "$(esc "$ui_ver")" "$(esc "$latest_ui")" "$(esc "$eng")" "$(esc "$eng_ver")" "$(esc "$latest_eng")" \
+		"$obj" "$running" "$enabled" "$awg_if" "$awg_up" "$in_spec" "$zm_fix" "$conflicts" "$live" "$spec"
+}
+
+_spl_fetch() { # РЕПОЗИТОРИЙ ВЕРСИЯ ФАЙЛ КУДА
+	local url="${GH_MAIN}/$1/releases/download/v$2/$3"
+	rm -f "$4"
+	curl -fsSL --connect-timeout 10 --max-time 180 -o "$4" "$url" 2>/dev/null && [ -s "$4" ] && return 0
+	wget -q --timeout=30 -O "$4" "$url" 2>/dev/null && [ -s "$4" ] && return 0
+	rm -f "$4"
+	return 1
+}
+
+_spl_pkg_add() { # ФАЙЛ
+	local out rc
+	if [ "$PKG" = "apk" ]; then out=$($T90 apk add --allow-untrusted --force-overwrite "$1" 2>&1); rc=$?
+	else out=$($T90 opkg install --force-overwrite "$1" 2>&1); rc=$?; fi
+	[ "$rc" = "0" ] || echo "$out" | tail -n 6
+	return $rc
+}
+
+do_splify2_install() {
+	local variant="$1" arch sv uv cur want pkg ui_pkg tmp="$JOBS_DIR/splify2_pkg"
+	arch="$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release)"
+	[ -n "$arch" ] || { echo "ОШИБКА: не удалось определить архитектуру пакетов"; return 1; }
+	_spl_coexist_warn_rev
+	_ensure_deps
+	rm -rf "$tmp"; mkdir -p "$tmp"
+	echo "==> Узнаём последние версии splify2 и steer"
+	sv=$(_gh_latest "$SPL_REPO_ENGINE"); uv=$(_gh_latest "$SPL_REPO_UI")
+	if [ -z "$sv" ] || [ -z "$uv" ]; then
+		echo "ОШИБКА: GitHub не ответил — не удалось узнать версии (попробуйте позже или через VPN)"
+		return 1
+	fi
+	echo "==> Обновляем список пакетов (нужны зависимости движка)"
+	$UPDATE >/dev/null 2>&1
+
+	cur=$(_spl_engine_pkg)
+	case "$variant" in
+		ext)  want="steer-extended" ;;
+		base) want="steer" ;;
+		*)    want="${cur:-steer-extended}" ;;
+	esac
+	pkg="${want}-${sv}-1_${arch}.${RAZ}"
+	echo "==> Движок: $want $sv"
+	_spl_fetch "$SPL_REPO_ENGINE" "$sv" "$pkg" "$tmp/$pkg" || { echo "ОШИБКА: не скачался $pkg (нет сборки для $arch?)"; rm -rf "$tmp"; return 1; }
+	if ! _spl_pkg_add "$tmp/$pkg"; then
+		if [ -n "$cur" ] && [ "$cur" != "$want" ]; then
+			echo "==> Конфликт вариантов: снимаем $cur и ставим $want"
+			$DELETE "$cur" >/dev/null 2>&1
+			_spl_pkg_add "$tmp/$pkg" || { echo "ОШИБКА: движок не установился"; rm -rf "$tmp"; return 1; }
+		else
+			echo "ОШИБКА: движок не установился"
+			rm -rf "$tmp"
+			return 1
+		fi
+	elif [ -n "$cur" ] && [ "$cur" != "$want" ] && _pkg_is_installed "$cur"; then
+		echo "==> Снимаем прежний вариант движка ($cur)"
+		$DELETE "$cur" >/dev/null 2>&1
+	fi
+	echo "==> Движок установлен"
+
+	if [ "$PKG" = "apk" ]; then ui_pkg="luci-app-splify2-${uv}-1_noarch.apk"
+	else ui_pkg="luci-app-splify2-${uv}-1_all.ipk"; fi
+	echo "==> Интерфейс splify2 $uv"
+	_spl_fetch "$SPL_REPO_UI" "$uv" "$ui_pkg" "$tmp/$ui_pkg" || { echo "ОШИБКА: не скачался $ui_pkg"; rm -rf "$tmp"; return 1; }
+	_spl_pkg_add "$tmp/$ui_pkg" || { echo "ОШИБКА: интерфейс splify2 не установился"; rm -rf "$tmp"; return 1; }
+	rm -rf "$tmp"
+
+	if [ -x /etc/init.d/steer ]; then
+		/etc/init.d/steer enable >/dev/null 2>&1
+		[ -s /etc/steer/spec.json ] && /etc/init.d/steer restart >/dev/null 2>&1
+	fi
+	rm -f /tmp/luci-indexcache* /tmp/luci-modulecache/* 2>/dev/null
+	echo "==> Перечитываем rpcd, чтобы появились методы splify2"
+	/etc/init.d/rpcd reload >/dev/null 2>&1
+	sleep 2
+	echo "==> Готово: splify2 $uv и $want $sv установлены"
+}
+
+# splify2 → Mixomo/ByeTube: предупреждение в обратную сторону
+_spl_coexist_warn_rev() {
+	[ -x "$MIHOMO_BIN" ] && echo "!! Внимание: установлен Mixomo (MagiTrickle тоже перехватывает DNS, hev-socks5-tunnel сидит на 198.18.0.1 — в диапазоне fake-IP steer). Вместе они могут мешать друг другу"
+	[ -x /usr/bin/bytetube ] && echo "!! Внимание: установлен ByeTube (свои правила dnsmasq и hev на 198.18.0.1). Вместе со splify2 он может мешать доменным правилам"
+	return 0
+}
+
+do_splify2_remove() {
+	local p list=""
+	[ -x /etc/init.d/steer ] && { echo "==> Останавливаем движок steer"; /etc/init.d/steer stop >/dev/null 2>&1; }
+	for p in luci-app-splify2 steer-extended steer; do _pkg_is_installed "$p" && list="$list $p"; done
+	if [ -n "$list" ]; then
+		echo "==> Удаляем пакеты:$list"
+		$DELETE $list >/dev/null 2>&1 || { echo "ОШИБКА: не удалось удалить пакеты"; return 1; }
+	fi
+	rm -f /tmp/luci-indexcache* /tmp/luci-modulecache/* 2>/dev/null
+	/etc/init.d/rpcd reload >/dev/null 2>&1
+	echo "==> Готово, splify2 удалён. Настройки (/etc/steer, /etc/splify2) оставлены на случай повторной установки"
+}
+
+# Добавить/убрать AWGz как выход kind=interface в спеке steer. Спеку правит ucode,
+# а проверяет и сохраняет сам splify2 (spec_set → steer apply --dry-run), так что сломать её нельзя
+do_splify2_awgz() {
+	local mode="$1" spec="$JOBS_DIR/spl_spec.json" payload="$JOBS_DIR/spl_payload.json" uc="$JOBS_DIR/spl_edit.uc"
+	local res rc out lan
+	_spl_present || { echo "ОШИБКА: splify2 не установлен (или rpcd ещё не видит его — обновите страницу)"; return 1; }
+	command -v ucode >/dev/null 2>&1 || { echo "ОШИБКА: на роутере нет ucode"; return 1; }
+	if [ "$mode" = "add" ] && ! _awg_iface_exists; then
+		echo "ОШИБКА: сначала создайте интерфейс AWGz в разделе «WARP / AmneziaWG»"
+		return 1
+	fi
+	echo "==> Читаем текущую спеку splify2"
+	ubus -t 30 call splify2 spec_get > "$spec" 2>/dev/null || { echo "ОШИБКА: splify2 не отдал спеку"; return 1; }
+	lan=$(uci -q get network.lan.device)
+	cat > "$uc" << 'ZM_UC_EOF'
+'use strict';
+let fs = require('fs');
+let readfile = fs.readfile, writefile = fs.writefile;
+let mode = ARGV[0], dev = ARGV[1], name = ARGV[2], lan = ARGV[3], src = ARGV[4], dst = ARGV[5];
+let spec = json(readfile(src) || '{}');
+if (type(spec) != 'object') spec = {};
+if (!spec.schema) spec.schema = 1;
+if (type(spec.outputs) != 'object') spec.outputs = {};
+if (type(spec.channels) != 'array') spec.channels = [];
+function uses(o) {
+	return type(o) == 'object' && (o.device == dev || (type(o.devices) == 'array' && index(o.devices, dev) >= 0));
+}
+if (mode == 'add') {
+	for (let k, o in spec.outputs)
+		if (k != name && uses(o)) { print('EXISTS ' + k + '\n'); exit(0); }
+	if (!spec.lan_device && !spec.lan_devices && lan) spec.lan_device = lan;
+	spec.outputs[name] = { kind: 'interface', devices: [ dev ], on_fail: 'drop' };
+} else {
+	let names = [], used = [];
+	for (let k, o in spec.outputs)
+		if (uses(o)) push(names, k);
+	for (let c in spec.channels)
+		if (type(c) == 'object' && index(names, c.out) >= 0) push(used, c.name || c.out);
+	if (length(used)) { print('USED ' + join(', ', used) + '\n'); exit(3); }
+	for (let k in names) delete spec.outputs[k];
+}
+writefile(dst, sprintf('%J', { spec: sprintf('%J', spec) }));
+print('OK\n');
+ZM_UC_EOF
+	res=$(ucode "$uc" "$mode" "$AWG_IF" "$SPL_OUT" "$lan" "$spec" "$payload" 2>&1); rc=$?
+	rm -f "$uc" "$spec"
+	case "$res" in
+		EXISTS*) echo "==> AWGz уже подключён к splify2 как выход «${res#EXISTS }» — ничего менять не нужно"; rm -f "$payload"; return 0 ;;
+		USED*)   echo "ОШИБКА: выход AWGz используется правилами splify2: ${res#USED } — сначала переведите их на другой выход в интерфейсе splify2"; rm -f "$payload"; return 1 ;;
+		OK*) ;;
+		*) echo "ОШИБКА: не удалось изменить спеку (код $rc): $res"; rm -f "$payload"; return 1 ;;
+	esac
+	echo "==> Проверяем и сохраняем спеку (steer apply --dry-run)"
+	out=$(ubus -t 90 call splify2 spec_set "$(cat "$payload")" 2>&1)
+	rm -f "$payload"
+	if [ "$(echo "$out" | jsonfilter -e '@.ok' 2>/dev/null)" = "false" ] || ! echo "$out" | grep -q '"ok"'; then
+		echo "ОШИБКА: движок отверг спеку: $(echo "$out" | jsonfilter -e '@.error' 2>/dev/null || echo "$out")"
+		[ "$mode" = "add" ] && echo "!! Если спека пустая — откройте splify2 и пройдите мастер настройки, затем повторите"
+		return 1
+	fi
+	echo "==> Применяем правила"
+	out=$(ubus -t 120 call splify2 apply 2>&1)
+	echo "$out" | jsonfilter -e '@.output' 2>/dev/null | tail -n 8
+	if [ "$(echo "$out" | jsonfilter -e '@.ok' 2>/dev/null)" != "true" ]; then
+		echo "ОШИБКА: спека сохранена, но применить не удалось — смотрите вывод выше"
+		return 1
+	fi
+	if [ "$mode" = "add" ]; then
+		echo "==> Готово: выход «$SPL_OUT» (устройство $AWG_IF) добавлен в splify2. Теперь в splify2 выберите сервисы и направьте их в этот выход"
+	else
+		echo "==> Готово: выход AWGz убран из splify2"
+	fi
+}
+
+splify2_action() {
+	case "$1" in
+		install_ext)  job_start splify2 do_splify2_install ext ;;
+		install_base) job_start splify2 do_splify2_install base ;;
+		update)       job_start splify2 do_splify2_install keep ;;
+		remove)       job_start splify2 do_splify2_remove ;;
+		awgz_add)     job_start splify2_awgz do_splify2_awgz add ;;
+		awgz_remove)  job_start splify2_awgz do_splify2_awgz remove ;;
+		start|stop)
+			if _spl_has_method engine_start; then ubus -t 60 call splify2 "engine_$1" >/dev/null 2>&1
+			elif [ -x /etc/init.d/steer ]; then
+				if [ "$1" = "start" ]; then /etc/init.d/steer enable; /etc/init.d/steer start; else /etc/init.d/steer stop; /etc/init.d/steer disable; fi >/dev/null 2>&1
+			else echo '{"error":"движок steer не установлен"}'; return 1; fi
+			printf '{"ok":true}\n' ;;
+		restart)
+			[ -x /etc/init.d/steer ] || { echo '{"error":"движок steer не установлен"}'; return 1; }
+			/etc/init.d/steer restart >/dev/null 2>&1; printf '{"ok":true}\n' ;;
+		zmfix_on|zmfix_off)
+			_spl_has_method zm_fix_set || { echo '{"error":"эта версия splify2 не умеет фикс Zapret Manager"}'; return 1; }
+			ubus -t 30 call splify2 zm_fix_set "{\"on\":$([ "$1" = zmfix_on ] && echo true || echo false)}" >/dev/null 2>&1
+			printf '{"ok":true}\n' ;;
+		*) echo '{"error":"неизвестное действие"}'; return 1 ;;
+	esac
+}
 
 
 cmd="$1"; shift
@@ -4777,6 +5405,14 @@ case "$cmd" in
 	bytetube_installed)                   bytetube_installed ;;
 	health)                               health ;;
 	bytetube_action)                      bytetube_action "$1" ;;
+	warp_status)                          warp_status ;;
+	warp_action)                          warp_action "$1" ;;
+	warp_config_set)                      warp_config_set "$1" ;;
+	awg_status)                           awg_status ;;
+	awg_action)                           awg_action "$1" ;;
+	awg_iface_create)                     awg_iface_create "$1" "$2" ;;
+	splify2_status)                       splify2_status ;;
+	splify2_action)                       splify2_action "$1" ;;
 	*) echo '{"error":"неизвестная команда"}'; exit 1 ;;
 esac
 ZM_INSTALLER_EOF
@@ -4865,6 +5501,14 @@ list_methods() {
 	json_add_object "bytetube_installed";     json_close_object
 	json_add_object "health";                 json_close_object
 	json_add_object "bytetube_action";        json_add_string "action" "string"; json_close_object
+	json_add_object "warp_status";            json_close_object
+	json_add_object "warp_action";            json_add_string "endpoint_mode" "string"; json_close_object
+	json_add_object "warp_config_set";        json_add_string "content" "string"; json_close_object
+	json_add_object "awg_status";             json_close_object
+	json_add_object "awg_action";             json_add_string "action" "string"; json_close_object
+	json_add_object "awg_iface_create";       json_add_string "source" "string"; json_add_string "content" "string"; json_close_object
+	json_add_object "splify2_status";         json_close_object
+	json_add_object "splify2_action";         json_add_string "action" "string"; json_close_object
 	json_dump
 }
 
@@ -4947,6 +5591,14 @@ call_method() {
 		bytetube_installed)      "$BACKEND" bytetube_installed ;;
 		health)                  "$BACKEND" health ;;
 		bytetube_action)         json_get_var action action; "$BACKEND" bytetube_action "$action" ;;
+		warp_status)             "$BACKEND" warp_status ;;
+		warp_action)             json_get_var endpoint_mode endpoint_mode; "$BACKEND" warp_action "$endpoint_mode" ;;
+		warp_config_set)         json_get_var content content; "$BACKEND" warp_config_set "$content" ;;
+		awg_status)              "$BACKEND" awg_status ;;
+		awg_action)              json_get_var action action; "$BACKEND" awg_action "$action" ;;
+		awg_iface_create)        json_get_var source source; json_get_var content content; "$BACKEND" awg_iface_create "$source" "$content" ;;
+		splify2_status)          "$BACKEND" splify2_status ;;
+		splify2_action)          json_get_var action action; "$BACKEND" splify2_action "$action" ;;
 		*) echo '{"error":"unknown method"}'; return 1 ;;
 	esac
 }
@@ -4973,7 +5625,7 @@ cat > '/usr/share/rpcd/acl.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF'
 					"discord_status", "hosts_status", "hosts_file_get", "doh_status", "game_status",
 					"system_status", "mirror_status", "exclusions_status", "exclusions_file_get", "nfqws_opt_get", "tg_status", "tgws_status",
 					"test_status", "test_results", "zm_update_status", "mixomo_status", "mixomo_config_get",
-					"mixomo_warp_status",
+					"mixomo_warp_status", "warp_status", "awg_status", "splify2_status",
 					"zapret_latest_version", "bytetube_installed", "health"
 				],
 				"system": [ "info" ]
@@ -4999,7 +5651,8 @@ cat > '/usr/share/rpcd/acl.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF'
 					"mixomo_action", "mixomo_config_set", "mixomo_subscription_set",
 					"mixomo_magitrickle_list_set", "mixomo_autorestart_set", "mixomo_ui_action",
 					"mixomo_warp_action", "mixomo_warp_integrate_action", "mixomo_warp_config_set",
-					"bytetube_action"
+					"bytetube_action",
+					"warp_action", "warp_config_set", "awg_action", "awg_iface_create", "splify2_action"
 				]
 			},
 			"uci": [ "bytetube" ]
@@ -5061,9 +5714,19 @@ cat > '/usr/share/luci/menu.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF
 		"order": 58,
 		"action": { "type": "view", "path": "zapret-manager/bytetube" }
 	},
+	"admin/services/zapret-manager/splify2": {
+		"title": "splify2",
+		"order": 59,
+		"action": { "type": "view", "path": "zapret-manager/splify2" }
+	},
+	"admin/services/zapret-manager/amneziawg": {
+		"title": "WARP / AmneziaWG",
+		"order": 61,
+		"action": { "type": "view", "path": "zapret-manager/amneziawg" }
+	},
 	"admin/services/zapret-manager/system": {
 		"title": "Система",
-		"order": 60,
+		"order": 70,
 		"action": { "type": "view", "path": "zapret-manager/system" }
 	}
 }
@@ -5150,6 +5813,20 @@ var callMixomoWarpConfigSet = rpc.declare({ object: 'zapret-manager', method: 'm
 var callBytetubeInstalled = rpc.declare({ object: 'zapret-manager', method: 'bytetube_installed', expect: {} });
 var callHealth = rpc.declare({ object: 'zapret-manager', method: 'health', expect: {} });
 var callBoardInfo = rpc.declare({ object: 'system', method: 'info', expect: {} });
+var callWarpStatus = rpc.declare({ object: 'zapret-manager', method: 'warp_status', expect: {} });
+var callWarpAction = rpc.declare({ object: 'zapret-manager', method: 'warp_action', params: ['endpoint_mode'], expect: {} });
+var callWarpConfigSet = rpc.declare({ object: 'zapret-manager', method: 'warp_config_set', params: ['content'], expect: {} });
+var callAwgStatus = rpc.declare({ object: 'zapret-manager', method: 'awg_status', expect: {} });
+var callAwgAction = rpc.declare({ object: 'zapret-manager', method: 'awg_action', params: ['action'], expect: {} });
+var callAwgIfaceCreate = rpc.declare({ object: 'zapret-manager', method: 'awg_iface_create', params: ['source', 'content'], expect: {} });
+var callSplify2Status = rpc.declare({ object: 'zapret-manager', method: 'splify2_status', expect: {} });
+var callSplify2Action = rpc.declare({ object: 'zapret-manager', method: 'splify2_action', params: ['action'], expect: {} });
+
+/* Ссылка на раздел панели: в Web UI — маршрут #/id, в LuCI — пункт меню */
+function pageUrl(id) {
+	if (document.body && document.body.classList.contains('zmw-body')) return '#/' + id;
+	return L.url('admin/services/zapret-manager/' + id);
+}
 
 function parseSize(v) {
 	var m = String(v == null ? '' : v).trim().match(/^([\d.,]+)\s*([KMGT]?)i?B?$/i);
@@ -5415,6 +6092,15 @@ return baseclass.extend({
 	bytetubeInstalled: callBytetubeInstalled,
 	health: callHealth,
 	boardInfo: callBoardInfo,
+	warpStatus: callWarpStatus,
+	warpAction: callWarpAction,
+	warpConfigSet: callWarpConfigSet,
+	awgStatus: callAwgStatus,
+	awgAction: callAwgAction,
+	awgIfaceCreate: callAwgIfaceCreate,
+	splify2Status: callSplify2Status,
+	splify2Action: callSplify2Action,
+	pageUrl: pageUrl,
 	parseSize: parseSize,
 	fmtSize: fmtSize,
 	usageText: usageText,
@@ -5481,7 +6167,8 @@ return view.extend({
 			var dohSt = st(h, 'doh', doh.installed ? 1 : 0);
 			var dohNode = zm.stateBadge(dohSt);
 			if (dohSt !== 0) dohNode = E('span', { 'style': 'display:inline-flex; align-items:center; gap:8px; flex-wrap:wrap' }, [
-				dohNode, E('span', {}, DOH_LABELS[doh.current] || doh.current || 'провайдер не определён')
+				dohNode, E('span', {}, doh.current_title || DOH_LABELS[doh.current] || doh.current || 'провайдер не определён'),
+				doh.delegated ? E('span', { 'class': 'zm-hint' }, 'через splify2') : ''
 			]);
 
 			var items = [];
@@ -5492,6 +6179,10 @@ return view.extend({
 			items.push(row('ByeTube', zm.stateBadge(st(h, 'bytetube', 0))));
 			items.push(row('TG WS Proxy', zm.stateBadge(st(h, 'tg', 0))));
 			items.push(row('Mixomo', zm.stateBadge(st(h, 'mixomo', 0))));
+			items.push(row('splify2', zm.stateBadge(st(h, 'splify2', 0), 'работает')));
+			items.push(row('WARP (AWGz)', st(h, 'awg', 0) === 2
+				? E('span', { 'class': 'zm-badge zm-warn' }, [ E('span', { 'class': 'zm-dot' }), 'нет туннеля' ])
+				: zm.stateBadge(st(h, 'awg', 0), 'туннель поднят')));
 			items.push(row('DNS over HTTPS', dohNode));
 			items.push(row('Домены в hosts', hosts.geohide
 				? zm.badge(true, 'GeoHide ' + hosts.geohide.toUpperCase(), '')
@@ -5628,89 +6319,114 @@ return view.extend({
 		var wrap = E('div', { 'class': 'zm-wrap' });
 		var logEl = E('pre', { 'class': 'zm-log' });
 		var bannerEl = E('div', {});
+		var card = E('div', { 'class': 'zm-card' });
 		var busy = false;
 
-		var grid = E('div', { 'class': 'zm-grid' });
-		function renderGrid() {
-			grid.innerHTML = '';
+		function row(label, node) {
+			return E('div', { 'class': 'zm-row' }, [ E('span', { 'class': 'zm-label' }, label), node ]);
+		}
+
+		function applyProvider(id, label) {
+			if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+			busy = true;
+			zm.toast(id === '__off' ? 'Возвращаем системный DNS' : id === '__fix' ? 'Исправляем force_dns' : 'Меняем DNS на ' + label, 'warning');
+			zm.dohSet(id).then(function(res) {
+				busy = false;
+				if (res.error) { zm.toast(res.error, 'error', 12000); return; }
+				zm.toast(id === '__off' ? 'Системный DNS включён' : id === '__fix' ? 'Исправлено' : label + ' применён', 'info');
+				zm.dohStatus().then(function(res2) { data = res2; render(); });
+			}).catch(function() { busy = false; });
+		}
+
+		/* ── Режим splify2: настройкой https-dns-proxy владеет он ── */
+		function renderDelegated() {
+			var s = data.state || {};
+			card.appendChild(E('h3', {}, 'DNS over HTTPS'));
+			card.appendChild(E('p', { 'class': 'zm-hint' }, 'Установлен splify2, поэтому DoH настраивается через него: так https-dns-proxy не перехватывает DNS сети (force_dns) и не ломает доменные правила steer. Список резолверов — тот же, что у Zapret Manager.'));
+			card.appendChild(row('Пакет', zm.badge(s.installed === true, 'установлен', 'не установлен')));
+			card.appendChild(row('Служба', zm.badge(s.running === true, 'работает', 'остановлена')));
+			card.appendChild(row('Кто управляет', E('span', {}, s.managed === false ? 'никто — системный DNS' : 'splify2')));
+			if (s.active === '' && s.urls && s.urls.length)
+				card.appendChild(row('Сейчас', E('span', { 'style': 'overflow-wrap:anywhere' }, s.urls.join(', '))));
+			if (s.via_tunnel) card.appendChild(row('Через туннель', E('span', {}, s.out || 'да')));
+			if (s.force_conflict) {
+				card.appendChild(E('div', { 'class': 'zm-refresh-banner zm-show', 'style': 'margin:12px 0' }, [
+					E('span', {}, 'https-dns-proxy сам заворачивает DNS сети (force_dns) и спорит с резолвером steer за порт 53 — доменные правила могут не работать.'),
+					E('button', { 'class': 'cbi-button cbi-button-positive', 'click': function() { applyProvider('__fix'); } }, 'Исправить')
+				]));
+			}
+			var grid = E('div', { 'class': 'zm-grid' });
+			(s.providers || []).forEach(function(p) {
+				grid.appendChild(E('div', {
+					'class': 'zm-tile' + (s.managed !== false && s.active === p.id ? ' zm-active' : ''),
+					'click': function() { applyProvider(p.id, p.title || p.id); }
+				}, p.title || p.id));
+			});
+			grid.appendChild(E('div', {
+				'class': 'zm-tile' + (s.managed === false ? ' zm-active' : ''),
+				'click': function() { if (s.managed !== false) applyProvider('__off', 'Системный DNS'); }
+			}, 'Системный DNS'));
+			card.appendChild(grid);
+			if (!(s.providers || []).length)
+				card.appendChild(E('p', { 'class': 'zm-hint' }, 'splify2 не вернул список резолверов — откройте раздел DNS в самом splify2.'));
+			card.appendChild(E('div', { 'class': 'zm-actions' }, [
+				E('button', { 'class': 'cbi-button', 'click': function() {
+					applyProvider(s.running ? '__stop' : '__start', s.running ? 'остановка' : 'запуск');
+				} }, s.running ? 'Остановить службу' : 'Запустить службу'),
+				E('a', { 'class': 'cbi-button', 'href': zm.pageUrl('splify2') }, 'Вкладка splify2')
+			]));
+		}
+
+		/* ── Обычный режим ── */
+		function renderOwn() {
+			var grid = E('div', { 'class': 'zm-grid' });
 			PROVIDERS.forEach(function(p) {
 				grid.appendChild(E('div', {
 					'class': 'zm-tile' + (data.current === p.id ? ' zm-active' : ''),
-					'click': function() {
-						if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
-						busy = true;
-						zm.toast('Меняем DNS на ' + p.label, 'warning');
-						zm.dohSet(p.id).then(function(res) {
-							busy = false;
-							if (res.error) { zm.toast(res.error, 'error'); return; }
-							zm.toast(p.label + ' применён', 'info');
-							zm.dohStatus().then(function(res2) { data = res2; renderGrid(); });
-						}).catch(function() { busy = false; });
-					}
+					'click': function() { applyProvider(p.id, p.label); }
 				}, p.label));
 			});
+
+			function jobBtn(cls, label, call, job, startText, okText, failText) {
+				return E('button', {
+					'class': cls,
+					'click': function() {
+						if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+						zm.toast(startText, 'warning');
+						busy = true;
+						call().then(function(res) {
+							if (res.error) { busy = false; zm.toast(res.error, 'error'); return; }
+							if (!res.started) { busy = false; return; }
+							zm.pollJob(job, logEl, function(ok) {
+								busy = false;
+								zm.toast(ok ? okText : failText, ok ? 'info' : 'error');
+								if (ok) {
+									bannerEl.innerHTML = '';
+									bannerEl.appendChild(zm.refreshBanner('Пункт меню DNS over HTTPS в LuCI мог измениться — выйдите и зайдите заново.'));
+									zm.dohStatus().then(function(res2) { data = res2; render(); });
+								}
+							});
+						}).catch(function() { busy = false; });
+					}
+				}, label);
+			}
+
+			card.appendChild(E('h3', {}, 'DNS over HTTPS'));
+			card.appendChild(row('Пакет', zm.badge(data.installed === true, 'установлен', 'не установлен')));
+			card.appendChild(E('div', { 'class': 'zm-actions' }, data.installed
+				? [ jobBtn('cbi-button cbi-button-remove', 'Удалить', zm.dohRemove, 'doh_remove', 'Удаляем DNS over HTTPS', 'DNS over HTTPS удалён', 'Ошибка удаления') ]
+				: [ jobBtn('cbi-button cbi-button-positive', 'Установить DNS over HTTPS', zm.dohInstall, 'doh_install', 'Устанавливаем DNS over HTTPS', 'DNS over HTTPS установлен', 'Ошибка установки') ]));
+			card.appendChild(grid);
 		}
-		renderGrid();
 
-		var installBtn = E('button', {
-			'class': 'cbi-button cbi-button-positive',
-			'click': function() {
-				if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
-				zm.toast('Устанавливаем DNS over HTTPS', 'warning');
-				busy = true;
-				zm.dohInstall().then(function(res) {
-					if (res.error) { busy = false; zm.toast(res.error, 'error'); return; }
-					if (res.started) {
-						zm.pollJob('doh_install', logEl, function(ok) {
-							busy = false;
-							zm.toast(ok ? 'DNS over HTTPS установлен' : 'Ошибка установки', ok ? 'info' : 'error');
-							if (ok) {
-								bannerEl.innerHTML = '';
-								bannerEl.appendChild(zm.refreshBanner('Пункт меню DNS over HTTPS в LuCI мог измениться — выйдите и зайдите заново.'));
-							}
-						});
-					} else {
-						busy = false;
-					}
-				}).catch(function() { busy = false; });
-			}
-		}, 'Установить DNS over HTTPS');
+		function render() {
+			card.innerHTML = '';
+			if (data && data.delegated) renderDelegated();
+			else renderOwn();
+			card.appendChild(logEl);
+		}
 
-		var removeBtn = E('button', {
-			'class': 'cbi-button cbi-button-remove',
-			'click': function() {
-				if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
-				zm.toast('Удаляем DNS over HTTPS', 'warning');
-				busy = true;
-				zm.dohRemove().then(function(res) {
-					if (res.error) { busy = false; zm.toast(res.error, 'error'); return; }
-					if (res.started) {
-						zm.pollJob('doh_remove', logEl, function(ok) {
-							busy = false;
-							zm.toast(ok ? 'DNS over HTTPS удалён' : 'Ошибка удаления', ok ? 'info' : 'error');
-							if (ok) {
-								bannerEl.innerHTML = '';
-								bannerEl.appendChild(zm.refreshBanner('Пункт меню DNS over HTTPS в LuCI мог измениться — выйдите и зайдите заново.'));
-							}
-						});
-					} else {
-						busy = false;
-					}
-				}).catch(function() { busy = false; });
-			}
-		}, 'Удалить');
-
-		var card = E('div', { 'class': 'zm-card' }, [
-			E('h3', {}, 'DNS over HTTPS'),
-			E('div', { 'class': 'zm-row' }, [
-				E('span', { 'class': 'zm-label' }, 'Пакет'),
-				zm.badge(data.installed === true, 'установлен', 'не установлен')
-			]),
-			E('div', { 'class': 'zm-actions' }, data.installed ? [ removeBtn ] : [ installBtn ]),
-			grid,
-			logEl
-		]);
-
+		render();
 		wrap.appendChild(card);
 		wrap.appendChild(bannerEl);
 		return wrap;
@@ -6353,32 +7069,22 @@ return view.extend({
 
 		var warpLogEl = E('pre', { 'class': 'zm-log' });
 		var warpStatusCard = E('div', { 'class': 'zm-card' });
-		var warpConfCard = E('div', { 'class': 'zm-card' });
-		var warpBusy = false;
 		var warpIntegrateBusy = false;
 
 		function renderWarpStatus(w) {
 			warpStatusCard.innerHTML = '';
-			warpStatusCard.appendChild(E('h3', {}, 'WARP'));
-			warpStatusCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Генерирует бесплатный ключ Cloudflare WARP и сохраняет его в /root/WARP.conf. Дальше файл можно интегрировать в Mihomo как ещё один прокси-выход.'));
+			warpStatusCard.appendChild(E('h3', {}, 'WARP в Mihomo'));
+			warpStatusCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Генерация и редактирование ключа WARP переехали в раздел «WARP / AmneziaWG» — оттуда же WARP можно поднять отдельным интерфейсом AWGz для splify2. Здесь готовый /root/WARP.conf встраивается в Mihomo как прокси-выход (текущая конфигурация Mihomo будет заменена, копия — config.yaml.bak).'));
 			warpStatusCard.appendChild(E('div', { 'class': 'zm-row' }, [
 				E('span', { 'class': 'zm-label' }, 'WARP.conf'),
 				zm.badge(w.exists === true, 'сгенерирован', 'не сгенерирован')
 			]));
-			warpStatusCard.appendChild(E('div', { 'class': 'zm-actions' }, [
-				E('button', {
+			var actions = [];
+			if (w.exists === true) {
+				actions.push(E('button', {
 					'class': 'cbi-button cbi-button-positive',
-					'click': function() { doWarpGenerate('fixed'); }
-				}, 'Сгенерировать WARP'),
-				E('button', {
-					'class': 'cbi-button',
-					'click': function() { doWarpGenerate('auto'); }
-				}, 'Сгенерировать с подбором endpoint'),
-				E('button', {
-					'class': 'cbi-button',
 					'click': function() {
 						if (warpIntegrateBusy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
-						if (w.exists !== true) { zm.toast('Сначала сгенерируйте WARP.conf', 'error'); return; }
 						warpIntegrateBusy = true;
 						zm.toast('Интегрируем WARP в Mihomo', 'warning');
 						zm.mixomoWarpIntegrateAction().then(function(res) {
@@ -6390,60 +7096,17 @@ return view.extend({
 							});
 						}).catch(function() { warpIntegrateBusy = false; });
 					}
-				}, 'Интегрировать в Mihomo')
-			]));
+				}, 'Интегрировать в Mihomo'));
+			}
+			actions.push(E('a', {
+				'class': 'cbi-button' + (w.exists === true ? '' : ' cbi-button-positive'),
+				'href': zm.pageUrl('amneziawg')
+			}, w.exists === true ? 'Открыть WARP / AmneziaWG' : 'Сгенерировать WARP'));
+			warpStatusCard.appendChild(E('div', { 'class': 'zm-actions' }, actions));
 		}
-
-		function doWarpGenerate(mode) {
-			if (warpBusy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
-			warpBusy = true;
-			zm.toast(mode === 'auto' ? 'Подбираем сервер и генерируем WARP (может занять минуту)' : 'Генерируем WARP', 'warning');
-			zm.mixomoWarpAction(mode).then(function(res) {
-				if (res.error) { warpBusy = false; zm.toast(res.error, 'error'); return; }
-				zm.pollJob('mixomo_warp', warpLogEl, function(ok) {
-					warpBusy = false;
-					zm.toast(ok ? 'WARP сгенерирован' : 'Не удалось сгенерировать WARP', ok ? 'info' : 'error');
-					zm.mixomoWarpStatus().then(function(w) { renderWarpStatus(w); renderWarpConf(w); });
-				});
-			}).catch(function() { warpBusy = false; });
-		}
-
-		var warpConfigEl = E('textarea', { 'class': 'zm-config-editor', 'spellcheck': 'false' });
-		var warpConfigBusy = false;
-		function renderWarpConf(w) {
-			warpConfigEl.value = w.content || '';
-		}
-
-		warpConfCard.appendChild(E('h3', {}, 'Редактор WARP.conf'));
-		warpConfCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Можно вставить сюда свой готовый WARP.conf (например, купленный отдельно ключ) вместо генерации выше — при сохранении проверяются обязательные поля ([Interface]/[Peer], PrivateKey/PublicKey).'));
-		warpConfCard.appendChild(warpConfigEl);
-		warpConfCard.appendChild(E('div', { 'class': 'zm-actions' }, [
-			E('button', {
-				'class': 'cbi-button',
-				'click': function() {
-					zm.mixomoWarpStatus().then(function(w) { renderWarpConf(w); });
-					zm.toast('Содержимое перечитано с диска', 'info');
-				}
-			}, 'Обновить из файла'),
-			E('button', {
-				'class': 'cbi-button cbi-button-positive',
-				'click': function() {
-					if (warpConfigBusy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
-					warpConfigBusy = true;
-					zm.toast('Сохраняем WARP.conf', 'warning');
-					zm.mixomoWarpConfigSet(warpConfigEl.value).then(function(res) {
-						warpConfigBusy = false;
-						if (res.error) { zm.toast(res.error, 'error', 10000); return; }
-						zm.toast('WARP.conf сохранён', 'info');
-						zm.mixomoWarpStatus().then(function(w) { renderWarpStatus(w); renderWarpConf(w); });
-					}).catch(function() { warpConfigBusy = false; });
-				}
-			}, 'Сохранить')
-		]));
 
 		panels.warp.appendChild(warpStatusCard);
 		panels.warp.appendChild(warpLogEl);
-		panels.warp.appendChild(warpConfCard);
 
 		renderTabBar();
 		renderStatus(data);
@@ -6453,7 +7116,6 @@ return view.extend({
 		renderAuto(data);
 		renderMtStatus(data);
 		renderWarpStatus(warpData);
-		renderWarpConf(warpData);
 		refreshConfig();
 
 		wrap.appendChild(tabBar);
@@ -6463,6 +7125,650 @@ return view.extend({
 });
 ZM_INSTALLER_EOF
 chmod 0644 '/www/luci-static/resources/view/zapret-manager/mixomo.js'
+
+cat > '/www/luci-static/resources/view/zapret-manager/amneziawg.js' << 'ZM_INSTALLER_EOF'
+'use strict';
+'require view';
+'require zapret-manager.common as zm';
+
+var TABS = [
+	{ id: 'iface', label: 'Интерфейс AWGz' },
+	{ id: 'warp', label: 'WARP' },
+	{ id: 'pkgs', label: 'Установка AWG' }
+];
+
+function ago(sec) {
+	if (sec == null) return 'не было';
+	if (sec < 60) return sec + ' с назад';
+	if (sec < 3600) return Math.floor(sec / 60) + ' мин назад';
+	if (sec < 86400) return Math.floor(sec / 3600) + ' ч назад';
+	return Math.floor(sec / 86400) + ' дн назад';
+}
+
+return view.extend({
+	load: function() {
+		zm.injectCss();
+		return Promise.all([
+			zm.awgStatus(),
+			zm.warpStatus().catch(function() { return {}; })
+		]);
+	},
+
+	render: function(all) {
+		var st = all[0] || {};
+		var warpData = all[1] || {};
+		var wrap = E('div', { 'class': 'zm-wrap' });
+		var activeTab = 'iface';
+		var busy = false;
+
+		/* ── Сводка «шаги» над вкладками ── */
+		var stepsCard = E('div', { 'class': 'zm-card' });
+
+		function row(label, node) {
+			return E('div', { 'class': 'zm-row' }, [ E('span', { 'class': 'zm-label' }, label), node ]);
+		}
+		function warnBadge(text) {
+			return E('span', { 'class': 'zm-badge zm-warn' }, [ E('span', { 'class': 'zm-dot' }), text ]);
+		}
+		function pkgsOk(s) { return s.kmod === true && s.tools === true; }
+
+		function ifaceBadge(s) {
+			if (s.iface !== true) return zm.badge(false, '', 'не создан');
+			if (s.up !== true) return zm.badge(false, '', 'создан, но опущен');
+			if (s.handshake_age == null || s.handshake_age > 180) return warnBadge('поднят, нет рукопожатия');
+			return zm.badge(true, 'работает · ' + ago(s.handshake_age), '');
+		}
+
+		function renderSteps(s) {
+			stepsCard.innerHTML = '';
+			stepsCard.appendChild(E('h3', {}, 'WARP через AmneziaWG'));
+			stepsCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Три шага: поставить пакеты AmneziaWG → получить ключ WARP → создать из него интерфейс AWGz. Интерфейс не забирает весь трафик: что именно идёт в туннель, решает splify2 (выход AWGz).'));
+			var spl;
+			if (s.splify2 !== true) spl = E('span', { 'class': 'zm-badge zm-off' }, [ E('span', { 'class': 'zm-dot' }), 'splify2 не установлен' ]);
+			else spl = zm.badge(s.in_splify2 === true, 'подключён как выход', 'не подключён');
+			stepsCard.appendChild(E('div', { 'class': 'bt-cols' }, [
+				E('div', { 'class': 'bt-col' }, [
+					row('1. Пакеты AmneziaWG', pkgsOk(s) ? zm.badge(true, 'установлены' + (s.tools_version ? ' · ' + s.tools_version : ''), '') : zm.badge(false, '', 'не установлены')),
+					row('2. Ключ WARP', zm.badge(s.warp === true, 'сгенерирован', 'нет'))
+				]),
+				E('div', { 'class': 'bt-col' }, [
+					row('3. Интерфейс AWGz', ifaceBadge(s)),
+					row('splify2', spl)
+				])
+			]));
+		}
+
+		/* ── Вкладки ── */
+		var tabBar = E('div', { 'class': 'zm-actions', 'style': 'margin-bottom:14px' });
+		var panels = {};
+		TABS.forEach(function(t) { panels[t.id] = E('div', { 'style': t.id === activeTab ? '' : 'display:none' }); });
+		function showTab(id) {
+			activeTab = id;
+			TABS.forEach(function(t) { panels[t.id].style.display = t.id === activeTab ? '' : 'none'; });
+			renderTabBar();
+		}
+		function renderTabBar() {
+			tabBar.innerHTML = '';
+			TABS.forEach(function(t) {
+				tabBar.appendChild(E('button', {
+					'class': 'cbi-button' + (t.id === activeTab ? ' cbi-button-positive' : ''),
+					'click': function() { showTab(t.id); }
+				}, t.label));
+			});
+		}
+
+		function guard() {
+			if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return false; }
+			return true;
+		}
+
+		function runJob(promise, job, logEl, okText, failText) {
+			busy = true;
+			return promise.then(function(res) {
+				if (res && res.error) { busy = false; zm.toast(res.error, 'error'); return; }
+				zm.pollJob(job, logEl, function(ok) {
+					busy = false;
+					zm.toast(ok ? okText : failText, ok ? 'info' : 'error');
+					refresh();
+				});
+			}).catch(function() { busy = false; });
+		}
+
+		/* ════════════ Вкладка «Установка AWG» ════════════ */
+		var pkgCard = E('div', { 'class': 'zm-card' });
+		var pkgLog = E('pre', { 'class': 'zm-log' });
+
+		function renderPkgs(s) {
+			pkgCard.innerHTML = '';
+			pkgCard.appendChild(E('h3', {}, 'Пакеты AmneziaWG'));
+			pkgCard.appendChild(E('p', { 'class': 'zm-hint' }, [
+				'Ставятся сборки из ',
+				E('a', { 'href': 'https://github.com/2Grey/awg-openwrt', 'target': '_blank', 'rel': 'noreferrer' }, '2Grey/awg-openwrt'),
+				' (AWG 3.0): модуль ядра, утилита awg и протокол для LuCI. Модуль собран под конкретную версию OpenWrt — после обновления прошивки пакеты нужно переустановить.'
+			]));
+			pkgCard.appendChild(row('OpenWrt', E('span', {}, (s.openwrt || '—') + (s.target ? ' · ' + s.target : ''))));
+			pkgCard.appendChild(row('kmod-amneziawg', zm.badge(s.kmod === true, s.module_version ? 'установлен · модуль ' + s.module_version : 'установлен', 'не установлен')));
+			pkgCard.appendChild(row('amneziawg-tools', zm.badge(s.tools === true, s.tools_version ? 'установлен · ' + s.tools_version : 'установлен', 'не установлен')));
+			pkgCard.appendChild(row('Протокол в netifd', s.tools === true
+				? (s.proto === true ? zm.badge(true, 'подключён', '') : warnBadge('подхватится при создании интерфейса'))
+				: E('span', {}, '—')));
+			pkgCard.appendChild(row('LuCI (Сеть → Интерфейсы)', zm.badge(s.luci === true, 'установлен', 'не установлен')));
+
+			var actions = [];
+			if (pkgsOk(s)) {
+				actions.push(E('button', { 'class': 'cbi-button', 'click': function() {
+					if (!guard()) return;
+					zm.toast('Переустанавливаем AmneziaWG', 'warning');
+					runJob(zm.awgAction('install'), 'awg_install', pkgLog, 'AmneziaWG переустановлен', 'Ошибка установки');
+				} }, 'Переустановить / обновить'));
+				actions.push(E('button', { 'class': 'cbi-button cbi-button-remove', 'click': function() {
+					if (!guard()) return;
+					if (!confirm('Удалить пакеты AmneziaWG вместе с интерфейсом AWGz?')) return;
+					zm.toast('Удаляем AmneziaWG', 'warning');
+					runJob(zm.awgAction('remove'), 'awg_install', pkgLog, 'AmneziaWG удалён', 'Ошибка удаления');
+				} }, 'Удалить'));
+			} else {
+				actions.push(E('button', { 'class': 'cbi-button cbi-button-positive', 'click': function() {
+					if (!guard()) return;
+					zm.toast('Устанавливаем AmneziaWG (может занять пару минут)', 'warning');
+					runJob(zm.awgAction('install'), 'awg_install', pkgLog, 'AmneziaWG установлен', 'Ошибка установки');
+				} }, 'Установить AmneziaWG'));
+			}
+			pkgCard.appendChild(E('div', { 'class': 'zm-actions' }, actions));
+		}
+		panels.pkgs.appendChild(pkgCard);
+		panels.pkgs.appendChild(pkgLog);
+
+		/* ════════════ Вкладка «WARP» ════════════ */
+		var warpCard = E('div', { 'class': 'zm-card' });
+		var warpLog = E('pre', { 'class': 'zm-log' });
+		var warpConfCard = E('div', { 'class': 'zm-card' });
+		var warpEditor = E('textarea', { 'class': 'zm-config-editor', 'spellcheck': 'false' });
+
+		function renderWarp(w, s) {
+			warpCard.innerHTML = '';
+			warpCard.appendChild(E('h3', {}, 'Ключ Cloudflare WARP'));
+			warpCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Генерирует бесплатный ключ WARP с параметрами обфускации AmneziaWG и сохраняет его в /root/WARP.conf. Этот же файл используют интерфейс AWGz и Mixomo (кнопка «Интегрировать в Mihomo» на вкладке Mixomo → WARP).'));
+			warpCard.appendChild(row('WARP.conf', zm.badge(w.exists === true, 'сгенерирован', 'не сгенерирован')));
+			var actions = [
+				E('button', { 'class': 'cbi-button cbi-button-positive', 'click': function() { doWarp('fixed'); } }, w.exists ? 'Сгенерировать заново' : 'Сгенерировать WARP'),
+				E('button', { 'class': 'cbi-button', 'click': function() { doWarp('auto'); } }, 'Сгенерировать с подбором endpoint')
+			];
+			if (w.exists === true && s.iface === true) {
+				actions.push(E('button', { 'class': 'cbi-button', 'click': function() { createIface('warp'); } }, 'Применить к AWGz'));
+			}
+			warpCard.appendChild(E('div', { 'class': 'zm-actions' }, actions));
+			if (w.exists === true && s.iface === true)
+				warpCard.appendChild(E('p', { 'class': 'zm-hint' }, 'После повторной генерации нажмите «Применить к AWGz» — интерфейс пересоздастся с новым ключом.'));
+			warpEditor.value = w.content || '';
+		}
+
+		function doWarp(mode) {
+			if (!guard()) return;
+			zm.toast(mode === 'auto' ? 'Подбираем сервер и генерируем WARP (может занять минуту)' : 'Генерируем WARP', 'warning');
+			busy = true;
+			zm.warpAction(mode).then(function(res) {
+				if (res.error) { busy = false; zm.toast(res.error, 'error'); return; }
+				zm.pollJob('warp', warpLog, function(ok) {
+					busy = false;
+					zm.toast(ok ? 'WARP сгенерирован' : 'Не удалось сгенерировать WARP', ok ? 'info' : 'error');
+					refresh();
+				});
+			}).catch(function() { busy = false; });
+		}
+
+		warpConfCard.appendChild(E('h3', {}, 'Редактор WARP.conf'));
+		warpConfCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Можно вставить свой готовый WARP.conf вместо генерации. При сохранении проверяются обязательные поля ([Interface]/[Peer], PrivateKey/PublicKey).'));
+		warpConfCard.appendChild(warpEditor);
+		warpConfCard.appendChild(E('div', { 'class': 'zm-actions' }, [
+			E('button', { 'class': 'cbi-button', 'click': function() {
+				zm.warpStatus().then(function(w) { warpEditor.value = w.content || ''; });
+				zm.toast('Содержимое перечитано с диска', 'info');
+			} }, 'Обновить из файла'),
+			E('button', { 'class': 'cbi-button cbi-button-positive', 'click': function() {
+				if (!guard()) return;
+				busy = true;
+				zm.warpConfigSet(warpEditor.value).then(function(res) {
+					busy = false;
+					if (res.error) { zm.toast(res.error, 'error', 10000); return; }
+					zm.toast('WARP.conf сохранён', 'info');
+					refresh();
+				}).catch(function() { busy = false; });
+			} }, 'Сохранить')
+		]));
+		panels.warp.appendChild(warpCard);
+		panels.warp.appendChild(warpLog);
+		panels.warp.appendChild(warpConfCard);
+
+		/* ════════════ Вкладка «Интерфейс AWGz» ════════════ */
+		var ifCard = E('div', { 'class': 'zm-card' });
+		var ifLog = E('pre', { 'class': 'zm-log' });
+		var splCard = E('div', { 'class': 'zm-card' });
+		var importCard = E('div', { 'class': 'zm-card' });
+		var importEditor = E('textarea', { 'class': 'zm-config-editor', 'spellcheck': 'false', 'placeholder': '[Interface]\nPrivateKey = …\nAddress = …\nJc = …\n\n[Peer]\nPublicKey = …\nEndpoint = host:port' });
+
+		function createIface(source) {
+			if (!guard()) return;
+			var content = source === 'conf' ? importEditor.value : '';
+			if (source === 'conf' && !content.trim()) { zm.toast('Вставьте содержимое .conf', 'error'); return; }
+			showTab('iface');
+			zm.toast('Создаём интерфейс AWGz', 'warning');
+			runJob(zm.awgIfaceCreate(source, content), 'awg_iface', ifLog, 'Интерфейс AWGz готов', 'Не удалось создать интерфейс');
+		}
+
+		function simpleAction(action, text) {
+			if (!guard()) return;
+			busy = true;
+			zm.toast(text, 'warning');
+			zm.awgAction(action).then(function(res) {
+				busy = false;
+				if (res.error) { zm.toast(res.error, 'error'); return; }
+				setTimeout(refresh, 2500);
+			}).catch(function() { busy = false; });
+		}
+
+		function renderIface(s) {
+			ifCard.innerHTML = '';
+			ifCard.appendChild(E('h3', {}, 'Интерфейс AWGz'));
+			ifCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Туннель AmneziaWG с зоной firewall AWGz (NAT, lan → AWGz). Маршрут по умолчанию не меняется — трафик в туннель направляет splify2.'));
+			if (!pkgsOk(s)) {
+				ifCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Сначала установите пакеты на вкладке «Установка AWG».'));
+				ifCard.appendChild(E('div', { 'class': 'zm-actions' }, [
+					E('button', { 'class': 'cbi-button cbi-button-positive', 'click': function() { showTab('pkgs'); } }, 'Перейти к установке')
+				]));
+				return;
+			}
+			ifCard.appendChild(row('Состояние', ifaceBadge(s)));
+			if (s.iface === true) {
+				ifCard.appendChild(row('Источник', E('span', {}, s.source === 'warp' ? 'WARP.conf' : s.source === 'conf' ? 'свой .conf' : '—')));
+				ifCard.appendChild(row('Адрес', E('span', { 'style': 'overflow-wrap:anywhere' }, s.addresses || '—')));
+				ifCard.appendChild(row('Сервер', E('span', { 'style': 'overflow-wrap:anywhere' }, s.endpoint || '—')));
+				ifCard.appendChild(row('Рукопожатие', E('span', {}, ago(s.handshake_age))));
+				ifCard.appendChild(row('Трафик', E('span', {}, '↓ ' + zm.fmtSize(+s.rx || 0) + ' · ↑ ' + zm.fmtSize(+s.tx || 0))));
+			}
+			var actions = [];
+			if (s.warp === true)
+				actions.push(E('button', { 'class': 'cbi-button cbi-button-positive', 'click': function() { createIface('warp'); } },
+					s.iface === true ? 'Пересоздать из WARP.conf' : 'Создать из WARP.conf'));
+			else
+				actions.push(E('button', { 'class': 'cbi-button cbi-button-positive', 'click': function() { showTab('warp'); } }, 'Сначала сгенерировать WARP'));
+			if (s.iface === true) {
+				actions.push(E('button', { 'class': 'cbi-button', 'click': function() {
+					simpleAction(s.up ? 'restart' : 'up', s.up ? 'Перезапускаем AWGz' : 'Поднимаем AWGz');
+				} }, s.up ? 'Перезапустить' : 'Поднять'));
+				if (s.up) actions.push(E('button', { 'class': 'cbi-button', 'click': function() { simpleAction('down', 'Опускаем AWGz'); } }, 'Опустить'));
+				actions.push(E('button', { 'class': 'cbi-button cbi-button-remove', 'click': function() {
+					if (!guard()) return;
+					if (!confirm('Удалить интерфейс AWGz и его зону firewall?')) return;
+					runJob(zm.awgAction('iface_remove'), 'awg_iface', ifLog, 'Интерфейс AWGz удалён', 'Не удалось удалить интерфейс');
+				} }, 'Удалить интерфейс'));
+			}
+			actions.push(E('button', { 'class': 'cbi-button', 'click': function() { refresh(); zm.toast('Состояние обновлено', 'info'); } }, 'Обновить'));
+			ifCard.appendChild(E('div', { 'class': 'zm-actions' }, actions));
+		}
+
+		function renderSpl(s) {
+			splCard.innerHTML = '';
+			splCard.appendChild(E('h3', {}, 'Маршрутизация через splify2'));
+			if (s.splify2 !== true) {
+				splCard.appendChild(E('p', { 'class': 'zm-hint' }, 'splify2 направляет в туннель только выбранные сервисы (YouTube, Telegram, Discord…) для всех устройств сети. Установите его на вкладке splify2 — затем подключите AWGz как выход.'));
+				splCard.appendChild(E('div', { 'class': 'zm-actions' }, [
+					E('a', { 'class': 'cbi-button cbi-button-positive', 'href': zm.pageUrl('splify2') }, 'Открыть вкладку splify2')
+				]));
+				return;
+			}
+			splCard.appendChild(row('Выход AWGz', zm.badge(s.in_splify2 === true, 'подключён', 'не подключён')));
+			var actions = [];
+			if (s.in_splify2 === true) {
+				actions.push(E('button', { 'class': 'cbi-button cbi-button-remove', 'click': function() {
+					if (!guard()) return;
+					runJob(zm.splify2Action('awgz_remove'), 'splify2_awgz', ifLog, 'AWGz убран из splify2', 'Не удалось убрать выход');
+				} }, 'Отключить от splify2'));
+			} else if (s.iface === true) {
+				actions.push(E('button', { 'class': 'cbi-button cbi-button-positive', 'click': function() {
+					if (!guard()) return;
+					zm.toast('Добавляем AWGz в splify2', 'warning');
+					runJob(zm.splify2Action('awgz_add'), 'splify2_awgz', ifLog, 'AWGz подключён к splify2', 'Не удалось подключить выход');
+				} }, 'Подключить AWGz к splify2'));
+			} else {
+				splCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Сначала создайте интерфейс AWGz.'));
+			}
+			actions.push(E('a', { 'class': 'cbi-button', 'href': zm.pageUrl('splify2') }, 'Вкладка splify2'));
+			splCard.appendChild(E('div', { 'class': 'zm-actions' }, actions));
+		}
+
+		importCard.appendChild(E('h3', {}, 'Свой .conf AmneziaWG'));
+		importCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Вместо WARP можно подключить свой сервер AmneziaWG (Amnezia VPN, свой VPS): вставьте .conf целиком — AWG 1.0/2.0/3.0 поддерживаются. Интерфейс AWGz будет пересоздан.'));
+		importCard.appendChild(importEditor);
+		importCard.appendChild(E('div', { 'class': 'zm-actions' }, [
+			E('button', { 'class': 'cbi-button cbi-button-positive', 'click': function() { createIface('conf'); } }, 'Создать AWGz из этого .conf')
+		]));
+
+		panels.iface.appendChild(ifCard);
+		panels.iface.appendChild(ifLog);
+		panels.iface.appendChild(splCard);
+		panels.iface.appendChild(importCard);
+
+		/* ── Обновление ── */
+		function renderAll(s, w) {
+			st = s; warpData = w;
+			renderSteps(s);
+			renderPkgs(s);
+			renderWarp(w, s);
+			renderIface(s);
+			renderSpl(s);
+		}
+		function refresh() {
+			Promise.all([ zm.awgStatus(), zm.warpStatus().catch(function() { return {}; }) ]).then(function(r) {
+				renderAll(r[0] || {}, r[1] || {});
+			});
+		}
+
+		renderTabBar();
+		renderAll(st, warpData);
+		if (!pkgsOk(st)) showTab('pkgs');
+		else if (st.warp !== true && st.iface !== true) showTab('warp');
+
+		var timer = setInterval(function() {
+			if (!document.body.contains(wrap)) { clearInterval(timer); return; }
+			if (busy || document.hidden || activeTab !== 'iface' || st.iface !== true) return;
+			zm.awgStatus().then(function(s) { st = s; renderSteps(s); renderIface(s); }).catch(function() {});
+		}, 10000);
+
+		wrap.appendChild(stepsCard);
+		wrap.appendChild(tabBar);
+		TABS.forEach(function(t) { wrap.appendChild(panels[t.id]); });
+		return wrap;
+	}
+});
+ZM_INSTALLER_EOF
+chmod 0644 '/www/luci-static/resources/view/zapret-manager/amneziawg.js'
+
+cat > '/www/luci-static/resources/view/zapret-manager/splify2.js' << 'ZM_INSTALLER_EOF'
+'use strict';
+'require view';
+'require zapret-manager.common as zm';
+
+var CONFLICTS = {
+	mixomo: 'Установлен Mixomo: MagiTrickle тоже перехватывает DNS и направляет сайты в туннель, а hev-socks5-tunnel занимает 198.18.0.1 — это диапазон fake-IP движка steer. Вместе они могут мешать друг другу: доменные правила срабатывают не там или не срабатывают вовсе. Рекомендуется оставить что-то одно.',
+	bytetube: 'Установлен ByeTube: у него свои правила dnsmasq для YouTube и hev на 198.18.0.1. Если YouTube направлен и в ByeTube, и в splify2, правила будут конкурировать — выберите что-то одно.',
+	doh: 'DNS over HTTPS настроен с force_dns: он заворачивает весь DNS сети на себя и отнимает порт 53 у резолвера steer — доменные правила splify2 молча перестают работать. Откройте вкладку DNS over HTTPS и выберите провайдера заново: управление перейдёт к splify2, и конфликт исчезнет.'
+};
+
+return view.extend({
+	load: function() {
+		zm.injectCss();
+		return zm.splify2Status();
+	},
+
+	render: function(data) {
+		var wrap = E('div', { 'class': 'zm-wrap' });
+		var busy = false;
+		var variant = 'ext';
+
+		var statusCard = E('div', { 'class': 'zm-card' });
+		var logEl = E('pre', { 'class': 'zm-log' });
+		var warnEl = E('div', {});
+		var awgCard = E('div', { 'class': 'zm-card' });
+		var routeCard = E('div', { 'class': 'zm-card' });
+		var extraCard = E('div', { 'class': 'zm-card' });
+
+		function row(label, node) {
+			return E('div', { 'class': 'zm-row' }, [ E('span', { 'class': 'zm-label' }, label), node ]);
+		}
+		function text(t) { return E('span', { 'style': 'overflow-wrap:anywhere' }, t); }
+		function isWebUi() { return document.body && document.body.classList.contains('zmw-body'); }
+		function splifyUrl() {
+			return isWebUi() ? 'http://' + window.location.hostname + '/cgi-bin/luci/admin/services/splify2' : L.url('admin/services/splify2');
+		}
+		function openBtn(label, cls) {
+			var a = E('a', { 'class': 'cbi-button' + (cls ? ' ' + cls : ''), 'href': splifyUrl() }, label || 'Открыть splify2');
+			if (isWebUi()) { a.setAttribute('target', '_blank'); a.setAttribute('rel', 'noreferrer'); }
+			return a;
+		}
+		function guard() {
+			if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return false; }
+			return true;
+		}
+		function verText(cur, latest) {
+			var t = cur || '—';
+			if (cur && latest && cur !== latest) t += ' (доступно ' + latest + ')';
+			return t;
+		}
+		function hasUpdate(d) {
+			return (d.ui_version && d.ui_latest && d.ui_version !== d.ui_latest) ||
+				(d.engine_version && d.engine_latest && d.engine_version !== d.engine_latest);
+		}
+
+		function job(action, jobName, okText, failText, startText) {
+			if (!guard()) return;
+			busy = true;
+			zm.toast(startText, 'warning');
+			zm.splify2Action(action).then(function(res) {
+				if (res.error) { busy = false; zm.toast(res.error, 'error'); return; }
+				zm.pollJob(jobName, logEl, function(ok) {
+					busy = false;
+					zm.toast(ok ? okText : failText, ok ? 'info' : 'error');
+					refresh();
+				});
+			}).catch(function() { busy = false; });
+		}
+
+		function quick(action, startText, okText) {
+			if (!guard()) return;
+			busy = true;
+			zm.toast(startText, 'warning');
+			zm.splify2Action(action).then(function(res) {
+				busy = false;
+				if (res.error) { zm.toast(res.error, 'error'); return; }
+				zm.toast(okText, 'info');
+				setTimeout(refresh, 1500);
+			}).catch(function() { busy = false; });
+		}
+
+		/* ── Состояние и установка ── */
+		function renderStatus(d) {
+			statusCard.innerHTML = '';
+			statusCard.appendChild(E('h3', {}, 'splify2 + steer'));
+			statusCard.appendChild(E('p', { 'class': 'zm-hint' }, [
+				'Выборочная маршрутизация для всей сети: отмечаете сервисы (YouTube, Telegram, Discord…) — и только они идут в туннель, остальное напрямую. ',
+				E('a', { 'href': 'https://github.com/xyzmean/splify2', 'target': '_blank', 'rel': 'noreferrer' }, 'splify2'),
+				' — интерфейс и списки, ',
+				E('a', { 'href': 'https://github.com/xyzmean/steer', 'target': '_blank', 'rel': 'noreferrer' }, 'steer'),
+				' — движок на nftables. Туннелем может быть VLESS-подписка (расширенный движок) или интерфейс WireGuard/AmneziaWG, например AWGz с WARP.'
+			]));
+
+			var installed = d.ui === true || !!d.engine;
+			if (!installed) {
+				statusCard.appendChild(row('Статус', zm.badge(false, '', 'не установлен')));
+				statusCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:10px' }, 'Какой движок поставить:'));
+				var tiles = E('div', { 'class': 'zm-grid' });
+				function renderTiles() {
+					tiles.innerHTML = '';
+					[
+						{ id: 'ext', label: 'Расширенный — со встроенным VLESS/Reality' },
+						{ id: 'base', label: 'Базовый — только маршрутизация (для AWGz/WireGuard)' }
+					].forEach(function(t) {
+						tiles.appendChild(E('div', {
+							'class': 'zm-tile' + (variant === t.id ? ' zm-active' : ''),
+							'click': function() { variant = t.id; renderTiles(); }
+						}, t.label));
+					});
+				}
+				renderTiles();
+				statusCard.appendChild(tiles);
+				statusCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Расширенный больше примерно на 250 КБ, зато умеет сам поднимать туннель по ссылке подписки. Если туннелем будет только AWGz — хватит базового. Вариант можно сменить позже.'));
+				statusCard.appendChild(E('div', { 'class': 'zm-actions' }, [
+					E('button', { 'class': 'cbi-button cbi-button-positive', 'click': function() {
+						job(variant === 'ext' ? 'install_ext' : 'install_base', 'splify2', 'splify2 установлен', 'Ошибка установки', 'Устанавливаем splify2 и движок steer');
+					} }, 'Установить splify2')
+				]));
+				return;
+			}
+
+			var engName = d.engine === 'steer-extended' ? 'расширенный (VLESS)' : d.engine === 'steer' ? 'базовый' : 'не установлен';
+			statusCard.appendChild(E('div', { 'class': 'bt-cols' }, [
+				E('div', { 'class': 'bt-col' }, [
+					row('Интерфейс splify2', d.ui ? text(verText(d.ui_version, d.ui_latest)) : zm.badge(false, '', 'не установлен')),
+					row('Движок steer', d.engine ? text(engName + ' · ' + verText(d.engine_version, d.engine_latest)) : zm.badge(false, '', 'не установлен'))
+				]),
+				E('div', { 'class': 'bt-col' }, [
+					row('Служба', d.engine ? zm.badge(d.running === true, 'работает', d.enabled ? 'остановлена' : 'выключена') : E('span', {}, '—')),
+					row('Автозапуск', d.engine ? zm.badge(d.enabled === true, 'включён', 'выключен') : E('span', {}, '—'))
+				])
+			]));
+			if (d.ui && d.object !== true)
+				statusCard.appendChild(E('p', { 'class': 'zm-hint' }, 'rpcd ещё не видит объект splify2 — обновите страницу через несколько секунд.'));
+
+			var actions = [ openBtn('Открыть splify2', 'cbi-button-positive') ];
+			if (d.engine) {
+				actions.push(E('button', { 'class': 'cbi-button', 'click': function() {
+					quick(d.running ? 'stop' : 'start', d.running ? 'Останавливаем движок' : 'Запускаем движок', 'Готово');
+				} }, d.running ? 'Остановить' : 'Запустить'));
+				if (d.running) actions.push(E('button', { 'class': 'cbi-button', 'click': function() { quick('restart', 'Перезапускаем движок', 'Движок перезапущен'); } }, 'Перезапустить'));
+			}
+			actions.push(E('button', { 'class': hasUpdate(d) ? 'cbi-button cbi-button-positive' : 'cbi-button', 'click': function() {
+				job('update', 'splify2', 'splify2 обновлён', 'Ошибка обновления', 'Обновляем splify2 и steer');
+			} }, hasUpdate(d) ? 'Обновить (есть новые версии)' : 'Переустановить / обновить'));
+			if (d.engine) {
+				var other = d.engine === 'steer-extended' ? 'base' : 'ext';
+				actions.push(E('button', { 'class': 'cbi-button', 'click': function() {
+					if (!confirm(other === 'ext' ? 'Поставить расширенный движок (с VLESS)?' : 'Поставить базовый движок (без VLESS)? Выходы VLESS перестанут работать.')) return;
+					job(other === 'ext' ? 'install_ext' : 'install_base', 'splify2', 'Движок заменён', 'Ошибка установки', 'Меняем вариант движка');
+				} }, other === 'ext' ? 'Сменить на расширенный' : 'Сменить на базовый'));
+			}
+			actions.push(E('button', { 'class': 'cbi-button cbi-button-remove', 'click': function() {
+				if (!confirm('Удалить splify2 и движок steer? Настройки и списки останутся на роутере.')) return;
+				job('remove', 'splify2', 'splify2 удалён', 'Ошибка удаления', 'Удаляем splify2');
+			} }, 'Удалить'));
+			statusCard.appendChild(E('div', { 'class': 'zm-actions' }, actions));
+		}
+
+		/* ── Предупреждения о соседях ── */
+		function renderWarnings(d) {
+			warnEl.innerHTML = '';
+			if (!(d.ui === true || d.engine)) {
+				(d.conflicts || []).forEach(function(c) {
+					if (c === 'doh') return;
+					warnEl.appendChild(E('div', { 'class': 'zm-refresh-banner zm-show', 'style': 'margin-bottom:12px' }, [ E('span', {}, 'Перед установкой: ' + CONFLICTS[c]) ]));
+				});
+				return;
+			}
+			(d.conflicts || []).forEach(function(c) {
+				if (!CONFLICTS[c]) return;
+				var kids = [ E('span', {}, CONFLICTS[c]) ];
+				if (c === 'doh') kids.push(E('a', { 'class': 'cbi-button cbi-button-positive', 'href': zm.pageUrl('doh') }, 'DNS over HTTPS'));
+				warnEl.appendChild(E('div', { 'class': 'zm-refresh-banner zm-show', 'style': 'margin-bottom:12px' }, kids));
+			});
+		}
+
+		/* ── AWGz как выход ── */
+		function renderAwg(d) {
+			awgCard.innerHTML = '';
+			awgCard.appendChild(E('h3', {}, 'WARP (AWGz) как выход'));
+			awgCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Добавляет в правила splify2 выход «AWGz» (kind: interface, устройство AWGz, при падении туннеля трафик блокируется, а не утекает). Спеку проверяет сам движок, так что сломать настройку нельзя.'));
+			var ifaceNode = d.awgz !== true ? zm.badge(false, '', 'не создан')
+				: zm.badge(d.awgz_up === true, 'поднят', 'опущен');
+			awgCard.appendChild(row('Интерфейс AWGz', ifaceNode));
+			awgCard.appendChild(row('Выход в splify2', zm.badge(d.awgz_in_spec === true, 'подключён', 'не подключён')));
+			var actions = [];
+			if (!(d.ui === true || d.engine)) {
+				awgCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Установите splify2 выше.'));
+			} else if (d.awgz_in_spec === true) {
+				actions.push(E('button', { 'class': 'cbi-button cbi-button-remove', 'click': function() {
+					job('awgz_remove', 'splify2_awgz', 'AWGz убран из splify2', 'Не удалось убрать выход', 'Убираем AWGz из splify2');
+				} }, 'Отключить AWGz'));
+				actions.push(openBtn('Настроить правила в splify2'));
+			} else if (d.awgz === true) {
+				actions.push(E('button', { 'class': 'cbi-button cbi-button-positive', 'click': function() {
+					job('awgz_add', 'splify2_awgz', 'AWGz подключён к splify2', 'Не удалось подключить выход', 'Добавляем AWGz в splify2');
+				} }, 'Подключить AWGz к splify2'));
+			}
+			actions.push(E('a', { 'class': 'cbi-button' + (d.awgz === true ? '' : ' cbi-button-positive'), 'href': zm.pageUrl('amneziawg') }, d.awgz === true ? 'WARP / AmneziaWG' : 'Создать AWGz с WARP'));
+			awgCard.appendChild(E('div', { 'class': 'zm-actions' }, actions));
+			if (d.awgz_in_spec === true)
+				awgCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Дальше в splify2: «Правила» → выберите сервисы и выход AWGz → «Применить».'));
+		}
+
+		/* ── Выходы и правила из спеки ── */
+		function renderRoutes(d) {
+			routeCard.innerHTML = '';
+			var spec = d.spec;
+			if (!spec || typeof spec !== 'object') { routeCard.style.display = 'none'; return; }
+			routeCard.style.display = '';
+			routeCard.appendChild(E('h3', {}, 'Выходы и правила'));
+			var outs = spec.outputs || {};
+			var names = Object.keys(outs);
+			var live = (d.live && d.live.status) || {};
+			var liveOuts = live.outputs || {};
+			var devs = (d.live && d.live.devices) || {};
+			if (!names.length) {
+				routeCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Выходов пока нет — настройте их в splify2 (подписка VLESS или интерфейс) либо подключите AWGz выше.'));
+			}
+			names.forEach(function(n) {
+				var o = outs[n] || {};
+				var desc = o.kind === 'interface' ? 'интерфейс ' + ((o.devices || [ o.device ]).filter(Boolean).join(', ') || '—')
+					: o.kind === 'vless' ? 'VLESS' : o.kind === 'zapret' ? 'Zapret' : o.kind === 'direct' ? 'напрямую' : (o.kind || '?');
+				var lo = Array.isArray(liveOuts) ? liveOuts.filter(function(x) { return x && x.name === n; })[0] : liveOuts[n];
+				var node;
+				if (lo && typeof lo.up === 'boolean') node = zm.badge(lo.up, 'работает', 'не работает');
+				else node = E('span', {}, '—');
+				var dev = (o.devices && o.devices[0]) || o.device;
+				var traffic = dev && devs[dev] ? ' · ↓ ' + zm.fmtSize(+devs[dev].rx || 0) + ' ↑ ' + zm.fmtSize(+devs[dev].tx || 0) : '';
+				routeCard.appendChild(row(n, E('span', { 'style': 'display:inline-flex; gap:8px; align-items:center; flex-wrap:wrap' }, [ node, E('span', {}, desc + traffic) ])));
+			});
+			var chans = (spec.channels || []).filter(function(c) { return c && !c.part_of; });
+			routeCard.appendChild(row('Правил', E('span', {}, chans.length ? String(chans.length) : 'нет')));
+			if (chans.length) {
+				routeCard.appendChild(E('div', { 'class': 'zm-hint', 'style': 'overflow-wrap:anywhere' },
+					chans.slice(0, 20).map(function(c) { return (c.enabled === false ? '⏸ ' : '') + (c.name || '?') + ' → ' + (c.out || '?'); }).join(' · ') +
+					(chans.length > 20 ? ' · …ещё ' + (chans.length - 20) : '')));
+			}
+		}
+
+		/* ── Прочее: DoH и фикс Zapret Manager ── */
+		function renderExtra(d) {
+			extraCard.innerHTML = '';
+			if (!(d.ui === true || d.engine)) { extraCard.style.display = 'none'; return; }
+			extraCard.style.display = '';
+			extraCard.appendChild(E('h3', {}, 'Совместная работа с Zapret Manager'));
+			extraCard.appendChild(row('DNS over HTTPS', E('span', {}, 'управляет splify2 — вкладка DNS over HTTPS работает через него')));
+			extraCard.appendChild(row('Zapret', E('span', {}, 'совместим: отметка стратегии общая')));
+			if (d.zm_fix !== null && d.zm_fix !== undefined) {
+				extraCard.appendChild(row('GitHub через туннель', zm.badge(d.zm_fix === true, 'включено', 'выключено')));
+				extraCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Фикс splify2: собственный трафик роутера к GitHub (обновления Zapret Manager, стратегии, пакеты) уходит в первый поднятый выход — например AWGz. Клиентов сети не касается.'));
+				extraCard.appendChild(E('div', { 'class': 'zm-actions' }, [
+					E('button', { 'class': 'cbi-button', 'click': function() {
+						quick(d.zm_fix ? 'zmfix_off' : 'zmfix_on', 'Меняем настройку', d.zm_fix ? 'Фикс выключен' : 'Фикс включён');
+					} }, d.zm_fix ? 'Выключить' : 'Включить')
+				]));
+			}
+		}
+
+		function renderAll(d) {
+			data = d;
+			renderStatus(d);
+			renderWarnings(d);
+			renderAwg(d);
+			renderRoutes(d);
+			renderExtra(d);
+		}
+		function refresh() {
+			zm.splify2Status().then(renderAll).catch(function() {});
+		}
+
+		renderAll(data || {});
+		wrap.appendChild(warnEl);
+		wrap.appendChild(statusCard);
+		wrap.appendChild(logEl);
+		wrap.appendChild(awgCard);
+		wrap.appendChild(routeCard);
+		wrap.appendChild(extraCard);
+		return wrap;
+	}
+});
+ZM_INSTALLER_EOF
+chmod 0644 '/www/luci-static/resources/view/zapret-manager/splify2.js'
 
 mkdir -p /www/luci-static/resources/view/zapret-manager
 chmod 0755 /www/luci-static/resources/view/zapret-manager
@@ -8014,7 +9320,7 @@ cat > '/www/luci-static/resources/view/zapret-manager/tgproxy.js' << 'ZM_INSTALL
 'require zapret-manager.common as zm';
 
 var VARIANTS = [
-	{ id: 'mtproto', title: 'MTProto (пакет)', port: 1443, kind: 'proto' },
+	{ id: 'mtproto', title: 'Go (MTProto)', port: 1443, kind: 'proto' },
 	{ id: 'socks5', title: 'SOCKS5', port: 2080, kind: 'socks' },
 	{ id: 'rust', title: 'Rust (MTProto)', port: 2443, kind: 'proto' }
 ];
@@ -10083,6 +11389,8 @@ var ICONS = {
 	arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>',
 	alert: '<path d="M12 3.5l9.5 16.5h-19L12 3.5z"/><path d="M12 10v4.5M12 17.3v.2"/>',
 	rocket: '<path d="M14.5 4.2c2.6-1.1 5-1.2 5.3-.9.3.3.2 2.7-.9 5.3-1 2.4-3.1 4.9-6.2 6.9l-3.2-3.2c2-3.1 4.5-5.2 6.9-6.2z"/><circle cx="15.2" cy="8.8" r="1.6"/><path d="M9.5 12.3l-3.6-.4 2.4-3.2 3.3-.2M11.7 14.5l.4 3.6 3.2-2.4.2-3.3"/><path d="M6.8 16.2c-1.3.4-2.1 2.2-2.3 3.3 1.1-.2 2.9-1 3.3-2.3"/>',
+	route: '<circle cx="6" cy="18.5" r="2.3"/><circle cx="18" cy="5.5" r="2.3"/><path d="M8.3 18.5h7.2a3.5 3.5 0 0 0 0-7h-7a3.5 3.5 0 0 1 0-7h6.2"/>',
+	key: '<circle cx="8" cy="15.5" r="4.5"/><path d="M11.3 12.2L20 3.5M16.5 7l2.5 2.5M14 9.5l2 2"/>',
 	telegram: '<path d="M21 4.5L2.8 11.4c-.8.3-.8 1.4 0 1.7l4.4 1.5 1.7 5.3c.2.7 1.1.9 1.6.4l2.5-2.4 4.6 3.4c.6.4 1.4.1 1.6-.6L22.3 5.8c.2-.9-.6-1.6-1.3-1.3z"/><path d="M7.3 14.6l10-6.6-7.4 8"/>'
 };
 
@@ -10169,7 +11477,9 @@ var ROUTES = [
 	{ id: 'zapret2', title: 'Zapret2', sub: 'Установка и управление Zapret2', icon: 'bolt', group: 'Обход блокировок', dot: 'zapret2' },
 	{ id: 'bytetube', title: 'ByeTube', sub: 'YouTube через ByeDPI', icon: 'play', group: 'Обход блокировок', dot: 'bytetube' },
 	{ id: 'tgproxy', title: 'TG WS Proxy', sub: 'Прокси для Telegram', icon: 'send', group: 'Обход блокировок', dot: 'tg' },
-	{ id: 'mixomo', title: 'Mixomo', sub: 'Mihomo, MagiTrickle и WARP', icon: 'layers', group: 'Обход блокировок', dot: 'mixomo' },
+	{ id: 'mixomo', title: 'Mixomo', sub: 'Mihomo и MagiTrickle', icon: 'layers', group: 'Обход блокировок', dot: 'mixomo' },
+	{ id: 'splify2', title: 'splify2', sub: 'Выборочная маршрутизация сервисов через туннель (steer)', icon: 'route', group: 'Туннели', dot: 'splify2' },
+	{ id: 'amneziawg', title: 'WARP / AmneziaWG', sub: 'Ключ WARP, пакеты AmneziaWG и интерфейс AWGz', icon: 'key', group: 'Туннели', dot: 'awg' },
 	{ id: 'hosts', title: 'Hosts', sub: 'Домены в hosts и списки GeoHide', icon: 'list', group: 'Сеть', dot: 'hosts' },
 	{ id: 'doh', title: 'DNS over HTTPS', sub: 'Шифрованный DNS для всей сети', icon: 'globe', group: 'Сеть', dot: 'doh' },
 	{ id: 'system', title: 'Система', sub: 'Параметры роутера, зеркала и обслуживание', icon: 'cpu', group: 'Сервис' }
