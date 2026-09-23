@@ -1,6 +1,6 @@
 #!/bin/sh
 # Zapret Manager by StressOzz for LuCI installer
-# Version: 1.35
+# Version: 1.36
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -61,7 +61,7 @@ chmod 0755 /opt/zapret-manager-luci
 cat > '/opt/zapret-manager-luci/backend.sh' << 'ZM_INSTALLER_EOF'
 
 CONF="/etc/config/zapret"
-ZM_VERSION="1.35"
+ZM_VERSION="1.36"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
@@ -4754,6 +4754,9 @@ RB_LAST="$RB_DIR/last"
 RB_STOP_FLAG="$RB_RUN/stop"
 RB_PHASE_FILE="$RB_RUN/phase"
 RB_WARP_CONF="$RB_DIR/warp.conf"
+# Ручной выбор списков для WARP: что человек добавил сверх подобранного и что убрал.
+RB_WARP_PICK="$RB_DIR/warp.pick"
+RB_WARP_SKIP="$RB_DIR/warp.skip"
 RB_WARP_IF="zmwarp"
 RB_WARP_ZONE="zmwarp"
 RB_STEER_VER="1.5.7"
@@ -4765,7 +4768,7 @@ RB_AWG_MIRROR_FLAT="https://gitlab.com/xyzmean/brb/-/raw/main/deps/awg"
 # переживает и удаление панели: туннель поднимается заново, steer перезапускается, если включён.
 RB_CRON_TAG="# zm-autobypass"
 RB_CRON_CMD="/etc/init.d/steer enabled && { ifup $RB_WARP_IF; sleep 15; /etc/init.d/steer restart; }"
-# Видео на время подбора. Настройка — вне RB_DIR: «Снять настройки» не должно её сбрасывать.
+# Видео на время подбора. Настройка — вне RB_DIR: «Удалить автообход» не должно её сбрасывать.
 RB_VIDEO_FILE="/opt/zapret-manager-luci/autobypass_video"
 RB_VIDEO_LIST_URLS="${GH_RAW}/StressOzz/Zapret-Manager/refs/heads/main/files/AutoBypass/videos.txt https://cdn.jsdelivr.net/gh/StressOzz/Zapret-Manager@main/files/AutoBypass/videos.txt"
 # Свой DNS для проб: системный резолвер может отдавать подмену провайдера. Первый ответивший
@@ -4795,6 +4798,21 @@ _rb_test_running() { [ -f "$JOBS_DIR/strategy_test.pid" ] && kill -0 "$(cat "$JO
 _rb_svc_ids() { grep -v '^#' "$RB_SHARE/services.conf" 2>/dev/null | cut -d'|' -f1 | grep .; }
 _rb_svc_field() { grep "^$1|" "$RB_SHARE/services.conf" 2>/dev/null | head -n1 | cut -d'|' -f"$2"; }
 _rb_svc_names() { local id; for id in $1; do printf '%s, ' "$(_rb_svc_field "$id" 2)"; done | sed 's/, $//'; }
+
+# Сервис можно пустить через WARP, только если у него есть списки доменов или адресов.
+_rb_routable() { [ -n "$(_rb_svc_field "$1" 3)$(_rb_svc_field "$1" 4)" ]; }
+_rb_in() { grep -qxF "$1" "$2" 2>/dev/null; }
+# Итоговый набор для WARP: подобранное автообходом плюс добавленное вручную минус убранное.
+_rb_warp_final() { # "id id..." подобранных
+	local id
+	for id in $(_rb_svc_ids); do
+		_rb_routable "$id" || continue
+		_rb_in "$id" "$RB_WARP_SKIP" && continue
+		case " $1 " in *" $id "*) echo "$id"; continue ;; esac
+		_rb_in "$id" "$RB_WARP_PICK" && echo "$id"
+	done
+}
+_rb_warp_auto() { grep '|warp$' "$RB_RESULTS" 2>/dev/null | cut -d'|' -f1 | tr '\n' ' '; }
 
 # Наш объект в ubus должен пережить установку пакетов: luci-proto-amneziawg в post-install
 # зовёт `rpcd reload`, следом идёт перезапуск сети, и rpcd поднимался без объекта
@@ -5510,12 +5528,16 @@ do_redbtn_run() {
 
 	# WARP — для того, что не открыл zapret.
 	failed="$(_rb_failed "$before")"
-	if [ -n "$failed" ]; then
+	if [ -n "$failed" ] || [ -s "$RB_WARP_PICK" ]; then
 		_rb_phase warp
-		_rb_say "Не открылось: $(_rb_svc_names "$failed")"
+		[ -n "$failed" ] && _rb_say "Не открылось: $(_rb_svc_names "$failed")"
+		[ -s "$RB_WARP_PICK" ] && _rb_say "Через WARP по вашему выбору: $(_rb_svc_names "$(cat "$RB_WARP_PICK")")"
 		if _rb_install_steer && _rb_warp_up; then
 			for id in $failed; do
-				if _rb_check_service "$id" warp; then
+				if _rb_in "$id" "$RB_WARP_SKIP"; then
+					echo "[ -- ] $(_rb_svc_field "$id" 2) — через WARP не пускаем: выключено вручную"
+					_rb_result_write "$id" none
+				elif _rb_check_service "$id" warp; then
 					echo "[ OK ] $(_rb_svc_field "$id" 2) — через WARP"
 					warp_ids="$warp_ids $id"
 					_rb_result_write "$id" warp
@@ -5531,17 +5553,7 @@ do_redbtn_run() {
 	_rb_stopped && { _rb_say "Остановлено"; return 0; }
 
 	_rb_phase steer
-	if [ -n "$warp_ids" ]; then
-		_rb_spec_apply $warp_ids || return 1
-	else
-		_rb_spec_clear
-		if _rb_owns "net $RB_WARP_IF"; then ifdown "$RB_WARP_IF" >/dev/null 2>&1; fi
-		# Правил нет — движку, поставленному автообходом, работать незачем.
-		if _rb_owns "pkg steer"; then
-			/etc/init.d/steer stop >/dev/null 2>&1
-			/etc/init.d/steer disable >/dev/null 2>&1
-		fi
-	fi
+	_rb_warp_rules "$(_rb_warp_final "$warp_ids")" || return 1
 
 	_rb_phase telegram
 	_rb_say "Проверяем Telegram"
@@ -5569,6 +5581,59 @@ do_redbtn_run() {
 		_rb_warn "DNS over HTTPS перехватывает DNS сети — сервисы через WARP работать не будут, нажмите «Исправить» на странице"
 	fi
 	_rb_say "Готово, обход подобран"
+}
+
+# Применить итоговый набор: правила steer или, если набор пуст, всё выключить.
+_rb_warp_rules() { # "id id..."
+	if [ -n "$(echo $1)" ]; then
+		_rb_say "Через WARP: $(_rb_svc_names "$1")"
+		_rb_spec_apply $1
+		return
+	fi
+	_rb_spec_clear
+	if _rb_owns "net $RB_WARP_IF"; then ifdown "$RB_WARP_IF" >/dev/null 2>&1; fi
+	# Правил нет — движку, поставленному автообходом, работать незачем.
+	if _rb_owns "pkg steer"; then
+		/etc/init.d/steer stop >/dev/null 2>&1
+		/etc/init.d/steer disable >/dev/null 2>&1
+	fi
+	_rb_say "Через WARP ничего не идёт — туннель и steer выключены"
+}
+
+# Ручной выбор: человек отметил, какие сервисы пускать через WARP.
+redbtn_warp_lists_set() { # "id,id,..." — итоговый набор
+	local want auto id
+	want=" $(echo "$1" | tr ',' ' ') "
+	for id in $(echo "$want"); do
+		_rb_svc_field "$id" 1 | grep -q . && _rb_routable "$id" || { echo '{"error":"неизвестный список"}'; return 1; }
+	done
+	mkdir -p "$RB_DIR"
+	auto=" $(_rb_warp_auto) "
+	: > "$RB_WARP_PICK"; : > "$RB_WARP_SKIP"
+	for id in $(_rb_svc_ids); do
+		_rb_routable "$id" || continue
+		case "$want" in
+			*" $id "*) case "$auto" in *" $id "*) ;; *) echo "$id" >> "$RB_WARP_PICK" ;; esac ;;
+			*) case "$auto" in *" $id "*) echo "$id" >> "$RB_WARP_SKIP" ;; esac ;;
+		esac
+	done
+	[ -s "$RB_WARP_PICK" ] || rm -f "$RB_WARP_PICK"
+	[ -s "$RB_WARP_SKIP" ] || rm -f "$RB_WARP_SKIP"
+	job_start redbtn do_redbtn_warp_apply
+}
+
+do_redbtn_warp_apply() {
+	local final blk
+	_rb_phase warp_op
+	rm -f "$RB_STOP_FLAG"
+	blk="$(_rb_blocker)"
+	[ -n "$blk" ] && { echo "ОШИБКА: WARP сейчас настраивается не здесь ($blk)"; return 1; }
+	final="$(_rb_warp_final "$(_rb_warp_auto)" | tr '\n' ' ')"
+	if [ -n "$(echo $final)" ]; then
+		_rb_install_steer && _rb_warp_up || return 1
+	fi
+	_rb_warp_rules "$final" || return 1
+	_rb_say "Готово, списки для WARP применены"
 }
 
 # ── управление WARP и steer ──
@@ -5708,7 +5773,7 @@ redbtn_video_set() {
 
 do_redbtn_remove() {
 	_rb_phase remove
-	_rb_say "Снимаем настройки автообхода"
+	_rb_say "Удаляем автообход"
 	_rb_spec_clear
 	if _rb_owns "net $RB_WARP_IF"; then
 		ifdown "$RB_WARP_IF" >/dev/null 2>&1
@@ -5743,7 +5808,7 @@ do_redbtn_remove() {
 	_rb_rpcd_ensure
 	_rb_probe_nft_down
 	rm -rf "$RB_DIR" "$RB_RUN"
-	_rb_say "Готово, настройки автообхода сняты"
+	_rb_say "Готово, автообход удалён"
 }
 
 redbtn_status() {
@@ -5774,10 +5839,15 @@ redbtn_status() {
 	fi
 	_rb_dns_conflict && dns=true
 	[ -s "$RB_VIDEO_FILE" ] && video=$(head -n1 "$RB_VIDEO_FILE")
+	local final w r
+	final=" $(_rb_warp_final "$(_rb_warp_auto)" | tr '\n' ' ') "
 	for id in $(_rb_svc_ids); do
 		name="$(_rb_svc_field "$id" 2)"
 		st="$(grep "^$id|" "$RB_RESULTS" 2>/dev/null | head -n1 | cut -d'|' -f2)"
-		svc="$svc$sep{\"id\":\"$id\",\"name\":\"$(esc "$name")\",\"state\":\"$st\"}"
+		w=false; r=false
+		case "$final" in *" $id "*) w=true ;; esac
+		_rb_routable "$id" && r=true
+		svc="$svc$sep{\"id\":\"$id\",\"name\":\"$(esc "$name")\",\"state\":\"$st\",\"warp\":$w,\"routable\":$r}"
 		sep=","
 	done
 	printf '{"running":%s,"phase":"%s","last":"%s","blocker":"%s","warp_up":%s,"warp_owned":%s,"warp_colo":"%s","warp_host":"%s","warp_port":"%s","warp_hs_age":"%s","warp_rx":%s,"warp_tx":%s,"steer":"%s","steer_running":%s,"steer_enabled":%s,"steer_channels":%s,"autorestart":"%s","video":"%s","dns_conflict":%s,"configured":%s,"services":[%s]}\n' \
@@ -5819,6 +5889,10 @@ redbtn_action() {
 			printf '{"ok":true}\n'
 			;;
 		autorestart) _rb_cron_set "$mode" ;;
+		warp_lists)
+			_rb_running && { echo '{"error":"дождитесь окончания текущей операции"}'; return 1; }
+			redbtn_warp_lists_set "$mode"
+			;;
 		dns_fix)
 			do_redbtn_dns_fix
 			printf '{"ok":true}\n'
@@ -6900,7 +6974,7 @@ var PHASE_TEXT = {
 	steer: 'Применяем правила',
 	telegram: 'Проверяем Telegram',
 	warp_op: 'Работаем с туннелем WARP',
-	remove: 'Снимаем настройки'
+	remove: 'Удаляем автообход'
 };
 var RUN_PHASES = [ 'zapret_install', 'check', 'zapret', 'warp', 'steer', 'telegram' ];
 
@@ -6931,7 +7005,11 @@ var VIDEO_DEFAULT = { file: 'wait.mp4', name: 'Стандартное', poster: 
 
 var ICON_BOLT = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8z"/></svg>';
 
-function stateBadge(st) {
+function stateBadge(svc) {
+	var st = svc.state;
+	// Ручной выбор списков важнее подобранного: отмеченный сервис идёт через WARP, снятый — нет.
+	if (svc.warp) st = 'warp';
+	else if (st === 'warp') return E('span', { 'class': 'zm-badge zm-off' }, [ E('span', { 'class': 'zm-dot' }), 'WARP выключен' ]);
 	var s = STATES[st];
 	return E('span', { 'class': 'zm-badge ' + (s ? s.cls : 'zm-off') }, [
 		E('span', { 'class': 'zm-dot' }),
@@ -7008,6 +7086,7 @@ return view.extend({
 		var dnsCard = E('div', {});
 		var svcCard = E('div', { 'class': 'zm-card' });
 		var warpCard = E('div', { 'class': 'zm-card' });
+		var listCard = E('div', { 'class': 'zm-card' });
 		var steerCard = E('div', { 'class': 'zm-card' });
 		var autoCard = E('div', { 'class': 'zm-card' });
 		var videoSetCard = E('div', { 'class': 'zm-card' });
@@ -7123,7 +7202,8 @@ return view.extend({
 			var msg;
 			if (!ok) msg = 'Операция завершилась с ошибкой — подробности в журнале';
 			else if (lastAction === 'start') msg = data.phase === 'done' ? 'Готово, обход подобран' : 'Подбор остановлен';
-			else if (lastAction === 'remove') msg = 'Настройки автообхода сняты';
+			else if (lastAction === 'remove') msg = 'Автообход удалён';
+			else if (lastAction === 'warp_lists') msg = 'Списки для WARP применены';
 			else msg = 'Готово';
 			zm.toast(msg, ok ? 'info' : 'error');
 			lastAction = '';
@@ -7190,8 +7270,8 @@ return view.extend({
 		}
 
 		function remove() {
-			if (!confirm('Снять настройки автообхода?\n\nТуннель WARP, правила steer и всё, что автообход установил, будут удалены. Стратегия Zapret останется.')) return;
-			act('remove', '', 'Снимаем настройки');
+			if (!confirm('Удалить автообход?\n\nБудут удалены туннель WARP, steer и всё, что автообход установил сам. Подобранная стратегия Zapret останется — сайты, которые открывались через Zapret, продолжат работать.')) return;
+			act('remove', '', 'Удаляем автообход');
 		}
 
 		// ── главная карточка ──
@@ -7216,7 +7296,7 @@ return view.extend({
 		function summary() {
 			var list = (data.services || []).filter(function(s) { return s.state; });
 			if (!list.length) return null;
-			var ok = list.filter(function(s) { return s.state !== 'none'; }).length;
+			var ok = list.filter(function(s) { return s.warp || (s.state !== 'none' && s.state !== 'warp'); }).length;
 			return E('div', { 'class': 'zm-ab-sum' + (ok === list.length ? ' zm-ab-sum-ok' : '') }, [
 				E('b', {}, ok + ' из ' + list.length), ' сервисов открываются'
 			]);
@@ -7262,7 +7342,7 @@ return view.extend({
 			heroCard.appendChild(E('p', { 'class': 'zm-hint' }, sel.hint + ' Стратегия Zapret меняется, только если так откроется больше сервисов.'));
 
 			var actions = [ E('button', { 'class': 'cbi-button cbi-button-positive zm-ab-go', 'click': start }, [ E(ICON_BOLT), data.configured ? 'Подобрать заново' : 'Запустить автообход' ]) ];
-			if (data.configured) actions.push(E('button', { 'class': 'cbi-button cbi-button-remove', 'click': remove }, 'Снять настройки'));
+			if (data.configured) actions.push(E('button', { 'class': 'cbi-button cbi-button-remove', 'click': remove, 'title': 'Удалить туннель WARP, steer и всё, что поставил автообход' }, 'Удалить автообход'));
 			heroCard.appendChild(E('div', { 'class': 'zm-actions' }, actions));
 
 			var foot = [ E('span', {}, 'Последний подбор: ' + fmtTime(data.last)) ];
@@ -7278,7 +7358,7 @@ return view.extend({
 			svcCard.appendChild(E('div', { 'class': 'zm-ab-svc' }, (data.services || []).map(function(s) {
 				return E('div', { 'class': 'zm-ab-svc-item' + (s.state === 'none' ? ' zm-ab-svc-bad' : '') }, [
 					E('span', { 'class': 'zm-ab-svc-name' }, s.name),
-					stateBadge(s.state)
+					stateBadge(s)
 				]);
 			})));
 		}
@@ -7311,7 +7391,7 @@ return view.extend({
 		function renderWarp() {
 			warpCard.innerHTML = '';
 			warpCard.appendChild(E('h3', {}, 'Туннель WARP'));
-			warpCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Бесплатный туннель Cloudflare. В него уходят только сервисы, которым не помог Zapret.'));
+			warpCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Бесплатный туннель Cloudflare. В него уходят сервисы, отмеченные выше, — остальной трафик идёт как обычно.'));
 			if (!data.warp_owned) {
 				warpCard.appendChild(row('Состояние', plainBadge('zm-off', 'не создан')));
 				warpCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Туннель создаётся сам во время подбора, если он понадобится.'));
@@ -7343,6 +7423,47 @@ return view.extend({
 				} }, 'Пересоздать')
 			]));
 			warpCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Не работает — нажмите «Перезапустить». Медленно — «Сменить точку входа». Совсем не помогает — «Пересоздать».'));
+		}
+
+		// ── какие списки пускать через WARP ──
+		var pick = null;   // выбор, ещё не применённый; null — показываем то, что на роутере
+
+		function currentPick() {
+			var m = {};
+			(data.services || []).forEach(function(s) { if (s.warp) m[s.id] = true; });
+			return m;
+		}
+
+		function renderLists() {
+			listCard.innerHTML = '';
+			listCard.appendChild(E('h3', {}, 'Что пускать через WARP'));
+			listCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Отмеченные сервисы идут через WARP. Автообход отмечает нужные сам — здесь можно добавить свои или убрать лишние.'));
+			var cur = currentPick(), sel = pick || cur, changed = false;
+			var list = (data.services || []).filter(function(s) { return s.routable; });
+			list.forEach(function(s) { if (!!sel[s.id] !== !!cur[s.id]) changed = true; });
+			listCard.appendChild(E('div', { 'class': 'zm-grid' }, list.map(function(s) {
+				return E('div', {
+					'class': 'zm-tile' + (sel[s.id] ? ' zm-active' : ''),
+					'click': function() {
+						if (busy) { zm.toast('Дождитесь окончания текущей операции', 'warning'); return; }
+						pick = {};
+						for (var k in sel) if (sel[k]) pick[k] = true;
+						if (pick[s.id]) delete pick[s.id]; else pick[s.id] = true;
+						renderLists();
+					}
+				}, s.name);
+			})));
+			if (changed) {
+				listCard.appendChild(E('div', { 'class': 'zm-actions' }, [
+					E('button', { 'class': 'cbi-button cbi-button-positive', 'click': function() {
+						var ids = list.filter(function(s) { return sel[s.id]; }).map(function(s) { return s.id; });
+						pick = null;
+						act('warp_lists', ids.join(','), ids.length ? 'Применяем — если туннеля ещё нет, он будет создан' : 'Выключаем WARP для всех сервисов');
+					} }, 'Применить'),
+					E('button', { 'class': 'cbi-button', 'click': function() { pick = null; renderLists(); } }, 'Отмена')
+				]));
+			}
+			if (!data.warp_owned) listCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Туннеля пока нет — он создастся сам, когда вы примените выбор.'));
 		}
 
 		function renderSteer() {
@@ -7496,6 +7617,7 @@ return view.extend({
 			renderHero();
 			renderDns();
 			renderServices();
+			renderLists();
 			renderWarp();
 			renderSteer();
 			renderAuto();
@@ -7505,6 +7627,7 @@ return view.extend({
 		panels.main.appendChild(heroCard);
 		panels.main.appendChild(dnsCard);
 		panels.main.appendChild(svcCard);
+		panels.warp.appendChild(listCard);
 		panels.warp.appendChild(warpCard);
 		panels.warp.appendChild(steerCard);
 		panels.warp.appendChild(autoCard);
@@ -13095,7 +13218,7 @@ var ICONS = {
 	arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>',
 	alert: '<path d="M12 3.5l9.5 16.5h-19L12 3.5z"/><path d="M12 10v4.5M12 17.3v.2"/>',
 	wand: '<path d="M4 20l10.5-10.5"/><path d="M13 8.5l2.5 2.5"/><path d="M16.5 3v3M15 4.5h3M19.5 8.5v2.5M18.2 9.8h2.6M9 3.5v2M8 4.5h2"/>',
-	rocket: '<path d="M14.5 4.2c2.6-1.1 5-1.2 5.3-.9.3.3.2 2.7-.9 5.3-1 2.4-3.1 4.9-6.2 6.9l-3.2-3.2c2-3.1 4.5-5.2 6.9-6.2z"/><circle cx="15.2" cy="8.8" r="1.6"/><path d="M9.5 12.3l-3.6-.4 2.4-3.2 3.3-.2M11.7 14.5l.4 3.6 3.2-2.4.2-3.3"/><path d="M6.8 16.2c-1.3.4-2.1 2.2-2.3 3.3 1.1-.2 2.9-1 3.3-2.3"/>',
+	rocket: '<path d="M12 2.5c2.9 2.1 4.3 5.3 4.3 9.2V16H7.7v-4.3c0-3.9 1.4-7.1 4.3-9.2z"/><circle cx="12" cy="9.3" r="1.7"/><path d="M7.7 12.2L5 14.6V18l2.7-2M16.3 12.2l2.7 2.4V18l-2.7-2"/><path d="M10.2 18.5 12 21.5l1.8-3"/>',
 	telegram: '<path d="M21 4.5L2.8 11.4c-.8.3-.8 1.4 0 1.7l4.4 1.5 1.7 5.3c.2.7 1.1.9 1.6.4l2.5-2.4 4.6 3.4c.6.4 1.4.1 1.6-.6L22.3 5.8c.2-.9-.6-1.6-1.3-1.3z"/><path d="M7.3 14.6l10-6.6-7.4 8"/>'
 };
 
