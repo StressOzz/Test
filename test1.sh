@@ -1,6 +1,6 @@
 #!/bin/sh
 # Zapret Manager by StressOzz for LuCI installer
-# Version: 1.37
+# Version: 1.38
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -63,7 +63,7 @@ chmod 0755 /opt/zapret-manager-luci
 cat > '/opt/zapret-manager-luci/backend.sh' << 'ZM_INSTALLER_EOF'
 
 CONF="/etc/config/zapret"
-ZM_VERSION="1.37"
+ZM_VERSION="1.38"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
@@ -4791,7 +4791,7 @@ ST_WARP_ZONE="zmwarp"
 ST_STEER_VER="1.5.7"
 ST_STEER_SPEC="/etc/steer/spec.json"
 ST_STEER_URLS="https://github.com/xyzmean/steer/releases/download/v@VER@ https://gitlab.com/xyzmean/steer/-/raw/dist https://raw.githubusercontent.com/xyzmean/steer/dist"
-ST_AWG_MIRRORS="${GH_MAIN}/2Grey/awg-openwrt/releases/download ${GH_MAIN}/Slava-Shchipunov/awg-openwrt/releases/download"
+ST_AWG_MIRRORS="${GH_MAIN}/Slava-Shchipunov/awg-openwrt/releases/download ${GH_MAIN}/2Grey/awg-openwrt/releases/download"
 ST_AWG_MIRROR_FLAT="https://gitlab.com/xyzmean/brb/-/raw/main/deps/awg"
 # Автоперезапуск: строка crontab помечается хвостом-комментарием. Команда самодостаточна —
 # переживает и удаление панели: туннель поднимается заново, steer перезапускается, если включён.
@@ -4813,22 +4813,36 @@ _st_installed() { _st_owns "net $ST_WARP_IF" && command -v steer >/dev/null 2>&1
 _st_ready() { _st_installed && [ ! -f "$ST_OFF" ] && [ -z "$(_st_blocker)" ]; }
 _st_sel() { [ -s "$ST_SEL" ] || return 0; local id; for id in $(cat "$ST_SEL"); do _rb_routable "$id" && echo "$id"; done; }
 
-# Переезд с 1.35–1.36, где всё это жило в каталоге автообхода.
+# Переезд со старых версий (красная кнопка 1.34, автообход 1.35–1.36), где туннель и steer
+# записывались в каталог автообхода. Раньше переезд шёл, только пока каталога steer ещё нет, —
+# и если он успевал появиться (выбор списков до установки), старые правила так и оставались
+# «чужими»: страница steer и автообход отказывались их трогать. Теперь смотрим на сами записи.
 _st_migrate() {
-	[ -d "$ST_DIR" ] && return 0
-	local old=/etc/zm-redbtn re='^(pkg (steer|kmod-amneziawg|amneziawg-tools|luci-proto-amneziawg)|net zmwarp|fw zmwarp|steer-spec)$' f id
+	local old=/etc/zm-redbtn re='^(pkg (steer|kmod-amneziawg|amneziawg-tools|luci-proto-amneziawg)|net zmwarp|fw zmwarp|steer-spec)$' f id l
 	grep -qE "$re" "$old/owned" 2>/dev/null || return 0
 	mkdir -p "$ST_DIR"
-	grep -E "$re" "$old/owned" > "$ST_OWNED"
+	grep -E "$re" "$old/owned" | while read -r l; do _rb_in "$l" "$ST_OWNED" || echo "$l" >> "$ST_OWNED"; done
 	sed -i -E "/$re/d" "$old/owned"
-	for f in warp.conf warp.colo spec.before; do [ -f "$old/$f" ] && mv "$old/$f" "$ST_DIR/$f"; done
-	{
-		grep '|warp$' "$old/services" 2>/dev/null | cut -d'|' -f1
-		cat "$old/warp.pick" 2>/dev/null
-	} | sort -u | while read -r id; do _rb_in "$id" "$old/warp.skip" || echo "$id"; done > "$ST_SEL"
-	[ -s "$old/warp.skip" ] && mv "$old/warp.skip" "$ST_SKIP"
+	for f in warp.conf warp.colo spec.before; do [ -f "$old/$f" ] && [ ! -f "$ST_DIR/$f" ] && mv "$old/$f" "$ST_DIR/$f"; done
+	if [ ! -s "$ST_SEL" ]; then
+		{
+			grep '|warp$' "$old/services" 2>/dev/null | cut -d'|' -f1
+			cat "$old/warp.pick" 2>/dev/null
+		} | sort -u | while read -r id; do _rb_in "$id" "$old/warp.skip" || echo "$id"; done > "$ST_SEL"
+	fi
+	[ -s "$old/warp.skip" ] && [ ! -s "$ST_SKIP" ] && mv "$old/warp.skip" "$ST_SKIP"
 	rm -f "$old/warp.pick" "$old/warp.skip"
 	sed -i 's/# zm-autobypass$/# zm-steer/' "$CRON_FILE" 2>/dev/null
+	# Красная кнопка 1.34 из форка держала для ИИ-сервисов свой DNS (zm-geodns). Его сторож
+	# звал команду, которой здесь нет: умри прокси — и ИИ-сервисы перестали бы разрешаться
+	# вовсе. Теперь они идут через WARP, поэтому этот DNS выключаем.
+	if grep -qx 'svc zm-geodns' "$old/owned" 2>/dev/null || [ -x /etc/init.d/zm-geodns ]; then
+		/etc/init.d/zm-geodns stop >/dev/null 2>&1
+		/etc/init.d/zm-geodns disable >/dev/null 2>&1
+		rm -f /etc/init.d/zm-geodns "$old/geo.resolver"
+		sed -i '/redbtn_geo_watch/d' "$CRON_FILE" 2>/dev/null
+		sed -i '/^svc zm-geodns$/d' "$old/owned" 2>/dev/null
+	fi
 }
 _st_migrate
 mkdir -p "$ST_RUN" 2>/dev/null
@@ -4847,6 +4861,9 @@ _st_blocker() {
 _st_spec_foreign() {
 	[ -s "$ST_STEER_SPEC" ] || return 1
 	_st_owns "steer-spec" && return 1
+	# Выход zm_warp пишет только Zapret Manager (любая его версия): такая спека наша, даже если
+	# запись о ней потерялась при обновлении, — забираем её обратно, а не отказываемся работать.
+	if grep -q '"zm_warp"' "$ST_STEER_SPEC"; then _st_own "steer-spec"; return 1; fi
 	grep -q '"channels"[[:space:]]*:[[:space:]]*\[[[:space:]]*{' "$ST_STEER_SPEC"
 }
 
@@ -4963,11 +4980,52 @@ _st_install_awg() {
 
 _st_warp_field() { sed -n "s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*//p" "$ST_WARP_CONF" | head -n1; }
 
-_st_warp_register() {
-	[ -s "$ST_WARP_CONF" ] && return 0
+# Ключи WARP — напрямую у Cloudflare, как это делает wgcf: свой ключ генерирует awg, Cloudflare
+# в ответ называет свой ключ и адрес. Разбор — jsonfilter, он есть в каждой OpenWrt, jq не
+# нужен. Не вышло — запасные генераторы страницы Mixomo (сторонние сайты).
+ST_WARP_API="https://api.cloudflareclient.com/v0a2158/reg https://api.cloudflareclient.com/v0a1922/reg"
+
+_st_warp_conf_write() { # ПРИВАТНЫЙ ПИР v4 v6
 	mkdir -p "$ST_DIR"
+	printf '%s\n' \
+		"[Interface]" "PrivateKey = $1" "Address = ${3}${4:+, $4}" "MTU = 1280" \
+		"S1 = $MIXOMO_AWG_S1" "S2 = $MIXOMO_AWG_S2" "Jc = $MIXOMO_AWG_JC" "Jmin = $MIXOMO_AWG_JMIN" "Jmax = $MIXOMO_AWG_JMAX" \
+		"H1 = $MIXOMO_AWG_H1" "H2 = $MIXOMO_AWG_H2" "H3 = $MIXOMO_AWG_H3" "H4 = $MIXOMO_AWG_H4" "I1 = $MIXOMO_AWG_I1" "" \
+		"[Peer]" "PublicKey = $2" "AllowedIPs = 0.0.0.0/0" "Endpoint = engage.cloudflareclient.com:4500" "PersistentKeepalive = 25" \
+		> "$ST_WARP_CONF"
+	chmod 600 "$ST_WARP_CONF"
+}
+
+_st_warp_register() {
+	[ -s "$ST_WARP_CONF" ] && [ -n "$(_st_warp_field PrivateKey)" ] && return 0
+	mkdir -p "$ST_DIR" "$ST_RUN"
+	local priv pub api reg="$ST_RUN/reg.json" peer v4 v6 tos
+	if command -v awg >/dev/null 2>&1 && command -v jsonfilter >/dev/null 2>&1; then
+		priv="$(awg genkey 2>/dev/null)"
+		pub="$(printf '%s' "$priv" | awg pubkey 2>/dev/null)"
+		tos="$(date -u +%Y-%m-%dT%H:%M:%S.000Z)"
+		for api in $ST_WARP_API; do
+			[ -n "$pub" ] || break
+			rm -f "$reg"
+			curl -fsS --connect-timeout 8 --max-time 25 -X POST \
+				-H 'User-Agent: okhttp/3.12.1' -H 'CF-Client-Version: a-6.10-2158' -H 'Content-Type: application/json' \
+				-d "{\"install_id\":\"\",\"tos\":\"$tos\",\"key\":\"$pub\",\"fcm_token\":\"\",\"type\":\"ios\",\"locale\":\"en_US\"}" \
+				-o "$reg" "$api" 2>/dev/null || continue
+			peer="$(jsonfilter -i "$reg" -e '@.config.peers[0].public_key' 2>/dev/null)"
+			v4="$(jsonfilter -i "$reg" -e '@.config.interface.addresses.v4' 2>/dev/null)"
+			v6="$(jsonfilter -i "$reg" -e '@.config.interface.addresses.v6' 2>/dev/null)"
+			if [ -n "$peer" ] && [ -n "$v4" ]; then
+				_st_warp_conf_write "$priv" "$peer" "$v4" "$v6"
+				rm -f "$reg"
+				_rb_say "Ключи WARP получены у Cloudflare"
+				return 0
+			fi
+		done
+		rm -f "$reg"
+		_rb_warn "Cloudflare не выдал ключи напрямую — пробуем запасные генераторы"
+	fi
 	# Тот же генератор, что у страницы Mixomo, но в свой файл: чужой /root/WARP.conf не трогаем.
-	( MIXOMO_WARP_CONF="$ST_WARP_CONF"; do_mixomo_warp_register manual ) || return 1
+	( MIXOMO_WARP_CONF="$ST_WARP_CONF"; $UPDATE >/dev/null 2>&1; do_mixomo_warp_register manual ) || return 1
 	chmod 600 "$ST_WARP_CONF"
 	[ -n "$(_st_warp_field PrivateKey)" ] && [ -n "$(_st_warp_field PublicKey)" ]
 }
@@ -5214,13 +5272,24 @@ _st_dns_conflict() {
 	[ "$(uci -q get https-dns-proxy.config.force_dns)" != "0" ]
 }
 
-do_steer_dns_fix() {
+# Перехват порта 53 DoH включён — независимо от того, стоят ли уже наши правила.
+_st_doh_force_on() {
+	[ -f /etc/config/https-dns-proxy ] || return 1
+	pidof https-dns-proxy >/dev/null 2>&1 || return 1
+	[ "$(uci -q get https-dns-proxy.config.force_dns)" != "0" ]
+}
+
+_st_doh_unforce() {
 	# Секция main 'config' — её так пишет и пакет, и страница DoH. Прежняя правка через sed
 	# ничего не делала, когда ключа force_dns в файле не было (умолчание — единица).
 	uci -q get https-dns-proxy.config >/dev/null 2>&1 || uci set https-dns-proxy.config=main
 	uci set https-dns-proxy.config.force_dns='0'
 	uci commit https-dns-proxy
 	/etc/init.d/https-dns-proxy restart >/dev/null 2>&1
+}
+
+do_steer_dns_fix() {
+	_st_doh_unforce
 	/etc/init.d/steer restart >/dev/null 2>&1
 }
 
@@ -5274,7 +5343,7 @@ _st_down() {
 }
 
 # Применить выбор: туннель и правила, или, если ничего не выбрано, всё выключить.
-_st_apply() {
+_st_apply() { # [tunnel_ready] — туннель только что проверен, второй раз не поднимаем
 	local sel
 	sel="$(_st_sel | tr '\n' ' ')"
 	if [ -z "$(echo $sel)" ]; then
@@ -5283,9 +5352,49 @@ _st_apply() {
 		_rb_say "Ничего не выбрано — туннель и steer выключены"
 		return 0
 	fi
-	_st_warp_up || return 1
+	[ "$1" = tunnel_ready ] || _st_warp_up || return 1
+	# Домены уходят в туннель, только если DNS устройств отвечает резолвер steer. Перехват
+	# порта 53 страницей DoH его перебивает — выключаем перехват сами: шифрованный DNS при
+	# этом работает как работал, dnsmasq по-прежнему спрашивает его.
+	if _st_doh_force_on; then
+		_st_doh_unforce
+		_rb_warn "DNS over HTTPS перехватывал DNS сети — перехват выключен, шифрованный DNS работает как прежде"
+	fi
 	_rb_say "Через WARP: $(_rb_svc_names "$sel")"
 	_st_spec_apply $sel
+}
+
+# Самопроверка: что говорит сам движок (steer diag) и идёт ли трафик через WARP на деле.
+# Печатает в журнал; код 1 — есть поломка.
+_st_selfcheck() {
+	local f="$ST_RUN/diag.json" n i v what why bad=0 trace
+	_rb_say "Проверяем, что всё работает"
+	if [ "$(_st_sel)" ]; then
+		trace="$(curl -s --interface "$ST_WARP_IF" --connect-timeout 5 --max-time 10 https://www.cloudflare.com/cdn-cgi/trace 2>/dev/null)"
+		case "$trace" in
+			*warp=on*|*warp=plus*) echo "[ OK ] Туннель WARP: трафик идёт через Cloudflare ($(echo "$trace" | sed -n 's/^colo=//p'))" ;;
+			*) echo "[FAIL] Туннель WARP: трафик через него не идёт"; bad=1 ;;
+		esac
+		/etc/init.d/steer running >/dev/null 2>&1 && echo "[ OK ] Служба steer запущена" || { echo "[FAIL] Служба steer не запущена"; bad=1; }
+	fi
+	command -v steer >/dev/null 2>&1 || return $bad
+	[ -s "$ST_STEER_SPEC" ] || return $bad
+	steer diag --spec "$ST_STEER_SPEC" > "$f" 2>/dev/null
+	n=$(jsonfilter -i "$f" -e '@.checks[*].id' 2>/dev/null | wc -l)
+	i=0
+	while [ "$i" -lt "$n" ]; do
+		v=$(jsonfilter -i "$f" -e "@.checks[$i].verdict" 2>/dev/null)
+		what=$(jsonfilter -i "$f" -e "@.checks[$i].what" 2>/dev/null)
+		why=$(jsonfilter -i "$f" -e "@.checks[$i].why" 2>/dev/null)
+		case "$v" in
+			ok)   echo "[ OK ] $what" ;;
+			warn) echo "!! $what${why:+ — $why}" ;;
+			fail) echo "[FAIL] $what${why:+ — $why}"; bad=1 ;;
+		esac
+		i=$((i + 1))
+	done
+	if [ "$bad" = 0 ]; then _rb_say "Проверка пройдена"; else _rb_warn "Проверка нашла поломку — подробности выше"; fi
+	return $bad
 }
 
 # Добавить сервис в выбор (зовёт автообход). Код 1 — человек его убирал, не добавляем.
@@ -5308,8 +5417,17 @@ do_steer_install() {
 	esac
 	_ensure_deps
 	mkdir -p "$ST_DIR"
+	_st_phase pkgs
 	_st_install_steer || return 1
+	# conntrack нужен движку, чтобы при включённой выгрузке потоков (flow offloading) уже
+	# открытые соединения тоже переходили в туннель. Не встал — не беда, это не ошибка.
+	if ! command -v conntrack >/dev/null 2>&1; then
+		$INSTALL conntrack >/dev/null 2>&1 && _st_own "pkg conntrack"
+	fi
+	_st_phase awg
 	_st_install_awg || return 1
+	_st_phase keys
+	_st_warp_register || { echo "ОШИБКА: не удалось получить ключи WARP — Cloudflare и запасные генераторы не ответили"; return 1; }
 	# Ничего не выбрано — берём ИИ-сервисы и то, что автообход не смог открыть.
 	if [ -z "$(_st_sel)" ]; then
 		for id in $ST_DEFAULT_SEL $(grep '|none$' /etc/zm-redbtn/services 2>/dev/null | cut -d'|' -f1); do
@@ -5317,11 +5435,14 @@ do_steer_install() {
 		done
 	fi
 	rm -f "$ST_OFF"
-	_st_phase warp
+	_st_phase tunnel
 	_st_warp_up || return 1
 	_st_phase rules
-	_st_apply || return 1
-	_rb_say "Готово, steer установлен"
+	_st_apply tunnel_ready || return 1
+	_st_phase check
+	sleep 2
+	_st_selfcheck
+	_rb_say "Готово, steer установлен и работает"
 }
 
 do_steer_apply() {
@@ -5331,6 +5452,9 @@ do_steer_apply() {
 	[ -n "$(_st_blocker)" ] && { echo "ОШИБКА: спеку steer сейчас ведёт не Zapret Manager"; return 1; }
 	rm -f "$ST_OFF"
 	_st_apply || return 1
+	_st_phase check
+	sleep 2
+	_st_selfcheck
 	_rb_say "Готово"
 }
 
@@ -5424,6 +5548,7 @@ do_steer_remove() {
 		_rb_say "Удаляем движок steer"
 		$DELETE steer >/dev/null 2>&1
 	fi
+	_st_owns "pkg conntrack" && $DELETE conntrack >/dev/null 2>&1
 	# AmneziaWG — только если других туннелей на нём нет.
 	if ! uci show network 2>/dev/null | grep -q "\.proto='amneziawg'"; then
 		local p
@@ -5532,6 +5657,20 @@ steer_action() {
 			printf '{"ok":true}\n'
 			;;
 		autorestart) _st_cron_set "$mode" ;;
+		diag)
+			local trace warp="none" colo=""
+			if _st_installed && [ -n "$(_st_sel)" ] && [ ! -f "$ST_OFF" ]; then
+				trace="$(curl -s --interface "$ST_WARP_IF" --connect-timeout 4 --max-time 8 https://www.cloudflare.com/cdn-cgi/trace 2>/dev/null)"
+				case "$trace" in *warp=on*|*warp=plus*) warp=on ;; *) warp=off ;; esac
+				colo="$(echo "$trace" | sed -n 's/^colo=//p')"
+			fi
+			local d=""
+			if command -v steer >/dev/null 2>&1 && [ -s "$ST_STEER_SPEC" ] && _st_owns "steer-spec"; then
+				d="$(steer diag --spec "$ST_STEER_SPEC" 2>/dev/null | tr '\n' ' ')"
+				case "$d" in '{'*'}'*) ;; *) d="" ;; esac
+			fi
+			printf '{"warp":"%s","colo":"%s","diag":%s}\n' "$warp" "$(esc "$colo")" "${d:-null}"
+			;;
 		dns_fix)
 			do_steer_dns_fix
 			printf '{"ok":true}\n'
@@ -5944,7 +6083,11 @@ do_redbtn_run() {
 
 	_rb_phase telegram
 	_rb_say "Проверяем Telegram"
-	if [ -x /etc/init.d/tgws ] && [ -n "$(tgws status 2>/dev/null)" ]; then
+	if _st_ready && _rb_in telegram "$ST_SEL"; then
+		# Telegram отмечен на странице steer — он уже идёт через WARP, веб-сокет не нужен.
+		_rb_result_write telegram warp
+		echo "[ OK ] Telegram — через WARP (выбран на странице steer)"
+	elif [ -x /etc/init.d/tgws ] && [ -n "$(tgws status 2>/dev/null)" ]; then
 		_rb_result_write telegram tgws
 		echo "[ OK ] Telegram — через веб-сокет"
 	elif _rb_tg_ok; then
@@ -7166,6 +7309,12 @@ var VIDEO_BASES = [
 	'https://cdn.jsdelivr.net/gh/StressOzz/Zapret-Manager@main/files/AutoBypass/',
 	'https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/files/AutoBypass/'
 ];
+// Запас для стандартного ролика: он же лежит в репозитории автора кнопки. Плеер берёт первый
+// источник, который открылся, так что пока на нашем сервере файла нет, играет этот.
+var VIDEO_SPARE = [
+	'https://cdn.jsdelivr.net/gh/xyzmean/Zapret-Manager-Exp@main/files/RedButton/',
+	'https://raw.githubusercontent.com/xyzmean/Zapret-Manager-Exp/main/files/RedButton/'
+];
 var VIDEO_DEFAULT = { file: 'wait.mp4', name: 'Стандартное', poster: 'poster.jpg' };
 
 var ICON_BOLT = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8z"/></svg>';
@@ -7267,9 +7416,12 @@ return view.extend({
 			if (pref === 'off') return null;
 			if (pref.indexOf('url:') === 0) return { srcs: [ pref.slice(4) ], poster: '' };
 			var it = catalogItem(pref.indexOf('cat:') === 0 ? pref.slice(4) : VIDEO_DEFAULT.file);
+			var bases = it.file === VIDEO_DEFAULT.file ? VIDEO_BASES.concat(VIDEO_SPARE) : VIDEO_BASES;
 			return {
-				srcs: VIDEO_BASES.map(function(b) { return b + it.file; }),
-				poster: it.poster ? VIDEO_BASES[0] + it.poster : ''
+				srcs: bases.map(function(b) { return b + it.file; }),
+				// Постер — только из каталога, который реально пришёл с сервера: иначе вместо
+				// заставки была бы битая картинка.
+				poster: (videos && it.poster) ? VIDEO_BASES[0] + it.poster : ''
 			};
 		}
 
@@ -7629,11 +7781,19 @@ cat > '/www/luci-static/resources/view/zapret-manager/steer.js' << 'ZM_INSTALLER
 // steer: выбранные сервисы идут через бесплатный туннель Cloudflare WARP, остальное — как обычно.
 // Страница ставит и связывает всё сама: движок steer, AmneziaWG, ключи WARP, туннель и правила.
 
+var STEPS = [
+	{ id: 'pkgs', label: 'steer' },
+	{ id: 'awg', label: 'AmneziaWG' },
+	{ id: 'keys', label: 'Ключи WARP' },
+	{ id: 'tunnel', label: 'Туннель' },
+	{ id: 'rules', label: 'Правила' },
+	{ id: 'check', label: 'Проверка' }
+];
+
 var PHASE_TEXT = {
-	install: 'Устанавливаем',
-	warp: 'Настраиваем туннель WARP',
-	rules: 'Применяем правила',
-	remove: 'Удаляем'
+	install: 'Устанавливаем', pkgs: 'Ставим steer', awg: 'Ставим AmneziaWG', keys: 'Получаем ключи WARP',
+	tunnel: 'Поднимаем туннель', warp: 'Настраиваем туннель', rules: 'Применяем правила',
+	check: 'Проверяем', remove: 'Удаляем'
 };
 
 var BLOCKERS = {
@@ -7641,7 +7801,18 @@ var BLOCKERS = {
 	steer: 'Движок steer уже настроен вручную — Zapret Manager его не перезаписывает.'
 };
 
-var AUTO_TEXT = { direct: 'открывается напрямую', zapret: 'открывается через Zapret', none: 'не открывался', warp: 'автообход пустил через WARP' };
+// Значок сервиса: буква на фирменном цвете.
+var SVC_LOOK = {
+	youtube: [ 'YT', '#ff0033' ], discord: [ 'D', '#5865f2' ], instagram: [ 'IG', '#e1306c' ],
+	whatsapp: [ 'W', '#25d366' ], x: [ 'X', '#14171a' ], github: [ 'GH', '#24292f' ],
+	geoblock: [ 'AI', '#10a37f' ], telegram: [ 'T', '#229ed9' ]
+};
+var SVC_SUB = {
+	youtube: 'сайт, видео, приложение', discord: 'сайт, голос, обновления', instagram: 'лента, сторис, звонки',
+	whatsapp: 'сообщения и звонки', x: 'лента и видео', github: 'сайт и загрузки',
+	geoblock: 'ChatGPT, Claude, Gemini', telegram: 'приложение и сайт'
+};
+var AUTO_TEXT = { direct: 'открывается и так', zapret: 'открывается через Zapret', none: 'автообход: не открылся', warp: 'автообход: нужен WARP' };
 
 var ICON_ROUTE = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18.5" r="2.2"/><circle cx="18" cy="5.5" r="2.2"/><path d="M8.2 18.5h7.3a3.3 3.3 0 0 0 0-6.6h-7a3.3 3.3 0 0 1 0-6.6h7.3"/></svg>';
 
@@ -7672,13 +7843,14 @@ return view.extend({
 	render: function(data) {
 		data = data || {};
 		var wrap = E('div', { 'class': 'zm-wrap zm-ab' });
-		var busy = false, lastAction = '', pick = null, autoBusy = false;
+		var busy = false, lastAction = '', pick = null, autoBusy = false, maxStep = -1, diagRes = null, diagBusy = false;
 
 		var heroCard = E('div', { 'class': 'zm-card zm-ab-hero' });
 		var logEl = E('pre', { 'class': 'zm-log' });
 		var logCard = E('div', { 'class': 'zm-card zm-ab-logcard', 'style': 'display:none' }, [ E('h3', {}, 'Журнал'), logEl ]);
 		var dnsCard = E('div', {});
 		var listCard = E('div', { 'class': 'zm-card' });
+		var checkCard = E('div', { 'class': 'zm-card' });
 		var warpCard = E('div', { 'class': 'zm-card' });
 		var autoCard = E('div', { 'class': 'zm-card' });
 
@@ -7692,14 +7864,16 @@ return view.extend({
 			busy = false;
 			if (res) data = res;
 			var msg = 'Готово';
-			if (!ok) msg = 'Операция завершилась с ошибкой — подробности в журнале';
+			if (!ok) msg = 'Не получилось — подробности в журнале';
 			else if (lastAction === 'install') msg = 'steer установлен и работает';
 			else if (lastAction === 'remove') msg = 'steer удалён';
 			else if (lastAction === 'stop') msg = 'steer выключен — всё идёт напрямую';
-			else if (lastAction === 'lists') msg = 'Выбор применён';
+			else if (lastAction === 'lists' || lastAction === 'start') msg = 'Готово, выбор применён';
 			zm.toast(msg, ok ? 'info' : 'error');
 			lastAction = '';
+			diagRes = null;
 			renderAll();
+			if (ok && data.installed) runDiag(true);
 		}
 
 		function waitRouter() {
@@ -7711,6 +7885,7 @@ return view.extend({
 		}
 
 		function follow() {
+			var ticks = 0;
 			busy = true;
 			logCard.style.display = '';
 			renderAll();
@@ -7723,31 +7898,66 @@ return view.extend({
 					zm.toast('Роутер не отвечает — ждём', 'warning');
 					setTimeout(waitRouter, 5000);
 				});
-			}, function() {});
+			}, function() {
+				if (++ticks % 3) return;
+				zm.steerStatus().then(function(res) { if (res) { data = res; renderHero(); } }).catch(function() {});
+			});
 		}
 
 		function act(action, arg, toastText) {
 			if (busy) { zm.toast('Дождитесь окончания текущей операции', 'warning'); return; }
 			zm.steerAction(action, arg || '').then(function(res) {
 				if (res.error) { zm.toast(res.error, 'error'); return; }
-				if (res.saved) { zm.toast('Выбор сохранён — применится, когда steer будет включён', 'info'); pick = null; refresh(); return; }
+				if (res.saved) { zm.toast('Выбор сохранён — применится при установке', 'info'); pick = null; refresh(); return; }
 				if (toastText) zm.toast(toastText, 'warning');
 				lastAction = action;
+				maxStep = -1;
 				data.running = true;
-				data.phase = action === 'install' ? 'install' : action === 'remove' ? 'remove' : /^warp_/.test(action) ? 'warp' : 'rules';
+				data.phase = action === 'install' ? 'pkgs' : action === 'remove' ? 'remove' : /^warp_/.test(action) ? 'warp' : 'rules';
 				follow();
 			}).catch(function() { zm.toast('Роутер не ответил', 'error'); });
 		}
 
 		// ── главная карточка ──
 
+		function stepIndex(p) {
+			for (var i = 0; i < STEPS.length; i++) if (STEPS[i].id === p) return i;
+			return -1;
+		}
+
+		function renderSteps() {
+			var cur = stepIndex(data.phase);
+			if (cur > maxStep) maxStep = cur;
+			return E('div', { 'class': 'zm-ab-steps' }, STEPS.map(function(s, i) {
+				var cls = i < maxStep ? ' zm-ab-done' : (i === maxStep ? ' zm-ab-now' : '');
+				return E('div', { 'class': 'zm-ab-step' + cls }, [
+					E('span', { 'class': 'zm-ab-step-dot' }, i < maxStep ? '✓' : String(i + 1)),
+					E('span', { 'class': 'zm-ab-step-label' }, s.label)
+				]);
+			}));
+		}
+
+		function stat(label, value, cls) {
+			return E('div', { 'class': 'zm-st-stat' }, [
+				E('span', { 'class': 'zm-st-stat-label' }, label),
+				E('span', { 'class': 'zm-st-stat-value ' + (cls || '') }, value)
+			]);
+		}
+
+		function tunnelState() {
+			var age = parseInt(data.warp_hs_age, 10), n = parseInt(data.channels, 10) || 0;
+			if (!data.warp_up) return (data.stopped || !n) ? [ 'выключен', 'zm-st-off' ] : [ 'не поднят', 'zm-st-bad' ];
+			if (!isNaN(age) && age < 300) return [ 'работает' + (data.warp_colo ? ' · ' + data.warp_colo : ''), 'zm-st-ok' ];
+			return [ 'нет связи', 'zm-st-warn' ];
+		}
+
 		function renderHero() {
 			heroCard.innerHTML = '';
-			var status;
+			var n = parseInt(data.channels, 10) || 0, status;
 			if (busy || data.running) status = plainBadge('zm-warn', PHASE_TEXT[data.phase] || 'Работаем');
 			else if (!data.installed) status = plainBadge('zm-off', 'не установлен');
 			else if (data.stopped) status = plainBadge('zm-off', 'выключен');
-			else if (!parseInt(data.channels, 10)) status = plainBadge('zm-off', 'сервисы не выбраны');
+			else if (!n) status = plainBadge('zm-off', 'сервисы не выбраны');
 			else if (data.steer_running && data.warp_up) status = plainBadge('zm-ok', 'работает');
 			else status = plainBadge('zm-bad', 'не работает');
 
@@ -7755,7 +7965,7 @@ return view.extend({
 				E('div', { 'class': 'zm-ab-icon' }, [ E(ICON_ROUTE) ]),
 				E('div', { 'class': 'zm-ab-title' }, [
 					E('h3', {}, 'steer'),
-					E('p', { 'class': 'zm-hint' }, 'Пускает выбранные сервисы через бесплатный туннель Cloudflare WARP. Остальной трафик идёт как обычно.')
+					E('p', { 'class': 'zm-hint' }, 'Выбранные сервисы идут через бесплатный туннель Cloudflare WARP. Остальной интернет — как обычно.')
 				]),
 				status
 			]));
@@ -7764,7 +7974,9 @@ return view.extend({
 				heroCard.appendChild(E('div', { 'class': 'zm-ab-note zm-ab-note-warn' }, BLOCKERS[data.blocker] || data.blocker));
 				return;
 			}
+
 			if (busy) {
+				if (lastAction === 'install') heroCard.appendChild(renderSteps());
 				heroCard.appendChild(E('div', { 'class': 'zm-actions' }, [
 					E('button', { 'class': 'cbi-button cbi-button-remove', 'click': function() {
 						zm.steerAction('halt', '').then(function(res) {
@@ -7777,26 +7989,33 @@ return view.extend({
 			}
 			if (data.redbtn_running) heroCard.appendChild(E('div', { 'class': 'zm-ab-note zm-ab-note-warn' }, 'Идёт автообход — кнопки заработают, когда он закончит.'));
 
-			var actions = [];
 			if (!data.installed) {
-				actions.push(E('button', { 'class': 'cbi-button cbi-button-positive zm-ab-go', 'click': function() {
-					act('install', '', 'Устанавливаем steer — это займёт пару минут');
-				} }, [ E(ICON_ROUTE), 'Установить и включить' ]));
-				heroCard.appendChild(E('div', { 'class': 'zm-actions' }, actions));
-				heroCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Поставится всё нужное: steer, AmneziaWG и ключи WARP. Сразу через WARP пойдут ИИ-сервисы и то, что автообход не смог открыть; выбор потом можно поменять.'));
+				heroCard.appendChild(E('div', { 'class': 'zm-st-promo' }, [
+					E('div', {}, [ E('b', {}, '1 кнопка'), E('span', {}, 'всё ставится и настраивается само') ]),
+					E('div', {}, [ E('b', {}, '2–4 минуты'), E('span', {}, 'steer, AmneziaWG, ключи WARP, туннель') ]),
+					E('div', {}, [ E('b', {}, 'Только выбранное'), E('span', {}, 'остальной трафик не трогается') ])
+				]));
+				heroCard.appendChild(E('div', { 'class': 'zm-actions' }, [
+					E('button', { 'class': 'cbi-button cbi-button-positive zm-ab-go', 'click': function() {
+						act('install', '', 'Устанавливаем steer — это займёт пару минут');
+					} }, [ E(ICON_ROUTE), 'Установить и включить' ])
+				]));
+				heroCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Сразу через WARP пойдут сервисы, отмеченные ниже. Выбор можно поменять в любой момент.'));
 				return;
 			}
+
+			var ts = tunnelState();
+			heroCard.appendChild(E('div', { 'class': 'zm-st-stats' }, [
+				stat('Туннель WARP', ts[0], ts[1]),
+				stat('steer', data.stopped ? 'выключен' : data.steer_running ? 'запущен' : (n ? 'остановлен' : 'ждёт выбора'),
+					data.stopped || !n ? 'zm-st-off' : data.steer_running ? 'zm-st-ok' : 'zm-st-bad'),
+				stat('Через WARP', n ? n + ' ' + (n === 1 ? 'сервис' : n < 5 ? 'сервиса' : 'сервисов') : 'ничего', n ? 'zm-st-ok' : 'zm-st-off')
+			]));
+
+			var actions = [];
 			if (data.stopped) actions.push(E('button', { 'class': 'cbi-button cbi-button-positive', 'click': function() { act('start', '', 'Включаем steer'); } }, 'Включить'));
 			else {
-				actions.push(E('button', { 'class': 'cbi-button', 'click': function() {
-					if (busy) return;
-					zm.toast('Перезапускаем steer', 'warning');
-					zm.steerAction('restart', '').then(function(res) {
-						if (res.error) { zm.toast(res.error, 'error'); return; }
-						zm.toast('steer перезапущен', 'info');
-						refresh();
-					});
-				} }, 'Перезапустить'));
+				actions.push(E('button', { 'class': 'cbi-button cbi-button-positive', 'click': function() { act('apply', '', 'Перезапускаем туннель и правила'); } }, 'Перезапустить'));
 				actions.push(E('button', { 'class': 'cbi-button', 'click': function() { act('stop', '', 'Выключаем steer'); } }, 'Выключить'));
 			}
 			actions.push(E('button', { 'class': 'cbi-button cbi-button-remove', 'click': function() {
@@ -7806,7 +8025,7 @@ return view.extend({
 			heroCard.appendChild(E('div', { 'class': 'zm-actions' }, actions));
 			heroCard.appendChild(E('div', { 'class': 'zm-ab-foot' }, [
 				E('span', {}, 'Версия steer: ' + (data.version || '—')),
-				E('span', {}, 'Сервисов через WARP: ' + (parseInt(data.channels, 10) || 0))
+				E('span', {}, 'Выключить — всё пойдёт напрямую, настройки сохранятся.')
 			]));
 		}
 
@@ -7821,14 +8040,16 @@ return view.extend({
 		function renderLists() {
 			listCard.innerHTML = '';
 			listCard.appendChild(E('h3', {}, 'Что пускать через WARP'));
-			listCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Отмеченные сервисы идут через WARP. Автообход отмечает нужные сам — здесь можно добавить свои или убрать лишние.'));
+			listCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Включите нужные сервисы и нажмите «Применить». Автообход включает их сам, если Zapret не помог.'));
 			var cur = currentPick(), sel = pick || cur, changed = false;
 			var list = data.services || [];
 			list.forEach(function(s) { if (!!sel[s.id] !== !!cur[s.id]) changed = true; });
-			listCard.appendChild(E('div', { 'class': 'zm-grid' }, list.map(function(s) {
+			listCard.appendChild(E('div', { 'class': 'zm-svc-grid' }, list.map(function(s) {
+				var look = SVC_LOOK[s.id] || [ (s.name || '?').charAt(0), '#6e7681' ];
+				var on = !!sel[s.id];
 				return E('div', {
-					'class': 'zm-tile' + (sel[s.id] ? ' zm-active' : ''),
-					'title': AUTO_TEXT[s.auto] ? 'Автообход: ' + AUTO_TEXT[s.auto] : '',
+					'class': 'zm-svc' + (on ? ' zm-svc-on' : ''),
+					'role': 'switch', 'aria-checked': on ? 'true' : 'false', 'tabindex': '0',
 					'click': function() {
 						if (busy) { zm.toast('Дождитесь окончания текущей операции', 'warning'); return; }
 						pick = {};
@@ -7836,19 +8057,70 @@ return view.extend({
 						if (pick[s.id]) delete pick[s.id]; else pick[s.id] = true;
 						renderLists();
 					}
-				}, s.name);
+				}, [
+					E('span', { 'class': 'zm-svc-ico', 'style': 'background:' + look[1] }, look[0]),
+					E('span', { 'class': 'zm-svc-text' }, [
+						E('span', { 'class': 'zm-svc-name' }, s.name),
+						E('span', { 'class': 'zm-svc-sub' }, AUTO_TEXT[s.auto] || SVC_SUB[s.id] || '')
+					]),
+					E('span', { 'class': 'zm-switch' + (on ? ' zm-switch-on' : '') }, [ E('span', {}) ])
+				]);
 			})));
 			if (changed) {
-				listCard.appendChild(E('div', { 'class': 'zm-actions' }, [
+				listCard.appendChild(E('div', { 'class': 'zm-actions zm-st-apply' }, [
 					E('button', { 'class': 'cbi-button cbi-button-positive', 'click': function() {
 						var ids = list.filter(function(s) { return sel[s.id]; }).map(function(s) { return s.id; });
 						pick = null;
 						act('lists', ids.join(','), 'Применяем выбор');
 					} }, 'Применить'),
-					E('button', { 'class': 'cbi-button', 'click': function() { pick = null; renderLists(); } }, 'Отмена')
+					E('button', { 'class': 'cbi-button', 'click': function() { pick = null; renderLists(); } }, 'Отмена'),
+					E('span', { 'class': 'zm-hint' }, 'Есть несохранённые изменения')
 				]));
 			}
-			if (!data.installed) listCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Выбор сохранится и применится после установки.'));
+		}
+
+		// ── проверка ──
+
+		function runDiag(quiet) {
+			if (diagBusy) return;
+			diagBusy = true;
+			renderCheck();
+			zm.steerAction('diag', '').then(function(res) {
+				diagBusy = false;
+				diagRes = res || {};
+				renderCheck();
+				if (!quiet) zm.toast('Проверка закончена', 'info');
+			}).catch(function() { diagBusy = false; renderCheck(); });
+		}
+
+		function renderCheck() {
+			checkCard.innerHTML = '';
+			checkCard.style.display = data.installed ? '' : 'none';
+			if (!data.installed) return;
+			checkCard.appendChild(E('h3', {}, 'Проверка'));
+			checkCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Роутер проверит туннель и спросит сам steer, всё ли на месте.'));
+			if (diagRes) {
+				var items = [];
+				if (diagRes.warp === 'on') items.push([ 'ok', 'Трафик идёт через WARP' + (diagRes.colo ? ' (сервер ' + diagRes.colo + ')' : ''), '' ]);
+				else if (diagRes.warp === 'off') items.push([ 'fail', 'Трафик через WARP не идёт', 'Нажмите «Перезапустить туннель» или «Сменить точку входа» ниже' ]);
+				var d = diagRes.diag;
+				if (d && d.checks) d.checks.forEach(function(c) {
+					if (c.verdict === 'ok' || c.verdict === 'warn' || c.verdict === 'fail') items.push([ c.verdict, c.what, c.why ]);
+				});
+				var bad = items.filter(function(i) { return i[0] === 'fail'; }).length, warn = items.filter(function(i) { return i[0] === 'warn'; }).length;
+				checkCard.appendChild(E('div', { 'class': 'zm-ab-note ' + (bad ? 'zm-st-note-bad' : warn ? 'zm-ab-note-warn' : 'zm-st-note-ok') },
+					bad ? 'Есть поломка — посмотрите красные пункты' : warn ? 'Работает, но есть замечания' : 'Всё в порядке'));
+				checkCard.appendChild(E('div', { 'class': 'zm-st-checks' }, items.map(function(i) {
+					return E('div', { 'class': 'zm-st-check zm-st-check-' + i[0] }, [
+						E('span', { 'class': 'zm-st-check-dot' }, i[0] === 'ok' ? '✓' : i[0] === 'warn' ? '!' : '✕'),
+						E('span', {}, [ E('span', { 'class': 'zm-st-check-what' }, i[1]), i[2] ? E('span', { 'class': 'zm-st-check-why' }, i[2]) : '' ])
+					]);
+				})));
+			}
+			checkCard.appendChild(E('div', { 'class': 'zm-actions' }, [
+				E('button', { 'class': 'cbi-button', 'disabled': diagBusy || busy ? '' : null, 'click': function() { runDiag(false); } },
+					diagBusy ? 'Проверяем…' : 'Проверить')
+			]));
 		}
 
 		// ── туннель WARP ──
@@ -7858,10 +8130,8 @@ return view.extend({
 			warpCard.style.display = data.installed ? '' : 'none';
 			if (!data.installed) return;
 			warpCard.appendChild(E('h3', {}, 'Туннель WARP'));
-			var age = parseInt(data.warp_hs_age, 10), st;
-			if (!data.warp_up) st = plainBadge(data.stopped || !parseInt(data.channels, 10) ? 'zm-off' : 'zm-bad', 'выключен');
-			else if (!isNaN(age) && age < 300) st = plainBadge('zm-ok', 'работает');
-			else st = plainBadge('zm-warn', 'нет связи');
+			var ts = tunnelState();
+			var st = plainBadge(ts[1] === 'zm-st-ok' ? 'zm-ok' : ts[1] === 'zm-st-warn' ? 'zm-warn' : ts[1] === 'zm-st-bad' ? 'zm-bad' : 'zm-off', ts[0].split(' · ')[0]);
 			warpCard.appendChild(E('div', { 'class': 'bt-cols' }, [
 				E('div', { 'class': 'bt-col' }, [
 					row('Состояние', st),
@@ -7875,14 +8145,14 @@ return view.extend({
 				])
 			]));
 			warpCard.appendChild(E('div', { 'class': 'zm-actions' }, [
-				E('button', { 'class': 'cbi-button cbi-button-positive', 'click': function() { act('warp_restart', '', 'Перезапускаем туннель'); } }, 'Перезапустить туннель'),
+				E('button', { 'class': 'cbi-button', 'click': function() { act('warp_restart', '', 'Перезапускаем туннель'); } }, 'Перезапустить туннель'),
 				E('button', { 'class': 'cbi-button', 'click': function() { act('warp_endpoint', '', 'Ищем быструю точку входа'); } }, 'Сменить точку входа'),
 				E('button', { 'class': 'cbi-button', 'click': function() {
 					if (!confirm('Пересоздать WARP?\n\nБудут получены новые ключи, туннель переподключится. Помогает, если Cloudflare перестал пускать старые ключи.')) return;
 					act('warp_recreate', '', 'Пересоздаём WARP');
-				} }, 'Пересоздать ключи')
+				} }, 'Новые ключи')
 			]));
-			warpCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Не работает — «Перезапустить туннель». Медленно — «Сменить точку входа». Совсем не помогает — «Пересоздать ключи».'));
+			warpCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Не работает — «Перезапустить туннель». Медленно — «Сменить точку входа». Совсем не помогает — «Новые ключи».'));
 		}
 
 		// ── автоперезапуск ──
@@ -7892,7 +8162,7 @@ return view.extend({
 			autoCard.style.display = data.installed ? '' : 'none';
 			if (!data.installed) return;
 			autoCard.appendChild(E('h3', {}, 'Автоперезапуск'));
-			autoCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Туннель WARP и steer перезапускаются по расписанию — помогает, если обход со временем «подвисает».'));
+			autoCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Туннель и steer перезапускаются по расписанию — помогает, если обход со временем «подвисает».'));
 			var cur = data.autorestart || '';
 			var am = cur === '' ? 'off' : (cur.indexOf('every:') === 0 ? 'every' + cur.split(':')[1] : 'daily');
 			var curHour = am === 'daily' ? parseInt(cur.split(':')[1], 10) : 4;
@@ -7942,7 +8212,7 @@ return view.extend({
 			dnsCard.style.display = '';
 			dnsCard.appendChild(E('div', { 'class': 'zm-card' }, [
 				E('h3', {}, 'Нужно исправить DNS'),
-				E('p', { 'class': 'zm-hint' }, 'DNS over HTTPS перехватывает запросы устройств, и сервисы через WARP не откроются. Шифрованный DNS после исправления продолжит работать.'),
+				E('p', { 'class': 'zm-hint' }, 'DNS over HTTPS снова перехватывает запросы устройств, и сервисы через WARP не откроются. Шифрованный DNS после исправления продолжит работать.'),
 				E('div', { 'class': 'zm-actions' }, [
 					E('button', { 'class': 'cbi-button cbi-button-positive', 'click': function() {
 						zm.steerAction('dns_fix', '').then(function(res) {
@@ -7959,15 +8229,16 @@ return view.extend({
 			renderHero();
 			renderDns();
 			renderLists();
+			renderCheck();
 			renderWarp();
 			renderAuto();
 		}
 
 		renderAll();
-		var panel = E('div', { 'class': 'zm-ab-panel' }, [ heroCard, logCard, dnsCard, listCard, warpCard, autoCard ]);
-		wrap.appendChild(panel);
+		wrap.appendChild(E('div', { 'class': 'zm-ab-panel' }, [ heroCard, logCard, dnsCard, listCard, checkCard, warpCard, autoCard ]));
 
-		if (data.running) { lastAction = ''; follow(); }
+		if (data.running) { lastAction = data.phase === 'remove' ? 'remove' : [ 'pkgs', 'awg', 'keys', 'tunnel' ].indexOf(data.phase) >= 0 ? 'install' : 'apply'; follow(); }
+		else if (data.installed && !data.stopped && (parseInt(data.channels, 10) || 0) > 0) runDiag(true);
 		return wrap;
 	}
 });
@@ -7996,7 +8267,7 @@ whatsapp|WhatsApp|svc_meta.lst|whatsapp.lst|web.whatsapp.com|static.whatsapp.net
 x|X (Twitter)|svc_twitter.lst|twitter_x.lst|x.com|twitter.com,abs.twimg.com,video.twimg.com|
 github|GitHub|own_github.lst||github.com,raw.githubusercontent.com,objects.githubusercontent.com|codeload.github.com,api.github.com,ghcr.io|
 geoblock|ИИ-сервисы|geoblock.lst||chatgpt.com|claude.ai,api.openai.com,gemini.google.com|App unavailable,unsupported_country,not available in your country,not available in your region
-telegram|Telegram|||web.telegram.org|t.me,core.telegram.org,telegra.ph|
+telegram|Telegram|svc_telegram.lst|telegram.lst|web.telegram.org|t.me,core.telegram.org,telegra.ph|
 ZM_INSTALLER_EOF
 cat > '/usr/share/zm-redbtn/lists/svc_youtube.lst' << 'ZM_INSTALLER_EOF'
 ggpht.com
@@ -8017,6 +8288,37 @@ yt3.googleusercontent.com
 ytimg.com
 ytimg.l.google.com
 yting.com
+ZM_INSTALLER_EOF
+cat > '/usr/share/zm-redbtn/lists/svc_telegram.lst' << 'ZM_INSTALLER_EOF'
+t.me
+telegram.me
+telegram.org
+telegram.dog
+telegra.ph
+telesco.pe
+tdesktop.com
+telegram-cdn.org
+cdn-telegram.org
+graph.org
+tg.dev
+fragment.com
+comments.app
+contest.com
+tx.me
+telegram.space
+ZM_INSTALLER_EOF
+cat > '/usr/share/zm-redbtn/lists/telegram.lst' << 'ZM_INSTALLER_EOF'
+# Сети Telegram (core.telegram.org/resources/cidr.txt), только IPv4: туннель WARP здесь без IPv6.
+91.105.192.0/23
+91.108.4.0/22
+91.108.8.0/22
+91.108.12.0/22
+91.108.16.0/22
+91.108.20.0/22
+91.108.56.0/22
+95.161.64.0/20
+149.154.160.0/20
+185.76.151.0/24
 ZM_INSTALLER_EOF
 cat > '/usr/share/zm-redbtn/lists/svc_discord.lst' << 'ZM_INSTALLER_EOF'
 dis.gd
@@ -8574,10 +8876,8 @@ zedge.net
 zerossl.com
 ZM_INSTALLER_EOF
 cat > '/usr/share/zm-redbtn/lists/discord.lst' << 'ZM_INSTALLER_EOF'
-104.16.0.0/12
 138.128.137.32/28
 138.128.140.240/28
-162.159.128.0/19
 172.65.202.16/28
 34.0.129.176/28
 34.0.130.176/28
@@ -11210,6 +11510,42 @@ html.zm-theme-dark .zm-ab-svc-item { background: #22272e; border-color: rgba(255
 .zm-ab-svc-item.zm-ab-svc-bad { border-color: rgba(207,34,46,.3); }
 .zm-ab-svc-name { font-weight: 600; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/* steer */
+.zm-st-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 16px; }
+.zm-st-stat { display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: 11px 14px; border-radius: 11px; border: 1px solid rgba(0,0,0,.08); background: var(--background-color-low, #fafafa); }
+html.zm-theme-dark .zm-st-stat { background: #22272e; border-color: rgba(255,255,255,.1); }
+.zm-st-stat-label { font-size: 11.5px; opacity: .65; text-transform: uppercase; letter-spacing: .04em; }
+.zm-st-stat-value { font-size: 14px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.zm-st-ok { color: #1a7f37; } .zm-st-warn { color: #9a6700; } .zm-st-bad { color: #cf222e; } .zm-st-off { opacity: .6; }
+.zm-st-promo { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 16px; }
+.zm-st-promo > div { display: flex; flex-direction: column; gap: 3px; padding: 12px 14px; border-radius: 11px; background: rgba(26,163,255,.07); border: 1px solid rgba(26,163,255,.2); }
+.zm-st-promo b { font-size: 14px; } .zm-st-promo span { font-size: 12px; opacity: .7; }
+.zm-svc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; margin-top: 12px; }
+.zm-svc { display: flex; align-items: center; gap: 11px; min-width: 0; padding: 10px 12px; border-radius: 12px; cursor: pointer; user-select: none;
+	border: 1px solid rgba(0,0,0,.1); background: var(--background-color-low, #fafafa); transition: border-color .15s, background .15s, transform .1s; }
+html.zm-theme-dark .zm-svc { background: #22272e; border-color: rgba(255,255,255,.1); }
+.zm-svc:hover { transform: translateY(-1px); border-color: #1aa3ff; }
+.zm-svc.zm-svc-on { border-color: rgba(26,163,255,.6); background: rgba(26,163,255,.08); }
+.zm-svc-ico { width: 34px; height: 34px; border-radius: 10px; flex-shrink: 0; display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 12.5px; letter-spacing: -.02em; }
+.zm-svc-text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.zm-svc-name { font-weight: 700; font-size: 13.5px; }
+.zm-svc-sub { font-size: 11.5px; opacity: .6; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.zm-switch { width: 38px; height: 22px; border-radius: 999px; background: rgba(110,118,129,.35); position: relative; flex-shrink: 0; transition: background .15s; }
+.zm-switch > span { position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.3); transition: left .15s; }
+.zm-switch.zm-switch-on { background: #1aa3ff; } .zm-switch.zm-switch-on > span { left: 19px; }
+.zm-st-apply .zm-hint { margin: 0; }
+.zm-st-note-ok { background: rgba(26,127,55,.1); color: #1a7f37; border: 1px solid rgba(26,127,55,.25); }
+.zm-st-note-bad { background: rgba(207,34,46,.08); color: #cf222e; border: 1px solid rgba(207,34,46,.25); }
+.zm-st-checks { display: flex; flex-direction: column; gap: 7px; margin-top: 12px; }
+.zm-st-check { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; }
+.zm-st-check > span:last-child { display: flex; flex-direction: column; min-width: 0; }
+.zm-st-check-dot { width: 20px; height: 20px; border-radius: 50%; flex-shrink: 0; display: grid; place-items: center; font-size: 11px; font-weight: 800; color: #fff; }
+.zm-st-check-ok .zm-st-check-dot { background: #1a7f37; } .zm-st-check-warn .zm-st-check-dot { background: #bf8700; } .zm-st-check-fail .zm-st-check-dot { background: #cf222e; }
+.zm-st-check-why { font-size: 12px; opacity: .65; }
+@media (max-width: 600px) {
+	.zm-st-stats, .zm-st-promo { grid-template-columns: 1fr; }
+	.zm-svc-grid { grid-template-columns: 1fr; }
+}
 .zm-ab-player video { display: block; width: 100%; max-height: 72vh; aspect-ratio: 16 / 9; object-fit: contain; border-radius: 12px; background: #000; }
 .zm-ab-player .zm-actions { margin-bottom: 0; }
 .zm-ab-logcard .zm-log { margin-top: 0; }
@@ -13056,6 +13392,10 @@ chmod 0644 '/www/luci-static/resources/view/zapret-manager/bytetube.js'
 
 rm -f /tmp/luci-indexcache* /tmp/luci-modulecache/* 2>/dev/null || true
 /etc/init.d/rpcd reload >/dev/null 2>&1 || /etc/init.d/rpcd restart >/dev/null 2>&1
+# Списки сервисов могли обновиться вместе с панелью — steer перечитывает их без обрыва DNS.
+if grep -qx 'steer-spec' /etc/zm-steer/owned 2>/dev/null && /etc/init.d/steer enabled 2>/dev/null; then
+	/etc/init.d/steer reload >/dev/null 2>&1
+fi
 
 if command -v apk >/dev/null 2>&1; then PM="apk"; INSTALL="apk add"
 else PM="opkg"; INSTALL="opkg install"; fi
@@ -14777,6 +15117,22 @@ html[data-theme="dark"] #zmw-view .zm-tile.zm-active::before { color: #a594ff; }
 #zmw-view .zm-ab-svc-name { color: var(--text); }
 #zmw-view .zm-ab-player video { border-radius: 14px; box-shadow: var(--shadow); }
 #zmw-view .zm-ab-logcard .zm-log { margin-top: 0; }
+
+#zmw-view .zm-st-stat, html.zm-theme-dark #zmw-view .zm-st-stat { background: var(--surface-2); border-color: var(--border); border-radius: 14px; }
+#zmw-view .zm-st-stat-label { color: var(--muted); opacity: 1; }
+#zmw-view .zm-st-stat-value { color: var(--text); }
+#zmw-view .zm-st-ok { color: var(--ok); } #zmw-view .zm-st-warn { color: var(--warn); } #zmw-view .zm-st-bad { color: var(--bad); } #zmw-view .zm-st-off { color: var(--muted); opacity: 1; }
+#zmw-view .zm-st-promo > div { background: var(--grad-soft); border-color: rgba(124,92,255,.25); border-radius: 14px; }
+#zmw-view .zm-st-promo b { color: var(--text); } #zmw-view .zm-st-promo span { color: var(--muted); opacity: 1; }
+#zmw-view .zm-svc, html.zm-theme-dark #zmw-view .zm-svc { background: var(--surface-2); border-color: var(--border); border-radius: 14px; }
+#zmw-view .zm-svc:hover { border-color: rgba(124,92,255,.55); box-shadow: 0 10px 20px -14px rgba(99,102,241,.7); }
+#zmw-view .zm-svc.zm-svc-on, html.zm-theme-dark #zmw-view .zm-svc.zm-svc-on { background: var(--grad-soft); border-color: rgba(124,92,255,.6); }
+#zmw-view .zm-svc-name { color: var(--text); } #zmw-view .zm-svc-sub { color: var(--muted); opacity: 1; }
+#zmw-view .zm-switch { background: var(--border-2); }
+#zmw-view .zm-switch.zm-switch-on { background: var(--grad); }
+#zmw-view .zm-st-note-ok { background: var(--ok-bg); color: var(--ok); border-color: rgba(16,185,129,.3); }
+#zmw-view .zm-st-note-bad { background: var(--bad-bg); color: var(--bad); border-color: rgba(239,68,68,.3); }
+#zmw-view .zm-st-check { color: var(--text); } #zmw-view .zm-st-check-why { color: var(--muted); opacity: 1; }
 
 /* авторы */
 #zmw-view .zm-credits-grid { gap: 12px; }
