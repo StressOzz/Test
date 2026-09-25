@@ -185,6 +185,27 @@ zapret_restart() {
 }
 
 
+_cpu_stat() { awk '/^cpu / { t = 0; for (i = 2; i <= NF; i++) t += $i; print t, $5 + $6; exit }' /proc/stat 2>/dev/null; }
+
+_cpu_load() {
+	local f="$JOBS_DIR/cpu.stat" now prev t1 i1 t2 i2
+	mkdir -p "$JOBS_DIR"
+	now="$(_cpu_stat)"
+	[ -n "$now" ] || return 0
+	if [ -s "$f" ] && [ -z "$(find "$f" -mmin +1 2>/dev/null)" ]; then
+		prev="$(cat "$f")"
+	else
+		prev="$now"
+		sleep 1
+		now="$(_cpu_stat)"
+	fi
+	echo "$now" > "$f"
+	set -- $prev $now
+	t1=$1; i1=$2; t2=$3; i2=$4
+	[ "$t2" -gt "$t1" ] 2>/dev/null || { echo 0; return 0; }
+	echo $(( (100 * ((t2 - t1) - (i2 - i1)) + (t2 - t1) / 2) / (t2 - t1) ))
+}
+
 _cpu_temp() {
 	local z t typ best="" v
 	for z in /sys/class/thermal/thermal_zone*; do
@@ -218,13 +239,9 @@ system_info() {
 	tmp_free=$(echo "$df_out" | awk 'NR==2{print $4}')
 	root_used=$(echo "$df_out" | awk 'NR==3{print $3}')
 	root_free=$(echo "$df_out" | awk 'NR==3{print $4}')
-	local load cores
-	load=$(awk '{print $1" "$2" "$3}' /proc/loadavg 2>/dev/null)
-	cores=$(grep -c '^processor' /proc/cpuinfo 2>/dev/null)
-	[ "${cores:-0}" -gt 0 ] 2>/dev/null || cores=1
-	printf '{"model":"%s","arch":"%s","openwrt":"%s","tmp_used":"%s","tmp_free":"%s","root_used":"%s","root_free":"%s","cpu_temp":"%s","load":"%s","cores":%s}\n' \
+	printf '{"model":"%s","arch":"%s","openwrt":"%s","tmp_used":"%s","tmp_free":"%s","root_used":"%s","root_free":"%s","cpu_temp":"%s","cpu_load":"%s"}\n' \
 		"$(esc "$model")" "$(esc "$arch")" "$(esc "$owrt")" \
-		"$(esc "$tmp_used")" "$(esc "$tmp_free")" "$(esc "$root_used")" "$(esc "$root_free")" "$(_cpu_temp)" "$(esc "$load")" "$cores"
+		"$(esc "$tmp_used")" "$(esc "$tmp_free")" "$(esc "$root_used")" "$(esc "$root_free")" "$(_cpu_temp)" "$(_cpu_load)"
 }
 
 _v_modified() {
@@ -8669,13 +8686,10 @@ return view.extend({
 			if (!isNaN(t)) memRows.push(row('Температура ЦП', E('span', { 'class': 'zm-badge ' + (t >= 80 ? 'zm-bad' : t >= 65 ? 'zm-warn' : 'zm-ok') }, [
 				E('span', { 'class': 'zm-dot' }), sysInfo.cpu_temp + ' °C'
 			])));
-			var la = String(sysInfo.load || '').trim().split(/\s+/).map(parseFloat);
-			if (la.length === 3 && !isNaN(la[0])) {
-				var cores = parseInt(sysInfo.cores, 10) || 1, lp = la[0] / cores;
-				memRows.push(row('Load Average', E('span', { 'class': 'zm-badge ' + (lp >= 1 ? 'zm-bad' : lp >= 0.7 ? 'zm-warn' : 'zm-ok'), 'title': 'Средняя нагрузка за 1, 5 и 15 минут; ядер ЦП: ' + cores }, [
-					E('span', { 'class': 'zm-dot' }), la.map(function(v) { return v.toFixed(2); }).join(' · ') + ' (' + Math.round(lp * 100) + '%)'
-				])));
-			}
+			var cl = parseInt(sysInfo.cpu_load, 10);
+			if (!isNaN(cl)) memRows.push(row('Нагрузка ЦП', E('span', { 'class': 'zm-badge ' + (cl >= 90 ? 'zm-bad' : cl >= 70 ? 'zm-warn' : 'zm-ok') }, [
+				E('span', { 'class': 'zm-dot' }), cl + '%'
+			])));
 			if (mem.total) memRows.push(row('ОЗУ', E('span', {}, zm.usageText(mem.total - ramAvail, mem.total))));
 			memRows.push(row('Флеш', E('span', {}, zm.usageText(ru, ru + rf))));
 			memRows.push(row('/tmp', E('span', {}, zm.usageText(tu, tu + tf))));
@@ -13378,22 +13392,26 @@ return view.extend({
 			{ product: 'zapret-openwrt', author: 'remittor', url: 'https://github.com/remittor/zapret-openwrt' },
 			{ product: 'стратегии Flowseal', author: 'Flowseal', url: 'https://github.com/Flowseal/zapret-discord-youtube' },
 			{ product: 'ByeDPI-OpenWrt', author: 'DPITrickster', url: 'https://github.com/DPITrickster/ByeDPI-OpenWrt' },
-			{ product: 'mihomo', author: 'MetaCubeX', url: 'https://github.com/MetaCubeX/mihomo' },
+			{ product: 'mihomo, metacubexd', author: 'MetaCubeX', url: 'https://github.com/MetaCubeX' },
+			{ product: 'zashboard', author: 'Zephyruso', url: 'https://github.com/Zephyruso/zashboard' },
+			{ product: 'hev-socks5-tunnel', author: 'heiher', url: 'https://github.com/heiher/hev-socks5-tunnel' },
 			{ product: 'MagiTrickle', author: 'MagiTrickle', url: 'https://github.com/MagiTrickle/MagiTrickle' },
 			{ product: 'sTGWS, Steer', author: 'xyzmean', url: 'https://github.com/xyzmean' },
 			{ product: 'tg-ws-proxy-go (MTProto)', author: 'spatiumstas', url: 'https://github.com/spatiumstas/tg-ws-proxy-go' },
 			{ product: 'tg-ws-proxy-go (SOCKS5)', author: 'd0mhate', url: 'https://github.com/d0mhate/-tg-ws-proxy-Manager-go' },
 			{ product: 'tg-ws-proxy-rs (Rust)', author: 'valnesfjord', url: 'https://github.com/valnesfjord/tg-ws-proxy-rs' },
-			{ product: 'GeoHideDNS', author: 'Internet-Helper', url: 'https://github.com/Internet-Helper/GeoHideDNS' },
+			{ product: 'Mixomo, GeoHideDNS', author: 'Internet-Helper', url: 'https://github.com/Internet-Helper' },
+			{ product: 'allow-domains', author: 'itdoginfo', url: 'https://github.com/itdoginfo/allow-domains' },
 			{ product: 'dpi-checkers', author: 'hyperion-cs', url: 'https://github.com/hyperion-cs/dpi-checkers' },
-			{ product: 'awg-openwrt (AmneziaWG)', author: '2Grey', url: 'https://github.com/2Grey/awg-openwrt' }
+			{ product: 'awg-openwrt (AmneziaWG)', author: '2Grey, Slava-Shchipunov', url: 'https://github.com/2Grey/awg-openwrt' },
+			{ product: 'Всем пользователям', author: 'кто помогает, тестирует и поддерживает проект ❤', self: true }
 		];
 		var creditsGrid = E('div', { 'class': 'zm-credits-grid' });
 		CREDITS.forEach(function(c) {
 			creditsGrid.appendChild(E('div', { 'class': 'zm-credit-tile' + (c.self ? ' zm-credit-self' : '') }, [
 				E('div', { 'class': 'zm-credit-product' }, c.product),
 				E('div', { 'class': 'zm-credit-author' }, c.author),
-				E('a', { 'href': c.url, 'target': '_blank', 'rel': 'noreferrer' }, c.url.replace(/^https?:\/\//, ''))
+				c.url ? E('a', { 'href': c.url, 'target': '_blank', 'rel': 'noreferrer' }, c.url.replace(/^https?:\/\//, '')) : ''
 			]));
 		});
 		var creditsCard = E('div', { 'class': 'zm-card' }, [
@@ -15813,13 +15831,13 @@ function tempRow(t) {
 	r.el.title = 'Температура процессора: ' + t + ' °C';
 }
 
-function loadRow(la, cores) {
+function loadRow(pct) {
 	var r = memRows.load;
 	if (!r) {
 		r = memRows.load = {
 			order: -0.5,
 			el: E('div', { 'class': 'zmw-mem-row' }, [
-				E('div', { 'class': 'zmw-mem-head' }, [ E('span', { 'class': 'zmw-mem-label' }, [ 'Load Average' ]), E('span', { 'class': 'zmw-mem-val' }) ]),
+				E('div', { 'class': 'zmw-mem-head' }, [ E('span', { 'class': 'zmw-mem-label' }, [ 'Нагрузка ЦП' ]), E('span', { 'class': 'zmw-mem-val' }) ]),
 				E('div', { 'class': 'zmw-mem-bar' }, [ E('i') ])
 			])
 		};
@@ -15827,12 +15845,12 @@ function loadRow(la, cores) {
 		Object.keys(memRows).forEach(function (k) { var o = memRows[k]; if (o !== r && o.el.parentNode && o.order > r.order && (!before || o.order < before.order)) before = o; });
 		memEl.insertBefore(r.el, before ? before.el : null);
 	}
-	var pct = la[0] / (cores || 1) * 100;
-	r.el.querySelector('.zmw-mem-val').textContent = la.map(function (v) { return v.toFixed(2); }).join(' · ');
-	r.el.querySelector('i').style.width = Math.max(0, Math.min(100, pct)).toFixed(0) + '%';
-	r.el.classList.toggle('zmw-mem-hi', pct >= 100);
-	r.el.classList.toggle('zmw-mem-mid', pct >= 70 && pct < 100);
-	r.el.title = 'Нагрузка ЦП за 1, 5 и 15 минут. Ядер: ' + (cores || 1) + ', загрузка ' + Math.round(pct) + '%';
+	pct = Math.max(0, Math.min(100, pct));
+	r.el.querySelector('.zmw-mem-val').textContent = pct + '%';
+	r.el.querySelector('i').style.width = pct + '%';
+	r.el.classList.toggle('zmw-mem-hi', pct >= 90);
+	r.el.classList.toggle('zmw-mem-mid', pct >= 70 && pct < 90);
+	r.el.title = 'Нагрузка процессора: ' + pct + '%';
 }
 
 function refreshMemory() {
@@ -15849,8 +15867,8 @@ function refreshMemory() {
 		if (isFinite(ru) && isFinite(rf)) memRow('flash', 'Флеш', ru, ru + rf);
 		var t = parseFloat(i.cpu_temp);
 		if (!isNaN(t)) tempRow(t);
-		var la = String(i.load || '').trim().split(/\s+/).map(parseFloat);
-		if (la.length === 3 && !isNaN(la[0])) loadRow(la, parseInt(i.cores, 10) || 1);
+		var cl = parseInt(i.cpu_load, 10);
+		if (!isNaN(cl)) loadRow(cl);
 	}).catch(function () {});
 }
 
