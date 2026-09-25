@@ -246,6 +246,28 @@ system_info() {
 		"$(esc "$tmp_used")" "$(esc "$tmp_free")" "$(esc "$root_used")" "$(esc "$root_free")" "$(_cpu_temp)"
 }
 
+_v_modified() {
+	local want have
+	want=$(strategy_"$1" | sed '1d')
+	have=$(sed -n "/^[[:space:]]*option NFQWS_OPT '\$/,/^[[:space:]]*'\$/p" "$CONF" | tr -d '\r' | awk -v m="#$1" '
+		{ l = $0; sub(/[ \t]+$/, "", l) }
+		l == m { f = 1; next }
+		f && (l == "--new" || l ~ /^[ \t]*#/ || l ~ /^[ \t]*\047/) { exit }
+		f { print l }')
+	[ "$want" != "$have" ]
+}
+
+_strat_verify() {
+	local w out=""
+	for w in $1; do
+		case "$w" in
+			v[1-9]|v10) _v_modified "$w" && w="$w (изменена)" ;;
+		esac
+		out="$out${out:+ }$w"
+	done
+	printf '%s' "$out"
+}
+
 status() {
 	local zr="not_installed" zr_running="false" zr_ver=""
 	if [ -f /etc/init.d/zapret ]; then
@@ -266,8 +288,12 @@ status() {
 
 	local strat="" fs_marker=""
 	if [ -f "$CONF" ]; then
-		strat=$(sed -n "/^[[:space:]]*option NFQWS_OPT '\$/,/^[[:space:]]*'\$/p" "$CONF" | grep '^#' | sed 's/^#//' | tr '\n' ' ' | sed 's/ $//')
+		strat=$(sed -n "/^[[:space:]]*option NFQWS_OPT '\$/,/^[[:space:]]*'\$/p" "$CONF" | grep '^#' | sed 's/^#//; s/[[:space:]]*$//' | tr '\n' ' ' | sed 's/ $//')
 		fs_marker=$(grep -m1 '^# ZMFS:' "$CONF" | sed 's/^# ZMFS://')
+		strat=$(_strat_verify "$strat")
+		if [ -z "$strat" ] && [ -z "$fs_marker" ] && [ -n "$(sed -n "/^[[:space:]]*option NFQWS_OPT '\$/,/^[[:space:]]*'\$/p" "$CONF" | sed '1d;$d' | grep -v '^[[:space:]]*$')" ]; then
+			strat="своя (без метки)"
+		fi
 	fi
 
 	printf '{"pkg":"%s","zapret":"%s","zapret_running":%s,"zapret_version":"%s","zapret2":"%s","zapret2_running":%s,"strategy":"%s","flowseal":"%s","yv_off":%s}\n' \
@@ -1645,11 +1671,21 @@ _excl_current() {
 	grep -oE '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' "$f" | sort -u
 }
 
+_excl_enable_custom() {
+	[ -f "$CONF" ] || return 0
+	if grep -q "^[[:space:]]*option DISABLE_CUSTOM " "$CONF"; then
+		sed -i "s/^\([[:space:]]*option DISABLE_CUSTOM \).*/\1'0'/" "$CONF"
+	else
+		sed -i "/^config main/a\\	option DISABLE_CUSTOM '0'" "$CONF"
+	fi
+}
+
 _excl_write() {
 	local ips="$1" f
 	f="$(_excl_file)"
 	mkdir -p "$(_excl_dir)"
 	if [ -n "$ips" ]; then
+		_excl_enable_custom
 		local formatted
 		formatted=$(printf '%s\n' "$ips" | tr '\n' ',' | sed 's/,$//' | sed 's/,/, /g')
 		{
@@ -5096,7 +5132,7 @@ _rb_svc_ids() { grep -v '^#' "$RB_SHARE/services.conf" 2>/dev/null | cut -d'|' -
 _rb_svc_field() { grep "^$1|" "$RB_SHARE/services.conf" 2>/dev/null | head -n1 | cut -d'|' -f"$2"; }
 _rb_svc_names() { local id; for id in $1; do printf '%s, ' "$(_rb_svc_field "$id" 2)"; done | sed 's/, $//'; }
 # Сервис можно пустить через WARP, только если у него есть списки доменов или адресов.
-_rb_routable() { [ "$1" = custom ] && [ -n "$(_rb_svc_field custom 1)" ] && return 0; [ -n "$(_rb_svc_field "$1" 3)$(_rb_svc_field "$1" 4)" ]; }
+_rb_routable() { [ "$1" = custom ] && [ -n "$(_rb_svc_field custom 1)" ] && return 0; [ -n "$(_rb_svc_field "$1" 3)$(_rb_svc_field "$1" 4)$(_rb_svc_field "$1" 8)" ]; }
 _rb_in() { grep -qxF "$1" "$2" 2>/dev/null; }
 _job_alive() { _job_running "$1"; }
 
@@ -6013,7 +6049,7 @@ _st_svc_channels() { # ID
 		narrow=""
 	fi
 	# Список доменов, исправленный человеком на странице Steer, заменяет скачанный и пакетный.
-	[ -s "$ST_USER_DIR/$id.lst" ] && dom="\"$ST_USER_DIR/$id.lst\""
+	[ "$id" = custom ] && [ -s "$ST_USER_DIR/$id.lst" ] && dom="\"$ST_USER_DIR/$id.lst\""
 	[ -n "$dom" ] && { ch="$ch$sep{\"name\":\"$name\",\"out\":\"zm_warp\",\"match\":{\"domains_files\":[$dom]}}"; sep=","; }
 	[ -n "$pfx" ] && { ch="$ch$sep{\"name\":\"$name (адреса)\",\"out\":\"zm_warp\",\"match\":{\"prefixes_files\":[$pfx]}}"; sep=","; }
 	# Подсети с сужением — отдельным каналом с протоколом и портами (схема 2): без сужения
@@ -6557,7 +6593,7 @@ _st_list_effective() { # ID -> домены в stdout, источник в ST_LI
 
 steer_list_get() { # ID
 	local id="$1" body n tmp="$JOBS_DIR/steer-list.$$"
-	_rb_routable "$id" || { echo '{"error":"неизвестный сервис"}'; return 1; }
+	[ "$id" = custom ] && _rb_routable "$id" || { echo '{"error":"редактируется только свой список"}'; return 1; }
 	ST_LIST_SRC=""
 	mkdir -p "$JOBS_DIR"
 	# Не в $( ): источник списка возвращается через переменную ST_LIST_SRC.
@@ -6573,7 +6609,7 @@ steer_list_get() { # ID
 steer_list_set() {
 	local id="${1%%|*}" body="${1#*|}" f tmp n
 	case "$1" in *'|'*) ;; *) echo '{"error":"нет списка"}'; return 1 ;; esac
-	_rb_routable "$id" || { echo '{"error":"неизвестный сервис"}'; return 1; }
+	[ "$id" = custom ] && _rb_routable "$id" || { echo '{"error":"редактируется только свой список"}'; return 1; }
 	mkdir -p "$ST_USER_DIR"
 	f="$ST_USER_DIR/$id.lst"; tmp="$f.tmp"
 	# Движку нужен простой список доменов (поддомены включаются сами): префиксы domain:/full:/suffix:
@@ -6593,7 +6629,7 @@ steer_list_set() {
 }
 
 steer_list_reset() { # ID
-	_rb_routable "$1" || { echo '{"error":"неизвестный сервис"}'; return 1; }
+	[ "$1" = custom ] && _rb_routable "$1" || { echo '{"error":"редактируется только свой список"}'; return 1; }
 	rm -f "$ST_USER_DIR/$1.lst"
 	if [ "$1" = custom ]; then
 		if _rb_in custom "$ST_SEL"; then
@@ -9067,12 +9103,8 @@ return view.extend({
 		var dnsCard = E('div', {});
 		var listCard = E('div', { 'class': 'zm-card' });
 		var checkCard = E('div', { 'class': 'zm-card' });
-		var domCard = E('div', { 'class': 'zm-card' });
 		var customCard = E('div', { 'class': 'zm-card' });
 		var customData = null, customLoading = false, customEditor = null, customDraft = null;
-		var domSel = null, domData = null, domBusy = false, domEditor = null;
-		var domOpen = false;
-		try { domOpen = localStorage.getItem('zm.steer.lists') === '1'; } catch (e) {}
 		var warpCard = E('div', { 'class': 'zm-card' });
 		var autoCard = E('div', { 'class': 'zm-card' });
 
@@ -9238,19 +9270,20 @@ return view.extend({
 			return m;
 		}
 
+		var CATEGORY_IDS = [ 'geoblock', 'block', 'news', 'anime', 'porn', 'russia_inside' ];
+
 		function renderLists() {
 			listCard.innerHTML = '';
 			listCard.style.display = data.blocker ? 'none' : '';
 			if (data.blocker) return;
 			listCard.appendChild(E('h3', {}, 'Что пускать через WARP'));
-			listCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Нажмите на сервис, чтобы включить или выключить его, и затем «Применить». Уже подобранные туннели WARP при этом не перебираются заново.'));
+			listCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Нажмите на пункт, чтобы включить или выключить его, и затем «Применить». Списки доменов берутся из itdoginfo/allow-domains и обновляются при каждом применении.'));
 			var cur = currentPick(), sel = pick || cur, changed = false;
 			var list = data.services || [];
 			list.forEach(function(s) { if (!!sel[s.id] !== !!cur[s.id]) changed = true; });
-			listCard.appendChild(E('div', { 'class': 'zm-grid' }, list.map(function(s) {
-				var on = !!sel[s.id];
+			function tile(s) {
 				return E('div', {
-					'class': 'zm-tile' + (on ? ' zm-active' : ''),
+					'class': 'zm-tile' + (sel[s.id] ? ' zm-active' : ''),
 					'click': function() {
 						if (busy) { zm.toast('Дождитесь окончания текущей операции', 'warning'); return; }
 						pick = {};
@@ -9259,97 +9292,26 @@ return view.extend({
 						renderLists();
 					}
 				}, s.name);
-			})));
+			}
+			var svcs = list.filter(function(s) { return CATEGORY_IDS.indexOf(s.id) < 0; });
+			var cats = list.filter(function(s) { return CATEGORY_IDS.indexOf(s.id) >= 0; });
+			listCard.appendChild(E('h4', { 'style': 'margin:12px 0 8px' }, 'Сервисы'));
+			listCard.appendChild(E('div', { 'class': 'zm-grid' }, svcs.map(tile)));
+			if (cats.length) {
+				listCard.appendChild(E('h4', { 'style': 'margin:16px 0 8px' }, 'Категории'));
+				listCard.appendChild(E('div', { 'class': 'zm-grid' }, cats.map(tile)));
+				listCard.appendChild(E('p', { 'class': 'zm-hint' }, '«Всё сразу» — полный список Russia inside: все категории и сервисы одним набором. Он большой, на слабых роутерах лучше включать отдельные пункты.'));
+			}
 			if (changed) {
 				listCard.appendChild(E('div', { 'class': 'zm-actions' }, [
 					E('button', { 'class': 'cbi-button cbi-button-positive', 'click': function() {
 						var ids = list.filter(function(s) { return sel[s.id]; }).map(function(s) { return s.id; });
-						// Выбор сбрасывается только после того, как бэкенд его принял (см. act).
 						act('lists', ids.join(','), 'Применяем выбор');
 					} }, 'Применить'),
 					E('button', { 'class': 'cbi-button', 'click': function() { pick = null; renderLists(); } }, 'Отмена'),
 					E('span', { 'class': 'zm-hint', 'style': 'margin:0' }, 'Есть несохранённые изменения')
 				]));
 			}
-		}
-
-		// ── списки доменов ──
-
-		var SRC_TEXT = { user: 'свой список', sets: 'скачанный набор', package: 'список из пакета' };
-
-		function loadDom(id) {
-			domSel = id; domData = null; domBusy = true;
-			renderDom();
-			zm.steerAction('list_get', id).then(function(res) {
-				domBusy = false;
-				if (res.error) { zm.toast(res.error, 'error'); domData = null; renderDom(); return; }
-				domData = res;
-				renderDom();
-			}).catch(function() { domBusy = false; renderDom(); zm.toast('Роутер не ответил', 'error'); });
-		}
-
-		function saveDom(action, arg, okText) {
-			if (busy) { zm.toast('Дождитесь окончания текущей операции', 'warning'); return; }
-			zm.steerAction(action, arg).then(function(res) {
-				if (res.error) { zm.toast(res.error, 'error'); return; }
-				if (res.saved) { zm.toast(okText + (res.count ? ' (' + res.count + ')' : ''), 'info'); loadDom(domSel); return; }
-				// Сервис сейчас идёт через WARP — правила применяются задачей, следим за журналом.
-				zm.toast(okText + ' — применяем правила', 'info');
-				lastAction = 'domlist';
-				data.running = true;
-				data.phase = 'rules';
-				follow();
-				loadDom(domSel);
-			}).catch(function() { zm.toast('Роутер не ответил', 'error'); });
-		}
-
-		function renderDom() {
-			domCard.innerHTML = '';
-			domCard.style.display = data.blocker ? 'none' : '';
-			if (data.blocker) return;
-			domCard.appendChild(E('h3', {
-				'style': 'cursor:pointer; user-select:none; display:flex; align-items:center' + (domOpen ? '' : '; margin-bottom:0'),
-				'title': domOpen ? 'Свернуть' : 'Развернуть',
-				'click': function() {
-					domOpen = !domOpen;
-					try { localStorage.setItem('zm.steer.lists', domOpen ? '1' : '0'); } catch (e) {}
-					renderDom();
-				}
-			}, [
-				E('span', {}, 'Списки доменов'),
-				E('span', { 'style': 'margin-left:auto; padding-left:12px; font-size:13px; font-weight:600; opacity:.65; white-space:nowrap' }, domOpen ? 'свернуть ▴' : 'развернуть ▾')
-			]));
-			if (!domOpen) return;
-			domCard.appendChild(E('p', { 'class': 'zm-hint' }, 'По этим доменам трафик сервиса уходит в туннель. Выберите сервис, чтобы посмотреть или поправить его список: свой список заменит стандартный и сохранится при обновлениях.'));
-			var list = (data.services || []).filter(function(s) { return s.id !== 'custom'; });
-			domCard.appendChild(E('div', { 'class': 'zm-grid' }, list.map(function(s) {
-				return E('div', {
-					'class': 'zm-tile' + (domSel === s.id ? ' zm-active' : ''),
-					'click': function() {
-						if (domSel !== s.id) { loadDom(s.id); return; }
-						domSel = null; domData = null; renderDom();
-					}
-				}, s.name);
-			})));
-			if (!domSel) return;
-			if (domBusy) { domCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Загружаем список…')); return; }
-			if (!domData) return;
-			domCard.appendChild(row('Источник', domData.source === 'user' ? badge('zm-warn', SRC_TEXT.user) : badge('zm-ok', SRC_TEXT[domData.source] || domData.source)));
-			domCard.appendChild(row('Доменов', E('span', {}, String(domData.count || 0))));
-			domEditor = E('textarea', { 'class': 'zm-config-editor', 'spellcheck': 'false', 'style': 'min-height:260px' });
-			domEditor.value = domData.content || '';
-			domCard.appendChild(domEditor);
-			var acts = [
-				E('button', { 'class': 'cbi-button cbi-button-positive', 'click': function() {
-					saveDom('list_set', domSel + '|' + domEditor.value, 'Список сохранён');
-				} }, 'Сохранить')
-			];
-			if (domData.source === 'user') acts.push(E('button', { 'class': 'cbi-button cbi-button-remove', 'click': function() {
-				if (!confirm('Вернуть стандартный список для «' + domData.name + '»?\n\nВаш список будет удалён.')) return;
-				saveDom('list_reset', domSel, 'Стандартный список возвращён');
-			} }, 'Вернуть стандартный'));
-			domCard.appendChild(E('div', { 'class': 'zm-actions' }, acts));
-			domCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Один домен на строку, поддомены включаются сами (example.com — это и www.example.com). Строки, не похожие на домен, при сохранении отбрасываются. Если сервис сейчас идёт через WARP, правила применятся сразу.'));
 		}
 
 		function loadCustom() {
@@ -9586,14 +9548,13 @@ return view.extend({
 			renderDns();
 			renderLists();
 			renderCustom();
-			renderDom();
 			renderCheck();
 			renderWarp();
 			renderAuto();
 		}
 
 		renderAll();
-		[ mainCard, logEl, dnsCard, listCard, customCard, domCard, checkCard, warpCard, autoCard ].forEach(function(n) { wrap.appendChild(n); });
+		[ mainCard, logEl, dnsCard, listCard, customCard, checkCard, warpCard, autoCard ].forEach(function(n) { wrap.appendChild(n); });
 		if (!data.blocker) loadCustom();
 
 		if (data.running) { lastAction = data.phase === 'remove' ? 'remove' : [ 'install', 'pkgs', 'awg', 'keys', 'tunnel' ].indexOf(data.phase) >= 0 ? 'install' : 'apply'; follow(); }
@@ -9628,6 +9589,15 @@ whatsapp|WhatsApp|svc_meta.lst|whatsapp.lst|web.whatsapp.com|static.whatsapp.net
 x|X (Twitter)|svc_twitter.lst|twitter_x.lst|x.com|twitter.com,abs.twimg.com,video.twimg.com||twitter
 github|GitHub|own_github.lst||github.com,raw.githubusercontent.com,objects.githubusercontent.com|codeload.github.com,api.github.com,ghcr.io||
 telegram|Telegram|svc_telegram.lst|telegram.lst|web.telegram.org|t.me,core.telegram.org,telegra.ph||telegram
+tiktok|TikTok||||||tiktok
+hdrezka|HDRezka||||||hdrezka
+google_meet|Google Meet||||||google_meet
+geoblock|Геоблок||||||geoblock
+block|Заблокированные сайты||||||block
+news|Новости||||||news
+anime|Аниме||||||anime
+porn|Сайты 18+||||||porn
+russia_inside|Всё сразу (Russia inside)||||||russia_inside
 custom|Свой список||||||
 ZM_INSTALLER_EOF
 cat > '/usr/share/zm-redbtn/lists/svc_youtube.lst' << 'ZM_INSTALLER_EOF'
@@ -11125,6 +11095,7 @@ return view.extend({
 
 		var tabBar = E('div', { 'class': 'zm-actions', 'style': 'margin:10px 0' });
 		var panels = {};
+		var tabHooks = {};
 		TABS.forEach(function(t) {
 			panels[t.id] = E('div', { 'style': t.id === activeTab ? '' : 'display:none' });
 		});
@@ -11138,6 +11109,7 @@ return view.extend({
 						activeTab = t.id;
 						TABS.forEach(function(t2) { panels[t2.id].style.display = t2.id === activeTab ? '' : 'none'; });
 						renderTabBar();
+						if (tabHooks[t.id]) tabHooks[t.id]();
 					}
 				}, t.label));
 			});
@@ -11232,7 +11204,7 @@ return view.extend({
 			mainSection.appendChild(zLogEl);
 			mainSection.appendChild(zBannerEl);
 
-			var currentBanner = E('div', { 'class': 'zm-current-banner' });
+			var currentBanner = E('div', { 'class': 'zm-current-banner zm-current-top' });
 			panels.strategy.appendChild(currentBanner);
 
 			var vGrid = E('div', { 'class': 'zm-grid' });
@@ -11272,7 +11244,7 @@ return view.extend({
 			]);
 
 			function renderBanner() {
-				currentBanner.className = 'zm-current-banner' + (status.strategy ? '' : ' zm-current-empty');
+				currentBanner.className = 'zm-current-banner zm-current-top' + (status.strategy ? '' : ' zm-current-empty');
 				currentBanner.innerHTML = '';
 				if (status.strategy) {
 					currentBanner.appendChild(E('span', {}, 'Сейчас применено: '));
@@ -11333,6 +11305,7 @@ return view.extend({
 				});
 			}
 
+			tabHooks.strategy = refreshState;
 			renderBanner();
 			renderV();
 
@@ -12421,6 +12394,7 @@ html.zm-theme-dark .zm-toast-warning .zm-toast-icon { color: #9a6700; }
 .zm-current-banner.zm-current-empty {
 	background: rgba(110,118,129,.08); border-color: rgba(110,118,129,.2);
 }
+.zm-current-banner.zm-current-top { margin: 0 0 10px; }
 
 .bt-cols { display: grid; grid-template-columns: 1fr 1fr; column-gap: 44px; }
 .bt-col { min-width: 0; }
@@ -13636,6 +13610,7 @@ html.zm-theme-dark .zm-toast-warning .zm-toast-icon { color: #9a6700; }
 .zm-current-banner.zm-current-empty {
 	background: rgba(110,118,129,.08); border-color: rgba(110,118,129,.2);
 }
+.zm-current-banner.zm-current-top { margin: 0 0 10px; }
 
 .bt-cols { display: grid; grid-template-columns: 1fr 1fr; column-gap: 44px; }
 .bt-col { min-width: 0; }
@@ -16156,6 +16131,8 @@ html[data-theme="dark"] #zmw-view .zm-tile.zm-active::before { color: #a594ff; }
 	border-radius: 14px; padding: 12px 16px; font-size: 13.5px; color: var(--text);
 }
 #zmw-view .zm-current-banner.zm-current-empty { background: var(--surface-2); border-color: var(--border); color: var(--muted); }
+#zmw-view .zm-current-banner.zm-current-top { margin: 14px 0 0 !important; }
+#zmw-view .zm-current-banner.zm-current-top + .zm-card { margin-top: 18px !important; }
 #zmw-view .bt-current-cmd { background: var(--console); color: #86efac; border-radius: 12px; font-family: var(--mono); }
 
 /* Telegram */
