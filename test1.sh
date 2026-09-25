@@ -99,6 +99,7 @@ FLOWSEAL_ZIP="${GH_MAIN}/Flowseal/zapret-discord-youtube/archive/refs/heads/main
 FLOWSEAL_FAKE_RAW="${GH_MAIN}/Flowseal/zapret-discord-youtube/raw/refs/heads/main/bin"
 STR_URL="${GH_RAW}/StressOzz/Zapret-Manager/refs/heads/main/files/StrYoutube"
 JOBS_DIR="/tmp/zapret-manager-luci"
+ZM_STATE_DIR="/opt/zapret-manager-luci/state"
 CRON_FILE="/etc/crontabs/root"
 MIHOMO_DIR="/etc/mihomo"
 MIHOMO_BIN="/usr/bin/mihomo"
@@ -109,7 +110,7 @@ HOSTS_FILE="/etc/hosts"
 EXPERT_MODE_FILE="/opt/zapret-manager-luci/expert_mode"
 PORTS_UDP="88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535"
 PORTS_TCP="2099,2802,2302,2502,3478-3480,3724,6000-8000,8085,8090,8100,8903,8904,25565,27015-27030,27036-27037,35500-35600,50001,60442"
-mkdir -p "$JOBS_DIR"
+mkdir -p "$JOBS_DIR" "$ZM_STATE_DIR" 2>/dev/null
 
 if command -v timeout >/dev/null 2>&1; then
 	T90="timeout 90"; T60="timeout 60"
@@ -3371,15 +3372,19 @@ health() {
 	# поломка, красным не показывается. Туннели — любые из поднятых, а не только первый: упавший
 	# zmwarp при живых zmwarp2 и zmwarp3 — штатная работа, движок уже ведёт через них.
 	local sr=0 w
-	if grep -qx 'net zmwarp' /etc/zm-steer/owned 2>/dev/null; then
-		if [ -f /etc/zm-steer/stopped ] || ! grep -qx 'steer-spec' /etc/zm-steer/owned; then
+	if _st_installed; then
+		if [ -f /etc/zm-steer/stopped ] || ! grep -qx 'steer-spec' /etc/zm-steer/owned 2>/dev/null || [ "$(_st_exit)" = none ]; then
 			sr=5
 		else
 			sr=2
 			if /etc/init.d/steer running >/dev/null 2>&1; then
-				for w in $(awk '{print $1}' /etc/zm-steer/warp.up 2>/dev/null) zmwarp; do
-					[ -d "/sys/class/net/$w" ] && { sr=1; break; }
-				done
+				if [ "$(_st_exit)" = vpn ]; then
+					[ -d "/sys/class/net/$ST_VPN_OUT" ] && sr=1
+				else
+					for w in $(awk '{print $1}' /etc/zm-steer/warp.up 2>/dev/null) zmwarp; do
+						[ -d "/sys/class/net/$w" ] && { sr=1; break; }
+					done
+				fi
 			fi
 		fi
 	fi
@@ -3394,9 +3399,22 @@ health() {
 # получает готовый ответ из кэша, а обновляет его фоновая задача: при первом запросе, раз в три
 # часа и по кнопке «Проверить снова». Установленные версии берутся теми же функциями, что
 # показывают их на страницах компонентов, — расхождений со страницами не бывает.
-VERSIONS_CACHE="$JOBS_DIR/versions.json"
+VERSIONS_CACHE="$ZM_STATE_DIR/versions.json"
 
 _ver_norm() { printf '%s' "$1" | sed 's/^[vV]//; s/-r[0-9]*$//; s/[[:space:]]//g'; }
+_ver_gh_latest() { # ВЛАДЕЛЕЦ/РЕПО
+	curl -Ls --connect-timeout 5 --max-time 10 -o /dev/null -w '%{url_effective}' "https://github.com/$1/releases/latest" 2>/dev/null |
+		sed -n 's#.*/tag/##p' | grep -oE '[0-9]+(\.[0-9]+)+' | head -n1
+}
+
+_ver_feed_latest() { # ПАКЕТ — версия в репозитории пакетов OpenWrt
+	if [ "$PKG" = apk ]; then
+		apk list "$1" 2>/dev/null | sed -n "s/^$1-\([0-9][^ ]*\) .*/\1/p" | head -n1
+	else
+		opkg list "$1" 2>/dev/null | awk -v p="$1" '$1 == p { v = $3 } END { print v }'
+	fi
+}
+
 _ver_item() { # ИМЯ УСТАНОВЛЕННАЯ ПОСЛЕДНЯЯ
 	local cur latest
 	cur="$(_ver_norm "$2")"; latest="$(_ver_norm "$3")"
@@ -3418,7 +3436,7 @@ do_versions_refresh() {
 		j="$(mixomo_status)"
 		add "$(_ver_item Mihomo "$(_jf "$j" '@.mihomo_version')" "$(_jf "$j" '@.mihomo_latest')")"
 		add "$(_ver_item MagiTrickle "$(_jf "$j" '@.magitrickle_version')" "$(_jf "$j" '@.magitrickle_latest')")"
-		add "$(_ver_item hev-socks5-tunnel "$(_jf "$j" '@.hev_version')" '')"
+		add "$(_ver_item hev-socks5-tunnel "$(_jf "$j" '@.hev_version')" "$(_ver_feed_latest hev-socks5-tunnel)")"
 	fi
 	j="$(tg_status)"
 	add "$(_ver_item 'TG WS Proxy (Go, MTProto)' "$(_jf "$j" '@.mtproto_version')" "$(_jf "$j" '@.mtproto_latest')")"
@@ -3429,6 +3447,24 @@ do_versions_refresh() {
 		add "$(_ver_item sTGWS "$(_jf "$j" '@.version')" "$(_jf "$j" '@.latest')")"
 	fi
 	command -v steer >/dev/null 2>&1 && add "$(_ver_item 'Движок Steer' "$(_st_steer_ver)" "$(_st_latest_ver)")"
+	local feeds=0 v
+	[ -n "$(_ver_feed_latest busybox)" ] || { $UPDATE >/dev/null 2>&1; }
+	if [ -f /etc/init.d/zapret2 ]; then
+		v="$(_awg_pkg_ver zapret2)"
+		add "$(_ver_item Zapret2 "$v" "$(_ver_feed_latest zapret2)")"
+	fi
+	if [ -x /usr/bin/ciadpi ] || [ -x /usr/bin/byedpi ]; then
+		add "$(_ver_item ByeDPI "$(_awg_pkg_ver byedpi)" "$(_ver_gh_latest "$BYEDPI_REPO")")"
+	fi
+	if ! { [ -x "$MIHOMO_BIN" ] || [ -x /etc/init.d/magitrickle ]; } && _pkg_is_installed hev-socks5-tunnel; then
+		add "$(_ver_item hev-socks5-tunnel "$(_awg_pkg_ver hev-socks5-tunnel)" "$(_ver_feed_latest hev-socks5-tunnel)")"
+	fi
+	if _awg_installed; then
+		add "$(_ver_item AmneziaWG "$(_awg_pkg_ver amneziawg-tools)" '')"
+	fi
+	if _pkg_is_installed https-dns-proxy; then
+		add "$(_ver_item 'DNS over HTTPS (https-dns-proxy)' "$(_awg_pkg_ver https-dns-proxy)" "$(_ver_feed_latest https-dns-proxy)")"
+	fi
 	printf '{"ts":"%s","items":[%s]}\n' "$(date '+%d.%m %H:%M')" "$out" > "$tmp" && mv "$tmp" "$VERSIONS_CACHE"
 	echo "==> Версии проверены"
 }
@@ -5310,7 +5346,7 @@ _st_ver_lt() { # A B
 }
 
 _st_latest_ver() {
-	local c="$JOBS_DIR/steer.latest" v="" m
+	local c="$ZM_STATE_DIR/steer.latest" v="" m
 	if [ -s "$c" ] && [ -z "$(find "$c" -mmin +360 2>/dev/null)" ]; then cat "$c"; return 0; fi
 	v="$(curl -Ls --connect-timeout 5 --max-time 12 -o /dev/null -w '%{url_effective}' https://github.com/xyzmean/steer/releases/latest 2>/dev/null |
 		grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | tail -n1)"
@@ -5323,7 +5359,7 @@ _st_latest_ver() {
 		done
 	fi
 	if [ -n "$v" ]; then
-		mkdir -p "$JOBS_DIR"
+		mkdir -p "$ZM_STATE_DIR"
 		echo "$v" > "$c"
 		echo "$v"
 	elif [ -s "$c" ]; then
@@ -5925,7 +5961,7 @@ _st_warp_up() { # [repick]
 		# КРОМЕ РОССИЙСКОЙ: её разведка берёт последним запасом, когда не нашлось ничего, и
 		# держаться за неё только потому, что туннель жив, — значит оставить геоблок навсегда
 		# (на тестовом роутере так и вышло: HEL, DME, HEL). Такой туннель разводится заново.
-		if [ "$repick" != repick ] && _st_warp_alive_if "$i" && c="$(_st_colo_of "$i")" && ! _st_warp_is_ru "$c"; then
+		if [ "$repick" != repick ] && grep -q "^$i " "$ST_WARP_UP" 2>/dev/null && _st_warp_alive_if "$i" && c="$(_st_colo_of "$i")" && ! _st_warp_is_ru "$c"; then
 			# Ключа качества нет («-»): свежего замера у оставленного туннеля нет, его место в
 			# warp.up решает _st_warp_order.
 			got="$(uci -q get "network.${i}_peer.endpoint_host") $(uci -q get "network.${i}_peer.endpoint_port") $c -"
@@ -6689,7 +6725,7 @@ steer_status() {
 	vexit="$(_st_exit)"
 	_st_warp_on && won=true
 	_st_is_ext && ext=true
-	if [ -s "$JOBS_DIR/steer.latest" ]; then latest="$(cat "$JOBS_DIR/steer.latest")"
+	if [ -s "$ZM_STATE_DIR/steer.latest" ]; then latest="$(cat "$ZM_STATE_DIR/steer.latest")"
 	elif command -v steer >/dev/null 2>&1; then ( _st_latest_ver >/dev/null 2>&1 & ); fi
 	[ -d "/sys/class/net/$ST_VPN_OUT" ] && vup=true
 	[ -s "$ST_SUB" ] && vsub=true
@@ -7114,7 +7150,7 @@ do_steer_engine() {
 	rm -f "$ST_STOP_FLAG"
 	_st_installed || { echo "ОШИБКА: Steer ещё не установлен"; return 1; }
 	[ -n "$(_st_blocker)" ] && { echo "ОШИБКА: движок Steer сейчас настраивает не Zapret Manager"; return 1; }
-	rm -f "$JOBS_DIR/steer.latest"
+	rm -f "$ZM_STATE_DIR/steer.latest"
 	_ensure_deps
 	_st_install_steer || return 1
 	if [ ! -f "$ST_OFF" ] && [ -n "$(_st_sel)" ]; then
@@ -8682,9 +8718,44 @@ function badge(ok, textOk, textBad) {
 	]);
 }
 
+function logMinPref() {
+	try { return localStorage.getItem('zm.log.min') === '1'; } catch (e) { return false; }
+}
+
+function logBar(logEl) {
+	if (!logEl._zmBar) {
+		var btn = document.createElement('button');
+		btn.type = 'button';
+		btn.className = 'zm-log-min';
+		var sync = function() {
+			var min = logEl.classList.contains('zm-log-collapsed');
+			btn.textContent = min ? '▢' : '_';
+			btn.title = min ? 'Развернуть вывод' : 'Свернуть вывод';
+		};
+		btn.addEventListener('click', function(ev) {
+			ev.preventDefault();
+			ev.stopPropagation();
+			var min = !logEl.classList.contains('zm-log-collapsed');
+			logEl.classList.toggle('zm-log-collapsed', min);
+			try { localStorage.setItem('zm.log.min', min ? '1' : '0'); } catch (e) {}
+			sync();
+			logEl.scrollTop = logEl.scrollHeight;
+		});
+		var bar = document.createElement('div');
+		bar.className = 'zm-log-bar';
+		bar.appendChild(btn);
+		logEl._zmBar = bar;
+		logEl._zmSync = sync;
+		if (logMinPref()) logEl.classList.add('zm-log-collapsed');
+	}
+	logEl._zmSync();
+	return logEl._zmBar;
+}
+
 function renderLog(logEl, text) {
 	logEl.innerHTML = '';
 	var lines = (text || '').split('\n');
+	if (lines.some(function(l) { return l !== ''; })) logEl.appendChild(logBar(logEl));
 	lines.forEach(function(line) {
 		if (line === '') return;
 		var div = document.createElement('div');
@@ -13255,6 +13326,17 @@ html.zm-theme-dark .zm-tile:not(.zm-active):not(.zm-tile-off) {
 .zm-config-editor::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.34); background-clip: padding-box; }
 @supports not selector(::-webkit-scrollbar) { .zm-config-editor { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.25) transparent; } }
 .zm-log:empty::before { content: "Ожидание вывода..."; opacity: .4; }
+.zm-log-bar { position: sticky; top: 16px; height: 0; z-index: 3; }
+.zm-log-min {
+	position: absolute; right: -8px; top: -8px; width: 30px; height: 24px; padding: 0; margin: 0;
+	border: 1px solid rgba(255,255,255,.14); border-radius: 7px; background: rgba(255,255,255,.06);
+	color: #c9d1d9; font: 700 13px/1 ui-monospace, Consolas, monospace; cursor: pointer;
+	display: flex; align-items: center; justify-content: center; transition: background .15s, color .15s;
+}
+.zm-log-min:hover { background: rgba(255,255,255,.16); color: #fff; }
+.zm-log.zm-log-collapsed { min-height: 0; max-height: none; overflow: hidden; padding-right: 48px; }
+.zm-log.zm-log-collapsed > div:not(.zm-log-bar):not(:last-child) { display: none; }
+.zm-log.zm-log-collapsed > div:last-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 .zm-config-editor {
 	width: 100%; box-sizing: border-box; min-height: 420px;
@@ -13721,7 +13803,7 @@ return view.extend({
 			{ product: 'ByeDPI-OpenWrt', author: 'DPITrickster', url: 'https://github.com/DPITrickster/ByeDPI-OpenWrt' },
 			{ product: 'mihomo', author: 'MetaCubeX', url: 'https://github.com/MetaCubeX/mihomo' },
 			{ product: 'MagiTrickle', author: 'MagiTrickle', url: 'https://github.com/MagiTrickle/MagiTrickle' },
-			{ product: 'sTGWS', author: 'xyzmean', url: 'https://gitlab.com/xyzmean/brb' },
+			{ product: 'sTGWS, Steer', author: 'xyzmean', url: 'https://github.com/xyzmean' },
 			{ product: 'tg-ws-proxy-go (MTProto)', author: 'spatiumstas', url: 'https://github.com/spatiumstas/tg-ws-proxy-go' },
 			{ product: 'tg-ws-proxy-go (SOCKS5)', author: 'd0mhate', url: 'https://github.com/d0mhate/-tg-ws-proxy-Manager-go' },
 			{ product: 'tg-ws-proxy-rs (Rust)', author: 'valnesfjord', url: 'https://github.com/valnesfjord/tg-ws-proxy-rs' },
@@ -14537,6 +14619,17 @@ html.zm-theme-dark .zm-tile:not(.zm-active):not(.zm-tile-off) {
 .zm-config-editor::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.34); background-clip: padding-box; }
 @supports not selector(::-webkit-scrollbar) { .zm-config-editor { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.25) transparent; } }
 .zm-log:empty::before { content: "Ожидание вывода..."; opacity: .4; }
+.zm-log-bar { position: sticky; top: 16px; height: 0; z-index: 3; }
+.zm-log-min {
+	position: absolute; right: -8px; top: -8px; width: 30px; height: 24px; padding: 0; margin: 0;
+	border: 1px solid rgba(255,255,255,.14); border-radius: 7px; background: rgba(255,255,255,.06);
+	color: #c9d1d9; font: 700 13px/1 ui-monospace, Consolas, monospace; cursor: pointer;
+	display: flex; align-items: center; justify-content: center; transition: background .15s, color .15s;
+}
+.zm-log-min:hover { background: rgba(255,255,255,.16); color: #fff; }
+.zm-log.zm-log-collapsed { min-height: 0; max-height: none; overflow: hidden; padding-right: 48px; }
+.zm-log.zm-log-collapsed > div:not(.zm-log-bar):not(:last-child) { display: none; }
+.zm-log.zm-log-collapsed > div:last-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 .zm-config-editor {
 	width: 100%; box-sizing: border-box; min-height: 420px;
@@ -17328,6 +17421,10 @@ html.zm-theme-dark #zmw-view .zm-node:not(.zm-active) { background: var(--surfac
 	#zmw-view .zm-nodes { grid-template-columns: 1fr 1fr; }
 	#zmw-view .zm-sub-meta { flex-direction: column; align-items: flex-start; }
 }
+#zmw-view .zm-log-bar { top: 46px; }
+#zmw-view .zm-log-min { top: -38px; right: -10px; border-radius: 8px; border-color: rgba(255,255,255,.12); background: rgba(255,255,255,.05); color: #cbd5e1; }
+#zmw-view .zm-log-min:hover { background: rgba(124,92,255,.35); border-color: rgba(124,92,255,.6); color: #fff; }
+#zmw-view .zm-log.zm-log-collapsed { padding-bottom: 12px; }
 ZM_INSTALLER_EOF
 cat > '/www/zm-webui.html' << 'ZM_INSTALLER_EOF'
 <!doctype html>
