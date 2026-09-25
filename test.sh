@@ -1,22 +1,12 @@
 #!/bin/sh
-# Zapret Manager by StressOzz for LuCI installer
-# Version: 1.43
+# Version: 1.45
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
 
 echo -e "\n${MAGENTA}Устанавливаем Zapret Manager для LuCI${NC}"
 
-# Пока идёт автообход, переустанавливать нельзя: ниже стирается каталог задач, а с
-# ним журнал идущего подбора, и страница показывает пустой журнал до самого конца. Тестер при
-# этом меняет стратегии zapret, и обрывать его посередине значит оставить роутер на случайной.
-# Сравнение равных стратегий в фоне — не повод отказывать: оно снимается, а стратегию меняет только
-# в самом конце.
 if [ -f /tmp/zapret-manager-luci/redbtn_deep.pid ]; then
-	# Снимается ВСЁ ДЕРЕВО: замер идёт в дочерних оболочках, и убитый верхний процесс оставлял
-	# цикл, который продолжал запускать curl. pkill в busybox OpenWrt нет — ищем по ps.
-	# `|| true` обязательно: установщик идёт под set -e, и kill уже завершившегося процесса
-	# молча обрывал установку сразу после заголовка.
 	_zm_kill_tree() {
 		for _c in $(cat "/proc/$1/task/$1/children" 2>/dev/null); do _zm_kill_tree "$_c"; done
 		kill -9 "$1" 2>/dev/null || true
@@ -26,7 +16,6 @@ if [ -f /tmp/zapret-manager-luci/redbtn_deep.pid ]; then
 	nft delete table inet zm_rb_ztest >/dev/null 2>&1 || true
 fi
 for _zm_job in redbtn steer awg; do
-	# Жив процесс и в журнале нет __DONE__: номер завершившейся задачи мог достаться другому.
 	if [ -f /tmp/zapret-manager-luci/$_zm_job.pid ] && kill -0 "$(cat /tmp/zapret-manager-luci/$_zm_job.pid 2>/dev/null)" 2>/dev/null &&
 	   ! grep -q '^__DONE__' /tmp/zapret-manager-luci/$_zm_job.log 2>/dev/null; then
 		echo -e "${YELLOW}Идёт операция Steer или AmneziaWG — дождитесь окончания и запустите установку снова${NC}"
@@ -53,7 +42,6 @@ rm -f \
 	/usr/share/rpcd/acl.d/luci-app-ytbypass.json \
 	/www/luci-static/resources/view/ytbypass/main.js 2>/dev/null
 
-# Миграция с версий, где ByeTube был внутренне назван "ytbypass" — переносим на "bytetube"
 if [ -x /etc/init.d/ytbypass ] || [ -f /etc/config/ytbypass ] || [ -x /usr/bin/ytbypass ]; then
 	[ -x /usr/bin/ytbypass ] && /usr/bin/ytbypass test stop >/dev/null 2>&1
 	if [ -x /etc/init.d/ytbypass ]; then
@@ -65,7 +53,6 @@ if [ -x /etc/init.d/ytbypass ] || [ -f /etc/config/ytbypass ] || [ -x /usr/bin/y
 		. /usr/libexec/ytbypass/common.sh
 		rm -f "$(dnsmasq_confdir)/ytbypass.conf" 2>/dev/null
 	fi
-	# Настройки и свои списки пользователя переносим, а не удаляем
 	[ -f /etc/config/ytbypass ] && [ ! -f /etc/config/bytetube ] && mv /etc/config/ytbypass /etc/config/bytetube
 	[ -d /etc/ytbypass ] && [ ! -d /etc/bytetube ] && mv /etc/ytbypass /etc/bytetube
 	rm -rf /etc/config/ytbypass /etc/init.d/ytbypass /etc/hotplug.d/firewall/90-ytbypass \
@@ -80,14 +67,10 @@ mkdir -p /opt/zapret-manager-luci
 chmod 0755 /opt/zapret-manager-luci
 cat > '/opt/zapret-manager-luci/backend.sh' << 'ZM_INSTALLER_EOF'
 
-# rpcd запускает бэкенд с umask 077, и всё, что он пишет — списки zapret, файлы fake при
-# установке, — получалось с правами 600. nfqws сбрасывает права до пользователя daemon и такие
-# файлы уже не читает: стратегия с --hostlist не запускается, а обход после перезапуска
-# молча перестаёт действовать.
 umask 022
 
 CONF="/etc/config/zapret"
-ZM_VERSION="1.43"
+ZM_VERSION="1.45"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
@@ -154,10 +137,6 @@ _ensure_deps() {
 }
 
 
-# Задача жива, если жив её процесс И в журнале ещё нет __DONE__. Одного kill -0 мало: номер
-# процесса завершившейся задачи система отдаёт следующему, и на тестовом роутере его получила
-# плановая проверка гео-DNS из cron — подбор «шёл» спустя час после «Готово», а установщик
-# отказывался ставиться.
 _job_running() { # ИМЯ
 	local pid="$JOBS_DIR/$1.pid"
 	[ -f "$pid" ] && kill -0 "$(cat "$pid" 2>/dev/null)" 2>/dev/null || return 1
@@ -199,15 +178,13 @@ log_tail() {
 }
 
 zapret_restart() {
-	# Файлы, записанные прежними версиями с правами 600 (см. umask выше), nfqws не прочтёт.
+	[ -n "$ZM_NO_RESTART" ] && return 0
 	chmod -R a+rX /opt/zapret/ipset /opt/zapret/files 2>/dev/null
 	[ -x /opt/zapret/sync_config.sh ] && /opt/zapret/sync_config.sh >/dev/null 2>&1
 	/etc/init.d/zapret restart >/dev/null 2>&1
 }
 
 
-# Температура процессора в градусах — из ядра, без пакетов: зона thermal с «cpu»/«soc» в
-# имени, иначе самая горячая из зон, иначе первый датчик hwmon. Нет датчиков — пусто.
 _cpu_temp() {
 	local z t typ best="" v
 	for z in /sys/class/thermal/thermal_zone*; do
@@ -227,7 +204,6 @@ _cpu_temp() {
 		done
 	fi
 	[ -n "$best" ] || return 0
-	# Ядро отдаёт миллиградусы; редкие драйверы — градусы.
 	if [ "$best" -gt 1000 ] 2>/dev/null; then v=$(( (best + 50) / 100 )); echo "$((v / 10)).$((v % 10))"
 	else echo "$best"; fi
 }
@@ -576,50 +552,69 @@ _refresh_exclude_file() {
 	wget -q --timeout=20 -U "Mozilla/5.0" -O /opt/zapret/ipset/zapret-hosts-user-exclude.txt "$EXCLUDE_URL"
 }
 
-# YouTube-стратегия выключена человеком (выбор «Выключить» на вкладке YouTube): блок Yv не
-# добавляется ни при смене основной стратегии, ни при установке. Снимается выбором любой Yv.
 YV_OFF_FLAG="/opt/zapret-manager-luci/yv_off"
 DV_OFF_FLAG="/opt/zapret-manager-luci/dv_off"
 DISCORD_RX='^--filter-l7=discord,stun$|^--filter-udp=19294-19344,50000-50100$|^--filter-tcp=2053,2083,2087,2096,8443$|^--hostlist-domains=discord[.]media$|^#[ \t]*Dv[0-9]+$'
 
+YV_RX='^#[ \t]*Yv[0-9]+$|^--hostlist=/opt/zapret/ipset/zapret-hosts-google[.]txt$'
+NFQ_MARK_RX='^[ \t]*#[ \t]*(Yv|Dv|Gv)[0-9]'
+
 _nfq_drop_profiles() {
-	local rx="$1" old="$JOBS_DIR/nfq_drop_old" new="$JOBS_DIR/nfq_drop_new" rc
+	local rx="$1" force="$2" old="$JOBS_DIR/nfq_drop_old" new="$JOBS_DIR/nfq_drop_new" rc
 	mkdir -p "$JOBS_DIR"
 	awk "/^[[:space:]]*option NFQWS_OPT '\$/ { f = 1 } f" "$CONF" > "$old"
 	[ -s "$old" ] || { rm -f "$old"; return 1; }
 	grep -q "^[[:space:]]*'[[:space:]]*\$" "$old" || { rm -f "$old"; return 1; }
-	awk -v RX="$rx" -v q="'" '
+	awk -v RX="$rx" -v MK="$NFQ_MARK_RX" -v q="'" '
+		function emit(l) { o[++no] = l }
 		function flush(   i, drop) {
 			if (n == 0 && np == 0) return
 			drop = 0
 			for (i = 1; i <= np; i++) if (pc[i] ~ RX) drop = 1
 			for (i = 1; i <= n; i++) if (b[i] ~ RX) drop = 1
 			if (drop) removed = 1
-			else {
-				for (i = 1; i <= np; i++) print pc[i]
-				if (printed) print "--new"
-				for (i = 1; i <= n; i++) print b[i]
+			else if (n > 0) {
+				for (i = 1; i <= np; i++) emit(pc[i])
+				if (printed) emit("--new")
+				for (i = 1; i <= n; i++) emit(b[i])
 				printed = 1
 			}
 			n = 0; np = 0
 		}
 		function hold_in(   i) { for (i = 1; i <= nh; i++) b[++n] = h[i]; nh = 0 }
-		NR == 1 { print; next }
-		done { print; next }
-		$0 ~ ("^[ \t]*" q "[ \t]*$") { hold_in(); flush(); print; done = 1; next }
+		NR == 1 { head = $0; next }
+		done { tail[++nt] = $0; next }
+		$0 ~ ("^[ \t]*" q "[ \t]*$") {
+			hold_in(); flush()
+			print head
+			for (i = 1; i <= nn; i++) print nm[i]
+			for (i = 1; i <= no; i++) print o[i]
+			print
+			done = 1; next
+		}
 		/^[ \t]*$/ { next }
 		$0 == "--new" { flush(); for (k = 1; k <= nh; k++) pc[++np] = h[k]; nh = 0; next }
-		/^[ \t]*#/ { h[++nh] = $0; next }
+		/^[ \t]*#/ {
+			if ($0 ~ MK) h[++nh] = $0
+			else if (!(($0) in seen)) { seen[$0] = 1; nm[++nn] = $0 }
+			next
+		}
 		{ hold_in(); b[++n] = $0 }
-		END { if (!done) exit 1; exit (removed ? 0 : 3) }' "$old" > "$new"
+		END {
+			if (!done) exit 1
+			for (i = 1; i <= nt; i++) print tail[i]
+			exit (removed ? 0 : 3)
+		}' "$old" > "$new"
 	rc=$?
-	if [ "$rc" = 0 ]; then
+	if [ "$rc" = 0 ] || { [ "$rc" = 3 ] && [ -n "$force" ]; }; then
 		sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
 		cat "$new" >> "$CONF"
 	fi
 	rm -f "$old" "$new"
 	return $rc
 }
+
+_nfq_normalize() { _nfq_drop_profiles '^#ZM_NEVER_MATCHES$' force; return 0; }
 
 _add_yv_default() {
 	[ -f "$YV_OFF_FLAG" ] && return 0
@@ -664,16 +659,34 @@ strategy_list_v() {
 }
 
 strategy_set_v() {
-	local version="$1"
+	local version="$1" yv dv gv xt
 	echo "$version" | grep -qE '^v([1-9]|10)$' || { echo '{"error":"некорректная версия"}'; return 1; }
 	[ -f "$CONF" ] || { echo '{"error":"Zapret не установлен"}'; return 1; }
+	yv=$(grep -oE '^#[[:space:]]*Yv[0-9]+$' "$CONF" | head -n1 | sed 's/^#[[:space:]]*//')
+	dv=$(grep -oE '^#[[:space:]]*Dv[0-9]+$' "$CONF" | head -n1 | sed 's/^#[[:space:]]*Dv//')
+	gv=$(grep -oE '^#Gv[1-4](Xtreme)?$' "$CONF" | head -n1 | sed 's/^#Gv//; s/Xtreme$//')
+	grep -q "^#Gv[0-9]\+Xtreme\$" "$CONF" && xt=1
+	_game_xtreme_undo_opts
+	_remove_ports_if_present NFQWS_PORTS_UDP "$PORTS_UDP"
+	_remove_ports_if_present NFQWS_PORTS_TCP "$PORTS_TCP"
 	sed -i '/^# ZMFS:/d' "$CONF"
 	sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
-	{ echo "  option NFQWS_OPT '"; strategy_"$version"; echo "'"; } >> "$CONF"
+	{ echo "	option NFQWS_OPT '"; strategy_"$version"; echo "'"; } >> "$CONF"
 	_add_gp_domains
 	_refresh_exclude_file
 	_add_yv_default
 	_discord_str_add
+	ZM_NO_RESTART=1
+	if [ -n "$yv" ] && [ "$yv" != Yv08 ] && [ ! -f "$YV_OFF_FLAG" ] && [ -s "$(_yv_file)" ] && grep -qxF "#$yv" "$(_yv_file)"; then
+		strategy_set_youtube "$yv" >/dev/null
+	fi
+	[ -n "$dv" ] && [ "$dv" != 1 ] && [ ! -f "$DV_OFF_FLAG" ] && discord_set_dv "$dv" >/dev/null
+	if [ -n "$gv" ]; then
+		game_set "$gv" >/dev/null
+		[ -n "$xt" ] && game_toggle_xtreme >/dev/null
+	fi
+	ZM_NO_RESTART=""
+	_nfq_normalize
 	zapret_restart
 	printf '{"ok":true,"strategy":"%s","ts_warning":%s}\n' "$version" "$(_ts_warning)"
 }
@@ -791,8 +804,10 @@ strategy_set_flowseal() {
 	[ -f "$CONF" ] || { echo '{"error":"Zapret не установлен"}'; return 1; }
 	block=$(awk -v n="#$name" '$0==n{flag=1; print; next} /^#/ && flag{exit} flag{print}' "$f")
 	[ -z "$block" ] && { echo '{"error":"стратегия не найдена"}'; return 1; }
-	# Стратегия Flowseal сама ведёт YouTube-часть — выключатель YouTube снимается.
 	rm -f "$YV_OFF_FLAG" "$DV_OFF_FLAG"
+	_game_xtreme_undo_opts
+	_remove_ports_if_present NFQWS_PORTS_UDP "$PORTS_UDP"
+	_remove_ports_if_present NFQWS_PORTS_TCP "$PORTS_TCP"
 	sed -i '/^# ZMFS:/d' "$CONF"
 	{ printf '# ZMFS:%s\n' "$name"; cat "$CONF"; } > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"
 	sed -i "/option NFQWS_OPT '/,\$d" "$CONF"
@@ -806,6 +821,10 @@ strategy_set_flowseal() {
 	_add_gp_domains
 	_refresh_exclude_file
 	sed -i '/--new/{N;/--filter-tcp=2802/{s/--new/#Gv0\n--new/;};}' "$CONF"
+	if printf '%s\n' "$block" | grep -qxF -e "--filter-udp=$PORTS_UDP" -e "--filter-tcp=$PORTS_TCP"; then
+		_add_ports_if_missing NFQWS_PORTS_UDP "$PORTS_UDP"
+		_add_ports_if_missing NFQWS_PORTS_TCP "$PORTS_TCP"
+	fi
 	zapret_restart
 	printf '{"ok":true,"strategy":"%s","ts_warning":%s}\n' "$(esc "$name")" "$(_ts_warning)"
 }
@@ -834,45 +853,7 @@ strategy_list_youtube() {
 	)"
 }
 
-# Убрать YouTube-профиль из NFQWS_OPT. Профили разделены строками --new; YouTube-профиль —
-# тот, где есть метка #YvNN или пара «--filter-tcp=443» + hostlist доменов Google. Остальные
-# профили и их порядок не трогаются; лишние --new по краям не остаются.
-_yv_block_remove() {
-	local old="$JOBS_DIR/yv_rm_old" new="$JOBS_DIR/yv_rm_new"
-	mkdir -p "$JOBS_DIR"
-	awk "/^[[:space:]]*option NFQWS_OPT '\$/ { f = 1 } f" "$CONF" > "$old"
-	[ -s "$old" ] || { rm -f "$old"; return 1; }
-	# Закрывающая кавычка — отдельной строкой, как пишет сама панель; иначе разбор ненадёжен.
-	grep -q "^[[:space:]]*'[[:space:]]*\$" "$old" || { rm -f "$old"; return 1; }
-	awk -v G="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt" -v q="'" '
-		function out(   i, yt) {
-			if (n == 0) return
-			yt = 0
-			for (i = 1; i <= n; i++) {
-				if (p[i] ~ /^[ \t]*#Yv[0-9]+/) yt = 1
-				if (p[i] == "--filter-tcp=443" && i < n && p[i + 1] == G) yt = 1
-			}
-			if (yt) removed = 1
-			else { if (printed) print "--new"; for (i = 1; i <= n; i++) print p[i]; printed = 1 }
-			n = 0
-		}
-		NR == 1 { print; next }
-		done { print; next }
-		$0 ~ ("^[ \t]*" q "[ \t]*$") { out(); print; done = 1; next }
-		$0 == "--new" { out(); next }
-		{ p[++n] = $0 }
-		END { if (!done) { out(); print q } exit (removed ? 0 : 3) }' "$old" > "$new"
-	local rc=$?
-	# Новый блок должен кончаться строкой с одной кавычкой — иначе (обрезанная запись, кавычка
-	# в конце строки опции) настройку не трогаем.
-	[ "$rc" = 0 ] || [ "$rc" = 3 ] && ! grep -q "^[[:space:]]*'[[:space:]]*\$" "$new" && rc=1
-	if [ "$rc" = 0 ] || [ "$rc" = 3 ]; then
-		sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
-		cat "$new" >> "$CONF"
-	fi
-	rm -f "$old" "$new"
-	return $rc
-}
+_yv_block_remove() { _nfq_drop_profiles "$YV_RX"; }
 
 strategy_set_youtube() {
 	local name="$1" f selected
@@ -964,6 +945,7 @@ AWK_INSERT_EOF
 AWK_DEDUP_EOF
 	awk -f "$awk_dedup" "$CONF" > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"
 	grep -qE "^[ \t]*'[ \t]*\$" "$CONF" || echo "'" >> "$CONF"
+	_nfq_normalize
 
 	_add_gp_domains
 	zapret_restart
@@ -1183,8 +1165,6 @@ _hosts_block() {
 	esac
 }
 
-# Строки сравниваются без учёта пробелов: SSH-версия Zapret Manager пишет некоторые строки с двумя
-# пробелами подряд (или с \r), и точное сравнение считало такой блок выключенным.
 _hosts_block_status() {
 	local block="$1" content
 	content="$(_hosts_block "$block")" || return 1
@@ -1194,18 +1174,14 @@ _hosts_block_status() {
 		{ k = n($0); if (k == "" || (k in seen)) next; seen[k] = 1; total++; if (k in have) found++ }
 		END { print (total > 0 && found == total) ? "true" : "false" }'
 }
-# Убрать из hosts строки, совпадающие (без учёта пробелов) со строками из stdin.
 _hosts_drop_lines() {
 	local tmp="$HOSTS_FILE.zmtmp" list="$HOSTS_FILE.zmdrop"
 	cat > "$list"
-	# Список читается в BEGIN: с пустым списком приём NR == FNR принял бы за список сам hosts
-	# и очистил бы его целиком.
 	awk -v list="$list" 'function n(s) { gsub(/\r/, "", s); gsub(/[ \t]+/, " ", s); sub(/^ /, "", s); sub(/ $/, "", s); return s }
 		BEGIN { while ((getline l < list) > 0) { k = n(l); if (k != "") drop[k] = 1 } close(list) }
 		!(n($0) in drop)' "$HOSTS_FILE" > "$tmp" && cat "$tmp" > "$HOSTS_FILE"
 	rm -f "$tmp" "$list"
 }
-# Строка уже есть в hosts (без учёта пробелов)?
 _hosts_has_line() {
 	awk -v want="$1" 'function n(s) { gsub(/\r/, "", s); gsub(/[ \t]+/, " ", s); sub(/^ /, "", s); sub(/ $/, "", s); return s }
 		BEGIN { want = n(want) } n($0) == want { f = 1; exit } END { exit !f }' "$HOSTS_FILE" 2>/dev/null
@@ -1285,19 +1261,27 @@ hosts_file_set() {
 }
 
 
+_ports_get() { sed -n "s/^[[:space:]]*option $1 '\([^']*\)'.*/\1/p" "$CONF" | head -n1; }
+_ports_put() { sed -i "s|^\([[:space:]]*option $1 '\)[^']*'|\1$2'|" "$CONF"; }
 _remove_ports_if_present() {
-	local option="$1" ports="$2" p
-	for p in $(echo "$ports" | tr ',' ' '); do
-		sed -i "\\#option $option '#s#,$p##g" "$CONF"
+	local option="$1" ports="$2" cur out="" p
+	grep -q "^[[:space:]]*option $option '" "$CONF" || return 0
+	cur="$(_ports_get "$option")"
+	for p in $(echo "$cur" | tr ',' ' '); do
+		case ",$ports," in *",$p,"*) continue ;; esac
+		out="$out${out:+,}$p"
 	done
-	sed -i "\\#option $option '#s#,,#,#g; s#,\$##" "$CONF"
+	[ "$out" = "$cur" ] || _ports_put "$option" "$out"
 }
 
 _add_ports_if_missing() {
-	local option="$1" ports="$2" p
+	local option="$1" ports="$2" cur p
+	grep -q "^[[:space:]]*option $option '" "$CONF" || return 0
+	cur="$(_ports_get "$option")"
 	for p in $(echo "$ports" | tr ',' ' '); do
-		grep -q "option $option '.*\b$p\b" "$CONF" || sed -i "\\#option $option '#s#'\$#,$p'#" "$CONF"
+		case ",$cur," in *",$p,"*) ;; *) cur="$cur${cur:+,}$p" ;; esac
 	done
+	_ports_put "$option" "$cur"
 }
 
 strategy_TCP_common() {
@@ -1575,7 +1559,6 @@ system_uninstall_panel() {
 	local script="/tmp/zm_uninstall_panel.sh"
 	cat > "$script" << 'ZM_UNINSTALL_EOF'
 sleep 1
-# Уборка остатков автообхода — пока backend.sh на месте (см. redbtn_panel_gone).
 /opt/zapret-manager-luci/backend.sh redbtn_panel_gone >/dev/null 2>&1
 rm -rf /opt/zapret-manager-luci /usr/libexec/rpcd/zapret-manager \
 	/usr/share/luci/menu.d/luci-app-zapret-manager.json \
@@ -1586,7 +1569,6 @@ rm -rf /opt/zapret-manager-luci /usr/libexec/rpcd/zapret-manager \
 	/www/luci-static/resources/view/bytetube \
 	/tmp/zapret-manager-luci /tmp/luci-indexcache* /tmp/luci-modulecache/* \
 	/www/zm /www/zm-webui.html 2>/dev/null
-# Списки автообхода нужны steer, пока его правила на месте: без них движок не поднимется.
 [ -s /etc/zm-steer/owned ] || rm -rf /usr/share/zm-redbtn
 uci -q delete uhttpd.zmweb && uci -q commit uhttpd
 /etc/init.d/rpcd restart >/dev/null 2>&1
@@ -3330,7 +3312,6 @@ mixomo_warp_integrate_action() {
 }
 
 
-# ================================================================ ByeTube
 BYEDPI_REPO="DPITrickster/ByeDPI-OpenWrt"
 
 _bytetube_fetch() { # URL OUT
@@ -3342,7 +3323,6 @@ _bytetube_fetch() { # URL OUT
 }
 
 health() {
-	# Быстрая сводка без сетевых запросов: 0 — не установлено, 1 — работает, 2 — установлено, но не работает
 	local zr=0 zr2=0 bt=0 tg=0 mx=0 doh=0 hs=0 inst=0 bad=0 out="" rb=0
 	if [ -f /etc/init.d/zapret ]; then zr=2; pgrep -f "/opt/zapret/" >/dev/null 2>&1 && zr=1; fi
 	if [ -f /etc/init.d/zapret2 ]; then zr2=2; /etc/init.d/zapret2 status >/dev/null 2>&1 && zr2=1; fi
@@ -3367,10 +3347,6 @@ health() {
 	if [ "$doh" = "2" ]; then pidof https-dns-proxy >/dev/null 2>&1 && doh=1; fi
 	out=$(hosts_status 2>/dev/null)
 	case "$out" in *'"enabled":true'*|*'"geohide":"'[a-z]*) hs=1 ;; esac
-	# Steer: 1 — работает; 2 — должен работать (правила стоят, не выключен), но служба не
-	# запущена или не жив ни один туннель; 5 — выключен человеком или сервисы не выбраны: это не
-	# поломка, красным не показывается. Туннели — любые из поднятых, а не только первый: упавший
-	# zmwarp при живых zmwarp2 и zmwarp3 — штатная работа, движок уже ведёт через них.
 	local sr=0 w
 	if _st_installed; then
 		if [ -f /etc/zm-steer/stopped ] || ! grep -qx 'steer-spec' /etc/zm-steer/owned 2>/dev/null || [ "$(_st_exit)" = none ]; then
@@ -3393,12 +3369,6 @@ health() {
 		"$([ -f /etc/zm-steer/stopped ] && echo true || echo false)" "$(_awg_health)"
 }
 
-# ── Версии компонентов: установленная и последняя ──
-#
-# Последние версии узнаются из сети (GitHub и зеркала), это до полуминуты — поэтому страница
-# получает готовый ответ из кэша, а обновляет его фоновая задача: при первом запросе, раз в три
-# часа и по кнопке «Проверить снова». Установленные версии берутся теми же функциями, что
-# показывают их на страницах компонентов, — расхождений со страницами не бывает.
 VERSIONS_CACHE="$ZM_STATE_DIR/versions.json"
 
 _ver_norm() { printf '%s' "$1" | sed 's/^[vV]//; s/-r[0-9]*$//; s/[[:space:]]//g'; }
@@ -3559,24 +3529,16 @@ _bytetube_install_payload() {
 	[ -f /etc/config/bytetube ] || cat > /etc/config/bytetube <<'YTB_FILE_END_7f3a9c'
 config bytetube 'main'
 	option enabled '1'
-	# локальный порт SOCKS5 у ByeDPI (отдельный экземпляр, штатный byedpi не трогаем)
 	option byedpi_port '1088'
-	# стратегия обхода DPI, подбирается под провайдера (вкладка «Тест стратегий»)
 	option byedpi_opts '-d1 -d3+s -s6+s -d9+s -s12+s -d15+s -s20+s -d25+s -s30+s -d35+s -r1+s -S -a1 -As -d1 -d3+s -s6+s -d9+s -s12+s -d15+s -s20+s -d25+s -s30+s -d35+s -S -a1'
-	# заворачивать IPv6-адреса YouTube (0 — только IPv4)
 	option ipv6 '1'
-	# QUIC (UDP/443): block — отбрасывать, чтобы клиент откатился на TCP; proxy — гнать через ByeDPI
 	option quic 'block'
-	# использовать встроенный список доменов YouTube
 	option default_domains '1'
-	# дополнительные домены:
-	# list domain 'example.com'
 YTB_FILE_END_7f3a9c
 	chmod 644 /etc/config/bytetube
 	mkdir -p /etc/hotplug.d/firewall
 	cat > /etc/hotplug.d/firewall/90-bytetube <<'YTB_FILE_END_7f3a9c'
 #!/bin/sh
-# Если после reload firewall наша таблица пропала — восстановить.
 [ -f /var/run/bytetube.started ] || exit 0
 nft list table inet bytetube >/dev/null 2>&1 && exit 0
 logger -t bytetube "таблица nft пропала после reload firewall — восстанавливаю"
@@ -3587,7 +3549,6 @@ YTB_FILE_END_7f3a9c
 	mkdir -p /etc/init.d
 	cat > /etc/init.d/bytetube <<'YTB_FILE_END_7f3a9c'
 #!/bin/sh /etc/rc.common
-# YouTube Bypass: ByeDPI + hev-socks5-tunnel, маршрутизация только доменов YouTube
 
 START=99
 STOP=10
@@ -3604,7 +3565,6 @@ STARTED_FLAG=/var/run/bytetube.started
 log() { logger -t "$NAME" "$*"; }
 _echo() { echo "$1"; }
 
-# итоговый список доменов: встроенный + свои, только валидные имена
 collect_domains() {
 	local use_default
 	config_get use_default main default_domains 1
@@ -3621,7 +3581,6 @@ collect_domains() {
 			for (i = 1; i <= NR; i++) {
 				n = split(name[i], p, ".")
 				suf = ""; redundant = 0
-				# proper-суффиксы справа налево: если родительский домен уже в списке — запись избыточна
 				for (j = n; j >= 2; j--) {
 					suf = (suf == "") ? p[j] : p[j] "." suf
 					if (suf in have) { redundant = 1; break }
@@ -3639,9 +3598,6 @@ dns_remove() {
 	/etc/init.d/dnsmasq restart >/dev/null 2>&1
 }
 
-# Записать nftset-правила для dnsmasq; dnsmasq перезапускается только при изменении.
-# Строка конфига dnsmasq не может быть длиннее ~1 КБ (иначе dnsmasq вообще не запустится),
-# поэтому домены разбиваются на несколько строк nftset= по <= 800 байт.
 dns_apply() {
 	local ipv6="$1" conf domains suffix new old
 	conf="$(dnsmasq_confdir)/bytetube.conf"
@@ -3687,7 +3643,6 @@ write_hev_conf() {
 	} > "$f"
 }
 
-# правило forward в fw4 (иначе policy drop не пропустит LAN -> tun)
 ensure_fw4_include() {
 	command -v fw4 >/dev/null 2>&1 || { log "fw4 не найден — нужен OpenWrt 22.03+"; return 0; }
 	nft list chain inet fw4 forward 2>/dev/null | grep -q "bytetube" && return 0
@@ -3732,18 +3687,15 @@ start_service() {
 	ensure_fw4_include
 	dns_apply "$ipv6"
 
-	# --- ByeDPI: локальный SOCKS5 с десинхронизацией ---
 	procd_open_instance byedpi
 	procd_set_param command "$byedpi" -i 127.0.0.1 -p "$byedpi_port"
 	set -f
-	# shellcheck disable=SC2086
 	[ -n "$byedpi_opts" ] && procd_append_param command $byedpi_opts
 	set +f
 	procd_set_param respawn 3600 5 0
 	procd_set_param stderr 1
 	procd_close_instance
 
-	# --- hev-socks5-tunnel: TUN -> SOCKS5 ByeDPI ---
 	procd_open_instance hev
 	procd_set_param command "$hev" "$RUNDIR/hev.yml"
 	procd_set_param respawn 3600 5 0
@@ -3771,14 +3723,6 @@ YTB_FILE_END_7f3a9c
 	mkdir -p /usr/bin
 	cat > /usr/bin/bytetube <<'YTB_FILE_END_7f3a9c'
 #!/bin/sh
-# Вспомогательная утилита YouTube Bypass (используется LuCI и для отладки)
-#   bytetube status   — состояние в JSON
-#   bytetube flush    — очистить наборы IP (клиентам нужно заново резолвить домены)
-#   bytetube list     — показать IP в наборах
-#   bytetube diag [IP|MAC|имя] [сек] — диагностика клиента: куда идёт его DNS и :443-трафик (без аргумента — список клиентов)
-#   bytetube test …   — тест стратегий ByeDPI (start|stop|status|log|results|clear|list)
-#   bytetube test list get|set|reset strategies|domains [текст] — свои списки для теста
-#   bytetube set-strategy "<параметры ciadpi>" — записать стратегию и перезапустить службу
 
 . /lib/functions.sh
 . /usr/libexec/bytetube/common.sh
@@ -3864,7 +3808,6 @@ diag)
 		exit 0
 	fi
 
-	# имя/MAC -> IP через аренды DHCP
 	client="$arg"
 	if ! printf '%s' "$arg" | grep -Eq '^[0-9]+(\.[0-9]+){3}$'; then
 		found=$(grep -i -- "$arg" "$LEASES" 2>/dev/null)
@@ -3884,7 +3827,6 @@ diag)
 			exit 0 ;;
 	esac
 
-	# все адреса устройства: IPv4 + его глобальные IPv6 (по MAC)
 	mac=$(ip neigh show 2>/dev/null | awk -v ip="$client" '$1==ip {for(i=1;i<=NF;i++) if($i=="lladdr") print $(i+1)}' | head -n 1)
 	ips="$client"
 	[ -n "$mac" ] && ips="$ips $(ip -6 neigh show 2>/dev/null | awk -v m="$mac" 'tolower($0) ~ tolower(m) {print $1}' | grep -v '^fe80' | tr '\n' ' ')"
@@ -3901,7 +3843,6 @@ diag)
 		[ "$i" -lt "$secs" ] && sleep 1
 	done
 
-	# каждый поток считаем один раз; «в туннеле», если у него хоть раз была метка
 	awk -v ips=" $ips " '
 	{
 		proto=$3; src=""; dst=""; sport=""; dport=""; mark=0
@@ -4015,7 +3956,6 @@ YTB_FILE_END_7f3a9c
 	mkdir -p /usr/libexec/bytetube
 	cat > /usr/libexec/bytetube/common.sh <<'YTB_FILE_END_7f3a9c'
 #!/bin/sh
-# Общие константы и функции YouTube Bypass
 
 TUN=ytb0            # имя TUN-интерфейса hev-socks5-tunnel
 MARK=0x10000        # fwmark (один выделенный бит)
@@ -4024,7 +3964,6 @@ TABLE=89            # таблица маршрутизации
 PREF=8900           # приоритет ip rule
 NFT_TABLE=bytetube
 
-# каталог conf-dir, который читает dnsmasq
 dnsmasq_confdir() {
 	local d
 	d=$(sed -n 's/^conf-dir=\([^,]*\).*/\1/p' /var/etc/dnsmasq.conf.* 2>/dev/null | head -n 1)
@@ -4032,12 +3971,10 @@ dnsmasq_confdir() {
 	echo "$d"
 }
 
-# dnsmasq собран с nftset (dnsmasq-full)?
 dnsmasq_has_nftset() {
 	dnsmasq --version 2>/dev/null | grep -Eq '(^| )nftset( |$)'
 }
 
-# путь к бинарнику ByeDPI
 find_byedpi() {
 	local b
 	for b in /usr/bin/ciadpi /usr/bin/byedpi; do
@@ -4046,9 +3983,6 @@ find_byedpi() {
 	command -v ciadpi
 }
 
-# Параметры ByeDPI приходят из UCI как строка, а раскрываются без eval (по пробелам).
-# Кавычки вроде -n "google.com" при этом остались бы в аргументе буквально,
-# поэтому их убираем: у аргументов ciadpi пробелов внутри не бывает.
 byedpi_opts_clean() {
 	printf '%s' "$1" | tr -d "\"'" | tr '\n\r\t' '   ' | sed 's/^ *//; s/ *$//; s/  */ /g'
 }
@@ -4056,11 +3990,6 @@ YTB_FILE_END_7f3a9c
 	chmod 755 /usr/libexec/bytetube/common.sh
 	cat > /usr/libexec/bytetube/net.sh <<'YTB_FILE_END_7f3a9c'
 #!/bin/sh
-# Настройка nftables и policy routing.
-# Использование: net.sh up | down | purge
-#   up    — создать таблицу inet bytetube и ip rule
-#   down  — убрать правила маркировки и ip rule (наборы IP остаются, чтобы dnsmasq не сыпал ошибками)
-#   purge — удалить всё, включая таблицу
 
 . /lib/functions.sh
 . /usr/libexec/bytetube/common.sh
@@ -4125,7 +4054,6 @@ up)
 	gen_ruleset | nft -f - || exit 1
 	ip rule add pref "$PREF" fwmark "$MARK/$MASK" lookup "$TABLE" || exit 1
 	[ "$IPV6" = "1" ] && ip -6 rule add pref "$PREF" fwmark "$MARK/$MASK" lookup "$TABLE"
-	# если туннель уже поднят — сразу добавить маршрут (иначе это сделает post-up hev)
 	ip link show "$TUN" >/dev/null 2>&1 && /usr/libexec/bytetube/route-up.sh "$TUN"
 	exit 0
 	;;
@@ -4148,9 +4076,6 @@ YTB_FILE_END_7f3a9c
 	chmod 755 /usr/libexec/bytetube/net.sh
 	cat > /usr/libexec/bytetube/route-up.sh <<'YTB_FILE_END_7f3a9c'
 #!/bin/sh
-# Вызывается hev-socks5-tunnel после подъёма TUN (и из net.sh up).
-# Если туннель упадёт, маршрут исчезнет вместе с интерфейсом, и помеченный
-# трафик уйдёт по основной таблице напрямую (fail-open).
 
 . /lib/functions.sh
 . /usr/libexec/bytetube/common.sh
@@ -4163,22 +4088,12 @@ ip link set "$TUN" up 2>/dev/null
 ip route replace default dev "$TUN" table "$TABLE"
 [ "$IPV6" = "1" ] && ip -6 route replace default dev "$TUN" table "$TABLE"
 
-# ответы приходят с адресов YouTube на TUN — нужен нестрогий rp_filter (2 = loose)
 echo 2 > "/proc/sys/net/ipv4/conf/$TUN/rp_filter" 2>/dev/null
 exit 0
 YTB_FILE_END_7f3a9c
 	chmod 755 /usr/libexec/bytetube/route-up.sh
 	cat > /usr/libexec/bytetube/test.sh <<'YTB_FILE_END_7f3a9c'
 #!/bin/sh
-# Тест стратегий ByeDPI.
-#   bytetube test start | stop | status | log | results | clear
-#
-# Списки стратегий и доменов: свои (/etc/bytetube/, переживают обновление) или встроенные.
-#   bytetube test list get|set|reset strategies|domains [текст]
-#
-# Каждая стратегия запускается во ВРЕМЕННОМ экземпляре ciadpi на отдельном порту,
-# домены проверяются через него по curl --socks5. Боевой сервис и трафик клиентов
-# не затрагиваются, конфигурация не меняется. Сначала контрольный замер без обхода.
 
 . /lib/functions.sh
 . /usr/libexec/bytetube/common.sh
@@ -4205,8 +4120,6 @@ count_lines() { # файл -> число строк без пустых и ко�
 	sed 's/#.*//' "$1" 2>/dev/null | tr -d '\r' | grep -c '[^[:space:]]'
 }
 
-# ---------------------------------------------------------------- списки
-# имя файла у пользователя
 list_name() {
 	case "$1" in
 		strategies) echo strategies.txt ;;
@@ -4214,7 +4127,6 @@ list_name() {
 	esac
 }
 
-# путь действующего списка: свой (если есть и не пуст), иначе встроенный
 list_file() {
 	local nm
 	nm=$(list_name "$1")
@@ -4238,8 +4150,6 @@ json_esc() {
 	printf '%s' "$1" | tr -d '\000-\037' | sed 's/\\/\\\\/g; s/"/\\"/g'
 }
 
-# домены: по одному в строке; допускаем ссылки, *.домен, запятые/пробелы; комментарии (#) сохраняем.
-# Первая некорректная запись пишется в файл $1.
 norm_domains() {
 	awk -v badf="$1" '
 	{
@@ -4263,7 +4173,6 @@ norm_domains() {
 	}'
 }
 
-# стратегии: по одной в строке, пробелы схлопываются, дубли убираются, комментарии (#) сохраняем
 norm_strategies() {
 	awk '
 	{
@@ -4331,7 +4240,6 @@ cmd_list() {
 	return 0
 }
 
-# ---------------------------------------------------------------- управление
 cmd_start() {
 	if is_running; then
 		echo '{"started":true,"already_running":true}'
@@ -4342,7 +4250,6 @@ cmd_start() {
 	mkdir -p "$TEST_DIR"
 	rm -f "$STOP"
 	: > "$LOGF"
-	# полностью отвязываем от stdin/stdout, иначе rpcd будет ждать завершения
 	( "$0" run >>"$LOGF" 2>&1; echo "__DONE__ $?" >>"$LOGF" ) >/dev/null 2>&1 </dev/null &
 	echo $! > "$PIDF"
 	echo '{"started":true}'
@@ -4390,8 +4297,6 @@ cmd_clear() {
 	echo '{"ok":true}'
 }
 
-# ---------------------------------------------------------------- движок
-# check_url ЗАПИСЬ OKFILE LOGFILE [socks host:port]
 check_url() {
 	local entry="$1" okfile="$2" logfile="$3" proxy="$4" host url rc
 	host="${entry%%|*}"
@@ -4412,7 +4317,6 @@ check_url() {
 	fi
 }
 
-# check_all ФАЙЛ_URL LOGFILE [socks] -> "ok total"
 check_all() {
 	local urls="$1" logfile="$2" proxy="$3" okf run=0 total=0 ok entry
 	okf="$TEST_DIR/ok.$$"
@@ -4465,7 +4369,6 @@ cmd_run() {
 	: > "$cand"; : > "$keys"; : > "$RAW"
 
 	echo "==> Собираем стратегии для теста"
-	# текущая стратегия идёт первой, затем список; дубликаты (без учёта кавычек) отбрасываем
 	{ printf '%s\n' "$CUR"; cat "$(list_file strategies)"; } | tr -d '\r' | while IFS= read -r line; do
 		line=$(printf '%s' "$line" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
 		case "$line" in ''|'#'*) continue ;; esac
@@ -4522,8 +4425,6 @@ cmd_run() {
 		ok=${res% *}; tot=${res#* }
 		ok=${ok:-0}
 		echo "    результат: $ok/$tot"
-		# ключ сортировки: (999999-ok) и номер — при обычном лексикографическом sort получается
-		# «больше ok выше, при равенстве раньше в списке». sort -k/-n в busybox OpenWrt может не работать.
 		printf '%06d\t%06d\t%s\t%s\t%s\n' "$((999999 - ok))" "$idx" "$ok" "$tot" "$line" >> "$RAW"
 	done < "$cand"
 
@@ -4535,7 +4436,6 @@ cmd_run() {
 	fi
 	[ "$skipped" -gt 0 ] && echo "==> Пропущено стратегий (не запустились): $skipped"
 
-	# итог: по убыванию числа доступных доменов, при равенстве — в порядке списка
 	{
 		echo "Контрольный тест (без обхода) → $cok/$ctot"
 		sort "$RAW" | while IFS="$TAB" read -r _ _ ok tot line; do
@@ -4568,9 +4468,6 @@ YTB_FILE_END_7f3a9c
 	chmod 644 /usr/share/nftables.d/chain-pre/forward/50-bytetube.nft
 	mkdir -p /usr/share/bytetube
 	cat > /usr/share/bytetube/domains.list <<'YTB_FILE_END_7f3a9c'
-# Домены YouTube и связанных сервисов Google (поддомены подхватываются автоматически).
-# Список объединяется с «Дополнительными доменами» из настроек. Вложенные записи
-# (например, i.ytimg.com при наличии ytimg.com) сервис сам отбрасывает как избыточные.
 android.clients.google.com
 beacons.gvt2.com
 cdn.youtube.com
@@ -4849,7 +4746,6 @@ YTB_FILE_END_7f3a9c
 YTB_FILE_END_7f3a9c
 	chmod 644 /usr/share/bytetube/strategies.txt
 	cat > /usr/share/bytetube/test-domains.txt <<'YTB_FILE_END_7f3a9c'
-# Google and Youtube
 youtu.be
 youtube.com
 i.ytimg.com
@@ -4864,7 +4760,6 @@ youtubei.googleapis.com
 manifest.googlevideo.com
 yt3.googleusercontent.com
 
-# Googlevideo
 rr1---sn-4axm-n8vs.googlevideo.com
 rr1---sn-gvnuxaxjvh-o8ge.googlevideo.com
 rr1---sn-ug5onuxaxjvh-p3ul.googlevideo.com
@@ -5011,15 +4906,11 @@ bytetube_action() {
 
 _doh_file="/etc/config/https-dns-proxy"
 
-# Страница DoH «удалила» шифрованный DNS, но пакет оставлен, потому что им пользуется DNS для
-# ИИ-сервисов автообхода (служба zm-geodns крутит свой экземпляр той же программы).
 DOH_OFF_FLAG="/opt/zapret-manager-luci/doh_off"
 _doh_pkg() {
 	if [ "$PKG" = "apk" ]; then apk info -e https-dns-proxy >/dev/null 2>&1
 	else opkg list-installed 2>/dev/null | grep -q '^https-dns-proxy '; fi
 }
-# Steer держит DNS устройств на своём резолвере: перехват порта 53 у https-dns-proxy его
-# перебивает, и сервисы через WARP перестают открываться. Пока Steer работает, перехват не нужен.
 _doh_steer_active() { grep -qx 'steer-spec' /etc/zm-steer/owned 2>/dev/null && [ ! -f /etc/zm-steer/stopped ]; }
 
 do_doh_install() {
@@ -5030,7 +4921,6 @@ do_doh_install() {
 		return 0
 	fi
 	if _doh_pkg; then
-		# Пакет уже стоит (остался от прежних версий) — ставить нечего, только вернуть службу.
 		rm -f "$DOH_OFF_FLAG"
 		echo "==> Пакет https-dns-proxy уже стоит — включаем службу"
 		/etc/init.d/https-dns-proxy enable >/dev/null 2>&1
@@ -5066,7 +4956,6 @@ doh_install() {
 	job_start doh_install do_doh_install
 }
 
-# Провайдер по адресу резолвера — те же адреса, что пишет doh_set.
 _doh_provider_of() {
 	case "$1" in
 		https://cloudflare-dns.com/*|https://1.1.1.1/*|https://1.0.0.1/*) echo cloudflare ;;
@@ -5080,9 +4969,6 @@ _doh_provider_of() {
 	esac
 }
 
-# Что реально настроено в /etc/config/https-dns-proxy: все экземпляры с адресом и портом.
-# «current» — провайдер, только если экземпляр ОДИН и он наш: пакет из коробки (и руками)
-# держит два резолвера сразу, и подсвечивать тогда одну кнопку — неправда.
 doh_status() {
 	local installed="false" current="" running=false force=false list="" sep="" i url port prov n=0 provs=""
 	_doh_pkg && [ ! -f "$DOH_OFF_FLAG" ] && installed="true"
@@ -5157,9 +5043,7 @@ doh_set() {
 }
 
 
-# ───────────────────────── Общее для steer ─────────────────────────
 
-# Каталог сервисов и их списки доменов/адресов (ставится установщиком панели).
 RB_SHARE="/usr/share/zm-redbtn"
 
 _rb_say() { echo "==> $*"; }
@@ -5167,12 +5051,10 @@ _rb_warn() { echo "!! $*"; }
 _rb_svc_ids() { grep -v '^#' "$RB_SHARE/services.conf" 2>/dev/null | cut -d'|' -f1 | grep .; }
 _rb_svc_field() { grep "^$1|" "$RB_SHARE/services.conf" 2>/dev/null | head -n1 | cut -d'|' -f"$2"; }
 _rb_svc_names() { local id; for id in $1; do printf '%s, ' "$(_rb_svc_field "$id" 2)"; done | sed 's/, $//'; }
-# Сервис можно пустить через WARP, только если у него есть списки доменов или адресов.
 _rb_routable() { [ "$1" = custom ] && [ -n "$(_rb_svc_field custom 1)" ] && return 0; [ -n "$(_rb_svc_field "$1" 3)$(_rb_svc_field "$1" 4)$(_rb_svc_field "$1" 8)" ]; }
 _rb_in() { grep -qxF "$1" "$2" 2>/dev/null; }
 _job_alive() { _job_running "$1"; }
 
-# pkill в busybox OpenWrt нет: процессы по подстроке командной строки — через ps.
 _kill_match() { # ПОДСТРОКА
 	local p
 	for p in $(ps w | grep -F -- "$1" | grep -v -e grep -e "_kill_match" | awk '{print $1}'); do
@@ -5180,9 +5062,6 @@ _kill_match() { # ПОДСТРОКА
 	done
 }
 
-# Наш объект в ubus должен пережить установку пакетов: luci-proto-amneziawg в post-install
-# зовёт `rpcd reload`, следом идёт перезапуск сети, и rpcd поднимался без объекта
-# zapret-manager — страница получала «Object not found» до конца операции.
 _rb_rpcd_ensure() {
 	local i=0
 	while [ "$i" -lt 3 ]; do
@@ -5196,23 +5075,6 @@ _rb_rpcd_ensure() {
 
 
 
-# ───────────────────────── steer: выбранные сервисы через WARP ─────────────────────────
-#
-# Страница «steer» ставит и связывает всё сама: движок steer (github.com/xyzmean/steer),
-# AmneziaWG, ключи Cloudflare WARP, интерфейс zmwarp с зоной firewall (NAT) и правила, по
-# которым в туннель уходят ТОЛЬКО выбранные сервисы; остальной трафик идёт как шёл.
-#
-# Автообход этим пользуется, если steer установлен: сервис, который не открыл Zapret, но
-# открывает WARP, он сам добавляет в выбор. То, что человек из выбора убрал (ST_SKIP), он
-# обратно не добавляет.
-#
-# ЧЕГО steer ЗДЕСЬ НЕ ДЕЛАЕТ:
-#   - не трогает DNS роутера: спор с перехватом порта 53 страницей DoH показывается и
-#     чинится только по нажатию;
-#   - не пишет поверх чужой спеки steer (splify2 или настроенной руками);
-#   - не держит движок включённым без правил: пакет при установке включает его сразу, а он и
-#     с пустой спекой заворачивает DNS сети на себя (на 25.12.5 так отваливался DNS по IPv6);
-#   - записывает всё, что поставил и поменял (ST_OWNED), и снимает ровно это при удалении.
 
 ST_DIR="/etc/zm-steer"
 ST_OWNED="$ST_DIR/owned"
@@ -5230,23 +5092,11 @@ ST_STEER_SPEC="/etc/steer/spec.json"
 ST_STEER_URLS="https://github.com/xyzmean/steer/releases/download/v@VER@ https://gitlab.com/xyzmean/steer/-/raw/dist https://raw.githubusercontent.com/xyzmean/steer/dist"
 ST_AWG_MIRRORS="${GH_MAIN}/2Grey/awg-openwrt/releases/download ${GH_MAIN}/Slava-Shchipunov/awg-openwrt/releases/download"
 ST_AWG_MIRROR_FLAT="https://gitlab.com/xyzmean/brb/-/raw/main/deps/awg"
-# Автоперезапуск: строка crontab помечается хвостом-комментарием. Команда самодостаточна —
-# переживает и удаление панели: туннель поднимается заново, steer перезапускается, если включён.
 ST_CRON_TAG="# zm-steer"
 ST_CRON_CMD="/etc/init.d/steer enabled && { for i in zmwarp zmwarp2 zmwarp3; do ifup \$i; done; sleep 15; /etc/init.d/steer restart; }"
-# ТРИ ТУННЕЛЯ В РАЗНЫХ КОЛОНИЯХ, как в brb. Один туннель — одна точка отказа: колония уходит
-# на обслуживание, провайдер начинает резать адрес — и все сервисы в WARP встают разом. Три
-# туннеля отказывают порознь; steer держит их одним выходом и ведёт через самый быстрый живой
-# (prefer: latency), сторож движка переключает сам. Первый — прежний zmwarp: его показывает
-# страница, его ключи и точка переживают обновление. У каждого своя регистрация: одни ключи
-# на трёх устройствах Cloudflare считает одним клиентом.
 ST_WARP_N=3
 ST_WARP_UP="$ST_DIR/warp.up"          # поднятые туннели «интерфейс колония», лучший первым (_st_warp_order)
-# Российские колонии Cloudflare: выход у них внутри страны, за теми же ТСПУ, что и без туннеля, —
-# через них не снимается ни геоблок, ни остальные блокировки. Берутся только в запас.
 ST_RU_COLOS="DME SVX LED KJA REN OVB KZN AER VVO"
-# Что выбрать при первой установке, если ничего не выбрано: ИИ-сервисы закрывает геоблок,
-# и кроме туннеля им ничего не поможет.
 ST_DEFAULT_SEL=""
 
 _st_phase() { printf '%s\n' "$1" > "$ST_PHASE_FILE"; }
@@ -5256,14 +5106,9 @@ _st_owns() { grep -qxF "$1" "$ST_OWNED" 2>/dev/null; }
 _st_running() { _job_alive steer; }
 _st_installed() { command -v steer >/dev/null 2>&1 && { _st_owns "engine" || _st_owns "pkg steer" || _st_owns "net $ST_WARP_IF"; }; }
 _st_warp_on() { _st_owns "net $ST_WARP_IF" && [ -s "$ST_WARP_CONF" ]; }
-# Готов принимать сервисы: поставлен, не выключен человеком и ничто не мешает.
 _st_ready() { _st_installed && [ ! -f "$ST_OFF" ] && [ -z "$(_st_blocker)" ]; }
 _st_sel() { [ -s "$ST_SEL" ] || return 0; local id; for id in $(cat "$ST_SEL"); do _rb_routable "$id" || continue; [ "$id" = custom ] && [ ! -s "$ST_USER_DIR/custom.lst" ] && continue; echo "$id"; done; }
 
-# Переезд со старых версий (красная кнопка 1.34, автообход 1.35–1.36), где туннель и steer
-# записывались в каталог автообхода. Раньше переезд шёл, только пока каталога steer ещё нет, —
-# и если он успевал появиться (выбор списков до установки), старые правила так и оставались
-# «чужими»: страница steer и автообход отказывались их трогать. Теперь смотрим на сами записи.
 _st_migrate() {
 	local old=/etc/zm-redbtn re='^(pkg (steer|kmod-amneziawg|amneziawg-tools|luci-proto-amneziawg)|net zmwarp|fw zmwarp|steer-spec)$' f id l
 	grep -qE "$re" "$old/owned" 2>/dev/null || return 0
@@ -5284,39 +5129,29 @@ _st_migrate() {
 _st_migrate
 mkdir -p "$ST_RUN" 2>/dev/null
 
-# ── что мешает ──
-#
-# splify2 держит ту же спеку steer и сам ведёт туннели и списки: два хозяина одной спеки
-# затирали бы друг друга.
 _st_blocker() {
 	if [ -x /etc/init.d/splify2 ] || ubus list splify2 >/dev/null 2>&1; then echo splify2; return; fi
 	if _st_spec_foreign; then echo steer; return; fi
 	echo ""
 }
 
-# Спека steer чужая: она есть, в ней есть каналы, и писали её не мы.
 _st_spec_foreign() {
 	[ -s "$ST_STEER_SPEC" ] || return 1
 	_st_owns "steer-spec" && return 1
-	# Выход zm_warp пишет только Zapret Manager (любая его версия): такая спека наша, даже если
-	# запись о ней потерялась при обновлении, — забираем её обратно, а не отказываемся работать.
 	if grep -q '"zm_warp"\|"zm_vpn"' "$ST_STEER_SPEC"; then _st_own "steer-spec"; return 1; fi
 	grep -q '"channels"[[:space:]]*:[[:space:]]*\[[[:space:]]*{' "$ST_STEER_SPEC"
 }
 
 
-# ── пакеты ──
 
 _rb_arch() { awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release; }
 _rb_release() { awk -F\' '/DISTRIB_RELEASE/ {print $2}' /etc/openwrt_release; }
 _rb_target() { awk -F\' '/DISTRIB_TARGET/ {print $2}' /etc/openwrt_release | tr '/' '_'; }
 
-# Скачать и проверить, что это пакет, а не HTML-страница ошибки с кодом 200.
 _rb_fetch_pkg() { # URL ФАЙЛ
 	local err
 	rm -f "$2"
 	if ! err=$(curl -fsSL --connect-timeout 8 --max-time 120 -o "$2" "$1" 2>&1); then
-		# Зеркал несколько, и промах одного — обычное дело: строка в журнал, а не ошибка.
 		echo "   не скачалось: $1${err:+ — $(printf '%s' "$err" | tail -n1)}"
 		rm -f "$2"; return 1
 	fi
@@ -5338,7 +5173,6 @@ _st_tun_ensure() {
 }
 _st_is_ext() { steer --version 2>/dev/null | head -n1 | grep -q 'VLESS'; }
 
-# 0, если версия A старше B (числа через точку). В busybox нет sort -V.
 _st_ver_lt() { # A B
 	awk -v a="$1" -v b="$2" 'BEGIN { n = split(a, x, "."); m = split(b, y, "."); k = n > m ? n : m
 		for (i = 1; i <= k; i++) { if (x[i] + 0 < y[i] + 0) exit 0; if (x[i] + 0 > y[i] + 0) exit 1 }
@@ -5384,8 +5218,6 @@ _st_install_steer() {
 		fi
 	fi
 	local arch tmp base url ver was_on=""
-	# Обновление не должно гасить работающий Steer: после установки пакета движок ниже
-	# выключается (это нужно новой установке), а при обновлении прежнее состояние возвращается.
 	command -v steer >/dev/null 2>&1 && /etc/init.d/steer enabled 2>/dev/null && was_on=1
 	arch="$(_rb_arch)"
 	[ -n "$arch" ] || { echo "ОШИБКА: не удалось определить архитектуру роутера"; return 1; }
@@ -5396,7 +5228,6 @@ _st_install_steer() {
 		ver="$want"
 		url="$(echo "$base" | sed "s/@VER@/$ver/")/${pkg}-${ver}-1_${arch}.${RAZ}"
 		if ! _rb_fetch_pkg "$url" "$tmp"; then
-			# На зеркале может лежать выпуск на шаг старше — берём тот, что там есть.
 			case "$base" in *@VER@*) continue ;; esac
 			ver=$(curl -fsSL --connect-timeout 8 --max-time 15 "$base/VERSION" 2>/dev/null | tr -d '[:space:]')
 			echo "$ver" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$' || continue
@@ -5407,8 +5238,6 @@ _st_install_steer() {
 			_st_own "pkg steer"
 			_st_own "pkg steer-extended"
 			_st_tun_ensure
-			# Пакет включает движок сразу, а движок и с пустой спекой заворачивает DNS сети на
-			# свой резолвер. Включается он только вместе с правилами (_st_spec_apply).
 			if [ -n "$was_on" ]; then
 				/etc/init.d/steer enable >/dev/null 2>&1
 				/etc/init.d/steer restart >/dev/null 2>&1
@@ -5428,17 +5257,6 @@ _st_install_steer() {
 
 _st_awg_loaded() { grep -q '^amneziawg ' /proc/modules 2>/dev/null || [ -d /sys/module/amneziawg ]; }
 
-# Установка AmneziaWG — как у установщика 2Grey/awg-openwrt (amneziawg-install.sh): версия,
-# архитектура и цель — из `ubus call system board` (запасной путь — /etc/openwrt_release),
-# пакеты — из релиза v<версия OpenWrt>, имя «пакет_v<версия>_<архитектура>_<цель>_<подцель>»,
-# сначала в формате своего менеджера пакетов (apk/ipk), потом в другом. Обработчик для LuCI —
-# luci-proto-amneziawg (OpenWrt 24.10.3+, 23.05.6+) или luci-app-amneziawg (старее); второй
-# с первым конфликтует и снимается. Старый фид slava-shchipunov убирается: его ключ подписи
-# конфликтует с пакетами 2Grey. Прочие зеркала — запас, если релиза 2Grey под версию нет.
-#
-# ПЕРВЫЙ аргумент update — поставить пакеты из релиза заново, даже если стоят (обновление);
-# без него ставится только недостающее. ST_AWG_OWN=0 — не записывать пакеты во владения
-# Steer (ставит страница AmneziaWG, удалять их вместе со Steer нельзя).
 _awg_board() { ubus call system board 2>/dev/null | jsonfilter -e "$1" 2>/dev/null; }
 _awg_rel_ver() { local v; v="$(_awg_board '@.release.version')"; [ -n "$v" ] || v="$(_rb_release)"; echo "$v"; }
 _awg_rel_arch() {
@@ -5449,11 +5267,9 @@ _awg_rel_arch() {
 	echo "$a"
 }
 _awg_rel_target() { local t; t="$(_awg_board '@.release.target')"; [ -n "$t" ] || t="$(awk -F\' '/DISTRIB_TARGET/ {print $2}' /etc/openwrt_release)"; echo "$t"; }
-# luci-proto-amneziawg — для OpenWrt 24.10.3+ и 23.05.6+, иначе luci-app-amneziawg.
 _awg_luci_pkg() {
 	local v="$1" ma mi pa
 	ma="$(echo "$v" | cut -d. -f1)"; mi="$(echo "$v" | cut -d. -f2)"; pa="$(echo "$v" | cut -d. -f3 | sed 's/[^0-9].*//')"
-	# Как у 2Grey: версия не из трёх чисел (rc, SNAPSHOT) — старый обработчик luci-app.
 	case "$ma.$mi.$pa" in *[!0-9.]*|*..*|.*|*.) echo luci-app-amneziawg; return ;; esac
 	if [ "$ma" -gt 24 ] || { [ "$ma" -eq 24 ] && [ "$mi" -gt 10 ]; } || { [ "$ma" -eq 24 ] && [ "$mi" -eq 10 ] && [ "$pa" -ge 3 ]; } ||
 	   { [ "$ma" -eq 23 ] && [ "$mi" -eq 5 ] && [ "$pa" -ge 6 ]; }; then
@@ -5471,7 +5287,6 @@ _awg_legacy_feeds() {
 		rm -f "$f.zmtmp"
 	done
 }
-# Скачать пакет из релиза: сначала своим форматом, потом другим (как download_package у 2Grey).
 _awg_fetch() { # БАЗА ПАКЕТ ПОСТФИКС -> путь к файлу в stdout
 	local e
 	for e in "$RAZ" "$([ "$RAZ" = apk ] && echo ipk || echo apk)"; do
@@ -5498,7 +5313,6 @@ _st_install_awg() { # [update]
 		luci="$(_awg_luci_pkg "$rel")"
 		old_luci=luci-app-amneziawg; [ "$luci" = luci-app-amneziawg ] && old_luci=luci-proto-amneziawg
 		{ [ "$mode" = update ] || ! _pkg_is_installed "$luci"; } && need="$need $luci"
-		# Тот же пакет той же версии opkg молча пропускает — для «переустановить» нужен флаг.
 		[ "$mode" = update ] && [ "$PKG" = opkg ] && force="--force-reinstall"
 		_rb_say "Устанавливаем AmneziaWG из релиза 2Grey/awg-openwrt v$rel ($arch, $tgt/$sub)"
 		mkdir -p "$ST_RUN"
@@ -5508,13 +5322,10 @@ _st_install_awg() { # [update]
 		bases=""
 		for m in $ST_AWG_MIRRORS; do bases="$bases $m/v$rel"; done
 		bases="$bases $ST_AWG_MIRROR_FLAT/$rel"
-		# Модуль и утилиты — только из ОДНОГО источника: при переходе к запасному зеркалу всё,
-		# что нужно было поставить, ставится заново оттуда же (версии AWG 1.x и 2.x не смешиваются).
 		for base in $bases; do
 			ok=1
 			for p in $need; do
 				if f="$(_awg_fetch "$base" "$p" "$post")"; then
-					# Конфликтующий обработчик LuCI снимается только когда замена уже скачана.
 					if [ "$p" = "$luci" ] && _pkg_is_installed "$old_luci"; then
 						_rb_say "$old_luci конфликтует с $luci — снимаем"
 						$DELETE "$old_luci" >&2
@@ -5536,7 +5347,6 @@ _st_install_awg() { # [update]
 				[ "$ok" = 1 ] || break
 			done
 			if [ "$ok" = 1 ]; then
-				# Русский перевод LuCI-страницы — необязателен, как у 2Grey.
 				if ! _pkg_is_installed luci-i18n-amneziawg-ru && f="$(_awg_fetch "$base" luci-i18n-amneziawg-ru "$post" 2>/dev/null)"; then
 					$INSTALL "$f" >&2 && { [ "${ST_AWG_OWN:-1}" = 1 ] && _st_own "pkg luci-i18n-amneziawg-ru"; }
 					rm -f "$f"
@@ -5551,8 +5361,6 @@ _st_install_awg() { # [update]
 			return 1
 		fi
 	fi
-	# Модуль ядра сменил версию, а в ядре остался прежний. Выгрузка модуля удаляет ВСЕ его
-	# интерфейсы, поэтому перегружаем только когда туннелей нет; иначе — после перезагрузки.
 	kver1="$(_awg_pkg_ver kmod-amneziawg)"
 	if [ "$was_loaded" = 1 ] && [ -n "$kver0" ] && [ "$kver0" != "$kver1" ]; then
 		if [ -z "$(awg show interfaces 2>/dev/null)" ] && rmmod amneziawg >/dev/null 2>&1; then
@@ -5561,14 +5369,11 @@ _st_install_awg() { # [update]
 			_rb_warn "Модуль ядра обновлён ($kver0 → $kver1), но туннели работают на прежнем — новый заработает после перезагрузки роутера"
 		fi
 	fi
-	# Установщик пакета модуль в ядро не грузит, а /etc/init.d/kmod грузит его только при
-	# загрузке: без modprobe интерфейс не поднимается до перезагрузки роутера.
 	_st_awg_loaded || modprobe amneziawg >/dev/null 2>&1
 	if ! _st_awg_loaded || ! command -v awg >/dev/null 2>&1; then
 		echo "ОШИБКА: AmneziaWG установлен, но модуль ядра не загрузился — перезагрузите роутер и повторите"
 		return 1
 	fi
-	# netifd узнаёт о протоколе amneziawg только при своём запуске.
 	if ! _awg_proto_ok; then
 		_rb_say "Перезапускаем сеть, чтобы она узнала протокол AmneziaWG (страница может ненадолго пропасть)"
 		/etc/init.d/network restart >/dev/null 2>&1
@@ -5578,13 +5383,9 @@ _st_install_awg() { # [update]
 	return 0
 }
 
-# ── WARP ──
 
 _st_warp_field() { sed -n "s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*//p" "$ST_WARP_CONF" | head -n1; }
 
-# Ключи WARP — напрямую у Cloudflare, как это делает wgcf: свой ключ генерирует awg, Cloudflare
-# в ответ называет свой ключ и адрес. Разбор — jsonfilter, он есть в каждой OpenWrt, jq не
-# нужен. Не вышло — запасные генераторы страницы Mixomo (сторонние сайты).
 ST_WARP_API="https://api.cloudflareclient.com/v0a2158/reg https://api.cloudflareclient.com/v0a1922/reg"
 
 _st_warp_conf_write() { # ПРИВАТНЫЙ ПИР v4 v6
@@ -5626,7 +5427,6 @@ _st_warp_register() {
 		rm -f "$reg"
 		_rb_warn "Cloudflare не выдал ключи напрямую — пробуем запасные генераторы"
 	fi
-	# Тот же генератор, что у страницы Mixomo, но в свой файл: чужой /root/WARP.conf не трогаем.
 	( MIXOMO_WARP_CONF="$ST_WARP_CONF"; $UPDATE >&2; do_mixomo_warp_register manual ) || return 1
 	chmod 600 "$ST_WARP_CONF"
 	[ -n "$(_st_warp_field PrivateKey)" ] && [ -n "$(_st_warp_field PublicKey)" ]
@@ -5659,8 +5459,6 @@ _st_warp_iface_write() { # ХОСТ ПОРТ
 	uci set "network.${ST_WARP_IF}_peer.description=WARP ${ST_WARP_IF#zmwarp}"
 	uci set "network.${ST_WARP_IF}_peer.public_key=$peer"
 	uci add_list "network.${ST_WARP_IF}_peer.allowed_ips=0.0.0.0/0"
-	# Маршрутов в главную таблицу не ставим: трафик в туннель уводит движок, остальное
-	# идёт как шло.
 	uci set "network.${ST_WARP_IF}_peer.route_allowed_ips=0"
 	uci set "network.${ST_WARP_IF}_peer.persistent_keepalive=25"
 	uci set "network.${ST_WARP_IF}_peer.endpoint_host=$1"
@@ -5669,12 +5467,8 @@ _st_warp_iface_write() { # ХОСТ ПОРТ
 	_st_own "net $ST_WARP_IF"
 }
 
-# Зона firewall туннеля: NAT и выравнивание MSS. Без NAT устройства сети уходят в туннель
-# со своими адресами из LAN, и ответы не возвращаются.
 _st_warp_zone() {
 	local want i changed=0
-	# Зона держит все туннели. Прежние версии заводили её на один zmwarp — список пишется
-	# заново, если отличается.
 	want="$(_st_wifs_all | tr '\n' ' ' | sed 's/ $//')"
 	if [ "$(uci -q get "firewall.$ST_WARP_ZONE")" = "zone" ] && [ "$(uci -q get "firewall.$ST_WARP_ZONE.network")" != "$want" ]; then
 		uci -q delete "firewall.$ST_WARP_ZONE.network"
@@ -5702,11 +5496,6 @@ _st_warp_zone() {
 
 _st_warp_is_ru() { case " $ST_RU_COLOS " in *" $1 "*) return 0 ;; esac; return 1; }
 
-# ── несколько туннелей ──
-#
-# Функции выше написаны на один туннель и читают ST_WARP_IF и ST_WARP_CONF. Туннель N — это
-# те же функции с подставленными интерфейсом и файлом ключей: 1 — zmwarp и warp.conf, 2 и 3 —
-# zmwarpN и warpN.conf.
 _st_wif() { [ "$1" = 1 ] && echo zmwarp || echo "zmwarp$1"; }
 _st_wconf() { [ "$1" = 1 ] && echo "$ST_DIR/warp.conf" || echo "$ST_DIR/warp$1.conf"; }
 _st_with() { # N КОМАНДА... — выполнить команду в контексте туннеля N
@@ -5718,29 +5507,17 @@ _st_with() { # N КОМАНДА... — выполнить команду в ко
 	return $rc
 }
 _st_wifs_all() { local n=1; while [ "$n" -le "$ST_WARP_N" ]; do _st_wif "$n"; n=$((n + 1)); done; }
-# Первый живой туннель — им пробуются сервисы и качаются списки.
 _st_warp_first() {
 	local i
 	[ -s "$ST_WARP_UP" ] && while read -r i _; do [ -d "/sys/class/net/$i" ] && { echo "$i"; return 0; }; done < "$ST_WARP_UP"
 	echo "$ST_WARP_IF"
 }
 
-# ── выбор точки: методом warpscout (как в brb) ──
-#
-# Годность точки решает ТОЛЬКО поднятый туннель. HTTP к краю Cloudflare меряет не то: он идёт
-# по TCP на 80-й, туннель — по UDP на свой порт, провайдер режет их по-разному, а колония в
-# ответе края — колония ВХОДА (на стенде кандидаты по HTTP вели в DUS/FRA/CPH, а изнутри
-# туннеля все оказались в HEL). Поэтому: точка ставится на живой интерфейс, настоящее
-# рукопожатие, потери и круг пингом, колония — изнутри туннеля.
 ST_WARP_POOLS="188.114.96. 188.114.97. 188.114.98. 188.114.99. 162.159.192. 162.159.193. 162.159.195. 8.34.146. 8.39.214. 8.39.204. 8.6.112. 8.35.211. 8.39.125. 8.47.69."
-# Порты — только вне игрового фильтра zapret (88, 1024-2407, 2409-4499, 4502-19293, …): иначе
-# пакеты туннеля разбирал бы общий обход.
 ST_WARP_PORTS="2408 500 4500 987"
 ST_WARP_RAND=10          # случайных адресов к якорям — за разными колониями
 ST_WARP_HS_WAIT=8        # секунд ждать рукопожатия: на живом роутере оно бывало и 1,25 с
 
-# Поставить узлу точку на живом интерфейсе и дождаться рукопожатия. Узел сначала удаляется:
-# WireGuard не начинает нового рукопожатия, пока жива прежняя сессия.
 _st_warp_link() { # ИНТЕРФЕЙС КЛЮЧ_УЗЛА АДРЕС ПОРТ
 	local dev="$1" peer="$2" push w=0 hs
 	awg set "$dev" peer "$peer" remove 2>/dev/null
@@ -5765,9 +5542,6 @@ _st_warp_probe() { # ИНТЕРФЕЙС -> «потери% круг_мс»
 	echo "${loss:-100} ${rtt:-99999}"
 }
 
-# Колония ИЗНУТРИ туннеля — по заголовку CF-RAY (`<ид>-<город>`), который Cloudflare
-# дописывает к любому своему ответу: один HTTP-запрос по адресу, без DNS и без TLS (TLS через
-# туннель на части роутеров не проходит, см. brb/warp.sh). Запасной ход — trace по https.
 _st_colo_of() { # ИНТЕРФЕЙС
 	local c
 	c=$(curl -sI --interface "$1" --max-time 8 -H 'Host: www.cloudflare.com' http://104.16.132.229/ 2>/dev/null |
@@ -5777,8 +5551,6 @@ _st_colo_of() { # ИНТЕРФЕЙС
 	[ -n "$c" ] && echo "$c"
 }
 
-# Какие порты провайдер выпускает к WARP — один раз, дальше из файла. Ищутся два: разведка
-# ведёт все адреса первым, второй — запасной при окончательной привязке точки (_st_warp_up).
 _st_warp_ports() { # ИНТЕРФЕЙС КЛЮЧ_УЗЛА АДРЕС
 	local f="$ST_DIR/warp.ports" ok="" p
 	[ -s "$f" ] && { cat "$f"; return 0; }
@@ -5792,25 +5564,13 @@ _st_warp_ports() { # ИНТЕРФЕЙС КЛЮЧ_УЗЛА АДРЕС
 	echo "$ok"
 }
 
-# Разведка для одного туннеля. Печатает «адрес порт колония ключ» лучшей точки. Занятая
-# колония — запас (другой адрес в той же колонии лучше никакого), российская — последний запас.
-#
-# Ключ — качество точки одним числом, меньше — лучше: разряд запаса (0 — наружная колония,
-# своя или занятая соседом; 1 — колония не узналась; 2 — российская; 3 — HTTPS не проходит),
-# за ним потери и круг. По нему _st_warp_order ставит туннели в warp.up лучшим первым. Занятая
-# колония в разряде не отличается от свободной: «занята соседом» важно, когда точку выбирают
-# для одного туннеля, а сравнивать туннели между собой — это уже только связь.
 _st_warp_scan() { # ИНТЕРФЕЙС КЛЮЧ_УЗЛА ЗАНЯТЫЕ_КОЛОНИИ ЗАНЯТЫЕ_АДРЕСА
 	local dev="$1" peer="$2" busy=" $3 " busyip=" $4 " r="$ST_RUN/scan.$1" cand ip ports port loss rtt colo pick f cls
 	mkdir -p "$ST_RUN"
 	: > "$r"; : > "$r.same"; : > "$r.nc"; : > "$r.ru"; : > "$r.notls"
-	# Якоря .1 первыми: на них указывает сам engage.cloudflareclient.com; случайные — за
-	# разными колониями.
 	cand=$(awk -v p="$ST_WARP_POOLS" -v n="$ST_WARP_RAND" 'BEGIN { srand(); c = split(p, a, " ");
 		for (i = 1; i <= c; i++) print a[i] "1"; for (i = 0; i < n; i++) print a[int(rand() * c) + 1] int(rand() * 254) + 2 }')
 	ports=""
-	# Порты ищутся на первых трёх якорях: если не ответил ни один порт ни у одного из них, дело
-	# не в адресах — провайдер режет UDP к WARP, и перебор всех 24 адресов стоил бы 13 минут.
 	local tried=0
 	for ip in $cand; do
 		[ -n "$ports" ] && break
@@ -5830,10 +5590,6 @@ _st_warp_scan() { # ИНТЕРФЕЙС КЛЮЧ_УЗЛА ЗАНЯТЫЕ_КОЛО
 		if [ -z "$colo" ]; then
 			echo "$loss $rtt $ip $port ?" >> "$r.nc"; echo "   $ip:$port — потери $loss%, $rtt мс, колония не узналась" >&2; continue
 		fi
-		# HTTPS через туннель — обязательно. CF-RAY приходит по голому HTTP, а на части сетей
-		# через туннель проходят только мелкие пакеты и порт 80, TLS молчит (brb снял это на
-		# живом роутере). Такая точка «работает» по всем замерам, а устройства через неё сайты
-		# не открывают, — поэтому она уходит в последний запас.
 		if ! curl -s -o /dev/null --interface "$dev" --connect-timeout 4 --max-time 8 https://www.cloudflare.com/cdn-cgi/trace 2>/dev/null; then
 			echo "$loss $rtt $ip $port $colo" >> "$r.notls"; echo "   $ip:$port — колония $colo, но HTTPS через туннель не проходит" >&2; continue
 		fi
@@ -5843,8 +5599,6 @@ _st_warp_scan() { # ИНТЕРФЕЙС КЛЮЧ_УЗЛА ЗАНЯТЫЕ_КОЛО
 		echo "$loss $rtt $ip $port $colo" >> "$r"
 		[ "$(grep -c . "$r")" -ge 3 ] && break
 	done
-	# Лучшая — одним числовым ключом: потери в старших разрядах, круг в младших (busybox sort
-	# не понимает модификаторов у ключей, см. brb/warp.sh).
 	for f in "$r" "$r.same" "$r.nc" "$r.ru" "$r.notls"; do
 		[ -s "$f" ] || continue
 		case "$f" in *.nc) cls=1 ;; *.ru) cls=2 ;; *.notls) cls=3 ;; *) cls=0 ;; esac
@@ -5868,26 +5622,6 @@ _st_warp_alive_if() { # ИНТЕРФЕЙС — рукопожатие не ст�
 }
 _st_warp_ready_if() { ifstatus "$1" 2>/dev/null | grep -q '"up": true' && awg show "$1" peers 2>/dev/null | grep -q .; }
 
-# Порядок туннелей в warp.up — лучший первым. Порядок здесь не для красоты: его читают все,
-# кому из нескольких туннелей нужен один или кто перебирает их по очереди.
-#  - _st_warp_first: через первый живой пробуются сервисы, качаются списки, идёт самопроверка.
-#  - Мост Telegram (warp.lst, см. _st_tgws_warp): берёт первый живой туннель из списка и к
-#    следующему переходит, только когда тот не дал даже TCP, — порядок для него и есть выбор.
-#  - Движок (devices в spec, prefer: latency): туннели он меряет сам, но замеры в пределах
-#    допуска (50 мс) считает равными и из равных берёт стоящий выше, — порядок решает ничьи, а
-#    когда замерить не вышло ни одного, выбор идёт просто по порядку.
-#
-# Ключ — от разведки (см. _st_warp_scan). У туннеля, оставленного живым, свежего замера нет, и
-# дальше два случая.
-#  - Разведки не было ни у одного — туннели остаются на прежних местах. Переставлять их по
-#    трём пингам значило бы на каждом «Применить» и каждом прогоне автообхода тасовать список
-#    по дрожанию задержки, а новый порядок — это другой spec и перезапуск движка с обрывом
-#    соединений ради ничего.
-#  - Хоть один разведан заново — список всё равно меняется, и оставленным меряется то же, что
-#    мерила разведка (потери и круг тремя пингами изнутри живого туннеля, сессию это не
-#    трогает), с разрядом запаса 0: колония у них узналась и она не российская, иначе туннель
-#    ушёл бы в разведку. Без замера новичка не с чем было бы сравнить.
-# При равных ключах держится порядок строк, то есть номеров туннелей.
 _st_warp_order() { # ФАЙЛ «интерфейс колония ключ|-» -> тот же файл «интерфейс колония»
 	local f="$1" i c k pos=0 fresh=0
 	grep -q ' [0-9][0-9]*$' "$f" && fresh=1
@@ -5896,30 +5630,21 @@ _st_warp_order() { # ФАЙЛ «интерфейс колония ключ|-» -
 		[ -n "$i" ] || continue
 		pos=$((pos + 1))
 		if [ "$fresh" = 0 ]; then
-			# Прежнее место; туннеля, которого в прошлом списке не было, — в хвост по номеру.
 			k=$(awk -v i="$i" '$1 == i { print NR; exit }' "$ST_WARP_UP" 2>/dev/null)
 			[ -n "$k" ] || k=$((100 + pos))
 		elif [ "$k" = - ]; then
 			set -- $(_st_warp_probe "$i")
 			k=$(($1 * 100000 + $2))
 		fi
-		# Ключ и номер строки — нулями до одной ширины, чтобы простой sort сравнил их как числа
-		# (busybox sort не понимает модификаторов у ключей, см. brb/warp.sh).
 		printf '%012d %03d %s %s\n' "$k" "$pos" "$i" "$c" >> "$f.key"
 	done < "$f"
 	sort "$f.key" | awk '{ print $3, $4 }' > "$f"
 	rm -f "$f.key"
 }
 
-# Поднять туннели. repick — не держаться прежних точек, подобрать заново.
-#
-# Сначала ключи и интерфейсы ВСЕХ туннелей одним reload, и только потом разведка на живых
-# интерфейсах через `awg set`: запись в uci с ifup посреди разведки делала `network reload`, и
-# netifd перезапускал соседние туннели (на стенде так пропадал уже подобранный первый).
 _st_warp_up() { # [repick]
 	local repick="$1" n i peer got busy="" busyip="" ru=0 c ready="" w need=0 colos="" alt p
 	_st_install_awg || return 1
-	# Какие порты провайдер выпускает, меняется: при подборе заново спрашиваем снова.
 	[ "$repick" = repick ] && rm -f "$ST_DIR/warp.ports"
 	_rb_say "Поднимаем туннели WARP в разных колониях"
 	n=1
@@ -5955,30 +5680,14 @@ _st_warp_up() { # [repick]
 		peer="$(_st_with "$n" _st_warp_field PublicKey)"
 		_st_warp_ready_if "$i" || { _rb_warn "WARP $n: устройство не поднялось"; continue; }
 		got=""
-		# Живой туннель с прошлого раза не трогаем — даже если колония совпала с соседом: её
-		# выбрала разведка, когда другой не нашлось, и пересканировать его на каждом «Применить»
-		# значило бы рвать соединения ради того же результата. Развести заново — «Сменить точки входа».
-		# КРОМЕ РОССИЙСКОЙ: её разведка берёт последним запасом, когда не нашлось ничего, и
-		# держаться за неё только потому, что туннель жив, — значит оставить геоблок навсегда
-		# (на тестовом роутере так и вышло: HEL, DME, HEL). Такой туннель разводится заново.
 		if [ "$repick" != repick ] && grep -q "^$i " "$ST_WARP_UP" 2>/dev/null && _st_warp_alive_if "$i" && c="$(_st_colo_of "$i")" && ! _st_warp_is_ru "$c"; then
-			# Ключа качества нет («-»): свежего замера у оставленного туннеля нет, его место в
-			# warp.up решает _st_warp_order.
 			got="$(uci -q get "network.${i}_peer.endpoint_host") $(uci -q get "network.${i}_peer.endpoint_port") $c -"
 			_rb_say "WARP $n работает: колония $c"
 		else
 			echo "   WARP $n: разведка"
 			if got="$(_st_warp_scan "$i" "$peer" "$busy" "$busyip")"; then
 				set -- $got
-				# Живая сессия осталась с ПОСЛЕДНИМ опробованным адресом. Голый `awg set
-				# endpoint` нового рукопожатия не начинает — нужен тот же сброс узла, что в
-				# разведке, иначе туннель полминуты молчит и идёт не в ту колонию.
 				if ! _st_warp_link "$i" "$peer" "$1" "$2"; then
-					# Запасной порт — второй найденный в warp.ports. Разведка ведёт все адреса
-					# ОДНИМ портом, первым выпущенным, и точка, ответившая на нём минуту назад,
-					# может замолчать именно на нём: провайдер режет UDP к WARP по портам, и не
-					# всегда с первой минуты. Адрес тот же, значит и колония та же — она за
-					# адресом, не за портом; ключ качества остаётся от разведки.
 					alt=""
 					for p in $(cat "$ST_DIR/warp.ports" 2>/dev/null); do
 						[ "$p" = "$2" ] && continue
@@ -6003,11 +5712,9 @@ _st_warp_up() { # [repick]
 		busy="$busy $3"; busyip="$busyip $1"
 		_st_warp_is_ru "$3" && ru=1
 		echo "$i $3 ${4:--}" >> "$ST_WARP_UP.tmp"
-		# В uci — для следующей загрузки. Без reload: живой интерфейс уже на этой точке.
 		uci set "network.${i}_peer.endpoint_host=$1"
 		uci set "network.${i}_peer.endpoint_port=$2"
 	done
-	# Остановлено — ничего не записываем и ничего не гасим: живые туннели должны пережить «стоп».
 	if _st_stopped; then
 		uci revert network >/dev/null 2>&1
 		rm -f "$ST_WARP_UP.tmp"
@@ -6017,7 +5724,6 @@ _st_warp_up() { # [repick]
 	_st_warp_order "$ST_WARP_UP.tmp"
 	mv "$ST_WARP_UP.tmp" "$ST_WARP_UP"
 	colos="$(awk '{ printf "%s%s", (NR > 1 ? ", " : ""), $2 }' "$ST_WARP_UP")"
-	# Не поднявшиеся — погасить: висящий без рукопожатия туннель движок принял бы за живой.
 	for n in $ready; do
 		i="$(_st_wif "$n")"
 		grep -q "^$i " "$ST_WARP_UP" || ifdown "$i" >/dev/null 2>&1
@@ -6033,10 +5739,6 @@ _st_warp_up() { # [repick]
 	return 0
 }
 
-# Туннели для моста Telegram (stgws): он ходит через WARP сам — к настоящим дата-центрам или
-# веб-сокетом — и бросает туннель, когда тот ложится (см. «WARP: путь поверх туннеля» в
-# tgws.c). Российские колонии в список не идут: выход у них внутри страны. Мост перечитывает
-# файл сам, перезапускать его не нужно.
 ST_TGWS_WARP="/etc/stgws/warp.lst"
 _st_tgws_warp() {
 	local i c
@@ -6049,16 +5751,6 @@ _st_tgws_warp() {
 	mv "$ST_TGWS_WARP.tmp" "$ST_TGWS_WARP"
 }
 
-# ── списки для туннеля ──
-#
-# Списки сервисов берутся наборами .srs из каталога splify2-lists (github.com/xyzmean/splify2-lists):
-# его lists.json называет для каждого набора ссылку на релиз издателя С ЗАФИКСИРОВАННЫМ тегом,
-# так что два роутера с одним каталогом уводят в туннель одно и то же. Набор раскладывает сам
-# движок (`steer srs-read`) на домены, подсети и сужение по протоколу и портам.
-#
-# Качается сначала напрямую, потом ЧЕРЕЗ ТУННЕЛЬ: списки нужны ровно тем сервисам, которые
-# уходят в WARP, значит туннель к этому моменту уже поднят, а GitHub у аудитории кнопки часто
-# закрыт. Не скачалось вовсе — берётся список из пакета: хуже свежего, но лучше никакого.
 ST_LISTS_MANIFEST="https://github.com/xyzmean/splify2-lists/releases/latest/download/lists.json"
 ST_SRS_FALLBACK="https://github.com/itdoginfo/allow-domains/releases/latest/download"
 
@@ -6078,7 +5770,6 @@ _st_srs_url() { # НАБОР -> ссылка из каталога или «по
 	echo "${u:-$ST_SRS_FALLBACK/$1.srs}"
 }
 
-# Набор -> $ST_DIR/lists/НАБОР.dom / .pfx / .meta. Код 0 — разложен.
 _st_srs_get() { # НАБОР
 	local d="$ST_DIR/lists" f
 	mkdir -p "$d"
@@ -6092,16 +5783,11 @@ _st_srs_get() { # НАБОР
 	touch "$ST_RUN/srs.$1.done"
 }
 
-# Каналы сервиса в спеке: печатает JSON-объекты через запятую (без внешних скобок).
 _st_svc_channels() { # ID
 	local id="$1" name sets set dom="" pfx="" narrow="" f proto ports ch="" sep="" took=""
 	name="$(esc "$(_rb_svc_field "$id" 2)")"
 	sets="$(_rb_svc_field "$id" 8 | tr ',' ' ')"
 	for set in $sets; do
-		# Один набор на несколько сервисов (Instagram и WhatsApp — оба meta) — в спеку один раз.
-		# Пометка файлом: функцию зовут в подоболочке, переменная оттуда не возвращается.
-		# Ставится только после того, как сервис взял ВСЕ свои наборы: иначе при сбое второго
-		# набора сервис откатывался на списки пакета, а соседу первый набор уже не доставался.
 		[ -f "$ST_RUN/used.$set" ] && continue
 		if _st_srs_get "$set"; then
 			took="$took $set"
@@ -6117,18 +5803,14 @@ _st_svc_channels() { # ID
 		fi
 	done
 	for set in $took; do [ -n "$sets" ] && touch "$ST_RUN/used.$set"; done
-	# Ни одного набора или набор не скачался — списки из пакета.
 	if [ -z "$sets" ]; then
 		dom="$(_st_json_list "$(_rb_svc_field "$id" 3 | tr ',' ' ')")"
 		pfx="$(_st_json_list "$(_rb_svc_field "$id" 4 | tr ',' ' ')")"
 		narrow=""
 	fi
-	# Список доменов, исправленный человеком на странице Steer, заменяет скачанный и пакетный.
 	[ "$id" = custom ] && [ -s "$ST_USER_DIR/$id.lst" ] && dom="\"$ST_USER_DIR/$id.lst\""
 	[ -n "$dom" ] && { ch="$ch$sep{\"name\":\"$name\",\"out\":\"$ST_OUT\",\"match\":{\"domains_files\":[$dom]}}"; sep=","; }
 	[ -n "$pfx" ] && { ch="$ch$sep{\"name\":\"$name (адреса)\",\"out\":\"$ST_OUT\",\"match\":{\"prefixes_files\":[$pfx]}}"; sep=","; }
-	# Подсети с сужением — отдельным каналом с протоколом и портами (схема 2): без сужения
-	# в туннель ушёл бы весь TCP к подсетям Cloudflare, а не только голос Discord.
 	for set in $narrow; do
 		f="$ST_DIR/lists/$set"
 		proto=$(sed -n 's/^proto=//p' "$f.meta" | head -n1)
@@ -6139,7 +5821,6 @@ _st_svc_channels() { # ID
 	printf '%s' "$ch"
 }
 
-# ── спека steer ──
 
 _st_json_list() { # файлы через пробел -> "a","b"
 	local f out=""
@@ -6149,8 +5830,6 @@ _st_json_list() { # файлы через пробел -> "a","b"
 
 _st_spec_build() { # ID... -> JSON в stdout
 	local id c chans="" schema=1 devs
-	# Каталог и отметки «набор разложен» живут до перезагрузки — на каждую сборку спрашиваем
-	# свежие, иначе «Применить» неделями ставило бы одни и те же списки.
 	rm -f "$ST_RUN"/used.* "$ST_RUN"/srs.*.done "$ST_RUN/lists.json"
 	mkdir -p "$ST_RUN"
 	ST_OUT=zm_warp
@@ -6218,13 +5897,10 @@ _st_spec_clear() {
 	sed -i '/^steer-spec$/d' "$ST_OWNED"
 }
 
-# Перезапустить steer, если он в работе (включён нами).
 _st_kick() {
 	_st_owns "steer-spec" || return 0
 	[ -f "$ST_OFF" ] && return 0
 	/etc/init.d/steer enabled 2>/dev/null || return 0
-	# Набор живых туннелей мог смениться — спека пересобирается (она же сама перезапускает
-	# движок, если что-то изменилось). Сборка не вышла — хотя бы перезапуск с прежней.
 	local sel
 	sel="$(_st_sel | tr '\n' ' ')"
 	if [ -n "$(echo $sel)" ] && _st_spec_apply $sel; then return 0; fi
@@ -6233,52 +5909,35 @@ _st_kick() {
 }
 
 
-# ── DNS: спор за порт 53 ──
-#
-# https-dns-proxy с force_dns=1 (так его всегда пишет страница DoH) заворачивает DNS сети на
-# dnsmasq; движок заворачивает те же запросы на свой резолвер, и только там домены
-# превращаются в правила. Побеждает тот, кто зарегистрировался раньше, а проигравший молчит.
 _st_dns_conflict() {
 	[ -f /etc/config/https-dns-proxy ] || return 1
 	[ -f "$ST_OFF" ] && return 1
-	# Служба самого пакета, а не любой процесс https-dns-proxy: свой экземпляр для ИИ-сервисов
-	# (zm-geodns) порт 53 не трогает, и принимать его за перехват было бы ложной тревогой.
 	/etc/init.d/https-dns-proxy running >/dev/null 2>&1 || return 1
 	_st_owns "steer-spec" || return 1
-	# Ключа нет — у прокси умолчание единица.
 	[ "$(uci -q get https-dns-proxy.config.force_dns)" != "0" ]
 }
 
-# Перехват порта 53 DoH включён — независимо от того, стоят ли уже наши правила.
 _st_doh_force_on() {
 	[ -f /etc/config/https-dns-proxy ] || return 1
-	# Служба самого пакета, а не любой процесс https-dns-proxy: свой экземпляр для ИИ-сервисов
-	# (zm-geodns) порт 53 не трогает, и принимать его за перехват было бы ложной тревогой.
 	/etc/init.d/https-dns-proxy running >/dev/null 2>&1 || return 1
 	[ "$(uci -q get https-dns-proxy.config.force_dns)" != "0" ]
 }
 
 _st_doh_unforce() {
-	# Секция main 'config' — её так пишет и пакет, и страница DoH. Прежняя правка через sed
-	# ничего не делала, когда ключа force_dns в файле не было (умолчание — единица).
 	uci -q get https-dns-proxy.config >/dev/null 2>&1 || uci set https-dns-proxy.config=main
 	uci set https-dns-proxy.config.force_dns='0'
 	uci commit https-dns-proxy
-	# Перезапуск — только работающей службы: остановленную (так её оставляет автообход, если
-	# поставил пакет сам) restart поднял бы и отдал бы ей dnsmasq.
 	/etc/init.d/https-dns-proxy running >/dev/null 2>&1 && /etc/init.d/https-dns-proxy restart >/dev/null 2>&1
 }
 
 do_steer_dns_fix() {
 	_st_doh_unforce
-	# Выключенный steer не поднимаем: restart у procd запускает и выключенную службу.
 	[ -f "$ST_OFF" ] && return 0
 	/etc/init.d/steer enabled 2>/dev/null && /etc/init.d/steer restart >/dev/null 2>&1
 }
 
 
 
-# Автоперезапуск по расписанию — так же, как у Mihomo.
 _st_cron_get() {
 	local line hour
 	line=$(grep -F "$ST_CRON_TAG" "$CRON_FILE" 2>/dev/null | head -n1)
@@ -6316,14 +5975,11 @@ _st_cron_set() { # off | every:N | daily:H
 
 
 
-# ── правила по выбору ──
 
-# Выключить движок и туннель, не удаляя ничего.
 _st_down() {
 	/etc/init.d/steer stop >/dev/null 2>&1
 	/etc/init.d/steer disable >/dev/null 2>&1
 	local i
-	# auto=0 — чтобы выключенные туннели не поднимались снова после перезагрузки роутера.
 	for i in $(_st_wifs_all); do
 		_st_owns "net $i" || continue
 		ifdown "$i" >/dev/null 2>&1
@@ -6332,10 +5988,6 @@ _st_down() {
 	uci -q commit network
 }
 
-# Туннели уже подобраны (warp.up) — поднять их на сохранённых точках входа, без разведки.
-# Выбор сервисов меняет только правила движка: заново перебирать точки WARP на каждое
-# «Применить» незачем — это минуты ожидания и обрыв живых соединений. Код 1 — ни один туннель
-# не ответил, тогда уже полный подъём (_st_warp_up, он и сам оставит живые как есть).
 _st_warp_resume() {
 	[ -s "$ST_WARP_UP" ] || return 1
 	local i ifs need=0 w=0 alive=""
@@ -6359,7 +6011,6 @@ _st_warp_resume() {
 	return 0
 }
 
-# Применить выбор: туннель и правила, или, если ничего не выбрано, всё выключить.
 _st_apply() { # [tunnel_ready] — туннель только что проверен, второй раз не поднимаем
 	local sel
 	sel="$(_st_sel | tr '\n' ' ')"
@@ -6378,9 +6029,6 @@ _st_apply() { # [tunnel_ready] — туннель только что прове
 			_rb_warn "Туннеля нет — подключите WARP или подписку VPN, и выбранные сервисы пойдут через него"
 			return 0 ;;
 	esac
-	# Домены уходят в туннель, только если DNS устройств отвечает резолвер steer. Перехват
-	# порта 53 страницей DoH его перебивает — выключаем перехват сами: шифрованный DNS при
-	# этом работает как работал, dnsmasq по-прежнему спрашивает его.
 	if _st_doh_force_on; then
 		_st_doh_unforce
 		_rb_warn "DNS over HTTPS перехватывал DNS сети — перехват выключен, шифрованный DNS работает как прежде"
@@ -6390,8 +6038,6 @@ _st_apply() { # [tunnel_ready] — туннель только что прове
 	_st_spec_apply $sel
 }
 
-# Самопроверка: что говорит сам движок (steer diag) и идёт ли трафик через WARP на деле.
-# Печатает в журнал; код 1 — есть поломка.
 _st_selfcheck() {
 	local f="$ST_RUN/diag.json" n i v what why bad=0 trace
 	_rb_say "Проверяем, что всё работает"
@@ -6426,14 +6072,12 @@ _st_selfcheck() {
 	return $bad
 }
 
-# Добавить сервис в выбор. Код 1 — человек его убирал, не добавляем.
 _st_sel_add() {
 	_rb_in "$1" "$ST_SKIP" && return 1
 	mkdir -p "$ST_DIR"
 	_rb_in "$1" "$ST_SEL" || echo "$1" >> "$ST_SEL"
 }
 
-# ── задачи страницы ──
 
 do_steer_install() {
 	local blk
@@ -6580,7 +6224,6 @@ do_steer_warp_restart() {
 	_st_need_warp || return 1
 	rm -f "$ST_STOP_FLAG"
 	_rb_say "Перезапускаем туннель WARP"
-	# Живые туннели оставляются как есть, умершие подбираются заново (см. _st_warp_up).
 	_st_warp_up || return 1
 	_st_kick
 	_rb_say "Готово"
@@ -6626,8 +6269,6 @@ do_steer_warp_recreate() {
 do_steer_remove() {
 	_st_phase remove
 	_rb_say "Удаляем Steer и туннель WARP"
-	# Встал splify2 — движок и спека теперь его: их не трогаем, снимаем только своё (туннели,
-	# зону, cron).
 	local foreign=0
 	[ "$(_st_blocker)" = splify2 ] && foreign=1
 	if [ "$foreign" = 1 ]; then
@@ -6662,7 +6303,6 @@ do_steer_remove() {
 		if _pkg_is_installed steer-extended; then $DELETE steer-extended >&2; else $DELETE steer >&2; fi
 	fi
 	_st_owns "pkg conntrack" && $DELETE conntrack >&2
-	# AmneziaWG — только если других туннелей на нём нет.
 	if ! uci show network 2>/dev/null | grep -q "\.proto='amneziawg'"; then
 		local p
 		for p in luci-i18n-amneziawg-ru luci-proto-amneziawg luci-app-amneziawg amneziawg-tools kmod-amneziawg; do
@@ -6683,7 +6323,6 @@ steer_status() {
 	blk="$(_st_blocker)"
 	_st_installed && installed=true
 	[ -f "$ST_OFF" ] && off=true
-	# Колонии живых туннелей через запятую, лучший первым; «работает» — если жив хоть один.
 	if [ -s "$ST_WARP_UP" ]; then
 		colo=$(while read -r w k; do [ -d "/sys/class/net/$w" ] && printf '%s\n' "$k"; done < "$ST_WARP_UP" | tr '\n' ',' | sed 's/,$//; s/,/, /g')
 		[ -n "$colo" ] && warp_up=true
@@ -6696,7 +6335,6 @@ steer_status() {
 		port="$(uci -q get "network.${ST_WARP_IF}_peer.endpoint_port")"
 	fi
 	if [ "$warp_up" = true ] && command -v awg >/dev/null 2>&1; then
-		# Свежайшее рукопожатие и суммарный трафик по всем живым туннелям.
 		for w in $(_st_wifs_all); do
 			[ -d "/sys/class/net/$w" ] || continue
 			k=$(awg show "$w" latest-handshakes 2>/dev/null | awk '{print $2; exit}')
@@ -6735,8 +6373,6 @@ steer_status() {
 		"$vexit" "$vup" "$vsub" "$(esc "$(_st_sub_label)")" "$(esc "$latest")" "$ext" "$won" "$(_st_tunnels_json)" "$svc"
 }
 
-# Туннели по одному — JSON-массив для страницы steer: у каждого своя точка, колония (из
-# последней разведки), связь и трафик. Только те, что заведены.
 _st_tunnels_json() {
 	local n=1 i up hs age rx tx host port colo out="" sep=""
 	while [ "$n" -le "$ST_WARP_N" ]; do
@@ -6761,12 +6397,6 @@ _st_tunnels_json() {
 	printf '[%s]' "$out"
 }
 
-# Выбор сервисов с страницы: итоговый набор через запятую.
-# ── списки доменов сервисов: показать и поправить ──
-#
-# Что сейчас уводится в туннель по доменам: свой список человека, иначе скачанные наборы
-# (последняя сборка правил), иначе списки из пакета. Свой список хранится в ST_USER_DIR и
-# переживает «Применить», обновления и новые ключи; «Вернуть стандартный» его удаляет.
 ST_USER_DIR="$ST_DIR/user"
 
 _st_list_effective() { # ID -> домены в stdout, источник в ST_LIST_SRC
@@ -6786,7 +6416,6 @@ steer_list_get() { # ID
 	[ "$id" = custom ] && _rb_routable "$id" || { echo '{"error":"редактируется только свой список"}'; return 1; }
 	ST_LIST_SRC=""
 	mkdir -p "$JOBS_DIR"
-	# Не в $( ): источник списка возвращается через переменную ST_LIST_SRC.
 	_st_list_effective "$id" > "$tmp"
 	body="$(tr -d '\r' < "$tmp" | grep -v '^[[:space:]]*$' | awk '!s[$0]++')"
 	rm -f "$tmp"
@@ -6794,16 +6423,12 @@ steer_list_get() { # ID
 	printf '{"id":"%s","name":"%s","source":"%s","count":%s,"content":"%s"}\n' "$id" "$(esc "$(_rb_svc_field "$id" 2)")" "$ST_LIST_SRC" "$n" "$(esc_ml "$body")"
 }
 
-# Сохранить свой список: «ID|домены по строке». Берутся только настоящие имена (можно с
-# префиксами domain:, full:, keyword:, как в наборах); остальное отбрасывается.
 steer_list_set() {
 	local id="${1%%|*}" body="${1#*|}" f tmp n
 	case "$1" in *'|'*) ;; *) echo '{"error":"нет списка"}'; return 1 ;; esac
 	[ "$id" = custom ] && _rb_routable "$id" || { echo '{"error":"редактируется только свой список"}'; return 1; }
 	mkdir -p "$ST_USER_DIR"
 	f="$ST_USER_DIR/$id.lst"; tmp="$f.tmp"
-	# Движку нужен простой список доменов (поддомены включаются сами): префиксы domain:/full:/suffix:
-	# и ведущие «*.»/«.» снимаем, строки keyword: и всё, что не похоже на домен, отбрасываем.
 	printf '%s\n' "$body" | tr -d '\r' | tr 'A-Z' 'a-z' |
 		sed 's/[[:space:]]*#.*$//; s/^[[:space:]]*//; s/[[:space:]]*$//; s/^domain://; s/^full://; s/^suffix://; s/^\*\.//; s/^\.//' |
 		grep -E '^[a-z0-9]([a-z0-9_-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9_-]*[a-z0-9])?)+$' | awk '!s[$0]++' > "$tmp"
@@ -6835,7 +6460,6 @@ steer_list_reset() { # ID
 	_st_list_changed "$1" 0
 }
 
-# Список поменялся: если сервис сейчас идёт через WARP — применить правила сразу.
 _st_list_changed() { # ID ЧИСЛО
 	if _st_installed && [ ! -f "$ST_OFF" ] && [ -z "$(_st_blocker)" ] && _rb_in "$1" "$ST_SEL"; then
 		job_start steer do_steer_apply
@@ -6854,7 +6478,6 @@ _st_sel_set() {
 	done
 	mkdir -p "$ST_DIR"
 	touch "$ST_SKIP"
-	# Снятое человеком запоминаем, чтобы автообход не вернул; отмеченное снова — забываем.
 	for id in $(_st_sel); do case "$want" in *" $id "*) ;; *) _rb_in "$id" "$ST_SKIP" || echo "$id" >> "$ST_SKIP" ;; esac; done
 	for id in $want; do sed -i "/^$id\$/d" "$ST_SKIP"; done
 	printf '%s\n' $want | grep . > "$ST_SEL"
@@ -7263,10 +6886,6 @@ steer_action() {
 			;;
 		autorestart) _st_cron_set "$mode" ;;
 		diag)
-			# Каждый туннель — отдельно: «идёт ли трафик» у одного ничего не говорит о других.
-			# Сначала HTTPS-трассировка (она же подтверждает warp=on); не прошла — голый HTTP с
-			# CF-RAY: если он отвечает, данные идут, но TLS через туннель режется — это другая
-			# поломка и другое действие.
 			local trace warp="none" colo="" tun="" tsep="" wi wn wv wc vpn="none" vip="" vloc=""
 			if _st_installed && [ -n "$(_st_sel)" ] && [ ! -f "$ST_OFF" ] && _st_use_vpn; then
 				vpn=off
@@ -7310,18 +6929,9 @@ steer_action() {
 
 
 
-# ───────────────────────── AmneziaWG ─────────────────────────
-#
-# Страница «Сеть → AmneziaWG»: всё про AmneziaWG в одном месте — пакеты, интерфейсы, ключи WARP
-# (несколько способов), точка входа (готовые, своя или подбор), превращение WARP.conf (или
-# любого .conf AmneziaWG/WireGuard) в интерфейс OpenWrt со своим именем и зоной firewall.
-# WARP.conf — тот же файл, что у страницы Mixomo: сгенерированное здесь сразу видно там.
-#
-# Туннели Steer (zmwarp*) показываются, но не удаляются и не правятся здесь: их ведёт Steer.
 AWG_DIR="/etc/zm-awg"
 AWG_RUN="$JOBS_DIR/awg"
 AWG_WARP_PEER="bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo="
-# Готовые точки входа WARP. «auto» — подобрать самую быструю (HTTP-trace по адресам Cloudflare).
 AWG_ENDPOINTS="engage.cloudflareclient.com:4500 engage.cloudflareclient.com:2408 162.159.192.1:2408 162.159.193.1:2408 162.159.195.1:2408 188.114.97.1:2408 188.114.98.1:500 188.114.99.1:4500"
 
 mkdir -p "$AWG_RUN" 2>/dev/null
@@ -7336,10 +6946,8 @@ _awg_pkg_ver() { # ПАКЕТ -> версия или пусто
 }
 _awg_installed() { command -v awg >/dev/null 2>&1 && { _pkg_is_installed kmod-amneziawg || _st_awg_loaded; }; }
 _awg_proto_ok() { ubus call network get_proto_handlers 2>/dev/null | grep -q '"amneziawg"'; }
-# Интерфейсы с протоколом amneziawg — по одному в строке.
 _awg_ifaces() { uci -q show network | sed -n "s/^network\.\([A-Za-z0-9_]*\)\.proto='amneziawg'\$/\1/p"; }
 _awg_is_steer() { case "$1" in zmwarp|zmwarp[0-9]) return 0 ;; esac; return 1; }
-# -X — настоящие имена безымянных секций (cfg…): номера @тип[N] сдвигаются при удалении.
 _awg_peer_sec() { uci -q -X show network | sed -n "s/^network\.\([^.=]*\)=amneziawg_$1\$/\1/p" | head -n1; }
 _awg_zone_of() { # ИНТЕРФЕЙС -> имя зоны firewall, где он есть
 	local z
@@ -7354,8 +6962,6 @@ _awg_hs_age() { # ИНТЕРФЕЙС -> секунд с последнего р�
 	[ -n "$hs" ] && echo $(( $(date +%s) - hs ))
 }
 
-# Для health: 0 — AmneziaWG нет; 5 — есть, туннелей нет; 1 — все туннели живы; 3 — не все; 2 —
-# ни один. Туннели, выключенные человеком (auto=0 и не подняты), не считаются.
 _awg_health() {
 	local i n=0 up=0 a st=0
 	if _awg_installed; then
@@ -7414,7 +7020,6 @@ awg_status() {
 		"$(_st_warp_on && echo true || echo false)" "$conf" "$MIXOMO_WARP_CONF" "$(esc "$ep")" "$mih" "$AWG_ENDPOINTS" "$list"
 }
 
-# ── установка и удаление ──
 
 do_awg_install() { # [update]
 	echo "${1:-install}" > "$AWG_RUN/phase"
@@ -7440,18 +7045,6 @@ do_awg_remove() {
 	_awg_say "Готово, AmneziaWG удалён"
 }
 
-# ── генерация WARP ──
-#
-# Как у Mixomo: «Сгенерировать WARP» (точка engage.cloudflareclient.com:4500), «с подбором
-# endpoint» и «свой endpoint». Ключи — генератор santa-atmo, запасной wgcli, последний запас —
-# сам Cloudflare. Конфиг всегда AmneziaWG (Jc/Jmin/Jmax, H1–H4, I1).
-#
-# «С проверкой связи» — по мотивам RR-WARP-Scanner (dedikar/RR-WARP-Scanner, wregister.sh):
-# аккаунт регистрируется у самого Cloudflare, а если его API из сети не открывается — через
-# живой туннель AmneziaWG на роутере или через временный туннель на общих ключах warpscout.
-# Затем роутер сам пробует новые ключи на точках входа и масках I1 (QUIC, iCloud-DNS) и пишет
-# в WARP.conf первую связку, через которую действительно идёт трафик, — а не просто первую,
-# ответившую на рукопожатие: DPI у части провайдеров пропускает рукопожатие и рвёт туннель.
 _awg_valid_ep() { printf '%s' "$1" | grep -Eq '^(\[[0-9A-Fa-f:]+\]|[A-Za-z0-9.-]+):[0-9]{1,5}$'; }
 
 AWG_API1="https://api.cloudflareclient.com/v0a4005/reg"
@@ -7475,7 +7068,6 @@ _awg_write_conf() { # ПРИВАТНЫЙ ПИР v4 v6 ТОЧКА [I1]
 	chmod 600 "$MIXOMO_WARP_CONF"
 }
 
-# Ключи от генераторов и Cloudflare. Результат — в переменных G_PRIV G_PEER G_V4 G_V6.
 _awg_keys_santa() {
 	local reg="$AWG_RUN/reg.json"
 	_awg_say "Ключи: генератор santa-atmo.ru"
@@ -7512,7 +7104,6 @@ _awg_genkey() { # -> G_PRIV и G_PUB
 	G_PRIV="$($gen genkey 2>/dev/null)"; G_PUB="$(printf '%s' "$G_PRIV" | $gen pubkey 2>/dev/null)"
 	[ -n "$G_PRIV" ] && [ -n "$G_PUB" ]
 }
-# Регистрация у Cloudflare. ПУТЬ — лишние параметры curl (пусто — напрямую, «--interface X»).
 _awg_cf_register() { # ПУТЬ
 	local reg="$AWG_RUN/reg.json" api code pre id tok
 	_awg_genkey || { echo "   нет awg/wg для ключей"; return 1; }
@@ -7533,7 +7124,6 @@ _awg_cf_register() { # ПУТЬ
 			break
 		done
 		if [ -n "$G_PEER" ] && [ -n "$G_V4" ]; then
-			# Включить WARP на аккаунте — без этого часть аккаунтов ходит «warp=off».
 			[ -n "$id" ] && [ -n "$tok" ] && curl -s --connect-timeout 8 --max-time 15 $1 -X PATCH \
 				-H 'Content-Type: application/json' -H 'User-Agent: okhttp/3.12.1' -H "Authorization: Bearer $tok" \
 				-d '{"warp_enabled":true}' -o /dev/null "$api/$id" 2>/dev/null
@@ -7550,11 +7140,6 @@ _awg_api_ok() { # ПУТЬ — ответил ли API хоть чем-то (л�
 	[ -n "$code" ] && [ "$code" != 000 ]
 }
 
-# Временный туннель: ИНТЕРФЕЙС ПРИВАТНЫЙ АДРЕС ТОЧКА I1 [КЛЮЧ_УЗЛА]. Интерфейс пересоздаётся на
-# каждую попытку, а не правится через `awg set … peer`: у части сборок модуля правка узла при
-# включённой маскировке роняет ядро (замечено в RR-WARP-Scanner). Код 0 — рукопожатие было,
-# 2 — интерфейс не создаётся (нет модуля). Модуль AWG 1.0 не знает I1 — тогда без него
-# (AWG_NO_I1=1, и в WARP.conf I1 тоже не пишется).
 AWG_NO_I1=0
 _awg_try() {
 	local dev="$1" conf="$AWG_RUN/try.conf" hs i=0 i1="$5"
@@ -7586,7 +7171,6 @@ _awg_try() {
 	return 1
 }
 _awg_try_down() { ip link del "$1" >/dev/null 2>&1; }
-# «, маска X» для журнала; модуль без I1 — пусто.
 _awg_ml() { [ "$AWG_NO_I1" = 1 ] || echo ", маска $(_awg_mask_name "$1")"; }
 _awg_trace() { # ИНТЕРФЕЙС — идёт ли трафик: trace Cloudflare изнутри туннеля
 	curl -s --interface "$1" --connect-timeout 4 --max-time 6 http://1.1.1.1/cdn-cgi/trace 2>/dev/null | grep -Eq '^warp=(on|plus)'
@@ -7614,10 +7198,8 @@ do_awg_gen() { # std ТОЧКА | check
 		return 0
 	fi
 
-	# ── с проверкой связи ──
 	_awg_installed || { echo "ОШИБКА: для проверки связи нужен AmneziaWG — установите его выше"; return 1; }
 	_st_awg_loaded || modprobe amneziawg >/dev/null 2>&1
-	# Временный интерфейс не должен пережить задачу, как бы она ни кончилась.
 	trap '_awg_try_down "$AWG_TEST_IF"' EXIT INT TERM
 	AWG_NO_I1=0
 	_awg_try "$AWG_TEST_IF" "$AWG_BOOT_PRIV" "$AWG_BOOT_IP" "127.0.0.1:9" "$MIXOMO_AWG_I1"
@@ -7659,12 +7241,9 @@ do_awg_gen() { # std ТОЧКА | check
 	_awg_say "Аккаунт WARP зарегистрирован (адрес $G_V4)"
 
 	_awg_say "Шаг 2 из 2: ищем точку входа и маску, через которые идёт трафик"
-	# Маски — по строке (в самих масках есть пробелы). Первой — та, что открыла временный туннель.
 	masks="$bmask"
 	for m in "$MIXOMO_AWG_I1" "$AWG_I1_ICLOUD" "$AWG_I1_QUIC1"; do [ "$m" = "$bmask" ] || masks="$masks
 $m"; done
-	# Какие порты провайдер вообще выпускает — на первом адресе, любой маской. Порт, не
-	# ответивший ни одной маской, дальше не пробуется: иначе на каждом адресе лишние секунды.
 	local ports="" oifs="$IFS" nl='
 ' h1="${bep%%:*}"
 	[ -n "$h1" ] || h1="${AWG_TEST_HOSTS%% *}"
@@ -7680,7 +7259,6 @@ $m"; done
 		echo "   порт $port: $(case " $ports " in *" $port "*) echo открыт ;; *) echo закрыт ;; esac)"
 	done
 	[ -n "$ports" ] || _rb_warn "Ни один порт WARP не ответил — провайдер, похоже, режет UDP к Cloudflare"
-	# Адрес × открытый порт × маска: первая связка, через которую прошёл trace, — победитель.
 	for host in $h1 $AWG_TEST_HOSTS; do
 		for port in $ports; do
 			a="$host:$port"
@@ -7727,9 +7305,6 @@ $m"; done
 	fi
 }
 
-# ── .conf → интерфейс ──
-#
-# Разбор .conf: «секция ключ значение» по строке, ключ в нижнем регистре.
 _awg_conf_kv() { # ФАЙЛ
 	awk 'function trim(s) { gsub(/^[ \t\r]+|[ \t\r]+$/, "", s); return s }
 		{ l = $0; sub(/[#;].*$/, "", l); l = trim(l); if (l == "") next
@@ -7766,7 +7341,6 @@ do_awg_create() { # ИМЯ МАРШРУТ(0|1) ЗОНА(0|1)
 		uci add_list "network.$name.addresses=$a"
 	done
 	uci set "network.$name.mtu=${mtu:-1280}"
-	# Маскировка AmneziaWG — всё, что есть в файле: Jc/Jmin/Jmax, S1–S4, H1–H4, I1–I5, J1–J3, Itime.
 	for k in jc jmin jmax s1 s2 s3 s4 h1 h2 h3 h4 i1 i2 i3 i4 i5 j1 j2 j3 itime; do
 		v="$(_awg_cv "$kv" interface "$k")"
 		[ -n "$v" ] && uci set "network.$name.awg_$k=$v"
@@ -7982,7 +7556,6 @@ _awg_delete() { # ИНТЕРФЕЙС
 	if [ "$(uci -q get "firewall.zmawg_$i")" = zone ]; then
 		uci -q delete "firewall.zmawg_$i"; uci -q delete "firewall.zmawg_${i}_fwd"
 	else
-		# Чужая зона: только убрать из неё интерфейс.
 		for z in $(uci -q -X show firewall | sed -n "s/^firewall\.\([^.=]*\)=zone\$/\1/p"); do
 			case " $(uci -q get "firewall.$z.network") " in *" $i "*) uci -q del_list "firewall.$z.network=$i" ;; esac
 		done
@@ -8017,7 +7590,6 @@ awg_action() {
 			job_start awg do_awg_remove
 			;;
 		gen)
-			# std|ТОЧКА (default — engage.cloudflareclient.com:4500, auto — подбор, адрес:порт — свой) или check
 			i="${mode%%|*}"; ep="${mode#*|}"
 			case "$i" in
 				std)
@@ -8033,7 +7605,6 @@ awg_action() {
 		conf_get) mixomo_warp_status ;;
 		conf_set) mixomo_warp_config_set "$mode" ;;
 		create)
-			# ИМЯ|МАРШРУТ|ЗОНА|ТЕКСТ .conf
 			name="${mode%%|*}"; mode="${mode#*|}"
 			route="${mode%%|*}"; mode="${mode#*|}"
 			fw="${mode%%|*}"; conf="${mode#*|}"
@@ -8079,7 +7650,6 @@ awg_action() {
 			job_start awg do_awg_pick "$mode"
 			;;
 		endpoint)
-			# ИНТЕРФЕЙС|АДРЕС:ПОРТ
 			i="${mode%%|*}"; ep="${mode#*|}"
 			[ "$(uci -q get "network.$i.proto")" = amneziawg ] || { echo '{"error":"нет такого интерфейса"}'; return 1; }
 			_awg_is_steer "$i" && { echo '{"error":"точки туннелей Steer меняются на странице Steer"}'; return 1; }
@@ -8130,12 +7700,6 @@ awg_action() {
 	esac
 }
 
-# ───────────────────────── Уборка после автообхода ─────────────────────────
-#
-# Автообход из панели убран. Этот проход снимает всё, что он мог оставить на роутере: DNS для
-# ИИ-сервисов (служба zm-geodns, файл dnsmasq, сторож в cron), строки hosts, которые он прятал,
-# пакет https-dns-proxy, если его ставил автообход и страница DoH им не пользуется, и свой
-# каталог. Зовут установщик (каждый раз, это дёшево) и удаление панели.
 redbtn_panel_gone() {
 	local f r=0 line dir=/etc/zm-redbtn run="$JOBS_DIR/redbtn"
 	_kill_match "redbtn_geo_watch"
@@ -8151,7 +7715,6 @@ redbtn_panel_gone() {
 		sed -i '/redbtn_geo_watch/d' "$CRON_FILE"
 		/etc/init.d/cron restart >/dev/null 2>&1
 	fi
-	# Строки ИИ-сервисов, которые автообход убирал из hosts на время своего DNS, — на место.
 	if [ -s "$dir/hosts.ai" ]; then
 		while IFS= read -r line; do
 			[ -n "$line" ] || continue
@@ -8169,7 +7732,6 @@ redbtn_panel_gone() {
 	_doh_pkg || rm -f "$DOH_OFF_FLAG"
 	[ -f "$DOH_OFF_FLAG" ] && { /etc/init.d/https-dns-proxy stop >/dev/null 2>&1; /etc/init.d/https-dns-proxy disable >/dev/null 2>&1; }
 	[ "$r" = 1 ] && /etc/init.d/dnsmasq restart >/dev/null 2>&1
-	# Туннели и выбор Steer, которые когда-то вёл автообход, уже перенесены (_st_migrate).
 	[ -d "$dir" ] && _st_migrate
 	rm -rf "$dir" "$run" /opt/zapret-manager-luci/autobypass_video /usr/share/zm-redbtn/doh.conf
 	return 0
@@ -10595,21 +10157,6 @@ chmod 0644 '/www/luci-static/resources/view/zapret-manager/steer.js'
 
 mkdir -p /usr/share/zm-redbtn/lists
 cat > '/usr/share/zm-redbtn/services.conf' << 'ZM_INSTALLER_EOF'
-# Сервисы Steer. Каталог и цели — из BigRedButton (gitlab.com/xyzmean/brb).
-#
-# ФОРМАТ: id|название|списки доменов|списки адресов|обязательные цели|дополнительные цели|признак отказа|наборы
-#
-#   списки    — файлы в /usr/share/zm-redbtn/lists, через запятую; по ним движок уводит сервис в
-#               туннель. Адресные списки только там, где сервис ходит по адресам без DNS
-#               (голос Discord, мессенджеры Meta); у YouTube и ИИ-сервисов адресов Google и
-#               облаков слишком много — туда ушло бы чужое.
-#   обязательные — цели, которые ОБЯЗАНЫ открыться все: у YouTube это видеоузел, у Discord —
-#               шлюз и узел обновлений (без него приложение висит на проверке обновлений).
-#   дополнительные — из них должно открыться не меньше RB_BAR процентов.
-#   наборы    — наборы .srs каталога splify2-lists (издатель itdoginfo), через запятую; по ним
-#               сервис уводится в туннель. Не скачались — списки из пакета (поля 3 и 4).
-#   признак отказа — фразы в ответе, при которых сервис считается закрытым, хотя ответил
-#               (геоблок отвечает кодом 200 со страницей «недоступно в вашей стране»).
 youtube|YouTube|svc_youtube.lst||www.youtube.com,youtubei.googleapis.com,manifest.googlevideo.com|youtu.be,i.ytimg.com,i9.ytimg.com,yt3.ggpht.com,yt4.ggpht.com,jnn-pa.googleapis.com,signaler-pa.youtube.com,yt3.googleusercontent.com,rr4---sn-4g5e6nze.googlevideo.com,rr4---sn-5go7yner.googlevideo.com,rr5---sn-n8v7knez.googlevideo.com,rr2---sn-q4fl6ndl.googlevideo.com,rr1---sn-q4fl6n6y.googlevideo.com,rr14---sn-n8v7kn7r.googlevideo.com,rr4---sn-jvhnu5g-c35d.googlevideo.com,rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com,rr12---sn-gvnuxaxjvh-bvwz.googlevideo.com,rr1---sn-ug5onuxaxjvh-n8v6.googlevideo.com||youtube
 discord|Discord|svc_discord.lst|discord.lst|discord.com,gateway.discord.gg,updates.discord.com|cdn.discordapp.com,media.discordapp.net||discord
 instagram|Instagram|svc_meta.lst|meta.lst|www.instagram.com|i.instagram.com,graph.instagram.com,scontent.cdninstagram.com||meta
@@ -10667,7 +10214,6 @@ tx.me
 telegram.space
 ZM_INSTALLER_EOF
 cat > '/usr/share/zm-redbtn/lists/telegram.lst' << 'ZM_INSTALLER_EOF'
-# Сети Telegram (core.telegram.org/resources/cidr.txt), только IPv4: туннель WARP здесь без IPv6.
 91.105.192.0/23
 91.108.4.0/22
 91.108.8.0/22
@@ -10767,8 +10313,6 @@ uploads.github.com
 user-images.githubusercontent.com
 www.github.com
 ZM_INSTALLER_EOF
-# Списка geoblock.lst больше нет: у ИИ-сервисов нет списков туннеля (поля 3 и 4 в services.conf
-# пусты), геоблок снимает DNS (zm-geodns), и файл, который ставили прежние версии, никто не читал.
 rm -f '/usr/share/zm-redbtn/lists/geoblock.lst'
 cat > '/usr/share/zm-redbtn/lists/discord.lst' << 'ZM_INSTALLER_EOF'
 138.128.137.32/28
@@ -12124,6 +11668,12 @@ return view.extend({
 		var tabBar = E('div', { 'class': 'zm-actions', 'style': 'margin:10px 0' });
 		var panels = {};
 		var tabHooks = {};
+		// Смена любой стратегии меняет и соседние вкладки (Yv, Gv, Dv и строку стратегии) —
+		// после каждого действия обновляются все, и ещё раз — при переходе на вкладку.
+		var refreshers = {};
+		function refreshAll() {
+			Object.keys(refreshers).forEach(function(k) { try { refreshers[k](); } catch (e) {} });
+		}
 		TABS.forEach(function(t) {
 			panels[t.id] = E('div', { 'style': t.id === activeTab ? '' : 'display:none' });
 		});
@@ -12211,7 +11761,7 @@ return view.extend({
 						zm.pollJob(job, zLogEl, function(ok) {
 							zBusy = false;
 							zm.toast(ok ? 'Готово' : 'Операция завершилась с ошибкой', ok ? 'info' : 'error');
-							zm.status().then(function(d) { status = d; renderZCard(d); renderBanner(); renderV(); });
+							zm.status().then(function(d) { status = d; renderZCard(d); renderBanner(); renderV(); refreshAll(); });
 							if (ok && (action === 'install' || action === 'remove')) {
 								zBannerEl.innerHTML = '';
 								zBannerEl.appendChild(zm.refreshBanner('Пункт меню Zapret в LuCI мог измениться — выйдите и зайдите заново.'));
@@ -12295,7 +11845,7 @@ return view.extend({
 							zm.strategySetV(it.id).then(function(res) {
 								busy = false;
 								if (!zm.notifyStrategyResult(res, it.id)) return;
-								refreshState();
+								refreshAll();
 							}).catch(function() { busy = false; });
 						}
 					}, it.id));
@@ -12315,7 +11865,7 @@ return view.extend({
 							zm.strategySetFlowseal(it.id).then(function(r2) {
 								busy = false;
 								if (!zm.notifyStrategyResult(r2, it.id)) return;
-								refreshState();
+								refreshAll();
 							}).catch(function() { busy = false; });
 						}
 					}, it.label));
@@ -12334,6 +11884,7 @@ return view.extend({
 			}
 
 			tabHooks.strategy = refreshState;
+			refreshers.strategy = refreshState;
 			renderBanner();
 			renderV();
 
@@ -12393,7 +11944,7 @@ return view.extend({
 								nfqwsBusy = false;
 								if (res.error) { zm.toast(res.error, 'error'); return; }
 								zm.toast('Сохранено, Zapret перезапущен', 'info');
-								refreshState();
+								refreshAll();
 							}).catch(function() { nfqwsBusy = false; });
 						}
 					}, 'Сохранить и применить'),
@@ -12638,7 +12189,7 @@ return view.extend({
 							busy = false;
 							if (r2.error) { zm.toast(r2.error, 'error'); return; }
 							zm.toast(r2.removed ? 'YouTube-стратегия выключена' : 'YouTube-стратегии в Zapret и так нет — она больше не добавится', 'info');
-							refreshState();
+							refreshAll();
 						}).catch(function() { busy = false; });
 					}
 				}, yvOff && !current ? 'Выключена' : 'Выключить'));
@@ -12653,7 +12204,7 @@ return view.extend({
 							zm.strategySetYoutube(it.id).then(function(r2) {
 								busy = false;
 								if (!zm.notifyStrategyResult(r2, it.id)) return;
-								refreshState();
+								refreshAll();
 							}).catch(function() { busy = false; });
 						}
 					}, it.id));
@@ -12670,6 +12221,8 @@ return view.extend({
 				});
 			}
 
+			refreshers.youtube = refreshState;
+			tabHooks.youtube = refreshState;
 			var yvOff = !!status.yv_off;
 			current = currentYv(status);
 
@@ -12734,7 +12287,7 @@ return view.extend({
 							busy = false;
 							if (res.error) { zm.toast(res.error, 'error'); return; }
 							zm.toast('Игровая стратегия выключена', 'info');
-							refreshState();
+							refreshAll();
 						}).catch(function() { busy = false; });
 					}
 				}, off ? 'Выключена' : 'Выключить'));
@@ -12750,7 +12303,7 @@ return view.extend({
 								busy = false;
 								if (res.error) { zm.toast(res.error, 'error'); return; }
 								zm.toast(res.game === 'none' ? 'Игровая стратегия снята' : res.game + ' применена', 'info');
-								refreshState();
+								refreshAll();
 							}).catch(function() { busy = false; });
 						}
 					}, 'Gv' + n));
@@ -12776,7 +12329,7 @@ return view.extend({
 								busy = false;
 								if (res.error) { zm.toast(res.error, 'error'); return; }
 								zm.toast(res.xtreme ? 'Xtreme включён' : 'Xtreme выключен', 'info');
-								refreshState();
+								refreshAll();
 							}).catch(function() { busy = false; });
 						}
 					}, xtreme ? 'Выключить Xtreme' : 'Включить Xtreme')
@@ -12796,7 +12349,7 @@ return view.extend({
 								busy = false;
 								if (res.error) { zm.toast(res.error, 'error'); return; }
 								zm.toast(f + ' установлен', 'info');
-								refreshState();
+								refreshAll();
 							}).catch(function() { busy = false; });
 						}
 					}, f));
@@ -12812,6 +12365,8 @@ return view.extend({
 				});
 			}
 
+			refreshers.game = refreshState;
+			tabHooks.game = refreshState;
 			renderGv();
 			renderXtreme();
 			renderFake();
@@ -12858,7 +12413,7 @@ return view.extend({
 							busy = false;
 							if (res.error) { zm.toast(res.error, 'error'); return; }
 							zm.toast(res.removed ? 'Стратегия Discord выключена' : 'Стратегии Discord в Zapret и так нет — она больше не добавится', 'info');
-							refreshState();
+							refreshAll();
 						}).catch(function() { busy = false; });
 					}
 				}, off ? 'Выключена' : 'Выключить'));
@@ -12873,7 +12428,7 @@ return view.extend({
 							zm.discordSetDv(dv.replace('Dv', '')).then(function(res) {
 								busy = false;
 								if (!zm.notifyStrategyResult(res, dv)) return;
-								refreshState();
+								refreshAll();
 							}).catch(function() { busy = false; });
 						}
 					}, dv));
@@ -12892,7 +12447,7 @@ return view.extend({
 							zm.discordSetFake(f).then(function(res) {
 								busy = false;
 								if (!zm.notifyStrategyResult(res, f)) return;
-								refreshState();
+								refreshAll();
 							}).catch(function() { busy = false; });
 						}
 					}, f));
@@ -12907,6 +12462,8 @@ return view.extend({
 				});
 			}
 
+			refreshers.discord = refreshState;
+			tabHooks.discord = refreshState;
 			renderDv();
 			renderFake();
 
@@ -15453,7 +15010,6 @@ chmod 0644 '/www/luci-static/resources/view/zapret-manager/bytetube.js'
 
 rm -f /tmp/luci-indexcache* /tmp/luci-modulecache/* 2>/dev/null || true
 /etc/init.d/rpcd reload >/dev/null 2>&1 || /etc/init.d/rpcd restart >/dev/null 2>&1
-# Списки сервисов могли обновиться вместе с панелью — steer перечитывает их без обрыва DNS.
 if grep -qx 'steer-spec' /etc/zm-steer/owned 2>/dev/null && /etc/init.d/steer enabled 2>/dev/null; then
 	/etc/init.d/steer reload >/dev/null 2>&1
 fi
@@ -15464,7 +15020,6 @@ command -v curl >/dev/null 2>&1 || $INSTALL curl >&2 || true
 command -v unzip >/dev/null 2>&1 || $INSTALL unzip >&2 || true
 
 
-# ─────────────── Web UI (отдельный веб-интерфейс на порту 7788) ───────────────
 mkdir -p /www/zm
 chmod 0755 /www/zm
 cat > '/www/zm/app.js' << 'ZM_INSTALLER_EOF'
@@ -17453,18 +17008,15 @@ ZMW_BUILD="$(date +%s)"
 sed -i "s/__ZMW_BUILD__/$ZMW_BUILD/g" /www/zm/app.js /www/zm/app.css /www/zm-webui.html
 chmod 0644 /www/zm/app.js /www/zm/app.css /www/zm-webui.html
 
-# Автообход убран из панели — снимаем то, что он мог оставить (DNS для ИИ, строки hosts, каталог).
 /opt/zapret-manager-luci/backend.sh redbtn_panel_gone >/dev/null 2>&1 || true
 
 ZMW_RESTART=0
-# JSON-RPC /ubus для uhttpd — обычно уже стоит вместе с LuCI
 if [ ! -e /usr/lib/uhttpd_ubus.so ]; then
 	echo -e "${CYAN}Устанавливаем ${NC}uhttpd-mod-ubus${CYAN} для Web UI${NC}"
 	$INSTALL uhttpd-mod-ubus >&2 || { $PM update >&2; $INSTALL uhttpd-mod-ubus >&2; } || true
 	ZMW_RESTART=1
 fi
 
-# Отдельный экземпляр uhttpd. Если секция уже есть — не трогаем (порт мог быть изменён вручную)
 if ! uci -q get uhttpd.zmweb >/dev/null; then
 	uci set uhttpd.zmweb=uhttpd
 	uci add_list uhttpd.zmweb.listen_http='0.0.0.0:7788'
