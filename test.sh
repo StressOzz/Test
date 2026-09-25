@@ -1,6 +1,6 @@
 #!/bin/sh
 # Zapret Manager by StressOzz for LuCI installer
-# Version: 1.38
+# Version: 1.39
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -86,7 +86,7 @@ cat > '/opt/zapret-manager-luci/backend.sh' << 'ZM_INSTALLER_EOF'
 umask 022
 
 CONF="/etc/config/zapret"
-ZM_VERSION="1.38"
+ZM_VERSION="1.39"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
@@ -370,13 +370,15 @@ do_install_zapret_full() {
 	strategy_set_v v7 >/dev/null
 
 	echo "==> Добавляем домены в hosts"
-	local b
-	for b in ai instagram ntc librusec telegram twitch scell spotify rutor; do
+	local b blocks="ai instagram ntc librusec telegram twitch scell spotify rutor"
+	# ИИ-сервисам уже подобран DNS автообходом — их адреса в hosts только помешали бы ему.
+	[ -s /etc/zm-redbtn/geo.resolver ] && blocks="${blocks#ai }"
+	for b in $blocks; do
 		local content line
 		content="$(_hosts_block "$b")"
 		while IFS= read -r line; do
 			[ -z "$line" ] && continue
-			grep -Fxq "$line" "$HOSTS_FILE" || echo "$line" >> "$HOSTS_FILE"
+			_hosts_has_line "$line" || echo "$line" >> "$HOSTS_FILE"
 		done <<-HOSTBLOCK
 		$content
 		HOSTBLOCK
@@ -1019,43 +1021,40 @@ _hosts_block() {
 			"#tapeop.dev" \
 			"216.24.57.251 www.tapeop.dev tapeop.dev" \
 			"216.24.57.3 www.tapeop.dev tapeop.dev" ;;
-		roblox) printf '%s\n' \
-			"#tr.rbxcdn.com" \
-			"108.156.22.8 tr.rbxcdn.com" \
-			"108.157.32.114 tr.rbxcdn.com" \
-			"18.65.147.108 tr.rbxcdn.com" \
-			"18.65.147.112 tr.rbxcdn.com" \
-			"13.224.181.18 tr.rbxcdn.com" \
-			"13.224.181.74 tr.rbxcdn.com" \
-			"54.230.253.22 tr.rbxcdn.com" \
-			"54.230.253.81 tr.rbxcdn.com" \
-			"54.230.253.48 tr.rbxcdn.com" \
-			"54.230.253.59 tr.rbxcdn.com" \
-			"143.204.214.34 tr.rbxcdn.com" \
-			"143.204.214.67 tr.rbxcdn.com" \
-			"143.204.214.92 tr.rbxcdn.com" \
-			"99.84.181.25 tr.rbxcdn.com" \
-			"99.84.181.63 tr.rbxcdn.com" \
-			"65.8.158.45 tr.rbxcdn.com" \
-			"65.8.158.112 tr.rbxcdn.com" ;;
 		*) return 1 ;;
 	esac
 }
 
+# Строки сравниваются без учёта пробелов: SSH-версия Zapret Manager пишет некоторые строки с двумя
+# пробелами подряд (или с \r), и точное сравнение считало такой блок выключенным.
 _hosts_block_status() {
-	local block="$1" content line
+	local block="$1" content
 	content="$(_hosts_block "$block")" || return 1
-	while IFS= read -r line; do
-		[ -z "$line" ] && continue
-		grep -Fxq "$line" "$HOSTS_FILE" || { echo "false"; return; }
-	done <<-EOF
-	$content
-	EOF
-	echo "true"
+	[ -f "$HOSTS_FILE" ] || { echo false; return; }
+	printf '%s\n' "$content" | awk -v hf="$HOSTS_FILE" 'function n(s) { gsub(/\r/, "", s); gsub(/[ \t]+/, " ", s); sub(/^ /, "", s); sub(/ $/, "", s); return s }
+		BEGIN { while ((getline l < hf) > 0) have[n(l)] = 1; close(hf) }
+		{ k = n($0); if (k == "" || (k in seen)) next; seen[k] = 1; total++; if (k in have) found++ }
+		END { print (total > 0 && found == total) ? "true" : "false" }'
+}
+# Убрать из hosts строки, совпадающие (без учёта пробелов) со строками из stdin.
+_hosts_drop_lines() {
+	local tmp="$HOSTS_FILE.zmtmp" list="$HOSTS_FILE.zmdrop"
+	cat > "$list"
+	# Список читается в BEGIN: с пустым списком приём NR == FNR принял бы за список сам hosts
+	# и очистил бы его целиком.
+	awk -v list="$list" 'function n(s) { gsub(/\r/, "", s); gsub(/[ \t]+/, " ", s); sub(/^ /, "", s); sub(/ $/, "", s); return s }
+		BEGIN { while ((getline l < list) > 0) { k = n(l); if (k != "") drop[k] = 1 } close(list) }
+		!(n($0) in drop)' "$HOSTS_FILE" > "$tmp" && cat "$tmp" > "$HOSTS_FILE"
+	rm -f "$tmp" "$list"
+}
+# Строка уже есть в hosts (без учёта пробелов)?
+_hosts_has_line() {
+	awk -v want="$1" 'function n(s) { gsub(/\r/, "", s); gsub(/[ \t]+/, " ", s); sub(/^ /, "", s); sub(/ $/, "", s); return s }
+		BEGIN { want = n(want) } n($0) == want { f = 1; exit } END { exit !f }' "$HOSTS_FILE" 2>/dev/null
 }
 
 hosts_status() {
-	local blocks="nalog ntc instagram librusec ai twitch telegram spotify rutor scell githubraw github tapeop roblox" b first=1
+	local blocks="nalog ntc instagram librusec ai twitch telegram spotify rutor scell githubraw github tapeop" b first=1
 	local geohide=""
 	if grep -q '^### geohide.ru: hosts file' "$HOSTS_FILE" 2>/dev/null; then
 		if grep -q '^# Регион серверов: US$' "$HOSTS_FILE" 2>/dev/null; then geohide="us"
@@ -1063,7 +1062,7 @@ hosts_status() {
 		elif grep -q '^# Регион серверов: RU$' "$HOSTS_FILE" 2>/dev/null; then geohide="ru"
 		else geohide="unknown"; fi
 	fi
-	printf '{"geohide":"%s","items":[' "$(esc "$geohide")"
+	printf '{"geohide":"%s","ai_geo":%s,"items":[' "$(esc "$geohide")" "$([ -s /etc/zm-redbtn/geo.resolver ] && echo true || echo false)"
 	for b in $blocks; do
 		[ "$first" -eq 1 ] || printf ','
 		first=0
@@ -1076,12 +1075,15 @@ hosts_toggle() {
 	local block="$1" content line enabled
 	content="$(_hosts_block "$block")" || { echo '{"error":"неизвестный блок"}'; return 1; }
 	enabled="$(_hosts_block_status "$block")"
+	# Записи hosts важнее серверов dnsmasq: с ними DNS для ИИ-сервисов автообхода перестаёт работать.
+	if [ "$block" = ai ] && [ "$enabled" != "true" ] && [ -s /etc/zm-redbtn/geo.resolver ]; then
+		echo '{"error":"Для ИИ-сервисов уже работает DNS автообхода — адреса из hosts ему помешают. Сначала выключите его на вкладке «Автообход»"}'
+		return 1
+	fi
 	if [ "$enabled" = "true" ]; then
-		while IFS= read -r line; do [ -z "$line" ] && continue; sed -i "\\|^$line\$|d" "$HOSTS_FILE"; done <<-EOF
-		$content
-		EOF
+		printf '%s\n' "$content" | _hosts_drop_lines
 	else
-		while IFS= read -r line; do [ -z "$line" ] && continue; grep -Fxq "$line" "$HOSTS_FILE" || echo "$line" >> "$HOSTS_FILE"; done <<-EOF
+		while IFS= read -r line; do [ -z "$line" ] && continue; _hosts_has_line "$line" || echo "$line" >> "$HOSTS_FILE"; done <<-EOF
 		$content
 		EOF
 	fi
@@ -1105,6 +1107,8 @@ hosts_replace_geohide() {
 		return 1
 	fi
 	mv "$tmp" "$HOSTS_FILE"
+	# Новый hosts снова принёс адреса ИИ-сервисов — убираем их, пока работает DNS автообхода.
+	[ -s /etc/zm-redbtn/geo.resolver ] && _rb_geo_hosts_strip >/dev/null 2>&1
 	/etc/init.d/dnsmasq restart >/dev/null 2>&1
 	printf '{"ok":true,"region":"%s"}\n' "$region"
 }
@@ -3194,6 +3198,64 @@ health() {
 		"$([ -f /etc/zm-steer/stopped ] && echo true || echo false)"
 }
 
+# ── Версии компонентов: установленная и последняя ──
+#
+# Последние версии узнаются из сети (GitHub и зеркала), это до полуминуты — поэтому страница
+# получает готовый ответ из кэша, а обновляет его фоновая задача: при первом запросе, раз в три
+# часа и по кнопке «Проверить снова». Установленные версии берутся теми же функциями, что
+# показывают их на страницах компонентов, — расхождений со страницами не бывает.
+VERSIONS_CACHE="$JOBS_DIR/versions.json"
+
+_ver_norm() { printf '%s' "$1" | sed 's/^[vV]//; s/-r[0-9]*$//; s/[[:space:]]//g'; }
+_ver_item() { # ИМЯ УСТАНОВЛЕННАЯ ПОСЛЕДНЯЯ
+	local cur latest
+	cur="$(_ver_norm "$2")"; latest="$(_ver_norm "$3")"
+	[ -n "$cur" ] || return 0
+	printf '{"name":"%s","installed":"%s","latest":"%s"}' "$(esc "$1")" "$(esc "$cur")" "$(esc "$latest")"
+}
+_jf() { jsonfilter -s "$1" -e "$2" 2>/dev/null; }
+
+do_versions_refresh() {
+	local out="" sep="" j it tmp="$VERSIONS_CACHE.tmp"
+	add() { [ -n "$1" ] && { out="$out$sep$1"; sep=","; }; }
+	j="$(zm_update_status)"
+	add "$(_ver_item 'Zapret Manager' "$(_jf "$j" '@.current')" "$(_jf "$j" '@.latest')")"
+	if [ -f /etc/init.d/zapret ]; then
+		j="$(status)"
+		add "$(_ver_item Zapret "$(_jf "$j" '@.zapret_version')" "$(_zapret_latest_version)")"
+	fi
+	if [ -x "$MIHOMO_BIN" ] || [ -x /etc/init.d/magitrickle ] || [ -x /etc/init.d/hev-socks5-tunnel ]; then
+		j="$(mixomo_status)"
+		add "$(_ver_item Mihomo "$(_jf "$j" '@.mihomo_version')" "$(_jf "$j" '@.mihomo_latest')")"
+		add "$(_ver_item MagiTrickle "$(_jf "$j" '@.magitrickle_version')" "$(_jf "$j" '@.magitrickle_latest')")"
+		add "$(_ver_item hev-socks5-tunnel "$(_jf "$j" '@.hev_version')" '')"
+	fi
+	j="$(tg_status)"
+	add "$(_ver_item 'TG WS Proxy (Go, MTProto)' "$(_jf "$j" '@.mtproto_version')" "$(_jf "$j" '@.mtproto_latest')")"
+	add "$(_ver_item 'TG WS Proxy (SOCKS5)' "$(_jf "$j" '@.socks5_version')" "$(_jf "$j" '@.socks5_latest')")"
+	add "$(_ver_item 'TG WS Proxy (Rust)' "$(_jf "$j" '@.rust_version')" "$(_jf "$j" '@.rust_latest')")"
+	if [ -x /etc/init.d/tgws ]; then
+		j="$(tgws_status)"
+		add "$(_ver_item sTGWS "$(_jf "$j" '@.version')" "$(_jf "$j" '@.latest')")"
+	fi
+	command -v steer >/dev/null 2>&1 && add "$(_ver_item 'Движок Steer' "$(_st_steer_ver)" "$ST_STEER_VER")"
+	printf '{"ts":"%s","items":[%s]}\n' "$(date '+%d.%m %H:%M')" "$out" > "$tmp" && mv "$tmp" "$VERSIONS_CACHE"
+	echo "==> Версии проверены"
+}
+
+versions_status() { # [refresh]
+	local busy=false
+	if [ "$1" = refresh ] || [ ! -s "$VERSIONS_CACHE" ] || [ -n "$(find "$VERSIONS_CACHE" -mmin +180 2>/dev/null)" ]; then
+		_job_running versions || job_start versions do_versions_refresh >/dev/null
+	fi
+	_job_running versions && busy=true
+	if [ -s "$VERSIONS_CACHE" ]; then
+		sed "s/}\$/,\"pending\":$busy}/" "$VERSIONS_CACHE"
+	else
+		printf '{"ts":"","items":[],"pending":%s}\n' "$busy"
+	fi
+}
+
 bytetube_installed() {
 	if [ -x /usr/bin/bytetube ]; then
 		printf '{"installed":true}\n'
@@ -4723,11 +4785,31 @@ bytetube_action() {
 
 _doh_file="/etc/config/https-dns-proxy"
 
+# Страница DoH «удалила» шифрованный DNS, но пакет оставлен, потому что им пользуется DNS для
+# ИИ-сервисов автообхода (служба zm-geodns крутит свой экземпляр той же программы).
+DOH_OFF_FLAG="/opt/zapret-manager-luci/doh_off"
+_doh_geo_active() { [ -s /etc/zm-redbtn/geo.resolver ]; }
+_doh_pkg() {
+	if [ "$PKG" = "apk" ]; then apk info -e https-dns-proxy >/dev/null 2>&1
+	else opkg list-installed 2>/dev/null | grep -q '^https-dns-proxy '; fi
+}
+# Steer держит DNS устройств на своём резолвере: перехват порта 53 у https-dns-proxy его
+# перебивает, и сервисы через WARP перестают открываться. Пока Steer работает, перехват не нужен.
+_doh_steer_active() { grep -qx 'steer-spec' /etc/zm-steer/owned 2>/dev/null && [ ! -f /etc/zm-steer/stopped ]; }
+
 do_doh_install() {
 	local installed
 	installed=$(doh_status | grep -o '"installed":[a-z]*' | cut -d: -f2)
 	if [ "$installed" = "true" ]; then
 		echo "==> DNS over HTTPS уже установлен"
+		return 0
+	fi
+	if _doh_pkg; then
+		# Пакет остался от DNS для ИИ-сервисов — ставить нечего, только вернуть службу.
+		rm -f "$DOH_OFF_FLAG"
+		echo "==> Пакет https-dns-proxy уже стоит — включаем службу"
+		/etc/init.d/https-dns-proxy enable >/dev/null 2>&1
+		echo "==> Готово — выберите провайдера ниже"
 		return 0
 	fi
 	_ensure_deps
@@ -4740,10 +4822,23 @@ do_doh_install() {
 
 do_doh_remove() {
 	echo "==> Удаляем DNS over HTTPS"
+	echo "==> Останавливаем службу — dnsmasq возвращается к прежним серверам"
+	/etc/init.d/https-dns-proxy stop >/dev/null 2>&1
+	/etc/init.d/https-dns-proxy disable >/dev/null 2>&1
+	if _doh_geo_active; then
+		# Программой https-dns-proxy пользуется DNS для ИИ-сервисов автообхода: удалить пакет —
+		# значит оставить домены ИИ-сервисов без DNS. Выключаем только DNS для всей сети.
+		echo "!! Пакет https-dns-proxy оставлен: им пользуется DNS для ИИ-сервисов (вкладка «Автообход»)"
+		rm -f /etc/config/https-dns-proxy
+		touch "$DOH_OFF_FLAG"
+		/etc/init.d/dnsmasq restart >/dev/null 2>&1
+		echo "==> Готово, DNS over HTTPS для сети выключен"
+		return 0
+	fi
 	echo "==> Удаляем пакеты"
 	$DELETE https-dns-proxy luci-app-https-dns-proxy >&2
 	echo "==> Удаляем файлы конфигурации"
-	rm -f /etc/config/https-dns-proxy /etc/init.d/https-dns-proxy
+	rm -f /etc/config/https-dns-proxy /etc/init.d/https-dns-proxy "$DOH_OFF_FLAG"
 	/etc/init.d/dnsmasq restart >/dev/null 2>&1
 	echo "==> Готово, DNS over HTTPS удалён"
 }
@@ -4756,20 +4851,44 @@ doh_install() {
 	job_start doh_install do_doh_install
 }
 
+# Провайдер по адресу резолвера — те же адреса, что пишет doh_set.
+_doh_provider_of() {
+	case "$1" in
+		https://cloudflare-dns.com/*|https://1.1.1.1/*|https://1.0.0.1/*) echo cloudflare ;;
+		https://dns.google/*|https://8.8.8.8/*|https://8.8.4.4/*) echo google ;;
+		https://dns.quad9.net/*) echo quad9 ;;
+		https://xbox-dns.ru/*) echo xbox ;;
+		https://eu.geohide.ru/*) echo geohide_eu ;;
+		https://us.geohide.ru/*) echo geohide_us ;;
+		https://geohide.ru/*|https://dns.geohide.ru*) echo geohide_ru ;;
+		*) echo "" ;;
+	esac
+}
+
+# Что реально настроено в /etc/config/https-dns-proxy: все экземпляры с адресом и портом.
+# «current» — провайдер, только если экземпляр ОДИН и он наш: пакет из коробки (и руками)
+# держит два резолвера сразу, и подсвечивать тогда одну кнопку — неправда.
 doh_status() {
-	local installed="false" current=""
-	if [ "$PKG" = "apk" ]; then apk info -e https-dns-proxy >/dev/null 2>&1 && installed="true"
-	else opkg list-installed 2>/dev/null | grep -q '^https-dns-proxy ' && installed="true"; fi
+	local installed="false" current="" running=false force=false list="" sep="" i url port prov n=0 provs=""
+	_doh_pkg && [ ! -f "$DOH_OFF_FLAG" ] && installed="true"
 	if [ -f "$_doh_file" ]; then
-		if grep -q "eu.geohide.ru" "$_doh_file"; then current="geohide_eu"
-		elif grep -q "us.geohide.ru" "$_doh_file"; then current="geohide_us"
-		elif grep -q "geohide.ru" "$_doh_file"; then current="geohide_ru"
-		elif grep -q "xbox-dns.ru" "$_doh_file"; then current="xbox"
-		elif grep -q "cloudflare-dns.com" "$_doh_file"; then current="cloudflare"
-		elif grep -q "dns.google" "$_doh_file"; then current="google"
-		elif grep -q "dns.quad9.net" "$_doh_file"; then current="quad9"; fi
+		i=0
+		while url="$(uci -q get "https-dns-proxy.@https-dns-proxy[$i].resolver_url")"; do
+			port="$(uci -q get "https-dns-proxy.@https-dns-proxy[$i].listen_port")"
+			[ -n "$port" ] || port=$((5053 + i))
+			prov="$(_doh_provider_of "$url")"
+			list="$list$sep{\"url\":\"$(esc "$url")\",\"port\":\"$(esc "$port")\",\"provider\":\"$prov\"}"
+			sep=","; n=$((n + 1)); provs="$prov"
+			i=$((i + 1))
+			[ "$i" -gt 16 ] && break
+		done
+		[ "$n" = 1 ] && current="$provs"
+		[ "$(uci -q get https-dns-proxy.config.force_dns)" != "0" ] && force=true
 	fi
-	printf '{"installed":%s,"current":"%s"}\n' "$installed" "$(esc "$current")"
+	/etc/init.d/https-dns-proxy running >/dev/null 2>&1 && running=true
+	printf '{"installed":%s,"current":"%s","running":%s,"force_dns":%s,"resolvers":[%s],"geo_uses_pkg":%s,"steer_active":%s}\n' \
+		"$installed" "$(esc "$current")" "$running" "$force" "$list" \
+		"$(_doh_geo_active && echo true || echo false)" "$(_doh_steer_active && echo true || echo false)"
 }
 
 doh_set() {
@@ -4789,12 +4908,14 @@ doh_set() {
 		echo '{"error":"DNS over HTTPS не установлен — сначала нажмите «Установить DNS over HTTPS»"}'
 		return 1
 	fi
+	local force=1
+	_doh_steer_active && force=0
 	{
 		echo "config main 'config'"
 		echo "	option canary_domains_icloud '1'"
 		echo "	option canary_domains_mozilla '1'"
 		echo "	option dnsmasq_config_update '*'"
-		echo "	option force_dns '1'"
+		echo "	option force_dns '$force'"
 		echo "	option notrack_dns '1'"
 		echo "	list force_dns_port '53'"
 		echo "	list force_dns_port '853'"
@@ -4811,7 +4932,9 @@ doh_set() {
 		echo "config https-dns-proxy"
 		echo "	option resolver_url '$url'"
 		[ -n "$bootstrap" ] && echo "	option bootstrap_dns '$bootstrap'"
+		echo "	option listen_port '5053'"
 	} > "$_doh_file"
+	/etc/init.d/https-dns-proxy enable >/dev/null 2>&1
 	/etc/init.d/https-dns-proxy reload >/dev/null 2>&1
 	/etc/init.d/https-dns-proxy restart >/dev/null 2>&1
 	/etc/init.d/dnsmasq restart >/dev/null 2>&1
@@ -5663,6 +5786,8 @@ _st_svc_channels() { # ID
 		pfx="$(_st_json_list "$(_rb_svc_field "$id" 4 | tr ',' ' ')")"
 		narrow=""
 	fi
+	# Список доменов, исправленный человеком на странице Steer, заменяет скачанный и пакетный.
+	[ -s "$ST_USER_DIR/$id.lst" ] && dom="\"$ST_USER_DIR/$id.lst\""
 	[ -n "$dom" ] && { ch="$ch$sep{\"name\":\"$name\",\"out\":\"zm_warp\",\"match\":{\"domains_files\":[$dom]}}"; sep=","; }
 	[ -n "$pfx" ] && { ch="$ch$sep{\"name\":\"$name (адреса)\",\"out\":\"zm_warp\",\"match\":{\"prefixes_files\":[$pfx]}}"; sep=","; }
 	# Подсети с сужением — отдельным каналом с протоколом и портами (схема 2): без сужения
@@ -6161,6 +6286,72 @@ _st_tunnels_json() {
 }
 
 # Выбор сервисов с страницы: итоговый набор через запятую.
+# ── списки доменов сервисов: показать и поправить ──
+#
+# Что сейчас уводится в туннель по доменам: свой список человека, иначе скачанные наборы
+# (последняя сборка правил), иначе списки из пакета. Свой список хранится в ST_USER_DIR и
+# переживает «Применить», обновления и новые ключи; «Вернуть стандартный» его удаляет.
+ST_USER_DIR="$ST_DIR/user"
+
+_st_list_effective() { # ID -> домены в stdout, источник в ST_LIST_SRC
+	local id="$1" set f any=0
+	if [ -s "$ST_USER_DIR/$id.lst" ]; then ST_LIST_SRC=user; cat "$ST_USER_DIR/$id.lst"; return 0; fi
+	for set in $(_rb_svc_field "$id" 8 | tr ',' ' '); do
+		f="$ST_DIR/lists/$set.dom"
+		[ -s "$f" ] && { cat "$f"; any=1; }
+	done
+	if [ "$any" = 1 ]; then ST_LIST_SRC=sets; return 0; fi
+	ST_LIST_SRC=package
+	for f in $(_rb_svc_field "$id" 3 | tr ',' ' '); do [ -s "$RB_SHARE/lists/$f" ] && cat "$RB_SHARE/lists/$f"; done
+}
+
+steer_list_get() { # ID
+	local id="$1" body n tmp="$JOBS_DIR/steer-list.$$"
+	_rb_routable "$id" || { echo '{"error":"неизвестный сервис"}'; return 1; }
+	ST_LIST_SRC=""
+	mkdir -p "$JOBS_DIR"
+	# Не в $( ): источник списка возвращается через переменную ST_LIST_SRC.
+	_st_list_effective "$id" > "$tmp"
+	body="$(tr -d '\r' < "$tmp" | grep -v '^[[:space:]]*$' | awk '!s[$0]++')"
+	rm -f "$tmp"
+	n=$(printf '%s\n' "$body" | grep -c .)
+	printf '{"id":"%s","name":"%s","source":"%s","count":%s,"content":"%s"}\n' "$id" "$(esc "$(_rb_svc_field "$id" 2)")" "$ST_LIST_SRC" "$n" "$(esc_ml "$body")"
+}
+
+# Сохранить свой список: «ID|домены по строке». Берутся только настоящие имена (можно с
+# префиксами domain:, full:, keyword:, как в наборах); остальное отбрасывается.
+steer_list_set() {
+	local id="${1%%|*}" body="${1#*|}" f tmp n
+	case "$1" in *'|'*) ;; *) echo '{"error":"нет списка"}'; return 1 ;; esac
+	_rb_routable "$id" || { echo '{"error":"неизвестный сервис"}'; return 1; }
+	mkdir -p "$ST_USER_DIR"
+	f="$ST_USER_DIR/$id.lst"; tmp="$f.tmp"
+	# Движку нужен простой список доменов (поддомены включаются сами): префиксы domain:/full:/suffix:
+	# и ведущие «*.»/«.» снимаем, строки keyword: и всё, что не похоже на домен, отбрасываем.
+	printf '%s\n' "$body" | tr -d '\r' | tr 'A-Z' 'a-z' |
+		sed 's/[[:space:]]*#.*$//; s/^[[:space:]]*//; s/[[:space:]]*$//; s/^domain://; s/^full://; s/^suffix://; s/^\*\.//; s/^\.//' |
+		grep -E '^[a-z0-9]([a-z0-9_-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9_-]*[a-z0-9])?)+$' | awk '!s[$0]++' > "$tmp"
+	n=$(grep -c . "$tmp")
+	[ "$n" -gt 0 ] || { rm -f "$tmp"; echo '{"error":"в списке нет ни одного домена"}'; return 1; }
+	mv "$tmp" "$f"
+	_st_list_changed "$id" "$n"
+}
+
+steer_list_reset() { # ID
+	_rb_routable "$1" || { echo '{"error":"неизвестный сервис"}'; return 1; }
+	rm -f "$ST_USER_DIR/$1.lst"
+	_st_list_changed "$1" 0
+}
+
+# Список поменялся: если сервис сейчас идёт через WARP — применить правила сразу.
+_st_list_changed() { # ID ЧИСЛО
+	if _st_installed && [ ! -f "$ST_OFF" ] && [ -z "$(_st_blocker)" ] && _rb_in "$1" "$ST_SEL"; then
+		job_start steer do_steer_apply
+	else
+		printf '{"ok":true,"saved":true,"count":%s}\n' "$2"
+	fi
+}
+
 _st_sel_set() {
 	local want id
 	want=" $(echo "$1" | tr ',' ' ') "
@@ -6197,6 +6388,12 @@ steer_action() {
 					if _st_installed && [ ! -f "$ST_OFF" ]; then job_start steer do_steer_apply
 					else printf '{"ok":true,"saved":true}\n'; fi ;;
 			esac
+			;;
+		list_get) steer_list_get "$mode" ;;
+		list_set|list_reset)
+			_st_running && { echo '{"error":"дождитесь окончания текущей операции"}'; return 1; }
+			_job_alive redbtn && { echo '{"error":"идёт автообход — дождитесь его окончания"}'; return 1; }
+			if [ "$action" = list_set ]; then steer_list_set "$mode"; else steer_list_reset "$mode"; fi
 			;;
 		halt)
 			_st_running || { echo '{"error":"ничего не выполняется"}'; return 1; }
@@ -7009,6 +7206,44 @@ _rb_geo_domains() {
 	_rb_say "Доменов для DNS ИИ-сервисов: $(grep -c . "$RB_GEO_DOMAINS")"
 }
 
+# Записи /etc/hosts dnsmasq отдаёт раньше, чем спросит сервер: пока в hosts есть адреса
+# доменов ИИ-сервисов (блок «AI» страницы Hosts или GeoHide целиком), DNS для ИИ-сервисов их не
+# увидит. Поэтому при его включении такие строки уходят из hosts в RB_GEO_HOSTS_SAVED, а при
+# выключении возвращаются. Строка уходит, если хоть одно имя в ней — домен списка или его поддомен.
+RB_GEO_HOSTS_SAVED="$RB_DIR/hosts.ai"
+_rb_geo_hosts_strip() {
+	local keep="$RB_RUN/hosts.keep" gone="$RB_RUN/hosts.gone" n
+	[ -s "$RB_GEO_DOMAINS" ] && [ -f "$HOSTS_FILE" ] || return 0
+	mkdir -p "$RB_RUN" "$RB_DIR"
+	: > "$keep"; : > "$gone"
+	awk -v keep="$keep" -v gone="$gone" 'NR == FNR { d[tolower($1)] = 1; next }
+		{ hit = 0
+		  if ($0 !~ /^[[:space:]]*#/ && NF >= 2) for (i = 2; i <= NF && !hit; i++) {
+			h = tolower($i); if (h ~ /^#/) break
+			while (h != "") { if (h in d) { hit = 1; break } if (index(h, ".") == 0) break; sub(/^[^.]*\./, "", h) }
+		  }
+		  print > (hit ? gone : keep) }' "$RB_GEO_DOMAINS" "$HOSTS_FILE"
+	n=$(grep -c . "$gone" 2>/dev/null)
+	if [ "${n:-0}" -gt 0 ]; then
+		cat "$gone" >> "$RB_GEO_HOSTS_SAVED"
+		cat "$keep" > "$HOSTS_FILE"
+		_rb_say "Из hosts убрано строк с адресами ИИ-сервисов: $n — они мешали бы DNS (вернутся при его выключении)"
+		/etc/init.d/dnsmasq restart >/dev/null 2>&1
+	fi
+	rm -f "$keep" "$gone"
+}
+_rb_geo_hosts_restore() {
+	local line r=0
+	[ -s "$RB_GEO_HOSTS_SAVED" ] || { rm -f "$RB_GEO_HOSTS_SAVED"; return 0; }
+	while IFS= read -r line; do
+		[ -n "$line" ] || continue
+		grep -Fxq "$line" "$HOSTS_FILE" || { echo "$line" >> "$HOSTS_FILE"; r=1; }
+	done < "$RB_GEO_HOSTS_SAVED"
+	rm -f "$RB_GEO_HOSTS_SAVED"
+	[ "$r" = 1 ] && { _rb_say "Адреса ИИ-сервисов возвращены в hosts"; /etc/init.d/dnsmasq restart >/dev/null 2>&1; }
+	return 0
+}
+
 _rb_geo_enable() {
 	local id line
 	if [ ! -x /usr/sbin/https-dns-proxy ]; then
@@ -7026,6 +7261,8 @@ _rb_geo_enable() {
 		if [ "$had_conf" = 0 ]; then
 			/etc/init.d/https-dns-proxy stop >/dev/null 2>&1
 			/etc/init.d/https-dns-proxy disable >/dev/null 2>&1
+			# Для страницы DoH шифрованного DNS сети нет: пакет — только для ИИ-сервисов.
+			touch "$DOH_OFF_FLAG"
 		fi
 		_rb_rpcd_ensure
 	fi
@@ -7040,6 +7277,7 @@ _rb_geo_enable() {
 		echo "GEO_URL='$(echo "$line" | cut -d'|' -f3)'"
 		echo "GEO_BOOT='$(echo "$line" | cut -d'|' -f4)'"
 	} > "$RB_GEO_RESOLVER"
+	_rb_geo_hosts_strip
 	_rb_own "svc zm-geodns"
 	/etc/init.d/zm-geodns enable >/dev/null 2>&1
 	/etc/init.d/zm-geodns restart >/dev/null 2>&1
@@ -7061,9 +7299,16 @@ _rb_geo_off() {
 	# Пакет удаляем, только если им не пользуется страница DoH: её служба включена — значит,
 	# человек настроил DoH поверх того, что поставили мы, и пакет теперь его.
 	if _rb_owns "pkg https-dns-proxy"; then
-		/etc/init.d/https-dns-proxy enabled 2>/dev/null || $DELETE https-dns-proxy >&2
+		# Служба включена — значит, пакетом пользуется страница DoH (она включает службу при
+		# выборе провайдера), и пакет теперь её.
+		if ! /etc/init.d/https-dns-proxy enabled 2>/dev/null || [ -f "$DOH_OFF_FLAG" ]; then
+			$DELETE https-dns-proxy >&2
+			rm -f "$DOH_OFF_FLAG"
+		fi
 		sed -i '/^pkg https-dns-proxy$/d' "$RB_OWNED"
 	fi
+	# Страница DoH «удалила» DNS, пока пакет держал автообход, — теперь пакета нет, флаг не нужен.
+	_doh_pkg || rm -f "$DOH_OFF_FLAG"
 	sed -i '/^geoblock|/d' "$RB_RESULTS" 2>/dev/null
 }
 
@@ -7071,6 +7316,7 @@ _rb_geo_disable() {
 	/etc/init.d/zm-geodns stop >/dev/null 2>&1
 	/etc/init.d/zm-geodns disable >/dev/null 2>&1
 	rm -f "$RB_GEO_RESOLVER"
+	_rb_geo_hosts_restore
 }
 
 _rb_geo_ok() {
@@ -7289,14 +7535,10 @@ do_redbtn_undo() {
 			if [ -f "$RB_UNDO/hosts" ]; then
 				for b in ai instagram ntc librusec telegram twitch scell spotify rutor; do
 					content="$(_hosts_block "$b")"
-					while IFS= read -r line; do
-						[ -n "$line" ] || continue
-						grep -Fxq "$line" "$RB_UNDO/hosts" && continue
-						grep -Fxv "$line" "$HOSTS_FILE" > "$HOSTS_FILE.zmtmp" && cat "$HOSTS_FILE.zmtmp" > "$HOSTS_FILE"
-						rm -f "$HOSTS_FILE.zmtmp"
-					done <<-HOSTBLOCK
-					$content
-					HOSTBLOCK
+					# Только строки, которых не было в снимке hosts до автообхода.
+					printf '%s\n' "$content" | awk -v snap="$RB_UNDO/hosts" 'function n(s) { gsub(/\r/, "", s); gsub(/[ \t]+/, " ", s); sub(/^ /, "", s); sub(/ $/, "", s); return s }
+						BEGIN { while ((getline l < snap) > 0) had[n(l)] = 1; close(snap) }
+						n($0) != "" && !(n($0) in had)' | _hosts_drop_lines
 				done
 				/etc/init.d/dnsmasq restart >/dev/null 2>&1
 			fi
@@ -7818,6 +8060,7 @@ case "$cmd" in
 	mixomo_warp_config_set)               mixomo_warp_config_set "$1" ;;
 	bytetube_installed)                   bytetube_installed ;;
 	health)                               health ;;
+	versions)                             versions_status "$1" ;;
 	redbtn_status)                        redbtn_status ;;
 	redbtn_action)                        redbtn_action "$1" "$2" ;;
 	redbtn_geo_watch)                     redbtn_geo_watch ;;
@@ -7912,6 +8155,7 @@ list_methods() {
 	json_add_object "mixomo_warp_config_set"; json_add_string "content" "string"; json_close_object
 	json_add_object "bytetube_installed";     json_close_object
 	json_add_object "health";                 json_close_object
+	json_add_object "versions";               json_add_string "action" "string"; json_close_object
 	json_add_object "redbtn_status";          json_close_object
 	json_add_object "redbtn_action";          json_add_string "action" "string"; json_add_string "mode" "string"; json_close_object
 	json_add_object "steer_status";           json_close_object
@@ -7998,6 +8242,7 @@ call_method() {
 		mixomo_warp_config_set) json_get_var content content; "$BACKEND" mixomo_warp_config_set "$content" ;;
 		bytetube_installed)      "$BACKEND" bytetube_installed ;;
 		health)                  "$BACKEND" health ;;
+		versions)                json_get_var action action; "$BACKEND" versions "$action" ;;
 		redbtn_status)           "$BACKEND" redbtn_status ;;
 		redbtn_action)           json_get_var action action; json_get_var mode mode; "$BACKEND" redbtn_action "$action" "$mode" ;;
 		steer_status)            "$BACKEND" steer_status ;;
@@ -8030,7 +8275,7 @@ cat > '/usr/share/rpcd/acl.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF'
 					"system_status", "mirror_status", "exclusions_status", "exclusions_file_get", "nfqws_opt_get", "tg_status", "tgws_status",
 					"test_status", "test_results", "zm_update_status", "mixomo_status", "mixomo_config_get",
 					"mixomo_warp_status",
-					"zapret_latest_version", "bytetube_installed", "health", "redbtn_status", "steer_status"
+					"zapret_latest_version", "bytetube_installed", "health", "versions", "redbtn_status", "steer_status"
 				],
 				"system": [ "info" ]
 			},
@@ -8089,7 +8334,7 @@ cat > '/usr/share/luci/menu.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF
 	},
 	"admin/services/zapret-manager/steer": {
 		"title": "Steer",
-		"order": 16,
+		"order": 26,
 		"action": { "type": "view", "path": "zapret-manager/steer" }
 	},
 	"admin/services/zapret-manager/strategy": {
@@ -8150,6 +8395,7 @@ var callRedbtnAction = rpc.declare({ object: 'zapret-manager', method: 'redbtn_a
 var callSteerStatus = rpc.declare({ object: 'zapret-manager', method: 'steer_status', expect: {} });
 var callSteerAction = rpc.declare({ object: 'zapret-manager', method: 'steer_action', params: ['action', 'mode'], expect: {} });
 var callSystemInfo = rpc.declare({ object: 'zapret-manager', method: 'system_info', expect: {} });
+var callVersions = rpc.declare({ object: 'zapret-manager', method: 'versions', params: ['action'], expect: {} });
 var callJobStatus = rpc.declare({ object: 'zapret-manager', method: 'job_status', params: ['job'], expect: {} });
 var callLogTail = rpc.declare({ object: 'zapret-manager', method: 'log_tail', params: ['job'], expect: {} });
 var callZapretAction = rpc.declare({ object: 'zapret-manager', method: 'zapret_action', params: ['action'], expect: {} });
@@ -8487,6 +8733,7 @@ return baseclass.extend({
 	redbtnStatus: callRedbtnStatus,
 	redbtnAction: callRedbtnAction,
 	steerStatus: callSteerStatus,
+	versions: callVersions,
 	steerAction: callSteerAction,
 	boardInfo: callBoardInfo,
 	parseSize: parseSize,
@@ -8537,6 +8784,14 @@ return view.extend({
 			return E('div', { 'class': 'zm-row' }, [ E('span', { 'class': 'zm-label' }, label), node ]);
 		}
 
+		function dohNames(doh) {
+			if (doh.current) return DOH_LABELS[doh.current] || doh.current;
+			var names = (doh.resolvers || []).map(function(r) {
+				return DOH_LABELS[r.provider] || (String(r.url || '').replace(/^https?:\/\//, '').split('/')[0]) || '';
+			}).filter(function(n) { return n; });
+			return names.length ? names.join(' + ') : 'провайдер не определён';
+		}
+
 		function st(h, key, fallback) {
 			return (h && typeof h[key] === 'number') ? h[key] : fallback;
 		}
@@ -8555,7 +8810,7 @@ return view.extend({
 			var dohSt = st(h, 'doh', doh.installed ? 1 : 0);
 			var dohNode = zm.stateBadge(dohSt);
 			if (dohSt !== 0) dohNode = E('span', { 'style': 'display:inline-flex; align-items:center; gap:8px; flex-wrap:wrap' }, [
-				dohNode, E('span', {}, DOH_LABELS[doh.current] || doh.current || 'провайдер не определён')
+				dohNode, E('span', {}, dohNames(doh))
 			]);
 
 			var items = [];
@@ -8646,6 +8901,53 @@ return view.extend({
 			});
 		}
 
+		// ── версии пакетов ──
+		var verEl = E('div', {});
+		var verTimer = null, verData = null;
+
+		function renderVersions() {
+			verEl.innerHTML = '';
+			var d = verData || { items: [], pending: true };
+			var items = d.items || [];
+			var card = E('div', { 'class': 'zm-card' }, [ E('h3', {}, 'Версии') ]);
+			if (!items.length) {
+				card.appendChild(E('p', { 'class': 'zm-hint' }, d.pending ? 'Проверяем версии установленных пакетов…' : 'Пакеты Zapret Manager пока не установлены.'));
+			} else {
+				var rows = items.map(function(it) {
+					var fresh = !it.latest || it.latest === it.installed;
+					return row(it.name, E('span', { 'style': 'display:inline-flex; align-items:center; gap:8px; flex-wrap:wrap' }, [
+						E('span', {}, it.installed),
+						fresh ? E('span', { 'class': 'zm-badge zm-ok' }, [ E('span', { 'class': 'zm-dot' }), 'актуальна' ])
+							: E('span', { 'class': 'zm-badge zm-warn' }, [ E('span', { 'class': 'zm-dot' }), 'доступна ' + it.latest ])
+					]));
+				});
+				var half = Math.ceil(rows.length / 2);
+				card.appendChild(E('div', { 'class': 'bt-cols' }, [
+					E('div', { 'class': 'bt-col' }, rows.slice(0, half)),
+					E('div', { 'class': 'bt-col' }, rows.slice(half))
+				]));
+			}
+			card.appendChild(E('div', { 'class': 'zm-actions' }, [
+				E('button', {
+					'class': 'cbi-button cbi-button-action',
+					'disabled': d.pending ? '' : null,
+					'click': function() { loadVersions('refresh'); }
+				}, d.pending ? 'Проверяем…' : 'Проверить снова'),
+				d.ts ? E('span', { 'class': 'zm-hint', 'style': 'margin:0' }, 'Проверено: ' + d.ts) : ''
+			]));
+			verEl.appendChild(card);
+		}
+
+		function loadVersions(action) {
+			if (verTimer) { clearTimeout(verTimer); verTimer = null; }
+			if (action && verData) { verData.pending = true; renderVersions(); }
+			(zm.versions ? zm.versions(action || '') : Promise.resolve({ items: [] })).then(function(res) {
+				verData = res || { items: [] };
+				renderVersions();
+				if (verData.pending && document.body.contains(verEl)) verTimer = setTimeout(function() { loadVersions(''); }, 3000);
+			}).catch(function() { verData = { items: (verData && verData.items) || [] }; renderVersions(); });
+		}
+
 		overviewEl.appendChild(renderOverview(data, dohData, hostsData, sysData, healthData));
 		renderCards();
 		var updateEl = E('div', {});
@@ -8661,6 +8963,9 @@ return view.extend({
 		]));
 		wrap.appendChild(overviewEl);
 		wrap.appendChild(cards);
+		wrap.appendChild(verEl);
+		renderVersions();
+		loadVersions('');
 
 		this.refreshOverview = refreshOverview;
 
@@ -8713,6 +9018,24 @@ var PROVIDERS = [
 	{ id: 'geohide_us', label: 'GeoHide US' }
 ];
 
+function label(id) {
+	for (var i = 0; i < PROVIDERS.length; i++) if (PROVIDERS[i].id === id) return PROVIDERS[i].label;
+	return '';
+}
+
+function badge(cls, text) {
+	return E('span', { 'class': 'zm-badge ' + cls }, [ E('span', { 'class': 'zm-dot' }), text ]);
+}
+
+function row(l, node) {
+	return E('div', { 'class': 'zm-row' }, [ E('span', { 'class': 'zm-label' }, l), node ]);
+}
+
+function host(url) {
+	var m = /^https?:\/\/([^\/]+)/.exec(url || '');
+	return m ? m[1] : url;
+}
+
 return view.extend({
 	load: function() {
 		zm.injectCss();
@@ -8720,94 +9043,90 @@ return view.extend({
 	},
 
 	render: function(data) {
+		data = data || {};
 		var wrap = E('div', { 'class': 'zm-wrap' });
+		var card = E('div', { 'class': 'zm-card' });
 		var logEl = E('pre', { 'class': 'zm-log' });
-		var bannerEl = E('div', {});
 		var busy = false;
 
-		var grid = E('div', { 'class': 'zm-grid' });
-		function renderGrid() {
-			grid.innerHTML = '';
-			PROVIDERS.forEach(function(p) {
-				grid.appendChild(E('div', {
-					'class': 'zm-tile' + (data.current === p.id ? ' zm-active' : ''),
-					'click': function() {
-						if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
-						busy = true;
-						zm.toast('Меняем DNS на ' + p.label, 'warning');
-						zm.dohSet(p.id).then(function(res) {
-							busy = false;
-							if (res.error) { zm.toast(res.error, 'error'); return; }
-							zm.toast(p.label + ' применён', 'info');
-							zm.dohStatus().then(function(res2) { data = res2; renderGrid(); });
-						}).catch(function() { busy = false; });
-					}
-				}, p.label));
-			});
+		function refresh() {
+			return zm.dohStatus().then(function(res) { data = res || {}; render(); });
 		}
-		renderGrid();
 
-		var installBtn = E('button', {
-			'class': 'cbi-button cbi-button-positive',
-			'click': function() {
-				if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
-				zm.toast('Устанавливаем DNS over HTTPS', 'warning');
-				busy = true;
-				zm.dohInstall().then(function(res) {
-					if (res.error) { busy = false; zm.toast(res.error, 'error'); return; }
-					if (res.started) {
-						zm.pollJob('doh_install', logEl, function(ok) {
-							busy = false;
-							zm.toast(ok ? 'DNS over HTTPS установлен' : 'Ошибка установки', ok ? 'info' : 'error');
-							if (ok) {
-								bannerEl.innerHTML = '';
-								bannerEl.appendChild(zm.refreshBanner('Пункт меню DNS over HTTPS в LuCI мог измениться — выйдите и зайдите заново.'));
-							}
-						});
-					} else {
-						busy = false;
-					}
-				}).catch(function() { busy = false; });
+		function job(call, name, startText, okText, errText) {
+			if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+			zm.toast(startText, 'warning');
+			busy = true;
+			call().then(function(res) {
+				if (res.error) { busy = false; zm.toast(res.error, 'error'); return; }
+				if (!res.started) { busy = false; return; }
+				zm.pollJob(name, logEl, function(ok) {
+					busy = false;
+					zm.toast(ok ? okText : errText, ok ? 'info' : 'error');
+					refresh();
+				});
+			}).catch(function() { busy = false; });
+		}
+
+		function render() {
+			card.innerHTML = '';
+			card.appendChild(E('h3', {}, 'DNS over HTTPS'));
+			card.appendChild(E('p', { 'class': 'zm-hint' }, 'Шифрованный DNS для всей сети: запросы устройств уходят к выбранному провайдеру по HTTPS, и провайдер интернета их не видит и не подменяет.'));
+			card.appendChild(row('Пакет', data.installed ? badge('zm-ok', 'установлен') : badge('zm-off', 'не установлен')));
+
+			var list = data.resolvers || [];
+			if (data.installed) {
+				card.appendChild(row('Служба', data.running ? badge('zm-ok', 'работает') : badge('zm-bad', 'остановлена')));
+				// Что на самом деле записано в /etc/config/https-dns-proxy.
+				if (!list.length) card.appendChild(row('Сейчас используется', E('span', {}, 'резолвер не выбран')));
+				list.forEach(function(r, i) {
+					var name = label(r.provider) || host(r.url);
+					card.appendChild(row(i === 0 ? (list.length > 1 ? 'Сейчас используются' : 'Сейчас используется') : '', E('span', { 'style': 'overflow-wrap:anywhere' }, [
+						E('b', {}, name), ' · ' + r.url + (r.port ? ' · порт ' + r.port : '')
+					])));
+				});
+				card.appendChild(row('Перехват DNS устройств', data.force_dns
+					? badge('zm-ok', 'включён')
+					: badge('zm-off', data.steer_active ? 'выключен — работает Steer' : 'выключен')));
 			}
-		}, 'Установить DNS over HTTPS');
 
-		var removeBtn = E('button', {
-			'class': 'cbi-button cbi-button-remove',
-			'click': function() {
-				if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
-				zm.toast('Удаляем DNS over HTTPS', 'warning');
-				busy = true;
-				zm.dohRemove().then(function(res) {
-					if (res.error) { busy = false; zm.toast(res.error, 'error'); return; }
-					if (res.started) {
-						zm.pollJob('doh_remove', logEl, function(ok) {
-							busy = false;
-							zm.toast(ok ? 'DNS over HTTPS удалён' : 'Ошибка удаления', ok ? 'info' : 'error');
-							if (ok) {
-								bannerEl.innerHTML = '';
-								bannerEl.appendChild(zm.refreshBanner('Пункт меню DNS over HTTPS в LuCI мог измениться — выйдите и зайдите заново.'));
-							}
-						});
-					} else {
-						busy = false;
-					}
-				}).catch(function() { busy = false; });
+			card.appendChild(E('div', { 'class': 'zm-actions' }, data.installed
+				? [ E('button', { 'class': 'cbi-button cbi-button-remove', 'click': function() {
+					job(zm.dohRemove, 'doh_remove', 'Удаляем DNS over HTTPS', 'DNS over HTTPS удалён', 'Ошибка удаления');
+				} }, 'Удалить') ]
+				: [ E('button', { 'class': 'cbi-button cbi-button-positive', 'click': function() {
+					job(zm.dohInstall, 'doh_install', 'Устанавливаем DNS over HTTPS', 'DNS over HTTPS установлен — выберите провайдера', 'Ошибка установки');
+				} }, 'Установить DNS over HTTPS') ]));
+
+			if (data.installed) {
+				card.appendChild(E('h4', { 'style': 'margin:14px 0 8px' }, 'Провайдер'));
+				// Подсвечивается только тот, что стоит на самом деле и один: при двух и больше
+				// резолверах (так пакет настроен из коробки) выбор заменит их одним.
+				card.appendChild(E('div', { 'class': 'zm-grid' }, PROVIDERS.map(function(p) {
+					return E('div', {
+						'class': 'zm-tile' + (data.current === p.id ? ' zm-active' : ''),
+						'click': function() {
+							if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+							busy = true;
+							zm.toast('Меняем DNS на ' + p.label, 'warning');
+							zm.dohSet(p.id).then(function(res) {
+								busy = false;
+								if (res.error) { zm.toast(res.error, 'error'); return; }
+								zm.toast(p.label + ' применён', 'info');
+								refresh();
+							}).catch(function() { busy = false; });
+						}
+					}, p.label);
+				})));
+				if (list.length > 1) card.appendChild(E('p', { 'class': 'zm-hint' }, 'Сейчас настроено несколько резолверов сразу, поэтому ни одна кнопка не подсвечена. Выбор провайдера заменит их одним.'));
+				else if (list.length === 1 && !data.current) card.appendChild(E('p', { 'class': 'zm-hint' }, 'Сейчас стоит резолвер не из списка — он настроен вручную. Выбор провайдера заменит его.'));
 			}
-		}, 'Удалить');
+			if (data.geo_uses_pkg) card.appendChild(E('p', { 'class': 'zm-hint' }, 'Программой https-dns-proxy пользуется и DNS для ИИ-сервисов автообхода — отдельным экземпляром на своём порту, он с этой настройкой не пересекается. При удалении пакет останется, выключится только DNS для сети.'));
+			card.appendChild(logEl);
+		}
 
-		var card = E('div', { 'class': 'zm-card' }, [
-			E('h3', {}, 'DNS over HTTPS'),
-			E('div', { 'class': 'zm-row' }, [
-				E('span', { 'class': 'zm-label' }, 'Пакет'),
-				zm.badge(data.installed === true, 'установлен', 'не установлен')
-			]),
-			E('div', { 'class': 'zm-actions' }, data.installed ? [ removeBtn ] : [ installBtn ]),
-			grid,
-			logEl
-		]);
-
+		render();
 		wrap.appendChild(card);
-		wrap.appendChild(bannerEl);
 		return wrap;
 	}
 });
@@ -8871,12 +9190,8 @@ var VIDEO_BASES = [
 	'https://cdn.jsdelivr.net/gh/StressOzz/Zapret-Manager@main/files/AutoBypass/',
 	'https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/files/AutoBypass/'
 ];
-// Запас для стандартного ролика: он же лежит в репозитории автора кнопки. Плеер берёт первый
-// источник, который открылся, так что пока на нашем сервере файла нет, играет этот.
-var VIDEO_SPARE = [
-	'https://cdn.jsdelivr.net/gh/xyzmean/Zapret-Manager-Exp@main/files/AutoBypass/',
-	'https://raw.githubusercontent.com/xyzmean/Zapret-Manager-Exp/main/files/AutoBypass/'
-];
+// Стандартный ролик — с сайта StressKVN, остальные из каталога — с сервера Zapret Manager.
+var VIDEO_DEFAULT_URL = 'https://stresskvn.lol/video.mp4';
 var VIDEO_DEFAULT = { file: 'wait.mp4', name: 'Стандартное', poster: 'poster.jpg' };
 
 function badge(cls, text) {
@@ -8972,9 +9287,8 @@ return view.extend({
 			if (pref === 'off') return null;
 			if (pref.indexOf('url:') === 0) return { srcs: [ pref.slice(4) ], poster: '' };
 			var it = catalogItem(pref.indexOf('cat:') === 0 ? pref.slice(4) : VIDEO_DEFAULT.file);
-			var bases = it.file === VIDEO_DEFAULT.file ? VIDEO_BASES.concat(VIDEO_SPARE) : VIDEO_BASES;
 			return {
-				srcs: bases.map(function(b) { return b + it.file; }),
+				srcs: it.file === VIDEO_DEFAULT.file ? [ VIDEO_DEFAULT_URL ] : VIDEO_BASES.map(function(b) { return b + it.file; }),
 				// Постер — только из каталога, который реально пришёл с сервера: иначе вместо
 				// заставки была бы битая картинка.
 				poster: (videos && it.poster) ? VIDEO_BASES[0] + it.poster : ''
@@ -9440,6 +9754,8 @@ return view.extend({
 		var dnsCard = E('div', {});
 		var listCard = E('div', { 'class': 'zm-card' });
 		var checkCard = E('div', { 'class': 'zm-card' });
+		var domCard = E('div', { 'class': 'zm-card' });
+		var domSel = null, domData = null, domBusy = false, domEditor = null;
 		var warpCard = E('div', { 'class': 'zm-card' });
 		var autoCard = E('div', { 'class': 'zm-card' });
 
@@ -9457,6 +9773,7 @@ return view.extend({
 			else if (lastAction === 'install') msg = 'Steer установлен и работает';
 			else if (lastAction === 'remove') msg = 'Steer удалён';
 			else if (lastAction === 'stop') msg = 'Steer выключен — всё идёт напрямую';
+			else if (lastAction === 'domlist') msg = 'Готово, новый список доменов работает';
 			else if (lastAction === 'lists' || lastAction === 'start') msg = 'Готово, выбор применён';
 			zm.toast(msg, ok ? 'info' : 'error');
 			var done = lastAction;
@@ -9644,6 +9961,70 @@ return view.extend({
 			}
 		}
 
+		// ── списки доменов ──
+
+		var SRC_TEXT = { user: 'свой список', sets: 'скачанный набор', package: 'список из пакета' };
+
+		function loadDom(id) {
+			domSel = id; domData = null; domBusy = true;
+			renderDom();
+			zm.steerAction('list_get', id).then(function(res) {
+				domBusy = false;
+				if (res.error) { zm.toast(res.error, 'error'); domData = null; renderDom(); return; }
+				domData = res;
+				renderDom();
+			}).catch(function() { domBusy = false; renderDom(); zm.toast('Роутер не ответил', 'error'); });
+		}
+
+		function saveDom(action, arg, okText) {
+			if (busy) { zm.toast('Дождитесь окончания текущей операции', 'warning'); return; }
+			zm.steerAction(action, arg).then(function(res) {
+				if (res.error) { zm.toast(res.error, 'error'); return; }
+				if (res.saved) { zm.toast(okText + (res.count ? ' (' + res.count + ')' : ''), 'info'); loadDom(domSel); return; }
+				// Сервис сейчас идёт через WARP — правила применяются задачей, следим за журналом.
+				zm.toast(okText + ' — применяем правила', 'info');
+				lastAction = 'domlist';
+				data.running = true;
+				data.phase = 'rules';
+				follow();
+				loadDom(domSel);
+			}).catch(function() { zm.toast('Роутер не ответил', 'error'); });
+		}
+
+		function renderDom() {
+			domCard.innerHTML = '';
+			domCard.style.display = data.blocker ? 'none' : '';
+			if (data.blocker) return;
+			domCard.appendChild(E('h3', {}, 'Списки доменов'));
+			domCard.appendChild(E('p', { 'class': 'zm-hint' }, 'По этим доменам трафик сервиса уходит в туннель. Выберите сервис, чтобы посмотреть или поправить его список: свой список заменит стандартный и сохранится при обновлениях.'));
+			var list = data.services || [];
+			domCard.appendChild(E('div', { 'class': 'zm-grid' }, list.map(function(s) {
+				return E('div', {
+					'class': 'zm-tile' + (domSel === s.id ? ' zm-active' : ''),
+					'click': function() { if (domSel !== s.id) loadDom(s.id); }
+				}, s.name);
+			})));
+			if (!domSel) return;
+			if (domBusy) { domCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Загружаем список…')); return; }
+			if (!domData) return;
+			domCard.appendChild(row('Источник', domData.source === 'user' ? badge('zm-warn', SRC_TEXT.user) : badge('zm-ok', SRC_TEXT[domData.source] || domData.source)));
+			domCard.appendChild(row('Доменов', E('span', {}, String(domData.count || 0))));
+			domEditor = E('textarea', { 'class': 'zm-config-editor', 'spellcheck': 'false', 'style': 'min-height:260px' });
+			domEditor.value = domData.content || '';
+			domCard.appendChild(domEditor);
+			var acts = [
+				E('button', { 'class': 'cbi-button cbi-button-positive', 'click': function() {
+					saveDom('list_set', domSel + '|' + domEditor.value, 'Список сохранён');
+				} }, 'Сохранить')
+			];
+			if (domData.source === 'user') acts.push(E('button', { 'class': 'cbi-button cbi-button-remove', 'click': function() {
+				if (!confirm('Вернуть стандартный список для «' + domData.name + '»?\n\nВаш список будет удалён.')) return;
+				saveDom('list_reset', domSel, 'Стандартный список возвращён');
+			} }, 'Вернуть стандартный'));
+			domCard.appendChild(E('div', { 'class': 'zm-actions' }, acts));
+			domCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Один домен на строку, поддомены включаются сами (example.com — это и www.example.com). Строки, не похожие на домен, при сохранении отбрасываются. Если сервис сейчас идёт через WARP, правила применятся сразу.'));
+		}
+
 		// ── проверка ──
 
 		function runDiag(quiet) {
@@ -9812,13 +10193,14 @@ return view.extend({
 			renderMain();
 			renderDns();
 			renderLists();
+			renderDom();
 			renderCheck();
 			renderWarp();
 			renderAuto();
 		}
 
 		renderAll();
-		[ mainCard, logEl, dnsCard, listCard, checkCard, warpCard, autoCard ].forEach(function(n) { wrap.appendChild(n); });
+		[ mainCard, logEl, dnsCard, listCard, domCard, checkCard, warpCard, autoCard ].forEach(function(n) { wrap.appendChild(n); });
 
 		if (data.running) { lastAction = data.phase === 'remove' ? 'remove' : [ 'install', 'pkgs', 'awg', 'keys', 'tunnel' ].indexOf(data.phase) >= 0 ? 'install' : 'apply'; follow(); }
 		else if (data.installed && !data.stopped && (parseInt(data.channels, 10) || 0) > 0) runDiag(true);
@@ -10645,8 +11027,7 @@ var LABELS = {
 	scell: 'Supercell (Clash, Brawl Stars)',
 	githubraw: 'githubusercontent.com',
 	github: 'GitHub',
-	tapeop: 'tapeop.dev',
-	roblox: 'Roblox'
+	tapeop: 'tapeop.dev'
 };
 
 return view.extend({
@@ -10673,13 +11054,16 @@ return view.extend({
 							busy = false;
 							if (res.error) { zm.toast(res.error, 'error'); return; }
 							zm.toast((LABELS[it.id] || it.id) + (res.enabled ? ' включён' : ' выключен'), 'info');
-							zm.hostsStatus().then(function(r) { renderGrid(r.items); });
+							zm.hostsStatus().then(function(r) { aiGeo = !!r.ai_geo; renderGrid(r.items); });
 						}).catch(function() { busy = false; });
 					}
-				}, LABELS[it.id] || it.id));
+				}, (it.id === 'ai' && aiGeo && !it.enabled)
+					? [ LABELS[it.id], E('div', { 'style': 'font-size:12px; font-weight:500; opacity:.7; margin-top:4px' }, 'работают через DNS автообхода') ]
+					: LABELS[it.id] || it.id));
 			});
 		}
 
+		var aiGeo = !!data.ai_geo;
 		renderGrid(data.items);
 
 		var card = E('div', { 'class': 'zm-card' }, [
@@ -10722,6 +11106,7 @@ return view.extend({
 		function refreshAll() {
 			zm.hostsStatus().then(function(res) {
 				data = res;
+				aiGeo = !!res.ai_geo;
 				renderGrid(res.items);
 				renderGeoGrid();
 			});
@@ -12605,9 +12990,9 @@ html.zm-theme-dark .zm-config-editor { border-color: rgba(255,255,255,.14); }
 .zm-toast {
 	display: flex; align-items: flex-start; gap: 14px;
 	background: #1c2128; color: #e6edf3;
-	padding: 22px 26px; border-radius: 14px;
+	padding: 24px 28px; border-radius: 16px;
 	box-shadow: 0 10px 40px rgba(0,0,0,.4);
-	font-size: 17px; line-height: 1.5; font-weight: 500; cursor: pointer;
+	font-size: 18px; line-height: 1.5; font-weight: 500; cursor: pointer;
 	opacity: 0; transform: translateX(24px);
 	transition: opacity .22s ease, transform .22s ease;
 	border-left: 6px solid #1a7f37;
@@ -12615,11 +13000,18 @@ html.zm-theme-dark .zm-config-editor { border-color: rgba(255,255,255,.14); }
 .zm-toast-show { opacity: 1; transform: translateX(0); }
 .zm-toast-error { border-left-color: #cf222e; }
 .zm-toast-warning { border-left-color: #9a6700; }
-.zm-toast-icon { flex-shrink: 0; font-weight: 700; font-size: 22px; line-height: 1.3; }
+.zm-toast-icon { flex-shrink: 0; font-weight: 700; font-size: 24px; line-height: 1.3; }
 .zm-toast-info .zm-toast-icon { color: #3fb950; }
 .zm-toast-error .zm-toast-icon { color: #ff7b72; }
 .zm-toast-warning .zm-toast-icon { color: #e3b341; }
 .zm-toast-text { overflow-wrap: anywhere; }
+html.zm-theme-dark .zm-toast {
+	background: #ffffff; color: #1f2328;
+	box-shadow: 0 12px 44px rgba(0,0,0,.6), 0 0 0 1px rgba(255,255,255,.1);
+}
+html.zm-theme-dark .zm-toast-info .zm-toast-icon { color: #1a7f37; }
+html.zm-theme-dark .zm-toast-error .zm-toast-icon { color: #cf222e; }
+html.zm-theme-dark .zm-toast-warning .zm-toast-icon { color: #9a6700; }
 
 .zm-tg-link-card {
 	background: rgba(26,127,55,.06);
@@ -13817,9 +14209,9 @@ html.zm-theme-dark .zm-config-editor { border-color: rgba(255,255,255,.14); }
 .zm-toast {
 	display: flex; align-items: flex-start; gap: 14px;
 	background: #1c2128; color: #e6edf3;
-	padding: 22px 26px; border-radius: 14px;
+	padding: 24px 28px; border-radius: 16px;
 	box-shadow: 0 10px 40px rgba(0,0,0,.4);
-	font-size: 17px; line-height: 1.5; font-weight: 500; cursor: pointer;
+	font-size: 18px; line-height: 1.5; font-weight: 500; cursor: pointer;
 	opacity: 0; transform: translateX(24px);
 	transition: opacity .22s ease, transform .22s ease;
 	border-left: 6px solid #1a7f37;
@@ -13827,11 +14219,18 @@ html.zm-theme-dark .zm-config-editor { border-color: rgba(255,255,255,.14); }
 .zm-toast-show { opacity: 1; transform: translateX(0); }
 .zm-toast-error { border-left-color: #cf222e; }
 .zm-toast-warning { border-left-color: #9a6700; }
-.zm-toast-icon { flex-shrink: 0; font-weight: 700; font-size: 22px; line-height: 1.3; }
+.zm-toast-icon { flex-shrink: 0; font-weight: 700; font-size: 24px; line-height: 1.3; }
 .zm-toast-info .zm-toast-icon { color: #3fb950; }
 .zm-toast-error .zm-toast-icon { color: #ff7b72; }
 .zm-toast-warning .zm-toast-icon { color: #e3b341; }
 .zm-toast-text { overflow-wrap: anywhere; }
+html.zm-theme-dark .zm-toast {
+	background: #ffffff; color: #1f2328;
+	box-shadow: 0 12px 44px rgba(0,0,0,.6), 0 0 0 1px rgba(255,255,255,.1);
+}
+html.zm-theme-dark .zm-toast-info .zm-toast-icon { color: #1a7f37; }
+html.zm-theme-dark .zm-toast-error .zm-toast-icon { color: #cf222e; }
+html.zm-theme-dark .zm-toast-warning .zm-toast-icon { color: #9a6700; }
 
 .zm-current-banner {
 	display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
@@ -15175,9 +15574,9 @@ function toggleTheme() {
 var ROUTES = [
 	{ id: 'dashboard', title: 'Дашборд', sub: 'Состояние всех компонентов', icon: 'dashboard', group: 'Обзор' },
 	{ id: 'redbtn', title: 'Автообход', sub: 'Роутер сам подберёт обход для каждого сервиса', icon: 'wand', group: 'Обход блокировок', dot: 'redbtn' },
-	{ id: 'steer', title: 'Steer', sub: 'Выбранные сервисы через туннель WARP', icon: 'route', group: 'Обход блокировок', dot: 'steer' },
 	{ id: 'strategy', title: 'Zapret', sub: 'Стратегии, тесты, YouTube, игры, Discord и исключения', icon: 'shield', group: 'Обход блокировок', dot: 'zapret' },
 	{ id: 'zapret2', title: 'Zapret2', sub: 'Установка и управление Zapret2', icon: 'bolt', group: 'Обход блокировок', dot: 'zapret2' },
+	{ id: 'steer', title: 'Steer', sub: 'Выбранные сервисы через туннель WARP', icon: 'route', group: 'Обход блокировок', dot: 'steer' },
 	{ id: 'bytetube', title: 'ByeTube', sub: 'YouTube через ByeDPI', icon: 'play', group: 'Обход блокировок', dot: 'bytetube' },
 	{ id: 'tgproxy', title: 'TG WS Proxy', sub: 'Прокси для Telegram', icon: 'send', group: 'Обход блокировок', dot: 'tg' },
 	{ id: 'mixomo', title: 'Mixomo', sub: 'Mihomo, MagiTrickle и WARP', icon: 'layers', group: 'Обход блокировок', dot: 'mixomo' },
@@ -16396,35 +16795,45 @@ html[data-theme="dark"] #zmw-view .zm-tile.zm-active::before { color: #a594ff; }
 /* ───────────── Тосты ───────────── */
 
 .zmw-body #zm-toast-container {
-	top: auto; bottom: 24px; right: 24px; left: auto;
-	gap: 10px; max-width: 420px; width: calc(100% - 48px);
+	top: auto; bottom: 28px; right: 28px; left: auto;
+	gap: 12px; max-width: 520px; width: calc(100% - 56px);
 	align-items: flex-end;
 	z-index: 400;
 	pointer-events: none;
 }
+/* Цвет тоста противоположен теме: в тёмной — светлый, в светлой — тёмный, чтобы его было сразу видно. */
 .zmw-body .zm-toast {
+	--toast-bg: #161b26; --toast-fg: #f4f6fb; --toast-border: rgba(255,255,255,.08);
 	pointer-events: auto;
-	align-items: center; gap: 12px;
+	align-items: center; gap: 16px;
 	width: 100%;
-	padding: 14px 16px 14px 14px;
-	border-radius: 16px;
-	border: 1px solid var(--border-2); border-left: 1px solid var(--border-2);
-	background: var(--surface-solid);
-	color: var(--text);
-	box-shadow: var(--shadow-lg);
-	font-size: 14px; font-weight: 550; line-height: 1.45;
+	padding: 20px 24px 20px 20px;
+	border-radius: 18px;
+	border: 1px solid var(--toast-border); border-left: 6px solid var(--ok);
+	background: var(--toast-bg);
+	color: var(--toast-fg);
+	box-shadow: 0 18px 50px rgba(0,0,0,.35), 0 2px 8px rgba(0,0,0,.2);
+	font-size: 16.5px; font-weight: 600; line-height: 1.45;
 	opacity: 0; transform: translateY(16px) scale(.98);
 	transition: opacity .25s ease, transform .3s cubic-bezier(.2,.8,.2,1);
 }
+html.zm-theme-dark .zmw-body .zm-toast, html.zm-theme-dark.zmw-body .zm-toast {
+	--toast-bg: #ffffff; --toast-fg: #141821; --toast-border: rgba(0,0,0,.06);
+	box-shadow: 0 18px 50px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.08);
+}
+.zmw-body .zm-toast-error { border-left-color: var(--bad); }
+.zmw-body .zm-toast-warning { border-left-color: var(--warn); }
 .zmw-body .zm-toast.zm-toast-show { opacity: 1; transform: none; }
 .zmw-body .zm-toast-icon {
-	width: 30px; height: 30px; border-radius: 10px;
+	width: 38px; height: 38px; border-radius: 12px;
 	display: grid; place-items: center; flex-shrink: 0;
-	font-size: 14px; font-weight: 800; line-height: 1;
+	font-size: 18px; font-weight: 800; line-height: 1;
 }
-.zmw-body .zm-toast-info .zm-toast-icon { background: var(--ok-bg); color: var(--ok); }
-.zmw-body .zm-toast-error .zm-toast-icon { background: var(--bad-bg); color: var(--bad); }
-.zmw-body .zm-toast-warning .zm-toast-icon { background: var(--warn-bg); color: var(--warn); }
+html body.zmw-body .zm-toast .zm-toast-icon { color: #fff; }
+html body.zmw-body .zm-toast { background: var(--toast-bg); color: var(--toast-fg); }
+.zmw-body .zm-toast-info .zm-toast-icon { background: #1f9d55; }
+.zmw-body .zm-toast-error .zm-toast-icon { background: #d93b3b; }
+.zmw-body .zm-toast-warning .zm-toast-icon { background: #d08a00; }
 
 /* ───────────── Адаптив ───────────── */
 
