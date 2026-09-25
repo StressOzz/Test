@@ -2,7 +2,7 @@
 # =========================================
 # Zapret Manager by StressOzz
 # =========================================
-ZAPRET_MANAGER_VERSION="9.89"; STR_VERSION_AUTOINSTALL="v7"
+ZAPRET_MANAGER_VERSION="9.90"; STR_VERSION_AUTOINSTALL="v7"
 GREEN="\033[1;32m"; RED="\033[1;31m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
 
 GH_RAW_HOST="https://raw.githubusercontent.com"; GH_MAIN_HOST="https://github.com"
@@ -1670,8 +1670,7 @@ fi
         fi
         pkg_is_installed netshift && PODKOP_VER && echo -e "${YELLOW}NetShift:${NC}            $PODKOP_STATUS"
         if web_is_enabled; then echo -e "${YELLOW}Доступ из браузера:${NC}  $LAN_IP:7681"; fi
-        if [ -e "$LUCI_EDITION" ]; then zm_luci_state; if [ "$ZML_ACT" = update ]; then echo -e "${YELLOW}WEB + LuCI:${NC}          ${RED}${ZML_INST:-?} (доступно обновление $ZML_LAST)${NC}"; else echo -e "${YELLOW}WEB + LuCI:${NC}          ${GREEN}${ZML_INST:-установлен}${NC}"; fi; fi
-        if [ -f /www/zm-webui.html ] && uci -q get uhttpd.zmweb >/dev/null 2>&1; then ZMW_PORT=$(uci -q get uhttpd.zmweb.listen_http | awk '{print $1}' | sed 's/.*://'); echo -e "${YELLOW}Web-панель:${NC}          http://$LAN_IP:${ZMW_PORT:-7788}"; fi
+        if [ -e "$LUCI_EDITION" ]; then zm_luci_state; ZMW_URL=""; if [ -f /www/zm-webui.html ] && uci -q get uhttpd.zmweb >/dev/null 2>&1; then ZMW_PORT=$(uci -q get uhttpd.zmweb.listen_http | awk '{print $1}' | sed 's/.*://'); ZMW_URL=" ${NC}/ http://$LAN_IP:${ZMW_PORT:-7788}"; fi; if [ "$ZML_ACT" = update ]; then echo -e "${YELLOW}WEB + LuCI:${NC}          ${RED}${ZML_INST:-?} (доступно обновление $ZML_LAST)$ZMW_URL${NC}"; else echo -e "${YELLOW}WEB + LuCI:${NC}          ${GREEN}${ZML_INST:-установлен}$ZMW_URL${NC}"; fi; fi
 
 		
         quic_is_blocked && if quic_is_blocked; then echo -e "${YELLOW}Блокировка QUIC:${NC}     ${GREEN}включена${NC}"; fi
@@ -1801,7 +1800,7 @@ trap '/usr/bin/bytetube test stop >/dev/null 2>&1' INT; sleep 1; while :; do c=$
 [ -s "$res" ] || { echo -e "\n${RED}Результатов нет${NC}\n"; PAUSE; return; }; echo -e "\n${MAGENTA}Результаты (лучшие сверху)${NC}"; while IFS= read -r line; do case "$line" in "Контрольный тест"*) echo -e "${YELLOW}$line${NC}"; continue ;; esac
 i=$((i + 1)); [ "$i" -gt 10 ] && break; eval "BT_R_$i=\${line% → *}"; echo -e "${CYAN}$i) ${GREEN}${line##* → }${NC} ${line% → *}"; done < "$res"
 echo -ne "\n${YELLOW}Номер стратегии для применения (Enter — не применять):${NC} "; read sel; case "$sel" in ''|*[!0-9]*) return ;; esac; [ "$sel" -ge 1 ] && [ "$sel" -le "$i" ] || return; eval "line=\$BT_R_$sel"; echo; bt_apply "$line"; PAUSE; }
-BYETUBE_MENU() { local ST cur; while true; do clear; echo -e "${MAGENTA}Меню ByeTube${NC}\n${NC}YouTube через ByeDPI для всех устройств сети\n"; echo -e "${YELLOW}ByeTube:${NC}             $(bt_state_line)"
+BYETUBE_MENU() { local ST cur; while true; do clear; echo -e "${MAGENTA}Меню ByeTube${NC}\n"; echo -e "${YELLOW}ByeTube:${NC}             $(bt_state_line)"
 if bt_installed; then cur=$(uci -q get bytetube.main.byedpi_opts); [ ${#cur} -gt 70 ] && cur="$(printf '%s' "$cur" | cut -c1-70)..."; echo -e "${YELLOW}Стратегия:${NC}           $cur"; ST=$(/usr/bin/bytetube status 2>/dev/null)
 echo -e "${YELLOW}IP YouTube в наборах:${NC} $(jsonfilter -s "$ST" -e '@.ips4' 2>/dev/null || echo 0) IPv4 / $(jsonfilter -s "$ST" -e '@.ips6' 2>/dev/null || echo 0) IPv6"; [ -f "$BT_TEST_DIR/results.txt" ] && echo -e "${YELLOW}Подбор стратегии:${NC}    ${GREEN}есть результаты${NC}"; fi
 if bt_installed; then echo -e "\n${CYAN}1) ${GREEN}Обновить ${NC}ByeTube\n${CYAN}2) ${GREEN}Удалить ${NC}ByeTube\n${CYAN}3) ${GREEN}Удалить ${NC}ByeTube ${GREEN}вместе с пакетами ${NC}ByeDPI${GREEN} и ${NC}hev-socks5-tunnel"
