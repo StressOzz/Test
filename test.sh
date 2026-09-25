@@ -17042,5 +17042,4 @@ ZMW_IP="$(uci -q get network.lan.ipaddr | cut -d/ -f1)"
 [ -n "$ZMW_IP" ] || ZMW_IP="192.168.1.1"
 
 echo -e "Zapret Manager ${GREEN}для ${NC}LuCI ${GREEN}установлен!${NC}"
-echo -e "\n${CYAN}Web UI: ${NC}http://${ZMW_IP}:${ZMW_PORT:-7788}/${NC}\n"
-
+echo -e "\n${CYAN}Web UI: ${NC}http://${ZMW_IP}:${ZMW_PORT:-7788}${NC}\n"
