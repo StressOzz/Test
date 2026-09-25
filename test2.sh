@@ -1758,7 +1758,7 @@ echo -e "${CYAN}Скачиваем файлы ${NC}ByeTube"; { curl -fsSL --conn
 grep -q '^_bytetube_install_payload() {$' "$src" 2>/dev/null || cp /opt/zapret-manager-luci/backend.sh "$src" 2>/dev/null
 awk '/^_bytetube_install_payload\(\) \{$/{p=1} p{print; if(h){ if($0=="YTB_FILE_END_7f3a9c") h=0; next } if($0 ~ /<<.YTB_FILE_END_7f3a9c.$/) h=1; else if($0=="}") exit}' "$src" > "$f" 2>/dev/null; rm -f "$src"
 if [ "$(tail -n 1 "$f" 2>/dev/null)" != "}" ] || ! grep -q "cat > /usr/bin/bytetube" "$f"; then rm -f "$f"; echo -e "\n${RED}Не удалось получить файлы ${NC}ByeTube\n"; return 1; fi; . "$f"; rm -f "$f"; }
-bt_dnsmasq_full() { if dnsmasq --version 2>/dev/null | grep -Eq '(^| )nftset( |$)'; then return 0; fi; echo -e "${CYAN}Заменяем ${NC}dnsmasq${CYAN} на ${NC}dnsmasq-full${CYAN} (нужен nftset)${NC}"; cp /etc/config/dhcp /tmp/dhcp.ytb.bak 2>/dev/null
+bt_dnsmasq_full() { if dnsmasq --version 2>/dev/null | grep -Eq '(^| )nftset( |$)'; then return 0; fi; echo -e "${CYAN}Заменяем ${NC}dnsmasq${CYAN} на ${NC}dnsmasq-full"; cp /etc/config/dhcp /tmp/dhcp.ytb.bak 2>/dev/null
 pkg_is_installed dnsmasq && $DELETE dnsmasq >/dev/null 2>&1; pkg_is_installed dnsmasq-dhcpv6 && $DELETE dnsmasq-dhcpv6 >/dev/null 2>&1; rm -f /tmp/resolv.conf
 if grep -qs '^nameserver' /tmp/resolv.conf.d/resolv.conf.auto; then cp /tmp/resolv.conf.d/resolv.conf.auto /tmp/resolv.conf; else printf 'nameserver 1.1.1.1\nnameserver 8.8.8.8\n' > /tmp/resolv.conf; fi
 if ! $INSTALL dnsmasq-full >/dev/null 2>&1; then echo -e "${RED}Не удалось установить ${NC}dnsmasq-full${RED}, возвращаем ${NC}dnsmasq"; $INSTALL dnsmasq >/dev/null 2>&1; [ -f /etc/config/dhcp ] || cp /tmp/dhcp.ytb.bak /etc/config/dhcp 2>/dev/null; /etc/init.d/dnsmasq restart >/dev/null 2>&1; return 1; fi
