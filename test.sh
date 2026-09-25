@@ -3428,7 +3428,7 @@ do_versions_refresh() {
 		j="$(tgws_status)"
 		add "$(_ver_item sTGWS "$(_jf "$j" '@.version')" "$(_jf "$j" '@.latest')")"
 	fi
-	command -v steer >/dev/null 2>&1 && add "$(_ver_item 'Движок Steer' "$(_st_steer_ver)" "$ST_STEER_VER")"
+	command -v steer >/dev/null 2>&1 && add "$(_ver_item 'Движок Steer' "$(_st_steer_ver)" "$(_st_latest_ver)")"
 	printf '{"ts":"%s","items":[%s]}\n' "$(date '+%d.%m %H:%M')" "$out" > "$tmp" && mv "$tmp" "$VERSIONS_CACHE"
 	echo "==> Версии проверены"
 }
@@ -5290,6 +5290,15 @@ _rb_fetch_pkg() { # URL ФАЙЛ
 
 
 _st_steer_ver() { steer --version 2>/dev/null | head -n1 | awk '{print $2}'; }
+_st_tun_ensure() {
+	[ -e /dev/net/tun ] && return 0
+	modprobe tun >/dev/null 2>&1
+	[ -e /dev/net/tun ] && return 0
+	_rb_say "Ставим kmod-tun (нужен steer-extended для подписок)"
+	$INSTALL kmod-tun >&2 || _rb_warn "kmod-tun не установился — подписки VPN работать не будут"
+	modprobe tun >/dev/null 2>&1
+	return 0
+}
 _st_is_ext() { steer --version 2>/dev/null | head -n1 | grep -q 'VLESS'; }
 
 # 0, если версия A старше B (числа через точку). В busybox нет sort -V.
@@ -5299,16 +5308,41 @@ _st_ver_lt() { # A B
 		exit 1 }'
 }
 
+_st_latest_ver() {
+	local c="$JOBS_DIR/steer.latest" v="" m
+	if [ -s "$c" ] && [ -z "$(find "$c" -mmin +360 2>/dev/null)" ]; then cat "$c"; return 0; fi
+	v="$(curl -Ls --connect-timeout 5 --max-time 12 -o /dev/null -w '%{url_effective}' https://github.com/xyzmean/steer/releases/latest 2>/dev/null |
+		grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | tail -n1)"
+	if ! echo "$v" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+		v=""
+		for m in https://gitlab.com/xyzmean/steer/-/raw/dist https://raw.githubusercontent.com/xyzmean/steer/dist; do
+			v="$(curl -fsSL --connect-timeout 6 --max-time 12 "$m/VERSION" 2>/dev/null | tr -d '[:space:]')"
+			echo "$v" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$' && break
+			v=""
+		done
+	fi
+	if [ -n "$v" ]; then
+		mkdir -p "$JOBS_DIR"
+		echo "$v" > "$c"
+		echo "$v"
+	elif [ -s "$c" ]; then
+		cat "$c"
+	else
+		echo "$ST_STEER_VER"
+	fi
+}
+
 _st_install_steer() {
-	local pkg=steer
-	{ [ "$ST_WANT_EXT" = 1 ] || _st_is_ext; } && pkg=steer-extended
+	local pkg=steer-extended want
+	want="$(_st_latest_ver)"
 	if command -v steer >/dev/null 2>&1; then
-		if [ "$pkg" = steer-extended ] && ! _st_is_ext; then
-			_rb_say "Меняем движок Steer на steer-extended (нужен для подписок VPN)"
-		elif _st_owns "pkg steer" && _st_ver_lt "$(_st_steer_ver)" "$ST_STEER_VER"; then
-			_rb_say "Движок Steer $(_st_steer_ver) — обновляем до $ST_STEER_VER"
+		if ! _st_is_ext; then
+			_rb_say "Меняем движок Steer $(_st_steer_ver) на steer-extended $want"
+		elif _st_ver_lt "$(_st_steer_ver)" "$want"; then
+			_rb_say "Движок Steer $(_st_steer_ver) — обновляем до $want"
 		else
-			_rb_say "Движок Steer уже установлен: $(_st_steer_ver)"
+			_rb_say "Движок steer-extended уже последней версии: $(_st_steer_ver)"
+			_st_tun_ensure
 			return 0
 		fi
 	fi
@@ -5319,10 +5353,10 @@ _st_install_steer() {
 	arch="$(_rb_arch)"
 	[ -n "$arch" ] || { echo "ОШИБКА: не удалось определить архитектуру роутера"; return 1; }
 	tmp="$ST_RUN/steer.$RAZ"
-	_rb_say "Устанавливаем движок Steer $ST_STEER_VER"
+	_rb_say "Устанавливаем движок steer-extended $want"
 	$UPDATE >&2
 	for base in $ST_STEER_URLS; do
-		ver="$ST_STEER_VER"
+		ver="$want"
 		url="$(echo "$base" | sed "s/@VER@/$ver/")/${pkg}-${ver}-1_${arch}.${RAZ}"
 		if ! _rb_fetch_pkg "$url" "$tmp"; then
 			# На зеркале может лежать выпуск на шаг старше — берём тот, что там есть.
@@ -5334,7 +5368,8 @@ _st_install_steer() {
 		if $INSTALL "$tmp" >&2; then
 			rm -f "$tmp"
 			_st_own "pkg steer"
-			[ "$pkg" = steer-extended ] && _st_own "pkg steer-extended"
+			_st_own "pkg steer-extended"
+			_st_tun_ensure
 			# Пакет включает движок сразу, а движок и с пустой спекой заворачивает DNS сети на
 			# свой резолвер. Включается он только вместе с правилами (_st_spec_apply).
 			if [ -n "$was_on" ]; then
@@ -6573,14 +6608,17 @@ steer_status() {
 		svc="$svc$sep{\"id\":\"$id\",\"name\":\"$(esc "$(_rb_svc_field "$id" 2)")\",\"on\":$w,\"skip\":$k}"
 		sep=","
 	done
-	local vexit=warp vup=false vsub=false
+	local vexit=warp vup=false vsub=false latest="" ext=false
 	_st_use_vpn && vexit=vpn
+	_st_is_ext && ext=true
+	if [ -s "$JOBS_DIR/steer.latest" ]; then latest="$(cat "$JOBS_DIR/steer.latest")"
+	elif command -v steer >/dev/null 2>&1; then ( _st_latest_ver >/dev/null 2>&1 & ); fi
 	[ -d "/sys/class/net/$ST_VPN_OUT" ] && vup=true
 	[ -s "$ST_SUB" ] && vsub=true
-	printf '{"running":%s,"phase":"%s","blocker":"%s","installed":%s,"stopped":%s,"version":"%s","steer_running":%s,"channels":%s,"warp_up":%s,"warp_colo":"%s","warp_host":"%s","warp_port":"%s","warp_hs_age":"%s","warp_rx":%s,"warp_tx":%s,"autorestart":"%s","dns_conflict":%s,"exit":"%s","vpn_up":%s,"has_sub":%s,"sub_label":"%s","tunnels":%s,"services":[%s]}\n' \
+	printf '{"running":%s,"phase":"%s","blocker":"%s","installed":%s,"stopped":%s,"version":"%s","steer_running":%s,"channels":%s,"warp_up":%s,"warp_colo":"%s","warp_host":"%s","warp_port":"%s","warp_hs_age":"%s","warp_rx":%s,"warp_tx":%s,"autorestart":"%s","dns_conflict":%s,"exit":"%s","vpn_up":%s,"has_sub":%s,"sub_label":"%s","latest":"%s","ext":%s,"tunnels":%s,"services":[%s]}\n' \
 		"$running" "$(esc "$phase")" "$blk" "$installed" "$off" "$(esc "$ver")" "$run" "${chans:-0}" "$warp_up" "$(esc "$colo")" \
 		"$(esc "$host")" "$(esc "$port")" "$age" "${rx:-0}" "${tx:-0}" "$(_st_cron_get)" "$dns" \
-		"$vexit" "$vup" "$vsub" "$(esc "$(_st_sub_label)")" "$(_st_tunnels_json)" "$svc"
+		"$vexit" "$vup" "$vsub" "$(esc "$(_st_sub_label)")" "$(esc "$latest")" "$ext" "$(_st_tunnels_json)" "$svc"
 }
 
 # Туннели по одному — JSON-массив для страницы steer: у каждого своя точка, колония (из
@@ -6786,7 +6824,7 @@ _st_need_ext() {
 	if ! _st_is_ext; then
 		_ensure_deps
 		_st_phase pkgs
-		ST_WANT_EXT=1 _st_install_steer || return 1
+		_st_install_steer || return 1
 		_st_is_ext || { echo "ОШИБКА: steer-extended не установился"; return 1; }
 	fi
 	if [ ! -e /dev/net/tun ]; then
@@ -6951,6 +6989,21 @@ steer_sub_action() { # ДЕЙСТВИЕ ЗНАЧЕНИЕ
 	esac
 }
 
+do_steer_engine() {
+	_st_phase pkgs
+	rm -f "$ST_STOP_FLAG"
+	_st_installed || { echo "ОШИБКА: Steer ещё не установлен"; return 1; }
+	[ -n "$(_st_blocker)" ] && { echo "ОШИБКА: движок Steer сейчас настраивает не Zapret Manager"; return 1; }
+	rm -f "$JOBS_DIR/steer.latest"
+	_ensure_deps
+	_st_install_steer || return 1
+	if [ ! -f "$ST_OFF" ] && [ -n "$(_st_sel)" ]; then
+		_st_phase rules
+		_st_apply || return 1
+	fi
+	_rb_say "Готово, движок: steer-extended $(_st_steer_ver)"
+}
+
 do_steer_sub_exit_vpn() {
 	rm -f "$ST_STOP_FLAG"
 	_st_need_ext || return 1
@@ -6998,7 +7051,7 @@ steer_sub_probe() { # НОМЕР
 steer_action() {
 	local action="$1" mode="$2"
 	case "$action" in
-		install|apply|start|stop|remove|warp_restart|warp_endpoint|warp_recreate|lists)
+		install|apply|start|stop|remove|warp_restart|warp_endpoint|warp_recreate|lists|engine)
 			_st_running && { echo '{"error":"дождитесь окончания текущей операции"}'; return 1; }
 			case "$action" in
 				install)       job_start steer do_steer_install ;;
@@ -7006,6 +7059,7 @@ steer_action() {
 				stop)          job_start steer do_steer_stop ;;
 				remove)        job_start steer do_steer_remove ;;
 				warp_restart)  job_start steer do_steer_warp_restart ;;
+				engine)        job_start steer do_steer_engine ;;
 				warp_endpoint) job_start steer do_steer_warp_endpoint ;;
 				warp_recreate) job_start steer do_steer_warp_recreate ;;
 				lists)
@@ -9537,6 +9591,15 @@ function plural(n, one, few, many) {
 	return many;
 }
 
+function verLt(a, b) {
+	var x = String(a).split('.'), y = String(b).split('.');
+	for (var i = 0; i < 3; i++) {
+		var p = parseInt(x[i], 10) || 0, q = parseInt(y[i], 10) || 0;
+		if (p !== q) return p < q;
+	}
+	return false;
+}
+
 function hh(h) { return (h < 10 ? '0' : '') + h + ':00'; }
 
 return view.extend({
@@ -9584,6 +9647,7 @@ return view.extend({
 			else if (lastAction === 'domlist') msg = 'Готово, новый список доменов работает';
 			else if (lastAction === 'lists' || lastAction === 'start') msg = 'Готово, выбор применён';
 			else if (/^sub_/.test(lastAction)) msg = 'Готово';
+			else if (lastAction === 'engine') msg = 'Движок Steer обновлён';
 			zm.toast(msg, ok ? 'info' : 'error');
 			var done = lastAction;
 			lastAction = '';
@@ -9631,7 +9695,7 @@ return view.extend({
 				if (toastText) zm.toast(toastText, 'warning');
 				lastAction = action;
 				data.running = true;
-				data.phase = action === 'install' ? 'pkgs' : action === 'remove' ? 'remove' : /^warp_/.test(action) ? 'warp' : /^sub_/.test(action) ? 'sub' : 'rules';
+				data.phase = action === 'install' ? 'pkgs' : action === 'remove' ? 'remove' : /^warp_/.test(action) ? 'warp' : /^sub_/.test(action) ? 'sub' : action === 'engine' ? 'pkgs' : 'rules';
 				follow();
 			}).catch(function() { zm.toast('Роутер не ответил', 'error'); });
 		}
@@ -9690,7 +9754,8 @@ return view.extend({
 				if (data.exit === 'vpn') mainCard.appendChild(row('Выход', badge(data.vpn_up ? 'zm-ok' : 'zm-warn', 'подписка' + (data.sub_label ? ' · ' + data.sub_label : ''))));
 				else mainCard.appendChild(row('Выход', badge(ts[1], 'WARP · ' + ts[0])));
 				mainCard.appendChild(row('Через туннель', E('span', {}, n ? n + ' ' + plural(n, 'сервис', 'сервиса', 'сервисов') : 'ничего не выбрано')));
-				mainCard.appendChild(row('Версия Steer', E('span', {}, data.version || '—')));
+				var newer = data.latest && data.version && verLt(data.version, data.latest);
+				mainCard.appendChild(row('Версия Steer', E('span', {}, (data.version || '—') + (data.ext ? ' · extended' : '') + (newer ? ' · доступна ' + data.latest : (!data.ext && data.version ? ' · нужен steer-extended' : '')))));
 			}
 
 			if (busy) {
@@ -9721,6 +9786,8 @@ return view.extend({
 				actions.push(E('button', { 'class': 'cbi-button cbi-button-positive', 'click': function() { act('apply', '', 'Перезапускаем туннели и правила'); } }, 'Перезапустить'));
 				actions.push(E('button', { 'class': 'cbi-button', 'click': function() { act('stop', '', 'Выключаем Steer'); } }, 'Выключить'));
 			}
+			if ((data.latest && data.version && verLt(data.version, data.latest)) || (data.version && !data.ext))
+				actions.push(E('button', { 'class': 'cbi-button cbi-button-action', 'click': function() { act('engine', '', 'Обновляем движок Steer'); } }, 'Обновить движок'));
 			actions.push(E('button', { 'class': 'cbi-button cbi-button-remove', 'click': function() {
 				if (!confirm('Удалить Steer?\n\nБудут удалены Steer, туннели WARP и всё, что для них ставилось. Сервисы, которые шли через WARP, пойдут напрямую.')) return;
 				act('remove', '', 'Удаляем Steer');
