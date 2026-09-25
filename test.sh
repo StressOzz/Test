@@ -1,6 +1,6 @@
 #!/bin/sh
 # Zapret Manager by StressOzz for LuCI installer
-# Version: 1.42
+# Version: 1.43
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -87,7 +87,7 @@ cat > '/opt/zapret-manager-luci/backend.sh' << 'ZM_INSTALLER_EOF'
 umask 022
 
 CONF="/etc/config/zapret"
-ZM_VERSION="1.42"
+ZM_VERSION="1.43"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
@@ -270,8 +270,9 @@ status() {
 		fs_marker=$(grep -m1 '^# ZMFS:' "$CONF" | sed 's/^# ZMFS://')
 	fi
 
-	printf '{"pkg":"%s","zapret":"%s","zapret_running":%s,"zapret_version":"%s","zapret2":"%s","zapret2_running":%s,"strategy":"%s","flowseal":"%s"}\n' \
-		"$PKG" "$zr" "$zr_running" "$(esc "$zr_ver")" "$zr2" "$zr2_running" "$(esc "$strat")" "$(esc "$fs_marker")"
+	printf '{"pkg":"%s","zapret":"%s","zapret_running":%s,"zapret_version":"%s","zapret2":"%s","zapret2_running":%s,"strategy":"%s","flowseal":"%s","yv_off":%s}\n' \
+		"$PKG" "$zr" "$zr_running" "$(esc "$zr_ver")" "$zr2" "$zr2_running" "$(esc "$strat")" "$(esc "$fs_marker")" \
+		"$([ -f /opt/zapret-manager-luci/yv_off ] && echo true || echo false)"
 }
 
 
@@ -398,7 +399,7 @@ do_remove_zapret() {
 	$DELETE luci-app-zapret >&2
 	$DELETE zapret >&2
 	echo "==> Удаляем файлы"
-	rm -rf /opt/zapret "$CONF" /etc/init.d/zapret /etc/firewall.zapret
+	rm -rf /opt/zapret "$CONF" /etc/init.d/zapret /etc/firewall.zapret "$YV_OFF_FLAG"
 	crontab -l 2>/dev/null | grep -v -i zapret | crontab - 2>/dev/null
 	echo "==> Готово, Zapret удалён"
 }
@@ -548,7 +549,12 @@ _refresh_exclude_file() {
 	wget -q --timeout=20 -U "Mozilla/5.0" -O /opt/zapret/ipset/zapret-hosts-user-exclude.txt "$EXCLUDE_URL"
 }
 
+# YouTube-стратегия выключена человеком (выбор «Выключить» на вкладке YouTube): блок Yv не
+# добавляется ни при смене основной стратегии, ни при установке. Снимается выбором любой Yv.
+YV_OFF_FLAG="/opt/zapret-manager-luci/yv_off"
+
 _add_yv_default() {
+	[ -f "$YV_OFF_FLAG" ] && return 0
 	if ! grep -q "^#Yv" "$CONF" && ! grep -q "^#general" "$CONF"; then
 		sed -i "/^[[:space:]]*option NFQWS_OPT '/a\\#Yv08\\n--filter-tcp=443\\n--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt\\n--dpi-desync=hostfakesplit\\n--dpi-desync-hostfakesplit-mod=host=google.com\\n--dpi-desync-fooling=ts\\n--new" "$CONF"
 	fi
@@ -716,6 +722,8 @@ strategy_set_flowseal() {
 	[ -f "$CONF" ] || { echo '{"error":"Zapret не установлен"}'; return 1; }
 	block=$(awk -v n="#$name" '$0==n{flag=1; print; next} /^#/ && flag{exit} flag{print}' "$f")
 	[ -z "$block" ] && { echo '{"error":"стратегия не найдена"}'; return 1; }
+	# Стратегия Flowseal сама ведёт YouTube-часть — выключатель YouTube снимается.
+	rm -f "$YV_OFF_FLAG"
 	sed -i '/^# ZMFS:/d' "$CONF"
 	{ printf '# ZMFS:%s\n' "$name"; cat "$CONF"; } > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"
 	sed -i "/option NFQWS_OPT '/,\$d" "$CONF"
@@ -757,13 +765,64 @@ strategy_list_youtube() {
 	)"
 }
 
+# Убрать YouTube-профиль из NFQWS_OPT. Профили разделены строками --new; YouTube-профиль —
+# тот, где есть метка #YvNN или пара «--filter-tcp=443» + hostlist доменов Google. Остальные
+# профили и их порядок не трогаются; лишние --new по краям не остаются.
+_yv_block_remove() {
+	local old="$JOBS_DIR/yv_rm_old" new="$JOBS_DIR/yv_rm_new"
+	mkdir -p "$JOBS_DIR"
+	awk "/^[[:space:]]*option NFQWS_OPT '\$/ { f = 1 } f" "$CONF" > "$old"
+	[ -s "$old" ] || { rm -f "$old"; return 1; }
+	# Закрывающая кавычка — отдельной строкой, как пишет сама панель; иначе разбор ненадёжен.
+	grep -q "^[[:space:]]*'[[:space:]]*\$" "$old" || { rm -f "$old"; return 1; }
+	awk -v G="--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt" -v q="'" '
+		function out(   i, yt) {
+			if (n == 0) return
+			yt = 0
+			for (i = 1; i <= n; i++) {
+				if (p[i] ~ /^[ \t]*#Yv[0-9]+/) yt = 1
+				if (p[i] == "--filter-tcp=443" && i < n && p[i + 1] == G) yt = 1
+			}
+			if (yt) removed = 1
+			else { if (printed) print "--new"; for (i = 1; i <= n; i++) print p[i]; printed = 1 }
+			n = 0
+		}
+		NR == 1 { print; next }
+		done { print; next }
+		$0 ~ ("^[ \t]*" q "[ \t]*$") { out(); print; done = 1; next }
+		$0 == "--new" { out(); next }
+		{ p[++n] = $0 }
+		END { if (!done) { out(); print q } exit (removed ? 0 : 3) }' "$old" > "$new"
+	local rc=$?
+	# Новый блок должен кончаться строкой с одной кавычкой — иначе (обрезанная запись, кавычка
+	# в конце строки опции) настройку не трогаем.
+	[ "$rc" = 0 ] || [ "$rc" = 3 ] && ! grep -q "^[[:space:]]*'[[:space:]]*\$" "$new" && rc=1
+	if [ "$rc" = 0 ] || [ "$rc" = 3 ]; then
+		sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
+		cat "$new" >> "$CONF"
+	fi
+	rm -f "$old" "$new"
+	return $rc
+}
+
 strategy_set_youtube() {
 	local name="$1" f selected
+	if [ "$name" = off ]; then
+		[ -f "$CONF" ] || { echo '{"error":"Zapret не установлен"}'; return 1; }
+		_yv_block_remove
+		case $? in
+			0) mkdir -p "$(dirname "$YV_OFF_FLAG")"; touch "$YV_OFF_FLAG"; zapret_restart; printf '{"ok":true,"strategy":"off","removed":true}\n' ;;
+			3) mkdir -p "$(dirname "$YV_OFF_FLAG")"; touch "$YV_OFF_FLAG"; printf '{"ok":true,"strategy":"off","removed":false}\n' ;;
+			*) echo '{"error":"блок стратегий Zapret (NFQWS_OPT) записан не так, как его пишет панель, — YouTube-часть не тронута"}'; return 1 ;;
+		esac
+		return 0
+	fi
 	f="$(_yv_file)"
 	[ -s "$f" ] || { echo '{"error":"список не загружен — сначала обновите"}'; return 1; }
 	[ -f "$CONF" ] || { echo '{"error":"Zapret не установлен"}'; return 1; }
 	selected="#$name"
 	grep -qxF "$selected" "$f" || { echo '{"error":"стратегия не найдена"}'; return 1; }
+	rm -f "$YV_OFF_FLAG"
 
 	local saved="$JOBS_DIR/yv_saved" newtmp="$JOBS_DIR/yv_new" finaltmp="$JOBS_DIR/yv_final" oldtmp="$JOBS_DIR/yv_old"
 	local awk_strip="$JOBS_DIR/yv_strip.awk" awk_insert="$JOBS_DIR/yv_insert.awk" awk_dedup="$JOBS_DIR/yv_dedup.awk"
@@ -4970,7 +5029,7 @@ ST_WARP_ZONE="zmwarp"
 ST_STEER_VER="1.5.8"
 ST_STEER_SPEC="/etc/steer/spec.json"
 ST_STEER_URLS="https://github.com/xyzmean/steer/releases/download/v@VER@ https://gitlab.com/xyzmean/steer/-/raw/dist https://raw.githubusercontent.com/xyzmean/steer/dist"
-ST_AWG_MIRRORS="${GH_MAIN}/Slava-Shchipunov/awg-openwrt/releases/download ${GH_MAIN}/2Grey/awg-openwrt/releases/download"
+ST_AWG_MIRRORS="${GH_MAIN}/2Grey/awg-openwrt/releases/download ${GH_MAIN}/Slava-Shchipunov/awg-openwrt/releases/download"
 ST_AWG_MIRROR_FLAT="https://gitlab.com/xyzmean/brb/-/raw/main/deps/awg"
 # Автоперезапуск: строка crontab помечается хвостом-комментарием. Команда самодостаточна —
 # переживает и удаление панели: туннель поднимается заново, steer перезапускается, если включён.
@@ -5131,48 +5190,148 @@ _st_install_steer() {
 
 _st_awg_loaded() { grep -q '^amneziawg ' /proc/modules 2>/dev/null || [ -d /sys/module/amneziawg ]; }
 
-_st_install_awg() {
-	if _st_awg_loaded && command -v awg >/dev/null 2>&1; then return 0; fi
-	if ! _pkg_is_installed kmod-amneziawg || ! command -v awg >/dev/null 2>&1; then
-		_rb_say "Устанавливаем AmneziaWG"
-		local rel arch tgt p base ok=0 bases m
-		rel="$(_rb_release)"; arch="$(_rb_arch)"; tgt="$(_rb_target)"
+# Установка AmneziaWG — как у установщика 2Grey/awg-openwrt (amneziawg-install.sh): версия,
+# архитектура и цель — из `ubus call system board` (запасной путь — /etc/openwrt_release),
+# пакеты — из релиза v<версия OpenWrt>, имя «пакет_v<версия>_<архитектура>_<цель>_<подцель>»,
+# сначала в формате своего менеджера пакетов (apk/ipk), потом в другом. Обработчик для LuCI —
+# luci-proto-amneziawg (OpenWrt 24.10.3+, 23.05.6+) или luci-app-amneziawg (старее); второй
+# с первым конфликтует и снимается. Старый фид slava-shchipunov убирается: его ключ подписи
+# конфликтует с пакетами 2Grey. Прочие зеркала — запас, если релиза 2Grey под версию нет.
+#
+# ПЕРВЫЙ аргумент update — поставить пакеты из релиза заново, даже если стоят (обновление);
+# без него ставится только недостающее. ST_AWG_OWN=0 — не записывать пакеты во владения
+# Steer (ставит страница AmneziaWG, удалять их вместе со Steer нельзя).
+_awg_board() { ubus call system board 2>/dev/null | jsonfilter -e "$1" 2>/dev/null; }
+_awg_rel_ver() { local v; v="$(_awg_board '@.release.version')"; [ -n "$v" ] || v="$(_rb_release)"; echo "$v"; }
+_awg_rel_arch() {
+	local a; a="$(_awg_board '@.release.arch')"
+	[ -n "$a" ] || a="$(_rb_arch)"
+	[ -n "$a" ] || a="$(opkg print-architecture 2>/dev/null | awk 'BEGIN { m = 0 } $3 > m { m = $3; a = $2 } END { print a }')"
+	[ -n "$a" ] || a="$(apk --print-arch 2>/dev/null)"
+	echo "$a"
+}
+_awg_rel_target() { local t; t="$(_awg_board '@.release.target')"; [ -n "$t" ] || t="$(awk -F\' '/DISTRIB_TARGET/ {print $2}' /etc/openwrt_release)"; echo "$t"; }
+# luci-proto-amneziawg — для OpenWrt 24.10.3+ и 23.05.6+, иначе luci-app-amneziawg.
+_awg_luci_pkg() {
+	local v="$1" ma mi pa
+	ma="$(echo "$v" | cut -d. -f1)"; mi="$(echo "$v" | cut -d. -f2)"; pa="$(echo "$v" | cut -d. -f3 | sed 's/[^0-9].*//')"
+	# Как у 2Grey: версия не из трёх чисел (rc, SNAPSHOT) — старый обработчик luci-app.
+	case "$ma.$mi.$pa" in *[!0-9.]*|*..*|.*|*.) echo luci-app-amneziawg; return ;; esac
+	if [ "$ma" -gt 24 ] || { [ "$ma" -eq 24 ] && [ "$mi" -gt 10 ]; } || { [ "$ma" -eq 24 ] && [ "$mi" -eq 10 ] && [ "$pa" -ge 3 ]; } ||
+	   { [ "$ma" -eq 23 ] && [ "$mi" -eq 5 ] && [ "$pa" -ge 6 ]; }; then
+		echo luci-proto-amneziawg
+	else
+		echo luci-app-amneziawg
+	fi
+}
+_awg_legacy_feeds() {
+	local f
+	for f in /etc/opkg/customfeeds.conf /etc/apk/repositories /etc/apk/repositories.d/*.list; do
+		[ -f "$f" ] && grep -qF 'slava-shchipunov.github.io/awg-openwrt' "$f" || continue
+		_rb_say "Убираем старый фид awg-openwrt из $f — его ключ конфликтует с пакетами 2Grey"
+		sed '\|slava-shchipunov\.github\.io/awg-openwrt|d' "$f" > "$f.zmtmp" && cat "$f.zmtmp" > "$f"
+		rm -f "$f.zmtmp"
+	done
+}
+# Скачать пакет из релиза: сначала своим форматом, потом другим (как download_package у 2Grey).
+_awg_fetch() { # БАЗА ПАКЕТ ПОСТФИКС -> путь к файлу в stdout
+	local e
+	for e in "$RAZ" "$([ "$RAZ" = apk ] && echo ipk || echo apk)"; do
+		if _rb_fetch_pkg "$1/$2$3.$e" "$ST_RUN/$2.$e" >&2; then echo "$ST_RUN/$2.$e"; return 0; fi
+	done
+	return 1
+}
+
+_st_install_awg() { # [update]
+	local mode="$1"
+	if [ "$mode" != update ] && _st_awg_loaded && command -v awg >/dev/null 2>&1 && _awg_proto_ok; then return 0; fi
+	local rel arch tgt sub post luci old_luci base bases m p f ok=0 was_loaded=0 kver0 kver1 need="" force=""
+	_st_awg_loaded && was_loaded=1
+	kver0="$(_awg_pkg_ver kmod-amneziawg)"
+	for p in kmod-amneziawg amneziawg-tools; do
+		if [ "$mode" = update ] || ! _pkg_is_installed "$p"; then need="$need $p"; fi
+	done
+	[ "$p" = amneziawg-tools ] && ! command -v awg >/dev/null 2>&1 && case " $need " in *" amneziawg-tools "*) ;; *) need="$need amneziawg-tools" ;; esac
+	if [ -n "$need" ]; then
+		rel="$(_awg_rel_ver)"; arch="$(_awg_rel_arch)"; tgt="$(_awg_rel_target)"
+		sub="${tgt#*/}"; tgt="${tgt%%/*}"
+		[ -n "$rel" ] && [ -n "$arch" ] && [ -n "$tgt" ] && [ -n "$sub" ] || { echo "ОШИБКА: не удалось определить версию, архитектуру или цель OpenWrt"; return 1; }
+		post="_v${rel}_${arch}_${tgt}_${sub}"
+		luci="$(_awg_luci_pkg "$rel")"
+		old_luci=luci-app-amneziawg; [ "$luci" = luci-app-amneziawg ] && old_luci=luci-proto-amneziawg
+		{ [ "$mode" = update ] || ! _pkg_is_installed "$luci"; } && need="$need $luci"
+		# Тот же пакет той же версии opkg молча пропускает — для «переустановить» нужен флаг.
+		[ "$mode" = update ] && [ "$PKG" = opkg ] && force="--force-reinstall"
+		_rb_say "Устанавливаем AmneziaWG из релиза 2Grey/awg-openwrt v$rel ($arch, $tgt/$sub)"
+		mkdir -p "$ST_RUN"
+		_awg_legacy_feeds
+		echo "==> Обновляем список пакетов (нужен для зависимостей kmod-amneziawg)"
+		$UPDATE >&2 || _rb_warn "Список пакетов обновился не полностью (какой-то фид не ответил) — продолжаем"
 		bases=""
 		for m in $ST_AWG_MIRRORS; do bases="$bases $m/v$rel"; done
 		bases="$bases $ST_AWG_MIRROR_FLAT/$rel"
-		$UPDATE >&2
+		# Модуль и утилиты — только из ОДНОГО источника: при переходе к запасному зеркалу всё,
+		# что нужно было поставить, ставится заново оттуда же (версии AWG 1.x и 2.x не смешиваются).
 		for base in $bases; do
 			ok=1
-			for p in kmod-amneziawg amneziawg-tools; do
-				_pkg_is_installed "$p" && continue
-				if _rb_fetch_pkg "$base/${p}_v${rel}_${arch}_${tgt}.${RAZ}" "$ST_RUN/$p.$RAZ" &&
-				   $INSTALL "$ST_RUN/$p.$RAZ" >&2; then
-					_st_own "pkg $p"
+			for p in $need; do
+				if f="$(_awg_fetch "$base" "$p" "$post")"; then
+					# Конфликтующий обработчик LuCI снимается только когда замена уже скачана.
+					if [ "$p" = "$luci" ] && _pkg_is_installed "$old_luci"; then
+						_rb_say "$old_luci конфликтует с $luci — снимаем"
+						$DELETE "$old_luci" >&2
+					fi
+					_rb_say "Ставим $p"
+					if $INSTALL $force "$f" >&2; then
+						[ "${ST_AWG_OWN:-1}" = 1 ] && _st_own "pkg $p"
+					elif [ "$p" != "$luci" ]; then
+						ok=0
+					else
+						_rb_warn "$p не встал — туннели работают и без него, но в «Сеть → Интерфейсы» их не будет видно"
+					fi
+					rm -f "$f"
+				elif [ "$p" = "$luci" ]; then
+					_rb_warn "$p для этой версии нет — туннели работают и без него"
 				else
 					ok=0
 				fi
-				rm -f "$ST_RUN/$p.$RAZ"
+				[ "$ok" = 1 ] || break
 			done
-			[ "$ok" = 1 ] && break
+			if [ "$ok" = 1 ]; then
+				# Русский перевод LuCI-страницы — необязателен, как у 2Grey.
+				if ! _pkg_is_installed luci-i18n-amneziawg-ru && f="$(_awg_fetch "$base" luci-i18n-amneziawg-ru "$post" 2>/dev/null)"; then
+					$INSTALL "$f" >&2 && { [ "${ST_AWG_OWN:-1}" = 1 ] && _st_own "pkg luci-i18n-amneziawg-ru"; }
+					rm -f "$f"
+				fi
+				break
+			fi
+			_rb_warn "В $base нет полного набора пакетов — пробуем следующее зеркало"
 		done
-		# Обработчик для веб-интерфейса — чтобы туннель было видно в «Сеть → Интерфейсы».
-		# Без него всё работает, поэтому неудача здесь не ошибка.
-		if [ "$ok" = 1 ] && ! _pkg_is_installed luci-proto-amneziawg; then
-			_rb_fetch_pkg "$base/luci-proto-amneziawg_v${rel}_${arch}_${tgt}.${RAZ}" "$ST_RUN/lpa.$RAZ" &&
-				$INSTALL "$ST_RUN/lpa.$RAZ" >&2 && _st_own "pkg luci-proto-amneziawg"
-			rm -f "$ST_RUN/lpa.$RAZ"
-		fi
 		_rb_rpcd_ensure
+		if [ "$ok" != 1 ]; then
+			echo "ОШИБКА: не удалось установить AmneziaWG — для OpenWrt $rel ($arch, $tgt/$sub) нет готовых пакетов в релизах 2Grey/awg-openwrt"
+			return 1
+		fi
+	fi
+	# Модуль ядра сменил версию, а в ядре остался прежний. Выгрузка модуля удаляет ВСЕ его
+	# интерфейсы, поэтому перегружаем только когда туннелей нет; иначе — после перезагрузки.
+	kver1="$(_awg_pkg_ver kmod-amneziawg)"
+	if [ "$was_loaded" = 1 ] && [ -n "$kver0" ] && [ "$kver0" != "$kver1" ]; then
+		if [ -z "$(awg show interfaces 2>/dev/null)" ] && rmmod amneziawg >/dev/null 2>&1; then
+			_rb_say "Модуль ядра AmneziaWG перезагружен ($kver0 → $kver1)"
+		else
+			_rb_warn "Модуль ядра обновлён ($kver0 → $kver1), но туннели работают на прежнем — новый заработает после перезагрузки роутера"
+		fi
 	fi
 	# Установщик пакета модуль в ядро не грузит, а /etc/init.d/kmod грузит его только при
 	# загрузке: без modprobe интерфейс не поднимается до перезагрузки роутера.
 	_st_awg_loaded || modprobe amneziawg >/dev/null 2>&1
 	if ! _st_awg_loaded || ! command -v awg >/dev/null 2>&1; then
-		echo "ОШИБКА: не удалось установить AmneziaWG — для вашей версии OpenWrt может не быть готового пакета"
+		echo "ОШИБКА: AmneziaWG установлен, но модуль ядра не загрузился — перезагрузите роутер и повторите"
 		return 1
 	fi
 	# netifd узнаёт о протоколе amneziawg только при своём запуске.
-	if ! ubus call network get_proto_handlers 2>/dev/null | grep -q '"amneziawg"'; then
+	if ! _awg_proto_ok; then
 		_rb_say "Перезапускаем сеть, чтобы она узнала протокол AmneziaWG (страница может ненадолго пропасть)"
 		/etc/init.d/network restart >/dev/null 2>&1
 		sleep 8
@@ -6161,7 +6320,7 @@ do_steer_remove() {
 	# AmneziaWG — только если других туннелей на нём нет.
 	if ! uci show network 2>/dev/null | grep -q "\.proto='amneziawg'"; then
 		local p
-		for p in luci-proto-amneziawg amneziawg-tools kmod-amneziawg; do
+		for p in luci-i18n-amneziawg-ru luci-proto-amneziawg luci-app-amneziawg amneziawg-tools kmod-amneziawg; do
 			_st_owns "pkg $p" && $DELETE "$p" >&2
 		done
 	fi
@@ -6500,7 +6659,9 @@ _awg_iface_json() { # ИНТЕРФЕЙС
 }
 
 awg_status() {
-	local i list="" sep="" running=false conf=false ep="" mih=false
+	local i list="" sep="" running=false conf=false ep="" mih=false lp=luci-proto-amneziawg lv
+	lv="$(_awg_pkg_ver luci-proto-amneziawg)"
+	[ -n "$lv" ] || { lv="$(_awg_pkg_ver luci-app-amneziawg)"; [ -n "$lv" ] && lp=luci-app-amneziawg; }
 	_job_alive awg && running=true
 	for i in $(_awg_ifaces); do list="$list$sep$(_awg_iface_json "$i")"; sep=","; done
 	if [ -s "$MIXOMO_WARP_CONF" ]; then
@@ -6508,23 +6669,21 @@ awg_status() {
 		ep="$(sed -n 's/^[[:space:]]*Endpoint[[:space:]]*=[[:space:]]*//p' "$MIXOMO_WARP_CONF" | head -n1)"
 	fi
 	[ -x /etc/init.d/mihomo ] && mih=true
-	printf '{"running":%s,"phase":"%s","installed":%s,"kmod":"%s","tools":"%s","luci":"%s","module":%s,"proto":%s,"steer":%s,"warp_conf":%s,"warp_path":"%s","warp_endpoint":"%s","mihomo":%s,"endpoints":"%s","ifaces":[%s]}\n' \
+	printf '{"running":%s,"phase":"%s","installed":%s,"kmod":"%s","tools":"%s","luci":"%s","luci_pkg":"%s","module":%s,"proto":%s,"steer":%s,"warp_conf":%s,"warp_path":"%s","warp_endpoint":"%s","mihomo":%s,"endpoints":"%s","ifaces":[%s]}\n' \
 		"$running" "$(cat "$AWG_RUN/phase" 2>/dev/null)" "$(_awg_installed && echo true || echo false)" \
-		"$(esc "$(_awg_pkg_ver kmod-amneziawg)")" "$(esc "$(_awg_pkg_ver amneziawg-tools)")" "$(esc "$(_awg_pkg_ver luci-proto-amneziawg)")" \
+		"$(esc "$(_awg_pkg_ver kmod-amneziawg)")" "$(esc "$(_awg_pkg_ver amneziawg-tools)")" "$(esc "$lv")" "$lp" \
 		"$(_st_awg_loaded && echo true || echo false)" "$(_awg_proto_ok && echo true || echo false)" \
 		"$(_st_installed && echo true || echo false)" "$conf" "$MIXOMO_WARP_CONF" "$(esc "$ep")" "$mih" "$AWG_ENDPOINTS" "$list"
 }
 
 # ── установка и удаление ──
 
-do_awg_install() {
-	echo install > "$AWG_RUN/phase"
+do_awg_install() { # [update]
+	echo "${1:-install}" > "$AWG_RUN/phase"
 	_ensure_deps
 	mkdir -p "$ST_RUN" "$AWG_DIR"
-	if _awg_installed && _awg_proto_ok; then
-		_awg_say "AmneziaWG уже установлен — проверяем модуль и протокол"
-	fi
-	_st_install_awg || return 1
+	[ "$1" = update ] && _awg_say "Переустанавливаем AmneziaWG из свежего релиза"
+	ST_AWG_OWN=0 _st_install_awg "$1" || return 1
 	_awg_say "Готово: AmneziaWG $(_awg_pkg_ver amneziawg-tools) установлен, модуль ядра загружен"
 }
 
@@ -6532,100 +6691,302 @@ do_awg_remove() {
 	local p
 	echo remove > "$AWG_RUN/phase"
 	_awg_say "Удаляем AmneziaWG"
-	for p in luci-proto-amneziawg amneziawg-tools kmod-amneziawg; do
+	for p in luci-i18n-amneziawg-ru luci-proto-amneziawg luci-app-amneziawg amneziawg-tools kmod-amneziawg; do
 		_pkg_is_installed "$p" || continue
 		_awg_say "Удаляем $p"
 		$DELETE "$p" >&2
 	done
 	rmmod amneziawg >/dev/null 2>&1
-	sed -i -E '/^pkg (kmod-amneziawg|amneziawg-tools|luci-proto-amneziawg)$/d' "$ST_OWNED" 2>/dev/null
+	sed -i -E '/^pkg (kmod-amneziawg|amneziawg-tools|luci-proto-amneziawg|luci-app-amneziawg|luci-i18n-amneziawg-ru)$/d' "$ST_OWNED" 2>/dev/null
 	_rb_rpcd_ensure
 	_awg_say "Готово, AmneziaWG удалён"
 }
 
-# ── ключи WARP ──
+# ── генерация WARP ──
 #
-# Способы: cf — напрямую у Cloudflare (как wgcf: свой ключ, Cloudflare называет свой);
-# santa и wgcli — сторонние генераторы, те же, что у страницы Mixomo. Профиль: awg — с
-# маскировкой AmneziaWG (Jc/Jmin/Jmax, I1), plain — чистый WireGuard без маскировки.
+# Как у Mixomo: «Сгенерировать WARP» (точка engage.cloudflareclient.com:4500), «с подбором
+# endpoint» и «свой endpoint». Ключи — генератор santa-atmo, запасной wgcli, последний запас —
+# сам Cloudflare. Конфиг всегда AmneziaWG (Jc/Jmin/Jmax, H1–H4, I1).
+#
+# «С проверкой связи» — по мотивам RR-WARP-Scanner (dedikar/RR-WARP-Scanner, wregister.sh):
+# аккаунт регистрируется у самого Cloudflare, а если его API из сети не открывается — через
+# живой туннель AmneziaWG на роутере или через временный туннель на общих ключах warpscout.
+# Затем роутер сам пробует новые ключи на точках входа и масках I1 (QUIC, iCloud-DNS) и пишет
+# в WARP.conf первую связку, через которую действительно идёт трафик, — а не просто первую,
+# ответившую на рукопожатие: DPI у части провайдеров пропускает рукопожатие и рвёт туннель.
 _awg_valid_ep() { printf '%s' "$1" | grep -Eq '^(\[[0-9A-Fa-f:]+\]|[A-Za-z0-9.-]+):[0-9]{1,5}$'; }
 
-do_awg_gen() { # СПОСОБ ТОЧКА ПРОФИЛЬ
-	local method="$1" ep="$2" prof="$3" priv="" pub="" peer="" v4="" v6="" reg="$AWG_RUN/reg.json" api tos
+AWG_API1="https://api.cloudflareclient.com/v0a4005/reg"
+AWG_API2="https://api.cloudflareclient.com/v0i1909051800/reg"
+AWG_BOOT_PRIV="4OnO86dDLpqJ2U10ODwX3tarx6xlRGLfkmbSBtMgaHg="
+AWG_BOOT_IP="172.16.0.3"
+AWG_TEST_IF="zmawgtest"
+AWG_TEST_HOSTS="162.159.192.1 188.114.97.1 188.114.96.3 162.159.193.2 162.159.195.2 188.114.98.2 188.114.99.2 8.6.112.2 8.34.146.2 8.39.125.2"
+AWG_TEST_PORTS="2408 500 4500 1701"
+AWG_I1_ICLOUD="<r 2><b 0x858000010001000000000669636c6f756403636f6d0000010001c00c000100010000105a00044d583737>"
+AWG_I1_QUIC1="<b 0xc10000000114367096bb0fb3f58f3a3fb8aaacd61d63a1c8a40e14f7374b8a62dccba6431716c3abf6f5afbcfb39bd008000047c32e268567c652e6f4db58bff759bc8c5aaca183b87cb4d22938fe7d8dca22a679a79e4d9ee62e4bbb3a380dd78d4e8e48f26b38a1d42d76b371a5a9a0444827a69d1ab5872a85749f65a4104e931740b4dc1e2dd77733fc7fac4f93011cd622f2bb47e85f71992e2d585f8dc765a7a12ddeb879746a267393ad023d267c4bd79f258703e27345155268bd3cc0506ebd72e2e3c6b5b0f005299cd94b67ddabe30389c4f9b5c2d512dcc298c14f14e9b7f931e1dc397926c31fbb7cebfc668349c218672501031ecce151d4cb03c4c660b6c6fe7754e75446cd7de09a8c81030c5f6fb377203f551864f3d83e27de7b86499736cbbb549b2f37f436db1cae0a4ea39930f0534aacdd1e3534bc87877e2afabe959ced261f228d6362e6fd277c88c312d966c8b9f67e4a92e757773db0b0862fb8108d1d8fa262a40a1b4171961f0704c8ba314da2482ac8ed9bd28d4b50f7432d89fd800c25a50c5e2f5c0710544fef5273401116aa0572366d8e49ad758fcb29e6a92912e644dbe227c247cb3417eabfab2db16796b2fba420de3b1dc94e8361f1f324a331ddaf1e626553138860757fd0bf687566108b77b70fb9f8f8962eca599c4a70ed373666961a8cb506b96756d9e28b94122b20f16b54f118c0e603ce0b831efea614ad836df6cf9affbdd09596412547496967da758cec9080295d853b0861670b71d9abde0d562b1a6de82782a5b0c14d297f27283a895abc889a5f6703f0e6eb95f67b2da45f150d0d8ab805612d570c2d5cb6997ac3a7756226c2f5c8982ffbd480c5004b0660a3c9468945efde90864019a2b519458724b55d766e16b0da25c0557c01f3c11ddeb024b62e303640e17fdd57dedb3aeb4a2c1b7c93059f9c1d7118d77caac1cd0f6556e46cbc991c1bb16970273dea833d01e5090d061a0c6d25af2415cd2878af97f6d0e7f1f936247b394ecb9bd484da6be936dee9b0b92dc90101a1b4295e97a9772f2263eb09431995aa173df4ca2abd687d87706f0f93eaa5e13cbe3b574fa3cfe94502ace25265778da6960d561381769c24e0cbd7aac73c16f95ae74ff7ec38124f7c722b9cb151d4b6841343f29be8f35145e1b27021056820fed77003df8554b4155716c8cf6049ef5e318481460a8ce3be7c7bfac695255be84dc491c19e9dedc449dd3471728cd2a3ee51324ccb3eef121e3e08f8e18f0006ea8957371d9f2f739f0b89e4db11e5c6430ada61572e589519fbad4498b460ce6e4407fc2d8f2dd4293a50a0cb8fcaaf35cd9a8cc097e3603fbfa08d9036f52b3e7fcce11b83ad28a4ac12dba0395a0cc871cefd1a2856fffb3f28d82ce35cf80579974778bab13d9b3578d8c75a2d196087a2cd439aff2bb33f2db24ac175fff4ed91d36a4cdbfaf3f83074f03894ea40f17034629890da3efdbb41141b38368ab532209b69f057ddc559c19bc8ae62bf3fd564c9a35d9a83d14a95834a92bae6d9a29ae5e8ece07910d16433e4c6230c9bd7d68b47de0de9843988af6dc88b5301820443bd4d0537778bf6b4c1dd067fcf14b81015f2a67c7f2a28f9cb7e0684d3cb4b1c24d9b343122a086611b489532f1c3a26779da1706c6759d96d8ab>"
+
+_awg_write_conf() { # ПРИВАТНЫЙ ПИР v4 v6 ТОЧКА [I1]
+	mkdir -p "$(dirname "$MIXOMO_WARP_CONF")"
+	printf '%s\n' \
+		"[Interface]" "PrivateKey = $1" "Address = ${3}${4:+, $4}" "DNS = 1.1.1.1, 1.0.0.1" "MTU = 1280" \
+		"S1 = $MIXOMO_AWG_S1" "S2 = $MIXOMO_AWG_S2" "Jc = $MIXOMO_AWG_JC" "Jmin = $MIXOMO_AWG_JMIN" "Jmax = $MIXOMO_AWG_JMAX" \
+		"H1 = $MIXOMO_AWG_H1" "H2 = $MIXOMO_AWG_H2" "H3 = $MIXOMO_AWG_H3" "H4 = $MIXOMO_AWG_H4" "I1 = ${6:-$MIXOMO_AWG_I1}" "" \
+		"[Peer]" "PublicKey = $2" "AllowedIPs = 0.0.0.0/0, ::/0" "Endpoint = $5" "PersistentKeepalive = 25" \
+		> "$MIXOMO_WARP_CONF"
+	chmod 600 "$MIXOMO_WARP_CONF"
+}
+
+# Ключи от генераторов и Cloudflare. Результат — в переменных G_PRIV G_PEER G_V4 G_V6.
+_awg_keys_santa() {
+	local reg="$AWG_RUN/reg.json"
+	_awg_say "Ключи: генератор santa-atmo.ru"
+	rm -f "$reg"
+	curl -fsSL --connect-timeout 10 --max-time 30 "$MIXOMO_WARP_PRIMARY" -o "$reg" || { echo "   не ответил"; return 1; }
+	grep -q '"public_key"' "$reg" || { echo "   ответ без ключей"; rm -f "$reg"; return 1; }
+	G_PRIV=$(grep -o '"key"[[:space:]]*:[[:space:]]*"[^"]*"' "$reg" | head -n1 | sed 's/.*:[[:space:]]*"//;s/"$//')
+	G_PEER=$(grep -o '"public_key"[[:space:]]*:[[:space:]]*"[^"]*"' "$reg" | head -n1 | sed 's/.*:[[:space:]]*"//;s/"$//')
+	G_V4=$(grep -o '"v4"[[:space:]]*:[[:space:]]*"[^"]*"' "$reg" | sed -n '2p' | sed 's/.*:[[:space:]]*"//;s/"$//')
+	G_V6=$(grep -o '"v6"[[:space:]]*:[[:space:]]*"[^"]*"' "$reg" | sed -n '2p' | sed 's/.*:[[:space:]]*"//;s/"$//')
+	rm -f "$reg"
+	[ -n "$G_PRIV" ] && [ -n "$G_PEER" ] && [ -n "$G_V4" ]
+}
+_awg_keys_wgcli() {
+	local reg="$AWG_RUN/reg.json" pre
+	_awg_say "Ключи: генератор wgcli.vercel.app (запасной)"
+	rm -f "$reg"
+	curl -fsSL --connect-timeout 10 --max-time 60 "$MIXOMO_WARP_SECONDARY" -o "$reg" || { echo "   не ответил"; return 1; }
+	for pre in '@.result' '@'; do
+		G_PEER="$(jsonfilter -i "$reg" -e "$pre.config.peers[0].public_key" 2>/dev/null)"
+		[ -n "$G_PEER" ] || continue
+		G_PRIV="$(jsonfilter -i "$reg" -e "$pre.key" 2>/dev/null)"
+		G_V4="$(jsonfilter -i "$reg" -e "$pre.config.interface.addresses.v4" 2>/dev/null)"
+		G_V6="$(jsonfilter -i "$reg" -e "$pre.config.interface.addresses.v6" 2>/dev/null)"
+		break
+	done
+	rm -f "$reg"
+	[ -n "$G_PRIV" ] && [ -n "$G_PEER" ] && [ -n "$G_V4" ] || { echo "   ответ без ключей"; return 1; }
+}
+_awg_genkey() { # -> G_PRIV и G_PUB
+	local gen=awg
+	command -v awg >/dev/null 2>&1 || gen=wg
+	command -v "$gen" >/dev/null 2>&1 || return 1
+	G_PRIV="$($gen genkey 2>/dev/null)"; G_PUB="$(printf '%s' "$G_PRIV" | $gen pubkey 2>/dev/null)"
+	[ -n "$G_PRIV" ] && [ -n "$G_PUB" ]
+}
+# Регистрация у Cloudflare. ПУТЬ — лишние параметры curl (пусто — напрямую, «--interface X»).
+_awg_cf_register() { # ПУТЬ
+	local reg="$AWG_RUN/reg.json" api code pre id tok
+	_awg_genkey || { echo "   нет awg/wg для ключей"; return 1; }
+	for api in "$AWG_API1" "$AWG_API2" $ST_WARP_API; do
+		rm -f "$reg"
+		code=$(curl -s --connect-timeout 8 --max-time 20 $1 -X POST \
+			-H 'Content-Type: application/json' -H 'User-Agent: okhttp/3.12.1' -H 'CF-Client-Version: a-6.10-2158' \
+			-d "{\"key\":\"$G_PUB\",\"install_id\":\"\",\"fcm_token\":\"\",\"tos\":\"$(date -u +%Y-%m-%dT%H:%M:%S.000Z)\",\"type\":\"Android\",\"model\":\"\",\"locale\":\"en_US\"}" \
+			-o "$reg" -w '%{http_code}' "$api" 2>/dev/null)
+		echo "   $api → HTTP ${code:-нет ответа}"
+		[ "$code" = 200 ] || { [ "$code" = 000 ] || [ -z "$code" ] && break; continue; }
+		for pre in '@.result' '@'; do
+			G_PEER="$(jsonfilter -i "$reg" -e "$pre.config.peers[0].public_key" 2>/dev/null)"
+			[ -n "$G_PEER" ] || continue
+			G_V4="$(jsonfilter -i "$reg" -e "$pre.config.interface.addresses.v4" 2>/dev/null)"
+			G_V6="$(jsonfilter -i "$reg" -e "$pre.config.interface.addresses.v6" 2>/dev/null)"
+			id="$(jsonfilter -i "$reg" -e "$pre.id" 2>/dev/null)"; tok="$(jsonfilter -i "$reg" -e "$pre.token" 2>/dev/null)"
+			break
+		done
+		if [ -n "$G_PEER" ] && [ -n "$G_V4" ]; then
+			# Включить WARP на аккаунте — без этого часть аккаунтов ходит «warp=off».
+			[ -n "$id" ] && [ -n "$tok" ] && curl -s --connect-timeout 8 --max-time 15 $1 -X PATCH \
+				-H 'Content-Type: application/json' -H 'User-Agent: okhttp/3.12.1' -H "Authorization: Bearer $tok" \
+				-d '{"warp_enabled":true}' -o /dev/null "$api/$id" 2>/dev/null
+			rm -f "$reg"
+			return 0
+		fi
+	done
+	rm -f "$reg"
+	return 1
+}
+_awg_api_ok() { # ПУТЬ — ответил ли API хоть чем-то (любой HTTP-код — дошли до Cloudflare)
+	local code
+	code=$(curl -s --connect-timeout 5 --max-time 8 $1 -o /dev/null -w '%{http_code}' "$AWG_API1/" 2>/dev/null)
+	[ -n "$code" ] && [ "$code" != 000 ]
+}
+
+# Временный туннель: ИНТЕРФЕЙС ПРИВАТНЫЙ АДРЕС ТОЧКА I1 [КЛЮЧ_УЗЛА]. Интерфейс пересоздаётся на
+# каждую попытку, а не правится через `awg set … peer`: у части сборок модуля правка узла при
+# включённой маскировке роняет ядро (замечено в RR-WARP-Scanner). Код 0 — рукопожатие было,
+# 2 — интерфейс не создаётся (нет модуля). Модуль AWG 1.0 не знает I1 — тогда без него
+# (AWG_NO_I1=1, и в WARP.conf I1 тоже не пишется).
+AWG_NO_I1=0
+_awg_try() {
+	local dev="$1" conf="$AWG_RUN/try.conf" hs i=0 i1="$5"
+	[ "$AWG_NO_I1" = 1 ] && i1=""
+	ip link del "$dev" >/dev/null 2>&1
+	ip link add dev "$dev" type amneziawg >/dev/null 2>&1 || return 2
+	ip link set "$dev" mtu 1280 >/dev/null 2>&1
+	ip addr add "$3/32" dev "$dev" >/dev/null 2>&1
+	ip link set "$dev" up >/dev/null 2>&1
+	printf '%s\n' "[Interface]" "PrivateKey = $2" \
+		"Jc = $MIXOMO_AWG_JC" "Jmin = $MIXOMO_AWG_JMIN" "Jmax = $MIXOMO_AWG_JMAX" "S1 = $MIXOMO_AWG_S1" "S2 = $MIXOMO_AWG_S2" \
+		"H1 = $MIXOMO_AWG_H1" "H2 = $MIXOMO_AWG_H2" "H3 = $MIXOMO_AWG_H3" "H4 = $MIXOMO_AWG_H4" ${i1:+"I1 = $i1"} "" \
+		"[Peer]" "PublicKey = ${6:-$AWG_WARP_PEER}" "AllowedIPs = 0.0.0.0/0" "Endpoint = $4" "PersistentKeepalive = 5" > "$conf"
+	if ! awg setconf "$dev" "$conf" >/dev/null 2>&1; then
+		if [ -n "$i1" ] && sed -i '/^I1 = /d' "$conf" && awg setconf "$dev" "$conf" >/dev/null 2>&1; then
+			[ "$AWG_NO_I1" = 1 ] || echo "   модуль AmneziaWG не знает маску I1 (версия 1.0) — пробуем без неё"
+			AWG_NO_I1=1
+		else
+			rm -f "$conf"; return 1
+		fi
+	fi
+	rm -f "$conf"
+	while [ "$i" -lt 8 ]; do
+		hs=$(awg show "$dev" latest-handshakes 2>/dev/null | awk '{ print $2; exit }')
+		[ "${hs:-0}" -gt 0 ] 2>/dev/null && return 0
+		sleep 0.5 2>/dev/null || sleep 1
+		i=$((i + 1))
+	done
+	return 1
+}
+_awg_try_down() { ip link del "$1" >/dev/null 2>&1; }
+# «, маска X» для журнала; модуль без I1 — пусто.
+_awg_ml() { [ "$AWG_NO_I1" = 1 ] || echo ", маска $(_awg_mask_name "$1")"; }
+_awg_trace() { # ИНТЕРФЕЙС — идёт ли трафик: trace Cloudflare изнутри туннеля
+	curl -s --interface "$1" --connect-timeout 4 --max-time 6 http://1.1.1.1/cdn-cgi/trace 2>/dev/null | grep -Eq '^warp=(on|plus)'
+}
+_awg_mask_name() { case "$1" in "$AWG_I1_ICLOUD") echo "iCloud-DNS" ;; "$AWG_I1_QUIC1") echo "QUIC-2" ;; *) echo "QUIC" ;; esac; }
+
+do_awg_gen() { # std ТОЧКА | check
+	local mode="$1" ep="$2" path="" i hs a host port m n=0 best="" fall="" bmask="$MIXOMO_AWG_I1" bep="" masks tried=""
 	echo gen > "$AWG_RUN/phase"
 	mkdir -p "$AWG_RUN"
-	_awg_say "Получаем ключи WARP"
-	case "$method" in
-		cf)
-			_awg_say "Способ: напрямую у Cloudflare"
-			command -v jsonfilter >/dev/null 2>&1 || { echo "ОШИБКА: нет jsonfilter"; return 1; }
-			local gen=""
-			command -v awg >/dev/null 2>&1 && gen=awg
-			[ -n "$gen" ] || { command -v wg >/dev/null 2>&1 && gen=wg; }
-			[ -n "$gen" ] || { echo "ОШИБКА: для этого способа нужен AmneziaWG (или wireguard-tools) — установите его выше"; return 1; }
-			priv="$($gen genkey 2>/dev/null)"; pub="$(printf '%s' "$priv" | $gen pubkey 2>/dev/null)"
-			tos="$(date -u +%Y-%m-%dT%H:%M:%S.000Z)"
-			for api in $ST_WARP_API; do
-				rm -f "$reg"
-				echo "   запрос: $api"
-				curl -fsS --connect-timeout 8 --max-time 25 -X POST \
-					-H 'User-Agent: okhttp/3.12.1' -H 'CF-Client-Version: a-6.10-2158' -H 'Content-Type: application/json' \
-					-d "{\"install_id\":\"\",\"tos\":\"$tos\",\"key\":\"$pub\",\"fcm_token\":\"\",\"type\":\"ios\",\"locale\":\"en_US\"}" \
-					-o "$reg" "$api" || { echo "   не ответил"; continue; }
-				peer="$(jsonfilter -i "$reg" -e '@.config.peers[0].public_key' 2>/dev/null)"
-				v4="$(jsonfilter -i "$reg" -e '@.config.interface.addresses.v4' 2>/dev/null)"
-				v6="$(jsonfilter -i "$reg" -e '@.config.interface.addresses.v6' 2>/dev/null)"
-				[ -n "$peer" ] && [ -n "$v4" ] && break
-				echo "   ответ без ключей"
-			done
-			rm -f "$reg"
-			;;
-		santa|wgcli)
-			# Генераторы страницы Mixomo пишут готовый файл сами — берём из него ключи и адреса.
-			local tmp="$AWG_RUN/gen.conf"
-			rm -f "$tmp"
-			if [ "$method" = santa ]; then
-				_awg_say "Способ: генератор santa-atmo.ru"
-				curl -fsSL --max-time 30 "$MIXOMO_WARP_PRIMARY" -o "$reg" && grep -q '"public_key"' "$reg" && {
-					priv=$(grep -o '"key"[[:space:]]*:[[:space:]]*"[^"]*"' "$reg" | head -n1 | sed 's/.*:[[:space:]]*"//;s/"$//')
-					peer=$(grep -o '"public_key"[[:space:]]*:[[:space:]]*"[^"]*"' "$reg" | head -n1 | sed 's/.*:[[:space:]]*"//;s/"$//')
-					v4=$(grep -o '"v4"[[:space:]]*:[[:space:]]*"[^"]*"' "$reg" | sed -n '2p' | sed 's/.*:[[:space:]]*"//;s/"$//')
-					v6=$(grep -o '"v6"[[:space:]]*:[[:space:]]*"[^"]*"' "$reg" | sed -n '2p' | sed 's/.*:[[:space:]]*"//;s/"$//')
-				}
-			else
-				_awg_say "Способ: генератор wgcli.vercel.app"
-				curl -fsSL --max-time 60 "$MIXOMO_WARP_SECONDARY" -o "$reg" && {
-					priv="$(jsonfilter -i "$reg" -e '@.result.key' 2>/dev/null)"
-					peer="$(jsonfilter -i "$reg" -e '@.result.config.peers[0].public_key' 2>/dev/null)"
-					v4="$(jsonfilter -i "$reg" -e '@.result.config.interface.addresses.v4' 2>/dev/null)"
-					v6="$(jsonfilter -i "$reg" -e '@.result.config.interface.addresses.v6' 2>/dev/null)"
-				}
-			fi
-			rm -f "$reg"
-			;;
-		*) echo "ОШИБКА: неизвестный способ"; return 1 ;;
-	esac
-	[ -n "$priv" ] && [ -n "$peer" ] && [ -n "$v4" ] || { echo "ОШИБКА: ключи не получены — попробуйте другой способ"; return 1; }
-	_awg_say "Ключи получены (адрес $v4)"
-
-	if [ "$ep" = auto ]; then
-		_awg_say "Подбираем самую быструю точку входа"
-		ep="$(_mixomo_warp_best_endpoint)"
-	fi
-	_awg_valid_ep "$ep" || ep="engage.cloudflareclient.com:4500"
-	_awg_say "Точка входа: $ep"
-
-	mkdir -p "$(dirname "$MIXOMO_WARP_CONF")"
-	{
-		printf '%s\n' "[Interface]" "PrivateKey = $priv" "Address = ${v4}${v6:+, $v6}" "DNS = 1.1.1.1, 1.0.0.1" "MTU = 1280"
-		if [ "$prof" != plain ]; then
-			printf '%s\n' "S1 = $MIXOMO_AWG_S1" "S2 = $MIXOMO_AWG_S2" "Jc = $MIXOMO_AWG_JC" "Jmin = $MIXOMO_AWG_JMIN" "Jmax = $MIXOMO_AWG_JMAX" \
-				"H1 = $MIXOMO_AWG_H1" "H2 = $MIXOMO_AWG_H2" "H3 = $MIXOMO_AWG_H3" "H4 = $MIXOMO_AWG_H4" "I1 = $MIXOMO_AWG_I1"
+	G_PRIV=""; G_PEER=""; G_V4=""; G_V6=""
+	if [ "$mode" = std ]; then
+		_awg_say "Генерируем WARP"
+		_awg_keys_santa || _awg_keys_wgcli || { _awg_say "Ключи: напрямую у Cloudflare"; _awg_cf_register ""; } ||
+			{ echo "ОШИБКА: ключи не получены — генераторы и Cloudflare не ответили; попробуйте «Сгенерировать с проверкой связи»"; return 1; }
+		_awg_say "Ключи получены (адрес $G_V4)"
+		if [ "$ep" = auto ]; then
+			_awg_say "Подбираем лучший endpoint"
+			ep="$(_mixomo_warp_best_endpoint)"
 		fi
-		printf '%s\n' "" "[Peer]" "PublicKey = $peer" "AllowedIPs = 0.0.0.0/0, ::/0" "Endpoint = $ep" "PersistentKeepalive = 25"
-	} > "$MIXOMO_WARP_CONF"
-	chmod 600 "$MIXOMO_WARP_CONF"
-	_awg_say "Готово: WARP.conf сохранён в $MIXOMO_WARP_CONF — его можно превратить в интерфейс ниже"
+		_awg_valid_ep "$ep" || ep="engage.cloudflareclient.com:4500"
+		_awg_say "Endpoint: $ep"
+		_awg_write_conf "$G_PRIV" "$G_PEER" "$G_V4" "$G_V6" "$ep"
+		_awg_say "Готово: WARP.conf сохранён в $MIXOMO_WARP_CONF"
+		return 0
+	fi
+
+	# ── с проверкой связи ──
+	_awg_installed || { echo "ОШИБКА: для проверки связи нужен AmneziaWG — установите его выше"; return 1; }
+	_st_awg_loaded || modprobe amneziawg >/dev/null 2>&1
+	# Временный интерфейс не должен пережить задачу, как бы она ни кончилась.
+	trap '_awg_try_down "$AWG_TEST_IF"' EXIT INT TERM
+	AWG_NO_I1=0
+	_awg_try "$AWG_TEST_IF" "$AWG_BOOT_PRIV" "$AWG_BOOT_IP" "127.0.0.1:9" "$MIXOMO_AWG_I1"
+	if [ $? = 2 ]; then echo "ОШИБКА: не удаётся создать временный интерфейс AmneziaWG — модуль ядра не загружен; нажмите «Обновить / переустановить» или перезагрузите роутер"; return 1; fi
+	_awg_try_down "$AWG_TEST_IF"
+	_awg_say "Шаг 1 из 2: регистрация WARP у Cloudflare"
+	if _awg_api_ok ""; then
+		echo "   API Cloudflare открывается напрямую"
+	else
+		echo "   напрямую API не открывается — ищем обходной путь"
+		path=""
+		for i in $(_awg_ifaces); do
+			a="$(_awg_hs_age "$i")"
+			[ -n "$a" ] && [ "$a" -lt 180 ] || continue
+			if _awg_api_ok "--interface $i"; then path="--interface $i"; echo "   через туннель $i"; break; fi
+		done
+		if [ -z "$path" ]; then
+			echo "   поднимаем временный туннель на общих ключах"
+			for host in 188.114.96.3 162.159.192.1 188.114.97.1; do
+				for port in $AWG_TEST_PORTS; do
+					for m in "$MIXOMO_AWG_I1" "$AWG_I1_ICLOUD" "$AWG_I1_QUIC1"; do
+						[ "$AWG_NO_I1" = 1 ] && [ "$m" != "$MIXOMO_AWG_I1" ] && continue
+						if _awg_try "$AWG_TEST_IF" "$AWG_BOOT_PRIV" "$AWG_BOOT_IP" "$host:$port" "$m" && _awg_api_ok "--interface $AWG_TEST_IF"; then
+							path="--interface $AWG_TEST_IF"; bep="$host:$port"; bmask="$m"
+							echo "   временный туннель: $host:$port$(_awg_ml "$m")"
+							break 3
+						fi
+					done
+				done
+			done
+		fi
+		[ -n "$path" ] || { _awg_try_down "$AWG_TEST_IF"; echo "ОШИБКА: API Cloudflare недоступен ни напрямую, ни через туннели — WARP у этого провайдера, похоже, закрыт"; return 1; }
+	fi
+	if ! _awg_cf_register "$path"; then
+		_awg_try_down "$AWG_TEST_IF"
+		echo "ОШИБКА: Cloudflare не выдал ключи"; return 1
+	fi
+	_awg_try_down "$AWG_TEST_IF"
+	_awg_say "Аккаунт WARP зарегистрирован (адрес $G_V4)"
+
+	_awg_say "Шаг 2 из 2: ищем точку входа и маску, через которые идёт трафик"
+	# Маски — по строке (в самих масках есть пробелы). Первой — та, что открыла временный туннель.
+	masks="$bmask"
+	for m in "$MIXOMO_AWG_I1" "$AWG_I1_ICLOUD" "$AWG_I1_QUIC1"; do [ "$m" = "$bmask" ] || masks="$masks
+$m"; done
+	# Какие порты провайдер вообще выпускает — на первом адресе, любой маской. Порт, не
+	# ответивший ни одной маской, дальше не пробуется: иначе на каждом адресе лишние секунды.
+	local ports="" oifs="$IFS" nl='
+' h1="${bep%%:*}"
+	[ -n "$h1" ] || h1="${AWG_TEST_HOSTS%% *}"
+	for port in $AWG_TEST_PORTS; do
+		IFS="$nl"
+		for m in $masks; do
+			IFS="$oifs"
+			[ "$AWG_NO_I1" = 1 ] && [ "$m" != "$bmask" ] && continue
+			n=$((n + 1))
+			if _awg_try "$AWG_TEST_IF" "$G_PRIV" "$G_V4" "$h1:$port" "$m" "$G_PEER"; then ports="$ports $port"; break; fi
+		done
+		IFS="$oifs"
+		echo "   порт $port: $(case " $ports " in *" $port "*) echo открыт ;; *) echo закрыт ;; esac)"
+	done
+	[ -n "$ports" ] || _rb_warn "Ни один порт WARP не ответил — провайдер, похоже, режет UDP к Cloudflare"
+	# Адрес × открытый порт × маска: первая связка, через которую прошёл trace, — победитель.
+	for host in $h1 $AWG_TEST_HOSTS; do
+		for port in $ports; do
+			a="$host:$port"
+			case " $tried " in *" $a "*) continue ;; esac
+			tried="$tried $a"
+			IFS="$nl"
+			for m in $masks; do
+				IFS="$oifs"
+				[ "$AWG_NO_I1" = 1 ] && [ "$m" != "$bmask" ] && continue
+				n=$((n + 1))
+				[ "$n" -gt 45 ] && break 3
+				if _awg_try "$AWG_TEST_IF" "$G_PRIV" "$G_V4" "$a" "$m" "$G_PEER"; then
+					if _awg_trace "$AWG_TEST_IF"; then
+						best="$a"; bmask="$m"
+						echo "   $a$(_awg_ml "$m") — трафик идёт"
+						break 3
+					fi
+					echo "   $a$(_awg_ml "$m") — рукопожатие есть, трафика нет"
+					[ -n "$fall" ] || fall="$a|$m"
+				else
+					echo "   $a$(_awg_ml "$m") — нет ответа"
+				fi
+			done
+			IFS="$oifs"
+		done
+	done
+	IFS="$oifs"
+	_awg_try_down "$AWG_TEST_IF"
+	if [ -z "$best" ]; then
+		if [ -n "$fall" ]; then
+			best="${fall%%|*}"; bmask="${fall#*|}"
+			_rb_warn "Трафик ни через одну точку не пошёл — записываю точку, где было рукопожатие ($best); туннель может не работать у этого провайдера"
+		else
+			best="engage.cloudflareclient.com:4500"; bmask="$MIXOMO_AWG_I1"
+			_rb_warn "Ни одна точка не ответила с роутера — записываю стандартную ($best)"
+		fi
+	fi
+	_awg_write_conf "$G_PRIV" "$G_PEER" "$G_V4" "$G_V6" "$best" "$bmask"
+	if [ "$AWG_NO_I1" = 1 ]; then
+		sed -i '/^I1 = /d' "$MIXOMO_WARP_CONF"
+		_awg_say "Готово: WARP.conf сохранён в $MIXOMO_WARP_CONF (точка $best, без маски I1 — её не знает модуль)"
+	else
+		_awg_say "Готово: WARP.conf сохранён в $MIXOMO_WARP_CONF (точка $best, маска $(_awg_mask_name "$bmask"))"
+	fi
 }
 
 # ── .conf → интерфейс ──
@@ -6794,24 +7155,32 @@ _awg_check_name() { # ИМЯ
 awg_action() {
 	local action="$1" mode="$2" i name route fw conf ep
 	case "$action" in
-		install|remove|gen|create|pick)
+		install|update|remove|gen|create|pick)
 			_job_alive awg && { echo '{"error":"дождитесь окончания текущей операции"}'; return 1; }
 			_job_alive steer && { echo '{"error":"на странице Steer идёт операция — дождитесь её окончания"}'; return 1; }
 			;;
 	esac
 	case "$action" in
 		install) job_start awg do_awg_install ;;
+		update)  job_start awg do_awg_install update ;;
 		remove)
 			_st_installed && { echo '{"error":"AmneziaWG нужен Steer — сначала удалите Steer на его странице"}'; return 1; }
 			[ -n "$(_awg_ifaces)" ] && { echo '{"error":"сначала удалите интерфейсы AmneziaWG ниже"}'; return 1; }
 			job_start awg do_awg_remove
 			;;
 		gen)
-			# СПОСОБ|ТОЧКА|ПРОФИЛЬ
-			i="${mode%%|*}"; ep="${mode#*|}"; ep="${ep%%|*}"; conf="${mode##*|}"
-			case "$i" in cf|santa|wgcli) ;; *) echo '{"error":"неизвестный способ"}'; return 1 ;; esac
-			[ "$ep" = auto ] || _awg_valid_ep "$ep" || { echo '{"error":"точка входа: адрес:порт, например 162.159.192.1:2408"}'; return 1; }
-			job_start awg do_awg_gen "$i" "$ep" "$conf"
+			# std|ТОЧКА (default — engage.cloudflareclient.com:4500, auto — подбор, адрес:порт — свой) или check
+			i="${mode%%|*}"; ep="${mode#*|}"
+			case "$i" in
+				std)
+					[ "$ep" = default ] && ep="engage.cloudflareclient.com:4500"
+					[ "$ep" = auto ] || _awg_valid_ep "$ep" || { echo '{"error":"endpoint: адрес:порт, например 162.159.192.1:2408"}'; return 1; }
+					job_start awg do_awg_gen std "$ep" ;;
+				check)
+					_awg_installed || { echo '{"error":"для проверки связи нужен AmneziaWG — установите его выше"}'; return 1; }
+					job_start awg do_awg_gen check ;;
+				*) echo '{"error":"неизвестный способ"}'; return 1 ;;
+			esac
 			;;
 		conf_get) mixomo_warp_status ;;
 		conf_set) mixomo_warp_config_set "$mode" ;;
@@ -8082,16 +8451,7 @@ cat > '/www/luci-static/resources/view/zapret-manager/awg.js' << 'ZM_INSTALLER_E
 // AmneziaWG: всё в одном месте — пакеты, интерфейсы, ключи WARP, точки входа и превращение
 // .conf (WARP.conf или любого своего) в интерфейс OpenWrt со своим именем и зоной firewall.
 
-var METHODS = [
-	{ id: 'cf', name: 'Cloudflare напрямую', hint: 'ключи выдаёт сам Cloudflare, как у wgcf — нужен установленный AmneziaWG' },
-	{ id: 'santa', name: 'Генератор santa-atmo', hint: 'сторонний сайт, работает и без AmneziaWG' },
-	{ id: 'wgcli', name: 'Генератор wgcli', hint: 'запасной сторонний сайт' }
-];
-var PROFILES = [
-	{ id: 'awg', name: 'AmneziaWG с маскировкой', hint: 'Jc/Jmin/Jmax и I1 — провайдеру сложнее распознать и заблокировать WARP' },
-	{ id: 'plain', name: 'Обычный WireGuard', hint: 'без маскировки — для клиентов, которые не знают AmneziaWG' }
-];
-var PHASE_TEXT = { install: 'устанавливаем AmneziaWG', remove: 'удаляем AmneziaWG', gen: 'получаем WARP', create: 'создаём интерфейс', pick: 'подбираем точку входа' };
+var PHASE_TEXT = { install: 'устанавливаем AmneziaWG', update: 'переустанавливаем AmneziaWG', remove: 'удаляем AmneziaWG', gen: 'генерируем WARP', create: 'создаём интерфейс', pick: 'подбираем точку входа' };
 
 function badge(cls, text) {
 	return E('span', { 'class': 'zm-badge ' + cls }, [ E('span', { 'class': 'zm-dot' }), text ]);
@@ -8139,7 +8499,7 @@ return view.extend({
 		var genCard = E('div', { 'class': 'zm-card' });
 		var newCard = E('div', { 'class': 'zm-card' });
 
-		var gen = { method: 'cf', ep: 'auto', custom: '', prof: 'awg' };
+		var gen = { custom: false, ep: '' };
 		var mk = { name: '', src: 'warp', text: '', fw: true, route: false, loaded: false };
 		var open = {};          // интерфейс -> какая панель открыта (ep | conf)
 		var testRes = {};       // интерфейс -> результат проверки
@@ -8155,7 +8515,7 @@ return view.extend({
 			renderAll();
 			zm.pollJob(job, logEl, function(ok) {
 				busy = false;
-				var msg = ok ? ({ install: 'AmneziaWG установлен', remove: 'AmneziaWG удалён', gen: 'WARP.conf готов',
+				var msg = ok ? ({ install: 'AmneziaWG установлен', update: 'AmneziaWG переустановлен', remove: 'AmneziaWG удалён', gen: 'WARP сгенерирован',
 					create: 'Интерфейс создан', pick: 'Точка входа подобрана', mihomo: 'WARP добавлен в Mihomo' }[action] || 'Готово')
 					: 'Не получилось — подробности в журнале';
 				zm.toast(msg, ok ? 'info' : 'error');
@@ -8187,12 +8547,12 @@ return view.extend({
 		function renderMain() {
 			mainCard.innerHTML = '';
 			mainCard.appendChild(E('h3', {}, 'AmneziaWG'));
-			mainCard.appendChild(E('p', { 'class': 'zm-hint' }, 'WireGuard с маскировкой трафика: провайдеру сложнее распознать и заблокировать туннель. Здесь — установка, интерфейсы, ключи WARP и точки входа.'));
+			mainCard.appendChild(E('p', { 'class': 'zm-hint' }, 'WireGuard с маскировкой трафика: провайдеру сложнее распознать и заблокировать туннель. Пакеты ставятся из релизов 2Grey/awg-openwrt под вашу версию OpenWrt.'));
 			var inst = !!data.installed;
 			mainCard.appendChild(row('Состояние', inst ? badge('zm-ok', 'установлен') : badge('zm-off', 'не установлен')));
 			if (data.kmod || data.tools) {
 				mainCard.appendChild(row('Пакеты', E('span', { 'style': 'overflow-wrap:anywhere' }, [
-					'kmod-amneziawg ' + (data.kmod || '—') + ' · amneziawg-tools ' + (data.tools || '—') + (data.luci ? ' · luci-proto ' + data.luci : '')
+					'kmod-amneziawg ' + (data.kmod || '—') + ' · amneziawg-tools ' + (data.tools || '—') + (data.luci ? ' · ' + (data.luci_pkg || 'luci-proto') + ' ' + data.luci : '')
 				])));
 			}
 			if (inst) {
@@ -8211,6 +8571,10 @@ return view.extend({
 				if (!data.module || !data.proto) acts.push(E('button', { 'class': 'cbi-button cbi-button-positive', 'click': function() {
 					job('install', '', 'Доустанавливаем AmneziaWG');
 				} }, 'Доустановить'));
+				acts.push(E('button', { 'class': 'cbi-button', 'click': function() {
+					if (!confirm('Переустановить AmneziaWG из свежего релиза 2Grey/awg-openwrt?\n\nЕсли туннели заняты, новый модуль ядра заработает после перезагрузки роутера.')) return;
+					job('update', '', 'Переустанавливаем AmneziaWG');
+				} }, 'Обновить / переустановить'));
 				acts.push(E('button', { 'class': 'cbi-button cbi-button-remove', 'click': function() {
 					if (!confirm('Удалить AmneziaWG с роутера?')) return;
 					job('remove', '', 'Удаляем AmneziaWG');
@@ -8328,37 +8692,51 @@ return view.extend({
 
 		function renderGen() {
 			genCard.innerHTML = '';
-			genCard.appendChild(E('h3', {}, 'Получить WARP'));
-			genCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Бесплатный туннель Cloudflare WARP. Готовый файл WARP.conf общий со страницей Mixomo: из него можно сделать интерфейс ниже или отдать в Mihomo.'));
+			genCard.appendChild(E('h3', {}, 'Сгенерировать WARP'));
+			genCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Бесплатный туннель Cloudflare WARP с маскировкой AmneziaWG. Файл WARP.conf общий со страницей Mixomo: из него можно сделать интерфейс ниже или отдать в Mihomo.'));
+			genCard.appendChild(row('WARP.conf', data.warp_conf ? badge('zm-ok', 'сгенерирован') : badge('zm-off', 'не сгенерирован')));
 
-			genCard.appendChild(E('div', { 'class': 'zm-label', 'style': 'margin:10px 0 6px' }, 'Способ'));
-			genCard.appendChild(tiles(METHODS, gen.method, function(id) { gen.method = id; renderGen(); }));
-			var m = METHODS.filter(function(x) { return x.id === gen.method; })[0];
-			genCard.appendChild(E('p', { 'class': 'zm-hint' }, m.hint));
-
-			genCard.appendChild(E('div', { 'class': 'zm-label', 'style': 'margin:14px 0 6px' }, 'Точка входа'));
-			var eps = [ { id: 'auto', name: 'Подобрать самую быструю' } ].concat(String(data.endpoints || '').split(' ').filter(function(x) { return x; }).map(function(e) { return { id: e, name: e }; }));
-			eps.push({ id: 'custom', name: 'Своя…' });
-			genCard.appendChild(tiles(eps, gen.ep, function(id) { gen.ep = id; renderGen(); }));
-			if (gen.ep === 'custom') {
-				var ci = E('input', { 'class': 'cbi-input-text', 'type': 'text', 'placeholder': 'например 162.159.192.7:2408', 'value': gen.custom, 'style': 'max-width:320px; width:100%; margin-top:8px' });
-				ci.addEventListener('input', function() { gen.custom = ci.value.trim(); });
-				genCard.appendChild(ci);
+			function run(mode, toastText) {
+				if (busy) { zm.toast('Дождитесь окончания текущей операции', 'warning'); return; }
+				if (data.warp_conf && !confirm('WARP.conf уже есть — заменить его новым?')) return;
+				job('gen', mode, toastText);
 			}
-
-			genCard.appendChild(E('div', { 'class': 'zm-label', 'style': 'margin:14px 0 6px' }, 'Профиль'));
-			genCard.appendChild(tiles(PROFILES, gen.prof, function(id) { gen.prof = id; renderGen(); }));
-			var p = PROFILES.filter(function(x) { return x.id === gen.prof; })[0];
-			genCard.appendChild(E('p', { 'class': 'zm-hint' }, p.hint));
-
 			genCard.appendChild(E('div', { 'class': 'zm-actions' }, [
 				E('button', { 'class': 'cbi-button cbi-button-positive', 'disabled': busy ? '' : null, 'click': function() {
-					var ep = gen.ep === 'custom' ? gen.custom : gen.ep;
-					if (!ep) { zm.toast('Укажите точку входа', 'warning'); return; }
-					if (data.warp_conf && !confirm('WARP.conf уже есть — заменить его новым?')) return;
-					job('gen', gen.method + '|' + ep + '|' + gen.prof, 'Получаем WARP');
-				} }, data.warp_conf ? 'Получить заново' : 'Получить WARP.conf')
+					run('std|default', 'Генерируем WARP');
+				} }, 'Сгенерировать WARP'),
+				E('button', { 'class': 'cbi-button', 'disabled': busy ? '' : null, 'click': function() {
+					run('std|auto', 'Подбираем сервер и генерируем WARP (может занять минуту)');
+				} }, 'Сгенерировать с подбором endpoint'),
+				E('button', { 'class': 'cbi-button' + (gen.custom ? ' cbi-button-action' : ''), 'disabled': busy ? '' : null, 'click': function() {
+					gen.custom = !gen.custom; renderGen();
+				} }, 'Свой endpoint')
 			]));
+			if (gen.custom) {
+				var ci = E('input', { 'class': 'cbi-input-text', 'type': 'text', 'placeholder': 'например 162.159.192.7:2408', 'value': gen.ep, 'style': 'max-width:320px; width:100%' });
+				ci.addEventListener('input', function() { gen.ep = ci.value.trim(); });
+				genCard.appendChild(E('div', { 'class': 'zm-actions' }, [
+					ci,
+					E('button', { 'class': 'cbi-button cbi-button-positive', 'disabled': busy ? '' : null, 'click': function() {
+						var ep = (gen.ep || '').trim();
+						if (!/^(\[[0-9A-Fa-f:]+\]|[A-Za-z0-9.-]+):[0-9]{1,5}$/.test(ep)) { zm.toast('Endpoint: адрес:порт, например 162.159.192.7:2408', 'warning'); return; }
+						run('std|' + ep, 'Генерируем WARP с endpoint ' + ep);
+					} }, 'Сгенерировать')
+				]));
+			}
+
+			var checkBox = E('div', { 'class': 'zm-awg-if' }, [
+				E('div', { 'style': 'font-weight:600; margin-bottom:4px' }, 'Сгенерировать с проверкой связи'),
+				E('p', { 'class': 'zm-hint', 'style': 'margin-top:0' }, 'Регистрирует WARP прямо у Cloudflare — если его API у провайдера закрыт, то через живой туннель на роутере или временный туннель. Потом роутер сам перебирает точки входа и маски AmneziaWG и записывает ту связку, через которую реально идёт трафик. Дольше обычного — до нескольких минут, нужен установленный AmneziaWG.'),
+				E('div', { 'class': 'zm-actions' }, [
+					E('button', { 'class': 'cbi-button cbi-button-action', 'disabled': (busy || !data.installed) ? '' : null, 'click': function() {
+						if (!data.installed) { zm.toast('Сначала установите AmneziaWG', 'warning'); return; }
+						run('check', 'Регистрируем WARP и проверяем связь — это займёт несколько минут');
+					} }, 'Сгенерировать с проверкой связи'),
+					!data.installed ? E('span', { 'class': 'zm-hint', 'style': 'margin:0' }, 'Нужен установленный AmneziaWG') : ''
+				])
+			]);
+			genCard.appendChild(checkBox);
 
 			if (data.warp_conf) {
 				genCard.appendChild(row('Файл', E('span', {}, data.warp_path || '/root/WARP.conf')));
@@ -11032,6 +11410,23 @@ return view.extend({
 			function renderGrid(res) {
 				lastList = res;
 				grid.innerHTML = '';
+				// «Выключить» — YouTube-профиль убирается из стратегии Zapret (YouTube идёт как без
+				// обхода или через ByeTube/Steer), и при смене основной стратегии он не вернётся.
+				grid.appendChild(E('div', {
+					'class': 'zm-tile' + (yvOff && !current ? ' zm-active' : ''),
+					'click': function() {
+						if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+						if (yvOff && !current) return;
+						busy = true;
+						zm.toast('Выключаем YouTube-стратегию', 'warning');
+						zm.strategySetYoutube('off').then(function(r2) {
+							busy = false;
+							if (r2.error) { zm.toast(r2.error, 'error'); return; }
+							zm.toast(r2.removed ? 'YouTube-стратегия выключена' : 'YouTube-стратегии в Zapret и так нет — она больше не добавится', 'info');
+							refreshState();
+						}).catch(function() { busy = false; });
+					}
+				}, 'Выключить'));
 				(res.items || []).forEach(function(it) {
 					grid.appendChild(E('div', {
 						'class': 'zm-tile' + (current === it.id ? ' zm-active' : ''),
@@ -11054,10 +11449,12 @@ return view.extend({
 			function refreshState() {
 				zm.status().then(function(s) {
 					current = currentYv(s);
+					yvOff = !!s.yv_off;
 					if (lastList) renderGrid(lastList);
 				});
 			}
 
+			var yvOff = !!status.yv_off;
 			current = currentYv(status);
 
 			var card = E('div', { 'class': 'zm-card' }, [
@@ -11087,7 +11484,7 @@ return view.extend({
 					}, 'Обновить список')
 				]),
 				grid,
-				E('p', { 'class': 'zm-hint' }, 'Применяется поверх текущей стратегии — заменяет только YouTube-часть.')
+				E('p', { 'class': 'zm-hint' }, 'Применяется поверх текущей стратегии — заменяет только YouTube-часть. «Выключить» убирает YouTube-часть из Zapret совсем — например, если YouTube идёт через ByeTube или Steer.')
 			]);
 
 			panels.youtube.appendChild(card);
