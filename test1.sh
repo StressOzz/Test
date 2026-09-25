@@ -399,7 +399,7 @@ do_remove_zapret() {
 	$DELETE luci-app-zapret >&2
 	$DELETE zapret >&2
 	echo "==> Удаляем файлы"
-	rm -rf /opt/zapret "$CONF" /etc/init.d/zapret /etc/firewall.zapret "$YV_OFF_FLAG"
+	rm -rf /opt/zapret "$CONF" /etc/init.d/zapret /etc/firewall.zapret "$YV_OFF_FLAG" "$DV_OFF_FLAG"
 	crontab -l 2>/dev/null | grep -v -i zapret | crontab - 2>/dev/null
 	echo "==> Готово, Zapret удалён"
 }
@@ -552,6 +552,47 @@ _refresh_exclude_file() {
 # YouTube-стратегия выключена человеком (выбор «Выключить» на вкладке YouTube): блок Yv не
 # добавляется ни при смене основной стратегии, ни при установке. Снимается выбором любой Yv.
 YV_OFF_FLAG="/opt/zapret-manager-luci/yv_off"
+DV_OFF_FLAG="/opt/zapret-manager-luci/dv_off"
+DISCORD_RX='^--filter-l7=discord,stun$|^--filter-udp=19294-19344,50000-50100$|^--filter-tcp=2053,2083,2087,2096,8443$|^--hostlist-domains=discord[.]media$|^#[ \t]*Dv[0-9]+$'
+
+_nfq_drop_profiles() {
+	local rx="$1" old="$JOBS_DIR/nfq_drop_old" new="$JOBS_DIR/nfq_drop_new" rc
+	mkdir -p "$JOBS_DIR"
+	awk "/^[[:space:]]*option NFQWS_OPT '\$/ { f = 1 } f" "$CONF" > "$old"
+	[ -s "$old" ] || { rm -f "$old"; return 1; }
+	grep -q "^[[:space:]]*'[[:space:]]*\$" "$old" || { rm -f "$old"; return 1; }
+	awk -v RX="$rx" -v q="'" '
+		function flush(   i, drop) {
+			if (n == 0 && np == 0) return
+			drop = 0
+			for (i = 1; i <= np; i++) if (pc[i] ~ RX) drop = 1
+			for (i = 1; i <= n; i++) if (b[i] ~ RX) drop = 1
+			if (drop) removed = 1
+			else {
+				for (i = 1; i <= np; i++) print pc[i]
+				if (printed) print "--new"
+				for (i = 1; i <= n; i++) print b[i]
+				printed = 1
+			}
+			n = 0; np = 0
+		}
+		function hold_in(   i) { for (i = 1; i <= nh; i++) b[++n] = h[i]; nh = 0 }
+		NR == 1 { print; next }
+		done { print; next }
+		$0 ~ ("^[ \t]*" q "[ \t]*$") { hold_in(); flush(); print; done = 1; next }
+		/^[ \t]*$/ { next }
+		$0 == "--new" { flush(); for (k = 1; k <= nh; k++) pc[++np] = h[k]; nh = 0; next }
+		/^[ \t]*#/ { h[++nh] = $0; next }
+		{ hold_in(); b[++n] = $0 }
+		END { if (!done) exit 1; exit (removed ? 0 : 3) }' "$old" > "$new"
+	rc=$?
+	if [ "$rc" = 0 ]; then
+		sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
+		cat "$new" >> "$CONF"
+	fi
+	rm -f "$old" "$new"
+	return $rc
+}
 
 _add_yv_default() {
 	[ -f "$YV_OFF_FLAG" ] && return 0
@@ -561,6 +602,7 @@ _add_yv_default() {
 }
 
 _discord_str_add() {
+	[ -f "$DV_OFF_FLAG" ] && return 0
 	if ! grep -q "option NFQWS_PORTS_UDP.*19294-19344,50000-50100" "$CONF"; then
 		sed -i "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/'\$/,19294-19344,50000-50100'/" "$CONF"
 	fi
@@ -723,7 +765,7 @@ strategy_set_flowseal() {
 	block=$(awk -v n="#$name" '$0==n{flag=1; print; next} /^#/ && flag{exit} flag{print}' "$f")
 	[ -z "$block" ] && { echo '{"error":"стратегия не найдена"}'; return 1; }
 	# Стратегия Flowseal сама ведёт YouTube-часть — выключатель YouTube снимается.
-	rm -f "$YV_OFF_FLAG"
+	rm -f "$YV_OFF_FLAG" "$DV_OFF_FLAG"
 	sed -i '/^# ZMFS:/d' "$CONF"
 	{ printf '# ZMFS:%s\n' "$name"; cat "$CONF"; } > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"
 	sed -i "/option NFQWS_OPT '/,\$d" "$CONF"
@@ -922,22 +964,53 @@ Dv15() { printf '%s\n' "--filter-tcp=2053,2083,2087,2096,8443" "--hostlist-domai
 Dv16() { printf '%s\n' "--filter-tcp=2053,2083,2087,2096,8443" "--hostlist-domains=discord.media" "--dpi-desync=fake,hostfakesplit" "--dpi-desync-fake-tls-mod=rnd,dupsid,sni=www.google.com" "--dpi-desync-hostfakesplit-mod=host=www.google.com,altorder=1" "--dpi-desync-fooling=ts"; }
 Dv17() { printf '%s\n' "--filter-tcp=2053,2083,2087,2096,8443" "--hostlist-domains=discord.media" "--dpi-desync=hostfakesplit" "--dpi-desync-repeats=4" "--dpi-desync-fooling=ts" "--dpi-desync-hostfakesplit-mod=host=www.google.com"; }
 
+_discord_active() {
+	[ -f "$CONF" ] || return 1
+	grep -qx -- '--filter-l7=discord,stun' "$CONF" || grep -qE '^[[:space:]]*--filter-tcp=2053,2083,2087,2096,8443$' "$CONF"
+}
+
 discord_status() {
-	local dv="" fake=""
+	local dv="" fake="" active=false
 	if [ -f "$CONF" ]; then
-		dv=$(grep -oE '#Dv[0-9]+' "$CONF" | head -n1 | sed 's/#//')
+		dv=$(grep -oE '^#[[:space:]]*Dv[0-9]+' "$CONF" | head -n1 | sed 's/^#[[:space:]]*//')
 		fake=$(grep -m1 -- '--dpi-desync-fake-discord=' "$CONF" | sed 's|.*fake/||')
+		_discord_active && active=true
 	fi
-	printf '{"current":"%s","current_fake":"%s","available":["Dv1","Dv2","Dv3","Dv4","Dv5","Dv6","Dv7","Dv8","Dv9","Dv10","Dv11","Dv12","Dv13","Dv14","Dv15","Dv16","Dv17"]}\n' "$(esc "$dv")" "$(esc "$fake")"
+	printf '{"current":"%s","current_fake":"%s","active":%s,"available":["Dv1","Dv2","Dv3","Dv4","Dv5","Dv6","Dv7","Dv8","Dv9","Dv10","Dv11","Dv12","Dv13","Dv14","Dv15","Dv16","Dv17"]}\n' "$(esc "$dv")" "$(esc "$fake")" "$active"
+}
+
+discord_off() {
+	[ -f "$CONF" ] || { echo '{"error":"Zapret не установлен"}'; return 1; }
+	_nfq_drop_profiles "$DISCORD_RX"
+	case $? in
+		0)
+			sed -i -e "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/,19294-19344,50000-50100//" \
+				-e "/^[[:space:]]*option NFQWS_PORTS_TCP '/s/,2053,2083,2087,2096,8443//" "$CONF"
+			mkdir -p "$(dirname "$DV_OFF_FLAG")"; touch "$DV_OFF_FLAG"
+			zapret_restart
+			printf '{"ok":true,"dv":"off","removed":true}\n' ;;
+		3)
+			mkdir -p "$(dirname "$DV_OFF_FLAG")"; touch "$DV_OFF_FLAG"
+			printf '{"ok":true,"dv":"off","removed":false}\n' ;;
+		*) echo '{"error":"блок стратегий Zapret (NFQWS_OPT) записан не так, как его пишет панель, — Discord-часть не тронута"}'; return 1 ;;
+	esac
 }
 
 discord_set_dv() {
 	local num="$1" strat
+	[ "$num" = off ] && { discord_off; return; }
 	echo "$num" | grep -qE '^(1[0-7]|[1-9])$' || { echo '{"error":"некорректный номер Dv"}'; return 1; }
 	[ -f "$CONF" ] || { echo '{"error":"Zapret не установлен"}'; return 1; }
 	strat="$(Dv"$num")"
-	grep -q -E '^[[:space:]]*--filter-tcp=2053,2083,2087,2096,8443' "$CONF" || {
-		echo '{"error":"блок discord.media отсутствует — сначала установите базовую стратегию с поддержкой Discord"}'; return 1; }
+	if ! grep -qx -- '--filter-l7=discord,stun' "$CONF" || ! grep -q -E '^[[:space:]]*--filter-tcp=2053,2083,2087,2096,8443' "$CONF"; then
+		_nfq_drop_profiles "$DISCORD_RX"
+		case $? in 0|3) ;; *) echo '{"error":"блок стратегий Zapret (NFQWS_OPT) записан не так, как его пишет панель, — Discord-часть не добавлена"}'; return 1 ;; esac
+		rm -f "$DV_OFF_FLAG"
+		_discord_str_add
+		grep -q -E '^[[:space:]]*--filter-tcp=2053,2083,2087,2096,8443' "$CONF" || {
+			echo '{"error":"не удалось добавить блок Discord — сначала выберите основную стратегию"}'; return 1; }
+	fi
+	rm -f "$DV_OFF_FLAG"
 	local start end line
 	start=$(grep -n -E '^[[:space:]]*--filter-tcp=2053,2083,2087,2096,8443' "$CONF" | head -n1 | cut -d: -f1)
 	end=$(tail -n +"$start" "$CONF" | grep -n -m1 -E '^--new$|^#|^'"'"'$' | cut -d: -f1)
@@ -961,7 +1034,7 @@ discord_set_fake() {
 		*) echo '{"error":"неизвестный fake-файл"}'; return 1 ;;
 	esac
 	[ -f "$CONF" ] || { echo '{"error":"Zapret не установлен"}'; return 1; }
-	grep -q -- "--filter-l7=discord,stun" "$CONF" || { echo '{"error":"блок discord,stun не найден"}'; return 1; }
+	grep -q -- "--filter-l7=discord,stun" "$CONF" || { echo '{"error":"стратегия Discord выключена — сначала выберите Dv"}'; return 1; }
 	awk -v new="$file" '{
 		if ($0 == "--filter-l7=discord,stun") { print; getline; print;
 			if ($0 == "--dpi-desync=fake") { getline a; getline b;
@@ -1217,42 +1290,78 @@ strategy_Gv() {
 		"--dpi-desync-any-protocol=1" "--dpi-desync-fake-unknown-udp=/opt/zapret/files/fake/stun.bin" "--dpi-desync-cutoff=n$n"
 }
 
+_game_rx() {
+	printf '%s' "^#Gv[0-9]+(Xtreme)?\$|^--filter-(udp|tcp)=($PORTS_UDP|$PORTS_TCP|80,88,444-65535)\$"
+}
+
+_game_active() {
+	[ -f "$CONF" ] || return 1
+	sed -n "/^[[:space:]]*option NFQWS_OPT '\$/,\$p" "$CONF" | grep -qE "$(_game_rx)"
+}
+
+_game_xtreme_undo_opts() {
+	local xfile="/opt/zapret/tmp/GvXtreme" old_tcp_opt old_udp_opt
+	grep -q "^#Gv[0-9]\+Xtreme\$" "$CONF" || { rm -f "$xfile"; return 0; }
+	if [ -f "$xfile" ]; then
+		old_tcp_opt=$(sed -n '4p' "$xfile")
+		old_udp_opt=$(sed -n '5p' "$xfile")
+		[ -n "$old_tcp_opt" ] && sed -i "s|^[[:space:]]*option NFQWS_PORTS_TCP .*|$old_tcp_opt|" "$CONF"
+		[ -n "$old_udp_opt" ] && sed -i "s|^[[:space:]]*option NFQWS_PORTS_UDP .*|$old_udp_opt|" "$CONF"
+	fi
+	rm -f "$xfile"
+}
+
 game_status() {
-	local current="" xtreme="false" fake=""
+	local current="" xtreme="false" fake="" active="false"
 	if [ -f "$CONF" ]; then
-		local i
-		for i in 1 2 3 4; do grep -q "^#Gv$i\$" "$CONF" && current="Gv$i"; done
+		current=$(grep -oE '^#Gv[1-4](Xtreme)?$' "$CONF" | head -n1 | sed 's/^#//; s/Xtreme$//')
 		grep -q "^#Gv[0-9]\+Xtreme\$" "$CONF" && xtreme="true"
 		fake=$(grep -m1 -- '--dpi-desync-fake-unknown-udp=' "$CONF" | sed 's|.*fake/||')
+		_game_active && active="true"
 	fi
-	printf '{"current":"%s","xtreme":%s,"fake":"%s"}\n' "$(esc "$current")" "$xtreme" "$(esc "$fake")"
+	printf '{"current":"%s","xtreme":%s,"fake":"%s","active":%s}\n' "$(esc "$current")" "$xtreme" "$(esc "$fake")" "$active"
 }
 
 game_set() {
-	local choice="$1" current="" i
-	echo "$choice" | grep -qE '^[1-4]$' || { echo '{"error":"некорректный номер Gv"}'; return 1; }
+	local choice="$1" current="" rc
+	echo "$choice" | grep -qE '^([1-4]|off)$' || { echo '{"error":"некорректный номер Gv"}'; return 1; }
 	[ -f "$CONF" ] || { echo '{"error":"Zapret не установлен"}'; return 1; }
-	for i in 1 2 3 4; do grep -q "^#Gv$i\$" "$CONF" && current="Gv$i"; done
+	current=$(grep -oE '^#Gv[1-4](Xtreme)?$' "$CONF" | head -n1 | sed 's/^#//; s/Xtreme$//')
 
-	local last_quote gv_line
-	last_quote=$(grep -n "^'\$" "$CONF" | tail -n1 | cut -d: -f1)
-	if grep -q "^#Gv" "$CONF"; then
-		gv_line=$(grep -n "^#Gv" "$CONF" | tail -n1 | cut -d: -f1)
-		sed -i "${gv_line},${last_quote}d" "$CONF"
-	elif [ -n "$last_quote" ]; then
-		sed -i "${last_quote},\$d" "$CONF"
+	if [ "$choice" = off ]; then
+		_game_active || { printf '{"ok":true,"game":"none","removed":false}\n'; return 0; }
+		cp "$CONF" "$CONF.gvbak"
+		_game_xtreme_undo_opts
+		_nfq_drop_profiles "$(_game_rx)"
+		rc=$?
+		case $rc in
+			0|3)
+				rm -f "$CONF.gvbak"
+				_remove_ports_if_present NFQWS_PORTS_UDP "$PORTS_UDP"
+				_remove_ports_if_present NFQWS_PORTS_TCP "$PORTS_TCP"
+				zapret_restart
+				printf '{"ok":true,"game":"none","removed":true}\n' ;;
+			*)
+				mv -f "$CONF.gvbak" "$CONF"
+				echo '{"error":"блок стратегий Zapret (NFQWS_OPT) записан не так, как его пишет панель, — игровая часть не тронута"}'; return 1 ;;
+		esac
+		return 0
 	fi
 
-	if [ "$current" = "Gv$choice" ]; then
-		_remove_ports_if_present NFQWS_PORTS_UDP "$PORTS_UDP"
-		_remove_ports_if_present NFQWS_PORTS_TCP "$PORTS_TCP"
-		echo "'" >> "$CONF"
-		zapret_restart
-		printf '{"ok":true,"game":"none"}\n'
-		return
-	fi
+	[ "$current" = "Gv$choice" ] && { printf '{"ok":true,"game":"Gv%s"}\n' "$choice"; return 0; }
 
-	local strat
+	cp "$CONF" "$CONF.gvbak"
+	_game_xtreme_undo_opts
+	_nfq_drop_profiles "$(_game_rx)"
+	case $? in
+		0|3) rm -f "$CONF.gvbak" ;;
+		*) mv -f "$CONF.gvbak" "$CONF"
+			echo '{"error":"блок стратегий Zapret (NFQWS_OPT) записан не так, как его пишет панель, — игровая часть не тронута"}'; return 1 ;;
+	esac
+
+	local last_quote strat
+	last_quote=$(grep -n "^[[:space:]]*'[[:space:]]*\$" "$CONF" | tail -n1 | cut -d: -f1)
+	[ -n "$last_quote" ] && sed -i "${last_quote},\$d" "$CONF"
 	if [ "$choice" = "1" ]; then strat="$(strategy_Gv1; strategy_TCP_common)"; else strat="$(strategy_Gv "$choice"; strategy_TCP_common)"; fi
 	echo "$strat" | sed '/^$/d' >> "$CONF"
 	echo "'" >> "$CONF"
@@ -2480,6 +2589,13 @@ mixomo_status() {
 		"$(esc "$lan_ip")" "$subscription" "$mt_list" "$(esc "$autorestart")" "$(esc "$ui_panel")"
 }
 
+_mt_list_known() {
+	[ -f "$MAGITRICKLE_CONF" ] || return 1
+	grep -Fq 'name: Google_ai' "$MAGITRICKLE_CONF" ||
+		grep -Fq 'name: Meta (WA+FB+Instagram)' "$MAGITRICKLE_CONF" ||
+		grep -Fq 'url: https://sw.ext.io/ipset/ipset_cf.list' "$MAGITRICKLE_CONF"
+}
+
 do_mixomo_install() {
 	_ensure_deps
 	echo "==> Устанавливаем Mixomo (Mihomo + hev-socks5-tunnel + MagiTrickle)"
@@ -2662,6 +2778,17 @@ do_mixomo_install() {
 		fi
 	else
 		echo "!! Не удалось определить версию или архитектуру MagiTrickle"
+	fi
+
+	if [ -x /etc/init.d/magitrickle ] && ! _mt_list_known; then
+		echo "==> Включаем список Internet Helper в MagiTrickle"
+		mkdir -p "$(dirname "$MAGITRICKLE_CONF")"
+		if wget -q --timeout=20 -O "$MAGITRICKLE_CONF.new" "$MT_URL_IH1" && [ -s "$MAGITRICKLE_CONF.new" ]; then
+			mv -f "$MAGITRICKLE_CONF.new" "$MAGITRICKLE_CONF"
+		else
+			rm -f "$MAGITRICKLE_CONF.new"
+			echo "!! Не удалось скачать список Internet Helper — его можно выбрать позже на вкладке Mixomo"
+		fi
 	fi
 
 	echo "==> Запускаем сервисы"
@@ -4969,7 +5096,7 @@ _rb_svc_ids() { grep -v '^#' "$RB_SHARE/services.conf" 2>/dev/null | cut -d'|' -
 _rb_svc_field() { grep "^$1|" "$RB_SHARE/services.conf" 2>/dev/null | head -n1 | cut -d'|' -f"$2"; }
 _rb_svc_names() { local id; for id in $1; do printf '%s, ' "$(_rb_svc_field "$id" 2)"; done | sed 's/, $//'; }
 # Сервис можно пустить через WARP, только если у него есть списки доменов или адресов.
-_rb_routable() { [ -n "$(_rb_svc_field "$1" 3)$(_rb_svc_field "$1" 4)" ]; }
+_rb_routable() { [ "$1" = custom ] && [ -n "$(_rb_svc_field custom 1)" ] && return 0; [ -n "$(_rb_svc_field "$1" 3)$(_rb_svc_field "$1" 4)" ]; }
 _rb_in() { grep -qxF "$1" "$2" 2>/dev/null; }
 _job_alive() { _job_running "$1"; }
 
@@ -5058,7 +5185,7 @@ _st_running() { _job_alive steer; }
 _st_installed() { _st_owns "net $ST_WARP_IF" && command -v steer >/dev/null 2>&1; }
 # Готов принимать сервисы: поставлен, не выключен человеком и ничто не мешает.
 _st_ready() { _st_installed && [ ! -f "$ST_OFF" ] && [ -z "$(_st_blocker)" ]; }
-_st_sel() { [ -s "$ST_SEL" ] || return 0; local id; for id in $(cat "$ST_SEL"); do _rb_routable "$id" && echo "$id"; done; }
+_st_sel() { [ -s "$ST_SEL" ] || return 0; local id; for id in $(cat "$ST_SEL"); do _rb_routable "$id" || continue; [ "$id" = custom ] && [ ! -s "$ST_USER_DIR/custom.lst" ] && continue; echo "$id"; done; }
 
 # Переезд со старых версий (красная кнопка 1.34, автообход 1.35–1.36), где туннель и steer
 # записывались в каталог автообхода. Раньше переезд шёл, только пока каталога steer ещё нет, —
@@ -6457,12 +6584,28 @@ steer_list_set() {
 	n=$(grep -c . "$tmp")
 	[ "$n" -gt 0 ] || { rm -f "$tmp"; echo '{"error":"в списке нет ни одного домена"}'; return 1; }
 	mv "$tmp" "$f"
+	if [ "$id" = custom ]; then
+		mkdir -p "$ST_DIR"
+		[ -f "$ST_SKIP" ] && sed -i '/^custom$/d' "$ST_SKIP"
+		_rb_in custom "$ST_SEL" || echo custom >> "$ST_SEL"
+	fi
 	_st_list_changed "$id" "$n"
 }
 
 steer_list_reset() { # ID
 	_rb_routable "$1" || { echo '{"error":"неизвестный сервис"}'; return 1; }
 	rm -f "$ST_USER_DIR/$1.lst"
+	if [ "$1" = custom ]; then
+		if _rb_in custom "$ST_SEL"; then
+			sed -i '/^custom$/d' "$ST_SEL"
+			if _st_installed && [ ! -f "$ST_OFF" ] && [ -z "$(_st_blocker)" ]; then
+				job_start steer do_steer_apply
+				return
+			fi
+		fi
+		printf '{"ok":true,"saved":true,"count":0}\n'
+		return
+	fi
 	_st_list_changed "$1" 0
 }
 
@@ -6481,6 +6624,7 @@ _st_sel_set() {
 	for id in $want; do
 		case "$id" in *[!a-z0-9_-]*) echo '{"error":"неизвестный сервис"}'; return 1 ;; esac
 		[ -n "$(_rb_svc_field "$id" 1)" ] && _rb_routable "$id" || { echo '{"error":"неизвестный сервис"}'; return 1; }
+		[ "$id" = custom ] && [ ! -s "$ST_USER_DIR/custom.lst" ] && { echo '{"error":"свой список пуст — сначала добавьте в него домены"}'; return 1; }
 	done
 	mkdir -p "$ST_DIR"
 	touch "$ST_SKIP"
@@ -8391,12 +8535,14 @@ return view.extend({
 				card.appendChild(row('Служба', data.running ? badge('zm-ok', 'работает') : badge('zm-bad', 'остановлена')));
 				// Что на самом деле записано в /etc/config/https-dns-proxy.
 				if (!list.length) card.appendChild(row('Сейчас используется', E('span', {}, 'резолвер не выбран')));
-				list.forEach(function(r, i) {
-					var name = label(r.provider) || host(r.url);
-					card.appendChild(row(i === 0 ? (list.length > 1 ? 'Сейчас используются' : 'Сейчас используется') : '', E('span', { 'style': 'overflow-wrap:anywhere' }, [
-						E('b', {}, name), ' · ' + r.url + (r.port ? ' · порт ' + r.port : '')
-					])));
-				});
+				else card.appendChild(E('div', { 'class': 'zm-row', 'style': 'align-items:flex-start; flex-wrap:nowrap' }, [
+					E('span', { 'class': 'zm-label', 'style': 'line-height:22px' }, list.length > 1 ? 'Сейчас используются' : 'Сейчас используется'),
+					E('div', { 'style': 'display:flex; flex-direction:column; gap:6px; min-width:0; flex:1 1 auto' }, list.map(function(r) {
+						return E('div', { 'style': 'line-height:22px; overflow-wrap:anywhere' }, [
+							E('b', {}, label(r.provider) || host(r.url)), ' · ' + r.url + (r.port ? ' · порт ' + r.port : '')
+						]);
+					}))
+				]));
 				card.appendChild(row('Перехват DNS устройств', data.force_dns
 					? badge('zm-ok', 'включён')
 					: badge('zm-off', data.steer_active ? 'выключен — работает Steer' : 'выключен')));
@@ -8922,6 +9068,8 @@ return view.extend({
 		var listCard = E('div', { 'class': 'zm-card' });
 		var checkCard = E('div', { 'class': 'zm-card' });
 		var domCard = E('div', { 'class': 'zm-card' });
+		var customCard = E('div', { 'class': 'zm-card' });
+		var customData = null, customLoading = false, customEditor = null, customDraft = null;
 		var domSel = null, domData = null, domBusy = false, domEditor = null;
 		var domOpen = false;
 		try { domOpen = localStorage.getItem('zm.steer.lists') === '1'; } catch (e) {}
@@ -9173,7 +9321,7 @@ return view.extend({
 			]));
 			if (!domOpen) return;
 			domCard.appendChild(E('p', { 'class': 'zm-hint' }, 'По этим доменам трафик сервиса уходит в туннель. Выберите сервис, чтобы посмотреть или поправить его список: свой список заменит стандартный и сохранится при обновлениях.'));
-			var list = data.services || [];
+			var list = (data.services || []).filter(function(s) { return s.id !== 'custom'; });
 			domCard.appendChild(E('div', { 'class': 'zm-grid' }, list.map(function(s) {
 				return E('div', {
 					'class': 'zm-tile' + (domSel === s.id ? ' zm-active' : ''),
@@ -9202,6 +9350,71 @@ return view.extend({
 			} }, 'Вернуть стандартный'));
 			domCard.appendChild(E('div', { 'class': 'zm-actions' }, acts));
 			domCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Один домен на строку, поддомены включаются сами (example.com — это и www.example.com). Строки, не похожие на домен, при сохранении отбрасываются. Если сервис сейчас идёт через WARP, правила применятся сразу.'));
+		}
+
+		function loadCustom() {
+			customLoading = true;
+			renderCustom();
+			zm.steerAction('list_get', 'custom').then(function(res) {
+				customLoading = false;
+				if (res.error) { customData = null; renderCustom(); return; }
+				customData = res;
+				customDraft = null;
+				renderCustom();
+			}).catch(function() { customLoading = false; renderCustom(); });
+		}
+
+		function saveCustom(action, arg, okText) {
+			if (busy) { zm.toast('Дождитесь окончания текущей операции', 'warning'); return; }
+			zm.steerAction(action, arg).then(function(res) {
+				if (res.error) { zm.toast(res.error, 'error'); return; }
+				customDraft = null;
+				if (res.saved) {
+					zm.toast(okText + (res.count ? ' (' + res.count + ')' : ''), 'info');
+					loadCustom();
+					refresh();
+					return;
+				}
+				zm.toast(okText + ' — применяем правила', 'info');
+				lastAction = 'domlist';
+				data.running = true;
+				data.phase = 'rules';
+				follow();
+				loadCustom();
+			}).catch(function() { zm.toast('Роутер не ответил', 'error'); });
+		}
+
+		function renderCustom() {
+			if (customEditor && customData) customDraft = customEditor.value;
+			customCard.innerHTML = '';
+			var svc = (data.services || []).filter(function(s) { return s.id === 'custom'; })[0];
+			customCard.style.display = data.blocker || !svc ? 'none' : '';
+			if (data.blocker || !svc) return;
+			customCard.appendChild(E('h3', {}, 'Свой список'));
+			customCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Домены из этого списка пойдут через WARP. После сохранения список сразу включается в выбор сервисов, «Очистить» — убирает его.'));
+			if (customLoading && !customData) { customCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Загружаем список…')); return; }
+			var n = customData ? (parseInt(customData.count, 10) || 0) : 0;
+			customCard.appendChild(row('Состояние', !n ? badge('zm-off', 'список пуст')
+				: !svc.on ? badge('zm-warn', 'не выбран')
+				: !data.installed ? badge('zm-warn', 'пойдёт через WARP после установки')
+				: data.stopped ? badge('zm-off', 'Steer выключен')
+				: badge('zm-ok', 'идёт через WARP')));
+			customCard.appendChild(row('Доменов', E('span', {}, String(n))));
+			customEditor = E('textarea', { 'class': 'zm-config-editor', 'spellcheck': 'false', 'style': 'min-height:200px', 'placeholder': 'example.com\nsite.org' });
+			customEditor.value = customDraft !== null ? customDraft : (customData && customData.content) || '';
+			customCard.appendChild(customEditor);
+			var acts = [
+				E('button', { 'class': 'cbi-button cbi-button-positive', 'click': function() {
+					if (!customEditor.value.trim()) { zm.toast('Добавьте хотя бы один домен', 'warning'); return; }
+					saveCustom('list_set', 'custom|' + customEditor.value, 'Свой список сохранён');
+				} }, 'Сохранить')
+			];
+			if (n) acts.push(E('button', { 'class': 'cbi-button cbi-button-remove', 'click': function() {
+				if (!confirm('Очистить свой список?\n\nДомены из него пойдут напрямую.')) return;
+				saveCustom('list_reset', 'custom', 'Свой список очищен');
+			} }, 'Очистить'));
+			customCard.appendChild(E('div', { 'class': 'zm-actions' }, acts));
+			customCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Один домен на строку, поддомены включаются сами (example.com — это и www.example.com). Строки, не похожие на домен, при сохранении отбрасываются.'));
 		}
 
 		// ── проверка ──
@@ -9372,6 +9585,7 @@ return view.extend({
 			renderMain();
 			renderDns();
 			renderLists();
+			renderCustom();
 			renderDom();
 			renderCheck();
 			renderWarp();
@@ -9379,7 +9593,8 @@ return view.extend({
 		}
 
 		renderAll();
-		[ mainCard, logEl, dnsCard, listCard, domCard, checkCard, warpCard, autoCard ].forEach(function(n) { wrap.appendChild(n); });
+		[ mainCard, logEl, dnsCard, listCard, customCard, domCard, checkCard, warpCard, autoCard ].forEach(function(n) { wrap.appendChild(n); });
+		if (!data.blocker) loadCustom();
 
 		if (data.running) { lastAction = data.phase === 'remove' ? 'remove' : [ 'install', 'pkgs', 'awg', 'keys', 'tunnel' ].indexOf(data.phase) >= 0 ? 'install' : 'apply'; follow(); }
 		else if (data.installed && !data.stopped && (parseInt(data.channels, 10) || 0) > 0) runDiag(true);
@@ -9413,6 +9628,7 @@ whatsapp|WhatsApp|svc_meta.lst|whatsapp.lst|web.whatsapp.com|static.whatsapp.net
 x|X (Twitter)|svc_twitter.lst|twitter_x.lst|x.com|twitter.com,abs.twimg.com,video.twimg.com||twitter
 github|GitHub|own_github.lst||github.com,raw.githubusercontent.com,objects.githubusercontent.com|codeload.github.com,api.github.com,ghcr.io||
 telegram|Telegram|svc_telegram.lst|telegram.lst|web.telegram.org|t.me,core.telegram.org,telegra.ph||telegram
+custom|Свой список||||||
 ZM_INSTALLER_EOF
 cat > '/usr/share/zm-redbtn/lists/svc_youtube.lst' << 'ZM_INSTALLER_EOF'
 ggpht.com
@@ -11410,8 +11626,6 @@ return view.extend({
 			function renderGrid(res) {
 				lastList = res;
 				grid.innerHTML = '';
-				// «Выключить» — YouTube-профиль убирается из стратегии Zapret (YouTube идёт как без
-				// обхода или через ByeTube/Steer), и при смене основной стратегии он не вернётся.
 				grid.appendChild(E('div', {
 					'class': 'zm-tile' + (yvOff && !current ? ' zm-active' : ''),
 					'click': function() {
@@ -11426,12 +11640,13 @@ return view.extend({
 							refreshState();
 						}).catch(function() { busy = false; });
 					}
-				}, 'Выключить'));
+				}, yvOff && !current ? 'Выключена' : 'Выключить'));
 				(res.items || []).forEach(function(it) {
 					grid.appendChild(E('div', {
 						'class': 'zm-tile' + (current === it.id ? ' zm-active' : ''),
 						'click': function() {
 							if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+							if (current === it.id) return;
 							busy = true;
 							zm.toast('Применяем стратегию ' + it.id + '', 'warning');
 							zm.strategySetYoutube(it.id).then(function(r2) {
@@ -11506,11 +11721,28 @@ return view.extend({
 
 			function renderGv() {
 				gvGrid.innerHTML = '';
+				var off = !data.active;
+				gvGrid.appendChild(E('div', {
+					'class': 'zm-tile' + (off ? ' zm-active' : ''),
+					'click': function() {
+						if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+						if (off) return;
+						busy = true;
+						zm.toast('Выключаем игровую стратегию', 'warning');
+						zm.gameSet('off').then(function(res) {
+							busy = false;
+							if (res.error) { zm.toast(res.error, 'error'); return; }
+							zm.toast('Игровая стратегия выключена', 'info');
+							refreshState();
+						}).catch(function() { busy = false; });
+					}
+				}, off ? 'Выключена' : 'Выключить'));
 				[1, 2, 3, 4].forEach(function(n) {
 					gvGrid.appendChild(E('div', {
-						'class': 'zm-tile' + (data.current === ('Gv' + n) ? ' zm-active' : ''),
+						'class': 'zm-tile' + (data.active && data.current === ('Gv' + n) ? ' zm-active' : ''),
 						'click': function() {
 							if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+							if (data.active && data.current === ('Gv' + n)) return;
 							busy = true;
 							zm.toast('Применяем игровую стратегию Gv' + n + '', 'warning');
 							zm.gameSet(String(n)).then(function(res) {
@@ -11586,7 +11818,7 @@ return view.extend({
 			var gvCard = E('div', { 'class': 'zm-card' }, [
 				E('h3', {}, 'Игровая стратегия'),
 				gvGrid,
-				E('p', { 'class': 'zm-hint' }, 'Повторный клик по уже выбранной — снимает игровую стратегию.')
+				E('p', { 'class': 'zm-hint' }, '«Выключить» убирает игровую часть из Zapret совсем, вместе с её портами.')
 			]);
 
 			var xtremeCard = E('div', { 'class': 'zm-card' }, [
@@ -11613,11 +11845,28 @@ return view.extend({
 
 			function renderDv() {
 				dvGrid.innerHTML = '';
+				var off = !data.active;
+				dvGrid.appendChild(E('div', {
+					'class': 'zm-tile' + (off ? ' zm-active' : ''),
+					'click': function() {
+						if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+						if (off) return;
+						busy = true;
+						zm.toast('Выключаем стратегию Discord', 'warning');
+						zm.discordSetDv('off').then(function(res) {
+							busy = false;
+							if (res.error) { zm.toast(res.error, 'error'); return; }
+							zm.toast(res.removed ? 'Стратегия Discord выключена' : 'Стратегии Discord в Zapret и так нет — она больше не добавится', 'info');
+							refreshState();
+						}).catch(function() { busy = false; });
+					}
+				}, off ? 'Выключена' : 'Выключить'));
 				(data.available || []).forEach(function(dv) {
 					dvGrid.appendChild(E('div', {
-						'class': 'zm-tile' + (data.current === dv ? ' zm-active' : ''),
+						'class': 'zm-tile' + (data.active && data.current === dv ? ' zm-active' : ''),
 						'click': function() {
 							if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+							if (data.active && data.current === dv) return;
 							busy = true;
 							zm.toast('Применяем стратегию ' + dv + '', 'warning');
 							zm.discordSetDv(dv.replace('Dv', '')).then(function(res) {
@@ -11634,7 +11883,7 @@ return view.extend({
 				fakeGrid.innerHTML = '';
 				GAME_FAKES.forEach(function(f) {
 					fakeGrid.appendChild(E('div', {
-						'class': 'zm-tile' + (data.current_fake === f ? ' zm-active' : ''),
+						'class': 'zm-tile' + (data.active && data.current_fake === f ? ' zm-active' : ''),
 						'click': function() {
 							if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
 							busy = true;
@@ -11661,14 +11910,15 @@ return view.extend({
 			renderFake();
 
 			var dvCard = E('div', { 'class': 'zm-card' }, [
-				E('h3', {}, 'Стратегия для discord.media'),
+				E('h3', {}, 'Стратегия для Discord'),
 				dvGrid,
-				E('p', { 'class': 'zm-hint' }, 'Нужна базовая стратегия с блоком discord.media.')
+				E('p', { 'class': 'zm-hint' }, 'Стратегия Discord состоит из двух блоков: голос (discord,stun) и discord.media. «Выключить» убирает оба блока из Zapret, и при смене основной стратегии они не вернутся. Выбор любой Dv включает их снова.')
 			]);
 
 			var fakeCard = E('div', { 'class': 'zm-card' }, [
 				E('h3', {}, 'Fake-файл для discord,stun'),
-				fakeGrid
+				fakeGrid,
+				E('p', { 'class': 'zm-hint' }, 'Доступно только если стратегия Discord включена.')
 			]);
 
 			panels.discord.appendChild(dvCard);
