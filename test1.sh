@@ -1,6 +1,6 @@
 #!/bin/sh
 # Zapret Manager by StressOzz for LuCI installer
-# Version: 1.39
+# Version: 1.41
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -86,7 +86,7 @@ cat > '/opt/zapret-manager-luci/backend.sh' << 'ZM_INSTALLER_EOF'
 umask 022
 
 CONF="/etc/config/zapret"
-ZM_VERSION="1.39"
+ZM_VERSION="1.41"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
@@ -9756,6 +9756,8 @@ return view.extend({
 		var checkCard = E('div', { 'class': 'zm-card' });
 		var domCard = E('div', { 'class': 'zm-card' });
 		var domSel = null, domData = null, domBusy = false, domEditor = null;
+		var domOpen = false;
+		try { domOpen = localStorage.getItem('zm.steer.lists') === '1'; } catch (e) {}
 		var warpCard = E('div', { 'class': 'zm-card' });
 		var autoCard = E('div', { 'class': 'zm-card' });
 
@@ -9995,13 +9997,28 @@ return view.extend({
 			domCard.innerHTML = '';
 			domCard.style.display = data.blocker ? 'none' : '';
 			if (data.blocker) return;
-			domCard.appendChild(E('h3', {}, 'Списки доменов'));
+			domCard.appendChild(E('h3', {
+				'style': 'cursor:pointer; user-select:none; display:flex; align-items:center' + (domOpen ? '' : '; margin-bottom:0'),
+				'title': domOpen ? 'Свернуть' : 'Развернуть',
+				'click': function() {
+					domOpen = !domOpen;
+					try { localStorage.setItem('zm.steer.lists', domOpen ? '1' : '0'); } catch (e) {}
+					renderDom();
+				}
+			}, [
+				E('span', {}, 'Списки доменов'),
+				E('span', { 'style': 'margin-left:auto; padding-left:12px; font-size:13px; font-weight:600; opacity:.65; white-space:nowrap' }, domOpen ? 'свернуть ▴' : 'развернуть ▾')
+			]));
+			if (!domOpen) return;
 			domCard.appendChild(E('p', { 'class': 'zm-hint' }, 'По этим доменам трафик сервиса уходит в туннель. Выберите сервис, чтобы посмотреть или поправить его список: свой список заменит стандартный и сохранится при обновлениях.'));
 			var list = data.services || [];
 			domCard.appendChild(E('div', { 'class': 'zm-grid' }, list.map(function(s) {
 				return E('div', {
 					'class': 'zm-tile' + (domSel === s.id ? ' zm-active' : ''),
-					'click': function() { if (domSel !== s.id) loadDom(s.id); }
+					'click': function() {
+						if (domSel !== s.id) { loadDom(s.id); return; }
+						domSel = null; domData = null; renderDom();
+					}
 				}, s.name);
 			})));
 			if (!domSel) return;
@@ -12948,6 +12965,12 @@ html.zm-theme-dark .zm-tile:not(.zm-active):not(.zm-tile-off) {
 	box-shadow: inset 0 0 0 1px rgba(0,0,0,.2);
 }
 .zm-log.zm-show { display: block; }
+.zm-log { scrollbar-width: auto; scrollbar-color: auto; }
+.zm-log::-webkit-scrollbar { width: 14px; }
+.zm-log::-webkit-scrollbar-track { background: transparent; margin: 8px 0; }
+.zm-log::-webkit-scrollbar-thumb { background: rgba(255,255,255,.2); border-radius: 10px; border: 4px solid transparent; background-clip: padding-box; min-height: 40px; }
+.zm-log::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.34); background-clip: padding-box; }
+@supports not selector(::-webkit-scrollbar) { .zm-log { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.25) transparent; } }
 .zm-log:empty::before { content: "Ожидание вывода..."; opacity: .4; }
 
 .zm-config-editor {
@@ -14174,6 +14197,12 @@ html.zm-theme-dark .zm-tile:not(.zm-active):not(.zm-tile-off) {
 	box-shadow: inset 0 0 0 1px rgba(0,0,0,.2);
 }
 .zm-log.zm-show { display: block; }
+.zm-log { scrollbar-width: auto; scrollbar-color: auto; }
+.zm-log::-webkit-scrollbar { width: 14px; }
+.zm-log::-webkit-scrollbar-track { background: transparent; margin: 8px 0; }
+.zm-log::-webkit-scrollbar-thumb { background: rgba(255,255,255,.2); border-radius: 10px; border: 4px solid transparent; background-clip: padding-box; min-height: 40px; }
+.zm-log::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.34); background-clip: padding-box; }
+@supports not selector(::-webkit-scrollbar) { .zm-log { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.25) transparent; } }
 .zm-log:empty::before { content: "Ожидание вывода..."; opacity: .4; }
 
 .zm-config-editor {
@@ -16682,19 +16711,45 @@ html[data-theme="dark"] #zmw-view .zm-tile.zm-active::before { color: #a594ff; }
 	color: #dfe6f3;
 	border: 1px solid var(--console-border);
 	border-radius: 16px;
-	padding: 44px 20px 18px;
+	padding: 0 20px 18px;
 	font: 13px/1.75 var(--mono);
 	box-shadow: inset 0 1px 0 rgba(255,255,255,.04), var(--shadow);
 	position: relative;
-	background-image:
+	background-image: none;
+	overflow-x: hidden; overflow-y: auto;
+	/* Свой скроллбар (ниже) — стандартные свойства в Chrome его бы отключили. */
+	scrollbar-width: auto; scrollbar-color: auto;
+}
+/* Шапка с «огоньками» закреплена сверху: текст при прокрутке уходит под неё, а не наезжает. */
+#zmw-view .zm-log::before {
+	content: ''; display: block;
+	position: sticky; top: 0; z-index: 2;
+	height: 40px; margin: 0 -20px 6px;
+	background:
 		radial-gradient(circle at 20px 20px, #ff5f57 5px, transparent 5.5px),
 		radial-gradient(circle at 38px 20px, #febc2e 5px, transparent 5.5px),
 		radial-gradient(circle at 56px 20px, #28c840 5px, transparent 5.5px),
-		linear-gradient(to bottom, rgba(255,255,255,.035) 0, rgba(255,255,255,.035) 40px, transparent 40px);
+		var(--console);
 	background-repeat: no-repeat;
+	opacity: 1;
 }
-#zmw-view .zm-log.bt-panel { padding-top: 16px; background-image: none; }
-#zmw-view .zm-log:empty::before { color: #8b949e; }
+#zmw-view .zm-log:empty::before { content: ''; opacity: 1; }
+#zmw-view .zm-log:empty::after { content: "Ожидание вывода..."; color: #8b949e; }
+#zmw-view .zm-log.bt-panel { padding-top: 16px; }
+#zmw-view .zm-log.bt-panel::before { display: none; }
+/* Скроллбар консоли: тонкий, скруглённый, с отступами — не залезает на шапку и углы. */
+#zmw-view .zm-log::-webkit-scrollbar { width: 14px; height: 14px; }
+#zmw-view .zm-log::-webkit-scrollbar-track { background: transparent; margin: 44px 0 12px; }
+#zmw-view .zm-log.bt-panel::-webkit-scrollbar-track { margin: 12px 0; }
+#zmw-view .zm-log::-webkit-scrollbar-thumb {
+	background: rgba(255,255,255,.18); border-radius: 10px;
+	border: 4px solid transparent; background-clip: padding-box; min-height: 40px;
+}
+#zmw-view .zm-log::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.32); background-clip: padding-box; }
+#zmw-view .zm-log::-webkit-scrollbar-corner { background: transparent; }
+@supports not selector(::-webkit-scrollbar) {
+	#zmw-view .zm-log { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.25) transparent; }
+}
 #zmw-view .zm-log-arrow { color: #67e8f9; }
 #zmw-view .zm-log-msg-info { color: #fcd34d; }
 #zmw-view .zm-log-msg-ok { color: #4ade80; }
@@ -16895,7 +16950,8 @@ html body.zmw-body .zm-toast { background: var(--toast-bg); color: var(--toast-f
 	.zmw-nav-item { padding: 7px 12px; }
 	.zmw-login-card { padding: 30px 20px 22px; border-radius: 22px; }
 	.zmw-body #zm-toast-container { left: 12px; right: 12px; bottom: 12px; width: auto; max-width: none; }
-	#zmw-view .zm-log { font-size: 12.5px; padding: 40px 14px 14px; }
+	#zmw-view .zm-log { font-size: 12.5px; padding: 0 14px 14px; }
+	#zmw-view .zm-log::before { margin: 0 -14px 6px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
