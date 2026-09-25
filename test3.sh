@@ -6102,7 +6102,10 @@ _st_spec_apply() { # ID...
 	if [ -s "$ST_STEER_SPEC" ] && ! _st_owns "steer-spec" && [ ! -f "$ST_DIR/spec.before" ]; then
 		cp "$ST_STEER_SPEC" "$ST_DIR/spec.before"
 	fi
-	if [ -s "$ST_STEER_SPEC" ] && cmp -s "$tmp" "$ST_STEER_SPEC" && /etc/init.d/steer running >/dev/null 2>&1; then
+	local sum
+	sum="$(_st_spec_sum "$tmp")"
+	if [ -s "$ST_STEER_SPEC" ] && cmp -s "$tmp" "$ST_STEER_SPEC" && [ "$sum" = "$(cat "$ST_DIR/spec.sum" 2>/dev/null)" ] &&
+		/etc/init.d/steer running >/dev/null 2>&1; then
 		_rb_say "Правила Steer не изменились"
 		return 0
 	fi
@@ -6110,7 +6113,19 @@ _st_spec_apply() { # ID...
 	_st_own "steer-spec"
 	/etc/init.d/steer enable >/dev/null 2>&1
 	/etc/init.d/steer restart >/dev/null 2>&1
+	mkdir -p "$ST_DIR"
+	printf '%s\n' "$sum" > "$ST_DIR/spec.sum"
 	_rb_say "Правила Steer применены"
+}
+
+_st_spec_sum() { # SPEC -> контрольная сумма спеки вместе со всеми файлами, на которые она ссылается
+	local f
+	{
+		cat "$1"
+		for f in $(grep -o '"/[^"]*"' "$1" | tr -d '"'); do
+			[ -f "$f" ] && { echo "$f"; cat "$f"; }
+		done
+	} 2>/dev/null | md5sum | cut -d' ' -f1
 }
 
 _st_spec_clear() {
@@ -9104,7 +9119,7 @@ return view.extend({
 		var listCard = E('div', { 'class': 'zm-card' });
 		var checkCard = E('div', { 'class': 'zm-card' });
 		var customCard = E('div', { 'class': 'zm-card' });
-		var customData = null, customLoading = false, customEditor = null, customDraft = null;
+		var customData = null, customLoading = false, customEditor = null, customDraft = null, customDirty = false;
 		var warpCard = E('div', { 'class': 'zm-card' });
 		var autoCard = E('div', { 'class': 'zm-card' });
 
@@ -9319,9 +9334,10 @@ return view.extend({
 			renderCustom();
 			zm.steerAction('list_get', 'custom').then(function(res) {
 				customLoading = false;
-				if (res.error) { customData = null; renderCustom(); return; }
+				if (res.error) { customData = null; renderCustom(); zm.toast(res.error, 'error'); return; }
 				customData = res;
 				customDraft = null;
+				customDirty = false;
 				renderCustom();
 			}).catch(function() { customLoading = false; renderCustom(); });
 		}
@@ -9331,6 +9347,7 @@ return view.extend({
 			zm.steerAction(action, arg).then(function(res) {
 				if (res.error) { zm.toast(res.error, 'error'); return; }
 				customDraft = null;
+				customDirty = false;
 				if (res.saved) {
 					zm.toast(okText + (res.count ? ' (' + res.count + ')' : ''), 'info');
 					loadCustom();
@@ -9347,7 +9364,7 @@ return view.extend({
 		}
 
 		function renderCustom() {
-			if (customEditor && customData) customDraft = customEditor.value;
+			if (customEditor && customDirty) customDraft = customEditor.value;
 			customCard.innerHTML = '';
 			var svc = (data.services || []).filter(function(s) { return s.id === 'custom'; })[0];
 			customCard.style.display = data.blocker || !svc ? 'none' : '';
@@ -9362,8 +9379,11 @@ return view.extend({
 				: data.stopped ? badge('zm-off', 'Steer выключен')
 				: badge('zm-ok', 'идёт через WARP')));
 			customCard.appendChild(row('Доменов', E('span', {}, String(n))));
-			customEditor = E('textarea', { 'class': 'zm-config-editor', 'spellcheck': 'false', 'style': 'min-height:200px', 'placeholder': 'example.com\nsite.org' });
-			customEditor.value = customDraft !== null ? customDraft : (customData && customData.content) || '';
+			customEditor = E('textarea', {
+				'class': 'zm-config-editor', 'spellcheck': 'false', 'style': 'min-height:200px', 'placeholder': 'example.com\nsite.org',
+				'input': function() { customDirty = true; }
+			});
+			customEditor.value = customDirty && customDraft !== null ? customDraft : (customData && customData.content) || '';
 			customCard.appendChild(customEditor);
 			var acts = [
 				E('button', { 'class': 'cbi-button cbi-button-positive', 'click': function() {
