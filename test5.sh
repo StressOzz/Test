@@ -5416,7 +5416,7 @@ RB_SHARE="/usr/share/zm-redbtn"
 _rb_say() { echo "==> $*"; }
 _rb_warn() { echo "!! $*"; }
 # Сервисы: встроенные (services.conf из пакета) + подтянутые из каталога списков (services.remote), встроенные первыми
-_rb_svc_src() { grep -hv '^#' "$RB_SHARE/services.conf" 2>/dev/null; [ -f "$ST_CAT_OFF" ] || cat "$ST_CAT_SVC" 2>/dev/null; }
+_rb_svc_src() { grep -hv '^#' "$RB_SHARE/services.conf" 2>/dev/null; [ -f "$ST_CAT_OFF" ] || awk -F'|' -v skip="$ST_CAT_SKIP" '$9 != "" && $9 != "Свои списки каталога" { k = $1; sub(/^c_/, "", k); if (!index(skip, " " k " ")) print }' "$ST_CAT_SVC" 2>/dev/null; }
 _rb_svc_ids() { _rb_svc_src | cut -d'|' -f1 | grep .; }
 _rb_svc_field() { _rb_svc_src | grep "^$1|" | head -n1 | cut -d'|' -f"$2"; }
 _rb_svc_names() { local id; for id in $1; do printf '%s, ' "$(_rb_svc_field "$id" 2)"; done | sed 's/, $//'; }
@@ -6572,6 +6572,7 @@ _st_cat_build() { # lists.json
 			for (j = 1; j <= cnt; j++) {
 				e = order[j]; id = f[e, "id"]; if (id == "") continue
 				if (index(skip, " " tolower(id) " ")) { bad[e] = 1; continue }
+				if (f[e, "source_name"] == "" && f[e, "source"] == "") { bad[e] = 1; continue }   # «свои списки каталога» — не показываем
 				k = key(id); byid[id] = e; ek[e] = k
 				u = f[e, "url"]; fm = f[e, "format"]
 				if (fm != "srs" || u == "") { fm = "lst"; u = (f[e, "file"] != "" && base != "") ? base "/" f[e, "file"] : "" }
@@ -6594,7 +6595,7 @@ _st_cat_build() { # lists.json
 		}
 		function line(e, st,    nm, grp, u, b) {
 			nm = clean(f[e, "name_ru"]); if (nm == "") nm = f[e, "id"]
-			grp = clean(f[e, "source_name"]); if (grp == "") grp = "Свои списки каталога"
+			grp = clean(f[e, "source_name"]); if (grp == "") return
 			# уже есть во встроенном списке: тот же набор itdoginfo или то же название
 			if (f[e, "source"] == "itdoginfo/allow-domains") {
 				u = f[e, "url"]; b = u; sub(/.*\//, "", b); sub(/\.srs$/, "", b)
@@ -6639,6 +6640,8 @@ _st_cat_refresh() { # [force] — скачать каталог и пересо�
 _st_cat_bg() { # фоновое обновление, если каталог старше 6 часов
 	[ -f "$ST_CAT_OFF" ] && return 0
 	[ -d "$ST_RUN/cat.lock" ] && return 0
+	# каталог собран старой версией (с «Своими списками каталога») — пересобрать сразу
+	if grep -q '|Свои списки каталога$' "$ST_CAT_SVC" 2>/dev/null; then ( _st_cat_refresh force >/dev/null 2>&1 & ); return 0; fi
 	[ -f "$ST_DIR/catalog.err" ] && [ $(( $(date +%s) - $(cat "$ST_DIR/catalog.err" 2>/dev/null || echo 0) )) -lt 1800 ] && return 0
 	[ -s "$ST_CAT_SVC" ] && [ $(( $(date +%s) - $(date -r "$ST_CAT_SVC" +%s 2>/dev/null || echo 0) )) -lt 21600 ] && return 0
 	( _st_cat_refresh >/dev/null 2>&1 & )
@@ -11304,7 +11307,7 @@ return view.extend({
 		}
 
 		var CATEGORY_IDS = [ 'geoblock', 'block', 'news', 'anime', 'porn', 'russia_inside' ];
-		var openGroups = {}, catQuery = {};
+		var openGroups = {};
 
 		function catalogEdit() {
 			var c = data.catalog || {};
@@ -11391,17 +11394,7 @@ return view.extend({
 				var m = /^(.*?)\s*\((.*)\)\s*$/.exec(g);
 				var gTitle = m ? m[1] : g, gSub = m ? m[2] : '';
 				var open = g in openGroups ? openGroups[g] : on > 0;
-				var q = catQuery[g] || '';
-				var grid = E('div', { 'class': 'zm-grid zm-cat-grid' }, items.map(function(s) { var t = tile(s); t.setAttribute('data-name', s.name.toLowerCase()); return t; }));
-				var empty = E('div', { 'class': 'zm-cat-empty', 'style': 'display:none' }, 'Ничего не нашлось');
-				function filter() {
-					var shown = 0, v = q.trim().toLowerCase();
-					Array.prototype.forEach.call(grid.children, function(t) {
-						var ok = !v || t.getAttribute('data-name').indexOf(v) >= 0;
-						t.style.display = ok ? '' : 'none'; if (ok) shown++;
-					});
-					empty.style.display = shown ? 'none' : '';
-				}
+				var grid = E('div', { 'class': 'zm-grid zm-cat-grid' }, items.map(tile));
 				function setAll(val) {
 					if (busy) { zm.toast('Дождитесь окончания текущей операции', 'warning'); return; }
 					pick = {};
@@ -11411,14 +11404,12 @@ return view.extend({
 				}
 				var body = E('div', { 'class': 'zm-cat-body', 'style': open ? '' : 'display:none' }, [
 					E('div', { 'class': 'zm-cat-tools' }, [
-						items.length > 8 ? E('input', { 'type': 'search', 'class': 'cbi-input-text zm-cat-search', 'placeholder': 'Поиск по ' + items.length + ' спискам', 'value': q,
-							'input': function(ev) { q = catQuery[g] = ev.target.value; filter(); } }) : E('span', { 'class': 'zm-cat-spacer' }),
 						E('div', { 'class': 'zm-cat-links' }, [
 							E('button', { 'class': 'zm-linkbtn', 'type': 'button', 'click': function() { setAll(true); } }, 'Выбрать все'),
 							E('button', { 'class': 'zm-linkbtn', 'type': 'button', 'click': function() { setAll(false); }, 'disabled': on ? null : '' }, 'Снять все')
 						])
 					]),
-					grid, empty
+					grid
 				]);
 				var badge = E('span', { 'class': 'zm-badge zm-cat-count ' + (on ? 'zm-ok' : 'zm-off') }, on ? 'выбрано ' + on + ' из ' + items.length : items.length + ' ' + (function(n) { var a = n % 10, h = n % 100; return a === 1 && h !== 11 ? 'список' : (a >= 2 && a <= 4 && (h < 12 || h > 14) ? 'списка' : 'списков'); })(items.length));
 				var head = E('div', { 'class': 'zm-list-head zm-cat-head', 'role': 'button', 'tabindex': '0', 'aria-expanded': open ? 'true' : 'false' }, [
@@ -11438,7 +11429,6 @@ return view.extend({
 				}
 				head.addEventListener('click', toggle);
 				head.addEventListener('keydown', function(ev) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); toggle(); } });
-				if (q) filter();
 				listCard.appendChild(box);
 			});
 			listCard.appendChild(catalogBlock());
@@ -15017,23 +15007,20 @@ html.zm-theme-dark .zm-list-dirty { color: #d29922; }
 .zm-cat-sub { margin-top: 2px; font-size: 12px; opacity: .6; }
 .zm-cat-count { flex: 0 0 auto; }
 .zm-cat-body { padding: 12px 16px 16px; border-top: 1px solid rgba(127,127,127,.15); }
-.zm-cat-tools { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
-.zm-cat-search { flex: 1 1 220px; max-width: 340px; min-width: 0; box-sizing: border-box; height: 34px; padding: 0 12px; border-radius: 8px; }
-.zm-cat-spacer { flex: 1 1 auto; }
+.zm-cat-tools { display: flex; align-items: center; justify-content: flex-end; margin: -4px -6px 8px; }
 .zm-cat-links { display: flex; gap: 4px; margin-left: auto; }
 .zm-linkbtn { background: none; border: 0; padding: 6px 10px; border-radius: 8px; font: inherit; font-size: 13px; font-weight: 600; color: #2563eb; cursor: pointer; }
 .zm-linkbtn:hover { background: rgba(37,99,235,.08); }
 .zm-linkbtn[disabled] { opacity: .35; cursor: default; background: none; }
 html.zm-theme-dark .zm-linkbtn { color: #6ea8fe; }
 .zm-cat-grid { margin: 0; }
-.zm-cat-empty { padding: 10px 0 2px; font-size: 13px; opacity: .6; }
 .zm-cat-src { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-top: 16px; padding: 14px 16px; border: 1px dashed rgba(127,127,127,.3); border-radius: 12px; }
 .zm-cat-src-info { flex: 1 1 260px; min-width: 0; }
 .zm-cat-src-title { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; }
 .zm-cat-src-state { margin-top: 4px; font-size: 13px; opacity: .8; }
 .zm-cat-src-url { margin-top: 2px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11px; opacity: .55; overflow-wrap: anywhere; }
 .zm-cat-src-actions { margin: 0 !important; flex: 0 0 auto; }
-@media (max-width: 600px) { .zm-cat-links { margin-left: 0; } .zm-cat-search { max-width: none; flex-basis: 100%; } .zm-cat-src-actions { flex: 1 1 100%; } }
+@media (max-width: 600px) { .zm-cat-tools { justify-content: flex-start; } .zm-cat-src-actions { flex: 1 1 100%; } }
 @media (max-width: 600px) {
 	.zm-list-head { padding: 12px 14px; gap: 10px; }
 	.zm-list-body { padding: 4px 14px 14px; }
@@ -15506,6 +15493,7 @@ return view.extend({
 			{ product: 'tg-ws-proxy-rs (Rust)', author: 'valnesfjord', url: 'https://github.com/valnesfjord/tg-ws-proxy-rs' },
 			{ product: 'Mixomo, GeoHideDNS', author: 'Internet-Helper', url: 'https://github.com/Internet-Helper' },
 			{ product: 'allow-domains', author: 'itdoginfo', url: 'https://github.com/itdoginfo/allow-domains' },
+			{ product: 'b4geoip (списки игр и сервисов)', author: 'DanielLavrushin', url: 'https://github.com/DanielLavrushin/b4geoip' },
 			{ product: 'dpi-checkers', author: 'hyperion-cs', url: 'https://github.com/hyperion-cs/dpi-checkers' },
 			{ product: 'awg-openwrt (AmneziaWG)', author: '2Grey', url: 'https://github.com/2Grey/awg-openwrt' },
 			{ product: 'warpscout (разведка WARP)', author: 'vernette', url: 'https://github.com/vernette/warpscout' },
@@ -16384,23 +16372,20 @@ html.zm-theme-dark .zm-list-dirty { color: #d29922; }
 .zm-cat-sub { margin-top: 2px; font-size: 12px; opacity: .6; }
 .zm-cat-count { flex: 0 0 auto; }
 .zm-cat-body { padding: 12px 16px 16px; border-top: 1px solid rgba(127,127,127,.15); }
-.zm-cat-tools { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
-.zm-cat-search { flex: 1 1 220px; max-width: 340px; min-width: 0; box-sizing: border-box; height: 34px; padding: 0 12px; border-radius: 8px; }
-.zm-cat-spacer { flex: 1 1 auto; }
+.zm-cat-tools { display: flex; align-items: center; justify-content: flex-end; margin: -4px -6px 8px; }
 .zm-cat-links { display: flex; gap: 4px; margin-left: auto; }
 .zm-linkbtn { background: none; border: 0; padding: 6px 10px; border-radius: 8px; font: inherit; font-size: 13px; font-weight: 600; color: #2563eb; cursor: pointer; }
 .zm-linkbtn:hover { background: rgba(37,99,235,.08); }
 .zm-linkbtn[disabled] { opacity: .35; cursor: default; background: none; }
 html.zm-theme-dark .zm-linkbtn { color: #6ea8fe; }
 .zm-cat-grid { margin: 0; }
-.zm-cat-empty { padding: 10px 0 2px; font-size: 13px; opacity: .6; }
 .zm-cat-src { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-top: 16px; padding: 14px 16px; border: 1px dashed rgba(127,127,127,.3); border-radius: 12px; }
 .zm-cat-src-info { flex: 1 1 260px; min-width: 0; }
 .zm-cat-src-title { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; }
 .zm-cat-src-state { margin-top: 4px; font-size: 13px; opacity: .8; }
 .zm-cat-src-url { margin-top: 2px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11px; opacity: .55; overflow-wrap: anywhere; }
 .zm-cat-src-actions { margin: 0 !important; flex: 0 0 auto; }
-@media (max-width: 600px) { .zm-cat-links { margin-left: 0; } .zm-cat-search { max-width: none; flex-basis: 100%; } .zm-cat-src-actions { flex: 1 1 100%; } }
+@media (max-width: 600px) { .zm-cat-tools { justify-content: flex-start; } .zm-cat-src-actions { flex: 1 1 100%; } }
 @media (max-width: 600px) {
 	.zm-list-head { padding: 12px 14px; gap: 10px; }
 	.zm-list-body { padding: 4px 14px 14px; }
@@ -19058,7 +19043,6 @@ html[data-theme="dark"] #zmw-view .cbi-button-positive {
 #zmw-view .zm-cat { border-color: var(--border-2, var(--border)); background: var(--surface-2); }
 #zmw-view .zm-cat.zm-list-open { background: transparent; }
 #zmw-view .zm-cat-body { border-top-color: var(--border); }
-#zmw-view .zm-cat-search { height: 36px; }
 #zmw-view .zm-linkbtn { color: var(--a1); }
 #zmw-view .zm-linkbtn:hover:not([disabled]) { background: var(--surface-2); }
 #zmw-view .zm-cat-src { border-color: var(--border-2, var(--border)); }
