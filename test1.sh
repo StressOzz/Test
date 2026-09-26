@@ -1,5 +1,5 @@
 #!/bin/sh
-# Version: 1.57
+# Version: 1.58
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -70,7 +70,7 @@ cat > '/opt/zapret-manager-luci/backend.sh' << 'ZM_INSTALLER_EOF'
 umask 022
 
 CONF="/etc/config/zapret"
-ZM_VERSION="1.57"
+ZM_VERSION="1.58"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
@@ -5666,7 +5666,7 @@ _st_warp_ports() { # ИНТЕРФЕЙС КЛЮЧ_УЗЛА АДРЕС
 	echo "$ok"
 }
 
-_st_warp_scan() { # ИНТЕРФЕЙС КЛЮЧ_УЗЛА ЗАНЯТЫЕ_КОЛОНИИ ЗАНЯТЫЕ_АДРЕСА
+_st_warp_scan() { # ИНТЕРФЕЙС КЛЮЧ_УЗЛА ЗАНЯТЫЕ_КОЛОНИИ ЗАНЯТЫЕ_АДРЕСА [ФАЙЛ_ОБЩЕГО_СПИСКА]
 	local dev="$1" peer="$2" busy=" $3 " busyip=" $4 " r="$ST_RUN/scan.$1" cand ip ports port loss rtt colo pick f cls
 	mkdir -p "$ST_RUN"
 	: > "$r"; : > "$r.same"; : > "$r.nc"; : > "$r.ru"; : > "$r.notls"
@@ -5701,6 +5701,15 @@ _st_warp_scan() { # ИНТЕРФЕЙС КЛЮЧ_УЗЛА ЗАНЯТЫЕ_КОЛО
 		echo "$loss $rtt $ip $port $colo" >> "$r"
 		[ "$(grep -c . "$r")" -ge 3 ] && break
 	done
+	# Все найденные точки — в общий список, лучшие первыми: остальные туннели возьмут точки
+	# оттуда, без своей разведки (точка входа не зависит от ключей WARP)
+	if [ -n "$5" ]; then
+		for f in "$r" "$r.same" "$r.nc" "$r.ru" "$r.notls"; do
+			[ -s "$f" ] || continue
+			case "$f" in *.nc) cls=1 ;; *.ru) cls=2 ;; *.notls) cls=3 ;; *) cls=0 ;; esac
+			awk -v c="$cls" '{ printf "%d %s %s %s\n", c * 100000000 + $1 * 100000 + $2, $3, $4, $5 }' "$f"
+		done | sort -n | awk '{ print $2, $3, $4, $1 }' > "$5"
+	fi
 	for f in "$r" "$r.same" "$r.nc" "$r.ru" "$r.notls"; do
 		[ -s "$f" ] || continue
 		case "$f" in *.nc) cls=1 ;; *.ru) cls=2 ;; *.notls) cls=3 ;; *) cls=0 ;; esac
@@ -5713,6 +5722,30 @@ _st_warp_scan() { # ИНТЕРФЕЙС КЛЮЧ_УЗЛА ЗАНЯТЫЕ_КОЛО
 		esac
 		echo "$pick"
 		return 0
+	done
+	return 1
+}
+
+# Точка из общего списка разведки: подключиться и проверить HTTPS — секунды вместо новой разведки.
+# Порядок как у разведки: хорошая чужая колония → та же колония через другой адрес → запасные (без колонии, российские, без HTTPS).
+_st_warp_from_pool() { # ИНТЕРФЕЙС КЛЮЧ_УЗЛА ЗАНЯТЫЕ_КОЛОНИИ ЗАНЯТЫЕ_АДРЕСА ФАЙЛ -> «адрес порт колония ключ»
+	local dev="$1" peer="$2" busy=" $3 " busyip=" $4 " f="$5" ip port colo k pass good isbusy
+	[ -s "$f" ] || return 1
+	for pass in 1 2 3 4; do
+		while read -r ip port colo k <&3; do
+			[ -n "$ip" ] || continue
+			case "$busyip" in *" $ip "*) continue ;; esac
+			good=0; [ "$k" -lt 100000000 ] 2>/dev/null && good=1
+			isbusy=0; case "$busy" in *" $colo "*) isbusy=1 ;; esac
+			case "$pass$good$isbusy" in 110|211|300|401) ;; *) continue ;; esac
+			_st_stopped && return 1
+			_st_warp_link "$dev" "$peer" "$ip" "$port" || { echo "   $ip:$port — с этими ключами рукопожатия нет" >&2; continue; }
+			if [ "$good" = 1 ] && ! curl -s -o /dev/null --interface "$dev" --connect-timeout 4 --max-time 8 https://www.cloudflare.com/cdn-cgi/trace 2>/dev/null; then
+				echo "   $ip:$port — HTTPS через туннель не проходит" >&2; continue
+			fi
+			echo "$ip $port $colo $k"
+			return 0
+		done 3< "$f"
 	done
 	return 1
 }
@@ -5869,6 +5902,8 @@ _st_warp_up() { # [repick]
 		while [ "$w" -lt 20 ] && ! _st_warp_ready_if "$i"; do w=$((w + 1)); sleep 1; done
 	done
 	: > "$ST_WARP_UP.tmp"
+	local pool="$ST_RUN/warp.pool"
+	rm -f "$pool"
 	for n in $ready; do
 		_st_stopped && break
 		i="$(_st_wif "$n")"
@@ -5878,9 +5913,12 @@ _st_warp_up() { # [repick]
 		if [ "$repick" != repick ] && grep -q "^$i " "$ST_WARP_UP" 2>/dev/null && _st_warp_alive_if "$i" && c="$(_st_colo_of "$i")" && ! _st_warp_is_ru "$c"; then
 			got="$(uci -q get "network.${i}_peer.endpoint_host") $(uci -q get "network.${i}_peer.endpoint_port") $c -"
 			_rb_say "WARP $n работает: колония $c"
+		elif [ -s "$pool" ] && got="$(_st_warp_from_pool "$i" "$peer" "$busy" "$busyip" "$pool")"; then
+			set -- $got
+			_rb_say "WARP $n работает: $1:$2, колония $3 — точка из общей разведки"
 		else
 			echo "   WARP $n: разведка"
-			if got="$(_st_warp_scan "$i" "$peer" "$busy" "$busyip")"; then
+			if got="$(_st_warp_scan "$i" "$peer" "$busy" "$busyip" "$pool")"; then
 				set -- $got
 				if ! _st_warp_link "$i" "$peer" "$1" "$2"; then
 					alt=""
