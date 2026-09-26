@@ -1,5 +1,5 @@
 #!/bin/sh
-# Version: 1.51
+# Version: 1.52
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -70,7 +70,7 @@ cat > '/opt/zapret-manager-luci/backend.sh' << 'ZM_INSTALLER_EOF'
 umask 022
 
 CONF="/etc/config/zapret"
-ZM_VERSION="1.51"
+ZM_VERSION="1.52"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
@@ -8774,18 +8774,30 @@ return view.extend({
 				row('Архитектура', E('span', {}, sysInfo.arch || '—')),
 				row('OpenWrt', E('span', {}, sysInfo.openwrt || '—'))
 			];
+			// Шкалы — как в боковой панели Web UI: подпись и значение сверху, полоска снизу;
+			// жёлтая и красная — по тем же порогам. Классы zmw-mem-* дают в Web UI тот же вид, что и в меню.
+			function meter(label, val, pct, mid, hi) {
+				pct = Math.max(0, Math.min(100, pct || 0));
+				return E('div', { 'class': 'zm-meter zmw-mem-row' + (pct >= hi ? ' zm-meter-hi zmw-mem-hi' : pct >= mid ? ' zm-meter-mid zmw-mem-mid' : '') }, [
+					E('div', { 'class': 'zm-meter-head zmw-mem-head' }, [
+						E('span', { 'class': 'zm-meter-label zmw-mem-label' }, label),
+						E('span', { 'class': 'zm-meter-val zmw-mem-val' }, val)
+					]),
+					E('div', { 'class': 'zm-meter-bar zmw-mem-bar' }, [ E('i', { 'style': 'width:' + pct.toFixed(0) + '%' }) ])
+				]);
+			}
+			function usage(label, used, total) {
+				return total > 0 ? meter(label, zm.fmtSize(used) + ' из ' + zm.fmtSize(total), used / total * 100, 65, 85) : null;
+			}
 			var memRows = [];
 			var t = parseFloat(sysInfo.cpu_temp);
-			if (!isNaN(t)) memRows.push(row('Температура ЦП', E('span', { 'class': 'zm-badge ' + (t >= 80 ? 'zm-bad' : t >= 65 ? 'zm-warn' : 'zm-ok') }, [
-				E('span', { 'class': 'zm-dot' }), sysInfo.cpu_temp + ' °C'
-			])));
+			if (!isNaN(t)) memRows.push(meter('Температура ЦП', sysInfo.cpu_temp + ' °C', t, 65, 80));
 			var cl = parseInt(sysInfo.cpu_load, 10);
-			if (!isNaN(cl)) memRows.push(row('Нагрузка ЦП', E('span', { 'class': 'zm-badge ' + (cl >= 90 ? 'zm-bad' : cl >= 70 ? 'zm-warn' : 'zm-ok') }, [
-				E('span', { 'class': 'zm-dot' }), cl + '%'
-			])));
-			if (mem.total) memRows.push(row('ОЗУ', E('span', {}, zm.usageText(mem.total - ramAvail, mem.total))));
-			memRows.push(row('Флеш', E('span', {}, zm.usageText(ru, ru + rf))));
-			memRows.push(row('/tmp', E('span', {}, zm.usageText(tu, tu + tf))));
+			if (!isNaN(cl)) memRows.push(meter('Нагрузка ЦП', cl + '%', cl, 70, 90));
+			memRows.push(usage('ОЗУ', mem.total - ramAvail, mem.total));
+			memRows.push(usage('Флеш', ru, ru + rf));
+			memRows.push(usage('/tmp', tu, tu + tf));
+			memRows = memRows.filter(Boolean);
 			var up = parseInt(boardInfo.uptime, 10), extras = [];
 			if (up > 0) {
 				var dd = Math.floor(up / 86400), hh = Math.floor(up % 86400 / 3600), mm = Math.floor(up % 3600 / 60);
@@ -8798,13 +8810,13 @@ return view.extend({
 					? E('span', { 'class': 'zm-badge zm-bad' }, [ E('span', { 'class': 'zm-dot' }), 'нет' ])
 					: E('span', { 'class': 'zm-badge zm-off' }, [ E('span', { 'class': 'zm-dot' }), 'проверяем…' ])));
 			if (sysInfo.kernel) extras.push(row('Ядро Linux', E('span', {}, sysInfo.kernel)));
-			while (rows.length < memRows.length && extras.length) rows.push(extras.shift());
+			rows = rows.concat(extras);
 
 			cards.appendChild(E('div', { 'class': 'zm-card' }, [
 				E('h3', {}, 'Система'),
 				E('div', { 'class': 'bt-cols' }, [
 					E('div', { 'class': 'bt-col' }, rows),
-					E('div', { 'class': 'bt-col' }, memRows)
+					E('div', { 'class': 'bt-col zm-meters' }, memRows)
 				])
 			]));
 		}
@@ -13028,6 +13040,17 @@ html.zm-theme-dark .zm-card {
 .zm-off .zm-dot { background: #57606a; }
 
 .zm-actions { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin: 14px 0; }
+
+/* Шкалы в «Системе» (как в боковой панели Web UI) */
+.zm-meters { display: flex; flex-direction: column; gap: 13px; padding-top: 7px; }
+body:not(.zmw-body) .zm-meter-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-size: 13px; margin-bottom: 6px; }
+body:not(.zmw-body) .zm-meter-label { opacity: .65; }
+body:not(.zmw-body) .zm-meter-val { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+body:not(.zmw-body) .zm-meter-bar { height: 6px; border-radius: 6px; background: rgba(110,118,129,.18); overflow: hidden; }
+body:not(.zmw-body) .zm-meter-bar i { display: block; height: 100%; border-radius: 6px; background: linear-gradient(90deg, #0969da, #3b8eea); transition: width .6s cubic-bezier(.2,.8,.2,1); }
+body:not(.zmw-body) .zm-meter-mid .zm-meter-bar i { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+body:not(.zmw-body) .zm-meter-hi .zm-meter-bar i { background: linear-gradient(90deg, #ef4444, #f87171); }
+html.zm-theme-dark body:not(.zmw-body) .zm-meter-bar { background: rgba(255,255,255,.1); }
 .zm-actions .cbi-button { margin: 0; }
 
 .zm-grid { display: flex; flex-wrap: wrap; gap: 9px; }
@@ -16682,6 +16705,9 @@ body.zmw-locked .zmw-shell { filter: blur(6px); pointer-events: none; }
 .zmw-mem-bar i { display: block; height: 100%; width: 0; border-radius: 6px; background: var(--grad); transition: width .6s cubic-bezier(.2,.8,.2,1); }
 .zmw-mem-mid .zmw-mem-bar i { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
 .zmw-mem-hi .zmw-mem-bar i { background: linear-gradient(90deg, #ef4444, #f87171); }
+/* те же шкалы в «Системе» на дашборде — крупнее, под текст карточки */
+#zmw-view .zm-meter .zmw-mem-head { font-size: 13px; margin-bottom: 6px; align-items: baseline; }
+#zmw-view .zm-meter .zmw-mem-label { font-weight: 500; }
 .zmw-credit { font-size: 11.5px; color: var(--muted); text-align: center; opacity: .7; }
 
 .zmw-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
