@@ -1,5 +1,5 @@
 #!/bin/sh
-# Version: 1.50
+# Version: 1.51
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -70,7 +70,7 @@ cat > '/opt/zapret-manager-luci/backend.sh' << 'ZM_INSTALLER_EOF'
 umask 022
 
 CONF="/etc/config/zapret"
-ZM_VERSION="1.50"
+ZM_VERSION="1.51"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
@@ -231,6 +231,32 @@ _cpu_temp() {
 	else echo "$best"; fi
 }
 
+# Есть ли интернет: пинг 1.1.1.1, затем 8.8.8.8 и 77.88.8.8. Пинг идёт в фоне,
+# результат («время ok|fail мс») живёт 10 секунд — панель не ждёт сеть.
+_inet_ping() {
+	local h out ms
+	for h in 1.1.1.1 8.8.8.8 77.88.8.8; do
+		out=$(ping -c 1 -W 2 "$h" 2>/dev/null)
+		ms=$(echo "$out" | sed -n 's/.*time=\([0-9.]*\).*/\1/p' | head -n1)
+		[ -n "$ms" ] && { echo "$(date +%s) ok ${ms%%.*}"; return 0; }
+	done
+	echo "$(date +%s) fail"
+}
+_inet_state() { # печатает «ok|fail мс» или пусто, пока не проверяли
+	local f="$ZM_STATE_DIR/inet" t r ms age
+	read -r t r ms 2>/dev/null < "$f"
+	age=$(( $(date +%s) - ${t:-0} ))
+	if [ "$age" -ge 10 ] || [ "$age" -lt 0 ]; then
+		mkdir -p "$ZM_STATE_DIR"
+		if mkdir "$f.lock" 2>/dev/null; then
+			( _inet_ping > "$f.new" 2>/dev/null && mv -f "$f.new" "$f"; rmdir "$f.lock" ) >/dev/null 2>&1 &
+		elif [ -n "$(find "$f.lock" -mmin +1 2>/dev/null)" ]; then
+			rmdir "$f.lock" 2>/dev/null
+		fi
+	fi
+	[ -n "$r" ] && [ "$age" -lt 120 ] && echo "$r $ms"
+}
+
 system_info() {
 	local model arch owrt df_out tmp_used tmp_free root_used root_free
 	model=$(cat /tmp/sysinfo/model 2>/dev/null)
@@ -241,9 +267,12 @@ system_info() {
 	tmp_free=$(echo "$df_out" | awk 'NR==2{print $4}')
 	root_used=$(echo "$df_out" | awk 'NR==3{print $3}')
 	root_free=$(echo "$df_out" | awk 'NR==3{print $4}')
-	printf '{"model":"%s","arch":"%s","openwrt":"%s","hostname":"%s","kernel":"%s","tmp_used":"%s","tmp_free":"%s","root_used":"%s","root_free":"%s","cpu_temp":"%s","cpu_load":"%s"}\n' \
+	local inet inet_ms
+	set -- $(_inet_state)
+	inet="$1"; inet_ms="$2"
+	printf '{"model":"%s","arch":"%s","openwrt":"%s","hostname":"%s","kernel":"%s","tmp_used":"%s","tmp_free":"%s","root_used":"%s","root_free":"%s","cpu_temp":"%s","cpu_load":"%s","inet":"%s","inet_ms":"%s"}\n' \
 		"$(esc "$model")" "$(esc "$arch")" "$(esc "$owrt")" "$(esc "$(cat /proc/sys/kernel/hostname 2>/dev/null)")" "$(esc "$(uname -r 2>/dev/null)")" \
-		"$(esc "$tmp_used")" "$(esc "$tmp_free")" "$(esc "$root_used")" "$(esc "$root_free")" "$(_cpu_temp)" "$(_cpu_load)"
+		"$(esc "$tmp_used")" "$(esc "$tmp_free")" "$(esc "$root_used")" "$(esc "$root_free")" "$(_cpu_temp)" "$(_cpu_load)" "$inet" "$inet_ms"
 }
 
 status() {
@@ -8762,7 +8791,12 @@ return view.extend({
 				var dd = Math.floor(up / 86400), hh = Math.floor(up % 86400 / 3600), mm = Math.floor(up % 3600 / 60);
 				extras.push(row('Время работы', E('span', {}, (dd ? dd + ' дн ' : '') + (dd || hh ? hh + ' ч ' : '') + mm + ' мин')));
 			}
-			if (sysInfo.hostname) extras.push(row('Имя роутера', E('span', {}, sysInfo.hostname)));
+			var ims = parseInt(sysInfo.inet_ms, 10);
+			extras.push(row('Интернет', sysInfo.inet === 'ok'
+				? E('span', { 'class': 'zm-badge ' + (ims >= 200 ? 'zm-warn' : 'zm-ok') }, [ E('span', { 'class': 'zm-dot' }), isNaN(ims) ? 'есть' : 'есть · ' + ims + ' мс' ])
+				: sysInfo.inet === 'fail'
+					? E('span', { 'class': 'zm-badge zm-bad' }, [ E('span', { 'class': 'zm-dot' }), 'нет' ])
+					: E('span', { 'class': 'zm-badge zm-off' }, [ E('span', { 'class': 'zm-dot' }), 'проверяем…' ])));
 			if (sysInfo.kernel) extras.push(row('Ядро Linux', E('span', {}, sysInfo.kernel)));
 			while (rows.length < memRows.length && extras.length) rows.push(extras.shift());
 
