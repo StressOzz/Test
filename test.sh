@@ -1,5 +1,5 @@
 #!/bin/sh
-# Version: 1.61
+# Version: 1.63
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -70,7 +70,7 @@ cat > '/opt/zapret-manager-luci/backend.sh' << 'ZM_INSTALLER_EOF'
 umask 022
 
 CONF="/etc/config/zapret"
-ZM_VERSION="1.61"
+ZM_VERSION="1.63"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
@@ -118,6 +118,69 @@ esc() {
 
 esc_ml() {
 	printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g' | sed ':a;N;$!ba;s/\n/\\n/g'
+}
+
+_zm_zone_sec() { # ИМЯ_ЗОНЫ -> секция firewall
+	local z
+	for z in $(uci -q -X show firewall | sed -n "s/^firewall\.\([^.=]*\)=zone\$/\1/p"); do
+		[ "$(uci -q get "firewall.$z.name")" = "$1" ] && { echo "$z"; return 0; }
+	done
+	return 1
+}
+_zm_zone_of_net() { # СЕТЬ -> имя зоны firewall, где она есть
+	local z
+	for z in $(uci -q -X show firewall | sed -n "s/^firewall\.\([^.=]*\)=zone\$/\1/p"); do
+		case " $(uci -q get "firewall.$z.network") " in *" $1 "*) uci -q get "firewall.$z.name"; return 0 ;; esac
+	done
+	return 1
+}
+_zm_lan_zone() {
+	local f w
+	_zm_zone_of_net lan && return 0
+	_zm_zone_sec lan >/dev/null && { echo lan; return 0; }
+	w="$(_zm_wan_zone)"
+	for f in $(uci -q -X show firewall | sed -n "s/^firewall\.\([^.=]*\)=forwarding\$/\1/p"); do
+		[ "$(uci -q get "firewall.$f.dest")" = "$w" ] && { uci -q get "firewall.$f.src"; return 0; }
+	done
+	echo lan
+}
+_zm_wan_zone() { _zm_zone_of_net wan || echo wan; }
+_zm_lan_nets() {
+	local s n=""
+	s="$(_zm_zone_sec "$(_zm_lan_zone)")" && n="$(uci -q get "firewall.$s.network")"
+	echo "${n:-lan}"
+}
+_zm_lan_devs() {
+	local s n d out=""
+	for n in $(_zm_lan_nets); do
+		d="$(ifstatus "$n" 2>/dev/null | jsonfilter -e '@.l3_device' 2>/dev/null)"
+		[ -n "$d" ] || d="$(ifstatus "$n" 2>/dev/null | jsonfilter -e '@.device' 2>/dev/null)"
+		[ -n "$d" ] || d="$(uci -q get "network.$n.device")"
+		[ -n "$d" ] && [ -d "/sys/class/net/$d" ] || continue
+		case " $out " in *" $d "*) ;; *) out="$out $d" ;; esac
+	done
+	if s="$(_zm_zone_sec "$(_zm_lan_zone)")"; then
+		for d in $(uci -q get "firewall.$s.device"); do
+			[ -d "/sys/class/net/$d" ] || continue
+			case " $out " in *" $d "*) ;; *) out="$out $d" ;; esac
+		done
+	fi
+	[ -n "$out" ] || out="br-lan"
+	echo $out
+}
+_zm_lan_ip() {
+	local n ip d
+	for n in lan $(_zm_lan_nets); do
+		ip="$(ifstatus "$n" 2>/dev/null | jsonfilter -e "@['ipv4-address'][0].address" 2>/dev/null)"
+		[ -n "$ip" ] && { echo "$ip"; return 0; }
+	done
+	ip="$(uci -q get network.lan.ipaddr 2>/dev/null | awk '{ print $1 }' | cut -d/ -f1)"
+	[ -n "$ip" ] && { echo "$ip"; return 0; }
+	for d in $(_zm_lan_devs); do
+		ip="$(ip -4 -o addr show dev "$d" 2>/dev/null | awk '{ print $4; exit }' | cut -d/ -f1)"
+		[ -n "$ip" ] && { echo "$ip"; return 0; }
+	done
+	return 1
 }
 
 _pkg_is_installed() {
@@ -279,6 +342,7 @@ system_info() {
 
 status() {
 	local zr="not_installed" zr_running="false" zr_ver=""
+	_test_recover
 	if [ -f /etc/init.d/zapret ]; then
 		zr="installed"
 		if [ "$PKG" = "opkg" ]; then
@@ -434,7 +498,7 @@ do_remove_zapret() {
 	$DELETE zapret >&2
 	echo "==> Удаляем файлы"
 	rm -rf /opt/zapret "$CONF" /etc/init.d/zapret /etc/firewall.zapret "$YV_OFF_FLAG" "$DV_OFF_FLAG"
-	crontab -l 2>/dev/null | grep -v -i zapret | crontab - 2>/dev/null
+	crontab -l 2>/dev/null | awk '{ l = tolower($0) } l ~ /zapret/ && l !~ /zapret-manager|zapret2/ { next } { print }' | crontab - 2>/dev/null
 	echo "==> Готово, Zapret удалён"
 }
 
@@ -1570,18 +1634,20 @@ system_toggle_quic() {
 		printf '{"ok":true,"quic_blocked":false}\n'
 		return
 	fi
+	local lz wz
+	lz="$(_zm_lan_zone)"; wz="$(_zm_wan_zone)"
 	uci add firewall rule >/dev/null 2>&1
 	uci set firewall.@rule[-1].name='Block_UDP_80' >/dev/null 2>&1
 	uci add_list firewall.@rule[-1].proto='udp' >/dev/null 2>&1
-	uci set firewall.@rule[-1].src='lan' >/dev/null 2>&1
-	uci set firewall.@rule[-1].dest='wan' >/dev/null 2>&1
+	uci set "firewall.@rule[-1].src=$lz" >/dev/null 2>&1
+	uci set "firewall.@rule[-1].dest=$wz" >/dev/null 2>&1
 	uci set firewall.@rule[-1].dest_port='80' >/dev/null 2>&1
 	uci set firewall.@rule[-1].target='REJECT' >/dev/null 2>&1
 	uci add firewall rule >/dev/null 2>&1
 	uci set firewall.@rule[-1].name='Block_UDP_443' >/dev/null 2>&1
 	uci add_list firewall.@rule[-1].proto='udp' >/dev/null 2>&1
-	uci set firewall.@rule[-1].src='lan' >/dev/null 2>&1
-	uci set firewall.@rule[-1].dest='wan' >/dev/null 2>&1
+	uci set "firewall.@rule[-1].src=$lz" >/dev/null 2>&1
+	uci set "firewall.@rule[-1].dest=$wz" >/dev/null 2>&1
 	uci set firewall.@rule[-1].dest_port='443' >/dev/null 2>&1
 	uci set firewall.@rule[-1].target='REJECT' >/dev/null 2>&1
 	uci commit firewall >/dev/null 2>&1
@@ -1645,7 +1711,7 @@ rm -rf /opt/zapret-manager-luci /usr/libexec/rpcd/zapret-manager \
 	/www/luci-static/resources/bytetube \
 	/www/luci-static/resources/view/bytetube \
 	/tmp/zapret-manager-luci /tmp/luci-indexcache* /tmp/luci-modulecache/* \
-	/www/zm /www/zm-webui.html 2>/dev/null
+	/www/zm /www/zm-webui.html /etc/zm-warp-own.conf 2>/dev/null
 [ -s /etc/zm-steer/owned ] || rm -rf /usr/share/zm-redbtn
 uci -q delete uhttpd.zmweb && uci -q commit uhttpd
 /etc/init.d/rpcd restart >/dev/null 2>&1
@@ -1777,14 +1843,13 @@ exclusions_status() {
 	fi
 
 	local lan_dev arp_tmp
-	lan_dev=$(uci -q get network.lan.device)
-	[ -z "$lan_dev" ] && lan_dev="br-lan"
+	lan_dev=" $(_zm_lan_devs) "
 	arp_tmp="$JOBS_DIR/excl_arp_tmp"
 	rm -f "$arp_tmp"
 	if [ -f /proc/net/arp ]; then
 		tail -n +2 /proc/net/arp | while read -r aip ahw aflags amac amask adev; do
 			[ -z "$aip" ] && continue
-			[ "$adev" = "$lan_dev" ] || continue
+			case "$lan_dev" in *" $adev "*) ;; *) continue ;; esac
 			echo "$aip" | grep -qE '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$' || continue
 			[ "$aflags" = "0x0" ] && continue
 			printf '%s' "$devjson" | grep -q "\"ip\":\"$aip\"" && continue
@@ -1882,9 +1947,8 @@ nfqws_opt_set() {
 	grep -q "^[[:space:]]*option NFQWS_OPT '\$" "$CONF" || { echo '{"error":"в конфигурации не найден блок NFQWS_OPT"}'; return 1; }
 	sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
 	{ echo "	option NFQWS_OPT '"; printf '%s\n' "$content"; echo "'"; } >> "$CONF"
-	chmod +x /opt/zapret/sync_config.sh
-	/opt/zapret/sync_config.sh
-	/etc/init.d/zapret restart >/dev/null 2>&1
+	[ -f /opt/zapret/sync_config.sh ] && chmod +x /opt/zapret/sync_config.sh
+	zapret_restart
 	sleep 1
 	printf '{"ok":true}\n'
 }
@@ -1910,6 +1974,7 @@ _tg_arch_rs() {
 		aarch64*) echo "tg-ws-proxy-aarch64-unknown-linux-musl" ;;
 		x86_64) echo "tg-ws-proxy-x86_64-unknown-linux-musl" ;;
 		arm*) echo "tg-ws-proxy-armv7-unknown-linux-musleabihf" ;;
+		mips64*) return 1 ;;
 		mipsel*) echo "tg-ws-proxy-mipsel-unknown-linux-musl" ;;
 		mips*) echo "tg-ws-proxy-mips-unknown-linux-musl" ;;
 		*) return 1 ;;
@@ -1920,6 +1985,7 @@ _tg_arch_go() {
 	case "$TG_ARCH" in
 		aarch64*) echo "tg-ws-proxy-openwrt-aarch64" ;;
 		arm*) echo "tg-ws-proxy-openwrt-armv7" ;;
+		mips64*) return 1 ;;
 		mipsel*) echo "tg-ws-proxy-openwrt-mipsel_24kc" ;;
 		mips*) echo "tg-ws-proxy-openwrt-mips_24kc" ;;
 		x86_64) echo "tg-ws-proxy-openwrt-x86_64" ;;
@@ -1955,7 +2021,7 @@ tg_status() {
 		secret_rs=$(sed -n 's/.*--secret[[:space:]]*\([0-9a-fA-F]\{32\}\).*/\1/p' "$TG_INIT_RS" | head -n1)
 	fi
 	[ -z "$secret_rs" ] && [ -f "$TG_SECRET_RS_FILE" ] && secret_rs=$(cat "$TG_SECRET_RS_FILE")
-	lan_ip=$(uci -q get network.lan.ipaddr 2>/dev/null | cut -d/ -f1)
+	lan_ip="$(_zm_lan_ip)"
 
 	printf '{"mtproto":"%s","mtproto_running":%s,"mtproto_version":"%s","mtproto_latest":"%s","socks5":"%s","socks5_running":%s,"socks5_version":"%s","socks5_latest":"%s","rust":"%s","rust_running":%s,"rust_version":"%s","rust_latest":"%s","lan_ip":"%s","secret_mtproto":"%s","secret_rust":"%s"}\n' \
 		"$mt" "$mt_running" "$(esc "$mt_ver")" "$TG_MTPROTO_VER" \
@@ -2098,7 +2164,7 @@ tgws_status() {
 		[ -n "$(tgws status 2>/dev/null)" ] && running="true"
 		domain=$(_tgws_domain)
 	fi
-	latest=$(curl -fsSL --connect-timeout 4 --max-time 6 "$TGWS_VERSION_URL" 2>/dev/null | tr -d '[:space:]')
+	latest="$(_zm_cached tgws _tgws_latest)"
 	printf '{"installed":"%s","running":%s,"version":"%s","latest":"%s","domain":"%s"}\n' "$installed" "$running" "$(esc "$ver")" "$(esc "$latest")" "$(esc "$domain")"
 }
 
@@ -2239,7 +2305,14 @@ tgws_action() {
 
 TEST_DIR="$JOBS_DIR/strategy_test"
 _test_results_file() { echo "$TEST_DIR/results_$1.txt"; }
-TEST_BACKUP="$TEST_DIR/backup.conf"
+_test_running() { [ -f "$JOBS_DIR/strategy_test.pid" ] && kill -0 "$(cat "$JOBS_DIR/strategy_test.pid" 2>/dev/null)" 2>/dev/null; }
+_test_recover() { # тест оборвался (перезагрузка, переустановка) — возвращаем конфиг Zapret, который был до теста
+	[ -s "$ZM_STATE_DIR/strategy_test.backup" ] || return 0
+	_test_running && return 0
+	[ -d /opt/zapret ] && cp -f "$ZM_STATE_DIR/strategy_test.backup" "$CONF" && zapret_restart
+	rm -f "$ZM_STATE_DIR/strategy_test.backup"
+}
+TEST_BACKUP="$ZM_STATE_DIR/strategy_test.backup"
 TEST_STOP_FLAG="$TEST_DIR/stop"
 TEST_MODE_FILE="$TEST_DIR/mode"
 TEST_DOMAINS_JSON="${GH_RAW}/hyperion-cs/dpi-checkers/refs/heads/main/ru/tcp-16-20/suite.v2.json"
@@ -2431,6 +2504,7 @@ do_test_run() {
 		return 0
 	fi
 
+	mkdir -p "$ZM_STATE_DIR"
 	cp "$CONF" "$TEST_BACKUP"
 	_add_gp_domains
 	_refresh_exclude_file
@@ -2553,6 +2627,7 @@ test_action() {
 
 test_status() {
 	local running="false" mode=""
+	_test_recover
 	if [ -f "$JOBS_DIR/strategy_test.pid" ] && kill -0 "$(cat "$JOBS_DIR/strategy_test.pid" 2>/dev/null)" 2>/dev/null; then
 		running="true"
 	fi
@@ -2599,7 +2674,27 @@ zm_update_action() {
 	job_start zm_update do_zm_update
 }
 
-_mixomo_lan_ip() { uci -q get network.lan.ipaddr 2>/dev/null | cut -d/ -f1; }
+_mixomo_lan_ip() { _zm_lan_ip; }
+
+_zm_cached() { # КЛЮЧ КОМАНДА... — значение из кеша на 6 часов; устаревшее обновляется в фоне, страница не ждёт сеть
+	local f="$ZM_STATE_DIR/latest.$1" v
+	shift
+	mkdir -p "$ZM_STATE_DIR"
+	if [ -n "$ZM_VER_FORCE" ]; then
+		v="$("$@")"
+		[ -n "$v" ] && echo "$v" > "$f"
+	elif [ ! -s "$f" ] || [ -n "$(find "$f" -mmin +360 2>/dev/null)" ]; then
+		if mkdir "$f.lock" 2>/dev/null; then
+			( v="$("$@")"; [ -n "$v" ] && echo "$v" > "$f"; rmdir "$f.lock" ) >/dev/null 2>&1 &
+		elif [ -n "$(find "$f.lock" -mmin +2 2>/dev/null)" ]; then
+			rmdir "$f.lock" 2>/dev/null
+		fi
+	fi
+	cat "$f" 2>/dev/null
+}
+_mihomo_latest() { curl -Ls --connect-timeout 4 --max-time 6 -o /dev/null -w '%{url_effective}' "https://github.com/MetaCubeX/mihomo/releases/latest" 2>/dev/null | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | head -1; }
+_mt_latest() { curl -fsSL --connect-timeout 4 --max-time 6 -o /dev/null -w '%{url_effective}' "https://github.com/MagiTrickle/MagiTrickle/releases/latest" 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1; }
+_tgws_latest() { curl -fsSL --connect-timeout 4 --max-time 6 "$TGWS_VERSION_URL" 2>/dev/null | tr -d '[:space:]'; }
 
 _mixomo_arch() {
 	local arch endian_byte
@@ -2613,6 +2708,9 @@ _mixomo_arch() {
 		aarch64|arm64) echo "arm64" ;;
 		armv7*) echo "armv7" ;;
 		armv5*|armv4*) echo "armv5" ;;
+		mips64*)
+			if [ "$endian_byte" = "1" ]; then echo "mips64le"; else echo "mips64"; fi
+			;;
 		mips*)
 			local fpu floattype
 			fpu=$(grep -c FPU /proc/cpuinfo 2>/dev/null || echo 0)
@@ -2635,7 +2733,7 @@ mixomo_status() {
 		mihomo="installed"
 		pidof mihomo >/dev/null 2>&1 && mihomo_running="true"
 		mihomo_ver=$("$MIHOMO_BIN" -v 2>/dev/null | head -n1 | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | head -1)
-		mihomo_latest=$(curl -Ls --connect-timeout 4 --max-time 6 -o /dev/null -w '%{url_effective}' "https://github.com/MetaCubeX/mihomo/releases/latest" 2>/dev/null | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+		mihomo_latest="$(_zm_cached mihomo _mihomo_latest)"
 		[ -f "$MIHOMO_DIR/.ui_panel" ] && ui_panel=$(cat "$MIHOMO_DIR/.ui_panel")
 	fi
 	if [ -x /etc/init.d/magitrickle ]; then
@@ -2646,7 +2744,7 @@ mixomo_status() {
 		else
 			mt_ver=$(opkg status magitrickle 2>/dev/null | awk '/^Version:/ {sub(/-1$/,"",$2); sub(/-r1$/,"",$2); print $2}')
 		fi
-		mt_latest=$(curl -fsSL --connect-timeout 4 --max-time 6 -o /dev/null -w '%{url_effective}' "https://github.com/MagiTrickle/MagiTrickle/releases/latest" 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+		mt_latest="$(_zm_cached magitrickle _mt_latest)"
 	fi
 	if [ -x /etc/init.d/hev-socks5-tunnel ]; then
 		hev="installed"
@@ -2846,7 +2944,7 @@ do_mixomo_install() {
 	uci set "firewall.${fw_zone}.mtu_fix=1"
 	uci add_list "firewall.${fw_zone}.network=Mihomo"
 	fw_fwd=$(uci add firewall forwarding)
-	uci set "firewall.${fw_fwd}.src=lan"
+	uci set "firewall.${fw_fwd}.src=$(_zm_lan_zone)"
 	uci set "firewall.${fw_fwd}.dest=Mihomo"
 	uci commit firewall
 	/etc/init.d/firewall restart >/dev/null 2>&1
@@ -3673,16 +3771,16 @@ collect_domains() {
 }
 
 dns_remove() {
-	local conf
-	conf="$(dnsmasq_confdir)/bytetube.conf"
-	[ -f "$conf" ] || return 0
-	rm -f "$conf"
-	/etc/init.d/dnsmasq restart >/dev/null 2>&1
+	local d r=0
+	for d in $(dnsmasq_confdirs); do
+		[ -f "$d/bytetube.conf" ] && { rm -f "$d/bytetube.conf"; r=1; }
+	done
+	[ "$r" = 1 ] && /etc/init.d/dnsmasq restart >/dev/null 2>&1
+	return 0
 }
 
 dns_apply() {
-	local ipv6="$1" conf domains suffix new old
-	conf="$(dnsmasq_confdir)/bytetube.conf"
+	local ipv6="$1" d domains suffix new r=0
 	domains=$(collect_domains)
 	if [ -z "$domains" ]; then
 		dns_remove
@@ -3699,12 +3797,14 @@ dns_apply() {
 			cur = (cur == "") ? $0 : cur "/" $0
 		}
 		END { if (cur != "") print "nftset=/" cur "/" suffix }')
-	old=$(cat "$conf" 2>/dev/null)
-	if [ "$old" != "$new" ]; then
-		mkdir -p "$(dirname "$conf")"
-		printf '%s\n' "$new" > "$conf"
-		/etc/init.d/dnsmasq restart >/dev/null 2>&1
-	fi
+	for d in $(dnsmasq_confdirs); do
+		[ "$(cat "$d/bytetube.conf" 2>/dev/null)" = "$new" ] && continue
+		mkdir -p "$d"
+		printf '%s\n' "$new" > "$d/bytetube.conf"
+		r=1
+	done
+	[ "$r" = 1 ] && /etc/init.d/dnsmasq restart >/dev/null 2>&1
+	return 0
 }
 
 write_hev_conf() {
@@ -3870,7 +3970,7 @@ diag)
 	echo "--- IPv6: маршрут по умолчанию: $(ip -6 route show default 2>/dev/null | head -n 1)"
 
 	router_addrs=$(ip -o addr show 2>/dev/null | awk '{print $4}' | sed 's#/.*##' | tr '\n' ' ')
-	lan_ip=$(uci -q get network.lan.ipaddr | sed 's#/.*##')
+	lan_ip=$(uci -q get network.lan.ipaddr 2>/dev/null | awk '{ print $1 }' | sed 's#/.*##')
 	[ -n "$lan_ip" ] && router_addrs="$router_addrs $lan_ip"
 
 	list_leases() {
@@ -4046,12 +4146,13 @@ TABLE=89            # таблица маршрутизации
 PREF=8900           # приоритет ip rule
 NFT_TABLE=bytetube
 
-dnsmasq_confdir() {
+dnsmasq_confdirs() {
 	local d
-	d=$(sed -n 's/^conf-dir=\([^,]*\).*/\1/p' /var/etc/dnsmasq.conf.* 2>/dev/null | head -n 1)
+	d=$(sed -n 's/^conf-dir=\([^,]*\).*/\1/p' /var/etc/dnsmasq.conf.* 2>/dev/null | sort -u)
 	[ -n "$d" ] || d=/tmp/dnsmasq.d
 	echo "$d"
 }
+dnsmasq_confdir() { dnsmasq_confdirs | head -n 1; }
 
 dnsmasq_has_nftset() {
 	dnsmasq --version 2>/dev/null | grep -Eq '(^| )nftset( |$)'
@@ -4948,7 +5049,7 @@ do_bytetube_uninstall() {
 	if [ -x /usr/libexec/bytetube/net.sh ]; then
 		/usr/libexec/bytetube/net.sh purge >/dev/null 2>&1
 		. /usr/libexec/bytetube/common.sh
-		rm -f "$(dnsmasq_confdir)/bytetube.conf"
+		for d in $(dnsmasq_confdirs 2>/dev/null || dnsmasq_confdir); do rm -f "$d/bytetube.conf"; done
 	fi
 	rm -rf /etc/config/bytetube /etc/init.d/bytetube /etc/hotplug.d/firewall/90-bytetube \
 		/usr/bin/bytetube /usr/libexec/bytetube /usr/share/bytetube \
@@ -5075,7 +5176,7 @@ doh_status() {
 }
 
 doh_set() {
-	local provider="$1" url bootstrap=""
+	local provider="$1" url bootstrap="" n
 	case "$provider" in
 		cloudflare)  url="https://cloudflare-dns.com/dns-query"; bootstrap="1.1.1.1,1.0.0.1,2606:4700:4700::1111,2606:4700:4700::1001" ;;
 		google)      url="https://dns.google/dns-query";         bootstrap="8.8.8.8,8.8.4.4,2001:4860:4860::8888,2001:4860:4860::8844" ;;
@@ -5102,7 +5203,7 @@ doh_set() {
 		echo "	option notrack_dns '1'"
 		echo "	list force_dns_port '53'"
 		echo "	list force_dns_port '853'"
-		echo "	list force_dns_src_interface 'lan'"
+		for n in $(_zm_lan_nets); do echo "	list force_dns_src_interface '$n'"; done
 		echo "	option procd_trigger_wan6 '0'"
 		echo "	option heartbeat_domain 'heartbeat.mossdef.org'"
 		echo "	option heartbeat_sleep_timeout '10'"
@@ -5181,6 +5282,7 @@ ST_WARP_MAX=3                         # столько туннелей в ав�
 ST_OWN_IF="zmwarp4"                   # «Свой конфиг» — отдельный интерфейс; автоматические при этом не удаляются
 ST_WARP_MODE="$ST_DIR/warp.mode"       # own — сейчас работает свой конфиг
 ST_WARP_OWN="$ST_DIR/warp.own.conf"    # свой конфиг (он же — конфиг zmwarp4)
+ST_WARP_OWN_KEEP="/etc/zm-warp-own.conf"
 ST_WARP_UP_AUTO="$ST_DIR/warp.up.auto" # список автоматических туннелей, пока работает свой конфиг
 # Туннель №1 — zmwarp в автоматическом режиме и zmwarp4 в режиме «Свой конфиг»
 ST_WIF1="zmwarp"; ST_WCONF1="$ST_WARP_CONF"
@@ -5608,12 +5710,23 @@ _st_warp_zone() {
 		uci set "firewall.$ST_WARP_ZONE.masq=1"
 		uci set "firewall.$ST_WARP_ZONE.mtu_fix=1"
 		uci set "firewall.${ST_WARP_ZONE}_fwd=forwarding"
-		uci set "firewall.${ST_WARP_ZONE}_fwd.src=lan"
+		uci set "firewall.${ST_WARP_ZONE}_fwd.src=$(_zm_lan_zone)"
 		uci set "firewall.${ST_WARP_ZONE}_fwd.dest=$ST_WARP_ZONE"
 		uci commit firewall
 		_st_own "fw $ST_WARP_ZONE"
 		/etc/init.d/firewall reload >/dev/null 2>&1
 	fi
+	_zm_fwd_fix "${ST_WARP_ZONE}_fwd"
+}
+
+_zm_fwd_fix() { # СЕКЦИЯ_FORWARDING — источник должен быть зоной LAN этого роутера
+	local lz
+	[ "$(uci -q get "firewall.$1")" = forwarding ] || return 0
+	lz="$(_zm_lan_zone)"
+	[ "$(uci -q get "firewall.$1.src")" = "$lz" ] && return 0
+	uci set "firewall.$1.src=$lz"
+	uci commit firewall
+	/etc/init.d/firewall reload >/dev/null 2>&1
 }
 
 # Все пиры интерфейса, и безымянные тоже (их создаёт импорт конфига в LuCI): иначе у интерфейса
@@ -5797,7 +5910,15 @@ _st_warp_scan1() { # ИНТЕРФЕЙС КЛЮЧ_УЗЛА ЗАНЯТЫЕ_КОЛ�
 		else
 			colo="$(_st_colo_of "$dev")"
 			if [ -z "$colo" ]; then
-				echo "$loss $rtt $ip $port ?" >> "$r.nc"; echo "   $ip:$port — потери $loss%, $rtt мс, колония не узналась" >&2; continue
+				if ping -I "$dev" -c 2 -W 2 1.1.1.1 >/dev/null 2>&1; then
+					echo "$loss $rtt $ip $port ?" >> "$r.nc"
+					echo "   $ip:$port — пинг идёт ($rtt мс), но веб-запросы через туннель не проходят" >&2
+				else
+					echo "$loss $rtt $ip $port ?" >> "$r.torn"
+					echo "   $ip:$port — пинг прошёл, а на первом веб-запросе туннель оборвался: так DPI рвёт туннель" >&2
+					[ "$(grep -c . "$r.torn")" -ge 6 ] && ! [ -s "$r" ] && ! [ -s "$r.same" ] && ! [ -s "$r.ru" ] && break
+				fi
+				continue
 			fi
 			if ! curl -s -o /dev/null --interface "$dev" --connect-timeout 4 --max-time 8 https://www.cloudflare.com/cdn-cgi/trace 2>/dev/null; then
 				echo "$loss $rtt $ip $port $colo" >> "$r.notls"; echo "   $ip:$port — колония $colo, но HTTPS через туннель не проходит" >&2; continue
@@ -5812,21 +5933,22 @@ _st_warp_scan1() { # ИНТЕРФЕЙС КЛЮЧ_УЗЛА ЗАНЯТЫЕ_КОЛ�
 	# Все найденные точки — в общий список, лучшие первыми: остальные туннели возьмут точки
 	# оттуда, без своей разведки (точка входа не зависит от ключей WARP)
 	if [ -n "$pool" ]; then
-		for f in "$r" "$r.same" "$r.nc" "$r.ru" "$r.notls"; do
+		for f in "$r" "$r.same" "$r.ru" "$r.notls" "$r.nc"; do
 			[ -s "$f" ] || continue
-			case "$f" in *.nc) cls=1 ;; *.ru) cls=2 ;; *.notls) cls=3 ;; *) cls=0 ;; esac
+			case "$f" in *.ru) cls=1 ;; *.notls) cls=2 ;; *.nc) cls=3 ;; *) cls=0 ;; esac
 			awk -v c="$cls" '{ printf "%d %s %s %s\n", c * 100000000 + $1 * 100000 + $2, $3, $4, $5 }' "$f"
 		done | sort -n | awk '{ print $2, $3, $4, $1 }' > "$pool"
 	fi
-	for f in "$r" "$r.same" "$r.nc" "$r.ru" "$r.notls"; do
+	for f in "$r" "$r.same" "$r.ru" "$r.notls" "$r.nc"; do
 		[ -s "$f" ] || continue
-		case "$f" in *.nc) cls=1 ;; *.ru) cls=2 ;; *.notls) cls=3 ;; *) cls=0 ;; esac
+		case "$f" in *.ru) cls=1 ;; *.notls) cls=2 ;; *.nc) cls=3 ;; *) cls=0 ;; esac
 		pick=$(awk -v c="$cls" '{ k = c * 100000000 + $1 * 100000 + $2; printf "%d\t%s %s %s %d\n", k, $3, $4, $5, k }' "$f" |
 			sort -n | head -n1 | cut -f2)
 		case "$f" in
 			*.same) echo "   другой колонии нет — та же, но через другой адрес" >&2 ;;
 			*.ru) echo "   наружных колоний нет — беру российскую: блокировки через неё не снимаются" >&2 ;;
 			*.notls) echo "!! ни через одну точку не проходит HTTPS — беру лучшую из оставшихся" >&2 ;;
+			*.nc) echo "!! ни через одну точку не проходят веб-запросы, только пинг" >&2 ;;
 		esac
 		echo "$pick"
 		return 0
@@ -5837,11 +5959,16 @@ _st_warp_scan1() { # ИНТЕРФЕЙС КЛЮЧ_УЗЛА ЗАНЯТЫЕ_КОЛ�
 
 # Разведка; не нашлось ни одной живой точки — перебираем маски I1: DPI чаще судит туннель по первому пакету
 _st_warp_scan() { # ИНТЕРФЕЙС КЛЮЧ_УЗЛА ЗАНЯТЫЕ_КОЛОНИИ ЗАНЯТЫЕ_АДРЕСА [ФАЙЛ_ОБЩЕГО_СПИСКА]
-	local dev="$1" peer="$2" busy="$3" busyip="$4" pool="$5" orig name mask got
-	got="$(_st_warp_scan1 "$dev" "$peer" "$busy" "$busyip" "$pool")" && { echo "$got"; return 0; }
-	_st_stopped && return 1
+	local dev="$1" peer="$2" busy="$3" busyip="$4" pool="$5" orig name mask got fall=""
+	if got="$(_st_warp_scan1 "$dev" "$peer" "$busy" "$busyip" "$pool")"; then
+		set -- $got
+		[ "${4:-0}" -lt 300000000 ] 2>/dev/null && { echo "$got"; return 0; }
+		fall="$got"
+		[ -n "$pool" ] && cp -f "$pool" "$pool.fall" 2>/dev/null
+	fi
+	_st_stopped && { [ -n "$fall" ] && echo "$fall"; [ -n "$fall" ]; return; }
 	orig="$(uci -q get "network.$dev.awg_i1")"
-	[ -n "$orig" ] || return 1
+	[ -n "$orig" ] || { [ -n "$fall" ] && echo "$fall"; [ -n "$fall" ]; return; }
 	echo "   меняем маску первого пакета (I1) и пробуем ещё раз" >&2
 	for name in $AWG_I1_SET; do
 		_st_stopped && break
@@ -5849,19 +5976,26 @@ _st_warp_scan() { # ИНТЕРФЕЙС КЛЮЧ_УЗЛА ЗАНЯТЫЕ_КОЛО
 		[ -n "$mask" ] && [ "$mask" != "$orig" ] || continue
 		_st_warp_i1 "$dev" "$mask" || { echo "   модуль AmneziaWG не даёт сменить маску на лету" >&2; break; }
 		echo "   маска $(_awg_mask_name "$mask"):" >&2
-		if got="$(_st_warp_scan1 "$dev" "$peer" "$busy" "$busyip" "$pool" quick)"; then
+		if got="$(_st_warp_scan1 "$dev" "$peer" "$busy" "$busyip" "$pool" quick)" && set -- $got && [ "${4:-0}" -lt 300000000 ] 2>/dev/null; then
 			printf '%s\n' "$mask" > "$ST_RUN/warp.mask"
 			echo "   маска $(_awg_mask_name "$mask") проходит — она останется у туннеля" >&2
+			[ -n "$pool" ] && rm -f "$pool.fall"
 			echo "$got"
 			return 0
 		fi
 	done
 	_st_warp_i1 "$dev" "$orig" >/dev/null 2>&1
+	if [ -n "$fall" ]; then
+		[ -n "$pool" ] && [ -s "$pool.fall" ] && mv -f "$pool.fall" "$pool"
+		echo "   маски не помогли — оставляю точку, где идёт хотя бы пинг" >&2
+		echo "$fall"
+		return 0
+	fi
 	return 1
 }
 
 # Точка из общего списка разведки: подключиться и проверить HTTPS — секунды вместо новой разведки.
-# Порядок как у разведки: хорошая чужая колония → та же колония через другой адрес → запасные (без колонии, российские, без HTTPS).
+# Порядок как у разведки: хорошая чужая колония → та же колония через другой адрес → запасные (российские, без HTTPS, без веб-запросов).
 _st_warp_from_pool() { # ИНТЕРФЕЙС КЛЮЧ_УЗЛА ЗАНЯТЫЕ_КОЛОНИИ ЗАНЯТЫЕ_АДРЕСА ФАЙЛ -> «адрес порт колония ключ»
 	local dev="$1" peer="$2" busy=" $3 " busyip=" $4 " f="$5" ip port colo k pass good isbusy
 	[ -s "$f" ] || return 1
@@ -5975,6 +6109,7 @@ _st_warp_own_up() { # поднять свой туннель и дождатьс
 	_st_install_awg || return 1
 	_st_awg_loaded || modprobe amneziawg >/dev/null 2>&1
 	if [ "$(uci -q get "network.$i.proto")" != amneziawg ]; then
+		_st_own_restore
 		[ -s "$ST_WARP_CONF" ] || { echo "ОШИБКА: своего конфига WARP нет — вставьте его на вкладке WARP"; return 1; }
 		_st_warp_own_iface "$ST_WARP_CONF" || return 1
 		ubus call network reload >/dev/null 2>&1
@@ -6211,7 +6346,7 @@ _st_json_list() { # файлы через пробел -> "a","b"
 }
 
 _st_spec_build() { # ID... -> JSON в stdout
-	local id c chans="" schema=1 devs
+	local id c chans="" schema=1 devs lans
 	rm -f "$ST_RUN"/used.* "$ST_RUN"/srs.*.done "$ST_RUN/lists.json"
 	mkdir -p "$ST_RUN"
 	ST_OUT=zm_warp
@@ -6222,15 +6357,16 @@ _st_spec_build() { # ID... -> JSON в stdout
 	done
 	[ -n "$chans" ] || return 1
 	case "$chans" in *'"ports"'*|*'"proto"'*) schema=2 ;; esac
+	lans="$(for c in $(_zm_lan_devs); do printf ',"%s"' "$c"; done | sed 's/^,//')"
 	if [ "$ST_OUT" = "$ST_VPN_OUT" ]; then
-		printf '{"schema":%s,"lan_devices":["br-lan"],"outputs":{"%s":{"kind":"vless","sub_file":"%s","nodes":[%s],"on_fail":"direct"}},"channels":[%s]}\n' \
-			"$schema" "$ST_VPN_OUT" "$ST_SUB" "$(_st_sub_node_idx)" "$chans"
+		printf '{"schema":%s,"lan_devices":[%s],"outputs":{"%s":{"kind":"vless","sub_file":"%s","nodes":[%s],"on_fail":"direct"}},"channels":[%s]}\n' \
+			"$schema" "$lans" "$ST_VPN_OUT" "$ST_SUB" "$(_st_sub_node_idx)" "$chans"
 		return 0
 	fi
 	devs="$(awk '{printf "%s\"%s\"", (NR > 1 ? "," : ""), $1}' "$ST_WARP_UP" 2>/dev/null)"
 	[ -n "$devs" ] || devs="\"$ST_WARP_IF\""
-	printf '{"schema":%s,"lan_devices":["br-lan"],"outputs":{"zm_warp":{"kind":"interface","devices":[%s],"prefer":"latency","on_fail":"direct"}},"channels":[%s]}\n' \
-		"$schema" "$devs" "$chans"
+	printf '{"schema":%s,"lan_devices":[%s],"outputs":{"zm_warp":{"kind":"interface","devices":[%s],"prefer":"latency","on_fail":"direct"}},"channels":[%s]}\n' \
+		"$schema" "$lans" "$devs" "$chans"
 }
 
 _st_spec_apply() { # ID...
@@ -6523,14 +6659,24 @@ do_steer_warp_setup() {
 	_rb_say "Готово, WARP подключён"
 }
 
+_st_own_keep() { [ -s "$ST_WARP_OWN" ] && cp -f "$ST_WARP_OWN" "$ST_WARP_OWN_KEEP" && chmod 600 "$ST_WARP_OWN_KEEP"; return 0; }
+_st_own_restore() {
+	[ -s "$ST_WARP_OWN" ] || [ ! -s "$ST_WARP_OWN_KEEP" ] && return 0
+	mkdir -p "$ST_DIR"
+	cp -f "$ST_WARP_OWN_KEEP" "$ST_WARP_OWN" && chmod 600 "$ST_WARP_OWN"
+}
+_st_own_saved() { [ -s "$ST_WARP_OWN" ] || [ -s "$ST_WARP_OWN_KEEP" ]; }
+
 do_steer_warp_own() { # подключить свой конфиг (из warp.pending или сохранённый)
 	_st_phase awg
 	rm -f "$ST_STOP_FLAG"
 	_st_installed || { echo "ОШИБКА: сначала установите Steer"; return 1; }
 	[ -n "$(_st_blocker)" ] && { echo "ОШИБКА: движок Steer сейчас настраивает не Zapret Manager"; return 1; }
 	if [ -s "$ST_DIR/warp.pending" ]; then mv -f "$ST_DIR/warp.pending" "$ST_WARP_OWN"; fi
+	_st_own_restore
 	[ -s "$ST_WARP_OWN" ] || { echo "ОШИБКА: вставьте конфиг WARP"; return 1; }
 	chmod 600 "$ST_WARP_OWN"
+	_st_own_keep
 	_ensure_deps
 	_st_install_awg || return 1
 	_st_phase tunnel
@@ -6850,7 +6996,7 @@ steer_status() {
 	printf '{"running":%s,"phase":"%s","blocker":"%s","installed":%s,"stopped":%s,"version":"%s","steer_running":%s,"channels":%s,"warp_up":%s,"warp_colo":"%s","warp_host":"%s","warp_port":"%s","warp_hs_age":"%s","warp_rx":%s,"warp_tx":%s,"autorestart":"%s","dns_conflict":%s,"exit":"%s","vpn_up":%s,"vpn_live":%s,"has_sub":%s,"sub_label":"%s","latest":"%s","ext":%s,"warp_on":%s,"warp_mode":"%s","warp_own_saved":%s,"tunnels":%s,"services":[%s]}\n' \
 		"$running" "$(esc "$phase")" "$blk" "$installed" "$off" "$(esc "$ver")" "$run" "${chans:-0}" "$warp_up" "$(esc "$colo")" \
 		"$(esc "$host")" "$(esc "$port")" "$age" "${rx:-0}" "${tx:-0}" "$(_st_cron_get)" "$dns" \
-		"$vexit" "$vup" "$vlive" "$vsub" "$(esc "$(_st_sub_label)")" "$(esc "$latest")" "$ext" "$won" "$(_st_warp_own && echo own || echo auto)" "$([ -s "$ST_WARP_OWN" ] && echo true || echo false)" "$(_st_tunnels_json)" "$svc"
+		"$vexit" "$vup" "$vlive" "$vsub" "$(esc "$(_st_sub_label)")" "$(esc "$latest")" "$ext" "$won" "$(_st_warp_own && echo own || echo auto)" "$(_st_own_saved && echo true || echo false)" "$(_st_tunnels_json)" "$svc"
 }
 
 _st_tunnels_json() {
@@ -7042,7 +7188,7 @@ _st_sub_node_idx() {
 
 _st_vpn_zone() { # on|off
 	if [ "$1" = on ]; then
-		[ "$(uci -q get "firewall.$ST_VPN_ZONE")" = zone ] && return 0
+		[ "$(uci -q get "firewall.$ST_VPN_ZONE")" = zone ] && { _zm_fwd_fix "${ST_VPN_ZONE}_fwd"; return 0; }
 		uci set "firewall.$ST_VPN_ZONE=zone"
 		uci set "firewall.$ST_VPN_ZONE.name=$ST_VPN_ZONE"
 		uci add_list "firewall.$ST_VPN_ZONE.device=$ST_VPN_OUT"
@@ -7052,7 +7198,7 @@ _st_vpn_zone() { # on|off
 		uci set "firewall.$ST_VPN_ZONE.masq=0"
 		uci set "firewall.$ST_VPN_ZONE.mtu_fix=1"
 		uci set "firewall.${ST_VPN_ZONE}_fwd=forwarding"
-		uci set "firewall.${ST_VPN_ZONE}_fwd.src=lan"
+		uci set "firewall.${ST_VPN_ZONE}_fwd.src=$(_zm_lan_zone)"
 		uci set "firewall.${ST_VPN_ZONE}_fwd.dest=$ST_VPN_ZONE"
 		uci commit firewall
 		_st_own "fw $ST_VPN_ZONE"
@@ -7365,7 +7511,7 @@ steer_action() {
 						printf '%s\n' "$mode" | tr -d '\r' > "$ST_DIR/warp.pending"
 						chmod 600 "$ST_DIR/warp.pending"
 					else
-						[ -s "$ST_WARP_OWN" ] || { echo '{"error":"вставьте конфиг WARP"}'; return 1; }
+						_st_own_saved || { echo '{"error":"вставьте конфиг WARP"}'; return 1; }
 					fi
 					job_start steer do_steer_warp_own ;;
 				warp_mode)
@@ -7423,6 +7569,12 @@ steer_action() {
 			printf '{"ok":true}\n'
 			;;
 		autorestart) _st_cron_set "$mode" ;;
+		warp_own_get)
+			local of="$ST_WARP_OWN"
+			[ -s "$of" ] || of="$ST_WARP_OWN_KEEP"
+			if [ -s "$of" ]; then printf '{"content":"%s"}\n' "$(esc_ml "$(tr -d '\r' < "$of" | tr '\t' ' ')")"
+			else printf '{"content":""}\n'; fi
+			;;
 		diag)
 			local trace warp="none" colo="" tun="" tsep="" wi wn wv wc vpn="none" vip="" vloc="" gs gt
 			if _st_installed && [ -n "$(_st_sel)" ] && [ ! -f "$ST_OFF" ] && _st_use_vpn; then
@@ -8032,7 +8184,7 @@ do_awg_create() { # ИМЯ МАРШРУТ(0|1) ЗОНА(0|1)
 		uci set "firewall.zmawg_$name.masq=1"
 		uci set "firewall.zmawg_$name.mtu_fix=1"
 		uci set "firewall.zmawg_${name}_fwd=forwarding"
-		uci set "firewall.zmawg_${name}_fwd.src=lan"
+		uci set "firewall.zmawg_${name}_fwd.src=$(_zm_lan_zone)"
 		uci set "firewall.zmawg_${name}_fwd.dest=$zone"
 		uci commit firewall
 		/etc/init.d/firewall reload >/dev/null 2>&1
@@ -8142,6 +8294,7 @@ do_awg_steer_replace() { # ИНТЕРФЕЙС
 			return
 		fi
 		mv -f "$f" "$ST_WARP_OWN"; chmod 600 "$ST_WARP_OWN"
+		_st_own_keep
 		( ST_WARP_IF="$ST_OWN_IF"; _st_warp_own_iface "$ST_WARP_OWN" ) || return 1
 		_st_warp_park "$ST_OWN_IF"
 		_awg_say "Готово: конфиг сохранён — он заработает, когда на странице Steer выберете «Свой конфиг»"
@@ -8416,6 +8569,8 @@ redbtn_panel_gone() {
 }
 
 cmd="$1"; shift
+if [ "$2" = @stdin ]; then ZM_IN="$(cat; echo .)"; set -- "$1" "${ZM_IN%.}"
+elif [ "$1" = @stdin ]; then ZM_IN="$(cat; echo .)"; set -- "${ZM_IN%.}"; fi
 case "$cmd" in
 	status)                  status ;;
 	system_info)             system_info ;;
@@ -8496,6 +8651,7 @@ case "$cmd" in
 	steer_status)                         steer_status ;;
 	steer_action)                         steer_action "$1" "$2" ;;
 	bytetube_action)                      bytetube_action "$1" ;;
+	lan_ip)                               _zm_lan_ip ;;
 	*) echo '{"error":"неизвестная команда"}'; exit 1 ;;
 esac
 ZM_INSTALLER_EOF
@@ -8634,10 +8790,10 @@ call_method() {
 		exclusions_toggle)             json_get_var ip ip;          "$BACKEND" exclusions_toggle "$ip" ;;
 		exclusions_clear)              "$BACKEND" exclusions_clear ;;
 		exclusions_file_get)           "$BACKEND" exclusions_file_get ;;
-		exclusions_file_set)           json_get_var content content; "$BACKEND" exclusions_file_set "$content" ;;
+		exclusions_file_set)           json_get_var content content; printf '%s' "$content" | "$BACKEND" exclusions_file_set @stdin ;;
 		exclusions_file_restore)       "$BACKEND" exclusions_file_restore ;;
 		nfqws_opt_get)                 "$BACKEND" nfqws_opt_get ;;
-		nfqws_opt_set)                 json_get_var content content; "$BACKEND" nfqws_opt_set "$content" ;;
+		nfqws_opt_set)                 json_get_var content content; printf '%s' "$content" | "$BACKEND" nfqws_opt_set @stdin ;;
 		tg_status)                     "$BACKEND" tg_status ;;
 		tg_action)                     json_get_var variant variant; json_get_var action action; "$BACKEND" tg_action "$variant" "$action" ;;
 		tg_restart_all)                "$BACKEND" tg_restart_all ;;
@@ -8648,7 +8804,7 @@ call_method() {
 		hosts_replace_geohide)   json_get_var region region;   "$BACKEND" hosts_replace_geohide "$region" ;;
 		hosts_reset)             "$BACKEND" hosts_reset ;;
 		hosts_file_get)          "$BACKEND" hosts_file_get ;;
-		hosts_file_set)          json_get_var content content; "$BACKEND" hosts_file_set "$content" ;;
+		hosts_file_set)          json_get_var content content; printf '%s' "$content" | "$BACKEND" hosts_file_set @stdin ;;
 		doh_status)              "$BACKEND" doh_status ;;
 		doh_install)             "$BACKEND" doh_install ;;
 		doh_remove)              "$BACKEND" doh_remove ;;
@@ -8661,7 +8817,7 @@ call_method() {
 		mixomo_status)           "$BACKEND" mixomo_status ;;
 		mixomo_action)           json_get_var action action; "$BACKEND" mixomo_action "$action" ;;
 		mixomo_config_get)       "$BACKEND" mixomo_config_get ;;
-		mixomo_config_set)       json_get_var content content; "$BACKEND" mixomo_config_set "$content" ;;
+		mixomo_config_set)       json_get_var content content; printf '%s' "$content" | "$BACKEND" mixomo_config_set @stdin ;;
 		mixomo_subscription_set) json_get_var url url; "$BACKEND" mixomo_subscription_set "$url" ;;
 		mixomo_magitrickle_list_set) json_get_var id id; "$BACKEND" mixomo_magitrickle_list_set "$id" ;;
 		mixomo_autorestart_set)  json_get_var mode mode; json_get_var value value; "$BACKEND" mixomo_autorestart_set "$mode" "$value" ;;
@@ -8669,14 +8825,14 @@ call_method() {
 		mixomo_warp_status)      "$BACKEND" mixomo_warp_status ;;
 		mixomo_warp_action)      json_get_var endpoint_mode endpoint_mode; "$BACKEND" mixomo_warp_action "$endpoint_mode" ;;
 		mixomo_warp_integrate_action) "$BACKEND" mixomo_warp_integrate_action ;;
-		mixomo_warp_config_set) json_get_var content content; "$BACKEND" mixomo_warp_config_set "$content" ;;
+		mixomo_warp_config_set) json_get_var content content; printf '%s' "$content" | "$BACKEND" mixomo_warp_config_set @stdin ;;
 		bytetube_installed)      "$BACKEND" bytetube_installed ;;
 		health)                  "$BACKEND" health ;;
 		versions)                json_get_var action action; "$BACKEND" versions "$action" ;;
 		awg_status)              "$BACKEND" awg_status ;;
-		awg_action)              json_get_var action action; json_get_var mode mode; "$BACKEND" awg_action "$action" "$mode" ;;
+		awg_action)              json_get_var action action; json_get_var mode mode; printf '%s' "$mode" | "$BACKEND" awg_action "$action" @stdin ;;
 		steer_status)            "$BACKEND" steer_status ;;
-		steer_action)            json_get_var action action; json_get_var mode mode; "$BACKEND" steer_action "$action" "$mode" ;;
+		steer_action)            json_get_var action action; json_get_var mode mode; printf '%s' "$mode" | "$BACKEND" steer_action "$action" @stdin ;;
 		bytetube_action)         json_get_var action action; "$BACKEND" bytetube_action "$action" ;;
 		*) echo '{"error":"unknown method"}'; return 1 ;;
 	esac
@@ -10214,7 +10370,7 @@ return view.extend({
 		var busy = false, lastAction = '', pick = null, autoBusy = false, diagRes = null, diagBusy = false;
 		// Режим WARP: warpPick — что выбрано переключателем (null — как на роутере); ownTa — поле своего конфига,
 		// один и тот же элемент между перерисовками, чтобы вставленный текст не пропадал; ownOpen — «Заменить конфиг».
-		var warpPick = null, ownTa = null, ownOpen = false;
+		var warpPick = null, ownTa = null, ownOpen = false, ownLoaded = false;
 
 		var mainCard = E('div', { 'class': 'zm-card' });
 		var logEl = E('pre', { 'class': 'zm-log' });
@@ -10258,7 +10414,7 @@ return view.extend({
 			zm.toast(msg, ok ? 'info' : 'error');
 			var done = lastAction;
 			lastAction = '';
-			if (ok && (done === 'warp_own' || done === 'warp_mode')) { warpPick = null; ownOpen = false; if (ownTa) ownTa.value = ''; }
+			if (ok && (done === 'warp_own' || done === 'warp_mode')) { warpPick = null; ownOpen = false; }
 			diagRes = null;
 			renderAll();
 			loadSub();
@@ -10643,6 +10799,12 @@ return view.extend({
 				if (!ownTa) ownTa = E('textarea', { 'class': 'zm-config-editor', 'spellcheck': 'false', 'style': 'min-height:220px',
 					'placeholder': '[Interface]\nPrivateKey = …\nAddress = 172.16.0.2/32\n\n[Peer]\nPublicKey = …\nEndpoint = 162.159.192.1:2408' });
 				warpCard.appendChild(ownTa);
+				if (data.warp_own_saved && !ownLoaded && !ownTa.value.trim()) {
+					ownLoaded = true;
+					zm.steerAction('warp_own_get', '').then(function(r) {
+						if (r && r.content && !ownTa.value.trim()) ownTa.value = r.content.replace(/\s+$/, '');
+					}).catch(function() { ownLoaded = false; });
+				}
 				var btns = [ E('button', { 'class': 'cbi-button cbi-button-positive', 'disabled': busy ? '' : null, 'click': function() {
 					var v = ownTa.value.trim();
 					if (!v && !data.warp_own_saved) { zm.toast('Вставьте конфиг WARP', 'warning'); ownTa.focus(); return; }
@@ -10652,7 +10814,7 @@ return view.extend({
 				if (warpPick === 'own' || ownOpen) btns.push(E('button', { 'class': 'cbi-button', 'click': function() { warpPick = null; ownOpen = false; renderWarp(); } }, 'Отмена'));
 				warpCard.appendChild(E('div', { 'class': 'zm-actions' }, btns));
 				warpCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Подойдёт конфиг WireGuard или AmneziaWG: ключи, маскировка и точка входа берутся из него как есть.' +
-					(data.warp_own_saved ? ' Оставьте поле пустым — подключится ваш прошлый конфиг.' : '')));
+					(data.warp_own_saved ? ' В поле — ваш сохранённый конфиг: поправьте его или вставьте новый. Он хранится отдельно и переживёт даже переустановку Steer.' : '')));
 			}
 
 			if (sel === 'own' && !own) {
@@ -14325,14 +14487,24 @@ return view.extend({
 			{ product: 'warpscout (разведка WARP)', author: 'vernette', url: 'https://github.com/vernette/warpscout' },
 			{ product: 'Всем пользователям', author: 'кто помогает, тестирует и поддерживает проект ❤', self: true, all: true }
 		];
-		var creditsGrid = E('div', { 'class': 'zm-credits-grid' });
+		var creditsGrid = E('div', { 'class': 'zm-credits-grid' }), allTile = null;
 		CREDITS.forEach(function(c) {
-			creditsGrid.appendChild(E('div', { 'class': 'zm-credit-tile' + (c.self ? ' zm-credit-self' : '') + (c.all ? ' zm-credit-all' : '') }, [
+			var tile = E('div', { 'class': 'zm-credit-tile' + (c.self ? ' zm-credit-self' : '') + (c.all ? ' zm-credit-all' : '') }, [
 				E('div', { 'class': 'zm-credit-product' }, c.product),
 				E('div', { 'class': 'zm-credit-author' }, c.author),
 				c.url ? E('a', { 'href': c.url, 'target': '_blank', 'rel': 'noreferrer' }, c.url.replace(/^https?:\/\//, '')) : ''
-			]));
+			]);
+			if (c.all) allTile = tile;
+			creditsGrid.appendChild(tile);
 		});
+		function fitAll() {
+			if (!allTile || !document.body.contains(creditsGrid)) return;
+			var cols = (getComputedStyle(creditsGrid).gridTemplateColumns || '').split(' ').filter(function(s) { return s; }).length || 1;
+			var rest = (CREDITS.length - 1) % cols;
+			allTile.style.gridColumn = rest ? 'span ' + (cols - rest) : '1 / -1';
+		}
+		setTimeout(fitAll, 0); setTimeout(fitAll, 400);
+		window.addEventListener('resize', fitAll);
 		var creditsCard = E('div', { 'class': 'zm-card' }, [
 			E('h3', {}, 'Спасибо'),
 			E('p', { 'class': 'zm-hint' }, 'Zapret Manager собирает в одном месте работу этих проектов и их авторов.'),
@@ -18566,7 +18738,7 @@ fi
 [ "$ZMW_RESTART" = "1" ] && { /etc/init.d/uhttpd restart >/dev/null 2>&1 || true; }
 
 ZMW_PORT="$(uci -q get uhttpd.zmweb.listen_http | tr ' ' '\n' | head -n1 | sed 's/.*://')"
-ZMW_IP="$(uci -q get network.lan.ipaddr | cut -d/ -f1)"
+ZMW_IP="$(/opt/zapret-manager-luci/backend.sh lan_ip 2>/dev/null || true)"
 [ -n "$ZMW_IP" ] || ZMW_IP="192.168.1.1"
 
 echo -e "Zapret Manager ${GREEN}для ${NC}LuCI ${GREEN}установлен!${NC}"
