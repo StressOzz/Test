@@ -1,5 +1,5 @@
 #!/bin/sh
-# Version: 1.47
+# Version: 1.48
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -70,7 +70,7 @@ cat > '/opt/zapret-manager-luci/backend.sh' << 'ZM_INSTALLER_EOF'
 umask 022
 
 CONF="/etc/config/zapret"
-ZM_VERSION="1.47"
+ZM_VERSION="1.48"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
@@ -199,11 +199,13 @@ _cpu_load() {
 		sleep 1
 		now="$(_cpu_stat)"
 	fi
-	echo "$now" > "$f"
 	set -- $prev $now
 	t1=$1; i1=$2; t2=$3; i2=$4
+	# Замер слишком короткий (панель и боковое меню спросили почти одновременно) — отдаём прошлое значение
+	if [ $((t2 - t1)) -lt 50 ] 2>/dev/null && [ -s "$f.pct" ]; then cat "$f.pct"; return 0; fi
 	[ "$t2" -gt "$t1" ] 2>/dev/null || { echo 0; return 0; }
-	echo $(( (100 * ((t2 - t1) - (i2 - i1)) + (t2 - t1) / 2) / (t2 - t1) ))
+	echo "$now" > "$f"
+	echo $(( (100 * ((t2 - t1) - (i2 - i1)) + (t2 - t1) / 2) / (t2 - t1) )) | tee "$f.pct"
 }
 
 _cpu_temp() {
@@ -264,14 +266,16 @@ status() {
 
 	local strat="" fs_marker=""
 	if [ -f "$CONF" ]; then
-		strat=$(sed -n "/^[[:space:]]*option NFQWS_OPT '\$/,/^[[:space:]]*'\$/p" "$CONF" | grep '^#' | sed 's/^#//; s/[[:space:]]*$//' | tr '\n' ' ' | sed 's/ $//')
+		strat=$(sed -n "/^[[:space:]]*option NFQWS_OPT '\$/,/^[[:space:]]*'\$/p" "$CONF" | grep '^#' | sed 's/^#[[:space:]]*//; s/[[:space:]]*$//; /^udp443$/d' | tr '\n' ' ' | sed 's/ $//')
+		_udp443_on && strat="${strat:+$strat }QUIC"
 		fs_marker=$(grep -m1 '^# ZMFS:' "$CONF" | sed 's/^# ZMFS://')
 		sed -n "/^[[:space:]]*option NFQWS_OPT '\$/,/^[[:space:]]*'\$/p" "$CONF" | grep -qi '^#[[:space:]]*customstart' && strat="Custom"
 	fi
 
-	printf '{"pkg":"%s","zapret":"%s","zapret_running":%s,"zapret_version":"%s","zapret2":"%s","zapret2_running":%s,"strategy":"%s","flowseal":"%s","yv_off":%s}\n' \
+	printf '{"pkg":"%s","zapret":"%s","zapret_running":%s,"zapret_version":"%s","zapret2":"%s","zapret2_running":%s,"strategy":"%s","flowseal":"%s","yv_off":%s,"quic_yt":%s}\n' \
 		"$PKG" "$zr" "$zr_running" "$(esc "$zr_ver")" "$zr2" "$zr2_running" "$(esc "$strat")" "$(esc "$fs_marker")" \
-		"$([ -f /opt/zapret-manager-luci/yv_off ] && echo true || echo false)"
+		"$([ -f /opt/zapret-manager-luci/yv_off ] && echo true || echo false)" \
+		"$([ -f "$CONF" ] && _udp443_on && echo true || echo false)"
 }
 
 
@@ -553,26 +557,35 @@ DV_OFF_FLAG="/opt/zapret-manager-luci/dv_off"
 DISCORD_RX='^--filter-l7=discord,stun$|^--filter-udp=19294-19344,50000-50100$|^--filter-tcp=2053,2083,2087,2096,8443$|^--hostlist-domains=discord[.]media$|^#[ \t]*Dv[0-9]+$'
 
 YV_RX='^#[ \t]*Yv[0-9]+$|^--hostlist=/opt/zapret/ipset/zapret-hosts-google[.]txt$'
-NFQ_MARK_RX='^[ \t]*#[ \t]*(Yv|Dv|Gv)[0-9]'
+NFQ_MARK_RX='^[ \t]*#[ \t]*((Yv|Dv|Gv)[0-9]|udp443[ \t]*$)'
+UDP443_MARK_RX='^[ \t]*#[ \t]*udp443[ \t]*$'
 
 _nfq_drop_profiles() {
-	local rx="$1" force="$2" old="$JOBS_DIR/nfq_drop_old" new="$JOBS_DIR/nfq_drop_new" rc
+	local rx="$1" force="$2" keep="$3" old="$JOBS_DIR/nfq_drop_old" new="$JOBS_DIR/nfq_drop_new" rc
 	mkdir -p "$JOBS_DIR"
 	awk "/^[[:space:]]*option NFQWS_OPT '\$/ { f = 1 } f" "$CONF" > "$old"
 	[ -s "$old" ] || { rm -f "$old"; return 1; }
 	grep -q "^[[:space:]]*'[[:space:]]*\$" "$old" || { rm -f "$old"; return 1; }
-	awk -v RX="$rx" -v MK="$NFQ_MARK_RX" -v q="'" '
+	awk -v RX="$rx" -v KP="$keep" -v MK="$NFQ_MARK_RX" -v UQ="$UDP443_MARK_RX" -v q="'" '
 		function emit(l) { o[++no] = l }
-		function flush(   i, drop) {
+		function flush(   i, drop, real, udp) {
 			if (n == 0 && np == 0) return
-			drop = 0
+			drop = 0; real = 0; udp = 0
 			for (i = 1; i <= np; i++) if (pc[i] ~ RX) drop = 1
-			for (i = 1; i <= n; i++) if (b[i] ~ RX) drop = 1
+			for (i = 1; i <= n; i++) {
+				if (b[i] ~ RX) drop = 1
+				if (b[i] !~ /^[ \t]*#/) real++
+				if (b[i] == "--filter-udp=443") udp = 1
+			}
+			if (drop && KP != "") {
+				for (i = 1; i <= np; i++) if (pc[i] ~ KP) drop = 0
+				for (i = 1; i <= n; i++) if (b[i] ~ KP) drop = 0
+			}
 			if (drop) removed = 1
-			else if (n > 0) {
-				for (i = 1; i <= np; i++) emit(pc[i])
+			else if (real > 0) {
+				for (i = 1; i <= np; i++) if (udp || pc[i] !~ UQ) emit(pc[i])
 				if (printed) emit("--new")
-				for (i = 1; i <= n; i++) emit(b[i])
+				for (i = 1; i <= n; i++) if (udp || b[i] !~ UQ) emit(b[i])
 				printed = 1
 			}
 			n = 0; np = 0
@@ -611,6 +624,36 @@ _nfq_drop_profiles() {
 }
 
 _nfq_normalize() { _nfq_drop_profiles '^#ZM_NEVER_MATCHES$' force; return 0; }
+
+# Блок QUIC (UDP 443) для YouTube — тот же, что в консольном Zapret Manager («#udp443»)
+_nfq_opt_body() { sed -n "/^[[:space:]]*option NFQWS_OPT '\$/,/^[[:space:]]*'\$/p" "$CONF" 2>/dev/null; }
+_udp443_on() { _nfq_opt_body | grep -qx -- '--filter-udp=443'; }
+_udp443_add() {
+	_udp443_on && return 0
+	sed -i '/^[[:space:]]*#[[:space:]]*udp443[[:space:]]*$/d' "$CONF"
+	sed -i "/^[[:space:]]*option NFQWS_OPT '/a\\#udp443\\n--filter-udp=443\\n--hostlist=/opt/zapret/ipset/zapret-hosts-google.txt\\n--dpi-desync=fake\\n--dpi-desync-repeats=11\\n--dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin\\n--new" "$CONF"
+	_add_ports_if_missing NFQWS_PORTS_UDP 443
+}
+
+youtube_quic_set() {
+	local mode="$1"
+	[ -f "$CONF" ] || { echo '{"error":"Zapret не установлен"}'; return 1; }
+	case "$mode" in
+		on)
+			_udp443_on && { printf '{"ok":true,"quic":true}\n'; return 0; }
+			_add_gp_domains
+			_udp443_add
+			_nfq_normalize ;;
+		off)
+			_udp443_on || { sed -i '/^[[:space:]]*#[[:space:]]*udp443[[:space:]]*$/d' "$CONF"; printf '{"ok":true,"quic":false}\n'; return 0; }
+			_nfq_drop_profiles '^--filter-udp=443$'
+			case $? in 0|3) ;; *) echo '{"error":"блок стратегий Zapret (NFQWS_OPT) записан не так, как его пишет панель, — блок QUIC не тронут"}'; return 1 ;; esac
+			sed -i '/^[[:space:]]*#[[:space:]]*udp443[[:space:]]*$/d' "$CONF" ;;
+		*) echo '{"error":"неизвестное действие"}'; return 1 ;;
+	esac
+	zapret_restart
+	printf '{"ok":true,"quic":%s}\n' "$(_udp443_on && echo true || echo false)"
+}
 
 _add_yv_default() {
 	[ -f "$YV_OFF_FLAG" ] && return 0
@@ -655,9 +698,10 @@ strategy_list_v() {
 }
 
 strategy_set_v() {
-	local version="$1" yv dv gv xt
+	local version="$1" yv dv gv xt q
 	echo "$version" | grep -qE '^v([1-9]|10)$' || { echo '{"error":"некорректная версия"}'; return 1; }
 	[ -f "$CONF" ] || { echo '{"error":"Zapret не установлен"}'; return 1; }
+	_udp443_on && q=1
 	yv=$(grep -oE '^#[[:space:]]*Yv[0-9]+$' "$CONF" | head -n1 | sed 's/^#[[:space:]]*//')
 	dv=$(grep -oE '^#[[:space:]]*Dv[0-9]+$' "$CONF" | head -n1 | sed 's/^#[[:space:]]*Dv//')
 	gv=$(grep -oE '^#Gv[1-4](Xtreme)?$' "$CONF" | head -n1 | sed 's/^#Gv//; s/Xtreme$//')
@@ -673,6 +717,9 @@ strategy_set_v() {
 	_add_yv_default
 	_discord_str_add
 	ZM_NO_RESTART=1
+	if [ -n "$yv" ] && [ "$yv" != Yv08 ] && [ ! -f "$YV_OFF_FLAG" ] && [ ! -s "$(_yv_file)" ]; then
+		do_yv_download >/dev/null 2>&1
+	fi
 	if [ -n "$yv" ] && [ "$yv" != Yv08 ] && [ ! -f "$YV_OFF_FLAG" ] && [ -s "$(_yv_file)" ] && grep -qxF "#$yv" "$(_yv_file)"; then
 		strategy_set_youtube "$yv" >/dev/null
 	fi
@@ -681,6 +728,7 @@ strategy_set_v() {
 		game_set "$gv" >/dev/null
 		[ -n "$xt" ] && game_toggle_xtreme >/dev/null
 	fi
+	[ -n "$q" ] && _udp443_add
 	ZM_NO_RESTART=""
 	_nfq_normalize
 	zapret_restart
@@ -781,7 +829,7 @@ do_flowseal_download() {
 
 strategy_list_flowseal() {
 	local f; f="$(_flowseal_file)"
-	if [ ! -s "$f" ]; then
+	if [ ! -s "$f" ] || [ "$1" = refresh ]; then
 		job_start flowseal_download do_flowseal_download
 		return
 	fi
@@ -794,12 +842,13 @@ strategy_list_flowseal() {
 }
 
 strategy_set_flowseal() {
-	local name="$1" f block
+	local name="$1" f block q
 	f="$(_flowseal_file)"
 	[ -s "$f" ] || { echo '{"error":"список не загружен — сначала обновите"}'; return 1; }
 	[ -f "$CONF" ] || { echo '{"error":"Zapret не установлен"}'; return 1; }
 	block=$(awk -v n="#$name" '$0==n{flag=1; print; next} /^#/ && flag{exit} flag{print}' "$f")
 	[ -z "$block" ] && { echo '{"error":"стратегия не найдена"}'; return 1; }
+	_udp443_on && q=1
 	rm -f "$YV_OFF_FLAG" "$DV_OFF_FLAG"
 	_game_xtreme_undo_opts
 	_remove_ports_if_present NFQWS_PORTS_UDP "$PORTS_UDP"
@@ -821,6 +870,7 @@ strategy_set_flowseal() {
 		_add_ports_if_missing NFQWS_PORTS_UDP "$PORTS_UDP"
 		_add_ports_if_missing NFQWS_PORTS_TCP "$PORTS_TCP"
 	fi
+	[ -n "$q" ] && _udp443_add
 	zapret_restart
 	printf '{"ok":true,"strategy":"%s","ts_warning":%s}\n' "$(esc "$name")" "$(_ts_warning)"
 }
@@ -838,7 +888,7 @@ do_yv_download() {
 
 strategy_list_youtube() {
 	local f; f="$(_yv_file)"
-	if [ ! -s "$f" ]; then
+	if [ ! -s "$f" ] || [ "$1" = refresh ]; then
 		job_start youtube_download do_yv_download
 		return
 	fi
@@ -849,7 +899,7 @@ strategy_list_youtube() {
 	)"
 }
 
-_yv_block_remove() { _nfq_drop_profiles "$YV_RX"; }
+_yv_block_remove() { _nfq_drop_profiles "$YV_RX" "" '^--filter-udp=443$'; }
 
 strategy_set_youtube() {
 	local name="$1" f selected
@@ -7753,10 +7803,11 @@ case "$cmd" in
 	zapret2_action)              zapret2_action "$1" ;;
 	strategy_list_v)            strategy_list_v ;;
 	strategy_set_v)              strategy_set_v "$1" ;;
-	strategy_list_flowseal)       strategy_list_flowseal ;;
+	strategy_list_flowseal)       strategy_list_flowseal "$1" ;;
 	strategy_set_flowseal)         strategy_set_flowseal "$1" ;;
-	strategy_list_youtube)          strategy_list_youtube ;;
+	strategy_list_youtube)          strategy_list_youtube "$1" ;;
 	strategy_set_youtube)            strategy_set_youtube "$1" ;;
+	youtube_quic_set)                youtube_quic_set "$1" ;;
 	discord_status)                 discord_status ;;
 	discord_set_dv)                  discord_set_dv "$1" ;;
 	discord_set_fake)                 discord_set_fake "$1" ;;
@@ -7847,10 +7898,11 @@ list_methods() {
 	json_add_object "zapret2_action";         json_add_string "action" "string"; json_close_object
 	json_add_object "strategy_list_v";        json_close_object
 	json_add_object "strategy_set_v";         json_add_string "version" "string"; json_close_object
-	json_add_object "strategy_list_flowseal"; json_close_object
+	json_add_object "strategy_list_flowseal"; json_add_string "action" "string"; json_close_object
 	json_add_object "strategy_set_flowseal";  json_add_string "name" "string"; json_close_object
-	json_add_object "strategy_list_youtube";  json_close_object
+	json_add_object "strategy_list_youtube";  json_add_string "action" "string"; json_close_object
 	json_add_object "strategy_set_youtube";   json_add_string "name" "string"; json_close_object
+	json_add_object "youtube_quic_set";       json_add_string "mode" "string"; json_close_object
 	json_add_object "discord_status";         json_close_object
 	json_add_object "discord_set_dv";         json_add_string "num" "string"; json_close_object
 	json_add_object "discord_set_fake";       json_add_string "file" "string"; json_close_object
@@ -7934,10 +7986,11 @@ call_method() {
 		zapret2_action)          json_get_var action action;   "$BACKEND" zapret2_action "$action" ;;
 		strategy_list_v)         "$BACKEND" strategy_list_v ;;
 		strategy_set_v)          json_get_var version version; "$BACKEND" strategy_set_v "$version" ;;
-		strategy_list_flowseal)  "$BACKEND" strategy_list_flowseal ;;
+		strategy_list_flowseal)  json_get_var action action;   "$BACKEND" strategy_list_flowseal "$action" ;;
 		strategy_set_flowseal)   json_get_var name name;       "$BACKEND" strategy_set_flowseal "$name" ;;
-		strategy_list_youtube)   "$BACKEND" strategy_list_youtube ;;
+		strategy_list_youtube)   json_get_var action action;   "$BACKEND" strategy_list_youtube "$action" ;;
 		strategy_set_youtube)    json_get_var name name;       "$BACKEND" strategy_set_youtube "$name" ;;
+		youtube_quic_set)        json_get_var mode mode;       "$BACKEND" youtube_quic_set "$mode" ;;
 		discord_status)          "$BACKEND" discord_status ;;
 		discord_set_dv)          json_get_var num num;         "$BACKEND" discord_set_dv "$num" ;;
 		discord_set_fake)        json_get_var file file;       "$BACKEND" discord_set_fake "$file" ;;
@@ -8043,7 +8096,7 @@ cat > '/usr/share/rpcd/acl.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF'
 			"ubus": {
 				"zapret-manager": [
 					"zapret_action", "zapret2_action",
-					"strategy_set_v", "strategy_set_flowseal", "strategy_set_youtube",
+					"strategy_set_v", "strategy_set_flowseal", "strategy_set_youtube", "youtube_quic_set",
 					"discord_set_dv", "discord_set_fake",
 					"hosts_toggle", "doh_set", "hosts_replace_geohide", "hosts_reset", "hosts_file_set", "doh_install", "doh_remove",
 					"game_set", "game_set_fake", "game_toggle_xtreme",
@@ -8157,10 +8210,11 @@ var callZapretLatestVersion = rpc.declare({ object: 'zapret-manager', method: 'z
 var callZapret2Action = rpc.declare({ object: 'zapret-manager', method: 'zapret2_action', params: ['action'], expect: {} });
 var callStrategyListV = rpc.declare({ object: 'zapret-manager', method: 'strategy_list_v', expect: {} });
 var callStrategySetV = rpc.declare({ object: 'zapret-manager', method: 'strategy_set_v', params: ['version'], expect: {} });
-var callStrategyListFlowseal = rpc.declare({ object: 'zapret-manager', method: 'strategy_list_flowseal', expect: {} });
+var callStrategyListFlowseal = rpc.declare({ object: 'zapret-manager', method: 'strategy_list_flowseal', params: ['action'], expect: {} });
 var callStrategySetFlowseal = rpc.declare({ object: 'zapret-manager', method: 'strategy_set_flowseal', params: ['name'], expect: {} });
-var callStrategyListYoutube = rpc.declare({ object: 'zapret-manager', method: 'strategy_list_youtube', expect: {} });
+var callStrategyListYoutube = rpc.declare({ object: 'zapret-manager', method: 'strategy_list_youtube', params: ['action'], expect: {} });
 var callStrategySetYoutube = rpc.declare({ object: 'zapret-manager', method: 'strategy_set_youtube', params: ['name'], expect: {} });
+var callYoutubeQuicSet = rpc.declare({ object: 'zapret-manager', method: 'youtube_quic_set', params: ['mode'], expect: {} });
 var callDiscordStatus = rpc.declare({ object: 'zapret-manager', method: 'discord_status', expect: {} });
 var callDiscordSetDv = rpc.declare({ object: 'zapret-manager', method: 'discord_set_dv', params: ['num'], expect: {} });
 var callDiscordSetFake = rpc.declare({ object: 'zapret-manager', method: 'discord_set_fake', params: ['file'], expect: {} });
@@ -8461,6 +8515,7 @@ return baseclass.extend({
 	strategySetFlowseal: callStrategySetFlowseal,
 	strategyListYoutube: callStrategyListYoutube,
 	strategySetYoutube: callStrategySetYoutube,
+	youtubeQuicSet: callYoutubeQuicSet,
 	discordStatus: callDiscordStatus,
 	discordSetDv: callDiscordSetDv,
 	discordSetFake: callDiscordSetFake,
@@ -8766,6 +8821,24 @@ return view.extend({
 		loadVersions('auto');
 
 		this.refreshOverview = refreshOverview;
+
+		// Температура, нагрузка и память обновляются сами; состояние компонентов — реже
+		var sysTick = 0, sysBusy = false;
+		var sysTimer = setInterval(function() {
+			if (!document.body.contains(cards)) { if (sysTick > 2) clearInterval(sysTimer); sysTick++; return; }
+			if (document.hidden || sysBusy) return;
+			sysBusy = true;
+			sysTick++;
+			Promise.all([
+				zm.systemInfo().catch(function() { return null; }),
+				zm.boardInfo().catch(function() { return null; })
+			]).then(function(r) {
+				if (r[0] && !r[0].error) sysInfo = r[0];
+				if (r[1] && r[1].memory) boardInfo = r[1];
+				renderCards();
+				if (sysTick % 3 === 0) refreshOverview();
+			}).catch(function() {}).then(function() { sysBusy = false; });
+		}, 5000);
 
 		var zmUpdateBusy = false;
 		function waitForServerAndReload() {
@@ -11830,7 +11903,7 @@ return view.extend({
 							busy = true;
 							zm.toast('Обновляем список Flowseal', 'warning');
 							fGrid.innerHTML = 'Загрузка списка';
-							zm.strategyListFlowseal().then(function(res) {
+							zm.strategyListFlowseal('refresh').then(function(res) {
 								if (res.started) {
 									zm.pollJob('flowseal_download', logEl, function(ok) {
 										busy = false;
@@ -11921,8 +11994,14 @@ return view.extend({
 			panels.strategy.appendChild(logEl);
 
 			zm.strategyListFlowseal().then(function(res) {
-				if (!res.started) renderFlowseal(res);
-				else fGrid.appendChild(E('p', { 'class': 'zm-hint' }, 'Список ещё не загружен — нажмите «Обновить список».'));
+				if (!res.started) { renderFlowseal(res); return; }
+				busy = true;
+				fGrid.appendChild(E('p', { 'class': 'zm-hint' }, 'Загружаем список…'));
+				zm.pollJob('flowseal_download', logEl, function(ok) {
+					busy = false;
+					if (!ok) { fGrid.innerHTML = ''; fGrid.appendChild(E('p', { 'class': 'zm-hint' }, 'Список не загрузился — нажмите «Обновить список».')); return; }
+					zm.strategyListFlowseal().then(renderFlowseal);
+				});
 			});
 
 			var nfqwsCard = E('div', { 'class': 'zm-card' });
@@ -11941,7 +12020,7 @@ return view.extend({
 				nfqwsCard.innerHTML = '';
 				nfqwsCard.appendChild(E('h3', {}, 'Редактировать текущую стратегию'));
 				if (!nfqwsOpen) {
-					nfqwsCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Прямое редактирование параметров NFQWS_OPT в /etc/config/zapret — для опытных пользователей.'));
+					nfqwsCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Ручная правка блока NFQWS_OPT — для опытных пользователей.'));
 					nfqwsCard.appendChild(E('div', { 'class': 'zm-actions' }, [
 						E('button', {
 							'class': 'cbi-button',
@@ -11954,7 +12033,7 @@ return view.extend({
 					]));
 					return;
 				}
-				nfqwsCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Содержимое в /etc/config/zapret. Сохранение применяет изменения и перезапускает Zapret.'));
+				nfqwsCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Блок NFQWS_OPT из /etc/config/zapret. «Сохранить и применить» перезапустит Zapret.'));
 				nfqwsEl.style.display = '';
 				nfqwsCard.appendChild(nfqwsEl);
 				nfqwsCard.appendChild(E('div', { 'class': 'zm-actions' }, [
@@ -12005,7 +12084,7 @@ return view.extend({
 			function renderMain() {
 				mainCard.innerHTML = '';
 				mainCard.appendChild(E('h3', {}, 'Тест стратегий v / Flowseal'));
-				mainCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Тест идёт в фоне — переключение вкладок или закрытие LuCI его не прервёт. По окончании конфигурация всегда возвращается к тому, что было до начала теста — стратегии только тестируются, лучшую нужно применить вручную на странице «Стратегии».'));
+				mainCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Тест идёт в фоне — его не прервут ни смена вкладки, ни закрытие страницы. После теста настройки возвращаются как были. Лучшую стратегию примените сами на вкладке «Стратегии».'));
 				if (busy && TEST_MAIN_MODES.indexOf(curMode) !== -1) {
 					mainCard.appendChild(E('div', { 'class': 'zm-row' }, [
 						E('span', { 'class': 'zm-label' }, 'Статус'),
@@ -12027,7 +12106,7 @@ return view.extend({
 			function renderYt() {
 				ytCard.innerHTML = '';
 				ytCard.appendChild(E('h3', {}, 'Тест стратегий YouTube (Yv)'));
-				ytCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Всегда тестируется отдельно от v/Flowseal.'));
+				ytCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Проверяет только YouTube-стратегии (Yv).'));
 				if (busy && curMode === 'youtube') {
 					ytCard.appendChild(E('div', { 'class': 'zm-row' }, [
 						E('span', { 'class': 'zm-label' }, 'Статус'),
@@ -12049,7 +12128,7 @@ return view.extend({
 			function renderCur() {
 				curCard.innerHTML = '';
 				curCard.appendChild(E('h3', {}, 'Тест текущей стратегии'));
-				curCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Проверяет уже применённую сейчас стратегию (конфигурация не переключается) по доменам DPI и отдельно по доменам YouTube.'));
+				curCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Проверяет стратегию, которая стоит сейчас, ничего не меняя: отдельно по заблокированным сайтам и по YouTube.'));
 				if (busy && curMode === 'current') {
 					curCard.appendChild(E('div', { 'class': 'zm-row' }, [
 						E('span', { 'class': 'zm-label' }, 'Статус'),
@@ -12216,7 +12295,7 @@ return view.extend({
 						zm.strategySetYoutube('off').then(function(r2) {
 							busy = false;
 							if (r2.error) { zm.toast(r2.error, 'error'); return; }
-							zm.toast(r2.removed ? 'YouTube-стратегия выключена' : 'YouTube-стратегии в Zapret и так нет — она больше не добавится', 'info');
+							zm.toast(r2.removed ? 'YouTube-стратегия выключена' : 'YouTube-стратегии и так не было — теперь она не будет добавляться', 'info');
 							refreshAll();
 						}).catch(function() { busy = false; });
 					}
@@ -12241,18 +12320,58 @@ return view.extend({
 					grid.appendChild(E('p', { 'class': 'zm-hint' }, 'Список пуст — нажмите «Обновить список».'));
 			}
 
+			// Блок QUIC (UDP 443): YouTube отдаёт видео и по QUIC, а не только по TCP
+			var quicOn = !!status.quic_yt, quicBlocked = false;
+			var quicCard = E('div', { 'class': 'zm-card' });
+
+			function renderQuic() {
+				quicCard.innerHTML = '';
+				quicCard.appendChild(E('h3', {}, 'QUIC для YouTube'));
+				quicCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Браузеры и приложение YouTube часто грузят видео по QUIC (UDP 443), а не по TCP. Этот блок обходит блокировку и для QUIC. Работает вместе с выбранной стратегией.'));
+				quicCard.appendChild(E('div', { 'class': 'zm-row' }, [
+					E('span', { 'class': 'zm-label' }, 'Статус'),
+					zm.badge(quicOn, 'включён', 'выключен')
+				]));
+				if (quicBlocked) quicCard.appendChild(E('p', { 'class': 'zm-hint' }, quicOn
+					? 'QUIC сейчас заблокирован на странице «Система» — блок не работает, пока блокировка включена.'
+					: 'QUIC сейчас заблокирован на странице «Система» — YouTube и так идёт по TCP, блок не нужен.'));
+				quicCard.appendChild(E('div', { 'class': 'zm-actions' }, [
+					E('button', {
+						'class': quicOn ? 'cbi-button cbi-button-remove' : 'cbi-button cbi-button-positive',
+						'click': function() {
+							if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+							busy = true;
+							zm.toast(quicOn ? 'Выключаем QUIC для YouTube' : 'Включаем QUIC для YouTube', 'warning');
+							zm.youtubeQuicSet(quicOn ? 'off' : 'on').then(function(res) {
+								busy = false;
+								if (res.error) { zm.toast(res.error, 'error'); return; }
+								zm.toast(res.quic ? 'QUIC для YouTube включён' : 'QUIC для YouTube выключен', 'info');
+								refreshAll();
+							}).catch(function() { busy = false; });
+						}
+					}, quicOn ? 'Выключить' : 'Включить')
+				]));
+			}
+
 			function refreshState() {
 				zm.status().then(function(s) {
 					current = currentYv(s);
 					yvOff = !!s.yv_off;
+					quicOn = !!s.quic_yt;
 					if (lastList) renderGrid(lastList);
+					renderQuic();
 				});
+				zm.systemStatus().then(function(ss) {
+					quicBlocked = !!(ss && ss.quic_blocked);
+					renderQuic();
+				}).catch(function() {});
 			}
 
 			refreshers.youtube = refreshState;
 			tabHooks.youtube = refreshState;
 			var yvOff = !!status.yv_off;
 			current = currentYv(status);
+			renderQuic();
 
 			var card = E('div', { 'class': 'zm-card' }, [
 				E('h3', {}, 'Стратегии для YouTube'),
@@ -12264,7 +12383,7 @@ return view.extend({
 							busy = true;
 							zm.toast('Обновляем список YouTube-стратегий', 'warning');
 							grid.innerHTML = 'Загрузка списка';
-							zm.strategyListYoutube().then(function(res) {
+							zm.strategyListYoutube('refresh').then(function(res) {
 								if (res.started) {
 									zm.pollJob('youtube_download', logEl, function(ok) {
 										busy = false;
@@ -12281,16 +12400,24 @@ return view.extend({
 					}, 'Обновить список')
 				]),
 				grid,
-				E('p', { 'class': 'zm-hint' }, 'Применяется поверх текущей стратегии — заменяет только YouTube-часть. «Выключить» убирает YouTube-часть из Zapret совсем — например, если YouTube идёт через ByeTube или Steer.')
+				E('p', { 'class': 'zm-hint' }, 'Меняет только YouTube-часть текущей стратегии. «Выключить» убирает её совсем — например, если YouTube идёт через ByeTube или Steer.')
 			]);
 
 			panels.youtube.appendChild(card);
 			panels.youtube.appendChild(logEl);
+			panels.youtube.appendChild(quicCard);
+			refreshState();
 
 			if (!initial.started) {
 				renderGrid(initial);
 			} else {
-				grid.appendChild(E('p', { 'class': 'zm-hint' }, 'Список ещё не загружен — нажмите «Обновить список».'));
+				busy = true;
+				grid.appendChild(E('p', { 'class': 'zm-hint' }, 'Загружаем список…'));
+				zm.pollJob('youtube_download', logEl, function(ok) {
+					busy = false;
+					if (!ok) { grid.innerHTML = ''; grid.appendChild(E('p', { 'class': 'zm-hint' }, 'Список не загрузился — нажмите «Обновить список».')); return; }
+					zm.strategyListYoutube().then(renderGrid);
+				});
 			}
 		})();
 
@@ -12345,7 +12472,7 @@ return view.extend({
 					E('span', { 'class': 'zm-label' }, 'Статус'),
 					zm.badge(xtreme, 'включён', 'выключен')
 				]));
-				xtremeRow.appendChild(E('p', { 'class': 'zm-hint' }, 'Внимание: может повлиять на работу приложений и соединений — используйте только для проверки игр.'));
+				xtremeRow.appendChild(E('p', { 'class': 'zm-hint' }, 'Может мешать работе других приложений. Включайте только для проверки игр.'));
 				xtremeRow.appendChild(E('div', { 'class': 'zm-actions' }, [
 					E('button', {
 						'class': xtreme ? 'cbi-button cbi-button-remove' : 'cbi-button cbi-button-positive',
@@ -12413,7 +12540,7 @@ return view.extend({
 			var fakeCard = E('div', { 'class': 'zm-card' }, [
 				E('h3', {}, 'Fake-файл для игровой стратегии'),
 				fakeGrid,
-				E('p', { 'class': 'zm-hint' }, 'Доступно только если игровая стратегия уже выбрана.')
+				E('p', { 'class': 'zm-hint' }, 'Работает, только когда выбрана игровая стратегия.')
 			]);
 
 			panels.game.appendChild(gvCard);
@@ -12440,7 +12567,7 @@ return view.extend({
 						zm.discordSetDv('off').then(function(res) {
 							busy = false;
 							if (res.error) { zm.toast(res.error, 'error'); return; }
-							zm.toast(res.removed ? 'Стратегия Discord выключена' : 'Стратегии Discord в Zapret и так нет — она больше не добавится', 'info');
+							zm.toast(res.removed ? 'Стратегия Discord выключена' : 'Стратегии Discord и так не было — теперь она не будет добавляться', 'info');
 							refreshAll();
 						}).catch(function() { busy = false; });
 					}
@@ -12498,13 +12625,13 @@ return view.extend({
 			var dvCard = E('div', { 'class': 'zm-card' }, [
 				E('h3', {}, 'Стратегия для Discord'),
 				dvGrid,
-				E('p', { 'class': 'zm-hint' }, 'Стратегия Discord состоит из двух блоков: голос (discord,stun) и discord.media. «Выключить» убирает оба блока из Zapret, и при смене основной стратегии они не вернутся. Выбор любой Dv включает их снова.')
+				E('p', { 'class': 'zm-hint' }, 'Стратегия Discord — это два блока: голос (discord,stun) и discord.media. «Выключить» убирает оба, и при смене основной стратегии они не вернутся. Любая Dv включает их снова.')
 			]);
 
 			var fakeCard = E('div', { 'class': 'zm-card' }, [
 				E('h3', {}, 'Fake-файл для discord,stun'),
 				fakeGrid,
-				E('p', { 'class': 'zm-hint' }, 'Доступно только если стратегия Discord включена.')
+				E('p', { 'class': 'zm-hint' }, 'Работает, только когда включена стратегия Discord.')
 			]);
 
 			panels.discord.appendChild(dvCard);
@@ -12524,7 +12651,7 @@ return view.extend({
 			}
 
 			editorCard.appendChild(E('h3', {}, 'Домены исключения'));
-			editorCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Редактирование /opt/zapret/ipset/zapret-hosts-user-exclude.txt — домены, для которых Zapret не применяется. Сохранение перезапускает Zapret.'));
+			editorCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Сайты из этого списка Zapret не трогает — по одному домену в строке. Сохранение перезапускает Zapret.'));
 			editorCard.appendChild(contentEl);
 			editorCard.appendChild(E('div', { 'class': 'zm-actions' }, [
 				E('button', {
@@ -12593,7 +12720,7 @@ return view.extend({
 					}, [ E('div', {}, d.ip), E('div', { 'class': 'zm-hint' }, d.name) ]));
 				});
 				if (!devices || !devices.length)
-					grid.appendChild(E('p', { 'class': 'zm-hint' }, 'Устройства не найдены (нет записей в /tmp/dhcp.leases).'));
+					grid.appendChild(E('p', { 'class': 'zm-hint' }, 'Устройства не найдены — нажмите «Обновить список».'));
 			}
 
 			renderGrid(data.devices);
@@ -12603,7 +12730,7 @@ return view.extend({
 			var card = E('div', { 'class': 'zm-card' }, [
 				E('h3', {}, 'Исключение устройств из Zapret'),
 				grid,
-				E('p', { 'class': 'zm-hint' }, 'Клик по устройству — включить/выключить исключение (трафик этого IP не будет проходить через Zapret).'),
+				E('p', { 'class': 'zm-hint' }, 'Нажмите на устройство, чтобы исключить его из Zapret или вернуть обратно. Красным отмечены исключённые.'),
 				E('div', { 'class': 'zm-actions' }, [
 					E('button', {
 						'class': 'cbi-button',
@@ -12846,9 +12973,8 @@ html.zm-theme-dark .zm-credit-tile { border-color: rgba(255,255,255,.12); backgr
 .zm-credit-product { font-weight: 700; font-size: 13.5px; margin-bottom: 2px; overflow-wrap: anywhere; }
 .zm-credit-author { font-size: 12px; opacity: .75; margin-bottom: 6px; }
 .zm-credit-tile a { font-size: 12px; word-break: break-all; overflow-wrap: anywhere; }
-.zm-credit-tile.zm-credit-all { grid-column: span 2; display: flex; flex-direction: column; justify-content: center; }
+.zm-credit-tile.zm-credit-all { grid-column: 1 / -1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
 .zm-credit-tile.zm-credit-all .zm-credit-author { margin-bottom: 0; }
-@media (max-width: 460px) { .zm-credit-tile.zm-credit-all { grid-column: auto; } }
 
 .zm-tile {
 	flex: 0 1 auto;
@@ -13415,7 +13541,7 @@ return view.extend({
 		});
 		var creditsCard = E('div', { 'class': 'zm-card' }, [
 			E('h3', {}, 'Спасибо'),
-			E('p', { 'class': 'zm-hint' }, 'Zapret Manager LuCI объединяет и упаковывает в один интерфейс наработки этих проектов и их авторов.'),
+			E('p', { 'class': 'zm-hint' }, 'Zapret Manager собирает в одном месте работу этих проектов и их авторов.'),
 			creditsGrid
 		]);
 		wrap.appendChild(creditsCard);
@@ -15728,7 +15854,11 @@ function buildShell() {
 		nav.appendChild(a);
 	});
 
-	deviceEl = E('div', { 'class': 'zmw-device' }, [ E('div', { 'class': 'zmw-device-model' }, [ 'Роутер' ]), E('div', { 'class': 'zmw-device-sub' }, [ location.hostname ]) ]);
+	deviceEl = E('div', { 'class': 'zmw-device' }, [
+		E('div', { 'class': 'zmw-device-model' }, [ 'Роутер' ]),
+		E('div', { 'class': 'zmw-device-sub' }, [ location.hostname ]),
+		E('div', { 'class': 'zmw-device-sub' }, [ '' ])
+	]);
 	verEl = E('div', { 'class': 'zmw-brand-sub' }, [ 'by StressOzz' ]);
 	updateEl = E('a', { 'class': 'zmw-update', 'href': '#/dashboard', 'hidden': '' }, [ 'Доступно обновление' ]);
 	memEl = E('div', { 'class': 'zmw-mem' });
@@ -15742,6 +15872,7 @@ function buildShell() {
 		updateEl,
 		nav,
 		E('div', { 'class': 'zmw-side-foot' }, [
+			deviceEl,
 			memEl,
 			E('div', { 'class': 'zmw-side-links' }, [
 				E('a', { 'href': luciUrl(), 'target': '_blank', 'rel': 'noreferrer' }, [ icon('external'), 'Открыть LuCI' ])
@@ -15930,7 +16061,8 @@ function loadShellInfo() {
 		if (!i || i.error) return;
 		deviceEl.firstChild.textContent = String(i.model || 'Роутер').replace(/\s*\(.*\)\s*$/, '') || i.model;
 		deviceEl.title = [ i.model, i.openwrt ? 'OpenWrt ' + i.openwrt : '', i.arch ].filter(Boolean).join('\n');
-		deviceEl.lastChild.textContent = [ i.openwrt ? 'OpenWrt ' + i.openwrt : '', i.arch || '' ].filter(Boolean).join(' · ') || location.hostname;
+		deviceEl.children[1].textContent = i.openwrt ? 'OpenWrt ' + i.openwrt : location.hostname;
+		deviceEl.children[2].textContent = i.arch || '';
 	}).catch(function () {});
 	callUpd().then(function (u) {
 		if (!u || u.error) return;
@@ -15945,7 +16077,8 @@ function loadShellInfo() {
 var shellTimer = null;
 function startShellPolling() {
 	if (shellTimer) return;
-	shellTimer = setInterval(function () { if (!document.hidden) { refreshShellStatus(); refreshMemory(); } }, 15000);
+	shellTimer = setInterval(function () { if (!document.hidden) refreshShellStatus(); }, 15000);
+	setInterval(function () { if (!document.hidden) refreshMemory(); }, 5000);
 }
 
 /* ───────────────────────── Рендер страниц ───────────────────────── */
@@ -16432,7 +16565,8 @@ body.zmw-locked .zmw-shell { filter: blur(6px); pointer-events: none; }
 	70% { box-shadow: 0 0 0 8px rgba(16,185,129,0); }
 	100% { box-shadow: 0 0 0 0 rgba(16,185,129,0); }
 }
-.zmw-device { padding: 2px 6px; }
+.zmw-device { padding: 2px 6px 9px; border-bottom: 1px dashed var(--border); }
+.zmw-device-sub:empty { display: none; }
 .zmw-device-model { font-size: 12.5px; line-height: 1.35; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 650; color: var(--text); overflow-wrap: anywhere; }
 .zmw-device-sub { font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .zmw-side-links { display: flex; gap: 6px; }
@@ -17437,8 +17571,7 @@ html[data-theme="depth"] #zmw-view .zm-tile.zm-active::before { color: #04111f; 
 html[data-theme="depth"] .zmw-theme-mark { color: #7fdcff; }
 html[data-theme="ink"] #zmw-view .zm-node.zm-active .zm-node-name::before, html[data-theme="ink"] #zmw-view .zm-node.zm-active .zm-lat { color: #0a0a0a; }
 html[data-theme="bento"] #zmw-view .zm-seg-item.zm-active, html[data-theme="retro"] #zmw-view .zm-seg-item.zm-active { color: #ffffff; }
-#zmw-view .zm-credit-tile.zm-credit-all { grid-column: span 2; display: flex; flex-direction: column; justify-content: center; }
-@media (max-width: 460px) { #zmw-view .zm-credit-tile.zm-credit-all { grid-column: auto; } }
+#zmw-view .zm-credit-tile.zm-credit-all { grid-column: 1 / -1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
 .zmw-theme-menu { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 4px; width: 340px; max-width: calc(100vw - 16px); }
 .zmw-theme-group { grid-column: 1 / -1; padding: 8px 10px 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
 .zmw-theme-group:first-child { padding-top: 4px; }
