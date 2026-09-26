@@ -6637,10 +6637,31 @@ _st_spec_apply() { # ID...
 	cp "$tmp" "$ST_STEER_SPEC.tmp" && mv "$ST_STEER_SPEC.tmp" "$ST_STEER_SPEC"
 	_st_own "steer-spec"
 	/etc/init.d/steer enable >/dev/null 2>&1
-	/etc/init.d/steer restart >/dev/null 2>&1
 	mkdir -p "$ST_DIR"
+	if _st_engine_reload; then
+		printf '%s\n' "$sum" > "$ST_DIR/spec.sum"
+		_rb_say "Правила Steer применены без перезапуска — соединения не рвались"
+		return 0
+	fi
+	/etc/init.d/steer restart >/dev/null 2>&1
 	printf '%s\n' "$sum" > "$ST_DIR/spec.sum"
 	_rb_say "Правила Steer применены"
+}
+
+# Мягкое применение: демон steer сверяет новую спеку с применённой и меняет только разницу —
+# правила, маршрутизацию выходов, помощников, — ничего не снимая, поэтому трафик через туннели
+# не прерывается. Не вышло (движок не запущен, старый движок без reload, демон отверг спеку
+# или упал) — код ошибки, и вызывающий делает полный перезапуск, как раньше.
+_st_engine_reload() {
+	/etc/init.d/steer running >/dev/null 2>&1 || return 1
+	command -v steer >/dev/null 2>&1 || return 1
+	if command -v timeout >/dev/null 2>&1; then
+		timeout 90 steer reload --spec "$ST_STEER_SPEC" >/dev/null 2>&1 || return 1
+	else
+		steer reload --spec "$ST_STEER_SPEC" >/dev/null 2>&1 || return 1
+	fi
+	sleep 1
+	/etc/init.d/steer running >/dev/null 2>&1
 }
 
 _st_spec_sum() { # SPEC -> контрольная сумма спеки вместе со всеми файлами, на которые она ссылается
@@ -7060,6 +7081,164 @@ do_steer_warp_fix() { # N [keys]
 	_rb_say "Готово"
 }
 
+# ── Автоподбор мёртвых туннелей ──
+# Движок сам уводит трафик с упавшего туннеля на живой, но упавший запасной не чинит: оживляет
+# туннели он, только когда молчат ВСЕ, и то на старой точке входа. Раз в 10 минут (cron)
+# смотрим каждый туннель; мёртвый дольше заданного — подбираем ему новую точку (как кнопка
+# «Починить»), не трогая остальные. Две неудачи подряд — третья попытка с новыми ключами,
+# после четвёртой сдаёмся до ручной починки или пока туннель не оживёт сам.
+ST_WFIX="$ST_DIR/wfix"            # порог в минутах: 30 | 60 | 180; нет файла — выключено
+ST_WFIX_STATE="$ST_DIR/wfix.state" # «интерфейс мёртв_с попыток последняя_попытка»
+ST_WFIX_LOG="$ST_DIR/wfix.log"     # «время|текст», последние 20 событий
+ST_WFIX_TAG="# zm-wfix"            # не «# zm-steer…»: ту метку чистит и читает автоперезапуск
+ST_WFIX_TRIES=4
+
+_st_wfix_say() { # ТЕКСТ
+	mkdir -p "$ST_DIR"
+	{ tail -n 19 "$ST_WFIX_LOG" 2>/dev/null; echo "$(date +%s)|$1"; } > "$ST_WFIX_LOG.tmp" && mv -f "$ST_WFIX_LOG.tmp" "$ST_WFIX_LOG"
+	logger -t zm-steer "автоподбор: $1" 2>/dev/null
+}
+
+_st_wfix_get() { awk -v i="$1" -v f="$2" '$1 == i { print $f; exit }' "$ST_WFIX_STATE" 2>/dev/null; }
+_st_wfix_put() { # ИНТЕРФЕЙС МЁРТВ_С ПОПЫТОК ПОСЛЕДНЯЯ | ИНТЕРФЕЙС - (удалить)
+	mkdir -p "$ST_DIR"
+	{ grep -v "^$1 " "$ST_WFIX_STATE" 2>/dev/null; [ "$2" = - ] || echo "$1 $2 ${3:-0} ${4:-0}"; } > "$ST_WFIX_STATE.tmp"
+	mv -f "$ST_WFIX_STATE.tmp" "$ST_WFIX_STATE"
+	[ -s "$ST_WFIX_STATE" ] || rm -f "$ST_WFIX_STATE"
+}
+
+_st_wfix_alive() { # ИНТЕРФЕЙС — поднят, рукопожатие свежее и пинг проходит
+	[ -d "/sys/class/net/$1" ] || return 1
+	_st_warp_alive_if "$1" || return 1
+	ping -I "$1" -c 2 -W 3 1.1.1.1 >/dev/null 2>&1 || ping -I "$1" -c 2 -W 3 8.8.8.8 >/dev/null 2>&1
+}
+
+_st_wfix_net_ok() { # интернет напрямую есть — иначе туннели не виноваты
+	ping -c 2 -W 3 1.1.1.1 >/dev/null 2>&1 || ping -c 2 -W 3 8.8.8.8 >/dev/null 2>&1 ||
+		curl -s -o /dev/null --connect-timeout 5 --max-time 8 https://www.cloudflare.com/cdn-cgi/trace 2>/dev/null
+}
+
+_st_wfix_min() { local m; m="$(cat "$ST_WFIX" 2>/dev/null)"; case "$m" in 30|60|180) echo "$m" ;; *) echo "" ;; esac; }
+
+_st_wfix_set() { # off | 30 | 60 | 180
+	case "$1" in
+		off) rm -f "$ST_WFIX" "$ST_WFIX_STATE" ;;
+		30|60|180) mkdir -p "$ST_DIR"; echo "$1" > "$ST_WFIX" ;;
+		*) echo '{"error":"допустимо: выкл, 30, 60 или 180 минут"}'; return 1 ;;
+	esac
+	_st_wfix_cron
+	printf '{"ok":true}\n'
+}
+
+_st_wfix_cron() { # строка cron — по настройке
+	local want=""
+	[ -n "$(_st_wfix_min)" ] && want="*/10 * * * * /opt/zapret-manager-luci/backend.sh steer_action wfix_tick x >/dev/null 2>&1 $ST_WFIX_TAG"
+	if [ -n "$want" ]; then
+		grep -qxF "$want" "$CRON_FILE" 2>/dev/null && return 0
+	else
+		grep -qF "$ST_WFIX_TAG" "$CRON_FILE" 2>/dev/null || return 0
+	fi
+	mkdir -p "$(dirname "$CRON_FILE")"
+	touch "$CRON_FILE"
+	sed -i "\\|$ST_WFIX_TAG|d" "$CRON_FILE"
+	[ -n "$want" ] && echo "$want" >> "$CRON_FILE"
+	/etc/init.d/cron enable >/dev/null 2>&1
+	/etc/init.d/cron restart >/dev/null 2>&1
+	return 0
+}
+
+_st_wfix_tick() { # из cron раз в 10 минут: ничего не делает, пока все живы
+	local lim now n i since tries last dead="" all=1 any=0 pick="" pn="" keys=""
+	lim="$(_st_wfix_min)"
+	[ -n "$lim" ] || return 0
+	_st_installed || return 0
+	[ -f "$ST_OFF" ] && return 0
+	[ -n "$(_st_blocker)" ] && return 0
+	_st_warp_own && return 0
+	[ "$(_st_exit)" = warp ] || return 0
+	_st_running && return 0
+	[ -n "$(_st_sel)" ] || return 0
+	now="$(date +%s)"
+	n=1
+	while [ "$n" -le "$ST_WARP_MAX" ]; do
+		i="$(_st_wif "$n")"
+		n=$((n + 1))
+		_st_owns "net $i" || continue
+		[ -s "$(_st_wconf $((n - 1)))" ] || continue
+		any=1
+		if _st_wfix_alive "$i"; then
+			all=0
+			since="$(_st_wfix_get "$i" 2)"
+			if [ -n "$since" ]; then
+				_st_wfix_put "$i" -
+				_st_wfix_say "WARP $((n - 1)) снова работает"
+			fi
+			continue
+		fi
+		since="$(_st_wfix_get "$i" 2)"; tries="$(_st_wfix_get "$i" 3)"; last="$(_st_wfix_get "$i" 4)"
+		[ -n "$since" ] || { since="$now"; tries=0; last=0; _st_wfix_put "$i" "$since" 0 0; }
+		dead="$dead $((n - 1))"
+		[ "${tries:-0}" -ge "$ST_WFIX_TRIES" ] && continue
+		[ $((now - since)) -ge $((lim * 60)) ] || continue
+		[ $((now - ${last:-0})) -ge $((lim * 60)) ] || continue
+		# Чиним по одному туннелю за раз: разведка — минуты, остальные подождут следующего тика
+		[ -z "$pick" ] && { pick="$i"; pn=$((n - 1)); }
+	done
+	[ "$any" = 1 ] && [ -n "$pick" ] || return 0
+	# Молчат все — сначала убедиться, что интернет вообще есть: иначе подбор только сожжёт попытки
+	if [ "$all" = 1 ] && ! _st_wfix_net_ok; then
+		[ -f "$ST_RUN/wfix.nonet" ] || { mkdir -p "$ST_RUN"; touch "$ST_RUN/wfix.nonet"; _st_wfix_say "молчат все туннели, но и напрямую интернета нет — ждём"; }
+		return 0
+	fi
+	rm -f "$ST_RUN/wfix.nonet"
+	tries="$(_st_wfix_get "$pick" 3)"; since="$(_st_wfix_get "$pick" 2)"
+	[ "${tries:-0}" -ge 2 ] && keys=keys
+	_st_wfix_put "$pick" "$since" $(( ${tries:-0} + 1 )) "$now"
+	job_start steer do_steer_wfix "$pn" "$keys" "$since" >/dev/null
+}
+
+do_steer_wfix() { # N [keys] МЁРТВ_С
+	local n="$1" keys="$2" since="$3" i mins tries
+	i="$(_st_wif "$n")"
+	mins=$(( ($(date +%s) - ${since:-$(date +%s)}) / 60 ))
+	tries="$(_st_wfix_get "$i" 3)"
+	_st_phase warp
+	rm -f "$ST_STOP_FLAG"
+	_rb_say "Автоподбор: WARP $n не работает $mins мин — подбираем новую точку входа${keys:+ с новыми ключами} (попытка ${tries:-1} из $ST_WFIX_TRIES)"
+	if _st_warp_fix "$n" "$keys"; then
+		_st_wfix_put "$i" -
+		_st_kick
+		set -- $(awk -v i="$i" '$1 == i { print $2; exit }' "$ST_WARP_UP" 2>/dev/null)
+		_st_wfix_say "WARP $n не работал $mins мин — подобрана точка $(uci -q get "network.${i}_peer.endpoint_host"):$(uci -q get "network.${i}_peer.endpoint_port")${1:+, колония $1}${keys:+, новые ключи}"
+		_rb_say "Готово"
+		return 0
+	fi
+	_st_stopped && { _st_wfix_say "WARP $n: подбор остановлен вручную"; return 1; }
+	if [ "${tries:-0}" -ge "$ST_WFIX_TRIES" ]; then
+		_st_wfix_say "WARP $n: $ST_WFIX_TRIES попытки подбора не помогли — автоподбор для него остановлен до ручной починки"
+	else
+		_st_wfix_say "WARP $n: новая точка не нашлась (попытка $tries из $ST_WFIX_TRIES), повторим через $(_st_wfix_min) мин"
+	fi
+	return 1
+}
+
+_st_wfix_json() {
+	local m out="" sep="" i since tries t txt
+	m="$(_st_wfix_min)"
+	if [ -s "$ST_WFIX_STATE" ]; then
+		while read -r i since tries _; do
+			[ -n "$i" ] || continue
+			out="$out$sep{\"n\":\"${i#zmwarp}\",\"since\":${since:-0},\"tries\":${tries:-0}}"; sep=","
+		done < "$ST_WFIX_STATE"
+	fi
+	printf '{"mode":"%s","max":%s,"now":%s,"dead":[%s],"log":[' "${m:-off}" "$ST_WFIX_TRIES" "$(date +%s)" "$out"
+	sep=""
+	[ -s "$ST_WFIX_LOG" ] && tail -n 5 "$ST_WFIX_LOG" | while IFS='|' read -r t txt; do
+		printf '%s{"t":%s,"text":"%s"}' "$sep" "${t:-0}" "$(esc "$txt")"; sep=","
+	done
+	printf ']}'
+}
+
 do_steer_apply() {
 	_st_phase rules
 	rm -f "$ST_STOP_FLAG"
@@ -7163,8 +7342,8 @@ do_steer_remove() {
 		uci commit firewall
 		/etc/init.d/firewall reload >/dev/null 2>&1
 	fi
-	if grep -qF "$ST_CRON_TAG" "$CRON_FILE" 2>/dev/null || grep -qF "# zm-subupd" "$CRON_FILE" 2>/dev/null; then
-		sed -i "\\|$ST_CRON_TAG|d; \\|# zm-subupd|d" "$CRON_FILE"
+	if grep -qF "$ST_CRON_TAG" "$CRON_FILE" 2>/dev/null || grep -qF "# zm-subupd" "$CRON_FILE" 2>/dev/null || grep -qF "$ST_WFIX_TAG" "$CRON_FILE" 2>/dev/null; then
+		sed -i "\\|$ST_CRON_TAG|d; \\|# zm-subupd|d; \\|$ST_WFIX_TAG|d" "$CRON_FILE"
 		/etc/init.d/cron restart >/dev/null 2>&1
 	fi
 	_st_vpn_zone off
@@ -7221,6 +7400,7 @@ steer_status() {
 	fi
 	_st_dns_conflict && dns=true
 	_st_cat_bg
+	[ -n "$(_st_wfix_min)" ] && _st_wfix_cron
 	sel=" $(_st_sel | tr '\n' ' ') "
 	# Один проход awk: сервисов из каталога десятки, а вызов _rb_svc_field на каждое поле — это лишние процессы на каждом опросе
 	svc="$(_rb_svc_src | awk -F'|' -v sel="$sel" -v skipf="$ST_SKIP" '
@@ -7245,10 +7425,10 @@ steer_status() {
 	if [ "$vup" = true ] && [ "$vexit" = vpn ] && [ "$off" = false ]; then
 		_st_vpn_live; case $? in 0) vlive=true ;; 1) vlive=false ;; esac
 	fi
-	printf '{"running":%s,"phase":"%s","blocker":"%s","installed":%s,"stopped":%s,"version":"%s","steer_running":%s,"channels":%s,"warp_up":%s,"warp_colo":"%s","warp_host":"%s","warp_port":"%s","warp_hs_age":"%s","warp_rx":%s,"warp_tx":%s,"autorestart":"%s","dns_conflict":%s,"exit":"%s","vpn_up":%s,"vpn_live":%s,"has_sub":%s,"sub_label":"%s","latest":"%s","ext":%s,"warp_on":%s,"warp_mode":"%s","warp_own_saved":%s,"tunnels":%s,"catalog":%s,"services":[%s]}\n' \
+	printf '{"running":%s,"phase":"%s","blocker":"%s","installed":%s,"stopped":%s,"version":"%s","steer_running":%s,"channels":%s,"warp_up":%s,"warp_colo":"%s","warp_host":"%s","warp_port":"%s","warp_hs_age":"%s","warp_rx":%s,"warp_tx":%s,"autorestart":"%s","dns_conflict":%s,"exit":"%s","vpn_up":%s,"vpn_live":%s,"has_sub":%s,"sub_label":"%s","latest":"%s","ext":%s,"warp_on":%s,"warp_mode":"%s","warp_own_saved":%s,"tunnels":%s,"catalog":%s,"wfix":%s,"services":[%s]}\n' \
 		"$running" "$(esc "$phase")" "$blk" "$installed" "$off" "$(esc "$ver")" "$run" "${chans:-0}" "$warp_up" "$(esc "$colo")" \
 		"$(esc "$host")" "$(esc "$port")" "$age" "${rx:-0}" "${tx:-0}" "$(_st_cron_get)" "$dns" \
-		"$vexit" "$vup" "$vlive" "$vsub" "$(esc "$(_st_sub_label)")" "$(esc "$latest")" "$ext" "$won" "$(_st_warp_own && echo own || echo auto)" "$(_st_own_saved && echo true || echo false)" "$(_st_tunnels_json)" "$(_st_cat_json)" "$svc"
+		"$vexit" "$vup" "$vlive" "$vsub" "$(esc "$(_st_sub_label)")" "$(esc "$latest")" "$ext" "$won" "$(_st_warp_own && echo own || echo auto)" "$(_st_own_saved && echo true || echo false)" "$(_st_tunnels_json)" "$(_st_cat_json)" "$(_st_wfix_json)" "$svc"
 }
 
 _st_tunnels_json() {
@@ -7745,7 +7925,7 @@ steer_sub_probe() { # НОМЕР
 
 steer_action() {
 	local action="$1" mode="$2"
-	[ "$action" = diag ] || rm -f "$ST_VPN_PROBE"
+	case "$action" in diag|wfix_tick) ;; *) rm -f "$ST_VPN_PROBE" ;; esac
 	case "$action" in
 		install|apply|start|stop|remove|warp_restart|warp_endpoint|warp_recreate|lists|engine|warp_setup|warp_fix|warp_fixkeys|warp_own|warp_mode)
 			_st_running && { echo '{"error":"дождитесь окончания текущей операции"}'; return 1; }
@@ -7843,6 +8023,10 @@ steer_action() {
 			printf '{"ok":true}\n'
 			;;
 		autorestart) _st_cron_set "$mode" ;;
+		wfix) _st_wfix_set "$mode" ;;
+		wfix_tick) _st_wfix_tick; printf '{"ok":true}\n' ;;
+		wfix_reset) # сбросить счётчик попыток — после ручной починки или по кнопке
+			rm -f "$ST_WFIX_STATE"; printf '{"ok":true}\n' ;;
 		warp_own_get)
 			local of="$ST_WARP_OWN"
 			[ -s "$of" ] || of="$ST_WARP_OWN_KEEP"
@@ -10656,6 +10840,7 @@ return view.extend({
 		var customData = null, customLoading = false, customEditor = null, customDraft = null, customDirty = false;
 		var warpCard = E('div', { 'class': 'zm-card' });
 		var autoCard = E('div', { 'class': 'zm-card' });
+		var wfixCard = E('div', { 'class': 'zm-card' }), wfixBusy = false;
 		var subCard = E('div', { 'class': 'zm-card' });
 		var subData = null, subLoading = false, subInput = '', lat = {}, probing = false, probeDone = 0, probeTotal = 0;
 		var tab = 'svc';
@@ -11281,6 +11466,60 @@ return view.extend({
 			}).catch(function() { autoBusy = false; zm.toast('Роутер не ответил', 'error'); });
 		}
 
+		// ── автоподбор мёртвых туннелей ──
+
+		function renderWfix() {
+			wfixCard.innerHTML = '';
+			var show = data.installed && !data.blocker && data.warp_on && data.warp_mode !== 'own';
+			wfixCard.style.display = show ? '' : 'none';
+			if (!show) return;
+			var w = data.wfix || {}, mode = w.mode || 'off', now = parseInt(w.now, 10) || Math.floor(Date.now() / 1000);
+			wfixCard.appendChild(E('h3', {}, 'Автоподбор мёртвых туннелей'));
+			wfixCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Steer сам уводит трафик с упавшего туннеля на живой, но упавший так и остаётся мёртвым. Автоподбор раз в 10 минут проверяет туннели и тому, что не работает дольше заданного времени, в фоне подбирает новую точку входа — остальные туннели не трогает. Если молчат все туннели, а интернета нет и напрямую, ничего не делает.'));
+			function tile(id, label) {
+				return E('div', { 'class': 'zm-tile' + (mode === id ? ' zm-active' : ''), 'click': function() { if (mode !== id) doWfix(id); } }, label);
+			}
+			wfixCard.appendChild(E('div', { 'class': 'zm-grid' }, [
+				tile('off', 'Выключен'), tile('30', 'Через 30 минут'), tile('60', 'Через 1 час'), tile('180', 'Через 3 часа')
+			]));
+			var dead = w.dead || [], max = parseInt(w.max, 10) || 4, stuck = false;
+			dead.forEach(function(d) {
+				var mins = Math.max(0, Math.round((now - (parseInt(d.since, 10) || now)) / 60));
+				var tries = parseInt(d.tries, 10) || 0, gave = tries >= max;
+				if (gave) stuck = true;
+				var dur = mins >= 60 ? Math.floor(mins / 60) + ' ч ' + (mins % 60) + ' мин' : mins + ' мин';
+				wfixCard.appendChild(row('WARP ' + (d.n || '1'), gave
+					? badge('zm-bad', 'не работает ' + dur + ' · ' + max + ' попытки не помогли, автоподбор остановлен')
+					: badge('zm-warn', 'не работает ' + dur + (tries ? ' · попыток: ' + tries + ' из ' + max : ''))));
+			});
+			if (mode !== 'off' && !dead.length) wfixCard.appendChild(row('Состояние', badge('zm-ok', 'все туннели работают')));
+			if (stuck) wfixCard.appendChild(E('div', { 'class': 'zm-actions' }, [
+				E('button', { 'class': 'cbi-button', 'click': function() {
+					zm.steerAction('wfix_reset', '').then(function() { zm.toast('Счётчик попыток сброшен', 'info'); refresh(); });
+				} }, 'Попробовать снова')
+			]));
+			var log = w.log || [];
+			if (log.length) {
+				wfixCard.appendChild(E('h4', { 'style': 'margin:12px 0 6px' }, 'Последние события'));
+				wfixCard.appendChild(E('div', { 'class': 'zm-hint', 'style': 'margin:0' }, log.slice().reverse().map(function(l) {
+					var d = new Date((parseInt(l.t, 10) || 0) * 1000);
+					var ts = ('0' + d.getDate()).slice(-2) + '.' + ('0' + (d.getMonth() + 1)).slice(-2) + ' ' + ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+					return E('div', {}, ts + ' — ' + l.text);
+				})));
+			}
+		}
+
+		function doWfix(value) {
+			if (wfixBusy) return;
+			wfixBusy = true;
+			zm.steerAction('wfix', value).then(function(res) {
+				wfixBusy = false;
+				if (res.error) { zm.toast(res.error, 'error'); return; }
+				zm.toast(value === 'off' ? 'Автоподбор выключен' : 'Автоподбор включён', 'info');
+				refresh();
+			}).catch(function() { wfixBusy = false; zm.toast('Роутер не ответил', 'error'); });
+		}
+
 		// ── спор за DNS ──
 
 		function renderDns() {
@@ -11498,11 +11737,12 @@ return view.extend({
 			renderCheck();
 			renderWarp();
 			renderAuto();
+			renderWfix();
 		}
 
 		renderAll();
 		[ listCard, customCard, checkCard ].forEach(function(n) { panes.svc.appendChild(n); });
-		[ warpCard, autoCard ].forEach(function(n) { panes.warp.appendChild(n); });
+		[ warpCard, wfixCard, autoCard ].forEach(function(n) { panes.warp.appendChild(n); });
 		panes.sub.appendChild(subCard);
 		[ mainCard, logEl, dnsCard, tabBar, panes.svc, panes.warp, panes.sub ].forEach(function(n) { wrap.appendChild(n); });
 		if (!data.blocker) { loadCustom(); loadSub(); }
