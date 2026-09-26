@@ -1,5 +1,5 @@
 #!/bin/sh
-# Version: 1.48
+# Version: 1.49
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -70,7 +70,7 @@ cat > '/opt/zapret-manager-luci/backend.sh' << 'ZM_INSTALLER_EOF'
 umask 022
 
 CONF="/etc/config/zapret"
-ZM_VERSION="1.48"
+ZM_VERSION="1.49"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
@@ -3401,7 +3401,8 @@ health() {
 			sr=2
 			if /etc/init.d/steer running >/dev/null 2>&1; then
 				if [ "$(_st_exit)" = vpn ]; then
-					[ -d "/sys/class/net/$ST_VPN_OUT" ] && sr=1
+					# интерфейс поднят, но трафик не идёт — это поломка
+					[ -d "/sys/class/net/$ST_VPN_OUT" ] && { _st_vpn_live; [ $? -ne 1 ] && sr=1; }
 				else
 					for w in $(awk '{print $1}' /etc/zm-steer/warp.up 2>/dev/null) zmwarp; do
 						[ -d "/sys/class/net/$w" ] && { sr=1; break; }
@@ -6422,10 +6423,14 @@ steer_status() {
 	elif command -v steer >/dev/null 2>&1; then ( _st_latest_ver >/dev/null 2>&1 & ); fi
 	[ -d "/sys/class/net/$ST_VPN_OUT" ] && vup=true
 	[ -s "$ST_SUB" ] && vsub=true
-	printf '{"running":%s,"phase":"%s","blocker":"%s","installed":%s,"stopped":%s,"version":"%s","steer_running":%s,"channels":%s,"warp_up":%s,"warp_colo":"%s","warp_host":"%s","warp_port":"%s","warp_hs_age":"%s","warp_rx":%s,"warp_tx":%s,"autorestart":"%s","dns_conflict":%s,"exit":"%s","vpn_up":%s,"has_sub":%s,"sub_label":"%s","latest":"%s","ext":%s,"warp_on":%s,"tunnels":%s,"services":[%s]}\n' \
+	local vlive=null
+	if [ "$vup" = true ] && [ "$vexit" = vpn ] && [ "$off" = false ]; then
+		_st_vpn_live; case $? in 0) vlive=true ;; 1) vlive=false ;; esac
+	fi
+	printf '{"running":%s,"phase":"%s","blocker":"%s","installed":%s,"stopped":%s,"version":"%s","steer_running":%s,"channels":%s,"warp_up":%s,"warp_colo":"%s","warp_host":"%s","warp_port":"%s","warp_hs_age":"%s","warp_rx":%s,"warp_tx":%s,"autorestart":"%s","dns_conflict":%s,"exit":"%s","vpn_up":%s,"vpn_live":%s,"has_sub":%s,"sub_label":"%s","latest":"%s","ext":%s,"warp_on":%s,"tunnels":%s,"services":[%s]}\n' \
 		"$running" "$(esc "$phase")" "$blk" "$installed" "$off" "$(esc "$ver")" "$run" "${chans:-0}" "$warp_up" "$(esc "$colo")" \
 		"$(esc "$host")" "$(esc "$port")" "$age" "${rx:-0}" "${tx:-0}" "$(_st_cron_get)" "$dns" \
-		"$vexit" "$vup" "$vsub" "$(esc "$(_st_sub_label)")" "$(esc "$latest")" "$ext" "$won" "$(_st_tunnels_json)" "$svc"
+		"$vexit" "$vup" "$vlive" "$vsub" "$(esc "$(_st_sub_label)")" "$(esc "$latest")" "$ext" "$won" "$(_st_tunnels_json)" "$svc"
 }
 
 _st_tunnels_json() {
@@ -6558,6 +6563,36 @@ _st_exit() {
 	echo none
 }
 _st_use_vpn() { [ "$(_st_exit)" = vpn ]; }
+
+# Живой ли VPN на деле: интерфейс может быть поднят, а трафик не идти.
+# Проверка (запрос к Cloudflare через туннель) идёт в фоне и кешируется на 2 минуты.
+ST_VPN_PROBE="$ZM_STATE_DIR/steer.vpnprobe"
+_st_vpn_probe() { # синхронно: пишет «время ok|fail ip loc»
+	local trace ip="" loc="" r=fail
+	if [ -d "/sys/class/net/$ST_VPN_OUT" ]; then
+		trace="$(curl -s --interface "$ST_VPN_OUT" --connect-timeout 5 --max-time 10 https://www.cloudflare.com/cdn-cgi/trace 2>/dev/null)"
+		ip="$(echo "$trace" | sed -n 's/^ip=//p')"; loc="$(echo "$trace" | sed -n 's/^loc=//p')"
+		[ -n "$ip" ] && r=ok
+	fi
+	mkdir -p "$ZM_STATE_DIR"
+	echo "$(date +%s) $r $ip $loc" > "$ST_VPN_PROBE"
+	[ "$r" = ok ]
+}
+_st_vpn_live() { # 0 — трафик идёт, 1 — не идёт, 2 — ещё не проверяли
+	local t r age
+	read -r t r _ 2>/dev/null < "$ST_VPN_PROBE"
+	age=$(( $(date +%s) - ${t:-0} ))
+	if [ "$age" -gt 120 ] || [ "$age" -lt 0 ]; then
+		if mkdir "$ST_VPN_PROBE.lock" 2>/dev/null; then
+			( _st_vpn_probe >/dev/null 2>&1; rmdir "$ST_VPN_PROBE.lock" ) >/dev/null 2>&1 &
+		elif [ -n "$(find "$ST_VPN_PROBE.lock" -mmin +1 2>/dev/null)" ]; then
+			rmdir "$ST_VPN_PROBE.lock" 2>/dev/null
+		fi
+	fi
+	[ -z "$r" ] && return 2
+	[ "$age" -gt 600 ] && return 2
+	[ "$r" = ok ]
+}
 
 _st_sub_label() {
 	[ -s "$ST_SUB" ] || return 0
@@ -6748,6 +6783,7 @@ do_steer_sub_remove() {
 }
 
 steer_sub_action() { # ДЕЙСТВИЕ ЗНАЧЕНИЕ
+	rm -f "$ST_VPN_PROBE"
 	local action="$1" mode="$2"
 	case "$action" in
 		sub_set)
@@ -6884,6 +6920,7 @@ steer_sub_probe() { # НОМЕР
 
 steer_action() {
 	local action="$1" mode="$2"
+	[ "$action" = diag ] || rm -f "$ST_VPN_PROBE"
 	case "$action" in
 		install|apply|start|stop|remove|warp_restart|warp_endpoint|warp_recreate|lists|engine|warp_setup|warp_fix|warp_fixkeys)
 			_st_running && { echo '{"error":"дождитесь окончания текущей операции"}'; return 1; }
@@ -6944,11 +6981,8 @@ steer_action() {
 			local trace warp="none" colo="" tun="" tsep="" wi wn wv wc vpn="none" vip="" vloc=""
 			if _st_installed && [ -n "$(_st_sel)" ] && [ ! -f "$ST_OFF" ] && _st_use_vpn; then
 				vpn=off
-				if [ -d "/sys/class/net/$ST_VPN_OUT" ]; then
-					trace="$(curl -s --interface "$ST_VPN_OUT" --connect-timeout 5 --max-time 10 https://www.cloudflare.com/cdn-cgi/trace 2>/dev/null)"
-					vip="$(echo "$trace" | sed -n 's/^ip=//p')"; vloc="$(echo "$trace" | sed -n 's/^loc=//p')"
-					[ -n "$vip" ] && vpn=on
-				fi
+				_st_vpn_probe && vpn=on
+				read -r _ _ vip vloc 2>/dev/null < "$ST_VPN_PROBE"
 			elif _st_installed && _st_warp_on && [ -n "$(_st_sel)" ] && [ ! -f "$ST_OFF" ]; then
 				warp=off
 				wn=1
@@ -9633,6 +9667,13 @@ return view.extend({
 			return [ 'нет связи', 'zm-warn' ];
 		}
 
+		// Туннель VPN: поднят ли он и идёт ли через него трафик на деле.
+		function vpnBadge() {
+			if (!data.vpn_up) return badge('zm-warn', 'подключаемся');
+			if (data.vpn_live === false) return badge('zm-bad', 'нет связи');
+			return badge('zm-ok', 'подключено');
+		}
+
 		function statusBadge() {
 			var n = selectedCount();
 			if (busy || data.running) return badge('zm-warn', PHASE_TEXT[data.phase] || 'работаем');
@@ -9643,6 +9684,7 @@ return view.extend({
 			// Работает, если служба запущена и жив хоть один туннель: упавший один из трёх —
 			// штатная работа, Steer уже ведёт трафик через живые.
 			if (data.exit === 'vpn') {
+				if (data.steer_running && data.vpn_up && data.vpn_live === false) return badge('zm-bad', 'трафик не идёт');
 				if (data.steer_running && data.vpn_up) return badge('zm-ok', 'работает');
 				if (data.steer_running) return badge('zm-warn', 'подключаемся к узлу');
 				return badge('zm-bad', 'не работает');
@@ -9675,9 +9717,9 @@ return view.extend({
 							E('div', { 'class': 'zm-seg-item' + (!isVpn ? ' zm-active' : ''), 'click': function() { if (isVpn && !busy) act('sub_exit', 'warp', 'Переключаем на WARP'); } }, 'WARP'),
 							E('div', { 'class': 'zm-seg-item' + (isVpn ? ' zm-active' : ''), 'click': function() { if (!isVpn && !busy) act('sub_exit', 'vpn', 'Переключаем на VPN'); } }, data.sub_label || 'VPN')
 						]),
-						isVpn ? badge(data.vpn_up ? 'zm-ok' : 'zm-warn', data.vpn_up ? 'подключено' : 'подключаемся') : badge(ts[1], ts[0])
+						isVpn ? vpnBadge() : badge(ts[1], ts[0])
 					]));
-				} else if (data.exit === 'vpn') mainCard.appendChild(row('Сервисы идут через', badge(data.vpn_up ? 'zm-ok' : 'zm-warn', 'VPN' + (data.sub_label ? ' · ' + data.sub_label : ''))));
+				} else if (data.exit === 'vpn') mainCard.appendChild(row('Сервисы идут через', E('span', {}, [ 'VPN' + (data.sub_label ? ' · ' + data.sub_label : '') + ' ', vpnBadge() ])));
 				else if (data.exit === 'warp') mainCard.appendChild(row('Сервисы идут через', badge(ts[1], 'WARP · ' + ts[0])));
 				else mainCard.appendChild(row('Сервисы идут через', badge('zm-warn', 'туннель не подключён — выберите вкладку WARP или VPN')));
 				mainCard.appendChild(row('Через туннель', E('span', {}, n ? n + ' ' + plural(n, 'сервис', 'сервиса', 'сервисов') : 'ничего не выбрано')));
@@ -9854,6 +9896,8 @@ return view.extend({
 				diagBusy = false;
 				diagRes = res || {};
 				renderCheck();
+				// проверка обновила кеш «идёт ли трафик» — подтягиваем состояние
+				zm.steerStatus().then(function(r) { if (r) { data = r; renderMain(); } }).catch(function() {});
 				if (!quiet) zm.toast('Проверка закончена', 'info');
 			}).catch(function() { diagBusy = false; renderCheck(); });
 		}
