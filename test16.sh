@@ -239,8 +239,8 @@ system_info() {
 	tmp_free=$(echo "$df_out" | awk 'NR==2{print $4}')
 	root_used=$(echo "$df_out" | awk 'NR==3{print $3}')
 	root_free=$(echo "$df_out" | awk 'NR==3{print $4}')
-	printf '{"model":"%s","arch":"%s","openwrt":"%s","tmp_used":"%s","tmp_free":"%s","root_used":"%s","root_free":"%s","cpu_temp":"%s","cpu_load":"%s"}\n' \
-		"$(esc "$model")" "$(esc "$arch")" "$(esc "$owrt")" \
+	printf '{"model":"%s","arch":"%s","openwrt":"%s","hostname":"%s","kernel":"%s","tmp_used":"%s","tmp_free":"%s","root_used":"%s","root_free":"%s","cpu_temp":"%s","cpu_load":"%s"}\n' \
+		"$(esc "$model")" "$(esc "$arch")" "$(esc "$owrt")" "$(esc "$(cat /proc/sys/kernel/hostname 2>/dev/null)")" "$(esc "$(uname -r 2>/dev/null)")" \
 		"$(esc "$tmp_used")" "$(esc "$tmp_free")" "$(esc "$root_used")" "$(esc "$root_free")" "$(_cpu_temp)" "$(_cpu_load)"
 }
 
@@ -8668,6 +8668,14 @@ return view.extend({
 			if (mem.total) memRows.push(row('ОЗУ', E('span', {}, zm.usageText(mem.total - ramAvail, mem.total))));
 			memRows.push(row('Флеш', E('span', {}, zm.usageText(ru, ru + rf))));
 			memRows.push(row('/tmp', E('span', {}, zm.usageText(tu, tu + tf))));
+			var up = parseInt(boardInfo.uptime, 10), extras = [];
+			if (up > 0) {
+				var dd = Math.floor(up / 86400), hh = Math.floor(up % 86400 / 3600), mm = Math.floor(up % 3600 / 60);
+				extras.push(row('Время работы', E('span', {}, (dd ? dd + ' дн ' : '') + (dd || hh ? hh + ' ч ' : '') + mm + ' мин')));
+			}
+			if (sysInfo.hostname) extras.push(row('Имя роутера', E('span', {}, sysInfo.hostname)));
+			if (sysInfo.kernel) extras.push(row('Ядро Linux', E('span', {}, sysInfo.kernel)));
+			while (rows.length < memRows.length && extras.length) rows.push(extras.shift());
 
 			cards.appendChild(E('div', { 'class': 'zm-card' }, [
 				E('h3', {}, 'Система'),
@@ -13378,6 +13386,7 @@ return view.extend({
 
 		var CREDITS = [
 			{ product: 'Zapret Manager и ByeTube', author: 'StressOzz', url: 'https://github.com/StressOzz', self: true },
+			{ product: 'zapret, zapret2', author: 'bol-van', url: 'https://github.com/bol-van' },
 			{ product: 'zapret-openwrt', author: 'remittor', url: 'https://github.com/remittor/zapret-openwrt' },
 			{ product: 'Zapret2', author: 'routerich', url: 'https://github.com/routerich' },
 			{ product: 'стратегии Flowseal', author: 'Flowseal', url: 'https://github.com/Flowseal/zapret-discord-youtube' },
@@ -15598,7 +15607,7 @@ var THEMES = [
 	{ id: 'dark', name: 'Тёмная', ico: 'moon', dark: true },
 	{ id: 'ink', name: 'Контур', ico: 'ink' },
 	{ id: 'bento', name: 'Бенто', ico: 'bento', fonts: 'Onest:wght@400;500;600;700&family=Unbounded:wght@600;800', color: '#efebe4' },
-	{ id: 'minimal', name: 'Минимализм', ico: 'minimal', fonts: 'IBM+Plex+Sans:wght@300;400;500', color: '#ffffff' },
+	{ id: 'minimal', name: 'Минимал', ico: 'minimal', fonts: 'IBM+Plex+Sans:wght@300;400;500', color: '#ffffff' },
 	{ id: 'retro', name: 'Ретро 98', ico: 'retro', color: '#008080' },
 	{ id: 'depth', name: 'Объём 3D', ico: 'depth', dark: true, fonts: 'Onest:wght@400;500;600;700&family=Unbounded:wght@600;800', color: '#0a0e18' }
 ];
@@ -15720,7 +15729,7 @@ function buildShell() {
 	});
 
 	deviceEl = E('div', { 'class': 'zmw-device' }, [ E('div', { 'class': 'zmw-device-model' }, [ 'Роутер' ]), E('div', { 'class': 'zmw-device-sub' }, [ location.hostname ]) ]);
-	verEl = E('div', { 'class': 'zmw-brand-sub' }, [ 'Web UI' ]);
+	verEl = E('div', { 'class': 'zmw-brand-sub' }, [ 'by StressOzz' ]);
 	updateEl = E('a', { 'class': 'zmw-update', 'href': '#/dashboard', 'hidden': '' }, [ 'Доступно обновление' ]);
 	memEl = E('div', { 'class': 'zmw-mem' });
 
@@ -15733,12 +15742,10 @@ function buildShell() {
 		updateEl,
 		nav,
 		E('div', { 'class': 'zmw-side-foot' }, [
-			deviceEl,
 			memEl,
 			E('div', { 'class': 'zmw-side-links' }, [
 				E('a', { 'href': luciUrl(), 'target': '_blank', 'rel': 'noreferrer' }, [ icon('external'), 'Открыть LuCI' ])
-			]),
-			E('div', { 'class': 'zmw-credit' }, [ 'by StressOzz' ])
+			])
 		])
 	]);
 
@@ -15927,7 +15934,7 @@ function loadShellInfo() {
 	}).catch(function () {});
 	callUpd().then(function (u) {
 		if (!u || u.error) return;
-		if (u.current) verEl.textContent = 'Web UI · v' + u.current;
+		if (u.current) verEl.textContent = 'by StressOzz · v' + u.current;
 		if (u.latest && u.current && u.latest !== u.current) {
 			updateEl.hidden = false;
 			updateEl.textContent = 'Доступна версия ' + u.latest;
@@ -17496,8 +17503,6 @@ html[data-theme="micro"] .zmw-login-card, html[data-theme="micro"] .zmw-modal, h
 html[data-theme="micro"] .zmw-theme-opt { color: #151a26; } html[data-theme="micro"] .zmw-theme-opt:hover { background: #f7f8fb; }
 html[data-theme="micro"] .zmw-theme-opt.zmw-on { background: #2d5bff; color: #ffffff; } html[data-theme="micro"] .zmw-theme-opt.zmw-on .zmw-theme-mark, html[data-theme="micro"] .zmw-theme-opt.zmw-on .zmw-i { color: #ffffff; }
 html[data-theme="micro"] .zmw-theme-group { color: #5a6377; }
-html[data-theme="micro"] #zmw-view .zm-card { transition: transform .25s cubic-bezier(.2,.8,.2,1), box-shadow .25s, border-color .25s; }
-html[data-theme="micro"] #zmw-view .zm-card:hover { transform: translateY(-4px); border-color: #2d5bff; box-shadow: 0 18px 30px -16px rgba(45,91,255,.45); }
 html[data-theme="micro"] #zmw-view .cbi-button, html[data-theme="micro"] .zmw-icon-btn, html[data-theme="micro"] .zmw-btn-primary { transition: transform .12s, box-shadow .12s, background .2s, border-radius .25s; }
 html[data-theme="micro"] #zmw-view .cbi-button:hover, html[data-theme="micro"] .zmw-icon-btn:hover { transform: scale(1.03); }
 html[data-theme="micro"] #zmw-view .cbi-button:active, html[data-theme="micro"] .zmw-icon-btn:active, html[data-theme="micro"] .zmw-btn-primary:active { transform: scale(.95); box-shadow: none; }
@@ -17534,6 +17539,18 @@ html[data-theme="micro"] #zmw-view .zmw-tabs .cbi-button:hover { background: #f0
 html[data-theme="micro"] #zmw-view .zmw-tabs .cbi-button-positive, html[data-theme="micro"] #zmw-view .zmw-tabs .cbi-button-positive:hover { background: #2d5bff; color: #ffffff; box-shadow: 0 6px 14px -8px rgba(45,91,255,.9); border-radius: 11px; }
 html[data-theme="micro"] #zmw-view .zmw-tabs .cbi-button:active { transform: scale(.96); }
 html[data-theme="retro"] #zmw-view .zm-current-banner { background: #ffffe1; border: 1px solid #000000; border-radius: 0; color: #000000; }
+html[data-theme="micro"] .zmw-icon-btn.zmw-link-kvn, html[data-theme="micro"] .zmw-icon-btn.zmw-link-kvn:hover { background: linear-gradient(135deg, #2d5bff, #5b7cff); color: #ffffff; border-color: #2d5bff; box-shadow: 0 8px 18px -10px rgba(45,91,255,.9); }
+html[data-theme="micro"] .zmw-icon-btn.zmw-link-tg, html[data-theme="micro"] .zmw-icon-btn.zmw-link-tg:hover { background: #e8f4fc; color: #1b6fa8; border-color: #bfdff3; }
+html[data-theme="ink"] .zmw-icon-btn.zmw-link-kvn, html[data-theme="ink"] .zmw-icon-btn.zmw-link-kvn:hover { background: #0a9cff; color: #0a0a0a; }
+html[data-theme="ink"] .zmw-icon-btn.zmw-link-tg, html[data-theme="ink"] .zmw-icon-btn.zmw-link-tg:hover { background: #d6f0ff; color: #0a0a0a; }
+html[data-theme="bento"] .zmw-icon-btn.zmw-link-kvn, html[data-theme="bento"] .zmw-icon-btn.zmw-link-kvn:hover { background: #1c1a17; color: #ffffff; }
+html[data-theme="bento"] .zmw-icon-btn.zmw-link-tg, html[data-theme="bento"] .zmw-icon-btn.zmw-link-tg:hover { background: #dcecff; color: #1f4f82; }
+html[data-theme="minimal"] .zmw-icon-btn.zmw-link-kvn, html[data-theme="minimal"] .zmw-icon-btn.zmw-link-kvn:hover { background: #111111; color: #ffffff; border-color: #111111; }
+html[data-theme="minimal"] .zmw-icon-btn.zmw-link-tg, html[data-theme="minimal"] .zmw-icon-btn.zmw-link-tg:hover { background: #ffffff; color: #0060bb; border-color: #0060bb; }
+html[data-theme="retro"] .zmw-icon-btn.zmw-link-kvn, html[data-theme="retro"] .zmw-icon-btn.zmw-link-kvn:hover { color: #000080; font-weight: 700; }
+html[data-theme="retro"] .zmw-icon-btn.zmw-link-tg, html[data-theme="retro"] .zmw-icon-btn.zmw-link-tg:hover { color: #000080; }
+html[data-theme="depth"] .zmw-icon-btn.zmw-link-kvn, html[data-theme="depth"] .zmw-icon-btn.zmw-link-kvn:hover { background: linear-gradient(180deg, #33c6ff, #0090ff); color: #04111f; border-color: #0090ff; }
+html[data-theme="depth"] .zmw-icon-btn.zmw-link-tg, html[data-theme="depth"] .zmw-icon-btn.zmw-link-tg:hover { background: rgba(127,220,255,.12); color: #7fdcff; }
 ZM_INSTALLER_EOF
 cat > '/www/zm-webui.html' << 'ZM_INSTALLER_EOF'
 <!doctype html>
