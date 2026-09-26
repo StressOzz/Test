@@ -7202,7 +7202,7 @@ _st_wfix_tick() { # из cron раз в 10 минут: ничего не дел�
 	[ "$any" = 1 ] && [ -n "$pick" ] || return 0
 	# Молчат все — сначала убедиться, что интернет вообще есть: иначе подбор только сожжёт попытки
 	if [ "$all" = 1 ] && ! _st_wfix_net_ok; then
-		[ -f "$ST_RUN/wfix.nonet" ] || { mkdir -p "$ST_RUN"; touch "$ST_RUN/wfix.nonet"; _st_wfix_say "молчат все туннели, но и напрямую интернета нет — ждём"; }
+		[ -f "$ST_RUN/wfix.nonet" ] || { mkdir -p "$ST_RUN"; touch "$ST_RUN/wfix.nonet"; _st_wfix_say "нет интернета — подбор отложен"; }
 		return 0
 	fi
 	rm -f "$ST_RUN/wfix.nonet"
@@ -11498,75 +11498,58 @@ return view.extend({
 			var now = parseInt(w.now, 10) || Math.floor(Date.now() / 1000);
 			var lim = (parseInt(mode, 10) || 0) * 60, max = parseInt(w.max, 10) || 4;
 			var lastCheck = parseInt(w.last_check, 10) || 0, fixing = String(w.fixing || '');
-			// Строки одной ширины подписи: «WARP 1» и «Проверка» стоят ровной колонкой
-			function wrow(label, badgeEl, note) {
-				var kids = [ badgeEl ];
-				if (note) kids.push(E('span', { 'style': 'opacity:.7' }, note));
-				return E('div', { 'class': 'zm-row' }, [
-					E('span', { 'class': 'zm-label', 'style': 'min-width:76px' }, label),
-					E('span', { 'style': 'display:inline-flex;align-items:center;gap:10px;flex-wrap:wrap' }, kids)
-				]);
-			}
 			function dur(sec) {
-				var m = Math.max(0, Math.round(sec / 60));
-				if (m < 1) return 'меньше минуты';
+				var m = Math.max(1, Math.round(sec / 60));
 				return m >= 60 ? Math.floor(m / 60) + ' ч' + (m % 60 ? ' ' + (m % 60) + ' мин' : '') : m + ' мин';
 			}
+			function clock(t) { var d = new Date(t * 1000); return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2); }
+			// Проверка идёт по cron в :00, :10, :20… — подбор случится на первой проверке после срока
+			function tickAt(t) { return Math.ceil(Math.max(t, now + 1) / 600) * 600; }
 
 			wfixCard.appendChild(E('h3', {}, 'Автоподбор мёртвых туннелей'));
-			wfixCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Steer сам переключает трафик с упавшего туннеля на живой, но упавший туннель остаётся мёртвым. Автоподбор проверяет туннели раз в 10 минут и туннелю, который не работает дольше выбранного времени, в фоне подбирает новую точку входа. Работающие туннели не трогаются.'));
-			wfixCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Если не работает ни один туннель, сначала проверяется, есть ли у роутера интернет вообще. Если интернета нет, подбор не запускается — ждём, пока он появится.'));
+			wfixCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Раз в 10 минут проверяет туннели и неработающему подбирает новую точку входа. Работающие не трогает, без интернета не запускается.'));
 
-			// Состояние — по живым данным туннелей (как в карточке выше), а время смерти и попытки — из автоподбора
-			var deadBy = {};
+			var deadBy = {}, stuck = false, rows = [];
 			(w.dead || []).forEach(function(d) { deadBy[String(d.n)] = d; });
-			var stuck = false;
-			var rows = (data.tunnels || []).map(function(t) {
+			(data.tunnels || []).forEach(function(t) {
 				var n = String(t.n), d = deadBy[n], hsa = parseInt(t.hs_age, 10);
-				// Автоподбор записал туннель мёртвым, но рукопожатие было уже после проверки — значит, ожил
 				var live = tunnelLive(t) && (!d || (lastCheck && hsa < now - lastCheck));
-				if (fixing === n) return wrow('WARP ' + n, badge('zm-warn', 'подбирается новая точка'), 'ход — в журнале вверху страницы');
-				if (live) return wrow('WARP ' + n, badge('zm-ok', 'работает'));
-				var hs = parseInt(t.hs_age, 10);
-				var since = d ? now - (parseInt(d.since, 10) || now) : (!isNaN(hs) ? hs : null);
-				var tries = d ? parseInt(d.tries, 10) || 0 : 0, lastTry = d ? parseInt(d.last, 10) || 0 : 0;
-				var text = 'не работает' + (since !== null ? ' ' + dur(since) : '');
-				var next;
-				if (!on) next = 'автоподбор выключен';
-				else if (!d) next = 'автоподбор увидит это на ближайшей проверке';
-				else if (tries >= max) { stuck = true; next = max + ' попытки не помогли — автоподбор для него остановлен'; }
+				if (live && fixing !== n) return;
+				var el;
+				if (fixing === n) el = badge('zm-warn', 'подбираем новую точку');
 				else {
-					var wait = Math.max(lim - (now - (parseInt(d.since, 10) || now)), tries ? lim - (now - lastTry) : 0);
-					next = (wait > 0 ? 'новая точка — через ' + dur(wait) : 'новая точка — на ближайшей проверке') + (tries ? ' · попыток: ' + tries + ' из ' + max : '');
+					var since = d ? parseInt(d.since, 10) || now : (!isNaN(hsa) ? now - hsa : 0);
+					var tries = d ? parseInt(d.tries, 10) || 0 : 0, last = d ? parseInt(d.last, 10) || 0 : 0;
+					var kids = [ badge(tries >= max ? 'zm-bad' : 'zm-warn', 'не работает' + (since ? ' ' + dur(now - since) : '')) ];
+					var note = '';
+					if (tries >= max) { stuck = true; note = max + ' попытки не помогли'; }
+					else if (on) note = 'подбор в ' + clock(tickAt(Math.max(since ? since + lim : now, tries ? last + lim : 0))) + (tries ? ' · попытка ' + (tries + 1) + ' из ' + max : '');
+					if (note) kids.push(E('span', { 'style': 'opacity:.7' }, note));
+					el = E('span', { 'style': 'display:inline-flex;align-items:center;gap:10px;flex-wrap:wrap' }, kids);
 				}
-				return wrow('WARP ' + n, badge(tries >= max ? 'zm-bad' : 'zm-warn', text), next);
+				rows.push(E('div', { 'class': 'zm-row' }, [ E('span', { 'class': 'zm-label', 'style': 'min-width:60px' }, 'WARP ' + n), el ]));
 			});
-			var box = E('div', { 'style': 'margin:4px 0 12px' }, rows);
-			if (on) box.appendChild(wrow('Проверка', E('span', {}, 'раз в 10 минут'), lastCheck ? 'последняя — ' + fmtAge(now - lastCheck) : 'первая — в ближайшие секунды'));
-			wfixCard.appendChild(box);
-			if (stuck) wfixCard.appendChild(E('div', { 'class': 'zm-actions', 'style': 'margin-top:-4px' }, [
+			if (rows.length) rows.forEach(function(r) { wfixCard.appendChild(r); });
+			else if (on) wfixCard.appendChild(E('div', { 'class': 'zm-row' }, [ badge('zm-ok', 'все туннели работают') ]));
+			if (stuck) wfixCard.appendChild(E('div', { 'class': 'zm-actions', 'style': 'margin:4px 0 0' }, [
 				E('button', { 'class': 'cbi-button', 'click': function() {
-					zm.steerAction('wfix_reset', '').then(function() { zm.toast('Автоподбор попробует снова на ближайшей проверке', 'info'); refresh(); });
+					zm.steerAction('wfix_reset', '').then(function() { zm.toast('Попытки сброшены', 'info'); refresh(); });
 				} }, 'Попробовать снова')
 			]));
 
 			function tile(id, label) {
 				return E('div', { 'class': 'zm-tile' + (mode === id ? ' zm-active' : ''), 'click': function() { if (mode !== id) doWfix(id); } }, label);
 			}
-			wfixCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin:0 0 8px' }, 'Подбирать новую точку, если туннель не работает:'));
+			wfixCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin:12px 0 8px' }, 'Подбирать, если туннель не работает:'));
 			wfixCard.appendChild(E('div', { 'class': 'zm-grid' }, [
 				tile('off', 'Выключен'), tile('30', '30 минут'), tile('60', '1 час'), tile('180', '3 часа')
 			]));
 
-			var log = w.log || [];
-			if (log.length) {
-				wfixCard.appendChild(E('div', { 'style': 'margin:16px 0 6px;font-size:13px;font-weight:600' }, 'Последние события'));
-				wfixCard.appendChild(E('div', { 'class': 'zm-hint', 'style': 'margin:0' }, log.slice().reverse().map(function(l) {
-					var d = new Date((parseInt(l.t, 10) || 0) * 1000);
-					var ts = ('0' + d.getDate()).slice(-2) + '.' + ('0' + (d.getMonth() + 1)).slice(-2) + ' ' + ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
-					return E('div', {}, ts + ' — ' + l.text);
-				})));
-			}
+			var log = (w.log || []).slice(-3).reverse();
+			if (log.length) wfixCard.appendChild(E('div', { 'class': 'zm-hint', 'style': 'margin:12px 0 0' }, log.map(function(l) {
+				var t = parseInt(l.t, 10) || 0, d = new Date(t * 1000);
+				return E('div', {}, ('0' + d.getDate()).slice(-2) + '.' + ('0' + (d.getMonth() + 1)).slice(-2) + ' ' + clock(t) + ' — ' + l.text);
+			})));
 		}
 
 		function doWfix(value) {
