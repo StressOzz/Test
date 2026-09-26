@@ -1,5 +1,5 @@
 #!/bin/sh
-# Version: 1.63
+# Version: 1.65
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -70,7 +70,7 @@ cat > '/opt/zapret-manager-luci/backend.sh' << 'ZM_INSTALLER_EOF'
 umask 022
 
 CONF="/etc/config/zapret"
-ZM_VERSION="1.63"
+ZM_VERSION="1.65"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
@@ -2648,42 +2648,70 @@ test_results() {
 	printf '{"lines":"%s"}\n' "$(esc_ml "$(cat "$f")")"
 }
 
-zm_update_status() {
-	local latest_line latest=""
-	latest_line=$(curl -fsSL --connect-timeout 5 --max-time 8 -r 0-400 "$ZM_SCRIPT_URL" 2>/dev/null | grep -m1 '^# Version:')
-	if [ -z "$latest_line" ]; then
-		latest_line=$(curl -fsSL --connect-timeout 5 --max-time 10 "$ZM_SCRIPT_URL" 2>/dev/null | grep -m1 '^# Version:')
-	fi
-	latest=$(echo "$latest_line" | sed 's/^# Version:[[:space:]]*//')
-	printf '{"current":"%s","latest":"%s"}\n' "$(esc "$ZM_VERSION")" "$(esc "$latest")"
+_zm_gh_get() { # URL ФАЙЛ [ДИАПАЗОН] — напрямую, а если GitHub не открывается — через туннель WARP
+	local i
+	curl -fsSL --connect-timeout 6 --max-time 120 ${3:+-r "$3"} -o "$2" "$1" 2>/dev/null && [ -s "$2" ] && return 0
+	i="$(_st_warp_first 2>/dev/null)"
+	[ -n "$i" ] && [ -d "/sys/class/net/$i" ] || return 1
+	curl -fsSL --interface "$i" --connect-timeout 6 --max-time 120 ${3:+-r "$3"} -o "$2" "$1" 2>/dev/null && [ -s "$2" ]
 }
 
-do_zm_update() {
-	echo "==> Скачиваем установщик"
-	local tmp="/tmp/zm_update_install.sh"
-	rm -f "$tmp"
-	wget -q --timeout=20 -U "Mozilla/5.0" -O "$tmp" "$ZM_SCRIPT_URL" || { echo "ОШИБКА: не удалось скачать установщик"; rm -f "$tmp"; return 1; }
-	[ -s "$tmp" ] || { echo "ОШИБКА: скачался пустой файл"; rm -f "$tmp"; return 1; }
-	head -c 200 "$tmp" | grep -q '^#!/bin/sh' || { echo "ОШИБКА: скачанный файл не похож на установщик"; rm -f "$tmp"; return 1; }
-	chmod +x "$tmp"
-	echo "==> Установка запущена в фоне — она перезапускает rpcd/uhttpd, поэтому не может отслеживаться этой же задачей. Панель перезагрузится сама через несколько секунд"
-	( sh "$tmp" >/tmp/zm_update_install.log 2>&1; rm -f "$tmp" ) &
+_zm_panel_latest() {
+	local f="$JOBS_DIR/zm_head.$$" v
+	mkdir -p "$JOBS_DIR"
+	_zm_gh_get "$ZM_SCRIPT_URL" "$f" 0-400 || { rm -f "$f"; return 1; }
+	v="$(grep -m1 '^# Version:' "$f" | sed 's/^# Version:[[:space:]]*//' | tr -d '\r ')"
+	rm -f "$f"
+	echo "$v" | grep -qE '^[0-9]+(\.[0-9]+)*$' && echo "$v"
+}
+
+_zm_newer() { [ -n "$1" ] && _st_ver_lt "$ZM_VERSION" "$1"; }
+
+zm_update_status() {
+	local latest
+	if [ -s "$ZM_STATE_DIR/latest.panel" ]; then latest="$(_zm_cached panel _zm_panel_latest)"
+	else latest="$(ZM_VER_FORCE=1 _zm_cached panel _zm_panel_latest)"; fi
+	printf '{"current":"%s","latest":"%s","newer":%s}\n' "$(esc "$ZM_VERSION")" "$(esc "$latest")" "$(_zm_newer "$latest" && echo true || echo false)"
+}
+
+_zm_update_fetch() { # ФАЙЛ -> причина отказа в stdout
+	rm -f "$1"
+	_zm_gh_get "$ZM_SCRIPT_URL" "$1" || { echo "не удалось скачать установщик с GitHub — ни напрямую, ни через WARP"; return 1; }
+	head -n1 "$1" | grep -qx '#!/bin/sh' || { echo "скачанный файл не похож на установщик (возможно, вместо него пришла страница-заглушка)"; return 1; }
+	grep -q '^# Version:' "$1" || { echo "в установщике нет номера версии"; return 1; }
+	tail -n 5 "$1" | grep -q 'Web UI:' || { echo "установщик скачался не полностью — попробуйте ещё раз"; return 1; }
+	sh -n "$1" 2>/dev/null || { echo "установщик повреждён — установка отменена"; return 1; }
+	return 0
 }
 
 zm_update_action() {
-	job_start zm_update do_zm_update
+	local tmp="/tmp/zm_update_install.sh" why v j
+	for j in steer awg redbtn; do
+		_job_alive "$j" && { echo '{"error":"идёт операция Steer или AmneziaWG — дождитесь её окончания и обновите панель"}'; return 1; }
+	done
+	if ! why="$(_zm_update_fetch "$tmp")"; then
+		rm -f "$tmp"
+		printf '{"error":"%s"}\n' "$(esc "$why")"
+		return 1
+	fi
+	v="$(grep -m1 '^# Version:' "$tmp" | sed 's/^# Version:[[:space:]]*//' | tr -d '\r ')"
+	chmod +x "$tmp"
+	rm -f "$ZM_STATE_DIR/latest.panel"
+	( sh "$tmp" >/tmp/zm_update_install.log 2>&1; rm -f "$tmp" ) >/dev/null 2>&1 </dev/null &
+	printf '{"ok":true,"version":"%s"}\n' "$(esc "$v")"
 }
 
 _mixomo_lan_ip() { _zm_lan_ip; }
 
 _zm_cached() { # КЛЮЧ КОМАНДА... — значение из кеша на 6 часов; устаревшее обновляется в фоне, страница не ждёт сеть
-	local f="$ZM_STATE_DIR/latest.$1" v
+	local f="$ZM_STATE_DIR/latest.$1" v age=360
+	[ "$1" = panel ] && age=60
 	shift
 	mkdir -p "$ZM_STATE_DIR"
 	if [ -n "$ZM_VER_FORCE" ]; then
 		v="$("$@")"
 		[ -n "$v" ] && echo "$v" > "$f"
-	elif [ ! -s "$f" ] || [ -n "$(find "$f" -mmin +360 2>/dev/null)" ]; then
+	elif [ ! -s "$f" ] || [ -n "$(find "$f" -mmin +$age 2>/dev/null)" ]; then
 		if mkdir "$f.lock" 2>/dev/null; then
 			( v="$("$@")"; [ -n "$v" ] && echo "$v" > "$f"; rmdir "$f.lock" ) >/dev/null 2>&1 &
 		elif [ -n "$(find "$f.lock" -mmin +2 2>/dev/null)" ]; then
@@ -3315,6 +3343,9 @@ do_mixomo_warp_register() {
 
 	if [ -z "$priv" ] || [ -z "$peer" ] || [ -z "$v4" ]; then
 		echo "==> Основной метод не сработал, пробуем резервный"
+		if ! command -v jq >/dev/null 2>&1 || { ! command -v wg >/dev/null 2>&1 && ! command -v awg >/dev/null 2>&1; }; then
+			$UPDATE >&2
+		fi
 		command -v jq >/dev/null 2>&1 || $INSTALL jq >&2
 		command -v wg >/dev/null 2>&1 || command -v awg >/dev/null 2>&1 || $INSTALL wireguard-tools >&2
 		command -v jq >/dev/null 2>&1 || { echo "ОШИБКА: не удалось установить jq для резервного метода"; return 1; }
@@ -3575,7 +3606,11 @@ do_versions_refresh() {
 	local out="" sep="" j it tmp="$VERSIONS_CACHE.tmp"
 	add() { [ -n "$1" ] && { out="$out$sep$1"; sep=","; }; }
 	j="$(zm_update_status)"
-	add "$(_ver_item 'Zapret Manager' "$(_jf "$j" '@.current')" "$(_jf "$j" '@.latest')")"
+	if [ "$(_jf "$j" '@.newer')" = true ]; then
+		add "$(_ver_item 'Zapret Manager' "$(_jf "$j" '@.current')" "$(_jf "$j" '@.latest')")"
+	else
+		add "$(_ver_item 'Zapret Manager' "$(_jf "$j" '@.current')" "$(_jf "$j" '@.current')")"
+	fi
 	if [ -f /etc/init.d/zapret ]; then
 		j="$(status)"
 		add "$(_ver_item Zapret "$(_jf "$j" '@.zapret_version')" "$(_zapret_latest_version)")"
@@ -5231,8 +5266,10 @@ RB_SHARE="/usr/share/zm-redbtn"
 
 _rb_say() { echo "==> $*"; }
 _rb_warn() { echo "!! $*"; }
-_rb_svc_ids() { grep -v '^#' "$RB_SHARE/services.conf" 2>/dev/null | cut -d'|' -f1 | grep .; }
-_rb_svc_field() { grep "^$1|" "$RB_SHARE/services.conf" 2>/dev/null | head -n1 | cut -d'|' -f"$2"; }
+# Сервисы: встроенные (services.conf из пакета) + подтянутые из каталога списков (services.remote), встроенные первыми
+_rb_svc_src() { grep -hv '^#' "$RB_SHARE/services.conf" 2>/dev/null; [ -f "$ST_CAT_OFF" ] || cat "$ST_CAT_SVC" 2>/dev/null; }
+_rb_svc_ids() { _rb_svc_src | cut -d'|' -f1 | grep .; }
+_rb_svc_field() { _rb_svc_src | grep "^$1|" | head -n1 | cut -d'|' -f"$2"; }
 _rb_svc_names() { local id; for id in $1; do printf '%s, ' "$(_rb_svc_field "$id" 2)"; done | sed 's/, $//'; }
 _rb_routable() { [ "$1" = custom ] && [ -n "$(_rb_svc_field custom 1)" ] && return 0; [ -n "$(_rb_svc_field "$1" 3)$(_rb_svc_field "$1" 4)$(_rb_svc_field "$1" 8)" ]; }
 _rb_in() { grep -qxF "$1" "$2" 2>/dev/null; }
@@ -5262,6 +5299,11 @@ _rb_rpcd_ensure() {
 ST_DIR="/etc/zm-steer"
 ST_OWNED="$ST_DIR/owned"
 ST_SEL="$ST_DIR/services"
+ST_CAT_SVC="$ST_DIR/services.remote"   # сервисы из каталога списков — формат services.conf, поле 9 — группа (издатель)
+ST_CAT_IDX="$ST_DIR/catalog.idx"       # «НАБОР|srs или lst|ссылка» из каталога
+ST_CAT_META="$ST_DIR/catalog.meta"     # version= sets= services= — для карточки
+ST_CAT_URL="$ST_DIR/catalog.url"       # свой каталог (форк splify2-lists); нет файла — ST_LISTS_MANIFEST
+ST_CAT_OFF="$ST_DIR/catalog.off"       # каталог выключен: только встроенные сервисы
 ST_SKIP="$ST_DIR/skip"
 ST_OFF="$ST_DIR/stopped"
 ST_WARP_CONF="$ST_DIR/warp.conf"
@@ -5624,8 +5666,10 @@ _st_warp_conf_write() { # ПРИВАТНЫЙ ПИР v4 v6
 _st_warp_register() {
 	[ -s "$ST_WARP_CONF" ] && [ -n "$(_st_warp_field PrivateKey)" ] && return 0
 	mkdir -p "$ST_DIR" "$ST_RUN"
-	local priv pub api reg="$ST_RUN/reg.json" peer v4 v6 tos
-	if command -v awg >/dev/null 2>&1 && command -v jsonfilter >/dev/null 2>&1; then
+	local priv pub api reg="$ST_RUN/reg.json" peer v4 v6 tos nf="$ST_RUN/warp.api.fail"
+	if [ -n "$(find "$nf" -mmin -10 2>/dev/null)" ]; then
+		_rb_say "API Cloudflare только что не ответил — сразу берём запасной генератор"
+	elif command -v awg >/dev/null 2>&1 && command -v jsonfilter >/dev/null 2>&1; then
 		priv="$(awg genkey 2>/dev/null)"
 		pub="$(printf '%s' "$priv" | awg pubkey 2>/dev/null)"
 		tos="$(date -u +%Y-%m-%dT%H:%M:%S.000Z)"
@@ -5647,9 +5691,10 @@ _st_warp_register() {
 			fi
 		done
 		rm -f "$reg"
+		touch "$nf"
 		_rb_warn "Cloudflare не выдал ключи напрямую — пробуем запасные генераторы"
 	fi
-	( MIXOMO_WARP_CONF="$ST_WARP_CONF"; $UPDATE >&2; do_mixomo_warp_register manual ) || return 1
+	( MIXOMO_WARP_CONF="$ST_WARP_CONF"; do_mixomo_warp_register manual ) || return 1
 	chmod 600 "$ST_WARP_CONF"
 	[ -n "$(_st_warp_field PrivateKey)" ] && [ -n "$(_st_warp_field PublicKey)" ]
 }
@@ -5853,18 +5898,32 @@ _st_colo_of() { # ИНТЕРФЕЙС
 	[ -n "$c" ] && echo "$c"
 }
 
+ST_WARP_PORTS_TTL=43200  # открытые порты перепроверяем раз в 12 часов: провайдер мог закрыть один из них
+
 _st_warp_ports() { # ИНТЕРФЕЙС КЛЮЧ_УЗЛА АДРЕС [ext]
-	local f="$ST_DIR/warp.ports" ok="" p list="$ST_WARP_PORTS"
-	[ -s "$f" ] && { cat "$f"; return 0; }
+	local f="$ST_DIR/warp.ports" ok="" p list="$ST_WARP_PORTS" t
+	if [ -s "$f" ]; then
+		t="$(date -r "$f" +%s 2>/dev/null || echo 0)"
+		[ $(( $(date +%s) - t )) -lt "$ST_WARP_PORTS_TTL" ] && { cat "$f"; return 0; }
+		rm -f "$f"
+	fi
 	[ "$4" = ext ] && { list="$ST_WARP_PORTS_EXT"; ST_WARP_HS_WAIT=3; }
+	# Нужно по порту на каждый туннель: у туннелей разные порты, и блокировка одного порта не кладёт все сразу
 	for p in $list; do
 		_st_stopped && return 1
 		_st_warp_link "$1" "$2" "$3" "$p" && ok="${ok:+$ok }$p"
-		[ "$(echo "$ok" | wc -w)" -ge 2 ] && break
+		[ "$(echo "$ok" | wc -w)" -ge "$ST_WARP_MAX" ] && break
 	done
 	[ -n "$ok" ] || return 1
 	echo "$ok" > "$f"
 	echo "$ok"
+}
+
+_st_port_order() { # ИНТЕРФЕЙС ПОРТЫ -> те же порты, сдвинутые по номеру туннеля: zmwarp — с первого, zmwarp2 — со второго…
+	local n
+	case "$1" in zmwarp) n=0 ;; zmwarp[0-9]*) n=$(( ${1#zmwarp} - 1 )) ;; *) n=0 ;; esac
+	[ "$n" -ge 0 ] 2>/dev/null || n=0
+	echo $2 | awk -v n="$n" '{ c = NF; if (!c) exit; s = n % c; o = ""; for (i = 0; i < c; i++) o = o (i ? " " : "") $((s + i) % c + 1); print o }'
 }
 
 _st_warp_scan1() { # ИНТЕРФЕЙС КЛЮЧ_УЗЛА ЗАНЯТЫЕ_КОЛОНИИ ЗАНЯТЫЕ_АДРЕСА [ФАЙЛ_ОБЩЕГО_СПИСКА] [quick]
@@ -5890,11 +5949,27 @@ _st_warp_scan1() { # ИНТЕРФЕЙС КЛЮЧ_УЗЛА ЗАНЯТЫЕ_КОЛ�
 		[ -n "$ports" ] && echo "   открыты запасные порты: $ports" >&2
 	fi
 	[ -n "$ports" ] || { echo "!! WARP: ни один порт не ответил — ни основные ($ST_WARP_PORTS), ни запасные" >&2; return 1; }
-	port="${ports%% *}"
+	ports="$(_st_port_order "$dev" "$ports")"
+	local alt altleft=2 p0 p
+	p0="${ports%% *}"
 	for ip in $cand; do
 		_st_stopped && return 1
 		case "$busyip" in *" $ip "*) continue ;; esac
-		_st_warp_link "$dev" "$peer" "$ip" "$port" || { echo "   $ip:$port — рукопожатия нет" >&2; continue; }
+		port="$p0"
+		if ! _st_warp_link "$dev" "$peer" "$ip" "$port"; then
+			# Порт этого туннеля мог быть закрыт к этому адресу — пробуем остальные открытые (не больше двух раз за разведку)
+			alt=""
+			if [ "$altleft" -gt 0 ]; then
+				altleft=$((altleft - 1))
+				for p in ${ports#"$p0"}; do
+					_st_stopped && return 1
+					_st_warp_link "$dev" "$peer" "$ip" "$p" && { alt="$p"; break; }
+				done
+			fi
+			[ -n "$alt" ] || { echo "   $ip:$port — рукопожатия нет" >&2; continue; }
+			echo "   $ip:$port — рукопожатия нет, через порт $alt есть" >&2
+			port="$alt"
+		fi
 		set -- $(_st_warp_probe "$dev"); loss="$1"; rtt="$2"; torn="$3"
 		[ "$loss" -ge 100 ] 2>/dev/null && { echo "   $ip:$port — туннель молчит" >&2; continue; }
 		if [ "$torn" = 1 ]; then
@@ -5946,8 +6021,8 @@ _st_warp_scan1() { # ИНТЕРФЕЙС КЛЮЧ_УЗЛА ЗАНЯТЫЕ_КОЛ�
 			sort -n | head -n1 | cut -f2)
 		case "$f" in
 			*.same) echo "   другой колонии нет — та же, но через другой адрес" >&2 ;;
-			*.ru) echo "   наружных колоний нет — беру российскую: блокировки через неё не снимаются" >&2 ;;
-			*.notls) echo "!! ни через одну точку не проходит HTTPS — беру лучшую из оставшихся" >&2 ;;
+			*.ru) echo "   наружных колоний нет — только российские" >&2 ;;
+			*.notls) echo "!! ни через одну точку не проходит HTTPS" >&2 ;;
 			*.nc) echo "!! ни через одну точку не проходят веб-запросы, только пинг" >&2 ;;
 		esac
 		echo "$pick"
@@ -5962,21 +6037,25 @@ _st_warp_scan() { # ИНТЕРФЕЙС КЛЮЧ_УЗЛА ЗАНЯТЫЕ_КОЛО
 	local dev="$1" peer="$2" busy="$3" busyip="$4" pool="$5" orig name mask got fall=""
 	if got="$(_st_warp_scan1 "$dev" "$peer" "$busy" "$busyip" "$pool")"; then
 		set -- $got
-		[ "${4:-0}" -lt 300000000 ] 2>/dev/null && { echo "$got"; return 0; }
+		[ "${4:-0}" -lt 100000000 ] 2>/dev/null && { echo "$got"; return 0; }
 		fall="$got"
 		[ -n "$pool" ] && cp -f "$pool" "$pool.fall" 2>/dev/null
 	fi
 	_st_stopped && { [ -n "$fall" ] && echo "$fall"; [ -n "$fall" ]; return; }
 	orig="$(uci -q get "network.$dev.awg_i1")"
 	[ -n "$orig" ] || { [ -n "$fall" ] && echo "$fall"; [ -n "$fall" ]; return; }
-	echo "   меняем маску первого пакета (I1) и пробуем ещё раз" >&2
+	if [ -n "$fall" ]; then
+		echo "   хорошей зарубежной точки нет — пробуем другие маски первого пакета (I1), запасная точка остаётся" >&2
+	else
+		echo "   меняем маску первого пакета (I1) и пробуем ещё раз" >&2
+	fi
 	for name in $AWG_I1_SET; do
 		_st_stopped && break
 		mask="$(_awg_i1 "$name")"
 		[ -n "$mask" ] && [ "$mask" != "$orig" ] || continue
 		_st_warp_i1 "$dev" "$mask" || { echo "   модуль AmneziaWG не даёт сменить маску на лету" >&2; break; }
 		echo "   маска $(_awg_mask_name "$mask"):" >&2
-		if got="$(_st_warp_scan1 "$dev" "$peer" "$busy" "$busyip" "$pool" quick)" && set -- $got && [ "${4:-0}" -lt 300000000 ] 2>/dev/null; then
+		if got="$(_st_warp_scan1 "$dev" "$peer" "$busy" "$busyip" "$pool" quick)" && set -- $got && [ "${4:-0}" -lt 100000000 ] 2>/dev/null; then
 			printf '%s\n' "$mask" > "$ST_RUN/warp.mask"
 			echo "   маска $(_awg_mask_name "$mask") проходит — она останется у туннеля" >&2
 			[ -n "$pool" ] && rm -f "$pool.fall"
@@ -5987,7 +6066,12 @@ _st_warp_scan() { # ИНТЕРФЕЙС КЛЮЧ_УЗЛА ЗАНЯТЫЕ_КОЛО
 	_st_warp_i1 "$dev" "$orig" >/dev/null 2>&1
 	if [ -n "$fall" ]; then
 		[ -n "$pool" ] && [ -s "$pool.fall" ] && mv -f "$pool.fall" "$pool"
-		echo "   маски не помогли — оставляю точку, где идёт хотя бы пинг" >&2
+		set -- $fall
+		case "$(( ${4:-0} / 100000000 ))" in
+			1) echo "   маски не помогли — беру российскую колонию $3: блокировки через неё не снимаются" >&2 ;;
+			2) echo "   маски не помогли — беру точку, где HTTPS не проходит" >&2 ;;
+			*) echo "   маски не помогли — оставляю точку, где идёт хотя бы пинг" >&2 ;;
+		esac
 		echo "$fall"
 		return 0
 	fi
@@ -5997,7 +6081,7 @@ _st_warp_scan() { # ИНТЕРФЕЙС КЛЮЧ_УЗЛА ЗАНЯТЫЕ_КОЛО
 # Точка из общего списка разведки: подключиться и проверить HTTPS — секунды вместо новой разведки.
 # Порядок как у разведки: хорошая чужая колония → та же колония через другой адрес → запасные (российские, без HTTPS, без веб-запросов).
 _st_warp_from_pool() { # ИНТЕРФЕЙС КЛЮЧ_УЗЛА ЗАНЯТЫЕ_КОЛОНИИ ЗАНЯТЫЕ_АДРЕСА ФАЙЛ -> «адрес порт колония ключ»
-	local dev="$1" peer="$2" busy=" $3 " busyip=" $4 " f="$5" ip port colo k pass good isbusy
+	local dev="$1" peer="$2" busy=" $3 " busyip=" $4 " f="$5" ip port colo k pass good isbusy pp
 	[ -s "$f" ] || return 1
 	[ -s "$ST_RUN/warp.mask" ] && _st_warp_i1 "$dev" "$(cat "$ST_RUN/warp.mask")" >/dev/null 2>&1
 	for pass in 1 2 3 4; do
@@ -6008,7 +6092,10 @@ _st_warp_from_pool() { # ИНТЕРФЕЙС КЛЮЧ_УЗЛА ЗАНЯТЫЕ_К�
 			isbusy=0; case "$busy" in *" $colo "*) isbusy=1 ;; esac
 			case "$pass$good$isbusy" in 110|211|300|401) ;; *) continue ;; esac
 			_st_stopped && return 1
-			_st_warp_link "$dev" "$peer" "$ip" "$port" || { echo "   $ip:$port — с этими ключами рукопожатия нет" >&2; continue; }
+			# Точка из общего списка найдена разведкой другого туннеля — сначала пробуем «свой» порт этого туннеля
+			pp="$(_st_port_order "$dev" "$(cat "$ST_DIR/warp.ports" 2>/dev/null)")"; pp="${pp%% *}"
+			if [ -n "$pp" ] && [ "$pp" != "$port" ] && _st_warp_link "$dev" "$peer" "$ip" "$pp"; then port="$pp"
+			else _st_warp_link "$dev" "$peer" "$ip" "$port" || { echo "   $ip:$port — с этими ключами рукопожатия нет" >&2; continue; }; fi
 			set -- $(_st_warp_probe "$dev")
 			[ "$3" = 1 ] && { echo "   $ip:$port — трафик пошёл и оборвался" >&2; continue; }
 			if [ "$good" = 1 ] && ! curl -s -o /dev/null --interface "$dev" --connect-timeout 4 --max-time 8 https://www.cloudflare.com/cdn-cgi/trace 2>/dev/null; then
@@ -6272,25 +6359,183 @@ _st_fetch() { # URL ФАЙЛ — напрямую, потом через тун�
 		curl -fsSL --interface "$i" --connect-timeout 6 --max-time 60 -o "$2" "$1" 2>/dev/null && [ -s "$2" ]
 }
 
-_st_srs_url() { # НАБОР -> ссылка из каталога или «последний релиз» издателя
+# JSON -> «путь<TAB>значение» по одной строке на скаляр: domain_lists.3.same_as_ip.0	itdoginfo:telegram
+# Без jsonfilter-овских тонкостей с массивами и пропущенными полями; формат файла (в строку или с отступами) не важен
+_json_flat() { # ФАЙЛ
+	awk 'BEGIN { RS = "\001" }
+	function emit(v) { p = ""; for (k = 1; k <= d; k++) p = p (k > 1 ? "." : "") key[k]; print p "\t" v; if (arr[d]) key[d]++ }
+	{
+		s = $0; n = length(s); i = 1; d = 0
+		while (i <= n) {
+			c = substr(s, i, 1)
+			if (c == "{") { d++; arr[d] = 0; key[d] = ""; want = 1; i++; continue }
+			if (c == "[") { d++; arr[d] = 1; key[d] = 0; i++; continue }
+			if (c == "}" || c == "]") { d--; if (d > 0 && arr[d]) key[d]++; i++; continue }
+			if (c == ",") { if (!arr[d]) want = 1; i++; continue }
+			if (c == ":") { want = 0; i++; continue }
+			if (c == "\"") {
+				v = ""; i++
+				while (i <= n) {
+					c = substr(s, i, 1)
+					if (c == "\\") { e = substr(s, i + 1, 1); v = v (e == "n" || e == "t" || e == "r" ? " " : e); i += 2; continue }
+					if (c == "\"") break
+					v = v c; i++
+				}
+				i++
+				if (!arr[d] && want) { key[d] = v; want = 0 } else emit(v)
+				continue
+			}
+			if (c ~ /[-0-9a-z]/) {
+				v = ""
+				while (i <= n && substr(s, i, 1) ~ /[-+.0-9a-zA-Z]/) { v = v substr(s, i, 1); i++ }
+				emit(v); continue
+			}
+			i++
+		}
+	}' "$1"
+}
+
+# Каталог splify2-lists -> services.remote (формат services.conf + поле 9 — группа) и catalog.idx «НАБОР|формат|ссылка».
+# Пара «домены + подсети» (same_as_ip) — один пункт; то, что уже есть во встроенном списке, не дублируем.
+_st_cat_build() { # lists.json
+	local flat="$ST_RUN/cat.flat" bsets bnames
+	mkdir -p "$ST_RUN" "$ST_DIR"
+	_json_flat "$1" > "$flat" 2>/dev/null
+	grep -q '^domain_lists\.0\.id	\|^categories\.0\.id	' "$flat" || { rm -f "$flat"; return 1; }
+	bsets=" $(grep -v '^#' "$RB_SHARE/services.conf" | cut -d'|' -f8 | tr ',\n' '  ') "
+	bnames="$(grep -v '^#' "$RB_SHARE/services.conf" | cut -d'|' -f2 | tr 'A-Z' 'a-z' | tr '\n' '|')"
+	awk -F'\t' -v bsets="$bsets" -v bnames="|$bnames" -v idx="$ST_CAT_IDX.tmp" -v meta="$ST_CAT_META.tmp" '
+		function key(id) { id = tolower(id); sub(/^svc_/, "", id); gsub(/[^a-z0-9_]/, "_", id); return "c_" id }
+		function clean(s) { gsub(/[|\t\r\n]/, " ", s); return s }
+		{
+			p = $1; v = $2
+			if (p == "version" || p == "base_url" || p == "generated_at") { top[p] = v; next }
+			n = split(p, a, ".")
+			if (a[1] != "domain_lists" && a[1] != "categories") next
+			e = a[1] "." a[2]
+			if (!(e in seen)) { seen[e] = 1; order[++cnt] = e }
+			if (n == 3) f[e, a[3]] = v
+			else if (a[3] == "same_as_ip" && a[4] == "0") f[e, "pair"] = v
+		}
+		END {
+			base = top["base_url"]; sub(/\/+$/, "", base)
+			for (j = 1; j <= cnt; j++) {
+				e = order[j]; id = f[e, "id"]; if (id == "") continue
+				k = key(id); byid[id] = e; ek[e] = k
+				u = f[e, "url"]; fm = f[e, "format"]
+				if (fm != "srs" || u == "") { fm = "lst"; u = (f[e, "file"] != "" && base != "") ? base "/" f[e, "file"] : "" }
+				if (u == "" || u !~ /^https:\/\//) { bad[e] = 1; continue }
+				if (!(k in done)) { done[k] = 1; print k "|" fm "|" u > idx; sets++ }
+			}
+			for (j = 1; j <= cnt; j++) {
+				e = order[j]
+				if (e !~ /^domain_lists/ || bad[e] || f[e, "id"] == "") continue
+				pr = f[e, "pair"]
+				if (pr != "" && (pr in byid) && !bad[byid[pr]]) { used[byid[pr]] = 1; st = ek[e]; if (ek[byid[pr]] != st) st = st "," ek[byid[pr]]; line(e, st) }
+				else line(e, ek[e])
+			}
+			for (j = 1; j <= cnt; j++) {
+				e = order[j]
+				if (e !~ /^categories/ || bad[e] || used[e] || f[e, "id"] == "") continue
+				line(e, ek[e])
+			}
+			printf "version=%s\nsets=%d\nservices=%d\n", clean(top["version"]), sets, svcs > meta
+		}
+		function line(e, st,    nm, grp, u, b) {
+			nm = clean(f[e, "name_ru"]); if (nm == "") nm = f[e, "id"]
+			grp = clean(f[e, "source_name"]); if (grp == "") grp = "Свои списки каталога"
+			# уже есть во встроенном списке: тот же набор itdoginfo или то же название
+			if (f[e, "source"] == "itdoginfo/allow-domains") {
+				u = f[e, "url"]; b = u; sub(/.*\//, "", b); sub(/\.srs$/, "", b)
+				if (index(bsets, " " b " ")) return
+			}
+			if (index(bnames, "|" tolower(nm) "|")) return
+			if (ek[e] in out) return
+			out[ek[e]] = 1; svcs++
+			print ek[e] "|" nm "|||||" "|" st "|" grp
+		}' "$flat" > "$ST_CAT_SVC.tmp" || { rm -f "$flat" "$ST_CAT_SVC.tmp" "$ST_CAT_IDX.tmp" "$ST_CAT_META.tmp"; return 1; }
+	rm -f "$flat"
+	[ -s "$ST_CAT_SVC.tmp" ] && [ -s "$ST_CAT_IDX.tmp" ] || { rm -f "$ST_CAT_SVC.tmp" "$ST_CAT_IDX.tmp" "$ST_CAT_META.tmp"; return 1; }
+	mv -f "$ST_CAT_IDX.tmp" "$ST_CAT_IDX"
+	mv -f "$ST_CAT_SVC.tmp" "$ST_CAT_SVC"
+	mv -f "$ST_CAT_META.tmp" "$ST_CAT_META"
+}
+
+_st_cat_src() { [ -s "$ST_CAT_URL" ] && head -n1 "$ST_CAT_URL" || echo "$ST_LISTS_MANIFEST"; }
+
+_st_cat_refresh() { # [force] — скачать каталог и пересобрать сервисы из него; прежний остаётся, если не вышло
+	local m="$ST_RUN/lists.json" lk="$ST_RUN/cat.lock" rc=0 t
+	[ -f "$ST_CAT_OFF" ] && return 0
+	mkdir -p "$ST_DIR" "$ST_RUN"
+	if [ "$1" != force ] && [ -s "$ST_CAT_SVC" ]; then
+		t="$(date -r "$ST_CAT_SVC" +%s 2>/dev/null || echo 0)"
+		[ $(( $(date +%s) - t )) -lt 21600 ] && return 0
+	fi
+	mkdir "$lk" 2>/dev/null || return 0
+	if _st_fetch "$(_st_cat_src)" "$m.tmp" && _st_cat_build "$m.tmp"; then
+		mv -f "$m.tmp" "$m"
+		touch "$ST_CAT_SVC"
+		rm -f "$ST_DIR/catalog.err"
+	else
+		rm -f "$m.tmp"
+		echo "$(date +%s)" > "$ST_DIR/catalog.err"
+		rc=1
+	fi
+	rmdir "$lk" 2>/dev/null
+	return $rc
+}
+
+_st_cat_bg() { # фоновое обновление, если каталог старше 6 часов
+	[ -f "$ST_CAT_OFF" ] && return 0
+	[ -d "$ST_RUN/cat.lock" ] && return 0
+	[ -f "$ST_DIR/catalog.err" ] && [ $(( $(date +%s) - $(cat "$ST_DIR/catalog.err" 2>/dev/null || echo 0) )) -lt 1800 ] && return 0
+	[ -s "$ST_CAT_SVC" ] && [ $(( $(date +%s) - $(date -r "$ST_CAT_SVC" +%s 2>/dev/null || echo 0) )) -lt 21600 ] && return 0
+	( _st_cat_refresh >/dev/null 2>&1 & )
+}
+
+_st_cat_json() {
+	local ver="" sets=0 svcs=0 err=false off=false src
+	[ -s "$ST_CAT_META" ] && { ver="$(sed -n 's/^version=//p' "$ST_CAT_META")"; sets="$(sed -n 's/^sets=//p' "$ST_CAT_META")"; svcs="$(sed -n 's/^services=//p' "$ST_CAT_META")"; }
+	[ -f "$ST_DIR/catalog.err" ] && err=true
+	[ -f "$ST_CAT_OFF" ] && off=true
+	src="$(_st_cat_src)"
+	printf '{"url":"%s","custom":%s,"version":"%s","sets":%s,"services":%s,"error":%s,"off":%s,"busy":%s}' \
+		"$(esc "$src")" "$([ -s "$ST_CAT_URL" ] && echo true || echo false)" "$(esc "$ver")" "${sets:-0}" "${svcs:-0}" "$err" "$off" \
+		"$([ -d "$ST_RUN/cat.lock" ] && echo true || echo false)"
+}
+
+_st_srs_url() { # НАБОР -> ссылка: из catalog.idx, из скачанного каталога или «последний релиз» itdoginfo
 	local m="$ST_RUN/lists.json" u=""
-	[ -s "$m" ] || _st_fetch "$ST_LISTS_MANIFEST" "$m" || rm -f "$m"
+	u="$(awk -F'|' -v k="$1" '$1 == k { print $3; exit }' "$ST_CAT_IDX" 2>/dev/null)"
+	[ -n "$u" ] && { echo "$u"; return 0; }
+	[ -s "$m" ] || _st_fetch "$(_st_cat_src)" "$m" || rm -f "$m"
 	[ -s "$m" ] && u=$(grep -o '"url"[[:space:]]*:[[:space:]]*"[^"]*/allow-domains/releases/download/[^"]*/'"$1"'\.srs"' "$m" |
 		head -n1 | sed 's/.*"\(https[^"]*\)"$/\1/')
 	echo "${u:-$ST_SRS_FALLBACK/$1.srs}"
 }
 
-_st_srs_get() { # НАБОР
-	local d="$ST_DIR/lists" f
+_st_srs_get() { # НАБОР — набор sing-box (.srs) или текстовый список каталога (.lst: домены и подсети вперемешку)
+	local set="$1" d="$ST_DIR/lists" f fmt x
 	mkdir -p "$d"
-	[ -f "$ST_RUN/srs.$1.done" ] && return 0
-	f="$ST_RUN/$1.srs"
-	_st_fetch "$(_st_srs_url "$1")" "$f" || return 1
-	steer srs-read "$f" --out "$d/$1.dom.tmp" --prefixes-out "$d/$1.pfx.tmp" --meta-out "$d/$1.meta.tmp" >/dev/null 2>&1 || {
-		rm -f "$f" "$d/$1".*.tmp; return 1; }
-	for x in dom pfx meta; do touch "$d/$1.$x.tmp"; mv "$d/$1.$x.tmp" "$d/$1.$x"; done
+	[ -f "$ST_RUN/srs.$set.done" ] && return 0
+	fmt="$(awk -F'|' -v k="$set" '$1 == k { print $2; exit }' "$ST_CAT_IDX" 2>/dev/null)"
+	f="$ST_RUN/$set.src"
+	_st_fetch "$(_st_srs_url "$set")" "$f" || return 1
+	if [ "$fmt" = lst ]; then
+		tr -d '\r' < "$f" | sed 's/[[:space:]]*#.*$//; s/^[[:space:]]*//; s/[[:space:]]*$//' | tr 'A-Z' 'a-z' > "$f.n"
+		grep -E '^[0-9]{1,3}(\.[0-9]{1,3}){3}(/[0-9]{1,2})?$' "$f.n" | awk '!s[$0]++' > "$d/$set.pfx.tmp"
+		sed 's/^domain://; s/^full://; s/^suffix://; s/^\*\.//; s/^\.//' "$f.n" |
+			grep -E '^[a-z0-9]([a-z0-9_-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9_-]*[a-z0-9])?)+$' | grep -vE '^[0-9.]+$' | awk '!s[$0]++' > "$d/$set.dom.tmp"
+		: > "$d/$set.meta.tmp"
+		rm -f "$f.n"
+		[ -s "$d/$set.dom.tmp" ] || [ -s "$d/$set.pfx.tmp" ] || { rm -f "$f" "$d/$set".*.tmp; return 1; }
+	else
+		steer srs-read "$f" --out "$d/$set.dom.tmp" --prefixes-out "$d/$set.pfx.tmp" --meta-out "$d/$set.meta.tmp" >/dev/null 2>&1 || {
+			rm -f "$f" "$d/$set".*.tmp; return 1; }
+	fi
+	for x in dom pfx meta; do touch "$d/$set.$x.tmp"; mv "$d/$set.$x.tmp" "$d/$set.$x"; done
 	rm -f "$f"
-	touch "$ST_RUN/srs.$1.done"
+	touch "$ST_RUN/srs.$set.done"
 }
 
 _st_chname() {
@@ -6314,7 +6559,8 @@ _st_svc_channels() { # ID
 				if [ -s "$f.meta" ]; then narrow="$narrow $set"; else pfx="$pfx${pfx:+,}\"$f.pfx\""; fi
 			fi
 		else
-			_rb_warn "Список $set не скачался — беру список из пакета" >&2
+			if [ -n "$(_rb_svc_field "$id" 3)$(_rb_svc_field "$id" 4)" ]; then _rb_warn "Список $set не скачался — беру список из пакета" >&2
+			else _rb_warn "Список «$name» из каталога не скачался — пропускаем его в этот раз" >&2; fi
 			sets=""
 			break
 		fi
@@ -6347,7 +6593,7 @@ _st_json_list() { # файлы через пробел -> "a","b"
 
 _st_spec_build() { # ID... -> JSON в stdout
 	local id c chans="" schema=1 devs lans
-	rm -f "$ST_RUN"/used.* "$ST_RUN"/srs.*.done "$ST_RUN/lists.json"
+	rm -f "$ST_RUN"/used.* "$ST_RUN"/srs.*.done
 	mkdir -p "$ST_RUN"
 	ST_OUT=zm_warp
 	_st_use_vpn && ST_OUT="$ST_VPN_OUT"
@@ -6541,6 +6787,8 @@ _st_warp_resume() {
 
 _st_apply() { # [tunnel_ready] — туннель только что проверен, второй раз не поднимаем
 	local sel
+	rm -f "$ST_RUN/lists.json"
+	_st_cat_refresh force >/dev/null 2>&1 || [ -f "$ST_CAT_OFF" ] || _rb_warn "Каталог списков не скачался — сервисы из каталога берём по прежнему списку"
 	sel="$(_st_sel | tr '\n' ' ')"
 	if [ -z "$(echo $sel)" ]; then
 		_st_spec_clear
@@ -6972,15 +7220,19 @@ steer_status() {
 		_st_owns "steer-spec" && chans=$(grep -o '"out"' "$ST_STEER_SPEC" 2>/dev/null | wc -l)
 	fi
 	_st_dns_conflict && dns=true
+	_st_cat_bg
 	sel=" $(_st_sel | tr '\n' ' ') "
-	for id in $(_rb_svc_ids); do
-		_rb_routable "$id" || continue
-		w=false; k=false
-		case "$sel" in *" $id "*) w=true ;; esac
-		_rb_in "$id" "$ST_SKIP" && k=true
-		svc="$svc$sep{\"id\":\"$id\",\"name\":\"$(esc "$(_rb_svc_field "$id" 2)")\",\"on\":$w,\"skip\":$k}"
-		sep=","
-	done
+	# Один проход awk: сервисов из каталога десятки, а вызов _rb_svc_field на каждое поле — это лишние процессы на каждом опросе
+	svc="$(_rb_svc_src | awk -F'|' -v sel="$sel" -v skipf="$ST_SKIP" '
+		function j(v) { gsub(/\\/, "\\\\", v); gsub(/"/, "\\\"", v); gsub(/[\t\r\n]/, " ", v); return v }
+		BEGIN { while ((getline l < skipf) > 0) sk[l] = 1 }
+		$1 == "" || ($1 in seen) { next }
+		{ seen[$1] = 1 }
+		$1 != "custom" && $3 $4 $8 == "" { next }
+		{
+			printf "%s{\"id\":\"%s\",\"name\":\"%s\",\"group\":\"%s\",\"on\":%s,\"skip\":%s}", (n++ ? "," : ""), $1, j($2), j($9),
+				(index(sel, " " $1 " ") ? "true" : "false"), (($1 in sk) ? "true" : "false")
+		}')"
 	local vexit vup=false vsub=false latest="" ext=false won=false
 	vexit="$(_st_exit)"
 	_st_warp_on && won=true
@@ -6993,10 +7245,10 @@ steer_status() {
 	if [ "$vup" = true ] && [ "$vexit" = vpn ] && [ "$off" = false ]; then
 		_st_vpn_live; case $? in 0) vlive=true ;; 1) vlive=false ;; esac
 	fi
-	printf '{"running":%s,"phase":"%s","blocker":"%s","installed":%s,"stopped":%s,"version":"%s","steer_running":%s,"channels":%s,"warp_up":%s,"warp_colo":"%s","warp_host":"%s","warp_port":"%s","warp_hs_age":"%s","warp_rx":%s,"warp_tx":%s,"autorestart":"%s","dns_conflict":%s,"exit":"%s","vpn_up":%s,"vpn_live":%s,"has_sub":%s,"sub_label":"%s","latest":"%s","ext":%s,"warp_on":%s,"warp_mode":"%s","warp_own_saved":%s,"tunnels":%s,"services":[%s]}\n' \
+	printf '{"running":%s,"phase":"%s","blocker":"%s","installed":%s,"stopped":%s,"version":"%s","steer_running":%s,"channels":%s,"warp_up":%s,"warp_colo":"%s","warp_host":"%s","warp_port":"%s","warp_hs_age":"%s","warp_rx":%s,"warp_tx":%s,"autorestart":"%s","dns_conflict":%s,"exit":"%s","vpn_up":%s,"vpn_live":%s,"has_sub":%s,"sub_label":"%s","latest":"%s","ext":%s,"warp_on":%s,"warp_mode":"%s","warp_own_saved":%s,"tunnels":%s,"catalog":%s,"services":[%s]}\n' \
 		"$running" "$(esc "$phase")" "$blk" "$installed" "$off" "$(esc "$ver")" "$run" "${chans:-0}" "$warp_up" "$(esc "$colo")" \
 		"$(esc "$host")" "$(esc "$port")" "$age" "${rx:-0}" "${tx:-0}" "$(_st_cron_get)" "$dns" \
-		"$vexit" "$vup" "$vlive" "$vsub" "$(esc "$(_st_sub_label)")" "$(esc "$latest")" "$ext" "$won" "$(_st_warp_own && echo own || echo auto)" "$(_st_own_saved && echo true || echo false)" "$(_st_tunnels_json)" "$svc"
+		"$vexit" "$vup" "$vlive" "$vsub" "$(esc "$(_st_sub_label)")" "$(esc "$latest")" "$ext" "$won" "$(_st_warp_own && echo own || echo auto)" "$(_st_own_saved && echo true || echo false)" "$(_st_tunnels_json)" "$(_st_cat_json)" "$svc"
 }
 
 _st_tunnels_json() {
@@ -7550,6 +7802,28 @@ steer_action() {
 			steer_sub_action "$action" "$mode"
 			;;
 		list_get) steer_list_get "$mode" ;;
+		catalog_refresh)
+			[ -f "$ST_CAT_OFF" ] && { echo '{"error":"каталог списков выключен"}'; return 1; }
+			rm -f "$ST_DIR/catalog.err"
+			( _st_cat_refresh force >/dev/null 2>&1 & )
+			printf '{"ok":true}\n'
+			;;
+		catalog_src) # пусто — каталог по умолчанию, off/on — выключить/включить, иначе ссылка на свой lists.json
+			_st_running && { echo '{"error":"дождитесь окончания текущей операции"}'; return 1; }
+			mkdir -p "$ST_DIR"
+			case "$mode" in
+				off) touch "$ST_CAT_OFF"; printf '{"ok":true}\n'; return 0 ;;
+				on) rm -f "$ST_CAT_OFF" ;;
+				'') rm -f "$ST_CAT_URL" ;;
+				https://*)
+					case "$mode" in *[[:space:]\"\'\\\`\$\;\|\<\>]*) echo '{"error":"недопустимые символы в ссылке"}'; return 1 ;; esac
+					printf '%s\n' "$mode" > "$ST_CAT_URL" ;;
+				*) echo '{"error":"нужна ссылка https://…/lists.json"}'; return 1 ;;
+			esac
+			rm -f "$ST_DIR/catalog.err"
+			if _st_cat_refresh force >/dev/null 2>&1; then printf '{"ok":true}\n'
+			else echo '{"error":"каталог по этой ссылке не скачался или в нём нет списков — прежний список сервисов оставлен"}'; return 1; fi
+			;;
 		list_set|list_reset)
 			_st_running && { echo '{"error":"дождитесь окончания текущей операции"}'; return 1; }
 			if [ "$action" = list_set ]; then steer_list_set "$mode"; else steer_list_reset "$mode"; fi
@@ -9664,7 +9938,7 @@ return view.extend({
 		}
 		function renderZmUpdate() {
 			updateEl.innerHTML = '';
-			if (!zmUpdate.latest || zmUpdate.latest === zmUpdate.current) return;
+			if (!zmUpdate.latest || zmUpdate.latest === zmUpdate.current || zmUpdate.newer === false) return;
 			updateEl.appendChild(E('div', { 'class': 'zm-refresh-banner zm-show' }, [
 				E('span', {}, 'Доступна новая версия панели Zapret Manager: ' + zmUpdate.latest + ' (у вас установлена ' + zmUpdate.current + ').'),
 				E('button', {
@@ -9672,10 +9946,11 @@ return view.extend({
 					'click': function() {
 						if (zmUpdateBusy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
 						zmUpdateBusy = true;
-						zm.toast('Обновление запущено — через 4 секунды вы будете автоматически выведены из LuCI. Просто зайдите заново', 'warning', 6000);
+						zm.toast('Скачиваем и проверяем новую версию…', 'info', 4000);
 						zm.zmUpdateAction().then(function(res) {
 							zmUpdateBusy = false;
-							if (res.error) { zm.toast(res.error, 'error'); return; }
+							if (res.error) { zm.toast('Обновление не началось: ' + res.error, 'error', 8000); return; }
+							zm.toast('Устанавливаем версию ' + (res.version || zmUpdate.latest) + ' — через 4 секунды вы будете выведены из LuCI. Подождите полминуты и зайдите заново', 'warning', 8000);
 							waitForServerAndReload();
 						}).catch(function() { zmUpdateBusy = false; });
 					}
@@ -10592,12 +10867,53 @@ return view.extend({
 		}
 
 		var CATEGORY_IDS = [ 'geoblock', 'block', 'news', 'anime', 'porn', 'russia_inside' ];
+		var openGroups = {};
+
+		function catalogEdit() {
+			var c = data.catalog || {};
+			var u = prompt('Ссылка на свой каталог списков (lists.json в формате splify2-lists, например из форка).\n\nПусто — каталог по умолчанию.', c.custom ? c.url : '');
+			if (u === null) return;
+			u = u.trim();
+			zm.toast('Скачиваем каталог…', 'info');
+			zm.steerAction('catalog_src', u).then(function(res) {
+				if (res.error) { zm.toast(res.error, 'error'); return; }
+				zm.toast('Каталог подключён', 'info');
+				refresh();
+			}).catch(function() { zm.toast('Роутер не ответил', 'error'); });
+		}
+
+		function catalogBlock() {
+			var c = data.catalog || {}, box = E('div', { 'style': 'margin-top:16px' });
+			var state = c.off ? 'выключен — показаны только встроенные сервисы'
+				: c.busy ? 'обновляется…'
+				: c.version ? 'версия ' + c.version + ' · пунктов: ' + c.services + (c.error ? ' · последнее обновление не удалось' : '')
+				: c.error ? 'не скачался — проверьте доступ к GitHub' : 'ещё не скачан';
+			box.appendChild(row('Каталог списков', E('span', {}, [ E('span', {}, state), E('br'),
+				E('small', { 'style': 'word-break:break-all;opacity:.7' }, c.url || '') ])));
+			var b = [];
+			if (!c.off) b.push(E('button', { 'class': 'cbi-button', 'click': function() {
+				zm.steerAction('catalog_refresh', '').then(function(res) {
+					if (res.error) { zm.toast(res.error, 'error'); return; }
+					zm.toast('Обновляем каталог', 'info');
+					setTimeout(refresh, 5000);
+				}).catch(function() { zm.toast('Роутер не ответил', 'error'); });
+			} }, 'Обновить'));
+			if (!c.off) b.push(E('button', { 'class': 'cbi-button', 'click': catalogEdit }, 'Сменить источник'));
+			b.push(E('button', { 'class': 'cbi-button', 'click': function() {
+				zm.steerAction('catalog_src', c.off ? 'on' : 'off').then(function(res) {
+					if (res.error) { zm.toast(res.error, 'error'); return; }
+					refresh();
+				}).catch(function() { zm.toast('Роутер не ответил', 'error'); });
+			} }, c.off ? 'Включить каталог' : 'Выключить каталог'));
+			box.appendChild(E('div', { 'class': 'zm-actions' }, b));
+			return box;
+		}
 
 		function renderLists() {
 			listCard.innerHTML = '';
 			listCard.style.display = data.blocker ? 'none' : '';
 			if (data.blocker) return;
-			listCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Нажмите на пункт, чтобы включить или выключить его, и затем «Применить». Списки доменов берутся из itdoginfo/allow-domains и обновляются при каждом применении.'));
+			listCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Нажмите на пункт, чтобы включить или выключить его, и затем «Применить». Списки берутся из каталога списков (itdoginfo/allow-domains, b4geoip и другие) и обновляются при каждом применении.'));
 			var cur = currentPick(), sel = pick || cur, changed = false;
 			var list = data.services || [];
 			list.forEach(function(s) { if (!!sel[s.id] !== !!cur[s.id]) changed = true; });
@@ -10613,8 +10929,9 @@ return view.extend({
 					}
 				}, s.name);
 			}
-			var svcs = list.filter(function(s) { return CATEGORY_IDS.indexOf(s.id) < 0; });
-			var cats = list.filter(function(s) { return CATEGORY_IDS.indexOf(s.id) >= 0; });
+			var remote = list.filter(function(s) { return !!s.group; });
+			var svcs = list.filter(function(s) { return !s.group && CATEGORY_IDS.indexOf(s.id) < 0; });
+			var cats = list.filter(function(s) { return !s.group && CATEGORY_IDS.indexOf(s.id) >= 0; });
 			listCard.appendChild(E('h4', { 'style': 'margin:0 0 8px' }, 'Сервисы'));
 			listCard.appendChild(E('div', { 'class': 'zm-grid' }, svcs.map(tile)));
 			if (cats.length) {
@@ -10622,6 +10939,20 @@ return view.extend({
 				listCard.appendChild(E('div', { 'class': 'zm-grid' }, cats.map(tile)));
 				listCard.appendChild(E('p', { 'class': 'zm-hint' }, '«Всё сразу» — полный список Russia inside: все категории и сервисы одним набором. Он большой, на слабых роутерах лучше включать отдельные пункты.'));
 			}
+			var groups = [];
+			remote.forEach(function(s) { if (groups.indexOf(s.group) < 0) groups.push(s.group); });
+			groups.forEach(function(g) {
+				var items = remote.filter(function(s) { return s.group === g; });
+				var on = items.filter(function(s) { return sel[s.id]; }).length;
+				var det = E('details', { 'style': 'margin-top:12px' }, [
+					E('summary', { 'style': 'cursor:pointer;font-weight:600' }, 'Каталог: ' + g + ' (' + items.length + (on ? ', выбрано ' + on : '') + ')'),
+					E('div', { 'class': 'zm-grid', 'style': 'margin-top:8px' }, items.map(tile))
+				]);
+				if (g in openGroups ? openGroups[g] : on) det.open = true;
+				det.addEventListener('toggle', function() { openGroups[g] = det.open; });
+				listCard.appendChild(det);
+			});
+			listCard.appendChild(catalogBlock());
 			if (changed) {
 				listCard.appendChild(E('div', { 'class': 'zm-actions' }, [
 					E('button', { 'class': 'cbi-button cbi-button-positive', 'click': function() {
@@ -16165,7 +16496,7 @@ cat > '/www/zm/app.js' << 'ZM_INSTALLER_EOF'
 var BUILD = '__ZMW_BUILD__';
 var RES = '/luci-static/resources/';
 var NULL_SID = '00000000000000000000000000000000';
-var K_SID = 'zmw.sid', K_THEME = 'zmw.theme', K_USER = 'zmw.user';
+var K_SID = 'zmw.sid', K_THEME = 'zmw.theme', K_USER = 'zmw.user', K_NOTE = 'zmw.note';
 
 /* ───────────────────────── storage ───────────────────────── */
 
@@ -17053,7 +17384,7 @@ function loadShellInfo() {
 	callUpd().then(function (u) {
 		if (!u || u.error) return;
 		if (u.current) verEl.textContent = 'by StressOzz · v' + u.current;
-		if (u.latest && u.current && u.latest !== u.current) {
+		if (u.latest && u.current && u.latest !== u.current && u.newer !== false) {
 			updateEl.hidden = false;
 			updateEl.textContent = 'Доступна версия ' + u.latest;
 		}
@@ -17233,7 +17564,34 @@ function authLost() {
 	authLostShown = true;
 	sid = null;
 	sset(K_SID, null);
-	showLogin('Сессия истекла — войдите снова', 'warning');
+	poll._reset();
+	freshLogin('Сессия истекла — войдите снова.', 'warning');
+}
+
+function dropCaches() {
+	srcCache = {};
+	modCache = {};
+	try { if (window.caches && caches.keys) caches.keys().then(function (ks) { ks.forEach(function (k) { caches.delete(k); }); }).catch(function () {}); } catch (e) {}
+	try { var s = store('session'); if (s) Object.keys(s).forEach(function (k) { if (/^zmw\./.test(k) && k !== K_THEME && k !== K_USER && k !== K_NOTE) s.removeItem(k); }); } catch (e) {}
+}
+
+function freshLogin(note, kind) {
+	dropCaches();
+	var shown = false;
+	var show = function () { if (!shown) { shown = true; showLogin(note, kind); } };
+	var t = setTimeout(show, 2500);
+	fetch('/zm-webui.html?t=' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.ok ? r.text() : ''; }).then(function (html) {
+		var m = /app\.js\?v=([0-9A-Za-z_]+)/.exec(html || '');
+		if (m && m[1] !== BUILD && !shown) {
+			clearTimeout(t);
+			shown = true;
+			try { var s = store('session'); if (s) s.setItem(K_NOTE, JSON.stringify([ (note ? note + ' ' : '') + 'Панель обновлена — загружена новая версия.', kind || 'info' ])); } catch (e) {}
+			location.replace('/?fresh=' + Date.now() + location.hash);
+			return;
+		}
+		clearTimeout(t);
+		show();
+	}).catch(function () { clearTimeout(t); show(); });
 }
 
 function logout() {
@@ -17243,7 +17601,7 @@ function logout() {
 	var done = function () {
 		poll._reset();
 		if (viewEl) viewEl.innerHTML = '';
-		showLogin('Вы вышли из панели.', 'info');
+		freshLogin('Вы вышли из панели.', 'info');
 	};
 	if (!s) return done();
 	ubus('session', 'destroy', {}, s).catch(function () {}).then(done);
@@ -17273,13 +17631,20 @@ function boot() {
 
 	document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { closeDrawer(); } });
 
+	var note = null;
+	try { var ss = store('session'); note = ss && JSON.parse(ss.getItem(K_NOTE) || 'null'); if (ss) ss.removeItem(K_NOTE); } catch (e) {}
+	if (/[?&]fresh=/.test(location.search)) {
+		try { history.replaceState(null, '', '/' + location.hash); } catch (e) {}
+	}
+	if (note && !sid) { showLogin(note[0], note[1]); return; }
+
 	if (/[?&]logout=1/.test(location.search)) {
 		var s = sid;
 		sid = null;
 		sset(K_SID, null);
 		try { history.replaceState(null, '', '/' + location.hash); } catch (e) {}
 		if (s) ubus('session', 'destroy', {}, s).catch(function () {});
-		showLogin('Вы вышли из панели. Войдите снова.', 'info');
+		freshLogin('Вы вышли из панели. Войдите снова.', 'info');
 		return;
 	}
 
