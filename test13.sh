@@ -1,5 +1,5 @@
 #!/bin/sh
-# Version: 1.60
+# Version: 1.61
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -70,7 +70,7 @@ cat > '/opt/zapret-manager-luci/backend.sh' << 'ZM_INSTALLER_EOF'
 umask 022
 
 CONF="/etc/config/zapret"
-ZM_VERSION="1.60"
+ZM_VERSION="1.61"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
@@ -3173,7 +3173,7 @@ mixomo_warp_config_set() {
 
 _mixomo_warp_best_endpoint() {
 	local warp_tmp="$JOBS_DIR/mixomo_warp"
-	local prefixes="188.114.96. 188.114.97. 188.114.98. 188.114.99. 162.159.192. 162.159.193. 162.159.195. 8.34.146. 8.39.214. 8.39.204. 8.6.112. 8.35.211. 8.39.125. 8.47.69."
+	local prefixes="188.114.96. 188.114.97. 188.114.98. 188.114.99. 162.159.192. 162.159.193. 162.159.195. 8.34.70. 8.34.146. 8.39.214. 8.39.204. 8.6.112. 8.35.211. 8.39.125. 8.47.69."
 	local pings="$warp_tmp/pings" candidates count=0 ip
 	mkdir -p "$warp_tmp"
 	rm -f "$pings"
@@ -5194,6 +5194,7 @@ _st_mode_vars() {
 }
 _st_mode_vars
 ST_WARP_UP="$ST_DIR/warp.up"          # поднятые туннели «интерфейс колония», лучший первым (_st_warp_order)
+ST_WARP_GEO="$ST_DIR/warp.geo"
 ST_RU_COLOS="DME SVX LED KJA REN OVB KZN AER VVO"
 ST_DEFAULT_SEL=""
 
@@ -5316,8 +5317,10 @@ _st_install_steer() {
 			return 0
 		fi
 	fi
-	local arch tmp base url ver was_on=""
+	local arch tmp base url ver was_on="" old_plain="" dropped=""
 	command -v steer >/dev/null 2>&1 && /etc/init.d/steer enabled 2>/dev/null && was_on=1
+	# Обычный пакет steer конфликтует с steer-extended — его надо убрать перед установкой
+	command -v steer >/dev/null 2>&1 && ! _st_is_ext && _pkg_is_installed steer && old_plain="$(_st_steer_ver)"
 	arch="$(_rb_arch)"
 	[ -n "$arch" ] || { echo "ОШИБКА: не удалось определить архитектуру роутера"; return 1; }
 	tmp="$ST_RUN/steer.$RAZ"
@@ -5332,8 +5335,25 @@ _st_install_steer() {
 			echo "$ver" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$' || continue
 			_rb_fetch_pkg "$base/${pkg}-${ver}-1_${arch}.${RAZ}" "$tmp" || continue
 		fi
+		if [ -n "$old_plain" ] && [ -z "$dropped" ]; then
+			# новый пакет уже скачан — только теперь убираем старый; правила Steer сохраняем и возвращаем
+			_rb_say "Удаляем старый пакет steer $old_plain — он мешает установке steer-extended"
+			[ -s "$ST_STEER_SPEC" ] && cp -f "$ST_STEER_SPEC" "$ST_RUN/spec.keep"
+			/etc/init.d/steer stop >/dev/null 2>&1
+			if ! $DELETE steer >&2; then
+				rm -f "$tmp" "$ST_RUN/spec.keep"
+				echo "ОШИБКА: старый пакет steer не удалился — удалите его вручную и повторите"
+				return 1
+			fi
+			dropped=1
+		fi
 		if $INSTALL "$tmp" >&2; then
 			rm -f "$tmp"
+			if [ -s "$ST_RUN/spec.keep" ]; then
+				mkdir -p "$(dirname "$ST_STEER_SPEC")"
+				cp -f "$ST_RUN/spec.keep" "$ST_STEER_SPEC"
+				rm -f "$ST_RUN/spec.keep"
+			fi
 			_st_own "pkg steer"
 			_st_own "pkg steer-extended"
 			_st_tun_ensure
@@ -5350,6 +5370,7 @@ _st_install_steer() {
 		fi
 	done
 	rm -f "$tmp"
+	[ -n "$dropped" ] && _rb_warn "Старый steer $old_plain уже удалён, а новый не поставился — нажмите установку ещё раз, когда появится интернет"
 	echo "ОШИБКА: не удалось установить движок Steer"
 	return 1
 }
@@ -5623,10 +5644,13 @@ _st_warp_first() {
 	echo "$ST_WARP_IF"
 }
 
-ST_WARP_POOLS="188.114.96. 188.114.97. 188.114.98. 188.114.99. 162.159.192. 162.159.193. 162.159.195. 8.34.146. 8.39.214. 8.39.204. 8.6.112. 8.35.211. 8.39.125. 8.47.69."
-ST_WARP_PORTS="2408 500 4500 987"
+ST_WARP_POOLS="188.114.96. 188.114.97. 188.114.98. 188.114.99. 162.159.192. 162.159.193. 162.159.195. 8.34.70. 8.34.146. 8.39.214. 8.39.204. 8.6.112. 8.35.211. 8.39.125. 8.47.69."
+ST_WARP_PORTS="2408 500 1701 4500"
+ST_WARP_PORTS_EXT="854 859 864 878 880 890 891 894 903 908 928 934 939 942 943 945 946 955 968 987 988 1002 1010 1014 1018 1070 1074 1180 1387 1843 2371 2506 3138 3476 3581 3854 4177 4198 4233 5279 5956 7103 7152 7156 7281 7559 8319 8742 8854 8886"
 ST_WARP_RAND=10          # случайных адресов к якорям — за разными колониями
 ST_WARP_HS_WAIT=8        # секунд ждать рукопожатия: на живом роутере оно бывало и 1,25 с
+ST_WARP_BURST=10
+ST_WARP_TORN=3
 
 _st_warp_link() { # ИНТЕРФЕЙС КЛЮЧ_УЗЛА АДРЕС ПОРТ
 	local dev="$1" peer="$2" push w=0 hs
@@ -5644,12 +5668,67 @@ _st_warp_link() { # ИНТЕРФЕЙС КЛЮЧ_УЗЛА АДРЕС ПОРТ
 	return 1
 }
 
-_st_warp_probe() { # ИНТЕРФЕЙС -> «потери% круг_мс»
-	local out loss rtt
-	out=$(ping -I "$1" -c 3 -W 2 1.1.1.1 2>/dev/null)
-	loss=$(printf '%s' "$out" | sed -n 's/.*[^0-9]\([0-9]*\)% packet loss.*/\1/p' | head -n1)
-	rtt=$(printf '%s' "$out" | sed -n 's|.*= [0-9.]*/\([0-9]*\)\.[0-9]*/.*|\1|p' | head -n1)
-	echo "${loss:-100} ${rtt:-99999}"
+_st_warp_probe() { # ИНТЕРФЕЙС -> «потери% круг_мс обрыв(0|1)»
+	local out
+	out=$(ping -I "$1" -c "$ST_WARP_BURST" -i 0.2 -W 2 -w 8 1.1.1.1 2>/dev/null)
+	case "$out" in *"packet loss"*) ;; *) out=$(ping -I "$1" -c 5 -W 2 -w 10 1.1.1.1 2>/dev/null) ;; esac
+	printf '%s\n' "$out" | awk -v t="$ST_WARP_TORN" '
+		/seq=[0-9]/ { s = $0; sub(/.*seq=/, "", s); sub(/[^0-9].*/, "", s); s += 0; if (!got++ || s > hi) hi = s }
+		/packets transmitted/ { tx = $1 + 0 }
+		/packet loss/ { l = $0; sub(/%.*/, "", l); sub(/.*[^0-9]/, "", l); loss = l + 0; have = 1 }
+		/min\/avg/ { v = $0; sub(/.*= */, "", v); split(v, a, "/"); rtt = int(a[2]) }
+		END {
+			if (!have) loss = 100
+			torn = (got > 0 && tx > 0 && tx - 1 - hi >= t) ? 1 : 0
+			printf "%d %d %d\n", loss, (got > 0 && rtt > 0 ? rtt : (got > 0 ? 1 : 99999)), torn
+		}'
+}
+
+_cf_meta() { # [ИНТЕРФЕЙС] -> «КОЛОНИЯ ВИДЯТ_КАК СТРАНА_КОЛОНИИ ГОРОД»
+	local j c s k t
+	j=$(curl -s ${1:+--interface "$1"} --connect-timeout 4 --max-time 8 -H 'Referer: https://speed.cloudflare.com' https://speed.cloudflare.com/meta 2>/dev/null)
+	case "$j" in *'"colo"'*) ;; *) return 1 ;; esac
+	c="$(jsonfilter -s "$j" -e '@.colo.iata' 2>/dev/null)"
+	[ -n "$c" ] || c="$(jsonfilter -s "$j" -e '@.colo' 2>/dev/null | grep -E '^[A-Z]{3}$')"
+	[ -n "$c" ] || return 1
+	s="$(jsonfilter -s "$j" -e '@.country' 2>/dev/null)"
+	k="$(jsonfilter -s "$j" -e '@.colo.cca2' 2>/dev/null)"
+	t="$(jsonfilter -s "$j" -e '@.colo.city' 2>/dev/null | tr -d '"\\\t\r\n')"
+	echo "$c ${s:--} ${k:--} ${t:--}"
+}
+
+_st_warp_geo() { # ИНТЕРФЕЙС... — «интерфейс колония видят_как страна_колонии город» в кеш для карточек
+	local i m
+	mkdir -p "$ST_DIR"
+	for i in "$@"; do
+		[ -d "/sys/class/net/$i" ] || continue
+		m="$(_cf_meta "$i")" || continue
+		{ grep -v "^$i " "$ST_WARP_GEO" 2>/dev/null; echo "$i $m"; } > "$ST_WARP_GEO.tmp" && mv "$ST_WARP_GEO.tmp" "$ST_WARP_GEO"
+	done
+	return 0
+}
+_st_geo_get() { awk -v i="$1" '$1 == i { $1 = ""; sub(/^ /, ""); print; exit }' "$ST_WARP_GEO" 2>/dev/null; }
+_st_geo_line() { # -> «DE (FRA), NL (AMS)» по поднятым туннелям
+	local i c out="" g
+	while read -r i c; do
+		[ -n "$i" ] || continue
+		g="$(_st_geo_get "$i")"
+		set -- $g
+		[ "$1" = "$c" ] && [ -n "$2" ] && [ "$2" != - ] && out="${out:+$out, }$2 ($c)"
+	done < "$ST_WARP_UP" 2>/dev/null
+	echo "$out"
+}
+
+_st_warp_i1() { # ИНТЕРФЕЙС МАСКА — сменить I1 на лету и в uci
+	local f="$ST_RUN/i1.$1" rc
+	mkdir -p "$ST_RUN"
+	uci -q set "network.$1.awg_i1=$2"
+	awg set "$1" i1 "$2" >/dev/null 2>&1 && return 0
+	awg showconf "$1" > "$f" 2>/dev/null || { rm -f "$f"; return 1; }
+	awk -v m="$2" '/^\[Interface\]/ { print; print "I1 = " m; next } /^I1[ \t]*=/ { next } { print }' "$f" > "$f.n"
+	awg setconf "$1" "$f.n" >/dev/null 2>&1; rc=$?
+	rm -f "$f" "$f.n"
+	return $rc
 }
 
 _st_colo_of() { # ИНТЕРФЕЙС
@@ -5661,10 +5740,11 @@ _st_colo_of() { # ИНТЕРФЕЙС
 	[ -n "$c" ] && echo "$c"
 }
 
-_st_warp_ports() { # ИНТЕРФЕЙС КЛЮЧ_УЗЛА АДРЕС
-	local f="$ST_DIR/warp.ports" ok="" p
+_st_warp_ports() { # ИНТЕРФЕЙС КЛЮЧ_УЗЛА АДРЕС [ext]
+	local f="$ST_DIR/warp.ports" ok="" p list="$ST_WARP_PORTS"
 	[ -s "$f" ] && { cat "$f"; return 0; }
-	for p in $ST_WARP_PORTS; do
+	[ "$4" = ext ] && { list="$ST_WARP_PORTS_EXT"; ST_WARP_HS_WAIT=3; }
+	for p in $list; do
 		_st_stopped && return 1
 		_st_warp_link "$1" "$2" "$3" "$p" && ok="${ok:+$ok }$p"
 		[ "$(echo "$ok" | wc -w)" -ge 2 ] && break
@@ -5674,36 +5754,56 @@ _st_warp_ports() { # ИНТЕРФЕЙС КЛЮЧ_УЗЛА АДРЕС
 	echo "$ok"
 }
 
-_st_warp_scan() { # ИНТЕРФЕЙС КЛЮЧ_УЗЛА ЗАНЯТЫЕ_КОЛОНИИ ЗАНЯТЫЕ_АДРЕСА [ФАЙЛ_ОБЩЕГО_СПИСКА]
-	local dev="$1" peer="$2" busy=" $3 " busyip=" $4 " r="$ST_RUN/scan.$1" cand ip ports port loss rtt colo pick f cls
+_st_warp_scan1() { # ИНТЕРФЕЙС КЛЮЧ_УЗЛА ЗАНЯТЫЕ_КОЛОНИИ ЗАНЯТЫЕ_АДРЕСА [ФАЙЛ_ОБЩЕГО_СПИСКА] [quick]
+	# $5 и $6 запоминаем сразу: ниже «set --» затирает позиционные параметры
+	local dev="$1" peer="$2" busy=" $3 " busyip=" $4 " pool="$5" quick="$6" r="$ST_RUN/scan.$1" cand ip ports port loss rtt torn colo seen city meta pick f cls
+	local tried=0 lim=3 ST_WARP_HS_WAIT="$ST_WARP_HS_WAIT"
+	[ -n "$quick" ] && { lim=1; ST_WARP_HS_WAIT=4; }
 	mkdir -p "$ST_RUN"
-	: > "$r"; : > "$r.same"; : > "$r.nc"; : > "$r.ru"; : > "$r.notls"
-	cand=$(awk -v p="$ST_WARP_POOLS" -v n="$ST_WARP_RAND" 'BEGIN { srand(); c = split(p, a, " ");
+	: > "$r"; : > "$r.same"; : > "$r.nc"; : > "$r.ru"; : > "$r.notls"; : > "$r.torn"
+	cand=$(awk -v p="$ST_WARP_POOLS" -v n="$ST_WARP_RAND" -v q="$quick" 'BEGIN { srand(); c = split(p, a, " ");
+		if (q != "") { for (i = 1; i <= 4; i++) print a[i] "1"; for (i = 0; i < 2; i++) print a[int(rand() * c) + 1] int(rand() * 254) + 2; exit }
 		for (i = 1; i <= c; i++) print a[i] "1"; for (i = 0; i < n; i++) print a[int(rand() * c) + 1] int(rand() * 254) + 2 }')
 	ports=""
-	local tried=0
 	for ip in $cand; do
 		[ -n "$ports" ] && break
-		[ "$tried" -ge 3 ] && break
+		[ "$tried" -ge "$lim" ] && break
 		tried=$((tried + 1))
 		ports="$(_st_warp_ports "$dev" "$peer" "$ip")"
 	done
-	[ -n "$ports" ] || { echo "!! WARP: провайдер не выпускает ни один порт ($ST_WARP_PORTS)" >&2; return 1; }
+	if [ -z "$ports" ] && [ -z "$quick" ] && ! _st_stopped; then
+		echo "   основные порты ($ST_WARP_PORTS) молчат — перебираем 50 запасных портов WARP, это до трёх минут" >&2
+		ports="$(_st_warp_ports "$dev" "$peer" "$(echo "$cand" | head -n1)" ext)"
+		[ -n "$ports" ] && echo "   открыты запасные порты: $ports" >&2
+	fi
+	[ -n "$ports" ] || { echo "!! WARP: ни один порт не ответил — ни основные ($ST_WARP_PORTS), ни запасные" >&2; return 1; }
 	port="${ports%% *}"
 	for ip in $cand; do
 		_st_stopped && return 1
 		case "$busyip" in *" $ip "*) continue ;; esac
 		_st_warp_link "$dev" "$peer" "$ip" "$port" || { echo "   $ip:$port — рукопожатия нет" >&2; continue; }
-		set -- $(_st_warp_probe "$dev"); loss="$1"; rtt="$2"
+		set -- $(_st_warp_probe "$dev"); loss="$1"; rtt="$2"; torn="$3"
 		[ "$loss" -ge 100 ] 2>/dev/null && { echo "   $ip:$port — туннель молчит" >&2; continue; }
-		colo="$(_st_colo_of "$dev")"
-		if [ -z "$colo" ]; then
-			echo "$loss $rtt $ip $port ?" >> "$r.nc"; echo "   $ip:$port — потери $loss%, $rtt мс, колония не узналась" >&2; continue
+		if [ "$torn" = 1 ]; then
+			echo "$loss $rtt $ip $port ?" >> "$r.torn"
+			echo "   $ip:$port — трафик пошёл и оборвался: так DPI рвёт туннель" >&2
+			[ "$(grep -c . "$r.torn")" -ge 6 ] && ! [ -s "$r" ] && ! [ -s "$r.same" ] && ! [ -s "$r.ru" ] && break
+			continue
 		fi
-		if ! curl -s -o /dev/null --interface "$dev" --connect-timeout 4 --max-time 8 https://www.cloudflare.com/cdn-cgi/trace 2>/dev/null; then
-			echo "$loss $rtt $ip $port $colo" >> "$r.notls"; echo "   $ip:$port — колония $colo, но HTTPS через туннель не проходит" >&2; continue
+		seen=""; city=""
+		if meta="$(_cf_meta "$dev")"; then
+			set -- $meta; colo="$1"; seen="$2"; shift 3; city="$*"
+			[ "$seen" = - ] && seen=""; [ "$city" = - ] && city=""
+		else
+			colo="$(_st_colo_of "$dev")"
+			if [ -z "$colo" ]; then
+				echo "$loss $rtt $ip $port ?" >> "$r.nc"; echo "   $ip:$port — потери $loss%, $rtt мс, колония не узналась" >&2; continue
+			fi
+			if ! curl -s -o /dev/null --interface "$dev" --connect-timeout 4 --max-time 8 https://www.cloudflare.com/cdn-cgi/trace 2>/dev/null; then
+				echo "$loss $rtt $ip $port $colo" >> "$r.notls"; echo "   $ip:$port — колония $colo, но HTTPS через туннель не проходит" >&2; continue
+			fi
 		fi
-		echo "   $ip:$port — потери $loss%, $rtt мс, колония $colo" >&2
+		echo "   $ip:$port — потери $loss%, $rtt мс, колония $colo${city:+ ($city)}${seen:+, сайты видят $seen}" >&2
 		if _st_warp_is_ru "$colo"; then echo "$loss $rtt $ip $port $colo" >> "$r.ru"; continue; fi
 		case "$busy" in *" $colo "*) echo "$loss $rtt $ip $port $colo" >> "$r.same"; continue ;; esac
 		echo "$loss $rtt $ip $port $colo" >> "$r"
@@ -5711,12 +5811,12 @@ _st_warp_scan() { # ИНТЕРФЕЙС КЛЮЧ_УЗЛА ЗАНЯТЫЕ_КОЛО
 	done
 	# Все найденные точки — в общий список, лучшие первыми: остальные туннели возьмут точки
 	# оттуда, без своей разведки (точка входа не зависит от ключей WARP)
-	if [ -n "$5" ]; then
+	if [ -n "$pool" ]; then
 		for f in "$r" "$r.same" "$r.nc" "$r.ru" "$r.notls"; do
 			[ -s "$f" ] || continue
 			case "$f" in *.nc) cls=1 ;; *.ru) cls=2 ;; *.notls) cls=3 ;; *) cls=0 ;; esac
 			awk -v c="$cls" '{ printf "%d %s %s %s\n", c * 100000000 + $1 * 100000 + $2, $3, $4, $5 }' "$f"
-		done | sort -n | awk '{ print $2, $3, $4, $1 }' > "$5"
+		done | sort -n | awk '{ print $2, $3, $4, $1 }' > "$pool"
 	fi
 	for f in "$r" "$r.same" "$r.nc" "$r.ru" "$r.notls"; do
 		[ -s "$f" ] || continue
@@ -5731,6 +5831,32 @@ _st_warp_scan() { # ИНТЕРФЕЙС КЛЮЧ_УЗЛА ЗАНЯТЫЕ_КОЛО
 		echo "$pick"
 		return 0
 	done
+	[ -s "$r.torn" ] && echo "!! через все ответившие точки ($(grep -c . "$r.torn")) DPI обрывает туннель — нужна другая маска" >&2
+	return 1
+}
+
+# Разведка; не нашлось ни одной живой точки — перебираем маски I1: DPI чаще судит туннель по первому пакету
+_st_warp_scan() { # ИНТЕРФЕЙС КЛЮЧ_УЗЛА ЗАНЯТЫЕ_КОЛОНИИ ЗАНЯТЫЕ_АДРЕСА [ФАЙЛ_ОБЩЕГО_СПИСКА]
+	local dev="$1" peer="$2" busy="$3" busyip="$4" pool="$5" orig name mask got
+	got="$(_st_warp_scan1 "$dev" "$peer" "$busy" "$busyip" "$pool")" && { echo "$got"; return 0; }
+	_st_stopped && return 1
+	orig="$(uci -q get "network.$dev.awg_i1")"
+	[ -n "$orig" ] || return 1
+	echo "   меняем маску первого пакета (I1) и пробуем ещё раз" >&2
+	for name in $AWG_I1_SET; do
+		_st_stopped && break
+		mask="$(_awg_i1 "$name")"
+		[ -n "$mask" ] && [ "$mask" != "$orig" ] || continue
+		_st_warp_i1 "$dev" "$mask" || { echo "   модуль AmneziaWG не даёт сменить маску на лету" >&2; break; }
+		echo "   маска $(_awg_mask_name "$mask"):" >&2
+		if got="$(_st_warp_scan1 "$dev" "$peer" "$busy" "$busyip" "$pool" quick)"; then
+			printf '%s\n' "$mask" > "$ST_RUN/warp.mask"
+			echo "   маска $(_awg_mask_name "$mask") проходит — она останется у туннеля" >&2
+			echo "$got"
+			return 0
+		fi
+	done
+	_st_warp_i1 "$dev" "$orig" >/dev/null 2>&1
 	return 1
 }
 
@@ -5739,6 +5865,7 @@ _st_warp_scan() { # ИНТЕРФЕЙС КЛЮЧ_УЗЛА ЗАНЯТЫЕ_КОЛО
 _st_warp_from_pool() { # ИНТЕРФЕЙС КЛЮЧ_УЗЛА ЗАНЯТЫЕ_КОЛОНИИ ЗАНЯТЫЕ_АДРЕСА ФАЙЛ -> «адрес порт колония ключ»
 	local dev="$1" peer="$2" busy=" $3 " busyip=" $4 " f="$5" ip port colo k pass good isbusy
 	[ -s "$f" ] || return 1
+	[ -s "$ST_RUN/warp.mask" ] && _st_warp_i1 "$dev" "$(cat "$ST_RUN/warp.mask")" >/dev/null 2>&1
 	for pass in 1 2 3 4; do
 		while read -r ip port colo k <&3; do
 			[ -n "$ip" ] || continue
@@ -5748,6 +5875,8 @@ _st_warp_from_pool() { # ИНТЕРФЕЙС КЛЮЧ_УЗЛА ЗАНЯТЫЕ_К�
 			case "$pass$good$isbusy" in 110|211|300|401) ;; *) continue ;; esac
 			_st_stopped && return 1
 			_st_warp_link "$dev" "$peer" "$ip" "$port" || { echo "   $ip:$port — с этими ключами рукопожатия нет" >&2; continue; }
+			set -- $(_st_warp_probe "$dev")
+			[ "$3" = 1 ] && { echo "   $ip:$port — трафик пошёл и оборвался" >&2; continue; }
 			if [ "$good" = 1 ] && ! curl -s -o /dev/null --interface "$dev" --connect-timeout 4 --max-time 8 https://www.cloudflare.com/cdn-cgi/trace 2>/dev/null; then
 				echo "   $ip:$port — HTTPS через туннель не проходит" >&2; continue
 			fi
@@ -5870,7 +5999,11 @@ _st_warp_own_up() { # поднять свой туннель и дождатьс
 	echo "$i ${col:-?}" > "$ST_WARP_UP"
 	if [ -n "$col" ]; then echo "$col" > "$ST_DIR/warp.colo"; else rm -f "$ST_DIR/warp.colo"; fi
 	_st_tgws_warp
+	_st_warp_geo "$i"
 	_rb_say "Свой WARP работает: $(uci -q get "network.${i}_peer.endpoint_host"):$(uci -q get "network.${i}_peer.endpoint_port")${col:+, колония $col}"
+	col="$(_st_geo_line)"
+	[ -n "$col" ] && _rb_say "Сайты видят WARP как: $col"
+	col="$(awk '{ print $2; exit }' "$ST_WARP_UP")"
 	[ -n "$col" ] && _st_warp_is_ru "$col" && _rb_warn "Туннель идёт через российскую колонию $col: заблокированное через неё не откроется"
 	return 0
 }
@@ -5909,7 +6042,7 @@ _st_warp_up() { # [repick]
 	done
 	: > "$ST_WARP_UP.tmp"
 	local pool="$ST_RUN/warp.pool"
-	rm -f "$pool"
+	rm -f "$pool" "$ST_RUN/warp.mask"
 	for n in $ready; do
 		_st_stopped && break
 		i="$(_st_wif "$n")"
@@ -5974,6 +6107,9 @@ _st_warp_up() { # [repick]
 	fi
 	echo "$colos" > "$ST_DIR/warp.colo"
 	_st_tgws_warp
+	_st_warp_geo $(awk '{ print $1 }' "$ST_WARP_UP")
+	c="$(_st_geo_line)"
+	[ -n "$c" ] && _rb_say "Сайты видят WARP как: $c"
 	[ "$ru" = 1 ] && _rb_warn "Часть туннелей WARP идёт через российские колонии: заблокированное через них не откроется"
 	return 0
 }
@@ -6518,6 +6654,7 @@ _st_warp_fix() { # N [keys]
 	awk '{ printf "%s%s", (NR > 1 ? ", " : ""), $2 }' "$ST_WARP_UP" > "$ST_DIR/warp.colo"
 	_st_tgws_warp
 	_rb_say "WARP $n работает: $1:$2, колония $3"
+	_st_warp_geo "$i"
 }
 
 do_steer_warp_fix() { # N [keys]
@@ -6717,7 +6854,7 @@ steer_status() {
 }
 
 _st_tunnels_json() {
-	local n=1 i up hs age rx tx host port colo out="" sep=""
+	local n=1 i up hs age rx tx host port colo out="" sep="" seen city cc
 	while [ "$n" -le "$ST_WARP_N" ]; do
 		i="$(_st_wif "$n")"
 		if _st_owns "net $i"; then
@@ -6732,7 +6869,14 @@ _st_tunnels_json() {
 				set -- $(awg show "$i" transfer 2>/dev/null | head -n1)
 				rx="${2:-0}"; tx="${3:-0}"
 			fi
-			out="$out$sep{\"n\":$n,\"if\":\"$i\",\"up\":$up,\"colo\":\"$(esc "$colo")\",\"host\":\"$(esc "$host")\",\"port\":\"$(esc "$port")\",\"hs_age\":\"$age\",\"rx\":$rx,\"tx\":$tx}"
+			seen=""; city=""; cc=""
+			set -- $(_st_geo_get "$i")
+			if [ $# -ge 4 ] && { [ "$1" = "$colo" ] || [ -z "$colo" ] || [ "$colo" = "?" ]; }; then
+				[ -n "$colo" ] && [ "$colo" != "?" ] || colo="$1"
+				seen="$2"; cc="$3"; shift 3; city="$*"
+				[ "$seen" = - ] && seen=""; [ "$cc" = - ] && cc=""; [ "$city" = - ] && city=""
+			fi
+			out="$out$sep{\"n\":$n,\"if\":\"$i\",\"up\":$up,\"colo\":\"$(esc "$colo")\",\"city\":\"$(esc "$city")\",\"cc\":\"$(esc "$cc")\",\"seen\":\"$(esc "$seen")\",\"host\":\"$(esc "$host")\",\"port\":\"$(esc "$port")\",\"hs_age\":\"$age\",\"rx\":$rx,\"tx\":$tx}"
 			sep=","
 		fi
 		n=$((n + 1))
@@ -7280,7 +7424,7 @@ steer_action() {
 			;;
 		autorestart) _st_cron_set "$mode" ;;
 		diag)
-			local trace warp="none" colo="" tun="" tsep="" wi wn wv wc vpn="none" vip="" vloc=""
+			local trace warp="none" colo="" tun="" tsep="" wi wn wv wc vpn="none" vip="" vloc="" gs gt
 			if _st_installed && [ -n "$(_st_sel)" ] && [ ! -f "$ST_OFF" ] && _st_use_vpn; then
 				vpn=off
 				_st_vpn_probe && vpn=on
@@ -7298,9 +7442,18 @@ steer_action() {
 							*warp=on*|*warp=plus*) wv=on ;;
 							*ip=*) _st_warp_own && wv=on ;;
 						esac
-						if [ "$wv" = on ]; then warp=on; [ -n "$colo" ] || colo="$wc"
+						gs=""; gt=""
+						if [ "$wv" = on ]; then
+							warp=on; [ -n "$colo" ] || colo="$wc"
+							_st_warp_geo "$wi"
+							set -- $(_st_geo_get "$wi")
+							if [ $# -ge 4 ]; then
+								[ -n "$wc" ] || wc="$1"
+								gs="$2"; shift 3; gt="$*"
+								[ "$gs" = - ] && gs=""; [ "$gt" = - ] && gt=""
+							fi
 						else wc="$(_st_colo_of "$wi")"; [ -n "$wc" ] && wv=notls || wv=off; fi
-						tun="$tun$tsep{\"n\":$wn,\"warp\":\"$wv\",\"colo\":\"$(esc "$wc")\"}"
+						tun="$tun$tsep{\"n\":$wn,\"warp\":\"$wv\",\"colo\":\"$(esc "$wc")\",\"city\":\"$(esc "$gt")\",\"seen\":\"$(esc "$gs")\"}"
 						tsep=","
 					fi
 					wn=$((wn + 1))
@@ -7446,10 +7599,59 @@ AWG_API2="https://api.cloudflareclient.com/v0i1909051800/reg"
 AWG_BOOT_PRIV="4OnO86dDLpqJ2U10ODwX3tarx6xlRGLfkmbSBtMgaHg="
 AWG_BOOT_IP="172.16.0.3"
 AWG_TEST_IF="zmawgtest"
-AWG_TEST_HOSTS="162.159.192.1 188.114.97.1 188.114.96.3 162.159.193.2 162.159.195.2 188.114.98.2 188.114.99.2 8.6.112.2 8.34.146.2 8.39.125.2"
+AWG_TEST_HOSTS="162.159.192.1 188.114.97.1 188.114.96.3 162.159.193.2 162.159.195.2 188.114.98.2 188.114.99.2 8.6.112.2 8.34.70.2 8.34.146.2 8.39.125.2"
 AWG_TEST_PORTS="2408 500 4500 1701"
 AWG_I1_ICLOUD="<r 2><b 0x858000010001000000000669636c6f756403636f6d0000010001c00c000100010000105a00044d583737>"
 AWG_I1_QUIC1="<b 0xc10000000114367096bb0fb3f58f3a3fb8aaacd61d63a1c8a40e14f7374b8a62dccba6431716c3abf6f5afbcfb39bd008000047c32e268567c652e6f4db58bff759bc8c5aaca183b87cb4d22938fe7d8dca22a679a79e4d9ee62e4bbb3a380dd78d4e8e48f26b38a1d42d76b371a5a9a0444827a69d1ab5872a85749f65a4104e931740b4dc1e2dd77733fc7fac4f93011cd622f2bb47e85f71992e2d585f8dc765a7a12ddeb879746a267393ad023d267c4bd79f258703e27345155268bd3cc0506ebd72e2e3c6b5b0f005299cd94b67ddabe30389c4f9b5c2d512dcc298c14f14e9b7f931e1dc397926c31fbb7cebfc668349c218672501031ecce151d4cb03c4c660b6c6fe7754e75446cd7de09a8c81030c5f6fb377203f551864f3d83e27de7b86499736cbbb549b2f37f436db1cae0a4ea39930f0534aacdd1e3534bc87877e2afabe959ced261f228d6362e6fd277c88c312d966c8b9f67e4a92e757773db0b0862fb8108d1d8fa262a40a1b4171961f0704c8ba314da2482ac8ed9bd28d4b50f7432d89fd800c25a50c5e2f5c0710544fef5273401116aa0572366d8e49ad758fcb29e6a92912e644dbe227c247cb3417eabfab2db16796b2fba420de3b1dc94e8361f1f324a331ddaf1e626553138860757fd0bf687566108b77b70fb9f8f8962eca599c4a70ed373666961a8cb506b96756d9e28b94122b20f16b54f118c0e603ce0b831efea614ad836df6cf9affbdd09596412547496967da758cec9080295d853b0861670b71d9abde0d562b1a6de82782a5b0c14d297f27283a895abc889a5f6703f0e6eb95f67b2da45f150d0d8ab805612d570c2d5cb6997ac3a7756226c2f5c8982ffbd480c5004b0660a3c9468945efde90864019a2b519458724b55d766e16b0da25c0557c01f3c11ddeb024b62e303640e17fdd57dedb3aeb4a2c1b7c93059f9c1d7118d77caac1cd0f6556e46cbc991c1bb16970273dea833d01e5090d061a0c6d25af2415cd2878af97f6d0e7f1f936247b394ecb9bd484da6be936dee9b0b92dc90101a1b4295e97a9772f2263eb09431995aa173df4ca2abd687d87706f0f93eaa5e13cbe3b574fa3cfe94502ace25265778da6960d561381769c24e0cbd7aac73c16f95ae74ff7ec38124f7c722b9cb151d4b6841343f29be8f35145e1b27021056820fed77003df8554b4155716c8cf6049ef5e318481460a8ce3be7c7bfac695255be84dc491c19e9dedc449dd3471728cd2a3ee51324ccb3eef121e3e08f8e18f0006ea8957371d9f2f739f0b89e4db11e5c6430ada61572e589519fbad4498b460ce6e4407fc2d8f2dd4293a50a0cb8fcaaf35cd9a8cc097e3603fbfa08d9036f52b3e7fcce11b83ad28a4ac12dba0395a0cc871cefd1a2856fffb3f28d82ce35cf80579974778bab13d9b3578d8c75a2d196087a2cd439aff2bb33f2db24ac175fff4ed91d36a4cdbfaf3f83074f03894ea40f17034629890da3efdbb41141b38368ab532209b69f057ddc559c19bc8ae62bf3fd564c9a35d9a83d14a95834a92bae6d9a29ae5e8ece07910d16433e4c6230c9bd7d68b47de0de9843988af6dc88b5301820443bd4d0537778bf6b4c1dd067fcf14b81015f2a67c7f2a28f9cb7e0684d3cb4b1c24d9b343122a086611b489532f1c3a26779da1706c6759d96d8ab>"
+
+AWG_I1_SET="quic2 dns stun icloud sip quic"
+AWG_I1_HOSTS="www.apple.com www.google.com www.microsoft.com cdn.jsdelivr.net"
+
+_i1_hex() { if command -v hexdump >/dev/null 2>&1; then hexdump -ve '1/1 "%02x"'; else od -An -v -tx1 | tr -d ' \n'; fi; }
+_i1_num() { # ОТ ДО
+	awk -v a="$1" -v b="$2" -v s="$(head -c 4 /dev/urandom | _i1_hex)" 'BEGIN { x = 0; for (i = 1; i <= length(s); i++) x = x * 16 + index("0123456789abcdef", substr(s, i, 1)) - 1; srand(x); print a + int(rand() * (b - a + 1)) }'
+}
+_i1_str() { tr -dc 'a-z0-9' < /dev/urandom 2>/dev/null | head -c "$1"; }
+_i1_host() { set -- $AWG_I1_HOSTS; eval "echo \"\${$(_i1_num 1 $#)}\""; }
+
+_i1_dns() { # [ХОСТ] — A-запрос с EDNS0 и паддингом RFC 7830: случайные байты внутри корректного запроса
+	local h="${1:-$(_i1_host)}" q="" l p
+	for l in $(echo "$h" | tr '.' ' '); do q="$q$(printf '%02x' "${#l}")$(printf '%s' "$l" | _i1_hex)"; done
+	p="$(_i1_num 60 180)"
+	printf '<r 2><b 0x01000001000000000001%s0000010001000029100000000000%04x000c%04x><r %d>' "$q" $((p + 4)) "$p" "$p"
+}
+
+_i1_stun() { # STUN Binding Request с атрибутом SOFTWARE
+	local s
+	s=$(( $(_i1_num 4 8) * 4 ))
+	printf '<b 0x0001%04x2112a442><r 12><b 0x8022%04x%s>' $((s + 4)) "$s" "$(_i1_str "$s" | _i1_hex)"
+}
+
+_i1_sip() { # [ХОСТ] — SIP OPTIONS, как у PJSIP
+	local h="${1:-$(_i1_host)}"
+	printf '<b 0x%s>' "$(printf '%s\r\n' \
+		"OPTIONS sip:$h SIP/2.0" \
+		"Via: SIP/2.0/UDP 192.168.$(_i1_num 0 255).$(_i1_num 2 254):5060;branch=z9hG4bK$(_i1_str 10)" \
+		"From: <sip:$(_i1_str 8)@$h>;tag=$(_i1_num 100000 999999)" \
+		"To: <sip:$h>" \
+		"Call-ID: $(_i1_str 16)@$h" \
+		"CSeq: $(_i1_num 1000 9999) OPTIONS" \
+		"Max-Forwards: 70" \
+		"User-Agent: PJSIP/2.13" \
+		"Content-Length: 0" \
+		"" | _i1_hex)"
+}
+
+_awg_i1() { # ИМЯ -> маска I1; dns, stun и sip каждый раз со свежими случайными полями
+	case "$1" in
+		quic) echo "$MIXOMO_AWG_I1" ;;
+		quic2) echo "$AWG_I1_QUIC1" ;;
+		icloud) echo "$AWG_I1_ICLOUD" ;;
+		dns) _i1_dns ;;
+		stun) _i1_stun ;;
+		sip) _i1_sip ;;
+	esac
+}
 
 _awg_write_conf() { # ПРИВАТНЫЙ ПИР v4 v6 ТОЧКА [I1]
 	mkdir -p "$(dirname "$MIXOMO_WARP_CONF")"
@@ -7535,6 +7737,7 @@ _awg_api_ok() { # ПУТЬ — ответил ли API хоть чем-то (л�
 }
 
 AWG_NO_I1=0
+AWG_TRY_WAIT=8
 _awg_try() {
 	local dev="$1" conf="$AWG_RUN/try.conf" hs i=0 i1="$5"
 	[ "$AWG_NO_I1" = 1 ] && i1=""
@@ -7556,7 +7759,7 @@ _awg_try() {
 		fi
 	fi
 	rm -f "$conf"
-	while [ "$i" -lt 8 ]; do
+	while [ "$i" -lt "$AWG_TRY_WAIT" ]; do
 		hs=$(awg show "$dev" latest-handshakes 2>/dev/null | awk '{ print $2; exit }')
 		[ "${hs:-0}" -gt 0 ] 2>/dev/null && return 0
 		sleep 0.5 2>/dev/null || sleep 1
@@ -7569,7 +7772,16 @@ _awg_ml() { [ "$AWG_NO_I1" = 1 ] || echo ", маска $(_awg_mask_name "$1")"; 
 _awg_trace() { # ИНТЕРФЕЙС — идёт ли трафик: trace Cloudflare изнутри туннеля
 	curl -s --interface "$1" --connect-timeout 4 --max-time 6 http://1.1.1.1/cdn-cgi/trace 2>/dev/null | grep -Eq '^warp=(on|plus)'
 }
-_awg_mask_name() { case "$1" in "$AWG_I1_ICLOUD") echo "iCloud-DNS" ;; "$AWG_I1_QUIC1") echo "QUIC-2" ;; *) echo "QUIC" ;; esac; }
+_awg_mask_name() {
+	case "$1" in
+		"$AWG_I1_ICLOUD") echo "iCloud-DNS" ;;
+		"$AWG_I1_QUIC1") echo "QUIC-2" ;;
+		"<r 2><b 0x01000001000000000001"*) echo "DNS" ;;
+		"<b 0x0001"*) echo "STUN" ;;
+		"<b 0x4f5054494f4e53"*) echo "SIP" ;;
+		*) echo "QUIC" ;;
+	esac
+}
 
 do_awg_gen() { # std ТОЧКА | check
 	local mode="$1" ep="$2" path="" i hs a host port m n=0 best="" fall="" bmask="$MIXOMO_AWG_I1" bep="" masks tried=""
@@ -7639,7 +7851,11 @@ do_awg_gen() { # std ТОЧКА | check
 	for m in "$MIXOMO_AWG_I1" "$AWG_I1_ICLOUD" "$AWG_I1_QUIC1"; do [ "$m" = "$bmask" ] || masks="$masks
 $m"; done
 	local ports="" oifs="$IFS" nl='
-' h1="${bep%%:*}"
+' h1="${bep%%:*}" allm meta torn seen
+	allm="$masks
+$(_i1_dns)
+$(_i1_stun)
+$(_i1_sip)"
 	[ -n "$h1" ] || h1="${AWG_TEST_HOSTS%% *}"
 	for port in $AWG_TEST_PORTS; do
 		IFS="$nl"
@@ -7652,6 +7868,16 @@ $m"; done
 		IFS="$oifs"
 		echo "   порт $port: $(case " $ports " in *" $port "*) echo открыт ;; *) echo закрыт ;; esac)"
 	done
+	if [ -z "$ports" ]; then
+		echo "   основные порты молчат — перебираем 50 запасных портов WARP, это до двух минут"
+		AWG_TRY_WAIT=4
+		for port in $ST_WARP_PORTS_EXT; do
+			_awg_try "$AWG_TEST_IF" "$G_PRIV" "$G_V4" "$h1:$port" "$bmask" "$G_PEER" && ports="$ports $port"
+			[ "$(echo $ports | wc -w)" -ge 2 ] && break
+		done
+		AWG_TRY_WAIT=8
+		[ -n "$ports" ] && echo "   открыты запасные порты:$ports"
+	fi
 	[ -n "$ports" ] || _rb_warn "Ни один порт WARP не ответил — провайдер, похоже, режет UDP к Cloudflare"
 	for host in $h1 $AWG_TEST_HOSTS; do
 		for port in $ports; do
@@ -7659,15 +7885,30 @@ $m"; done
 			case " $tried " in *" $a "*) continue ;; esac
 			tried="$tried $a"
 			IFS="$nl"
-			for m in $masks; do
+			for m in $allm; do
 				IFS="$oifs"
 				[ "$AWG_NO_I1" = 1 ] && [ "$m" != "$bmask" ] && continue
 				n=$((n + 1))
-				[ "$n" -gt 45 ] && break 3
+				[ "$n" -gt 60 ] && break 3
 				if _awg_try "$AWG_TEST_IF" "$G_PRIV" "$G_V4" "$a" "$m" "$G_PEER"; then
 					if _awg_trace "$AWG_TEST_IF"; then
+						set -- $(_st_warp_probe "$AWG_TEST_IF"); torn="$3"
+						if [ "$torn" = 1 ]; then
+							echo "   $a$(_awg_ml "$m") — трафик пошёл и оборвался: так DPI рвёт туннель"
+							[ -n "$fall" ] || fall="$a|$m"
+							continue
+						fi
+						meta="потери $1%, $2 мс"
 						best="$a"; bmask="$m"
-						echo "   $a$(_awg_ml "$m") — трафик идёт"
+						set -- $(_cf_meta "$AWG_TEST_IF")
+						if [ $# -ge 4 ]; then
+							meta="$meta, колония $1"
+							[ "$2" != - ] && seen="$2" || seen=""
+							shift 3
+							[ "$*" != - ] && meta="$meta ($*)"
+							[ -n "$seen" ] && meta="$meta, сайты видят $seen"
+						fi
+						echo "   $a$(_awg_ml "$m") — трафик идёт: $meta"
 						break 3
 					fi
 					echo "   $a$(_awg_ml "$m") — рукопожатие есть, трафика нет"
@@ -7832,6 +8073,9 @@ do_awg_pick() { # ИНТЕРФЕЙС — разведка точки входа 
 	uci set "network.$p.endpoint_port=$2"
 	uci commit network
 	_awg_say "Готово: $i → $1:$2, колония $3"
+	set -- $(_cf_meta "$i")
+	[ $# -ge 4 ] && [ "$2" != - ] && _awg_say "Сайты видят этот туннель как $2"
+	return 0
 }
 
 do_awg_regen() { # ИНТЕРФЕЙС — новые ключи WARP прямо в этот интерфейс
@@ -8099,12 +8343,22 @@ awg_action() {
 			;;
 		test)
 			[ "$(uci -q get "network.$mode.proto")" = amneziawg ] || { echo '{"error":"нет такого интерфейса"}'; return 1; }
-			local tr colo ip warp age
+			local tr colo ip warp age seen="" city="" loss="" rtt="" torn=""
 			age="$(_awg_hs_age "$mode")"
 			tr="$(curl -s --interface "$mode" --connect-timeout 5 --max-time 10 https://www.cloudflare.com/cdn-cgi/trace 2>/dev/null)"
 			[ -n "$tr" ] || tr="$(curl -s --interface "$mode" --connect-timeout 5 --max-time 10 https://1.1.1.1/cdn-cgi/trace 2>/dev/null)"
 			colo="$(printf '%s\n' "$tr" | sed -n 's/^colo=//p')"; ip="$(printf '%s\n' "$tr" | sed -n 's/^ip=//p')"; warp="$(printf '%s\n' "$tr" | sed -n 's/^warp=//p')"
-			printf '{"ok":%s,"hs_age":"%s","colo":"%s","ip":"%s","warp":"%s"}\n' "$([ -n "$ip" ] && echo true || echo false)" "$age" "$(esc "$colo")" "$(esc "$ip")" "$(esc "$warp")"
+			if [ -n "$ip" ]; then
+				set -- $(_cf_meta "$mode")
+				if [ $# -ge 4 ]; then
+					[ -n "$colo" ] || colo="$1"
+					[ "$2" != - ] && seen="$2"
+					shift 3; [ "$*" != - ] && city="$*"
+				fi
+				set -- $(_st_warp_probe "$mode"); loss="$1"; rtt="$2"; torn="$3"
+				[ "$loss" -ge 100 ] 2>/dev/null && { loss=""; rtt=""; torn=""; }
+			fi
+			printf '{"ok":%s,"hs_age":"%s","colo":"%s","city":"%s","seen":"%s","ip":"%s","warp":"%s","loss":"%s","rtt":"%s","torn":%s}\n' "$([ -n "$ip" ] && echo true || echo false)" "$age" "$(esc "$colo")" "$(esc "$city")" "$(esc "$seen")" "$(esc "$ip")" "$(esc "$warp")" "$loss" "$rtt" "$([ "$torn" = 1 ] && echo true || echo false)"
 			;;
 		export)
 			[ "$(uci -q get "network.$mode.proto")" = amneziawg ] || { echo '{"error":"нет такого интерфейса"}'; return 1; }
@@ -9443,6 +9697,11 @@ function age(sec) {
 	return Math.floor(sec / 3600) + ' ч назад';
 }
 function live(f) { var a = parseInt(f.hs_age, 10); return f.up && !isNaN(a) && a < 180; }
+function country(cc) {
+	cc = String(cc || '').toUpperCase();
+	if (!/^[A-Z]{2}$/.test(cc)) return '';
+	try { return new Intl.DisplayNames([ 'ru' ], { type: 'region' }).of(cc) || cc; } catch (e) { return cc; }
+}
 function tiles(list, cur, onPick) {
 	return E('div', { 'class': 'zm-grid' }, list.map(function(it) {
 		return E('div', { 'class': 'zm-tile' + (cur === it.id ? ' zm-active' : ''), 'click': function() { onPick(it.id); } }, it.name);
@@ -9573,7 +9832,7 @@ return view.extend({
 					job('pick', f.name, 'Подбираем точку входа — это займёт пару минут');
 				} }, 'Подобрать автоматически') : ''
 			]));
-			box.appendChild(E('p', { 'class': 'zm-hint' }, f.warp ? 'Подбор проверяет адреса и порты Cloudflare изнутри туннеля и берёт самую быструю зарубежную колонию.' : 'Адрес и порт сервера из вашей конфигурации.'));
+			box.appendChild(E('p', { 'class': 'zm-hint' }, f.warp ? 'Подбор проверяет адреса и порты Cloudflare изнутри туннеля, отсеивает точки, где DPI обрывает связь, и берёт самую быструю зарубежную колонию. Рвутся все — сам сменит маску I1.' : 'Адрес и порт сервера из вашей конфигурации.'));
 			return box;
 		}
 
@@ -9595,16 +9854,25 @@ return view.extend({
 			box.appendChild(row('Зона firewall', E('span', {}, f.zone || 'нет — устройства сети в туннель не попадут')));
 			box.appendChild(row('Маршруты', E('span', {}, f.route_all ? 'весь трафик роутера через туннель' : 'не трогает — трафик направляют Steer, Mihomo или PBR')));
 			var t = testRes[f.name];
-			if (t) box.appendChild(row('Проверка', t.ok
-				? badge('zm-ok', E('span', {}, [ 'выход ', hide ? zm.secret(t.ip || '?') : (t.ip || '?'), (t.colo ? ' · колония ' + t.colo : '') + (t.warp && t.warp !== 'off' ? ' · warp=' + t.warp : '') ]))
-				: badge('zm-bad', 'через туннель ничего не открылось')));
+			if (t) {
+				var ti = [];
+				if (t.colo) ti.push('колония ' + t.colo + (t.city ? ' (' + t.city + ')' : ''));
+				if (t.seen) ti.push('сайты видят: ' + country(t.seen));
+				if (t.loss !== undefined && t.loss !== '') ti.push('потери ' + t.loss + '%' + (t.rtt ? ', ' + t.rtt + ' мс' : ''));
+				if (t.warp && t.warp !== 'off') ti.push('warp=' + t.warp);
+				box.appendChild(row('Проверка', t.ok
+					? badge(t.torn ? 'zm-warn' : 'zm-ok', E('span', {}, [ 'выход ', hide ? zm.secret(t.ip || '?') : (t.ip || '?'), ti.length ? ' · ' + ti.join(' · ') : '' ]))
+					: badge('zm-bad', 'через туннель ничего не открылось')));
+				if (t.ok && t.torn) box.appendChild(E('p', { 'class': 'zm-hint' }, 'Серия пингов оборвалась на хвосте — так DPI рвёт туннель через несколько секунд после начала. ' +
+					(f.warp ? 'Подберите точку входа заново: подбор отсеет такие точки, а если рвутся все — сменит маску I1.' : 'Попробуйте другую точку входа или маску I1.')));
+			}
 
 			var acts = [
 				E('button', { 'class': 'cbi-button cbi-button-action', 'click': function(ev) {
 					ev.target.disabled = true;
 					zm.awgAction('test', f.name).then(function(r) {
 						testRes[f.name] = r || {};
-						zm.toast(r && r.ok ? f.name + ': туннель работает' : f.name + ': через туннель ничего не открылось', r && r.ok ? 'info' : 'error');
+						zm.toast(r && r.ok ? (r.torn ? f.name + ': связь есть, но обрывается' : f.name + ': туннель работает') : f.name + ': через туннель ничего не открылось', r && r.ok ? (r.torn ? 'warning' : 'info') : 'error');
 						refresh();
 					}).catch(function() { zm.toast('Роутер не ответил', 'error'); refresh(); });
 				} }, 'Проверить')
@@ -9908,6 +10176,12 @@ function fmtAge(sec) {
 function tunnelLive(t) {
 	var a = parseInt(t.hs_age, 10);
 	return t.up && !isNaN(a) && a < 300;
+}
+
+function country(cc) {
+	cc = String(cc || '').toUpperCase();
+	if (!/^[A-Z]{2}$/.test(cc)) return '';
+	try { return new Intl.DisplayNames([ 'ru' ], { type: 'region' }).of(cc) || cc; } catch (e) { return cc; }
 }
 
 function plural(n, one, few, many) {
@@ -10306,7 +10580,7 @@ return view.extend({
 				else if (tn.length) tn.forEach(function(t) {
 					var who = tn.length > 1 ? 'Туннель ' + t.n + ': ' : '';
 					var ownW = data.warp_mode === 'own';
-					if (t.warp === 'on') items.push([ 'ok', who + 'трафик идёт через ' + warpName() + (t.colo ? ' (сервер ' + t.colo + ')' : ''), '' ]);
+					if (t.warp === 'on') items.push([ 'ok', who + 'трафик идёт через ' + warpName() + (t.colo ? ' (сервер ' + t.colo + (t.city ? ', ' + t.city : '') + ')' : '') + (t.seen ? ' · сайты видят: ' + country(t.seen) : ''), '' ]);
 					else if (t.warp === 'notls') items.push([ 'warn', who + 'соединение есть, но HTTPS через туннель не проходит', ownW ? 'замените конфиг на вкладке WARP' : 'нажмите «Сменить точки входа»' ]);
 					else items.push([ tn.length > 1 && diagRes.warp === 'on' ? 'warn' : 'fail', who + 'трафик через ' + warpName() + ' не идёт',
 						ownW ? 'нажмите «Перезапустить туннель» или замените конфиг на вкладке WARP' : 'нажмите «Перезапустить туннели» или «Сменить точки входа»' ]);
@@ -10398,7 +10672,8 @@ return view.extend({
 				if (data.exit === 'vpn') warpCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Сейчас сервисы идут через подписку — свой WARP не используется.'));
 				var t0 = tl[0] || {}, live0 = tunnelLive(t0), info0 = [];
 				var ep0 = t0.host ? zm.secret(t0.host + ':' + t0.port) : null;
-				if (t0.colo && t0.colo !== '?') info0.push('сервер ' + t0.colo);
+				if (t0.colo && t0.colo !== '?') info0.push('сервер ' + t0.colo + (t0.city ? ' (' + t0.city + ')' : ''));
+				if (t0.seen) info0.push('сайты видят: ' + country(t0.seen));
 				if (t0.up) info0.push('связь ' + fmtAge(t0.hs_age));
 				if (t0.up) info0.push('↓ ' + zm.fmtSize(+t0.rx || 0) + ' / ↑ ' + zm.fmtSize(+t0.tx || 0));
 				warpCard.appendChild(E('div', { 'class': 'zm-row' }, [
@@ -10430,7 +10705,8 @@ return view.extend({
 					]) : '';
 					var st = badge(live ? 'zm-ok' : t.up ? 'zm-warn' : 'zm-bad', live ? 'работает' : t.up ? 'нет связи' : 'не поднят');
 					var info = [];
-					if (t.colo) info.push('сервер ' + t.colo);
+					if (t.colo) info.push('сервер ' + t.colo + (t.city ? ' (' + t.city + ')' : ''));
+					if (t.seen) info.push('сайты видят: ' + country(t.seen));
 					if (t.host) info.push(t.host + ':' + t.port);
 					if (t.up) info.push('связь ' + fmtAge(t.hs_age));
 					if (t.up) info.push('↓ ' + zm.fmtSize(+t.rx || 0) + ' / ↑ ' + zm.fmtSize(+t.tx || 0));
@@ -14046,6 +14322,7 @@ return view.extend({
 			{ product: 'allow-domains', author: 'itdoginfo', url: 'https://github.com/itdoginfo/allow-domains' },
 			{ product: 'dpi-checkers', author: 'hyperion-cs', url: 'https://github.com/hyperion-cs/dpi-checkers' },
 			{ product: 'awg-openwrt (AmneziaWG)', author: '2Grey', url: 'https://github.com/2Grey/awg-openwrt' },
+			{ product: 'warpscout (разведка WARP)', author: 'vernette', url: 'https://github.com/vernette/warpscout' },
 			{ product: 'Всем пользователям', author: 'кто помогает, тестирует и поддерживает проект ❤', self: true, all: true }
 		];
 		var creditsGrid = E('div', { 'class': 'zm-credits-grid' });
