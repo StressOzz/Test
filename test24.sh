@@ -1,5 +1,5 @@
 #!/bin/sh
-# Version: 1.52
+# Version: 1.53
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -70,7 +70,7 @@ cat > '/opt/zapret-manager-luci/backend.sh' << 'ZM_INSTALLER_EOF'
 umask 022
 
 CONF="/etc/config/zapret"
-ZM_VERSION="1.52"
+ZM_VERSION="1.53"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
@@ -262,6 +262,8 @@ system_info() {
 	model=$(cat /tmp/sysinfo/model 2>/dev/null)
 	arch=$(grep DISTRIB_ARCH /etc/openwrt_release 2>/dev/null | cut -d"'" -f2)
 	owrt=$(grep '^DISTRIB_RELEASE=' /etc/openwrt_release 2>/dev/null | cut -d"'" -f2)
+	local target
+	target=$(grep '^DISTRIB_TARGET=' /etc/openwrt_release 2>/dev/null | cut -d"'" -f2)
 	df_out=$(df -h /tmp / 2>/dev/null)
 	tmp_used=$(echo "$df_out" | awk 'NR==2{print $3}')
 	tmp_free=$(echo "$df_out" | awk 'NR==2{print $4}')
@@ -270,8 +272,8 @@ system_info() {
 	local inet inet_ms
 	set -- $(_inet_state)
 	inet="$1"; inet_ms="$2"
-	printf '{"model":"%s","arch":"%s","openwrt":"%s","hostname":"%s","kernel":"%s","tmp_used":"%s","tmp_free":"%s","root_used":"%s","root_free":"%s","cpu_temp":"%s","cpu_load":"%s","inet":"%s","inet_ms":"%s"}\n' \
-		"$(esc "$model")" "$(esc "$arch")" "$(esc "$owrt")" "$(esc "$(cat /proc/sys/kernel/hostname 2>/dev/null)")" "$(esc "$(uname -r 2>/dev/null)")" \
+	printf '{"model":"%s","arch":"%s","openwrt":"%s","target":"%s","hostname":"%s","kernel":"%s","tmp_used":"%s","tmp_free":"%s","root_used":"%s","root_free":"%s","cpu_temp":"%s","cpu_load":"%s","inet":"%s","inet_ms":"%s"}\n' \
+		"$(esc "$model")" "$(esc "$arch")" "$(esc "$owrt")" "$(esc "$target")" "$(esc "$(cat /proc/sys/kernel/hostname 2>/dev/null)")" "$(esc "$(uname -r 2>/dev/null)")" \
 		"$(esc "$tmp_used")" "$(esc "$tmp_free")" "$(esc "$root_used")" "$(esc "$root_free")" "$(_cpu_temp)" "$(_cpu_load)" "$inet" "$inet_ms"
 }
 
@@ -8772,6 +8774,7 @@ return view.extend({
 			var rows = [
 				row('Модель', E('span', {}, sysInfo.model || '—')),
 				row('Архитектура', E('span', {}, sysInfo.arch || '—')),
+				row('Платформа', E('span', {}, sysInfo.target || '—')),
 				row('OpenWrt', E('span', {}, sysInfo.openwrt || '—'))
 			];
 			// Шкалы — как в боковой панели Web UI: подпись и значение сверху, полоска снизу;
@@ -8809,7 +8812,6 @@ return view.extend({
 				: sysInfo.inet === 'fail'
 					? E('span', { 'class': 'zm-badge zm-bad' }, [ E('span', { 'class': 'zm-dot' }), 'нет' ])
 					: E('span', { 'class': 'zm-badge zm-off' }, [ E('span', { 'class': 'zm-dot' }), 'проверяем…' ])));
-			if (sysInfo.kernel) extras.push(row('Ядро Linux', E('span', {}, sysInfo.kernel)));
 			rows = rows.concat(extras);
 
 			cards.appendChild(E('div', { 'class': 'zm-card' }, [
