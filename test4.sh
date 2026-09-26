@@ -6498,6 +6498,7 @@ _st_tgws_warp() {
 }
 
 ST_LISTS_MANIFEST="https://github.com/xyzmean/splify2-lists/releases/latest/download/lists.json"
+ST_CAT_SKIP=" mydyson "   # пункты каталога, которые не показываем (выкидываются на лету при разборе lists.json)
 ST_SRS_FALLBACK="https://github.com/itdoginfo/allow-domains/releases/latest/download"
 
 _st_fetch() { # URL ФАЙЛ — напрямую, потом через туннель
@@ -6553,7 +6554,7 @@ _st_cat_build() { # lists.json
 	grep -q '^domain_lists\.0\.id	\|^categories\.0\.id	' "$flat" || { rm -f "$flat"; return 1; }
 	bsets=" $(grep -v '^#' "$RB_SHARE/services.conf" | cut -d'|' -f8 | tr ',\n' '  ') "
 	bnames="$(grep -v '^#' "$RB_SHARE/services.conf" | cut -d'|' -f2 | tr 'A-Z' 'a-z' | tr '\n' '|')"
-	awk -F'\t' -v bsets="$bsets" -v bnames="|$bnames" -v idx="$ST_CAT_IDX.tmp" -v meta="$ST_CAT_META.tmp" '
+	awk -F'\t' -v skip="$ST_CAT_SKIP" -v bsets="$bsets" -v bnames="|$bnames" -v idx="$ST_CAT_IDX.tmp" -v meta="$ST_CAT_META.tmp" '
 		function key(id) { id = tolower(id); sub(/^svc_/, "", id); gsub(/[^a-z0-9_]/, "_", id); return "c_" id }
 		function clean(s) { gsub(/[|\t\r\n]/, " ", s); return s }
 		{
@@ -6570,6 +6571,7 @@ _st_cat_build() { # lists.json
 			base = top["base_url"]; sub(/\/+$/, "", base)
 			for (j = 1; j <= cnt; j++) {
 				e = order[j]; id = f[e, "id"]; if (id == "") continue
+				if (index(skip, " " tolower(id) " ")) { bad[e] = 1; continue }
 				k = key(id); byid[id] = e; ek[e] = k
 				u = f[e, "url"]; fm = f[e, "format"]
 				if (fm != "srs" || u == "") { fm = "lst"; u = (f[e, "file"] != "" && base != "") ? base "/" f[e, "file"] : "" }
@@ -11302,7 +11304,7 @@ return view.extend({
 		}
 
 		var CATEGORY_IDS = [ 'geoblock', 'block', 'news', 'anime', 'porn', 'russia_inside' ];
-		var openGroups = {};
+		var openGroups = {}, catQuery = {};
 
 		function catalogEdit() {
 			var c = data.catalog || {};
@@ -11318,13 +11320,16 @@ return view.extend({
 		}
 
 		function catalogBlock() {
-			var c = data.catalog || {}, box = E('div', { 'style': 'margin-top:16px' });
+			var c = data.catalog || {}, box = E('div', { 'class': 'zm-cat-src' });
 			var state = c.off ? 'выключен — показаны только встроенные сервисы'
 				: c.busy ? 'обновляется…'
 				: c.version ? 'версия ' + c.version + ' · пунктов: ' + c.services + (c.error ? ' · последнее обновление не удалось' : '')
 				: c.error ? 'не скачался — проверьте доступ к GitHub' : 'ещё не скачан';
-			box.appendChild(row('Каталог списков', E('span', {}, [ E('span', {}, state), E('br'),
-				E('small', { 'style': 'word-break:break-all;opacity:.7' }, c.url || '') ])));
+			box.appendChild(E('div', { 'class': 'zm-cat-src-info' }, [
+				E('div', { 'class': 'zm-cat-src-title' }, [ 'Каталог списков ', E('span', { 'class': 'zm-badge ' + (c.off ? 'zm-off' : c.error ? 'zm-warn' : c.version ? 'zm-ok' : 'zm-off') }, c.off ? 'выключен' : c.busy ? 'обновляется' : c.error ? (c.version ? 'не обновился' : 'не скачан') : c.version ? 'подключён' : 'нет') ]),
+				E('div', { 'class': 'zm-cat-src-state' }, state),
+				E('div', { 'class': 'zm-cat-src-url' }, c.url || '')
+			]));
 			var b = [];
 			if (!c.off) b.push(E('button', { 'class': 'cbi-button', 'click': function() {
 				zm.steerAction('catalog_refresh', '').then(function(res) {
@@ -11340,7 +11345,7 @@ return view.extend({
 					refresh();
 				}).catch(function() { zm.toast('Роутер не ответил', 'error'); });
 			} }, c.off ? 'Включить каталог' : 'Выключить каталог'));
-			box.appendChild(E('div', { 'class': 'zm-actions' }, b));
+			box.appendChild(E('div', { 'class': 'zm-actions zm-cat-src-actions' }, b));
 			return box;
 		}
 
@@ -11376,16 +11381,65 @@ return view.extend({
 			}
 			var groups = [];
 			remote.forEach(function(s) { if (groups.indexOf(s.group) < 0) groups.push(s.group); });
+			if (groups.length) {
+				listCard.appendChild(E('h4', { 'style': 'margin:20px 0 4px' }, 'Дополнительные списки'));
+				listCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin:0 0 10px' }, 'Готовые наборы доменов и подсетей из каталога. Разверните источник и отметьте нужное.'));
+			}
 			groups.forEach(function(g) {
 				var items = remote.filter(function(s) { return s.group === g; });
 				var on = items.filter(function(s) { return sel[s.id]; }).length;
-				var det = E('details', { 'style': 'margin-top:12px' }, [
-					E('summary', { 'style': 'cursor:pointer;font-weight:600' }, 'Каталог: ' + g + ' (' + items.length + (on ? ', выбрано ' + on : '') + ')'),
-					E('div', { 'class': 'zm-grid', 'style': 'margin-top:8px' }, items.map(tile))
+				var m = /^(.*?)\s*\((.*)\)\s*$/.exec(g);
+				var gTitle = m ? m[1] : g, gSub = m ? m[2] : '';
+				var open = g in openGroups ? openGroups[g] : on > 0;
+				var q = catQuery[g] || '';
+				var grid = E('div', { 'class': 'zm-grid zm-cat-grid' }, items.map(function(s) { var t = tile(s); t.setAttribute('data-name', s.name.toLowerCase()); return t; }));
+				var empty = E('div', { 'class': 'zm-cat-empty', 'style': 'display:none' }, 'Ничего не нашлось');
+				function filter() {
+					var shown = 0, v = q.trim().toLowerCase();
+					Array.prototype.forEach.call(grid.children, function(t) {
+						var ok = !v || t.getAttribute('data-name').indexOf(v) >= 0;
+						t.style.display = ok ? '' : 'none'; if (ok) shown++;
+					});
+					empty.style.display = shown ? 'none' : '';
+				}
+				function setAll(val) {
+					if (busy) { zm.toast('Дождитесь окончания текущей операции', 'warning'); return; }
+					pick = {};
+					for (var k in sel) if (sel[k]) pick[k] = true;
+					items.forEach(function(s) { if (val) pick[s.id] = true; else delete pick[s.id]; });
+					renderLists();
+				}
+				var body = E('div', { 'class': 'zm-cat-body', 'style': open ? '' : 'display:none' }, [
+					E('div', { 'class': 'zm-cat-tools' }, [
+						items.length > 8 ? E('input', { 'type': 'search', 'class': 'cbi-input-text zm-cat-search', 'placeholder': 'Поиск по ' + items.length + ' спискам', 'value': q,
+							'input': function(ev) { q = catQuery[g] = ev.target.value; filter(); } }) : E('span', { 'class': 'zm-cat-spacer' }),
+						E('div', { 'class': 'zm-cat-links' }, [
+							E('button', { 'class': 'zm-linkbtn', 'type': 'button', 'click': function() { setAll(true); } }, 'Выбрать все'),
+							E('button', { 'class': 'zm-linkbtn', 'type': 'button', 'click': function() { setAll(false); }, 'disabled': on ? null : '' }, 'Снять все')
+						])
+					]),
+					grid, empty
 				]);
-				if (g in openGroups ? openGroups[g] : on) det.open = true;
-				det.addEventListener('toggle', function() { openGroups[g] = det.open; });
-				listCard.appendChild(det);
+				var badge = E('span', { 'class': 'zm-badge zm-cat-count ' + (on ? 'zm-ok' : 'zm-off') }, on ? 'выбрано ' + on + ' из ' + items.length : items.length + ' ' + (function(n) { var a = n % 10, h = n % 100; return a === 1 && h !== 11 ? 'список' : (a >= 2 && a <= 4 && (h < 12 || h > 14) ? 'списка' : 'списков'); })(items.length));
+				var head = E('div', { 'class': 'zm-list-head zm-cat-head', 'role': 'button', 'tabindex': '0', 'aria-expanded': open ? 'true' : 'false' }, [
+					E('span', { 'class': 'zm-list-chev', 'aria-hidden': 'true' }, '›'),
+					E('div', { 'class': 'zm-list-titles' }, [
+						E('div', { 'class': 'zm-list-title' }, gTitle),
+						gSub ? E('div', { 'class': 'zm-cat-sub' }, gSub) : E([])
+					]),
+					badge
+				]);
+				var box = E('div', { 'class': 'zm-cat' + (open ? ' zm-list-open' : '') }, [ head, body ]);
+				function toggle() {
+					open = openGroups[g] = !open;
+					box.classList.toggle('zm-list-open', open);
+					body.style.display = open ? '' : 'none';
+					head.setAttribute('aria-expanded', open ? 'true' : 'false');
+				}
+				head.addEventListener('click', toggle);
+				head.addEventListener('keydown', function(ev) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); toggle(); } });
+				if (q) filter();
+				listCard.appendChild(box);
 			});
 			listCard.appendChild(catalogBlock());
 			if (changed) {
@@ -14764,6 +14818,10 @@ cat > '/www/luci-static/resources/view/zapret-manager/style.css' << 'ZM_INSTALLE
 .zm-header-links a:hover { background: rgba(34,158,217,.18); }
 
 .zm-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
+.zm-cards.zm-cards-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.zm-cards.zm-cards-2 > .zm-card { display: flex; flex-direction: column; }
+.zm-cards.zm-cards-2 > .zm-card > .zm-actions:last-child { margin-top: auto; padding-top: 6px; margin-bottom: 0; }
+@media (max-width: 720px) { .zm-cards.zm-cards-2 { grid-template-columns: minmax(0, 1fr); } }
 
 .zm-card {
 	min-width: 0;
@@ -14952,6 +15010,30 @@ textarea.zm-list-editor { display: block; width: 100%; box-sizing: border-box; m
 .zm-list-dirty { flex: 0 0 auto; font-size: 12px; white-space: nowrap; font-weight: 600; color: #9a6700; display: inline-flex; align-items: center; gap: 6px; }
 .zm-list-dirty::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
 html.zm-theme-dark .zm-list-dirty { color: #d29922; }
+
+/* ── Steer: дополнительные списки каталога ── */
+.zm-cat { border: 1px solid rgba(127,127,127,.18); border-radius: 12px; margin-top: 10px; overflow: hidden; }
+.zm-cat .zm-cat-head { padding: 12px 16px; }
+.zm-cat-sub { margin-top: 2px; font-size: 12px; opacity: .6; }
+.zm-cat-count { flex: 0 0 auto; }
+.zm-cat-body { padding: 12px 16px 16px; border-top: 1px solid rgba(127,127,127,.15); }
+.zm-cat-tools { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+.zm-cat-search { flex: 1 1 220px; max-width: 340px; min-width: 0; box-sizing: border-box; height: 34px; padding: 0 12px; border-radius: 8px; }
+.zm-cat-spacer { flex: 1 1 auto; }
+.zm-cat-links { display: flex; gap: 4px; margin-left: auto; }
+.zm-linkbtn { background: none; border: 0; padding: 6px 10px; border-radius: 8px; font: inherit; font-size: 13px; font-weight: 600; color: #2563eb; cursor: pointer; }
+.zm-linkbtn:hover { background: rgba(37,99,235,.08); }
+.zm-linkbtn[disabled] { opacity: .35; cursor: default; background: none; }
+html.zm-theme-dark .zm-linkbtn { color: #6ea8fe; }
+.zm-cat-grid { margin: 0; }
+.zm-cat-empty { padding: 10px 0 2px; font-size: 13px; opacity: .6; }
+.zm-cat-src { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-top: 16px; padding: 14px 16px; border: 1px dashed rgba(127,127,127,.3); border-radius: 12px; }
+.zm-cat-src-info { flex: 1 1 260px; min-width: 0; }
+.zm-cat-src-title { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; }
+.zm-cat-src-state { margin-top: 4px; font-size: 13px; opacity: .8; }
+.zm-cat-src-url { margin-top: 2px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11px; opacity: .55; overflow-wrap: anywhere; }
+.zm-cat-src-actions { margin: 0 !important; flex: 0 0 auto; }
+@media (max-width: 600px) { .zm-cat-links { margin-left: 0; } .zm-cat-search { max-width: none; flex-basis: 100%; } .zm-cat-src-actions { flex: 1 1 100%; } }
 @media (max-width: 600px) {
 	.zm-list-head { padding: 12px 14px; gap: 10px; }
 	.zm-list-body { padding: 4px 14px 14px; }
@@ -15514,7 +15596,7 @@ return view.extend({
 		var data = all[0];
 		var tgwsData = all[1] || {};
 		var wrap = E('div', { 'class': 'zm-wrap' });
-		var cards = E('div', { 'class': 'zm-cards' });
+		var cards = E('div', { 'class': 'zm-cards zm-cards-2' });
 		var linksWrap = E('div', {});
 		var logEl = E('pre', { 'class': 'zm-log' });
 
@@ -15616,6 +15698,7 @@ return view.extend({
 					E('div', { 'class': 'zm-actions' }, actions)
 				]));
 			});
+			if (tgwsCard) cards.appendChild(tgwsCard);   // четвёртая плитка сетки 2×2
 		}
 
 		function doAction(variantId, action) {
@@ -15676,8 +15759,7 @@ return view.extend({
 				}, 'Установить'));
 			}
 			tgwsCard.innerHTML = '';
-			tgwsCard.appendChild(E('h3', {}, 'sTGWS (бета)'));
-			tgwsCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Бета-версия. В отдельных случаях может потребоваться сброс роутера до заводских настроек. Не устанавливайте, если не уверены, что сможете устранить возможные проблемы.'));
+			tgwsCard.appendChild(E('h3', {}, 'sTGWS'));
 			tgwsCard.appendChild(E('div', { 'class': 'zm-row' }, [
 				E('span', { 'class': 'zm-label' }, 'Статус'),
 				installed ? zm.badge(d.running === true, 'запущен', 'остановлен') : zm.badge(false, '', 'не установлен')
@@ -15721,7 +15803,7 @@ return view.extend({
 		}
 
 		renderTgws(tgwsData);
-		wrap.appendChild(tgwsCard);
+		cards.appendChild(tgwsCard);
 
 		var restartBusy = false;
 		wrap.appendChild(E('div', { 'class': 'zm-card' }, [
@@ -16139,6 +16221,10 @@ cat > '/www/luci-static/resources/view/bytetube/style.css' << 'ZM_INSTALLER_EOF'
 .zm-header-links a:hover { background: rgba(34,158,217,.18); }
 
 .zm-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
+.zm-cards.zm-cards-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.zm-cards.zm-cards-2 > .zm-card { display: flex; flex-direction: column; }
+.zm-cards.zm-cards-2 > .zm-card > .zm-actions:last-child { margin-top: auto; padding-top: 6px; margin-bottom: 0; }
+@media (max-width: 720px) { .zm-cards.zm-cards-2 { grid-template-columns: minmax(0, 1fr); } }
 
 .zm-card {
 	min-width: 0;
@@ -16291,6 +16377,30 @@ textarea.zm-list-editor { display: block; width: 100%; box-sizing: border-box; m
 .zm-list-dirty { flex: 0 0 auto; font-size: 12px; white-space: nowrap; font-weight: 600; color: #9a6700; display: inline-flex; align-items: center; gap: 6px; }
 .zm-list-dirty::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
 html.zm-theme-dark .zm-list-dirty { color: #d29922; }
+
+/* ── Steer: дополнительные списки каталога ── */
+.zm-cat { border: 1px solid rgba(127,127,127,.18); border-radius: 12px; margin-top: 10px; overflow: hidden; }
+.zm-cat .zm-cat-head { padding: 12px 16px; }
+.zm-cat-sub { margin-top: 2px; font-size: 12px; opacity: .6; }
+.zm-cat-count { flex: 0 0 auto; }
+.zm-cat-body { padding: 12px 16px 16px; border-top: 1px solid rgba(127,127,127,.15); }
+.zm-cat-tools { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+.zm-cat-search { flex: 1 1 220px; max-width: 340px; min-width: 0; box-sizing: border-box; height: 34px; padding: 0 12px; border-radius: 8px; }
+.zm-cat-spacer { flex: 1 1 auto; }
+.zm-cat-links { display: flex; gap: 4px; margin-left: auto; }
+.zm-linkbtn { background: none; border: 0; padding: 6px 10px; border-radius: 8px; font: inherit; font-size: 13px; font-weight: 600; color: #2563eb; cursor: pointer; }
+.zm-linkbtn:hover { background: rgba(37,99,235,.08); }
+.zm-linkbtn[disabled] { opacity: .35; cursor: default; background: none; }
+html.zm-theme-dark .zm-linkbtn { color: #6ea8fe; }
+.zm-cat-grid { margin: 0; }
+.zm-cat-empty { padding: 10px 0 2px; font-size: 13px; opacity: .6; }
+.zm-cat-src { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-top: 16px; padding: 14px 16px; border: 1px dashed rgba(127,127,127,.3); border-radius: 12px; }
+.zm-cat-src-info { flex: 1 1 260px; min-width: 0; }
+.zm-cat-src-title { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; }
+.zm-cat-src-state { margin-top: 4px; font-size: 13px; opacity: .8; }
+.zm-cat-src-url { margin-top: 2px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11px; opacity: .55; overflow-wrap: anywhere; }
+.zm-cat-src-actions { margin: 0 !important; flex: 0 0 auto; }
+@media (max-width: 600px) { .zm-cat-links { margin-left: 0; } .zm-cat-search { max-width: none; flex-basis: 100%; } .zm-cat-src-actions { flex: 1 1 100%; } }
 @media (max-width: 600px) {
 	.zm-list-head { padding: 12px 14px; gap: 10px; }
 	.zm-list-body { padding: 4px 14px 14px; }
@@ -18810,6 +18920,8 @@ html[data-theme="light"] .zmw-orbs i { opacity: .28; }
 #zmw-view .zm-current-banner { margin-bottom: 0; }
 
 #zmw-view .zm-cards { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; }
+#zmw-view .zm-cards.zm-cards-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 720px) { #zmw-view .zm-cards.zm-cards-2 { grid-template-columns: minmax(0, 1fr); } }
 
 #zmw-view .zm-card {
 	background: var(--surface);
@@ -18943,6 +19055,14 @@ html[data-theme="dark"] #zmw-view .cbi-button-positive {
 
 /* плитки */
 #zmw-view .zm-grid { gap: 10px; }
+#zmw-view .zm-cat { border-color: var(--border-2, var(--border)); background: var(--surface-2); }
+#zmw-view .zm-cat.zm-list-open { background: transparent; }
+#zmw-view .zm-cat-body { border-top-color: var(--border); }
+#zmw-view .zm-cat-search { height: 36px; }
+#zmw-view .zm-linkbtn { color: var(--a1); }
+#zmw-view .zm-linkbtn:hover:not([disabled]) { background: var(--surface-2); }
+#zmw-view .zm-cat-src { border-color: var(--border-2, var(--border)); }
+#zmw-view .zm-cat-src-title { color: var(--text); }
 #zmw-view .zm-grid-devices { gap: 10px; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
 #zmw-view .zm-tile {
 	background: var(--surface-2);
