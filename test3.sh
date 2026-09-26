@@ -7107,9 +7107,13 @@ _st_wfix_put() { # ИНТЕРФЕЙС МЁРТВ_С ПОПЫТОК ПОСЛЕД�
 	[ -s "$ST_WFIX_STATE" ] || rm -f "$ST_WFIX_STATE"
 }
 
-_st_wfix_alive() { # ИНТЕРФЕЙС — поднят, рукопожатие свежее и пинг проходит
+_st_wfix_hs() { awg show "$1" latest-handshakes 2>/dev/null | awk '{ print $2 + 0; exit }'; } # 0 — рукопожатия не было
+
+_st_wfix_alive() { # ИНТЕРФЕЙС — поднят, рукопожатие за 5 минут (как «работает» в карточке туннелей) и пинг проходит
+	local hs
 	[ -d "/sys/class/net/$1" ] || return 1
-	_st_warp_alive_if "$1" || return 1
+	hs="$(_st_wfix_hs "$1")"
+	[ "${hs:-0}" -gt 0 ] 2>/dev/null && [ $(( $(date +%s) - hs )) -lt 300 ] || return 1
 	ping -I "$1" -c 2 -W 3 1.1.1.1 >/dev/null 2>&1 || ping -I "$1" -c 2 -W 3 8.8.8.8 >/dev/null 2>&1
 }
 
@@ -7122,11 +7126,13 @@ _st_wfix_min() { local m; m="$(cat "$ST_WFIX" 2>/dev/null)"; case "$m" in 30|60|
 
 _st_wfix_set() { # off | 30 | 60 | 180
 	case "$1" in
-		off) rm -f "$ST_WFIX" "$ST_WFIX_STATE" ;;
+		off) rm -f "$ST_WFIX" "$ST_WFIX_STATE" "$ST_DIR/wfix.last" ;;
 		30|60|180) mkdir -p "$ST_DIR"; echo "$1" > "$ST_WFIX" ;;
 		*) echo '{"error":"допустимо: выкл, 30, 60 или 180 минут"}'; return 1 ;;
 	esac
 	_st_wfix_cron
+	# Проверить сразу, а не через 10 минут: состояние в карточке должно быть правдой с момента включения
+	[ "$1" = off ] || ( _st_wfix_tick >/dev/null 2>&1 & )
 	printf '{"ok":true}\n'
 }
 
@@ -7159,6 +7165,8 @@ _st_wfix_tick() { # из cron раз в 10 минут: ничего не дел�
 	_st_running && return 0
 	[ -n "$(_st_sel)" ] || return 0
 	now="$(date +%s)"
+	mkdir -p "$ST_DIR"
+	echo "$now" > "$ST_DIR/wfix.last"
 	n=1
 	while [ "$n" -le "$ST_WARP_MAX" ]; do
 		i="$(_st_wif "$n")"
@@ -7176,7 +7184,14 @@ _st_wfix_tick() { # из cron раз в 10 минут: ничего не дел�
 			continue
 		fi
 		since="$(_st_wfix_get "$i" 2)"; tries="$(_st_wfix_get "$i" 3)"; last="$(_st_wfix_get "$i" 4)"
-		[ -n "$since" ] || { since="$now"; tries=0; last=0; _st_wfix_put "$i" "$since" 0 0; }
+		if [ -z "$since" ]; then
+			# «Мёртв с» — с последнего рукопожатия, если оно было: туннель мог умереть задолго до
+			# первой проверки (например, автоподбор только что включили)
+			since="$(_st_wfix_hs "$i")"
+			[ "${since:-0}" -gt 0 ] 2>/dev/null && [ "$since" -le "$now" ] && [ $((now - since)) -ge 300 ] || since="$now"
+			tries=0; last=0
+			_st_wfix_put "$i" "$since" 0 0
+		fi
 		dead="$dead $((n - 1))"
 		[ "${tries:-0}" -ge "$ST_WFIX_TRIES" ] && continue
 		[ $((now - since)) -ge $((lim * 60)) ] || continue
@@ -7204,8 +7219,10 @@ do_steer_wfix() { # N [keys] МЁРТВ_С
 	tries="$(_st_wfix_get "$i" 3)"
 	_st_phase warp
 	rm -f "$ST_STOP_FLAG"
+	mkdir -p "$ST_RUN"; echo "$n" > "$ST_RUN/wfix.busy"
 	_rb_say "Автоподбор: WARP $n не работает $mins мин — подбираем новую точку входа${keys:+ с новыми ключами} (попытка ${tries:-1} из $ST_WFIX_TRIES)"
 	if _st_warp_fix "$n" "$keys"; then
+		rm -f "$ST_RUN/wfix.busy"
 		_st_wfix_put "$i" -
 		_st_kick
 		set -- $(awk -v i="$i" '$1 == i { print $2; exit }' "$ST_WARP_UP" 2>/dev/null)
@@ -7213,6 +7230,7 @@ do_steer_wfix() { # N [keys] МЁРТВ_С
 		_rb_say "Готово"
 		return 0
 	fi
+	rm -f "$ST_RUN/wfix.busy"
 	_st_stopped && { _st_wfix_say "WARP $n: подбор остановлен вручную"; return 1; }
 	if [ "${tries:-0}" -ge "$ST_WFIX_TRIES" ]; then
 		_st_wfix_say "WARP $n: $ST_WFIX_TRIES попытки подбора не помогли — автоподбор для него остановлен до ручной починки"
@@ -7223,15 +7241,18 @@ do_steer_wfix() { # N [keys] МЁРТВ_С
 }
 
 _st_wfix_json() {
-	local m out="" sep="" i since tries t txt
+	local m out="" sep="" i since tries last t txt n fixing=""
 	m="$(_st_wfix_min)"
 	if [ -s "$ST_WFIX_STATE" ]; then
-		while read -r i since tries _; do
+		while read -r i since tries last; do
 			[ -n "$i" ] || continue
-			out="$out$sep{\"n\":\"${i#zmwarp}\",\"since\":${since:-0},\"tries\":${tries:-0}}"; sep=","
+			case "$i" in zmwarp) n=1 ;; *) n="${i#zmwarp}" ;; esac
+			out="$out$sep{\"n\":${n:-0},\"since\":${since:-0},\"tries\":${tries:-0},\"last\":${last:-0}}"; sep=","
 		done < "$ST_WFIX_STATE"
 	fi
-	printf '{"mode":"%s","max":%s,"now":%s,"dead":[%s],"log":[' "${m:-off}" "$ST_WFIX_TRIES" "$(date +%s)" "$out"
+	_st_running && [ -s "$ST_RUN/wfix.busy" ] && fixing="$(cat "$ST_RUN/wfix.busy")"
+	printf '{"mode":"%s","max":%s,"now":%s,"last_check":%s,"fixing":"%s","dead":[%s],"log":[' "${m:-off}" "$ST_WFIX_TRIES" "$(date +%s)" \
+		"$(cat "$ST_DIR/wfix.last" 2>/dev/null || echo 0)" "$fixing" "$out"
 	sep=""
 	[ -s "$ST_WFIX_LOG" ] && tail -n 5 "$ST_WFIX_LOG" | while IFS='|' read -r t txt; do
 		printf '%s{"t":%s,"text":"%s"}' "$sep" "${t:-0}" "$(esc "$txt")"; sep=","
@@ -11473,34 +11494,73 @@ return view.extend({
 			var show = data.installed && !data.blocker && data.warp_on && data.warp_mode !== 'own';
 			wfixCard.style.display = show ? '' : 'none';
 			if (!show) return;
-			var w = data.wfix || {}, mode = w.mode || 'off', now = parseInt(w.now, 10) || Math.floor(Date.now() / 1000);
+			var w = data.wfix || {}, mode = w.mode || 'off', on = mode !== 'off';
+			var now = parseInt(w.now, 10) || Math.floor(Date.now() / 1000);
+			var lim = (parseInt(mode, 10) || 0) * 60, max = parseInt(w.max, 10) || 4;
+			var lastCheck = parseInt(w.last_check, 10) || 0, fixing = String(w.fixing || '');
+			// Строки одной ширины подписи: «WARP 1» и «Проверка» стоят ровной колонкой
+			function wrow(label, badgeEl, note) {
+				var kids = [ badgeEl ];
+				if (note) kids.push(E('span', { 'style': 'opacity:.7' }, note));
+				return E('div', { 'class': 'zm-row' }, [
+					E('span', { 'class': 'zm-label', 'style': 'min-width:76px' }, label),
+					E('span', { 'style': 'display:inline-flex;align-items:center;gap:10px;flex-wrap:wrap' }, kids)
+				]);
+			}
+			function dur(sec) {
+				var m = Math.max(0, Math.round(sec / 60));
+				if (m < 1) return 'меньше минуты';
+				return m >= 60 ? Math.floor(m / 60) + ' ч' + (m % 60 ? ' ' + (m % 60) + ' мин' : '') : m + ' мин';
+			}
+
 			wfixCard.appendChild(E('h3', {}, 'Автоподбор мёртвых туннелей'));
-			wfixCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Steer сам уводит трафик с упавшего туннеля на живой, но упавший так и остаётся мёртвым. Автоподбор раз в 10 минут проверяет туннели и тому, что не работает дольше заданного времени, в фоне подбирает новую точку входа — остальные туннели не трогает. Если молчат все туннели, а интернета нет и напрямую, ничего не делает.'));
+			wfixCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Steer сам переключает трафик с упавшего туннеля на живой, но упавший туннель остаётся мёртвым. Автоподбор проверяет туннели раз в 10 минут и туннелю, который не работает дольше выбранного времени, в фоне подбирает новую точку входа. Работающие туннели не трогаются.'));
+			wfixCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Если не работает ни один туннель, сначала проверяется, есть ли у роутера интернет вообще. Если интернета нет, подбор не запускается — ждём, пока он появится.'));
+
+			// Состояние — по живым данным туннелей (как в карточке выше), а время смерти и попытки — из автоподбора
+			var deadBy = {};
+			(w.dead || []).forEach(function(d) { deadBy[String(d.n)] = d; });
+			var stuck = false;
+			var rows = (data.tunnels || []).map(function(t) {
+				var n = String(t.n), d = deadBy[n], hsa = parseInt(t.hs_age, 10);
+				// Автоподбор записал туннель мёртвым, но рукопожатие было уже после проверки — значит, ожил
+				var live = tunnelLive(t) && (!d || (lastCheck && hsa < now - lastCheck));
+				if (fixing === n) return wrow('WARP ' + n, badge('zm-warn', 'подбирается новая точка'), 'ход — в журнале вверху страницы');
+				if (live) return wrow('WARP ' + n, badge('zm-ok', 'работает'));
+				var hs = parseInt(t.hs_age, 10);
+				var since = d ? now - (parseInt(d.since, 10) || now) : (!isNaN(hs) ? hs : null);
+				var tries = d ? parseInt(d.tries, 10) || 0 : 0, lastTry = d ? parseInt(d.last, 10) || 0 : 0;
+				var text = 'не работает' + (since !== null ? ' ' + dur(since) : '');
+				var next;
+				if (!on) next = 'автоподбор выключен';
+				else if (!d) next = 'автоподбор увидит это на ближайшей проверке';
+				else if (tries >= max) { stuck = true; next = max + ' попытки не помогли — автоподбор для него остановлен'; }
+				else {
+					var wait = Math.max(lim - (now - (parseInt(d.since, 10) || now)), tries ? lim - (now - lastTry) : 0);
+					next = (wait > 0 ? 'новая точка — через ' + dur(wait) : 'новая точка — на ближайшей проверке') + (tries ? ' · попыток: ' + tries + ' из ' + max : '');
+				}
+				return wrow('WARP ' + n, badge(tries >= max ? 'zm-bad' : 'zm-warn', text), next);
+			});
+			var box = E('div', { 'style': 'margin:4px 0 12px' }, rows);
+			if (on) box.appendChild(wrow('Проверка', E('span', {}, 'раз в 10 минут'), lastCheck ? 'последняя — ' + fmtAge(now - lastCheck) : 'первая — в ближайшие секунды'));
+			wfixCard.appendChild(box);
+			if (stuck) wfixCard.appendChild(E('div', { 'class': 'zm-actions', 'style': 'margin-top:-4px' }, [
+				E('button', { 'class': 'cbi-button', 'click': function() {
+					zm.steerAction('wfix_reset', '').then(function() { zm.toast('Автоподбор попробует снова на ближайшей проверке', 'info'); refresh(); });
+				} }, 'Попробовать снова')
+			]));
+
 			function tile(id, label) {
 				return E('div', { 'class': 'zm-tile' + (mode === id ? ' zm-active' : ''), 'click': function() { if (mode !== id) doWfix(id); } }, label);
 			}
+			wfixCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin:0 0 8px' }, 'Подбирать новую точку, если туннель не работает:'));
 			wfixCard.appendChild(E('div', { 'class': 'zm-grid' }, [
-				tile('off', 'Выключен'), tile('30', 'Через 30 минут'), tile('60', 'Через 1 час'), tile('180', 'Через 3 часа')
+				tile('off', 'Выключен'), tile('30', '30 минут'), tile('60', '1 час'), tile('180', '3 часа')
 			]));
-			var dead = w.dead || [], max = parseInt(w.max, 10) || 4, stuck = false;
-			dead.forEach(function(d) {
-				var mins = Math.max(0, Math.round((now - (parseInt(d.since, 10) || now)) / 60));
-				var tries = parseInt(d.tries, 10) || 0, gave = tries >= max;
-				if (gave) stuck = true;
-				var dur = mins >= 60 ? Math.floor(mins / 60) + ' ч ' + (mins % 60) + ' мин' : mins + ' мин';
-				wfixCard.appendChild(row('WARP ' + (d.n || '1'), gave
-					? badge('zm-bad', 'не работает ' + dur + ' · ' + max + ' попытки не помогли, автоподбор остановлен')
-					: badge('zm-warn', 'не работает ' + dur + (tries ? ' · попыток: ' + tries + ' из ' + max : ''))));
-			});
-			if (mode !== 'off' && !dead.length) wfixCard.appendChild(row('Состояние', badge('zm-ok', 'все туннели работают')));
-			if (stuck) wfixCard.appendChild(E('div', { 'class': 'zm-actions' }, [
-				E('button', { 'class': 'cbi-button', 'click': function() {
-					zm.steerAction('wfix_reset', '').then(function() { zm.toast('Счётчик попыток сброшен', 'info'); refresh(); });
-				} }, 'Попробовать снова')
-			]));
+
 			var log = w.log || [];
 			if (log.length) {
-				wfixCard.appendChild(E('h4', { 'style': 'margin:12px 0 6px' }, 'Последние события'));
+				wfixCard.appendChild(E('div', { 'style': 'margin:16px 0 6px;font-size:13px;font-weight:600' }, 'Последние события'));
 				wfixCard.appendChild(E('div', { 'class': 'zm-hint', 'style': 'margin:0' }, log.slice().reverse().map(function(l) {
 					var d = new Date((parseInt(l.t, 10) || 0) * 1000);
 					var ts = ('0' + d.getDate()).slice(-2) + '.' + ('0' + (d.getMonth() + 1)).slice(-2) + ' ' + ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
@@ -11515,8 +11575,10 @@ return view.extend({
 			zm.steerAction('wfix', value).then(function(res) {
 				wfixBusy = false;
 				if (res.error) { zm.toast(res.error, 'error'); return; }
-				zm.toast(value === 'off' ? 'Автоподбор выключен' : 'Автоподбор включён', 'info');
+				zm.toast(value === 'off' ? 'Автоподбор выключен' : 'Автоподбор включён — проверяем туннели', 'info');
 				refresh();
+				// первая проверка идёт в фоне несколько секунд — показать её результат
+				if (value !== 'off') setTimeout(refresh, 8000);
 			}).catch(function() { wfixBusy = false; zm.toast('Роутер не ответил', 'error'); });
 		}
 
