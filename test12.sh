@@ -1,5 +1,5 @@
 #!/bin/sh
-# Version: 1.59
+# Version: 1.60
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -70,7 +70,7 @@ cat > '/opt/zapret-manager-luci/backend.sh' << 'ZM_INSTALLER_EOF'
 umask 022
 
 CONF="/etc/config/zapret"
-ZM_VERSION="1.59"
+ZM_VERSION="1.60"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
@@ -5539,6 +5539,7 @@ _st_warp_iface_write() { # ХОСТ ПОРТ
 	case "$addr" in */*) ;; *) addr="$addr/32" ;; esac
 	uci -q delete "network.$ST_WARP_IF"
 	uci -q delete "network.${ST_WARP_IF}_peer"
+	_st_peers_drop "$ST_WARP_IF"
 	uci set "network.$ST_WARP_IF=interface"
 	uci set "network.$ST_WARP_IF.proto=amneziawg"
 	uci set "network.$ST_WARP_IF.private_key=$priv"
@@ -5592,6 +5593,13 @@ _st_warp_zone() {
 		_st_own "fw $ST_WARP_ZONE"
 		/etc/init.d/firewall reload >/dev/null 2>&1
 	fi
+}
+
+# Все пиры интерфейса, и безымянные тоже (их создаёт импорт конфига в LuCI): иначе у интерфейса
+# останется старый пир с тем же 0.0.0.0/0, трафик уйдёт ему, и новый сервер не ответит
+_st_peers_drop() { # ИНТЕРФЕЙС
+	local p
+	for p in $(uci -q -X show network | sed -n "s/^network\.\([^.=]*\)=amneziawg_$1\$/\1/p"); do uci -q delete "network.$p"; done
 }
 
 _st_warp_is_ru() { case " $ST_RU_COLOS " in *" $1 "*) return 0 ;; esac; return 1; }
@@ -5797,6 +5805,7 @@ _st_warp_own_iface() { # ФАЙЛ — интерфейс zmwarp из конфи�
 	fi
 	uci -q delete "network.$i"
 	uci -q delete "network.${i}_peer"
+	_st_peers_drop "$i"
 	uci set "network.$i=interface"
 	uci set "network.$i.proto=amneziawg"
 	uci set "network.$i.private_key=$priv"
