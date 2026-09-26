@@ -1,5 +1,5 @@
 #!/bin/sh
-# Version: 1.66
+# Version: 1.65
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -5131,20 +5131,16 @@ _doh_pkg() {
 }
 _doh_steer_active() { grep -qx 'steer-spec' /etc/zm-steer/owned 2>/dev/null && [ ! -f /etc/zm-steer/stopped ]; }
 
-# Кто перехватывает DNS-запросы устройств: auto — DoH, пока не работает Steer, а при работающем Steer
-# перехват отдаётся ему (DoH при этом шифрует всё, что роутер отправляет наружу); on — всегда DoH; off — никто.
+# Перехват DNS-запросов устройств (force_dns): auto — включён всегда, в том числе при работающем Steer; off — выключен.
+# Старое значение on считается auto.
 DOH_FORCE_MODE_FILE="/opt/zapret-manager-luci/doh_force"
 _doh_force_mode() {
 	local m
 	m="$(cat "$DOH_FORCE_MODE_FILE" 2>/dev/null)"
-	case "$m" in on|off) echo "$m" ;; *) echo auto ;; esac
+	case "$m" in off) echo off ;; *) echo auto ;; esac
 }
 _doh_force_want() { # -> 1 или 0
-	case "$(_doh_force_mode)" in
-		on) echo 1 ;;
-		off) echo 0 ;;
-		*) if _doh_steer_active; then echo 0; else echo 1; fi ;;
-	esac
+	if [ "$(_doh_force_mode)" = off ]; then echo 0; else echo 1; fi
 }
 # Привести force_dns к нужному значению; служба перезапускается, только если что-то поменялось
 _doh_force_apply() {
@@ -5167,7 +5163,11 @@ _doh_force_apply() {
 }
 
 doh_force_set() {
-	case "$1" in auto|on|off) ;; *) echo '{"error":"неизвестный режим"}'; return 1 ;; esac
+	case "$1" in auto|off) ;; on) set -- auto ;; *) echo '{"error":"неизвестный режим"}'; return 1 ;; esac
+	if [ ! -f "$_doh_file" ] || [ -f "$DOH_OFF_FLAG" ] || [ ! -x /etc/init.d/https-dns-proxy ]; then
+		echo '{"error":"DNS over HTTPS не установлен — сначала нажмите «Установить DNS over HTTPS»"}'
+		return 1
+	fi
 	mkdir -p "$(dirname "$DOH_FORCE_MODE_FILE")"
 	if [ "$1" = auto ]; then rm -f "$DOH_FORCE_MODE_FILE"; else echo "$1" > "$DOH_FORCE_MODE_FILE"; fi
 	_doh_force_apply
@@ -5194,9 +5194,6 @@ do_doh_install() {
 	$UPDATE >&2
 	echo "==> Устанавливаем https-dns-proxy и luci-app-https-dns-proxy"
 	$INSTALL https-dns-proxy luci-app-https-dns-proxy >&2 || { echo "ОШИБКА установки"; return 1; }
-	if _doh_steer_active && [ "$(_doh_force_want)" = 0 ]; then
-		echo "==> Работает Steer — перехват DNS устройств остаётся за ним, DoH шифрует запросы роутера"
-	fi
 	_doh_force_apply
 	echo "==> Готово, DNS over HTTPS установлен — выберите провайдера ниже"
 }
@@ -5228,6 +5225,8 @@ _doh_provider_of() {
 		https://dns.google/*|https://8.8.8.8/*|https://8.8.4.4/*) echo google ;;
 		https://dns.quad9.net/*) echo quad9 ;;
 		https://xbox-dns.ru/*) echo xbox ;;
+		https://dns.comss.one/*) echo comss ;;
+		https://dns.dns-ai.ru/*) echo dnsai ;;
 		https://eu.geohide.ru/*) echo geohide_eu ;;
 		https://us.geohide.ru/*) echo geohide_us ;;
 		https://geohide.ru/*|https://dns.geohide.ru*) echo geohide_ru ;;
@@ -5266,6 +5265,8 @@ doh_set() {
 		google)      url="https://dns.google/dns-query";         bootstrap="8.8.8.8,8.8.4.4,2001:4860:4860::8888,2001:4860:4860::8844" ;;
 		quad9)       url="https://dns.quad9.net/dns-query";      bootstrap="9.9.9.9,149.112.112.112,2620:fe::fe,2620:fe::9" ;;
 		xbox)        url="https://xbox-dns.ru/dns-query" ;;
+		comss)       url="https://dns.comss.one/dns-query" ;;
+		dnsai)       url="https://dns.dns-ai.ru/dns-query" ;;
 		geohide_ru)  url="https://geohide.ru/dns-query" ;;
 		geohide_eu)  url="https://eu.geohide.ru/dns-query" ;;
 		geohide_us)  url="https://us.geohide.ru/dns-query" ;;
@@ -6745,6 +6746,8 @@ _st_kick() {
 
 
 _st_dns_conflict() {
+	# перехват DNS у DoH (force_dns 1) Steer не мешает — конфликт больше не показываем
+	return 1
 	[ -f /etc/config/https-dns-proxy ] || return 1
 	[ -f "$ST_OFF" ] && return 1
 	/etc/init.d/https-dns-proxy running >/dev/null 2>&1 || return 1
@@ -6766,10 +6769,10 @@ _st_doh_unforce() {
 }
 
 do_steer_dns_fix() {
-	[ "$(_doh_force_mode)" = on ] && rm -f "$DOH_FORCE_MODE_FILE"
-	_st_doh_unforce
+	_doh_force_apply
 	[ -f "$ST_OFF" ] && return 0
 	/etc/init.d/steer enabled 2>/dev/null && /etc/init.d/steer restart >/dev/null 2>&1
+	return 0
 }
 
 
@@ -6877,14 +6880,6 @@ _st_apply() { # [tunnel_ready] — туннель только что прове
 			_rb_warn "Туннеля нет — подключите WARP или подписку VPN, и выбранные сервисы пойдут через него"
 			return 0 ;;
 	esac
-	if _st_doh_force_on; then
-		if [ "$(_doh_force_mode)" = on ]; then
-			_rb_warn "На странице DNS over HTTPS выбран перехват «Всегда DoH» — Steer не увидит запросы устройств, выбранные сервисы не пойдут через туннель. Поставьте там «Авто»"
-		else
-			_st_doh_unforce
-			_rb_say "DNS over HTTPS работает вместе со Steer: перехват DNS устройств у Steer, DoH шифрует запросы роутера"
-		fi
-	fi
 	if _st_use_vpn; then _rb_say "Через VPN ($(_st_sub_label)): $(_rb_svc_names "$sel")"
 	else _rb_say "Через WARP: $(_rb_svc_names "$sel")"; fi
 	_st_spec_apply $sel
@@ -7334,9 +7329,8 @@ do_steer_stop() {
 	touch "$ST_OFF"
 	_st_down
 	rm -f "$ST_TGWS_WARP"
-	if [ "$(_doh_force_mode)" = auto ] && [ -f /etc/config/https-dns-proxy ]; then
+	if [ -f /etc/config/https-dns-proxy ]; then
 		_doh_force_apply
-		_rb_say "DNS over HTTPS снова перехватывает DNS устройств"
 	fi
 	_rb_say "Готово, Steer и туннель выключены — всё идёт напрямую"
 }
@@ -9973,7 +9967,7 @@ return view.extend({
 		var overviewEl = E('div', {});
 		var cards = E('div', { 'class': 'zm-cards' });
 
-		var DOH_LABELS = { cloudflare: 'Cloudflare', google: 'Google', quad9: 'Quad9', xbox: 'XBOX', geohide_ru: 'GeoHide RU', geohide_eu: 'GeoHide EU', geohide_us: 'GeoHide US' };
+		var DOH_LABELS = { cloudflare: 'Cloudflare', google: 'Google', quad9: 'Quad9', xbox: 'XBOX', comss: 'Comss', dnsai: 'DNS-AI', geohide_ru: 'GeoHide RU', geohide_eu: 'GeoHide EU', geohide_us: 'GeoHide US' };
 
 		function row(label, node) {
 			return E('div', { 'class': 'zm-row' }, [ E('span', { 'class': 'zm-label' }, label), node ]);
@@ -10254,6 +10248,8 @@ var PROVIDERS = [
 	{ id: 'cloudflare', label: 'Cloudflare' },
 	{ id: 'quad9', label: 'Quad9' },
 	{ id: 'xbox', label: 'XBOX' },
+	{ id: 'comss', label: 'Comss' },
+	{ id: 'dnsai', label: 'DNS-AI' },
 	{ id: 'geohide_ru', label: 'GeoHide RU' },
 	{ id: 'geohide_eu', label: 'GeoHide EU' },
 	{ id: 'geohide_us', label: 'GeoHide US' }
@@ -10329,8 +10325,7 @@ return view.extend({
 					}))
 				]));
 				card.appendChild(row('Перехват DNS устройств', data.force_dns
-					? badge(data.steer_active ? 'zm-bad' : 'zm-ok', data.steer_active ? 'у DoH — Steer не видит запросы' : 'у DoH')
-					: badge(data.steer_active ? 'zm-ok' : 'zm-off', data.steer_active ? 'у Steer — работают вместе' : 'выключен')));
+					? badge('zm-ok', 'включён') : badge('zm-off', 'выключен')));
 			}
 
 			card.appendChild(E('div', { 'class': 'zm-actions' }, data.installed
@@ -10371,52 +10366,35 @@ return view.extend({
 		// ── Кто перехватывает DNS устройств ──
 		var FORCE = [
 			{ id: 'auto', label: 'Авто (рекомендуется)' },
-			{ id: 'on', label: 'Всегда DoH' },
 			{ id: 'off', label: 'Не перехватывать' }
 		];
 		var forceCard = E('div', { 'class': 'zm-card' });
-
-		function forceText(mode, steer) {
-			if (mode === 'on') return steer
-				? 'Все устройства принудительно получают DNS через DoH. Но у вас работает Steer — он не видит, какие сайты открывают устройства, и выбранные в нём сервисы пойдут напрямую, мимо туннеля.'
-				: 'Все устройства принудительно получают DNS через DoH, даже если в них вручную прописан другой DNS. Если потом включите Steer — он работать не будет, пока здесь не выбрано «Авто».';
-			if (mode === 'off') return 'Перехвата нет. Через DoH идут запросы устройств, которые спрашивают DNS у роутера (так настроено почти везде). Устройства с вручную прописанным DNS (например, 8.8.8.8) пойдут мимо DoH.';
-			return steer
-				? 'Сейчас работает Steer, поэтому перехват у него: Steer видит, какие сайты открывают устройства, и отправляет нужные в туннель. DoH при этом продолжает шифровать все DNS-запросы, которые уходят с роутера. Выключите Steer — перехват сам вернётся к DoH.'
-				: 'Пока Steer не работает, DoH принудительно забирает DNS всех устройств. Как только включите Steer, перехват сам перейдёт к нему, а DoH продолжит шифровать запросы — ничего переключать не нужно.';
-		}
 
 		function renderForce() {
 			forceCard.innerHTML = '';
 			forceCard.style.display = data.installed ? '' : 'none';
 			if (!data.installed) return;
-			var mode = data.force_mode || 'auto', steer = !!data.steer_active;
-			forceCard.appendChild(E('h3', {}, 'DoH и Steer'));
-			forceCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:0' },
-				'DNS-запросы устройств может перехватывать кто-то один: DoH или Steer. Здесь выбирается, кто.'));
-			if (steer || data.steer_installed) {
-				var together = steer && !data.force_dns;
-				forceCard.appendChild(row('Со Steer', !steer ? badge('zm-off', 'Steer выключен')
-					: together ? badge('zm-ok', 'работают вместе') : badge('zm-bad', 'мешают друг другу')));
-			}
-			forceCard.appendChild(E('div', { 'class': 'zm-grid', 'style': 'margin-top:10px' }, FORCE.map(function(f) {
+			var mode = data.force_mode === 'off' ? 'off' : 'auto';
+			forceCard.appendChild(E('h3', {}, 'Перехват DNS устройств'));
+			forceCard.appendChild(E('div', { 'class': 'zm-grid' }, FORCE.map(function(f) {
 				return E('div', {
 					'class': 'zm-tile' + (mode === f.id ? ' zm-active' : ''),
 					'click': function() {
 						if (mode === f.id) return;
 						if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
-						if (f.id === 'on' && steer && !confirm('Работает Steer.\n\nЕсли DoH будет перехватывать DNS всегда, Steer перестанет видеть запросы устройств и выбранные в нём сервисы пойдут мимо туннеля.\n\nВсё равно включить?')) return;
 						busy = true;
 						zm.dohForceSet(f.id).then(function(res) {
 							busy = false;
 							if (res.error) { zm.toast(res.error, 'error'); return; }
-							zm.toast('Перехват DNS: ' + f.label.replace(/ \(.*\)$/, ''), 'info');
+							zm.toast(f.id === 'off' ? 'Перехват DNS выключен' : 'Перехват DNS включён', 'info');
 							refresh();
 						}).catch(function() { busy = false; zm.toast('Роутер не ответил', 'error'); });
 					}
 				}, f.label);
 			})));
-			forceCard.appendChild(E('p', { 'class': 'zm-hint' }, forceText(mode, steer)));
+			forceCard.appendChild(E('p', { 'class': 'zm-hint' }, mode === 'off'
+				? 'Перехвата нет. Через DoH идут запросы устройств, которые спрашивают DNS у роутера (так настроено почти везде). Устройства с вручную прописанным DNS (например, 8.8.8.8) пойдут мимо DoH.'
+				: 'Все устройства принудительно получают DNS через DoH, даже если в них вручную прописан другой DNS. Работает и вместе со Steer.'));
 		}
 
 		render();
@@ -11148,10 +11126,10 @@ return view.extend({
 				else mainCard.appendChild(row('Сервисы идут через', badge('zm-warn', 'туннель не подключён — выберите вкладку WARP или VPN')));
 				mainCard.appendChild(row('Через туннель', E('span', {}, n ? n + ' ' + plural(n, 'сервис', 'сервиса', 'сервисов') : 'ничего не выбрано')));
 				if (data.doh) {
-					var DOHN = { cloudflare: 'Cloudflare', google: 'Google', quad9: 'Quad9', xbox: 'XBOX', geohide_ru: 'GeoHide RU', geohide_eu: 'GeoHide EU', geohide_us: 'GeoHide US', multi: 'несколько серверов', other: 'свой сервер' };
+					var DOHN = { cloudflare: 'Cloudflare', google: 'Google', quad9: 'Quad9', xbox: 'XBOX', comss: 'Comss', dnsai: 'DNS-AI', geohide_ru: 'GeoHide RU', geohide_eu: 'GeoHide EU', geohide_us: 'GeoHide US', multi: 'несколько серверов', other: 'свой сервер' };
 					mainCard.appendChild(row('Шифрованный DNS', E('span', { 'style': 'display:inline-flex; align-items:center; gap:8px; flex-wrap:wrap' }, [
 						E('span', {}, 'DNS over HTTPS · ' + (DOHN[data.doh] || data.doh)),
-						data.stopped ? '' : data.dns_conflict ? badge('zm-bad', 'мешает Steer — см. ниже') : badge('zm-ok', 'работает вместе со Steer')
+						badge('zm-ok', 'работает')
 					])));
 				}
 				var newer = data.latest && data.version && verLt(data.version, data.latest);
