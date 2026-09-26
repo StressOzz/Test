@@ -244,28 +244,6 @@ system_info() {
 		"$(esc "$tmp_used")" "$(esc "$tmp_free")" "$(esc "$root_used")" "$(esc "$root_free")" "$(_cpu_temp)" "$(_cpu_load)"
 }
 
-_v_modified() {
-	local want have
-	want=$(strategy_"$1" | sed '1d')
-	have=$(sed -n "/^[[:space:]]*option NFQWS_OPT '\$/,/^[[:space:]]*'\$/p" "$CONF" | tr -d '\r' | awk -v m="#$1" '
-		{ l = $0; sub(/[ \t]+$/, "", l) }
-		l == m { f = 1; next }
-		f && (l == "--new" || l ~ /^[ \t]*#/ || l ~ /^[ \t]*\047/) { exit }
-		f { print l }')
-	[ "$want" != "$have" ]
-}
-
-_strat_verify() {
-	local w out=""
-	for w in $1; do
-		case "$w" in
-			v[1-9]|v10) _v_modified "$w" && w="$w (изменена)" ;;
-		esac
-		out="$out${out:+ }$w"
-	done
-	printf '%s' "$out"
-}
-
 status() {
 	local zr="not_installed" zr_running="false" zr_ver=""
 	if [ -f /etc/init.d/zapret ]; then
@@ -288,10 +266,7 @@ status() {
 	if [ -f "$CONF" ]; then
 		strat=$(sed -n "/^[[:space:]]*option NFQWS_OPT '\$/,/^[[:space:]]*'\$/p" "$CONF" | grep '^#' | sed 's/^#//; s/[[:space:]]*$//' | tr '\n' ' ' | sed 's/ $//')
 		fs_marker=$(grep -m1 '^# ZMFS:' "$CONF" | sed 's/^# ZMFS://')
-		strat=$(_strat_verify "$strat")
-		if [ -z "$strat" ] && [ -z "$fs_marker" ] && [ -n "$(sed -n "/^[[:space:]]*option NFQWS_OPT '\$/,/^[[:space:]]*'\$/p" "$CONF" | sed '1d;$d' | grep -v '^[[:space:]]*$')" ]; then
-			strat="своя (без метки)"
-		fi
+		sed -n "/^[[:space:]]*option NFQWS_OPT '\$/,/^[[:space:]]*'\$/p" "$CONF" | grep -qi '^#[[:space:]]*customstart' && strat="Custom"
 	fi
 
 	printf '{"pkg":"%s","zapret":"%s","zapret_running":%s,"zapret_version":"%s","zapret2":"%s","zapret2_running":%s,"strategy":"%s","flowseal":"%s","yv_off":%s}\n' \
@@ -13404,6 +13379,7 @@ return view.extend({
 		var CREDITS = [
 			{ product: 'Zapret Manager и ByeTube', author: 'StressOzz', url: 'https://github.com/StressOzz', self: true },
 			{ product: 'zapret-openwrt', author: 'remittor', url: 'https://github.com/remittor/zapret-openwrt' },
+			{ product: 'Zapret2', author: 'routerich', url: 'https://github.com/routerich' },
 			{ product: 'стратегии Flowseal', author: 'Flowseal', url: 'https://github.com/Flowseal/zapret-discord-youtube' },
 			{ product: 'ByeDPI-OpenWrt', author: 'DPITrickster', url: 'https://github.com/DPITrickster/ByeDPI-OpenWrt' },
 			{ product: 'mihomo, metacubexd', author: 'MetaCubeX', url: 'https://github.com/MetaCubeX' },
