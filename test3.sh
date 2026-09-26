@@ -294,12 +294,12 @@ _cpu_temp() {
 	else echo "$best"; fi
 }
 
-# Есть ли интернет: пинг 1.1.1.1, затем 8.8.8.8 и 77.88.8.8. Пинг идёт в фоне,
+# Есть ли интернет: ping -4 ya.ru, если не ответил — vk.ru. Пинг идёт в фоне,
 # результат («время ok|fail мс») живёт 10 секунд — панель не ждёт сеть.
 _inet_ping() {
 	local h out ms
-	for h in 1.1.1.1 8.8.8.8 77.88.8.8; do
-		out=$(ping -c 1 -W 2 "$h" 2>/dev/null)
+	for h in ya.ru vk.ru; do
+		out=$(ping -4 -c 1 -W 2 "$h" 2>/dev/null)
 		ms=$(echo "$out" | sed -n 's/.*time=\([0-9.]*\).*/\1/p' | head -n1)
 		[ -n "$ms" ] && { echo "$(date +%s) ok ${ms%%.*}"; return 0; }
 	done
@@ -1924,13 +1924,67 @@ exclusions_file_set() {
 	printf '{"ok":true}\n'
 }
 
-exclusions_file_restore() {
+exclusions_file_restore() { # совместимость: старый метод, теперь безопасный (скачивает во временный файл)
+	zapret_list_restore exclude
+}
+
+# ── Редактор списков Zapret ──
+_zl_path() { # ID -> файл
+	case "$1" in
+		exclude) echo /opt/zapret/ipset/zapret-hosts-user-exclude.txt ;;
+		user)    echo /opt/zapret/ipset/zapret-hosts-user.txt ;;
+		google)  echo /opt/zapret/ipset/zapret-hosts-google.txt ;;
+		*) return 1 ;;
+	esac
+}
+_zl_json_text() { # ФАЙЛ -> строка JSON без кавычек; управляющие символы кроме табуляции выбрасываются
+	[ -f "$1" ] || return 0
+	local tab; tab="$(printf '\t')"
+	tr -d '\r\000-\010\013\014\016-\037' < "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e "s/$tab/\\\\t/g" | awk '{ printf "%s%s", (NR > 1 ? "\\n" : ""), $0 }'
+}
+_zl_count() { local n; [ -f "$1" ] && n=$(grep -cvE '^[[:space:]]*(#.*)?$' "$1"); echo "${n:-0}"; }
+_zl_info() { # ID
+	local f; f="$(_zl_path "$1")"
+	printf '{"id":"%s","path":"%s","exists":%s,"count":%s,"size":%s,"mtime":%s}' "$1" "$f" \
+		"$([ -f "$f" ] && echo true || echo false)" "$(_zl_count "$f")" \
+		"$([ -f "$f" ] && wc -c < "$f" | tr -d ' ' || echo 0)" "$([ -f "$f" ] && date -r "$f" +%s 2>/dev/null || echo 0)"
+}
+
+zapret_lists_status() {
 	[ -x /etc/init.d/zapret ] || { echo '{"error":"Zapret не установлен"}'; return 1; }
-	mkdir -p "$(dirname "$EXCLUDE_DOMAINS_FILE")"
-	rm -f "$EXCLUDE_DOMAINS_FILE"
-	wget -q --timeout=20 -U "Mozilla/5.0" -O "$EXCLUDE_DOMAINS_FILE" "$EXCLUDE_URL"
-	[ -s "$EXCLUDE_DOMAINS_FILE" ] || { echo '{"error":"не удалось скачать список исключений"}'; return 1; }
-	printf '{"content":"%s"}\n' "$(esc_ml "$(cat "$EXCLUDE_DOMAINS_FILE")")"
+	printf '{"lists":[%s,%s,%s]}\n' "$(_zl_info exclude)" "$(_zl_info user)" "$(_zl_info google)"
+}
+
+zapret_list_get() { # ID
+	local f; f="$(_zl_path "$1")" || { echo '{"error":"неизвестный список"}'; return 1; }
+	printf '{"id":"%s","content":"%s","info":%s}\n' "$1" "$(_zl_json_text "$f")" "$(_zl_info "$1")"
+}
+
+zapret_list_set() { # ID ТЕКСТ
+	local f tmp
+	f="$(_zl_path "$1")" || { echo '{"error":"неизвестный список"}'; return 1; }
+	[ -x /etc/init.d/zapret ] || { echo '{"error":"Zapret не установлен"}'; return 1; }
+	mkdir -p "$(dirname "$f")"
+	tmp="$f.zmtmp"
+	# \r убираем, пробелы по краям строк — тоже; в конце ровно один перевод строки
+	printf '%s\n' "$2" | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | awk 'NF { for (i = 0; i < e; i++) print ""; e = 0; print; next } { e++ }' > "$tmp" || { rm -f "$tmp"; echo '{"error":"не удалось записать файл"}'; return 1; }
+	mv -f "$tmp" "$f"
+	chmod 644 "$f"
+	zapret_restart
+	printf '{"ok":true,"info":%s}\n' "$(_zl_info "$1")"
+}
+
+zapret_list_restore() { # ID — только для списка исключений: исходный список из репозитория
+	[ "$1" = exclude ] || { echo '{"error":"восстановить можно только список исключений"}'; return 1; }
+	[ -x /etc/init.d/zapret ] || { echo '{"error":"Zapret не установлен"}'; return 1; }
+	local f tmp; f="$(_zl_path exclude)"; tmp="$f.zmdl"
+	mkdir -p "$(dirname "$f")"
+	rm -f "$tmp"
+	wget -q --timeout=20 -U "Mozilla/5.0" -O "$tmp" "$EXCLUDE_URL" 2>/dev/null
+	if [ ! -s "$tmp" ]; then rm -f "$tmp"; echo '{"error":"не удалось скачать список исключений — текущий список не тронут"}'; return 1; fi
+	mv -f "$tmp" "$f"; chmod 644 "$f"
+	zapret_restart
+	zapret_list_get exclude
 }
 
 nfqws_opt_get() {
@@ -2721,7 +2775,18 @@ _zm_cached() { # КЛЮЧ КОМАНДА... — значение из кеша �
 	cat "$f" 2>/dev/null
 }
 _mihomo_latest() { curl -Ls --connect-timeout 4 --max-time 6 -o /dev/null -w '%{url_effective}' "https://github.com/MetaCubeX/mihomo/releases/latest" 2>/dev/null | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | head -1; }
-_mt_latest() { curl -fsSL --connect-timeout 4 --max-time 6 -o /dev/null -w '%{url_effective}' "https://github.com/MagiTrickle/MagiTrickle/releases/latest" 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1; }
+# Тег релиза как есть: 0.8.2 или 0.8.2-rev2
+_mt_latest() { curl -fsSL --connect-timeout 4 --max-time 6 -o /dev/null -w '%{url_effective}' "https://github.com/MagiTrickle/MagiTrickle/releases/latest" 2>/dev/null | sed -n 's#.*/tag/##p' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+(-rev[0-9]+)?$' | head -1; }
+# Версия установленного пакета в виде тега: opkg 0.8.2-2 и apk 0.8.2-r2 → 0.8.2-rev2, ревизия 1 → 0.8.2
+_mt_installed_ver() {
+	local v
+	if [ "$PKG" = "apk" ]; then
+		v=$(apk info -v 2>/dev/null | sed -n 's/^magitrickle-\([0-9].*\)$/\1/p' | head -n1)
+	else
+		v=$(opkg status magitrickle 2>/dev/null | awk '/^Version:/ {print $2; exit}')
+	fi
+	printf '%s' "$v" | sed -E 's/-r?1$//; s/-r?([0-9]+)$/-rev\1/'
+}
 _tgws_latest() { curl -fsSL --connect-timeout 4 --max-time 6 "$TGWS_VERSION_URL" 2>/dev/null | tr -d '[:space:]'; }
 
 _mixomo_arch() {
@@ -2767,12 +2832,8 @@ mixomo_status() {
 	if [ -x /etc/init.d/magitrickle ]; then
 		magitrickle="installed"
 		/etc/init.d/magitrickle status >/dev/null 2>&1 && magitrickle_running="true"
-		if [ "$PKG" = "apk" ]; then
-			mt_ver=$(apk info -v 2>/dev/null | grep '^magitrickle-' | cut -d- -f2)
-		else
-			mt_ver=$(opkg status magitrickle 2>/dev/null | awk '/^Version:/ {sub(/-1$/,"",$2); sub(/-r1$/,"",$2); print $2}')
-		fi
-		mt_latest="$(_zm_cached magitrickle _mt_latest)"
+		mt_ver="$(_mt_installed_ver)"
+		mt_latest="$(_zm_cached magitrickle2 _mt_latest)"
 	fi
 	if [ -x /etc/init.d/hev-socks5-tunnel ]; then
 		hev="installed"
@@ -2809,6 +2870,39 @@ mixomo_status() {
 		"$magitrickle" "$magitrickle_running" "$(esc "$mt_ver")" "$(esc "$mt_latest")" \
 		"$hev" "$hev_running" "$(esc "$hev_ver")" \
 		"$(esc "$lan_ip")" "$subscription" "$mt_list" "$(esc "$autorestart")" "$(esc "$ui_panel")"
+}
+
+# Список групп MagiTrickle: из скачанного файла берём только groups и subscriptions,
+# настройки app (DNS, netfilter, link — сеть LAN) остаются от установленного пакета
+_mt_apply_list() { # ССЫЛКА
+	local new="$MAGITRICKLE_CONF.new" out="$MAGITRICKLE_CONF.zmtmp"
+	mkdir -p "$(dirname "$MAGITRICKLE_CONF")"
+	rm -f "$new" "$out"
+	wget -q --timeout=20 -O "$new" "$1" 2>/dev/null || curl -fsSL --connect-timeout 8 --max-time 30 -o "$new" "$1" 2>/dev/null
+	if [ ! -s "$new" ] || ! grep -q '^groups:' "$new"; then
+		rm -f "$new"
+		return 1
+	fi
+	if [ -s "$MAGITRICKLE_CONF" ] && grep -q '^app:' "$MAGITRICKLE_CONF"; then
+		{
+			awk '/^(groups|subscriptions):/ { exit } { print }' "$MAGITRICKLE_CONF"
+			awk '/^groups:/ { on = 1 } on' "$new"
+		} > "$out"
+	else
+		cp -f "$new" "$out"
+	fi
+	rm -f "$new"
+	[ -s "$out" ] && grep -q '^groups:' "$out" || { rm -f "$out"; return 1; }
+	mv -f "$out" "$MAGITRICKLE_CONF"
+}
+
+_mt_wait_running() {
+	local i=0
+	while [ "$i" -lt 10 ]; do
+		pidof magitrickled >/dev/null 2>&1 && return 0
+		sleep 1; i=$((i + 1))
+	done
+	return 1
 }
 
 _mt_list_known() {
@@ -2980,7 +3074,8 @@ do_mixomo_install() {
 	echo "==> Устанавливаем MagiTrickle"
 	local arch_mt mt_tag assets_page file_mt url_mt
 	arch_mt=$(grep '^OPENWRT_ARCH=' /etc/os-release 2>/dev/null | cut -d'"' -f2)
-	mt_tag=$(curl -Ls --connect-timeout 5 --max-time 10 -o /dev/null -w '%{url_effective}' "https://github.com/MagiTrickle/MagiTrickle/releases/latest" 2>/dev/null | sed 's#.*/tag/##')
+	[ -n "$arch_mt" ] || arch_mt="$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release)"
+	mt_tag=$(curl -Ls --connect-timeout 5 --max-time 10 -o /dev/null -w '%{url_effective}' "https://github.com/MagiTrickle/MagiTrickle/releases/latest" 2>/dev/null | sed -n 's#.*/tag/##p')
 	if [ -n "$mt_tag" ] && [ -n "$arch_mt" ]; then
 		assets_page=$(curl -fsSL --connect-timeout 5 --max-time 15 "https://github.com/MagiTrickle/MagiTrickle/releases/expanded_assets/${mt_tag}" 2>/dev/null)
 		url_mt=$(printf '%s' "$assets_page" | grep -oE "href=\"/MagiTrickle/MagiTrickle/releases/download/[^\"]*_openwrt_${arch_mt}\.${RAZ}\"" | head -n1 | sed 's/^href="//; s/"$//')
@@ -2988,10 +3083,13 @@ do_mixomo_install() {
 			url_mt="${GH_MAIN}${url_mt}"
 			file_mt=$(basename "$url_mt")
 			tmp="/tmp/$file_mt"
-			echo "==> Скачиваем $file_mt"
+			echo "==> Скачиваем $file_mt (MagiTrickle $mt_tag)"
 			if curl -sSLf --connect-timeout 5 --max-time 90 --retry 3 --retry-delay 2 -o "$tmp" "$url_mt" >&2; then
 				$INSTALL "$tmp" >&2 || echo "!! Не удалось установить MagiTrickle"
 				rm -f "$tmp"
+				rm -f "$ZM_STATE_DIR/latest.magitrickle2"
+				# opkg при обновлении мог положить новый конфиг рядом, если старого нет — берём его
+				[ ! -f "$MAGITRICKLE_CONF" ] && [ -f "$MAGITRICKLE_CONF-opkg" ] && cp -f "$MAGITRICKLE_CONF-opkg" "$MAGITRICKLE_CONF"
 			else
 				echo "!! Не удалось скачать MagiTrickle"
 			fi
@@ -3004,13 +3102,7 @@ do_mixomo_install() {
 
 	if [ -x /etc/init.d/magitrickle ] && ! _mt_list_known; then
 		echo "==> Включаем список Internet Helper в MagiTrickle"
-		mkdir -p "$(dirname "$MAGITRICKLE_CONF")"
-		if wget -q --timeout=20 -O "$MAGITRICKLE_CONF.new" "$MT_URL_IH1" && [ -s "$MAGITRICKLE_CONF.new" ]; then
-			mv -f "$MAGITRICKLE_CONF.new" "$MAGITRICKLE_CONF"
-		else
-			rm -f "$MAGITRICKLE_CONF.new"
-			echo "!! Не удалось скачать список Internet Helper — его можно выбрать позже на вкладке Mixomo"
-		fi
+		_mt_apply_list "$MT_URL_IH1" || echo "!! Не удалось скачать список Internet Helper — его можно выбрать позже на вкладке Mixomo"
 	fi
 
 	echo "==> Запускаем сервисы"
@@ -3018,6 +3110,7 @@ do_mixomo_install() {
 	if [ -x /etc/init.d/magitrickle ]; then
 		/etc/init.d/magitrickle enable >/dev/null 2>&1
 		/etc/init.d/magitrickle restart >/dev/null 2>&1
+		_mt_wait_running || echo "!! MagiTrickle перезапущен, но процесс magitrickled не найден — проверьте системный журнал"
 	fi
 
 	if [ ! -f "$MIHOMO_DIR/.ui_panel" ]; then
@@ -3180,8 +3273,7 @@ mixomo_magitrickle_list_set() {
 		*) echo '{"error":"неизвестный список"}'; return 1 ;;
 	esac
 	[ -x /etc/init.d/magitrickle ] || { echo '{"error":"MagiTrickle не установлен"}'; return 1; }
-	wget -q --timeout=20 -O "$MAGITRICKLE_CONF" "$url" || { echo '{"error":"не удалось скачать список"}'; return 1; }
-	[ -s "$MAGITRICKLE_CONF" ] || { echo '{"error":"скачанный файл пуст"}'; return 1; }
+	_mt_apply_list "$url" || { echo '{"error":"не удалось скачать список — текущие группы MagiTrickle не тронуты"}'; return 1; }
 	/etc/init.d/magitrickle enable >/dev/null 2>&1
 	/etc/init.d/magitrickle restart >/dev/null 2>&1
 	[ -x /etc/init.d/mihomo ] && /etc/init.d/mihomo restart >/dev/null 2>&1
@@ -5143,22 +5235,45 @@ _doh_force_want() { # -> 1 или 0
 	if [ "$(_doh_force_mode)" = off ]; then echo 0; else echo 1; fi
 }
 # Привести force_dns к нужному значению; служба перезапускается, только если что-то поменялось
+# Секция config main целиком. force_dns 1 — с canary-доменами iCloud и Mozilla, 0 — без них.
+_doh_main_text() { # 1|0
+	local n
+	echo "config main 'config'"
+	echo "	option dnsmasq_config_update '*'"
+	echo "	option force_dns '$1'"
+	echo "	option notrack_dns '1'"
+	echo "	list force_dns_port '53'"
+	echo "	list force_dns_port '853'"
+	for n in $(_zm_lan_nets); do echo "	list force_dns_src_interface '$n'"; done
+	echo "	option procd_trigger_wan6 '0'"
+	echo "	option heartbeat_domain 'heartbeat.mossdef.org'"
+	echo "	option heartbeat_sleep_timeout '10'"
+	echo "	option heartbeat_wait_timeout '10'"
+	echo "	option user 'nobody'"
+	echo "	option group 'nogroup'"
+	echo "	option listen_addr '127.0.0.1'"
+	echo "	option force_ip_family 'auto'"
+	if [ "$1" = 1 ]; then
+		echo "	option canary_domains_icloud '1'"
+		echo "	option canary_domains_mozilla '1'"
+	fi
+}
+# Остальные секции файла (резолверы) без config main
+_doh_other_sections() {
+	awk '/^config[ \t]/ { skip = ($2 == "main") } !skip' "$_doh_file" 2>/dev/null | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}' | sed '/./,$!d'
+}
+# Привести config main к нужному виду; служба перезапускается, только если что-то поменялось
 _doh_force_apply() {
-	local want cur
+	local want new cur rest
 	[ -f "$_doh_file" ] || return 0
 	[ -f "$DOH_OFF_FLAG" ] && return 0
 	want="$(_doh_force_want)"
-	cur="$(uci -q get https-dns-proxy.config.force_dns)"
-	[ "$cur" = "0" ] || cur=1
-	[ "$cur" = "$want" ] && return 0
-	uci -q get https-dns-proxy.config >/dev/null 2>&1 || uci set https-dns-proxy.config=main
-	uci set https-dns-proxy.config.force_dns="$want"
-	uci commit https-dns-proxy
+	new="$(_doh_main_text "$want")"
+	cur="$(awk '/^config[ \t]/ { on = ($2 == "main") } on' "$_doh_file" | sed '/^[[:space:]]*$/d')"
+	[ "$cur" = "$new" ] && return 0
+	rest="$(_doh_other_sections)"
+	{ printf '%s\n' "$new"; [ -n "$rest" ] && printf '\n%s\n' "$rest"; } > "$_doh_file.zmtmp" && mv -f "$_doh_file.zmtmp" "$_doh_file"
 	/etc/init.d/https-dns-proxy running >/dev/null 2>&1 && /etc/init.d/https-dns-proxy restart >/dev/null 2>&1
-	# перехват освободился — Steer снова забирает DNS устройств
-	if [ "$want" = 0 ] && _doh_steer_active && /etc/init.d/steer enabled 2>/dev/null; then
-		/etc/init.d/steer restart >/dev/null 2>&1
-	fi
 	return 0
 }
 
@@ -5280,23 +5395,7 @@ doh_set() {
 	local force
 	force="$(_doh_force_want)"
 	{
-		echo "config main 'config'"
-		echo "	option canary_domains_icloud '1'"
-		echo "	option canary_domains_mozilla '1'"
-		echo "	option dnsmasq_config_update '*'"
-		echo "	option force_dns '$force'"
-		echo "	option notrack_dns '1'"
-		echo "	list force_dns_port '53'"
-		echo "	list force_dns_port '853'"
-		for n in $(_zm_lan_nets); do echo "	list force_dns_src_interface '$n'"; done
-		echo "	option procd_trigger_wan6 '0'"
-		echo "	option heartbeat_domain 'heartbeat.mossdef.org'"
-		echo "	option heartbeat_sleep_timeout '10'"
-		echo "	option heartbeat_wait_timeout '10'"
-		echo "	option user 'nobody'"
-		echo "	option group 'nogroup'"
-		echo "	option listen_addr '127.0.0.1'"
-		echo "	option force_ip_family 'auto'"
+		_doh_main_text "$force"
 		echo ""
 		echo "config https-dns-proxy"
 		echo "	option resolver_url '$url'"
@@ -9149,6 +9248,10 @@ case "$cmd" in
 	exclusions_file_set)                             exclusions_file_set "$1" ;;
 	exclusions_file_restore)                         exclusions_file_restore ;;
 	nfqws_opt_get)                                   nfqws_opt_get ;;
+	zapret_lists_status)                             zapret_lists_status ;;
+	zapret_list_get)                                 zapret_list_get "$1" ;;
+	zapret_list_set)                                 zapret_list_set "$1" "$2" ;;
+	zapret_list_restore)                             zapret_list_restore "$1" ;;
 	nfqws_opt_set)                                   nfqws_opt_set "$1" ;;
 	tg_status)                                                   tg_status ;;
 	tg_action)                                                    tg_action "$1" "$2" ;;
@@ -9246,6 +9349,10 @@ list_methods() {
 	json_add_object "exclusions_file_set";         json_add_string "content" "string"; json_close_object
 	json_add_object "exclusions_file_restore";     json_close_object
 	json_add_object "nfqws_opt_get";               json_close_object
+	json_add_object "zapret_lists_status";         json_close_object
+	json_add_object "zapret_list_get";             json_add_string "id" "string"; json_close_object
+	json_add_object "zapret_list_set";             json_add_string "id" "string"; json_add_string "content" "string"; json_close_object
+	json_add_object "zapret_list_restore";         json_add_string "id" "string"; json_close_object
 	json_add_object "nfqws_opt_set";               json_add_string "content" "string"; json_close_object
 	json_add_object "tg_status";                   json_close_object
 	json_add_object "tg_action";                   json_add_string "variant" "string"; json_add_string "action" "string"; json_close_object
@@ -9335,6 +9442,10 @@ call_method() {
 		exclusions_file_set)           json_get_var content content; printf '%s' "$content" | "$BACKEND" exclusions_file_set @stdin ;;
 		exclusions_file_restore)       "$BACKEND" exclusions_file_restore ;;
 		nfqws_opt_get)                 "$BACKEND" nfqws_opt_get ;;
+		zapret_lists_status)           "$BACKEND" zapret_lists_status ;;
+		zapret_list_get)               json_get_var id id; "$BACKEND" zapret_list_get "$id" ;;
+		zapret_list_set)               json_get_var id id; json_get_var content content; printf '%s' "$content" | "$BACKEND" zapret_list_set "$id" @stdin ;;
+		zapret_list_restore)           json_get_var id id; "$BACKEND" zapret_list_restore "$id" ;;
 		nfqws_opt_set)                 json_get_var content content; printf '%s' "$content" | "$BACKEND" nfqws_opt_set @stdin ;;
 		tg_status)                     "$BACKEND" tg_status ;;
 		tg_action)                     json_get_var variant variant; json_get_var action action; "$BACKEND" tg_action "$variant" "$action" ;;
@@ -9401,7 +9512,7 @@ cat > '/usr/share/rpcd/acl.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF'
 					"status", "job_status", "log_tail", "system_info",
 					"strategy_list_v", "strategy_list_flowseal", "strategy_list_youtube",
 					"discord_status", "hosts_status", "hosts_file_get", "doh_status", "game_status",
-					"system_status", "mirror_status", "exclusions_status", "exclusions_file_get", "nfqws_opt_get", "tg_status", "tgws_status",
+					"system_status", "mirror_status", "exclusions_status", "exclusions_file_get", "nfqws_opt_get", "zapret_lists_status", "zapret_list_get", "tg_status", "tgws_status",
 					"test_status", "test_results", "zm_update_status", "mixomo_status", "mixomo_config_get",
 					"mixomo_warp_status",
 					"zapret_latest_version", "bytetube_installed", "health", "versions", "awg_status", "steer_status"
@@ -9424,7 +9535,7 @@ cat > '/usr/share/rpcd/acl.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF'
 					"game_set", "game_set_fake", "game_toggle_xtreme",
 					"system_check_connectivity", "system_toggle_quic", "system_toggle_ipv6",
 					"system_toggle_flow_offloading_fix", "system_toggle_expert_mode", "system_uninstall_panel",
-					"mirror_set", "exclusions_toggle", "exclusions_clear", "exclusions_file_set", "exclusions_file_restore", "nfqws_opt_set",
+					"mirror_set", "exclusions_toggle", "exclusions_clear", "exclusions_file_set", "exclusions_file_restore", "nfqws_opt_set", "zapret_list_set", "zapret_list_restore",
 					"tg_action", "tg_restart_all", "tgws_action", "test_action", "zm_update_action",
 					"mixomo_action", "mixomo_config_set", "mixomo_subscription_set",
 					"mixomo_magitrickle_list_set", "mixomo_autorestart_set", "mixomo_ui_action",
@@ -9559,6 +9670,10 @@ var callExclusionsClear = rpc.declare({ object: 'zapret-manager', method: 'exclu
 var callExclusionsFileGet = rpc.declare({ object: 'zapret-manager', method: 'exclusions_file_get', expect: {} });
 var callExclusionsFileSet = rpc.declare({ object: 'zapret-manager', method: 'exclusions_file_set', params: ['content'], expect: {} });
 var callExclusionsFileRestore = rpc.declare({ object: 'zapret-manager', method: 'exclusions_file_restore', expect: {} });
+var callZapretListsStatus = rpc.declare({ object: 'zapret-manager', method: 'zapret_lists_status', expect: {} });
+var callZapretListGet = rpc.declare({ object: 'zapret-manager', method: 'zapret_list_get', params: ['id'], expect: {} });
+var callZapretListSet = rpc.declare({ object: 'zapret-manager', method: 'zapret_list_set', params: ['id', 'content'], expect: {} });
+var callZapretListRestore = rpc.declare({ object: 'zapret-manager', method: 'zapret_list_restore', params: ['id'], expect: {} });
 var callNfqwsOptGet = rpc.declare({ object: 'zapret-manager', method: 'nfqws_opt_get', expect: {} });
 var callNfqwsOptSet = rpc.declare({ object: 'zapret-manager', method: 'nfqws_opt_set', params: ['content'], expect: {} });
 var callTgStatus = rpc.declare({ object: 'zapret-manager', method: 'tg_status', expect: {} });
@@ -9882,6 +9997,10 @@ return baseclass.extend({
 	exclusionsFileSet: callExclusionsFileSet,
 	exclusionsFileRestore: callExclusionsFileRestore,
 	nfqwsOptGet: callNfqwsOptGet,
+	zapretListsStatus: callZapretListsStatus,
+	zapretListGet: callZapretListGet,
+	zapretListSet: callZapretListSet,
+	zapretListRestore: callZapretListRestore,
 	nfqwsOptSet: callNfqwsOptSet,
 	tgStatus: callTgStatus,
 	tgAction: callTgAction,
@@ -13388,7 +13507,7 @@ var TABS = [
 	{ id: 'youtube', label: 'YouTube' },
 	{ id: 'game', label: 'Игры' },
 	{ id: 'discord', label: 'Discord' },
-	{ id: 'domains_exclude', label: 'Домены исключения' },
+	{ id: 'lists', label: 'Редактор списков' },
 	{ id: 'exclusions', label: 'Исключение устройств' }
 ];
 
@@ -14306,53 +14425,119 @@ return view.extend({
 			panels.discord.appendChild(fakeCard);
 		})();
 
-		(function buildDomainsExcludePanel() {
-			var editorCard = E('div', { 'class': 'zm-card' });
-			var contentEl = E('textarea', { 'class': 'zm-config-editor', 'spellcheck': 'false' });
-			var editorBusy = false;
+		(function buildListsPanel() {
+			var LISTS = [
+				{ id: 'exclude', title: 'Список исключений', hint: 'Сайты, которые Zapret не трогает никогда. По одному домену в строке, поддомены входят сами.', restore: true },
+				{ id: 'user', title: 'Список пользовательских хостов', hint: 'Свои сайты, к которым Zapret применяет стратегию. По одному домену в строке.' },
+				{ id: 'google', title: 'Список Google', hint: 'Домены YouTube и Google для YouTube-стратегии и QUIC. Панель сама дописывает сюда нужные домены при выборе стратегии.' }
+			];
+			var busy = false;
+			var intro = E('p', { 'class': 'zm-hint zm-lists-intro' }, 'Нажмите на список, чтобы развернуть его. «Сохранить и применить» записывает файл и перезапускает Zapret.');
+			panels.lists.appendChild(intro);
 
-			function refreshFile() {
-				zm.exclusionsFileGet().then(function(res) {
-					if (res.error) { zm.toast(res.error, 'error'); return; }
-					contentEl.value = res.content || '';
+			function plural(n, a, b, c) { var m = n % 10, h = n % 100; return m === 1 && h !== 11 ? a : (m >= 2 && m <= 4 && (h < 12 || h > 14) ? b : c); }
+			function countText(n) { return n + ' ' + plural(n, 'запись', 'записи', 'записей'); }
+			function countOf(text) { return String(text || '').split('\n').filter(function(l) { l = l.trim(); return l && l.charAt(0) !== '#'; }).length; }
+
+			LISTS.forEach(function(L) {
+				var st = { open: false, loaded: false, saved: '', info: null };
+				var ta = E('textarea', { 'class': 'zm-config-editor zm-list-editor', 'spellcheck': 'false', 'wrap': 'off', 'placeholder': 'example.com' });
+				var countEl = E('span', { 'class': 'zm-badge zm-off zm-list-count' }, '…');
+				var dirtyEl = E('span', { 'class': 'zm-list-dirty', 'style': 'display:none', 'title': 'Есть несохранённые изменения' }, 'не сохранено');
+				var chev = E('span', { 'class': 'zm-list-chev', 'aria-hidden': 'true' }, '›');
+				var body = E('div', { 'class': 'zm-list-body', 'style': 'display:none' });
+				var btnSave = E('button', { 'class': 'cbi-button cbi-button-positive' }, 'Сохранить и применить');
+				var btnReload = E('button', { 'class': 'cbi-button' }, 'Обновить из файла');
+				var btnRestore = L.restore ? E('button', { 'class': 'cbi-button' }, 'Восстановить исходный') : null;
+
+				function dirty() { return st.loaded && ta.value !== st.saved; }
+				function syncCount() {
+					var n = st.loaded ? countOf(ta.value) : (st.info ? st.info.count : 0);
+					countEl.textContent = st.info && !st.info.exists && !dirty() ? 'нет файла' : countText(n);
+					countEl.className = 'zm-badge zm-list-count ' + (n ? 'zm-ok' : 'zm-off');
+					dirtyEl.style.display = dirty() ? '' : 'none';
+					btnSave.disabled = !st.loaded;
+				}
+				function load(quiet) {
+					return zm.zapretListGet(L.id).then(function(r) {
+						if (r.error) { zm.toast(r.error, 'error'); return; }
+						st.saved = r.content || ''; if (st.saved && st.saved.slice(-1) !== '\n') st.saved += '\n';
+						ta.value = st.saved; st.loaded = true; st.info = r.info || st.info; syncCount();
+						if (!quiet) zm.toast(L.title + ': перечитан из файла', 'info');
+					});
+				}
+				function toggle() {
+					if (st.open && dirty() && !confirm('В «' + L.title + '» есть несохранённые изменения. Свернуть и отменить их?')) return;
+					st.open = !st.open;
+					if (!st.open && st.loaded) { ta.value = st.saved; syncCount(); }
+					card.classList.toggle('zm-list-open', st.open);
+					body.style.display = st.open ? '' : 'none';
+					head.setAttribute('aria-expanded', st.open ? 'true' : 'false');
+					if (st.open) (st.loaded ? Promise.resolve() : load(true)).then(function() { ta.focus(); });
+				}
+
+				ta.addEventListener('input', syncCount);
+				btnSave.addEventListener('click', function() {
+					if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+					busy = true; btnSave.disabled = true;
+					zm.toast('Сохраняем «' + L.title + '» и перезапускаем Zapret', 'warning');
+					zm.zapretListSet(L.id, ta.value).then(function(r) {
+						busy = false;
+						if (r.error) { zm.toast(r.error, 'error'); syncCount(); return; }
+						st.info = r.info || st.info;
+						return load(true).then(function() { zm.toast(L.title + ' сохранён, Zapret перезапущен', 'info'); });
+					}).catch(function() { busy = false; syncCount(); zm.toast('Роутер не ответил', 'error'); });
+				});
+				btnReload.addEventListener('click', function() {
+					if (dirty() && !confirm('Отменить несохранённые изменения и перечитать «' + L.title + '» из файла?')) return;
+					load(false);
+				});
+				if (btnRestore) btnRestore.addEventListener('click', function() {
+					if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+					if (!confirm('Заменить список исключений исходным из репозитория Zapret Manager? Ваши правки в нём пропадут.')) return;
+					busy = true;
+					zm.toast('Скачиваем исходный список исключений', 'warning');
+					zm.zapretListRestore(L.id).then(function(r) {
+						busy = false;
+						if (r.error) { zm.toast(r.error, 'error'); return; }
+						st.saved = r.content || ''; if (st.saved && st.saved.slice(-1) !== '\n') st.saved += '\n';
+						ta.value = st.saved; st.loaded = true; st.info = r.info || st.info; syncCount();
+						zm.toast('Список исключений восстановлен, Zapret перезапущен', 'info');
+					}).catch(function() { busy = false; zm.toast('Роутер не ответил', 'error'); });
+				});
+
+				var head = E('div', { 'class': 'zm-list-head', 'role': 'button', 'tabindex': '0', 'aria-expanded': 'false', 'click': toggle,
+					'keydown': function(ev) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); toggle(); } } }, [
+					chev,
+					E('div', { 'class': 'zm-list-titles' }, [
+						E('div', { 'class': 'zm-list-title' }, L.title),
+						E('div', { 'class': 'zm-list-path' }, '/opt/zapret/ipset/' + ({ exclude: 'zapret-hosts-user-exclude.txt', user: 'zapret-hosts-user.txt', google: 'zapret-hosts-google.txt' })[L.id])
+					]),
+					dirtyEl,
+					countEl
+				]);
+				body.appendChild(E('p', { 'class': 'zm-hint zm-list-hint' }, L.hint));
+				body.appendChild(ta);
+				body.appendChild(E('div', { 'class': 'zm-actions zm-list-actions' }, [ btnSave, btnReload, btnRestore ]));
+				var card = E('div', { 'class': 'zm-card zm-list-card' }, [ head, body ]);
+				panels.lists.appendChild(card);
+				L.refresh = function() {
+					if (st.loaded && !dirty()) return load(true);
+					if (!st.loaded) return zm.zapretListsStatus().then(function(r) {
+						(r.lists || []).forEach(function(i) { if (i.id === L.id) { st.info = i; syncCount(); } });
+					});
+				};
+				syncCount();
+			});
+
+			function refreshAllLists() {
+				zm.zapretListsStatus().then(function(r) {
+					if (r.error) return;
+					LISTS.forEach(function(L) { L.refresh && L.refresh(); });
 				});
 			}
-
-			editorCard.appendChild(E('h3', {}, 'Домены исключения'));
-			editorCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Сайты из этого списка Zapret не трогает — по одному домену в строке. Сохранение перезапускает Zapret.'));
-			editorCard.appendChild(contentEl);
-			editorCard.appendChild(E('div', { 'class': 'zm-actions' }, [
-				E('button', {
-					'class': 'cbi-button cbi-button-positive',
-					'click': function() {
-						if (editorBusy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
-						editorBusy = true;
-						zm.toast('Сохраняем и перезапускаем Zapret', 'warning');
-						zm.exclusionsFileSet(contentEl.value).then(function(res) {
-							editorBusy = false;
-							if (res.error) { zm.toast(res.error, 'error'); return; }
-							zm.toast('Список исключений сохранён, Zapret перезапущен', 'info');
-						}).catch(function() { editorBusy = false; });
-					}
-				}, 'Сохранить и применить'),
-				E('button', {
-					'class': 'cbi-button',
-					'click': function() {
-						if (editorBusy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
-						editorBusy = true;
-						zm.toast('Восстанавливаем список исключений', 'warning');
-						zm.exclusionsFileRestore().then(function(res) {
-							editorBusy = false;
-							if (res.error) { zm.toast(res.error, 'error'); return; }
-							contentEl.value = res.content || '';
-							zm.toast('Список исключений восстановлен', 'info');
-						}).catch(function() { editorBusy = false; });
-					}
-				}, 'Восстановить исключения')
-			]));
-
-			refreshFile();
-			panels.domains_exclude.appendChild(editorCard);
+			refreshAllLists();
+			tabHooks.lists = refreshAllLists;
 		})();
 
 		(function buildExclusionsPanel() {
@@ -14746,6 +14931,34 @@ html.zm-theme-dark .zm-tile:not(.zm-active):not(.zm-tile-off) {
 	white-space: pre; overflow: auto; resize: vertical;
 }
 html.zm-theme-dark .zm-config-editor { border-color: rgba(255,255,255,.14); }
+
+/* ── Редактор списков Zapret ── */
+.zm-lists-intro { margin: 0 0 12px; }
+.zm-list-card { padding: 0; margin-bottom: 12px; overflow: hidden; }
+.zm-list-head { display: flex; align-items: center; gap: 14px; padding: 14px 20px; cursor: pointer; user-select: none; outline: none; transition: background .15s; }
+@media (hover: hover) { .zm-list-head:hover { background: rgba(127,127,127,.06); } }
+.zm-list-head:focus-visible { box-shadow: inset 0 0 0 2px rgba(34,158,217,.55); }
+.zm-list-chev { flex: 0 0 22px; width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; border-radius: 6px; background: rgba(127,127,127,.12); font-size: 16px; font-weight: 700; line-height: 1; transition: transform .2s; }
+.zm-list-open .zm-list-chev { transform: rotate(90deg); }
+.zm-list-titles { flex: 1 1 auto; min-width: 0; }
+.zm-list-title { font-size: 15px; font-weight: 600; line-height: 1.3; }
+.zm-list-path { margin-top: 3px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; opacity: .6; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.zm-list-count { flex: 0 0 auto; min-width: 92px; justify-content: center; }
+.zm-list-body { padding: 4px 20px 18px; border-top: 1px solid rgba(127,127,127,.15); }
+.zm-list-hint { margin: 12px 0 10px; }
+textarea.zm-list-editor { display: block; width: 100%; box-sizing: border-box; min-height: 320px; resize: vertical; white-space: pre; overflow-wrap: normal; overflow-x: auto; tab-size: 4; }
+.zm-list-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 12px; }
+.zm-list-actions .cbi-button { margin: 0; }
+.zm-list-dirty { flex: 0 0 auto; font-size: 12px; white-space: nowrap; font-weight: 600; color: #9a6700; display: inline-flex; align-items: center; gap: 6px; }
+.zm-list-dirty::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+html.zm-theme-dark .zm-list-dirty { color: #d29922; }
+@media (max-width: 600px) {
+	.zm-list-head { padding: 12px 14px; gap: 10px; }
+	.zm-list-body { padding: 4px 14px 14px; }
+	.zm-list-count { min-width: 0; }
+	.zm-list-actions .cbi-button { flex: 1 1 100%; }
+	.zm-list-dirty { font-size: 0; gap: 0; }
+}
 @media (max-width: 600px) {
 	/* 16px — чтобы iOS Safari не увеличивал масштаб страницы при тапе в поле */
 	.zm-config-editor { font-size: 16px; min-height: 320px; }
@@ -16057,6 +16270,34 @@ html.zm-theme-dark .zm-tile:not(.zm-active):not(.zm-tile-off) {
 	white-space: pre; overflow: auto; resize: vertical;
 }
 html.zm-theme-dark .zm-config-editor { border-color: rgba(255,255,255,.14); }
+
+/* ── Редактор списков Zapret ── */
+.zm-lists-intro { margin: 0 0 12px; }
+.zm-list-card { padding: 0; margin-bottom: 12px; overflow: hidden; }
+.zm-list-head { display: flex; align-items: center; gap: 14px; padding: 14px 20px; cursor: pointer; user-select: none; outline: none; transition: background .15s; }
+@media (hover: hover) { .zm-list-head:hover { background: rgba(127,127,127,.06); } }
+.zm-list-head:focus-visible { box-shadow: inset 0 0 0 2px rgba(34,158,217,.55); }
+.zm-list-chev { flex: 0 0 22px; width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; border-radius: 6px; background: rgba(127,127,127,.12); font-size: 16px; font-weight: 700; line-height: 1; transition: transform .2s; }
+.zm-list-open .zm-list-chev { transform: rotate(90deg); }
+.zm-list-titles { flex: 1 1 auto; min-width: 0; }
+.zm-list-title { font-size: 15px; font-weight: 600; line-height: 1.3; }
+.zm-list-path { margin-top: 3px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; opacity: .6; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.zm-list-count { flex: 0 0 auto; min-width: 92px; justify-content: center; }
+.zm-list-body { padding: 4px 20px 18px; border-top: 1px solid rgba(127,127,127,.15); }
+.zm-list-hint { margin: 12px 0 10px; }
+textarea.zm-list-editor { display: block; width: 100%; box-sizing: border-box; min-height: 320px; resize: vertical; white-space: pre; overflow-wrap: normal; overflow-x: auto; tab-size: 4; }
+.zm-list-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 12px; }
+.zm-list-actions .cbi-button { margin: 0; }
+.zm-list-dirty { flex: 0 0 auto; font-size: 12px; white-space: nowrap; font-weight: 600; color: #9a6700; display: inline-flex; align-items: center; gap: 6px; }
+.zm-list-dirty::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+html.zm-theme-dark .zm-list-dirty { color: #d29922; }
+@media (max-width: 600px) {
+	.zm-list-head { padding: 12px 14px; gap: 10px; }
+	.zm-list-body { padding: 4px 14px 14px; }
+	.zm-list-count { min-width: 0; }
+	.zm-list-actions .cbi-button { flex: 1 1 100%; }
+	.zm-list-dirty { font-size: 0; gap: 0; }
+}
 @media (max-width: 600px) {
 	/* 16px — чтобы iOS Safari не увеличивал масштаб страницы при тапе в поле */
 	.zm-config-editor { font-size: 16px; min-height: 320px; }
@@ -17529,7 +17770,7 @@ function toggleTheme(ev) {
 
 var ROUTES = [
 	{ id: 'dashboard', title: 'Дашборд', sub: 'Состояние всех компонентов', icon: 'dashboard', group: 'Обзор' },
-	{ id: 'strategy', title: 'Zapret', sub: 'Стратегии, тесты, YouTube, игры, Discord и исключения', icon: 'shield', group: 'Обход блокировок', dot: 'zapret' },
+	{ id: 'strategy', title: 'Zapret', sub: 'Стратегии, тесты, YouTube, игры, Discord и списки', icon: 'shield', group: 'Обход блокировок', dot: 'zapret' },
 	{ id: 'zapret2', title: 'Zapret2', sub: 'Установка и управление Zapret2', icon: 'bolt', group: 'Обход блокировок', dot: 'zapret2' },
 	{ id: 'steer', title: 'Steer', sub: 'Выбранные сервисы через WARP или VPN', icon: 'route', group: 'Обход блокировок', dot: 'steer' },
 	{ id: 'bytetube', title: 'ByeTube', sub: 'YouTube через ByeDPI', icon: 'play', group: 'Обход блокировок', dot: 'bytetube' },
@@ -18581,6 +18822,12 @@ html[data-theme="light"] .zmw-orbs i { opacity: .28; }
 	transition: border-color .2s, box-shadow .2s;
 }
 #zmw-view .zm-card:hover { border-color: var(--border-2); box-shadow: var(--shadow); }
+#zmw-view .zm-card.zm-list-card { padding: 0; overflow: hidden; }
+#zmw-view .zm-card.zm-list-card:not(:last-child) { margin-bottom: 14px; }
+#zmw-view .zm-list-head { padding: 16px 24px; }
+#zmw-view .zm-list-body { padding: 2px 24px 20px; border-top-color: var(--border); }
+#zmw-view .zm-list-actions { margin: 14px 0 0; }
+@media (max-width: 600px) { #zmw-view .zm-list-head { padding: 14px 16px; } #zmw-view .zm-list-body { padding: 2px 16px 16px; } }
 #zmw-view .zm-card h3 { margin: 0 0 14px; font-size: 16px; font-weight: 700; letter-spacing: -.01em; color: var(--text); }
 #zmw-view .zm-card h3::before {
 	content: ""; width: 4px; height: 18px; border-radius: 4px; background: var(--grad); flex-shrink: 0;
