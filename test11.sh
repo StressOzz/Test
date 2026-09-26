@@ -1,5 +1,5 @@
 #!/bin/sh
-# Version: 1.58
+# Version: 1.59
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -70,7 +70,7 @@ cat > '/opt/zapret-manager-luci/backend.sh' << 'ZM_INSTALLER_EOF'
 umask 022
 
 CONF="/etc/config/zapret"
-ZM_VERSION="1.58"
+ZM_VERSION="1.59"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
@@ -5805,10 +5805,7 @@ _st_warp_own_iface() { # ФАЙЛ — интерфейс zmwarp из конфи�
 		uci add_list "network.$i.addresses=$a"
 	done
 	uci set "network.$i.mtu=${mtu:-1280}"
-	for k in jc jmin jmax s1 s2 s3 s4 h1 h2 h3 h4 i1 i2 i3 i4 i5 j1 j2 j3 itime; do
-		v="$(_awg_cv "$kv" interface "$k")"
-		[ -n "$v" ] && uci set "network.$i.awg_$k=$v"
-	done
+	_awg_iface_set "$f" "$i"
 	uci set "network.${i}_peer=amneziawg_$i"
 	uci set "network.${i}_peer.description=Свой WARP"
 	uci set "network.${i}_peer.public_key=$pub"
@@ -7693,6 +7690,36 @@ $m"; done
 	fi
 }
 
+# Параметры AmneziaWG из [Interface] -> опции uci так же, как их пишет LuCI при импорте конфига:
+# HeaderProtectionKey -> awg_header_protection_key, Jc -> awg_jc, I1 -> awg_i1. Переносятся все,
+# кроме ключа, адресов, DNS и MTU (их панель задаёт сама) — новые версии AmneziaWG заработают без правок панели.
+_awg_iface_opts() { # ФАЙЛ -> строки «awg_имя значение»
+	awk 'function trim(s) { gsub(/^[ \t\r]+|[ \t\r]+$/, "", s); return s }
+		{ l = $0; sub(/[#;].*$/, "", l); l = trim(l); if (l == "") next
+		  if (l ~ /^\[.*\]$/) { sec = tolower(trim(substr(l, 2, length(l) - 2))); next }
+		  if (sec != "interface") next
+		  p = index(l, "="); if (!p) next
+		  k = trim(substr(l, 1, p - 1)); v = trim(substr(l, p + 1))
+		  if (v == "" || tolower(k) ~ /^(privatekey|address|dns|mtu|listenport|table|saveconfig|preup|postup|predown|postdown|fwmark)$/) next
+		  n = ""
+		  for (i = 1; i <= length(k); i++) { c = substr(k, i, 1); if (c ~ /[A-Z]/ && i > 1 && substr(k, i - 1, 1) ~ /[a-z0-9]/) n = n "_"; n = n tolower(c) }
+		  gsub(/[^a-z0-9_]/, "", n); if (n == "") next
+		  print "awg_" n, v }' "$1"
+}
+_awg_iface_set() { # ФАЙЛ ИНТЕРФЕЙС — записать эти параметры в uci
+	local o v
+	_awg_iface_opts "$1" | while read -r o v; do uci set "network.$2.$o=$v"; done
+}
+# Обратно: опции awg_* интерфейса -> строки конфига «Имя = значение» (awg_header_protection_key -> HeaderProtectionKey)
+_awg_uci_conf() { # ИНТЕРФЕЙС
+	local o v
+	for o in $(uci -q show "network.$1" | sed -n "s/^network\.$1\.\(awg_[a-z0-9_]*\)=.*/\1/p"); do
+		v="$(uci -q get "network.$1.$o")"
+		[ -n "$v" ] || continue
+		echo "$(echo "${o#awg_}" | awk -F_ '{ for (i = 1; i <= NF; i++) printf "%s%s", toupper(substr($i, 1, 1)), substr($i, 2) }') = $v"
+	done
+}
+
 _awg_conf_kv() { # ФАЙЛ
 	awk 'function trim(s) { gsub(/^[ \t\r]+|[ \t\r]+$/, "", s); return s }
 		{ l = $0; sub(/[#;].*$/, "", l); l = trim(l); if (l == "") next
@@ -7729,10 +7756,7 @@ do_awg_create() { # ИМЯ МАРШРУТ(0|1) ЗОНА(0|1)
 		uci add_list "network.$name.addresses=$a"
 	done
 	uci set "network.$name.mtu=${mtu:-1280}"
-	for k in jc jmin jmax s1 s2 s3 s4 h1 h2 h3 h4 i1 i2 i3 i4 i5 j1 j2 j3 itime; do
-		v="$(_awg_cv "$kv" interface "$k")"
-		[ -n "$v" ] && uci set "network.$name.awg_$k=$v"
-	done
+	_awg_iface_set "$f" "$name"
 	p="$(uci add network "amneziawg_$name")"
 	uci set "network.$p.description=$name"
 	uci set "network.$p.public_key=$pub"
@@ -7818,9 +7842,7 @@ do_awg_regen() { # ИНТЕРФЕЙС — новые ключи WARP прямо 
 		{ echo "ОШИБКА: ключи не получены — генераторы и Cloudflare не ответили"; return 1; }
 	_awg_say "Ключи получены (адрес $G_V4)"
 	if [ "$warp" = 1 ]; then
-		for k in jc jmin jmax s1 s2 s3 s4 h1 h2 h3 h4 i1 i2 i3 i4 i5 j1 j2 j3 itime; do
-			[ -n "$(uci -q get "network.$i.awg_$k")" ] && have=1
-		done
+		[ -n "$(_awg_uci_conf "$i")" ] && have=1
 	fi
 	{
 		echo "[Interface]"
@@ -7828,12 +7850,7 @@ do_awg_regen() { # ИНТЕРФЕЙС — новые ключи WARP прямо 
 		echo "Address = $G_V4${G_V6:+, $G_V6}"
 		echo "MTU = $(uci -q get "network.$i.mtu" || echo 1280)"
 		if [ "$have" = 1 ]; then
-			for k in jc jmin jmax s1 s2 s3 s4 h1 h2 h3 h4 i1 i2 i3 i4 i5 j1 j2 j3 itime; do
-				v="$(uci -q get "network.$i.awg_$k")"
-				[ -n "$v" ] || continue
-				case "$k" in jc) kk=Jc ;; jmin) kk=Jmin ;; jmax) kk=Jmax ;; itime) kk=Itime ;; *) kk="$(echo "$k" | tr 'a-z' 'A-Z')" ;; esac
-				echo "$kk = $v"
-			done
+			_awg_uci_conf "$i"
 		else
 			AWG_NO_I1=0
 			if _awg_installed; then
@@ -7893,10 +7910,7 @@ do_awg_steer_replace() { # ИНТЕРФЕЙС
 	cp "$f" "$c"; chmod 600 "$c"
 	_awg_say "Записываем конфиг в туннель Steer $i"
 	_st_with "$n" _st_warp_iface_write "${host:-162.159.192.1}" "${port:-2408}"
-	for k in jc jmin jmax s1 s2 s3 s4 h1 h2 h3 h4 i1 i2 i3 i4 i5 j1 j2 j3 itime; do
-		v="$(_awg_cv "$kv" interface "$k")"
-		[ -n "$v" ] && uci set "network.$i.awg_$k=$v"
-	done
+	_awg_iface_set "$f" "$i"
 	uci -q delete "network.$i.auto"
 	uci commit network
 	rm -f "$f" "$kv"
@@ -7936,12 +7950,7 @@ _awg_export() { # ИНТЕРФЕЙС -> .conf в stdout
 	echo "PrivateKey = $(uci -q get "network.$i.private_key")"
 	echo "Address = $(uci -q get "network.$i.addresses" | sed 's/ /, /g')"
 	v="$(uci -q get "network.$i.mtu")"; [ -n "$v" ] && echo "MTU = $v"
-	for k in jc jmin jmax s1 s2 s3 s4 h1 h2 h3 h4 i1 i2 i3 i4 i5 j1 j2 j3 itime; do
-		v="$(uci -q get "network.$i.awg_$k")"
-		[ -n "$v" ] || continue
-		case "$k" in jc) k=Jc ;; jmin) k=Jmin ;; jmax) k=Jmax ;; itime) k=Itime ;; *) k="$(echo "$k" | tr 'a-z' 'A-Z')" ;; esac
-		echo "$k = $v"
-	done
+	_awg_uci_conf "$i"
 	echo ""
 	echo "[Peer]"
 	echo "PublicKey = $(uci -q get "network.$p.public_key")"
