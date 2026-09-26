@@ -1,5 +1,5 @@
 #!/bin/sh
-# Version: 1.49
+# Version: 1.50
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -70,7 +70,7 @@ cat > '/opt/zapret-manager-luci/backend.sh' << 'ZM_INSTALLER_EOF'
 umask 022
 
 CONF="/etc/config/zapret"
-ZM_VERSION="1.49"
+ZM_VERSION="1.50"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
@@ -15360,8 +15360,12 @@ var UBUS_ERR = [ 'OK', 'неверная команда', 'неверный ар
 var rpcSeq = 0;
 
 function ubus(object, method, params, useSid) {
+	// Запрос к роутеру не должен висеть вечно: через 60 с — ошибка вместо вечного «крутится».
+	var ac = window.AbortController ? new AbortController() : null;
+	var tm = ac ? setTimeout(function () { ac.abort(); }, 60000) : 0;
 	return fetch('/ubus', {
 		method: 'POST',
+		signal: ac ? ac.signal : undefined,
 		headers: { 'Content-Type': 'application/json' },
 		cache: 'no-store',
 		credentials: 'omit',
@@ -15370,6 +15374,7 @@ function ubus(object, method, params, useSid) {
 			params: [ useSid || sid || NULL_SID, object, method, params || {} ]
 		})
 	}).then(function (r) {
+		clearTimeout(tm);
 		if (r.status === 404) {
 			var e404 = new Error('На роутере не отвечает /ubus — нужен пакет uhttpd-mod-ubus.');
 			e404.noUbus = true;
@@ -15385,6 +15390,10 @@ function ubus(object, method, params, useSid) {
 		}
 		if (!msg || !Array.isArray(msg.result)) throw new Error('Некорректный ответ ubus');
 		return msg.result;
+	}, function (err) {
+		clearTimeout(tm);
+		if (err && err.name === 'AbortError') throw new Error('роутер не ответил за 60 секунд');
+		throw err;
 	});
 }
 
@@ -15783,13 +15792,21 @@ var THEMES = [
 ];
 function themeById(id) { return THEMES.filter(function (x) { return x.id === id; })[0]; }
 function themePref() { var t = sget(K_THEME); return themeById(t) ? t : 'auto'; }
+// Шрифты темы — с Google Fonts, но строго «по желанию»: грузятся в фоне
+// (media=print не держит страницу), а если Google недоступен или не ответил
+// за 3 секунды — запрос снимается и остаются системные шрифты.
+var fontsFailed = false;
 function themeFonts(t) {
-	if (!t || !t.fonts || document.getElementById('zmw-font-' + t.id)) return;
-	var l = document.createElement('link');
+	if (fontsFailed || !t || !t.fonts || document.getElementById('zmw-font-' + t.id)) return;
+	var l = document.createElement('link'), done = false;
 	l.id = 'zmw-font-' + t.id;
 	l.rel = 'stylesheet';
+	l.media = 'print';
+	l.onload = function () { done = true; l.media = 'all'; };
+	l.onerror = function () { done = true; fontsFailed = true; l.remove(); };
 	l.href = 'https://fonts.googleapis.com/css2?family=' + t.fonts + '&display=swap';
 	document.head.appendChild(l);
+	setTimeout(function () { if (!done) { fontsFailed = true; l.remove(); } }, 3000);
 }
 function themeEffective() { var p = themePref(); return p === 'auto' ? 'micro' : p; }
 function applyTheme() {
