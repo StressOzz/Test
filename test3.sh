@@ -2087,6 +2087,55 @@ TG_SECRET_MT_FILE="/etc/tg-ws-proxy/secret.conf"
 TG_VER_GO_FILE="/usr/bin/tg-ws-proxy-go.ver"
 TG_VER_RS_FILE="/usr/bin/tg-ws-proxy-rs.ver"
 
+_zm_pkg_files() {
+	if [ "$PKG" = apk ]; then apk info -L "$1" 2>/dev/null | grep -v 'contains:$' | grep -v '^$' | sed 's#^/*#/#'
+	else opkg files "$1" 2>/dev/null | grep '^/'; fi
+}
+
+_zm_pkg_purge() {
+	local p="$1" out files f
+	_pkg_is_installed "$p" || return 0
+	files="$(_zm_pkg_files "$p")"
+	echo "==> Удаляем пакет $p"
+	out="$($DELETE "$p" 2>&1)"
+	if _pkg_is_installed "$p"; then
+		echo "   менеджер пакетов отказался:"
+		printf '%s\n' "$out" | grep -v '^$' | tail -n 4 | sed 's/^/   /'
+		echo "==> Удаляем принудительно"
+		if [ "$PKG" = apk ]; then
+			apk del --force-broken-world "$p" >/dev/null 2>&1 || apk del --force "$p" >/dev/null 2>&1
+		else
+			opkg remove --force-depends --force-remove "$p" >/dev/null 2>&1
+		fi
+	fi
+	for f in $files; do [ -f "$f" ] || [ -L "$f" ] && rm -f "$f"; done
+	if _pkg_is_installed "$p"; then
+		echo "!! Пакет $p всё ещё числится в системе, но его файлы удалены"
+		return 1
+	fi
+	return 0
+}
+
+_zm_left() {
+	local f left=""
+	for f in "$@"; do [ -e "$f" ] || [ -L "$f" ] && left="$left $f"; done
+	[ -z "$left" ] && return 0
+	echo "!! Не удалось удалить:$left"
+	return 1
+}
+
+_zm_stop_svc() {
+	local s="$1" b="$2"
+	[ -x "/etc/init.d/$s" ] && { "/etc/init.d/$s" stop >/dev/null 2>&1; "/etc/init.d/$s" disable >/dev/null 2>&1; }
+	[ -n "$b" ] && killall "$b" >/dev/null 2>&1
+	rm -f /etc/rc.d/[SK][0-9][0-9]"$s"
+}
+
+_zm_reinstall() {
+	"$1" || { echo "ОШИБКА: не удалось удалить — переустановка остановлена"; return 1; }
+	"$2"
+}
+
 _tg_arch_rs() {
 	case "$TG_ARCH" in
 		aarch64*) echo "tg-ws-proxy-aarch64-unknown-linux-musl" ;;
@@ -2160,7 +2209,14 @@ do_tg_install_mtproto() {
 	$UPDATE >&2
 	echo "==> Скачиваем $(basename "$url")"
 	wget -q --timeout=20 -O "$tmp" "$url" || { echo "ОШИБКА скачивания $url"; return 1; }
-	$INSTALL "$tmp" >&2 || { echo "ОШИБКА установки"; rm -f "$tmp"; return 1; }
+	if _pkg_is_installed tg-ws-proxy && [ ! -f /etc/init.d/tg-ws-proxy ]; then
+		echo "==> Пакет числится установленным, но файлов нет — ставим поверх"
+		if [ "$PKG" = apk ]; then apk del --force-broken-world tg-ws-proxy >/dev/null 2>&1; $INSTALL "$tmp" >&2
+		else opkg install --force-reinstall "$tmp" >&2; fi
+	else
+		$INSTALL "$tmp" >&2
+	fi
+	[ -f /etc/init.d/tg-ws-proxy ] || { echo "ОШИБКА установки: менеджер пакетов не поставил tg-ws-proxy"; rm -f "$tmp"; return 1; }
 	rm -f "$tmp"
 	mkdir -p "$(dirname "$TG_SECRET_MT_FILE")"
 	if ! grep -q '^SECRET=.' "$TG_SECRET_MT_FILE" 2>/dev/null; then
@@ -2173,12 +2229,14 @@ do_tg_install_mtproto() {
 }
 
 do_tg_remove_mtproto() {
-	echo "==> Удаляем TG WS Proxy MTProto"
-	/etc/init.d/tg-ws-proxy stop >/dev/null 2>&1
-	/etc/init.d/tg-ws-proxy disable >/dev/null 2>&1
-	$DELETE tg-ws-proxy >&2
-	rm -rf /etc/tg-ws-proxy /etc/tg-ws-proxy.conf /etc/tg-ws-proxy.conf-opkg
-	echo "==> Готово"
+	local rc=0
+	echo "==> Останавливаем TG WS Proxy MTProto"
+	_zm_stop_svc tg-ws-proxy tg-ws-proxy
+	_zm_pkg_purge tg-ws-proxy || rc=1
+	echo "==> Чистим файлы"
+	rm -rf /etc/init.d/tg-ws-proxy /usr/bin/tg-ws-proxy /etc/tg-ws-proxy /etc/tg-ws-proxy.conf /etc/tg-ws-proxy.conf-opkg /etc/config/tg-ws-proxy
+	_zm_left /etc/init.d/tg-ws-proxy /usr/bin/tg-ws-proxy || return 1
+	[ "$rc" = 0 ] && echo "==> Готово: TG WS Proxy MTProto удалён" || echo "==> Готово: файлы удалены, можно ставить заново"
 }
 
 do_tg_install_socks5() {
@@ -2202,9 +2260,10 @@ do_tg_install_socks5() {
 
 do_tg_remove_socks5() {
 	echo "==> Удаляем TG WS Proxy SOCKS5"
-	[ -x "$TG_INIT_GO" ] && { "$TG_INIT_GO" stop >/dev/null 2>&1; "$TG_INIT_GO" disable >/dev/null 2>&1; }
+	_zm_stop_svc tg-ws-proxy-go tg-ws-proxy-go
 	rm -f "$TG_BIN_GO" "$TG_INIT_GO" "$TG_VER_GO_FILE"
-	echo "==> Готово"
+	_zm_left "$TG_BIN_GO" "$TG_INIT_GO" || return 1
+	echo "==> Готово: TG WS Proxy SOCKS5 удалён"
 }
 
 do_tg_install_rust() {
@@ -2240,15 +2299,19 @@ do_tg_install_rust() {
 
 do_tg_remove_rust() {
 	echo "==> Удаляем TG WS Proxy Rust"
-	[ -x "$TG_INIT_RS" ] && { "$TG_INIT_RS" stop >/dev/null 2>&1; "$TG_INIT_RS" disable >/dev/null 2>&1; }
+	_zm_stop_svc tg-ws-proxy-rs tg-ws-proxy-rs
 	rm -f "$TG_BIN_RS" "$TG_INIT_RS" "$TG_SECRET_RS_FILE" "$TG_VER_RS_FILE"
-	echo "==> Готово"
+	_zm_left "$TG_BIN_RS" "$TG_INIT_RS" || return 1
+	echo "==> Готово: TG WS Proxy Rust удалён"
 }
 
 tg_action() {
 	local variant="$1" action="$2"
 	case "$variant:$action" in
 		mtproto:install|mtproto:update) job_start tg_install_mtproto do_tg_install_mtproto ;;
+		mtproto:reinstall)              job_start tg_install_mtproto _zm_reinstall do_tg_remove_mtproto do_tg_install_mtproto ;;
+		socks5:reinstall)               job_start tg_install_socks5 _zm_reinstall do_tg_remove_socks5 do_tg_install_socks5 ;;
+		rust:reinstall)                 job_start tg_install_rust _zm_reinstall do_tg_remove_rust do_tg_install_rust ;;
 		mtproto:remove)                 job_start tg_remove_mtproto do_tg_remove_mtproto ;;
 		socks5:install|socks5:update)   job_start tg_install_socks5 do_tg_install_socks5 ;;
 		socks5:remove)                  job_start tg_remove_socks5 do_tg_remove_socks5 ;;
@@ -2359,25 +2422,19 @@ do_tgws_install() {
 }
 
 do_tgws_remove() {
-	echo "==> Удаляем sTGWS"
-	/etc/init.d/tgws disable >/dev/null 2>&1
-	/etc/init.d/tgws stop >/dev/null 2>&1
-	$DELETE tgws >&2
+	local rc=0
+	echo "==> Останавливаем sTGWS"
+	_zm_stop_svc tgws tgws
+	killall stgws >/dev/null 2>&1
 	/usr/sbin/stgws apply --spec /dev/null --state-dir /var/lib/stgws >/dev/null 2>&1
 	/usr/sbin/tgws apply --spec /dev/null --state-dir /var/lib/tgws >/dev/null 2>&1
-	killall tgws >/dev/null 2>&1
-	killall stgws >/dev/null 2>&1
 	nft delete table inet stgws >/dev/null 2>&1
 	nft delete table inet tgws >/dev/null 2>&1
-	rm -rf /etc/*tgws*
-	rm -rf /var/lib/*tgws*
-	rm -rf /var/lock/*tgws*
-	rm -rf /etc/rc.d/*tgws*
-	rm -rf /etc/init.d/*tgws*
-	rm -rf /usr/sbin/*tgws*
-	rm -rf /usr/bin/*tgws*
-	rm -rf /etc/config/*tgws*
-	echo "==> Готово, sTGWS удалён"
+	_zm_pkg_purge tgws || rc=1
+	echo "==> Чистим файлы"
+	rm -rf /etc/*tgws* /var/lib/*tgws* /var/lock/*tgws* /etc/rc.d/*tgws* /etc/init.d/*tgws* /usr/sbin/*tgws* /usr/bin/*tgws* /etc/config/*tgws*
+	_zm_left /etc/init.d/tgws /usr/sbin/tgws || return 1
+	[ "$rc" = 0 ] && echo "==> Готово: sTGWS удалён" || echo "==> Готово: файлы удалены, можно ставить заново"
 }
 
 do_tgws_restart() {
@@ -2413,6 +2470,7 @@ tgws_action() {
 	local action="$1"
 	case "$action" in
 		install|update) job_start tgws_install do_tgws_install ;;
+		reinstall)      job_start tgws_install _zm_reinstall do_tgws_remove do_tgws_install ;;
 		remove)         job_start tgws_remove do_tgws_remove ;;
 		restart)        job_start tgws_restart do_tgws_restart ;;
 		reconfigure)    job_start tgws_reconfigure do_tgws_reconfigure ;;
@@ -2571,171 +2629,179 @@ _test_apply_block() {
 	{ echo "	option NFQWS_OPT '"; echo "$block"; echo "'"; } >> "$CONF"
 }
 
+_test_detail_file() { echo "$TEST_DIR/detail_$1.txt"; }
+
+_test_detail_domains() {
+	printf 'D|%s\n' "$(printf '%s\n' "$2" | grep '|' | cut -d'|' -f1 | sed 's/[[:space:]]/_/g' | tr '\n' ' ' | sed 's/ $//')" >> "$1"
+}
+
+_test_detail_add() {
+	local f="$1" name="$2" ok="$3" tot="$4" log="$5" fails
+	fails="$(sed -n 's/^\[FAIL\] //p' "$log" 2>/dev/null | sed 's/[[:space:]]/_/g; s/|/\//g' | tr '\n' ' ' | sed 's/ $//')"
+	printf 'S|%s|%s|%s|%s\n' "$(printf '%s' "$name" | tr '|' '/')" "${ok:-0}" "${tot:-0}" "$fails" >> "$f"
+}
+
+_test_run_set() {
+	local urls="$1" name="$2" results="$3" detail="$4" log="$TEST_DIR/log_run.txt" res ok tot
+	: > "$log"
+	res=$(_test_check_all_urls "$urls" "$log")
+	ok=$(echo "$res" | cut -d' ' -f1)
+	tot=$(echo "$res" | cut -d' ' -f2)
+	echo "${name} → ${ok}/${tot}" >> "$results"
+	_test_detail_add "$detail" "$name" "$ok" "$tot" "$log"
+	echo "   результат: ${ok} из ${tot}"
+}
+
+_test_domain_urls() {
+	local d h
+	for d in $(cat "$TEST_DIR/domain_list" 2>/dev/null); do
+		h="$(printf '%s' "$d" | sed -E 's#^[a-zA-Z]+://##; s#[/?#].*##')"
+		[ -n "$h" ] && printf '%s|https://%s/\n' "$h" "$h"
+	done
+}
+
 do_test_run() {
-	local mode="$1" results
+	local mode="$1" results detail
 	mkdir -p "$TEST_DIR"
 	rm -f "$TEST_STOP_FLAG"
 	results="$(_test_results_file "$mode")"
+	detail="$(_test_detail_file "$mode")"
 	: > "$results"
+	printf 'T|%s\n' "$(date '+%d.%m.%Y %H:%M')" > "$detail"
 	echo "$mode" > "$TEST_MODE_FILE"
 	[ -f "$CONF" ] || { echo "ОШИБКА: Zapret не установлен"; return 1; }
 
 	if [ "$mode" = "current" ]; then
 		_add_gp_domains
 		_refresh_exclude_file
-		echo "==> Проверяем текущую применённую стратегию"
+		echo "==> Проверяем текущую стратегию, ничего не меняя"
 		zapret_restart
-
 		local urls_file="$TEST_DIR/urls.txt" dpi_urls yt_urls
-		echo "==> Собираем список доменов DPI"
+		echo "==> Собираем список сайтов"
 		_test_prepare_urls "$urls_file"
 		dpi_urls="$(cat "$urls_file")"
 		yt_urls="$(_test_yt_urls)"
-
-		local dpi_log="$TEST_DIR/log_current_dpi.txt" dpi_res dpi_ok dpi_total
-		: > "$dpi_log"
-		echo "==> Идёт тест по доменам DPI"
-		dpi_res=$(_test_check_all_urls "$dpi_urls" "$dpi_log")
-		dpi_ok=$(echo "$dpi_res" | cut -d' ' -f1)
-		dpi_total=$(echo "$dpi_res" | cut -d' ' -f2)
-		echo "==> Результат (DPI): ${dpi_ok}/${dpi_total}"
-		echo "Текущая стратегия — домены DPI → ${dpi_ok}/${dpi_total}" >> "$results"
-
+		echo "==> Заблокированные сайты: $(printf '%s\n' "$dpi_urls" | grep -c '|')"
+		_test_detail_domains "$detail" "$dpi_urls"
+		_test_run_set "$dpi_urls" "Заблокированные сайты" "$results" "$detail"
 		if [ -f "$TEST_STOP_FLAG" ]; then
-			echo "==> Тестирование остановлено пользователем"
 			rm -f "$TEST_STOP_FLAG"
-			echo "==> Готово"
+			echo "==> Тест остановлен"
 			return 0
 		fi
-
-		local yt_log="$TEST_DIR/log_current_yt.txt" yt_res yt_ok yt_total
-		: > "$yt_log"
-		echo "==> Идёт тест по доменам YouTube"
-		yt_res=$(_test_check_all_urls "$yt_urls" "$yt_log")
-		yt_ok=$(echo "$yt_res" | cut -d' ' -f1)
-		yt_total=$(echo "$yt_res" | cut -d' ' -f2)
-		echo "==> Результат (YouTube): ${yt_ok}/${yt_total}"
-		echo "Текущая стратегия — домены YouTube → ${yt_ok}/${yt_total}" >> "$results"
-
+		echo "==> YouTube: $(printf '%s\n' "$yt_urls" | grep -c '|') адресов"
+		_test_detail_domains "$detail" "$yt_urls"
+		_test_run_set "$yt_urls" "YouTube" "$results" "$detail"
 		rm -f "$TEST_STOP_FLAG"
 		echo "==> Готово"
 		return 0
 	fi
+
+	local urls total_domains
+	case "$mode" in
+		youtube) urls="$(_test_yt_urls)" ;;
+		domain)
+			urls="$(_test_domain_urls)"
+			[ -n "$urls" ] || { echo "ОШИБКА: не указаны домены"; return 1; }
+			;;
+		*)
+			local urls_file="$TEST_DIR/urls.txt"
+			echo "==> Собираем список сайтов"
+			_test_prepare_urls "$urls_file"
+			urls="$(cat "$urls_file")"
+			;;
+	esac
+	total_domains=$(printf '%s\n' "$urls" | grep -c '|')
 
 	mkdir -p "$ZM_STATE_DIR"
 	cp "$CONF" "$TEST_BACKUP"
 	_add_gp_domains
 	_refresh_exclude_file
 
-	local cand="$TEST_DIR/candidates.txt"
-	echo "==> Собираем стратегии для теста"
-	_test_build_candidates "$mode" "$cand"
+	local cand="$TEST_DIR/candidates.txt" cmode="$mode"
+	[ "$mode" = domain ] && cmode=v_flowseal
+	echo "==> Собираем стратегии"
+	_test_build_candidates "$cmode" "$cand"
 	if [ ! -s "$cand" ]; then
-		echo "ОШИБКА: не удалось собрать ни одной стратегии для теста"
+		echo "ОШИБКА: не удалось собрать ни одной стратегии"
 		rm -f "$TEST_BACKUP"
 		return 1
 	fi
-
-	local urls total_domains
-	if [ "$mode" = "youtube" ]; then
-		urls="$(_test_yt_urls)"
-	else
-		local urls_file="$TEST_DIR/urls.txt"
-		echo "==> Собираем список доменов для теста"
-		_test_prepare_urls "$urls_file"
-		urls="$(cat "$urls_file")"
-	fi
-	total_domains=$(printf '%s\n' "$urls" | grep -c '|')
-
 	local total_str
 	total_str=$(grep -c '^#' "$cand")
-	echo "==> Найдено стратегий: $total_str"
-	echo "==> Доменов для теста: $total_domains"
+	echo "==> Стратегий: $total_str, адресов: $total_domains"
+	_test_detail_domains "$detail" "$urls"
 
 	echo "==> Контрольный тест: Zapret выключен"
 	/etc/init.d/zapret stop >/dev/null 2>&1
-	local ctrl_log="$TEST_DIR/log_control.txt" ctrl_res ctrl_ok ctrl_total
-	: > "$ctrl_log"
-	ctrl_res=$(_test_check_all_urls "$urls" "$ctrl_log")
-	ctrl_ok=$(echo "$ctrl_res" | cut -d' ' -f1)
-	ctrl_total=$(echo "$ctrl_res" | cut -d' ' -f2)
-	echo "Контрольный тест (Zapret выключен) → ${ctrl_ok}/${ctrl_total}" >> "$results"
-	echo "==> Результат: ${ctrl_ok}/${ctrl_total}"
+	_test_run_set "$urls" "Контрольный тест (Zapret выключен)" "$results" "$detail"
 	/etc/init.d/zapret start >/dev/null 2>&1
 
-	local lines cur=0
+	local lines
 	lines=$(grep -n '^#' "$cand" | cut -d: -f1)
-	echo "$lines" | while read -r start; do
-		cur=$((cur + 1))
-		if [ -f "$TEST_STOP_FLAG" ]; then
-			echo "==> Получен сигнал остановки, прерываем тестирование"
-			break
-		fi
-		local next name block res ok tot log
+	echo "$lines" | awk '{ print NR, $0 }' | while read -r cur start; do
+		[ -f "$TEST_STOP_FLAG" ] && break
+		local next name
 		next=$(echo "$lines" | awk -v s="$start" '$1>s{print;exit}')
-		if [ -z "$next" ]; then
-			sed -n "${start},\$p" "$cand" > "$TEST_DIR/block.txt"
-		else
-			sed -n "${start},$((next-1))p" "$cand" > "$TEST_DIR/block.txt"
-		fi
+		if [ -z "$next" ]; then sed -n "${start},\$p" "$cand" > "$TEST_DIR/block.txt"
+		else sed -n "${start},$((next-1))p" "$cand" > "$TEST_DIR/block.txt"; fi
 		name=$(head -n1 "$TEST_DIR/block.txt")
 		name="${name#\#}"
-		block=$(cat "$TEST_DIR/block.txt")
-		echo "==> [$cur/$total_str] Тестируем: $name"
-		_test_apply_block "$block"
+		echo "==> [$cur/$total_str] $name"
+		_test_apply_block "$(cat "$TEST_DIR/block.txt")"
 		zapret_restart
-		log="$TEST_DIR/log_$cur.txt"
-		: > "$log"
-		res=$(_test_check_all_urls "$urls" "$log")
-		ok=$(echo "$res" | cut -d' ' -f1)
-		tot=$(echo "$res" | cut -d' ' -f2)
-		echo "==> Результат: ${ok}/${tot}"
-		echo "${name} → ${ok}/${tot}" >> "$results"
+		_test_run_set "$urls" "$name" "$results" "$detail"
 	done
 
 	if [ -f "$TEST_STOP_FLAG" ]; then
-		echo "==> Тестирование остановлено пользователем, восстанавливаем конфигурацию"
+		echo "==> Тест остановлен, возвращаем настройки"
 		rm -f "$TEST_STOP_FLAG"
 	else
-		echo "==> Тестирование завершено, восстанавливаем конфигурацию"
+		echo "==> Тест завершён, возвращаем настройки"
 	fi
-
-	echo "==> Результаты теста"
 	_test_sort_results "$results"
-	cat "$results"
-	local best_line
-	best_line=$(grep -v '^Контрольный тест' "$results" | head -n1)
-	[ -n "$best_line" ] && echo "==> Лучшая стратегия по результатам теста: $best_line"
-
+	local best
+	best=$(grep -v '^Контрольный тест' "$results" | head -n1)
+	[ -n "$best" ] && echo "==> Лучшая: $best"
 	cp "$TEST_BACKUP" "$CONF"
 	zapret_restart
 	rm -f "$TEST_BACKUP"
-	echo "==> Готово, конфигурация восстановлена"
+	echo "==> Готово: настройки возвращены"
 }
 
 test_action() {
-	local action="$1" mode="$2"
+	local action="$1" mode="$2" doms="" d h
 	case "$action" in
 		start)
 			case "$mode" in
+				domain:*)
+					for d in $(printf '%s' "${mode#domain:}" | tr ',;' '  '); do
+						h="$(printf '%s' "$d" | sed -E 's#^[a-zA-Z]+://##; s#[/?#].*##' | tr 'A-Z' 'a-z')"
+						printf '%s' "$h" | grep -qE '^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$' || { printf '{"error":"%s"}\n' "$(esc "не похоже на домен: $d")"; return 1; }
+						doms="$doms $h"
+					done
+					doms="$(printf '%s\n' $doms | awk '!s[$0]++' | head -n 30 | tr '\n' ' ')"
+					[ -n "${doms# }" ] || { echo '{"error":"введите хотя бы один домен"}'; return 1; }
+					mkdir -p "$TEST_DIR"
+					printf '%s\n' $doms > "$TEST_DIR/domain_list"
+					mode=domain
+					;;
 				v|flowseal|v_flowseal|youtube|current) ;;
 				*) echo '{"error":"неизвестный режим теста"}'; return 1 ;;
 			esac
+			_test_running && { echo '{"error":"тест уже идёт"}'; return 1; }
 			job_start strategy_test do_test_run "$mode"
 			;;
 		stop)
-			if [ ! -f "$JOBS_DIR/strategy_test.pid" ] || ! kill -0 "$(cat "$JOBS_DIR/strategy_test.pid" 2>/dev/null)" 2>/dev/null; then
-				echo '{"error":"тест не запущен"}'
-				return 1
-			fi
+			_test_running || { echo '{"error":"тест не запущен"}'; return 1; }
 			mkdir -p "$TEST_DIR"
 			touch "$TEST_STOP_FLAG"
 			printf '{"ok":true}\n'
 			;;
 		clear)
 			case "$mode" in
-				v|flowseal|v_flowseal|youtube|current) rm -f "$(_test_results_file "$mode")" ;;
-				*) rm -f "$TEST_DIR"/results_*.txt ;;
+				v|flowseal|v_flowseal|youtube|current|domain) rm -f "$(_test_results_file "$mode")" "$(_test_detail_file "$mode")" ;;
+				*) rm -f "$TEST_DIR"/results_*.txt "$TEST_DIR"/detail_*.txt ;;
 			esac
 			printf '{"ok":true}\n'
 			;;
@@ -2744,26 +2810,22 @@ test_action() {
 }
 
 test_status() {
-	local running="false" mode=""
+	local running="false" mode="" m has=""
 	_test_recover
-	if [ -f "$JOBS_DIR/strategy_test.pid" ] && kill -0 "$(cat "$JOBS_DIR/strategy_test.pid" 2>/dev/null)" 2>/dev/null; then
-		running="true"
-	fi
+	_test_running && running="true"
 	[ -f "$TEST_MODE_FILE" ] && mode=$(cat "$TEST_MODE_FILE")
-	printf '{"running":%s,"mode":"%s","has_results_v":%s,"has_results_flowseal":%s,"has_results_v_flowseal":%s,"has_results_youtube":%s,"has_results_current":%s}\n' \
-		"$running" "$(esc "$mode")" \
-		"$([ -s "$(_test_results_file v)" ] && echo true || echo false)" \
-		"$([ -s "$(_test_results_file flowseal)" ] && echo true || echo false)" \
-		"$([ -s "$(_test_results_file v_flowseal)" ] && echo true || echo false)" \
-		"$([ -s "$(_test_results_file youtube)" ] && echo true || echo false)" \
-		"$([ -s "$(_test_results_file current)" ] && echo true || echo false)"
+	for m in v flowseal v_flowseal youtube current domain; do
+		has="$has,\"has_results_$m\":$([ -s "$(_test_results_file "$m")" ] && echo true || echo false)"
+	done
+	printf '{"running":%s,"mode":"%s","domains":"%s"%s}\n' "$running" "$(esc "$mode")" "$(esc "$(tr '\n' ' ' < "$TEST_DIR/domain_list" 2>/dev/null | sed 's/ $//')")" "$has"
 }
 
 test_results() {
-	local mode="$1" f
+	local mode="$1" f d
 	f="$(_test_results_file "$mode")"
-	[ -s "$f" ] || { echo '{"lines":""}'; return; }
-	printf '{"lines":"%s"}\n' "$(esc_ml "$(cat "$f")")"
+	d="$(_test_detail_file "$mode")"
+	[ -s "$f" ] || { echo '{"lines":"","detail":""}'; return; }
+	printf '{"lines":"%s","detail":"%s"}\n' "$(esc_ml "$(cat "$f")")" "$(esc_ml "$(cat "$d" 2>/dev/null)")"
 }
 
 _zm_gh_get() { # URL ФАЙЛ [ДИАПАЗОН] — напрямую, а если GitHub не открывается — через туннель WARP
@@ -14931,16 +14993,10 @@ var TABS = [
 	{ id: 'exclusions', label: 'Исключение устройств' }
 ];
 
-var TEST_MODES = [
-	{ id: 'v', label: 'Тестировать v' },
-	{ id: 'flowseal', label: 'Тестировать Flowseal' },
-	{ id: 'v_flowseal', label: 'Тестировать v + Flowseal' }
-];
 var TEST_MODE_LABELS = {
-	v: 'v', flowseal: 'Flowseal', v_flowseal: 'v + Flowseal', youtube: 'YouTube', current: 'Текущая стратегия'
+	v: 'v1–v10', flowseal: 'Flowseal', v_flowseal: 'v + Flowseal', youtube: 'YouTube', current: 'Текущая', domain: 'По домену'
 };
-var TEST_RESULT_MODES = ['v', 'flowseal', 'v_flowseal', 'youtube', 'current'];
-var TEST_MAIN_MODES = ['v', 'flowseal', 'v_flowseal'];
+var TEST_RESULT_MODES = ['current', 'domain', 'v', 'flowseal', 'v_flowseal', 'youtube'];
 
 var GAME_FAKES = [
 	'stun.bin', 'stun2.bin', 'quic_initial_4pda_to.bin',
@@ -15274,203 +15330,241 @@ return view.extend({
 
 		(function buildTestPanel() {
 			var logEl = E('pre', { 'class': 'zm-log' });
-			var resultsEl = E('pre', { 'class': 'zm-log' });
 			var busy = testData.running === true;
 			var curMode = testData.mode || '';
 			var status = testData;
+			var launchCard = E('div', { 'class': 'zm-card' });
+			var resCard = E('div', { 'class': 'zm-card' });
+			var resMode = null, resData = {}, openRows = {};
+			var domInput = E('input', { 'type': 'text', 'class': 'cbi-input-text', 'placeholder': 'x.com discord.com rutracker.org', 'style': 'flex:1 1 220px; min-width:0' });
+			domInput.value = testData.domains || '';
+			domInput.addEventListener('keydown', function(ev) { if (ev.key === 'Enter') startDomain(); });
 
-			var mainCard = E('div', { 'class': 'zm-card' });
-			var ytCard = E('div', { 'class': 'zm-card' });
-			var curCard = E('div', { 'class': 'zm-card' });
-			var resultsButtonsEl = E('div', {});
+			var TILES = [
+				{ id: 'current', title: 'Текущая стратегия', sub: 'Проверяет, что стоит сейчас, ничего не меняя: заблокированные сайты и YouTube.', buttons: [ { mode: 'current', label: 'Проверить' } ] },
+				{ id: 'domain', title: 'По домену', sub: 'Все стратегии v и Flowseal на ваших сайтах. Через пробел, до 30 штук.', domain: true },
+				{ id: 'main', title: 'Стратегии v и Flowseal', sub: 'Перебирает стратегии на списке заблокированных сайтов.', buttons: [ { mode: 'v', label: 'v1–v10' }, { mode: 'flowseal', label: 'Flowseal' }, { mode: 'v_flowseal', label: 'Все' } ] },
+				{ id: 'youtube', title: 'YouTube', sub: 'Перебирает стратегии Yv на адресах YouTube.', buttons: [ { mode: 'youtube', label: 'Проверить' } ] }
+			];
 
-			function stopButton() {
-				return E('button', { 'class': 'cbi-button cbi-button-remove', 'click': doStop }, 'Остановить тестирование стратегий');
-			}
-
-			function renderMain() {
-				mainCard.innerHTML = '';
-				mainCard.appendChild(E('h3', {}, 'Тест стратегий v / Flowseal'));
-				mainCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Тест идёт в фоне — его не прервут ни смена вкладки, ни закрытие страницы. После теста настройки возвращаются как были. Лучшую стратегию примените сами на вкладке «Стратегии».'));
-				if (busy && TEST_MAIN_MODES.indexOf(curMode) !== -1) {
-					mainCard.appendChild(E('div', { 'class': 'zm-row' }, [
-						E('span', { 'class': 'zm-label' }, 'Статус'),
-						zm.badge(true, 'тест выполняется (' + (TEST_MODE_LABELS[curMode] || curMode) + ')', '')
-					]));
-					mainCard.appendChild(E('div', { 'class': 'zm-actions' }, [ stopButton() ]));
-				} else if (busy) {
-					mainCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Сейчас выполняется другой тест — дождитесь его завершения.'));
-				} else {
-					mainCard.appendChild(E('div', { 'class': 'zm-actions' }, TEST_MODES.map(function(m) {
-						return E('button', {
-							'class': 'cbi-button cbi-button-positive',
-							'click': function() { doStart(m.id); }
-						}, m.label);
-					})));
-				}
-			}
-
-			function renderYt() {
-				ytCard.innerHTML = '';
-				ytCard.appendChild(E('h3', {}, 'Тест стратегий YouTube (Yv)'));
-				ytCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Проверяет только YouTube-стратегии (Yv).'));
-				if (busy && curMode === 'youtube') {
-					ytCard.appendChild(E('div', { 'class': 'zm-row' }, [
-						E('span', { 'class': 'zm-label' }, 'Статус'),
-						zm.badge(true, 'тест выполняется', '')
-					]));
-					ytCard.appendChild(E('div', { 'class': 'zm-actions' }, [ stopButton() ]));
-				} else if (busy) {
-					ytCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Сейчас выполняется другой тест — дождитесь его завершения.'));
-				} else {
-					ytCard.appendChild(E('div', { 'class': 'zm-actions' }, [
-						E('button', {
-							'class': 'cbi-button cbi-button-positive',
-							'click': function() { doStart('youtube'); }
-						}, 'Тестировать YouTube')
+			function renderLaunch() {
+				launchCard.innerHTML = '';
+				launchCard.appendChild(E('h3', {}, 'Тест стратегий'));
+				launchCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:-6px' }, 'Тест идёт в фоне — можно уйти со страницы. После теста настройки Zapret возвращаются как были.'));
+				if (busy) {
+					launchCard.appendChild(E('div', { 'class': 'zm-refresh-banner zm-show zm-tt-run' }, [
+						E('span', {}, [ 'Идёт тест: ' + (TEST_MODE_LABELS[curMode] || curMode || '…') + ' — подождите…' ]),
+						E('button', { 'class': 'cbi-button cbi-button-remove', 'click': doStop }, 'Остановить')
 					]));
 				}
+				launchCard.appendChild(E('div', { 'class': 'zm-tt-grid' }, TILES.map(function(t) {
+					var ctl;
+					if (t.domain) {
+						ctl = E('div', { 'class': 'zm-tt-ctl' }, [ domInput, E('button', { 'class': 'cbi-button cbi-button-positive', 'disabled': busy ? '' : null, 'click': startDomain }, 'Проверить') ]);
+						domInput.disabled = busy;
+					} else {
+						ctl = E('div', { 'class': 'zm-tt-ctl' }, t.buttons.map(function(b, i) {
+							return E('button', { 'class': 'cbi-button' + (i === t.buttons.length - 1 ? ' cbi-button-positive' : ''), 'disabled': busy ? '' : null, 'click': function() { doStart(b.mode); } }, b.label);
+						}));
+					}
+					var run = busy && (curMode === t.id || (t.id === 'main' && /^(v|flowseal|v_flowseal)$/.test(curMode)));
+					return E('div', { 'class': 'zm-tt-tile' + (run ? ' zm-tt-active' : '') }, [
+						E('div', { 'class': 'zm-tt-head' }, [ E('b', {}, t.title), run ? zm.badge(true, 'идёт', '') : (status['has_results_' + (t.id === 'main' ? 'v_flowseal' : t.id)] ? E('span', { 'class': 'zm-hint', 'style': 'margin:0' }, 'есть результат') : E([])) ]),
+						E('p', { 'class': 'zm-hint' }, t.sub),
+						ctl
+					]);
+				})));
 			}
 
-			function renderCur() {
-				curCard.innerHTML = '';
-				curCard.appendChild(E('h3', {}, 'Тест текущей стратегии'));
-				curCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Проверяет стратегию, которая стоит сейчас, ничего не меняя: отдельно по заблокированным сайтам и по YouTube.'));
-				if (busy && curMode === 'current') {
-					curCard.appendChild(E('div', { 'class': 'zm-row' }, [
-						E('span', { 'class': 'zm-label' }, 'Статус'),
-						zm.badge(true, 'тест выполняется', '')
-					]));
-					curCard.appendChild(E('div', { 'class': 'zm-actions' }, [ stopButton() ]));
-				} else if (busy) {
-					curCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Сейчас выполняется другой тест — дождитесь его завершения.'));
-				} else {
-					curCard.appendChild(E('div', { 'class': 'zm-actions' }, [
-						E('button', {
-							'class': 'cbi-button cbi-button-positive',
-							'click': function() { doStart('current'); }
-						}, 'Тестировать текущую стратегию')
-					]));
-				}
+			function startDomain() {
+				var v = domInput.value.trim();
+				if (!v) { zm.toast('Введите хотя бы один домен', 'warning'); domInput.focus(); return; }
+				doStart('domain:' + v.replace(/[\s,;]+/g, ' '));
+			}
+
+			function doStart(mode) {
+				if (busy) { zm.toast('Дождитесь окончания текущего теста', 'warning'); return; }
+				busy = true;
+				curMode = /^domain:/.test(mode) ? 'domain' : mode;
+				renderLaunch();
+				zm.toast('Запускаем тест — подождите…', 'warning');
+				zm.testAction('start', mode).then(function(res) {
+					if (res && res.error) { busy = false; curMode = ''; zm.toast(res.error, 'error'); renderLaunch(); return; }
+					startPolling();
+				}).catch(function() { busy = false; curMode = ''; renderLaunch(); zm.toast('Роутер не ответил', 'error'); });
+			}
+
+			function doStop() {
+				zm.toast('Останавливаем тест — подождите…', 'warning');
+				zm.testAction('stop').then(function(res) {
+					if (res && res.error) zm.toast(res.error, 'error');
+				});
 			}
 
 			function startPolling() {
 				logEl.classList.add('zm-show');
 				zm.pollJob('strategy_test', logEl, function(ok) {
+					var done = curMode;
 					busy = false;
 					curMode = '';
-					zm.toast(ok ? 'Тест завершён' : 'Тест завершился с ошибкой', ok ? 'info' : 'error');
-					renderMain();
-					renderYt();
-					renderCur();
+					zm.toast(ok ? 'Тест завершён' : 'Тест завершился с ошибкой — смотрите журнал', ok ? 'info' : 'error');
 					zm.testStatus().then(function(res) {
 						status = res;
-						renderResultsButtons();
+						renderLaunch();
+						delete resData[done];
+						loadResults(status['has_results_' + done] ? done : resMode);
 					});
 				});
 			}
 
-			function doStart(mode) {
-				if (busy) { zm.toast('Дождитесь завершения текущего теста', 'warning'); return; }
-				busy = true;
-				curMode = mode;
-				renderMain();
-				renderYt();
-				renderCur();
-				zm.toast('Запускаем тест стратегий', 'warning');
-				zm.testAction('start', mode).then(function(res) {
-					if (res.error) { busy = false; curMode = ''; zm.toast(res.error, 'error'); renderMain(); renderYt(); renderCur(); return; }
-					startPolling();
-				}).catch(function() { busy = false; curMode = ''; renderMain(); renderYt(); renderCur(); });
-			}
-
-			function doStop() {
-				zm.toast('Останавливаем тест', 'warning');
-				zm.testAction('stop').then(function(res) {
-					if (res.error) { zm.toast(res.error, 'error'); return; }
-					zm.toast('Тест остановлен, конфигурация восстанавливается', 'info');
-				});
-			}
-
-			function renderResultsColored(el, text) {
-				el.innerHTML = '';
-				var lines = (text || '').split('\n').filter(function(l) { return l; });
-				var controlOk = null;
-				lines.forEach(function(line) {
-					var m = line.match(/^(.*?)\s*→\s*(\d+)\/(\d+)\s*$/);
-					if (m && /^Контрольный тест/.test(m[1])) controlOk = +m[2];
-				});
-				var first = true;
-				lines.forEach(function(line) {
-					var div = document.createElement('div');
-					var m = line.match(/^(.*?)\s*→\s*(\d+)\/(\d+)\s*$/);
-					if (m) {
-						var name = m[1], ok = +m[2], total = +m[3];
-						var isControl = /^Контрольный тест/.test(name);
-						var nameSpan = document.createElement('span');
-						nameSpan.textContent = name + ' → ';
-						var scoreSpan = document.createElement('span');
-						scoreSpan.textContent = ok + '/' + total;
-						if (isControl) {
-							div.className = 'zm-log-code';
-						} else {
-							if (ok === total) scoreSpan.className = 'zm-log-msg-ok';
-							else if (controlOk !== null && ok < controlOk) scoreSpan.className = 'zm-log-msg-error';
-							else scoreSpan.className = 'zm-log-msg-warn';
-							if (first) { nameSpan.style.fontWeight = '700'; first = false; }
-						}
-						div.appendChild(nameSpan);
-						div.appendChild(scoreSpan);
-					} else {
-						div.className = 'zm-log-code';
-						div.textContent = line;
+			function parse(res) {
+				var out = { ts: '', rows: [], control: null };
+				var doms = [];
+				(res.detail || '').split('\n').forEach(function(l) {
+					if (!l) return;
+					var p = l.split('|');
+					if (p[0] === 'T') out.ts = p[1];
+					else if (p[0] === 'D') doms = (p[1] || '').split(' ').filter(Boolean);
+					else if (p[0] === 'S') {
+						var fails = (p[4] || '').split(' ').filter(Boolean), fm = {};
+						fails.forEach(function(f) { fm[f] = true; });
+						var row = { name: p[1], ok: +p[2], tot: +p[3], doms: doms.map(function(d) { return { name: d.replace(/_/g, ' '), ok: !fm[d] }; }) };
+						if (/^Контрольный тест/.test(row.name)) out.control = row; else out.rows.push(row);
 					}
-					el.appendChild(div);
 				});
-			}
-
-			function showResultsFor(mode) {
-				zm.testResults(mode).then(function(res) {
-					resultsEl.classList.add('zm-show');
-					renderResultsColored(resultsEl, res.lines || '');
-				});
-			}
-
-			function renderResultsButtons() {
-				resultsButtonsEl.innerHTML = '';
-				var actions = [];
-				TEST_RESULT_MODES.forEach(function(m) {
-					if (!status['has_results_' + m]) return;
-					actions.push(E('button', {
-						'class': 'cbi-button',
-						'click': function() { showResultsFor(m); }
-					}, 'Показать результаты: ' + TEST_MODE_LABELS[m]));
-				});
-				if (actions.length) {
-					resultsButtonsEl.appendChild(E('div', { 'class': 'zm-actions' }, actions));
-				} else {
-					resultsButtonsEl.appendChild(E('p', { 'class': 'zm-hint' }, 'Пока нет сохранённых результатов — запустите тест.'));
+				if (!out.rows.length && res.lines) {
+					res.lines.split('\n').forEach(function(l) {
+						var m = l.match(/^(.*?)\s*→\s*(\d+)\/(\d+)\s*$/);
+						if (!m) return;
+						var row = { name: m[1], ok: +m[2], tot: +m[3], doms: [] };
+						if (/^Контрольный тест/.test(row.name)) out.control = row; else out.rows.push(row);
+					});
 				}
+				return out;
 			}
 
-			var resultsCard = E('div', { 'class': 'zm-card' }, [
-				E('h3', {}, 'Результаты тестирования'),
-				resultsButtonsEl,
-				resultsEl
-			]);
+			function loadResults(mode) {
+				var avail = TEST_RESULT_MODES.filter(function(m) { return status['has_results_' + m]; });
+				if (!mode || avail.indexOf(mode) < 0) mode = avail[0] || null;
+				resMode = mode;
+				if (!mode) { renderResults(); return; }
+				if (resData[mode]) { renderResults(); return; }
+				renderResults(true);
+				zm.testResults(mode).then(function(res) {
+					resData[mode] = parse(res || {});
+					openRows = {};
+					if (mode === 'current' || mode === 'domain') resData[mode].rows.forEach(function(r, i) { if (mode === 'current' || i === 0) openRows[mode + ':' + r.name] = true; });
+					renderResults();
+				}).catch(function() { renderResults(); });
+			}
 
-			renderMain();
-			renderYt();
-			renderCur();
-			renderResultsButtons();
+			function scoreCls(r, ctrl) {
+				if (r.tot > 0 && r.ok === r.tot) return 'zm-tt-good';
+				if (ctrl && r.ok > ctrl.ok) return 'zm-tt-mid';
+				if (!ctrl && r.ok * 2 >= r.tot) return 'zm-tt-mid';
+				return 'zm-tt-bad';
+			}
 
-			if (busy) { startPolling(); }
+			function applyStrategy(mode, name) {
+				var call;
+				if (/^v([1-9]|10)$/.test(name)) call = function() { return zm.strategySetV(name); };
+				else if (mode === 'youtube') call = function() { return zm.strategySetYoutube(name); };
+				else call = function() { return zm.strategySetFlowseal(name); };
+				if (!confirm('Применить стратегию ' + name + '?')) return;
+				zm.toast('Применяем ' + name + ' — подождите…', 'warning');
+				call().then(function(r) {
+					if (r && r.error) { zm.toast(r.error, 'error'); return; }
+					zm.toast('Стратегия ' + name + ' применена', 'info');
+				}).catch(function() { zm.toast('Роутер не ответил', 'error'); });
+			}
 
-			panels.test.appendChild(mainCard);
-			panels.test.appendChild(ytCard);
-			panels.test.appendChild(curCard);
+			function chips(list) {
+				var bad = list.filter(function(d) { return !d.ok; }), good = list.filter(function(d) { return d.ok; });
+				var box = E('div', { 'class': 'zm-tt-doms' });
+				if (bad.length) box.appendChild(E('div', { 'class': 'zm-tt-domgrp' }, [
+					E('div', { 'class': 'zm-tt-domhead zm-tt-bad' }, [ 'Не открылись · ' + bad.length ]),
+					E('div', { 'class': 'zm-chips' }, bad.map(function(d) { return E('span', { 'class': 'zm-chip zm-chip-bad' }, [ '✕ ' + d.name ]); }))
+				]));
+				if (good.length) box.appendChild(E('div', { 'class': 'zm-tt-domgrp' }, [
+					E('div', { 'class': 'zm-tt-domhead zm-tt-good' }, [ 'Открылись · ' + good.length ]),
+					E('div', { 'class': 'zm-chips' }, good.map(function(d) { return E('span', { 'class': 'zm-chip zm-chip-ok' }, [ '✓ ' + d.name ]); }))
+				]));
+				return box;
+			}
+
+			function rowEl(mode, r, rank, ctrl, isCtrl) {
+				var key = mode + ':' + r.name, open = !!openRows[key], pct = r.tot ? Math.round(r.ok * 100 / r.tot) : 0;
+				var cls = isCtrl ? 'zm-tt-ctrl' : scoreCls(r, ctrl);
+				var canApply = !isCtrl && mode !== 'current';
+				var head = E('div', { 'class': 'zm-tt-row-head', 'click': function() {
+					if (!r.doms.length) return;
+					openRows[key] = !openRows[key];
+					renderResults();
+				} }, [
+					E('span', { 'class': 'zm-tt-rank' }, [ isCtrl ? '—' : String(rank) ]),
+					E('span', { 'class': 'zm-tt-name', 'title': r.name }, [ isCtrl ? 'Без Zapret' : r.name ]),
+					E('span', { 'class': 'zm-tt-bar' }, [ E('span', { 'class': 'zm-tt-fill ' + cls, 'style': 'width:' + pct + '%' }) ]),
+					E('span', { 'class': 'zm-tt-score ' + cls }, [ r.ok + ' / ' + r.tot ]),
+					canApply ? E('button', { 'class': 'cbi-button zm-tt-apply', 'click': function(ev) { ev.stopPropagation(); applyStrategy(mode, r.name); } }, 'Применить') : E('span', { 'class': 'zm-tt-apply-ph' }),
+					E('span', { 'class': 'zm-tt-chev' + (open ? ' zm-tt-open' : '') + (r.doms.length ? '' : ' zm-tt-nochev') }, '›')
+				]);
+				var body = open && r.doms.length ? chips(r.doms) : null;
+				if (body && canApply) body.appendChild(E('div', { 'class': 'zm-tt-apply-m' }, [ E('button', { 'class': 'cbi-button cbi-button-positive', 'click': function() { applyStrategy(mode, r.name); } }, 'Применить ' + r.name) ]));
+				return E('div', { 'class': 'zm-tt-row' + (open ? ' zm-tt-row-open' : '') + (isCtrl ? ' zm-tt-row-ctrl' : '') }, [ head, body || E([]) ]);
+			}
+
+			function renderResults(loading) {
+				resCard.innerHTML = '';
+				resCard.appendChild(E('h3', {}, 'Результаты'));
+				var avail = TEST_RESULT_MODES.filter(function(m) { return status['has_results_' + m]; });
+				if (!avail.length) {
+					resCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Пока пусто — запустите любой тест выше.'));
+					return;
+				}
+				resCard.appendChild(E('div', { 'class': 'zm-tt-tabs' }, [
+					E('div', { 'class': 'zm-seg' }, avail.map(function(m) {
+						return E('div', { 'class': 'zm-seg-item' + (m === resMode ? ' zm-active' : ''), 'click': function() { if (m !== resMode) loadResults(m); } }, TEST_MODE_LABELS[m] || m);
+					})),
+					E('button', { 'class': 'cbi-button', 'click': function() {
+						if (!confirm('Удалить результаты «' + (TEST_MODE_LABELS[resMode] || resMode) + '»?')) return;
+						zm.testAction('clear', resMode).then(function() {
+							status['has_results_' + resMode] = false;
+							delete resData[resMode];
+							renderLaunch();
+							loadResults(null);
+						});
+					} }, 'Удалить')
+				]));
+				var d = resData[resMode];
+				if (loading || !d) { resCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Загружаем…')); return; }
+				var rows = d.rows.slice();
+				if (resMode !== 'current') rows.sort(function(a, b) { return b.ok - a.ok; });
+				var best = rows[0], total = rows.length ? rows[0].tot : (d.control ? d.control.tot : 0);
+				var meta = [];
+				if (d.ts) meta.push('Проверено ' + d.ts);
+				if (resMode !== 'current') meta.push(rows.length + ' ' + (rows.length % 10 === 1 && rows.length % 100 !== 11 ? 'стратегия' : rows.length % 10 >= 2 && rows.length % 10 <= 4 && (rows.length % 100 < 12 || rows.length % 100 > 14) ? 'стратегии' : 'стратегий'));
+				if (total) meta.push(total + ' адр.');
+				if (resMode === 'domain' && status.domains) meta.push(status.domains);
+				resCard.appendChild(E('p', { 'class': 'zm-hint zm-tt-meta' }, [ meta.join(' · ') ]));
+				if (best && resMode !== 'current') {
+					resCard.appendChild(E('div', { 'class': 'zm-tt-best ' + scoreCls(best, d.control) }, [
+						E('span', {}, [ 'Лучшая: ' ]), E('b', {}, [ best.name ]), E('span', {}, [ ' — ' + best.ok + ' из ' + best.tot + (d.control ? ', без Zapret ' + d.control.ok : '') ])
+					]));
+				}
+				var list = E('div', { 'class': 'zm-tt-list' });
+				if (d.control) list.appendChild(rowEl(resMode, d.control, 0, null, true));
+				rows.forEach(function(r, i) { list.appendChild(rowEl(resMode, r, i + 1, d.control, false)); });
+				resCard.appendChild(list);
+				resCard.appendChild(E('p', { 'class': 'zm-hint' }, resMode === 'current' ? 'Нажмите на строку, чтобы скрыть или показать сайты.' : 'Нажмите на строку — покажет, какие сайты открылись. Зелёный — всё открылось, жёлтый — лучше, чем без Zapret, красный — не лучше.'));
+			}
+
+			renderLaunch();
+			loadResults(TEST_RESULT_MODES.filter(function(m) { return status['has_results_' + m]; })[0]);
+			if (busy) startPolling();
+
+			panels.test.appendChild(launchCard);
 			panels.test.appendChild(logEl);
-			panels.test.appendChild(resultsCard);
+			panels.test.appendChild(resCard);
 		})();
 
 		(function buildYoutubePanel() {
@@ -16676,6 +16770,48 @@ html.zm-theme-dark .zm-si-box { border-color: rgba(255,255,255,.12); background:
 .zm-chip { padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; background: rgba(110,118,129,.14); }
 .zm-chip-ok { background: rgba(46,160,67,.12); color: #1a7f37; }
 .zm-chip-bad { background: rgba(207,34,46,.10); color: #cf222e; }
+.zm-tt-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 800px) { .zm-tt-grid { grid-template-columns: 1fr; } }
+.zm-tt-tile { border: 1px solid rgba(0,0,0,.1); border-radius: 12px; padding: 12px 14px; background: rgba(0,0,0,.02); display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+html.zm-theme-dark .zm-tt-tile { border-color: rgba(255,255,255,.12); background: rgba(255,255,255,.03); }
+.zm-tt-tile.zm-tt-active { border-color: #2d5bff; box-shadow: 0 0 0 1px #2d5bff inset; }
+.zm-tt-tile .zm-hint { margin: 0; flex: 1; }
+.zm-tt-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.zm-tt-ctl { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 4px; }
+.zm-tt-run { margin-bottom: 12px; }
+.zm-tt-tabs { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.zm-tt-tabs .zm-seg { flex-wrap: wrap; }
+.zm-tt-meta { margin: 10px 0 8px; }
+.zm-tt-best { padding: 9px 12px; border-radius: 10px; margin-bottom: 10px; font-size: 13px; }
+.zm-tt-best.zm-tt-good { background: rgba(46,160,67,.12); }
+.zm-tt-best.zm-tt-mid { background: rgba(191,135,0,.12); }
+.zm-tt-best.zm-tt-bad { background: rgba(207,34,46,.10); }
+.zm-tt-list { display: flex; flex-direction: column; gap: 6px; }
+.zm-tt-row { border: 1px solid rgba(0,0,0,.08); border-radius: 10px; background: rgba(0,0,0,.015); overflow: hidden; }
+html.zm-theme-dark .zm-tt-row { border-color: rgba(255,255,255,.1); background: rgba(255,255,255,.025); }
+.zm-tt-row-ctrl { border-style: dashed; }
+.zm-tt-row-head { display: grid; grid-template-columns: 28px minmax(0, 1.3fr) minmax(60px, 1fr) 64px 100px 18px; align-items: center; gap: 10px; padding: 7px 10px; cursor: pointer; }
+.zm-tt-row-head:hover { background: rgba(45,91,255,.06); }
+.zm-tt-rank { font-size: 12px; opacity: .55; text-align: right; font-variant-numeric: tabular-nums; }
+.zm-tt-name { font-weight: 600; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.zm-tt-bar { height: 7px; border-radius: 99px; background: rgba(110,118,129,.18); overflow: hidden; }
+.zm-tt-fill { display: block; height: 100%; border-radius: 99px; }
+.zm-tt-fill.zm-tt-good { background: #2ea043; } .zm-tt-fill.zm-tt-mid { background: #d4a72c; } .zm-tt-fill.zm-tt-bad { background: #e5534b; } .zm-tt-fill.zm-tt-ctrl { background: #8b949e; }
+.zm-tt-score { font-weight: 700; font-size: 13px; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.zm-tt-score.zm-tt-good, .zm-tt-domhead.zm-tt-good { color: #1a7f37; } .zm-tt-score.zm-tt-mid { color: #9a6700; } .zm-tt-score.zm-tt-bad, .zm-tt-domhead.zm-tt-bad { color: #cf222e; } .zm-tt-score.zm-tt-ctrl { opacity: .7; }
+.zm-tt-apply { padding: 3px 10px !important; font-size: 12px !important; min-height: 0 !important; }
+.zm-tt-apply { justify-self: end; }
+.zm-tt-apply-m { display: none; }
+.zm-tt-chev { font-size: 18px; opacity: .5; transition: transform .15s; text-align: center; }
+.zm-tt-chev.zm-tt-open { transform: rotate(90deg); } .zm-tt-chev.zm-tt-nochev { visibility: hidden; }
+.zm-tt-doms { padding: 4px 12px 12px 48px; display: flex; flex-direction: column; gap: 10px; }
+.zm-tt-domhead { font-size: 12px; font-weight: 700; margin-bottom: 6px; }
+@media (max-width: 600px) {
+	.zm-tt-row-head { grid-template-columns: 22px minmax(0, 1fr) 56px 16px; }
+	.zm-tt-bar, .zm-tt-apply, .zm-tt-apply-ph { display: none; }
+	.zm-tt-doms { padding-left: 12px; }
+	.zm-tt-apply-m { display: block; }
+}
 .zm-alerts { display: flex; flex-direction: column; gap: 10px; }
 .zm-alerts:empty { display: none; }
 .zm-wrap > .zm-alerts { margin-bottom: 2px; }
@@ -17182,8 +17318,15 @@ return view.extend({
 				if (st.installed) {
 					actions.push(E('button', {
 						'class': 'cbi-button cbi-button-remove',
-						'click': function() { doAction(v.id, 'remove'); }
+						'click': function() {
+							if (!confirm('Удалить ' + v.title + '?\n\nУдаление принудительное: пакет и все файлы будут стёрты, даже если менеджер пакетов откажется.')) return;
+							doAction(v.id, 'remove');
+						}
 					}, 'Удалить'));
+					actions.push(E('button', {
+						'class': 'cbi-button',
+						'click': function() { doAction(v.id, 'reinstall'); }
+					}, 'Переустановить'));
 					if (st.version && st.latest && st.version !== st.latest) {
 						actions.push(E('button', {
 							'class': 'cbi-button',
@@ -17216,13 +17359,13 @@ return view.extend({
 			busyMap[variantId] = true;
 			var job = action === 'remove' ? ('tg_remove_' + (variantId === 'mtproto' ? 'mtproto' : variantId))
 				: ('tg_install_' + (variantId === 'mtproto' ? 'mtproto' : variantId));
-			zm.toast((action === 'remove' ? 'Удаляем ' : action === 'update' ? 'Обновляем ' : 'Устанавливаем ') + variantId + '', 'warning');
+			zm.toast((action === 'remove' ? 'Удаляем — подождите…' : action === 'reinstall' ? 'Переустанавливаем — подождите…' : action === 'update' ? 'Обновляем — подождите…' : 'Устанавливаем — подождите…'), 'warning');
 			zm.tgAction(variantId, action).then(function(res) {
 				if (res.error) { busyMap[variantId] = false; zm.toast(res.error, 'error'); return; }
 				if (res.started) {
 					zm.pollJob(job, logEl, function(ok) {
 						busyMap[variantId] = false;
-						zm.toast(ok ? 'Готово' : 'Ошибка', ok ? 'info' : 'error');
+						zm.toast(ok ? 'Готово' : 'Не получилось — причина в журнале ниже', ok ? 'info' : 'error');
 						zm.tgStatus().then(function(d) { renderCards(d); renderLinks(d); });
 					});
 				} else {
@@ -17246,8 +17389,15 @@ return view.extend({
 			if (installed) {
 				actions.push(E('button', {
 					'class': 'cbi-button cbi-button-remove',
-					'click': function() { doTgwsAction('remove'); }
+					'click': function() {
+						if (!confirm('Удалить sTGWS?\n\nУдаление принудительное: пакет и все файлы будут стёрты, даже если менеджер пакетов откажется.')) return;
+						doTgwsAction('remove');
+					}
 				}, 'Удалить'));
+				actions.push(E('button', {
+					'class': 'cbi-button',
+					'click': function() { doTgwsAction('reinstall'); }
+				}, 'Переустановить'));
 				if (d.version && d.latest && d.version !== d.latest) {
 					actions.push(E('button', {
 						'class': 'cbi-button',
@@ -17296,6 +17446,7 @@ return view.extend({
 			var label = action === 'remove' ? 'Удаляем sTGWS'
 				: action === 'restart' ? 'Перезапускаем sTGWS'
 				: action === 'reconfigure' ? 'Подбираем новый домен sTGWS'
+				: action === 'reinstall' ? 'Переустанавливаем sTGWS'
 				: action === 'update' ? 'Обновляем sTGWS' : 'Устанавливаем sTGWS';
 			zm.toast(label, 'warning');
 			zm.tgwsAction(action).then(function(res) {
@@ -17303,7 +17454,7 @@ return view.extend({
 				if (res.started) {
 					zm.pollJob(job, logEl, function(ok) {
 						tgwsBusy = false;
-						zm.toast(ok ? 'Готово' : 'Ошибка', ok ? 'info' : 'error');
+						zm.toast(ok ? 'Готово' : 'Не получилось — причина в журнале ниже', ok ? 'info' : 'error');
 						zm.tgwsStatus().then(function(d) { renderTgws(d); });
 					});
 				} else {
@@ -22157,6 +22308,12 @@ html[data-theme="depth"] .zmw-icon-btn.zmw-link-kvn, html[data-theme="depth"] .z
 html[data-theme="depth"] .zmw-icon-btn.zmw-link-tg, html[data-theme="depth"] .zmw-icon-btn.zmw-link-tg:hover { background: rgba(127,220,255,.12); color: #7fdcff; }
 #zmw-view .zm-st-stat-sub { color: var(--muted); opacity: 1; }
 #zmw-view .zm-log-wait { color: #fcd34d; }
+#zmw-view .zm-tt-tile, #zmw-view .zm-tt-row, html.zm-theme-dark #zmw-view .zm-tt-tile, html.zm-theme-dark #zmw-view .zm-tt-row { background: var(--surface-2); border-color: var(--border); }
+#zmw-view .zm-tt-tile { border-radius: 14px; }
+#zmw-view .zm-tt-tile.zm-tt-active { border-color: var(--accent, #2d5bff); box-shadow: 0 0 0 1px var(--accent, #2d5bff) inset; }
+#zmw-view .zm-tt-name, #zmw-view .zm-tt-head b { color: var(--text); }
+#zmw-view .zm-tt-row-head:hover { background: var(--surface-3, rgba(45,91,255,.06)); }
+#zmw-view .zm-tt-bar { background: var(--border); }
 #zmw-view .zm-si-box, html.zm-theme-dark #zmw-view .zm-si-box { background: var(--surface-2); border-color: var(--border); border-radius: 14px; }
 #zmw-view .zm-si-head h4 { color: var(--text); }
 #zmw-view .zm-chip { background: var(--surface-3, rgba(110,118,129,.14)); color: var(--text); }
