@@ -5822,6 +5822,52 @@ _awg_fetch() { # БАЗА ПАКЕТ ПОСТФИКС -> путь к файлу 
 	return 1
 }
 
+_awg_kmod_load() {
+	local kv ko dir out dm need p free msg
+	_st_awg_loaded && return 0
+	_rb_say "Загружаем модуль ядра"
+	modprobe amneziawg >/dev/null 2>&1
+	_st_awg_loaded && return 0
+	kv="$(uname -r)"
+	ko="$(find /lib/modules -name 'amneziawg.ko' 2>/dev/null | head -n1)"
+	if [ -z "$ko" ]; then
+		echo "ОШИБКА: файла модуля amneziawg.ko нет — пакет kmod-amneziawg встал не полностью"
+		free="$(df -k /overlay 2>/dev/null | awk 'NR==2 {print $4}')"
+		[ -n "$free" ] && [ "$free" -lt 2048 ] && echo "!! На флеше свободно всего $((free / 1024)) МБ — освободите место"
+		echo "!! Нажмите «Переустановить»"
+		return 1
+	fi
+	dir="${ko#/lib/modules/}"; dir="${dir%%/*}"
+	if [ "$dir" != "$kv" ]; then
+		echo "ОШИБКА: модуль собран для ядра $dir, а у роутера ядро $kv"
+		echo "!! Прошивка отличается от официальной OpenWrt $(_awg_rel_ver) — готовый модуль к ней не подходит. Поставьте официальную прошивку этой версии"
+		return 1
+	fi
+	for p in kmod-udptunnel4 kmod-udptunnel6 kmod-crypto-lib-chacha20poly1305 kmod-crypto-lib-curve25519; do
+		_pkg_is_installed "$p" || need="$need $p"
+	done
+	if [ -n "$need" ]; then
+		_rb_say "Не хватает модулей ядра:$need — ставим"
+		_zm_quiet "" $INSTALL $need
+		modprobe amneziawg >/dev/null 2>&1
+		_st_awg_loaded && return 0
+	fi
+	for p in udp_tunnel ip6_udp_tunnel libchacha20poly1305 libcurve25519 libcurve25519-generic; do modprobe "$p" >/dev/null 2>&1; done
+	out="$(insmod "$ko" 2>&1)"
+	_st_awg_loaded && return 0
+	dm="$(dmesg 2>/dev/null | grep -i 'amneziawg' | tail -n 3)"
+	case "$out $dm" in
+		*[Uu]nknown\ symbol*) msg="модулю не хватает функций ядра — в этой прошивке нет нужных модулей" ;;
+		*magic*|*[Ii]nvalid\ module\ format*|*disagrees*|*[Ee]xec\ format*) msg="модуль не подходит к ядру этой прошивки" ;;
+		*) msg="ядро не приняло модуль" ;;
+	esac
+	echo "ОШИБКА: $msg"
+	[ -n "$out" ] && echo "   insmod: $out"
+	[ -n "$dm" ] && printf '%s\n' "$dm" | sed 's/^/   ядро: /'
+	echo "!! Ядро $kv, OpenWrt $(_awg_rel_ver), $(_awg_rel_target). Перезагрузка не поможет — нужна официальная прошивка OpenWrt этой версии"
+	return 1
+}
+
 _st_install_awg() { # [update]
 	local mode="$1"
 	if [ "$mode" != update ] && _st_awg_loaded && command -v awg >/dev/null 2>&1 && _awg_proto_ok; then return 0; fi
@@ -5897,11 +5943,8 @@ _st_install_awg() { # [update]
 			_rb_warn "Модуль ядра обновлён ($kver0 → $kver1) — заработает после перезагрузки роутера"
 		fi
 	fi
-	_st_awg_loaded || modprobe amneziawg >/dev/null 2>&1
-	if ! _st_awg_loaded || ! command -v awg >/dev/null 2>&1; then
-		echo "ОШИБКА: модуль ядра AmneziaWG не загрузился — перезагрузите роутер и повторите"
-		return 1
-	fi
+	command -v awg >/dev/null 2>&1 || { echo "ОШИБКА: утилита awg не установилась — нажмите «Переустановить»"; return 1; }
+	_awg_kmod_load || return 1
 	if ! _awg_proto_ok; then
 		_rb_say "Перезапускаем сеть — страница может ненадолго пропасть"
 		/etc/init.d/network restart >/dev/null 2>&1
@@ -6834,8 +6877,8 @@ _st_svc_channels() { # ID
 				if [ -s "$f.meta" ]; then narrow="$narrow $set"; else pfx="$pfx${pfx:+,}\"$f.pfx\""; fi
 			fi
 		else
-			if [ -n "$(_rb_svc_field "$id" 3)$(_rb_svc_field "$id" 4)" ]; then _rb_warn "Список $set не скачался — беру список из пакета" >&2
-			else _rb_warn "Список «$name» из каталога не скачался — пропускаем его в этот раз" >&2; fi
+			if [ -n "$(_rb_svc_field "$id" 3)$(_rb_svc_field "$id" 4)" ]; then _rb_warn "Список $set не скачался или не раскрылся — беру список из пакета" >&2
+			else _rb_warn "Список «$name» не скачался или не раскрылся — пропускаем его в этот раз" >&2; fi
 			sets=""
 			break
 		fi
@@ -6900,7 +6943,6 @@ _st_spec_apply() { # ID...
 	out=$(steer apply --spec "$tmp" --dry-run 2>&1 >/dev/null); rc=$?
 	if [ "$rc" != 0 ] && grep -q '"srs_files"' "$tmp"; then
 		# Старый движок не читает наборы .srs сам — раскладываем их в списки, как раньше
-		_rb_warn "Движок Steer не принял наборы .srs напрямую — раскладываем их в списки (обновите движок)"
 		ST_SRS_NATIVE=0
 		_st_spec_build "$@" > "$tmp" || { echo "ОШИБКА: для выбранных сервисов нет ни одного списка"; return 1; }
 		out=$(steer apply --spec "$tmp" --dry-run 2>&1 >/dev/null); rc=$?
@@ -9937,11 +9979,7 @@ do_sysinfo() {
 			hosts="$(grep '^#' "$HOSTS_FILE" | cut -c2- | sed 's/^[[:space:]]*//' | grep -v '^$' | while IFS= read -r v; do printf '"%s",' "$(esc "$(_si_clean "$v")")"; done)"
 		fi
 		printf ',"hosts":[%s]' "${hosts%,}"
-		if [ "$PKG" = apk ]; then
-			pk="$(sort -u /etc/apk/world 2>/dev/null | sed 's/[<>=~].*//' | grep -v '^$')"
-		else
-			pk="$(awk '/^Package:/ {p = $2} /^Status: install user/ {print p}' /usr/lib/opkg/status 2>/dev/null | sort -u)"
-		fi
+		pk="$(_si_user_pkgs)"
 		printf ',"packages":[%s]' "$(printf '%s\n' "$pk" | grep -v '^$' | while IFS= read -r v; do printf '"%s",' "$(esc "$v")"; done | sed 's/,$//')"
 	} >> "$out"
 
@@ -9958,6 +9996,25 @@ do_sysinfo() {
 	rm -f "$list" "$res"
 	mv "$out" "$SI_OUT"
 	echo "==> Готово: сайты открываются $ok из $all"
+}
+
+_si_user_pkgs() {
+	local t0
+	if [ "$PKG" = apk ]; then
+		if [ -s /rom/etc/apk/world ]; then
+			sed 's/[<>=~].*//' /rom/etc/apk/world | sort -u > "$JOBS_DIR/si.rom"
+			sed 's/[<>=~].*//' /etc/apk/world 2>/dev/null | sort -u | grep -vxF -f "$JOBS_DIR/si.rom"
+		else
+			sed 's/[<>=~].*//' /etc/apk/world 2>/dev/null | sort -u
+		fi
+	elif [ -s /rom/usr/lib/opkg/status ]; then
+		awk '/^Package:/ {p = $2} /^Status: install user/ {print p}' /rom/usr/lib/opkg/status | sort -u > "$JOBS_DIR/si.rom"
+		awk '/^Package:/ {p = $2} /^Status: install user/ {print p}' /usr/lib/opkg/status 2>/dev/null | sort -u | grep -vxF -f "$JOBS_DIR/si.rom"
+	else
+		t0="$(awk '/^Installed-Time:/ {print $2}' /usr/lib/opkg/status 2>/dev/null | sort -n | head -n1)"
+		awk -v t0="${t0:-0}" '/^Package:/ {p = $2; u = 0} /^Status: install user/ {u = 1} /^Installed-Time:/ { if (u && $2 > t0 + 600) print p }' /usr/lib/opkg/status 2>/dev/null | sort -u
+	fi
+	rm -f "$JOBS_DIR/si.rom"
 }
 
 sysinfo_run() {
@@ -15335,7 +15392,7 @@ return view.extend({
 			var status = testData;
 			var launchCard = E('div', { 'class': 'zm-card' });
 			var resCard = E('div', { 'class': 'zm-card' });
-			var resMode = null, resData = {}, openRows = {};
+			var resMode = null, resData = {}, openRows = {}, mainPick = /^(v|flowseal|v_flowseal)$/.test(testData.mode || '') ? testData.mode : 'v_flowseal';
 			var domInput = E('input', { 'type': 'text', 'class': 'cbi-input-text', 'placeholder': 'x.com discord.com rutracker.org', 'style': 'flex:1 1 220px; min-width:0' });
 			domInput.value = testData.domains || '';
 			domInput.addEventListener('keydown', function(ev) { if (ev.key === 'Enter') startDomain(); });
@@ -15343,7 +15400,7 @@ return view.extend({
 			var TILES = [
 				{ id: 'current', title: 'Текущая стратегия', sub: 'Проверяет, что стоит сейчас, ничего не меняя: заблокированные сайты и YouTube.', buttons: [ { mode: 'current', label: 'Проверить' } ] },
 				{ id: 'domain', title: 'По домену', sub: 'Все стратегии v и Flowseal на ваших сайтах. Через пробел, до 30 штук.', domain: true },
-				{ id: 'main', title: 'Стратегии v и Flowseal', sub: 'Перебирает стратегии на списке заблокированных сайтов.', buttons: [ { mode: 'v', label: 'v1–v10' }, { mode: 'flowseal', label: 'Flowseal' }, { mode: 'v_flowseal', label: 'Все' } ] },
+				{ id: 'main', title: 'Стратегии v и Flowseal', sub: 'Выберите, что перебирать, и нажмите «Проверить». Проверка идёт по списку заблокированных сайтов.', choice: [ { id: 'v', label: 'v1–v10' }, { id: 'flowseal', label: 'Flowseal' }, { id: 'v_flowseal', label: 'v + Flowseal' } ] },
 				{ id: 'youtube', title: 'YouTube', sub: 'Перебирает стратегии Yv на адресах YouTube.', buttons: [ { mode: 'youtube', label: 'Проверить' } ] }
 			];
 
@@ -15362,6 +15419,13 @@ return view.extend({
 					if (t.domain) {
 						ctl = E('div', { 'class': 'zm-tt-ctl' }, [ domInput, E('button', { 'class': 'cbi-button cbi-button-positive', 'disabled': busy ? '' : null, 'click': startDomain }, 'Проверить') ]);
 						domInput.disabled = busy;
+					} else if (t.choice) {
+						ctl = E('div', { 'class': 'zm-tt-ctl' }, [
+							E('div', { 'class': 'zm-seg' }, t.choice.map(function(c) {
+								return E('div', { 'class': 'zm-seg-item' + (c.id === mainPick ? ' zm-active' : ''), 'click': function() { if (!busy && c.id !== mainPick) { mainPick = c.id; renderLaunch(); } } }, c.label);
+							})),
+							E('button', { 'class': 'cbi-button cbi-button-positive', 'disabled': busy ? '' : null, 'click': function() { doStart(mainPick); } }, 'Проверить')
+						]);
 					} else {
 						ctl = E('div', { 'class': 'zm-tt-ctl' }, t.buttons.map(function(b, i) {
 							return E('button', { 'class': 'cbi-button' + (i === t.buttons.length - 1 ? ' cbi-button-positive' : ''), 'disabled': busy ? '' : null, 'click': function() { doStart(b.mode); } }, b.label);
@@ -15369,7 +15433,7 @@ return view.extend({
 					}
 					var run = busy && (curMode === t.id || (t.id === 'main' && /^(v|flowseal|v_flowseal)$/.test(curMode)));
 					return E('div', { 'class': 'zm-tt-tile' + (run ? ' zm-tt-active' : '') }, [
-						E('div', { 'class': 'zm-tt-head' }, [ E('b', {}, t.title), run ? zm.badge(true, 'идёт', '') : (status['has_results_' + (t.id === 'main' ? 'v_flowseal' : t.id)] ? E('span', { 'class': 'zm-hint', 'style': 'margin:0' }, 'есть результат') : E([])) ]),
+						E('div', { 'class': 'zm-tt-head' }, [ E('b', {}, t.title), run ? zm.badge(true, 'идёт', '') : ((t.id === 'main' ? (status.has_results_v || status.has_results_flowseal || status.has_results_v_flowseal) : status['has_results_' + t.id]) ? E('span', { 'class': 'zm-hint', 'style': 'margin:0' }, 'есть результат') : E([])) ]),
 						E('p', { 'class': 'zm-hint' }, t.sub),
 						ctl
 					]);
@@ -15539,18 +15603,13 @@ return view.extend({
 				if (loading || !d) { resCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Загружаем…')); return; }
 				var rows = d.rows.slice();
 				if (resMode !== 'current') rows.sort(function(a, b) { return b.ok - a.ok; });
-				var best = rows[0], total = rows.length ? rows[0].tot : (d.control ? d.control.tot : 0);
+				var total = rows.length ? rows[0].tot : (d.control ? d.control.tot : 0);
 				var meta = [];
 				if (d.ts) meta.push('Проверено ' + d.ts);
 				if (resMode !== 'current') meta.push(rows.length + ' ' + (rows.length % 10 === 1 && rows.length % 100 !== 11 ? 'стратегия' : rows.length % 10 >= 2 && rows.length % 10 <= 4 && (rows.length % 100 < 12 || rows.length % 100 > 14) ? 'стратегии' : 'стратегий'));
 				if (total) meta.push(total + ' адр.');
 				if (resMode === 'domain' && status.domains) meta.push(status.domains);
 				resCard.appendChild(E('p', { 'class': 'zm-hint zm-tt-meta' }, [ meta.join(' · ') ]));
-				if (best && resMode !== 'current') {
-					resCard.appendChild(E('div', { 'class': 'zm-tt-best ' + scoreCls(best, d.control) }, [
-						E('span', {}, [ 'Лучшая: ' ]), E('b', {}, [ best.name ]), E('span', {}, [ ' — ' + best.ok + ' из ' + best.tot + (d.control ? ', без Zapret ' + d.control.ok : '') ])
-					]));
-				}
 				var list = E('div', { 'class': 'zm-tt-list' });
 				if (d.control) list.appendChild(rowEl(resMode, d.control, 0, null, true));
 				rows.forEach(function(r, i) { list.appendChild(rowEl(resMode, r, i + 1, d.control, false)); });
@@ -16993,7 +17052,7 @@ return view.extend({
 					return E('span', { 'class': 'zm-chip ' + (x.ok ? 'zm-chip-ok' : 'zm-chip-bad') }, [ (x.ok ? '✓ ' : '✕ ') + x.name ]);
 				})) ], E('span', { 'class': 'zm-badge ' + cls }, [ E('span', { 'class': 'zm-dot' }), [ ok + ' из ' + all ] ])));
 			}
-			if (si.packages && si.packages.length) siBody.appendChild(siBox('Установленные пакеты', [ E('div', { 'class': 'zm-chips' }, si.packages.map(function(p) { return E('span', { 'class': 'zm-chip' }, [ p ]); })) ], E('span', { 'class': 'zm-hint', 'style': 'margin:0' }, [ String(si.packages.length) ])));
+			if (si.packages && si.packages.length) siBody.appendChild(siBox('Пакеты, поставленные вручную', [ E('div', { 'class': 'zm-chips' }, si.packages.map(function(p) { return E('span', { 'class': 'zm-chip' }, [ p ]); })) ], E('span', { 'class': 'zm-hint', 'style': 'margin:0' }, [ String(si.packages.length) ])));
 		}
 
 		function siRun() {
@@ -17635,7 +17694,7 @@ function fromCfg(c) {
 	var dns = c.dns || {};
 	return {
 		sec: c.sec || 'main', mode: c.mode || 'links', links: (c.links || []).join('\n'), sub: c.sub || '',
-		sub_interval: c.sub_interval || '12h', iface: c.iface || '', fastest: c.exists ? !!c.fastest : true,
+		sub_interval: c.sub_interval || '12h', iface: c.iface || '', fastest: true,
 		services: (c.services || []).slice(), domains: (c.domains || []).join('\n'), subnets: (c.subnets || []).join('\n'),
 		lists: (c.lists || []).join('\n'), full: (c.full || []).slice(), excl: (c.excl || []).slice(),
 		dns: { type: dns.type || 'udp', server: dns.server || '77.88.8.8', bootstrap: dns.bootstrap || '77.88.8.8' },
@@ -17652,6 +17711,11 @@ function sig(d) {
 	var tl = function(v) { return String(v || '').split(/\n/).map(function(x) { return x.trim(); }).filter(Boolean).join('\n'); };
 	return JSON.stringify([ d.sec, d.mode, tl(d.links), d.sub.trim(), d.sub_interval, d.iface, d.fastest, srt(d.services), tl(d.domains),
 		tl(d.subnets), tl(d.lists), srt(d.full), srt(d.excl), d.dns.type, d.dns.server, d.dns.bootstrap, d.quic_off, d.list_interval ]);
+}
+
+function subName(t) {
+	t = String(t || '').trim();
+	return t.replace(/[\s\uFE0F]/g, '') === '\uD83C\uDF28VPN' ? 'StressKVN' : t;
 }
 
 function dnsPreset(d) {
@@ -17780,7 +17844,7 @@ return view.extend({
 		function payload() {
 			return JSON.stringify({
 				sec: draft.sec, mode: draft.mode, links: draft.links, sub: draft.sub.trim(), sub_interval: draft.sub_interval,
-				iface: draft.iface, fastest: draft.fastest, services: draft.services, domains: draft.domains,
+				iface: draft.iface, fastest: true, services: draft.services, domains: draft.domains,
 				subnets: draft.subnets, lists: draft.lists, full: draft.full, excl: draft.excl,
 				dns: draft.dns, quic_off: draft.quic_off, list_interval: draft.list_interval
 			});
@@ -17833,12 +17897,31 @@ return view.extend({
 			renderTabs();
 		}
 
+		function srvState() {
+			if (!servers) return null;
+			var ns = servers.nodes || {}, list = servers.list || [];
+			var autoTag = list.filter(function(t) { return ns[t] && ns[t].members; })[0], auto = autoTag ? ns[autoTag] : null;
+			var isAuto = !!(autoTag && servers.now === autoTag);
+			var curTag = isAuto ? auto.now : servers.now;
+			return { ns: ns, list: list, autoTag: autoTag, auto: auto, isAuto: isAuto, curTag: curTag, cur: ns[curTag] || {} };
+		}
+
+		function connNow() {
+			var s = srvState();
+			if (!s || !s.curTag) return '';
+			return (s.auto ? (s.isAuto ? 'авто · ' : 'вручную · ') : '') + nodeName(s.cur);
+		}
+
 		function connValue(c) {
 			if (!c || !c.exists) return [ 'не настроено', 'выберите способ ниже' ];
 			if (c.mode === 'iface') return [ 'Туннель ' + c.iface, 'WireGuard / AmneziaWG' ];
-			if (c.mode === 'sub') return [ 'Подписка', c.fastest ? 'самый быстрый сервер' : 'сервер вручную' ];
+			var now = st.running ? connNow() : '';
+			if (c.mode === 'sub') {
+				var t = servers && servers.sub && servers.sub.title ? subName(servers.sub.title) : '';
+				return [ t || 'Подписка', now || (t ? 'подписка' : 'серверы из подписки') ];
+			}
 			var n = (c.links || []).length;
-			return [ nn(n, 'сервер', 'сервера', 'серверов'), n > 1 ? (c.fastest ? 'самый быстрый' : 'выбор вручную') : 'по ссылке' ];
+			return [ nn(n, 'сервер', 'сервера', 'серверов'), now || (n > 1 ? 'авто или вручную' : 'по ссылке') ];
 		}
 
 		function routeValue(c) {
@@ -17993,13 +18076,11 @@ return view.extend({
 				connCard.appendChild(row('Распознано', linkCountEl));
 				renderLinkCount();
 				connCard.appendChild(E('p', { 'class': 'zm-hint' }, 'По одной ссылке на строку: vless, vmess, trojan, ss, socks5, hysteria2, tuic. Серверы с XHTTP — только с расширенным sing-box.'));
-				if (textLines(draft.links).length > 1)
-					connCard.appendChild(sw(draft.fastest, 'Самый быстрый сервер', 'Forkozz сам переключается на лучший.', function() { set('fastest', !draft.fastest); }));
+				connCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Если серверов несколько, выбирать между ними — в карточке «Серверы» ниже.'));
 			}
 			else if (draft.mode === 'sub') {
 				connCard.appendChild(taSub);
-				connCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Ссылка на подписку от VPN-сервиса, обычно https://…/sub/…'));
-				connCard.appendChild(sw(draft.fastest, 'Самый быстрый сервер', 'Forkozz сам переключается на лучший.', function() { set('fastest', !draft.fastest); }));
+				connCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Ссылка на подписку от VPN-сервиса, обычно https://…/sub/…. Выбор сервера — в карточке «Серверы» ниже.'));
 				connCard.appendChild(row('Обновлять', seg(SUB_IV, draft.sub_interval, function(v) { set('sub_interval', v); })));
 			}
 			else {
@@ -18024,6 +18105,7 @@ return view.extend({
 				srvBusy = false;
 				if (res.error) { servers = null; srvErr = res.error; } else { servers = res; srvErr = ''; }
 				renderServers();
+				renderMain();
 			}).catch(function() { srvBusy = false; srvErr = 'роутер не ответил'; renderServers(); });
 		}
 
@@ -18063,15 +18145,12 @@ return view.extend({
 				if (!srvBusy) srvCard.appendChild(E('div', { 'class': 'zm-actions' }, [ E('button', { 'class': 'cbi-button', 'click': loadServers }, 'Обновить') ]));
 				return;
 			}
-			var ns = servers.nodes || {}, list = servers.list || [];
-			var autoTag = list.filter(function(t) { return ns[t] && ns[t].members; })[0], auto = autoTag ? ns[autoTag] : null;
-			var manual = list.filter(function(t) { return t !== autoTag; });
-			var isAuto = autoTag && servers.now === autoTag;
-			var curTag = isAuto ? auto.now : servers.now, cur = ns[curTag] || {};
+			var S = srvState(), ns = S.ns, autoTag = S.autoTag, auto = S.auto, isAuto = S.isAuto, curTag = S.curTag, cur = S.cur;
+			var manual = S.list.filter(function(t) { return t !== autoTag; });
 
 			var sub = servers.sub;
 			if (sub && (sub.title || sub.used != null || sub.expire)) {
-				if (sub.title) srvCard.appendChild(row('Подписка', E('b', {}, [ String(sub.title) ])));
+				if (sub.title) srvCard.appendChild(row('Подписка', E('b', {}, [ subName(sub.title) ])));
 				if (sub.used != null) srvCard.appendChild(row('Трафик', E('span', {}, fmtBytes(sub.used) + (sub.total ? ' из ' + fmtBytes(sub.total) : sub.unlimited ? ' · без лимита' : ''))));
 				if (sub.expire) srvCard.appendChild(row('Действует до', E('span', {}, fmtDate(sub.expire))));
 			}
