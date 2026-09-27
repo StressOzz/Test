@@ -1,5 +1,5 @@
 #!/bin/sh
-# Version: 1.70
+# Version: 1.69
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -70,7 +70,7 @@ cat > '/opt/zapret-manager-luci/backend.sh' << 'ZM_INSTALLER_EOF'
 umask 022
 
 CONF="/etc/config/zapret"
-ZM_VERSION="1.70"
+ZM_VERSION="1.69"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
@@ -3665,9 +3665,9 @@ health() {
 	fi
 	local sx=""
 	if _st_installed; then sx="$(_st_exit)"; [ "$sx" = warp ] && _st_warp_own && sx=own; fi
-	printf '{"zapret":%s,"zapret2":%s,"bytetube":%s,"tg":%s,"mixomo":%s,"doh":%s,"hosts":%s,"steer":%s,"steer_off":%s,"steer_exit":"%s","awg":%s}\n' \
+	printf '{"zapret":%s,"zapret2":%s,"bytetube":%s,"tg":%s,"mixomo":%s,"doh":%s,"hosts":%s,"steer":%s,"steer_off":%s,"steer_exit":"%s","awg":%s,"forkop":%s}\n' \
 		"$zr" "$zr2" "$bt" "$tg" "$mx" "$doh" "$hs" "$sr" \
-		"$([ -f /etc/zm-steer/stopped ] && echo true || echo false)" "$sx" "$(_awg_health)"
+		"$([ -f /etc/zm-steer/stopped ] && echo true || echo false)" "$sx" "$(_awg_health)" "$(_fk_health)"
 }
 
 VERSIONS_CACHE="$ZM_STATE_DIR/versions.json"
@@ -3722,8 +3722,12 @@ do_versions_refresh() {
 		add "$(_ver_item sTGWS "$(_jf "$j" '@.version')" "$(_jf "$j" '@.latest')")"
 	fi
 	command -v steer >/dev/null 2>&1 && add "$(_ver_item 'Движок Steer' "$(_st_steer_ver)" "$(_st_latest_ver)")"
+	_fk_installed && add "$(_ver_item Forkop "$(_fk_version)" "$(_fk_latest)")"
 	local feeds=0 v
 	[ -n "$(_ver_feed_latest busybox)" ] || { $UPDATE >/dev/null 2>&1; }
+	if _fk_installed && v="$(_fk_sb_pkg)"; then
+		add "$(_ver_item sing-box "$(_fk_sb_ver)" "$(_ver_feed_latest "$v")")"
+	fi
 	if [ -f /etc/init.d/zapret2 ]; then
 		v="$(_awg_pkg_ver zapret2)"
 		add "$(_ver_item Zapret2 "$v" "$(_ver_feed_latest zapret2)")"
@@ -9221,6 +9225,442 @@ awg_action() {
 	esac
 }
 
+FK_REPO="slayer326/forkop"
+FK_PIN="1.0.26"
+FK_MARK="/usr/share/forkop/zm-managed"
+FK_UC="/opt/zapret-manager-luci/forkop.uc"
+FK_SAVE="$ZM_STATE_DIR/forkop.config"
+FK_SB_OWN="$ZM_STATE_DIR/forkop.singbox"
+FK_DEPS="ca-bundle kmod-inet-diag kmod-tun curl ucode ucode-mod-fs ucode-mod-uci kmod-nft-tproxy coreutils-base64 bind-dig nftables-json kmod-nft-nat ip-full"
+FK_MIRRORS='mirror\.(infotechtg|51343)\.ru|fold8\.ru'
+
+_fk_say() { echo "==> $*"; }
+_fk_installed() { [ -x /usr/bin/forkop ] && [ -d /usr/lib/forkop ]; }
+_fk_version() { sed -n 's/.*env("FORKOP_VERSION", "\([^"]*\)").*/\1/p' /usr/lib/forkop/core/constants.uc 2>/dev/null | head -n1; }
+_fk_enabled() { ls /etc/rc.d/S*forkop >/dev/null 2>&1; }
+_fk_up() { nft list table inet ForkopTable >/dev/null 2>&1 && pidof sing-box >/dev/null 2>&1; }
+_fk_sb_ver() { command -v sing-box >/dev/null 2>&1 && sing-box version 2>/dev/null | head -n1 | awk '{print $NF}'; }
+_fk_sb_pkg() { local p; for p in sing-box-tiny sing-box sing-box-extended; do _pkg_is_installed "$p" && { echo "$p"; return 0; }; done; return 1; }
+_fk_foreign() { _pkg_is_installed forkop || _pkg_is_installed luci-app-forkop; }
+_fk_uc() { command -v ucode >/dev/null 2>&1 && [ -f "$FK_UC" ] || { echo '{"error":"Forkop не установлен"}'; return 1; }; ucode "$FK_UC" "$@"; }
+
+_fk_latest_fetch() {
+	local v
+	v="$(_ver_gh_latest "$FK_REPO")"
+	echo "$v" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$' ||
+		v="$(curl -fsSL --connect-timeout 5 --max-time 10 "https://raw.githubusercontent.com/$FK_REPO/main/RELEASE_VERSION" 2>/dev/null | tr -d '[:space:]')"
+	echo "$v" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$' && echo "$v"
+}
+_fk_latest() { _zm_cached forkop _fk_latest_fetch; }
+
+_fk_blocker() {
+	_pkg_is_installed https-dns-proxy && { echo doh; return; }
+	{ _pkg_is_installed podkop || _pkg_is_installed podkop-plus || [ -x /etc/init.d/podkop ] || [ -x /etc/init.d/podkop-plus ]; } && { echo podkop; return; }
+	{ _pkg_is_installed luci-app-passwall || _pkg_is_installed luci-app-passwall2 || [ -x /etc/init.d/passwall ] || [ -x /etc/init.d/passwall2 ]; } && { echo passwall; return; }
+	[ -x "$MIHOMO_BIN" ] && { echo mixomo; return; }
+	echo ""
+}
+
+_fk_blocker_text() {
+	case "$1" in
+		doh) echo "Установлен DNS over HTTPS (https-dns-proxy) — Forkop сам шифрует DNS и с ним не уживается. Удалите его на вкладке «DNS over HTTPS»." ;;
+		podkop) echo "Установлен Podkop — два маршрутизатора трафика на одном роутере мешают друг другу. Удалите Podkop." ;;
+		passwall) echo "Установлен PassWall — два маршрутизатора трафика на одном роутере мешают друг другу. Удалите PassWall." ;;
+		mixomo) echo "Установлен Mixomo (Mihomo) — он тоже перехватывает трафик и DNS. Удалите Mixomo на его вкладке." ;;
+		*) echo "$1" ;;
+	esac
+}
+
+_fk_warn() {
+	local w=""
+	_st_installed 2>/dev/null && [ ! -f /etc/zm-steer/stopped ] && w="$w steer"
+	[ -x /usr/bin/bytetube ] && /etc/init.d/bytetube enabled 2>/dev/null && w="$w bytetube"
+	echo $w
+}
+
+_fk_health() {
+	_fk_installed || { echo 0; return; }
+	_fk_enabled || { echo 5; return; }
+	_fk_up && echo 1 || echo 2
+}
+
+forkop_status() {
+	local inst=false ver="" latest="" newer=false en=false up=false sb sbp="" blk w busy=false warn="" x
+	_fk_installed && { inst=true; ver="$(_fk_version)"; }
+	latest="$(_fk_latest)"
+	[ -n "$ver" ] && [ -n "$latest" ] && _st_ver_lt "$ver" "$latest" && newer=true
+	_fk_enabled && en=true
+	_fk_up && up=true
+	sb="$(_fk_sb_ver)"
+	sbp="$(_fk_sb_pkg)"
+	blk="$(_fk_blocker)"
+	_job_running forkop && busy=true
+	for x in $(_fk_warn); do warn="$warn${warn:+,}\"$x\""; done
+	printf '{"installed":%s,"version":"%s","latest":"%s","newer":%s,"enabled":%s,"running":%s,"managed":%s,"foreign":%s,"singbox":"%s","singbox_pkg":"%s","blocker":"%s","blocker_text":"%s","warn":[%s],"busy":%s,"lan_ip":"%s","saved":%s}\n' \
+		"$inst" "$(esc "$ver")" "$(esc "$latest")" "$newer" "$en" "$up" \
+		"$([ -f "$FK_MARK" ] && echo true || echo false)" "$(_fk_foreign && echo true || echo false)" \
+		"$(esc "$sb")" "$(esc "$sbp")" "$(esc "$blk")" "$(esc "$(_fk_blocker_text "$blk")")" "$warn" "$busy" \
+		"$(esc "$(_zm_lan_ip)")" "$([ -s "$FK_SAVE" ] && echo true || echo false)"
+}
+
+_fk_feeds_official() {
+	local f b ch=0
+	for f in /etc/opkg/distfeeds.conf /etc/opkg/customfeeds.conf /etc/apk/repositories /etc/apk/repositories.d/*.list; do
+		[ -f "$f" ] || continue
+		case "$f" in */repositories.d/forkop.list) rm -f "$f"; ch=1; continue ;; esac
+		grep -qE "$FK_MIRRORS" "$f" || continue
+		b="$f.pre-forkop-mirror"
+		if [ -f "$b" ] && ! grep -qE "$FK_MIRRORS" "$b"; then cp "$b" "$f"
+		elif [ -f "/rom$f" ] && ! grep -qE "$FK_MIRRORS" "/rom$f"; then cp "/rom$f" "$f"
+		else sed -i -E 's#https?://mirror\.(infotechtg|51343)\.ru/openwrt/releases/#https://downloads.openwrt.org/releases/#g' "$f"; fi
+		sed -i -E "/$FK_MIRRORS/d" "$f"
+		rm -f "$b"
+		ch=1
+		_fk_say "Репозиторий пакетов снова официальный: $f"
+	done
+	[ -f /etc/apk/keys/forkop-mirror.pem ] && { rm -f /etc/apk/keys/forkop-mirror.pem; ch=1; }
+	[ "$ch" = 1 ] && return 0
+	return 1
+}
+
+_fk_conf_official() {
+	local c=/etc/config/forkop m
+	[ -f "$c" ] || return 0
+	sed -i -E \
+		-e 's#https?://mirror\.(infotechtg|51343)\.ru/forkop/lists/allow-domains/#https://raw.githubusercontent.com/itdoginfo/allow-domains/main/#g' \
+		-e 's#https?://mirror\.(infotechtg|51343)\.ru/forkop/lists/b4geoip-forkop/#https://raw.githubusercontent.com/Greeg0ry/b4geoip-forkop/main/#g' \
+		-e 's#https?://mirror\.(infotechtg|51343)\.ru/forkop/lists/rulesets/community/#https://github.com/itdoginfo/allow-domains/releases/latest/download/#g' \
+		-e 's#https?://mirror\.(infotechtg|51343)\.ru/forkop/lists/rulesets/adlist\.srs#https://github.com/zxc-rv/ad-filter/releases/latest/download/adlist.srs#g' \
+		-e 's#https?://mirror\.(infotechtg|51343)\.ru/forkop/lists/rulesets/supercell\.srs#https://raw.githubusercontent.com/ushan0v/sing-box-supercell-ruleset/main/supercell.srs#g' \
+		-e 's#https?://mirror\.(infotechtg|51343)\.ru/forkop/lists/rulesets/github\.srs#https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/github.srs#g' \
+		-e '/downloaded from this mirror/d' "$c"
+	uci -q get forkop.settings >/dev/null || return 0
+	uci -q delete forkop.settings.mirror_base_url
+	for m in secondary_rulesets_mirror_v1 own_dependency_mirror_v1 mirror_infotechtg_ru_v1; do
+		uci -q get forkop.settings.applied_migrations 2>/dev/null | tr ' ' '\n' | grep -qx "$m" || uci -q add_list forkop.settings.applied_migrations="$m"
+	done
+	uci set forkop.settings.component_update_check_enabled='0'
+	uci commit forkop
+}
+
+_fk_patch() {
+	local d="$1" tag="$2" c a m
+	c="$d/usr/lib/core/constants.uc"; a="$d/usr/lib/components/action.uc"; m="$d/usr/lib/config/migration.uc"
+	[ -f "$c" ] && [ -f "$a" ] && [ -f "$m" ] && [ -f "$d/etc/config/forkop" ] || { echo "ОШИБКА: в архиве нет нужных файлов Forkop"; return 1; }
+	sed -i \
+		-e 's#const default_mirror = "https://mirror.infotechtg.ru";#const default_mirror = "";#' \
+		-e 's#env("FORKOP_RELEASE_BASE_URL", "https://fold8.ru/forkop")#env("FORKOP_RELEASE_BASE_URL", "")#' \
+		-e "s#__COMPILED_VERSION_VARIABLE__#$tag#g" "$c"
+	sed -i -e 's#|| "https://fold8.ru/forkop";#|| "";#' \
+		-e '/^function install_forkop(requested_version) {$/a\
+    action_fail("forkop", "install", "Forkop is updated from Zapret Manager");' "$a"
+	sed -i \
+		-e 's#run: migrate_secondary_rulesets_to_mirror }#run: function(ctx) { return null; } }#' \
+		-e 's#run: migrate_own_dependency_mirror }#run: function(ctx) { return null; } }#' "$m"
+	sed -i -e '/mirror_base_url/d' -e '/downloaded from this mirror/d' \
+		-e "s#option component_update_check_enabled '1'#option component_update_check_enabled '0'#" "$d/etc/config/forkop"
+	rm -f "$d/usr/share/forkop/mirror-migration.sh"
+	grep -q 'const default_mirror = "";' "$c" &&
+		grep -q 'env("FORKOP_RELEASE_BASE_URL", "")' "$c" &&
+		! grep -qE "$FK_MIRRORS" "$c" "$a" "$d/etc/config/forkop" &&
+		! grep -q '__COMPILED_VERSION_VARIABLE__' "$c" &&
+		[ "$(grep -c 'run: function(ctx) { return null; } }' "$m")" = 2 ] &&
+		grep -q 'Forkop is updated from Zapret Manager' "$a" || {
+		echo "ОШИБКА: эта версия Forkop устроена по-другому — не получилось переключить её на официальные источники. Установка отменена, роутер не изменён."
+		return 1
+	}
+	_fk_say "Зеркала отключены: списки — с GitHub (itdoginfo/allow-domains), пакеты — из официального репозитория OpenWrt"
+}
+
+_fk_restore_old() {
+	[ -d /usr/lib/forkop.zm-old ] || return 0
+	rm -rf /usr/lib/forkop
+	mv /usr/lib/forkop.zm-old/.bin /usr/bin/forkop 2>/dev/null
+	mv /usr/lib/forkop.zm-old/.init /etc/init.d/forkop 2>/dev/null
+	mv /usr/lib/forkop.zm-old /usr/lib/forkop
+	_fk_say "Вернули прежнюю версию Forkop"
+}
+
+_fk_sb_install() {
+	local v act out="$JOBS_DIR/forkop-sb.json" msg
+	v="$(_fk_sb_ver)"
+	if [ -n "$v" ] && ! _st_ver_lt "$v" 1.12.0; then
+		_fk_say "sing-box $v уже есть"
+		return 0
+	fi
+	act=install_tiny
+	[ "$1" = stable ] && act=install_stable
+	_fk_say "Ставим sing-box$([ "$act" = install_tiny ] && echo ' (облегчённый)') из официального репозитория OpenWrt"
+	/usr/bin/forkop component_action sing_box "$act" > "$out" 2>&1
+	msg="$(jsonfilter -i "$out" -e '@.message' 2>/dev/null)"
+	if [ "$(jsonfilter -i "$out" -e '@.success' 2>/dev/null)" != true ] && [ "$act" = install_tiny ]; then
+		_fk_say "Облегчённого sing-box нет — ставим полный"
+		/usr/bin/forkop component_action sing_box install_stable > "$out" 2>&1
+		msg="$(jsonfilter -i "$out" -e '@.message' 2>/dev/null)"
+	fi
+	if [ -z "$(_fk_sb_ver)" ]; then
+		echo "ОШИБКА: sing-box не установился${msg:+: $msg}"
+		return 1
+	fi
+	_fk_sb_pkg > "$FK_SB_OWN"
+	_fk_say "sing-box $(_fk_sb_ver) установлен"
+}
+
+do_fk_install() {
+	local mode="$1" tag tmp="$JOBS_DIR/forkop-src" tgz src rel major b need="" p free was_run=0 was_en=0 fresh=1 keep="$JOBS_DIR/forkop.conf.keep" sbfree=0 restored=0
+	_fk_say "Проверяем роутер"
+	rel="$(awk -F\' '/DISTRIB_RELEASE/ {print $2}' /etc/openwrt_release)"
+	major="${rel%%.*}"
+	case "$major" in ''|*[!0-9]*) ;; *) [ "$major" -ge 24 ] || { echo "ОШИБКА: Forkop работает на OpenWrt 24.10 и новее, а здесь $rel"; return 1; } ;; esac
+	b="$(_fk_blocker)"
+	[ -n "$b" ] && { echo "ОШИБКА: $(_fk_blocker_text "$b")"; return 1; }
+	_fk_installed && fresh=0
+	[ -n "$(_fk_sb_ver)" ] || sbfree=12288
+	free="$(df -k /overlay 2>/dev/null | awk 'NR==2 {print $4}')"
+	[ -n "$free" ] || free="$(df -k / 2>/dev/null | awk 'NR==2 {print $4}')"
+	if [ -n "$free" ] && [ "$free" -lt $((4096 + sbfree)) ]; then
+		echo "ОШИБКА: мало места во флеш-памяти: свободно $((free / 1024)) МБ, нужно около $(((4096 + sbfree) / 1024)) МБ"
+		return 1
+	fi
+
+	_fk_feeds_official || true
+	_fk_say "Обновляем список пакетов"
+	$UPDATE >&2 || { echo "ОШИБКА: не удалось обновить список пакетов — проверьте интернет на роутере"; return 1; }
+	for p in $FK_DEPS; do _pkg_is_installed "$p" || need="$need $p"; done
+	if [ -n "$need" ]; then
+		_fk_say "Ставим пакеты из официального репозитория:$need"
+		if [ "$PKG" = apk ]; then ${T90:+timeout 600} apk add $need >&2; else ${T90:+timeout 600} opkg install $need >&2; fi
+		for p in $need; do _pkg_is_installed "$p" || { echo "ОШИБКА: не установился пакет $p"; return 1; }; done
+	fi
+
+	[ "$mode" = update ] || [ "$fresh" = 1 ] && tag="$(ZM_VER_FORCE=1 _zm_cached forkop _fk_latest_fetch)"
+	[ -n "$tag" ] || tag="$(_fk_version)"
+	[ -n "$tag" ] || tag="$FK_PIN"
+	_fk_say "Скачиваем Forkop $tag с GitHub ($FK_REPO)"
+	rm -rf "$tmp"
+	mkdir -p "$tmp"
+	tgz="$tmp/src.tar.gz"
+	_zm_gh_get "https://codeload.github.com/$FK_REPO/tar.gz/refs/tags/$tag" "$tgz" ||
+		_zm_gh_get "https://github.com/$FK_REPO/archive/refs/tags/$tag.tar.gz" "$tgz" || {
+		rm -rf "$tmp"
+		echo "ОШИБКА: не удалось скачать Forkop $tag с GitHub — ни напрямую, ни через WARP"
+		return 1
+	}
+	if ! tar -xzf "$tgz" -C "$tmp" 2>/dev/null; then
+		rm -rf "$tmp"
+		echo "ОШИБКА: архив Forkop скачался повреждённым — попробуйте ещё раз"
+		return 1
+	fi
+	rm -f "$tgz"
+	src="$(ls -d "$tmp"/*/forkop/files 2>/dev/null | head -n1)"
+	[ -d "$src/usr/lib" ] || { rm -rf "$tmp"; echo "ОШИБКА: в архиве нет бэкенда Forkop"; return 1; }
+	_fk_patch "$src" "$tag" || { rm -rf "$tmp"; return 1; }
+
+	if _fk_foreign; then
+		_fk_say "Убираем прежнюю установку Forkop (LuCI и зеркала) — настройки сохраняем"
+		_fk_up && was_run=1
+		_fk_enabled && was_en=1
+		[ -s /etc/config/forkop ] && cp /etc/config/forkop "$keep"
+		for p in luci-i18n-forkop-ru luci-app-forkop forkop; do _pkg_is_installed "$p" && $DELETE "$p" >&2; done
+		rm -rf /www/luci-static/resources/view/forkop /usr/share/luci/menu.d/luci-app-forkop.json /usr/share/rpcd/acl.d/luci-app-forkop.json /etc/uci-defaults/50_luci-forkop
+		[ -s "$keep" ] && cp "$keep" /etc/config/forkop
+		rm -f "$keep"
+		fresh=0
+	elif [ "$fresh" = 0 ]; then
+		_fk_up && was_run=1
+		_fk_enabled && was_en=1
+	fi
+	[ "$was_run" = 1 ] && { _fk_say "Останавливаем Forkop на время обновления"; /etc/init.d/forkop stop >/dev/null 2>&1; }
+
+	_fk_say "Копируем файлы Forkop"
+	rm -rf /usr/lib/forkop.zm-old
+	if [ -d /usr/lib/forkop ]; then
+		mv /usr/lib/forkop /usr/lib/forkop.zm-old
+		[ -f /usr/bin/forkop ] && mv /usr/bin/forkop /usr/lib/forkop.zm-old/.bin
+		[ -f /etc/init.d/forkop ] && mv /etc/init.d/forkop /usr/lib/forkop.zm-old/.init
+	fi
+	mkdir -p /usr/lib/forkop /usr/share/forkop/defaults /etc/forkop
+	if ! cp -R "$src/usr/lib/." /usr/lib/forkop/ ||
+		! cp "$src/usr/bin/forkop" /usr/bin/forkop ||
+		! cp "$src/etc/init.d/forkop" /etc/init.d/forkop ||
+		! cp "$src/etc/config/forkop" /usr/share/forkop/defaults/forkop; then
+		_fk_restore_old
+		rm -rf "$tmp"
+		echo "ОШИБКА: не удалось записать файлы — возможно, закончилось место"
+		return 1
+	fi
+	chmod 0755 /usr/bin/forkop /etc/init.d/forkop
+	chmod -R a+rX /usr/lib/forkop
+	if [ ! -s /etc/config/forkop ]; then
+		if [ -s "$FK_SAVE" ]; then cp "$FK_SAVE" /etc/config/forkop; restored=1; _fk_say "Вернули ваши прежние настройки Forkop"
+		else cp "$src/etc/config/forkop" /etc/config/forkop; fi
+	fi
+	chmod 0644 /etc/config/forkop
+	rm -rf "$tmp"
+	_fk_conf_official
+
+	_fk_say "Проверяем и переносим настройки"
+	if ! FORKOP_LIB=/usr/lib/forkop ucode -L /usr/lib/forkop /usr/lib/forkop/config/migration.uc migrate >&2; then
+		_fk_restore_old
+		echo "ОШИБКА: не удалось перенести настройки Forkop"
+		return 1
+	fi
+	/usr/bin/forkop package_postinst >&2 || true
+	if [ "$(ucode -L /usr/lib/forkop /usr/lib/forkop/core/constants.uc get GITHUB_RAW_URL 2>/dev/null)" != "https://raw.githubusercontent.com/itdoginfo/allow-domains/main" ]; then
+		_fk_restore_old
+		echo "ОШИБКА: Forkop не переключился на официальные источники — установка отменена"
+		return 1
+	fi
+	rm -rf /usr/lib/forkop.zm-old
+	echo "$tag" > "$FK_MARK"
+	rm -f /tmp/luci-indexcache* /tmp/luci-modulecache/* /var/luci-indexcache* 2>/dev/null
+
+	_fk_sb_install || return 1
+
+	if [ "$was_run" = 1 ]; then
+		_fk_say "Запускаем Forkop"
+		[ "$was_en" = 1 ] && /etc/init.d/forkop enable >/dev/null 2>&1
+		/etc/init.d/forkop start >&2 || true
+		_fk_up || { sleep 5; _fk_up; } || echo "!! Forkop не запустился — нажмите «Проверить» на странице"
+	fi
+	if [ "$restored" = 1 ]; then
+		_fk_say "Готово, Forkop $tag установлен с прежними настройками — нажмите «Включить»"
+	elif [ "$fresh" = 1 ]; then
+		_fk_say "Готово, Forkop $tag установлен. Укажите подключение и сервисы — и нажмите «Сохранить и включить»"
+	else
+		_fk_say "Готово, Forkop обновлён до $tag"
+	fi
+}
+
+do_fk_remove() {
+	local p
+	_fk_say "Выключаем Forkop"
+	[ -x /etc/init.d/forkop ] && { /etc/init.d/forkop stop >/dev/null 2>&1; /etc/init.d/forkop disable >/dev/null 2>&1; }
+	[ -x /usr/bin/forkop ] && /usr/bin/forkop restore_dnsmasq >/dev/null 2>&1
+	[ -f /usr/lib/forkop/service/package.uc ] && ucode -L /usr/lib/forkop /usr/lib/forkop/service/package.uc remove-rt-tables-entry >/dev/null 2>&1
+	[ -s /etc/config/forkop ] && { mkdir -p "$ZM_STATE_DIR"; cp /etc/config/forkop "$FK_SAVE"; _fk_say "Настройки сохранены — вернутся при следующей установке"; }
+	for p in luci-i18n-forkop-ru luci-app-forkop forkop; do _pkg_is_installed "$p" && $DELETE "$p" >&2; done
+	if [ -s "$FK_SB_OWN" ]; then
+		p="$(cat "$FK_SB_OWN")"
+		_fk_say "Удаляем $p"
+		[ -x /etc/init.d/sing-box ] && { /etc/init.d/sing-box stop >/dev/null 2>&1; /etc/init.d/sing-box disable >/dev/null 2>&1; }
+		$DELETE "$p" >&2
+		rm -f "$FK_SB_OWN" /etc/config/sing-box
+	fi
+	rm -rf /usr/lib/forkop /usr/lib/forkop.zm-old /usr/share/forkop /etc/forkop /var/run/forkop /tmp/sing-box /tmp/forkop* /etc/sing-box/config.json
+	rm -f /usr/bin/forkop /etc/init.d/forkop /etc/rc.d/*forkop /etc/config/forkop
+	if grep -q '/usr/bin/forkop' "$CRON_FILE" 2>/dev/null; then
+		sed -i '\#/usr/bin/forkop#d' "$CRON_FILE"
+		/etc/init.d/cron restart >/dev/null 2>&1
+	fi
+	nft delete table inet ForkopTable >/dev/null 2>&1
+	/etc/init.d/dnsmasq restart >/dev/null 2>&1
+	_fk_feeds_official || true
+	_fk_say "Готово, Forkop удалён"
+}
+
+do_fk_service() {
+	local a="$1" b
+	_fk_installed || { echo "ОШИБКА: Forkop не установлен"; return 1; }
+	case "$a" in
+		stop)
+			_fk_say "Выключаем Forkop — трафик пойдёт напрямую"
+			/etc/init.d/forkop disable >/dev/null 2>&1
+			/etc/init.d/forkop stop >&2
+			_fk_say "Готово, Forkop выключен"
+			return 0 ;;
+	esac
+	b="$(_fk_blocker)"
+	[ -n "$b" ] && { echo "ОШИБКА: $(_fk_blocker_text "$b")"; return 1; }
+	[ -n "$(_fk_sb_ver)" ] || _fk_sb_install || return 1
+	/etc/init.d/forkop enable >/dev/null 2>&1
+	if [ "$a" = apply ] && _fk_up; then
+		_fk_say "Применяем настройки"
+		/etc/init.d/forkop reload >&2
+	else
+		_fk_say "Запускаем Forkop — скачиваем списки и собираем правила"
+		/etc/init.d/forkop restart >&2
+	fi
+	local i=0
+	while [ "$i" -lt 12 ]; do _fk_up && break; sleep 5; i=$((i + 1)); done
+	if _fk_up; then
+		_fk_say "Готово, Forkop работает"
+		return 0
+	fi
+	echo "ОШИБКА: Forkop не запустился. Последние записи журнала:"
+	logread 2>/dev/null | grep -E 'forkop|sing-box' | tail -n 12 | sed 's/^[^]]*\]: //'
+	return 1
+}
+
+do_fk_lists() {
+	_fk_installed || { echo "ОШИБКА: Forkop не установлен"; return 1; }
+	_fk_say "Обновляем списки сервисов"
+	/usr/bin/forkop list_update >&2 || { echo "ОШИБКА: списки не обновились"; return 1; }
+	_fk_say "Готово, списки обновлены"
+}
+
+do_fk_subs() {
+	_fk_installed || { echo "ОШИБКА: Forkop не установлен"; return 1; }
+	_fk_say "Обновляем подписку"
+	/usr/bin/forkop subscription_update >&2 || { echo "ОШИБКА: подписка не обновилась — проверьте ссылку"; return 1; }
+	_fk_say "Готово, подписка обновлена"
+}
+
+do_fk_singbox() {
+	local want="$1" cur
+	_fk_installed || { echo "ОШИБКА: Forkop не установлен"; return 1; }
+	case "$want" in tiny|stable) ;; *) echo "ОШИБКА: неизвестный вариант sing-box"; return 1 ;; esac
+	cur="$(_fk_sb_pkg)"
+	_fk_say "Меняем sing-box${cur:+ ($cur)} на $([ "$want" = tiny ] && echo облегчённый || echo полный) из официального репозитория"
+	/usr/bin/forkop component_action sing_box "install_$want" > "$JOBS_DIR/forkop-sb.json" 2>&1
+	if [ "$(jsonfilter -i "$JOBS_DIR/forkop-sb.json" -e '@.success' 2>/dev/null)" != true ]; then
+		echo "ОШИБКА: $(jsonfilter -i "$JOBS_DIR/forkop-sb.json" -e '@.message' 2>/dev/null)"
+		return 1
+	fi
+	_fk_sb_pkg > "$FK_SB_OWN"
+	_fk_say "Готово, sing-box $(_fk_sb_ver)"
+}
+
+forkop_config_get() {
+	_fk_installed || { echo '{"error":"Forkop не установлен"}'; return 1; }
+	_fk_uc get
+}
+
+forkop_config_set() {
+	local bak="$JOBS_DIR/forkop.conf.bak" res err
+	_fk_installed || { echo '{"error":"Forkop не установлен"}'; return 1; }
+	_job_running forkop && { echo '{"error":"дождитесь окончания текущей операции"}'; return 1; }
+	cp /etc/config/forkop "$bak" 2>/dev/null
+	res="$(printf '%s' "$1" | _fk_uc set)" || { echo "$res"; return 1; }
+	err="$(FORKOP_LIB=/usr/lib/forkop ucode -L /usr/lib/forkop /usr/lib/forkop/config/validator.uc validate-runtime 2>&1)" || {
+		cp "$bak" /etc/config/forkop
+		err="$(printf '%s' "$err" | grep -v '^[[:space:]]*$' | tail -n 2 | tr '\n' ' ')"
+		printf '{"error":"%s"}\n' "$(esc "Forkop не принял настройки: ${err:-неизвестная ошибка}")"
+		return 1
+	}
+	echo "$res"
+}
+
+forkop_action() {
+	local a="$1" arg="$2" b
+	case "$a" in
+		install|update)
+			b="$(_fk_blocker)"
+			[ -n "$b" ] && { printf '{"error":"%s"}\n' "$(esc "$(_fk_blocker_text "$b")")"; return 1; }
+			job_start forkop do_fk_install "$a" ;;
+		remove)        job_start forkop do_fk_remove ;;
+		start|stop|restart|apply) job_start forkop do_fk_service "$a" ;;
+		lists)         job_start forkop do_fk_lists ;;
+		subs)          job_start forkop do_fk_subs ;;
+		singbox)       job_start forkop do_fk_singbox "$arg" ;;
+		diag)          _fk_uc diag ;;
+		servers)       _fk_uc servers ;;
+		latency)       _fk_uc latency ;;
+		select)        _fk_uc select "" "$arg" ;;
+		*) echo '{"error":"неизвестное действие"}' ;;
+	esac
+}
+
 redbtn_panel_gone() {
 	local f r=0 line dir=/etc/zm-redbtn run="$JOBS_DIR/redbtn"
 	_kill_match "redbtn_geo_watch"
@@ -9346,11 +9786,401 @@ case "$cmd" in
 	steer_status)                         steer_status ;;
 	steer_action)                         steer_action "$1" "$2" ;;
 	bytetube_action)                      bytetube_action "$1" ;;
+	forkop_status)                        forkop_status ;;
+	forkop_config_get)                    forkop_config_get ;;
+	forkop_config_set)                    forkop_config_set "$1" ;;
+	forkop_action)                        forkop_action "$1" "$2" ;;
 	lan_ip)                               _zm_lan_ip ;;
 	*) echo '{"error":"неизвестная команда"}'; exit 1 ;;
 esac
 ZM_INSTALLER_EOF
 chmod 0755 '/opt/zapret-manager-luci/backend.sh'
+cat > '/opt/zapret-manager-luci/forkop.uc' << 'ZM_INSTALLER_EOF'
+let fs = require("fs");
+let uci = require("uci");
+
+const CFG = "forkop";
+const BIN = getenv("ZM_FK_BIN") || "/usr/bin/forkop";
+const LEASES = getenv("ZM_FK_LEASES") || "/tmp/dhcp.leases";
+const NETDIR = getenv("ZM_FK_NETDIR") || "/sys/class/net";
+const SERVICES = [ "russia_inside", "russia_outside", "ukraine_inside", "geoblock", "block", "porn", "news", "anime",
+	"youtube", "hdrezka", "tiktok", "google_ai", "google_play", "hodca", "discord", "meta", "twitter", "cloudflare",
+	"cloudfront", "digitalocean", "hetzner", "ovh", "telegram", "roblox", "ads_hagezi_pro", "supercell", "github" ];
+const CONN = [ "connection", "proxy", "vpn", "outbound" ];
+const SCHEMES = /^(vless|vmess|trojan|ss|socks4|socks4a|socks5|hysteria2|hy2|tuic|http|https):\/\/[^ \t\r\n]+$/i;
+const LEGACY_DOMAIN = [ "domain_suffix", "domain_suffix_text", "domain_suffix_text_mode", "domain_keyword", "domain_regex",
+	"domain_text", "domain_keyword_text", "domain_regex_text", "domain_text_mode", "domain_keyword_text_mode", "domain_regex_text_mode" ];
+
+function s(v) { return v == null ? "" : "" + v; }
+
+function out(v) { print(sprintf("%J", v), "\n"); }
+
+function fail(msg) { out({ error: msg }); exit(1); }
+
+function cursor() {
+	let dir = getenv("ZM_FK_CONFDIR");
+	let c = dir ? uci.cursor(dir) : uci.cursor();
+	c.load(CFG);
+	return c;
+}
+
+function arr(v) {
+	if (v == null) return [];
+	if (type(v) == "array") return filter(map(v, (x) => trim(s(x))), (x) => x != "");
+	let t = trim(s(v));
+	return t == "" ? [] : [ t ];
+}
+
+function words(v) {
+	let r = [];
+	for (let x in arr(v))
+		for (let w in split(x, /[ \t\r\n]+/))
+			if (w != "") push(r, w);
+	return r;
+}
+
+function lines(v) {
+	let r = [];
+	for (let x in (type(v) == "array" ? v : [ v ]))
+		for (let l in split(s(x), /[\r\n]+/)) {
+			l = trim(l);
+			if (l != "" && !match(l, /^(#|\/\/)/)) push(r, l);
+		}
+	return r;
+}
+
+function tokens(v) {
+	let r = [];
+	for (let l in lines(v))
+		for (let w in split(replace(l, /[ \t]+(#|\/\/).*$/, ""), /[ \t,;]+/))
+			if (w != "") push(r, w);
+	return r;
+}
+
+function uniq(list) {
+	let seen = {}, r = [];
+	for (let x in list)
+		if (!seen[x]) { seen[x] = true; push(r, x); }
+	return r;
+}
+
+function sh(cmd) {
+	let p = fs.popen(cmd + " 2>/dev/null", "r");
+	if (!p) return "";
+	let d = p.read("all");
+	p.close();
+	return s(d);
+}
+
+function jcmd(cmd) {
+	let t = trim(sh(cmd));
+	if (t == "") return null;
+	try { return json(t); } catch (e) {}
+	let i = rindex(t, "\n{");
+	if (i >= 0) try { return json(substr(t, i + 1)); } catch (e) {}
+	return null;
+}
+
+function q(v) { return "'" + replace(s(v), /'/g, "'\\''") + "'"; }
+
+function sections(c, t) {
+	let r = [];
+	c.foreach(CFG, t, (x) => { push(r, x); });
+	return r;
+}
+
+function children(c, t, sec) {
+	return filter(sections(c, t), (x) => s(x.section) == sec);
+}
+
+function pick(c) {
+	let all = sections(c, "section"), sec = null;
+	for (let x in all)
+		if (x[".name"] == "main" && index(CONN, s(x.action || "connection")) >= 0) sec = "main";
+	if (!sec)
+		for (let x in all)
+			if (index(CONN, s(x.action || "connection")) >= 0) { sec = x[".name"]; break; }
+	if (!sec) sec = "main";
+	let extra = [];
+	for (let x in all)
+		if (x[".name"] != sec)
+			push(extra, { name: x[".name"], label: s(x.label || x[".name"]), action: s(x.action || "connection"), enabled: s(x.enabled) != "0" });
+	return { sec, extra };
+}
+
+function devices() {
+	let r = [], seen = {};
+	for (let l in split(s(fs.readfile(LEASES)), "\n")) {
+		let f = split(trim(l), /[ \t]+/);
+		if (length(f) < 4 || !match(f[2], /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/) || seen[f[2]]) continue;
+		seen[f[2]] = true;
+		push(r, { ip: f[2], mac: lc(f[1]), name: f[3] == "*" ? "" : f[3] });
+	}
+	return sort(r, (a, b) => {
+		let x = map(split(a.ip, "."), int), y = map(split(b.ip, "."), int);
+		for (let i = 0; i < 4; i++) if (x[i] != y[i]) return x[i] - y[i];
+		return 0;
+	});
+}
+
+function tunnels() {
+	let r = [];
+	for (let n in (fs.lsdir(NETDIR) || [])) {
+		if (n == "lo" || match(n, /^(sit|ip6tnl|gre|erspan|teql|ifb|dummy|bond)/)) continue;
+		if (trim(s(fs.readfile(NETDIR + "/" + n + "/type"))) != "65534") continue;
+		let st = trim(s(fs.readfile(NETDIR + "/" + n + "/operstate")));
+		push(r, { name: n, up: st != "down", steer: !!match(n, /^zmwarp[0-9]*$/) });
+	}
+	return sort(r, (a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
+}
+
+function domain_lines(m) {
+	let r = [];
+	for (let k in [ "domain", "domain_suffix_text", "domain_text" ]) r = [ ...r, ...lines(m[k]) ];
+	for (let k in [ "domain_suffix", "domain_keyword", "domain_regex" ]) {
+		let pre = k == "domain_keyword" ? "keyword:" : k == "domain_regex" ? "regex:" : "";
+		for (let x in words(m[k])) push(r, pre + x);
+	}
+	return uniq(r);
+}
+
+function cmd_get() {
+	let c = cursor(), p = pick(c), sec = p.sec;
+	let m = c.get_all(CFG, sec) || {}, st = c.get_all(CFG, "settings") || {};
+	let subs = children(c, "subscription_url", sec), ifs = children(c, "section_interface", sec);
+	let links = words(m.selector_proxy_links);
+	let mode = length(ifs) ? "iface" : length(subs) ? "sub" : "links";
+	out({
+		sec,
+		exists: m[".type"] != null,
+		mode,
+		links,
+		sub: length(subs) ? s(subs[0].url) : "",
+		sub_interval: length(subs) ? s(subs[0].subscription_update_interval || "12h") : "12h",
+		iface: length(ifs) ? s(ifs[0].name) : "",
+		fastest: length(children(c, "urltest", sec)) > 0 || s(m.urltest_enabled) == "1",
+		jsons: length(arr(m.outbound_jsons)),
+		services: words(m.community_lists),
+		domains: domain_lines(m),
+		subnets: uniq([ ...lines(m.ip_cidr), ...lines(m.ip_cidr_text) ]),
+		lists: uniq([ ...words(m.domain_ip_lists), ...words(m.remote_domain_lists), ...words(m.remote_subnet_lists) ]),
+		full: uniq(words(m.fully_routed_ips)),
+		excl: uniq(words(m.excluded_source_ip_cidr)),
+		extra: p.extra,
+		dns: { type: s(st.dns_type || "udp"), server: s(arr(st.dns_server)[0] || "77.88.8.8"), bootstrap: s(arr(st.bootstrap_dns_server)[0] || "77.88.8.8") },
+		quic_off: s(st.disable_quic || "1") == "1",
+		list_interval: s(st.update_interval || "1d"),
+		list_update: s(st.list_update_enabled || "1") == "1",
+		devices: devices(),
+		tunnels: tunnels()
+	});
+}
+
+function valid_ip(v) {
+	let m = match(v, /^([0-9]+)\.([0-9]+)\.([0-9]+)\.([0-9]+)(\/([0-9]+))?$/);
+	if (!m) return false;
+	for (let i = 1; i <= 4; i++) if (int(m[i]) > 255) return false;
+	return m[6] == null || int(m[6]) <= 32;
+}
+
+function valid_domain(v) {
+	let m = match(v, /^(full|keyword|regex):(.+)$/);
+	if (m) return m[1] == "regex" || !match(m[2], /[ \t\/]/);
+	return !match(v, /[ \t\/:;,'"<>()]/) && !!match(v, /[^.]\.[^.]/);
+}
+
+function valid_url(v) { return !!match(v, /^https?:\/\/[^ \t\/]+(\/[^ \t]*)?$/i); }
+
+function set_list(c, sec, key, list) {
+	if (length(list)) c.set(CFG, sec, key, list);
+	else c.delete(CFG, sec, key);
+}
+
+function set_text(c, sec, key, list) {
+	if (length(list)) c.set(CFG, sec, key, join("\n", list));
+	else c.delete(CFG, sec, key);
+}
+
+function keep_one(c, t, sec, want) {
+	let ch = children(c, t, sec), name = null;
+	for (let x in ch) {
+		if (want && name == null) name = x[".name"];
+		else c.delete(CFG, x[".name"]);
+	}
+	if (want && name == null) {
+		name = c.add(CFG, t);
+		c.set(CFG, name, "section", sec);
+	}
+	return name;
+}
+
+function cmd_set() {
+	let raw = fs.stdin.read("all"), d;
+	try { d = json(s(raw)); } catch (e) { fail("не удалось прочитать настройки"); }
+	if (type(d) != "object") fail("пустые настройки");
+	let c = cursor(), sec = s(d.sec) || pick(c).sec;
+	if (!match(sec, /^[A-Za-z0-9_]+$/)) fail("неверное имя секции");
+	let mode = s(d.mode);
+	if (index([ "links", "sub", "iface" ], mode) < 0) fail("неизвестный способ подключения");
+
+	let links = uniq(map(lines(d.links), (x) => replace(x, /[ \t]/g, "%20")));
+	for (let x in links) if (!match(x, SCHEMES)) fail("ссылка не поддерживается: " + substr(x, 0, 40));
+	let sub = trim(s(d.sub)), iface = trim(s(d.iface));
+	if (mode == "links" && !length(links)) fail("добавьте хотя бы одну ссылку на сервер");
+	if (mode == "sub" && !valid_url(sub)) fail("ссылка на подписку должна начинаться с https://");
+	if (mode == "iface" && !match(iface, /^[A-Za-z0-9_.@-]{1,15}$/)) fail("выберите сетевой интерфейс");
+
+	let services = filter(uniq(words(d.services)), (x) => index(SERVICES, x) >= 0);
+	let domains = uniq(tokens(d.domains));
+	for (let x in domains) if (!valid_domain(x)) fail("это не похоже на домен: " + x);
+	let subnets = uniq(tokens(d.subnets));
+	for (let x in subnets) if (!valid_ip(x)) fail("это не похоже на IP или подсеть: " + x);
+	let lists = uniq(tokens(d.lists));
+	for (let x in lists) if (!valid_url(x) && !match(x, /^\/[^ \t]+$/)) fail("список должен быть ссылкой https://… или путём /…: " + x);
+	let full = uniq(tokens(d.full)), excl = uniq(tokens(d.excl));
+	for (let x in [ ...full, ...excl ]) if (!valid_ip(x)) fail("неверный адрес устройства: " + x);
+	excl = filter(excl, (x) => index(full, x) < 0);
+	if (!length(services) && !length(domains) && !length(subnets) && !length(lists) && !length(full))
+		fail("выберите хотя бы один сервис, домен или устройство — иначе через подключение ничего не пойдёт");
+
+	if (!c.get(CFG, sec)) c.set(CFG, sec, "section");
+	if (!c.get(CFG, sec, "label")) c.set(CFG, sec, "label", "Zapret Manager");
+	c.set(CFG, sec, "action", "connection");
+	c.set(CFG, sec, "enabled", "1");
+
+	set_list(c, sec, "selector_proxy_links", mode == "links" ? links : []);
+	let sn = keep_one(c, "subscription_url", sec, mode == "sub");
+	if (sn) {
+		let iv = s(d.sub_interval);
+		if (index([ "1h", "3h", "6h", "12h", "1d" ], iv) < 0) iv = "12h";
+		c.set(CFG, sn, "url", sub);
+		c.set(CFG, sn, "subscription_update_enabled", "1");
+		c.set(CFG, sn, "subscription_update_interval", iv);
+		if (!c.get(CFG, sn, "include_urltest_groups")) c.set(CFG, sn, "include_urltest_groups", "1");
+	}
+	let fn = keep_one(c, "section_interface", sec, mode == "iface");
+	if (fn) {
+		c.set(CFG, fn, "name", iface);
+		if (!c.get(CFG, fn, "domain_resolver_enabled")) c.set(CFG, fn, "domain_resolver_enabled", "0");
+	}
+	let auto = !!d.fastest && (mode == "sub" || (mode == "links" && length(links) > 1));
+	let un = keep_one(c, "urltest", sec, auto);
+	if (un) {
+		if (!c.get(CFG, un, "name")) c.set(CFG, un, "name", "Авто");
+		for (let kv in [ [ "check_interval", "3m" ], [ "tolerance", "50" ], [ "interrupt_exist_connections", "1" ], [ "filter_mode", "disabled" ] ])
+			if (!c.get(CFG, un, kv[0])) c.set(CFG, un, kv[0], kv[1]);
+	}
+	c.delete(CFG, sec, "urltest_enabled");
+
+	set_list(c, sec, "community_lists", services);
+	for (let k in LEGACY_DOMAIN) c.delete(CFG, sec, k);
+	set_text(c, sec, "domain", domains);
+	c.delete(CFG, sec, "ip_cidr_text");
+	c.delete(CFG, sec, "ip_cidr_text_mode");
+	set_text(c, sec, "ip_cidr", subnets);
+	c.delete(CFG, sec, "remote_domain_lists");
+	c.delete(CFG, sec, "remote_subnet_lists");
+	set_list(c, sec, "domain_ip_lists", lists);
+	for (let k in [ "fully_routed_ips", "excluded_source_ip_cidr" ]) {
+		c.delete(CFG, sec, k + "_text");
+		c.delete(CFG, sec, k + "_text_mode");
+	}
+	set_list(c, sec, "fully_routed_ips", full);
+	set_list(c, sec, "excluded_source_ip_cidr", excl);
+
+	if (!c.get(CFG, "settings")) c.set(CFG, "settings", "settings");
+	let dns = type(d.dns) == "object" ? d.dns : null;
+	if (dns) {
+		let t = s(dns.type), sv = trim(s(dns.server)), bs = trim(s(dns.bootstrap));
+		if (index([ "udp", "dot", "doh" ], t) < 0) fail("неизвестный тип DNS");
+		if (sv == "" || match(sv, /[ \t@]/)) fail("укажите адрес DNS-сервера");
+		if (!valid_ip(bs) || index(bs, "/") >= 0) fail("резервный DNS должен быть IP-адресом");
+		c.set(CFG, "settings", "dns_type", t);
+		c.set(CFG, "settings", "dns_server", [ sv ]);
+		c.set(CFG, "settings", "bootstrap_dns_server", [ bs ]);
+	}
+	if (d.quic_off != null) c.set(CFG, "settings", "disable_quic", d.quic_off ? "1" : "0");
+	if (index([ "6h", "12h", "1d", "3d" ], s(d.list_interval)) >= 0) {
+		c.set(CFG, "settings", "list_update_enabled", "1");
+		c.set(CFG, "settings", "update_interval", s(d.list_interval));
+	}
+
+	c.save(CFG);
+	c.commit(CFG);
+	out({ ok: true, sec });
+}
+
+function group_tag(sec) { return sec + "-out"; }
+
+function cmd_servers(sec) {
+	let j = jcmd(BIN + " clash_api get_proxies");
+	let px = j && type(j.proxies) == "object" ? j.proxies : null;
+	if (!px) fail("sing-box не отвечает — Forkop выключен или ещё запускается");
+	let g = px[group_tag(sec)];
+	if (!g || type(g.all) != "array") fail("группа серверов не найдена — примените настройки ещё раз");
+	let meta = jcmd(BIN + " get_outbound_metadata " + q(sec)) || {};
+	let names = type(meta.names) == "object" ? meta.names : {}, cc = type(meta.countries) == "object" ? meta.countries : {};
+	let items = [];
+	for (let t in g.all) {
+		let p = px[t] || {}, h = type(p.history) == "array" && length(p.history) ? p.history[length(p.history) - 1] : null;
+		push(items, {
+			tag: t,
+			name: s(names[t] || t),
+			country: s(cc[t] || ""),
+			type: s(p.type),
+			now: s(p.now || ""),
+			delay: h ? int(h.delay || 0) : -1
+		});
+	}
+	out({ group: group_tag(sec), now: s(g.now), items });
+}
+
+function cmd_latency(sec) {
+	let j = jcmd(BIN + " clash_api get_group_latency " + q(group_tag(sec)) + " 5000");
+	if (type(j) != "object") fail("проверка задержки не удалась");
+	if (j.message && length(j) == 1) fail(s(j.message));
+	out({ ok: true, delays: j });
+}
+
+function cmd_select(sec, tag) {
+	if (s(tag) == "") fail("не выбран сервер");
+	let j = jcmd(BIN + " clash_api set_group_proxy " + q(group_tag(sec)) + " " + q(tag));
+	if (type(j) == "object" && (j.error || j.success === false)) fail(s(j.error || j.message || "сервер не переключился"));
+	out({ ok: true });
+}
+
+function cmd_diag(sec) {
+	let checks = [];
+	function add(v, what, why) { push(checks, { verdict: v, what, why: why || "" }); }
+	let st = jcmd(BIN + " get_status") || {};
+	let sb = jcmd(BIN + " get_sing_box_status") || {};
+	add(int(st.running) == 1 ? "ok" : "fail", "Служба Forkop", int(st.running) == 1 ? "запущена" + (int(st.enabled) == 1 ? " и включена в автозапуск" : ", но не в автозапуске") : "не запущена — нажмите «Включить»");
+	add(int(sb.running) == 1 ? "ok" : "fail", "sing-box", int(sb.running) == 1 ? "работает" : "не работает — посмотрите журнал ниже");
+	add(int(st.dns_configured) == 1 ? "ok" : "fail", "DNS роутера", int(st.dns_configured) == 1 ? "запросы идут через Forkop" : "dnsmasq не перенаправлен на Forkop");
+	let fk = jcmd(BIN + " check_fakeip") || {};
+	add(fk.fakeip ? "ok" : "warn", "FakeIP", fk.fakeip ? "работает (" + s(fk.IP) + ")" : "тестовый домен не получил адрес FakeIP");
+	if (int(sb.running) == 1) {
+		let l = jcmd(BIN + " clash_api get_proxy_latency " + q(group_tag(sec)) + " 5000") || {};
+		let ms = int(l.delay || 0);
+		add(ms > 0 ? (ms < 1500 ? "ok" : "warn") : "fail", "Подключение к серверу", ms > 0 ? "отвечает за " + ms + " мс" : "сервер не отвечает — проверьте ссылку или выберите другой сервер");
+	}
+	out({ checks });
+}
+
+let mode = ARGV[0] || "";
+let sec = ARGV[1] || "";
+if (sec == "" && mode != "get" && mode != "set") sec = pick(cursor()).sec;
+if (sec != "" && !match(sec, /^[A-Za-z0-9_]+$/)) fail("неверное имя секции");
+
+if (mode == "get") cmd_get();
+else if (mode == "set") cmd_set();
+else if (mode == "servers") cmd_servers(sec);
+else if (mode == "latency") cmd_latency(sec);
+else if (mode == "select") cmd_select(sec, ARGV[2]);
+else if (mode == "diag") cmd_diag(sec);
+else fail("неизвестная команда");
+ZM_INSTALLER_EOF
+chmod 0644 '/opt/zapret-manager-luci/forkop.uc'
 
 mkdir -p /usr/libexec/rpcd
 chmod 0755 /usr/libexec/rpcd
@@ -9446,6 +10276,10 @@ list_methods() {
 	json_add_object "steer_status";           json_close_object
 	json_add_object "steer_action";           json_add_string "action" "string"; json_add_string "mode" "string"; json_close_object
 	json_add_object "bytetube_action";        json_add_string "action" "string"; json_close_object
+	json_add_object "forkop_status";          json_close_object
+	json_add_object "forkop_config_get";      json_close_object
+	json_add_object "forkop_config_set";      json_add_string "content" "string"; json_close_object
+	json_add_object "forkop_action";          json_add_string "action" "string"; json_add_string "mode" "string"; json_close_object
 	json_dump
 }
 
@@ -9539,6 +10373,10 @@ call_method() {
 		steer_status)            "$BACKEND" steer_status ;;
 		steer_action)            json_get_var action action; json_get_var mode mode; printf '%s' "$mode" | "$BACKEND" steer_action "$action" @stdin ;;
 		bytetube_action)         json_get_var action action; "$BACKEND" bytetube_action "$action" ;;
+		forkop_status)           "$BACKEND" forkop_status ;;
+		forkop_config_get)       "$BACKEND" forkop_config_get ;;
+		forkop_config_set)       json_get_var content content; printf '%s' "$content" | "$BACKEND" forkop_config_set @stdin ;;
+		forkop_action)           json_get_var action action; json_get_var mode mode; printf '%s' "$mode" | "$BACKEND" forkop_action "$action" @stdin ;;
 		*) echo '{"error":"unknown method"}'; return 1 ;;
 	esac
 }
@@ -9566,7 +10404,8 @@ cat > '/usr/share/rpcd/acl.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF'
 					"system_status", "mirror_status", "exclusions_status", "exclusions_file_get", "nfqws_opt_get", "zapret_lists_status", "zapret_list_get", "tg_status", "tgws_status",
 					"test_status", "test_results", "zm_update_status", "mixomo_status", "mixomo_config_get",
 					"mixomo_warp_status",
-					"zapret_latest_version", "bytetube_installed", "health", "versions", "awg_status", "steer_status"
+					"zapret_latest_version", "bytetube_installed", "health", "versions", "awg_status", "steer_status",
+					"forkop_status", "forkop_config_get"
 				],
 				"system": [ "info" ]
 			},
@@ -9591,7 +10430,8 @@ cat > '/usr/share/rpcd/acl.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF'
 					"mixomo_action", "mixomo_config_set", "mixomo_subscription_set",
 					"mixomo_magitrickle_list_set", "mixomo_autorestart_set", "mixomo_ui_action",
 					"mixomo_warp_action", "mixomo_warp_integrate_action", "mixomo_warp_config_set",
-					"bytetube_action", "awg_action", "steer_action"
+					"bytetube_action", "awg_action", "steer_action",
+					"forkop_config_set", "forkop_action"
 				]
 			},
 			"uci": [ "bytetube" ]
@@ -9627,6 +10467,11 @@ cat > '/usr/share/luci/menu.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF
 		"title": "Zapret",
 		"order": 20,
 		"action": { "type": "view", "path": "zapret-manager/strategy" }
+	},
+	"admin/services/zapret-manager/forkop": {
+		"title": "Forkop",
+		"order": 27,
+		"action": { "type": "view", "path": "zapret-manager/forkop" }
 	},
 	"admin/services/zapret-manager/zapret2": {
 		"title": "Zapret2",
@@ -9763,6 +10608,10 @@ var callMixomoWarpConfigSet = rpc.declare({ object: 'zapret-manager', method: 'm
 var callBytetubeInstalled = rpc.declare({ object: 'zapret-manager', method: 'bytetube_installed', expect: {} });
 var callHealth = rpc.declare({ object: 'zapret-manager', method: 'health', expect: {} });
 var callBoardInfo = rpc.declare({ object: 'system', method: 'info', expect: {} });
+var callForkopStatus = rpc.declare({ object: 'zapret-manager', method: 'forkop_status', expect: {} });
+var callForkopConfigGet = rpc.declare({ object: 'zapret-manager', method: 'forkop_config_get', expect: {} });
+var callForkopConfigSet = rpc.declare({ object: 'zapret-manager', method: 'forkop_config_set', params: ['content'], expect: {} });
+var callForkopAction = rpc.declare({ object: 'zapret-manager', method: 'forkop_action', params: ['action', 'mode'], expect: {} });
 
 function parseSize(v) {
 	var m = String(v == null ? '' : v).trim().match(/^([\d.,]+)\s*([KMGT]?)i?B?$/i);
@@ -10094,6 +10943,10 @@ return baseclass.extend({
 	versions: callVersions,
 	steerAction: callSteerAction,
 	boardInfo: callBoardInfo,
+	forkopStatus: callForkopStatus,
+	forkopConfigGet: callForkopConfigGet,
+	forkopConfigSet: callForkopConfigSet,
+	forkopAction: callForkopAction,
 	parseSize: parseSize,
 	fmtSize: fmtSize,
 	secret: secret,
@@ -10185,6 +11038,11 @@ return view.extend({
 			items.push(row('Steer', stSt === 1 ? zm.badge(true, 'работает' + (stVia ? ' · ' + stVia : ''), '')
 				: stSt === 2 ? zm.badge(false, '', 'не работает' + (stVia ? ' · ' + stVia : ''))
 				: stSt === 5 ? offBadge(h.steer_off ? 'выключен' : h.steer_exit === 'none' ? 'подключите WARP или VPN' : 'сервисы не выбраны')
+				: zm.badge(false, '', 'не установлен')));
+			var fkSt = st(h, 'forkop', 0);
+			items.push(row('Forkop', fkSt === 1 ? zm.badge(true, 'работает', '')
+				: fkSt === 2 ? zm.badge(false, '', 'не работает')
+				: fkSt === 5 ? offBadge('выключен')
 				: zm.badge(false, '', 'не установлен')));
 			items.push(row('ByeTube', zm.stateBadge(st(h, 'bytetube', 0))));
 			items.push(row('TG WS Proxy', zm.stateBadge(st(h, 'tg', 0))));
@@ -15944,6 +16802,776 @@ return view.extend({
 ZM_INSTALLER_EOF
 chmod 0644 '/www/luci-static/resources/view/zapret-manager/tgproxy.js'
 
+cat > '/www/luci-static/resources/view/zapret-manager/forkop.js' << 'ZM_INSTALLER_EOF'
+'use strict';
+'require view';
+'require zapret-manager.common as zm';
+
+var SERVICES = [
+	{ id: 'youtube', name: 'YouTube', sub: 'Видео без замедления', color: '#ff0033', ico: 'YT' },
+	{ id: 'discord', name: 'Discord', sub: 'Голос, чаты и стримы', color: '#5865f2', ico: 'DC' },
+	{ id: 'telegram', name: 'Telegram', sub: 'Звонки, медиа, веб-версия', color: '#229ed9', ico: 'TG' },
+	{ id: 'meta', name: 'Instagram и Facebook', sub: 'Все сервисы Meta, WhatsApp', color: '#e1306c', ico: 'IG' },
+	{ id: 'twitter', name: 'X (Twitter)', sub: 'Лента и медиа', color: '#16181c', ico: 'X' },
+	{ id: 'tiktok', name: 'TikTok', sub: 'Лента и загрузка видео', color: '#fe2c55', ico: 'TT' },
+	{ id: 'google_ai', name: 'Google AI', sub: 'Gemini и AI Studio', color: '#4285f4', ico: 'AI' },
+	{ id: 'google_play', name: 'Google Play', sub: 'Установка и обновление приложений', color: '#01875f', ico: 'GP' },
+	{ id: 'github', name: 'GitHub', sub: 'Код, релизы, Copilot', color: '#24292f', ico: 'GH' },
+	{ id: 'roblox', name: 'Roblox', sub: 'Игра и лаунчер', color: '#e2231a', ico: 'RB' },
+	{ id: 'supercell', name: 'Supercell', sub: 'Brawl Stars, Clash Royale, Clash of Clans', color: '#f59e0b', ico: 'SC' },
+	{ id: 'hdrezka', name: 'HDRezka', sub: 'Фильмы и сериалы', color: '#3f8f3f', ico: 'HD' }
+];
+
+var SETS = [
+	{ id: 'russia_inside', name: 'Всё заблокированное', sub: 'Общий список для России — сервисы и категории разом', color: '#6366f1', ico: 'RU' },
+	{ id: 'geoblock', name: 'Геоблок', sub: 'Сайты, которые сами закрылись для России', color: '#0ea5e9', ico: 'GB' },
+	{ id: 'block', name: 'Блокировки', sub: 'Сайты из реестра блокировок', color: '#ef4444', ico: 'BL' },
+	{ id: 'news', name: 'Новости', sub: 'СМИ и новостные сайты', color: '#64748b', ico: 'NW' },
+	{ id: 'anime', name: 'Аниме', sub: 'Сайты с аниме', color: '#ec4899', ico: 'AN' },
+	{ id: 'porn', name: '18+', sub: 'Сайты для взрослых', color: '#9f1239', ico: '18' }
+];
+
+var NETS = [
+	{ id: 'cloudflare', name: 'Cloudflare', sub: 'Огромный диапазон — уведёт в прокси много лишнего', color: '#f38020', ico: 'CF' },
+	{ id: 'cloudfront', name: 'Amazon CloudFront', sub: 'Подсети CDN Amazon', color: '#8c4fff', ico: 'AW' },
+	{ id: 'hetzner', name: 'Hetzner', sub: 'Подсети хостинга Hetzner', color: '#d50c2d', ico: 'HZ' },
+	{ id: 'ovh', name: 'OVH', sub: 'Подсети хостинга OVH', color: '#123f6d', ico: 'OV' },
+	{ id: 'digitalocean', name: 'DigitalOcean', sub: 'Подсети хостинга DigitalOcean', color: '#0080ff', ico: 'DO' }
+];
+
+var DNS = [
+	{ id: 'yandex', name: 'Яндекс', sub: 'UDP · 77.88.8.8', type: 'udp', server: '77.88.8.8', bootstrap: '77.88.8.8' },
+	{ id: 'cloudflare', name: 'Cloudflare', sub: 'DoH · 1.1.1.1', type: 'doh', server: '1.1.1.1', bootstrap: '1.1.1.1' },
+	{ id: 'google', name: 'Google', sub: 'DoH · 8.8.8.8', type: 'doh', server: '8.8.8.8', bootstrap: '8.8.8.8' },
+	{ id: 'quad9', name: 'Quad9', sub: 'DoT · 9.9.9.9', type: 'dot', server: '9.9.9.9', bootstrap: '9.9.9.9' },
+	{ id: 'comss', name: 'Comss', sub: 'DoH · dns.comss.one', type: 'doh', server: 'dns.comss.one', bootstrap: '77.88.8.8' }
+];
+
+var TABS = [ { id: 'conn', label: 'Подключение' }, { id: 'svc', label: 'Сервисы' }, { id: 'dev', label: 'Устройства' }, { id: 'set', label: 'Настройки' } ];
+
+var MODES = [ { id: 'links', label: 'Серверы' }, { id: 'sub', label: 'Подписка' }, { id: 'iface', label: 'Туннель' } ];
+
+var SUB_IV = [ { id: '1h', label: 'Каждый час' }, { id: '6h', label: 'Каждые 6 часов' }, { id: '12h', label: 'Каждые 12 часов' }, { id: '1d', label: 'Раз в сутки' } ];
+
+var LIST_IV = [ { id: '6h', label: 'Каждые 6 часов' }, { id: '12h', label: 'Каждые 12 часов' }, { id: '1d', label: 'Раз в сутки' }, { id: '3d', label: 'Раз в 3 дня' } ];
+
+var LINK_RE = /^(vless|vmess|trojan|ss|socks4a?|socks5|hysteria2|hy2|tuic|https?):\/\/\S+$/i;
+
+var WARN = {
+	steer: 'Работает Steer. Если один и тот же сервис выбран и там, и здесь, они будут мешать друг другу — выберите его только в одном месте.',
+	bytetube: 'Работает ByeTube. YouTube лучше пускать только через что-то одно: либо ByeTube, либо Forkop.'
+};
+
+function badge(cls, text) {
+	return E('span', { 'class': 'zm-badge ' + cls }, [ E('span', { 'class': 'zm-dot' }), text ]);
+}
+
+function row(label, node) {
+	return E('div', { 'class': 'zm-row' }, [ E('span', { 'class': 'zm-label' }, label), node ]);
+}
+
+function plural(n, one, few, many) {
+	var a = n % 10, h = n % 100;
+	if (a === 1 && h !== 11) return one;
+	if (a >= 2 && a <= 4 && (h < 12 || h > 14)) return few;
+	return many;
+}
+
+function latClass(ms) {
+	if (!(ms > 0)) return 'zm-lat-none';
+	if (ms < 400) return 'zm-lat-good';
+	if (ms < 900) return 'zm-lat-mid';
+	return 'zm-lat-bad';
+}
+
+function textLines(t) {
+	return String(t || '').split(/\r?\n/).map(function(l) { return l.trim(); }).filter(function(l) { return l && !/^(#|\/\/)/.test(l); });
+}
+
+function isWeb() {
+	return document.body.classList.contains('zmw-body');
+}
+
+function pageLink(id) {
+	return isWeb() ? '#/' + id : L.url('admin/services/zapret-manager/' + id);
+}
+
+function fromCfg(c) {
+	c = c || {};
+	var dns = c.dns || {};
+	return {
+		sec: c.sec || 'main',
+		mode: c.mode || 'links',
+		links: (c.links || []).join('\n'),
+		sub: c.sub || '',
+		sub_interval: c.sub_interval || '12h',
+		iface: c.iface || '',
+		fastest: c.exists ? !!c.fastest : true,
+		services: (c.services || []).slice(),
+		domains: (c.domains || []).join('\n'),
+		subnets: (c.subnets || []).join('\n'),
+		lists: (c.lists || []).join('\n'),
+		full: (c.full || []).slice(),
+		excl: (c.excl || []).slice(),
+		dns: { type: dns.type || 'udp', server: dns.server || '77.88.8.8', bootstrap: dns.bootstrap || '77.88.8.8' },
+		quic_off: c.quic_off !== false,
+		list_interval: c.list_interval || '1d'
+	};
+}
+
+function dnsPreset(d) {
+	for (var i = 0; i < DNS.length; i++)
+		if (DNS[i].type === d.type && DNS[i].server === d.server) return DNS[i].id;
+	return 'custom';
+}
+
+return view.extend({
+	load: function() {
+		zm.injectCss();
+		return Promise.all([
+			zm.forkopStatus().catch(function() { return {}; }),
+			zm.forkopConfigGet().catch(function() { return {}; })
+		]);
+	},
+
+	render: function(all) {
+		var st = all[0] || {}, cfg = (all[1] && !all[1].error) ? all[1] : null;
+		var draft = fromCfg(cfg), dirty = false, busy = false, lastAct = '', saving = false;
+		var servers = null, srvBusy = false, srvErr = '', latBusy = false;
+		var diag = null, diagBusy = false;
+		var customDns = dnsPreset(draft.dns) === 'custom';
+		var tab = 'conn';
+		try { tab = localStorage.getItem('zm.forkop.tab') || 'conn'; } catch (e) {}
+		if (!TABS.some(function(t) { return t.id === tab; })) tab = 'conn';
+		if (cfg && !cfg.exists) tab = 'conn';
+
+		var wrap = E('div', { 'class': 'zm-wrap' });
+		var mainCard = E('div', { 'class': 'zm-card' });
+		var logEl = E('pre', { 'class': 'zm-log' });
+		var tabBar = E('div', { 'class': 'zm-actions', 'style': 'margin:4px 0 0' });
+		var saveBar = E('div', { 'class': 'zm-card zm-st-apply', 'style': 'display:none; position:sticky; bottom:12px; z-index:5; box-shadow:0 10px 30px -12px rgba(0,0,0,.35)' });
+		var panes = { conn: E('div', { 'class': 'zm-wrap' }), svc: E('div', { 'class': 'zm-wrap' }), dev: E('div', { 'class': 'zm-wrap' }), set: E('div', { 'class': 'zm-wrap' }) };
+		var connCard = E('div', { 'class': 'zm-card' });
+		var srvCard = E('div', { 'class': 'zm-card' });
+		var checkCard = E('div', { 'class': 'zm-card' });
+		var svcCard = E('div', { 'class': 'zm-card' });
+		var ownCard = E('div', { 'class': 'zm-card' });
+		var fullCard = E('div', { 'class': 'zm-card' });
+		var exclCard = E('div', { 'class': 'zm-card' });
+		var dnsCard = E('div', { 'class': 'zm-card' });
+		var miscCard = E('div', { 'class': 'zm-card' });
+		var sbCard = E('div', { 'class': 'zm-card' });
+
+		function area(key, placeholder, minh) {
+			var ta = E('textarea', { 'class': 'zm-config-editor', 'spellcheck': 'false', 'autocapitalize': 'off', 'placeholder': placeholder, 'style': 'min-height:' + (minh || 120) + 'px' });
+			ta.value = draft[key];
+			ta.addEventListener('input', function() { draft[key] = ta.value; touch(); if (key === 'links') renderLinkCount(); });
+			return ta;
+		}
+
+		var taLinks = area('links', 'vless://…\nss://…\ntrojan://…', 130);
+		var taSub = area('sub', 'https://…/sub/…', 60);
+		taSub.classList.add('zm-sub-input');
+		var taDomains = area('domains', 'chatgpt.com\nopenai.com\nkeyword:spotify', 150);
+		var taSubnets = area('subnets', '91.108.4.0/22\n149.154.160.0/20', 90);
+		var taLists = area('lists', 'https://raw.githubusercontent.com/…/list.lst', 70);
+		var linkCountEl = E('span', {});
+		var dnsServerIn = E('input', { 'type': 'text', 'class': 'cbi-input-text', 'placeholder': 'dns.example.com или 1.2.3.4', 'style': 'flex:1; min-width:180px' });
+		var dnsBootIn = E('input', { 'type': 'text', 'class': 'cbi-input-text', 'placeholder': '77.88.8.8', 'style': 'width:150px' });
+		dnsServerIn.addEventListener('input', function() { draft.dns.server = dnsServerIn.value.trim(); touch(); });
+		dnsBootIn.addEventListener('input', function() { draft.dns.bootstrap = dnsBootIn.value.trim(); touch(); });
+
+		function syncAreas() {
+			taLinks.value = draft.links; taSub.value = draft.sub; taDomains.value = draft.domains;
+			taSubnets.value = draft.subnets; taLists.value = draft.lists;
+			dnsServerIn.value = draft.dns.server; dnsBootIn.value = draft.dns.bootstrap;
+		}
+
+		function touch() {
+			if (!dirty) { dirty = true; renderSaveBar(); }
+		}
+
+		function set(k, v) {
+			draft[k] = v;
+			touch();
+			renderPanes();
+		}
+
+		function configured() { return !!(cfg && cfg.exists); }
+
+		function reload(after) {
+			return Promise.all([
+				zm.forkopStatus().catch(function() { return st; }),
+				zm.forkopConfigGet().catch(function() { return {}; })
+			]).then(function(r) {
+				st = r[0] || {};
+				cfg = (r[1] && !r[1].error) ? r[1] : null;
+				if (!dirty) { draft = fromCfg(cfg); customDns = dnsPreset(draft.dns) === 'custom'; syncAreas(); }
+				renderAll();
+				if (st.running && draft.mode !== 'iface') loadServers();
+				if (after) after();
+			});
+		}
+
+		function finish(ok) {
+			busy = false;
+			var done = lastAct;
+			lastAct = '';
+			var msg = ok ? ({ install: 'Forkop установлен — настройте подключение и сервисы', update: 'Forkop обновлён', remove: 'Forkop удалён',
+				stop: 'Forkop выключен — всё идёт напрямую', start: 'Forkop включён', restart: 'Forkop перезапущен', apply: 'Настройки применены',
+				lists: 'Списки обновлены', subs: 'Подписка обновлена', singbox: 'sing-box заменён' }[done] || 'Готово') : 'Не получилось — подробности в журнале';
+			zm.toast(msg, ok ? 'info' : 'error');
+			diag = null;
+			reload(function() {
+				if (ok && st.running && /^(apply|start|restart|update|install)$/.test(done)) runDiag(true);
+				if (ok && (done === 'install' || done === 'update')) { servers = null; }
+			});
+		}
+
+		function follow() {
+			busy = true;
+			renderAll();
+			zm.pollJob('forkop', logEl, finish);
+		}
+
+		function act(action, arg, text) {
+			if (busy || saving) { zm.toast('Дождитесь окончания текущей операции', 'warning'); return; }
+			zm.forkopAction(action, arg || '').then(function(res) {
+				if (res.error) { zm.toast(res.error, 'error'); return; }
+				if (!res.started) return;
+				lastAct = action;
+				if (text) zm.toast(text, 'warning');
+				follow();
+			}).catch(function() { zm.toast('Роутер не ответил', 'error'); });
+		}
+
+		function payload() {
+			return JSON.stringify({
+				sec: draft.sec, mode: draft.mode, links: draft.links, sub: draft.sub.trim(), sub_interval: draft.sub_interval,
+				iface: draft.iface, fastest: draft.fastest, services: draft.services, domains: draft.domains,
+				subnets: draft.subnets, lists: draft.lists, full: draft.full, excl: draft.excl,
+				dns: draft.dns, quic_off: draft.quic_off, list_interval: draft.list_interval
+			});
+		}
+
+		function save(enable) {
+			if (busy || saving) { zm.toast('Дождитесь окончания текущей операции', 'warning'); return; }
+			if (draft.mode === 'links' && !textLines(draft.links).length) { tabTo('conn'); zm.toast('Вставьте хотя бы одну ссылку на сервер', 'warning'); return; }
+			if (draft.mode === 'sub' && !/^https?:\/\//i.test(draft.sub.trim())) { tabTo('conn'); zm.toast('Вставьте ссылку на подписку', 'warning'); return; }
+			if (draft.mode === 'iface' && !draft.iface) { tabTo('conn'); zm.toast('Выберите туннель', 'warning'); return; }
+			if (!draft.services.length && !textLines(draft.domains).length && !textLines(draft.subnets).length && !textLines(draft.lists).length && !draft.full.length) {
+				tabTo('svc'); zm.toast('Выберите хотя бы один сервис — иначе через подключение ничего не пойдёт', 'warning'); return;
+			}
+			saving = true;
+			renderSaveBar();
+			zm.forkopConfigSet(payload()).then(function(res) {
+				saving = false;
+				if (res.error) { renderSaveBar(); zm.toast(res.error, 'error'); return; }
+				dirty = false;
+				renderSaveBar();
+				if (enable || st.enabled) act(st.enabled && st.running ? 'apply' : 'start', '', st.enabled ? 'Применяем настройки' : 'Включаем Forkop');
+				else { zm.toast('Настройки сохранены', 'info'); reload(); }
+			}).catch(function() { saving = false; renderSaveBar(); zm.toast('Роутер не ответил', 'error'); });
+		}
+
+		function discard() {
+			draft = fromCfg(cfg);
+			customDns = dnsPreset(draft.dns) === 'custom';
+			dirty = false;
+			syncAreas();
+			renderAll();
+		}
+
+		function tabTo(id) {
+			tab = id;
+			try { localStorage.setItem('zm.forkop.tab', tab); } catch (e) {}
+			renderTabs();
+		}
+
+		function selectedCount() {
+			return draft.services.length + (textLines(draft.domains).length ? 1 : 0) + (textLines(draft.subnets).length ? 1 : 0) + (textLines(draft.lists).length ? 1 : 0);
+		}
+
+		function connSummary(c) {
+			if (!c || !c.exists) return 'не настроено';
+			if (c.mode === 'iface') return 'туннель ' + c.iface;
+			if (c.mode === 'sub') return 'подписка' + (c.fastest ? ' · авто' : '');
+			var n = (c.links || []).length;
+			return n + ' ' + plural(n, 'сервер', 'сервера', 'серверов') + (n > 1 && c.fastest ? ' · авто' : '');
+		}
+
+		function routeSummary(c) {
+			if (!c || !c.exists) return '—';
+			var n = (c.services || []).length, parts = [];
+			if (n) parts.push(n + ' ' + plural(n, 'список', 'списка', 'списков'));
+			if ((c.domains || []).length) parts.push((c.domains.length) + ' ' + plural(c.domains.length, 'домен', 'домена', 'доменов'));
+			if ((c.full || []).length) parts.push(c.full.length + ' ' + plural(c.full.length, 'устройство', 'устройства', 'устройств'));
+			return parts.length ? parts.join(' · ') : 'ничего';
+		}
+
+		function statusBadge() {
+			if (busy) return badge('zm-warn', { install: 'устанавливаем', update: 'обновляем', remove: 'удаляем', stop: 'выключаем', lists: 'обновляем списки', subs: 'обновляем подписку', singbox: 'меняем sing-box' }[lastAct] || 'запускаем');
+			if (!st.installed) return badge('zm-off', 'не установлен');
+			if (!st.enabled) return badge('zm-off', configured() ? 'выключен' : 'не настроен');
+			if (st.running) return badge('zm-ok', 'работает');
+			return badge('zm-bad', 'не работает');
+		}
+
+		function stat(label, value) {
+			return E('div', { 'class': 'zm-st-stat' }, [ E('span', { 'class': 'zm-st-stat-label' }, label), E('span', { 'class': 'zm-st-stat-value', 'title': value }, value) ]);
+		}
+
+		function renderMain() {
+			mainCard.innerHTML = '';
+			mainCard.appendChild(E('h3', {}, 'Forkop'));
+			mainCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:-6px' }, 'Выбранные сервисы идут через ваш сервер — VLESS, Shadowsocks, Trojan, подписку VPN или туннель WireGuard/AmneziaWG. Остальной интернет — напрямую. Внутри — sing-box.'));
+			if (st.blocker) mainCard.appendChild(E('div', { 'class': 'zm-refresh-banner zm-show' }, [ E('span', {}, st.blocker_text || st.blocker) ]));
+			if (st.installed && st.enabled) (st.warn || []).forEach(function(w) {
+				if (WARN[w]) mainCard.appendChild(E('p', { 'class': 'zm-hint' }, '⚠ ' + WARN[w]));
+			});
+			mainCard.appendChild(row('Состояние', statusBadge()));
+
+			if (st.installed) {
+				var ver = (st.version || '—') + (st.newer ? ' → ' + st.latest : '');
+				var sb = st.singbox ? st.singbox + (st.singbox_pkg === 'sing-box-tiny' ? ' tiny' : '') : 'не установлен';
+				mainCard.appendChild(E('div', { 'class': 'zm-st-stats' }, [
+					stat('Подключение', connSummary(cfg)),
+					stat('Через Forkop', routeSummary(cfg)),
+					stat('Forkop · sing-box', ver + ' · ' + sb)
+				]));
+			}
+
+			if (st.foreign && !busy) {
+				mainCard.appendChild(E('div', { 'class': 'zm-refresh-banner zm-show', 'style': 'margin-top:14px' }, [
+					E('span', {}, 'Forkop стоит в старом виде — с LuCI-приложением и сторонними зеркалами. Переведите его на Zapret Manager: LuCI-приложение уберётся, репозитории пакетов снова станут официальными, настройки сохранятся.'),
+					E('button', { 'class': 'cbi-button cbi-button-positive', 'click': function() { act('install', '', 'Переводим Forkop на Zapret Manager'); } }, 'Перевести')
+				]));
+			}
+
+			if (busy) {
+				mainCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Можно закрыть страницу — всё доделается на роутере.'));
+				return;
+			}
+
+			var b = [];
+			if (!st.installed) {
+				b.push(E('button', { 'class': 'cbi-button cbi-button-positive', 'disabled': st.blocker ? '' : null, 'click': function() { act('install', '', 'Устанавливаем Forkop — это займёт пару минут'); } }, 'Установить'));
+				mainCard.appendChild(E('div', { 'class': 'zm-actions' }, b));
+				mainCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Поставится только сам Forkop — без LuCI-приложения — прямо с GitHub (' + 'slayer326/forkop' + '), а sing-box и остальные пакеты — из официального репозитория OpenWrt. Никаких сторонних зеркал. Нужно около 15 МБ свободной памяти.' + (st.saved ? ' Ваши прежние настройки вернутся.' : '')));
+				return;
+			}
+			if (st.enabled) {
+				b.push(E('button', { 'class': 'cbi-button cbi-button-positive', 'click': function() { act('restart', '', 'Перезапускаем Forkop'); } }, 'Перезапустить'));
+				b.push(E('button', { 'class': 'cbi-button', 'click': function() { act('stop', '', 'Выключаем Forkop'); } }, 'Выключить'));
+			} else {
+				b.push(E('button', { 'class': 'cbi-button cbi-button-positive', 'disabled': st.blocker ? '' : null, 'click': function() {
+					if (!configured()) { tabTo('conn'); zm.toast('Сначала укажите подключение и сервисы, затем «Сохранить и включить»', 'warning'); return; }
+					if (dirty) { save(true); return; }
+					act('start', '', 'Включаем Forkop');
+				} }, 'Включить'));
+			}
+			if (st.newer) b.push(E('button', { 'class': 'cbi-button cbi-button-action', 'click': function() { act('update', '', 'Обновляем Forkop до ' + st.latest); } }, 'Обновить до ' + st.latest));
+			b.push(E('button', { 'class': 'cbi-button cbi-button-remove', 'click': function() {
+				if (!confirm('Удалить Forkop?\n\nУдалятся Forkop и поставленный для него sing-box. Весь трафик пойдёт напрямую. Ваши настройки сохранятся и вернутся при следующей установке.')) return;
+				act('remove', '', 'Удаляем Forkop');
+			} }, 'Удалить'));
+			mainCard.appendChild(E('div', { 'class': 'zm-actions' }, b));
+			if (!configured()) mainCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Три шага: укажите подключение → выберите сервисы → «Сохранить и включить».'));
+			else if (st.enabled) mainCard.appendChild(E('p', { 'class': 'zm-hint' }, '«Выключить» — всё пойдёт напрямую, настройки сохранятся.'));
+		}
+
+		function renderTabs() {
+			tabBar.innerHTML = '';
+			var show = !!st.installed;
+			tabBar.style.display = show ? '' : 'none';
+			TABS.forEach(function(t) {
+				tabBar.appendChild(E('button', { 'class': 'cbi-button' + (t.id === tab ? ' cbi-button-positive' : ''), 'click': function() { tabTo(t.id); } }, t.label));
+			});
+			Object.keys(panes).forEach(function(k) { panes[k].style.display = show && k === tab ? '' : 'none'; });
+			saveBar.style.display = show && (dirty || !configured()) ? '' : 'none';
+		}
+
+		function renderSaveBar() {
+			saveBar.innerHTML = '';
+			var show = !!st.installed && (dirty || !configured());
+			saveBar.style.display = show ? '' : 'none';
+			if (!show) return;
+			var btns = [];
+			var primary = st.enabled ? 'Сохранить и применить' : 'Сохранить и включить';
+			btns.push(E('button', { 'class': 'cbi-button cbi-button-positive', 'disabled': saving || busy ? '' : null, 'click': function() { save(true); } }, saving ? 'Сохраняем…' : primary));
+			if (!st.enabled) btns.push(E('button', { 'class': 'cbi-button', 'disabled': saving || busy ? '' : null, 'click': function() { save(false); } }, 'Только сохранить'));
+			if (dirty && configured()) btns.push(E('button', { 'class': 'cbi-button', 'disabled': saving ? '' : null, 'click': discard }, 'Отменить'));
+			saveBar.appendChild(E('div', { 'class': 'zm-actions', 'style': 'margin:0' }, btns.concat([
+				E('span', { 'class': 'zm-hint', 'style': 'margin:0' }, dirty ? 'Есть несохранённые изменения' : 'Настройте подключение и сервисы, затем сохраните')
+			])));
+		}
+
+		function renderLinkCount() {
+			var l = textLines(draft.links), bad = l.filter(function(x) { return !LINK_RE.test(x); }).length;
+			linkCountEl.innerHTML = '';
+			if (!l.length) return;
+			linkCountEl.appendChild(bad ? badge('zm-warn', 'не распознано: ' + bad) : badge('zm-ok', l.length + ' ' + plural(l.length, 'сервер', 'сервера', 'серверов')));
+		}
+
+		function node(name, foot, on, click, right, cls) {
+			return E('div', { 'class': 'zm-node' + (on ? ' zm-active' : '') + (cls ? ' ' + cls : ''), 'click': click }, [
+				E('div', { 'class': 'zm-node-name' }, name),
+				E('div', { 'class': 'zm-node-foot' }, [ E('span', {}, foot || ''), right || E('span') ])
+			]);
+		}
+
+		function sw(on, label, hint, click) {
+			return E('div', { 'class': 'zm-row', 'style': 'cursor:pointer; align-items:flex-start; flex-wrap:nowrap; margin:12px 0', 'click': click }, [
+				E('div', { 'class': 'zm-switch' + (on ? ' zm-switch-on' : ''), 'style': 'margin-top:1px' }, [ E('span') ]),
+				E('div', {}, [ E('div', { 'style': 'font-weight:600' }, label), hint ? E('div', { 'class': 'zm-hint', 'style': 'margin-top:2px' }, hint) : E([]) ])
+			]);
+		}
+
+		function seg(items, cur, pick) {
+			return E('div', { 'class': 'zm-seg' }, items.map(function(it) {
+				return E('div', { 'class': 'zm-seg-item' + (it.id === cur ? ' zm-active' : ''), 'click': function() { if (it.id !== cur) pick(it.id); } }, it.label);
+			}));
+		}
+
+		function tiles(items, cur, pick) {
+			return E('div', { 'class': 'zm-grid' }, items.map(function(it) {
+				return E('div', { 'class': 'zm-tile' + (it.id === cur ? ' zm-active' : ''), 'click': function() { if (it.id !== cur) pick(it.id); } }, it.label);
+			}));
+		}
+
+		function renderConn() {
+			connCard.innerHTML = '';
+			connCard.appendChild(E('h3', {}, 'Подключение'));
+			connCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:-6px' }, 'Через что пускать выбранные сервисы.'));
+			connCard.appendChild(row('Способ', seg(MODES, draft.mode, function(m) { set('mode', m); })));
+
+			if (draft.mode === 'links') {
+				connCard.appendChild(taLinks);
+				connCard.appendChild(E('div', { 'class': 'zm-row' }, [ linkCountEl ]));
+				renderLinkCount();
+				connCard.appendChild(E('p', { 'class': 'zm-hint' }, 'По одной ссылке на строку: vless://, vmess://, trojan://, ss://, socks5://, hysteria2://, tuic://. Ссылку даёт ваш VPN-сервис или панель сервера (3x-ui, Marzban, Remnawave).'));
+				if (textLines(draft.links).length > 1)
+					connCard.appendChild(sw(draft.fastest, 'Выбирать самый быстрый сервер', 'Раз в 3 минуты Forkop проверяет серверы и сам переключается на лучший. Выключите — и выбирайте сервер вручную ниже.', function() { set('fastest', !draft.fastest); }));
+			}
+			else if (draft.mode === 'sub') {
+				connCard.appendChild(taSub);
+				connCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Ссылка на подписку от вашего VPN-сервиса — обычно https://…/sub/… Серверы из неё обновляются сами.'));
+				connCard.appendChild(sw(draft.fastest, 'Выбирать самый быстрый сервер', 'Forkop сам переключается на лучший сервер из подписки. Выключите — и выбирайте вручную ниже.', function() { set('fastest', !draft.fastest); }));
+				connCard.appendChild(E('h4', { 'style': 'margin:14px 0 8px' }, 'Обновлять подписку'));
+				connCard.appendChild(tiles(SUB_IV, draft.sub_interval, function(v) { set('sub_interval', v); }));
+			}
+			else {
+				var tl = (cfg && cfg.tunnels) || [];
+				if (draft.iface && !tl.some(function(t) { return t.name === draft.iface; })) tl = tl.concat([ { name: draft.iface, up: false, missing: true } ]);
+				if (tl.length) {
+					connCard.appendChild(E('div', { 'class': 'zm-nodes' }, tl.map(function(t) {
+						return node(t.name, t.missing ? 'сейчас не найден' : t.steer ? 'туннель Steer' : 'туннель', draft.iface === t.name,
+							function() { if (draft.iface !== t.name) set('iface', t.name); },
+							E('span', { 'class': 'zm-lat ' + (t.up && !t.missing ? 'zm-lat-good' : 'zm-lat-bad') }, t.up && !t.missing ? 'поднят' : 'выключен'));
+					})));
+					connCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Сервисы пойдут через выбранный туннель WireGuard или AmneziaWG, который уже настроен на роутере.'));
+				}
+				else connCard.appendChild(E('p', { 'class': 'zm-hint' }, 'На роутере нет туннелей WireGuard или AmneziaWG.'));
+				connCard.appendChild(E('p', { 'class': 'zm-hint' }, [ 'Туннель WARP или свой AmneziaWG можно создать на вкладке ', E('a', { 'href': pageLink('awg') }, 'AmneziaWG'), ' — он появится здесь.' ]));
+			}
+		}
+
+		function loadServers() {
+			if (srvBusy) return;
+			srvBusy = true;
+			renderServers();
+			zm.forkopAction('servers', '').then(function(res) {
+				srvBusy = false;
+				if (res.error) { servers = null; srvErr = res.error; } else { servers = res; srvErr = ''; }
+				renderServers();
+			}).catch(function() { srvBusy = false; srvErr = 'роутер не ответил'; renderServers(); });
+		}
+
+		function testLatency() {
+			if (latBusy) return;
+			latBusy = true;
+			renderServers();
+			zm.forkopAction('latency', '').then(function(res) {
+				latBusy = false;
+				if (res.error) zm.toast(res.error, 'error');
+				loadServers();
+			}).catch(function() { latBusy = false; renderServers(); zm.toast('Роутер не ответил', 'error'); });
+		}
+
+		function pickServer(tag, name) {
+			zm.forkopAction('select', tag).then(function(res) {
+				if (res.error) { zm.toast(res.error, 'error'); return; }
+				zm.toast('Выбран: ' + name, 'info');
+				loadServers();
+			}).catch(function() { zm.toast('Роутер не ответил', 'error'); });
+		}
+
+		function renderServers() {
+			srvCard.innerHTML = '';
+			var show = st.installed && st.running && configured() && cfg.mode !== 'iface' && draft.mode === cfg.mode && !busy;
+			srvCard.style.display = show ? '' : 'none';
+			if (!show) return;
+			srvCard.appendChild(E('h3', {}, 'Серверы'));
+			if (!servers) {
+				srvCard.appendChild(E('p', { 'class': 'zm-hint' }, srvBusy ? 'Загружаем список серверов…' : (srvErr || 'Список пока не загружен.')));
+				if (!srvBusy) srvCard.appendChild(E('div', { 'class': 'zm-actions' }, [ E('button', { 'class': 'cbi-button', 'click': loadServers }, 'Обновить') ]));
+				return;
+			}
+			var items = servers.items || [], auto = items.filter(function(i) { return /urltest/i.test(i.type); })[0];
+			var alive = items.filter(function(i) { return i.delay > 0; }).length;
+			srvCard.appendChild(row('Сейчас', E('span', { 'style': 'font-weight:600' }, (function() {
+				var n = items.filter(function(i) { return i.tag === servers.now; })[0];
+				if (!n) return servers.now || '—';
+				if (/urltest/i.test(n.type)) {
+					var inner = items.filter(function(i) { return i.tag === n.now; })[0];
+					return 'Авто → ' + (inner ? inner.name : (n.now || 'выбирает…'));
+				}
+				return n.name;
+			})())));
+			var grid = E('div', { 'class': 'zm-nodes' });
+			items = items.filter(function(i) { return /urltest/i.test(i.type); }).concat(items.filter(function(i) { return !/urltest/i.test(i.type); }));
+			items.forEach(function(n) {
+				var isAuto = /urltest/i.test(n.type), on = servers.now === n.tag;
+				var lat = n.delay > 0 ? n.delay + ' мс' : n.delay === 0 ? 'нет ответа' : '';
+				var foot = isAuto ? 'сам выбирает лучший' : [ n.country, String(n.type || '').toLowerCase() ].filter(function(x) { return x; }).join(' · ');
+				grid.appendChild(E('div', { 'class': 'zm-node' + (on ? ' zm-active' : '') + (n.delay === 0 ? ' zm-node-dead' : ''), 'click': function() { if (!on) pickServer(n.tag, isAuto ? 'автовыбор' : n.name); } }, [
+					E('div', { 'class': 'zm-node-name' }, isAuto ? 'Авто — самый быстрый' : n.name),
+					E('div', { 'class': 'zm-node-foot' }, [ E('span', {}, foot), E('span', { 'class': 'zm-lat ' + (n.delay === 0 ? 'zm-lat-bad' : latClass(n.delay)) }, lat) ])
+				]));
+			});
+			srvCard.appendChild(grid);
+			var acts = [ E('button', { 'class': 'cbi-button', 'disabled': latBusy ? '' : null, 'click': testLatency }, latBusy ? 'Проверяем…' : 'Проверить задержку') ];
+			if (cfg.mode === 'sub') acts.push(E('button', { 'class': 'cbi-button', 'click': function() { act('subs', '', 'Обновляем подписку'); } }, 'Обновить подписку'));
+			srvCard.appendChild(E('div', { 'class': 'zm-actions' }, acts));
+			srvCard.appendChild(E('p', { 'class': 'zm-hint' }, (auto ? 'Нажмите на сервер, чтобы выбрать его вручную, или на «Авто», чтобы Forkop выбирал сам. ' : 'Нажмите на сервер, чтобы переключиться. ') + 'Ручной выбор держится до перезагрузки роутера.' + (items.length && !alive ? ' Задержка ещё не проверялась.' : '')));
+		}
+
+		function svcTile(s) {
+			var on = draft.services.indexOf(s.id) >= 0;
+			return E('div', { 'class': 'zm-svc' + (on ? ' zm-svc-on' : ''), 'click': function() {
+				var l = draft.services.slice(), i = l.indexOf(s.id);
+				if (i >= 0) l.splice(i, 1); else l.push(s.id);
+				set('services', l);
+			} }, [
+				E('div', { 'class': 'zm-svc-ico', 'style': 'background:' + s.color }, s.ico),
+				E('div', { 'class': 'zm-svc-text' }, [ E('div', { 'class': 'zm-svc-name' }, s.name), E('div', { 'class': 'zm-svc-sub', 'title': s.sub }, s.sub) ]),
+				E('div', { 'class': 'zm-switch' + (on ? ' zm-switch-on' : '') }, [ E('span') ])
+			]);
+		}
+
+		var netsOpen = null;
+
+		function renderSvc() {
+			svcCard.innerHTML = '';
+			var n = draft.services.length;
+			svcCard.appendChild(E('h3', {}, [ 'Что пускать через Forkop ', n ? badge('zm-ok', 'выбрано ' + n) : badge('zm-off', 'ничего не выбрано') ]));
+			svcCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:-6px' }, 'Готовые списки доменов и подсетей из itdoginfo/allow-domains. Обновляются сами, прямо с GitHub.'));
+			svcCard.appendChild(E('h4', { 'style': 'margin:14px 0 0' }, 'Сервисы'));
+			svcCard.appendChild(E('div', { 'class': 'zm-svc-grid' }, SERVICES.map(svcTile)));
+			svcCard.appendChild(E('h4', { 'style': 'margin:20px 0 0' }, 'Наборы'));
+			svcCard.appendChild(E('div', { 'class': 'zm-svc-grid' }, SETS.map(svcTile)));
+			if (draft.services.indexOf('russia_inside') >= 0)
+				svcCard.appendChild(E('p', { 'class': 'zm-hint' }, '«Всё заблокированное» уже включает большинство сервисов и наборов выше — отдельно их можно не отмечать. На роутерах с 128 МБ памяти лучше выбрать нужное по отдельности.'));
+			var netOn = NETS.filter(function(s) { return draft.services.indexOf(s.id) >= 0; }).length;
+			var open = netsOpen === null ? netOn > 0 : netsOpen;
+			var head = E('div', { 'class': 'zm-list-head zm-cat-head', 'role': 'button', 'tabindex': '0', 'style': 'padding-left:0; padding-right:0; margin-top:10px' }, [
+				E('span', { 'class': 'zm-list-chev', 'aria-hidden': 'true' }, '›'),
+				E('div', { 'class': 'zm-list-titles' }, [ E('div', { 'class': 'zm-list-title' }, 'Подсети хостингов и CDN'), E('div', { 'class': 'zm-cat-sub' }, 'Для игр и сайтов, которые не определяются по домену') ]),
+				badge(netOn ? 'zm-ok' : 'zm-off', netOn ? 'выбрано ' + netOn : 'не выбраны')
+			]);
+			var body = E('div', { 'style': open ? '' : 'display:none' }, [ E('div', { 'class': 'zm-svc-grid' }, NETS.map(svcTile)) ]);
+			var box = E('div', { 'class': 'zm-cat' + (open ? ' zm-list-open' : '') }, [ head, body ]);
+			head.addEventListener('click', function() { netsOpen = !open; renderSvc(); });
+			svcCard.appendChild(box);
+			if (draft.services.indexOf('discord') >= 0 && draft.services.indexOf('cloudflare') >= 0)
+				svcCard.appendChild(E('p', { 'class': 'zm-hint' }, '⚠ Discord и Cloudflare вместе уводят в прокси очень много постороннего трафика, включая торренты.'));
+			var known = SERVICES.concat(SETS, NETS).map(function(s) { return s.id; });
+			var other = draft.services.filter(function(x) { return known.indexOf(x) < 0; });
+			if (other.length) svcCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Ещё включено: ' + other.join(', ') + ' — сохранится как есть.'));
+
+			ownCard.innerHTML = '';
+			ownCard.appendChild(E('h3', {}, 'Свои домены и адреса'));
+			ownCard.appendChild(E('h4', { 'style': 'margin:4px 0 8px' }, 'Домены'));
+			ownCard.appendChild(taDomains);
+			ownCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Один домен на строку, поддомены включаются сами: example.com — это и www.example.com. Можно keyword:слово — все домены со словом.'));
+			ownCard.appendChild(E('h4', { 'style': 'margin:16px 0 8px' }, 'IP-адреса и подсети'));
+			ownCard.appendChild(taSubnets);
+			ownCard.appendChild(E('h4', { 'style': 'margin:16px 0 8px' }, 'Внешние списки'));
+			ownCard.appendChild(taLists);
+			ownCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Ссылки на .lst-файлы с доменами и подсетями — по одной на строку. Forkop скачивает их сам и обновляет по расписанию.'));
+		}
+
+		function devCard(card, key, other, title, hint, empty) {
+			card.innerHTML = '';
+			var list = draft[key], devs = (cfg && cfg.devices) || [], known = {};
+			card.appendChild(E('h3', {}, [ title + ' ', list.length ? badge(key === 'full' ? 'zm-ok' : 'zm-warn', list.length + ' ' + plural(list.length, 'устройство', 'устройства', 'устройств')) : E([]) ]));
+			card.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:-6px' }, hint));
+			function toggle(ip) {
+				var l = draft[key].slice(), i = l.indexOf(ip);
+				if (i >= 0) l.splice(i, 1);
+				else {
+					l.push(ip);
+					var o = draft[other].indexOf(ip);
+					if (o >= 0) { draft[other] = draft[other].slice(); draft[other].splice(o, 1); }
+				}
+				set(key, l);
+			}
+			var grid = E('div', { 'class': 'zm-nodes' });
+			devs.forEach(function(d) {
+				known[d.ip] = true;
+				grid.appendChild(node(d.name || d.ip, d.name ? d.ip : 'без имени', list.indexOf(d.ip) >= 0, function() { toggle(d.ip); }));
+			});
+			list.forEach(function(ip) {
+				if (known[ip]) return;
+				grid.appendChild(node(ip, 'добавлен вручную', true, function() { toggle(ip); }));
+			});
+			if (!devs.length && !list.length) grid.appendChild(E('p', { 'class': 'zm-hint' }, empty));
+			card.appendChild(grid);
+			var inp = E('input', { 'type': 'text', 'class': 'cbi-input-text', 'placeholder': '192.168.1.100 или 192.168.1.0/24', 'style': 'flex:1; min-width:180px' });
+			function add() {
+				var v = inp.value.trim();
+				if (!/^\d{1,3}(\.\d{1,3}){3}(\/\d{1,2})?$/.test(v)) { zm.toast('Введите IP-адрес, например 192.168.1.100', 'warning'); return; }
+				if (draft[key].indexOf(v) < 0) toggle(v);
+			}
+			inp.addEventListener('keydown', function(ev) { if (ev.key === 'Enter') { ev.preventDefault(); add(); } });
+			card.appendChild(E('div', { 'class': 'zm-actions' }, [ inp, E('button', { 'class': 'cbi-button', 'click': add }, 'Добавить') ]));
+		}
+
+		function renderDev() {
+			devCard(fullCard, 'full', 'excl', 'Всё через Forkop',
+				'Весь интернет этих устройств пойдёт через подключение, какие бы сервисы ни были выбраны. Удобно для телевизора или игровой приставки.',
+				'Устройства не найдены — адреса можно добавить вручную.');
+			devCard(exclCard, 'excl', 'full', 'Мимо Forkop',
+				'Эти устройства всегда ходят напрямую — например, рабочий ноутбук или умная колонка.',
+				'Устройства не найдены — адреса можно добавить вручную.');
+		}
+
+		function renderSet() {
+			dnsCard.innerHTML = '';
+			var cur = customDns ? 'custom' : dnsPreset(draft.dns);
+			dnsCard.appendChild(E('h3', {}, 'DNS'));
+			dnsCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:-6px' }, 'Какой DNS использует роутер, пока работает Forkop. DoH и DoT шифруют запросы — провайдер не сможет их подменить.'));
+			var g = E('div', { 'class': 'zm-nodes' });
+			DNS.forEach(function(p) {
+				g.appendChild(node(p.name, p.sub, cur === p.id, function() {
+					customDns = false;
+					set('dns', { type: p.type, server: p.server, bootstrap: p.bootstrap });
+					syncAreas();
+				}));
+			});
+			g.appendChild(node('Свой', 'любой сервер', cur === 'custom', function() { customDns = true; syncAreas(); renderSet(); }));
+			dnsCard.appendChild(g);
+			if (cur === 'custom') {
+				dnsCard.appendChild(row('Протокол', seg([ { id: 'udp', label: 'UDP' }, { id: 'dot', label: 'DoT' }, { id: 'doh', label: 'DoH' } ], draft.dns.type, function(t) {
+					draft.dns = { type: t, server: draft.dns.server, bootstrap: draft.dns.bootstrap }; touch(); renderSet();
+				})));
+				dnsCard.appendChild(E('div', { 'class': 'zm-actions' }, [ E('span', { 'class': 'zm-label' }, 'Сервер'), dnsServerIn ]));
+				dnsCard.appendChild(E('div', { 'class': 'zm-actions' }, [ E('span', { 'class': 'zm-label' }, 'Резервный (IP)'), dnsBootIn ]));
+				dnsCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Резервный DNS нужен, чтобы узнать адрес основного, если тот указан именем.'));
+			}
+
+			miscCard.innerHTML = '';
+			miscCard.appendChild(E('h3', {}, 'Прочее'));
+			miscCard.appendChild(sw(draft.quic_off, 'Отключить QUIC для выбранных сервисов', 'Браузеры и приложения перейдут на обычный HTTPS — через прокси это заметно стабильнее. Рекомендуется.', function() { set('quic_off', !draft.quic_off); }));
+			miscCard.appendChild(E('h4', { 'style': 'margin:14px 0 8px' }, 'Обновлять списки сервисов'));
+			miscCard.appendChild(tiles(LIST_IV, draft.list_interval, function(v) { set('list_interval', v); }));
+			var m = [ E('button', { 'class': 'cbi-button', 'disabled': !configured() || busy ? '' : null, 'click': function() { act('lists', '', 'Обновляем списки'); } }, 'Обновить списки сейчас') ];
+			if (configured() && cfg.mode === 'sub') m.push(E('button', { 'class': 'cbi-button', 'disabled': busy ? '' : null, 'click': function() { act('subs', '', 'Обновляем подписку'); } }, 'Обновить подписку сейчас'));
+			miscCard.appendChild(E('div', { 'class': 'zm-actions' }, m));
+			var extra = (cfg && cfg.extra) || [];
+			if (extra.length) miscCard.appendChild(E('p', { 'class': 'zm-hint' }, 'В настройках Forkop есть ещё ' + extra.length + ' ' + plural(extra.length, 'секция', 'секции', 'секций') + ', созданных раньше вручную (' + extra.map(function(x) { return x.label; }).join(', ') + '). Zapret Manager их не трогает — они продолжают работать.'));
+			if (cfg && cfg.jsons) miscCard.appendChild(E('p', { 'class': 'zm-hint' }, 'У подключения есть JSON-исходящие, заданные вручную, — они сохранятся.'));
+
+			sbCard.innerHTML = '';
+			sbCard.appendChild(E('h3', {}, 'sing-box'));
+			var tiny = st.singbox_pkg === 'sing-box-tiny', full = st.singbox_pkg === 'sing-box';
+			sbCard.appendChild(row('Версия', E('span', {}, st.singbox ? st.singbox + ' · ' + (tiny ? 'облегчённый' : full ? 'полный' : st.singbox_pkg || 'установлен вручную') : 'не установлен')));
+			sbCard.appendChild(tiles([ { id: 'tiny', label: 'Облегчённый' }, { id: 'stable', label: 'Полный' } ], tiny ? 'tiny' : full ? 'stable' : '', function(v) {
+				if (!confirm('Заменить sing-box на ' + (v === 'tiny' ? 'облегчённый' : 'полный') + '?\n\nОн скачается из официального репозитория OpenWrt, Forkop перезапустится.')) return;
+				act('singbox', v, 'Меняем sing-box');
+			}));
+			sbCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Облегчённый — меньше памяти и места, подходит почти всем. Полный — со всеми протоколами, если нужен WireGuard внутри sing-box.'));
+		}
+
+		function runDiag(quiet) {
+			if (diagBusy) return;
+			diagBusy = true;
+			renderCheck();
+			zm.forkopAction('diag', '').then(function(res) {
+				diagBusy = false;
+				diag = res && !res.error ? res : null;
+				if (res && res.error && !quiet) zm.toast(res.error, 'error');
+				renderCheck();
+				if (!quiet) zm.toast('Проверка закончена', 'info');
+			}).catch(function() { diagBusy = false; renderCheck(); });
+		}
+
+		function renderCheck() {
+			checkCard.innerHTML = '';
+			var show = st.installed && configured() && st.enabled && !busy;
+			checkCard.style.display = show ? '' : 'none';
+			if (!show) return;
+			checkCard.appendChild(E('h3', {}, 'Проверка'));
+			if (diag && diag.checks) {
+				var fails = diag.checks.filter(function(c) { return c.verdict === 'fail'; }).length, warns = diag.checks.filter(function(c) { return c.verdict === 'warn'; }).length;
+				checkCard.appendChild(row('Итог', fails ? badge('zm-bad', 'есть поломка') : warns ? badge('zm-warn', 'работает, есть замечания') : badge('zm-ok', 'всё в порядке')));
+				checkCard.appendChild(E('div', { 'class': 'zm-st-checks' }, diag.checks.map(function(c) {
+					return E('div', { 'class': 'zm-st-check zm-st-check-' + c.verdict }, [
+						E('span', { 'class': 'zm-st-check-dot' }, c.verdict === 'ok' ? '✓' : c.verdict === 'warn' ? '!' : '✕'),
+						E('span', {}, [ E('span', {}, c.what), E('span', { 'class': 'zm-st-check-why' }, c.why) ])
+					]);
+				})));
+			}
+			else checkCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:-6px' }, 'Роутер проверит службу, sing-box, DNS и ответ сервера.'));
+			checkCard.appendChild(E('div', { 'class': 'zm-actions' }, [
+				E('button', { 'class': 'cbi-button', 'disabled': diagBusy ? '' : null, 'click': function() { runDiag(false); } }, diagBusy ? 'Проверяем…' : 'Проверить')
+			]));
+		}
+
+		function renderPanes() {
+			renderConn();
+			renderServers();
+			renderSvc();
+			renderDev();
+			renderSet();
+			renderMain();
+			renderSaveBar();
+		}
+
+		function renderAll() {
+			renderMain();
+			renderTabs();
+			renderSaveBar();
+			renderConn();
+			renderServers();
+			renderSvc();
+			renderDev();
+			renderSet();
+			renderCheck();
+		}
+
+		panes.conn.appendChild(connCard);
+		panes.conn.appendChild(srvCard);
+		panes.conn.appendChild(checkCard);
+		panes.svc.appendChild(svcCard);
+		panes.svc.appendChild(ownCard);
+		panes.dev.appendChild(fullCard);
+		panes.dev.appendChild(exclCard);
+		panes.set.appendChild(dnsCard);
+		panes.set.appendChild(miscCard);
+		panes.set.appendChild(sbCard);
+		[ mainCard, logEl, tabBar, panes.conn, panes.svc, panes.dev, panes.set, saveBar ].forEach(function(n) { wrap.appendChild(n); });
+
+		syncAreas();
+		renderAll();
+		if (st.busy) { lastAct = ''; follow(); }
+		else if (st.running && configured() && draft.mode !== 'iface') loadServers();
+		return wrap;
+	}
+});
+ZM_INSTALLER_EOF
+chmod 0644 '/www/luci-static/resources/view/zapret-manager/forkop.js'
+
 
 mkdir -p /www/luci-static/resources/bytetube
 cat > '/www/luci-static/resources/bytetube/common.js' << 'ZM_INSTALLER_EOF'
@@ -17837,6 +19465,7 @@ var ICONS = {
 	lock: '<rect x="4.5" y="10.5" width="15" height="10" rx="2.5"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/>',
 	arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>',
 	alert: '<path d="M12 3.5l9.5 16.5h-19L12 3.5z"/><path d="M12 10v4.5M12 17.3v.2"/>',
+	fork: '<circle cx="6" cy="5" r="2.2"/><circle cx="18" cy="5" r="2.2"/><circle cx="12" cy="19" r="2.2"/><path d="M6 7.2v1.3a4 4 0 0 0 4 4h4a4 4 0 0 0 4-4V7.2M12 12.5v4.3"/>',
 	route: '<circle cx="6" cy="18.5" r="2.2"/><circle cx="18" cy="5.5" r="2.2"/><path d="M8.2 18.5h7.3a3.3 3.3 0 0 0 0-6.6h-7a3.3 3.3 0 0 1 0-6.6h7.3"/>',
 	tunnel: '<path d="M3 20V11a9 9 0 0 1 18 0v9"/><path d="M7 20v-8a5 5 0 0 1 10 0v8"/><path d="M3 20h18"/>',
 	anarchy: '<circle cx="12" cy="12.8" r="7.3"/><path d="M12 2.2L4.2 21.8M12 2.2l7.8 19.6M3.6 14.6h16.8"/>',
@@ -17993,6 +19622,7 @@ var ROUTES = [
 	{ id: 'strategy', title: 'Zapret', sub: 'Стратегии, тесты, YouTube, игры, Discord и списки', icon: 'shield', group: 'Обход блокировок', dot: 'zapret' },
 	{ id: 'zapret2', title: 'Zapret2', sub: 'Установка и управление Zapret2', icon: 'bolt', group: 'Обход блокировок', dot: 'zapret2' },
 	{ id: 'steer', title: 'Steer', sub: 'Выбранные сервисы через WARP или VPN', icon: 'route', group: 'Обход блокировок', dot: 'steer' },
+	{ id: 'forkop', title: 'Forkop', sub: 'Выбранные сервисы через ваш прокси, подписку или туннель', icon: 'fork', group: 'Обход блокировок', dot: 'forkop' },
 	{ id: 'bytetube', title: 'ByeTube', sub: 'YouTube через ByeDPI', icon: 'play', group: 'Обход блокировок', dot: 'bytetube' },
 	{ id: 'tgproxy', title: 'TG WS Proxy', sub: 'Прокси для Telegram', icon: 'send', group: 'Обход блокировок', dot: 'tg' },
 	{ id: 'mixomo', title: 'Mixomo', sub: 'Mihomo, MagiTrickle и WARP', icon: 'layers', group: 'Обход блокировок', dot: 'mixomo' },
