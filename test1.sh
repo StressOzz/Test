@@ -6662,7 +6662,7 @@ _st_cat_build() {
 				u = f[e, "url"]; fm = f[e, "format"]
 				if (fm != "srs" || u == "") { fm = "lst"; u = (f[e, "file"] != "" && base != "") ? base "/" f[e, "file"] : "" }
 				if (u == "" || u !~ /^https:\/\//) { bad[e] = 1; continue }
-				if (!(k in done)) { done[k] = 1; print k "|" fm "|" u > idx; sets++ }
+				if (!(k in done)) { done[k] = 1; print k "|" fm "|" u "|" (e ~ /^categories/ ? "s" : "d") > idx; sets++ }
 			}
 			for (j = 1; j <= cnt; j++) {
 				e = order[j]
@@ -9709,7 +9709,14 @@ do_fk_singbox() {
 
 forkop_config_get() {
 	_fk_installed || { echo '{"error":"Forkozz не установлен"}'; return 1; }
-	_fk_uc get
+	if [ ! -f "$ST_CAT_OFF" ]; then
+		if [ -s "$ST_CAT_IDX" ] && ! head -n1 "$ST_CAT_IDX" | grep -q '^[^|]*|[^|]*|[^|]*|[sd]$'; then
+			[ -d "$ST_RUN/cat.lock" ] || ( _st_cat_refresh force >/dev/null 2>&1 & )
+		else
+			_st_cat_bg
+		fi
+	fi
+	ZM_FK_CAT="$(_st_cat_json)" _fk_uc get
 }
 
 forkop_config_set() {
@@ -10064,16 +10071,85 @@ function services_list() {
 	return length(l) ? l : SERVICES_BASE;
 }
 const CONN = [ "connection", "proxy", "vpn", "outbound" ];
-const B4_IDS = [ "blizzard", "bungie", "ccp", "electronicarts", "epicgames", "nintendo", "play2go", "riot", "roblox",
-	"sony", "taketwo", "ubisoft", "valve", "wargaming", "xbox", "adobe", "anthropic", "apple", "google", "twitch" ];
-const B4_RAW = "https://raw.githubusercontent.com/Greeg0ry/b4geoip-forkop/main/srs/";
-const B4_RE = /^https:\/\/(raw\.githubusercontent\.com\/Greeg0ry\/b4geoip-forkop\/main\/|cdn\.jsdelivr\.net\/gh\/Greeg0ry\/b4geoip-forkop@main\/|mirror\.(infotechtg|51343)\.ru\/forkop\/lists\/b4geoip-forkop\/)srs\/([a-z0-9_]+)\.srs$/;
-function b4_id(u) { let m = (type(u) == "string") ? match(u, B4_RE) : null; return m ? m[3] : null; }
+const ST_DIR = getenv("ZM_FK_STDIR") || "/etc/zm-steer";
+const RB_CONF = getenv("ZM_FK_RBCONF") || "/usr/share/zm-redbtn/services.conf";
+const ITD_RAW = "https://raw.githubusercontent.com/itdoginfo/allow-domains/main";
+const ITD_SUBNETS = { cloudflare: true, cloudfront: true, digitalocean: true, discord: true, google_meet: true, hetzner: true,
+	meta: true, ovh: true, roblox: true, telegram: true, twitter: true };
+const CAT_SKIP = { mydyson: true };
 const SCHEMES = /^(vless|vmess|trojan|ss|socks4|socks4a|socks5|hysteria2|hy2|tuic|http|https):\/\/[^ \t\r\n]+$/i;
 const LEGACY_DOMAIN = [ "domain_suffix", "domain_suffix_text", "domain_suffix_text_mode", "domain_keyword", "domain_regex",
 	"domain_text", "domain_keyword_text", "domain_regex_text", "domain_text_mode", "domain_keyword_text_mode", "domain_regex_text_mode" ];
 
 function s(v) { return v == null ? "" : "" + v; }
+
+function latest_url(u) {
+	return replace(s(u), /^(https:\/\/github\.com\/[^\/]+\/[^\/]+\/releases\/)download\/[^\/]+\//, "$1latest/download/");
+}
+
+function kind_hint(u) {
+	u = lc(s(u));
+	for (let w in [ "geosite", "domain", "adguard", "filter" ]) if (index(u, w) >= 0) return "domains";
+	for (let w in [ "geoip", "subnet", "cidr" ]) if (index(u, w) >= 0) return "subnets";
+	return "unknown";
+}
+
+function itd_name(u) {
+	let m = match(s(u), /allow-domains\/.*\/([A-Za-z0-9_]+)\.srs$/);
+	return m ? lc(m[1]) : null;
+}
+
+function itd_plain(n) {
+	let t = [ "l:" + ITD_RAW + "/Services/" + n + ".lst" ];
+	if (ITD_SUBNETS[n]) push(t, "l:" + ITD_RAW + "/Subnets/IPv4/" + n + ".lst");
+	return t;
+}
+
+function idx_tokens(e, known) {
+	let n = itd_name(e.url);
+	if (n && known[n]) return [ "c:" + n ];
+	if (e.fmt == "lst") return [ "l:" + e.url ];
+	if (n) return itd_plain(n);
+	let u = latest_url(e.url);
+	if (e.kind == "d") return [ "s:" + u ];
+	if (kind_hint(u) == "domains") return [];
+	return [ "r:" + u ];
+}
+
+function catalog_items(known_list) {
+	let known = {}, items = [], seen = {}, idx = {};
+	for (let k in known_list) known[k] = true;
+	for (let l in split(s(fs.readfile(RB_CONF)), "\n")) {
+		if (l == "" || substr(l, 0, 1) == "#") continue;
+		let f = split(l, "|"), id = f[0], t = [];
+		if (!id || id == "custom" || seen[id]) continue;
+		if (s(f[2]) + s(f[3]) + s(f[7]) == "") continue;
+		if (id == "github") { if (known.github) t = [ "c:github" ]; }
+		else for (let set in split(s(f[7]), ",")) {
+			if (set == "") continue;
+			t = [ ...t, ...(known[set] ? [ "c:" + set ] : itd_plain(set)) ];
+		}
+		if (!length(t)) continue;
+		seen[id] = true;
+		push(items, { id, name: s(f[1]) || id, group: "", targets: uniq(t) });
+	}
+	if (fs.access(ST_DIR + "/catalog.off")) return items;
+	for (let l in split(s(fs.readfile(ST_DIR + "/catalog.idx")), "\n")) {
+		let f = split(l, "|");
+		if (length(f) >= 3 && f[0] != "" && match(f[2], /^https:\/\//))
+			idx[f[0]] = { fmt: f[1], url: f[2], kind: s(f[3]) };
+	}
+	for (let l in split(s(fs.readfile(ST_DIR + "/services.remote")), "\n")) {
+		let f = split(l, "|"), id = f[0], grp = s(f[8]), t = [];
+		if (!id || seen[id] || grp == "" || grp == "Свои списки каталога") continue;
+		if (CAT_SKIP[replace(id, /^c_/, "")]) continue;
+		for (let k in split(s(f[7]), ",")) if (idx[k]) t = [ ...t, ...idx_tokens(idx[k], known) ];
+		if (!length(t)) continue;
+		seen[id] = true;
+		push(items, { id, name: s(f[1]) || id, group: grp, targets: uniq(t) });
+	}
+	return items;
+}
 
 function link_xhttp(x) {
 	let h = split(x, "#");
@@ -10225,6 +10301,10 @@ function domain_lines(m) {
 	return uniq(r);
 }
 
+function cat_meta() {
+	try { let j = json(s(getenv("ZM_FK_CAT"))); return type(j) == "object" ? j : null; } catch (e) { return null; }
+}
+
 function cmd_get() {
 	let c = cursor(), p = pick(c), sec = p.sec;
 	let m = c.get_all(CFG, sec) || {}, st = c.get_all(CFG, "settings") || {};
@@ -10241,8 +10321,8 @@ function cmd_get() {
 		iface: length(ifs) ? s(ifs[0].name) : "",
 		fastest: length(children(c, "urltest", sec)) > 0 || s(m.urltest_enabled) == "1",
 		jsons: length(arr(m.outbound_jsons)),
-		services: words(m.community_lists),
-		b4: uniq(filter(map(words(m.rule_set_with_subnets), b4_id), (x) => x != null && index(B4_IDS, x) >= 0)),
+		refs: { c: uniq(words(m.community_lists)), s: uniq(words(m.rule_set)), r: uniq(words(m.rule_set_with_subnets)) },
+		catalog: { items: catalog_items(services_list()), meta: cat_meta() },
 		domains: domain_lines(m),
 		subnets: uniq([ ...lines(m.ip_cidr), ...lines(m.ip_cidr_text) ]),
 		lists: uniq([ ...words(m.domain_ip_lists), ...words(m.remote_domain_lists), ...words(m.remote_subnet_lists) ]),
@@ -10324,19 +10404,24 @@ function cmd_set() {
 	if (mode == "sub" && !valid_url(sub)) fail("ссылка на подписку должна начинаться с https://");
 	if (mode == "iface" && !match(iface, /^[A-Za-z0-9_.@-]{1,15}$/)) fail("выберите сетевой интерфейс");
 
-	let known = services_list();
-	let services = filter(uniq(words(d.services)), (x) => index(known, x) >= 0);
-	let b4 = filter(uniq(words(d.b4)), (x) => index(B4_IDS, x) >= 0);
+	let known = services_list(), refs = type(d.refs) == "object" ? d.refs : {};
+	let services = filter(uniq(words(refs.c)), (x) => index(known, x) >= 0);
+	let rsets = uniq(words(refs.s)), rsubs = uniq(words(refs.r)), rplain = uniq(words(refs.l));
+	for (let x in [ ...rsets, ...rsubs ])
+		if (!match(x, /^https?:\/\/[^ \t]+$/i) && !match(x, /^\/[^ \t]+\.(srs|json)$/)) fail("неверная ссылка на набор правил: " + substr(x, 0, 60));
+	for (let x in rplain)
+		if (!valid_url(x) && !match(x, /^\/[^ \t]+$/)) fail("неверная ссылка на список: " + substr(x, 0, 60));
 	let domains = uniq(tokens(d.domains));
 	for (let x in domains) if (!valid_domain(x)) fail("это не похоже на домен: " + x);
 	let subnets = uniq(tokens(d.subnets));
 	for (let x in subnets) if (!valid_ip(x)) fail("это не похоже на IP или подсеть: " + x);
 	let lists = uniq(tokens(d.lists));
 	for (let x in lists) if (!valid_url(x) && !match(x, /^\/[^ \t]+$/)) fail("список должен быть ссылкой https://… или путём /…: " + x);
+	lists = uniq([ ...lists, ...rplain ]);
 	let full = uniq(tokens(d.full)), excl = uniq(tokens(d.excl));
 	for (let x in [ ...full, ...excl ]) if (!valid_ip(x)) fail("неверный адрес устройства: " + x);
 	excl = filter(excl, (x) => index(full, x) < 0);
-	if (!length(services) && !length(b4) && !length(domains) && !length(subnets) && !length(lists) && !length(full))
+	if (!length(services) && !length(rsets) && !length(rsubs) && !length(domains) && !length(subnets) && !length(lists) && !length(full))
 		fail("выберите хотя бы один сервис, домен или устройство");
 
 	if (!c.get(CFG, sec)) c.set(CFG, sec, "section");
@@ -10369,8 +10454,8 @@ function cmd_set() {
 	c.delete(CFG, sec, "urltest_enabled");
 
 	set_list(c, sec, "community_lists", services);
-	let rsw = [ ...filter(words(c.get(CFG, sec, "rule_set_with_subnets")), (x) => b4_id(x) == null), ...map(b4, (x) => B4_RAW + x + ".srs") ];
-	set_list(c, sec, "rule_set_with_subnets", uniq(rsw));
+	set_list(c, sec, "rule_set", rsets);
+	set_list(c, sec, "rule_set_with_subnets", rsubs);
 	for (let k in LEGACY_DOMAIN) c.delete(CFG, sec, k);
 	set_text(c, sec, "domain", domains);
 	c.delete(CFG, sec, "ip_cidr_text");
@@ -17348,60 +17433,69 @@ cat > '/www/luci-static/resources/view/zapret-manager/forkozz.js' << 'ZM_INSTALL
 'require view';
 'require zapret-manager.common as zm';
 
-var SERVICES = [
-	{ id: 'youtube', name: 'YouTube', sub: 'Видео без замедления', color: '#ff0033', ico: 'YT' },
-	{ id: 'discord', name: 'Discord', sub: 'Голос, чаты, стримы', color: '#5865f2', ico: 'DC' },
-	{ id: 'telegram', name: 'Telegram', sub: 'Звонки, медиа, веб', color: '#229ed9', ico: 'TG' },
-	{ id: 'meta', name: 'Meta', sub: 'Instagram, Facebook, WhatsApp', color: '#e1306c', ico: 'IG' },
-	{ id: 'twitter', name: 'X (Twitter)', sub: 'Лента и медиа', color: '#16181c', ico: 'X' },
-	{ id: 'tiktok', name: 'TikTok', sub: 'Лента и видео', color: '#fe2c55', ico: 'TT' },
-	{ id: 'google_ai', name: 'Google AI', sub: 'Gemini и AI Studio', color: '#4285f4', ico: 'AI' },
-	{ id: 'google_play', name: 'Google Play', sub: 'Установка приложений', color: '#01875f', ico: 'GP' },
-	{ id: 'github', name: 'GitHub', sub: 'Код, релизы, Copilot', color: '#24292f', ico: 'GH' },
-	{ id: 'roblox', name: 'Roblox', sub: 'Игра и лаунчер', color: '#e2231a', ico: 'RB' },
-	{ id: 'supercell', name: 'Supercell', sub: 'Brawl Stars, Clash', color: '#f59e0b', ico: 'SC' },
-	{ id: 'hdrezka', name: 'HDRezka', sub: 'Фильмы и сериалы', color: '#3f8f3f', ico: 'HD' }
-];
+var CATEGORY_IDS = [ 'geoblock', 'block', 'news', 'anime', 'porn', 'russia_inside' ];
+var OLD_GROUP = 'Выбрано раньше (нет в каталоге)';
+var OLD_NAMES = { supercell: 'Supercell', ads_hagezi_pro: 'Реклама (HaGeZi Pro)', github: 'GitHub', youtube: 'YouTube', discord: 'Discord',
+	telegram: 'Telegram', meta: 'Meta', twitter: 'X (Twitter)', tiktok: 'TikTok', hdrezka: 'HDRezka', roblox: 'Roblox', google_ai: 'Google AI',
+	google_play: 'Google Play', cloudflare: 'Cloudflare', cloudfront: 'Amazon CloudFront', digitalocean: 'DigitalOcean', hetzner: 'Hetzner', ovh: 'OVH',
+	hodca: 'H.O.D.C.A', russia_outside: 'Россия: снаружи', ukraine_inside: 'Украина: заблокированное' };
 
-var SETS = [
-	{ id: 'russia_inside', name: 'Всё сразу', sub: 'Все заблокированные сайты', color: '#6366f1', ico: 'RU' },
-	{ id: 'geoblock', name: 'Геоблок', sub: 'Сами закрылись для России', color: '#0ea5e9', ico: 'GB' },
-	{ id: 'block', name: 'Блокировки', sub: 'Сайты из реестра', color: '#ef4444', ico: 'BL' },
-	{ id: 'news', name: 'Новости', sub: 'СМИ и новостные сайты', color: '#64748b', ico: 'NW' },
-	{ id: 'anime', name: 'Аниме', sub: 'Сайты с аниме', color: '#ec4899', ico: 'AN' },
-	{ id: 'porn', name: '18+', sub: 'Сайты для взрослых', color: '#9f1239', ico: '18' }
-];
+function refNorm(t) {
+	t = String(t || '');
+	if (t.indexOf('c:') === 0) return 'itd:' + t.slice(2);
+	var u = t.slice(2).toLowerCase().replace(/[?#].*$/, ''), b = u.replace(/^.*\//, ''), m;
+	if (/allow-domains/.test(u) && /\.srs$/.test(b)) return 'itd:' + b.slice(0, -4);
+	if (/b4geoip/.test(u) && /\.srs$/.test(b)) return 'b4:' + b.slice(0, -4);
+	if ((m = /github\.com\/([^\/]+\/[^\/]+)\/releases\/(?:latest\/download|download\/[^\/]+)\/(.+)$/.exec(u))) return 'gh:' + m[1] + '/' + m[2];
+	return 'u:' + u;
+}
 
-var NETS = [
-	{ id: 'cloudflare', name: 'Cloudflare', sub: 'Очень широкий — уведёт лишнее', color: '#f38020', ico: 'CF' },
-	{ id: 'cloudfront', name: 'Amazon CloudFront', sub: 'CDN Amazon', color: '#ff9900', ico: 'AW' },
-	{ id: 'hetzner', name: 'Hetzner', sub: 'Хостинг', color: '#d50c2d', ico: 'HZ' },
-	{ id: 'ovh', name: 'OVH', sub: 'Хостинг', color: '#123f6d', ico: 'OV' },
-	{ id: 'digitalocean', name: 'DigitalOcean', sub: 'Хостинг', color: '#0080ff', ico: 'DO' }
-];
+function refLabel(t) {
+	if (t.indexOf('c:') === 0) return OLD_NAMES[t.slice(2)] || t.slice(2);
+	var b = t.slice(2).replace(/[?#].*$/, '').replace(/^.*\//, '').replace(/\.(srs|json|lst)$/i, '');
+	return /b4geoip/i.test(t) ? b + ' (b4geoip)' : (b || t.slice(2));
+}
 
-var B4 = [
-	{ id: 'valve', name: 'Valve (Steam)', sub: 'Steam, CS2, Dota 2' },
-	{ id: 'epicgames', name: 'Epic Games', sub: 'Fortnite, EGS' },
-	{ id: 'riot', name: 'Riot Games', sub: 'LoL, Valorant' },
-	{ id: 'blizzard', name: 'Blizzard', sub: 'Battle.net, WoW' },
-	{ id: 'electronicarts', name: 'Electronic Arts', sub: 'EA app, Apex' },
-	{ id: 'ubisoft', name: 'Ubisoft', sub: 'Ubisoft Connect' },
-	{ id: 'taketwo', name: 'Take-Two (Rockstar)', sub: 'GTA Online, RDO' },
-	{ id: 'wargaming', name: 'Wargaming', sub: 'World of Tanks' },
-	{ id: 'bungie', name: 'Bungie', sub: 'Destiny 2' },
-	{ id: 'ccp', name: 'CCP', sub: 'EVE Online' },
-	{ id: 'roblox', name: 'Roblox', sub: 'Серверы игры' },
-	{ id: 'nintendo', name: 'Nintendo', sub: 'Switch Online' },
-	{ id: 'sony', name: 'Sony (PlayStation)', sub: 'PSN' },
-	{ id: 'xbox', name: 'Xbox', sub: 'Xbox Live' },
-	{ id: 'play2go', name: 'Play2Go', sub: 'Хостинг игровых серверов' },
-	{ id: 'twitch', name: 'Twitch', sub: 'Стримы' },
-	{ id: 'google', name: 'Google', sub: 'Все сети Google' },
-	{ id: 'apple', name: 'Apple', sub: 'Сети Apple' },
-	{ id: 'anthropic', name: 'Anthropic', sub: 'Claude' },
-	{ id: 'adobe', name: 'Adobe', sub: 'Creative Cloud' }
-];
+function pickFromCfg(c) {
+	c = c || {};
+	var items = ((c.catalog && c.catalog.items) || []).filter(function(it) { return it && it.id && (it.targets || []).length; });
+	var refs = c.refs || {}, toks = [], present = {}, sel = {}, covered = {}, extra = [];
+	[ 'c', 's', 'r' ].forEach(function(k) { (refs[k] || []).forEach(function(v) { toks.push(k + ':' + v); }); });
+	var lists = (c.lists || []).slice();
+	toks.forEach(function(t) { present[refNorm(t)] = true; });
+	lists.forEach(function(u) { present[refNorm('l:' + u)] = true; });
+	items.forEach(function(it) {
+		if (!it.targets.every(function(t) { return present[refNorm(t)]; })) return;
+		sel[it.id] = true;
+		it.targets.forEach(function(t) { covered[refNorm(t)] = true; });
+	});
+	toks.forEach(function(t) {
+		var n = refNorm(t);
+		if (covered[n]) return;
+		covered[n] = true;
+		extra.push({ id: 'old:' + t, name: refLabel(t), group: OLD_GROUP, targets: [ t ] });
+		sel['old:' + t] = true;
+	});
+	return { items: items.concat(extra), sel: sel, lists: lists.filter(function(u) { return !covered[refNorm('l:' + u)]; }) };
+}
+
+function refsOf(d) {
+	var out = { c: [], s: [], r: [], l: [] }, seen = {};
+	(d.items || []).forEach(function(it) {
+		if (!d.sel[it.id]) return;
+		it.targets.forEach(function(t) {
+			var n = refNorm(t), k = t.slice(0, 1);
+			if (seen[n] || !out[k]) return;
+			seen[n] = true;
+			out[k].push(t.slice(2));
+		});
+	});
+	return out;
+}
+
+function selCount(p) {
+	return (p.items || []).filter(function(it) { return p.sel[it.id]; }).length;
+}
 
 var DNS = [
 	{ id: 'yandex', name: 'Яндекс', type: 'udp', server: '77.88.8.8', bootstrap: '77.88.8.8' },
@@ -17506,12 +17600,12 @@ function pageLink(id) {
 
 function fromCfg(c) {
 	c = c || {};
-	var dns = c.dns || {};
+	var dns = c.dns || {}, pick = pickFromCfg(c);
 	return {
 		sec: c.sec || 'main', mode: c.mode || 'links', links: (c.links || []).join('\n'), sub: c.sub || '',
 		sub_interval: c.sub_interval || '12h', iface: c.iface || '', fastest: true,
-		services: (c.services || []).slice(), b4: (c.b4 || []).slice(), domains: (c.domains || []).join('\n'), subnets: (c.subnets || []).join('\n'),
-		lists: (c.lists || []).join('\n'), full: (c.full || []).slice(), excl: (c.excl || []).slice(),
+		items: pick.items, sel: pick.sel, domains: (c.domains || []).join('\n'), subnets: (c.subnets || []).join('\n'),
+		lists: pick.lists.join('\n'), full: (c.full || []).slice(), excl: (c.excl || []).slice(),
 		dns: { type: dns.type || 'udp', server: dns.server || '77.88.8.8', bootstrap: dns.bootstrap || '77.88.8.8' },
 		quic_off: c.quic_off !== false, list_interval: c.list_interval || '1d'
 	};
@@ -17524,7 +17618,7 @@ function validCfg(x) {
 function sig(d) {
 	var srt = function(a) { return (a || []).slice().sort(); };
 	var tl = function(v) { return String(v || '').split(/\n/).map(function(x) { return x.trim(); }).filter(Boolean).join('\n'); };
-	return JSON.stringify([ d.sec, d.mode, tl(d.links), d.sub.trim(), d.sub_interval, d.iface, d.fastest, srt(d.services), srt(d.b4), tl(d.domains),
+	return JSON.stringify([ d.sec, d.mode, tl(d.links), d.sub.trim(), d.sub_interval, d.iface, d.fastest, (function(r) { return [ srt(r.c), srt(r.s), srt(r.r), srt(r.l) ]; })(refsOf(d)), tl(d.domains),
 		tl(d.subnets), tl(d.lists), srt(d.full), srt(d.excl), d.dns.type, d.dns.server, d.dns.bootstrap, d.quic_off, d.list_interval ]);
 }
 
@@ -17558,7 +17652,7 @@ return view.extend({
 		var st = all[0] || {}, cfg = validCfg(all[1]);
 		var draft = fromCfg(cfg), savedSig = sig(draft), dirty = false, busy = false, lastAct = '', saving = false;
 		var servers = null, srvBusy = false, srvErr = '', latBusy = false;
-		var diag = null, diagBusy = false, netsOpen = null, b4Open = null;
+		var diag = null, diagBusy = false, openGroups = {}, catWait = 0;
 		var customDns = !dnsPreset(draft.dns);
 		var tab = 'conn';
 		try { tab = localStorage.getItem('zm.forkozz.tab') || 'conn'; } catch (e) {}
@@ -17623,6 +17717,13 @@ return view.extend({
 				st = r[0] || {};
 				if (r[1] !== null) cfg = validCfg(r[1]);
 				if (!dirty) { draft = fromCfg(cfg); savedSig = sig(draft); customDns = !dnsPreset(draft.dns); syncAreas(); }
+				else if (cfg) {
+					var rf = refsOf(draft);
+					var p = pickFromCfg({ catalog: cfg.catalog, refs: rf, lists: textLines(draft.lists).concat(rf.l) });
+					draft.items = p.items; draft.sel = p.sel; draft.lists = p.lists.join('\n'); taLists.value = draft.lists;
+					savedSig = sig(fromCfg(cfg));
+					dirty = sig(draft) !== savedSig;
+				}
 				renderAll();
 				if (st.running && configured() && cfg.mode !== 'iface') loadServers();
 				if (after) after();
@@ -17659,7 +17760,7 @@ return view.extend({
 		function payload() {
 			return JSON.stringify({
 				sec: draft.sec, mode: draft.mode, links: draft.links, sub: draft.sub.trim(), sub_interval: draft.sub_interval,
-				iface: draft.iface, fastest: true, services: draft.services, b4: draft.b4, domains: draft.domains,
+				iface: draft.iface, fastest: true, refs: refsOf(draft), domains: draft.domains,
 				subnets: draft.subnets, lists: draft.lists, full: draft.full, excl: draft.excl,
 				dns: draft.dns, quic_off: draft.quic_off, list_interval: draft.list_interval
 			});
@@ -17669,7 +17770,8 @@ return view.extend({
 			if (draft.mode === 'links' && !textLines(draft.links).length) return [ 'conn', 'Вставьте хотя бы одну ссылку на сервер' ];
 			if (draft.mode === 'sub' && !/^https?:\/\//i.test(draft.sub.trim())) return [ 'conn', 'Вставьте ссылку на подписку' ];
 			if (draft.mode === 'iface' && !draft.iface) return [ 'conn', 'Выберите туннель' ];
-			if (!draft.services.length && !draft.b4.length && !textLines(draft.domains).length && !textLines(draft.subnets).length && !textLines(draft.lists).length && !draft.full.length)
+			var rf = refsOf(draft);
+			if (!rf.c.length && !rf.s.length && !rf.r.length && !rf.l.length && !textLines(draft.domains).length && !textLines(draft.subnets).length && !textLines(draft.lists).length && !draft.full.length)
 				return [ 'svc', 'Выберите хотя бы один сервис' ];
 			if (!draft.dns.server) return [ 'set', 'Укажите DNS-сервер' ];
 			if (draft.dns.type === 'udp' && !IP_RE.test(draft.dns.server.replace(/:\d+$/, ''))) return [ 'set', 'Для UDP нужен IP-адрес DNS, например 77.88.8.8' ];
@@ -17741,7 +17843,7 @@ return view.extend({
 
 		function routeValue(c) {
 			if (!c || !c.exists) return [ '—', 'ничего не выбрано' ];
-			var n = (c.services || []).length + (c.b4 || []).length, d = (c.domains || []).length, f = (c.full || []).length, extra = [];
+			var n = selCount(pickFromCfg(c)), d = (c.domains || []).length, f = (c.full || []).length, extra = [];
 			if (d) extra.push(nn(d, 'домен', 'домена', 'доменов'));
 			if (f) extra.push(nn(f, 'устройство', 'устройства', 'устройств'));
 			return [ n ? nn(n, 'список', 'списка', 'списков') : (extra.shift() || 'ничего'), extra.join(' · ') || 'только выбранное' ];
@@ -17986,55 +18088,94 @@ return view.extend({
 			srvCard.appendChild(E('p', { 'class': 'zm-hint' }, isAuto ? 'Авто: Forkozz сам выбирает лучший из этих серверов. Нажмите на сервер, чтобы закрепить его.' : 'Нажмите на сервер, чтобы переключиться. Выбор держится до перезагрузки роутера.'));
 		}
 
+		function catalogBlock() {
+			var c = (cfg && cfg.catalog && cfg.catalog.meta) || {}, box = E('div', { 'class': 'zm-cat-src' });
+			var state = c.off ? 'выключен — показаны только встроенные сервисы'
+				: c.busy ? 'обновляется…'
+				: c.version ? 'версия ' + c.version + ' · пунктов: ' + c.services + (c.error ? ' · последнее обновление не удалось' : '')
+				: c.error ? 'не скачался — проверьте доступ к GitHub' : 'ещё не скачан';
+			function call(action, arg, okText, after) {
+				zm.steerAction(action, arg).then(function(res) {
+					if (res.error) { zm.toast(res.error, 'error'); return; }
+					if (okText) zm.toast(okText, 'info');
+					if (after) after();
+				}).catch(function() { zm.toast('Роутер не ответил', 'error'); });
+			}
+			box.appendChild(E('div', { 'class': 'zm-cat-src-info' }, [
+				E('div', { 'class': 'zm-cat-src-title' }, [ 'Каталог списков ', E('span', { 'class': 'zm-badge ' + (c.off ? 'zm-off' : c.error ? 'zm-warn' : c.version ? 'zm-ok' : 'zm-off') }, c.off ? 'выключен' : c.busy ? 'обновляется' : c.error ? (c.version ? 'не обновился' : 'не скачан') : c.version ? 'подключён' : 'нет') ]),
+				E('div', { 'class': 'zm-cat-src-state' }, state),
+				E('div', { 'class': 'zm-cat-src-url' }, c.url || '')
+			]));
+			var b = [];
+			if (!c.off) b.push(E('button', { 'class': 'cbi-button', 'click': function() {
+				call('catalog_refresh', '', 'Обновляем каталог', function() { setTimeout(function() { reload(); }, 5000); });
+			} }, 'Обновить'));
+			if (!c.off) b.push(E('button', { 'class': 'cbi-button', 'click': function() {
+				var u = prompt('Ссылка на свой каталог списков (lists.json в формате splify2-lists, например из форка).\n\nПусто — каталог по умолчанию.', c.custom ? c.url : '');
+				if (u === null) return;
+				zm.toast('Скачиваем каталог…', 'info');
+				call('catalog_src', u.trim(), 'Каталог подключён', function() { reload(); });
+			} }, 'Сменить источник'));
+			b.push(E('button', { 'class': 'cbi-button', 'click': function() {
+				call('catalog_src', c.off ? 'on' : 'off', '', function() { reload(); });
+			} }, c.off ? 'Включить каталог' : 'Выключить каталог'));
+			box.appendChild(E('div', { 'class': 'zm-actions zm-cat-src-actions' }, b));
+			return box;
+		}
+
 		function svcTile(s) {
-			var on = draft.services.indexOf(s.id) >= 0;
-			return zm.svcCard({ name: s.name, sub: s.sub, color: s.color, ico: s.ico, on: on, click: function() {
-				var l = draft.services.slice(), i = l.indexOf(s.id);
-				if (i >= 0) l.splice(i, 1); else l.push(s.id);
-				set('services', l);
+			return zm.svcCard({ name: s.name, sub: s.sub || '', key: s.id, on: !!draft.sel[s.id], click: function() {
+				var nsel = {};
+				for (var k in draft.sel) if (draft.sel[k]) nsel[k] = true;
+				if (nsel[s.id]) delete nsel[s.id]; else nsel[s.id] = true;
+				set('sel', nsel);
 			} });
 		}
 
 		function renderSvc() {
 			svcCard.innerHTML = '';
-			var n = draft.services.length + draft.b4.length;
+			var list = draft.items || [], sel = draft.sel || {}, n = selCount(draft);
 			svcCard.appendChild(E('h3', {}, [ 'Что пускать через Forkozz ', n ? badge('zm-ok', 'выбрано ' + n) : badge('zm-off', 'ничего') ]));
-			svcCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:-6px' }, 'Готовые списки itdoginfo/allow-domains и b4geoip. Обновляются сами.'));
-			svcCard.appendChild(E('h4', { 'style': 'margin:14px 0 0' }, 'Сервисы'));
-			svcCard.appendChild(zm.svcGrid(SERVICES.map(svcTile)));
-			svcCard.appendChild(E('h4', { 'style': 'margin:20px 0 0' }, 'Наборы'));
-			svcCard.appendChild(zm.svcGrid(SETS.map(svcTile)));
-			if (draft.services.indexOf('russia_inside') >= 0)
-				svcCard.appendChild(E('p', { 'class': 'zm-hint' }, '«Всё сразу» уже включает большинство пунктов выше. На роутере со 128 МБ памяти лучше выбрать нужное по отдельности.'));
-			var netOn = NETS.filter(function(s) { return draft.services.indexOf(s.id) >= 0; }).length;
-			svcCard.appendChild(zm.svcGroup({
-				name: 'Подсети хостингов и CDN', sub: 'Для игр и сайтов без доменов', color: '#475569', ico: 'IP',
-				open: netsOpen === null ? netOn > 0 : netsOpen,
-				badge: badge(netOn ? 'zm-ok' : 'zm-off', netOn ? 'выбрано ' + netOn : 'нет'),
-				body: zm.svcGrid(NETS.map(svcTile)),
-				toggle: function(o) { netsOpen = o; }
-			}));
-			var b4On = draft.b4.length;
-			svcCard.appendChild(zm.svcGroup({
-				name: 'b4geoip', sub: 'игры и сервисы', key: 'b4geoip',
-				open: b4Open === null ? b4On > 0 : b4Open,
-				badge: badge(b4On ? 'zm-ok' : 'zm-off', b4On ? 'выбрано ' + b4On : 'нет'),
-				body: zm.svcGrid(B4.map(function(s) {
-					var on = draft.b4.indexOf(s.id) >= 0;
-					return zm.svcCard({ name: s.name, sub: s.sub, key: s.id, on: on, click: function() {
-						var l = draft.b4.slice(), i = l.indexOf(s.id);
-						if (i >= 0) l.splice(i, 1); else l.push(s.id);
-						set('b4', l);
-					} });
-				})),
-				toggle: function(o) { b4Open = o; }
-			}));
-			if (b4On) svcCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Списки b4geoip — это IP-подсети (геобаза DanielLavrushin/b4geoip, собранная в .srs). Обновляются вместе с остальными списками.'));
-			if (draft.services.indexOf('discord') >= 0 && draft.services.indexOf('cloudflare') >= 0)
+			svcCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:-6px' }, 'Нажмите на пункт, чтобы включить или выключить его, и затем «Сохранить». Списки те же, что в Steer: берутся из каталога списков (itdoginfo/allow-domains, b4geoip и другие) и обновляются сами.'));
+			var remote = list.filter(function(s) { return !!s.group; });
+			var svcs = list.filter(function(s) { return !s.group && CATEGORY_IDS.indexOf(s.id) < 0; });
+			var cats = list.filter(function(s) { return !s.group && CATEGORY_IDS.indexOf(s.id) >= 0; });
+			svcCard.appendChild(E('h4', { 'style': 'margin:0' }, 'Сервисы'));
+			svcCard.appendChild(zm.svcGrid(svcs.map(svcTile)));
+			if (cats.length) {
+				svcCard.appendChild(E('h4', { 'style': 'margin:18px 0 0' }, 'Категории'));
+				svcCard.appendChild(zm.svcGrid(cats.map(svcTile)));
+				svcCard.appendChild(E('p', { 'class': 'zm-hint' }, '«Всё сразу» — полный список Russia inside: все категории и сервисы одним набором. Он большой, на слабых роутерах лучше включать отдельные пункты.'));
+			}
+			var groups = [];
+			remote.forEach(function(s) { if (groups.indexOf(s.group) < 0) groups.push(s.group); });
+			groups.sort(function(a, b) { return (a === OLD_GROUP) - (b === OLD_GROUP); });
+			if (groups.length) {
+				svcCard.appendChild(E('h4', { 'style': 'margin:20px 0 4px' }, 'Дополнительные списки'));
+				svcCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin:0 0 10px' }, 'Готовые наборы доменов и подсетей из каталога. Разверните источник и отметьте нужное.'));
+			}
+			groups.forEach(function(g) {
+				var items = remote.filter(function(s) { return s.group === g; });
+				var on = items.filter(function(s) { return sel[s.id]; }).length;
+				var m = /^(.*?)\s*\((.*)\)\s*$/.exec(g);
+				svcCard.appendChild(zm.svcGroup({
+					name: m ? m[1] : g, sub: m ? m[2] : '', key: g,
+					open: g in openGroups ? openGroups[g] : on > 0,
+					badge: E('span', { 'class': 'zm-badge ' + (on ? 'zm-ok' : 'zm-off') }, on ? 'выбрано ' + on + ' из ' + items.length : String(items.length)),
+					body: zm.svcGrid(items.map(svcTile)),
+					toggle: function(o) { openGroups[g] = o; }
+				}));
+			});
+			if (groups.indexOf(OLD_GROUP) >= 0)
+				svcCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Эти списки были выбраны раньше, но их нет в каталоге. Они продолжают работать; выключите ненужные и сохраните.'));
+			if (sel.discord && sel.c_itdoginfo_cloudflare)
 				svcCard.appendChild(E('p', { 'class': 'zm-hint' }, '⚠ Discord вместе с Cloudflare уводят в Forkozz много лишнего, даже торренты.'));
-			var known = SERVICES.concat(SETS, NETS).map(function(s) { return s.id; });
-			var other = draft.services.filter(function(x) { return known.indexOf(x) < 0; });
-			if (other.length) svcCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Ещё включено: ' + other.join(', ') + '.'));
+			svcCard.appendChild(catalogBlock());
+			var meta = (cfg && cfg.catalog && cfg.catalog.meta) || {};
+			if (!meta.off && !remote.length && catWait < 4 && (meta.busy || !meta.version)) {
+				catWait++;
+				setTimeout(function() { if (document.body.contains(svcCard)) reload(); }, 6000);
+			}
 
 			ownCard.innerHTML = '';
 			ownCard.appendChild(E('h3', {}, 'Свои домены и адреса'));
@@ -22169,7 +22310,6 @@ ZMW_PORT="$(uci -q get uhttpd.zmweb.listen_http | tr ' ' '\n' | head -n1 | sed '
 ZMW_IP="$(/opt/zapret-manager-luci/backend.sh lan_ip 2>/dev/null || true)"
 [ -n "$ZMW_IP" ] || ZMW_IP="192.168.1.1"
 
-echo "sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/main/Zapret-Manager.sh)" > /usr/bin/zms; chmod +x /usr/bin/zms
-
 echo -e "Zapret Manager ${GREEN}для ${NC}LuCI ${GREEN}установлен!${NC}"
 echo -e "\n${CYAN}Web UI: ${NC}http://${ZMW_IP}:${ZMW_PORT:-7788}${NC}\n"
+echo "sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/main/Zapret-Manager.sh)" > /usr/bin/zms; chmod +x /usr/bin/zms
