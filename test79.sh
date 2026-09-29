@@ -1,5 +1,6 @@
 #!/bin/sh
 # Version: 1.77
+set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
 
@@ -45,18 +46,18 @@ rm -f \
 	/www/luci-static/resources/view/ytbypass/main.js 2>/dev/null
 
 if [ -x /etc/init.d/ytbypass ] || [ -f /etc/config/ytbypass ] || [ -x /usr/bin/ytbypass ]; then
-	[ -x /usr/bin/ytbypass ] && /usr/bin/ytbypass test stop >/dev/null 2>&1
+	[ -x /usr/bin/ytbypass ] && { /usr/bin/ytbypass test stop >/dev/null 2>&1 || true; }
 	if [ -x /etc/init.d/ytbypass ]; then
-		/etc/init.d/ytbypass stop >/dev/null 2>&1
-		/etc/init.d/ytbypass disable >/dev/null 2>&1
+		/etc/init.d/ytbypass stop >/dev/null 2>&1 || true
+		/etc/init.d/ytbypass disable >/dev/null 2>&1 || true
 	fi
-	[ -x /usr/libexec/ytbypass/net.sh ] && /usr/libexec/ytbypass/net.sh purge >/dev/null 2>&1
+	[ -x /usr/libexec/ytbypass/net.sh ] && { /usr/libexec/ytbypass/net.sh purge >/dev/null 2>&1 || true; }
 	if [ -f /usr/libexec/ytbypass/common.sh ]; then
-		. /usr/libexec/ytbypass/common.sh
-		rm -f "$(dnsmasq_confdir)/ytbypass.conf" 2>/dev/null
+		. /usr/libexec/ytbypass/common.sh || true
+		rm -f "$(dnsmasq_confdir)/ytbypass.conf" 2>/dev/null || true
 	fi
-	[ -f /etc/config/ytbypass ] && [ ! -f /etc/config/bytetube ] && mv /etc/config/ytbypass /etc/config/bytetube
-	[ -d /etc/ytbypass ] && [ ! -d /etc/bytetube ] && mv /etc/ytbypass /etc/bytetube
+	[ -f /etc/config/ytbypass ] && [ ! -f /etc/config/bytetube ] && { mv /etc/config/ytbypass /etc/config/bytetube || true; }
+	[ -d /etc/ytbypass ] && [ ! -d /etc/bytetube ] && { mv /etc/ytbypass /etc/bytetube || true; }
 	rm -rf /etc/config/ytbypass /etc/init.d/ytbypass /etc/hotplug.d/firewall/90-ytbypass \
 		/usr/bin/ytbypass /usr/libexec/ytbypass /usr/share/ytbypass \
 		/usr/share/nftables.d/chain-pre/forward/50-ytbypass.nft \
@@ -21286,9 +21287,9 @@ ZM_INSTALLER_EOF
 chmod 0644 '/www/luci-static/resources/view/zapret-manager/bytetube.js'
 
 rm -f /tmp/luci-indexcache* /tmp/luci-modulecache/* 2>/dev/null || true
-/etc/init.d/rpcd reload >/dev/null 2>&1 || /etc/init.d/rpcd restart >/dev/null 2>&1
+/etc/init.d/rpcd reload >/dev/null 2>&1 || /etc/init.d/rpcd restart >/dev/null 2>&1 || true
 if grep -qx 'steer-spec' /etc/zm-steer/owned 2>/dev/null && /etc/init.d/steer enabled 2>/dev/null; then
-	/etc/init.d/steer reload >/dev/null 2>&1
+	/etc/init.d/steer reload >/dev/null 2>&1 || true
 fi
 
 if command -v apk >/dev/null 2>&1; then PM="apk"; INSTALL="apk add"
@@ -23905,9 +23906,10 @@ ZM_INSTALLER_EOF
 ZMW_BUILD="$(date +%s)"
 sed -i "s/__ZMW_BUILD__/$ZMW_BUILD/g" /www/zm/app.js /www/zm/app.css /www/zm-webui.html
 chmod 0644 /www/zm/app.js /www/zm/app.css /www/zm-webui.html
-sed -i '/# zm-rpcd-watch$/d' /etc/crontabs/root 2>/dev/null
+mkdir -p /etc/crontabs; touch /etc/crontabs/root
+sed -i '/# zm-rpcd-watch$/d' /etc/crontabs/root 2>/dev/null || true
 echo '*/2 * * * * /opt/zapret-manager-luci/backend.sh zm_watch >/dev/null 2>&1 # zm-rpcd-watch' >> /etc/crontabs/root
-/etc/init.d/cron enable >/dev/null 2>&1; /etc/init.d/cron restart >/dev/null 2>&1
+/etc/init.d/cron enable >/dev/null 2>&1 || true; /etc/init.d/cron restart >/dev/null 2>&1 || true
 [ -s /opt/zapret-manager-luci/state/ui.theme ] && cp -f /opt/zapret-manager-luci/state/ui.theme /www/zm/theme.txt && chmod 0644 /www/zm/theme.txt
 
 /opt/zapret-manager-luci/backend.sh redbtn_panel_gone >/dev/null 2>&1 || true
