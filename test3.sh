@@ -1,5 +1,5 @@
 #!/bin/sh
-# Version: 1.73
+# Version: 1.74
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -73,7 +73,7 @@ cat > '/opt/zapret-manager-luci/backend.sh' << 'ZM_INSTALLER_EOF'
 umask 022
 
 CONF="/etc/config/zapret"
-ZM_VERSION="1.73"
+ZM_VERSION="1.74"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
@@ -297,6 +297,7 @@ _zm_pkg_update() {
 		fi
 		_zm_pkg_unlock
 		[ "$try" -ge 2 ] && break
+		_zm_dns_ok downloads.openwrt.org || _zm_net_heal
 		echo "   ↻ Не получилось — пробуем ещё раз"
 		try=$((try + 1))
 		sleep 3
@@ -356,7 +357,7 @@ job_start() {
 		return 0
 	fi
 	: > "$log"
-	( ZM_JOB_LOG="$log"; export ZM_JOB_LOG; "$@" >>"$log" 2>&1; rc=$?; [ -n "$(tail -c 1 "$log" 2>/dev/null)" ] && echo >>"$log"; echo "__DONE__ $rc" >>"$log" ) &
+	( ZM_JOB_LOG="$log"; export ZM_JOB_LOG; "$@" >>"$log" 2>&1; rc=$?; _zm_net_restore >>"$log" 2>&1; [ -n "$(tail -c 1 "$log" 2>/dev/null)" ] && echo >>"$log"; echo "__DONE__ $rc" >>"$log" ) &
 	echo $! > "$pid"
 	printf '{"started":true,"job":"%s"}\n' "$name"
 }
@@ -428,6 +429,74 @@ _zm_svc_off() {
 	return 0
 }
 
+ZM_RESOLV_BAK="$JOBS_DIR/resolv.conf.zm-bak"
+
+_zm_dns_ok() { nslookup "$1" >/dev/null 2>&1; }
+
+_zm_host_ok() {
+	curl -s -o /dev/null --connect-timeout 6 --max-time 12 "https://$1/" >/dev/null 2>&1
+	case $? in 0|22|35|47|52|56|60) return 0 ;; esac
+	return 1
+}
+
+_zm_net_heal() {
+	[ -f "$ZM_RESOLV_BAK" ] && return 0
+	cat /tmp/resolv.conf > "$ZM_RESOLV_BAK" 2>/dev/null || cat /etc/resolv.conf > "$ZM_RESOLV_BAK" 2>/dev/null || return 1
+	printf 'nameserver 1.1.1.1\nnameserver 9.9.9.9\n' > /tmp/resolv.conf 2>/dev/null || printf 'nameserver 1.1.1.1\nnameserver 9.9.9.9\n' > /etc/resolv.conf
+	echo "   → DNS роутера не отвечает — на время операции берём 1.1.1.1 и 9.9.9.9"
+}
+
+_zm_net_restore() {
+	[ -f "$ZM_RESOLV_BAK" ] || return 0
+	if [ -e /tmp/resolv.conf ]; then cat "$ZM_RESOLV_BAK" > /tmp/resolv.conf; else cat "$ZM_RESOLV_BAK" > /etc/resolv.conf; fi
+	rm -f "$ZM_RESOLV_BAK"
+	echo "   ✓ Обычный DNS роутера возвращён"
+}
+
+_zm_net_prepare() {
+	local h bad=""
+	_fk_say "Проверяем доступ к источникам: $*"
+	for h in "$@"; do _zm_dns_ok "$h" || bad="$bad $h"; done
+	if [ -n "$bad" ]; then
+		_zm_net_heal
+		for h in $bad; do _zm_dns_ok "$h" || { echo "ОШИБКА: не удаётся узнать адрес $h — проверьте интернет на роутере"; _zm_net_restore; return 1; }; done
+	fi
+	for h in "$@"; do
+		if ! _zm_host_ok "$h"; then
+			echo "ОШИБКА: $h не отвечает — возможно, он недоступен у провайдера. Ничего не меняли"
+			_zm_net_restore
+			return 1
+		fi
+	done
+	echo "   ✓ Источники доступны"
+	return 0
+}
+
+_fk_watch() {
+	local f="$ZM_STATE_DIR/fk.watch" n=0 last=0 now wait
+	_fk_installed && _fk_enabled || { rm -f "$f"; return 0; }
+	_job_running forkop && return 0
+	[ -n "$(_fk_blocker)" ] && return 0
+	if _fk_up; then rm -f "$f"; return 0; fi
+	read -r n last 2>/dev/null < "$f"
+	n="${n:-0}"; last="${last:-0}"
+	now="$(date +%s)"
+	wait=$((120 * (1 << (n > 4 ? 4 : n))))
+	[ $((now - last)) -lt "$wait" ] && return 0
+	logger -t zapret-manager "Forkozz включён, но sing-box или его правила не работают — перезапускаем (попытка $((n + 1)))"
+	mkdir -p "$ZM_STATE_DIR"
+	echo "$((n + 1)) $now" > "$f"
+	_zm_run 180 /etc/init.d/forkop restart >/dev/null 2>&1
+	return 0
+}
+
+zm_watch() {
+	rpcd_watch
+	if [ -f "$ZM_RESOLV_BAK" ] && [ -z "$(_zm_busy_job)" ]; then _zm_net_restore >/dev/null 2>&1; fi
+	_fk_watch
+	return 0
+}
+
 _zm_job_skip() { case "$1" in versions|sysinfo|*_download|redbtn_deep) return 0 ;; esac; return 1; }
 
 _zm_cancel_one() {
@@ -459,6 +528,7 @@ jobs_cancel() {
 		list="$list$sep\"$j\""; sep=","
 	done
 	rm -f /tmp/zm-run.* /tmp/zm-wait.* /tmp/zm-quiet.* /tmp/zm-pkg.* 2>/dev/null
+	_zm_net_restore >/dev/null 2>&1
 	_zm_pkg_unlock
 	printf '{"ok":true,"stopped":[%s]}\n' "$list"
 }
@@ -9565,16 +9635,24 @@ _fk_up() { nft list table inet ForkopTable >/dev/null 2>&1 && pidof sing-box >/d
 _fk_sb_ver() { command -v sing-box >/dev/null 2>&1 && sing-box version 2>/dev/null | head -n1 | awk '{print $NF}'; }
 _fk_sb_pkg() { local p; for p in sing-box-tiny sing-box sing-box-extended; do _pkg_is_installed "$p" && { echo "$p"; return 0; }; done; return 1; }
 _fk_sb_var() {
-	local v
-	case "$(_fk_sb_ver)" in *extended*) echo extended; return 0 ;; esac
+	local v m
+	v="$(_fk_sb_ver)"
+	[ -n "$v" ] || { echo ""; return 0; }
+	m="$(head -n1 /etc/forkop/sing-box-variant 2>/dev/null | awk '{print $1}')"
+	case "$m" in
+		extended-compressed) case "$v" in *extended*) echo compact; return 0 ;; esac ;;
+		tiny|stable) case "$v" in *extended*) ;; *) echo "$m"; return 0 ;; esac ;;
+	esac
+	case "$v" in *extended*) echo extended; return 0 ;; esac
 	case "$(_fk_sb_pkg)" in
 		sing-box-tiny) echo tiny ;;
 		sing-box) echo stable ;;
 		sing-box-extended) echo extended ;;
-		*) v="$(_fk_sb_ver)"; case "$v" in '') ;; *extended*) echo extended ;; *) echo manual ;; esac ;;
+		*) echo manual ;;
 	esac
 }
-_fk_sb_name() { case "$1" in tiny) echo облегчённый ;; stable) echo обычный ;; extended) echo расширенный ;; *) echo "$1" ;; esac; }
+_fk_sb_name() { case "$1" in tiny) echo облегчённый ;; stable) echo обычный ;; extended) echo расширенный ;; compact) echo "расширенный компактный" ;; manual) echo "установлен вручную" ;; *) echo "$1" ;; esac; }
+_fk_sb_compact_ok() { grep -q 'install_extended_compressed' /usr/lib/forkop/components/action.uc 2>/dev/null; }
 _fk_sbx_latest() {
 	curl -Ls --connect-timeout 5 --max-time 10 -o /dev/null -w '%{url_effective}' "https://github.com/$FK_SBX_REPO/releases/latest" 2>/dev/null |
 		sed -n 's#.*/tag/[vV]\{0,1\}##p' | head -n1
@@ -9635,11 +9713,12 @@ forkop_status() {
 	blk="$(_fk_blocker)"
 	_job_running forkop && busy=true
 	for x in $(_fk_warn); do warn="$warn${warn:+,}\"$x\""; done
-	printf '{"installed":%s,"version":"%s","latest":"%s","newer":%s,"enabled":%s,"running":%s,"managed":%s,"foreign":%s,"singbox":"%s","singbox_pkg":"%s","blocker":"%s","blocker_text":"%s","warn":[%s],"busy":%s,"lan_ip":"%s","saved":%s}\n' \
+	printf '{"installed":%s,"version":"%s","latest":"%s","newer":%s,"enabled":%s,"running":%s,"managed":%s,"foreign":%s,"singbox":"%s","singbox_pkg":"%s","blocker":"%s","blocker_text":"%s","warn":[%s],"busy":%s,"lan_ip":"%s","saved":%s,"sb_compact":%s,"watch":%s}\n' \
 		"$inst" "$(esc "$ver")" "$(esc "$latest")" "$newer" "$en" "$up" \
 		"$([ -f "$FK_MARK" ] && echo true || echo false)" "$(_fk_foreign && echo true || echo false)" \
 		"$(esc "$sb")" "$(esc "$sbp")" "$(esc "$blk")" "$(esc "$(_fk_blocker_text "$blk")")" "$warn" "$busy" \
-		"$(esc "$(_zm_lan_ip)")" "$([ -s "$FK_SAVE" ] && echo true || echo false)"
+		"$(esc "$(_zm_lan_ip)")" "$([ -s "$FK_SAVE" ] && echo true || echo false)" \
+		"$(_fk_sb_compact_ok && echo true || echo false)" "$(awk '{print $1 + 0; exit}' "$ZM_STATE_DIR/fk.watch" 2>/dev/null || echo 0)"
 }
 
 _fk_feeds_official() {
@@ -9930,6 +10009,8 @@ do_fk_install() {
 	echo "   ✓ OpenWrt $rel, свободно ${free:+$((free / 1024)) МБ}, конфликтов нет"
 
 	_fk_feeds_official || true
+	_zm_net_prepare downloads.openwrt.org || return 1
+	_zm_dns_ok codeload.github.com || _zm_net_heal
 	_fk_say "Обновляем список пакетов"
 	$UPDATE || { echo "ОШИБКА: список пакетов не обновился — проверьте интернет"; return 1; }
 	_fk_say "Проверяем нужные пакеты"
@@ -10183,48 +10264,74 @@ do_fk_subs() {
 }
 
 do_fk_singbox() {
-	local want="$1" free tfree have out="$JOBS_DIR/forkop-sb.json"
+	local want="$1" free tfree have need tneed act out="$JOBS_DIR/forkop-sb.json" old oldvar msg i=0
 	_fk_installed || { echo "ОШИБКА: Forkozz не установлен"; return 1; }
-	case "$want" in tiny|stable|extended) ;; *) echo "ОШИБКА: неизвестный вариант sing-box"; return 1 ;; esac
-	if [ "$want" != extended ] && grep -Eqi "[?&]type=xhttp" /etc/config/forkop 2>/dev/null; then
+	case "$want" in tiny|stable|extended|compact) ;; *) echo "ОШИБКА: неизвестный вариант sing-box"; return 1 ;; esac
+	if [ "$want" = compact ] && ! _fk_sb_compact_ok; then
+		echo "ОШИБКА: эта версия Forkozz не умеет ставить компактный sing-box — обновите Forkozz"
+		return 1
+	fi
+	if [ "$want" != extended ] && [ "$want" != compact ] && grep -Eqi "[?&]type=xhttp" /etc/config/forkop 2>/dev/null; then
 		echo "ОШИБКА: среди серверов есть XHTTP — они работают только на расширенном sing-box. Сначала уберите их в «Подключении»"
 		return 1
 	fi
-	if [ "$want" = extended ]; then
-		free="$(df -k /overlay 2>/dev/null | awk 'NR==2 {print $4}')"
-		[ -n "$free" ] || free="$(df -k / 2>/dev/null | awk 'NR==2 {print $4}')"
-		have="$(ls -l /usr/bin/sing-box 2>/dev/null | awk '{print int($5 / 1024)}')"
-		tfree="$(df -k /tmp 2>/dev/null | awk 'NR==2 {print $4}')"
-		if [ -n "$free" ] && [ $((free + ${have:-0})) -lt 40960 ]; then
-			echo "ОШИБКА: мало памяти для расширенного sing-box: свободно $(((free + ${have:-0}) / 1024)) МБ, нужно около 40 МБ"
-			return 1
-		fi
-		if [ -n "$tfree" ] && [ "$tfree" -lt 30720 ]; then
-			echo "ОШИБКА: мало оперативной памяти для загрузки: свободно $((tfree / 1024)) МБ, нужно около 30 МБ"
-			return 1
-		fi
-		_fk_patch_sbx /usr/lib/forkop/components/action.uc || { echo "ОШИБКА: эта версия Forkozz не умеет ставить расширенный sing-box — обновите Forkozz"; return 1; }
-		_fk_say "Скачиваем расширенный sing-box с GitHub (github.com/$FK_SBX_REPO) — около 40 МБ"
-	else
-		_fk_say "Ставим $(_fk_sb_name "$want") sing-box из репозитория OpenWrt"
+	old="$(_fk_sb_ver)"; oldvar="$(_fk_sb_var)"
+	_fk_say "Проверяем место и память"
+	free="$(df -k /overlay 2>/dev/null | awk 'NR==2 {print $4}')"
+	[ -n "$free" ] || free="$(df -k / 2>/dev/null | awk 'NR==2 {print $4}')"
+	have="$(ls -l /usr/bin/sing-box 2>/dev/null | awk '{print int($5 / 1024)}')"
+	tfree="$(df -k /tmp 2>/dev/null | awk 'NR==2 {print $4}')"
+	case "$want" in
+		extended) need=40960; tneed=30720 ;;
+		compact) need=20480; tneed=40960 ;;
+		*) need=16384; tneed=12288 ;;
+	esac
+	if [ -n "$free" ] && [ $((free + ${have:-0})) -lt "$need" ]; then
+		echo "ОШИБКА: мало места на флеше для этого sing-box: свободно $(((free + ${have:-0}) / 1024)) МБ, нужно около $((need / 1024)) МБ"
+		[ "$want" = extended ] && _fk_sb_compact_ok && echo "!! Попробуйте компактный вариант — ему нужно в два раза меньше места"
+		return 1
 	fi
-	[ -n "$(_fk_sb_ver)" ] && echo "   · сейчас стоит $(_fk_sb_ver) ($(_fk_sb_name "$(_fk_sb_var)")) — его заменит новый"
-	_zm_wait "" /usr/bin/forkop component_action sing_box "install_$want" > "$out" 2>&1
+	if [ -n "$tfree" ] && [ "$tfree" -lt "$tneed" ]; then
+		echo "ОШИБКА: мало оперативной памяти для загрузки: свободно $((tfree / 1024)) МБ, нужно около $((tneed / 1024)) МБ"
+		return 1
+	fi
+	echo "   ✓ Флеш: свободно $(((free + ${have:-0}) / 1024)) МБ, /tmp: $((tfree / 1024)) МБ"
+	case "$want" in
+		extended|compact)
+			_fk_patch_sbx /usr/lib/forkop/components/action.uc || { echo "ОШИБКА: эта версия Forkozz не умеет ставить расширенный sing-box — обновите Forkozz"; return 1; }
+			_zm_net_prepare api.github.com github.com objects.githubusercontent.com || return 1 ;;
+		*) _zm_net_prepare downloads.openwrt.org || return 1 ;;
+	esac
+	case "$want" in
+		extended) act=install_extended; _fk_say "Скачиваем расширенный sing-box с GitHub (github.com/$FK_SBX_REPO) — около 40 МБ" ;;
+		compact) act=install_extended_compressed; _fk_say "Скачиваем компактный расширенный sing-box с GitHub (github.com/$FK_SBX_REPO)" ;;
+		*) act="install_$want"; _fk_say "Ставим $(_fk_sb_name "$want") sing-box из репозитория OpenWrt" ;;
+	esac
+	[ -n "$old" ] && echo "   · сейчас стоит $old ($(_fk_sb_name "$oldvar")) — сохраняем его копию, чтобы вернуть, если новый не заработает"
+	_zm_wait "" /usr/bin/forkop component_action sing_box "$act" > "$out" 2>&1
 	if [ "$(jsonfilter -i "$out" -e '@.success' 2>/dev/null)" != true ]; then
-		echo "ОШИБКА: sing-box не заменился: $(jsonfilter -i "$out" -e '@.message' 2>/dev/null)"
-		[ "$want" = extended ] && echo "!! Прежний sing-box оставлен. Возможно, для этого роутера нет сборки или GitHub недоступен"
+		msg="$(jsonfilter -i "$out" -e '@.message' 2>/dev/null)"
+		echo "ОШИБКА: sing-box не заменился${msg:+: $msg}"
+		if [ -n "$old" ] && [ "$(_fk_sb_ver)" = "$old" ]; then
+			echo "   ✓ Прежний sing-box $old на месте — Forkozz работает как раньше"
+		elif [ -n "$old" ]; then
+			echo "!! Сейчас стоит sing-box $(_fk_sb_ver) — проверьте работу Forkozz"
+		fi
+		_fk_up && _fk_check_live
 		return 1
 	fi
 	_fk_sb_pkg > "$FK_SB_OWN" || echo "sing-box" > "$FK_SB_OWN"
 	echo "   ✓ Установлен sing-box $(_fk_sb_ver)"
-	if _fk_up; then
-		_fk_say "Перезапускаем Forkozz на новом sing-box"
-		_zm_run 240 /etc/init.d/forkop restart >/dev/null 2>&1
+	if _fk_enabled; then
+		_fk_say "Проверяем Forkozz на новом sing-box"
+		i=0
+		while [ "$i" -lt 30 ] && ! _fk_up; do sleep 1; i=$((i + 1)); done
+		_fk_up || { _zm_run 240 /etc/init.d/forkop restart >/dev/null 2>&1; sleep 3; }
 		_fk_check_live
+		_fk_up || { echo "ОШИБКА: Forkozz не запустился на новом sing-box — верните прежний вариант в «Настройках»"; return 1; }
 	fi
 	_fk_say "Готово: sing-box $(_fk_sb_ver), $(_fk_sb_name "$(_fk_sb_var)")"
 }
-
 forkop_config_get() {
 	_fk_installed || { echo '{"error":"Forkozz не установлен"}'; return 1; }
 	if [ ! -f "$ST_CAT_OFF" ]; then
@@ -10573,6 +10680,7 @@ case "$cmd" in
 	lan_ip)                               _zm_lan_ip ;;
 	jobs_cancel)                          jobs_cancel "$1" ;;
 	rpcd_watch)                           rpcd_watch ;;
+	zm_watch)                             zm_watch ;;
 	ui_theme_get)                         ui_theme_get ;;
 	ui_theme_set)                         ui_theme_set "$1" ;;
 	*) echo '{"error":"неизвестная команда"}'; exit 1 ;;
@@ -11704,6 +11812,46 @@ function renderLog(logEl, text) {
 	logEl.scrollTop = logEl.scrollHeight;
 }
 
+var _dockEl = null;
+
+function dockEl() {
+	if (!_dockEl || !document.body.contains(_dockEl)) {
+		_dockEl = E('div', { 'class': 'zm-dock' });
+		document.body.appendChild(_dockEl);
+	}
+	return _dockEl;
+}
+
+function dockSync() {
+	if (!_dockEl) return;
+	Array.prototype.slice.call(_dockEl.children).forEach(function(el) {
+		if (el._zmGlobal) return;
+		if (!el._zmPh || !document.body.contains(el._zmPh) || el.style.display === 'none') {
+			if (el._zmPh && document.body.contains(el._zmPh)) el._zmPh.parentNode.insertBefore(el, el._zmPh);
+			else el.parentNode.removeChild(el);
+		}
+	});
+	var vis = Array.prototype.some.call(_dockEl.children, function(el) { return el.style.display !== 'none'; });
+	_dockEl.classList.toggle('zm-dock-on', vis);
+}
+
+function dock(el, show) {
+	if (show) {
+		if (el.parentNode !== dockEl()) {
+			if (el.parentNode) {
+				if (!el._zmPh) el._zmPh = E('span', { 'class': 'zm-dock-ph', 'style': 'display:none' });
+				el.parentNode.insertBefore(el._zmPh, el);
+			}
+			if (el._zmPh && document.body.contains(el._zmPh)) { el._zmTry = 0; dockEl().appendChild(el); }
+			else if ((el._zmTry = (el._zmTry || 0) + 1) < 15) setTimeout(function() { if (el.style.display !== 'none') dock(el, true); }, 300);
+		}
+	}
+	dockSync();
+}
+
+setInterval(dockSync, 600);
+window.addEventListener('hashchange', function() { setTimeout(dockSync, 50); });
+
 var _activePolls = {};
 var JOB_NAMES = { steer: 'Steer', forkop: 'Forkozz', awg: 'AmneziaWG', strategy_test: 'тест стратегий', mirror_set: 'смена зеркала' };
 var _stuck = {}, _stopEl = null, _stopBusy = false;
@@ -11744,14 +11892,17 @@ function renderStopBar() {
 	if (!keys.length) {
 		if (_stopEl && _stopEl.parentNode) _stopEl.parentNode.removeChild(_stopEl);
 		_stopEl = null;
+		dockSync();
 		return;
 	}
 	var mins = Math.max.apply(null, keys.map(function(k) { return _stuck[k]; }));
 	mins = Math.max(2, Math.floor(mins / 60));
 	if (!_stopEl) {
 		_stopEl = E('div', { 'class': 'zm-stopbar', 'role': 'alert' });
-		document.body.appendChild(_stopEl);
+		_stopEl._zmGlobal = true;
 	}
+	if (_stopEl.parentNode !== dockEl()) dockEl().insertBefore(_stopEl, dockEl().firstChild);
+	dockSync();
 	_stopEl.innerHTML = '';
 	_stopEl.appendChild(E('div', { 'class': 'zm-stopbar-text' }, [
 		E('b', {}, 'Операция «' + keys.map(jobName).join(', ') + '» не отвечает уже ' + mins + ' мин'),
@@ -11944,6 +12095,9 @@ function saveBar(o) {
 	el.set = function(dirty, busy, text, label) {
 		state.dirty = !!dirty; state.busy = !!busy; state.text = text || ''; state.label = label || '';
 		render();
+		var show = state.dirty || state.busy;
+		if (show) setTimeout(function() { if (state.dirty || state.busy) dock(el, true); }, 0);
+		else dock(el, false);
 		return el;
 	};
 	el.isDirty = function() { return state.dirty; };
@@ -12118,6 +12272,7 @@ return baseclass.extend({
 	forkopConfigSet: callForkopConfigSet,
 	forkopAction: callForkopAction,
 	jobsCancel: callJobsCancel,
+	dock: dock,
 	riCovers: riCovers,
 	riNote: riNote,
 	swRow: swRow,
@@ -13444,7 +13599,7 @@ return view.extend({
 			listCard.innerHTML = '';
 			listCard.style.display = data.blocker ? 'none' : '';
 			if (data.blocker) return;
-			listCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Нажмите на пункт, чтобы включить или выключить его, и затем «Применить». Списки берутся из каталога списков (itdoginfo/allow-domains, b4geoip и другие) и обновляются при каждом применении.'));
+			listCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Нажмите на пункт, чтобы включить или выключить его, и затем «Сохранить и применить». Списки берутся из каталога списков (itdoginfo/allow-domains, b4geoip и другие) и обновляются при каждом применении.'));
 			var cur = currentPick(), sel = pick || cur, changed = false;
 			var list = data.services || [];
 			list.forEach(function(s) { if (!!sel[s.id] !== !!cur[s.id]) changed = true; });
@@ -17654,6 +17809,11 @@ html.zm-theme-dark .zm-stopbar { background: #2a1416; color: #fecaca; border-col
 .zm-sb-left { border-color: rgba(207,34,46,.3); background: rgba(207,34,46,.05); }
 .zm-sb-left-text, .zm-lists-now-text { display: flex; flex-direction: column; gap: 4px; flex: 1 1 260px; min-width: 0; }
 .zm-sb-left .cbi-button, .zm-lists-now .cbi-button { margin: 0; flex-shrink: 0; }
+.zm-dock { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 9999; width: min(860px, calc(100vw - 32px)); display: none; flex-direction: column; gap: 10px; pointer-events: none; }
+.zm-dock.zm-dock-on { display: flex; }
+.zm-dock > * { pointer-events: auto; }
+.zm-dock .zm-savebar { position: static; margin: 0; box-shadow: 0 18px 44px -14px rgba(0,0,0,.45); }
+.zm-dock .zm-stopbar { position: static; left: auto; bottom: auto; transform: none; width: auto; }
 
 ZM_INSTALLER_EOF
 chmod 0644 '/www/luci-static/resources/view/zapret-manager/style.css'
@@ -18424,7 +18584,8 @@ var SB_VARS = [
 	{ id: 'stable', label: 'Обычный', hint: 'Все протоколы официального sing-box. Нужно больше места.', warn: '' },
 	{ id: 'extended', label: 'Расширенный', hint: 'Сборка sing-box-extended с GitHub: XHTTP, mKCP, VLESS encryption, Amnezia и другое. Нужно ~40 МБ.', warn: 'Скачивается с GitHub (shtorm-7/sing-box-extended), нужно около 40 МБ свободной памяти.\n' }
 ];
-var SB_NAMES = { tiny: 'облегчённый', stable: 'обычный', extended: 'расширенный' };
+SB_VARS.push({ id: 'compact', label: 'Компактный', hint: 'Тот же расширенный sing-box с GitHub, но в сжатой сборке: места на флеше нужно вдвое меньше (~20 МБ), зато запускается чуть дольше и берёт больше оперативной памяти.', warn: 'Скачивается с GitHub (shtorm-7/sing-box-extended), нужно около 20 МБ на флеше и 40 МБ в /tmp.\n' });
+var SB_NAMES = { tiny: 'облегчённый', stable: 'обычный', extended: 'расширенный', compact: 'расширенный компактный' };
 var SUB_IV = [ { id: '1h', label: '1 ч' }, { id: '6h', label: '6 ч' }, { id: '12h', label: '12 ч' }, { id: '1d', label: '24 ч' } ];
 var LIST_IV = [ { id: '6h', label: '6 ч' }, { id: '12h', label: '12 ч' }, { id: '1d', label: '24 ч' }, { id: '3d', label: '3 дня' } ];
 var LINK_RE = /^(vless|vmess|trojan|ss|socks4a?|socks5|hysteria2|hy2|tuic|https?):\/\/\S+$/i;
@@ -18793,6 +18954,7 @@ return view.extend({
 			}
 			mainCard.appendChild(E('h3', {}, 'Forkozz'));
 			mainCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:-6px' }, 'Выбранные сервисы идут через ваш сервер, подписку или туннель. Остальное — напрямую.'));
+			if (st.installed && st.enabled && st.watch > 0 && !st.running) mainCard.appendChild(E('p', { 'class': 'zm-hint' }, '⚠ Forkozz включён, но не работает — сторож уже перезапускал его ' + st.watch + ' раз. Посмотрите «Проверку» и журнал.'));
 			if (st.installed && st.enabled) (st.warn || []).forEach(function(w) {
 				if (WARN[w]) mainCard.appendChild(E('p', { 'class': 'zm-hint' }, '⚠ ' + WARN[w]));
 			});
@@ -18865,6 +19027,7 @@ return view.extend({
 			saveBar.innerHTML = '';
 			var show = !!st.installed && (dirty || !configured());
 			saveBar.style.display = show ? '' : 'none';
+			zm.dock(saveBar, show);
 			if (!show) return;
 			var btns = [];
 			if (dirty && configured()) btns.push(E('button', { 'class': 'cbi-button', 'disabled': saving ? '' : null, 'click': discard }, 'Отменить'));
@@ -19208,12 +19371,13 @@ return view.extend({
 			sbCard.appendChild(E('h3', {}, 'sing-box'));
 			var sv = st.singbox_pkg;
 			sbCard.appendChild(row('Версия', E('span', {}, st.singbox ? st.singbox + ' · ' + (SB_NAMES[sv] || 'установлен вручную') : 'не установлен')));
-			sbCard.appendChild(row('Вариант', seg(SB_VARS, SB_NAMES[sv] ? sv : '', function(v) {
+			var vars = SB_VARS.filter(function(x) { return x.id !== 'compact' || st.sb_compact || sv === 'compact'; });
+			sbCard.appendChild(row('Вариант', seg(vars, SB_NAMES[sv] ? sv : '', function(v) {
 				var it = SB_VARS.filter(function(x) { return x.id === v; })[0];
-				if (!confirm('Заменить sing-box на ' + it.label.toLowerCase() + '?\n\n' + it.warn + 'Forkozz перезапустится.')) return;
+				if (!confirm('Заменить sing-box на ' + it.label.toLowerCase() + '?\n\n' + it.warn + 'Forkozz перезапустится. Если новый sing-box не заработает, вернётся прежний.')) return;
 				act('singbox', v);
 			})));
-			sbCard.appendChild(E('div', { 'class': 'zm-kv' }, SB_VARS.map(function(x) {
+			sbCard.appendChild(E('div', { 'class': 'zm-kv' }, vars.map(function(x) {
 				return row(x.label, E('span', { 'class': 'zm-hint', 'style': 'margin:0' }, x.hint));
 			})));
 		}
@@ -22361,11 +22525,11 @@ html[data-theme="light"] .zmw-orbs i { opacity: .28; }
 #zmw-view .bt-col .zm-row { padding: 6px 0; margin: 0; border-bottom: 1px dashed var(--border); }
 #zmw-view .bt-col .zm-row:last-child { border-bottom: 0; }
 
-#zmw-view .zm-hint, #zmw-view p.zm-hint { opacity: 1; color: var(--muted); font-size: 12.5px; line-height: 1.6; }
-#zmw-view a:not(.cbi-button) { color: var(--a2); text-decoration-color: rgba(59,130,246,.35); text-underline-offset: 3px; }
-html[data-theme="dark"] #zmw-view a:not(.cbi-button) { color: #8ab4ff; }
+#zmw-view .zm-hint, #zmw-view p.zm-hint, .zm-dock .zm-hint, .zm-dock p.zm-hint { opacity: 1; color: var(--muted); font-size: 12.5px; line-height: 1.6; }
+#zmw-view a:not(.cbi-button), .zm-dock a:not(.cbi-button) { color: var(--a2); text-decoration-color: rgba(59,130,246,.35); text-underline-offset: 3px; }
+html[data-theme="dark"] #zmw-view a:not(.cbi-button), html[data-theme="dark"] .zm-dock a:not(.cbi-button) { color: #8ab4ff; }
 
-#zmw-view .zm-badge { padding: 4px 11px 4px 9px; font-size: 12px; font-weight: 650; gap: 7px; letter-spacing: .01em; }
+#zmw-view .zm-badge, .zm-dock .zm-badge { padding: 4px 11px 4px 9px; font-size: 12px; font-weight: 650; gap: 7px; letter-spacing: .01em; }
 #zmw-view .zm-ok { background: var(--ok-bg); color: var(--ok); }
 #zmw-view .zm-ok .zm-dot { background: var(--ok-dot); box-shadow: 0 0 8px var(--ok-dot); animation: zmw-pulse 2.4s infinite; }
 #zmw-view .zm-bad { background: var(--bad-bg); color: var(--bad); }
@@ -22375,7 +22539,7 @@ html[data-theme="dark"] #zmw-view a:not(.cbi-button) { color: #8ab4ff; }
 #zmw-view .zm-off { background: var(--off-bg); color: var(--off); }
 #zmw-view .zm-off .zm-dot { background: var(--off); }
 
-#zmw-view .cbi-button, .zmw-modal .cbi-button, .zm-refresh-banner .cbi-button {
+#zmw-view .cbi-button, .zmw-modal .cbi-button, .zm-refresh-banner .cbi-button, .zm-dock .cbi-button {
 	display: inline-flex; align-items: center; justify-content: center; gap: 6px;
 	min-height: 38px; height: auto; padding: 8px 16px; margin: 0;
 	border-radius: 12px; border: 1px solid var(--border-2);
@@ -22386,27 +22550,27 @@ html[data-theme="dark"] #zmw-view a:not(.cbi-button) { color: #8ab4ff; }
 	transition: border-color .15s, background .15s, transform .1s, box-shadow .15s, color .15s;
 	-webkit-appearance: none; appearance: none;
 }
-html[data-theme="dark"] #zmw-view .cbi-button { background: rgba(255,255,255,.05); }
-#zmw-view .cbi-button:hover { border-color: rgba(124,92,255,.55); background: var(--surface-solid); transform: translateY(-1px); box-shadow: 0 6px 16px -10px rgba(99,102,241,.6); }
-html[data-theme="dark"] #zmw-view .cbi-button:hover { background: rgba(255,255,255,.08); }
-#zmw-view .cbi-button:active { transform: translateY(0) scale(.98); }
-#zmw-view .cbi-button:focus-visible { outline: none; box-shadow: var(--ring); }
-#zmw-view .cbi-button[disabled], #zmw-view .cbi-button:disabled { opacity: .5; cursor: not-allowed; transform: none; box-shadow: none; }
+html[data-theme="dark"] #zmw-view .cbi-button, html[data-theme="dark"] .zm-dock .cbi-button { background: rgba(255,255,255,.05); }
+#zmw-view .cbi-button:hover, .zm-dock .cbi-button:hover { border-color: rgba(124,92,255,.55); background: var(--surface-solid); transform: translateY(-1px); box-shadow: 0 6px 16px -10px rgba(99,102,241,.6); }
+html[data-theme="dark"] #zmw-view .cbi-button:hover, html[data-theme="dark"] .zm-dock .cbi-button:hover { background: rgba(255,255,255,.08); }
+#zmw-view .cbi-button:active, .zm-dock .cbi-button:active { transform: translateY(0) scale(.98); }
+#zmw-view .cbi-button:focus-visible, .zm-dock .cbi-button:focus-visible { outline: none; box-shadow: var(--ring); }
+#zmw-view .cbi-button[disabled], #zmw-view .cbi-button:disabled, .zm-dock .cbi-button[disabled], .zm-dock .cbi-button:disabled { opacity: .5; cursor: not-allowed; transform: none; box-shadow: none; }
 
 #zmw-view .cbi-button-positive, .zm-refresh-banner .cbi-button-positive,
-html[data-theme="dark"] #zmw-view .cbi-button-positive {
+html[data-theme="dark"] #zmw-view .cbi-button-positive, .zm-dock .cbi-button-positive, html[data-theme="dark"] .zm-dock .cbi-button-positive {
 	background: var(--grad); background-size: 150% 100%; color: #fff; border-color: transparent;
 	box-shadow: 0 8px 20px -10px rgba(99,102,241,.9), inset 0 1px 0 rgba(255,255,255,.22);
 }
-#zmw-view .cbi-button-positive:hover, html[data-theme="dark"] #zmw-view .cbi-button-positive:hover {
+#zmw-view .cbi-button-positive:hover, html[data-theme="dark"] #zmw-view .cbi-button-positive:hover, .zm-dock .cbi-button-positive:hover, html[data-theme="dark"] .zm-dock .cbi-button-positive:hover {
 	background: var(--grad); background-size: 150% 100%; background-position: 100% 0;
 	border-color: transparent; color: #fff;
 	box-shadow: 0 12px 26px -10px rgba(99,102,241,1), inset 0 1px 0 rgba(255,255,255,.22);
 }
-#zmw-view .cbi-button-remove, html[data-theme="dark"] #zmw-view .cbi-button-remove {
+#zmw-view .cbi-button-remove, html[data-theme="dark"] #zmw-view .cbi-button-remove, .zm-dock .cbi-button-remove, html[data-theme="dark"] .zm-dock .cbi-button-remove {
 	background: var(--bad-bg); color: var(--bad); border-color: rgba(239,68,68,.28); box-shadow: none;
 }
-#zmw-view .cbi-button-remove:hover, html[data-theme="dark"] #zmw-view .cbi-button-remove:hover {
+#zmw-view .cbi-button-remove:hover, html[data-theme="dark"] #zmw-view .cbi-button-remove:hover, .zm-dock .cbi-button-remove:hover, html[data-theme="dark"] .zm-dock .cbi-button-remove:hover {
 	background: rgba(239,68,68,.18); border-color: rgba(239,68,68,.5); color: var(--bad);
 	box-shadow: 0 8px 20px -12px rgba(239,68,68,.8);
 }
@@ -22423,13 +22587,13 @@ html[data-theme="dark"] #zmw-view .cbi-button-positive {
 	width: max-content; max-width: 100%;
 }
 #zmw-view .zm-actions.zmw-tabs::-webkit-scrollbar { display: none; }
-#zmw-view .zmw-tabs .cbi-button {
+#zmw-view .zmw-tabs .cbi-button, .zm-dock .zmw-tabs .cbi-button {
 	flex-shrink: 0; white-space: nowrap;
 	border: 0; background: transparent; box-shadow: none; color: var(--muted);
 	min-height: 36px; padding: 7px 16px; border-radius: 11px;
 }
-#zmw-view .zmw-tabs .cbi-button:hover { background: var(--surface-2); color: var(--text); transform: none; box-shadow: none; }
-#zmw-view .zmw-tabs .cbi-button-positive, #zmw-view .zmw-tabs .cbi-button-positive:hover {
+#zmw-view .zmw-tabs .cbi-button:hover, .zm-dock .zmw-tabs .cbi-button:hover { background: var(--surface-2); color: var(--text); transform: none; box-shadow: none; }
+#zmw-view .zmw-tabs .cbi-button-positive, #zmw-view .zmw-tabs .cbi-button-positive:hover, .zm-dock .zmw-tabs .cbi-button-positive, .zm-dock .zmw-tabs .cbi-button-positive:hover {
 	background: var(--grad); color: #fff;
 	box-shadow: 0 6px 16px -8px rgba(99,102,241,.9);
 }
@@ -22713,8 +22877,8 @@ html body.zmw-body .zm-toast { background: var(--toast-bg); color: var(--toast-f
 	#zmw-view .zm-cards { grid-template-columns: 1fr; }
 	#zmw-view .zm-header { padding: 16px; }
 	#zmw-view .zm-header-links { margin-left: 0; }
-	#zmw-view .zm-actions .cbi-button { flex: 1 1 auto; }
-	#zmw-view .zmw-tabs .cbi-button { flex: 0 0 auto; }
+	#zmw-view .zm-actions .cbi-button, .zm-dock .zm-actions .cbi-button { flex: 1 1 auto; }
+	#zmw-view .zmw-tabs .cbi-button, .zm-dock .zmw-tabs .cbi-button { flex: 0 0 auto; }
 	#zmw-view .zm-actions.zmw-tabs { width: 100%; }
 	#zmw-view .zm-refresh-banner, .zm-refresh-banner { flex-direction: column; align-items: stretch; text-align: left; }
 	.zmw-brand-name { font-size: 15px; white-space: nowrap; }
@@ -22829,26 +22993,26 @@ html[data-theme="ink"] #zmw-view .zm-card {
 }
 html[data-theme="ink"] #zmw-view .zm-card:hover { box-shadow: 5px 5px 0 #0a0a0a; border-color: #0a0a0a; }
 html[data-theme="ink"] #zmw-view .zm-card h3::before { background: #0a9cff; border: 1.5px solid #0a0a0a; }
-html[data-theme="ink"] #zmw-view .cbi-button {
+html[data-theme="ink"] #zmw-view .cbi-button, html[data-theme="ink"] .zm-dock .cbi-button {
 	border: 2px solid #0a0a0a; border-radius: 6px; box-shadow: 3px 3px 0 #0a0a0a; background: #ffffff; color: #0a0a0a;
 	transition: transform .08s, box-shadow .08s;
 }
-html[data-theme="ink"] #zmw-view .cbi-button:hover { background: #e8f6ff; transform: none; box-shadow: 3px 3px 0 #0a0a0a; }
-html[data-theme="ink"] #zmw-view .cbi-button:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 #0a0a0a; }
-html[data-theme="ink"] #zmw-view .cbi-button-positive, html[data-theme="ink"] #zmw-view .cbi-button-positive:hover { background: #0a9cff; color: #0a0a0a; border-color: #0a0a0a; }
-html[data-theme="ink"] #zmw-view .cbi-button-remove, html[data-theme="ink"] #zmw-view .cbi-button-remove:hover { background: #ff4d3d; color: #0a0a0a; border-color: #0a0a0a; }
-html[data-theme="ink"] #zmw-view .cbi-button-action, html[data-theme="ink"] #zmw-view .cbi-button-action:hover { background: #d6f0ff; color: #0a0a0a; }
-html[data-theme="ink"] #zmw-view .cbi-button[disabled] { box-shadow: none; opacity: .5; }
-html[data-theme="ink"] #zmw-view .zmw-tabs .cbi-button { box-shadow: none; }
-html[data-theme="ink"] #zmw-view .zmw-tabs .cbi-button-positive { box-shadow: 3px 3px 0 #0a0a0a; }
+html[data-theme="ink"] #zmw-view .cbi-button:hover, html[data-theme="ink"] .zm-dock .cbi-button:hover { background: #e8f6ff; transform: none; box-shadow: 3px 3px 0 #0a0a0a; }
+html[data-theme="ink"] #zmw-view .cbi-button:active, html[data-theme="ink"] .zm-dock .cbi-button:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 #0a0a0a; }
+html[data-theme="ink"] #zmw-view .cbi-button-positive, html[data-theme="ink"] #zmw-view .cbi-button-positive:hover, html[data-theme="ink"] .zm-dock .cbi-button-positive, html[data-theme="ink"] .zm-dock .cbi-button-positive:hover { background: #0a9cff; color: #0a0a0a; border-color: #0a0a0a; }
+html[data-theme="ink"] #zmw-view .cbi-button-remove, html[data-theme="ink"] #zmw-view .cbi-button-remove:hover, html[data-theme="ink"] .zm-dock .cbi-button-remove, html[data-theme="ink"] .zm-dock .cbi-button-remove:hover { background: #ff4d3d; color: #0a0a0a; border-color: #0a0a0a; }
+html[data-theme="ink"] #zmw-view .cbi-button-action, html[data-theme="ink"] #zmw-view .cbi-button-action:hover, html[data-theme="ink"] .zm-dock .cbi-button-action, html[data-theme="ink"] .zm-dock .cbi-button-action:hover { background: #d6f0ff; color: #0a0a0a; }
+html[data-theme="ink"] #zmw-view .cbi-button[disabled], html[data-theme="ink"] .zm-dock .cbi-button[disabled] { box-shadow: none; opacity: .5; }
+html[data-theme="ink"] #zmw-view .zmw-tabs .cbi-button, html[data-theme="ink"] .zm-dock .zmw-tabs .cbi-button { box-shadow: none; }
+html[data-theme="ink"] #zmw-view .zmw-tabs .cbi-button-positive, html[data-theme="ink"] .zm-dock .zmw-tabs .cbi-button-positive { box-shadow: 3px 3px 0 #0a0a0a; }
 html[data-theme="ink"] #zmw-view .zm-tile {
 	background: #ffffff; border: 2px solid #0a0a0a; border-radius: 6px; box-shadow: 3px 3px 0 #0a0a0a; color: #0a0a0a;
 }
 html[data-theme="ink"] #zmw-view .zm-tile:hover { background: #e8f6ff; transform: none; }
 html[data-theme="ink"] #zmw-view .zm-tile.zm-active { background: #0a9cff; color: #0a0a0a; border-color: #0a0a0a; box-shadow: 3px 3px 0 #0a0a0a; }
 html[data-theme="ink"] #zmw-view .zm-tile.zm-active::before { color: #0a0a0a; }
-html[data-theme="ink"] #zmw-view .zm-badge { border: 2px solid #0a0a0a; color: #0a0a0a; }
-html[data-theme="ink"] #zmw-view .zm-badge .zm-dot { box-shadow: none; animation: none; }
+html[data-theme="ink"] #zmw-view .zm-badge, html[data-theme="ink"] .zm-dock .zm-badge { border: 2px solid #0a0a0a; color: #0a0a0a; }
+html[data-theme="ink"] #zmw-view .zm-badge .zm-dot, html[data-theme="ink"] .zm-dock .zm-badge .zm-dot { box-shadow: none; animation: none; }
 html[data-theme="ink"] #zmw-view input[type="text"], html[data-theme="ink"] #zmw-view input[type="password"],
 html[data-theme="ink"] #zmw-view input[type="number"], html[data-theme="ink"] #zmw-view select,
 html[data-theme="ink"] #zmw-view textarea:not(.zm-config-editor) { border: 2px solid #0a0a0a; border-radius: 6px; background: #ffffff; }
@@ -22869,7 +23033,7 @@ html[data-theme="ink"] #zmw-view .zm-quota > i { background: #0a9cff; border-rad
 html[data-theme="ink"] #zmw-view .zm-switch { border: 2px solid #0a0a0a; background: #ffffff; }
 html[data-theme="ink"] #zmw-view .zm-switch > span { border: 2px solid #0a0a0a; box-shadow: none; top: 1px; left: 1px; }
 html[data-theme="ink"] #zmw-view .zm-switch.zm-switch-on { background: #0a9cff; }
-html[data-theme="ink"] #zmw-view a:not(.cbi-button) { color: #0060c0; text-decoration: underline; text-underline-offset: 2px; }
+html[data-theme="ink"] #zmw-view a:not(.cbi-button), html[data-theme="ink"] .zm-dock a:not(.cbi-button) { color: #0060c0; text-decoration: underline; text-underline-offset: 2px; }
 html[data-theme="ink"] .zmw-logo svg { filter: none; }
 html[data-theme="ink"] .zmw-logo-lg::after { display: none; }
 html[data-theme="bento"] {
@@ -22907,13 +23071,13 @@ html[data-theme="bento"] #zmw-view .zm-cards > .zm-card:nth-child(4n+3) { backgr
 html[data-theme="bento"] #zmw-view .zm-cards > .zm-card:nth-child(4n+4) { background: #dff2e2; }
 html[data-theme="bento"] #zmw-view .zm-card h3::before { display: none; }
 html[data-theme="bento"] #zmw-view .zm-card h3 { font-size: 15px; font-weight: 600; color: inherit; opacity: .8; }
-html[data-theme="bento"] #zmw-view .cbi-button, html[data-theme="bento"] .zmw-icon-btn { border-radius: 14px; border: 0; background: #f6f2ea; color: #1c1a17; box-shadow: none; }
-html[data-theme="bento"] #zmw-view .cbi-button:hover, html[data-theme="bento"] .zmw-icon-btn:hover { background: #e4ddd0; transform: none; }
-html[data-theme="bento"] #zmw-view .cbi-button-positive, html[data-theme="bento"] #zmw-view .cbi-button-positive:hover, html[data-theme="bento"] .zmw-btn-primary { background: #1c1a17; color: #ffffff; border: 0; box-shadow: none; }
-html[data-theme="bento"] #zmw-view .cbi-button-remove, html[data-theme="bento"] #zmw-view .cbi-button-remove:hover { background: #ffd9d4; color: #8a1c14; }
+html[data-theme="bento"] #zmw-view .cbi-button, html[data-theme="bento"] .zmw-icon-btn, html[data-theme="bento"] .zm-dock .cbi-button { border-radius: 14px; border: 0; background: #f6f2ea; color: #1c1a17; box-shadow: none; }
+html[data-theme="bento"] #zmw-view .cbi-button:hover, html[data-theme="bento"] .zmw-icon-btn:hover, html[data-theme="bento"] .zm-dock .cbi-button:hover { background: #e4ddd0; transform: none; }
+html[data-theme="bento"] #zmw-view .cbi-button-positive, html[data-theme="bento"] #zmw-view .cbi-button-positive:hover, html[data-theme="bento"] .zmw-btn-primary, html[data-theme="bento"] .zm-dock .cbi-button-positive, html[data-theme="bento"] .zm-dock .cbi-button-positive:hover { background: #1c1a17; color: #ffffff; border: 0; box-shadow: none; }
+html[data-theme="bento"] #zmw-view .cbi-button-remove, html[data-theme="bento"] #zmw-view .cbi-button-remove:hover, html[data-theme="bento"] .zm-dock .cbi-button-remove, html[data-theme="bento"] .zm-dock .cbi-button-remove:hover { background: #ffd9d4; color: #8a1c14; }
 html[data-theme="bento"] #zmw-view .zm-tile { border-radius: 18px; border: 0; background: #f6f2ea; }
 html[data-theme="bento"] #zmw-view .zm-tile.zm-active { background: #1c1a17; color: #ffffff; border: 0; }
-html[data-theme="bento"] #zmw-view .zm-badge { border-radius: 999px; }
+html[data-theme="bento"] #zmw-view .zm-badge, html[data-theme="bento"] .zm-dock .zm-badge { border-radius: 999px; }
 html[data-theme="bento"] #zmw-view .zm-log, html[data-theme="bento"] #zmw-view .zm-config-editor { border-radius: 24px; }
 html[data-theme="bento"] .zmw-login-card, html[data-theme="bento"] .zmw-modal, html[data-theme="bento"] .zmw-theme-menu { border: 0; border-radius: 28px; background: #ffffff; backdrop-filter: none; }
 
@@ -22951,16 +23115,16 @@ html[data-theme="minimal"] #zmw-view .zm-card { border: 0; border-top: 1px solid
 html[data-theme="minimal"] #zmw-view .zm-card:hover { box-shadow: none; }
 html[data-theme="minimal"] #zmw-view .zm-card h3 { font-weight: 400; font-size: 13px; text-transform: uppercase; letter-spacing: .12em; color: #6b6b6b; }
 html[data-theme="minimal"] #zmw-view .zm-card h3::before { display: none; }
-html[data-theme="minimal"] #zmw-view .cbi-button, html[data-theme="minimal"] .zmw-icon-btn { border-radius: 0; border: 1px solid #111111; background: #ffffff; color: #111111; box-shadow: none; font-weight: 400; }
-html[data-theme="minimal"] #zmw-view .cbi-button:hover, html[data-theme="minimal"] .zmw-icon-btn:hover { background: #111111; color: #ffffff; transform: none; }
-html[data-theme="minimal"] #zmw-view .cbi-button-positive, html[data-theme="minimal"] #zmw-view .cbi-button-positive:hover, html[data-theme="minimal"] .zmw-btn-primary { background: #111111; color: #ffffff; border: 1px solid #111111; box-shadow: none; }
-html[data-theme="minimal"] #zmw-view .cbi-button-remove { border-color: #b3261e; color: #b3261e; background: #ffffff; }
-html[data-theme="minimal"] #zmw-view .cbi-button-remove:hover { background: #b3261e; color: #ffffff; }
+html[data-theme="minimal"] #zmw-view .cbi-button, html[data-theme="minimal"] .zmw-icon-btn, html[data-theme="minimal"] .zm-dock .cbi-button { border-radius: 0; border: 1px solid #111111; background: #ffffff; color: #111111; box-shadow: none; font-weight: 400; }
+html[data-theme="minimal"] #zmw-view .cbi-button:hover, html[data-theme="minimal"] .zmw-icon-btn:hover, html[data-theme="minimal"] .zm-dock .cbi-button:hover { background: #111111; color: #ffffff; transform: none; }
+html[data-theme="minimal"] #zmw-view .cbi-button-positive, html[data-theme="minimal"] #zmw-view .cbi-button-positive:hover, html[data-theme="minimal"] .zmw-btn-primary, html[data-theme="minimal"] .zm-dock .cbi-button-positive, html[data-theme="minimal"] .zm-dock .cbi-button-positive:hover { background: #111111; color: #ffffff; border: 1px solid #111111; box-shadow: none; }
+html[data-theme="minimal"] #zmw-view .cbi-button-remove, html[data-theme="minimal"] .zm-dock .cbi-button-remove { border-color: #b3261e; color: #b3261e; background: #ffffff; }
+html[data-theme="minimal"] #zmw-view .cbi-button-remove:hover, html[data-theme="minimal"] .zm-dock .cbi-button-remove:hover { background: #b3261e; color: #ffffff; }
 html[data-theme="minimal"] #zmw-view .zm-tile { border-radius: 0; border: 1px solid #e0e0e0; background: #ffffff; font-weight: 400; }
 html[data-theme="minimal"] #zmw-view .zm-tile.zm-active { border-color: #111111; background: #ffffff; color: #111111; box-shadow: inset 0 0 0 1px #111111; }
 html[data-theme="minimal"] #zmw-view .zm-tile.zm-active::before { color: #0078e8; }
-html[data-theme="minimal"] #zmw-view .zm-badge { padding-left: 0; font-weight: 400; }
-html[data-theme="minimal"] #zmw-view .zm-badge .zm-dot { width: 6px; height: 6px; box-shadow: none; animation: none; }
+html[data-theme="minimal"] #zmw-view .zm-badge, html[data-theme="minimal"] .zm-dock .zm-badge { padding-left: 0; font-weight: 400; }
+html[data-theme="minimal"] #zmw-view .zm-badge .zm-dot, html[data-theme="minimal"] .zm-dock .zm-badge .zm-dot { width: 6px; height: 6px; box-shadow: none; animation: none; }
 html[data-theme="minimal"] #zmw-view .zm-log, html[data-theme="minimal"] #zmw-view .zm-config-editor { border-radius: 0; }
 html[data-theme="minimal"] .zmw-login-card, html[data-theme="minimal"] .zmw-modal, html[data-theme="minimal"] .zmw-theme-menu { border-radius: 0; border: 1px solid #111111; box-shadow: none; background: #ffffff; backdrop-filter: none; }
 html[data-theme="minimal"] .zmw-theme-opt { border-radius: 0; }
@@ -23004,18 +23168,18 @@ html[data-theme="retro"] #zmw-view .zm-card {
 html[data-theme="retro"] #zmw-view .zm-card { padding: 0 14px 14px; }
 html[data-theme="retro"] #zmw-view .zm-card h3 { margin: 3px -11px 14px; padding: 5px 8px; background: linear-gradient(90deg, #000080, #1084d0); color: #ffffff; font-size: 13px; font-weight: 700; }
 html[data-theme="retro"] #zmw-view .zm-card h3::before { display: none; }
-html[data-theme="retro"] #zmw-view .cbi-button, html[data-theme="retro"] .zmw-icon-btn, html[data-theme="retro"] .zmw-btn-primary {
+html[data-theme="retro"] #zmw-view .cbi-button, html[data-theme="retro"] .zmw-icon-btn, html[data-theme="retro"] .zmw-btn-primary, html[data-theme="retro"] .zm-dock .cbi-button {
 	border-radius: 0; background: #c0c0c0; color: #000000; box-shadow: inset -1px -1px 0 #808080, inset 1px 1px 0 #dfdfdf;
 	border-top: 2px solid #ffffff; border-left: 2px solid #ffffff; border-right: 2px solid #000000; border-bottom: 2px solid #000000; font-weight: 400;
 }
-html[data-theme="retro"] #zmw-view .cbi-button:hover, html[data-theme="retro"] .zmw-icon-btn:hover { background: #c0c0c0; transform: none; }
-html[data-theme="retro"] #zmw-view .cbi-button:active, html[data-theme="retro"] .zmw-icon-btn:active { border-top-color: #000000; border-left-color: #000000; border-right-color: #ffffff; border-bottom-color: #ffffff; }
-html[data-theme="retro"] #zmw-view .cbi-button-positive, html[data-theme="retro"] #zmw-view .cbi-button-positive:hover { background: #c0c0c0; color: #000000; font-weight: 700; outline: 1px dotted #000000; outline-offset: -5px; }
-html[data-theme="retro"] #zmw-view .cbi-button-remove, html[data-theme="retro"] #zmw-view .cbi-button-remove:hover { background: #c0c0c0; color: #a00000; }
+html[data-theme="retro"] #zmw-view .cbi-button:hover, html[data-theme="retro"] .zmw-icon-btn:hover, html[data-theme="retro"] .zm-dock .cbi-button:hover { background: #c0c0c0; transform: none; }
+html[data-theme="retro"] #zmw-view .cbi-button:active, html[data-theme="retro"] .zmw-icon-btn:active, html[data-theme="retro"] .zm-dock .cbi-button:active { border-top-color: #000000; border-left-color: #000000; border-right-color: #ffffff; border-bottom-color: #ffffff; }
+html[data-theme="retro"] #zmw-view .cbi-button-positive, html[data-theme="retro"] #zmw-view .cbi-button-positive:hover, html[data-theme="retro"] .zm-dock .cbi-button-positive, html[data-theme="retro"] .zm-dock .cbi-button-positive:hover { background: #c0c0c0; color: #000000; font-weight: 700; outline: 1px dotted #000000; outline-offset: -5px; }
+html[data-theme="retro"] #zmw-view .cbi-button-remove, html[data-theme="retro"] #zmw-view .cbi-button-remove:hover, html[data-theme="retro"] .zm-dock .cbi-button-remove, html[data-theme="retro"] .zm-dock .cbi-button-remove:hover { background: #c0c0c0; color: #a00000; }
 html[data-theme="retro"] #zmw-view .zm-tile { border-radius: 0; background: #ffffff; border-top: 2px solid #808080; border-left: 2px solid #808080; border-right: 2px solid #ffffff; border-bottom: 2px solid #ffffff; }
 html[data-theme="retro"] #zmw-view .zm-tile.zm-active { background: #000080; color: #ffffff; }
-html[data-theme="retro"] #zmw-view .zm-badge { border-radius: 0; padding-left: 0; }
-html[data-theme="retro"] #zmw-view .zm-badge .zm-dot { box-shadow: none; animation: none; }
+html[data-theme="retro"] #zmw-view .zm-badge, html[data-theme="retro"] .zm-dock .zm-badge { border-radius: 0; padding-left: 0; }
+html[data-theme="retro"] #zmw-view .zm-badge .zm-dot, html[data-theme="retro"] .zm-dock .zm-badge .zm-dot { box-shadow: none; animation: none; }
 html[data-theme="retro"] #zmw-view input, html[data-theme="retro"] #zmw-view select, html[data-theme="retro"] #zmw-view textarea:not(.zm-config-editor), html[data-theme="retro"] .zmw-input {
 	border-radius: 0; background: #ffffff; border-top: 2px solid #808080; border-left: 2px solid #808080; border-right: 2px solid #ffffff; border-bottom: 2px solid #ffffff;
 }
@@ -23054,14 +23218,14 @@ html[data-theme="depth"] #zmw-view .zm-card {
 	transform: translateZ(0); transition: transform .35s cubic-bezier(.2,.8,.2,1), box-shadow .35s;
 }
 html[data-theme="depth"] #zmw-view .zm-card:hover { transform: rotateX(4deg) translateY(-4px); box-shadow: 0 1px 0 rgba(255,255,255,.1) inset, 0 14px 0 -2px #0c1426, 0 40px 60px -14px rgba(0,0,0,.85), 0 0 40px -10px rgba(0,182,255,.35); border-color: rgba(127,220,255,.4); }
-html[data-theme="depth"] #zmw-view .cbi-button, html[data-theme="depth"] .zmw-icon-btn {
+html[data-theme="depth"] #zmw-view .cbi-button, html[data-theme="depth"] .zmw-icon-btn, html[data-theme="depth"] .zm-dock .cbi-button {
 	background: #1e2b48; border: 1px solid rgba(127,220,255,.25); color: #e8eefc;
 	box-shadow: 0 4px 0 #0c1426, 0 8px 16px -6px rgba(0,0,0,.7); transition: transform .08s, box-shadow .08s;
 }
-html[data-theme="depth"] #zmw-view .cbi-button:hover, html[data-theme="depth"] .zmw-icon-btn:hover { background: #253559; transform: translateY(-1px); }
-html[data-theme="depth"] #zmw-view .cbi-button:active, html[data-theme="depth"] .zmw-icon-btn:active { transform: translateY(4px); box-shadow: 0 0 0 #0c1426; }
-html[data-theme="depth"] #zmw-view .cbi-button-positive, html[data-theme="depth"] #zmw-view .cbi-button-positive:hover, html[data-theme="depth"] .zmw-btn-primary { background: linear-gradient(180deg, #33c6ff, #0090ff); color: #04111f; border-color: #0090ff; box-shadow: 0 4px 0 #005a9e, 0 10px 24px -8px rgba(0,182,255,.8); }
-html[data-theme="depth"] #zmw-view .cbi-button-remove, html[data-theme="depth"] #zmw-view .cbi-button-remove:hover { background: linear-gradient(180deg, #ff8a7a, #e84a3a); color: #1a0503; border-color: #e84a3a; box-shadow: 0 4px 0 #8f2419; }
+html[data-theme="depth"] #zmw-view .cbi-button:hover, html[data-theme="depth"] .zmw-icon-btn:hover, html[data-theme="depth"] .zm-dock .cbi-button:hover { background: #253559; transform: translateY(-1px); }
+html[data-theme="depth"] #zmw-view .cbi-button:active, html[data-theme="depth"] .zmw-icon-btn:active, html[data-theme="depth"] .zm-dock .cbi-button:active { transform: translateY(4px); box-shadow: 0 0 0 #0c1426; }
+html[data-theme="depth"] #zmw-view .cbi-button-positive, html[data-theme="depth"] #zmw-view .cbi-button-positive:hover, html[data-theme="depth"] .zmw-btn-primary, html[data-theme="depth"] .zm-dock .cbi-button-positive, html[data-theme="depth"] .zm-dock .cbi-button-positive:hover { background: linear-gradient(180deg, #33c6ff, #0090ff); color: #04111f; border-color: #0090ff; box-shadow: 0 4px 0 #005a9e, 0 10px 24px -8px rgba(0,182,255,.8); }
+html[data-theme="depth"] #zmw-view .cbi-button-remove, html[data-theme="depth"] #zmw-view .cbi-button-remove:hover, html[data-theme="depth"] .zm-dock .cbi-button-remove, html[data-theme="depth"] .zm-dock .cbi-button-remove:hover { background: linear-gradient(180deg, #ff8a7a, #e84a3a); color: #1a0503; border-color: #e84a3a; box-shadow: 0 4px 0 #8f2419; }
 html[data-theme="depth"] #zmw-view .zm-tile { background: #1e2b48; border: 1px solid rgba(127,220,255,.2); box-shadow: 0 4px 0 #0c1426; transition: transform .15s, box-shadow .15s; }
 html[data-theme="depth"] #zmw-view .zm-tile:hover { transform: translateY(-2px); box-shadow: 0 6px 0 #0c1426, 0 14px 24px -10px rgba(0,182,255,.5); }
 html[data-theme="depth"] #zmw-view .zm-tile.zm-active { background: linear-gradient(180deg, #33c6ff, #0090ff); color: #04111f; border-color: #0090ff; box-shadow: 0 4px 0 #005a9e; }
@@ -23126,19 +23290,19 @@ html[data-theme="micro"] .zmw-mem-bar i { background: #2d5bff; border-radius: in
 html[data-theme="micro"] #zmw-view .zm-card { background: #ffffff; border: 1px solid #e3e6ee; border-radius: 20px; box-shadow: 0 1px 2px rgba(0,0,0,.04); backdrop-filter: none; -webkit-backdrop-filter: none; color: #151a26; }
 html[data-theme="micro"] #zmw-view .zm-card:hover { border-color: #e3e6ee; }
 html[data-theme="micro"] #zmw-view .zm-card h3 { color: #151a26; } html[data-theme="micro"] #zmw-view .zm-card h3::before { background: #2d5bff; }
-html[data-theme="micro"] #zmw-view .zm-hint, html[data-theme="micro"] #zmw-view p.zm-hint, html[data-theme="micro"] #zmw-view .zm-label { color: #5a6377; opacity: 1; }
-html[data-theme="micro"] #zmw-view a:not(.cbi-button) { color: #2d5bff; }
-html[data-theme="micro"] #zmw-view .cbi-button, html[data-theme="micro"] .zmw-icon-btn { background: #f7f8fb; color: #151a26; border: 1px solid #e3e6ee; border-radius: 14px; box-shadow: 0 1px 2px rgba(0,0,0,.06); }
-html[data-theme="micro"] #zmw-view .cbi-button:hover, html[data-theme="micro"] .zmw-icon-btn:hover { background: #eceff5; color: #151a26; }
-html[data-theme="micro"] #zmw-view .cbi-button-positive, html[data-theme="micro"] #zmw-view .cbi-button-positive:hover, html[data-theme="micro"] .zmw-btn-primary { background: #2d5bff; color: #ffffff; border-color: #2d5bff; }
-html[data-theme="micro"] #zmw-view .cbi-button-remove, html[data-theme="micro"] #zmw-view .cbi-button-remove:hover { background: #ffe1e1; color: #9a1f1f; border-color: #ffe1e1; }
-html[data-theme="micro"] #zmw-view .cbi-button-action, html[data-theme="micro"] #zmw-view .cbi-button-action:hover { background: #e6ecff; color: #151a26; }
+html[data-theme="micro"] #zmw-view .zm-hint, html[data-theme="micro"] #zmw-view p.zm-hint, html[data-theme="micro"] #zmw-view .zm-label, html[data-theme="micro"] .zm-dock .zm-hint, html[data-theme="micro"] .zm-dock p.zm-hint { color: #5a6377; opacity: 1; }
+html[data-theme="micro"] #zmw-view a:not(.cbi-button), html[data-theme="micro"] .zm-dock a:not(.cbi-button) { color: #2d5bff; }
+html[data-theme="micro"] #zmw-view .cbi-button, html[data-theme="micro"] .zmw-icon-btn, html[data-theme="micro"] .zm-dock .cbi-button { background: #f7f8fb; color: #151a26; border: 1px solid #e3e6ee; border-radius: 14px; box-shadow: 0 1px 2px rgba(0,0,0,.06); }
+html[data-theme="micro"] #zmw-view .cbi-button:hover, html[data-theme="micro"] .zmw-icon-btn:hover, html[data-theme="micro"] .zm-dock .cbi-button:hover { background: #eceff5; color: #151a26; }
+html[data-theme="micro"] #zmw-view .cbi-button-positive, html[data-theme="micro"] #zmw-view .cbi-button-positive:hover, html[data-theme="micro"] .zmw-btn-primary, html[data-theme="micro"] .zm-dock .cbi-button-positive, html[data-theme="micro"] .zm-dock .cbi-button-positive:hover { background: #2d5bff; color: #ffffff; border-color: #2d5bff; }
+html[data-theme="micro"] #zmw-view .cbi-button-remove, html[data-theme="micro"] #zmw-view .cbi-button-remove:hover, html[data-theme="micro"] .zm-dock .cbi-button-remove, html[data-theme="micro"] .zm-dock .cbi-button-remove:hover { background: #ffe1e1; color: #9a1f1f; border-color: #ffe1e1; }
+html[data-theme="micro"] #zmw-view .cbi-button-action, html[data-theme="micro"] #zmw-view .cbi-button-action:hover, html[data-theme="micro"] .zm-dock .cbi-button-action, html[data-theme="micro"] .zm-dock .cbi-button-action:hover { background: #e6ecff; color: #151a26; }
 html[data-theme="micro"] #zmw-view .zm-tile:not(.zm-active):not(.zm-tile-off), html[data-theme="micro"] #zmw-view .zm-tile { background: #f7f8fb; color: #151a26; border: 1px solid #e3e6ee; border-radius: 14px; }
 html[data-theme="micro"] #zmw-view .zm-tile.zm-active { background: #2d5bff; color: #ffffff; border-color: #2d5bff; }
 html[data-theme="micro"] #zmw-view .zm-tile.zm-active::before { color: #ffffff; }
 html[data-theme="micro"] #zmw-view .zm-seg-item { color: #151a26; } html[data-theme="micro"] #zmw-view .zm-seg-item.zm-active { background: #2d5bff; color: #ffffff; }
 html[data-theme="micro"] #zmw-view .zm-node.zm-active { background: #e6ecff; border-color: #2d5bff; } html[data-theme="micro"] #zmw-view .zm-node.zm-active .zm-node-name, html[data-theme="micro"] #zmw-view .zm-node.zm-active .zm-node-name::before { color: #151a26; }
-html[data-theme="micro"] #zmw-view .zm-badge { border-radius: 999px; }
+html[data-theme="micro"] #zmw-view .zm-badge, html[data-theme="micro"] .zm-dock .zm-badge { border-radius: 999px; }
 html[data-theme="micro"] #zmw-view input, html[data-theme="micro"] #zmw-view select, html[data-theme="micro"] #zmw-view textarea:not(.zm-config-editor), html[data-theme="micro"] .zmw-input { background: #f7f8fb; color: #151a26; border: 1px solid #e3e6ee; border-radius: 14px; }
 html[data-theme="micro"] #zmw-view .zm-current-banner, html[data-theme="micro"] #zmw-view .zm-refresh-banner { background: #e6ecff; color: #151a26; border-color: #2d5bff; }
 html[data-theme="micro"] #zmw-view .zm-credit-tile, html.zm-theme-dark[data-theme="micro"] #zmw-view .zm-credit-tile { background: #f7f8fb; border-color: #e3e6ee; color: #151a26; }
@@ -23149,41 +23313,41 @@ html[data-theme="micro"] .zmw-login-card, html[data-theme="micro"] .zmw-modal, h
 html[data-theme="micro"] .zmw-theme-opt { color: #151a26; } html[data-theme="micro"] .zmw-theme-opt:hover { background: #f7f8fb; }
 html[data-theme="micro"] .zmw-theme-opt.zmw-on { background: #2d5bff; color: #ffffff; } html[data-theme="micro"] .zmw-theme-opt.zmw-on .zmw-theme-mark, html[data-theme="micro"] .zmw-theme-opt.zmw-on .zmw-i { color: #ffffff; }
 html[data-theme="micro"] .zmw-theme-group { color: #5a6377; }
-html[data-theme="micro"] #zmw-view .cbi-button, html[data-theme="micro"] .zmw-icon-btn, html[data-theme="micro"] .zmw-btn-primary { transition: transform .12s, box-shadow .12s, background .2s, border-radius .25s; }
-html[data-theme="micro"] #zmw-view .cbi-button:hover, html[data-theme="micro"] .zmw-icon-btn:hover { transform: scale(1.03); }
-html[data-theme="micro"] #zmw-view .cbi-button:active, html[data-theme="micro"] .zmw-icon-btn:active, html[data-theme="micro"] .zmw-btn-primary:active { transform: scale(.95); box-shadow: none; }
-html[data-theme="micro"] #zmw-view .cbi-button-positive:hover, html[data-theme="micro"] .zmw-btn-primary:hover { border-radius: 22px; box-shadow: 0 12px 24px -10px rgba(45,91,255,.7); }
+html[data-theme="micro"] #zmw-view .cbi-button, html[data-theme="micro"] .zmw-icon-btn, html[data-theme="micro"] .zmw-btn-primary, html[data-theme="micro"] .zm-dock .cbi-button { transition: transform .12s, box-shadow .12s, background .2s, border-radius .25s; }
+html[data-theme="micro"] #zmw-view .cbi-button:hover, html[data-theme="micro"] .zmw-icon-btn:hover, html[data-theme="micro"] .zm-dock .cbi-button:hover { transform: scale(1.03); }
+html[data-theme="micro"] #zmw-view .cbi-button:active, html[data-theme="micro"] .zmw-icon-btn:active, html[data-theme="micro"] .zmw-btn-primary:active, html[data-theme="micro"] .zm-dock .cbi-button:active { transform: scale(.95); box-shadow: none; }
+html[data-theme="micro"] #zmw-view .cbi-button-positive:hover, html[data-theme="micro"] .zmw-btn-primary:hover, html[data-theme="micro"] .zm-dock .cbi-button-positive:hover { border-radius: 22px; box-shadow: 0 12px 24px -10px rgba(45,91,255,.7); }
 html[data-theme="micro"] #zmw-view .zm-tile { transition: transform .2s cubic-bezier(.2,.8,.2,1), box-shadow .2s; }
 html[data-theme="micro"] #zmw-view .zm-tile:hover { transform: translateY(-2px); box-shadow: 0 10px 18px -12px rgba(45,91,255,.6); }
-html[data-theme="micro"] #zmw-view .zm-badge .zm-dot { animation: zmw-micro-ring 2s infinite; }
+html[data-theme="micro"] #zmw-view .zm-badge .zm-dot, html[data-theme="micro"] .zm-dock .zm-badge .zm-dot { animation: zmw-micro-ring 2s infinite; }
 @keyframes zmw-micro-ring { 0% { box-shadow: 0 0 0 0 rgba(30,180,110,.45); } 70% { box-shadow: 0 0 0 7px rgba(30,180,110,0); } 100% { box-shadow: 0 0 0 0 rgba(30,180,110,0); } }
 html[data-theme="micro"] .zmw-nav-item { transition: background .2s, transform .15s; }
 html[data-theme="micro"] .zmw-nav-item:active { transform: scale(.97); }
 html[data-theme="ink"] #zmw-view .zm-actions.zmw-tabs { background: #ffffff; border: 2.5px solid #0a0a0a; border-radius: 6px; box-shadow: 4px 4px 0 #0a0a0a; backdrop-filter: none; }
-html[data-theme="ink"] #zmw-view .zmw-tabs .cbi-button { background: transparent; border: 2px solid transparent; border-radius: 4px; box-shadow: none; color: #0a0a0a; transform: none; }
-html[data-theme="ink"] #zmw-view .zmw-tabs .cbi-button:hover { background: #e8f6ff; border-color: transparent; box-shadow: none; }
-html[data-theme="ink"] #zmw-view .zmw-tabs .cbi-button-positive, html[data-theme="ink"] #zmw-view .zmw-tabs .cbi-button-positive:hover { background: #0a9cff; border-color: #0a0a0a; color: #0a0a0a; box-shadow: none; }
+html[data-theme="ink"] #zmw-view .zmw-tabs .cbi-button, html[data-theme="ink"] .zm-dock .zmw-tabs .cbi-button { background: transparent; border: 2px solid transparent; border-radius: 4px; box-shadow: none; color: #0a0a0a; transform: none; }
+html[data-theme="ink"] #zmw-view .zmw-tabs .cbi-button:hover, html[data-theme="ink"] .zm-dock .zmw-tabs .cbi-button:hover { background: #e8f6ff; border-color: transparent; box-shadow: none; }
+html[data-theme="ink"] #zmw-view .zmw-tabs .cbi-button-positive, html[data-theme="ink"] #zmw-view .zmw-tabs .cbi-button-positive:hover, html[data-theme="ink"] .zm-dock .zmw-tabs .cbi-button-positive, html[data-theme="ink"] .zm-dock .zmw-tabs .cbi-button-positive:hover { background: #0a9cff; border-color: #0a0a0a; color: #0a0a0a; box-shadow: none; }
 html[data-theme="bento"] #zmw-view .zm-actions.zmw-tabs { background: #ffffff; border: 0; border-radius: 999px; box-shadow: none; backdrop-filter: none; }
-html[data-theme="bento"] #zmw-view .zmw-tabs .cbi-button { background: transparent; border: 0; border-radius: 999px; color: #6f685d; box-shadow: none; }
-html[data-theme="bento"] #zmw-view .zmw-tabs .cbi-button:hover { background: #f6f2ea; color: #1c1a17; }
-html[data-theme="bento"] #zmw-view .zmw-tabs .cbi-button-positive, html[data-theme="bento"] #zmw-view .zmw-tabs .cbi-button-positive:hover { background: #1c1a17; color: #ffffff; }
+html[data-theme="bento"] #zmw-view .zmw-tabs .cbi-button, html[data-theme="bento"] .zm-dock .zmw-tabs .cbi-button { background: transparent; border: 0; border-radius: 999px; color: #6f685d; box-shadow: none; }
+html[data-theme="bento"] #zmw-view .zmw-tabs .cbi-button:hover, html[data-theme="bento"] .zm-dock .zmw-tabs .cbi-button:hover { background: #f6f2ea; color: #1c1a17; }
+html[data-theme="bento"] #zmw-view .zmw-tabs .cbi-button-positive, html[data-theme="bento"] #zmw-view .zmw-tabs .cbi-button-positive:hover, html[data-theme="bento"] .zm-dock .zmw-tabs .cbi-button-positive, html[data-theme="bento"] .zm-dock .zmw-tabs .cbi-button-positive:hover { background: #1c1a17; color: #ffffff; }
 html[data-theme="minimal"] #zmw-view .zm-actions.zmw-tabs { background: transparent; border: 0; border-bottom: 1px solid #e0e0e0; border-radius: 0; box-shadow: none; padding: 0; gap: 24px; backdrop-filter: none; }
-html[data-theme="minimal"] #zmw-view .zmw-tabs .cbi-button { background: transparent; border: 0; border-bottom: 2px solid transparent; border-radius: 0; color: #6b6b6b; padding: 10px 0; box-shadow: none; font-weight: 400; }
-html[data-theme="minimal"] #zmw-view .zmw-tabs .cbi-button:hover { background: transparent; color: #111111; }
-html[data-theme="minimal"] #zmw-view .zmw-tabs .cbi-button-positive, html[data-theme="minimal"] #zmw-view .zmw-tabs .cbi-button-positive:hover { background: transparent; color: #111111; border-bottom-color: #111111; font-weight: 500; }
+html[data-theme="minimal"] #zmw-view .zmw-tabs .cbi-button, html[data-theme="minimal"] .zm-dock .zmw-tabs .cbi-button { background: transparent; border: 0; border-bottom: 2px solid transparent; border-radius: 0; color: #6b6b6b; padding: 10px 0; box-shadow: none; font-weight: 400; }
+html[data-theme="minimal"] #zmw-view .zmw-tabs .cbi-button:hover, html[data-theme="minimal"] .zm-dock .zmw-tabs .cbi-button:hover { background: transparent; color: #111111; }
+html[data-theme="minimal"] #zmw-view .zmw-tabs .cbi-button-positive, html[data-theme="minimal"] #zmw-view .zmw-tabs .cbi-button-positive:hover, html[data-theme="minimal"] .zm-dock .zmw-tabs .cbi-button-positive, html[data-theme="minimal"] .zm-dock .zmw-tabs .cbi-button-positive:hover { background: transparent; color: #111111; border-bottom-color: #111111; font-weight: 500; }
 html[data-theme="retro"] #zmw-view .zm-actions.zmw-tabs { background: transparent; border: 0; border-bottom: 2px solid #ffffff; border-radius: 0; box-shadow: none; padding: 0 0 0 4px; gap: 2px; align-items: flex-end; backdrop-filter: none; }
-html[data-theme="retro"] #zmw-view .zmw-tabs .cbi-button { background: #c0c0c0; color: #000000; border-radius: 0; border-top: 2px solid #ffffff; border-left: 2px solid #ffffff; border-right: 2px solid #000000; border-bottom: 0; box-shadow: inset -1px 0 0 #808080; min-height: 30px; padding: 5px 16px; margin: 0; outline: none; font-weight: 400; }
-html[data-theme="retro"] #zmw-view .zmw-tabs .cbi-button:hover { background: #c0c0c0; color: #000000; }
-html[data-theme="retro"] #zmw-view .zmw-tabs .cbi-button-positive, html[data-theme="retro"] #zmw-view .zmw-tabs .cbi-button-positive:hover { background: #c0c0c0; color: #000000; font-weight: 700; min-height: 34px; outline: none; margin-bottom: -2px; padding-bottom: 7px; }
+html[data-theme="retro"] #zmw-view .zmw-tabs .cbi-button, html[data-theme="retro"] .zm-dock .zmw-tabs .cbi-button { background: #c0c0c0; color: #000000; border-radius: 0; border-top: 2px solid #ffffff; border-left: 2px solid #ffffff; border-right: 2px solid #000000; border-bottom: 0; box-shadow: inset -1px 0 0 #808080; min-height: 30px; padding: 5px 16px; margin: 0; outline: none; font-weight: 400; }
+html[data-theme="retro"] #zmw-view .zmw-tabs .cbi-button:hover, html[data-theme="retro"] .zm-dock .zmw-tabs .cbi-button:hover { background: #c0c0c0; color: #000000; }
+html[data-theme="retro"] #zmw-view .zmw-tabs .cbi-button-positive, html[data-theme="retro"] #zmw-view .zmw-tabs .cbi-button-positive:hover, html[data-theme="retro"] .zm-dock .zmw-tabs .cbi-button-positive, html[data-theme="retro"] .zm-dock .zmw-tabs .cbi-button-positive:hover { background: #c0c0c0; color: #000000; font-weight: 700; min-height: 34px; outline: none; margin-bottom: -2px; padding-bottom: 7px; }
 html[data-theme="depth"] #zmw-view .zm-actions.zmw-tabs { background: #16203a; border: 1px solid rgba(127,220,255,.2); box-shadow: 0 6px 0 -2px #0c1426; }
-html[data-theme="depth"] #zmw-view .zmw-tabs .cbi-button { background: transparent; border: 0; box-shadow: none; color: #9fb0cc; }
-html[data-theme="depth"] #zmw-view .zmw-tabs .cbi-button:hover { background: rgba(127,220,255,.08); color: #e8eefc; transform: none; }
-html[data-theme="depth"] #zmw-view .zmw-tabs .cbi-button-positive, html[data-theme="depth"] #zmw-view .zmw-tabs .cbi-button-positive:hover { background: linear-gradient(180deg, #33c6ff, #0090ff); color: #04111f; box-shadow: 0 3px 0 #005a9e; }
+html[data-theme="depth"] #zmw-view .zmw-tabs .cbi-button, html[data-theme="depth"] .zm-dock .zmw-tabs .cbi-button { background: transparent; border: 0; box-shadow: none; color: #9fb0cc; }
+html[data-theme="depth"] #zmw-view .zmw-tabs .cbi-button:hover, html[data-theme="depth"] .zm-dock .zmw-tabs .cbi-button:hover { background: rgba(127,220,255,.08); color: #e8eefc; transform: none; }
+html[data-theme="depth"] #zmw-view .zmw-tabs .cbi-button-positive, html[data-theme="depth"] #zmw-view .zmw-tabs .cbi-button-positive:hover, html[data-theme="depth"] .zm-dock .zmw-tabs .cbi-button-positive, html[data-theme="depth"] .zm-dock .zmw-tabs .cbi-button-positive:hover { background: linear-gradient(180deg, #33c6ff, #0090ff); color: #04111f; box-shadow: 0 3px 0 #005a9e; }
 html[data-theme="micro"] #zmw-view .zm-actions.zmw-tabs { background: #ffffff; border: 1px solid #e3e6ee; border-radius: 16px; box-shadow: 0 1px 2px rgba(0,0,0,.04); backdrop-filter: none; }
-html[data-theme="micro"] #zmw-view .zmw-tabs .cbi-button { background: transparent; border: 0; border-radius: 11px; color: #5a6377; box-shadow: none; transform: none; }
-html[data-theme="micro"] #zmw-view .zmw-tabs .cbi-button:hover { background: #f0f3fa; color: #151a26; transform: none; }
-html[data-theme="micro"] #zmw-view .zmw-tabs .cbi-button-positive, html[data-theme="micro"] #zmw-view .zmw-tabs .cbi-button-positive:hover { background: #2d5bff; color: #ffffff; box-shadow: 0 6px 14px -8px rgba(45,91,255,.9); border-radius: 11px; }
-html[data-theme="micro"] #zmw-view .zmw-tabs .cbi-button:active { transform: scale(.96); }
+html[data-theme="micro"] #zmw-view .zmw-tabs .cbi-button, html[data-theme="micro"] .zm-dock .zmw-tabs .cbi-button { background: transparent; border: 0; border-radius: 11px; color: #5a6377; box-shadow: none; transform: none; }
+html[data-theme="micro"] #zmw-view .zmw-tabs .cbi-button:hover, html[data-theme="micro"] .zm-dock .zmw-tabs .cbi-button:hover { background: #f0f3fa; color: #151a26; transform: none; }
+html[data-theme="micro"] #zmw-view .zmw-tabs .cbi-button-positive, html[data-theme="micro"] #zmw-view .zmw-tabs .cbi-button-positive:hover, html[data-theme="micro"] .zm-dock .zmw-tabs .cbi-button-positive, html[data-theme="micro"] .zm-dock .zmw-tabs .cbi-button-positive:hover { background: #2d5bff; color: #ffffff; box-shadow: 0 6px 14px -8px rgba(45,91,255,.9); border-radius: 11px; }
+html[data-theme="micro"] #zmw-view .zmw-tabs .cbi-button:active, html[data-theme="micro"] .zm-dock .zmw-tabs .cbi-button:active { transform: scale(.96); }
 html[data-theme="retro"] #zmw-view .zm-current-banner { background: #ffffe1; border: 1px solid #000000; border-radius: 0; color: #000000; }
 html[data-theme="micro"] .zmw-icon-btn.zmw-link-kvn, html[data-theme="micro"] .zmw-icon-btn.zmw-link-kvn:hover { background: linear-gradient(135deg, #2d5bff, #5b7cff); color: #ffffff; border-color: #2d5bff; box-shadow: 0 8px 18px -10px rgba(45,91,255,.9); }
 html[data-theme="micro"] .zmw-icon-btn.zmw-link-tg, html[data-theme="micro"] .zmw-icon-btn.zmw-link-tg:hover { background: #e8f4fc; color: #1b6fa8; border-color: #bfdff3; }
@@ -23220,8 +23384,8 @@ html[data-theme="ink"] #zmw-view .zm-svc.zm-svc-on .zm-svc-sub { color: #0a0a0a;
 html[data-theme="retro"] #zmw-view .zm-refresh-banner { background: #ffffe1; border: 1px solid #000000; border-radius: 0; color: #000000; box-shadow: none; }#zmw-view .zm-log-step { color: #a9b4c7; }
 #zmw-view .zm-log-step-ok { color: #4ade80; }
 #zmw-view .zm-log-step-bad { color: #fb7185; }
-#zmw-view .zm-savebar { background: var(--surface-solid); border: 1px solid rgba(124,92,255,.45); border-radius: var(--radius-sm); box-shadow: var(--shadow-lg); color: var(--text); }
-#zmw-view .zm-savebar-dot { background: var(--warn-dot); box-shadow: 0 0 0 4px var(--warn-bg); }
+#zmw-view .zm-savebar, .zm-dock .zm-savebar { background: var(--surface-solid); border: 1px solid rgba(124,92,255,.45); border-radius: var(--radius-sm); box-shadow: var(--shadow-lg); color: var(--text); }
+#zmw-view .zm-savebar-dot, .zm-dock .zm-savebar-dot { background: var(--warn-dot); box-shadow: 0 0 0 4px var(--warn-bg); }
 .zm-stopbar { font-family: var(--font); }
 html[data-theme="dark"] .zm-stopbar, html[data-theme="depth"] .zm-stopbar { background: #2a1416; color: #fecaca; border-color: rgba(248,113,113,.5); }
 #zmw-view .zm-ri-note { background: var(--grad-soft); border-color: rgba(124,92,255,.3); color: var(--text); }
@@ -23230,6 +23394,12 @@ html[data-theme="dark"] .zm-stopbar, html[data-theme="depth"] .zm-stopbar { back
 #zmw-view .zm-sb-left, #zmw-view .zm-lists-now { background: var(--surface-2); border-color: var(--border); border-radius: var(--radius-sm); color: var(--text); }
 #zmw-view .zm-sb-left { background: var(--bad-bg); border-color: rgba(239,68,68,.3); }
 .zm-stopbar .cbi-button.zm-stopbar-btn { padding: 10px 18px; border-radius: 12px; font-size: 14px; line-height: 1.2; box-shadow: 0 8px 20px -10px rgba(220,38,38,.8); }
+@media (min-width: 961px) {
+	html body.zmw-body .zm-dock { left: calc(var(--side-w) + (100vw - var(--side-w)) / 2); width: min(860px, calc(100vw - var(--side-w) - 48px)); }
+}
+.zm-dock .zm-savebar { background: var(--surface-solid); border: 1px solid rgba(124,92,255,.45); border-radius: var(--radius-sm); color: var(--text); box-shadow: var(--shadow-lg); }
+.zm-dock .zm-savebar-dot { background: var(--warn-dot); box-shadow: 0 0 0 4px var(--warn-bg); }
+.zm-dock .cbi-button { font-family: var(--font); }
 
 ZM_INSTALLER_EOF
 cat > '/www/zm-webui.html' << 'ZM_INSTALLER_EOF'
@@ -23259,7 +23429,7 @@ ZMW_BUILD="$(date +%s)"
 sed -i "s/__ZMW_BUILD__/$ZMW_BUILD/g" /www/zm/app.js /www/zm/app.css /www/zm-webui.html
 chmod 0644 /www/zm/app.js /www/zm/app.css /www/zm-webui.html
 sed -i '/# zm-rpcd-watch$/d' /etc/crontabs/root 2>/dev/null
-echo '*/2 * * * * /opt/zapret-manager-luci/backend.sh rpcd_watch >/dev/null 2>&1 # zm-rpcd-watch' >> /etc/crontabs/root
+echo '*/2 * * * * /opt/zapret-manager-luci/backend.sh zm_watch >/dev/null 2>&1 # zm-rpcd-watch' >> /etc/crontabs/root
 /etc/init.d/cron enable >/dev/null 2>&1; /etc/init.d/cron restart >/dev/null 2>&1
 [ -s /opt/zapret-manager-luci/state/ui.theme ] && cp -f /opt/zapret-manager-luci/state/ui.theme /www/zm/theme.txt && chmod 0644 /www/zm/theme.txt
 
