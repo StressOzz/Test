@@ -1,5 +1,5 @@
 #!/bin/sh
-# Version: 1.74
+# Version: 1.77
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -73,7 +73,7 @@ cat > '/opt/zapret-manager-luci/backend.sh' << 'ZM_INSTALLER_EOF'
 umask 022
 
 CONF="/etc/config/zapret"
-ZM_VERSION="1.74"
+ZM_VERSION="1.77"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
@@ -744,6 +744,7 @@ do_install_zapret() {
 	echo "==> Обновляем список пакетов"
 	$UPDATE
 
+	[ -d /opt/zapret/ipset ] && _nochange_save /opt/zapret/ipset
 	if [ -f /etc/init.d/zapret ]; then
 		echo "==> Останавливаем текущий Zapret"
 		/etc/init.d/zapret stop >/dev/null 2>&1
@@ -789,9 +790,9 @@ do_install_zapret() {
 		done
 	fi
 
+	_nochange_restore /opt/zapret/ipset
 	echo "==> Добавляем домены в исключения"
-	rm -f /opt/zapret/ipset/zapret-hosts-user-exclude.txt
-	wget -q --timeout=20 -U "Mozilla/5.0" -O /opt/zapret/ipset/zapret-hosts-user-exclude.txt "$EXCLUDE_URL"
+	_nochange_fetch /opt/zapret/ipset/zapret-hosts-user-exclude.txt "$EXCLUDE_URL" || echo "!! Список исключений не скачался — оставлен прежний"
 
 	do_add_fake_flow
 
@@ -807,8 +808,11 @@ do_install_zapret_full() {
 	do_install_zapret || return 1
 	[ -f /etc/init.d/zapret ] || return 1
 
-	echo "==> Применяем базовую стратегию v7"
-	strategy_set_v v7 >/dev/null
+	if _nochange_strategy; then echo "==> Стратегия помечена #nochange — оставляем её как есть"
+	else
+		echo "==> Применяем базовую стратегию v7"
+		strategy_set_v v7 >/dev/null
+	fi
 
 	echo "==> Добавляем домены в hosts"
 	local b blocks="ai instagram ntc librusec telegram twitch scell spotify rutor"
@@ -824,8 +828,10 @@ do_install_zapret_full() {
 	done
 	/etc/init.d/dnsmasq restart >/dev/null 2>&1
 
-	echo "==> Настраиваем игровую стратегию Gv1"
-	game_set 1 >/dev/null
+	if ! _nochange_strategy; then
+		echo "==> Настраиваем игровую стратегию Gv1"
+		game_set 1 >/dev/null
+	fi
 
 	echo "==> Готово, Zapret установлен и настроен"
 }
@@ -912,23 +918,27 @@ do_install_zapret2() {
 	echo "==> Обновляем список пакетов"
 	$UPDATE
 
+	[ -d /opt/zapret2/ipset ] && _nochange_save /opt/zapret2/ipset
+	[ -f /etc/config/zapret2 ] && _nochange_in /etc/config/zapret2 && cp -p /etc/config/zapret2 "$JOBS_DIR/zapret2.nochange"
 	echo "==> Устанавливаем"
 	$INSTALL ./*."$raz" || { echo "ОШИБКА установки"; return 1; }
+	_nochange_restore /opt/zapret2/ipset
+	[ -f "$JOBS_DIR/zapret2.nochange" ] && { mv -f "$JOBS_DIR/zapret2.nochange" /etc/config/zapret2; echo "   ✓ Стратегия Zapret2 оставлена как была (#nochange)"; }
 
 	echo "==> Добавляем домены в исключения"
 	mkdir -p /opt/zapret2/ipset
-	wget -q --timeout=20 -U "Mozilla/5.0" -O /opt/zapret2/ipset/zapret_hosts_user_exclude.txt "$EXCLUDE_URL"
+	_nochange_fetch /opt/zapret2/ipset/zapret_hosts_user_exclude.txt "$EXCLUDE_URL"
 
 	echo "==> Настраиваем стратегии"
 	mkdir -p /opt/zapret2/init.d/openwrt/custom.d
 	wget -q --timeout=20 -U "Mozilla/5.0" -O /opt/zapret2/init.d/openwrt/custom.d/50-discord_media.sh \
 		"${GH_RAW}/StressOzz/Zapret-Manager/refs/heads/main/files/Zapret2/50-discord_media.sh" \
 		|| echo "!! Не удалось загрузить 50-discord_media.sh"
-	wget -q --timeout=20 -U "Mozilla/5.0" -O /etc/config/zapret2 \
-		"${GH_RAW}/StressOzz/Zapret-Manager/refs/heads/main/files/Zapret2/zapret2" \
-		|| echo "!! Не удалось загрузить zapret2"
-	wget -q --timeout=20 -U "Mozilla/5.0" -O /opt/zapret2/ipset/zapret_hosts_discord.txt \
-		"${GH_RAW}/StressOzz/Zapret-Manager/refs/heads/main/files/Zapret2/zapret_hosts_discord.txt" \
+	if _nochange_in /etc/config/zapret2; then echo "   · Стратегия Zapret2 помечена #nochange — оставляем как есть"
+	else
+		_nochange_fetch /etc/config/zapret2 "${GH_RAW}/StressOzz/Zapret-Manager/refs/heads/main/files/Zapret2/zapret2" || echo "!! Не удалось загрузить zapret2"
+	fi
+	_nochange_fetch /opt/zapret2/ipset/zapret_hosts_discord.txt "${GH_RAW}/StressOzz/Zapret-Manager/refs/heads/main/files/Zapret2/zapret_hosts_discord.txt" \
 		|| echo "!! Не удалось загрузить zapret_hosts_discord.txt"
 
 	echo "==> Запускаем Zapret2"
@@ -980,7 +990,52 @@ strategy_v8()  { printf '%s\n' "#v8"  "--filter-tcp=443" "--hostlist-exclude=/op
 strategy_v9()  { printf '%s\n' "#v9"  "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=hostfakesplit" "--dpi-desync-fooling=badseq,badsum" "--dpi-desync-hostfakesplit-mod=host=ozon.ru" "--dpi-desync-badseq-increment=0"; }
 strategy_v10() { printf '%s\n' "#v10" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake,split2" "--dpi-desync-split-pos=2" "--dpi-desync-fake-tls=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin" "--dpi-desync-hostfakesplit-mod=host=maxcdn.bootstrapcdn.com" "--dpi-desync-fake-tls-mod=rnd,sni=maxcdn.bootstrapcdn.com" "--dpi-desync-fooling=ts"; }
 
+NOCHANGE_RX='#[[:space:]]*nochange'
+NOCHANGE_MSG="стратегия помечена #nochange — панель её не меняет. Уберите строку #nochange в «Редактировать текущую стратегию», чтобы разрешить изменения"
+
+_nochange_in() { [ -f "$1" ] && grep -qiE "$NOCHANGE_RX" "$1"; }
+_nochange_strategy() { _nfq_opt_body | grep -qiE "$NOCHANGE_RX"; }
+_nochange_guard() {
+	_nochange_strategy || return 0
+	printf '{"error":"%s","nochange":true}\n' "$(esc "$NOCHANGE_MSG")"
+	return 1
+}
+
+_nochange_fetch() {
+	local f="$1" url="$2" tmp="$1.zm-new"
+	if _nochange_in "$f"; then
+		[ -n "$ZM_JOB_LOG" ] && echo "   · $(basename "$f"): помечен #nochange — не обновляем" >&2
+		return 0
+	fi
+	mkdir -p "$(dirname "$f")"
+	if wget -q --timeout=20 -U "Mozilla/5.0" -O "$tmp" "$url" 2>/dev/null && [ -s "$tmp" ]; then mv -f "$tmp" "$f"
+	else rm -f "$tmp"; return 1; fi
+}
+
+_nochange_save() {
+	local d="$1" keep="$JOBS_DIR/nochange.keep" f
+	rm -rf "$keep"; mkdir -p "$keep"
+	for f in "$d"/*; do
+		_nochange_in "$f" || continue
+		cp -p "$f" "$keep/$(basename "$f")"
+		echo "   · $(basename "$f"): помечен #nochange — сохраним как есть"
+	done
+	return 0
+}
+
+_nochange_restore() {
+	local d="$1" keep="$JOBS_DIR/nochange.keep" f
+	[ -d "$keep" ] || return 0
+	for f in "$keep"/*; do
+		[ -f "$f" ] || continue
+		cp -p "$f" "$d/$(basename "$f")"
+		echo "   ✓ $(basename "$f") оставлен как был (#nochange)"
+	done
+	rm -rf "$keep"
+}
+
 _add_gp_domains() {
+	_nochange_in /opt/zapret/ipset/zapret-hosts-google.txt && return 0
 	local f="/opt/zapret/ipset/zapret-hosts-google.txt" tmp
 	mkdir -p "$(dirname "$f")"
 	tmp="$f.tmp"
@@ -996,8 +1051,7 @@ _add_gp_domains() {
 }
 
 _refresh_exclude_file() {
-	rm -f /opt/zapret/ipset/zapret-hosts-user-exclude.txt
-	wget -q --timeout=20 -U "Mozilla/5.0" -O /opt/zapret/ipset/zapret-hosts-user-exclude.txt "$EXCLUDE_URL"
+	_nochange_fetch /opt/zapret/ipset/zapret-hosts-user-exclude.txt "$EXCLUDE_URL"
 }
 
 YV_OFF_FLAG="/opt/zapret-manager-luci/yv_off"
@@ -2331,6 +2385,7 @@ zapret_list_restore() {
 	[ "$1" = exclude ] || { echo '{"error":"восстановить можно только список исключений"}'; return 1; }
 	[ -x /etc/init.d/zapret ] || { echo '{"error":"Zapret не установлен"}'; return 1; }
 	local f tmp; f="$(_zl_path exclude)"; tmp="$f.zmdl"
+	_nochange_in "$f" && { echo '{"error":"список помечен #nochange — панель его не меняет. Уберите строку #nochange в редакторе списка, чтобы восстановить исходный"}'; return 1; }
 	mkdir -p "$(dirname "$f")"
 	rm -f "$tmp"
 	wget -q --timeout=20 -U "Mozilla/5.0" -O "$tmp" "$EXCLUDE_URL" 2>/dev/null
@@ -2372,8 +2427,66 @@ TG_BIN_RS="/usr/bin/tg-ws-proxy-rs"
 TG_INIT_RS="/etc/init.d/tg-ws-proxy-rs"
 TG_SECRET_RS_FILE="/etc/tg-ws-proxy-rs.secret"
 TG_SECRET_MT_FILE="/etc/tg-ws-proxy/secret.conf"
-TG_VER_GO_FILE="/usr/bin/tg-ws-proxy-go.ver"
-TG_VER_RS_FILE="/usr/bin/tg-ws-proxy-rs.ver"
+TG_VER_GO_FILE="/etc/tg-ws-proxy-go.ver"
+TG_VER_RS_FILE="/etc/tg-ws-proxy-rs.ver"
+TG_REPO_MT="spatiumstas/tg-ws-proxy-go"
+TG_REPO_GO="d0mhate/-tg-ws-proxy-Manager-go"
+TG_REPO_RS="valnesfjord/tg-ws-proxy-rs"
+
+_gh_latest_tag() {
+	curl -Ls --connect-timeout 5 --max-time 12 -o /dev/null -w '%{url_effective}' "https://github.com/$1/releases/latest" 2>/dev/null |
+		sed -n 's#.*/releases/tag/##p' | head -n1 | grep -E '^[vV]?[0-9]+(\.[0-9]+)+$'
+}
+_tg_url_ok() { curl -sfIL --connect-timeout 6 --max-time 15 -o /dev/null "$1" 2>/dev/null; }
+
+_tg_mt_url() {
+	local sfx="$3" raz="ipk" arch
+	[ "$PKG" = apk ] && { sfx="r$3"; raz="apk"; }
+	arch="$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release)"
+	echo "${GH_MAIN}/$TG_REPO_MT/releases/download/$1/tg-ws-proxy_$2-${sfx}_openwrt_${arch}.${raz}"
+}
+
+_tg_tag_mt() {
+	local t v r
+	t="$(_gh_latest_tag "$TG_REPO_MT")"; [ -n "$t" ] || return 1
+	v="$(_ver_norm "$t")"
+	for r in 1 2 3; do _tg_url_ok "$(_tg_mt_url "$t" "$v" "$r")" && { echo "$t $r"; return 0; }; done
+	return 1
+}
+_tg_tag_go() {
+	local t f
+	f="$(_tg_arch_go)" || return 1
+	t="$(_gh_latest_tag "$TG_REPO_GO")"; [ -n "$t" ] || return 1
+	_tg_url_ok "${GH_MAIN}/$TG_REPO_GO/releases/download/$t/$f" && echo "$t"
+}
+_tg_tag_rs() {
+	local t f
+	f="$(_tg_arch_rs)" || return 1
+	t="$(_gh_latest_tag "$TG_REPO_RS")"; [ -n "$t" ] || return 1
+	_tg_url_ok "${GH_MAIN}/$TG_REPO_RS/releases/download/$t/$f.tar.gz" && echo "$t"
+}
+
+_tg_latest() {
+	local t
+	t="$(_zm_cached "tg_$1" "_tg_tag_$1")"
+	[ -n "$t" ] || case "$1" in mt) t="$TG_MTPROTO_VER 1" ;; go) t="v$TG_GO_VER" ;; rs) t="v$TG_RS_VER" ;; esac
+	echo "$t"
+}
+
+_tg_fresh_tag() {
+	local t
+	t="$(ZM_VER_FORCE=1 _zm_cached "tg_$1" "_tg_tag_$1")"
+	[ -n "$t" ] || t="$(_tg_latest "$1")"
+	echo "$t"
+}
+
+_tg_ver_migrate() {
+	[ -s /usr/bin/tg-ws-proxy-go.ver ] && { [ -s "$TG_VER_GO_FILE" ] || mv /usr/bin/tg-ws-proxy-go.ver "$TG_VER_GO_FILE"; rm -f /usr/bin/tg-ws-proxy-go.ver; }
+	[ -s /usr/bin/tg-ws-proxy-rs.ver ] && { [ -s "$TG_VER_RS_FILE" ] || mv /usr/bin/tg-ws-proxy-rs.ver "$TG_VER_RS_FILE"; rm -f /usr/bin/tg-ws-proxy-rs.ver; }
+	return 0
+}
+
+_tg_newer() { [ -n "$1" ] && [ -n "$2" ] && _st_ver_lt "$(_ver_norm "$1")" "$(_ver_norm "$2")"; }
 
 _zm_pkg_files() {
 	if [ "$PKG" = apk ]; then apk info -L "$1" 2>/dev/null | grep -v 'contains:$' | grep -v '^$' | sed 's#^/*#/#'
@@ -2457,9 +2570,10 @@ tg_status() {
 		if [ "$PKG" = "apk" ]; then
 			mt_ver=$(apk info -v 2>/dev/null | grep '^tg-ws-proxy-' | grep -v '^tg-ws-proxy-go' | head -n1 | sed -E 's/^tg-ws-proxy-([0-9.]+).*/\1/')
 		else
-			mt_ver=$(opkg list-installed 2>/dev/null | awk '$1=="tg-ws-proxy"{print $3}' | cut -d'-' -f1)
+			mt_ver=$(opkg list-installed 2>/dev/null | awk '$1=="tg-ws-proxy"{print $3}' | sed 's/-[0-9]*$//; s/-r[0-9]*$//')
 		fi
 	fi
+	_tg_ver_migrate
 	if [ -f "$TG_INIT_GO" ]; then
 		go="installed"; pidof tg-ws-proxy-go >/dev/null 2>&1 && go_running="true"
 		[ -f "$TG_VER_GO_FILE" ] && go_ver=$(cat "$TG_VER_GO_FILE")
@@ -2476,29 +2590,46 @@ tg_status() {
 	[ -z "$secret_rs" ] && [ -f "$TG_SECRET_RS_FILE" ] && secret_rs=$(cat "$TG_SECRET_RS_FILE")
 	lan_ip="$(_zm_lan_ip)"
 
-	printf '{"mtproto":"%s","mtproto_running":%s,"mtproto_version":"%s","mtproto_latest":"%s","socks5":"%s","socks5_running":%s,"socks5_version":"%s","socks5_latest":"%s","rust":"%s","rust_running":%s,"rust_version":"%s","rust_latest":"%s","lan_ip":"%s","secret_mtproto":"%s","secret_rust":"%s"}\n' \
-		"$mt" "$mt_running" "$(esc "$mt_ver")" "$TG_MTPROTO_VER" \
-		"$go" "$go_running" "$(esc "$go_ver")" "$TG_GO_VER" \
-		"$rs" "$rs_running" "$(esc "$rs_ver")" "$TG_RS_VER" \
+	local mt_l go_l rs_l
+	mt_l="$(_tg_latest mt)"; mt_l="$(_ver_norm "${mt_l%% *}")"; go_l="$(_ver_norm "$(_tg_latest go)")"; rs_l="$(_ver_norm "$(_tg_latest rs)")"
+	printf '{"mtproto":"%s","mtproto_running":%s,"mtproto_version":"%s","mtproto_latest":"%s","mtproto_newer":%s,"socks5":"%s","socks5_running":%s,"socks5_version":"%s","socks5_latest":"%s","socks5_newer":%s,"rust":"%s","rust_running":%s,"rust_version":"%s","rust_latest":"%s","rust_newer":%s,"lan_ip":"%s","secret_mtproto":"%s","secret_rust":"%s"}\n' \
+		"$mt" "$mt_running" "$(esc "$mt_ver")" "$(esc "$mt_l")" "$(_tg_newer "$mt_ver" "$mt_l" && echo true || echo false)" \
+		"$go" "$go_running" "$(esc "$go_ver")" "$(esc "$go_l")" "$(_tg_newer "$go_ver" "$go_l" && echo true || echo false)" \
+		"$rs" "$rs_running" "$(esc "$rs_ver")" "$(esc "$rs_l")" "$(_tg_newer "$rs_ver" "$rs_l" && echo true || echo false)" \
 		"$(esc "$lan_ip")" "$(esc "$secret_mt")" "$(esc "$secret_rs")"
 }
 
 do_tg_install_mtproto() {
 	_ensure_deps
 	echo "==> Устанавливаем TG WS Proxy MTProto"
-	local go_suf raz url tmp arch_full
-	if [ "$PKG" = "apk" ]; then go_suf="r1"; raz="apk"; else go_suf="1"; raz="ipk"; fi
-	arch_full="$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release)"
-	url="${GH_MAIN}/spatiumstas/tg-ws-proxy-go/releases/download/${TG_MTPROTO_VER}/tg-ws-proxy_${TG_MTPROTO_VER}-${go_suf}_openwrt_${arch_full}.${raz}"
+	local raz url tmp tag ver cur rev
+	raz="ipk"; [ "$PKG" = "apk" ] && raz="apk"
+	echo "==> Узнаём последнюю версию на GitHub ($TG_REPO_MT)"
+	tag="$(_tg_fresh_tag mt)"; rev="${tag#* }"; tag="${tag%% *}"; [ "$rev" = "$tag" ] && rev=1
+	ver="$(_ver_norm "$tag")"
+	cur="$(tg_status | sed -n 's/.*"mtproto_version":"\([^"]*\)".*/\1/p')"
+	echo "   ✓ Последняя версия: $ver${cur:+, сейчас стоит $cur}"
 	tmp="/tmp/tg-ws-proxy.$raz"
 	rm -f /etc/tg-ws-proxy.conf /etc/tg-ws-proxy.conf-opkg
 	$UPDATE >&2
+	url="$(_tg_mt_url "$tag" "$ver" "$rev")"
 	echo "==> Скачиваем $(basename "$url")"
-	wget -q --timeout=20 -O "$tmp" "$url" || { echo "ОШИБКА скачивания $url"; return 1; }
+	if ! curl -fsL --connect-timeout 10 --max-time 120 -o "$tmp" "$url" || [ ! -s "$tmp" ]; then
+		if [ "$ver" != "$TG_MTPROTO_VER" ]; then
+			echo "!! Для версии $ver нет пакета под эту архитектуру — ставим проверенную $TG_MTPROTO_VER"
+			ver="$TG_MTPROTO_VER"
+			url="$(_tg_mt_url "$ver" "$ver" 1)"
+			curl -fsL --connect-timeout 10 --max-time 120 -o "$tmp" "$url" && [ -s "$tmp" ] || { rm -f "$tmp"; echo "ОШИБКА скачивания $url"; return 1; }
+		else
+			rm -f "$tmp"; echo "ОШИБКА скачивания $url"; return 1
+		fi
+	fi
 	if _pkg_is_installed tg-ws-proxy && [ ! -f /etc/init.d/tg-ws-proxy ]; then
 		echo "==> Пакет числится установленным, но файлов нет — ставим поверх"
 		if [ "$PKG" = apk ]; then apk del --force-broken-world tg-ws-proxy >/dev/null 2>&1; $INSTALL "$tmp" >&2
 		else opkg install --force-reinstall "$tmp" >&2; fi
+	elif [ "$PKG" = opkg ] && _pkg_is_installed tg-ws-proxy; then
+		$INSTALL --force-reinstall "$tmp" >&2
 	else
 		$INSTALL "$tmp" >&2
 	fi
@@ -2511,8 +2642,10 @@ do_tg_install_mtproto() {
 	rm -f /etc/tg-ws-proxy.conf /etc/tg-ws-proxy.conf-opkg
 	/etc/init.d/tg-ws-proxy enable >/dev/null 2>&1
 	/etc/init.d/tg-ws-proxy restart >/dev/null 2>&1
-	echo "==> Готово"
+	cur="$(tg_status | sed -n 's/.*"mtproto_version":"\([^"]*\)".*/\1/p')"
+	echo "==> Готово: TG WS Proxy MTProto ${cur:-$ver}"
 }
+
 
 do_tg_remove_mtproto() {
 	local rc=0
@@ -2529,27 +2662,40 @@ do_tg_remove_mtproto() {
 do_tg_install_socks5() {
 	_ensure_deps
 	echo "==> Устанавливаем TG WS Proxy SOCKS5"
-	local file url
+	local file url tag tmp="$TG_BIN_GO.new"
 	file="$(_tg_arch_go)" || { echo "ОШИБКА: архитектура не поддерживается ($TG_ARCH)"; return 1; }
-	url="${GH_MAIN}/d0mhate/-tg-ws-proxy-Manager-go/releases/download/v${TG_GO_VER}/${file}"
+	echo "==> Узнаём последнюю версию на GitHub ($TG_REPO_GO)"
+	tag="$(_tg_fresh_tag go)"
+	echo "   ✓ Последняя версия: $(_ver_norm "$tag")$([ -s "$TG_VER_GO_FILE" ] && echo ", сейчас стоит $(cat "$TG_VER_GO_FILE")")"
+	url="${GH_MAIN}/$TG_REPO_GO/releases/download/${tag}/${file}"
 	echo "==> Скачиваем $file"
-	curl -fL --max-time 30 -o "$TG_BIN_GO" "$url" || { echo "ОШИБКА скачивания"; rm -f "$TG_BIN_GO"; return 1; }
-	chmod +x "$TG_BIN_GO"
+	if ! curl -fsL --connect-timeout 10 --max-time 120 -o "$tmp" "$url" || [ ! -s "$tmp" ]; then
+		rm -f "$tmp"
+		[ "$(_ver_norm "$tag")" = "$TG_GO_VER" ] && { echo "ОШИБКА скачивания"; return 1; }
+		echo "!! Для версии $(_ver_norm "$tag") нет файла под эту архитектуру — ставим проверенную $TG_GO_VER"
+		tag="v$TG_GO_VER"
+		curl -fsL --connect-timeout 10 --max-time 120 -o "$tmp" "${GH_MAIN}/$TG_REPO_GO/releases/download/${tag}/${file}" && [ -s "$tmp" ] || { rm -f "$tmp"; echo "ОШИБКА скачивания"; return 1; }
+	fi
+	chmod +x "$tmp"
+	[ -x "$TG_INIT_GO" ] && "$TG_INIT_GO" stop >/dev/null 2>&1
+	mv -f "$tmp" "$TG_BIN_GO" || { rm -f "$tmp"; echo "ОШИБКА: не удалось записать программу"; return 1; }
 	if [ ! -f "$TG_INIT_GO" ]; then
 		printf '#!/bin/sh /etc/rc.common\nSTART=99\nUSE_PROCD=1\n\nstart_service() {\n\tprocd_open_instance\n\tprocd_set_param command /usr/bin/tg-ws-proxy-go --host 0.0.0.0 --port 2080 --cf-proxy --cf-proxy-first --cf-balance\n\tprocd_set_param respawn\n\tprocd_close_instance\n}\n' > "$TG_INIT_GO"
 		chmod +x "$TG_INIT_GO"
 		"$TG_INIT_GO" enable >/dev/null 2>&1
 	fi
 	"$TG_INIT_GO" restart >/dev/null 2>&1
-	echo "$TG_GO_VER" > "$TG_VER_GO_FILE"
-	echo "==> Готово"
+	_ver_norm "$tag" > "$TG_VER_GO_FILE"
+	rm -f /usr/bin/tg-ws-proxy-go.ver
+	echo "==> Готово: TG WS Proxy SOCKS5 $(cat "$TG_VER_GO_FILE")"
 }
+
 
 do_tg_remove_socks5() {
 	echo "==> Удаляем TG WS Proxy SOCKS5"
 	_zm_stop_svc tg-ws-proxy-go tg-ws-proxy-go
 	echo "==> Удаляем программу, службу и настройки"
-	rm -f "$TG_BIN_GO" "$TG_INIT_GO" "$TG_VER_GO_FILE" /etc/rc.d/*tg-ws-proxy-go
+	rm -f "$TG_BIN_GO" "$TG_BIN_GO.new" "$TG_INIT_GO" "$TG_VER_GO_FILE" /usr/bin/tg-ws-proxy-go.ver /etc/rc.d/*tg-ws-proxy-go
 	_zm_cron_drop 'tg-ws-proxy-go' "TG WS Proxy SOCKS5"
 	_zm_left "$TG_BIN_GO" "$TG_INIT_GO" || return 1
 	echo "==> Готово: TG WS Proxy SOCKS5 удалён"
@@ -2558,16 +2704,28 @@ do_tg_remove_socks5() {
 do_tg_install_rust() {
 	_ensure_deps
 	echo "==> Устанавливаем TG WS Proxy Rust"
-	local file url tmp_archive tmp_dir secret
+	local file url tmp_archive tmp_dir secret tag
 	file="$(_tg_arch_rs)" || { echo "ОШИБКА: архитектура не поддерживается ($TG_ARCH)"; return 1; }
-	url="${GH_MAIN}/valnesfjord/tg-ws-proxy-rs/releases/download/v${TG_RS_VER}/${file}.tar.gz"
-	tmp_archive="/tmp/tg-ws-proxy-rs.tar.gz"; tmp_dir="/tmp/tg-ws-proxy-rs"
+	echo "==> Узнаём последнюю версию на GitHub ($TG_REPO_RS)"
+	tag="$(_tg_fresh_tag rs)"
+	echo "   ✓ Последняя версия: $(_ver_norm "$tag")$([ -s "$TG_VER_RS_FILE" ] && echo ", сейчас стоит $(cat "$TG_VER_RS_FILE")")"
+	tmp_archive="$JOBS_DIR/tg-ws-proxy-rs.tar.gz"; tmp_dir="$JOBS_DIR/tg-ws-proxy-rs"
+	url="${GH_MAIN}/$TG_REPO_RS/releases/download/${tag}/${file}.tar.gz"
 	echo "==> Скачиваем $file"
-	curl -fL --max-time 30 -o "$tmp_archive" "$url" || { echo "ОШИБКА скачивания"; return 1; }
+	if ! curl -fsL --connect-timeout 10 --max-time 120 -o "$tmp_archive" "$url" || [ ! -s "$tmp_archive" ]; then
+		rm -f "$tmp_archive"
+		[ "$(_ver_norm "$tag")" = "$TG_RS_VER" ] && { echo "ОШИБКА скачивания"; return 1; }
+		echo "!! Для версии $(_ver_norm "$tag") нет архива под эту архитектуру — ставим проверенную $TG_RS_VER"
+		tag="v$TG_RS_VER"
+		curl -fsL --connect-timeout 10 --max-time 120 -o "$tmp_archive" "${GH_MAIN}/$TG_REPO_RS/releases/download/${tag}/${file}.tar.gz" && [ -s "$tmp_archive" ] || { rm -f "$tmp_archive"; echo "ОШИБКА скачивания"; return 1; }
+	fi
 	rm -rf "$tmp_dir"; mkdir -p "$tmp_dir"
-	tar -xzf "$tmp_archive" -C "$tmp_dir" || { echo "ОШИБКА распаковки"; rm -f "$tmp_archive"; return 1; }
+	tar -xzf "$tmp_archive" -C "$tmp_dir" || { echo "ОШИБКА распаковки"; rm -rf "$tmp_dir" "$tmp_archive"; return 1; }
+	set -- $(find "$tmp_dir" -type f -name 'tg-ws-proxy*' 2>/dev/null)
+	[ -n "$1" ] || { echo "ОШИБКА: в архиве нет программы"; rm -rf "$tmp_dir" "$tmp_archive"; return 1; }
+	[ -x "$TG_INIT_RS" ] && "$TG_INIT_RS" stop >/dev/null 2>&1
 	rm -f "$TG_BIN_RS"
-	mv "$tmp_dir"/tg-ws-proxy* "$TG_BIN_RS" || { echo "ОШИБКА установки бинарника"; rm -rf "$tmp_dir" "$tmp_archive"; return 1; }
+	mv "$1" "$TG_BIN_RS" || { echo "ОШИБКА установки бинарника"; rm -rf "$tmp_dir" "$tmp_archive"; return 1; }
 	chmod +x "$TG_BIN_RS"
 	rm -rf "$tmp_dir" "$tmp_archive"
 
@@ -2582,15 +2740,17 @@ do_tg_install_rust() {
 		"$TG_INIT_RS" enable >/dev/null 2>&1
 	fi
 	"$TG_INIT_RS" restart >/dev/null 2>&1
-	echo "$TG_RS_VER" > "$TG_VER_RS_FILE"
-	echo "==> Готово"
+	_ver_norm "$tag" > "$TG_VER_RS_FILE"
+	rm -f /usr/bin/tg-ws-proxy-rs.ver
+	echo "==> Готово: TG WS Proxy Rust $(cat "$TG_VER_RS_FILE")"
 }
+
 
 do_tg_remove_rust() {
 	echo "==> Удаляем TG WS Proxy Rust"
 	_zm_stop_svc tg-ws-proxy-rs tg-ws-proxy-rs
 	echo "==> Удаляем программу, службу и настройки"
-	rm -f "$TG_BIN_RS" "$TG_INIT_RS" "$TG_SECRET_RS_FILE" "$TG_VER_RS_FILE" /etc/rc.d/*tg-ws-proxy-rs
+	rm -f "$TG_BIN_RS" "$TG_INIT_RS" "$TG_SECRET_RS_FILE" "$TG_VER_RS_FILE" /usr/bin/tg-ws-proxy-rs.ver /etc/rc.d/*tg-ws-proxy-rs
 	_zm_cron_drop 'tg-ws-proxy-rs' "TG WS Proxy Rust"
 	_zm_left "$TG_BIN_RS" "$TG_INIT_RS" || return 1
 	echo "==> Готово: TG WS Proxy Rust удалён"
@@ -2637,15 +2797,18 @@ tgws_status() {
 		domain=$(_tgws_domain)
 	fi
 	latest="$(_zm_cached tgws _tgws_latest)"
-	printf '{"installed":"%s","running":%s,"version":"%s","latest":"%s","domain":"%s"}\n' "$installed" "$running" "$(esc "$ver")" "$(esc "$latest")" "$(esc "$domain")"
+	[ -n "$latest" ] || latest="$TGWS_VERSION"
+	printf '{"installed":"%s","running":%s,"version":"%s","latest":"%s","newer":%s,"domain":"%s"}\n' "$installed" "$running" "$(esc "$ver")" "$(esc "$latest")" "$(_tg_newer "$ver" "$latest" && echo true || echo false)" "$(esc "$domain")"
 }
 
 do_tgws_install() {
 	_ensure_deps
 	echo "==> Устанавливаем sTGWS"
 	local ver arch file tmp
-	ver=$(curl -fsSL --connect-timeout 4 --max-time 6 "$TGWS_VERSION_URL" 2>/dev/null | tr -d '[:space:]')
+	echo "==> Узнаём последнюю версию sTGWS"
+	ver="$(ZM_VER_FORCE=1 _zm_cached tgws _tgws_latest)"
 	[ -n "$ver" ] || ver="$TGWS_VERSION"
+	echo "   ✓ Последняя версия: $ver"
 	arch="$(awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release)"
 	[ -n "$arch" ] || arch="$(opkg print-architecture 2>/dev/null | awk '$2!="all"&&$2!="noarch"{print $2}' | tail -1)"
 	if [ -z "$arch" ]; then
@@ -3225,7 +3388,7 @@ _mt_installed_ver() {
 	fi
 	printf '%s' "$v" | sed -E 's/-r?1$//; s/-r?([0-9]+)$/-rev\1/'
 }
-_tgws_latest() { curl -fsSL --connect-timeout 4 --max-time 6 "$TGWS_VERSION_URL" 2>/dev/null | tr -d '[:space:]'; }
+_tgws_latest() { curl -fsSL --connect-timeout 4 --max-time 6 "$TGWS_VERSION_URL" 2>/dev/null | tr -d '[:space:]' | grep -E '^[vV]?[0-9]+(\.[0-9]+)+$'; }
 
 _mixomo_arch() {
 	local arch endian_byte
@@ -4112,6 +4275,7 @@ _ver_item() {
 	local cur latest
 	cur="$(_ver_norm "$2")"; latest="$(_ver_norm "$3")"
 	[ -n "$cur" ] || return 0
+	[ -n "$latest" ] && ! _st_ver_lt "$cur" "$latest" && latest="$cur"
 	printf '{"name":"%s","installed":"%s","latest":"%s"}' "$(esc "$1")" "$(esc "$cur")" "$(esc "$latest")"
 }
 _jf() { jsonfilter -s "$1" -e "$2" 2>/dev/null; }
@@ -7438,6 +7602,8 @@ _st_apply() {
 	_st_spec_apply $sel
 }
 
+_st_failopen() { nft list set inet steer failopen 2>/dev/null | grep -q 'elements = {'; }
+
 _st_selfcheck() {
 	local f="$ST_RUN/diag.json" n i v what why bad=0 trace
 	_rb_say "Проверяем, что всё работает"
@@ -7462,6 +7628,22 @@ _st_selfcheck() {
 	fi
 	command -v steer >/dev/null 2>&1 || return $bad
 	[ -s "$ST_STEER_SPEC" ] || return $bad
+	if [ -n "$(_st_sel)" ] && _st_failopen; then
+		_rb_warn "Движок Steer считает туннель нерабочим и пускает выбранные сервисы напрямую — перезапускаем его"
+		/etc/init.d/steer restart >/dev/null 2>&1
+		i=0
+		while [ "$i" -lt 20 ] && _st_failopen; do sleep 1; i=$((i + 1)); done
+		if _st_failopen; then
+			echo "[FAIL] Туннель ${ST_WARP_IF}: Steer не может пустить через него трафик — сервисы идут напрямую, через провайдера"
+			echo "   Проверка движка: TCP к 1.1.1.1:80 и 8.8.8.8:80 через ${ST_WARP_IF} — сервер из конфига их не пропускает?"
+			logread 2>/dev/null | grep -iE 'steer' | grep -iE 'выход|output|устройств|device' | tail -n 6 | sed 's/^[^]]*\]: /   /'
+			bad=1
+		else
+			echo "[ OK ] После перезапуска движок пустил трафик в туннель"
+		fi
+	else
+		[ -n "$(_st_sel)" ] && echo "[ OK ] Движок Steer ведёт выбранные сервисы в туннель"
+	fi
 	steer diag --spec "$ST_STEER_SPEC" > "$f" 2>/dev/null
 	n=$(jsonfilter -i "$f" -e '@.checks[*].id' 2>/dev/null | wc -l)
 	i=0
@@ -8046,10 +8228,10 @@ steer_status() {
 	if [ "$vup" = true ] && [ "$vexit" = vpn ] && [ "$off" = false ]; then
 		_st_vpn_live; case $? in 0) vlive=true ;; 1) vlive=false ;; esac
 	fi
-	printf '{"running":%s,"phase":"%s","blocker":"%s","installed":%s,"stopped":%s,"version":"%s","steer_running":%s,"channels":%s,"warp_up":%s,"warp_colo":"%s","warp_host":"%s","warp_port":"%s","warp_hs_age":"%s","warp_rx":%s,"warp_tx":%s,"autorestart":"%s","dns_conflict":%s,"doh":"%s","doh_mode":"%s","exit":"%s","vpn_up":%s,"vpn_live":%s,"has_sub":%s,"sub_label":"%s","latest":"%s","ext":%s,"warp_on":%s,"warp_mode":"%s","warp_own_saved":%s,"tunnels":%s,"catalog":%s,"wfix":%s,"lists_via":%s,"services":[%s]}\n' \
+	printf '{"running":%s,"phase":"%s","blocker":"%s","installed":%s,"stopped":%s,"version":"%s","steer_running":%s,"channels":%s,"warp_up":%s,"warp_colo":"%s","warp_host":"%s","warp_port":"%s","warp_hs_age":"%s","warp_rx":%s,"warp_tx":%s,"autorestart":"%s","dns_conflict":%s,"doh":"%s","doh_mode":"%s","exit":"%s","vpn_up":%s,"vpn_live":%s,"has_sub":%s,"sub_label":"%s","latest":"%s","ext":%s,"warp_on":%s,"warp_mode":"%s","warp_own_saved":%s,"tunnels":%s,"catalog":%s,"wfix":%s,"lists_via":%s,"failopen":%s,"services":[%s]}\n' \
 		"$running" "$(esc "$phase")" "$blk" "$installed" "$off" "$(esc "$ver")" "$run" "${chans:-0}" "$warp_up" "$(esc "$colo")" \
 		"$(esc "$host")" "$(esc "$port")" "$age" "${rx:-0}" "${tx:-0}" "$(_st_cron_get)" "$dns" "$doh" "$(_doh_force_mode)" \
-		"$vexit" "$vup" "$vlive" "$vsub" "$(esc "$(_st_sub_label)")" "$(esc "$latest")" "$ext" "$won" "$(_st_warp_own && echo own || echo auto)" "$(_st_own_saved && echo true || echo false)" "$(_st_tunnels_json)" "$(_st_cat_json)" "$(_st_wfix_json)" "$([ -f "$ST_DIR/lists.via" ] && echo true || echo false)" "$svc"
+		"$vexit" "$vup" "$vlive" "$vsub" "$(esc "$(_st_sub_label)")" "$(esc "$latest")" "$ext" "$won" "$(_st_warp_own && echo own || echo auto)" "$(_st_own_saved && echo true || echo false)" "$(_st_tunnels_json)" "$(_st_cat_json)" "$(_st_wfix_json)" "$([ -f "$ST_DIR/lists.via" ] && echo true || echo false)" "$(_st_failopen && echo true || echo false)" "$svc"
 }
 
 _st_tunnels_json() {
@@ -10109,10 +10291,12 @@ do_fk_install() {
 		uci -q set forkop.settings.dns_type='dot'
 		uci -q delete forkop.settings.dns_server
 		uci -q add_list forkop.settings.dns_server='9.9.9.9'
+		uci -q add_list forkop.settings.dns_server='common.dot.dns.yandex.net'
 		uci -q delete forkop.settings.bootstrap_dns_server
 		uci -q add_list forkop.settings.bootstrap_dns_server='9.9.9.9'
+		uci -q add_list forkop.settings.bootstrap_dns_server='77.88.8.8'
 		uci -q commit forkop
-		_fk_say "DNS по умолчанию: Quad9 — 9.9.9.9 (DNS over TLS). Сменить можно в «Настройках»"
+		_fk_say "DNS по умолчанию: Quad9 9.9.9.9 (DNS over TLS), при сбое — Яндекс. Сменить можно в «Настройках»"
 	fi
 	rm -rf /usr/lib/forkop.zm-old
 	echo "$tag" > "$FK_MARK"
@@ -10332,6 +10516,65 @@ do_fk_singbox() {
 	fi
 	_fk_say "Готово: sing-box $(_fk_sb_ver), $(_fk_sb_name "$(_fk_sb_var)")"
 }
+FK_DNS_Q="AAABAAABAAAAAAAAB2V4YW1wbGUDY29tAAABAAE"
+
+_fk_dns_ms() { awk -v t="$1" 'BEGIN { if (t == "" || t + 0 <= 0) print 0; else printf "%d\n", t * 1000 + 0.5 }'; }
+
+_fk_dns_probe() {
+	local t="$1" v="$2" out="$3" f="$3.body" host port path url code tm res ms="" ok=0 how=""
+	case "$t" in
+		udp)
+			host="${v%:*}"; port="${v##*:}"; [ "$host" = "$v" ] && port=53
+			res="$(dig @"$host" -p "$port" example.com A +time=3 +tries=1 2>&1)"
+			echo "$res" | grep -q 'status: NOERROR' && { ok=1; ms="$(echo "$res" | sed -n 's/.*Query time: \([0-9]*\) msec.*/\1/p' | head -n1)"; }
+			how=udp ;;
+		dot)
+			host="${v%:*}"; port="${v##*:}"; [ "$host" = "$v" ] && port=853
+			res="$(dig +tls @"$host" -p "$port" example.com A +time=4 +tries=1 2>&1)"
+			if echo "$res" | grep -q 'status: NOERROR'; then
+				ok=1; ms="$(echo "$res" | sed -n 's/.*Query time: \([0-9]*\) msec.*/\1/p' | head -n1)"; how=dot
+			else
+				res="$(curl -sk -o /dev/null -w '%{time_appconnect}' --connect-timeout 4 --max-time 5 "https://$host:$port/" 2>/dev/null)"
+				tm="$(_fk_dns_ms "$res")"
+				[ "$tm" -gt 0 ] 2>/dev/null && { ok=1; ms="$tm"; how=tls; }
+			fi ;;
+		doh)
+			case "$v" in
+				https://*) url="$v"; case "${url#https://}" in */*) ;; *) url="$url/dns-query" ;; esac ;;
+				*) url="https://$v/dns-query" ;;
+			esac
+			case "$url" in *\?*) url="$url&dns=$FK_DNS_Q" ;; *) url="$url?dns=$FK_DNS_Q" ;; esac
+			res="$(curl -s -o "$f" -w '%{http_code} %{time_total}' -H 'accept: application/dns-message' --connect-timeout 4 --max-time 6 "$url" 2>/dev/null)"
+			code="${res%% *}"; tm="${res##* }"
+			if [ "$code" = 200 ] && [ "$(wc -c < "$f" 2>/dev/null || echo 0)" -ge 29 ]; then ok=1; ms="$(_fk_dns_ms "$tm")"; fi
+			rm -f "$f"; how=doh ;;
+	esac
+	[ "$ok" = 1 ] && [ "${ms:-0}" -lt 1 ] 2>/dev/null && ms=1
+	printf '%s|%s|%s|%s\n' "$v" "$ok" "${ms:-0}" "$how" > "$out"
+}
+
+fk_dns_test() {
+	local t="${1%%|*}" list="${1#*|}" d="$JOBS_DIR/fkdns.$$" v i=0 sep="" line ok ms how
+	case "$t" in udp|dot|doh) ;; *) echo '{"error":"неизвестный тип DNS"}'; return 1 ;; esac
+	command -v dig >/dev/null 2>&1 || [ "$t" = doh ] || { echo '{"error":"нет программы dig — нажмите «Переустановить» Forkozz"}'; return 1; }
+	mkdir -p "$d"
+	for v in $list; do
+		case "$v" in *[!A-Za-z0-9.:/_?=%-]*|'') continue ;; esac
+		i=$((i + 1))
+		[ "$i" -gt 16 ] && break
+		_fk_dns_probe "$t" "$v" "$d/$i" &
+	done
+	wait
+	printf '{"type":"%s","results":[' "$t"
+	for v in $(ls "$d" 2>/dev/null | sort -n); do
+		IFS='|' read -r line ok ms how < "$d/$v"
+		printf '%s{"server":"%s","ok":%s,"ms":%s,"how":"%s"}' "$sep" "$(esc "$line")" "$([ "$ok" = 1 ] && echo true || echo false)" "${ms:-0}" "$how"
+		sep=","
+	done
+	printf ']}\n'
+	rm -rf "$d"
+}
+
 forkop_config_get() {
 	_fk_installed || { echo '{"error":"Forkozz не установлен"}'; return 1; }
 	if [ ! -f "$ST_CAT_OFF" ]; then
@@ -10377,6 +10620,7 @@ forkop_action() {
 		diag)          _fk_uc diag ;;
 		servers)       _fk_uc servers ;;
 		latency)       _fk_uc latency ;;
+		dns_test)      fk_dns_test "$arg" ;;
 		select)        _fk_uc select "" "$arg" ;;
 		*) echo '{"error":"неизвестное действие"}' ;;
 	esac
@@ -10590,6 +10834,12 @@ redbtn_panel_gone() {
 cmd="$1"; shift
 if [ "$2" = @stdin ]; then ZM_IN="$(cat; echo .)"; set -- "$1" "${ZM_IN%.}"
 elif [ "$1" = @stdin ]; then ZM_IN="$(cat; echo .)"; set -- "${ZM_IN%.}"; fi
+case "$cmd" in
+	strategy_set_v|strategy_set_flowseal|strategy_set_youtube|youtube_quic_set|discord_set_dv|discord_set_fake|game_set|game_set_fake|game_toggle_xtreme)
+		[ -f "$CONF" ] && { _nochange_guard || exit 1; } ;;
+	test_action)
+		[ "$1" = start ] && [ "$2" != current ] && [ -f "$CONF" ] && { _nochange_guard || exit 1; } ;;
+esac
 case "$cmd" in
 	status)                  status ;;
 	system_info)             system_info ;;
@@ -10939,6 +11189,28 @@ function cat_meta() {
 	try { let j = json(s(getenv("ZM_FK_CAT"))); return type(j) == "object" ? j : null; } catch (e) { return null; }
 }
 
+const DNS_FO_STATE = getenv("ZM_FK_DNSFO") || "/var/run/forkop/dns-failover.json";
+
+function dns_info(st) {
+	let sv = arr(st.dns_server), bs = arr(st.bootstrap_dns_server);
+	let t = s(st.dns_type || (length(sv) ? "udp" : "dot"));
+	if (!length(sv)) sv = [ "9.9.9.9" ];
+	if (!length(bs)) bs = [ "9.9.9.9" ];
+	let fo = null, active = 0, bactive = 0, same = true;
+	try { fo = json(s(fs.readfile(DNS_FO_STATE)) || "null"); } catch (e) { fo = null; }
+	if (type(fo) == "object" && s(fo.dns_type) == t && type(fo.main_servers) == "array" && length(fo.main_servers) == length(sv)) {
+		for (let i = 0; i < length(sv); i++) if (s(fo.main_servers[i]) != sv[i]) same = false;
+		if (same) {
+			active = int(fo.main_index || 0);
+			if (active < 0 || active >= length(sv)) active = 0;
+			if (type(fo.bootstrap_servers) == "array" && length(fo.bootstrap_servers) == length(bs)) bactive = int(fo.bootstrap_index || 0);
+		}
+	}
+	return { type: t, server: sv[0], bootstrap: bs[0], servers: sv, bootstraps: bs, active, bactive,
+		detour: s(st.dns_detour_enabled) == "1", failover: length(sv) > 1 || length(bs) > 1 };
+}
+
+
 function cmd_get() {
 	let c = cursor(), p = pick(c), sec = p.sec;
 	let m = c.get_all(CFG, sec) || {}, st = c.get_all(CFG, "settings") || {};
@@ -10963,7 +11235,7 @@ function cmd_get() {
 		full: uniq(words(m.fully_routed_ips)),
 		excl: uniq(words(m.excluded_source_ip_cidr)),
 		extra: p.extra,
-		dns: { type: s(st.dns_type || (length(arr(st.dns_server)) ? "udp" : "dot")), server: s(arr(st.dns_server)[0] || "9.9.9.9"), bootstrap: s(arr(st.bootstrap_dns_server)[0] || "9.9.9.9") },
+		dns: dns_info(st),
 		quic_off: s(st.disable_quic || "1") == "1",
 		list_interval: s(st.update_interval || "1d"),
 		list_update: s(st.list_update_enabled || "1") == "1",
@@ -10978,6 +11250,14 @@ function valid_ip(v) {
 	if (!m) return false;
 	for (let i = 1; i <= 4; i++) if (int(m[i]) > 255) return false;
 	return m[6] == null || int(m[6]) <= 32;
+}
+
+function dns_value_ok(t, v) {
+	if (v == "" || match(v, /[ \t@|,;'"<>]/)) return false;
+	if (t == "udp") return valid_ip(replace(v, /:[0-9]+$/, "")) && index(v, "/") < 0;
+	if (t == "dot") return !match(v, /^[a-z]+:\/\//i) && index(v, "/") < 0 && !!match(v, /^[A-Za-z0-9.-]+(:[0-9]+)?$/) && !!match(v, /\./);
+	if (match(v, /^https:\/\//i)) return !!match(v, /^https:\/\/[A-Za-z0-9.-]+\.[A-Za-z0-9-]+(:[0-9]+)?(\/[^ ]*)?$/i);
+	return !!match(v, /^[A-Za-z0-9.-]+\.[A-Za-z0-9-]+(:[0-9]+)?$/);
 }
 
 function valid_domain(v) {
@@ -11109,14 +11389,41 @@ function cmd_set() {
 	if (!c.get(CFG, "settings")) c.set(CFG, "settings", "settings");
 	let dns = type(d.dns) == "object" ? d.dns : null;
 	if (dns) {
-		let t = s(dns.type), sv = trim(s(dns.server)), bs = trim(s(dns.bootstrap));
+		let t = s(dns.type);
 		if (index([ "udp", "dot", "doh" ], t) < 0) fail("неизвестный тип DNS");
-		if (sv == "" || match(sv, /[ \t@]/)) fail("укажите адрес DNS-сервера");
-		if (t == "udp" && !valid_ip(replace(sv, /:[0-9]+$/, ""))) fail("для UDP укажите IP-адрес DNS, например 77.88.8.8");
-		if (!valid_ip(bs) || index(bs, "/") >= 0) fail("резервный DNS должен быть IP-адресом");
+		let list = type(dns.servers) == "array" && length(dns.servers) ? dns.servers : [ dns.server ];
+		let blist = type(dns.bootstraps) == "array" && length(dns.bootstraps) ? dns.bootstraps : [ dns.bootstrap ];
+		let svs = [], bss = [], seen = {};
+		for (let x in list) {
+			x = trim(s(x));
+			if (x == "" || seen[x]) continue;
+			seen[x] = true;
+			if (!dns_value_ok(t, x))
+				fail(t == "udp" ? "для UDP нужен IP-адрес DNS, например 9.9.9.9 (ошибка в «" + x + "»)"
+					: t == "dot" ? "для DoT нужен адрес сервера без https://, например dns.quad9.net (ошибка в «" + x + "»)"
+					: "для DoH нужен адрес или ссылка https://…/dns-query (ошибка в «" + x + "»)");
+			push(svs, x);
+		}
+		if (!length(svs)) fail("укажите хотя бы один DNS-сервер");
+		if (length(svs) > 8) fail("DNS-серверов можно указать не больше 8");
+		seen = {};
+		for (let x in blist) {
+			x = trim(s(x));
+			if (x == "" || seen[x]) continue;
+			seen[x] = true;
+			if (!valid_ip(x) || index(x, "/") >= 0) fail("резервный DNS должен быть IP-адресом (ошибка в «" + x + "»)");
+			push(bss, x);
+		}
+		if (!length(bss)) push(bss, "9.9.9.9");
+		if (length(bss) > 4) bss = slice(bss, 0, 4);
 		c.set(CFG, "settings", "dns_type", t);
-		c.set(CFG, "settings", "dns_server", [ sv ]);
-		c.set(CFG, "settings", "bootstrap_dns_server", [ bs ]);
+		c.set(CFG, "settings", "dns_server", svs);
+		c.set(CFG, "settings", "bootstrap_dns_server", bss);
+		if (dns.detour != null) {
+			c.set(CFG, "settings", "dns_detour_enabled", dns.detour ? "1" : "0");
+			if (dns.detour) c.set(CFG, "settings", "dns_detour_section", sec);
+			else c.delete(CFG, "settings", "dns_detour_section");
+		}
 	}
 	if (d.quic_off != null) c.set(CFG, "settings", "disable_quic", d.quic_off ? "1" : "0");
 	if (d.lists_via != null) {
@@ -13456,10 +13763,12 @@ return view.extend({
 			if (data.exit === 'none') return badge('zm-warn', 'подключите WARP или VPN');
 			if (data.exit === 'vpn') {
 				if (data.steer_running && data.vpn_up && data.vpn_live === false) return badge('zm-bad', 'трафик не идёт');
+				if (data.steer_running && data.failopen) return badge('zm-bad', 'VPN не принят — сервисы идут напрямую');
 				if (data.steer_running && data.vpn_up) return badge('zm-ok', 'работает');
 				if (data.steer_running) return badge('zm-warn', 'подключаемся к узлу');
 				return badge('zm-bad', 'не работает');
 			}
+			if (data.steer_running && data.failopen) return badge('zm-bad', 'туннель не принят — сервисы идут напрямую');
 			var t = data.tunnels || [], age = parseInt(data.warp_hs_age, 10);
 			var live = t.length ? t.filter(tunnelLive).length > 0 : (!isNaN(age) && age < 300);
 			if (data.steer_running && data.warp_up && live) return badge('zm-ok', 'работает');
@@ -16261,7 +16570,7 @@ return view.extend({
 					]));
 					return;
 				}
-				nfqwsCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Блок NFQWS_OPT из /etc/config/zapret. «Сохранить и применить» перезапустит Zapret.'));
+				nfqwsCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Блок NFQWS_OPT из /etc/config/zapret. «Сохранить и применить» перезапустит Zapret. Добавьте отдельной строкой #nochange — и панель перестанет менять эту стратегию (смена стратегий, YouTube, Discord, игры, тест, переустановка).'));
 				nfqwsEl.style.display = '';
 				nfqwsCard.appendChild(nfqwsEl);
 				nfqwsCard.appendChild(E('div', { 'class': 'zm-actions' }, [
@@ -16905,7 +17214,7 @@ return view.extend({
 				{ id: 'google', title: 'Список Google', hint: 'Домены YouTube и Google для YouTube-стратегии и QUIC. Панель сама дописывает сюда нужные домены при выборе стратегии.' }
 			];
 			var busy = false;
-			var intro = E('p', { 'class': 'zm-hint zm-lists-intro' }, 'Нажмите на список, чтобы развернуть его. «Сохранить и применить» записывает файл и перезапускает Zapret.');
+			var intro = E('p', { 'class': 'zm-hint zm-lists-intro' }, 'Нажмите на список, чтобы развернуть его. «Сохранить и применить» записывает файл и перезапускает Zapret. Строка #nochange в списке запрещает панели менять его при обновлениях и восстановлении.');
 			panels.lists.appendChild(intro);
 
 			function plural(n, a, b, c) { var m = n % 10, h = n % 100; return m === 1 && h !== 11 ? a : (m >= 2 && m <= 4 && (h < 12 || h > 14) ? b : c); }
@@ -17814,6 +18123,14 @@ html.zm-theme-dark .zm-stopbar { background: #2a1416; color: #fecaca; border-col
 .zm-dock > * { pointer-events: auto; }
 .zm-dock .zm-savebar { position: static; margin: 0; box-shadow: 0 18px 44px -14px rgba(0,0,0,.45); }
 .zm-dock .zm-stopbar { position: static; left: auto; bottom: auto; transform: none; width: auto; }
+.zm-dns-order { display: flex; flex-direction: column; gap: 8px; }
+.zm-dns-item { display: flex; align-items: center; gap: 12px; padding: 9px 10px 9px 12px; border-radius: 12px; border: 1px solid rgba(110,118,129,.25); background: rgba(110,118,129,.05); flex-wrap: wrap; }
+.zm-dns-item.zm-dns-active { border-color: rgba(26,127,55,.5); background: rgba(26,127,55,.08); }
+.zm-dns-num { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 13px; background: #1aa3ff; color: #fff; flex-shrink: 0; }
+.zm-dns-text { display: flex; flex-direction: column; min-width: 0; flex: 1 1 200px; }
+.zm-dns-text span { font-size: 11.5px; opacity: .65; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.zm-dns-btns { display: flex; gap: 4px; margin-left: auto; }
+.zm-dns-btns .cbi-button { margin: 0; min-width: 34px; padding: 4px 8px; }
 
 ZM_INSTALLER_EOF
 chmod 0644 '/www/luci-static/resources/view/zapret-manager/style.css'
@@ -18247,9 +18564,9 @@ return view.extend({
 		var logEl = E('pre', { 'class': 'zm-log' });
 
 		function statusOf(d, id) {
-			if (id === 'mtproto') return { installed: d.mtproto === 'installed', running: d.mtproto_running === true, secret: d.secret_mtproto, version: d.mtproto_version, latest: d.mtproto_latest };
-			if (id === 'socks5') return { installed: d.socks5 === 'installed', running: d.socks5_running === true, secret: '', version: d.socks5_version, latest: d.socks5_latest };
-			return { installed: d.rust === 'installed', running: d.rust_running === true, secret: d.secret_rust, version: d.rust_version, latest: d.rust_latest };
+			if (id === 'mtproto') return { installed: d.mtproto === 'installed', running: d.mtproto_running === true, secret: d.secret_mtproto, version: d.mtproto_version, latest: d.mtproto_latest, newer: d.mtproto_newer === true };
+			if (id === 'socks5') return { installed: d.socks5 === 'installed', running: d.socks5_running === true, secret: '', version: d.socks5_version, latest: d.socks5_latest, newer: d.socks5_newer === true };
+			return { installed: d.rust === 'installed', running: d.rust_running === true, secret: d.secret_rust, version: d.rust_version, latest: d.rust_latest, newer: d.rust_newer === true };
 		}
 
 		function renderLinks(d) {
@@ -18327,7 +18644,7 @@ return view.extend({
 						'class': 'cbi-button',
 						'click': function() { doAction(v.id, 'reinstall'); }
 					}, 'Переустановить'));
-					if (st.version && st.latest && st.version !== st.latest) {
+					if (st.installed && st.newer) {
 						actions.push(E('button', {
 							'class': 'cbi-button',
 							'click': function() { doAction(v.id, 'update'); }
@@ -18346,7 +18663,7 @@ return view.extend({
 						st.installed ? zm.badge(st.running, 'запущен', 'остановлен') : zm.badge(false, '', 'не установлен')
 					]),
 					st.installed && st.version ? E('div', { 'class': 'zm-row' }, [
-						E('span', { 'class': 'zm-label' }, 'Версия'), E('span', {}, st.version)
+						E('span', { 'class': 'zm-label' }, 'Версия'), E('span', {}, st.version + (st.newer ? ' · доступна ' + st.latest : st.latest ? ' · последняя' : ''))
 					]) : E([]),
 					E('div', { 'class': 'zm-actions' }, actions)
 				]));
@@ -18398,7 +18715,7 @@ return view.extend({
 					'class': 'cbi-button',
 					'click': function() { doTgwsAction('reinstall'); }
 				}, 'Переустановить'));
-				if (d.version && d.latest && d.version !== d.latest) {
+				if (d.version && d.newer) {
 					actions.push(E('button', {
 						'class': 'cbi-button',
 						'click': function() { doTgwsAction('update'); }
@@ -18561,21 +18878,78 @@ function selCount(p) {
 	return (p.items || []).filter(function(it) { return p.sel[it.id]; }).length;
 }
 
-var DNS = [
-	{ id: 'yandex', name: 'Яндекс', type: 'udp', server: '77.88.8.8', bootstrap: '77.88.8.8' },
-	{ id: 'cloudflare', name: 'Cloudflare', type: 'doh', server: '1.1.1.1', bootstrap: '1.1.1.1' },
-	{ id: 'google', name: 'Google', type: 'doh', server: '8.8.8.8', bootstrap: '8.8.8.8' },
-	{ id: 'quad9', name: 'Quad9', type: 'dot', server: '9.9.9.9', bootstrap: '9.9.9.9' },
-	{ id: 'comss', name: 'Comss', type: 'doh', server: 'dns.comss.one', bootstrap: '77.88.8.8' }
-];
+var DNS_CAT = {
+	doh: [
+		{ id: 'quad9', name: 'Quad9', value: 'https://dns.quad9.net/dns-query', boot: '9.9.9.9', alias: [ 'dns.quad9.net', '9.9.9.9' ] },
+		{ id: 'cloudflare', name: 'Cloudflare', value: 'https://cloudflare-dns.com/dns-query', boot: '1.1.1.1', alias: [ '1.1.1.1', 'cloudflare-dns.com', 'https://1.1.1.1/dns-query' ] },
+		{ id: 'google', name: 'Google', value: 'https://dns.google/dns-query', boot: '8.8.8.8', alias: [ '8.8.8.8', 'dns.google', 'https://8.8.8.8/dns-query' ] },
+		{ id: 'yandex', name: 'Яндекс', value: 'https://common.dot.dns.yandex.net/dns-query', boot: '77.88.8.8' },
+		{ id: 'yandex_safe', name: 'Яндекс Безопасный', value: 'https://safe.dot.dns.yandex.net/dns-query', boot: '77.88.8.88' },
+		{ id: 'yandex_family', name: 'Яндекс Семейный', value: 'https://family.dot.dns.yandex.net/dns-query', boot: '77.88.8.7' },
+		{ id: 'comss', name: 'Comss', value: 'https://dns.comss.one/dns-query', boot: '77.88.8.8', alias: [ 'dns.comss.one' ] },
+		{ id: 'xbox', name: 'XBOX', value: 'https://xbox-dns.ru/dns-query', boot: '77.88.8.8' },
+		{ id: 'dnsai', name: 'DNS-AI', value: 'https://dns.dns-ai.ru/dns-query', boot: '77.88.8.8' },
+		{ id: 'geohide_ru', name: 'GeoHide RU', value: 'https://geohide.ru/dns-query', boot: '77.88.8.8' },
+		{ id: 'geohide_eu', name: 'GeoHide EU', value: 'https://eu.geohide.ru/dns-query', boot: '77.88.8.8' },
+		{ id: 'geohide_us', name: 'GeoHide US', value: 'https://us.geohide.ru/dns-query', boot: '77.88.8.8' }
+	],
+	dot: [
+		{ id: 'quad9', name: 'Quad9', value: 'dns.quad9.net', boot: '9.9.9.9', alias: [ '9.9.9.9' ] },
+		{ id: 'cloudflare', name: 'Cloudflare', value: '1.1.1.1', boot: '1.1.1.1', alias: [ 'one.one.one.one', '1dot1dot1dot1.cloudflare-dns.com' ] },
+		{ id: 'google', name: 'Google', value: 'dns.google', boot: '8.8.8.8', alias: [ '8.8.8.8' ] },
+		{ id: 'yandex', name: 'Яндекс', value: 'common.dot.dns.yandex.net', boot: '77.88.8.8' },
+		{ id: 'yandex_safe', name: 'Яндекс Безопасный', value: 'safe.dot.dns.yandex.net', boot: '77.88.8.88' },
+		{ id: 'yandex_family', name: 'Яндекс Семейный', value: 'family.dot.dns.yandex.net', boot: '77.88.8.7' },
+		{ id: 'comss', name: 'Comss', value: 'dns.comss.one', boot: '77.88.8.8' }
+	],
+	udp: [
+		{ id: 'quad9', name: 'Quad9', value: '9.9.9.9', boot: '9.9.9.9' },
+		{ id: 'cloudflare', name: 'Cloudflare', value: '1.1.1.1', boot: '1.1.1.1' },
+		{ id: 'google', name: 'Google', value: '8.8.8.8', boot: '8.8.8.8' },
+		{ id: 'yandex', name: 'Яндекс', value: '77.88.8.8', boot: '77.88.8.8' },
+		{ id: 'yandex_safe', name: 'Яндекс Безопасный', value: '77.88.8.88', boot: '77.88.8.88' },
+		{ id: 'yandex_family', name: 'Яндекс Семейный', value: '77.88.8.7', boot: '77.88.8.7' }
+	]
+};
+
+var DNS_DEF = { doh: [ 'https://dns.quad9.net/dns-query', 'https://common.dot.dns.yandex.net/dns-query' ], dot: [ 'dns.quad9.net', 'common.dot.dns.yandex.net' ], udp: [ '9.9.9.9', '77.88.8.8' ] };
+var DNS_MAX = 8;
 
 var DNS_TYPES = { udp: 'UDP', dot: 'DoT', doh: 'DoH' };
 
 var DNS_HELP = {
-	udp: { ph: '77.88.8.8', hint: 'Обычный DNS без шифрования. Только IP-адрес, например 77.88.8.8.' },
-	dot: { ph: '9.9.9.9 или dns.quad9.net', hint: 'DNS over TLS. IP-адрес или имя сервера, без https:// — например 9.9.9.9 или dns.quad9.net.' },
-	doh: { ph: '1.1.1.1 или https://dns.comss.one/dns-query', hint: 'DNS over HTTPS. IP-адрес, имя сервера или полная ссылка — например 1.1.1.1, dns.google или https://dns.comss.one/dns-query.' }
+	udp: { ph: '9.9.9.9', hint: 'Обычный DNS без шифрования — только IP-адрес. Провайдер видит и может подменять ответы.' },
+	dot: { ph: 'dns.quad9.net', hint: 'DNS over TLS: адрес сервера без https://, например dns.quad9.net или 9.9.9.9.' },
+	doh: { ph: 'https://dns.quad9.net/dns-query', hint: 'DNS over HTTPS: ссылка https://…/dns-query или просто адрес сервера.' }
 };
+
+var DNS_RE = {
+	udp: /^((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(:\d{1,5})?$/,
+	dot: /^[A-Za-z0-9.-]+\.[A-Za-z0-9-]+(:\d{1,5})?$/,
+	doh: /^(https:\/\/[A-Za-z0-9.-]+\.[A-Za-z0-9-]+(:\d{1,5})?(\/[^\s@|,;'"<>]*)?|[A-Za-z0-9.-]+\.[A-Za-z0-9-]+(:\d{1,5})?)$/i
+};
+
+function dnsFind(t, v) {
+	var list = DNS_CAT[t] || [];
+	for (var i = 0; i < list.length; i++)
+		if (list[i].value === v || (list[i].alias || []).indexOf(v) >= 0) return list[i];
+	return null;
+}
+
+function dnsName(t, v) {
+	var p = dnsFind(t, v);
+	return p ? p.name : String(v || '').replace(/^https:\/\//, '').replace(/\/dns-query$/, '');
+}
+
+function dnsBoots(t, servers) {
+	var out = [];
+	(servers || []).forEach(function(v) {
+		var p = dnsFind(t, v), b = p ? p.boot : (t === 'udp' ? '' : '9.9.9.9');
+		if (b && out.indexOf(b) < 0) out.push(b);
+	});
+	[ '9.9.9.9', '77.88.8.8' ].forEach(function(b) { if (out.length < 2 && out.indexOf(b) < 0) out.push(b); });
+	return out.slice(0, 4);
+}
 
 var TABS = [ { id: 'conn', label: 'Подключение' }, { id: 'svc', label: 'Сервисы' }, { id: 'dev', label: 'Устройства' }, { id: 'set', label: 'Настройки' } ];
 var MODES = [ { id: 'links', label: 'Серверы' }, { id: 'sub', label: 'Подписка' }, { id: 'iface', label: 'Туннель' } ];
@@ -18671,7 +19045,8 @@ function fromCfg(c) {
 		sub_interval: c.sub_interval || '12h', iface: c.iface || '', fastest: true,
 		items: pick.items, sel: pick.sel, domains: (c.domains || []).join('\n'), subnets: (c.subnets || []).join('\n'),
 		lists: pick.lists.join('\n'), full: (c.full || []).slice(), excl: (c.excl || []).slice(),
-		dns: { type: dns.type || (dns.server ? 'udp' : 'dot'), server: dns.server || '9.9.9.9', bootstrap: dns.bootstrap || '9.9.9.9' },
+		dns: { type: dns.type || (dns.server ? 'udp' : 'dot'), servers: (dns.servers && dns.servers.length ? dns.servers : [ dns.server || '9.9.9.9' ]).slice(),
+			bootstraps: (dns.bootstraps && dns.bootstraps.length ? dns.bootstraps : [ dns.bootstrap || '9.9.9.9' ]).slice(), detour: !!dns.detour },
 		quic_off: c.quic_off !== false, list_interval: c.list_interval || '1d', lists_via: !!c.lists_via
 	};
 }
@@ -18684,7 +19059,7 @@ function sig(d) {
 	var srt = function(a) { return (a || []).slice().sort(); };
 	var tl = function(v) { return String(v || '').split(/\n/).map(function(x) { return x.trim(); }).filter(Boolean).join('\n'); };
 	return JSON.stringify([ d.sec, d.mode, tl(d.links), d.sub.trim(), d.sub_interval, d.iface, d.fastest, (function(r) { return [ srt(r.c), srt(r.s), srt(r.r), srt(r.l) ]; })(refsOf(d)), tl(d.domains),
-		tl(d.subnets), tl(d.lists), srt(d.full), srt(d.excl), d.dns.type, d.dns.server, d.dns.bootstrap, d.quic_off, d.list_interval, d.lists_via ]);
+		tl(d.subnets), tl(d.lists), srt(d.full), srt(d.excl), d.dns.type, d.dns.servers, d.dns.bootstraps, d.dns.detour, d.quic_off, d.list_interval, d.lists_via ]);
 }
 
 function subName(t) {
@@ -18692,16 +19067,11 @@ function subName(t) {
 	return t.replace(/[\s\uFE0F]/g, '') === '\uD83C\uDF28VPN' ? 'StressKVN' : t;
 }
 
-function dnsPreset(d) {
-	for (var i = 0; i < DNS.length; i++)
-		if (DNS[i].type === d.type && DNS[i].server === d.server) return DNS[i];
-	return null;
-}
-
 function dnsLabel(d) {
 	if (!d) return '—';
-	var p = dnsPreset(d);
-	return (p ? p.name : d.server) + ' · ' + (DNS_TYPES[d.type] || d.type);
+	var sv = d.servers && d.servers.length ? d.servers : [ d.server ];
+	var cur = sv[d.active > 0 && d.active < sv.length ? d.active : 0];
+	return dnsName(d.type, cur) + (sv.length > 1 ? ' +' + (sv.length - 1) : '');
 }
 
 return view.extend({
@@ -18718,7 +19088,7 @@ return view.extend({
 		var draft = fromCfg(cfg), savedSig = sig(draft), dirty = false, busy = false, lastAct = '', saving = false;
 		var servers = null, srvBusy = false, srvErr = '', latBusy = false;
 		var diag = null, diagBusy = false, openGroups = {}, catWait = 0;
-		var customDns = !dnsPreset(draft.dns);
+		var dnsRes = {}, dnsTesting = false, dnsInput = null;
 		var tab = 'conn';
 		try { tab = localStorage.getItem('zm.forkozz.tab') || 'conn'; } catch (e) {}
 		if (!TABS.some(function(t) { return t.id === tab; }) || (cfg && !cfg.exists)) tab = 'conn';
@@ -18754,15 +19124,9 @@ return view.extend({
 		var taSubnets = area('subnets', '91.108.4.0/22\n149.154.160.0/20', 90);
 		var taLists = area('lists', 'https://raw.githubusercontent.com/…/list.lst', 70);
 		var linkCountEl = E('span', {});
-		var dnsServerIn = E('input', { 'type': 'text', 'class': 'cbi-input-text', 'autocapitalize': 'off', 'spellcheck': 'false', 'style': 'flex:1; min-width:220px' });
-		var dnsBootIn = E('input', { 'type': 'text', 'class': 'cbi-input-text', 'placeholder': '9.9.9.9', 'style': 'width:170px' });
-		dnsServerIn.addEventListener('input', function() { draft.dns.server = dnsServerIn.value.trim(); touch(); });
-		dnsBootIn.addEventListener('input', function() { draft.dns.bootstrap = dnsBootIn.value.trim(); touch(); });
-
 		function syncAreas() {
 			taLinks.value = draft.links; taSub.value = draft.sub; taDomains.value = draft.domains;
 			taSubnets.value = draft.subnets; taLists.value = draft.lists;
-			dnsServerIn.value = draft.dns.server; dnsBootIn.value = draft.dns.bootstrap;
 		}
 
 		function touch() {
@@ -18781,7 +19145,7 @@ return view.extend({
 			]).then(function(r) {
 				st = r[0] || {};
 				if (r[1] !== null) cfg = validCfg(r[1]);
-				if (!dirty) { draft = fromCfg(cfg); savedSig = sig(draft); customDns = !dnsPreset(draft.dns); syncAreas(); }
+				if (!dirty) { draft = fromCfg(cfg); savedSig = sig(draft); syncAreas(); }
 				else if (cfg) {
 					var rf = refsOf(draft);
 					var p = pickFromCfg({ catalog: cfg.catalog, refs: rf, lists: textLines(draft.lists).concat(rf.l) });
@@ -18828,7 +19192,7 @@ return view.extend({
 				sec: draft.sec, mode: draft.mode, links: draft.links, sub: draft.sub.trim(), sub_interval: draft.sub_interval,
 				iface: draft.iface, fastest: true, refs: refsOf(draft), domains: draft.domains,
 				subnets: draft.subnets, lists: draft.lists, full: draft.full, excl: draft.excl,
-				dns: draft.dns, quic_off: draft.quic_off, list_interval: draft.list_interval, lists_via: draft.lists_via
+				dns: { type: draft.dns.type, servers: draft.dns.servers, bootstraps: draft.dns.bootstraps, server: draft.dns.servers[0], bootstrap: draft.dns.bootstraps[0], detour: draft.dns.detour }, quic_off: draft.quic_off, list_interval: draft.list_interval, lists_via: draft.lists_via
 			});
 		}
 
@@ -18839,10 +19203,9 @@ return view.extend({
 			var rf = refsOf(draft);
 			if (!rf.c.length && !rf.s.length && !rf.r.length && !rf.l.length && !textLines(draft.domains).length && !textLines(draft.subnets).length && !textLines(draft.lists).length && !draft.full.length)
 				return [ 'svc', 'Выберите хотя бы один сервис' ];
-			if (!draft.dns.server) return [ 'set', 'Укажите DNS-сервер' ];
-			if (draft.dns.type === 'udp' && !IP_RE.test(draft.dns.server.replace(/:\d+$/, ''))) return [ 'set', 'Для UDP нужен IP-адрес DNS, например 77.88.8.8' ];
-			if (/^https?:\/\//i.test(draft.dns.server) && draft.dns.type !== 'doh') return [ 'set', 'Ссылка https:// подходит только для DoH' ];
-			if (!IP_RE.test(draft.dns.bootstrap)) return [ 'set', 'Резервный DNS — только IP-адрес, например 77.88.8.8' ];
+			if (!draft.dns.servers.length) return [ 'set', 'Выберите хотя бы один DNS-сервер' ];
+			var badDns = draft.dns.servers.filter(function(v) { return !DNS_RE[draft.dns.type].test(v); })[0];
+			if (badDns) return [ 'set', 'DNS «' + badDns + '» не подходит для ' + DNS_TYPES[draft.dns.type] + '. ' + DNS_HELP[draft.dns.type].hint ];
 			return null;
 		}
 
@@ -18868,7 +19231,6 @@ return view.extend({
 		function discard() {
 			draft = fromCfg(cfg);
 			savedSig = sig(draft);
-			customDns = !dnsPreset(draft.dns);
 			dirty = false;
 			syncAreas();
 			renderAll();
@@ -18968,7 +19330,7 @@ return view.extend({
 				mainCard.appendChild(E('div', { 'class': 'zm-st-stats zm-st-stats-4' }, [
 					stat('Подключение', cv[0], cv[1]),
 					stat('Через Forkozz', rv[0], rv[1]),
-					stat('DNS', cfg && cfg.dns ? dnsLabel(cfg.dns).split(' · ')[0] : '—', cfg && cfg.dns ? (DNS_TYPES[cfg.dns.type] || '') + ' · ' + cfg.dns.server : ''),
+					stat('DNS', cfg && cfg.dns ? dnsLabel(cfg.dns) : '—', cfg && cfg.dns ? (DNS_TYPES[cfg.dns.type] || '') + (cfg.dns.servers && cfg.dns.servers.length > 1 ? ' · автопереключение' : '') + (cfg.dns.detour ? ' · через VPN' : '') : ''),
 					stat('Версия', 'Forkozz ' + (st.version || '—'), sb)
 				]));
 			}
@@ -19329,32 +19691,133 @@ return view.extend({
 			devCard(exclCard, 'excl', 'full', 'Мимо Forkozz', 'Устройство всегда ходит напрямую.');
 		}
 
-		function renderSet() {
-			dnsCard.innerHTML = '';
-			var pre = customDns ? null : dnsPreset(draft.dns), cur = pre ? pre.id : 'custom';
-			dnsCard.appendChild(E('h3', {}, 'DNS'));
-			dnsCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:-6px' }, 'Через какой DNS роутер ищет адреса сайтов, пока работает Forkozz. DoH и DoT шифруют запросы.'));
-			var g = E('div', { 'class': 'zm-nodes zm-nodes-3' });
-			DNS.forEach(function(p) {
-				g.appendChild(node(p.name, DNS_TYPES[p.type] + ' · ' + p.server, cur === p.id, function() {
-					customDns = false;
-					set('dns', { type: p.type, server: p.server, bootstrap: p.bootstrap });
-					syncAreas();
-				}));
+		function dnsUniq(t, list) {
+			var seen = {}, out = [];
+			(list || []).forEach(function(v) {
+				var p = dnsFind(t, v), k = p ? 'p:' + p.id : 'v:' + v;
+				if (seen[k]) return;
+				seen[k] = true;
+				out.push(v);
 			});
-			g.appendChild(node('Свой', 'любой сервер', cur === 'custom', function() { customDns = true; syncAreas(); renderSet(); }));
+			return out;
+		}
+
+		function dnsSet(servers, keepBoots) {
+			var d = draft.dns;
+			servers = dnsUniq(d.type, servers);
+			draft.dns = { type: d.type, servers: servers, bootstraps: keepBoots ? d.bootstraps : dnsBoots(d.type, servers), detour: d.detour };
+			touch();
+			renderDns();
+			renderSaveBar();
+		}
+
+		function dnsSaved() {
+			return !dirty && cfg && cfg.dns && cfg.dns.type === draft.dns.type;
+		}
+
+		function dnsTest(pick) {
+			if (dnsTesting) return;
+			var t = draft.dns.type, list = [];
+			(DNS_CAT[t] || []).forEach(function(p) { list.push(p.value); });
+			draft.dns.servers.forEach(function(v) { if (list.indexOf(v) < 0) list.push(v); });
+			dnsTesting = true;
+			renderDns();
+			zm.toast(pick ? 'Проверяем все серверы ' + DNS_TYPES[t] + ' и подбираем лучшие…' : 'Проверяем серверы ' + DNS_TYPES[t] + '…', 'warning');
+			zm.forkopAction('dns_test', t + '|' + list.join(' ')).then(function(res) {
+				dnsTesting = false;
+				if (!res || res.error) { zm.toast((res && res.error) || 'Проверка не удалась', 'error'); renderDns(); return; }
+				if (res.type !== draft.dns.type) { renderDns(); return; }
+				dnsRes = {};
+				(res.results || []).forEach(function(r) { dnsRes[t + '|' + r.server] = r; });
+				var good = (res.results || []).filter(function(r) { return r.ok; }).sort(function(a, b) { return a.ms - b.ms; });
+				if (pick) {
+					if (!good.length) { zm.toast('Ни один сервер ' + DNS_TYPES[t] + ' не ответил — попробуйте другой протокол или включите «DNS через VPN»', 'error'); renderDns(); return; }
+					var chosen = dnsUniq(t, good.map(function(r) { return r.server; })).slice(0, 4);
+					dnsSet(chosen);
+					zm.toast('Подобрано ' + chosen.length + ': ' + chosen.map(function(v) { return dnsName(t, v); }).join(', ') + '. Сохраните, чтобы применить', 'info');
+					return;
+				}
+				zm.toast('Отвечают ' + good.length + ' из ' + (res.results || []).length, good.length ? 'info' : 'warning');
+				renderDns();
+			}).catch(function() { dnsTesting = false; renderDns(); zm.toast('Роутер не ответил', 'error'); });
+		}
+
+		function dnsLat(v) {
+			var r = dnsRes[draft.dns.type + '|' + v];
+			if (!r) return E('span');
+			return E('span', { 'class': 'zm-lat ' + (r.ok ? latClass(r.ms) : 'zm-lat-bad'), 'title': r.how === 'tls' ? 'TLS-соединение есть, ответ DNS проверить не удалось' : '' }, r.ok ? r.ms + ' мс' + (r.how === 'tls' ? '*' : '') : 'не отвечает');
+		}
+
+		function renderDns() {
+			dnsCard.innerHTML = '';
+			var d = draft.dns, t = d.type, cat = DNS_CAT[t] || [], sel = d.servers, act = dnsSaved() ? (cfg.dns.active || 0) : -1;
+			dnsCard.appendChild(E('h3', {}, [ 'DNS ', sel.length > 1 ? badge('zm-ok', 'автопереключение · ' + sel.length) : E([]) ]));
+			dnsCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:-6px' }, 'Через какие DNS-серверы Forkozz ищет адреса сайтов. Выберите несколько — Forkozz каждые 10 секунд проверяет текущий и при сбое сам переходит на следующий по списку, а когда первый оживёт, возвращается к нему.'));
+			dnsCard.appendChild(row('Протокол', seg([ { id: 'doh', label: 'DoH' }, { id: 'dot', label: 'DoT' }, { id: 'udp', label: 'UDP' } ], t, function(nt) {
+				var keep = sel.map(function(v) { var p = dnsFind(t, v); var q = p && (DNS_CAT[nt] || []).filter(function(x) { return x.id === p.id; })[0]; return q ? q.value : null; }).filter(Boolean);
+				draft.dns = { type: nt, servers: [], bootstraps: [], detour: d.detour };
+				dnsSet(keep.length ? keep : DNS_DEF[nt].slice());
+			})));
+			dnsCard.appendChild(E('p', { 'class': 'zm-hint' }, (t === 'udp' ? '⚠ ' : '') + DNS_HELP[t].hint));
+
+			dnsCard.appendChild(E('h4', { 'style': 'margin:14px 0 8px' }, 'Порядок серверов'));
+			var ol = E('div', { 'class': 'zm-dns-order' });
+			sel.forEach(function(v, i) {
+				ol.appendChild(E('div', { 'class': 'zm-dns-item' + (i === act ? ' zm-dns-active' : '') }, [
+					E('span', { 'class': 'zm-dns-num' }, String(i + 1)),
+					E('div', { 'class': 'zm-dns-text' }, [ E('b', {}, dnsName(t, v)), E('span', {}, v) ]),
+					i === act ? badge('zm-ok', sel.length > 1 ? 'сейчас работает' : 'используется') : E([]),
+					dnsLat(v),
+					E('div', { 'class': 'zm-dns-btns' }, [
+						E('button', { 'class': 'cbi-button', 'title': 'Выше', 'disabled': i === 0 ? '' : null, 'click': function() { var a = sel.slice(); a.splice(i - 1, 0, a.splice(i, 1)[0]); dnsSet(a, true); } }, '↑'),
+						E('button', { 'class': 'cbi-button', 'title': 'Ниже', 'disabled': i === sel.length - 1 ? '' : null, 'click': function() { var a = sel.slice(); a.splice(i + 1, 0, a.splice(i, 1)[0]); dnsSet(a, true); } }, '↓'),
+						E('button', { 'class': 'cbi-button', 'title': 'Убрать', 'disabled': sel.length === 1 ? '' : null, 'click': function() { var a = sel.slice(); a.splice(i, 1); dnsSet(a); } }, '✕')
+					])
+				]));
+			});
+			dnsCard.appendChild(ol);
+
+			dnsCard.appendChild(E('h4', { 'style': 'margin:16px 0 4px' }, 'Серверы ' + DNS_TYPES[t]));
+			var g = E('div', { 'class': 'zm-nodes zm-nodes-3' });
+			cat.forEach(function(p) {
+				var on = sel.indexOf(p.value) >= 0 || (p.alias || []).some(function(a) { return sel.indexOf(a) >= 0; });
+				g.appendChild(node(p.name, p.value.replace(/^https:\/\//, ''), on, function() {
+					if (on) {
+						if (sel.length === 1) { zm.toast('Нужен хотя бы один сервер', 'warning'); return; }
+						dnsSet(sel.filter(function(v) { return v !== p.value && (p.alias || []).indexOf(v) < 0; }));
+					} else {
+						if (sel.length >= DNS_MAX) { zm.toast('Не больше ' + DNS_MAX + ' серверов', 'warning'); return; }
+						dnsSet(sel.concat([ p.value ]));
+					}
+				}, dnsLat(p.value)));
+			});
 			dnsCard.appendChild(g);
-			if (cur === 'custom') {
-				var h = DNS_HELP[draft.dns.type] || DNS_HELP.udp;
-				dnsServerIn.placeholder = h.ph;
-				dnsCard.appendChild(row('Протокол', seg([ { id: 'udp', label: 'UDP' }, { id: 'dot', label: 'DoT' }, { id: 'doh', label: 'DoH' } ], draft.dns.type, function(t) {
-					draft.dns = { type: t, server: draft.dns.server, bootstrap: draft.dns.bootstrap }; touch(); renderSet();
-				})));
-				dnsCard.appendChild(row('Сервер', dnsServerIn));
-				dnsCard.appendChild(E('p', { 'class': 'zm-hint' }, h.hint));
-				dnsCard.appendChild(row('Резервный', dnsBootIn));
-				dnsCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Только IP-адрес. Нужен, чтобы найти основной сервер, если он указан именем.'));
+
+			dnsInput = E('input', { 'type': 'text', 'class': 'cbi-input-text', 'autocapitalize': 'off', 'spellcheck': 'false', 'placeholder': 'Свой: ' + DNS_HELP[t].ph, 'style': 'flex:1; min-width:220px' });
+			function addOwn() {
+				var v = dnsInput.value.trim();
+				if (!v) return;
+				if (t === 'doh' && /^[A-Za-z0-9.-]+\.[A-Za-z0-9-]+$/.test(v)) v = 'https://' + v + '/dns-query';
+				if (!DNS_RE[t].test(v)) { zm.toast(DNS_HELP[t].hint, 'warning'); return; }
+				if (sel.indexOf(v) >= 0) { zm.toast('Этот сервер уже в списке', 'warning'); return; }
+				if (sel.length >= DNS_MAX) { zm.toast('Не больше ' + DNS_MAX + ' серверов', 'warning'); return; }
+				dnsSet(sel.concat([ v ]));
 			}
+			dnsInput.addEventListener('keydown', function(ev) { if (ev.key === 'Enter') { ev.preventDefault(); addOwn(); } });
+			dnsCard.appendChild(E('div', { 'class': 'zm-actions' }, [ dnsInput, E('button', { 'class': 'cbi-button', 'click': addOwn }, 'Добавить') ]));
+
+			dnsCard.appendChild(E('div', { 'class': 'zm-actions' }, [
+				E('button', { 'class': 'cbi-button cbi-button-action', 'disabled': dnsTesting || busy ? '' : null, 'click': function() { dnsTest(true); } }, dnsTesting ? 'Проверяем…' : 'Подобрать лучшие'),
+				E('button', { 'class': 'cbi-button', 'disabled': dnsTesting || busy ? '' : null, 'click': function() { dnsTest(false); } }, 'Только проверить')
+			]));
+			dnsCard.appendChild(E('p', { 'class': 'zm-hint' }, '«Подобрать лучшие» проверит с роутера все серверы ' + DNS_TYPES[t] + ' и поставит в список до 4 отвечающих — самые быстрые первыми. Резервные DNS для поиска самих серверов подставляются сами: ' + d.bootstraps.join(', ') + '.'));
+			dnsCard.appendChild(sw(d.detour, 'DNS через VPN', 'Запросы к DNS-серверам пойдут через ваше подключение Forkozz. Помогает, если провайдер блокирует или подменяет DoH/DoT.', function() {
+				draft.dns = { type: d.type, servers: d.servers, bootstraps: d.bootstraps, detour: !d.detour }; touch(); renderDns(); renderSaveBar();
+			}));
+		}
+
+		function renderSet() {
+			renderDns();
 
 			miscCard.innerHTML = '';
 			miscCard.appendChild(E('h3', {}, 'Прочее'));
@@ -21414,6 +21877,7 @@ function themeSave(id) {
 	if (!sid || sid === NULL_SID) { themeDirty = true; return; }
 	ubus('zapret-manager', 'ui_theme_set', { theme: id }).then(function (r) {
 		themeDirty = !(r && r[0] === 0 && r[1] && r[1].ok);
+		if (r && r[0] === 6) toast('Тема не сохранилась на роутере — выйдите из панели и войдите снова', 'warning');
 	}).catch(function () { themeDirty = true; });
 }
 function themeSync() {
@@ -21995,8 +22459,17 @@ function boot() {
 	if (!sid) { showLogin(); return; }
 
 	ubus('session', 'access', { scope: 'ubus', object: 'zapret-manager', 'function': 'status' }, sid).then(function (res) {
-		if (res[0] === 0 && res[1] && res[1].access) startApp();
-		else { sid = null; sset(K_SID, null); showLogin(); }
+		if (!(res[0] === 0 && res[1] && res[1].access)) { sid = null; sset(K_SID, null); showLogin(); return; }
+		return ubus('session', 'access', { scope: 'ubus', object: 'zapret-manager', 'function': 'ui_theme_set' }, sid).then(function (r2) {
+			if (r2[0] === 0 && r2[1] && r2[1].access === false) {
+				var old = sid;
+				sid = null; sset(K_SID, null);
+				ubus('session', 'destroy', {}, old).catch(function () {});
+				showLogin('Панель обновилась — войдите снова, чтобы заработали новые функции и сохранялась тема.', 'info');
+				return;
+			}
+			startApp();
+		}, function () { startApp(); });
 	}).catch(function (e) {
 		sid = null; sset(K_SID, null);
 		showLogin(e && e.noUbus ? e.message : null, 'error');
@@ -23400,6 +23873,11 @@ html[data-theme="dark"] .zm-stopbar, html[data-theme="depth"] .zm-stopbar { back
 .zm-dock .zm-savebar { background: var(--surface-solid); border: 1px solid rgba(124,92,255,.45); border-radius: var(--radius-sm); color: var(--text); box-shadow: var(--shadow-lg); }
 .zm-dock .zm-savebar-dot { background: var(--warn-dot); box-shadow: 0 0 0 4px var(--warn-bg); }
 .zm-dock .cbi-button { font-family: var(--font); }
+#zmw-view .zm-dns-item { background: var(--surface-2); border-color: var(--border); border-radius: var(--radius-sm); }
+#zmw-view .zm-dns-item.zm-dns-active { background: var(--ok-bg); border-color: rgba(16,185,129,.4); }
+#zmw-view .zm-dns-num { background: var(--grad); }
+#zmw-view .zm-dns-text b { color: var(--text); } #zmw-view .zm-dns-text span { color: var(--muted); opacity: 1; }
+#zmw-view .zm-dns-btns .cbi-button { padding: 6px 10px; min-width: 36px; }
 
 ZM_INSTALLER_EOF
 cat > '/www/zm-webui.html' << 'ZM_INSTALLER_EOF'
@@ -23415,7 +23893,7 @@ cat > '/www/zm-webui.html' << 'ZM_INSTALLER_EOF'
 <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20viewBox=%270%200%201250%201250%27%3E%3Cdefs%3E%3ClinearGradient%20id=%27z%27%20x1=%270%27%20y1=%270%27%20x2=%270%27%20y2=%271%27%3E%3Cstop%20offset=%270%27%20stop-color=%27%2300b6ff%27/%3E%3Cstop%20offset=%271%27%20stop-color=%27%230090ff%27/%3E%3C/linearGradient%3E%3C/defs%3E%3Cg%20fill=%27url%28%23z%29%27%20stroke=%27%230a0a0a%27%20stroke-width=%2722%27%20stroke-linejoin=%27miter%27%3E%3Cpolygon%20points=%27455,170%201072,118%201215,25%20688,615%2025,1235%20735,338%20262,383%27/%3E%3Cpolygon%20points=%271025,462%20722,860%201215,800%201005,1022%20315,1095%27/%3E%3C/g%3E%3C/svg%3E">
 <link rel="stylesheet" href="/zm/app.css?v=__ZMW_BUILD__">
 <script>
-(function(){try{var t=localStorage.getItem('zmw.theme')||sessionStorage.getItem('zmw.theme');if(!/^(micro|light|dark|ink|bento|minimal|retro|depth)$/.test(t||''))t='micro';document.documentElement.setAttribute('data-theme',t);if(/^(dark|depth)$/.test(t))document.documentElement.classList.add('zm-theme-dark');}catch(e){}})();
+(function(){try{var t=null,re=/^(micro|light|dark|ink|bento|minimal|retro|depth)$/;try{var x=new XMLHttpRequest();x.open('GET','/zm/theme.txt?t='+Date.now(),false);x.send(null);if(x.status===200){var v=String(x.responseText||'').trim();if(re.test(v)){t=v;try{localStorage.setItem('zmw.theme',v);}catch(e){}}}}catch(e){}if(!t)t=localStorage.getItem('zmw.theme')||sessionStorage.getItem('zmw.theme');if(!/^(micro|light|dark|ink|bento|minimal|retro|depth)$/.test(t||''))t='micro';document.documentElement.setAttribute('data-theme',t);if(/^(dark|depth)$/.test(t))document.documentElement.classList.add('zm-theme-dark');}catch(e){}})();
 </script>
 </head>
 <body class="zmw-body">
