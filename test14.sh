@@ -1,5 +1,5 @@
 #!/bin/sh
-# Version: 1.81
+# Version: 1.82
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -50,7 +50,7 @@ cat > '/opt/zapret-manager-luci/backend.sh' << 'ZM_INSTALLER_EOF'
 umask 022
 
 CONF="/etc/config/zapret"
-ZM_VERSION="1.81"
+ZM_VERSION="1.82"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
@@ -11741,6 +11741,7 @@ function cmd_get() {
 		iface: length(ifs) ? s(ifs[0].name) : "",
 		fastest: length(children(c, "urltest", sec)) > 0 || s(m.urltest_enabled) == "1",
 		exclude: s(m.zm_exclude),
+		hide_names: rawlist(m.zm_hide),
 		jsons: length(arr(m.outbound_jsons)),
 		refs: { c: uniq(words(m.community_lists)), s: uniq(words(m.rule_set)), r: uniq(words(m.rule_set_with_subnets)) },
 		catalog: { items: catalog_items(services_list()), meta: cat_meta() },
@@ -13256,9 +13257,21 @@ function hidePicker(o) {
 			if (!info.noEdit && (items.length > 1 || hc)) acts.push(E('button', { 'class': 'cbi-button', 'disabled': o.busy && o.busy() ? '' : null, 'click': start }, hc ? 'Изменить список скрытых' : 'Скрыть ' + (o.noun || 'серверы') + '…'));
 			if (hc || info.markers) acts.push(E('button', { 'class': 'cbi-button cbi-button-remove', 'disabled': o.busy && o.busy() ? '' : null, 'click': reset }, 'Показать все (восстановить список)'));
 			if (!acts.length) return;
-			var txt = hc ? 'Скрыто: ' + hc + ' — они не показываются и не используются.' : '';
-			if (info.markers) txt += (txt ? ' ' : '') + 'Также скрываются названия с «' + String(info.markers).split('|').join('», «') + '».';
-			el.appendChild(E('div', { 'class': 'zm-hide-bar' }, [ txt ? E('span', { 'class': 'zm-hint', 'style': 'margin:0; flex:1 1 260px' }, [ txt ]) : E([]), E('div', { 'class': 'zm-actions', 'style': 'margin:0' }, acts) ]));
+			if (hc || info.markers) {
+				var hidden = items.filter(function(it) { return it.hidden || it.locked; }).map(function(it) { return it.name || '(без названия)'; });
+				var chips = hidden.slice(0, 12).map(function(n) { return E('span', { 'class': 'zm-hide-chip' }, [ String(n) ]); });
+				if (hidden.length > 12) chips.push(E('span', { 'class': 'zm-hide-chip zm-hide-more' }, [ '+ ещё ' + (hidden.length - 12) ]));
+				var box = E('div', { 'class': 'zm-hide-box' }, [
+					E('div', { 'class': 'zm-hide-head' }, [
+						E('span', { 'class': 'zm-badge zm-warn' }, [ E('span', { 'class': 'zm-dot' }), hc ? 'Скрыто: ' + hc : 'Скрыто по маркерам' ]),
+						E('span', { 'class': 'zm-hint', 'style': 'margin:0' }, [ 'Эти ' + (o.noun || 'серверы') + ' не показываются в списке и не используются.' ])
+					]),
+					chips.length ? E('div', { 'class': 'zm-hide-chips' }, chips) : E([]),
+					info.markers ? E('p', { 'class': 'zm-hint', 'style': 'margin:0' }, [ 'Также скрываются названия с «' + String(info.markers).split('|').join('», «') + '».' ]) : E([]),
+					E('div', { 'class': 'zm-actions', 'style': 'margin:0' }, acts)
+				]);
+				el.appendChild(box);
+			} else el.appendChild(E('div', { 'class': 'zm-hide-bar' }, [ E('div', { 'class': 'zm-actions', 'style': 'margin:0' }, acts) ]));
 			bar.set(false);
 			return;
 		}
@@ -13290,8 +13303,11 @@ function hidePicker(o) {
 		syncBar();
 	}
 	el.update = function(list, i) {
-		items = (list || []).filter(function(it) { return it && it.name != null; });
 		info = i || {};
+		items = (list || []).filter(function(it) { return it && it.name != null; });
+		var have = {};
+		items.forEach(function(it) { have[it.name] = true; });
+		(info.hideNames || []).forEach(function(n) { if (n && !have[n]) { have[n] = true; items.push({ name: n, foot: 'сейчас нет в списке', hidden: true }); } });
 		if (!selecting) render();
 	};
 	el.selecting = function() { return selecting; };
@@ -15431,7 +15447,7 @@ return view.extend({
 			hidePick.update(allNodes.filter(function(n) { return !!n.name; }).map(function(n, ni) {
 				var byName = hn.indexOf(n.name || '') >= 0;
 				return { name: n.name || '', foot: [ n.type, n.security !== 'none' ? n.security : '' ].filter(Boolean).join(' · '), hidden: byName, locked: !!hidMap[n.index] && !byName };
-			}), { markers: subData.exclude || '' });
+			}), { markers: subData.exclude || '', hideNames: hn });
 			subCard.appendChild(hidePick);
 
 			var sk = subData.list && subData.list.skipped_reasons || [];
@@ -16867,7 +16883,7 @@ return view.extend({
 			var nodes = mxNodes(), hn = mxSrv.hide_names || [];
 			var items = nodes.map(function(n) { return { name: n.name, foot: n.type, hidden: false }; });
 			hn.forEach(function(nm) { if (!nodes.some(function(n) { return n.name === nm; })) items.push({ name: nm, foot: 'скрыт', hidden: true }); });
-			mxHide.update(items, { markers: mxSrv.exclude || '', noEdit: !nodes.length, error: mxSrv.error ? 'Список серверов недоступен: ' + mxSrv.error : (!nodes.length ? 'Mihomo не отдал список серверов — проверьте подписку в конфигурации' : '') });
+			mxHide.update(items, { markers: mxSrv.exclude || '', hideNames: hn, noEdit: !nodes.length, error: mxSrv.error ? 'Список серверов недоступен: ' + mxSrv.error : (!nodes.length ? 'Mihomo не отдал список серверов — проверьте подписку в конфигурации' : '') });
 			if (!mxHideMode && nodes.length) {
 				mxSrvEl.appendChild(E('div', { 'class': 'zm-nodes' }, nodes.map(function(n) {
 					return E('div', { 'class': 'zm-node', 'style': 'cursor:default' }, [
@@ -19098,6 +19114,11 @@ html.zm-theme-dark .zm-stopbar { background: #2a1416; color: #fecaca; border-col
 .zm-hide-grid .zm-node.zm-hide-lock { opacity: .45; cursor: not-allowed; }
 .zm-hide-grid .zm-hide-mark { font-weight: 700; opacity: .8; }
 .zm-hide-grid .zm-node.zm-hide-on .zm-hide-mark { color: #cf222e; opacity: 1; }
+.zm-hide-box { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; padding: 12px 14px; border-radius: 12px; border: 1px dashed rgba(154,103,0,.55); background: rgba(154,103,0,.06); }
+.zm-hide-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.zm-hide-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.zm-hide-chip { padding: 3px 10px; border-radius: 999px; font-size: 12px; background: rgba(127,127,127,.14); text-decoration: line-through; opacity: .85; overflow-wrap: anywhere; }
+.zm-hide-chip.zm-hide-more { text-decoration: none; }
 
 ZM_INSTALLER_EOF
 chmod 0644 '/www/luci-static/resources/view/zapret-manager/style.css'
@@ -20264,7 +20285,8 @@ return view.extend({
 		function connNow() {
 			var s = srvState();
 			if (!s || !s.curTag) return '';
-			return (s.auto ? (s.isAuto ? 'авто · ' : 'вручную · ') : '') + nodeName(s.cur);
+			var hc = (cfg && cfg.hide_names || []).length;
+			return (s.auto ? (s.isAuto ? 'авто · ' : 'вручную · ') : '') + nodeName(s.cur) + (hc ? ' · скрыто серверов: ' + hc : '');
 		}
 
 		function connValue(c) {
@@ -20476,13 +20498,17 @@ return view.extend({
 			}
 		}
 
+		var srvRetry = 0;
 		function loadServers() {
 			if (srvBusy) return;
 			srvBusy = true;
 			renderServers();
 			zm.forkopAction('servers', '').then(function(res) {
 				srvBusy = false;
-				if (res.error) { servers = null; srvErr = res.error; } else { servers = res; srvErr = ''; }
+				if (res.error) {
+					servers = null; srvErr = res.error;
+					if (srvRetry < 5 && st.running) { srvRetry++; setTimeout(function() { if (!servers) loadServers(); }, 4000); }
+				} else { servers = res; srvErr = ''; srvRetry = 0; }
 				renderServers();
 				renderMain();
 			}).catch(function() { srvBusy = false; srvErr = 'роутер не ответил'; renderServers(); });
@@ -20522,6 +20548,10 @@ return view.extend({
 			if (!servers) {
 				srvCard.appendChild(E('p', { 'class': 'zm-hint' }, srvBusy ? 'Загружаем список…' : (srvErr || 'Список ещё не загружен.')));
 				if (!srvBusy) srvCard.appendChild(E('div', { 'class': 'zm-actions' }, [ E('button', { 'class': 'cbi-button', 'click': loadServers }, 'Обновить') ]));
+				if (!hideMode && cfg && ((cfg.hide_names || []).length || cfg.exclude)) {
+					hidePick.update([], { markers: cfg.exclude || '', hideNames: cfg.hide_names || [], noEdit: true });
+					srvCard.appendChild(hidePick);
+				}
 				return;
 			}
 			var S = srvState(), ns = S.ns, autoTag = S.autoTag, auto = S.auto, isAuto = S.isAuto, curTag = S.curTag, cur = S.cur;
@@ -20548,7 +20578,7 @@ return view.extend({
 			hidePick.update(S.list.filter(function(t) { return t !== autoTag && ns[t]; }).map(function(t) {
 				var n = ns[t], nm = n.name || t, byName = hn.indexOf(nm) >= 0;
 				return { name: nm, foot: String(n.type || '').toLowerCase(), hidden: byName, locked: !!n.hidden && !byName };
-			}), { markers: servers.exclude || '' });
+			}), { markers: servers.exclude || '', hideNames: servers.hide_names || [] });
 			if (hideMode) { srvCard.appendChild(hidePick); return; }
 			srvCard.appendChild(E('div', { 'class': 'zm-nodes', 'style': 'margin-top:12px' }, tags.map(function(t) {
 				var n = ns[t] || { name: t, delay: -1 }, on = t === curTag;
@@ -24951,6 +24981,8 @@ html[data-theme="dark"] .zm-stopbar, html[data-theme="depth"] .zm-stopbar { back
 #zmw-view .zm-dns-btns .cbi-button { padding: 6px 10px; min-width: 36px; }
 
 #zmw-view .zm-hide-grid .zm-node.zm-hide-on { opacity: .62; border-style: dashed; border-color: rgba(239,68,68,.7); background: rgba(239,68,68,.08); box-shadow: none; }
+#zmw-view .zm-hide-box { border-color: rgba(245,158,11,.5); background: rgba(245,158,11,.07); }
+#zmw-view .zm-hide-chip { background: var(--surface-2); border: 1px solid var(--border); }
 
 ZM_INSTALLER_EOF
 cat > '/www/zm-webui.html' << 'ZM_INSTALLER_EOF'
