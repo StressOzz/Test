@@ -1,5 +1,5 @@
 #!/bin/sh
-# Version: 1.80
+# Version: 1.81
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -50,7 +50,7 @@ cat > '/opt/zapret-manager-luci/backend.sh' << 'ZM_INSTALLER_EOF'
 umask 022
 
 CONF="/etc/config/zapret"
-ZM_VERSION="1.80"
+ZM_VERSION="1.81"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
@@ -500,7 +500,7 @@ _fk_watch() {
 	_fk_installed && _fk_enabled || { rm -f "$f"; return 0; }
 	if _fk_up; then
 		rm -f "$f"
-		_job_running forkop || ! grep -q "zm_exclude" /etc/config/forkop 2>/dev/null || _fk_uc fixsel >/dev/null 2>&1
+		_job_running forkop || ! grep -qE "zm_exclude|zm_hide" /etc/config/forkop 2>/dev/null || _fk_uc fixsel >/dev/null 2>&1
 		return 0
 	fi
 	_job_running forkop && return 0
@@ -3879,7 +3879,7 @@ mixomo_config_set() {
 	[ -x /etc/init.d/mihomo ] || { echo '{"error":"Mixomo не установлен"}'; return 1; }
 	cp "$MIHOMO_CONF" "$MIHOMO_CONF.bak" 2>/dev/null
 	printf '%s' "$content" > "$MIHOMO_CONF"
-	[ -s "$MIXOMO_EXCL" ] && _mx_filter_apply
+	{ [ -s "$MIXOMO_EXCL" ] || [ -s "$MIXOMO_HIDE" ]; } && _mx_filter_apply
 	/etc/init.d/mihomo restart >/dev/null 2>&1
 	sleep 1
 	if pidof mihomo >/dev/null 2>&1; then
@@ -3892,10 +3892,47 @@ mixomo_config_set() {
 	fi
 }
 
+_mx_rx_esc() { sed 's/[][\\^$.|?*+(){}]/\\&/g; s/`/\\x60/g'; }
+
 _mx_filter_rx() {
-	[ -s "$MIXOMO_EXCL" ] || return 0
-	head -n1 "$MIXOMO_EXCL" | tr '|,' '\n\n' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' | grep -v '^$' |
-		sed 's/[][\\^$.|?*+(){}]/\\&/g' | awk 'BEGIN { o = "" } { o = o (o == "" ? "" : "|") $0 } END { if (o != "") printf "(?i)(%s)", o }'
+	local m="" h=""
+	[ -s "$MIXOMO_EXCL" ] && m="$(head -n1 "$MIXOMO_EXCL" | tr '|,' '\n\n' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' | grep -v '^$' | _mx_rx_esc | awk '{ o = o (NR > 1 ? "|" : "") $0 } END { printf "%s", o }')"
+	[ -s "$MIXOMO_HIDE" ] && h="$(grep -v '^$' "$MIXOMO_HIDE" | _mx_rx_esc | awk '{ o = o (NR > 1 ? "|" : "") $0 } END { printf "%s", o }')"
+	[ -n "$m" ] && printf '(?i:%s)' "$m"
+	[ -n "$m" ] && [ -n "$h" ] && printf '|'
+	[ -n "$h" ] && printf '^(?:%s)$' "$h"
+	return 0
+}
+
+_mx_api() {
+	local port sec
+	local ec host port sec
+	ec="$(sed -n 's/^external-controller:[[:space:]]*//p' "$MIHOMO_CONF" 2>/dev/null | head -n1 | sed 's/[[:space:]]*#.*$//; s/^["'\'']//; s/["'\''][[:space:]]*$//; s/[[:space:]]*$//')"
+	port="${ec##*:}"
+	case "$port" in ''|*[!0-9]*) port=9090 ;; esac
+	host="${ec%:*}"; host="${host#[}"; host="${host%]}"
+	case "$host" in ''|0.0.0.0|::|'*'|localhost) host=127.0.0.1 ;; esac
+	case "$host" in *:*) host="[$host]" ;; esac
+	sec="$(sed -n 's/^secret:[[:space:]]*//p' "$MIHOMO_CONF" 2>/dev/null | head -n1)"
+	case "$sec" in
+		\"*) sec="${sec#\"}"; sec="${sec%%\"*}" ;;
+		\'*) sec="${sec#\'}"; sec="${sec%%\'*}" ;;
+		*) sec="$(printf '%s' "$sec" | sed 's/[[:space:]]*#.*$//; s/[[:space:]]*$//')" ;;
+	esac
+	curl -s --connect-timeout 3 --max-time 8 ${sec:+-H "Authorization: Bearer $sec"} "http://$host:$port$1" 2>/dev/null
+}
+
+mixomo_proxies() {
+	local j
+	[ -x /etc/init.d/mihomo ] || { echo '{"error":"Mixomo не установлен"}'; return 1; }
+	pidof mihomo >/dev/null 2>&1 || { printf '{"error":"Mihomo не запущен","hide_names":[%s],"exclude":"%s"}\n' "$(_zm_json_lines "$MIXOMO_HIDE")" "$(esc "$(cat "$MIXOMO_EXCL" 2>/dev/null)")"; return 0; }
+	j="$(_mx_api /providers/proxies | tr '\n' ' ')"
+	case "$j" in
+		*'"providers"'*) ;;
+		'{'*'"message"'*) printf '{"error":"Mihomo не пустил к списку серверов — проверьте secret в конфигурации","hide_names":[%s],"exclude":"%s"}\n' "$(_zm_json_lines "$MIXOMO_HIDE")" "$(esc "$(cat "$MIXOMO_EXCL" 2>/dev/null)")"; return 0 ;;
+		*) j=null ;;
+	esac
+	printf '{"data":%s,"hide_names":[%s],"exclude":"%s"}\n' "$j" "$(_zm_json_lines "$MIXOMO_HIDE")" "$(esc "$(cat "$MIXOMO_EXCL" 2>/dev/null)")"
 }
 
 _mx_filter_apply() {
@@ -3924,16 +3961,30 @@ _mx_filter_apply() {
 }
 
 mixomo_filter_set() {
-	local m="$1" was=0
+	local m="$1" was=0 nf="$JOBS_DIR/mixomo.hide.in"
 	[ -x /etc/init.d/mihomo ] || { echo '{"error":"Mixomo не установлен"}'; return 1; }
+	case "$m" in
+		'{'*)
+			mkdir -p "$MIHOMO_DIR"
+			if [ "$(printf '%s' "$m" | jsonfilter -e '@.reset' 2>/dev/null)" = true ]; then
+				rm -f "$MIXOMO_HIDE" "$MIXOMO_EXCL"
+			else
+				printf '%s' "$m" | jsonfilter -e '@.names[*]' > "$nf" 2>/dev/null
+				_zm_names_save "$nf" "$MIXOMO_HIDE"
+				rm -f "$nf"
+			fi
+			m="$(cat "$MIXOMO_EXCL" 2>/dev/null)"
+			;;
+	esac
 	case "$m" in *"
 "*) echo '{"error":"маркеры — одной строкой через |"}'; return 1 ;; esac
 	[ "${#m}" -le 1600 ] || { echo '{"error":"слишком длинный список маркеров"}'; return 1; }
 	mkdir -p "$MIHOMO_DIR"
 	if [ -n "$(printf '%s' "$m" | tr -d ' |,')" ]; then printf '%s\n' "$m" > "$MIXOMO_EXCL"; else rm -f "$MIXOMO_EXCL"; fi
+	[ -s "$MIXOMO_HIDE" ] || [ -s "$MIXOMO_EXCL" ] || m=""
 	grep -q '^proxy-providers:' "$MIHOMO_CONF" 2>/dev/null || { printf '{"ok":true,"providers":false}\n'; return 0; }
 	_mx_filter_apply
-	if [ -s "$MIXOMO_EXCL" ] && ! grep -q '# zm-filter' "$MIHOMO_CONF" 2>/dev/null; then
+	if { [ -s "$MIXOMO_EXCL" ] || [ -s "$MIXOMO_HIDE" ]; } && ! grep -q '# zm-filter' "$MIHOMO_CONF" 2>/dev/null; then
 		printf '{"ok":true,"providers":false}\n'
 		return 0
 	fi
@@ -3958,7 +4009,7 @@ mixomo_subscription_set() {
 		if awk -v url="$sub_url" 'BEGIN { updated = 0; in_provider = 0; section = "" } { if ($0 ~ /^[a-zA-Z_-]+:/) { section = $0; sub(/:.*/, "", section) } if (!updated && section == "proxy-providers" && $0 ~ /^[[:space:]]*type:[[:space:]]*http[[:space:]]*$/) { in_provider = 1; print; next } if (!updated && in_provider && $0 ~ /^[[:space:]]*url:[[:space:]]*"/) { sub(/url:[[:space:]]*".*"/, "url: \"" url "\""); updated = 1; in_provider = 0; print; next } print } END { exit (updated ? 0 : 1) }' "$MIHOMO_CONF" > "$tmp"
 		then
 			mv "$tmp" "$MIHOMO_CONF"
-			[ -s "$MIXOMO_EXCL" ] && _mx_filter_apply
+			{ [ -s "$MIXOMO_EXCL" ] || [ -s "$MIXOMO_HIDE" ]; } && _mx_filter_apply
 			/etc/init.d/mihomo restart >/dev/null 2>&1
 			printf '{"ok":true,"mode":"updated"}\n'
 			return 0
@@ -3986,7 +4037,7 @@ mixomo_subscription_set() {
 		'    url: "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/YouTube/YouTube.yaml"' \
 		'    path: ./rule-providers/youtube.yaml' '    interval: 86400' \
 		> "$MIHOMO_CONF"
-	[ -s "$MIXOMO_EXCL" ] && _mx_filter_apply
+	{ [ -s "$MIXOMO_EXCL" ] || [ -s "$MIXOMO_HIDE" ]; } && _mx_filter_apply
 	/etc/init.d/mihomo restart >/dev/null 2>&1
 	printf '{"ok":true,"mode":"created"}\n'
 }
@@ -4082,6 +4133,7 @@ mixomo_ui_action() {
 
 MIXOMO_WARP_CONF="/root/WARP.conf"
 MIXOMO_EXCL="$MIHOMO_DIR/.zm_exclude"
+MIXOMO_HIDE="$MIHOMO_DIR/.zm_hide"
 MIXOMO_WARP_PRIMARY="https://santa-atmo.ru/warp/warp.php"
 MIXOMO_AWG_JC=4
 MIXOMO_AWG_JMIN=40
@@ -6029,7 +6081,7 @@ do_doh_remove() {
 	echo "==> Удаляем пакеты"
 	$DELETE luci-i18n-https-dns-proxy-ru luci-app-https-dns-proxy https-dns-proxy
 	echo "==> Удаляем настройки и правила перехвата DNS"
-	rm -f /etc/config/https-dns-proxy /etc/config/https-dns-proxy-opkg /etc/init.d/https-dns-proxy /etc/rc.d/*https-dns-proxy "$DOH_OFF_FLAG" "$DOH_FORCE_MODE_FILE"
+	rm -f /etc/config/https-dns-proxy /etc/config/https-dns-proxy-opkg /etc/init.d/https-dns-proxy /etc/rc.d/*https-dns-proxy "$DOH_OFF_FLAG" "$DOH_FORCE_MODE_FILE" "$DOH_BOOT_FILE"
 	_zm_dns_scrub '^127\.0\.0\.1#50[0-9][0-9]$'
 	for r in $(uci -q show firewall | sed -n "s/^firewall\.\([^.=]*\)\.name='[^']*[Hh]ttps[-_ ]dns[-_ ]proxy[^']*'\$/\1/p"); do uci -q delete "firewall.$r"; done
 	uci -q commit firewall
@@ -6073,7 +6125,7 @@ doh_status() {
 			port="$(uci -q get "https-dns-proxy.@https-dns-proxy[$i].listen_port")"
 			[ -n "$port" ] || port=$((5053 + i))
 			prov="$(_doh_provider_of "$url")"
-			list="$list$sep{\"url\":\"$(esc "$url")\",\"port\":\"$(esc "$port")\",\"provider\":\"$prov\"}"
+			list="$list$sep{\"url\":\"$(esc "$url")\",\"port\":\"$(esc "$port")\",\"provider\":\"$prov\",\"bootstrap\":\"$(esc "$(uci -q get "https-dns-proxy.@https-dns-proxy[$i].bootstrap_dns")")\"}"
 			sep=","; n=$((n + 1)); provs="$prov"
 			i=$((i + 1))
 			[ "$i" -gt 16 ] && break
@@ -6082,11 +6134,61 @@ doh_status() {
 		[ "$(uci -q get https-dns-proxy.config.force_dns)" != "0" ] && force=true
 	fi
 	/etc/init.d/https-dns-proxy running >/dev/null 2>&1 && running=true
-	printf '{"installed":%s,"current":"%s","running":%s,"force_dns":%s,"force_mode":"%s","resolvers":[%s],"steer_active":%s,"steer_installed":%s,"forkozz":%s}\n' \
+	printf '{"installed":%s,"current":"%s","running":%s,"force_dns":%s,"force_mode":"%s","resolvers":[%s],"steer_active":%s,"steer_installed":%s,"forkozz":%s,"bootstrap_custom":"%s"}\n' \
 		"$installed" "$(esc "$current")" "$running" "$force" "$(_doh_force_mode)" "$list" \
 		"$(_doh_steer_active && echo true || echo false)" \
 		"$(grep -qx 'engine' /etc/zm-steer/owned 2>/dev/null && command -v steer >/dev/null 2>&1 && echo true || echo false)" \
-		"$(_fk_installed && echo true || echo false)"
+		"$(_fk_installed && echo true || echo false)" "$(esc "$(cat "$DOH_BOOT_FILE" 2>/dev/null)")"
+}
+
+DOH_BOOT_FILE="/opt/zapret-manager-luci/doh_bootstrap"
+
+_doh_boot_of() {
+	case "$1" in
+		cloudflare) echo "1.1.1.1,1.0.0.1,2606:4700:4700::1111,2606:4700:4700::1001" ;;
+		google) echo "8.8.8.8,8.8.4.4,2001:4860:4860::8888,2001:4860:4860::8844" ;;
+		quad9) echo "9.9.9.9,149.112.112.112,2620:fe::fe,2620:fe::9" ;;
+		yandex_family) echo "77.88.8.7,77.88.8.3" ;;
+		yandex_safe) echo "77.88.8.88,77.88.8.2" ;;
+	esac
+}
+
+_doh_ip_ok() {
+	printf '%s' "$1" | grep -qE '^([0-9]{1,3}\.){3}[0-9]{1,3}$' && {
+		local IFS=. o
+		for o in $1; do [ "$o" -le 255 ] 2>/dev/null || return 1; done
+		return 0
+	}
+	printf '%s' "$1" | grep -qE '^[0-9A-Fa-f:]+$' && printf '%s' "$1" | grep -q ':.*:'
+}
+
+doh_bootstrap_set() {
+	local v="$1" ip out="" n=0 i url b
+	case "$v" in *[*?\[]*) echo '{"error":"укажите IP-адреса через запятую, например 77.88.8.8, 1.1.1.1"}'; return 1 ;; esac
+	for ip in $(printf '%s' "$v" | tr ',;' '  '); do
+		_doh_ip_ok "$ip" || { printf '{"error":"%s"}\n' "$(esc "«$ip» — не IP-адрес. Укажите IP через запятую, например 77.88.8.8, 1.1.1.1")"; return 1; }
+		case ",$out," in *",$ip,"*) continue ;; esac
+		out="$out${out:+,}$ip"; n=$((n + 1))
+	done
+	[ "$n" -le 6 ] || { echo '{"error":"укажите не больше 6 адресов"}'; return 1; }
+	mkdir -p "$(dirname "$DOH_BOOT_FILE")"
+	if [ -n "$out" ]; then printf '%s\n' "$out" > "$DOH_BOOT_FILE"; else rm -f "$DOH_BOOT_FILE"; fi
+	if [ -f "$_doh_file" ] && _doh_pkg; then
+		i=0
+		while url="$(uci -q get "https-dns-proxy.@https-dns-proxy[$i].resolver_url")"; do
+			b="$out"
+			[ -n "$b" ] || b="$(_doh_boot_of "$(_doh_provider_of "$url")")"
+			if [ -n "$b" ]; then uci -q set "https-dns-proxy.@https-dns-proxy[$i].bootstrap_dns=$b"
+			else uci -q delete "https-dns-proxy.@https-dns-proxy[$i].bootstrap_dns"; fi
+			i=$((i + 1)); [ "$i" -gt 16 ] && break
+		done
+		uci -q commit https-dns-proxy
+		if [ ! -f "$DOH_OFF_FLAG" ]; then
+			_zm_run 30 /etc/init.d/https-dns-proxy restart >/dev/null 2>&1
+			/etc/init.d/dnsmasq restart >/dev/null 2>&1
+		fi
+	fi
+	printf '{"ok":true,"bootstrap":"%s"}\n' "$(esc "$out")"
 }
 
 doh_set() {
@@ -6105,6 +6207,7 @@ doh_set() {
 		geohide_us)  url="https://us.geohide.ru/dns-query" ;;
 		*) echo '{"error":"неизвестный провайдер"}'; return 1 ;;
 	esac
+	[ -s "$DOH_BOOT_FILE" ] && bootstrap="$(head -n1 "$DOH_BOOT_FILE")"
 	local installed; installed=$(doh_status | grep -o '"installed":[a-z]*' | cut -d: -f2)
 	if [ "$installed" != "true" ]; then
 		echo '{"error":"DNS over HTTPS не установлен — сначала нажмите «Установить DNS over HTTPS»"}'
@@ -8491,6 +8594,7 @@ ST_SUB_URL="$ST_DIR/sub.url"
 ST_SUB_TITLE="$ST_DIR/sub.title"
 ST_SUB_NODE="$ST_DIR/sub.node"
 ST_SUB_EXCL="$ST_DIR/sub.exclude"
+ST_SUB_HIDE="$ST_DIR/sub.hidden"
 ST_EXIT="$ST_DIR/exit"
 
 _st_exit() {
@@ -8559,10 +8663,33 @@ ZM_FOLD_AWK='function fold(x,  k) { x = tolower(x); for (k = 1; k <= nU; k++) gs
 BEGIN { nU = split("А Б В Г Д Е Ё Ж З И Й К Л М Н О П Р С Т У Ф Х Ц Ч Ш Щ Ъ Ы Ь Э Ю Я", U, " "); split("а б в г д е ё ж з и й к л м н о п р с т у ф х ц ч ш щ ъ ы ь э ю я", L, " ") }'
 
 _zm_excl_hits() {
+	[ -s "$1" ] || [ -s "${2:-/nonexistent}" ] || return 0
+	ZM_EXCL="$(head -n1 "$1" 2>/dev/null)" ZM_HIDE="${2:-}" awk -F'\t' "$ZM_FOLD_AWK"'
+		BEGIN {
+			c = split(ENVIRON["ZM_EXCL"], a, /[|,]/); n = 0
+			for (i = 1; i <= c; i++) { t = a[i]; gsub(/^[ \t]+|[ \t]+$/, "", t); if (t != "") m[++n] = fold(t) }
+			f = ENVIRON["ZM_HIDE"]
+			if (f != "") while ((getline l < f) > 0) if (l != "") h[l] = 1
+		}
+		{
+			if ($2 in h) { print $1; next }
+			nm = fold($2); for (i = 1; i <= n; i++) if (index(nm, m[i])) { print $1; break }
+		}'
+}
+
+_zm_json_lines() {
+	local l sep=""
 	[ -s "$1" ] || return 0
-	ZM_EXCL="$(head -n1 "$1")" awk -F'\t' "$ZM_FOLD_AWK"'
-		BEGIN { c = split(ENVIRON["ZM_EXCL"], a, /[|,]/); n = 0; for (i = 1; i <= c; i++) { t = a[i]; gsub(/^[ \t]+|[ \t]+$/, "", t); if (t != "") m[++n] = fold(t) } }
-		{ nm = fold($2); for (i = 1; i <= n; i++) if (index(nm, m[i])) { print $1; break } }'
+	while IFS= read -r l || [ -n "$l" ]; do
+		[ -n "$l" ] || continue
+		printf '%s"%s"' "$sep" "$(esc "$l")"; sep=","
+	done < "$1"
+}
+
+_zm_names_save() {
+	local src="$1" dst="$2"
+	awk 'length($0) > 0 && length($0) <= 400 && !s[$0]++' "$src" 2>/dev/null | head -n 300 > "$dst.tmp"
+	if [ -s "$dst.tmp" ]; then mv -f "$dst.tmp" "$dst"; else rm -f "$dst.tmp" "$dst"; fi
 }
 
 _zm_excl_save() {
@@ -8580,7 +8707,7 @@ _st_sub_node_idx() {
 	local want tsv hid n allowed
 	[ -s "$ST_SUB" ] || return 0
 	tsv="$(steer vless-nodes "$ST_SUB" 2>/dev/null | _zm_nodes_tsv)"
-	hid="$(printf '%s\n' "$tsv" | _zm_excl_hits "$ST_SUB_EXCL" | tr '\n' ' ')"
+	hid="$(printf '%s\n' "$tsv" | _zm_excl_hits "$ST_SUB_EXCL" "$ST_SUB_HIDE" | tr '\n' ' ')"
 	want="$(cat "$ST_SUB_NODE" 2>/dev/null)"
 	if [ -n "$want" ]; then
 		n="$(printf '%s\n' "$tsv" | ZM_W="$want" awk -F'\t' '$2 == ENVIRON["ZM_W"] { print $1; exit }')"
@@ -8810,12 +8937,12 @@ steer_sub_action() {
 				_zm_excl_save "$ST_DIR/sub.exclude.try" "$m" >/dev/null
 				tsv="$(steer vless-nodes "$ST_SUB" 2>/dev/null | _zm_nodes_tsv)"
 				total="$(printf '%s\n' "$tsv" | grep -c .)"
-				hid="$(printf '%s\n' "$tsv" | _zm_excl_hits "$ST_DIR/sub.exclude.try" | grep -c .)"
+				hid="$(printf '%s\n' "$tsv" | _zm_excl_hits "$ST_DIR/sub.exclude.try" "$ST_SUB_HIDE" | grep -c .)"
 				rm -f "$ST_DIR/sub.exclude.try"
 				[ "$total" -gt 0 ] && [ "$hid" -ge "$total" ] && { echo '{"error":"под эти маркеры попадают все узлы подписки — тогда VPN работать не сможет. Уберите лишние маркеры"}'; return 1; }
 			fi
 			err="$(_zm_excl_save "$ST_SUB_EXCL" "$m")" || { printf '{"error":"%s"}\n' "$(esc "$err")"; return 1; }
-			if [ -s "$ST_SUB_NODE" ] && [ -s "$ST_SUB_EXCL" ] && steer vless-nodes "$ST_SUB" 2>/dev/null | _zm_nodes_tsv | ZM_W="$(cat "$ST_SUB_NODE")" awk -F'\t' '$2 == ENVIRON["ZM_W"]' | _zm_excl_hits "$ST_SUB_EXCL" | grep -q .; then
+			if [ -s "$ST_SUB_NODE" ] && steer vless-nodes "$ST_SUB" 2>/dev/null | _zm_nodes_tsv | ZM_W="$(cat "$ST_SUB_NODE")" awk -F'\t' '$2 == ENVIRON["ZM_W"]' | _zm_excl_hits "$ST_SUB_EXCL" "$ST_SUB_HIDE" | grep -q .; then
 				rm -f "$ST_SUB_NODE"
 			fi
 			if [ -s "$ST_SUB" ] && _st_use_vpn && _st_installed && [ ! -f "$ST_OFF" ] && [ -z "$(_st_blocker)" ] && [ -n "$(_st_sel)" ]; then
@@ -8824,9 +8951,33 @@ steer_sub_action() {
 				printf '{"ok":true,"saved":true}\n'
 			fi
 			;;
+		sub_hide)
+			local nf="$JOBS_DIR/steer.hide.in" tsv total hid
+			[ -s "$ST_SUB" ] || { echo '{"error":"подписки нет"}'; return 1; }
+			mkdir -p "$ST_DIR"
+			if [ "$(printf '%s' "$mode" | jsonfilter -e '@.reset' 2>/dev/null)" = true ]; then
+				rm -f "$ST_SUB_HIDE" "$ST_SUB_EXCL"
+			else
+				printf '%s' "$mode" | jsonfilter -e '@.names[*]' > "$nf" 2>/dev/null
+				tsv="$(steer vless-nodes "$ST_SUB" 2>/dev/null | _zm_nodes_tsv)"
+				total="$(printf '%s\n' "$tsv" | grep -c .)"
+				hid="$(printf '%s\n' "$tsv" | _zm_excl_hits "$ST_SUB_EXCL" "$nf" | grep -c .)"
+				if [ "$total" -gt 0 ] && [ "$hid" -ge "$total" ]; then rm -f "$nf"; echo '{"error":"нельзя скрыть все узлы — тогда VPN работать не сможет"}'; return 1; fi
+				_zm_names_save "$nf" "$ST_SUB_HIDE"
+				rm -f "$nf"
+				if [ -s "$ST_SUB_NODE" ] && printf '%s\n' "$tsv" | ZM_W="$(cat "$ST_SUB_NODE")" awk -F'\t' '$2 == ENVIRON["ZM_W"]' | _zm_excl_hits "$ST_SUB_EXCL" "$ST_SUB_HIDE" | grep -q .; then
+					rm -f "$ST_SUB_NODE"
+				fi
+			fi
+			if _st_use_vpn && _st_installed && [ ! -f "$ST_OFF" ] && [ -z "$(_st_blocker)" ] && [ -n "$(_st_sel)" ]; then
+				job_start steer do_steer_apply
+			else
+				printf '{"ok":true,"saved":true}\n'
+			fi
+			;;
 		sub_node)
 			[ -s "$ST_SUB" ] || { echo '{"error":"подписки нет"}'; return 1; }
-			if [ -n "$mode" ] && [ -s "$ST_SUB_EXCL" ] && steer vless-nodes "$ST_SUB" 2>/dev/null | _zm_nodes_tsv | ZM_W="$mode" awk -F'\t' '$2 == ENVIRON["ZM_W"]' | _zm_excl_hits "$ST_SUB_EXCL" | grep -q .; then
+			if [ -n "$mode" ] && steer vless-nodes "$ST_SUB" 2>/dev/null | _zm_nodes_tsv | ZM_W="$mode" awk -F'\t' '$2 == ENVIRON["ZM_W"]' | _zm_excl_hits "$ST_SUB_EXCL" "$ST_SUB_HIDE" | grep -q .; then
 				echo '{"error":"этот узел скрыт фильтром — уберите маркер или выберите другой узел"}'; return 1
 			fi
 			mkdir -p "$ST_DIR"
@@ -8906,16 +9057,16 @@ steer_sub_status() {
 		mt="$(date -r "$ST_SUB" +%s 2>/dev/null)"
 		if [ "$ext" = true ]; then
 			list="$(steer vless-nodes "$ST_SUB" 2>/dev/null | tr '\n' ' ')"
-			case "$list" in '{'*) hidden="$(printf '%s\n' "$list" | _zm_nodes_tsv | _zm_excl_hits "$ST_SUB_EXCL" | tr '\n' ',' | sed 's/,$//')" ;; *) list=null ;; esac
+			case "$list" in '{'*) hidden="$(printf '%s\n' "$list" | _zm_nodes_tsv | _zm_excl_hits "$ST_SUB_EXCL" "$ST_SUB_HIDE" | tr '\n' ',' | sed 's/,$//')" ;; *) list=null ;; esac
 		fi
 	fi
 	if _st_use_vpn && [ -s "$ST_STEER_SPEC" ] && _st_owns "steer-spec"; then
 		vpn="$(steer status --spec "$ST_STEER_SPEC" 2>/dev/null | jsonfilter -e "@.outputs.$ST_VPN_OUT" 2>/dev/null | tr '\n' ' ')"
 		case "$vpn" in '{'*) ;; *) vpn=null ;; esac
 	fi
-	printf '{"ext":%s,"has":%s,"kind":"%s","url":"%s","title":"%s","exit":"%s","auto":"%s","node":"%s","quota":{"up":"%s","down":"%s","total":"%s","expire":"%s"},"updated":%s,"list":%s,"vpn":%s,"hidden":[%s],"exclude":"%s"}\n' \
+	printf '{"ext":%s,"has":%s,"kind":"%s","url":"%s","title":"%s","exit":"%s","auto":"%s","node":"%s","quota":{"up":"%s","down":"%s","total":"%s","expire":"%s"},"updated":%s,"list":%s,"vpn":%s,"hidden":[%s],"exclude":"%s","hide_names":[%s]}\n' \
 		"$ext" "$has" "$kind" "$(esc "$url")" "$(esc "$title")" "$vexit" "$(_st_sub_auto_get)" "$(esc "$node")" \
-		"$(esc "$up")" "$(esc "$down")" "$(esc "$total")" "$(esc "$expire")" "${mt:-0}" "$list" "$vpn" "$hidden" "$(esc "$(cat "$ST_SUB_EXCL" 2>/dev/null)")"
+		"$(esc "$up")" "$(esc "$down")" "$(esc "$total")" "$(esc "$expire")" "${mt:-0}" "$list" "$vpn" "$hidden" "$(esc "$(cat "$ST_SUB_EXCL" 2>/dev/null)")" "$(_zm_json_lines "$ST_SUB_HIDE")"
 }
 
 steer_sub_probe() {
@@ -8980,7 +9131,7 @@ steer_action() {
 			job_start steer do_steer_sub_update >/dev/null
 			;;
 		sub_probe) steer_sub_probe "$mode" ;;
-		sub_set|sub_update|sub_remove|sub_exit|sub_node|sub_filter)
+		sub_set|sub_update|sub_remove|sub_exit|sub_node|sub_filter|sub_hide)
 			_st_running && { echo '{"error":"дождитесь окончания текущей операции"}'; return 1; }
 			steer_sub_action "$action" "$mode"
 			;;
@@ -10604,7 +10755,7 @@ do_fk_sb_remove() {
 
 _fk_fixsel() {
 	local r i=0
-	grep -q "zm_exclude" /etc/config/forkop 2>/dev/null || return 0
+	grep -qE "zm_exclude|zm_hide" /etc/config/forkop 2>/dev/null || return 0
 	while [ "$i" -lt 10 ]; do
 		r="$(_fk_uc fixsel 2>/dev/null)"
 		[ "$(printf '%s' "$r" | jsonfilter -e '@.ok' 2>/dev/null)" = true ] && break
@@ -10875,6 +11026,14 @@ forkop_action() {
 		servers)       _fk_uc servers ;;
 		latency)       _fk_uc latency ;;
 		dns_test)      fk_dns_test "$arg" ;;
+		hide)
+			_fk_installed || { echo '{"error":"Forkozz не установлен"}'; return 1; }
+			_job_running forkop && { echo '{"error":"дождитесь окончания текущей операции"}'; return 1; }
+			b="$(printf '%s' "$arg" | _fk_uc hide 2>&1)"
+			case "$b" in *'"ok": true'*|*'"ok":true'*) ;; *) printf '%s\n' "$b"; return 1 ;; esac
+			if _fk_enabled && _fk_up; then job_start forkop do_fk_service apply
+			else printf '{"ok":true,"saved":true}\n'; fi
+			;;
 		select)        _fk_uc select "" "$arg" ;;
 		*) echo '{"error":"неизвестное действие"}' ;;
 	esac
@@ -11150,6 +11309,7 @@ case "$cmd" in
 	doh_remove)                          doh_remove ;;
 	doh_status)                          doh_status ;;
 	doh_set)                              doh_set "$1" ;;
+	doh_bootstrap_set)                    doh_bootstrap_set "$1" ;;
 	doh_force_set)                        doh_force_set "$1" ;;
 	test_status)                          test_status ;;
 	test_action)                          test_action "$1" "$2" ;;
@@ -11162,6 +11322,7 @@ case "$cmd" in
 	mixomo_config_set)                    mixomo_config_set "$1" ;;
 	mixomo_subscription_set)              mixomo_subscription_set "$1" ;;
 	mixomo_filter_set)                    mixomo_filter_set "$1" ;;
+	mixomo_proxies)                       mixomo_proxies ;;
 	mixomo_magitrickle_list_set)          mixomo_magitrickle_list_set "$1" ;;
 	mixomo_autorestart_set)               mixomo_autorestart_set "$1" "$2" ;;
 	mixomo_ui_action)                     mixomo_ui_action "$1" ;;
@@ -11486,11 +11647,21 @@ function excl_list(v) {
 	return out;
 }
 
-function excl_vars(m) { return excl_list(m.zm_exclude); }
+function rawlist(v) {
+	if (v == null) return [];
+	if (type(v) != "array") v = [ v ];
+	return filter(map(v, (x) => s(x)), (x) => x != "");
+}
 
-function excl_hit(name, list) {
+function excl_vars(m) { return { m: excl_list(m.zm_exclude), h: rawlist(m.zm_hide) }; }
+
+function excl_any(f) { return length(f.m) > 0 || length(f.h) > 0; }
+
+function excl_hit(name, f) {
+	name = s(name);
+	if (index(f.h, name) >= 0) return true;
 	name = fold(name);
-	for (let x in list) if (x != "" && index(name, x) >= 0) return true;
+	for (let x in f.m) if (x != "" && index(name, x) >= 0) return true;
 	return false;
 }
 
@@ -11514,6 +11685,37 @@ function rx_ci(m) {
 		else out += ch;
 	}
 	return out;
+}
+
+function rx_lit(v) {
+	let o = "";
+	v = s(v);
+	for (let i = 0; i < length(v); i++) o += rx_char(substr(v, i, 1));
+	return o;
+}
+
+function filt_rx(f) {
+	let parts = [];
+	if (length(f.m)) push(parts, "(" + join("|", map(f.m, rx_ci)) + ")");
+	if (length(f.h)) push(parts, "^(" + join("|", map(f.h, rx_lit)) + ")$");
+	return join("|", parts);
+}
+
+function apply_urltest(c, sec, un, my_rx) {
+	let prev_rx = s(c.get(CFG, sec, "zm_exclude_rx"));
+	if (my_rx != "") c.set(CFG, sec, "zm_exclude_rx", my_rx); else c.delete(CFG, sec, "zm_exclude_rx");
+	if (!un) return;
+	let urx = filter(arr(c.get(CFG, un, "exclude_regex")), (x) => x != prev_rx && x != my_rx);
+	let all_rx = my_rx != "" ? [ ...urx, my_rx ] : urx;
+	let fm = s(c.get(CFG, un, "filter_mode") || "disabled");
+	if (length(all_rx)) c.set(CFG, un, "exclude_regex", all_rx); else c.delete(CFG, un, "exclude_regex");
+	if (my_rx != "") {
+		if (fm == "include") c.set(CFG, un, "filter_mode", "mixed");
+		else if (fm != "mixed") c.set(CFG, un, "filter_mode", "exclude");
+	} else if (prev_rx != "" && !length(urx)) {
+		if (fm == "exclude") c.set(CFG, un, "filter_mode", "disabled");
+		else if (fm == "mixed") c.set(CFG, un, "filter_mode", "include");
+	}
 }
 
 function link_name(l) {
@@ -11675,10 +11877,10 @@ function cmd_set() {
 	let xstr = trim(s(d.exclude));
 	if (mode == "iface") xstr = "";
 	if (match(xstr, /[\r\n]/) || length(xstr) > 1600) fail("маркеры — одной строкой через |, не длиннее 400 символов");
-	let xv = excl_list(xstr);
-	if (length(xv) > 40) fail("маркеров можно указать не больше 40");
-	if (!length(xv)) xstr = "";
-	if (length(xv)) {
+	let xv = { m: excl_list(xstr), h: mode == "iface" ? [] : rawlist(c.get(CFG, sec, "zm_hide")) };
+	if (length(xv.m) > 40) fail("маркеров можно указать не больше 40");
+	if (!length(xv.m)) xstr = "";
+	if (excl_any(xv)) {
 		let names = [];
 		if (mode == "links") names = filter(map(links, link_name), (x) => x != "");
 		else {
@@ -11691,11 +11893,10 @@ function cmd_set() {
 		if (mode == "sub" && length(names) && length(filter(names, (n) => !excl_hit(n, xv))) == 0)
 			fail("под эти маркеры попадают все серверы подписки — тогда Forkozz работать не сможет. Уберите лишние маркеры");
 	}
-	let prev_rx = s(c.get(CFG, sec, "zm_exclude_rx"));
-	let my_rx = length(xv) ? "(" + join("|", map(xv, rx_ci)) + ")" : "";
+	let my_rx = filt_rx(xv);
 	c.delete(CFG, sec, "zm_exclude_v");
-	if (xstr != "") { c.set(CFG, sec, "zm_exclude", xstr); c.set(CFG, sec, "zm_exclude_rx", my_rx); }
-	else { c.delete(CFG, sec, "zm_exclude"); c.delete(CFG, sec, "zm_exclude_rx"); }
+	if (xstr != "") c.set(CFG, sec, "zm_exclude", xstr); else c.delete(CFG, sec, "zm_exclude");
+	if (mode == "iface") c.delete(CFG, sec, "zm_hide");
 
 	let auto = !!d.fastest && (mode == "sub" || (mode == "links" && length(links) > 1));
 	let un = keep_one(c, "urltest", sec, auto);
@@ -11703,18 +11904,8 @@ function cmd_set() {
 		if (!c.get(CFG, un, "name")) c.set(CFG, un, "name", "Авто");
 		for (let kv in [ [ "check_interval", "3m" ], [ "tolerance", "50" ], [ "interrupt_exist_connections", "1" ] ])
 			if (!c.get(CFG, un, kv[0])) c.set(CFG, un, kv[0], kv[1]);
-		let urx = filter(arr(c.get(CFG, un, "exclude_regex")), (x) => x != prev_rx && x != my_rx);
-		let all_rx = my_rx != "" ? [ ...urx, my_rx ] : urx;
-		let fm = s(c.get(CFG, un, "filter_mode") || "disabled");
-		if (length(all_rx)) c.set(CFG, un, "exclude_regex", all_rx); else c.delete(CFG, un, "exclude_regex");
-		if (my_rx != "") {
-			if (fm == "include") c.set(CFG, un, "filter_mode", "mixed");
-			else if (fm != "mixed") c.set(CFG, un, "filter_mode", "exclude");
-		} else if (prev_rx != "" && !length(urx)) {
-			if (fm == "exclude") c.set(CFG, un, "filter_mode", "disabled");
-			else if (fm == "mixed") c.set(CFG, un, "filter_mode", "include");
-		}
 	}
+	apply_urltest(c, sec, un, my_rx);
 	c.delete(CFG, sec, "urltest_enabled");
 
 	set_list(c, sec, "community_lists", services);
@@ -11760,7 +11951,7 @@ function cmd_set() {
 			x = trim(s(x));
 			if (x == "" || seen[x]) continue;
 			seen[x] = true;
-			if (!valid_ip(x) || index(x, "/") >= 0) fail("резервный DNS должен быть IP-адресом (ошибка в «" + x + "»)");
+			if (!valid_ip(x) || index(x, "/") >= 0) fail("Bootstrap DNS — только IPv4-адреса, например 77.88.8.8 (ошибка в «" + x + "»)");
 			push(bss, x);
 		}
 		if (!length(bss)) push(bss, "9.9.9.9");
@@ -11815,7 +12006,7 @@ function cmd_servers(sec) {
 	if (!g || type(g.all) != "array") fail("список серверов ещё не готов — примените настройки");
 	let meta = jcmd(BIN + " get_outbound_metadata " + q(sec)) || {};
 	let names = type(meta.names) == "object" ? meta.names : {}, cc = type(meta.countries) == "object" ? meta.countries : {};
-	let xv = excl_vars(cursor().get_all(CFG, sec) || {}), hidden = 0;
+	let xm = cursor().get_all(CFG, sec) || {}, xv = excl_vars(xm), hidden = 0;
 	let nodes = {};
 	for (let t in g.all) {
 		nodes[t] = node_info(px, names, cc, t);
@@ -11824,12 +12015,12 @@ function cmd_servers(sec) {
 	}
 	for (let t in keys(nodes))
 		if (!nodes[t].members && excl_hit(nodes[t].name, xv)) { nodes[t].hidden = true; if (index(g.all, t) >= 0) hidden++; }
-	out({ group: group_tag(sec), now: s(g.now), list: g.all, nodes, sub: sub_info(sec), hidden, exclude: s((cursor().get_all(CFG, sec) || {}).zm_exclude) });
+	out({ group: group_tag(sec), now: s(g.now), list: g.all, nodes, sub: sub_info(sec), hidden, exclude: s(xm.zm_exclude), hide_names: xv.h });
 }
 
 function cmd_fixsel(sec) {
 	let xv = excl_vars(cursor().get_all(CFG, sec) || {});
-	if (!length(xv)) { out({ ok: true, changed: false }); return; }
+	if (!excl_any(xv)) { out({ ok: true, changed: false }); return; }
 	let j = jcmd(BIN + " clash_api get_proxies");
 	let px = j && type(j.proxies) == "object" ? j.proxies : null;
 	let g = px ? px[group_tag(sec)] : null;
@@ -11857,14 +12048,52 @@ function cmd_latency(sec) {
 function cmd_select(sec, tag) {
 	if (s(tag) == "") fail("не выбран сервер");
 	let xv = excl_vars(cursor().get_all(CFG, sec) || {});
-	if (length(xv)) {
+	if (excl_any(xv)) {
 		let meta = jcmd(BIN + " get_outbound_metadata " + q(sec)) || {};
 		let names = type(meta.names) == "object" ? meta.names : {};
-		if (excl_hit(s(names[tag] || tag), xv)) fail("этот сервер скрыт фильтром — уберите маркер, чтобы его выбрать");
+		if (excl_hit(s(names[tag] || tag), xv)) fail("этот сервер скрыт — сначала верните его в список");
 	}
 	let j = jcmd(BIN + " clash_api set_group_proxy " + q(group_tag(sec)) + " " + q(tag));
 	if (type(j) == "object" && (j.error || j.success === false)) fail(s(j.error || j.message || "сервер не переключился"));
 	out({ ok: true });
+}
+
+function cmd_hide(sec) {
+	let raw = fs.stdin.read("all"), d;
+	try { d = json(s(raw)); } catch (e) { fail("не удалось прочитать список"); }
+	if (type(d) != "object") fail("пустой запрос");
+	let c = cursor();
+	if (c.get(CFG, sec) != "section") fail("Forkozz ещё не настроен");
+	let names = [];
+	if (d.reset) {
+		c.delete(CFG, sec, "zm_hide");
+		c.delete(CFG, sec, "zm_exclude");
+	} else {
+		let seen = {};
+		for (let n in (type(d.names) == "array" ? d.names : [])) {
+			n = s(n);
+			if (n == "" || length(n) > 400 || match(n, /[\r\n]/) || seen[n]) continue;
+			seen[n] = true;
+			push(names, n);
+		}
+		if (length(names) > 300) fail("слишком много серверов");
+		let f = { m: excl_list(c.get(CFG, sec, "zm_exclude")), h: names };
+		let j = jcmd(BIN + " clash_api get_proxies");
+		let px = j && type(j.proxies) == "object" ? j.proxies : null;
+		let g = px ? px[group_tag(sec)] : null;
+		if (length(names) && g && type(g.all) == "array") {
+			let meta = jcmd(BIN + " get_outbound_metadata " + q(sec)) || {};
+			let nm = type(meta.names) == "object" ? meta.names : {};
+			let real = filter(g.all, (t) => !(px[t] && lc(s(px[t].type)) == "urltest"));
+			if (length(real) && !length(filter(real, (t) => !excl_hit(s(nm[t] || t), f)))) fail("нельзя скрыть все серверы — тогда Forkozz работать не сможет");
+		}
+		if (length(names)) c.set(CFG, sec, "zm_hide", names); else c.delete(CFG, sec, "zm_hide");
+	}
+	let ut = children(c, "urltest", sec);
+	apply_urltest(c, sec, length(ut) ? ut[0][".name"] : null, filt_rx(excl_vars(c.get_all(CFG, sec) || {})));
+	c.save(CFG);
+	c.commit(CFG);
+	out({ ok: true, hidden: length(names) });
 }
 
 function cmd_diag(sec) {
@@ -11896,6 +12125,7 @@ else if (mode == "servers") cmd_servers(sec);
 else if (mode == "latency") cmd_latency(sec);
 else if (mode == "select") cmd_select(sec, ARGV[2]);
 else if (mode == "fixsel") cmd_fixsel(sec);
+else if (mode == "hide") cmd_hide(sec);
 else if (mode == "diag") cmd_diag(sec);
 else fail("неизвестная команда");
 ZM_INSTALLER_EOF
@@ -11967,6 +12197,7 @@ list_methods() {
 	json_add_object "doh_install";            json_close_object
 	json_add_object "doh_remove";             json_close_object
 	json_add_object "doh_set";                json_add_string "provider" "string"; json_close_object
+	json_add_object "doh_bootstrap_set";      json_add_string "value" "string"; json_close_object
 	json_add_object "doh_force_set";          json_add_string "mode" "string"; json_close_object
 	json_add_object "test_status";             json_close_object
 	json_add_object "test_action";             json_add_string "action" "string"; json_add_string "mode" "string"; json_close_object
@@ -11979,6 +12210,7 @@ list_methods() {
 	json_add_object "mixomo_config_set";       json_add_string "content" "string"; json_close_object
 	json_add_object "mixomo_subscription_set"; json_add_string "url" "string"; json_close_object
 	json_add_object "mixomo_filter_set";       json_add_string "value" "string"; json_close_object
+	json_add_object "mixomo_proxies";          json_close_object
 	json_add_object "mixomo_magitrickle_list_set"; json_add_string "id" "string"; json_close_object
 	json_add_object "mixomo_autorestart_set";  json_add_string "mode" "string"; json_add_string "value" "string"; json_close_object
 	json_add_object "mixomo_ui_action";        json_add_string "which" "string"; json_close_object
@@ -12066,6 +12298,7 @@ call_method() {
 		doh_install)             "$BACKEND" doh_install ;;
 		doh_remove)              "$BACKEND" doh_remove ;;
 		doh_set)                 json_get_var provider provider; "$BACKEND" doh_set "$provider" ;;
+		doh_bootstrap_set)       json_get_var value value; "$BACKEND" doh_bootstrap_set "$value" ;;
 		doh_force_set)           json_get_var mode mode; "$BACKEND" doh_force_set "$mode" ;;
 		test_status)             "$BACKEND" test_status ;;
 		test_action)             json_get_var action action; json_get_var mode mode; "$BACKEND" test_action "$action" "$mode" ;;
@@ -12078,6 +12311,7 @@ call_method() {
 		mixomo_config_set)       json_get_var content content; printf '%s' "$content" | "$BACKEND" mixomo_config_set @stdin ;;
 		mixomo_subscription_set) json_get_var url url; "$BACKEND" mixomo_subscription_set "$url" ;;
 		mixomo_filter_set)       json_get_var value value; "$BACKEND" mixomo_filter_set "$value" ;;
+		mixomo_proxies)          "$BACKEND" mixomo_proxies ;;
 		mixomo_magitrickle_list_set) json_get_var id id; "$BACKEND" mixomo_magitrickle_list_set "$id" ;;
 		mixomo_autorestart_set)  json_get_var mode mode; json_get_var value value; "$BACKEND" mixomo_autorestart_set "$mode" "$value" ;;
 		mixomo_ui_action)        json_get_var which which; "$BACKEND" mixomo_ui_action "$which" ;;
@@ -12135,7 +12369,7 @@ cat > '/usr/share/rpcd/acl.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF'
 					"strategy_list_v", "strategy_list_flowseal", "strategy_list_youtube",
 					"discord_status", "hosts_status", "hosts_file_get", "doh_status", "game_status",
 					"system_status", "mirror_status", "exclusions_status", "nfqws_opt_get", "zapret_lists_status", "zapret_list_get", "tg_status", "tgws_status",
-					"test_status", "test_results", "zm_update_status", "mixomo_status", "mixomo_config_get",
+					"test_status", "test_results", "zm_update_status", "mixomo_status", "mixomo_proxies", "mixomo_config_get",
 					"mixomo_warp_status",
 					"zapret_latest_version", "bytetube_installed", "health", "versions", "awg_status", "steer_status",
 					"forkop_status", "forkop_config_get", "sysinfo_get", "ui_theme_get"
@@ -12154,7 +12388,7 @@ cat > '/usr/share/rpcd/acl.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF'
 					"zapret_action", "zapret2_action",
 					"strategy_set_v", "strategy_set_flowseal", "strategy_set_youtube", "youtube_quic_set",
 					"discord_set_dv", "discord_set_fake",
-					"hosts_toggle", "doh_set", "doh_force_set", "hosts_replace_geohide", "hosts_reset", "hosts_file_set", "doh_install", "doh_remove",
+					"hosts_toggle", "doh_set", "doh_bootstrap_set", "doh_force_set", "hosts_replace_geohide", "hosts_reset", "hosts_file_set", "doh_install", "doh_remove",
 					"game_set", "game_set_fake", "game_toggle_xtreme",
 					"system_check_connectivity", "system_toggle_quic", "system_toggle_ipv6",
 					"system_toggle_flow_offloading_fix", "system_uninstall_panel",
@@ -12328,6 +12562,7 @@ var callDohStatus = zmDeclare({ object: 'zapret-manager', method: 'doh_status', 
 var callDohInstall = zmDeclare({ object: 'zapret-manager', method: 'doh_install', expect: {} });
 var callDohRemove = zmDeclare({ object: 'zapret-manager', method: 'doh_remove', expect: {} });
 var callDohSet = zmDeclare({ object: 'zapret-manager', method: 'doh_set', params: ['provider'], expect: {} });
+var callDohBootstrapSet = zmDeclare({ object: 'zapret-manager', method: 'doh_bootstrap_set', params: ['value'], expect: {} });
 var callDohForceSet = zmDeclare({ object: 'zapret-manager', method: 'doh_force_set', params: ['mode'], expect: {} });
 var callTestStatus = zmDeclare({ object: 'zapret-manager', method: 'test_status', expect: {} });
 var callTestAction = zmDeclare({ object: 'zapret-manager', method: 'test_action', params: ['action', 'mode'], expect: {} });
@@ -12340,6 +12575,7 @@ var callMixomoConfigGet = zmDeclare({ object: 'zapret-manager', method: 'mixomo_
 var callMixomoConfigSet = zmDeclare({ object: 'zapret-manager', method: 'mixomo_config_set', params: ['content'], expect: {} });
 var callMixomoApplySubscription = zmDeclare({ object: 'zapret-manager', method: 'mixomo_subscription_set', params: ['url'], expect: {} });
 var callMixomoFilterSet = zmDeclare({ object: 'zapret-manager', method: 'mixomo_filter_set', params: ['value'], expect: {} });
+var callMixomoProxies = zmDeclare({ object: 'zapret-manager', method: 'mixomo_proxies', expect: {} });
 var callMixomoMagitrickleListSet = zmDeclare({ object: 'zapret-manager', method: 'mixomo_magitrickle_list_set', params: ['id'], expect: {} });
 var callMixomoAutorestartSet = zmDeclare({ object: 'zapret-manager', method: 'mixomo_autorestart_set', params: ['mode', 'value'], expect: {} });
 var callMixomoUiAction = zmDeclare({ object: 'zapret-manager', method: 'mixomo_ui_action', params: ['which'], expect: {} });
@@ -12973,6 +13209,96 @@ function exclField(o) {
 	return el;
 }
 
+function hidePicker(o) {
+	o = o || {};
+	var el = E('div', { 'class': 'zm-hide' });
+	var items = [], info = {}, selecting = false, pick = {}, saving = false;
+	var bar = saveBar({ saveLabel: 'Сохранить', busyText: 'Сохраняем…', onCancel: function() { stop(); }, onSave: save });
+	function hiddenCount() { return items.filter(function(it) { return it.hidden || it.locked; }).length; }
+	function pickedCount() { return items.filter(function(it) { return it.locked || pick[it.name]; }).length; }
+	function uniq(a) { var o = {}; a.forEach(function(x) { o[x] = true; }); return Object.keys(o).sort().join('\n'); }
+	function mode(on) { selecting = on; if (o.onMode) o.onMode(on); render(); }
+	function start() {
+		pick = {};
+		items.forEach(function(it) { if (it.hidden) pick[it.name] = true; });
+		mode(true);
+	}
+	function stop() { pick = {}; bar.set(false); mode(false); }
+	function syncBar() {
+		var n = pickedCount();
+		var was = uniq(items.filter(function(it) { return it.hidden; }).map(function(it) { return it.name; }));
+		var now = uniq(Object.keys(pick).filter(function(k) { return pick[k]; }));
+		bar.set(true, saving, 'Скрыто будет: ' + n + ' из ' + items.length + (was === now ? ' — без изменений' : ''), 'Сохранить');
+		Array.prototype.forEach.call(el.querySelectorAll('.zm-hide-tools button'), function(b) { b.disabled = saving; });
+	}
+	function save() {
+		if (saving) return;
+		var names = Object.keys(pick).filter(function(k) { return pick[k]; });
+		var left = items.filter(function(it) { return !it.locked && !pick[it.name]; }).length;
+		if (items.length && !left) { toast('Нельзя скрыть все ' + (o.noun || 'серверы') + ' — тогда подключение не будет работать', 'warning'); return; }
+		saving = true; syncBar();
+		Promise.resolve(o.onSave(names)).then(function(ok) {
+			saving = false;
+			if (ok === false) { syncBar(); return; }
+			stop();
+		}, function() { saving = false; syncBar(); });
+	}
+	function reset() {
+		if (!confirm('Вернуть все скрытые ' + (o.noun || 'серверы') + ' в список?')) return;
+		Promise.resolve(o.onReset()).then(function(ok) { if (ok !== false) stop(); }, function() {});
+	}
+	function render() {
+		el.innerHTML = '';
+		if (info.error && !items.length && !hiddenCount()) { el.appendChild(E('p', { 'class': 'zm-hint' }, [ info.error ])); return; }
+		var hc = hiddenCount();
+		if (!selecting) {
+			var acts = [];
+			if (!info.noEdit && (items.length > 1 || hc)) acts.push(E('button', { 'class': 'cbi-button', 'disabled': o.busy && o.busy() ? '' : null, 'click': start }, hc ? 'Изменить список скрытых' : 'Скрыть ' + (o.noun || 'серверы') + '…'));
+			if (hc || info.markers) acts.push(E('button', { 'class': 'cbi-button cbi-button-remove', 'disabled': o.busy && o.busy() ? '' : null, 'click': reset }, 'Показать все (восстановить список)'));
+			if (!acts.length) return;
+			var txt = hc ? 'Скрыто: ' + hc + ' — они не показываются и не используются.' : '';
+			if (info.markers) txt += (txt ? ' ' : '') + 'Также скрываются названия с «' + String(info.markers).split('|').join('», «') + '».';
+			el.appendChild(E('div', { 'class': 'zm-hide-bar' }, [ txt ? E('span', { 'class': 'zm-hint', 'style': 'margin:0; flex:1 1 260px' }, [ txt ]) : E([]), E('div', { 'class': 'zm-actions', 'style': 'margin:0' }, acts) ]));
+			bar.set(false);
+			return;
+		}
+		el.appendChild(E('p', { 'class': 'zm-hint' }, [ 'Отметьте ' + (o.noun || 'серверы') + ', которые нужно скрыть, и нажмите «Сохранить». Скрытые не показываются и не используются — ни вручную, ни в автовыборе.' ]));
+		var grid = E('div', { 'class': 'zm-nodes zm-hide-grid' });
+		items.forEach(function(it) {
+			var on = it.locked || !!pick[it.name];
+			grid.appendChild(E('div', { 'class': 'zm-node' + (on ? ' zm-hide-on' : '') + (it.locked ? ' zm-hide-lock' : ''), 'title': it.locked ? 'Скрыт по маркеру — вернуть можно кнопкой «Показать все»' : '', 'click': function() {
+				if (it.locked || saving) return;
+				pick[it.name] = !pick[it.name];
+				Array.prototype.forEach.call(grid.children, function(t) {
+					if (t._zmName !== it.name) return;
+					t.classList.toggle('zm-hide-on', !!pick[it.name]);
+					t.querySelector('.zm-hide-mark').textContent = pick[it.name] ? 'скрыт' : 'виден';
+				});
+				syncBar();
+			} }, [
+				E('div', { 'class': 'zm-node-name' }, [ String(it.name || '(без названия)') ]),
+				E('div', { 'class': 'zm-node-foot' }, [ E('span', {}, [ String(it.foot || '') ]), E('span', { 'class': 'zm-hide-mark' }, [ it.locked ? 'по маркеру' : on ? 'скрыт' : 'виден' ]) ])
+			]));
+		});
+		Array.prototype.forEach.call(grid.children, function(t, i) { t._zmName = items[i].name; });
+		el.appendChild(grid);
+		el.appendChild(E('div', { 'class': 'zm-actions zm-hide-tools' }, [
+			E('button', { 'class': 'cbi-button', 'click': function() { if (!saving) { pick = {}; render(); } } }, 'Снять отметки'),
+			E('button', { 'class': 'cbi-button', 'click': stop }, 'Выйти без изменений')
+		]));
+		el.appendChild(bar);
+		syncBar();
+	}
+	el.update = function(list, i) {
+		items = (list || []).filter(function(it) { return it && it.name != null; });
+		info = i || {};
+		if (!selecting) render();
+	};
+	el.selecting = function() { return selecting; };
+	el.appendChild(bar);
+	return el;
+}
+
 return baseclass.extend({
 	injectCss: injectCss,
 	badge: badge,
@@ -13038,6 +13364,7 @@ return baseclass.extend({
 	dohInstall: callDohInstall,
 	dohRemove: callDohRemove,
 	dohSet: callDohSet,
+	dohBootstrapSet: callDohBootstrapSet,
 	dohForceSet: callDohForceSet,
 	testStatus: callTestStatus,
 	testAction: callTestAction,
@@ -13050,6 +13377,7 @@ return baseclass.extend({
 	mixomoConfigSet: callMixomoConfigSet,
 	mixomoApplySubscription: callMixomoApplySubscription,
 	mixomoFilterSet: callMixomoFilterSet,
+	mixomoProxies: callMixomoProxies,
 	mixomoMagitrickleListSet: callMixomoMagitrickleListSet,
 	mixomoAutorestartSet: callMixomoAutorestartSet,
 	mixomoUiAction: callMixomoUiAction,
@@ -13079,6 +13407,7 @@ return baseclass.extend({
 	exclVariants: exclVariants,
 	exclHit: exclHit,
 	exclField: exclField,
+	hidePicker: hidePicker,
 	editorBar: editorBar,
 	blockCard: blockCard,
 	parseSize: parseSize,
@@ -13431,9 +13760,9 @@ return view.extend({
 		var wrap = E('div', { 'class': 'zm-wrap' });
 		var card = E('div', { 'class': 'zm-card' });
 		var logEl = E('pre', { 'class': 'zm-log' });
-		var busy = false, pickProv = null, pickForce = null;
+		var busy = false, pickProv = null, pickForce = null, bootOwn = !!data.bootstrap_custom;
 		var bar = zm.saveBar({
-			onCancel: function() { pickProv = null; pickForce = null; render(); },
+			onCancel: function() { pickProv = null; pickForce = null; bootReset(); render(); },
 			onSave: applyPick
 		});
 
@@ -13443,12 +13772,21 @@ return view.extend({
 			var n = 0;
 			if (pickProv && pickProv !== data.current) n++;
 			if (pickForce && pickForce !== curForce()) n++;
+			if (bootChanged()) n++;
 			return n;
 		}
 
 		function applyPick() {
 			if (busy) return;
 			var steps = [];
+			var bw = bootWant();
+			if (bootChanged()) steps.push(function() {
+				logLines.push('   → ' + (bw ? 'Ставим Bootstrap DNS: ' + bw : 'Возвращаем Bootstrap DNS провайдеров'));
+				return zm.dohBootstrapSet(bw).then(function(res) {
+					if (res.error) throw new Error(res.error);
+					logLines.push('   ✓ Bootstrap DNS ' + (res.bootstrap ? res.bootstrap : 'как у провайдеров'));
+				});
+			});
 			if (pickProv && pickProv !== data.current) steps.push(function() {
 				logLines.push('   → Переключаем DNS на ' + label(pickProv) + ' и перезапускаем https-dns-proxy');
 				return zm.dohSet(pickProv).then(function(res) {
@@ -13480,7 +13818,7 @@ return view.extend({
 				zm.renderLog(logEl, logLines.join('\n'));
 				busy = false;
 				pickProv = null; pickForce = null;
-				refresh();
+				refresh().then(function() { bootReset(); render(); });
 			});
 		}
 
@@ -13559,8 +13897,45 @@ return view.extend({
 			}
 			card.appendChild(logEl);
 			renderForce();
+			renderBoot();
 			var n = pending();
 			bar.set(n > 0 || busy, busy, n ? 'Есть несохранённые изменения' : '');
+		}
+
+		var bootCard = E('div', { 'class': 'zm-card' });
+		var bootInput = E('input', { 'type': 'text', 'class': 'cbi-input-text', 'spellcheck': 'false', 'autocapitalize': 'off', 'placeholder': '77.88.8.8, 1.1.1.1', 'style': 'flex:1; min-width:220px; max-width:420px' });
+		bootInput.value = data.bootstrap_custom || '';
+		function bootWant() { return bootOwn ? bootInput.value.split(/[\s,;]+/).filter(Boolean).join(',') : ''; }
+		function bootChanged() { var w = bootWant(); return !(bootOwn && !w) && w !== (data.bootstrap_custom || ''); }
+		function bootReset() { bootOwn = !!data.bootstrap_custom; bootInput.value = data.bootstrap_custom || ''; }
+		bootInput.addEventListener('input', function() {
+			var n = pending();
+			bar.set(n > 0 || busy, busy, n ? 'Есть несохранённые изменения' : '');
+		});
+
+		function renderBoot() {
+			bootCard.innerHTML = '';
+			bootCard.style.display = data.installed ? '' : 'none';
+			if (!data.installed) return;
+			var m = bootOwn ? 'own' : 'auto';
+			bootCard.appendChild(E('h3', {}, 'Bootstrap DNS'));
+			bootCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:-6px' }, 'Обычный DNS, через который https-dns-proxy один раз узнаёт адрес самого DoH-сервера (например, dns.google). Нужен, если провайдер блокирует или подменяет эти адреса.'));
+			bootCard.appendChild(E('div', { 'class': 'zm-grid' }, [ { id: 'auto', label: 'Как у провайдера' }, { id: 'own', label: 'Свои адреса' } ].map(function(o) {
+				return E('div', { 'class': 'zm-tile' + (m === o.id ? ' zm-active' : ''), 'click': function() {
+					if (busy || m === o.id) return;
+					bootOwn = o.id === 'own';
+					render();
+					if (o.id === 'own') setTimeout(function() { bootInput.focus(); }, 0);
+				} }, o.label);
+			})));
+			if (m === 'own') {
+				bootCard.appendChild(E('div', { 'class': 'zm-actions' }, [ bootInput ]));
+				bootCard.appendChild(E('p', { 'class': 'zm-hint' }, 'IP-адреса через запятую, до 6 штук, можно IPv6. Применяются ко всем резолверам DoH.'));
+			} else {
+				var list = data.resolvers || [];
+				var cur = list.map(function(r) { return (label(r.provider) || host(r.url)) + ': ' + (r.bootstrap || 'по умолчанию https-dns-proxy (1.1.1.1, 8.8.8.8)'); });
+				bootCard.appendChild(E('p', { 'class': 'zm-hint' }, [ cur.length ? 'Сейчас: ' + cur.join('; ') + '.' : 'Для Google, Cloudflare, Quad9 и Яндекса берутся их собственные адреса, для остальных — адреса по умолчанию https-dns-proxy.' ]));
+			}
 		}
 
 		var FORCE = [
@@ -13593,6 +13968,7 @@ return view.extend({
 
 		render();
 		wrap.appendChild(card);
+		wrap.appendChild(bootCard);
 		wrap.appendChild(forceCard);
 		wrap.appendChild(bar);
 		return wrap;
@@ -14918,19 +15294,12 @@ return view.extend({
 
 		function subNodesAll() { return (subData && subData.list && subData.list.nodes) || []; }
 		function subHidden() { var h = {}; ((subData && subData.hidden) || []).forEach(function(i) { h[i] = true; }); return h; }
-		var exclBar = zm.saveBar({ saveLabel: 'Сохранить фильтр', onCancel: function() { exclEl.set(subData && subData.exclude || ''); exclBar.set(false); }, onSave: function() {
-			var v = exclEl.value(), list = zm.exclParse(v);
-			var names = subNodesAll().map(function(n) { return n.name || ''; });
-			if (list.length && names.length && names.every(function(n) { return zm.exclHit(n, list); })) { zm.toast('Под эти маркеры попадают все узлы — тогда VPN работать не сможет', 'error'); return; }
-			exclBar.set(true, true);
-			act('sub_filter', JSON.stringify({ m: v }), 'Применяем фильтр узлов', function(ok) {
-				if (ok) { subData.exclude = v; exclBar.set(false); } else exclBar.set(true, false);
-			});
-		} });
-		var exclEl = zm.exclField({ label: 'Скрывать узлы, в названии которых есть',
-			hint: 'Маркеры через | — например LTE|Мобильный|🇪🇺. Совпадение по части названия, регистр не важен. Такие узлы не показываются, и Steer их не использует — ни в «Авто», ни при переборе.',
-			names: function() { return subNodesAll().map(function(n) { return n.name || ''; }); },
-			onChange: function(v) { exclBar.set(!!subData && v !== (subData.exclude || '')); } });
+		var hideMode = false;
+		function subActP(action, arg, text) { return new Promise(function(res) { act(action, arg, text, res); }); }
+		var hidePick = zm.hidePicker({ noun: 'узлы', busy: function() { return busy; },
+			onMode: function(on) { hideMode = on; renderSub(); },
+			onSave: function(names) { return subActP('sub_hide', JSON.stringify({ names: names }), 'Применяем список узлов'); },
+			onReset: function() { return subActP('sub_hide', JSON.stringify({ reset: true }), 'Возвращаем все узлы'); } });
 
 		function probeAll() {
 			var hm = subHidden(), nodes = subNodesAll().filter(function(n) { return !hm[n.index]; });
@@ -15057,13 +15426,13 @@ return view.extend({
 					click: function() { if (subData.node !== n.name && !busy) subAct('sub_node', n.name, 'Выбираем узел ' + n.name); }
 				}));
 			});
-			subCard.appendChild(grid);
-			if (nodes.length !== allNodes.length) subCard.appendChild(E('p', { 'class': 'zm-hint' }, [ 'Скрыто фильтром: ' + (allNodes.length - nodes.length) + ' — эти узлы Steer не использует.' ]));
-			subCard.appendChild(E('h4', { 'style': 'margin:16px 0 8px' }, 'Фильтр узлов'));
-			if (!exclBar.isDirty()) exclEl.set(subData.exclude || '');
-			subCard.appendChild(exclEl);
-			subCard.appendChild(exclBar);
-			exclEl.refresh();
+			if (!hideMode) subCard.appendChild(grid);
+			var hn = subData.hide_names || [];
+			hidePick.update(allNodes.filter(function(n) { return !!n.name; }).map(function(n, ni) {
+				var byName = hn.indexOf(n.name || '') >= 0;
+				return { name: n.name || '', foot: [ n.type, n.security !== 'none' ? n.security : '' ].filter(Boolean).join(' · '), hidden: byName, locked: !!hidMap[n.index] && !byName };
+			}), { markers: subData.exclude || '' });
+			subCard.appendChild(hidePick);
 
 			var sk = subData.list && subData.list.skipped_reasons || [];
 			if (subData.list && subData.list.skipped > 0) subCard.appendChild(E('p', { 'class': 'zm-hint' },
@@ -16451,34 +16820,71 @@ return view.extend({
 						if (res.error) { zm.toast(res.error, 'error'); return; }
 						zm.toast(res.mode === 'updated' ? 'Ссылка на подписку обновлена' : 'Подписка применена, создана новая конфигурация', 'info');
 						refreshAll();
+						setTimeout(loadMxSrv, 4000);
 						refreshConfig();
 					}).catch(function() { subBusy = false; });
 				}
 			}, 'Применить подписку')
 		]));
 
-		var mxExcl = '', mxExclBusy = false;
-		var mxExclBar = zm.saveBar({ saveLabel: 'Сохранить фильтр', busyText: 'Применяем фильтр…', onCancel: function() { mxExclEl.set(mxExcl); mxExclBar.set(false); }, onSave: function() {
-			if (mxExclBusy) return;
-			var v = mxExclEl.value();
-			mxExclBusy = true; mxExclBar.set(true, true);
-			zm.mixomoFilterSet(v).then(function(res) {
-				mxExclBusy = false;
-				if (res.error) { zm.toast(res.error, 'error'); mxExclBar.set(true, false); return; }
-				mxExcl = v; mxExclBar.set(false);
-				zm.toast(!v ? 'Фильтр серверов выключен' : res.providers === false ? 'Фильтр сохранён — применится, когда в конфигурации появится подписка (proxy-providers)' : 'Фильтр применён' + (res.restarted ? ', Mihomo перезапущен' : ''), 'info');
+		var mxSrvEl = E('div', {}), mxSrv = null, mxSrvBusy = false, mxHideMode = false;
+		var mxHide = zm.hidePicker({ noun: 'серверы',
+			onMode: function(on) { mxHideMode = on; renderMxSrv(); },
+			onSave: function(names) { return mxHideSave(JSON.stringify({ names: names })); },
+			onReset: function() { return mxHideSave(JSON.stringify({ reset: true })); } });
+		function mxHideSave(v) {
+			return zm.mixomoFilterSet(v).then(function(res) {
+				if (res.error) { zm.toast(res.error, 'error'); return false; }
+				zm.toast(res.providers === false ? 'Сохранено — применится, когда в конфигурации появится подписка (proxy-providers)' : 'Список серверов применён' + (res.restarted ? ', Mihomo перезапущен' : ''), 'info');
+				setTimeout(loadMxSrv, 2500);
 				refreshConfig();
-			}, function() { mxExclBusy = false; mxExclBar.set(true, false); zm.toast('Роутер не ответил', 'error'); });
-		} });
-		var mxExclEl = zm.exclField({ hint: 'Маркеры через | — например LTE|Мобильный|🇪🇺. Панель добавит всем подпискам (proxy-providers) параметр exclude-filter: такие серверы Mihomo не загружает — их не видно в панели Mihomo и они не участвуют в выборе. Регистр не важен.',
-			onChange: function(v) { if (!mxExclBusy) mxExclBar.set(v !== mxExcl); } });
-		subCard.appendChild(E('h4', { 'style': 'margin:16px 0 8px' }, 'Фильтр серверов'));
-		subCard.appendChild(mxExclEl);
-		subCard.appendChild(mxExclBar);
-		function renderExcl(d) {
-			mxExcl = d.exclude || '';
-			if (!mxExclBar.isDirty() && !mxExclBusy) mxExclEl.set(mxExcl);
+				return true;
+			}, function() { zm.toast('Роутер не ответил', 'error'); return false; });
 		}
+		function mxNodes() {
+			var out = [], seen = {}, prov = (mxSrv && mxSrv.data && mxSrv.data.providers) || {};
+			Object.keys(prov).forEach(function(k) {
+				var p = prov[k] || {};
+				if (k === 'default' || p.vehicleType === 'Compatible') return;
+				(p.proxies || []).forEach(function(x) {
+					if (!x || !x.name || seen[x.name]) return;
+					seen[x.name] = true;
+					var h = x.history && x.history.length ? x.history[x.history.length - 1].delay : null;
+					out.push({ name: x.name, type: String(x.type || '').toLowerCase(), delay: h });
+				});
+			});
+			return out;
+		}
+		function loadMxSrv() {
+			if (mxSrvBusy) return;
+			mxSrvBusy = true; renderMxSrv();
+			zm.mixomoProxies().then(function(r) { mxSrvBusy = false; mxSrv = r || {}; renderMxSrv(); }, function() { mxSrvBusy = false; mxSrv = { error: 'роутер не ответил' }; renderMxSrv(); });
+		}
+		function renderMxSrv() {
+			mxSrvEl.innerHTML = '';
+			mxSrvEl.appendChild(E('h4', { 'style': 'margin:16px 0 8px' }, 'Серверы подписки'));
+			if (!mxSrv) { mxSrvEl.appendChild(E('p', { 'class': 'zm-hint' }, mxSrvBusy ? 'Загружаем…' : 'Список ещё не загружен.')); return; }
+			var nodes = mxNodes(), hn = mxSrv.hide_names || [];
+			var items = nodes.map(function(n) { return { name: n.name, foot: n.type, hidden: false }; });
+			hn.forEach(function(nm) { if (!nodes.some(function(n) { return n.name === nm; })) items.push({ name: nm, foot: 'скрыт', hidden: true }); });
+			mxHide.update(items, { markers: mxSrv.exclude || '', noEdit: !nodes.length, error: mxSrv.error ? 'Список серверов недоступен: ' + mxSrv.error : (!nodes.length ? 'Mihomo не отдал список серверов — проверьте подписку в конфигурации' : '') });
+			if (!mxHideMode && nodes.length) {
+				mxSrvEl.appendChild(E('div', { 'class': 'zm-nodes' }, nodes.map(function(n) {
+					return E('div', { 'class': 'zm-node', 'style': 'cursor:default' }, [
+						E('div', { 'class': 'zm-node-name' }, [ String(n.name) ]),
+						E('div', { 'class': 'zm-node-foot' }, [ E('span', {}, [ n.type ]), E('span', { 'class': 'zm-lat ' + (n.delay > 0 ? (n.delay < 300 ? 'zm-lat-good' : n.delay < 800 ? 'zm-lat-mid' : 'zm-lat-bad') : 'zm-lat-none') }, n.delay > 0 ? n.delay + ' мс' : '') ])
+					]);
+				})));
+				mxSrvEl.appendChild(E('p', { 'class': 'zm-hint' }, [ 'Видно серверов: ' + nodes.length + '. Выбирать сервер — в панели Mihomo.' ]));
+			}
+			mxSrvEl.appendChild(mxHide);
+			if (!mxHideMode) mxSrvEl.appendChild(E('div', { 'class': 'zm-actions' }, [ E('button', { 'class': 'cbi-button', 'disabled': mxSrvBusy ? '' : null, 'click': loadMxSrv }, mxSrvBusy ? 'Загружаем…' : 'Обновить список') ]));
+		}
+		subCard.appendChild(mxSrvEl);
+		function renderExcl(d) {
+			if (d && d.mihomo === 'installed' && !mxSrv && !mxSrvBusy) loadMxSrv();
+		}
+
 
 		var autoBusy = false;
 		function renderAuto(d) {
@@ -18685,6 +19091,14 @@ html.zm-theme-dark .zm-stopbar { background: #2a1416; color: #fecaca; border-col
 .zm-dns-btns { display: flex; gap: 4px; margin-left: auto; }
 .zm-dns-btns .cbi-button { margin: 0; min-width: 34px; padding: 4px 8px; }
 
+.zm-hide { margin-top: 12px; }
+.zm-hide-bar { display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap; }
+.zm-hide-grid .zm-node.zm-hide-on { opacity: .62; border-style: dashed; border-color: #cf222e; background: rgba(207,34,46,.07); }
+.zm-hide-grid .zm-node.zm-hide-on .zm-node-name { text-decoration: line-through; }
+.zm-hide-grid .zm-node.zm-hide-lock { opacity: .45; cursor: not-allowed; }
+.zm-hide-grid .zm-hide-mark { font-weight: 700; opacity: .8; }
+.zm-hide-grid .zm-node.zm-hide-on .zm-hide-mark { color: #cf222e; opacity: 1; }
+
 ZM_INSTALLER_EOF
 chmod 0644 '/www/luci-static/resources/view/zapret-manager/style.css'
 
@@ -19606,6 +20020,12 @@ function fromCfg(c) {
 	};
 }
 
+function withBootMode(d) {
+	var auto = dnsBoots(d.dns.type, d.dns.servers);
+	d.dns.bootOwn = d.dns.bootstraps.slice().sort().join(',') !== auto.slice().sort().join(',');
+	return d;
+}
+
 function validCfg(x) {
 	return (x && typeof x === 'object' && !x.error && x.dns) ? x : null;
 }
@@ -19640,7 +20060,7 @@ return view.extend({
 
 	render: function(all) {
 		var st = all[0] || {}, cfg = validCfg(all[1]);
-		var draft = fromCfg(cfg), savedSig = sig(draft), dirty = false, busy = false, lastAct = '', saving = false;
+		var draft = withBootMode(fromCfg(cfg)), savedSig = sig(draft), dirty = false, busy = false, lastAct = '', saving = false;
 		var servers = null, srvBusy = false, srvErr = '', latBusy = false;
 		var diag = null, diagBusy = false, openGroups = {}, catWait = 0;
 		var dnsRes = {}, dnsTesting = false, dnsInput = null;
@@ -19687,12 +20107,9 @@ return view.extend({
 			if (!servers || !servers.nodes) return [];
 			return (servers.list || []).filter(function(t) { return servers.nodes[t] && !servers.nodes[t].members; }).map(function(t) { return servers.nodes[t].name || t; });
 		}
-		var exclEl = zm.exclField({ value: draft.exclude, names: exclNames,
-			onChange: function(v) { if (v !== (draft.exclude || '')) { draft.exclude = v; touch(); } } });
 		function syncAreas() {
 			taLinks.value = draft.links; taSub.value = draft.sub; taDomains.value = draft.domains;
 			taSubnets.value = draft.subnets; taLists.value = draft.lists;
-			if (exclEl.value() !== (draft.exclude || '')) exclEl.set(draft.exclude);
 		}
 
 		function touch() {
@@ -19711,12 +20128,13 @@ return view.extend({
 			]).then(function(r) {
 				st = r[0] || {};
 				if (r[1] !== null) cfg = validCfg(r[1]);
-				if (!dirty) { draft = fromCfg(cfg); savedSig = sig(draft); syncAreas(); }
+				if (!dirty) { draft = withBootMode(fromCfg(cfg)); savedSig = sig(draft); syncAreas(); }
 				else if (cfg) {
+					draft.exclude = cfg.exclude || '';
 					var rf = refsOf(draft);
 					var p = pickFromCfg({ catalog: cfg.catalog, refs: rf, lists: textLines(draft.lists).concat(rf.l) });
 					draft.items = p.items; draft.sel = p.sel; draft.lists = p.lists.join('\n'); taLists.value = draft.lists;
-					savedSig = sig(fromCfg(cfg));
+					savedSig = sig(withBootMode(fromCfg(cfg)));
 					dirty = sig(draft) !== savedSig;
 				}
 				renderAll();
@@ -19752,6 +20170,27 @@ return view.extend({
 				try { logEl.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) {}
 			}).catch(function() { zm.toast('Роутер не ответил', 'error'); });
 		}
+
+		var hideMode = false;
+		function hideAct(arg) {
+			if (busy || saving) { zm.toast('Дождитесь окончания текущей операции', 'warning'); return Promise.resolve(false); }
+			return zm.forkopAction('hide', arg).then(function(res) {
+				if (res.error) { zm.toast(res.error, 'error'); return false; }
+				if (res.started) {
+					lastAct = 'apply';
+					zm.toast('Применяем список серверов — ход работы виден в окне вывода', 'warning');
+					follow();
+				} else {
+					zm.toast('Сохранено — применится, когда Forkozz будет включён', 'info');
+					loadServers();
+				}
+				return true;
+			}, function() { zm.toast('Роутер не ответил', 'error'); return false; });
+		}
+		var hidePick = zm.hidePicker({ noun: 'серверы', busy: function() { return busy || saving; },
+			onMode: function(on) { hideMode = on; renderServers(); },
+			onSave: function(names) { return hideAct(JSON.stringify({ names: names })); },
+			onReset: function() { return hideAct(JSON.stringify({ reset: true })); } });
 
 		function payload() {
 			return JSON.stringify({
@@ -19800,7 +20239,7 @@ return view.extend({
 		}
 
 		function discard() {
-			draft = fromCfg(cfg);
+			draft = withBootMode(fromCfg(cfg));
 			savedSig = sig(draft);
 			dirty = false;
 			syncAreas();
@@ -20017,13 +20456,11 @@ return view.extend({
 				renderLinkCount();
 				connCard.appendChild(E('p', { 'class': 'zm-hint' }, 'По одной ссылке на строку: vless, vmess, trojan, ss, socks5, hysteria2, tuic. Серверы с XHTTP — только с расширенным sing-box.'));
 				connCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Если серверов несколько, выбирать между ними — в карточке «Серверы» ниже.'));
-				connCard.appendChild(exclEl); exclEl.refresh();
 			}
 			else if (draft.mode === 'sub') {
 				connCard.appendChild(taSub);
 				connCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Ссылка на подписку от VPN-сервиса, обычно https://…/sub/…. Выбор сервера — в карточке «Серверы» ниже.'));
 				connCard.appendChild(row('Обновлять', seg(SUB_IV, draft.sub_interval, function(v) { set('sub_interval', v); })));
-				connCard.appendChild(exclEl); exclEl.refresh();
 			}
 			else {
 				var tl = (cfg && cfg.tunnels) || [];
@@ -20107,6 +20544,12 @@ return view.extend({
 			])));
 
 			var tags = (isAuto ? (auto.members || []) : manual).filter(function(t) { return !(ns[t] && ns[t].hidden); });
+			var hn = servers.hide_names || [];
+			hidePick.update(S.list.filter(function(t) { return t !== autoTag && ns[t]; }).map(function(t) {
+				var n = ns[t], nm = n.name || t, byName = hn.indexOf(nm) >= 0;
+				return { name: nm, foot: String(n.type || '').toLowerCase(), hidden: byName, locked: !!n.hidden && !byName };
+			}), { markers: servers.exclude || '' });
+			if (hideMode) { srvCard.appendChild(hidePick); return; }
 			srvCard.appendChild(E('div', { 'class': 'zm-nodes', 'style': 'margin-top:12px' }, tags.map(function(t) {
 				var n = ns[t] || { name: t, delay: -1 }, on = t === curTag;
 				return node(nodeName(n), String(n.type || '').toLowerCase(), on, function() { if (!on) pickServer(t, nodeName(n)); },
@@ -20116,7 +20559,7 @@ return view.extend({
 			if (cfg.mode === 'sub') acts.push(E('button', { 'class': 'cbi-button', 'click': function() { act('subs'); } }, 'Обновить подписку'));
 			srvCard.appendChild(E('div', { 'class': 'zm-actions' }, acts));
 			srvCard.appendChild(E('p', { 'class': 'zm-hint' }, isAuto ? 'Авто: Forkozz сам выбирает лучший из этих серверов. Нажмите на сервер, чтобы закрепить его.' : 'Нажмите на сервер, чтобы переключиться. Выбор держится до перезагрузки роутера.'));
-			if (servers.hidden > 0) srvCard.appendChild(E('p', { 'class': 'zm-hint' }, [ 'Скрыто фильтром: ' + servers.hidden + ' (маркеры: ' + (servers.exclude || '') + '). Изменить — в карточке «Подключение».' ]));
+			srvCard.appendChild(hidePick);
 		}
 
 		function catalogBlock() {
@@ -20285,7 +20728,7 @@ return view.extend({
 		function dnsSet(servers, keepBoots) {
 			var d = draft.dns;
 			servers = dnsUniq(d.type, servers);
-			draft.dns = { type: d.type, servers: servers, bootstraps: keepBoots ? d.bootstraps : dnsBoots(d.type, servers), detour: d.detour };
+			draft.dns = { type: d.type, servers: servers, bootstraps: d.bootOwn ? d.bootstraps : dnsBoots(d.type, servers), detour: d.detour, bootOwn: !!d.bootOwn };
 			touch();
 			renderDns();
 			renderSaveBar();
@@ -20335,7 +20778,7 @@ return view.extend({
 			dnsCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:-6px' }, 'Через какие DNS-серверы Forkozz ищет адреса сайтов. Выберите несколько — Forkozz каждые 10 секунд проверяет текущий и при сбое сам переходит на следующий по списку, а когда первый оживёт, возвращается к нему.'));
 			dnsCard.appendChild(row('Протокол', seg([ { id: 'doh', label: 'DoH' }, { id: 'dot', label: 'DoT' }, { id: 'udp', label: 'UDP' } ], t, function(nt) {
 				var keep = sel.map(function(v) { var p = dnsFind(t, v); var q = p && (DNS_CAT[nt] || []).filter(function(x) { return x.id === p.id; })[0]; return q ? q.value : null; }).filter(Boolean);
-				draft.dns = { type: nt, servers: [], bootstraps: [], detour: d.detour };
+				draft.dns = { type: nt, servers: [], bootstraps: d.bootOwn ? d.bootstraps : [], detour: d.detour, bootOwn: !!d.bootOwn };
 				dnsSet(keep.length ? keep : DNS_DEF[nt].slice());
 			})));
 			dnsCard.appendChild(E('p', { 'class': 'zm-hint' }, (t === 'udp' ? '⚠ ' : '') + DNS_HELP[t].hint));
@@ -20390,9 +20833,29 @@ return view.extend({
 				E('button', { 'class': 'cbi-button cbi-button-action', 'disabled': dnsTesting || busy ? '' : null, 'click': function() { dnsTest(true); } }, dnsTesting ? 'Проверяем…' : 'Подобрать лучшие'),
 				E('button', { 'class': 'cbi-button', 'disabled': dnsTesting || busy ? '' : null, 'click': function() { dnsTest(false); } }, 'Только проверить')
 			]));
-			dnsCard.appendChild(E('p', { 'class': 'zm-hint' }, '«Подобрать лучшие» проверит с роутера все серверы ' + DNS_TYPES[t] + ' и поставит в список до 4 отвечающих — самые быстрые первыми. Резервные DNS для поиска самих серверов подставляются сами: ' + d.bootstraps.join(', ') + '.'));
+			dnsCard.appendChild(E('p', { 'class': 'zm-hint' }, '«Подобрать лучшие» проверит с роутера все серверы ' + DNS_TYPES[t] + ' и поставит в список до 4 отвечающих — самые быстрые первыми.'));
+			if (t !== 'udp') {
+				dnsCard.appendChild(E('h4', { 'style': 'margin:16px 0 4px' }, 'Bootstrap DNS'));
+				dnsCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:0' }, 'Обычный DNS, через который Forkozz узнаёт адреса самих серверов ' + DNS_TYPES[t] + ' (например, dns.quad9.net).'));
+				dnsCard.appendChild(row('Адреса', seg([ { id: 'auto', label: 'Авто' }, { id: 'own', label: 'Свои' } ], d.bootOwn ? 'own' : 'auto', function(m) {
+					var own = m === 'own';
+					draft.dns = { type: d.type, servers: d.servers, bootstraps: own ? d.bootstraps : dnsBoots(d.type, d.servers), detour: d.detour, bootOwn: own };
+					touch(); renderDns(); renderSaveBar();
+				})));
+				if (d.bootOwn) {
+					var bIn = E('input', { 'type': 'text', 'class': 'cbi-input-text', 'autocapitalize': 'off', 'spellcheck': 'false', 'placeholder': '77.88.8.8, 9.9.9.9', 'style': 'flex:1; min-width:220px; max-width:420px' });
+					bIn.value = d.bootstraps.join(', ');
+					bIn.addEventListener('input', function() {
+						var l = bIn.value.split(/[\s,;]+/).filter(Boolean).slice(0, 4);
+						draft.dns.bootstraps = l.length ? l : dnsBoots(d.type, d.servers);
+						touch(); renderSaveBar();
+					});
+					dnsCard.appendChild(E('div', { 'class': 'zm-actions' }, [ bIn ]));
+					dnsCard.appendChild(E('p', { 'class': 'zm-hint' }, 'IPv4-адреса через запятую, до 4. Используются по порядку: если первый не отвечает — следующий.'));
+				} else dnsCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Сейчас: ' + d.bootstraps.join(', ') + ' — подбираются под выбранные серверы.'));
+			}
 			dnsCard.appendChild(sw(d.detour, 'DNS через VPN', 'Запросы к DNS-серверам пойдут через ваше подключение Forkozz. Помогает, если провайдер блокирует или подменяет DoH/DoT.', function() {
-				draft.dns = { type: d.type, servers: d.servers, bootstraps: d.bootstraps, detour: !d.detour }; touch(); renderDns(); renderSaveBar();
+				draft.dns = { type: d.type, servers: d.servers, bootstraps: d.bootstraps, detour: !d.detour, bootOwn: !!d.bootOwn }; touch(); renderDns(); renderSaveBar();
 			}));
 		}
 
@@ -24486,6 +24949,8 @@ html[data-theme="dark"] .zm-stopbar, html[data-theme="depth"] .zm-stopbar { back
 #zmw-view .zm-dns-num { background: var(--grad); }
 #zmw-view .zm-dns-text b { color: var(--text); } #zmw-view .zm-dns-text span { color: var(--muted); opacity: 1; }
 #zmw-view .zm-dns-btns .cbi-button { padding: 6px 10px; min-width: 36px; }
+
+#zmw-view .zm-hide-grid .zm-node.zm-hide-on { opacity: .62; border-style: dashed; border-color: rgba(239,68,68,.7); background: rgba(239,68,68,.08); box-shadow: none; }
 
 ZM_INSTALLER_EOF
 cat > '/www/zm-webui.html' << 'ZM_INSTALLER_EOF'
