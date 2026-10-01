@@ -1,5 +1,5 @@
 #!/bin/sh
-# Version: 1.90
+# Version: 1.92
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -50,7 +50,7 @@ cat > '/opt/zapret-manager-luci/backend.sh' << 'ZM_INSTALLER_EOF'
 umask 022
 
 CONF="/etc/config/zapret"
-ZM_VERSION="1.90"
+ZM_VERSION="1.92"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
@@ -471,12 +471,29 @@ _zm_net_recover() {
 	return 1
 }
 
+_zm_after_remove() {
+	if _zm_net_recover; then
+		_zm_reboot_hint "$1 удалён. Желательно перезагрузить роутер — так сбросятся оставшиеся соединения и правила."
+	else
+		_zm_reboot_hint "$1 удалён, но интернет на роутере не отвечает. Перезагрузите роутер."
+	fi
+	echo "   Желательно перезагрузить роутер — кнопка «Перезагрузить роутер» появилась вверху страницы"
+}
+
 system_reboot() {
 	local j
 	j="$(_zm_busy_job)" && { printf '{"error":"%s"}\n' "$(esc "Сейчас идёт операция: $j — дождитесь её окончания")"; return 1; }
 	rm -f "$ZM_REBOOT_HINT"
 	( sleep 2; sync; reboot ) >/dev/null 2>&1 </dev/null &
 	printf '{"ok":true}\n'
+}
+
+_zm_if_web() {
+	local u
+	for u in https://1.1.1.1/cdn-cgi/trace https://www.google.com/generate_204 https://www.cloudflare.com/cdn-cgi/trace; do
+		curl -s -o /dev/null --interface "$1" --connect-timeout 4 --max-time 7 "$u" 2>/dev/null && return 0
+	done
+	return 1
 }
 
 _zm_net_own() {
@@ -3932,7 +3949,8 @@ do_mixomo_remove() {
 
 	_zm_cron_drop 'mihomo|magitrickle' "Mixomo"
 	/etc/init.d/dnsmasq restart >/dev/null 2>&1
-	echo "==> Готово, Mixomo удалён полностью. Рекомендуется перезагрузить роутер"
+	echo "==> Mixomo удалён полностью"
+	_zm_after_remove "Mixomo"
 }
 mixomo_action() {
 	local action="$1"
@@ -6097,9 +6115,10 @@ do_bytetube_uninstall() {
 	rm -rf /tmp/luci-indexcache* /tmp/luci-modulecache
 	/etc/init.d/rpcd reload >/dev/null 2>&1
 	echo "   ✓ ByeTube удалён"
+	[ "$ZM_NO_AFTER" = 1 ] || _zm_after_remove "ByeTube"
 }
 do_bytetube_purge() {
-	do_bytetube_uninstall
+	ZM_NO_AFTER=1 do_bytetube_uninstall
 	echo "==> Удаляем пакет byedpi"
 	_zm_svc_off byedpi
 	$DELETE byedpi
@@ -6111,7 +6130,8 @@ do_bytetube_purge() {
 		$DELETE hev-socks5-tunnel
 		rm -rf /etc/hev-socks5-tunnel
 	fi
-	echo "==> Готово, ByeTube удалён полностью"
+	echo "==> ByeTube удалён полностью"
+	_zm_after_remove "ByeTube"
 }
 bytetube_action() {
 	local action="$1"
@@ -7011,6 +7031,7 @@ _st_warp_probe() {
 	local out
 	out=$(ping -I "$1" -c "$ST_WARP_BURST" -i 0.2 -W 2 -w 8 1.1.1.1 2>/dev/null)
 	case "$out" in *"packet loss"*) ;; *) out=$(ping -I "$1" -c 5 -W 2 -w 10 1.1.1.1 2>/dev/null) ;; esac
+	case "$out" in *" 100% packet loss"*|'') out=$(ping -I "$1" -c "$ST_WARP_BURST" -i 0.2 -W 2 -w 8 8.8.8.8 2>/dev/null) ;; esac
 	printf '%s\n' "$out" | awk -v t="$ST_WARP_TORN" '
 		/seq=[0-9]/ { s = $0; sub(/.*seq=/, "", s); sub(/[^0-9].*/, "", s); s += 0; if (!got++ || s > hi) hi = s }
 		/packets transmitted/ { tx = $1 + 0 }
@@ -7173,7 +7194,7 @@ _st_warp_scan1() {
 				fi
 				continue
 			fi
-			if ! curl -s -o /dev/null --interface "$dev" --connect-timeout 4 --max-time 8 https://www.cloudflare.com/cdn-cgi/trace 2>/dev/null; then
+			if ! _zm_if_web "$dev"; then
 				echo "$loss $rtt $ip $port $colo" >> "$r.notls"; echo "   $ip:$port — колония $colo, но HTTPS через туннель не проходит" >&2; continue
 			fi
 		fi
@@ -7270,7 +7291,7 @@ _st_warp_from_pool() {
 			else _st_warp_link "$dev" "$peer" "$ip" "$port" || { echo "   $ip:$port — с этими ключами рукопожатия нет" >&2; continue; }; fi
 			set -- $(_st_warp_probe "$dev")
 			[ "$3" = 1 ] && { echo "   $ip:$port — трафик пошёл и оборвался" >&2; continue; }
-			if [ "$good" = 1 ] && ! curl -s -o /dev/null --interface "$dev" --connect-timeout 4 --max-time 8 https://www.cloudflare.com/cdn-cgi/trace 2>/dev/null; then
+			if [ "$good" = 1 ] && ! _zm_if_web "$dev"; then
 				echo "   $ip:$port — HTTPS через туннель не проходит" >&2; continue
 			fi
 			echo "$ip $port $colo $k"
@@ -8628,13 +8649,8 @@ do_steer_remove() {
 	rm -rf "$ST_DIR" "$ST_RUN"
 	rm -f "$ST_TGWS_WARP"
 	[ "$foreign" = 1 ] || _st_leftovers_clean
-	if _zm_net_recover; then
-		_zm_reboot_hint "Steer удалён. Желательно перезагрузить роутер — так сбросятся оставшиеся соединения и модули ядра."
-	else
-		_zm_reboot_hint "Steer удалён, но интернет на роутере не отвечает. Перезагрузите роутер."
-	fi
-	_rb_say "Готово, Steer удалён"
-	echo "   Желательно перезагрузить роутер — кнопка «Перезагрузить роутер» появилась вверху страницы"
+	_rb_say "Steer удалён"
+	_zm_after_remove "Steer"
 }
 
 steer_status() {
@@ -8706,10 +8722,22 @@ steer_status() {
 	if [ "$vup" = true ] && [ "$vexit" = vpn ] && [ "$off" = false ]; then
 		_st_vpn_live; case $? in 0) vlive=true ;; 1) vlive=false ;; esac
 	fi
-	printf '{"running":%s,"phase":"%s","blocker":"%s","installed":%s,"stopped":%s,"version":"%s","steer_running":%s,"channels":%s,"warp_up":%s,"warp_colo":"%s","warp_host":"%s","warp_port":"%s","warp_hs_age":"%s","warp_rx":%s,"warp_tx":%s,"autorestart":"%s","dns_conflict":%s,"doh":"%s","doh_mode":"%s","exit":"%s","vpn_up":%s,"vpn_live":%s,"has_sub":%s,"sub_label":"%s","latest":"%s","ext":%s,"warp_on":%s,"warp_mode":"%s","warp_own_saved":%s,"tunnels":%s,"catalog":%s,"wfix":%s,"lists_via":%s,"failopen":%s,"hosts_extra":%s,"services":[%s]}\n' \
+	printf '{"running":%s,"phase":"%s","blocker":"%s","installed":%s,"stopped":%s,"version":"%s","steer_running":%s,"channels":%s,"warp_up":%s,"warp_colo":"%s","warp_host":"%s","warp_port":"%s","warp_hs_age":"%s","warp_rx":%s,"warp_tx":%s,"autorestart":"%s","dns_conflict":%s,"doh":"%s","doh_mode":"%s","exit":"%s","vpn_up":%s,"vpn_live":%s,"has_sub":%s,"sub_label":"%s","latest":"%s","ext":%s,"warp_on":%s,"warp_mode":"%s","warp_own_saved":%s,"tunnels":%s,"warp_active":"%s","catalog":%s,"wfix":%s,"lists_via":%s,"failopen":%s,"hosts_extra":%s,"services":[%s]}\n' \
 		"$running" "$(esc "$phase")" "$blk" "$installed" "$off" "$(esc "$ver")" "$run" "${chans:-0}" "$warp_up" "$(esc "$colo")" \
 		"$(esc "$host")" "$(esc "$port")" "$age" "${rx:-0}" "${tx:-0}" "$(_st_cron_get)" "$dns" "$doh" "$(_doh_force_mode)" \
-		"$vexit" "$vup" "$vlive" "$vsub" "$(esc "$(_st_sub_label)")" "$(esc "$latest")" "$ext" "$won" "$(_st_warp_own && echo own || echo auto)" "$(_st_own_saved && echo true || echo false)" "$(_st_tunnels_json)" "$(_st_cat_json)" "$(_st_wfix_json)" "$([ -f "$ST_DIR/lists.via" ] && echo true || echo false)" "$(_st_failopen && echo true || echo false)" "$(_hosts_extra)" "$svc"
+		"$vexit" "$vup" "$vlive" "$vsub" "$(esc "$(_st_sub_label)")" "$(esc "$latest")" "$ext" "$won" "$(_st_warp_own && echo own || echo auto)" "$(_st_own_saved && echo true || echo false)" "$(_st_tunnels_json)" "$(_st_active_if)" "$(_st_cat_json)" "$(_st_wfix_json)" "$([ -f "$ST_DIR/lists.via" ] && echo true || echo false)" "$(_st_failopen && echo true || echo false)" "$(_hosts_extra)" "$svc"
+}
+
+_st_active_if() {
+	[ "$(_st_exit)" = vpn ] && return 0
+	command -v steer >/dev/null 2>&1 || return 0
+	/etc/init.d/steer running >/dev/null 2>&1 || return 0
+	local j
+	if command -v timeout >/dev/null 2>&1; then j="$(timeout 5 steer status --spec "$ST_STEER_SPEC" 2>/dev/null)"
+	else j="$(steer status --spec "$ST_STEER_SPEC" 2>/dev/null)"; fi
+	[ -n "$j" ] || return 0
+	[ "$(printf '%s' "$j" | jsonfilter -e '@.outputs.zm_warp.failed' 2>/dev/null)" = true ] && return 0
+	printf '%s' "$j" | jsonfilter -e '@.outputs.zm_warp.device' 2>/dev/null | grep -E '^[A-Za-z0-9_.-]+$' | head -n1
 }
 
 _st_tunnels_json() {
@@ -9589,11 +9617,11 @@ awg_status() {
 		ep="$(sed -n 's/^[[:space:]]*Endpoint[[:space:]]*=[[:space:]]*//p' "$MIXOMO_WARP_CONF" | head -n1)"
 	fi
 	[ -x /etc/init.d/mihomo ] && mih=true
-	printf '{"running":%s,"phase":"%s","installed":%s,"kmod":"%s","tools":"%s","luci":"%s","luci_pkg":"%s","module":%s,"proto":%s,"steer":%s,"warp_conf":%s,"warp_path":"%s","warp_endpoint":"%s","mihomo":%s,"endpoints":"%s","steer_own":%s,"ifaces":[%s]}\n' \
+	printf '{"running":%s,"phase":"%s","installed":%s,"kmod":"%s","tools":"%s","luci":"%s","luci_pkg":"%s","module":%s,"proto":%s,"steer":%s,"warp_conf":%s,"warp_path":"%s","warp_endpoint":"%s","mihomo":%s,"endpoints":"%s","steer_own":%s,"steer_active":"%s","ifaces":[%s]}\n' \
 		"$running" "$(cat "$AWG_RUN/phase" 2>/dev/null)" "$(_awg_installed && echo true || echo false)" \
 		"$(esc "$(_awg_pkg_ver kmod-amneziawg)")" "$(esc "$(_awg_pkg_ver amneziawg-tools)")" "$(esc "$lv")" "$lp" \
 		"$(_st_awg_loaded && echo true || echo false)" "$(_awg_proto_ok && echo true || echo false)" \
-		"$(_st_warp_on && echo true || echo false)" "$conf" "$MIXOMO_WARP_CONF" "$(esc "$ep")" "$mih" "$AWG_ENDPOINTS" "$(_st_warp_own && echo true || echo false)" "$list"
+		"$(_st_warp_on && echo true || echo false)" "$conf" "$MIXOMO_WARP_CONF" "$(esc "$ep")" "$mih" "$AWG_ENDPOINTS" "$(_st_warp_own && echo true || echo false)" "$(_st_warp_on && _st_active_if)" "$list"
 }
 
 do_awg_install() {
@@ -9831,7 +9859,8 @@ _awg_try() {
 _awg_try_down() { ip link del "$1" >/dev/null 2>&1; }
 _awg_ml() { [ "$AWG_NO_I1" = 1 ] || echo ", маска $(_awg_mask_name "$1")"; }
 _awg_trace() {
-	curl -s --interface "$1" --connect-timeout 4 --max-time 6 http://1.1.1.1/cdn-cgi/trace 2>/dev/null | grep -Eq '^warp=(on|plus)'
+	curl -s --interface "$1" --connect-timeout 4 --max-time 6 http://1.1.1.1/cdn-cgi/trace 2>/dev/null | grep -Eq '^warp=(on|plus)' && return 0
+	curl -s -o /dev/null --interface "$1" --connect-timeout 4 --max-time 7 https://www.google.com/generate_204 2>/dev/null
 }
 _awg_mask_name() {
 	case "$1" in
@@ -10444,11 +10473,19 @@ awg_action() {
 			tr="$(curl -s --interface "$mode" --connect-timeout 5 --max-time 10 https://www.cloudflare.com/cdn-cgi/trace 2>/dev/null)"
 			[ -n "$tr" ] || tr="$(curl -s --interface "$mode" --connect-timeout 5 --max-time 10 https://1.1.1.1/cdn-cgi/trace 2>/dev/null)"
 			colo="$(printf '%s\n' "$tr" | sed -n 's/^colo=//p')"; ip="$(printf '%s\n' "$tr" | sed -n 's/^ip=//p')"; warp="$(printf '%s\n' "$tr" | sed -n 's/^warp=//p')"
+			if [ -z "$ip" ]; then
+				tr="$(curl -s --interface "$mode" --connect-timeout 5 --max-time 10 https://ipinfo.io/json 2>/dev/null)"
+				ip="$(printf '%s' "$tr" | jsonfilter -e '@.ip' 2>/dev/null)"
+				[ -n "$ip" ] && seen="$(printf '%s' "$tr" | jsonfilter -e '@.country' 2>/dev/null)"
+			fi
+			if [ -z "$ip" ]; then
+				ip="$(curl -s --interface "$mode" --connect-timeout 5 --max-time 10 https://api.ipify.org 2>/dev/null | grep -Eo '^[0-9a-fA-F.:]{3,45}$' | head -n1)"
+			fi
 			if [ -n "$ip" ]; then
 				set -- $(_cf_meta "$mode")
 				if [ $# -ge 4 ]; then
 					[ -n "$colo" ] || colo="$1"
-					[ "$2" != - ] && seen="$2"
+					[ "$2" != - ] && [ -z "$seen" ] && seen="$2"
 					shift 3; [ "$*" != - ] && city="$*"
 				fi
 				set -- $(_st_warp_probe "$mode"); loss="$1"; rtt="$2"; torn="$3"
@@ -11061,8 +11098,9 @@ do_fk_remove() {
 	echo "   ✓ dnsmasq перезапущен"
 	_fk_feeds_official || true
 	rm -f /tmp/luci-indexcache* /tmp/luci-modulecache/* /var/luci-indexcache* 2>/dev/null
-	if [ -e /usr/bin/sing-box ]; then _fk_say "Готово: Forkozz удалён полностью — вместе с настройками и правилами (sing-box оставлен)"
-	else _fk_say "Готово: Forkozz удалён полностью — вместе с настройками, правилами и sing-box"; fi
+	if [ -e /usr/bin/sing-box ]; then _fk_say "Forkozz удалён полностью — вместе с настройками и правилами (sing-box оставлен)"
+	else _fk_say "Forkozz удалён полностью — вместе с настройками, правилами и sing-box"; fi
+	_zm_after_remove "Forkozz"
 }
 
 do_fk_sb_remove() {
@@ -11088,6 +11126,60 @@ _fk_fixsel() {
 	return 0
 }
 
+_fk_start_once() {
+	local m="/usr/lib/forkop/service/initd.uc"
+	if [ -f "$m" ] && grep -q '"start-and-wait"' "$m" 2>/dev/null; then
+		_zm_run 240 ucode -L /usr/lib/forkop "$m" start-and-wait start "" 200 >> "$JOBS_DIR/forkop-svc.out" 2>&1
+	else
+		_zm_run 240 /etc/init.d/forkop start >> "$JOBS_DIR/forkop-svc.out" 2>&1
+	fi
+}
+
+_fk_wait_up() {
+	local i=0
+	while [ "$i" -lt "$1" ]; do
+		_fk_up && return 0
+		sleep 1
+		i=$((i + 1))
+		[ "$i" = 20 ] && printf 'Подождите '
+		[ "$i" -gt 20 ] && [ $((i % 5)) = 0 ] && printf '.'
+	done
+	[ "$i" -ge 20 ] && echo
+	_fk_up
+}
+
+_fk_why() {
+	local l
+	l="$(logread 2>/dev/null | grep -E 'forkop|sing-box' | grep -E 'Refusing|fatal' | tail -n 1)"
+	case "$l" in
+		*"sing-box process ownership is ambiguous"*) echo "запущен посторонний процесс sing-box — Forkozz не может понять, чей он" ;;
+		*"DPI guard"*|*runtime_guard_active*) echo "остался защитный блок правил от прошлого неудачного запуска" ;;
+		*"rule-set download sources failed"*) echo "не скачался ни один список правил" ;;
+		*"provenance"*) echo "после обновления sing-box не удалось проверить, чей процесс sing-box запущен" ;;
+	esac
+}
+
+_fk_reset_runtime() {
+	_zm_run 90 /etc/init.d/forkop stop >/dev/null 2>&1
+	if pidof sing-box >/dev/null 2>&1 && [ -z "$(_fk_sb_users)" ]; then
+		[ -x /etc/init.d/sing-box ] && /etc/init.d/sing-box stop >/dev/null 2>&1
+		killall sing-box >/dev/null 2>&1
+		sleep 2
+		pidof sing-box >/dev/null 2>&1 && killall -9 sing-box >/dev/null 2>&1
+		echo "   ✓ Остановлен оставшийся процесс sing-box"
+	fi
+	nft list table inet ForkopTableDpiGuard >/dev/null 2>&1 && nft delete table inet ForkopTableDpiGuard >/dev/null 2>&1 && echo "   ✓ Снят защитный блок правил от прошлого запуска"
+	rm -f /var/run/forkop/start.failure 2>/dev/null
+}
+
+_fk_svc_report() {
+	local f="$JOBS_DIR/forkop-svc.out" lines
+	[ -s "$f" ] || return 0
+	lines="$(sed 's/\x1b\[[0-9;]*m//g' "$f" | grep -v '^[[:space:]]*$' | grep -viE 'udhcpc|^pending$|^Start Forkop$' | grep -iE 'error|fatal|fail|abort|ошиб|не удалось' | awk '!s[$0]++' | tail -n 8)"
+	[ -n "$lines" ] && printf '%s\n' "$lines" | sed 's/^/   /'
+	return 0
+}
+
 do_fk_service() {
 	local a="$1" b i=0
 	_fk_installed || { echo "ОШИБКА: Forkozz не установлен"; return 1; }
@@ -11110,20 +11202,32 @@ do_fk_service() {
 		_zm_run 240 /etc/init.d/forkop reload > "$JOBS_DIR/forkop-svc.out" 2>&1 || echo "!! Перезагрузка настроек завершилась с ошибкой"
 	else
 		_fk_say "Запускаем Forkozz: собираем конфиг sing-box, скачиваем списки, ставим правила"
-		_zm_run 240 /etc/init.d/forkop restart > "$JOBS_DIR/forkop-svc.out" 2>&1 || echo "!! Запуск завершился с ошибкой"
+		if _fk_up || pidof sing-box >/dev/null 2>&1; then
+			if ! _zm_run 240 /etc/init.d/forkop restart > "$JOBS_DIR/forkop-svc.out" 2>&1; then
+				echo "   · перезапуск не прошёл — останавливаем Forkozz полностью и запускаем заново"
+				_zm_run 90 /etc/init.d/forkop stop >> "$JOBS_DIR/forkop-svc.out" 2>&1
+				_fk_start_once || echo "!! Запуск завершился с ошибкой"
+			fi
+		else
+			_fk_start_once || echo "!! Запуск завершился с ошибкой"
+		fi
 	fi
-	grep -iE 'error|fail|ошиб' "$JOBS_DIR/forkop-svc.out" 2>/dev/null | tail -n 5 | sed 's/^/   /'
+	_fk_svc_report
 	rm -f "$JOBS_DIR/forkop-svc.out"
 	if ! _fk_up; then
 		_fk_say "Ждём, пока поднимутся sing-box и правила (до 60 с)"
-		while [ "$i" -lt 60 ]; do
-			_fk_up && break
-			sleep 1
-			i=$((i + 1))
-			[ "$i" = 20 ] && printf 'Подождите '
-			[ "$i" -gt 20 ] && [ $((i % 5)) = 0 ] && printf '.'
-		done
-		[ "$i" -ge 20 ] && echo
+		_fk_wait_up 60
+	fi
+	if ! _fk_up; then
+		b="$(_fk_why)"
+		_rb_warn "Forkozz не поднялся${b:+: $b}"
+		_fk_say "Пробуем ещё раз: снимаем остатки прошлого запуска и запускаем заново"
+		_fk_reset_runtime
+		: > "$JOBS_DIR/forkop-svc.out"
+		_fk_start_once || echo "!! Повторный запуск завершился с ошибкой"
+		_fk_svc_report
+		rm -f "$JOBS_DIR/forkop-svc.out"
+		_fk_up || _fk_wait_up 60
 	fi
 	if _fk_up; then
 		_fk_fixsel
@@ -11132,10 +11236,17 @@ do_fk_service() {
 		_fk_lists_report
 		_fk_lists_errors
 		_fk_say "Готово: Forkozz работает"
+		grep -q '^Forkozz не запустился' "$ZM_REBOOT_HINT" 2>/dev/null && rm -f "$ZM_REBOOT_HINT"
 		return 0
 	fi
-	echo "ОШИБКА: Forkozz не запустился. Журнал:"
-	logread 2>/dev/null | grep -E 'forkop|sing-box' | tail -n 12 | sed 's/^[^]]*\]: //'
+	echo "ОШИБКА: Forkozz не запустился. Если ошибка повторяется, перезагрузите роутер — это сбросит всё, что осталось от прошлых запусков."
+	_zm_reboot_hint "Forkozz не запустился. Перезагрузите роутер — это сбросит всё, что осталось от прошлых запусков, — и включите Forkozz снова."
+	if logread 2>/dev/null | grep -E 'forkop|sing-box' | grep -qiE 'fatal|error'; then
+		echo "Причина из журнала:"
+		logread 2>/dev/null | grep -E 'forkop|sing-box' | grep -iE 'fatal|error|abort|refus' | tail -n 6 | sed 's/^[^]]*\]: //; s/^/   /'
+	fi
+	echo "Последние записи журнала:"
+	logread 2>/dev/null | grep -E 'forkop|sing-box' | grep -v 'Updates:' | tail -n 10 | sed 's/^[^]]*\]: //; s/^/   /'
 	return 1
 }
 
@@ -13559,7 +13670,6 @@ function rebootWait(note) {
 	var t0 = Date.now();
 	var ov = E('div', { 'class': 'zm-reboot-ov' }, [
 		E('div', { 'class': 'zm-reboot-box' }, [
-			E('div', { 'class': 'zm-reboot-spin' }),
 			E('b', {}, 'Роутер перезагружается'),
 			note
 		])
@@ -13589,7 +13699,7 @@ function rebootRouter() {
 }
 
 function rebootBanner(text) {
-	var btn = E('button', { 'class': 'cbi-button cbi-button-action', 'click': function() {
+	var btn = E('button', { 'class': 'cbi-button cbi-button-positive', 'click': function() {
 		btn.disabled = true;
 		rebootRouter().then(function(ok) { if (!ok) btn.disabled = false; });
 	} }, 'Перезагрузить роутер');
@@ -14665,7 +14775,7 @@ return view.extend({
 				busy = false;
 				var msg = ok ? ({ install: 'AmneziaWG установлен', update: 'AmneziaWG переустановлен', remove: 'AmneziaWG удалён', gen: 'WARP сгенерирован',
 					create: 'Интерфейс создан', pick: 'Точка входа подобрана', mihomo: 'WARP добавлен в Mihomo',
-					replace: 'Конфиг применён', regen: 'Новый WARP применён' }[action] || 'Готово')
+					replace: 'Конфиг применён', regen: 'Новый WARP применён', fix: 'Туннель Steer перезапущен на новой точке входа' }[action] || 'Готово')
 					: 'Не получилось — подробности в журнале';
 				zm.toast(msg, ok ? 'info' : 'error');
 				if (ok && action === 'gen') mk.loaded = false;
@@ -14682,6 +14792,16 @@ return view.extend({
 				follow(res.job || 'awg', action);
 				return true;
 			}).catch(function() { zm.toast('Роутер не ответил', 'error'); return false; });
+		}
+
+		function steerFix(f) {
+			if (busy) { zm.toast('Дождитесь окончания текущей операции', 'warning'); return; }
+			var n = f.name === 'zmwarp' ? '1' : f.name.replace(/^zmwarp/, '');
+			zm.steerAction('warp_fix', n).then(function(res) {
+				if (res.error) { zm.toast(res.error, 'error'); return; }
+				zm.toast('Подбираем точку входа для ' + f.name + ', это до пары минут', 'warning');
+				follow('steer', 'fix');
+			}).catch(function() { zm.toast('Роутер не ответил', 'error'); });
 		}
 
 		function quick(action, mode, okText) {
@@ -14760,7 +14880,8 @@ return view.extend({
 			var head = E('div', { 'style': 'display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:6px' }, [
 				E('b', { 'style': 'font-size:15px' }, [ String(f.name) ]), st,
 				f.warp ? badge('zm-off', 'WARP') : '',
-				steer ? badge('zm-off', 'Steer') : ''
+				steer ? badge('zm-off', 'Steer') : '',
+				steer && data.steer_active ? (data.steer_active === f.name ? badge('zm-ok', 'сейчас через него идёт трафик') : live(f) ? badge('zm-off', 'запасной') : '') : ''
 			]);
 			var box = E('div', { 'class': 'zm-awg-if' }, [ head ]);
 			var hide = !f.warp || f.name === 'zmwarp4';
@@ -14821,6 +14942,10 @@ return view.extend({
 				? 'Свой WARP для Steer' + (data.steer_own ? '' : ', сейчас выключен') + '. Конфиг меняется здесь или в Steer.'
 				: data.steer_own ? 'Туннель Steer. Выключен, пока работает свой WARP.'
 				: 'Туннель Steer. Ключи и конфиг меняются здесь, остальное — в Steer.'));
+			if (steer && f.warp && f.enabled && f.name !== 'zmwarp4' && !data.steer_own && !live(f)) {
+				box.appendChild(E('p', { 'class': 'zm-hint' }, [ 'У каждого туннеля Steer свои ключи, и даже без трафика он раз в 25 секунд связывается с Cloudflare — у рабочего туннеля рукопожатие не старше 3 минут. Здесь его нет: точка входа перестала отвечать.' + (data.steer_active && data.steer_active !== f.name ? ' Steer сейчас идёт через ' + data.steer_active + '.' : '') ]));
+				box.appendChild(E('div', { 'class': 'zm-actions' }, [ E('button', { 'class': 'cbi-button cbi-button-positive', 'disabled': busy ? '' : null, 'click': function() { steerFix(f); } }, 'Подобрать точку входа') ]));
+			}
 			if (open[f.name] === 'ep') box.appendChild(epEditor(f));
 			if (open[f.name] === 'conf') {
 				var ta = E('textarea', { 'class': 'zm-config-editor', 'spellcheck': 'false', 'style': 'min-height:220px' });
@@ -15699,7 +15824,7 @@ return view.extend({
 				return;
 			}
 			if (data.exit === 'vpn') warpCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Сейчас сервисы идут через подписку — туннели WARP не используются.'));
-			if (tl.length > 1) warpCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Трафик идёт через самый быстрый живой туннель; упал один — Steer сам переключится на другой.'));
+			if (tl.length > 1) warpCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Трафик идёт через самый быстрый живой туннель' + (data.warp_active && data.exit !== 'vpn' ? ' — сейчас это ' + (function() { var a = tl.filter(function(t) { return t.if === data.warp_active; })[0]; return a ? 'WARP ' + a.n : data.warp_active; })() : '') + '; упал один — Steer сам переключится на другой.'));
 			var deadN = tl.filter(function(t) { return !tunnelLive(t); }).length;
 			var partial = deadN > 0 && deadN < tl.length;
 			if (tl.length) {
@@ -15713,6 +15838,7 @@ return view.extend({
 						} }, 'Новые ключи')
 					]) : '';
 					var st = badge(live ? 'zm-ok' : t.up ? 'zm-warn' : 'zm-bad', live ? 'работает' : t.up ? 'нет связи' : 'не поднят');
+					var cur = data.warp_active && data.exit !== 'vpn' && tl.length > 1 ? (data.warp_active === t.if ? badge('zm-ok', 'трафик идёт здесь') : live ? badge('zm-off', 'запасной') : '') : '';
 					var info = [];
 					if (t.colo) info.push('сервер ' + t.colo + (t.city ? ' (' + t.city + ')' : ''));
 					if (t.seen) info.push('сайты видят: ' + country(t.seen));
@@ -15722,6 +15848,7 @@ return view.extend({
 					warpCard.appendChild(E('div', { 'class': 'zm-row' }, [
 						E('span', { 'class': 'zm-label' }, 'WARP ' + t.n),
 						st,
+						cur,
 						E('span', {}, info.join(' · ')),
 						fix
 					]));
@@ -18972,8 +19099,6 @@ html.zm-theme-dark .zm-stopbar { background: #2a1416; color: #fecaca; border-col
 .zm-reboot-ov { position: fixed; inset: 0; z-index: 10000; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(10,12,18,.55); backdrop-filter: blur(3px); }
 .zm-reboot-box { display: flex; flex-direction: column; align-items: center; gap: 10px; max-width: 360px; padding: 26px 24px; border-radius: 16px; text-align: center; background: var(--surface-solid, var(--surface, #fff)); color: var(--text, #1f2328); box-shadow: 0 20px 60px -20px rgba(0,0,0,.5); }
 .zm-reboot-box b { font-size: 16px; }
-.zm-reboot-spin { width: 34px; height: 34px; border-radius: 50%; border: 3px solid rgba(127,127,127,.25); border-top-color: #2d5bff; animation: zm-reboot-spin 1s linear infinite; }
-@keyframes zm-reboot-spin { to { transform: rotate(360deg); } }
 .zm-reboot-banner { gap: 10px 14px; flex-wrap: wrap; }
 .zm-hide-quick { margin: 0 0 12px; padding: 10px 12px; border-radius: 12px; border: 1px solid rgba(127,127,127,.25); background: rgba(127,127,127,.05); }
 .zm-hide-qlist { display: flex; flex-wrap: wrap; gap: 6px; }
