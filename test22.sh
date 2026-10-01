@@ -1,5 +1,5 @@
 #!/bin/sh
-# Version: 1.89
+# Version: 1.90
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -50,7 +50,7 @@ cat > '/opt/zapret-manager-luci/backend.sh' << 'ZM_INSTALLER_EOF'
 umask 022
 
 CONF="/etc/config/zapret"
-ZM_VERSION="1.89"
+ZM_VERSION="1.90"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
@@ -428,6 +428,55 @@ _zm_host_ok() {
 	curl -s -o /dev/null --connect-timeout 6 --max-time 12 "https://$1/" >/dev/null 2>&1
 	case $? in 0|22|35|47|52|56|60) return 0 ;; esac
 	return 1
+}
+
+ZM_REBOOT_HINT="$JOBS_DIR/reboot.hint"
+
+_zm_reboot_hint() {
+	mkdir -p "$JOBS_DIR"
+	printf '%s\n' "$1" > "$ZM_REBOOT_HINT"
+}
+
+_zm_inet_ok() {
+	nslookup ya.ru 127.0.0.1 >/dev/null 2>&1 || nslookup cloudflare.com 127.0.0.1 >/dev/null 2>&1 || return 1
+	_zm_host_ok ya.ru || _zm_host_ok www.cloudflare.com || _zm_host_ok www.google.com
+}
+
+_zm_inet_wait() {
+	local t=0
+	while [ "$t" -lt "$1" ]; do
+		_zm_inet_ok && return 0
+		sleep 3; t=$((t + 3))
+	done
+	return 1
+}
+
+_zm_net_recover() {
+	_rb_say "Проверяем интернет и DNS после удаления"
+	/etc/init.d/firewall restart >/dev/null 2>&1
+	/etc/init.d/dnsmasq restart >/dev/null 2>&1
+	if _zm_inet_wait 15; then
+		echo "   ✓ Интернет и DNS на роутере работают"
+		return 0
+	fi
+	_rb_warn "Интернет не отвечает — перезапускаем сеть (панель может на полминуты потерять связь с роутером)"
+	_zm_run 90 /etc/init.d/network restart >/dev/null 2>&1
+	sleep 5
+	/etc/init.d/dnsmasq restart >/dev/null 2>&1
+	if _zm_inet_wait 45; then
+		echo "   ✓ После перезапуска сети интернет работает"
+		return 0
+	fi
+	_rb_warn "Интернет так и не появился — перезагрузите роутер"
+	return 1
+}
+
+system_reboot() {
+	local j
+	j="$(_zm_busy_job)" && { printf '{"error":"%s"}\n' "$(esc "Сейчас идёт операция: $j — дождитесь её окончания")"; return 1; }
+	rm -f "$ZM_REBOOT_HINT"
+	( sleep 2; sync; reboot ) >/dev/null 2>&1 </dev/null &
+	printf '{"ok":true}\n'
 }
 
 _zm_net_own() {
@@ -4521,9 +4570,9 @@ health() {
 	local fw=false v6=false
 	[ "$(uci -q get firewall.@defaults[0].flow_offloading)" = 1 ] && [ -f /usr/share/firewall4/templates/ruleset.uc ] && [ "$(_flow_offloading_fix_applied)" = false ] && fw=true
 	[ -f "$CONF" ] && [ "$(_ipv6_enabled_in_zapret)" = false ] && ip -6 route show default 2>/dev/null | grep -q . && v6=true
-	printf '{"zapret":%s,"zapret2":%s,"bytetube":%s,"tg":%s,"mixomo":%s,"doh":%s,"hosts":%s,"steer":%s,"steer_off":%s,"steer_exit":"%s","awg":%s,"forkop":%s,"flow_warn":%s,"ipv6_warn":%s}\n' \
+	printf '{"zapret":%s,"zapret2":%s,"bytetube":%s,"tg":%s,"mixomo":%s,"doh":%s,"hosts":%s,"steer":%s,"steer_off":%s,"steer_exit":"%s","awg":%s,"forkop":%s,"flow_warn":%s,"ipv6_warn":%s,"reboot_hint":"%s"}\n' \
 		"$zr" "$zr2" "$bt" "$tg" "$mx" "$doh" "$hs" "$sr" \
-		"$([ -f /etc/zm-steer/stopped ] && echo true || echo false)" "$sx" "$(_awg_health)" "$(_fk_health)" "$fw" "$v6"
+		"$([ -f /etc/zm-steer/stopped ] && echo true || echo false)" "$sx" "$(_awg_health)" "$(_fk_health)" "$fw" "$v6" "$(esc "$(head -n1 "$ZM_REBOOT_HINT" 2>/dev/null)")"
 }
 
 VERSIONS_CACHE="$ZM_STATE_DIR/versions.json"
@@ -8515,6 +8564,23 @@ do_steer_warp_recreate() {
 	_rb_say "Готово, WARP пересоздан"
 }
 
+_st_leftovers_clean() {
+	command -v steer >/dev/null 2>&1 && return 0
+	local t m n=0
+	for t in "inet steer" "ip steer" "ip6 steer" "inet steer_obfs"; do
+		nft delete table $t >/dev/null 2>&1 && n=$((n + 1))
+	done
+	for t in $(awk '{print $3}' /var/lib/steer/registry 2>/dev/null); do ip route flush table "$t" >/dev/null 2>&1; done
+	for m in $(awk '{print $2}' /var/lib/steer/registry 2>/dev/null); do
+		while ip rule del fwmark "0x$m/0x0ff00000" >/dev/null 2>&1; do n=$((n + 1)); done
+		while ip rule del fwmark "0x$m" >/dev/null 2>&1; do n=$((n + 1)); done
+	done
+	killall steerd >/dev/null 2>&1
+	rm -rf /var/lib/steer
+	[ "$n" -gt 0 ] && echo "   ✓ Убраны оставшиеся правила Steer: $n"
+	return 0
+}
+
 do_steer_remove() {
 	_st_phase remove
 	_rb_say "Удаляем Steer и туннель WARP"
@@ -8561,7 +8627,14 @@ do_steer_remove() {
 	_rb_rpcd_ensure
 	rm -rf "$ST_DIR" "$ST_RUN"
 	rm -f "$ST_TGWS_WARP"
+	[ "$foreign" = 1 ] || _st_leftovers_clean
+	if _zm_net_recover; then
+		_zm_reboot_hint "Steer удалён. Желательно перезагрузить роутер — так сбросятся оставшиеся соединения и модули ядра."
+	else
+		_zm_reboot_hint "Steer удалён, но интернет на роутере не отвечает. Перезагрузите роутер."
+	fi
 	_rb_say "Готово, Steer удалён"
+	echo "   Желательно перезагрузить роутер — кнопка «Перезагрузить роутер» появилась вверху страницы"
 }
 
 steer_status() {
@@ -9548,6 +9621,7 @@ do_awg_remove() {
 	done
 	_awg_say "Выгружаем модуль ядра и чистим файлы"
 	rmmod amneziawg >/dev/null 2>&1
+	[ -d /sys/module/amneziawg ] && _zm_reboot_hint "AmneziaWG удалён, но его модуль ядра ещё загружен. Перезагрузите роутер, чтобы он выгрузился."
 	sed -i -E '/^pkg (kmod-amneziawg|amneziawg-tools|luci-proto-amneziawg|luci-app-amneziawg|luci-i18n-amneziawg-ru)$/d' "$ST_OWNED" 2>/dev/null
 	rm -rf "$AWG_DIR" 2>/dev/null
 	rm -f /tmp/luci-indexcache* /tmp/luci-modulecache/* 2>/dev/null
@@ -9558,7 +9632,6 @@ _awg_valid_ep() { printf '%s' "$1" | grep -Eq '^(\[[0-9A-Fa-f:]+\]|[A-Za-z0-9.-]
 
 AWG_API1="https://api.cloudflareclient.com/v0a4005/reg"
 AWG_API2="https://api.cloudflareclient.com/v0i1909051800/reg"
-AWG_RELAY="https://edge-client-api.vercel.app"
 AWG_CF_VER="a-6.11-2223"
 AWG_BOOT_PRIV="4OnO86dDLpqJ2U10ODwX3tarx6xlRGLfkmbSBtMgaHg="
 AWG_BOOT_IP="172.16.0.3"
@@ -9651,7 +9724,7 @@ _awg_keys_get() {
 	if [ -n "$(_awg_keygen_tool)" ]; then
 		_awg_say "Получаем ключи WARP: Cloudflare, ключ создаётся на роутере"
 		_awg_cf_register "" && return 0
-		echo "   Cloudflare и запасной адрес регистрации не ответили"
+		echo "   Cloudflare не выдал ключи"
 	fi
 	_awg_say "Получаем ключи WARP: внешний генератор"
 	_awg_keys_main && return 0
@@ -9677,10 +9750,9 @@ _awg_cf_register() {
 	local reg="$AWG_RUN/reg.$$.json" api code pre id tok host dead="" ua='okhttp/3.12.1' cv="$AWG_CF_VER"
 	_awg_genkey || { echo "   нет утилиты awg или wg"; return 1; }
 	mkdir -p "$AWG_RUN"
-	for api in "$AWG_API1" "$AWG_API2" $ST_WARP_API "$AWG_RELAY/v0a4005/reg"; do
+	for api in "$AWG_API1" "$AWG_API2" $ST_WARP_API; do
 		host="${api#https://}"; host="${host%%/*}"
 		case " $dead " in *" $host "*) continue ;; esac
-		[ "$host" = "${AWG_RELAY#https://}" ] && echo "   пробуем через посредника ${AWG_RELAY#https://}"
 		rm -f "$reg"
 		code=$(curl -s --connect-timeout 6 --max-time 25 $1 -X POST \
 			-H 'Content-Type: application/json' -H "User-Agent: $ua" -H "CF-Client-Version: $cv" -H 'Accept-Encoding: identity' \
@@ -11594,6 +11666,7 @@ case "$cmd" in
 	forkop_action)                        forkop_action "$1" "$2" ;;
 	lan_ip)                               _zm_lan_ip ;;
 	jobs_cancel)                          jobs_cancel "$1" ;;
+	system_reboot)                        system_reboot ;;
 	rpcd_watch)                           rpcd_watch ;;
 	zm_watch)                             zm_watch ;;
 	ui_theme_get)                         ui_theme_get ;;
@@ -12479,6 +12552,7 @@ list_methods() {
 	json_add_object "mixomo_warp_config_set"; json_add_string "content" "string"; json_close_object
 	json_add_object "bytetube_installed";     json_close_object
 	json_add_object "health";                 json_close_object
+	json_add_object "system_reboot";          json_close_object
 	json_add_object "versions";               json_add_string "action" "string"; json_close_object
 	json_add_object "awg_status";             json_close_object
 	json_add_object "awg_action";             json_add_string "action" "string"; json_add_string "mode" "string"; json_close_object
@@ -12580,6 +12654,7 @@ call_method() {
 		mixomo_warp_config_set) json_get_var content content; printf '%s' "$content" | "$BACKEND" mixomo_warp_config_set @stdin ;;
 		bytetube_installed)      "$BACKEND" bytetube_installed ;;
 		health)                  "$BACKEND" health ;;
+		system_reboot)           "$BACKEND" system_reboot ;;
 		versions)                json_get_var action action; "$BACKEND" versions "$action" ;;
 		awg_status)              "$BACKEND" awg_status ;;
 		awg_action)              json_get_var action action; json_get_var mode mode; printf '%s' "$mode" | "$BACKEND" awg_action "$action" @stdin ;;
@@ -12624,46 +12699,127 @@ cat > '/usr/share/rpcd/acl.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF'
 		"read": {
 			"ubus": {
 				"zapret-manager": [
-					"status", "job_status", "log_tail", "system_info",
-					"strategy_list_v", "strategy_list_flowseal", "strategy_list_youtube",
-					"discord_status", "hosts_status", "hosts_file_get", "doh_status", "game_status",
-					"system_status", "mirror_status", "exclusions_status", "nfqws_opt_get", "zapret_lists_status", "zapret_list_get", "tg_status", "tgws_status",
-					"test_status", "test_results", "zm_update_status", "mixomo_status", "mixomo_proxies", "mixomo_config_get",
+					"status",
+					"job_status",
+					"log_tail",
+					"system_info",
+					"strategy_list_v",
+					"strategy_list_flowseal",
+					"strategy_list_youtube",
+					"discord_status",
+					"hosts_status",
+					"hosts_file_get",
+					"doh_status",
+					"game_status",
+					"system_status",
+					"mirror_status",
+					"exclusions_status",
+					"nfqws_opt_get",
+					"zapret_lists_status",
+					"zapret_list_get",
+					"tg_status",
+					"tgws_status",
+					"test_status",
+					"test_results",
+					"zm_update_status",
+					"mixomo_status",
+					"mixomo_proxies",
+					"mixomo_config_get",
 					"mixomo_warp_status",
-					"zapret_latest_version", "bytetube_installed", "health", "versions", "awg_status", "steer_status",
-					"forkop_status", "forkop_config_get", "sysinfo_get", "ui_theme_get"
+					"zapret_latest_version",
+					"bytetube_installed",
+					"health",
+					"versions",
+					"awg_status",
+					"steer_status",
+					"forkop_status",
+					"forkop_config_get",
+					"sysinfo_get",
+					"ui_theme_get"
 				],
-				"system": [ "info" ]
+				"system": [
+					"info"
+				]
 			},
-			"uci": [ "bytetube" ],
+			"uci": [
+				"bytetube"
+			],
 			"file": {
-				"/usr/bin/bytetube": [ "exec" ],
-				"/etc/init.d/bytetube": [ "exec" ]
+				"/usr/bin/bytetube": [
+					"exec"
+				],
+				"/etc/init.d/bytetube": [
+					"exec"
+				]
 			}
 		},
 		"write": {
 			"ubus": {
 				"zapret-manager": [
-					"zapret_action", "zapret2_action",
-					"strategy_set_v", "strategy_set_flowseal", "strategy_set_youtube", "youtube_quic_set",
-					"discord_set_dv", "discord_set_fake",
-					"hosts_toggle", "doh_set", "doh_bootstrap_set", "doh_force_set", "hosts_replace_geohide", "hosts_reset", "hosts_file_set", "doh_install", "doh_remove",
-					"game_set", "game_set_fake", "game_toggle_xtreme",
-					"system_check_connectivity", "system_toggle_quic", "system_toggle_ipv6",
-					"system_toggle_flow_offloading_fix", "system_uninstall_panel",
-					"mirror_set", "exclusions_toggle", "exclusions_clear", "nfqws_opt_set", "zapret_list_set", "zapret_list_restore",
-					"tg_action", "tg_restart_all", "tgws_action", "test_action", "zm_update_action",
-					"mixomo_action", "mixomo_config_set", "mixomo_subscription_set", "mixomo_filter_set",
-					"mixomo_magitrickle_list_set", "mixomo_autorestart_set", "mixomo_ui_action",
-					"mixomo_warp_action", "mixomo_warp_integrate_action", "mixomo_warp_config_set",
-					"bytetube_action", "awg_action", "steer_action",
-					"forkop_config_set", "forkop_action", "sysinfo_run", "jobs_cancel", "ui_theme_set"
+					"zapret_action",
+					"zapret2_action",
+					"strategy_set_v",
+					"strategy_set_flowseal",
+					"strategy_set_youtube",
+					"youtube_quic_set",
+					"discord_set_dv",
+					"discord_set_fake",
+					"hosts_toggle",
+					"doh_set",
+					"doh_bootstrap_set",
+					"doh_force_set",
+					"hosts_replace_geohide",
+					"hosts_reset",
+					"hosts_file_set",
+					"doh_install",
+					"doh_remove",
+					"game_set",
+					"game_set_fake",
+					"game_toggle_xtreme",
+					"system_check_connectivity",
+					"system_toggle_quic",
+					"system_toggle_ipv6",
+					"system_toggle_flow_offloading_fix",
+					"system_uninstall_panel",
+					"mirror_set",
+					"exclusions_toggle",
+					"exclusions_clear",
+					"nfqws_opt_set",
+					"zapret_list_set",
+					"zapret_list_restore",
+					"tg_action",
+					"tg_restart_all",
+					"tgws_action",
+					"test_action",
+					"zm_update_action",
+					"mixomo_action",
+					"mixomo_config_set",
+					"mixomo_subscription_set",
+					"mixomo_filter_set",
+					"mixomo_magitrickle_list_set",
+					"mixomo_autorestart_set",
+					"mixomo_ui_action",
+					"mixomo_warp_action",
+					"mixomo_warp_integrate_action",
+					"mixomo_warp_config_set",
+					"bytetube_action",
+					"awg_action",
+					"steer_action",
+					"forkop_config_set",
+					"forkop_action",
+					"sysinfo_run",
+					"jobs_cancel",
+					"ui_theme_set",
+					"system_reboot"
 				]
 			},
-			"uci": [ "bytetube" ]
+			"uci": [
+				"bytetube"
+			]
 		}
 	}
 }
+
 ZM_INSTALLER_EOF
 chmod 0644 '/usr/share/rpcd/acl.d/luci-app-zapret-manager.json'
 
@@ -12843,6 +12999,7 @@ var callMixomoWarpAction = zmDeclare({ object: 'zapret-manager', method: 'mixomo
 var callMixomoWarpIntegrateAction = zmDeclare({ object: 'zapret-manager', method: 'mixomo_warp_integrate_action', expect: {} });
 var callMixomoWarpConfigSet = zmDeclare({ object: 'zapret-manager', method: 'mixomo_warp_config_set', params: ['content'], expect: {} });
 var callHealth = zmDeclare({ object: 'zapret-manager', method: 'health', expect: {} });
+var callSystemReboot = zmDeclare({ object: 'zapret-manager', method: 'system_reboot', expect: {} });
 var callBoardInfo = rpc.declare({ object: 'system', method: 'info', expect: {} });
 var callForkopStatus = zmDeclare({ object: 'zapret-manager', method: 'forkop_status', expect: {} });
 var callForkopConfigGet = zmDeclare({ object: 'zapret-manager', method: 'forkop_config_get', expect: {} });
@@ -13204,7 +13361,7 @@ function pollJob(job, logEl, onDone, onTick) {
 			inFlight = false;
 			if (finished) return;
 			failCount++;
-			if (failCount >= 8) {
+			if (failCount >= 40) {
 				renderLog(logEl, '==> ОШИБКА: роутер не отвечает, не удалось получить статус операции.');
 				end(false);
 			}
@@ -13398,6 +13555,62 @@ function svcGroup(o) {
 	return E('div', { 'class': 'zm-svc-groupwrap' }, [ head, body ]);
 }
 
+function rebootWait(note) {
+	var t0 = Date.now();
+	var ov = E('div', { 'class': 'zm-reboot-ov' }, [
+		E('div', { 'class': 'zm-reboot-box' }, [
+			E('div', { 'class': 'zm-reboot-spin' }),
+			E('b', {}, 'Роутер перезагружается'),
+			note
+		])
+	]);
+	document.body.appendChild(ov);
+	function tick() {
+		var sec = Math.round((Date.now() - t0) / 1000);
+		note.textContent = 'Страница переподключится сама, обычно через 1–2 минуты. Прошло ' + sec + ' с.';
+		if (sec < 25) { setTimeout(tick, 1000); return; }
+		var ctl = window.AbortController ? new AbortController() : null;
+		var tm = ctl ? setTimeout(function() { ctl.abort(); }, 4000) : 0;
+		fetch(location.pathname + location.search, { cache: 'no-store', credentials: 'same-origin', signal: ctl ? ctl.signal : undefined }).then(function(r) {
+			clearTimeout(tm);
+			if (r.ok) location.reload(); else setTimeout(tick, 3000);
+		}, function() { clearTimeout(tm); setTimeout(tick, 3000); });
+	}
+	tick();
+}
+
+function rebootRouter() {
+	if (!confirm('Перезагрузить роутер?\n\nИнтернет пропадёт на 1–2 минуты, потом всё поднимется само.')) return Promise.resolve(false);
+	return callSystemReboot().then(function(r) {
+		if (r && r.error) { toast(r.error, 'error'); return false; }
+		rebootWait(E('span', { 'class': 'zm-hint', 'style': 'margin:0' }));
+		return true;
+	}, function() { toast('Роутер не ответил', 'error'); return false; });
+}
+
+function rebootBanner(text) {
+	var btn = E('button', { 'class': 'cbi-button cbi-button-action', 'click': function() {
+		btn.disabled = true;
+		rebootRouter().then(function(ok) { if (!ok) btn.disabled = false; });
+	} }, 'Перезагрузить роутер');
+	return E('div', { 'class': 'zm-refresh-banner zm-show zm-reboot-banner' }, [ E('span', {}, String(text)), btn ]);
+}
+
+function rebootSlot() {
+	var el = E('div', { 'class': 'zm-reboot-slot' });
+	el.refresh = function() {};
+	if (document.body.classList.contains('zmw-body')) return el;
+	el.refresh = function() {
+		callHealth().then(function(h) {
+			el.innerHTML = '';
+			if (h && h.reboot_hint) el.appendChild(rebootBanner(h.reboot_hint));
+		}).catch(function() {});
+	};
+	el.refresh();
+	window.addEventListener('zm:changed', function() { setTimeout(el.refresh, 800); });
+	return el;
+}
+
 function alertBanners(h, done) {
 	var box = E('div', { 'class': 'zm-alerts' });
 	function one(text, btn, key, call, okText) {
@@ -13419,6 +13632,7 @@ function alertBanners(h, done) {
 			} }, btn)
 		]));
 	}
+	if (h && h.reboot_hint) box.appendChild(rebootBanner(h.reboot_hint));
 	if (h && h.flow_warn) one('Включён Flow Offloading, а FIX для него не применён — Zapret может работать с перебоями.', 'Применить FIX', 'flow_offloading_fix', callSystemToggleFlowOffloadingFix, 'FIX применён');
 	if (h && h.ipv6_warn) one('Роутер работает по IPv6, а в Zapret IPv6 выключен — часть сайтов может открываться без обхода.', 'Включить IPv6', 'ipv6_enabled', callSystemToggleIpv6, 'IPv6 в Zapret включён');
 	return box;
@@ -13802,6 +14016,9 @@ return baseclass.extend({
 	exclHit: exclHit,
 	exclField: exclField,
 	hidePicker: hidePicker,
+	rebootBanner: rebootBanner,
+	rebootRouter: rebootRouter,
+	rebootSlot: rebootSlot,
 	hostsWarn: hostsWarn,
 	editorBar: editorBar,
 	blockCard: blockCard,
@@ -14243,6 +14460,7 @@ return view.extend({
 			if (!data.installed && data.forkozz && !busy) {
 				zm.blockCard(card, 'DNS over HTTPS', 'Шифрованный DNS для всей сети: запросы устройств уходят к выбранному провайдеру по HTTPS, и провайдер интернета их не видит и не подменяет.', 'Стоит Forkozz — он сам шифрует DNS. Чтобы поставить DoH, удалите Forkozz.');
 				if (logEl.classList.contains('zm-show')) card.appendChild(logEl);
+				renderBoot();
 				renderForce();
 				bar.set(false, false);
 				return;
@@ -14299,7 +14517,7 @@ return view.extend({
 			bar.set(n > 0 || busy, busy, n ? 'Есть несохранённые изменения' : '');
 		}
 
-		var bootCard = E('div', { 'class': 'zm-card' });
+		var bootCard = E('div', { 'class': 'zm-card', 'style': 'display:none' });
 		var bootInput = E('input', { 'type': 'text', 'class': 'cbi-input-text', 'spellcheck': 'false', 'autocapitalize': 'off', 'placeholder': '77.88.8.8, 1.1.1.1', 'style': 'flex:1; min-width:220px; max-width:420px' });
 		bootInput.value = data.bootstrap_custom || '';
 		function bootWant() { return bootOwn ? bootInput.value.split(/[\s,;]+/).filter(Boolean).join(',') : ''; }
@@ -14339,7 +14557,7 @@ return view.extend({
 			{ id: 'auto', label: 'Авто (рекомендуется)' },
 			{ id: 'off', label: 'Не перехватывать' }
 		];
-		var forceCard = E('div', { 'class': 'zm-card' });
+		var forceCard = E('div', { 'class': 'zm-card', 'style': 'display:none' });
 
 		function renderForce() {
 			forceCard.innerHTML = '';
@@ -14804,6 +15022,7 @@ return view.extend({
 		}
 
 		renderAll();
+		wrap.appendChild(zm.rebootSlot());
 		wrap.appendChild(mainCard);
 		wrap.appendChild(logEl);
 		wrap.appendChild(ifCard);
@@ -15892,7 +16111,7 @@ return view.extend({
 		[ listCard, customCard, checkCard ].forEach(function(n) { panes.svc.appendChild(n); });
 		[ warpCard, wfixCard, autoCard ].forEach(function(n) { panes.warp.appendChild(n); });
 		panes.sub.appendChild(subCard);
-		[ mainCard, hostsWarn, logEl, dnsCard, tabBar, panes.svc, panes.warp, panes.sub ].forEach(function(n) { wrap.appendChild(n); });
+		[ zm.rebootSlot(), mainCard, hostsWarn, logEl, dnsCard, tabBar, panes.svc, panes.warp, panes.sub ].forEach(function(n) { wrap.appendChild(n); });
 		if (!data.blocker) { loadCustom(); loadSub(); }
 
 		if (data.running) { lastAction = data.phase === 'remove' ? 'remove' : [ 'install', 'pkgs', 'awg', 'keys', 'tunnel' ].indexOf(data.phase) >= 0 ? 'install' : 'apply'; follow(); }
@@ -18750,6 +18969,12 @@ html.zm-theme-dark .zm-stopbar { background: #2a1416; color: #fecaca; border-col
 .zm-hide-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .zm-hide-chip { padding: 3px 10px; border-radius: 999px; font-size: 12px; background: rgba(127,127,127,.14); text-decoration: line-through; opacity: .85; overflow-wrap: anywhere; }
 .zm-hide-chip.zm-hide-more { text-decoration: none; }
+.zm-reboot-ov { position: fixed; inset: 0; z-index: 10000; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(10,12,18,.55); backdrop-filter: blur(3px); }
+.zm-reboot-box { display: flex; flex-direction: column; align-items: center; gap: 10px; max-width: 360px; padding: 26px 24px; border-radius: 16px; text-align: center; background: var(--surface-solid, var(--surface, #fff)); color: var(--text, #1f2328); box-shadow: 0 20px 60px -20px rgba(0,0,0,.5); }
+.zm-reboot-box b { font-size: 16px; }
+.zm-reboot-spin { width: 34px; height: 34px; border-radius: 50%; border: 3px solid rgba(127,127,127,.25); border-top-color: #2d5bff; animation: zm-reboot-spin 1s linear infinite; }
+@keyframes zm-reboot-spin { to { transform: rotate(360deg); } }
+.zm-reboot-banner { gap: 10px 14px; flex-wrap: wrap; }
 .zm-hide-quick { margin: 0 0 12px; padding: 10px 12px; border-radius: 12px; border: 1px solid rgba(127,127,127,.25); background: rgba(127,127,127,.05); }
 .zm-hide-qlist { display: flex; flex-wrap: wrap; gap: 6px; }
 .zm-hide-q { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; border: 1px solid rgba(127,127,127,.35); background: transparent; color: inherit; font: inherit; font-size: 13px; line-height: 1.3; cursor: pointer; }
@@ -22694,7 +22919,7 @@ function mountAlerts() {
 }
 
 function renderAlerts(h) {
-	var key = (h && h.flow_warn ? 'f' : '') + (h && h.ipv6_warn ? '6' : '');
+	var key = (h && h.flow_warn ? 'f' : '') + (h && h.ipv6_warn ? '6' : '') + (h && h.reboot_hint ? 'r' + h.reboot_hint : '');
 	if (key === alertsKey) return;
 	alertsKey = key;
 	if (!key) { alertsEl.innerHTML = ''; return; }
