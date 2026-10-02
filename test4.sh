@@ -1,5 +1,5 @@
 #!/bin/sh
-# Version: 2.05
+# Version: 2.06
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -50,7 +50,7 @@ cat > '/opt/zapret-manager-luci/backend.sh.zm-new' << 'ZM_INSTALLER_EOF'
 umask 022
 
 CONF="/etc/config/zapret"
-ZM_VERSION="2.05"
+ZM_VERSION="2.06"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
@@ -10260,8 +10260,16 @@ _awg_mask_name() {
 	esac
 }
 
+_zm_rand32() {
+	local v=""
+	if command -v hexdump >/dev/null 2>&1; then v="$(head -c 4 /dev/urandom 2>/dev/null | hexdump -e '1/4 "%u"' 2>/dev/null)"
+	elif command -v od >/dev/null 2>&1; then v="$(head -c 4 /dev/urandom 2>/dev/null | od -An -tu4 2>/dev/null | tr -d ' \n')"; fi
+	case "$v" in ''|*[!0-9]*) v="$(( $(date +%s) % 100000 * 1000 + $$ % 1000 ))" ;; esac
+	echo "$v"
+}
+
 _awg_rand_hosts() {
-	awk -v n="$1" -v pools="$ST_WARP_POOLS" -v seed="$(head -c 4 /dev/urandom 2>/dev/null | od -An -tu4 | tr -d ' \n')" 'BEGIN {
+	awk -v n="$1" -v pools="$ST_WARP_POOLS" -v seed="$(_zm_rand32)" 'BEGIN {
 		srand(seed + 0); c = split(pools, p, " ")
 		for (i = 1; i <= c; i++) for (k = 0; k < n; k++) printf "%s%d\n", p[i], 2 + int(rand() * 253)
 	}' | awk 'BEGIN { srand() } { print rand() "\t" $0 }' | sort -n | cut -f2
@@ -24248,8 +24256,8 @@ function buildShell() {
 		E('button', { 'class': 'zmw-icon-btn zmw-burger', 'type': 'button', 'aria-label': 'Меню', 'click': openDrawer }, [ icon('menu') ]),
 		E('div', { 'class': 'zmw-titles' }, [ titleEl, subEl ]),
 		E('div', { 'class': 'zmw-top-actions' }, [
-			E('a', { 'class': 'zmw-icon-btn zmw-link-btn zmw-link-kvn', 'href': 'http://stresskvn.lol/', 'target': '_blank', 'rel': 'noreferrer', 'title': 'StressKVN — обход белых списков!' }, [
-				icon('rocket'), E('span', { 'class': 'zmw-lbl-full' }, [ 'StressKVN — обход белых списков!' ]), E('span', { 'class': 'zmw-lbl-short' }, [ 'StressKVN' ])
+			E('a', { 'class': 'zmw-icon-btn zmw-link-btn zmw-link-kvn', 'href': 'http://stresskvn.lol/', 'target': '_blank', 'rel': 'noreferrer', 'title': 'StressKVN — умный VPN для стабильного доступа в любых условиях.' }, [
+				icon('rocket'), E('span', { 'class': 'zmw-lbl-full' }, [ E('span', { 'class': 'zmw-kvn-l1' }, [ 'StressKVN — лучший VPN' ]), E('span', { 'class': 'zmw-kvn-l2' }, [ 'обход белых списков · телефон, ПК, роутер' ]) ]), E('span', { 'class': 'zmw-lbl-short' }, [ 'StressKVN' ])
 			]),
 			E('a', { 'class': 'zmw-icon-btn zmw-link-btn zmw-link-tg', 'href': 'https://t.me/stressozz_manager', 'target': '_blank', 'rel': 'noreferrer', 'title': 'Сообщество Telegram' }, [
 				icon('telegram'), E('span', { 'class': 'zmw-lbl-full' }, [ 'Сообщество Telegram' ]), E('span', { 'class': 'zmw-lbl-short' }, [ 'Telegram' ])
@@ -25014,6 +25022,10 @@ html[data-theme="light"] .zmw-top { background: linear-gradient(to bottom, rgba(
 	transition: background-position .35s, transform .1s, box-shadow .2s;
 }
 .zmw-link-kvn:hover { color: #fff; border-color: transparent; background: var(--grad); background-size: 160% 100%; background-origin: border-box; background-repeat: no-repeat; background-position: 100% 0; box-shadow: 0 10px 24px -10px rgba(99,102,241,1), inset 0 1px 0 rgba(255,255,255,.22); }
+.zmw-link-kvn .zmw-lbl-full { text-align: center; }
+.zmw-link-kvn .zmw-kvn-l1 { display: block; font-size: 17px; font-weight: 600; line-height: 1.15; white-space: nowrap; }
+.zmw-link-kvn .zmw-kvn-l2 { display: block; font-size: 11px; font-weight: 400; line-height: 1.2; opacity: .85; white-space: nowrap; margin-top: 2px; }
+@media (min-width: 1361px) { .zmw-link-kvn .zmw-i { width: 24px; height: 24px; } }
 .zmw-link-tg { color: #229ed9; border-color: rgba(34,158,217,.35); background: rgba(34,158,217,.10); }
 .zmw-link-tg:hover { color: #229ed9; border-color: rgba(34,158,217,.6); background: rgba(34,158,217,.16); }
 html[data-theme="dark"] .zmw-link-tg, html[data-theme="dark"] .zmw-link-tg:hover { color: #5cc1f0; }
