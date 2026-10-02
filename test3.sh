@@ -1,5 +1,5 @@
 #!/bin/sh
-# Version: 2.04
+# Version: 2.05
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -50,7 +50,7 @@ cat > '/opt/zapret-manager-luci/backend.sh.zm-new' << 'ZM_INSTALLER_EOF'
 umask 022
 
 CONF="/etc/config/zapret"
-ZM_VERSION="2.04"
+ZM_VERSION="2.05"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
@@ -1193,7 +1193,7 @@ strategy_v9()  { printf '%s\n' "#v9"  "--filter-tcp=443" "--hostlist-exclude=/op
 strategy_v10() { printf '%s\n' "#v10" "--filter-tcp=443" "--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt" "--dpi-desync=fake,split2" "--dpi-desync-split-pos=2" "--dpi-desync-fake-tls=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin" "--dpi-desync-hostfakesplit-mod=host=maxcdn.bootstrapcdn.com" "--dpi-desync-fake-tls-mod=rnd,sni=maxcdn.bootstrapcdn.com" "--dpi-desync-fooling=ts"; }
 
 NOCHANGE_RX='#[[:space:]]*nochange'
-NOCHANGE_MSG="стратегия помечена #nochange — панель её не меняет. Уберите строку #nochange в «Редактировать текущую стратегию», чтобы разрешить изменения"
+NOCHANGE_MSG="включено «Не изменять стратегию» (#nochange) — панель её не меняет. Выключите этот переключатель в «Редактировать текущую стратегию», чтобы разрешить изменения"
 
 _nochange_in() { [ -f "$1" ] && grep -qiE "$NOCHANGE_RX" "$1"; }
 _nochange_strategy() { _nfq_opt_body | grep -qiE "$NOCHANGE_RX"; }
@@ -2632,12 +2632,53 @@ zapret_list_set() {
 	printf '{"ok":true,"info":%s}\n' "$(_zl_info "$1")"
 }
 
+_nochange_strip() {
+	awk '{ l = tolower($0); if (l ~ /^[ \t]*#[ \t]*nochange[ \t]*$/) next; print }'
+}
+
+zapret_nochange_set() {
+	local t="${1%%:*}" st="${1#*:}" f tmp
+	case "$st" in on|off) ;; *) echo '{"error":"неизвестное значение"}'; return 1 ;; esac
+	[ -x /etc/init.d/zapret ] || { echo '{"error":"Zapret не установлен"}'; return 1; }
+	case "$t" in
+		strategy)
+			[ -f "$CONF" ] || { echo '{"error":"конфигурация Zapret не найдена"}'; return 1; }
+			grep -q "^[[:space:]]*option NFQWS_OPT '\$" "$CONF" || { echo '{"error":"в конфигурации не найден блок NFQWS_OPT"}'; return 1; }
+			tmp="$CONF.zmnc"
+			if [ "$st" = on ]; then
+				_nochange_strategy || {
+					awk '{ print } !d && /^[ \t]*option NFQWS_OPT \047$/ { print "#nochange"; d = 1 }' "$CONF" > "$tmp" && [ -s "$tmp" ] && cat "$tmp" > "$CONF"
+					rm -f "$tmp"
+				}
+			else
+				awk '/^[ \t]*option NFQWS_OPT \047$/ { b = 1; print; next } b && /^[ \t]*\047$/ { b = 0 } b { l = tolower($0); if (l ~ /^[ \t]*#[ \t]*nochange[ \t]*$/) next } { print }' "$CONF" > "$tmp" && [ -s "$tmp" ] && cat "$tmp" > "$CONF"
+				rm -f "$tmp"
+				_nochange_strategy && { echo '{"error":"пометка #nochange стоит внутри другой строки — уберите её вручную в редакторе стратегии","nochange":true}'; return 1; }
+			fi
+			printf '{"ok":true,"nochange":%s}\n' "$(_nochange_strategy && echo true || echo false)" ;;
+		exclude|user|google)
+			f="$(_zl_path "$t")"; tmp="$f.zmnc"
+			mkdir -p "$(dirname "$f")"
+			if [ "$st" = on ]; then
+				_nochange_in "$f" || { { echo "#nochange"; [ -f "$f" ] && cat "$f"; :; } > "$tmp" && mv -f "$tmp" "$f"; chmod 644 "$f"; }
+			elif [ -f "$f" ]; then
+				_nochange_strip < "$f" > "$tmp" && mv -f "$tmp" "$f"; chmod 644 "$f"
+				_nochange_in "$f" && { printf '{"error":"пометка #nochange стоит внутри другой строки — уберите её вручную в редакторе списка","info":%s}\n' "$(_zl_info "$t")"; return 1; }
+			fi
+			printf '{"ok":true,"info":%s}\n' "$(_zl_info "$t")" ;;
+		*) echo '{"error":"неизвестный список"}'; return 1 ;;
+	esac
+}
+
 zapret_list_restore() {
-	case "$1" in auto=*) zapret_excl_auto_set "${1#auto=}"; return ;; esac
+	case "$1" in
+		auto=*) zapret_excl_auto_set "${1#auto=}"; return ;;
+		nochange=*) zapret_nochange_set "${1#nochange=}"; return ;;
+	esac
 	[ "$1" = exclude ] || { echo '{"error":"восстановить можно только список исключений"}'; return 1; }
 	[ -x /etc/init.d/zapret ] || { echo '{"error":"Zapret не установлен"}'; return 1; }
 	local f tmp; f="$(_zl_path exclude)"; tmp="$f.zmdl"
-	_nochange_in "$f" && { echo '{"error":"список помечен #nochange — панель его не меняет. Уберите строку #nochange в редакторе списка, чтобы восстановить исходный"}'; return 1; }
+	_nochange_in "$f" && { echo '{"error":"включено «Не изменять список» (#nochange) — панель его не меняет. Выключите этот переключатель, чтобы восстановить исходный"}'; return 1; }
 	mkdir -p "$(dirname "$f")"
 	rm -f "$tmp"
 	wget -q --timeout=20 -U "Mozilla/5.0" -O "$tmp" "$EXCLUDE_URL" 2>/dev/null
@@ -18301,6 +18342,7 @@ return view.extend({
 					zm.toast('Сохраняем стратегию и перезапускаем Zapret', 'warning');
 					return zm.nfqwsOptSet(v).then(function(res) {
 						if (res.error) { zm.toast(res.error, 'error'); return false; }
+						nfqNo = /#\s*nochange/i.test(v); renderNfqNo();
 						zm.toast('Сохранено, Zapret перезапущен', 'info');
 						refreshAll();
 						return true;
@@ -18308,10 +18350,30 @@ return view.extend({
 				}
 			});
 
+			var nfqNo = false, nfqNoBusy = false, nfqNoBox = E('div', { 'class': 'zm-list-nc' });
+			function renderNfqNo() {
+				nfqNoBox.innerHTML = '';
+				nfqNoBox.appendChild(zm.swRow(nfqNo, 'Не изменять стратегию', 'Панель не будет менять стратегию: выбор стратегий, YouTube, Discord, игры, тест и переустановка её не тронут. В блок NFQWS_OPT добавляется строка #nochange.', function() {
+					if (nfqNoBusy) return;
+					if (nfqwsOpen && nfqwsBar.dirty()) { zm.toast('Сначала сохраните или отмените изменения в стратегии', 'warning'); return; }
+					nfqNoBusy = true; renderNfqNo();
+					var was = nfqNo;
+					zm.zapretListRestore('nochange=strategy:' + (was ? 'off' : 'on')).then(function(r) {
+						nfqNoBusy = false;
+						if (r && typeof r.nochange === 'boolean') nfqNo = r.nochange;
+						if (!r || r.error) { zm.toast((r && r.error) || 'Роутер не ответил', 'error'); renderNfqNo(); return; }
+						zm.toast(was ? 'Панель снова может менять стратегию' : 'Стратегия защищена: панель её не изменит', 'info');
+						renderNfqNo();
+						if (nfqwsOpen) refreshNfqwsOpt();
+					}).catch(function() { nfqNoBusy = false; zm.toast('Роутер не ответил', 'error'); renderNfqNo(); });
+				}, nfqNoBusy));
+			}
 			function refreshNfqwsOpt() {
-				zm.nfqwsOptGet().then(function(res) {
-					if (res.error) { zm.toast(res.error, 'error'); return; }
-					nfqwsBar.reset(res.content || '');
+				return zm.nfqwsOptGet().then(function(res) {
+					if (res.error) { if (nfqwsOpen) zm.toast(res.error, 'error'); return; }
+					nfqNo = /#\s*nochange/i.test(res.content || '');
+					renderNfqNo();
+					if (nfqwsOpen) nfqwsBar.reset(res.content || '');
 				});
 			}
 
@@ -18330,9 +18392,10 @@ return view.extend({
 							}
 						}, 'Открыть редактор стратегии')
 					]));
+					nfqwsCard.appendChild(nfqNoBox);
 					return;
 				}
-				nfqwsCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Блок NFQWS_OPT из /etc/config/zapret. «Сохранить и применить» перезапустит Zapret. Добавьте отдельной строкой #nochange — и панель перестанет менять эту стратегию (смена стратегий, YouTube, Discord, игры, тест, переустановка).'));
+				nfqwsCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Блок NFQWS_OPT из /etc/config/zapret. «Сохранить и применить» перезапустит Zapret. Чтобы панель не меняла эту стратегию (смена стратегий, YouTube, Discord, игры, тест, переустановка), включите «Не изменять стратегию».'));
 				nfqwsEl.style.display = '';
 				nfqwsCard.appendChild(nfqwsEl);
 				nfqwsCard.appendChild(E('div', { 'class': 'zm-actions' }, [
@@ -18351,9 +18414,13 @@ return view.extend({
 						}
 					}, 'Свернуть')
 				]));
+				nfqwsCard.appendChild(nfqNoBox);
 				nfqwsCard.appendChild(nfqwsBar);
 			}
+			renderNfqNo();
 			renderNfqwsCard();
+			if (zapretInstalled) refreshNfqwsOpt().catch(function() {});
+			refreshers.nfqNo = function() { if (!nfqwsOpen || !nfqwsBar.dirty()) refreshNfqwsOpt().catch(function() {}); };
 			panels.strategy.appendChild(nfqwsCard);
 		})();
 
@@ -19004,6 +19071,7 @@ return view.extend({
 					countEl.textContent = st.info && !st.info.exists && !dirty() ? 'нет файла' : countText(n);
 					countEl.className = 'zm-badge zm-list-count ' + (n ? 'zm-ok' : 'zm-off');
 					if (typeof renderAutoBox === 'function') renderAutoBox();
+					if (typeof renderNc === 'function' && ncBox) renderNc();
 					dirtyEl.style.display = dirty() ? '' : 'none';
 					btnSave.disabled = !st.loaded;
 					lbar.set(dirty() || (busy && st.open && lbar.isDirty()), busy && lbar.isDirty());
@@ -19069,10 +19137,29 @@ return view.extend({
 				body.appendChild(E('p', { 'class': 'zm-hint zm-list-hint' }, L.hint));
 				body.appendChild(ta);
 				body.appendChild(E('div', { 'class': 'zm-actions zm-list-actions' }, [ btnReload, btnRestore ]));
+				var ncBox = E('div', { 'class': 'zm-list-nc' }), ncBusy = false;
+				function ncOn() { return st.loaded ? /#\s*nochange/i.test(st.saved) : !!(st.info && st.info.nochange); }
+				function renderNc() {
+					var on = ncOn();
+					ncBox.innerHTML = '';
+					ncBox.appendChild(zm.swRow(on, 'Не изменять список', 'Панель не будет трогать этот список при установке, обновлении, смене стратегии' + (L.restore ? ', тесте и автообновлении' : ' и тесте') + '. В файл добавляется строка #nochange.', function() {
+						if (ncBusy || busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+						if (dirty()) { zm.toast('Сначала сохраните или отмените изменения в списке', 'warning'); return; }
+						ncBusy = true; renderNc();
+						zm.zapretListRestore('nochange=' + L.id + ':' + (on ? 'off' : 'on')).then(function(r) {
+							ncBusy = false;
+							if (r && r.info) st.info = r.info;
+							if (!r || r.error) { zm.toast((r && r.error) || 'Роутер не ответил', 'error'); renderNc(); return; }
+							zm.toast(on ? L.title + ': панель снова может его обновлять' : L.title + ': панель больше не будет его менять', 'info');
+							return load(true);
+						}).catch(function() { ncBusy = false; zm.toast('Роутер не ответил', 'error'); renderNc(); });
+					}, ncBusy));
+				}
+				body.appendChild(ncBox);
 				var autoBox = L.restore ? E('div', { 'class': 'zm-list-auto' }) : null, autoBusy = false;
 				function renderAutoBox() {
 					if (!autoBox) return;
-					var cur = (st.info && st.info.auto) || 'off', locked = !!(st.info && st.info.nochange);
+					var cur = (st.info && st.info.auto) || 'off', locked = ncOn();
 					autoBox.innerHTML = '';
 					autoBox.appendChild(E('div', { 'class': 'zm-row zm-list-auto-row' }, [
 						E('span', { 'class': 'zm-label' }, 'Обновлять список'),
@@ -19091,8 +19178,8 @@ return view.extend({
 						}))
 					]));
 					autoBox.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin:4px 0 0' }, locked && cur !== 'off'
-						? 'В списке есть строка #nochange — панель его не меняет, автообновление пропускается.'
-						: 'Панель сама скачивает свежий список из репозитория Zapret Manager и перезапускает Zapret, если он изменился. Свои правки при этом заменяются; чтобы список не трогали, добавьте в него строку #nochange.'));
+						? 'Включено «Не изменять список» — автообновление пропускается.'
+						: 'Панель сама скачивает свежий список из репозитория Zapret Manager и перезапускает Zapret, если он изменился. Свои правки при этом заменяются; чтобы список не трогали, включите «Не изменять список».'));
 				}
 				if (autoBox) { body.appendChild(autoBox); renderAutoBox(); }
 				body.appendChild(lbar);
@@ -19954,6 +20041,7 @@ html.zm-theme-dark .zm-stopbar { background: #2a1416; color: #fecaca; border-col
 @media (max-width: 600px) { .zm-link-row { flex-wrap: wrap; } .zm-link-main { flex: 1 1 calc(100% - 40px); } .zm-link-btns { margin-left: 32px; } .zm-link-edit input { flex-basis: calc(100% - 40px) !important; } }
 .zm-seg-busy { opacity: .6; pointer-events: none; }
 .zm-list-auto { margin: 12px 0 4px; }
+.zm-list-nc { margin: 12px 0 0; }
 .zm-list-auto-row { margin: 0; }
 @media (max-width: 600px) { .zm-list-auto-row { flex-wrap: wrap; } .zm-list-auto-row .zm-label { flex: 0 0 100%; } .zm-list-auto-row .zm-seg { flex-wrap: nowrap; width: 100%; } .zm-list-auto-row .zm-seg-item { flex: 1 1 0; padding: 6px 2px; text-align: center; } }
 .zm-tg-auto-row .zm-label { flex: 0 0 130px; }
