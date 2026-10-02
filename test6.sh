@@ -25022,7 +25022,7 @@ html[data-theme="light"] .zmw-top { background: linear-gradient(to bottom, rgba(
 }
 .zmw-link-kvn:hover { color: #fff; border-color: #463d9c; background: #463d9c; box-shadow: 0 8px 20px -10px rgba(60,52,137,1); }
 .zmw-link-kvn .zmw-lbl-full { text-align: left; font-weight: 500; line-height: 1.25; }
-.zmw-link-kvn .zmw-kvn-l1 { display: block; font-size: 17px; font-weight: 500; white-space: nowrap; }
+.zmw-link-kvn .zmw-kvn-l1 { display: block; font-size: 17px; font-weight: 500; white-space: nowrap; padding-left: 6px; }
 .zmw-link-kvn .zmw-kvn-l2 { display: block; font-size: 11px; font-weight: 400; opacity: .85; white-space: nowrap; }
 @media (min-width: 1361px) {
 	.zmw-link-kvn { height: auto; min-height: 40px; padding: 6px 14px; gap: 10px; }
@@ -26070,7 +26070,8 @@ html[data-theme="micro"] #zmw-view .zmw-tabs .cbi-button:hover, html[data-theme=
 html[data-theme="micro"] #zmw-view .zmw-tabs .cbi-button-positive, html[data-theme="micro"] #zmw-view .zmw-tabs .cbi-button-positive:hover, html[data-theme="micro"] .zm-dock .zmw-tabs .cbi-button-positive, html[data-theme="micro"] .zm-dock .zmw-tabs .cbi-button-positive:hover { background: #2d5bff; color: #ffffff; box-shadow: 0 6px 14px -8px rgba(45,91,255,.9); border-radius: 11px; }
 html[data-theme="micro"] #zmw-view .zmw-tabs .cbi-button:active, html[data-theme="micro"] .zm-dock .zmw-tabs .cbi-button:active { transform: scale(.96); }
 html[data-theme="retro"] #zmw-view .zm-current-banner { background: #ffffe1; border: 1px solid #000000; border-radius: 0; color: #000000; }
-html[data-theme="micro"] .zmw-icon-btn.zmw-link-kvn, html[data-theme="micro"] .zmw-icon-btn.zmw-link-kvn:hover { background: linear-gradient(135deg, #2d5bff, #5b7cff); color: #ffffff; border-color: #2d5bff; box-shadow: 0 8px 18px -10px rgba(45,91,255,.9); }
+html[data-theme="micro"] .zmw-icon-btn.zmw-link-kvn { background: #3C3489; color: #ffffff; border-color: #3C3489; box-shadow: 0 6px 16px -10px rgba(60,52,137,.9); }
+html[data-theme="micro"] .zmw-icon-btn.zmw-link-kvn:hover { background: #463d9c; color: #ffffff; border-color: #463d9c; box-shadow: 0 8px 20px -10px rgba(60,52,137,1); }
 html[data-theme="micro"] .zmw-icon-btn.zmw-link-tg, html[data-theme="micro"] .zmw-icon-btn.zmw-link-tg:hover { background: #e8f4fc; color: #1b6fa8; border-color: #bfdff3; }
 html[data-theme="ink"] .zmw-icon-btn.zmw-link-kvn, html[data-theme="ink"] .zmw-icon-btn.zmw-link-kvn:hover { background: #0a9cff; color: #0a0a0a; }
 html[data-theme="ink"] .zmw-icon-btn.zmw-link-tg, html[data-theme="ink"] .zmw-icon-btn.zmw-link-tg:hover { background: #d6f0ff; color: #0a0a0a; }
