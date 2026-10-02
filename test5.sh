@@ -25015,17 +25015,19 @@ html[data-theme="light"] .zmw-top { background: linear-gradient(to bottom, rgba(
 .zmw-link-btn .zmw-i { width: 18px; height: 18px; }
 .zmw-lbl-short { display: none; }
 .zmw-link-kvn {
-	color: #fff; border-color: transparent;
-	background: var(--grad); background-size: 160% 100%;
-	background-origin: border-box; background-repeat: no-repeat;
-	box-shadow: 0 8px 20px -10px rgba(99,102,241,.9), inset 0 1px 0 rgba(255,255,255,.22);
-	transition: background-position .35s, transform .1s, box-shadow .2s;
+	color: #fff; border-color: #3C3489;
+	background: #3C3489;
+	box-shadow: 0 6px 16px -10px rgba(60,52,137,.9);
+	transition: background .2s, transform .1s, box-shadow .2s;
 }
-.zmw-link-kvn:hover { color: #fff; border-color: transparent; background: var(--grad); background-size: 160% 100%; background-origin: border-box; background-repeat: no-repeat; background-position: 100% 0; box-shadow: 0 10px 24px -10px rgba(99,102,241,1), inset 0 1px 0 rgba(255,255,255,.22); }
-.zmw-link-kvn .zmw-lbl-full { text-align: center; }
-.zmw-link-kvn .zmw-kvn-l1 { display: block; font-size: 17px; font-weight: 600; line-height: 1.15; white-space: nowrap; }
-.zmw-link-kvn .zmw-kvn-l2 { display: block; font-size: 11px; font-weight: 400; line-height: 1.2; opacity: .85; white-space: nowrap; margin-top: 2px; }
-@media (min-width: 1361px) { .zmw-link-kvn .zmw-i { width: 24px; height: 24px; } }
+.zmw-link-kvn:hover { color: #fff; border-color: #463d9c; background: #463d9c; box-shadow: 0 8px 20px -10px rgba(60,52,137,1); }
+.zmw-link-kvn .zmw-lbl-full { text-align: left; font-weight: 500; line-height: 1.25; }
+.zmw-link-kvn .zmw-kvn-l1 { display: block; font-size: 17px; font-weight: 500; white-space: nowrap; }
+.zmw-link-kvn .zmw-kvn-l2 { display: block; font-size: 11px; font-weight: 400; opacity: .85; white-space: nowrap; }
+@media (min-width: 1361px) {
+	.zmw-link-kvn { height: auto; min-height: 40px; padding: 6px 14px; gap: 10px; }
+	.zmw-link-kvn .zmw-i { width: 24px; height: 24px; }
+}
 .zmw-link-tg { color: #229ed9; border-color: rgba(34,158,217,.35); background: rgba(34,158,217,.10); }
 .zmw-link-tg:hover { color: #229ed9; border-color: rgba(34,158,217,.6); background: rgba(34,158,217,.16); }
 html[data-theme="dark"] .zmw-link-tg, html[data-theme="dark"] .zmw-link-tg:hover { color: #5cc1f0; }
