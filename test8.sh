@@ -2,7 +2,7 @@
 # =========================================
 # Zapret Manager by StressOzz
 # =========================================
-ZAPRET_MANAGER_VERSION="9.90"; STR_VERSION_AUTOINSTALL="v7"
+ZAPRET_MANAGER_VERSION="9.91"; STR_VERSION_AUTOINSTALL="v7"
 GREEN="\033[1;32m"; RED="\033[1;31m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
 
 GH_RAW_HOST="https://raw.githubusercontent.com"; GH_MAIN_HOST="https://github.com"
@@ -428,56 +428,383 @@ then WARP_PEER="$(jq -r '.config.peers[0].public_key' "$REG")"; WARP_V4="$(jq -r
 [ -n "$WARP_PEER" ] && [ "$WARP_PEER" != "null" ] || { echo -e "${RED}Нет peer public_key${NC}"; PAUSE; return 1; }; [ -n "$WARP_V4" ] && [ "$WARP_V4" != "null" ] || { echo -e "${RED}Нет IPv4${NC}"; PAUSE; return 1; }; echo -e "WARP ${GREEN}сгенерирован!${NC}"; }
 WARP_TO_ROOT() { printf '%s\n' "[Interface]" "PrivateKey = $PRIV" "Address = $WARP_V4${WARP_V6:+, $WARP_V6}" "DNS = 9.9.9.9" "MTU = 1280" "S1 = $AWG_S1" "S2 = $AWG_S2" "Jc = $AWG_JC" "Jmin = $AWG_JMIN" "Jmax = $AWG_JMAX" "H1 = $AWG_H1" "H2 = $AWG_H2" "H3 = $AWG_H3" "H4 = $AWG_H4" "I1 = $AWG_I1" "" "[Peer]" "PublicKey = $WARP_PEER" "AllowedIPs = 0.0.0.0/0, ::/0" "Endpoint = $WARP_EP" "PersistentKeepalive = 25" > /root/WARP.conf; echo -e "${YELLOW}Файл ${NC}WARP${YELLOW} сохранён в ${NC}/root/WARP.conf"; }
 SPL_V_VER() { if [ "$PKG_IS_APK" -eq 1 ]; then SPL_INST_VER=$(awk '$0=="P:splify"{f=1} f&&/^V:/{v=substr($0,3);sub(/-r[0-9]+$/,"",v);print v;exit}' /lib/apk/db/installed); else SPL_INST_VER=$(opkg list-installed splify 2>/dev/null | awk '{sub(/(-r[0-9]+|-[0-9]+)$/, "", $3); print $3}'); fi; }
+# ==========================================
+# Движок Zapret Manager (общий с WEB + LuCI)
+# ==========================================
 uget() { uci -q get "$1" 2>/dev/null; }
-ZMB="/opt/zapret-manager-luci/backend.sh"; ZM_JOBS="/tmp/zapret-manager-luci"
-st_panel() { [ -x "$ZMB" ] && grep -q '^steer_action() {' "$ZMB" 2>/dev/null; }
+ZME_DIR="/opt/zapret-manager-luci"; ZMB="$ZME_DIR/backend.sh"; ZM_JOBS="/tmp/zapret-manager-luci"; ZMT="/tmp/zapret_temp/zm"; ZME_CHECKED=""
+zme_has() { [ -x "$ZMB" ] && grep -q "^$1() {" "$ZMB" 2>/dev/null; }
+zme_panel() { [ -e "$LUCI_EDITION" ]; }
+zme_busy() { local f j; for f in "$ZM_JOBS"/*.pid; do [ -f "$f" ] || continue; j=$(basename "$f" .pid); case "$j" in versions|sysinfo|*_download|redbtn_deep) continue ;; esac
+kill -0 "$(cat "$f" 2>/dev/null)" 2>/dev/null && ! grep -q '^__DONE__' "$ZM_JOBS/$j.log" 2>/dev/null && { echo "$j"; return 0; }; done; return 1; }
+zme_cut() { awk -v p="cat > '$2" 'f && $0 == "ZM_INSTALLER_EOF" { exit } f { print } !f && index($0, p) == 1 && $0 ~ /ZM_INSTALLER_EOF.$/ { f = 1 }' "$1" > "$3" 2>/dev/null; [ -s "$3" ]; }
+zme_install() { local src="$ZMT/luci.sh" f; mkdir -p "$ZMT" "$ZME_DIR" /usr/share/zm-redbtn; echo -e "${CYAN}Скачиваем движок ${NC}Zapret Manager"; rm -f "$src"
+{ curl -fsSL --connect-timeout 10 --max-time 180 "$ZM_LUCI_URL" -o "$src" || wget -q -T 30 -O "$src" "$ZM_LUCI_URL"; } >/dev/null 2>&1
+if ! grep -q "^cat > '$ZMB.zm-new'" "$src" 2>/dev/null; then echo -e "\n${RED}Не удалось скачать движок!${NC}\n"; rm -f "$src"; return 1; fi
+echo -e "${CYAN}Устанавливаем движок${NC}"; if ! zme_cut "$src" "$ZMB" "$ZMB.zm-new" || ! grep -q '^ZM_VERSION=' "$ZMB.zm-new" || ! sh -n "$ZMB.zm-new" 2>/dev/null; then echo -e "\n${RED}Файл движка повреждён — попробуйте позже!${NC}\n"; rm -f "$src" "$ZMB.zm-new"; return 1; fi
+for f in "$ZME_DIR/forkop.uc" /usr/share/zm-redbtn/services.conf; do zme_cut "$src" "$f" "$f.zm-new" && { mv -f "$f.zm-new" "$f"; chmod 0644 "$f"; }; rm -f "$f.zm-new"; done
+chmod 0755 "$ZMB.zm-new"; mv -f "$ZMB.zm-new" "$ZMB"; rm -f "$src" "$ZM_LUCI_CACHE" "$ZME_DIR/state/steer.vpnprobe"
+if [ -d /usr/share/zm-redbtn/lists ]; then mkdir -p "$ZME_DIR/lists"; for f in /usr/share/zm-redbtn/lists/*.lst; do [ -s "$f" ] && [ ! -e "$ZME_DIR/lists/${f##*/}" ] && cp -p "$f" "$ZME_DIR/lists/"; done; rm -rf /usr/share/zm-redbtn/lists; fi
+mkdir -p /etc/crontabs; [ -f "$CRON_FILE" ] || : > "$CRON_FILE"; sed -i '/# zm-rpcd-watch$/d' "$CRON_FILE"; echo '*/2 * * * * /opt/zapret-manager-luci/backend.sh zm_watch >/dev/null 2>&1 # zm-rpcd-watch' >> "$CRON_FILE"
+/etc/init.d/cron enable >/dev/null 2>&1; /etc/init.d/cron restart >/dev/null 2>&1; "$ZMB" redbtn_panel_gone >/dev/null 2>&1
+grep -qx 'steer-spec' /etc/zm-steer/owned 2>/dev/null && /etc/init.d/steer enabled 2>/dev/null && /etc/init.d/steer reload >/dev/null 2>&1; echo -e "Движок ${GREEN}готов! ${NC}($(zm_luci_inst_ver))\n"; }
+# zme_need <функция движка> — проверяет движок, ставит или обновляет его при необходимости
+zme_need() { local last inst; if zme_has "$1"; then [ -n "$ZME_CHECKED" ] && return 0; ZME_CHECKED=1; zme_panel && return 0; last=$(zm_luci_last_ver); inst=$(zm_luci_inst_ver)
+if [ -n "$last" ] && zm_ver_gt "$last" "${inst:-0}" && ! zme_busy >/dev/null; then clear; echo -e "${MAGENTA}Обновляем движок Zapret Manager${NC} ${inst:-?} → $last"; zme_install || PAUSE; fi; return 0; fi
+clear; if zme_panel; then echo -e "${MAGENTA}Нужно обновить Zapret Manager для WEB + LuCI${NC}\n\n${YELLOW}В установленной версии панели нет этой функции${NC}\n"; echo -ne "${YELLOW}Обновить панель сейчас? (Y/n):${NC} "; read -r last
+case "$last" in n|N|т|Т) return 1 ;; esac; rm -f "$ZM_LUCI_CACHE"; sh <(wget -qO - "$ZM_LUCI_URL"); else if [ -x "$ZMB" ]; then echo -e "${MAGENTA}Обновляем движок Zapret Manager${NC}\n"; else echo -e "${MAGENTA}Устанавливаем движок Zapret Manager${NC}\n${DGRAY}Тот же движок, что и в Zapret Manager для WEB + LuCI, но без web-интерфейса${NC}\n"; fi; zme_install; fi
+ZME_CHECKED=1; zme_has "$1" && return 0; echo -e "\n${RED}Функция пока недоступна — попробуйте позже!${NC}\n"; PAUSE; return 1; }
+# zme_keep — движок нужен установленным компонентам (Steer, Forkozz, AmneziaWG, расписания)
+zme_keep() { [ -s /etc/zm-steer/owned ] && return 0; [ -f /usr/share/forkop/zm-managed ] && return 0; [ -s /etc/zm-awg/owned ] && return 0; grep -v '# zm-rpcd-watch$' "$CRON_FILE" 2>/dev/null | grep -q '/opt/zapret-manager-luci/backend.sh'; }
+zme_err() { jsonfilter -s "$1" -e '@.error' 2>/dev/null; }
+zme_paint() { awk -v C="$(printf "$CYAN")" -v R="$(printf "$RED")" -v Y="$(printf "$YELLOW")" -v N="$(printf "$NC")" '/^__DONE__/ { next } /^==> / { sub(/^==> /, ""); print C $0 N; next } /^ОШИБКА/ { print R $0 N; next } /^!! / { sub(/^!! /, ""); print Y $0 N; next } { print }'; }
+# zme_follow <задача> — показывает журнал фоновой задачи движка до конца
+zme_follow() { local job="$1" log="$ZM_JOBS/$1.log" n=0 c rc; echo -e "${DGRAY}Прервать — Ctrl+C${NC}"
+if [ "$job" = steer ]; then trap '"$ZMB" steer_action halt >/dev/null 2>&1' INT; else trap '"$ZMB" jobs_cancel "'"$job"'" >/dev/null 2>&1' INT; fi; sleep 1
+while :; do c=$(wc -l < "$log" 2>/dev/null); c=${c:-0}; if [ "$c" -gt "$n" ]; then sed -n "$((n + 1)),${c}p" "$log" | zme_paint; n=$c; fi; grep -q '^__DONE__' "$log" 2>/dev/null && break; sleep 1; done; trap - INT
+rc=$(grep '^__DONE__' "$log" | tail -n 1 | awk '{print $2}'); case "$rc" in 0) echo -e "\n${GREEN}Готово!${NC}\n"; return 0 ;; 130) echo -e "\n${YELLOW}Операция остановлена!${NC}\n" ;; *) echo -e "\n${RED}Завершено с ошибкой!${NC}\n" ;; esac; return 1; }
+# zme_run <задача> <команда движка> [аргументы] — выполняет действие, ответ в $ZME_R
+zme_run() { local job="$1" e; shift; ZME_R=$("$ZMB" "$@" 2>/dev/null); e=$(zme_err "$ZME_R"); [ -n "$e" ] && { echo -e "\n${RED}$e${NC}\n"; return 1; }
+case "$ZME_R" in *'"started"'*) zme_follow "$job" ;; *'"saved":true'*) echo -e "${GREEN}Сохранено!${NC} ${DGRAY}Применится при запуске${NC}\n" ;; *) echo -e "${GREEN}Готово!${NC}\n" ;; esac; }
+# JSON → строки «путь<TAB>значение»
+zm_jflat() { awk 'BEGIN { RS = "\001" }
+function emit(v) { p = ""; for (k = 1; k <= d; k++) p = p (k > 1 ? "." : "") key[k]; print p "\t" v; if (arr[d]) key[d]++ }
+{ s = $0; n = length(s); i = 1; d = 0
+while (i <= n) { c = substr(s, i, 1)
+if (c == "{") { d++; arr[d] = 0; key[d] = ""; want = 1; i++; continue }
+if (c == "[") { d++; arr[d] = 1; key[d] = 0; i++; continue }
+if (c == "}" || c == "]") { d--; if (d > 0 && arr[d]) key[d]++; i++; continue }
+if (c == ",") { if (!arr[d]) want = 1; i++; continue }
+if (c == ":") { want = 0; i++; continue }
+if (c == "\"") { v = ""; i++; while (i <= n) { c = substr(s, i, 1); if (c == "\\") { e = substr(s, i + 1, 1); v = v (e == "n" || e == "t" || e == "r" ? " " : e); i += 2; continue }; if (c == "\"") break; v = v c; i++ }
+i++; if (!arr[d] && want) { key[d] = v; want = 0 } else emit(v); continue }
+if (c ~ /[-0-9a-z]/) { v = ""; while (i <= n && substr(s, i, 1) ~ /[-+.0-9a-zA-Z]/) { v = v substr(s, i, 1); i++ }; emit(v); continue }
+i++ } }'; }
+zj() { awk -F'\t' -v p="$2" '$1 == p { sub(/^[^\t]*\t/, ""); print; exit }' "$1"; }
+zjl() { awk -F'\t' -v p="$2." 'index($1, p) == 1 && substr($1, length(p) + 1) ~ /^[0-9]+$/ { sub(/^[^\t]*\t/, ""); print }' "$1"; }
+zjn() { awk -F'\t' -v p="$2." 'index($1, p) == 1 { s = substr($1, length(p) + 1); sub(/\..*/, "", s); if (s ~ /^[0-9]+$/ && !(s in a)) { a[s] = 1; n++ } } END { print n + 0 }' "$1"; }
+zm_jstr() { printf '%s' "$1" | awk 'BEGIN { ORS = "" } { gsub(/\\/, "\\\\"); gsub(/"/, "\\\""); gsub(/\t/, " "); gsub(/\r/, ""); if (NR > 1) print "\\n"; print }'; }
+zm_jarr() { printf '['; awk 'BEGIN { ORS = "" } { gsub(/\r/, ""); gsub(/^[ \t]+|[ \t]+$/, ""); if ($0 == "") next; gsub(/\\/, "\\\\"); gsub(/"/, "\\\""); gsub(/\t/, " "); print (n++ ? "," : "") "\"" $0 "\"" }' "$@"; printf ']'; }
+zm_bytes() { awk -v b="${1:-0}" 'BEGIN { if (b >= 1073741824) printf "%.1f ГБ", b / 1073741824; else if (b >= 1048576) printf "%.1f МБ", b / 1048576; else if (b >= 1024) printf "%d КБ", b / 1024; else printf "%d Б", b }'; }
+zm_age() { [ -n "$1" ] || { echo "нет"; return; }; if [ "$1" -lt 60 ]; then echo "$1 с назад"; elif [ "$1" -lt 3600 ]; then echo "$(($1 / 60)) мин назад"; else echo "$(($1 / 3600)) ч назад"; fi; }
+zm_num() { case "$1" in ''|*[!0-9]*) echo 0 ;; *) echo "$1" ;; esac; }
+zm_yesd() { local a; echo -ne "${YELLOW}$1 (Y/n):${NC} "; read -r a; case "$a" in n|N|т|Т) return 1 ;; esac; return 0; }
+zm_yes() { local a; echo -ne "${YELLOW}$1 (y/N):${NC} "; read -r a; case "$a" in y|Y|д|Д|н|Н) return 0 ;; esac; return 1; }
+# zm_paste <файл> — вставка многострочного текста (.conf или ссылки), конец — пустая строка после секции [Peer] или Ctrl+D
+zm_paste() { local l peer=0 any=0; : > "$1"; echo -e "${DGRAY}Вставьте текст и нажмите Enter на пустой строке (сразу Enter — отмена)${NC}"; while IFS= read -r l; do l=$(printf '%s' "$l" | tr -d '\r')
+if [ -z "$l" ]; then [ "$any" = 1 ] || break; grep -qi '^[[:space:]]*\[interface\]' "$1" || break; [ "$peer" = 1 ] && break; else any=1; printf '%s\n' "$l" | grep -qi '^[[:space:]]*\[peer\]' && peer=1; fi; printf '%s\n' "$l" >> "$1"; done
+awk '{ l[NR] = $0 } END { n = NR; while (n > 0 && l[n] ~ /^[ \t]*$/) n--; for (i = 1; i <= n; i++) print l[i] }' "$1" > "$1.t" && mv -f "$1.t" "$1"; [ -s "$1" ]; }
+# zm_pick <файл id|имя|группа|0/1> <заголовок> — выбор пунктов по группам, итог в $ZM_PICK (id через запятую)
+zm_pick() { local f="$ZMT/pick.cur" t="$2" g gl ng nt i c k x on sel; mkdir -p "$ZMT"; cp "$1" "$f"; ZM_PICK=""; ng=$(cut -d'|' -f3 "$f" | awk '!s[$0]++' | wc -l); nt=$(grep -c . "$f")
+if [ "$ng" -le 1 ] || [ "$nt" -le 24 ]; then zm_pick_list "$t" "" || return 1; else while :; do clear; echo -e "${MAGENTA}$t${NC}\n"; zm_pick_sum; i=0; gl="$ZMT/pick.groups"; cut -d'|' -f3 "$f" | awk '!s[$0]++' > "$gl"
+while IFS= read -r g; do i=$((i + 1)); c=$(awk -F'|' -v g="$g" '$3 == g' "$f" | grep -c .); k=$(awk -F'|' -v g="$g" '$3 == g && $4 == 1' "$f" | grep -c .); [ "$k" -gt 0 ] && on="${GREEN}" || on="${NC}"
+echo -e "${CYAN}$(printf '%2d' "$i")) ${on}${g:-Основные}${NC} ${DGRAY}[$k из $c]${NC}"; done < "$gl"
+echo -e "\n${CYAN} s) ${GREEN}Сохранить выбор${NC}\n${CYAN} 0) ${GREEN}Снять все${NC}"; echo -ne "${CYAN}Enter) ${GREEN}Вернуться без сохранения${NC}\n\n${YELLOW}Выберите группу:${NC} "; read -r x
+case "$x" in "") return 1 ;; s|S|ы|Ы) break ;; 0) sed -i 's/|[01]$/|0/' "$f" ;; *[!0-9]*) ;; *) g=$(sed -n "${x}p" "$gl"); [ "$x" -ge 1 ] && [ "$x" -le "$i" ] && { zm_pick_list "$t → ${g:-Основные}" "$g" grp; } ;; esac; done; fi
+ZM_PICK=$(awk -F'|' '$4 == 1 { printf "%s%s", (n++ ? "," : ""), $1 }' "$f"); return 0; }
+zm_names() { awk -v k="${1:-6}" '{ if (n < k) printf "%s%s", (n ? ", " : ""), $0; n++ } END { if (n > k) printf " и ещё %d", n - k }'; }
+zm_pick_sum() { local sel; sel=$(awk -F'|' '$4 == 1 { print $2 }' "$ZMT/pick.cur" | zm_names 8); echo -e "${YELLOW}Выбрано:${NC} ${sel:-${RED}ничего${NC}}\n"; }
+zm_pick_list() { local f="$ZMT/pick.cur" g="$2" i x n; while :; do clear; echo -e "${MAGENTA}$1${NC}\n"; [ -z "$3" ] && zm_pick_sum
+awk -F'|' -v g="$g" -v grp="$3" -v C="$(printf "$CYAN")" -v G="$(printf "$GREEN")" -v N="$(printf "$NC")" '!grp || $3 == g { i++; printf "%s%2d) %s%s%s\n", C, i, ($4 == 1 ? G "[x] " : N "[ ] "), $2, N }' "$f"
+echo -e "\n${YELLOW}Введите номера через пробел — отметить или снять${NC}"; if [ -z "$3" ]; then echo -e "${CYAN} s) ${GREEN}Сохранить выбор${NC}\n${CYAN} 0) ${GREEN}Снять все${NC}"; echo -ne "${CYAN}Enter) ${GREEN}Вернуться без сохранения${NC}\n\n${YELLOW}Номера:${NC} "
+else echo -ne "${CYAN}Enter) ${GREEN}Назад к группам${NC}\n\n${YELLOW}Номера:${NC} "; fi; read -r x
+case "$x" in "") [ -z "$3" ] && return 1; return 0 ;; s|S|ы|Ы) [ -z "$3" ] && return 0 ;; 0) [ -z "$3" ] && sed -i 's/|[01]$/|0/' "$f" ;;
+*) n=$(echo "$x" | tr ',;' '  '); awk -F'|' -v OFS='|' -v g="$g" -v grp="$3" -v want=" $n " '{ if (!grp || $3 == g) { i++; if (index(want, " " i " ")) $4 = ($4 == 1 ? 0 : 1) } print }' "$f" > "$f.n" && mv -f "$f.n" "$f" ;; esac; done; }
+# ==========================================
+# Steer
+# ==========================================
 st_zm_owned() { command -v steer >/dev/null 2>&1 && grep -qE '^(engine|pkg steer|net zmwarp)$' /etc/zm-steer/owned 2>/dev/null; }
-st_splify2() { [ -x /etc/init.d/splify2 ] || { command -v steer >/dev/null 2>&1 && ! st_zm_owned; }; }
 st_state_line() { if [ -f /etc/zm-steer/stopped ]; then echo -e "${RED}выключен${NC}"; elif /etc/init.d/steer running >/dev/null 2>&1; then echo -e "${GREEN}запущен${NC}"; elif grep -qx 'steer-spec' /etc/zm-steer/owned 2>/dev/null; then echo -e "${RED}остановлен${NC}"; else echo -e "${YELLOW}сервисы не выбраны${NC}"; fi; }
-st_j() { jsonfilter -s "$ST_JS" -e "$1" 2>/dev/null; }
-st_err() { echo "$1" | sed -n 's/.*"error":"\([^"]*\)".*/\1/p'; }
-st_run() { local r log="$ZM_JOBS/steer.log" n=0 c rc; r=$("$ZMB" steer_action "$@" 2>/dev/null); if [ -n "$(st_err "$r")" ]; then echo -e "\n${RED}$(st_err "$r")${NC}\n"; return 1; fi
-case "$r" in *'"started"'*) ;; *) echo -e "${GREEN}Сохранено!${NC}\n"; return 0 ;; esac; echo -e "${YELLOW}Прервать — ${NC}Ctrl+C\n"; trap '"$ZMB" steer_action halt >/dev/null 2>&1' INT; sleep 1
-while :; do c=$(wc -l < "$log" 2>/dev/null); c=${c:-0}; if [ "$c" -gt "$n" ]; then sed -n "$((n + 1)),${c}p" "$log" | grep -v '^__DONE__'; n=$c; fi; grep -q '^__DONE__' "$log" 2>/dev/null && break; sleep 1; done; trap - INT
-rc=$(grep '^__DONE__' "$log" | tail -n 1 | awk '{print $2}'); if [ "$rc" = 0 ]; then echo -e "\n${GREEN}Готово!${NC}\n"; else echo -e "\n${RED}Завершено с ошибкой!${NC}\n"; return 1; fi; }
-st_services() { local i=0 id name on sel want="" x; clear; echo -e "${MAGENTA}Сервисы через Steer${NC}\n"; while :; do id=$(st_j "@.services[$i].id"); [ -n "$id" ] || break; name=$(st_j "@.services[$i].name"); on=$(st_j "@.services[$i].on"); i=$((i + 1)); eval "ST_ID_$i=\$id"
-if [ "$on" = true ]; then echo -e "${CYAN}$(printf "%2d" "$i")) ${GREEN}[x] ${NC}${name:-$id}"; else echo -e "${CYAN}$(printf "%2d" "$i")) ${NC}[ ] ${name:-$id}"; fi; done; [ "$i" -gt 0 ] || { echo -e "${RED}Список сервисов пуст${NC}\n"; PAUSE; return; }
-echo -e "\n${YELLOW}Введите номера нужных сервисов через пробел — выбор заменится целиком\n${NC}0${YELLOW} — снять все, ${NC}Enter${YELLOW} — вернуться${NC}\n"; echo -ne "${YELLOW}Сервисы:${NC} "; read sel; [ -z "$sel" ] && return
-if [ "$sel" != 0 ]; then for x in $(echo "$sel" | tr ',' ' '); do case "$x" in ''|*[!0-9]*) continue ;; esac; [ "$x" -ge 1 ] && [ "$x" -le "$i" ] || continue; eval "id=\$ST_ID_$x"; case ",$want," in *",$id,"*) ;; *) want="$want${want:+,}$id" ;; esac; done; [ -n "$want" ] || { echo -e "\n${RED}Неверный ввод!${NC}\n"; PAUSE; return; }; fi
-echo -e "\n${MAGENTA}Применяем выбор сервисов${NC}"; st_run lists "$want"; PAUSE; }
-st_autorestart() { local cur m v; cur=$(st_j '@.autorestart'); echo -e "\n${MAGENTA}Автоперезапуск Steer${NC}\n${CYAN}1) ${GREEN}Каждые N часов ${NC}(2, 4, 6, 8, 12)\n${CYAN}2) ${GREEN}Ежедневно в указанный час${NC}"; [ -n "$cur" ] && echo -e "${CYAN}3) ${GREEN}Выключить${NC}"
-echo -ne "${CYAN}Enter) ${GREEN}Вернуться${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read m; case "$m" in 1) echo -ne "${YELLOW}Каждые сколько часов:${NC} "; read v; v="every:$v" ;; 2) echo -ne "${YELLOW}Час (0-23):${NC} "; read v; v="daily:$v" ;; 3) [ -n "$cur" ] || return; v=off ;; *) return ;; esac
-m=$("$ZMB" steer_action autorestart "$v" 2>/dev/null); if [ -n "$(st_err "$m")" ]; then echo -e "\n${RED}$(st_err "$m")${NC}\n"; else echo -e "\n${GREEN}Сохранено!${NC}\n"; fi; PAUSE; }
+st_splify2() { [ -x /etc/init.d/splify2 ] || { command -v steer >/dev/null 2>&1 && ! st_zm_owned; }; }
 st_splify2_delete() { echo -e "\n${MAGENTA}Удаляем splify2${NC}"; /etc/init.d/splify2 stop >/dev/null 2>&1; /etc/init.d/splify2 disable >/dev/null 2>&1; /etc/init.d/steer stop >/dev/null 2>&1; /etc/init.d/steer disable >/dev/null 2>&1
 for p in luci-app-splify2 splify2 steer-extended steer; do $DELETE "$p" >/dev/null 2>&1; done; rm -rf /etc/config/steer* /etc/config/splify2* /etc/init.d/steer /etc/init.d/splify2 /tmp/*steer* /tmp/*splify2* /etc/steer* /etc/splify2* /tmp/luci-indexcache* /tmp/luci-modulecache 2>/dev/null
 /etc/init.d/rpcd reload >/dev/null 2>&1; echo -e "splify2 ${GREEN}удалён!${NC}\n"; PAUSE; }
-STEER_MENU() { local ST_JS inst ex colo sub ver lat svc ar blk w k; while true; do SPL_V_VER; clear; echo -e "${MAGENTA}Меню Steer${NC}\n"
-if ! st_panel; then echo -e "${YELLOW}Steer:${NC}     $(st_zm_owned && st_state_line || echo -e "${RED}не установлен${NC}")\n\n${NC}Steer ${YELLOW}настраивается через ${NC}Zapret Manager ${YELLOW}для ${NC}WEB ${YELLOW}+ ${NC}LuCI"; ST_JS=""; inst=""; blk=""
-else ST_JS=$("$ZMB" steer_status 2>/dev/null); inst=$(st_j '@.installed'); blk=$(st_j '@.blocker'); ver=$(st_j '@.version'); lat=$(st_j '@.latest')
-if [ "$inst" = true ]; then if [ "$(st_j '@.stopped')" = true ]; then k="${RED}выключен${NC}"; elif [ "$(st_j '@.steer_running')" = true ]; then k="${GREEN}запущен${NC}"; elif [ "$(st_j '@.running')" = true ]; then k="${YELLOW}выполняется операция${NC}"; else k="${RED}не запущен${NC}"; fi; if [ -n "$lat" ] && [ -n "$ver" ] && zm_ver_gt "$lat" "$ver"; then echo -e "${YELLOW}Steer:${NC}            $k / ${RED}$ver (доступно обновление $lat)${NC}"; else echo -e "${YELLOW}Steer:${NC}            $k / ${GREEN}${ver:-?}${NC}"; fi
-ex=$(st_j '@.exit'); colo=$(st_j '@.warp_colo'); sub=$(st_j '@.sub_label'); case "$ex" in warp) echo -e "${YELLOW}Туннель:${NC}          ${GREEN}WARP${NC}${colo:+ ($colo)}" ;; vpn) echo -e "${YELLOW}Туннель:${NC}          ${GREEN}VPN${NC}${sub:+ ($sub)}" ;; *) echo -e "${YELLOW}Туннель:${NC}          ${RED}не подключён — подключите WARP или VPN${NC}" ;; esac
-svc=""; k=0; while [ -n "$(st_j "@.services[$k].id")" ]; do [ "$(st_j "@.services[$k].on")" = true ] && svc="$svc${svc:+, }$(st_j "@.services[$k].name")"; k=$((k + 1)); done; echo -e "${YELLOW}Сервисы:${NC}          ${svc:-${RED}не выбраны${NC}}"
-ar=$(st_j '@.autorestart'); case "$ar" in every:*) echo -e "${YELLOW}Автоперезапуск:${NC}   ${GREEN}каждые ${NC}${ar#every:}${GREEN} ч${NC}" ;; daily:*) echo -e "${YELLOW}Автоперезапуск:${NC}   ${GREEN}ежедневно в ${NC}$(printf '%02d' "${ar#daily:}"):00" ;; esac
-else echo -e "${YELLOW}Steer:${NC}            ${RED}не установлен${NC}"; fi; fi
+ST_F="$ZMT/st.flat"; STS_F="$ZMT/sts.flat"
+st_load() { mkdir -p "$ZMT"; "$ZMB" steer_status 2>/dev/null | zm_jflat > "$ST_F"; }
+st_j() { zj "$ST_F" "$1"; }
+st_hours() { case "$1" in every:*) echo -e "${GREEN}каждые ${NC}${1#every:}${GREEN} ч${NC}" ;; daily:*) echo -e "${GREEN}ежедневно в ${NC}$(printf '%02d' "${1#daily:}"):00" ;; *) echo -e "${RED}выключен${NC}" ;; esac; }
+st_svc_names() { awk -F'\t' '$1 ~ /^services\.[0-9]+\.(name|on)$/ { split($1, a, "."); if (a[3] == "name") nm[a[2]] = $2; else on[a[2]] = $2; if (a[2] + 0 > m) m = a[2] + 0 } END { for (i = 0; i <= m; i++) if (on[i] == "true") print nm[i] }' "$ST_F" | zm_names; }
+st_services() { local f="$ZMT/st.pick"; awk -F'\t' '$1 ~ /^services\.[0-9]+\./ { split($1, a, "."); v[a[2], a[3]] = $2; if (a[2] + 1 > m) m = a[2] + 1 } END { for (i = 0; i < m; i++) printf "%s|%s|%s|%s\n", v[i, "id"], v[i, "name"], (v[i, "group"] == "" ? "Основные" : v[i, "group"]), (v[i, "on"] == "true" ? 1 : 0) }' "$ST_F" > "$f"
+[ -s "$f" ] || { echo -e "\n${RED}Список сервисов пуст!${NC}\n"; PAUSE; return; }; zm_pick "$f" "Сервисы через Steer" || return; clear; echo -e "${MAGENTA}Применяем выбор сервисов${NC}"; zme_run steer steer_action lists "$ZM_PICK"; PAUSE; }
+st_custom() { local r f="$ZMT/st.custom" n x; while :; do r=$("$ZMB" steer_action list_get custom 2>/dev/null); clear; echo -e "${MAGENTA}Свой список Steer${NC}\n"; n=$(jsonfilter -s "$r" -e '@.count' 2>/dev/null)
+echo -e "${YELLOW}Записей:${NC} ${n:-0} ${DGRAY}(домены и IP — идут через Steer вместе с выбранными сервисами)${NC}\n"; [ "${n:-0}" -gt 0 ] && jsonfilter -s "$r" -e '@.content' 2>/dev/null | head -n 40 | sed 's/^/  /'; [ "${n:-0}" -gt 40 ] && echo -e "  ${DGRAY}… и ещё $((n - 40))${NC}"
+echo -e "\n${CYAN}1) ${GREEN}Добавить домены или IP${NC}\n${CYAN}2) ${GREEN}Заменить список целиком${NC}"; [ "${n:-0}" -gt 0 ] && echo -e "${CYAN}3) ${GREEN}Убрать записи${NC}\n${CYAN}4) ${GREEN}Очистить список${NC}"; echo -ne "${CYAN}Enter) ${GREEN}Вернуться в предыдущее меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read -r x
+case "$x" in 1|2) echo -e "\n${YELLOW}Домены и IP через пробел или с новой строки${NC} ${DGRAY}(например: youtube.com 1.2.3.0/24)${NC}"; zm_paste "$f.add" || continue; if [ "$x" = 1 ]; then { jsonfilter -s "$r" -e '@.content' 2>/dev/null; tr ' ,;' '\n\n\n' < "$f.add"; } > "$f"; else tr ' ,;' '\n\n\n' < "$f.add" > "$f"; fi
+echo -e "\n${MAGENTA}Сохраняем свой список${NC}"; zme_run steer steer_action list_set "custom|$(cat "$f")"; rm -f "$f" "$f.add"; PAUSE ;;
+3) [ "${n:-0}" -gt 0 ] || continue; echo -ne "\n${YELLOW}Что убрать (через пробел):${NC} "; read -r x; [ -n "$x" ] || continue; jsonfilter -s "$r" -e '@.content' 2>/dev/null | awk -v d=" $(echo "$x" | tr 'A-Z,;' 'a-z  ') " '!index(d, " " $0 " ")' > "$f"
+if [ -s "$f" ]; then echo -e "\n${MAGENTA}Сохраняем свой список${NC}"; zme_run steer steer_action list_set "custom|$(cat "$f")"; else echo -e "\n${MAGENTA}Очищаем свой список${NC}"; zme_run steer steer_action list_reset custom; fi; rm -f "$f"; PAUSE ;;
+4) [ "${n:-0}" -gt 0 ] || continue; zm_yes "\nОчистить свой список?" || continue; echo -e "\n${MAGENTA}Очищаем свой список${NC}"; zme_run steer steer_action list_reset custom; PAUSE ;; *) return ;; esac; done; }
+st_autorestart() { local cur m v; cur=$(st_j autorestart); echo -e "\n${MAGENTA}Автоперезапуск Steer${NC}\n${CYAN}1) ${GREEN}Каждые N часов ${NC}(2, 4, 6, 8, 12)\n${CYAN}2) ${GREEN}Ежедневно в указанный час${NC}"; [ -n "$cur" ] && echo -e "${CYAN}3) ${GREEN}Выключить${NC}"
+echo -ne "${CYAN}Enter) ${GREEN}Вернуться${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read -r m; case "$m" in 1) echo -ne "${YELLOW}Каждые сколько часов:${NC} "; read -r v; v="every:$v" ;; 2) echo -ne "${YELLOW}Час (0-23):${NC} "; read -r v; v="daily:$v" ;; 3) [ -n "$cur" ] || return; v=off ;; *) return ;; esac
+echo; zme_run steer steer_action autorestart "$v"; PAUSE; }
+st_wfix() { local m; echo -e "\n${MAGENTA}Сторож WARP${NC}\n${DGRAY}Проверяет туннели WARP и сам чинит упавшие${NC}\n${CYAN}1) ${GREEN}Каждые ${NC}30${GREEN} минут${NC}\n${CYAN}2) ${GREEN}Каждый ${NC}час\n${CYAN}3) ${GREEN}Каждые ${NC}3${GREEN} часа${NC}\n${CYAN}4) ${GREEN}Выключить${NC}"
+echo -ne "${CYAN}Enter) ${GREEN}Вернуться${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read -r m; case "$m" in 1) m=30 ;; 2) m=60 ;; 3) m=180 ;; 4) m=off ;; *) return ;; esac; echo; zme_run steer steer_action wfix "$m"; PAUSE; }
+st_own_conf() { local f="$ZMT/st.own" s; echo -e "\n${MAGENTA}Свой конфиг WARP для Steer${NC}\n${DGRAY}Конфиг WireGuard / AmneziaWG с секциями [Interface] и [Peer]${NC}"
+echo -ne "\n${YELLOW}Путь к файлу (Enter — вставить текст):${NC} "; read -r s; if [ -n "$s" ]; then [ -s "$s" ] || { echo -e "\n${RED}Файл не найден!${NC}\n"; PAUSE; return; }; cp "$s" "$f"; else echo; zm_paste "$f" || return; fi
+echo -e "\n${MAGENTA}Переходим на свой конфиг WARP${NC}"; zme_run steer steer_action warp_own "$(cat "$f")"; rm -f "$f"; PAUSE; }
+st_warp_menu() { local x w own n i hs; while :; do st_load; w=$(st_j warp_on); own=$(st_j warp_mode); clear; echo -e "${MAGENTA}Меню WARP для Steer${NC}\n"
+[ "$own" = own ] && echo -e "${YELLOW}Режим WARP:${NC}       свой конфиг" || echo -e "${YELLOW}Режим WARP:${NC}       автоматический"
+n=$(zjn "$ST_F" tunnels); if [ "$n" -gt 0 ]; then i=0; while [ "$i" -lt "$n" ]; do hs=$(st_j "tunnels.$i.hs_age"); [ "$(st_j "tunnels.$i.up")" = true ] && x="${GREEN}поднят${NC}" || x="${RED}выключен${NC}"
+echo -e "${YELLOW}Туннель $(st_j "tunnels.$i.n"):${NC}        $x${NC} · $(st_j "tunnels.$i.colo")$( [ -n "$(st_j "tunnels.$i.city")" ] && echo " ($(st_j "tunnels.$i.city"))") · ${DGRAY}$(st_j "tunnels.$i.host"):$(st_j "tunnels.$i.port") · рукопожатие $(zm_age "$hs")${NC}"; i=$((i + 1)); done
+else echo -e "${YELLOW}Туннели:${NC}          ${RED}нет${NC}"; fi; x=$(st_j wfix.mode); [ -n "$x" ] && [ "$x" != off ] && echo -e "${YELLOW}Сторож WARP:${NC}      ${GREEN}каждые ${NC}$x${GREEN} мин${NC}" || echo -e "${YELLOW}Сторож WARP:${NC}      ${RED}выключен${NC}"
+if [ "$own" = own ]; then echo -e "\n${CYAN}1) ${GREEN}Заменить свой конфиг${NC}\n${CYAN}2) ${GREEN}Вернуться к автоматическому ${NC}WARP"; elif [ "$w" = true ]; then echo -e "\n${CYAN}1) ${GREEN}Пересоздать ${NC}WARP\n${CYAN}2) ${GREEN}Подобрать ${NC}endpoint ${GREEN}для ${NC}WARP"
+else echo -e "\n${CYAN}1) ${GREEN}Подключить ${NC}WARP"; fi; [ "$w" = true ] && echo -e "${CYAN}3) ${GREEN}Перезапустить туннели ${NC}WARP\n${CYAN}4) ${GREEN}Сторож ${NC}WARP"; [ "$own" != own ] && echo -e "${CYAN}5) ${GREEN}Перейти на свой конфиг ${NC}WARP"
+echo -ne "${CYAN}Enter) ${GREEN}Вернуться в предыдущее меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read -r x
+case "$x" in 1) if [ "$own" = own ]; then st_own_conf; elif [ "$w" = true ]; then echo -e "\n${MAGENTA}Пересоздаём WARP${NC}"; zme_run steer steer_action warp_recreate; PAUSE; else echo -e "\n${MAGENTA}Подключаем WARP${NC}"; zme_run steer steer_action warp_setup; PAUSE; fi ;;
+2) if [ "$own" = own ]; then echo -e "\n${MAGENTA}Переходим на автоматический WARP${NC}"; zme_run steer steer_action warp_mode auto; PAUSE; elif [ "$w" = true ]; then echo -e "\n${MAGENTA}Подбираем endpoint для WARP${NC}"; zme_run steer steer_action warp_endpoint; PAUSE; fi ;;
+3) [ "$w" = true ] || continue; echo -e "\n${MAGENTA}Перезапускаем туннели WARP${NC}"; zme_run steer steer_action warp_restart; PAUSE ;; 4) [ "$w" = true ] && st_wfix ;; 5) [ "$own" != own ] && st_own_conf ;; *) return ;; esac; done; }
+st_sub_menu() { local x has kind ex auto n i nm cur u t e; while :; do st_load; "$ZMB" steer_action sub_status 2>/dev/null | zm_jflat > "$STS_F"; has=$(zj "$STS_F" has); kind=$(zj "$STS_F" kind); ex=$(st_j exit); auto=$(zj "$STS_F" auto)
+clear; echo -e "${MAGENTA}Меню VPN подписки для Steer${NC}\n"; if [ "$has" = true ]; then [ "$kind" = url ] && t="по ссылке" || t="свои ссылки"; echo -e "${YELLOW}Подписка:${NC}         $(zj "$STS_F" title) ${DGRAY}($t)${NC}"
+u=$(zj "$STS_F" quota.down)$(zj "$STS_F" quota.up); t=$(zm_num "$(zj "$STS_F" quota.total)"); e=$(zm_num "$(zj "$STS_F" quota.expire)"); if [ -n "$u" ]; then u=$(( $(zm_num "$(zj "$STS_F" quota.down)") + $(zm_num "$(zj "$STS_F" quota.up)") )); [ "$t" -gt 0 ] && echo -e "${YELLOW}Трафик:${NC}           $(zm_bytes "$u") из $(zm_bytes "$t")" || echo -e "${YELLOW}Трафик:${NC}           $(zm_bytes "$u") ${DGRAY}(без ограничений)${NC}"; fi
+[ "$e" -gt 0 ] && echo -e "${YELLOW}Действует до:${NC}     $(date -d "@$e" '+%d.%m.%Y' 2>/dev/null || echo "$e")"; cur=$(zj "$STS_F" node); echo -e "${YELLOW}Узел:${NC}             ${cur:-автоматически}"
+[ "$kind" = url ] && { [ "$auto" = off ] && echo -e "${YELLOW}Автообновление:${NC}   ${RED}выключено${NC}" || echo -e "${YELLOW}Автообновление:${NC}   ${GREEN}каждые ${NC}$auto${GREEN} ч${NC}"; }
+case "$ex" in vpn) echo -e "${YELLOW}Сервисы идут:${NC}     ${GREEN}через VPN${NC}" ;; warp) echo -e "${YELLOW}Сервисы идут:${NC}     ${GREEN}через WARP${NC}" ;; esac; else echo -e "${YELLOW}Подписка:${NC}         ${RED}нет${NC}"; fi
+[ "$has" = true ] && echo -e "\n${CYAN}1) ${GREEN}Заменить подписку${NC}" || echo -e "\n${CYAN}1) ${GREEN}Добавить подписку${NC}"; if [ "$has" = true ]; then [ "$kind" = url ] && echo -e "${CYAN}2) ${GREEN}Обновить подписку сейчас${NC}\n${CYAN}3) ${GREEN}Автообновление подписки${NC}"
+n=$(zjn "$STS_F" list.nodes); [ "$n" -gt 1 ] && echo -e "${CYAN}4) ${GREEN}Выбрать узел${NC}"; [ "$(st_j warp_on)" = true ] && { [ "$ex" = vpn ] && echo -e "${CYAN}5) ${GREEN}Пустить сервисы через ${NC}WARP ${GREEN}вместо ${NC}VPN" || echo -e "${CYAN}5) ${GREEN}Пустить сервисы через ${NC}VPN ${GREEN}вместо ${NC}WARP"; }; echo -e "${CYAN}6) ${GREEN}Удалить подписку${NC}"; fi
+echo -ne "${CYAN}Enter) ${GREEN}Вернуться в предыдущее меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read -r x
+case "$x" in 1) echo -e "\n${YELLOW}Ссылка на подписку (${NC}https://...${YELLOW}) или свои ссылки ${NC}vless://...${YELLOW}, каждая с новой строки${NC}"; zm_paste "$ZMT/st.sub" || continue; echo -e "\n${MAGENTA}Подключаем подписку VPN${NC}"; zme_run steer steer_action sub_set "$(tr -d '\r' < "$ZMT/st.sub")"; rm -f "$ZMT/st.sub"; PAUSE ;;
+2) [ "$kind" = url ] || continue; echo -e "\n${MAGENTA}Обновляем подписку${NC}"; zme_run steer steer_action sub_update; PAUSE ;;
+3) [ "$kind" = url ] || continue; echo -e "\n${MAGENTA}Автообновление подписки${NC}\n${CYAN}1) ${GREEN}Каждые ${NC}3${GREEN} часа${NC}\n${CYAN}2) ${GREEN}Каждые ${NC}6${GREEN} часов${NC}\n${CYAN}3) ${GREEN}Каждые ${NC}12${GREEN} часов${NC}\n${CYAN}4) ${GREEN}Раз в сутки${NC}\n${CYAN}5) ${GREEN}Выключить${NC}"
+echo -ne "${CYAN}Enter) ${GREEN}Вернуться${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read -r u; case "$u" in 1) u=3 ;; 2) u=6 ;; 3) u=12 ;; 4) u=24 ;; 5) u=off ;; *) continue ;; esac; echo; zme_run steer steer_action sub_auto "$u"; PAUSE ;;
+4) [ "$has" = true ] || continue; clear; echo -e "${MAGENTA}Выбор узла VPN${NC}\n"; echo -e "${CYAN} 0) ${GREEN}Автоматически${NC} ${DGRAY}(первый рабочий)${NC}"; i=0; while [ "$i" -lt "$n" ]; do nm=$(zj "$STS_F" "list.nodes.$i.name"); [ "$nm" = "$cur" ] && t="${GREEN}" || t="${NC}"; echo -e "${CYAN}$(printf '%2d' $((i + 1)))) ${t}$nm${NC}"; i=$((i + 1)); done
+echo -ne "${CYAN}Enter) ${GREEN}Вернуться${NC}\n\n${YELLOW}Номер узла:${NC} "; read -r u; case "$u" in ''|*[!0-9]*) continue ;; esac; [ "$u" -le "$n" ] || continue; [ "$u" = 0 ] && nm="" || nm=$(zj "$STS_F" "list.nodes.$((u - 1)).name"); echo -e "\n${MAGENTA}Выбираем узел ${NC}${nm:-автоматически}"; zme_run steer steer_action sub_node "$nm"; PAUSE ;;
+5) [ "$has" = true ] && [ "$(st_j warp_on)" = true ] || continue; [ "$ex" = vpn ] && ex=warp || ex=vpn; echo -e "\n${MAGENTA}Переключаем туннель${NC}"; zme_run steer steer_action sub_exit "$ex"; PAUSE ;;
+6) [ "$has" = true ] || continue; zm_yes "\nУдалить подписку VPN?" || continue; echo -e "\n${MAGENTA}Удаляем подписку VPN${NC}"; zme_run steer steer_action sub_remove; PAUSE ;; *) return ;; esac; done; }
+st_check() { local r f="$ZMT/st.diag" n i w q v; clear; echo -e "${MAGENTA}Проверка Steer${NC}\n\n${CYAN}Проверяем туннели${NC}"; "$ZMB" steer_action diag 2>/dev/null | zm_jflat > "$f"; echo
+case "$(zj "$f" warp)" in on) echo -e "${YELLOW}WARP:${NC}  ${GREEN}работает${NC} $(zj "$f" colo)" ;; off) echo -e "${YELLOW}WARP:${NC}  ${RED}не отвечает${NC}" ;; esac; n=$(zjn "$f" tunnels); i=0
+while [ "$i" -lt "$n" ]; do case "$(zj "$f" "tunnels.$i.warp")" in on) w="${GREEN}работает${NC}" ;; notls) w="${YELLOW}есть связь, но не WARP${NC}" ;; *) w="${RED}нет связи${NC}" ;; esac; echo -e "  Туннель $(zj "$f" "tunnels.$i.n"): $w $(zj "$f" "tunnels.$i.colo") $(zj "$f" "tunnels.$i.city")"; i=$((i + 1)); done
+case "$(zj "$f" vpn)" in on) echo -e "${YELLOW}VPN:${NC}   ${GREEN}работает${NC} $(zj "$f" vpn_ip) $(zj "$f" vpn_loc)" ;; off) echo -e "${YELLOW}VPN:${NC}   ${RED}не отвечает${NC}" ;; esac
+[ "$(zj "$f" warp)$(zj "$f" vpn)" = nonenone ] && echo -e "${YELLOW}Туннели не проверялись — ${NC}Steer ${YELLOW}выключен или сервисы не выбраны${NC}"
+while :; do echo -ne "\n${YELLOW}Домен или IP — куда он пойдёт ${NC}(Enter — выйти)${YELLOW}:${NC} "; read -r q; [ -n "$q" ] || return; r=$("$ZMB" steer_action explain "$q" 2>/dev/null); [ -n "$(zme_err "$r")" ] && { echo -e "${RED}$(zme_err "$r")${NC}"; continue; }
+v=$(jsonfilter -s "$r" -e '@.verdict' 2>/dev/null); case "$v" in warp) echo -e "${GREEN}Через ${NC}WARP" ;; vpn) echo -e "${GREEN}Через ${NC}VPN" ;; direct) echo -e "${CYAN}Напрямую${NC}" ;; off) echo -e "${YELLOW}Steer выключен${NC}" ;; other) echo -e "${GREEN}Через ${NC}$(jsonfilter -s "$r" -e '@.out' 2>/dev/null)" ;; *) echo -e "${RED}Не удалось определить${NC}" ;; esac; done; }
+STEER_MENU() { local inst blk ver lat k ex colo sub svc ar w x; zme_need steer_action || return; while true; do SPL_V_VER; st_load; inst=$(st_j installed); blk=$(st_j blocker); ver=$(st_j version); lat=$(st_j latest); clear; echo -e "${MAGENTA}Меню Steer${NC}\n"
+if [ "$inst" = true ]; then if [ "$(st_j stopped)" = true ]; then k="${RED}выключен${NC}"; elif [ "$(st_j steer_running)" = true ]; then k="${GREEN}запущен${NC}"; elif [ "$(st_j running)" = true ]; then k="${YELLOW}выполняется операция${NC}"; else k="${RED}не запущен${NC}"; fi
+if [ -n "$lat" ] && [ -n "$ver" ] && zm_ver_gt "$lat" "$ver"; then echo -e "${YELLOW}Steer:${NC}            $k / ${RED}$ver (доступно обновление $lat)${NC}"; else echo -e "${YELLOW}Steer:${NC}            $k / ${GREEN}${ver:-?}${NC}"; fi
+ex=$(st_j exit); colo=$(st_j warp_colo); sub=$(st_j sub_label); case "$ex" in warp) echo -e "${YELLOW}Туннель:${NC}          ${GREEN}WARP${NC}${colo:+ ($colo)}" ;; vpn) echo -e "${YELLOW}Туннель:${NC}          ${GREEN}VPN${NC}${sub:+ ($sub)}" ;; *) echo -e "${YELLOW}Туннель:${NC}          ${RED}не подключён — подключите WARP или VPN${NC}" ;; esac
+svc=$(st_svc_names); echo -e "${YELLOW}Сервисы:${NC}          ${svc:-${RED}не выбраны${NC}}"; [ "$(st_j has_sub)" = true ] && [ "$ex" != vpn ] && echo -e "${YELLOW}Подписка VPN:${NC}     $sub ${DGRAY}(запасная)${NC}"
+ar=$(st_j autorestart); [ -n "$ar" ] && echo -e "${YELLOW}Автоперезапуск:${NC}   $(st_hours "$ar")"; x=$(st_j wfix.mode); [ -n "$x" ] && [ "$x" != off ] && echo -e "${YELLOW}Сторож WARP:${NC}      ${GREEN}каждые ${NC}$x${GREEN} мин${NC}"
+[ "$(st_j failopen)" = true ] && [ "$(st_j steer_running)" = true ] && echo -e "\n${RED}Туннель не принят — сервисы сейчас идут напрямую!${NC}"; else echo -e "${YELLOW}Steer:${NC}            ${RED}не установлен${NC}"; fi
 [ -n "$SPL_INST_VER" ] && echo -e "${YELLOW}splify:${NC}           ${RED}установлен ${NC}(заменён на Steer — удалите)"; st_splify2 && echo -e "${YELLOW}splify2:${NC}          ${RED}установлен ${NC}(заменён на Steer — удалите)"
-[ "$blk" = steer ] && echo -e "\n${RED}Движок Steer настроен не Zapret Manager — сначала удалите splify2${NC}"
-if ! st_panel; then echo -e "\n${CYAN}1) ${GREEN}Установить ${NC}Zapret Manager ${GREEN}для ${NC}WEB ${GREEN}+ ${NC}LuCI"
-elif [ "$inst" != true ]; then echo -e "\n${CYAN}1) ${GREEN}Установить ${NC}Steer"
-else echo -e "\n${CYAN}1) ${GREEN}Выбрать сервисы${NC}"; w=$(st_j '@.warp_on'); if [ "$w" = true ]; then echo -e "${CYAN}2) ${GREEN}Пересоздать ${NC}WARP\n${CYAN}3) ${GREEN}Подобрать ${NC}endpoint ${GREEN}для ${NC}WARP"; else echo -e "${CYAN}2) ${GREEN}Подключить ${NC}WARP"; fi
-[ "$(st_j '@.has_sub')" = true ] && echo -e "${CYAN}4) ${GREEN}Заменить подписку ${NC}VPN" || echo -e "${CYAN}4) ${GREEN}Добавить подписку ${NC}VPN"; [ "$w" = true ] && [ "$(st_j '@.has_sub')" = true ] && { [ "$ex" = vpn ] && echo -e "${CYAN}5) ${GREEN}Пустить сервисы через ${NC}WARP ${GREEN}вместо ${NC}VPN" || echo -e "${CYAN}5) ${GREEN}Пустить сервисы через ${NC}VPN ${GREEN}вместо ${NC}WARP"; }
-[ "$(st_j '@.stopped')" = true ] && echo -e "${CYAN}6) ${GREEN}Запустить ${NC}Steer" || echo -e "${CYAN}6) ${GREEN}Остановить ${NC}Steer"; echo -e "${CYAN}7) ${GREEN}Автоперезапуск ${NC}Steer"
+case "$blk" in steer|splify2) echo -e "\n${RED}Движок Steer настроен не Zapret Manager — сначала удалите splify2${NC}" ;; forkozz) echo -e "\n${RED}Установлен ${NC}Forkozz${RED} — он тоже направляет сервисы в туннель. Удалите его, чтобы поставить ${NC}Steer" ;; esac
+if [ "$inst" != true ]; then echo -e "\n${CYAN}1) ${GREEN}Установить ${NC}Steer"; else w=$(st_j warp_on); echo -e "\n${CYAN}1) ${GREEN}Выбрать сервисы${NC}\n${CYAN}2) ${GREEN}Свой список доменов и ${NC}IP\n${CYAN}3) ${GREEN}Меню ${NC}WARP\n${CYAN}4) ${GREEN}Меню ${NC}VPN ${GREEN}подписки${NC}"
+[ "$(st_j stopped)" = true ] && echo -e "${CYAN}5) ${GREEN}Запустить ${NC}Steer" || echo -e "${CYAN}5) ${GREEN}Остановить ${NC}Steer"; echo -e "${CYAN}6) ${GREEN}Автоперезапуск ${NC}Steer\n${CYAN}7) ${GREEN}Проверить работу ${NC}Steer"
 [ -n "$lat" ] && [ -n "$ver" ] && zm_ver_gt "$lat" "$ver" && echo -e "${CYAN}8) ${GREEN}Обновить движок ${NC}Steer ${GREEN}(${NC}$ver → $lat${GREEN})${NC}"; echo -e "${CYAN}9) ${GREEN}Удалить ${NC}Steer"; fi
 [ -n "$SPL_INST_VER" ] && echo -e "${CYAN}p) ${GREEN}Удалить ${NC}splify"; st_splify2 && echo -e "${CYAN}d) ${GREEN}Удалить ${NC}splify2"
-echo -e "${CYAN}Enter) ${GREEN}Вернуться в предыдущее меню${NC}\n"; echo -ne "${YELLOW}Выберите пункт:${NC} "; read choiceST
-case "$choiceST" in p|P|з|З) [ -n "$SPL_INST_VER" ] && DELETE_SPL; continue ;; d|D|в|В) st_splify2 && st_splify2_delete; continue ;; "") return ;; esac
-if ! st_panel; then [ "$choiceST" = 1 ] && install_zapret_manager_luci; continue; fi
-if [ "$inst" != true ]; then [ "$choiceST" = 1 ] || continue; echo -e "\n${MAGENTA}Устанавливаем Steer${NC}"; st_run install && { echo -e "${MAGENTA}Подключаем WARP${NC}"; st_run warp_setup; }; PAUSE; continue; fi
-case "$choiceST" in 1) st_services ;; 2) if [ "$w" = true ]; then echo -e "\n${MAGENTA}Пересоздаём WARP${NC}"; st_run warp_recreate; else echo -e "\n${MAGENTA}Подключаем WARP${NC}"; st_run warp_setup; fi; PAUSE ;;
-3) [ "$w" = true ] || continue; echo -e "\n${MAGENTA}Подбираем endpoint WARP${NC}"; st_run warp_endpoint; PAUSE ;;
-4) echo -ne "\n${YELLOW}Ссылка на подписку (${NC}https://...${YELLOW}) или ${NC}vless://...${YELLOW}:${NC} "; IFS= read -r sub; [ -n "$sub" ] || continue; echo -e "\n${MAGENTA}Подключаем подписку VPN${NC}"; st_run sub_set "$sub"; PAUSE ;;
-5) [ "$w" = true ] && [ "$(st_j '@.has_sub')" = true ] || continue; [ "$ex" = vpn ] && ex=warp || ex=vpn; echo -e "\n${MAGENTA}Переключаем туннель${NC}"; st_run sub_exit "$ex"; PAUSE ;;
-6) if [ "$(st_j '@.stopped')" = true ]; then echo -e "\n${MAGENTA}Запускаем Steer${NC}"; st_run start; else echo -e "\n${MAGENTA}Останавливаем Steer${NC}"; st_run stop; fi; PAUSE ;; 7) st_autorestart ;;
-8) echo -e "\n${MAGENTA}Обновляем движок Steer${NC}"; st_run engine; PAUSE ;; 9) echo -ne "\n${YELLOW}Удалить Steer вместе с WARP? (y/N):${NC} "; read w; case "$w" in y|Y|д|Д|н|Н) echo -e "\n${MAGENTA}Удаляем Steer${NC}"; st_run remove; PAUSE ;; esac ;; esac; done; }
+echo -ne "${CYAN}Enter) ${GREEN}Вернуться в предыдущее меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read -r x
+case "$x" in p|P|з|З) [ -n "$SPL_INST_VER" ] && DELETE_SPL; continue ;; d|D|в|В) st_splify2 && st_splify2_delete; continue ;; "") return ;; esac
+if [ "$inst" != true ]; then [ "$x" = 1 ] || continue; [ -n "$blk" ] && continue; echo -e "\n${MAGENTA}Устанавливаем Steer${NC}"; zme_run steer steer_action install && { echo -e "${MAGENTA}Подключаем WARP${NC}"; zme_run steer steer_action warp_setup; }; PAUSE; continue; fi
+case "$x" in 1) st_services ;; 2) st_custom ;; 3) st_warp_menu ;; 4) st_sub_menu ;; 5) if [ "$(st_j stopped)" = true ]; then echo -e "\n${MAGENTA}Запускаем Steer${NC}"; zme_run steer steer_action start; else echo -e "\n${MAGENTA}Останавливаем Steer${NC}"; zme_run steer steer_action stop; fi; PAUSE ;;
+6) st_autorestart ;; 7) st_check ;; 8) [ -n "$lat" ] && zm_ver_gt "$lat" "$ver" || continue; echo -e "\n${MAGENTA}Обновляем движок Steer${NC}"; zme_run steer steer_action engine; PAUSE ;;
+9) zm_yes "\nУдалить Steer вместе с WARP?" || continue; echo -e "\n${MAGENTA}Удаляем Steer${NC}"; zme_run steer steer_action remove; PAUSE ;; esac; done; }
+# ==========================================
+# Forkozz
+# ==========================================
+FKD="$ZMT/fk"; FK_F="$ZMT/fk/st.flat"; FKC="$ZMT/fk/cfg.flat"
+fk_j() { zj "$FK_F" "$1"; }
+fk_state_line() { if ! ls /etc/rc.d/S*forkop >/dev/null 2>&1; then echo -e "${RED}выключен${NC}"; elif pidof sing-box >/dev/null 2>&1 && nft list table inet ForkopTable >/dev/null 2>&1; then echo -e "${GREEN}работает${NC}"; else echo -e "${RED}не работает${NC}"; fi; }
+fk_c() { zj "$FKC" "$1"; }
+fk_n() { awk -v n="$1" -v a="$2" -v b="$3" -v c="$4" 'BEGIN { m = n % 100; k = n % 10; w = (m > 10 && m < 20) ? c : (k == 1 ? a : (k >= 2 && k <= 4 ? b : c)); print n " " w }'; }
+fk_iv() { case "$1" in 1h) echo "каждый час" ;; 1d) echo "раз в сутки" ;; 3d) echo "раз в 3 дня" ;; *h) echo "каждые ${1%h} ч" ;; *) echo "$1" ;; esac; }
+fk_sbname() { case "$1" in tiny) echo "облегчённый" ;; stable) echo "обычный" ;; extended) echo "расширенный" ;; compact) echo "расширенный компактный" ;; *) echo "установлен вручную" ;; esac; }
+fk_load() { mkdir -p "$FKD"; "$ZMB" forkop_status 2>/dev/null | zm_jflat > "$FK_F"; }
+# Загружает настройки Forkozz в черновик ($FKD/*)
+fk_cfg_load() { local r; r=$("$ZMB" forkop_config_get 2>/dev/null); [ -n "$(zme_err "$r")" ] && { FK_OK=0; return 1; }; FK_OK=1; printf '%s' "$r" | zm_jflat > "$FKC"
+FK_SEC=$(fk_c sec); FK_EXISTS=$(fk_c exists); FK_MODE=$(fk_c mode); FK_SUB=$(fk_c sub); FK_SUBIV=$(fk_c sub_interval); FK_IFACE=$(fk_c iface); FK_EXCLUDE=$(fk_c exclude)
+for k in links domains subnets lists full excl; do zjl "$FKC" "$k" > "$FKD/$k"; done; zjl "$FKC" refs.c > "$FKD/rc"; zjl "$FKC" refs.s > "$FKD/rs"; zjl "$FKC" refs.r > "$FKD/rr"
+FK_DT=$(fk_c dns.type); zjl "$FKC" dns.servers > "$FKD/dnss"; zjl "$FKC" dns.bootstraps > "$FKD/dnsb"; [ -s "$FKD/dnss" ] || echo 9.9.9.9 > "$FKD/dnss"; [ -s "$FKD/dnsb" ] || echo 9.9.9.9 > "$FKD/dnsb"; [ -n "$FK_DT" ] || FK_DT=dot
+FK_DDET=$(fk_c dns.detour); FK_QUIC=$(fk_c quic_off); [ "$FK_QUIC" = false ] || FK_QUIC=true; FK_LIV=$(fk_c list_interval); FK_LVIA=$(fk_c lists_via); [ "$FK_DDET" = true ] || FK_DDET=false; [ "$FK_LVIA" = true ] || FK_LVIA=false
+[ -n "$FK_SEC" ] || FK_SEC=main; [ -n "$FK_MODE" ] || FK_MODE=links; [ -n "$FK_SUBIV" ] || FK_SUBIV=12h; [ -n "$FK_LIV" ] || FK_LIV=1d
+awk -F'\t' '$1 ~ /^catalog\.items\.[0-9]+\./ { split($1, a, "."); i = a[3]; if (i + 1 > m) m = i + 1; if (a[4] == "targets") t[i] = t[i] (t[i] == "" ? "" : " ") $2; else v[i, a[4]] = $2 } END { for (i = 0; i < m; i++) if (v[i, "id"] != "" && t[i] != "") printf "%s|%s|%s|%s\n", v[i, "id"], v[i, "name"], (v[i, "group"] == "" ? "Основные" : v[i, "group"]), t[i] }' "$FKC" > "$FKD/cat"
+cut -d'|' -f4 "$FKD/cat" | tr ' ' '\n' | grep . | sort -u > "$FKD/cattok"
+{ sed 's/^/c:/' "$FKD/rc"; sed 's/^/s:/' "$FKD/rs"; sed 's/^/r:/' "$FKD/rr"; sed 's/^/l:/' "$FKD/lists"; } > "$FKD/tok"; return 0; }
+# Выбранные пункты каталога: все их списки уже подключены
+fk_cat_sel() { awk -F'|' -v OFS='|' 'NR == FNR { have[$0] = 1; next } { n = split($4, t, " "); on = 1; for (i = 1; i <= n; i++) if (!(t[i] in have)) on = 0; print $1, $2, $3, on }' "$FKD/tok" "$FKD/cat"; }
+fk_cat_names() { fk_cat_sel | awk -F'|' '$4 == 1 { print $2 }' | zm_names; }
+# Собирает списки из выбора каталога, сохраняя то, чего в каталоге нет
+fk_cat_apply() { awk -F'|' 'FILENAME == ARGV[1] { n = split($4, t, " "); for (i = 1; i <= n; i++) { all[t[i]] = 1; tg[$1] = $4 }; next } FILENAME == ARGV[2] { if ($4 == 1) { n = split(tg[$1], t, " "); for (i = 1; i <= n; i++) if (!(t[i] in out)) { out[t[i]] = 1; ord[++k] = t[i] } }; next }
+{ if (!($0 in all) && !($0 in out)) { out[$0] = 1; ord[++k] = $0 } } END { for (i = 1; i <= k; i++) print ord[i] }' "$FKD/cat" "$1" "$FKD/tok" > "$FKD/tok.n" && mv -f "$FKD/tok.n" "$FKD/tok"
+sed -n 's/^c://p' "$FKD/tok" > "$FKD/rc"; sed -n 's/^s://p' "$FKD/tok" > "$FKD/rs"; sed -n 's/^r://p' "$FKD/tok" > "$FKD/rr"; sed -n 's/^l://p' "$FKD/tok" > "$FKD/lists"; }
+fk_payload() { local s1 b1; s1=$(head -n1 "$FKD/dnss"); b1=$(head -n1 "$FKD/dnsb")
+printf '{"sec":"%s","mode":"%s","links":"%s","sub":"%s","sub_interval":"%s","iface":"%s","fastest":true,' "$(zm_jstr "$FK_SEC")" "$FK_MODE" "$(zm_jstr "$(cat "$FKD/links")")" "$(zm_jstr "$FK_SUB")" "$FK_SUBIV" "$(zm_jstr "$FK_IFACE")"
+printf '"refs":{"c":%s,"s":%s,"r":%s,"l":[]},' "$(zm_jarr "$FKD/rc")" "$(zm_jarr "$FKD/rs")" "$(zm_jarr "$FKD/rr")"; [ "$FK_MODE" = iface ] && FK_EXCLUDE=""
+printf '"domains":"%s","exclude":"%s","subnets":"%s","lists":"%s","full":%s,"excl":%s,' "$(zm_jstr "$(cat "$FKD/domains")")" "$(zm_jstr "$FK_EXCLUDE")" "$(zm_jstr "$(cat "$FKD/subnets")")" "$(zm_jstr "$(cat "$FKD/lists")")" "$(zm_jarr "$FKD/full")" "$(zm_jarr "$FKD/excl")"
+printf '"dns":{"type":"%s","servers":%s,"bootstraps":%s,"server":"%s","bootstrap":"%s","detour":%s},"quic_off":%s,"list_interval":"%s","lists_via":%s}' "$FK_DT" "$(zm_jarr "$FKD/dnss")" "$(zm_jarr "$FKD/dnsb")" "$(zm_jstr "$s1")" "$(zm_jstr "$b1")" "$FK_DDET" "$FK_QUIC" "$FK_LIV" "$FK_LVIA"; }
+# fk_save [restart] — сохраняет черновик и применяет его
+fk_save() { local r e; echo -e "\n${MAGENTA}Сохраняем настройки Forkozz${NC}"; r=$(fk_payload | "$ZMB" forkop_config_set @stdin 2>/dev/null); e=$(zme_err "$r"); [ -n "$e" ] && { echo -e "\n${RED}$e${NC}\n"; PAUSE; return 1; }; fk_load
+if [ "$(fk_j enabled)" = true ]; then if [ "$(fk_j running)" = true ]; then [ "$1" = restart ] && { echo -e "${MAGENTA}Перезапускаем Forkozz${NC}"; zme_run forkop forkop_action restart; } || { echo -e "${MAGENTA}Применяем настройки${NC}"; zme_run forkop forkop_action apply; }
+else echo -e "${MAGENTA}Включаем Forkozz${NC}"; zme_run forkop forkop_action start; fi; elif zm_yes "${GREEN}Настройки сохранены!${YELLOW} Включить Forkozz сейчас?"; then echo -e "\n${MAGENTA}Включаем Forkozz${NC}"; zme_run forkop forkop_action start; else echo; fi; PAUSE; }
+fk_conn_text() { case "$FK_MODE" in sub) echo "подписка ${DGRAY}$(printf '%s' "$FK_SUB" | sed 's#^[a-z]*://\([^/?]*\).*#\1#')${NC}" ;; iface) echo "туннель ${FK_IFACE}" ;; *) fk_n "$(grep -c . "$FKD/links")" сервер сервера серверов ;; esac; }
+fk_links_in() { local f="$FKD/links.in" bad; echo -e "\n${YELLOW}Ссылки на серверы, по одной на строку${NC}\n${DGRAY}vless, vmess, trojan, ss, socks5, hysteria2, tuic${NC}"; zm_paste "$f" || return 1; tr ' \t' '\n\n' < "$f" | tr -d '\r' | grep . > "$f.n"
+bad=$(grep -viE '^(vless|vmess|trojan|ss|socks4a?|socks5|hysteria2|hy2|tuic|https?)://' "$f.n" | head -n1); [ -n "$bad" ] && { echo -e "\n${RED}Не похоже на ссылку:${NC} $(printf '%s' "$bad" | cut -c1-60)\n"; PAUSE; return 1; }; mv -f "$f.n" "$FKD/links"; rm -f "$f"; FK_MODE=links; }
+fk_tunnel_in() { local n i x; n=$(zjn "$FKC" tunnels); clear; echo -e "${MAGENTA}Туннель для Forkozz${NC}\n"; [ "$n" -gt 0 ] || { echo -e "${RED}Туннелей WireGuard или AmneziaWG пока нет!${NC}\n${YELLOW}Создайте туннель в меню ${NC}AmneziaWG\n"; PAUSE; return 1; }; i=0
+while [ "$i" -lt "$n" ]; do [ "$(fk_c "tunnels.$i.up")" = true ] && x="${GREEN}поднят${NC}" || x="${RED}выключен${NC}"; [ "$(fk_c "tunnels.$i.steer")" = true ] && x="$x ${DGRAY}(туннель Steer)${NC}"; echo -e "${CYAN}$(printf '%2d' $((i + 1)))) ${NC}$(fk_c "tunnels.$i.name") — $x"; i=$((i + 1)); done
+echo -ne "${CYAN}Enter) ${GREEN}Вернуться${NC}\n\n${YELLOW}Номер туннеля:${NC} "; read -r x; case "$x" in ''|*[!0-9]*) return 1 ;; esac; [ "$x" -ge 1 ] && [ "$x" -le "$n" ] || return 1; FK_IFACE=$(fk_c "tunnels.$((x - 1)).name"); FK_MODE=iface; }
+fk_conn() { local x; while :; do clear; echo -e "${MAGENTA}Подключение Forkozz${NC}\n"; echo -e "${YELLOW}Сейчас:${NC}             $(fk_conn_text)"; [ "$FK_MODE" = sub ] && echo -e "${YELLOW}Обновление серверов:${NC} $(fk_iv "$FK_SUBIV")"; [ -n "$FK_EXCLUDE" ] && [ "$FK_MODE" != iface ] && echo -e "${YELLOW}Скрыты серверы со словами:${NC} $FK_EXCLUDE"
+echo -e "\n${CYAN}1) ${GREEN}Подписка ${NC}VPN ${GREEN}(ссылка ${NC}https://...${GREEN})${NC}\n${CYAN}2) ${GREEN}Свои серверы ${NC}(vless://, trojan://, ss://...)\n${CYAN}3) ${GREEN}Туннель ${NC}WireGuard / AmneziaWG"; [ "$FK_MODE" = sub ] && echo -e "${CYAN}4) ${GREEN}Как часто обновлять серверы подписки${NC}"; [ "$FK_MODE" != iface ] && echo -e "${CYAN}5) ${GREEN}Скрывать серверы по словам${NC}"
+echo -ne "${CYAN}Enter) ${GREEN}Вернуться в предыдущее меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read -r x; case "$x" in 1) echo -ne "\n${YELLOW}Ссылка на подписку:${NC} "; IFS= read -r x; x=$(printf '%s' "$x" | tr -d ' \r'); case "$x" in http://*|https://*) FK_SUB="$x"; FK_MODE=sub; return 0 ;; '') ;; *) echo -e "\n${RED}Нужна ссылка https://...${NC}\n"; PAUSE ;; esac ;;
+2) fk_links_in && return 0 ;; 3) fk_tunnel_in && return 0 ;; 4) [ "$FK_MODE" = sub ] || continue; echo -e "\n${CYAN}1) ${GREEN}Каждый час${NC}\n${CYAN}2) ${GREEN}Каждые ${NC}6${GREEN} часов${NC}\n${CYAN}3) ${GREEN}Каждые ${NC}12${GREEN} часов${NC}\n${CYAN}4) ${GREEN}Раз в сутки${NC}"; echo -ne "\n${YELLOW}Выберите пункт:${NC} "; read -r x
+case "$x" in 1) FK_SUBIV=1h ;; 2) FK_SUBIV=6h ;; 3) FK_SUBIV=12h ;; 4) FK_SUBIV=1d ;; *) continue ;; esac; return 0 ;; 5) [ "$FK_MODE" != iface ] || continue; echo -e "\n${YELLOW}Слова через ${NC}|${YELLOW}, например: ${NC}Russia|RU|тест${DGRAY} (пусто — показывать все)${NC}"; echo -ne "${YELLOW}Слова:${NC} "; IFS= read -r FK_EXCLUDE; return 0 ;; *) return 1 ;; esac; done; }
+fk_services() { fk_cat_sel > "$FKD/pick"; [ -s "$FKD/pick" ] || { echo -e "\n${RED}Каталог сервисов пуст!${NC}\n"; PAUSE; return 1; }; zm_pick "$FKD/pick" "Сервисы через Forkozz" || return 1; cp "$ZMT/pick.cur" "$FKD/pick"; fk_cat_apply "$FKD/pick"; }
+fk_custom() { local x f="$FKD/add"; while :; do clear; echo -e "${MAGENTA}Свои домены и IP для Forkozz${NC}\n"; echo -e "${YELLOW}Домены:${NC}         $(grep -c . "$FKD/domains")\n${YELLOW}IP и подсети:${NC}   $(grep -c . "$FKD/subnets")\n${YELLOW}Внешние списки:${NC} $(awk 'NR == FNR { c[$0] = 1; next } !(("l:" $0) in c)' "$FKD/cattok" "$FKD/lists" 2>/dev/null | grep -c .)\n"
+{ cat "$FKD/domains" "$FKD/subnets"; } | head -n 30 | sed 's/^/  /'; echo -e "\n${CYAN}1) ${GREEN}Добавить домены или IP${NC}\n${CYAN}2) ${GREEN}Убрать записи${NC}\n${CYAN}3) ${GREEN}Очистить домены и IP${NC}\n${CYAN}4) ${GREEN}Добавить внешний список ${NC}(.lst по ссылке)"
+echo -e "${CYAN}s) ${GREEN}Сохранить и применить${NC}"; echo -ne "${CYAN}Enter) ${GREEN}Вернуться без сохранения${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read -r x
+case "$x" in 1) echo -e "\n${YELLOW}Домены и IP через пробел или с новой строки${NC} ${DGRAY}(например: youtube.com 1.2.3.0/24)${NC}"; zm_paste "$f" || continue; tr ' ,;' '\n\n\n' < "$f" | tr -d '\r' | sed 's#^https\?://##; s#/$##' | grep . > "$f.n"
+grep -E '^[0-9]{1,3}(\.[0-9]{1,3}){3}(/[0-9]{1,2})?$' "$f.n" | cat "$FKD/subnets" - | awk '!s[$0]++' > "$FKD/subnets.n"; grep -vE '^[0-9]{1,3}(\.[0-9]{1,3}){3}(/[0-9]{1,2})?$' "$f.n" | tr 'A-Z' 'a-z' | cat "$FKD/domains" - | awk '!s[$0]++' > "$FKD/domains.n"
+mv -f "$FKD/subnets.n" "$FKD/subnets"; mv -f "$FKD/domains.n" "$FKD/domains"; rm -f "$f" "$f.n" ;; 2) echo -ne "\n${YELLOW}Что убрать (через пробел):${NC} "; read -r x; for f in domains subnets; do awk -v d=" $(echo "$x" | tr 'A-Z,;' 'a-z  ') " '!index(d, " " tolower($0) " ")' "$FKD/$f" > "$FKD/$f.n" && mv -f "$FKD/$f.n" "$FKD/$f"; done ;;
+3) : > "$FKD/domains"; : > "$FKD/subnets" ;; 4) echo -ne "\n${YELLOW}Ссылка на список (${NC}https://...${YELLOW}):${NC} "; IFS= read -r x; case "$x" in https://*|http://*) echo "$x" >> "$FKD/lists"; echo "l:$x" >> "$FKD/tok" ;; esac ;; s|S|ы|Ы) fk_save; return ;; *) return ;; esac; done; }
+fk_devices() { local n i x ip nm m f="$FKD/devs"; while :; do clear; echo -e "${MAGENTA}Устройства и Forkozz${NC}\n"; echo -e "${DGRAY}Обычно через Forkozz идут только выбранные сервисы.\nМожно пустить через него всё устройство или, наоборот, провести устройство мимо.${NC}\n"
+n=$(zjn "$FKC" devices); { i=0; while [ "$i" -lt "$n" ]; do echo "$(fk_c "devices.$i.ip")|$(fk_c "devices.$i.name")"; i=$((i + 1)); done; cat "$FKD/full" "$FKD/excl" | sed 's/$/|/'; } | awk -F'|' '!s[$1]++' > "$f"; i=0
+while IFS='|' read -r ip nm; do i=$((i + 1)); if grep -qxF "$ip" "$FKD/full"; then m="${GREEN}всё через Forkozz${NC}"; elif grep -qxF "$ip" "$FKD/excl"; then m="${YELLOW}мимо Forkozz${NC}"; else m="${DGRAY}по сервисам${NC}"; fi; echo -e "${CYAN}$(printf '%2d' "$i")) ${NC}$(printf '%-15s' "$ip") ${nm:+$nm }— $m"; done < "$f"
+[ "$i" = 0 ] && echo -e "${YELLOW}Устройства не найдены — добавьте адрес вручную${NC}"; echo -e "\n${YELLOW}Номер устройства — переключить режим, ${NC}a${YELLOW} — добавить IP вручную${NC}\n${CYAN} s) ${GREEN}Сохранить и применить${NC}"; echo -ne "${CYAN}Enter) ${GREEN}Вернуться без сохранения${NC}\n\n${YELLOW}Выберите:${NC} "; read -r x
+case "$x" in a|A|ф|Ф) echo -ne "${YELLOW}IP-адрес устройства:${NC} "; read -r ip; printf '%s' "$ip" | grep -Eq '^[0-9]{1,3}(\.[0-9]{1,3}){3}$' && { grep -qxF "$ip" "$FKD/full" || echo "$ip" >> "$FKD/full"; } ;; s|S|ы|Ы) fk_save; return ;; ''|*[!0-9]*) [ -z "$x" ] && return ;;
+*) ip=$(sed -n "${x}p" "$f" | cut -d'|' -f1); [ -n "$ip" ] || continue; if grep -qxF "$ip" "$FKD/full"; then grep -vxF "$ip" "$FKD/full" > "$f.n"; mv -f "$f.n" "$FKD/full"; echo "$ip" >> "$FKD/excl"; elif grep -qxF "$ip" "$FKD/excl"; then grep -vxF "$ip" "$FKD/excl" > "$f.n"; mv -f "$f.n" "$FKD/excl"; else echo "$ip" >> "$FKD/full"; fi ;; esac; done; }
+FK_DNS_CAT="doh|quad9|Quad9|https://dns.quad9.net/dns-query|9.9.9.9
+doh|cloudflare|Cloudflare|https://cloudflare-dns.com/dns-query|1.1.1.1
+doh|google|Google|https://dns.google/dns-query|8.8.8.8
+doh|yandex|Яндекс|https://common.dot.dns.yandex.net/dns-query|77.88.8.8
+doh|yandex_safe|Яндекс Безопасный|https://safe.dot.dns.yandex.net/dns-query|77.88.8.88
+doh|yandex_family|Яндекс Семейный|https://family.dot.dns.yandex.net/dns-query|77.88.8.7
+doh|comss|Comss|https://dns.comss.one/dns-query|77.88.8.8
+doh|xbox|XBOX|https://xbox-dns.ru/dns-query|77.88.8.8
+doh|dnsai|DNS-AI|https://dns.dns-ai.ru/dns-query|77.88.8.8
+doh|geohide_ru|GeoHide RU|https://geohide.ru/dns-query|77.88.8.8
+doh|geohide_eu|GeoHide EU|https://eu.geohide.ru/dns-query|77.88.8.8
+doh|geohide_us|GeoHide US|https://us.geohide.ru/dns-query|77.88.8.8
+dot|quad9|Quad9|dns.quad9.net|9.9.9.9
+dot|cloudflare|Cloudflare|1.1.1.1|1.1.1.1
+dot|google|Google|dns.google|8.8.8.8
+dot|yandex|Яндекс|common.dot.dns.yandex.net|77.88.8.8
+dot|yandex_safe|Яндекс Безопасный|safe.dot.dns.yandex.net|77.88.8.88
+dot|yandex_family|Яндекс Семейный|family.dot.dns.yandex.net|77.88.8.7
+dot|comss|Comss|dns.comss.one|77.88.8.8
+udp|quad9|Quad9|9.9.9.9|9.9.9.9
+udp|cloudflare|Cloudflare|1.1.1.1|1.1.1.1
+udp|google|Google|8.8.8.8|8.8.8.8
+udp|yandex|Яндекс|77.88.8.8|77.88.8.8
+udp|yandex_safe|Яндекс Безопасный|77.88.8.88|77.88.8.88
+udp|yandex_family|Яндекс Семейный|77.88.8.7|77.88.8.7"
+fk_dns_name() { local n; n=$(printf '%s\n' "$FK_DNS_CAT" | awk -F'|' -v t="$1" -v v="$2" '$1 == t && $4 == v { print $3; exit }'); [ -n "$n" ] && echo "$n" || printf '%s' "$2" | sed 's#^https://##; s#/dns-query$##'; }
+fk_dns_text() { local s n; s=$(head -n1 "$FKD/dnss"); n=$(grep -c . "$FKD/dnss"); printf '%s' "$(fk_dns_name "$FK_DT" "$s")"; [ "$n" -gt 1 ] && printf ' +%s' "$((n - 1))"; case "$FK_DT" in doh) printf ' (DoH)' ;; dot) printf ' (DoT)' ;; udp) printf ' (UDP)' ;; esac; }
+fk_dns() { local t x f="$FKD/dnspick" own; echo -e "\n${MAGENTA}Тип DNS для Forkozz${NC}\n${CYAN}1) ${NC}DoT ${DGRAY}— DNS over TLS (рекомендуется)${NC}\n${CYAN}2) ${NC}DoH ${DGRAY}— DNS over HTTPS${NC}\n${CYAN}3) ${NC}UDP ${DGRAY}— обычный DNS без шифрования${NC}"; echo -ne "${CYAN}Enter) ${GREEN}Вернуться${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read -r x
+case "$x" in 1) t=dot ;; 2) t=doh ;; 3) t=udp ;; *) return 1 ;; esac; printf '%s\n' "$FK_DNS_CAT" | awk -F'|' -v t="$t" -v cur="$( [ "$t" = "$FK_DT" ] && tr '\n' ' ' < "$FKD/dnss")" '$1 == t { print $4 "|" $3 "|DNS|" (index(" " cur, " " $4 " ") ? 1 : 0) }' > "$f"
+zm_pick "$f" "DNS-серверы Forkozz ($(echo "$t" | tr 'a-z' 'A-Z')) — первый основной, остальные запасные" || return 1; echo -ne "\n${YELLOW}Свой сервер ${NC}(Enter — не нужен)${YELLOW}:${NC} "; read -r own
+printf '%s' "$ZM_PICK" | tr ',' '\n' | grep . > "$FKD/dnss.n"; [ -n "$own" ] && echo "$own" >> "$FKD/dnss.n"; [ -s "$FKD/dnss.n" ] || { echo -e "\n${RED}Выберите хотя бы один DNS-сервер!${NC}\n"; rm -f "$FKD/dnss.n"; PAUSE; return 1; }
+head -n 8 "$FKD/dnss.n" > "$FKD/dnss"; rm -f "$FKD/dnss.n"; FK_DT="$t"; while IFS= read -r x; do printf '%s\n' "$FK_DNS_CAT" | awk -F'|' -v t="$t" -v v="$x" '$1 == t && $4 == v { print $5; f = 1; exit } END { if (!f && t != "udp") print "9.9.9.9" }'; done < "$FKD/dnss" | { cat; echo 9.9.9.9; echo 77.88.8.8; } | awk 'NF && !s[$0]++' | head -n 4 > "$FKD/dnsb"; }
+fk_settings() { local x ch; ch=0; while :; do clear; echo -e "${MAGENTA}DNS и настройки Forkozz${NC}\n"; echo -e "${YELLOW}DNS:${NC}                  $(fk_dns_text)"; [ "$FK_DDET" = true ] && echo -e "${YELLOW}DNS через VPN:${NC}        ${GREEN}да${NC}" || echo -e "${YELLOW}DNS через VPN:${NC}        ${NC}нет"
+[ "$FK_QUIC" = true ] && echo -e "${YELLOW}QUIC для сервисов:${NC}    ${GREEN}отключён${NC}" || echo -e "${YELLOW}QUIC для сервисов:${NC}    ${NC}не трогаем"; echo -e "${YELLOW}Обновлять списки:${NC}     $(fk_iv "$FK_LIV")"; [ "$FK_LVIA" = true ] && echo -e "${YELLOW}Скачивать списки:${NC}     ${GREEN}через VPN${NC}" || echo -e "${YELLOW}Скачивать списки:${NC}     ${NC}напрямую"
+echo -e "${YELLOW}sing-box:${NC}             $(fk_j singbox | sed 's/-extended.*//') ${DGRAY}($(fk_sbname "$(fk_j singbox_pkg)"))${NC}"; [ "$ch" = 1 ] && echo -e "\n${YELLOW}Есть несохранённые изменения${NC}"
+echo -e "\n${CYAN}1) ${GREEN}Выбрать ${NC}DNS${GREEN}-серверы${NC}"; [ "$FK_DDET" = true ] && echo -e "${CYAN}2) ${GREEN}Пускать ${NC}DNS${GREEN} напрямую${NC}" || echo -e "${CYAN}2) ${GREEN}Пускать ${NC}DNS${GREEN} через ${NC}VPN"; [ "$FK_QUIC" = true ] && echo -e "${CYAN}3) ${GREEN}Не отключать ${NC}QUIC" || echo -e "${CYAN}3) ${GREEN}Отключить ${NC}QUIC${GREEN} для выбранных сервисов${NC}"
+echo -e "${CYAN}4) ${GREEN}Как часто обновлять списки сервисов${NC}"; [ "$FK_LVIA" = true ] && echo -e "${CYAN}5) ${GREEN}Скачивать списки напрямую${NC}" || echo -e "${CYAN}5) ${GREEN}Скачивать списки через ${NC}VPN"; echo -e "${CYAN}6) ${GREEN}Сменить вариант ${NC}sing-box"; [ "$ch" = 1 ] && echo -e "${CYAN}s) ${GREEN}Сохранить и применить${NC}"
+echo -ne "${CYAN}Enter) ${GREEN}Вернуться в предыдущее меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read -r x
+case "$x" in 1) fk_dns && ch=1 ;; 2) [ "$FK_DDET" = true ] && FK_DDET=false || FK_DDET=true; ch=1 ;; 3) [ "$FK_QUIC" = true ] && FK_QUIC=false || FK_QUIC=true; ch=1 ;; 5) [ "$FK_LVIA" = true ] && FK_LVIA=false || FK_LVIA=true; ch=1 ;;
+4) echo -e "\n${CYAN}1) ${GREEN}Каждые ${NC}6${GREEN} часов${NC}\n${CYAN}2) ${GREEN}Каждые ${NC}12${GREEN} часов${NC}\n${CYAN}3) ${GREEN}Раз в сутки${NC}\n${CYAN}4) ${GREEN}Раз в ${NC}3${GREEN} дня${NC}"; echo -ne "\n${YELLOW}Выберите пункт:${NC} "; read -r x; case "$x" in 1) FK_LIV=6h ;; 2) FK_LIV=12h ;; 3) FK_LIV=1d ;; 4) FK_LIV=3d ;; *) continue ;; esac; ch=1 ;;
+6) echo -e "\n${MAGENTA}Вариант sing-box${NC}\n${CYAN}1) ${GREEN}Облегчённый ${DGRAY}— меньше памяти, основные протоколы${NC}\n${CYAN}2) ${GREEN}Обычный ${DGRAY}— все протоколы официального sing-box${NC}\n${CYAN}3) ${GREEN}Расширенный ${DGRAY}— XHTTP, mKCP и другое, нужно ~40 МБ (с GitHub)${NC}"; echo -ne "\n${YELLOW}Выберите пункт:${NC} "; read -r x
+case "$x" in 1) x=tiny ;; 2) x=stable ;; 3) x=extended ;; *) continue ;; esac; echo -e "\n${MAGENTA}Меняем sing-box${NC}"; zme_run forkop forkop_action singbox "$x"; fk_load; PAUSE ;; s|S|ы|Ы) [ "$ch" = 1 ] && { fk_save; return; } ;; *) [ "$ch" = 1 ] && { zm_yes "\nСохранить изменения?" && fk_save; }; return ;; esac; done; }
+fk_servers() { local f="$FKD/srv.flat" n i t nm d now r x; while :; do r=$("$ZMB" forkop_action servers 2>/dev/null); clear; echo -e "${MAGENTA}Серверы Forkozz${NC}\n"; [ -n "$(zme_err "$r")" ] && { echo -e "${RED}$(zme_err "$r")${NC}\n"; PAUSE; return; }; printf '%s' "$r" | zm_jflat > "$f"; now=$(zj "$f" now)
+t=$(zj "$f" sub.title); [ -n "$t" ] && echo -e "${YELLOW}Подписка:${NC} $(echo "$t" | sed 's/^🌨[[:space:]]*VPN$/StressKVN/')\n"; n=$(zjn "$f" list); i=0
+while [ "$i" -lt "$n" ]; do t=$(zj "$f" "list.$i"); nm=$(zj "$f" "nodes.$t.name"); d=$(zj "$f" "nodes.$t.delay"); [ "$(zj "$f" "nodes.$t.type" | tr 'A-Z' 'a-z')" = urltest ] && nm="Авто ${DGRAY}(сейчас: $(zj "$f" "nodes.$(zj "$f" "nodes.$t.now").name"))${NC}"
+case "$d" in ''|-1) d="" ;; 0) d=" ${RED}нет ответа${NC}" ;; *) [ "$d" -lt 300 ] 2>/dev/null && d=" ${GREEN}$d мс${NC}" || d=" ${YELLOW}$d мс${NC}" ;; esac; [ "$(zj "$f" "nodes.$t.hidden")" = true ] && d=" ${DGRAY}скрыт${NC}"
+[ "$t" = "$now" ] && echo -e "${CYAN}$(printf '%2d' $((i + 1)))) ${GREEN}● ${NC}$nm$d" || echo -e "${CYAN}$(printf '%2d' $((i + 1)))) ${NC}  $nm$d"; i=$((i + 1)); done
+echo -e "\n${YELLOW}Номер — переключиться на сервер${NC}\n${CYAN} t) ${GREEN}Проверить задержку${NC}"; echo -ne "${CYAN}Enter) ${GREEN}Вернуться в предыдущее меню${NC}\n\n${YELLOW}Выберите:${NC} "; read -r x
+case "$x" in t|T|е|Е) echo -e "\n${CYAN}Проверяем задержку${NC}"; r=$("$ZMB" forkop_action latency 2>/dev/null); [ -n "$(zme_err "$r")" ] && { echo -e "${RED}$(zme_err "$r")${NC}\n"; PAUSE; } ;; ''|*[!0-9]*) return ;;
+*) t=$(zj "$f" "list.$((x - 1))"); [ -n "$t" ] || continue; r=$("$ZMB" forkop_action select "$t" 2>/dev/null); [ -n "$(zme_err "$r")" ] && { echo -e "\n${RED}$(zme_err "$r")${NC}\n"; PAUSE; } ;; esac; done; }
+fk_check() { local f="$FKD/diag.flat" n i v q r; clear; echo -e "${MAGENTA}Проверка Forkozz${NC}\n\n${CYAN}Проверяем службу, sing-box, DNS и сервер${NC}\n"; "$ZMB" forkop_action diag 2>/dev/null | zm_jflat > "$f"; n=$(zjn "$f" checks); i=0
+while [ "$i" -lt "$n" ]; do case "$(zj "$f" "checks.$i.verdict")" in ok) v="${GREEN}✓${NC}" ;; warn) v="${YELLOW}!${NC}" ;; *) v="${RED}✗${NC}" ;; esac; echo -e "$v ${YELLOW}$(zj "$f" "checks.$i.what"):${NC} $(zj "$f" "checks.$i.why")"; i=$((i + 1)); done
+while :; do echo -ne "\n${YELLOW}Домен или IP — куда он пойдёт ${NC}(Enter — выйти)${YELLOW}:${NC} "; read -r q; [ -n "$q" ] || return; r=$("$ZMB" forkop_action route "$q" 2>/dev/null); [ -n "$(zme_err "$r")" ] && { echo -e "${RED}$(zme_err "$r")${NC}"; continue; }
+case "$(jsonfilter -s "$r" -e '@.verdict' 2>/dev/null)" in proxy) echo -e "${GREEN}Через ${NC}Forkozz $( [ "$(jsonfilter -s "$r" -e '@.how' 2>/dev/null)" = subnet ] && echo "${DGRAY}(адрес входит в подсети)${NC}")" ;; direct) echo -e "${CYAN}Напрямую${NC}" ;; off) echo -e "${YELLOW}Forkozz выключен${NC}" ;; *) echo -e "${RED}Не удалось определить${NC}" ;; esac; done; }
+fk_netshift() { pkg_is_installed netshift || return 1; echo -e "\n${RED}Обнаружен ${NC}NetShift${RED}!${NC}\n${YELLOW}Forkozz и NetShift работают на sing-box и перехватывают один и тот же трафик — удалите ${NC}NetShift\n"; PAUSE; return 0; }
+fk_wizard() { echo -e "\n${MAGENTA}Настраиваем Forkozz${NC}\n${YELLOW}Шаг 1 из 2 — подключение${NC}"; sleep 1; fk_conn || return; fk_services || return; [ -s "$FKD/rc" ] || [ -s "$FKD/rs" ] || [ -s "$FKD/rr" ] || [ -s "$FKD/lists" ] || { echo -e "\n${RED}Выберите хотя бы один сервис!${NC}\n"; PAUSE; return; }; fk_save restart; }
+FORKOZZ_MENU() { local inst en run ver lat blk sb x svc ex; zme_need forkop_action || return; while true; do fk_load; inst=$(fk_j installed); en=$(fk_j enabled); run=$(fk_j running); ver=$(fk_j version); lat=$(fk_j latest); blk=$(fk_j blocker); sb=$(fk_j singbox)
+FK_OK=0; [ "$inst" = true ] && fk_cfg_load; clear; echo -e "${MAGENTA}Меню Forkozz${NC}\n${DGRAY}Выбранные сервисы идут через ваш сервер, подписку или туннель. Остальное — напрямую${NC}\n"
+if [ "$inst" = true ]; then if [ "$(fk_j busy)" = true ]; then x="${YELLOW}выполняется операция${NC}"; elif [ "$en" != true ]; then [ "$FK_EXISTS" = true ] && x="${RED}выключен${NC}" || x="${YELLOW}не настроен${NC}"; elif [ "$run" = true ]; then x="${GREEN}работает${NC}"; else x="${RED}не работает${NC}"; fi
+[ "$(fk_j newer)" = true ] && echo -e "${YELLOW}Forkozz:${NC}          $x / ${RED}$ver (доступно обновление $lat)${NC}" || echo -e "${YELLOW}Forkozz:${NC}          $x / ${GREEN}$ver${NC}"; echo -e "${YELLOW}sing-box:${NC}         ${sb:-${RED}не установлен}${NC} ${DGRAY}($(fk_sbname "$(fk_j singbox_pkg)"))${NC}"
+if [ "$FK_OK" = 1 ] && [ "$FK_EXISTS" = true ]; then echo -e "${YELLOW}Подключение:${NC}      $(fk_conn_text)"; svc=$(fk_cat_names); ex=""; [ -s "$FKD/domains" ] && ex=" + $(fk_n "$(grep -c . "$FKD/domains")" домен домена доменов)"; [ -s "$FKD/full" ] && ex="$ex + $(fk_n "$(grep -c . "$FKD/full")" устройство устройства устройств)"
+echo -e "${YELLOW}Сервисы:${NC}          ${svc:-${DGRAY}только свои${NC}}$ex"; echo -e "${YELLOW}DNS:${NC}              $(fk_dns_text)"; fi
+[ "$en" = true ] && [ "$run" != true ] && [ "$(fk_j watch)" -gt 0 ] 2>/dev/null && echo -e "\n${RED}Forkozz включён, но не работает — сторож уже перезапускал его $(fk_j watch) раз. Запустите проверку${NC}"; [ "$(fk_j foreign)" = true ] && echo -e "\n${YELLOW}Стоит старая версия с LuCI и сторонними зеркалами — переведите её на Zapret Manager (пункт ${NC}u${YELLOW})${NC}"
+zjl "$FK_F" warn | grep -qx bytetube && [ "$en" = true ] && echo -e "\n${YELLOW}Работает ByeTube — YouTube пускайте только через что-то одно${NC}"; zjl "$FK_F" warn | grep -qx v6fake && echo -e "\n${YELLOW}Обновлён IPv6 FakeIP — перезапустите Forkozz${NC}"
+else echo -e "${YELLOW}Forkozz:${NC}          ${RED}не установлен${NC}"; [ -n "$sb" ] && echo -e "${YELLOW}sing-box:${NC}         $sb ${DGRAY}(остался после удаления)${NC}"; [ -n "$blk" ] && echo -e "\n${RED}$(fk_j blocker_text)${NC}"; pkg_is_installed netshift && echo -e "\n${RED}Установлен ${NC}NetShift${RED} — Forkozz с ним не совместим${NC}"; fi
+if [ "$inst" != true ]; then echo -e "\n${CYAN}1) ${GREEN}Установить ${NC}Forkozz"; [ -n "$sb" ] && echo -e "${CYAN}b) ${GREEN}Удалить оставшийся ${NC}sing-box"
+elif [ "$FK_EXISTS" != true ]; then echo -e "\n${CYAN}1) ${GREEN}Настроить ${NC}Forkozz ${DGRAY}(подключение → сервисы → включить)${NC}"
+else echo -e "\n${CYAN}1) ${GREEN}Подключение${NC}\n${CYAN}2) ${GREEN}Выбрать сервисы${NC}\n${CYAN}3) ${GREEN}Свои домены и ${NC}IP\n${CYAN}4) ${GREEN}Устройства${NC}\n${CYAN}5) ${NC}DNS ${GREEN}и настройки${NC}"; [ "$run" = true ] && [ "$FK_MODE" != iface ] && echo -e "${CYAN}6) ${GREEN}Серверы${NC}"
+echo -e "${CYAN}7) ${GREEN}Проверить работу ${NC}Forkozz"; [ "$en" = true ] && echo -e "${CYAN}8) ${GREEN}Выключить ${NC}Forkozz\n${CYAN}9) ${GREEN}Перезапустить ${NC}Forkozz" || echo -e "${CYAN}8) ${GREEN}Включить ${NC}Forkozz"; echo -e "${CYAN}0) ${GREEN}Обновить списки сервисов${NC}$( [ "$FK_MODE" = sub ] && echo "${GREEN} и серверы подписки${NC}")"
+fi; if [ "$inst" = true ]; then if [ "$(fk_j newer)" = true ]; then echo -e "${CYAN}u) ${GREEN}Обновить ${NC}Forkozz ${GREEN}(${NC}$ver → $lat${GREEN})${NC}"; elif [ "$(fk_j foreign)" = true ]; then echo -e "${CYAN}u) ${GREEN}Перевести на ${NC}Zapret Manager"; fi; echo -e "${CYAN}d) ${GREEN}Удалить ${NC}Forkozz"; fi
+echo -ne "${CYAN}Enter) ${GREEN}Вернуться в предыдущее меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read -r x; [ -z "$x" ] && return
+if [ "$inst" != true ]; then case "$x" in 1) [ -n "$blk" ] && { echo -e "\n${RED}$(fk_j blocker_text)${NC}\n"; PAUSE; continue; }; fk_netshift && continue; echo -e "\n${MAGENTA}Устанавливаем Forkozz${NC}"; zme_run forkop forkop_action install; PAUSE ;;
+b|B|и|И) [ -n "$sb" ] || continue; pkg_is_installed netshift && { echo -e "\n${RED}sing-box нужен ${NC}NetShift${RED} — удалять его нельзя!${NC}\n"; PAUSE; continue; }; zm_yes "\nУдалить sing-box $sb?" || continue; echo -e "\n${MAGENTA}Удаляем sing-box${NC}"; zme_run forkop forkop_action singbox_remove; PAUSE ;; esac; continue; fi
+case "$x" in d|D|в|В) zm_yes "\nУдалить Forkozz полностью? Трафик пойдёт напрямую" || continue; echo -e "\n${MAGENTA}Удаляем Forkozz${NC}"; zme_run forkop forkop_action remove; PAUSE; continue ;;
+u|U|г|Г) { [ "$(fk_j newer)" = true ] || [ "$(fk_j foreign)" = true ]; } || continue; [ "$(fk_j newer)" = true ] && { echo -e "\n${MAGENTA}Обновляем Forkozz${NC}"; zme_run forkop forkop_action update; } || { echo -e "\n${MAGENTA}Переводим Forkozz на Zapret Manager${NC}"; zme_run forkop forkop_action install; }; PAUSE; continue ;; esac
+[ "$FK_OK" = 1 ] || { echo -e "\n${RED}Не удалось прочитать настройки Forkozz!${NC}\n"; PAUSE; continue; }; if [ "$FK_EXISTS" != true ]; then [ "$x" = 1 ] && fk_wizard; continue; fi
+case "$x" in 1) fk_conn && fk_save restart ;; 2) fk_services && fk_save ;; 3) fk_custom ;; 4) fk_devices ;; 5) fk_settings ;; 6) [ "$run" = true ] && fk_servers ;; 7) fk_check ;;
+8) if [ "$en" = true ]; then echo -e "\n${MAGENTA}Выключаем Forkozz${NC}"; zme_run forkop forkop_action stop; else [ -n "$blk" ] && { echo -e "\n${RED}$(fk_j blocker_text)${NC}\n"; PAUSE; continue; }; echo -e "\n${MAGENTA}Включаем Forkozz${NC}"; zme_run forkop forkop_action start; fi; PAUSE ;;
+9) [ "$en" = true ] || continue; echo -e "\n${MAGENTA}Перезапускаем Forkozz${NC}"; zme_run forkop forkop_action restart; PAUSE ;; 0) echo -e "\n${MAGENTA}Обновляем списки сервисов${NC}"; zme_run forkop forkop_action lists; [ "$FK_MODE" = sub ] && { echo -e "${MAGENTA}Обновляем серверы подписки${NC}"; zme_run forkop forkop_action subs; }; PAUSE ;; esac; done; }
+# ==========================================
+# AmneziaWG
+# ==========================================
+AW_F="$ZMT/awg.flat"
+aw_load() { mkdir -p "$ZMT"; "$ZMB" awg_status 2>/dev/null | zm_jflat > "$AW_F"; }
+aw_j() { zj "$AW_F" "$1"; }
+aw_state_line() { uci show network 2>/dev/null | sed -n "s/^network\.\([^.=]*\)\.proto='amneziawg'$/\1/p" | grep -v '^zmwarp' | while read -r i; do [ -d "/sys/class/net/$i" ] && printf '%s ' "$(printf "${GREEN}%s${NC}" "$i")" || printf '%s ' "$(printf "${RED}%s${NC}" "$i")"; done; }
+aw_line() { local i="$1" x h; [ "$(aw_j "ifaces.$i.up")" = true ] && x="${GREEN}поднят${NC}" || x="${RED}не поднят${NC}"; [ "$(aw_j "ifaces.$i.enabled")" = false ] && x="${RED}выключен${NC}"; h=$(aw_j "ifaces.$i.hs_age")
+[ "$(aw_j "ifaces.$i.owner")" = steer ] && x="$x · ${CYAN}туннель Steer${NC}"; [ "$(aw_j "ifaces.$i.warp")" = true ] && x="$x · WARP"; [ "$(aw_j "ifaces.$i.route_all")" = true ] && x="$x · ${YELLOW}весь трафик${NC}"
+echo -e "  ${NC}$(printf '%-10s' "$(aw_j "ifaces.$i.name")") $x · ${DGRAY}рукопожатие $(zm_age "$h") · ↓ $(zm_bytes "$(aw_j "ifaces.$i.rx")") ↑ $(zm_bytes "$(aw_j "ifaces.$i.tx")")${NC}"; }
+aw_gen() { local x m; clear; echo -e "${MAGENTA}Генерация WARP${NC}\n${DGRAY}Бесплатный туннель WARP с маскировкой. Файл /root/WARP.conf общий с Mixomo${NC}\n"
+echo -e "${CYAN}1) ${GREEN}Сгенерировать ${DGRAY}(engage.cloudflareclient.com:4500)${NC}\n${CYAN}2) ${GREEN}С подбором точки входа${NC}\n${CYAN}3) ${GREEN}Своя точка входа${NC}"; [ "$(aw_j installed)" = true ] && echo -e "${CYAN}4) ${GREEN}С проверкой связи ${DGRAY}(надёжнее, несколько минут)${NC}"
+echo -ne "${CYAN}Enter) ${GREEN}Вернуться в предыдущее меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read -r x; case "$x" in 1) m="std|default" ;; 2) m="std|auto" ;; 3) echo -ne "\n${YELLOW}Точка входа ${NC}(адрес:порт, например 162.159.192.7:2408)${YELLOW}:${NC} "; read -r m; [ -n "$m" ] || return; m="std|$m" ;; 4) [ "$(aw_j installed)" = true ] || return; m="check|" ;; *) return ;; esac
+[ "$(aw_j warp_conf)" = true ] && { zm_yes "\nWARP.conf уже есть — заменить его новым?" || return; }; echo -e "\n${MAGENTA}Генерируем WARP${NC}"; zme_run awg awg_action gen "$m" && echo -e "${YELLOW}Файл ${NC}WARP${YELLOW} сохранён в ${NC}/root/WARP.conf\n"; PAUSE; }
+aw_conf_in() { local s; if [ "$(aw_j warp_conf)" = true ]; then echo -e "\n${CYAN}1) ${GREEN}Из ${NC}/root/WARP.conf\n${CYAN}2) ${GREEN}Свой ${NC}.conf ${GREEN}(файл или текст)${NC}"; echo -ne "\n${YELLOW}Выберите пункт:${NC} "; read -r s; case "$s" in 1) cp /root/WARP.conf "$1" 2>/dev/null || { echo -e "\n${RED}Не удалось прочитать /root/WARP.conf!${NC}\n"; PAUSE; return 1; }; AW_SRC=warp; return 0 ;; 2) ;; *) return 1 ;; esac; fi
+AW_SRC=own; echo -ne "\n${YELLOW}Путь к .conf ${NC}(Enter — вставить текст)${YELLOW}:${NC} "; read -r s; if [ -n "$s" ]; then [ -s "$s" ] || { echo -e "\n${RED}Файл не найден!${NC}\n"; PAUSE; return 1; }; cp "$s" "$1"; else echo; zm_paste "$1" || return 1; fi
+grep -qi '^[[:space:]]*\[interface\]' "$1" && grep -qi '^[[:space:]]*\[peer\]' "$1" || { echo -e "\n${RED}Нужны секции [Interface] и [Peer]!${NC}\n"; PAUSE; return 1; }; }
+aw_create() { local f="$ZMT/awg.conf" nm def fw=1 rt=0 i n; clear; echo -e "${MAGENTA}Создание интерфейса AmneziaWG${NC}\n${DGRAY}Из WARP.conf или своего .conf AmneziaWG / WireGuard${NC}"; aw_conf_in "$f" || return
+[ "$AW_SRC" = warp ] && def=warp || def=awg; n=""; i=1; while aw_has "$def$n"; do i=$((i + 1)); n=$i; done; def="$def$n"; echo -ne "\n${YELLOW}Имя интерфейса ${NC}(Enter — ${def})${YELLOW}:${NC} "; read -r nm; nm=$(printf '%s' "${nm:-$def}" | tr 'A-Z' 'a-z')
+printf '%s' "$nm" | grep -Eq '^[a-z][a-z0-9_]{0,10}$' || { echo -e "\n${RED}Имя: латиница в нижнем регистре, цифры и _, начинается с буквы, до 11 символов${NC}\n"; PAUSE; return; }; aw_has "$nm" && { zm_yes "Интерфейс $nm уже есть — заменить его?" || return; }
+zm_yesd "\nПустить устройства сети в туннель?" || fw=0; echo -e "${DGRAY}Весь интернет роутера в туннель — если туннель упадёт, пропадёт интернет${NC}"; zm_yes "Пустить весь трафик роутера в туннель?" && rt=1
+echo -e "\n${MAGENTA}Создаём интерфейс ${NC}$nm"; zme_run awg awg_action create "$nm|$rt|$fw|$(cat "$f")"; rm -f "$f"; [ "$rt" = 0 ] && echo -e "${YELLOW}Что пускать в туннель — выберите в ${NC}Forkozz${YELLOW} или ${NC}Steer\n"; PAUSE; }
+aw_has() { local i=0 n; n=$(zjn "$AW_F" ifaces); while [ "$i" -lt "$n" ]; do [ "$(aw_j "ifaces.$i.name")" = "$1" ] && return 0; i=$((i + 1)); done; return 1; }
+aw_iface() { local i="$1" nm x r f="$ZMT/awg.conf" st w; while :; do aw_load; nm=$(aw_j "ifaces.$i.name"); [ -n "$nm" ] || return; st=$(aw_j "ifaces.$i.owner"); w=$(aw_j "ifaces.$i.warp"); clear; echo -e "${MAGENTA}Интерфейс ${NC}$nm\n"; aw_line "$i"
+echo -e "\n${YELLOW}Адрес:${NC}       $(aw_j "ifaces.$i.address")\n${YELLOW}Точка входа:${NC} $(aw_j "ifaces.$i.endpoint")"; [ -n "$(aw_j "ifaces.$i.zone")" ] && echo -e "${YELLOW}Зона:${NC}        $(aw_j "ifaces.$i.zone") ${DGRAY}(устройства могут ходить в туннель)${NC}"
+echo -e "\n${CYAN}1) ${GREEN}Проверить связь${NC}\n${CYAN}2) ${GREEN}Перезапустить${NC}"; if [ "$st" != steer ]; then [ "$(aw_j "ifaces.$i.enabled")" = false ] && echo -e "${CYAN}3) ${GREEN}Включить${NC}" || echo -e "${CYAN}3) ${GREEN}Выключить${NC}"; echo -e "${CYAN}4) ${GREEN}Подобрать точку входа${NC}\n${CYAN}5) ${GREEN}Сменить точку входа${NC}"; fi
+{ [ "$w" = true ] || [ "$st" = steer ]; } && echo -e "${CYAN}6) ${GREEN}Новые ключи ${NC}WARP"; echo -e "${CYAN}7) ${GREEN}Заменить конфиг${NC}\n${CYAN}8) ${GREEN}Показать конфиг${NC}"; [ "$st" != steer ] && echo -e "${CYAN}9) ${GREEN}Удалить интерфейс${NC}"
+echo -ne "${CYAN}Enter) ${GREEN}Вернуться в предыдущее меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read -r x
+case "$x" in 1) echo -e "\n${CYAN}Проверяем связь через ${NC}$nm"; r=$("$ZMB" awg_action test "$nm" 2>/dev/null); if [ "$(jsonfilter -s "$r" -e '@.ok' 2>/dev/null)" = true ]; then echo -e "${GREEN}Связь есть!${NC} IP: $(jsonfilter -s "$r" -e '@.ip') $(jsonfilter -s "$r" -e '@.colo') $(jsonfilter -s "$r" -e '@.city')"
+x=$(jsonfilter -s "$r" -e '@.loss' 2>/dev/null); [ -n "$x" ] && echo -e "${YELLOW}Потери:${NC} $x% ${YELLOW}задержка:${NC} $(jsonfilter -s "$r" -e '@.rtt') мс"; [ "$(jsonfilter -s "$r" -e '@.torn' 2>/dev/null)" = true ] && echo -e "${RED}Связь обрывается через пару секунд — так DPI рвёт туннель. Попробуйте другую точку входа${NC}"
+else echo -e "${RED}Связи нет!${NC} ${DGRAY}рукопожатие: $(zm_age "$(jsonfilter -s "$r" -e '@.hs_age' 2>/dev/null)")${NC}"; fi; echo; PAUSE ;;
+2) echo; zme_run awg awg_action restart "$nm"; PAUSE ;; 3) [ "$st" != steer ] || continue; echo; [ "$(aw_j "ifaces.$i.enabled")" = false ] && zme_run awg awg_action up "$nm" || zme_run awg awg_action down "$nm"; PAUSE ;;
+4) [ "$st" != steer ] || continue; echo -e "\n${MAGENTA}Подбираем точку входа для ${NC}$nm"; zme_run awg awg_action pick "$nm"; PAUSE ;; 5) [ "$st" != steer ] || continue; echo -ne "\n${YELLOW}Точка входа ${NC}(адрес:порт)${YELLOW}:${NC} "; read -r r; [ -n "$r" ] || continue; echo; zme_run awg awg_action endpoint "$nm|$r"; PAUSE ;;
+6) { [ "$w" = true ] || [ "$st" = steer ]; } || continue; zm_yes "\nПолучить новые ключи WARP для $nm? Точка входа и маскировка сохранятся" || continue; echo -e "\n${MAGENTA}Генерируем новый WARP для ${NC}$nm"; zme_run awg awg_action regen "$nm"; PAUSE ;;
+7) clear; echo -e "${MAGENTA}Новый конфиг для ${NC}$nm"; aw_conf_in "$f" || continue; echo -e "\n${MAGENTA}Применяем конфиг ${NC}$nm"; zme_run awg awg_action replace "$nm|$(cat "$f")"; rm -f "$f"; PAUSE ;;
+8) clear; echo -e "${MAGENTA}Конфиг ${NC}$nm\n"; jsonfilter -s "$("$ZMB" awg_action export "$nm" 2>/dev/null)" -e '@.content' 2>/dev/null; echo; PAUSE ;;
+9) [ "$st" != steer ] || continue; zm_yes "\nУдалить интерфейс $nm?" || continue; echo; zme_run awg awg_action delete "$nm" && { PAUSE; return; }; PAUSE ;; *) return ;; esac; done; }
+AWG_MENU() { local inst n i x; zme_need awg_action || return; while true; do aw_load; inst=$(aw_j installed); n=$(zjn "$AW_F" ifaces); clear; echo -e "${MAGENTA}Меню AmneziaWG${NC}\n${DGRAY}WireGuard с маскировкой: провайдеру сложнее заметить и заблокировать туннель${NC}\n"
+if [ "$inst" = true ]; then x="${GREEN}установлен ${NC}$(aw_j tools)"; [ "$(aw_j module)" = true ] || x="$x ${RED}(модуль ядра не загружен)${NC}"; [ "$(aw_j proto)" = true ] || x="$x ${RED}(нет поддержки в сети)${NC}"; echo -e "${YELLOW}AmneziaWG:${NC}  $x"; else echo -e "${YELLOW}AmneziaWG:${NC}  ${RED}не установлен${NC}"; fi
+[ "$(aw_j warp_conf)" = true ] && echo -e "${YELLOW}WARP.conf:${NC}  ${GREEN}есть ${DGRAY}($(aw_j warp_endpoint))${NC}" || echo -e "${YELLOW}WARP.conf:${NC}  ${NC}не сгенерирован"; [ "$(aw_j running)" = true ] && echo -e "${YELLOW}Сейчас выполняется операция...${NC}"
+if [ "$n" -gt 0 ]; then echo -e "${YELLOW}Интерфейсы:${NC}"; i=0; while [ "$i" -lt "$n" ]; do aw_line "$i"; i=$((i + 1)); done; fi
+[ "$inst" = true ] && echo -e "\n${CYAN}1) ${GREEN}Удалить ${NC}AmneziaWG" || echo -e "\n${CYAN}1) ${GREEN}Установить ${NC}AmneziaWG"
+echo -e "${CYAN}2) ${GREEN}Сгенерировать ${NC}WARP"; [ "$inst" = true ] && echo -e "${CYAN}3) ${GREEN}Создать интерфейс${NC}"; [ "$n" -gt 0 ] && echo -e "${CYAN}4) ${GREEN}Управление интерфейсами${NC}"; [ "$(aw_j mihomo)" = true ] && [ "$(aw_j warp_conf)" = true ] && echo -e "${CYAN}5) ${GREEN}Отправить ${NC}WARP.conf ${GREEN}в ${NC}Mihomo"
+if [ "$inst" = true ]; then { [ "$(aw_j module)" = true ] && [ "$(aw_j proto)" = true ]; } && echo -e "${CYAN}r) ${GREEN}Переустановить ${NC}AmneziaWG" || echo -e "${CYAN}r) ${GREEN}Доустановить ${NC}AmneziaWG"; fi; echo -ne "${CYAN}Enter) ${GREEN}Вернуться в предыдущее меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read -r x
+case "$x" in 1) if [ "$inst" = true ]; then zm_yes "\nУдалить AmneziaWG? Будут удалены пакеты и интерфейсы, созданные здесь" || continue; echo -e "\n${MAGENTA}Удаляем AmneziaWG${NC}"; zme_run awg awg_action remove
+else pkg_is_installed amneziawg-tools && { echo -e "\nAmneziaWG ${YELLOW}уже установлен из меню ${NC}NetShift"; zm_yesd "Доустановить через Zapret Manager?" || continue; }; echo -e "\n${MAGENTA}Устанавливаем AmneziaWG${NC}\n${DGRAY}Сеть может ненадолго пропасть${NC}"; zme_run awg awg_action install; fi; PAUSE ;;
+r|R|к|К) [ "$inst" = true ] || continue; if [ "$(aw_j module)" = true ] && [ "$(aw_j proto)" = true ]; then echo -e "\n${MAGENTA}Переустанавливаем AmneziaWG${NC}"; zme_run awg awg_action update; else echo -e "\n${MAGENTA}Доустанавливаем AmneziaWG${NC}"; zme_run awg awg_action install; fi; PAUSE ;; 2) aw_gen ;; 3) [ "$inst" = true ] && aw_create ;;
+4) [ "$n" -gt 0 ] || continue; if [ "$n" = 1 ]; then aw_iface 0; else clear; echo -e "${MAGENTA}Выберите интерфейс${NC}\n"; i=0; while [ "$i" -lt "$n" ]; do echo -e "${CYAN}$(printf '%2d' $((i + 1)))) ${NC}$(aw_j "ifaces.$i.name")"; i=$((i + 1)); done; echo -ne "${CYAN}Enter) ${GREEN}Вернуться${NC}\n\n${YELLOW}Номер:${NC} "; read -r x
+case "$x" in ''|*[!0-9]*) continue ;; esac; [ "$x" -ge 1 ] && [ "$x" -le "$n" ] && aw_iface $((x - 1)); fi ;; 5) [ "$(aw_j warp_conf)" = true ] || continue; echo -e "\n${MAGENTA}Добавляем WARP в Mihomo${NC}"; zme_run mixomo_warp_integrate awg_action mihomo; PAUSE ;; *) return ;; esac; done; }
+# ==========================================
+# Автоперезапуск TG WS Proxy и автообновление исключений
+# ==========================================
+tg_auto_get() { grep -F "# zm-tg-auto-$1=" "$CRON_FILE" 2>/dev/null | head -n1 | sed 's/.*=//'; }
+tg_auto_text() { case "$(tg_auto_get "$1")" in h1) echo -e "${GREEN}каждый час${NC}" ;; h*) echo -e "${GREEN}каждые ${NC}$(tg_auto_get "$1" | tr -d h)${GREEN} ч${NC}" ;; *) echo -e "${NC}выключен" ;; esac; }
+TG_AUTO_MENU() { local x id nm v; zme_need tg_action || return; while :; do clear; echo -e "${MAGENTA}Автоперезапуск TG WS Proxy${NC}\n${DGRAY}Перезапуск по расписанию, а сторож поднимает упавший прокси в течение пары минут${NC}\n"
+[ -f "$INIT_PATH_GO" ] && echo -e "${YELLOW}SOCKS5:${NC}   $(tg_auto_text socks5)"; [ -f "$INIT_PATH_RS" ] && echo -e "${YELLOW}Rust:${NC}     $(tg_auto_text rust)"; [ -f /etc/init.d/tg-ws-proxy ] && echo -e "${YELLOW}MTProto:${NC}  $(tg_auto_text mtproto)"; [ -f /etc/init.d/tgws ] && echo -e "${YELLOW}sTGWS:${NC}    $(tg_auto_text tgws)"
+[ -f "$ZME_DIR/state/tg.watch" ] && echo -e "${YELLOW}Сторож:${NC}   ${GREEN}включён${NC}" || echo -e "${YELLOW}Сторож:${NC}   ${NC}выключен"; echo
+[ -f "$INIT_PATH_GO" ] && echo -e "${CYAN}1) ${GREEN}Расписание для ${NC}SOCKS5"; [ -f "$INIT_PATH_RS" ] && echo -e "${CYAN}2) ${GREEN}Расписание для ${NC}Rust"; [ -f /etc/init.d/tg-ws-proxy ] && echo -e "${CYAN}3) ${GREEN}Расписание для ${NC}MTProto"; [ -f /etc/init.d/tgws ] && echo -e "${CYAN}4) ${GREEN}Расписание для ${NC}sTGWS"
+[ -f "$ZME_DIR/state/tg.watch" ] && echo -e "${CYAN}5) ${GREEN}Выключить сторожа${NC}" || echo -e "${CYAN}5) ${GREEN}Включить сторожа${NC}"; echo -ne "${CYAN}Enter) ${GREEN}Вернуться в предыдущее меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read -r x
+case "$x" in 1) id=socks5; nm=SOCKS5; [ -f "$INIT_PATH_GO" ] || continue ;; 2) id=rust; nm=Rust; [ -f "$INIT_PATH_RS" ] || continue ;; 3) id=mtproto; nm=MTProto; [ -f /etc/init.d/tg-ws-proxy ] || continue ;; 4) id=tgws; nm=sTGWS; [ -f /etc/init.d/tgws ] || continue ;;
+5) [ -f "$ZME_DIR/state/tg.watch" ] && v=off || v=on; echo; zme_run tg tg_action watch "$v"; PAUSE; continue ;; *) return ;; esac
+echo -e "\n${MAGENTA}Расписание для $nm${NC}\n${CYAN}1) ${GREEN}Каждый час${NC}\n${CYAN}2) ${GREEN}Каждые ${NC}2${GREEN} часа${NC}\n${CYAN}3) ${GREEN}Каждые ${NC}3${GREEN} часа${NC}\n${CYAN}4) ${GREEN}Каждые ${NC}6${GREEN} часов${NC}\n${CYAN}5) ${GREEN}Каждые ${NC}12${GREEN} часов${NC}\n${CYAN}6) ${GREEN}Выключить${NC}"
+echo -ne "${CYAN}Enter) ${GREEN}Вернуться${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read -r v; case "$v" in 1) v=h1 ;; 2) v=h2 ;; 3) v=h3 ;; 4) v=h6 ;; 5) v=h12 ;; 6) v=off ;; *) continue ;; esac; echo; zme_run tg tg_action "$id" "auto=$v"; PAUSE; done; }
+excl_auto_get() { grep -F "# zm-excl-auto=" "$CRON_FILE" 2>/dev/null | head -n1 | sed 's/.*=h//'; }
+EXCL_AUTO_MENU() { local v; [ -f /etc/init.d/zapret ] || { echo -e "\nZapret ${RED}не установлен!${NC}\n"; PAUSE; return; }; zme_need zapret_excl_auto_set || return; v=$(excl_auto_get)
+echo -e "\n${MAGENTA}Автообновление списка исключений Zapret${NC}\n${DGRAY}Скачивает свежий список доменов-исключений и перезапускает Zapret, только если список изменился${NC}"; [ -n "$v" ] && echo -e "${YELLOW}Сейчас:${NC} каждые $v ч" || echo -e "${YELLOW}Сейчас:${NC} выключено"
+echo -e "\n${CYAN}1) ${GREEN}Каждые ${NC}2${GREEN} часа${NC}\n${CYAN}2) ${GREEN}Каждые ${NC}4${GREEN} часа${NC}\n${CYAN}3) ${GREEN}Каждые ${NC}6${GREEN} часов${NC}\n${CYAN}4) ${GREEN}Каждые ${NC}12${GREEN} часов${NC}\n${CYAN}5) ${GREEN}Выключить${NC}"; echo -ne "${CYAN}Enter) ${GREEN}Вернуться${NC}\n\n${YELLOW}Выберите пункт:${NC} "; read -r v
+case "$v" in 1) v=h2 ;; 2) v=h4 ;; 3) v=h6 ;; 4) v=h12 ;; 5) v=off ;; *) return ;; esac; echo; zme_run excl zapret_list_restore "auto=$v"; PAUSE; }
 DELETE_SPL() { echo -e "\n${MAGENTA}Удаляем splify${NC}"; 
 # ──────────────────────────── 1. stop splify services ───────────────────────
 echo -e "${CYAN}Останавливаем службы${NC}"; for s in splify splify-agent; do if [ -x "/etc/init.d/$s" ]; then "/etc/init.d/$s" stop >/dev/null 2>&1; "/etc/init.d/$s" disable >/dev/null 2>&1; fi; done; if [ -x /etc/init.d/splify-singbox ]; then /etc/init.d/splify-singbox stop >/dev/null 2>&1; /etc/init.d/splify-singbox disable >/dev/null 2>&1; fi
@@ -885,7 +1212,7 @@ then DOH_STATUS="GeoHide RU"; elif grep -q "dns.yo1nk.app" "$fileDoH"; then DOH_
 elif grep -q "dns.google" "$fileDoH"; then DOH_STATUS="Google"; elif grep -q "dns.astracat.ru" "$fileDoH"; then DOH_STATUS="dns.astracat.ru"; elif grep -q "dns.nullsproxy.com" "$fileDoH"; then DOH_STATUS="dns.nullsproxy.com"; else DOH_STATUS="установлен"; fi; }
 D_o_H(){ if { [ "$PKG_IS_APK" -eq 1 ] && apk info -e https-dns-proxy >/dev/null 2>&1; } || { [ "$PKG_IS_APK" -eq 0 ] && opkg list-installed | grep -q '^https-dns-proxy '; }; then echo -e "\n${MAGENTA}Удаляем DNS over HTTPS${NC}\n${CYAN}Удаляем пакеты${NC}"; $DELETE https-dns-proxy luci-app-https-dns-proxy >/dev/null 2>&1; echo -e "${CYAN}Удаляем файлы конфигурации${NC}"; rm -f /etc/config/https-dns-proxy /etc/init.d/https-dns-proxy
 sed -i -e "/option doh_backup_noresolv '-1'/d" -e "/option noresolv '1'/d" -e "/list doh_backup_server ''/d" -e "/list server '\/mask\.icloud\.com\/'/d" -e "/list server '\/mask-h2\.icloud\.com\/'/d" -e "/list server '\/use-application-dns\.net\/'/d" -e "/list server '127\.0\.0\.1#5053'/d" -e "/list server '127\.0\.0\.1#5054'/d" -e "/list doh_server '127\.0\.0\.1#5053'/d" -e "/list doh_server '127\.0\.0\.1#5054'/d" /etc/config/dhcp
-/etc/init.d/dnsmasq restart >/dev/null 2>&1; echo -e "DNS over HTTPS${GREEN} удалён!${NC}\n"; PAUSE; else if pkg_is_installed netshift; then echo -e "\n${RED}Обнаружен ${NC}NetShift${RED}!"; echo -e "${YELLOW}Удалите ${NC}NetShift\n"; PAUSE; return; fi; echo -e "\n${MAGENTA}Устанавливаем DNS over HTTPS${NC}"; update_packages || return; echo -e "${CYAN}Устанавливаем ${NC}https-dns-proxy"
+/etc/init.d/dnsmasq restart >/dev/null 2>&1; echo -e "DNS over HTTPS${GREEN} удалён!${NC}\n"; PAUSE; else if pkg_is_installed netshift; then echo -e "\n${RED}Обнаружен ${NC}NetShift${RED}!"; echo -e "${YELLOW}Удалите ${NC}NetShift\n"; PAUSE; return; fi; if [ -x /usr/bin/forkop ]; then echo -e "\n${RED}Обнаружен ${NC}Forkozz${RED}!"; echo -e "${YELLOW}Forkozz шифрует DNS сам — DNS over HTTPS с ним не нужен${NC}\n"; PAUSE; return; fi; echo -e "\n${MAGENTA}Устанавливаем DNS over HTTPS${NC}"; update_packages || return; echo -e "${CYAN}Устанавливаем ${NC}https-dns-proxy"
 $INSTALL https-dns-proxy >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при установке!${NC}\n"; PAUSE; return; }; echo -e "${CYAN}Устанавливаем ${NC}luci-app-https-dns-proxy"; $INSTALL luci-app-https-dns-proxy >/dev/null 2>&1 || { echo -e "\n${RED}Ошибка при установке!${NC}\n"; PAUSE; return; }; echo -e "DNS over HTTPS${GREEN} установлен!${NC}\n"; PAUSE; fi; }
 doh_install() { [ -f "$fileDoH" ] && return 0; echo -e "\n${RED}DNS over HTTPS не установлен!${NC}\n"; PAUSE; return 1; }
 doh_set=$(printf "%s\n" "config main 'config'" "	option canary_domains_icloud '1'" "	option canary_domains_mozilla '1'" "	option dnsmasq_config_update '*'" "	option force_dns '1'" "	option notrack_dns '1'" "	list force_dns_port '53'" "	list force_dns_port '853'" "	list force_dns_src_interface 'lan'" "	option procd_trigger_wan6 '0'" "	option heartbeat_domain 'heartbeat.mossdef.org'" "	option heartbeat_sleep_timeout '10'" "	option heartbeat_wait_timeout '10'" "	option user 'nobody'" "	option group 'nogroup'" "	option listen_addr '127.0.0.1'" "	option force_ip_family 'auto'")
@@ -925,9 +1252,10 @@ uci commit firewall >/dev/null 2>&1; /etc/init.d/firewall restart >/dev/null 2>&
 install_zapret_manager_luci() {
 zm_luci_state
 if [ "$ZML_ACT" = remove ]; then
+if ZMJ=$(zme_busy); then echo -e "\n${YELLOW}Сейчас идёт операция (${NC}$ZMJ${YELLOW}) — дождитесь её окончания!${NC}\n"; PAUSE; return; fi
 echo -e "\n${MAGENTA}Удаляем Zapret Manager для WEB + LuCI${NC}"
 [ -x /opt/zapret-manager-luci/backend.sh ] && /opt/zapret-manager-luci/backend.sh redbtn_panel_gone >/dev/null 2>&1
-rm -rf /opt/zapret-manager-luci /usr/lib/zapret-manager* /usr/libexec/rpcd/zapret-manager* \
+rm -rf /usr/lib/zapret-manager* /usr/libexec/rpcd/zapret-manager* \
 	/usr/share/luci/menu.d/luci-app-zapret-manager.json \
 	/usr/share/rpcd/acl.d/luci-app-zapret-manager.json \
 	/www/luci-static/resources/view/zapret-manager* \
@@ -935,13 +1263,16 @@ rm -rf /opt/zapret-manager-luci /usr/lib/zapret-manager* /usr/libexec/rpcd/zapre
 	/www/luci-static/resources/bytetube \
 	/www/luci-static/resources/view/bytetube \
 	/www/zm /www/zm-webui.html \
-	/tmp/zapret-manager* /tmp/zm_uninstall_panel.sh "$ZM_LUCI_CACHE" \
+	/tmp/zm_uninstall_panel.sh "$ZM_LUCI_CACHE" \
 	/tmp/luci-indexcache* /tmp/luci-modulecache/* 2>/dev/null
-[ -s /etc/zm-steer/owned ] || rm -rf /usr/share/zm-redbtn
+if zme_keep; then ZMK=1; rm -f /opt/zapret-manager-luci/rpcd-plugin.zm-new 2>/dev/null
+else ZMK=0; rm -rf /opt/zapret-manager-luci /tmp/zapret-manager* 2>/dev/null; [ -s /etc/zm-steer/owned ] || rm -rf /usr/share/zm-redbtn
+grep -q '/opt/zapret-manager-luci/backend.sh' "$CRON_FILE" 2>/dev/null && { sed -i '\#/opt/zapret-manager-luci/backend.sh#d' "$CRON_FILE"; /etc/init.d/cron restart >/dev/null 2>&1; }; fi
 uci -q delete uhttpd.zmweb && uci -q commit uhttpd
 /etc/init.d/rpcd restart >/dev/null 2>&1
 /etc/init.d/uhttpd restart >/dev/null 2>&1
 echo -e "Zapret Manager ${GREEN}для ${NC}WEB ${GREEN}+ ${NC}LuCI ${GREEN}удалён!${NC}\n"
+[ "$ZMK" = 1 ] && echo -e "${YELLOW}Движок Zapret Manager оставлен — он нужен ${NC}Steer${YELLOW}, ${NC}Forkozz${YELLOW}, ${NC}AmneziaWG${YELLOW} и заданиям по расписанию${NC}\n"
 else
 [ "$ZML_ACT" = update ] && echo -e "\n${MAGENTA}Обновляем Zapret Manager для WEB + LuCI${NC} ${ZML_INST:-?} → $ZML_LAST"
 rm -f "$ZM_LUCI_CACHE"
@@ -1483,10 +1814,10 @@ echo -e "${YELLOW}Ссылка для подключения:${NC}\ntg://proxy?s
 case "$GO_ACTION" in install) echo -e "${CYAN}2)${GREEN} Установить ${NC}TG WS Proxy SOCKS5" ;; update) echo -e "${CYAN}2)${GREEN} Обновить ${NC}TG WS Proxy SOCKS5" ;;
 installed) echo -e "${CYAN}2)${GREEN} Удалить ${NC}TG WS Proxy SOCKS5" ;; esac; case "$RS_ACTION" in install) echo -e "${CYAN}3)${GREEN} Установить ${NC}TG WS Proxy Rust" ;; update) echo -e "${CYAN}3)${GREEN} Обновить ${NC}TG WS Proxy Rust" ;;
 installed) echo -e "${CYAN}3)${GREEN} Удалить ${NC}TG WS Proxy Rust" ;; esac; case "$MT_ACTION" in install) echo -e "${CYAN}4)${GREEN} Установить ${NC}TG WS Proxy MTProto" ;; update) echo -e "${CYAN}4)${GREEN} Обновить ${NC}TG WS Proxy MTProto" ;;
-installed) echo -e "${CYAN}4)${GREEN} Удалить ${NC}TG WS Proxy MTProto" ;; esac; echo -e "${CYAN}5)${GREEN} Удалить все ${NC}TG WS Proxy\n${CYAN}6)${GREEN} Перезапустить все ${NC}TG WS Proxy\n${CYAN}Enter) ${GREEN}Вернуться в предыдущее меню${NC}\n"; echo -en "${YELLOW}Выберите пункт: ${NC}"; read choice
+installed) echo -e "${CYAN}4)${GREEN} Удалить ${NC}TG WS Proxy MTProto" ;; esac; echo -e "${CYAN}5)${GREEN} Удалить все ${NC}TG WS Proxy\n${CYAN}6)${GREEN} Перезапустить все ${NC}TG WS Proxy\n${CYAN}7)${GREEN} Автоперезапуск ${NC}TG WS Proxy\n${CYAN}Enter) ${GREEN}Вернуться в предыдущее меню${NC}\n"; echo -en "${YELLOW}Выберите пункт: ${NC}"; read choice
 case "$choice" in 2) case "$GO_ACTION" in install|update) install_TG_GO ;; installed) delete_TG_GO ;; esac ;; 3) case "$RS_ACTION" in install|update) install_TG_RS ;; installed) delete_TG_RS ;; esac ;; 4) case "$MT_ACTION" in install|update) install_update_TG_PKG ;;
 installed) remove_TG_PKG ;; esac ;; 1) menu_TGWS ;; 5) echo -e "\n${MAGENTA}Удаляем все TG WS Proxy${NC}"; for s in /etc/init.d/tg-ws* /etc/init.d/tgws; do [ -e "$s" ] || continue; "$s" stop >/dev/null 2>&1; "$s" disable >/dev/null 2>&1; done
-$DELETE tg-ws* tgws >/dev/null 2>&1; rm -rf /usr/bin/tg-ws* /etc/init.d/tg-ws* /etc/init.d/tgws /etc/tg-ws* /etc/tgws /etc/config/tg-ws* /etc/config/tgws; echo -e "${GREEN}Все ${NC}TG WS Proxy ${GREEN}удалены!${NC}\n"; PAUSE;; 6) restart_all_TG ;; *) break ;; esac; done; }
+$DELETE tg-ws* tgws >/dev/null 2>&1; rm -rf /usr/bin/tg-ws* /etc/init.d/tg-ws* /etc/init.d/tgws /etc/tg-ws* /etc/tgws /etc/config/tg-ws* /etc/config/tgws; grep -q '# zm-tg-auto-' "$CRON_FILE" 2>/dev/null && { sed -i '/# zm-tg-auto-/d' "$CRON_FILE"; /etc/init.d/cron restart >/dev/null 2>&1; }; echo -e "${GREEN}Все ${NC}TG WS Proxy ${GREEN}удалены!${NC}\n"; PAUSE;; 6) restart_all_TG ;; 7) TG_AUTO_MENU ;; *) break ;; esac; done; }
 get_TG_versions() { INSTALLED_VER_GO=""; INSTALLED_VER_RS=""; INSTALLED_VER_MT=""; [ -s "$BIN_VER_GO" ] && INSTALLED_VER_GO="$(cat "$BIN_VER_GO")"; [ -s "$BIN_VER_RS" ] && INSTALLED_VER_RS="$(cat "$BIN_VER_RS")"; if command -v opkg >/dev/null 2>&1
 then INSTALLED_VER_MT="$(opkg list-installed 2>/dev/null | grep '^tg-ws-proxy' | awk '{print $3}' | cut -d'-' -f1)"; else INSTALLED_VER_MT="$(apk list -I 2>/dev/null | grep '^tg-ws-proxy-' | sed -E 's/tg-ws-proxy-([0-9.]+).*/\1/')"; fi; }
 # ==========================================
@@ -1576,7 +1907,7 @@ else echo -e "${CYAN}2) ${GREEN}Установить ${NC}ByeDPI"; fi; if pkg_is
 else echo -e "${CYAN}3) ${GREEN}Установить ${NC}AmneziaWG"; fi; if uci -q get network.AWG >/dev/null 2>&1; then echo -e "${CYAN}4) ${GREEN}Удалить ${NC}интерфейс AWG"; else echo -e "${CYAN}4) ${GREEN}Установить ${NC}интерфейс AWG"; fi
 if [ -f /etc/config/netshift ] && grep -q "^[[:space:]]*option subscription_url" /etc/config/netshift; then echo -e "${CYAN}5) ${GREEN}Сменить ${NC}VPN подписку${GREEN} в ${NC}NetShift"; else echo -e "${CYAN}5) ${GREEN}Интегрировать ${NC}VPN подписку${GREEN} в ${NC}NetShift"; fi
 echo -e "${CYAN}6) ${GREEN}Интегрировать ${NC}AWG${GREEN} в ${NC}NetShift"; echo -e "${CYAN}7) ${GREEN}Интегрировать ${NC}ByeDPI${GREEN} в ${NC}NetShift"; if pkg_is_installed byedpi; then echo -e "${CYAN}8) ${GREEN}Изменить стратегию ${NC}ByeDPI"; fi
-echo -e "${CYAN}Enter) ${GREEN}Вернуться в предыдущее меню${NC}"; echo -ne "\n${YELLOW}Выберите пункт:${NC} "; read -r choicePOD; case "$choicePOD" in 1) PODKOP_INSTALL ;; 2) BYEDPI_INSTALL ;;
+echo -e "${CYAN}Enter) ${GREEN}Вернуться в предыдущее меню${NC}"; echo -ne "\n${YELLOW}Выберите пункт:${NC} "; read -r choicePOD; case "$choicePOD" in 1) if ! pkg_is_installed netshift && [ -x /usr/bin/forkop ]; then echo -e "\n${RED}Обнаружен ${NC}Forkozz${RED}!${NC}\n${YELLOW}Forkozz и NetShift работают на sing-box и перехватывают один и тот же трафик — удалите ${NC}Forkozz\n"; PAUSE; else PODKOP_INSTALL; fi ;; 2) BYEDPI_INSTALL ;;
 3) if pkg_is_installed amneziawg-tools && pkg_is_installed luci-proto-amneziawg && pkg_is_installed kmod-amneziawg; then if pkg_is_installed splify; then echo -e "\n${RED}Удаление невозможно!${NC}"; echo -e "AmneziaWG ${YELLOW}используется в ${NC}splify\n"; PAUSE; elif grep -q '^net zmwarp' /etc/zm-steer/owned 2>/dev/null; then echo -e "\n${RED}Удаление невозможно!${NC}"; echo -e "AmneziaWG ${YELLOW}используется в ${NC}Steer\n"; PAUSE; else AWG_DELETE; fi; else install_AWG; echo -e "\nAmneziaWG ${GREEN}установлен!${NC}\n"; PAUSE; fi ;;
 4) if uci -q get network.AWG >/dev/null 2>&1; then INT_DELETE; else install_AWG_INTER; echo -e "\n\nИнтерфейс AWG ${GREEN}установлен!${NC}\n"; fi ;; 5) PODKOP_VPN ;; 6) integration_AWG ;; 7) BYEDPI_NETSHIFT ;; 8) if pkg_is_installed byedpi; then fix_strategy; fi ;; *) return ;; esac; done; }
 # ==========================================
@@ -1605,6 +1936,8 @@ get_TG_versions
         fi
         is_expert_mode && echo -e "${YELLOW}Expert mode:${NC}         ${GREEN}включён${NC}"
         st_zm_owned && echo -e "${YELLOW}Steer:${NC}               $(st_state_line)"
+        [ -x /usr/bin/forkop ] && [ -d /usr/lib/forkop ] && echo -e "${YELLOW}Forkozz:${NC}             $(fk_state_line)"
+        AW_LINE=$(aw_state_line); [ -n "$AW_LINE" ] && echo -e "${YELLOW}AmneziaWG:${NC}           $AW_LINE"
         case "$(/etc/init.d/mihomo status 2>/dev/null)" in
             running) echo -e "${YELLOW}Mixomo:              ${GREEN}запущен${NC}" ;;
             inactive) echo -e "${YELLOW}Mixomo:              ${RED}остановлен${NC}" ;;
@@ -1801,7 +2134,7 @@ echo -e "\n${CYAN}1) ${GREEN}Установить ${NC}Mixomo"; echo -e "${CYAN}
 then echo -e "${CYAN}4) ${GREEN}Сменить ${NC}VPN${GREEN} подписку${NC}"; else echo -e "${CYAN}4) ${GREEN}Интегрировать ${NC}VPN${GREEN} подписку в ${NC}Mihomo${NC}"; fi; echo -e "${CYAN}5) ${GREEN}Сгенерировать ${NC}WARP"
 echo -e "${CYAN}6) ${GREEN}Интегрировать ${NC}/root/WARP.conf${GREEN} в ${NC}Mihomo"; echo -e "${CYAN}7) ${GREEN}Выбрать и установить панель для ${NC}Mihomo"; if grep -qF "/etc/init.d/mihomo restart" /etc/crontabs/root 2>/dev/null
 then echo -e "${CYAN}8) ${GREEN}Выключить автоперезапуск ${NC}Mihomo"; else echo -e "${CYAN}8) ${GREEN}Включить автоперезапуск ${NC}Mihomo"; fi; [ -n "$Magi_INSTALL_VER" ] && { [ "$Magi_INSTALL_VER" != "$MT_VERSION" ] && echo -e "${CYAN}9) ${GREEN}Обновить ${NC}MagiTrickle"; }
-echo -e "${CYAN}Enter) ${GREEN}Вернуться в предыдущее меню\n"; echo -ne "${YELLOW}Выберите пункт: ${NC}"; read choiceM; case "$choiceM" in 1) wget -q -O - ${GH_RAW}/StressOzz/Zapret-Manager/refs/heads/main/files/Mixomo/mixomo_openwrt_install.sh | sh; PAUSE ;;
+echo -e "${CYAN}Enter) ${GREEN}Вернуться в предыдущее меню\n"; echo -ne "${YELLOW}Выберите пункт: ${NC}"; read choiceM; case "$choiceM" in 1) if [ -x /usr/bin/forkop ]; then echo -e "\n${RED}Обнаружен ${NC}Forkozz${RED}!${NC}\n${YELLOW}Mixomo и Forkozz перехватывают один и тот же трафик и DNS — удалите ${NC}Forkozz\n"; PAUSE; continue; fi; wget -q -O - ${GH_RAW}/StressOzz/Zapret-Manager/refs/heads/main/files/Mixomo/mixomo_openwrt_install.sh | sh; PAUSE ;;
 2) wget -q -O - ${GH_RAW}/StressOzz/Zapret-Manager/refs/heads/main/files/Mixomo/mixomo_openwrt_delete.sh | sh; if bt_installed && ! pkg_is_installed hev-socks5-tunnel; then echo -e "${CYAN}Возвращаем ${NC}hev-socks5-tunnel${CYAN} для ${NC}ByeTube"; $INSTALL hev-socks5-tunnel >/dev/null 2>&1; /etc/init.d/hev-socks5-tunnel disable >/dev/null 2>&1; /etc/init.d/hev-socks5-tunnel stop >/dev/null 2>&1; /etc/init.d/bytetube restart >/dev/null 2>&1; fi; sed -i "\|$CRON_CMD|d" "$CRON_FILE" >/dev/null 2>&1; /etc/init.d/cron restart >/dev/null 2>&1; echo -e "\n${YELLOW}Рекомендую сделать перезагрузку роутера!${NC}\n"; PAUSE ;;
 3) check_mihomo || continue; magitrickle_config ;; 4) check_mihomo || continue; PODPISKA ;; 5) register_warp || return 1; choose_endpoint || return 1; WARP_TO_ROOT; echo; PAUSE ;; 6) check_mihomo || continue; wget -q -O - ${GH_RAW}/StressOzz/Zapret-Manager/refs/heads/main/files/Mixomo/WARP_to_conf.sh | sh; echo; PAUSE ;;
 7) check_mihomo || continue; UI_INSTALL ;; 8) check_mihomo || continue; MIXOMO_RESTART ;; 9) check_mihomo || continue; ARCH_MT=$(grep "^OPENWRT_ARCH=" /etc/os-release | cut -d'"' -f2); FILE_MT="/tmp/magitrickle.$RAZ"; URL_MT="${GH_MAIN}/MagiTrickle/MagiTrickle/releases/download/${MT_VERSION}/magitrickle_${MT_VERSION}-${SUF_MT}1_openwrt_${ARCH_MT}.$RAZ"
@@ -1972,6 +2305,7 @@ MENU_ZAPRET() {
         echo -e "${CYAN}3) ${GREEN}Меню тестирования стратегий${NC}"
         echo -e "${CYAN}4) ${GREEN}Меню автоподбора стратегий по расписанию${NC}"
         echo -e "${CYAN}5) ${GREEN}Меню настройки${NC} Discord"
+        [ -n "$(excl_auto_get)" ] && echo -e "${CYAN}6) ${GREEN}Автообновление списка исключений ${NC}(каждые $(excl_auto_get) ч)" || echo -e "${CYAN}6) ${GREEN}Автообновление списка исключений${NC}"
         echo -ne "${CYAN}Enter) ${GREEN}Вернуться в предыдущее меню${NC}\n\n${YELLOW}Выберите пункт:${NC} "
         read -r choiceZ1
         case "$choiceZ1" in
@@ -1979,12 +2313,13 @@ MENU_ZAPRET() {
         2) menu_str ;;
         3) TEST_menu;;
         4) AUTO_BEST_MENU;;
-        5) Discord_menu ;; 
+        5) Discord_menu ;;
+        6) EXCL_AUTO_MENU ;;
         
         *) return ;; esac
     done
 }
-show_menu() { get_versions; get_doh_status; show_current_strategy; RKN_Check; mkdir -p "$TMP_SF"; CURR=$(curr_MIR); clear; echo -e "╔═══════════════════════════════╗\n║  ${BLUE}Zapret Manager by StressOzz${NC}  ║\n╚═══════════════════════════════╝\n${DGRAY}тгк: ${NC}stressozz_manager${DGRAY} - заходи !\n${NC}StressKVN${DGRAY}-${DGRAY}VPN для всех устройств!${NC}\n"
+show_menu() { get_versions; get_doh_status; show_current_strategy; RKN_Check; mkdir -p "$TMP_SF"; CURR=$(curr_MIR); clear; echo -e "╔═══════════════════════════════╗\n║  ${BLUE}Zapret Manager by StressOzz${NC}  ║\n╚═══════════════════════════════╝\n${DGRAY}тгк: stressozz_manager - заходи !\n"
 if [ -f /etc/init.d/zapret ] && [ -f "$CONF" ] && grep -Eq "^[[:space:]]*option DISABLE_IPV6 '1'" "$CONF" && ping -6 -c 1 -W 2 google.com >/dev/null 2>&1; then echo -e "${RED}Обнаружен IPv6! ${GREEN}Включите ${NC}IPv6${GREEN} в системном меню!${NC}\n"; fi
 if [ ! -f /etc/init.d/zapret2 ]; then Z2_ACTION_TEXT="Установить"; Z2_ACTION_FUNC="install_zapret2"; elif [ "$INSTALLED_VER2" = "$ZAPRET2_VERSION" ]; then Z2_ACTION_TEXT="Удалить"; Z2_ACTION_FUNC="remove_zapret2"; else Z2_ACTION_TEXT="Обновить"; Z2_ACTION_FUNC="install_zapret2"; fi
 for pkg in byedpi youtubeUnblock; do if [ "$PKG_IS_APK" -eq 1 ]; then apk info -e "$pkg" >/dev/null 2>&1 && echo -e "${RED}Найден установленный ${NC}$pkg${RED}!${NC}\nZapret${RED} может работать некорректно с ${NC}$pkg${RED}!${NC}\n"
@@ -2001,20 +2336,23 @@ if grep -qE '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' "$EXCL_FILE" 2>/dev
         echo -e "${YELLOW}Исключённые IP:      ${GREEN}есть${NC}"
     fi
 fi
-echo -e "\n${CYAN}1) ${GREEN}Меню${NC} Zapret\n${CYAN}2) ${GREEN}$Z2_ACTION_TEXT${NC} Zapret2\n${CYAN}3) ${GREEN}Меню ${NC}Steer\n${CYAN}4) ${GREEN}Меню ${NC}Mixomo\n${CYAN}5) ${GREEN}Меню ${NC}ByeTube\n${CYAN}6) ${GREEN}Меню ${NC}NetShift\n${CYAN}7) ${GREEN}Меню ${NC}TG WS Proxy\n${CYAN}8) ${GREEN}Меню ${NC}DNS over HTTPS\n${CYAN}9) ${GREEN}Меню управления доменами в ${NC}hosts"
-echo -e "${CYAN}f) ${GREEN}Удалить ${NC}→${GREEN} установить ${NC}→${GREEN} настроить${NC} Zapret\n${CYAN}m) ${GREEN}Системное меню${NC}"; [ "$SHOW_S" = "1" ] && echo -e "${CYAN}s) ${GREEN}$S_ACTION${NC} $S_NAME"
-zm_luci_state; case "$ZML_ACT" in update) echo -e "${CYAN}w)${GREEN} Обновить ${NC}Zapret Manager ${GREEN}для ${NC}WEB ${GREEN}+ ${NC}LuCI ${GREEN}(${NC}${ZML_INST:-?} → $ZML_LAST${GREEN})${NC}" ;; remove) echo -e "${CYAN}w)${GREEN} Удалить ${NC}Zapret Manager ${GREEN}для ${NC}WEB ${GREEN}+ ${NC}LuCI" ;; *) echo -e "${CYAN}w)${GREEN} Установить ${NC}Zapret Manager ${GREEN}для ${NC}WEB ${GREEN}+ ${NC}LuCI" ;; esac
+echo -e "\n${CYAN} 1) ${GREEN}Меню${NC} Zapret\n${CYAN} 2) ${GREEN}$Z2_ACTION_TEXT${NC} Zapret2\n${CYAN} 3) ${GREEN}Меню ${NC}Steer\n${CYAN} 4) ${GREEN}Меню ${NC}Forkozz\n${CYAN} 5) ${GREEN}Меню ${NC}Mixomo\n${CYAN} 6) ${GREEN}Меню ${NC}ByeTube\n${CYAN} 7) ${GREEN}Меню ${NC}NetShift\n${CYAN} 8) ${GREEN}Меню ${NC}AmneziaWG"
+echo -e "${CYAN} 9) ${GREEN}Меню ${NC}TG WS Proxy\n${CYAN}10) ${GREEN}Меню ${NC}DNS over HTTPS\n${CYAN}11) ${GREEN}Меню управления доменами в ${NC}hosts"
+echo -e "${CYAN} f) ${GREEN}Удалить ${NC}→${GREEN} установить ${NC}→${GREEN} настроить${NC} Zapret\n${CYAN} m) ${GREEN}Системное меню${NC}"; [ "$SHOW_S" = "1" ] && echo -e "${CYAN} s) ${GREEN}$S_ACTION${NC} $S_NAME"
+zm_luci_state; case "$ZML_ACT" in update) echo -e "${CYAN} w)${GREEN} Обновить ${NC}Zapret Manager ${GREEN}для ${NC}WEB ${GREEN}+ ${NC}LuCI ${GREEN}(${NC}${ZML_INST:-?} → $ZML_LAST${GREEN})${NC}" ;; remove) echo -e "${CYAN} w)${GREEN} Удалить ${NC}Zapret Manager ${GREEN}для ${NC}WEB ${GREEN}+ ${NC}LuCI" ;; *) echo -e "${CYAN} w)${GREEN} Установить ${NC}Zapret Manager ${GREEN}для ${NC}WEB ${GREEN}+ ${NC}LuCI" ;; esac
 [ "$SHOW_S" = "2" ] && echo -e "${CYAN}s1) ${GREEN}$S1_ACTION${NC} Zapret\n${CYAN}s2) ${GREEN}$S2_ACTION${NC} Zapret2"; echo -ne "${CYAN}Enter) ${GREEN}Выход${NC}\n\n${YELLOW}Выберите пункт:${NC} " && read choice
 case "$choice" in 999) echo; uninstall_zapret "1"; install_Zapret "1"; curl -fsSL ${GH_RAW}/StressOzz/Test/refs/heads/main/zapret -o "$CONF"; hosts_add "$ALL_BLOCKS"; rm -f "$EXCLUDE_FILE"; wget -q -U "Mozilla/5.0" -O "$EXCLUDE_FILE" "$EXCLUDE_URL"; ZAPRET_RESTART; PAUSE;;
 1) MENU_ZAPRET;;
 2) $Z2_ACTION_FUNC;;
 3) STEER_MENU ;;
-4) MIXOMO_MENU;;
-5) BYETUBE_MENU;;
-6) PODKOP_menu;;
-7) menu_TG;;
-8) DoH_menu;;
-9) menu_hosts;;
+4) FORKOZZ_MENU ;;
+5) MIXOMO_MENU;;
+6) BYETUBE_MENU;;
+7) PODKOP_menu;;
+8) AWG_MENU ;;
+9) menu_TG;;
+10) DoH_menu;;
+11) menu_hosts;;
 f|F|а|А) zapret_key;;
 m|M|ь|Ь) sys_menu;;
 s|S|ы|Ы) toggle_zapret;;
