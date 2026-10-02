@@ -1,5 +1,5 @@
 #!/bin/sh
-# Version: 2.03
+# Version: 2.04
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -50,7 +50,7 @@ cat > '/opt/zapret-manager-luci/backend.sh.zm-new' << 'ZM_INSTALLER_EOF'
 umask 022
 
 CONF="/etc/config/zapret"
-ZM_VERSION="2.03"
+ZM_VERSION="2.04"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
@@ -594,6 +594,7 @@ _fk_watch() {
 	if _fk_up; then
 		rm -f "$f"
 		_job_running forkop || ! grep -qE "zm_exclude|zm_hide" /etc/config/forkop 2>/dev/null || _fk_uc fixsel >/dev/null 2>&1
+		_job_running forkop || _fk_heal
 		return 0
 	fi
 	_job_running forkop && return 0
@@ -607,6 +608,25 @@ _fk_watch() {
 	mkdir -p "$ZM_STATE_DIR"
 	echo "$((n + 1)) $now" > "$f"
 	_zm_run 180 /etc/init.d/forkop restart >/dev/null 2>&1
+	return 0
+}
+
+_fk_heal() {
+	local f="$JOBS_DIR/fk.heal" r n=0 name to
+	r="$(_fk_uc heal 2>/dev/null)"
+	[ "$(printf '%s' "$r" | jsonfilter -e '@.dead' 2>/dev/null)" = true ] || { rm -f "$f"; return 0; }
+	_zm_inet_ok || return 0
+	n="$(cat "$f" 2>/dev/null)"; n=$(( ${n:-0} + 1 ))
+	echo "$n" > "$f"
+	[ "$n" -ge 2 ] || return 0
+	[ "$n" -gt 2 ] && [ $((n % 15)) -ne 0 ] && return 0
+	r="$(_fk_uc heal "" switch 2>/dev/null)"
+	if [ "$(printf '%s' "$r" | jsonfilter -e '@.changed' 2>/dev/null)" = true ]; then
+		name="$(printf '%s' "$r" | jsonfilter -e '@.name' 2>/dev/null)"
+		to="$(printf '%s' "$r" | jsonfilter -e '@.to' 2>/dev/null)"
+		logger -t zapret-manager "Forkozz: сервер «$name» не отвечает — переключились на ${to:-автовыбор}"
+		rm -f "$f"
+	fi
 	return 0
 }
 
@@ -11772,6 +11792,7 @@ forkop_config_set() {
 		printf '{"error":"%s"}\n' "$(esc "Forkozz не принял настройки: ${err:-неизвестная ошибка}")"
 		return 1
 	}
+	rm -f "$ZM_STATE_DIR/fk.fell" "$JOBS_DIR/fk.heal"
 	echo "$res"
 }
 
@@ -12460,6 +12481,7 @@ function cat_meta() {
 	try { let j = json(s(getenv("ZM_FK_CAT"))); return type(j) == "object" ? j : null; } catch (e) { return null; }
 }
 
+const FELL_FILE = getenv("ZM_FK_FELL") || "/opt/zapret-manager-luci/state/fk.fell";
 const DNS_FO_STATE = getenv("ZM_FK_DNSFO") || "/var/run/forkop/dns-failover.json";
 
 function dns_info(st) {
@@ -12871,7 +12893,42 @@ function cmd_servers(sec) {
 	}
 	for (let t in keys(nodes))
 		if (!nodes[t].members && excl_hit(nodes[t].name, xv)) { nodes[t].hidden = true; if (index(g.all, t) >= 0) hidden++; }
-	out({ group: group_tag(sec), now: s(g.now), list: g.all, nodes, sub: sub_info(sec), hidden, exclude: s(xm.zm_exclude), hide_names: xv.h });
+	let fell = "";
+	try { fell = trim(s(fs.readfile(FELL_FILE))); } catch (e) { fell = ""; }
+	out({ group: group_tag(sec), now: s(g.now), list: g.all, nodes, sub: sub_info(sec), hidden, exclude: s(xm.zm_exclude), hide_names: xv.h, fell });
+}
+
+function proxy_alive(tag) {
+	let l = jcmd(BIN + " clash_api get_proxy_latency " + q(tag) + " 5000");
+	return type(l) == "object" && int(l.delay || 0) > 0;
+}
+
+function cmd_heal(sec, act) {
+	let j = jcmd(BIN + " clash_api get_proxies");
+	let px = j && type(j.proxies) == "object" ? j.proxies : null;
+	let g = px ? px[group_tag(sec)] : null;
+	if (!g || type(g.all) != "array" || s(g.now) == "") { out({ ok: false }); return; }
+	let now = s(g.now);
+	if (px[now] && lc(s(px[now].type)) == "urltest") { out({ ok: true, manual: false, dead: false }); return; }
+	if (proxy_alive(now) || proxy_alive(now)) { out({ ok: true, manual: true, dead: false }); return; }
+	let meta = jcmd(BIN + " get_outbound_metadata " + q(sec)) || {};
+	let names = type(meta.names) == "object" ? meta.names : {};
+	let nm = (t) => s(names[t] || t);
+	if (act != "switch") { out({ ok: true, manual: true, dead: true, name: nm(now) }); return; }
+	let xv = excl_vars(cursor().get_all(CFG, sec) || {});
+	let pickt = null;
+	for (let t in g.all) if (px[t] && lc(s(px[t].type)) == "urltest") { pickt = t; break; }
+	if (!pickt) {
+		for (let t in g.all) {
+			if (t == now || excl_hit(nm(t), xv)) continue;
+			if (proxy_alive(t)) { pickt = t; break; }
+		}
+	}
+	if (!pickt) { out({ ok: true, manual: true, dead: true, changed: false, name: nm(now) }); return; }
+	let r = jcmd(BIN + " clash_api set_group_proxy " + q(group_tag(sec)) + " " + q(pickt));
+	if (type(r) == "object" && (r.error || r.success === false)) { out({ ok: false, manual: true, dead: true, changed: false, name: nm(now) }); return; }
+	try { fs.writefile(FELL_FILE, nm(now) + "\n"); } catch (e) {}
+	out({ ok: true, manual: true, dead: true, changed: true, name: nm(now), to: px[pickt] && lc(s(px[pickt].type)) == "urltest" ? "" : nm(pickt) });
 }
 
 function cmd_fixsel(sec) {
@@ -12911,6 +12968,7 @@ function cmd_select(sec, tag) {
 	}
 	let j = jcmd(BIN + " clash_api set_group_proxy " + q(group_tag(sec)) + " " + q(tag));
 	if (type(j) == "object" && (j.error || j.success === false)) fail(s(j.error || j.message || "сервер не переключился"));
+	try { fs.unlink(FELL_FILE); } catch (e) {}
 	out({ ok: true });
 }
 
@@ -12990,6 +13048,7 @@ else if (mode == "servers") cmd_servers(sec);
 else if (mode == "latency") cmd_latency(sec);
 else if (mode == "select") cmd_select(sec, ARGV[2]);
 else if (mode == "fixsel") cmd_fixsel(sec);
+else if (mode == "heal") cmd_heal(sec, ARGV[2] || "");
 else if (mode == "hide") cmd_hide(sec);
 else if (mode == "diag") cmd_diag(sec);
 else fail("неизвестная команда");
@@ -21453,6 +21512,9 @@ return view.extend({
 				if (sub.used != null) srvCard.appendChild(row('Трафик', E('span', {}, fmtBytes(sub.used) + (sub.total ? ' из ' + fmtBytes(sub.total) : sub.unlimited ? ' · без лимита' : ''))));
 				if (sub.expire) srvCard.appendChild(row('Действует до', E('span', {}, fmtDate(sub.expire))));
 			}
+			if (servers.fell && (isAuto || nodeName(cur) !== servers.fell)) srvCard.appendChild(E('div', { 'class': 'zm-refresh-banner zm-show', 'role': 'note' }, [
+				E('span', {}, [ 'Сервер «', String(servers.fell), '» перестал отвечать — Forkozz сам переключился на ' + (isAuto ? 'автовыбор. Чтобы вернуть его, переключите режим на «Вручную» и выберите его в списке.' : 'другой рабочий сервер. Чтобы вернуть его, нажмите на него в списке.') ])
+			]));
 			if (auto) srvCard.appendChild(row('Режим', seg([ { id: 'auto', label: 'Авто' }, { id: 'manual', label: 'Вручную' } ], isAuto ? 'auto' : 'manual', function(m) {
 				if (m === 'auto') pickServer(autoTag, 'автовыбор');
 				else if (curTag) pickServer(curTag, nodeName(cur));
@@ -21801,12 +21863,6 @@ return view.extend({
 			miscCard.appendChild(sw(draft.lists_via, 'Скачивать списки сервисов через VPN', 'Списки будут качаться через ваше подключение (сервер, подписку или туннель). Помогает, если GitHub у провайдера не открывается.', function() { set('lists_via', !draft.lists_via); }));
 			miscCard.appendChild(row('Обновлять списки', seg(LIST_IV, draft.list_interval, function(v) { set('list_interval', v); })));
 			miscCard.appendChild(E('div', { 'class': 'zm-actions' }, [ E('button', { 'class': 'cbi-button', 'disabled': !configured() || busy ? '' : null, 'click': function() { act('lists'); } }, 'Обновить списки сервисов сейчас') ]));
-			if (draft.mode === 'sub') {
-				miscCard.appendChild(E('h4', { 'style': 'margin:18px 0 4px' }, 'Серверы подписки'));
-				miscCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:0' }, 'Список VPN-серверов из вашей подписки — Forkozz скачивает его заново по расписанию.'));
-				miscCard.appendChild(row('Обновлять серверы', seg(SUB_IV, draft.sub_interval, function(v) { set('sub_interval', v); })));
-				miscCard.appendChild(E('div', { 'class': 'zm-actions' }, [ E('button', { 'class': 'cbi-button', 'disabled': !configured() || cfg.mode !== 'sub' || busy ? '' : null, 'click': function() { act('subs'); } }, 'Обновить серверы подписки сейчас') ]));
-			}
 			var extra = (cfg && cfg.extra) || [];
 			if (extra.length) miscCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Есть ещё ' + nn(extra.length, 'секция', 'секции', 'секций') + ', созданных раньше (' + extra.map(function(x) { return x.label; }).join(', ') + '). Они работают как прежде.'));
 
