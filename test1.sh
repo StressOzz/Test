@@ -1,5 +1,5 @@
 #!/bin/sh
-# Version: 1.99
+# Version: 2.03
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -50,7 +50,7 @@ cat > '/opt/zapret-manager-luci/backend.sh.zm-new' << 'ZM_INSTALLER_EOF'
 umask 022
 
 CONF="/etc/config/zapret"
-ZM_VERSION="1.99"
+ZM_VERSION="2.03"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
@@ -258,6 +258,7 @@ _zm_pkg_fmt() {
 		/^\([0-9]+\/[0-9]+\) (Purging|Deleting) / { print "     · удаляем " $3; next }
 		/^OK: [0-9]+ distinct packages available/ { print "     · доступно пакетов: " $2; next }
 		/^fetch / { next }
+		/ubus call service delete .*Not found/ { next }
 		/[Ee]rror|ERROR|Collected errors|^ \* |[Uu]nknown package|not found|No such|unable|cannot|failed|Failed|unsatisfiable|breaks:/ { l = $0; sub(/^[ *]+/, "", l); if (l != "" && !seen[l]++) print "     ! " l; next }
 	'
 }
@@ -313,8 +314,11 @@ _zm_pkg_add() {
 	return $rc
 }
 
+_zm_ca_have() { ls /etc/ssl/certs/*.crt >/dev/null 2>&1; }
+
 _zm_pkg_del() {
-	local rc p have="" names
+	local rc p have="" names ca=0
+	_zm_ca_have && ca=1
 	for p; do
 		case "$p" in -*) have="$have $p"; continue ;; esac
 		_pkg_is_installed "$p" && have="$have $p"
@@ -329,7 +333,17 @@ _zm_pkg_del() {
 	_zm_pkg_unlock
 	if [ "$rc" = 0 ]; then echo "   ✓ Удалено: $names"
 	else echo "   ✗ Не удалось удалить: $names"; fi
+	[ "$ca" = 1 ] && _zm_ca_keep
 	return $rc
+}
+
+_zm_ca_keep() {
+	_zm_ca_have && return 0
+	echo "   → Возвращаем корневые сертификаты (ca-bundle) — без них не работает HTTPS"
+	_zm_run 180 $PKG_ADD ca-bundle >/dev/null 2>&1 || { _zm_run 150 $PKG_UPD >/dev/null 2>&1; _zm_run 180 $PKG_ADD ca-bundle >/dev/null 2>&1; }
+	if _zm_ca_have; then echo "   ✓ Сертификаты на месте"
+	else echo "   ! Не удалось поставить ca-bundle — установите его вручную, иначе HTTPS-загрузки не заработают"; fi
+	return 0
 }
 
 _job_running() {
@@ -2527,9 +2541,52 @@ _zl_json_text() {
 _zl_count() { local n; [ -f "$1" ] && n=$(grep -cvE '^[[:space:]]*(#.*)?$' "$1"); echo "${n:-0}"; }
 _zl_info() {
 	local f; f="$(_zl_path "$1")"
-	printf '{"id":"%s","path":"%s","exists":%s,"count":%s,"size":%s,"mtime":%s}' "$1" "$f" \
+	printf '{"id":"%s","path":"%s","exists":%s,"count":%s,"size":%s,"mtime":%s,"auto":"%s","nochange":%s}' "$1" "$f" \
 		"$([ -f "$f" ] && echo true || echo false)" "$(_zl_count "$f")" \
-		"$([ -f "$f" ] && wc -c < "$f" | tr -d ' ' || echo 0)" "$([ -f "$f" ] && date -r "$f" +%s 2>/dev/null || echo 0)"
+		"$([ -f "$f" ] && wc -c < "$f" | tr -d ' ' || echo 0)" "$([ -f "$f" ] && date -r "$f" +%s 2>/dev/null || echo 0)" \
+		"$([ "$1" = exclude ] && _zx_auto_get)" "$(_nochange_in "$f" && echo true || echo false)"
+}
+
+ZX_AUTO_TAG="# zm-excl-auto"
+
+_zx_auto_get() {
+	local v
+	v="$(grep -F "$ZX_AUTO_TAG=" "$CRON_FILE" 2>/dev/null | head -n1 | sed 's/.*=//')"
+	case "$v" in h2|h4|h6|h12) echo "$v" ;; *) echo off ;; esac
+}
+
+zapret_excl_auto_set() {
+	local v="$1" spec=""
+	case "$v" in
+		off) ;;
+		h2|h4|h6|h12) spec="17 */${v#h} * * *" ;;
+		*) echo '{"error":"неизвестный интервал"}'; return 1 ;;
+	esac
+	[ -z "$spec" ] || [ -x /etc/init.d/zapret ] || { echo '{"error":"Zapret не установлен"}'; return 1; }
+	mkdir -p "$(dirname "$CRON_FILE")"
+	touch "$CRON_FILE"
+	sed -i "\\|$ZX_AUTO_TAG=|d" "$CRON_FILE"
+	[ -n "$spec" ] && echo "$spec /opt/zapret-manager-luci/backend.sh zapret_excl_tick >/dev/null 2>&1 $ZX_AUTO_TAG=$v" >> "$CRON_FILE"
+	/etc/init.d/cron enable >/dev/null 2>&1
+	/etc/init.d/cron restart >/dev/null 2>&1
+	printf '{"ok":true,"info":%s}\n' "$(_zl_info exclude)"
+}
+
+zapret_excl_tick() {
+	local f tmp
+	[ -x /etc/init.d/zapret ] || return 0
+	f="$(_zl_path exclude)"; tmp="$f.zmauto"
+	_nochange_in "$f" && return 0
+	_zm_busy_job >/dev/null 2>&1 && return 0
+	mkdir -p "$(dirname "$f")"
+	rm -f "$tmp"
+	wget -q --timeout=20 -U "Mozilla/5.0" -O "$tmp" "$EXCLUDE_URL" 2>/dev/null
+	if [ ! -s "$tmp" ] || grep -qi '<html\|<!doctype' "$tmp" || ! grep -q '^[A-Za-z0-9][A-Za-z0-9.-]*\.[A-Za-z]' "$tmp"; then rm -f "$tmp"; return 0; fi
+	if cmp -s "$tmp" "$f"; then rm -f "$tmp"; return 0; fi
+	mv -f "$tmp" "$f"; chmod 644 "$f"
+	logger -t zapret-manager "Список исключений Zapret обновлён по расписанию"
+	zapret_restart
+	return 0
 }
 
 zapret_lists_status() {
@@ -2556,6 +2613,7 @@ zapret_list_set() {
 }
 
 zapret_list_restore() {
+	case "$1" in auto=*) zapret_excl_auto_set "${1#auto=}"; return ;; esac
 	[ "$1" = exclude ] || { echo '{"error":"восстановить можно только список исключений"}'; return 1; }
 	[ -x /etc/init.d/zapret ] || { echo '{"error":"Zapret не установлен"}'; return 1; }
 	local f tmp; f="$(_zl_path exclude)"; tmp="$f.zmdl"
@@ -11313,15 +11371,14 @@ do_fk_install() {
 		return 1
 	fi
 	if [ "$fresh" = 1 ] && [ "$restored" = 0 ] && uci -q get forkop.settings >/dev/null; then
-		uci -q set forkop.settings.dns_type='dot'
+		uci -q set forkop.settings.dns_type='udp'
 		uci -q delete forkop.settings.dns_server
 		uci -q add_list forkop.settings.dns_server='9.9.9.9'
-		uci -q add_list forkop.settings.dns_server='common.dot.dns.yandex.net'
 		uci -q delete forkop.settings.bootstrap_dns_server
 		uci -q add_list forkop.settings.bootstrap_dns_server='9.9.9.9'
 		uci -q add_list forkop.settings.bootstrap_dns_server='77.88.8.8'
 		uci -q commit forkop
-		_fk_say "DNS по умолчанию: Quad9 9.9.9.9 (DNS over TLS), при сбое — Яндекс. Сменить можно в «Настройках»"
+		_fk_say "DNS по умолчанию: Quad9 9.9.9.9 (обычный UDP). Сменить можно в «Настройках»"
 	fi
 	rm -rf /usr/lib/forkop.zm-old
 	echo "$tag" > "$FK_MARK"
@@ -11573,12 +11630,8 @@ do_fk_subs() {
 do_fk_singbox() {
 	local want="$1" free tfree have need tneed act out="$JOBS_DIR/forkop-sb.json" old oldvar msg i=0
 	_fk_installed || { echo "ОШИБКА: Forkozz не установлен"; return 1; }
-	case "$want" in tiny|stable|extended|compact) ;; *) echo "ОШИБКА: неизвестный вариант sing-box"; return 1 ;; esac
-	if [ "$want" = compact ] && ! _fk_sb_compact_ok; then
-		echo "ОШИБКА: эта версия Forkozz не умеет ставить компактный sing-box — обновите Forkozz"
-		return 1
-	fi
-	if [ "$want" != extended ] && [ "$want" != compact ] && grep -Eqi "[?&]type=xhttp" /etc/config/forkop 2>/dev/null; then
+	case "$want" in tiny|stable|extended) ;; *) echo "ОШИБКА: неизвестный вариант sing-box"; return 1 ;; esac
+	if [ "$want" != extended ] && grep -Eqi "[?&]type=xhttp" /etc/config/forkop 2>/dev/null; then
 		echo "ОШИБКА: среди серверов есть XHTTP — они работают только на расширенном sing-box. Сначала уберите их в «Подключении»"
 		return 1
 	fi
@@ -11590,12 +11643,10 @@ do_fk_singbox() {
 	tfree="$(df -k /tmp 2>/dev/null | awk 'NR==2 {print $4}')"
 	case "$want" in
 		extended) need=40960; tneed=30720 ;;
-		compact) need=20480; tneed=40960 ;;
 		*) need=16384; tneed=12288 ;;
 	esac
 	if [ -n "$free" ] && [ $((free + ${have:-0})) -lt "$need" ]; then
 		echo "ОШИБКА: мало места на флеше для этого sing-box: свободно $(((free + ${have:-0}) / 1024)) МБ, нужно около $((need / 1024)) МБ"
-		[ "$want" = extended ] && _fk_sb_compact_ok && echo "!! Попробуйте компактный вариант — ему нужно в два раза меньше места"
 		return 1
 	fi
 	if [ -n "$tfree" ] && [ "$tfree" -lt "$tneed" ]; then
@@ -11604,14 +11655,13 @@ do_fk_singbox() {
 	fi
 	echo "   ✓ Флеш: свободно $(((free + ${have:-0}) / 1024)) МБ, /tmp: $((tfree / 1024)) МБ"
 	case "$want" in
-		extended|compact)
+		extended)
 			_fk_patch_sbx /usr/lib/forkop/components/action.uc || { echo "ОШИБКА: эта версия Forkozz не умеет ставить расширенный sing-box — обновите Forkozz"; return 1; }
 			_zm_net_prepare api.github.com github.com objects.githubusercontent.com || return 1 ;;
 		*) _zm_net_prepare downloads.openwrt.org || return 1 ;;
 	esac
 	case "$want" in
 		extended) act=install_extended; _fk_say "Скачиваем расширенный sing-box с GitHub (github.com/$FK_SBX_REPO) — около 40 МБ" ;;
-		compact) act=install_extended_compressed; _fk_say "Скачиваем компактный расширенный sing-box с GitHub (github.com/$FK_SBX_REPO)" ;;
 		*) act="install_$want"; _fk_say "Ставим $(_fk_sb_name "$want") sing-box из репозитория OpenWrt" ;;
 	esac
 	[ -n "$old" ] && echo "   · сейчас стоит $old ($(_fk_sb_name "$oldvar")) — сохраняем его копию, чтобы вернуть, если новый не заработает"
@@ -12098,6 +12148,7 @@ case "$cmd" in
 	tg_status)                                                   tg_status ;;
 	tg_action)                                                    tg_action "$1" "$2" ;;
 	tg_auto_tick)                                                 tg_auto_tick "$1" ;;
+	zapret_excl_tick)                                             zapret_excl_tick ;;
 	tg_restart_all)                                                tg_restart_all ;;
 	tgws_status)                                                    tgws_status ;;
 	tgws_action)                                                     tgws_action "$1" ;;
@@ -16783,20 +16834,18 @@ return view.extend({
 			if (subData.kind === 'links') acts.push(E('button', { 'class': 'cbi-button', 'disabled': busy ? '' : null, 'click': function() { if (linksOpen) { linksOpen = false; renderSub(); } else openLinks(); } }, linksOpen ? 'Скрыть серверы' : 'Изменить серверы'));
 			acts.push(E('button', { 'class': 'cbi-button cbi-button-action', 'disabled': (probing || busy || !nodes.length) ? '' : null, 'click': probeAll },
 				probing ? 'Проверяем ' + probeDone + ' из ' + probeTotal : 'Проверить задержку'));
-			acts.push(E('button', { 'class': 'cbi-button' + (sortPing ? ' cbi-button-positive' : ''), 'disabled': !nodes.length ? '' : null,
-				'title': sortPing ? 'Сейчас серверы идут от быстрых к медленным. Нажмите, чтобы вернуть порядок подписки.' : 'Показать серверы от быстрых к медленным',
-				'click': function() {
-					sortPing = !sortPing;
-					try { localStorage.setItem('zm.steer.sort', sortPing ? 'ping' : 'list'); } catch (e) {}
-					var tested = nodes.some(function(n) { return lat[n.index] && !lat[n.index].busy; });
-					renderSub();
-					if (sortPing && !tested && !probing && !busy) probeAll();
-				} }, sortPing ? 'По пингу ✓' : 'По пингу'));
 			acts.push(E('button', { 'class': 'cbi-button cbi-button-remove', 'disabled': busy ? '' : null, 'click': function() {
 				if (!confirm('Удалить подписку?' + (data.warp_on ? '\n\nВыбранные сервисы пойдут через WARP.' : '\n\nТуннеля не останется — сервисы пойдут напрямую.'))) return;
 				subAct('sub_remove', '', 'Удаляем подписку');
 			} }, 'Удалить'));
 			if (!hideMode) subCard.appendChild(E('div', { 'class': 'zm-actions' }, acts));
+			if (!hideMode && !(linksOpen && subData.kind === 'links') && nodes.length > 1) subCard.appendChild(zm.swRow(sortPing, 'Сортировать по пингу', 'Серверы идут от быстрых к медленным, неотвечающие — в конце.', function() {
+				sortPing = !sortPing;
+				try { localStorage.setItem('zm.steer.sort', sortPing ? 'ping' : 'list'); } catch (e) {}
+				var tested = nodes.some(function(n) { return lat[n.index] && !lat[n.index].busy; });
+				renderSub();
+				if (sortPing && !tested && !probing && !busy) probeAll();
+			}));
 			if (linksOpen && subData.kind === 'links' && !hideMode) {
 				subCard.appendChild(E('div', { 'class': 'zm-hide-box', 'style': 'border-style:solid; border-color:rgba(127,127,127,.3); background:transparent' }, [
 					E('div', { 'style': 'font-weight:600' }, 'Свои серверы VLESS'),
@@ -18895,6 +18944,7 @@ return view.extend({
 					var n = st.loaded ? countOf(ta.value) : (st.info ? st.info.count : 0);
 					countEl.textContent = st.info && !st.info.exists && !dirty() ? 'нет файла' : countText(n);
 					countEl.className = 'zm-badge zm-list-count ' + (n ? 'zm-ok' : 'zm-off');
+					if (typeof renderAutoBox === 'function') renderAutoBox();
 					dirtyEl.style.display = dirty() ? '' : 'none';
 					btnSave.disabled = !st.loaded;
 					lbar.set(dirty() || (busy && st.open && lbar.isDirty()), busy && lbar.isDirty());
@@ -18960,6 +19010,32 @@ return view.extend({
 				body.appendChild(E('p', { 'class': 'zm-hint zm-list-hint' }, L.hint));
 				body.appendChild(ta);
 				body.appendChild(E('div', { 'class': 'zm-actions zm-list-actions' }, [ btnReload, btnRestore ]));
+				var autoBox = L.restore ? E('div', { 'class': 'zm-list-auto' }) : null, autoBusy = false;
+				function renderAutoBox() {
+					if (!autoBox) return;
+					var cur = (st.info && st.info.auto) || 'off', locked = !!(st.info && st.info.nochange);
+					autoBox.innerHTML = '';
+					autoBox.appendChild(E('div', { 'class': 'zm-row zm-list-auto-row' }, [
+						E('span', { 'class': 'zm-label' }, 'Обновлять список'),
+						E('div', { 'class': 'zm-seg' + (autoBusy ? ' zm-seg-busy' : '') }, [ [ 'off', 'Выкл' ], [ 'h2', '2 ч' ], [ 'h4', '4 ч' ], [ 'h6', '6 ч' ], [ 'h12', '12 ч' ] ].map(function(o) {
+							return E('div', { 'class': 'zm-seg-item' + (o[0] === cur ? ' zm-active' : ''), 'click': function() {
+								if (o[0] === cur || autoBusy) return;
+								autoBusy = true; renderAutoBox();
+								zm.zapretListRestore('auto=' + o[0]).then(function(r) {
+									autoBusy = false;
+									if (!r || r.error) { zm.toast((r && r.error) || 'Роутер не ответил', 'error'); renderAutoBox(); return; }
+									st.info = r.info || st.info;
+									zm.toast(o[0] === 'off' ? 'Автообновление списка исключений выключено' : 'Список исключений будет обновляться каждые ' + o[1], 'info');
+									renderAutoBox();
+								}).catch(function() { autoBusy = false; zm.toast('Роутер не ответил', 'error'); renderAutoBox(); });
+							} }, o[1]);
+						}))
+					]));
+					autoBox.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin:4px 0 0' }, locked && cur !== 'off'
+						? 'В списке есть строка #nochange — панель его не меняет, автообновление пропускается.'
+						: 'Панель сама скачивает свежий список из репозитория Zapret Manager и перезапускает Zapret, если он изменился. Свои правки при этом заменяются; чтобы список не трогали, добавьте в него строку #nochange.'));
+				}
+				if (autoBox) { body.appendChild(autoBox); renderAutoBox(); }
 				body.appendChild(lbar);
 				var card = E('div', { 'class': 'zm-card zm-list-card' }, [ head, body ]);
 				panels.lists.appendChild(card);
@@ -19817,9 +19893,12 @@ html.zm-theme-dark .zm-stopbar { background: #2a1416; color: #fecaca; border-col
 .zm-links-ed .zm-links-tools { margin: 8px 0 0; }
 .zm-links-add-label { font-size: 13px; font-weight: 600; margin: 4px 0 6px; }
 @media (max-width: 600px) { .zm-link-row { flex-wrap: wrap; } .zm-link-main { flex: 1 1 calc(100% - 40px); } .zm-link-btns { margin-left: 32px; } .zm-link-edit input { flex-basis: calc(100% - 40px) !important; } }
-.zm-tg-auto-ctl { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; min-width: 0; }
-.zm-tg-auto-sel { min-width: 200px; max-width: 100%; }
-@media (max-width: 600px) { .zm-tg-auto-row { flex-wrap: wrap; } .zm-tg-auto-row .zm-label { flex: 0 0 100%; } }
+.zm-seg-busy { opacity: .6; pointer-events: none; }
+.zm-list-auto { margin: 12px 0 4px; }
+.zm-list-auto-row { margin: 0; }
+@media (max-width: 600px) { .zm-list-auto-row { flex-wrap: wrap; } .zm-list-auto-row .zm-label { flex: 0 0 100%; } .zm-list-auto-row .zm-seg { flex-wrap: nowrap; width: 100%; } .zm-list-auto-row .zm-seg-item { flex: 1 1 0; padding: 6px 2px; text-align: center; } }
+.zm-tg-auto-row .zm-label { flex: 0 0 130px; }
+@media (max-width: 600px) { .zm-tg-auto-row { flex-wrap: wrap; } .zm-tg-auto-row .zm-label { flex: 0 0 100%; } .zm-tg-auto-row .zm-seg { flex-wrap: nowrap; width: 100%; } .zm-tg-auto-row .zm-seg-item { flex: 1 1 0; padding: 6px 2px; text-align: center; } }
 .zm-route { margin: 4px 0 2px; }
 .zm-route-form { display: flex; gap: 8px; align-items: stretch; }
 .zm-route-form .zm-route-input { flex: 1; min-width: 0; width: auto !important; }
@@ -20242,7 +20321,7 @@ var VARIANTS = [
 ];
 
 var AUTO_OPTS = [
-	[ 'off', 'Выключен' ], [ 'h1', 'Каждый час' ], [ 'h2', 'Каждые 2 часа' ], [ 'h3', 'Каждые 3 часа' ], [ 'h6', 'Каждые 6 часов' ], [ 'h12', 'Каждые 12 часов' ]
+	[ 'off', 'Выкл' ], [ 'h1', '1 ч' ], [ 'h2', '2 ч' ], [ 'h3', '3 ч' ], [ 'h6', '6 ч' ], [ 'h12', '12 ч' ]
 ];
 
 function copyToClipboard(text) {
@@ -20533,17 +20612,15 @@ return view.extend({
 			autoCard.appendChild(E('h3', {}, 'Автоперезапуск'));
 			list.filter(function(x) { return x.on; }).forEach(function(x) {
 				var cur = a[x.id] || 'off', opts = AUTO_OPTS.slice();
-				if (!opts.some(function(o) { return o[0] === cur; })) opts.push([ cur, /^d\d+$/.test(cur) ? 'Раз в сутки в ' + ('0' + cur.slice(1)).slice(-2) + ':00' : /^m\d+$/.test(cur) ? 'Каждые ' + cur.slice(1) + ' минут' : /^h\d+$/.test(cur) ? 'Каждые ' + cur.slice(1) + ' часа' : cur ]);
-				var sel = E('select', { 'class': 'cbi-input-select zm-tg-auto-sel', 'disabled': autoBusy ? '' : null }, opts.map(function(o) {
-					return E('option', { 'value': o[0], 'selected': o[0] === cur ? '' : null }, o[1]);
-				}));
-				sel.addEventListener('change', function() {
-					var v = sel.value, name = opts.filter(function(o) { return o[0] === v; })[0][1];
-					autoSet(x.id, 'auto=' + v, v === 'off' ? x.title + ': автоперезапуск выключен' : x.title + ': перезапуск ' + name.charAt(0).toLowerCase() + name.slice(1));
-				});
+				if (!opts.some(function(o) { return o[0] === cur; })) opts.push([ cur, /^d\d+$/.test(cur) ? 'в ' + ('0' + cur.slice(1)).slice(-2) + ':00' : /^m\d+$/.test(cur) ? cur.slice(1) + ' мин' : /^h\d+$/.test(cur) ? cur.slice(1) + ' ч' : cur ]);
 				rows.push(E('div', { 'class': 'zm-row zm-tg-auto-row' }, [
 					E('span', { 'class': 'zm-label' }, x.title),
-					E('span', { 'class': 'zm-tg-auto-ctl' }, [ sel, cur !== 'off' ? zm.badge(true, 'включён', '') : E([]) ])
+					E('div', { 'class': 'zm-seg' + (autoBusy ? ' zm-seg-busy' : '') }, opts.map(function(o) {
+						return E('div', { 'class': 'zm-seg-item' + (o[0] === cur ? ' zm-active' : ''), 'click': function() {
+							if (o[0] === cur || autoBusy) return;
+							autoSet(x.id, 'auto=' + o[0], o[0] === 'off' ? x.title + ': автоперезапуск выключен' : x.title + ': перезапуск каждые ' + o[1]);
+						} }, o[1]);
+					}))
 				]));
 			});
 			if (!rows.length) {
@@ -20689,7 +20766,7 @@ var DNS_CAT = {
 	]
 };
 
-var DNS_DEF = { doh: [ 'https://dns.quad9.net/dns-query', 'https://common.dot.dns.yandex.net/dns-query' ], dot: [ 'dns.quad9.net', 'common.dot.dns.yandex.net' ], udp: [ '9.9.9.9', '77.88.8.8' ] };
+var DNS_DEF = { doh: [ 'https://dns.quad9.net/dns-query', 'https://common.dot.dns.yandex.net/dns-query' ], dot: [ 'dns.quad9.net', 'common.dot.dns.yandex.net' ], udp: [ '9.9.9.9' ] };
 var DNS_MAX = 8;
 
 var DNS_TYPES = { udp: 'UDP', dot: 'DoT', doh: 'DoH' };
@@ -20735,7 +20812,6 @@ var SB_VARS = [
 	{ id: 'stable', label: 'Обычный', hint: 'Все протоколы официального sing-box. Нужно больше места.', warn: '' },
 	{ id: 'extended', label: 'Расширенный', hint: 'Сборка sing-box-extended с GitHub: XHTTP, mKCP, VLESS encryption, Amnezia и другое. Нужно ~40 МБ.', warn: 'Скачивается с GitHub (shtorm-7/sing-box-extended), нужно около 40 МБ свободной памяти.\n' }
 ];
-SB_VARS.push({ id: 'compact', label: 'Компактный', hint: 'Тот же расширенный sing-box с GitHub, но в сжатой сборке: места на флеше нужно вдвое меньше (~20 МБ), зато запускается чуть дольше и берёт больше оперативной памяти.', warn: 'Скачивается с GitHub (shtorm-7/sing-box-extended), нужно около 20 МБ на флеше и 40 МБ в /tmp.\n' });
 var SB_NAMES = { tiny: 'облегчённый', stable: 'обычный', extended: 'расширенный', compact: 'расширенный компактный' };
 var SUB_IV = [ { id: '1h', label: '1 ч' }, { id: '6h', label: '6 ч' }, { id: '12h', label: '12 ч' }, { id: '1d', label: '24 ч' } ];
 var LIST_IV = [ { id: '6h', label: '6 ч' }, { id: '12h', label: '12 ч' }, { id: '1d', label: '24 ч' }, { id: '3d', label: '3 дня' } ];
@@ -20749,14 +20825,14 @@ var WARN = {
 
 var ACT_TEXT = {
 	install: 'Устанавливаем Forkozz', update: 'Обновляем Forkozz', remove: 'Удаляем Forkozz', stop: 'Выключаем Forkozz',
-	start: 'Включаем Forkozz', restart: 'Перезапускаем Forkozz', apply: 'Применяем настройки', lists: 'Обновляем списки',
-	subs: 'Обновляем подписку', singbox: 'Меняем sing-box', singbox_remove: 'Удаляем sing-box'
+	start: 'Включаем Forkozz', restart: 'Перезапускаем Forkozz', apply: 'Применяем настройки', lists: 'Обновляем списки сервисов',
+	subs: 'Обновляем серверы подписки', singbox: 'Меняем sing-box', singbox_remove: 'Удаляем sing-box'
 };
 
 var DONE_TEXT = {
 	install: 'Forkozz установлен', update: 'Forkozz обновлён', remove: 'Forkozz удалён', stop: 'Forkozz выключен',
-	start: 'Forkozz включён', restart: 'Forkozz перезапущен', apply: 'Настройки применены', lists: 'Списки обновлены',
-	subs: 'Подписка обновлена', singbox: 'sing-box заменён', singbox_remove: 'sing-box удалён'
+	start: 'Forkozz включён', restart: 'Forkozz перезапущен', apply: 'Настройки применены', lists: 'Списки сервисов обновлены',
+	subs: 'Серверы подписки обновлены', singbox: 'sing-box заменён', singbox_remove: 'sing-box удалён'
 };
 
 function badge(cls, text) {
@@ -21296,7 +21372,7 @@ return view.extend({
 			else if (draft.mode === 'sub') {
 				connCard.appendChild(taSub);
 				connCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Ссылка на подписку от VPN-сервиса, обычно https://…/sub/…. Выбор сервера — в карточке «Серверы» ниже.'));
-				connCard.appendChild(row('Обновлять', seg(SUB_IV, draft.sub_interval, function(v) { set('sub_interval', v); })));
+				connCard.appendChild(row('Обновлять серверы', seg(SUB_IV, draft.sub_interval, function(v) { set('sub_interval', v); })));
 			}
 			else {
 				var tl = (cfg && cfg.tunnels) || [];
@@ -21404,17 +21480,15 @@ return view.extend({
 					E('span', { 'class': 'zm-lat ' + (n.delay === 0 ? 'zm-lat-bad' : latClass(n.delay)) }, latText(n.delay)), n.delay === 0 ? 'zm-node-dead' : '');
 			})));
 			var acts = [ E('button', { 'class': 'cbi-button', 'disabled': latBusy ? '' : null, 'click': testLatency }, latBusy ? 'Проверяем…' : 'Проверить задержку') ];
-			acts.push(E('button', { 'class': 'cbi-button' + (sortPing ? ' cbi-button-positive' : ''),
-				'title': sortPing ? 'Сейчас серверы идут от быстрых к медленным. Нажмите, чтобы вернуть обычный порядок.' : 'Показать серверы от быстрых к медленным',
-				'click': function() {
-					sortPing = !sortPing;
-					try { localStorage.setItem('zm.fk.sort', sortPing ? 'ping' : 'list'); } catch (e) {}
-					var tested = tags.some(function(t) { return ns[t] && ns[t].delay >= 0; });
-					renderServers();
-					if (sortPing && !tested && !latBusy) testLatency();
-				} }, sortPing ? 'По пингу ✓' : 'По пингу'));
-			if (cfg.mode === 'sub') acts.push(E('button', { 'class': 'cbi-button', 'click': function() { act('subs'); } }, 'Обновить подписку'));
+			if (cfg.mode === 'sub') acts.push(E('button', { 'class': 'cbi-button', 'click': function() { act('subs'); } }, 'Обновить серверы подписки'));
 			srvCard.appendChild(E('div', { 'class': 'zm-actions' }, acts));
+			if (tags.length > 1) srvCard.appendChild(zm.swRow(sortPing, 'Сортировать по пингу', 'Серверы идут от быстрых к медленным, неотвечающие — в конце.', function() {
+				sortPing = !sortPing;
+				try { localStorage.setItem('zm.fk.sort', sortPing ? 'ping' : 'list'); } catch (e) {}
+				var tested = tags.some(function(t) { return ns[t] && ns[t].delay >= 0; });
+				renderServers();
+				if (sortPing && !tested && !latBusy) testLatency();
+			}));
 			srvCard.appendChild(E('p', { 'class': 'zm-hint' }, isAuto ? 'Авто: Forkozz сам выбирает лучший из этих серверов. Нажмите на сервер, чтобы закрепить его.' : 'Нажмите на сервер, чтобы переключиться. Выбор держится до перезагрузки роутера.'));
 			srvCard.appendChild(hidePick);
 		}
@@ -21722,11 +21796,17 @@ return view.extend({
 			miscCard.innerHTML = '';
 			miscCard.appendChild(E('h3', {}, 'Прочее'));
 			miscCard.appendChild(sw(draft.quic_off, 'Отключить QUIC для выбранных сервисов', 'Приложения перейдут на обычный HTTPS — через сервер так стабильнее.', function() { set('quic_off', !draft.quic_off); }));
-			miscCard.appendChild(sw(draft.lists_via, 'Скачивать списки через VPN', 'Списки сервисов будут качаться через ваше подключение (сервер, подписку или туннель). Помогает, если GitHub у провайдера не открывается.', function() { set('lists_via', !draft.lists_via); }));
+			miscCard.appendChild(E('h4', { 'style': 'margin:18px 0 4px' }, 'Списки сервисов'));
+			miscCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:0' }, 'Домены и адреса выбранных сервисов (YouTube, Discord и другие) — по ним Forkozz понимает, что вести через VPN.'));
+			miscCard.appendChild(sw(draft.lists_via, 'Скачивать списки сервисов через VPN', 'Списки будут качаться через ваше подключение (сервер, подписку или туннель). Помогает, если GitHub у провайдера не открывается.', function() { set('lists_via', !draft.lists_via); }));
 			miscCard.appendChild(row('Обновлять списки', seg(LIST_IV, draft.list_interval, function(v) { set('list_interval', v); })));
-			var m = [ E('button', { 'class': 'cbi-button', 'disabled': !configured() || busy ? '' : null, 'click': function() { act('lists'); } }, 'Обновить списки сейчас') ];
-			if (configured() && cfg.mode === 'sub') m.push(E('button', { 'class': 'cbi-button', 'disabled': busy ? '' : null, 'click': function() { act('subs'); } }, 'Обновить подписку сейчас'));
-			miscCard.appendChild(E('div', { 'class': 'zm-actions' }, m));
+			miscCard.appendChild(E('div', { 'class': 'zm-actions' }, [ E('button', { 'class': 'cbi-button', 'disabled': !configured() || busy ? '' : null, 'click': function() { act('lists'); } }, 'Обновить списки сервисов сейчас') ]));
+			if (draft.mode === 'sub') {
+				miscCard.appendChild(E('h4', { 'style': 'margin:18px 0 4px' }, 'Серверы подписки'));
+				miscCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:0' }, 'Список VPN-серверов из вашей подписки — Forkozz скачивает его заново по расписанию.'));
+				miscCard.appendChild(row('Обновлять серверы', seg(SUB_IV, draft.sub_interval, function(v) { set('sub_interval', v); })));
+				miscCard.appendChild(E('div', { 'class': 'zm-actions' }, [ E('button', { 'class': 'cbi-button', 'disabled': !configured() || cfg.mode !== 'sub' || busy ? '' : null, 'click': function() { act('subs'); } }, 'Обновить серверы подписки сейчас') ]));
+			}
 			var extra = (cfg && cfg.extra) || [];
 			if (extra.length) miscCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Есть ещё ' + nn(extra.length, 'секция', 'секции', 'секций') + ', созданных раньше (' + extra.map(function(x) { return x.label; }).join(', ') + '). Они работают как прежде.'));
 
@@ -21734,7 +21814,7 @@ return view.extend({
 			sbCard.appendChild(E('h3', {}, 'sing-box'));
 			var sv = st.singbox_pkg;
 			sbCard.appendChild(row('Версия', E('span', {}, st.singbox ? st.singbox + ' · ' + (SB_NAMES[sv] || 'установлен вручную') : 'не установлен')));
-			var vars = SB_VARS.filter(function(x) { return x.id !== 'compact' || st.sb_compact || sv === 'compact'; });
+			var vars = SB_VARS;
 			sbCard.appendChild(row('Вариант', seg(vars, SB_NAMES[sv] ? sv : '', function(v) {
 				var it = SB_VARS.filter(function(x) { return x.id === v; })[0];
 				if (!confirm('Заменить sing-box на ' + it.label.toLowerCase() + '?\n\n' + it.warn + 'Forkozz перезапустится. Если новый sing-box не заработает, вернётся прежний.')) return;
