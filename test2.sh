@@ -1,5 +1,5 @@
 #!/bin/sh
-# Version: 2.19
+# Version: 2.20
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -50,7 +50,7 @@ cat > '/opt/zapret-manager-luci/backend.sh.zm-new' << 'ZM_INSTALLER_EOF'
 umask 022
 
 CONF="/etc/config/zapret"
-ZM_VERSION="2.19"
+ZM_VERSION="2.20"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
@@ -11834,33 +11834,81 @@ _fk_restore_old() {
 	_fk_say "Вернули прежнюю версию Forkozz"
 }
 
-# Swaps the OpenWrt sing-box package: tiny or stable. Keeps a copy of the old binary and returns it on failure.
+# Смена sing-box на пакет OpenWrt (tiny — облегчённый, stable — обычный). Прежний вариант уходит
+# целиком: пакет другого варианта удаляется, а сборка, поставленная не пакетом (расширенная, её
+# облегчённая версия), — вместе с libcronet и сжатым ядром; иначе её файл мешал пакету встать и
+# оставался жить рядом. Не встал новый — всё прежнее возвращается из копии в /tmp.
 _fk_sb_pkg_switch() {
-	local want="$1" pkg other tmp="$JOBS_DIR/fk-sb-bak" oldpkg
-	case "$want" in tiny) pkg=sing-box-tiny; other=sing-box ;; *) pkg=sing-box; other=sing-box-tiny ;; esac
+	local want="$1" pkg tmp="$JOBS_DIR/fk-sb-bak" oldpkg p f moved=""
+	case "$want" in tiny) pkg=sing-box-tiny ;; *) pkg=sing-box ;; esac
 	oldpkg="$(_fk_sb_pkg)"
 	rm -rf "$tmp"; mkdir -p "$tmp"
-	[ -e /usr/bin/sing-box ] && cp -p /usr/bin/sing-box "$tmp/sing-box" 2>/dev/null
 	_fk_say "Ставим пакет $pkg из репозитория OpenWrt"
-	_pkg_is_installed "$other" && $DELETE "$other" >/dev/null 2>&1
+	if [ -z "$oldpkg" ]; then
+		for f in /usr/bin/sing-box /usr/lib/libcronet.so /usr/libexec/sing-box-core /etc/init.d/sing-box; do
+			[ -e "$f" ] || continue
+			mkdir -p "$tmp/keep${f%/*}"
+			mv -f "$f" "$tmp/keep$f" 2>/dev/null && moved="$moved $f"
+		done
+		[ -n "$moved" ] && echo "   → Убираем прежний sing-box, поставленный не пакетом:$(echo "$moved" | sed 's# /# /#g')"
+	else
+		[ -e /usr/bin/sing-box ] && cp -p /usr/bin/sing-box "$tmp/sing-box" 2>/dev/null
+	fi
+	for p in sing-box sing-box-tiny sing-box-extended; do
+		[ "$p" = "$pkg" ] && continue
+		_pkg_is_installed "$p" && $DELETE "$p" >/dev/null 2>&1
+	done
 	if _pkg_is_installed "$pkg"; then
 		if command -v apk >/dev/null 2>&1; then apk fix --reinstall "$pkg" >/dev/null 2>&1 || apk add --force-overwrite "$pkg" >/dev/null 2>&1
 		else opkg install --force-reinstall "$pkg" >/dev/null 2>&1; fi
 	else
 		$INSTALL "$pkg" >/dev/null 2>&1
 	fi
-	if _pkg_is_installed "$pkg" && [ -x /usr/bin/sing-box ] && sing-box version >/dev/null 2>&1; then
-		case "$(_fk_sb_ver)" in *extended*) ;; *)
-			rm -f /usr/libexec/sing-box-core /etc/netshift/core-version.cache /etc/sing-box-version.cache /usr/lib/libcronet.so 2>/dev/null
-			rm -rf "$tmp"
-			return 0 ;;
-		esac
+	if _pkg_is_installed "$pkg" && [ -x /usr/bin/sing-box ] && sing-box version >/dev/null 2>&1 && ! _fk_sb_is_ext; then
+		rm -rf "$tmp"
+		_fk_sb_leftovers
+		return 0
 	fi
 	echo "   ! пакет $pkg не встал — возвращаем прежний sing-box"
+	_pkg_is_installed "$pkg" && [ "$pkg" != "$oldpkg" ] && $DELETE "$pkg" >/dev/null 2>&1
 	[ -n "$oldpkg" ] && [ "$oldpkg" != "$pkg" ] && ! _pkg_is_installed "$oldpkg" && $INSTALL "$oldpkg" >/dev/null 2>&1
-	[ -s "$tmp/sing-box" ] && cp -p "$tmp/sing-box" /usr/bin/sing-box 2>/dev/null
+	for f in $moved; do mkdir -p "${f%/*}"; mv -f "$tmp/keep$f" "$f" 2>/dev/null; done
+	[ -s "$tmp/sing-box" ] && ! sing-box version >/dev/null 2>&1 && cp -p "$tmp/sing-box" /usr/bin/sing-box 2>/dev/null
 	rm -rf "$tmp"
 	return 1
+}
+
+# Расширенный sing-box поставлен поверх пакета: пакет прежнего варианта удаляем, чтобы его не
+# осталось в системе (и обновление пакетов не вернуло облегчённый поверх расширенного). Файл
+# расширенного на время удаления отодвигается, служба sing-box (её init-скрипт нужен Forkozz)
+# остаётся на месте.
+_fk_sb_drop_pkgs() {
+	local p had="" k="$JOBS_DIR/fk-sb-keep"
+	for p in sing-box sing-box-tiny sing-box-extended; do _pkg_is_installed "$p" && had="$had $p"; done
+	[ -n "$had" ] || { _fk_sb_leftovers; return 0; }
+	rm -rf "$k"; mkdir -p "$k"
+	cp -p /etc/init.d/sing-box "$k/init" 2>/dev/null
+	cp -p /etc/config/sing-box "$k/config" 2>/dev/null
+	mv -f /usr/bin/sing-box /usr/bin/.sing-box.zm-keep 2>/dev/null || { rm -rf "$k"; return 1; }
+	$DELETE $had >/dev/null 2>&1
+	mv -f /usr/bin/.sing-box.zm-keep /usr/bin/sing-box
+	[ -e /etc/init.d/sing-box ] || { cp -p "$k/init" /etc/init.d/sing-box 2>/dev/null; chmod 0755 /etc/init.d/sing-box 2>/dev/null; }
+	[ -e /etc/config/sing-box ] || cp -p "$k/config" /etc/config/sing-box 2>/dev/null
+	rm -rf "$k"
+	_fk_sb_leftovers
+	echo "   ✓ Прежний sing-box удалён полностью (пакет$(echo "$had" | sed 's/^ / /; s/ \([^ ]\)/, \1/g; s/^,//')) — остался только расширенный"
+}
+
+# Остатки прежних вариантов: копии на откат, распакованные архивы, сжатое ядро и кэши версий
+# от варианта, который сейчас не стоит.
+_fk_sb_leftovers() {
+	local var
+	var="$(_fk_sb_var)"
+	rm -f /usr/bin/sing-box.forkop-backup.* /usr/lib/libcronet.so.forkop-backup.* /usr/bin/.sing-box.zm-keep 2>/dev/null
+	rm -rf /tmp/netshift-sbext.* 2>/dev/null
+	[ "$var" = lite ] || rm -f /usr/libexec/sing-box-core /etc/netshift/core-version.cache /etc/sing-box-version.cache 2>/dev/null
+	case "$var" in extended|lite) ;; *) rm -f /usr/lib/libcronet.so 2>/dev/null ;; esac
+	return 0
 }
 
 _fk_sb_install() {
@@ -12533,7 +12581,8 @@ do_fk_singbox() {
 				rm -f "$out"
 				return 1
 			fi
-			rm -f "$out" ;;
+			rm -f "$out"
+			_fk_sb_drop_pkgs ;;
 		*)
 			_zm_net_prepare downloads.openwrt.org || return 1
 			$UPDATE >/dev/null 2>&1
@@ -13985,6 +14034,14 @@ function fell_file(sec) {
 	return sec == "" || sec == pick(c).sec ? FELL_FILE : FELL_FILE + "." + sec;
 }
 
+function lat_path(sec) { return STATE + "/fk.lat." + sec + ".json"; }
+function lat_read(sec) {
+	let j = null;
+	try { j = json(s(fs.readfile(lat_path(sec)))); } catch (e) { j = null; }
+	return type(j) == "object" ? j : null;
+}
+function lat_running(l) { return !!(l && l.running && time() - int(l.at || 0) < 120); }
+
 function proxies() {
 	let j = jcmd(BIN + " clash_api get_proxies");
 	return j && type(j.proxies) == "object" ? j.proxies : null;
@@ -14004,8 +14061,14 @@ function cmd_servers(sec) {
 	}
 	let fell = "";
 	try { fell = trim(s(fs.readfile(fell_file(sec)))); } catch (e) { fell = ""; }
+	let lat = lat_read(sec), lrun = lat_running(lat);
+	if (lat && !lat.running && time() - int(lat.at || 0) < 900) {
+		let dl = type(lat.delays) == "object" ? lat.delays : {};
+		for (let t in (type(lat.tested) == "array" ? lat.tested : []))
+			if (nodes[t] && nodes[t].delay < 0) nodes[t].delay = int(dl[t] || 0);
+	}
 	out({ group: group_tag(sec), now: s(g.now), list: g.all, nodes, sub: sec_mode(xm) == "sub" ? sub_info(sec) : null,
-		hidden: length(xv.h), exclude: s(xm.zm_exclude), hide_names: xv.h, fell });
+		hidden: length(xv.h), exclude: s(xm.zm_exclude), hide_names: xv.h, fell, lat: lat ? { running: lrun, at: int(lat.at || 0), error: s(lat.error) } : null });
 }
 
 function proxy_alive(tag) {
@@ -14037,11 +14100,43 @@ function cmd_heal(sec, act) {
 	out({ ok: true, manual: true, dead: true, changed: true, name: nm(now), to: px[pickt] && lc(s(px[pickt].type)) == "urltest" ? "" : nm(pickt) });
 }
 
+/* Задержка серверов. Замер всей группы — один запрос к sing-box, который проверяет узлы по десять:
+ * на подписке в десятки узлов с мёртвыми среди них он идёт дольше, чем ждёт панель (rpcd), и пинг
+ * «не определялся». Поэтому замер идёт в фоне, а панель опрашивает servers. Узел, который замер
+ * проверил и который не ответил, sing-box в истории не хранит — его отмечаем сами (задержка 0). */
 function cmd_latency(sec) {
-	let j = jcmd(BIN + " clash_api get_group_latency " + q(group_tag(sec)) + " 5000");
-	if (type(j) != "object") fail("проверка задержки не удалась");
-	if (j.message && length(j) == 1) fail(s(j.message));
-	out({ ok: true, delays: j });
+	if (!proxies()) fail("sing-box не отвечает — Forkozz выключен или ещё запускается");
+	if (!lat_running(lat_read(sec))) {
+		try { fs.mkdir(STATE); } catch (e) {}
+		fs.writefile(lat_path(sec), sprintf("%J", { at: time(), running: true }));
+		system("(ucode " + q(sourcepath()) + " latwork " + q(sec) + " >/dev/null 2>&1 &)");
+	}
+	out({ ok: true, started: true });
+}
+
+function cmd_latwork(sec) {
+	let px = proxies(), g = px ? px[group_tag(sec)] : null, tested = {}, delays = {}, direct = {}, groups = [ group_tag(sec) ];
+	if (g && type(g.all) == "array") {
+		for (let t in g.all) { tested[t] = true; direct[t] = true; }
+		/* вложенные группы (urltest по подписке или по странам): их узлы проверяем, только если
+		 * среди прямых членов группы секции их нет — иначе каждый узел мерился бы дважды */
+		for (let t in g.all) {
+			let p = px[t];
+			if (!p || type(p.all) != "array") continue;
+			let extra = false;
+			for (let m in p.all) { if (!direct[m]) extra = true; tested[m] = true; }
+			if (extra) push(groups, t);
+		}
+	}
+	let err = g ? "" : "группа серверов секции ещё не готова — примените настройки";
+	for (let gt in groups) {
+		let j = jcmd(BIN + " clash_api get_group_latency " + q(gt) + " 5000");
+		if (type(j) != "object") { err = err || "sing-box не ответил на проверку задержки"; continue; }
+		if (j.message && length(j) == 1) { err = err || ("sing-box: " + s(j.message)); continue; }
+		for (let k in j) if (int(j[k]) > 0) delays[k] = int(j[k]);
+	}
+	if (length(delays)) err = "";
+	fs.writefile(lat_path(sec), sprintf("%J", { at: time(), running: false, tested: err ? [] : keys(tested), delays, error: err }));
 }
 
 function cmd_select(sec, tag) {
@@ -14450,6 +14545,7 @@ else if (mode == "secdel") cmd_secdel(sec);
 else if (mode == "secnames") cmd_secnames();
 else if (mode == "servers") cmd_servers(sec);
 else if (mode == "latency") cmd_latency(sec);
+else if (mode == "latwork") cmd_latwork(sec);
 else if (mode == "select") cmd_select(sec, ARGV[2]);
 else if (mode == "fixsel") cmd_fixsel(sec);
 else if (mode == "heal") cmd_heal(sec, ARGV[2] || "");
@@ -23275,16 +23371,32 @@ return view.extend({
 			}).catch(function() { srvBusy = false; srvErr = 'роутер не ответил'; renderServers(); });
 		}
 
+		/* Замер идёт на роутере в фоне (подписка в десятки узлов не укладывается в один запрос):
+		 * запускаем и опрашиваем список — задержки появляются по мере проверки. */
 		function testLatency() {
 			if (latBusy) return;
+			var forSec = (cfg && cfg.sec) || '', tries = 0;
 			latBusy = true;
 			renderServers();
 			zm.toast('Проверяем задержку…', 'warning');
-			zm.forkopAction('latency', (cfg && cfg.sec) || '').then(function(res) {
-				latBusy = false;
-				if (res.error) zm.toast(res.error, 'error'); else zm.toast('Задержка проверена', 'info');
-				loadServers();
-			}).catch(function() { latBusy = false; renderServers(); zm.toast('Роутер не ответил', 'error'); });
+			function done(text, kind) { latBusy = false; renderServers(); renderMain(); if (text) zm.toast(text, kind); }
+			function poll() {
+				setTimeout(function() {
+					tries++;
+					zm.forkopAction('servers', forSec).then(function(r) {
+						if (!cfg || ((cfg.sec || '') !== forSec)) { latBusy = false; return; }
+						if (r && !r.error) { servers = r; srvErr = ''; }
+						var running = !!(r && r.lat && r.lat.running);
+						if (running && tries < 40) { renderServers(); poll(); return; }
+						var le = r && r.lat && r.lat.error;
+						done(running ? 'Проверка идёт дольше обычного — задержки появятся сами' : le ? 'Задержка не проверена: ' + le : 'Задержка проверена', running || le ? 'warning' : 'info');
+					}).catch(function() { if (tries < 40) poll(); else done('Роутер не ответил', 'error'); });
+				}, tries ? 2500 : 1500);
+			}
+			zm.forkopAction('latency', forSec).then(function(res) {
+				if (res.error) { done(res.error, 'error'); return; }
+				poll();
+			}).catch(function() { done('Роутер не ответил', 'error'); });
 		}
 
 		function pickServer(tag, name) {
