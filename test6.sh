@@ -1,5 +1,5 @@
 #!/bin/sh
-# Version: 2.22
+# Version: 2.23
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -50,7 +50,7 @@ cat > '/opt/zapret-manager-luci/backend.sh.zm-new' << 'ZM_INSTALLER_EOF'
 umask 022
 
 CONF="/etc/config/zapret"
-ZM_VERSION="2.22"
+ZM_VERSION="2.23"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
@@ -10495,56 +10495,85 @@ steer_sub_status() {
 }
 
 # TCP-пинг узла (как «TCP» в Happ): время установки соединения с сервером, без туннеля. Хост и порт
-# берём из вывода модуля ядра steer (кэш рядом со списком узлов). UDP-протокол (Hysteria2) так не
-# проверить — для него остаётся проверка ядром.
-_st_hostport() {
+# берём из вывода модулей ядра steer (кэш рядом со списком узлов). Hysteria2 работает по UDP — по TCP
+# его не проверить, для него остаётся проверка ядром.
+_st_hp_build() {
 	local m hp="$ST_SUB_NODES.hp"
-	if [ ! -s "$hp" ] || [ "$ST_SUB" -nt "$hp" ]; then
-		mkdir -p "$ST_DIR"
-		{ for m in vless proxy; do
-			[ -x "$STL_SBIN/steer-$m" ] || continue
-			_stl_t 30 steer "$m-nodes" "$ST_SUB" 2>/dev/null | tr '\n\t' '  ' | awk -v M="$m" '{
-				j = $0; p = index(j, "\"nodes\":["); if (!p) next
-				j = substr(j, p + 9); n = split(j, C, /\{"index":/)
-				for (i = 2; i <= n; i++) {
-					ch = C[i]; idx = ch + 0; h = ""; pt = 0
-					if (match(ch, /"host":"[^"]*"/)) h = substr(ch, RSTART + 8, RLENGTH - 9)
-					if (match(ch, /"port":[0-9]+/)) pt = substr(ch, RSTART + 7, RLENGTH - 7) + 0
-					if (h != "" && pt > 0) printf "%s\t%d\t%s\t%d\n", M, idx, h, pt
-				}
-			}'
-		done; } > "$hp.tmp" 2>/dev/null
-		mv -f "$hp.tmp" "$hp" 2>/dev/null
-	fi
-	awk -F'\t' -v m="$1" -v i="$2" '$1 == m && $2 == i { print $3, $4; exit }' "$hp" 2>/dev/null
+	[ -s "$hp" ] && [ ! "$ST_SUB" -nt "$hp" ] && return 0
+	mkdir -p "$ST_DIR"
+	{ for m in vless proxy; do
+		[ -x "$STL_SBIN/steer-$m" ] || continue
+		_stl_t 30 steer "$m-nodes" "$ST_SUB" 2>/dev/null | tr '\n\t' '  ' | awk -v M="$m" '{
+			j = $0; p = index(j, "\"nodes\":["); if (!p) next
+			j = substr(j, p + 9); n = split(j, C, /\{"index":/)
+			for (i = 2; i <= n; i++) {
+				ch = C[i]; idx = ch + 0; h = ""; pt = 0
+				if (match(ch, /"host":"[^"]*"/)) h = substr(ch, RSTART + 8, RLENGTH - 9)
+				if (match(ch, /"port":[0-9]+/)) pt = substr(ch, RSTART + 7, RLENGTH - 7) + 0
+				if (h != "" && pt > 0) printf "%s\t%d\t%s\t%d\n", M, idx, h, pt
+			}
+		}'
+	done; } > "$hp.$$" 2>/dev/null
+	mv -f "$hp.$$" "$hp" 2>/dev/null
 }
-_st_tcp_ms() {
-	local h="$1" i out ms best=""
+
+# Две попытки сразу, параллельно; в файл — лучшее время в мс или пусто. Прокси из окружения не берём.
+_st_tcp_one() {
+	local h="$1" p="$2" to="$3" out="$4"
 	case "$h" in *:*) h="[$h]" ;; esac
-	for i in 1 2; do
-		out="$(curl -s -o /dev/null --connect-timeout 3 --max-time 3 -w '%{time_connect} %{time_namelookup}' "http://$h:$2/" 2>/dev/null)"
-		ms="$(printf '%s' "$out" | awk '{ c = $1 + 0; n = $2 + 0; if (c > 0) { if (n > 0 && n < c) c -= n; m = int(c * 1000 + 0.5); print (m < 1 ? 1 : m) } }')"
-		if [ -n "$ms" ]; then best="$ms"; break; fi
+	( curl -s -o /dev/null --noproxy '*' --connect-timeout "$to" --max-time "$to" -w '%{time_connect} %{time_namelookup}\n' "http://$h:$p/" 2>/dev/null > "$out.a" ) &
+	( curl -s -o /dev/null --noproxy '*' --connect-timeout "$to" --max-time "$to" -w '%{time_connect} %{time_namelookup}\n' "http://$h:$p/" 2>/dev/null > "$out.b" ) &
+	wait
+	cat "$out.a" "$out.b" 2>/dev/null | awk '{ c = $1 + 0; n = $2 + 0; if (c > 0) { if (n > 0 && n < c) c -= n; m = int(c * 1000 + 0.5); if (m < 1) m = 1; if (!b || m < b) b = m } } END { if (b) print b }' > "$out"
+	rm -f "$out.a" "$out.b"
+}
+
+# Пачка узлов: «1,5,7» → {"results":{"1":{"ok":true,"ms":42},"5":{"ok":false},"7":{"core":true}}}.
+# Все узлы пачки проверяются одновременно; кто не ответил за 3 с, проверяется ещё раз с запасом в 6 с —
+# «нет ответа» только после обоих проходов. core — узел по TCP не проверить (Hysteria2): его проверит ядро.
+steer_sub_tcp() {
+	local t dir list="" i p f hp h port retry="" out="" sep="" ms
+	command -v curl >/dev/null 2>&1 || { echo '{"error":"на роутере нет curl"}'; return 1; }
+	[ -s "$ST_SUB" ] && _st_vpn_ok && t="$(_st_nodes)" || { echo '{"error":"подписки нет"}'; return 1; }
+	_st_hp_build
+	dir="$ST_RUN/tcp.$$"; mkdir -p "$dir"
+	for i in $(printf '%s' "$1" | tr ',' ' '); do
+		case "$i" in ''|*[!0-9]*) continue ;; esac
+		set -- $(awk -F'\t' -v g="$i" '$1 == g { print $2, $4; exit }' "$t")
+		p="$(_stl_mod_of "$1")"; f="$2"
+		hp=""
+		[ -n "$1" ] && [ "$p" != hysteria2 ] && hp="$(awk -F'\t' -v m="$p" -v n="$f" '$1 == m && $2 == n { print $3, $4; exit }' "$ST_SUB_NODES.hp" 2>/dev/null)"
+		if [ -z "$hp" ]; then echo udp > "$dir/$i.k"; list="$list $i"; continue; fi
+		echo "$hp" > "$dir/$i.k"
+		_st_tcp_one "${hp% *}" "${hp#* }" 3 "$dir/$i" &
+		list="$list $i"
 	done
-	[ -n "$best" ] && echo "$best"
+	wait
+	for i in $list; do
+		[ "$(cat "$dir/$i.k")" != udp ] && [ ! -s "$dir/$i" ] || continue
+		hp="$(cat "$dir/$i.k")"
+		_st_tcp_one "${hp% *}" "${hp#* }" 6 "$dir/$i" &
+		retry=1
+	done
+	[ -n "$retry" ] && wait
+	for i in $list; do
+		if [ "$(cat "$dir/$i.k")" = udp ]; then out="$out$sep\"$i\":{\"core\":true}"
+		elif ms="$(cat "$dir/$i" 2>/dev/null)" && [ -n "$ms" ]; then out="$out$sep\"$i\":{\"ok\":true,\"ms\":$ms}"
+		else out="$out$sep\"$i\":{\"ok\":false}"; fi
+		sep=","
+	done
+	rm -rf "$dir"
+	printf '{"results":{%s}}\n' "$out"
 }
 
 steer_sub_probe() {
-	local out t p f hp tcp=""
+	local out t p f
 	case "$1" in ''|*[!0-9]*) echo '{"ok":false,"error":"неверный номер узла"}'; return 1 ;; esac
 	[ -s "$ST_SUB" ] && _st_vpn_ok && t="$(_st_nodes)" || { echo '{"ok":false,"error":"подписки нет"}'; return 1; }
 	set -- $(awk -F'\t' -v g="$1" '$1 == g { print $2, $4; exit }' "$t")
 	[ -n "$1" ] || { echo '{"ok":false,"error":"узла нет в подписке"}'; return 1; }
 	p="$(_stl_mod_of "$1")"; f="$2"
 	stl_has "$p" || { echo '{"ok":false,"error":"модуль ядра steer для этого протокола не установлен"}'; return 1; }
-	if [ "$p" != hysteria2 ] && command -v curl >/dev/null 2>&1; then
-		hp="$(_st_hostport "$p" "$f")"
-		[ -n "$hp" ] && tcp="$(_st_tcp_ms "${hp% *}" "${hp#* }")"
-		if [ -n "$tcp" ]; then
-			printf '{"ok":true,"results":[{"ok":true,"tcp_ms":%s,"ttfb_ms":0,"handshake_ms":%s}]}\n' "$tcp" "$tcp"
-			return 0
-		fi
-	fi
 	out="$(stl_probe "$ST_SUB" "$p" "$f")"
 	case "$out" in '{'*) printf '%s\n' "$out" ;; *) echo '{"ok":false,"error":"проверка не удалась"}' ;; esac
 }
@@ -10604,6 +10633,7 @@ steer_action() {
 			job_start steer do_steer_sub_update auto >/dev/null
 			;;
 		sub_probe) steer_sub_probe "$mode" ;;
+		sub_tcp) steer_sub_tcp "$mode" ;;
 		sub_links_get)
 			[ -s "$ST_SUB" ] || { echo '{"error":"подписки нет"}'; return 1; }
 			[ -s "$ST_SUB_URL" ] && { echo '{"error":"это подписка по ссылке — её серверы задаёт сервис, а не вы"}'; return 1; }
@@ -14376,13 +14406,11 @@ function cmd_servers(sec) {
 	let fell = "";
 	try { fell = trim(s(fs.readfile(fell_file(sec)))); } catch (e) { fell = ""; }
 	let lat = lat_read(sec), lrun = lat_running(lat);
-	if (lat && !lat.running && time() - int(lat.at || 0) < 900) {
+	/* результаты последнего TCP-пинга (и промежуточные, пока он идёт): -2 — сервер ещё в очереди */
+	if (lat && (lrun || time() - int(lat.at || 0) < 900)) {
 		let dl = type(lat.delays) == "object" ? lat.delays : {};
-		for (let t in (type(lat.tested) == "array" ? lat.tested : [])) {
-			if (!nodes[t]) continue;
-			if (!nodes[t].members) nodes[t].delay = int(dl[t] || 0);
-			else if (nodes[t].delay < 0) nodes[t].delay = int(dl[t] || 0);
-		}
+		for (let t in (type(lat.tested) == "array" ? lat.tested : [])) if (nodes[t]) nodes[t].delay = int(dl[t] || 0);
+		if (lrun) for (let t in (type(lat.pending) == "array" ? lat.pending : [])) if (nodes[t]) nodes[t].delay = -2;
 	}
 	out({ group: group_tag(sec), now: s(g.now), list: g.all, nodes, sub: sec_mode(xm) == "sub" ? sub_info(sec) : null,
 		hidden: length(xv.h), exclude: s(xm.zm_exclude), hide_names: xv.h, fell, lat: lat ? { running: lrun, at: int(lat.at || 0), error: s(lat.error) } : null });
@@ -14418,7 +14446,7 @@ function urlenc(v) {
 }
 
 function lat_cmd(ep, tag, url, ms) {
-	return "curl -s --max-time " + (int(ms / 1000) + 3) + (ep.secret != "" ? " -H " + q("Authorization: Bearer " + ep.secret) : "") +
+	return "curl -s --noproxy '*' --max-time " + (int(ms / 1000) + 3) + (ep.secret != "" ? " -H " + q("Authorization: Bearer " + ep.secret) : "") +
 		" -G --data-urlencode " + q("url=" + url) + " --data-urlencode " + q("timeout=" + ms) +
 		" " + q(ep.base + "/proxies/" + urlenc(tag) + "/delay");
 }
@@ -14465,9 +14493,9 @@ function node_addrs() {
 	return r;
 }
 
-function tcp_cmd(a) {
+function tcp_cmd(a, to) {
 	let h = index(a.host, ":") >= 0 ? "[" + a.host + "]" : a.host;
-	return "curl -s -o /dev/null --connect-timeout 4 --max-time 4 -w '%{time_connect} %{time_namelookup}' " + q("http://" + h + ":" + a.port + "/");
+	return "curl -s -o /dev/null --noproxy '*' --connect-timeout " + to + " --max-time " + to + " -w '%{time_connect} %{time_namelookup}' " + q("http://" + h + ":" + a.port + "/");
 }
 
 function tcp_parse(raw) {
@@ -14479,50 +14507,28 @@ function tcp_parse(raw) {
 	return ms < 1 ? 1 : ms;
 }
 
-/* по 8 серверов параллельно; две попытки на сервер, берём лучшую (как у клиентов) */
-function tcp_batch(addrs, tags) {
-	let res = {}, dir = STATE + "/tcp.tmp." + time();
+/* Одна пачка серверов: все параллельно, у каждого две попытки сразу, берём лучшую. Пачка длится
+ * не дольше таймаута — мёртвый сервер не тормозит остальных. */
+const TCP_PAR = 10;
+let TCP_SEQ = 0;
+
+function tcp_chunk(addrs, part, to) {
+	let res = {}, dir = STATE + "/tcp.tmp." + s(fs.readlink("/proc/self")) + "." + (++TCP_SEQ), cmd = "";
 	try { fs.mkdir(STATE); } catch (e) {}
 	try { fs.mkdir(dir); } catch (e) {}
-	for (let i = 0; i < length(tags); i += 8) {
-		let part = slice(tags, i, i + 8), cmd = "";
-		for (let k = 0; k < length(part); k++) {
-			let c = tcp_cmd(addrs[part[k]]), f = q(dir + "/" + k);
-			cmd += "( " + c + " > " + f + "; " + c + " >> " + f + ".b; ) 2>/dev/null & ";
-		}
-		sh(cmd + "wait");
-		for (let k = 0; k < length(part); k++) {
-			let a = 0, b = 0;
-			try { a = tcp_parse(fs.readfile(dir + "/" + k)); } catch (e) { a = 0; }
-			try { b = tcp_parse(fs.readfile(dir + "/" + k + ".b")); } catch (e) { b = 0; }
-			let best = (a > 0 && b > 0) ? (a < b ? a : b) : (a > 0 ? a : b);
-			if (best > 0) res[part[k]] = best;
-		}
+	for (let k = 0; k < length(part); k++) {
+		let c = tcp_cmd(addrs[part[k]], to), f = q(dir + "/" + k);
+		cmd += "(" + c + " > " + f + ".a) 2>/dev/null & (" + c + " > " + f + ".b) 2>/dev/null & ";
+	}
+	sh(cmd + "wait");
+	for (let k = 0; k < length(part); k++) {
+		let a = 0, b = 0;
+		try { a = tcp_parse(fs.readfile(dir + "/" + k + ".a")); } catch (e) { a = 0; }
+		try { b = tcp_parse(fs.readfile(dir + "/" + k + ".b")); } catch (e) { b = 0; }
+		let best = (a > 0 && b > 0) ? (a < b ? a : b) : (a > 0 ? a : b);
+		if (best > 0) res[part[k]] = best;
 	}
 	sh("rm -rf " + q(dir));
-	return res;
-}
-
-/* Итог: { tag: мс } для ответивших. Сначала TCP-пинг (быстро и сравнимо с Happ). Тем, у кого TCP не
- * получился (UDP-протоколы, группы, закрытый порт), делаем реальный запрос через сервер — в несколько
- * проходов с запасными адресами. */
-function lat_measure(tags, ms) {
-	let ep = clash_ep(), res = {};
-	let hasCurl = sh("command -v curl") != "";
-	if (!hasCurl) return null;
-	let addrs = node_addrs(), tl = filter(tags, (x) => !!addrs[x]);
-	if (length(tl)) {
-		let tr = tcp_batch(addrs, tl);
-		for (let k in tr) res[k] = tr[k];
-	}
-	let left = filter(tags, (x) => !res[x]);
-	if (!ep) return length(res) ? res : null;
-	for (let pass = 0; pass < length(LAT_URLS) && length(left); pass++) {
-		let got = lat_batch(ep, left, LAT_URLS[pass], ms + pass * 1500);
-		let next = [];
-		for (let x in left) { if (got[x] > 0) res[x] = got[x]; else push(next, x); }
-		left = next;
-	}
 	return res;
 }
 
@@ -14581,46 +14587,65 @@ function cmd_latency(sec) {
 	out({ ok: true, started: true });
 }
 
-function cmd_latwork(sec) {
-	let px = proxies(), g = px ? px[group_tag(sec)] : null, tested = {}, delays = {}, direct = {}, order = [];
-	let add = (t) => { if (!tested[t]) { tested[t] = true; push(order, t); } };
-	if (g && type(g.all) == "array") {
-		for (let t in g.all) { direct[t] = true; add(t); }
-		/* вложенные группы (urltest по подписке или по странам): их узлы проверяем, только если
-		 * среди прямых членов группы секции их нет */
+/* Задержка серверов — TCP-пинг, как «TCP» в Happ: время установки соединения с сервером, без туннеля.
+ * Пачками по TCP_PAR параллельно, по две попытки на сервер; после каждой пачки результат сразу пишется
+ * в файл — панель показывает задержки по мере проверки. Кто не ответил за 3 с, проверяется ещё раз
+ * с запасом в 6 с: «не отвечает» ставится только после обоих проходов. Серверы на UDP (Hysteria2,
+ * TUIC) по TCP не проверить — для них один настоящий запрос через sing-box. Группа (по странам,
+ * автовыбор подписки) получает лучшую задержку своих серверов. */
+function latwork(sec) {
+	let px = proxies(), g = px ? px[group_tag(sec)] : null, seen = {}, order = [], groups = [];
+	let add = (t) => { if (!seen[t]) { seen[t] = true; push(order, t); } };
+	if (g && type(g.all) == "array")
 		for (let t in g.all) {
 			let p = px[t];
-			if (!p || type(p.all) != "array") continue;
-			for (let m in p.all) add(m);
+			if (p && type(p.all) == "array") { push(groups, t); for (let m in p.all) add(m); }
+			else add(t);
 		}
-	}
-	let err = g ? "" : "группа серверов секции ещё не готова — примените настройки";
-	if (g) {
-		/* основной путь: каждый сервер проверяется отдельным запросом, с повторами и запасными адресами */
-		let r = lat_measure(order, 6000);
-		if (r != null) {
-			for (let k in r) delays[k] = r[k];
-			if (!length(delays)) err = "ни один сервер не ответил на проверку — проверьте интернет на роутере";
-		} else {
-			/* запасной путь (нет curl или Clash API): прежний замер группы */
-			let groups = [ group_tag(sec) ];
-			for (let t in g.all) {
-				let p = px[t];
-				if (!p || type(p.all) != "array") continue;
-				let extra = false;
-				for (let m in p.all) if (!direct[m]) extra = true;
-				if (extra) push(groups, t);
-			}
-			for (let gt in groups) {
-				let j = jcmd(BIN + " clash_api get_group_latency " + q(gt) + " 8000");
-				if (type(j) != "object") { err = err || "sing-box не ответил на проверку задержки"; continue; }
-				if (j.message && length(j) == 1) { err = err || ("sing-box: " + s(j.message)); continue; }
-				for (let k in j) if (int(j[k]) > 0) delays[k] = int(j[k]);
-			}
+	let delays = {}, done = {}, err = g ? "" : "группа серверов секции ещё не готова — примените настройки";
+	let save = (running) => {
+		for (let t in groups) {
+			let best = 0, all = true;
+			for (let m in px[t].all) { if (!done[m]) all = false; else if (delays[m] > 0 && (!best || delays[m] < best)) best = delays[m]; }
+			if (best > 0) delays[t] = best;
+			if (all || best > 0) done[t] = true;
 		}
+		fs.writefile(lat_path(sec), sprintf("%J", { at: time(), running, tested: keys(done), pending: filter([ ...order, ...groups ], (t) => !done[t]), delays, error: err }));
+	};
+	if (!g) { save(false); return; }
+	if (sh("command -v curl") == "") { err = "на роутере нет curl — задержку проверить нечем"; save(false); return; }
+	save(true);
+
+	let addrs = node_addrs(), tcp = filter(order, (t) => !!addrs[t]), other = filter(order, (t) => !addrs[t]);
+	let fails = [];
+	for (let i = 0; i < length(tcp); i += TCP_PAR) {
+		let part = slice(tcp, i, i + TCP_PAR), r = tcp_chunk(addrs, part, 3);
+		for (let t in part) { if (r[t]) { delays[t] = r[t]; done[t] = true; } else push(fails, t); }
+		save(true);
 	}
-	if (length(delays)) err = "";
-	fs.writefile(lat_path(sec), sprintf("%J", { at: time(), running: false, tested: err ? [] : keys(tested), delays, error: err }));
+	for (let i = 0; i < length(fails); i += TCP_PAR) {
+		let part = slice(fails, i, i + TCP_PAR), r = tcp_chunk(addrs, part, 6);
+		for (let t in part) { if (r[t]) delays[t] = r[t]; done[t] = true; }
+		save(true);
+	}
+	let ep = clash_ep();
+	if (length(other) && ep) {
+		let r = lat_batch(ep, other, LAT_URLS[0], 5000);
+		for (let t in other) { if (r[t]) delays[t] = r[t]; done[t] = true; }
+	}
+	for (let t in other) done[t] = true;
+	let alive = 0;
+	for (let t in order) if (delays[t] > 0) alive++;
+	if (!alive && length(order)) err = "ни один сервер не ответил — проверьте интернет на роутере";
+	save(false);
+}
+
+function cmd_latwork(sec) {
+	try { latwork(sec); }
+	catch (e) {
+		/* что бы ни случилось — не оставлять «проверяем…» висеть */
+		try { fs.writefile(lat_path(sec), sprintf("%J", { at: time(), running: false, tested: [], delays: {}, error: "проверка прервалась: " + s(e.message || e) })); } catch (x) {}
+	}
 }
 
 function cmd_select(sec, tag) {
@@ -15028,7 +15053,7 @@ function cmd_stats() {
 	let ep = clash_ep();
 	if (!ep) { out({ ok: false }); return; }
 	let auth = ep.secret != "" ? " -H " + q("Authorization: Bearer " + ep.secret) : "";
-	let j = jcmd("curl -s -m 3" + auth + " " + q(ep.base + "/connections"));
+	let j = jcmd("curl -s --noproxy '*' -m 3" + auth + " " + q(ep.base + "/connections"));
 	if (type(j) != "object" || j.downloadTotal == null) { out({ ok: false }); return; }
 	out({ ok: true, at: time(), down: int(j.downloadTotal || 0), up: int(j.uploadTotal || 0),
 		conns: type(j.connections) == "array" ? length(j.connections) : 0,
@@ -18830,26 +18855,40 @@ return view.extend({
 			onSave: function(names, markers) { return subActP('sub_hide', JSON.stringify({ names: names, markers: markers }), 'Применяем список узлов'); },
 			onReset: function() { return subActP('sub_hide', JSON.stringify({ reset: true }), 'Возвращаем все узлы'); } });
 
+		/* Задержка — TCP-пинг, как «TCP» в Happ: пачками по 8 узлов, две пачки одновременно, результаты
+		 * появляются по мере проверки. Hysteria2 по TCP не проверить — его проверяет ядро steer. */
 		function probeAll() {
 			var hm = subHidden(), nodes = subNodesAll().filter(function(n) { return !hm[n.index]; });
 			if (probing || !nodes.length) return;
 			probing = true; probeDone = 0; probeTotal = nodes.length; lat = {};
 			nodes.forEach(function(n) { lat[n.index] = { busy: true }; });
 			renderSub();
-			var queue = nodes.map(function(n) { return n.index; });
-			function next() {
-				if (!queue.length) return Promise.resolve();
-				var i = queue.shift();
+			var ids = nodes.map(function(n) { return n.index; }), chunks = [], core = [];
+			for (var c = 0; c < ids.length; c += 8) chunks.push(ids.slice(c, c + 8));
+			function one(i) {
 				return zm.steerAction('sub_probe', String(i)).then(function(res) {
 					var r = res && res.results && res.results[0];
-					lat[i] = r ? { ok: !!r.ok, ms: r.tcp_ms > 0 ? r.tcp_ms : (r.ttfb_ms > 0 ? r.ttfb_ms : r.handshake_ms), why: r.why } : { ok: false, why: (res && res.error) || '' };
-				}).catch(function() { lat[i] = { ok: false }; }).then(function() {
-					probeDone++;
+					lat[i] = r ? { ok: !!r.ok, ms: r.ttfb_ms > 0 ? r.ttfb_ms : r.handshake_ms, why: r.why } : { ok: false, why: (res && res.error) || '' };
+				}).catch(function() { lat[i] = { ok: false }; }).then(function() { probeDone++; renderSub(); });
+			}
+			function nextChunk() {
+				if (!chunks.length) return Promise.resolve();
+				var part = chunks.shift();
+				return zm.steerAction('sub_tcp', part.join(',')).then(function(res) {
+					var rs = (res && res.results) || {};
+					part.forEach(function(i) {
+						var r = rs[i];
+						if (r && r.core) { core.push(i); return; }
+						lat[i] = r && r.ok ? { ok: true, ms: r.ms } : { ok: false, why: res && res.error ? res.error : 'нет TCP-соединения с сервером' };
+						probeDone++;
+					});
+				}).catch(function() { part.forEach(function(i) { lat[i] = { ok: false }; probeDone++; }); }).then(function() {
 					renderSub();
-					return next();
+					return nextChunk();
 				});
 			}
-			Promise.all([ next(), next(), next() ]).then(function() {
+			function nextCore() { return core.length ? one(core.shift()).then(nextCore) : Promise.resolve(); }
+			Promise.all([ nextChunk(), nextChunk() ]).then(function() { return Promise.all([ nextCore(), nextCore() ]); }).then(function() {
 				probing = false;
 				var ok = Object.keys(lat).filter(function(k) { return lat[k].ok; }).length;
 				zm.toast('Проверка закончена: отвечают ' + ok + ' из ' + probeTotal, ok ? 'info' : 'warning');
@@ -23097,7 +23136,7 @@ function latClass(ms) {
 }
 
 function latText(ms) {
-	return ms > 0 ? ms + ' мс' : ms === 0 ? 'нет ответа' : '';
+	return ms > 0 ? ms + ' мс' : ms === 0 ? 'нет ответа' : ms === -2 ? '…' : '';
 }
 
 function flag(cc) {
@@ -24095,9 +24134,14 @@ return view.extend({
 			if (latBusy) return;
 			var forSec = (cfg && cfg.sec) || '', tries = 0;
 			latBusy = true;
+			if (servers && servers.nodes) Object.keys(servers.nodes).forEach(function(t) { servers.nodes[t].delay = -2; });
 			renderServers();
-			zm.toast('Проверяем задержку…', 'warning');
 			function done(text, kind) { latBusy = false; renderServers(); renderMain(); if (text) zm.toast(text, kind); }
+			function score(r) {
+				var ns = (r && r.nodes) || {}, ok = 0, all = 0;
+				Object.keys(ns).forEach(function(t) { if (!ns[t].members) { all++; if (ns[t].delay > 0) ok++; } });
+				return 'отвечают ' + ok + ' из ' + all;
+			}
 			function poll() {
 				setTimeout(function() {
 					tries++;
@@ -24105,11 +24149,11 @@ return view.extend({
 						if (!cfg || ((cfg.sec || '') !== forSec)) { latBusy = false; return; }
 						if (r && !r.error) { servers = r; srvErr = ''; }
 						var running = !!(r && r.lat && r.lat.running);
-						if (running && tries < 40) { renderServers(); poll(); return; }
+						if (running && tries < 90) { renderServers(); poll(); return; }
 						var le = r && r.lat && r.lat.error;
-						done(running ? 'Проверка идёт дольше обычного — задержки появятся сами' : le ? 'Задержка не проверена: ' + le : 'Задержка проверена', running || le ? 'warning' : 'info');
-					}).catch(function() { if (tries < 40) poll(); else done('Роутер не ответил', 'error'); });
-				}, tries ? 2500 : 1500);
+						done(running ? 'Проверка идёт дольше обычного — задержки появятся сами' : le ? 'Задержка не проверена: ' + le : 'Проверка закончена: ' + score(r), running || le ? 'warning' : 'info');
+					}).catch(function() { if (tries < 90) poll(); else done('Роутер не ответил', 'error'); });
+				}, tries ? 1200 : 800);
 			}
 			zm.forkopAction('latency', forSec).then(function(res) {
 				if (res.error) { done(res.error, 'error'); return; }
@@ -24177,7 +24221,7 @@ return view.extend({
 			hn.forEach(function(nm) { if (!shown[nm]) hpItems.push({ name: nm, foot: 'скрыт', hidden: true, locked: false }); });
 			hidePick.update(hpItems, { markers: servers.exclude || '', hideNames: hn });
 			if (hideMode) { srvCard.appendChild(hidePick); return; }
-			if (sortPing) {
+			if (sortPing && !latBusy) {
 				var rank = function(t) { var d = ns[t] ? ns[t].delay : -1; return d > 0 ? d : d === 0 ? 1e9 : 1e8; };
 				tags = tags.map(function(t, i) { return { t: t, i: i }; }).sort(function(a, b) { return rank(a.t) - rank(b.t) || a.i - b.i; }).map(function(x) { return x.t; });
 			}
@@ -24186,7 +24230,8 @@ return view.extend({
 				return node(nodeName(n), String(n.type || '').toLowerCase(), on, function() { if (!on) pickServer(t, nodeName(n)); },
 					E('span', { 'class': 'zm-lat ' + (n.delay === 0 ? 'zm-lat-bad' : latClass(n.delay)) }, latText(n.delay)), n.delay === 0 ? 'zm-node-dead' : '');
 			})));
-			var acts = [ E('button', { 'class': 'cbi-button', 'disabled': latBusy ? '' : null, 'click': testLatency }, latBusy ? 'Проверяем…' : 'Проверить задержку') ];
+			var lt = tags.filter(function(t) { return ns[t] && !ns[t].members; }), lw = lt.filter(function(t) { return ns[t].delay !== -2; }).length;
+			var acts = [ E('button', { 'class': 'cbi-button', 'disabled': latBusy ? '' : null, 'click': testLatency }, latBusy ? (lt.length ? 'Проверяем ' + lw + ' из ' + lt.length : 'Проверяем…') : 'Проверить задержку') ];
 			if (cfg.mode === 'sub') acts.push(E('button', { 'class': 'cbi-button', 'click': function() { act('subs'); } }, 'Обновить серверы подписки'));
 			srvCard.appendChild(E('div', { 'class': 'zm-actions' }, acts));
 			if (tags.length > 1) srvCard.appendChild(zm.swRow(sortPing, 'Сортировать по пингу', 'Серверы идут от быстрых к медленным, неотвечающие — в конце.', function() {
