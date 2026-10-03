@@ -1,5 +1,5 @@
 #!/bin/sh
-# Version: 2.10
+# Version: 2.12
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -50,7 +50,7 @@ cat > '/opt/zapret-manager-luci/backend.sh.zm-new' << 'ZM_INSTALLER_EOF'
 umask 022
 
 CONF="/etc/config/zapret"
-ZM_VERSION="2.10"
+ZM_VERSION="2.12"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
@@ -6877,7 +6877,16 @@ _st_migrate() {
 	rm -f "$old/warp.pick" "$old/warp.skip"
 	sed -i 's/# zm-autobypass$/# zm-steer/' "$CRON_FILE" 2>/dev/null
 }
+_st_sel_remap() {
+	local f
+	for f in "$ST_SEL" "$ST_SKIP"; do
+		grep -q '^c_itdoginfo_' "$f" 2>/dev/null || continue
+		awk -v conf="$RB_SHARE/services.conf" 'BEGIN { while ((getline l < conf) > 0) { split(l, a, "|"); if (a[1] != "" && a[1] !~ /^#/) b[a[1]] = 1 } }
+			{ k = $0; if (k ~ /^c_itdoginfo_/ && (substr(k, 13) in b)) k = substr(k, 13); if (k != "" && !(k in s)) { s[k] = 1; print k } }' "$f" > "$f.tmp" && mv -f "$f.tmp" "$f"
+	done
+}
 _st_migrate
+_st_sel_remap
 mkdir -p "$ST_RUN" 2>/dev/null
 
 _st_blocker() {
@@ -7446,8 +7455,8 @@ _st_warp_scan1() {
 	mkdir -p "$ST_RUN"
 	: > "$r"; : > "$r.same"; : > "$r.nc"; : > "$r.ru"; : > "$r.notls"; : > "$r.torn"
 	cand=$(awk -v p="$ST_WARP_POOLS" -v n="$ST_WARP_RAND" -v q="$quick" 'BEGIN { srand(); c = split(p, a, " ");
-		if (q != "") { for (i = 1; i <= 4; i++) print a[i] "1"; for (i = 0; i < 2; i++) print a[int(rand() * c) + 1] int(rand() * 254) + 2; exit }
-		for (i = 1; i <= c; i++) print a[i] "1"; for (i = 0; i < n; i++) print a[int(rand() * c) + 1] int(rand() * 254) + 2 }')
+		if (q != "") { for (i = 1; i <= 4; i++) print a[i] "1"; for (i = 0; i < 2; i++) print a[int(rand() * c) + 1] int(rand() * 253) + 2; exit }
+		for (i = 1; i <= c; i++) print a[i] "1"; for (i = 0; i < n; i++) print a[int(rand() * c) + 1] int(rand() * 253) + 2 }')
 	ports=""
 	for ip in $cand; do
 		[ -n "$ports" ] && break
@@ -7957,9 +7966,8 @@ _st_cat_build() {
 			grp = clean(f[e, "source_name"]); if (grp == "") return
 			if (f[e, "source"] == "itdoginfo/allow-domains") {
 				u = f[e, "url"]; b = u; sub(/.*\//, "", b); sub(/\.srs$/, "", b)
-				if (index(bsets, " " b " ")) return
+				if (index(bsets, " " b " ") || index(bnames, "|" tolower(nm) "|")) return
 			}
-			if (index(bnames, "|" tolower(nm) "|")) return
 			if (ek[e] in out) return
 			out[ek[e]] = 1; svcs++
 			print ek[e] "|" nm "|||||" "|" st "|" grp
@@ -8003,6 +8011,15 @@ _st_cat_bg() {
 	[ -d "$ST_RUN/cat.lock" ] && [ -z "$(find "$ST_RUN/cat.lock" -maxdepth 0 -mmin +5 2>/dev/null)" ] && return 0
 	if grep -q '|Свои списки каталога$' "$ST_CAT_SVC" 2>/dev/null; then ( _st_cat_refresh force >/dev/null 2>&1 & ); return 0; fi
 	[ -f "$ST_DIR/catalog.err" ] && [ $(( $(date +%s) - $(cat "$ST_DIR/catalog.err" 2>/dev/null || echo 0) )) -lt 1800 ] && return 0
+	if [ -s "$ST_CAT_SVC" ] && [ "$RB_SHARE/services.conf" -nt "$ST_CAT_SVC" ]; then
+		if [ -s "$ST_RUN/lists.json" ] && mkdir "$ST_RUN/cat.lock" 2>/dev/null; then
+			_st_cat_build "$ST_RUN/lists.json"; local rc=$?
+			rmdir "$ST_RUN/cat.lock" 2>/dev/null
+			[ "$rc" = 0 ] && return 0
+		fi
+		( _st_cat_refresh force >/dev/null 2>&1 & )
+		return 0
+	fi
 	[ -s "$ST_CAT_SVC" ] && [ $(( $(date +%s) - $(date -r "$ST_CAT_SVC" +%s 2>/dev/null || echo 0) )) -lt 21600 ] && return 0
 	( _st_cat_refresh >/dev/null 2>&1 & )
 }
@@ -10089,6 +10106,7 @@ _awg_valid_ep() { printf '%s' "$1" | grep -Eq '^(\[[0-9A-Fa-f:]+\]|[A-Za-z0-9.-]
 
 AWG_API1="https://api.cloudflareclient.com/v0a4005/reg"
 AWG_API2="https://api.cloudflareclient.com/v0i1909051800/reg"
+AWG_RELAY="https://edge-client-api.vercel.app/v0a4005/reg"
 AWG_CF_VER="a-6.11-2223"
 AWG_BOOT_PRIV="4OnO86dDLpqJ2U10ODwX3tarx6xlRGLfkmbSBtMgaHg="
 AWG_BOOT_IP="172.16.0.3"
@@ -10204,12 +10222,13 @@ _awg_genkey() {
 	[ -n "$G_PRIV" ] && [ -n "$G_PUB" ]
 }
 _awg_cf_register() {
-	local reg="$AWG_RUN/reg.$$.json" api code pre id tok host dead="" ua='okhttp/3.12.1' cv="$AWG_CF_VER"
+	local reg="$AWG_RUN/reg.$$.json" api code pre id tok host lbl dead="" ua='okhttp/3.12.1' cv="$AWG_CF_VER"
 	_awg_genkey || { echo "   нет утилиты awg или wg"; return 1; }
 	mkdir -p "$AWG_RUN"
-	for api in "$AWG_API1" "$AWG_API2" $ST_WARP_API; do
+	for api in "$AWG_API1" "$AWG_API2" $ST_WARP_API "$AWG_RELAY"; do
 		host="${api#https://}"; host="${host%%/*}"
 		case " $dead " in *" $host "*) continue ;; esac
+		lbl="$host"; [ "$api" = "$AWG_RELAY" ] && lbl="реле $host"
 		rm -f "$reg"
 		code=$(curl -s --connect-timeout 6 --max-time 25 $1 -X POST \
 			-H 'Content-Type: application/json' -H "User-Agent: $ua" -H "CF-Client-Version: $cv" -H 'Accept-Encoding: identity' \
@@ -10217,8 +10236,8 @@ _awg_cf_register() {
 			-o "$reg" -w '%{http_code}' "$api" 2>/dev/null)
 		case "$code" in
 			200|201) ;;
-			''|000) echo "   $host: нет связи"; dead="$dead $host"; continue ;;
-			*) echo "   $host: ответ $code"; continue ;;
+			''|000) echo "   $lbl: нет связи"; dead="$dead $host"; continue ;;
+			*) echo "   $lbl: ответ $code"; continue ;;
 		esac
 		G_PEER=""; G_V4=""; G_V6=""; id=""; tok=""
 		for pre in '@.result' '@'; do
@@ -10236,14 +10255,14 @@ _awg_cf_register() {
 					-d '{"warp_enabled":true}' -o /dev/null -w '%{http_code}' "${api}/$id" 2>/dev/null)
 				case "$code" in
 					2??) ;;
-					*) echo "   $host: ключ выдан, но WARP не включился (ответ ${code:-нет связи})"; G_PEER=""; G_V4=""; G_V6=""; dead="$dead $host"; continue ;;
+					*) echo "   $lbl: ключ выдан, но WARP не включился (ответ ${code:-нет связи})"; G_PEER=""; G_V4=""; G_V6=""; dead="$dead $host"; continue ;;
 				esac
 			fi
 			rm -f "$reg"
-			echo "   ключи выданы ($host)"
+			echo "   ключи выданы ($lbl)"
 			return 0
 		fi
-		echo "   $host: в ответе нет ключа сервера"
+		echo "   $lbl: в ответе нет ключа сервера"
 	done
 	rm -f "$reg"
 	return 1
@@ -14673,7 +14692,7 @@ function toast(message, kind, duration) {
 	var txt = String(message == null ? '' : message);
 	Array.prototype.slice.call(container.children).forEach(function(o) { if (o._zmText === txt) container.removeChild(o); });
 	var el = E('div', { 'class': 'zm-toast zm-toast-' + (kind || 'info') }, [
-		E('span', { 'class': 'zm-toast-icon' }, kind === 'error' ? '✕' : (kind === 'warning' ? '!' : '✓')),
+		E('span', { 'class': 'zm-toast-icon' }),
 		E('span', { 'class': 'zm-toast-text' }, [ String(message == null ? '' : message) ])
 	]);
 	el._zmText = txt;
@@ -14706,12 +14725,18 @@ var SVC_BRANDS = [
 	[ /rezka/i, '#3f8f3f', 'HD' ], [ /spotify/i, '#1db954', 'SP' ], [ /twitch/i, '#9146ff', 'TW' ], [ /netflix/i, '#e50914', 'NF' ],
 	[ /steam/i, '#1b2838', 'ST' ], [ /cloudflare/i, '#f38020', 'CF' ], [ /amazon|aws|cloudfront/i, '#ff9900', 'AW' ],
 	[ /linkedin/i, '#0a66c2', 'IN' ], [ /soundcloud/i, '#ff5500', 'SC' ], [ /reddit/i, '#ff4500', 'RD' ], [ /nalog/i, '#1f4e8c', 'НЛ' ],
-	[ /rutor|rutracker|torrent/i, '#6b7280', 'RT' ], [ /hetzner/i, '#d50c2d', 'HZ' ], [ /ovh/i, '#123f6d', 'OV' ], [ /digitalocean/i, '#0080ff', 'DO' ]
+	[ /rutor|rutracker|torrent/i, '#6b7280', 'RT' ], [ /hetzner/i, '#d50c2d', 'HZ' ], [ /ovh/i, '#123f6d', 'OV' ], [ /digitalocean/i, '#0080ff', 'DO' ],
+	[ /hodca|хостинг/i, '#0f766e', 'HC' ]
 ];
 var SVC_PALETTE = [ '#6366f1', '#0ea5e9', '#14b8a6', '#10b981', '#84cc16', '#f59e0b', '#f97316', '#ef4444', '#ec4899', '#8b5cf6', '#64748b', '#0891b2' ];
 
+var SVC_KEY_ICO = { geoblock: [ '#0ea5e9', 'ГБ' ], block: [ '#ef4444', 'ЗБ' ], news: [ '#64748b', 'НВ' ], anime: [ '#ec4899', 'АН' ], porn: [ '#be123c', '18' ],
+	hodca: [ '#0f766e', 'HC' ], russia_inside: [ '#2563eb', 'ВС' ], russia_outside: [ '#7c3aed', 'РФ' ], ukraine_inside: [ '#0057b7', 'UA' ], custom: [ '#0891b2', 'СВ' ] };
+
 function svcIco(name, key) {
 	name = String(name || '');
+	var kk = SVC_KEY_ICO[String(key || '').replace(/^c_itdoginfo_/, '')];
+	if (kk) return { color: kk[0], ico: kk[1] };
 	for (var i = 0; i < SVC_BRANDS.length; i++)
 		if (SVC_BRANDS[i][0].test(name) || (key && SVC_BRANDS[i][0].test(key))) return { color: SVC_BRANDS[i][1], ico: SVC_BRANDS[i][2] };
 	var src = String(key || name), h = 0;
@@ -15296,14 +15321,16 @@ function routeCheck(o) {
 	var btn = E('button', { 'type': 'button', 'class': 'cbi-button cbi-button-action', 'click': function() { run(); } }, 'Проверить');
 	var chips = E('div', { 'class': 'zm-route-chips' });
 	var out = E('div', { 'class': 'zm-route-out' });
-	(o.examples || [ 'youtube.com', 'instagram.com', 'discord.com', 'chatgpt.com' ]).forEach(function(x) {
+	(o.examples || [ 'youtube.com', 'instagram.com', 'discord.com', 'chatgpt.com', 'epidemz.net.co', 'speedtest.net', 'telegram.org' ]).forEach(function(x) {
 		chips.appendChild(E('button', { 'type': 'button', 'class': 'zm-route-chip', 'click': function() { inp.value = x; run(); } }, x));
 	});
 	function off() { return !!(o.disabled && o.disabled()); }
 	function run() {
-		var v = inp.value.trim();
+		var v = inp.value.trim().replace(/^[a-z][a-z0-9+.-]*:\/\//i, '').replace(/[\/?#].*$/, '').replace(/^[^@]*@/, '');
+		if (/^[^:\[\]]+:\d+$/.test(v)) v = v.replace(/:\d+$/, '');
 		if (busy) return;
 		if (!v) { toast('Введите домен или IP-адрес', 'warning'); inp.focus(); return; }
+		inp.value = v;
 		if (off()) { toast(o.offText || 'Сейчас проверить нельзя', 'warning'); return; }
 		busy = true; err = ''; last = v; paint();
 		Promise.resolve(o.call(v)).then(function(r) {
@@ -15568,7 +15595,7 @@ return view.extend({
 				: hostsTotal
 					? (hostsEnabled > 0 ? zm.badge(true, 'включено ' + hostsEnabled + ' из ' + hostsTotal, '') : E('span', { 'class': 'zm-badge zm-off' }, [ E('span', { 'class': 'zm-dot' }), 'ничего не включено' ]))
 					: E('span', {}, '—')));
-			if (sysFlags.length) items.push(row('Система', E('span', { 'style': 'overflow-wrap:anywhere' }, sysFlags.join(', '))));
+			if (sysFlags.length) items.push(row('Система', E('span', { 'style': 'display:flex;flex-wrap:wrap;gap:6px;flex:1 1 0;min-width:0' }, sysFlags.map(function(f) { return E('span', { 'class': 'zm-badge zm-off' }, f); }))));
 
 			var half = Math.ceil(items.length / 2);
 
@@ -16825,7 +16852,7 @@ return view.extend({
 			return m;
 		}
 
-		var CATEGORY_IDS = [ 'geoblock', 'block', 'news', 'anime', 'porn', 'russia_inside' ];
+		var CATEGORY_IDS = [ 'geoblock', 'block', 'news', 'anime', 'porn', 'hodca', 'russia_inside', 'russia_outside', 'ukraine_inside' ];
 		var openGroups = {};
 
 		function catalogEdit() {
@@ -17712,12 +17739,23 @@ telegram|Telegram|svc_telegram.lst|telegram.lst|web.telegram.org|t.me,core.teleg
 tiktok|TikTok||||||tiktok
 hdrezka|HDRezka||||||hdrezka
 google_meet|Google Meet||||||google_meet
+google_ai|Google AI (Gemini)||||||google_ai
+google_play|Google Play||||||google_play
+roblox|Roblox||||||roblox
+cloudflare|Cloudflare||||||cloudflare
+cloudfront|Amazon CloudFront||||||cloudfront
+digitalocean|DigitalOcean||||||digitalocean
+hetzner|Hetzner||||||hetzner
+ovh|OVH||||||ovh
 geoblock|Геоблок||||||geoblock
 block|Заблокированные сайты||||||block
 news|Новости||||||news
 anime|Аниме||||||anime
 porn|Сайты 18+||||||porn
+hodca|Хостинги и CDN||||||hodca
 russia_inside|Всё сразу (Russia inside)||||||russia_inside
+russia_outside|Сайты РФ из-за рубежа||||||russia_outside
+ukraine_inside|Блокировки Украины||||||ukraine_inside
 custom|Свой список||||||
 ZM_INSTALLER_EOF
 chmod 0644 /usr/share/zm-redbtn/services.conf
@@ -18387,7 +18425,6 @@ return view.extend({
 		panels.main.appendChild(autoCard);
 
 		var configEl = E('textarea', { 'class': 'zm-config-editor', 'spellcheck': 'false' });
-		var configBusy = false;
 		var configCard = E('div', { 'class': 'zm-card' }, [
 			E('h3', {}, 'Редактор конфигурации Mihomo'),
 			E('p', { 'class': 'zm-hint' }, 'Прямое редактирование /etc/mihomo/config.yaml. Проверка — как в оригинальном установщике: сохранение перезапускает Mihomo, и если он не поднимается с новой конфигурацией, изменения автоматически откатываются, а рабочая версия остаётся нетронутой.')
@@ -18580,7 +18617,6 @@ return view.extend({
 		}
 
 		var warpConfigEl = E('textarea', { 'class': 'zm-config-editor', 'spellcheck': 'false' });
-		var warpConfigBusy = false;
 		var warpBar = zm.editorBar(warpConfigEl, {
 			saveLabel: 'Сохранить',
 			onSave: function(v) {
@@ -19184,11 +19220,11 @@ return view.extend({
 				var box = E('div', { 'class': 'zm-tt-doms' });
 				if (bad.length) box.appendChild(E('div', { 'class': 'zm-tt-domgrp' }, [
 					E('div', { 'class': 'zm-tt-domhead zm-tt-bad' }, [ 'Не открылись · ' + bad.length ]),
-					E('div', { 'class': 'zm-chips' }, bad.map(function(d) { return E('span', { 'class': 'zm-chip zm-chip-bad' }, [ '✕ ' + d.name ]); }))
+					E('div', { 'class': 'zm-chips' }, bad.map(function(d) { return E('span', { 'class': 'zm-chip zm-chip-bad' }, [ E('span', { 'class': 'zm-dot' }), d.name ]); }))
 				]));
 				if (good.length) box.appendChild(E('div', { 'class': 'zm-tt-domgrp' }, [
 					E('div', { 'class': 'zm-tt-domhead zm-tt-good' }, [ 'Открылись · ' + good.length ]),
-					E('div', { 'class': 'zm-chips' }, good.map(function(d) { return E('span', { 'class': 'zm-chip zm-chip-ok' }, [ '✓ ' + d.name ]); }))
+					E('div', { 'class': 'zm-chips' }, good.map(function(d) { return E('span', { 'class': 'zm-chip zm-chip-ok' }, [ E('span', { 'class': 'zm-dot' }), d.name ]); }))
 				]));
 				return box;
 			}
@@ -20140,13 +20176,13 @@ html.zm-theme-dark .zm-tile:not(.zm-active):not(.zm-tile-off) {
 	font-weight: 700; color: #15803d;
 	box-shadow: 0 0 0 2px rgba(26,127,55,.35);
 }
-.zm-tile.zm-active::before { content: "✓ "; }
+.zm-tile.zm-active::before { content: none; }
 
 .zm-tile.zm-tile-off {
 	border-color: rgba(207,34,46,.35); background: rgba(207,34,46,.08);
 	color: #cf222e; font-weight: 600;
 }
-.zm-tile.zm-tile-off::before { content: "✗ "; }
+.zm-tile.zm-tile-off::before { content: none; }
 .zm-tile.zm-tile-off:hover { border-color: #cf222e; }
 .zm-tile.zm-tile-pending { opacity: .55; border-style: dashed; cursor: not-allowed; }
 .zm-tile.zm-tile-pending:hover { border-color: rgba(0,0,0,.1); transform: none; }
@@ -20288,7 +20324,7 @@ html.zm-theme-dark .zm-linkbtn { color: #6ea8fe; }
 .zm-toast-show { opacity: 1; transform: translateX(0); }
 .zm-toast-error { border-left-color: #cf222e; }
 .zm-toast-warning { border-left-color: #9a6700; }
-.zm-toast-icon { flex-shrink: 0; font-weight: 700; font-size: 24px; line-height: 1.3; }
+.zm-toast-icon { flex-shrink: 0; width: 10px; height: 10px; border-radius: 50%; background: currentColor; align-self: center; }
 .zm-toast-info .zm-toast-icon { color: #3fb950; }
 .zm-toast-error .zm-toast-icon { color: #ff7b72; }
 .zm-toast-warning .zm-toast-icon { color: #e3b341; }
@@ -20425,7 +20461,7 @@ html.zm-theme-dark .zm-svc { background: #22272e; border-color: rgba(255,255,255
 .zm-st-checks { display: flex; flex-direction: column; gap: 7px; margin-top: 12px; }
 .zm-st-check { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; }
 .zm-st-check > span:last-child { display: flex; flex-direction: column; min-width: 0; }
-.zm-st-check-dot { width: 20px; height: 20px; border-radius: 50%; flex-shrink: 0; display: grid; place-items: center; font-size: 11px; font-weight: 800; color: #fff; }
+.zm-st-check-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; margin-top: 5px; }
 .zm-st-check-ok .zm-st-check-dot { background: #1a7f37; } .zm-st-check-warn .zm-st-check-dot { background: #bf8700; } .zm-st-check-fail .zm-st-check-dot { background: #cf222e; }
 .zm-st-check-why { font-size: 12px; opacity: .65; }
 @media (max-width: 600px) {
@@ -20460,10 +20496,12 @@ html.zm-theme-dark .zm-node:not(.zm-active) { background: #22272e; border-color:
 .zm-node.zm-active { border-color: #1a7f37; background: rgba(26,127,55,.12); box-shadow: 0 0 0 2px rgba(26,127,55,.3); }
 .zm-node.zm-node-dead { opacity: .6; }
 .zm-node-name { font-weight: 600; font-size: 13px; line-height: 1.35; overflow-wrap: anywhere; }
-.zm-node.zm-active .zm-node-name::before { content: "✓ "; color: #1a7f37; }
+.zm-node.zm-active .zm-node-name::before { content: none; }
 .zm-node.zm-sec .zm-node-name::before { content: none; }
-.zm-node.zm-sec-add { border-style: dashed; }
-.zm-node.zm-sec-add:not(:hover) { opacity: .8; }
+.zm-node.zm-sec-add { border-style: dashed; display: flex; align-items: center; justify-content: center; text-align: center; min-height: 64px; box-sizing: border-box; }
+.zm-node.zm-sec-add:not(:hover) { opacity: .85; }
+.zm-sec-add-text { font-weight: 600; font-size: 13px; line-height: 1.35; color: #1a7f37; }
+html.zm-theme-dark .zm-sec-add-text { color: #3fb950; }
 .zm-node-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 11.5px; }
 .zm-node-foot > span:first-child { opacity: .65; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .zm-node-foot > span:last-child { flex-shrink: 0; }
@@ -20490,10 +20528,12 @@ html.zm-theme-dark .zm-seg { background: #22272e; border-color: rgba(255,255,255
 .zm-sub-input { min-height: 72px !important; }
 .zm-svc { min-height: 58px; box-sizing: border-box; }
 .zm-svc-text { overflow: hidden; }
-.zm-svc-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.zm-svc-name { overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; line-height: 1.25; overflow-wrap: anywhere; }
+.zm-svc-text:has(.zm-svc-sub) .zm-svc-name { -webkit-line-clamp: 1; line-clamp: 1; }
 .zm-svc-grid + .zm-hint, .zm-svc-groupwrap + .zm-hint { margin-top: 12px; }
 .zm-svc-groupwrap { margin-top: 12px; }
 .zm-svc-groupwrap > div:last-child > .zm-svc-grid { margin-top: 10px; }
+@media (max-width: 600px) { .zm-svc-grid { gap: 8px; } .zm-svc { min-height: 50px; padding: 8px 10px; gap: 10px; } .zm-svc-ico { width: 30px; height: 30px; border-radius: 9px; font-size: 11.5px; } }
 .zm-svc-group { width: 100%; }
 .zm-svc-chev { display: inline-block; font-size: 20px; line-height: 1; opacity: .55; transition: transform .15s; }
 .zm-svc-open .zm-svc-chev { transform: rotate(90deg); }
@@ -20521,7 +20561,8 @@ html.zm-theme-dark .zm-si-box { border-color: rgba(255,255,255,.12); background:
 @media (max-width: 600px) { .zm-si-box .zm-row > .zm-label { min-width: 110px; } }
 .zm-si-pre { margin: 0; white-space: pre-wrap; word-break: break-all; font-size: 12px; max-height: 260px; overflow: auto; }
 .zm-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.zm-chip { padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; background: rgba(110,118,129,.14); }
+.zm-chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; background: rgba(110,118,129,.14); }
+.zm-chip .zm-dot { width: 7px; height: 7px; background: currentColor; }
 .zm-chip-ok { background: rgba(46,160,67,.12); color: #1a7f37; }
 .zm-chip-bad { background: rgba(207,34,46,.10); color: #cf222e; }
 .zm-tt-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
@@ -20857,7 +20898,7 @@ return view.extend({
 			if (si.sites && si.sites.length) {
 				var ok = si.sites_ok, all = si.sites_total, cls = ok === all ? 'zm-ok' : ok * 2 >= all ? 'zm-warn' : 'zm-bad';
 				siBody.appendChild(siBox('Доступность сайтов', [ E('div', { 'class': 'zm-chips' }, si.sites.map(function(x) {
-					return E('span', { 'class': 'zm-chip ' + (x.ok ? 'zm-chip-ok' : 'zm-chip-bad') }, [ (x.ok ? '✓ ' : '✕ ') + x.name ]);
+					return E('span', { 'class': 'zm-chip ' + (x.ok ? 'zm-chip-ok' : 'zm-chip-bad') }, [ E('span', { 'class': 'zm-dot' }), x.name ]);
 				})) ], E('span', { 'class': 'zm-badge ' + cls }, [ E('span', { 'class': 'zm-dot' }), [ ok + ' из ' + all ] ])));
 			}
 			if (si.packages && si.packages.length) siBody.appendChild(siBox('Пакеты, поставленные вручную', [ E('div', { 'class': 'zm-chips' }, si.packages.map(function(p) { return E('span', { 'class': 'zm-chip' }, [ p ]); })) ], E('span', { 'class': 'zm-hint', 'style': 'margin:0' }, [ String(si.packages.length) ])));
@@ -21001,11 +21042,11 @@ return view.extend({
 			{ product: 'Zapret2', author: 'routerich', url: 'https://github.com/routerich' },
 			{ product: 'стратегии Flowseal', author: 'Flowseal', url: 'https://github.com/Flowseal/zapret-discord-youtube' },
 			{ product: 'ByeDPI-OpenWrt', author: 'DPITrickster', url: 'https://github.com/DPITrickster/ByeDPI-OpenWrt' },
-			{ product: 'mihomo, metacubexd', author: 'MetaCubeX', url: 'https://github.com/MetaCubeX' },
+			{ product: 'mihomo, metacubexd, meta-rules-dat', author: 'MetaCubeX', url: 'https://github.com/MetaCubeX' },
 			{ product: 'zashboard', author: 'Zephyruso', url: 'https://github.com/Zephyruso/zashboard' },
 			{ product: 'hev-socks5-tunnel', author: 'heiher', url: 'https://github.com/heiher/hev-socks5-tunnel' },
 			{ product: 'MagiTrickle', author: 'MagiTrickle', url: 'https://github.com/MagiTrickle/MagiTrickle' },
-			{ product: 'sTGWS, Steer', author: 'xyzmean', url: 'https://github.com/xyzmean' },
+			{ product: 'sTGWS, Steer, каталог списков', author: 'xyzmean', url: 'https://github.com/xyzmean' },
 			{ product: 'tg-ws-proxy-go (MTProto)', author: 'spatiumstas', url: 'https://github.com/spatiumstas/tg-ws-proxy-go' },
 			{ product: 'tg-ws-proxy-go (SOCKS5)', author: 'd0mhate', url: 'https://github.com/d0mhate/-tg-ws-proxy-Manager-go' },
 			{ product: 'tg-ws-proxy-rs (Rust)', author: 'valnesfjord', url: 'https://github.com/valnesfjord/tg-ws-proxy-rs' },
@@ -21015,13 +21056,18 @@ return view.extend({
 			{ product: 'sing-box', author: 'SagerNet', url: 'https://github.com/SagerNet/sing-box' },
 			{ product: 'sing-box-extended', author: 'shtorm-7', url: 'https://github.com/shtorm-7/sing-box-extended' },
 			{ product: 'AmneziaWG', author: 'amnezia-vpn', url: 'https://github.com/amnezia-vpn' },
-			{ product: 'NetShift', author: 'yandexru45', url: 'https://github.com/yandexru45/netshift' },
 			{ product: 'zapret4rocket', author: 'IndeecFOX', url: 'https://github.com/IndeecFOX/zapret4rocket' },
 			{ product: 'ios_rule_script (списки)', author: 'blackmatrix7', url: 'https://github.com/blackmatrix7/ios_rule_script' },
 			{ product: 'b4geoip (списки игр и сервисов)', author: 'DanielLavrushin', url: 'https://github.com/DanielLavrushin/b4geoip' },
+			{ product: 'b4geoip-forkop (сборка для sing-box)', author: 'Greeg0ry', url: 'https://github.com/Greeg0ry/b4geoip-forkop' },
+			{ product: 'domain-list-community', author: 'v2fly', url: 'https://github.com/v2fly/domain-list-community' },
+			{ product: 'supercell-ruleset', author: 'ushan0v', url: 'https://github.com/ushan0v/sing-box-supercell-ruleset' },
+			{ product: 'ad-filter (реклама)', author: 'zxc-rv', url: 'https://github.com/zxc-rv/ad-filter' },
 			{ product: 'dpi-checkers', author: 'hyperion-cs', url: 'https://github.com/hyperion-cs/dpi-checkers' },
-			{ product: 'awg-openwrt (AmneziaWG)', author: '2Grey', url: 'https://github.com/2Grey/awg-openwrt' },
+			{ product: 'awg-openwrt (AmneziaWG)', author: 'Slava-Shchipunov', url: 'https://github.com/Slava-Shchipunov/awg-openwrt' },
+			{ product: 'awg-openwrt (сборки)', author: '2Grey', url: 'https://github.com/2Grey/awg-openwrt' },
 			{ product: 'warpscout (разведка WARP)', author: 'vernette', url: 'https://github.com/vernette/warpscout' },
+			{ product: 'base-relay (реле регистрации WARP)', author: 'nellimonix', url: 'https://github.com/nellimonix/base-relay' },
 			{ product: 'Всем пользователям', author: 'кто помогает, тестирует и поддерживает проект ❤', self: true, all: true }
 		];
 		var creditsGrid = E('div', { 'class': 'zm-credits-grid' }), allTile = null;
@@ -21127,11 +21173,9 @@ return view.extend({
 
 		function renderLinks(d) {
 			linksWrap.innerHTML = '';
-			var any = false;
 			VARIANTS.forEach(function(v) {
 				var st = statusOf(d, v.id);
 				if (!st.installed || !st.running || !d.lan_ip) return;
-				any = true;
 
 				var link, extra;
 				if (v.kind === 'socks') {
@@ -21418,12 +21462,12 @@ cat > '/www/luci-static/resources/view/zapret-manager/forkozz.js' << 'ZM_INSTALL
 'require view';
 'require zapret-manager.common as zm';
 
-var CATEGORY_IDS = [ 'geoblock', 'block', 'news', 'anime', 'porn', 'russia_inside' ];
+var CATEGORY_IDS = [ 'geoblock', 'block', 'news', 'anime', 'porn', 'hodca', 'russia_inside', 'russia_outside', 'ukraine_inside' ];
 var OLD_GROUP = 'Выбрано раньше (нет в каталоге)';
 var OLD_NAMES = { supercell: 'Supercell', ads_hagezi_pro: 'Реклама (HaGeZi Pro)', github: 'GitHub', youtube: 'YouTube', discord: 'Discord',
-	telegram: 'Telegram', meta: 'Meta', twitter: 'X (Twitter)', tiktok: 'TikTok', hdrezka: 'HDRezka', roblox: 'Roblox', google_ai: 'Google AI',
+	telegram: 'Telegram', meta: 'Meta', twitter: 'X (Twitter)', tiktok: 'TikTok', hdrezka: 'HDRezka', roblox: 'Roblox', google_ai: 'Google AI (Gemini)',
 	google_play: 'Google Play', cloudflare: 'Cloudflare', cloudfront: 'Amazon CloudFront', digitalocean: 'DigitalOcean', hetzner: 'Hetzner', ovh: 'OVH',
-	hodca: 'H.O.D.C.A', russia_outside: 'Россия: снаружи', ukraine_inside: 'Украина: заблокированное' };
+	hodca: 'Хостинги и CDN', russia_outside: 'Сайты РФ из-за рубежа', ukraine_inside: 'Блокировки Украины' };
 
 function refNorm(t) {
 	t = String(t || '');
@@ -21576,7 +21620,6 @@ function domainProblem(v) {
 	if (!DOMAIN_RE.test(d)) return '«' + raw + '» не похоже на домен';
 	return '';
 }
-var IP_RE = /^((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)$/;
 
 var WARN = {
 	steer: 'Работает Steer. Один и тот же сервис выбирайте только в одном месте.',
@@ -21846,11 +21889,14 @@ return view.extend({
 			try { localStorage.setItem('zm.forkozz.sec', cfg && s === cfg.main ? '' : s); } catch (e) {}
 		}
 
+		var loadGen = 0;
 		function reload(after) {
+			var g = ++loadGen;
 			return Promise.all([
 				zm.forkopStatus().catch(function() { return st; }),
 				getCfg(curSec).catch(function() { return null; })
 			]).then(function(r) {
+				if (g !== loadGen || saving || secBusy) return;
 				st = r[0] || {};
 				if (r[1] !== null) cfg = validCfg(r[1]);
 				if (cfg && curSec && cfg.sec !== curSec) { rememberSec(cfg.sec); dirty = false; }
@@ -21978,6 +22024,7 @@ return view.extend({
 			var bad = check();
 			if (bad) { tabTo(bad[0]); zm.toast(bad[1], 'warning'); return; }
 			saving = true;
+			loadGen++;
 			renderSaveBar();
 			var sent = sig(draft), connChanged = !configured() || !secExists() || connSig(draft) !== connSig(withBootMode(fromCfg(cfg)));
 			zm.forkopConfigSet(payload()).then(function(res) {
@@ -22019,6 +22066,7 @@ return view.extend({
 			var keep = {};
 			GLOBAL_KEYS.forEach(function(k) { keep[k] = draft[k]; });
 			secBusy = true;
+			loadGen++;
 			renderSections();
 			getCfg(name === (cfg && cfg.main) ? '' : name).then(function(c) {
 				secBusy = false;
@@ -22070,7 +22118,7 @@ return view.extend({
 					'zm-sec' + (s.enabled ? '' : ' zm-node-dead'));
 			});
 			if (isNew) tiles.push(node(secName(), 'ещё не сохранена', true, function() {}, E('span', { 'class': 'zm-lat zm-lat-mid' }, 'черновик'), 'zm-sec'));
-			else if (list.length < SEC_MAX) tiles.push(node('Новая секция', 'свои списки через другой VPN', false, function() { switchSec('new'); }, E('span'), 'zm-sec zm-sec-add'));
+			else if (list.length < SEC_MAX) tiles.push(E('div', { 'class': 'zm-node zm-sec zm-sec-add', 'title': 'Свои списки через другой VPN', 'click': function() { switchSec('new'); } }, [ E('span', { 'class': 'zm-sec-add-text' }, 'Создать новую секцию') ]));
 			secCard.appendChild(E('div', { 'class': 'zm-nodes' }, tiles));
 			if (list.length > 1) secCard.appendChild(E('p', { 'class': 'zm-hint' }, (mainName() === 'Основная' ? 'Основная секция' : 'Основная секция — «' + mainName() + '»') + ': через неё идут устройства «Всё через Forkozz», DNS и скачивание списков. Секции проверяются по порядку слева направо: если сайт попал в две, сработает левая. Один сервис можно включить только в одной секции. Исключения действуют на все секции сразу.'));
 		}
@@ -22574,14 +22622,14 @@ return view.extend({
 			});
 			if (groups.indexOf(OLD_GROUP) >= 0)
 				svcCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Эти списки были выбраны раньше, но их нет в каталоге. Они продолжают работать; выключите ненужные и сохраните.'));
-			if (sel.discord && sel.c_itdoginfo_cloudflare)
+			if (sel.discord && (sel.cloudflare || sel.c_itdoginfo_cloudflare))
 				svcCard.appendChild(E('p', { 'class': 'zm-hint' }, '⚠ Discord вместе с Cloudflare уводят в Forkozz много лишнего, даже торренты.'));
 			svcCard.appendChild(catalogBlock());
 			svcCard.appendChild(listsNow());
 			var meta = (cfg && cfg.catalog && cfg.catalog.meta) || {};
 			if (!meta.off && !remote.length && catWait < 4 && (meta.busy || !meta.version)) {
 				catWait++;
-				setTimeout(function() { if (document.body.contains(svcCard)) reload(); }, 6000);
+				setTimeout(function() { if (document.body.contains(svcCard) && !saving && !busy && !secBusy) reload(); }, 6000);
 			}
 
 			ownCard.innerHTML = '';
@@ -22858,7 +22906,7 @@ return view.extend({
 				checkCard.appendChild(row('Итог', fails ? badge('zm-bad', 'есть поломка') : warns ? badge('zm-warn', 'есть замечания') : badge('zm-ok', 'всё в порядке')));
 				checkCard.appendChild(E('div', { 'class': 'zm-st-checks' }, diag.checks.map(function(c) {
 					return E('div', { 'class': 'zm-st-check zm-st-check-' + c.verdict }, [
-						E('span', { 'class': 'zm-st-check-dot' }, c.verdict === 'ok' ? '✓' : c.verdict === 'warn' ? '!' : '✕'),
+						E('span', { 'class': 'zm-st-check-dot' }),
 						E('span', {}, [ E('span', {}, c.what), E('span', { 'class': 'zm-st-check-why' }, c.why) ])
 					]);
 				})));
@@ -23042,7 +23090,7 @@ function toastContainer() {
 function toast(message, kind, duration) {
 	var container = toastContainer();
 	var el = E('div', { 'class': 'zm-toast zm-toast-' + (kind || 'info') }, [
-		E('span', { 'class': 'zm-toast-icon' }, kind === 'error' ? '✕' : (kind === 'warning' ? '!' : '✓')),
+		E('span', { 'class': 'zm-toast-icon' }),
 		E('span', { 'class': 'zm-toast-text' }, [ message ])
 	]);
 	container.appendChild(el);
@@ -23406,13 +23454,13 @@ html.zm-theme-dark .zm-tile:not(.zm-active):not(.zm-tile-off) {
 	font-weight: 700; color: #15803d;
 	box-shadow: 0 0 0 2px rgba(26,127,55,.35);
 }
-.zm-tile.zm-active::before { content: "✓ "; }
+.zm-tile.zm-active::before { content: none; }
 
 .zm-tile.zm-tile-off {
 	border-color: rgba(207,34,46,.35); background: rgba(207,34,46,.08);
 	color: #cf222e; font-weight: 600;
 }
-.zm-tile.zm-tile-off::before { content: "✗ "; }
+.zm-tile.zm-tile-off::before { content: none; }
 .zm-tile.zm-tile-off:hover { border-color: #cf222e; }
 .zm-tile.zm-tile-pending { opacity: .55; border-style: dashed; cursor: not-allowed; }
 .zm-tile.zm-tile-pending:hover { border-color: rgba(0,0,0,.1); transform: none; }
@@ -23546,7 +23594,7 @@ html.zm-theme-dark .zm-linkbtn { color: #6ea8fe; }
 .zm-toast-show { opacity: 1; transform: translateX(0); }
 .zm-toast-error { border-left-color: #cf222e; }
 .zm-toast-warning { border-left-color: #9a6700; }
-.zm-toast-icon { flex-shrink: 0; font-weight: 700; font-size: 24px; line-height: 1.3; }
+.zm-toast-icon { flex-shrink: 0; width: 10px; height: 10px; border-radius: 50%; background: currentColor; align-self: center; }
 .zm-toast-info .zm-toast-icon { color: #3fb950; }
 .zm-toast-error .zm-toast-icon { color: #ff7b72; }
 .zm-toast-warning .zm-toast-icon { color: #e3b341; }
@@ -24914,7 +24962,7 @@ function toast(message, kind, duration) {
 	var c = document.getElementById('zm-toast-container');
 	if (!c) { c = E('div', { id: 'zm-toast-container' }); document.body.appendChild(c); }
 	var el = E('div', { 'class': 'zm-toast zm-toast-' + (kind || 'info') }, [
-		E('span', { 'class': 'zm-toast-icon' }, [ kind === 'error' ? '✕' : (kind === 'warning' ? '!' : '✓') ]),
+		E('span', { 'class': 'zm-toast-icon' }),
 		E('span', { 'class': 'zm-toast-text' }, [ message ])
 	]);
 	Array.prototype.slice.call(c.children).forEach(function (o) { if (o !== el && o._zmText === String(message)) o.remove(); });
@@ -25025,7 +25073,7 @@ function toggleTheme(ev) {
 			'type': 'button', 'role': 'menuitemradio', 'aria-checked': t.id === cur ? 'true' : 'false',
 			'class': 'zmw-theme-opt' + (t.id === cur ? ' zmw-on' : ''),
 			'click': function (e) { e.stopPropagation(); closeThemeMenu(); if (t.id !== cur) setTheme(t.id); }
-		}, [ icon(t.ico), E('span', {}, [ t.name ]), E('span', { 'class': 'zmw-theme-mark' }, [ t.id === cur ? '✓' : '' ]) ]);
+		}, [ icon(t.ico), E('span', {}, [ t.name ]), E('span', { 'class': 'zmw-theme-mark' }) ]);
 	}
 	document.body.appendChild(themeMenuEl);
 	if (btn) {
@@ -26245,7 +26293,7 @@ html.zm-theme-dark #zmw-view .zm-tile:not(.zm-active):not(.zm-tile-off):hover { 
 	color: var(--text); font-weight: 700;
 	box-shadow: 0 0 0 1px rgba(124,92,255,.45) inset, 0 10px 24px -14px rgba(99,102,241,.9);
 }
-#zmw-view .zm-tile.zm-active::before { content: "✓ "; color: var(--a1); font-weight: 800; }
+#zmw-view .zm-tile.zm-active::before { content: none; }
 html[data-theme="dark"] #zmw-view .zm-tile.zm-active::before { color: #a594ff; }
 #zmw-view .zm-tile.zm-tile-off { background: var(--bad-bg); border-color: rgba(239,68,68,.35); color: var(--bad); }
 #zmw-view .zm-tile.zm-tile-pending { opacity: .5; }
@@ -26417,9 +26465,9 @@ html.zm-theme-dark .zmw-body .zm-toast, html.zm-theme-dark.zmw-body .zm-toast {
 .zmw-body .zm-toast-warning { border-left-color: var(--warn); }
 .zmw-body .zm-toast.zm-toast-show { opacity: 1; transform: none; }
 .zmw-body .zm-toast-icon {
-	width: 38px; height: 38px; border-radius: 12px;
-	display: grid; place-items: center; flex-shrink: 0;
-	font-size: 18px; font-weight: 800; line-height: 1;
+	width: 10px; height: 10px; border-radius: 50%;
+	flex-shrink: 0; align-self: center;
+	box-shadow: 0 0 0 4px rgba(0,0,0,.06);
 }
 html body.zmw-body .zm-toast .zm-toast-icon { color: #fff; }
 html body.zmw-body .zm-toast { background: var(--toast-bg); color: var(--toast-fg); }
@@ -26498,6 +26546,7 @@ html.zm-theme-dark #zmw-view .zm-node:not(.zm-active) { background: var(--surfac
 #zmw-view .zm-node.zm-active { border-color: rgba(124,92,255,.6); background: var(--grad-soft); box-shadow: var(--ring); }
 #zmw-view .zm-node.zm-active .zm-node-name::before { color: var(--a1); }
 #zmw-view .zm-node.zm-sec-add { border-style: dashed; }
+#zmw-view .zm-sec-add-text { color: var(--a1); }
 #zmw-view .zm-node-name { color: var(--text); }
 #zmw-view .zm-node-foot > span:first-child { color: var(--muted); opacity: 1; }
 #zmw-view .zm-lat-good { color: var(--ok); } #zmw-view .zm-lat-mid { color: var(--warn); } #zmw-view .zm-lat-bad { color: var(--bad); }
@@ -26538,7 +26587,8 @@ html[data-theme="dark"] .zmw-logo svg { filter: drop-shadow(0 0 1px rgba(255,255
 .zmw-theme-opt.zmw-on { background: var(--grad-soft); font-weight: 650; }
 .zmw-theme-opt .zmw-i { width: 18px; height: 18px; flex-shrink: 0; }
 .zmw-theme-opt > span:nth-of-type(1) { flex: 1; }
-.zmw-theme-mark { color: var(--a1); font-weight: 800; width: 14px; text-align: center; }
+.zmw-theme-mark { color: var(--a1); width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.zmw-theme-opt.zmw-on .zmw-theme-mark { background: currentColor; }
 
 html[data-theme="ink"] {
 	--a1: #0a9cff; --a2: #0a9cff; --a3: #00c0ff;
