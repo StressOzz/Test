@@ -14064,8 +14064,11 @@ function cmd_servers(sec) {
 	let lat = lat_read(sec), lrun = lat_running(lat);
 	if (lat && !lat.running && time() - int(lat.at || 0) < 900) {
 		let dl = type(lat.delays) == "object" ? lat.delays : {};
-		for (let t in (type(lat.tested) == "array" ? lat.tested : []))
-			if (nodes[t] && nodes[t].delay < 0) nodes[t].delay = int(dl[t] || 0);
+		for (let t in (type(lat.tested) == "array" ? lat.tested : [])) {
+			if (!nodes[t]) continue;
+			if (!nodes[t].members) nodes[t].delay = int(dl[t] || 0);
+			else if (nodes[t].delay < 0) nodes[t].delay = int(dl[t] || 0);
+		}
 	}
 	out({ group: group_tag(sec), now: s(g.now), list: g.all, nodes, sub: sec_mode(xm) == "sub" ? sub_info(sec) : null,
 		hidden: length(xv.h), exclude: s(xm.zm_exclude), hide_names: xv.h, fell, lat: lat ? { running: lrun, at: int(lat.at || 0), error: s(lat.error) } : null });
@@ -14133,16 +14136,77 @@ function lat_batch(ep, tags, url, ms) {
 	return res;
 }
 
-/* несколько проходов: на каждом проходе другой тестовый адрес и всё больше времени, перепроверяются
- * только те, кто не ответил. Возвращает { tag: мс } только для ответивших. */
+/* ---------- TCP-пинг (как «TCP» в Happ): время установки соединения с сервером, без туннеля ---------- */
+const UDP_TYPES = { hysteria: true, hysteria2: true, tuic: true, wireguard: true, awg: true, quic: true };
+
+function node_addrs() {
+	let j = null, r = {};
+	try { j = json(s(fs.readfile(SB_CONF))); } catch (e) { j = null; }
+	if (!j || type(j.outbounds) != "array") return r;
+	for (let o in j.outbounds) {
+		if (type(o) != "object" || s(o.tag) == "" || s(o.server) == "" || int(o.server_port || 0) <= 0) continue;
+		if (UDP_TYPES[lc(s(o.type))]) continue;
+		r[s(o.tag)] = { host: s(o.server), port: int(o.server_port) };
+	}
+	return r;
+}
+
+function tcp_cmd(a) {
+	let h = index(a.host, ":") >= 0 ? "[" + a.host + "]" : a.host;
+	return "curl -s -o /dev/null --connect-timeout 4 --max-time 4 -w '%{time_connect} %{time_namelookup}' " + q("http://" + h + ":" + a.port + "/");
+}
+
+function tcp_parse(raw) {
+	let f = split(trim(s(raw)), " ");
+	if (length(f) < 2) return 0;
+	let c = +f[0], n = +f[1];
+	if (!(c > 0)) return 0;
+	let ms = int((c - (n > 0 && n < c ? n : 0)) * 1000 + 0.5);
+	return ms < 1 ? 1 : ms;
+}
+
+/* по 8 серверов параллельно; две попытки на сервер, берём лучшую (как у клиентов) */
+function tcp_batch(addrs, tags) {
+	let res = {}, dir = STATE + "/tcp.tmp." + time();
+	try { fs.mkdir(STATE); } catch (e) {}
+	try { fs.mkdir(dir); } catch (e) {}
+	for (let i = 0; i < length(tags); i += 8) {
+		let part = slice(tags, i, i + 8), cmd = "";
+		for (let k = 0; k < length(part); k++) {
+			let c = tcp_cmd(addrs[part[k]]), f = q(dir + "/" + k);
+			cmd += "( " + c + " > " + f + "; " + c + " >> " + f + ".b; ) 2>/dev/null & ";
+		}
+		sh(cmd + "wait");
+		for (let k = 0; k < length(part); k++) {
+			let a = 0, b = 0;
+			try { a = tcp_parse(fs.readfile(dir + "/" + k)); } catch (e) { a = 0; }
+			try { b = tcp_parse(fs.readfile(dir + "/" + k + ".b")); } catch (e) { b = 0; }
+			let best = (a > 0 && b > 0) ? (a < b ? a : b) : (a > 0 ? a : b);
+			if (best > 0) res[part[k]] = best;
+		}
+	}
+	sh("rm -rf " + q(dir));
+	return res;
+}
+
+/* Итог: { tag: мс } для ответивших. Сначала TCP-пинг (быстро и сравнимо с Happ). Тем, у кого TCP не
+ * получился (UDP-протоколы, группы, закрытый порт), делаем реальный запрос через сервер — в несколько
+ * проходов с запасными адресами. */
 function lat_measure(tags, ms) {
 	let ep = clash_ep(), res = {};
-	if (!ep || sh("command -v curl") == "") return null;
-	let left = tags;
+	let hasCurl = sh("command -v curl") != "";
+	if (!hasCurl) return null;
+	let addrs = node_addrs(), tl = filter(tags, (x) => !!addrs[x]);
+	if (length(tl)) {
+		let tr = tcp_batch(addrs, tl);
+		for (let k in tr) res[k] = tr[k];
+	}
+	let left = filter(tags, (x) => !res[x]);
+	if (!ep) return length(res) ? res : null;
 	for (let pass = 0; pass < length(LAT_URLS) && length(left); pass++) {
 		let got = lat_batch(ep, left, LAT_URLS[pass], ms + pass * 1500);
 		let next = [];
-		for (let t in left) { if (got[t] > 0) res[t] = got[t]; else push(next, t); }
+		for (let x in left) { if (got[x] > 0) res[x] = got[x]; else push(next, x); }
 		left = next;
 	}
 	return res;
@@ -22051,7 +22115,6 @@ return view.extend({
 			{ product: 'b4geoip-forkop (сборка для sing-box)', author: 'Greeg0ry', url: 'https://github.com/Greeg0ry/b4geoip-forkop' },
 			{ product: 'domain-list-community', author: 'v2fly', url: 'https://github.com/v2fly/domain-list-community' },
 			{ product: 'supercell-ruleset', author: 'ushan0v', url: 'https://github.com/ushan0v/sing-box-supercell-ruleset' },
-			{ product: 'ad-filter (реклама)', author: 'zxc-rv', url: 'https://github.com/zxc-rv/ad-filter' },
 			{ product: 'dpi-checkers', author: 'hyperion-cs', url: 'https://github.com/hyperion-cs/dpi-checkers' },
 			{ product: 'awg-openwrt (AmneziaWG)', author: 'Slava-Shchipunov', url: 'https://github.com/Slava-Shchipunov/awg-openwrt' },
 			{ product: 'awg-openwrt (сборки)', author: '2Grey', url: 'https://github.com/2Grey/awg-openwrt' },
