@@ -14040,7 +14040,7 @@ function lat_read(sec) {
 	try { j = json(s(fs.readfile(lat_path(sec)))); } catch (e) { j = null; }
 	return type(j) == "object" ? j : null;
 }
-function lat_running(l) { return !!(l && l.running && time() - int(l.at || 0) < 120); }
+function lat_running(l) { return !!(l && l.running && time() - int(l.at || 0) < 300); }
 
 function proxies() {
 	let j = jcmd(BIN + " clash_api get_proxies");
@@ -14071,9 +14071,98 @@ function cmd_servers(sec) {
 		hidden: length(xv.h), exclude: s(xm.zm_exclude), hide_names: xv.h, fell, lat: lat ? { running: lrun, at: int(lat.at || 0), error: s(lat.error) } : null });
 }
 
+/* ---------- точная проверка сервера (как делают клиенты вроде Happ) ----------
+ * Настоящий HTTP-запрос ЧЕРЕЗ сервер к лёгкому тестовому адресу (generate_204), а не общий замер всей
+ * группы. Сервер считается «не отвечает», только если не ответил ни на один из тестовых адресов
+ * с запасом по времени. Проверка идёт напрямую через Clash API sing-box: curl на роутере. */
+const LAT_URLS = [ "https://www.gstatic.com/generate_204", "http://cp.cloudflare.com/generate_204",
+	"https://www.google.com/generate_204", "http://connectivitycheck.gstatic.com/generate_204" ];
+const LAT_PAR = 4;
+
+function clash_ep() {
+	let j = null;
+	try { j = json(s(fs.readfile(SB_CONF))); } catch (e) { j = null; }
+	let ca = j && type(j.experimental) == "object" && type(j.experimental.clash_api) == "object" ? j.experimental.clash_api : null;
+	let ec = ca ? s(ca.external_controller) : "";
+	if (ec == "") return null;
+	let m = match(ec, /^(.*):([0-9]+)$/);
+	let host = m ? m[1] : "127.0.0.1", port = m ? m[2] : "9090";
+	if (host == "" || host == "0.0.0.0" || host == "::" || host == "[::]") host = "127.0.0.1";
+	return { base: "http://" + host + ":" + port, secret: s(ca.secret) };
+}
+
+function urlenc(v) {
+	let o = "", str = s(v);
+	for (let i = 0; i < length(str); i++) {
+		let b = ord(str, i), c = chr(b);
+		o += match(c, /^[A-Za-z0-9_.~-]$/) ? c : sprintf("%%%02X", b);
+	}
+	return o;
+}
+
+function lat_cmd(ep, tag, url, ms) {
+	return "curl -s --max-time " + (int(ms / 1000) + 3) + (ep.secret != "" ? " -H " + q("Authorization: Bearer " + ep.secret) : "") +
+		" -G --data-urlencode " + q("url=" + url) + " --data-urlencode " + q("timeout=" + ms) +
+		" " + q(ep.base + "/proxies/" + urlenc(tag) + "/delay");
+}
+
+function lat_parse(raw) {
+	let j = null;
+	try { j = json(trim(s(raw))); } catch (e) { j = null; }
+	return type(j) == "object" ? int(j.delay || 0) : 0;
+}
+
+/* пачка серверов параллельно (не больше LAT_PAR за раз — слабый роутер иначе сам даёт ложные таймауты) */
+function lat_batch(ep, tags, url, ms) {
+	let res = {};
+	let dir = STATE + "/lat.tmp." + time();
+	try { fs.mkdir(STATE); } catch (e) {}
+	try { fs.mkdir(dir); } catch (e) {}
+	for (let i = 0; i < length(tags); i += LAT_PAR) {
+		let part = slice(tags, i, i + LAT_PAR), cmd = "";
+		for (let k = 0; k < length(part); k++)
+			cmd += "(" + lat_cmd(ep, part[k], url, ms) + " > " + q(dir + "/" + k) + " 2>/dev/null) & ";
+		sh(cmd + "wait");
+		for (let k = 0; k < length(part); k++) {
+			let d = 0;
+			try { d = lat_parse(fs.readfile(dir + "/" + k)); } catch (e) { d = 0; }
+			if (d > 0) res[part[k]] = d;
+		}
+	}
+	sh("rm -rf " + q(dir));
+	return res;
+}
+
+/* несколько проходов: на каждом проходе другой тестовый адрес и всё больше времени, перепроверяются
+ * только те, кто не ответил. Возвращает { tag: мс } только для ответивших. */
+function lat_measure(tags, ms) {
+	let ep = clash_ep(), res = {};
+	if (!ep || sh("command -v curl") == "") return null;
+	let left = tags;
+	for (let pass = 0; pass < length(LAT_URLS) && length(left); pass++) {
+		let got = lat_batch(ep, left, LAT_URLS[pass], ms + pass * 1500);
+		let next = [];
+		for (let t in left) { if (got[t] > 0) res[t] = got[t]; else push(next, t); }
+		left = next;
+	}
+	return res;
+}
+
+function probe_ms(tag, ms, passes) {
+	let ep = clash_ep();
+	if (ep && sh("command -v curl") != "") {
+		for (let i = 0; i < (passes || 3); i++) {
+			let d = lat_parse(sh(lat_cmd(ep, tag, LAT_URLS[i % length(LAT_URLS)], ms + i * 1500)));
+			if (d > 0) return d;
+		}
+		return 0;
+	}
+	let l = jcmd(BIN + " clash_api get_proxy_latency " + q(tag) + " " + ms);
+	return type(l) == "object" ? int(l.delay || 0) : 0;
+}
+
 function proxy_alive(tag) {
-	let l = jcmd(BIN + " clash_api get_proxy_latency " + q(tag) + " 5000");
-	return type(l) == "object" && int(l.delay || 0) > 0;
+	return probe_ms(tag, 6000, 3) > 0;
 }
 
 function cmd_heal(sec, act) {
@@ -14083,7 +14172,7 @@ function cmd_heal(sec, act) {
 	if (!g || type(g.all) != "array" || s(g.now) == "") { out({ ok: false }); return; }
 	let now = s(g.now), names = sec_names(hc, sec);
 	if (px[now] && lc(s(px[now].type)) == "urltest") { out({ ok: true, manual: false, dead: false }); return; }
-	if (proxy_alive(now) || proxy_alive(now)) { out({ ok: true, manual: true, dead: false }); return; }
+	if (proxy_alive(now)) { out({ ok: true, manual: true, dead: false }); return; }
 	let nm = (t) => s(names[t] || t);
 	if (act != "switch") { out({ ok: true, manual: true, dead: true, name: nm(now) }); return; }
 	let pickt = null;
@@ -14115,25 +14204,42 @@ function cmd_latency(sec) {
 }
 
 function cmd_latwork(sec) {
-	let px = proxies(), g = px ? px[group_tag(sec)] : null, tested = {}, delays = {}, direct = {}, groups = [ group_tag(sec) ];
+	let px = proxies(), g = px ? px[group_tag(sec)] : null, tested = {}, delays = {}, direct = {}, order = [];
+	let add = (t) => { if (!tested[t]) { tested[t] = true; push(order, t); } };
 	if (g && type(g.all) == "array") {
-		for (let t in g.all) { tested[t] = true; direct[t] = true; }
+		for (let t in g.all) { direct[t] = true; add(t); }
 		/* вложенные группы (urltest по подписке или по странам): их узлы проверяем, только если
-		 * среди прямых членов группы секции их нет — иначе каждый узел мерился бы дважды */
+		 * среди прямых членов группы секции их нет */
 		for (let t in g.all) {
 			let p = px[t];
 			if (!p || type(p.all) != "array") continue;
-			let extra = false;
-			for (let m in p.all) { if (!direct[m]) extra = true; tested[m] = true; }
-			if (extra) push(groups, t);
+			for (let m in p.all) add(m);
 		}
 	}
 	let err = g ? "" : "группа серверов секции ещё не готова — примените настройки";
-	for (let gt in groups) {
-		let j = jcmd(BIN + " clash_api get_group_latency " + q(gt) + " 5000");
-		if (type(j) != "object") { err = err || "sing-box не ответил на проверку задержки"; continue; }
-		if (j.message && length(j) == 1) { err = err || ("sing-box: " + s(j.message)); continue; }
-		for (let k in j) if (int(j[k]) > 0) delays[k] = int(j[k]);
+	if (g) {
+		/* основной путь: каждый сервер проверяется отдельным запросом, с повторами и запасными адресами */
+		let r = lat_measure(order, 6000);
+		if (r != null) {
+			for (let k in r) delays[k] = r[k];
+			if (!length(delays)) err = "ни один сервер не ответил на проверку — проверьте интернет на роутере";
+		} else {
+			/* запасной путь (нет curl или Clash API): прежний замер группы */
+			let groups = [ group_tag(sec) ];
+			for (let t in g.all) {
+				let p = px[t];
+				if (!p || type(p.all) != "array") continue;
+				let extra = false;
+				for (let m in p.all) if (!direct[m]) extra = true;
+				if (extra) push(groups, t);
+			}
+			for (let gt in groups) {
+				let j = jcmd(BIN + " clash_api get_group_latency " + q(gt) + " 8000");
+				if (type(j) != "object") { err = err || "sing-box не ответил на проверку задержки"; continue; }
+				if (j.message && length(j) == 1) { err = err || ("sing-box: " + s(j.message)); continue; }
+				for (let k in j) if (int(j[k]) > 0) delays[k] = int(j[k]);
+			}
+		}
 	}
 	if (length(delays)) err = "";
 	fs.writefile(lat_path(sec), sprintf("%J", { at: time(), running: false, tested: err ? [] : keys(tested), delays, error: err }));
@@ -14240,8 +14346,7 @@ function cmd_diag() {
 	if (sbr) {
 		let c = cursor(), list = filter(sec_list(c, pick(c)), (x) => x.enabled), many = length(list) > 1;
 		for (let x in list) {
-			let l = jcmd(BIN + " clash_api get_proxy_latency " + q(group_tag(x.name)) + " 5000") || {};
-			let ms = int(l.delay || 0), what = many ? "Секция «" + x.label + "»" : "Подключение к серверу";
+			let ms = probe_ms(group_tag(x.name), 5000, 3), what = many ? "Секция «" + x.label + "»" : "Подключение к серверу";
 			let dead = x.mode == "iface" ? "туннель " + x.iface + " не отвечает — проверьте его на вкладке AmneziaWG" : "сервер не отвечает — проверьте ссылку или выберите другой сервер";
 			add(ms > 0 ? (ms < 1500 ? "ok" : "warn") : "fail", what, ms > 0 ? "отвечает за " + ms + " мс" : dead);
 		}
@@ -14295,8 +14400,7 @@ function cmd_secstate(probe) {
 			}
 		}
 		if (probe && px && e.state != "off" && e.state != "wait") {
-			let l = jcmd(BIN + " clash_api get_proxy_latency " + q(group_tag(x.name)) + " 4000") || {};
-			let ms = int(l.delay || 0);
+			let ms = probe_ms(group_tag(x.name), 4000, 2);
 			e.probed = true;
 			e.state = ms > 0 ? "ok" : "bad";
 			if (ms > 0) e.delay = ms;
