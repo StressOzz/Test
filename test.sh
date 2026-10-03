@@ -1,5 +1,5 @@
 #!/bin/sh
-# Version: 2.24
+# Version: 2.25
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -50,7 +50,7 @@ cat > '/opt/zapret-manager-luci/backend.sh.zm-new' << 'ZM_INSTALLER_EOF'
 umask 022
 
 CONF="/etc/config/zapret"
-ZM_VERSION="2.24"
+ZM_VERSION="2.25"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
@@ -15714,47 +15714,105 @@ function detectMissingThemeVar() {
 	} catch (e) {  }
 }
 
+/* Номер сборки панели: установщик подставляет его сюда же, в build.txt и в адрес style.css. */
+var ZM_BUILD = '__ZM_BUILD__';
+
+function cssUrl(path) {
+	return L.resource(path) + (/^[0-9]{6,}$/.test(ZM_BUILD) ? '?v=' + ZM_BUILD : '');
+}
+
+/* После обновления браузер может держать старые файлы панели: LuCI грузит их с одним и тем же
+ * адресом (?v= — версия самой LuCI, она не меняется), а uhttpd не запрещает кэш. Проверка:
+ * build.txt читаем всегда с сервера. Если в нём другой номер, чем в этом common.js, — common.js
+ * устарел: перекачиваем все файлы панели мимо кэша и перезагружаем страницу (не больше двух раз
+ * подряд на одну сборку, чтобы не зациклиться). Если номер тот же, но браузер в этой сборке ещё
+ * не проверялся, сверяем остальные файлы (виды страниц): кэш против сервера. */
 var cacheGuardDone = false;
 function cacheGuard() {
 	if (cacheGuardDone) return;
 	cacheGuardDone = true;
 	try {
-		if (document.body.classList.contains('zmw-body') || !window.fetch || !window.localStorage) return;
+		if (document.body.classList.contains('zmw-body') || !window.fetch) return;
 		var base = String(L.env.base_url || L.resource('x').replace(/\/x$/, '')), ver = L.env.resource_version;
-		fetch(base + '/zapret-manager/build.txt?t=' + Date.now(), { cache: 'no-store' }).then(function(r) { return r.ok ? r.text() : ''; }).then(function(t) {
-			var lines = String(t || '').split(/\r?\n/).map(function(x) { return x.trim(); }).filter(Boolean);
-			var build = lines.shift(), had = null, stale = false;
+		var ls = function(k, v) { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) {} return null; };
+		var ss = function(k, v) { try { if (v === undefined) return sessionStorage.getItem(k); sessionStorage.setItem(k, v); } catch (e) {} return null; };
+		var grab = function(url, mode) { return fetch(url, { cache: mode }).then(function(r) { return r.ok ? r.text() : null; }).catch(function() { return null; }); };
+		/* по 4 запроса одновременно: uhttpd на роутере обслуживает всего несколько запросов разом */
+		var pool = function(list, fn) {
+			var i = 0, run = function() { if (i >= list.length) return Promise.resolve(); var x = list[i++]; return fn(x).then(run, run); };
+			return Promise.all([ run(), run(), run(), run() ]);
+		};
+		fetch(base + '/zapret-manager/build.txt?t=' + Date.now(), { cache: 'no-store' }).then(function(r) { return r.ok ? r.text() : ''; }).then(function(txt) {
+			var lines = String(txt || '').split(/\r?\n/).map(function(x) { return x.trim(); }).filter(Boolean);
+			var build = lines.shift();
 			if (!/^[0-9]{6,}$/.test(build || '')) return;
-			try { had = localStorage.getItem('zm.build'); } catch (e) { return; }
-			if (had === build) return;
-			function grab(url, mode) {
-				return fetch(url, { cache: mode }).then(function(r) { return r.ok ? r.text() : null; }).catch(function() { return null; });
-			}
-			return lines.filter(function(p) { return /^[A-Za-z0-9_\/.-]+\.(js|css)$/.test(p) && p.indexOf('..') < 0; }).reduce(function(pr, p) {
-				var url = base + '/' + p + (/\.js$/.test(p) && ver != null ? '?v=' + ver : '');
-				return pr.then(function() {
-					return grab(url, 'force-cache').then(function(a) {
-						return grab(url, 'reload').then(function(b) { if (a != null && b != null && a !== b) stale = true; });
-					});
-				});
-			}, Promise.resolve()).then(function() {
-				try { localStorage.setItem('zm.build', build); if (localStorage.getItem('zm.build') !== build) return; } catch (e) { return; }
-				if (!stale) return;
+			var files = lines.filter(function(p) { return /^[A-Za-z0-9_\/.-]+\.(js|css)$/.test(p) && p.indexOf('..') < 0; });
+			var urls = [];
+			files.forEach(function(p) {
+				urls.push(base + '/' + p);
+				if (/\.js$/.test(p) && ver != null) urls.push(base + '/' + p + '?v=' + ver);
+				if (/\.css$/.test(p)) urls.push(base + '/' + p + '?v=' + build);
+			});
+			var reload = function() {
+				var n = +(ss('zm.reload.' + build) || 0);
+				if (n >= 2) return;
+				ss('zm.reload.' + build, String(n + 1));
 				toast('Панель обновлена — загружаем новую версию', 'info');
-				setTimeout(function() { location.reload(); }, 700);
+				setTimeout(function() { location.reload(); }, 600);
+			};
+			if (/^[0-9]{6,}$/.test(ZM_BUILD) && ZM_BUILD !== build) {
+				return pool(urls, function(u) { return grab(u, 'reload'); }).then(function() { ls('zm.build', build); reload(); });
+			}
+			if (ls('zm.build') === build) return;
+			var stale = false;
+			return pool(urls, function(u) {
+				return grab(u, 'force-cache').then(function(a) {
+					return grab(u, 'reload').then(function(b) { if (a != null && b != null && a !== b) stale = true; });
+				});
+			}).then(function() {
+				ls('zm.build', build);
+				if (stale) reload();
 			});
 		}).catch(function() {});
 	} catch (e) {}
 }
 
+/* Windows не рисует флаги стран (🇩🇪 видно как «DE»). Если браузер флаги не умеет, подключаем
+ * шрифт только с флагами (unicode-range — остальной текст остаётся шрифтом темы). Без интернета
+ * всё как раньше: буквы вместо флага. */
+var FLAG_FONT = 'https://cdn.jsdelivr.net/npm/country-flag-emoji-polyfill@0.1/dist/TwemojiCountryFlags.woff2';
+function flagsOk() {
+	try {
+		var c = document.createElement('canvas'); c.width = c.height = 24;
+		var x = c.getContext('2d', { willReadFrequently: true });
+		if (!x) return true;
+		x.textBaseline = 'top'; x.font = '20px sans-serif'; x.fillStyle = '#000';
+		x.fillText('\uD83C\uDDE8\uD83C\uDDED', 0, 0);
+		var d = x.getImageData(0, 0, 24, 24).data;
+		for (var i = 0; i < d.length; i += 4) if (d[i + 3] && (d[i] !== d[i + 1] || d[i + 1] !== d[i + 2])) return true;
+		return false;
+	} catch (e) { return true; }
+}
+function flagFont() {
+	if (document.getElementById('zm-flags') || flagsOk()) return;
+	var fam = '';
+	try { fam = getComputedStyle(document.body).fontFamily || ''; } catch (e) {}
+	var s = document.createElement('style');
+	s.id = 'zm-flags';
+	s.textContent = '@font-face{font-family:"Twemoji Country Flags";unicode-range:U+1F1E6-1F1FF,U+1F3F4,U+E0062-E0063,U+E0065,U+E0067,U+E006C,U+E006E,U+E0073-E0074,U+E0077,U+E007F;src:url("' + FLAG_FONT + '") format("woff2");font-display:swap}' +
+		'body,.zm-wrap{font-family:"Twemoji Country Flags",' + (fam || 'system-ui,sans-serif') + '}';
+	document.head.appendChild(s);
+}
+
 function injectCss() {
 	cacheGuard();
+	try { flagFont(); } catch (e) {}
 	detectMissingThemeVar();
 	if (document.getElementById('zm-css')) return;
 	var l = document.createElement('link');
 	l.id = 'zm-css';
 	l.rel = 'stylesheet';
-	l.href = L.resource('view/zapret-manager/style.css');
+	l.href = cssUrl('view/zapret-manager/style.css');
 	document.head.appendChild(l);
 }
 
@@ -24943,7 +25001,7 @@ function injectCss() {
 	var l = document.createElement('link');
 	l.id = 'bt-css';
 	l.rel = 'stylesheet';
-	l.href = L.resource('view/bytetube/style.css');
+	l.href = L.resource('view/bytetube/style.css') + (/^[0-9]{6,}$/.test('__ZM_BUILD__') ? '?v=__ZM_BUILD__' : '');
 	document.head.appendChild(l);
 }
 
@@ -26275,6 +26333,8 @@ ZM_BUILD_ID="$(date +%s)"
 		[ -f "$_zm_f" ] && echo "${_zm_f#/www/luci-static/resources/}"
 	done
 } > /www/luci-static/resources/zapret-manager/build.txt.zm-new 2>/dev/null || true
+# номер сборки — в common.js (сверка с build.txt) и в адрес style.css: новая сборка = новый адрес стилей
+sed -i "s/__ZM_BUILD__/$ZM_BUILD_ID/g" /www/luci-static/resources/zapret-manager/common.js /www/luci-static/resources/bytetube/common.js 2>/dev/null || true
 mv -f /www/luci-static/resources/zapret-manager/build.txt.zm-new /www/luci-static/resources/zapret-manager/build.txt 2>/dev/null || true
 chmod 0644 /www/luci-static/resources/zapret-manager/build.txt 2>/dev/null || true
 
