@@ -1,5 +1,5 @@
 #!/bin/sh
-# Version: 2.18
+# Version: 2.19
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -50,7 +50,7 @@ cat > '/opt/zapret-manager-luci/backend.sh.zm-new' << 'ZM_INSTALLER_EOF'
 umask 022
 
 CONF="/etc/config/zapret"
-ZM_VERSION="2.18"
+ZM_VERSION="2.19"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
@@ -8734,6 +8734,7 @@ _st_spec_apply() {
 	_st_model "$@" > "$m"
 	grep -q '^svc	' "$m" || { rm -f "$m"; echo "ОШИБКА: для выбранных сервисов нет ни одного списка"; return 1; }
 	stl_apply "$m" || { rm -f "$m"; return 1; }
+	grep -v '^\(lan\|warp\|vpn\|tun\)	' "$m" > "$ST_DIR/model.svc" 2>/dev/null
 	rm -f "$m"
 	_st_own "steer-spec"
 }
@@ -9355,6 +9356,64 @@ _st_wfix_json() {
 	printf ']}'
 }
 
+# Смена узла, фильтра узлов или скрытия — меняется только выход VPN. Списки сервисов уже скачаны и
+# стоят в ядре, поэтому каталог и списки не трогаем: спека собирается из запомненного состава, и ядро
+# steer перезапускает один туннель (резолвер, наборы адресов и правила остаются). Нет запомненного
+# состава или файла из него — полное применение, как раньше.
+_st_spec_quick() {
+	local m="$ST_RUN/model" f id
+	[ -s "$ST_DIR/model.svc" ] && _st_owns "steer-spec" && stl_running && _st_use_vpn || return 2
+	for f in $(awk -F'\t' '$1 == "srs" || $1 == "dom" || $1 == "pfx" { print $2 }' "$ST_DIR/model.svc"); do [ -s "$f" ] || return 2; done
+	_st_engine_ready || return 1
+	_st_vpn_zone on
+	mkdir -p "$ST_RUN"
+	{
+		printf 'lan'; for id in $(_zm_lan_devs); do printf '\t%s' "$id"; done; echo
+		printf 'vpn\t%s\n' "$ST_SUB"
+		_st_sub_filter
+		cat "$ST_DIR/model.svc"
+	} > "$m"
+	stl_apply "$m"; f=$?
+	rm -f "$m"
+	return $f
+}
+
+# Узел, который сейчас выбран, — для сообщений
+_st_node_label() { local n; n="$(cat "$ST_SUB_NODE" 2>/dev/null)"; [ -n "$n" ] && printf '«%s»' "$n" || printf 'автовыбор'; }
+
+# ПРЕЖНИЙ — что было выбрано до смены: имя узла, «auto» (автовыбор) или «-» (не откатывать)
+do_steer_switch() {
+	local prev="${1:--}" rc why
+	rm -f "$ST_STOP_FLAG"
+	_st_installed || { echo "ОШИБКА: Steer ещё не установлен"; return 1; }
+	[ -n "$(_st_blocker)" ] && { echo "ОШИБКА: настройку ядра steer сейчас ведёт не Zapret Manager"; return 1; }
+	_st_phase rules
+	_rb_say "Переключаем VPN: $(_st_node_label) — списки сервисов и правила не трогаем"
+	_st_spec_quick; rc=$?
+	if [ "$rc" = 2 ]; then
+		_rb_say "Списки ещё не собирались — применяем настройку целиком"
+		do_steer_apply; return $?
+	fi
+	[ "$rc" = 0 ] || return 1
+	_st_phase check
+	if _st_vpn_check 30; then _rb_say "Готово"; return 0; fi
+	why="$STL_NWHY"
+	# Новый узел не ответил — возвращаем то, что работало, а не оставляем сервисы без туннеля
+	case "$prev" in
+		-) _rb_say "Готово, но VPN сейчас не отвечает — сторож Steer переключит на рабочий узел сам"; return 0 ;;
+		auto) [ -s "$ST_SUB_NODE" ] || { _rb_say "Сторож Steer сам переберёт узлы"; return 0; }
+			_rb_warn "Узел $(_st_node_label) не отвечает${why:+ ($why)} — возвращаем автовыбор"
+			mkdir -p "$ST_DIR"; head -n1 "$ST_SUB_NODE" > "$ST_SUB_FELL"; rm -f "$ST_SUB_NODE" ;;
+		*) [ "$prev" = "$(cat "$ST_SUB_NODE" 2>/dev/null)" ] && return 0
+			_rb_warn "Узел $(_st_node_label) не отвечает${why:+ ($why)} — возвращаем прежний «$prev»"
+			if _st_key_in "$(_st_nodes)" "$prev"; then printf '%s\n' "$prev" > "$ST_SUB_NODE"; else rm -f "$ST_SUB_NODE"; fi ;;
+	esac
+	_st_spec_quick || return 1
+	if _st_vpn_check 30; then _rb_say "Готово: VPN снова работает через $(_st_node_label)"; return 0; fi
+	_rb_warn "И прежний выбор не отвечает — сторож Steer будет искать рабочий узел сам"
+	return 0
+}
+
 do_steer_apply() {
 	_st_phase rules
 	rm -f "$ST_STOP_FLAG"
@@ -9817,6 +9876,9 @@ _st_nodes() {
 	fi
 	echo "$ST_SUB_NODES"
 }
+# Есть ли узел с таким именем в списке ФАЙЛ (awk читает файл целиком: «cut | grep -q» ронял cut
+# в «Broken pipe», когда grep выходил на первом совпадении)
+_st_key_in() { [ -s "$1" ] && ZM_W="$2" awk -F'\t' '$5 == ENVIRON["ZM_W"] { f = 1 } END { exit !f }' "$1"; }
 # «номер<TAB>имя» — для фильтра узлов (маркеры, скрытые по имени)
 _st_nodes_kv() { local t; t="$(_st_nodes)" && cut -f1,5 "$t"; }
 
@@ -9826,7 +9888,7 @@ _st_sub_names_fix() {
 	local t="$ST_SUB_NODES" node w f
 	[ -s "$t" ] || return 0
 	node="$(cat "$ST_SUB_NODE" 2>/dev/null)"
-	if [ -n "$node" ] && ! cut -f5 "$t" | grep -qxF "$node"; then
+	if [ -n "$node" ] && ! _st_key_in "$t" "$node"; then
 		w="$(printf '%s' "$node" | sed 's/[[:space:]]*$//')"
 		f="$(ZM_W="$w" awk -F'\t' 'index($5, ENVIRON["ZM_W"]) == 1 { n++; k = $5 } END { if (n == 1) print k }' "$t")"
 		[ -n "$f" ] && printf '%s\n' "$f" > "$ST_SUB_NODE"
@@ -9834,7 +9896,7 @@ _st_sub_names_fix() {
 	[ -s "$ST_SUB_HIDE" ] || return 0
 	while IFS= read -r w || [ -n "$w" ]; do
 		[ -n "$w" ] || continue
-		if cut -f5 "$t" | grep -qxF "$w"; then printf '%s\n' "$w"
+		if _st_key_in "$t" "$w"; then printf '%s\n' "$w"
 		else ZM_W="$(printf '%s' "$w" | sed 's/[[:space:]]*$//')" awk -F'\t' 'index($5, ENVIRON["ZM_W"]) == 1 { print $5 }' "$t"; fi
 	done < "$ST_SUB_HIDE" | awk '!s[$0]++' > "$ST_SUB_HIDE.tmp"
 	if [ -s "$ST_SUB_HIDE.tmp" ]; then mv -f "$ST_SUB_HIDE.tmp" "$ST_SUB_HIDE"; else rm -f "$ST_SUB_HIDE.tmp" "$ST_SUB_HIDE"; fi
@@ -9857,6 +9919,7 @@ _st_sub_filter() {
 	if [ -n "$want" ]; then
 		n="$(ZM_W="$want" awk -F'\t' '$5 == ENVIRON["ZM_W"] { print $1 " " $2 " " $3; exit }' "$t")"
 		if [ -n "$n" ]; then
+			# shellcheck disable=SC2086
 			set -- $n
 			case "$hid" in *" $1 "*) ;; *) printf 'tun\t%s\t%s\t%s\n' "$2" "$3" "$mk"; return 0 ;; esac
 		fi
@@ -9941,11 +10004,11 @@ _st_vpn_zone() {
 }
 
 _st_vpn_check() {
-	local w=0 tr ip loc
+	local w=0 tr ip loc max="${1:-90}"
 	# Ядро 2.0 создаёт устройство туннеля сразу и рапортует «поднят» ещё до ответа узла; у подписки с
 	# несколькими протоколами устройство — того протокола, что жив. Ждём, пока ядро назовёт рабочее
 	# устройство (перебор узлов — до 90 с), и проверяем трафик несколькими попытками.
-	while [ "$w" -lt 90 ]; do
+	while [ "$w" -lt "$max" ]; do
 		stl_state vpn >/dev/null 2>&1
 		[ "$STL_UP" = true ] && [ -n "$STL_DEV" ] && [ -d "/sys/class/net/$STL_DEV" ] && break
 		# узел уже признан мёртвым (node_down) или перебор кончился — ждать дальше нечего
@@ -9972,7 +10035,7 @@ _st_vpn_check() {
 	elif [ "$STL_PSTATE" = no_such_node ]; then
 		echo "[FAIL] VPN: выбранного узла больше нет в подписке — выберите «Авто» или другой узел"
 	elif [ "$STL_PSTATE" = failed ] || [ "$STL_UP" != true ]; then
-		echo "[FAIL] VPN: ни один выбранный узел не ответил за 90 с — проверьте задержку узлов на вкладке «Подписка»"
+		echo "[FAIL] VPN: ни один выбранный узел не ответил за $max с — проверьте задержку узлов на вкладке «Подписка»"
 	else
 		echo "[FAIL] VPN: туннель поднят${STL_NODE:+ (узел «$STL_NODE»)}, но трафик через него не идёт"
 	fi
@@ -10057,7 +10120,7 @@ _st_sub_node_gone() {
 	local node t
 	node="$(cat "$ST_SUB_NODE" 2>/dev/null)"
 	[ -n "$node" ] && [ -s "$ST_SUB" ] || return 0
-	t="$(_st_nodes)" && cut -f5 "$t" | grep -qxF "$(cat "$ST_SUB_NODE" 2>/dev/null)" && return 0
+	t="$(_st_nodes)" && _st_key_in "$t" "$node" && return 0
 	rm -f "$ST_SUB_NODE"
 	echo "   · выбранного узла «$node» больше нет в подписке — Steer сам выберет рабочий"
 }
@@ -10283,11 +10346,11 @@ steer_sub_action() {
 				[ "$total" -gt 0 ] && [ "$hid" -ge "$total" ] && { echo '{"error":"под эти маркеры попадают все узлы подписки — тогда VPN работать не сможет. Уберите лишние маркеры"}'; return 1; }
 			fi
 			err="$(_zm_excl_save "$ST_SUB_EXCL" "$m")" || { printf '{"error":"%s"}\n' "$(esc "$err")"; return 1; }
-			if [ -s "$ST_SUB_NODE" ] && _st_nodes_kv | ZM_W="$(cat "$ST_SUB_NODE")" awk -F'\t' '$2 == ENVIRON["ZM_W"]' | _zm_excl_hits "$ST_SUB_EXCL" "$ST_SUB_HIDE" | grep -q .; then
+			if [ -s "$ST_SUB_NODE" ] && _st_nodes_kv | ZM_W="$(cat "$ST_SUB_NODE")" awk -F'\t' '$2 == ENVIRON["ZM_W"]' | _zm_excl_hits "$ST_SUB_EXCL" "$ST_SUB_HIDE" | grep -c . | grep -qv '^0$'; then
 				rm -f "$ST_SUB_NODE"
 			fi
 			if [ -s "$ST_SUB" ] && _st_use_vpn && _st_installed && [ ! -f "$ST_OFF" ] && [ -z "$(_st_blocker)" ] && [ -n "$(_st_sel)" ]; then
-				job_start steer do_steer_apply
+				job_start steer do_steer_switch -
 			else
 				printf '{"ok":true,"saved":true}\n'
 			fi
@@ -10315,29 +10378,31 @@ steer_sub_action() {
 				fi
 				_zm_names_save "$nf" "$ST_SUB_HIDE"
 				rm -f "$nf"
-				if [ -s "$ST_SUB_NODE" ] && printf '%s\n' "$tsv" | ZM_W="$(cat "$ST_SUB_NODE")" awk -F'\t' '$2 == ENVIRON["ZM_W"]' | _zm_excl_hits "$ST_SUB_EXCL" "$ST_SUB_HIDE" | grep -q .; then
+				if [ -s "$ST_SUB_NODE" ] && printf '%s\n' "$tsv" | ZM_W="$(cat "$ST_SUB_NODE")" awk -F'\t' '$2 == ENVIRON["ZM_W"]' | _zm_excl_hits "$ST_SUB_EXCL" "$ST_SUB_HIDE" | grep -c . | grep -qv '^0$'; then
 					rm -f "$ST_SUB_NODE"
 				fi
 			fi
 			if _st_use_vpn && _st_installed && [ ! -f "$ST_OFF" ] && [ -z "$(_st_blocker)" ] && [ -n "$(_st_sel)" ]; then
-				job_start steer do_steer_apply
+				job_start steer do_steer_switch -
 			else
 				printf '{"ok":true,"saved":true}\n'
 			fi
 			;;
 		sub_node)
 			[ -s "$ST_SUB" ] || { echo '{"error":"подписки нет"}'; return 1; }
-			if [ -n "$mode" ] && ! _st_nodes_kv | cut -f2 | grep -qxF "$mode"; then
+			if [ -n "$mode" ] && ! _st_key_in "$(_st_nodes)" "$mode"; then
 				echo '{"error":"такого узла нет в подписке — обновите страницу"}'; return 1
 			fi
-			if [ -n "$mode" ] && _st_nodes_kv | ZM_W="$mode" awk -F'\t' '$2 == ENVIRON["ZM_W"]' | _zm_excl_hits "$ST_SUB_EXCL" "$ST_SUB_HIDE" | grep -q .; then
+			if [ -n "$mode" ] && _st_nodes_kv | ZM_W="$mode" awk -F'\t' '$2 == ENVIRON["ZM_W"]' | _zm_excl_hits "$ST_SUB_EXCL" "$ST_SUB_HIDE" | grep -c . | grep -qv '^0$'; then
 				echo '{"error":"этот узел скрыт фильтром — уберите маркер или выберите другой узел"}'; return 1
 			fi
 			mkdir -p "$ST_DIR"
+			local prev
+			prev="$(cat "$ST_SUB_NODE" 2>/dev/null)"; prev="${prev:-auto}"
 			if [ -n "$mode" ]; then printf '%s\n' "$mode" > "$ST_SUB_NODE"; else rm -f "$ST_SUB_NODE"; fi
 			rm -f "$ST_SUB_FELL" "$ST_VPN_WATCH"
 			if _st_use_vpn && _st_installed && [ ! -f "$ST_OFF" ] && [ -z "$(_st_blocker)" ] && [ -n "$(_st_sel)" ]; then
-				job_start steer do_steer_apply
+				job_start steer do_steer_switch "$prev"
 			else
 				printf '{"ok":true,"saved":true}\n'
 			fi
