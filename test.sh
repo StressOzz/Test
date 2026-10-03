@@ -1,5 +1,5 @@
 #!/bin/sh
-# Version: 2.23
+# Version: 2.24
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -50,7 +50,7 @@ cat > '/opt/zapret-manager-luci/backend.sh.zm-new' << 'ZM_INSTALLER_EOF'
 umask 022
 
 CONF="/etc/config/zapret"
-ZM_VERSION="2.23"
+ZM_VERSION="2.24"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
@@ -12339,6 +12339,7 @@ do_fk_install() {
 		[ "$legacy" = 1 ] || _fk_say "DNS по умолчанию: Quad9 9.9.9.9 (обычный UDP). Сменить можно в «Настройках»"
 	fi
 	chmod 0644 /etc/config/netshift
+	_fk_log_default
 
 	if [ "$legacy" = 1 ]; then
 		if [ -s "$lconf/forkop" ]; then
@@ -12503,6 +12504,7 @@ do_fk_service() {
 	[ -n "$b" ] && { echo "ОШИБКА: $(_fk_blocker_text "$b")"; return 1; }
 	[ -n "$(_fk_sb_ver)" ] || _fk_sb_install || return 1
 	_fk_ext_auto config "" norestart
+	_fk_log_default
 	local lx; lx="$(_fk_log_ext)"
 	/etc/init.d/netshift enable >/dev/null 2>&1
 	: > "$JOBS_DIR/forkop-svc.out"
@@ -12587,6 +12589,15 @@ do_fk_subs() {
 FK_EXT_FAIL="$ZM_STATE_DIR/fk.ext.fail"
 _fk_sb_is_ext() { sing-box version 2>/dev/null | head -n1 | grep -qi extended; }
 _fk_log_ext() { logread 2>/dev/null | grep -ci 'requires sing-box-extended'; }
+# Журнал sing-box по умолчанию выключен (уровень panic — только аварии). Один раз: дальше выбор в панели.
+_fk_log_default() {
+	[ -s /etc/config/netshift ] || return 0
+	[ "$(uci -q get netshift.settings.zm_log)" = 1 ] && return 0
+	uci -q get netshift.settings >/dev/null || return 0
+	uci -q set netshift.settings.log_level='panic'
+	uci -q set netshift.settings.zm_log='1'
+	uci -q commit netshift
+}
 _fk_ext_need() {
 	local f
 	[ -n "$(_fk_sb_ver)" ] && _fk_sb_is_ext && return 1
@@ -13839,7 +13850,8 @@ function set_ext(st) {
 		excl_ntp: flag(st.exclude_ntp),
 		excl_bt: flag(st.exclude_bittorrent),
 		block_doh: flag(st.block_doh),
-		log_level: index(LOG_LEVELS, s(st.log_level)) >= 0 ? s(st.log_level) : "warn",
+		/* журнал sing-box по умолчанию выключен (panic — пишет только аварии), пока его не выбрали в панели */
+		log_level: s(st.zm_log) == "1" && index(LOG_LEVELS, s(st.log_level)) >= 0 ? s(st.log_level) : "panic",
 		yacd: flag(st.enable_yacd),
 		yacd_wan: flag(st.enable_yacd_wan_access),
 		yacd_secret: s(st.yacd_secret_key)
@@ -14018,7 +14030,8 @@ function write_set_ext(c, g) {
 	for (let kv in [ [ "ipv6", "enable_ipv6" ], [ "no_dhcp", "dont_touch_dhcp" ], [ "excl_ntp", "exclude_ntp" ], [ "excl_bt", "exclude_bittorrent" ], [ "block_doh", "block_doh" ] ])
 		c.set(CFG, S, kv[1], g[kv[0]] ? "1" : "0");
 	let lv = s(g.log_level);
-	c.set(CFG, S, "log_level", index(LOG_LEVELS, lv) >= 0 ? lv : "warn");
+	c.set(CFG, S, "log_level", index(LOG_LEVELS, lv) >= 0 ? lv : "panic");
+	c.set(CFG, S, "zm_log", "1");
 
 	if (g.yacd) {
 		c.set(CFG, S, "enable_yacd", "1");
@@ -16722,7 +16735,7 @@ function routeCheck(o) {
 	var btn = E('button', { 'type': 'button', 'class': 'cbi-button cbi-button-action', 'click': function() { run(); } }, 'Проверить');
 	var chips = E('div', { 'class': 'zm-route-chips' });
 	var out = E('div', { 'class': 'zm-route-out' });
-	(o.examples || [ 'youtube.com', 'instagram.com', 'discord.com', 'chatgpt.com', 'epidemz.net.co', 'speedtest.net', 'telegram.org' ]).forEach(function(x) {
+	(o.examples || [ 'youtube.com', 'instagram.com', 'discord.com', 'chatgpt.com', 'epidemz.net.co', 'speedtest.net', 'telegram.org', 'ozon.ru', 'vk.ru' ]).forEach(function(x) {
 		chips.appendChild(E('button', { 'type': 'button', 'class': 'zm-route-chip', 'click': function() { inp.value = x; run(); } }, x));
 	});
 	function off() { return !!(o.disabled && o.disabled()); }
@@ -21916,6 +21929,10 @@ html.zm-theme-dark .zm-node:not(.zm-active) { background: #22272e; border-color:
 .zm-node.zm-sec .zm-node-name::before { content: none; }
 .zm-tabsplit { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 40px; margin: 4px 0 0; }
 .zm-tabsplit > .zm-tabgrp { margin: 0; }
+.zm-tabsplit.zm-tabs-one > .zm-tabgrp { flex: 1 1 100%; width: 100%; max-width: 100%; display: flex; }
+.zm-tabsplit.zm-tabs-one > .zm-tabgrp > .cbi-button { flex: 1 1 0; justify-content: center; text-align: center; }
+#zmw-view .zm-tabsplit.zm-tabs-one > .zm-actions.zmw-tabs { width: 100%; }
+#zmw-view .zm-tabsplit.zm-tabs-one .zmw-tabs .cbi-button { flex: 1 0 auto; }
 .zm-sec-dim .zm-nodes { opacity: .45; filter: grayscale(.6); transition: opacity .15s, filter .15s; }
 .zm-sec-dim .zm-nodes:hover { opacity: .85; filter: none; }
 .zm-node.zm-sec-add { border-style: dashed; display: flex; align-items: center; justify-content: center; text-align: center; min-height: 64px; box-sizing: border-box; }
@@ -22490,7 +22507,7 @@ return view.extend({
 			{ product: 'tg-ws-proxy-go (SOCKS5)', author: 'd0mhate', url: 'https://github.com/d0mhate/-tg-ws-proxy-Manager-go' },
 			{ product: 'tg-ws-proxy-rs (Rust)', author: 'valnesfjord', url: 'https://github.com/valnesfjord/tg-ws-proxy-rs' },
 			{ product: 'Mixomo, GeoHideDNS', author: 'Internet-Helper', url: 'https://github.com/Internet-Helper' },
-			{ product: 'Podkop, allow-domains', author: 'itdoginfo', url: 'https://github.com/itdoginfo' },
+			{ product: 'allow-domains', author: 'itdoginfo', url: 'https://github.com/itdoginfo' },
 			{ product: 'NetShift (основа Forkozz)', author: 'yandexru45', url: 'https://github.com/yandexru45/netshift' },
 			{ product: 'sing-box', author: 'SagerNet', url: 'https://github.com/SagerNet/sing-box' },
 			{ product: 'sing-box-extended', author: 'shtorm-7', url: 'https://github.com/shtorm-7/sing-box-extended' },
@@ -22498,9 +22515,7 @@ return view.extend({
 			{ product: 'b4geoip (списки игр и сервисов)', author: 'DanielLavrushin', url: 'https://github.com/DanielLavrushin/b4geoip' },
 			{ product: 'b4geoip-forkop (сборка для sing-box)', author: 'Greeg0ry', url: 'https://github.com/Greeg0ry/b4geoip-forkop' },
 			{ product: 'domain-list-community', author: 'v2fly', url: 'https://github.com/v2fly/domain-list-community' },
-			{ product: 'supercell-ruleset', author: 'ushan0v', url: 'https://github.com/ushan0v/sing-box-supercell-ruleset' },
 			{ product: 'dpi-checkers', author: 'hyperion-cs', url: 'https://github.com/hyperion-cs/dpi-checkers' },
-			{ product: 'awg-openwrt (AmneziaWG)', author: 'Slava-Shchipunov', url: 'https://github.com/Slava-Shchipunov/awg-openwrt' },
 			{ product: 'awg-openwrt (сборки)', author: '2Grey', url: 'https://github.com/2Grey/awg-openwrt' },
 			{ product: 'warpscout (разведка WARP)', author: 'vernette', url: 'https://github.com/vernette/warpscout' },
 			{ product: 'base-relay (реле регистрации WARP)', author: 'nellimonix', url: 'https://github.com/nellimonix/base-relay' },
@@ -23045,12 +23060,12 @@ var SUB_MAX = 10;
 var UT_IV = [ { id: '30s', label: '30 с' }, { id: '1m', label: '1 мин' }, { id: '3m', label: '3 мин' }, { id: '5m', label: '5 мин' } ];
 var UT_URL_DEF = 'https://www.gstatic.com/generate_204';
 var UT_URLS = [ { id: UT_URL_DEF, label: 'Google' }, { id: 'https://cp.cloudflare.com/generate_204', label: 'Cloudflare' }, { id: 'https://captive.apple.com', label: 'Apple' } ];
-var LOG_LV = [ { id: 'error', label: 'Только ошибки' }, { id: 'warn', label: 'Обычный' }, { id: 'info', label: 'Подробный' }, { id: 'debug', label: 'Отладка' } ];
+var LOG_LV = [ { id: 'panic', label: 'Выключен' }, { id: 'error', label: 'Только ошибки' }, { id: 'warn', label: 'Обычный' }, { id: 'info', label: 'Подробный' }, { id: 'debug', label: 'Отладка' } ];
 var DRES_DEF = { udp: '1.1.1.1', dot: 'one.one.one.one', doh: 'https://cloudflare-dns.com/dns-query' };
 var SEC_EXT = { sub_fmt: 'auto', sub_group: 'off', sub_plen: '2', sub_incl: '', sub_insecure: false, sub_ua: '', ut_iv: '3m', ut_tol: '50', ut_url: UT_URL_DEF,
 	uot: false, mixed: false, mixed_port: '2080', real_ip: false, dres_on: false, dres_type: 'udp', dres_server: '' };
 var SET_EXT = { dns_ttl: '60', dns_ecs: '', src_ifs: [ 'br-lan' ], out_if: '', badwan: false, badwan_ifs: [], badwan_delay: '2000', ipv6: false, no_dhcp: false,
-	excl_ntp: false, excl_bt: false, block_doh: false, log_level: 'warn', yacd: false, yacd_wan: false, yacd_secret: '' };
+	excl_ntp: false, excl_bt: false, block_doh: false, log_level: 'panic', yacd: false, yacd_wan: false, yacd_secret: '' };
 
 /* Дополнительные опции секции (SEC_EXT) и общие (SET_EXT) живут в черновике плоско, рядом с остальными. */
 function extFrom(def, src, into) {
@@ -23906,8 +23921,11 @@ return view.extend({
 			tabBar.innerHTML = '';
 			var show = !!st.installed;
 			tabBar.style.display = show ? '' : 'none';
-			[ false, true ].forEach(function(common) {
-				tabBar.appendChild(E('div', { 'class': 'zm-actions zmw-tabs zm-tabgrp' }, TABS.filter(function(t) { return !!t.common === common; }).map(function(t) {
+			/* одна секция — делить вкладки на «секцию» и «общие» незачем: одна полоса во всю ширину */
+			var one = secs().length <= 1 && draft.sec !== 'new';
+			tabBar.className = 'zm-tabsplit' + (one ? ' zm-tabs-one' : '');
+			(one ? [ null ] : [ false, true ]).forEach(function(common) {
+				tabBar.appendChild(E('div', { 'class': 'zm-actions zmw-tabs zm-tabgrp' }, TABS.filter(function(t) { return common === null || !!t.common === common; }).map(function(t) {
 					return E('button', { 'class': 'cbi-button' + (t.id === tab ? ' cbi-button-positive' : ''), 'click': function() { tabTo(t.id); } }, t.label);
 				})));
 			});
@@ -24111,8 +24129,11 @@ return view.extend({
 		}
 
 		var srvRetry = 0;
+		var srvAgain = false;
 		function loadServers() {
-			if (srvBusy || !secLive()) return;
+			if (!secLive()) return;
+			if (srvBusy) { srvAgain = true; return; }
+			srvAgain = false;
 			srvBusy = true;
 			renderServers();
 			var forSec = cfg && cfg.sec;
@@ -24125,7 +24146,8 @@ return view.extend({
 				} else { servers = res; srvErr = ''; srvRetry = 0; }
 				renderServers();
 				renderMain();
-			}).catch(function() { srvBusy = false; srvErr = 'роутер не ответил'; renderServers(); });
+				if (srvAgain) loadServers();
+			}).catch(function() { srvBusy = false; srvErr = 'роутер не ответил'; renderServers(); if (srvAgain) loadServers(); });
 		}
 
 		/* Замер идёт на роутере в фоне (подписка в десятки узлов не укладывается в один запрос):
@@ -24161,11 +24183,26 @@ return view.extend({
 			}).catch(function() { done('Роутер не ответил', 'error'); });
 		}
 
+		/* Выбор сервера: сразу показываем его выбранным (и в списке, и в карточке секции наверху),
+		 * затем перечитываем у sing-box — список серверов и состояние секций. */
 		function pickServer(tag, name) {
-			zm.forkopAction('select', ((cfg && cfg.sec) || '') + '|' + tag).then(function(res) {
+			var forSec = (cfg && cfg.sec) || '';
+			zm.forkopAction('select', forSec + '|' + tag).then(function(res) {
 				if (res.error) { zm.toast(res.error, 'error'); return; }
 				zm.toast('Выбрано: ' + name, 'info');
+				if (servers && cfg && (cfg.sec || '') === forSec) {
+					servers.now = tag; servers.fell = '';
+					var nt = servers.nodes && servers.nodes[tag];
+					var se = secState && (secState.sections || []).filter(function(e) { return e.name === forSec; })[0];
+					if (se) {
+						se.auto = !!(nt && nt.members);
+						if (nt && nt.members) { var an = servers.nodes[nt.now]; se.server = an ? an.name || nt.now : ''; se.delay = an ? an.delay : -1; }
+						else { se.server = nt ? nt.name || tag : name; se.delay = nt ? nt.delay : -1; }
+					}
+					renderServers(); renderMain();
+				}
 				loadServers();
+				loadSecState(false);
 			}).catch(function() { zm.toast('Роутер не ответил', 'error'); });
 		}
 
@@ -24713,7 +24750,7 @@ return view.extend({
 				return row(x.label, E('span', { 'class': 'zm-hint', 'style': 'margin:0' }, x.hint));
 			})));
 			sbCard.appendChild(row('Журнал', seg(LOG_LV, LOG_LV.some(function(x) { return x.id === draft.log_level; }) ? draft.log_level : '', function(v) { set('log_level', v); })));
-			sbCard.appendChild(hint('Сколько sing-box пишет в системный журнал. «Подробный» и «Отладка» — чтобы разобраться с проблемой, потом верните «Обычный».'));
+			sbCard.appendChild(hint('Сколько sing-box пишет в системный журнал. По умолчанию выключен — меньше нагрузки на память и флеш роутера; ошибки запуска Forkozz всё равно видно. «Подробный» и «Отладка» — чтобы разобраться с проблемой, потом верните «Выключен».'));
 		}
 
 		function runDiag(quiet) {
