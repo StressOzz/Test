@@ -1,5 +1,5 @@
 #!/bin/sh
-# Version: 2.12
+# Version: 2.14
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -50,7 +50,7 @@ cat > '/opt/zapret-manager-luci/backend.sh.zm-new' << 'ZM_INSTALLER_EOF'
 umask 022
 
 CONF="/etc/config/zapret"
-ZM_VERSION="2.12"
+ZM_VERSION="2.14"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
@@ -11999,6 +11999,7 @@ forkop_action() {
 			[ -n "$u" ] && { printf '{"error":"%s"}\n' "$(esc "sing-box нужен другим программам ($u) — удалять его нельзя")"; return 1; }
 			job_start forkop do_fk_sb_remove ;;
 		diag)          _fk_ucj diag "$arg" ;;
+		secstate)      _fk_ucj secstate "$([ "$arg" = probe ] && echo probe)" ;;
 		servers)       _fk_ucj servers "$arg" ;;
 		latency)       _fk_ucj latency "$arg" ;;
 		cfg)           forkop_config_get "$arg" ;;
@@ -13434,6 +13435,61 @@ function cmd_diag() {
 	out({ checks });
 }
 
+/* ---------- per-section state for the Forkozz overview (cheap: no traffic unless probe) ---------- */
+
+function hs_age(dev) {
+	for (let tool in [ "awg", "wg" ]) {
+		let o = sh(tool + " show " + q(dev) + " latest-handshakes 2>/dev/null");
+		if (o == "") continue;
+		let mx = 0;
+		for (let l in split(o, "\n")) {
+			let f = split(trim(l), /[ \t]+/);
+			if (length(f) >= 2 && int(f[1]) > mx) mx = int(f[1]);
+		}
+		return mx > 0 ? time() - mx : -1;
+	}
+	return null;
+}
+
+function cmd_secstate(probe) {
+	let c = cursor(), p = pick(c), px = proxies(), r = [];
+	for (let x in sec_list(c, p)) {
+		let e = { name: x.name, label: x.label, main: x.main, enabled: x.enabled, mode: x.mode, iface: x.iface,
+			state: "", server: "", delay: -1, auto: false, count: 0, hs: null, up: null, sub: "" };
+		if (x.mode == "iface") {
+			let ex = !!fs.access(NETDIR + "/" + x.iface);
+			e.up = ex && trim(s(fs.readfile(NETDIR + "/" + x.iface + "/operstate"))) != "down";
+			e.hs = ex ? hs_age(x.iface) : null;
+		}
+		if (!x.enabled) e.state = "off";
+		else if (!px) e.state = "stopped";
+		else if (x.mode == "iface") e.state = !e.up ? "bad" : e.hs == null || (e.hs >= 0 && e.hs < 180) ? "ok" : "bad";
+		else {
+			let g = px[group_tag(x.name)];
+			if (!g || type(g.all) != "array") e.state = "wait";
+			else {
+				let names = sec_names(c, x.name), now = s(g.now), cur = now;
+				if (px[now] && lc(s(px[now].type)) == "urltest") { e.auto = true; cur = s(px[now].now); }
+				e.count = length(filter(g.all, (t) => !(px[t] && lc(s(px[t].type)) == "urltest")));
+				let ni = node_info(px, names, cur);
+				e.server = cur != "" ? ni.name : "";
+				e.delay = ni.delay;
+				e.state = ni.delay > 0 ? "ok" : "unknown";
+				if (x.mode == "sub") { let si = sub_info(x.name); e.sub = si ? s(si.title) : ""; }
+			}
+		}
+		if (probe && px && e.state != "off" && e.state != "wait") {
+			let l = jcmd(BIN + " clash_api get_proxy_latency " + q(group_tag(x.name)) + " 4000") || {};
+			let ms = int(l.delay || 0);
+			e.probed = true;
+			e.state = ms > 0 ? "ok" : "bad";
+			if (ms > 0) e.delay = ms;
+		}
+		push(r, e);
+	}
+	out({ running: !!px, sections: r });
+}
+
 /* ---------- route check: replays sing-box route rules for a domain or an IP ---------- */
 
 function ip4n(a) {
@@ -13665,7 +13721,7 @@ function cmd_import(dir) {
 let mode = ARGV[0] || "";
 let sec = ARGV[1] || "";
 if (mode != "import" && mode != "route" && sec != "" && !match(sec, /^[A-Za-z0-9_]+$/)) fail("неверное имя секции");
-if (sec == "" && index([ "get", "set", "secdel", "import", "route", "diag", "secnames" ], mode) < 0) sec = pick(cursor()).sec;
+if (sec == "" && index([ "get", "set", "secdel", "import", "route", "diag", "secnames", "secstate" ], mode) < 0) sec = pick(cursor()).sec;
 
 if (mode == "get") cmd_get(sec);
 else if (mode == "set") cmd_set();
@@ -13678,6 +13734,7 @@ else if (mode == "fixsel") cmd_fixsel(sec);
 else if (mode == "heal") cmd_heal(sec, ARGV[2] || "");
 else if (mode == "hide") cmd_hide(sec);
 else if (mode == "diag") cmd_diag();
+else if (mode == "secstate") cmd_secstate(sec == "probe");
 else if (mode == "subinfo") cmd_subinfo(sec);
 else if (mode == "route") cmd_route(ARGV[1], ARGV[2]);
 else if (mode == "import") cmd_import(sec);
@@ -20498,6 +20555,10 @@ html.zm-theme-dark .zm-node:not(.zm-active) { background: #22272e; border-color:
 .zm-node-name { font-weight: 600; font-size: 13px; line-height: 1.35; overflow-wrap: anywhere; }
 .zm-node.zm-active .zm-node-name::before { content: none; }
 .zm-node.zm-sec .zm-node-name::before { content: none; }
+.zm-tabsplit { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 40px; margin: 4px 0 0; }
+.zm-tabsplit > .zm-tabgrp { margin: 0; }
+.zm-sec-dim .zm-nodes { opacity: .45; filter: grayscale(.6); transition: opacity .15s, filter .15s; }
+.zm-sec-dim .zm-nodes:hover { opacity: .85; filter: none; }
 .zm-node.zm-sec-add { border-style: dashed; display: flex; align-items: center; justify-content: center; text-align: center; min-height: 64px; box-sizing: border-box; }
 .zm-node.zm-sec-add:not(:hover) { opacity: .85; }
 .zm-sec-add-text { font-weight: 600; font-size: 13px; line-height: 1.35; color: #1a7f37; }
@@ -20538,6 +20599,14 @@ html.zm-theme-dark .zm-seg { background: #22272e; border-color: rgba(255,255,255
 .zm-svc-chev { display: inline-block; font-size: 20px; line-height: 1; opacity: .55; transition: transform .15s; }
 .zm-svc-open .zm-svc-chev { transform: rotate(90deg); }
 .zm-st-stats.zm-st-stats-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.zm-st-stats.zm-fk-secs { grid-template-columns: repeat(auto-fill, minmax(min(240px, 100%), 1fr)); }
+.zm-fk-sec { cursor: pointer; transition: border-color .15s, transform .1s; }
+.zm-fk-sec:hover { border-color: #1aa3ff; transform: translateY(-1px); }
+.zm-fk-sec-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
+.zm-fk-sec-head > .zm-st-stat-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.zm-fk-sec-head > .zm-badge { flex-shrink: 0; padding: 2px 9px; font-size: 11px; }
+.zm-fk-sec-head > .zm-st-stat-sub { flex-shrink: 0; }
+.zm-fk-common { border-style: dashed; }
 .zm-st-stat-sub { font-size: 11.5px; opacity: .6; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (max-width: 1000px) { .zm-st-stats.zm-st-stats-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 600px) { .zm-st-stat-sub { white-space: normal; } }
@@ -21055,8 +21124,6 @@ return view.extend({
 			{ product: 'NetShift (основа Forkozz)', author: 'yandexru45', url: 'https://github.com/yandexru45/netshift' },
 			{ product: 'sing-box', author: 'SagerNet', url: 'https://github.com/SagerNet/sing-box' },
 			{ product: 'sing-box-extended', author: 'shtorm-7', url: 'https://github.com/shtorm-7/sing-box-extended' },
-			{ product: 'AmneziaWG', author: 'amnezia-vpn', url: 'https://github.com/amnezia-vpn' },
-			{ product: 'zapret4rocket', author: 'IndeecFOX', url: 'https://github.com/IndeecFOX/zapret4rocket' },
 			{ product: 'ios_rule_script (списки)', author: 'blackmatrix7', url: 'https://github.com/blackmatrix7/ios_rule_script' },
 			{ product: 'b4geoip (списки игр и сервисов)', author: 'DanielLavrushin', url: 'https://github.com/DanielLavrushin/b4geoip' },
 			{ product: 'b4geoip-forkop (сборка для sing-box)', author: 'Greeg0ry', url: 'https://github.com/Greeg0ry/b4geoip-forkop' },
@@ -21599,7 +21666,8 @@ function dnsBoots(t, servers) {
 	return out.slice(0, 4);
 }
 
-var TABS = [ { id: 'conn', label: 'Подключение' }, { id: 'svc', label: 'Сервисы' }, { id: 'byp', label: 'Исключения' }, { id: 'dev', label: 'Устройства' }, { id: 'set', label: 'Настройки' } ];
+var TABS = [ { id: 'conn', label: 'Подключение' }, { id: 'svc', label: 'Сервисы' }, { id: 'byp', label: 'Исключения', common: true }, { id: 'dev', label: 'Устройства', common: true }, { id: 'set', label: 'Настройки', common: true } ];
+function isSecTab(id) { return id === 'conn' || id === 'svc'; }
 var SEC_MAX = 9;
 var MODES = [ { id: 'links', label: 'Серверы' }, { id: 'sub', label: 'Подписка' }, { id: 'iface', label: 'Туннель' } ];
 var SB_VARS = [
@@ -21805,6 +21873,7 @@ return view.extend({
 		var draft = withBootMode(fromCfg(cfg)), savedSig = sig(draft), dirty = false, busy = false, lastAct = '', saving = false;
 		var servers = null, srvBusy = false, srvErr = '', latBusy = false;
 		var diag = null, diagBusy = false, openGroups = {}, catWait = 0;
+		var secState = null, secProbe = false, secProbed = false;
 		var dnsRes = {}, dnsTesting = false, dnsInput = null;
 		var tab = 'conn';
 		try { tab = localStorage.getItem('zm.forkozz.tab') || 'conn'; } catch (e) {}
@@ -21815,7 +21884,7 @@ return view.extend({
 		var hostsWarn = zm.hostsWarn('Forkozz');
 		var mainCard = E('div', { 'class': 'zm-card zm-kv' });
 		var logEl = E('pre', { 'class': 'zm-log' });
-		var tabBar = E('div', { 'class': 'zm-actions', 'style': 'margin:4px 0 0' });
+		var tabBar = E('div', { 'class': 'zm-tabsplit' });
 		var saveBar = E('div', { 'class': 'zm-savebar', 'style': 'display:none' });
 		var panes = { conn: E('div', { 'class': 'zm-wrap' }), svc: E('div', { 'class': 'zm-wrap' }), byp: E('div', { 'class': 'zm-wrap' }), dev: E('div', { 'class': 'zm-wrap' }), set: E('div', { 'class': 'zm-wrap' }) };
 		var secCard = E('div', { 'class': 'zm-card zm-kv' });
@@ -21911,6 +21980,7 @@ return view.extend({
 				}
 				renderAll();
 				if (st.running && secLive()) loadServers();
+				loadSecState(st.running && !secProbed);
 				if (after) after();
 			});
 		}
@@ -21928,6 +21998,7 @@ return view.extend({
 			zm.toast(ok ? (DONE_TEXT[done] || 'Готово') : 'Не получилось — смотрите журнал', ok ? 'info' : 'error');
 			diag = null;
 			servers = null;
+			if (ok) secProbed = false;
 			reload(function() {
 				if (ok && st.running && /^(apply|start|restart|update|install)$/.test(done)) runDiag(true);
 				if (pa && st.running && secLive()) {
@@ -22104,23 +22175,27 @@ return view.extend({
 
 		function renderSections() {
 			secCard.innerHTML = '';
-			var list = secs(), show = !!st.installed && configured() && (tab === 'conn' || tab === 'svc');
+			var list = secs(), show = !!st.installed && configured(), common = !isSecTab(tab);
 			secCard.style.display = show ? '' : 'none';
+			secCard.classList.toggle('zm-sec-dim', common);
 			if (!show) return;
 			var isNew = draft.sec === 'new';
+			function open(name) { if (common) tabTo('conn'); switchSec(name); }
 			secCard.appendChild(E('h3', {}, [ 'Секции ', badge(list.length > 1 || isNew ? 'zm-ok' : 'zm-off', nn(list.length + (isNew ? 1 : 0), 'секция', 'секции', 'секций')) ]));
-			secCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:-6px' }, 'Каждая секция ведёт свои сервисы через своё подключение: например, YouTube — через сервер, а ChatGPT — через WARP. Нажмите на секцию, чтобы настроить её на вкладках «Подключение» и «Сервисы».'));
+			secCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:-6px' }, common
+				? 'Исключения, устройства и настройки действуют для всех секций сразу. Нажмите на секцию, чтобы вернуться к её подключению и сервисам.'
+				: 'Каждая секция ведёт свои сервисы через своё подключение: например, YouTube — через сервер, а ChatGPT — через WARP. Нажмите на секцию, чтобы настроить её на вкладках «Подключение» и «Сервисы».'));
 			var tiles = list.map(function(s) {
 				var on = s.name === draft.sec, n = secSel(cfg, s), extra = (s.domains || 0) + (s.subnets || 0);
 				var what = n ? nn(n, 'список', 'списка', 'списков') : extra ? nn(extra, 'адрес', 'адреса', 'адресов') : 'пусто';
-				return node(s.label, secConn(s), on, function() { switchSec(s.name); },
+				return node(s.label, secConn(s), on, function() { open(s.name); },
 					E('span', { 'class': 'zm-lat ' + (!s.enabled ? 'zm-lat-bad' : n || extra ? 'zm-lat-good' : 'zm-lat-none') }, s.enabled ? what : 'выключена'),
 					'zm-sec' + (s.enabled ? '' : ' zm-node-dead'));
 			});
 			if (isNew) tiles.push(node(secName(), 'ещё не сохранена', true, function() {}, E('span', { 'class': 'zm-lat zm-lat-mid' }, 'черновик'), 'zm-sec'));
-			else if (list.length < SEC_MAX) tiles.push(E('div', { 'class': 'zm-node zm-sec zm-sec-add', 'title': 'Свои списки через другой VPN', 'click': function() { switchSec('new'); } }, [ E('span', { 'class': 'zm-sec-add-text' }, 'Создать новую секцию') ]));
+			else if (list.length < SEC_MAX) tiles.push(E('div', { 'class': 'zm-node zm-sec zm-sec-add', 'title': 'Свои списки через другой VPN', 'click': function() { open('new'); } }, [ E('span', { 'class': 'zm-sec-add-text' }, 'Создать новую секцию') ]));
 			secCard.appendChild(E('div', { 'class': 'zm-nodes' }, tiles));
-			if (list.length > 1) secCard.appendChild(E('p', { 'class': 'zm-hint' }, (mainName() === 'Основная' ? 'Основная секция' : 'Основная секция — «' + mainName() + '»') + ': через неё идут устройства «Всё через Forkozz», DNS и скачивание списков. Секции проверяются по порядку слева направо: если сайт попал в две, сработает левая. Один сервис можно включить только в одной секции. Исключения действуют на все секции сразу.'));
+			if (list.length > 1 && !common) secCard.appendChild(E('p', { 'class': 'zm-hint' }, (mainName() === 'Основная' ? 'Основная секция' : 'Основная секция — «' + mainName() + '»') + ': через неё идут устройства «Всё через Forkozz», DNS и скачивание списков. Секции проверяются по порядку слева направо: если сайт попал в две, сработает левая. Один сервис можно включить только в одной секции. Исключения действуют на все секции сразу.'));
 		}
 
 		function tabTo(id) {
@@ -22205,6 +22280,79 @@ return view.extend({
 			]);
 		}
 
+		function loadSecState(probe) {
+			if (!st.installed || !configured()) { secState = null; return; }
+			if (probe) { secProbe = true; secProbed = true; }
+			zm.forkopAction('secstate', probe ? 'probe' : '').then(function(r) {
+				if (probe) secProbe = false;
+				if (r && !r.error && r.sections) secState = r;
+				if (!busy) renderMain();
+			}).catch(function() { if (probe) secProbe = false; });
+		}
+
+		function ago(sec) {
+			return sec < 60 ? sec + ' с назад' : sec < 3600 ? Math.floor(sec / 60) + ' мин назад' : Math.floor(sec / 3600) + ' ч назад';
+		}
+
+		function secListsText(s) {
+			var p = secPick(cfg, s), names = p.items.filter(function(it) { return p.sel[it.id]; }).map(function(it) { return it.name; }), parts = [];
+			if (names.length) parts.push(names.slice(0, 2).join(', ') + (names.length > 2 ? ' +' + (names.length - 2) : ''));
+			if ((p.lists || []).length) parts.push(nn(p.lists.length, 'свой список', 'своих списка', 'своих списков'));
+			if (s.domains) parts.push(nn(s.domains, 'домен', 'домена', 'доменов'));
+			if (s.subnets) parts.push(nn(s.subnets, 'подсеть', 'подсети', 'подсетей'));
+			return parts.join(' · ') || 'ничего не выбрано';
+		}
+
+		function secConnText(s, x) {
+			if (s.mode === 'iface') {
+				var warp = /^zmwarp/.test(s.iface || ''), v = (warp ? 'WARP · ' : 'Туннель · ') + (s.iface || '—');
+				if (x && x.probed && x.delay > 0) v += ' · ' + x.delay + ' мс';
+				return [ v, x && x.up === false ? 'интерфейс не поднят' : x && x.hs > 0 ? 'рукопожатие ' + ago(x.hs) : x && x.hs === -1 ? 'рукопожатия ещё не было' : (warp ? 'WARP-туннель' : 'WireGuard / AmneziaWG') ];
+			}
+			var n = (x && x.count) || s.links || 0, srv = x && x.server ? x.server + (x.delay > 0 ? ' · ' + x.delay + ' мс' : '') : '';
+			var how = n > 1 ? (x && x.auto ? 'авто из ' : 'вручную из ') + nn(n, 'сервера', 'серверов', 'серверов') : n === 1 ? 'один сервер' : '';
+			if (s.mode === 'sub') return [ srv || 'Подписка', [ x && x.sub ? 'подписка «' + subName(x.sub) + '»' : 'подписка', how ].filter(Boolean).join(' · ') ];
+			return [ srv || (n ? nn(n, 'сервер', 'сервера', 'серверов') : 'серверы'), how || 'по ссылке' ];
+		}
+
+		function secStateBadge(s, x) {
+			if (!s.enabled) return badge('zm-off', 'выключена');
+			if (!st.enabled) return badge('zm-off', 'Forkozz выключен');
+			if (!x) return badge('zm-off', st.running ? 'проверяем…' : 'не работает');
+			if (x.state === 'ok') return badge('zm-ok', 'работает');
+			if (x.state === 'bad') return badge('zm-bad', s.mode === 'iface' ? 'туннель не отвечает' : 'сервер не отвечает');
+			if (x.state === 'stopped') return badge('zm-bad', 'не работает');
+			if (x.state === 'wait') return badge('zm-warn', 'запускается');
+			return badge('zm-off', secProbe ? 'проверяем…' : 'нет данных');
+		}
+
+		function secBox(s) {
+			var x = secState && (secState.sections || []).filter(function(e) { return e.name === s.name; })[0];
+			var c = secConnText(s, x), l = secListsText(s);
+			return E('div', { 'class': 'zm-st-stat zm-fk-sec' + (s.name === draft.sec ? ' zm-fk-sec-cur' : ''), 'title': 'Открыть секцию «' + s.label + '»', 'click': function() {
+				if (!isSecTab(tab)) tabTo('conn');
+				if (s.name !== draft.sec) switchSec(s.name);
+			} }, [
+				E('span', { 'class': 'zm-fk-sec-head' }, [ E('span', { 'class': 'zm-st-stat-label' }, [ s.label ]), secStateBadge(s, x) ]),
+				E('span', { 'class': 'zm-st-stat-value', 'title': c[0] }, [ c[0] ]),
+				E('span', { 'class': 'zm-st-stat-sub', 'title': c[1] }, [ c[1] ]),
+				E('span', { 'class': 'zm-st-stat-sub', 'title': l }, [ l ])
+			]);
+		}
+
+		function commonBox() {
+			var bp = cfg.bypass || {}, bn = (bp.domains || []).length + (bp.subnets || []).length, f = (cfg.full || []).length, e = (cfg.excl || []).length;
+			var dev = [ f ? 'всё через Forkozz: ' + f : '', e ? 'мимо Forkozz: ' + e : '' ].filter(Boolean).join(' · ') || 'устройства по спискам';
+			var sb = st.singbox ? 'sing-box ' + st.singbox.replace(/-extended.*$/, '') : 'sing-box не установлен';
+			var dn = cfg.dns ? dnsLabel(cfg.dns) : '—', dt = cfg.dns ? (DNS_TYPES[cfg.dns.type] || '') + (cfg.dns.detour ? ' · через VPN' : '') : '';
+			return E('div', { 'class': 'zm-st-stat zm-fk-common' }, [
+				E('span', { 'class': 'zm-fk-sec-head' }, [ E('span', { 'class': 'zm-st-stat-label' }, 'Общее'), E('span', { 'class': 'zm-st-stat-sub' }, 'для всех секций') ]),
+				E('span', { 'class': 'zm-st-stat-value', 'title': 'DNS ' + dn }, [ 'DNS ' + dn + (dt ? ' · ' + dt : '') ]),
+				E('span', { 'class': 'zm-st-stat-sub' }, [ (bn ? 'исключений: ' + bn : 'без исключений') + ' · ' + dev ]),
+				E('span', { 'class': 'zm-st-stat-sub', 'title': sb }, [ 'NetShift ' + (st.version || '—') + ' · ' + sb ])
+			]);
+		}
+
 		function renderMain() {
 			hostsWarn.set(!!(st && st.installed && st.hosts_extra));
 			mainCard.innerHTML = '';
@@ -22223,7 +22371,9 @@ return view.extend({
 				statusBadge(), st.installed && st.newer && !busy ? badge('zm-warn', 'есть версия ' + st.latest) : E([])
 			])));
 
-			if (st.installed) {
+			if (st.installed && configured() && secs().length) {
+				mainCard.appendChild(E('div', { 'class': 'zm-st-stats zm-fk-secs' }, secs().map(secBox).concat([ commonBox() ])));
+			} else if (st.installed) {
 				var sl = secs(), cv, rv = routeValue(cfg);
 				if (sl.length > 1) cv = [ nn(sl.length, 'секция', 'секции', 'секций'), sl.map(function(s) { return s.label + (s.enabled ? '' : ' (выкл.)'); }).join(' · ') ];
 				else if (cfg && cfg.is_main) cv = connValue(cfg);
@@ -22288,8 +22438,10 @@ return view.extend({
 			tabBar.innerHTML = '';
 			var show = !!st.installed;
 			tabBar.style.display = show ? '' : 'none';
-			TABS.forEach(function(t) {
-				tabBar.appendChild(E('button', { 'class': 'cbi-button' + (t.id === tab ? ' cbi-button-positive' : ''), 'click': function() { tabTo(t.id); } }, t.label));
+			[ false, true ].forEach(function(common) {
+				tabBar.appendChild(E('div', { 'class': 'zm-actions zmw-tabs zm-tabgrp' }, TABS.filter(function(t) { return !!t.common === common; }).map(function(t) {
+					return E('button', { 'class': 'cbi-button' + (t.id === tab ? ' cbi-button-positive' : ''), 'click': function() { tabTo(t.id); } }, t.label);
+				})));
 			});
 			Object.keys(panes).forEach(function(k) { panes[k].style.display = show && k === tab ? '' : 'none'; });
 			saveBar.style.display = show && (dirty || !configured() || draft.sec === 'new') ? '' : 'none';
@@ -22997,12 +23149,15 @@ return view.extend({
 		panes.set.appendChild(miscCard);
 		panes.set.appendChild(sbCard);
 		panes.byp.appendChild(bypCard);
-		[ mainCard, hostsWarn, logEl, tabBar, secCard, panes.conn, panes.svc, panes.byp, panes.dev, panes.set, saveBar ].forEach(function(n) { wrap.appendChild(n); });
+		[ mainCard, hostsWarn, logEl, secCard, tabBar, panes.conn, panes.svc, panes.byp, panes.dev, panes.set, saveBar ].forEach(function(n) { wrap.appendChild(n); });
 
 		syncAreas();
 		renderAll();
 		if (st.busy) { lastAct = ''; follow(); }
-		else if (st.running && secLive()) loadServers();
+		else {
+			if (st.running && secLive()) loadServers();
+			loadSecState(!!st.running);
+		}
 		return wrap;
 	}
 });
@@ -26546,6 +26701,7 @@ html.zm-theme-dark #zmw-view .zm-node:not(.zm-active) { background: var(--surfac
 #zmw-view .zm-node.zm-active { border-color: rgba(124,92,255,.6); background: var(--grad-soft); box-shadow: var(--ring); }
 #zmw-view .zm-node.zm-active .zm-node-name::before { color: var(--a1); }
 #zmw-view .zm-node.zm-sec-add { border-style: dashed; }
+#zmw-view .zm-fk-sec:hover { border-color: var(--a1); }
 #zmw-view .zm-sec-add-text { color: var(--a1); }
 #zmw-view .zm-node-name { color: var(--text); }
 #zmw-view .zm-node-foot > span:first-child { color: var(--muted); opacity: 1; }
