@@ -1,5 +1,5 @@
 #!/bin/sh
-# Version: 2.31
+# Version: 2.32
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -50,7 +50,7 @@ cat > '/opt/zapret-manager-luci/backend.sh.zm-new' << 'ZM_INSTALLER_EOF'
 umask 022
 
 CONF="/etc/config/zapret"
-ZM_VERSION="2.31"
+ZM_VERSION="2.32"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
@@ -2091,26 +2091,22 @@ hosts_file_set() {
 	printf '{"ok":true}\n'
 }
 
-# Большой hosts приходит частями: uhttpd не принимает в /ubus запрос больше 64 КБ
-HOSTS_UP_FILE="$JOBS_DIR/hosts_upload.part"
-hosts_file_part() {
-	local part="$1" data="$2" sz
+# Большие тексты (hosts, списки, конфиги) приходят частями: uhttpd не принимает в /ubus запрос больше 64 КБ.
+# Части копятся в ZM_UP_FILE, а итоговый вызов вместо текста передаёт метку @zmupload.
+ZM_UP_FILE="$JOBS_DIR/upload.part"
+ZM_UP_MAX=4194304
+upload_part() {
+	local part="$1" sz
 	mkdir -p "$JOBS_DIR"
 	case "$part" in
-		first) : > "$HOSTS_UP_FILE" ;;
-		next|last) [ -f "$HOSTS_UP_FILE" ] || { echo '{"error":"загрузка прервалась — сохраните ещё раз"}'; return 1; } ;;
+		first) : > "$ZM_UP_FILE" ;;
+		next) [ -f "$ZM_UP_FILE" ] || { echo '{"error":"загрузка прервалась — сохраните ещё раз"}'; return 1; } ;;
 		*) echo '{"error":"неверная часть файла"}'; return 1 ;;
 	esac
-	printf '%s' "$data" >> "$HOSTS_UP_FILE"
-	sz="$(wc -c < "$HOSTS_UP_FILE" | tr -d ' ')"
-	[ "${sz:-0}" -gt "$HOSTS_EDIT_MAX" ] && { rm -f "$HOSTS_UP_FILE"; echo '{"error":"файл слишком большой для редактора"}'; return 1; }
-	[ "$part" = last ] || { printf '{"ok":true,"size":%s}\n' "${sz:-0}"; return 0; }
-	[ -s "$HOSTS_UP_FILE" ] || { rm -f "$HOSTS_UP_FILE"; echo '{"error":"пустой файл — сохранение отменено"}'; return 1; }
-	cp "$HOSTS_FILE" "$HOSTS_FILE.bak" 2>/dev/null
-	cat "$HOSTS_UP_FILE" > "$HOSTS_FILE"
-	rm -f "$HOSTS_UP_FILE"
-	/etc/init.d/dnsmasq restart >/dev/null 2>&1
-	printf '{"ok":true}\n'
+	printf '%s' "$2" >> "$ZM_UP_FILE"
+	sz="$(wc -c < "$ZM_UP_FILE" | tr -d ' ')"
+	[ "${sz:-0}" -gt "$ZM_UP_MAX" ] && { rm -f "$ZM_UP_FILE"; echo '{"error":"текст слишком большой"}'; return 1; }
+	printf '{"ok":true,"size":%s}\n' "${sz:-0}"
 }
 
 _ports_get() { sed -n "s/^[[:space:]]*option $1 '\([^']*\)'.*/\1/p" "$CONF" | head -n1; }
@@ -2775,6 +2771,8 @@ nfqws_opt_set() {
 	[ -x /etc/init.d/zapret ] || { echo '{"error":"Zapret не установлен"}'; return 1; }
 	[ -f "$CONF" ] || { echo '{"error":"конфигурация Zapret не найдена"}'; return 1; }
 	grep -q "^[[:space:]]*option NFQWS_OPT '\$" "$CONF" || { echo '{"error":"в конфигурации не найден блок NFQWS_OPT"}'; return 1; }
+	case "$content" in *"'"*) echo '{"error":"одинарные кавычки \u0027 в стратегии нельзя — они ломают конфиг Zapret"}'; return 1 ;; esac
+	printf '%s' "$content" | grep -q -- '--' || { echo '{"error":"в стратегии нет ни одного параметра --… — сохранение отменено"}'; return 1; }
 	sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
 	{ echo "	option NFQWS_OPT '"; printf '%s\n' "$content"; echo "'"; } >> "$CONF"
 	[ -f /opt/zapret/sync_config.sh ] && chmod +x /opt/zapret/sync_config.sh
@@ -13557,8 +13555,15 @@ redbtn_panel_gone() {
 }
 
 cmd="$1"; shift
-if [ "$2" = @stdin ]; then ZM_IN="$(cat; echo .)"; set -- "$1" "${ZM_IN%.}"
-elif [ "$1" = @stdin ]; then ZM_IN="$(cat; echo .)"; set -- "${ZM_IN%.}"; fi
+_zm_in() {
+	ZM_IN="$(cat; echo .)"
+	if [ "$ZM_IN" = "@zmupload." ] && [ "$cmd" != upload_part ] && [ -f "$ZM_UP_FILE" ]; then
+		ZM_IN="$(cat "$ZM_UP_FILE"; echo .)"
+		rm -f "$ZM_UP_FILE"
+	fi
+}
+if [ "$2" = @stdin ]; then _zm_in; set -- "$1" "${ZM_IN%.}"
+elif [ "$1" = @stdin ]; then _zm_in; set -- "${ZM_IN%.}"; fi
 case "$cmd" in
 	strategy_set_v|strategy_set_flowseal|strategy_set_youtube|youtube_quic_set|discord_set_dv|discord_set_fake|game_set|game_set_fake|game_toggle_xtreme)
 		[ -f "$CONF" ] && { _nochange_guard || exit 1; } ;;
@@ -13622,7 +13627,7 @@ case "$cmd" in
 	hosts_reset)                        hosts_reset ;;
 	hosts_file_get)                     hosts_file_get ;;
 	hosts_file_set)                     hosts_file_set "$1" ;;
-	hosts_file_part)                    hosts_file_part "$1" "$2" ;;
+	upload_part)                        upload_part "$1" "$2" ;;
 	doh_install)                         doh_install ;;
 	doh_remove)                          doh_remove ;;
 	doh_status)                          doh_status ;;
@@ -15632,7 +15637,7 @@ list_methods() {
 	json_add_object "hosts_reset";            json_close_object
 	json_add_object "hosts_file_get";         json_close_object
 	json_add_object "hosts_file_set";         json_add_string "content" "string"; json_close_object
-	json_add_object "hosts_file_part";        json_add_string "content" "string"; json_add_string "part" "string"; json_close_object
+	json_add_object "upload_part";            json_add_string "content" "string"; json_add_string "part" "string"; json_close_object
 	json_add_object "doh_status";             json_close_object
 	json_add_object "doh_install";            json_close_object
 	json_add_object "doh_remove";             json_close_object
@@ -15737,7 +15742,7 @@ call_method() {
 		hosts_reset)             "$BACKEND" hosts_reset ;;
 		hosts_file_get)          "$BACKEND" hosts_file_get ;;
 		hosts_file_set)          json_get_var content content; printf '%s' "$content" | "$BACKEND" hosts_file_set @stdin ;;
-		hosts_file_part)         json_get_var content content; json_get_var part part; printf '%s' "$content" | "$BACKEND" hosts_file_part "$part" @stdin ;;
+		upload_part)             json_get_var content content; json_get_var part part; printf '%s' "$content" | "$BACKEND" upload_part "$part" @stdin ;;
 		doh_status)              "$BACKEND" doh_status ;;
 		doh_install)             "$BACKEND" doh_install ;;
 		doh_remove)              "$BACKEND" doh_remove ;;
@@ -15885,7 +15890,7 @@ cat > '/usr/share/rpcd/acl.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF'
 					"hosts_replace_geohide",
 					"hosts_reset",
 					"hosts_file_set",
-					"hosts_file_part",
+					"upload_part",
 					"doh_install",
 					"doh_remove",
 					"game_set",
@@ -16102,13 +16107,13 @@ var callHostsReplaceGeohide = zmDeclare({ object: 'zapret-manager', method: 'hos
 var callHostsReset = zmDeclare({ object: 'zapret-manager', method: 'hosts_reset', expect: {} });
 var callHostsFileGet = zmDeclare({ object: 'zapret-manager', method: 'hosts_file_get', expect: {} });
 var callHostsFileSet = zmDeclare({ object: 'zapret-manager', method: 'hosts_file_set', params: ['content'], expect: {} });
-var callHostsFilePart = zmDeclare({ object: 'zapret-manager', method: 'hosts_file_part', params: ['content', 'part'], expect: {} });
+var callUploadPart = zmDeclare({ object: 'zapret-manager', method: 'upload_part', params: ['content', 'part'], expect: {} });
 
-/* uhttpd принимает в /ubus не больше 64 КБ за запрос — большой hosts отправляем частями */
-function hostsFileSave(text) {
-	text = String(text || '');
+/* uhttpd принимает в /ubus не больше 64 КБ за запрос: длинный текст сначала уходит частями,
+   а сам вызов получает метку @zmupload — роутер подставит собранный текст */
+function bigSend(text, fn) {
+	if (typeof text !== 'string' || text.length <= 16000) return fn(text);
 	var CH = 16000, parts = [], i = 0;
-	if (text.length <= CH) return callHostsFileSet(text);
 	while (i < text.length) {
 		var e = Math.min(i + CH, text.length), c = text.charCodeAt(e - 1);
 		if (e < text.length && c >= 0xD800 && c <= 0xDBFF) e--;
@@ -16116,12 +16121,11 @@ function hostsFileSave(text) {
 		i = e;
 	}
 	return parts.reduce(function(p, chunk, k) {
-		return p.then(function(r) {
-			if (r && r.error) return r;
-			return callHostsFilePart(chunk, k === 0 ? 'first' : k === parts.length - 1 ? 'last' : 'next');
-		});
-	}, Promise.resolve({}));
+		return p.then(function(r) { return r && r.error ? r : callUploadPart(chunk, k ? 'next' : 'first'); });
+	}, Promise.resolve({})).then(function(r) { return r && r.error ? r : fn('@zmupload'); });
 }
+function bigText(call) { return function(text) { return bigSend(text, function(v) { return call(v); }); }; }
+function bigArg2(call) { return function(a, text) { return bigSend(text, function(v) { return call(a, v); }); }; }
 var callDohStatus = zmDeclare({ object: 'zapret-manager', method: 'doh_status', expect: {} });
 var callDohInstall = zmDeclare({ object: 'zapret-manager', method: 'doh_install', expect: {} });
 var callDohRemove = zmDeclare({ object: 'zapret-manager', method: 'doh_remove', expect: {} });
@@ -17398,9 +17402,9 @@ return baseclass.extend({
 	nfqwsOptGet: callNfqwsOptGet,
 	zapretListsStatus: callZapretListsStatus,
 	zapretListGet: callZapretListGet,
-	zapretListSet: callZapretListSet,
+	zapretListSet: bigArg2(callZapretListSet),
 	zapretListRestore: callZapretListRestore,
-	nfqwsOptSet: callNfqwsOptSet,
+	nfqwsOptSet: bigText(callNfqwsOptSet),
 	tgStatus: callTgStatus,
 	tgAction: callTgAction,
 	tgRestartAll: callTgRestartAll,
@@ -17411,7 +17415,7 @@ return baseclass.extend({
 	hostsReplaceGeohide: callHostsReplaceGeohide,
 	hostsReset: callHostsReset,
 	hostsFileGet: callHostsFileGet,
-	hostsFileSet: hostsFileSave,
+	hostsFileSet: bigText(callHostsFileSet),
 	dohStatus: callDohStatus,
 	dohInstall: callDohInstall,
 	dohRemove: callDohRemove,
@@ -17419,7 +17423,7 @@ return baseclass.extend({
 	dohBootstrapSet: callDohBootstrapSet,
 	dohForceSet: callDohForceSet,
 	testStatus: callTestStatus,
-	testAction: callTestAction,
+	testAction: bigArg2(callTestAction),
 	zapretOptSet: callZapretOptSet,
 	systemTimeSet: callSystemTimeSet,
 	testResults: callTestResults,
@@ -17428,7 +17432,7 @@ return baseclass.extend({
 	mixomoStatus: callMixomoStatus,
 	mixomoAction: callMixomoAction,
 	mixomoConfigGet: callMixomoConfigGet,
-	mixomoConfigSet: callMixomoConfigSet,
+	mixomoConfigSet: bigText(callMixomoConfigSet),
 	mixomoApplySubscription: callMixomoApplySubscription,
 	mixomoFilterSet: callMixomoFilterSet,
 	mixomoProxies: callMixomoProxies,
@@ -17438,18 +17442,18 @@ return baseclass.extend({
 	mixomoWarpStatus: callMixomoWarpStatus,
 	mixomoWarpAction: callMixomoWarpAction,
 	mixomoWarpIntegrateAction: callMixomoWarpIntegrateAction,
-	mixomoWarpConfigSet: callMixomoWarpConfigSet,
+	mixomoWarpConfigSet: bigText(callMixomoWarpConfigSet),
 	health: callHealth,
 	awgStatus: callAwgStatus,
-	awgAction: callAwgAction,
+	awgAction: bigArg2(callAwgAction),
 	steerStatus: callSteerStatus,
 	versions: callVersions,
-	steerAction: callSteerAction,
+	steerAction: bigArg2(callSteerAction),
 	boardInfo: callBoardInfo,
 	forkopStatus: callForkopStatus,
 	forkopConfigGet: callForkopConfigGet,
-	forkopConfigSet: callForkopConfigSet,
-	forkopAction: callForkopAction,
+	forkopConfigSet: bigText(callForkopConfigSet),
+	forkopAction: bigArg2(callForkopAction),
 	jobsCancel: callJobsCancel,
 	dock: dock,
 	riCovers: riCovers,
