@@ -1,5 +1,5 @@
 #!/bin/sh
-# Version: 2.32
+# Version: 2.33
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -50,7 +50,7 @@ cat > '/opt/zapret-manager-luci/backend.sh.zm-new' << 'ZM_INSTALLER_EOF'
 umask 022
 
 CONF="/etc/config/zapret"
-ZM_VERSION="2.32"
+ZM_VERSION="2.33"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
@@ -2925,11 +2925,41 @@ _tg_arch_go() {
 	esac
 }
 
+# Пакет tg-ws-proxy-rs (luci-app-tg-ws-proxy-rs или его install.sh) ставит свой init.d: бинарник
+# запускается без аргументов, а порт, ключ и адрес ссылки берутся из /etc/config/tg-ws-proxy-rs.
+# Такой установкой управляет менеджер пакетов — панель её только показывает.
+_tg_rs_uci() {
+	[ -f /etc/config/tg-ws-proxy-rs ] && [ -f "$TG_INIT_RS" ] && ! grep -q -- '--secret' "$TG_INIT_RS"
+}
+# Прокси выключен в настройках пакета (option enabled '0') — init.d тогда ничего не запускает
+_tg_rs_off() {
+	_tg_rs_uci && [ "$(uci -q get tg-ws-proxy-rs.main.enabled)" != 1 ]
+}
+_tg_hex() {
+	if command -v hexdump >/dev/null 2>&1; then printf '%s' "$1" | hexdump -v -e '1/1 "%02x"'
+	else printf '%s' "$1" | od -An -v -tx1 | tr -d ' \n'; fi
+}
+# Ключ для ссылки — так же, как его строит сам tg-ws-proxy-rs: dd + 32-символьный ключ,
+# готовый dd/ee-ключ как есть, а при FakeTLS-домене — ee + ключ + hex(домен)
+_tg_rs_link_secret() {
+	local secret="$1" domain="$2" key="$1"
+	[ -n "$secret" ] || return 0
+	case "$secret" in dd*|ee*) [ "${#secret}" -gt 32 ] && key="$(printf '%s' "$secret" | cut -c3-34)" ;; esac
+	if [ -n "$domain" ]; then
+		printf 'ee%s%s' "$key" "$(_tg_hex "$domain")"
+	elif [ "$key" != "$secret" ]; then
+		printf '%s' "$secret"
+	else
+		printf 'dd%s' "$secret"
+	fi
+}
+
 tg_status() {
 	local mt="not_installed" mt_running="false" mt_ver=""
 	local go="not_installed" go_running="false" go_ver=""
 	local rs="not_installed" rs_running="false" rs_ver=""
 	local secret_mt="" secret_rs="" lan_ip
+	local rs_uci="false" rs_enabled="true" rs_port=2443 rs_host="" rs_domain="" v
 
 	if [ -f /etc/init.d/tg-ws-proxy ]; then
 		mt="installed"; pidof tg-ws-proxy >/dev/null 2>&1 && mt_running="true"
@@ -2950,18 +2980,30 @@ tg_status() {
 	fi
 
 	[ -f "$TG_SECRET_MT_FILE" ] && secret_mt=$(grep '^SECRET=' "$TG_SECRET_MT_FILE" | cut -d= -f2)
-	if [ -f "$TG_INIT_RS" ]; then
+	if _tg_rs_uci; then
+		rs_uci="true"
+		_tg_rs_off && rs_enabled="false"
+		rs_port="$(uci -q get tg-ws-proxy-rs.main.port)"; [ -n "$rs_port" ] || rs_port=1443
+		secret_rs="$(uci -q get tg-ws-proxy-rs.main.secret)"; secret_rs="${secret_rs%%,*}"
+		rs_host="$(uci -q get tg-ws-proxy-rs.main.link_ip)"
+		rs_domain="$(uci -q get tg-ws-proxy-rs.main.listen_faketls_domain)"
+	elif [ -f "$TG_INIT_RS" ]; then
 		secret_rs=$(sed -n 's/.*--secret[[:space:]]*\([0-9a-fA-F]\{32\}\).*/\1/p' "$TG_INIT_RS" | head -n1)
+		[ -z "$secret_rs" ] && [ -f "$TG_SECRET_RS_FILE" ] && secret_rs=$(cat "$TG_SECRET_RS_FILE")
 	fi
-	[ -z "$secret_rs" ] && [ -f "$TG_SECRET_RS_FILE" ] && secret_rs=$(cat "$TG_SECRET_RS_FILE")
+	if [ "$rs" = installed ] && { [ "$rs_uci" = true ] || [ -z "$rs_ver" ]; }; then
+		v="$("$TG_BIN_RS" --version 2>/dev/null | awk '{print $2}')"; [ -n "$v" ] && rs_ver="$(_ver_norm "$v")"
+	fi
+	secret_rs="$(_tg_rs_link_secret "$secret_rs" "$rs_domain")"
 	lan_ip="$(_zm_lan_ip)"
 
 	local mt_l go_l rs_l
 	mt_l="$(_tg_latest mt)"; mt_l="$(_ver_norm "${mt_l%% *}")"; go_l="$(_ver_norm "$(_tg_latest go)")"; rs_l="$(_ver_norm "$(_tg_latest rs)")"
-	printf '{"mtproto":"%s","mtproto_running":%s,"mtproto_version":"%s","mtproto_latest":"%s","mtproto_newer":%s,"socks5":"%s","socks5_running":%s,"socks5_version":"%s","socks5_latest":"%s","socks5_newer":%s,"rust":"%s","rust_running":%s,"rust_version":"%s","rust_latest":"%s","rust_newer":%s,"lan_ip":"%s","secret_mtproto":"%s","secret_rust":"%s","auto":%s}\n' \
+	printf '{"mtproto":"%s","mtproto_running":%s,"mtproto_version":"%s","mtproto_latest":"%s","mtproto_newer":%s,"socks5":"%s","socks5_running":%s,"socks5_version":"%s","socks5_latest":"%s","socks5_newer":%s,"rust":"%s","rust_running":%s,"rust_version":"%s","rust_latest":"%s","rust_newer":%s,"rust_uci":%s,"rust_enabled":%s,"rust_port":"%s","rust_host":"%s","lan_ip":"%s","secret_mtproto":"%s","secret_rust":"%s","auto":%s}\n' \
 		"$mt" "$mt_running" "$(esc "$mt_ver")" "$(esc "$mt_l")" "$(_tg_newer "$mt_ver" "$mt_l" && echo true || echo false)" \
 		"$go" "$go_running" "$(esc "$go_ver")" "$(esc "$go_l")" "$(_tg_newer "$go_ver" "$go_l" && echo true || echo false)" \
 		"$rs" "$rs_running" "$(esc "$rs_ver")" "$(esc "$rs_l")" "$(_tg_newer "$rs_ver" "$rs_l" && echo true || echo false)" \
+		"$rs_uci" "$rs_enabled" "$(esc "$rs_port")" "$(esc "$rs_host")" \
 		"$(esc "$lan_ip")" "$(esc "$secret_mt")" "$(esc "$secret_rs")" "$(_tg_auto_json)"
 }
 
@@ -3047,6 +3089,7 @@ tg_auto_tick() {
 	init="$(_tg_auto_init "$1")" || return 0
 	[ -x "$init" ] || return 0
 	"$init" enabled >/dev/null 2>&1 || return 0
+	[ "$1" = rust ] && _tg_rs_off && return 0
 	_tg_auto_busy "$1" && return 0
 	"$init" restart >/dev/null 2>&1
 	return 0
@@ -3059,6 +3102,7 @@ _tg_watch() {
 		init="$(_tg_auto_init "$id")"
 		[ -x "$init" ] || continue
 		"$init" enabled >/dev/null 2>&1 || continue
+		[ "$id" = rust ] && _tg_rs_off && continue
 		_tg_auto_busy "$id" && continue
 		_tg_auto_alive "$id" && continue
 		sleep 3
@@ -3231,6 +3275,10 @@ tg_action() {
 	case "$variant:$action" in
 		watch:on|watch:off) tg_watch_set "$action"; return ;;
 		*:auto=*) tg_auto_set "$variant" "${action#auto=}"; return ;;
+		rust:install|rust:update|rust:reinstall|rust:remove)
+			_tg_rs_uci && { echo '{"error":"TG WS Proxy (Rust) установлен пакетом luci-app-tg-ws-proxy-rs — обновляйте и удаляйте его через менеджер пакетов, настройки — в Службы → Telegram WS Proxy (Rust)"}'; return 1; } ;;
+	esac
+	case "$variant:$action" in
 		mtproto:remove|socks5:remove|rust:remove) _tg_auto_drop "$variant" ;;
 	esac
 	case "$variant:$action" in
@@ -23542,25 +23590,28 @@ return view.extend({
 		var logEl = E('pre', { 'class': 'zm-log' });
 
 		function statusOf(d, id) {
-			if (id === 'mtproto') return { installed: d.mtproto === 'installed', running: d.mtproto_running === true, secret: d.secret_mtproto, version: d.mtproto_version, latest: d.mtproto_latest, newer: d.mtproto_newer === true };
+			if (id === 'mtproto') return { installed: d.mtproto === 'installed', running: d.mtproto_running === true, secret: d.secret_mtproto ? 'dd' + d.secret_mtproto : '', version: d.mtproto_version, latest: d.mtproto_latest, newer: d.mtproto_newer === true };
 			if (id === 'socks5') return { installed: d.socks5 === 'installed', running: d.socks5_running === true, secret: '', version: d.socks5_version, latest: d.socks5_latest, newer: d.socks5_newer === true };
-			return { installed: d.rust === 'installed', running: d.rust_running === true, secret: d.secret_rust, version: d.rust_version, latest: d.rust_latest, newer: d.rust_newer === true };
+			/* secret_rust приходит уже с dd/ee-префиксом; у установки пакетом порт и адрес — из его настроек */
+			return { installed: d.rust === 'installed', running: d.rust_running === true, secret: d.secret_rust, version: d.rust_version, latest: d.rust_latest, newer: d.rust_newer === true,
+				uci: d.rust_uci === true, enabled: d.rust_enabled !== false, port: d.rust_port, host: d.rust_host };
 		}
 
 		function renderLinks(d) {
 			linksWrap.innerHTML = '';
 			VARIANTS.forEach(function(v) {
 				var st = statusOf(d, v.id);
-				if (!st.installed || !st.running || !d.lan_ip) return;
+				var host = st.host || d.lan_ip, port = st.port || v.port;
+				if (!st.installed || !st.running || !host) return;
 
 				var link, extra;
 				if (v.kind === 'socks') {
-					link = 'tg://socks?server=' + d.lan_ip + '&port=' + v.port;
-					extra = 'SOCKS5-адрес: ' + d.lan_ip + ':' + v.port;
+					link = 'tg://socks?server=' + host + '&port=' + port;
+					extra = 'SOCKS5-адрес: ' + host + ':' + port;
 				} else {
-					var secretPrefixed = 'dd' + st.secret;
-					link = 'tg://proxy?server=' + d.lan_ip + '&port=' + v.port + '&secret=' + secretPrefixed;
-					extra = 'Хост: ' + d.lan_ip + '   Порт: ' + v.port + '   Ключ: ' + secretPrefixed;
+					if (!st.secret) return;
+					link = 'tg://proxy?server=' + host + '&port=' + port + '&secret=' + st.secret;
+					extra = 'Хост: ' + host + '   Порт: ' + port + '   Ключ: ' + st.secret;
 				}
 
 				var qrLink = link.replace(/^tg:\/\//, 'https://t.me/');
@@ -23607,8 +23658,16 @@ return view.extend({
 			cards.innerHTML = '';
 			VARIANTS.forEach(function(v) {
 				var st = statusOf(d, v.id);
-				var actions = [];
-				if (st.installed) {
+				var actions = [], pkgNote = null;
+				if (st.uci) {
+					var web = document.body.classList.contains('zmw-body');
+					actions.push(E('a', { 'class': 'cbi-button', 'href': L.url('admin/services/tg-ws-proxy-rs'), 'target': web ? '_blank' : null, 'rel': web ? 'noopener' : null }, 'Настройки пакета'));
+					pkgNote = E('p', { 'class': 'zm-hint' }, st.enabled
+						? 'Установлен пакетом luci-app-tg-ws-proxy-rs: порт, ключ и остальное меняются в его настройках, обновление и удаление — через менеджер пакетов.'
+						: 'Установлен пакетом luci-app-tg-ws-proxy-rs и выключен в его настройках — включите там «Enabled» и сохраните.');
+					if (String(st.port) === '1443' && d.mtproto === 'installed')
+						pkgNote = E([ pkgNote, E('p', { 'class': 'zm-hint' }, '⚠ Порт 1443 занят и Go (MTProto) — оба прокси на одном порту не заработают. Смените порт в настройках пакета.') ]);
+				} else if (st.installed) {
 					actions.push(E('button', {
 						'class': 'cbi-button cbi-button-remove',
 						'click': function() {
@@ -23636,11 +23695,13 @@ return view.extend({
 					E('h3', {}, v.title),
 					E('div', { 'class': 'zm-row' }, [
 						E('span', { 'class': 'zm-label' }, 'Статус'),
-						st.installed ? zm.badge(st.running, 'запущен', 'остановлен') : zm.badge(false, '', 'не установлен')
+						st.installed ? zm.badge(st.running, 'запущен', st.uci && !st.enabled ? 'выключен в пакете' : 'остановлен') : zm.badge(false, '', 'не установлен')
 					]),
 					st.installed && st.version ? E('div', { 'class': 'zm-row' }, [
 						E('span', { 'class': 'zm-label' }, 'Версия'), E('span', {}, [ st.version + (st.newer ? ' · доступна ' + st.latest : st.latest ? ' · последняя' : '') ])
 					]) : E([]),
+					st.uci ? E('div', { 'class': 'zm-row' }, [ E('span', { 'class': 'zm-label' }, 'Порт'), E('span', {}, [ String(st.port || '') ]) ]) : E([]),
+					pkgNote || E([]),
 					E('div', { 'class': 'zm-actions' }, actions)
 				]));
 			});
