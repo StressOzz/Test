@@ -1,5 +1,5 @@
 #!/bin/sh
-# Version: 2.30
+# Version: 2.31
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -50,7 +50,7 @@ cat > '/opt/zapret-manager-luci/backend.sh.zm-new' << 'ZM_INSTALLER_EOF'
 umask 022
 
 CONF="/etc/config/zapret"
-ZM_VERSION="2.30"
+ZM_VERSION="2.31"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
@@ -2009,7 +2009,7 @@ _hosts_has_line() {
 }
 
 hosts_status() {
-	local blocks="nalog ntc instagram librusec ai twitch telegram spotify spotifyext rutor rutracker scell githubraw github tapeop" b first=1
+	local blocks="nalog ntc instagram librusec ai twitch telegram spotify spotifyext rutor rutracker scell githubraw github tapeop finland" b first=1
 	local geohide=""
 	if grep -q '^### geohide.ru: hosts file' "$HOSTS_FILE" 2>/dev/null; then
 		if grep -q '^# Регион серверов: US$' "$HOSTS_FILE" 2>/dev/null; then geohide="us"
@@ -2087,6 +2087,28 @@ hosts_file_set() {
 	[ "$(printf '%s' "$content" | wc -c)" -gt "$HOSTS_EDIT_MAX" ] && { echo '{"error":"файл слишком большой для редактора"}'; return 1; }
 	cp "$HOSTS_FILE" "$HOSTS_FILE.bak" 2>/dev/null
 	printf '%s' "$content" > "$HOSTS_FILE"
+	/etc/init.d/dnsmasq restart >/dev/null 2>&1
+	printf '{"ok":true}\n'
+}
+
+# Большой hosts приходит частями: uhttpd не принимает в /ubus запрос больше 64 КБ
+HOSTS_UP_FILE="$JOBS_DIR/hosts_upload.part"
+hosts_file_part() {
+	local part="$1" data="$2" sz
+	mkdir -p "$JOBS_DIR"
+	case "$part" in
+		first) : > "$HOSTS_UP_FILE" ;;
+		next|last) [ -f "$HOSTS_UP_FILE" ] || { echo '{"error":"загрузка прервалась — сохраните ещё раз"}'; return 1; } ;;
+		*) echo '{"error":"неверная часть файла"}'; return 1 ;;
+	esac
+	printf '%s' "$data" >> "$HOSTS_UP_FILE"
+	sz="$(wc -c < "$HOSTS_UP_FILE" | tr -d ' ')"
+	[ "${sz:-0}" -gt "$HOSTS_EDIT_MAX" ] && { rm -f "$HOSTS_UP_FILE"; echo '{"error":"файл слишком большой для редактора"}'; return 1; }
+	[ "$part" = last ] || { printf '{"ok":true,"size":%s}\n' "${sz:-0}"; return 0; }
+	[ -s "$HOSTS_UP_FILE" ] || { rm -f "$HOSTS_UP_FILE"; echo '{"error":"пустой файл — сохранение отменено"}'; return 1; }
+	cp "$HOSTS_FILE" "$HOSTS_FILE.bak" 2>/dev/null
+	cat "$HOSTS_UP_FILE" > "$HOSTS_FILE"
+	rm -f "$HOSTS_UP_FILE"
 	/etc/init.d/dnsmasq restart >/dev/null 2>&1
 	printf '{"ok":true}\n'
 }
@@ -13600,6 +13622,7 @@ case "$cmd" in
 	hosts_reset)                        hosts_reset ;;
 	hosts_file_get)                     hosts_file_get ;;
 	hosts_file_set)                     hosts_file_set "$1" ;;
+	hosts_file_part)                    hosts_file_part "$1" "$2" ;;
 	doh_install)                         doh_install ;;
 	doh_remove)                          doh_remove ;;
 	doh_status)                          doh_status ;;
@@ -15609,6 +15632,7 @@ list_methods() {
 	json_add_object "hosts_reset";            json_close_object
 	json_add_object "hosts_file_get";         json_close_object
 	json_add_object "hosts_file_set";         json_add_string "content" "string"; json_close_object
+	json_add_object "hosts_file_part";        json_add_string "content" "string"; json_add_string "part" "string"; json_close_object
 	json_add_object "doh_status";             json_close_object
 	json_add_object "doh_install";            json_close_object
 	json_add_object "doh_remove";             json_close_object
@@ -15713,6 +15737,7 @@ call_method() {
 		hosts_reset)             "$BACKEND" hosts_reset ;;
 		hosts_file_get)          "$BACKEND" hosts_file_get ;;
 		hosts_file_set)          json_get_var content content; printf '%s' "$content" | "$BACKEND" hosts_file_set @stdin ;;
+		hosts_file_part)         json_get_var content content; json_get_var part part; printf '%s' "$content" | "$BACKEND" hosts_file_part "$part" @stdin ;;
 		doh_status)              "$BACKEND" doh_status ;;
 		doh_install)             "$BACKEND" doh_install ;;
 		doh_remove)              "$BACKEND" doh_remove ;;
@@ -15860,6 +15885,7 @@ cat > '/usr/share/rpcd/acl.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF'
 					"hosts_replace_geohide",
 					"hosts_reset",
 					"hosts_file_set",
+					"hosts_file_part",
 					"doh_install",
 					"doh_remove",
 					"game_set",
@@ -16076,6 +16102,26 @@ var callHostsReplaceGeohide = zmDeclare({ object: 'zapret-manager', method: 'hos
 var callHostsReset = zmDeclare({ object: 'zapret-manager', method: 'hosts_reset', expect: {} });
 var callHostsFileGet = zmDeclare({ object: 'zapret-manager', method: 'hosts_file_get', expect: {} });
 var callHostsFileSet = zmDeclare({ object: 'zapret-manager', method: 'hosts_file_set', params: ['content'], expect: {} });
+var callHostsFilePart = zmDeclare({ object: 'zapret-manager', method: 'hosts_file_part', params: ['content', 'part'], expect: {} });
+
+/* uhttpd принимает в /ubus не больше 64 КБ за запрос — большой hosts отправляем частями */
+function hostsFileSave(text) {
+	text = String(text || '');
+	var CH = 16000, parts = [], i = 0;
+	if (text.length <= CH) return callHostsFileSet(text);
+	while (i < text.length) {
+		var e = Math.min(i + CH, text.length), c = text.charCodeAt(e - 1);
+		if (e < text.length && c >= 0xD800 && c <= 0xDBFF) e--;
+		parts.push(text.slice(i, e));
+		i = e;
+	}
+	return parts.reduce(function(p, chunk, k) {
+		return p.then(function(r) {
+			if (r && r.error) return r;
+			return callHostsFilePart(chunk, k === 0 ? 'first' : k === parts.length - 1 ? 'last' : 'next');
+		});
+	}, Promise.resolve({}));
+}
 var callDohStatus = zmDeclare({ object: 'zapret-manager', method: 'doh_status', expect: {} });
 var callDohInstall = zmDeclare({ object: 'zapret-manager', method: 'doh_install', expect: {} });
 var callDohRemove = zmDeclare({ object: 'zapret-manager', method: 'doh_remove', expect: {} });
@@ -17365,7 +17411,7 @@ return baseclass.extend({
 	hostsReplaceGeohide: callHostsReplaceGeohide,
 	hostsReset: callHostsReset,
 	hostsFileGet: callHostsFileGet,
-	hostsFileSet: callHostsFileSet,
+	hostsFileSet: hostsFileSave,
 	dohStatus: callDohStatus,
 	dohInstall: callDohInstall,
 	dohRemove: callDohRemove,
@@ -19733,7 +19779,8 @@ var LABELS = {
 	scell: [ 'Supercell', 'Clash, Brawl Stars' ],
 	githubraw: [ 'GitHub Raw', 'githubusercontent.com' ],
 	github: [ 'GitHub', 'Код и релизы' ],
-	tapeop: [ 'tapeop.dev', 'Сайт' ]
+	tapeop: [ 'tapeop.dev', 'Сайт' ],
+	finland: [ 'Финские IP для Discord', 'Голосовые серверы Discord' ]
 };
 
 function lbl(id) { return (LABELS[id] || [ id ])[0]; }
