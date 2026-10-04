@@ -1,5 +1,5 @@
 #!/bin/sh
-# Version: 2.33
+# Version: 2.34
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -50,7 +50,7 @@ cat > '/opt/zapret-manager-luci/backend.sh.zm-new' << 'ZM_INSTALLER_EOF'
 umask 022
 
 CONF="/etc/config/zapret"
-ZM_VERSION="2.33"
+ZM_VERSION="2.34"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
@@ -594,6 +594,7 @@ _fk_watch() {
 	if _fk_up; then
 		rm -f "$f"
 		_job_running forkop || _fk_heal
+		_job_running forkop || _fk_zash_ensure quiet
 		_job_running forkop || _fk_dns_watch
 		return 0
 	fi
@@ -4275,7 +4276,7 @@ _zm_update_fetch() {
 
 _zm_job_label() {
 	case "$1" in
-		steer) echo "Steer" ;; awg) echo "AmneziaWG" ;; forkop) echo "Forkozz" ;;
+		steer) echo "Steer" ;; awg) echo "AmneziaWG" ;; forkop) echo "Forkozz" ;; term) echo "Терминал" ;;
 		mixomo*) echo "Mixomo" ;; bytetube*) echo "ByeTube" ;;
 		install_zapret2|remove_zapret2) echo "Zapret2" ;; install_zapret|remove_zapret) echo "Zapret" ;;
 		strategy_test) echo "тест стратегий" ;; tg*) echo "TG WS Proxy" ;; doh*) echo "DNS over HTTPS" ;;
@@ -12252,6 +12253,215 @@ awg_action() {
 	esac
 }
 
+# ---------- Терминал (ttyd) ----------
+_term_say() { echo "==> $*"; }
+_term_installed() { [ -x /usr/bin/ttyd ]; }
+_term_running() { pidof ttyd >/dev/null 2>&1; }
+_term_enabled() { ls /etc/rc.d/S*ttyd >/dev/null 2>&1; }
+_term_version() { ttyd --version 2>/dev/null | head -n1 | awk '{ print $NF }'; }
+_term_port() {
+	local p
+	p="$(uci -q get 'ttyd.@ttyd[0].port' 2>/dev/null)"
+	case "$p" in ''|*[!0-9]*) p=7681 ;; esac
+	echo "$p"
+}
+# Пароль root задан, если в /etc/shadow стоит хеш (начинается с $)
+_term_has_pw() {
+	local h
+	h="$(awk -F: '$1 == "root" { print $2; exit }' /etc/shadow 2>/dev/null)"
+	case "$h" in '$'*) return 0 ;; esac
+	return 1
+}
+
+# Настройки по умолчанию: только домашняя сеть, вход через /bin/login. Уже заданное пользователем не трогаем.
+_term_config() {
+	[ -f /etc/config/ttyd ] || : > /etc/config/ttyd
+	uci -q get 'ttyd.@ttyd[0]' >/dev/null 2>&1 || uci -q add ttyd ttyd >/dev/null 2>&1
+	[ -n "$(uci -q get 'ttyd.@ttyd[0].interface')" ] || uci -q set 'ttyd.@ttyd[0].interface=@lan'
+	[ -n "$(uci -q get 'ttyd.@ttyd[0].port')" ] || uci -q set 'ttyd.@ttyd[0].port=7681'
+	[ -n "$(uci -q get 'ttyd.@ttyd[0].command')" ] || uci -q set 'ttyd.@ttyd[0].command=/bin/login'
+	uci -q commit ttyd
+}
+
+_term_start() {
+	local t=0
+	_term_installed || { echo "ОШИБКА: терминал не установлен"; return 1; }
+	if ! _term_has_pw; then
+		echo "!! Пароль root не задан — терминал не запускаем: войти в него мог бы любой в сети без пароля"
+		echo "   Задайте пароль: LuCI → Система → Администрирование, затем нажмите «Включить»"
+		return 1
+	fi
+	_term_config
+	/etc/init.d/ttyd enable >/dev/null 2>&1
+	/etc/init.d/ttyd restart >/dev/null 2>&1
+	while [ "$t" -lt 10 ]; do
+		_term_running && break
+		sleep 1; t=$((t + 1))
+	done
+	_term_running || { echo "ОШИБКА: ttyd не запустился"; return 1; }
+	return 0
+}
+
+_term_stop() {
+	[ -x /etc/init.d/ttyd ] && { /etc/init.d/ttyd stop >/dev/null 2>&1; /etc/init.d/ttyd disable >/dev/null 2>&1; }
+	_term_running && { killall ttyd >/dev/null 2>&1; sleep 1; killall -9 ttyd >/dev/null 2>&1; }
+	return 0
+}
+
+term_status() {
+	local inst=false run=false en=false pw=false
+	_term_installed && inst=true
+	_term_running && run=true
+	_term_enabled && en=true
+	_term_has_pw && pw=true
+	printf '{"installed":%s,"running":%s,"enabled":%s,"root_pw":%s,"version":"%s","port":%s,"lan_ip":"%s","job":%s}\n' \
+		"$inst" "$run" "$en" "$pw" "$(esc "$(_term_version)")" "$(_term_port)" "$(esc "$(_zm_lan_ip)")" \
+		"$(_job_alive term && echo true || echo false)"
+}
+
+# Проверка с самого роутера: процесс, порт и ответ веб-сервера ttyd на адресе домашней сети
+term_check() {
+	local ip port run=false lis=false code=""
+	ip="$(_zm_lan_ip)"; port="$(_term_port)"
+	_term_running && run=true
+	netstat -ln 2>/dev/null | grep -q "[.:]$port[[:space:]]" && lis=true
+	[ -n "$ip" ] && code="$(curl -s -o /dev/null --noproxy '*' --connect-timeout 3 --max-time 5 -w '%{http_code}' "http://$ip:$port/" 2>/dev/null)"
+	printf '{"running":%s,"listening":%s,"http":"%s","ip":"%s","port":%s}\n' "$run" "$lis" "$(esc "$code")" "$(esc "$ip")" "$port"
+}
+
+do_term_install() {
+	local mode="$1" out rc=0
+	_ensure_deps
+	if [ "$mode" = update ]; then _term_say "Обновляем терминал (ttyd)"; else _term_say "Устанавливаем терминал (ttyd)"; fi
+	$UPDATE || echo "!! Список пакетов не обновился — пробуем с тем, что есть"
+	if [ "$mode" = update ] && _term_installed; then
+		echo "   → Обновляем пакет ttyd"
+		out="/tmp/zm-pkg.$$"
+		if [ "$PKG" = apk ]; then _zm_run 300 apk add --upgrade ttyd > "$out" 2>&1; rc=$?
+		else _zm_run 300 opkg upgrade ttyd > "$out" 2>&1; rc=$?; fi
+		_zm_pkg_fmt < "$out"
+		rm -f "$out"
+		_zm_pkg_unlock
+		[ "$rc" = 0 ] && echo "   ✓ ttyd $(_term_version) — последняя доступная версия" || echo "   ✗ Обновить не получилось"
+	else
+		$INSTALL ttyd || { echo "ОШИБКА: ttyd не установился — проверьте интернет и доступность пакета для вашей прошивки"; return 1; }
+	fi
+	_term_installed || { echo "ОШИБКА: файла /usr/bin/ttyd нет — пакет встал не полностью"; return 1; }
+	_term_config
+	if _term_has_pw; then
+		_term_say "Запускаем терминал"
+		_term_start || return 1
+		echo "   ✓ Терминал работает: порт $(_term_port), только домашняя сеть"
+	else
+		echo "!! Пароль root не задан — терминал установлен, но не запущен"
+		echo "   Задайте пароль: LuCI → Система → Администрирование, затем нажмите «Включить»"
+	fi
+	_term_say "Готово: терминал ttyd $(_term_version)"
+}
+
+do_term_remove() {
+	_term_say "Останавливаем терминал"
+	_term_stop
+	echo "   ✓ Терминал остановлен и убран из автозапуска"
+	_term_say "Удаляем ttyd"
+	_zm_pkg_purge ttyd
+	rm -f /etc/config/ttyd /etc/config/ttyd-opkg /etc/config/ttyd.apk-new 2>/dev/null
+	rm -f /tmp/luci-indexcache* /tmp/luci-modulecache/* 2>/dev/null
+	if _term_installed; then echo "!! ttyd удалить до конца не получилось"; return 1; fi
+	_term_say "Готово: терминал удалён"
+}
+
+term_action() {
+	local a="$1" j
+	case "$a" in
+		install|update|remove)
+			_job_alive term && { echo '{"error":"дождитесь окончания текущей операции"}'; return 1; }
+			if j="$(_zm_busy_job)"; then printf '{"error":"%s"}\n' "$(esc "Сейчас идёт операция: $j — дождитесь её окончания")"; return 1; fi
+			case "$a" in
+				install) job_start term do_term_install install ;;
+				update)  _term_installed || { echo '{"error":"терминал не установлен"}'; return 1; }; job_start term do_term_install update ;;
+				remove)  job_start term do_term_remove ;;
+			esac ;;
+		start|restart)
+			_term_installed || { echo '{"error":"терминал не установлен"}'; return 1; }
+			_job_alive term && { echo '{"error":"дождитесь окончания текущей операции"}'; return 1; }
+			_term_has_pw || { echo '{"error":"Не задан пароль root — задайте его в LuCI: Система → Администрирование"}'; return 1; }
+			_term_start >/dev/null 2>&1 || { echo '{"error":"ttyd не запустился — смотрите журнал роутера"}'; return 1; }
+			printf '{"ok":true}\n' ;;
+		stop)
+			_term_installed || { echo '{"error":"терминал не установлен"}'; return 1; }
+			_term_stop
+			printf '{"ok":true}\n' ;;
+		check)
+			_term_installed || { echo '{"error":"терминал не установлен"}'; return 1; }
+			term_check ;;
+		*) echo '{"error":"неизвестное действие"}'; return 1 ;;
+	esac
+}
+
+# ---------- Forkozz: панель sing-box — Zashboard вместо YACD ----------
+FK_ZASH_MARK=".zm-zashboard"
+
+# Каталог панели берём из настоящего конфига sing-box (experimental.clash_api.external_ui)
+_fk_ui_dir() {
+	local c=/etc/sing-box/config.json ui pid base
+	[ -s "$c" ] || return 1
+	ui="$(jsonfilter -i "$c" -e '@.experimental.clash_api.external_ui' 2>/dev/null)"
+	[ -n "$ui" ] || return 1
+	case "$ui" in /*) [ -d "$ui" ] && { echo "$ui"; return 0; }; return 1 ;; esac
+	pid="$(pidof sing-box 2>/dev/null | awk '{ print $1 }')"
+	base=""
+	[ -n "$pid" ] && base="$(readlink "/proc/$pid/cwd" 2>/dev/null)"
+	for base in "$base" /etc/sing-box /tmp/sing-box /var/run/sing-box; do
+		[ -n "$base" ] && [ -d "$base/$ui" ] && { echo "$base/$ui"; return 0; }
+	done
+	return 1
+}
+
+# Заменяет скачанный sing-box YACD на Zashboard. Не вышло — остаётся рабочий YACD.
+# Аргумент quiet: вызов из фоновой проверки — молча и не чаще раза в 30 минут при неудаче.
+_fk_zash_ensure() {
+	local quiet="$1" d stage tmp="/tmp/zm-zash" i ok=0 fail="$ZM_STATE_DIR/fk.zash.fail" now last
+	[ "$(uci -q get netshift.settings.enable_yacd)" = 1 ] || return 0
+	d="$(_fk_ui_dir)" || return 0
+	[ -f "$d/$FK_ZASH_MARK" ] && { rm -f "$fail"; return 0; }
+	now="$(date +%s)"
+	if [ -n "$quiet" ]; then
+		last="$(cat "$fail" 2>/dev/null)"; last="${last:-0}"
+		[ $((now - last)) -lt 1800 ] && return 0
+	else
+		_fk_say "Ставим панель Zashboard вместо YACD"
+	fi
+	rm -rf "$tmp" "$tmp.zip"; mkdir -p "$tmp"
+	for i in 1 2 3; do
+		curl -sSfL --connect-timeout 5 --max-time 40 -o "$tmp.zip" "${GH_MAIN}/Zephyruso/zashboard/releases/latest/download/dist-cdn-fonts.zip" >/dev/null 2>&1 && { ok=1; break; }
+		sleep 1
+	done
+	if [ "$ok" = 1 ]; then
+		command -v unzip >/dev/null 2>&1 || $INSTALL unzip >/dev/null 2>&1
+		unzip -oq "$tmp.zip" -d "$tmp" >/dev/null 2>&1 || ok=0
+	fi
+	stage="$tmp/dist"
+	[ "$ok" = 1 ] && [ -f "$stage/index.html" ] || ok=0
+	if [ "$ok" = 1 ]; then
+		rm -rf "$d.zm-new"
+		if cp -r "$stage" "$d.zm-new" 2>/dev/null && : > "$d.zm-new/$FK_ZASH_MARK"; then
+			{ rm -rf "$d" && mv "$d.zm-new" "$d"; } 2>/dev/null || { mkdir -p "$d"; cp -r "$d.zm-new"/. "$d"/ 2>/dev/null; rm -rf "$d.zm-new"; }
+		else
+			rm -rf "$d.zm-new"; ok=0
+		fi
+	fi
+	rm -rf "$tmp" "$tmp.zip"
+	if [ "$ok" = 1 ] && [ -f "$d/$FK_ZASH_MARK" ]; then
+		rm -f "$fail"
+		[ -n "$quiet" ] && logger -t zapret-manager "Forkozz: панель sing-box — Zashboard" || echo "   ✓ Zashboard установлен"
+		return 0
+	fi
+	echo "$now" > "$fail"
+	[ -n "$quiet" ] || echo "!! Zashboard поставить не удалось (GitHub недоступен или мало памяти) — остаётся стандартная панель sing-box"
+	return 0
+}
+
 FK_REPO="yandexru45/netshift"
 FK_PIN="0.9.9"
 FK_MARK="/usr/lib/netshift/zm-managed"
@@ -12894,8 +13104,57 @@ do_fk_install() {
 	fi
 }
 
+# AmneziaWG-туннели, которые Forkozz использовал как подключение (connection_type=vpn). Читать нужно ДО удаления его конфига.
+_fk_tunnels() {
+	local s i seen=""
+	for s in $(uci -q show netshift 2>/dev/null | sed -n "s/^netshift\.\([^.=]*\)\.connection_type='vpn'\$/\1/p"); do
+		i="$(uci -q get "netshift.$s.interface" 2>/dev/null)"
+		[ -n "$i" ] || continue
+		[ "$(uci -q get "network.$i.proto")" = amneziawg ] || continue
+		_awg_is_steer "$i" && continue
+		case " $seen " in *" $i "*) continue ;; esac
+		seen="$seen $i"
+		echo "$i"
+	done
+}
+
+_fk_tunnels_json() {
+	local i sep="" own route p
+	printf '{"tunnels":['
+	for i in $(_fk_tunnels); do
+		own=false; grep -qxF "$i" "$AWG_DIR/owned" 2>/dev/null && own=true
+		p="$(_awg_peer_sec "$i")"
+		route=false; [ -n "$p" ] && [ "$(uci -q get "network.$p.route_allowed_ips")" = 1 ] && route=true
+		printf '%s{"name":"%s","owned":%s,"route_all":%s}' "$sep" "$(esc "$i")" "$own" "$route"
+		sep=","
+	done
+	printf ']}\n'
+}
+
+# mode: stop — выключить туннель (настройки остаются, auto=0, как кнопка «Выключить» на вкладке AmneziaWG); delete — удалить созданный панелью туннель
+_fk_tunnels_off() {
+	local mode="$1" i
+	shift
+	for i in "$@"; do
+		if [ "$mode" = delete ] && grep -qxF "$i" "$AWG_DIR/owned" 2>/dev/null; then
+			_fk_say "Удаляем туннель $i — его использовал Forkozz"
+			_awg_delete "$i"
+			echo "   ✓ Туннель $i удалён"
+		else
+			[ "$mode" = delete ] && echo "   · Туннель $i создан не панелью — удалять его не будем, только выключим"
+			_fk_say "Выключаем туннель $i — его использовал Forkozz, без Forkozz он не нужен"
+			uci set "network.$i.auto=0"
+			uci commit network
+			ifdown "$i" >/dev/null 2>&1
+			echo "   ✓ Туннель $i выключен, настройки сохранены (включить: вкладка AmneziaWG → «Включить»)"
+		fi
+	done
+}
+
 do_fk_remove() {
-	local p
+	local p tmode="$1" tun
+	[ "$tmode" = delete ] || tmode=stop
+	tun="$(_fk_tunnels | tr '\n' ' ')"
 	_fk_say "Останавливаем Forkozz и убираем его из автозапуска"
 	if [ -x /etc/init.d/netshift ]; then
 		_zm_run 90 /etc/init.d/netshift stop >/dev/null 2>&1
@@ -12909,6 +13168,7 @@ do_fk_remove() {
 	_fk_say "Удаляем правила файрвола (nftables: $FK_NFT)"
 	nft delete table inet "$FK_NFT" >/dev/null 2>&1
 	nft list table inet "$FK_NFT" >/dev/null 2>&1 && echo "!! Таблица $FK_NFT не удалилась" || echo "   ✓ Правила файрвола убраны"
+	[ -n "$tun" ] && _fk_tunnels_off "$tmode" $tun
 	_fk_legacy && _fk_legacy_remove
 	for p in luci-i18n-netshift-ru luci-app-netshift netshift; do _pkg_is_installed "$p" && $DELETE "$p"; done
 	_fk_say "Удаляем файлы, настройки и кэш Forkozz"
@@ -13050,6 +13310,7 @@ do_fk_service() {
 		_fk_lists_report
 		_fk_lists_errors
 		_fk_ext_auto all "$lx"
+		_fk_zash_ensure
 		_fk_say "Готово: Forkozz работает"
 		grep -q '^Forkozz не запустился' "$ZM_REBOOT_HINT" 2>/dev/null && rm -f "$ZM_REBOOT_HINT"
 		return 0
@@ -13357,7 +13618,8 @@ forkop_action() {
 			b="$(_fk_blocker)"
 			[ -n "$b" ] && { printf '{"error":"%s"}\n' "$(esc "$(_fk_blocker_text "$b")")"; return 1; }
 			job_start forkop do_fk_install "$a" ;;
-		remove)        job_start forkop do_fk_remove ;;
+		remove)        job_start forkop do_fk_remove "$arg" ;;
+		tunnels)       _fk_tunnels_json ;;
 		start|stop|restart|apply) job_start forkop do_fk_service "$a" ;;
 		route)         fk_route_check "$arg" ;;
 		lists)         job_start forkop do_fk_lists ;;
@@ -13709,6 +13971,8 @@ case "$cmd" in
 	redbtn_panel_gone)                    redbtn_panel_gone ;;
 	awg_status)                           awg_status ;;
 	awg_action)                           awg_action "$1" "$2" ;;
+	term_status)                          term_status ;;
+	term_action)                          term_action "$1" "$2" ;;
 	steer_status)                         steer_status ;;
 	steer_action)                         steer_action "$1" "$2" ;;
 	bytetube_action)                      bytetube_action "$1" ;;
@@ -15719,6 +15983,8 @@ list_methods() {
 	json_add_object "versions";               json_add_string "action" "string"; json_close_object
 	json_add_object "awg_status";             json_close_object
 	json_add_object "awg_action";             json_add_string "action" "string"; json_add_string "mode" "string"; json_close_object
+	json_add_object "term_status";            json_close_object
+	json_add_object "term_action";            json_add_string "action" "string"; json_add_string "mode" "string"; json_close_object
 	json_add_object "steer_status";           json_close_object
 	json_add_object "steer_action";           json_add_string "action" "string"; json_add_string "mode" "string"; json_close_object
 	json_add_object "bytetube_action";        json_add_string "action" "string"; json_close_object
@@ -15824,6 +16090,8 @@ call_method() {
 		versions)                json_get_var action action; "$BACKEND" versions "$action" ;;
 		awg_status)              "$BACKEND" awg_status ;;
 		awg_action)              json_get_var action action; json_get_var mode mode; printf '%s' "$mode" | "$BACKEND" awg_action "$action" @stdin ;;
+		term_status)             "$BACKEND" term_status ;;
+		term_action)             json_get_var action action; json_get_var mode mode; printf '%s' "$mode" | "$BACKEND" term_action "$action" @stdin ;;
 		steer_status)            "$BACKEND" steer_status ;;
 		steer_action)            json_get_var action action; json_get_var mode mode; printf '%s' "$mode" | "$BACKEND" steer_action "$action" @stdin ;;
 		bytetube_action)         json_get_var action action; "$BACKEND" bytetube_action "$action" ;;
@@ -15898,6 +16166,7 @@ cat > '/usr/share/rpcd/acl.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF'
 					"health",
 					"versions",
 					"awg_status",
+					"term_status",
 					"steer_status",
 					"forkop_status",
 					"forkop_config_get",
@@ -15974,6 +16243,7 @@ cat > '/usr/share/rpcd/acl.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF'
 					"mixomo_warp_config_set",
 					"bytetube_action",
 					"awg_action",
+					"term_action",
 					"steer_action",
 					"forkop_config_set",
 					"forkop_action",
@@ -16045,6 +16315,11 @@ cat > '/usr/share/luci/menu.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF
 		"order": 52,
 		"action": { "type": "view", "path": "zapret-manager/awg" }
 	},
+	"admin/services/zapret-manager/terminal": {
+		"title": "Терминал",
+		"order": 53,
+		"action": { "type": "view", "path": "zapret-manager/terminal" }
+	},
 	"admin/services/zapret-manager/tgproxy": {
 		"title": "TG WS Proxy",
 		"order": 55,
@@ -16102,6 +16377,8 @@ function zmDeclare(o) {
 var callStatus = zmDeclare({ object: 'zapret-manager', method: 'status', expect: {} });
 var callAwgStatus = zmDeclare({ object: 'zapret-manager', method: 'awg_status', expect: {} });
 var callAwgAction = zmDeclare({ object: 'zapret-manager', method: 'awg_action', params: ['action', 'mode'], expect: {} });
+var callTermStatus = zmDeclare({ object: 'zapret-manager', method: 'term_status', expect: {} });
+var callTermAction = zmDeclare({ object: 'zapret-manager', method: 'term_action', params: ['action', 'mode'], expect: {} });
 var callSteerStatus = zmDeclare({ object: 'zapret-manager', method: 'steer_status', expect: {} });
 var callSteerAction = zmDeclare({ object: 'zapret-manager', method: 'steer_action', params: ['action', 'mode'], expect: {} });
 var callSystemInfo = zmDeclare({ object: 'zapret-manager', method: 'system_info', expect: {} });
@@ -17494,6 +17771,8 @@ return baseclass.extend({
 	health: callHealth,
 	awgStatus: callAwgStatus,
 	awgAction: bigArg2(callAwgAction),
+	termStatus: callTermStatus,
+	termAction: bigArg2(callTermAction),
 	steerStatus: callSteerStatus,
 	versions: callVersions,
 	steerAction: bigArg2(callSteerAction),
@@ -18550,6 +18829,147 @@ return view.extend({
 });
 ZM_INSTALLER_EOF
 chmod 0644 '/www/luci-static/resources/view/zapret-manager/awg.js'
+cat > '/www/luci-static/resources/view/zapret-manager/terminal.js' << 'ZM_INSTALLER_EOF'
+'use strict';
+'require view';
+'require zapret-manager.common as zm';
+
+function badge(cls, text) {
+	return E('span', { 'class': 'zm-badge ' + cls }, [ E('span', { 'class': 'zm-dot' }), text ]);
+}
+function row(label, node) {
+	return E('div', { 'class': 'zm-row' }, [ E('span', { 'class': 'zm-label' }, label), node ]);
+}
+
+return view.extend({
+	load: function() {
+		zm.injectCss();
+		return zm.termStatus();
+	},
+
+	render: function(data) {
+		data = data || {};
+		var wrap = E('div', { 'class': 'zm-wrap' });
+		var card = E('div', { 'class': 'zm-card' });
+		var viewCard = E('div', { 'class': 'zm-card' });
+		var logEl = E('pre', { 'class': 'zm-log' });
+		var busy = false, embed = false, checkRes = null;
+		var canEmbed = window.location.protocol === 'http:';
+		var DONE = { install: 'Терминал установлен', update: 'Терминал обновлён', remove: 'Терминал удалён' };
+
+		function addr() { return 'http://' + window.location.hostname + ':' + (data.port || 7681) + '/'; }
+
+		function refresh() {
+			return zm.termStatus().then(function(d) { data = d || {}; renderAll(); });
+		}
+
+		function follow(action) {
+			busy = true;
+			renderAll();
+			zm.pollJob('term', logEl, function(ok) {
+				busy = false;
+				embed = false;
+				checkRes = null;
+				zm.toast(ok ? (DONE[action] || 'Готово') : 'Не получилось — подробности в журнале', ok ? 'info' : 'error');
+				refresh();
+			});
+		}
+
+		function job(action, text) {
+			if (busy) { zm.toast('Дождитесь окончания текущей операции', 'warning'); return; }
+			zm.termAction(action, '').then(function(res) {
+				if (res.error) { zm.toast(res.error, 'error'); return; }
+				zm.toast(text, 'warning');
+				follow(action);
+			}).catch(function() { zm.toast('Роутер не ответил', 'error'); });
+		}
+
+		function quick(action, okText) {
+			if (busy) { zm.toast('Дождитесь окончания текущей операции', 'warning'); return; }
+			busy = true;
+			renderAll();
+			zm.termAction(action, '').then(function(res) {
+				busy = false;
+				embed = false;
+				checkRes = null;
+				if (res.error) zm.toast(res.error, 'error'); else zm.toast(okText, 'info');
+				refresh();
+			}).catch(function() { busy = false; zm.toast('Роутер не ответил', 'error'); renderAll(); });
+		}
+
+		function check() {
+			if (busy) return;
+			zm.termAction('check', '').then(function(res) {
+				checkRes = res;
+				renderAll();
+			}).catch(function() { zm.toast('Роутер не ответил', 'error'); });
+		}
+
+		function btn(cls, text, fn, dis) {
+			return E('button', { 'class': 'cbi-button ' + cls, 'disabled': (busy || dis) ? '' : null, 'click': fn }, text);
+		}
+
+		function renderMain() {
+			card.innerHTML = '';
+			var inst = !!data.installed;
+			card.appendChild(E('h3', {}, [ 'Терминал ', inst ? (data.running ? badge('zm-ok', 'работает') : badge('zm-off', 'выключен')) : E([]) ]));
+			card.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:-6px' }, 'Командная строка роутера прямо в браузере (ttyd). Доступна только из домашней сети, вход — логином root и его паролем.'));
+			var b = [];
+			if (!inst) {
+				b.push(btn('cbi-button-positive', 'Установить', function() { job('install', 'Устанавливаем терминал — ход работы виден в окне вывода'); }));
+				card.appendChild(E('div', { 'class': 'zm-actions' }, b));
+				card.appendChild(E('p', { 'class': 'zm-hint' }, 'Ставится пакет ttyd из репозитория OpenWrt (около 1 МБ). Терминал запустится сам, если у root задан пароль.'));
+				return;
+			}
+			card.appendChild(row('Версия', E('span', {}, data.version || '—')));
+			card.appendChild(row('Адрес', data.running ? E('a', { 'href': addr(), 'target': '_blank', 'rel': 'noopener' }, addr()) : E('span', {}, 'появится после запуска')));
+			if (!data.root_pw) card.appendChild(E('p', { 'class': 'zm-hint', 'style': 'color:var(--zm-warn,#e0a030)' }, '⚠ Пароль root не задан — терминал не запускается, иначе в него мог бы войти любой в сети. Задайте пароль в LuCI: Система → Администрирование, затем нажмите «Включить».'));
+			if (data.running) {
+				b.push(E('a', { 'class': 'cbi-button cbi-button-positive', 'href': addr(), 'target': '_blank', 'rel': 'noopener' }, 'Открыть в новой вкладке'));
+				if (canEmbed) b.push(btn('cbi-button-action', embed ? 'Скрыть здесь' : 'Открыть здесь', function() { embed = !embed; renderAll(); }));
+				b.push(btn('', 'Перезапустить', function() { quick('restart', 'Терминал перезапущен'); }));
+				b.push(btn('', 'Выключить', function() { quick('stop', 'Терминал выключен'); }));
+			} else {
+				b.push(btn('cbi-button-positive', 'Включить', function() { quick('start', 'Терминал включён'); }, !data.root_pw));
+			}
+			b.push(btn('cbi-button-action', 'Обновить', function() { job('update', 'Обновляем терминал — ход работы виден в окне вывода'); }));
+			b.push(btn('', 'Проверить', check, !data.running));
+			b.push(btn('cbi-button-remove', 'Удалить', function() {
+				if (!confirm('Удалить терминал?\n\nБудет остановлен и удалён пакет ttyd вместе с его настройками.')) return;
+				job('remove', 'Удаляем терминал — ход работы виден в окне вывода');
+			}));
+			card.appendChild(E('div', { 'class': 'zm-actions' }, b));
+			if (data.running && !canEmbed) card.appendChild(E('p', { 'class': 'zm-hint' }, 'Панель открыта по https, а терминал работает по http — встроить его сюда нельзя, он откроется в отдельной вкладке.'));
+			if (checkRes) {
+				if (checkRes.error) card.appendChild(row('Проверка', badge('zm-bad', checkRes.error)));
+				else {
+					var good = checkRes.running && checkRes.listening && String(checkRes.http) === '200';
+					card.appendChild(row('Проверка', badge(good ? 'zm-ok' : 'zm-bad', good ? 'всё в порядке' : 'есть проблема')));
+					card.appendChild(E('p', { 'class': 'zm-hint' }, 'Процесс ' + (checkRes.running ? 'запущен' : 'не запущен') + ' · порт ' + checkRes.port + (checkRes.listening ? ' слушает' : ' не слушает') + ' · ответ на ' + (checkRes.ip || '—') + ': ' + (checkRes.http && checkRes.http !== '000' ? 'HTTP ' + checkRes.http : 'нет ответа') + '. Проверка идёт с самого роутера; если с компьютера терминал не открывается — проверьте файрвол и перехват трафика других сервисов.'));
+				}
+			}
+		}
+
+		function renderView() {
+			viewCard.innerHTML = '';
+			var show = !!data.installed && !!data.running && embed && canEmbed;
+			viewCard.style.display = show ? '' : 'none';
+			if (!show) return;
+			viewCard.appendChild(E('iframe', { 'src': addr(), 'style': 'width:100%; height:480px; border:0; border-radius:8px; background:#000' }));
+		}
+
+		function renderAll() { renderMain(); renderView(); }
+
+		wrap.appendChild(card);
+		wrap.appendChild(viewCard);
+		wrap.appendChild(logEl);
+		renderAll();
+		if (data.job) follow('');
+		return wrap;
+	}
+});
+ZM_INSTALLER_EOF
+chmod 0644 '/www/luci-static/resources/view/zapret-manager/terminal.js'
 
 
 cat > '/www/luci-static/resources/view/zapret-manager/steer.js' << 'ZM_INSTALLER_EOF'
@@ -24897,7 +25317,13 @@ return view.extend({
 			if (st.newer) b.push(E('button', { 'class': 'cbi-button cbi-button-action', 'click': function() { act('update'); } }, 'Обновить до ' + st.latest));
 			b.push(E('button', { 'class': 'cbi-button cbi-button-remove', 'click': function() {
 				if (!confirm('Удалить Forkozz полностью?\n\nБудут удалены Forkozz, его настройки, правила файрвола и маршрутизации, задания в cron и sing-box. Трафик пойдёт напрямую.')) return;
-				act('remove');
+				zm.forkopAction('tunnels', '').then(function(res) { return (res && res.tunnels) || []; }, function() { return []; }).then(function(tl) {
+					if (!tl.length) { act('remove'); return; }
+					var names = tl.map(function(t) { return t.name; }).join(', ');
+					var can = tl.some(function(t) { return t.owned; });
+					var del = can && confirm('Туннель AmneziaWG (' + names + ') использовался Forkozz. Без Forkozz он не нужен и может мешать интернету.\n\nForkozz будет удалён в любом случае. Что сделать с туннелем?\n\nОК — удалить туннель вместе с настройками.\nОтмена — только выключить (настройки сохранятся, включить можно на вкладке AmneziaWG).');
+					act('remove', del ? 'delete' : 'stop');
+				});
 			} }, 'Удалить'));
 			mainCard.appendChild(E('div', { 'class': 'zm-actions' }, b));
 			if (!configured()) mainCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Три шага: подключение → сервисы → «Сохранить и включить».'));
@@ -25683,7 +26109,7 @@ return view.extend({
 			panelCard.innerHTML = '';
 			var on = draft.yacd, live = cfg && cfg.g && cfg.g.yacd && st.running, url = 'http://' + lanIp() + ':9090/ui/';
 			panelCard.appendChild(E('h3', {}, [ 'Панель sing-box ', live ? badge('zm-ok', 'включена') : E([]) ]));
-			panelCard.appendChild(sw(on, 'Веб-панель (YACD)', 'Соединения, трафик и серверы всех секций в реальном времени, с ручным выбором сервера. При первом запуске панель скачивается с GitHub.', function() { set('yacd', !on); }));
+			panelCard.appendChild(sw(on, 'Веб-панель (Zashboard)', 'Соединения, трафик и серверы всех секций в реальном времени, с ручным выбором сервера. Панель скачивается с GitHub после запуска Forkozz; если не получится — останется стандартная панель sing-box.', function() { set('yacd', !on); }));
 			if (live) panelCard.appendChild(row('Адрес', E('a', { 'href': url, 'target': '_blank', 'rel': 'noopener' }, url)));
 			else if (on) panelCard.appendChild(hint('Откроется по адресу ' + url + ' после сохранения.'));
 			if (!on) return;
@@ -27790,6 +28216,7 @@ var ICONS = {
 	fork: '<path d="M4.2 3.6 8.6 7.6Q12 6.6 15.4 7.6L19.8 3.6Q20.9 8.4 19.1 11.8L20.4 13.1Q16.6 14.6 14.5 18.6Q12 21.4 9.5 18.6Q7.4 14.6 3.6 13.1L4.9 11.8Q3.1 8.4 4.2 3.6Z" stroke-linejoin="round"/><path d="M8.3 11.9 10.1 12.8M15.7 11.9 13.9 12.8"/><circle cx="12" cy="17.3" r=".9" fill="currentColor" stroke="none"/>',
 	route: '<circle cx="6" cy="18.5" r="2.2"/><circle cx="18" cy="5.5" r="2.2"/><path d="M8.2 18.5h7.3a3.3 3.3 0 0 0 0-6.6h-7a3.3 3.3 0 0 1 0-6.6h7.3"/>',
 	tunnel: '<path d="M3 20V11a9 9 0 0 1 18 0v9"/><path d="M7 20v-8a5 5 0 0 1 10 0v8"/><path d="M3 20h18"/>',
+	terminal: '<rect x="3" y="4.5" width="18" height="15" rx="2.2"/><path d="M7 9.5l3 2.5-3 2.5M12.5 15h4.5"/>',
 	anarchy: '<circle cx="12" cy="12.8" r="7.3"/><path d="M12 2.2L4.2 21.8M12 2.2l7.8 19.6M3.6 14.6h16.8"/>',
 	rocket: '<path d="M12 2.5c2.9 2.1 4.3 5.3 4.3 9.2V16H7.7v-4.3c0-3.9 1.4-7.1 4.3-9.2z"/><circle cx="12" cy="9.3" r="1.7"/><path d="M7.7 12.2L5 14.6V18l2.7-2M16.3 12.2l2.7 2.4V18l-2.7-2"/><path d="M10.2 18.5 12 21.5l1.8-3"/>',
 	telegram: '<path d="M21 4.5L2.8 11.4c-.8.3-.8 1.4 0 1.7l4.4 1.5 1.7 5.3c.2.7 1.1.9 1.6.4l2.5-2.4 4.6 3.4c.6.4 1.4.1 1.6-.6L22.3 5.8c.2-.9-.6-1.6-1.3-1.3z"/><path d="M7.3 14.6l10-6.6-7.4 8"/>'
@@ -27965,6 +28392,7 @@ var ROUTES = [
 	{ id: 'hosts', title: 'Hosts', sub: 'Домены в hosts и списки GeoHide', icon: 'list', group: 'Сеть', dot: 'hosts' },
 	{ id: 'doh', title: 'DNS over HTTPS', sub: 'Шифрованный DNS для всей сети', icon: 'globe', group: 'Сеть', dot: 'doh' },
 	{ id: 'awg', title: 'AmneziaWG', sub: 'Туннели AmneziaWG и WARP: установка, ключи, интерфейсы', icon: 'anarchy', group: 'Сеть', dot: 'awg' },
+	{ id: 'terminal', title: 'Терминал', sub: 'Командная строка роутера в браузере (ttyd)', icon: 'terminal', group: 'Сеть' },
 	{ id: 'system', title: 'Система', sub: 'Параметры роутера, зеркала и обслуживание', icon: 'cpu', group: 'Сервис' }
 ];
 var ROUTE_BY_ID = {};
