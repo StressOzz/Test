@@ -1,5 +1,5 @@
 #!/bin/sh
-# Version: 2.28
+# Version: 2.30
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -50,7 +50,7 @@ cat > '/opt/zapret-manager-luci/backend.sh.zm-new' << 'ZM_INSTALLER_EOF'
 umask 022
 
 CONF="/etc/config/zapret"
-ZM_VERSION="2.28"
+ZM_VERSION="2.30"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
@@ -3823,15 +3823,17 @@ _zo_reapply() {
 	return 0
 }
 
+# какой скрипт стоит: по комментарию в начале файла (как в консольном Zapret Manager), без учёта регистра.
+# Пакет zapret-openwrt сам кладёт 50-script.sh с тем же Stun4ALL — он тоже узнаётся.
 _zo_script() {
 	local l
 	[ -f "$ZO_SCRIPT" ] || return 0
-	l="$(head -n 1 "$ZO_SCRIPT" 2>/dev/null)"
+	l="$(head -n 5 "$ZO_SCRIPT" 2>/dev/null | grep '^[[:space:]]*#' | tr -d '\r' | tr 'A-Z' 'a-z')"
 	case "$l" in
-		*QUIC*|*quic*) echo quic4all ;;
+		*quic*) echo quic4all ;;
 		*"discord media"*) echo discord-media ;;
 		*"discord subnets"*) echo discord ;;
-		*stun*|*STUN*) echo stun4all ;;
+		*stun*) echo stun4all ;;
 		*) echo other ;;
 	esac
 }
@@ -3856,7 +3858,7 @@ zapret_opt_set() {
 					tmp="$ZO_RKN_FILE.zmdl"
 					mkdir -p "$(dirname "$ZO_RKN_FILE")"
 					rm -f "$tmp"
-					curl -fsSL --connect-timeout 8 --max-time 25 -o "$tmp" "$ZO_RKN_URL" 2>/dev/null
+					curl -fsSL --connect-timeout 6 --max-time 16 -o "$tmp" "$ZO_RKN_URL" 2>/dev/null
 					n="$(grep -c '^[A-Za-z0-9*][A-Za-z0-9.*-]*\.[A-Za-z]' "$tmp" 2>/dev/null)"
 					if [ ! -s "$tmp" ] || grep -qi '<html\|<!doctype' "$tmp" || [ "${n:-0}" -lt 100 ]; then
 						rm -f "$tmp"; echo '{"error":"не удалось скачать список РКН — попробуйте позже"}'; return 1
@@ -3927,7 +3929,9 @@ ZA_LAST="$ZM_STATE_DIR/autobest.last"
 ZA_RUN="$TEST_DIR/autobest"
 
 _za_mode() { case "$(cat "$ZA_MODE_FILE" 2>/dev/null)" in v) echo v ;; flowseal) echo flowseal ;; *) echo v_flowseal ;; esac; }
-_za_hour() { grep -F "$ZA_TAG" "$CRON_FILE" 2>/dev/null | head -n 1 | awk '{ print $2 }'; }
+ZA_TIME_FILE="$ZM_STATE_DIR/autobest.time"
+# время запуска из расписания: ЧЧ:ММ или пусто, если выключен
+_za_time() { grep -F "$ZA_TAG" "$CRON_FILE" 2>/dev/null | head -n 1 | awk '{ printf "%02d:%02d\n", $2, $1 }'; }
 _za_running() { [ -f "$ZA_RUN" ] && _test_running; }
 
 _za_last_write() {
@@ -3982,20 +3986,25 @@ do_autobest() {
 	return 0
 }
 
-# hour: 0..23 или off; mode: v | flowseal | v_flowseal
+# when: ЧЧ:ММ или off; mode: v | flowseal | v_flowseal. Последнее время запоминается — при повторном
+# включении панель предложит его же.
 test_auto_set() {
-	local hour="${1%%|*}" mode="${1#*|}"
+	local when="${1%%|*}" mode="${1#*|}" h m
 	case "$mode" in v|flowseal|v_flowseal) ;; *) mode="$(_za_mode)" ;; esac
+	case "$when" in
+		off) ;;
+		[0-9]:[0-5][0-9]|[01][0-9]:[0-5][0-9]|2[0-3]:[0-5][0-9])
+			[ -x /etc/init.d/zapret ] || { echo '{"error":"Zapret не установлен"}'; return 1; }
+			h="${when%%:*}"; m="${when#*:}"; h="${h#0}"; m="${m#0}" ;;
+		*) echo '{"error":"неверное время"}'; return 1 ;;
+	esac
 	mkdir -p "$ZM_STATE_DIR"; echo "$mode" > "$ZA_MODE_FILE"
 	mkdir -p "$(dirname "$CRON_FILE")"; touch "$CRON_FILE"
 	sed -i "\\|$ZA_TAG|d" "$CRON_FILE"
-	case "$hour" in
-		off) ;;
-		[0-9]|1[0-9]|2[0-3])
-			[ -x /etc/init.d/zapret ] || { echo '{"error":"Zapret не установлен"}'; return 1; }
-			echo "7 $hour * * * /opt/zapret-manager-luci/backend.sh test_action auto_tick x >/dev/null 2>&1 $ZA_TAG" >> "$CRON_FILE" ;;
-		*) echo '{"error":"неверный час"}'; return 1 ;;
-	esac
+	if [ "$when" != off ]; then
+		echo "${m:-0} ${h:-0} * * * /opt/zapret-manager-luci/backend.sh test_action auto_tick x >/dev/null 2>&1 $ZA_TAG" >> "$CRON_FILE"
+		printf '%02d:%02d\n' "${h:-0}" "${m:-0}" > "$ZA_TIME_FILE"
+	fi
 	/etc/init.d/cron enable >/dev/null 2>&1
 	/etc/init.d/cron restart >/dev/null 2>&1
 	test_status
@@ -4013,7 +4022,7 @@ test_auto_tick() {
 
 _za_json() {
 	local h last at m b bo bt co cn res
-	h="$(_za_hour)"
+	h="$(_za_time)"
 	last="$(cat "$ZA_LAST" 2>/dev/null)"
 	if [ -n "$last" ]; then
 		IFS='|' read -r at m b bo bt co cn res <<-ZA_EOF
@@ -4021,7 +4030,7 @@ _za_json() {
 		ZA_EOF
 		last="{\"at\":${at:-0},\"mode\":\"$(esc "$m")\",\"best\":\"$(esc "$b")\",\"best_ok\":${bo:-0},\"total\":${bt:-0},\"cur_ok\":${co:-0},\"cur\":\"$(esc "$cn")\",\"result\":\"$(esc "$res")\"}"
 	else last=null; fi
-	printf '{"hour":%s,"mode":"%s","running":%s,"last":%s}' "$([ -n "$h" ] && echo "$h" || echo null)" "$(_za_mode)" "$(_za_running && echo true || echo false)" "$last"
+	printf '{"time":"%s","pref":"%s","mode":"%s","running":%s,"last":%s}' "$h" "$(cat "$ZA_TIME_FILE" 2>/dev/null || echo 04:00)" "$(_za_mode)" "$(_za_running && echo true || echo false)" "$last"
 }
 
 # ---------- Время на роутере: часовой пояс и синхронизация по NTP ----------
@@ -4050,20 +4059,104 @@ _zt_json() {
 		"$([ "$(uci -q get system.ntp.enabled)" = 0 ] && echo false || echo true)"
 }
 
+# Часовой пояс по месту роутера: спрашиваем несколько независимых сервисов геолокации параллельно
+# и берём пояс, который назвало большинство. Затем точное время: NTP, а если провайдер режет NTP —
+# по заголовку Date нескольких крупных сайтов (берём совпадающие).
+_zt_posix() {
+	local z="$1" p f
+	p="$(_zt_tz "$z")" && { echo "$p"; return 0; }
+	for f in /usr/share/ucode/luci/zoneinfo.uc /usr/lib/lua/luci/sys/zoneinfo/tzdata.lua; do
+		[ -f "$f" ] || continue
+		p="$(grep -F "'$z'" "$f" 2>/dev/null | head -n 1 | sed -n "s/.*'$(printf '%s' "$z" | sed 's#/#\\/#g')'[^']*'\([^']*\)'.*/\1/p")"
+		[ -n "$p" ] && { echo "$p"; return 0; }
+	done
+	[ -n "$2" ] || return 1
+	# пояс без перехода на летнее время по смещению: +07:00 → <+07>-7
+	printf '%s' "$2" | awk '{ s = substr($0, 1, 1); h = substr($0, 2, 2) + 0; m = substr($0, 5, 2) + 0;
+		if (s != "+" && s != "-") exit 1
+		n = sprintf("%s%02d", s, h); if (m) n = n sprintf("%02d", m)
+		printf "<%s>%s%d%s\n", n, (s == "+" ? "-" : ""), h, (m ? ":" m : "") }'
+}
+
+_zt_detect() {
+	local d="$JOBS_DIR/tzdet.$$" i
+	mkdir -p "$d"
+	( curl -s --noproxy '*' -m 5 'http://ip-api.com/json/?fields=status,timezone,city,offset' > "$d/1" ) 2>/dev/null &
+	( curl -s --noproxy '*' -m 5 'https://ipwho.is/?fields=timezone,city' > "$d/2" ) 2>/dev/null &
+	( curl -s --noproxy '*' -m 5 'https://get.geojs.io/v1/ip/geo.json' > "$d/3" ) 2>/dev/null &
+	( curl -s --noproxy '*' -m 5 'https://ipapi.co/json/' > "$d/4" ) 2>/dev/null &
+	( curl -s --noproxy '*' -m 5 'https://ipinfo.io/json' > "$d/5" ) 2>/dev/null &
+	wait
+	# из каждого ответа: пояс IANA и город
+	for i in 1 2 3 4 5; do
+		[ -s "$d/$i" ] || continue
+		tr -d '\n\r' < "$d/$i" | awk -v N="$i" '{
+			z = ""; c = ""
+			if (match($0, /"timezone"[ \t]*:[ \t]*"[A-Za-z_]+(\/[A-Za-z0-9_+-]+)*"/)) { z = substr($0, RSTART, RLENGTH); sub(/^"timezone"[ \t]*:[ \t]*"/, "", z); sub(/"$/, "", z) }
+			else if (match($0, /"timezone"[ \t]*:[ \t]*\{[^}]*"id"[ \t]*:[ \t]*"[^"]+"/)) { z = substr($0, RSTART, RLENGTH); sub(/.*"id"[ \t]*:[ \t]*"/, "", z); sub(/"$/, "", z) }
+			if (match($0, /"city"[ \t]*:[ \t]*"[^"]*"/)) { c = substr($0, RSTART, RLENGTH); sub(/^"city"[ \t]*:[ \t]*"/, "", c); sub(/"$/, "", c) }
+			if (z ~ /^[A-Za-z_]+(\/[A-Za-z0-9_+-]+)*$/) printf "%s\t%s\n", z, c
+		}'
+	done > "$d/all"
+	ZT_ASKED=5
+	ZT_GOT="$(wc -l < "$d/all" | tr -d ' ')"
+	# большинство голосов; при равенстве — первый ответивший
+	set -- $(awk -F'\t' '{ n[$1]++; if (!($1 in o)) { o[$1] = NR; c[$1] = $2 } } END { b = ""; for (z in n) if (b == "" || n[z] > n[b] || (n[z] == n[b] && o[z] < o[b])) b = z; if (b != "") print b, n[b] }' "$d/all")
+	ZT_ZONE="$1"; ZT_VOTES="${2:-0}"
+	ZT_CITY="$(awk -F'\t' -v z="$ZT_ZONE" '$1 == z && $2 != "" { print $2; exit }' "$d/all")"
+	ZT_OFF="$(tr -d '\n' < "$d/1" 2>/dev/null | grep -o '"offset"[[:space:]]*:[[:space:]]*-\{0,1\}[0-9]*' | head -n 1 | sed 's/.*://' | awk '{ s = $1 + 0; g = s < 0 ? "-" : "+"; if (s < 0) s = -s; if ($1 != "") printf "%s%02d:%02d\n", g, int(s / 3600), int((s % 3600) / 60) }')"
+	rm -rf "$d"
+	[ -n "$ZT_ZONE" ]
+}
+
+# точное время: NTP, иначе — заголовок Date с нескольких сайтов (две совпадающие отметки)
+_zt_sync() {
+	local p d i t n prev=""
+	ZT_SYNC=""
+	if command -v ntpd >/dev/null 2>&1; then
+		ntpd -n -q -p 0.openwrt.pool.ntp.org -p 1.openwrt.pool.ntp.org -p time.cloudflare.com -p ntp1.vniiftri.ru >/dev/null 2>&1 &
+		p=$!
+		( sleep 7; kill "$p" 2>/dev/null ) >/dev/null 2>&1 &
+		wait "$p" 2>/dev/null && ZT_SYNC=ntp
+	fi
+	if [ -z "$ZT_SYNC" ]; then
+		for i in https://www.google.com https://ya.ru https://www.cloudflare.com; do
+			d="$(curl -sI --noproxy '*' -m 3 "$i" 2>/dev/null | tr -d '\r' | sed -n 's/^[Dd]ate:[[:space:]]*//p' | head -n 1)"
+			t="$(printf '%s' "$d" | awk '{ split("Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec", M, " "); for (k = 1; k <= 12; k++) if (M[k] == $3) m = k;
+				if (m && $4 ~ /^[0-9]{4}$/ && $5 ~ /^[0-9]+:[0-9]+:[0-9]+$/) printf "%s-%02d-%02d %s\n", $4, m, $2, $5 }')"
+			[ -n "$t" ] || continue
+			n="$(date -u -d "$t" +%s 2>/dev/null)"
+			[ -n "$n" ] || continue
+			if [ -n "$prev" ] && [ $((n - prev)) -le 10 ] && [ $((prev - n)) -le 10 ]; then
+				date -u -s "$t" >/dev/null 2>&1 && ZT_SYNC=http
+				break
+			fi
+			prev="$n"
+		done
+	fi
+	[ -n "$ZT_SYNC" ] && command -v hwclock >/dev/null 2>&1 && hwclock -w >/dev/null 2>&1
+	[ -n "$ZT_SYNC" ]
+}
+
 system_time_set() {
 	local a="$1" tz
 	case "$a" in
 		ntp)
-			if command -v ntpd >/dev/null 2>&1; then
-				ntpd -n -q -p 0.openwrt.pool.ntp.org -p 1.openwrt.pool.ntp.org -p time.cloudflare.com >/dev/null 2>&1 &
-				tz=$!
-				( sleep 20; kill "$tz" 2>/dev/null ) >/dev/null 2>&1 &
-				wait "$tz" 2>/dev/null
-			else
-				/etc/init.d/sysntpd restart >/dev/null 2>&1; sleep 3
-			fi
-			command -v hwclock >/dev/null 2>&1 && hwclock -w >/dev/null 2>&1
-			[ "$(date +%Y)" -ge 2024 ] 2>/dev/null || { printf '{"error":"время не синхронизировалось — проверьте интернет на роутере",%s}\n' "$(_zt_json)"; return 1; } ;;
+			_zt_sync || { printf '{"error":"время не синхронизировалось — ни NTP, ни сайты не ответили. Проверьте интернет на роутере",%s}\n' "$(_zt_json)"; return 1; }
+			printf '{"ok":true,"sync":"%s",%s}\n' "$ZT_SYNC" "$(_zt_json)"
+			return 0 ;;
+		auto)
+			_zt_detect || { printf '{"error":"не удалось определить часовой пояс — сервисы геолокации не ответили",%s}\n' "$(_zt_json)"; return 1; }
+			tz="$(_zt_posix "$ZT_ZONE" "$ZT_OFF")" || { printf '{"error":"%s",%s}\n' "$(esc "сервисы назвали пояс $ZT_ZONE, но панель не знает его правил — выберите пояс вручную")" "$(_zt_json)"; return 1; }
+			uci -q set system.@system[0].zonename="$ZT_ZONE"
+			uci -q set system.@system[0].timezone="$tz"
+			uci -q commit system
+			/etc/init.d/system reload >/dev/null 2>&1
+			_zt_sync
+			/etc/init.d/cron restart >/dev/null 2>&1
+			printf '{"ok":true,"auto":{"zone":"%s","city":"%s","votes":%s,"got":%s,"asked":%s,"sync":"%s"},%s}\n' \
+				"$(esc "$ZT_ZONE")" "$(esc "$ZT_CITY")" "${ZT_VOTES:-0}" "${ZT_GOT:-0}" "${ZT_ASKED:-0}" "$ZT_SYNC" "$(_zt_json)"
+			return 0 ;;
 		tz:*)
 			tz="$(_zt_tz "${a#tz:}")" || { echo '{"error":"неизвестный часовой пояс"}'; return 1; }
 			uci -q set system.@system[0].zonename="${a#tz:}"
@@ -20544,6 +20637,8 @@ var TEST_MODE_LABELS = {
 	custom: 'Свои', custom_yt: 'Свои · YouTube', auto: 'Автоподбор'
 };
 var TEST_RESULT_MODES = ['current', 'domain', 'v', 'flowseal', 'v_flowseal', 'youtube', 'custom', 'custom_yt'];
+var ZONE_RU = { 'Europe/Kaliningrad': 'Калининград', 'Europe/Moscow': 'Москва', 'Europe/Samara': 'Самара', 'Asia/Yekaterinburg': 'Екатеринбург', 'Asia/Omsk': 'Омск', 'Asia/Krasnoyarsk': 'Красноярск',
+	'Asia/Irkutsk': 'Иркутск', 'Asia/Yakutsk': 'Якутск', 'Asia/Vladivostok': 'Владивосток', 'Asia/Magadan': 'Магадан', 'Asia/Kamchatka': 'Камчатка', 'UTC': 'UTC' };
 var AUTO_MODES = [ { id: 'v', label: 'v1–v10' }, { id: 'flowseal', label: 'Flowseal' }, { id: 'v_flowseal', label: 'v + Flowseal' } ];
 var CUSTOM_SCRIPTS = [
 	{ id: 'off', label: 'Нет' },
@@ -21043,53 +21138,86 @@ return view.extend({
 				})));
 			}
 
-			var autoCard = E('div', { 'class': 'zm-card' }), autoInfo = testData.auto || {}, autoBusy = false, timeInfo = testData;
-			function fmtTs(s) {
-				var d = new Date(s * 1000), p = function(n) { return (n < 10 ? '0' : '') + n; };
-				return p(d.getDate()) + '.' + p(d.getMonth() + 1) + '.' + d.getFullYear() + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+			var autoCard = E('div', { 'class': 'zm-card' }), autoInfo = testData.auto || {}, autoBusy = false, timeInfo = testData, autoOwn = false;
+			var AUTO_TIMES = [ '01:00', '02:00', '03:00', '04:00', '05:00', '06:00' ];
+			function p2(n) { return (n < 10 ? '0' : '') + n; }
+			function routerNow() {
+				if (!timeInfo.time) return null;
+				var off = String(timeInfo.utc_offset || '+0000'), sg = off.charAt(0) === '-' ? -1 : 1;
+				return new Date((timeInfo.time + sg * ((+off.slice(1, 3)) * 3600 + (+off.slice(3, 5)) * 60)) * 1000);
 			}
-			function autoSet(hour, mode) {
+			function whenText(ts) {
+				var now = routerNow(), off = String(timeInfo.utc_offset || '+0000'), sg = off.charAt(0) === '-' ? -1 : 1;
+				var d = new Date((ts + sg * ((+off.slice(1, 3)) * 3600 + (+off.slice(3, 5)) * 60)) * 1000);
+				var hm = p2(d.getUTCHours()) + ':' + p2(d.getUTCMinutes());
+				if (now) {
+					var days = Math.round((Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()) - Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())) / 86400000);
+					if (days === 0) return 'сегодня в ' + hm;
+					if (days === 1) return 'вчера в ' + hm;
+				}
+				return p2(d.getUTCDate()) + '.' + p2(d.getUTCMonth() + 1) + '.' + d.getUTCFullYear() + ' в ' + hm;
+			}
+			function nextText(t) {
+				var now = routerNow();
+				if (!now || !/^\d\d:\d\d$/.test(t)) return t;
+				var mins = (+t.slice(0, 2)) * 60 + (+t.slice(3, 5)), cur = now.getUTCHours() * 60 + now.getUTCMinutes();
+				return (mins > cur ? 'сегодня в ' : 'завтра в ') + t;
+			}
+			function autoSet(when, mode, okText) {
 				if (autoBusy) return;
 				autoBusy = true; renderAuto();
-				zm.testAction('auto_set', (hour == null ? 'off' : String(hour)) + '|' + mode).then(function(r) {
+				zm.testAction('auto_set', when + '|' + mode).then(function(r) {
 					autoBusy = false;
 					if (!r || r.error) { zm.toast((r && r.error) || 'Роутер не ответил', 'error'); renderAuto(); return; }
-					status = r; autoInfo = r.auto || {}; timeInfo = r;
-					zm.toast(autoInfo.hour != null ? 'Автоподбор: каждый день в ' + (autoInfo.hour < 10 ? '0' : '') + autoInfo.hour + ':07' : 'Автоподбор по расписанию выключен', 'info');
+					autoInfo = r.auto || {}; timeInfo = r;
+					zm.toast(okText || (autoInfo.time ? 'Автоподбор: каждый день в ' + autoInfo.time : 'Автоподбор выключен'), 'info');
 					renderAuto();
 				}).catch(function() { autoBusy = false; zm.toast('Роутер не ответил', 'error'); renderAuto(); });
 			}
 			function renderAuto() {
+				var on = !!autoInfo.time, mode = autoInfo.mode || 'v_flowseal', t = autoInfo.time || autoInfo.pref || '04:00';
+				var preset = AUTO_TIMES.indexOf(t) >= 0 && !autoOwn;
 				autoCard.innerHTML = '';
-				autoCard.appendChild(E('h3', {}, [ 'Автоподбор по расписанию ', autoInfo.hour != null ? zm.badge(true, 'включён', '') : E([]) ]));
-				autoCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:-6px' }, 'Раз в сутки роутер сам перебирает стратегии на заблокированных сайтах, затем проверяет текущую на тех же адресах. Лучшую ставит, только если она открыла больше сайтов. YouTube, Discord, игры, QUIC и дополнения к стратегии сохраняются. При «Не изменять стратегию» автоподбор ничего не меняет.'));
-				var sel = E('select', { 'class': 'cbi-input-select', 'disabled': autoBusy ? '' : null, 'style': 'width:auto; min-width:150px', 'change': function() { autoSet(sel.value === 'off' ? null : +sel.value, autoInfo.mode || 'v_flowseal'); } });
-				sel.appendChild(E('option', { 'value': 'off' }, 'Выключен'));
-				for (var h = 0; h < 24; h++) sel.appendChild(E('option', { 'value': String(h) }, 'Каждый день в ' + (h < 10 ? '0' : '') + h + ':07'));
-				sel.value = autoInfo.hour != null ? String(autoInfo.hour) : 'off';
-				autoCard.appendChild(E('div', { 'class': 'zm-row' }, [ E('span', { 'class': 'zm-label' }, 'Расписание'), sel ]));
-				autoCard.appendChild(E('div', { 'class': 'zm-row' }, [ E('span', { 'class': 'zm-label' }, 'Стратегии'),
-					E('div', { 'class': 'zm-seg' + (autoBusy ? ' zm-seg-busy' : '') }, AUTO_MODES.map(function(m) {
-						return E('div', { 'class': 'zm-seg-item' + (m.id === (autoInfo.mode || 'v_flowseal') ? ' zm-active' : ''), 'click': function() { if (!autoBusy && m.id !== autoInfo.mode) autoSet(autoInfo.hour, m.id); } }, m.label);
-					}))
-				]));
-				var yr = timeInfo.time ? new Date(timeInfo.time * 1000).getFullYear() : 0;
-				autoCard.appendChild(E('div', { 'class': 'zm-row' }, [ E('span', { 'class': 'zm-label' }, 'Время на роутере'),
-					E('span', {}, [ (timeInfo.time_text || '—') + (timeInfo.zone ? ' · ' + timeInfo.zone : ''), ' · ', E('a', { 'href': document.body.classList.contains('zmw-body') ? '#/system' : L.url('admin/services/zapret-manager/system') }, 'настроить') ])
-				]));
-				if (yr && yr < 2024) autoCard.appendChild(E('p', { 'class': 'zm-hint' }, '⚠ Время на роутере неверное — расписание не сработает. Синхронизируйте его на странице «Система».'));
+				autoCard.appendChild(E('h3', {}, [ 'Автоподбор стратегии ', on ? zm.badge(true, 'ежедневно в ' + autoInfo.time, '') : E([]) ]));
+				autoCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:-6px' }, 'Роутер проверяет стратегии на списке заблокированных сайтов и сравнивает лучшую с текущей. Новая стратегия применяется, только если открывает больше сайтов. Настройки YouTube, Discord, игр, QUIC и дополнения к стратегии сохраняются.'));
+				autoCard.appendChild(zm.swRow(on, 'Запускать ежедневно', on ? 'Следующий запуск: ' + nextText(autoInfo.time) + '. Проверка длится 5–10 минут, Zapret в это время перезапускается.' : 'Выключено — стратегия меняется только вручную.', function() {
+					if (autoBusy) return;
+					autoSet(on ? 'off' : t, mode);
+				}, autoBusy));
+				if (on) {
+					var ctl = [ E('div', { 'class': 'zm-seg' + (autoBusy ? ' zm-seg-busy' : '') }, AUTO_TIMES.map(function(x) {
+						return E('div', { 'class': 'zm-seg-item' + (preset && x === t ? ' zm-active' : ''), 'click': function() { if (autoBusy || (preset && x === t)) return; autoOwn = false; autoSet(x, mode); } }, x);
+					}).concat([ E('div', { 'class': 'zm-seg-item' + (!preset ? ' zm-active' : ''), 'click': function() { if (!autoOwn && preset) { autoOwn = true; renderAuto(); } } }, 'Другое') ])) ];
+					if (!preset) {
+						var inp = E('input', { 'type': 'time', 'lang': 'ru', 'class': 'cbi-input-text zm-ab-time', 'value': t, 'step': '300', 'disabled': autoBusy ? '' : null });
+						ctl.push(inp, E('button', { 'class': 'cbi-button', 'disabled': autoBusy ? '' : null, 'click': function() {
+							if (!/^\d\d:\d\d$/.test(inp.value)) { zm.toast('Укажите время в формате ЧЧ:ММ', 'warning'); return; }
+							autoOwn = AUTO_TIMES.indexOf(inp.value) < 0;
+							autoSet(inp.value, mode);
+						} }, 'Сохранить'));
+					}
+					autoCard.appendChild(E('div', { 'class': 'zm-row zm-ab-row' }, [ E('span', { 'class': 'zm-label' }, 'Время запуска'), E('div', { 'class': 'zm-ab-ctl' }, ctl) ]));
+					autoCard.appendChild(E('div', { 'class': 'zm-row zm-ab-row' }, [ E('span', { 'class': 'zm-label' }, 'Стратегии'),
+						E('div', { 'class': 'zm-seg' + (autoBusy ? ' zm-seg-busy' : '') }, AUTO_MODES.map(function(m) {
+							return E('div', { 'class': 'zm-seg-item' + (m.id === mode ? ' zm-active' : ''), 'click': function() { if (!autoBusy && m.id !== mode) autoSet(autoInfo.time, m.id, 'Автоподбор будет проверять: ' + m.label); } }, m.label);
+						}))
+					]));
+				}
 				var last = autoInfo.last;
 				if (last && last.at) {
-					var txt = last.result === 'applied' ? 'применена ' + last.best + ' — ' + last.best_ok + '/' + last.total + ' (была ' + (last.cur || 'текущая') + ' — ' + last.cur_ok + '/' + last.total + ')'
-						: last.result === 'kept' ? 'оставлена ' + (last.cur || 'текущая') + ' — ' + last.cur_ok + '/' + last.total + ' (лучшая из теста ' + last.best + ' — ' + last.best_ok + '/' + last.total + ')'
-						: last.result === 'nochange' ? 'пропущен: включено «Не изменять стратегию»'
-						: last.result === 'none' ? 'лучшую стратегию определить не удалось' : 'завершился с ошибкой — смотрите журнал';
-					autoCard.appendChild(E('div', { 'class': 'zm-row' }, [ E('span', { 'class': 'zm-label' }, 'Последний запуск'), E('span', {}, fmtTs(last.at) + ': ' + txt) ]));
+					var res = last.result === 'applied' ? [ E('b', { 'class': 'zm-ab-ok' }, 'применена ' + last.best), ' — ' + last.best_ok + ' из ' + last.total + ' сайтов (было ' + (last.cur || 'текущая') + ' — ' + last.cur_ok + ' из ' + last.total + ')' ]
+						: last.result === 'kept' ? [ E('b', {}, 'оставлена ' + (last.cur || 'текущая')), ' — ' + last.cur_ok + ' из ' + last.total + ' сайтов; лучшая из проверенных ' + last.best + ' — ' + last.best_ok + ' из ' + last.total ]
+						: last.result === 'nochange' ? [ 'пропущен — включено «Не изменять стратегию»' ]
+						: last.result === 'none' ? [ 'лучшую стратегию определить не удалось, оставлена текущая' ] : [ E('b', { 'class': 'zm-ab-bad' }, 'ошибка'), ' — подробности в журнале теста' ];
+					autoCard.appendChild(E('div', { 'class': 'zm-ab-last' }, [ E('span', { 'class': 'zm-label' }, 'Последний запуск ' + whenText(last.at) + ': ') ].concat(res)));
 				}
-				autoCard.appendChild(E('div', { 'class': 'zm-actions' }, [
+				var yr = timeInfo.time ? new Date(timeInfo.time * 1000).getFullYear() : 0;
+				if (on && yr && yr < 2024) autoCard.appendChild(E('p', { 'class': 'zm-hint' }, '⚠ Время на роутере неверное — расписание не сработает. Настройте его на странице «Система».'));
+				var now = routerNow();
+				autoCard.appendChild(E('div', { 'class': 'zm-actions zm-ab-actions' }, [
 					E('button', { 'class': 'cbi-button cbi-button-positive', 'disabled': busy || !zapretInstalled ? '' : null, 'click': function() {
 						if (busy) { zm.toast('Дождитесь окончания текущего теста', 'warning'); return; }
-						if (!confirm('Запустить автоподбор сейчас?\n\nЗаймёт несколько минут. Пока идёт тест, Zapret перезапускается со стратегиями по очереди.')) return;
+						if (!confirm('Запустить автоподбор сейчас?\n\nПроверка займёт 5–10 минут. Zapret в это время перезапускается со стратегиями по очереди.')) return;
 						busy = true; curMode = 'auto'; renderLaunch(); renderAuto();
 						zm.testAction('auto_run', '').then(function(res) {
 							if (res && res.error) { busy = false; curMode = ''; zm.toast(res.error, 'error'); renderLaunch(); renderAuto(); return; }
@@ -21098,8 +21226,10 @@ return view.extend({
 						}).catch(function() { busy = false; curMode = ''; renderLaunch(); renderAuto(); zm.toast('Роутер не ответил', 'error'); });
 					} }, busy && curMode === 'auto' ? 'Идёт автоподбор…' : 'Запустить сейчас'),
 					last && last.at ? E('button', { 'class': 'cbi-button', 'disabled': busy ? '' : null, 'click': function() {
-						zm.testAction('auto_clear', '').then(function(r) { if (r && !r.error) { autoInfo = r.auto || {}; renderAuto(); } });
-					} }, 'Удалить результат') : E([])
+						zm.testAction('auto_clear', '').then(function(r) { if (r && !r.error) { autoInfo = r.auto || {}; timeInfo = r; renderAuto(); } });
+					} }, 'Удалить результат') : E([]),
+					E('span', { 'class': 'zm-hint zm-ab-clock' }, [ 'Время роутера: ' + (now ? p2(now.getUTCHours()) + ':' + p2(now.getUTCMinutes()) : '—') + (timeInfo.zone ? ' · ' + (ZONE_RU[timeInfo.zone] || timeInfo.zone.replace(/^.*\//, '').replace(/_/g, ' ')) : '') + ' · ',
+						E('a', { 'href': document.body.classList.contains('zmw-body') ? '#/system' : L.url('admin/services/zapret-manager/system') }, 'настроить') ])
 				]));
 			}
 
@@ -22648,6 +22778,28 @@ html.zm-theme-dark .zm-tt-tile { border-color: rgba(255,255,255,.12); background
 .zm-tt-tile.zm-tt-active { border-color: #2d5bff; box-shadow: 0 0 0 1px #2d5bff inset; }
 .zm-tt-tile .zm-hint { margin: 0; flex: 1; }
 .zm-tt-grid .zm-tt-tile.zm-tt-wide { grid-column: 1 / -1; }
+.zm-ab-row .zm-label { min-width: 120px; }
+.zm-ab-ctl { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.zm-ab-time { width: auto !important; min-width: 110px; }
+.zm-ab-last { margin: 12px 0 4px; padding: 10px 12px; border-radius: 10px; background: rgba(127,127,127,.08); font-size: 13px; line-height: 1.5; }
+.zm-ab-last .zm-label { opacity: .7; }
+.zm-ab-ok { color: #1a7f37; }
+.zm-ab-bad { color: #cf222e; }
+.zm-ab-actions { align-items: center; }
+.zm-ab-clock { margin: 0 0 0 auto !important; }
+@media (max-width: 600px) { .zm-ab-row .zm-label { min-width: 0; width: 100%; } .zm-ab-clock { margin: 0 !important; width: 100%; } }
+.zm-tz-clock { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding: 14px 16px; border-radius: 14px; background: linear-gradient(135deg, rgba(124,92,255,.10), rgba(34,211,238,.08)); border: 1px solid rgba(124,92,255,.18); }
+.zm-tz-now { min-width: 0; }
+.zm-tz-time { font-size: 34px; font-weight: 700; line-height: 1.1; letter-spacing: .02em; font-variant-numeric: tabular-nums; }
+.zm-tz-date { font-size: 13px; opacity: .65; margin-top: 2px; }
+.zm-tz-zone { font-size: 14px; font-weight: 600; margin-top: 2px; }
+.zm-tz-btns { margin-left: auto; display: flex; flex-direction: column; gap: 8px; min-width: 210px; }
+.zm-tz-btns .cbi-button { width: 100%; margin: 0 !important; }
+.zm-tz-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); margin-top: 12px; }
+.zm-tz-grid .zm-tz-tile { min-width: 0; text-align: left; }
+.zm-tz-tile b { display: block; font-weight: 600; }
+.zm-tz-tile span { font-size: 12px; opacity: .7; }
+@media (max-width: 600px) { .zm-tz-btns { margin-left: 0; width: 100%; } .zm-tz-time { font-size: 30px; } }
 .zm-tt-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .zm-tt-ctl { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 4px; }
 .zm-tt-run { margin-bottom: 12px; }
@@ -23014,54 +23166,92 @@ return view.extend({
 		wrap.appendChild(siCard);
 
 		var ZONES = [
-			{ id: 'Europe/Kaliningrad', label: 'Калининград (UTC+2)' }, { id: 'Europe/Moscow', label: 'Москва (UTC+3)' },
-			{ id: 'Europe/Samara', label: 'Самара (UTC+4)' }, { id: 'Asia/Yekaterinburg', label: 'Екатеринбург (UTC+5)' },
-			{ id: 'Asia/Omsk', label: 'Омск (UTC+6)' }, { id: 'Asia/Krasnoyarsk', label: 'Красноярск (UTC+7)' },
-			{ id: 'Asia/Irkutsk', label: 'Иркутск (UTC+8)' }, { id: 'Asia/Yakutsk', label: 'Якутск (UTC+9)' },
-			{ id: 'Asia/Vladivostok', label: 'Владивосток (UTC+10)' }, { id: 'Asia/Magadan', label: 'Магадан (UTC+11)' },
-			{ id: 'Asia/Kamchatka', label: 'Камчатка (UTC+12)' }, { id: 'UTC', label: 'UTC' }
+			{ id: 'Europe/Kaliningrad', city: 'Калининград', off: 'UTC+2' }, { id: 'Europe/Moscow', city: 'Москва', off: 'UTC+3' },
+			{ id: 'Europe/Samara', city: 'Самара', off: 'UTC+4' }, { id: 'Asia/Yekaterinburg', city: 'Екатеринбург', off: 'UTC+5' },
+			{ id: 'Asia/Omsk', city: 'Омск', off: 'UTC+6' }, { id: 'Asia/Krasnoyarsk', city: 'Красноярск', off: 'UTC+7' },
+			{ id: 'Asia/Irkutsk', city: 'Иркутск', off: 'UTC+8' }, { id: 'Asia/Yakutsk', city: 'Якутск', off: 'UTC+9' },
+			{ id: 'Asia/Vladivostok', city: 'Владивосток', off: 'UTC+10' }, { id: 'Asia/Magadan', city: 'Магадан', off: 'UTC+11' },
+			{ id: 'Asia/Kamchatka', city: 'Камчатка', off: 'UTC+12' }, { id: 'UTC', city: 'UTC', off: '±0' }
 		];
-		var timeCard = E('div', { 'class': 'zm-card' }), timeBusy = false, timeData = sysData, clockEl = E('span', {}), clockBase = 0, clockAt = 0;
-		function clockText() {
-			if (!clockBase) return timeData.time_text || '—';
+		var WDAYS = [ 'воскресенье', 'понедельник', 'вторник', 'среда', 'четверг', 'пятница', 'суббота' ];
+		var MONTHS = [ 'января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря' ];
+		var timeCard = E('div', { 'class': 'zm-card' }), timeBusy = '', timeData = sysData, tzOpen = false, autoNote = '';
+		var clockT = E('div', { 'class': 'zm-tz-time' }), clockD = E('div', { 'class': 'zm-tz-date' }), clockBase = 0, clockAt = 0;
+		function offText(o) {
+			o = String(o || '+0000');
+			var h = +o.slice(1, 3), m = +o.slice(3, 5);
+			return 'UTC' + (h || m ? o.charAt(0) + h + (m ? ':' + o.slice(3, 5) : '') : '±0');
+		}
+		function zoneText() {
+			var z = ZONES.filter(function(x) { return x.id === timeData.zone; })[0];
+			if (z) return z.city + ' · ' + offText(timeData.utc_offset);
+			return (timeData.zone ? timeData.zone.replace(/^.*\//, '').replace(/_/g, ' ') + ' · ' : 'Пояс не выбран · ') + offText(timeData.utc_offset);
+		}
+		function nowLocal() {
+			if (!clockBase) return null;
 			var s = clockBase + Math.round((Date.now() - clockAt) / 1000);
 			var off = String(timeData.utc_offset || '+0000'), sg = off.charAt(0) === '-' ? -1 : 1, mins = sg * ((+off.slice(1, 3)) * 60 + (+off.slice(3, 5)));
-			var d = new Date((s + mins * 60) * 1000), p = function(n) { return (n < 10 ? '0' : '') + n; };
-			return p(d.getUTCDate()) + '.' + p(d.getUTCMonth() + 1) + '.' + d.getUTCFullYear() + ' ' + p(d.getUTCHours()) + ':' + p(d.getUTCMinutes()) + ':' + p(d.getUTCSeconds());
+			return new Date((s + mins * 60) * 1000);
+		}
+		function paintClock() {
+			var d = nowLocal(), p = function(n) { return (n < 10 ? '0' : '') + n; };
+			if (!d) { clockT.textContent = '—'; clockD.textContent = timeData.time_text || ''; return; }
+			clockT.textContent = p(d.getUTCHours()) + ':' + p(d.getUTCMinutes()) + ':' + p(d.getUTCSeconds());
+			clockD.textContent = WDAYS[d.getUTCDay()] + ', ' + d.getUTCDate() + ' ' + MONTHS[d.getUTCMonth()] + ' ' + d.getUTCFullYear();
 		}
 		function tick() {
-			if (!document.body.contains(clockEl)) return;
-			clockEl.textContent = clockText();
+			if (!document.body.contains(clockT)) return;
+			paintClock();
 			setTimeout(tick, 1000);
 		}
-		function timeDo(value, text) {
+		function timeDo(value, what, text) {
 			if (timeBusy) return;
-			timeBusy = true; renderTime();
+			timeBusy = what; renderTime();
 			zm.toast(text, 'warning');
 			zm.systemTimeSet(value).then(function(r) {
-				timeBusy = false;
+				timeBusy = '';
 				if (r && r.time) { timeData = r; clockBase = r.time; clockAt = Date.now(); }
 				if (!r || r.error) { zm.toast((r && r.error) || 'Роутер не ответил', 'error'); renderTime(); return; }
-				zm.toast(value === 'ntp' ? 'Время синхронизировано' : 'Часовой пояс установлен', 'info');
+				if (value === 'auto' && r.auto) {
+					var a = r.auto, how = a.sync === 'ntp' ? 'время синхронизировано по NTP' : a.sync === 'http' ? 'время взято с сайтов (NTP у провайдера закрыт)' : 'время синхронизировать не удалось';
+					autoNote = 'Определено: ' + a.zone + (a.city ? ' (' + a.city + ')' : '') + ' — так ответили ' + a.votes + ' из ' + a.got + ' сервисов; ' + how + '.';
+					tzOpen = false;
+					zm.toast(a.sync ? 'Часовой пояс определён, время синхронизировано' : 'Часовой пояс определён, но время синхронизировать не удалось', a.sync ? 'info' : 'warning');
+				} else {
+					autoNote = '';
+					if (/^tz:/.test(value)) tzOpen = false;
+					zm.toast(value === 'ntp' ? (r.sync === 'http' ? 'Время взято с сайтов — NTP у провайдера закрыт' : 'Время синхронизировано') : 'Часовой пояс установлен', 'info');
+				}
 				renderTime();
-			}).catch(function() { timeBusy = false; zm.toast('Роутер не ответил', 'error'); renderTime(); });
+			}).catch(function() { timeBusy = ''; zm.toast('Роутер не ответил', 'error'); renderTime(); });
 		}
 		function renderTime() {
 			timeCard.innerHTML = '';
 			timeCard.appendChild(E('h3', {}, 'Время на роутере'));
 			timeCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:-6px' }, 'Нужно для всех расписаний панели: автоподбора стратегии, перезапусков и обновления списков.'));
-			clockEl.textContent = clockText();
-			timeCard.appendChild(E('div', { 'class': 'zm-row' }, [ E('span', { 'class': 'zm-label' }, 'Сейчас'), clockEl ]));
-			var sel = E('select', { 'class': 'cbi-input-select', 'disabled': timeBusy ? '' : null, 'style': 'width:auto; min-width:220px', 'change': function() { timeDo('tz:' + sel.value, 'Меняем часовой пояс'); } });
-			var known = ZONES.some(function(z) { return z.id === timeData.zone; });
-			if (!known) sel.appendChild(E('option', { 'value': '' }, timeData.zone ? timeData.zone + ' (свой)' : 'Не выбран'));
-			ZONES.forEach(function(z) { sel.appendChild(E('option', { 'value': z.id }, z.label)); });
-			sel.value = known ? timeData.zone : '';
-			timeCard.appendChild(E('div', { 'class': 'zm-row' }, [ E('span', { 'class': 'zm-label' }, 'Часовой пояс'), sel ]));
-			if (timeData.time && new Date(timeData.time * 1000).getFullYear() < 2024) timeCard.appendChild(E('p', { 'class': 'zm-hint' }, '⚠ Время на роутере неверное — синхронизируйте его, иначе расписания не сработают.'));
-			timeCard.appendChild(E('div', { 'class': 'zm-actions' }, [
-				E('button', { 'class': 'cbi-button', 'disabled': timeBusy ? '' : null, 'click': function() { timeDo('ntp', 'Синхронизируем время по NTP'); } }, timeBusy ? 'Синхронизируем…' : 'Синхронизировать по NTP')
+			paintClock();
+			timeCard.appendChild(E('div', { 'class': 'zm-tz-clock' }, [
+				E('div', { 'class': 'zm-tz-now' }, [ clockT, clockD, E('div', { 'class': 'zm-tz-zone' }, zoneText()) ]),
+				E('div', { 'class': 'zm-tz-btns' }, [
+					E('button', { 'class': 'cbi-button cbi-button-positive', 'disabled': timeBusy ? '' : null, 'title': 'Роутер сам определит часовой пояс по своему местоположению (сверяя несколько сервисов) и выставит точное время', 'click': function() { timeDo('auto', 'auto', 'Определяем часовой пояс и время'); } }, timeBusy === 'auto' ? 'Определяем…' : 'Определить автоматически'),
+					E('button', { 'class': 'cbi-button', 'disabled': timeBusy ? '' : null, 'click': function() { tzOpen = !tzOpen; renderTime(); } }, tzOpen ? 'Скрыть часовые пояса' : 'Сменить часовой пояс'),
+					E('button', { 'class': 'cbi-button', 'disabled': timeBusy ? '' : null, 'click': function() { timeDo('ntp', 'ntp', 'Синхронизируем время'); } }, timeBusy === 'ntp' ? 'Синхронизируем…' : 'Синхронизировать время')
+				])
 			]));
+			if (autoNote) timeCard.appendChild(E('p', { 'class': 'zm-hint' }, autoNote));
+			if (timeData.time && new Date(timeData.time * 1000).getFullYear() < 2024) timeCard.appendChild(E('p', { 'class': 'zm-hint' }, '⚠ Время на роутере неверное — нажмите «Определить автоматически», иначе расписания не сработают.'));
+			if (tzOpen) {
+				var list = ZONES.slice();
+				if (timeData.zone && !list.some(function(z) { return z.id === timeData.zone; }))
+					list.unshift({ id: timeData.zone, city: timeData.zone.replace(/^.*\//, '').replace(/_/g, ' '), off: offText(timeData.utc_offset), own: true });
+				timeCard.appendChild(E('div', { 'class': 'zm-grid zm-tz-grid' }, list.map(function(z) {
+					var on = z.id === timeData.zone;
+					return E('div', { 'class': 'zm-tile zm-tz-tile' + (on ? ' zm-active' : ''), 'click': function() {
+						if (on || z.own || timeBusy) return;
+						timeDo('tz:' + z.id, 'tz', 'Ставим часовой пояс: ' + z.city);
+					} }, [ E('b', {}, z.city), E('span', {}, z.off + (on ? ' · выбран' : '')) ]);
+				})));
+			}
 		}
 		if (timeData.time) { clockBase = timeData.time; clockAt = Date.now(); }
 		renderTime();
