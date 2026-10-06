@@ -19778,6 +19778,9 @@ return view.extend({
 		var logEl = E('pre', { 'class': 'zm-log' });
 		var busy = false, frame = null, autoTried = false;
 		var canEmbed = window.location.protocol === 'http:';
+		/* В Web UI терминал держит сама панель: он не сбрасывается при переходе в другой раздел */
+		var keep = window.zmTermKeep || null;
+		function dropFrame() { frame = null; if (keep) keep.drop(); }
 		var DONE = { install: 'Терминал установлен', remove: 'Терминал удалён' };
 
 		function addr() { return 'http://' + window.location.hostname + ':' + (data.port || 7681) + '/'; }
@@ -19788,7 +19791,7 @@ return view.extend({
 
 		function follow(action) {
 			busy = true;
-			frame = null;
+			dropFrame();
 			renderAll();
 			zm.pollJob('term', logEl, function(ok) {
 				busy = false;
@@ -19810,7 +19813,7 @@ return view.extend({
 		function quick(action, okText) {
 			if (busy) { zm.toast('Дождитесь окончания текущей операции', 'warning'); return; }
 			busy = true;
-			frame = null;
+			dropFrame();
 			renderAll();
 			zm.termAction(action, '').then(function(res) {
 				busy = false;
@@ -19839,6 +19842,11 @@ return view.extend({
 
 		function renderView() {
 			var show = !!data.installed && !!data.running && canEmbed && !busy;
+			if (keep) {
+				viewEl.style.display = 'none';
+				if (!show) keep.hide(); else keep.open(addr());
+				return;
+			}
 			if (!show) { viewEl.style.display = 'none'; return; }
 			if (!frame) {
 				frame = E('iframe', { 'src': addr(), 'style': 'width:100%; height:480px; border:0; border-radius:8px; background:#000' });
@@ -29487,6 +29495,40 @@ function currentRoute() {
 var root, shell = null, viewEl, titleEl, subEl, navLinks = {}, navDots = {}, deviceEl, verEl, updateEl, memEl;
 var alertsEl = E('div', { 'class': 'zmw-alerts' }), alertsKey = '';
 
+/* Терминал переживает переходы между разделами: его iframe живёт в viewEl постоянно и только прячется.
+ * Прячем без display:none и без смены размера — иначе ttyd сожмёт терминал до нуля колонок. */
+var termKeep = { host: null, frame: null, src: '' };
+var TERM_SHOW = 'max-width:1100px; margin:0 0 16px', TERM_HIDE = 'max-width:1100px; margin:0; height:0; overflow:hidden; visibility:hidden';
+
+function termHide() { if (termKeep.host) termKeep.host.setAttribute('style', TERM_HIDE); }
+
+function termDrop() {
+	if (termKeep.host && termKeep.host.parentNode) termKeep.host.parentNode.removeChild(termKeep.host);
+	termKeep.host = null; termKeep.frame = null; termKeep.src = '';
+}
+
+function termOpen(src) {
+	if (!viewEl || !sid || currentRoute() !== 'terminal') return false;
+	if (termKeep.frame && termKeep.src !== src) termDrop();
+	if (!termKeep.host || termKeep.host.parentNode !== viewEl) {
+		termDrop();
+		termKeep.frame = E('iframe', { 'src': src, 'style': 'display:block; width:100%; height:480px; border:0; border-radius:8px; background:#000' });
+		termKeep.host = E('div', { 'class': 'zmw-term-keep', 'style': TERM_HIDE }, [ termKeep.frame ]);
+		termKeep.src = src;
+		viewEl.insertBefore(termKeep.host, viewEl.firstChild);
+	}
+	termKeep.host.setAttribute('style', TERM_SHOW);
+	return true;
+}
+
+window.zmTermKeep = { open: termOpen, hide: termHide, drop: termDrop };
+
+function viewReset() {
+	var n = viewEl.firstChild, next;
+	while (n) { next = n.nextSibling; if (n !== termKeep.host) viewEl.removeChild(n); n = next; }
+	viewEl.appendChild(alertsEl);
+}
+
 function mountAlerts() {
 	if (viewEl && alertsEl.parentNode !== viewEl) viewEl.insertBefore(alertsEl, viewEl.firstChild);
 	else if (viewEl && viewEl.firstChild !== alertsEl) viewEl.insertBefore(alertsEl, viewEl.firstChild);
@@ -29792,8 +29834,8 @@ function route(force) {
 	poll._reset();
 	ui.hideModal();
 	refreshShellStatus();
-	viewEl.innerHTML = '';
-	viewEl.appendChild(alertsEl);
+	termHide();
+	viewReset();
 	viewEl.appendChild(skeleton());
 	if (!force) window.scrollTo(0, 0);
 
@@ -29808,16 +29850,14 @@ function route(force) {
 			}).then(function (node) {
 				if (token !== routeToken || !node) return;
 				var page = E('div', { 'class': 'zmw-page' }, [ node ]);
-				viewEl.innerHTML = '';
-				viewEl.appendChild(alertsEl);
+				viewReset();
 				viewEl.appendChild(page);
 			});
 		})
 		.catch(function (err) {
 			if (token !== routeToken || (err && err.authLost)) return;
 			console.error(err);
-			viewEl.innerHTML = '';
-			viewEl.appendChild(alertsEl);
+			viewReset();
 			viewEl.appendChild(errorCard(err, function () { route(true); }));
 		});
 }
@@ -29913,6 +29953,7 @@ function authLost() {
 	sid = null;
 	sset(K_SID, null);
 	poll._reset();
+	termDrop();
 	freshLogin('Сессия истекла — войдите снова.', 'warning');
 }
 
@@ -29948,6 +29989,7 @@ function logout() {
 	sset(K_SID, null);
 	var done = function () {
 		poll._reset();
+		termDrop();
 		if (viewEl) viewEl.innerHTML = '';
 		freshLogin('Вы вышли из панели.', 'info');
 	};
