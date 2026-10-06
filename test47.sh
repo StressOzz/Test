@@ -1,10 +1,10 @@
 #!/bin/sh
-# Version: 2.45
+# Version: 2.47
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
 
-ZM_NEW_VER="2.45"
+ZM_NEW_VER="2.47"
 _zmi_say() { echo -e "${CYAN}==>${NC} $*"; }
 _zmi_ok() { echo -e "   ${GREEN}✓${NC} $*"; }
 _zmi_step() { echo -e "   → $*"; }
@@ -79,7 +79,7 @@ cat > '/opt/zapret-manager-luci/backend.sh.zm-new' << 'ZM_INSTALLER_EOF'
 umask 022
 
 CONF="/etc/config/zapret"
-ZM_VERSION="2.45"
+ZM_VERSION="2.47"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
@@ -799,6 +799,7 @@ zm_watch() {
 	rpcd_watch
 	_zm_net_orphan && _zm_net_restore force >/dev/null 2>&1
 	_fk_watch
+	_fk_fast_patch
 	_st_legacy_check
 	_st_vpn_watch
 	_tg_watch
@@ -13242,19 +13243,130 @@ _fk_ip_clean() {
 	return 0
 }
 
+_fk_fast_patch() {
+	local f=/usr/lib/netshift/rulesets.sh n
+	[ -f "$f" ] && [ -f /usr/lib/netshift/nft.sh ] && [ -f /usr/lib/netshift/helpers.sh ] || return 0
+	grep -q '^# zm-fast-begin 1$' "$f" && return 0
+	for n in patch_source_ruleset_rules import_plain_domain_list_to_local_source_ruleset_chunked import_plain_subnet_list_to_local_source_ruleset_chunked extract_ip_cidr_from_json_ruleset_to_file; do
+		grep -q "^$n() {" "$f" || return 0
+	done
+	grep -q '^nft_add_set_elements() {' /usr/lib/netshift/nft.sh && grep -q '^nft_add_set_elements_from_file_chunked() {' /usr/lib/netshift/nft.sh || return 0
+	grep -q '^comma_string_to_json_array() {' /usr/lib/netshift/helpers.sh || return 0
+	grep -q '^# zm-fast-begin' "$f" && sed -i '/^# zm-fast-begin/,/^# zm-fast-end$/d' "$f"
+	cat >> "$f" << 'ZM_FK_FAST_EOF'
+# zm-fast-begin 1
+_zm_fast_subnets() {
+	awk -v n="$2" '{ gsub(/\r/, ""); sub(/^[ \t]+/, ""); sub(/[ \t]+$/, ""); if ($0 == "") next
+		m = split($0, p, "/"); if (m > 2) next
+		if (m == 2 && (p[2] !~ /^[0-9]+$/ || length(p[2]) > 2 || p[2] + 0 > 32)) next
+		if (split(p[1], o, ".") != 4) next
+		ok = 1; for (i = 1; i <= 4; i++) if (o[i] !~ /^(0|[1-9][0-9]?[0-9]?)$/ || o[i] + 0 > 255) ok = 0
+		if (!ok || ($0 in seen)) next
+		seen[$0] = 1; buf = buf (c ? "," : "") $0
+		if (++c == n) { print buf; buf = ""; c = 0 } }
+		END { if (c) print buf }' "$1"
+}
+
+_zm_fast_domains() {
+	awk -v n="$2" '{ gsub(/\r/, ""); sub(/^[ \t]+/, ""); sub(/[ \t]+$/, ""); if ($0 == "") next
+		d = tolower($0); t = d; sub(/^\./, "", t)
+		if (t !~ /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$/) next
+		if (t ~ /^[0-9.]+$/ || (d in seen)) next
+		seen[d] = 1; buf = buf (c ? "," : "") d
+		if (++c == n) { print buf; buf = ""; c = 0 } }
+		END { if (c) print buf }' "$1"
+}
+
+import_plain_domain_list_to_local_source_ruleset_chunked() {
+	local plain_list_filepath="$1" ruleset_filepath="$2" chunk_size="${3:-1000}" zm_tmp zm_line
+	zm_tmp="$(mktemp)"
+	_zm_fast_domains "$plain_list_filepath" "$chunk_size" > "$zm_tmp"
+	while IFS= read -r zm_line; do
+		[ -n "$zm_line" ] || continue
+		patch_source_ruleset_rules "$ruleset_filepath" "domain_suffix" "$(comma_string_to_json_array "$zm_line")"
+	done < "$zm_tmp"
+	rm -f "$zm_tmp"
+}
+
+import_plain_subnet_list_to_local_source_ruleset_chunked() {
+	local plain_list_filepath="$1" ruleset_filepath="$2" chunk_size="${3:-1000}" zm_tmp zm_line
+	zm_tmp="$(mktemp)"
+	_zm_fast_subnets "$plain_list_filepath" "$chunk_size" > "$zm_tmp"
+	while IFS= read -r zm_line; do
+		[ -n "$zm_line" ] || continue
+		patch_source_ruleset_rules "$ruleset_filepath" "ip_cidr" "$(comma_string_to_json_array "$zm_line")"
+	done < "$zm_tmp"
+	rm -f "$zm_tmp"
+}
+
+nft_add_set_elements_from_file_chunked() {
+	local filepath="$1" nft_table_name="$2" nft_set_name="$3" chunk_size="${4:-5000}" zm_tmp zm_line
+	zm_tmp="$(mktemp)"
+	_zm_fast_subnets "$filepath" "$chunk_size" > "$zm_tmp"
+	while IFS= read -r zm_line; do
+		[ -n "$zm_line" ] || continue
+		nft_add_set_elements "$nft_table_name" "$nft_set_name" "$zm_line"
+	done < "$zm_tmp"
+	rm -f "$zm_tmp"
+}
+
+extract_ip_cidr_from_json_ruleset_to_file() {
+	jq -r '.rules[]? | .ip_cidr? // empty | if type == "array" then .[] else . end' "$1" > "$2" 2>/dev/null
+}
+# zm-fast-end
+ZM_FK_FAST_EOF
+	return 0
+}
+
+_fk_log_mark() {
+	FK_LOGMARK="zm-lists-$$-$(date +%s)"
+	logger -t netshift "[info] $FK_LOGMARK" 2>/dev/null
+	FK_LOGSEEN=0
+}
+
+_fk_lists_progress() {
+	local all tot
+	[ -n "$FK_LOGMARK" ] || return 0
+	all="$(logread 2>/dev/null | awk -v m="$FK_LOGMARK" 'f && /netshift/ { print } index($0, m) { f = 1 }')"
+	tot="$(printf '%s\n' "$all" | grep -c .)"
+	[ "$tot" -gt "${FK_LOGSEEN:-0}" ] 2>/dev/null || return 0
+	printf '%s\n' "$all" | awk -v skip="${FK_LOGSEEN:-0}" '
+		function base(u) { sub(/[?#].*$/, "", u); sub(/^.*\//, "", u); return u }
+		NR <= skip { next }
+		{ sub(/^.*netshift[^:]*: /, ""); sub(/^\[[a-z]+\] /, "") }
+		/Starting lists update/ { print "   → Начинаем загрузку списков"; next }
+		/DNS check passed/ { print "   ✓ DNS отвечает"; next }
+		/DNS check failed/ { print "   ✗ DNS не ответил — списки не скачаны"; next }
+		/DNS is unavailable/ { print "   · DNS пока не отвечает — пробуем ещё раз"; next }
+		/GitHub connection check passed/ { print "   ✓ GitHub доступен"; next }
+		/GitHub connection check failed/ { print "   ✗ GitHub недоступен — списки не скачаны"; next }
+		/GitHub is unavailable/ { print "   · GitHub пока не отвечает — пробуем ещё раз"; next }
+		/Downloading and processing lists/ { print "   → Скачиваем и разбираем списки"; next }
+		/Importing community subnet lists for/ { print "   → Адреса встроенных сервисов — заносим в файрвол"; next }
+		/Importing domains from URL: / { u = $0; sub(/^.*URL: /, "", u); print "   → Домены из списка " base(u); next }
+		/Importing subnets from URL: / { u = $0; sub(/^.*URL: /, "", u); print "   → Адреса из списка " base(u) " — заносим в файрвол"; next }
+		/^Download .* list failed/ { u = $2; print "   ✗ Не скачался список " base(u); next }
+		/Failed to decompile binary rule set/ { print "   ✗ Набор правил не раскрылся — его адреса пропущены"; next }
+		/Lists update completed successfully/ { print "   ✓ Все списки загружены"; next }
+		/Lists update failed/ { print "   ✗ Часть списков не загрузилась — работают остальные"; next }'
+	FK_LOGSEEN="$tot"
+	return 0
+}
+
 _fk_lists_wait() {
-	local p i=0 max="${1:-150}"
-	p="$(cat /var/run/netshift_list_update.pid 2>/dev/null)"
+	local p i=0 max="${1:-240}"
+	p="${2:-$(cat /var/run/netshift_list_update.pid 2>/dev/null)}"
 	case "$p" in ''|*[!0-9]*) return 0 ;; esac
-	kill -0 "$p" 2>/dev/null || return 0
-	_fk_say "Ждём, пока Forkozz скачает списки и занесёт адреса в файрвол (до $max с)"
+	kill -0 "$p" 2>/dev/null || { _fk_lists_progress; return 0; }
+	_fk_say "Forkozz скачивает списки и заносит адреса в файрвол"
 	while [ "$i" -lt "$max" ]; do
-		kill -0 "$p" 2>/dev/null || { echo "   ✓ Списки загружены"; return 0; }
+		_fk_lists_progress
+		kill -0 "$p" 2>/dev/null || { _fk_lists_progress; return 0; }
 		sleep 2
 		i=$((i + 2))
 	done
-	_rb_warn "Списки ещё скачиваются — числа ниже могут быть неполными. Они догрузятся сами; позже нажмите «Обновить списки сейчас», чтобы увидеть итог"
-	return 0
+	_fk_lists_progress
+	return 1
 }
 
 _fk_lists_report() {
@@ -13471,6 +13583,7 @@ do_fk_install() {
 	fi
 	chmod 0755 /usr/bin/netshift /etc/init.d/netshift
 	chmod -R a+rX /usr/lib/netshift
+	_fk_fast_patch
 	rm -rf "$tmp"
 
 	if [ ! -s /etc/config/netshift ]; then
@@ -13762,6 +13875,8 @@ do_fk_service() {
 	_fk_log_default
 	local lx; lx="$(_fk_log_ext)"
 	/etc/init.d/netshift enable >/dev/null 2>&1
+	_fk_fast_patch
+	_fk_log_mark
 	: > "$JOBS_DIR/forkop-svc.out"
 	if [ "$a" = apply ] && _fk_up; then
 		_fk_say "Применяем настройки: Forkozz пересобирает конфиг sing-box и подхватывает списки"
@@ -13792,7 +13907,7 @@ do_fk_service() {
 	if _fk_up; then
 		_fk_say "Проверяем, что всё работает"
 		_fk_check_live
-		_fk_lists_wait 150
+		_fk_lists_wait 240 || _rb_warn "Списки ещё скачиваются — числа ниже могут быть неполными. Они догрузятся сами; позже нажмите «Обновить списки сейчас», чтобы увидеть итог"
 		_fk_lists_report
 		_fk_lists_errors
 		_fk_ext_auto all "$lx"
@@ -13818,9 +13933,18 @@ do_fk_lists() {
 	local rc=0 out="$JOBS_DIR/forkop-lists.out"
 	_fk_installed || { echo "ОШИБКА: Forkozz не установлен"; return 1; }
 	_fk_up || { echo "ОШИБКА: Forkozz выключен — включите его, и списки скачаются сами"; return 1; }
-	_fk_say "Скачиваем свежие списки сервисов и обновляем адреса в файрволе"
-	_zm_run 300 /usr/bin/netshift list_update > "$out" 2>&1 || rc=1
-	sed 's/\x1b\[[0-9;]*m//g' "$out" 2>/dev/null | grep -v '^[[:space:]]*$' | tail -n 15 | sed 's/^/   /'
+	local lp
+	_fk_fast_patch
+	_fk_log_mark
+	/usr/bin/netshift list_update > "$out" 2>&1 &
+	lp=$!
+	if ! _fk_lists_wait 300 "$lp"; then
+		_zm_kill_tree "$lp"
+		_rb_warn "Загрузка списков не завершилась за 5 минут — прерываем её"
+		rc=1
+	fi
+	wait "$lp" 2>/dev/null || rc=1
+	sed 's/\x1b\[[0-9;]*m//g' "$out" 2>/dev/null | grep -v '^[[:space:]]*$' | grep -iE 'error|fail|ошиб' | grep -v '^jq: ' | tail -n 8 | sed 's/^/   /'
 	rm -f "$out"
 	if [ "$rc" != 0 ]; then
 		echo "!! Скачивание списков завершилось с ошибкой — работают прежние"
@@ -29947,7 +30071,10 @@ function buildShell() {
 		nav,
 		E('div', { 'class': 'zmw-side-foot' }, [
 			deviceEl,
-			memEl
+			memEl,
+			E('div', { 'class': 'zmw-side-links' }, [
+				E('a', { 'href': luciUrl(), 'target': '_blank', 'rel': 'noreferrer' }, [ icon('external'), 'Открыть LuCI' ])
+			])
 		])
 	]);
 
@@ -29983,6 +30110,10 @@ function buildShell() {
 	]);
 	root.appendChild(shell);
 	applyTheme();
+}
+
+function luciUrl() {
+	return location.protocol + '//' + location.hostname + '/cgi-bin/luci/admin/services/zapret-manager/dashboard';
 }
 
 function openDrawer() { document.body.classList.add('zmw-drawer-open'); }
