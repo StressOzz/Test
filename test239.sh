@@ -1,5 +1,5 @@
 #!/bin/sh
-# Version: 2.38
+# Version: 2.39
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -50,7 +50,7 @@ cat > '/opt/zapret-manager-luci/backend.sh.zm-new' << 'ZM_INSTALLER_EOF'
 umask 022
 
 CONF="/etc/config/zapret"
-ZM_VERSION="2.38"
+ZM_VERSION="2.39"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
@@ -8081,7 +8081,16 @@ _st_migrate() {
 	rm -f "$old/warp.pick" "$old/warp.skip"
 	sed -i 's/# zm-autobypass$/# zm-steer/' "$CRON_FILE" 2>/dev/null
 }
+_st_sel_remap() {
+	local f
+	for f in "$ST_SEL" "$ST_SKIP"; do
+		grep -q '^c_itdoginfo_' "$f" 2>/dev/null || continue
+		awk -v conf="$RB_SHARE/services.conf" 'BEGIN { while ((getline l < conf) > 0) { split(l, a, "|"); if (a[1] != "" && a[1] !~ /^#/) b[a[1]] = 1 } }
+			{ k = $0; if (k ~ /^c_itdoginfo_/ && (substr(k, 13) in b)) k = substr(k, 13); if (k != "" && !(k in s)) { s[k] = 1; print k } }' "$f" > "$f.tmp" && mv -f "$f.tmp" "$f"
+	done
+}
 _st_migrate
+_st_sel_remap
 mkdir -p "$ST_RUN" 2>/dev/null
 
 _st_blocker() {
@@ -14189,14 +14198,25 @@ function catalog_items(known_list) {
 		if (length(f) >= 3 && f[0] != "" && match(f[2], /^https:\/\//))
 			idx[f[0]] = { fmt: f[1], url: f[2], kind: s(f[3]) };
 	}
+	let covered = {};
+	for (let it in items) for (let tk in it.targets) covered[tk] = true;
 	for (let l in split(s(fs.readfile(ST_DIR + "/services.remote")), "\n")) {
-		let f = split(l, "|"), id = f[0], grp = s(f[8]), t = [];
+		let f = split(l, "|"), id = f[0], grp = s(f[8]), t = [], cat = false;
 		if (!id || seen[id] || grp == "" || grp == "Свои списки каталога") continue;
 		if (CAT_SKIP[replace(id, /^c_/, "")]) continue;
-		for (let k in split(s(f[7]), ",")) if (idx[k]) t = [ ...t, ...idx_tokens(idx[k], known) ];
+		for (let k in split(s(f[7]), ",")) if (idx[k]) {
+			t = [ ...t, ...idx_tokens(idx[k], known) ];
+			if (idx[k].kind == "s") cat = true;
+		}
 		if (!length(t)) continue;
+		let itd = index(id, "c_itdoginfo_") == 0 || index(lc(grp), "itdoginfo") == 0;
+		if (itd) {
+			let own = true;
+			for (let tk in t) if (!covered[tk]) own = false;
+			if (own) continue;
+		}
 		seen[id] = true;
-		push(items, { id, name: s(f[1]) || id, group: grp, targets: uniq(t) });
+		push(items, { id, name: s(f[1]) || id, group: itd ? "" : grp, cat: itd && cat, targets: uniq(t) });
 	}
 	return items;
 }
@@ -19734,8 +19754,8 @@ return view.extend({
 				} });
 			}
 			var remote = list.filter(function(s) { return !!s.group; });
-			var svcs = list.filter(function(s) { return !s.group && CATEGORY_IDS.indexOf(s.id) < 0; });
-			var cats = list.filter(function(s) { return !s.group && CATEGORY_IDS.indexOf(s.id) >= 0; });
+			var svcs = list.filter(function(s) { return !s.group && !s.cat && CATEGORY_IDS.indexOf(s.id) < 0; });
+			var cats = list.filter(function(s) { return !s.group && (s.cat || CATEGORY_IDS.indexOf(s.id) >= 0); });
 			listCard.appendChild(E('h4', { 'style': 'margin:0' }, 'Сервисы'));
 			listCard.appendChild(zm.svcGrid(svcs.map(tile)));
 			if (cats.length) {
@@ -26211,8 +26231,8 @@ return view.extend({
 			if (many) svcCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:-6px' }, [ 'Подключение этой секции: ', E('b', {}, draft.mode === 'iface' ? (draft.iface ? (/^zmwarp/.test(draft.iface) ? 'WARP · ' : 'туннель ') + draft.iface : 'туннель не выбран') : draft.mode === 'sub' ? 'подписка' : nn(textLines(draft.links).length, 'сервер', 'сервера', 'серверов')), '. Сервисы, выбранные в других секциях, помечены их названием.' ]));
 			svcCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:-6px' }, 'Нажмите на пункт, чтобы включить или выключить его, и затем «Сохранить». Списки те же, что в Steer: берутся из каталога списков (itdoginfo/allow-domains, b4geoip и другие) и обновляются сами.'));
 			var remote = list.filter(function(s) { return !!s.group; });
-			var svcs = list.filter(function(s) { return !s.group && CATEGORY_IDS.indexOf(s.id) < 0; });
-			var cats = list.filter(function(s) { return !s.group && CATEGORY_IDS.indexOf(s.id) >= 0; });
+			var svcs = list.filter(function(s) { return !s.group && !s.cat && CATEGORY_IDS.indexOf(s.id) < 0; });
+			var cats = list.filter(function(s) { return !s.group && (s.cat || CATEGORY_IDS.indexOf(s.id) >= 0); });
 			svcCard.appendChild(E('h4', { 'style': 'margin:0' }, 'Сервисы'));
 			svcCard.appendChild(zm.svcGrid(svcs.map(svcTile)));
 			if (cats.length) {
