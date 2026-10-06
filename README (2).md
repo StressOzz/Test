@@ -95,7 +95,7 @@
 Подключитесь к роутеру по SSH и выполните:
 
 ```sh
-sh <(wget -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh)
+sh <(wget -q -O - https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh)
 ```
 
 Установщик:
