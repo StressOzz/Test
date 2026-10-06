@@ -1,5 +1,5 @@
 #!/bin/sh
-# Version: 2.35
+# Version: 2.38
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
@@ -50,7 +50,7 @@ cat > '/opt/zapret-manager-luci/backend.sh.zm-new' << 'ZM_INSTALLER_EOF'
 umask 022
 
 CONF="/etc/config/zapret"
-ZM_VERSION="2.35"
+ZM_VERSION="2.38"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
@@ -448,7 +448,20 @@ ZM_REBOOT_HINT="$JOBS_DIR/reboot.hint"
 
 _zm_reboot_hint() {
 	mkdir -p "$JOBS_DIR"
-	printf '%s\n' "$1" > "$ZM_REBOOT_HINT"
+	printf '%s\n%s\n' "$1" "$(date +%s)" > "$ZM_REBOOT_HINT"
+}
+
+# Текст подсказки; через 2 минуты она пропадает сама
+_zm_reboot_hint_get() {
+	local ts now
+	[ -s "$ZM_REBOOT_HINT" ] || return 0
+	ts="$(sed -n 2p "$ZM_REBOOT_HINT" 2>/dev/null)"
+	now="$(date +%s)"
+	case "$ts" in
+		''|*[!0-9]*) rm -f "$ZM_REBOOT_HINT"; return 0 ;;
+		*) [ $((now - ts)) -gt 120 ] && { rm -f "$ZM_REBOOT_HINT"; return 0; } ;;
+	esac
+	head -n1 "$ZM_REBOOT_HINT"
 }
 
 _zm_inet_ok() {
@@ -491,7 +504,7 @@ _zm_after_remove() {
 	else
 		_zm_reboot_hint "$1 удалён, но интернет на роутере не отвечает. Перезагрузите роутер."
 	fi
-	echo "   Желательно перезагрузить роутер — кнопка «Перезагрузить роутер» появилась вверху страницы"
+	echo "   Желательно перезагрузить роутер — кнопка «Перезагрузить роутер» появилась вверху страницы на 2 минуты"
 }
 
 system_reboot() {
@@ -5443,7 +5456,7 @@ health() {
 	[ -f "$CONF" ] && [ "$(_ipv6_enabled_in_zapret)" = false ] && ip -6 route show default 2>/dev/null | grep -q . && v6=true
 	printf '{"zapret":%s,"zapret2":%s,"bytetube":%s,"tg":%s,"mixomo":%s,"doh":%s,"hosts":%s,"steer":%s,"steer_off":%s,"steer_exit":"%s","awg":%s,"forkop":%s,"flow_warn":%s,"ipv6_warn":%s,"reboot_hint":"%s"}\n' \
 		"$zr" "$zr2" "$bt" "$tg" "$mx" "$doh" "$hs" "$sr" \
-		"$([ -f /etc/zm-steer/stopped ] && echo true || echo false)" "$sx" "$(_awg_health)" "$(_fk_health)" "$fw" "$v6" "$(esc "$(head -n1 "$ZM_REBOOT_HINT" 2>/dev/null)")"
+		"$([ -f /etc/zm-steer/stopped ] && echo true || echo false)" "$sx" "$(_awg_health)" "$(_fk_health)" "$fw" "$v6" "$(esc "$(_zm_reboot_hint_get)")"
 }
 
 VERSIONS_CACHE="$ZM_STATE_DIR/versions.json"
@@ -8068,16 +8081,7 @@ _st_migrate() {
 	rm -f "$old/warp.pick" "$old/warp.skip"
 	sed -i 's/# zm-autobypass$/# zm-steer/' "$CRON_FILE" 2>/dev/null
 }
-_st_sel_remap() {
-	local f
-	for f in "$ST_SEL" "$ST_SKIP"; do
-		grep -q '^c_itdoginfo_' "$f" 2>/dev/null || continue
-		awk -v conf="$RB_SHARE/services.conf" 'BEGIN { while ((getline l < conf) > 0) { split(l, a, "|"); if (a[1] != "" && a[1] !~ /^#/) b[a[1]] = 1 } }
-			{ k = $0; if (k ~ /^c_itdoginfo_/ && (substr(k, 13) in b)) k = substr(k, 13); if (k != "" && !(k in s)) { s[k] = 1; print k } }' "$f" > "$f.tmp" && mv -f "$f.tmp" "$f"
-	done
-}
 _st_migrate
-_st_sel_remap
 mkdir -p "$ST_RUN" 2>/dev/null
 
 _st_blocker() {
@@ -9044,7 +9048,7 @@ _st_cat_build() {
 			p = $1; v = $2
 			if (p == "version" || p == "base_url" || p == "generated_at") { top[p] = v; next }
 			n = split(p, a, ".")
-			if (a[1] != "domain_lists" && a[1] != "categories") next
+			if (a[2] !~ /^[0-9]+$/) next
 			e = a[1] "." a[2]
 			if (!(e in seen)) { seen[e] = 1; order[++cnt] = e }
 			if (n == 3) f[e, a[3]] = v
@@ -9054,17 +9058,18 @@ _st_cat_build() {
 			base = top["base_url"]; sub(/\/+$/, "", base)
 			for (j = 1; j <= cnt; j++) {
 				e = order[j]; id = f[e, "id"]; if (id == "") continue
-				if (index(skip, " " tolower(id) " ")) { bad[e] = 1; continue }
-				if (f[e, "source_name"] == "" && f[e, "source"] == "") { bad[e] = 1; continue }
+				if (tolower(id " " f[e, "source"]) ~ /b4geoip|itdoginfo/) fo[e] = 1
+				if (index(skip, " " tolower(id) " ") && !fo[e]) { bad[e] = 1; continue }
+				if (f[e, "source_name"] == "" && f[e, "source"] == "" && !fo[e]) { bad[e] = 1; continue }
 				k = key(id); byid[id] = e; ek[e] = k
 				u = f[e, "url"]; fm = f[e, "format"]
 				if (fm != "srs" || u == "") { fm = "lst"; u = (f[e, "file"] != "" && base != "") ? base "/" f[e, "file"] : "" }
 				if (u == "" || u !~ /^https:\/\//) { bad[e] = 1; continue }
-				if (!(k in done)) { done[k] = 1; print k "|" fm "|" u "|" (e ~ /^categories/ ? "s" : "d") > idx; sets++ }
+				if (!(k in done)) { done[k] = 1; print k "|" fm "|" u "|" ((e ~ /^categories/ || (e !~ /^domain_lists/ && f[e, "kind"] != "" && f[e, "kind"] != "domains")) ? "s" : "d") > idx; sets++ }
 			}
 			for (j = 1; j <= cnt; j++) {
 				e = order[j]
-				if (e !~ /^domain_lists/ || bad[e] || f[e, "id"] == "") continue
+				if (e ~ /^categories/ || bad[e] || f[e, "id"] == "") continue
 				pr = f[e, "pair"]
 				if (pr != "" && (pr in byid) && !bad[byid[pr]]) { used[byid[pr]] = 1; st = ek[e]; if (ek[byid[pr]] != st) st = st "," ek[byid[pr]]; line(e, st) }
 				else line(e, ek[e])
@@ -9078,8 +9083,10 @@ _st_cat_build() {
 		}
 		function line(e, st,    nm, grp, u, b) {
 			nm = clean(f[e, "name_ru"]); if (nm == "") nm = f[e, "id"]
-			grp = clean(f[e, "source_name"]); if (grp == "") return
-			if (f[e, "source"] == "itdoginfo/allow-domains") {
+			grp = clean(f[e, "source_name"])
+			if (grp == "" && fo[e]) grp = (tolower(f[e, "id"] " " f[e, "source"]) ~ /b4geoip/) ? "b4geoip" : "itdoginfo (allow-domains)"
+			if (grp == "") return
+			if (!fo[e] && f[e, "source"] == "itdoginfo/allow-domains") {
 				u = f[e, "url"]; b = u; sub(/.*\//, "", b); sub(/\.srs$/, "", b)
 				if (index(bsets, " " b " ") || index(bnames, "|" tolower(nm) "|")) return
 			}
@@ -17579,7 +17586,11 @@ function rebootSlot() {
 	el.refresh = function() {
 		callHealth().then(function(h) {
 			el.innerHTML = '';
-			if (h && h.reboot_hint) el.appendChild(rebootBanner(h.reboot_hint));
+			clearTimeout(el._t);
+			if (h && h.reboot_hint) {
+				el.appendChild(rebootBanner(h.reboot_hint));
+				el._t = setTimeout(el.refresh, 125000);
+			}
 		}).catch(function() {});
 	};
 	el.refresh();
@@ -19282,11 +19293,9 @@ return view.extend({
 
 		function renderHead() {
 			headEl.innerHTML = '';
-			var inst = !!data.installed;
-			headEl.appendChild(E('h3', {}, [ 'Терминал ', inst && data.running ? badge('zm-ok', 'работает') : E([]) ]));
-			headEl.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:-6px' }, inst
-				? 'Командная строка роутера прямо в браузере (ttyd). Доступна только из домашней сети.'
-				: 'Командная строка роутера прямо в браузере (ttyd). Ставится пакет ttyd из репозитория OpenWrt (около 1 МБ), терминал запустится сам и откроется здесь.'));
+			if (data.installed) return;
+			headEl.appendChild(E('h3', {}, 'Терминал'));
+			headEl.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:-6px' }, 'Командная строка роутера прямо в браузере (ttyd). Ставится пакет ttyd из репозитория OpenWrt (около 1 МБ), терминал запустится сам и откроется здесь.'));
 		}
 
 		function renderView() {
@@ -26166,7 +26175,7 @@ return view.extend({
 				var p = secPick(cfg, s);
 				Object.keys(p.sel).forEach(function(id) { if (p.sel[id] && id.indexOf('old:') !== 0 && !map[id]) map[id] = s.label; });
 				if (!s.enabled) return;
-				if (i < cur && p.sel.russia_inside) ri.label = ri.label || s.label;
+				if (p.sel.russia_inside) ri.label = ri.label || s.label;
 				if (i > cur) p.items.forEach(function(it) { if (p.sel[it.id] && !it.group && it.id !== 'russia_inside' && zm.riCovers(it.id)) shadow.push(it.name + ' в «' + s.label + '»'); });
 			});
 			takenMemo = { key: key, map: map, ri: ri.label || '', shadow: shadow };
@@ -26180,7 +26189,7 @@ return view.extend({
 			var shadowed = !by && ra && !s.group && s.id !== 'russia_inside' && zm.riCovers(s.id);
 			if (shadowed && !draft.sel[s.id]) return zm.svcCard({ name: s.name, key: s.id, on: false, sub: 'входит в «Всё сразу» секции «' + ra + '»', cls: 'zm-svc-taken',
 				title: s.name + ' уже идёт через «Всё сразу» секции «' + ra + '»', click: function() {
-					zm.toast('«' + s.name + '» входит в «Всё сразу» секции «' + ra + '». Та секция выше и срабатывает первой — чтобы пустить «' + s.name + '» здесь, выключите «Всё сразу» там.', 'warning');
+					zm.toast('«' + s.name + '» входит в «Всё сразу» секции «' + ra + '». Чтобы пустить «' + s.name + '» здесь, выключите «Всё сразу» там.', 'warning');
 				} });
 			if (by && !draft.sel[s.id]) return zm.svcCard({ name: s.name, key: s.id, on: false, sub: 'в секции «' + by + '»', cls: 'zm-svc-taken',
 				title: s.name + ' уже идёт через секцию «' + by + '»', click: function() {
