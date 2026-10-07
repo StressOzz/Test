@@ -1,10 +1,10 @@
 #!/bin/sh
-# Version: 2.48
+# Version: 2.49
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
 
-ZM_NEW_VER="2.48"
+ZM_NEW_VER="2.49"
 _zmi_say() { echo -e "${CYAN}==>${NC} $*"; }
 _zmi_ok() { echo -e "   ${GREEN}✓${NC} $*"; }
 _zmi_step() { echo -e "   → $*"; }
@@ -79,7 +79,7 @@ cat > '/opt/zapret-manager-luci/backend.sh.zm-new' << 'ZM_INSTALLER_EOF'
 umask 022
 
 CONF="/etc/config/zapret"
-ZM_VERSION="2.48"
+ZM_VERSION="2.49"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
@@ -800,6 +800,7 @@ zm_watch() {
 	_zm_net_orphan && _zm_net_restore force >/dev/null 2>&1
 	_fk_watch
 	_fk_fast_patch
+	_st_colo_guard
 	_st_legacy_check
 	_st_vpn_watch
 	_tg_watch
@@ -2129,11 +2130,6 @@ _hosts_block() {
 			"99.84.181.63 tr.rbxcdn.com" \
 			"65.8.158.45 tr.rbxcdn.com" \
 			"65.8.158.112 tr.rbxcdn.com" ;;
-		riot) printf '%s\n' \
-			"#Riotgames" \
-			"159.194.200.33 auth.riotgames.com authenticate.riotgames.com entitlements.auth.riotgames.com clientconfig.rpg.riotgames.com" \
-			"159.194.200.33 playerpreferences.riotgames.com login.riotgames.com riotgames.com www.riotgames.com account.riotgames.com" \
-			"159.194.200.33 recovery.riotgames.com riot-client.riotgames.com playvalorant.com leagueoflegends.com" ;;
 		rutracker) printf '%s\n' \
 			"#Rutracker" \
 			"172.67.182.196 rutracker.org" ;;
@@ -2169,7 +2165,7 @@ _hosts_has_line() {
 }
 
 hosts_status() {
-	local blocks="nalog ntc instagram librusec ai twitch telegram spotify spotifyext rutor rutracker scell roblox riot githubraw github tapeop finland" b first=1
+	local blocks="nalog ntc instagram librusec ai twitch telegram spotify spotifyext rutor rutracker scell roblox githubraw github tapeop finland" b first=1
 	local geohide=""
 	if grep -q '^### geohide.ru: hosts file' "$HOSTS_FILE" 2>/dev/null; then
 		if grep -q '^# Регион серверов: US$' "$HOSTS_FILE" 2>/dev/null; then geohide="us"
@@ -8041,9 +8037,9 @@ _stl_vpn_outs() {
 _stl_spec() {
 	local tab k a b c lists="" rules="" outs="" lan="" sep="" lid="" lab="" srs="" dom="" pfx="" d m
 	tab="$(printf '\t')"
-	local out="" body
+	local out="" body wp=latency
 	while IFS="$tab" read -r k a b c; do
-		case "$k" in warp) out="$STL_WARP_OUT" ;; vpn) out="$STL_VPN_OUT" ;; esac
+		case "$k" in warp) out="$STL_WARP_OUT" ;; vpn) out="$STL_VPN_OUT" ;; wpick) [ "$a" = order ] && wp=order ;; esac
 	done < "$1"
 	[ -n "$out" ] || return 1
 	while IFS="$tab" read -r k a b c; do
@@ -8055,7 +8051,7 @@ _stl_spec() {
 					outs="\"$STL_WARP_OUT\":{\"kind\":\"interface\",\"device\":$(_stl_js "$1"),\"ipv6\":\"off\",\"on_fail\":\"direct\"}"
 				else
 					m=""; for d; do m="$m${m:+,}$(_stl_js "$d")"; outs="$outs,$(_stl_js "$d"):{\"kind\":\"interface\",\"device\":$(_stl_js "$d"),\"ipv6\":\"off\"}"; done
-					outs="\"$STL_WARP_OUT\":{\"kind\":\"group\",\"pick\":\"latency\",\"members\":[$m],\"ipv6\":\"off\",\"on_fail\":\"direct\"}$outs"
+					outs="\"$STL_WARP_OUT\":{\"kind\":\"group\",\"pick\":\"$wp\",\"members\":[$m],\"ipv6\":\"off\",\"on_fail\":\"direct\"}$outs"
 				fi ;;
 			vpn) outs="$(_stl_vpn_outs "$1" "$a")" ;;
 			svc) _stl_rule; lid="$(_stl_ident "$a")"; lab="$(_stl_label "$b" "$a")"; srs=""; dom=""; pfx="" ;;
@@ -9023,20 +9019,21 @@ _st_warp_scan1() {
 		[ "$(grep -c . "$r")" -ge 3 ] && break
 	done
 	if [ -n "$pool" ]; then
-		for f in "$r" "$r.same" "$r.ru" "$r.notls" "$r.nc"; do
+		for f in "$r" "$r.same" "$r.notls" "$r.nc"; do
 			[ -s "$f" ] || continue
 			case "$f" in *.ru) cls=1 ;; *.notls) cls=2 ;; *.nc) cls=3 ;; *) cls=0 ;; esac
 			awk -v c="$cls" '{ printf "%d %s %s %s\n", c * 100000000 + $1 * 100000 + $2, $3, $4, $5 }' "$f"
 		done | sort -n | awk '{ print $2, $3, $4, $1 }' > "$pool"
 	fi
-	for f in "$r" "$r.same" "$r.ru" "$r.notls" "$r.nc"; do
+	[ -s "$r.ru" ] && ! [ -s "$r" ] && ! [ -s "$r.same" ] &&
+		echo "   ответили только российские узлы ($(awk '{ print $5 }' "$r.ru" | sort -u | tr '\n' ' ' | sed 's/ $//')) — их не берём: заблокированное через них не открывается" >&2
+	for f in "$r" "$r.same" "$r.notls" "$r.nc"; do
 		[ -s "$f" ] || continue
 		case "$f" in *.ru) cls=1 ;; *.notls) cls=2 ;; *.nc) cls=3 ;; *) cls=0 ;; esac
 		pick=$(awk -v c="$cls" '{ k = c * 100000000 + $1 * 100000 + $2; printf "%d\t%s %s %s %d\n", k, $3, $4, $5, k }' "$f" |
 			sort -n | head -n1 | cut -f2)
 		case "$f" in
 			*.same) echo "   другой колонии нет — та же, но через другой адрес" >&2 ;;
-			*.ru) echo "   наружных колоний нет — только российские" >&2 ;;
 			*.notls) echo "!! ни через одну точку не проходит HTTPS" >&2 ;;
 			*.nc) echo "!! ни через одну точку не проходят веб-запросы, только пинг" >&2 ;;
 		esac
@@ -9126,8 +9123,101 @@ _st_warp_alive_if() {
 }
 _st_warp_ready_if() { ifstatus "$1" 2>/dev/null | grep -q '"up": true' && awg show "$1" peers 2>/dev/null | grep -q .; }
 
+ST_WARP_PICK="$ST_DIR/warp.pick"
+ST_WARP_ORDER="$ST_DIR/warp.order"
+_st_warp_pick() { [ "$(cat "$ST_WARP_PICK" 2>/dev/null)" = order ] && echo order || echo latency; }
+
+_st_warp_use() {
+	[ -s "$ST_WARP_UP" ] || return 0
+	awk -v ru=" $ST_RU_COLOS " '{ all = all $1 "\n"; if (!index(ru, " " $2 " ")) good = good $1 "\n" } END { printf "%s", (good != "" ? good : all) }' "$ST_WARP_UP"
+}
+
+_st_warp_reorder() {
+	[ -s "$ST_WARP_UP" ] || return 0
+	awk '{ print $1, $2 }' "$ST_WARP_UP" > "$ST_WARP_UP.tmp"
+	_st_warp_order "$ST_WARP_UP.tmp"
+	mv -f "$ST_WARP_UP.tmp" "$ST_WARP_UP"
+	awk '{ printf "%s%s", (NR > 1 ? ", " : ""), $2 }' "$ST_WARP_UP" > "$ST_DIR/warp.colo"
+	_st_tgws_warp
+}
+
+_st_colo_guard() {
+	local f="$ST_RUN/colo.last" i c n changed=0 moved="" t
+	_st_installed || return 0
+	[ -f "$ST_OFF" ] && return 0
+	[ "$(_st_exit)" = warp ] || return 0
+	_st_warp_own && return 0
+	[ -s "$ST_WARP_UP" ] || return 0
+	_st_running && return 0
+	[ -n "$(_st_blocker)" ] && return 0
+	mkdir -p "$ST_RUN"
+	if [ -f "$f" ]; then
+		t="$(date -r "$f" +%s 2>/dev/null || echo 0)"
+		[ $(( $(date +%s) - t )) -lt 600 ] && return 0
+	fi
+	: > "$f"
+	: > "$ST_WARP_UP.chk"
+	while read -r i c; do
+		[ -n "$i" ] || continue
+		n="$c"
+		if _st_warp_alive_if "$i"; then n="$(_st_colo_of "$i")"; [ -n "$n" ] || n="$c"; fi
+		if [ "$n" != "$c" ]; then
+			changed=1
+			_st_warp_is_ru "$n" && ! _st_warp_is_ru "$c" && moved="$moved $i:$n"
+		fi
+		echo "$i $n" >> "$ST_WARP_UP.chk"
+	done < "$ST_WARP_UP"
+	if [ "$changed" != 1 ]; then
+		rm -f "$ST_WARP_UP.chk"
+		for i in $(awk '{ print $1 }' "$ST_WARP_UP"); do
+			_st_warp_use | grep -qx "$i" && continue
+			grep -q "\"$i\"" "$STL_SPEC" 2>/dev/null && { job_start steer do_steer_warp_pick keep >/dev/null; break; }
+		done
+		return 0
+	fi
+	_st_running && { rm -f "$ST_WARP_UP.chk"; return 0; }
+	_st_warp_use > "$ST_WARP_UP.was"
+	mv -f "$ST_WARP_UP.chk" "$ST_WARP_UP"
+	_st_warp_reorder
+	_st_warp_geo $(awk '{ print $1 }' "$ST_WARP_UP")
+	for t in $moved; do
+		i="${t%%:*}"; case "$i" in zmwarp) n=1 ;; *) n="${i#zmwarp}" ;; esac
+		_st_wfix_say "WARP $n переключился на российский узел ${t##*:} — выведен из работы, трафик идёт через остальные туннели"
+	done
+	if [ "$(_st_warp_use | tr '\n' ' ')" != "$(tr '\n' ' ' < "$ST_WARP_UP.was")" ]; then
+		rm -f "$ST_WARP_UP.was"
+		job_start steer do_steer_warp_pick keep >/dev/null
+	else
+		rm -f "$ST_WARP_UP.was"
+	fi
+	return 0
+}
+
+do_steer_warp_pick() {
+	_st_phase rules
+	rm -f "$ST_STOP_FLAG"
+	if [ "$1" != keep ]; then
+		mkdir -p "$ST_DIR"
+		if [ "$1" = order ]; then
+			echo order > "$ST_WARP_PICK"
+			printf '%s\n' $2 > "$ST_WARP_ORDER"
+			_rb_say "Основной туннель WARP — первый живой по вашему порядку"
+		else
+			rm -f "$ST_WARP_PICK"
+			_rb_say "Основной туннель WARP — самый быстрый из живых"
+		fi
+		_st_warp_reorder
+	else
+		_rb_say "Состав туннелей WARP изменился — обновляем правила"
+	fi
+	set -- $(_st_warp_use)
+	[ $# -gt 0 ] && echo "   → в работе: $(echo "$*" | sed 's/zmwarp\([0-9]\)/WARP \1/g; s/zmwarp/WARP 1/g; s/ /, /g')"
+	_st_kick
+	_rb_say "Готово"
+}
+
 _st_warp_order() {
-	local f="$1" i c k pos=0 fresh=0
+	local f="$1" i c k pos=0 fresh=0 cls
 	grep -q ' [0-9][0-9]*$' "$f" && fresh=1
 	: > "$f.key"
 	while read -r i c k; do
@@ -9140,9 +9230,14 @@ _st_warp_order() {
 			set -- $(_st_warp_probe "$i")
 			k=$(($1 * 100000 + $2))
 		fi
-		printf '%012d %03d %s %s\n' "$k" "$pos" "$i" "$c" >> "$f.key"
+		if [ "$(_st_warp_pick)" = order ]; then
+			k=$(awk -v i="$i" '$1 == i { print NR; exit }' "$ST_WARP_ORDER" 2>/dev/null)
+			[ -n "$k" ] || k=$((900 + pos))
+		fi
+		cls=0; _st_warp_is_ru "$c" && cls=1
+		printf '%d %012d %03d %s %s\n' "$cls" "$k" "$pos" "$i" "$c" >> "$f.key"
 	done < "$f"
-	sort "$f.key" | awk '{ print $3, $4 }' > "$f"
+	sort "$f.key" | awk '{ print $4, $5 }' > "$f"
 	rm -f "$f.key"
 }
 
@@ -9313,8 +9408,12 @@ _st_warp_up() {
 			fi
 		fi
 		set -- $got
+		if _st_warp_is_ru "$3"; then
+			_rb_warn "WARP $n: точка $1:$2 ведёт в российский узел $3 — такой туннель не используем"
+			ifdown "$i" >/dev/null 2>&1
+			continue
+		fi
 		busy="$busy $3"; busyip="$busyip $1"
-		_st_warp_is_ru "$3" && ru=1
 		echo "$i $3 ${4:--}" >> "$ST_WARP_UP.tmp"
 		uci set "network.${i}_peer.endpoint_host=$1"
 		uci set "network.${i}_peer.endpoint_port=$2"
@@ -9334,7 +9433,7 @@ _st_warp_up() {
 	done
 	if [ ! -s "$ST_WARP_UP" ]; then
 		rm -f "$ST_DIR/warp.colo"
-		echo "ОШИБКА: туннель WARP не поднялся ни через одну точку входа"
+		echo "ОШИБКА: туннель WARP не поднялся ни через одну зарубежную точку входа. Российские узлы (Домодедово и другие) Steer не использует — заблокированное через них не открывается. Попробуйте «Найти новую точку входа» позже или VPN-подписку"
 		return 1
 	fi
 	echo "$colos" > "$ST_DIR/warp.colo"
@@ -9342,7 +9441,6 @@ _st_warp_up() {
 	_st_warp_geo $(awk '{ print $1 }' "$ST_WARP_UP")
 	c="$(_st_geo_line)"
 	[ -n "$c" ] && _rb_say "Сайты видят WARP как: $c"
-	[ "$ru" = 1 ] && _rb_warn "Часть туннелей WARP идёт через российские колонии: заблокированное через них не откроется"
 	return 0
 }
 
@@ -9646,8 +9744,9 @@ _st_model() {
 		printf 'vpn\t%s\n' "$ST_SUB"
 		_st_sub_filter
 	else
+		printf 'wpick\t%s\n' "$(_st_warp_pick)"
 		printf 'warp'
-		if [ -s "$ST_WARP_UP" ]; then awk '{ printf "\t%s", $1 }' "$ST_WARP_UP"; else printf '\t%s' "$ST_WARP_IF"; fi
+		if [ -s "$ST_WARP_UP" ]; then for id in $(_st_warp_use); do printf '\t%s' "$id"; done; else printf '\t%s' "$ST_WARP_IF"; fi
 		echo
 	fi
 	for id; do _st_svc_lists "$id"; done
@@ -10088,6 +10187,11 @@ _st_warp_fix() {
 		return 1
 	fi
 	set -- $got
+	if _st_warp_is_ru "$3"; then
+		ifdown "$i" >/dev/null 2>&1
+		echo "ОШИБКА: WARP $n — нашлась только точка через российский узел $3, её не берём; попробуйте позже или новые ключи"
+		return 1
+	fi
 	_st_warp_link "$i" "$peer" "$1" "$2" >/dev/null 2>&1
 	uci set "network.${i}_peer.endpoint_host=$1"
 	uci set "network.${i}_peer.endpoint_port=$2"
@@ -10140,6 +10244,7 @@ _st_wfix_alive() {
 	[ -d "/sys/class/net/$1" ] || return 1
 	hs="$(_st_wfix_hs "$1")"
 	[ "${hs:-0}" -gt 0 ] 2>/dev/null && [ $(( $(date +%s) - hs )) -lt 300 ] || return 1
+	_st_warp_is_ru "$(awk -v i="$1" '$1 == i { print $2; exit }' "$ST_WARP_UP" 2>/dev/null)" && return 1
 	ping -I "$1" -c 2 -W 3 1.1.1.1 >/dev/null 2>&1 || ping -I "$1" -c 2 -W 3 8.8.8.8 >/dev/null 2>&1
 }
 
@@ -10541,10 +10646,10 @@ steer_status() {
 	if [ "$vup" = true ] && [ "$vexit" = vpn ] && [ "$off" = false ]; then
 		_st_vpn_live; case $? in 0) vlive=true ;; 1) vlive=false ;; esac
 	fi
-	printf '{"running":%s,"phase":"%s","blocker":"%s","installed":%s,"stopped":%s,"version":"%s","steer_running":%s,"channels":%s,"warp_up":%s,"warp_colo":"%s","warp_host":"%s","warp_port":"%s","warp_hs_age":"%s","warp_rx":%s,"warp_tx":%s,"autorestart":"%s","dns_conflict":%s,"doh":"%s","doh_mode":"%s","exit":"%s","vpn_up":%s,"vpn_live":%s,"has_sub":%s,"sub_label":"%s","latest":"%s","ext":%s,"warp_on":%s,"warp_mode":"%s","warp_own_saved":%s,"tunnels":%s,"warp_active":"%s","catalog":%s,"wfix":%s,"lists_via":%s,"failopen":%s,"hosts_extra":%s,"services":[%s]}\n' \
+	printf '{"running":%s,"phase":"%s","blocker":"%s","installed":%s,"stopped":%s,"version":"%s","steer_running":%s,"channels":%s,"warp_up":%s,"warp_colo":"%s","warp_host":"%s","warp_port":"%s","warp_hs_age":"%s","warp_rx":%s,"warp_tx":%s,"autorestart":"%s","dns_conflict":%s,"doh":"%s","doh_mode":"%s","exit":"%s","vpn_up":%s,"vpn_live":%s,"has_sub":%s,"sub_label":"%s","latest":"%s","ext":%s,"warp_on":%s,"warp_mode":"%s","warp_pick":"%s","warp_own_saved":%s,"tunnels":%s,"warp_active":"%s","catalog":%s,"wfix":%s,"lists_via":%s,"failopen":%s,"hosts_extra":%s,"services":[%s]}\n' \
 		"$running" "$(esc "$phase")" "$(esc "$blk")" "$installed" "$off" "$(esc "$ver")" "$run" "${chans:-0}" "$warp_up" "$(esc "$colo")" \
 		"$(esc "$host")" "$(esc "$port")" "$age" "${rx:-0}" "${tx:-0}" "$(_st_cron_get)" "$dns" "$doh" "$(_doh_force_mode)" \
-		"$vexit" "$vup" "$vlive" "$vsub" "$(esc "$(_st_sub_label)")" "$(esc "$latest")" "$ext" "$won" "$(_st_warp_own && echo own || echo auto)" "$(_st_own_saved && echo true || echo false)" "$(_st_tunnels_json)" "$active" "$(_st_cat_json)" "$(_st_wfix_json)" "$([ -f "$ST_DIR/lists.via" ] && echo true || echo false)" "$failed" "$(_hosts_extra)" "$svc"
+		"$vexit" "$vup" "$vlive" "$vsub" "$(esc "$(_st_sub_label)")" "$(esc "$latest")" "$ext" "$won" "$(_st_warp_own && echo own || echo auto)" "$(_st_warp_pick)" "$(_st_own_saved && echo true || echo false)" "$(_st_tunnels_json)" "$active" "$(_st_cat_json)" "$(_st_wfix_json)" "$([ -f "$ST_DIR/lists.via" ] && echo true || echo false)" "$failed" "$(_hosts_extra)" "$svc"
 }
 
 _st_active_if() {
@@ -10554,7 +10659,7 @@ _st_active_if() {
 }
 
 _st_tunnels_json() {
-	local n=1 i up hs age rx tx host port colo out="" sep="" seen city cc
+	local n=1 i up hs age rx tx host port colo out="" sep="" seen city cc pos isru
 	while [ "$n" -le "$ST_WARP_N" ]; do
 		i="$(_st_wif "$n")"
 		if _st_owns "net $i"; then
@@ -10576,7 +10681,9 @@ _st_tunnels_json() {
 				seen="$2"; cc="$3"; shift 3; city="$*"
 				[ "$seen" = - ] && seen=""; [ "$cc" = - ] && cc=""; [ "$city" = - ] && city=""
 			fi
-			out="$out$sep{\"n\":$n,\"if\":\"$i\",\"up\":$up,\"colo\":\"$(esc "$colo")\",\"city\":\"$(esc "$city")\",\"cc\":\"$(esc "$cc")\",\"seen\":\"$(esc "$seen")\",\"host\":\"$(esc "$host")\",\"port\":\"$(esc "$port")\",\"hs_age\":\"$age\",\"rx\":$rx,\"tx\":$tx}"
+			pos="$(awk -v i="$i" '$1 == i { print NR; exit }' "$ST_WARP_UP" 2>/dev/null)"
+			isru=false; [ -n "$colo" ] && _st_warp_is_ru "$colo" && isru=true
+			out="$out$sep{\"n\":$n,\"if\":\"$i\",\"pos\":${pos:-0},\"ru\":$isru,\"up\":$up,\"colo\":\"$(esc "$colo")\",\"city\":\"$(esc "$city")\",\"cc\":\"$(esc "$cc")\",\"seen\":\"$(esc "$seen")\",\"host\":\"$(esc "$host")\",\"port\":\"$(esc "$port")\",\"hs_age\":\"$age\",\"rx\":$rx,\"tx\":$tx}"
 			sep=","
 		fi
 		n=$((n + 1))
@@ -11500,13 +11607,13 @@ steer_sub_probe() {
 }
 
 steer_action() {
-	local action="$1" mode="$2"
+	local action="$1" mode="$2" w
 	case "$action" in diag|wfix_tick|explain) ;; *) rm -f "$ST_VPN_PROBE" ;; esac
 	case "$action" in
-		install|apply|start|stop|remove|warp_restart|warp_endpoint|warp_recreate|lists|engine|warp_setup|warp_fix|warp_fixkeys|warp_own|warp_mode)
+		install|apply|start|stop|remove|warp_restart|warp_endpoint|warp_recreate|lists|engine|warp_setup|warp_fix|warp_fixkeys|warp_own|warp_mode|warp_pick)
 			_st_running && { echo '{"error":"дождитесь окончания текущей операции"}'; return 1; }
 			case "$action" in
-				warp_endpoint|warp_recreate|warp_fix|warp_fixkeys)
+				warp_endpoint|warp_recreate|warp_fix|warp_fixkeys|warp_pick)
 					_st_warp_own && { echo '{"error":"в режиме «Свой конфиг» ключи и точку входа задаёт ваш конфиг — замените его или вернитесь к автоматическому WARP"}'; return 1; } ;;
 			esac
 			case "$action" in
@@ -11525,6 +11632,17 @@ steer_action() {
 				warp_mode)
 					[ "$mode" = auto ] || { echo '{"error":"неизвестный режим"}'; return 1; }
 					job_start steer do_steer_warp_auto ;;
+				warp_pick)
+					_st_warp_on || { echo '{"error":"WARP ещё не подключён"}'; return 1; }
+					case "$mode" in
+						latency) job_start steer do_steer_warp_pick latency ;;
+						order:*)
+							mode="$(printf '%s' "${mode#order:}" | tr ',' ' ')"
+							for w in $mode; do printf '%s' "$w" | grep -qE '^zmwarp[0-9]?$' || { echo '{"error":"неверное имя туннеля"}'; return 1; }; done
+							[ -n "$(echo $mode)" ] || { echo '{"error":"пустой порядок туннелей"}'; return 1; }
+							job_start steer do_steer_warp_pick order "$mode" ;;
+						*) echo '{"error":"неизвестный режим"}'; return 1 ;;
+					esac ;;
 				install)       job_start steer do_steer_install ;;
 				apply|start)   job_start steer do_steer_apply ;;
 				stop)          job_start steer do_steer_stop ;;
@@ -20972,7 +21090,29 @@ return view.extend({
 				return;
 			}
 			if (data.exit === 'vpn') warpCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Сейчас сервисы идут через подписку — туннели WARP не используются.'));
-			if (tl.length > 1) warpCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Трафик идёт через самый быстрый живой туннель' + (data.warp_active && data.exit !== 'vpn' ? ' — сейчас это ' + (function() { var a = tl.filter(function(t) { return t.if === data.warp_active; })[0]; return a ? 'WARP ' + a.n : data.warp_active; })() : '') + '; упал один — Steer сам переключится на другой.'));
+			var byOrder = data.warp_pick === 'order';
+			tl = tl.slice().sort(function(x, y) { return ((x.pos || 99) - (y.pos || 99)) || (x.n - y.n); });
+			var activeT = data.warp_active && data.exit !== 'vpn' ? tl.filter(function(t) { return t.if === data.warp_active; })[0] : null;
+			if (tl.length > 1) {
+				warpCard.appendChild(E('div', { 'class': 'zm-row' }, [
+					E('span', { 'class': 'zm-label' }, 'Основной туннель'),
+					E('div', { 'class': 'zm-seg' }, [
+						E('div', { 'class': 'zm-seg-item' + (!byOrder ? ' zm-active' : ''), 'click': function() { if (busy || !byOrder) return; act('warp_pick', 'latency', 'Основным будет самый быстрый туннель'); } }, 'Самый быстрый'),
+						E('div', { 'class': 'zm-seg-item' + (byOrder ? ' zm-active' : ''), 'click': function() { if (busy || byOrder) return; act('warp_pick', 'order:' + tl.map(function(t) { return t.if; }).join(','), 'Основным будет первый живой туннель по порядку'); } }, 'По порядку')
+					])
+				]));
+				warpCard.appendChild(E('p', { 'class': 'zm-hint' }, (byOrder
+					? 'Трафик идёт через первый живой туннель в списке; порядок меняется стрелками. Упал верхний — Steer возьмёт следующий, а когда верхний оживёт — вернётся на него.'
+					: 'Трафик идёт через самый быстрый живой туннель; упал один — Steer сам переключится на другой.')
+					+ (activeT ? ' Сейчас это WARP ' + activeT.n + '.' : '')
+					+ ' Туннели, попавшие в российский узел Cloudflare (Домодедово и другие), в работу не берутся: заблокированное через них не открывается.'));
+			}
+			function moveTunnel(i, d) {
+				var o = tl.map(function(t) { return t.if; }), j = i + d;
+				if (j < 0 || j >= o.length) return;
+				var x = o[i]; o[i] = o[j]; o[j] = x;
+				act('warp_pick', 'order:' + o.join(','), 'Меняем порядок туннелей');
+			}
 			var deadN = tl.filter(function(t) { return !tunnelLive(t); }).length;
 			var partial = deadN > 0 && deadN < tl.length;
 			if (tl.length) {
@@ -20986,7 +21126,13 @@ return view.extend({
 						} }, 'Новые ключи')
 					]) : '';
 					var st = badge(live ? 'zm-ok' : t.up ? 'zm-warn' : 'zm-bad', live ? 'работает' : t.up ? 'нет связи' : 'не поднят');
-					var cur = data.warp_active && data.exit !== 'vpn' && tl.length > 1 ? (data.warp_active === t.if ? badge('zm-ok', 'трафик идёт здесь') : live ? badge('zm-off', 'запасной') : '') : '';
+					var cur = t.ru ? badge('zm-bad', 'российский узел — не используется')
+						: data.warp_active && data.exit !== 'vpn' && tl.length > 1 ? (data.warp_active === t.if ? badge('zm-ok', 'трафик идёт здесь') : live ? badge('zm-off', 'запасной') : '') : '';
+					var idx = tl.indexOf(t);
+					var move = byOrder && tl.length > 1 ? E('span', { 'style': 'display:inline-flex; gap:4px' }, [
+						E('button', { 'class': 'cbi-button', 'title': 'Выше', 'disabled': busy || idx === 0 ? '' : null, 'style': 'min-width:34px; padding:4px 8px', 'click': function() { moveTunnel(idx, -1); } }, '↑'),
+						E('button', { 'class': 'cbi-button', 'title': 'Ниже', 'disabled': busy || idx === tl.length - 1 ? '' : null, 'style': 'min-width:34px; padding:4px 8px', 'click': function() { moveTunnel(idx, 1); } }, '↓')
+					]) : '';
 					var info = [];
 					if (t.colo) info.push('сервер ' + t.colo + (t.city ? ' (' + t.city + ')' : ''));
 					if (t.seen) info.push('сайты видят: ' + country(t.seen));
@@ -20995,6 +21141,7 @@ return view.extend({
 					if (t.up) info.push('↓ ' + zm.fmtSize(+t.rx || 0) + ' / ↑ ' + zm.fmtSize(+t.tx || 0));
 					warpCard.appendChild(E('div', { 'class': 'zm-row' }, [
 						E('span', { 'class': 'zm-label' }, 'WARP ' + t.n),
+						move,
 						st,
 						cur,
 						E('span', {}, info.join(' · ')),
@@ -21582,7 +21729,6 @@ var LABELS = {
 	rutracker: [ 'rutracker.org', 'Торренты' ],
 	scell: [ 'Supercell', 'Clash, Brawl Stars' ],
 	roblox: [ 'Картинки Roblox', 'tr.rbxcdn.com — аватары и превью' ],
-	riot: [ 'Riot Games', 'Вход в Valorant и League of Legends' ],
 	githubraw: [ 'GitHub Raw', 'githubusercontent.com' ],
 	github: [ 'GitHub', 'Код и релизы' ],
 	tapeop: [ 'tapeop.dev', 'Сайт' ],
@@ -26509,7 +26655,7 @@ return view.extend({
 			secCard.appendChild(E('h3', {}, [ 'Секции ', badge(list.length > 1 || isNew ? 'zm-ok' : 'zm-off', nn(list.length + (isNew ? 1 : 0), 'секция', 'секции', 'секций')) ]));
 			secCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:-6px' }, common
 				? 'Исключения, список «Мимо Forkozz» и настройки действуют для всех секций сразу. Нажмите на секцию, чтобы настроить её подключение, сервисы и устройства.'
-				: 'Каждая секция ведёт свои сервисы через своё подключение. На вкладке «Устройства» можно ограничить её правила выбранными устройствами.'));
+				: 'Каждая секция ведёт свои сервисы через своё подключение. На вкладке «Устройства» можно пустить через секцию весь трафик выбранных устройств или ограничить её правила отдельными устройствами.'));
 			var tiles = list.map(function(s) {
 				var on = s.name === draft.sec, n = secSel(cfg, s), extra = (s.domains || 0) + (s.subnets || 0), f = (s.full || []).length;
 				var what = n ? nn(n, 'список', 'списка', 'списков') : extra ? nn(extra, 'адрес', 'адреса', 'адресов') : 'пусто';
@@ -30928,9 +31074,9 @@ html[data-theme="dark"] .zmw-link-tg, html[data-theme="dark"] .zmw-link-tg:hover
 
 .zmw-login {
 	position: fixed; inset: 0; z-index: 200;
-	display: grid; place-items: center; padding: 20px;
+	display: grid; grid-template-columns: minmax(0, 1fr); place-items: center; padding: 20px; box-sizing: border-box;
 	background: var(--bg);
-	overflow: auto;
+	overflow-x: hidden; overflow-y: auto;
 	animation: zmw-fade .4s ease both;
 }
 .zmw-login.zmw-leave { animation: zmw-fade-out .38s ease both; }
@@ -30959,6 +31105,7 @@ html[data-theme="light"] .zmw-orbs i { opacity: .28; }
 
 .zmw-login-card {
 	position: relative; z-index: 1;
+	box-sizing: border-box; min-width: 0;
 	width: 100%; max-width: 400px;
 	padding: 36px 32px 28px;
 	border-radius: 26px;
@@ -32104,6 +32251,14 @@ if [ -x /usr/bin/netshift ] && [ -f /usr/lib/netshift/constants.sh ]; then
 	else _zmi_warn "Сверить не удалось — откройте вкладку Forkozz и нажмите «Перезапустить»"; fi
 fi
 
+if grep -q '^159\.194\.200\.33 .*riotgames\.com' /etc/hosts 2>/dev/null; then
+	grep -vxF -e '#Riotgames' \
+		-e '159.194.200.33 auth.riotgames.com authenticate.riotgames.com entitlements.auth.riotgames.com clientconfig.rpg.riotgames.com' \
+		-e '159.194.200.33 playerpreferences.riotgames.com login.riotgames.com riotgames.com www.riotgames.com account.riotgames.com' \
+		-e '159.194.200.33 recovery.riotgames.com riot-client.riotgames.com playvalorant.com leagueoflegends.com' /etc/hosts > /etc/hosts.zmtmp 2>/dev/null || true
+	if [ -s /etc/hosts.zmtmp ]; then cat /etc/hosts.zmtmp > /etc/hosts; /etc/init.d/dnsmasq restart >/dev/null 2>&1 || true; fi
+	rm -f /etc/hosts.zmtmp
+fi
 _zmi_say "Убираем временные файлы и остатки прошлых версий"
 _zm_cl="$(/opt/zapret-manager-luci/backend.sh zm_cleanup install 2>/dev/null || true)"
 _zm_cl_f="$(printf '%s' "$_zm_cl" | sed -n 's/.*"freed_flash_kb":\([0-9]*\).*/\1/p')"
