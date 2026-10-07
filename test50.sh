@@ -1,10 +1,10 @@
 #!/bin/sh
-# Version: 2.49
+# Version: 2.50
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
 
-ZM_NEW_VER="2.49"
+ZM_NEW_VER="2.50"
 _zmi_say() { echo -e "${CYAN}==>${NC} $*"; }
 _zmi_ok() { echo -e "   ${GREEN}✓${NC} $*"; }
 _zmi_step() { echo -e "   → $*"; }
@@ -79,7 +79,7 @@ cat > '/opt/zapret-manager-luci/backend.sh.zm-new' << 'ZM_INSTALLER_EOF'
 umask 022
 
 CONF="/etc/config/zapret"
-ZM_VERSION="2.49"
+ZM_VERSION="2.50"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
@@ -7803,6 +7803,7 @@ STL_VPN_OUT="zm_vpn"
 STL_VPN_DEV="zm_vpn"
 
 _stl_say() { echo "==> $*"; }
+_st_onfail() { [ "$(cat /etc/zm-steer/onfail 2>/dev/null)" = drop ] && echo drop || echo direct; }
 _stl_t() { if command -v timeout >/dev/null 2>&1; then timeout "$@"; else shift; "$@"; fi; }
 _stl_out() { case "$1" in vpn) echo "$STL_VPN_OUT" ;; *) echo "$STL_WARP_OUT" ;; esac; }
 _stl_js() { printf '"%s"' "$(esc "$1")"; }
@@ -8023,14 +8024,14 @@ _stl_vpn_outs() {
 		[ "$k" = tun ] || continue
 		case " $STL_VPN_PROTOS " in *" $p "*) ;; *) continue ;; esac
 		if [ "$n" -le 1 ]; then
-			o="$(_stl_tun_json "$STL_VPN_OUT" "$p" "$2" "$b" "$c" "$STL_VPN_DEV"),\"on_fail\":\"direct\"}"
+			o="$(_stl_tun_json "$STL_VPN_OUT" "$p" "$2" "$b" "$c" "$STL_VPN_DEV"),\"on_fail\":\"$(_st_onfail)\"}"
 		else
 			d="$(_stl_member "$p")"
 			o="$o,$(_stl_tun_json "$d" "$p" "$2" "$b" "$c" "$d")}"
 			m="$m${m:+,}\"$d\""
 		fi
 	done < "$1"
-	[ "$n" -le 1 ] || o="\"$STL_VPN_OUT\":{\"kind\":\"group\",\"pick\":\"order\",\"members\":[$m],\"ipv6\":\"off\",\"on_fail\":\"direct\"}$o"
+	[ "$n" -le 1 ] || o="\"$STL_VPN_OUT\":{\"kind\":\"group\",\"pick\":\"order\",\"members\":[$m],\"ipv6\":\"off\",\"on_fail\":\"$(_st_onfail)\"}$o"
 	printf '%s' "$o"
 }
 
@@ -8048,10 +8049,10 @@ _stl_spec() {
 			warp)
 				set -- $(printf '%s\t%s\t%s' "$a" "$b" "$c" | tr "$tab" ' ')
 				if [ $# = 1 ]; then
-					outs="\"$STL_WARP_OUT\":{\"kind\":\"interface\",\"device\":$(_stl_js "$1"),\"ipv6\":\"off\",\"on_fail\":\"direct\"}"
+					outs="\"$STL_WARP_OUT\":{\"kind\":\"interface\",\"device\":$(_stl_js "$1"),\"ipv6\":\"off\",\"on_fail\":\"$(_st_onfail)\"}"
 				else
 					m=""; for d; do m="$m${m:+,}$(_stl_js "$d")"; outs="$outs,$(_stl_js "$d"):{\"kind\":\"interface\",\"device\":$(_stl_js "$d"),\"ipv6\":\"off\"}"; done
-					outs="\"$STL_WARP_OUT\":{\"kind\":\"group\",\"pick\":\"$wp\",\"members\":[$m],\"ipv6\":\"off\",\"on_fail\":\"direct\"}$outs"
+					outs="\"$STL_WARP_OUT\":{\"kind\":\"group\",\"pick\":\"$wp\",\"members\":[$m],\"ipv6\":\"off\",\"on_fail\":\"$(_st_onfail)\"}$outs"
 				fi ;;
 			vpn) outs="$(_stl_vpn_outs "$1" "$a")" ;;
 			svc) _stl_rule; lid="$(_stl_ident "$a")"; lab="$(_stl_label "$b" "$a")"; srs=""; dom=""; pfx="" ;;
@@ -8796,7 +8797,13 @@ _st_peers_drop() {
 	for p in $(uci -q -X show network | sed -n "s/^network\.\([^.=]*\)=amneziawg_$1\$/\1/p"); do uci -q delete "network.$p"; done
 }
 
-_st_warp_is_ru() { case " $ST_RU_COLOS " in *" $1 "*) return 0 ;; esac; return 1; }
+_st_warp_is_ru() { case " $ST_RU_COLOS " in *" $1 "*) return 0 ;; esac; [ "$2" = RU ] && return 0; return 1; }
+_st_if_ru() {
+	local g
+	_st_warp_is_ru "$2" && return 0
+	g="$(awk -v i="$1" -v c="$2" '$1 == i && ($2 == c || c == "" || c == "?") { print $4; exit }' "$ST_WARP_GEO" 2>/dev/null)"
+	[ "$g" = RU ]
+}
 
 _st_wif() { [ "$1" = 1 ] && echo "$ST_WIF1" || echo "zmwarp$1"; }
 _st_wconf() { [ "$1" = 1 ] && echo "$ST_WCONF1" || echo "$ST_DIR/warp$1.conf"; }
@@ -8942,7 +8949,7 @@ _st_port_order() {
 }
 
 _st_warp_scan1() {
-	local dev="$1" peer="$2" busy=" $3 " busyip=" $4 " pool="$5" quick="$6" r="$ST_RUN/scan.$1" cand ip ports port loss rtt torn colo seen city meta pick f cls
+	local dev="$1" peer="$2" busy=" $3 " busyip=" $4 " pool="$5" quick="$6" r="$ST_RUN/scan.$1" cand ip ports port loss rtt torn colo seen city meta pick f cls ccc
 	local tried=0 lim=3 ST_WARP_HS_WAIT="$ST_WARP_HS_WAIT"
 	[ -n "$quick" ] && { lim=1; ST_WARP_HS_WAIT=4; }
 	mkdir -p "$ST_RUN"
@@ -8991,9 +8998,9 @@ _st_warp_scan1() {
 			[ "$(grep -c . "$r.torn")" -ge 6 ] && ! [ -s "$r" ] && ! [ -s "$r.same" ] && ! [ -s "$r.ru" ] && break
 			continue
 		fi
-		seen=""; city=""
+		seen=""; city=""; ccc=""
 		if meta="$(_cf_meta "$dev")"; then
-			set -- $meta; colo="$1"; seen="$2"; shift 3; city="$*"
+			set -- $meta; colo="$1"; seen="$2"; ccc="$3"; shift 3; city="$*"
 			[ "$seen" = - ] && seen=""; [ "$city" = - ] && city=""
 		else
 			colo="$(_st_colo_of "$dev")"
@@ -9013,7 +9020,7 @@ _st_warp_scan1() {
 			fi
 		fi
 		echo "   $ip:$port — потери $loss%, $rtt мс, колония $colo${city:+ ($city)}${seen:+, сайты видят $seen}" >&2
-		if _st_warp_is_ru "$colo"; then echo "$loss $rtt $ip $port $colo" >> "$r.ru"; continue; fi
+		if _st_warp_is_ru "$colo" "$ccc"; then echo "$loss $rtt $ip $port $colo" >> "$r.ru"; continue; fi
 		case "$busy" in *" $colo "*) echo "$loss $rtt $ip $port $colo" >> "$r.same"; continue ;; esac
 		echo "$loss $rtt $ip $port $colo" >> "$r"
 		[ "$(grep -c . "$r")" -ge 3 ] && break
@@ -9129,7 +9136,15 @@ _st_warp_pick() { [ "$(cat "$ST_WARP_PICK" 2>/dev/null)" = order ] && echo order
 
 _st_warp_use() {
 	[ -s "$ST_WARP_UP" ] || return 0
-	awk -v ru=" $ST_RU_COLOS " '{ all = all $1 "\n"; if (!index(ru, " " $2 " ")) good = good $1 "\n" } END { printf "%s", (good != "" ? good : all) }' "$ST_WARP_UP"
+	local i c good="" all=""
+	while read -r i c; do
+		[ -n "$i" ] || continue
+		all="$all$i
+"
+		_st_if_ru "$i" "$c" || good="$good$i
+"
+	done < "$ST_WARP_UP"
+	printf '%s' "${good:-$all}"
 }
 
 _st_warp_reorder() {
@@ -9153,7 +9168,7 @@ _st_colo_guard() {
 	mkdir -p "$ST_RUN"
 	if [ -f "$f" ]; then
 		t="$(date -r "$f" +%s 2>/dev/null || echo 0)"
-		[ $(( $(date +%s) - t )) -lt 600 ] && return 0
+		[ $(( $(date +%s) - t )) -lt 300 ] && return 0
 	fi
 	: > "$f"
 	: > "$ST_WARP_UP.chk"
@@ -9212,7 +9227,7 @@ do_steer_warp_pick() {
 	fi
 	set -- $(_st_warp_use)
 	[ $# -gt 0 ] && echo "   → в работе: $(echo "$*" | sed 's/zmwarp\([0-9]\)/WARP \1/g; s/zmwarp/WARP 1/g; s/ /, /g')"
-	_st_kick
+	_st_respec
 	_rb_say "Готово"
 }
 
@@ -9234,7 +9249,7 @@ _st_warp_order() {
 			k=$(awk -v i="$i" '$1 == i { print NR; exit }' "$ST_WARP_ORDER" 2>/dev/null)
 			[ -n "$k" ] || k=$((900 + pos))
 		fi
-		cls=0; _st_warp_is_ru "$c" && cls=1
+		cls=0; _st_if_ru "$i" "$c" && cls=1
 		printf '%d %012d %03d %s %s\n' "$cls" "$k" "$pos" "$i" "$c" >> "$f.key"
 	done < "$f"
 	sort "$f.key" | awk '{ print $4, $5 }' > "$f"
@@ -9758,7 +9773,7 @@ _st_spec_apply() {
 	_st_model "$@" > "$m"
 	grep -q '^svc	' "$m" || { rm -f "$m"; echo "ОШИБКА: для выбранных сервисов нет ни одного списка"; return 1; }
 	stl_apply "$m" || { rm -f "$m"; return 1; }
-	grep -v '^\(lan\|warp\|vpn\|tun\)	' "$m" > "$ST_DIR/model.svc" 2>/dev/null
+	grep -v '^\(lan\|warp\|wpick\|vpn\|tun\)	' "$m" > "$ST_DIR/model.svc" 2>/dev/null
 	rm -f "$m"
 	_st_own "steer-spec"
 }
@@ -9784,11 +9799,6 @@ _st_kick() {
 
 _st_dns_conflict() {
 	return 1
-	[ -f /etc/config/https-dns-proxy ] || return 1
-	[ -f "$ST_OFF" ] && return 1
-	/etc/init.d/https-dns-proxy running >/dev/null 2>&1 || return 1
-	_st_owns "steer-spec" || return 1
-	[ "$(uci -q get https-dns-proxy.config.force_dns)" != "0" ]
 }
 
 
@@ -9983,11 +9993,12 @@ _st_selfcheck() {
 	fi
 	_st_owns "steer-spec" && stl_v2 || return $bad
 	if [ -n "$(_st_sel)" ] && _st_failopen; then
-		_rb_warn "Ядро steer считает туннель нерабочим и пускает выбранные сервисы напрямую — ждём, пока его сторож проверит туннель снова"
+		_rb_warn "Ядро steer считает туннель нерабочим — ждём, пока его сторож проверит туннель снова"
 		i=0
 		while [ "$i" -lt 30 ] && _st_failopen; do sleep 2; i=$((i + 1)); done
 		if _st_failopen; then
-			echo "[FAIL] Туннель: ядро steer не может пустить через него трафик — сервисы идут напрямую, через провайдера"
+			if [ "$(_st_onfail)" = drop ]; then echo "[FAIL] Туннель: ядро steer не может пустить через него трафик — выбранные сервисы остановлены"
+			else echo "[FAIL] Туннель: ядро steer не может пустить через него трафик — сервисы идут напрямую, через провайдера"; fi
 			logread 2>/dev/null | grep -F 'steer[warn]' | tail -n 6 | sed 's/^[^]]*\]: /   /'
 			bad=1
 		else
@@ -10244,7 +10255,7 @@ _st_wfix_alive() {
 	[ -d "/sys/class/net/$1" ] || return 1
 	hs="$(_st_wfix_hs "$1")"
 	[ "${hs:-0}" -gt 0 ] 2>/dev/null && [ $(( $(date +%s) - hs )) -lt 300 ] || return 1
-	_st_warp_is_ru "$(awk -v i="$1" '$1 == i { print $2; exit }' "$ST_WARP_UP" 2>/dev/null)" && return 1
+	_st_if_ru "$1" "$(awk -v i="$1" '$1 == i { print $2; exit }' "$ST_WARP_UP" 2>/dev/null)" && return 1
 	ping -I "$1" -c 2 -W 3 1.1.1.1 >/dev/null 2>&1 || ping -I "$1" -c 2 -W 3 8.8.8.8 >/dev/null 2>&1
 }
 
@@ -10406,6 +10417,46 @@ _st_spec_quick() {
 	stl_apply "$m"; f=$?
 	rm -f "$m"
 	return $f
+}
+
+_st_spec_quick_warp() {
+	local m="$ST_RUN/model" f id
+	[ -s "$ST_DIR/model.svc" ] && _st_owns "steer-spec" && stl_running && ! _st_use_vpn && [ -s "$ST_WARP_UP" ] || return 2
+	for f in $(awk -F'\t' '$1 == "srs" || $1 == "dom" || $1 == "pfx" { print $2 }' "$ST_DIR/model.svc"); do [ -s "$f" ] || return 2; done
+	_st_engine_ready || return 1
+	mkdir -p "$ST_RUN"
+	{
+		printf 'lan'; for id in $(_zm_lan_devs); do printf '\t%s' "$id"; done; echo
+		printf 'wpick\t%s\n' "$(_st_warp_pick)"
+		printf 'warp'; for id in $(_st_warp_use); do printf '\t%s' "$id"; done; echo
+		cat "$ST_DIR/model.svc"
+	} > "$m"
+	stl_apply "$m"; f=$?
+	rm -f "$m"
+	return $f
+}
+
+_st_respec() {
+	local rc
+	if _st_use_vpn; then _st_spec_quick; else _st_spec_quick_warp; fi
+	rc=$?
+	[ "$rc" = 0 ] && { echo "   ✓ Правила обновлены, списки сервисов не перекачивались"; return 0; }
+	_st_kick
+}
+
+do_steer_onfail() {
+	_st_phase rules
+	rm -f "$ST_STOP_FLAG"
+	mkdir -p "$ST_DIR"
+	if [ "$1" = drop ]; then
+		echo drop > "$ST_DIR/onfail"
+		_rb_say "Туннель недоступен — выбранные сервисы останавливаются, мимо туннеля не идут"
+	else
+		rm -f "$ST_DIR/onfail"
+		_rb_say "Туннель недоступен — выбранные сервисы идут напрямую"
+	fi
+	_st_respec
+	_rb_say "Готово"
 }
 
 # Узел, который сейчас выбран, — для сообщений
@@ -10646,10 +10697,10 @@ steer_status() {
 	if [ "$vup" = true ] && [ "$vexit" = vpn ] && [ "$off" = false ]; then
 		_st_vpn_live; case $? in 0) vlive=true ;; 1) vlive=false ;; esac
 	fi
-	printf '{"running":%s,"phase":"%s","blocker":"%s","installed":%s,"stopped":%s,"version":"%s","steer_running":%s,"channels":%s,"warp_up":%s,"warp_colo":"%s","warp_host":"%s","warp_port":"%s","warp_hs_age":"%s","warp_rx":%s,"warp_tx":%s,"autorestart":"%s","dns_conflict":%s,"doh":"%s","doh_mode":"%s","exit":"%s","vpn_up":%s,"vpn_live":%s,"has_sub":%s,"sub_label":"%s","latest":"%s","ext":%s,"warp_on":%s,"warp_mode":"%s","warp_pick":"%s","warp_own_saved":%s,"tunnels":%s,"warp_active":"%s","catalog":%s,"wfix":%s,"lists_via":%s,"failopen":%s,"hosts_extra":%s,"services":[%s]}\n' \
+	printf '{"running":%s,"phase":"%s","blocker":"%s","installed":%s,"stopped":%s,"version":"%s","steer_running":%s,"channels":%s,"warp_up":%s,"warp_colo":"%s","warp_host":"%s","warp_port":"%s","warp_hs_age":"%s","warp_rx":%s,"warp_tx":%s,"autorestart":"%s","dns_conflict":%s,"doh":"%s","doh_mode":"%s","exit":"%s","vpn_up":%s,"vpn_live":%s,"has_sub":%s,"sub_label":"%s","latest":"%s","ext":%s,"warp_on":%s,"warp_mode":"%s","warp_pick":"%s","onfail":"%s","warp_own_saved":%s,"tunnels":%s,"warp_active":"%s","catalog":%s,"wfix":%s,"lists_via":%s,"failopen":%s,"hosts_extra":%s,"services":[%s]}\n' \
 		"$running" "$(esc "$phase")" "$(esc "$blk")" "$installed" "$off" "$(esc "$ver")" "$run" "${chans:-0}" "$warp_up" "$(esc "$colo")" \
 		"$(esc "$host")" "$(esc "$port")" "$age" "${rx:-0}" "${tx:-0}" "$(_st_cron_get)" "$dns" "$doh" "$(_doh_force_mode)" \
-		"$vexit" "$vup" "$vlive" "$vsub" "$(esc "$(_st_sub_label)")" "$(esc "$latest")" "$ext" "$won" "$(_st_warp_own && echo own || echo auto)" "$(_st_warp_pick)" "$(_st_own_saved && echo true || echo false)" "$(_st_tunnels_json)" "$active" "$(_st_cat_json)" "$(_st_wfix_json)" "$([ -f "$ST_DIR/lists.via" ] && echo true || echo false)" "$failed" "$(_hosts_extra)" "$svc"
+		"$vexit" "$vup" "$vlive" "$vsub" "$(esc "$(_st_sub_label)")" "$(esc "$latest")" "$ext" "$won" "$(_st_warp_own && echo own || echo auto)" "$(_st_warp_pick)" "$(_st_onfail)" "$(_st_own_saved && echo true || echo false)" "$(_st_tunnels_json)" "$active" "$(_st_cat_json)" "$(_st_wfix_json)" "$([ -f "$ST_DIR/lists.via" ] && echo true || echo false)" "$failed" "$(_hosts_extra)" "$svc"
 }
 
 _st_active_if() {
@@ -10682,7 +10733,7 @@ _st_tunnels_json() {
 				[ "$seen" = - ] && seen=""; [ "$cc" = - ] && cc=""; [ "$city" = - ] && city=""
 			fi
 			pos="$(awk -v i="$i" '$1 == i { print NR; exit }' "$ST_WARP_UP" 2>/dev/null)"
-			isru=false; [ -n "$colo" ] && _st_warp_is_ru "$colo" && isru=true
+			isru=false; [ -n "$colo" ] && _st_if_ru "$i" "$colo" && isru=true
 			out="$out$sep{\"n\":$n,\"if\":\"$i\",\"pos\":${pos:-0},\"ru\":$isru,\"up\":$up,\"colo\":\"$(esc "$colo")\",\"city\":\"$(esc "$city")\",\"cc\":\"$(esc "$cc")\",\"seen\":\"$(esc "$seen")\",\"host\":\"$(esc "$host")\",\"port\":\"$(esc "$port")\",\"hs_age\":\"$age\",\"rx\":$rx,\"tx\":$tx}"
 			sep=","
 		fi
@@ -11610,7 +11661,7 @@ steer_action() {
 	local action="$1" mode="$2" w
 	case "$action" in diag|wfix_tick|explain) ;; *) rm -f "$ST_VPN_PROBE" ;; esac
 	case "$action" in
-		install|apply|start|stop|remove|warp_restart|warp_endpoint|warp_recreate|lists|engine|warp_setup|warp_fix|warp_fixkeys|warp_own|warp_mode|warp_pick)
+		install|apply|start|stop|remove|warp_restart|warp_endpoint|warp_recreate|lists|engine|warp_setup|warp_fix|warp_fixkeys|warp_own|warp_mode|warp_pick|onfail)
 			_st_running && { echo '{"error":"дождитесь окончания текущей операции"}'; return 1; }
 			case "$action" in
 				warp_endpoint|warp_recreate|warp_fix|warp_fixkeys|warp_pick)
@@ -11632,6 +11683,14 @@ steer_action() {
 				warp_mode)
 					[ "$mode" = auto ] || { echo '{"error":"неизвестный режим"}'; return 1; }
 					job_start steer do_steer_warp_auto ;;
+				onfail)
+					case "$mode" in drop|direct) ;; *) echo '{"error":"неизвестный режим"}'; return 1 ;; esac
+					if _st_installed && [ ! -f "$ST_OFF" ] && _st_owns "steer-spec"; then job_start steer do_steer_onfail "$mode"
+					else
+						mkdir -p "$ST_DIR"
+						if [ "$mode" = drop ]; then echo drop > "$ST_DIR/onfail"; else rm -f "$ST_DIR/onfail"; fi
+						printf '{"ok":true,"saved":true}\n'
+					fi ;;
 				warp_pick)
 					_st_warp_on || { echo '{"error":"WARP ещё не подключён"}'; return 1; }
 					case "$mode" in
@@ -11731,6 +11790,19 @@ steer_action() {
 			printf '{"ok":true}\n' ;;
 		wfix) _st_wfix_set "$mode" ;;
 		wfix_tick) _st_wfix_tick; printf '{"ok":true}\n' ;;
+		conns)
+			stl_present && stl_running || { echo '{"error":"Steer не запущен"}'; return 1; }
+			w="$(_stl_t 15 steer conns 2>/dev/null | tr -d '\n\r')"
+			case "$w" in '{'*'"conns"'*) ;; *) echo '{"error":"ядро Steer не отдало список соединений — нужна версия 2.0 или новее"}'; return 1 ;; esac
+			if [ "$(printf '%s' "$w" | sed 's/}, *{/}\n{/g' | wc -l)" -gt 400 ]; then
+				printf '%s' "$w" | sed 's/}, *{/}\n{/g' | head -n 400 | tr '\n' ',' | sed 's/,$//'
+				w="$(printf '%s' "$w" | sed -n 's/.*"total": *\([0-9][0-9]*\).*/\1/p')"
+				printf '],"shown":400,"total":%s,"truncated":true}\n' "${w:-400}"
+			else printf '%s\n' "$w"; fi ;;
+		dnslog)
+			stl_present && stl_running || { echo '{"error":"Steer не запущен"}'; return 1; }
+			w="$(_stl_t 15 steer dns-log 2>/dev/null | tr -d '\n\r')"
+			case "$w" in '{'*'"names"'*) printf '%s\n' "$w" ;; *) echo '{"error":"ядро Steer не отдало журнал имён — нужна версия 2.0 или новее"}'; return 1 ;; esac ;;
 		wfix_reset)
 			rm -f "$ST_WFIX_STATE"; printf '{"ok":true}\n' ;;
 		warp_own_get)
@@ -20507,7 +20579,7 @@ return view.extend({
 		data = data || {};
 		var wrap = E('div', { 'class': 'zm-wrap' });
 		var hostsWarn = zm.hostsWarn('Steer');
-		var busy = false, lastAction = '', pick = null, autoBusy = false, diagRes = null, diagBusy = false;
+		var busy = false, lastAction = '', pick = null, autoBusy = false, diagRes = null, diagBusy = false, viewKind = null, viewRes = null, viewBusy = false;
 		var warpPick = null, ownTa = null, ownOpen = false, ownLoaded = false;
 
 		var mainCard = E('div', { 'class': 'zm-card' });
@@ -20610,6 +20682,17 @@ return view.extend({
 
 		function warpName() { return data.warp_mode === 'own' ? 'Свой WARP' : 'WARP'; }
 
+		function failText() { return data.onfail === 'drop' ? 'сервисы остановлены' : 'сервисы идут напрямую'; }
+
+		function outName(o) {
+			if (!o) return '';
+			if (o === 'zm_warp') return warpName();
+			if (o === 'zm_vpn' || /^zmv_/.test(o)) return 'VPN';
+			var t = (data.tunnels || []).filter(function(x) { return x.if === o; })[0];
+			if (t) return data.warp_mode === 'own' ? 'Свой WARP' : 'WARP ' + t.n;
+			return o;
+		}
+
 		function selectedCount() {
 			var n = (data.services || []).filter(function(s) { return s.on; }).length;
 			if (!n && (parseInt(data.channels, 10) || 0) > 0) n = 1;
@@ -20640,12 +20723,12 @@ return view.extend({
 			if (data.exit === 'none') return badge('zm-warn', 'подключите WARP или VPN');
 			if (data.exit === 'vpn') {
 				if (data.steer_running && data.vpn_up && data.vpn_live === false) return badge('zm-bad', 'трафик не идёт');
-				if (data.steer_running && data.failopen) return badge('zm-bad', 'VPN не принят — сервисы идут напрямую');
+				if (data.steer_running && data.failopen) return badge('zm-bad', 'VPN не принят — ' + failText());
 				if (data.steer_running && data.vpn_up) return badge('zm-ok', 'работает');
 				if (data.steer_running) return badge('zm-warn', 'подключаемся к узлу');
 				return badge('zm-bad', 'не работает');
 			}
-			if (data.steer_running && data.failopen) return badge('zm-bad', 'туннель не принят — сервисы идут напрямую');
+			if (data.steer_running && data.failopen) return badge('zm-bad', 'туннель не принят — ' + failText());
 			var t = data.tunnels || [], age = parseInt(data.warp_hs_age, 10);
 			var live = t.length ? t.filter(tunnelLive).length > 0 : (!isNaN(age) && age < 300);
 			if (data.steer_running && data.warp_up && live) return badge('zm-ok', 'работает');
@@ -20681,6 +20764,17 @@ return view.extend({
 				else if (data.exit === 'warp') mainCard.appendChild(row('Сервисы идут через', badge(ts[1], warpName() + ' · ' + ts[0])));
 				else mainCard.appendChild(row('Сервисы идут через', badge('zm-warn', 'туннель не подключён — выберите вкладку WARP или VPN')));
 				mainCard.appendChild(row('Через туннель', E('span', {}, n ? n + ' ' + plural(n, 'сервис', 'сервиса', 'сервисов') : 'ничего не выбрано')));
+				var isDrop = data.onfail === 'drop';
+				mainCard.appendChild(E('div', { 'class': 'zm-row' }, [
+					E('span', { 'class': 'zm-label' }, 'Если туннель упал'),
+					E('div', { 'class': 'zm-seg' }, [
+						E('div', { 'class': 'zm-seg-item' + (!isDrop ? ' zm-active' : ''), 'click': function() { if (busy || !isDrop) return; act('onfail', 'direct', 'Без туннеля сервисы пойдут напрямую'); } }, 'Пустить напрямую'),
+						E('div', { 'class': 'zm-seg-item' + (isDrop ? ' zm-active' : ''), 'click': function() { if (busy || isDrop) return; act('onfail', 'drop', 'Без туннеля сервисы будут остановлены'); } }, 'Остановить')
+					])
+				]));
+				mainCard.appendChild(E('p', { 'class': 'zm-hint' }, isDrop
+					? 'Пока туннель не работает, выбранные сервисы не открываются совсем — мимо туннеля, через провайдера, они не пойдут. Остальной интернет работает как обычно.'
+					: 'Пока туннель не работает, выбранные сервисы идут через провайдера, как без Steer: что не заблокировано — откроется, но ваш настоящий адрес будет виден.'));
 				if (data.doh) {
 					var DOHN = { cloudflare: 'Cloudflare', google: 'Google', quad9: 'Quad9', xbox: 'XBOX', comss: 'Comss', dnsai: 'DNS-AI', yandex_family: 'Яндекс Семейный', yandex_safe: 'Яндекс Безопасный', geohide_ru: 'GeoHide RU', geohide_eu: 'GeoHide EU', geohide_us: 'GeoHide US', multi: 'несколько серверов', other: 'свой сервер' };
 					mainCard.appendChild(row('Шифрованный DNS', E('span', { 'style': 'display:inline-flex; align-items:center; gap:8px; flex-wrap:wrap' }, [
@@ -21000,8 +21094,62 @@ return view.extend({
 			}
 			checkCard.appendChild(E('div', { 'class': 'zm-actions' }, [
 				E('button', { 'class': 'cbi-button', 'disabled': diagBusy || busy ? '' : null, 'click': function() { runDiag(false); } },
-					diagBusy ? 'Проверяем…' : 'Проверить')
+					diagBusy ? 'Проверяем…' : 'Проверить'),
+				E('button', { 'class': 'cbi-button' + (viewKind === 'conns' ? ' cbi-button-action' : ''), 'disabled': viewBusy ? '' : null, 'click': function() { loadView('conns'); } }, 'Соединения'),
+				E('button', { 'class': 'cbi-button' + (viewKind === 'dnslog' ? ' cbi-button-action' : ''), 'disabled': viewBusy ? '' : null, 'click': function() { loadView('dnslog'); } }, 'Недавние сайты'),
+				viewKind ? E('button', { 'class': 'cbi-button', 'click': function() { viewKind = null; viewRes = null; renderCheck(); } }, 'Скрыть') : ''
 			]));
+			if (!viewKind) return;
+			checkCard.appendChild(E('p', { 'class': 'zm-hint' }, viewKind === 'conns'
+				? 'Что прямо сейчас идёт через туннель: устройство, адрес назначения и выход. Список берётся из памяти роутера в момент нажатия, никуда не сохраняется и не отправляется.'
+				: 'Какие сайты недавно запрашивались и попали ли они в туннель. Журнал живёт только в памяти Steer, на диск не пишется, никуда не отправляется и обнуляется при перезапуске; кто именно спрашивал, в нём нет.'));
+			if (viewBusy || !viewRes) { checkCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Загружаем…')); return; }
+			if (viewRes.error) { checkCard.appendChild(E('div', { 'class': 'zm-refresh-banner zm-show' }, viewRes.error)); return; }
+			var lines = [], total = 0, LIMIT = 200;
+			if (viewKind === 'conns') {
+				var agg = {}, keys = [];
+				(viewRes.conns || []).forEach(function(c) {
+					var k = [ c.src, c.dst, c.dport || '', c.proto, c.out || '' ].join('|');
+					if (!agg[k]) { agg[k] = { c: c, n: 0 }; keys.push(k); }
+					agg[k].n++;
+				});
+				total = keys.length;
+				keys.slice(0, LIMIT).forEach(function(k) {
+					var a = agg[k], c = a.c, v6 = String(c.dst).indexOf(':') >= 0;
+					lines.push([ badge(c.out ? 'zm-ok' : 'zm-off', outName(c.out) || 'выход убран'),
+						String(c.src) + ' → ' + (c.dport ? (v6 ? '[' + c.dst + ']' : c.dst) + ':' + c.dport : c.dst) + ' · ' + String(c.proto) + (a.n > 1 ? ' · ×' + a.n : '') ]);
+				});
+				if (!total) checkCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Через туннель сейчас ничего не идёт. Откройте на устройстве выбранный сервис и нажмите «Соединения» ещё раз.'));
+				else checkCard.appendChild(row('Через туннель', E('span', {}, (viewRes.total || (viewRes.conns || []).length) + ' ' + plural(viewRes.total || (viewRes.conns || []).length, 'соединение', 'соединения', 'соединений') + (viewRes.truncated ? ' · показана часть' : ''))));
+			} else {
+				var names = viewRes.names || [];
+				total = names.length;
+				names.slice(0, LIMIT).forEach(function(x) {
+					var ago = parseInt(x.ago, 10);
+					lines.push([ badge(x.out ? 'zm-ok' : 'zm-off', outName(x.out) || 'мимо туннеля'),
+						String(x.name) + (x.channel && x.out ? ' · ' + x.channel : '') + ' · ' + (isNaN(ago) ? '' : ago < 60 ? ago + ' с назад' : fmtAge(ago)) + (x.count > 1 ? ' · ×' + x.count : '') ]);
+				});
+				if (viewRes.running === false) checkCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Резолвер Steer не запущен — он нужен только сервисам, выбранным по доменам.'));
+				else if (!total) checkCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Журнал пока пуст — откройте на устройстве любой сайт и нажмите «Недавние сайты» ещё раз.'));
+			}
+			if (lines.length) {
+				var box = E('div', { 'style': 'max-height:340px; overflow:auto; margin-top:8px; padding:4px 12px; border:1px solid rgba(127,127,127,.2); border-radius:10px' });
+				lines.forEach(function(l) {
+					box.appendChild(E('div', { 'class': 'zm-row', 'style': 'flex-wrap:nowrap; align-items:flex-start' }, [ l[0], E('span', { 'style': 'min-width:0; overflow-wrap:anywhere; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:12px' }, l[1]) ]));
+				});
+				checkCard.appendChild(box);
+				if (total > LIMIT) checkCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Показаны первые ' + LIMIT + ' из ' + total + '.'));
+			}
+		}
+
+		function loadView(kind) {
+			if (viewBusy) return;
+			viewKind = kind; viewRes = null; viewBusy = true;
+			renderCheck();
+			zm.steerAction(kind, 'x').then(function(res) {
+				viewBusy = false; viewRes = res || { error: 'Роутер не ответил' };
+				renderCheck();
+			}).catch(function() { viewBusy = false; viewRes = { error: 'Роутер не ответил' }; renderCheck(); });
 		}
 
 		function renderWarp() {
@@ -21079,8 +21227,10 @@ return view.extend({
 				warpCard.appendChild(E('div', { 'class': 'zm-row' }, [
 					E('span', { 'class': 'zm-label' }, 'Туннель'),
 					badge(live0 ? 'zm-ok' : t0.up ? 'zm-warn' : 'zm-bad', live0 ? 'работает' : t0.up ? 'нет связи' : 'не поднят'),
+					t0.ru ? badge('zm-bad', 'российский узел') : '',
 					E('span', {}, ep0 ? [ ep0, info0.length ? ' · ' + info0.join(' · ') : '' ] : info0.join(' · '))
 				]));
+				if (t0.ru) warpCard.appendChild(E('div', { 'class': 'zm-refresh-banner zm-show' }, 'Этот конфиг выводит трафик через российский узел Cloudflare — заблокированное через него не откроется. Замените конфиг или точку входа в нём.'));
 				if (ownOpen) { ownEditor('Сохранить и подключить', 'Меняем конфиг WARP'); return; }
 				warpCard.appendChild(E('div', { 'class': 'zm-actions' }, [
 					E('button', { 'class': 'cbi-button', 'disabled': busy ? '' : null, 'click': function() { act('warp_restart', '', 'Перезапускаем туннель'); } }, 'Перезапустить туннель'),
@@ -21106,7 +21256,11 @@ return view.extend({
 					: 'Трафик идёт через самый быстрый живой туннель; упал один — Steer сам переключится на другой.')
 					+ (activeT ? ' Сейчас это WARP ' + activeT.n + '.' : '')
 					+ ' Туннели, попавшие в российский узел Cloudflare (Домодедово и другие), в работу не берутся: заблокированное через них не открывается.'));
+				if (!byOrder && data.version && verLt(data.version, '2.0.3'))
+					warpCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Ядро Steer ' + data.version + ' скорость туннелей не измеряет и берёт первый живой. Чтобы выбор шёл по скорости, нажмите «Обновить движок» на карточке Steer.'));
 			}
+			if (tl.length && tl.every(function(t) { return t.ru; }))
+				warpCard.appendChild(E('div', { 'class': 'zm-refresh-banner zm-show' }, 'Все туннели попали в российский узел Cloudflare — заблокированное через них не откроется. Нажмите «Сменить точки входа».'));
 			function moveTunnel(i, d) {
 				var o = tl.map(function(t) { return t.if; }), j = i + d;
 				if (j < 0 || j >= o.length) return;
@@ -21490,7 +21644,7 @@ return view.extend({
 				else if (pr.state === 'probing') st = badge('zm-warn', 'ищем рабочий узел · ' + pr.node + ' из ' + pr.total);
 				else if (pr.state === 'failed') st = badge('zm-bad', 'ни один узел не ответил');
 				else if (pr.state === 'no_such_node') st = badge('zm-bad', 'выбранного узла больше нет');
-				else if (v.failed) st = badge('zm-bad', (subData.node ? 'узел «' + subData.node + '» не отвечает' : 'узел не отвечает') + (v.why ? ' — ' + v.why : '') + ' · сервисы идут напрямую');
+				else if (v.failed) st = badge('zm-bad', (subData.node ? 'узел «' + subData.node + '» не отвечает' : 'узел не отвечает') + (v.why ? ' — ' + v.why : '') + ' · ' + failText());
 				else st = badge(data.stopped ? 'zm-off' : 'zm-warn', data.stopped ? 'Steer выключен' : 'подключаемся');
 				subCard.appendChild(row('Туннель', st));
 			}
@@ -26663,7 +26817,7 @@ return view.extend({
 				var fa = (s.all || []).length;
 				if (fa) what = (n || extra || f ? what + ' · ' : '') + 'весь трафик: ' + fa;
 				return node(s.label, secConn(s), on, function() { open(s.name); },
-					E('span', { 'class': 'zm-lat ' + (!s.enabled ? 'zm-lat-bad' : n || extra || f || fa ? 'zm-lat-good' : 'zm-lat-none') }, s.enabled ? what : 'выключена'),
+					E('span', { 'class': 'zm-lat ' + (!s.enabled ? 'zm-lat-bad' : n || extra || f || fa ? 'zm-lat-good' : 'zm-lat-none'), 'style': 'flex:0 1 auto; white-space:normal; min-width:0; text-align:right; overflow-wrap:anywhere' }, s.enabled ? what : 'выключена'),
 					'zm-sec' + (s.enabled ? '' : ' zm-node-dead'));
 			});
 			if (isNew) tiles.push(node(secName(), 'ещё не сохранена', true, function() {}, E('span', { 'class': 'zm-lat zm-lat-mid' }, 'черновик'), 'zm-sec'));
