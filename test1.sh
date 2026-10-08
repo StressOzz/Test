@@ -7798,7 +7798,7 @@ do_doh_install() {
 		echo "==> Пакет https-dns-proxy уже стоит — включаем службу"
 		/etc/init.d/https-dns-proxy enable >/dev/null 2>&1
 		_doh_force_apply
-		echo "==> Готово — выберите провайдера ниже"
+		echo "==> Готово — выберите сервер ниже"
 		return 0
 	fi
 	_ensure_deps
@@ -7807,7 +7807,7 @@ do_doh_install() {
 	echo "==> Устанавливаем https-dns-proxy и luci-app-https-dns-proxy"
 	$INSTALL https-dns-proxy luci-app-https-dns-proxy >&2 || { echo "ОШИБКА установки"; return 1; }
 	_doh_force_apply
-	echo "==> Готово, DNS over HTTPS установлен — выберите провайдера ниже"
+	echo "==> Готово, DNS over HTTPS установлен — выберите сервер ниже"
 }
 
 do_doh_remove() {
@@ -7951,6 +7951,11 @@ _doh_url_of() {
 		geohide_ru)    echo "https://geohide.ru/dns-query" ;;
 		geohide_eu)    echo "https://eu.geohide.ru/dns-query" ;;
 		geohide_us)    echo "https://us.geohide.ru/dns-query" ;;
+		https://*)
+			# свой сервер: адрес попадёт в конфиг, поэтому только буквы, цифры и обычные знаки ссылки
+			printf '%s' "$1" | grep -qE '^https://[A-Za-z0-9.-]+\.[A-Za-z0-9-]+(:[0-9]{1,5})?(/[A-Za-z0-9._~%/+=&?-]*)?$' || return 1
+			[ "${#1}" -le 200 ] || return 1
+			echo "$1" ;;
 		*) return 1 ;;
 	esac
 }
@@ -8059,7 +8064,7 @@ _doh_res_json() {
 # Кнопка «Проверить»: отвечает ли провайдер, без изменения настроек
 doh_probe() {
 	local url
-	url="$(_doh_url_of "$1")" || { echo '{"error":"неизвестный провайдер"}'; return 1; }
+	url="$(_doh_url_of "$1")" || { echo '{"error":"адрес сервера не подходит — нужна ссылка вида https://…/dns-query"}'; return 1; }
 	printf '{%s}\n' "$(_doh_res_json "$(_doh_probe "$url" "$(_doh_boots_for "$1")")")"
 }
 
@@ -8104,7 +8109,7 @@ doh_check() {
 
 doh_set() {
 	local provider="$1" url bootstrap="" n prev=""
-	url="$(_doh_url_of "$provider")" || { echo '{"error":"неизвестный провайдер"}'; return 1; }
+	url="$(_doh_url_of "$provider")" || { echo '{"error":"адрес сервера не подходит — нужна ссылка вида https://…/dns-query"}'; return 1; }
 	bootstrap="$(_doh_boot_of "$provider")"
 	[ -s "$DOH_BOOT_FILE" ] && bootstrap="$(head -n1 "$DOH_BOOT_FILE")"
 	local installed; installed=$(doh_status | grep -o '"installed":[a-z]*' | cut -d: -f2)
@@ -8133,14 +8138,14 @@ doh_set() {
 			mv -f "$_doh_file.zm-prev" "$_doh_file"
 			/etc/init.d/https-dns-proxy restart >/dev/null 2>&1
 			/etc/init.d/dnsmasq restart >/dev/null 2>&1
-			echo '{"error":"Через этого провайдера DNS на роутере не заработал — вернули прежние настройки"}'
+			echo '{"error":"Через этот сервер DNS на роутере не заработал — вернули прежние настройки"}'
 		else
-			echo '{"error":"Через этого провайдера DNS на роутере не заработал — выберите другого"}'
+			echo '{"error":"Через этот сервер DNS на роутере не заработал — выберите другой"}'
 		fi
 		return 1
 	fi
 	rm -f "$_doh_file.zm-prev"
-	printf '{"ok":true,"provider":"%s"}\n' "$provider"
+	printf '{"ok":true,"provider":"%s"}\n' "$(esc "$provider")"
 }
 
 RB_SHARE="/usr/share/zm-redbtn"
@@ -20804,32 +20809,51 @@ cat > '/www/luci-static/resources/view/zapret-manager/doh.js' << 'ZM_INSTALLER_E
 var E = (function(raw) { return function() { var a = Array.prototype.slice.call(arguments), i = a.length - 1; if (i >= 1 && (typeof a[i] === 'string' || typeof a[i] === 'number')) a[i] = [ String(a[i]) ]; return raw.apply(null, a); }; })(window.E);
 
 var PROVIDERS = [
-	{ id: 'google', label: 'Google' },
-	{ id: 'cloudflare', label: 'Cloudflare' },
-	{ id: 'quad9', label: 'Quad9' },
-	{ id: 'xbox', label: 'XBOX' },
-	{ id: 'comss', label: 'Comss' },
-	{ id: 'dnsai', label: 'DNS-AI' },
-	{ id: 'yandex_family', label: 'Яндекс Семейный' },
-	{ id: 'yandex_safe', label: 'Яндекс Безопасный' },
-	{ id: 'geohide_ru', label: 'GeoHide RU' },
-	{ id: 'geohide_eu', label: 'GeoHide EU' },
-	{ id: 'geohide_us', label: 'GeoHide US' }
+	{ id: 'google', label: 'Google', url: 'https://dns.google/dns-query', boot: '8.8.8.8, 8.8.4.4' },
+	{ id: 'cloudflare', label: 'Cloudflare', url: 'https://cloudflare-dns.com/dns-query', boot: '1.1.1.1, 1.0.0.1' },
+	{ id: 'quad9', label: 'Quad9', url: 'https://dns.quad9.net/dns-query', boot: '9.9.9.9, 149.112.112.112' },
+	{ id: 'xbox', label: 'XBOX', url: 'https://xbox-dns.ru/dns-query' },
+	{ id: 'comss', label: 'Comss', url: 'https://dns.comss.one/dns-query' },
+	{ id: 'dnsai', label: 'DNS-AI', url: 'https://dns.dns-ai.ru/dns-query' },
+	{ id: 'yandex_family', label: 'Яндекс Семейный', url: 'https://family.dot.dns.yandex.net/dns-query', boot: '77.88.8.7, 77.88.8.3' },
+	{ id: 'yandex_safe', label: 'Яндекс Безопасный', url: 'https://safe.dot.dns.yandex.net/dns-query', boot: '77.88.8.88, 77.88.8.2' },
+	{ id: 'geohide_ru', label: 'GeoHide RU', url: 'https://geohide.ru/dns-query' },
+	{ id: 'geohide_eu', label: 'GeoHide EU', url: 'https://eu.geohide.ru/dns-query' },
+	{ id: 'geohide_us', label: 'GeoHide US', url: 'https://us.geohide.ru/dns-query' }
+];
+var BOOT_STD = '1.1.1.1, 8.8.8.8';
+var OWN_RE = /^https:\/\/[A-Za-z0-9.-]+\.[A-Za-z0-9-]+(:\d{1,5})?(\/[A-Za-z0-9._~%\/+=&?-]*)?$/;
+var INTRO = 'Шифрованный DNS для всей сети: интернет-провайдер не видит и не подменяет запросы устройств.';
+
+var GROUPS = [
+	{ title: 'Обычные', hint: 'только шифрование, ничего не подменяют', ids: [ 'google', 'cloudflare', 'quad9' ] },
+	{ title: 'С обходом геоблокировок', hint: 'открывают сервисы, закрытые для России', ids: [ 'xbox', 'comss', 'dnsai', 'geohide_ru', 'geohide_eu', 'geohide_us' ] },
+	{ title: 'Семейные', hint: 'блокируют опасные сайты, «Семейный» — ещё и взрослые', ids: [ 'yandex_safe', 'yandex_family' ] }
 ];
 
-/* Группы: чем провайдеры отличаются и какой выбирать */
-var GROUPS = [
-	{ title: 'Обычные', hint: 'Просто шифруют запросы и ничего не подменяют. Подходят, если нужно только спрятать DNS от провайдера интернета.',
-	  ids: [ 'google', 'cloudflare', 'quad9' ] },
-	{ title: 'С обходом геоблокировок', hint: 'Для сервисов, которые сами закрылись для России (ChatGPT, часть игр и магазинов), отдают адреса своих прокси — и такие сервисы открываются.',
-	  ids: [ 'xbox', 'comss', 'dnsai', 'geohide_ru', 'geohide_eu', 'geohide_us' ] },
-	{ title: 'Семейные', hint: '«Безопасный» блокирует вредоносные и мошеннические сайты, «Семейный» — ещё и сайты для взрослых.',
-	  ids: [ 'yandex_safe', 'yandex_family' ] }
-];
+function prov(id) {
+	for (var i = 0; i < PROVIDERS.length; i++) if (PROVIDERS[i].id === id) return PROVIDERS[i];
+	return null;
+}
+
+function isUrl(id) { return /^https:\/\//.test(id || ''); }
 
 function label(id) {
-	for (var i = 0; i < PROVIDERS.length; i++) if (PROVIDERS[i].id === id) return PROVIDERS[i].label;
-	return '';
+	var p = prov(id);
+	return p ? p.label : isUrl(id) ? host(id) : '';
+}
+
+function latClass(ms) {
+	if (!(ms > 0)) return 'zm-lat-none';
+	if (ms < 400) return 'zm-lat-good';
+	if (ms < 900) return 'zm-lat-mid';
+	return 'zm-lat-bad';
+}
+
+function seg(items, cur, pick) {
+	return E('div', { 'class': 'zm-seg' }, items.map(function(it) {
+		return E('div', { 'class': 'zm-seg-item' + (it.id === cur ? ' zm-active' : ''), 'click': function() { if (it.id !== cur) pick(it.id); } }, it.label);
+	}));
 }
 
 function badge(cls, text) {
@@ -20860,20 +20884,47 @@ return view.extend({
 		var busy = false, pickProv = null, pickForce = null, bootOwn = !!data.bootstrap_custom;
 		/* Проверка настоящим запросом. Результаты рисуются на месте, без перерисовки страницы:
 		 * иначе ответ роутера сбивал бы фокус в поле Bootstrap DNS. */
-		var probe = {}, probing = false, subs = {}, health = null, healthSeq = 0;
+		var probe = {}, probing = false, subs = {}, health = null, healthSeq = 0, own = [];
 		var svcBox = E('span', { 'class': 'zm-doh-svc' });
-		var probeBtn = E('button', { 'class': 'cbi-button', 'click': runProbe }, 'Проверить провайдеров');
+		var probeBtn = E('button', { 'class': 'cbi-button', 'click': runProbe }, 'Проверить все');
+		var ownInput = E('input', { 'type': 'text', 'class': 'cbi-input-text', 'spellcheck': 'false', 'autocapitalize': 'off', 'placeholder': 'Свой: https://dns.example.com/dns-query', 'style': 'flex:1; min-width:220px' });
+		ownInput.addEventListener('keydown', function(ev) { if (ev.key === 'Enter') { ev.preventDefault(); addOwn(); } });
+
+		/* Что стоит сейчас: сервер из списка или свой адрес */
+		function cur() {
+			var l = data.resolvers || [];
+			if (data.current) return data.current;
+			return l.length === 1 && !l[0].provider && isUrl(l[0].url) ? l[0].url : '';
+		}
+
+		function syncOwn() {
+			var c = cur();
+			if (isUrl(c) && own.indexOf(c) < 0) own.unshift(c);
+		}
+
+		function addOwn() {
+			var v = ownInput.value.trim(), i;
+			if (!v) return;
+			if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+			if (/^[A-Za-z0-9.-]+\.[A-Za-z0-9-]+$/.test(v)) v = 'https://' + v + '/dns-query';
+			if (!OWN_RE.test(v) || v.length > 200) { zm.toast('Нужна ссылка вида https://dns.example.com/dns-query или просто адрес сервера', 'warning'); return; }
+			for (i = 0; i < PROVIDERS.length; i++) if (PROVIDERS[i].url === v) { v = PROVIDERS[i].id; break; }
+			if (isUrl(v) && own.indexOf(v) < 0) own.push(v);
+			ownInput.value = '';
+			pickProv = v === cur() ? null : v;
+			render();
+		}
 
 		function sub(id) {
-			if (!subs[id]) subs[id] = E('span', { 'class': 'zm-tile-sub' });
+			if (!subs[id]) subs[id] = E('span', { 'class': 'zm-lat' });
 			return subs[id];
 		}
 
 		function paintProbe(id) {
 			var el = sub(id), r = probe[id];
-			el.className = 'zm-tile-sub' + (r && r !== 'wait' ? (r.ok ? ' zm-sub-ok' : ' zm-sub-bad') : '');
-			el.textContent = !r ? '' : r === 'wait' ? 'проверяем…' : r.ok ? r.ms + ' мс' : 'не отвечает';
-			if (el.parentNode) el.parentNode.title = r && r !== 'wait' && !r.ok ? label(id) + ': ' + r.err : '';
+			el.className = 'zm-lat' + (r === 'wait' ? ' zm-lat-none' : r ? ' ' + (r.ok ? latClass(r.ms) : 'zm-lat-bad') : '');
+			el.textContent = !r ? '' : r === 'wait' ? '…' : r.ok ? r.ms + ' мс' : 'не отвечает';
+			el.title = r && r !== 'wait' && !r.ok ? r.err : '';
 		}
 
 		function probeOne(id) {
@@ -20892,7 +20943,7 @@ return view.extend({
 		function runProbe() {
 			if (probing) return;
 			if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
-			var queue = PROVIDERS.map(function(p) { return p.id; }), left = 0, good = 0;
+			var queue = PROVIDERS.map(function(p) { return p.id; }).concat(own), total = queue.length, left = 0, good = 0;
 			probing = true;
 			probeBtn.disabled = true;
 			probeBtn.textContent = 'Проверяем…';
@@ -20901,8 +20952,8 @@ return view.extend({
 					if (left) return;
 					probing = false;
 					probeBtn.disabled = false;
-					probeBtn.textContent = 'Проверить провайдеров';
-					zm.toast(good ? 'Отвечают ' + good + ' из ' + PROVIDERS.length : 'Ни один провайдер не ответил — проверьте интернет на роутере', good ? 'info' : 'error');
+					probeBtn.textContent = 'Проверить все';
+					zm.toast(good ? 'Отвечают ' + good + ' из ' + total : 'Ни один сервер не ответил — проверьте интернет на роутере', good ? 'info' : 'error');
 					return;
 				}
 				left++;
@@ -20917,8 +20968,8 @@ return view.extend({
 			if (health && health !== 'wait' && !health.local) {
 				svcBox.appendChild(badge('zm-bad', 'не отвечает'));
 				svcBox.appendChild(E('span', { 'class': 'zm-hint', 'style': 'margin:0' }, health.ok
-					? 'Провайдер отвечает, а DNS на роутере — нет. Попробуйте выбрать другого провайдера.'
-					: 'Провайдер: ' + health.err + '. Выберите другого.'));
+					? 'Сервер отвечает, а DNS на роутере — нет. Выберите другой сервер.'
+					: health.err.charAt(0).toUpperCase() + health.err.slice(1) + '. Выберите другой сервер.'));
 				return;
 			}
 			if (health && health !== 'wait') { svcBox.appendChild(badge('zm-ok', 'отвечает' + (health.ok ? ' · ' + health.ms + ' мс' : ''))); return; }
@@ -20946,7 +20997,7 @@ return view.extend({
 
 		function pending() {
 			var n = 0;
-			if (pickProv && pickProv !== data.current) n++;
+			if (pickProv && pickProv !== cur()) n++;
 			if (pickForce && pickForce !== curForce()) n++;
 			if (bootChanged()) n++;
 			return n;
@@ -20957,13 +21008,13 @@ return view.extend({
 			var steps = [];
 			var bw = bootWant();
 			if (bootChanged()) steps.push(function() {
-				logLines.push('   → ' + (bw ? 'Ставим Bootstrap DNS: ' + bw : 'Возвращаем Bootstrap DNS провайдеров'));
+				logLines.push('   → ' + (bw ? 'Ставим Bootstrap DNS: ' + bw.split(',').join(', ') : 'Возвращаем Bootstrap DNS в режим «Авто»'));
 				return zm.dohBootstrapSet(bw).then(function(res) {
 					if (res.error) throw new Error(res.error);
-					logLines.push('   ✓ Bootstrap DNS ' + (res.bootstrap ? res.bootstrap : 'как у провайдеров'));
+					logLines.push('   ✓ Bootstrap DNS: ' + (res.bootstrap ? res.bootstrap.split(',').join(', ') : 'авто'));
 				});
 			});
-			if (pickProv && pickProv !== data.current) steps.push(function() {
+			if (pickProv && pickProv !== cur()) steps.push(function() {
 				var id = pickProv;
 				logLines.push('   → Проверяем, отвечает ли ' + label(id));
 				zm.renderLog(logEl, logLines.join('\n'));
@@ -21007,7 +21058,7 @@ return view.extend({
 		}
 
 		function refresh() {
-			return zm.dohStatus().then(function(res) { if (res && !res.error) data = res; render(); checkHealth(); }, function() { render(); });
+			return zm.dohStatus().then(function(res) { if (res && !res.error) data = res; syncOwn(); render(); checkHealth(); }, function() { render(); });
 		}
 
 		function job(call, name, startText, okText, errText) {
@@ -21029,15 +21080,14 @@ return view.extend({
 			hostsWarn.set(!!(data.installed && data.hosts_extra));
 			card.innerHTML = '';
 			if (!data.installed && data.forkozz && !busy) {
-				zm.blockCard(card, 'DNS over HTTPS', 'Шифрованный DNS для всей сети: запросы устройств уходят к выбранному провайдеру по HTTPS, и провайдер интернета их не видит и не подменяет.', 'Стоит Forkozz — он сам шифрует DNS. Чтобы поставить DoH, удалите Forkozz.');
+				zm.blockCard(card, 'DNS over HTTPS', INTRO, 'Стоит Forkozz — он сам шифрует DNS. Чтобы поставить DoH, удалите Forkozz.');
 				if (logEl.classList.contains('zm-show')) card.appendChild(logEl);
-				renderBoot();
 				renderForce();
 				bar.set(false, false);
 				return;
 			}
 			card.appendChild(E('h3', {}, 'DNS over HTTPS'));
-			card.appendChild(E('p', { 'class': 'zm-hint' }, 'Шифрованный DNS для всей сети: запросы устройств уходят к выбранному провайдеру по HTTPS, и провайдер интернета их не видит и не подменяет.'));
+			card.appendChild(E('p', { 'class': 'zm-hint' }, INTRO));
 			card.appendChild(row('Пакет', data.installed ? badge('zm-ok', 'установлен') : badge('zm-off', 'не установлен')));
 
 			var list = data.resolvers || [];
@@ -21063,73 +21113,74 @@ return view.extend({
 					job(zm.dohRemove, 'doh_remove', 'Удаляем DNS over HTTPS', 'DNS over HTTPS удалён', 'Ошибка удаления');
 				} }, 'Удалить') ]
 				: [ E('button', { 'class': 'cbi-button cbi-button-positive', 'click': function() {
-					job(zm.dohInstall, 'doh_install', 'Устанавливаем DNS over HTTPS', 'DNS over HTTPS установлен — выберите провайдера', 'Ошибка установки');
+					job(zm.dohInstall, 'doh_install', 'Устанавливаем DNS over HTTPS', 'DNS over HTTPS установлен — выберите сервер', 'Ошибка установки');
 				} }, 'Установить DNS over HTTPS') ]));
 
 			if (data.installed) {
-				card.appendChild(E('div', { 'class': 'zm-doh-head' }, [ E('h4', {}, 'Провайдер'), probeBtn ]));
-				var curProv = pickProv || data.current;
-				GROUPS.forEach(function(g) {
+				card.appendChild(E('div', { 'class': 'zm-doh-head' }, [ E('h4', {}, 'Сервер'), probeBtn ]));
+				var curProv = pickProv || cur();
+				var nodes = function(ids) {
+					return E('div', { 'class': 'zm-nodes zm-nodes-3' }, ids.map(function(id) {
+						var p = prov(id);
+						paintProbe(id);
+						return E('div', {
+							'class': 'zm-node' + (curProv === id ? ' zm-active' : ''),
+							'click': function() {
+								if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+								pickProv = id === cur() ? null : id;
+								render();
+							}
+						}, [
+							E('div', { 'class': 'zm-node-name' }, [ label(id) ]),
+							E('div', { 'class': 'zm-node-foot' }, [ E('span', {}, [ (p ? p.url : id).replace(/^https:\/\//, '') ]), sub(id) ])
+						]);
+					}));
+				};
+				GROUPS.concat(own.length ? [ { title: 'Свои', hint: '', ids: own } ] : []).forEach(function(g) {
 					card.appendChild(E('div', { 'class': 'zm-doh-group' }, [
 						E('div', { 'class': 'zm-doh-group-head' }, [ E('b', {}, g.title), E('span', { 'class': 'zm-hint' }, g.hint) ]),
-						E('div', { 'class': 'zm-grid' }, g.ids.map(function(id) {
-							var tile = E('div', {
-								'class': 'zm-tile' + (curProv === id ? ' zm-active' : ''),
-								'click': function() {
-									if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
-									pickProv = id === data.current ? null : id;
-									render();
-								}
-							}, [ E('span', {}, label(id)), sub(id) ]);
-							paintProbe(id);
-							return tile;
-						}))
+						nodes(g.ids)
 					]));
 				});
-				if (list.length > 1) card.appendChild(E('p', { 'class': 'zm-hint' }, 'Сейчас настроено несколько резолверов сразу, поэтому ни одна кнопка не подсвечена. Выбор провайдера заменит их одним.'));
-				else if (list.length === 1 && !data.current) card.appendChild(E('p', { 'class': 'zm-hint' }, 'Сейчас стоит резолвер не из списка — он настроен вручную. Выбор провайдера заменит его.'));
+				card.appendChild(E('div', { 'class': 'zm-actions' }, [ ownInput, E('button', { 'class': 'cbi-button', 'click': addOwn }, 'Добавить') ]));
+				if (list.length > 1) card.appendChild(E('p', { 'class': 'zm-hint' }, 'Сейчас настроено несколько серверов сразу, поэтому ни один не выделен. Выбор заменит их одним.'));
+				renderBoot(curProv);
 			}
 			card.appendChild(logEl);
 			renderForce();
-			renderBoot();
 			var n = pending();
 			bar.set(n > 0 || busy, busy, n ? 'Есть несохранённые изменения' : '');
 		}
 
-		var bootCard = E('div', { 'class': 'zm-card', 'style': 'display:none' });
 		var bootInput = E('input', { 'type': 'text', 'class': 'cbi-input-text', 'spellcheck': 'false', 'autocapitalize': 'off', 'placeholder': '77.88.8.8, 1.1.1.1', 'style': 'flex:1; min-width:220px; max-width:420px' });
-		bootInput.value = data.bootstrap_custom || '';
+		bootInput.value = (data.bootstrap_custom || '').split(',').join(', ');
 		function bootWant() { return bootOwn ? bootInput.value.split(/[\s,;]+/).filter(Boolean).join(',') : ''; }
 		function bootChanged() { var w = bootWant(); return !(bootOwn && !w) && w !== (data.bootstrap_custom || ''); }
-		function bootReset() { bootOwn = !!data.bootstrap_custom; bootInput.value = data.bootstrap_custom || ''; }
+		function bootReset() { bootOwn = !!data.bootstrap_custom; bootInput.value = (data.bootstrap_custom || '').split(',').join(', '); }
 		bootInput.addEventListener('input', function() {
 			var n = pending();
 			bar.set(n > 0 || busy, busy, n ? 'Есть несохранённые изменения' : '');
 		});
 
-		function renderBoot() {
-			bootCard.innerHTML = '';
-			bootCard.style.display = data.installed ? '' : 'none';
-			if (!data.installed) return;
-			var m = bootOwn ? 'own' : 'auto';
-			bootCard.appendChild(E('h3', {}, 'Bootstrap DNS'));
-			bootCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:-6px' }, 'Обычный DNS, через который https-dns-proxy один раз узнаёт адрес самого DoH-сервера (например, dns.google). Нужен, если провайдер блокирует или подменяет эти адреса.'));
-			bootCard.appendChild(E('div', { 'class': 'zm-grid' }, [ { id: 'auto', label: 'Как у провайдера' }, { id: 'own', label: 'Свои адреса' } ].map(function(o) {
-				return E('div', { 'class': 'zm-tile' + (m === o.id ? ' zm-active' : ''), 'click': function() {
-					if (busy || m === o.id) return;
-					bootOwn = o.id === 'own';
-					render();
-					if (o.id === 'own') setTimeout(function() { bootInput.focus(); }, 0);
-				} }, o.label);
+		function renderBoot(sel) {
+			var m = bootOwn ? 'own' : 'auto', l = data.resolvers || [], p = prov(sel), now;
+			card.appendChild(E('h4', { 'style': 'margin:18px 0 4px' }, 'Bootstrap DNS'));
+			card.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:0' }, 'Обычный DNS, через который роутер узнаёт адрес самого DoH-сервера.'));
+			card.appendChild(row('Адреса', seg([ { id: 'auto', label: 'Авто' }, { id: 'own', label: 'Свои' } ], m, function(v) {
+				if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+				bootOwn = v === 'own';
+				render();
+				if (bootOwn) setTimeout(function() { bootInput.focus(); }, 0);
 			})));
 			if (m === 'own') {
-				bootCard.appendChild(E('div', { 'class': 'zm-actions' }, [ bootInput ]));
-				bootCard.appendChild(E('p', { 'class': 'zm-hint' }, 'IP-адреса через запятую, до 6 штук, можно IPv6. Применяются ко всем резолверам DoH.'));
-			} else {
-				var list = data.resolvers || [];
-				var cur = list.map(function(r) { return (label(r.provider) || host(r.url)) + ': ' + (r.bootstrap || 'по умолчанию https-dns-proxy (1.1.1.1, 8.8.8.8)'); });
-				bootCard.appendChild(E('p', { 'class': 'zm-hint' }, [ cur.length ? 'Сейчас: ' + cur.join('; ') + '.' : 'Для Google, Cloudflare, Quad9 и Яндекса берутся их собственные адреса, для остальных — адреса по умолчанию https-dns-proxy.' ]));
+				card.appendChild(E('div', { 'class': 'zm-actions' }, [ bootInput ]));
+				card.appendChild(E('p', { 'class': 'zm-hint' }, 'IP-адреса через запятую, до 6 штук.'));
+				return;
 			}
+			/* что будет стоять в режиме «Авто» для выбранного сервера */
+			now = p && p.boot ? p.boot : BOOT_STD;
+			if (!data.bootstrap_custom && !pickProv && l.length === 1 && l[0].bootstrap) now = l[0].bootstrap.split(',').filter(function(x) { return x.indexOf(':') < 0; }).join(', ') || now;
+			card.appendChild(E('p', { 'class': 'zm-hint' }, 'Сейчас: ' + now + (p && p.boot ? ' — адреса самого ' + p.label + '.' : ' — стандартные.')));
 		}
 
 		var FORCE = [
@@ -21160,11 +21211,11 @@ return view.extend({
 				: 'Все устройства принудительно получают DNS через DoH, даже если в них вручную прописан другой DNS. Работает и вместе со Steer.'));
 		}
 
+		syncOwn();
 		render();
 		checkHealth();
 		wrap.appendChild(hostsWarn);
 		wrap.appendChild(card);
-		wrap.appendChild(bootCard);
 		wrap.appendChild(forceCard);
 		wrap.appendChild(bar);
 		return wrap;
@@ -26063,16 +26114,13 @@ html.zm-theme-dark .zm-tile:not(.zm-active):not(.zm-tile-off) {
 .zm-tile.zm-tile-off:hover { border-color: #cf222e; }
 .zm-tile.zm-tile-pending { opacity: .55; border-style: dashed; cursor: not-allowed; }
 .zm-tile.zm-tile-pending:hover { border-color: rgba(0,0,0,.1); transform: none; }
-.zm-tile-sub { display: block; margin-top: 2px; font-size: 11.5px; font-weight: 500; opacity: .7; }
-.zm-tile-sub:empty { display: none; }
-.zm-tile-sub.zm-sub-ok { color: var(--ok, #1a7f37); opacity: 1; }
-.zm-tile-sub.zm-sub-bad { color: var(--bad, #cf222e); opacity: 1; }
 .zm-doh-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin: 16px 0 0; }
 .zm-doh-head h4 { margin: 0; }
 .zm-doh-head .cbi-button { margin: 0; }
 .zm-doh-group { margin-top: 14px; }
-.zm-doh-group-head { display: flex; align-items: baseline; gap: 2px 10px; flex-wrap: wrap; margin-bottom: 8px; font-size: 13px; }
-.zm-doh-group-head .zm-hint { margin: 0; flex: 1 1 280px; }
+.zm-doh-group-head { display: flex; align-items: baseline; gap: 2px 10px; flex-wrap: wrap; font-size: 13px; }
+.zm-doh-group-head .zm-hint { margin: 0; }
+.zm-doh-group .zm-node { min-height: 0; gap: 6px; }
 .zm-doh-svc { display: inline-flex; align-items: center; gap: 6px 10px; flex-wrap: wrap; min-width: 0; }
 
 .zm-log {
