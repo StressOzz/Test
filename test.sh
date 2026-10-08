@@ -553,17 +553,23 @@ _zm_net_recover() {
 # Совет перезагрузиться печатается одной строкой в самом конце, после итога удаления (_zm_rb_note).
 _zm_after_remove() {
 	if _zm_net_recover; then
-		_zm_reboot_hint "$1 удалён. Желательно перезагрузить роутер — так сбросятся оставшиеся соединения и правила."
-		ZM_RB_NOTE="   Желательно перезагрузить роутер — кнопка «Перезагрузить роутер» появилась внизу страницы на 2 минуты"
+		_zm_reboot_hint "$1 удалён. Желательно перезагрузить роутер."
+		ZM_RB_NOTE="   Желательно перезагрузить роутер — кнопка «Перезагрузить» появилась внизу страницы на 2 минуты"
 	else
 		_zm_reboot_hint "$1 удалён, но интернет на роутере не отвечает. Перезагрузите роутер."
-		ZM_RB_NOTE="!! Перезагрузите роутер — кнопка «Перезагрузить роутер» появилась внизу страницы на 2 минуты"
+		ZM_RB_NOTE="!! Перезагрузите роутер — кнопка «Перезагрузить» появилась внизу страницы на 2 минуты"
 	fi
 }
 _zm_rb_note() {
 	[ -n "$ZM_RB_NOTE" ] && echo "$ZM_RB_NOTE"
 	ZM_RB_NOTE=""
 	return 0
+}
+
+# Крестик на плашке «перезагрузите роутер»: подсказка больше не нужна
+reboot_hint_clear() {
+	rm -f "$ZM_REBOOT_HINT"
+	printf '{"ok":true}\n'
 }
 
 system_reboot() {
@@ -639,6 +645,14 @@ _zm_net_restore() {
 	fi
 	rm -f "$ZM_RESOLV_BAK.r" "$ZM_RESOLV_BAK.owners"
 	echo "   ✓ Обычный DNS роутера возвращён"
+}
+
+# Хост репозитория пакетов, прописанный на роутере сейчас (выбранное зеркало или downloads.openwrt.org)
+_zm_feed_host() {
+	local h
+	h="$(_mirror_host)"
+	h="${h%%/*}"
+	echo "${h:-downloads.openwrt.org}"
 }
 
 _zm_net_prepare() {
@@ -7924,22 +7938,174 @@ doh_bootstrap_set() {
 	printf '{"ok":true,"bootstrap":"%s"}\n' "$(esc "$out")"
 }
 
-doh_set() {
-	local provider="$1" url bootstrap="" n
-	case "$provider" in
-		cloudflare)  url="https://cloudflare-dns.com/dns-query"; bootstrap="1.1.1.1,1.0.0.1,2606:4700:4700::1111,2606:4700:4700::1001" ;;
-		google)      url="https://dns.google/dns-query";         bootstrap="8.8.8.8,8.8.4.4,2001:4860:4860::8888,2001:4860:4860::8844" ;;
-		quad9)       url="https://dns.quad9.net/dns-query";      bootstrap="9.9.9.9,149.112.112.112,2620:fe::fe,2620:fe::9" ;;
-		xbox)        url="https://xbox-dns.ru/dns-query" ;;
-		comss)       url="https://dns.comss.one/dns-query" ;;
-		dnsai)       url="https://dns.dns-ai.ru/dns-query" ;;
-		yandex_family) url="https://family.dot.dns.yandex.net/dns-query"; bootstrap="77.88.8.7,77.88.8.3" ;;
-		yandex_safe) url="https://safe.dot.dns.yandex.net/dns-query"; bootstrap="77.88.8.88,77.88.8.2" ;;
-		geohide_ru)  url="https://geohide.ru/dns-query" ;;
-		geohide_eu)  url="https://eu.geohide.ru/dns-query" ;;
-		geohide_us)  url="https://us.geohide.ru/dns-query" ;;
-		*) echo '{"error":"неизвестный провайдер"}'; return 1 ;;
+_doh_url_of() {
+	case "$1" in
+		cloudflare)    echo "https://cloudflare-dns.com/dns-query" ;;
+		google)        echo "https://dns.google/dns-query" ;;
+		quad9)         echo "https://dns.quad9.net/dns-query" ;;
+		xbox)          echo "https://xbox-dns.ru/dns-query" ;;
+		comss)         echo "https://dns.comss.one/dns-query" ;;
+		dnsai)         echo "https://dns.dns-ai.ru/dns-query" ;;
+		yandex_family) echo "https://family.dot.dns.yandex.net/dns-query" ;;
+		yandex_safe)   echo "https://safe.dot.dns.yandex.net/dns-query" ;;
+		geohide_ru)    echo "https://geohide.ru/dns-query" ;;
+		geohide_eu)    echo "https://eu.geohide.ru/dns-query" ;;
+		geohide_us)    echo "https://us.geohide.ru/dns-query" ;;
+		*) return 1 ;;
 	esac
+}
+
+# Bootstrap DNS, через который https-dns-proxy узнаёт адрес DoH-сервера: свои → провайдера → по умолчанию
+_doh_boots_for() {
+	local b=""
+	[ -s "$DOH_BOOT_FILE" ] && b="$(head -n1 "$DOH_BOOT_FILE")"
+	[ -n "$b" ] || b="$(_doh_boot_of "$1")"
+	echo "${b:-1.1.1.1,8.8.8.8}"
+}
+
+_doh_t() {
+	local s="$1"
+	shift
+	# у старого busybox другой синтаксис timeout — тогда обходимся без него
+	if timeout 1 true >/dev/null 2>&1; then timeout "$s" "$@"; else "$@"; fi
+}
+
+# Адреса DoH-сервера — через Bootstrap DNS, а не через DNS роутера: тот может как раз не работать
+_doh_host_ips() {
+	local host="$1" b ips n=0
+	case "$host" in *[!0-9.]*) ;; *) echo "$host"; return 0 ;; esac
+	for b in $(printf '%s' "$2" | tr ',' ' '); do
+		case "$b" in *:*) continue ;; esac
+		[ "$n" -ge 2 ] && break
+		n=$((n + 1))
+		ips="$(_doh_t 3 nslookup -type=a "$host" "$b" 2>/dev/null | awk '
+			/^Name:/ { f = 1 }
+			f && /^Address/ { for (i = 2; i <= NF; i++) if ($i ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/) { print $i; break } }' | head -n 3 | tr '\n' ',')"
+		[ -n "$ips" ] && { echo "${ips%,}"; return 0; }
+	done
+	return 1
+}
+
+# Настоящий DoH-запрос (example.com, A) напрямую к серверу. Печатает «ok МС» или «fail ПРИЧИНА».
+# Мало, чтобы адрес открывался: нужен код 200, тип application/dns-message и ответ с адресом внутри.
+_doh_probe() {
+	local url="$1" t="${3:-/tmp/zm-doh.$$}" rest hp host port ips res="" w rc code ct hx f1 f2 an r
+	rest="${url#*://}"; hp="${rest%%/*}"
+	case "$hp" in
+		*:*) host="${hp%%:*}"; port="${hp##*:}" ;;
+		*) host="$hp"; case "$url" in http://*) port=80 ;; *) port=443 ;; esac ;;
+	esac
+	printf '\022\064\001\000\000\001\000\000\000\000\000\000\007example\003com\000\000\001\000\001' > "$t.q"
+	: > "$t.b"
+	ips="$(_doh_host_ips "$host" "$2")"
+	case "$host" in *[!0-9.]*) [ -n "$ips" ] && res="--resolve $host:$port:$ips" ;; esac
+	w="$(curl -q --noproxy '*' -s -o "$t.b" -w '%{http_code} %{time_pretransfer} %{time_starttransfer} %{content_type}' \
+		--connect-timeout 3 --max-time 5 $res \
+		-H 'Content-Type: application/dns-message' -H 'Accept: application/dns-message' \
+		--data-binary "@$t.q" "$url" 2>/dev/null)"
+	rc=$?
+	case "$rc" in
+		0) ;;
+		6) r="fail resolve" ;;
+		28) r="fail timeout" ;;
+		35|51|53|58|59|60|77|83|90|91) r="fail tls" ;;
+		*) r="fail connect" ;;
+	esac
+	if [ "$rc" = 0 ]; then
+		code="${w%% *}"
+		ct="$(printf '%s' "$w" | cut -d' ' -f4- | tr 'A-Z' 'a-z')"
+		if [ "$code" != 200 ]; then r="fail http_$code"
+		else
+			case "$ct" in *application/dns-message*) r="" ;; *) r="fail bad" ;; esac
+			if [ -z "$r" ]; then
+				hx="$(head -c 8 "$t.b" 2>/dev/null | hexdump -v -e '1/1 "%02x"' 2>/dev/null)"
+				if [ "${#hx}" = 16 ]; then
+					f1=$((0x$(printf '%s' "$hx" | cut -c5-6)))
+					f2=$((0x$(printf '%s' "$hx" | cut -c7-8)))
+					an=$((0x$(printf '%s' "$hx" | cut -c13-16)))
+					if [ "$(printf '%s' "$hx" | cut -c1-4)" != 1234 ] || [ "$f1" -lt 128 ]; then r="fail bad"
+					elif [ $((f2 % 16)) != 0 ]; then r="fail rcode"
+					elif [ "$an" = 0 ]; then r="fail empty"
+					fi
+				elif [ ! -s "$t.b" ]; then r="fail bad"
+				fi
+			fi
+			[ -n "$r" ] || r="ok $(printf '%s' "$w" | awk '{ gsub(/,/, "."); v = ($3 - $2) * 1000; if (v < 1) v = 1; printf "%d", v + 0.5 }')"
+		fi
+	fi
+	rm -f "$t.q" "$t.b"
+	echo "$r"
+}
+
+_doh_err_text() {
+	case "$1" in
+		resolve) echo "не удалось узнать адрес сервера" ;;
+		timeout) echo "сервер не ответил за 5 секунд" ;;
+		tls) echo "не установилось защищённое соединение" ;;
+		connect) echo "сервер недоступен" ;;
+		http_*) echo "сервер ответил ошибкой ${1#http_}" ;;
+		rcode|empty) echo "сервер ответил, но адрес сайта не выдал" ;;
+		*) echo "ответ сервера не похож на DNS" ;;
+	esac
+}
+
+_doh_res_json() {
+	case "$1" in
+		"ok "*) printf '"ok":true,"ms":%s' "${1#ok }" ;;
+		*) printf '"ok":false,"err":"%s"' "$(esc "$(_doh_err_text "${1#fail }")")" ;;
+	esac
+}
+
+# Кнопка «Проверить»: отвечает ли провайдер, без изменения настроек
+doh_probe() {
+	local url
+	url="$(_doh_url_of "$1")" || { echo '{"error":"неизвестный провайдер"}'; return 1; }
+	printf '{%s}\n' "$(_doh_res_json "$(_doh_probe "$url" "$(_doh_boots_for "$1")")")"
+}
+
+# Отвечает ли DNS на самом роутере: сначала сам https-dns-proxy на своём порту, затем весь путь через dnsmasq.
+# Для второго берём имя, которого нет в кэше: ответ «такого сайта нет» тоже значит, что DNS работает.
+_doh_local_ok() {
+	local port="${1:-5053}" o
+	_doh_t 3 nslookup -type=a example.com "127.0.0.1:$port" >/dev/null 2>&1 && return 0
+	o="$(_doh_t 3 nslookup -type=a "zm$$-$(date +%s).example.com" 127.0.0.1 2>&1)" && return 0
+	printf '%s' "$o" | grep -qi 'NXDOMAIN'
+}
+
+_doh_wait_local() {
+	local t0 port="$1"
+	t0="$(date +%s)"
+	while :; do
+		sleep 1
+		_doh_local_ok "$port" && return 0
+		[ $(( $(date +%s) - t0 )) -ge 8 ] && return 1
+	done
+}
+
+# Строка «Служба» на странице: не «процесс запущен», а «DNS действительно отвечает»
+doh_check() {
+	local url port boots loc=false r pp t="/tmp/zm-doh.$$"
+	url="$(uci -q get 'https-dns-proxy.@https-dns-proxy[0].resolver_url')"
+	if [ -z "$url" ] || [ -f "$DOH_OFF_FLAG" ] || ! /etc/init.d/https-dns-proxy running >/dev/null 2>&1; then
+		echo '{"skip":true}'
+		return 0
+	fi
+	port="$(uci -q get 'https-dns-proxy.@https-dns-proxy[0].listen_port')"
+	boots="$(uci -q get 'https-dns-proxy.@https-dns-proxy[0].bootstrap_dns')"
+	[ -n "$boots" ] || boots="$(_doh_boots_for "$(_doh_provider_of "$url")")"
+	_doh_probe "$url" "$boots" "$t" > "$t.r" 2>/dev/null &
+	pp=$!
+	_doh_local_ok "${port:-5053}" && loc=true
+	wait "$pp" 2>/dev/null
+	r="$(cat "$t.r" 2>/dev/null)"
+	rm -f "$t.r"
+	printf '{"local":%s,%s}\n' "$loc" "$(_doh_res_json "${r:-fail connect}")"
+}
+
+doh_set() {
+	local provider="$1" url bootstrap="" n prev=""
+	url="$(_doh_url_of "$provider")" || { echo '{"error":"неизвестный провайдер"}'; return 1; }
+	bootstrap="$(_doh_boot_of "$provider")"
 	[ -s "$DOH_BOOT_FILE" ] && bootstrap="$(head -n1 "$DOH_BOOT_FILE")"
 	local installed; installed=$(doh_status | grep -o '"installed":[a-z]*' | cut -d: -f2)
 	if [ "$installed" != "true" ]; then
@@ -7948,6 +8114,7 @@ doh_set() {
 	fi
 	local force
 	force="$(_doh_force_want)"
+	[ -f "$_doh_file" ] && cp -p "$_doh_file" "$_doh_file.zm-prev" 2>/dev/null && prev=1
 	{
 		_doh_main_text "$force"
 		echo ""
@@ -7960,6 +8127,19 @@ doh_set() {
 	/etc/init.d/https-dns-proxy reload >/dev/null 2>&1
 	/etc/init.d/https-dns-proxy restart >/dev/null 2>&1
 	/etc/init.d/dnsmasq restart >/dev/null 2>&1
+	# применили — проверяем, что DNS роутера отвечает; если нет, возвращаем прежние настройки
+	if ! _doh_wait_local 5053; then
+		if [ -n "$prev" ]; then
+			mv -f "$_doh_file.zm-prev" "$_doh_file"
+			/etc/init.d/https-dns-proxy restart >/dev/null 2>&1
+			/etc/init.d/dnsmasq restart >/dev/null 2>&1
+			echo '{"error":"Через этого провайдера DNS на роутере не заработал — вернули прежние настройки"}'
+		else
+			echo '{"error":"Через этого провайдера DNS на роутере не заработал — выберите другого"}'
+		fi
+		return 1
+	fi
+	rm -f "$_doh_file.zm-prev"
 	printf '{"ok":true,"provider":"%s"}\n' "$provider"
 }
 
@@ -14434,12 +14614,54 @@ _fk_lists_report() {
 	return 0
 }
 
+# Настоящие ошибки загрузки списков — только из этого запуска (после метки _fk_log_mark).
+# Попытка, после которой список всё же скачался («Download failed [1/3]»), ошибкой не считается;
+# если Forkozz отчитался, что списки загружены, про его попытки молчим совсем.
 _fk_lists_errors() {
 	local e
-	e="$(logread 2>/dev/null | tail -n 300 | grep -iE 'netshift|sing-box' | grep -iE 'rule-set|rule_set|ruleset|list|download' | grep -iE 'error|fail|timeout|refused|not found|ошиб' | tail -n 6 | sed 's/^[^]]*\]: //')"
+	[ -n "$FK_LOGMARK" ] || return 0
+	e="$(logread 2>/dev/null | awk -v m="$FK_LOGMARK" '
+		function base(u) { sub(/[?#].*$/, "", u); sub(/^.*\//, "", u); return u }
+		function why(s,   c) {
+			c = ""
+			if (match(s, /error_class=[a-z_]+/)) c = substr(s, RSTART + 12, RLENGTH - 12)
+			if (c == "operation_not_permitted") return "запрос заблокировал сам роутер: правила или туннель ещё не были готовы"
+			if (c ~ /timeout|timed_out/) return "сервер не ответил вовремя"
+			if (c ~ /dns|resolve/) return "не удалось узнать адрес сервера"
+			if (c ~ /refused|unreachable|network/) return "сервер недоступен"
+			if (c ~ /tls|ssl|cert/) return "не установилось защищённое соединение"
+			if (c ~ /not_found|404/) return "такого файла на сервере нет"
+			return c
+		}
+		function add(s, own) { if (seen[s]++) return; out[++n] = s; if (own) nn++ }
+		!f { if (index($0, m)) f = 1; next }
+		{
+			if (!match($0, /(netshift|sing-box)(\[[0-9]+\])?: /)) next
+			src = substr($0, RSTART, 8)
+			l = substr($0, RSTART + RLENGTH)
+		}
+		src != "netshift" {
+			if (l ~ /(ERROR|FATAL)/ && l ~ /rule[-_]?set/) add("sing-box: " substr(l, 1, 200))
+			next
+		}
+		{ sub(/^\[[a-z]+\] /, "", l) }
+		l ~ /Starting lists update/ { k = 0; for (i = 1; i <= n; i++) if (out[i] ~ /^sing-box: /) out[++k] = out[i]; n = k; nn = 0; last = ""; res = ""; split("", seen); for (i = 1; i <= n; i++) seen[out[i]] = 1; next }
+		l ~ /Lists update completed successfully/ { res = "ok"; next }
+		l ~ /Lists update failed/ { res = "fail"; next }
+		l ~ /\[[0-9]+\/[0-9]+\]/ && l ~ /[Ff]ail|[Ee]rror/ { last = why(l); next }
+		l ~ /^Download .* list failed/ { split(l, a, " "); add("Не скачался список " base(a[2]) (last != "" ? " — " last : ""), 1); last = ""; next }
+		l ~ /Failed to decompile binary rule set/ { add("Набор правил не раскрылся — его адреса пропущены", 1); next }
+		l ~ /DNS check failed/ { add("DNS не ответил — списки не скачаны", 1); next }
+		l ~ /GitHub connection check failed/ { add("GitHub недоступен — списки не скачаны", 1); next }
+		END {
+			if (res == "ok") { k = 0; for (i = 1; i <= n; i++) if (out[i] ~ /^sing-box: /) out[++k] = out[i]; n = k }
+			else if (res == "fail" && !nn) add("Forkozz сообщил об ошибке загрузки списков" (last != "" ? " — " last : ""), 1)
+			from = n > 8 ? n - 7 : 1
+			for (i = from; i <= n; i++) print out[i]
+		}')"
 	[ -n "$e" ] || return 0
-	echo "!! В журнале есть ошибки загрузки списков:"
-	printf '%s\n' "$e" | sed 's/^/   /'
+	echo "!! Не все списки загрузились:"
+	printf '%s\n' "$e" | sed 's/^/   ✗ /'
 	return 0
 }
 
@@ -14520,7 +14742,7 @@ do_fk_install() {
 	[ "$legacy" = 1 ] && _fk_say "Найден прежний движок Forkop — переводим Forkozz на новый движок и переносим настройки, секции и исключения"
 
 	_fk_feeds_official || true
-	_zm_net_prepare downloads.openwrt.org || return 1
+	_zm_net_prepare "$(_zm_feed_host)" || return 1
 	_zm_dns_ok codeload.github.com || _zm_net_heal
 	_fk_say "Обновляем список пакетов"
 	$UPDATE || { echo "ОШИБКА: список пакетов не обновился — проверьте интернет"; return 1; }
@@ -14990,7 +15212,8 @@ do_fk_lists() {
 		rc=1
 	fi
 	wait "$lp" 2>/dev/null || rc=1
-	sed 's/\x1b\[[0-9;]*m//g' "$out" 2>/dev/null | grep -v '^[[:space:]]*$' | grep -iE 'error|fail|ошиб' | grep -v '^jq: ' | tail -n 8 | sed 's/^/   /'
+	# вывод самой загрузки — только если она не удалась; попытки, за которыми был повтор («[1/3]»), не ошибки
+	[ "$rc" = 0 ] || sed 's/\x1b\[[0-9;]*m//g' "$out" 2>/dev/null | grep -v '^[[:space:]]*$' | grep -iE 'error|fail|ошиб' | grep -v '^jq: ' | grep -vE '\[[0-9]+/[0-9]+\]' | tail -n 8 | sed 's/^/   /'
 	rm -f "$out"
 	if [ "$rc" != 0 ]; then
 		echo "!! Скачивание списков завершилось с ошибкой — работают прежние"
@@ -15113,7 +15336,7 @@ do_fk_singbox() {
 			rm -f "$out"
 			_fk_sb_drop_pkgs ;;
 		*)
-			_zm_net_prepare downloads.openwrt.org || return 1
+			_zm_net_prepare "$(_zm_feed_host)" || return 1
 			$UPDATE >/dev/null 2>&1 || echo "   ! Список пакетов не обновился — пробуем с прежним"
 			_fk_sb_pkg_switch "$want" || {
 				echo "ОШИБКА: $(_fk_sb_name "$want") sing-box не встал$([ "$want" = tiny ] && echo " — возможно, для этого роутера его нет в репозитории OpenWrt; выберите «Обычный»")"
@@ -15635,6 +15858,8 @@ case "$cmd" in
 	doh_remove)                          doh_remove ;;
 	doh_status)                          doh_status ;;
 	doh_set)                              doh_set "$1" ;;
+	doh_probe)                            doh_probe "$1" ;;
+	doh_check)                            doh_check ;;
 	doh_bootstrap_set)                    doh_bootstrap_set "$1" ;;
 	doh_force_set)                        doh_force_set "$1" ;;
 	test_status)                          test_status ;;
@@ -15679,6 +15904,7 @@ case "$cmd" in
 	lan_ip)                               _zm_lan_ip ;;
 	jobs_cancel)                          jobs_cancel "$1" ;;
 	system_reboot)                        system_reboot ;;
+	reboot_hint_clear)                    reboot_hint_clear ;;
 	rpcd_watch)                           rpcd_watch ;;
 	zm_watch)                             zm_watch ;;
 	ui_theme_get)                         ui_theme_get ;;
@@ -18253,6 +18479,8 @@ list_methods() {
 	json_add_object "hosts_file_set";         json_add_string "content" "string"; json_close_object
 	json_add_object "upload_part";            json_add_string "content" "string"; json_add_string "part" "string"; json_close_object
 	json_add_object "doh_status";             json_close_object
+	json_add_object "doh_check";              json_close_object
+	json_add_object "doh_probe";              json_add_string "provider" "string"; json_close_object
 	json_add_object "doh_install";            json_close_object
 	json_add_object "doh_remove";             json_close_object
 	json_add_object "doh_set";                json_add_string "provider" "string"; json_close_object
@@ -18282,6 +18510,7 @@ list_methods() {
 	json_add_object "bytetube_installed";     json_close_object
 	json_add_object "health";                 json_close_object
 	json_add_object "system_reboot";          json_close_object
+	json_add_object "reboot_hint_clear";      json_close_object
 	json_add_object "versions";               json_add_string "action" "string"; json_close_object
 	json_add_object "awg_status";             json_close_object
 	json_add_object "awg_action";             json_add_string "action" "string"; json_add_string "mode" "string"; json_close_object
@@ -18362,6 +18591,8 @@ call_method() {
 		hosts_file_set)          json_get_var content content; printf '%s' "$content" | "$BACKEND" hosts_file_set @stdin ;;
 		upload_part)             json_get_var content content; json_get_var part part; printf '%s' "$content" | "$BACKEND" upload_part "$part" @stdin ;;
 		doh_status)              "$BACKEND" doh_status ;;
+		doh_check)               "$BACKEND" doh_check ;;
+		doh_probe)               json_get_var provider provider; "$BACKEND" doh_probe "$provider" ;;
 		doh_install)             "$BACKEND" doh_install ;;
 		doh_remove)              "$BACKEND" doh_remove ;;
 		doh_set)                 json_get_var provider provider; "$BACKEND" doh_set "$provider" ;;
@@ -18391,6 +18622,7 @@ call_method() {
 		bytetube_installed)      "$BACKEND" bytetube_installed ;;
 		health)                  "$BACKEND" health ;;
 		system_reboot)           "$BACKEND" system_reboot ;;
+		reboot_hint_clear)       "$BACKEND" reboot_hint_clear ;;
 		versions)                json_get_var action action; "$BACKEND" versions "$action" ;;
 		awg_status)              "$BACKEND" awg_status ;;
 		awg_action)              json_get_var action action; json_get_var mode mode; printf '%s' "$mode" | "$BACKEND" awg_action "$action" @stdin ;;
@@ -18449,6 +18681,8 @@ cat > '/usr/share/rpcd/acl.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF'
 					"hosts_status",
 					"hosts_file_get",
 					"doh_status",
+					"doh_check",
+					"doh_probe",
 					"game_status",
 					"system_status",
 					"mirror_status",
@@ -18556,7 +18790,8 @@ cat > '/usr/share/rpcd/acl.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF'
 					"sysinfo_run",
 					"jobs_cancel",
 					"ui_theme_set",
-					"system_reboot"
+					"system_reboot",
+					"reboot_hint_clear"
 				]
 			},
 			"uci": [
@@ -18761,6 +18996,8 @@ function bigSend(text, fn) {
 function bigText(call) { return function(text) { return bigSend(text, function(v) { return call(v); }); }; }
 function bigArg2(call) { return function(a, text) { return bigSend(text, function(v) { return call(a, v); }); }; }
 var callDohStatus = zmDeclare({ object: 'zapret-manager', method: 'doh_status', expect: {} });
+var callDohCheck = zmDeclare({ object: 'zapret-manager', method: 'doh_check', expect: {} });
+var callDohProbe = zmDeclare({ object: 'zapret-manager', method: 'doh_probe', params: ['provider'], expect: {} });
 var callDohInstall = zmDeclare({ object: 'zapret-manager', method: 'doh_install', expect: {} });
 var callDohRemove = zmDeclare({ object: 'zapret-manager', method: 'doh_remove', expect: {} });
 var callDohSet = zmDeclare({ object: 'zapret-manager', method: 'doh_set', params: ['provider'], expect: {} });
@@ -18789,6 +19026,7 @@ var callMixomoWarpIntegrateAction = zmDeclare({ object: 'zapret-manager', method
 var callMixomoWarpConfigSet = zmDeclare({ object: 'zapret-manager', method: 'mixomo_warp_config_set', params: ['content'], expect: {} });
 var callHealth = zmDeclare({ object: 'zapret-manager', method: 'health', expect: {} });
 var callSystemReboot = zmDeclare({ object: 'zapret-manager', method: 'system_reboot', expect: {} });
+var callRebootHintClear = zmDeclare({ object: 'zapret-manager', method: 'reboot_hint_clear', expect: {} });
 var callBoardInfo = rpc.declare({ object: 'system', method: 'info', expect: {} });
 var callForkopStatus = zmDeclare({ object: 'zapret-manager', method: 'forkop_status', expect: {} });
 var callForkopConfigGet = zmDeclare({ object: 'zapret-manager', method: 'forkop_config_get', expect: {} });
@@ -19620,8 +19858,16 @@ function rebootBanner(text) {
 	var btn = E('button', { 'class': 'cbi-button cbi-button-positive', 'click': function() {
 		btn.disabled = true;
 		rebootRouter().then(function(ok) { if (!ok) btn.disabled = false; });
-	} }, 'Перезагрузить роутер');
-	return floatBanner(E('div', { 'class': 'zm-refresh-banner zm-show zm-reboot-banner' }, [ E('span', {}, String(text)), btn ]));
+	} }, 'Перезагрузить');
+	var el = E('div', { 'class': 'zm-refresh-banner zm-show zm-reboot-banner' }, [ E('span', {}, String(text)), btn ]);
+	el.appendChild(E('button', { 'type': 'button', 'class': 'zm-banner-x', 'title': 'Закрыть', 'aria-label': 'Закрыть', 'click': function() {
+		el._zmWant = false;
+		if (el._zmPh && el._zmPh.parentNode) el._zmPh.parentNode.removeChild(el._zmPh);
+		if (el.parentNode) el.parentNode.removeChild(el);
+		dockSync();
+		callRebootHintClear().catch(function() {});
+	} }, '×'));
+	return floatBanner(el);
 }
 
 function rebootSlot() {
@@ -20173,6 +20419,8 @@ return baseclass.extend({
 	hostsFileGet: callHostsFileGet,
 	hostsFileSet: bigText(callHostsFileSet),
 	dohStatus: callDohStatus,
+	dohCheck: callDohCheck,
+	dohProbe: callDohProbe,
 	dohInstall: callDohInstall,
 	dohRemove: callDohRemove,
 	dohSet: callDohSet,
@@ -20569,6 +20817,16 @@ var PROVIDERS = [
 	{ id: 'geohide_us', label: 'GeoHide US' }
 ];
 
+/* Группы: чем провайдеры отличаются и какой выбирать */
+var GROUPS = [
+	{ title: 'Обычные', hint: 'Просто шифруют запросы и ничего не подменяют. Подходят, если нужно только спрятать DNS от провайдера интернета.',
+	  ids: [ 'google', 'cloudflare', 'quad9' ] },
+	{ title: 'С обходом геоблокировок', hint: 'Для сервисов, которые сами закрылись для России (ChatGPT, часть игр и магазинов), отдают адреса своих прокси — и такие сервисы открываются.',
+	  ids: [ 'xbox', 'comss', 'dnsai', 'geohide_ru', 'geohide_eu', 'geohide_us' ] },
+	{ title: 'Семейные', hint: '«Безопасный» блокирует вредоносные и мошеннические сайты, «Семейный» — ещё и сайты для взрослых.',
+	  ids: [ 'yandex_safe', 'yandex_family' ] }
+];
+
 function label(id) {
 	for (var i = 0; i < PROVIDERS.length; i++) if (PROVIDERS[i].id === id) return PROVIDERS[i].label;
 	return '';
@@ -20600,6 +20858,85 @@ return view.extend({
 		var card = E('div', { 'class': 'zm-card' });
 		var logEl = E('pre', { 'class': 'zm-log' });
 		var busy = false, pickProv = null, pickForce = null, bootOwn = !!data.bootstrap_custom;
+		/* Проверка настоящим запросом. Результаты рисуются на месте, без перерисовки страницы:
+		 * иначе ответ роутера сбивал бы фокус в поле Bootstrap DNS. */
+		var probe = {}, probing = false, subs = {}, health = null, healthSeq = 0;
+		var svcBox = E('span', { 'class': 'zm-doh-svc' });
+		var probeBtn = E('button', { 'class': 'cbi-button', 'click': runProbe }, 'Проверить провайдеров');
+
+		function sub(id) {
+			if (!subs[id]) subs[id] = E('span', { 'class': 'zm-tile-sub' });
+			return subs[id];
+		}
+
+		function paintProbe(id) {
+			var el = sub(id), r = probe[id];
+			el.className = 'zm-tile-sub' + (r && r !== 'wait' ? (r.ok ? ' zm-sub-ok' : ' zm-sub-bad') : '');
+			el.textContent = !r ? '' : r === 'wait' ? 'проверяем…' : r.ok ? r.ms + ' мс' : 'не отвечает';
+			if (el.parentNode) el.parentNode.title = r && r !== 'wait' && !r.ok ? label(id) + ': ' + r.err : '';
+		}
+
+		function probeOne(id) {
+			probe[id] = 'wait';
+			paintProbe(id);
+			return zm.dohProbe(id).then(function(r) {
+				r = r || {};
+				return r.ok ? { ok: true, ms: r.ms } : { ok: false, err: r.err || r.error || 'роутер не ответил' };
+			}, function() { return { ok: false, err: 'роутер не ответил' }; }).then(function(r) {
+				probe[id] = r;
+				paintProbe(id);
+				return r;
+			});
+		}
+
+		function runProbe() {
+			if (probing) return;
+			if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+			var queue = PROVIDERS.map(function(p) { return p.id; }), left = 0, good = 0;
+			probing = true;
+			probeBtn.disabled = true;
+			probeBtn.textContent = 'Проверяем…';
+			function next() {
+				if (!queue.length) {
+					if (left) return;
+					probing = false;
+					probeBtn.disabled = false;
+					probeBtn.textContent = 'Проверить провайдеров';
+					zm.toast(good ? 'Отвечают ' + good + ' из ' + PROVIDERS.length : 'Ни один провайдер не ответил — проверьте интернет на роутере', good ? 'info' : 'error');
+					return;
+				}
+				left++;
+				probeOne(queue.shift()).then(function(r) { if (r.ok) good++; left--; next(); });
+			}
+			next(); next(); next();
+		}
+
+		function paintHealth() {
+			svcBox.innerHTML = '';
+			if (!data.running) { svcBox.appendChild(badge('zm-bad', 'остановлена')); return; }
+			if (health && health !== 'wait' && !health.local) {
+				svcBox.appendChild(badge('zm-bad', 'не отвечает'));
+				svcBox.appendChild(E('span', { 'class': 'zm-hint', 'style': 'margin:0' }, health.ok
+					? 'Провайдер отвечает, а DNS на роутере — нет. Попробуйте выбрать другого провайдера.'
+					: 'Провайдер: ' + health.err + '. Выберите другого.'));
+				return;
+			}
+			if (health && health !== 'wait') { svcBox.appendChild(badge('zm-ok', 'отвечает' + (health.ok ? ' · ' + health.ms + ' мс' : ''))); return; }
+			svcBox.appendChild(badge('zm-ok', 'работает'));
+			if (health === 'wait') svcBox.appendChild(E('span', { 'class': 'zm-hint', 'style': 'margin:0' }, 'проверяем ответ…'));
+		}
+
+		function checkHealth() {
+			var mine = ++healthSeq;
+			if (!data.installed || !data.running || !(data.resolvers || []).length) { health = null; paintHealth(); return; }
+			health = 'wait';
+			paintHealth();
+			zm.dohCheck().then(function(r) { return r && !r.error && !r.skip ? r : null; }, function() { return null; }).then(function(r) {
+				if (mine !== healthSeq) return;
+				health = r;
+				paintHealth();
+			});
+		}
 		var bar = zm.saveBar({
 			onCancel: function() { pickProv = null; pickForce = null; bootReset(); render(); },
 			onSave: applyPick
@@ -20627,10 +20964,18 @@ return view.extend({
 				});
 			});
 			if (pickProv && pickProv !== data.current) steps.push(function() {
-				logLines.push('   → Переключаем DNS на ' + label(pickProv) + ' и перезапускаем https-dns-proxy');
-				return zm.dohSet(pickProv).then(function(res) {
+				var id = pickProv;
+				logLines.push('   → Проверяем, отвечает ли ' + label(id));
+				zm.renderLog(logEl, logLines.join('\n'));
+				return probeOne(id).then(function(r) {
+					if (!r.ok) throw new Error(label(id) + ' не отвечает: ' + r.err + '. Настройки не меняли');
+					logLines.push('   ✓ Отвечает за ' + r.ms + ' мс');
+					logLines.push('   → Переключаем DNS на ' + label(id) + ' и перезапускаем https-dns-proxy');
+					zm.renderLog(logEl, logLines.join('\n'));
+					return zm.dohSet(id);
+				}).then(function(res) {
 					if (res.error) throw new Error(res.error);
-					logLines.push('   ✓ ' + label(pickProv) + ' применён');
+					logLines.push('   ✓ ' + label(id) + ' применён — DNS на роутере отвечает');
 				});
 			});
 			if (pickForce && pickForce !== curForce()) steps.push(function() {
@@ -20662,7 +21007,7 @@ return view.extend({
 		}
 
 		function refresh() {
-			return zm.dohStatus().then(function(res) { if (res && !res.error) data = res; render(); }, function() { render(); });
+			return zm.dohStatus().then(function(res) { if (res && !res.error) data = res; render(); checkHealth(); }, function() { render(); });
 		}
 
 		function job(call, name, startText, okText, errText) {
@@ -20697,7 +21042,8 @@ return view.extend({
 
 			var list = data.resolvers || [];
 			if (data.installed) {
-				card.appendChild(row('Служба', data.running ? badge('zm-ok', 'работает') : badge('zm-bad', 'остановлена')));
+				paintHealth();
+				card.appendChild(row('Служба', svcBox));
 				if (!list.length) card.appendChild(row('Сейчас используется', E('span', {}, 'резолвер не выбран')));
 				else card.appendChild(E('div', { 'class': 'zm-row', 'style': 'align-items:flex-start; flex-wrap:nowrap' }, [
 					E('span', { 'class': 'zm-label', 'style': 'line-height:22px' }, list.length > 1 ? 'Сейчас используются' : 'Сейчас используется'),
@@ -20721,18 +21067,25 @@ return view.extend({
 				} }, 'Установить DNS over HTTPS') ]));
 
 			if (data.installed) {
-				card.appendChild(E('h4', { 'style': 'margin:14px 0 8px' }, 'Провайдер'));
+				card.appendChild(E('div', { 'class': 'zm-doh-head' }, [ E('h4', {}, 'Провайдер'), probeBtn ]));
 				var curProv = pickProv || data.current;
-				card.appendChild(E('div', { 'class': 'zm-grid' }, PROVIDERS.map(function(p) {
-					return E('div', {
-						'class': 'zm-tile' + (curProv === p.id ? ' zm-active' : ''),
-						'click': function() {
-							if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
-							pickProv = p.id === data.current ? null : p.id;
-							render();
-						}
-					}, p.label);
-				})));
+				GROUPS.forEach(function(g) {
+					card.appendChild(E('div', { 'class': 'zm-doh-group' }, [
+						E('div', { 'class': 'zm-doh-group-head' }, [ E('b', {}, g.title), E('span', { 'class': 'zm-hint' }, g.hint) ]),
+						E('div', { 'class': 'zm-grid' }, g.ids.map(function(id) {
+							var tile = E('div', {
+								'class': 'zm-tile' + (curProv === id ? ' zm-active' : ''),
+								'click': function() {
+									if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+									pickProv = id === data.current ? null : id;
+									render();
+								}
+							}, [ E('span', {}, label(id)), sub(id) ]);
+							paintProbe(id);
+							return tile;
+						}))
+					]));
+				});
 				if (list.length > 1) card.appendChild(E('p', { 'class': 'zm-hint' }, 'Сейчас настроено несколько резолверов сразу, поэтому ни одна кнопка не подсвечена. Выбор провайдера заменит их одним.'));
 				else if (list.length === 1 && !data.current) card.appendChild(E('p', { 'class': 'zm-hint' }, 'Сейчас стоит резолвер не из списка — он настроен вручную. Выбор провайдера заменит его.'));
 			}
@@ -20808,6 +21161,7 @@ return view.extend({
 		}
 
 		render();
+		checkHealth();
 		wrap.appendChild(hostsWarn);
 		wrap.appendChild(card);
 		wrap.appendChild(bootCard);
@@ -21508,6 +21862,11 @@ function row(label, node) {
 	return E('div', { 'class': 'zm-row' }, [ E('span', { 'class': 'zm-label' }, label), node ]);
 }
 
+/* Строка карточки «Проверка»: слева колонка одной ширины (подпись «Итог» или вердикт), справа — значение */
+function chkRow(head, body) {
+	return E('div', { 'class': 'zm-row zm-chk' }, [ E('span', { 'class': 'zm-chk-h' }, [ head ]), E('span', { 'class': 'zm-chk-b' }, [ body ]) ]);
+}
+
 function fmtAge(sec) {
 	sec = parseInt(sec, 10);
 	if (isNaN(sec)) return 'не было';
@@ -22182,13 +22541,10 @@ return view.extend({
 					if (c.verdict === 'ok' || c.verdict === 'warn' || c.verdict === 'fail') items.push([ c.verdict, c.what, c.why ]);
 				});
 				var bad = items.filter(function(i) { return i[0] === 'fail'; }).length, warn = items.filter(function(i) { return i[0] === 'warn'; }).length;
-				checkCard.appendChild(row('Итог', bad ? badge('zm-bad', 'есть поломка') : warn ? badge('zm-warn', 'работает, есть замечания') : badge('zm-ok', 'всё в порядке')));
+				checkCard.appendChild(chkRow(E('span', { 'class': 'zm-label' }, 'Итог'), bad ? badge('zm-bad', 'есть поломка') : warn ? badge('zm-warn', 'работает, есть замечания') : badge('zm-ok', 'всё в порядке')));
 				var CLS = { ok: 'zm-ok', warn: 'zm-warn', fail: 'zm-bad' }, TXT = { ok: 'ок', warn: 'внимание', fail: 'ошибка' };
 				items.forEach(function(i) {
-					checkCard.appendChild(E('div', { 'class': 'zm-row' }, [
-						badge(CLS[i[0]], TXT[i[0]]),
-						E('span', {}, [].concat(i[1], i[2] ? ' — ' + i[2] : ''))
-					]));
+					checkCard.appendChild(chkRow(badge(CLS[i[0]], TXT[i[0]]), E('span', {}, [].concat(i[1], i[2] ? ' — ' + i[2] : ''))));
 				});
 			}
 			checkCard.appendChild(E('div', { 'class': 'zm-actions' }, [
@@ -25615,6 +25971,9 @@ html.zm-theme-dark .zm-card {
 .zm-row { display: flex; align-items: center; gap: 12px; margin: 7px 0; font-size: 13px; flex-wrap: wrap; }
 .zm-row .zm-label { opacity: .65; flex-shrink: 0; }
 .zm-row > span:last-child { overflow-wrap: anywhere; }
+.zm-row.zm-chk { flex-wrap: nowrap; align-items: baseline; }
+.zm-row.zm-chk > .zm-chk-h { flex: 0 0 104px; min-width: 0; }
+.zm-row.zm-chk > .zm-chk-b { flex: 1 1 auto; min-width: 0; line-height: 1.5; }
 
 .zm-badge { display: inline-flex; align-items: center; gap: 6px; padding: 3px 11px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; }
 .zm-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
@@ -25704,6 +26063,17 @@ html.zm-theme-dark .zm-tile:not(.zm-active):not(.zm-tile-off) {
 .zm-tile.zm-tile-off:hover { border-color: #cf222e; }
 .zm-tile.zm-tile-pending { opacity: .55; border-style: dashed; cursor: not-allowed; }
 .zm-tile.zm-tile-pending:hover { border-color: rgba(0,0,0,.1); transform: none; }
+.zm-tile-sub { display: block; margin-top: 2px; font-size: 11.5px; font-weight: 500; opacity: .7; }
+.zm-tile-sub:empty { display: none; }
+.zm-tile-sub.zm-sub-ok { color: var(--ok, #1a7f37); opacity: 1; }
+.zm-tile-sub.zm-sub-bad { color: var(--bad, #cf222e); opacity: 1; }
+.zm-doh-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin: 16px 0 0; }
+.zm-doh-head h4 { margin: 0; }
+.zm-doh-head .cbi-button { margin: 0; }
+.zm-doh-group { margin-top: 14px; }
+.zm-doh-group-head { display: flex; align-items: baseline; gap: 2px 10px; flex-wrap: wrap; margin-bottom: 8px; font-size: 13px; }
+.zm-doh-group-head .zm-hint { margin: 0; flex: 1 1 280px; }
+.zm-doh-svc { display: inline-flex; align-items: center; gap: 6px 10px; flex-wrap: wrap; min-width: 0; }
 
 .zm-log {
 	background: #0d1117; color: #e6edf3;
@@ -26256,7 +26626,11 @@ html.zm-theme-dark .zm-dock .zm-refresh-banner { background: #2f2a1c; color: #e3
 .zm-reboot-ov { position: fixed; inset: 0; z-index: 10000; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(10,12,18,.55); backdrop-filter: blur(3px); }
 .zm-reboot-box { display: flex; flex-direction: column; align-items: center; gap: 10px; max-width: 360px; padding: 26px 24px; border-radius: 16px; text-align: center; background: var(--surface-solid, var(--surface, #fff)); color: var(--text, #1f2328); box-shadow: 0 20px 60px -20px rgba(0,0,0,.5); }
 .zm-reboot-box b { font-size: 16px; }
-.zm-reboot-banner { gap: 10px 14px; flex-wrap: wrap; }
+.zm-refresh-banner.zm-reboot-banner { flex-direction: row !important; align-items: center !important; flex-wrap: nowrap; gap: 12px; padding: 10px 12px 10px 16px; font-size: 13.5px; }
+.zm-reboot-banner > span { flex: 1 1 auto; min-width: 0; line-height: 1.4; }
+.zm-reboot-banner > .cbi-button { margin: 0; white-space: nowrap; }
+.zm-reboot-banner > .zm-banner-x { flex: 0 0 auto; width: 28px; height: 28px; min-width: 0 !important; margin: 0 !important; padding: 0 !important; border: 0 !important; border-radius: 8px; background: transparent !important; box-shadow: none !important; color: inherit !important; font-size: 20px; line-height: 1; opacity: .55; cursor: pointer; }
+.zm-reboot-banner > .zm-banner-x:hover { opacity: 1; background: rgba(127,127,127,.18) !important; }
 .zm-links { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 10px; }
 .zm-link-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px 8px 12px; border-radius: 10px; border: 1px solid rgba(127,127,127,.25); background: rgba(127,127,127,.04); min-width: 0; }
 .zm-link-row.zm-link-bad { border-color: rgba(207,34,46,.5); }
@@ -27451,6 +27825,11 @@ function badge(cls, text) {
 
 function row(label, node) {
 	return E('div', { 'class': 'zm-row' }, [ E('span', { 'class': 'zm-label' }, label), node ]);
+}
+
+/* Строка карточки «Проверка»: слева колонка одной ширины (подпись «Итог» или вердикт), справа — значение */
+function chkRow(head, body) {
+	return E('div', { 'class': 'zm-row zm-chk' }, [ E('span', { 'class': 'zm-chk-h' }, [ head ]), E('span', { 'class': 'zm-chk-b' }, [ body ]) ]);
 }
 
 function plural(n, one, few, many) {
@@ -29265,14 +29644,11 @@ return view.extend({
 			/* как в Steer: строка на проверку — «ок / внимание / ошибка», что проверено и что делать */
 			if (diag && diag.checks) {
 				var fails = diag.checks.filter(function(c) { return c.verdict === 'fail'; }).length, warns = diag.checks.filter(function(c) { return c.verdict === 'warn'; }).length;
-				checkCard.appendChild(row('Итог', fails ? badge('zm-bad', 'есть поломка') : warns ? badge('zm-warn', 'работает, есть замечания') : badge('zm-ok', 'всё в порядке')));
+				checkCard.appendChild(chkRow(E('span', { 'class': 'zm-label' }, 'Итог'), fails ? badge('zm-bad', 'есть поломка') : warns ? badge('zm-warn', 'работает, есть замечания') : badge('zm-ok', 'всё в порядке')));
 				var CLS = { ok: 'zm-ok', warn: 'zm-warn', fail: 'zm-bad' }, TXT = { ok: 'ок', warn: 'внимание', fail: 'ошибка' };
 				diag.checks.forEach(function(c) {
 					if (!CLS[c.verdict]) return;
-					checkCard.appendChild(E('div', { 'class': 'zm-row' }, [
-						badge(CLS[c.verdict], TXT[c.verdict]),
-						E('span', {}, [ String(c.what || '') + (c.why ? ' — ' + c.why : '') ])
-					]));
+					checkCard.appendChild(chkRow(badge(CLS[c.verdict], TXT[c.verdict]), E('span', {}, [ String(c.what || '') + (c.why ? ' — ' + c.why : '') ])));
 				});
 			}
 			checkCard.appendChild(E('div', { 'class': 'zm-actions' }, [
