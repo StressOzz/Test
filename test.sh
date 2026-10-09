@@ -81,6 +81,52 @@ chmod 0755 /opt/zapret-manager-luci
 cat > '/opt/zapret-manager-luci/backend.sh.zm-new' << 'ZM_INSTALLER_EOF'
 #!/bin/sh
 umask 022
+# Сторож из cron (zm_watch, раз в 2 минуты). Оболочка читает скрипт по одной команде, поэтому выход
+# здесь не разбирает остальные ~16 тысяч строк. Выходим, только если ни одной проверке zm_watch нечего
+# делать, — те же условия, что у самих проверок. Любое сомнение — полный проход ниже, как раньше.
+if [ "$1" = zm_watch ]; then
+	_zw_idle() {
+		local d=/tmp/zapret-manager-luci s=/opt/zapret-manager-luci/state e=/etc/zm-steer
+		local pl=/usr/libexec/rpcd/zapret-manager want have t v st=0
+		# rpcd_watch — исправный путь: rpcd жив, сессии отвечают, панель видна в ubus со всеми методами
+		pidof rpcd >/dev/null 2>&1 || return 1
+		ubus -t 5 list session >/dev/null 2>&1 || return 1
+		ubus -t 15 call session access '{"ubus_rpc_session":"00000000000000000000000000000000","scope":"ubus","object":"session","function":"access"}' >/dev/null 2>&1
+		[ "$?" = 7 ] && return 1
+		if [ -x "$pl" ]; then
+			ubus -t 5 list zapret-manager >/dev/null 2>&1 || return 1
+			want="$(grep -c 'json_add_object' "$pl" 2>/dev/null)"
+			have="$(ubus -v list zapret-manager 2>/dev/null | grep -c '^[[:space:]]*"')"
+			if [ "${want:-0}" -gt 0 ] 2>/dev/null && [ "${have:-0}" -gt 0 ] 2>/dev/null && [ "$have" != "$want" ]; then return 1; fi
+		fi
+		# _test_recover, восстановление DNS после прерванной операции, TG-прокси
+		[ -s "$s/strategy_test.backup" ] && return 1
+		[ -f "$d/resolv.conf.zm-bak" ] && return 1
+		[ -f "$s/tg.watch" ] && return 1
+		# Forkozz: сторож и правки движка нужны, только если он стоит
+		{ [ -e /usr/bin/netshift ] || [ -e /usr/lib/netshift ]; } && return 1
+		# Steer: панель им управляет?
+		if command -v steer >/dev/null 2>&1 && grep -qxF -e engine -e 'pkg steer' -e 'net zmwarp' -e 'net zmwarp4' "$e/owned" 2>/dev/null; then
+			# _st_vpn_watch: VPN по подписке
+			[ ! -f "$e/stopped" ] && [ -s "$e/sub.txt" ] && grep -qxF steer-spec "$e/owned" 2>/dev/null && return 1
+			# _st_colo_guard: туннели WARP — не чаще раза в 5 минут
+			if [ ! -f "$e/stopped" ] && [ -s "$e/warp.up" ]; then
+				[ -f "$d/steer/colo.last" ] || return 1
+				t="$(date -r "$d/steer/colo.last" +%s 2>/dev/null || echo 0)"
+				[ $(( $(date +%s) - t )) -lt 300 ] || return 1
+			fi
+			# _st_legacy_check: ядро steer старше 2.0
+			if grep -qxF engine "$e/owned" 2>/dev/null; then
+				v="$(steer --version 2>/dev/null | awk 'NR == 1 { print $2 }')"
+				printf '%s\n' "$v" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$' && [ "${v%%.*}" -ge 2 ] 2>/dev/null || return 1
+			fi
+		fi
+		# делать нечего — убираем то же, что убрали бы сами проверки на этом пути
+		rm -f /tmp/zm-rpcd-slow /tmp/zm-rpcd-plugin.stamp "$s/fk.watch" "$d/steer.vpnwatch"
+		return 0
+	}
+	_zw_idle && exit 0
+fi
 
 CONF="/etc/config/zapret"
 ZM_VERSION="2.66"
@@ -5876,7 +5922,7 @@ mixomo_subscription_set() {
 	[ -s "$MIHOMO_CONF" ] && cp -f "$MIHOMO_CONF" "$MIHOMO_CONF.bak" 2>/dev/null
 	printf '%s\n' \
 		'mixed-port: 7890' 'allow-lan: false' 'tcp-concurrent: true' 'mode: rule' \
-		'log-level: info' 'ipv6: false' 'external-controller: 0.0.0.0:9090' \
+		'log-level: error' 'ipv6: false' 'external-controller: 0.0.0.0:9090' \
 		'external-ui: ui' 'secret:' 'unified-delay: true' \
 		'profile:' '  store-selected: true' '  store-fake-ip: true' '' \
 		'proxy-groups:' '  - name: GLOBAL' '    type: select' '    proxies:' \
@@ -6559,7 +6605,7 @@ write_hev_conf() {
 		echo "  address: 127.0.0.1"
 		echo "  udp: 'udp'"
 		echo "misc:"
-		echo "  log-level: warn"
+		echo "  log-level: error"
 	} > "$f"
 }
 
@@ -8696,7 +8742,10 @@ _stl_spec() {
 					outs="\"$STL_WARP_OUT\":{\"kind\":\"interface\",\"device\":$(_stl_js "$1"),\"ipv6\":\"off\",\"on_fail\":\"$(_st_onfail)\"}"
 				else
 					m=""; for d; do m="$m${m:+,}$(_stl_js "$d")"; outs="$outs,$(_stl_js "$d"):{\"kind\":\"interface\",\"device\":$(_stl_js "$d"),\"ipv6\":\"off\"}"; done
-					outs="\"$STL_WARP_OUT\":{\"kind\":\"group\",\"pick\":\"$wp\",\"members\":[$m],\"ipv6\":\"off\",\"on_fail\":\"$(_st_onfail)\"}$outs"
+					# «самый быстрый»: смена члена группы рвёт все соединения WARP (ядро снимает их записи conntrack),
+					# поэтому уходим с живого туннеля только за явный выигрыш и меряем реже — без прыжков под нагрузкой
+					d=""; [ "$wp" = latency ] && d=',"tolerance":200,"interval":600'
+					outs="\"$STL_WARP_OUT\":{\"kind\":\"group\",\"pick\":\"$wp\"$d,\"members\":[$m],\"ipv6\":\"off\",\"on_fail\":\"$(_st_onfail)\"}$outs"
 				fi ;;
 			vpn) outs="$(_stl_vpn_outs "$1" "$a")" ;;
 			svc) _stl_rule; lid="$(_stl_ident "$a")"; lab="$(_stl_label "$b" "$a")"; srs=""; dom=""; pfx="" ;;
@@ -10015,7 +10064,7 @@ _st_colo_guard() {
 		[ $(( $(date +%s) - t )) -lt 300 ] && return 0
 	fi
 	: > "$f"
-	: > "$ST_WARP_UP.chk"
+	: > "$ST_RUN/warp.up.chk"
 	while read -r i c; do
 		[ -n "$i" ] || continue
 		n="$c"
@@ -10024,30 +10073,30 @@ _st_colo_guard() {
 			changed=1
 			_st_warp_is_ru "$n" && ! _st_warp_is_ru "$c" && moved="$moved $i:$n"
 		fi
-		echo "$i $n" >> "$ST_WARP_UP.chk"
+		echo "$i $n" >> "$ST_RUN/warp.up.chk"
 	done < "$ST_WARP_UP"
 	if [ "$changed" != 1 ]; then
-		rm -f "$ST_WARP_UP.chk"
+		rm -f "$ST_RUN/warp.up.chk"
 		for i in $(awk '{ print $1 }' "$ST_WARP_UP"); do
 			_st_warp_use | grep -qx "$i" && continue
 			grep -q "\"$i\"" "$STL_SPEC" 2>/dev/null && { job_start steer do_steer_warp_pick keep >/dev/null; break; }
 		done
 		return 0
 	fi
-	_st_running && { rm -f "$ST_WARP_UP.chk"; return 0; }
-	_st_warp_use > "$ST_WARP_UP.was"
-	mv -f "$ST_WARP_UP.chk" "$ST_WARP_UP"
+	_st_running && { rm -f "$ST_RUN/warp.up.chk"; return 0; }
+	_st_warp_use > "$ST_RUN/warp.up.was"
+	mv -f "$ST_RUN/warp.up.chk" "$ST_WARP_UP"
 	_st_warp_reorder
 	_st_warp_geo $(awk '{ print $1 }' "$ST_WARP_UP")
 	for t in $moved; do
 		i="${t%%:*}"; case "$i" in zmwarp) n=1 ;; *) n="${i#zmwarp}" ;; esac
 		_st_wfix_say "WARP $n переключился на российский узел ${t##*:} — выведен из работы, трафик идёт через остальные туннели"
 	done
-	if [ "$(_st_warp_use | tr '\n' ' ')" != "$(tr '\n' ' ' < "$ST_WARP_UP.was")" ]; then
-		rm -f "$ST_WARP_UP.was"
+	if [ "$(_st_warp_use | tr '\n' ' ')" != "$(tr '\n' ' ' < "$ST_RUN/warp.up.was")" ]; then
+		rm -f "$ST_RUN/warp.up.was"
 		job_start steer do_steer_warp_pick keep >/dev/null
 	else
-		rm -f "$ST_WARP_UP.was"
+		rm -f "$ST_RUN/warp.up.was"
 	fi
 	return 0
 }
@@ -11175,7 +11224,7 @@ _st_wfix_min() { local m; m="$(cat "$ST_WFIX" 2>/dev/null)"; case "$m" in 30|60|
 
 _st_wfix_set() {
 	case "$1" in
-		off) rm -f "$ST_WFIX" "$ST_WFIX_STATE" "$ST_DIR/wfix.last" ;;
+		off) rm -f "$ST_WFIX" "$ST_WFIX_STATE" "$ST_RUN/wfix.last" "$ST_DIR/wfix.last" ;;
 		30|60|180) mkdir -p "$ST_DIR"; echo "$1" > "$ST_WFIX" ;;
 		*) echo '{"error":"допустимо: выкл, 30, 60 или 180 минут"}'; return 1 ;;
 	esac
@@ -11213,8 +11262,8 @@ _st_wfix_tick() {
 	_st_running && return 0
 	_st_work || return 0
 	now="$(date +%s)"
-	mkdir -p "$ST_DIR"
-	echo "$now" > "$ST_DIR/wfix.last"
+	mkdir -p "$ST_RUN"
+	echo "$now" > "$ST_RUN/wfix.last"
 	n=1
 	while [ "$n" -le "$ST_WARP_MAX" ]; do
 		i="$(_st_wif "$n")"
@@ -11296,7 +11345,7 @@ _st_wfix_json() {
 	fi
 	_st_running && [ -s "$ST_RUN/wfix.busy" ] && fixing="$(cat "$ST_RUN/wfix.busy")"
 	printf '{"mode":"%s","max":%s,"now":%s,"last_check":%s,"fixing":"%s","dead":[%s],"log":[' "${m:-off}" "$ST_WFIX_TRIES" "$(date +%s)" \
-		"$(awk '{ print $1 + 0; exit }' "$ST_DIR/wfix.last" 2>/dev/null | grep . || echo 0)" "$fixing" "$out"
+		"$(awk '{ print $1 + 0; exit }' "$ST_RUN/wfix.last" 2>/dev/null | grep . || echo 0)" "$fixing" "$out"
 	sep=""
 	[ -s "$ST_WFIX_LOG" ] && tail -n 5 "$ST_WFIX_LOG" | while IFS='|' read -r t txt; do
 		printf '%s{"t":%s,"text":"%s"}' "$sep" "${t:-0}" "$(esc "$txt")"; sep=","
@@ -21451,8 +21500,13 @@ return view.extend({
 
 			card.appendChild(E('div', { 'class': 'zm-actions' }, data.installed
 				? [ E('button', { 'class': 'cbi-button cbi-button-remove', 'click': function() {
-					if (!confirm('Удалить DNS over HTTPS полностью?\n\nБудут удалены пакеты, настройки и правила перехвата DNS — роутер вернётся к обычному DNS.')) return;
-					job(zm.dohRemove, 'doh_remove', 'Удаляем DNS over HTTPS', 'DNS over HTTPS удалён', 'Ошибка удаления');
+					zm.dialog({ title: 'Удалить DNS over HTTPS?', danger: true, okText: 'Удалить DNS over HTTPS',
+						blocks: [ { type: 'list', title: 'Что произойдёт', items: [
+							'DNS over HTTPS удалится вместе с пакетами и настройками',
+							'Правила перехвата DNS устройств уберутся',
+							'DNS роутера вернётся к обычному — без шифрования'
+						] } ]
+					}).then(function(v) { if (v) job(zm.dohRemove, 'doh_remove', 'Удаляем DNS over HTTPS', 'DNS over HTTPS удалён', 'Ошибка удаления'); });
 				} }, 'Удалить') ]
 				: [ E('button', { 'class': 'cbi-button cbi-button-positive', 'click': function() {
 					job(zm.dohInstall, 'doh_install', 'Устанавливаем DNS over HTTPS', 'DNS over HTTPS установлен — выберите сервер', 'Ошибка установки');
@@ -21712,10 +21766,10 @@ return view.extend({
 					var list = (data.ifaces || []).filter(function(f) { return f.owner !== 'steer'; });
 					var foreign = list.filter(function(f) { return !f.owned; }).map(function(f) { return f.name; });
 					var fk = list.filter(function(f) { return f.forkozz; }).map(function(f) { return f.name; });
-					var blocks = [ { type: 'list', title: 'Что будет удалено', items: [
-						'Пакеты AmneziaWG и модуль ядра',
-						'Сохранённые конфиги туннелей'
-					].concat(list.map(function(f) { return 'Туннель ' + f.name + (f.owned ? '' : ' (создан не панелью)') + ' — с ключами и зоной файрвола'; })) } ];
+					var blocks = [ { type: 'list', title: 'Что произойдёт', items: [
+						'Пакеты AmneziaWG и модуль ядра удалятся',
+						'Сохранённые конфиги туннелей удалятся'
+					].concat(list.map(function(f) { return 'Туннель ' + f.name + (f.owned ? '' : ' (создан не панелью)') + ' удалится — с ключами и зоной файрвола'; })) } ];
 					if (fk.length) blocks.push({ type: 'note', kind: 'warn', text: 'Через ' + fk.join(', ') + ' сейчас работает Forkozz. Он будет выключен, трафик пойдёт напрямую. Его настройки останутся — потом выберите в нём другое подключение.' });
 					if (foreign.length) blocks.push({ type: 'switch', id: 'all', value: false,
 						label: 'Удалить и туннели, созданные не панелью: ' + foreign.join(', '),
@@ -21818,7 +21872,7 @@ return view.extend({
 					return;
 				}
 				zm.dialog({ title: 'Удалить туннель ' + f.name + '?', danger: true, okText: 'Удалить туннель',
-					blocks: [ { type: 'list', title: 'Что будет удалено', items: [ 'Туннель ' + f.name + ' и его ключи', 'Его зона файрвола, если её создала панель' ] },
+					blocks: [ { type: 'list', title: 'Что произойдёт', items: [ 'Туннель ' + f.name + ' удалится вместе с ключами', 'Его зона файрвола уберётся, если её создала панель' ] },
 						f.route_all && f.up ? { type: 'note', text: 'Сейчас через него идёт весь интернет роутера. После удаления он пойдёт напрямую через провайдера.' } : null ]
 				}).then(function(v) { if (v) quick('delete', f.name, f.name + ' удалён'); });
 			} }, 'Удалить'));
@@ -22181,8 +22235,12 @@ return view.extend({
 			if (data.running) b.push(E('a', { 'class': 'cbi-button cbi-button-positive', 'href': addr(), 'target': '_blank', 'rel': 'noopener' }, 'Открыть в новой вкладке'));
 			b.push(btn('', 'Перезапустить', function() { quick('restart', 'Терминал перезапущен'); }));
 			b.push(btn('cbi-button-remove', 'Удалить', function() {
-				if (!confirm('Удалить терминал?\n\nБудет остановлен и удалён пакет ttyd вместе с его настройками.')) return;
-				job('remove', 'Удаляем терминал — ход работы виден в окне вывода');
+				zm.dialog({ title: 'Удалить терминал?', danger: true, okText: 'Удалить терминал',
+					blocks: [ { type: 'list', title: 'Что произойдёт', items: [
+						'Терминал остановится',
+						'Пакет ttyd удалится вместе с настройками'
+					] } ]
+				}).then(function(v) { if (v) job('remove', 'Удаляем терминал — ход работы виден в окне вывода'); });
 			}));
 			actEl.appendChild(E('div', { 'class': 'zm-actions' }, b));
 			if (data.running && !canEmbed) actEl.appendChild(E('p', { 'class': 'zm-hint' }, 'Панель открыта по https, а терминал работает по http — встроить его сюда нельзя, он откроется в отдельной вкладке.'));
@@ -22582,8 +22640,12 @@ return view.extend({
 					mainCard.appendChild(E('p', { 'class': 'zm-hint' }, 'На роутере остались настройки Steer панели: туннели WARP, списки и выбор сервисов. «Удалить Steer панели» уберёт только то, чем сейчас никто не пользуется: само ядро steer, а также туннели и списки, записанные в его нынешних правилах, останутся на месте.'));
 					mainCard.appendChild(E('div', { 'class': 'zm-actions' }, [
 						E('button', { 'class': 'cbi-button cbi-button-remove', 'click': function() {
-							if (!confirm('Удалить Steer панели?\n\nЯдро steer и всё, на что ссылаются его нынешние правила, останется на месте.')) return;
-							act('remove', '', 'Удаляем Steer панели');
+							zm.dialog({ title: 'Удалить Steer панели?', danger: true, okText: 'Удалить Steer панели',
+								blocks: [ { type: 'list', title: 'Что произойдёт', items: [
+									'Туннели WARP, списки и выбор сервисов панели удалятся',
+									'Ядро steer и всё, на что ссылаются его нынешние правила, останется на месте'
+								] } ]
+							}).then(function(v) { if (v) act('remove', '', 'Удаляем Steer панели'); });
 						} }, 'Удалить Steer панели')
 					]));
 				}
@@ -22662,8 +22724,13 @@ return view.extend({
 			if ((data.latest && data.version && verLt(data.version, data.latest)) || (data.version && !data.ext))
 				actions.push(E('button', { 'class': 'cbi-button cbi-button-action', 'click': function() { act('engine', '', 'Обновляем движок Steer'); } }, 'Обновить движок'));
 			actions.push(E('button', { 'class': 'cbi-button cbi-button-remove', 'click': function() {
-				if (!confirm('Удалить Steer?\n\nБудут удалены Steer, туннели WARP и всё, что для них ставилось. Сервисы, которые шли через WARP, пойдут напрямую.')) return;
-				act('remove', '', 'Удаляем Steer');
+				zm.dialog({ title: 'Удалить Steer?', danger: true, okText: 'Удалить Steer',
+					blocks: [ { type: 'list', title: 'Что произойдёт', items: [
+						'Steer удалится со всеми настройками: подписка, выбор сервисов, списки',
+						'Туннели WARP и всё, что для них ставилось, удалятся',
+						'Сервисы, которые шли через туннель, пойдут напрямую'
+					] } ]
+				}).then(function(v) { if (v) act('remove', '', 'Удаляем Steer'); });
 			} }, 'Удалить'));
 			mainCard.appendChild(E('div', { 'class': 'zm-actions' }, actions));
 			mainCard.appendChild(E('p', { 'class': 'zm-hint' }, '«Выключить» — всё пойдёт напрямую, настройки и выбор сервисов сохранятся.'));
@@ -23537,8 +23604,12 @@ return view.extend({
 			acts.push(E('button', { 'class': 'cbi-button cbi-button-action', 'disabled': (probing || busy || !nodes.length) ? '' : null, 'click': probeAll },
 				probing ? 'Проверяем ' + probeDone + ' из ' + probeTotal : 'Проверить задержку'));
 			acts.push(E('button', { 'class': 'cbi-button cbi-button-remove', 'disabled': busy ? '' : null, 'click': function() {
-				if (!confirm('Удалить подписку?' + (data.warp_on ? '\n\nВыбранные сервисы пойдут через WARP.' : '\n\nТуннеля не останется — сервисы пойдут напрямую.'))) return;
-				subAct('sub_remove', '', 'Удаляем подписку');
+				zm.dialog({ title: 'Удалить подписку?', danger: true, okText: 'Удалить подписку',
+					blocks: [ { type: 'list', title: 'Что произойдёт', items: [
+						'Подписка и её серверы удалятся',
+						data.warp_on ? 'Выбранные сервисы пойдут через WARP' : 'Туннеля не останется — сервисы пойдут напрямую'
+					] } ]
+				}).then(function(v) { if (v) subAct('sub_remove', '', 'Удаляем подписку'); });
 			} }, 'Удалить'));
 			if (!hideMode) subCard.appendChild(E('div', { 'class': 'zm-actions' }, acts));
 			if (!hideMode && !(linksOpen && subData.kind === 'links') && nodes.length > 1) subCard.appendChild(zm.swRow(sortPing, 'Сортировать по пингу', 'Серверы идут от быстрых к медленным, неотвечающие — в конце.', function() {
@@ -24208,8 +24279,14 @@ return view.extend({
 				actions.push(E('button', {
 					'class': 'cbi-button cbi-button-remove',
 					'click': function() {
-						if (!confirm('Удалить Mixomo полностью?\n\nБудут удалены Mihomo, MagiTrickle, hev-socks5-tunnel, их настройки, подписка, WARP.conf, интерфейс, зона файрвола и задания cron.')) return;
-						doAction('remove');
+						zm.dialog({ title: 'Удалить Mixomo?', danger: true, okText: 'Удалить Mixomo',
+							blocks: [ { type: 'list', title: 'Что произойдёт', items: [
+								'Mihomo, MagiTrickle и hev-socks5-tunnel удалятся',
+								'Их настройки, подписка и WARP.conf удалятся',
+								'Интерфейс, зона файрвола и задания расписания уберутся',
+								'Сервисы, которые шли через Mixomo, пойдут напрямую'
+							] } ]
+						}).then(function(v) { if (v) doAction('remove'); });
 					}
 				}, 'Удалить'));
 				actions.push(E('button', {
@@ -24860,7 +24937,15 @@ return view.extend({
 				if (d.zapret === 'installed') {
 					zActions.push(E('button', {
 						'class': 'cbi-button cbi-button-remove',
-						'click': function() { doZapretAction('remove'); }
+						'click': function() {
+							zm.dialog({ title: 'Удалить Zapret?', danger: true, okText: 'Удалить Zapret',
+								blocks: [ { type: 'list', title: 'Что произойдёт', items: [
+									'Zapret остановится, его правила файрвола снимутся',
+									'Пакеты, стратегии и списки удалятся',
+									'Задания Zapret уберутся из расписания'
+								] }, { type: 'note', kind: 'warn', text: 'Сайты, которые открывались благодаря Zapret, перестанут открываться.' } ]
+							}).then(function(v) { if (v) doZapretAction('remove'); });
+						}
 					}, 'Удалить'));
 					if (/^[0-9]+\.[0-9]+$/.test(latestVersion) && d.zapret_version && latestVersion !== d.zapret_version) {
 						zActions.push(E('button', {
@@ -25557,13 +25642,17 @@ return view.extend({
 						return E('div', { 'class': 'zm-seg-item' + (m === resMode ? ' zm-active' : ''), 'click': function() { if (m !== resMode) loadResults(m); } }, TEST_MODE_LABELS[m] || m);
 					})),
 					E('button', { 'class': 'cbi-button', 'click': function() {
-						if (!confirm('Удалить результаты «' + (TEST_MODE_LABELS[resMode] || resMode) + '»?')) return;
-						zm.testAction('clear', resMode).then(function() {
+						zm.dialog({ title: 'Удалить результаты «' + (TEST_MODE_LABELS[resMode] || resMode) + '»?', danger: true, okText: 'Удалить результаты',
+							blocks: [ { type: 'list', title: 'Что произойдёт', items: [
+								'Результаты этого теста удалятся',
+								'Результаты других тестов останутся'
+							] } ]
+						}).then(function(ok) { if (ok) zm.testAction('clear', resMode).then(function() {
 							status['has_results_' + resMode] = false;
 							delete resData[resMode];
 							renderLaunch();
 							loadResults(null);
-						});
+						}); });
 					} }, 'Удалить')
 				]));
 				var d = resData[resMode];
@@ -26313,7 +26402,15 @@ return view.extend({
 			if (d.zapret2 === 'installed') {
 				z2Actions.push(E('button', {
 					'class': 'cbi-button cbi-button-remove',
-					'click': function() { view.doAction2('remove'); }
+					'click': function() {
+						zm.dialog({ title: 'Удалить Zapret2?', danger: true, okText: 'Удалить Zapret2',
+							blocks: [ { type: 'list', title: 'Что произойдёт', items: [
+								'Zapret2 остановится, его правила файрвола снимутся',
+								'Пакеты и настройки удалятся',
+								'Задания Zapret2 уберутся из расписания'
+							] }, { type: 'note', kind: 'warn', text: 'Сайты, которые открывались благодаря Zapret2, перестанут открываться.' } ]
+						}).then(function(v) { if (v) view.doAction2('remove'); });
+					}
 				}, 'Удалить'));
 				z2Actions.push(E('button', {
 					'class': 'cbi-button',
@@ -27648,9 +27745,14 @@ return view.extend({
 				E('button', {
 					'class': 'cbi-button cbi-button-remove',
 					'click': function() {
-						if (!confirm('Удалить панель Zapret Manager?\n\nСам Zapret и остальные установленные через панель компоненты не пострадают. Действие необратимо — панель придётся ставить заново.')) {
-							return;
-						}
+						zm.dialog({ title: 'Удалить Zapret Manager?', danger: true, okText: 'Удалить панель',
+							blocks: [ { type: 'list', title: 'Что произойдёт', items: [
+								'Удалится только панель — приложение в LuCI и Web UI',
+								'Zapret, Steer, Forkozz, Mixomo и остальное останутся и продолжат работать',
+								'Автоподбор WARP и автообновление подписки Steer остановятся'
+							] }, { type: 'note', kind: 'warn', text: 'Действие необратимо — панель придётся ставить заново. Эта страница сразу станет недоступна.' } ]
+						}).then(function(v) {
+						if (!v) return;
 						uninstallLog.classList.add('zm-show');
 						zm.renderLog(uninstallLog, '==> Удаляем панель Zapret Manager');
 						zm.toast('Удаляем панель Zapret Manager', 'warning');
@@ -27662,6 +27764,7 @@ return view.extend({
 						}).catch(function() {
 							zm.renderLog(uninstallLog, '==> Готово (соединение прервано — это ожидаемо, панель уже удалена). Выходим из панели');
 							setTimeout(function() { location.href = L.url('admin/logout'); }, 2500);
+						});
 						});
 					}
 				}, 'Удалить панель')
@@ -27878,8 +27981,13 @@ return view.extend({
 					actions.push(E('button', {
 						'class': 'cbi-button cbi-button-remove',
 						'click': function() {
-							if (!confirm('Удалить ' + v.title + '?\n\nУдаление принудительное: пакет и все файлы будут стёрты, даже если менеджер пакетов откажется.')) return;
-							doAction(v.id, 'remove');
+							zm.dialog({ title: 'Удалить ' + v.title + '?', danger: true, okText: 'Удалить',
+								blocks: [ { type: 'list', title: 'Что произойдёт', items: [
+									v.title + ' остановится',
+									'Пакет и все файлы удалятся — даже если менеджер пакетов откажется',
+									'Telegram через этот прокси перестанет подключаться'
+								] } ]
+							}).then(function(r) { if (r) doAction(v.id, 'remove'); });
 						}
 					}, 'Удалить'));
 					actions.push(E('button', {
@@ -27951,8 +28059,13 @@ return view.extend({
 				actions.push(E('button', {
 					'class': 'cbi-button cbi-button-remove',
 					'click': function() {
-						if (!confirm('Удалить sTGWS?\n\nУдаление принудительное: пакет и все файлы будут стёрты, даже если менеджер пакетов откажется.')) return;
-						doTgwsAction('remove');
+						zm.dialog({ title: 'Удалить sTGWS?', danger: true, okText: 'Удалить sTGWS',
+							blocks: [ { type: 'list', title: 'Что произойдёт', items: [
+								'sTGWS остановится',
+								'Пакет и все файлы удалятся — даже если менеджер пакетов откажется',
+								'Telegram через этот прокси перестанет подключаться'
+							] } ]
+						}).then(function(v) { if (v) doTgwsAction('remove'); });
 					}
 				}, 'Удалить'));
 				actions.push(E('button', {
@@ -28844,8 +28957,12 @@ return view.extend({
 
 		function deleteSec() {
 			if (busy || saving) { zm.toast('Дождитесь окончания текущей операции', 'warning'); return; }
-			if (!confirm('Удалить секцию «' + secName() + '»?\n\nЕё правила перестанут действовать. Правила остальных секций и их выбор устройств сохранятся.')) return;
-			zm.forkopAction('secdel', draft.sec).then(function(res) {
+			zm.dialog({ title: 'Удалить секцию «' + secName() + '»?', danger: true, okText: 'Удалить секцию',
+				blocks: [ { type: 'list', title: 'Что произойдёт', items: [
+					'Её правила перестанут действовать',
+					'Остальные секции и их выбор устройств сохранятся'
+				] } ]
+			}).then(function(v) { if (v) zm.forkopAction('secdel', draft.sec).then(function(res) {
 				if (res.error) { zm.toast(res.error, 'error'); return; }
 				rememberSec(cfg.main || '');
 				dirty = false;
@@ -28855,7 +28972,7 @@ return view.extend({
 					switchSec(cfg.main || '', true);
 					follow();
 				} else { zm.toast('Секция удалена', 'info'); switchSec(cfg.main || '', true); }
-			}).catch(function() { zm.toast('Роутер не ответил', 'error'); });
+			}).catch(function() { zm.toast('Роутер не ответил', 'error'); }); });
 		}
 
 		function renderSections() {
@@ -28983,7 +29100,7 @@ return view.extend({
 				E('button', { 'class': 'cbi-button cbi-button-remove', 'click': function() {
 					zm.dialog({ title: 'Удалить sing-box?', danger: true, okText: 'Удалить sing-box',
 						intro: 'sing-box ' + st.singbox + ' (' + sbn + ') остался после Forkozz. Сам по себе он ничего не делает.',
-						blocks: [ { type: 'list', title: 'Что будет удалено', items: [ 'Программа sing-box и её пакет', 'Её настройки и кэш' ] } ]
+						blocks: [ { type: 'list', title: 'Что произойдёт', items: [ 'Программа sing-box и её пакет удалятся', 'Её настройки и кэш удалятся' ] } ]
 					}).then(function(v) { if (v) act('singbox_remove'); });
 				} }, 'Удалить sing-box')
 			]);
@@ -31213,9 +31330,24 @@ function renderInstalled(all) {
 
 		function removeByeTube() {
 			if (removeBusy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+			zm.dialog({ title: 'Удалить ByeTube?', danger: true, okText: 'Удалить ByeTube', blocks: [
+				{ type: 'switch', id: 'pkgs', value: true,
+					label: 'Удалить byedpi и hev-socks5-tunnel',
+					hint: 'Без ByeTube они не нужны. hev-socks5-tunnel останется, если им пользуется Mixomo.' },
+				{ type: 'list', title: 'Что произойдёт', items: function(v) { return [
+					'ByeTube удалится со всеми настройками и расписанием',
+					'Его правила файрвола и DNS уберутся',
+					v.pkgs ? 'byedpi и hev-socks5-tunnel удалятся' : 'byedpi и hev-socks5-tunnel останутся на роутере',
+					'YouTube пойдёт напрямую через провайдера'
+				]; } }
+			] }).then(function(v) { if (v) runRemoveByeTube(v.pkgs ? 'purge' : 'remove'); });
+		}
+
+		function runRemoveByeTube(mode) {
+			if (removeBusy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
 			removeBusy = true;
 			zm.toast('Удаляем ByeTube', 'warning');
-			callBytetubeAction('purge').then(function(res) {
+			callBytetubeAction(mode).then(function(res) {
 				if (res && res.error) { removeBusy = false; zm.toast(res.error, 'error'); return; }
 				if (res && res.started) {
 					zm.pollJob('bytetube_remove', removeLogEl, function(ok) {
@@ -34567,6 +34699,11 @@ mkdir -p /etc/crontabs 2>/dev/null || true
 [ -f /etc/crontabs/root ] || : > /etc/crontabs/root 2>/dev/null || true
 sed -i '/# zm-rpcd-watch$/d' /etc/crontabs/root 2>/dev/null || true
 echo '*/2 * * * * /opt/zapret-manager-luci/backend.sh zm_watch >/dev/null 2>&1 # zm-rpcd-watch' >> /etc/crontabs/root 2>/dev/null || true
+# Сторож панели запускается раз в 2 минуты — без этого cron пишет строку о каждом запуске в системный журнал.
+# Уровень 9 — только ошибки cron. Свой уровень, если его уже выставили, не трогаем.
+if [ -z "$(uci -q get system.@system[0].cronloglevel)" ]; then
+	uci -q set system.@system[0].cronloglevel='9' && uci -q commit system
+fi
 if [ -x /etc/init.d/cron ]; then
 	/etc/init.d/cron enable >/dev/null 2>&1 || true
 	/etc/init.d/cron restart >/dev/null 2>&1 || true
