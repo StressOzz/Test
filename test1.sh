@@ -1,10 +1,10 @@
 #!/bin/sh
-# Version: 2.62
+# Version: 2.65
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
 
-ZM_NEW_VER="2.62"
+ZM_NEW_VER="2.65"
 _zmi_say() { echo -e "${CYAN}==>${NC} $*"; }
 _zmi_ok() { echo -e "   ${GREEN}✓${NC} $*"; }
 _zmi_step() { echo -e "   → $*"; }
@@ -83,7 +83,7 @@ cat > '/opt/zapret-manager-luci/backend.sh.zm-new' << 'ZM_INSTALLER_EOF'
 umask 022
 
 CONF="/etc/config/zapret"
-ZM_VERSION="2.62"
+ZM_VERSION="2.65"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
@@ -23836,7 +23836,7 @@ return view.extend({
 
 	render: function(data) {
 		var wrap = E('div', { 'class': 'zm-wrap' });
-		var grid = E('div', { 'class': 'zm-svc-grid', 'style': 'grid-auto-flow:dense' });
+		var grid = E('div');
 		var busy = false, pick = null, lastItems = data.items || [];
 		var hostsLog = E('pre', { 'class': 'zm-log' });
 
@@ -23885,33 +23885,24 @@ return view.extend({
 					ev.stopPropagation();
 					setAll(!all);
 				} }, [ E('span') ]);
-				var g = zm.svcGroup({
+				return zm.svcGroup({
 					name: 'AI-сервисы', sub: 'ChatGPT, Claude, Gemini', key: 'ai', open: aiOpen,
 					badge: E('span', { 'style': 'display:inline-flex; align-items:center; gap:10px' }, [
 						E('span', { 'class': 'zm-badge ' + (on ? 'zm-ok' : 'zm-off') }, on + ' из ' + ai.length),
 						sw
 					]),
-					body: E('div', {}, [
-						E('div', { 'class': 'zm-actions', 'style': 'margin:10px 0 0' }, [
-							E('button', { 'class': 'cbi-button', 'click': function() { setAll(true); } }, 'Выбрать все'),
-							E('button', { 'class': 'cbi-button', 'click': function() { setAll(false); } }, 'Снять все')
-						]),
-						zm.svcGrid(ai.map(tile))
-					]),
+					body: zm.svcGrid(ai.map(tile)),
 					toggle: function(o) { aiOpen = o; }
 				});
-				g.style.gridColumn = '1 / -1';
-				g.style.marginTop = '0';
-				g.style.minWidth = '0';
-				return g;
 			}
-			var ai = lastItems.filter(function(it) { return isAi(it.id); }), aiShown = false;
-			lastItems.forEach(function(it) {
-				if (!isAi(it.id)) { grid.appendChild(tile(it)); return; }
-				if (aiShown) return;
-				aiShown = true;
+			/* AI-сервисы — отдельным разделом под остальными, как «Дополнительные списки» в Steer */
+			var ai = lastItems.filter(function(it) { return isAi(it.id); });
+			grid.appendChild(E('h4', { 'style': 'margin:0' }, 'Сервисы'));
+			grid.appendChild(zm.svcGrid(lastItems.filter(function(it) { return !isAi(it.id); }).map(tile)));
+			if (ai.length) {
+				grid.appendChild(E('h4', { 'style': 'margin:18px 0 0' }, 'AI-сервисы'));
 				grid.appendChild(aiGroup(ai));
-			});
+			}
 			var n = changes().length;
 			bar.set(n > 0 || busy, busy, n ? 'Есть несохранённые изменения: ' + n : '');
 		}
@@ -26940,7 +26931,36 @@ html.zm-theme-dark .zm-seg { background: #22272e; border-color: rgba(255,255,255
 .zm-fk-sec-head > .zm-st-stat-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .zm-fk-sec-head > .zm-badge { flex-shrink: 0; padding: 2px 9px; font-size: 11px; }
 .zm-fk-sec-head > .zm-st-stat-sub { flex-shrink: 0; }
-.zm-fk-common { border-style: dashed; }
+.zm-st-stat.zm-fk-top { margin-top: 16px; padding: 16px 18px; gap: 6px; border-width: 1.5px; border-color: rgba(26,163,255,.45); }
+.zm-fk-top > .zm-fk-sec-head { flex-wrap: wrap; }
+.zm-fk-top > .zm-fk-sec-head > .zm-st-stat-label { white-space: normal; }
+.zm-fk-top-badges { display: inline-flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; flex-shrink: 0; }
+.zm-fk-top-badges > .zm-badge { padding: 2px 9px; font-size: 11px; }
+.zm-fk-top + .zm-st-stats.zm-fk-secs { margin-top: 10px; }
+.zm-st-stats.zm-fk-secs.zm-fk-cols-1 { grid-template-columns: minmax(0, 1fr); }
+.zm-st-stats.zm-fk-secs.zm-fk-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.zm-st-stats.zm-fk-secs.zm-fk-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 1000px) { .zm-st-stats.zm-fk-secs.zm-fk-cols-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 700px) { .zm-st-stats.zm-fk-secs.zm-fk-cols-2, .zm-st-stats.zm-fk-secs.zm-fk-cols-3 { grid-template-columns: minmax(0, 1fr); } }
+.zm-fk-traffic { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 6px; }
+.zm-fk-tile { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: 10px 12px; border-radius: 10px; background: rgba(0,0,0,.04); }
+html.zm-theme-dark .zm-fk-tile { background: rgba(255,255,255,.06); }
+.zm-fk-tile > b { font-size: 17px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.zm-fk-tile > span { font-size: 11.5px; opacity: .6; }
+.zm-fk-info { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(125px, 100%), 1fr)); gap: 8px 20px; margin-top: 8px; padding-top: 10px; border-top: 1px solid rgba(0,0,0,.08); }
+html.zm-theme-dark .zm-fk-info { border-top-color: rgba(255,255,255,.1); }
+.zm-fk-info > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.zm-fk-info > div > span { font-size: 11.5px; opacity: .6; }
+.zm-fk-info > div > b { font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
+.zm-fk-sec.zm-fk-sec-main { border-width: 1.5px; border-color: rgba(26,163,255,.45); }
+.zm-fk-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+.zm-fk-chip { font-size: 11.5px; line-height: 1.5; padding: 2px 9px; border-radius: 999px; background: rgba(0,0,0,.05); border: 1px solid transparent; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+html.zm-theme-dark .zm-fk-chip { background: rgba(255,255,255,.08); }
+.zm-fk-chip.zm-fk-chip-x { background: transparent; border: 1px dashed rgba(0,0,0,.22); opacity: .8; }
+html.zm-theme-dark .zm-fk-chip.zm-fk-chip-x { border-color: rgba(255,255,255,.25); }
+.zm-fk-chip.zm-fk-chip-more { background: rgba(26,163,255,.12); color: #1a7fd0; font-weight: 600; cursor: pointer; }
+.zm-fk-chip.zm-fk-chip-more:hover { background: rgba(26,163,255,.2); }
+@media (max-width: 600px) { .zm-fk-traffic, .zm-fk-info { grid-template-columns: repeat(2, minmax(0, 1fr)); } .zm-fk-info { gap: 8px 12px; } .zm-fk-top-badges { justify-content: flex-start; } }
 .zm-st-stat-sub { font-size: 11.5px; opacity: .6; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (max-width: 1000px) { .zm-st-stats.zm-st-stats-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 600px) { .zm-st-stat-sub { white-space: normal; } }
@@ -28519,7 +28539,14 @@ return view.extend({
 		var netCard = E('div', { 'class': 'zm-card zm-kv' });
 		var panelCard = E('div', { 'class': 'zm-card zm-kv' });
 		var openFold = {}, ownUtUrl = false;
-		var trafficEl = E('span', { 'class': 'zm-fk-traffic' }, '—'), trafficLast = null, trafficTimer = null;
+		var tDown = E('b', {}, '—'), tUp = E('b', {}, '—'), tAll = E('b', {}, '—'), tConn = E('b', {}, '—'), tConnLbl = E('span', {}, 'соединений');
+		var sbMem = E('b', {}, '—'), trafficNote = E('span', { 'class': 'zm-st-stat-sub', 'style': 'display:none' }, 'нет данных — sing-box ещё запускается');
+		var trafficEl = E('div', { 'class': 'zm-fk-traffic' }, [
+			E('div', { 'class': 'zm-fk-tile' }, [ tDown, E('span', {}, 'загрузка') ]),
+			E('div', { 'class': 'zm-fk-tile' }, [ tUp, E('span', {}, 'отдача') ]),
+			E('div', { 'class': 'zm-fk-tile' }, [ tAll, E('span', {}, 'всего') ]),
+			E('div', { 'class': 'zm-fk-tile' }, [ tConn, tConnLbl ])
+		]), trafficLast = null, trafficTimer = null;
 
 		function area(key, placeholder, minh) {
 			var ta = E('textarea', { 'class': 'zm-config-editor', 'spellcheck': 'false', 'autocapitalize': 'off', 'placeholder': placeholder, 'style': 'min-height:' + (minh || 120) + 'px' });
@@ -28969,17 +28996,18 @@ return view.extend({
 			return sec < 60 ? sec + ' с назад' : sec < 3600 ? Math.floor(sec / 60) + ' мин назад' : Math.floor(sec / 3600) + ' ч назад';
 		}
 
-		function secListsText(s) {
+		/* Что выбрано в секции: сервисы по отдельности (для меток) и прочее — свои списки, домены, устройства */
+		function secLists(s) {
 			var p = secPick(cfg, s), names = p.items.filter(function(it) { return p.sel[it.id]; }).map(function(it) { return it.name; }), parts = [];
-			if (names.length) parts.push(names.slice(0, 2).join(', ') + (names.length > 2 ? ' +' + (names.length - 2) : ''));
 			if ((p.lists || []).length) parts.push(nn(p.lists.length, 'свой список', 'своих списка', 'своих списков'));
 			if (s.domains) parts.push(nn(s.domains, 'домен', 'домена', 'доменов'));
 			if (s.subnets) parts.push(nn(s.subnets, 'подсеть', 'подсети', 'подсетей'));
 			if (s.own_off) parts.push('свой список выключен');
 			if ((s.full || []).length) parts.push('только для ' + nn(s.full.length, 'устройства', 'устройств', 'устройств'));
 			if ((s.all || []).length) parts.push('весь трафик: ' + nn(s.all.length, 'устройство', 'устройства', 'устройств'));
-			return parts.join(' · ') || 'ничего не выбрано';
+			return { names: names, extra: parts };
 		}
+
 
 		function secConnText(s, x) {
 			if (x && x.fallback_direct) return [ 'Напрямую', 'VPN недоступны · проверяем раз в 2 минуты' ];
@@ -29006,30 +29034,59 @@ return view.extend({
 			return badge('zm-off', secProbe ? 'проверяем…' : 'нет данных');
 		}
 
+		/* Метки сервисов: до SVC_SHOW штук, остальные — под «ещё N», раскрываются прямо в карточке */
+		var SVC_SHOW = 6, secOpen = {};
+		function secChips(s) {
+			var l = secLists(s), box = E('div', { 'class': 'zm-fk-chips' }), names = l.names;
+			var cut = !secOpen[s.name] && names.length > SVC_SHOW ? SVC_SHOW - 1 : names.length;
+			names.slice(0, cut).forEach(function(n) { box.appendChild(E('span', { 'class': 'zm-fk-chip', 'title': n }, n)); });
+			if (cut < names.length) box.appendChild(E('span', { 'class': 'zm-fk-chip zm-fk-chip-more', 'title': names.slice(cut).join(', '), 'click': function(ev) {
+				ev.stopPropagation();
+				secOpen[s.name] = true;
+				box.parentNode.replaceChild(secChips(s), box);
+			} }, 'ещё ' + (names.length - cut)));
+			l.extra.forEach(function(t) { box.appendChild(E('span', { 'class': 'zm-fk-chip zm-fk-chip-x', 'title': t }, t)); });
+			if (!names.length && !l.extra.length) box.appendChild(E('span', { 'class': 'zm-fk-chip zm-fk-chip-x' }, 'ничего не выбрано'));
+			return box;
+		}
+
 		function secBox(s) {
 			var x = secState && (secState.sections || []).filter(function(e) { return e.name === s.name; })[0];
-			var c = secConnText(s, x), l = secListsText(s);
-			return E('div', { 'class': 'zm-st-stat zm-fk-sec' + (s.name === draft.sec ? ' zm-fk-sec-cur' : ''), 'title': 'Открыть секцию «' + s.label + '»', 'click': function() {
+			var c = secConnText(s, x);
+			var val = s.mode !== 'iface' && x && x.server && x.delay > 0 && !x.fallback_direct
+				? [ x.server, ' · ', E('span', { 'class': 'zm-lat ' + latClass(x.delay) }, x.delay + ' мс') ] : [ c[0] ];
+			return E('div', { 'class': 'zm-st-stat zm-fk-sec' + (s.main ? ' zm-fk-sec-main' : '') + (s.name === draft.sec ? ' zm-fk-sec-cur' : ''), 'title': 'Открыть секцию «' + s.label + '»', 'click': function() {
 				if (!isSecTab(tab)) tabTo('conn');
 				if (s.name !== draft.sec) switchSec(s.name);
 			} }, [
-				E('span', { 'class': 'zm-fk-sec-head' }, [ E('span', { 'class': 'zm-st-stat-label' }, [ s.label ]), secStateBadge(s, x) ]),
-				E('span', { 'class': 'zm-st-stat-value', 'title': c[0] }, [ c[0] ]),
+				E('span', { 'class': 'zm-fk-sec-head' }, [ E('span', { 'class': 'zm-st-stat-label', 'title': s.label }, [ s.label ]), secStateBadge(s, x) ]),
+				E('span', { 'class': 'zm-st-stat-value', 'title': c[0] }, val),
 				E('span', { 'class': 'zm-st-stat-sub', 'title': c[1] }, [ c[1] ]),
-				E('span', { 'class': 'zm-st-stat-sub', 'title': l }, [ l ])
+				secChips(s)
 			]);
 		}
 
-		function commonBox() {
+		/* «Общее» — наверху на всю ширину: состояние, трафик всего Forkozz и всё, что действует для всех секций */
+		function topBox() {
 			var bp = cfg.bypass || {}, bn = (bp.domains || []).length + (bp.subnets || []).length, e = (cfg.excl || []).length;
-			var dev = e ? 'мимо Forkozz: ' + e : 'без исключённых устройств';
 			var sb = st.singbox ? 'sing-box ' + st.singbox.replace(/-extended.*$/, '') : 'sing-box не установлен';
 			var dn = cfg.dns ? dnsLabel(cfg.dns) : '—', dt = cfg.dns ? (DNS_TYPES[cfg.dns.type] || '') + (cfg.dns.detour ? ' · через VPN' : '') : '';
-			return E('div', { 'class': 'zm-st-stat zm-fk-common' }, [
-				E('span', { 'class': 'zm-fk-sec-head' }, [ E('span', { 'class': 'zm-st-stat-label' }, 'Общее'), E('span', { 'class': 'zm-st-stat-sub' }, 'для всех секций') ]),
-				E('span', { 'class': 'zm-st-stat-value', 'title': 'DNS ' + dn }, [ 'DNS ' + dn + (dt ? ' · ' + dt : '') ]),
-				E('span', { 'class': 'zm-st-stat-sub' }, [ (bn ? 'исключений: ' + bn : 'без исключений') + ' · ' + dev ]),
-				E('span', { 'class': 'zm-st-stat-sub', 'title': sb }, [ 'Движок ' + (st.version || '—') + ' · ' + sb ])
+			var live = st.running && !busy;
+			function info(k, v) { return E('div', {}, [ E('span', {}, k), typeof v === 'string' ? E('b', { 'title': v }, v) : v ]); }
+			return E('div', { 'class': 'zm-st-stat zm-fk-top' }, [
+				E('span', { 'class': 'zm-fk-sec-head' }, [
+					E('span', { 'class': 'zm-st-stat-label' }, [ 'Общее · для всех секций' ]),
+					E('span', { 'class': 'zm-fk-top-badges' }, [ statusBadge(), st.newer && !busy ? badge('zm-warn', 'есть версия ' + st.latest) : E([]) ])
+				]),
+				live ? trafficEl : E([]),
+				live ? trafficNote : E([]),
+				E('div', { 'class': 'zm-fk-info' }, [
+					info('DNS', dn + (dt ? ' · ' + dt : '')),
+					info('Исключения', bn ? nn(bn, 'строка', 'строки', 'строк') : 'нет'),
+					info('Мимо Forkozz', e ? nn(e, 'устройство', 'устройства', 'устройств') : 'нет устройств'),
+					info('Движок', (st.version || '—') + ' · ' + sb),
+					live ? info('Память sing-box', sbMem) : E([])
+				])
 			]);
 		}
 
@@ -29042,16 +29099,19 @@ return view.extend({
 			if (document.hidden || busy) { trafficTimer = setTimeout(trafficTick, 3000); return; }
 			zm.forkopAction('stats', '').then(function(r) {
 				if (r && r.ok) {
-					var now = Date.now(), parts = [];
+					var now = Date.now();
 					if (trafficLast && r.down >= trafficLast.down && r.up >= trafficLast.up) {
 						var dt = Math.max(1, (now - trafficLast.t) / 1000);
-						parts.push('↓ ' + rate((r.down - trafficLast.down) / dt), '↑ ' + rate((r.up - trafficLast.up) / dt));
+						tDown.textContent = '↓ ' + rate((r.down - trafficLast.down) / dt);
+						tUp.textContent = '↑ ' + rate((r.up - trafficLast.up) / dt);
 					}
 					trafficLast = { t: now, down: r.down, up: r.up };
-					parts.push('всего ' + fmtBytes(r.down + r.up), nn(r.conns, 'соединение', 'соединения', 'соединений'));
-					if (r.mem > 0) parts.push('sing-box ' + fmtBytes(r.mem));
-					trafficEl.textContent = parts.join(' · ');
-				} else trafficEl.textContent = 'нет данных — sing-box ещё запускается';
+					tAll.textContent = fmtBytes(r.down + r.up);
+					tConn.textContent = String(r.conns || 0);
+					tConnLbl.textContent = nn(r.conns || 0, 'соединение', 'соединения', 'соединений').replace(/^\d+\s+/, '');
+					sbMem.textContent = r.mem > 0 ? fmtBytes(r.mem) : '—';
+					trafficNote.style.display = 'none';
+				} else trafficNote.style.display = '';
 			}).catch(function() {}).then(function() {
 				if (!trafficTimer && document.body.contains(trafficEl)) trafficTimer = setTimeout(trafficTick, 3000);
 			});
@@ -29073,13 +29133,18 @@ return view.extend({
 			if (st.installed && st.enabled) (st.warn || []).forEach(function(w) {
 				if (WARN[w]) mainCard.appendChild(E('p', { 'class': 'zm-hint' }, '⚠ ' + WARN[w]));
 			});
-			mainCard.appendChild(row('Состояние', E('span', { 'style': 'display:inline-flex; gap:8px; flex-wrap:wrap' }, [
+			var withSecs = st.installed && configured() && secs().length;
+			if (!withSecs) mainCard.appendChild(row('Состояние', E('span', { 'style': 'display:inline-flex; gap:8px; flex-wrap:wrap' }, [
 				statusBadge(), st.installed && st.newer && !busy ? badge('zm-warn', 'есть версия ' + st.latest) : E([])
 			])));
 
-			if (st.installed && configured() && secs().length) {
-				mainCard.appendChild(E('div', { 'class': 'zm-st-stats zm-fk-secs' }, secs().map(secBox).concat([ commonBox() ])));
-				if (st.running && !busy) { mainCard.appendChild(row('Трафик', trafficEl)); trafficStart(); }
+			if (withSecs) {
+				var allSecs = secs(), mainSec = allSecs.filter(function(s) { return s.main; })[0] || allSecs[0];
+				mainCard.appendChild(topBox());
+				/* колонок столько, чтобы ряды были полными: 1, 2, 3; четыре секции — 2×2 */
+				var cols = allSecs.length === 4 ? 2 : Math.min(allSecs.length, 3);
+				mainCard.appendChild(E('div', { 'class': 'zm-st-stats zm-fk-secs zm-fk-cols-' + cols }, [ mainSec ].concat(allSecs.filter(function(s) { return s !== mainSec; })).map(secBox)));
+				if (st.running && !busy) trafficStart();
 			} else if (st.installed) {
 				var sl = secs(), cv, rv = routeValue(cfg);
 				if (sl.length > 1) cv = [ nn(sl.length, 'секция', 'секции', 'секций'), sl.map(function(s) { return s.label + (s.enabled ? '' : ' (выкл.)'); }).join(' · ') ];
@@ -33923,6 +33988,14 @@ html.zm-theme-dark #zmw-view .zm-node:not(.zm-active) { background: var(--surfac
 #zmw-view .zm-node.zm-active .zm-node-name::before { color: var(--a1); }
 #zmw-view .zm-node.zm-sec-add { border-style: dashed; }
 #zmw-view .zm-fk-sec:hover { border-color: var(--a1); }
+#zmw-view .zm-st-stat.zm-fk-top, #zmw-view .zm-fk-sec.zm-fk-sec-main { border-color: var(--a1); }
+#zmw-view .zm-fk-tile { background: var(--surface-3); }
+#zmw-view .zm-fk-tile > b, #zmw-view .zm-fk-info > div > b { color: var(--text); }
+#zmw-view .zm-fk-tile > span, #zmw-view .zm-fk-info > div > span { color: var(--muted); opacity: 1; }
+#zmw-view .zm-fk-info { border-top-color: var(--border); }
+#zmw-view .zm-fk-chip { background: var(--surface-3); color: var(--text); }
+#zmw-view .zm-fk-chip.zm-fk-chip-x { background: transparent; border-color: var(--border-2); color: var(--muted); opacity: 1; }
+#zmw-view .zm-fk-chip.zm-fk-chip-more { background: var(--surface-3); color: var(--a1); }
 #zmw-view .zm-sec-add-text { color: var(--a1); }
 #zmw-view .zm-node-name { color: var(--text); }
 #zmw-view .zm-node-foot > span:first-child { color: var(--muted); opacity: 1; }
