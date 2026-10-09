@@ -1,10 +1,10 @@
 #!/bin/sh
-# Version: 2.65
+# Version: 2.66
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
 
-ZM_NEW_VER="2.65"
+ZM_NEW_VER="2.66"
 _zmi_say() { echo -e "${CYAN}==>${NC} $*"; }
 _zmi_ok() { echo -e "   ${GREEN}✓${NC} $*"; }
 _zmi_step() { echo -e "   → $*"; }
@@ -83,7 +83,7 @@ cat > '/opt/zapret-manager-luci/backend.sh.zm-new' << 'ZM_INSTALLER_EOF'
 umask 022
 
 CONF="/etc/config/zapret"
-ZM_VERSION="2.65"
+ZM_VERSION="2.66"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
@@ -849,6 +849,8 @@ zm_watch() {
 	_test_recover >/dev/null 2>&1
 	_zm_net_orphan && _zm_net_restore force >/dev/null 2>&1
 	if ! _fk_installed || [ -f "$FK_MARK" ] || ! _fk_foreign; then
+		# без папки /etc/sing-box движок собирает конфиг, но не может его положить — sing-box падает без конфига
+		_fk_installed && [ ! -d /etc/sing-box ] && mkdir -p /etc/sing-box
 		_fk_watch
 		_fk_fast_patch
 		_fk_mlkem_patch
@@ -14499,6 +14501,8 @@ _fk_sb_drop_pkgs() {
 	mv -f /usr/bin/.sing-box.zm-keep /usr/bin/sing-box
 	[ -e /etc/init.d/sing-box ] || { cp -p "$k/init" /etc/init.d/sing-box 2>/dev/null; chmod 0755 /etc/init.d/sing-box 2>/dev/null; }
 	[ -e /etc/config/sing-box ] || cp -p "$k/config" /etc/config/sing-box 2>/dev/null
+	# удаление пакета забирает и папку /etc/sing-box, а движок кладёт конфиг туда, не создавая её
+	mkdir -p /etc/sing-box
 	rm -rf "$k"
 	_fk_sb_leftovers
 	echo "   ✓ Прежний sing-box удалён полностью (пакет$(echo "$had" | sed 's/^ / /; s/ \([^ ]\)/, \1/g; s/^,//')) — остался только расширенный"
@@ -14975,7 +14979,7 @@ _fk_check_live() {
 _fk_resume() {
 	[ -x /etc/init.d/netshift ] || return 0
 	[ "$1" = 1 ] && /etc/init.d/netshift enable >/dev/null 2>&1
-	[ "$2" = 1 ] && { _fk_say "Запускаем Forkozz обратно"; /etc/init.d/netshift start >/dev/null 2>&1; }
+	[ "$2" = 1 ] && { _fk_say "Запускаем Forkozz обратно"; mkdir -p /etc/sing-box; /etc/init.d/netshift start >/dev/null 2>&1; }
 	return 0
 }
 
@@ -15187,6 +15191,7 @@ do_fk_install() {
 	[ "$was_en" = 1 ] && /etc/init.d/netshift enable >/dev/null 2>&1
 	if [ "$was_run" = 1 ]; then
 		_fk_say "Запускаем Forkozz"
+		mkdir -p /etc/sing-box
 		_zm_quiet "" /etc/init.d/netshift start || true
 		_fk_wait_up 90 || echo "!! Forkozz не запустился — нажмите «Проверить»"
 	fi
@@ -15366,6 +15371,7 @@ do_fk_sb_remove() {
 }
 
 _fk_start_once() {
+	mkdir -p /etc/sing-box
 	_zm_run 60 /etc/init.d/netshift start >> "$JOBS_DIR/forkop-svc.out" 2>&1
 }
 
@@ -15442,6 +15448,7 @@ do_fk_service() {
 	/etc/init.d/netshift enable >/dev/null 2>&1
 	_fk_fast_patch
 	_fk_mlkem_patch
+	mkdir -p /etc/sing-box
 	_fk_log_mark
 	: > "$JOBS_DIR/forkop-svc.out"
 	if [ "$a" = apply ] && _fk_up; then
