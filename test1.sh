@@ -1,10 +1,10 @@
 #!/bin/sh
-# Version: 2.71
+# Version: 2.72
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
 
-ZM_NEW_VER="2.71"
+ZM_NEW_VER="2.72"
 _zmi_say() { echo -e "${CYAN}==>${NC} $*"; }
 _zmi_ok() { echo -e "   ${GREEN}✓${NC} $*"; }
 _zmi_step() { echo -e "   → $*"; }
@@ -129,7 +129,7 @@ if [ "$1" = zm_watch ]; then
 fi
 
 CONF="/etc/config/zapret"
-ZM_VERSION="2.71"
+ZM_VERSION="2.72"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
@@ -16042,6 +16042,27 @@ _st_where() {
 			fi
 		} | while IFS= read -r f; do [ -s "$f" ] && printf 'off\t%s\t%s\t%s\n' "$id" "$name" "$f"; done
 	done | awk -F'\t' '!s[$2 "\t" $4]++' >> "$man"
+	# наборы .srs (каталог списков) ядро steer само раскладывает в текст: steer srs-read. Раскладку кладём
+	# рядом и берём заново, только когда набор обновился. Пятое поле строки — исходный файл, для подписи.
+	mkdir -p "$ST_RUN/srsdump"
+	awk -F'\t' '{ print NR "\t" $0 }' "$man" | while IFS="$(printf '\t')" read -r n st id name path; do
+		case "$path" in
+			*.srs)
+				x="$ST_RUN/srsdump/$(printf '%s' "$path" | tr -c 'A-Za-z0-9_.-' '_')"
+				if [ ! -s "$x.dom" -a ! -s "$x.pfx" ] || [ "$path" -nt "$x.dom" ]; then
+					rm -f "$x.dom" "$x.pfx"
+					steer srs-read "$path" --out "$x.dom" --prefixes-out "$x.pfx" >/dev/null 2>&1 || rm -f "$x.dom" "$x.pfx"
+				fi
+				if [ -f "$x.dom" ]; then
+					printf '%s\t%s\t%s\t%s\t%s\n' "$st" "$id" "$name" "$x.dom" "$path"
+					[ -s "$x.pfx" ] && printf '%s\t%s\t%s\t%s\t%s\n' "$st" "$id" "$name" "$x.pfx" "$path"
+				else
+					printf '%s\t%s\t%s\t%s\t%s\n' "$st" "$id" "$name" "$path" "$path"
+				fi ;;
+			*) printf '%s\t%s\t%s\t%s\t%s\n' "$st" "$id" "$name" "$path" "$path" ;;
+		esac
+	done > "$man.x"
+	mv -f "$man.x" "$man"
 	{
 		awk -F'\t' -v h="$host" -v ip="$ip" '
 			function ipn(a,  p) { if (split(a, p, ".") != 4) return -1; return ((p[1] * 256 + p[2]) * 256 + p[3]) * 256 + p[4] }
@@ -16070,10 +16091,10 @@ _st_where() {
 					if ((h == l || under(h, l)) && length(l) > bw) { best = l; bw = length(l) }
 				}
 				close(path)
-				if (best != "") print NR "\t" $1 "\t" $2 "\t" $3 "\t" $4 "\t" best
+				if (best != "") print NR "\t" $1 "\t" $2 "\t" $3 "\t" ($5 != "" ? $5 : $4) "\t" best
 			}' "$man"
 		if command -v sing-box >/dev/null 2>&1; then
-			awk -F'\t' '$4 ~ /\.srs$/ { print NR "\t" $0 }' "$man" | while IFS="$(printf '\t')" read -r n st id name path; do
+			awk -F'\t' '$4 ~ /\.srs$/ { print NR "\t" $1 "\t" $2 "\t" $3 "\t" $4 }' "$man" | while IFS="$(printf '\t')" read -r n st id name path; do
 				for x in $host $ip; do
 					sing-box rule-set match -f binary "$path" "$x" 2>&1 | grep -q 'match rules' && { printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$n" "$st" "$id" "$name" "$path" ""; break; }
 				done
@@ -16093,7 +16114,7 @@ _st_where() {
 		sep=","
 	done < "$res"
 	printf ']'
-	rm -f "$man" "$res"
+	rm -f "$man" "$man.x" "$res"
 }
 
 steer_explain() {
@@ -23549,7 +23570,7 @@ return view.extend({
 			exclCard.style.display = data.blocker ? 'none' : '';
 			if (data.blocker) return;
 			exclCard.appendChild(E('h3', {}, 'Исключения'));
-			exclCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Домены и IP-адреса из этого списка всегда идут напрямую, мимо WARP и VPN — даже если они входят в выбранный сервис или устройство отправляет через Steer весь трафик. Например, music.youtube.com при включённом YouTube.'));
+			exclCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Домены и IP-адреса из этого списка всегда идут напрямую (через провайдера), мимо WARP и VPN — даже если они входят в выбранный сервис или устройство отправляет через Steer весь трафик. Из списков сервисов они не удаляются: правило исключений стоит выше всех и срабатывает первым. Например, music.youtube.com при включённом YouTube.'));
 			if (exclLoading && !exclData) { exclCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Загружаем список…')); return; }
 			var nd = exclData ? (parseInt(exclData.domains, 10) || 0) : 0, np = exclData ? (parseInt(exclData.subnets, 10) || 0) : 0;
 			exclCard.appendChild(row('Состояние', !(nd + np) ? badge('zm-off', 'исключений нет')
@@ -24360,7 +24381,7 @@ return view.extend({
 			var onSvc = wh.filter(function(x) { return x.state === 'on'; }).length > 0;
 			if (r.verdict === 'off') return { tone: 'off', cls: 'zm-off', label: 'Steer выключен', title: 'запрос пойдёт напрямую', lines: lines, note: 'Запустите Steer, чтобы сервисы шли через WARP или VPN.' };
 			if (r.verdict === 'exclude') return { tone: 'warn', cls: 'zm-warn', label: 'напрямую · исключение', title: 'адрес в «Исключениях» Steer — идёт мимо WARP и VPN', lines: lines,
-				note: 'Чтобы он снова шёл через Steer, уберите строку из карточки «Исключения» и сохраните.' };
+				note: 'Домен остаётся в списке сервиса — правило исключений просто стоит выше и срабатывает первым. «Напрямую» — значит через провайдера, мимо WARP и VPN: если сайт при этом открывается, его пропускает Zapret или провайдер его не блокирует. Браузер, открывавший сайт до исключения, ещё пару минут может ходить по старому подменному адресу через туннель — перезапустите его или очистите DNS-кэш. Чтобы сайт снова шёл через Steer, уберите строку из «Исключений».' };
 			if (r.verdict === 'vpn') {
 				lines.push([ 'Выход', 'VPN' + (data.sub_label ? ' · ' + data.sub_label : '') ]);
 				lines.push([ 'Сервер', r.node ? r.node : 'выбирается автоматически (первый рабочий)' ]);
