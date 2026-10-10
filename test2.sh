@@ -1,10 +1,10 @@
 #!/bin/sh
-# Version: 2.72
+# Version: 2.73
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
 
-ZM_NEW_VER="2.72"
+ZM_NEW_VER="2.73"
 _zmi_say() { echo -e "${CYAN}==>${NC} $*"; }
 _zmi_ok() { echo -e "   ${GREEN}✓${NC} $*"; }
 _zmi_step() { echo -e "   → $*"; }
@@ -129,7 +129,7 @@ if [ "$1" = zm_watch ]; then
 fi
 
 CONF="/etc/config/zapret"
-ZM_VERSION="2.72"
+ZM_VERSION="2.73"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
@@ -16139,9 +16139,42 @@ steer_explain() {
 	where="$(_st_where "$host" "$ip")"
 	# выход «напрямую» из-за своих исключений — отдельный ответ, а не «Steer этот адрес не трогает»
 	[ "$STL_X_VERDICT" = direct ] && [ "$STL_X_OUT" = "$ST_DIRECT_OUT" ] && case "$where" in *'"state":"x"'*) STL_X_VERDICT=exclude ;; esac
-	printf '{"target":"%s","verdict":"%s","out":"%s","dev":"%s","channel":"%s","addr":"%s","fake":%s,"node":"%s","where":%s,"text":"%s"}\n' \
+	printf '{"target":"%s","verdict":"%s","out":"%s","dev":"%s","channel":"%s","addr":"%s","fake":%s,"node":"%s","where":%s,"now":%s,"text":"%s"}\n' \
 		"$(esc "$q")" "$STL_X_VERDICT" "$(esc "$STL_X_OUT")" "$(esc "$STL_X_DEV")" "$(esc "$STL_X_SET")" "$(esc "$STL_X_ADDR")" "$STL_X_FAKE" \
-		"$(esc "$node")" "$where" "$(esc_ml "$STL_X_TEXT")"
+		"$(esc "$node")" "$where" "$(_st_now "$host" "$STL_X_ADDR" "$([ "$STL_X_FAKE" = true ] || echo real)" "$STL_X_VERDICT")" "$(esc_ml "$STL_X_TEXT")"
+}
+
+# Что происходит СЕЙЧАС, а не только что велят правила — чтобы было видно, почему сайт «всё равно открывается»:
+#  dns  — спрашивали ли устройства это имя у роутера (журнал резолвера steer: сколько раз, когда, какое правило);
+#         нет в журнале — браузер берёт адрес из своего кэша или своего DNS («Безопасный DNS»), и Steer его не видит;
+#  tun  — сколько живых соединений к этому сайту ядро ведёт в туннель (по настоящему адресу и по прежнему
+#         подменному из fakeip.state): после исключения это старые соединения и кэш браузера;
+#  http — для исключения: открывается ли сайт с самого роутера напрямую (код ответа HTTPS). Открывается —
+#         значит провайдер его пропускает или его пропускает Zapret, и «сайт открывается» — это и есть «напрямую».
+_st_now() {
+	local host="$1" addr="$2" real="$3" verdict="$4" dl e cnt="" ago="" ch="" out="" fk="" cj n=0 outs="" http=""
+	[ -n "$host" ] && stl_running || { printf 'null'; return 0; }
+	dl="$(_stl_t 8 steer dns-log 2>/dev/null | tr -d '\n\r')"
+	e="$(printf '%s' "$dl" | sed 's/}, *{/}\n{/g' | grep -m1 "\"name\": *\"$host\"")"
+	if [ -n "$e" ]; then
+		cnt="$(printf '%s' "$e" | sed -n 's/.*"count": *\([0-9]*\).*/\1/p')"
+		ago="$(printf '%s' "$e" | sed -n 's/.*"ago": *\([0-9]*\).*/\1/p')"
+		ch="$(printf '%s' "$e" | sed -n 's/.*"channel": *"\([^"]*\)".*/\1/p')"
+		out="$(printf '%s' "$e" | sed -n 's/.*"out": *"\([^"]*\)".*/\1/p')"
+	fi
+	fk="$(awk -F'\t' -v n="$host" '$1 == n { print $2; exit }' "$STL_STATE/fakeip.state" 2>/dev/null)"
+	cj="$(_stl_t 10 steer conns 2>/dev/null | tr -d '\n\r' | sed 's/}, *{/}\n{/g')"
+	for e in $(printf '%s\n' $fk $addr | awk '!s[$0]++'); do
+		printf '%s' "$e" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' || continue
+		n=$((n + $(printf '%s\n' "$cj" | grep -c "\"dst\": *\"$e\"")))
+		outs="$outs $(printf '%s\n' "$cj" | grep "\"dst\": *\"$e\"" | sed -n 's/.*"out": *"\([^"]*\)".*/\1/p')"
+	done
+	outs="$(printf '%s\n' $outs | grep . | sort -u | tr '\n' ' ' | sed 's/ $//')"
+	if [ "$verdict" = exclude ] && [ "$real" = real ] && printf '%s' "$addr" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$'; then
+		http="$(curl -sk -o /dev/null -m 6 --resolve "$host:443:$addr" -w '%{http_code}' "https://$host/" 2>/dev/null)"
+	fi
+	printf '{"dns":%s,"ago":%s,"channel":"%s","out":"%s","fake":"%s","tun":%s,"tun_outs":"%s","http":"%s"}' \
+		"${cnt:-0}" "${ago:-null}" "$(esc "$ch")" "$(esc "$out")" "$(esc "$fk")" "$n" "$(esc "$outs")" "$(esc "$http")"
 }
 
 fk_route_check() {
@@ -24379,9 +24412,26 @@ return view.extend({
 			else if (r.channel && !/^zm_/.test(r.channel)) lines.push([ 'Правило', r.channel ]);
 			var offSvc = wh.filter(function(x) { return x.state === 'off'; }).map(function(x) { return x.name; }).filter(function(n, i, a) { return n && a.indexOf(n) === i; });
 			var onSvc = wh.filter(function(x) { return x.state === 'on'; }).length > 0;
+			/* Что происходит сейчас: спрашивали ли имя у роутера, есть ли живые соединения через туннель, открывается ли сайт с роутера напрямую */
+			var nw = r.now || null, outName = function(o) { return o === 'zm_warp' || /^zmwarp/.test(o) ? warpName() : o === 'zm_vpn' || /^zmv_/.test(o) ? 'VPN' : o === 'zm_direct' ? 'напрямую' : o; };
+			var ago = function(sec) { sec = parseInt(sec, 10); return isNaN(sec) ? '' : sec < 60 ? sec + ' с назад' : sec < 3600 ? Math.round(sec / 60) + ' мин назад' : Math.round(sec / 3600) + ' ч назад'; };
+			if (nw && r.verdict !== 'off') {
+				lines.push([ 'Запросы DNS', nw.dns > 0 ? 'устройства спрашивали это имя у роутера: ' + nw.dns + ' раз, последний — ' + ago(nw.ago) + (nw.channel ? ' · правило «' + nw.channel + '» → ' + outName(nw.out) : ' · ни одно правило')
+					: 'устройства это имя у роутера не спрашивали — браузер берёт адрес из своего кэша или из своего DNS («Безопасный DNS»), и Steer его не видит' ]);
+				lines.push([ 'Через туннель сейчас', nw.tun > 0 ? 'соединений: ' + nw.tun + (nw.tun_outs ? ' (' + nw.tun_outs.split(' ').map(outName).join(', ') + ')' : '') + (nw.fake ? ' · прежний подменный адрес ' + nw.fake : '')
+					: 'нет ни одного соединения' ]);
+				if (r.verdict === 'exclude' && nw.http !== undefined && nw.http !== '') lines.push([ 'С роутера напрямую', nw.http === '000' ? 'не открывается — провайдер блокирует сайт' : 'открывается (ответ HTTP ' + nw.http + ')' ]);
+			}
 			if (r.verdict === 'off') return { tone: 'off', cls: 'zm-off', label: 'Steer выключен', title: 'запрос пойдёт напрямую', lines: lines, note: 'Запустите Steer, чтобы сервисы шли через WARP или VPN.' };
-			if (r.verdict === 'exclude') return { tone: 'warn', cls: 'zm-warn', label: 'напрямую · исключение', title: 'адрес в «Исключениях» Steer — идёт мимо WARP и VPN', lines: lines,
-				note: 'Домен остаётся в списке сервиса — правило исключений просто стоит выше и срабатывает первым. «Напрямую» — значит через провайдера, мимо WARP и VPN: если сайт при этом открывается, его пропускает Zapret или провайдер его не блокирует. Браузер, открывавший сайт до исключения, ещё пару минут может ходить по старому подменному адресу через туннель — перезапустите его или очистите DNS-кэш. Чтобы сайт снова шёл через Steer, уберите строку из «Исключений».' };
+			if (r.verdict === 'exclude') {
+				var xn = [];
+				if (nw && nw.tun > 0) xn.push('Соединений к этому сайту, которые всё ещё идут через туннель: ' + nw.tun + ' — их открыл браузер до исключения по прежнему подменному адресу. Перезапустите браузер (или очистите кэш DNS: chrome://net-internals/#dns и #sockets) — новые соединения пойдут напрямую.');
+				else if (nw) xn.push('Через туннель к этому сайту сейчас не идёт ни одного соединения.');
+				if (nw && nw.http && nw.http !== '000') xn.push('С роутера напрямую сайт открывается — провайдер его пропускает или его пропускает Zapret. Поэтому сайт и открывается в браузере: исключение работает, просто сайт доступен и без туннеля.');
+				else if (nw && nw.http === '000') xn.push('С роутера напрямую сайт не открывается: если в браузере он всё же открывается — браузер ходит через туннель по старому адресу или через свой DNS/VPN/прокси.');
+				xn.push('Домен остаётся в списке сервиса — правило исключений стоит выше и срабатывает первым. Чтобы сайт снова шёл через Steer, уберите строку из «Исключений».');
+				return { tone: 'warn', cls: 'zm-warn', label: 'напрямую · исключение', title: 'адрес в «Исключениях» Steer — идёт мимо WARP и VPN', lines: lines, note: xn.join(' ') };
+			}
 			if (r.verdict === 'vpn') {
 				lines.push([ 'Выход', 'VPN' + (data.sub_label ? ' · ' + data.sub_label : '') ]);
 				lines.push([ 'Сервер', r.node ? r.node : 'выбирается автоматически (первый рабочий)' ]);
