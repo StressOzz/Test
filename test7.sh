@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 2.75
+# Version: 2.76
 ZM_VERSION_EOF
 set -e
 
@@ -11853,15 +11853,31 @@ steer_status() {
 	_st_cat_bg
 	[ -n "$(_st_wfix_min)" ] && _st_wfix_cron
 	sel=" $(_st_sel | tr '\n' ' ') "
-	svc="$(_rb_svc_src | awk -F'|' -v sel="$sel" -v skipf="$ST_SKIP" '
+	local cust=0
+	[ -s "$ST_USER_DIR/custom.lst" ] && cust=1
+	# dom — есть ли в списке пункта домены (значок «≡» на карточке): известное число из $ST_DOMCNT, иначе по
+	# источникам — у наборов каталога с одними подсетями («s» в индексе) доменов нет
+	svc="$(_rb_svc_src | awk -F'|' -v sel="$sel" -v skipf="$ST_SKIP" -v dcf="$ST_DOMCNT" -v idxf="$ST_CAT_IDX" -v cust="$cust" '
 		function j(v,    o, i, c) { o = ""; for (i = 1; i <= length(v); i++) { c = substr(v, i, 1); if (c == "\\") o = o "\\\\"; else if (c == "\"") o = o "\\\""; else if (c == "\t" || c == "\r" || c == "\n") o = o " "; else o = o c } return o }
-		BEGIN { while ((getline l < skipf) > 0) sk[l] = 1 }
+		function hasdom(    m, i, s) {
+			if ($1 == "custom") return cust + 0
+			if ($1 in dc) return dc[$1] > 0
+			if ($3 != "" || $5 != "" || $6 != "") return 1
+			m = split($8, s, ",")
+			for (i = 1; i <= m; i++) if (s[i] != "" && (!(s[i] in ik) || ik[s[i]] != "s")) return 1
+			return 0
+		}
+		BEGIN {
+			while ((getline l < skipf) > 0) sk[l] = 1
+			while ((getline l < dcf) > 0) { split(l, a, " "); if (a[1] != "") dc[a[1]] = a[2] + 0 }
+			while ((getline l < idxf) > 0) { split(l, a, "|"); if (a[1] != "") ik[a[1]] = a[4] }
+		}
 		$1 == "" || ($1 in seen) { next }
 		{ seen[$1] = 1 }
 		$1 != "custom" && $3 $4 $8 == "" { next }
 		{
-			printf "%s{\"id\":\"%s\",\"name\":\"%s\",\"group\":\"%s\",\"on\":%s,\"skip\":%s}", (n++ ? "," : ""), $1, j($2), j($9),
-				(index(sel, " " $1 " ") ? "true" : "false"), (($1 in sk) ? "true" : "false")
+			printf "%s{\"id\":\"%s\",\"name\":\"%s\",\"group\":\"%s\",\"on\":%s,\"skip\":%s,\"dom\":%s}", (n++ ? "," : ""), $1, j($2), j($9),
+				(index(sel, " " $1 " ") ? "true" : "false"), (($1 in sk) ? "true" : "false"), (hasdom() ? "true" : "false")
 		}')"
 	local vexit vup=false vsub=false latest="" ext=false won=false failed=false active=""
 	vexit="$(_st_exit)"
@@ -11941,6 +11957,96 @@ _st_list_effective() {
 
 # Списки, которые правит человек: «Свой список» (custom — через Steer) и «Исключения» (exclude — всегда напрямую).
 _st_user_list() { [ "$1" = exclude ] || { [ "$1" = custom ] && _rb_routable "$1"; }; }
+
+# Домены сервиса для просмотра (значок «≡» у карточки на вкладке «Сервисы»). Источники — те же, что берёт
+# применение (_st_svc_lists): наборы каталога, а если их нет или один не скачался — списки пакета, а без них —
+# основные домены сервиса; у «Своего списка» — ваши строки. Показываем только домены: подсети и адреса
+# отбрасываются. Наборы .srs раскладывает в текст ядро (steer srs-read) — тот же кэш, что у «Куда пойдёт
+# запрос». Пока идёт применение, ничего не качаем — берём то, что уже на роутере. Число доменов запоминаем
+# в $ST_DOMCNT: карточка, у которой в списке одни подсети, значка не показывает.
+ST_DOMCNT="$ST_DIR/domcount"
+_st_dom_norm() {
+	awk '{
+		l = tolower($0); sub(/[#;].*$/, "", l); gsub(/^[ \t\r]+|[ \t\r]+$/, "", l); sub(/[ \t].*$/, "", l)
+		sub(/^(domain|full|suffix|domain_suffix):/, "", l); sub(/^=/, "", l); sub(/^\*\./, "", l); sub(/^\./, "", l)
+		if (l ~ /^[a-z0-9]([a-z0-9_-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9_-]*[a-z0-9])?)+$/ && l !~ /^[0-9.]+$/) print l
+	}'
+}
+# $1 — сервис, $2 — итоговый файл. В $ST_DOM_SRC — откуда взяты домены (для подписи).
+_st_dom_build() {
+	local id="$1" out="$2" src="$2.src.$$" dl=1 sets set f fmt x ok=1
+	ST_DOM_SRC=""
+	_st_running && dl=0
+	mkdir -p "${out%/*}" "$ST_DIR/lists" "$ST_RUN/srsdump"
+	: > "$src"
+	if [ "$id" = custom ]; then
+		[ -s "$ST_USER_DIR/custom.lst" ] && echo "$ST_USER_DIR/custom.lst" >> "$src"
+		ST_DOM_SRC="ваши строки"
+	else
+		sets="$(_rb_svc_field "$id" 8 | tr ',' ' ')"
+		for set in $sets; do
+			fmt="$(awk -F'|' -v k="$set" '$1 == k { print $2; exit }' "$ST_CAT_IDX" 2>/dev/null)"
+			if [ "$fmt" = lst ]; then
+				f="$ST_DIR/lists/$set.dom"
+				[ -s "$f" ] || [ -s "$ST_DIR/lists/$set.pfx" ] || { [ "$dl" = 1 ] && _st_srs_get "$set" >/dev/null 2>&1; }
+				if [ -s "$f" ]; then echo "$f" >> "$src"
+				elif [ ! -s "$ST_DIR/lists/$set.pfx" ]; then ok=0; break; fi
+			else
+				f="$ST_DIR/lists/$set.srs"
+				[ -s "$f" ] || { [ "$dl" = 1 ] && _st_srs_get "$set" >/dev/null 2>&1; }
+				[ -s "$f" ] && command -v steer >/dev/null 2>&1 || { ok=0; break; }
+				x="$ST_RUN/srsdump/$(printf '%s' "$f" | tr -c 'A-Za-z0-9_.-' '_')"
+				if { [ ! -s "$x.dom" ] && [ ! -s "$x.pfx" ]; } || [ "$f" -nt "$x.dom" ]; then
+					rm -f "$x.dom" "$x.pfx"
+					steer srs-read "$f" --out "$x.dom" --prefixes-out "$x.pfx" >/dev/null 2>&1 || rm -f "$x.dom" "$x.pfx"
+				fi
+				[ -f "$x.dom" ] || { ok=0; break; }
+				[ -s "$x.dom" ] && echo "$x.dom" >> "$src"
+			fi
+		done
+		if [ -n "$sets" ] && [ "$ok" = 1 ]; then ST_DOM_SRC="каталог списков"
+		else
+			: > "$src"
+			for f in $(_rb_svc_field "$id" 3 | tr ',' ' '); do
+				if [ "$dl" = 1 ]; then _rb_list_get "$f" >/dev/null 2>&1; fi
+				[ -s "$ZM_LISTS_DIR/$f" ] && echo "$ZM_LISTS_DIR/$f" >> "$src"
+			done
+			if [ -s "$src" ]; then ST_DOM_SRC="списки сервиса"
+			else
+				printf '%s,%s\n' "$(_rb_svc_field "$id" 5)" "$(_rb_svc_field "$id" 6)" | tr ',' '\n' > "$out.base.$$"
+				[ -s "$out.base.$$" ] && echo "$out.base.$$" >> "$src"
+				ST_DOM_SRC="основные домены сервиса"
+			fi
+		fi
+	fi
+	while IFS= read -r f; do cat "$f"; echo; done < "$src" | _st_dom_norm | sort -u > "$out.$$"
+	mv -f "$out.$$" "$out"
+	rm -f "$src" "$out.base.$$"
+	printf '%s\n' "$ST_DOM_SRC" > "$out.how"
+}
+
+steer_svc_dom() {
+	local id="${1%%:*}" r o l f n
+	r="${1#*:}"; o="${r%%:*}"; l="${r#*:}"
+	case "$id" in ''|*[!A-Za-z0-9_.-]*) echo '{"error":"нет такого сервиса"}'; return 1 ;; esac
+	case "$o" in ''|*[!0-9]*) o=0 ;; esac
+	case "$l" in ''|*[!0-9]*) l=500 ;; esac
+	[ "$l" -gt 5000 ] && l=5000
+	[ "$l" -lt 1 ] && l=1
+	_rb_routable "$id" || { echo '{"error":"у этого пункта нет списка"}'; return 1; }
+	f="$ST_RUN/dom/$id.txt"
+	# файл моложе минуты берём как есть: «Скачать .txt» читает его частями
+	if [ ! -f "$f" ] || [ ! -f "$f.how" ] || [ -n "$(find "$f" -mmin +1 2>/dev/null)" ] || { [ "$o" = 0 ] && [ "$id" = custom ]; }; then
+		_st_dom_build "$id" "$f"
+	fi
+	n="$(wc -l < "$f" | tr -d ' ')"
+	if [ "$id" != custom ]; then
+		mkdir -p "$ST_DIR"
+		{ grep -v "^$id " "$ST_DOMCNT" 2>/dev/null; echo "$id $n"; } > "$ST_DOMCNT.$$" && mv -f "$ST_DOMCNT.$$" "$ST_DOMCNT"
+	fi
+	printf '{"id":"%s","name":"%s","count":%s,"offset":%s,"src":"%s","domains":"%s"}\n' "$id" "$(esc "$(_rb_svc_field "$id" 2)")" "${n:-0}" "$o" \
+		"$(esc "$(cat "$f.how" 2>/dev/null)")" "$(sed -n "$((o + 1)),$((o + l))p" "$f" | tr '\n' ' ')"
+}
 
 steer_list_get() {
 	local id="$1" body n tmp="$JOBS_DIR/steer-list.$$"
@@ -13171,6 +13277,7 @@ steer_action() {
 			steer_sub_action "$action" "$mode"
 			;;
 		list_get) steer_list_get "$mode" ;;
+		svc_dom) steer_svc_dom "$mode" ;;
 		devices) steer_devices ;;
 		devs_set)
 			_st_running && { echo '{"error":"дождитесь окончания текущей операции"}'; return 1; }
@@ -20702,6 +20809,7 @@ function svcCard(o) {
 	return E('div', { 'class': 'zm-svc' + (on ? ' zm-svc-on' : '') + (o.inc && !o.on ? ' zm-svc-inc' : '') + (o.cls ? ' ' + o.cls : ''), 'title': o.title || (o.inc && !o.on ? 'Входит в «Всё сразу» (Russia inside)' : (typeof o.name === 'string' ? o.name : '')), 'click': o.click }, [
 		E('div', { 'class': 'zm-svc-ico', 'style': 'background:' + (o.color || ic.color) }, o.ico || ic.ico),
 		E('div', { 'class': 'zm-svc-text' }, [ E('div', { 'class': 'zm-svc-name' }, svcTx(o.name)), o.inc && !o.on ? E('div', { 'class': 'zm-svc-sub' }, 'входит в «Всё сразу»') : o.sub ? E('div', { 'class': 'zm-svc-sub' }, svcTx(o.sub)) : E([]) ]),
+		o.extra || E([]),
 		o.right || E('div', { 'class': 'zm-switch' + (on ? ' zm-switch-on' : '') + (o.inc && !o.on ? ' zm-switch-inc' : '') }, [ E('span') ])
 	]);
 }
@@ -23087,6 +23195,7 @@ return view.extend({
 				zm.toast('Серверы обновлены — проверяем задержку до каждого', 'info');
 			}
 			diagRes = null;
+			domData = {};
 			renderAll();
 			loadSub();
 			if (ok && data.installed && !data.stopped && done !== 'stop' && done !== 'remove') runDiag(true);
@@ -23417,6 +23526,115 @@ return view.extend({
 		var CATEGORY_IDS = [ 'geoblock', 'block', 'news', 'anime', 'porn', 'hodca', 'russia_inside', 'russia_outside', 'ukraine_inside' ];
 		var openGroups = {};
 
+		/* Домены списка пункта: значок «≡» на карточке раскрывает их панелью под рядом карточек (как
+		 * раскрывается b4geoip). Открыт один список; показываем первые 500, весь — «Скачать .txt»
+		 * (читается с роутера частями). У пункта, где в списке одни подсети, значка нет. */
+		var domOpen = null, domData = {}, domCards = {}, domPanelEl = null, DOM_SHOW = 500, DOM_PART = 4000;
+		function domSvc(id) {
+			var r = null;
+			(data.services || []).forEach(function(x) { if (x.id === id) r = x; });
+			return r;
+		}
+		function domWord(n) { return plural(n, 'домен', 'домена', 'доменов'); }
+		function domNum(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ' '); }
+		function domIcon(s) {
+			if (!s.dom) return null;
+			var b = E('button', { 'type': 'button', 'class': 'zm-svc-dom' + (domOpen === s.id ? ' zm-active' : ''), 'title': 'Домены списка',
+				'aria-label': 'Домены списка «' + s.name + '»', 'click': function(ev) { ev.stopPropagation(); ev.preventDefault(); domToggle(s.id); } },
+				[ E('i'), E('i'), E('i') ]);
+			b._zmDom = s.id;
+			return b;
+		}
+		function domLoad(id) {
+			zm.steerAction('svc_dom', id + ':0:' + DOM_SHOW).then(function(r) {
+				if (r.error) { domData[id] = { error: String(r.error) }; domPlace(); return; }
+				var n = parseInt(r.count, 10) || 0;
+				domData[id] = { count: n, src: String(r.src || ''), list: String(r.domains || '').split(/\s+/).filter(function(x) { return x; }) };
+				if (!n) {
+					var sv = domSvc(id);
+					if (sv) sv.dom = false;
+					if (domOpen === id) domOpen = null;
+					zm.toast('В списке «' + (sv ? sv.name : id) + '» только подсети — доменов нет', 'info');
+					renderLists();
+					return;
+				}
+				domPlace();
+			}).catch(function() { domData[id] = { error: 'Роутер не ответил' }; domPlace(); });
+		}
+		function domToggle(id) {
+			domOpen = domOpen === id ? null : id;
+			if (domOpen && domData[domOpen] && domData[domOpen].error) delete domData[domOpen];
+			domPlace();
+		}
+		function domDownload(id) {
+			var d = domData[id], sv = domSvc(id);
+			if (!d || d.dl) return;
+			d.dl = true; domPlace();
+			var parts = [];
+			function done(err) {
+				d.dl = false; domPlace();
+				if (err) zm.toast(err, 'error');
+			}
+			function next(off) {
+				zm.steerAction('svc_dom', id + ':' + off + ':' + DOM_PART).then(function(r) {
+					if (r.error) { done(String(r.error)); return; }
+					var list = String(r.domains || '').split(/\s+/).filter(function(x) { return x; });
+					if (list.length) parts.push(list.join('\n'));
+					var total = parseInt(r.count, 10) || 0;
+					if (list.length && off + DOM_PART < total) { next(off + DOM_PART); return; }
+					var url = URL.createObjectURL(new Blob([ parts.join('\n') + '\n' ], { type: 'text/plain;charset=utf-8' }));
+					var a = E('a', { 'href': url, 'download': 'domains-' + id + '.txt', 'style': 'display:none' });
+					document.body.appendChild(a);
+					a.click();
+					setTimeout(function() { URL.revokeObjectURL(url); if (a.parentNode) a.parentNode.removeChild(a); }, 1500);
+					done();
+				}).catch(function() { done('Роутер не ответил'); });
+			}
+			next(0);
+		}
+		function domPanel(id) {
+			var d = domData[id], sv = domSvc(id) || { name: id }, body = [];
+			var sub = !d ? 'загружаем…' : d.error ? 'не удалось получить список'
+				: domNum(d.count) + ' ' + domWord(d.count) + (d.src ? ' · ' + d.src : '') + ' · с поддоменами';
+			var btns = [];
+			if (d && d.count) btns.push(E('button', { 'type': 'button', 'class': 'cbi-button', 'disabled': d.dl ? '' : null, 'click': function() { domDownload(id); } }, d.dl ? 'Скачиваем…' : 'Скачать .txt'));
+			btns.push(E('button', { 'type': 'button', 'class': 'cbi-button', 'click': function() { domToggle(id); } }, 'Свернуть'));
+			if (!d) body.push(E('p', { 'class': 'zm-hint zm-dom-more' }, 'Читаем список с роутера…'));
+			else if (d.error) body.push(E('div', { 'class': 'zm-refresh-banner zm-show', 'style': 'margin-top:12px' }, d.error));
+			else {
+				body.push(E('div', { 'class': 'zm-dom-list' }, d.list.map(function(x) { return E('div', { 'class': 'zm-dom-item' }, x); })));
+				if (d.count > d.list.length) body.push(E('p', { 'class': 'zm-hint zm-dom-more' }, 'Показаны первые ' + domNum(d.list.length) + ' из ' + domNum(d.count) + ' — весь список в «Скачать .txt».'));
+			}
+			return E('div', { 'class': 'zm-dom-panel' }, [
+				E('div', { 'class': 'zm-dom-head' }, [
+					E('div', { 'class': 'zm-dom-title' }, [ E('b', {}, 'Домены · ' + sv.name), E('span', { 'class': 'zm-dom-sub' }, sub) ]),
+					E('div', { 'class': 'zm-dom-btns' }, btns)
+				])
+			].concat(body));
+		}
+		/* Панель встаёт сразу за последней карточкой того же ряда — ряд узнаём по offsetTop. */
+		function domPlace() {
+			if (domPanelEl && domPanelEl.parentNode) domPanelEl.parentNode.removeChild(domPanelEl);
+			domPanelEl = null;
+			Object.keys(domCards).forEach(function(k) {
+				var b = domCards[k] && domCards[k].querySelector('.zm-svc-dom');
+				if (b) b.classList.toggle('zm-active', k === domOpen);
+			});
+			var card = domOpen && domCards[domOpen];
+			if (!card || !card.parentNode || !document.body.contains(card)) return;
+			if (domData[domOpen] === undefined) { domData[domOpen] = null; domLoad(domOpen); }
+			domPanelEl = domPanel(domOpen);
+			var n = card, top = card.offsetTop;
+			while (n.nextElementSibling && n.nextElementSibling.offsetTop === top) n = n.nextElementSibling;
+			card.parentNode.insertBefore(domPanelEl, n.nextSibling);
+		}
+		var domResizeT = null;
+		window.addEventListener('resize', function() {
+			if (!domOpen) return;
+			clearTimeout(domResizeT);
+			domResizeT = setTimeout(domPlace, 150);
+		});
+
 		function catalogEdit() {
 			var c = data.catalog || {};
 			var u = prompt('Ссылка на свой каталог списков (lists.json в формате splify2-lists, например из форка).\n\nПусто — каталог по умолчанию.', c.custom ? c.url : '');
@@ -23449,7 +23667,7 @@ return view.extend({
 					setTimeout(refresh, 1200);
 					zm.catalogWatch(c, refresh);
 				}).catch(function() { zm.toast('Роутер не ответил', 'error'); });
-			} }, 'Обновить'));
+			} }, 'Обновить каталог'));
 			if (!c.off) b.push(E('button', { 'class': 'cbi-button', 'click': catalogEdit }, 'Сменить источник'));
 			b.push(E('button', { 'class': 'cbi-button', 'click': function() {
 				var turnOn = !!c.off;
@@ -23473,17 +23691,20 @@ return view.extend({
 			var all = data.services || [];
 			var list = all.filter(function(s) { return s.id !== 'custom'; }).map(function(s) {
 				if (!/^c_itdoginfo_/.test(s.id) && !/^itdoginfo/i.test(s.group || '')) return s;
-				return { id: s.id, name: s.name, group: '', cat: true, on: s.on, skip: s.skip };
+				return { id: s.id, name: s.name, group: '', cat: true, on: s.on, skip: s.skip, dom: s.dom };
 			});
 			list.forEach(function(s) { if (!!sel[s.id] !== !!cur[s.id]) changed = true; });
+			domCards = {};
 			function tile(s) {
-				return zm.svcCard({ name: s.name, key: s.id, on: !!sel[s.id], inc: !!sel.russia_inside && s.id !== 'russia_inside' && !s.group && zm.riCovers(s.id), click: function() {
+				var el = zm.svcCard({ name: s.name, key: s.id, on: !!sel[s.id], inc: !!sel.russia_inside && s.id !== 'russia_inside' && !s.group && zm.riCovers(s.id), extra: domIcon(s), click: function() {
 					if (busy) { zm.toast('Дождитесь окончания текущей операции', 'warning'); return; }
 					pick = {};
 					for (var k in sel) if (sel[k] && k !== 'custom') pick[k] = true;
 					zm.svcPickToggle(pick, s.id);
 					renderLists();
 				} });
+				if (s.dom) domCards[s.id] = el;
+				return el;
 			}
 			var remote = list.filter(function(s) { return !!s.group; });
 			var svcs = list.filter(function(s) { return !s.group && !s.cat && CATEGORY_IDS.indexOf(s.id) < 0; });
@@ -23546,6 +23767,8 @@ return view.extend({
 			});
 			bar.set(changed, false);
 			listCard.appendChild(bar);
+			if (domOpen && !domCards[domOpen]) domOpen = null;
+			domPlace();
 		}
 
 		function loadCustom() {
@@ -27808,6 +28031,26 @@ html.zm-theme-dark .zm-seg { background: #22272e; border-color: rgba(255,255,255
 .zm-svc-group { width: 100%; }
 .zm-svc-chev { display: inline-block; font-size: 20px; line-height: 1; opacity: .55; transition: transform .15s; }
 .zm-svc-open .zm-svc-chev { transform: rotate(90deg); }
+.zm-svc-dom { flex-shrink: 0; box-sizing: border-box; width: 28px; height: 28px; min-width: 0; min-height: 0; margin: 0; padding: 0; line-height: 1; box-shadow: none; -webkit-appearance: none; appearance: none; display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+	border-radius: 9px; border: 1px solid rgba(110,118,129,.32); background: transparent; color: inherit; cursor: pointer; transition: background .15s, border-color .15s, color .15s; }
+.zm-svc-dom > i { display: block; width: 11px; height: 2px; border-radius: 2px; background: currentColor; opacity: .8; }
+.zm-svc-dom:hover { border-color: #1aa3ff; }
+.zm-svc-dom:focus-visible { outline: 2px solid #1aa3ff; outline-offset: 2px; }
+.zm-svc-dom.zm-active { background: #1aa3ff; border-color: #1aa3ff; color: #fff; }
+.zm-dom-panel { grid-column: 1 / -1; min-width: 0; padding: 14px 16px; border-radius: 12px; border: 1px solid rgba(26,163,255,.45); background: rgba(26,163,255,.05); animation: zmDomIn .16s ease-out; }
+.zm-dom-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.zm-dom-title { display: flex; flex-direction: column; gap: 2px; flex: 1 1 220px; min-width: 0; }
+.zm-dom-title b { font-size: 14px; }
+.zm-dom-sub { font-size: 12px; opacity: .65; }
+.zm-dom-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.zm-dom-btns .cbi-button { margin: 0; }
+.zm-dom-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); column-gap: 24px; margin-top: 12px; padding: 6px 14px; max-height: 360px; overflow: auto;
+	border-radius: 10px; border: 1px solid rgba(110,118,129,.18); background: var(--background-color-medium, #fff); }
+html.zm-theme-dark .zm-dom-list { background: #1b2027; }
+.zm-dom-item { min-width: 0; padding: 5px 0; border-bottom: 1px solid rgba(110,118,129,.12); font-family: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace; font-size: 12.5px; overflow-wrap: anywhere; }
+.zm-dom-more { margin: 10px 0 0; font-size: 12px; }
+@keyframes zmDomIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .zm-dom-panel { animation: none; } }
 .zm-st-stats.zm-st-stats-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .zm-st-stats.zm-fk-secs { grid-template-columns: repeat(auto-fill, minmax(min(240px, 100%), 1fr)); }
 .zm-fk-sec { cursor: pointer; transition: border-color .15s, transform .1s; }
@@ -30586,7 +30829,7 @@ return view.extend({
 					setTimeout(function() { reload(); }, 1200);
 					zm.catalogWatch(c, function() { reload(); });
 				});
-			} }, 'Обновить'));
+			} }, 'Обновить каталог'));
 			if (!c.off) b.push(E('button', { 'class': 'cbi-button', 'click': function() {
 				var u = prompt('Ссылка на свой каталог списков (lists.json в формате splify2-lists, например из форка).\n\nПусто — каталог по умолчанию.', c.custom ? c.url : '');
 				if (u === null) return;
@@ -35439,6 +35682,15 @@ html[data-theme="dark"] .zm-stopbar, html[data-theme="depth"] .zm-stopbar { back
 #zmw-view .zm-swrow-label { color: var(--text); }
 #zmw-view .zm-svc.zm-svc-inc { border-style: dashed; }
 #zmw-view .zm-svc.zm-svc-taken { opacity: .5; cursor: not-allowed; }
+#zmw-view .zm-svc-dom { border-color: var(--border-2, var(--border)); color: var(--text-2, var(--text)); }
+#zmw-view .zm-svc-dom:hover { border-color: var(--a1); }
+#zmw-view .zm-svc-dom:focus-visible { outline-color: var(--a1); }
+#zmw-view .zm-svc-dom.zm-active { background: var(--grad); border-color: transparent; color: #fff; }
+#zmw-view .zm-dom-panel { background: var(--surface-2); border-color: var(--border-2, var(--border)); border-radius: 14px; }
+#zmw-view .zm-dom-title b { color: var(--text); }
+#zmw-view .zm-dom-sub, #zmw-view .zm-dom-more { color: var(--muted); opacity: 1; }
+#zmw-view .zm-dom-list, html.zm-theme-dark #zmw-view .zm-dom-list { background: var(--surface-solid); border-color: var(--border); }
+#zmw-view .zm-dom-item { font-family: var(--mono); color: var(--text); border-bottom-color: var(--border); }
 #zmw-view .zm-sb-left, #zmw-view .zm-lists-now { background: var(--surface-2); border-color: var(--border); border-radius: var(--radius-sm); color: var(--text); }
 #zmw-view .zm-sb-left { background: var(--bad-bg); border-color: rgba(239,68,68,.3); }
 .zm-stopbar .cbi-button.zm-stopbar-btn { padding: 10px 18px; border-radius: 12px; font-size: 14px; line-height: 1.2; box-shadow: 0 8px 20px -10px rgba(220,38,38,.8); }
