@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 2.77
+# Version: 2.78
 ZM_VERSION_EOF
 set -e
 
@@ -12096,9 +12096,9 @@ _st_ip_in() {
 steer_svc_find() {
 	local q host="" ip="" d="$ST_RUN/dom" suf="$ST_RUN/find.$$.s" res="$ST_RUN/find.$$.r" sel miss nmiss=0 sep=""
 	local id name f3 f4 f5 f6 f7 f8 rest f by line n grp on
-	q="$(_zm_route_target "$1")" || { echo '{"error":"введите сайт, например claude.ai"}'; return 1; }
+	q="$(_zm_route_target "$1")" || { echo '{"error":"введите сайт, например fast.com"}'; return 1; }
 	if printf '%s' "$q" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$'; then ip="$q"
-	elif printf '%s' "$q" | grep -q ':'; then echo '{"error":"введите домен, например claude.ai"}'; return 1
+	elif printf '%s' "$q" | grep -q ':'; then echo '{"error":"введите домен, например fast.com"}'; return 1
 	else host="$q"; ip="$(_st_find_ip "$host")"; fi
 	mkdir -p "$d"
 	sel=" $(_st_sel | tr '\n' ' ') "
@@ -23740,6 +23740,9 @@ return view.extend({
 		 * Списки, которых ещё нет на роутере, докачиваются в фоне — поиск сам повторяется. */
 		var findEl = null, findQ = '', findRes = null, findBusy = false, findT = null, findRetryT = null, findSeq = 0, findTries = 0, findAdding = false;
 		function findSel() { return pick || currentPick(); }
+		function findSvg(cls, svg) { var el = E('span', { 'class': cls, 'aria-hidden': 'true' }); el.innerHTML = svg; return el; }
+		var FIND_LOUPE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.4 15.4L20 20"/></svg>';
+		var FIND_CROSS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg>';
 		function findKey(ev) { if (ev.key === 'Escape' && findEl) { ev.preventDefault(); findClose(); } }
 		function findClose() {
 			clearTimeout(findT); clearTimeout(findRetryT);
@@ -23749,16 +23752,15 @@ return view.extend({
 		}
 		function findOpen() {
 			if (findEl || data.blocker) return;
-			var input = E('input', { 'type': 'text', 'class': 'zm-find-input', 'placeholder': 'Сайт, например claude.ai', 'aria-label': 'Сайт или домен',
+			var input = E('input', { 'type': 'text', 'class': 'zm-find-input', 'placeholder': 'Сайт, например fast.com', 'aria-label': 'Сайт или домен',
 				'autocomplete': 'off', 'autocapitalize': 'off', 'spellcheck': 'false', 'enterkeyhint': 'search' });
 			input.value = findQ;
 			var body = E('div', { 'class': 'zm-find-body' });
 			var box = E('div', { 'class': 'zm-find zmw-modal', 'role': 'dialog', 'aria-modal': 'true', 'aria-label': 'Найти сайт в списках' }, [
-				E('div', { 'class': 'zm-find-bar' }),
 				E('div', { 'class': 'zm-find-field' }, [
-					E('span', { 'class': 'zm-find-ico', 'aria-hidden': 'true' }),
+					findSvg('zm-find-ico', FIND_LOUPE),
 					input,
-					E('button', { 'type': 'button', 'class': 'zm-find-esc', 'title': 'Закрыть', 'click': findClose }, 'Esc')
+					E('button', { 'type': 'button', 'class': 'zm-find-x', 'title': 'Закрыть', 'aria-label': 'Закрыть', 'click': findClose }, [ findSvg('zm-find-x-ico', FIND_CROSS) ])
 				]),
 				body
 			]);
@@ -23877,7 +23879,7 @@ return view.extend({
 						var on = !!sel[h.id], inc = !on && !!sel.russia_inside && h.id !== 'russia_inside' && !h.group && zm.riCovers(h.id);
 						var size = +h.size || 0;
 						var why = (h.by === 'dom' ? 'в списке есть ' + h.line : 'адрес ' + (r.ip || '') + ' в подсети ' + h.line)
-							+ (h.group ? ' · ' + h.group : '') + (size > 20000 ? ' · большой список' : '');
+							+ (h.group ? ' · ' + String(h.group).replace(/\s*\(.*\)\s*$/, '') : '') + (size > 20000 ? ' · большой список' : '');
 						var ic = zm.svcIco ? zm.svcIco(h.name, h.id) : null;
 						listEl.appendChild(E('div', { 'class': 'zm-find-row' + (on || inc ? ' zm-on' : ''), 'role': 'button', 'tabindex': '0',
 							'click': function() { findToggle(h.id); },
@@ -23967,7 +23969,6 @@ return view.extend({
 			listCard.innerHTML = '';
 			listCard.style.display = data.blocker ? 'none' : '';
 			if (data.blocker) return;
-			listCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Нажмите на пункт, чтобы включить или выключить его, и затем «Сохранить и применить». Списки берутся из каталога списков (itdoginfo/allow-domains, b4geoip и другие) и обновляются при каждом применении.'));
 			var cur = currentPick(), sel = pick || cur, changed = false;
 			var all = data.services || [];
 			var list = all.filter(function(s) { return s.id !== 'custom'; }).map(function(s) {
@@ -23992,8 +23993,8 @@ return view.extend({
 			var cats = list.filter(function(s) { return !s.group && (s.cat || CATEGORY_IDS.indexOf(s.id) >= 0); });
 			listCard.appendChild(E('div', { 'class': 'zm-find-head' }, [
 				E('h4', { 'style': 'margin:0' }, 'Сервисы'),
-				E('button', { 'type': 'button', 'class': 'zm-find-open', 'title': 'Найти сайт в списках (Ctrl+K)', 'click': findOpen }, [
-					E('span', { 'class': 'zm-find-ico', 'aria-hidden': 'true' }), 'Найти сайт', E('kbd', {}, 'Ctrl K')
+				E('button', { 'type': 'button', 'class': 'zm-find-open', 'title': 'Найти сайт в списках', 'click': findOpen }, [
+					findSvg('zm-find-ico', FIND_LOUPE), 'Найти сайт'
 				])
 			]));
 			listCard.appendChild(zm.svcGrid(svcs.map(tile)));
@@ -28340,27 +28341,27 @@ html.zm-theme-dark .zm-dom-list { background: #1b2027; }
 @media (prefers-reduced-motion: reduce) { .zm-dom-panel { animation: none; } }
 .zm-find-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .zm-find-head > h4 { flex: 1 1 auto; }
-.zm-find-open { display: inline-flex; align-items: center; gap: 9px; box-sizing: border-box; height: 38px; margin: 0; padding: 0 7px 0 12px; border-radius: 11px; border: 1px solid rgba(110,118,129,.3);
+.zm-find-open { display: inline-flex; align-items: center; gap: 8px; box-sizing: border-box; height: 38px; margin: 0; padding: 0 14px 0 12px; border-radius: 11px; border: 1px solid rgba(110,118,129,.3);
 	background: transparent; color: inherit; font: inherit; font-weight: 700; font-size: 13.5px; line-height: 1; cursor: pointer; box-shadow: none; -webkit-appearance: none; appearance: none; transition: border-color .15s, background .15s; }
 .zm-find-open:hover { border-color: #1aa3ff; }
 .zm-find-open:focus-visible { outline: 2px solid #1aa3ff; outline-offset: 2px; }
-.zm-find-open kbd, .zm-find-esc { font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace; font-size: 11px; font-weight: 600; padding: 4px 7px; border-radius: 7px; background: rgba(110,118,129,.14); border: 0; color: inherit; opacity: .8; }
-.zm-find-ico { position: relative; display: inline-block; flex-shrink: 0; width: 15px; height: 15px; }
-.zm-find-ico::before { content: ""; position: absolute; left: 0; top: 0; width: 9px; height: 9px; border: 2px solid currentColor; border-radius: 50%; }
-.zm-find-ico::after { content: ""; position: absolute; left: 10px; top: 10px; width: 6px; height: 2px; background: currentColor; border-radius: 2px; transform: rotate(45deg); transform-origin: 0 50%; }
+.zm-find-ico, .zm-find-x-ico { display: inline-flex; flex-shrink: 0; width: 17px; height: 17px; }
+.zm-find-ico > svg, .zm-find-x-ico > svg { display: block; width: 100%; height: 100%; }
+.zm-find-open .zm-find-ico { color: #6d4cff; }
+.zm-find-x { flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; width: 36px; height: 36px; margin: 0; padding: 0; border: 0; border-radius: 10px;
+	background: rgba(110,118,129,.12); color: inherit; cursor: pointer; box-shadow: none; -webkit-appearance: none; appearance: none; transition: background .15s, transform .15s; }
+.zm-find-x:hover { background: rgba(110,118,129,.22); }
+.zm-find-x:focus-visible { outline: 2px solid #6d4cff; outline-offset: 2px; }
+.zm-find-x .zm-find-x-ico { width: 16px; height: 16px; opacity: .8; }
 .zm-find-wrap { position: fixed; inset: 0; z-index: 10000; display: flex; align-items: flex-start; justify-content: center; padding: 9vh 16px 16px; box-sizing: border-box;
 	background: rgba(15,23,42,.45); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); animation: zmFindFade .15s ease-out; }
-.zm-find { width: 100%; max-width: 640px; max-height: 82vh; display: flex; flex-direction: column; overflow: hidden; border-radius: 22px;
+.zm-find { width: 100%; max-width: 640px; max-height: 82vh; display: flex; flex-direction: column; overflow: hidden; box-sizing: border-box; border-radius: 22px; border: 1px solid rgba(124,92,255,.38);
 	background: var(--background-color-high, #fff); color: var(--text-color-highest, #0f172a); box-shadow: 0 30px 80px -20px rgba(15,23,42,.55); animation: zmFindIn .18s ease-out; }
 html.zm-theme-dark .zm-find { background: #1c2128; color: #e6edf3; }
-.zm-find-bar { flex-shrink: 0; height: 4px; background: linear-gradient(90deg, #7c5cff 0%, #3b82f6 55%, #22d3ee 100%); }
 .zm-find-field { flex-shrink: 0; display: flex; align-items: center; gap: 14px; padding: 0 18px 0 22px; height: 66px; border-bottom: 1px solid rgba(110,118,129,.18); }
-.zm-find-field > .zm-find-ico { width: 18px; height: 18px; color: #6d4cff; }
-.zm-find-field > .zm-find-ico::before { width: 11px; height: 11px; }
-.zm-find-field > .zm-find-ico::after { left: 12px; top: 12px; width: 7px; }
+.zm-find-field > .zm-find-ico { width: 21px; height: 21px; color: #6d4cff; }
 .zm-find-input, .zm-find-input:focus { flex: 1; min-width: 0; height: 44px; margin: 0; padding: 0; border: 0 !important; outline: none; box-shadow: none !important; background: transparent !important; color: inherit;
 	font-family: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace; font-size: 19px; }
-.zm-find-esc { cursor: pointer; }
 .zm-find-body { overflow: auto; padding: 14px 14px 16px; }
 .zm-find-title { font-size: 11.5px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; opacity: .6; padding: 2px 10px 8px; }
 .zm-find-list { display: flex; flex-direction: column; gap: 4px; }
@@ -28394,9 +28395,8 @@ html.zm-theme-dark .zm-find-tag-dom { color: #c4b5fd; } html.zm-theme-dark .zm-f
 	.zm-find-field { height: 58px; padding: 0 12px 0 16px; }
 	.zm-find-input { font-size: 16px; }
 	.zm-find-tag { display: none; }
-	.zm-find-open kbd { display: none; }
 }
-@media (prefers-reduced-motion: reduce) { .zm-find-wrap, .zm-find { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .zm-find-wrap, .zm-find { animation: none; } .zm-find-spin { animation: zmFindSpin .9s linear infinite !important; } }
 .zm-st-stats.zm-st-stats-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .zm-st-stats.zm-fk-secs { grid-template-columns: repeat(auto-fill, minmax(min(240px, 100%), 1fr)); }
 .zm-fk-sec { cursor: pointer; transition: border-color .15s, transform .1s; }
@@ -36039,15 +36039,17 @@ html[data-theme="dark"] .zm-stopbar, html[data-theme="depth"] .zm-stopbar { back
 #zmw-view .zm-dom-item { font-family: var(--mono); color: var(--text); border-bottom-color: var(--border); }
 #zmw-view .zm-find-open { border-color: var(--border-2, var(--border)); color: var(--text); }
 #zmw-view .zm-find-open:hover { border-color: var(--a1); background: var(--surface-2); }
-#zmw-view .zm-find-open kbd { background: var(--surface-3, var(--surface-2)); color: var(--muted); opacity: 1; }
+#zmw-view .zm-find-open .zm-find-ico { color: var(--a1, #6d4cff); }
 .zm-find-wrap { background: rgba(5,7,12,.5); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
-.zm-find { background: var(--surface-solid, #fff); color: var(--text, #0f172a); border: 1px solid var(--border-2, transparent); box-shadow: var(--shadow-lg); font-family: var(--font, inherit); }
+.zm-find { background: var(--surface-solid, #fff); color: var(--text, #0f172a); border: 1px solid rgba(124,92,255,.42); box-shadow: var(--shadow-lg); font-family: var(--font, inherit); }
 html.zm-theme-dark .zm-find { background: var(--surface-solid, #1c2128); color: var(--text, #e6edf3); }
-.zm-find-bar { background: var(--grad, linear-gradient(90deg, #7c5cff, #3b82f6, #22d3ee)); }
 .zm-find-field { border-bottom-color: var(--border, rgba(110,118,129,.18)); }
 .zm-find-field > .zm-find-ico { color: var(--a1, #6d4cff); }
 .zm-find-input, .zm-find-input:focus { font-family: var(--mono); color: var(--text); }
-.zm-find-esc { background: var(--surface-2); color: var(--muted); opacity: 1; }
+.zm-find-x { background: var(--surface-2); color: var(--text-2, var(--text)); }
+.zm-find-x:hover { background: var(--surface-3, var(--surface-2)); }
+/* крутилка поиска — индикатор работы, а не украшение: крутится и при «уменьшить движение» */
+.zm-find-spin { animation: zmFindSpin .9s linear infinite !important; }
 .zm-find-title, .zm-find-why, .zm-find-empty > span, .zm-find-note { color: var(--muted); opacity: 1; }
 .zm-find-row:hover, .zm-find-row:focus-visible { background: var(--surface-2); border-color: var(--border-2, var(--border)); }
 .zm-find-row.zm-on { background: var(--grad-soft, rgba(124,92,255,.1)); border-color: rgba(124,92,255,.45); }
@@ -36058,7 +36060,7 @@ html.zm-theme-dark .zm-find { background: var(--surface-solid, #1c2128); color: 
 .zm-find .cbi-button { border-radius: 12px; }
 .zm-find .cbi-button-action { background: var(--grad); border-color: transparent; color: #fff; }
 .zm-find .cbi-button[disabled] { opacity: .55; }
-.zmw-modal.zm-find { width: 100%; max-width: 640px; max-height: 82vh; padding: 0; overflow: hidden; border-radius: 22px; }
+.zmw-modal.zm-find { width: 100%; max-width: 640px; max-height: 82vh; padding: 0; overflow: hidden; border-radius: 22px; border: 1px solid rgba(124,92,255,.42); }
 .zmw-modal.zm-find .zm-find-input, .zmw-modal.zm-find .zm-find-input:focus { width: auto; height: 44px; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; font-size: 19px; }
 @media (max-width: 600px) { .zmw-modal.zm-find { max-height: calc(100vh - 24px); border-radius: 18px; } .zmw-modal.zm-find .zm-find-input { font-size: 16px; } }
 #zmw-view .zm-sb-left, #zmw-view .zm-lists-now { background: var(--surface-2); border-color: var(--border); border-radius: var(--radius-sm); color: var(--text); }
