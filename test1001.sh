@@ -1,7 +1,7 @@
 #!/bin/sh
 # ==========================================================================
 #  FakeDPI для OpenWrt — FakeSIP (UDP) + FakeHTTP (TCP) «из коробки»
-#  Version: 1.00
+#  Version: 1.01
 #
 #  Использование:
 #    sh fakedpi.sh            — установить / переустановить и запустить
@@ -15,7 +15,7 @@
 #             github.com/MikeWang000000/FakeHTTP
 # ==========================================================================
 
-VERSION="1.00"
+VERSION="1.01"
 BIN_DIR="/usr/bin"
 INIT="/etc/init.d/fakedpi"
 CFG="/etc/config/fakedpi"
@@ -132,6 +132,11 @@ config main 'main'
 	# домены, под которые FakeHTTP маскирует TCP (HTTP / HTTPS)
 	option http_host 'ya.ru'
 	option https_host 'ya.ru'
+	# 1 — подделка ещё и обычным HTTP-запросом. FakeHTTP чередует подделки по соединениям,
+	# поэтому с HTTP половина HTTPS-соединений (YouTube) получала бы бесполезную HTTP-подделку
+	option http_fake '0'
+	# 1 — запретить QUIC (UDP 80/443) устройствам: YouTube и браузеры уйдут на TCP, где работает FakeHTTP
+	option block_quic '1'
 	# порты, которые не трогать (через пробел, можно диапазоны 50000-50100)
 	option exclude_udp '53 67 68 123 5353'
 	option exclude_tcp '22 53'
@@ -196,7 +201,7 @@ zapret_ports() { # tcp|udp
 
 # "53 67 50000-50100" -> "53, 67, 50000-50100" (только валидные, без повторов)
 port_list() {
-	echo $* | tr ' ' '\n' | grep -E '^[0-9]+(-[0-9]+)?$' | sort -u | tr '\n' ',' | sed 's/,$//; s/,/, /g'
+	echo $* | tr ' ' '\n' | grep -E '^[0-9]+(-[0-9]+)?$' | sort -n | uniq | tr '\n' ',' | sed 's/,$//; s/,/, /g'
 }
 
 build_nft() {
@@ -233,6 +238,7 @@ build_nft() {
   }
   chain sip_rules {
     meta mark and $MSIP == $MSIP return
+    meta mark and $MZAP != 0 return
     meta l4proto != udp return
     $NO6
     udp dport @ex_udp return
@@ -259,12 +265,21 @@ NFT
   }
   chain http_rules {
     meta mark and $MHTTP == $MHTTP return
+    meta mark and $MZAP != 0 return
     meta l4proto != tcp return
     $NO6
     tcp dport @ex_tcp return
     tcp sport @ex_tcp return
     tcp flags & (syn | fin | rst) == syn counter queue num $QHTTP bypass
     tcp flags & (syn | ack | fin | rst) == ack ct packets 2-4 counter queue num $QHTTP bypass
+  }
+NFT
+	fi
+	if [ "$BQ" = 1 ]; then
+	cat <<NFT
+  chain quic {
+    type filter hook forward priority filter - 5; policy accept;
+    oifname @wanif udp dport { 80, 443 } counter reject
   }
 NFT
 	fi
@@ -286,10 +301,14 @@ start_service() {
 	config_get_bool ZC main zapret_compat 1
 	config_get_bool V6 main ipv6 1
 	config_get_bool LOG main log 0
-	MSIP=0x10000
-	MHTTP=0x8000
+	config_get_bool HF main http_fake 0
+	config_get_bool BQ main block_quic 1
+	# свои метки: 0x10000 занят ByeTube, 0x20000000 и 0x40000000 — zapret
+	MSIP=0x40000
+	MHTTP=0x80000
+	MZAP=0x60000000
 
-	[ "$SIP" = 1 ] || [ "$HTTP" = 1 ] || { logger -t fakedpi "всё выключено в /etc/config/fakedpi"; return 0; }
+	[ "$SIP" = 1 ] || [ "$HTTP" = 1 ] || [ "$BQ" = 1 ] || { logger -t fakedpi "всё выключено в /etc/config/fakedpi"; return 0; }
 	[ -x /usr/bin/fakesip ] || SIP=0
 	[ -x /usr/bin/fakehttp ] || HTTP=0
 
@@ -334,7 +353,11 @@ start_service() {
 	fi
 	if [ "$HTTP" = 1 ]; then
 		procd_open_instance fakehttp
-		procd_set_param command /usr/bin/fakehttp $common -n "$QHTTP" -m "$MHTTP" -h "$HHOST" -e "$SHOST"
+		if [ "$HF" = 1 ]; then
+			procd_set_param command /usr/bin/fakehttp $common -n "$QHTTP" -m "$MHTTP" -h "$HHOST" -e "$SHOST"
+		else
+			procd_set_param command /usr/bin/fakehttp $common -n "$QHTTP" -m "$MHTTP" -e "$SHOST"
+		fi
 		procd_set_param respawn 3600 5 0
 		[ "$LOG" = 1 ] && procd_set_param stderr 1
 		procd_close_instance
@@ -349,6 +372,7 @@ QHTTP="$QHTTP"
 EXU="$EXU"
 EXT="$EXT"
 ZAPRET="$([ -n "$ZT" ] && echo 1 || echo 0)"
+QUIC="$BQ"
 ST
 	logger -t fakedpi "запущен: WAN=[$WAN] fakesip=$SIP(q$QSIP) fakehttp=$HTTP(q$QHTTP)"
 }
@@ -394,9 +418,11 @@ do_status() {
 		[ "$ZAPRET" = 1 ] && printf "  Совместимость с zapret: ${G}вкл${N}\n"
 	fi
 	if nft list table inet fakedpi >/dev/null 2>&1; then
-		ps="$(nft list chain inet fakedpi sip_rules 2>/dev/null | grep -o 'packets [0-9]*' | tail -n1 | awk '{print $2}')"
-		ph="$(nft list chain inet fakedpi http_rules 2>/dev/null | grep -o 'packets [0-9]*' | awk '{s+=$2} END{print s+0}')"
+		ps="$(nft list chain inet fakedpi sip_rules 2>/dev/null | grep -o 'counter packets [0-9]*' | awk '{s+=$3} END{print s+0}')"
+		ph="$(nft list chain inet fakedpi http_rules 2>/dev/null | grep -o 'counter packets [0-9]*' | awk '{s+=$3} END{print s+0}')"
+		pq="$(nft list chain inet fakedpi quic 2>/dev/null | grep -o 'counter packets [0-9]*' | awk '{s+=$3} END{print s+0}')"
 		printf "  Обработано пакетов: UDP=%s  TCP=%s\n" "${ps:-0}" "${ph:-0}"
+		nft list chain inet fakedpi quic >/dev/null 2>&1 && printf "  QUIC запрещён: ${G}да${N} (отклонено пакетов: %s)\n" "${pq:-0}"
 	else
 		printf "  Правила nftables: ${R}не загружены${N}\n"
 	fi
