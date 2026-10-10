@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 2.76
+# Version: 2.77
 ZM_VERSION_EOF
 set -e
 
@@ -11974,13 +11974,14 @@ _st_dom_norm() {
 }
 # $1 — сервис, $2 — итоговый файл. В $ST_DOM_SRC — откуда взяты домены (для подписи).
 _st_dom_build() {
-	local id="$1" out="$2" src="$2.src.$$" dl=1 sets set f fmt x ok=1
-	ST_DOM_SRC=""
-	_st_running && dl=0
+	local id="$1" out="$2" src="$2.src.$$" pfx="$2.pfx.$$" dl=1 sets set f fmt x ok=1
+	ST_DOM_SRC=""; ST_DOM_MISS=""
+	{ _st_running || [ -n "$ST_DOM_NODL" ]; } && dl=0
 	mkdir -p "${out%/*}" "$ST_DIR/lists" "$ST_RUN/srsdump"
-	: > "$src"
+	: > "$src"; : > "$pfx"
 	if [ "$id" = custom ]; then
 		[ -s "$ST_USER_DIR/custom.lst" ] && echo "$ST_USER_DIR/custom.lst" >> "$src"
+		[ -s "$ST_USER_DIR/custom.pfx" ] && echo "$ST_USER_DIR/custom.pfx" >> "$pfx"
 		ST_DOM_SRC="ваши строки"
 	else
 		sets="$(_rb_svc_field "$id" 8 | tr ',' ' ')"
@@ -11989,11 +11990,13 @@ _st_dom_build() {
 			if [ "$fmt" = lst ]; then
 				f="$ST_DIR/lists/$set.dom"
 				[ -s "$f" ] || [ -s "$ST_DIR/lists/$set.pfx" ] || { [ "$dl" = 1 ] && _st_srs_get "$set" >/dev/null 2>&1; }
+				[ -s "$ST_DIR/lists/$set.pfx" ] && echo "$ST_DIR/lists/$set.pfx" >> "$pfx"
 				if [ -s "$f" ]; then echo "$f" >> "$src"
-				elif [ ! -s "$ST_DIR/lists/$set.pfx" ]; then ok=0; break; fi
+				elif [ ! -s "$ST_DIR/lists/$set.pfx" ]; then ST_DOM_MISS="$ST_DOM_MISS $set"; ok=0; break; fi
 			else
 				f="$ST_DIR/lists/$set.srs"
 				[ -s "$f" ] || { [ "$dl" = 1 ] && _st_srs_get "$set" >/dev/null 2>&1; }
+				[ -s "$f" ] || ST_DOM_MISS="$ST_DOM_MISS $set"
 				[ -s "$f" ] && command -v steer >/dev/null 2>&1 || { ok=0; break; }
 				x="$ST_RUN/srsdump/$(printf '%s' "$f" | tr -c 'A-Za-z0-9_.-' '_')"
 				if { [ ! -s "$x.dom" ] && [ ! -s "$x.pfx" ]; } || [ "$f" -nt "$x.dom" ]; then
@@ -12002,11 +12005,16 @@ _st_dom_build() {
 				fi
 				[ -f "$x.dom" ] || { ok=0; break; }
 				[ -s "$x.dom" ] && echo "$x.dom" >> "$src"
+				[ -s "$x.pfx" ] && echo "$x.pfx" >> "$pfx"
 			fi
 		done
 		if [ -n "$sets" ] && [ "$ok" = 1 ]; then ST_DOM_SRC="каталог списков"
 		else
-			: > "$src"
+			: > "$src"; : > "$pfx"
+			for f in $(_rb_svc_field "$id" 4 | tr ',' ' '); do
+				if [ "$dl" = 1 ]; then _rb_list_get "$f" >/dev/null 2>&1; fi
+				[ -s "$ZM_LISTS_DIR/$f" ] && echo "$ZM_LISTS_DIR/$f" >> "$pfx"
+			done
 			for f in $(_rb_svc_field "$id" 3 | tr ',' ' '); do
 				if [ "$dl" = 1 ]; then _rb_list_get "$f" >/dev/null 2>&1; fi
 				[ -s "$ZM_LISTS_DIR/$f" ] && echo "$ZM_LISTS_DIR/$f" >> "$src"
@@ -12021,7 +12029,9 @@ _st_dom_build() {
 	fi
 	while IFS= read -r f; do cat "$f"; echo; done < "$src" | _st_dom_norm | sort -u > "$out.$$"
 	mv -f "$out.$$" "$out"
+	mv -f "$pfx" "$out.pfxsrc"
 	rm -f "$src" "$out.base.$$"
+	printf '%s\n' "$ST_DOM_MISS" > "$out.miss"
 	printf '%s\n' "$ST_DOM_SRC" > "$out.how"
 }
 
@@ -12046,6 +12056,93 @@ steer_svc_dom() {
 	fi
 	printf '{"id":"%s","name":"%s","count":%s,"offset":%s,"src":"%s","domains":"%s"}\n' "$id" "$(esc "$(_rb_svc_field "$id" 2)")" "${n:-0}" "$o" \
 		"$(esc "$(cat "$f.how" 2>/dev/null)")" "$(sed -n "$((o + 1)),$((o + l))p" "$f" | tr '\n' ' ')"
+}
+
+# «Найти сайт» на вкладке «Сервисы»: в каких пунктах есть домен (вместе с поддоменами) или его адрес IPv4
+# (подсети — так находятся и пункты b4geoip). Смотрим только то, что уже лежит на роутере, чтобы ответ был
+# быстрым; наборы, которых ещё нет, докачиваются в фоне, а в ответе — сколько их ждём (missing), и панель
+# повторяет поиск. Адрес берём у DNS роутера, а если там поддельный адрес Steer (198.18.0.0/15) — у внешнего.
+_st_find_ip() {
+	local a s
+	for s in 127.0.0.1 77.88.8.8 1.1.1.1; do
+		a="$(_stl_t 4 nslookup "$1" "$s" 2>/dev/null | awk '/^Name:/ { f = 1; next } f && /^Address/ { a = $0; sub(/^Address[ 0-9]*:[ \t]*/, "", a); if (a ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/) { print a; exit } }')"
+		case "$a" in ''|198.18.*|198.19.*|0.*|127.*) continue ;; esac
+		printf '%s' "$a"
+		return 0
+	done
+	return 1
+}
+
+# адрес $1 в подсетях файлов $2…: печатает сработавшую строку (самую узкую)
+_st_ip_in() {
+	local ip="$1"; shift
+	[ $# -gt 0 ] || return 0
+	awk -v ip="$ip" '
+		function ipn(a,  p) { if (split(a, p, ".") != 4) return -1; return ((p[1] * 256 + p[2]) * 256 + p[3]) * 256 + p[4] }
+		BEGIN { iv = ipn(ip); bw = -1 }
+		{
+			l = $0; sub(/[#;].*$/, "", l); gsub(/[ \t\r]/, "", l)
+			if (l ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+(\/[0-9]+)?$/) {
+				split(l, c, "/"); b = (c[2] == "") ? 32 : c[2] + 0; if (b < 0 || b > 32) next
+				z = 2 ^ (32 - b); a = ipn(c[1])
+				if (a >= 0 && int(iv / z) == int(a / z) && b > bw) { best = l; bw = b }
+			} else if (l ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+-[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/) {
+				split(l, c, "-"); if (iv >= ipn(c[1]) && iv <= ipn(c[2]) && bw < 0) { best = l; bw = 0 }
+			}
+		}
+		END { if (bw >= 0) print best }' "$@" 2>/dev/null
+}
+
+steer_svc_find() {
+	local q host="" ip="" d="$ST_RUN/dom" suf="$ST_RUN/find.$$.s" res="$ST_RUN/find.$$.r" sel miss nmiss=0 sep=""
+	local id name f3 f4 f5 f6 f7 f8 rest f by line n grp on
+	q="$(_zm_route_target "$1")" || { echo '{"error":"введите сайт, например claude.ai"}'; return 1; }
+	if printf '%s' "$q" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$'; then ip="$q"
+	elif printf '%s' "$q" | grep -q ':'; then echo '{"error":"введите домен, например claude.ai"}'; return 1
+	else host="$q"; ip="$(_st_find_ip "$host")"; fi
+	mkdir -p "$d"
+	sel=" $(_st_sel | tr '\n' ' ') "
+	: > "$res"; : > "$suf"
+	[ -n "$host" ] && printf '%s\n' "$host" | awk '{ s = $0; while (1) { print s; i = index(s, "."); if (!i) break; s = substr(s, i + 1) } }' > "$suf"
+	_rb_svc_src | awk -F'|' '$1 != "" && !s[$1]++ && ($1 == "custom" || $3 $4 $8 != "")' > "$res.svc"
+	while IFS='|' read -r id name f3 f4 f5 f6 f7 f8 rest; do
+		case "$id" in *[!A-Za-z0-9_.-]*) continue ;; esac
+		f="$d/$id.txt"
+		if [ "$id" = custom ] || [ ! -f "$f" ] || [ ! -f "$f.pfxsrc" ] || [ -s "$f.miss" ] || [ -n "$(find "$f" -mmin +9 2>/dev/null)" ]; then
+			ST_DOM_NODL=1
+			_st_dom_build "$id" "$f" </dev/null 2>/dev/null
+			ST_DOM_NODL=""
+		fi
+		by=""; line=""
+		if [ -s "$suf" ] && [ -s "$f" ]; then
+			line="$(grep -xF -f "$suf" "$f" 2>/dev/null | awk '{ print length($0) "\t" $0 }' | sort -rn | head -n1 | cut -f2)"
+			[ -n "$line" ] && by=dom
+		fi
+		if [ -z "$by" ] && [ -n "$ip" ] && [ -s "$f.pfxsrc" ]; then
+			line="$(_st_ip_in "$ip" $(cat "$f.pfxsrc"))"
+			[ -n "$line" ] && by=ip
+		fi
+		[ -n "$by" ] || continue
+		n="$(cat "$f" $(cat "$f.pfxsrc" 2>/dev/null) 2>/dev/null | wc -l | tr -d ' ')"
+		grp="${rest%%|*}"
+		on=false; case "$sel" in *" $id "*) on=true ;; esac
+		printf '%s|%s|%s|%s|%s|%s|%s\n' "$id" "$name" "$grp" "$on" "$by" "$line" "${n:-0}" >> "$res"
+	done < "$res.svc"
+	miss="$(cat "$d"/*.txt.miss 2>/dev/null | tr ' ' '\n' | grep . | sort -u)"
+	if [ -n "$miss" ]; then
+		nmiss="$(printf '%s\n' "$miss" | grep -c .)"
+		[ -d "$ST_RUN/find.lock" ] && [ -n "$(find "$ST_RUN/find.lock" -maxdepth 0 -mmin +10 2>/dev/null)" ] && rmdir "$ST_RUN/find.lock" 2>/dev/null
+		if ! _st_running && mkdir "$ST_RUN/find.lock" 2>/dev/null; then
+			( for f in $miss; do _st_srs_get "$f"; done; rmdir "$ST_RUN/find.lock" ) >/dev/null 2>&1 </dev/null &
+		fi
+	fi
+	printf '{"q":"%s","host":"%s","ip":"%s","missing":%s,"hits":[' "$(esc "$q")" "$(esc "$host")" "$(esc "$ip")" "${nmiss:-0}"
+	while IFS='|' read -r id name grp on by line n; do
+		printf '%s{"id":"%s","name":"%s","group":"%s","on":%s,"by":"%s","line":"%s","size":%s}' "$sep" "$id" "$(esc "$name")" "$(esc "$grp")" "$on" "$by" "$(esc "$line")" "${n:-0}"
+		sep=","
+	done < "$res"
+	printf ']}\n'
+	rm -f "$res" "$res.svc" "$suf"
 }
 
 steer_list_get() {
@@ -13278,6 +13375,7 @@ steer_action() {
 			;;
 		list_get) steer_list_get "$mode" ;;
 		svc_dom) steer_svc_dom "$mode" ;;
+		svc_find) steer_svc_find "$mode" ;;
 		devices) steer_devices ;;
 		devs_set)
 			_st_running && { echo '{"error":"дождитесь окончания текущей операции"}'; return 1; }
@@ -21622,6 +21720,7 @@ return baseclass.extend({
 	dock: dock,
 	riCovers: riCovers,
 	svcPickToggle: svcPickToggle,
+	svcIco: svcIco,
 	riNote: riNote,
 	swRow: swRow,
 	dialog: dialog,
@@ -23635,6 +23734,188 @@ return view.extend({
 			domResizeT = setTimeout(domPlace, 150);
 		});
 
+		/* «Найти сайт»: окно поиска поверх страницы (кнопка у заголовка «Сервисы» или Ctrl+K). Ищет домен —
+		 * вместе с поддоменами — и его адрес (подсети, b4geoip) по спискам всех пунктов и сразу даёт их
+		 * включить тем же переключателем, что на карточке; применяется общей кнопкой «Сохранить и применить».
+		 * Списки, которых ещё нет на роутере, докачиваются в фоне — поиск сам повторяется. */
+		var findEl = null, findQ = '', findRes = null, findBusy = false, findT = null, findRetryT = null, findSeq = 0, findTries = 0, findAdding = false;
+		function findSel() { return pick || currentPick(); }
+		function findKey(ev) { if (ev.key === 'Escape' && findEl) { ev.preventDefault(); findClose(); } }
+		function findClose() {
+			clearTimeout(findT); clearTimeout(findRetryT);
+			document.removeEventListener('keydown', findKey);
+			if (findEl && findEl.parentNode) findEl.parentNode.removeChild(findEl);
+			findEl = null;
+		}
+		function findOpen() {
+			if (findEl || data.blocker) return;
+			var input = E('input', { 'type': 'text', 'class': 'zm-find-input', 'placeholder': 'Сайт, например claude.ai', 'aria-label': 'Сайт или домен',
+				'autocomplete': 'off', 'autocapitalize': 'off', 'spellcheck': 'false', 'enterkeyhint': 'search' });
+			input.value = findQ;
+			var body = E('div', { 'class': 'zm-find-body' });
+			var box = E('div', { 'class': 'zm-find zmw-modal', 'role': 'dialog', 'aria-modal': 'true', 'aria-label': 'Найти сайт в списках' }, [
+				E('div', { 'class': 'zm-find-bar' }),
+				E('div', { 'class': 'zm-find-field' }, [
+					E('span', { 'class': 'zm-find-ico', 'aria-hidden': 'true' }),
+					input,
+					E('button', { 'type': 'button', 'class': 'zm-find-esc', 'title': 'Закрыть', 'click': findClose }, 'Esc')
+				]),
+				body
+			]);
+			findEl = E('div', { 'class': 'zm-find-wrap', 'click': function(ev) { if (ev.target === findEl) findClose(); } }, [ box ]);
+			findEl._body = body;
+			input.addEventListener('input', function() {
+				findQ = input.value;
+				clearTimeout(findT);
+				findT = setTimeout(function() { findRun(false); }, 600);
+			});
+			input.addEventListener('keydown', function(ev) {
+				if (ev.key === 'Enter') { ev.preventDefault(); clearTimeout(findT); findRun(false); }
+			});
+			document.body.appendChild(findEl);
+			document.addEventListener('keydown', findKey);
+			findDraw();
+			setTimeout(function() { try { input.focus(); input.select(); } catch (e) {} }, 0);
+		}
+		function findRun(auto) {
+			var q = String(findQ || '').trim();
+			clearTimeout(findRetryT);
+			if (!q) { findSeq++; findRes = null; findBusy = false; findDraw(); return; }
+			if (!auto) findTries = 0;
+			var seq = ++findSeq;
+			if (!auto) { findBusy = true; findDraw(); }
+			zm.steerAction('svc_find', q).then(function(r) {
+				if (seq !== findSeq) return;
+				findBusy = false;
+				findRes = r || {};
+				findDraw();
+				if (!findRes.error && (parseInt(findRes.missing, 10) || 0) > 0 && findTries < 8 && findEl) {
+					findTries++;
+					findRetryT = setTimeout(function() { if (findEl && seq === findSeq) findRun(true); }, 5000);
+				}
+			}).catch(function() {
+				if (seq !== findSeq) return;
+				findBusy = false;
+				findRes = { error: 'Роутер не ответил' };
+				findDraw();
+			});
+		}
+		function findToggle(id) {
+			if (busy) { zm.toast('Дождитесь окончания текущей операции', 'warning'); return; }
+			var sel = findSel();
+			pick = {};
+			for (var k in sel) if (sel[k] && k !== 'custom') pick[k] = true;
+			zm.svcPickToggle(pick, id);
+			renderLists();
+			findDraw();
+		}
+		function findAddCustom(q) {
+			if (busy) { zm.toast('Дождитесь окончания текущей операции', 'warning'); return; }
+			if (customDirty) { zm.toast('Сначала сохраните изменения в «Своём списке»', 'warning'); return; }
+			var csvc = domSvc('custom');
+			if (!csvc || findAdding) return;
+			findAdding = true; findDraw();
+			function fail(msg) { findAdding = false; findDraw(); zm.toast(msg, 'error'); }
+			function go(cur) {
+				var lines = String(cur || '').split('\n').map(function(x) { return x.trim(); }).filter(function(x) { return x; });
+				if (lines.indexOf(q) < 0) lines.push(q);
+				zm.steerAction('list_set', 'custom|' + lines.join('\n')).then(function(res) {
+					findAdding = false;
+					if (res.error) { fail(String(res.error)); return; }
+					if (findRes && findRes.hits) findRes.hits.push({ id: 'custom', name: csvc.name, group: '', on: !!csvc.on, by: 'dom', line: q, size: lines.length });
+					findDraw();
+					loadCustom();
+					if (!res.saved) {
+						zm.toast(q + ' добавлен в «Свой список» — применяем правила', 'info');
+						lastAction = 'domlist'; data.running = true; data.phase = 'rules';
+						follow();
+						return;
+					}
+					if (!csvc.on && data.installed && !data.stopped) {
+						var sel = findSel(), ids = [];
+						for (var k in sel) if (sel[k] && k !== 'custom') ids.push(k);
+						ids.push('custom');
+						pick = null;
+						act('lists', ids.join(','), q + ' добавлен в «Свой список» — включаем его');
+						return;
+					}
+					zm.toast(q + ' добавлен в «Свой список»' + (csvc.on ? '' : ' — включите его на карточке «Свой список»'), 'info');
+					refresh();
+				}).catch(function() { fail('Роутер не ответил'); });
+			}
+			if (customData && !customLoading) go(customData.content);
+			else zm.steerAction('list_get', 'custom').then(function(r) {
+				if (r.error) { fail(String(r.error)); return; }
+				go(r.content);
+			}).catch(function() { fail('Роутер не ответил'); });
+		}
+		function findDraw() {
+			if (!findEl) return;
+			var body = findEl._body, q = String(findQ || '').trim(), r = findRes, out = [];
+			body.innerHTML = '';
+			if (!q) {
+				out.push(E('div', { 'class': 'zm-find-empty' }, [
+					E('b', {}, 'Какой сайт нужен?'),
+					E('span', {}, 'Впишите адрес — покажем, какой пункт включить, чтобы сайт шёл через туннель.')
+				]));
+			} else if (findBusy || !r) {
+				out.push(E('div', { 'class': 'zm-find-empty' }, [ E('span', { 'class': 'zm-find-spin', 'aria-hidden': 'true' }), E('span', {}, 'Ищем в списках…') ]));
+			} else if (r.error) {
+				out.push(E('div', { 'class': 'zm-find-empty zm-find-err' }, [ E('span', {}, String(r.error)) ]));
+			} else {
+				var sel = findSel(), hits = (r.hits || []).filter(function(h) { return h.id !== 'custom'; });
+				var inCustom = (r.hits || []).some(function(h) { return h.id === 'custom'; });
+				hits.sort(function(a, b) { return (a.by === b.by ? 0 : a.by === 'dom' ? -1 : 1) || ((+a.size || 0) - (+b.size || 0)); });
+				var best = null;
+				/* советуем самый маленький список с этим доменом; по адресу — только если по домену нет ничего */
+				hits.forEach(function(h) { if (!best || (best.by !== 'dom' && h.by === 'dom') || (best.by === h.by && (+h.size || 0) < (+best.size || 0))) best = h; });
+				var anyOn = hits.some(function(h) { return !!sel[h.id] || (!!sel.russia_inside && h.id !== 'russia_inside' && !h.group && zm.riCovers(h.id)); });
+				if (hits.length) {
+					out.push(E('div', { 'class': 'zm-find-title' }, anyOn ? 'Уже включено — сайт идёт через туннель' : 'Включите любой — сайт пойдёт через туннель'));
+					var listEl = E('div', { 'class': 'zm-find-list' });
+					hits.forEach(function(h) {
+						var on = !!sel[h.id], inc = !on && !!sel.russia_inside && h.id !== 'russia_inside' && !h.group && zm.riCovers(h.id);
+						var size = +h.size || 0;
+						var why = (h.by === 'dom' ? 'в списке есть ' + h.line : 'адрес ' + (r.ip || '') + ' в подсети ' + h.line)
+							+ (h.group ? ' · ' + h.group : '') + (size > 20000 ? ' · большой список' : '');
+						var ic = zm.svcIco ? zm.svcIco(h.name, h.id) : null;
+						listEl.appendChild(E('div', { 'class': 'zm-find-row' + (on || inc ? ' zm-on' : ''), 'role': 'button', 'tabindex': '0',
+							'click': function() { findToggle(h.id); },
+							'keydown': function(ev) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); findToggle(h.id); } } }, [
+							E('div', { 'class': 'zm-svc-ico', 'style': ic ? 'background:' + ic.color : '' }, ic ? ic.ico : String(h.name || '?').slice(0, 2).toUpperCase()),
+							E('div', { 'class': 'zm-find-text' }, [
+								E('div', { 'class': 'zm-find-name' }, [ String(h.name), best === h && hits.length > 1 && !anyOn ? E('span', { 'class': 'zm-find-best' }, 'советуем') : '' ]),
+								E('div', { 'class': 'zm-find-why' }, inc ? 'входит во «Всё сразу» — уже идёт через туннель' : why)
+							]),
+							E('span', { 'class': 'zm-find-tag zm-find-tag-' + (h.by === 'dom' ? 'dom' : 'ip') }, h.by === 'dom' ? 'домен' : 'IP-адрес'),
+							E('div', { 'class': 'zm-switch' + (on || inc ? ' zm-switch-on' : '') + (inc ? ' zm-switch-inc' : '') }, [ E('span') ])
+						]));
+					});
+					out.push(listEl);
+				} else {
+					out.push(E('div', { 'class': 'zm-find-empty' }, [
+						E('b', {}, 'Сайта нет ни в одном списке'),
+						E('span', {}, r.host ? 'Добавьте ' + r.host + ' в «Свой список» — он пойдёт через туннель.' : 'Добавьте адрес в «Свой список» — он пойдёт через туннель.')
+					]));
+				}
+				if ((parseInt(r.missing, 10) || 0) > 0)
+					out.push(E('div', { 'class': 'zm-find-note' }, [ E('span', { 'class': 'zm-find-spin', 'aria-hidden': 'true' }),
+						'Докачиваем ещё ' + r.missing + ' ' + plural(+r.missing, 'список', 'списка', 'списков') + ' — результаты обновятся сами' ]));
+				if (domSvc('custom')) out.push(E('div', { 'class': 'zm-find-foot' }, [
+					E('button', { 'type': 'button', 'class': 'cbi-button' + (inCustom ? '' : ' cbi-button-action'), 'disabled': inCustom || findAdding || busy ? '' : null,
+						'click': function() { findAddCustom(r.host || r.q || q); } },
+						inCustom ? 'Уже в «Своём списке»' : findAdding ? 'Добавляем…' : 'Добавить в «Свой список»')
+				]));
+			}
+			out.forEach(function(n) { body.appendChild(n); });
+		}
+		document.addEventListener('keydown', function(ev) {
+			if (!(ev.ctrlKey || ev.metaKey) || ev.altKey || ev.shiftKey || String(ev.key).toLowerCase() !== 'k' && ev.code !== 'KeyK') return;
+			if (!listCard || !document.body.contains(listCard) || listCard.style.display === 'none' || data.blocker) return;
+			ev.preventDefault();
+			if (findEl) findClose(); else findOpen();
+		});
+
 		function catalogEdit() {
 			var c = data.catalog || {};
 			var u = prompt('Ссылка на свой каталог списков (lists.json в формате splify2-lists, например из форка).\n\nПусто — каталог по умолчанию.', c.custom ? c.url : '');
@@ -23709,7 +23990,12 @@ return view.extend({
 			var remote = list.filter(function(s) { return !!s.group; });
 			var svcs = list.filter(function(s) { return !s.group && !s.cat && CATEGORY_IDS.indexOf(s.id) < 0; });
 			var cats = list.filter(function(s) { return !s.group && (s.cat || CATEGORY_IDS.indexOf(s.id) >= 0); });
-			listCard.appendChild(E('h4', { 'style': 'margin:0' }, 'Сервисы'));
+			listCard.appendChild(E('div', { 'class': 'zm-find-head' }, [
+				E('h4', { 'style': 'margin:0' }, 'Сервисы'),
+				E('button', { 'type': 'button', 'class': 'zm-find-open', 'title': 'Найти сайт в списках (Ctrl+K)', 'click': findOpen }, [
+					E('span', { 'class': 'zm-find-ico', 'aria-hidden': 'true' }), 'Найти сайт', E('kbd', {}, 'Ctrl K')
+				])
+			]));
 			listCard.appendChild(zm.svcGrid(svcs.map(tile)));
 			if (cats.length) {
 				listCard.appendChild(E('h4', { 'style': 'margin:18px 0 0' }, 'Категории'));
@@ -23769,6 +24055,7 @@ return view.extend({
 			listCard.appendChild(bar);
 			if (domOpen && !domCards[domOpen]) domOpen = null;
 			domPlace();
+			if (findEl) findDraw();
 		}
 
 		function loadCustom() {
@@ -28051,6 +28338,65 @@ html.zm-theme-dark .zm-dom-list { background: #1b2027; }
 .zm-dom-more { margin: 10px 0 0; font-size: 12px; }
 @keyframes zmDomIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .zm-dom-panel { animation: none; } }
+.zm-find-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.zm-find-head > h4 { flex: 1 1 auto; }
+.zm-find-open { display: inline-flex; align-items: center; gap: 9px; box-sizing: border-box; height: 38px; margin: 0; padding: 0 7px 0 12px; border-radius: 11px; border: 1px solid rgba(110,118,129,.3);
+	background: transparent; color: inherit; font: inherit; font-weight: 700; font-size: 13.5px; line-height: 1; cursor: pointer; box-shadow: none; -webkit-appearance: none; appearance: none; transition: border-color .15s, background .15s; }
+.zm-find-open:hover { border-color: #1aa3ff; }
+.zm-find-open:focus-visible { outline: 2px solid #1aa3ff; outline-offset: 2px; }
+.zm-find-open kbd, .zm-find-esc { font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace; font-size: 11px; font-weight: 600; padding: 4px 7px; border-radius: 7px; background: rgba(110,118,129,.14); border: 0; color: inherit; opacity: .8; }
+.zm-find-ico { position: relative; display: inline-block; flex-shrink: 0; width: 15px; height: 15px; }
+.zm-find-ico::before { content: ""; position: absolute; left: 0; top: 0; width: 9px; height: 9px; border: 2px solid currentColor; border-radius: 50%; }
+.zm-find-ico::after { content: ""; position: absolute; left: 10px; top: 10px; width: 6px; height: 2px; background: currentColor; border-radius: 2px; transform: rotate(45deg); transform-origin: 0 50%; }
+.zm-find-wrap { position: fixed; inset: 0; z-index: 10000; display: flex; align-items: flex-start; justify-content: center; padding: 9vh 16px 16px; box-sizing: border-box;
+	background: rgba(15,23,42,.45); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); animation: zmFindFade .15s ease-out; }
+.zm-find { width: 100%; max-width: 640px; max-height: 82vh; display: flex; flex-direction: column; overflow: hidden; border-radius: 22px;
+	background: var(--background-color-high, #fff); color: var(--text-color-highest, #0f172a); box-shadow: 0 30px 80px -20px rgba(15,23,42,.55); animation: zmFindIn .18s ease-out; }
+html.zm-theme-dark .zm-find { background: #1c2128; color: #e6edf3; }
+.zm-find-bar { flex-shrink: 0; height: 4px; background: linear-gradient(90deg, #7c5cff 0%, #3b82f6 55%, #22d3ee 100%); }
+.zm-find-field { flex-shrink: 0; display: flex; align-items: center; gap: 14px; padding: 0 18px 0 22px; height: 66px; border-bottom: 1px solid rgba(110,118,129,.18); }
+.zm-find-field > .zm-find-ico { width: 18px; height: 18px; color: #6d4cff; }
+.zm-find-field > .zm-find-ico::before { width: 11px; height: 11px; }
+.zm-find-field > .zm-find-ico::after { left: 12px; top: 12px; width: 7px; }
+.zm-find-input, .zm-find-input:focus { flex: 1; min-width: 0; height: 44px; margin: 0; padding: 0; border: 0 !important; outline: none; box-shadow: none !important; background: transparent !important; color: inherit;
+	font-family: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace; font-size: 19px; }
+.zm-find-esc { cursor: pointer; }
+.zm-find-body { overflow: auto; padding: 14px 14px 16px; }
+.zm-find-title { font-size: 11.5px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; opacity: .6; padding: 2px 10px 8px; }
+.zm-find-list { display: flex; flex-direction: column; gap: 4px; }
+.zm-find-row { display: flex; align-items: center; gap: 13px; padding: 11px 12px; border-radius: 14px; cursor: pointer; border: 1px solid transparent; transition: background .12s, border-color .12s; }
+.zm-find-row:hover, .zm-find-row:focus-visible { background: rgba(124,92,255,.07); border-color: rgba(124,92,255,.25); outline: none; }
+.zm-find-row.zm-on { background: rgba(26,163,255,.08); border-color: rgba(26,163,255,.35); }
+.zm-find-row .zm-svc-ico { width: 36px; height: 36px; }
+.zm-find-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.zm-find-name { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-weight: 700; font-size: 14.5px; }
+.zm-find-why { font-size: 12.5px; opacity: .7; overflow-wrap: anywhere; }
+.zm-find-best { font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 999px; color: #fff; background: linear-gradient(135deg, #7c5cff 0%, #3b82f6 100%); }
+.zm-find-tag { flex-shrink: 0; font-size: 11.5px; font-weight: 700; padding: 4px 9px; border-radius: 999px; }
+.zm-find-tag-dom { background: rgba(124,92,255,.13); color: #5b21b6; }
+.zm-find-tag-ip { background: rgba(14,165,233,.14); color: #075985; }
+html.zm-theme-dark .zm-find-tag-dom { color: #c4b5fd; } html.zm-theme-dark .zm-find-tag-ip { color: #7dd3fc; }
+.zm-find-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 26px 16px; text-align: center; font-size: 13.5px; }
+.zm-find-empty > span { opacity: .7; }
+.zm-find-empty > b { font-size: 15px; }
+.zm-find-err > span { color: #cf222e; opacity: 1; }
+.zm-find-note { display: flex; align-items: center; gap: 9px; margin: 10px 10px 0; font-size: 12.5px; opacity: .75; }
+.zm-find-foot { display: flex; margin-top: 14px; padding: 14px 10px 0; border-top: 1px solid rgba(110,118,129,.16); }
+.zm-find-foot .cbi-button { flex: 1; margin: 0; min-height: 44px; font-weight: 700; }
+.zm-find-spin { display: inline-block; flex-shrink: 0; width: 14px; height: 14px; border-radius: 50%; border: 2px solid rgba(124,92,255,.25); border-top-color: #7c5cff; animation: zmFindSpin .8s linear infinite; }
+.zm-find-empty > .zm-find-spin { width: 20px; height: 20px; opacity: 1; }
+@keyframes zmFindFade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes zmFindIn { from { opacity: 0; transform: translateY(-8px) scale(.985); } to { opacity: 1; transform: none; } }
+@keyframes zmFindSpin { to { transform: rotate(360deg); } }
+@media (max-width: 600px) {
+	.zm-find-wrap { padding: 12px 10px; }
+	.zm-find { max-height: calc(100vh - 24px); border-radius: 18px; }
+	.zm-find-field { height: 58px; padding: 0 12px 0 16px; }
+	.zm-find-input { font-size: 16px; }
+	.zm-find-tag { display: none; }
+	.zm-find-open kbd { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .zm-find-wrap, .zm-find { animation: none; } }
 .zm-st-stats.zm-st-stats-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .zm-st-stats.zm-fk-secs { grid-template-columns: repeat(auto-fill, minmax(min(240px, 100%), 1fr)); }
 .zm-fk-sec { cursor: pointer; transition: border-color .15s, transform .1s; }
@@ -35691,6 +36037,30 @@ html[data-theme="dark"] .zm-stopbar, html[data-theme="depth"] .zm-stopbar { back
 #zmw-view .zm-dom-sub, #zmw-view .zm-dom-more { color: var(--muted); opacity: 1; }
 #zmw-view .zm-dom-list, html.zm-theme-dark #zmw-view .zm-dom-list { background: var(--surface-solid); border-color: var(--border); }
 #zmw-view .zm-dom-item { font-family: var(--mono); color: var(--text); border-bottom-color: var(--border); }
+#zmw-view .zm-find-open { border-color: var(--border-2, var(--border)); color: var(--text); }
+#zmw-view .zm-find-open:hover { border-color: var(--a1); background: var(--surface-2); }
+#zmw-view .zm-find-open kbd { background: var(--surface-3, var(--surface-2)); color: var(--muted); opacity: 1; }
+.zm-find-wrap { background: rgba(5,7,12,.5); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+.zm-find { background: var(--surface-solid, #fff); color: var(--text, #0f172a); border: 1px solid var(--border-2, transparent); box-shadow: var(--shadow-lg); font-family: var(--font, inherit); }
+html.zm-theme-dark .zm-find { background: var(--surface-solid, #1c2128); color: var(--text, #e6edf3); }
+.zm-find-bar { background: var(--grad, linear-gradient(90deg, #7c5cff, #3b82f6, #22d3ee)); }
+.zm-find-field { border-bottom-color: var(--border, rgba(110,118,129,.18)); }
+.zm-find-field > .zm-find-ico { color: var(--a1, #6d4cff); }
+.zm-find-input, .zm-find-input:focus { font-family: var(--mono); color: var(--text); }
+.zm-find-esc { background: var(--surface-2); color: var(--muted); opacity: 1; }
+.zm-find-title, .zm-find-why, .zm-find-empty > span, .zm-find-note { color: var(--muted); opacity: 1; }
+.zm-find-row:hover, .zm-find-row:focus-visible { background: var(--surface-2); border-color: var(--border-2, var(--border)); }
+.zm-find-row.zm-on { background: var(--grad-soft, rgba(124,92,255,.1)); border-color: rgba(124,92,255,.45); }
+.zm-find-best { background: var(--grad); }
+.zm-find-foot { border-top-color: var(--border); }
+.zm-find .zm-switch { background: var(--border-2, rgba(110,118,129,.35)); }
+.zm-find .zm-switch.zm-switch-on { background: var(--grad, #1aa3ff); }
+.zm-find .cbi-button { border-radius: 12px; }
+.zm-find .cbi-button-action { background: var(--grad); border-color: transparent; color: #fff; }
+.zm-find .cbi-button[disabled] { opacity: .55; }
+.zmw-modal.zm-find { width: 100%; max-width: 640px; max-height: 82vh; padding: 0; overflow: hidden; border-radius: 22px; }
+.zmw-modal.zm-find .zm-find-input, .zmw-modal.zm-find .zm-find-input:focus { width: auto; height: 44px; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; font-size: 19px; }
+@media (max-width: 600px) { .zmw-modal.zm-find { max-height: calc(100vh - 24px); border-radius: 18px; } .zmw-modal.zm-find .zm-find-input { font-size: 16px; } }
 #zmw-view .zm-sb-left, #zmw-view .zm-lists-now { background: var(--surface-2); border-color: var(--border); border-radius: var(--radius-sm); color: var(--text); }
 #zmw-view .zm-sb-left { background: var(--bad-bg); border-color: rgba(239,68,68,.3); }
 .zm-stopbar .cbi-button.zm-stopbar-btn { padding: 10px 18px; border-radius: 12px; font-size: 14px; line-height: 1.2; box-shadow: 0 8px 20px -10px rgba(220,38,38,.8); }
