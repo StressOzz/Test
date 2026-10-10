@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 2.78
+# Version: 2.79
 ZM_VERSION_EOF
 set -e
 
@@ -24437,12 +24437,14 @@ return view.extend({
 				var x = o[i]; o[i] = o[j]; o[j] = x;
 				act('warp_pick', 'order:' + o.join(','), 'Меняем порядок туннелей');
 			}
-			var deadN = tl.filter(function(t) { return !tunnelLive(t); }).length;
+			/* туннель через российский узел работает, но в дело не идёт — чинится так же, как упавший */
+			function tunnelBad(t) { return !tunnelLive(t) || !!t.ru; }
+			var deadN = tl.filter(tunnelBad).length;
 			var partial = deadN > 0 && deadN < tl.length;
 			if (tl.length) {
 				tl.forEach(function(t) {
 					var live = tunnelLive(t);
-					var fix = partial && !live ? E('span', { 'style': 'display:inline-flex; gap:6px; margin-left:auto' }, [
+					var fix = partial && tunnelBad(t) ? E('span', { 'style': 'display:inline-flex; gap:6px; margin-left:auto' }, [
 						E('button', { 'class': 'cbi-button cbi-button-action', 'disabled': busy ? '' : null, 'click': function() { act('warp_fix', String(t.n), 'Переделываем WARP ' + t.n); } }, 'Переделать'),
 						E('button', { 'class': 'cbi-button', 'disabled': busy ? '' : null, 'click': function() {
 							if (!confirm('Получить новые ключи для WARP ' + t.n + '?\n\nОстальные туннели не тронутся.')) return;
@@ -24481,7 +24483,7 @@ return view.extend({
 				warpCard.appendChild(row('Получено / отправлено', E('span', {}, zm.fmtSize(+data.warp_rx || 0) + ' / ' + zm.fmtSize(+data.warp_tx || 0))));
 			}
 			if (partial) {
-				warpCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Не работает ' + (deadN === 1 ? 'один туннель' : 'часть туннелей') + ' — переделайте только ' + (deadN === 1 ? 'его' : 'их') + ': «Переделать» подберёт новую точку входа, «Новые ключи» — новый аккаунт WARP. Работающие туннели не тронутся.'));
+				warpCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Не работает ' + (deadN === 1 ? 'один туннель' : 'часть туннелей') + ' (упал или попал в российский узел) — переделайте только ' + (deadN === 1 ? 'его' : 'их') + ': «Переделать» подберёт новую зарубежную точку входа, «Новые ключи» — новый аккаунт WARP. Работающие туннели не тронутся.'));
 				return;
 			}
 			warpCard.appendChild(E('div', { 'class': 'zm-actions' }, [
