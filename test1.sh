@@ -1,10 +1,10 @@
 #!/bin/sh
-# Version: 2.66
+# Version: 2.68
 set -e
 
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; BLUE="\033[0;34m"; NC="\033[0m"; DGRAY="\033[38;5;244m"
 
-ZM_NEW_VER="2.66"
+ZM_NEW_VER="2.68"
 _zmi_say() { echo -e "${CYAN}==>${NC} $*"; }
 _zmi_ok() { echo -e "   ${GREEN}✓${NC} $*"; }
 _zmi_step() { echo -e "   → $*"; }
@@ -129,7 +129,7 @@ if [ "$1" = zm_watch ]; then
 fi
 
 CONF="/etc/config/zapret"
-ZM_VERSION="2.66"
+ZM_VERSION="2.68"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 GH_RAW="https://raw.githubusercontent.com"
 GH_MAIN="https://github.com"
@@ -1085,6 +1085,7 @@ zapret_restart() {
 	chmod -R a+rX /opt/zapret/ipset /opt/zapret/files 2>/dev/null
 	[ -x /opt/zapret/sync_config.sh ] && /opt/zapret/sync_config.sh >/dev/null 2>&1
 	/etc/init.d/zapret restart >/dev/null 2>&1
+	_obm_resync
 }
 
 _cpu_stat() { awk '/^cpu / { t = 0; for (i = 2; i <= NF; i++) t += $i; print t, $5 + $6; exit }' /proc/stat 2>/dev/null; }
@@ -1451,6 +1452,7 @@ _do_install_zapret2_core() {
 	echo "==> Запускаем Zapret2"
 	/etc/init.d/zapret2 enable >/dev/null 2>&1
 	/etc/init.d/zapret2 restart >/dev/null 2>&1
+	_obm_resync
 
 	cd /; rm -rf "$tmp"
 	echo "==> Готово, Zapret2 установлен"
@@ -1487,6 +1489,7 @@ zapret2_action() {
 			[ -x /etc/init.d/zapret2 ] || { echo '{"error":"Zapret2 не установлен"}'; return 1; }
 			/etc/init.d/zapret2 restart >/dev/null 2>&1
 			for p in 1 2 3 4 5; do /etc/init.d/zapret2 status >/dev/null 2>&1 && break; sleep 1; done
+			_obm_resync
 			status ;;
 		*) echo '{"error":"неизвестное действие"}' ;;
 	esac
@@ -1564,7 +1567,8 @@ _add_gp_domains() {
 			"play.googleapis.com" "play-fe.googleapis.com" "lh3.googleusercontent.com" \
 			"android.clients.google.com" "connectivitycheck.gstatic.com" \
 			"play-lh.googleusercontent.com" "play-games.googleusercontent.com" \
-			"prod-lt-playstoregatewayadapter-pa.googleapis.com" "youtubei.youtube.com"
+			"prod-lt-playstoregatewayadapter-pa.googleapis.com" "youtubei.youtube.com" \
+			"cloudfunctions.net"
 	} | sort -u > "$tmp"
 	mv "$tmp" "$f"
 }
@@ -2822,7 +2826,7 @@ _zm_junk_raw() {
 	for f in /tmp/zm-run.* /tmp/zm-wait.* /tmp/zm-quiet.* /tmp/zm-pkg.* /tmp/ytb-ct.* /tmp/ytb-diag.* /tmp/ytb-ins.* /tmp/ytb-dl /tmp/zm-zash /tmp/netshift-sbext.* \
 		/tmp/mihomo.gz /tmp/zashboard.zip /tmp/zashboard /tmp/metacubexd.tgz /tmp/metacubexd /tmp/tg-ws-proxy.ipk /tmp/tg-ws-proxy.apk /tmp/zm_uninstall_panel.sh \
 		"$JOBS_DIR"/install_tmp "$JOBS_DIR"/install_z2_tmp "$JOBS_DIR"/flowseal.zip "$JOBS_DIR"/flowseal_src "$JOBS_DIR"/tg-ws-proxy-rs.tar.gz \
-		"$JOBS_DIR"/netshift-src "$JOBS_DIR"/forkop-src "$JOBS_DIR"/forkop-import "$JOBS_DIR"/zm_head.* "$JOBS_DIR"/steer-list.* "$JOBS_DIR"/tgws_install.* \
+		"$JOBS_DIR"/netshift-src "$JOBS_DIR"/forkop-src "$JOBS_DIR"/forkop-import "$JOBS_DIR"/zm_head.* "$JOBS_DIR"/steer-list.* "$JOBS_DIR"/tgws_install.* "$JOBS_DIR"/obm_* \
 		"$JOBS_DIR"/geohide_hosts.tmp "$JOBS_DIR"/cleanup.* "$ST_RUN"/*.src "$ST_RUN"/cat.flat \
 		/opt/zapret-manager-luci/*.zm-new /www/luci-static/resources/zapret-manager/*.zm-new "$ZM_STATE_DIR"/*.tmp "$ST_DIR"/*.tmp "$ST_DIR"/lists/*.tmp \
 		"$ST_USER_DIR"/*.tmp "$ST_USER_DIR"/*.tmp.* "$HOSTS_FILE.zmtmp" "$HOSTS_FILE.zmdrop"; do
@@ -5140,7 +5144,7 @@ _zm_update_fetch() {
 
 _zm_job_label() {
 	case "$1" in
-		steer) echo "Steer" ;; awg) echo "AmneziaWG" ;; forkop) echo "Forkozz" ;; term) echo "Терминал" ;;
+		steer) echo "Steer" ;; awg) echo "AmneziaWG" ;; forkop) echo "Forkozz" ;; term) echo "Терминал" ;; obmanka) echo "Obmanka" ;;
 		mixomo*) echo "Mixomo" ;; bytetube*) echo "ByeTube" ;;
 		install_zapret2|remove_zapret2) echo "Zapret2" ;; install_zapret|remove_zapret) echo "Zapret" ;;
 		strategy_test) echo "тест стратегий" ;; tg*) echo "TG WS Proxy" ;; doh*) echo "DNS over HTTPS" ;;
@@ -6314,8 +6318,10 @@ health() {
 	if _term_installed; then
 		if _term_running; then d_term=1; elif _term_enabled; then d_term=2; else d_term=4; fi
 	fi
-	printf '{"dots":{"zapret":%s,"zapret2":%s,"bytetube":%s,"tg":%s,"mixomo":%s,"doh":%s,"hosts":%s,"steer":%s,"forkop":%s,"awg":%s,"term":%s},' \
-		"$d_zr" "$d_zr2" "$d_bt" "$d_tg" "$d_mx" "$d_doh" "$hs" "$d_sr" "${d_fk:-0}" "${d_awg:-0}" "$d_term"
+	local d_obm; d_obm="$(_obm_health)"
+	printf '{"dots":{"zapret":%s,"zapret2":%s,"bytetube":%s,"tg":%s,"mixomo":%s,"doh":%s,"hosts":%s,"steer":%s,"forkop":%s,"awg":%s,"term":%s,"obmanka":%s},' \
+		"$d_zr" "$d_zr2" "$d_bt" "$d_tg" "$d_mx" "$d_doh" "$hs" "$d_sr" "${d_fk:-0}" "${d_awg:-0}" "$d_term" "${d_obm:-0}"
+	printf '"obmanka":%s,' "${d_obm:-0}"
 	printf '"zapret":%s,"zapret2":%s,"bytetube":%s,"tg":%s,"mixomo":%s,"doh":%s,"hosts":%s,"steer":%s,"steer_off":%s,"steer_exit":"%s","awg":%s,"forkop":%s,"flow_warn":%s,"ipv6_warn":%s,"reboot_hint":"%s"}\n' \
 		"$zr" "$zr2" "$bt" "$tg" "$mx" "$doh" "$hs" "$sr" \
 		"$([ -f /etc/zm-steer/stopped ] && echo true || echo false)" "$sx" "$awgj" "$fkh" "$fw" "$v6" "$(esc "$(_zm_reboot_hint_get)")"
@@ -6376,6 +6382,10 @@ do_versions_refresh() {
 	_st_legacy_check
 	stl_present && add "$(_ver_item 'Ядро steer' "$(stl_version)" "$(stl_latest)")"
 	_fk_installed && add "$(_ver_item Forkozz "$(_fk_version)" "$(_fk_latest)")"
+	if _obm_installed; then
+		add "$(_ver_item 'FakeSIP (Obmanka)' "$(_obm_ver fakesip)" "$(_zm_cached obm_sip _obm_latest_sip)")"
+		add "$(_ver_item 'FakeHTTP (Obmanka)' "$(_obm_ver fakehttp)" "$(_zm_cached obm_http _obm_latest_http)")"
+	fi
 	local feeds=0 v
 	[ -n "$(_ver_feed_latest busybox)" ] || [ -n "$(_zm_busy_job)" ] || { $UPDATE >/dev/null 2>&1; }
 	if _fk_installed && v="$(_fk_sb_var)" && [ -n "$v" ]; then
@@ -9373,6 +9383,78 @@ _awg_fetch() {
 	return 1
 }
 
+# Пакеты kmod в OpenWrt жёстко привязаны к ядру: зависимость kernel=<версия>~<хеш конфигурации ядра>.
+# Готовые модули собраны SDK официальной сборки, и на прошивке, собранной самостоятельно или
+# сторонним сборщиком, хеш другой — apk/opkg отказываются ставить пакет («breaks: …[kernel=…]»),
+# хотя при той же версии ядра модуль обычно загружается. Такой модуль ставим в обход проверки,
+# а подойдёт ли он к ядру, проверит insmod в _awg_kmod_load.
+AWG_KMOD_MANUAL="/etc/zm-awg/kmod-manual"
+_awg_kmod_pin_bad() {	# $1 — файл kmod-amneziawg; 0 и AWG_KPIN/AWG_KMV — если пакет не принимают только из-за ядра
+	local out
+	AWG_KPIN=""; AWG_KMV=""
+	if [ "$PKG" = apk ]; then
+		out="$(apk add --simulate --allow-untrusted "$1" 2>&1)" && return 1
+		AWG_KPIN="$(printf '%s\n' "$out" | sed -n 's/.*kmod-amneziawg-[^[]*\[kernel=\([^]]*\)\].*/\1/p' | head -n1)"
+		AWG_KMV="$(printf '%s\n' "$out" | sed -n 's/.*kmod-amneziawg-\([^[ ]*\)\[kernel=.*/\1/p' | head -n1)"
+	else
+		out="$(opkg install --noaction "$1" 2>&1)"
+		AWG_KPIN="$(printf '%s\n' "$out" | sed -n 's/.*\*[[:space:]]*kernel (= *\([^)]*\)).*/\1/p' | head -n1)"
+	fi
+	[ -n "$AWG_KPIN" ]
+}
+_awg_kmod_have() {	# пакет стоит или модуль поставлен в обход проверки ядра
+	_pkg_is_installed kmod-amneziawg && return 0
+	[ -s "$AWG_KMOD_MANUAL" ] && [ -f "/lib/modules/$(uname -r)/amneziawg.ko" ]
+}
+_awg_kmod_ver() {
+	if [ -s "$AWG_KMOD_MANUAL" ] && [ -f "/lib/modules/$(uname -r)/amneziawg.ko" ]; then
+		awk '{ print $1; exit }' "$AWG_KMOD_MANUAL"
+	else
+		_awg_pkg_ver kmod-amneziawg
+	fi
+}
+_awg_kmod_manual_rm() {
+	[ -f "$AWG_KMOD_MANUAL" ] || return 0
+	rm -f "/lib/modules/$(uname -r)/amneziawg.ko" "$AWG_KMOD_MANUAL"
+}
+_awg_kmod_manual() {	# $1 — файл пакета; 2 — модуль собран под другую версию ядра
+	local f="$1" d="$ST_RUN/kx" ko dir kv cur
+	kv="$(uname -r)"; cur="$(_awg_pkg_ver kernel)"
+	_rb_warn "Ядро прошивки ($cur) собрано не так, как в официальной OpenWrt (модулю нужно $AWG_KPIN) — пакетный менеджер не даёт поставить модуль"
+	_rb_say "Ставим модуль ядра в обход этой проверки"
+	if [ "$PKG" != apk ]; then
+		$INSTALL --force-depends "$f"
+		return
+	fi
+	rm -rf "$d"; mkdir -p "$d"
+	if ! apk extract --allow-untrusted --destination "$d" "$f" >/dev/null 2>&1; then
+		echo "   ✗ apk не смог распаковать пакет модуля"
+		rm -rf "$d"; return 1
+	fi
+	ko="$(find "$d/lib/modules" -name amneziawg.ko 2>/dev/null | head -n1)"
+	if [ -z "$ko" ]; then
+		echo "   ✗ в пакете нет amneziawg.ko"
+		rm -rf "$d"; return 1
+	fi
+	dir="${ko#"$d"/lib/modules/}"; dir="${dir%%/*}"
+	if [ "$dir" != "$kv" ]; then
+		echo "   ✗ модуль собран для ядра $dir, а у роутера ядро $kv"
+		rm -rf "$d"; return 2
+	fi
+	if ! mkdir -p "/lib/modules/$kv" || ! cp "$ko" "/lib/modules/$kv/amneziawg.ko"; then
+		echo "   ✗ не удалось записать модуль в /lib/modules/$kv — мало места на флеше?"
+		rm -f "/lib/modules/$kv/amneziawg.ko"; rm -rf "$d"; return 1
+	fi
+	rm -rf "$d"
+	mkdir -p "${AWG_KMOD_MANUAL%/*}"
+	echo "${AWG_KMV:-?} $kv" > "$AWG_KMOD_MANUAL"
+	# amneziawg-tools зависит от kmod-amneziawg — отмечаем модуль в базе apk пустым виртуальным пакетом
+	_pkg_is_installed kmod-amneziawg || _zm_run 120 apk add --force-non-repository --virtual kmod-amneziawg >/dev/null 2>&1 ||
+		{ echo "   ✗ apk не принял отметку о модуле — amneziawg-tools не встанет"; return 1; }
+	echo "   ✓ Модуль положен в /lib/modules/$kv"
+	return 0
+}
+
 _awg_kmod_load() {
 	local kv ko dir out dm need p free msg
 	_st_awg_loaded && return 0
@@ -9422,13 +9504,12 @@ _awg_kmod_load() {
 _st_install_awg() {
 	local mode="$1"
 	if [ "$mode" != update ] && _st_awg_loaded && command -v awg >/dev/null 2>&1 && _awg_proto_ok; then return 0; fi
-	local rel arch tgt sub post luci old_luci base bases m p f ok=0 was_loaded=0 kver0 kver1 need="" force=""
+	local rel arch tgt sub post luci old_luci base bases m p f ok=0 was_loaded=0 kver0 kver1 need="" force="" why="" mrc
 	_st_awg_loaded && was_loaded=1
-	kver0="$(_awg_pkg_ver kmod-amneziawg)"
-	for p in kmod-amneziawg amneziawg-tools; do
-		if [ "$mode" = update ] || ! _pkg_is_installed "$p"; then need="$need $p"; fi
-	done
-	[ "$p" = amneziawg-tools ] && ! command -v awg >/dev/null 2>&1 && case " $need " in *" amneziawg-tools "*) ;; *) need="$need amneziawg-tools" ;; esac
+	kver0="$(_awg_kmod_ver)"
+	_awg_kmod_have || need=" kmod-amneziawg"
+	[ "$mode" = update ] && need=" kmod-amneziawg"
+	if [ "$mode" = update ] || ! _pkg_is_installed amneziawg-tools || ! command -v awg >/dev/null 2>&1; then need="$need amneziawg-tools"; fi
 	if [ -n "$need" ]; then
 		rel="$(_awg_rel_ver)"; arch="$(_awg_rel_arch)"; tgt="$(_awg_rel_target)"
 		sub="${tgt#*/}"; tgt="${tgt%%/*}"
@@ -9456,7 +9537,19 @@ _st_install_awg() {
 						$DELETE "$old_luci" >&2
 					fi
 					_rb_say "Ставим $p"
-					if $INSTALL $force "$f"; then
+					if [ "$p" = kmod-amneziawg ] && _awg_kmod_pin_bad "$f"; then
+						# хеш ядра у всех источников один (официальный SDK) — перебирать их бесполезно
+						_awg_kmod_manual "$f"; mrc=$?
+						if [ "$mrc" = 0 ]; then
+							[ "${ST_AWG_OWN:-1}" = 1 ] && _st_own "pkg $p"
+						else
+							ok=0
+							[ "$mrc" = 2 ] && why=kver
+							[ "$why" = kver ] || why=pin
+						fi
+					elif $INSTALL $force "$f"; then
+						# модуль из пакета заменил положенный вручную — убираем только отметку
+						[ "$p" = kmod-amneziawg ] && rm -f "$AWG_KMOD_MANUAL"
 						[ "${ST_AWG_OWN:-1}" = 1 ] && _st_own "pkg $p"
 					elif [ "$p" != "$luci" ]; then
 						ok=0
@@ -9478,15 +9571,25 @@ _st_install_awg() {
 				fi
 				break
 			fi
+			[ -n "$why" ] && break
 			_rb_warn "Здесь нет всех пакетов — пробуем другой источник"
 		done
 		_rb_rpcd_ensure
 		if [ "$ok" != 1 ]; then
-			echo "ОШИБКА: для OpenWrt $rel ($arch) нет готовых пакетов AmneziaWG"
+			case "$why" in
+				kver)
+					echo "ОШИБКА: готовый модуль AmneziaWG собран под ядро официальной OpenWrt $rel, а у роутера ядро $(uname -r)"
+					echo "!! Прошивка не официальная (${tgt}/${sub}). Поставьте официальную OpenWrt $rel или прошивку со встроенным AmneziaWG" ;;
+				pin)
+					echo "ОШИБКА: ядро прошивки ($(_awg_pkg_ver kernel)) отличается от официальной OpenWrt $rel — модуль AmneziaWG поставить не удалось"
+					echo "!! Поставьте официальную OpenWrt $rel (${tgt}/${sub}) или прошивку со встроенным AmneziaWG" ;;
+				*)
+					echo "ОШИБКА: для OpenWrt $rel ($arch, ${tgt}/${sub}) нет готовых пакетов AmneziaWG" ;;
+			esac
 			return 1
 		fi
 	fi
-	kver1="$(_awg_pkg_ver kmod-amneziawg)"
+	kver1="$(_awg_kmod_ver)"
 	if [ "$was_loaded" = 1 ] && [ -n "$kver0" ] && [ "$kver0" != "$kver1" ]; then
 		if [ -z "$(awg show interfaces 2>/dev/null)" ] && rmmod amneziawg >/dev/null 2>&1; then
 			_rb_say "Модуль ядра AmneziaWG перезагружен ($kver0 → $kver1)"
@@ -11588,6 +11691,7 @@ do_steer_remove() {
 		for p in luci-i18n-amneziawg-ru luci-proto-amneziawg luci-app-amneziawg amneziawg-tools kmod-amneziawg; do
 			_st_owns "pkg $p" && { _zm_pkg_purge "$p" || rc=1; }
 		done
+		_pkg_is_installed kmod-amneziawg || _awg_kmod_manual_rm
 	fi
 	_rb_rpcd_ensure
 	# что-то не удалилось — запоминаем, какие пакеты ставила панель: иначе повторное «Удалить» их уже не найдёт
@@ -13135,7 +13239,7 @@ _awg_pkg_ver() {
 		opkg list-installed 2>/dev/null | awk -v p="$1" '$1 == p { print $3; exit }'
 	fi
 }
-_awg_installed() { command -v awg >/dev/null 2>&1 && { _pkg_is_installed kmod-amneziawg || _st_awg_loaded; }; }
+_awg_installed() { command -v awg >/dev/null 2>&1 && { _awg_kmod_have || _st_awg_loaded; }; }
 _awg_proto_ok() { ubus call network get_proto_handlers 2>/dev/null | grep -q '"amneziawg"'; }
 _awg_ifaces() { uci -q show network | sed -n "s/^network\.\([A-Za-z0-9_]*\)\.proto='amneziawg'\$/\1/p"; }
 _awg_is_steer() { case "$1" in zmwarp|zmwarp[0-9]) return 0 ;; esac; return 1; }
@@ -13224,7 +13328,7 @@ awg_status() {
 	[ -x /etc/init.d/mihomo ] && mih=true
 	printf '{"running":%s,"phase":"%s","installed":%s,"kmod":"%s","tools":"%s","luci":"%s","luci_pkg":"%s","module":%s,"proto":%s,"steer":%s,"warp_conf":%s,"warp_path":"%s","warp_endpoint":"%s","mihomo":%s,"endpoints":"%s","steer_own":%s,"steer_active":"%s","ifaces":[%s]}\n' \
 		"$running" "$(cat "$AWG_RUN/phase" 2>/dev/null)" "$(_awg_installed && echo true || echo false)" \
-		"$(esc "$(_awg_pkg_ver kmod-amneziawg)")" "$(esc "$(_awg_pkg_ver amneziawg-tools)")" "$(esc "$lv")" "$lp" \
+		"$(esc "$(_awg_kmod_ver)")" "$(esc "$(_awg_pkg_ver amneziawg-tools)")" "$(esc "$lv")" "$lp" \
 		"$(_st_awg_loaded && echo true || echo false)" "$(_awg_proto_ok && echo true || echo false)" \
 		"$(_st_warp_on && echo true || echo false)" "$conf" "$MIXOMO_WARP_CONF" "$(esc "$ep")" "$mih" "$AWG_ENDPOINTS" "$(_st_warp_own && echo true || echo false)" "$(_st_warp_on && _st_active_if)" "$list"
 }
@@ -13272,6 +13376,7 @@ do_awg_remove() {
 	done
 	_awg_say "Выгружаем модуль ядра и чистим файлы"
 	rmmod amneziawg >/dev/null 2>&1
+	_awg_kmod_manual_rm
 	[ -d /sys/module/amneziawg ] && _zm_reboot_hint "AmneziaWG удалён, но его модуль ядра ещё загружен. Перезагрузите роутер, чтобы он выгрузился."
 	sed -i -E '/^pkg (kmod-amneziawg|amneziawg-tools|luci-proto-amneziawg|luci-app-amneziawg|luci-i18n-amneziawg-ru)$/d' "$ST_OWNED" 2>/dev/null
 	_zm_wipe "$AWG_DIR" /usr/bin/awg /usr/bin/awg-quick /lib/netifd/proto/amneziawg.sh || rc=1
@@ -16144,6 +16249,575 @@ redbtn_panel_gone() {
 	return 0
 }
 
+# ---------- Obmanka: FakeSIP + FakeHTTP (MikeWang000000) ----------
+# Перед первыми пакетами соединения уходит подделка с маленьким TTL: для UDP — SIP, для TCP — HTTP/HTTPS.
+# Служба /etc/init.d/obmanka самостоятельная — работает и без панели.
+OBM_INIT="/etc/init.d/obmanka"
+OBM_CFG="/etc/config/obmanka"
+OBM_RUN="/var/run/obmanka.state"
+OBM_GH="MikeWang000000"
+
+_obm_installed() { [ -x "$OBM_INIT" ] && [ -x /usr/bin/fakesip ] && [ -x /usr/bin/fakehttp ]; }
+_obm_enabled() { ls /etc/rc.d/S*obmanka >/dev/null 2>&1; }
+# номер версии зашит в программу строкой «FakeSIP version 0.9.1» (tr в busybox OpenWrt не знает [:print:])
+_obm_binver() { grep -ao 'Fake[A-Z]* version [0-9][0-9.]*' "$1" 2>/dev/null | head -n1 | sed 's/.* //'; }
+_obm_ver() { [ -x "/usr/bin/$1" ] && _obm_binver "/usr/bin/$1"; }
+_obm_latest_sip() { _gh_latest_tag "$OBM_GH/FakeSIP" | sed 's/^[vV]//'; }
+_obm_latest_http() { _gh_latest_tag "$OBM_GH/FakeHTTP" | sed 's/^[vV]//'; }
+_obm_get() { local v; v="$(uci -q get "obmanka.main.$1")" || v="$2"; echo "$v"; }
+_obm_st() { sed -n "s/^$1=\"\(.*\)\"\$/\1/p" "$OBM_RUN" 2>/dev/null | head -n1; }
+# только счётчики правил очереди: «ct packets 1-5» в тех же строках — не счётчик
+_obm_pk() { nft list chain inet obmanka "$1" 2>/dev/null | grep -o 'counter packets [0-9]*' | awk '{ s += $3 } END { print s + 0 }'; }
+
+_obm_arch() {
+	local a
+	a="$(awk -F\' '/DISTRIB_ARCH/ { print $2 }' /etc/openwrt_release 2>/dev/null)"
+	[ -n "$a" ] || a="$(uname -m)"
+	case "$a" in
+		aarch64*|arm64*) echo arm64 ;;
+		x86_64*) echo x86_64 ;;
+		i386_pentium4*|i686*) echo i686 ;;
+		i386*|i486*|i586*) echo i586 ;;
+		arm_cortex-a*vfp*|arm_cortex-a*neon*) echo arm32v7hf ;;
+		arm_cortex-a*|armv7*) echo arm32v7 ;;
+		arm_*vfp*) echo arm32hf ;;
+		arm*) echo arm32 ;;
+		mipsel*) echo mips32elsf ;;
+		mips64el*) echo mips64el ;;
+		mips64*) echo mips64 ;;
+		mips*) echo mips32sf ;;
+		riscv64*) echo riscv64 ;;
+		powerpc64*) echo powerpc64 ;;
+		powerpc*) echo powerpc ;;
+		loongarch64*) echo loong64 ;;
+		*) return 1 ;;
+	esac
+}
+
+_obm_kmod() {
+	[ -e /sys/module/nft_queue ] && return 0
+	modprobe nft_queue >/dev/null 2>&1 && [ -e /sys/module/nft_queue ] && return 0
+	_pkg_is_installed kmod-nft-queue || { $INSTALL kmod-nft-queue || { $UPDATE && $INSTALL kmod-nft-queue; }; }
+	modprobe nft_queue >/dev/null 2>&1
+	[ -e /sys/module/nft_queue ] || _pkg_is_installed kmod-nft-queue
+}
+
+# $1 — fakesip|fakehttp, $2 — FakeSIP|FakeHTTP, $3 — сборка. Кладёт проверенный файл в $JOBS_DIR/obm_<имя>.bin
+_obm_fetch() {
+	local n="$1" r="$2" d="$JOBS_DIR/obm_$1" f
+	rm -rf "$d" "$JOBS_DIR/obm_$n.bin"; mkdir -p "$d"
+	echo "   → Скачиваем $r"
+	if ! _zm_gh_get "$GH_MAIN/$OBM_GH/$r/releases/latest/download/$n-linux-$3.tar.gz" "$d/a.tgz"; then
+		rm -rf "$d"; echo "ОШИБКА: не удалось скачать $r с GitHub — ни напрямую, ни через WARP"; return 1
+	fi
+	tar -xzf "$d/a.tgz" -C "$d" 2>/dev/null
+	f="$(find "$d" -type f -name "$n" | head -n1)"
+	if [ -z "$f" ] || ! "$f" 2>&1 | grep -q 'Usage'; then
+		rm -rf "$d"; echo "ОШИБКА: $r скачался повреждённым или не подходит роутеру (сборка $3)"; return 1
+	fi
+	mv -f "$f" "$JOBS_DIR/obm_$n.bin" && chmod 755 "$JOBS_DIR/obm_$n.bin"
+	rm -rf "$d"
+	echo "   ✓ $r $(_obm_binver "$JOBS_DIR/obm_$n.bin")"
+}
+
+# Отдельный скрипт FakeDPI (до панели) — переносим его настройки и убираем, чтобы не было двух служб
+_obm_legacy() {
+	[ -e /etc/init.d/fakedpi ] || [ -e /usr/bin/fakedpi ] || [ -e /etc/config/fakedpi ] || return 0
+	echo "   → Найдена отдельная установка FakeDPI — переносим её настройки в Obmanka"
+	[ -x /etc/init.d/fakedpi ] && { /etc/init.d/fakedpi stop >/dev/null 2>&1; /etc/init.d/fakedpi disable >/dev/null 2>&1; }
+	nft delete table inet fakedpi >/dev/null 2>&1
+	[ ! -f "$OBM_CFG" ] && [ -f /etc/config/fakedpi ] && cp -f /etc/config/fakedpi "$OBM_CFG"
+	rm -f /etc/init.d/fakedpi /etc/config/fakedpi /usr/bin/fakedpi /var/run/fakedpi.state /var/run/fakedpi.nft /etc/rc.d/[SK][0-9][0-9]fakedpi
+	echo "   ✓ FakeDPI убран, настройки перенесены"
+}
+
+_obm_write_cfg() {
+	[ -f "$OBM_CFG" ] && return 0
+	cat > "$OBM_CFG" << 'OBM_CFG_EOF'
+config main 'main'
+	# 1 — включено, 0 — выключено
+	option fakesip '1'
+	option fakehttp '1'
+	# WAN-интерфейс(ы) через пробел; пусто = определить автоматически
+	option iface ''
+	# TTL фейка в % от числа хопов до цели (0 = фиксированный TTL 3)
+	option ttl_pct '50'
+	# сколько раз повторять фейковый пакет
+	option repeat '2'
+	# домены, под которые FakeHTTP маскирует TCP (HTTP / HTTPS)
+	option http_host 'ya.ru'
+	option https_host 'ya.ru'
+	# порты, которые не трогать (через пробел, можно диапазоны 50000-50100)
+	option exclude_udp '53 67 68 123 5353'
+	option exclude_tcp '22 53'
+	# 1 — не трогать порты, которые уже обрабатывает zapret/zapret2
+	option zapret_compat '1'
+	option ipv6 '1'
+	# 1 — писать подробный лог в logread (много строк!)
+	option log '0'
+OBM_CFG_EOF
+}
+
+_obm_write_init() {
+	cat > "$OBM_INIT" << 'OBM_INIT_EOF'
+#!/bin/sh /etc/rc.common
+# Obmanka (Zapret Manager): FakeSIP + FakeHTTP — github.com/MikeWang000000
+START=99
+STOP=10
+USE_PROCD=1
+
+TABLE="obmanka"
+STATE="/var/run/obmanka.state"
+NFT="/var/run/obmanka.nft"
+# свои метки пакетов: 0x10000 занят ByeTube, 0x20000000/0x40000000 — Zapret, 0x0ff00000 — steer
+MSIP=0x40000
+MHTTP=0x80000
+MZAP=0x60000000
+
+wan_devs() {
+	local devs="" n d
+	for n in wan wan6 wwan; do
+		d="$(ifstatus "$n" 2>/dev/null | jsonfilter -q -e '@.l3_device')"
+		[ -n "$d" ] && case " $devs " in *" $d "*) ;; *) devs="$devs $d" ;; esac
+	done
+	[ -n "$devs" ] || devs="$(ip route show default 2>/dev/null | awk '{ for (i = 1; i < NF; i++) if ($i == "dev") { print $(i + 1); exit } }')"
+	echo $devs
+}
+
+# занятые номера NFQUEUE (одиночные и диапазоны a-b)
+queue_used() {
+	local q="$1" e a b
+	for e in $(nft -n list ruleset 2>/dev/null | grep -w queue | grep -oE '(to|num) [0-9]+(-[0-9]+)?' | awk '{ print $2 }'); do
+		a="${e%-*}"; b="${e#*-}"
+		[ "$q" -ge "$a" ] && [ "$q" -le "$b" ] && return 0
+	done
+	return 1
+}
+free_queue() {
+	local q="$1"
+	while queue_used "$q"; do q=$((q + 1)); done
+	echo "$q"
+}
+
+# порты, которые Zapret и Zapret2 отправляют в свои очереди: настройки + живые правила
+zapret_ports() {
+	local t
+	if [ -f /etc/config/zapret ]; then
+		if [ "$1" = udp ]; then echo 443; uci -q get zapret.config.NFQWS_PORTS_UDP
+		else echo 80 443; uci -q get zapret.config.NFQWS_PORTS_TCP; fi
+	fi
+	[ -f /etc/config/zapret2 ] && uci -q get "zapret2.main.nfqws_ports_$1"
+	for t in zapret zapret2; do
+		nft list table inet "$t" 2>/dev/null | grep -w queue | grep -E "(l4proto $1|$1 dport)" \
+			| grep -oE "(th|$1) dport (\{[^}]*\}|[0-9]+(-[0-9]+)?)" \
+			| sed -E 's/^(th|tcp|udp) dport //; s/[{}]//g'
+	done
+}
+
+# подпись настроек портов Zapret — по ней панель понимает, что исключения пора обновить
+zcfg() {
+	local u="" t=""
+	if [ -f /etc/config/zapret ]; then u="$u $(uci -q get zapret.config.NFQWS_PORTS_UDP)"; t="$t $(uci -q get zapret.config.NFQWS_PORTS_TCP)"; fi
+	if [ -f /etc/config/zapret2 ]; then u="$u $(uci -q get zapret2.main.nfqws_ports_udp)"; t="$t $(uci -q get zapret2.main.nfqws_ports_tcp)"; fi
+	echo "$u|$t"
+}
+
+# порты серверов AmneziaWG: туннель прячется сам, двойная маскировка не нужна
+awg_ports() {
+	local s
+	for s in $(uci -q -X show network 2>/dev/null | sed -n "s/^network\.\([^.=]*\)=amneziawg_.*/\1/p"); do
+		uci -q get "network.$s.endpoint_port"
+	done
+}
+
+# "53, 67 50000-50100" -> "53, 67, 50000-50100": только верные порты и диапазоны, без повторов
+port_list() {
+	echo "$*" | tr ',' ' ' | tr ' ' '\n' | awk -F- '/^[0-9]+(-[0-9]+)?$/ { a = $1 + 0; b = (NF > 1 ? $2 + 0 : a); if (a >= 1 && b <= 65535 && a <= b) print (a == b ? a : a "-" b) }' \
+		| sort -n | uniq | tr '\n' ',' | sed 's/,$//; s/,/, /g'
+}
+
+build_nft() {
+	local wanset="" d ew="" eu="" et=""
+	for d in $WAN; do wanset="$wanset${wanset:+, }\"$d\""; done
+	[ -n "$wanset" ] && ew="elements = { $wanset };"
+	[ -n "$EXU" ] && eu="elements = { $EXU };"
+	[ -n "$EXT" ] && et="elements = { $EXT };"
+	{
+	echo "table inet $TABLE {"
+	echo "  set wanif { type ifname; $ew }"
+	echo "  set local4 { type ipv4_addr; flags interval; elements = { 0.0.0.0/8, 10.0.0.0/8, 100.64.0.0/10, 127.0.0.0/8, 169.254.0.0/16, 172.16.0.0/12, 192.168.0.0/16, 224.0.0.0/3 }; }"
+	echo "  set local6 { type ipv6_addr; flags interval; elements = { ::/127, ::ffff:0:0/96, 64:ff9b::/96, 64:ff9b:1::/48, 2002::/16, fc00::/7, fe80::/10 }; }"
+	echo "  set ex_udp { type inet_service; flags interval; auto-merge; $eu }"
+	echo "  set ex_tcp { type inet_service; flags interval; auto-merge; $et }"
+	if [ "$SIP" = 1 ]; then
+	cat << NFT
+  chain sip_pre {
+    type filter hook prerouting priority mangle - 5; policy accept;
+    iifname != @wanif return
+    icmp type time-exceeded counter drop
+    icmpv6 type time-exceeded counter drop
+    ip saddr @local4 return
+    ip6 saddr != 2000::/3 return
+    jump sip_rules
+  }
+  chain sip_post {
+    type filter hook postrouting priority mangle - 5; policy accept;
+    oifname != @wanif return
+    ip daddr @local4 return
+    ip6 daddr != 2000::/3 return
+    jump sip_rules
+  }
+  chain sip_rules {
+    meta mark and $MSIP == $MSIP return
+    meta mark and $MZAP != 0 return
+    meta l4proto != udp return
+    $NO6
+    udp dport @ex_udp return
+    udp sport @ex_udp return
+    ct packets 1-5 counter queue num $QSIP bypass
+  }
+NFT
+	fi
+	if [ "$HTTP" = 1 ]; then
+	cat << NFT
+  chain http_pre {
+    type filter hook prerouting priority mangle - 5; policy accept;
+    iifname != @wanif return
+    ip saddr @local4 return
+    ip6 saddr @local6 return
+    jump http_rules
+  }
+  chain http_post {
+    type filter hook postrouting priority srcnat + 5; policy accept;
+    oifname != @wanif return
+    ip daddr @local4 return
+    ip6 daddr @local6 return
+    jump http_rules
+  }
+  chain http_rules {
+    meta mark and $MHTTP == $MHTTP return
+    meta mark and $MZAP != 0 return
+    meta l4proto != tcp return
+    $NO6
+    tcp dport @ex_tcp return
+    tcp sport @ex_tcp return
+    tcp flags & (syn | fin | rst) == syn counter queue num $QHTTP bypass
+    tcp flags & (syn | ack | fin | rst) == ack ct packets 2-4 counter queue num $QHTTP bypass
+  }
+NFT
+	fi
+	echo "}"
+	} > "$NFT"
+}
+
+start_service() {
+	config_load obmanka
+	config_get_bool SIP main fakesip 1
+	config_get_bool HTTP main fakehttp 1
+	config_get WAN main iface ''
+	config_get PCT main ttl_pct 50
+	config_get REP main repeat 2
+	config_get HHOST main http_host 'ya.ru'
+	config_get SHOST main https_host 'ya.ru'
+	config_get EXU main exclude_udp '53 67 68 123 5353'
+	config_get EXT main exclude_tcp '22 53'
+	config_get_bool ZC main zapret_compat 1
+	config_get_bool V6 main ipv6 1
+	config_get_bool LOG main log 0
+
+	nft delete table inet "$TABLE" 2>/dev/null
+	rm -f "$STATE"
+	[ -x /usr/bin/fakesip ] || SIP=0
+	[ -x /usr/bin/fakehttp ] || HTTP=0
+	[ "$SIP" = 1 ] || [ "$HTTP" = 1 ] || { logger -t obmanka "FakeSIP и FakeHTTP выключены — нечего запускать"; return 0; }
+	case "$REP" in [1-9]) ;; *) REP=2 ;; esac
+	case "$PCT" in ''|*[!0-9]*) PCT=50 ;; esac
+	[ "$PCT" -le 100 ] || PCT=50
+
+	modprobe nft_queue 2>/dev/null
+	sysctl -q -w net.netfilter.nf_conntrack_acct=1 2>/dev/null
+
+	[ -n "$WAN" ] || WAN="$(wan_devs)"
+	[ -n "$WAN" ] || logger -t obmanka "WAN не найден — правила применятся, когда WAN поднимется"
+
+	ZU=""; ZT=""
+	if [ "$ZC" = 1 ] && { [ -x /etc/init.d/zapret ] || [ -x /etc/init.d/zapret2 ]; }; then
+		ZU="$(port_list $(zapret_ports udp))"
+		ZT="$(port_list $(zapret_ports tcp))"
+	fi
+	AU="$(port_list $(awg_ports))"
+	EXU="$(port_list $EXU $ZU $AU)"
+	EXT="$(port_list $EXT $ZT)"
+
+	QSIP="$(free_queue 513)"
+	QHTTP="$(free_queue 512)"
+	[ "$QHTTP" = "$QSIP" ] && QHTTP="$(free_queue $((QSIP + 1)))"
+
+	NO6=""; F6=""
+	[ "$V6" = 1 ] || { NO6="meta nfproto ipv6 return"; F6="-4"; }
+
+	build_nft
+	if ! nft -f "$NFT" 2>/dev/null; then
+		logger -t obmanka "ошибка загрузки правил nftables ($NFT)"
+		return 1
+	fi
+
+	local common="-a -f $F6 -r $REP"
+	[ "$PCT" -gt 0 ] && common="$common -y $PCT"
+	[ "$LOG" = 1 ] || common="$common -s"
+
+	if [ "$SIP" = 1 ]; then
+		procd_open_instance fakesip
+		procd_set_param command /usr/bin/fakesip $common -n "$QSIP" -m "$MSIP"
+		procd_set_param respawn 3600 5 0
+		[ "$LOG" = 1 ] && procd_set_param stderr 1
+		procd_close_instance
+	fi
+	if [ "$HTTP" = 1 ]; then
+		procd_open_instance fakehttp
+		procd_set_param command /usr/bin/fakehttp $common -n "$QHTTP" -m "$MHTTP" -h "$HHOST" -e "$SHOST"
+		procd_set_param respawn 3600 5 0
+		[ "$LOG" = 1 ] && procd_set_param stderr 1
+		procd_close_instance
+	fi
+
+	cat > "$STATE" << ST
+WAN="$WAN"
+SIP="$SIP"
+HTTP="$HTTP"
+QSIP="$QSIP"
+QHTTP="$QHTTP"
+EXU="$EXU"
+EXT="$EXT"
+ZU="$ZU"
+ZT="$ZT"
+AU="$AU"
+ZCFG="$(zcfg)"
+ST
+	logger -t obmanka "запущена: WAN=[$WAN] FakeSIP=$SIP (очередь $QSIP) FakeHTTP=$HTTP (очередь $QHTTP)"
+}
+
+stop_service() {
+	nft delete table inet "$TABLE" 2>/dev/null
+	rm -f "$STATE"
+}
+
+reload_service() {
+	stop
+	start
+}
+
+service_triggers() {
+	procd_add_reload_trigger obmanka
+	procd_add_interface_trigger "interface.*.up" wan /etc/init.d/obmanka reload
+	procd_add_interface_trigger "interface.*.up" wan6 /etc/init.d/obmanka reload
+}
+OBM_INIT_EOF
+	chmod 755 "$OBM_INIT"
+}
+
+# Zapret или Zapret2 перезапустились — если их порты поменялись, обновляем исключения Obmanka
+_obm_resync() {
+	[ -x "$OBM_INIT" ] && [ -f "$OBM_RUN" ] && _obm_enabled || return 0
+	[ "$(_obm_get zapret_compat 1)" = 0 ] && return 0
+	local u="" t=""
+	if [ -f /etc/config/zapret ]; then u="$u $(uci -q get zapret.config.NFQWS_PORTS_UDP)"; t="$t $(uci -q get zapret.config.NFQWS_PORTS_TCP)"; fi
+	if [ -f /etc/config/zapret2 ]; then u="$u $(uci -q get zapret2.main.nfqws_ports_udp)"; t="$t $(uci -q get zapret2.main.nfqws_ports_tcp)"; fi
+	[ "$u|$t" = "$(_obm_st ZCFG)" ] && return 0
+	"$OBM_INIT" reload >/dev/null 2>&1
+	return 0
+}
+
+_obm_health() {
+	_obm_installed || { echo 0; return 0; }
+	_obm_enabled || { echo 4; return 0; }
+	local n=0 ok=0
+	[ "$(_obm_get fakesip 1)" = 1 ] && { n=$((n + 1)); pidof fakesip >/dev/null 2>&1 && ok=$((ok + 1)); }
+	[ "$(_obm_get fakehttp 1)" = 1 ] && { n=$((n + 1)); pidof fakehttp >/dev/null 2>&1 && ok=$((ok + 1)); }
+	nft list table inet obmanka >/dev/null 2>&1 || ok=0
+	if [ "$ok" = "$n" ]; then echo 1; elif [ "$ok" = 0 ]; then echo 2; else echo 3; fi
+}
+
+_obm_start_wait() {
+	local i n
+	for i in 1 2 3 4 5 6; do
+		_zm_sleep 1
+		n=0
+		[ "$(_obm_get fakesip 1)" = 1 ] && ! pidof fakesip >/dev/null 2>&1 && n=1
+		[ "$(_obm_get fakehttp 1)" = 1 ] && ! pidof fakehttp >/dev/null 2>&1 && n=1
+		[ "$n" = 0 ] && nft list table inet obmanka >/dev/null 2>&1 && return 0
+	done
+	return 1
+}
+
+do_obm_install() {
+	local arch upd=0
+	_obm_installed && upd=1
+	echo "==> $([ "$upd" = 1 ] && echo Обновляем || echo Устанавливаем) Obmanka (FakeSIP + FakeHTTP)"
+	command -v nft >/dev/null 2>&1 || { echo "ОШИБКА: нужен firewall4 (nftables) — OpenWrt 22.03 и новее"; return 1; }
+	arch="$(_obm_arch)" || { echo "ОШИБКА: для этого роутера ($(awk -F\' '/DISTRIB_ARCH/ { print $2 }' /etc/openwrt_release)) нет сборки FakeSIP и FakeHTTP"; return 1; }
+	echo "   ✓ Сборка для роутера: $arch"
+	echo "==> Проверяем модуль ядра nft_queue"
+	_obm_kmod || { echo "ОШИБКА: не удалось поставить kmod-nft-queue — без него Obmanka не работает"; return 1; }
+	echo "   ✓ Модуль на месте"
+	echo "==> Скачиваем программы"
+	_obm_fetch fakesip FakeSIP "$arch" || return 1
+	_obm_fetch fakehttp FakeHTTP "$arch" || { rm -f "$JOBS_DIR/obm_fakesip.bin"; return 1; }
+	echo "==> Ставим"
+	_obm_legacy
+	[ -x "$OBM_INIT" ] && "$OBM_INIT" stop >/dev/null 2>&1
+	killall fakesip fakehttp >/dev/null 2>&1
+	mv -f "$JOBS_DIR/obm_fakesip.bin" /usr/bin/fakesip && mv -f "$JOBS_DIR/obm_fakehttp.bin" /usr/bin/fakehttp ||
+		{ rm -f "$JOBS_DIR"/obm_*.bin; echo "ОШИБКА: не удалось записать программы — проверьте место на флеше"; return 1; }
+	_obm_write_cfg
+	_obm_write_init
+	echo "   ✓ Программы, служба и настройки на месте"
+	echo "==> Запускаем"
+	"$OBM_INIT" enable >/dev/null 2>&1
+	"$OBM_INIT" restart >/dev/null 2>&1
+	if ! _obm_start_wait; then
+		echo "!! Obmanka не запустилась — откройте вкладку и нажмите «Проверить»"
+		return 1
+	fi
+	echo "   ✓ Работает, внешний интерфейс: $(_obm_st WAN)"
+	echo "==> Готово: Obmanka $([ "$upd" = 1 ] && echo обновлена || echo "установлена и работает")"
+}
+
+do_obm_remove() {
+	local rc=0 keep=""
+	echo "==> Удаляем Obmanka"
+	_zm_stop_svc obmanka
+	for b in fakesip fakehttp; do [ -x "/usr/bin/$b" ] && "/usr/bin/$b" -k >/dev/null 2>&1; done
+	killall fakesip fakehttp >/dev/null 2>&1
+	nft delete table inet obmanka >/dev/null 2>&1
+	[ -n "$ZM_RM_INNER" ] && keep=1
+	_zm_wipe "$OBM_INIT" /usr/bin/fakesip /usr/bin/fakehttp "$OBM_RUN" /var/run/obmanka.nft $([ -z "$keep" ] && echo "$OBM_CFG") &&
+		echo "   ✓ Программы, служба и правила файрвола удалены$([ -n "$keep" ] && echo ', настройки сохранены')" || rc=1
+	_zm_rm_done "$rc" "модуль Obmanka"
+}
+
+_obm_set() {
+	local line k v
+	printf '%s\n' "$1" | tr -d '\r' > "$JOBS_DIR/obm_set.$$"
+	while IFS= read -r line; do
+		[ -n "$line" ] || continue
+		k="${line%%=*}"; v="${line#*=}"
+		case "$k" in
+			fakesip|fakehttp|zapret_compat|ipv6|log)
+				case "$v" in 0|1) ;; *) rm -f "$JOBS_DIR/obm_set.$$"; echo '{"error":"неверное значение переключателя"}'; return 1 ;; esac ;;
+			ttl_pct)
+				case "$v" in ''|*[!0-9]*) v=x ;; esac
+				[ "$v" != x ] && [ "$v" -le 90 ] || { rm -f "$JOBS_DIR/obm_set.$$"; echo '{"error":"TTL — от 0 до 90 %"}'; return 1; } ;;
+			repeat)
+				case "$v" in [1-5]) ;; *) rm -f "$JOBS_DIR/obm_set.$$"; echo '{"error":"повторов — от 1 до 5"}'; return 1 ;; esac ;;
+			host)
+				_zm_re "$v" '^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)+$' && [ "${#v}" -le 100 ] ||
+					{ rm -f "$JOBS_DIR/obm_set.$$"; echo '{"error":"домен — например ya.ru"}'; return 1; } ;;
+			exclude_udp|exclude_tcp)
+				v="$(printf '%s' "$v" | tr ',;' '  ' | tr -s ' ' | sed 's/^ //; s/ $//')"
+				[ -z "$v" ] || _zm_re "$v" '^[0-9]+(-[0-9]+)?( [0-9]+(-[0-9]+)?)*$' ||
+					{ rm -f "$JOBS_DIR/obm_set.$$"; echo '{"error":"порты — числа и диапазоны через пробел, например 27015 3478-3480"}'; return 1; } ;;
+			*) continue ;;
+		esac
+		# пустое значение uci удаляет — тогда служба вернула бы порты по умолчанию; пробел — «не исключать ничего»
+		[ -z "$v" ] && v=" "
+		if [ "$k" = host ]; then uci -q set obmanka.main.http_host="$v"; uci -q set obmanka.main.https_host="$v"
+		else uci -q set "obmanka.main.$k=$v"; fi
+	done < "$JOBS_DIR/obm_set.$$"
+	rm -f "$JOBS_DIR/obm_set.$$"
+	if [ "$(uci -q get obmanka.main.fakesip)" = 0 ] && [ "$(uci -q get obmanka.main.fakehttp)" = 0 ]; then
+		uci -q revert obmanka
+		echo '{"error":"включите хотя бы FakeSIP или FakeHTTP"}'
+		return 1
+	fi
+	uci -q commit obmanka
+	_obm_enabled && "$OBM_INIT" reload >/dev/null 2>&1
+	echo '{"ok":true}'
+}
+
+_obm_check() {
+	local out="" sep="" q n m p on
+	item() { out="$out$sep[\"$1\",\"$(esc "$2")\"]"; sep=","; }
+	if ! _obm_enabled; then item warn "Obmanka выключена — нажмите «Включить»"
+	else
+		[ -e /sys/module/nft_queue ] || nft list table inet obmanka 2>/dev/null | grep -q queue && item ok "Модуль ядра nft_queue на месте" || item fail "Нет модуля ядра nft_queue — нажмите «Переустановить»"
+		if nft list table inet obmanka >/dev/null 2>&1; then item ok "Правила Obmanka загружены"; else item fail "Правил Obmanka нет — нажмите «Перезапустить»"; fi
+		[ -n "$(_obm_st WAN)" ] && item ok "Внешний интерфейс: $(_obm_st WAN)" || item fail "Не найден внешний интерфейс (WAN)"
+		for p in fakesip:FakeSIP:QSIP:sip_rules fakehttp:FakeHTTP:QHTTP:http_rules; do
+			on="${p%%:*}"
+			[ "$(_obm_get "$on" 1)" = 1 ] || continue
+			if pidof "$on" >/dev/null 2>&1; then
+				item ok "$(echo "$p" | cut -d: -f2) работает"
+				n="$(_obm_pk "$(echo "$p" | cut -d: -f4)")"
+				[ "${n:-0}" -gt 0 ] && item ok "$(echo "$p" | cut -d: -f2): обработано пакетов — $n" || item warn "$(echo "$p" | cut -d: -f2): пакетов пока не было — откройте что-нибудь на устройстве и проверьте ещё раз"
+			else item fail "$(echo "$p" | cut -d: -f2) не запущен — нажмите «Перезапустить»"; fi
+			q="$(_obm_st "$(echo "$p" | cut -d: -f3)")"
+			if [ -n "$q" ]; then
+				n="$(nft -n list ruleset 2>/dev/null | grep -w queue | grep -cE "(to|num) $q( |\$)")"
+				m="$(nft -n list table inet obmanka 2>/dev/null | grep -w queue | grep -cE "(to|num) $q( |\$)")"
+				[ "${n:-0}" -gt "${m:-0}" ] && item fail "Очередь $q занята другой программой — нажмите «Перезапустить», Obmanka возьмёт свободную"
+			fi
+		done
+	fi
+	[ "$(uci -q get firewall.@defaults[0].flow_offloading_hw)" = 1 ] && item warn "Включён аппаратный Flow Offloading — если что-то не работает, выключите его"
+	{ [ -f /etc/init.d/zapret ] || [ -f /etc/init.d/zapret2 ]; } && [ "$(_obm_get zapret_compat 1)" = 0 ] && item warn "Совместимость с Zapret выключена — они обрабатывают одни и те же соединения"
+	printf '{"items":[%s]}\n' "$out"
+}
+
+obmanka_status() {
+	local inst=false en=false busy=false v_sip v_http l_sip l_http newer=false
+	_obm_installed && inst=true
+	_obm_enabled && en=true
+	_job_running obmanka && busy=true
+	v_sip="$(_obm_ver fakesip)"; v_http="$(_obm_ver fakehttp)"
+	if [ "$inst" = true ]; then
+		l_sip="$(_zm_cached obm_sip _obm_latest_sip)"; l_http="$(_zm_cached obm_http _obm_latest_http)"
+		{ [ -n "$l_sip" ] && [ -n "$v_sip" ] && _st_ver_lt "$v_sip" "$l_sip"; } && newer=true
+		{ [ -n "$l_http" ] && [ -n "$v_http" ] && _st_ver_lt "$v_http" "$l_http"; } && newer=true
+	fi
+	printf '{"installed":%s,"enabled":%s,"busy":%s,"loaded":%s,' "$inst" "$en" "$busy" "$(nft list table inet obmanka >/dev/null 2>&1 && echo true || echo false)"
+	printf '"sip_run":%s,"http_run":%s,' "$(pidof fakesip >/dev/null 2>&1 && echo true || echo false)" "$(pidof fakehttp >/dev/null 2>&1 && echo true || echo false)"
+	printf '"sip_pk":%s,"http_pk":%s,' "$(_obm_pk sip_rules)" "$(_obm_pk http_rules)"
+	printf '"ver_sip":"%s","ver_http":"%s","latest_sip":"%s","latest_http":"%s","newer":%s,' "$(esc "$v_sip")" "$(esc "$v_http")" "$(esc "$l_sip")" "$(esc "$l_http")" "$newer"
+	printf '"wan":"%s","q_sip":"%s","q_http":"%s","auto_udp":"%s","auto_tcp":"%s","awg_udp":"%s",' \
+		"$(esc "$(_obm_st WAN)")" "$(esc "$(_obm_st QSIP)")" "$(esc "$(_obm_st QHTTP)")" "$(esc "$(_obm_st ZU)")" "$(esc "$(_obm_st ZT)")" "$(esc "$(_obm_st AU)")"
+	printf '"cfg":{"fakesip":"%s","fakehttp":"%s","host":"%s","ttl_pct":"%s","repeat":"%s","zapret_compat":"%s","ipv6":"%s","log":"%s","exclude_udp":"%s","exclude_tcp":"%s"},' \
+		"$(esc "$(_obm_get fakesip 1)")" "$(esc "$(_obm_get fakehttp 1)")" "$(esc "$(_obm_get https_host ya.ru)")" "$(esc "$(_obm_get ttl_pct 50)")" "$(esc "$(_obm_get repeat 2)")" \
+		"$(esc "$(_obm_get zapret_compat 1)")" "$(esc "$(_obm_get ipv6 1)")" "$(esc "$(_obm_get log 0)")" "$(esc "$(_obm_get exclude_udp '53 67 68 123 5353')")" "$(esc "$(_obm_get exclude_tcp '22 53')")"
+	printf '"zapret":%s,"zapret2":%s,"legacy":%s,"vpn":"%s"}\n' \
+		"$([ -f /etc/init.d/zapret ] && echo true || echo false)" "$([ -f /etc/init.d/zapret2 ] && echo true || echo false)" \
+		"$({ [ -e /etc/init.d/fakedpi ] || [ -e /usr/bin/fakedpi ]; } && echo true || echo false)" \
+		"$(esc "$(v=""; _st_installed 2>/dev/null && v="Steer"; _fk_installed 2>/dev/null && v="${v:+$v, }Forkozz"; _mx_installed 2>/dev/null && v="${v:+$v, }Mixomo"; echo "$v")")"
+}
+
+obmanka_action() {
+	local action="$1" mode="$2"
+	case "$action" in
+		install|update|reinstall|remove|restart|start|stop|set)
+			_job_running obmanka && { echo '{"error":"дождитесь окончания текущей операции"}'; return 1; } ;;
+	esac
+	case "$action" in
+		install|update) job_start obmanka do_obm_install ;;
+		reinstall)      _obm_installed || { echo '{"error":"Obmanka не установлена"}'; return 1; }; job_start obmanka _zm_reinstall do_obm_remove do_obm_install ;;
+		remove)         job_start obmanka do_obm_remove ;;
+		restart|start)
+			_obm_installed || { echo '{"error":"Obmanka не установлена"}'; return 1; }
+			"$OBM_INIT" enable >/dev/null 2>&1
+			"$OBM_INIT" restart >/dev/null 2>&1
+			ZM_JOB_LOG=/dev/null _obm_start_wait && echo '{"ok":true}' || echo '{"error":"Obmanka не запустилась — нажмите «Проверить»"}' ;;
+		stop)
+			_obm_installed || { echo '{"error":"Obmanka не установлена"}'; return 1; }
+			"$OBM_INIT" stop >/dev/null 2>&1
+			"$OBM_INIT" disable >/dev/null 2>&1
+			echo '{"ok":true}' ;;
+		set)
+			_obm_installed || { echo '{"error":"Obmanka не установлена"}'; return 1; }
+			_obm_set "$mode" ;;
+		check) _obm_installed || { echo '{"error":"Obmanka не установлена"}'; return 1; }; _obm_check ;;
+		*) echo '{"error":"неизвестное действие"}'; return 1 ;;
+	esac
+}
+
 cmd="$1"; shift
 _zm_in() {
 	ZM_IN="$(cat; echo .)"
@@ -16269,6 +16943,8 @@ case "$cmd" in
 	forkop_priority_watch)                _fk_fallback_sec "$1" ;;
 	forkop_ping_burst)                    _fk_ping_burst "$1" ;;
 	forkop_action)                        forkop_action "$1" "$2" ;;
+	obmanka_status)                       obmanka_status ;;
+	obmanka_action)                       obmanka_action "$1" "$2" ;;
 	lan_ip)                               _zm_lan_ip ;;
 	jobs_cancel)                          jobs_cancel "$1" ;;
 	system_reboot)                        system_reboot ;;
@@ -18905,6 +19581,8 @@ list_methods() {
 	json_add_object "forkop_config_get";      json_close_object
 	json_add_object "forkop_config_set";      json_add_string "content" "string"; json_close_object
 	json_add_object "forkop_action";          json_add_string "action" "string"; json_add_string "mode" "string"; json_close_object
+	json_add_object "obmanka_status";         json_close_object
+	json_add_object "obmanka_action";         json_add_string "action" "string"; json_add_string "mode" "string"; json_close_object
 	json_add_object "jobs_cancel";            json_add_string "job" "string"; json_close_object
 	json_add_object "ui_theme_get";           json_close_object
 	json_add_object "ui_theme_set";           json_add_string "theme" "string"; json_close_object
@@ -19017,6 +19695,8 @@ call_method() {
 		forkop_config_get)       "$BACKEND" forkop_config_get ;;
 		forkop_config_set)       json_get_var content content; printf '%s' "$content" | "$BACKEND" forkop_config_set @stdin ;;
 		forkop_action)           json_get_var action action; json_get_var mode mode; printf '%s' "$mode" | "$BACKEND" forkop_action "$action" @stdin ;;
+		obmanka_status)          "$BACKEND" obmanka_status ;;
+		obmanka_action)          json_get_var action action; json_get_var mode mode; printf '%s' "$mode" | "$BACKEND" obmanka_action "$action" @stdin ;;
 		jobs_cancel)             json_get_var job job;         "$BACKEND" jobs_cancel "$job" ;;
 		ui_theme_get)            "$BACKEND" ui_theme_get ;;
 		ui_theme_set)            json_get_var theme theme;     "$BACKEND" ui_theme_set "$theme" ;;
@@ -19090,6 +19770,7 @@ cat > '/usr/share/rpcd/acl.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF'
 					"term_status",
 					"steer_status",
 					"forkop_status",
+					"obmanka_status",
 					"forkop_config_get",
 					"sysinfo_get",
 					"ui_theme_get"
@@ -19169,6 +19850,7 @@ cat > '/usr/share/rpcd/acl.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF'
 					"steer_action",
 					"forkop_config_set",
 					"forkop_action",
+					"obmanka_action",
 					"sysinfo_run",
 					"jobs_cancel",
 					"ui_theme_set",
@@ -19217,6 +19899,11 @@ cat > '/usr/share/luci/menu.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF
 		"title": "Forkozz",
 		"order": 27,
 		"action": { "type": "view", "path": "zapret-manager/forkozz" }
+	},
+	"admin/services/zapret-manager/obmanka": {
+		"title": "Obmanka",
+		"order": 28,
+		"action": { "type": "view", "path": "zapret-manager/obmanka" }
 	},
 	"admin/services/zapret-manager/zapret2": {
 		"title": "Zapret2",
@@ -19414,6 +20101,8 @@ var callForkopStatus = zmDeclare({ object: 'zapret-manager', method: 'forkop_sta
 var callForkopConfigGet = zmDeclare({ object: 'zapret-manager', method: 'forkop_config_get', expect: {} });
 var callForkopConfigSet = zmDeclare({ object: 'zapret-manager', method: 'forkop_config_set', params: ['content'], expect: {} });
 var callForkopAction = zmDeclare({ object: 'zapret-manager', method: 'forkop_action', params: ['action', 'mode'], expect: {} });
+var callObmankaStatus = zmDeclare({ object: 'zapret-manager', method: 'obmanka_status', expect: {} });
+var callObmankaAction = zmDeclare({ object: 'zapret-manager', method: 'obmanka_action', params: ['action', 'mode'], expect: {} });
 var callJobsCancel = zmDeclare({ object: 'zapret-manager', method: 'jobs_cancel', params: ['job'], expect: {} });
 
 function parseSize(v) {
@@ -19741,7 +20430,7 @@ setInterval(dockSync, 600);
 window.addEventListener('hashchange', function() { setTimeout(dockSync, 50); });
 
 var _activePolls = {};
-var JOB_NAMES = { steer: 'Steer', forkop: 'Forkozz', awg: 'AmneziaWG', strategy_test: 'тест стратегий', mirror_set: 'смена зеркала', zm_update: 'обновление панели' };
+var JOB_NAMES = { steer: 'Steer', forkop: 'Forkozz', obmanka: 'Obmanka', awg: 'AmneziaWG', strategy_test: 'тест стратегий', mirror_set: 'смена зеркала', zm_update: 'обновление панели' };
 var _stuck = {}, _stopEl = null, _stopBusy = false;
 
 function jobName(j) {
@@ -20843,6 +21532,8 @@ return baseclass.extend({
 	forkopConfigGet: callForkopConfigGet,
 	forkopConfigSet: bigText(callForkopConfigSet),
 	forkopAction: bigArg2(callForkopAction),
+	obmankaStatus: callObmankaStatus,
+	obmankaAction: bigArg2(callObmankaAction),
 	jobsCancel: callJobsCancel,
 	dock: dock,
 	riCovers: riCovers,
@@ -20951,6 +21642,12 @@ return view.extend({
 			items.push(row('Forkozz', fkSt === 1 ? zm.badge(true, 'работает', '')
 				: fkSt === 2 ? zm.badge(false, '', 'не работает')
 				: fkSt === 5 ? offBadge('выключен')
+				: zm.badge(false, '', 'не установлен')));
+			var obSt = st(h, 'obmanka', 0);
+			items.push(row('Obmanka', obSt === 1 ? zm.badge(true, 'работает', '')
+				: obSt === 2 ? zm.badge(false, '', 'не работает')
+				: obSt === 3 ? warnBadge('работает частично')
+				: obSt === 4 ? offBadge('выключена')
 				: zm.badge(false, '', 'не установлен')));
 			items.push(row('ByeTube', zm.stateBadge(st(h, 'bytetube', 0))));
 			items.push(row('TG WS Proxy', zm.stateBadge(st(h, 'tg', 0))));
@@ -27801,6 +28498,13 @@ return view.extend({
 			{ product: 'awg-openwrt (сборки)', author: '2Grey', url: 'https://github.com/2Grey/awg-openwrt' },
 			{ product: 'warpscout (разведка WARP)', author: 'vernette', url: 'https://github.com/vernette/warpscout' },
 			{ product: 'base-relay (реле регистрации WARP)', author: 'nellimonix', url: 'https://github.com/nellimonix/base-relay' },
+			{ product: 'FakeSIP, FakeHTTP (основа Obmanka)', author: 'MikeWang000000', url: 'https://github.com/MikeWang000000' },
+			{ product: 'ByeDPI', author: 'hufrea', url: 'https://github.com/hufrea/byedpi' },
+			{ product: 'AmneziaWG', author: 'amnezia-vpn', url: 'https://github.com/amnezia-vpn' },
+			{ product: 'ad-filter (списки рекламы)', author: 'zxc-rv', url: 'https://github.com/zxc-rv/ad-filter' },
+			{ product: 'sing-box-supercell-ruleset', author: 'ushan0v', url: 'https://github.com/ushan0v/sing-box-supercell-ruleset' },
+			{ product: 'ttyd (Терминал)', author: 'tsl0922', url: 'https://github.com/tsl0922/ttyd' },
+			{ product: 'https-dns-proxy (DNS over HTTPS)', author: 'aarond10, stangri', url: 'https://github.com/aarond10/https_dns_proxy' },
 			{ product: 'Всем пользователям', author: 'кто помогает, тестирует и поддерживает проект ❤', self: true, all: true }
 		];
 		var creditsGrid = E('div', { 'class': 'zm-credits-grid' }), allTile = null;
@@ -30485,6 +31189,340 @@ return view.extend({
 ZM_INSTALLER_EOF
 chmod 0644 '/www/luci-static/resources/view/zapret-manager/forkozz.js'
 
+cat > '/www/luci-static/resources/view/zapret-manager/obmanka.js' << 'ZM_INSTALLER_EOF'
+'use strict';
+'require view';
+'require zapret-manager.common as zm';
+var E = (function(raw) { return function() { var a = Array.prototype.slice.call(arguments), i = a.length - 1; if (i >= 1 && (typeof a[i] === 'string' || typeof a[i] === 'number')) a[i] = [ String(a[i]) ]; return raw.apply(null, a); }; })(window.E);
+
+var INTRO = 'Подсовывает DPI провайдера поддельный пакет: UDP выглядит как звонок (SIP), TCP — как обычный сайт. Работает для всех устройств сети.';
+var TTL = [ { id: '50', label: 'Авто · 50 %' }, { id: '30', label: '30 %' }, { id: '70', label: '70 %' }, { id: '0', label: 'Фикс. 3 хопа' } ];
+var REP = [ { id: '1', label: '1' }, { id: '2', label: '2' }, { id: '3', label: '3' } ];
+var KEYS = [ 'fakesip', 'fakehttp', 'host', 'ttl_pct', 'repeat', 'zapret_compat', 'ipv6', 'log', 'exclude_udp', 'exclude_tcp' ];
+
+function badge(cls, text) {
+	return E('span', { 'class': 'zm-badge ' + cls }, [ E('span', { 'class': 'zm-dot' }), text ]);
+}
+
+function row(l, node) {
+	return E('div', { 'class': 'zm-row' }, [ E('span', { 'class': 'zm-label' }, l), node ]);
+}
+
+function chkRow(head, body) {
+	return E('div', { 'class': 'zm-row zm-chk' }, [ E('span', { 'class': 'zm-chk-h' }, [ head ]), E('span', { 'class': 'zm-chk-b' }, [ body ]) ]);
+}
+
+function seg(items, cur, pick) {
+	if (!items.some(function(it) { return it.id === cur; })) items = items.concat([ { id: cur, label: cur } ]);
+	return E('div', { 'class': 'zm-seg' }, items.map(function(it) {
+		return E('div', { 'class': 'zm-seg-item' + (it.id === cur ? ' zm-active' : ''), 'click': function() { if (it.id !== cur) pick(it.id); } }, it.label);
+	}));
+}
+
+/* сколько портов из 65535 покрывают диапазоны "443, 1024-65535" */
+function portCount(s) {
+	return String(s || '').split(/[\s,]+/).filter(Boolean).reduce(function(n, p) {
+		var m = /^(\d+)(?:-(\d+))?$/.exec(p);
+		return m ? n + (m[2] ? +m[2] - +m[1] + 1 : 1) : n;
+	}, 0);
+}
+
+function normPorts(s) {
+	return String(s || '').split(/[\s,;]+/).filter(Boolean).join(' ');
+}
+
+return view.extend({
+	load: function() {
+		zm.injectCss();
+		return zm.obmankaStatus();
+	},
+
+	render: function(data) {
+		data = data || {};
+		var wrap = E('div', { 'class': 'zm-wrap' });
+		var warnBox = E('div', { 'class': 'zm-alerts' });
+		var mainCard = E('div', { 'class': 'zm-card' });
+		var whatCard = E('div', { 'class': 'zm-card' });
+		var setCard = E('div', { 'class': 'zm-card' });
+		var checkCard = E('div', { 'class': 'zm-card' });
+		var logEl = E('pre', { 'class': 'zm-log' });
+		var busy = false, saving = false, pick = {}, diag = null, diagBusy = false;
+
+		var hostIn = E('input', { 'type': 'text', 'class': 'cbi-input-text', 'spellcheck': 'false', 'autocapitalize': 'off', 'placeholder': 'ya.ru', 'style': 'flex:0 1 260px; min-width:160px' });
+		var udpIn = E('input', { 'type': 'text', 'class': 'cbi-input-text', 'spellcheck': 'false', 'placeholder': '53 123 27015-27030', 'style': 'flex:1; min-width:200px' });
+		var tcpIn = E('input', { 'type': 'text', 'class': 'cbi-input-text', 'spellcheck': 'false', 'placeholder': '22 53', 'style': 'flex:1; min-width:200px' });
+		[ [ hostIn, 'host' ], [ udpIn, 'exclude_udp' ], [ tcpIn, 'exclude_tcp' ] ].forEach(function(x) {
+			x[0].addEventListener('input', function() {
+				var v = x[1] === 'host' ? x[0].value.trim() : normPorts(x[0].value);
+				if (v === cfg(x[1], true)) delete pick[x[1]]; else pick[x[1]] = v;
+				syncBar();
+			});
+		});
+
+		var bar = zm.saveBar({
+			onCancel: function() { pick = {}; fillInputs(); render(); },
+			onSave: save
+		});
+
+		function cfg(k, orig) {
+			var c = data.cfg || {};
+			if (!orig && pick.hasOwnProperty(k)) return pick[k];
+			return k === 'exclude_udp' || k === 'exclude_tcp' ? normPorts(c[k]) : String(c[k] == null ? '' : c[k]);
+		}
+
+		function setPick(k, v) {
+			if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+			if (v === cfg(k, true)) delete pick[k]; else pick[k] = v;
+			render();
+		}
+
+		function fillInputs() {
+			hostIn.value = cfg('host');
+			udpIn.value = cfg('exclude_udp');
+			tcpIn.value = cfg('exclude_tcp');
+		}
+
+		function dirty() { return Object.keys(pick).length; }
+
+		function syncBar() {
+			bar.set(dirty() > 0 || saving, saving, dirty() ? 'Есть несохранённые изменения' : '');
+		}
+
+		function refresh() {
+			return zm.obmankaStatus().then(function(d) {
+				if (d && !d.error) data = d;
+				render();
+			}, function() { render(); });
+		}
+
+		function save() {
+			if (busy || !dirty()) return;
+			if (cfg('fakesip') === '0' && cfg('fakehttp') === '0') { zm.toast('Включите хотя бы FakeSIP или FakeHTTP', 'warning'); return; }
+			busy = saving = true;
+			syncBar();
+			var text = KEYS.filter(function(k) { return pick.hasOwnProperty(k); }).map(function(k) { return k + '=' + pick[k]; }).join('\n');
+			zm.obmankaAction('set', text).then(function(r) {
+				busy = saving = false;
+				if (!r || r.error) { zm.toast((r && r.error) || 'Роутер не ответил', 'error'); syncBar(); return; }
+				pick = {};
+				diag = null;
+				zm.toast('Настройки применены', 'info');
+				refresh().then(fillInputs);
+			}).catch(function() { busy = saving = false; syncBar(); zm.toast('Роутер не ответил', 'error'); });
+		}
+
+		function job(action, text, okText) {
+			if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+			busy = true;
+			render();
+			zm.toast(text, 'warning');
+			zm.obmankaAction(action, '').then(function(r) {
+				if (!r || r.error) { busy = false; zm.toast((r && r.error) || 'Роутер не ответил', 'error'); render(); return; }
+				if (!r.started) { busy = false; render(); return; }
+				zm.pollJob('obmanka', logEl, function(ok) {
+					busy = false;
+					diag = null;
+					zm.toast(ok ? okText : 'Не получилось — причина в журнале ниже', ok ? 'info' : 'error');
+					refresh().then(fillInputs);
+				});
+			}).catch(function() { busy = false; zm.toast('Роутер не ответил', 'error'); render(); });
+		}
+
+		function quick(action, text, okText) {
+			if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+			busy = true;
+			render();
+			zm.toast(text, 'warning');
+			zm.obmankaAction(action, '').then(function(r) {
+				busy = false;
+				diag = null;
+				if (!r || r.error) zm.toast((r && r.error) || 'Роутер не ответил', 'error');
+				else zm.toast(okText, 'info');
+				refresh();
+			}).catch(function() { busy = false; zm.toast('Роутер не ответил', 'error'); refresh(); });
+		}
+
+		function runDiag() {
+			if (diagBusy || busy) return;
+			diagBusy = true;
+			renderCheck();
+			zm.obmankaAction('check', '').then(function(r) {
+				diagBusy = false;
+				if (!r || r.error) { zm.toast((r && r.error) || 'Роутер не ответил', 'error'); renderCheck(); return; }
+				diag = r.items || [];
+				renderCheck();
+			}).catch(function() { diagBusy = false; zm.toast('Роутер не ответил', 'error'); renderCheck(); });
+		}
+
+		function stateBadge() {
+			if (busy || data.busy) return badge('zm-warn', 'идёт операция');
+			if (!data.installed) return badge('zm-off', 'не установлена');
+			if (!data.enabled) return badge('zm-off', 'выключена');
+			var need = 0, up = 0;
+			if (cfg('fakesip', true) === '1') { need++; if (data.sip_run) up++; }
+			if (cfg('fakehttp', true) === '1') { need++; if (data.http_run) up++; }
+			if (!data.loaded || !up) return badge('zm-bad', 'не работает');
+			return up < need ? badge('zm-warn', 'работает частично') : badge('zm-ok', 'работает');
+		}
+
+		function procRow(name, on, run, pk, q) {
+			if (on !== '1') return row(name, badge('zm-off', 'выключен'));
+			return row(name, E('span', { 'style': 'display:inline-flex; gap:8px; align-items:center; flex-wrap:wrap' }, [
+				data.enabled ? (run ? badge('zm-ok', 'запущен') : badge('zm-bad', 'не запущен')) : badge('zm-off', 'остановлен'),
+				data.enabled && run ? E('span', { 'class': 'zm-hint', 'style': 'margin:0' }, 'пакетов: ' + (pk || 0) + (q ? ' · очередь ' + q : '')) : E([])
+			]));
+		}
+
+		function renderWarn() {
+			warnBox.innerHTML = '';
+			var w = [];
+			if (data.legacy && !data.installed) w.push('Найдена отдельная установка FakeDPI — при установке Obmanka заменит её и перенесёт настройки.');
+			if (data.installed) {
+				if ((data.zapret || data.zapret2) && cfg('zapret_compat', true) === '0')
+					w.push('Совместимость с Zapret выключена — Obmanka и Zapret будут обрабатывать одни и те же соединения.');
+				if (data.enabled && cfg('fakesip', true) === '1' && portCount(data.auto_udp) > 60000)
+					w.push('Почти весь UDP уже обходит ' + (data.zapret2 ? 'Zapret2' : 'Zapret') + ' — FakeSIP работает только с оставшимися портами.');
+				if (data.vpn && cfg('fakehttp', true) === '1')
+					w.push('Стоит ' + data.vpn + ' — если VPN перестал подключаться, выключите FakeHTTP.');
+			}
+			w.forEach(function(t) { warnBox.appendChild(E('div', { 'class': 'zm-refresh-banner zm-show' }, [ E('span', { 'style': 'line-height:1.5' }, t) ])); });
+		}
+
+		function renderMain() {
+			mainCard.innerHTML = '';
+			mainCard.appendChild(E('h3', {}, 'Obmanka'));
+			mainCard.appendChild(E('p', { 'class': 'zm-hint' }, INTRO));
+			mainCard.appendChild(row('Состояние', stateBadge()));
+			if (!data.installed) {
+				mainCard.appendChild(E('div', { 'class': 'zm-actions' }, [
+					E('button', { 'class': 'cbi-button cbi-button-positive', 'disabled': busy || data.busy ? '' : null, 'click': function() {
+						job('install', 'Устанавливаем Obmanka', 'Obmanka установлена');
+					} }, 'Установить')
+				]));
+				mainCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Скачает FakeSIP и FakeHTTP с GitHub — около 300 КБ.'));
+				mainCard.appendChild(logEl);
+				return;
+			}
+			mainCard.appendChild(procRow('FakeSIP · UDP', cfg('fakesip', true), data.sip_run, data.sip_pk, data.q_sip));
+			mainCard.appendChild(procRow('FakeHTTP · TCP', cfg('fakehttp', true), data.http_run, data.http_pk, data.q_http));
+			if (data.enabled) mainCard.appendChild(row('Внешний интерфейс', E('span', {}, data.wan || 'не найден')));
+			mainCard.appendChild(row('Версия', E('span', {}, 'FakeSIP ' + (data.ver_sip || '—') + ' · FakeHTTP ' + (data.ver_http || '—') +
+				(data.newer ? ' · есть обновление' : data.latest_sip ? ' · последние' : ''))));
+
+			var a = [], dis = busy || data.busy ? '' : null;
+			if (data.enabled) {
+				a.push(E('button', { 'class': 'cbi-button cbi-button-positive', 'disabled': dis, 'click': function() { quick('restart', 'Перезапускаем Obmanka', 'Obmanka перезапущена'); } }, 'Перезапустить'));
+				a.push(E('button', { 'class': 'cbi-button', 'disabled': dis, 'click': function() { quick('stop', 'Выключаем Obmanka', 'Obmanka выключена'); } }, 'Выключить'));
+			} else {
+				a.push(E('button', { 'class': 'cbi-button cbi-button-positive', 'disabled': dis, 'click': function() { quick('start', 'Включаем Obmanka', 'Obmanka включена'); } }, 'Включить'));
+			}
+			if (data.newer) a.push(E('button', { 'class': 'cbi-button cbi-button-action', 'disabled': dis, 'click': function() { job('update', 'Обновляем Obmanka', 'Obmanka обновлена'); } }, 'Обновить'));
+			a.push(E('button', { 'class': 'cbi-button', 'disabled': dis, 'click': function() { job('reinstall', 'Переустанавливаем Obmanka', 'Obmanka переустановлена'); } }, 'Переустановить'));
+			a.push(E('button', { 'class': 'cbi-button cbi-button-remove', 'disabled': dis, 'click': function() {
+				zm.dialog({ title: 'Удалить Obmanka?', danger: true, okText: 'Удалить Obmanka',
+					blocks: [ { type: 'list', title: 'Что произойдёт', items: [
+						'FakeSIP и FakeHTTP остановятся и удалятся вместе с настройками',
+						'Соединения пойдут без маскировки'
+					] } ]
+				}).then(function(v) { if (v) job('remove', 'Удаляем Obmanka', 'Obmanka удалена'); });
+			} }, 'Удалить'));
+			mainCard.appendChild(E('div', { 'class': 'zm-actions' }, a));
+			mainCard.appendChild(logEl);
+		}
+
+		function svc(k, name, sub, color, ico) {
+			var on = cfg(k) === '1';
+			return zm.svcCard({ name: name, sub: sub, color: color, ico: ico, on: on, click: function() { setPick(k, on ? '0' : '1'); } });
+		}
+
+		function renderWhat() {
+			whatCard.innerHTML = '';
+			whatCard.style.display = data.installed ? '' : 'none';
+			if (!data.installed) return;
+			whatCard.appendChild(E('h3', {}, 'Что маскировать'));
+			whatCard.appendChild(zm.svcGrid([
+				svc('fakesip', 'FakeSIP', 'UDP → звонок SIP', '#7c5cff', 'UDP'),
+				svc('fakehttp', 'FakeHTTP', 'TCP → обычный сайт', '#0ea5e9', 'TCP')
+			]));
+			whatCard.appendChild(E('p', { 'class': 'zm-hint' }, 'FakeSIP — игры, звонки, WireGuard и прочий UDP. FakeHTTP — TCP на нестандартных портах.'));
+		}
+
+		function autoLine(label, list) {
+			return list ? E('p', { 'class': 'zm-hint', 'style': 'margin:2px 0 0' }, label + ': ' + list) : E([]);
+		}
+
+		function renderSet() {
+			setCard.innerHTML = '';
+			setCard.style.display = data.installed ? '' : 'none';
+			if (!data.installed) return;
+			setCard.appendChild(E('h3', {}, 'Настройки'));
+			setCard.appendChild(row('Сайт для маскировки TCP', hostIn));
+			setCard.appendChild(row('TTL подделки', seg(TTL, cfg('ttl_pct'), function(v) { setPick('ttl_pct', v); })));
+			setCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:0' }, 'Подделка должна пройти DPI и пропасть до сервера. Авто подходит почти всем.'));
+			setCard.appendChild(row('Повторов подделки', seg(REP, cfg('repeat'), function(v) { setPick('repeat', v); })));
+			setCard.appendChild(zm.swRow(cfg('zapret_compat') === '1', 'Не трогать порты Zapret', 'Соединения, которые обходит Zapret или Zapret2, Obmanka пропускает.', function() { setPick('zapret_compat', cfg('zapret_compat') === '1' ? '0' : '1'); }, busy));
+			setCard.appendChild(zm.swRow(cfg('ipv6') === '1', 'IPv6', '', function() { setPick('ipv6', cfg('ipv6') === '1' ? '0' : '1'); }, busy));
+			setCard.appendChild(zm.swRow(cfg('log') === '1', 'Подробный журнал', 'Каждое соединение — в системный журнал. Только для поиска проблем.', function() { setPick('log', cfg('log') === '1' ? '0' : '1'); }, busy));
+			setCard.appendChild(E('h4', { 'style': 'margin:18px 0 4px' }, 'Не трогать порты'));
+			setCard.appendChild(row('UDP', udpIn));
+			setCard.appendChild(autoLine('Добавлены сами из-за Zapret', data.auto_udp));
+			setCard.appendChild(autoLine('Добавлены сами из-за AmneziaWG', data.awg_udp));
+			setCard.appendChild(row('TCP', tcpIn));
+			setCard.appendChild(autoLine('Добавлены сами из-за Zapret', data.auto_tcp));
+		}
+
+		function renderCheck() {
+			checkCard.innerHTML = '';
+			checkCard.style.display = data.installed ? '' : 'none';
+			if (!data.installed) return;
+			checkCard.appendChild(E('h3', {}, 'Проверка'));
+			if (diag) {
+				var CLS = { ok: 'zm-ok', warn: 'zm-warn', fail: 'zm-bad' }, TXT = { ok: 'ок', warn: 'внимание', fail: 'ошибка' };
+				var bad = diag.filter(function(i) { return i[0] === 'fail'; }).length, warn = diag.filter(function(i) { return i[0] === 'warn'; }).length;
+				checkCard.appendChild(chkRow(E('span', { 'class': 'zm-label' }, 'Итог'), bad ? badge('zm-bad', 'есть поломка') : warn ? badge('zm-warn', 'работает, есть замечания') : badge('zm-ok', 'всё в порядке')));
+				diag.forEach(function(i) { checkCard.appendChild(chkRow(badge(CLS[i[0]] || 'zm-off', TXT[i[0]] || i[0]), E('span', {}, i[1]))); });
+			}
+			checkCard.appendChild(E('div', { 'class': 'zm-actions' }, [
+				E('button', { 'class': 'cbi-button', 'disabled': diagBusy || busy ? '' : null, 'click': runDiag }, diagBusy ? 'Проверяем…' : 'Проверить')
+			]));
+		}
+
+		function render() {
+			renderWarn();
+			renderMain();
+			renderWhat();
+			renderSet();
+			renderCheck();
+			syncBar();
+		}
+
+		fillInputs();
+		render();
+		wrap.appendChild(warnBox);
+		wrap.appendChild(mainCard);
+		wrap.appendChild(whatCard);
+		wrap.appendChild(setCard);
+		wrap.appendChild(checkCard);
+		wrap.appendChild(bar);
+		if (data.busy) {
+			busy = true;
+			render();
+			zm.pollJob('obmanka', logEl, function(ok) {
+				busy = false;
+				zm.toast(ok ? 'Готово' : 'Не получилось — причина в журнале ниже', ok ? 'info' : 'error');
+				refresh().then(fillInputs);
+			});
+		}
+		return wrap;
+	},
+
+	handleSaveApply: null,
+	handleSave: null,
+	handleReset: null
+});
+ZM_INSTALLER_EOF
+chmod 0644 '/www/luci-static/resources/view/zapret-manager/obmanka.js'
+
 
 mkdir -p /www/luci-static/resources/bytetube
 cat > '/www/luci-static/resources/bytetube/common.js' << 'ZM_INSTALLER_EOF'
@@ -32444,6 +33482,7 @@ var ICONS = {
 	arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>',
 	alert: '<path d="M12 3.5l9.5 16.5h-19L12 3.5z"/><path d="M12 10v4.5M12 17.3v.2"/>',
 	fork: '<path d="M4.2 3.6 8.6 7.6Q12 6.6 15.4 7.6L19.8 3.6Q20.9 8.4 19.1 11.8L20.4 13.1Q16.6 14.6 14.5 18.6Q12 21.4 9.5 18.6Q7.4 14.6 3.6 13.1L4.9 11.8Q3.1 8.4 4.2 3.6Z" stroke-linejoin="round"/><path d="M8.3 11.9 10.1 12.8M15.7 11.9 13.9 12.8"/><circle cx="12" cy="17.3" r=".9" fill="currentColor" stroke="none"/>',
+	mask: '<path d="M2.8 8.2c3-1.7 6-1.9 9.2-.3 3.2-1.6 6.2-1.4 9.2.3-.1 4.6-2.2 8-5.6 8-1.6 0-2.6-1-3.6-2.4-1 1.4-2 2.4-3.6 2.4-3.4 0-5.5-3.4-5.6-8z"/><path d="M6.2 11.2c.9-.9 2.3-.9 3.2 0M14.6 11.2c.9-.9 2.3-.9 3.2 0"/>',
 	route: '<circle cx="6" cy="18.5" r="2.2"/><circle cx="18" cy="5.5" r="2.2"/><path d="M8.2 18.5h7.3a3.3 3.3 0 0 0 0-6.6h-7a3.3 3.3 0 0 1 0-6.6h7.3"/>',
 	tunnel: '<path d="M3 20V11a9 9 0 0 1 18 0v9"/><path d="M7 20v-8a5 5 0 0 1 10 0v8"/><path d="M3 20h18"/>',
 	terminal: '<rect x="3" y="4.5" width="18" height="15" rx="2.2"/><path d="M7 9.5l3 2.5-3 2.5M12.5 15h4.5"/>',
@@ -32616,6 +33655,7 @@ var ROUTES = [
 	{ id: 'zapret2', title: 'Zapret2', sub: 'Установка и управление Zapret2', icon: 'bolt', group: 'Обход блокировок', dot: 'zapret2' },
 	{ id: 'steer', title: 'Steer', sub: 'Выбранные сервисы через WARP или VPN', icon: 'route', group: 'Обход блокировок', dot: 'steer' },
 	{ id: 'forkozz', title: 'Forkozz', sub: 'Выбранные сервисы через ваш сервер, подписку или туннель', icon: 'fork', group: 'Обход блокировок', dot: 'forkop' },
+	{ id: 'obmanka', title: 'Obmanka', sub: 'Маскировка трафика под звонки и сайты', icon: 'mask', group: 'Обход блокировок', dot: 'obmanka' },
 	{ id: 'bytetube', title: 'ByeTube', sub: 'YouTube через ByeDPI', icon: 'play', group: 'Обход блокировок', dot: 'bytetube' },
 	{ id: 'tgproxy', title: 'TG WS Proxy', sub: 'Прокси для Telegram', icon: 'send', group: 'Обход блокировок', dot: 'tg' },
 	{ id: 'mixomo', title: 'Mixomo', sub: 'Mihomo, MagiTrickle и WARP', icon: 'layers', group: 'Обход блокировок', dot: 'mixomo' },
