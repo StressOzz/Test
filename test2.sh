@@ -1085,7 +1085,6 @@ zapret_restart() {
 	chmod -R a+rX /opt/zapret/ipset /opt/zapret/files 2>/dev/null
 	[ -x /opt/zapret/sync_config.sh ] && /opt/zapret/sync_config.sh >/dev/null 2>&1
 	/etc/init.d/zapret restart >/dev/null 2>&1
-	_obm_resync
 }
 
 _cpu_stat() { awk '/^cpu / { t = 0; for (i = 2; i <= NF; i++) t += $i; print t, $5 + $6; exit }' /proc/stat 2>/dev/null; }
@@ -1452,7 +1451,6 @@ _do_install_zapret2_core() {
 	echo "==> Запускаем Zapret2"
 	/etc/init.d/zapret2 enable >/dev/null 2>&1
 	/etc/init.d/zapret2 restart >/dev/null 2>&1
-	_obm_resync
 
 	cd /; rm -rf "$tmp"
 	echo "==> Готово, Zapret2 установлен"
@@ -1489,7 +1487,6 @@ zapret2_action() {
 			[ -x /etc/init.d/zapret2 ] || { echo '{"error":"Zapret2 не установлен"}'; return 1; }
 			/etc/init.d/zapret2 restart >/dev/null 2>&1
 			for p in 1 2 3 4 5; do /etc/init.d/zapret2 status >/dev/null 2>&1 && break; sleep 1; done
-			_obm_resync
 			status ;;
 		*) echo '{"error":"неизвестное действие"}' ;;
 	esac
@@ -2826,7 +2823,7 @@ _zm_junk_raw() {
 	for f in /tmp/zm-run.* /tmp/zm-wait.* /tmp/zm-quiet.* /tmp/zm-pkg.* /tmp/ytb-ct.* /tmp/ytb-diag.* /tmp/ytb-ins.* /tmp/ytb-dl /tmp/zm-zash /tmp/netshift-sbext.* \
 		/tmp/mihomo.gz /tmp/zashboard.zip /tmp/zashboard /tmp/metacubexd.tgz /tmp/metacubexd /tmp/tg-ws-proxy.ipk /tmp/tg-ws-proxy.apk /tmp/zm_uninstall_panel.sh \
 		"$JOBS_DIR"/install_tmp "$JOBS_DIR"/install_z2_tmp "$JOBS_DIR"/flowseal.zip "$JOBS_DIR"/flowseal_src "$JOBS_DIR"/tg-ws-proxy-rs.tar.gz \
-		"$JOBS_DIR"/netshift-src "$JOBS_DIR"/forkop-src "$JOBS_DIR"/forkop-import "$JOBS_DIR"/zm_head.* "$JOBS_DIR"/steer-list.* "$JOBS_DIR"/tgws_install.* "$JOBS_DIR"/obm_* \
+		"$JOBS_DIR"/netshift-src "$JOBS_DIR"/forkop-src "$JOBS_DIR"/forkop-import "$JOBS_DIR"/zm_head.* "$JOBS_DIR"/steer-list.* "$JOBS_DIR"/tgws_install.* \
 		"$JOBS_DIR"/geohide_hosts.tmp "$JOBS_DIR"/cleanup.* "$ST_RUN"/*.src "$ST_RUN"/cat.flat \
 		/opt/zapret-manager-luci/*.zm-new /www/luci-static/resources/zapret-manager/*.zm-new "$ZM_STATE_DIR"/*.tmp "$ST_DIR"/*.tmp "$ST_DIR"/lists/*.tmp \
 		"$ST_USER_DIR"/*.tmp "$ST_USER_DIR"/*.tmp.* "$HOSTS_FILE.zmtmp" "$HOSTS_FILE.zmdrop"; do
@@ -5144,7 +5141,7 @@ _zm_update_fetch() {
 
 _zm_job_label() {
 	case "$1" in
-		steer) echo "Steer" ;; awg) echo "AmneziaWG" ;; forkop) echo "Forkozz" ;; term) echo "Терминал" ;; obmanka) echo "Obmanka" ;;
+		steer) echo "Steer" ;; awg) echo "AmneziaWG" ;; forkop) echo "Forkozz" ;; term) echo "Терминал" ;;
 		mixomo*) echo "Mixomo" ;; bytetube*) echo "ByeTube" ;;
 		install_zapret2|remove_zapret2) echo "Zapret2" ;; install_zapret|remove_zapret) echo "Zapret" ;;
 		strategy_test) echo "тест стратегий" ;; tg*) echo "TG WS Proxy" ;; doh*) echo "DNS over HTTPS" ;;
@@ -6318,10 +6315,8 @@ health() {
 	if _term_installed; then
 		if _term_running; then d_term=1; elif _term_enabled; then d_term=2; else d_term=4; fi
 	fi
-	local d_obm; d_obm="$(_obm_health)"
-	printf '{"dots":{"zapret":%s,"zapret2":%s,"bytetube":%s,"tg":%s,"mixomo":%s,"doh":%s,"hosts":%s,"steer":%s,"forkop":%s,"awg":%s,"term":%s,"obmanka":%s},' \
-		"$d_zr" "$d_zr2" "$d_bt" "$d_tg" "$d_mx" "$d_doh" "$hs" "$d_sr" "${d_fk:-0}" "${d_awg:-0}" "$d_term" "${d_obm:-0}"
-	printf '"obmanka":%s,' "${d_obm:-0}"
+	printf '{"dots":{"zapret":%s,"zapret2":%s,"bytetube":%s,"tg":%s,"mixomo":%s,"doh":%s,"hosts":%s,"steer":%s,"forkop":%s,"awg":%s,"term":%s},' \
+		"$d_zr" "$d_zr2" "$d_bt" "$d_tg" "$d_mx" "$d_doh" "$hs" "$d_sr" "${d_fk:-0}" "${d_awg:-0}" "$d_term"
 	printf '"zapret":%s,"zapret2":%s,"bytetube":%s,"tg":%s,"mixomo":%s,"doh":%s,"hosts":%s,"steer":%s,"steer_off":%s,"steer_exit":"%s","awg":%s,"forkop":%s,"flow_warn":%s,"ipv6_warn":%s,"reboot_hint":"%s"}\n' \
 		"$zr" "$zr2" "$bt" "$tg" "$mx" "$doh" "$hs" "$sr" \
 		"$([ -f /etc/zm-steer/stopped ] && echo true || echo false)" "$sx" "$awgj" "$fkh" "$fw" "$v6" "$(esc "$(_zm_reboot_hint_get)")"
@@ -6382,10 +6377,6 @@ do_versions_refresh() {
 	_st_legacy_check
 	stl_present && add "$(_ver_item 'Ядро steer' "$(stl_version)" "$(stl_latest)")"
 	_fk_installed && add "$(_ver_item Forkozz "$(_fk_version)" "$(_fk_latest)")"
-	if _obm_installed; then
-		add "$(_ver_item 'FakeSIP (Obmanka)' "$(_obm_ver fakesip)" "$(_zm_cached obm_sip _obm_latest_sip)")"
-		add "$(_ver_item 'FakeHTTP (Obmanka)' "$(_obm_ver fakehttp)" "$(_zm_cached obm_http _obm_latest_http)")"
-	fi
 	local feeds=0 v
 	[ -n "$(_ver_feed_latest busybox)" ] || [ -n "$(_zm_busy_job)" ] || { $UPDATE >/dev/null 2>&1; }
 	if _fk_installed && v="$(_fk_sb_var)" && [ -n "$v" ]; then
@@ -8331,6 +8322,8 @@ doh_set() {
 RB_SHARE="/usr/share/zm-redbtn"
 ZM_LISTS_DIR="/opt/zapret-manager-luci/lists"
 ZM_LISTS_ITD="${GH_RAW}/itdoginfo/allow-domains/main"
+# Meta, Instagram, Facebook и WhatsApp — списки v2fly (и itdoginfo); те же ссылки берёт Forkozz (PKG_LISTS в netshift.uc)
+ZM_LISTS_V2F="${GH_RAW}/v2fly/domain-list-community/master/data"
 
 _rb_list_src() {
 	case "$1" in
@@ -8338,6 +8331,14 @@ _rb_list_src() {
 		svc_telegram.lst) echo "$ZM_LISTS_ITD/Services/telegram.lst" ;;
 		svc_discord.lst) echo "$ZM_LISTS_ITD/Services/discord.lst" ;;
 		svc_meta.lst) echo "$ZM_LISTS_ITD/Services/meta.lst" ;;
+		svc_instagram.lst) echo "$ZM_LISTS_V2F/instagram" ;;
+		svc_facebook.lst) echo "$ZM_LISTS_V2F/facebook" ;;
+		svc_messenger.lst) echo "$ZM_LISTS_V2F/messenger" ;;
+		svc_whatsapp.lst) echo "$ZM_LISTS_V2F/whatsapp" ;;
+		svc_v2meta.lst) echo "$ZM_LISTS_V2F/meta" ;;
+		svc_threads.lst) echo "$ZM_LISTS_V2F/threads" ;;
+		svc_oculus.lst) echo "$ZM_LISTS_V2F/oculus" ;;
+		svc_facebook_dev.lst) echo "$ZM_LISTS_V2F/facebook-dev" ;;
 		svc_twitter.lst) echo "$ZM_LISTS_ITD/Services/twitter.lst" ;;
 		telegram.lst) echo "$ZM_LISTS_ITD/Subnets/IPv4/telegram.lst" ;;
 		discord.lst) echo "$ZM_LISTS_ITD/Subnets/IPv4/discord.lst" ;;
@@ -9256,16 +9257,20 @@ _st_sel_remap() {
 		rm -f "$f.$$.tmp"
 	done
 }
-# Instagram и WhatsApp объединены в один пункт Meta (у них и так был общий список meta) — переносим старый выбор.
+# Meta включает Instagram, Facebook и WhatsApp: выбранная Meta (и Meta из каталога) — это все четыре пункта.
 _st_sel_meta() {
-	local f moved=""
+	local f id
 	for f in "$ST_SEL" "$ST_SKIP"; do
-		grep -qxE 'instagram|whatsapp' "$f" 2>/dev/null || continue
-		awk '{ k = ($0 == "instagram" || $0 == "whatsapp") ? "meta" : $0; if (k != "" && !(k in s)) { s[k] = 1; print k } }' "$f" > "$f.$$.tmp" && mv -f "$f.$$.tmp" "$f"
+		grep -qxE 'meta|c_itdoginfo_meta' "$f" 2>/dev/null || continue
+		awk -v kids="$([ "$f" = "$ST_SEL" ] && echo 1)" 'function put(k) { if (k != "" && !(k in s)) { s[k] = 1; print k } }
+			{ if ($0 == "meta" || $0 == "c_itdoginfo_meta") { put("meta"); if (kids) { put("instagram"); put("facebook"); put("whatsapp") } } else put($0) }' "$f" > "$f.$$.tmp" &&
+			{ if cmp -s "$f.$$.tmp" "$f"; then rm -f "$f.$$.tmp"; else mv -f "$f.$$.tmp" "$f"; fi; }
 		rm -f "$f.$$.tmp"
-		moved=1
 	done
-	[ -n "$moved" ] && _rb_in meta "$ST_SEL" && [ -f "$ST_SKIP" ] && { sed -i '/^meta$/d' "$ST_SKIP"; [ -s "$ST_SKIP" ] || rm -f "$ST_SKIP"; }
+	if [ -s "$ST_SKIP" ] && [ -s "$ST_SEL" ]; then
+		for id in meta instagram facebook whatsapp; do _rb_in "$id" "$ST_SEL" && _rb_in "$id" "$ST_SKIP" && sed -i "/^$id\$/d" "$ST_SKIP"; done
+		[ -s "$ST_SKIP" ] || rm -f "$ST_SKIP"
+	fi
 	return 0
 }
 _st_migrate
@@ -10490,7 +10495,7 @@ _st_tgws_warp() {
 }
 
 ST_LISTS_MANIFEST="https://github.com/xyzmean/splify2-lists/releases/latest/download/lists.json"
-ST_CAT_SKIP=" mydyson "
+ST_CAT_SKIP=" mydyson itdoginfo_meta "
 ST_SRS_FALLBACK="https://github.com/itdoginfo/allow-domains/releases/latest/download"
 
 _st_fetch() {
@@ -10801,7 +10806,11 @@ _st_model() {
 		echo
 	fi
 	_st_dev_model
-	for id; do _st_svc_lists "$id"; done
+	for id; do
+		# Meta уже содержит списки Instagram, Facebook и WhatsApp — отдельно их не добавляем
+		case "$id" in instagram|facebook|whatsapp) case " $* " in *" meta "*) continue ;; esac ;; esac
+		_st_svc_lists "$id"
+	done
 }
 
 _st_spec_apply() {
@@ -14804,7 +14813,7 @@ _fk_ip_clean() {
 _fk_fast_patch() {
 	local f=/usr/lib/netshift/rulesets.sh n
 	[ -f "$f" ] && [ -f /usr/lib/netshift/nft.sh ] && [ -f /usr/lib/netshift/helpers.sh ] || return 0
-	grep -q '^# zm-fast-begin 1$' "$f" && return 0
+	grep -q '^# zm-fast-begin 2$' "$f" && return 0
 	for n in patch_source_ruleset_rules import_plain_domain_list_to_local_source_ruleset_chunked import_plain_subnet_list_to_local_source_ruleset_chunked extract_ip_cidr_from_json_ruleset_to_file; do
 		grep -q "^$n() {" "$f" || return 0
 	done
@@ -14812,7 +14821,7 @@ _fk_fast_patch() {
 	grep -q '^comma_string_to_json_array() {' /usr/lib/netshift/helpers.sh || return 0
 	grep -q '^# zm-fast-begin' "$f" && sed -i '/^# zm-fast-begin/,/^# zm-fast-end$/d' "$f"
 	cat >> "$f" << 'ZM_FK_FAST_EOF'
-# zm-fast-begin 1
+# zm-fast-begin 2
 _zm_fast_subnets() {
 	awk -v n="$2" '{ gsub(/\r/, ""); sub(/^[ \t]+/, ""); sub(/[ \t]+$/, ""); if ($0 == "") next
 		m = split($0, p, "/"); if (m > 2) next
@@ -14827,7 +14836,7 @@ _zm_fast_subnets() {
 
 _zm_fast_domains() {
 	awk -v n="$2" '{ gsub(/\r/, ""); sub(/^[ \t]+/, ""); sub(/[ \t]+$/, ""); if ($0 == "") next
-		d = tolower($0); t = d; sub(/^\./, "", t)
+		d = tolower($0); sub(/^(full|domain|suffix):/, "", d); t = d; sub(/^\./, "", t)
 		if (t !~ /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$/) next
 		if (t ~ /^[0-9.]+$/ || (d in seen)) next
 		seen[d] = 1; buf = buf (c ? "," : "") d
@@ -15856,6 +15865,7 @@ _fk_dns_probe() {
 		doh)
 			case "$v" in
 				https://*) url="$v"; case "${url#https://}" in */*) ;; *) url="$url/dns-query" ;; esac ;;
+				*/*) url="https://$v" ;;
 				*) url="https://$v/dns-query" ;;
 			esac
 			case "$url" in *\?*) url="$url&dns=$FK_DNS_Q" ;; *) url="$url?dns=$FK_DNS_Q" ;; esac
@@ -16249,575 +16259,6 @@ redbtn_panel_gone() {
 	return 0
 }
 
-# ---------- Obmanka: FakeSIP + FakeHTTP (MikeWang000000) ----------
-# Перед первыми пакетами соединения уходит подделка с маленьким TTL: для UDP — SIP, для TCP — HTTP/HTTPS.
-# Служба /etc/init.d/obmanka самостоятельная — работает и без панели.
-OBM_INIT="/etc/init.d/obmanka"
-OBM_CFG="/etc/config/obmanka"
-OBM_RUN="/var/run/obmanka.state"
-OBM_GH="MikeWang000000"
-
-_obm_installed() { [ -x "$OBM_INIT" ] && [ -x /usr/bin/fakesip ] && [ -x /usr/bin/fakehttp ]; }
-_obm_enabled() { ls /etc/rc.d/S*obmanka >/dev/null 2>&1; }
-# номер версии зашит в программу строкой «FakeSIP version 0.9.1» (tr в busybox OpenWrt не знает [:print:])
-_obm_binver() { grep -ao 'Fake[A-Z]* version [0-9][0-9.]*' "$1" 2>/dev/null | head -n1 | sed 's/.* //'; }
-_obm_ver() { [ -x "/usr/bin/$1" ] && _obm_binver "/usr/bin/$1"; }
-_obm_latest_sip() { _gh_latest_tag "$OBM_GH/FakeSIP" | sed 's/^[vV]//'; }
-_obm_latest_http() { _gh_latest_tag "$OBM_GH/FakeHTTP" | sed 's/^[vV]//'; }
-_obm_get() { local v; v="$(uci -q get "obmanka.main.$1")" || v="$2"; echo "$v"; }
-_obm_st() { sed -n "s/^$1=\"\(.*\)\"\$/\1/p" "$OBM_RUN" 2>/dev/null | head -n1; }
-# только счётчики правил очереди: «ct packets 1-5» в тех же строках — не счётчик
-_obm_pk() { nft list chain inet obmanka "$1" 2>/dev/null | grep -o 'counter packets [0-9]*' | awk '{ s += $3 } END { print s + 0 }'; }
-
-_obm_arch() {
-	local a
-	a="$(awk -F\' '/DISTRIB_ARCH/ { print $2 }' /etc/openwrt_release 2>/dev/null)"
-	[ -n "$a" ] || a="$(uname -m)"
-	case "$a" in
-		aarch64*|arm64*) echo arm64 ;;
-		x86_64*) echo x86_64 ;;
-		i386_pentium4*|i686*) echo i686 ;;
-		i386*|i486*|i586*) echo i586 ;;
-		arm_cortex-a*vfp*|arm_cortex-a*neon*) echo arm32v7hf ;;
-		arm_cortex-a*|armv7*) echo arm32v7 ;;
-		arm_*vfp*) echo arm32hf ;;
-		arm*) echo arm32 ;;
-		mipsel*) echo mips32elsf ;;
-		mips64el*) echo mips64el ;;
-		mips64*) echo mips64 ;;
-		mips*) echo mips32sf ;;
-		riscv64*) echo riscv64 ;;
-		powerpc64*) echo powerpc64 ;;
-		powerpc*) echo powerpc ;;
-		loongarch64*) echo loong64 ;;
-		*) return 1 ;;
-	esac
-}
-
-_obm_kmod() {
-	[ -e /sys/module/nft_queue ] && return 0
-	modprobe nft_queue >/dev/null 2>&1 && [ -e /sys/module/nft_queue ] && return 0
-	_pkg_is_installed kmod-nft-queue || { $INSTALL kmod-nft-queue || { $UPDATE && $INSTALL kmod-nft-queue; }; }
-	modprobe nft_queue >/dev/null 2>&1
-	[ -e /sys/module/nft_queue ] || _pkg_is_installed kmod-nft-queue
-}
-
-# $1 — fakesip|fakehttp, $2 — FakeSIP|FakeHTTP, $3 — сборка. Кладёт проверенный файл в $JOBS_DIR/obm_<имя>.bin
-_obm_fetch() {
-	local n="$1" r="$2" d="$JOBS_DIR/obm_$1" f
-	rm -rf "$d" "$JOBS_DIR/obm_$n.bin"; mkdir -p "$d"
-	echo "   → Скачиваем $r"
-	if ! _zm_gh_get "$GH_MAIN/$OBM_GH/$r/releases/latest/download/$n-linux-$3.tar.gz" "$d/a.tgz"; then
-		rm -rf "$d"; echo "ОШИБКА: не удалось скачать $r с GitHub — ни напрямую, ни через WARP"; return 1
-	fi
-	tar -xzf "$d/a.tgz" -C "$d" 2>/dev/null
-	f="$(find "$d" -type f -name "$n" | head -n1)"
-	if [ -z "$f" ] || ! "$f" 2>&1 | grep -q 'Usage'; then
-		rm -rf "$d"; echo "ОШИБКА: $r скачался повреждённым или не подходит роутеру (сборка $3)"; return 1
-	fi
-	mv -f "$f" "$JOBS_DIR/obm_$n.bin" && chmod 755 "$JOBS_DIR/obm_$n.bin"
-	rm -rf "$d"
-	echo "   ✓ $r $(_obm_binver "$JOBS_DIR/obm_$n.bin")"
-}
-
-# Отдельный скрипт FakeDPI (до панели) — переносим его настройки и убираем, чтобы не было двух служб
-_obm_legacy() {
-	[ -e /etc/init.d/fakedpi ] || [ -e /usr/bin/fakedpi ] || [ -e /etc/config/fakedpi ] || return 0
-	echo "   → Найдена отдельная установка FakeDPI — переносим её настройки в Obmanka"
-	[ -x /etc/init.d/fakedpi ] && { /etc/init.d/fakedpi stop >/dev/null 2>&1; /etc/init.d/fakedpi disable >/dev/null 2>&1; }
-	nft delete table inet fakedpi >/dev/null 2>&1
-	[ ! -f "$OBM_CFG" ] && [ -f /etc/config/fakedpi ] && cp -f /etc/config/fakedpi "$OBM_CFG"
-	rm -f /etc/init.d/fakedpi /etc/config/fakedpi /usr/bin/fakedpi /var/run/fakedpi.state /var/run/fakedpi.nft /etc/rc.d/[SK][0-9][0-9]fakedpi
-	echo "   ✓ FakeDPI убран, настройки перенесены"
-}
-
-_obm_write_cfg() {
-	[ -f "$OBM_CFG" ] && return 0
-	cat > "$OBM_CFG" << 'OBM_CFG_EOF'
-config main 'main'
-	# 1 — включено, 0 — выключено
-	option fakesip '1'
-	option fakehttp '1'
-	# WAN-интерфейс(ы) через пробел; пусто = определить автоматически
-	option iface ''
-	# TTL фейка в % от числа хопов до цели (0 = фиксированный TTL 3)
-	option ttl_pct '50'
-	# сколько раз повторять фейковый пакет
-	option repeat '2'
-	# домены, под которые FakeHTTP маскирует TCP (HTTP / HTTPS)
-	option http_host 'ya.ru'
-	option https_host 'ya.ru'
-	# порты, которые не трогать (через пробел, можно диапазоны 50000-50100)
-	option exclude_udp '53 67 68 123 5353'
-	option exclude_tcp '22 53'
-	# 1 — не трогать порты, которые уже обрабатывает zapret/zapret2
-	option zapret_compat '1'
-	option ipv6 '1'
-	# 1 — писать подробный лог в logread (много строк!)
-	option log '0'
-OBM_CFG_EOF
-}
-
-_obm_write_init() {
-	cat > "$OBM_INIT" << 'OBM_INIT_EOF'
-#!/bin/sh /etc/rc.common
-# Obmanka (Zapret Manager): FakeSIP + FakeHTTP — github.com/MikeWang000000
-START=99
-STOP=10
-USE_PROCD=1
-
-TABLE="obmanka"
-STATE="/var/run/obmanka.state"
-NFT="/var/run/obmanka.nft"
-# свои метки пакетов: 0x10000 занят ByeTube, 0x20000000/0x40000000 — Zapret, 0x0ff00000 — steer
-MSIP=0x40000
-MHTTP=0x80000
-MZAP=0x60000000
-
-wan_devs() {
-	local devs="" n d
-	for n in wan wan6 wwan; do
-		d="$(ifstatus "$n" 2>/dev/null | jsonfilter -q -e '@.l3_device')"
-		[ -n "$d" ] && case " $devs " in *" $d "*) ;; *) devs="$devs $d" ;; esac
-	done
-	[ -n "$devs" ] || devs="$(ip route show default 2>/dev/null | awk '{ for (i = 1; i < NF; i++) if ($i == "dev") { print $(i + 1); exit } }')"
-	echo $devs
-}
-
-# занятые номера NFQUEUE (одиночные и диапазоны a-b)
-queue_used() {
-	local q="$1" e a b
-	for e in $(nft -n list ruleset 2>/dev/null | grep -w queue | grep -oE '(to|num) [0-9]+(-[0-9]+)?' | awk '{ print $2 }'); do
-		a="${e%-*}"; b="${e#*-}"
-		[ "$q" -ge "$a" ] && [ "$q" -le "$b" ] && return 0
-	done
-	return 1
-}
-free_queue() {
-	local q="$1"
-	while queue_used "$q"; do q=$((q + 1)); done
-	echo "$q"
-}
-
-# порты, которые Zapret и Zapret2 отправляют в свои очереди: настройки + живые правила
-zapret_ports() {
-	local t
-	if [ -f /etc/config/zapret ]; then
-		if [ "$1" = udp ]; then echo 443; uci -q get zapret.config.NFQWS_PORTS_UDP
-		else echo 80 443; uci -q get zapret.config.NFQWS_PORTS_TCP; fi
-	fi
-	[ -f /etc/config/zapret2 ] && uci -q get "zapret2.main.nfqws_ports_$1"
-	for t in zapret zapret2; do
-		nft list table inet "$t" 2>/dev/null | grep -w queue | grep -E "(l4proto $1|$1 dport)" \
-			| grep -oE "(th|$1) dport (\{[^}]*\}|[0-9]+(-[0-9]+)?)" \
-			| sed -E 's/^(th|tcp|udp) dport //; s/[{}]//g'
-	done
-}
-
-# подпись настроек портов Zapret — по ней панель понимает, что исключения пора обновить
-zcfg() {
-	local u="" t=""
-	if [ -f /etc/config/zapret ]; then u="$u $(uci -q get zapret.config.NFQWS_PORTS_UDP)"; t="$t $(uci -q get zapret.config.NFQWS_PORTS_TCP)"; fi
-	if [ -f /etc/config/zapret2 ]; then u="$u $(uci -q get zapret2.main.nfqws_ports_udp)"; t="$t $(uci -q get zapret2.main.nfqws_ports_tcp)"; fi
-	echo "$u|$t"
-}
-
-# порты серверов AmneziaWG: туннель прячется сам, двойная маскировка не нужна
-awg_ports() {
-	local s
-	for s in $(uci -q -X show network 2>/dev/null | sed -n "s/^network\.\([^.=]*\)=amneziawg_.*/\1/p"); do
-		uci -q get "network.$s.endpoint_port"
-	done
-}
-
-# "53, 67 50000-50100" -> "53, 67, 50000-50100": только верные порты и диапазоны, без повторов
-port_list() {
-	echo "$*" | tr ',' ' ' | tr ' ' '\n' | awk -F- '/^[0-9]+(-[0-9]+)?$/ { a = $1 + 0; b = (NF > 1 ? $2 + 0 : a); if (a >= 1 && b <= 65535 && a <= b) print (a == b ? a : a "-" b) }' \
-		| sort -n | uniq | tr '\n' ',' | sed 's/,$//; s/,/, /g'
-}
-
-build_nft() {
-	local wanset="" d ew="" eu="" et=""
-	for d in $WAN; do wanset="$wanset${wanset:+, }\"$d\""; done
-	[ -n "$wanset" ] && ew="elements = { $wanset };"
-	[ -n "$EXU" ] && eu="elements = { $EXU };"
-	[ -n "$EXT" ] && et="elements = { $EXT };"
-	{
-	echo "table inet $TABLE {"
-	echo "  set wanif { type ifname; $ew }"
-	echo "  set local4 { type ipv4_addr; flags interval; elements = { 0.0.0.0/8, 10.0.0.0/8, 100.64.0.0/10, 127.0.0.0/8, 169.254.0.0/16, 172.16.0.0/12, 192.168.0.0/16, 224.0.0.0/3 }; }"
-	echo "  set local6 { type ipv6_addr; flags interval; elements = { ::/127, ::ffff:0:0/96, 64:ff9b::/96, 64:ff9b:1::/48, 2002::/16, fc00::/7, fe80::/10 }; }"
-	echo "  set ex_udp { type inet_service; flags interval; auto-merge; $eu }"
-	echo "  set ex_tcp { type inet_service; flags interval; auto-merge; $et }"
-	if [ "$SIP" = 1 ]; then
-	cat << NFT
-  chain sip_pre {
-    type filter hook prerouting priority mangle - 5; policy accept;
-    iifname != @wanif return
-    icmp type time-exceeded counter drop
-    icmpv6 type time-exceeded counter drop
-    ip saddr @local4 return
-    ip6 saddr != 2000::/3 return
-    jump sip_rules
-  }
-  chain sip_post {
-    type filter hook postrouting priority mangle - 5; policy accept;
-    oifname != @wanif return
-    ip daddr @local4 return
-    ip6 daddr != 2000::/3 return
-    jump sip_rules
-  }
-  chain sip_rules {
-    meta mark and $MSIP == $MSIP return
-    meta mark and $MZAP != 0 return
-    meta l4proto != udp return
-    $NO6
-    udp dport @ex_udp return
-    udp sport @ex_udp return
-    ct packets 1-5 counter queue num $QSIP bypass
-  }
-NFT
-	fi
-	if [ "$HTTP" = 1 ]; then
-	cat << NFT
-  chain http_pre {
-    type filter hook prerouting priority mangle - 5; policy accept;
-    iifname != @wanif return
-    ip saddr @local4 return
-    ip6 saddr @local6 return
-    jump http_rules
-  }
-  chain http_post {
-    type filter hook postrouting priority srcnat + 5; policy accept;
-    oifname != @wanif return
-    ip daddr @local4 return
-    ip6 daddr @local6 return
-    jump http_rules
-  }
-  chain http_rules {
-    meta mark and $MHTTP == $MHTTP return
-    meta mark and $MZAP != 0 return
-    meta l4proto != tcp return
-    $NO6
-    tcp dport @ex_tcp return
-    tcp sport @ex_tcp return
-    tcp flags & (syn | fin | rst) == syn counter queue num $QHTTP bypass
-    tcp flags & (syn | ack | fin | rst) == ack ct packets 2-4 counter queue num $QHTTP bypass
-  }
-NFT
-	fi
-	echo "}"
-	} > "$NFT"
-}
-
-start_service() {
-	config_load obmanka
-	config_get_bool SIP main fakesip 1
-	config_get_bool HTTP main fakehttp 1
-	config_get WAN main iface ''
-	config_get PCT main ttl_pct 50
-	config_get REP main repeat 2
-	config_get HHOST main http_host 'ya.ru'
-	config_get SHOST main https_host 'ya.ru'
-	config_get EXU main exclude_udp '53 67 68 123 5353'
-	config_get EXT main exclude_tcp '22 53'
-	config_get_bool ZC main zapret_compat 1
-	config_get_bool V6 main ipv6 1
-	config_get_bool LOG main log 0
-
-	nft delete table inet "$TABLE" 2>/dev/null
-	rm -f "$STATE"
-	[ -x /usr/bin/fakesip ] || SIP=0
-	[ -x /usr/bin/fakehttp ] || HTTP=0
-	[ "$SIP" = 1 ] || [ "$HTTP" = 1 ] || { logger -t obmanka "FakeSIP и FakeHTTP выключены — нечего запускать"; return 0; }
-	case "$REP" in [1-9]) ;; *) REP=2 ;; esac
-	case "$PCT" in ''|*[!0-9]*) PCT=50 ;; esac
-	[ "$PCT" -le 100 ] || PCT=50
-
-	modprobe nft_queue 2>/dev/null
-	sysctl -q -w net.netfilter.nf_conntrack_acct=1 2>/dev/null
-
-	[ -n "$WAN" ] || WAN="$(wan_devs)"
-	[ -n "$WAN" ] || logger -t obmanka "WAN не найден — правила применятся, когда WAN поднимется"
-
-	ZU=""; ZT=""
-	if [ "$ZC" = 1 ] && { [ -x /etc/init.d/zapret ] || [ -x /etc/init.d/zapret2 ]; }; then
-		ZU="$(port_list $(zapret_ports udp))"
-		ZT="$(port_list $(zapret_ports tcp))"
-	fi
-	AU="$(port_list $(awg_ports))"
-	EXU="$(port_list $EXU $ZU $AU)"
-	EXT="$(port_list $EXT $ZT)"
-
-	QSIP="$(free_queue 513)"
-	QHTTP="$(free_queue 512)"
-	[ "$QHTTP" = "$QSIP" ] && QHTTP="$(free_queue $((QSIP + 1)))"
-
-	NO6=""; F6=""
-	[ "$V6" = 1 ] || { NO6="meta nfproto ipv6 return"; F6="-4"; }
-
-	build_nft
-	if ! nft -f "$NFT" 2>/dev/null; then
-		logger -t obmanka "ошибка загрузки правил nftables ($NFT)"
-		return 1
-	fi
-
-	local common="-a -f $F6 -r $REP"
-	[ "$PCT" -gt 0 ] && common="$common -y $PCT"
-	[ "$LOG" = 1 ] || common="$common -s"
-
-	if [ "$SIP" = 1 ]; then
-		procd_open_instance fakesip
-		procd_set_param command /usr/bin/fakesip $common -n "$QSIP" -m "$MSIP"
-		procd_set_param respawn 3600 5 0
-		[ "$LOG" = 1 ] && procd_set_param stderr 1
-		procd_close_instance
-	fi
-	if [ "$HTTP" = 1 ]; then
-		procd_open_instance fakehttp
-		procd_set_param command /usr/bin/fakehttp $common -n "$QHTTP" -m "$MHTTP" -h "$HHOST" -e "$SHOST"
-		procd_set_param respawn 3600 5 0
-		[ "$LOG" = 1 ] && procd_set_param stderr 1
-		procd_close_instance
-	fi
-
-	cat > "$STATE" << ST
-WAN="$WAN"
-SIP="$SIP"
-HTTP="$HTTP"
-QSIP="$QSIP"
-QHTTP="$QHTTP"
-EXU="$EXU"
-EXT="$EXT"
-ZU="$ZU"
-ZT="$ZT"
-AU="$AU"
-ZCFG="$(zcfg)"
-ST
-	logger -t obmanka "запущена: WAN=[$WAN] FakeSIP=$SIP (очередь $QSIP) FakeHTTP=$HTTP (очередь $QHTTP)"
-}
-
-stop_service() {
-	nft delete table inet "$TABLE" 2>/dev/null
-	rm -f "$STATE"
-}
-
-reload_service() {
-	stop
-	start
-}
-
-service_triggers() {
-	procd_add_reload_trigger obmanka
-	procd_add_interface_trigger "interface.*.up" wan /etc/init.d/obmanka reload
-	procd_add_interface_trigger "interface.*.up" wan6 /etc/init.d/obmanka reload
-}
-OBM_INIT_EOF
-	chmod 755 "$OBM_INIT"
-}
-
-# Zapret или Zapret2 перезапустились — если их порты поменялись, обновляем исключения Obmanka
-_obm_resync() {
-	[ -x "$OBM_INIT" ] && [ -f "$OBM_RUN" ] && _obm_enabled || return 0
-	[ "$(_obm_get zapret_compat 1)" = 0 ] && return 0
-	local u="" t=""
-	if [ -f /etc/config/zapret ]; then u="$u $(uci -q get zapret.config.NFQWS_PORTS_UDP)"; t="$t $(uci -q get zapret.config.NFQWS_PORTS_TCP)"; fi
-	if [ -f /etc/config/zapret2 ]; then u="$u $(uci -q get zapret2.main.nfqws_ports_udp)"; t="$t $(uci -q get zapret2.main.nfqws_ports_tcp)"; fi
-	[ "$u|$t" = "$(_obm_st ZCFG)" ] && return 0
-	"$OBM_INIT" reload >/dev/null 2>&1
-	return 0
-}
-
-_obm_health() {
-	_obm_installed || { echo 0; return 0; }
-	_obm_enabled || { echo 4; return 0; }
-	local n=0 ok=0
-	[ "$(_obm_get fakesip 1)" = 1 ] && { n=$((n + 1)); pidof fakesip >/dev/null 2>&1 && ok=$((ok + 1)); }
-	[ "$(_obm_get fakehttp 1)" = 1 ] && { n=$((n + 1)); pidof fakehttp >/dev/null 2>&1 && ok=$((ok + 1)); }
-	nft list table inet obmanka >/dev/null 2>&1 || ok=0
-	if [ "$ok" = "$n" ]; then echo 1; elif [ "$ok" = 0 ]; then echo 2; else echo 3; fi
-}
-
-_obm_start_wait() {
-	local i n
-	for i in 1 2 3 4 5 6; do
-		_zm_sleep 1
-		n=0
-		[ "$(_obm_get fakesip 1)" = 1 ] && ! pidof fakesip >/dev/null 2>&1 && n=1
-		[ "$(_obm_get fakehttp 1)" = 1 ] && ! pidof fakehttp >/dev/null 2>&1 && n=1
-		[ "$n" = 0 ] && nft list table inet obmanka >/dev/null 2>&1 && return 0
-	done
-	return 1
-}
-
-do_obm_install() {
-	local arch upd=0
-	_obm_installed && upd=1
-	echo "==> $([ "$upd" = 1 ] && echo Обновляем || echo Устанавливаем) Obmanka (FakeSIP + FakeHTTP)"
-	command -v nft >/dev/null 2>&1 || { echo "ОШИБКА: нужен firewall4 (nftables) — OpenWrt 22.03 и новее"; return 1; }
-	arch="$(_obm_arch)" || { echo "ОШИБКА: для этого роутера ($(awk -F\' '/DISTRIB_ARCH/ { print $2 }' /etc/openwrt_release)) нет сборки FakeSIP и FakeHTTP"; return 1; }
-	echo "   ✓ Сборка для роутера: $arch"
-	echo "==> Проверяем модуль ядра nft_queue"
-	_obm_kmod || { echo "ОШИБКА: не удалось поставить kmod-nft-queue — без него Obmanka не работает"; return 1; }
-	echo "   ✓ Модуль на месте"
-	echo "==> Скачиваем программы"
-	_obm_fetch fakesip FakeSIP "$arch" || return 1
-	_obm_fetch fakehttp FakeHTTP "$arch" || { rm -f "$JOBS_DIR/obm_fakesip.bin"; return 1; }
-	echo "==> Ставим"
-	_obm_legacy
-	[ -x "$OBM_INIT" ] && "$OBM_INIT" stop >/dev/null 2>&1
-	killall fakesip fakehttp >/dev/null 2>&1
-	mv -f "$JOBS_DIR/obm_fakesip.bin" /usr/bin/fakesip && mv -f "$JOBS_DIR/obm_fakehttp.bin" /usr/bin/fakehttp ||
-		{ rm -f "$JOBS_DIR"/obm_*.bin; echo "ОШИБКА: не удалось записать программы — проверьте место на флеше"; return 1; }
-	_obm_write_cfg
-	_obm_write_init
-	echo "   ✓ Программы, служба и настройки на месте"
-	echo "==> Запускаем"
-	"$OBM_INIT" enable >/dev/null 2>&1
-	"$OBM_INIT" restart >/dev/null 2>&1
-	if ! _obm_start_wait; then
-		echo "!! Obmanka не запустилась — откройте вкладку и нажмите «Проверить»"
-		return 1
-	fi
-	echo "   ✓ Работает, внешний интерфейс: $(_obm_st WAN)"
-	echo "==> Готово: Obmanka $([ "$upd" = 1 ] && echo обновлена || echo "установлена и работает")"
-}
-
-do_obm_remove() {
-	local rc=0 keep=""
-	echo "==> Удаляем Obmanka"
-	_zm_stop_svc obmanka
-	for b in fakesip fakehttp; do [ -x "/usr/bin/$b" ] && "/usr/bin/$b" -k >/dev/null 2>&1; done
-	killall fakesip fakehttp >/dev/null 2>&1
-	nft delete table inet obmanka >/dev/null 2>&1
-	[ -n "$ZM_RM_INNER" ] && keep=1
-	_zm_wipe "$OBM_INIT" /usr/bin/fakesip /usr/bin/fakehttp "$OBM_RUN" /var/run/obmanka.nft $([ -z "$keep" ] && echo "$OBM_CFG") &&
-		echo "   ✓ Программы, служба и правила файрвола удалены$([ -n "$keep" ] && echo ', настройки сохранены')" || rc=1
-	_zm_rm_done "$rc" "модуль Obmanka"
-}
-
-_obm_set() {
-	local line k v
-	printf '%s\n' "$1" | tr -d '\r' > "$JOBS_DIR/obm_set.$$"
-	while IFS= read -r line; do
-		[ -n "$line" ] || continue
-		k="${line%%=*}"; v="${line#*=}"
-		case "$k" in
-			fakesip|fakehttp|zapret_compat|ipv6|log)
-				case "$v" in 0|1) ;; *) rm -f "$JOBS_DIR/obm_set.$$"; echo '{"error":"неверное значение переключателя"}'; return 1 ;; esac ;;
-			ttl_pct)
-				case "$v" in ''|*[!0-9]*) v=x ;; esac
-				[ "$v" != x ] && [ "$v" -le 90 ] || { rm -f "$JOBS_DIR/obm_set.$$"; echo '{"error":"TTL — от 0 до 90 %"}'; return 1; } ;;
-			repeat)
-				case "$v" in [1-5]) ;; *) rm -f "$JOBS_DIR/obm_set.$$"; echo '{"error":"повторов — от 1 до 5"}'; return 1 ;; esac ;;
-			host)
-				_zm_re "$v" '^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)+$' && [ "${#v}" -le 100 ] ||
-					{ rm -f "$JOBS_DIR/obm_set.$$"; echo '{"error":"домен — например ya.ru"}'; return 1; } ;;
-			exclude_udp|exclude_tcp)
-				v="$(printf '%s' "$v" | tr ',;' '  ' | tr -s ' ' | sed 's/^ //; s/ $//')"
-				[ -z "$v" ] || _zm_re "$v" '^[0-9]+(-[0-9]+)?( [0-9]+(-[0-9]+)?)*$' ||
-					{ rm -f "$JOBS_DIR/obm_set.$$"; echo '{"error":"порты — числа и диапазоны через пробел, например 27015 3478-3480"}'; return 1; } ;;
-			*) continue ;;
-		esac
-		# пустое значение uci удаляет — тогда служба вернула бы порты по умолчанию; пробел — «не исключать ничего»
-		[ -z "$v" ] && v=" "
-		if [ "$k" = host ]; then uci -q set obmanka.main.http_host="$v"; uci -q set obmanka.main.https_host="$v"
-		else uci -q set "obmanka.main.$k=$v"; fi
-	done < "$JOBS_DIR/obm_set.$$"
-	rm -f "$JOBS_DIR/obm_set.$$"
-	if [ "$(uci -q get obmanka.main.fakesip)" = 0 ] && [ "$(uci -q get obmanka.main.fakehttp)" = 0 ]; then
-		uci -q revert obmanka
-		echo '{"error":"включите хотя бы FakeSIP или FakeHTTP"}'
-		return 1
-	fi
-	uci -q commit obmanka
-	_obm_enabled && "$OBM_INIT" reload >/dev/null 2>&1
-	echo '{"ok":true}'
-}
-
-_obm_check() {
-	local out="" sep="" q n m p on
-	item() { out="$out$sep[\"$1\",\"$(esc "$2")\"]"; sep=","; }
-	if ! _obm_enabled; then item warn "Obmanka выключена — нажмите «Включить»"
-	else
-		[ -e /sys/module/nft_queue ] || nft list table inet obmanka 2>/dev/null | grep -q queue && item ok "Модуль ядра nft_queue на месте" || item fail "Нет модуля ядра nft_queue — нажмите «Переустановить»"
-		if nft list table inet obmanka >/dev/null 2>&1; then item ok "Правила Obmanka загружены"; else item fail "Правил Obmanka нет — нажмите «Перезапустить»"; fi
-		[ -n "$(_obm_st WAN)" ] && item ok "Внешний интерфейс: $(_obm_st WAN)" || item fail "Не найден внешний интерфейс (WAN)"
-		for p in fakesip:FakeSIP:QSIP:sip_rules fakehttp:FakeHTTP:QHTTP:http_rules; do
-			on="${p%%:*}"
-			[ "$(_obm_get "$on" 1)" = 1 ] || continue
-			if pidof "$on" >/dev/null 2>&1; then
-				item ok "$(echo "$p" | cut -d: -f2) работает"
-				n="$(_obm_pk "$(echo "$p" | cut -d: -f4)")"
-				[ "${n:-0}" -gt 0 ] && item ok "$(echo "$p" | cut -d: -f2): обработано пакетов — $n" || item warn "$(echo "$p" | cut -d: -f2): пакетов пока не было — откройте что-нибудь на устройстве и проверьте ещё раз"
-			else item fail "$(echo "$p" | cut -d: -f2) не запущен — нажмите «Перезапустить»"; fi
-			q="$(_obm_st "$(echo "$p" | cut -d: -f3)")"
-			if [ -n "$q" ]; then
-				n="$(nft -n list ruleset 2>/dev/null | grep -w queue | grep -cE "(to|num) $q( |\$)")"
-				m="$(nft -n list table inet obmanka 2>/dev/null | grep -w queue | grep -cE "(to|num) $q( |\$)")"
-				[ "${n:-0}" -gt "${m:-0}" ] && item fail "Очередь $q занята другой программой — нажмите «Перезапустить», Obmanka возьмёт свободную"
-			fi
-		done
-	fi
-	[ "$(uci -q get firewall.@defaults[0].flow_offloading_hw)" = 1 ] && item warn "Включён аппаратный Flow Offloading — если что-то не работает, выключите его"
-	{ [ -f /etc/init.d/zapret ] || [ -f /etc/init.d/zapret2 ]; } && [ "$(_obm_get zapret_compat 1)" = 0 ] && item warn "Совместимость с Zapret выключена — они обрабатывают одни и те же соединения"
-	printf '{"items":[%s]}\n' "$out"
-}
-
-obmanka_status() {
-	local inst=false en=false busy=false v_sip v_http l_sip l_http newer=false
-	_obm_installed && inst=true
-	_obm_enabled && en=true
-	_job_running obmanka && busy=true
-	v_sip="$(_obm_ver fakesip)"; v_http="$(_obm_ver fakehttp)"
-	if [ "$inst" = true ]; then
-		l_sip="$(_zm_cached obm_sip _obm_latest_sip)"; l_http="$(_zm_cached obm_http _obm_latest_http)"
-		{ [ -n "$l_sip" ] && [ -n "$v_sip" ] && _st_ver_lt "$v_sip" "$l_sip"; } && newer=true
-		{ [ -n "$l_http" ] && [ -n "$v_http" ] && _st_ver_lt "$v_http" "$l_http"; } && newer=true
-	fi
-	printf '{"installed":%s,"enabled":%s,"busy":%s,"loaded":%s,' "$inst" "$en" "$busy" "$(nft list table inet obmanka >/dev/null 2>&1 && echo true || echo false)"
-	printf '"sip_run":%s,"http_run":%s,' "$(pidof fakesip >/dev/null 2>&1 && echo true || echo false)" "$(pidof fakehttp >/dev/null 2>&1 && echo true || echo false)"
-	printf '"sip_pk":%s,"http_pk":%s,' "$(_obm_pk sip_rules)" "$(_obm_pk http_rules)"
-	printf '"ver_sip":"%s","ver_http":"%s","latest_sip":"%s","latest_http":"%s","newer":%s,' "$(esc "$v_sip")" "$(esc "$v_http")" "$(esc "$l_sip")" "$(esc "$l_http")" "$newer"
-	printf '"wan":"%s","q_sip":"%s","q_http":"%s","auto_udp":"%s","auto_tcp":"%s","awg_udp":"%s",' \
-		"$(esc "$(_obm_st WAN)")" "$(esc "$(_obm_st QSIP)")" "$(esc "$(_obm_st QHTTP)")" "$(esc "$(_obm_st ZU)")" "$(esc "$(_obm_st ZT)")" "$(esc "$(_obm_st AU)")"
-	printf '"cfg":{"fakesip":"%s","fakehttp":"%s","host":"%s","ttl_pct":"%s","repeat":"%s","zapret_compat":"%s","ipv6":"%s","log":"%s","exclude_udp":"%s","exclude_tcp":"%s"},' \
-		"$(esc "$(_obm_get fakesip 1)")" "$(esc "$(_obm_get fakehttp 1)")" "$(esc "$(_obm_get https_host ya.ru)")" "$(esc "$(_obm_get ttl_pct 50)")" "$(esc "$(_obm_get repeat 2)")" \
-		"$(esc "$(_obm_get zapret_compat 1)")" "$(esc "$(_obm_get ipv6 1)")" "$(esc "$(_obm_get log 0)")" "$(esc "$(_obm_get exclude_udp '53 67 68 123 5353')")" "$(esc "$(_obm_get exclude_tcp '22 53')")"
-	printf '"zapret":%s,"zapret2":%s,"legacy":%s,"vpn":"%s"}\n' \
-		"$([ -f /etc/init.d/zapret ] && echo true || echo false)" "$([ -f /etc/init.d/zapret2 ] && echo true || echo false)" \
-		"$({ [ -e /etc/init.d/fakedpi ] || [ -e /usr/bin/fakedpi ]; } && echo true || echo false)" \
-		"$(esc "$(v=""; _st_installed 2>/dev/null && v="Steer"; _fk_installed 2>/dev/null && v="${v:+$v, }Forkozz"; _mx_installed 2>/dev/null && v="${v:+$v, }Mixomo"; echo "$v")")"
-}
-
-obmanka_action() {
-	local action="$1" mode="$2"
-	case "$action" in
-		install|update|reinstall|remove|restart|start|stop|set)
-			_job_running obmanka && { echo '{"error":"дождитесь окончания текущей операции"}'; return 1; } ;;
-	esac
-	case "$action" in
-		install|update) job_start obmanka do_obm_install ;;
-		reinstall)      _obm_installed || { echo '{"error":"Obmanka не установлена"}'; return 1; }; job_start obmanka _zm_reinstall do_obm_remove do_obm_install ;;
-		remove)         job_start obmanka do_obm_remove ;;
-		restart|start)
-			_obm_installed || { echo '{"error":"Obmanka не установлена"}'; return 1; }
-			"$OBM_INIT" enable >/dev/null 2>&1
-			"$OBM_INIT" restart >/dev/null 2>&1
-			ZM_JOB_LOG=/dev/null _obm_start_wait && echo '{"ok":true}' || echo '{"error":"Obmanka не запустилась — нажмите «Проверить»"}' ;;
-		stop)
-			_obm_installed || { echo '{"error":"Obmanka не установлена"}'; return 1; }
-			"$OBM_INIT" stop >/dev/null 2>&1
-			"$OBM_INIT" disable >/dev/null 2>&1
-			echo '{"ok":true}' ;;
-		set)
-			_obm_installed || { echo '{"error":"Obmanka не установлена"}'; return 1; }
-			_obm_set "$mode" ;;
-		check) _obm_installed || { echo '{"error":"Obmanka не установлена"}'; return 1; }; _obm_check ;;
-		*) echo '{"error":"неизвестное действие"}'; return 1 ;;
-	esac
-}
-
 cmd="$1"; shift
 _zm_in() {
 	ZM_IN="$(cat; echo .)"
@@ -16943,8 +16384,6 @@ case "$cmd" in
 	forkop_priority_watch)                _fk_fallback_sec "$1" ;;
 	forkop_ping_burst)                    _fk_ping_burst "$1" ;;
 	forkop_action)                        forkop_action "$1" "$2" ;;
-	obmanka_status)                       obmanka_status ;;
-	obmanka_action)                       obmanka_action "$1" "$2" ;;
 	lan_ip)                               _zm_lan_ip ;;
 	jobs_cancel)                          jobs_cancel "$1" ;;
 	system_reboot)                        system_reboot ;;
@@ -16985,7 +16424,21 @@ const ITD_RAW = "https://raw.githubusercontent.com/itdoginfo/allow-domains/main"
 const SRS_MAIN = "https://github.com/itdoginfo/allow-domains/releases/latest/download";
 const ITD_SUBNETS = { cloudflare: true, cloudfront: true, digitalocean: true, discord: true, google_meet: true, hetzner: true,
 	meta: true, ovh: true, roblox: true, telegram: true, twitter: true };
-const CAT_SKIP = { mydyson: true };
+const CAT_SKIP = { mydyson: true, itdoginfo_meta: true };
+/* Списки пакета без набора в каталоге — те же ссылки, что качает Steer (_rb_list_src): Meta, Instagram, Facebook, WhatsApp. */
+const V2F_RAW = "https://raw.githubusercontent.com/v2fly/domain-list-community/master/data";
+const PKG_LISTS = {
+	"svc_meta.lst": ITD_RAW + "/Services/meta.lst",
+	"svc_v2meta.lst": V2F_RAW + "/meta",
+	"svc_threads.lst": V2F_RAW + "/threads",
+	"svc_oculus.lst": V2F_RAW + "/oculus",
+	"svc_facebook_dev.lst": V2F_RAW + "/facebook-dev",
+	"svc_instagram.lst": V2F_RAW + "/instagram",
+	"svc_facebook.lst": V2F_RAW + "/facebook",
+	"svc_messenger.lst": V2F_RAW + "/messenger",
+	"svc_whatsapp.lst": V2F_RAW + "/whatsapp",
+	"meta.lst": ITD_RAW + "/Subnets/IPv4/meta.lst"
+};
 const SCHEMES = /^(vless|vmess|trojan|ss|socks4|socks4a|socks5|hysteria2|hy2):\/\/[^ \t\r\n]+$/i;
 const BYPASS = "zm_bypass";
 const SUB_IVS = [ "30m", "1h", "3h", "6h", "12h", "1d" ];
@@ -17135,6 +16588,10 @@ function catalog_items(known_list) {
 		if (!id || id == "custom" || seen[id]) continue;
 		if (s(f[2]) + s(f[3]) + s(f[7]) == "") continue;
 		if (id == "github") t = set_tokens("github", known);
+		else if (s(f[7]) == "") {
+			for (let fl in [ ...split(s(f[2]), ","), ...split(s(f[3]), ",") ])
+				if (PKG_LISTS[fl]) push(t, "l:" + PKG_LISTS[fl]);
+		}
 		else for (let set in split(s(f[7]), ",")) {
 			if (set == "") continue;
 			t = [ ...t, ...set_tokens(set, known) ];
@@ -17493,11 +16950,13 @@ function dns_value_ok(t, v) {
 	if (t == "udp") return valid_ip(replace(v, /:[0-9]+$/, "")) && index(v, "/") < 0;
 	if (t == "dot") return !match(v, /^[a-z]+:\/\//i) && index(v, "/") < 0 && !!match(v, /^[A-Za-z0-9.-]+(:[0-9]+)?$/) && !!match(v, /\./);
 	if (match(v, /^https:\/\//i)) return !!match(v, /^https:\/\/[A-Za-z0-9.-]+\.[A-Za-z0-9-]+(:[0-9]+)?(\/[^ ]*)?$/i);
-	return !!match(v, /^[A-Za-z0-9.-]+\.[A-Za-z0-9-]+(:[0-9]+)?$/);
+	return !!match(v, /^[A-Za-z0-9.-]+\.[A-Za-z0-9-]+(:[0-9]+)?(\/[^ ]*)?$/);
 }
 
+/* DoH: голый адрес сервера (dns.example.com) — дописываем стандартный /dns-query; адрес со своим путём
+ * (dns.example.com/abc или dns.example.com/) и ссылку https://… берём как есть, путь не трогаем. */
 function dns_norm(t, v) {
-	if (t == "doh" && !match(v, /^https:\/\//i)) return "https://" + v + "/dns-query";
+	if (t == "doh" && !match(v, /^https:\/\//i)) return index(v, "/") >= 0 ? "https://" + v : "https://" + v + "/dns-query";
 	return v;
 }
 
@@ -17634,13 +17093,26 @@ function cmd_device_setup() {
 		}
 		migrated = true;
 	}
-	if (!v2) {
+	/* Пункт Meta теперь из списков пакета (с Instagram, Facebook и WhatsApp): секции со старым списком meta получают их все. */
+	let split_meta = false;
+	for (let x in sections(c, "section")) {
+		let cl = uniq(words(x.community_lists));
+		if (index(cl, "meta") < 0) continue;
+		/* только дописываем: остальные списки секции и их порядок не трогаем */
+		let n = x[".name"], urls = map(keys(PKG_LISTS), (k) => PKG_LISTS[k]), zr = rawlist(x.zm_refs);
+		set_list(c, n, "community_lists", filter(cl, (v) => v != "meta"));
+		if (length(zr)) set_list(c, n, "zm_refs", uniq([ ...zr, ...map(urls, (u) => "l:" + u) ]));
+		set_list(c, n, "remote_domain_lists", uniq([ ...words(x.remote_domain_lists), ...urls ]));
+		set_list(c, n, "remote_subnet_lists", uniq([ ...words(x.remote_subnet_lists), ...urls ]));
+		split_meta = true;
+	}
+	if (!v2 || split_meta) {
 		if (!c.get(CFG, "settings")) c.set(CFG, "settings", "settings");
 		c.set(CFG, "settings", "zm_dev_v2", "1");
 		c.save(CFG);
 		c.commit(CFG);
 	}
-	out({ ok: true, changed: patched || migrated, migrated });
+	out({ ok: true, changed: patched || migrated || split_meta, migrated });
 }
 
 function set_text(c, sec, key, list) {
@@ -17891,7 +17363,7 @@ function write_sec_ext(c, sec, mode, x) {
 			let t = s(x.dres_type), v = trim(s(x.dres_server));
 			if (index([ "udp", "dot", "doh" ], t) < 0) fail("неизвестный тип DNS для туннеля");
 			if (!dns_value_ok(t, v))
-				fail(t == "udp" ? "DNS туннеля: нужен IP-адрес, например 1.1.1.1" : t == "dot" ? "DNS туннеля: нужен адрес без https://, например one.one.one.one" : "DNS туннеля: нужна ссылка https://…/dns-query или адрес сервера");
+				fail(t == "udp" ? "DNS туннеля: нужен IP-адрес, например 1.1.1.1" : t == "dot" ? "DNS туннеля: нужен адрес без https://, например one.one.one.one" : "DNS туннеля: нужен адрес сервера или ссылка https://…");
 			c.set(CFG, sec, "domain_resolver_enabled", "1");
 			c.set(CFG, sec, "domain_resolver_dns_type", t);
 			c.set(CFG, sec, "domain_resolver_dns_server", dns_norm(t, v));
@@ -18215,7 +17687,7 @@ function cmd_set() {
 			if (!dns_value_ok(t, x))
 				fail(t == "udp" ? "для UDP нужен IP-адрес DNS, например 9.9.9.9 (ошибка в «" + x + "»)"
 					: t == "dot" ? "для DoT нужен адрес сервера без https://, например dns.quad9.net (ошибка в «" + x + "»)"
-					: "для DoH нужен адрес или ссылка https://…/dns-query (ошибка в «" + x + "»)");
+					: "для DoH нужен адрес сервера или ссылка https://… (ошибка в «" + x + "»)");
 			push(svs, dns_norm(t, x));
 		}
 		svs = uniq(svs);
@@ -19581,8 +19053,6 @@ list_methods() {
 	json_add_object "forkop_config_get";      json_close_object
 	json_add_object "forkop_config_set";      json_add_string "content" "string"; json_close_object
 	json_add_object "forkop_action";          json_add_string "action" "string"; json_add_string "mode" "string"; json_close_object
-	json_add_object "obmanka_status";         json_close_object
-	json_add_object "obmanka_action";         json_add_string "action" "string"; json_add_string "mode" "string"; json_close_object
 	json_add_object "jobs_cancel";            json_add_string "job" "string"; json_close_object
 	json_add_object "ui_theme_get";           json_close_object
 	json_add_object "ui_theme_set";           json_add_string "theme" "string"; json_close_object
@@ -19695,8 +19165,6 @@ call_method() {
 		forkop_config_get)       "$BACKEND" forkop_config_get ;;
 		forkop_config_set)       json_get_var content content; printf '%s' "$content" | "$BACKEND" forkop_config_set @stdin ;;
 		forkop_action)           json_get_var action action; json_get_var mode mode; printf '%s' "$mode" | "$BACKEND" forkop_action "$action" @stdin ;;
-		obmanka_status)          "$BACKEND" obmanka_status ;;
-		obmanka_action)          json_get_var action action; json_get_var mode mode; printf '%s' "$mode" | "$BACKEND" obmanka_action "$action" @stdin ;;
 		jobs_cancel)             json_get_var job job;         "$BACKEND" jobs_cancel "$job" ;;
 		ui_theme_get)            "$BACKEND" ui_theme_get ;;
 		ui_theme_set)            json_get_var theme theme;     "$BACKEND" ui_theme_set "$theme" ;;
@@ -19770,7 +19238,6 @@ cat > '/usr/share/rpcd/acl.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF'
 					"term_status",
 					"steer_status",
 					"forkop_status",
-					"obmanka_status",
 					"forkop_config_get",
 					"sysinfo_get",
 					"ui_theme_get"
@@ -19850,7 +19317,6 @@ cat > '/usr/share/rpcd/acl.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF'
 					"steer_action",
 					"forkop_config_set",
 					"forkop_action",
-					"obmanka_action",
 					"sysinfo_run",
 					"jobs_cancel",
 					"ui_theme_set",
@@ -19899,11 +19365,6 @@ cat > '/usr/share/luci/menu.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF
 		"title": "Forkozz",
 		"order": 27,
 		"action": { "type": "view", "path": "zapret-manager/forkozz" }
-	},
-	"admin/services/zapret-manager/obmanka": {
-		"title": "Obmanka",
-		"order": 28,
-		"action": { "type": "view", "path": "zapret-manager/obmanka" }
 	},
 	"admin/services/zapret-manager/zapret2": {
 		"title": "Zapret2",
@@ -20101,8 +19562,6 @@ var callForkopStatus = zmDeclare({ object: 'zapret-manager', method: 'forkop_sta
 var callForkopConfigGet = zmDeclare({ object: 'zapret-manager', method: 'forkop_config_get', expect: {} });
 var callForkopConfigSet = zmDeclare({ object: 'zapret-manager', method: 'forkop_config_set', params: ['content'], expect: {} });
 var callForkopAction = zmDeclare({ object: 'zapret-manager', method: 'forkop_action', params: ['action', 'mode'], expect: {} });
-var callObmankaStatus = zmDeclare({ object: 'zapret-manager', method: 'obmanka_status', expect: {} });
-var callObmankaAction = zmDeclare({ object: 'zapret-manager', method: 'obmanka_action', params: ['action', 'mode'], expect: {} });
 var callJobsCancel = zmDeclare({ object: 'zapret-manager', method: 'jobs_cancel', params: ['job'], expect: {} });
 
 function parseSize(v) {
@@ -20430,7 +19889,7 @@ setInterval(dockSync, 600);
 window.addEventListener('hashchange', function() { setTimeout(dockSync, 50); });
 
 var _activePolls = {};
-var JOB_NAMES = { steer: 'Steer', forkop: 'Forkozz', obmanka: 'Obmanka', awg: 'AmneziaWG', strategy_test: 'тест стратегий', mirror_set: 'смена зеркала', zm_update: 'обновление панели' };
+var JOB_NAMES = { steer: 'Steer', forkop: 'Forkozz', awg: 'AmneziaWG', strategy_test: 'тест стратегий', mirror_set: 'смена зеркала', zm_update: 'обновление панели' };
 var _stuck = {}, _stopEl = null, _stopBusy = false;
 
 function jobName(j) {
@@ -20692,7 +20151,7 @@ function notifyStrategyResult(res, okLabel) {
 
 var SVC_BRANDS = [
 	[ /youtube/i, '#ff0033', 'YT' ], [ /discord/i, '#5865f2', 'DC' ], [ /telegram/i, '#229ed9', 'TG' ],
-	[ /^meta$/i, '#0866ff', 'M' ], [ /whatsapp/i, '#25d366', 'WA' ], [ /instagram|facebook|\bmeta\b/i, '#e1306c', 'IG' ], [ /twitter|^x\b/i, '#16181c', 'X' ],
+	[ /^meta$/i, '#0866ff', 'M' ], [ /whatsapp/i, '#25d366', 'WA' ], [ /instagram|\bmeta\b/i, '#e1306c', 'IG' ], [ /facebook/i, '#1877f2', 'FB' ], [ /twitter|^x\b/i, '#16181c', 'X' ],
 	[ /tiktok/i, '#fe2c55', 'TT' ], [ /google play/i, '#01875f', 'GP' ], [ /gemini|google ai/i, '#4285f4', 'AI' ],
 	[ /chatgpt|openai|claude|\bai\b|(^|[^а-яё])ии([^а-яё]|$)/i, '#10a37f', 'AI' ], [ /githubusercontent|github raw/i, '#57606a', 'GR' ], [ /github/i, '#24292f', 'GH' ],
 	[ /google/i, '#4285f4', 'G' ], [ /roblox/i, '#e2231a', 'RB' ], [ /supercell|brawl|clash/i, '#f59e0b', 'SC' ],
@@ -20724,7 +20183,22 @@ function svcTx(v) {
 	return (typeof v === 'string' || typeof v === 'number') ? [ String(v) ] : v;
 }
 
-var RI_IDS = { geoblock: 1, block: 1, news: 1, anime: 1, porn: 1, youtube: 1, discord: 1, meta: 1, instagram: 1, whatsapp: 1, twitter: 1, x: 1, tiktok: 1, hdrezka: 1 };
+/* Meta включает Instagram, Facebook и WhatsApp: Meta включает и выключает их вместе с собой,
+ * а снятый с Meta отдельный пункт снимает и саму Meta. */
+var META_KIDS = [ 'instagram', 'facebook', 'whatsapp' ];
+function svcPickToggle(p, id) {
+	if (p[id]) {
+		delete p[id];
+		if (id === 'meta') META_KIDS.forEach(function(k) { delete p[k]; });
+		else if (META_KIDS.indexOf(id) >= 0) delete p.meta;
+	} else {
+		p[id] = true;
+		if (id === 'meta') META_KIDS.forEach(function(k) { p[k] = true; });
+	}
+	return p;
+}
+
+var RI_IDS = { geoblock: 1, block: 1, news: 1, anime: 1, porn: 1, youtube: 1, discord: 1, meta: 1, instagram: 1, facebook: 1, whatsapp: 1, twitter: 1, x: 1, tiktok: 1, hdrezka: 1 };
 
 function riCovers(id) {
 	return !!RI_IDS[String(id || '').replace(/^c_itdoginfo_/, '')];
@@ -21532,11 +21006,10 @@ return baseclass.extend({
 	forkopConfigGet: callForkopConfigGet,
 	forkopConfigSet: bigText(callForkopConfigSet),
 	forkopAction: bigArg2(callForkopAction),
-	obmankaStatus: callObmankaStatus,
-	obmankaAction: bigArg2(callObmankaAction),
 	jobsCancel: callJobsCancel,
 	dock: dock,
 	riCovers: riCovers,
+	svcPickToggle: svcPickToggle,
 	riNote: riNote,
 	swRow: swRow,
 	dialog: dialog,
@@ -21642,12 +21115,6 @@ return view.extend({
 			items.push(row('Forkozz', fkSt === 1 ? zm.badge(true, 'работает', '')
 				: fkSt === 2 ? zm.badge(false, '', 'не работает')
 				: fkSt === 5 ? offBadge('выключен')
-				: zm.badge(false, '', 'не установлен')));
-			var obSt = st(h, 'obmanka', 0);
-			items.push(row('Obmanka', obSt === 1 ? zm.badge(true, 'работает', '')
-				: obSt === 2 ? zm.badge(false, '', 'не работает')
-				: obSt === 3 ? warnBadge('работает частично')
-				: obSt === 4 ? offBadge('выключена')
 				: zm.badge(false, '', 'не установлен')));
 			items.push(row('ByeTube', zm.stateBadge(st(h, 'bytetube', 0))));
 			items.push(row('TG WS Proxy', zm.stateBadge(st(h, 'tg', 0))));
@@ -23506,7 +22973,7 @@ return view.extend({
 					if (busy) { zm.toast('Дождитесь окончания текущей операции', 'warning'); return; }
 					pick = {};
 					for (var k in sel) if (sel[k] && k !== 'custom') pick[k] = true;
-					if (pick[s.id]) delete pick[s.id]; else pick[s.id] = true;
+					zm.svcPickToggle(pick, s.id);
 					renderLists();
 				} });
 			}
@@ -24518,7 +23985,10 @@ mkdir -p /usr/share/zm-redbtn
 cat > '/usr/share/zm-redbtn/services.conf' << 'ZM_INSTALLER_EOF'
 youtube|YouTube|svc_youtube.lst||www.youtube.com,youtubei.googleapis.com,manifest.googlevideo.com|youtu.be,i.ytimg.com,i9.ytimg.com,yt3.ggpht.com,yt4.ggpht.com,jnn-pa.googleapis.com,signaler-pa.youtube.com,yt3.googleusercontent.com,rr4---sn-4g5e6nze.googlevideo.com,rr4---sn-5go7yner.googlevideo.com,rr5---sn-n8v7knez.googlevideo.com,rr2---sn-q4fl6ndl.googlevideo.com,rr1---sn-q4fl6n6y.googlevideo.com,rr14---sn-n8v7kn7r.googlevideo.com,rr4---sn-jvhnu5g-c35d.googlevideo.com,rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com,rr12---sn-gvnuxaxjvh-bvwz.googlevideo.com,rr1---sn-ug5onuxaxjvh-n8v6.googlevideo.com||youtube
 discord|Discord|svc_discord.lst|discord.lst|discord.com,gateway.discord.gg,updates.discord.com|cdn.discordapp.com,media.discordapp.net||discord
-meta|Meta|svc_meta.lst|meta.lst|www.instagram.com,web.whatsapp.com|i.instagram.com,graph.instagram.com,scontent.cdninstagram.com,static.whatsapp.net,mmg.whatsapp.net||meta
+meta|Meta|svc_meta.lst,svc_v2meta.lst,svc_instagram.lst,svc_facebook.lst,svc_messenger.lst,svc_whatsapp.lst,svc_threads.lst,svc_oculus.lst,svc_facebook_dev.lst|meta.lst|www.instagram.com,www.facebook.com,web.whatsapp.com|i.instagram.com,graph.instagram.com,scontent.cdninstagram.com,static.xx.fbcdn.net,static.whatsapp.net,mmg.whatsapp.net||
+instagram|Instagram|svc_instagram.lst,svc_facebook.lst|meta.lst|www.instagram.com|i.instagram.com,graph.instagram.com,scontent.cdninstagram.com||
+facebook|Facebook|svc_facebook.lst,svc_messenger.lst|meta.lst|www.facebook.com|static.xx.fbcdn.net||
+whatsapp|WhatsApp|svc_whatsapp.lst|meta.lst|web.whatsapp.com|static.whatsapp.net,mmg.whatsapp.net||
 x|X (Twitter)|svc_twitter.lst|twitter_x.lst|x.com|twitter.com,abs.twimg.com,video.twimg.com||twitter
 github|GitHub|own_github.lst||github.com,raw.githubusercontent.com,objects.githubusercontent.com|codeload.github.com,api.github.com,ghcr.io||
 telegram|Telegram|svc_telegram.lst|telegram.lst|web.telegram.org|t.me,core.telegram.org,telegra.ph||telegram
@@ -28498,13 +27968,6 @@ return view.extend({
 			{ product: 'awg-openwrt (сборки)', author: '2Grey', url: 'https://github.com/2Grey/awg-openwrt' },
 			{ product: 'warpscout (разведка WARP)', author: 'vernette', url: 'https://github.com/vernette/warpscout' },
 			{ product: 'base-relay (реле регистрации WARP)', author: 'nellimonix', url: 'https://github.com/nellimonix/base-relay' },
-			{ product: 'FakeSIP, FakeHTTP (основа Obmanka)', author: 'MikeWang000000', url: 'https://github.com/MikeWang000000' },
-			{ product: 'ByeDPI', author: 'hufrea', url: 'https://github.com/hufrea/byedpi' },
-			{ product: 'AmneziaWG', author: 'amnezia-vpn', url: 'https://github.com/amnezia-vpn' },
-			{ product: 'ad-filter (списки рекламы)', author: 'zxc-rv', url: 'https://github.com/zxc-rv/ad-filter' },
-			{ product: 'sing-box-supercell-ruleset', author: 'ushan0v', url: 'https://github.com/ushan0v/sing-box-supercell-ruleset' },
-			{ product: 'ttyd (Терминал)', author: 'tsl0922', url: 'https://github.com/tsl0922/ttyd' },
-			{ product: 'https-dns-proxy (DNS over HTTPS)', author: 'aarond10, stangri', url: 'https://github.com/aarond10/https_dns_proxy' },
 			{ product: 'Всем пользователям', author: 'кто помогает, тестирует и поддерживает проект ❤', self: true, all: true }
 		];
 		var creditsGrid = E('div', { 'class': 'zm-credits-grid' }), allTile = null;
@@ -29030,14 +28493,23 @@ var DNS_TYPES = { udp: 'UDP', dot: 'DoT', doh: 'DoH' };
 var DNS_HELP = {
 	udp: { ph: '9.9.9.9', hint: 'Обычный DNS без шифрования — только IP-адрес. Провайдер видит и может подменять ответы.' },
 	dot: { ph: 'dns.quad9.net', hint: 'DNS over TLS: адрес сервера без https://, например dns.quad9.net или 9.9.9.9.' },
-	doh: { ph: 'https://dns.quad9.net/dns-query', hint: 'DNS over HTTPS: ссылка https://…/dns-query или просто адрес сервера.' }
+	doh: { ph: 'https://dns.quad9.net/dns-query', hint: 'DNS over HTTPS: ссылка https://… или адрес сервера. Голый адрес (dns.example.com) — допишем /dns-query; ссылка или адрес с путём берутся как есть, без пути — https://dns.example.com/.' }
 };
 
 var DNS_RE = {
 	udp: /^((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(:\d{1,5})?$/,
 	dot: /^[A-Za-z0-9.-]+\.[A-Za-z0-9-]+(:\d{1,5})?$/,
-	doh: /^(https:\/\/[A-Za-z0-9.-]+\.[A-Za-z0-9-]+(:\d{1,5})?(\/[^\s@|,;'"<>]*)?|[A-Za-z0-9.-]+\.[A-Za-z0-9-]+(:\d{1,5})?)$/i
+	doh: /^(https:\/\/)?[A-Za-z0-9.-]+\.[A-Za-z0-9-]+(:\d{1,5})?(\/[^\s@|,;'"<>]*)?$/i
 };
+
+/* Свой DoH-сервер: голый адрес (dns.example.com) — стандартный путь /dns-query; ссылка https://сервер без пути —
+ * корень «/» (иначе sing-box сам подставит /dns-query); адрес со своим путём остаётся как есть. */
+function dohOwn(v) {
+	if (/^[A-Za-z0-9.-]+\.[A-Za-z0-9-]+(:\d{1,5})?$/.test(v)) return 'https://' + v + '/dns-query';
+	if (/^https:\/\/[^\/?#]+$/i.test(v)) return v + '/';
+	if (!/^https:\/\//i.test(v) && /^[A-Za-z0-9.-]+\.[A-Za-z0-9-]+(:\d{1,5})?\//.test(v)) return 'https://' + v;
+	return v;
+}
 
 function dnsFind(t, v) {
 	var list = DNS_CAT[t] || [];
@@ -30557,7 +30029,7 @@ return view.extend({
 			return zm.svcCard({ name: s.name, key: s.id, on: !!draft.sel[s.id], sub: by ? 'и в секции «' + by + '» — сработает верхняя' : shadowed ? 'перекрыт «Всё сразу» секции «' + ra + '»' : '', inc: !!draft.sel.russia_inside && s.id !== 'russia_inside' && !s.group && zm.riCovers(s.id), click: function() {
 				var nsel = {};
 				for (var k in draft.sel) if (draft.sel[k]) nsel[k] = true;
-				if (nsel[s.id]) delete nsel[s.id]; else nsel[s.id] = true;
+				zm.svcPickToggle(nsel, s.id);
 				set('sel', nsel);
 			} });
 		}
@@ -30818,7 +30290,7 @@ return view.extend({
 			function addOwn() {
 				var v = dnsInput.value.trim();
 				if (!v) return;
-				if (t === 'doh' && /^[A-Za-z0-9.-]+\.[A-Za-z0-9-]+$/.test(v)) v = 'https://' + v + '/dns-query';
+				if (t === 'doh') v = dohOwn(v);
 				if (!DNS_RE[t].test(v)) { zm.toast(DNS_HELP[t].hint, 'warning'); return; }
 				if (sel.indexOf(v) >= 0) { zm.toast('Этот сервер уже в списке', 'warning'); return; }
 				if (sel.length >= DNS_MAX) { zm.toast('Не больше ' + DNS_MAX + ' серверов', 'warning'); return; }
@@ -31188,340 +30660,6 @@ return view.extend({
 });
 ZM_INSTALLER_EOF
 chmod 0644 '/www/luci-static/resources/view/zapret-manager/forkozz.js'
-
-cat > '/www/luci-static/resources/view/zapret-manager/obmanka.js' << 'ZM_INSTALLER_EOF'
-'use strict';
-'require view';
-'require zapret-manager.common as zm';
-var E = (function(raw) { return function() { var a = Array.prototype.slice.call(arguments), i = a.length - 1; if (i >= 1 && (typeof a[i] === 'string' || typeof a[i] === 'number')) a[i] = [ String(a[i]) ]; return raw.apply(null, a); }; })(window.E);
-
-var INTRO = 'Подсовывает DPI провайдера поддельный пакет: UDP выглядит как звонок (SIP), TCP — как обычный сайт. Работает для всех устройств сети.';
-var TTL = [ { id: '50', label: 'Авто · 50 %' }, { id: '30', label: '30 %' }, { id: '70', label: '70 %' }, { id: '0', label: 'Фикс. 3 хопа' } ];
-var REP = [ { id: '1', label: '1' }, { id: '2', label: '2' }, { id: '3', label: '3' } ];
-var KEYS = [ 'fakesip', 'fakehttp', 'host', 'ttl_pct', 'repeat', 'zapret_compat', 'ipv6', 'log', 'exclude_udp', 'exclude_tcp' ];
-
-function badge(cls, text) {
-	return E('span', { 'class': 'zm-badge ' + cls }, [ E('span', { 'class': 'zm-dot' }), text ]);
-}
-
-function row(l, node) {
-	return E('div', { 'class': 'zm-row' }, [ E('span', { 'class': 'zm-label' }, l), node ]);
-}
-
-function chkRow(head, body) {
-	return E('div', { 'class': 'zm-row zm-chk' }, [ E('span', { 'class': 'zm-chk-h' }, [ head ]), E('span', { 'class': 'zm-chk-b' }, [ body ]) ]);
-}
-
-function seg(items, cur, pick) {
-	if (!items.some(function(it) { return it.id === cur; })) items = items.concat([ { id: cur, label: cur } ]);
-	return E('div', { 'class': 'zm-seg' }, items.map(function(it) {
-		return E('div', { 'class': 'zm-seg-item' + (it.id === cur ? ' zm-active' : ''), 'click': function() { if (it.id !== cur) pick(it.id); } }, it.label);
-	}));
-}
-
-/* сколько портов из 65535 покрывают диапазоны "443, 1024-65535" */
-function portCount(s) {
-	return String(s || '').split(/[\s,]+/).filter(Boolean).reduce(function(n, p) {
-		var m = /^(\d+)(?:-(\d+))?$/.exec(p);
-		return m ? n + (m[2] ? +m[2] - +m[1] + 1 : 1) : n;
-	}, 0);
-}
-
-function normPorts(s) {
-	return String(s || '').split(/[\s,;]+/).filter(Boolean).join(' ');
-}
-
-return view.extend({
-	load: function() {
-		zm.injectCss();
-		return zm.obmankaStatus();
-	},
-
-	render: function(data) {
-		data = data || {};
-		var wrap = E('div', { 'class': 'zm-wrap' });
-		var warnBox = E('div', { 'class': 'zm-alerts' });
-		var mainCard = E('div', { 'class': 'zm-card' });
-		var whatCard = E('div', { 'class': 'zm-card' });
-		var setCard = E('div', { 'class': 'zm-card' });
-		var checkCard = E('div', { 'class': 'zm-card' });
-		var logEl = E('pre', { 'class': 'zm-log' });
-		var busy = false, saving = false, pick = {}, diag = null, diagBusy = false;
-
-		var hostIn = E('input', { 'type': 'text', 'class': 'cbi-input-text', 'spellcheck': 'false', 'autocapitalize': 'off', 'placeholder': 'ya.ru', 'style': 'flex:0 1 260px; min-width:160px' });
-		var udpIn = E('input', { 'type': 'text', 'class': 'cbi-input-text', 'spellcheck': 'false', 'placeholder': '53 123 27015-27030', 'style': 'flex:1; min-width:200px' });
-		var tcpIn = E('input', { 'type': 'text', 'class': 'cbi-input-text', 'spellcheck': 'false', 'placeholder': '22 53', 'style': 'flex:1; min-width:200px' });
-		[ [ hostIn, 'host' ], [ udpIn, 'exclude_udp' ], [ tcpIn, 'exclude_tcp' ] ].forEach(function(x) {
-			x[0].addEventListener('input', function() {
-				var v = x[1] === 'host' ? x[0].value.trim() : normPorts(x[0].value);
-				if (v === cfg(x[1], true)) delete pick[x[1]]; else pick[x[1]] = v;
-				syncBar();
-			});
-		});
-
-		var bar = zm.saveBar({
-			onCancel: function() { pick = {}; fillInputs(); render(); },
-			onSave: save
-		});
-
-		function cfg(k, orig) {
-			var c = data.cfg || {};
-			if (!orig && pick.hasOwnProperty(k)) return pick[k];
-			return k === 'exclude_udp' || k === 'exclude_tcp' ? normPorts(c[k]) : String(c[k] == null ? '' : c[k]);
-		}
-
-		function setPick(k, v) {
-			if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
-			if (v === cfg(k, true)) delete pick[k]; else pick[k] = v;
-			render();
-		}
-
-		function fillInputs() {
-			hostIn.value = cfg('host');
-			udpIn.value = cfg('exclude_udp');
-			tcpIn.value = cfg('exclude_tcp');
-		}
-
-		function dirty() { return Object.keys(pick).length; }
-
-		function syncBar() {
-			bar.set(dirty() > 0 || saving, saving, dirty() ? 'Есть несохранённые изменения' : '');
-		}
-
-		function refresh() {
-			return zm.obmankaStatus().then(function(d) {
-				if (d && !d.error) data = d;
-				render();
-			}, function() { render(); });
-		}
-
-		function save() {
-			if (busy || !dirty()) return;
-			if (cfg('fakesip') === '0' && cfg('fakehttp') === '0') { zm.toast('Включите хотя бы FakeSIP или FakeHTTP', 'warning'); return; }
-			busy = saving = true;
-			syncBar();
-			var text = KEYS.filter(function(k) { return pick.hasOwnProperty(k); }).map(function(k) { return k + '=' + pick[k]; }).join('\n');
-			zm.obmankaAction('set', text).then(function(r) {
-				busy = saving = false;
-				if (!r || r.error) { zm.toast((r && r.error) || 'Роутер не ответил', 'error'); syncBar(); return; }
-				pick = {};
-				diag = null;
-				zm.toast('Настройки применены', 'info');
-				refresh().then(fillInputs);
-			}).catch(function() { busy = saving = false; syncBar(); zm.toast('Роутер не ответил', 'error'); });
-		}
-
-		function job(action, text, okText) {
-			if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
-			busy = true;
-			render();
-			zm.toast(text, 'warning');
-			zm.obmankaAction(action, '').then(function(r) {
-				if (!r || r.error) { busy = false; zm.toast((r && r.error) || 'Роутер не ответил', 'error'); render(); return; }
-				if (!r.started) { busy = false; render(); return; }
-				zm.pollJob('obmanka', logEl, function(ok) {
-					busy = false;
-					diag = null;
-					zm.toast(ok ? okText : 'Не получилось — причина в журнале ниже', ok ? 'info' : 'error');
-					refresh().then(fillInputs);
-				});
-			}).catch(function() { busy = false; zm.toast('Роутер не ответил', 'error'); render(); });
-		}
-
-		function quick(action, text, okText) {
-			if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
-			busy = true;
-			render();
-			zm.toast(text, 'warning');
-			zm.obmankaAction(action, '').then(function(r) {
-				busy = false;
-				diag = null;
-				if (!r || r.error) zm.toast((r && r.error) || 'Роутер не ответил', 'error');
-				else zm.toast(okText, 'info');
-				refresh();
-			}).catch(function() { busy = false; zm.toast('Роутер не ответил', 'error'); refresh(); });
-		}
-
-		function runDiag() {
-			if (diagBusy || busy) return;
-			diagBusy = true;
-			renderCheck();
-			zm.obmankaAction('check', '').then(function(r) {
-				diagBusy = false;
-				if (!r || r.error) { zm.toast((r && r.error) || 'Роутер не ответил', 'error'); renderCheck(); return; }
-				diag = r.items || [];
-				renderCheck();
-			}).catch(function() { diagBusy = false; zm.toast('Роутер не ответил', 'error'); renderCheck(); });
-		}
-
-		function stateBadge() {
-			if (busy || data.busy) return badge('zm-warn', 'идёт операция');
-			if (!data.installed) return badge('zm-off', 'не установлена');
-			if (!data.enabled) return badge('zm-off', 'выключена');
-			var need = 0, up = 0;
-			if (cfg('fakesip', true) === '1') { need++; if (data.sip_run) up++; }
-			if (cfg('fakehttp', true) === '1') { need++; if (data.http_run) up++; }
-			if (!data.loaded || !up) return badge('zm-bad', 'не работает');
-			return up < need ? badge('zm-warn', 'работает частично') : badge('zm-ok', 'работает');
-		}
-
-		function procRow(name, on, run, pk, q) {
-			if (on !== '1') return row(name, badge('zm-off', 'выключен'));
-			return row(name, E('span', { 'style': 'display:inline-flex; gap:8px; align-items:center; flex-wrap:wrap' }, [
-				data.enabled ? (run ? badge('zm-ok', 'запущен') : badge('zm-bad', 'не запущен')) : badge('zm-off', 'остановлен'),
-				data.enabled && run ? E('span', { 'class': 'zm-hint', 'style': 'margin:0' }, 'пакетов: ' + (pk || 0) + (q ? ' · очередь ' + q : '')) : E([])
-			]));
-		}
-
-		function renderWarn() {
-			warnBox.innerHTML = '';
-			var w = [];
-			if (data.legacy && !data.installed) w.push('Найдена отдельная установка FakeDPI — при установке Obmanka заменит её и перенесёт настройки.');
-			if (data.installed) {
-				if ((data.zapret || data.zapret2) && cfg('zapret_compat', true) === '0')
-					w.push('Совместимость с Zapret выключена — Obmanka и Zapret будут обрабатывать одни и те же соединения.');
-				if (data.enabled && cfg('fakesip', true) === '1' && portCount(data.auto_udp) > 60000)
-					w.push('Почти весь UDP уже обходит ' + (data.zapret2 ? 'Zapret2' : 'Zapret') + ' — FakeSIP работает только с оставшимися портами.');
-				if (data.vpn && cfg('fakehttp', true) === '1')
-					w.push('Стоит ' + data.vpn + ' — если VPN перестал подключаться, выключите FakeHTTP.');
-			}
-			w.forEach(function(t) { warnBox.appendChild(E('div', { 'class': 'zm-refresh-banner zm-show' }, [ E('span', { 'style': 'line-height:1.5' }, t) ])); });
-		}
-
-		function renderMain() {
-			mainCard.innerHTML = '';
-			mainCard.appendChild(E('h3', {}, 'Obmanka'));
-			mainCard.appendChild(E('p', { 'class': 'zm-hint' }, INTRO));
-			mainCard.appendChild(row('Состояние', stateBadge()));
-			if (!data.installed) {
-				mainCard.appendChild(E('div', { 'class': 'zm-actions' }, [
-					E('button', { 'class': 'cbi-button cbi-button-positive', 'disabled': busy || data.busy ? '' : null, 'click': function() {
-						job('install', 'Устанавливаем Obmanka', 'Obmanka установлена');
-					} }, 'Установить')
-				]));
-				mainCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Скачает FakeSIP и FakeHTTP с GitHub — около 300 КБ.'));
-				mainCard.appendChild(logEl);
-				return;
-			}
-			mainCard.appendChild(procRow('FakeSIP · UDP', cfg('fakesip', true), data.sip_run, data.sip_pk, data.q_sip));
-			mainCard.appendChild(procRow('FakeHTTP · TCP', cfg('fakehttp', true), data.http_run, data.http_pk, data.q_http));
-			if (data.enabled) mainCard.appendChild(row('Внешний интерфейс', E('span', {}, data.wan || 'не найден')));
-			mainCard.appendChild(row('Версия', E('span', {}, 'FakeSIP ' + (data.ver_sip || '—') + ' · FakeHTTP ' + (data.ver_http || '—') +
-				(data.newer ? ' · есть обновление' : data.latest_sip ? ' · последние' : ''))));
-
-			var a = [], dis = busy || data.busy ? '' : null;
-			if (data.enabled) {
-				a.push(E('button', { 'class': 'cbi-button cbi-button-positive', 'disabled': dis, 'click': function() { quick('restart', 'Перезапускаем Obmanka', 'Obmanka перезапущена'); } }, 'Перезапустить'));
-				a.push(E('button', { 'class': 'cbi-button', 'disabled': dis, 'click': function() { quick('stop', 'Выключаем Obmanka', 'Obmanka выключена'); } }, 'Выключить'));
-			} else {
-				a.push(E('button', { 'class': 'cbi-button cbi-button-positive', 'disabled': dis, 'click': function() { quick('start', 'Включаем Obmanka', 'Obmanka включена'); } }, 'Включить'));
-			}
-			if (data.newer) a.push(E('button', { 'class': 'cbi-button cbi-button-action', 'disabled': dis, 'click': function() { job('update', 'Обновляем Obmanka', 'Obmanka обновлена'); } }, 'Обновить'));
-			a.push(E('button', { 'class': 'cbi-button', 'disabled': dis, 'click': function() { job('reinstall', 'Переустанавливаем Obmanka', 'Obmanka переустановлена'); } }, 'Переустановить'));
-			a.push(E('button', { 'class': 'cbi-button cbi-button-remove', 'disabled': dis, 'click': function() {
-				zm.dialog({ title: 'Удалить Obmanka?', danger: true, okText: 'Удалить Obmanka',
-					blocks: [ { type: 'list', title: 'Что произойдёт', items: [
-						'FakeSIP и FakeHTTP остановятся и удалятся вместе с настройками',
-						'Соединения пойдут без маскировки'
-					] } ]
-				}).then(function(v) { if (v) job('remove', 'Удаляем Obmanka', 'Obmanka удалена'); });
-			} }, 'Удалить'));
-			mainCard.appendChild(E('div', { 'class': 'zm-actions' }, a));
-			mainCard.appendChild(logEl);
-		}
-
-		function svc(k, name, sub, color, ico) {
-			var on = cfg(k) === '1';
-			return zm.svcCard({ name: name, sub: sub, color: color, ico: ico, on: on, click: function() { setPick(k, on ? '0' : '1'); } });
-		}
-
-		function renderWhat() {
-			whatCard.innerHTML = '';
-			whatCard.style.display = data.installed ? '' : 'none';
-			if (!data.installed) return;
-			whatCard.appendChild(E('h3', {}, 'Что маскировать'));
-			whatCard.appendChild(zm.svcGrid([
-				svc('fakesip', 'FakeSIP', 'UDP → звонок SIP', '#7c5cff', 'UDP'),
-				svc('fakehttp', 'FakeHTTP', 'TCP → обычный сайт', '#0ea5e9', 'TCP')
-			]));
-			whatCard.appendChild(E('p', { 'class': 'zm-hint' }, 'FakeSIP — игры, звонки, WireGuard и прочий UDP. FakeHTTP — TCP на нестандартных портах.'));
-		}
-
-		function autoLine(label, list) {
-			return list ? E('p', { 'class': 'zm-hint', 'style': 'margin:2px 0 0' }, label + ': ' + list) : E([]);
-		}
-
-		function renderSet() {
-			setCard.innerHTML = '';
-			setCard.style.display = data.installed ? '' : 'none';
-			if (!data.installed) return;
-			setCard.appendChild(E('h3', {}, 'Настройки'));
-			setCard.appendChild(row('Сайт для маскировки TCP', hostIn));
-			setCard.appendChild(row('TTL подделки', seg(TTL, cfg('ttl_pct'), function(v) { setPick('ttl_pct', v); })));
-			setCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:0' }, 'Подделка должна пройти DPI и пропасть до сервера. Авто подходит почти всем.'));
-			setCard.appendChild(row('Повторов подделки', seg(REP, cfg('repeat'), function(v) { setPick('repeat', v); })));
-			setCard.appendChild(zm.swRow(cfg('zapret_compat') === '1', 'Не трогать порты Zapret', 'Соединения, которые обходит Zapret или Zapret2, Obmanka пропускает.', function() { setPick('zapret_compat', cfg('zapret_compat') === '1' ? '0' : '1'); }, busy));
-			setCard.appendChild(zm.swRow(cfg('ipv6') === '1', 'IPv6', '', function() { setPick('ipv6', cfg('ipv6') === '1' ? '0' : '1'); }, busy));
-			setCard.appendChild(zm.swRow(cfg('log') === '1', 'Подробный журнал', 'Каждое соединение — в системный журнал. Только для поиска проблем.', function() { setPick('log', cfg('log') === '1' ? '0' : '1'); }, busy));
-			setCard.appendChild(E('h4', { 'style': 'margin:18px 0 4px' }, 'Не трогать порты'));
-			setCard.appendChild(row('UDP', udpIn));
-			setCard.appendChild(autoLine('Добавлены сами из-за Zapret', data.auto_udp));
-			setCard.appendChild(autoLine('Добавлены сами из-за AmneziaWG', data.awg_udp));
-			setCard.appendChild(row('TCP', tcpIn));
-			setCard.appendChild(autoLine('Добавлены сами из-за Zapret', data.auto_tcp));
-		}
-
-		function renderCheck() {
-			checkCard.innerHTML = '';
-			checkCard.style.display = data.installed ? '' : 'none';
-			if (!data.installed) return;
-			checkCard.appendChild(E('h3', {}, 'Проверка'));
-			if (diag) {
-				var CLS = { ok: 'zm-ok', warn: 'zm-warn', fail: 'zm-bad' }, TXT = { ok: 'ок', warn: 'внимание', fail: 'ошибка' };
-				var bad = diag.filter(function(i) { return i[0] === 'fail'; }).length, warn = diag.filter(function(i) { return i[0] === 'warn'; }).length;
-				checkCard.appendChild(chkRow(E('span', { 'class': 'zm-label' }, 'Итог'), bad ? badge('zm-bad', 'есть поломка') : warn ? badge('zm-warn', 'работает, есть замечания') : badge('zm-ok', 'всё в порядке')));
-				diag.forEach(function(i) { checkCard.appendChild(chkRow(badge(CLS[i[0]] || 'zm-off', TXT[i[0]] || i[0]), E('span', {}, i[1]))); });
-			}
-			checkCard.appendChild(E('div', { 'class': 'zm-actions' }, [
-				E('button', { 'class': 'cbi-button', 'disabled': diagBusy || busy ? '' : null, 'click': runDiag }, diagBusy ? 'Проверяем…' : 'Проверить')
-			]));
-		}
-
-		function render() {
-			renderWarn();
-			renderMain();
-			renderWhat();
-			renderSet();
-			renderCheck();
-			syncBar();
-		}
-
-		fillInputs();
-		render();
-		wrap.appendChild(warnBox);
-		wrap.appendChild(mainCard);
-		wrap.appendChild(whatCard);
-		wrap.appendChild(setCard);
-		wrap.appendChild(checkCard);
-		wrap.appendChild(bar);
-		if (data.busy) {
-			busy = true;
-			render();
-			zm.pollJob('obmanka', logEl, function(ok) {
-				busy = false;
-				zm.toast(ok ? 'Готово' : 'Не получилось — причина в журнале ниже', ok ? 'info' : 'error');
-				refresh().then(fillInputs);
-			});
-		}
-		return wrap;
-	},
-
-	handleSaveApply: null,
-	handleSave: null,
-	handleReset: null
-});
-ZM_INSTALLER_EOF
-chmod 0644 '/www/luci-static/resources/view/zapret-manager/obmanka.js'
 
 
 mkdir -p /www/luci-static/resources/bytetube
@@ -33482,7 +32620,6 @@ var ICONS = {
 	arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>',
 	alert: '<path d="M12 3.5l9.5 16.5h-19L12 3.5z"/><path d="M12 10v4.5M12 17.3v.2"/>',
 	fork: '<path d="M4.2 3.6 8.6 7.6Q12 6.6 15.4 7.6L19.8 3.6Q20.9 8.4 19.1 11.8L20.4 13.1Q16.6 14.6 14.5 18.6Q12 21.4 9.5 18.6Q7.4 14.6 3.6 13.1L4.9 11.8Q3.1 8.4 4.2 3.6Z" stroke-linejoin="round"/><path d="M8.3 11.9 10.1 12.8M15.7 11.9 13.9 12.8"/><circle cx="12" cy="17.3" r=".9" fill="currentColor" stroke="none"/>',
-	mask: '<path d="M2.8 8.2c3-1.7 6-1.9 9.2-.3 3.2-1.6 6.2-1.4 9.2.3-.1 4.6-2.2 8-5.6 8-1.6 0-2.6-1-3.6-2.4-1 1.4-2 2.4-3.6 2.4-3.4 0-5.5-3.4-5.6-8z"/><path d="M6.2 11.2c.9-.9 2.3-.9 3.2 0M14.6 11.2c.9-.9 2.3-.9 3.2 0"/>',
 	route: '<circle cx="6" cy="18.5" r="2.2"/><circle cx="18" cy="5.5" r="2.2"/><path d="M8.2 18.5h7.3a3.3 3.3 0 0 0 0-6.6h-7a3.3 3.3 0 0 1 0-6.6h7.3"/>',
 	tunnel: '<path d="M3 20V11a9 9 0 0 1 18 0v9"/><path d="M7 20v-8a5 5 0 0 1 10 0v8"/><path d="M3 20h18"/>',
 	terminal: '<rect x="3" y="4.5" width="18" height="15" rx="2.2"/><path d="M7 9.5l3 2.5-3 2.5M12.5 15h4.5"/>',
@@ -33655,7 +32792,6 @@ var ROUTES = [
 	{ id: 'zapret2', title: 'Zapret2', sub: 'Установка и управление Zapret2', icon: 'bolt', group: 'Обход блокировок', dot: 'zapret2' },
 	{ id: 'steer', title: 'Steer', sub: 'Выбранные сервисы через WARP или VPN', icon: 'route', group: 'Обход блокировок', dot: 'steer' },
 	{ id: 'forkozz', title: 'Forkozz', sub: 'Выбранные сервисы через ваш сервер, подписку или туннель', icon: 'fork', group: 'Обход блокировок', dot: 'forkop' },
-	{ id: 'obmanka', title: 'Obmanka', sub: 'Маскировка трафика под звонки и сайты', icon: 'mask', group: 'Обход блокировок', dot: 'obmanka' },
 	{ id: 'bytetube', title: 'ByeTube', sub: 'YouTube через ByeDPI', icon: 'play', group: 'Обход блокировок', dot: 'bytetube' },
 	{ id: 'tgproxy', title: 'TG WS Proxy', sub: 'Прокси для Telegram', icon: 'send', group: 'Обход блокировок', dot: 'tg' },
 	{ id: 'mixomo', title: 'Mixomo', sub: 'Mihomo, MagiTrickle и WARP', icon: 'layers', group: 'Обход блокировок', dot: 'mixomo' },
