@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 2.74
+# Version: 2.75
 ZM_VERSION_EOF
 set -e
 
@@ -5142,7 +5142,7 @@ _zm_update_fetch() {
 
 _zm_job_label() {
 	case "$1" in
-		steer) echo "Steer" ;; awg) echo "AmneziaWG" ;; forkop) echo "Forkozz" ;; term) echo "Терминал" ;; tailscale) echo "Tailscale" ;;
+		steer) echo "Steer" ;; awg) echo "AmneziaWG" ;; forkop) echo "Forkozz" ;; term) echo "Терминал" ;;
 		mixomo*) echo "Mixomo" ;; bytetube*) echo "ByeTube" ;;
 		install_zapret2|remove_zapret2) echo "Zapret2" ;; install_zapret|remove_zapret) echo "Zapret" ;;
 		strategy_test) echo "тест стратегий" ;; tg*) echo "TG WS Proxy" ;; doh*) echo "DNS over HTTPS" ;;
@@ -6302,7 +6302,7 @@ health() {
 	[ "$(uci -q get firewall.@defaults[0].flow_offloading)" = 1 ] && [ -f /usr/share/firewall4/templates/ruleset.uc ] && [ "$(_flow_offloading_fix_applied)" = false ] && fw=true
 	# плашка нужна, только если по IPv6 действительно ходят: он работает и DNS роутера отдаёт IPv6-адреса сайтов
 	[ -f "$CONF" ] && [ "$(_ipv6_enabled_in_zapret)" = false ] && [ "$(_zm_v6_cached)" = live ] && v6=true
-	local d_zr="$zr" d_zr2="$zr2" d_bt="$bt" d_tg="$tg" d_mx="$mx" d_doh="$doh" d_sr="$sr" d_fk d_awg d_term=0 d_ts=0 awgj fkh
+	local d_zr="$zr" d_zr2="$zr2" d_bt="$bt" d_tg="$tg" d_mx="$mx" d_doh="$doh" d_sr="$sr" d_fk d_awg d_term=0 awgj fkh
 	[ "$zr" = 2 ] && d_zr=4
 	[ "$zr2" = 2 ] && d_zr2=4
 	if [ "$bt" = 2 ]; then case "$(/usr/bin/bytetube status 2>/dev/null)" in *'"enabled":true'*) ;; *) d_bt=4 ;; esac; fi
@@ -6316,12 +6316,11 @@ health() {
 	if _term_installed; then
 		if _term_running; then d_term=1; elif _term_enabled; then d_term=2; else d_term=4; fi
 	fi
-	d_ts="$(_ts_health)"
-	printf '{"dots":{"zapret":%s,"zapret2":%s,"bytetube":%s,"tg":%s,"mixomo":%s,"doh":%s,"hosts":%s,"steer":%s,"forkop":%s,"awg":%s,"term":%s,"ts":%s},' \
-		"$d_zr" "$d_zr2" "$d_bt" "$d_tg" "$d_mx" "$d_doh" "$hs" "$d_sr" "${d_fk:-0}" "${d_awg:-0}" "$d_term" "${d_ts:-0}"
-	printf '"zapret":%s,"zapret2":%s,"bytetube":%s,"tg":%s,"mixomo":%s,"doh":%s,"hosts":%s,"steer":%s,"steer_off":%s,"steer_exit":"%s","awg":%s,"forkop":%s,"flow_warn":%s,"ipv6_warn":%s,"ts":%s,"reboot_hint":"%s"}\n' \
+	printf '{"dots":{"zapret":%s,"zapret2":%s,"bytetube":%s,"tg":%s,"mixomo":%s,"doh":%s,"hosts":%s,"steer":%s,"forkop":%s,"awg":%s,"term":%s},' \
+		"$d_zr" "$d_zr2" "$d_bt" "$d_tg" "$d_mx" "$d_doh" "$hs" "$d_sr" "${d_fk:-0}" "${d_awg:-0}" "$d_term"
+	printf '"zapret":%s,"zapret2":%s,"bytetube":%s,"tg":%s,"mixomo":%s,"doh":%s,"hosts":%s,"steer":%s,"steer_off":%s,"steer_exit":"%s","awg":%s,"forkop":%s,"flow_warn":%s,"ipv6_warn":%s,"reboot_hint":"%s"}\n' \
 		"$zr" "$zr2" "$bt" "$tg" "$mx" "$doh" "$hs" "$sr" \
-		"$([ -f /etc/zm-steer/stopped ] && echo true || echo false)" "$sx" "$awgj" "$fkh" "$fw" "$v6" "${d_ts:-0}" "$(esc "$(_zm_reboot_hint_get)")"
+		"$([ -f /etc/zm-steer/stopped ] && echo true || echo false)" "$sx" "$awgj" "$fkh" "$fw" "$v6" "$(esc "$(_zm_reboot_hint_get)")"
 }
 
 VERSIONS_CACHE="$ZM_STATE_DIR/versions.json"
@@ -13241,7 +13240,11 @@ steer_action() {
 		dnslog)
 			stl_present && stl_running || { echo '{"error":"Steer не запущен"}'; return 1; }
 			w="$(_stl_t 15 steer dns-log 2>/dev/null | tr -d '\n\r')"
-			case "$w" in '{'*'"names"'*) printf '%s\n' "$w" ;; *) echo '{"error":"ядро Steer не отдало журнал имён — нужна версия 2.0 или новее"}'; return 1 ;; esac ;;
+			case "$w" in '{'*'"names"'*) ;; *) echo '{"error":"ядро Steer не отдало журнал имён — нужна версия 2.0 или новее"}'; return 1 ;; esac
+			mkdir -p "$ST_RUN"
+			printf '%s\n' "$w" > "$ST_RUN/dnslog.$$"
+			_st_dnslog_fix "$ST_RUN/dnslog.$$" 2>/dev/null | grep . || printf '%s\n' "$w"
+			rm -f "$ST_RUN/dnslog.$$" ;;
 		wfix_reset)
 			rm -f "$ST_WFIX_STATE"; printf '{"ok":true}\n' ;;
 		warp_own_get)
@@ -14432,407 +14435,6 @@ term_action() {
 			_term_installed || { echo '{"error":"терминал не установлен"}'; return 1; }
 			_job_alive term && { echo '{"error":"дождитесь окончания текущей операции"}'; return 1; }
 			_term_start >/dev/null 2>&1 || { echo '{"error":"ttyd не запустился — смотрите журнал роутера"}'; return 1; }
-			printf '{"ok":true}\n' ;;
-		*) echo '{"error":"неизвестное действие"}'; return 1 ;;
-	esac
-}
-
-# ---------- Tailscale: удалённый доступ к роутеру и домашней сети ----------
-TS_BIN="/usr/sbin/tailscale"
-TS_DIR="/etc/zm-tailscale"
-TS_UP_OUT="$JOBS_DIR/ts-up.out"
-TS_UP_BG="$JOBS_DIR/ts-up.bg"
-TS_KEY="$JOBS_DIR/ts.key"
-TS_HEALTH="$JOBS_DIR/ts-health"
-TS_URL_OFFICIAL="https://controlplane.tailscale.com"
-TS_URL_ROUTERICH="https://rc.routerich.ru"
-TS_NEED_KB=25600
-
-_ts_say() { echo "==> $*"; }
-_ts_installed() { [ -x /usr/sbin/tailscaled ] && [ -e "$TS_BIN" ]; }
-_ts_running() { pidof tailscaled >/dev/null 2>&1; }
-_ts_enabled() { ls /etc/rc.d/S*tailscale >/dev/null 2>&1; }
-_ts_version() { "$TS_BIN" version 2>/dev/null | awk 'NR == 1 { sub(/-r?[0-9]+$/, "", $1); print $1 }'; }
-_ts_cli() { local s="$1"; shift; _doh_t "$s" "$TS_BIN" "$@"; }
-_ts_state() { _ts_cli 6 status --json --peers=false 2>/dev/null | jsonfilter -e '@.BackendState' 2>/dev/null; }
-_ts_server() { local s; s="$(head -n1 "$TS_DIR/server" 2>/dev/null)"; echo "${s:-official}"; }
-_ts_server_url() {
-	case "$1" in
-		''|official) echo "$TS_URL_OFFICIAL" ;;
-		routerich) echo "$TS_URL_ROUTERICH" ;;
-		*) echo "${1%/}" ;;
-	esac
-}
-_ts_server_ok() {
-	case "$1" in official|routerich) return 0 ;; esac
-	_zm_re "$1" '^https?://[A-Za-z0-9.-]+(:[0-9]{1,5})?(/[A-Za-z0-9._~/%-]*)?$'
-}
-_ts_owned() { grep -qxF "$1" "$TS_DIR/owned" 2>/dev/null; }
-_ts_own() { mkdir -p "$TS_DIR"; _ts_owned "$1" || echo "$1" >> "$TS_DIR/owned"; }
-
-# 192.168.1.1 24 → 192.168.1.0/24
-_ts_net() {
-	awk -v ip="$1" -v p="$2" 'BEGIN {
-		if (split(ip, o, ".") != 4 || p !~ /^[0-9]+$/ || p < 1 || p > 30) exit 1
-		v = ((o[1] * 256 + o[2]) * 256 + o[3]) * 256 + o[4]; b = 2 ^ (32 - p); v = int(v / b) * b
-		printf "%d.%d.%d.%d/%d\n", int(v / 16777216) % 256, int(v / 65536) % 256, int(v / 256) % 256, v % 256, p
-	}'
-}
-
-# Подсети домашней сети — их роутер откроет устройствам Tailscale
-_ts_subnets() {
-	local n i a m s out=""
-	for n in $(_zm_lan_nets); do
-		i=0
-		while [ "$i" -lt 4 ]; do
-			a="$(ifstatus "$n" 2>/dev/null | jsonfilter -e "@['ipv4-address'][$i].address" 2>/dev/null)"
-			[ -n "$a" ] || break
-			m="$(ifstatus "$n" 2>/dev/null | jsonfilter -e "@['ipv4-address'][$i].mask" 2>/dev/null)"
-			s="$(_ts_net "$a" "$m")" && case " $out " in *" $s "*) ;; *) out="$out $s" ;; esac
-			i=$((i + 1))
-		done
-	done
-	if [ -z "$out" ]; then
-		a="$(_zm_lan_ip)"
-		[ -n "$a" ] && s="$(_ts_net "$a" 24)" && out=" $s"
-	fi
-	echo $out
-}
-
-_ts_hostname() {
-	local h
-	h="$(uci -q get 'system.@system[0].hostname')"
-	h="$(printf '%s' "${h:-OpenWrt}" | tr 'A-Z' 'a-z' | sed 's/[^a-z0-9-]/-/g; s/^-*//; s/-*$//' | cut -c1-63)"
-	echo "${h:-openwrt}"
-}
-
-# Сеть OpenWrt, в которой живёт tailscale0 (своя или созданная раньше вручную)
-_ts_netname() {
-	uci -q -X show network | sed -n "s/^network\.\([^.=]*\)\.device='tailscale0'\$/\1/p" | head -n1
-}
-
-_ts_fwd_has() {
-	local f
-	for f in $(uci -q -X show firewall | sed -n "s/^firewall\.\([^.=]*\)=forwarding\$/\1/p"); do
-		[ "$(uci -q get "firewall.$f.src")" = "$1" ] && [ "$(uci -q get "firewall.$f.dest")" = "$2" ] && return 0
-	done
-	return 1
-}
-
-# Зона файрвола для tailscale0: вход на роутер и проход в домашнюю сеть и интернет (для выхода через дом)
-_ts_fw_setup() {
-	local n z zs lz wz chn=0 chf=0 k=0 p
-	n="$(_ts_netname)"
-	if [ -z "$n" ]; then
-		n=tailscale
-		uci -q get network.tailscale >/dev/null 2>&1 && n=zm_ts
-		uci set "network.$n=interface"
-		uci set "network.$n.proto=none"
-		uci set "network.$n.device=tailscale0"
-		uci commit network
-		_ts_own "net $n"
-		chn=1
-		echo "   ✓ Сетевой интерфейс $n (tailscale0) создан"
-	fi
-	z="$(_zm_zone_of_net "$n")"
-	if [ -z "$z" ]; then
-		if zs="$(_zm_zone_sec tailscale)"; then
-			uci add_list "firewall.$zs.network=$n"
-			_ts_own "zlist $zs $n"
-			z=tailscale
-		else
-			uci set firewall.zm_ts=zone
-			uci set firewall.zm_ts.name=tailscale
-			uci set firewall.zm_ts.input=ACCEPT
-			uci set firewall.zm_ts.output=ACCEPT
-			uci set firewall.zm_ts.forward=ACCEPT
-			uci set firewall.zm_ts.masq=1
-			uci set firewall.zm_ts.mtu_fix=1
-			uci add_list "firewall.zm_ts.network=$n"
-			_ts_own "zone zm_ts"
-			z=tailscale
-		fi
-		chf=1
-		echo "   ✓ Зона файрвола «$z» создана"
-	fi
-	lz="$(_zm_lan_zone)"; wz="$(_zm_wan_zone)"
-	for p in "$z $lz" "$z $wz" "$lz $z"; do
-		set -- $p
-		[ "$1" = "$2" ] && continue
-		k=$((k + 1))
-		_ts_fwd_has "$1" "$2" && continue
-		uci set "firewall.zm_ts_f$k=forwarding"
-		uci set "firewall.zm_ts_f$k.src=$1"
-		uci set "firewall.zm_ts_f$k.dest=$2"
-		_ts_own "fwd zm_ts_f$k"
-		chf=1
-		echo "   ✓ Разрешён проход: $1 → $2"
-	done
-	if [ "$chf" = 1 ]; then uci commit firewall; fi
-	[ "$chn" = 1 ] && /etc/init.d/network reload >/dev/null 2>&1
-	[ "$chf" = 1 ] && /etc/init.d/firewall reload >/dev/null 2>&1
-	[ "$chn$chf" = 00 ] && echo "   ✓ Сеть и файрвол уже настроены"
-	return 0
-}
-
-_ts_fw_remove() {
-	local l a b c chn=0 chf=0
-	[ -s "$TS_DIR/owned" ] || return 0
-	while read -r a b c; do
-		case "$a" in
-			net) uci -q delete "network.$b" && chn=1 ;;
-			zone|fwd) uci -q delete "firewall.$b" && chf=1 ;;
-			zlist) uci -q del_list "firewall.$b.network=$c" && chf=1 ;;
-		esac
-	done < "$TS_DIR/owned"
-	[ "$chn" = 1 ] && { uci commit network; /etc/init.d/network reload >/dev/null 2>&1; }
-	[ "$chf" = 1 ] && { uci commit firewall; /etc/init.d/firewall reload >/dev/null 2>&1; }
-	rm -f "$TS_DIR/owned"
-	echo "   ✓ Интерфейс и правила файрвола, созданные панелью, убраны"
-}
-
-# Файрвол пропускает tailscale0: вход на роутер и проход в домашнюю сеть
-_ts_fw_ok() {
-	local n z s
-	n="$(_ts_netname)"; [ -n "$n" ] || return 1
-	z="$(_zm_zone_of_net "$n")" || return 1
-	s="$(_zm_zone_sec "$z")" || return 1
-	[ "$(uci -q get "firewall.$s.input")" = ACCEPT ] || return 1
-	_ts_fwd_has "$z" "$(_zm_lan_zone)"
-}
-
-_ts_start() {
-	local t=0
-	_ts_installed || { echo "ОШИБКА: Tailscale не установлен"; return 1; }
-	/etc/init.d/tailscale enable >/dev/null 2>&1
-	_ts_running || /etc/init.d/tailscale start >/dev/null 2>&1
-	while [ "$t" -lt 15 ]; do
-		[ -n "$(_ts_state)" ] && return 0
-		sleep 1; t=$((t + 1))
-	done
-	echo "ОШИБКА: служба tailscaled не запустилась — смотрите «Система → Журнал» роутера"
-	return 1
-}
-
-_ts_up_kill() {
-	local p
-	p="$(cat "$TS_UP_BG" 2>/dev/null)"
-	[ -n "$p" ] && kill -0 "$p" 2>/dev/null && _zm_kill_tree "$p"
-	rm -f "$TS_UP_BG"
-}
-
-# Вход в фоне: «tailscale up» ждёт, пока пользователь откроет ссылку. Ссылку и QR-код берём из его вывода
-_ts_up_bg() {
-	local r
-	r="$(_ts_subnets | tr ' ' ',')"
-	_ts_up_kill
-	: > "$TS_UP_OUT"
-	set -- up --reset --json --timeout=1h --accept-dns=false --advertise-exit-node \
-		"--advertise-routes=$r" "--hostname=$(_ts_hostname)" "--login-server=$(_ts_server_url "$(_ts_server)")"
-	[ -s "$TS_KEY" ] && set -- "$@" "--auth-key=file:$TS_KEY"
-	( "$TS_BIN" "$@" >>"$TS_UP_OUT" 2>&1; echo "__RC__ $?" >>"$TS_UP_OUT"; rm -f "$TS_KEY" ) </dev/null >/dev/null 2>&1 &
-	echo $! > "$TS_UP_BG"
-	rm -f "$TS_HEALTH"
-}
-
-# Ждём ссылку для входа, подключение или ошибку
-_ts_up_wait() {
-	local t=0 lim="${1:-12}"
-	while [ "$t" -lt "$lim" ]; do
-		sleep 1; t=$((t + 1))
-		grep -q -e '"AuthURL"' -e '^__RC__' "$TS_UP_OUT" 2>/dev/null && break
-		[ "$(_ts_state)" = Running ] && [ "$t" -ge 3 ] && break
-	done
-	return 0
-}
-
-_ts_up_field() { sed -n "s/^[[:space:]]*\"$1\": \"\\([^\"]*\\)\".*/\\1/p" "$TS_UP_OUT" 2>/dev/null | tail -n1; }
-
-# Текст ошибки «tailscale up», если он завершился неудачно
-_ts_up_error() {
-	local rc
-	rc="$(sed -n 's/^__RC__ //p' "$TS_UP_OUT" 2>/dev/null | tail -n1)"
-	[ -n "$rc" ] && [ "$rc" != 0 ] || return 0
-	grep -v -e '^__RC__' -e '^[[:space:]]*[{}]' -e '^[[:space:]]*"' -e '^Warning' -e '^See https' -e '^$' "$TS_UP_OUT" 2>/dev/null | tail -n 3
-}
-
-_ts_health_code() {
-	local st
-	_ts_installed || { echo 0; return; }
-	if ! _ts_running; then _ts_enabled && echo 2 || echo 4; return; fi
-	st="$(_ts_state)"
-	case "$st" in
-		Running) echo 1 ;;
-		NeedsLogin|NeedsMachineAuth|Starting) echo 3 ;;
-		Stopped) echo 4 ;;
-		*) echo 2 ;;
-	esac
-}
-
-# Для точки в меню и дашборда: опрос раз в 20 секунд, чтобы не запускать tailscale при каждом обновлении
-_ts_health() {
-	local now t c
-	_ts_installed || { echo 0; return; }
-	now="$(date +%s)"
-	if [ -f "$TS_HEALTH" ]; then
-		t="$(date -r "$TS_HEALTH" +%s 2>/dev/null || echo 0)"
-		[ $((now - t)) -lt 20 ] && { cat "$TS_HEALTH"; return; }
-	fi
-	c="$(_ts_health_code)"
-	echo "$c" > "$TS_HEALTH"
-	echo "$c"
-}
-
-ts_status() {
-	local inst=false run=false en=false raw="" free qr="" uurl="" uerr="" fw=false bg=false p
-	_ts_installed && inst=true
-	_ts_running && run=true
-	_ts_enabled && en=true
-	if [ "$run" = true ]; then
-		raw="$(_ts_cli 8 status --json 2>/dev/null)"
-		printf '%s' "$raw" | jsonfilter -e '@.BackendState' >/dev/null 2>&1 || raw=""
-	fi
-	[ -n "$raw" ] || raw=null
-	free="$(df -k /overlay 2>/dev/null | awk 'NR==2 {print $4}')"
-	[ -n "$free" ] || free="$(df -k / 2>/dev/null | awk 'NR==2 {print $4}')"
-	p="$(cat "$TS_UP_BG" 2>/dev/null)"
-	[ -n "$p" ] && kill -0 "$p" 2>/dev/null && bg=true
-	if [ -s "$TS_UP_OUT" ]; then
-		# ссылка и QR нужны, только пока «tailscale up» ждёт входа; ошибка — когда он уже завершился
-		if [ "$bg" = true ]; then
-			uurl="$(_ts_up_field AuthURL)"
-			qr="$(_ts_up_field QR)"
-			case "$qr" in data:image/png\;base64,*) ;; *) qr="" ;; esac
-		fi
-		uerr="$(_ts_up_error)"
-	fi
-	[ "$inst" = true ] && _ts_fw_ok && fw=true
-	printf '{"installed":%s,"running":%s,"enabled":%s,"version":"%s","server":"%s","server_url":"%s","subnets":"%s","hostname":"%s","lan_ip":"%s","fw_ok":%s,"free_kb":%s,"need_kb":%s,"up_url":"%s","up_qr":"%s","up_error":"%s","up_wait":%s,"job":%s,"ts":%s}\n' \
-		"$inst" "$run" "$en" "$(esc "$(_ts_version)")" "$(esc "$(_ts_server)")" "$(esc "$(_ts_server_url "$(_ts_server)")")" \
-		"$(esc "$(_ts_subnets)")" "$(esc "$(_ts_hostname)")" "$(esc "$(_zm_lan_ip)")" "$fw" "${free:-0}" "$TS_NEED_KB" \
-		"$(esc "$uurl")" "$(esc "$qr")" "$(esc "$uerr")" "$bg" \
-		"$(_job_alive tailscale && echo true || echo false)" "$raw"
-}
-
-# Сервер и ключ: «official|», «routerich|ключ», «https://мой.сервер|»
-_ts_take_server() {
-	local srv="${1%%|*}" key=""
-	case "$1" in *'|'*) key="${1#*|}" ;; esac
-	key="$(printf '%s' "$key" | tr -d ' \t\r\n')"
-	[ -n "$srv" ] || srv=official
-	_ts_server_ok "$srv" || { echo '{"error":"адрес сервера должен начинаться с https:// — например https://headscale.example.com"}'; return 1; }
-	case "$key" in *[!A-Za-z0-9_:-]*) echo '{"error":"в ключе есть лишние символы — скопируйте его целиком ещё раз"}'; return 1 ;; esac
-	mkdir -p "$TS_DIR"
-	TS_OLD_SERVER="$(_ts_server)"
-	echo "$srv" > "$TS_DIR/server"
-	rm -f "$TS_KEY"
-	if [ -n "$key" ]; then (umask 077; printf '%s\n' "$key" > "$TS_KEY"); fi
-	return 0
-}
-
-do_ts_install() {
-	local free st ip
-	if ! _ts_installed; then
-		_ts_say "Проверяем свободное место"
-		free="$(df -k /overlay 2>/dev/null | awk 'NR==2 {print $4}')"
-		[ -n "$free" ] || free="$(df -k / 2>/dev/null | awk 'NR==2 {print $4}')"
-		if [ -n "$free" ] && [ "$free" -lt "$TS_NEED_KB" ]; then
-			echo "ОШИБКА: мало места: свободно $((free / 1024)) МБ, Tailscale нужно около $((TS_NEED_KB / 1024)) МБ"
-			return 1
-		fi
-		[ -n "$free" ] && echo "   ✓ Свободно $((free / 1024)) МБ"
-		_zm_net_prepare "$(_zm_feed_host)" || return 1
-		_ts_say "Обновляем список пакетов"
-		$UPDATE || echo "!! Список пакетов не обновился — пробуем с тем, что есть"
-		_ts_say "Устанавливаем Tailscale — пакет большой, это пара минут"
-		$INSTALL tailscale || { echo "ОШИБКА: tailscale не установился — проверьте интернет и свободное место"; return 1; }
-		_ts_installed || { echo "ОШИБКА: файла /usr/sbin/tailscaled нет — пакет встал не полностью"; return 1; }
-	fi
-	_ts_say "Запускаем службу Tailscale"
-	_ts_start || return 1
-	echo "   ✓ Служба работает и включена в автозапуск"
-	_ts_say "Настраиваем сеть и файрвол"
-	_ts_fw_setup
-	_ts_say "Подключаемся к серверу $(_ts_server_url "$(_ts_server)")"
-	echo "   → Открываем домашнюю сеть: $(_ts_subnets)"
-	_ts_up_bg
-	_ts_up_wait 25
-	st="$(_ts_state)"
-	if [ "$st" = Running ]; then
-		ip="$(_ts_cli 5 ip -4 2>/dev/null | head -n1)"
-		_ts_say "Готово: роутер в сети Tailscale${ip:+, адрес $ip}"
-	elif [ -n "$(_ts_up_field AuthURL)" ]; then
-		_ts_say "Готово: осталось войти — нажмите «Войти» на странице"
-	elif [ -n "$(_ts_up_error)" ]; then
-		echo "ОШИБКА: не получилось подключиться к серверу:"
-		_ts_up_error | sed 's/^/   /'
-		return 1
-	else
-		_ts_say "Готово: подключение продолжается — через пару секунд на странице появится кнопка «Войти»"
-	fi
-}
-
-do_ts_remove() {
-	local rc=0
-	_ts_up_kill
-	rm -f "$TS_KEY" "$TS_UP_OUT" "$TS_HEALTH"
-	if _ts_running; then
-		_ts_say "Отключаем роутер от аккаунта Tailscale"
-		_ts_cli 15 logout >/dev/null 2>&1 && echo "   ✓ Роутер вышел из аккаунта" || echo "   ! Выйти не получилось — удалите роутер в списке устройств Tailscale сами"
-	fi
-	_ts_say "Останавливаем службу"
-	[ -x /etc/init.d/tailscale ] && { /etc/init.d/tailscale stop >/dev/null 2>&1; /etc/init.d/tailscale disable >/dev/null 2>&1; }
-	_ts_running && { killall tailscaled >/dev/null 2>&1; sleep 1; killall -9 tailscaled >/dev/null 2>&1; }
-	[ -x /usr/sbin/tailscaled ] && /usr/sbin/tailscaled --cleanup >/dev/null 2>&1
-	echo "   ✓ Служба остановлена"
-	_ts_say "Убираем настройки сети"
-	_ts_fw_remove
-	_ts_say "Удаляем Tailscale"
-	_zm_pkg_wipe luci-i18n-tailscale-ru luci-app-tailscale luci-app-tailscale-community tailscale || rc=1
-	_zm_wipe /etc/config/tailscale /etc/config/tailscale-opkg /etc/config/tailscale.apk-new /etc/tailscale /etc/init.d/tailscale /etc/rc.d/*tailscale /var/run/tailscale "$TS_DIR" || rc=1
-	rm -f /tmp/luci-indexcache* /tmp/luci-modulecache/* 2>/dev/null
-	_ts_installed && rc=1
-	_zm_rm_done "$rc" "Tailscale"
-}
-
-ts_action() {
-	local a="$1" m="$2" j st
-	case "$a" in
-		install|remove)
-			_job_alive tailscale && { echo '{"error":"дождитесь окончания текущей операции"}'; return 1; }
-			if j="$(_zm_busy_job)"; then printf '{"error":"%s"}\n' "$(esc "Сейчас идёт операция: $j — дождитесь её окончания")"; return 1; fi
-			if [ "$a" = install ]; then
-				_ts_take_server "$m" || return 1
-				job_start tailscale do_ts_install
-			else
-				job_start tailscale do_ts_remove
-			fi ;;
-		connect)
-			_ts_installed || { echo '{"error":"Tailscale не установлен"}'; return 1; }
-			_job_alive tailscale && { echo '{"error":"дождитесь окончания текущей операции"}'; return 1; }
-			TS_OLD_SERVER="$(_ts_server)"
-			if [ -n "$m" ]; then _ts_take_server "$m" || return 1; fi
-			_ts_start >/dev/null 2>&1 || { echo '{"error":"служба tailscaled не запустилась — смотрите журнал роутера"}'; return 1; }
-			_ts_fw_setup >/dev/null 2>&1
-			st="$(_ts_state)"
-			# другой сервер — сначала выходим из прежнего аккаунта, иначе tailscale откажется
-			if [ "$TS_OLD_SERVER" != "$(_ts_server)" ] && [ "$st" != NeedsLogin ] && [ "$st" != NoState ]; then
-				_ts_cli 15 logout >/dev/null 2>&1
-			fi
-			_ts_up_bg
-			_ts_up_wait 12
-			printf '{"ok":true}\n' ;;
-		down)
-			_ts_installed || { echo '{"error":"Tailscale не установлен"}'; return 1; }
-			_ts_up_kill
-			_ts_cli 10 down >/dev/null 2>&1 || { echo '{"error":"не получилось отключить — служба не отвечает"}'; return 1; }
-			rm -f "$TS_HEALTH"
-			printf '{"ok":true}\n' ;;
-		logout)
-			_ts_installed || { echo '{"error":"Tailscale не установлен"}'; return 1; }
-			_ts_up_kill
-			rm -f "$TS_UP_OUT" "$TS_KEY" "$TS_HEALTH"
-			_ts_cli 15 logout >/dev/null 2>&1 || { echo '{"error":"не получилось выйти — служба не отвечает"}'; return 1; }
 			printf '{"ok":true}\n' ;;
 		*) echo '{"error":"неизвестное действие"}'; return 1 ;;
 	esac
@@ -16520,6 +16122,98 @@ _st_where() {
 	rm -f "$man" "$man.x" "$res"
 }
 
+# Журнал имён («Недавние сайты»): ядро ставит у имени имя КАНАЛА, а не правила. Правила с одним выходом
+# (у Steer это все выбранные сервисы — они идут в один туннель) ядро сливает в общий набор и зовёт его по
+# первому доменному правилу. Поэтому forum.ru-board.com из «Заблокированных сайтов» показывался как
+# «WhatsApp», если WhatsApp выбран раньше. Настоящий сервис находим сами — по спискам выбранных сервисов
+# (model.svc) теми же правилами, что ядро и _st_where: домен — с поддоменами, «=имя» — только имя, «*.имя» —
+# только поддомены. Из больших списков берём лишь строки, которые вообще могут подойти к именам журнала, —
+# памяти почти не нужно. Имя есть в нескольких выбранных сервисах — называем все по порядку правил. Имя не
+# нашлось в текстовых списках (попало по подсети, по ключевому слову .srs) — сервис не называем, лишь выход.
+_st_dnslog_fix() {
+	local src="$1" man="$ST_RUN/dlfix.$$" nl="$ST_RUN/dlfix.$$.n" map="$ST_RUN/dlfix.$$.m" tab x path nm
+	tab="$(printf '\t')"
+	# один выбранный сервис — канал и так назван им, править нечего
+	if [ ! -s "$ST_DIR/model.svc" ] || [ "$(grep -c '^svc	' "$ST_DIR/model.svc")" -le 1 ]; then cat "$src"; return 0; fi
+	mkdir -p "$ST_RUN/srsdump"
+	awk -F'\t' '$1 == "svc" { nm = $3; next } ($1 == "dom" || $1 == "srs") && nm != "" { print nm "\t" $2 }' "$ST_DIR/model.svc" |
+	while IFS="$tab" read -r nm path; do
+		case "$path" in
+			*.srs)
+				# та же раскладка .srs в текст, что у «Куда пойдёт запрос» (_st_where), — общий кэш
+				x="$ST_RUN/srsdump/$(printf '%s' "$path" | tr -c 'A-Za-z0-9_.-' '_')"
+				if [ -s "$path" ] && { { [ ! -s "$x.dom" ] && [ ! -s "$x.pfx" ]; } || [ "$path" -nt "$x.dom" ]; }; then
+					rm -f "$x.dom" "$x.pfx"
+					steer srs-read "$path" --out "$x.dom" --prefixes-out "$x.pfx" >/dev/null 2>&1 || rm -f "$x.dom" "$x.pfx"
+				fi
+				[ -s "$x.dom" ] && printf '%s\t%s\n' "$nm" "$x.dom" ;;
+			*) [ -s "$path" ] && printf '%s\t%s\n' "$nm" "$path" ;;
+		esac
+	done > "$man"
+	# имена журнала, попавшие в канал
+	grep -o '{"name":"[^"]*","channel":"' "$src" | sed 's/^{"name":"//; s/",.*$//' | awk '!s[$0]++' > "$nl"
+	if [ ! -s "$man" ] || [ ! -s "$nl" ]; then cat "$src"; rm -f "$man" "$nl"; return 0; fi
+	awk -F'\t' '
+		FNR == NR {
+			n = $0; sub(/\.$/, "", n); has[n] = 1; ord[++nn] = $0; key[$0] = n
+			s = n
+			while (1) { suf[s] = 1; i = index(s, "."); if (!i) break; s = substr(s, i + 1) }
+			next
+		}
+		function add(k, lab) { if (!((k, lab) in got)) { got[k, lab] = 1; hit[k] = hit[k] SUBSEP lab } }
+		{
+			lab = $1; path = $2
+			if (!(lab in rank)) rank[lab] = ++nr
+			while ((getline l < path) > 0) {
+				sub(/[#;].*$/, "", l); gsub(/^[ \t\r]+|[ \t\r]+$/, "", l)
+				if (l == "") continue
+				l = tolower(l)
+				c = substr(l, 1, 1)
+				if (c == "=") { w = substr(l, 2); if (w in has) add("e" SUBSEP w, lab); continue }
+				if (c == "*" && substr(l, 2, 1) == ".") { w = substr(l, 3); if (w in suf) add("s" SUBSEP w, lab); continue }
+				if (l ~ /^re:/ || l ~ /[*? \t\/]/) continue
+				if (l in suf) add("d" SUBSEP l, lab)
+			}
+			close(path)
+		}
+		END {
+			for (j = 1; j <= nn; j++) {
+				n = key[ord[j]]; all = ""; delete pick
+				s = n
+				while (1) {
+					all = all hit["d" SUBSEP s]
+					if (s == n) all = all hit["e" SUBSEP s]; else all = all hit["s" SUBSEP s]
+					i = index(s, "."); if (!i) break; s = substr(s, i + 1)
+				}
+				m = split(all, p, SUBSEP); out = ""
+				# по порядку правил (порядок выбранных сервисов), без повторов
+				for (r = 1; r <= nr; r++) for (t = 2; t <= m; t++) if (rank[p[t]] == r && !(p[t] in pick)) {
+					pick[p[t]] = 1; out = out (out == "" ? "" : ", ") p[t]
+				}
+				print ord[j] "\t" out
+			}
+		}' "$nl" "$man" > "$map"
+	# переписываем поле channel у имён журнала; объекты upstreams/other с «name» без channel не трогаем
+	awk -v map="$map" -v direct="$ST_DIRECT_OUT" '
+		BEGIN { while ((getline l < map) > 0) { k = index(l, "\t"); n = substr(l, 1, k - 1); v = substr(l, k + 1); gsub(/["\\]/, "", v); lab[n] = v; known[n] = 1 } close(map) }
+		{
+			sep = "{\"name\":\""; pre = "\",\"channel\":\""; rest = $0; o = ""
+			while ((i = index(rest, sep)) > 0) {
+				o = o substr(rest, 1, i - 1 + length(sep)); rest = substr(rest, i + length(sep))
+				k = index(rest, "\""); nm = substr(rest, 1, k - 1); t = substr(rest, k)
+				if (!(nm in known) || substr(t, 1, length(pre)) != pre) continue
+				t = substr(t, length(pre) + 1); e = 0
+				for (z = 1; z <= length(t); z++) { c = substr(t, z, 1); if (c == "\\") { z++; continue } if (c == "\"") { e = z; break } }
+				if (!e) continue
+				after = substr(t, e + 1)
+				if (index(after, ",\"out\":\"" direct "\"") == 1) continue
+				o = o nm "\",\"channel\":" (lab[nm] != "" ? "\"" lab[nm] "\"" : "null"); rest = after
+			}
+			print o rest
+		}' "$src"
+	rm -f "$man" "$nl" "$map"
+}
+
 steer_explain() {
 	local q host="" ip="" fd where
 	q="$(_zm_route_target "$1")" || { echo '{"error":"введите домен (например, youtube.com) или IP-адрес"}'; return 1; }
@@ -16966,8 +16660,6 @@ case "$cmd" in
 	awg_action)                           awg_action "$1" "$2" ;;
 	term_status)                          term_status ;;
 	term_action)                          term_action "$1" "$2" ;;
-	ts_status)                            ts_status ;;
-	ts_action)                            ts_action "$1" "$2" ;;
 	steer_status)                         steer_status ;;
 	steer_action)                         steer_action "$1" "$2" ;;
 	bytetube_action)                      bytetube_action "$1" ;;
@@ -19845,8 +19537,6 @@ list_methods() {
 	json_add_object "awg_action";             json_add_string "action" "string"; json_add_string "mode" "string"; json_close_object
 	json_add_object "term_status";            json_close_object
 	json_add_object "term_action";            json_add_string "action" "string"; json_add_string "mode" "string"; json_close_object
-	json_add_object "ts_status";              json_close_object
-	json_add_object "ts_action";              json_add_string "action" "string"; json_add_string "mode" "string"; json_close_object
 	json_add_object "steer_status";           json_close_object
 	json_add_object "steer_action";           json_add_string "action" "string"; json_add_string "mode" "string"; json_close_object
 	json_add_object "bytetube_action";        json_add_string "action" "string"; json_close_object
@@ -19959,8 +19649,6 @@ call_method() {
 		awg_action)              json_get_var action action; json_get_var mode mode; printf '%s' "$mode" | "$BACKEND" awg_action "$action" @stdin ;;
 		term_status)             "$BACKEND" term_status ;;
 		term_action)             json_get_var action action; json_get_var mode mode; printf '%s' "$mode" | "$BACKEND" term_action "$action" @stdin ;;
-		ts_status)               "$BACKEND" ts_status ;;
-		ts_action)               json_get_var action action; json_get_var mode mode; printf '%s' "$mode" | "$BACKEND" ts_action "$action" @stdin ;;
 		steer_status)            "$BACKEND" steer_status ;;
 		steer_action)            json_get_var action action; json_get_var mode mode; printf '%s' "$mode" | "$BACKEND" steer_action "$action" @stdin ;;
 		bytetube_action)         json_get_var action action; "$BACKEND" bytetube_action "$action" ;;
@@ -20039,7 +19727,6 @@ cat > '/usr/share/rpcd/acl.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF'
 					"versions",
 					"awg_status",
 					"term_status",
-					"ts_status",
 					"steer_status",
 					"forkop_status",
 					"forkop_config_get",
@@ -20118,7 +19805,6 @@ cat > '/usr/share/rpcd/acl.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF'
 					"bytetube_action",
 					"awg_action",
 					"term_action",
-					"ts_action",
 					"steer_action",
 					"forkop_config_set",
 					"forkop_action",
@@ -20196,11 +19882,6 @@ cat > '/usr/share/luci/menu.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF
 		"order": 53,
 		"action": { "type": "view", "path": "zapret-manager/terminal" }
 	},
-	"admin/services/zapret-manager/tailscale": {
-		"title": "Tailscale",
-		"order": 54,
-		"action": { "type": "view", "path": "zapret-manager/tailscale" }
-	},
 	"admin/services/zapret-manager/tgproxy": {
 		"title": "TG WS Proxy",
 		"order": 55,
@@ -20261,8 +19942,6 @@ var callAwgStatus = zmDeclare({ object: 'zapret-manager', method: 'awg_status', 
 var callAwgAction = zmDeclare({ object: 'zapret-manager', method: 'awg_action', params: ['action', 'mode'], expect: {} });
 var callTermStatus = zmDeclare({ object: 'zapret-manager', method: 'term_status', expect: {} });
 var callTermAction = zmDeclare({ object: 'zapret-manager', method: 'term_action', params: ['action', 'mode'], expect: {} });
-var callTsStatus = zmDeclare({ object: 'zapret-manager', method: 'ts_status', expect: {} });
-var callTsAction = zmDeclare({ object: 'zapret-manager', method: 'ts_action', params: ['action', 'mode'], expect: {} });
 var callSteerStatus = zmDeclare({ object: 'zapret-manager', method: 'steer_status', expect: {} });
 var callSteerAction = zmDeclare({ object: 'zapret-manager', method: 'steer_action', params: ['action', 'mode'], expect: {} });
 var callSystemInfo = zmDeclare({ object: 'zapret-manager', method: 'system_info', expect: {} });
@@ -21822,8 +21501,6 @@ return baseclass.extend({
 	awgAction: bigArg2(callAwgAction),
 	termStatus: callTermStatus,
 	termAction: bigArg2(callTermAction),
-	tsStatus: callTsStatus,
-	tsAction: bigArg2(callTsAction),
 	steerStatus: callSteerStatus,
 	catalogWatch: catalogWatch,
 	versions: callVersions,
@@ -21954,11 +21631,6 @@ return view.extend({
 				: awgSt === 2 ? zm.badge(false, '', 'туннели не отвечают')
 				: awgSt === 5 ? offBadge('установлен, туннелей нет')
 				: zm.badge(false, '', 'не установлен')));
-			var tsSt = st(h, 'ts', 0);
-			if (tsSt) items.push(row('Tailscale', tsSt === 1 ? zm.badge(true, 'подключён', '')
-				: tsSt === 3 ? warnBadge('нужно войти')
-				: tsSt === 4 ? offBadge('выключен')
-				: zm.badge(false, '', 'не работает')));
 			items.push(row('Домены в hosts', hosts.geohide
 				? zm.badge(true, 'GeoHide ' + hosts.geohide.toUpperCase(), '')
 				: hostsTotal
@@ -23257,405 +22929,6 @@ return view.extend({
 });
 ZM_INSTALLER_EOF
 chmod 0644 '/www/luci-static/resources/view/zapret-manager/terminal.js'
-cat > '/www/luci-static/resources/view/zapret-manager/tailscale.js' << 'ZM_INSTALLER_EOF'
-'use strict';
-'require view';
-'require zapret-manager.common as zm';
-var E = (function(raw) { return function() { var a = Array.prototype.slice.call(arguments), i = a.length - 1; if (i >= 1 && (typeof a[i] === 'string' || typeof a[i] === 'number')) a[i] = [ String(a[i]) ]; return raw.apply(null, a); }; })(window.E);
-
-var SERVERS = [
-	{ id: 'official', name: 'Tailscale', hint: 'Обычный Tailscale: вход через Google, Microsoft, GitHub или Apple. Бесплатно до 100 устройств.' },
-	{ id: 'routerich', name: 'Routerich', hint: 'Сервер Routerich: вход без аккаунтов, по ключу Device Auth Key. Создайте сеть на remote.routerich.ru/create-tailnet и сохраните оба ключа — они показываются один раз.' },
-	{ id: 'custom', name: 'Свой сервер', hint: 'Свой Headscale или другой совместимый сервер.' }
-];
-var ADMIN = { official: 'https://login.tailscale.com/admin/machines', routerich: 'https://remote.routerich.ru/' };
-var OS_NAME = { android: 'Android', iOS: 'iPhone / iPad', windows: 'Windows', macOS: 'macOS', linux: 'Linux', freebsd: 'FreeBSD', openbsd: 'OpenBSD', tvOS: 'Apple TV' };
-
-function badge(cls, text) {
-	return E('span', { 'class': 'zm-badge ' + cls }, [ E('span', { 'class': 'zm-dot' }), text ]);
-}
-function row(label, node) {
-	return E('div', { 'class': 'zm-row' }, [ E('span', { 'class': 'zm-label' }, label), node ]);
-}
-function seg(list, cur, onPick) {
-	return E('div', { 'class': 'zm-seg' }, list.map(function(it) {
-		return E('div', { 'class': 'zm-seg-item' + (cur === it.id ? ' zm-active' : ''), 'click': function() { if (cur !== it.id) onPick(it.id); } }, it.name);
-	}));
-}
-function link(href, text) {
-	return E('a', { 'href': href, 'target': '_blank', 'rel': 'noopener noreferrer' }, text);
-}
-function day(t) {
-	var d = new Date(t);
-	if (isNaN(d.getTime()) || d.getFullYear() < 2000) return '';
-	try { return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' }); } catch (e) { return d.toISOString().slice(0, 10); }
-}
-function ago(t) {
-	var d = new Date(t).getTime();
-	if (isNaN(d) || d < 946684800000) return '';
-	var s = Math.max(0, Math.round((Date.now() - d) / 1000));
-	if (s < 120) return 'только что';
-	if (s < 7200) return Math.round(s / 60) + ' мин назад';
-	if (s < 172800) return Math.round(s / 3600) + ' ч назад';
-	return day(t);
-}
-function v4(list) {
-	list = list || [];
-	for (var i = 0; i < list.length; i++) if (String(list[i]).indexOf('.') > 0) return String(list[i]);
-	return list.length ? String(list[0]) : '';
-}
-function serverName(id) {
-	for (var i = 0; i < SERVERS.length; i++) if (SERVERS[i].id === id) return SERVERS[i].name;
-	return String(id || '').replace(/^https?:\/\//, '');
-}
-
-return view.extend({
-	load: function() {
-		zm.injectCss();
-		return zm.tsStatus().catch(function() { return {}; });
-	},
-
-	render: function(data) {
-		data = data || {};
-		var wrap = E('div', { 'class': 'zm-wrap' });
-		var mainCard = E('div', { 'class': 'zm-card zm-kv' });
-		var helpCard = E('div', { 'class': 'zm-card zm-kv' });
-		var devCard = E('div', { 'class': 'zm-card zm-kv' });
-		var logEl = E('pre', { 'class': 'zm-log' });
-		var busy = false, pending = false, timer = null, wasRunning = null;
-		var pick = { open: false, server: '', url: '', key: '', keyOpen: false };
-
-		function ts() { return data.ts || null; }
-		function state() {
-			if (!data.installed) return 'none';
-			if (!data.running) return 'nodaemon';
-			var t = ts();
-			return (t && t.BackendState) || 'unknown';
-		}
-		function serverId() { return data.server === 'official' || data.server === 'routerich' ? data.server : 'custom'; }
-
-		function alive() { return document.body.contains(wrap); }
-		function schedule(ms) {
-			if (timer) clearTimeout(timer);
-			timer = setTimeout(function() { timer = null; if (alive() && !busy) refresh(); }, ms);
-		}
-		function refresh() {
-			return zm.tsStatus().then(function(res) {
-				data = res || {};
-				var st = state();
-				if (wasRunning === false && st === 'Running') zm.toast('Роутер подключён к Tailscale', 'info');
-				wasRunning = st === 'Running';
-				renderAll();
-				if (data.job && !busy) follow('');
-				else if (st === 'NeedsLogin' || st === 'NeedsMachineAuth' || st === 'Starting' || st === 'NoState' || st === 'unknown' || data.up_wait) schedule(3000);
-				else if (st === 'Running') schedule(30000);
-			}).catch(function() { schedule(5000); });
-		}
-
-		function follow(action) {
-			busy = true;
-			logEl.classList.add('zm-show');
-			renderAll();
-			zm.pollJob('tailscale', logEl, function(ok) {
-				busy = false;
-				zm.toast(ok ? ({ install: 'Tailscale установлен — осталось войти', remove: 'Tailscale удалён' }[action] || 'Готово') : 'Не получилось — подробности в журнале', ok ? 'info' : 'error');
-				refresh();
-			});
-		}
-
-		function job(action, mode, text) {
-			if (busy || pending) { zm.toast('Дождитесь окончания текущей операции', 'warning'); return; }
-			zm.tsAction(action, mode || '').then(function(res) {
-				if (res.error) { zm.toast(res.error, 'error'); return; }
-				zm.toast(text, 'warning');
-				follow(action);
-			}).catch(function() { zm.toast('Роутер не ответил', 'error'); });
-		}
-
-		function quick(action, mode, okText) {
-			if (busy || pending) { zm.toast('Дождитесь окончания текущей операции', 'warning'); return; }
-			pending = true;
-			renderAll();
-			zm.tsAction(action, mode || '').then(function(res) {
-				pending = false;
-				if (res.error) zm.toast(res.error, 'error');
-				else if (okText) zm.toast(okText, 'info');
-				refresh();
-			}).catch(function() { pending = false; zm.toast('Роутер не ответил', 'error'); refresh(); });
-		}
-
-		function btn(cls, text, fn) {
-			return E('button', { 'class': 'cbi-button ' + cls, 'disabled': (busy || pending) ? '' : null, 'click': fn }, text);
-		}
-
-		// Выбор сервера: при установке и при смене аккаунта
-		function serverMode() {
-			var s = pick.server || serverId();
-			if (s === 'custom') {
-				var u = (pick.url || (serverId() === 'custom' ? data.server : '') || '').trim();
-				if (!/^https?:\/\/[A-Za-z0-9.-]+(:[0-9]{1,5})?(\/[A-Za-z0-9._~\/%-]*)?$/.test(u)) { zm.toast('Укажите адрес сервера, например https://headscale.example.com', 'error'); return null; }
-				s = u;
-			}
-			return s + '|' + (pick.keyOpen ? pick.key.trim() : '');
-		}
-
-		function serverPicker() {
-			var cur = pick.server || serverId();
-			var box = E('div', { 'style': 'margin:4px 0 10px' });
-			box.appendChild(row('Сервер', seg(SERVERS, cur, function(id) { pick.server = id; renderAll(); })));
-			var info = SERVERS.filter(function(x) { return x.id === cur; })[0];
-			if (info) box.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:2px' }, info.hint));
-			if (cur === 'custom') {
-				var u = E('input', { 'class': 'cbi-input-text', 'type': 'text', 'placeholder': 'https://headscale.example.com', 'value': pick.url || (serverId() === 'custom' ? data.server : '') || '', 'style': 'max-width:360px; width:100%',
-					'input': function(ev) { pick.url = ev.target.value; } });
-				box.appendChild(row('Адрес сервера', u));
-			}
-			if (!pick.keyOpen) {
-				box.appendChild(E('p', { 'class': 'zm-hint' }, [ E('a', { 'href': '#', 'click': function(ev) { ev.preventDefault(); pick.keyOpen = true; renderAll(); } }, 'У меня есть ключ авторизации (auth key)') ]));
-			} else {
-				var k = E('input', { 'class': 'cbi-input-text', 'type': 'password', 'autocomplete': 'off', 'placeholder': 'tskey-auth-… или ключ вашего сервера', 'value': pick.key, 'style': 'max-width:360px; width:100%',
-					'input': function(ev) { pick.key = ev.target.value; } });
-				box.appendChild(row('Ключ', k));
-				box.appendChild(E('p', { 'class': 'zm-hint' }, 'С ключом роутер войдёт сам, без ссылки. Можно оставить пустым.'));
-			}
-			return box;
-		}
-
-		function adminNote(items) {
-			var adm = ADMIN[serverId()];
-			var box = E('div', { 'class': 'zm-note zm-note-warn', 'style': 'margin:10px 0; padding:10px 12px; border-radius:10px; border:1px solid rgba(191,135,0,.45); background:rgba(191,135,0,.08)' });
-			box.appendChild(E('b', {}, 'Осталось одобрить роутер на сервере'));
-			box.appendChild(E('ol', { 'style': 'margin:6px 0 0 18px; padding:0' }, items.map(function(t) { return E('li', {}, t); })));
-			if (adm) box.appendChild(E('div', { 'class': 'zm-actions', 'style': 'margin-top:8px' }, [ E('a', { 'class': 'cbi-button cbi-button-action', 'href': adm, 'target': '_blank', 'rel': 'noopener noreferrer' }, 'Открыть список устройств') ]));
-			box.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-bottom:0' }, 'После одобрения эта страница обновится сама.'));
-			return box;
-		}
-
-		function approveSteps(needRoutes, needExit) {
-			var s = serverId(), what = [];
-			if (needRoutes) what.push('подсеть ' + (data.subnets || '').split(' ').join(', '));
-			if (needExit) what.push('«Use as exit node»');
-			if (s === 'official') return [
-				'Откройте список устройств (кнопка ниже) и войдите тем же аккаунтом',
-				'У роутера «' + (data.hostname || 'openwrt') + '» нажмите «⋯» → «Edit route settings…»',
-				'Отметьте ' + what.join(' и ') + ' и нажмите «Save»'
-			];
-			if (s === 'routerich') return [
-				'Откройте панель remote.routerich.ru (кнопка ниже) и войдите по Management Key',
-				'На странице устройств одобрите маршруты роутера' + (needExit ? ' и включите Exit Node' : '')
-			];
-			return [ 'В панели своего сервера одобрите у роутера ' + what.join(' и ') + ' (в Headscale: headscale nodes approve-routes)' ];
-		}
-
-		function renderMain() {
-			mainCard.innerHTML = '';
-			mainCard.appendChild(E('h3', {}, 'Tailscale'));
-			mainCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:-6px' }, 'Доступ к роутеру и всей домашней сети откуда угодно — с телефона по LTE, с работы, из поездки. Белый IP и проброс портов не нужны.'));
-			var st = state(), t = ts() || {}, self = t.Self || {}, acts = [];
-
-			if (busy) {
-				mainCard.appendChild(row('Состояние', badge('zm-warn', 'идёт операция…')));
-				mainCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Можно закрыть страницу — роутер всё доделает сам.'));
-				return;
-			}
-
-			if (st === 'none') {
-				mainCard.appendChild(row('Состояние', badge('zm-off', 'не установлен')));
-				mainCard.appendChild(serverPicker());
-				var lack = data.free_kb && data.need_kb && data.free_kb < data.need_kb;
-				if (lack) mainCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'color:var(--zm-bad, #dc2626)' }, 'Мало места на роутере: свободно ' + Math.floor(data.free_kb / 1024) + ' МБ, нужно около ' + Math.round(data.need_kb / 1024) + ' МБ.'));
-				else mainCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Поставится пакет tailscale из репозитория OpenWrt (около ' + Math.round((data.need_kb || 25600) / 1024) + ' МБ). Панель сама настроит сеть и файрвол, откроет домашнюю сеть и выход в интернет через дом — останется только войти.'));
-				acts.push(E('button', { 'class': 'cbi-button cbi-button-positive', 'disabled': (lack || pending) ? '' : null, 'click': function() {
-					var m = serverMode(); if (m == null) return;
-					job('install', m, 'Устанавливаем Tailscale — ход работы виден в окне вывода');
-				} }, 'Установить и подключить'));
-				mainCard.appendChild(E('div', { 'class': 'zm-actions' }, acts));
-				return;
-			}
-
-			var srvText = serverName(data.server);
-			if (st === 'nodaemon') {
-				mainCard.appendChild(row('Состояние', badge(data.enabled ? 'zm-bad' : 'zm-off', data.enabled ? 'служба не запущена' : 'выключен')));
-				acts.push(btn('cbi-button-positive', 'Запустить', function() { quick('connect', '', 'Tailscale запущен'); }));
-			}
-			else if (st === 'NeedsLogin' || st === 'NoState') {
-				var url = t.AuthURL || data.up_url || '';
-				mainCard.appendChild(row('Состояние', badge('zm-warn', 'нужно войти')));
-				mainCard.appendChild(row('Сервер', E('span', {}, srvText)));
-				if (pick.open) {
-					mainCard.appendChild(serverPicker());
-					acts.push(btn('cbi-button-positive', 'Подключить', function() {
-						var m = serverMode(); if (m == null) return;
-						pick.open = false;
-						quick('connect', m, '');
-					}));
-					acts.push(btn('', 'Отмена', function() { pick.open = false; renderAll(); }));
-				}
-				else if (url) {
-					var box = E('div', { 'style': 'display:flex; gap:18px; align-items:center; flex-wrap:wrap; margin:8px 0 4px' });
-					var left = E('div', { 'style': 'flex:1 1 260px; min-width:0' }, [
-						E('div', { 'style': 'font-weight:600; margin-bottom:6px' }, 'Остался один шаг — войдите'),
-						E('p', { 'class': 'zm-hint', 'style': 'margin:0 0 10px' }, serverId() === 'routerich'
-							? 'Откройте ссылку и введите Device Auth Key — роутер появится в вашей сети.'
-							: serverId() === 'official'
-								? 'Откройте ссылку и войдите аккаунтом Google, Microsoft, GitHub или Apple. Этим же аккаунтом потом войдёте в приложение на телефоне.'
-								: 'Откройте ссылку и подтвердите вход на своём сервере.'),
-						E('a', { 'class': 'cbi-button cbi-button-positive', 'href': url, 'target': '_blank', 'rel': 'noopener noreferrer' }, 'Войти'),
-						E('p', { 'class': 'zm-hint', 'style': 'margin:10px 0 0; overflow-wrap:anywhere' }, [ 'Ссылка: ', link(url, url) ]),
-						E('p', { 'class': 'zm-hint', 'style': 'margin:4px 0 0' }, 'После входа страница обновится сама.')
-					]);
-					box.appendChild(left);
-					if (data.up_qr && (!t.AuthURL || t.AuthURL === data.up_url)) box.appendChild(E('div', { 'style': 'text-align:center; flex:0 0 auto' }, [
-						E('img', { 'src': data.up_qr, 'alt': 'QR-код для входа', 'width': '160', 'height': '160', 'style': 'display:block; width:160px; height:160px; image-rendering:pixelated; background:#fff; padding:8px; border-radius:12px' }),
-						E('div', { 'class': 'zm-hint', 'style': 'margin-top:4px' }, 'или с телефона по QR-коду')
-					]));
-					mainCard.appendChild(box);
-					acts.push(btn('', 'Сменить сервер', function() { pick.open = true; pick.server = ''; renderAll(); }));
-				}
-				else if (data.up_wait) {
-					mainCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Получаем ссылку для входа…'));
-				}
-				else {
-					if (data.up_error) mainCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'color:var(--zm-bad, #dc2626); overflow-wrap:anywhere' }, 'Сервер ответил: ' + data.up_error));
-					acts.push(btn('cbi-button-positive', 'Подключить', function() { quick('connect', '', ''); }));
-					acts.push(btn('', 'Сменить сервер', function() { pick.open = true; pick.server = ''; renderAll(); }));
-				}
-			}
-			else if (st === 'NeedsMachineAuth') {
-				mainCard.appendChild(row('Состояние', badge('zm-warn', 'ждёт подтверждения')));
-				mainCard.appendChild(adminNote([ 'Откройте панель сервера и подтвердите новое устройство «' + (data.hostname || 'openwrt') + '»' ]));
-			}
-			else if (st === 'Stopped') {
-				mainCard.appendChild(row('Состояние', badge('zm-off', 'выключен')));
-				mainCard.appendChild(row('Сервер', E('span', {}, srvText)));
-				mainCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Роутер вышел из сети Tailscale, но аккаунт сохранён — включится без входа.'));
-				acts.push(btn('cbi-button-positive', 'Включить', function() { quick('connect', '', 'Tailscale включён'); }));
-			}
-			else if (st === 'Running') {
-				var ip = v4(self.TailscaleIPs || t.TailscaleIPs);
-				var allowed = self.AllowedIPs || [];
-				var subnets = String(data.subnets || '').split(' ').filter(function(x) { return x; });
-				var needRoutes = subnets.some(function(s) { return allowed.indexOf(s) < 0; });
-				var needExit = allowed.indexOf('0.0.0.0/0') < 0;
-				var user = (t.User && self.UserID != null && t.User[self.UserID]) || {};
-				var dns = String(self.DNSName || '').replace(/\.$/, '');
-				mainCard.appendChild(row('Состояние', badge('zm-ok', 'подключён')));
-				mainCard.appendChild(row('Адрес роутера', E('span', { 'style': 'overflow-wrap:anywhere' }, [ E('b', {}, ip || '—'), dns ? ' · ' + dns : '' ])));
-				if (user.LoginName || (t.CurrentTailnet && t.CurrentTailnet.Name)) mainCard.appendChild(row('Аккаунт', E('span', { 'style': 'overflow-wrap:anywhere' }, String(user.LoginName || t.CurrentTailnet.Name))));
-				mainCard.appendChild(row('Сервер', E('span', {}, srvText)));
-				if (subnets.length) mainCard.appendChild(row('Домашняя сеть', E('span', { 'style': 'display:inline-flex; gap:8px; flex-wrap:wrap; align-items:center' }, [
-					subnets.join(', '), needRoutes ? badge('zm-warn', 'ждёт одобрения') : badge('zm-ok', 'открыта')
-				])));
-				mainCard.appendChild(row('Интернет через дом', needExit ? badge('zm-warn', 'ждёт одобрения') : badge('zm-ok', 'доступен')));
-				if (!data.fw_ok) mainCard.appendChild(row('Файрвол', badge('zm-bad', 'не настроен — нажмите «Переподключить»')));
-				if (self.KeyExpiry) {
-					var left = (new Date(self.KeyExpiry).getTime() - Date.now()) / 86400000;
-					mainCard.appendChild(row('Ключ роутера', isNaN(left) ? E('span', {}, '—') : left < 14 ? badge('zm-bad', 'истекает ' + day(self.KeyExpiry)) : badge('zm-off', 'действует до ' + day(self.KeyExpiry))));
-				}
-				if (needRoutes || needExit) mainCard.appendChild(adminNote(approveSteps(needRoutes, needExit)));
-				else if (self.KeyExpiry && serverId() === 'official') mainCard.appendChild(E('p', { 'class': 'zm-hint' }, [
-					'Чтобы роутер не выпал из сети, когда истечёт ключ, отключите срок: в ', link(ADMIN.official, 'списке устройств'), ' у роутера «⋯» → «Disable key expiry».'
-				]));
-				(t.Health || []).slice(0, 3).forEach(function(h) { mainCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'overflow-wrap:anywhere' }, 'Tailscale сообщает: ' + h)); });
-				acts.push(btn('', 'Переподключить', function() { quick('connect', '', 'Настройки применены заново'); }));
-				acts.push(btn('', 'Выключить', function() {
-					zm.dialog({ title: 'Выключить Tailscale?', okText: 'Выключить',
-						blocks: [ { type: 'list', title: 'Что произойдёт', items: [
-							'Роутер выйдет из сети Tailscale — снаружи к нему не попасть',
-							'Аккаунт сохранится: «Включить» вернёт всё без входа'
-						] } ]
-					}).then(function(v) { if (v) quick('down', '', 'Tailscale выключен'); });
-				}));
-			}
-			else {
-				mainCard.appendChild(row('Состояние', badge('zm-warn', 'подключается…')));
-			}
-
-			if (st !== 'none') {
-				if (st === 'Running' || st === 'Stopped' || st === 'NeedsMachineAuth') acts.push(btn('', 'Сменить аккаунт', function() {
-					zm.dialog({ title: 'Выйти из аккаунта?', okText: 'Выйти',
-						blocks: [ { type: 'list', title: 'Что произойдёт', items: [
-							'Роутер выйдет из аккаунта Tailscale',
-							'Можно будет войти другим аккаунтом или на другой сервер'
-						] } ]
-					}).then(function(v) { if (v) { pick.open = true; pick.server = ''; quick('logout', '', 'Роутер вышел из аккаунта'); } });
-				}));
-				acts.push(btn('cbi-button-remove', 'Удалить', function() {
-					zm.dialog({ title: 'Удалить Tailscale?', danger: true, okText: 'Удалить Tailscale',
-						blocks: [ { type: 'list', title: 'Что произойдёт', items: [
-							'Роутер выйдет из аккаунта и пропадёт из сети Tailscale',
-							'Пакет tailscale удалится вместе с настройками',
-							'Интерфейс и зона файрвола, созданные панелью, уберутся'
-						] } ]
-					}).then(function(v) { if (v) job('remove', '', 'Удаляем Tailscale — ход работы виден в окне вывода'); });
-				}));
-			}
-			if (acts.length) mainCard.appendChild(E('div', { 'class': 'zm-actions' }, acts));
-			if (data.version) mainCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-bottom:0' }, 'Tailscale ' + data.version));
-		}
-
-		function renderHelp() {
-			helpCard.innerHTML = '';
-			var st = state();
-			if (busy || st !== 'Running') { helpCard.style.display = 'none'; return; }
-			helpCard.style.display = '';
-			var t = ts() || {}, ip = v4((t.Self || {}).TailscaleIPs || t.TailscaleIPs), lan = data.lan_ip || '192.168.1.1';
-			var s = serverId(), url = data.server_url || '';
-			helpCard.appendChild(E('h3', {}, 'Как зайти с телефона'));
-			var steps = [
-				E('li', {}, [ 'Поставьте приложение Tailscale: Android — Google Play или ', link('https://github.com/tailscale/tailscale-android/releases', 'APK с GitHub'), ', iPhone — App Store.' ]),
-				s === 'official'
-					? E('li', {}, 'Войдите тем же аккаунтом, что и роутер.')
-					: E('li', {}, [ 'Перед входом укажите свой сервер: Android — «⋯» → Accounts → «Use an alternate server», iPhone — Settings → Accounts → «Log in to a custom server». Адрес: ', E('b', { 'style': 'overflow-wrap:anywhere' }, url), s === 'routerich' ? '. При входе введите Device Auth Key.' : '' ]),
-				E('li', {}, [ 'Включите VPN в приложении — и открывайте роутер как дома: ', link('http://' + lan + '/', 'LuCI'), ' · ', link('http://' + lan + ':7788/', 'Web UI'), ip ? [ ' (или по адресу Tailscale ', link('http://' + ip + '/', ip), ')' ] : '', '.' ]),
-				E('li', {}, [ 'Чтобы весь интернет телефона шёл через дом — с обходом блокировок роутера — в приложении выберите Exit Node → ', E('b', {}, data.hostname || 'openwrt'), '.' ]),
-				s !== 'official' ? E('li', {}, 'В настройках DNS приложения выключите «Use Tailscale DNS».') : ''
-			];
-			helpCard.appendChild(E('ol', { 'style': 'margin:0 0 0 18px; padding:0; line-height:1.6' }, steps));
-			helpCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Если телефон сидит в чужом Wi-Fi с такими же адресами ' + lan.replace(/\.\d+$/, '.x') + ', открывайте роутер по адресу Tailscale' + (ip ? ' ' + ip : '') + '.'));
-		}
-
-		function renderDevices() {
-			devCard.innerHTML = '';
-			var st = state(), t = ts() || {};
-			if (busy || st !== 'Running') { devCard.style.display = 'none'; return; }
-			var peers = Object.keys(t.Peer || {}).map(function(k) { return t.Peer[k]; }).filter(function(p) { return p && p.HostName; });
-			devCard.style.display = '';
-			devCard.appendChild(E('h3', {}, 'Устройства в сети' + (peers.length ? ' · ' + peers.length : '')));
-			if (!peers.length) {
-				devCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Пока здесь только роутер. Войдите в приложение Tailscale на телефоне — он появится в этом списке.'));
-				return;
-			}
-			peers.sort(function(a, b) { return (b.Online ? 1 : 0) - (a.Online ? 1 : 0) || String(a.HostName).localeCompare(String(b.HostName)); });
-			peers.forEach(function(p) {
-				var name = String(p.DNSName || '').split('.')[0] || p.HostName;
-				var via = p.CurAddr ? badge('zm-ok', 'напрямую') : p.Relay && p.Active ? badge('zm-off', 'через ретранслятор ' + p.Relay) : '';
-				devCard.appendChild(E('div', { 'class': 'zm-row', 'style': 'flex-wrap:wrap; gap:6px 10px' }, [
-					E('span', { 'class': 'zm-label', 'style': 'overflow-wrap:anywhere' }, [ E('b', {}, name), p.OS ? E('span', { 'class': 'zm-hint', 'style': 'margin-left:6px' }, OS_NAME[p.OS] || String(p.OS)) : '' ]),
-					E('span', { 'style': 'display:inline-flex; gap:8px; flex-wrap:wrap; align-items:center' }, [
-						v4(p.TailscaleIPs),
-						p.Online ? badge('zm-ok', 'в сети') : badge('zm-off', p.LastSeen && ago(p.LastSeen) ? 'был ' + ago(p.LastSeen) : 'не в сети'),
-						via
-					])
-				]));
-			});
-		}
-
-		function renderAll() { renderMain(); renderHelp(); renderDevices(); }
-
-		wrap.appendChild(mainCard);
-		wrap.appendChild(helpCard);
-		wrap.appendChild(devCard);
-		wrap.appendChild(logEl);
-		wasRunning = state() === 'Running';
-		renderAll();
-		if (data.job) follow('');
-		else refresh();
-		return wrap;
-	}
-});
-ZM_INSTALLER_EOF
-chmod 0644 '/www/luci-static/resources/view/zapret-manager/tailscale.js'
 
 
 cat > '/www/luci-static/resources/view/zapret-manager/steer.js' << 'ZM_INSTALLER_EOF'
@@ -33977,7 +33250,6 @@ var ICONS = {
 	route: '<circle cx="6" cy="18.5" r="2.2"/><circle cx="18" cy="5.5" r="2.2"/><path d="M8.2 18.5h7.3a3.3 3.3 0 0 0 0-6.6h-7a3.3 3.3 0 0 1 0-6.6h7.3"/>',
 	tunnel: '<path d="M3 20V11a9 9 0 0 1 18 0v9"/><path d="M7 20v-8a5 5 0 0 1 10 0v8"/><path d="M3 20h18"/>',
 	terminal: '<rect x="3" y="4.5" width="18" height="15" rx="2.2"/><path d="M7 9.5l3 2.5-3 2.5M12.5 15h4.5"/>',
-	remote: '<path d="M3.5 12.2 10 6.8l6.5 5.4"/><path d="M5.5 10.8v8.7h9v-8.7"/><path d="M8.5 19.5v-4.5h3v4.5"/><path d="M17.6 4.3a4.6 4.6 0 0 1 2.9 4.3"/><path d="M16.4 6.6a2.2 2.2 0 0 1 1.5 2"/>',
 	anarchy: '<circle cx="12" cy="12.8" r="7.3"/><path d="M12 2.2L4.2 21.8M12 2.2l7.8 19.6M3.6 14.6h16.8"/>',
 	rocket: '<path d="M12 2.5c2.9 2.1 4.3 5.3 4.3 9.2V16H7.7v-4.3c0-3.9 1.4-7.1 4.3-9.2z"/><circle cx="12" cy="9.3" r="1.7"/><path d="M7.7 12.2L5 14.6V18l2.7-2M16.3 12.2l2.7 2.4V18l-2.7-2"/><path d="M10.2 18.5 12 21.5l1.8-3"/>',
 	telegram: '<path d="M21 4.5L2.8 11.4c-.8.3-.8 1.4 0 1.7l4.4 1.5 1.7 5.3c.2.7 1.1.9 1.6.4l2.5-2.4 4.6 3.4c.6.4 1.4.1 1.6-.6L22.3 5.8c.2-.9-.6-1.6-1.3-1.3z"/><path d="M7.3 14.6l10-6.6-7.4 8"/>'
@@ -34154,7 +33426,6 @@ var ROUTES = [
 	{ id: 'doh', title: 'DNS over HTTPS', sub: 'Шифрованный DNS для всей сети', icon: 'globe', group: 'Сеть', dot: 'doh' },
 	{ id: 'awg', title: 'AmneziaWG', sub: 'Туннели AmneziaWG и WARP: установка, ключи, интерфейсы', icon: 'anarchy', group: 'Сеть', dot: 'awg' },
 	{ id: 'terminal', title: 'Терминал', sub: 'Командная строка роутера в браузере (ttyd)', icon: 'terminal', group: 'Сеть', dot: 'term' },
-	{ id: 'tailscale', title: 'Tailscale', sub: 'Удалённый доступ к роутеру и домашней сети без белого IP', icon: 'remote', group: 'Сеть', dot: 'ts' },
 	{ id: 'system', title: 'Система', sub: 'Параметры роутера, зеркала и обслуживание', icon: 'cpu', group: 'Сервис' }
 ];
 var ROUTE_BY_ID = {};
@@ -34432,7 +33703,6 @@ function refreshShellStatus() {
 			if (k === 'awg' && h.awg_total) title = 'туннелей работает: ' + (h.awg_up || 0) + ' из ' + h.awg_total;
 			else if (k === 'awg' && h.awg === 1) title = 'установлен, туннелей нет';
 			else if (k === 'awg' && h.awg === 3) title = 'установлен не полностью — откройте вкладку и нажмите «Доустановить»';
-			else if (k === 'ts' && h.dots && h.dots.ts === 3) title = 'нужно войти или одобрить роутер — откройте вкладку';
 			if (h.dots && h.dots[k] === 4) title = null;
 			setDot(navDots[k], h.dots && typeof h.dots[k] === 'number' ? h.dots[k] : h[k], title);
 		});
