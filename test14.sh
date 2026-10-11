@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 2.83
+# Version: 2.84
 ZM_VERSION_EOF
 set -e
 
@@ -121,6 +121,12 @@ if [ "$1" = zm_watch ]; then
 				v="$(steer --version 2>/dev/null | awk 'NR == 1 { print $2 }')"
 				printf '%s\n' "$v" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$' && [ "${v%%.*}" -ge 2 ] 2>/dev/null || return 1
 			fi
+		fi
+		# Блокировка рекламы: список включён, а у dnsmasq его нет (после перезагрузки папки dnsmasq пустые)
+		if grep -qx 'on=1' "$s/adblock/settings" 2>/dev/null; then
+			for t in $(sed -n 's/^conf-dir=\([^,]*\).*/\1/p' /var/etc/dnsmasq.conf.* 2>/dev/null | sort -u); do
+				[ -s "$t/zm-adblock.conf" ] || return 1
+			done
 		fi
 		# делать нечего — убираем то же, что убрали бы сами проверки на этом пути
 		rm -f /tmp/zm-rpcd-slow /tmp/zm-rpcd-plugin.stamp "$s/fk.watch" "$d/steer.vpnwatch"
@@ -906,6 +912,7 @@ zm_watch() {
 	_st_legacy_check
 	_st_vpn_watch
 	_tg_watch
+	_ab_watch
 	return 0
 }
 
@@ -3039,6 +3046,10 @@ if [ -s /tmp/zapret-manager-luci/resolv.conf.zm-bak ]; then
 	if [ -e /tmp/resolv.conf ]; then cat /tmp/zapret-manager-luci/resolv.conf.zm-bak > /tmp/resolv.conf 2>/dev/null || true
 	else cat /tmp/zapret-manager-luci/resolv.conf.zm-bak > /etc/resolv.conf 2>/dev/null || true; fi
 fi
+for zm_d in $(sed -n 's/^conf-dir=\([^,]*\).*/\1/p' /var/etc/dnsmasq.conf.* 2>/dev/null | sort -u) /tmp/dnsmasq.d; do
+	if [ -f "$zm_d/zm-adblock.conf" ]; then rm -f "$zm_d/zm-adblock.conf"; zm_dns=1; fi
+done
+[ -n "$zm_dns" ] && /etc/init.d/dnsmasq restart >/dev/null 2>&1
 ZM_OPT="/opt/zapret-manager-luci"
 ZM_KEEP="$(cat /etc/steer/*.json /etc/steer/*.yaml /etc/steer/*.yml 2>/dev/null | sed 's|\\/|/|g' | tr '",[]{} \t\r' '\n\n\n\n\n\n\n\n\n' | sed "s/^'//; s/'\$//" | grep "^$ZM_OPT/lists/" | sort -u)"
 if [ -n "$ZM_KEEP" ]; then
@@ -5146,7 +5157,7 @@ _zm_job_label() {
 		mixomo*) echo "Mixomo" ;; bytetube*) echo "ByeTube" ;;
 		install_zapret2|remove_zapret2) echo "Zapret2" ;; install_zapret|remove_zapret) echo "Zapret" ;;
 		strategy_test) echo "тест стратегий" ;; tg*) echo "TG WS Proxy" ;; doh*) echo "DNS over HTTPS" ;;
-		mirror_set) echo "смена зеркала" ;; zm_update) echo "обновление панели" ;; *) echo "$1" ;;
+		adblock) echo "блокировка рекламы" ;; mirror_set) echo "смена зеркала" ;; zm_update) echo "обновление панели" ;; *) echo "$1" ;;
 	esac
 }
 
@@ -6316,8 +6327,10 @@ health() {
 	if _term_installed; then
 		if _term_running; then d_term=1; elif _term_enabled; then d_term=2; else d_term=4; fi
 	fi
-	printf '{"dots":{"zapret":%s,"zapret2":%s,"bytetube":%s,"tg":%s,"mixomo":%s,"doh":%s,"hosts":%s,"steer":%s,"forkop":%s,"awg":%s,"term":%s},' \
-		"$d_zr" "$d_zr2" "$d_bt" "$d_tg" "$d_mx" "$d_doh" "$hs" "$d_sr" "${d_fk:-0}" "${d_awg:-0}" "$d_term"
+	local d_ab=0
+	if _ab_on; then if _ab_applied; then d_ab=1; else d_ab=2; fi; fi
+	printf '{"dots":{"zapret":%s,"zapret2":%s,"bytetube":%s,"tg":%s,"mixomo":%s,"doh":%s,"hosts":%s,"adblock":%s,"steer":%s,"forkop":%s,"awg":%s,"term":%s},' \
+		"$d_zr" "$d_zr2" "$d_bt" "$d_tg" "$d_mx" "$d_doh" "$hs" "$d_ab" "$d_sr" "${d_fk:-0}" "${d_awg:-0}" "$d_term"
 	printf '"zapret":%s,"zapret2":%s,"bytetube":%s,"tg":%s,"mixomo":%s,"doh":%s,"hosts":%s,"steer":%s,"steer_off":%s,"steer_exit":"%s","awg":%s,"forkop":%s,"flow_warn":%s,"ipv6_warn":%s,"reboot_hint":"%s"}\n' \
 		"$zr" "$zr2" "$bt" "$tg" "$mx" "$doh" "$hs" "$sr" \
 		"$([ -f /etc/zm-steer/stopped ] && echo true || echo false)" "$sx" "$awgj" "$fkh" "$fw" "$v6" "$(esc "$(_zm_reboot_hint_get)")"
@@ -16786,6 +16799,416 @@ redbtn_panel_gone() {
 	return 0
 }
 
+# ---------- Блокировка рекламы: списки HaGeZi в dnsmasq ----------
+# Списки качаются в $AB_DIR/src (домены по одному в строке, сжатые), из них собирается
+# zm-adblock.conf со строками local=/домен/ и кладётся в папку настроек каждого dnsmasq.
+# Папки dnsmasq живут в ОЗУ: после перезагрузки сторож (zm_watch) собирает файл заново из копии на флеше.
+AB_DIR="$ZM_STATE_DIR/adblock"
+AB_SET="$AB_DIR/settings"
+AB_ALLOW="$AB_DIR/allow.txt"
+AB_NAME="zm-adblock.conf"
+AB_CRON_TAG="# zm-adblock"
+AB_URL_GH="${GH_RAW}/hagezi/dns-blocklists/main/dnsmasq"
+AB_URL_CDN="https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/dnsmasq"
+AB_ALLOW_DEFAULT='# Переходы по рекламе в поиске Яндекса
+yabs.yandex.ru
+# Ссылки из писем и приложений Яндекса
+redirect.appmetrica.yandex.com
+# Ссылки из рассылок Mail.ru
+trk.mail.ru
+# Партнёрские ссылки и кешбэк AliExpress
+s.click.aliexpress.com'
+
+_ab_say() { echo "==> $*"; }
+_ab_get() {
+	local v
+	v="$(sed -n "s/^$1=//p" "$AB_SET" 2>/dev/null | tail -n1)"
+	echo "${v:-$2}"
+}
+_ab_put() {
+	local k v tmp="$AB_SET.zm-new"
+	mkdir -p "$AB_DIR"
+	[ -f "$AB_SET" ] || : > "$AB_SET"
+	cp -f "$AB_SET" "$tmp"
+	while [ $# -ge 2 ]; do
+		k="$1"; v="$2"; shift 2
+		grep -v "^$k=" "$tmp" > "$tmp.2" 2>/dev/null; mv -f "$tmp.2" "$tmp"
+		echo "$k=$v" >> "$tmp"
+	done
+	mv -f "$tmp" "$AB_SET"
+}
+_ab_file() {
+	case "$1" in
+		light) echo light.txt ;; multi) echo multi.txt ;; pro) echo pro.txt ;;
+		proplus) echo pro.plus.txt ;; ultimate) echo ultimate.txt ;;
+		tif) echo tif.mini.txt ;; doh) echo doh.txt ;; *) return 1 ;;
+	esac
+}
+_ab_title() {
+	case "$1" in
+		light) echo Light ;; multi) echo Multi ;; pro) echo Pro ;; proplus) echo "Pro++" ;;
+		ultimate) echo Ultimate ;; tif) echo "TIF mini (фишинг)" ;; doh) echo "чужих DoH-серверов" ;; *) echo "$1" ;;
+	esac
+}
+# Меньше этого — значит, скачалась ошибка или обрывок, а не список
+_ab_min() {
+	case "$1" in
+		light) echo 20000 ;; multi|pro|proplus|ultimate) echo 60000 ;; tif) echo 80000 ;; doh) echo 1000 ;;
+	esac
+}
+_ab_gz() { command -v gzip >/dev/null 2>&1; }
+_ab_src() { if [ -s "$AB_DIR/src/$1.gz" ]; then echo "$AB_DIR/src/$1.gz"; elif [ -s "$AB_DIR/src/$1.txt" ]; then echo "$AB_DIR/src/$1.txt"; else return 1; fi; }
+_ab_cat() {
+	local f
+	f="$(_ab_src "$1")" || return 1
+	case "$f" in *.gz) gzip -dc "$f" ;; *) cat "$f" ;; esac
+}
+_ab_num() { echo "${1:-0}" | awk '{ s = $1; o = ""; while (length(s) > 3) { o = " " substr(s, length(s) - 2) o; s = substr(s, 1, length(s) - 3) } print s o }'; }
+_ab_on() { [ "$(_ab_get on 0)" = 1 ]; }
+_ab_ids() {
+	local ids
+	ids="$(_ab_get list pro)"
+	[ "$(_ab_get tif 0)" = 1 ] && ids="$ids tif"
+	[ "$(_ab_get doh 0)" = 1 ] && ids="$ids doh"
+	echo "$ids"
+}
+_ab_dirs() {
+	local d
+	d="$(sed -n 's/^conf-dir=\([^,]*\).*/\1/p' /var/etc/dnsmasq.conf.* 2>/dev/null | sort -u)"
+	echo "${d:-/tmp/dnsmasq.d}"
+}
+# Список подключён ко всем запущенным dnsmasq
+_ab_applied() {
+	local d n=0
+	for d in $(_ab_dirs); do [ -s "$d/$AB_NAME" ] || return 1; n=1; done
+	[ "$n" = 1 ]
+}
+_ab_dns_rss() {
+	local p t=0 v
+	for p in $(pidof dnsmasq 2>/dev/null); do
+		v="$(awk '/^VmRSS:/ { print $2 }' "/proc/$p/status" 2>/dev/null)"
+		t=$((t + ${v:-0}))
+	done
+	echo "$t"
+}
+_ab_dns_alive() { pidof dnsmasq >/dev/null 2>&1 && { nslookup localhost 127.0.0.1 >/dev/null 2>&1 || nslookup openwrt.org 127.0.0.1 >/dev/null 2>&1; }; }
+
+# Адреса DoH-серверов, которыми пользуется сам роутер (https-dns-proxy), никогда не блокируем
+_ab_own_hosts() {
+	local i=0 u
+	while u="$(uci -q get "https-dns-proxy.@https-dns-proxy[$i].resolver_url")"; do
+		printf '%s\n' "$u" | sed -n 's#^[a-z]*://\([^/:]*\).*#\1#p'
+		i=$((i + 1))
+	done
+}
+
+# Белый список: по одному домену в строке, «#» — комментарий; лишнее (http://, путь, *.) отрезаем
+_ab_allow_norm() {
+	tr 'A-Z' 'a-z' | sed 's/#.*//; s/^[[:space:]]*//; s/[[:space:]].*$//; s#^[a-z]*://##; s#[/:?].*$##; s/^\*\.//; s/^\.//; s/\.$//' |
+		grep -E '^[a-z0-9_]([a-z0-9_-]*[a-z0-9_])?(\.[a-z0-9_]([a-z0-9_-]*[a-z0-9_])?)+$' | awk '!s[$0]++' | head -n 500
+}
+_ab_allow_text() { if [ -f "$AB_ALLOW" ]; then cat "$AB_ALLOW"; else printf '%s\n' "$AB_ALLOW_DEFAULT"; fi; }
+
+# Скачивает один список и сохраняет только домены. 0 — скачан, 1 — не вышло (старая копия не тронута)
+_ab_dl() {
+	local id="$1" f tmp="$JOBS_DIR/adblock.$1.dl" dom="$JOBS_DIR/adblock.$1.dom" url host n min ver ok=0
+	f="$(_ab_file "$id")" || return 1
+	min="$(_ab_min "$id")"
+	mkdir -p "$AB_DIR/src"
+	for url in "$AB_URL_GH/$f" "$AB_URL_CDN/$f"; do
+		host="$(printf '%s' "$url" | sed 's#^https://\([^/]*\).*#\1#')"
+		echo "   → Скачиваем $(_ab_title "$id") ($host)"
+		rm -f "$tmp"
+		if curl -fsSL --connect-timeout 10 --max-time 240 --retry 2 -o "$tmp" "$url" >/dev/null 2>&1 && [ -s "$tmp" ]; then
+			awk -F/ '/^(local|address|server)=\/[^\/]+\// { d = tolower($2); if (d ~ /^[a-z0-9_.-]+$/ && index(d, ".")) print d }' "$tmp" > "$dom"
+			n="$(wc -l < "$dom" | tr -d ' ')"
+			if [ "${n:-0}" -ge "$min" ]; then ok=1; break; fi
+			echo "   ! Получен неполный файл ($(_ab_num "${n:-0}") доменов) — пробуем другой адрес"
+		else
+			echo "   ! Не скачалось"
+		fi
+	done
+	if [ "$ok" != 1 ]; then rm -f "$tmp" "$dom"; return 1; fi
+	ver="$(sed -n 's/^# Version: *//p' "$tmp" | head -n1 | tr -cd '0-9.')"
+	rm -f "$tmp"
+	if _ab_gz; then
+		gzip -c "$dom" > "$AB_DIR/src/$id.gz.zm-new" && mv -f "$AB_DIR/src/$id.gz.zm-new" "$AB_DIR/src/$id.gz" && rm -f "$AB_DIR/src/$id.txt"
+	else
+		mv -f "$dom" "$AB_DIR/src/$id.txt" && rm -f "$AB_DIR/src/$id.gz"
+	fi
+	rm -f "$dom" "$AB_DIR/src/$id."*.zm-new
+	_ab_put "n_$id" "$n" "v_$id" "$ver" "t_$id" "$(date +%s)"
+	echo "   ✓ $(_ab_title "$id"): $(_ab_num "$n") доменов${ver:+, версия $ver}"
+	return 0
+}
+
+# Собирает conf из скачанных списков и белого списка. Печатает число заблокированных доменов
+_ab_build() {
+	local out="$1" ids id allow="$JOBS_DIR/adblock.allow" dedup=0 n
+	ids="$(_ab_ids)"
+	for id in $ids; do _ab_src "$id" >/dev/null || { echo "нет скачанного списка $(_ab_title "$id")" >&2; return 1; }; done
+	set -- $ids; [ $# -gt 1 ] && dedup=1
+	{ _ab_allow_text | _ab_allow_norm; _ab_own_hosts | _ab_allow_norm; } | awk '!s[$0]++' > "$allow"
+	{ for id in $ids; do _ab_cat "$id"; done; } | awk -v af="$allow" -v dedup="$dedup" -v cf="$out.count" '
+		BEGIN { while ((getline l < af) > 0) if (l != "") A[l] = 1; close(af) }
+		{
+			d = $0
+			if (d == "") next
+			if (dedup) { if (d in S) next; S[d] = 1 }
+			x = d
+			while (1) {
+				if (x in A) next
+				i = index(x, "."); if (!i) break
+				x = substr(x, i + 1)
+			}
+			print "local=/" d "/"; n++
+		}
+		END { for (a in A) print "server=/" a "/#"; print n + 0 > cf }' > "$out" || return 1
+	rm -f "$allow"
+	n="$(cat "$out.count" 2>/dev/null)"; rm -f "$out.count"
+	[ "${n:-0}" -gt 0 ] || { echo "список получился пустым" >&2; return 1; }
+	echo "$n"
+}
+
+# Подключает собранный conf ко всем dnsmasq. Если dnsmasq с ним не поднялся — возвращает как было
+_ab_install() {
+	local new="$1" d dirs bak="$JOBS_DIR/adblock.old" t=0 had=0
+	dirs="$(_ab_dirs)"
+	if ! dnsmasq --test --conf-file="$new" >/dev/null 2>&1; then
+		echo "ОШИБКА: dnsmasq не принял собранный список — ничего не меняем"
+		return 1
+	fi
+	rm -f "$bak"
+	for d in $dirs; do
+		[ "$had" = 0 ] && [ -s "$d/$AB_NAME" ] && { cp -f "$d/$AB_NAME" "$bak" 2>/dev/null && had=1; }
+		mkdir -p "$d" && cp -f "$new" "$d/$AB_NAME.zm-tmp" && mv -f "$d/$AB_NAME.zm-tmp" "$d/$AB_NAME" || {
+			echo "ОШИБКА: не хватило места в памяти роутера для списка"
+			rm -f "$d/$AB_NAME.zm-tmp"
+			for d in $dirs; do rm -f "$d/$AB_NAME"; done
+			return 1
+		}
+	done
+	/etc/init.d/dnsmasq restart >/dev/null 2>&1
+	while [ "$t" -lt 30 ]; do
+		sleep 2; t=$((t + 2))
+		_ab_dns_alive && { rm -f "$bak"; return 0; }
+	done
+	echo "!! dnsmasq не отвечает с новым списком — возвращаем прежнее состояние"
+	for d in $dirs; do
+		if [ "$had" = 1 ]; then cp -f "$bak" "$d/$AB_NAME"; else rm -f "$d/$AB_NAME"; fi
+	done
+	rm -f "$bak"
+	/etc/init.d/dnsmasq restart >/dev/null 2>&1
+	return 1
+}
+
+_ab_unplug() {
+	local d
+	for d in $(_ab_dirs) /tmp/dnsmasq.d; do rm -f "$d/$AB_NAME" "$d/$AB_NAME.zm-tmp"; done
+}
+
+_ab_cron_sync() {
+	local m line
+	if _ab_on && [ "$(_ab_get auto 1)" = 1 ]; then
+		m="$(_ab_get minute "")"
+		case "$m" in ''|*[!0-9]*) m="$(awk 'BEGIN { srand(); print int(rand() * 60) }')"; _ab_put minute "$m" ;; esac
+		line="$m 4 * * * /opt/zapret-manager-luci/backend.sh adblock_cron >/dev/null 2>&1 $AB_CRON_TAG"
+		grep -qxF "$line" "$CRON_FILE" 2>/dev/null && return 0
+		mkdir -p "$(dirname "$CRON_FILE")"; touch "$CRON_FILE"
+		grep -vF "$AB_CRON_TAG" "$CRON_FILE" > "$CRON_FILE.zm" 2>/dev/null; cat "$CRON_FILE.zm" > "$CRON_FILE"; rm -f "$CRON_FILE.zm"
+		echo "$line" >> "$CRON_FILE"
+		/etc/init.d/cron restart >/dev/null 2>&1
+	else
+		grep -qF "$AB_CRON_TAG" "$CRON_FILE" 2>/dev/null || return 0
+		grep -vF "$AB_CRON_TAG" "$CRON_FILE" > "$CRON_FILE.zm" 2>/dev/null; cat "$CRON_FILE.zm" > "$CRON_FILE"; rm -f "$CRON_FILE.zm"
+		/etc/init.d/cron restart >/dev/null 2>&1
+	fi
+	return 0
+}
+
+# Собрать и подключить из уже скачанного (белый список, после перезагрузки)
+_ab_rebuild() {
+	local tmp="$JOBS_DIR/adblock.conf.new" n
+	mkdir -p "$JOBS_DIR"
+	n="$(_ab_build "$tmp" 2>&1)" || { rm -f "$tmp"; echo "${n:-не удалось собрать список}"; return 1; }
+	if ! _ab_install "$tmp" >/dev/null 2>&1; then rm -f "$tmp"; echo "dnsmasq не запустился с этим списком"; return 1; fi
+	rm -f "$tmp"
+	_ab_put count "$n" err ""
+	echo "$n"
+}
+
+do_ab_apply() {
+	local mode="$1" ids id f tmp="$JOBS_DIR/adblock.conf.new" n avail age now fails=0 got=0 keep
+	ids="$(_ab_ids)"
+	_ab_say "Блокировка рекламы: $(_ab_title "$(_ab_get list pro)")$([ "$(_ab_get tif 0)" = 1 ] && echo ' + защита от фишинга')$([ "$(_ab_get doh 0)" = 1 ] && echo ' + запрет чужих DoH')"
+	avail="$(awk '/^MemAvailable:/ { print $2 }' /proc/meminfo 2>/dev/null)"
+	if [ -n "$avail" ] && [ "$avail" -lt 60000 ] 2>/dev/null; then
+		echo "ОШИБКА: свободной памяти роутера всего $((avail / 1024)) МБ — для списка нужно хотя бы 60 МБ. Выберите список поменьше или отключите защиту от фишинга"
+		_ab_put err "мало свободной памяти" errat "$(date +%s)"
+		return 1
+	fi
+	_ab_say "Скачиваем списки"
+	now="$(date +%s)"
+	for id in $ids; do
+		age=$(( now - $(_ab_get "t_$id" 0) ))
+		if [ "$mode" != force ] && _ab_src "$id" >/dev/null && [ "$age" -ge 0 ] && [ "$age" -lt 43200 ]; then
+			echo "   ✓ $(_ab_title "$id"): свежий, скачан $((age / 60)) мин назад"
+			continue
+		fi
+		if _ab_dl "$id"; then got=1
+		elif _ab_src "$id" >/dev/null; then echo "   ! $(_ab_title "$id"): обновить не удалось — оставляем прежнюю копию"; fails=1
+		else
+			echo "ОШИБКА: $(_ab_title "$id") не скачался ни с GitHub, ни с jsDelivr — проверьте интернет на роутере"
+			_ab_put err "список не скачался" errat "$(date +%s)"
+			return 1
+		fi
+	done
+	# Списки, которые больше не выбраны, — с флеша долой
+	for f in "$AB_DIR"/src/*; do
+		[ -f "$f" ] || continue
+		keep=0; id="$(basename "$f")"; id="${id%.*}"
+		for n in $ids; do [ "$n" = "$id" ] && keep=1; done
+		[ "$keep" = 1 ] || rm -f "$f"
+	done
+	_ab_say "Собираем список для dnsmasq"
+	n="$(_ab_build "$tmp")" || { rm -f "$tmp"; echo "ОШИБКА: не удалось собрать список"; _ab_put err "не удалось собрать список" errat "$(date +%s)"; return 1; }
+	echo "   ✓ К блокировке: $(_ab_num "$n") доменов (белый список учтён)"
+	_ab_say "Подключаем к dnsmasq"
+	if ! _ab_install "$tmp"; then
+		rm -f "$tmp"
+		_ab_put err "dnsmasq не запустился со списком" errat "$(date +%s)"
+		return 1
+	fi
+	rm -f "$tmp"
+	echo "   ✓ dnsmasq перезапущен и отвечает (занимает $(( $(_ab_dns_rss) / 1024 )) МБ памяти)"
+	_ab_put count "$n" updated "$(date +%s)" err ""
+	_ab_cron_sync
+	_zm_inet_ok || echo "!! Сайты сейчас не открываются с роутера — проверьте интернет; список тут ни при чём, его можно выключить кнопкой «Выключить»"
+	[ "$fails" = 1 ] && echo "!! Часть списков осталась прежней версии — попробуйте «Обновить сейчас» позже"
+	_ab_say "Готово: реклама блокируется для всех устройств в сети"
+}
+
+adblock_status() {
+	local on=false applied=false auto=false tif=false doh=false job=false ram avail have="" sep="" id ver="" vs="" err errat
+	_ab_on && on=true
+	_ab_applied && applied=true
+	[ "$(_ab_get auto 1)" = 1 ] && auto=true
+	[ "$(_ab_get tif 0)" = 1 ] && tif=true
+	[ "$(_ab_get doh 0)" = 1 ] && doh=true
+	_job_alive adblock && job=true
+	ram="$(awk '/^MemTotal:/ { print $2 }' /proc/meminfo 2>/dev/null)"
+	avail="$(awk '/^MemAvailable:/ { print $2 }' /proc/meminfo 2>/dev/null)"
+	for id in light multi pro proplus ultimate tif doh; do
+		_ab_src "$id" >/dev/null || continue
+		have="$have$sep\"$id\":{\"n\":$(_ab_get "n_$id" 0),\"v\":\"$(esc "$(_ab_get "v_$id" "")")\",\"t\":$(_ab_get "t_$id" 0)}"; sep=","
+	done
+	err="$(_ab_get err "")"; errat="$(_ab_get errat 0)"
+	printf '{"on":%s,"applied":%s,"list":"%s","tif":%s,"doh":%s,"auto":%s,"minute":"%s","count":%s,"updated":%s,"now":%s,"err":"%s","errat":%s,"job":%s,"dns_kb":%s,"ram_kb":%s,"avail_kb":%s,"doh_proxy":%s,"src":{%s},"allow":"%s","allow_default":"%s"}\n' \
+		"$on" "$applied" "$(esc "$(_ab_get list pro)")" "$tif" "$doh" "$auto" "$(esc "$(_ab_get minute "")")" \
+		"$(_ab_get count 0)" "$(_ab_get updated 0)" "$(date +%s)" "$(esc "$err")" "${errat:-0}" "$job" \
+		"$(_ab_dns_rss)" "${ram:-0}" "${avail:-0}" "$(pidof https-dns-proxy >/dev/null 2>&1 && echo true || echo false)" \
+		"$have" "$(esc_ml "$(_ab_allow_text)")" "$(esc_ml "$AB_ALLOW_DEFAULT")"
+}
+
+# Есть ли домен (или домен уровнем выше) в скачанных списках и в белом списке
+_ab_check() {
+	local q id hit allow
+	q="$(printf '%s\n' "$1" | _ab_allow_norm | head -n1)"
+	[ -n "$q" ] || { echo '{"error":"введите домен, например doubleclick.net"}'; return 1; }
+	if ! _ab_on; then printf '{"domain":"%s","state":"off"}\n' "$(esc "$q")"; return 0; fi
+	allow="$( { _ab_allow_text | _ab_allow_norm; _ab_own_hosts | _ab_allow_norm; } | awk -v q="$q" '
+		{ A[$0] = 1 } END { x = q; while (1) { if (x in A) { print x; exit } i = index(x, "."); if (!i) break; x = substr(x, i + 1) } }')"
+	for id in $(_ab_ids); do
+		hit="$(_ab_cat "$id" 2>/dev/null | awk -v q="$q" '
+			BEGIN { x = q; while (1) { C[x] = 1; i = index(x, "."); if (!i) break; x = substr(x, i + 1) } }
+			($0 in C) { print; exit }')"
+		[ -n "$hit" ] && break
+	done
+	if [ -n "$hit" ] && [ -n "$allow" ]; then
+		printf '{"domain":"%s","state":"allowed","source":"%s","by":"%s","allow":"%s"}\n' "$(esc "$q")" "$(esc "$(_ab_title "$id")")" "$(esc "$hit")" "$(esc "$allow")"
+	elif [ -n "$hit" ]; then
+		printf '{"domain":"%s","state":"blocked","source":"%s","by":"%s"}\n' "$(esc "$q")" "$(esc "$(_ab_title "$id")")" "$(esc "$hit")"
+	else
+		printf '{"domain":"%s","state":"clean"}\n' "$(esc "$q")"
+	fi
+}
+
+adblock_action() {
+	local a="$1" m="$2" j k v kv list tif doh auto n
+	case "$a" in
+		apply|update)
+			_job_alive adblock && { echo '{"error":"список уже обновляется — дождитесь окончания"}'; return 1; }
+			if j="$(_zm_busy_job)"; then printf '{"error":"%s"}\n' "$(esc "Сейчас идёт операция: $j — дождитесь её окончания")"; return 1; fi
+			if [ "$a" = apply ]; then
+				list="$(_ab_get list pro)"; tif="$(_ab_get tif 0)"; doh="$(_ab_get doh 0)"; auto="$(_ab_get auto 1)"
+				for kv in $m; do
+					k="${kv%%=*}"; v="${kv#*=}"
+					case "$k" in
+						list) _ab_file "$v" >/dev/null && case "$v" in tif|doh) ;; *) list="$v" ;; esac ;;
+						tif) [ "$v" = 1 ] && tif=1 || tif=0 ;;
+						doh) [ "$v" = 1 ] && doh=1 || doh=0 ;;
+						auto) [ "$v" = 1 ] && auto=1 || auto=0 ;;
+					esac
+				done
+				_ab_put on 1 list "$list" tif "$tif" doh "$doh" auto "$auto"
+				job_start adblock do_ab_apply
+			else
+				_ab_on || { echo '{"error":"блокировка выключена"}'; return 1; }
+				job_start adblock do_ab_apply force
+			fi ;;
+		off)
+			_job_alive adblock && { echo '{"error":"дождитесь окончания операции"}'; return 1; }
+			_ab_put on 0 err ""
+			_ab_unplug
+			rm -rf "$AB_DIR/src"
+			_ab_cron_sync
+			/etc/init.d/dnsmasq restart >/dev/null 2>&1
+			printf '{"ok":true}\n' ;;
+		auto)
+			[ "$m" = 1 ] && v=1 || v=0
+			_ab_put auto "$v"
+			_ab_cron_sync
+			printf '{"ok":true,"auto":%s,"minute":"%s"}\n' "$([ "$v" = 1 ] && echo true || echo false)" "$(_ab_get minute "")" ;;
+		allow_set)
+			_job_alive adblock && { echo '{"error":"список сейчас обновляется — сохраните чуть позже"}'; return 1; }
+			mkdir -p "$AB_DIR"
+			if [ "$m" = default ]; then rm -f "$AB_ALLOW"
+			else printf '%s\n' "$m" | tr -d '\r' | head -c 65536 > "$AB_ALLOW.zm-new" && mv -f "$AB_ALLOW.zm-new" "$AB_ALLOW"; fi
+			n=""
+			if _ab_on && _ab_applied; then
+				n="$(_ab_rebuild)" || { printf '{"error":"%s"}\n' "$(esc "белый список сохранён, но применить не удалось: $n")"; return 1; }
+			fi
+			printf '{"ok":true,"count":%s,"entries":%s}\n' "${n:-0}" "$(_ab_allow_text | _ab_allow_norm | wc -l | tr -d ' ')" ;;
+		check) _ab_check "$m" ;;
+		*) echo '{"error":"неизвестное действие"}'; return 1 ;;
+	esac
+}
+
+# Ежедневное обновление из cron
+adblock_cron() {
+	_ab_on && [ "$(_ab_get auto 1)" = 1 ] || { _ab_cron_sync; return 0; }
+	_job_alive adblock && return 0
+	_zm_busy_job >/dev/null && return 0
+	job_start adblock do_ab_apply force >/dev/null
+}
+
+# Сторож: после перезагрузки или чужого перезапуска dnsmasq файл со списком мог пропасть
+_ab_watch() {
+	local stamp="$JOBS_DIR/adblock.watch" r
+	_ab_on || return 0
+	_ab_applied && return 0
+	_job_alive adblock && return 0
+	[ -n "$(find "$stamp" -mmin -10 2>/dev/null)" ] && return 0
+	touch "$stamp"
+	if r="$(_ab_rebuild)"; then
+		logger -t zapret-manager "Блокировка рекламы: список снова подключён к dnsmasq ($r доменов)"
+		return 0
+	fi
+	_zm_busy_job >/dev/null && return 0
+	logger -t zapret-manager "Блокировка рекламы: нет готового списка ($r) — скачиваем заново"
+	job_start adblock do_ab_apply >/dev/null
+}
+
 cmd="$1"; shift
 _zm_in() {
 	ZM_IN="$(cat; echo .)"
@@ -16901,6 +17324,9 @@ case "$cmd" in
 	awg_action)                           awg_action "$1" "$2" ;;
 	term_status)                          term_status ;;
 	term_action)                          term_action "$1" "$2" ;;
+	adblock_status)                       adblock_status ;;
+	adblock_action)                       adblock_action "$1" "$2" ;;
+	adblock_cron)                         adblock_cron ;;
 	steer_status)                         steer_status ;;
 	steer_action)                         steer_action "$1" "$2" ;;
 	bytetube_action)                      bytetube_action "$1" ;;
@@ -19778,6 +20204,8 @@ list_methods() {
 	json_add_object "awg_action";             json_add_string "action" "string"; json_add_string "mode" "string"; json_close_object
 	json_add_object "term_status";            json_close_object
 	json_add_object "term_action";            json_add_string "action" "string"; json_add_string "mode" "string"; json_close_object
+	json_add_object "adblock_status";         json_close_object
+	json_add_object "adblock_action";         json_add_string "action" "string"; json_add_string "mode" "string"; json_close_object
 	json_add_object "steer_status";           json_close_object
 	json_add_object "steer_action";           json_add_string "action" "string"; json_add_string "mode" "string"; json_close_object
 	json_add_object "bytetube_action";        json_add_string "action" "string"; json_close_object
@@ -19890,6 +20318,8 @@ call_method() {
 		awg_action)              json_get_var action action; json_get_var mode mode; printf '%s' "$mode" | "$BACKEND" awg_action "$action" @stdin ;;
 		term_status)             "$BACKEND" term_status ;;
 		term_action)             json_get_var action action; json_get_var mode mode; printf '%s' "$mode" | "$BACKEND" term_action "$action" @stdin ;;
+		adblock_status)          "$BACKEND" adblock_status ;;
+		adblock_action)          json_get_var action action; json_get_var mode mode; printf '%s' "$mode" | "$BACKEND" adblock_action "$action" @stdin ;;
 		steer_status)            "$BACKEND" steer_status ;;
 		steer_action)            json_get_var action action; json_get_var mode mode; printf '%s' "$mode" | "$BACKEND" steer_action "$action" @stdin ;;
 		bytetube_action)         json_get_var action action; "$BACKEND" bytetube_action "$action" ;;
@@ -19968,6 +20398,7 @@ cat > '/usr/share/rpcd/acl.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF'
 					"versions",
 					"awg_status",
 					"term_status",
+					"adblock_status",
 					"steer_status",
 					"forkop_status",
 					"forkop_config_get",
@@ -20046,6 +20477,7 @@ cat > '/usr/share/rpcd/acl.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF'
 					"bytetube_action",
 					"awg_action",
 					"term_action",
+					"adblock_action",
 					"steer_action",
 					"forkop_config_set",
 					"forkop_action",
@@ -20107,6 +20539,11 @@ cat > '/usr/share/luci/menu.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF
 		"title": "Hosts",
 		"order": 40,
 		"action": { "type": "view", "path": "zapret-manager/hosts" }
+	},
+	"admin/services/zapret-manager/adblock": {
+		"title": "Блокировка рекламы",
+		"order": 45,
+		"action": { "type": "view", "path": "zapret-manager/adblock" }
 	},
 	"admin/services/zapret-manager/doh": {
 		"title": "DNS over HTTPS",
@@ -20183,6 +20620,8 @@ var callAwgStatus = zmDeclare({ object: 'zapret-manager', method: 'awg_status', 
 var callAwgAction = zmDeclare({ object: 'zapret-manager', method: 'awg_action', params: ['action', 'mode'], expect: {} });
 var callTermStatus = zmDeclare({ object: 'zapret-manager', method: 'term_status', expect: {} });
 var callTermAction = zmDeclare({ object: 'zapret-manager', method: 'term_action', params: ['action', 'mode'], expect: {} });
+var callAdblockStatus = zmDeclare({ object: 'zapret-manager', method: 'adblock_status', expect: {} });
+var callAdblockAction = zmDeclare({ object: 'zapret-manager', method: 'adblock_action', params: ['action', 'mode'], expect: {} });
 var callSteerStatus = zmDeclare({ object: 'zapret-manager', method: 'steer_status', expect: {} });
 var callSteerAction = zmDeclare({ object: 'zapret-manager', method: 'steer_action', params: ['action', 'mode'], expect: {} });
 var callSystemInfo = zmDeclare({ object: 'zapret-manager', method: 'system_info', expect: {} });
@@ -21743,6 +22182,8 @@ return baseclass.extend({
 	awgAction: bigArg2(callAwgAction),
 	termStatus: callTermStatus,
 	termAction: bigArg2(callTermAction),
+	adblockStatus: callAdblockStatus,
+	adblockAction: bigArg2(callAdblockAction),
 	steerStatus: callSteerStatus,
 	catalogWatch: catalogWatch,
 	versions: callVersions,
@@ -21879,6 +22320,8 @@ return view.extend({
 				: hostsTotal
 					? (hostsEnabled > 0 ? zm.badge(true, 'включено ' + hostsEnabled + ' из ' + hostsTotal, '') : E('span', { 'class': 'zm-badge zm-off' }, [ E('span', { 'class': 'zm-dot' }), 'ничего не включено' ]))
 					: E('span', {}, '—')));
+			var abSt = h && h.dots && typeof h.dots.adblock === 'number' ? h.dots.adblock : 0;
+			items.push(row('Блокировка рекламы', abSt === 1 ? zm.badge(true, 'работает', '') : abSt === 2 ? warnBadge('список не подключён') : offBadge('выключена')));
 			if (sysFlags.length) items.push(row('Система', E('span', { 'style': 'display:flex;flex-wrap:wrap;gap:6px;flex:1 1 0;min-width:0' }, sysFlags.map(function(f) { return E('span', { 'class': 'zm-badge zm-off' }, f); }))));
 
 			var half = Math.ceil(items.length / 2);
@@ -25520,6 +25963,383 @@ chmod 0644 '/www/luci-static/resources/view/zapret-manager/hosts.js'
 
 mkdir -p /www/luci-static/resources/view/zapret-manager
 chmod 0755 /www/luci-static/resources/view/zapret-manager
+cat > '/www/luci-static/resources/view/zapret-manager/adblock.js' << 'ZM_INSTALLER_EOF'
+'use strict';
+'require view';
+'require zapret-manager.common as zm';
+var E = (function(raw) { return function() { var a = Array.prototype.slice.call(arguments), i = a.length - 1; if (i >= 1 && (typeof a[i] === 'string' || typeof a[i] === 'number')) a[i] = [ String(a[i]) ]; return raw.apply(null, a); }; })(window.E);
+
+var LISTS = [
+	{ id: 'light', name: 'Light', approx: 55, lvl: 1, text: 'Только самая явная реклама и трекеры. Почти ничего не ломает — всё работает как раньше, просто чище.' },
+	{ id: 'multi', name: 'Multi', approx: 159, lvl: 2, text: 'Обычная защита: реклама, трекеры, счётчики, телеметрия и известные вредоносные сайты.' },
+	{ id: 'pro', name: 'Pro', approx: 195, lvl: 3, rec: true, text: 'Заметно строже Multi, а сайты почти не ломаются. Лучший выбор для большинства.' },
+	{ id: 'proplus', name: 'Pro++', approx: 208, lvl: 4, text: 'Ещё строже. Иногда перестают открываться ссылки из рекламы и редкие сервисы — их можно вернуть белым списком.' },
+	{ id: 'ultimate', name: 'Ultimate', approx: 231, lvl: 5, text: 'Максимум. Понадобится белый список: часть сайтов и приложений может работать не полностью.' }
+];
+var LIST_BY_ID = {};
+LISTS.forEach(function(l) { LIST_BY_ID[l.id] = l; });
+
+function num(n) { return String(Math.round(+n || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, ' '); }
+function badge(cls, text) { return E('span', { 'class': 'zm-badge ' + cls }, [ E('span', { 'class': 'zm-dot' }), text ]); }
+function mb(kb) { return Math.max(0, Math.round((+kb || 0) / 1024)); }
+function two(n) { return (n < 10 ? '0' : '') + n; }
+
+function when(ts, now) {
+	if (!ts) return '—';
+	var d = new Date(ts * 1000), n = new Date((now || ts) * 1000);
+	var t = two(d.getHours()) + ':' + two(d.getMinutes());
+	var day = function(x) { return new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime(); };
+	var diff = Math.round((day(n) - day(d)) / 86400000);
+	if (diff === 0) return 'сегодня в ' + t;
+	if (diff === 1) return 'вчера в ' + t;
+	return two(d.getDate()) + '.' + two(d.getMonth() + 1) + ' в ' + t;
+}
+
+return view.extend({
+	load: function() {
+		zm.injectCss();
+		return zm.adblockStatus().catch(function() { return { error: 'роутер не ответил' }; });
+	},
+
+	render: function(data) {
+		data = data || {};
+		var wrap = E('div', { 'class': 'zm-wrap' });
+		var heroCard = E('div', { 'class': 'zm-card zm-ab-hero' });
+		var levelCard = E('div', { 'class': 'zm-card' });
+		var allowCard = E('div', { 'class': 'zm-card' });
+		var checkCard = E('div', { 'class': 'zm-card' });
+		var logEl = E('pre', { 'class': 'zm-log' });
+		var busy = false, pick = null;
+
+		function cur() { return { list: LIST_BY_ID[data.list] ? data.list : 'pro', tif: !!data.tif, doh: !!data.doh }; }
+		function sel() { return pick || cur(); }
+		function changed() {
+			if (!pick || !data.on) return [];
+			var c = cur(), out = [];
+			if (pick.list !== c.list) out.push('список ' + LIST_BY_ID[c.list].name + ' → ' + LIST_BY_ID[pick.list].name);
+			if (pick.tif !== c.tif) out.push(pick.tif ? 'защита от фишинга включается' : 'защита от фишинга выключается');
+			if (pick.doh !== c.doh) out.push(pick.doh ? 'запрет чужих DoH включается' : 'запрет чужих DoH выключается');
+			return out;
+		}
+		function modeStr(s) { return 'list=' + s.list + ' tif=' + (s.tif ? 1 : 0) + ' doh=' + (s.doh ? 1 : 0) + ' auto=' + (data.auto === false ? 0 : 1); }
+		function edit(fn) {
+			if (busy) { zm.toast('Дождитесь окончания текущей операции', 'warning'); return; }
+			var s = sel(), p = { list: s.list, tif: s.tif, doh: s.doh };
+			fn(p);
+			pick = p;
+			var c = cur();
+			if (data.on && p.list === c.list && p.tif === c.tif && p.doh === c.doh) pick = null;
+			renderHero(); renderLevel();
+		}
+
+		var bar = zm.saveBar({
+			saveLabel: 'Применить',
+			onCancel: function() { pick = null; renderLevel(); },
+			onSave: function() { var s = sel(); job('apply', modeStr(s), 'Применяем новый список — ход работы виден в окне вывода'); }
+		});
+
+		function refresh() {
+			return zm.adblockStatus().then(function(d) {
+				data = d || {};
+				if (!busy && data.job) { follow(); return; }
+				if (data.on) pick = changed().length ? pick : null;
+				renderAll();
+			}).catch(function() { zm.toast('Роутер не ответил', 'error'); });
+		}
+
+		function follow() {
+			busy = true;
+			renderAll();
+			zm.pollJob('adblock', logEl, function(ok) {
+				busy = false;
+				pick = null;
+				zm.toast(ok ? 'Готово — реклама блокируется для всех устройств в сети' : 'Не получилось — подробности в окне вывода', ok ? 'info' : 'error');
+				refresh();
+			});
+		}
+
+		function job(action, mode, text) {
+			if (busy) { zm.toast('Дождитесь окончания текущей операции', 'warning'); return; }
+			busy = true; renderAll();
+			zm.adblockAction(action, mode || '').then(function(res) {
+				if (res.error) { busy = false; renderAll(); zm.toast(res.error, 'error'); return; }
+				zm.toast(text, 'warning');
+				follow();
+			}).catch(function() { busy = false; renderAll(); zm.toast('Роутер не ответил', 'error'); });
+		}
+
+		function turnOff() {
+			zm.dialog({
+				title: 'Выключить блокировку рекламы?', danger: true, okText: 'Выключить',
+				blocks: [ { type: 'list', title: 'Что произойдёт', items: [
+					'Реклама и трекеры снова будут загружаться на всех устройствах',
+					'Скачанные списки удалятся с роутера; белый список и настройки останутся',
+					'dnsmasq перезапустится — на пару секунд пропадут ответы DNS'
+				] } ]
+			}).then(function(v) {
+				if (!v) return;
+				busy = true; renderAll();
+				zm.adblockAction('off', '').then(function(res) {
+					busy = false;
+					if (res.error) zm.toast(res.error, 'error'); else zm.toast('Блокировка рекламы выключена', 'info');
+					pick = null;
+					refresh();
+				}).catch(function() { busy = false; zm.toast('Роутер не ответил', 'error'); refresh(); });
+			});
+		}
+
+		function btn(cls, text, fn) {
+			return E('button', { 'class': 'cbi-button ' + cls, 'disabled': busy ? '' : null, 'click': fn }, text);
+		}
+
+		function listTitle(s) {
+			return LIST_BY_ID[s.list].name + (s.tif ? ' + защита от фишинга' : '') + (s.doh ? ' + запрет чужих DoH' : '');
+		}
+
+		function renderHero() {
+			heroCard.innerHTML = '';
+			var st = busy || data.job ? badge('zm-warn', data.on ? 'обновляется…' : 'включается…')
+				: data.on && data.applied ? badge('zm-ok', 'работает')
+				: data.on ? badge('zm-bad', 'список не подключён')
+				: badge('zm-off', 'выключена');
+			heroCard.appendChild(E('div', { 'class': 'zm-ab-head' }, [ E('h3', {}, 'Блокировка рекламы'), st ]));
+			heroCard.appendChild(E('p', { 'class': 'zm-hint zm-ab-lead' }, 'Реклама, трекеры и счётчики отсекаются прямо в DNS роутера — сразу для всех устройств в сети: телефонов, телевизоров, приставок, без программ на них. Списки HaGeZi обновляются сами каждый день.'));
+
+			if (data.error) {
+				heroCard.appendChild(E('div', { 'class': 'zm-refresh-banner zm-show zm-block-banner' }, [ E('span', {}, 'Не удалось узнать состояние: ' + data.error) ]));
+				return;
+			}
+
+			if (!data.on) {
+				heroCard.appendChild(E('div', { 'class': 'zm-ab-chips' }, [ 'Реклама в сайтах и приложениях', 'Трекеры и счётчики', 'Телеметрия', 'Фишинг и вирусы — по желанию' ].map(function(t, i) {
+					return E('span', { 'class': 'zm-chip' + (i < 3 ? ' zm-chip-ok' : '') }, [ E('span', { 'class': 'zm-dot' }), t ]);
+				})));
+				heroCard.appendChild(E('div', { 'class': 'zm-actions zm-ab-actions' }, [
+					btn('cbi-button-positive', 'Включить: ' + listTitle(sel()), function() { job('apply', modeStr(sel()), 'Скачиваем списки и включаем блокировку — ход работы виден в окне вывода'); }),
+					E('span', { 'class': 'zm-hint', 'style': 'margin:0' }, 'Уровень строгости можно выбрать ниже')
+				]));
+				return;
+			}
+
+			if (data.err && data.errat >= (data.updated || 0)) {
+				heroCard.appendChild(E('div', { 'class': 'zm-refresh-banner zm-show zm-block-banner' }, [ E('span', {},
+					'Последнее обновление не удалось (' + when(data.errat, data.now) + '): ' + data.err + '. ' + (data.applied ? 'Пока работает прежний список.' : 'Нажмите «Обновить сейчас».')) ]));
+			} else if (!data.applied && !busy && !data.job) {
+				heroCard.appendChild(E('div', { 'class': 'zm-refresh-banner zm-show zm-block-banner' }, [ E('span', {}, 'Список сейчас не подключён к dnsmasq — так бывает сразу после перезагрузки роутера. Через пару минут панель подключит его сама, или нажмите «Обновить сейчас».') ]));
+			}
+
+			var c = cur();
+			heroCard.appendChild(E('div', { 'class': 'zm-sub-facts zm-ab-facts' }, [
+				E('div', { 'class': 'zm-sub-fact' }, [ E('span', {}, 'Список'), E('b', {}, listTitle(c)) ]),
+				E('div', { 'class': 'zm-sub-fact' }, [ E('span', {}, 'Доменов в блокировке'), E('b', {}, data.count ? num(data.count) : '—') ]),
+				E('div', { 'class': 'zm-sub-fact' }, [ E('span', {}, 'Обновлено'), E('b', {}, when(data.updated, data.now)) ]),
+				E('div', { 'class': 'zm-sub-fact' }, [ E('span', {}, 'Автообновление'), E('b', {}, data.auto ? 'каждый день в 04:' + two(+data.minute || 0) : 'выключено') ])
+			]));
+
+			if (data.ram_kb) {
+				var used = +data.dns_kb || 0, pct = Math.min(100, Math.max(2, Math.round(used * 100 / data.ram_kb)));
+				heroCard.appendChild(E('div', { 'class': 'zm-ab-meter' }, [
+					E('div', { 'class': 'zm-ab-meter-top' }, [
+						E('span', {}, 'Память роутера: DNS со списком занимает ' + mb(used) + ' МБ'),
+						E('span', {}, 'свободно ' + mb(data.avail_kb) + ' из ' + mb(data.ram_kb) + ' МБ')
+					]),
+					E('div', { 'class': 'zm-quota' + (data.avail_kb && data.avail_kb < 51200 ? ' zm-quota-high' : '') }, [ E('i', { 'style': 'width:' + pct + '%' }) ])
+				]));
+			}
+
+			heroCard.appendChild(E('div', { 'class': 'zm-actions zm-ab-actions' }, [
+				btn('cbi-button-action', busy ? 'Обновляем…' : 'Обновить сейчас', function() { job('update', '', 'Скачиваем свежие списки — ход работы виден в окне вывода'); }),
+				btn('cbi-button-remove', 'Выключить', turnOff)
+			]));
+		}
+
+		function pips(n) {
+			var out = [];
+			for (var i = 1; i <= 5; i++) out.push(E('i', { 'class': i <= n ? 'zm-on' : '' }));
+			return E('span', { 'class': 'zm-ab-pips', 'title': 'Строгость: ' + n + ' из 5', 'aria-label': 'Строгость: ' + n + ' из 5' }, out);
+		}
+
+		function renderLevel() {
+			levelCard.innerHTML = '';
+			var s = sel(), l = LIST_BY_ID[s.list], src = data.src || {};
+			levelCard.appendChild(E('h3', {}, 'Насколько строго'));
+			levelCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:-6px' }, 'Чем строже список, тем больше рекламы и слежки он режет — и тем чаще может понадобиться белый список.'));
+
+			var seg = E('div', { 'class': 'zm-seg zm-ab-seg', 'role': 'radiogroup', 'aria-label': 'Список HaGeZi' });
+			LISTS.forEach(function(it) {
+				var on = it.id === s.list;
+				var choose = function() { if (!on) edit(function(p) { p.list = it.id; }); };
+				seg.appendChild(E('div', {
+					'class': 'zm-seg-item' + (on ? ' zm-active' : ''), 'role': 'radio', 'tabindex': '0', 'aria-checked': on ? 'true' : 'false',
+					'click': choose,
+					'keydown': function(ev) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); choose(); } }
+				}, it.name));
+			});
+			levelCard.appendChild(seg);
+
+			var n = src[l.id] && src[l.id].n ? num(src[l.id].n) + ' доменов' : '≈ ' + l.approx + ' тыс. доменов';
+			levelCard.appendChild(E('div', { 'class': 'zm-ab-desc' }, [
+				E('div', { 'class': 'zm-ab-desc-head' }, [
+					E('b', {}, l.name),
+					pips(l.lvl),
+					l.rec ? badge('zm-ok', 'рекомендуем') : E([]),
+					E('span', { 'class': 'zm-ab-desc-n' }, n)
+				]),
+				E('div', { 'class': 'zm-hint' }, l.text)
+			]));
+
+			var tifN = src.tif && src.tif.n ? num(src.tif.n) : '≈ 240 тыс.';
+			levelCard.appendChild(zm.swRow(s.tif, 'Защита от фишинга и вирусов',
+				'Добавляет список TIF mini: ещё ' + tifN + ' доменов мошенников, фишинга и вредоносных сайтов. Нужна свободная память роутера.',
+				function() { edit(function(p) { p.tif = !p.tif; }); }, busy));
+			levelCard.appendChild(zm.swRow(s.doh, 'Не давать устройствам обходить блокировку',
+				E('span', {}, [ 'Закрывает чужие серверы зашифрованного DNS (DoH/DoT): браузеры и приложения перестанут спрашивать адреса в обход роутера. DNS over HTTPS самого роутера не затрагивается. ',
+					E('span', { 'class': 'zm-ab-warn' }, 'Если на телефоне вручную задан «Частный DNS» (например, dns.google), выключите его — иначе на телефоне пропадёт интернет.') ]),
+				function() { edit(function(p) { p.doh = !p.doh; }); }, busy));
+			var autoOn = data.auto !== false;
+			levelCard.appendChild(zm.swRow(autoOn, 'Обновлять списки каждый день',
+				(data.minute !== '' && data.minute != null ? 'В 04:' + two(+data.minute || 0) + ' по времени роутера. ' : 'Ночью, по времени роутера. ') + 'После перезагрузки роутера список подключается сам.',
+				function() {
+					if (busy) { zm.toast('Дождитесь окончания текущей операции', 'warning'); return; }
+					zm.adblockAction('auto', autoOn ? '0' : '1').then(function(res) {
+						if (res.error) { zm.toast(res.error, 'error'); return; }
+						data.auto = !!res.auto; data.minute = res.minute;
+						zm.toast(res.auto ? 'Списки будут обновляться каждый день' : 'Автообновление выключено', 'info');
+						renderHero(); renderLevel();
+					}).catch(function() { zm.toast('Роутер не ответил', 'error'); });
+				}, busy));
+
+			var ch = changed();
+			levelCard.appendChild(bar);
+			bar.set(ch.length > 0, false, ch.length ? 'Изменения: ' + ch.join(', ') : '');
+		}
+
+		/* ---------- Белый список ---------- */
+		var allowTa = E('textarea', { 'class': 'zm-config-editor zm-ab-editor', 'spellcheck': 'false', 'autocapitalize': 'off', 'rows': '9', 'aria-label': 'Белый список' });
+		allowTa.value = data.allow || '';
+		var allowBar = zm.editorBar(allowTa, {
+			saveLabel: 'Сохранить',
+			onSave: function(v) {
+				zm.toast(data.on && data.applied ? 'Сохраняем и пересобираем список' : 'Сохраняем белый список', 'warning');
+				return zm.adblockAction('allow_set', v).then(function(res) {
+					if (res.error) { zm.toast(res.error, 'error'); return false; }
+					zm.toast('Белый список сохранён' + (res.count ? ' — в блокировке ' + num(res.count) + ' доменов' : ''), 'info');
+					if (res.count) data.count = res.count;
+					data.allow = v;
+					renderHero();
+					return true;
+				}).catch(function() { zm.toast('Роутер не ответил', 'error'); return false; });
+			}
+		});
+
+		function allowAdd(dom) {
+			if (allowBar.dirty()) { zm.toast('Сначала сохраните или отмените правки белого списка', 'warning'); return; }
+			var lines = allowTa.value.split('\n').map(function(x) { return x.trim().toLowerCase(); });
+			if (lines.indexOf(dom) >= 0) { zm.toast(dom + ' уже в белом списке', 'info'); return; }
+			var v = allowTa.value.replace(/\s+$/, '') + (allowTa.value.trim() ? '\n' : '') + dom + '\n';
+			zm.toast('Добавляем ' + dom + ' в белый список', 'warning');
+			zm.adblockAction('allow_set', v).then(function(res) {
+				if (res.error) { zm.toast(res.error, 'error'); return; }
+				allowBar.reset(v);
+				data.allow = v;
+				if (res.count) data.count = res.count;
+				zm.toast(dom + ' больше не блокируется', 'info');
+				renderHero();
+				runCheck(dom);
+			}).catch(function() { zm.toast('Роутер не ответил', 'error'); });
+		}
+
+		function renderAllow() {
+			allowCard.innerHTML = '';
+			allowCard.appendChild(E('h3', {}, 'Белый список'));
+			allowCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:-6px' }, 'Эти домены не блокируются никогда — вместе со всеми поддоменами. По одному в строке, после # — комментарий.'));
+			allowCard.appendChild(allowTa);
+			allowCard.appendChild(E('div', { 'class': 'zm-actions' }, [
+				E('button', { 'class': 'cbi-button', 'click': function() {
+					if (allowTa.value === (data.allow_default || '')) { zm.toast('Уже стоит список по умолчанию', 'info'); return; }
+					allowTa.value = data.allow_default || '';
+					allowTa.dispatchEvent(new Event('input'));
+					zm.toast('Подставлен список по умолчанию — нажмите «Сохранить»', 'info');
+				} }, 'Вернуть по умолчанию')
+			]));
+			allowCard.appendChild(E('p', { 'class': 'zm-hint' }, 'По умолчанию здесь ссылки, без которых не открываются переходы из поисковой рекламы, писем и кешбэк-сервисов.'));
+			allowCard.appendChild(allowBar);
+		}
+
+		/* ---------- Проверка домена ---------- */
+		var chkInp = E('input', { 'type': 'text', 'class': 'cbi-input-text zm-route-input', 'spellcheck': 'false', 'autocapitalize': 'off', 'autocomplete': 'off', 'inputmode': 'url', 'placeholder': 'например, doubleclick.net', 'aria-label': 'Домен для проверки' });
+		var chkBtn = E('button', { 'type': 'button', 'class': 'cbi-button cbi-button-action', 'click': function() { runCheck(); } }, 'Проверить');
+		var chkOut = E('div', { 'class': 'zm-route-out', 'aria-live': 'polite' });
+		var chkBusy = false;
+		chkInp.addEventListener('keydown', function(ev) { if (ev.key === 'Enter') { ev.preventDefault(); runCheck(); } });
+
+		function chkRes(tone, cls, label, what, lines, note) {
+			var box = E('div', { 'class': 'zm-route-res zm-route-' + tone }, [
+				E('div', { 'class': 'zm-route-head' }, [ badge(cls, label), E('span', { 'class': 'zm-route-what' }, what) ])
+			]);
+			(lines || []).forEach(function(l) { box.appendChild(E('div', { 'class': 'zm-route-line' }, [ E('span', { 'class': 'zm-route-k' }, l[0]), E('span', { 'class': 'zm-route-v' }, l[1]) ])); });
+			if (note) box.appendChild(E('div', { 'class': 'zm-route-note' }, note));
+			chkOut.innerHTML = '';
+			chkOut.appendChild(box);
+		}
+
+		function runCheck(v) {
+			v = String(v != null ? v : chkInp.value).trim().replace(/^[a-z][a-z0-9+.-]*:\/\//i, '').replace(/[\/?#:].*$/, '').toLowerCase();
+			if (chkBusy) return;
+			if (!v) { zm.toast('Введите домен, например doubleclick.net', 'warning'); chkInp.focus(); return; }
+			chkInp.value = v;
+			chkBusy = true; chkBtn.disabled = true; chkBtn.textContent = 'Ищем…';
+			chkOut.innerHTML = '';
+			chkOut.appendChild(E('div', { 'class': 'zm-hint zm-route-wait' }, 'Ищем ' + v + ' в списках…'));
+			zm.adblockAction('check', v).then(function(r) {
+				r = r || {};
+				var d = E('b', {}, r.domain || v);
+				if (r.error) chkRes('bad', 'zm-bad', 'ошибка', r.error);
+				else if (r.state === 'off') chkRes('off', 'zm-off', 'выключено', [ d, ' — блокировка выключена, домен открывается' ]);
+				else if (r.state === 'clean') chkRes('ok', 'zm-ok', 'не блокируется', [ d, ' — его нет в выбранных списках' ], null,
+					E('span', { 'class': 'zm-hint' }, 'Если сайт всё равно не открывается — дело не в блокировке рекламы.'));
+				else if (r.state === 'allowed') chkRes('ok', 'zm-ok', 'разрешён', [ d, ' — есть в списке ' + r.source + ', но стоит в белом списке' ],
+					[ [ 'Правило списка', r.by ], [ 'Белый список', r.allow ] ]);
+				else chkRes('bad', 'zm-bad', 'блокируется', [ d, ' — есть в списке ' + r.source ],
+					[ [ 'Правило', r.by === r.domain ? r.by : r.by + ' и все его поддомены' ] ],
+					E('div', { 'class': 'zm-actions', 'style': 'margin:8px 0 0' }, [
+						E('button', { 'class': 'cbi-button', 'click': function() { allowAdd(r.by); } }, 'Разблокировать ' + r.by),
+						E('span', { 'class': 'zm-hint', 'style': 'margin:0' }, 'если из-за этого не работает нужный сайт')
+					]));
+			}).catch(function() { chkRes('bad', 'zm-bad', 'ошибка', 'роутер не ответил'); }).then(function() {
+				chkBusy = false; chkBtn.disabled = false; chkBtn.textContent = 'Проверить';
+			});
+		}
+
+		function renderCheck() {
+			checkCard.innerHTML = '';
+			checkCard.appendChild(E('h3', {}, 'Проверить домен'));
+			checkCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:-6px' }, 'Сайт или приложение перестали работать? Проверьте, не режет ли их список, и разблокируйте одной кнопкой.'));
+			var chips = E('div', { 'class': 'zm-route-chips' });
+			[ 'doubleclick.net', 'mc.yandex.ru', 'an.yandex.ru', 'googlesyndication.com', 'ozon.ru', 'youtube.com' ].forEach(function(x) {
+				chips.appendChild(E('button', { 'type': 'button', 'class': 'zm-route-chip', 'click': function() { runCheck(x); } }, x));
+			});
+			checkCard.appendChild(E('div', { 'class': 'zm-route' }, [ E('div', { 'class': 'zm-route-form' }, [ chkInp, chkBtn ]), chips, chkOut ]));
+		}
+
+		function renderAll() { renderHero(); renderLevel(); }
+
+		wrap.appendChild(heroCard);
+		wrap.appendChild(logEl);
+		wrap.appendChild(levelCard);
+		wrap.appendChild(E('div', { 'class': 'zm-cards zm-cards-2 zm-ab-pair' }, [ allowCard, checkCard ]));
+		renderAll();
+		renderAllow();
+		renderCheck();
+		if (data.job) follow();
+		return wrap;
+	}
+});
+ZM_INSTALLER_EOF
+chmod 0644 '/www/luci-static/resources/view/zapret-manager/adblock.js'
+
+mkdir -p /www/luci-static/resources/view/zapret-manager
+chmod 0755 /www/luci-static/resources/view/zapret-manager
 cat > '/www/luci-static/resources/view/zapret-manager/mixomo.js' << 'ZM_INSTALLER_EOF'
 'use strict';
 'require view';
@@ -28731,6 +29551,35 @@ html.zm-theme-dark .zm-fold { border-top-color: rgba(255,255,255,.1); }
 html.zm-theme-dark .zm-dlg-note-warn, html.zm-theme-dark .zm-hint.zm-dlg-warn { color: #e3b341; }
 html.zm-theme-dark .zm-dlg-note-bad { color: #ff7b72; }
 @media (max-width: 600px) { .zm-dlg-actions .cbi-button { flex: 1 1 auto; } }
+/* Блокировка рекламы */
+.zm-ab-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 0 10px; }
+.zm-ab-head h3 { margin: 0 !important; }
+.zm-ab-head > .zm-badge { margin-left: auto; }
+.zm-ab-lead { margin: 0; max-width: 760px; }
+.zm-ab-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 14px 0 2px; }
+.zm-ab-hero .zm-refresh-banner { margin: 12px 0 0; }
+.zm-ab-facts { margin: 16px 0 0; gap: 14px 36px; }
+.zm-ab-facts .zm-sub-fact > b { font-size: 15px; }
+.zm-ab-meter { margin: 16px 0 0; max-width: 760px; }
+.zm-ab-meter-top { display: flex; justify-content: space-between; gap: 6px 16px; flex-wrap: wrap; font-size: 12px; margin: 0 0 6px; }
+.zm-ab-meter-top > span:first-child { opacity: .7; }
+.zm-ab-meter-top > span:last-child { opacity: .55; font-variant-numeric: tabular-nums; }
+.zm-ab-meter .zm-quota { width: 100%; height: 6px; }
+.zm-ab-actions { margin: 16px 0 0; }
+.zm-ab-seg { display: flex; flex-wrap: wrap; width: max-content; max-width: 100%; box-sizing: border-box; }
+.zm-ab-seg .zm-seg-item { user-select: none; }
+.zm-ab-seg .zm-seg-item:focus-visible { outline: 2px solid #1aa3ff; outline-offset: 1px; }
+.zm-ab-desc { margin: 12px 0 6px; padding: 12px 14px; border-radius: 12px; border: 1px solid rgba(127,127,127,.22); background: rgba(127,127,127,.05); max-width: 760px; box-sizing: border-box; }
+.zm-ab-desc-head { display: flex; align-items: center; gap: 8px 10px; flex-wrap: wrap; font-size: 14px; }
+.zm-ab-desc-n { margin-left: auto; font-size: 12px; opacity: .65; font-variant-numeric: tabular-nums; }
+.zm-ab-desc .zm-hint { margin-top: 6px; }
+.zm-ab-pips { display: inline-flex; gap: 3px; }
+.zm-ab-pips > i { display: block; width: 14px; height: 5px; border-radius: 3px; background: rgba(127,127,127,.28); }
+.zm-ab-pips > i.zm-on { background: #1a7f37; }
+.zm-ab-warn { color: #9a6700; }
+html.zm-theme-dark .zm-ab-warn { color: #e3b341; }
+.zm-config-editor.zm-ab-editor { min-height: 190px; height: 190px; resize: vertical; }
+@media (max-width: 600px) { .zm-ab-seg { width: 100%; } .zm-ab-seg .zm-seg-item { flex: 1 1 auto; text-align: center; padding: 6px 10px; } .zm-ab-desc-n { margin-left: 0; width: 100%; } }
 ZM_INSTALLER_EOF
 chmod 0644 '/www/luci-static/resources/view/zapret-manager/style.css'
 
@@ -34154,6 +35003,7 @@ var ICONS = {
 	dashboard: '<rect x="3" y="3" width="7.5" height="9" rx="2"/><rect x="13.5" y="3" width="7.5" height="5.5" rx="2"/><rect x="13.5" y="11.5" width="7.5" height="9.5" rx="2"/><rect x="3" y="15" width="7.5" height="6" rx="2"/>',
 	shield: '<path d="M12 3l7.5 3v5.6c0 4.6-3.2 8.4-7.5 9.4-4.3-1-7.5-4.8-7.5-9.4V6L12 3z"/><path d="M8.8 12.2l2.2 2.2 4.3-4.4"/>',
 	bolt: '<path d="M13.2 2.8L5 13.5h6.2l-1.1 7.7 8.4-10.9h-6.3l1-7.5z"/>',
+	adblock: '<path d="M12 3l7.5 3v5.6c0 4.6-3.2 8.4-7.5 9.4-4.3-1-7.5-4.8-7.5-9.4V6L12 3z"/><circle cx="12" cy="11.6" r="4.3"/><path d="M9 8.6l6 6"/>',
 	list: '<path d="M8.5 6.5h11.5M8.5 12h11.5M8.5 17.5h11.5"/><circle cx="4.3" cy="6.5" r="1"/><circle cx="4.3" cy="12" r="1"/><circle cx="4.3" cy="17.5" r="1"/>',
 	globe: '<circle cx="12" cy="12" r="9"/><path d="M3.5 9h17M3.5 15h17M12 3c2.6 2.6 3.8 5.6 3.8 9s-1.2 6.4-3.8 9c-2.6-2.6-3.8-5.6-3.8-9S9.4 5.6 12 3z"/>',
 	send: '<path d="M21 3.5L3.5 10.3l6.7 2.8 2.8 6.9L21 3.5z"/><path d="M10.2 13.1l4.6-4.6"/>',
@@ -34356,6 +35206,7 @@ var ROUTES = [
 	{ id: 'tgproxy', title: 'TG WS Proxy', sub: 'Прокси для Telegram', icon: 'send', group: 'Обход блокировок', dot: 'tg' },
 	{ id: 'mixomo', title: 'Mixomo', sub: 'Mihomo, MagiTrickle и WARP', icon: 'layers', group: 'Обход блокировок', dot: 'mixomo' },
 	{ id: 'hosts', title: 'Hosts', sub: 'Домены в hosts и списки GeoHide', icon: 'list', group: 'Сеть', dot: 'hosts' },
+	{ id: 'adblock', title: 'Блокировка рекламы', sub: 'Реклама, трекеры и фишинг — для всех устройств в сети', icon: 'adblock', group: 'Сеть', dot: 'adblock' },
 	{ id: 'doh', title: 'DNS over HTTPS', sub: 'Шифрованный DNS для всей сети', icon: 'globe', group: 'Сеть', dot: 'doh' },
 	{ id: 'awg', title: 'AmneziaWG', sub: 'Туннели AmneziaWG и WARP: установка, ключи, интерфейсы', icon: 'anarchy', group: 'Сеть', dot: 'awg' },
 	{ id: 'terminal', title: 'Терминал', sub: 'Командная строка роутера в браузере (ttyd)', icon: 'terminal', group: 'Сеть', dot: 'term' },
@@ -36438,6 +37289,13 @@ html.zm-theme-dark .zm-find { background: var(--surface-solid, #1c2128); color: 
 #zmw-view .zm-hide-quick { background: var(--surface-2); border-color: var(--border); }
 #zmw-view .zm-hide-q { border-color: var(--border); color: var(--text); }
 #zmw-view .zm-hide-q.zm-hide-q-on { border-color: rgba(239,68,68,.7); background: rgba(239,68,68,.1); color: #ef4444; }
+
+#zmw-view .zm-ab-desc { background: var(--surface-2); border-color: var(--border); border-radius: var(--radius-sm); }
+#zmw-view .zm-ab-pips > i { background: var(--surface-3); }
+#zmw-view .zm-ab-pips > i.zm-on { background: var(--grad); }
+#zmw-view .zm-ab-warn { color: var(--warn); }
+#zmw-view .zm-ab-meter-top > span:first-child { color: var(--text-2); opacity: 1; }
+#zmw-view .zm-ab-meter-top > span:last-child { color: var(--muted); opacity: 1; }
 
 ZM_INSTALLER_EOF
 cat > '/www/zm-webui.html' << 'ZM_INSTALLER_EOF'
