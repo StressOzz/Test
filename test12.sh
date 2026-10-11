@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 2.80
+# Version: 2.81
 ZM_VERSION_EOF
 set -e
 
@@ -11972,6 +11972,21 @@ _st_dom_norm() {
 		if (l ~ /^[a-z0-9]([a-z0-9_-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9_-]*[a-z0-9])?)+$/ && l !~ /^[0-9.]+$/) print l
 	}'
 }
+# Набор .srs ($1) в текст: домены в $2, подсети в $3. Раскладывает ядро steer, а без него (стоит только
+# Forkozz) — sing-box: rule-set decompile отдаёт JSON, из него берём domain/domain_suffix и ip_cidr.
+_st_srs_dump() {
+	local j="$2.json.$$"
+	if command -v steer >/dev/null 2>&1; then
+		steer srs-read "$1" --out "$2" --prefixes-out "$3" >/dev/null 2>&1 && return 0
+	fi
+	command -v sing-box >/dev/null 2>&1 && command -v jsonfilter >/dev/null 2>&1 || return 1
+	sing-box rule-set decompile -o "$j" "$1" >/dev/null 2>&1 && [ -s "$j" ] || { rm -f "$j"; return 1; }
+	jsonfilter -i "$j" -e '@.rules[*].domain[*]' -e '@.rules[*].domain_suffix[*]' -e '@.rules[*].rules[*].domain[*]' -e '@.rules[*].rules[*].domain_suffix[*]' 2>/dev/null > "$2"
+	jsonfilter -i "$j" -e '@.rules[*].ip_cidr[*]' -e '@.rules[*].rules[*].ip_cidr[*]' 2>/dev/null > "$3"
+	rm -f "$j"
+	return 0
+}
+
 # $1 — сервис, $2 — итоговый файл. В $ST_DOM_SRC — откуда взяты домены (для подписи).
 _st_dom_build() {
 	local id="$1" out="$2" src="$2.src.$$" pfx="$2.pfx.$$" dl=1 sets set f fmt x ok=1
@@ -11997,11 +12012,11 @@ _st_dom_build() {
 				f="$ST_DIR/lists/$set.srs"
 				[ -s "$f" ] || { [ "$dl" = 1 ] && _st_srs_get "$set" >/dev/null 2>&1; }
 				[ -s "$f" ] || ST_DOM_MISS="$ST_DOM_MISS $set"
-				[ -s "$f" ] && command -v steer >/dev/null 2>&1 || { ok=0; break; }
+				[ -s "$f" ] || { ok=0; break; }
 				x="$ST_RUN/srsdump/$(printf '%s' "$f" | tr -c 'A-Za-z0-9_.-' '_')"
 				if { [ ! -s "$x.dom" ] && [ ! -s "$x.pfx" ]; } || [ "$f" -nt "$x.dom" ]; then
 					rm -f "$x.dom" "$x.pfx"
-					steer srs-read "$f" --out "$x.dom" --prefixes-out "$x.pfx" >/dev/null 2>&1 || rm -f "$x.dom" "$x.pfx"
+					_st_srs_dump "$f" "$x.dom" "$x.pfx" || rm -f "$x.dom" "$x.pfx"
 				fi
 				[ -f "$x.dom" ] || { ok=0; break; }
 				[ -s "$x.dom" ] && echo "$x.dom" >> "$src"
@@ -12033,6 +12048,26 @@ _st_dom_build() {
 	rm -f "$src" "$out.base.$$"
 	printf '%s\n' "$ST_DOM_MISS" > "$out.miss"
 	printf '%s\n' "$ST_DOM_SRC" > "$out.how"
+}
+
+# Есть ли в списке пункта домены — для значка «≡» на карточках Forkozz (у Steer это поле dom в его статусе):
+# известное число из $ST_DOMCNT, иначе по источникам; у наборов каталога с одними подсетями доменов нет.
+steer_svc_domflags() {
+	_rb_svc_src | awk -F'|' -v dcf="$ST_DOMCNT" -v idxf="$ST_CAT_IDX" '
+		BEGIN {
+			while ((getline l < dcf) > 0) { split(l, a, " "); if (a[1] != "") dc[a[1]] = a[2] + 0 }
+			while ((getline l < idxf) > 0) { split(l, a, "|"); if (a[1] != "") ik[a[1]] = a[4] }
+			printf "{"
+		}
+		$1 == "" || $1 == "custom" || ($1 in seen) || $3 $4 $8 == "" || $1 !~ /^[A-Za-z0-9_.-]+$/ { next }
+		{
+			seen[$1] = 1; d = 0
+			if ($1 in dc) d = dc[$1] > 0
+			else if ($3 != "" || $5 != "" || $6 != "") d = 1
+			else { m = split($8, s, ","); for (i = 1; i <= m; i++) if (s[i] != "" && (!(s[i] in ik) || ik[s[i]] != "s")) d = 1 }
+			printf "%s\"%s\":%s", (n++ ? "," : ""), $1, (d ? "true" : "false")
+		}
+		END { printf "}\n" }'
 }
 
 steer_svc_dom() {
@@ -13376,6 +13411,7 @@ steer_action() {
 		list_get) steer_list_get "$mode" ;;
 		svc_dom) steer_svc_dom "$mode" ;;
 		svc_find) steer_svc_find "$mode" ;;
+		svc_domflags) steer_svc_domflags ;;
 		devices) steer_devices ;;
 		devs_set)
 			_st_running && { echo '{"error":"дождитесь окончания текущей операции"}'; return 1; }
@@ -28370,6 +28406,7 @@ html.zm-theme-dark .zm-find { background: #1c2128; color: #e6edf3; }
 .zm-find-row { display: flex; align-items: center; gap: 13px; padding: 11px 12px; border-radius: 14px; cursor: pointer; border: 1px solid transparent; transition: background .12s, border-color .12s; }
 .zm-find-row:hover, .zm-find-row:focus-visible { background: rgba(124,92,255,.07); border-color: rgba(124,92,255,.25); outline: none; }
 .zm-find-row.zm-on { background: rgba(26,163,255,.08); border-color: rgba(26,163,255,.35); }
+.zm-find-row.zm-find-taken { opacity: .6; }
 .zm-find-row .zm-svc-ico { width: 36px; height: 36px; }
 .zm-find-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .zm-find-name { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-weight: 700; font-size: 14.5px; }
@@ -31226,24 +31263,310 @@ return view.extend({
 
 		function riAbove() { takenMap(); return takenMemo.ri; }
 
+		/* Домены списка пункта и «Найти сайт» — как на странице Steer: списки те же (каталог и списки
+		 * сервисов), поэтому домены и поиск берутся у той же части роутера (steer_action svc_dom / svc_find).
+		 * Включение — через карточку секции (те же правила «одна секция на сервис»), применение — «Сохранить». */
+		var domOpen = null, domData = {}, domCards = {}, domPanelEl = null, domFlags = null, domFlagsBusy = false, DOM_SHOW = 500, DOM_PART = 4000;
+		function domItem(id) {
+			var r = null;
+			(draft.items || []).forEach(function(x) { if (x.id === id) r = x; });
+			return r;
+		}
+		function domWord(n) { return plural(n, 'домен', 'домена', 'доменов'); }
+		function domNum(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ' '); }
+		function domFlagsLoad() {
+			if (domFlags || domFlagsBusy) return;
+			domFlagsBusy = true;
+			zm.steerAction('svc_domflags', '').then(function(r) {
+				domFlagsBusy = false;
+				if (!r || r.error) return;
+				domFlags = r;
+				if (document.body.contains(svcCard)) renderSvc();
+			}).catch(function() { domFlagsBusy = false; });
+		}
+		function domIcon(s) {
+			if (!domFlags || !domFlags[s.id]) return null;
+			var b = E('button', { 'type': 'button', 'class': 'zm-svc-dom' + (domOpen === s.id ? ' zm-active' : ''), 'title': 'Домены списка',
+				'aria-label': 'Домены списка «' + s.name + '»', 'click': function(ev) { ev.stopPropagation(); ev.preventDefault(); domToggle(s.id); } },
+				[ E('i'), E('i'), E('i') ]);
+			return b;
+		}
+		function domLoad(id) {
+			zm.steerAction('svc_dom', id + ':0:' + DOM_SHOW).then(function(r) {
+				if (r.error) { domData[id] = { error: String(r.error) }; domPlace(); return; }
+				var n = parseInt(r.count, 10) || 0;
+				domData[id] = { count: n, src: String(r.src || ''), list: String(r.domains || '').split(/\s+/).filter(function(x) { return x; }) };
+				if (!n) {
+					var it = domItem(id);
+					if (domFlags) domFlags[id] = false;
+					if (domOpen === id) domOpen = null;
+					zm.toast('В списке «' + (it ? it.name : id) + '» только подсети — доменов нет', 'info');
+					renderSvc();
+					return;
+				}
+				domPlace();
+			}).catch(function() { domData[id] = { error: 'Роутер не ответил' }; domPlace(); });
+		}
+		function domToggle(id) {
+			domOpen = domOpen === id ? null : id;
+			if (domOpen && domData[domOpen] && domData[domOpen].error) delete domData[domOpen];
+			domPlace();
+		}
+		function domDownload(id) {
+			var d = domData[id];
+			if (!d || d.dl) return;
+			d.dl = true; domPlace();
+			var parts = [];
+			function done(err) { d.dl = false; domPlace(); if (err) zm.toast(err, 'error'); }
+			function next(off) {
+				zm.steerAction('svc_dom', id + ':' + off + ':' + DOM_PART).then(function(r) {
+					if (r.error) { done(String(r.error)); return; }
+					var list = String(r.domains || '').split(/\s+/).filter(function(x) { return x; });
+					if (list.length) parts.push(list.join('\n'));
+					var total = parseInt(r.count, 10) || 0;
+					if (list.length && off + DOM_PART < total) { next(off + DOM_PART); return; }
+					var url = URL.createObjectURL(new Blob([ parts.join('\n') + '\n' ], { type: 'text/plain;charset=utf-8' }));
+					var a = E('a', { 'href': url, 'download': 'domains-' + id + '.txt', 'style': 'display:none' });
+					document.body.appendChild(a);
+					a.click();
+					setTimeout(function() { URL.revokeObjectURL(url); if (a.parentNode) a.parentNode.removeChild(a); }, 1500);
+					done();
+				}).catch(function() { done('Роутер не ответил'); });
+			}
+			next(0);
+		}
+		function domPanel(id) {
+			var d = domData[id], it = domItem(id) || { name: id }, body = [];
+			var sub = !d ? 'загружаем…' : d.error ? 'не удалось получить список'
+				: domNum(d.count) + ' ' + domWord(d.count) + (d.src ? ' · ' + d.src : '') + ' · с поддоменами';
+			var btns = [];
+			if (d && d.count) btns.push(E('button', { 'type': 'button', 'class': 'cbi-button', 'disabled': d.dl ? '' : null, 'click': function() { domDownload(id); } }, d.dl ? 'Скачиваем…' : 'Скачать .txt'));
+			btns.push(E('button', { 'type': 'button', 'class': 'cbi-button', 'click': function() { domToggle(id); } }, 'Свернуть'));
+			if (!d) body.push(E('p', { 'class': 'zm-hint zm-dom-more' }, 'Читаем список с роутера…'));
+			else if (d.error) body.push(E('div', { 'class': 'zm-refresh-banner zm-show', 'style': 'margin-top:12px' }, d.error));
+			else {
+				body.push(E('div', { 'class': 'zm-dom-list' }, d.list.map(function(x) { return E('div', { 'class': 'zm-dom-item' }, x); })));
+				if (d.count > d.list.length) body.push(E('p', { 'class': 'zm-hint zm-dom-more' }, 'Показаны первые ' + domNum(d.list.length) + ' из ' + domNum(d.count) + ' — весь список в «Скачать .txt».'));
+			}
+			return E('div', { 'class': 'zm-dom-panel' }, [
+				E('div', { 'class': 'zm-dom-head' }, [
+					E('div', { 'class': 'zm-dom-title' }, [ E('b', {}, 'Домены · ' + it.name), E('span', { 'class': 'zm-dom-sub' }, sub) ]),
+					E('div', { 'class': 'zm-dom-btns' }, btns)
+				])
+			].concat(body));
+		}
+		function domPlace() {
+			if (domPanelEl && domPanelEl.parentNode) domPanelEl.parentNode.removeChild(domPanelEl);
+			domPanelEl = null;
+			Object.keys(domCards).forEach(function(k) {
+				var b = domCards[k] && domCards[k].querySelector('.zm-svc-dom');
+				if (b) b.classList.toggle('zm-active', k === domOpen);
+			});
+			var card = domOpen && domCards[domOpen];
+			if (!card || !card.parentNode || !document.body.contains(card)) return;
+			if (domData[domOpen] === undefined) { domData[domOpen] = null; domLoad(domOpen); }
+			domPanelEl = domPanel(domOpen);
+			var n = card, top = card.offsetTop;
+			while (n.nextElementSibling && n.nextElementSibling.offsetTop === top) n = n.nextElementSibling;
+			card.parentNode.insertBefore(domPanelEl, n.nextSibling);
+		}
+		var domResizeT = null;
+		window.addEventListener('resize', function() {
+			if (!domOpen) return;
+			clearTimeout(domResizeT);
+			domResizeT = setTimeout(domPlace, 150);
+		});
+
+		var findEl = null, findQ = '', findRes = null, findBusy = false, findT = null, findRetryT = null, findSeq = 0, findTries = 0;
+		function findSvg(cls, svg) { var el = E('span', { 'class': cls, 'aria-hidden': 'true' }); el.innerHTML = svg; return el; }
+		var FIND_LOUPE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.4 15.4L20 20"/></svg>';
+		var FIND_CROSS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg>';
+		function findKey(ev) { if (ev.key === 'Escape' && findEl) { ev.preventDefault(); findClose(); } }
+		function findClose() {
+			clearTimeout(findT); clearTimeout(findRetryT);
+			document.removeEventListener('keydown', findKey);
+			if (findEl && findEl.parentNode) findEl.parentNode.removeChild(findEl);
+			findEl = null;
+		}
+		function findOpen() {
+			if (findEl) return;
+			var input = E('input', { 'type': 'text', 'class': 'zm-find-input', 'placeholder': 'Сайт, например fast.com', 'aria-label': 'Сайт или домен',
+				'autocomplete': 'off', 'autocapitalize': 'off', 'spellcheck': 'false', 'enterkeyhint': 'search' });
+			input.value = findQ;
+			var body = E('div', { 'class': 'zm-find-body' });
+			var box = E('div', { 'class': 'zm-find zmw-modal', 'role': 'dialog', 'aria-modal': 'true', 'aria-label': 'Найти сайт в списках' }, [
+				E('div', { 'class': 'zm-find-field' }, [
+					findSvg('zm-find-ico', FIND_LOUPE),
+					input,
+					E('button', { 'type': 'button', 'class': 'zm-find-x', 'title': 'Закрыть', 'aria-label': 'Закрыть', 'click': findClose }, [ findSvg('zm-find-x-ico', FIND_CROSS) ])
+				]),
+				body
+			]);
+			findEl = E('div', { 'class': 'zm-find-wrap', 'click': function(ev) { if (ev.target === findEl) findClose(); } }, [ box ]);
+			findEl._body = body;
+			input.addEventListener('input', function() {
+				findQ = input.value;
+				clearTimeout(findT);
+				findT = setTimeout(function() { findRun(false); }, 600);
+			});
+			input.addEventListener('keydown', function(ev) {
+				if (ev.key === 'Enter') { ev.preventDefault(); clearTimeout(findT); findRun(false); }
+			});
+			document.body.appendChild(findEl);
+			document.addEventListener('keydown', findKey);
+			findDraw();
+			setTimeout(function() { try { input.focus(); input.select(); } catch (e) {} }, 0);
+		}
+		function findRun(auto) {
+			var q = String(findQ || '').trim();
+			clearTimeout(findRetryT);
+			if (!q) { findSeq++; findRes = null; findBusy = false; findDraw(); return; }
+			if (!auto) findTries = 0;
+			var seq = ++findSeq;
+			if (!auto) { findBusy = true; findDraw(); }
+			zm.steerAction('svc_find', q).then(function(r) {
+				if (seq !== findSeq) return;
+				findBusy = false;
+				findRes = r || {};
+				findDraw();
+				if (!findRes.error && (parseInt(findRes.missing, 10) || 0) > 0 && findTries < 8 && findEl) {
+					findTries++;
+					findRetryT = setTimeout(function() { if (findEl && seq === findSeq) findRun(true); }, 5000);
+				}
+			}).catch(function() {
+				if (seq !== findSeq) return;
+				findBusy = false;
+				findRes = { error: 'Роутер не ответил' };
+				findDraw();
+			});
+		}
+		/* включение — тем же обработчиком, что у карточки: он и откажет, если пункт уже в другой секции */
+		function findToggle(id) {
+			if (busy || saving) { zm.toast('Дождитесь окончания текущей операции', 'warning'); return; }
+			var it = domItem(id);
+			if (!it) return;
+			var el = svcTile(it);
+			if (el && el.click) el.click();
+			findDraw();
+		}
+		function findOwnHas(r) {
+			var h = String(r.host || ''), ip = String(r.ip || '');
+			if (h) {
+				var hit = tokLines(draft.domains).some(function(d) {
+					d = String(d).toLowerCase().replace(/^(domain:|full:)/, '').replace(/^(\*\.|\.)/, '');
+					return d && (h === d || (h.length > d.length && h.slice(-(d.length + 1)) === '.' + d));
+				});
+				if (hit) return true;
+			}
+			return !h && !!ip && tokLines(draft.subnets).indexOf(ip) >= 0;
+		}
+		function findAddOwn(r) {
+			if (busy || saving) { zm.toast('Дождитесь окончания текущей операции', 'warning'); return; }
+			var h = String(r.host || ''), ip = String(r.ip || r.q || '');
+			if (h) {
+				var dl = String(draft.domains || '').replace(/\s+$/, '');
+				draft.domains = (dl ? dl + '\n' : '') + h;
+				taDomains.value = draft.domains;
+			} else {
+				var sl = String(draft.subnets || '').replace(/\s+$/, '');
+				draft.subnets = (sl ? sl + '\n' : '') + ip;
+				taSubnets.value = draft.subnets;
+			}
+			draft.own_on = true;
+			touch();
+			renderPanes();
+			zm.toast((h || ip) + ' добавлен в «Свой список» секции «' + secName() + '» — сохраните изменения', 'info');
+			findDraw();
+		}
+		function findDraw() {
+			if (!findEl) return;
+			var body = findEl._body, q = String(findQ || '').trim(), r = findRes, out = [];
+			body.innerHTML = '';
+			if (!q) {
+				out.push(E('div', { 'class': 'zm-find-empty' }, [
+					E('b', {}, 'Какой сайт нужен?'),
+					E('span', {}, 'Впишите адрес — покажем, какой пункт включить, чтобы сайт шёл через VPN.')
+				]));
+			} else if (findBusy || !r) {
+				out.push(E('div', { 'class': 'zm-find-empty' }, [ E('span', { 'class': 'zm-find-spin', 'aria-hidden': 'true' }), E('span', {}, 'Ищем в списках…') ]));
+			} else if (r.error) {
+				out.push(E('div', { 'class': 'zm-find-empty zm-find-err' }, [ E('span', {}, String(r.error)) ]));
+			} else {
+				var sel = draft.sel || {}, taken = takenMap();
+				var hits = (r.hits || []).filter(function(h) { return h.id !== 'custom' && !!domItem(h.id); });
+				var inOwn = findOwnHas(r), many = secs().length > 1 || draft.sec === 'new';
+				hits.sort(function(a, b) { return (a.by === b.by ? 0 : a.by === 'dom' ? -1 : 1) || ((+a.size || 0) - (+b.size || 0)); });
+				var best = null;
+				hits.forEach(function(h) { if (!best || (best.by !== 'dom' && h.by === 'dom') || (best.by === h.by && (+h.size || 0) < (+best.size || 0))) best = h; });
+				var anyOn = inOwn || hits.some(function(h) { return !!sel[h.id] || (!!sel.russia_inside && h.id !== 'russia_inside' && !h.group && zm.riCovers(h.id)); });
+				if (hits.length) {
+					out.push(E('div', { 'class': 'zm-find-title' }, anyOn ? 'Уже включено — сайт идёт через VPN' : (many ? 'Включите любой в секции «' + secName() + '»' : 'Включите любой — сайт пойдёт через VPN')));
+					var listEl = E('div', { 'class': 'zm-find-list' });
+					hits.forEach(function(h) {
+						var on = !!sel[h.id], inc = !on && !!sel.russia_inside && h.id !== 'russia_inside' && !h.group && zm.riCovers(h.id);
+						var by = !on ? taken[h.id] : '';
+						var size = +h.size || 0;
+						var why = by ? 'уже идёт через секцию «' + by + '»'
+							: inc ? 'входит во «Всё сразу» — уже идёт через VPN'
+							: (h.by === 'dom' ? 'в списке есть ' + h.line : 'адрес ' + (r.ip || '') + ' в подсети ' + h.line)
+								+ (h.group ? ' · ' + String(h.group).replace(/\s*\(.*\)\s*$/, '') : '') + (size > 20000 ? ' · большой список' : '');
+						var ic = zm.svcIco ? zm.svcIco(h.name, h.id) : null;
+						listEl.appendChild(E('div', { 'class': 'zm-find-row' + (on || inc ? ' zm-on' : '') + (by ? ' zm-find-taken' : ''), 'role': 'button', 'tabindex': '0',
+							'click': function() { findToggle(h.id); },
+							'keydown': function(ev) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); findToggle(h.id); } } }, [
+							E('div', { 'class': 'zm-svc-ico', 'style': ic ? 'background:' + ic.color : '' }, ic ? ic.ico : String(h.name || '?').slice(0, 2).toUpperCase()),
+							E('div', { 'class': 'zm-find-text' }, [
+								E('div', { 'class': 'zm-find-name' }, [ String((domItem(h.id) || h).name), best === h && hits.length > 1 && !anyOn ? E('span', { 'class': 'zm-find-best' }, 'советуем') : '' ]),
+								E('div', { 'class': 'zm-find-why' }, why)
+							]),
+							E('span', { 'class': 'zm-find-tag zm-find-tag-' + (h.by === 'dom' ? 'dom' : 'ip') }, h.by === 'dom' ? 'домен' : 'IP-адрес'),
+							E('div', { 'class': 'zm-switch' + (on || inc ? ' zm-switch-on' : '') + (inc ? ' zm-switch-inc' : '') }, [ E('span') ])
+						]));
+					});
+					out.push(listEl);
+				} else {
+					out.push(E('div', { 'class': 'zm-find-empty' }, [
+						E('b', {}, inOwn ? 'Сайт уже в «Своём списке»' : 'Сайта нет ни в одном списке'),
+						E('span', {}, inOwn ? 'Он идёт через VPN' + (many ? ' секции «' + secName() + '»' : '') + (draft.own_on === false ? ', когда «Свой список» включён' : '') + '.'
+							: 'Добавьте ' + (r.host || 'адрес') + ' в «Свой список» — он пойдёт через VPN.')
+					]));
+				}
+				if ((parseInt(r.missing, 10) || 0) > 0)
+					out.push(E('div', { 'class': 'zm-find-note' }, [ E('span', { 'class': 'zm-find-spin', 'aria-hidden': 'true' }),
+						'Докачиваем ещё ' + r.missing + ' ' + plural(+r.missing, 'список', 'списка', 'списков') + ' — результаты обновятся сами' ]));
+				out.push(E('div', { 'class': 'zm-find-foot' }, [
+					E('button', { 'type': 'button', 'class': 'cbi-button' + (inOwn ? '' : ' cbi-button-action'), 'disabled': inOwn || busy || saving ? '' : null,
+						'click': function() { findAddOwn(r); } }, inOwn ? 'Уже в «Своём списке»' : 'Добавить в «Свой список»')
+				]));
+			}
+			out.forEach(function(n) { body.appendChild(n); });
+		}
+		document.addEventListener('keydown', function(ev) {
+			if (!(ev.ctrlKey || ev.metaKey) || ev.altKey || ev.shiftKey || String(ev.key).toLowerCase() !== 'k' && ev.code !== 'KeyK') return;
+			if (!svcCard || !document.body.contains(svcCard) || svcCard.offsetParent === null) return;
+			ev.preventDefault();
+			if (findEl) findClose(); else findOpen();
+		});
+
 		function svcTile(s) {
 			var by = takenMap()[s.id], ra = riAbove();
 			var shadowed = !by && ra && !s.group && s.id !== 'russia_inside' && zm.riCovers(s.id);
-			if (shadowed && !draft.sel[s.id]) return zm.svcCard({ name: s.name, key: s.id, on: false, sub: 'входит в «Всё сразу» секции «' + ra + '»', cls: 'zm-svc-taken',
+			if (shadowed && !draft.sel[s.id]) return domKeep(s, zm.svcCard({ name: s.name, key: s.id, on: false, sub: 'входит в «Всё сразу» секции «' + ra + '»', cls: 'zm-svc-taken', extra: domIcon(s),
 				title: s.name + ' уже идёт через «Всё сразу» секции «' + ra + '»', click: function() {
 					zm.toast('«' + s.name + '» входит в «Всё сразу» секции «' + ra + '». Чтобы пустить «' + s.name + '» здесь, выключите «Всё сразу» там.', 'warning');
-				} });
-			if (by && !draft.sel[s.id]) return zm.svcCard({ name: s.name, key: s.id, on: false, sub: 'в секции «' + by + '»', cls: 'zm-svc-taken',
+				} }));
+			if (by && !draft.sel[s.id]) return domKeep(s, zm.svcCard({ name: s.name, key: s.id, on: false, sub: 'в секции «' + by + '»', cls: 'zm-svc-taken', extra: domIcon(s),
 				title: s.name + ' уже идёт через секцию «' + by + '»', click: function() {
 					zm.toast('«' + s.name + '» уже идёт через секцию «' + by + '». Сначала выключите его там — один сервис работает только в одной секции.', 'warning');
-				} });
-			return zm.svcCard({ name: s.name, key: s.id, on: !!draft.sel[s.id], sub: by ? 'и в секции «' + by + '» — сработает верхняя' : shadowed ? 'перекрыт «Всё сразу» секции «' + ra + '»' : '', inc: !!draft.sel.russia_inside && s.id !== 'russia_inside' && !s.group && zm.riCovers(s.id), click: function() {
+				} }));
+			return domKeep(s, zm.svcCard({ name: s.name, key: s.id, on: !!draft.sel[s.id], sub: by ? 'и в секции «' + by + '» — сработает верхняя' : shadowed ? 'перекрыт «Всё сразу» секции «' + ra + '»' : '', inc: !!draft.sel.russia_inside && s.id !== 'russia_inside' && !s.group && zm.riCovers(s.id), extra: domIcon(s), click: function() {
 				var nsel = {};
 				for (var k in draft.sel) if (draft.sel[k]) nsel[k] = true;
 				zm.svcPickToggle(nsel, s.id);
 				set('sel', nsel);
-			} });
+			} }));
 		}
+		function domKeep(s, el) { if (domFlags && domFlags[s.id]) domCards[s.id] = el; return el; }
 
 		function renderSvc() {
 			svcCard.innerHTML = '';
@@ -31251,11 +31574,15 @@ return view.extend({
 			var many = secs().length > 1 || draft.sec === 'new';
 			svcCard.appendChild(E('h3', {}, [ many ? 'Что пускать через «' + secName() + '» ' : 'Что пускать через Forkozz ', n ? badge('zm-ok', 'выбрано ' + n) : badge('zm-off', 'ничего') ]));
 			if (many) svcCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:-6px' }, [ 'Подключение этой секции: ', E('b', {}, draft.mode === 'iface' ? (draft.iface ? (/^zmwarp/.test(draft.iface) ? 'WARP · ' : 'туннель ') + draft.iface : 'туннель не выбран') : draft.mode === 'sub' ? 'подписка' : nn(textLines(draft.links).length, 'сервер', 'сервера', 'серверов')), '. Сервисы, выбранные в других секциях, помечены их названием.' ]));
-			svcCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:-6px' }, 'Нажмите на пункт, чтобы включить или выключить его, и затем «Сохранить». Списки те же, что в Steer: берутся из каталога списков (itdoginfo/allow-domains, b4geoip и другие) и обновляются сами.'));
 			var remote = list.filter(function(s) { return !!s.group; });
 			var svcs = list.filter(function(s) { return !s.group && !s.cat && CATEGORY_IDS.indexOf(s.id) < 0; });
 			var cats = list.filter(function(s) { return !s.group && (s.cat || CATEGORY_IDS.indexOf(s.id) >= 0); });
-			svcCard.appendChild(E('h4', { 'style': 'margin:0' }, 'Сервисы'));
+			domCards = {};
+			domFlagsLoad();
+			svcCard.appendChild(E('div', { 'class': 'zm-find-head' }, [
+				E('h4', { 'style': 'margin:0' }, 'Сервисы'),
+				E('button', { 'type': 'button', 'class': 'zm-find-open', 'title': 'Найти сайт в списках', 'click': findOpen }, [ findSvg('zm-find-ico', FIND_LOUPE), 'Найти сайт' ])
+			]));
 			svcCard.appendChild(zm.svcGrid(svcs.map(svcTile)));
 			if (cats.length) {
 				svcCard.appendChild(E('h4', { 'style': 'margin:18px 0 0' }, 'Категории'));
@@ -31289,6 +31616,9 @@ return view.extend({
 				svcCard.appendChild(E('p', { 'class': 'zm-hint' }, '⚠ Discord вместе с Cloudflare уводят в Forkozz много лишнего, даже торренты.'));
 			svcCard.appendChild(catalogBlock());
 			svcCard.appendChild(listsNow());
+			if (domOpen && !domCards[domOpen]) domOpen = null;
+			domPlace();
+			if (findEl) findDraw();
 			var meta = (cfg && cfg.catalog && cfg.catalog.meta) || {};
 			if (!meta.off && !remote.length && catWait < 4 && (meta.busy || !meta.version)) {
 				catWait++;
