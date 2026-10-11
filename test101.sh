@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 2.88
+# Version: 2.91
 ZM_VERSION_EOF
 set -e
 
@@ -12152,14 +12152,16 @@ _st_dom_build() {
 	rm -f "$src" "$out.base.$$"
 	printf '%s\n' "$ST_DOM_MISS" > "$out.miss"
 	printf '%s\n' "$ST_DOM_SRC" > "$out.how"
-	# сколько в списке подсетей и адресов IP (IPv4 и IPv6, с маской или без, диапазоны) — для подписи панели
+	# подсети и адреса IP списка (IPv4 и IPv6, с маской или без, диапазоны): $out.ips — сами строки (для
+	# «Скачать .txt»), $out.ipn — их число (для подписи панели)
 	if [ -s "$out.pfxsrc" ]; then
-		awk '{ l = $0; sub(/[#;].*$/, "", l); gsub(/[ \t\r]/, "", l)
-			if (l ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+((\/[0-9]+)|(-[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+))?$/ || (l ~ /^[0-9a-f:]+(\/[0-9]+)?$/ && index(l, ":"))) if (!s[l]++) n++ }
-			END { print n + 0 }' $(cat "$out.pfxsrc") 2>/dev/null > "$out.ipn"
+		awk '{ l = tolower($0); sub(/[#;].*$/, "", l); gsub(/[ \t\r]/, "", l)
+			if (l ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+((\/[0-9]+)|(-[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+))?$/ || (l ~ /^[0-9a-f:]+(\/[0-9]+)?$/ && index(l, ":"))) if (!s[l]++) print l }' \
+			$(cat "$out.pfxsrc") 2>/dev/null > "$out.ips"
 	else
-		echo 0 > "$out.ipn"
+		: > "$out.ips"
 	fi
+	wc -l < "$out.ips" | tr -d ' ' > "$out.ipn"
 }
 
 # Есть ли в списке пункта домены — для значка «≡» на карточках Forkozz (у Steer это поле dom в его статусе):
@@ -12183,8 +12185,10 @@ steer_svc_domflags() {
 }
 
 steer_svc_dom() {
-	local id="${1%%:*}" r o l f n ipn
+	local id="${1%%:*}" r o l f n ipn k="" src
 	r="${1#*:}"; o="${r%%:*}"; l="${r#*:}"
+	# четвёртое поле «ip» — отдать не домены, а IP-подсети списка (для «Скачать .txt»)
+	case "$l" in *:*) k="${l#*:}"; l="${l%%:*}" ;; esac
 	case "$id" in ''|*[!A-Za-z0-9_.-]*) echo '{"error":"нет такого сервиса"}'; return 1 ;; esac
 	case "$o" in ''|*[!0-9]*) o=0 ;; esac
 	case "$l" in ''|*[!0-9]*) l=500 ;; esac
@@ -12193,7 +12197,7 @@ steer_svc_dom() {
 	_rb_routable "$id" || { echo '{"error":"у этого пункта нет списка"}'; return 1; }
 	f="$ST_RUN/dom/$id.txt"
 	# файл моложе минуты берём как есть: «Скачать .txt» читает его частями
-	if [ ! -f "$f" ] || [ ! -f "$f.how" ] || [ ! -f "$f.ipn" ] || [ -n "$(find "$f" -mmin +1 2>/dev/null)" ] || { [ "$o" = 0 ] && [ "$id" = custom ]; }; then
+	if [ ! -f "$f" ] || [ ! -f "$f.how" ] || [ ! -f "$f.ipn" ] || [ ! -f "$f.ips" ] || [ -n "$(find "$f" -mmin +1 2>/dev/null)" ] || { [ "$o" = 0 ] && [ "$id" = custom ] && [ "$k" != ip ]; }; then
 		_st_dom_build "$id" "$f"
 	fi
 	n="$(wc -l < "$f" | tr -d ' ')"
@@ -12202,8 +12206,9 @@ steer_svc_dom() {
 		{ grep -v "^$id " "$ST_DOMCNT" 2>/dev/null; echo "$id $n"; } > "$ST_DOMCNT.$$" && mv -f "$ST_DOMCNT.$$" "$ST_DOMCNT"
 	fi
 	ipn="$(cat "$f.ipn" 2>/dev/null)"; case "$ipn" in ''|*[!0-9]*) ipn=0 ;; esac
-	printf '{"id":"%s","name":"%s","count":%s,"ips":%s,"offset":%s,"src":"%s","domains":"%s"}\n' "$id" "$(esc "$(_rb_svc_field "$id" 2)")" "${n:-0}" "$ipn" "$o" \
-		"$(esc "$(cat "$f.how" 2>/dev/null)")" "$(sed -n "$((o + 1)),$((o + l))p" "$f" | tr '\n' ' ')"
+	src="$f"; [ "$k" = ip ] && src="$f.ips"
+	printf '{"id":"%s","name":"%s","kind":"%s","count":%s,"ips":%s,"offset":%s,"src":"%s","domains":"%s"}\n' "$id" "$(esc "$(_rb_svc_field "$id" 2)")" "${k:-dom}" "${n:-0}" "$ipn" "$o" \
+		"$(esc "$(cat "$f.how" 2>/dev/null)")" "$(sed -n "$((o + 1)),$((o + l))p" "$src" 2>/dev/null | tr '\n' ' ')"
 }
 
 # «Найти сайт» на вкладке «Сервисы»: в каких пунктах есть домен (вместе с поддоменами) или его адрес IPv4
@@ -24293,6 +24298,30 @@ return view.extend({
 				d.dl = false; domPlace();
 				if (err) zm.toast(err, 'error');
 			}
+			/* домены, затем IP-подсети — частями, как читает роутер; в файле — два раздела с заголовками «#»,
+			 * их понимают и «Свой список», и большинство программ для списков */
+			var ips = [], ipTotal = 0;
+			function save() {
+				var name = (sv && sv.name || id), head = '# ' + name + ': ' + domNum(d.count) + ' ' + domWord(d.count) + (ipTotal ? ', ' + domNum(ipTotal) + ' ' + plural(ipTotal, 'IP-подсеть', 'IP-подсети', 'IP-подсетей') : '');
+				var text = head + '\n\n# Домены (вместе с поддоменами)\n' + parts.join('\n') + '\n' + (ips.length ? '\n# IP-подсети\n' + ips.join('\n') + '\n' : '');
+				var url = URL.createObjectURL(new Blob([ text ], { type: 'text/plain;charset=utf-8' }));
+				var a = E('a', { 'href': url, 'download': (ips.length ? 'list-' : 'domains-') + id + '.txt', 'style': 'display:none' });
+				document.body.appendChild(a);
+				a.click();
+				setTimeout(function() { URL.revokeObjectURL(url); if (a.parentNode) a.parentNode.removeChild(a); }, 1500);
+				done();
+			}
+			function nextIp(off) {
+				zm.steerAction('svc_dom', id + ':' + off + ':' + DOM_PART + ':ip').then(function(r) {
+					if (r.error) { done(String(r.error)); return; }
+					var list = String(r.domains || '').split(/\s+/).filter(function(x) { return x; });
+					if (list.length) ips = ips.concat(list);
+					ipTotal = parseInt(r.ips, 10) || 0;
+					if (list.length && off + DOM_PART < ipTotal) { nextIp(off + DOM_PART); return; }
+					ipTotal = ips.length;
+					save();
+				}).catch(function() { done('Роутер не ответил'); });
+			}
 			function next(off) {
 				zm.steerAction('svc_dom', id + ':' + off + ':' + DOM_PART).then(function(r) {
 					if (r.error) { done(String(r.error)); return; }
@@ -24300,12 +24329,7 @@ return view.extend({
 					if (list.length) parts.push(list.join('\n'));
 					var total = parseInt(r.count, 10) || 0;
 					if (list.length && off + DOM_PART < total) { next(off + DOM_PART); return; }
-					var url = URL.createObjectURL(new Blob([ parts.join('\n') + '\n' ], { type: 'text/plain;charset=utf-8' }));
-					var a = E('a', { 'href': url, 'download': 'domains-' + id + '.txt', 'style': 'display:none' });
-					document.body.appendChild(a);
-					a.click();
-					setTimeout(function() { URL.revokeObjectURL(url); if (a.parentNode) a.parentNode.removeChild(a); }, 1500);
-					done();
+					if ((parseInt(r.ips, 10) || 0) > 0) nextIp(0); else save();
 				}).catch(function() { done('Роутер не ответил'); });
 			}
 			next(0);
@@ -24316,13 +24340,13 @@ return view.extend({
 				: domNum(d.count) + ' ' + domWord(d.count) + (d.ips ? ' · ' + domNum(d.ips) + ' ' + plural(d.ips, 'IP-подсеть', 'IP-подсети', 'IP-подсетей') : '');
 			var subTip = d && !d.error ? 'Домены действуют вместе с поддоменами' + (d.ips ? '; IP-подсети — адреса и диапазоны, которые идут тем же путём' : '') + (d.src ? '. Источник: ' + d.src : '') : '';
 			var btns = [];
-			if (d && d.count) btns.push(E('button', { 'type': 'button', 'class': 'cbi-button', 'disabled': d.dl ? '' : null, 'click': function() { domDownload(id); } }, d.dl ? 'Скачиваем…' : 'Скачать .txt'));
+			if (d && d.count) btns.push(E('button', { 'type': 'button', 'class': 'cbi-button', 'title': d.ips ? 'Домены и IP-подсети одним файлом .txt' : 'Все домены списка файлом .txt', 'disabled': d.dl ? '' : null, 'click': function() { domDownload(id); } }, d.dl ? 'Скачиваем…' : d.ips ? 'Скачать список доменов и IP' : 'Скачать список доменов'));
 			btns.push(E('button', { 'type': 'button', 'class': 'cbi-button', 'click': function() { domToggle(id); } }, 'Свернуть'));
 			if (!d) body.push(E('p', { 'class': 'zm-hint zm-dom-more' }, 'Читаем список с роутера…'));
 			else if (d.error) body.push(E('div', { 'class': 'zm-refresh-banner zm-show', 'style': 'margin-top:12px' }, d.error));
 			else {
 				body.push(E('div', { 'class': 'zm-dom-list' }, d.list.map(function(x) { return E('div', { 'class': 'zm-dom-item' }, x); })));
-				if (d.count > d.list.length) body.push(E('p', { 'class': 'zm-hint zm-dom-more' }, 'Показаны первые ' + domNum(d.list.length) + ' из ' + domNum(d.count) + ' — весь список в «Скачать .txt».'));
+				if (d.count > d.list.length) body.push(E('p', { 'class': 'zm-hint zm-dom-more' }, 'Показаны первые ' + domNum(d.list.length) + ' из ' + domNum(d.count) + '. Весь список' + (d.ips ? ' вместе с IP-подсетями' : '') + ' — по кнопке «' + (d.ips ? 'Скачать список доменов и IP' : 'Скачать список доменов') + '».'));
 			}
 			return E('div', { 'class': 'zm-dom-panel' }, [
 				E('div', { 'class': 'zm-dom-head' }, [
@@ -24625,8 +24649,8 @@ return view.extend({
 			var cats = list.filter(function(s) { return !s.group && (s.cat || CATEGORY_IDS.indexOf(s.id) >= 0); });
 			listCard.appendChild(E('div', { 'class': 'zm-find-head' }, [
 				E('h4', { 'style': 'margin:0' }, 'Сервисы'),
-				E('button', { 'type': 'button', 'class': 'zm-find-open', 'title': 'Найти сайт в списках', 'click': findOpen }, [
-					findSvg('zm-find-ico', FIND_LOUPE), 'Найти сайт'
+				E('button', { 'type': 'button', 'class': 'zm-find-open', 'title': 'Найти сайт или IP-адрес в списках (Ctrl+K)', 'aria-label': 'Найти сайт или IP-адрес в списках', 'click': findOpen }, [
+					findSvg('zm-find-ico', FIND_LOUPE), 'Найти сайт или IP'
 				])
 			]));
 			listCard.appendChild(zm.svcGrid(svcs.map(tile)));
@@ -29342,7 +29366,7 @@ html.zm-theme-dark .zm-dom-list { background: #1b2027; }
 .zm-find-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .zm-find-head > h4 { flex: 1 1 auto; }
 .zm-find-open { display: inline-flex; align-items: center; gap: 8px; box-sizing: border-box; height: 38px; margin: 0; padding: 0 14px 0 12px; border-radius: 11px; border: 1px solid rgba(110,118,129,.3);
-	background: transparent; color: inherit; font: inherit; font-weight: 700; font-size: 13.5px; line-height: 1; cursor: pointer; box-shadow: none; -webkit-appearance: none; appearance: none; transition: border-color .15s, background .15s; }
+	background: transparent; color: inherit; font: inherit; font-weight: 700; font-size: 13.5px; line-height: 1; white-space: nowrap; flex-shrink: 0; cursor: pointer; box-shadow: none; -webkit-appearance: none; appearance: none; transition: border-color .15s, background .15s; }
 .zm-find-open:hover { border-color: #1aa3ff; }
 .zm-find-open:focus-visible { outline: 2px solid #1aa3ff; outline-offset: 2px; }
 .zm-find-ico, .zm-find-x-ico { display: inline-flex; flex-shrink: 0; width: 17px; height: 17px; }
@@ -32304,6 +32328,30 @@ return view.extend({
 			d.dl = true; domPlace();
 			var parts = [];
 			function done(err) { d.dl = false; domPlace(); if (err) zm.toast(err, 'error'); }
+			/* домены, затем IP-подсети — частями, как читает роутер; в файле — два раздела с заголовками «#»,
+			 * их понимают и «Свой список», и большинство программ для списков */
+			var ips = [], ipTotal = 0;
+			function save() {
+				var name = ((domItem(id) || {}).name || id), head = '# ' + name + ': ' + domNum(d.count) + ' ' + domWord(d.count) + (ipTotal ? ', ' + domNum(ipTotal) + ' ' + plural(ipTotal, 'IP-подсеть', 'IP-подсети', 'IP-подсетей') : '');
+				var text = head + '\n\n# Домены (вместе с поддоменами)\n' + parts.join('\n') + '\n' + (ips.length ? '\n# IP-подсети\n' + ips.join('\n') + '\n' : '');
+				var url = URL.createObjectURL(new Blob([ text ], { type: 'text/plain;charset=utf-8' }));
+				var a = E('a', { 'href': url, 'download': (ips.length ? 'list-' : 'domains-') + id + '.txt', 'style': 'display:none' });
+				document.body.appendChild(a);
+				a.click();
+				setTimeout(function() { URL.revokeObjectURL(url); if (a.parentNode) a.parentNode.removeChild(a); }, 1500);
+				done();
+			}
+			function nextIp(off) {
+				zm.steerAction('svc_dom', id + ':' + off + ':' + DOM_PART + ':ip').then(function(r) {
+					if (r.error) { done(String(r.error)); return; }
+					var list = String(r.domains || '').split(/\s+/).filter(function(x) { return x; });
+					if (list.length) ips = ips.concat(list);
+					ipTotal = parseInt(r.ips, 10) || 0;
+					if (list.length && off + DOM_PART < ipTotal) { nextIp(off + DOM_PART); return; }
+					ipTotal = ips.length;
+					save();
+				}).catch(function() { done('Роутер не ответил'); });
+			}
 			function next(off) {
 				zm.steerAction('svc_dom', id + ':' + off + ':' + DOM_PART).then(function(r) {
 					if (r.error) { done(String(r.error)); return; }
@@ -32311,12 +32359,7 @@ return view.extend({
 					if (list.length) parts.push(list.join('\n'));
 					var total = parseInt(r.count, 10) || 0;
 					if (list.length && off + DOM_PART < total) { next(off + DOM_PART); return; }
-					var url = URL.createObjectURL(new Blob([ parts.join('\n') + '\n' ], { type: 'text/plain;charset=utf-8' }));
-					var a = E('a', { 'href': url, 'download': 'domains-' + id + '.txt', 'style': 'display:none' });
-					document.body.appendChild(a);
-					a.click();
-					setTimeout(function() { URL.revokeObjectURL(url); if (a.parentNode) a.parentNode.removeChild(a); }, 1500);
-					done();
+					if ((parseInt(r.ips, 10) || 0) > 0) nextIp(0); else save();
 				}).catch(function() { done('Роутер не ответил'); });
 			}
 			next(0);
@@ -32327,13 +32370,13 @@ return view.extend({
 				: domNum(d.count) + ' ' + domWord(d.count) + (d.ips ? ' · ' + domNum(d.ips) + ' ' + plural(d.ips, 'IP-подсеть', 'IP-подсети', 'IP-подсетей') : '');
 			var subTip = d && !d.error ? 'Домены действуют вместе с поддоменами' + (d.ips ? '; IP-подсети — адреса и диапазоны, которые идут тем же путём' : '') + (d.src ? '. Источник: ' + d.src : '') : '';
 			var btns = [];
-			if (d && d.count) btns.push(E('button', { 'type': 'button', 'class': 'cbi-button', 'disabled': d.dl ? '' : null, 'click': function() { domDownload(id); } }, d.dl ? 'Скачиваем…' : 'Скачать .txt'));
+			if (d && d.count) btns.push(E('button', { 'type': 'button', 'class': 'cbi-button', 'title': d.ips ? 'Домены и IP-подсети одним файлом .txt' : 'Все домены списка файлом .txt', 'disabled': d.dl ? '' : null, 'click': function() { domDownload(id); } }, d.dl ? 'Скачиваем…' : d.ips ? 'Скачать список доменов и IP' : 'Скачать список доменов'));
 			btns.push(E('button', { 'type': 'button', 'class': 'cbi-button', 'click': function() { domToggle(id); } }, 'Свернуть'));
 			if (!d) body.push(E('p', { 'class': 'zm-hint zm-dom-more' }, 'Читаем список с роутера…'));
 			else if (d.error) body.push(E('div', { 'class': 'zm-refresh-banner zm-show', 'style': 'margin-top:12px' }, d.error));
 			else {
 				body.push(E('div', { 'class': 'zm-dom-list' }, d.list.map(function(x) { return E('div', { 'class': 'zm-dom-item' }, x); })));
-				if (d.count > d.list.length) body.push(E('p', { 'class': 'zm-hint zm-dom-more' }, 'Показаны первые ' + domNum(d.list.length) + ' из ' + domNum(d.count) + ' — весь список в «Скачать .txt».'));
+				if (d.count > d.list.length) body.push(E('p', { 'class': 'zm-hint zm-dom-more' }, 'Показаны первые ' + domNum(d.list.length) + ' из ' + domNum(d.count) + '. Весь список' + (d.ips ? ' вместе с IP-подсетями' : '') + ' — по кнопке «' + (d.ips ? 'Скачать список доменов и IP' : 'Скачать список доменов') + '».'));
 			}
 			return E('div', { 'class': 'zm-dom-panel' }, [
 				E('div', { 'class': 'zm-dom-head' }, [
@@ -32578,7 +32621,7 @@ return view.extend({
 			domFlagsLoad();
 			svcCard.appendChild(E('div', { 'class': 'zm-find-head' }, [
 				E('h4', { 'style': 'margin:0' }, 'Сервисы'),
-				E('button', { 'type': 'button', 'class': 'zm-find-open', 'title': 'Найти сайт в списках', 'click': findOpen }, [ findSvg('zm-find-ico', FIND_LOUPE), 'Найти сайт' ])
+				E('button', { 'type': 'button', 'class': 'zm-find-open', 'title': 'Найти сайт или IP-адрес в списках (Ctrl+K)', 'aria-label': 'Найти сайт или IP-адрес в списках', 'click': findOpen }, [ findSvg('zm-find-ico', FIND_LOUPE), 'Найти сайт или IP' ])
 			]));
 			svcCard.appendChild(zm.svcGrid(svcs.map(svcTile)));
 			if (cats.length) {
