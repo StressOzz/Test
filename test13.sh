@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 2.82
+# Version: 2.83
 ZM_VERSION_EOF
 set -e
 
@@ -23928,7 +23928,7 @@ return view.extend({
 							'keydown': function(ev) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); findToggle(h.id); } } }, [
 							E('div', { 'class': 'zm-svc-ico', 'style': ic ? 'background:' + ic.color : '' }, ic ? ic.ico : String(h.name || '?').slice(0, 2).toUpperCase()),
 							E('div', { 'class': 'zm-find-text' }, [
-								E('div', { 'class': 'zm-find-name' }, [ String(h.name), best === h && hits.length > 1 && !anyOn ? E('span', { 'class': 'zm-find-best' }, 'советуем') : '' ]),
+								E('div', { 'class': 'zm-find-name' }, [ String(h.name), best === h && hits.length > 1 && !anyOn ? E('span', { 'class': 'zm-find-best' }, 'лучший выбор') : '' ]),
 								E('div', { 'class': 'zm-find-why' }, inc ? 'входит во «Всё сразу» — уже идёт через туннель' : why)
 							]),
 							E('span', { 'class': 'zm-find-tag zm-find-tag-' + (h.by === 'dom' ? 'dom' : 'ip') }, h.by === 'dom' ? 'домен' : 'IP-адрес'),
@@ -31528,7 +31528,7 @@ return view.extend({
 							'keydown': function(ev) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); findToggle(h.id); } } }, [
 							E('div', { 'class': 'zm-svc-ico', 'style': ic ? 'background:' + ic.color : '' }, ic ? ic.ico : String(h.name || '?').slice(0, 2).toUpperCase()),
 							E('div', { 'class': 'zm-find-text' }, [
-								E('div', { 'class': 'zm-find-name' }, [ String((domItem(h.id) || h).name), best === h && hits.length > 1 && !anyOn ? E('span', { 'class': 'zm-find-best' }, 'советуем') : '' ]),
+								E('div', { 'class': 'zm-find-name' }, [ String((domItem(h.id) || h).name), best === h && hits.length > 1 && !anyOn ? E('span', { 'class': 'zm-find-best' }, 'лучший выбор') : '' ]),
 								E('div', { 'class': 'zm-find-why' }, why)
 							]),
 							E('span', { 'class': 'zm-find-tag zm-find-tag-' + (h.by === 'dom' ? 'dom' : 'ip') }, h.by === 'dom' ? 'домен' : 'IP-адрес'),
