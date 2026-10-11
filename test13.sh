@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 2.81
+# Version: 2.82
 ZM_VERSION_EOF
 set -e
 
@@ -23902,11 +23902,17 @@ return view.extend({
 				out.push(E('div', { 'class': 'zm-find-empty zm-find-err' }, [ E('span', {}, String(r.error)) ]));
 			} else {
 				var sel = findSel(), hits = (r.hits || []).filter(function(h) { return h.id !== 'custom'; });
+				/* по адресу ищем, только если по домену ничего нет: сайты за Cloudflare и другими CDN делят адреса
+				 * с тысячами чужих, и включать ради них «Cloudflare» — значит пустить через туннель всё подряд */
+				var domOnly = hits.filter(function(h) { return h.by === 'dom'; });
+				if (domOnly.length) hits = domOnly;
+				var WIDE_IDS = { cloudflare: 1, c_itdoginfo_cloudflare: 1, cloudfront: 1, c_itdoginfo_cloudfront: 1, digitalocean: 1, hetzner: 1, ovh: 1, discord: 1 };
+				function findWide(h) { var m = /\/(\d+)$/.exec(String(h.line || '')); return h.by === 'ip' && (!!WIDE_IDS[h.id] || (m && +m[1] <= 16)); }
 				var inCustom = (r.hits || []).some(function(h) { return h.id === 'custom'; });
 				hits.sort(function(a, b) { return (a.by === b.by ? 0 : a.by === 'dom' ? -1 : 1) || ((+a.size || 0) - (+b.size || 0)); });
 				var best = null;
 				/* советуем самый маленький список с этим доменом; по адресу — только если по домену нет ничего */
-				hits.forEach(function(h) { if (!best || (best.by !== 'dom' && h.by === 'dom') || (best.by === h.by && (+h.size || 0) < (+best.size || 0))) best = h; });
+				hits.forEach(function(h) { if (findWide(h)) return; if (!best || (best.by !== 'dom' && h.by === 'dom') || (best.by === h.by && (+h.size || 0) < (+best.size || 0))) best = h; });
 				var anyOn = hits.some(function(h) { return !!sel[h.id] || (!!sel.russia_inside && h.id !== 'russia_inside' && !h.group && zm.riCovers(h.id)); });
 				if (hits.length) {
 					out.push(E('div', { 'class': 'zm-find-title' }, anyOn ? 'Уже включено — сайт идёт через туннель' : 'Включите любой — сайт пойдёт через туннель'));
@@ -23914,7 +23920,7 @@ return view.extend({
 					hits.forEach(function(h) {
 						var on = !!sel[h.id], inc = !on && !!sel.russia_inside && h.id !== 'russia_inside' && !h.group && zm.riCovers(h.id);
 						var size = +h.size || 0;
-						var why = (h.by === 'dom' ? 'в списке есть ' + h.line : 'адрес ' + (r.ip || '') + ' в подсети ' + h.line)
+						var why = (h.by === 'dom' ? 'в списке есть ' + h.line : findWide(h) ? 'общий адрес ' + (r.ip || '') + ' (' + h.line + ') — через VPN пойдут и другие сайты' : 'адрес ' + (r.ip || '') + ' в подсети ' + h.line)
 							+ (h.group ? ' · ' + String(h.group).replace(/\s*\(.*\)\s*$/, '') : '') + (size > 20000 ? ' · большой список' : '');
 						var ic = zm.svcIco ? zm.svcIco(h.name, h.id) : null;
 						listEl.appendChild(E('div', { 'class': 'zm-find-row' + (on || inc ? ' zm-on' : ''), 'role': 'button', 'tabindex': '0',
@@ -31494,10 +31500,16 @@ return view.extend({
 			} else {
 				var sel = draft.sel || {}, taken = takenMap();
 				var hits = (r.hits || []).filter(function(h) { return h.id !== 'custom' && !!domItem(h.id); });
+				/* по адресу ищем, только если по домену ничего нет: сайты за Cloudflare и другими CDN делят адреса
+				 * с тысячами чужих, и включать ради них «Cloudflare» — значит пустить через туннель всё подряд */
+				var domOnly = hits.filter(function(h) { return h.by === 'dom'; });
+				if (domOnly.length) hits = domOnly;
+				var WIDE_IDS = { cloudflare: 1, c_itdoginfo_cloudflare: 1, cloudfront: 1, c_itdoginfo_cloudfront: 1, digitalocean: 1, hetzner: 1, ovh: 1, discord: 1 };
+				function findWide(h) { var m = /\/(\d+)$/.exec(String(h.line || '')); return h.by === 'ip' && (!!WIDE_IDS[h.id] || (m && +m[1] <= 16)); }
 				var inOwn = findOwnHas(r), many = secs().length > 1 || draft.sec === 'new';
 				hits.sort(function(a, b) { return (a.by === b.by ? 0 : a.by === 'dom' ? -1 : 1) || ((+a.size || 0) - (+b.size || 0)); });
 				var best = null;
-				hits.forEach(function(h) { if (!best || (best.by !== 'dom' && h.by === 'dom') || (best.by === h.by && (+h.size || 0) < (+best.size || 0))) best = h; });
+				hits.forEach(function(h) { if (findWide(h)) return; if (!best || (best.by !== 'dom' && h.by === 'dom') || (best.by === h.by && (+h.size || 0) < (+best.size || 0))) best = h; });
 				var anyOn = inOwn || hits.some(function(h) { return !!sel[h.id] || (!!sel.russia_inside && h.id !== 'russia_inside' && !h.group && zm.riCovers(h.id)); });
 				if (hits.length) {
 					out.push(E('div', { 'class': 'zm-find-title' }, anyOn ? 'Уже включено — сайт идёт через VPN' : (many ? 'Включите любой в секции «' + secName() + '»' : 'Включите любой — сайт пойдёт через VPN')));
@@ -31508,7 +31520,7 @@ return view.extend({
 						var size = +h.size || 0;
 						var why = by ? 'уже идёт через секцию «' + by + '»'
 							: inc ? 'входит во «Всё сразу» — уже идёт через VPN'
-							: (h.by === 'dom' ? 'в списке есть ' + h.line : 'адрес ' + (r.ip || '') + ' в подсети ' + h.line)
+							: (h.by === 'dom' ? 'в списке есть ' + h.line : findWide(h) ? 'общий адрес ' + (r.ip || '') + ' (' + h.line + ') — через VPN пойдут и другие сайты' : 'адрес ' + (r.ip || '') + ' в подсети ' + h.line)
 								+ (h.group ? ' · ' + String(h.group).replace(/\s*\(.*\)\s*$/, '') : '') + (size > 20000 ? ' · большой список' : '');
 						var ic = zm.svcIco ? zm.svcIco(h.name, h.id) : null;
 						listEl.appendChild(E('div', { 'class': 'zm-find-row' + (on || inc ? ' zm-on' : '') + (by ? ' zm-find-taken' : ''), 'role': 'button', 'tabindex': '0',
