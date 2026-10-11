@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 2.84
+# Version: 2.95
 ZM_VERSION_EOF
 set -e
 
@@ -180,6 +180,34 @@ _tg_arch_init() {
 ZM_NL='
 '
 _zm_re() { case "$1" in *"$ZM_NL"*) return 1 ;; esac; printf '%s\n' "$1" | grep -qE -- "$2"; }
+
+# Ограничение времени команды. В части прошивок busybox собран без timeout, а ссылка /usr/bin/timeout
+# осталась — «command -v» её находит, а запуск даёт «timeout: applet not found». Поэтому проверяем делом
+# (один раз за вызов скрипта); старый busybox с синтаксисом «timeout -t» проверку тоже не проходит.
+# Нет рабочего timeout — ограничиваем сами: команда в фоне (stdin сохраняем), сторож снимает её по сроку.
+ZM_TMO=""
+_zm_tmo_ok() {
+	[ -n "$ZM_TMO" ] || { if timeout 1 true >/dev/null 2>&1; then ZM_TMO=1; else ZM_TMO=0; fi; }
+	[ "$ZM_TMO" = 1 ]
+}
+_zm_tmo() {
+	local s="$1" p w rc
+	shift
+	# timeout умеет запускать только программы; функцию оболочки ограничиваем своим сторожем
+	case "$(type "$1" 2>/dev/null)" in *function*) ;; *) if _zm_tmo_ok; then timeout "$s" "$@"; return; fi ;; esac
+	case "$s" in ''|*[!0-9]*) s=60 ;; esac
+	# фоновой команде оболочка подставляет /dev/null вместо stdin — отдаём ей наш stdin через fd 3
+	{ "$@" <&3 3<&- & } 3<&0
+	p=$!
+	( i=0
+	  while [ "$i" -lt "$s" ] && kill -0 "$p" 2>/dev/null; do sleep 1; i=$((i + 1)); done
+	  if kill -0 "$p" 2>/dev/null; then kill "$p" 2>/dev/null; sleep 1; kill -9 "$p" 2>/dev/null; fi ) >/dev/null 2>&1 </dev/null &
+	w=$!
+	wait "$p" 2>/dev/null; rc=$?
+	wait "$w" 2>/dev/null
+	case "$rc" in 137|143) rc=124 ;; esac
+	return $rc
+}
 
 esc() {
 	printf '%s' "$1" | tr -d '\000-\010\013\014\016-\037' | sed 's/\\/\\\\/g; s/"/\\"/g; s/\t/\\t/g; s/\r/\\r/g' | tr '\n' ' '
@@ -1065,6 +1093,23 @@ ui_theme_set() {
 	printf '%s\n' "$1" > "$ZM_STATE_DIR/ui.theme"
 	printf '%s\n' "$1" > /www/zm/theme.txt
 	chmod 0644 /www/zm/theme.txt 2>/dev/null
+	printf '{"ok":true}\n'
+}
+
+# Отметки интерфейса («больше не показывать»): по одной в строке
+ui_flags_get() {
+	local f="$ZM_STATE_DIR/ui.flags" out="" sep="" k
+	if [ -s "$f" ]; then
+		for k in $(grep -E '^[a-z0-9_]{1,48}$' "$f" | sort -u); do out="$out$sep\"$k\":1"; sep=","; done
+	fi
+	printf '{"flags":{%s}}\n' "$out"
+}
+
+ui_flag_set() {
+	local f="$ZM_STATE_DIR/ui.flags"
+	printf '%s' "$1" | grep -qE '^[a-z0-9_]{1,48}$' || { echo '{"error":"неверное имя"}'; return 1; }
+	mkdir -p "$ZM_STATE_DIR"
+	grep -qx "$1" "$f" 2>/dev/null || echo "$1" >> "$f"
 	printf '{"ok":true}\n'
 }
 
@@ -8156,8 +8201,7 @@ _doh_boots_for() {
 _doh_t() {
 	local s="$1"
 	shift
-	# у старого busybox другой синтаксис timeout — тогда обходимся без него
-	if timeout 1 true >/dev/null 2>&1; then timeout "$s" "$@"; else "$@"; fi
+	_zm_tmo "$s" "$@"
 }
 
 # Адреса DoH-сервера — через Bootstrap DNS, а не через DNS роутера: тот может как раз не работать
@@ -8528,7 +8572,7 @@ STL_VPN_DEV="zm_vpn"
 
 _stl_say() { echo "==> $*"; }
 _st_onfail() { [ "$(cat /etc/zm-steer/onfail 2>/dev/null)" = drop ] && echo drop || echo direct; }
-_stl_t() { if command -v timeout >/dev/null 2>&1; then timeout "$@"; else shift; "$@"; fi; }
+_stl_t() { _zm_tmo "$@"; }
 _stl_out() { case "$1" in vpn) echo "$STL_VPN_OUT" ;; *) echo "$STL_WARP_OUT" ;; esac; }
 _stl_js() { printf '"%s"' "$(esc "$1")"; }
 _stl_ident() {
@@ -8640,7 +8684,18 @@ stl_engine_install() {
 	_stl_say "Ставим ядро steer $ver: $(echo $pkgs | sed 's/ /, /g')"
 	$UPDATE >&2
 	[ -s "$STL_SPEC" ] && cp -f "$STL_SPEC" "$keep"
-	if [ "$PKG" = apk ]; then
+	if [ -n "$STL_REINSTALL" ] && [ -z "$legacy" ]; then
+		# переустановка той же версии: пакеты уже скачаны, ставим их поверх стоящих
+		"$STL_INIT" stop >/dev/null 2>&1
+		if [ "$PKG" = apk ]; then
+			n=""; for p in $pkgs; do _pkg_is_installed "$p" && n="$n $p"; done
+			[ -n "$n" ] && $DELETE $n >&2
+			$INSTALL $files >&2; rc=$?
+			[ "$rc" = 0 ] || { $INSTALL $files >&2; rc=$?; }
+		else
+			$INSTALL --force-reinstall $files >&2; rc=$?
+		fi
+	elif [ "$PKG" = apk ]; then
 		for n in $legacy; do if [ "$n" = steer ]; then apk add steer >/dev/null 2>&1; else old="$old !$n"; fi; done
 		$INSTALL $files $old >&2; rc=$?
 		[ "$rc" = 0 ] && for n in $legacy; do apk del "$n" >/dev/null 2>&1; done
@@ -11106,8 +11161,53 @@ _st_engine_ready() {
 
 _st_failopen() { stl_state "$(_st_exit)" && [ "$STL_FAILED" = true ]; }
 
+# Самопочинка по итогам самодиагностики ядра: сначала перезапуск (клиенты протоколов поднимаются не сразу —
+# ждём до 30 секунд), не помогло — переустановка той же версии ядра с нужными модулями (правила остаются).
+# Переустановка — не чаще раза в 30 минут, чтобы при поломке, которую так не исправить, не качать ядро по кругу.
+ST_HEAL_STAMP="$ST_DIR/heal.reinstall"
+_st_heal_wait() {
+	local f="$1" i=0
+	while [ "$i" -lt 10 ]; do
+		sleep 3; i=$((i + 1))
+		stl_running || continue
+		stl_diag_lines > "$f"
+		[ -s "$f" ] && ! grep -q '^fail' "$f" && return 0
+	done
+	return 1
+}
+_st_heal() {
+	local f="$1" ver
+	ST_HEAL_DID="перезапуск ядра не помог"
+	_rb_say "Чиним сами: перезапускаем ядро steer"
+	if stl_restart && _st_heal_wait "$f"; then
+		echo "   ✓ После перезапуска ядра всё работает"
+		return 0
+	fi
+	if [ -f "$ST_HEAL_STAMP" ] && [ -z "$(find "$ST_HEAL_STAMP" -mmin +30 2>/dev/null)" ]; then
+		echo "   ! Перезапуск не помог, а ядро уже переустанавливали меньше получаса назад — второй раз не трогаем"
+		stl_diag_lines > "$f"
+		return 1
+	fi
+	mkdir -p "$ST_DIR"; touch "$ST_HEAL_STAMP"
+	ST_HEAL_DID="не помогли ни перезапуск, ни переустановка ядра"
+	ver="$(stl_version)"; _stl_ver_ok "$ver" || ver="$(stl_latest)"
+	_rb_say "Перезапуск не помог — переустанавливаем ядро steer $ver"
+	if ! STL_REINSTALL=1 stl_engine_install "$ver" $(_st_use_vpn && _st_sub_feats); then
+		echo "   ✗ Переустановить ядро не удалось — проверьте интернет и нажмите «Применить» ещё раз"
+		stl_running || stl_restart >/dev/null 2>&1
+		stl_diag_lines > "$f"
+		return 1
+	fi
+	stl_running || stl_restart >/dev/null 2>&1
+	if _st_heal_wait "$f"; then
+		echo "   ✓ После переустановки ядра всё работает"
+		return 0
+	fi
+	return 1
+}
+
 _st_selfcheck() {
-	local f="$ST_RUN/diag.json" n i v what why bad=0 trace
+	local f="$ST_RUN/diag.json" n i v what why bad=0 trace healed="" did=""
 	_rb_say "Проверяем, что всё работает"
 	if _st_work && _st_use_vpn; then
 		_st_vpn_check || bad=1
@@ -11145,14 +11245,29 @@ _st_selfcheck() {
 		_st_work && echo "[ OK ] Ядро steer ведёт выбранные сервисы в туннель"
 	fi
 	stl_diag_lines > "$f"
+	# поломку ядра чиним сами — сразу, без «перезапустите вручную»; один раз за проверку
+	if grep -q '^fail' "$f" && [ -z "$ST_HEALING" ] && _st_work && [ ! -f "$ST_OFF" ]; then
+		while IFS="$(printf '\t')" read -r v what why; do
+			[ "$v" = fail ] && echo "!! $what"
+		done < "$f"
+		ST_HEALING=1
+		if _st_heal "$f"; then healed=1; fi
+		ST_HEALING=""
+		did="$ST_HEAL_DID"
+		_rb_say "Проверяем ещё раз"
+	fi
 	while IFS="$(printf '\t')" read -r v what why; do
 		case "$v" in
 			ok)   echo "[ OK ] $what" ;;
 			warn) echo "!! $what${why:+ — $why}" ;;
-			fail) echo "[FAIL] $what${why:+ — $why}"; bad=1 ;;
+			fail)
+				# совет «перезапустите ядро» после нашей починки уже не к месту — пишем, что пробовали
+				case "$why" in *'init.d/steer'*|*ерезапустите*|*ереустановите*) [ -n "$did" ] && why="$did; пришлите журнал в чат поддержки" ;; esac
+				echo "[FAIL] $what${why:+ — $why}"; bad=1 ;;
 		esac
 	done < "$f"
 	rm -f "$f"
+	[ -n "$healed" ] && [ "$bad" = 0 ] && echo "   · Поломку ядра панель исправила сама"
 	if [ "$bad" = 0 ]; then _rb_say "Проверка пройдена"; else _rb_warn "Проверка нашла поломку — подробности выше"; fi
 	return $bad
 }
@@ -11162,6 +11277,8 @@ do_steer_install() {
 	local blk
 	_st_phase install
 	rm -f "$ST_STOP_FLAG"
+	# ручная установка — с чистого листа: автопочинке снова можно переустанавливать ядро
+	rm -f "$ST_HEAL_STAMP"
 	blk="$(_st_blocker)"
 	_fk_present && { echo "ОШИБКА: стоит Forkozz — он сам направляет сервисы в туннель. Удалите Forkozz, чтобы поставить Steer"; return 1; }
 	case "$blk" in
@@ -11718,6 +11835,7 @@ do_steer_warp_recreate() {
 
 do_steer_remove() {
 	_st_phase remove
+	rm -f "$ST_HEAL_STAMP"
 	_rb_say "Удаляем Steer и туннель WARP"
 	local foreign="" p pkgs="" rc=0 keepf="$JOBS_DIR/steer.keep.$$" keptif="" kept=0 alien="" ownpk=""
 	case "$(_st_blocker)" in
@@ -12061,6 +12179,16 @@ _st_dom_build() {
 	rm -f "$src" "$out.base.$$"
 	printf '%s\n' "$ST_DOM_MISS" > "$out.miss"
 	printf '%s\n' "$ST_DOM_SRC" > "$out.how"
+	# подсети и адреса IP списка (IPv4 и IPv6, с маской или без, диапазоны): $out.ips — сами строки (для
+	# «Скачать .txt»), $out.ipn — их число (для подписи панели)
+	if [ -s "$out.pfxsrc" ]; then
+		awk '{ l = tolower($0); sub(/[#;].*$/, "", l); gsub(/[ \t\r]/, "", l)
+			if (l ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+((\/[0-9]+)|(-[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+))?$/ || (l ~ /^[0-9a-f:]+(\/[0-9]+)?$/ && index(l, ":"))) if (!s[l]++) print l }' \
+			$(cat "$out.pfxsrc") 2>/dev/null > "$out.ips"
+	else
+		: > "$out.ips"
+	fi
+	wc -l < "$out.ips" | tr -d ' ' > "$out.ipn"
 }
 
 # Есть ли в списке пункта домены — для значка «≡» на карточках Forkozz (у Steer это поле dom в его статусе):
@@ -12084,8 +12212,10 @@ steer_svc_domflags() {
 }
 
 steer_svc_dom() {
-	local id="${1%%:*}" r o l f n
+	local id="${1%%:*}" r o l f n ipn k="" src
 	r="${1#*:}"; o="${r%%:*}"; l="${r#*:}"
+	# четвёртое поле «ip» — отдать не домены, а IP-подсети списка (для «Скачать .txt»)
+	case "$l" in *:*) k="${l#*:}"; l="${l%%:*}" ;; esac
 	case "$id" in ''|*[!A-Za-z0-9_.-]*) echo '{"error":"нет такого сервиса"}'; return 1 ;; esac
 	case "$o" in ''|*[!0-9]*) o=0 ;; esac
 	case "$l" in ''|*[!0-9]*) l=500 ;; esac
@@ -12094,7 +12224,7 @@ steer_svc_dom() {
 	_rb_routable "$id" || { echo '{"error":"у этого пункта нет списка"}'; return 1; }
 	f="$ST_RUN/dom/$id.txt"
 	# файл моложе минуты берём как есть: «Скачать .txt» читает его частями
-	if [ ! -f "$f" ] || [ ! -f "$f.how" ] || [ -n "$(find "$f" -mmin +1 2>/dev/null)" ] || { [ "$o" = 0 ] && [ "$id" = custom ]; }; then
+	if [ ! -f "$f" ] || [ ! -f "$f.how" ] || [ ! -f "$f.ipn" ] || [ ! -f "$f.ips" ] || [ -n "$(find "$f" -mmin +1 2>/dev/null)" ] || { [ "$o" = 0 ] && [ "$id" = custom ] && [ "$k" != ip ]; }; then
 		_st_dom_build "$id" "$f"
 	fi
 	n="$(wc -l < "$f" | tr -d ' ')"
@@ -12102,8 +12232,10 @@ steer_svc_dom() {
 		mkdir -p "$ST_DIR"
 		{ grep -v "^$id " "$ST_DOMCNT" 2>/dev/null; echo "$id $n"; } > "$ST_DOMCNT.$$" && mv -f "$ST_DOMCNT.$$" "$ST_DOMCNT"
 	fi
-	printf '{"id":"%s","name":"%s","count":%s,"offset":%s,"src":"%s","domains":"%s"}\n' "$id" "$(esc "$(_rb_svc_field "$id" 2)")" "${n:-0}" "$o" \
-		"$(esc "$(cat "$f.how" 2>/dev/null)")" "$(sed -n "$((o + 1)),$((o + l))p" "$f" | tr '\n' ' ')"
+	ipn="$(cat "$f.ipn" 2>/dev/null)"; case "$ipn" in ''|*[!0-9]*) ipn=0 ;; esac
+	src="$f"; [ "$k" = ip ] && src="$f.ips"
+	printf '{"id":"%s","name":"%s","kind":"%s","count":%s,"ips":%s,"offset":%s,"src":"%s","domains":"%s"}\n' "$id" "$(esc "$(_rb_svc_field "$id" 2)")" "${k:-dom}" "${n:-0}" "$ipn" "$o" \
+		"$(esc "$(cat "$f.how" 2>/dev/null)")" "$(sed -n "$((o + 1)),$((o + l))p" "$src" 2>/dev/null | tr '\n' ' ')"
 }
 
 # «Найти сайт» на вкладке «Сервисы»: в каких пунктах есть домен (вместе с поддоменами) или его адрес IPv4
@@ -12144,9 +12276,11 @@ _st_ip_in() {
 steer_svc_find() {
 	local q host="" ip="" d="$ST_RUN/dom" suf="$ST_RUN/find.$$.s" res="$ST_RUN/find.$$.r" sel miss nmiss=0 sep=""
 	local id name f3 f4 f5 f6 f7 f8 rest f by line n grp on
-	q="$(_zm_route_target "$1")" || { echo '{"error":"введите сайт, например fast.com"}'; return 1; }
-	if printf '%s' "$q" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$'; then ip="$q"
-	elif printf '%s' "$q" | grep -q ':'; then echo '{"error":"введите домен, например fast.com"}'; return 1
+	q="$(_zm_route_target "$1")" || { echo '{"error":"введите сайт или IP, например fast.com или 1.2.3.4"}'; return 1; }
+	if printf '%s' "$q" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$'; then
+		printf '%s' "$q" | awk -F. '$1 < 256 && $2 < 256 && $3 < 256 && $4 < 256 { ok = 1 } END { exit !ok }' || { echo '{"error":"такого IP-адреса не бывает — в каждой части число от 0 до 255"}'; return 1; }
+		ip="$q"
+	elif printf '%s' "$q" | grep -q ':'; then echo '{"error":"IPv6 пока не ищется — введите IPv4-адрес или сайт"}'; return 1
 	else host="$q"; ip="$(_st_find_ip "$host")"; fi
 	mkdir -p "$d"
 	sel=" $(_st_sel | tr '\n' ' ') "
@@ -16510,8 +16644,8 @@ fk_route_check() {
 			nft get element inet "$FK_NFT" "$s" "{ $addr }" >/dev/null 2>&1 && { caught=1; how=subnet; break; }
 		done ;;
 	esac
-	if command -v timeout >/dev/null 2>&1; then tr="$(timeout 40 ucode "$FK_UC" route "$q" "$addr" "$source" 2>/dev/null)"
-	else tr="$(_fk_uc route "$q" "$addr" "$source" 2>/dev/null)"; fi
+	if _zm_tmo_ok; then tr="$(timeout 40 ucode "$FK_UC" route "$q" "$addr" "$source" 2>/dev/null)"
+	else tr="$(_zm_tmo 40 _fk_uc route "$q" "$addr" "$source" 2>/dev/null)"; fi
 	case "$tr" in
 		'{'*)
 			err="$(printf '%s' "$tr" | jsonfilter -e '@.error' 2>/dev/null)"
@@ -17042,11 +17176,9 @@ do_ab_apply() {
 	ids="$(_ab_ids)"
 	_ab_say "Блокировка рекламы: $(_ab_title "$(_ab_get list pro)")$([ "$(_ab_get tif 0)" = 1 ] && echo ' + защита от фишинга')$([ "$(_ab_get doh 0)" = 1 ] && echo ' + запрет чужих DoH')"
 	avail="$(awk '/^MemAvailable:/ { print $2 }' /proc/meminfo 2>/dev/null)"
-	if [ -n "$avail" ] && [ "$avail" -lt 60000 ] 2>/dev/null; then
-		echo "ОШИБКА: свободной памяти роутера всего $((avail / 1024)) МБ — для списка нужно хотя бы 60 МБ. Выберите список поменьше или отключите защиту от фишинга"
-		_ab_put err "мало свободной памяти" errat "$(date +%s)"
-		return 1
-	fi
+if [ -n "$avail" ] && [ "$avail" -lt 60000 ]; then
+    echo "!! Свободной памяти мало ($((avail / 1024)) МБ), продолжаем на свой риск"
+fi
 	_ab_say "Скачиваем списки"
 	now="$(date +%s)"
 	for id in $ids; do
@@ -17345,6 +17477,8 @@ case "$cmd" in
 	zm_watch)                             zm_watch ;;
 	ui_theme_get)                         ui_theme_get ;;
 	ui_theme_set)                         ui_theme_set "$1" ;;
+	ui_flags_get)                         ui_flags_get ;;
+	ui_flag_set)                          ui_flag_set "$1" ;;
 	*) echo '{"error":"неизвестная команда"}'; exit 1 ;;
 esac
 ZM_INSTALLER_EOF
@@ -20216,6 +20350,8 @@ list_methods() {
 	json_add_object "jobs_cancel";            json_add_string "job" "string"; json_close_object
 	json_add_object "ui_theme_get";           json_close_object
 	json_add_object "ui_theme_set";           json_add_string "theme" "string"; json_close_object
+	json_add_object "ui_flags_get";           json_close_object
+	json_add_object "ui_flag_set";            json_add_string "name" "string"; json_close_object
 	json_dump
 }
 
@@ -20330,6 +20466,8 @@ call_method() {
 		jobs_cancel)             json_get_var job job;         "$BACKEND" jobs_cancel "$job" ;;
 		ui_theme_get)            "$BACKEND" ui_theme_get ;;
 		ui_theme_set)            json_get_var theme theme;     "$BACKEND" ui_theme_set "$theme" ;;
+		ui_flags_get)            "$BACKEND" ui_flags_get ;;
+		ui_flag_set)             json_get_var name name;       "$BACKEND" ui_flag_set "$name" ;;
 		*) echo '{"error":"unknown method"}'; return 1 ;;
 	esac
 }
@@ -20403,7 +20541,8 @@ cat > '/usr/share/rpcd/acl.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF'
 					"forkop_status",
 					"forkop_config_get",
 					"sysinfo_get",
-					"ui_theme_get"
+					"ui_theme_get",
+					"ui_flags_get"
 				],
 				"system": [
 					"info"
@@ -20484,6 +20623,7 @@ cat > '/usr/share/rpcd/acl.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF'
 					"sysinfo_run",
 					"jobs_cancel",
 					"ui_theme_set",
+					"ui_flag_set",
 					"system_reboot",
 					"reboot_hint_clear"
 				]
@@ -20620,6 +20760,8 @@ var callAwgStatus = zmDeclare({ object: 'zapret-manager', method: 'awg_status', 
 var callAwgAction = zmDeclare({ object: 'zapret-manager', method: 'awg_action', params: ['action', 'mode'], expect: {} });
 var callTermStatus = zmDeclare({ object: 'zapret-manager', method: 'term_status', expect: {} });
 var callTermAction = zmDeclare({ object: 'zapret-manager', method: 'term_action', params: ['action', 'mode'], expect: {} });
+var callUiFlagsGet = zmDeclare({ object: 'zapret-manager', method: 'ui_flags_get', expect: {} });
+var callUiFlagSet = zmDeclare({ object: 'zapret-manager', method: 'ui_flag_set', params: ['name'], expect: {} });
 var callAdblockStatus = zmDeclare({ object: 'zapret-manager', method: 'adblock_status', expect: {} });
 var callAdblockAction = zmDeclare({ object: 'zapret-manager', method: 'adblock_action', params: ['action', 'mode'], expect: {} });
 var callSteerStatus = zmDeclare({ object: 'zapret-manager', method: 'steer_status', expect: {} });
@@ -21077,20 +21219,22 @@ function jobName(j) {
 
 function stopAll() {
 	if (_stopBusy) return;
-	if (!confirm('Остановить все операции?\n\nВсе их процессы будут принудительно завершены. Если прервать установку, её можно просто запустить заново.')) return;
-	_stopBusy = true;
-	renderStopBar();
-	callJobsCancel('').then(function(res) {
-		_stopBusy = false;
-		if (res && res.error) { toast(res.error, 'error'); renderStopBar(); return; }
-		var n = (res && res.stopped || []).length;
-		toast(n ? 'Остановлено: ' + res.stopped.map(jobName).join(', ') : 'Активных операций не было', n ? 'warning' : 'info');
-		_stuck = {};
+	return ask('Остановить все операции?\n\nВсе их процессы будут принудительно завершены. Если прервать установку, её можно просто запустить заново.').then(function(ok) {
+		if (!ok) return;
+		_stopBusy = true;
 		renderStopBar();
-	}).catch(function() {
-		_stopBusy = false;
-		renderStopBar();
-		toast('Роутер не ответил — попробуйте ещё раз', 'error');
+		callJobsCancel('').then(function(res) {
+			_stopBusy = false;
+			if (res && res.error) { toast(res.error, 'error'); renderStopBar(); return; }
+			var n = (res && res.stopped || []).length;
+			toast(n ? 'Остановлено: ' + res.stopped.map(jobName).join(', ') : 'Активных операций не было', n ? 'warning' : 'info');
+			_stuck = {};
+			renderStopBar();
+		}).catch(function() {
+			_stopBusy = false;
+			renderStopBar();
+			toast('Роутер не ответил — попробуйте ещё раз', 'error');
+		});
 	});
 }
 
@@ -21432,6 +21576,16 @@ function dialog(o) {
 					});
 				} else if (b.type === 'switch') {
 					body.appendChild(swRow(!!vals[b.id], b.label, b.hint, function() { vals[b.id] = !vals[b.id]; draw(); }, b.disabled));
+				} else if (b.type === 'input') {
+					if (b.title) body.appendChild(E('div', { 'class': 'zm-dlg-title' }, b.title));
+					var inp = E('input', { 'type': 'text', 'class': 'cbi-input-text zm-dlg-input', 'spellcheck': 'false', 'autocapitalize': 'off', 'autocomplete': 'off',
+						'placeholder': b.placeholder || '', 'aria-label': b.title || b.placeholder || '' });
+					inp.value = vals[b.id] == null ? '' : String(vals[b.id]);
+					inp.addEventListener('input', function() { vals[b.id] = inp.value; if (okBtn) { if (allowed()) okBtn.removeAttribute('disabled'); else okBtn.setAttribute('disabled', ''); } });
+					inp.addEventListener('keydown', function(ev) { if (ev.key === 'Enter') { ev.preventDefault(); if (allowed()) close(vals); } });
+					body.appendChild(inp);
+					if (b.hint) body.appendChild(E('div', { 'class': 'zm-hint', 'style': 'margin:6px 0 0' }, b.hint));
+					if (!o._focus) o._focus = inp;
 				}
 			});
 			if (okBtn) { if (allowed()) okBtn.removeAttribute('disabled'); else okBtn.setAttribute('disabled', ''); }
@@ -21452,7 +21606,43 @@ function dialog(o) {
 		draw();
 		document.addEventListener('keydown', onKey);
 		document.body.appendChild(wrap);
+		/* фокус: в поле ввода, иначе на кнопку подтверждения — Enter сразу подтверждает, Esc отменяет */
+		setTimeout(function() { try { (o._focus || okBtn).focus(); if (o._focus) o._focus.select(); } catch (e) {} }, 0);
 	});
+}
+
+/* Вопрос «да/нет» в оформлении панели вместо confirm() браузера. Текст как у confirm: первая строка —
+   заголовок, остальное (после пустой строки) — пояснение. Подпись кнопки — глагол из вопроса
+   («Перезагрузить», «Очистить»), опасные действия — красной кнопкой. Ответ — Promise<boolean>. */
+var ASK_DANGER = /^(удалить|очистить|убрать|остановить|сбросить|отменить|заменить|свернуть)$/i;
+function askVerb(title) {
+	var words = String(title).replace(/[«»"()?!.,:;—–]/g, ' ').split(/\s+/), i, w, found = [];
+	for (i = 0; i < words.length; i++) {
+		w = words[i].toLowerCase();
+		if (w.length > 3 && w !== 'есть' && w !== 'быть' && /(ть|ти|ться)$/.test(w)) found.push(w);
+	}
+	/* «Отменить» рядом с кнопкой «Отмена» путает — берём следующее действие («перечитать», «перейти») */
+	if (found.length > 1 && found[0] === 'отменить') found.shift();
+	return found.length ? found[0].charAt(0).toUpperCase() + found[0].slice(1) : '';
+}
+function ask(text, o) {
+	o = o || {};
+	var t = String(text || ''), cut = t.indexOf('\n\n');
+	var title = (cut < 0 ? t : t.slice(0, cut)).trim(), rest = cut < 0 ? '' : t.slice(cut + 2).trim();
+	if (!rest && title.length > 70) {
+		var dot = title.search(/[.?!]\s/);
+		if (dot > 0 && dot < title.length - 2) { rest = title.slice(dot + 1).trim(); title = title.slice(0, dot + 1).trim(); }
+	}
+	var verb = o.okText || (/\?\s*$/.test(title) ? askVerb(title) : '') || (/\?\s*$/.test(title) ? 'Да' : 'Продолжить');
+	var danger = o.danger != null ? !!o.danger : (ASK_DANGER.test(verb) || /несохранённ|будут удалены|пропадут/i.test(t));
+	return dialog({ title: title, intro: rest, okText: verb, cancelText: o.cancelText || 'Отмена', danger: danger }).then(function(v) { return !!v; });
+}
+
+/* Строка ввода в оформлении панели вместо prompt(). Ответ — введённый текст или null (отмена). */
+function askText(o) {
+	o = o || {};
+	return dialog({ title: o.title || '', intro: o.intro || '', okText: o.okText || 'Сохранить', blocks: [ { type: 'input', id: 'v', value: o.value || '', placeholder: o.placeholder || '', hint: o.hint || '' } ] })
+		.then(function(v) { return v ? String(v.v == null ? '' : v.v) : null; });
 }
 
 function saveBar(o) {
@@ -21555,12 +21745,14 @@ function rebootWait(note) {
 }
 
 function rebootRouter() {
-	if (!confirm('Перезагрузить роутер?\n\nИнтернет пропадёт на 1–2 минуты, потом всё поднимется само.')) return Promise.resolve(false);
-	return callSystemReboot().then(function(r) {
-		if (r && r.error) { toast(r.error, 'error'); return false; }
-		rebootWait(E('span', { 'class': 'zm-hint', 'style': 'margin:0' }));
-		return true;
-	}, function() { toast('Роутер не ответил', 'error'); return false; });
+	return ask('Перезагрузить роутер?\n\nИнтернет пропадёт на 1–2 минуты, потом всё поднимется само.').then(function(ok) {
+		if (!ok) return Promise.resolve(false);
+		return callSystemReboot().then(function(r) {
+			if (r && r.error) { toast(r.error, 'error'); return false; }
+			rebootWait(E('span', { 'class': 'zm-hint', 'style': 'margin:0' }));
+			return true;
+		}, function() { toast('Роутер не ответил', 'error'); return false; });
+	});
 }
 
 function rebootBanner(text) {
@@ -21776,8 +21968,7 @@ function hidePicker(o) {
 		}, function() { saving = false; syncBar(); });
 	}
 	function reset() {
-		if (!confirm('Вернуть все ' + noun + ' в список?')) return;
-		Promise.resolve(o.onReset()).then(function(ok) { if (ok !== false) stop(); }, function() {});
+		return ask('Вернуть все ' + noun + ' в список?').then(function(ok) { if (!ok) return; Promise.resolve(o.onReset()).then(function(ok) { if (ok !== false) stop(); }, function() {}); });
 	}
 	function markGrid() {
 		Array.prototype.forEach.call(el.querySelectorAll('.zm-hide-grid > .zm-node'), function(t) {
@@ -21953,8 +22144,7 @@ function linksEditor(o) {
 			E('div', { 'class': 'zm-link-btns' }, [
 				btn('Изменить', '', function() { editing = i; render(); }),
 				btn('✕', 'cbi-button-remove', function() {
-					if (!confirm('Убрать сервер «' + (inf.name || inf.host || 'без названия') + '» из списка?')) return;
-					lines.splice(i, 1); editing = -1; emit(); render();
+					return ask('Убрать сервер «' + (inf.name || inf.host || 'без названия') + '» из списка?').then(function(ok) { if (!ok) return; lines.splice(i, 1); editing = -1; emit(); render(); });
 				}, 'Убрать из списка')
 			])
 		]);
@@ -22075,12 +22265,40 @@ function routeWhere(w, o) {
 	return out;
 }
 
+/* Плашки «Понятно, больше не показывать»: отметка хранится на роутере (LuCI и Web UI — разные адреса,
+   браузер держит их хранилища раздельно), а в браузере — только как быстрый запас до ответа роутера */
+var _uiFlags = null;
+function uiFlags() {
+	if (!_uiFlags) _uiFlags = callUiFlagsGet().then(function(r) { return (r && r.flags) || {}; }).catch(function() { return {}; });
+	return _uiFlags;
+}
+function uiFlagLocal(key, set) {
+	try {
+		if (set) localStorage.setItem('zm.flag.' + key, '1');
+		return localStorage.getItem('zm.flag.' + key) === '1';
+	} catch (e) { return !!set; }
+}
+function uiFlagSet(key) {
+	uiFlagLocal(key, true);
+	uiFlags().then(function(f) { f[key] = 1; });
+	return callUiFlagSet(key).catch(function() {});
+}
+
 function hostsWarn(name) {
 	var href = document.body.classList.contains('zmw-body') ? '#/hosts' : L.url('admin/services/zapret-manager/hosts');
+	var key = 'hosts_warn_' + String(name).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+	var want = false, hidden = uiFlagLocal(key);
 	var el = E('div', { 'class': 'zm-refresh-banner zm-show zm-hosts-warn', 'role': 'note', 'style': 'display:none' }, [
-		E('span', { 'style': 'line-height:1.5' }, [ 'В ', E('a', { 'href': href }, 'hosts'), ' есть сторонние записи — они могут мешать работе ' + name + '.' ])
+		E('span', { 'style': 'line-height:1.5' }, [ 'В ', E('a', { 'href': href }, 'hosts'), ' есть сторонние записи — они могут мешать работе ' + name + '.' ]),
+		E('button', { 'type': 'button', 'class': 'cbi-button zm-hosts-warn-ok', 'click': function() {
+			hidden = true; paint();
+			uiFlagSet(key);
+			toast('Это предупреждение больше не появится', 'info');
+		} }, 'Понятно, больше не показывать')
 	]);
-	el.set = function(on) { el.style.display = on ? '' : 'none'; return el; };
+	function paint() { el.style.display = want && !hidden ? '' : 'none'; }
+	uiFlags().then(function(f) { if (f[key]) { hidden = true; paint(); } });
+	el.set = function(on) { want = !!on; paint(); return el; };
 	return el;
 }
 
@@ -22201,6 +22419,8 @@ return baseclass.extend({
 	riNote: riNote,
 	swRow: swRow,
 	dialog: dialog,
+	ask: ask,
+	askText: askText,
 	saveBar: saveBar,
 	exclParse: exclParse,
 	exclNorm: exclNorm,
@@ -23114,8 +23334,7 @@ return view.extend({
 					job('install', '', 'Доустанавливаем AmneziaWG');
 				} }, 'Доустановить'));
 				acts.push(E('button', { 'class': 'cbi-button', 'click': function() {
-					if (!confirm('Переустановить AmneziaWG?\n\nЕсли туннели работают, новый модуль заработает после перезагрузки роутера.')) return;
-					job('update', '', 'Переустанавливаем AmneziaWG');
+					return zm.ask('Переустановить AmneziaWG?\n\nЕсли туннели работают, новый модуль заработает после перезагрузки роутера.').then(function(ok) { if (!ok) return; job('update', '', 'Переустанавливаем AmneziaWG'); });
 				} }, 'Переустановить'));
 				acts.push(E('button', { 'class': 'cbi-button cbi-button-remove', 'click': function() {
 					var list = (data.ifaces || []).filter(function(f) { return f.owner !== 'steer'; });
@@ -23209,8 +23428,7 @@ return view.extend({
 				acts.push(E('button', { 'class': 'cbi-button', 'click': function() { open[f.name] = open[f.name] === 'ep' ? null : 'ep'; renderIfaces(); } }, 'Точка входа'));
 			}
 			if (!(steer && (data.steer_own || f.name === 'zmwarp4'))) acts.push(E('button', { 'class': 'cbi-button cbi-button-action', 'click': function() {
-				if (!confirm('Новые ключи WARP для ' + f.name + '?\n\n' + (f.warp ? 'Точка входа и маскировка сохранятся.' : 'Туннель переключится с вашего сервера на WARP.'))) return;
-				job('regen', f.name, 'Новые ключи WARP для ' + f.name);
+				return zm.ask('Новые ключи WARP для ' + f.name + '?\n\n' + (f.warp ? 'Точка входа и маскировка сохранятся.' : 'Туннель переключится с вашего сервера на WARP.'), { okText: 'Получить ключи' }).then(function(ok) { if (!ok) return; job('regen', f.name, 'Новые ключи WARP для ' + f.name); });
 			} }, 'Новый WARP'));
 			acts.push(E('button', { 'class': 'cbi-button', 'click': function() {
 				if (open[f.name] === 'conf') { open[f.name] = null; renderIfaces(); return; }
@@ -23250,12 +23468,14 @@ return view.extend({
 					onCancel: function() { ta.value = open[f.name + ':orig']; open[f.name + ':conf'] = ta.value; ta.dispatchEvent(new Event('input')); },
 					onSave: function(t) {
 						if (!/\[interface\]/i.test(t) || !/\[peer\]/i.test(t)) { zm.toast('Нужны секции [Interface] и [Peer]', 'warning'); return false; }
-						if (!confirm('Заменить конфиг ' + f.name + '?\n\nЗона firewall и маршруты останутся как есть, туннель переподключится.')) return false;
-						var k = f.name + ':orig', prev = open[k];
-						open[k] = t; open[f.name + ':conf'] = t;
-						return job('replace', f.name + '|' + t, 'Применяем конфиг ' + f.name).then(function(ok) {
-							if (ok) delete open[k]; else open[k] = prev;
-							return ok;
+						return zm.ask('Заменить конфиг ' + f.name + '?\n\nЗона firewall и маршруты останутся как есть, туннель переподключится.').then(function(ok) {
+							if (!ok) return false;
+							var k = f.name + ':orig', prev = open[k];
+							open[k] = t; open[f.name + ':conf'] = t;
+							return job('replace', f.name + '|' + t, 'Применяем конфиг ' + f.name).then(function(ok) {
+								if (ok) delete open[k]; else open[k] = prev;
+								return ok;
+							});
 						});
 					}
 				});
@@ -23297,8 +23517,9 @@ return view.extend({
 
 			function run(mode, toastText) {
 				if (busy) { zm.toast('Дождитесь окончания текущей операции', 'warning'); return; }
-				if (data.warp_conf && !confirm('WARP.conf уже есть — заменить его новым?')) return;
-				job('gen', mode, toastText);
+				var zmGo = function() { job('gen', mode, toastText); };
+				if (data.warp_conf) return zm.ask('WARP.conf уже есть — заменить его новым?').then(function(ok) { return ok ? zmGo() : undefined; });
+				return zmGo();
 			}
 			genCard.appendChild(E('div', { 'class': 'zm-actions' }, [
 				E('button', { 'class': 'cbi-button cbi-button-positive', 'disabled': busy ? '' : null, 'click': function() {
@@ -23426,9 +23647,12 @@ return view.extend({
 					if (!/^[a-z][a-z0-9_]{0,10}$/.test(nm)) { zm.toast('Имя: латиница в нижнем регистре, цифры и _, до 11 символов', 'warning'); return; }
 					if (!/\[interface\]/i.test(mk.text) || !/\[peer\]/i.test(mk.text)) { zm.toast('Вставьте конфигурацию с секциями [Interface] и [Peer]', 'warning'); return; }
 					var exists = (data.ifaces || []).some(function(f) { return f.name === nm; });
-					if (exists && !confirm('Интерфейс ' + nm + ' уже есть — заменить его?')) return;
-					job('create', nm + '|' + (mk.route ? 1 : 0) + '|' + (mk.fw ? 1 : 0) + '|' + mk.text, 'Создаём интерфейс ' + nm);
-					mk.name = '';
+					var zmGo = function() {
+						job('create', nm + '|' + (mk.route ? 1 : 0) + '|' + (mk.fw ? 1 : 0) + '|' + mk.text, 'Создаём интерфейс ' + nm);
+						mk.name = '';
+					};
+					if (exists) return zm.ask('Интерфейс ' + nm + ' уже есть — заменить его?').then(function(ok) { return ok ? zmGo() : undefined; });
+					return zmGo();
 				} }, 'Создать интерфейс')
 			]));
 		}
@@ -24127,12 +24351,12 @@ return view.extend({
 			zm.steerAction('svc_dom', id + ':0:' + DOM_SHOW).then(function(r) {
 				if (r.error) { domData[id] = { error: String(r.error) }; domPlace(); return; }
 				var n = parseInt(r.count, 10) || 0;
-				domData[id] = { count: n, src: String(r.src || ''), list: String(r.domains || '').split(/\s+/).filter(function(x) { return x; }) };
+				domData[id] = { count: n, ips: parseInt(r.ips, 10) || 0, src: String(r.src || ''), list: String(r.domains || '').split(/\s+/).filter(function(x) { return x; }) };
 				if (!n) {
 					var sv = domSvc(id);
 					if (sv) sv.dom = false;
 					if (domOpen === id) domOpen = null;
-					zm.toast('В списке «' + (sv ? sv.name : id) + '» только подсети — доменов нет', 'info');
+					zm.toast('В списке «' + (sv ? sv.name : id) + '» только IP-подсети' + (domData[id].ips ? ' (' + domNum(domData[id].ips) + ')' : '') + ' — доменов нет', 'info');
 					renderLists();
 					return;
 				}
@@ -24153,6 +24377,30 @@ return view.extend({
 				d.dl = false; domPlace();
 				if (err) zm.toast(err, 'error');
 			}
+			/* домены, затем IP-подсети — частями, как читает роутер; в файле — два раздела с заголовками «#»,
+			 * их понимают и «Свой список», и большинство программ для списков */
+			var ips = [], ipTotal = 0;
+			function save() {
+				var name = (sv && sv.name || id), head = '# ' + name + ': ' + domNum(d.count) + ' ' + domWord(d.count) + (ipTotal ? ', ' + domNum(ipTotal) + ' ' + plural(ipTotal, 'IP-подсеть', 'IP-подсети', 'IP-подсетей') : '');
+				var text = head + '\n\n# Домены (вместе с поддоменами)\n' + parts.join('\n') + '\n' + (ips.length ? '\n# IP-подсети\n' + ips.join('\n') + '\n' : '');
+				var url = URL.createObjectURL(new Blob([ text ], { type: 'text/plain;charset=utf-8' }));
+				var a = E('a', { 'href': url, 'download': (ips.length ? 'list-' : 'domains-') + id + '.txt', 'style': 'display:none' });
+				document.body.appendChild(a);
+				a.click();
+				setTimeout(function() { URL.revokeObjectURL(url); if (a.parentNode) a.parentNode.removeChild(a); }, 1500);
+				done();
+			}
+			function nextIp(off) {
+				zm.steerAction('svc_dom', id + ':' + off + ':' + DOM_PART + ':ip').then(function(r) {
+					if (r.error) { done(String(r.error)); return; }
+					var list = String(r.domains || '').split(/\s+/).filter(function(x) { return x; });
+					if (list.length) ips = ips.concat(list);
+					ipTotal = parseInt(r.ips, 10) || 0;
+					if (list.length && off + DOM_PART < ipTotal) { nextIp(off + DOM_PART); return; }
+					ipTotal = ips.length;
+					save();
+				}).catch(function() { done('Роутер не ответил'); });
+			}
 			function next(off) {
 				zm.steerAction('svc_dom', id + ':' + off + ':' + DOM_PART).then(function(r) {
 					if (r.error) { done(String(r.error)); return; }
@@ -24160,12 +24408,7 @@ return view.extend({
 					if (list.length) parts.push(list.join('\n'));
 					var total = parseInt(r.count, 10) || 0;
 					if (list.length && off + DOM_PART < total) { next(off + DOM_PART); return; }
-					var url = URL.createObjectURL(new Blob([ parts.join('\n') + '\n' ], { type: 'text/plain;charset=utf-8' }));
-					var a = E('a', { 'href': url, 'download': 'domains-' + id + '.txt', 'style': 'display:none' });
-					document.body.appendChild(a);
-					a.click();
-					setTimeout(function() { URL.revokeObjectURL(url); if (a.parentNode) a.parentNode.removeChild(a); }, 1500);
-					done();
+					if ((parseInt(r.ips, 10) || 0) > 0) nextIp(0); else save();
 				}).catch(function() { done('Роутер не ответил'); });
 			}
 			next(0);
@@ -24173,19 +24416,20 @@ return view.extend({
 		function domPanel(id) {
 			var d = domData[id], sv = domSvc(id) || { name: id }, body = [];
 			var sub = !d ? 'загружаем…' : d.error ? 'не удалось получить список'
-				: domNum(d.count) + ' ' + domWord(d.count) + (d.src ? ' · ' + d.src : '') + ' · с поддоменами';
+				: domNum(d.count) + ' ' + domWord(d.count) + (d.ips ? ' · ' + domNum(d.ips) + ' ' + plural(d.ips, 'IP-подсеть', 'IP-подсети', 'IP-подсетей') : '');
+			var subTip = d && !d.error ? 'Домены действуют вместе с поддоменами' + (d.ips ? '; IP-подсети — адреса и диапазоны, которые идут тем же путём' : '') + (d.src ? '. Источник: ' + d.src : '') : '';
 			var btns = [];
-			if (d && d.count) btns.push(E('button', { 'type': 'button', 'class': 'cbi-button', 'disabled': d.dl ? '' : null, 'click': function() { domDownload(id); } }, d.dl ? 'Скачиваем…' : 'Скачать .txt'));
+			if (d && d.count) btns.push(E('button', { 'type': 'button', 'class': 'cbi-button', 'title': d.ips ? 'Домены и IP-подсети одним файлом .txt' : 'Все домены списка файлом .txt', 'disabled': d.dl ? '' : null, 'click': function() { domDownload(id); } }, d.dl ? 'Скачиваем…' : d.ips ? 'Скачать список доменов и IP' : 'Скачать список доменов'));
 			btns.push(E('button', { 'type': 'button', 'class': 'cbi-button', 'click': function() { domToggle(id); } }, 'Свернуть'));
 			if (!d) body.push(E('p', { 'class': 'zm-hint zm-dom-more' }, 'Читаем список с роутера…'));
 			else if (d.error) body.push(E('div', { 'class': 'zm-refresh-banner zm-show', 'style': 'margin-top:12px' }, d.error));
 			else {
 				body.push(E('div', { 'class': 'zm-dom-list' }, d.list.map(function(x) { return E('div', { 'class': 'zm-dom-item' }, x); })));
-				if (d.count > d.list.length) body.push(E('p', { 'class': 'zm-hint zm-dom-more' }, 'Показаны первые ' + domNum(d.list.length) + ' из ' + domNum(d.count) + ' — весь список в «Скачать .txt».'));
+				if (d.count > d.list.length) body.push(E('p', { 'class': 'zm-hint zm-dom-more' }, 'Показаны первые ' + domNum(d.list.length) + ' из ' + domNum(d.count) + '. Весь список' + (d.ips ? ' вместе с IP-подсетями' : '') + ' — по кнопке «' + (d.ips ? 'Скачать список доменов и IP' : 'Скачать список доменов') + '».'));
 			}
 			return E('div', { 'class': 'zm-dom-panel' }, [
 				E('div', { 'class': 'zm-dom-head' }, [
-					E('div', { 'class': 'zm-dom-title' }, [ E('b', {}, 'Домены · ' + sv.name), E('span', { 'class': 'zm-dom-sub' }, sub) ]),
+					E('div', { 'class': 'zm-dom-title' }, [ E('b', {}, 'Домены · ' + sv.name), E('span', { 'class': 'zm-dom-sub', 'title': subTip || null }, sub) ]),
 					E('div', { 'class': 'zm-dom-btns' }, btns)
 				])
 			].concat(body));
@@ -24231,11 +24475,11 @@ return view.extend({
 		}
 		function findOpen() {
 			if (findEl || data.blocker) return;
-			var input = E('input', { 'type': 'text', 'class': 'zm-find-input', 'placeholder': 'Сайт, например fast.com', 'aria-label': 'Сайт или домен',
+			var input = E('input', { 'type': 'text', 'class': 'zm-find-input', 'placeholder': 'Сайт или IP, например fast.com или 1.2.3.4', 'aria-label': 'Сайт или IP-адрес',
 				'autocomplete': 'off', 'autocapitalize': 'off', 'spellcheck': 'false', 'enterkeyhint': 'search' });
 			input.value = findQ;
 			var body = E('div', { 'class': 'zm-find-body' });
-			var box = E('div', { 'class': 'zm-find zmw-modal', 'role': 'dialog', 'aria-modal': 'true', 'aria-label': 'Найти сайт в списках' }, [
+			var box = E('div', { 'class': 'zm-find zmw-modal', 'role': 'dialog', 'aria-modal': 'true', 'aria-label': 'Найти сайт или IP в списках' }, [
 				E('div', { 'class': 'zm-find-field' }, [
 					findSvg('zm-find-ico', FIND_LOUPE),
 					input,
@@ -24336,8 +24580,8 @@ return view.extend({
 			body.innerHTML = '';
 			if (!q) {
 				out.push(E('div', { 'class': 'zm-find-empty' }, [
-					E('b', {}, 'Какой сайт нужен?'),
-					E('span', {}, 'Впишите адрес — покажем, какой пункт включить, чтобы сайт шёл через туннель.')
+					E('b', {}, 'Какой сайт или IP нужен?'),
+					E('span', {}, 'Впишите сайт или IPv4-адрес — покажем, какой пункт включить, чтобы он шёл через туннель.')
 				]));
 			} else if (findBusy || !r) {
 				out.push(E('div', { 'class': 'zm-find-empty' }, [ E('span', { 'class': 'zm-find-spin', 'aria-hidden': 'true' }), E('span', {}, 'Ищем в списках…') ]));
@@ -24357,13 +24601,16 @@ return view.extend({
 				/* советуем самый маленький список с этим доменом; по адресу — только если по домену нет ничего */
 				hits.forEach(function(h) { if (findWide(h)) return; if (!best || (best.by !== 'dom' && h.by === 'dom') || (best.by === h.by && (+h.size || 0) < (+best.size || 0))) best = h; });
 				var anyOn = hits.some(function(h) { return !!sel[h.id] || (!!sel.russia_inside && h.id !== 'russia_inside' && !h.group && zm.riCovers(h.id)); });
+				var isIp = !!r.ip && !r.host;
 				if (hits.length) {
-					out.push(E('div', { 'class': 'zm-find-title' }, anyOn ? 'Уже включено — сайт идёт через туннель' : 'Включите любой — сайт пойдёт через туннель'));
+					out.push(E('div', { 'class': 'zm-find-title' }, isIp
+						? (anyOn ? 'Уже включено — адрес ' + r.ip + ' идёт через туннель' : 'Адрес ' + r.ip + ' есть в подсетях — включите любой пункт')
+						: (anyOn ? 'Уже включено — сайт идёт через туннель' : 'Включите любой — сайт пойдёт через туннель')));
 					var listEl = E('div', { 'class': 'zm-find-list' });
 					hits.forEach(function(h) {
 						var on = !!sel[h.id], inc = !on && !!sel.russia_inside && h.id !== 'russia_inside' && !h.group && zm.riCovers(h.id);
 						var size = +h.size || 0;
-						var why = (h.by === 'dom' ? 'в списке есть ' + h.line : findWide(h) ? 'общий адрес ' + (r.ip || '') + ' (' + h.line + ') — через VPN пойдут и другие сайты' : 'адрес ' + (r.ip || '') + ' в подсети ' + h.line)
+						var why = (h.by === 'dom' ? 'в списке есть ' + h.line : findWide(h) ? (isIp ? 'общая подсеть ' + h.line : 'общий адрес ' + (r.ip || '') + ' (' + h.line + ')') + ' — через туннель пойдут и другие сайты' : (isIp ? 'в подсети ' + h.line : 'адрес ' + (r.ip || '') + ' в подсети ' + h.line))
 							+ (h.group ? ' · ' + String(h.group).replace(/\s*\(.*\)\s*$/, '') : '') + (size > 20000 ? ' · большой список' : '');
 						var ic = zm.svcIco ? zm.svcIco(h.name, h.id) : null;
 						listEl.appendChild(E('div', { 'class': 'zm-find-row' + (on || inc ? ' zm-on' : ''), 'role': 'button', 'tabindex': '0',
@@ -24380,7 +24627,10 @@ return view.extend({
 					});
 					out.push(listEl);
 				} else {
-					out.push(E('div', { 'class': 'zm-find-empty' }, [
+					out.push(E('div', { 'class': 'zm-find-empty' }, isIp ? [
+						E('b', {}, 'Адреса ' + r.ip + ' нет в подсетях списков'),
+						E('span', {}, 'Пункты из одних доменов по IP не проверить — попробуйте найти сайт по имени или добавьте адрес в «Свой список».')
+					] : [
 						E('b', {}, 'Сайта нет ни в одном списке'),
 						E('span', {}, r.host ? 'Добавьте ' + r.host + ' в «Свой список» — он пойдёт через туннель.' : 'Добавьте адрес в «Свой список» — он пойдёт через туннель.')
 					]));
@@ -24405,15 +24655,16 @@ return view.extend({
 
 		function catalogEdit() {
 			var c = data.catalog || {};
-			var u = prompt('Ссылка на свой каталог списков (lists.json в формате splify2-lists, например из форка).\n\nПусто — каталог по умолчанию.', c.custom ? c.url : '');
-			if (u === null) return;
-			u = u.trim();
-			zm.toast('Скачиваем каталог…', 'info');
-			zm.steerAction('catalog_src', u).then(function(res) {
-				if (res.error) { zm.toast(res.error, 'error'); return; }
-				zm.toast('Каталог подключён', 'info');
-				refresh();
-			}).catch(function() { zm.toast('Роутер не ответил', 'error'); });
+			zm.askText({ title: 'Свой каталог списков', intro: 'Ссылка на lists.json в формате splify2-lists — например, из форка каталога.', placeholder: 'https://…/lists.json', hint: 'Оставьте поле пустым, чтобы вернуть каталог по умолчанию.', value: c.custom ? c.url : '', okText: 'Подключить' }).then(function(u) {
+				if (u === null) return;
+				u = u.trim();
+				zm.toast('Скачиваем каталог…', 'info');
+				zm.steerAction('catalog_src', u).then(function(res) {
+					if (res.error) { zm.toast(res.error, 'error'); return; }
+					zm.toast('Каталог подключён', 'info');
+					refresh();
+				}).catch(function() { zm.toast('Роутер не ответил', 'error'); });
+			});
 		}
 
 		function catalogBlock() {
@@ -24478,8 +24729,8 @@ return view.extend({
 			var cats = list.filter(function(s) { return !s.group && (s.cat || CATEGORY_IDS.indexOf(s.id) >= 0); });
 			listCard.appendChild(E('div', { 'class': 'zm-find-head' }, [
 				E('h4', { 'style': 'margin:0' }, 'Сервисы'),
-				E('button', { 'type': 'button', 'class': 'zm-find-open', 'title': 'Найти сайт в списках', 'click': findOpen }, [
-					findSvg('zm-find-ico', FIND_LOUPE), 'Найти сайт'
+				E('button', { 'type': 'button', 'class': 'zm-find-open', 'title': 'Найти сайт или IP-адрес в списках (Ctrl+K)', 'aria-label': 'Найти сайт или IP-адрес в списках', 'click': findOpen }, [
+					findSvg('zm-find-ico', FIND_LOUPE), 'Найти сайт или IP'
 				])
 			]));
 			listCard.appendChild(zm.svcGrid(svcs.map(tile)));
@@ -24621,8 +24872,7 @@ return view.extend({
 			customEditor.addEventListener('input', function() { customDirty = cbar.dirty(); customDraft = customEditor.value; });
 			if (customDirty && customDraft !== null) { customEditor.value = customDraft; customEditor.dispatchEvent(new Event('input')); }
 			if (n) customCard.appendChild(E('div', { 'class': 'zm-actions' }, [ E('button', { 'class': 'cbi-button cbi-button-remove', 'click': function() {
-				if (!confirm('Очистить свой список?\n\nДомены из него пойдут напрямую.')) return;
-				saveCustom('list_reset', 'custom', 'Свой список очищен');
+				return zm.ask('Очистить свой список?\n\nДомены из него пойдут напрямую.').then(function(ok) { if (!ok) return; saveCustom('list_reset', 'custom', 'Свой список очищен'); });
 			} }, 'Очистить') ]));
 			customCard.appendChild(E('p', { 'class': 'zm-hint' }, 'По одному на строку: домен (поддомены включаются сами — example.com это и www.example.com), IP-адрес (1.2.3.4) или подсеть (91.108.4.0/22). Остальное при сохранении отбрасывается.'));
 			customCard.appendChild(cbar);
@@ -24694,8 +24944,7 @@ return view.extend({
 			exclEditor.addEventListener('input', function() { exclDirty = ebar.dirty(); exclDraft = exclEditor.value; });
 			if (exclDirty && exclDraft !== null) { exclEditor.value = exclDraft; exclEditor.dispatchEvent(new Event('input')); }
 			if (nd + np) exclCard.appendChild(E('div', { 'class': 'zm-actions' }, [ E('button', { 'class': 'cbi-button cbi-button-remove', 'click': function() {
-				if (!confirm('Очистить исключения?\n\nЭти адреса снова пойдут так, как велят сервисы.')) return;
-				saveExcl('list_reset', 'exclude', 'Исключения очищены');
+				return zm.ask('Очистить исключения?\n\nЭти адреса снова пойдут так, как велят сервисы.').then(function(ok) { if (!ok) return; saveExcl('list_reset', 'exclude', 'Исключения очищены'); });
 			} }, 'Очистить') ]));
 			exclCard.appendChild(E('p', { 'class': 'zm-hint' }, 'По одному на строку: домен (поддомены включаются сами), IP-адрес или подсеть. Сайты исключайте доменом: подсеть не остановит сайт, который Steer ловит по имени — устройство тогда ходит на подменный адрес, а не на настоящий.'));
 			exclCard.appendChild(ebar);
@@ -24823,9 +25072,11 @@ return view.extend({
 					E('div', { 'class': 'zm-seg-item' + (sel === 'auto' ? ' zm-active' : ''), 'click': function() {
 						if (busy || sel === 'auto') return;
 						if (own) {
-							if (!confirm('Перейти на автоматический WARP?\n\nВключатся прежние автоматические туннели (если их ещё не было — роутер получит ключи у Cloudflare и подберёт три туннеля за несколько минут). Свой туннель выключится, но сохранится.')) return;
-							act('warp_mode', 'auto', 'Переходим на автоматический WARP — это займёт несколько минут');
-							return;
+							return zm.ask('Перейти на автоматический WARP?\n\nВключатся прежние автоматические туннели (если их ещё не было — роутер получит ключи у Cloudflare и подберёт три туннеля за несколько минут). Свой туннель выключится, но сохранится.').then(function(ok) {
+								if (!ok) return;
+								act('warp_mode', 'auto', 'Переходим на автоматический WARP — это займёт несколько минут');
+								return;
+							});
 						}
 						warpPick = null; renderWarp();
 					} }, 'Автоматически'),
@@ -24932,8 +25183,7 @@ return view.extend({
 					var fix = partial && tunnelBad(t) ? E('span', { 'style': 'display:inline-flex; gap:6px; margin-left:auto' }, [
 						E('button', { 'class': 'cbi-button cbi-button-action', 'disabled': busy ? '' : null, 'click': function() { act('warp_fix', String(t.n), 'Переделываем WARP ' + t.n); } }, 'Переделать'),
 						E('button', { 'class': 'cbi-button', 'disabled': busy ? '' : null, 'click': function() {
-							if (!confirm('Получить новые ключи для WARP ' + t.n + '?\n\nОстальные туннели не тронутся.')) return;
-							act('warp_fixkeys', String(t.n), 'Новые ключи для WARP ' + t.n);
+							return zm.ask('Получить новые ключи для WARP ' + t.n + '?\n\nОстальные туннели не тронутся.').then(function(ok) { if (!ok) return; act('warp_fixkeys', String(t.n), 'Новые ключи для WARP ' + t.n); });
 						} }, 'Новые ключи')
 					]) : '';
 					var st = badge(live ? 'zm-ok' : t.up ? 'zm-warn' : 'zm-bad', live ? 'работает' : t.up ? 'нет связи' : 'не поднят');
@@ -24975,8 +25225,7 @@ return view.extend({
 				E('button', { 'class': 'cbi-button', 'click': function() { act('warp_restart', '', 'Перезапускаем туннели'); } }, 'Перезапустить туннели'),
 				E('button', { 'class': 'cbi-button', 'click': function() { act('warp_endpoint', '', 'Ищем точки входа'); } }, 'Сменить точки входа'),
 				E('button', { 'class': 'cbi-button', 'click': function() {
-					if (!confirm('Пересоздать WARP?\n\nБудут получены новые ключи, туннели переподключатся. Помогает, если Cloudflare перестал пускать старые ключи.')) return;
-					act('warp_recreate', '', 'Пересоздаём WARP');
+					return zm.ask('Пересоздать WARP?\n\nБудут получены новые ключи, туннели переподключатся. Помогает, если Cloudflare перестал пускать старые ключи.').then(function(ok) { if (!ok) return; act('warp_recreate', '', 'Пересоздаём WARP'); });
 				} }, 'Новые ключи')
 			]));
 			warpCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Не работает — «Перезапустить туннели». Медленно — «Сменить точки входа». Совсем не помогает — «Новые ключи».'));
@@ -25938,15 +26187,17 @@ return view.extend({
 				E('button', {
 					'class': 'cbi-button',
 					'click': function() {
-						if (hostsBar.dirty() && !confirm('Отменить несохранённые изменения и перечитать файл?')) return;
-						refreshHostsFile(); zm.toast('Содержимое перечитано с диска', 'info');
+						var zmGo = function() { refreshHostsFile(); zm.toast('Содержимое перечитано с диска', 'info'); };
+						if (hostsBar.dirty()) return zm.ask('Отменить несохранённые изменения и перечитать файл?').then(function(ok) { return ok ? zmGo() : undefined; });
+						return zmGo();
 					}
 				}, 'Перечитать файл'),
 				E('button', {
 					'class': 'cbi-button',
 					'click': function() {
-						if (hostsBar.dirty() && !confirm('Есть несохранённые изменения. Свернуть без сохранения?')) return;
-						editorOpen = false; hostsBar.reset(); renderEditorCard();
+						var zmGo = function() { editorOpen = false; hostsBar.reset(); renderEditorCard(); };
+						if (hostsBar.dirty()) return zm.ask('Есть несохранённые изменения. Свернуть без сохранения?').then(function(ok) { return ok ? zmGo() : undefined; });
+						return zmGo();
 					}
 				}, 'Свернуть')
 			]));
@@ -26136,17 +26387,6 @@ return view.extend({
 				E('div', { 'class': 'zm-sub-fact' }, [ E('span', {}, 'Автообновление'), E('b', {}, data.auto ? 'каждый день в 04:' + two(+data.minute || 0) : 'выключено') ])
 			]));
 
-			if (data.ram_kb) {
-				var used = +data.dns_kb || 0, pct = Math.min(100, Math.max(2, Math.round(used * 100 / data.ram_kb)));
-				heroCard.appendChild(E('div', { 'class': 'zm-ab-meter' }, [
-					E('div', { 'class': 'zm-ab-meter-top' }, [
-						E('span', {}, 'Память роутера: DNS со списком занимает ' + mb(used) + ' МБ'),
-						E('span', {}, 'свободно ' + mb(data.avail_kb) + ' из ' + mb(data.ram_kb) + ' МБ')
-					]),
-					E('div', { 'class': 'zm-quota' + (data.avail_kb && data.avail_kb < 51200 ? ' zm-quota-high' : '') }, [ E('i', { 'style': 'width:' + pct + '%' }) ])
-				]));
-			}
-
 			heroCard.appendChild(E('div', { 'class': 'zm-actions zm-ab-actions' }, [
 				btn('cbi-button-action', busy ? 'Обновляем…' : 'Обновить сейчас', function() { job('update', '', 'Скачиваем свежие списки — ход работы виден в окне вывода'); }),
 				btn('cbi-button-remove', 'Выключить', turnOff)
@@ -26316,7 +26556,7 @@ return view.extend({
 			checkCard.appendChild(E('h3', {}, 'Проверить домен'));
 			checkCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:-6px' }, 'Сайт или приложение перестали работать? Проверьте, не режет ли их список, и разблокируйте одной кнопкой.'));
 			var chips = E('div', { 'class': 'zm-route-chips' });
-			[ 'doubleclick.net', 'mc.yandex.ru', 'an.yandex.ru', 'googlesyndication.com', 'ozon.ru', 'youtube.com' ].forEach(function(x) {
+			[ 'doubleclick.net', 'mc.yandex.ru', 'an.yandex.ru', 'googlesyndication.com' ].forEach(function(x) {
 				chips.appendChild(E('button', { 'type': 'button', 'class': 'zm-route-chip', 'click': function() { runCheck(x); } }, x));
 			});
 			checkCard.appendChild(E('div', { 'class': 'zm-route' }, [ E('div', { 'class': 'zm-route-form' }, [ chkInp, chkBtn ]), chips, chkOut ]));
@@ -26766,8 +27006,9 @@ return view.extend({
 			E('button', {
 				'class': 'cbi-button',
 				'click': function() {
-					if (configBar.dirty() && !confirm('Отменить несохранённые изменения и перечитать файл?')) return;
-					refreshConfig(); zm.toast('Конфигурация перечитана с диска', 'info');
+					var zmGo = function() { refreshConfig(); zm.toast('Конфигурация перечитана с диска', 'info'); };
+					if (configBar.dirty()) return zm.ask('Отменить несохранённые изменения и перечитать файл?').then(function(ok) { return ok ? zmGo() : undefined; });
+					return zmGo();
 				}
 			}, 'Перечитать файл')
 		]));
@@ -26953,9 +27194,12 @@ return view.extend({
 			E('button', {
 				'class': 'cbi-button',
 				'click': function() {
-					if (warpBar.dirty() && !confirm('Отменить несохранённые изменения и перечитать файл?')) return;
-					zm.mixomoWarpStatus().then(function(w) { renderWarpConf(w); });
-					zm.toast('Содержимое перечитано с диска', 'info');
+					var zmGo = function() {
+						zm.mixomoWarpStatus().then(function(w) { renderWarpConf(w); });
+						zm.toast('Содержимое перечитано с диска', 'info');
+					};
+					if (warpBar.dirty()) return zm.ask('Отменить несохранённые изменения и перечитать файл?').then(function(ok) { return ok ? zmGo() : undefined; });
+					return zmGo();
 				}
 			}, 'Перечитать файл')
 		]));
@@ -27408,15 +27652,17 @@ return view.extend({
 					E('button', {
 						'class': 'cbi-button',
 						'click': function() {
-							if (nfqwsBar.dirty() && !confirm('Отменить несохранённые изменения и перечитать файл?')) return;
-							refreshNfqwsOpt(); zm.toast('Содержимое перечитано с диска', 'info');
+							var zmGo = function() { refreshNfqwsOpt(); zm.toast('Содержимое перечитано с диска', 'info'); };
+							if (nfqwsBar.dirty()) return zm.ask('Отменить несохранённые изменения и перечитать файл?').then(function(ok) { return ok ? zmGo() : undefined; });
+							return zmGo();
 						}
 					}, 'Перечитать файл'),
 					E('button', {
 						'class': 'cbi-button',
 						'click': function() {
-							if (nfqwsBar.dirty() && !confirm('Есть несохранённые изменения. Свернуть без сохранения?')) return;
-							nfqwsOpen = false; nfqwsBar.reset(); renderNfqwsCard();
+							var zmGo = function() { nfqwsOpen = false; nfqwsBar.reset(); renderNfqwsCard(); };
+							if (nfqwsBar.dirty()) return zm.ask('Есть несохранённые изменения. Свернуть без сохранения?').then(function(ok) { return ok ? zmGo() : undefined; });
+							return zmGo();
 						}
 					}, 'Свернуть')
 				]));
@@ -27474,8 +27720,9 @@ return view.extend({
 				customCard.appendChild(customEl);
 				customCard.appendChild(E('div', { 'class': 'zm-actions' }, [
 					E('button', { 'class': 'cbi-button', 'click': function() {
-						if (customBar.dirty() && !confirm('Есть несохранённые изменения. Свернуть без сохранения?')) return;
-						customOpen = false; customBar.reset(customText); renderCustomCard(); renderLaunch();
+						var zmGo = function() { customOpen = false; customBar.reset(customText); renderCustomCard(); renderLaunch(); };
+						if (customBar.dirty()) return zm.ask('Есть несохранённые изменения. Свернуть без сохранения?').then(function(ok) { return ok ? zmGo() : undefined; });
+						return zmGo();
 					} }, 'Свернуть')
 				]));
 				customCard.appendChild(customBar);
@@ -27606,13 +27853,15 @@ return view.extend({
 				autoCard.appendChild(E('div', { 'class': 'zm-actions zm-ab-actions' }, [
 					E('button', { 'class': 'cbi-button cbi-button-positive', 'disabled': busy || !zapretInstalled ? '' : null, 'click': function() {
 						if (busy) { zm.toast('Дождитесь окончания текущего теста', 'warning'); return; }
-						if (!confirm('Запустить автоподбор сейчас?\n\nПроверка займёт 5–10 минут. Zapret в это время перезапускается со стратегиями по очереди.')) return;
-						busy = true; curMode = 'auto'; renderLaunch(); renderAuto();
-						zm.testAction('auto_run', '').then(function(res) {
-							if (res && res.error) { busy = false; curMode = ''; zm.toast(res.error, 'error'); renderLaunch(); renderAuto(); return; }
-							zm.toast('Автоподбор запущен', 'info');
-							startPolling();
-						}).catch(function() { busy = false; curMode = ''; renderLaunch(); renderAuto(); zm.toast('Роутер не ответил', 'error'); });
+						return zm.ask('Запустить автоподбор сейчас?\n\nПроверка займёт 5–10 минут. Zapret в это время перезапускается со стратегиями по очереди.').then(function(ok) {
+							if (!ok) return;
+							busy = true; curMode = 'auto'; renderLaunch(); renderAuto();
+							zm.testAction('auto_run', '').then(function(res) {
+								if (res && res.error) { busy = false; curMode = ''; zm.toast(res.error, 'error'); renderLaunch(); renderAuto(); return; }
+								zm.toast('Автоподбор запущен', 'info');
+								startPolling();
+							}).catch(function() { busy = false; curMode = ''; renderLaunch(); renderAuto(); zm.toast('Роутер не ответил', 'error'); });
+						});
 					} }, busy && curMode === 'auto' ? 'Идёт автоподбор…' : 'Запустить сейчас'),
 					last && last.at ? E('button', { 'class': 'cbi-button', 'disabled': busy ? '' : null, 'click': function() {
 						zm.testAction('auto_clear', '').then(function(r) { if (r && !r.error) { autoInfo = r.auto || {}; timeInfo = r; renderAuto(); } });
@@ -27730,24 +27979,28 @@ return view.extend({
 				if (mode === 'custom' || mode === 'custom_yt') {
 					var block = customBlock(name);
 					if (!block) { zm.toast('Стратегии «' + name + '» уже нет в вашем списке', 'warning'); return; }
-					if (!confirm('Применить свою стратегию «' + name + '»?\n\nОна заменит весь блок стратегий Zapret (NFQWS_OPT) — вместе с частями для YouTube, Discord и игр. Вернуть их можно выбором стратегии на вкладке «Стратегии».')) return;
-					zm.toast('Применяем ' + name + '…', 'warning');
-					zm.nfqwsOptSet(block).then(function(r) {
-						if (r && r.error) { zm.toast(r.error, 'error'); return; }
-						zm.toast('Стратегия ' + name + ' применена', 'info');
-						refreshAll();
-					}).catch(function() { zm.toast('Роутер не ответил', 'error'); });
-					return;
+					return zm.ask('Применить свою стратегию «' + name + '»?\n\nОна заменит весь блок стратегий Zapret (NFQWS_OPT) — вместе с частями для YouTube, Discord и игр. Вернуть их можно выбором стратегии на вкладке «Стратегии».').then(function(ok) {
+						if (!ok) return;
+						zm.toast('Применяем ' + name + '…', 'warning');
+						zm.nfqwsOptSet(block).then(function(r) {
+							if (r && r.error) { zm.toast(r.error, 'error'); return; }
+							zm.toast('Стратегия ' + name + ' применена', 'info');
+							refreshAll();
+						}).catch(function() { zm.toast('Роутер не ответил', 'error'); });
+						return;
+					});
 				}
 				if (/^v([1-9]|10)$/.test(name)) call = function() { return zm.strategySetV(name); };
 				else if (mode === 'youtube') call = function() { return zm.strategySetYoutube(name); };
 				else call = function() { return zm.strategySetFlowseal(name); };
-				if (!confirm('Применить стратегию ' + name + '?')) return;
-				zm.toast('Применяем ' + name + '…', 'warning');
-				call().then(function(r) {
-					if (r && r.error) { zm.toast(r.error, 'error'); return; }
-					zm.toast('Стратегия ' + name + ' применена', 'info');
-				}).catch(function() { zm.toast('Роутер не ответил', 'error'); });
+				return zm.ask('Применить стратегию ' + name + '?').then(function(ok) {
+					if (!ok) return;
+					zm.toast('Применяем ' + name + '…', 'warning');
+					call().then(function(r) {
+						if (r && r.error) { zm.toast(r.error, 'error'); return; }
+						zm.toast('Стратегия ' + name + ' применена', 'info');
+					}).catch(function() { zm.toast('Роутер не ответил', 'error'); });
+				});
 			}
 
 			function chips(list) {
@@ -28302,13 +28555,16 @@ return view.extend({
 					});
 				}
 				function toggle() {
-					if (st.open && dirty() && !confirm('В «' + L.title + '» есть несохранённые изменения. Свернуть и отменить их?')) return;
-					st.open = !st.open;
-					if (!st.open && st.loaded) { ta.value = st.saved; syncCount(); }
-					card.classList.toggle('zm-list-open', st.open);
-					body.style.display = st.open ? '' : 'none';
-					head.setAttribute('aria-expanded', st.open ? 'true' : 'false');
-					if (st.open) (st.loaded ? Promise.resolve() : load(true)).then(function() { ta.focus(); });
+					var zmGo = function() {
+						st.open = !st.open;
+						if (!st.open && st.loaded) { ta.value = st.saved; syncCount(); }
+						card.classList.toggle('zm-list-open', st.open);
+						body.style.display = st.open ? '' : 'none';
+						head.setAttribute('aria-expanded', st.open ? 'true' : 'false');
+						if (st.open) (st.loaded ? Promise.resolve() : load(true)).then(function() { ta.focus(); });
+					};
+					if (st.open && dirty()) return zm.ask('В «' + L.title + '» есть несохранённые изменения. Свернуть и отменить их?').then(function(ok) { return ok ? zmGo() : undefined; });
+					return zmGo();
 				}
 
 				ta.addEventListener('input', syncCount);
@@ -28324,21 +28580,24 @@ return view.extend({
 					}).catch(function() { busy = false; syncCount(); zm.toast('Роутер не ответил', 'error'); });
 				});
 				btnReload.addEventListener('click', function() {
-					if (dirty() && !confirm('Отменить несохранённые изменения и перечитать «' + L.title + '» из файла?')) return;
-					load(false);
+					var zmGo = function() { load(false); };
+					if (dirty()) return zm.ask('Отменить несохранённые изменения и перечитать «' + L.title + '» из файла?').then(function(ok) { return ok ? zmGo() : undefined; });
+					return zmGo();
 				});
 				if (btnRestore) btnRestore.addEventListener('click', function() {
 					if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
-					if (!confirm('Заменить список исключений исходным из репозитория Zapret Manager? Ваши правки в нём пропадут.')) return;
-					busy = true;
-					zm.toast('Скачиваем исходный список исключений', 'warning');
-					zm.zapretListRestore(L.id).then(function(r) {
-						busy = false;
-						if (r.error) { zm.toast(r.error, 'error'); syncCount(); return; }
-						st.saved = r.content || ''; if (st.saved && st.saved.slice(-1) !== '\n') st.saved += '\n';
-						ta.value = st.saved; st.loaded = true; st.info = r.info || st.info; syncCount();
-						zm.toast('Список исключений восстановлен, Zapret перезапущен', 'info');
-					}).catch(function() { busy = false; syncCount(); zm.toast('Роутер не ответил', 'error'); });
+					return zm.ask('Заменить список исключений исходным из репозитория Zapret Manager? Ваши правки в нём пропадут.').then(function(ok) {
+						if (!ok) return;
+						busy = true;
+						zm.toast('Скачиваем исходный список исключений', 'warning');
+						zm.zapretListRestore(L.id).then(function(r) {
+							busy = false;
+							if (r.error) { zm.toast(r.error, 'error'); syncCount(); return; }
+							st.saved = r.content || ''; if (st.saved && st.saved.slice(-1) !== '\n') st.saved += '\n';
+							ta.value = st.saved; st.loaded = true; st.info = r.info || st.info; syncCount();
+							zm.toast('Список исключений восстановлен, Zapret перезапущен', 'info');
+						}).catch(function() { busy = false; syncCount(); zm.toast('Роутер не ответил', 'error'); });
+					});
 				});
 
 				var head = E('div', { 'class': 'zm-list-head', 'role': 'button', 'tabindex': '0', 'aria-expanded': 'false', 'click': toggle,
@@ -29206,7 +29465,7 @@ html.zm-theme-dark .zm-dom-list { background: #1b2027; }
 .zm-find-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .zm-find-head > h4 { flex: 1 1 auto; }
 .zm-find-open { display: inline-flex; align-items: center; gap: 8px; box-sizing: border-box; height: 38px; margin: 0; padding: 0 14px 0 12px; border-radius: 11px; border: 1px solid rgba(110,118,129,.3);
-	background: transparent; color: inherit; font: inherit; font-weight: 700; font-size: 13.5px; line-height: 1; cursor: pointer; box-shadow: none; -webkit-appearance: none; appearance: none; transition: border-color .15s, background .15s; }
+	background: transparent; color: inherit; font: inherit; font-weight: 700; font-size: 13.5px; line-height: 1; white-space: nowrap; flex-shrink: 0; cursor: pointer; box-shadow: none; -webkit-appearance: none; appearance: none; transition: border-color .15s, background .15s; }
 .zm-find-open:hover { border-color: #1aa3ff; }
 .zm-find-open:focus-visible { outline: 2px solid #1aa3ff; outline-offset: 2px; }
 .zm-find-ico, .zm-find-x-ico { display: inline-flex; flex-shrink: 0; width: 17px; height: 17px; }
@@ -29532,7 +29791,8 @@ html.zm-theme-dark .zm-fold { border-top-color: rgba(255,255,255,.1); }
 .zm-dlg-wrap { position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 10000; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(0,0,0,.5); }
 .zm-dlg { width: 100%; max-width: 540px; max-height: 88vh; overflow: auto; box-shadow: 0 12px 40px rgba(0,0,0,.3); }
 .zm-dlg h3 { font-size: 17px; margin-bottom: 8px; }
-.zm-dlg-intro { margin: 0 0 6px; font-size: 13px; line-height: 1.5; opacity: .8; }
+.zm-dlg-intro { margin: 0 0 6px; font-size: 13px; line-height: 1.5; opacity: .8; white-space: pre-line; overflow-wrap: anywhere; }
+.zm-dlg-input { width: 100% !important; box-sizing: border-box; margin: 4px 0 0; }
 .zm-dlg-title { margin: 16px 0 6px; font-size: 13px; font-weight: 600; }
 .zm-dlg-list { margin: 0; padding-left: 20px; font-size: 13px; line-height: 1.6; }
 .zm-dlg-note { margin: 12px 0 0; padding: 9px 12px; border-radius: 10px; font-size: 12.5px; line-height: 1.5; background: rgba(110,118,129,.12); }
@@ -29560,11 +29820,6 @@ html.zm-theme-dark .zm-dlg-note-bad { color: #ff7b72; }
 .zm-ab-hero .zm-refresh-banner { margin: 12px 0 0; }
 .zm-ab-facts { margin: 16px 0 0; gap: 14px 36px; }
 .zm-ab-facts .zm-sub-fact > b { font-size: 15px; }
-.zm-ab-meter { margin: 16px 0 0; max-width: 760px; }
-.zm-ab-meter-top { display: flex; justify-content: space-between; gap: 6px 16px; flex-wrap: wrap; font-size: 12px; margin: 0 0 6px; }
-.zm-ab-meter-top > span:first-child { opacity: .7; }
-.zm-ab-meter-top > span:last-child { opacity: .55; font-variant-numeric: tabular-nums; }
-.zm-ab-meter .zm-quota { width: 100%; height: 6px; }
 .zm-ab-actions { margin: 16px 0 0; }
 .zm-ab-seg { display: flex; flex-wrap: wrap; width: max-content; max-width: 100%; box-sizing: border-box; }
 .zm-ab-seg .zm-seg-item { user-select: none; }
@@ -31210,28 +31465,31 @@ return view.extend({
 			if (busy || saving) { zm.toast('Дождитесь окончания текущей операции', 'warning'); return; }
 			if (name === draft.sec && !force) return;
 			var secDirty = draft.sec === 'new' ? false : secSig(draft) !== secSig(withBootMode(fromCfg(cfg)));
-			if (secDirty && !force && !confirm('В секции «' + secName() + '» есть несохранённые изменения.\n\nОтменить их и перейти к другой секции?')) return;
-			var keep = {};
-			GLOBAL_KEYS.forEach(function(k) { keep[k] = draft[k]; });
-			secBusy = true;
-			loadGen++;
-			renderSections();
-			getCfg(name === (cfg && cfg.main) ? '' : name).then(function(c) {
-				secBusy = false;
-				c = validCfg(c);
-				if (!c) { zm.toast('Не удалось загрузить секцию', 'error'); renderSections(); return; }
-				cfg = c;
-				rememberSec(c.sec);
-				draft = withBootMode(fromCfg(cfg));
-				savedSig = sig(draft);
-				GLOBAL_KEYS.forEach(function(k) { draft[k] = keep[k]; });
-				dirty = sig(draft) !== savedSig;
-				servers = null; srvErr = ''; srvRetry = 0; hideMode = false;
-				syncAreas();
-				if (!isSecTab(tab)) tabTo('conn');
-				renderAll();
-				if (st.running && secLive()) loadServers();
-			}).catch(function() { secBusy = false; renderSections(); zm.toast('Роутер не ответил', 'error'); });
+			var zmGo = function() {
+				var keep = {};
+				GLOBAL_KEYS.forEach(function(k) { keep[k] = draft[k]; });
+				secBusy = true;
+				loadGen++;
+				renderSections();
+				getCfg(name === (cfg && cfg.main) ? '' : name).then(function(c) {
+					secBusy = false;
+					c = validCfg(c);
+					if (!c) { zm.toast('Не удалось загрузить секцию', 'error'); renderSections(); return; }
+					cfg = c;
+					rememberSec(c.sec);
+					draft = withBootMode(fromCfg(cfg));
+					savedSig = sig(draft);
+					GLOBAL_KEYS.forEach(function(k) { draft[k] = keep[k]; });
+					dirty = sig(draft) !== savedSig;
+					servers = null; srvErr = ''; srvRetry = 0; hideMode = false;
+					syncAreas();
+					if (!isSecTab(tab)) tabTo('conn');
+					renderAll();
+					if (st.running && secLive()) loadServers();
+				}).catch(function() { secBusy = false; renderSections(); zm.toast('Роутер не ответил', 'error'); });
+			};
+			if (secDirty && !force) return zm.ask('В секции «' + secName() + '» есть несохранённые изменения.\n\nОтменить их и перейти к другой секции?').then(function(ok) { return ok ? zmGo() : undefined; });
+			return zmGo();
 		}
 
 		function deleteSec() {
@@ -31602,7 +31860,7 @@ return view.extend({
 			}
 			if (st.newer) b.push(E('button', { 'class': 'cbi-button cbi-button-action', 'click': function() { act('update'); } }, 'Обновить до ' + st.latest));
 			else b.push(E('button', { 'class': 'cbi-button', 'title': 'Скачать движок Forkozz ' + (st.version || '') + ' заново и доставить недостающие пакеты. Настройки, секции и sing-box останутся', 'click': function() {
-				if (confirm('Переустановить Forkozz ' + (st.version || '') + '?\n\nДвижок скачается с GitHub заново, недостающие пакеты доставятся. Настройки, секции и sing-box останутся.' + (st.running ? '\nНа время переустановки Forkozz остановится.' : ''))) act('reinstall');
+				zm.ask('Переустановить Forkozz ' + (st.version || '') + '?\n\nДвижок скачается с GitHub заново, недостающие пакеты доставятся. Настройки, секции и sing-box останутся.' + (st.running ? '\nНа время переустановки Forkozz остановится.' : '')).then(function(ok) { if (ok) act('reinstall'); });
 			} }, 'Переустановить'));
 			b.push(E('button', { 'class': 'cbi-button cbi-button-remove', 'click': removeDialog }, 'Удалить'));
 			mainCard.appendChild(E('div', { 'class': 'zm-actions' }, b));
@@ -32071,10 +32329,11 @@ return view.extend({
 				});
 			} }, 'Обновить каталог'));
 			if (!c.off) b.push(E('button', { 'class': 'cbi-button', 'click': function() {
-				var u = prompt('Ссылка на свой каталог списков (lists.json в формате splify2-lists, например из форка).\n\nПусто — каталог по умолчанию.', c.custom ? c.url : '');
-				if (u === null) return;
-				zm.toast('Скачиваем каталог…', 'info');
-				call('catalog_src', u.trim(), 'Каталог подключён', function() { reload(); });
+				zm.askText({ title: 'Свой каталог списков', intro: 'Ссылка на lists.json в формате splify2-lists — например, из форка каталога.', placeholder: 'https://…/lists.json', hint: 'Оставьте поле пустым, чтобы вернуть каталог по умолчанию.', value: c.custom ? c.url : '', okText: 'Подключить' }).then(function(u) {
+					if (u === null) return;
+					zm.toast('Скачиваем каталог…', 'info');
+					call('catalog_src', u.trim(), 'Каталог подключён', function() { reload(); });
+				});
 			} }, 'Сменить источник'));
 			b.push(E('button', { 'class': 'cbi-button', 'click': function() {
 				var turnOn = !!c.off;
@@ -32150,12 +32409,12 @@ return view.extend({
 			zm.steerAction('svc_dom', id + ':0:' + DOM_SHOW).then(function(r) {
 				if (r.error) { domData[id] = { error: String(r.error) }; domPlace(); return; }
 				var n = parseInt(r.count, 10) || 0;
-				domData[id] = { count: n, src: String(r.src || ''), list: String(r.domains || '').split(/\s+/).filter(function(x) { return x; }) };
+				domData[id] = { count: n, ips: parseInt(r.ips, 10) || 0, src: String(r.src || ''), list: String(r.domains || '').split(/\s+/).filter(function(x) { return x; }) };
 				if (!n) {
 					var it = domItem(id);
 					if (domFlags) domFlags[id] = false;
 					if (domOpen === id) domOpen = null;
-					zm.toast('В списке «' + (it ? it.name : id) + '» только подсети — доменов нет', 'info');
+					zm.toast('В списке «' + (it ? it.name : id) + '» только IP-подсети' + (domData[id].ips ? ' (' + domNum(domData[id].ips) + ')' : '') + ' — доменов нет', 'info');
 					renderSvc();
 					return;
 				}
@@ -32173,6 +32432,30 @@ return view.extend({
 			d.dl = true; domPlace();
 			var parts = [];
 			function done(err) { d.dl = false; domPlace(); if (err) zm.toast(err, 'error'); }
+			/* домены, затем IP-подсети — частями, как читает роутер; в файле — два раздела с заголовками «#»,
+			 * их понимают и «Свой список», и большинство программ для списков */
+			var ips = [], ipTotal = 0;
+			function save() {
+				var name = ((domItem(id) || {}).name || id), head = '# ' + name + ': ' + domNum(d.count) + ' ' + domWord(d.count) + (ipTotal ? ', ' + domNum(ipTotal) + ' ' + plural(ipTotal, 'IP-подсеть', 'IP-подсети', 'IP-подсетей') : '');
+				var text = head + '\n\n# Домены (вместе с поддоменами)\n' + parts.join('\n') + '\n' + (ips.length ? '\n# IP-подсети\n' + ips.join('\n') + '\n' : '');
+				var url = URL.createObjectURL(new Blob([ text ], { type: 'text/plain;charset=utf-8' }));
+				var a = E('a', { 'href': url, 'download': (ips.length ? 'list-' : 'domains-') + id + '.txt', 'style': 'display:none' });
+				document.body.appendChild(a);
+				a.click();
+				setTimeout(function() { URL.revokeObjectURL(url); if (a.parentNode) a.parentNode.removeChild(a); }, 1500);
+				done();
+			}
+			function nextIp(off) {
+				zm.steerAction('svc_dom', id + ':' + off + ':' + DOM_PART + ':ip').then(function(r) {
+					if (r.error) { done(String(r.error)); return; }
+					var list = String(r.domains || '').split(/\s+/).filter(function(x) { return x; });
+					if (list.length) ips = ips.concat(list);
+					ipTotal = parseInt(r.ips, 10) || 0;
+					if (list.length && off + DOM_PART < ipTotal) { nextIp(off + DOM_PART); return; }
+					ipTotal = ips.length;
+					save();
+				}).catch(function() { done('Роутер не ответил'); });
+			}
 			function next(off) {
 				zm.steerAction('svc_dom', id + ':' + off + ':' + DOM_PART).then(function(r) {
 					if (r.error) { done(String(r.error)); return; }
@@ -32180,12 +32463,7 @@ return view.extend({
 					if (list.length) parts.push(list.join('\n'));
 					var total = parseInt(r.count, 10) || 0;
 					if (list.length && off + DOM_PART < total) { next(off + DOM_PART); return; }
-					var url = URL.createObjectURL(new Blob([ parts.join('\n') + '\n' ], { type: 'text/plain;charset=utf-8' }));
-					var a = E('a', { 'href': url, 'download': 'domains-' + id + '.txt', 'style': 'display:none' });
-					document.body.appendChild(a);
-					a.click();
-					setTimeout(function() { URL.revokeObjectURL(url); if (a.parentNode) a.parentNode.removeChild(a); }, 1500);
-					done();
+					if ((parseInt(r.ips, 10) || 0) > 0) nextIp(0); else save();
 				}).catch(function() { done('Роутер не ответил'); });
 			}
 			next(0);
@@ -32193,19 +32471,20 @@ return view.extend({
 		function domPanel(id) {
 			var d = domData[id], it = domItem(id) || { name: id }, body = [];
 			var sub = !d ? 'загружаем…' : d.error ? 'не удалось получить список'
-				: domNum(d.count) + ' ' + domWord(d.count) + (d.src ? ' · ' + d.src : '') + ' · с поддоменами';
+				: domNum(d.count) + ' ' + domWord(d.count) + (d.ips ? ' · ' + domNum(d.ips) + ' ' + plural(d.ips, 'IP-подсеть', 'IP-подсети', 'IP-подсетей') : '');
+			var subTip = d && !d.error ? 'Домены действуют вместе с поддоменами' + (d.ips ? '; IP-подсети — адреса и диапазоны, которые идут тем же путём' : '') + (d.src ? '. Источник: ' + d.src : '') : '';
 			var btns = [];
-			if (d && d.count) btns.push(E('button', { 'type': 'button', 'class': 'cbi-button', 'disabled': d.dl ? '' : null, 'click': function() { domDownload(id); } }, d.dl ? 'Скачиваем…' : 'Скачать .txt'));
+			if (d && d.count) btns.push(E('button', { 'type': 'button', 'class': 'cbi-button', 'title': d.ips ? 'Домены и IP-подсети одним файлом .txt' : 'Все домены списка файлом .txt', 'disabled': d.dl ? '' : null, 'click': function() { domDownload(id); } }, d.dl ? 'Скачиваем…' : d.ips ? 'Скачать список доменов и IP' : 'Скачать список доменов'));
 			btns.push(E('button', { 'type': 'button', 'class': 'cbi-button', 'click': function() { domToggle(id); } }, 'Свернуть'));
 			if (!d) body.push(E('p', { 'class': 'zm-hint zm-dom-more' }, 'Читаем список с роутера…'));
 			else if (d.error) body.push(E('div', { 'class': 'zm-refresh-banner zm-show', 'style': 'margin-top:12px' }, d.error));
 			else {
 				body.push(E('div', { 'class': 'zm-dom-list' }, d.list.map(function(x) { return E('div', { 'class': 'zm-dom-item' }, x); })));
-				if (d.count > d.list.length) body.push(E('p', { 'class': 'zm-hint zm-dom-more' }, 'Показаны первые ' + domNum(d.list.length) + ' из ' + domNum(d.count) + ' — весь список в «Скачать .txt».'));
+				if (d.count > d.list.length) body.push(E('p', { 'class': 'zm-hint zm-dom-more' }, 'Показаны первые ' + domNum(d.list.length) + ' из ' + domNum(d.count) + '. Весь список' + (d.ips ? ' вместе с IP-подсетями' : '') + ' — по кнопке «' + (d.ips ? 'Скачать список доменов и IP' : 'Скачать список доменов') + '».'));
 			}
 			return E('div', { 'class': 'zm-dom-panel' }, [
 				E('div', { 'class': 'zm-dom-head' }, [
-					E('div', { 'class': 'zm-dom-title' }, [ E('b', {}, 'Домены · ' + it.name), E('span', { 'class': 'zm-dom-sub' }, sub) ]),
+					E('div', { 'class': 'zm-dom-title' }, [ E('b', {}, 'Домены · ' + it.name), E('span', { 'class': 'zm-dom-sub', 'title': subTip || null }, sub) ]),
 					E('div', { 'class': 'zm-dom-btns' }, btns)
 				])
 			].concat(body));
@@ -32245,11 +32524,11 @@ return view.extend({
 		}
 		function findOpen() {
 			if (findEl) return;
-			var input = E('input', { 'type': 'text', 'class': 'zm-find-input', 'placeholder': 'Сайт, например fast.com', 'aria-label': 'Сайт или домен',
+			var input = E('input', { 'type': 'text', 'class': 'zm-find-input', 'placeholder': 'Сайт или IP, например fast.com или 1.2.3.4', 'aria-label': 'Сайт или IP-адрес',
 				'autocomplete': 'off', 'autocapitalize': 'off', 'spellcheck': 'false', 'enterkeyhint': 'search' });
 			input.value = findQ;
 			var body = E('div', { 'class': 'zm-find-body' });
-			var box = E('div', { 'class': 'zm-find zmw-modal', 'role': 'dialog', 'aria-modal': 'true', 'aria-label': 'Найти сайт в списках' }, [
+			var box = E('div', { 'class': 'zm-find zmw-modal', 'role': 'dialog', 'aria-modal': 'true', 'aria-label': 'Найти сайт или IP в списках' }, [
 				E('div', { 'class': 'zm-find-field' }, [
 					findSvg('zm-find-ico', FIND_LOUPE),
 					input,
@@ -32339,8 +32618,8 @@ return view.extend({
 			body.innerHTML = '';
 			if (!q) {
 				out.push(E('div', { 'class': 'zm-find-empty' }, [
-					E('b', {}, 'Какой сайт нужен?'),
-					E('span', {}, 'Впишите адрес — покажем, какой пункт включить, чтобы сайт шёл через VPN.')
+					E('b', {}, 'Какой сайт или IP нужен?'),
+					E('span', {}, 'Впишите сайт или IPv4-адрес — покажем, какой пункт включить, чтобы он шёл через VPN.')
 				]));
 			} else if (findBusy || !r) {
 				out.push(E('div', { 'class': 'zm-find-empty' }, [ E('span', { 'class': 'zm-find-spin', 'aria-hidden': 'true' }), E('span', {}, 'Ищем в списках…') ]));
@@ -32360,8 +32639,11 @@ return view.extend({
 				var best = null;
 				hits.forEach(function(h) { if (findWide(h)) return; if (!best || (best.by !== 'dom' && h.by === 'dom') || (best.by === h.by && (+h.size || 0) < (+best.size || 0))) best = h; });
 				var anyOn = inOwn || hits.some(function(h) { return !!sel[h.id] || (!!sel.russia_inside && h.id !== 'russia_inside' && !h.group && zm.riCovers(h.id)); });
+				var isIp = !!r.ip && !r.host;
 				if (hits.length) {
-					out.push(E('div', { 'class': 'zm-find-title' }, anyOn ? 'Уже включено — сайт идёт через VPN' : (many ? 'Включите любой в секции «' + secName() + '»' : 'Включите любой — сайт пойдёт через VPN')));
+					out.push(E('div', { 'class': 'zm-find-title' }, anyOn ? (isIp ? 'Уже включено — адрес ' + r.ip + ' идёт через VPN' : 'Уже включено — сайт идёт через VPN')
+						: many ? (isIp ? 'Адрес ' + r.ip + ' есть в подсетях — включите любой пункт в секции «' : 'Включите любой в секции «') + secName() + '»'
+						: (isIp ? 'Адрес ' + r.ip + ' есть в подсетях — включите любой пункт' : 'Включите любой — сайт пойдёт через VPN')));
 					var listEl = E('div', { 'class': 'zm-find-list' });
 					hits.forEach(function(h) {
 						var on = !!sel[h.id], inc = !on && !!sel.russia_inside && h.id !== 'russia_inside' && !h.group && zm.riCovers(h.id);
@@ -32369,7 +32651,7 @@ return view.extend({
 						var size = +h.size || 0;
 						var why = by ? 'уже идёт через секцию «' + by + '»'
 							: inc ? 'входит во «Всё сразу» — уже идёт через VPN'
-							: (h.by === 'dom' ? 'в списке есть ' + h.line : findWide(h) ? 'общий адрес ' + (r.ip || '') + ' (' + h.line + ') — через VPN пойдут и другие сайты' : 'адрес ' + (r.ip || '') + ' в подсети ' + h.line)
+							: (h.by === 'dom' ? 'в списке есть ' + h.line : findWide(h) ? (isIp ? 'общая подсеть ' + h.line : 'общий адрес ' + (r.ip || '') + ' (' + h.line + ')') + ' — через VPN пойдут и другие сайты' : (isIp ? 'в подсети ' + h.line : 'адрес ' + (r.ip || '') + ' в подсети ' + h.line))
 								+ (h.group ? ' · ' + String(h.group).replace(/\s*\(.*\)\s*$/, '') : '') + (size > 20000 ? ' · большой список' : '');
 						var ic = zm.svcIco ? zm.svcIco(h.name, h.id) : null;
 						listEl.appendChild(E('div', { 'class': 'zm-find-row' + (on || inc ? ' zm-on' : '') + (by ? ' zm-find-taken' : ''), 'role': 'button', 'tabindex': '0',
@@ -32387,8 +32669,9 @@ return view.extend({
 					out.push(listEl);
 				} else {
 					out.push(E('div', { 'class': 'zm-find-empty' }, [
-						E('b', {}, inOwn ? 'Сайт уже в «Своём списке»' : 'Сайта нет ни в одном списке'),
+						E('b', {}, inOwn ? (isIp ? 'Адрес уже в «Своём списке»' : 'Сайт уже в «Своём списке»') : isIp ? 'Адреса ' + r.ip + ' нет в подсетях списков' : 'Сайта нет ни в одном списке'),
 						E('span', {}, inOwn ? 'Он идёт через VPN' + (many ? ' секции «' + secName() + '»' : '') + (draft.own_on === false ? ', когда «Свой список» включён' : '') + '.'
+							: isIp ? 'Пункты из одних доменов по IP не проверить — попробуйте найти сайт по имени или добавьте адрес в «Свой список».'
 							: 'Добавьте ' + (r.host || 'адрес') + ' в «Свой список» — он пойдёт через VPN.')
 					]));
 				}
@@ -32442,7 +32725,7 @@ return view.extend({
 			domFlagsLoad();
 			svcCard.appendChild(E('div', { 'class': 'zm-find-head' }, [
 				E('h4', { 'style': 'margin:0' }, 'Сервисы'),
-				E('button', { 'type': 'button', 'class': 'zm-find-open', 'title': 'Найти сайт в списках', 'click': findOpen }, [ findSvg('zm-find-ico', FIND_LOUPE), 'Найти сайт' ])
+				E('button', { 'type': 'button', 'class': 'zm-find-open', 'title': 'Найти сайт или IP-адрес в списках (Ctrl+K)', 'aria-label': 'Найти сайт или IP-адрес в списках', 'click': findOpen }, [ findSvg('zm-find-ico', FIND_LOUPE), 'Найти сайт или IP' ])
 			]));
 			svcCard.appendChild(zm.svcGrid(svcs.map(svcTile)));
 			if (cats.length) {
@@ -32787,8 +33070,9 @@ return view.extend({
 			}
 			netCard.appendChild(sw(draft.ipv6, 'Поддержка IPv6', 'Маршрутизация и DNS для IPv6. Включайте, только если провайдер даёт роутеру рабочий IPv6 — иначе сайты могут открываться дольше.', function() { set('ipv6', !draft.ipv6); }));
 			netCard.appendChild(sw(draft.no_dhcp, 'Не менять настройки DNS роутера', '⚠ Для опытных. Forkozz не будет перенаправлять dnsmasq на себя — тогда это нужно сделать вручную (сервер 127.0.0.42), иначе сайты по доменам пойдут мимо Forkozz.', function() {
-				if (!draft.no_dhcp && !confirm('Forkozz перестанет сам настраивать DNS роутера.\n\nБез ручной настройки dnsmasq сервисы по доменам пойдут напрямую. Продолжить?')) return;
-				set('no_dhcp', !draft.no_dhcp);
+				var zmGo = function() { set('no_dhcp', !draft.no_dhcp); };
+				if (!draft.no_dhcp) return zm.ask('Forkozz перестанет сам настраивать DNS роутера.\n\nБез ручной настройки dnsmasq сервисы по доменам пойдут напрямую. Продолжить?').then(function(ok) { return ok ? zmGo() : undefined; });
+				return zmGo();
 			}));
 		}
 
@@ -32843,14 +33127,12 @@ return view.extend({
 			sbCard.appendChild(row('Версия', E('span', {}, has ? st.singbox + ' · ' + (SB_NAMES[sv] || 'установлен вручную') : 'не установлен')));
 			sbCard.appendChild(row('Вариант', seg(vars, curVar, function(v) {
 				var it = vars.filter(function(x) { return x.id === v; })[0];
-				if (!confirm((has ? 'Заменить sing-box на ' : 'Установить ') + it.label.toLowerCase() + (has ? '' : ' sing-box') + '?\n\n' + it.warn + restartNote + (has ? 'Если новый sing-box не установится, останется прежний.' : ''))) return;
-				act('singbox', v);
+				return zm.ask((has ? 'Заменить sing-box на ' : 'Установить ') + it.label.toLowerCase() + (has ? '' : ' sing-box') + '?\n\n' + it.warn + restartNote + (has ? 'Если новый sing-box не установится, останется прежний.' : '')).then(function(ok) { if (!ok) return; act('singbox', v); });
 			})));
 			if (has && curVar) {
 				var cur = vars.filter(function(x) { return x.id === curVar; })[0];
 				sbCard.appendChild(E('div', { 'class': 'zm-actions' }, [ E('button', { 'class': 'cbi-button', 'disabled': busy ? '' : null, 'click': function() {
-					if (!confirm('Переустановить ' + cur.label.toLowerCase() + ' sing-box?\n\n' + (curVar === 'extended' ? 'Скачается свежая сборка с GitHub (около 40 МБ).\n' : 'Пакет скачается из репозитория OpenWrt заново.\n') + restartNote + 'Если не установится, останется прежний.')) return;
-					act('singbox_reinstall', curVar);
+					return zm.ask('Переустановить ' + cur.label.toLowerCase() + ' sing-box?\n\n' + (curVar === 'extended' ? 'Скачается свежая сборка с GitHub (около 40 МБ).\n' : 'Пакет скачается из репозитория OpenWrt заново.\n') + restartNote + 'Если не установится, останется прежний.').then(function(ok) { if (!ok) return; act('singbox_reinstall', curVar); });
 				} }, curVar === 'extended' ? 'Переустановить (обновить сборку)' : 'Переустановить') ]));
 			}
 			sbCard.appendChild(E('div', { 'class': 'zm-kv' }, vars.map(function(x) {
@@ -34184,13 +34466,15 @@ function renderInstalled(all) {
 			}
 
 			function onReset() {
-				if (!confirm('Вернуть встроенный список? Ваши правки будут удалены.')) return;
-				bt.listReset(o.kind).then(function(res) {
-					if (res.error) { bt.toast(res.error, 'error'); return; }
-					o.apply(res);
-					reload().then(function() {
-						ed.sync();
-						bt.toast('Возвращён встроенный список', 'info');
+				return zm.ask('Вернуть встроенный список? Ваши правки будут удалены.').then(function(ok) {
+					if (!ok) return;
+					bt.listReset(o.kind).then(function(res) {
+						if (res.error) { bt.toast(res.error, 'error'); return; }
+						o.apply(res);
+						reload().then(function() {
+							ed.sync();
+							bt.toast('Возвращён встроенный список', 'info');
+						});
 					});
 				});
 			}
@@ -34323,7 +34607,7 @@ function renderInstalled(all) {
 					E('td', { 'class': 'bt-td-a' }, [
 						isCur ? '' : btn('Применить', 'cbi-button-apply', function() {
 							var q = 'Применить стратегию и перезапустить службу?\n\n' + (p ? p.name + '\n' : '') + r.opts;
-							if (confirm(q)) setStrategy(r.opts, p ? (p.label || p.name) : 'Стратегия');
+							zm.ask(q, { okText: 'Применить' }).then(function(ok) { if (ok) setStrategy(r.opts, p ? (p.label || p.name) : 'Стратегия'); });
 						})
 					])
 				]);
@@ -36327,11 +36611,11 @@ html[data-theme="light"] .zmw-orbs i { opacity: .28; }
 #zmw-view .bt-col .zm-row { padding: 6px 0; margin: 0; border-bottom: 1px dashed var(--border); }
 #zmw-view .bt-col .zm-row:last-child { border-bottom: 0; }
 
-#zmw-view .zm-hint, #zmw-view p.zm-hint, .zm-dock .zm-hint, .zm-dock p.zm-hint { opacity: 1; color: var(--muted); font-size: 12.5px; line-height: 1.6; }
-#zmw-view a:not(.cbi-button), .zm-dock a:not(.cbi-button) { color: var(--a2); text-decoration-color: rgba(59,130,246,.35); text-underline-offset: 3px; }
-html[data-theme="dark"] #zmw-view a:not(.cbi-button), html[data-theme="dark"] .zm-dock a:not(.cbi-button) { color: #8ab4ff; }
+#zmw-view .zm-hint, #zmw-view p.zm-hint, .zm-dock .zm-hint, .zm-dock p.zm-hint, .zmw-modal .zm-hint, .zmw-modal p.zm-hint { opacity: 1; color: var(--muted); font-size: 12.5px; line-height: 1.6; }
+#zmw-view a:not(.cbi-button), .zm-dock a:not(.cbi-button), .zmw-modal a:not(.cbi-button) { color: var(--a2); text-decoration-color: rgba(59,130,246,.35); text-underline-offset: 3px; }
+html[data-theme="dark"] #zmw-view a:not(.cbi-button), html[data-theme="dark"] .zm-dock a:not(.cbi-button), html[data-theme="dark"] .zmw-modal a:not(.cbi-button) { color: #8ab4ff; }
 
-#zmw-view .zm-badge, .zm-dock .zm-badge { padding: 4px 11px 4px 9px; font-size: 12px; font-weight: 650; gap: 7px; letter-spacing: .01em; }
+#zmw-view .zm-badge, .zm-dock .zm-badge, .zmw-modal .zm-badge { padding: 4px 11px 4px 9px; font-size: 12px; font-weight: 650; gap: 7px; letter-spacing: .01em; }
 #zmw-view .zm-ok { background: var(--ok-bg); color: var(--ok); }
 #zmw-view .zm-ok .zm-dot { background: var(--ok-dot); box-shadow: 0 0 8px var(--ok-dot); animation: zmw-pulse 2.4s infinite; }
 #zmw-view .zm-bad { background: var(--bad-bg); color: var(--bad); }
@@ -36352,27 +36636,27 @@ html[data-theme="dark"] #zmw-view a:not(.cbi-button), html[data-theme="dark"] .z
 	transition: border-color .15s, background .15s, transform .1s, box-shadow .15s, color .15s;
 	-webkit-appearance: none; appearance: none;
 }
-html[data-theme="dark"] #zmw-view .cbi-button, html[data-theme="dark"] .zm-dock .cbi-button { background: rgba(255,255,255,.05); }
-#zmw-view .cbi-button:hover, .zm-dock .cbi-button:hover { border-color: rgba(124,92,255,.55); background: var(--surface-solid); transform: translateY(-1px); box-shadow: 0 6px 16px -10px rgba(99,102,241,.6); }
-html[data-theme="dark"] #zmw-view .cbi-button:hover, html[data-theme="dark"] .zm-dock .cbi-button:hover { background: rgba(255,255,255,.08); }
-#zmw-view .cbi-button:active, .zm-dock .cbi-button:active { transform: translateY(0) scale(.98); }
-#zmw-view .cbi-button:focus-visible, .zm-dock .cbi-button:focus-visible { outline: none; box-shadow: var(--ring); }
-#zmw-view .cbi-button[disabled], #zmw-view .cbi-button:disabled, .zm-dock .cbi-button[disabled], .zm-dock .cbi-button:disabled { opacity: .5; cursor: not-allowed; transform: none; box-shadow: none; }
+html[data-theme="dark"] #zmw-view .cbi-button, html[data-theme="dark"] .zm-dock .cbi-button, html[data-theme="dark"] .zmw-modal .cbi-button { background: rgba(255,255,255,.05); }
+#zmw-view .cbi-button:hover, .zm-dock .cbi-button:hover, .zmw-modal .cbi-button:hover { border-color: rgba(124,92,255,.55); background: var(--surface-solid); transform: translateY(-1px); box-shadow: 0 6px 16px -10px rgba(99,102,241,.6); }
+html[data-theme="dark"] #zmw-view .cbi-button:hover, html[data-theme="dark"] .zm-dock .cbi-button:hover, html[data-theme="dark"] .zmw-modal .cbi-button:hover { background: rgba(255,255,255,.08); }
+#zmw-view .cbi-button:active, .zm-dock .cbi-button:active, .zmw-modal .cbi-button:active { transform: translateY(0) scale(.98); }
+#zmw-view .cbi-button:focus-visible, .zm-dock .cbi-button:focus-visible, .zmw-modal .cbi-button:focus-visible { outline: none; box-shadow: var(--ring); }
+#zmw-view .cbi-button[disabled], #zmw-view .cbi-button:disabled, .zm-dock .cbi-button[disabled], .zm-dock .cbi-button:disabled, .zmw-modal .cbi-button[disabled], .zmw-modal .cbi-button:disabled { opacity: .5; cursor: not-allowed; transform: none; box-shadow: none; }
 
 #zmw-view .cbi-button-positive, .zm-refresh-banner .cbi-button-positive,
-html[data-theme="dark"] #zmw-view .cbi-button-positive, .zm-dock .cbi-button-positive, html[data-theme="dark"] .zm-dock .cbi-button-positive {
+html[data-theme="dark"] #zmw-view .cbi-button-positive, .zm-dock .cbi-button-positive, html[data-theme="dark"] .zm-dock .cbi-button-positive, .zmw-modal .cbi-button-positive, html[data-theme="dark"] .zmw-modal .cbi-button-positive {
 	background: var(--grad); background-size: 150% 100%; color: #fff; border-color: transparent;
 	box-shadow: 0 8px 20px -10px rgba(99,102,241,.9), inset 0 1px 0 rgba(255,255,255,.22);
 }
-#zmw-view .cbi-button-positive:hover, html[data-theme="dark"] #zmw-view .cbi-button-positive:hover, .zm-dock .cbi-button-positive:hover, html[data-theme="dark"] .zm-dock .cbi-button-positive:hover {
+#zmw-view .cbi-button-positive:hover, html[data-theme="dark"] #zmw-view .cbi-button-positive:hover, .zm-dock .cbi-button-positive:hover, html[data-theme="dark"] .zm-dock .cbi-button-positive:hover, .zmw-modal .cbi-button-positive:hover, html[data-theme="dark"] .zmw-modal .cbi-button-positive:hover {
 	background: var(--grad); background-size: 150% 100%; background-position: 100% 0;
 	border-color: transparent; color: #fff;
 	box-shadow: 0 12px 26px -10px rgba(99,102,241,1), inset 0 1px 0 rgba(255,255,255,.22);
 }
-#zmw-view .cbi-button-remove, html[data-theme="dark"] #zmw-view .cbi-button-remove, .zm-dock .cbi-button-remove, html[data-theme="dark"] .zm-dock .cbi-button-remove {
+#zmw-view .cbi-button-remove, html[data-theme="dark"] #zmw-view .cbi-button-remove, .zm-dock .cbi-button-remove, html[data-theme="dark"] .zm-dock .cbi-button-remove, .zmw-modal .cbi-button-remove, html[data-theme="dark"] .zmw-modal .cbi-button-remove {
 	background: var(--bad-bg); color: var(--bad); border-color: rgba(239,68,68,.28); box-shadow: none;
 }
-#zmw-view .cbi-button-remove:hover, html[data-theme="dark"] #zmw-view .cbi-button-remove:hover, .zm-dock .cbi-button-remove:hover, html[data-theme="dark"] .zm-dock .cbi-button-remove:hover {
+#zmw-view .cbi-button-remove:hover, html[data-theme="dark"] #zmw-view .cbi-button-remove:hover, .zm-dock .cbi-button-remove:hover, html[data-theme="dark"] .zm-dock .cbi-button-remove:hover, .zmw-modal .cbi-button-remove:hover, html[data-theme="dark"] .zmw-modal .cbi-button-remove:hover {
 	background: rgba(239,68,68,.18); border-color: rgba(239,68,68,.5); color: var(--bad);
 	box-shadow: 0 8px 20px -12px rgba(239,68,68,.8);
 }
@@ -36389,13 +36673,13 @@ html[data-theme="dark"] #zmw-view .cbi-button-positive, .zm-dock .cbi-button-pos
 	width: max-content; max-width: 100%;
 }
 #zmw-view .zm-actions.zmw-tabs::-webkit-scrollbar { display: none; }
-#zmw-view .zmw-tabs .cbi-button, .zm-dock .zmw-tabs .cbi-button {
+#zmw-view .zmw-tabs .cbi-button, .zm-dock .zmw-tabs .cbi-button, .zmw-modal .zmw-tabs .cbi-button {
 	flex-shrink: 0; white-space: nowrap;
 	border: 0; background: transparent; box-shadow: none; color: var(--muted);
 	min-height: 36px; padding: 7px 16px; border-radius: 11px;
 }
-#zmw-view .zmw-tabs .cbi-button:hover, .zm-dock .zmw-tabs .cbi-button:hover { background: var(--surface-2); color: var(--text); transform: none; box-shadow: none; }
-#zmw-view .zmw-tabs .cbi-button-positive, #zmw-view .zmw-tabs .cbi-button-positive:hover, .zm-dock .zmw-tabs .cbi-button-positive, .zm-dock .zmw-tabs .cbi-button-positive:hover {
+#zmw-view .zmw-tabs .cbi-button:hover, .zm-dock .zmw-tabs .cbi-button:hover, .zmw-modal .zmw-tabs .cbi-button:hover { background: var(--surface-2); color: var(--text); transform: none; box-shadow: none; }
+#zmw-view .zmw-tabs .cbi-button-positive, #zmw-view .zmw-tabs .cbi-button-positive:hover, .zm-dock .zmw-tabs .cbi-button-positive, .zm-dock .zmw-tabs .cbi-button-positive:hover, .zmw-modal .zmw-tabs .cbi-button-positive, .zmw-modal .zmw-tabs .cbi-button-positive:hover {
 	background: var(--grad); color: #fff;
 	box-shadow: 0 6px 16px -8px rgba(99,102,241,.9);
 }
@@ -36692,8 +36976,8 @@ html body.zmw-body .zm-toast { background: var(--toast-bg); color: var(--toast-f
 	#zmw-view .zm-cards { grid-template-columns: 1fr; }
 	#zmw-view .zm-header { padding: 16px; }
 	#zmw-view .zm-header-links { margin-left: 0; }
-	#zmw-view .zm-actions .cbi-button, .zm-dock .zm-actions .cbi-button { flex: 1 1 auto; }
-	#zmw-view .zmw-tabs .cbi-button, .zm-dock .zmw-tabs .cbi-button { flex: 0 0 auto; }
+	#zmw-view .zm-actions .cbi-button, .zm-dock .zm-actions .cbi-button, .zmw-modal .zm-actions .cbi-button { flex: 1 1 auto; }
+	#zmw-view .zmw-tabs .cbi-button, .zm-dock .zmw-tabs .cbi-button, .zmw-modal .zmw-tabs .cbi-button { flex: 0 0 auto; }
 	#zmw-view .zm-actions.zmw-tabs { width: 100%; }
 	#zmw-view .zm-refresh-banner, .zm-refresh-banner { flex-direction: column; align-items: stretch; text-align: left; }
 	.zmw-brand-name { font-size: 15px; white-space: nowrap; }
@@ -36820,26 +37104,26 @@ html[data-theme="ink"] #zmw-view .zm-card {
 }
 html[data-theme="ink"] #zmw-view .zm-card:hover { box-shadow: 5px 5px 0 #0a0a0a; border-color: #0a0a0a; }
 html[data-theme="ink"] #zmw-view .zm-card h3::before { background: #0a9cff; border: 1.5px solid #0a0a0a; }
-html[data-theme="ink"] #zmw-view .cbi-button, html[data-theme="ink"] .zm-dock .cbi-button {
+html[data-theme="ink"] #zmw-view .cbi-button, html[data-theme="ink"] .zm-dock .cbi-button, html[data-theme="ink"] .zmw-modal .cbi-button {
 	border: 2px solid #0a0a0a; border-radius: 6px; box-shadow: 3px 3px 0 #0a0a0a; background: #ffffff; color: #0a0a0a;
 	transition: transform .08s, box-shadow .08s;
 }
-html[data-theme="ink"] #zmw-view .cbi-button:hover, html[data-theme="ink"] .zm-dock .cbi-button:hover { background: #e8f6ff; transform: none; box-shadow: 3px 3px 0 #0a0a0a; }
-html[data-theme="ink"] #zmw-view .cbi-button:active, html[data-theme="ink"] .zm-dock .cbi-button:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 #0a0a0a; }
-html[data-theme="ink"] #zmw-view .cbi-button-positive, html[data-theme="ink"] #zmw-view .cbi-button-positive:hover, html[data-theme="ink"] .zm-dock .cbi-button-positive, html[data-theme="ink"] .zm-dock .cbi-button-positive:hover { background: #0a9cff; color: #0a0a0a; border-color: #0a0a0a; }
-html[data-theme="ink"] #zmw-view .cbi-button-remove, html[data-theme="ink"] #zmw-view .cbi-button-remove:hover, html[data-theme="ink"] .zm-dock .cbi-button-remove, html[data-theme="ink"] .zm-dock .cbi-button-remove:hover { background: #ff4d3d; color: #0a0a0a; border-color: #0a0a0a; }
-html[data-theme="ink"] #zmw-view .cbi-button-action, html[data-theme="ink"] #zmw-view .cbi-button-action:hover, html[data-theme="ink"] .zm-dock .cbi-button-action, html[data-theme="ink"] .zm-dock .cbi-button-action:hover { background: #d6f0ff; color: #0a0a0a; }
-html[data-theme="ink"] #zmw-view .cbi-button[disabled], html[data-theme="ink"] .zm-dock .cbi-button[disabled] { box-shadow: none; opacity: .5; }
-html[data-theme="ink"] #zmw-view .zmw-tabs .cbi-button, html[data-theme="ink"] .zm-dock .zmw-tabs .cbi-button { box-shadow: none; }
-html[data-theme="ink"] #zmw-view .zmw-tabs .cbi-button-positive, html[data-theme="ink"] .zm-dock .zmw-tabs .cbi-button-positive { box-shadow: 3px 3px 0 #0a0a0a; }
+html[data-theme="ink"] #zmw-view .cbi-button:hover, html[data-theme="ink"] .zm-dock .cbi-button:hover, html[data-theme="ink"] .zmw-modal .cbi-button:hover { background: #e8f6ff; transform: none; box-shadow: 3px 3px 0 #0a0a0a; }
+html[data-theme="ink"] #zmw-view .cbi-button:active, html[data-theme="ink"] .zm-dock .cbi-button:active, html[data-theme="ink"] .zmw-modal .cbi-button:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 #0a0a0a; }
+html[data-theme="ink"] #zmw-view .cbi-button-positive, html[data-theme="ink"] #zmw-view .cbi-button-positive:hover, html[data-theme="ink"] .zm-dock .cbi-button-positive, html[data-theme="ink"] .zm-dock .cbi-button-positive:hover, html[data-theme="ink"] .zmw-modal .cbi-button-positive, html[data-theme="ink"] .zmw-modal .cbi-button-positive:hover { background: #0a9cff; color: #0a0a0a; border-color: #0a0a0a; }
+html[data-theme="ink"] #zmw-view .cbi-button-remove, html[data-theme="ink"] #zmw-view .cbi-button-remove:hover, html[data-theme="ink"] .zm-dock .cbi-button-remove, html[data-theme="ink"] .zm-dock .cbi-button-remove:hover, html[data-theme="ink"] .zmw-modal .cbi-button-remove, html[data-theme="ink"] .zmw-modal .cbi-button-remove:hover { background: #ff4d3d; color: #0a0a0a; border-color: #0a0a0a; }
+html[data-theme="ink"] #zmw-view .cbi-button-action, html[data-theme="ink"] #zmw-view .cbi-button-action:hover, html[data-theme="ink"] .zm-dock .cbi-button-action, html[data-theme="ink"] .zm-dock .cbi-button-action:hover, html[data-theme="ink"] .zmw-modal .cbi-button-action, html[data-theme="ink"] .zmw-modal .cbi-button-action:hover { background: #d6f0ff; color: #0a0a0a; }
+html[data-theme="ink"] #zmw-view .cbi-button[disabled], html[data-theme="ink"] .zm-dock .cbi-button[disabled], html[data-theme="ink"] .zmw-modal .cbi-button[disabled] { box-shadow: none; opacity: .5; }
+html[data-theme="ink"] #zmw-view .zmw-tabs .cbi-button, html[data-theme="ink"] .zm-dock .zmw-tabs .cbi-button, html[data-theme="ink"] .zmw-modal .zmw-tabs .cbi-button { box-shadow: none; }
+html[data-theme="ink"] #zmw-view .zmw-tabs .cbi-button-positive, html[data-theme="ink"] .zm-dock .zmw-tabs .cbi-button-positive, html[data-theme="ink"] .zmw-modal .zmw-tabs .cbi-button-positive { box-shadow: 3px 3px 0 #0a0a0a; }
 html[data-theme="ink"] #zmw-view .zm-tile {
 	background: #ffffff; border: 2px solid #0a0a0a; border-radius: 6px; box-shadow: 3px 3px 0 #0a0a0a; color: #0a0a0a;
 }
 html[data-theme="ink"] #zmw-view .zm-tile:hover { background: #e8f6ff; transform: none; }
 html[data-theme="ink"] #zmw-view .zm-tile.zm-active { background: #0a9cff; color: #0a0a0a; border-color: #0a0a0a; box-shadow: 3px 3px 0 #0a0a0a; }
 html[data-theme="ink"] #zmw-view .zm-tile.zm-active::before { color: #0a0a0a; }
-html[data-theme="ink"] #zmw-view .zm-badge, html[data-theme="ink"] .zm-dock .zm-badge { border: 2px solid #0a0a0a; color: #0a0a0a; }
-html[data-theme="ink"] #zmw-view .zm-badge .zm-dot, html[data-theme="ink"] .zm-dock .zm-badge .zm-dot { box-shadow: none; animation: none; }
+html[data-theme="ink"] #zmw-view .zm-badge, html[data-theme="ink"] .zm-dock .zm-badge, html[data-theme="ink"] .zmw-modal .zm-badge { border: 2px solid #0a0a0a; color: #0a0a0a; }
+html[data-theme="ink"] #zmw-view .zm-badge .zm-dot, html[data-theme="ink"] .zm-dock .zm-badge .zm-dot, html[data-theme="ink"] .zmw-modal .zm-badge .zm-dot { box-shadow: none; animation: none; }
 html[data-theme="ink"] #zmw-view input[type="text"], html[data-theme="ink"] #zmw-view input[type="password"],
 html[data-theme="ink"] #zmw-view input[type="number"], html[data-theme="ink"] #zmw-view select,
 html[data-theme="ink"] #zmw-view textarea:not(.zm-config-editor) { border: 2px solid #0a0a0a; border-radius: 6px; background: #ffffff; }
@@ -36860,7 +37144,7 @@ html[data-theme="ink"] #zmw-view .zm-quota > i { background: #0a9cff; border-rad
 html[data-theme="ink"] #zmw-view .zm-switch { border: 2px solid #0a0a0a; background: #ffffff; }
 html[data-theme="ink"] #zmw-view .zm-switch > span { border: 2px solid #0a0a0a; box-shadow: none; top: 1px; left: 1px; }
 html[data-theme="ink"] #zmw-view .zm-switch.zm-switch-on { background: #0a9cff; }
-html[data-theme="ink"] #zmw-view a:not(.cbi-button), html[data-theme="ink"] .zm-dock a:not(.cbi-button) { color: #0060c0; text-decoration: underline; text-underline-offset: 2px; }
+html[data-theme="ink"] #zmw-view a:not(.cbi-button), html[data-theme="ink"] .zm-dock a:not(.cbi-button), html[data-theme="ink"] .zmw-modal a:not(.cbi-button) { color: #0060c0; text-decoration: underline; text-underline-offset: 2px; }
 html[data-theme="ink"] .zmw-logo svg { filter: none; }
 html[data-theme="ink"] .zmw-logo-lg::after { display: none; }
 html[data-theme="bento"] {
@@ -36901,13 +37185,13 @@ html[data-theme="bento"] #zmw-view .zm-cards > .zm-card:nth-child(4n+3) { backgr
 html[data-theme="bento"] #zmw-view .zm-cards > .zm-card:nth-child(4n+4) { background: #dff2e2; }
 html[data-theme="bento"] #zmw-view .zm-card h3::before { display: none; }
 html[data-theme="bento"] #zmw-view .zm-card h3 { font-size: 15px; font-weight: 600; color: inherit; opacity: .8; }
-html[data-theme="bento"] #zmw-view .cbi-button, html[data-theme="bento"] .zmw-icon-btn, html[data-theme="bento"] .zm-dock .cbi-button { border-radius: 14px; border: 0; background: #f6f2ea; color: #1c1a17; box-shadow: none; }
-html[data-theme="bento"] #zmw-view .cbi-button:hover, html[data-theme="bento"] .zmw-icon-btn:hover, html[data-theme="bento"] .zm-dock .cbi-button:hover { background: #e4ddd0; transform: none; }
-html[data-theme="bento"] #zmw-view .cbi-button-positive, html[data-theme="bento"] #zmw-view .cbi-button-positive:hover, html[data-theme="bento"] .zmw-btn-primary, html[data-theme="bento"] .zm-dock .cbi-button-positive, html[data-theme="bento"] .zm-dock .cbi-button-positive:hover { background: #1c1a17; color: #ffffff; border: 0; box-shadow: none; }
-html[data-theme="bento"] #zmw-view .cbi-button-remove, html[data-theme="bento"] #zmw-view .cbi-button-remove:hover, html[data-theme="bento"] .zm-dock .cbi-button-remove, html[data-theme="bento"] .zm-dock .cbi-button-remove:hover { background: #ffd9d4; color: #8a1c14; }
+html[data-theme="bento"] #zmw-view .cbi-button, html[data-theme="bento"] .zmw-icon-btn, html[data-theme="bento"] .zm-dock .cbi-button, html[data-theme="bento"] .zmw-modal .cbi-button { border-radius: 14px; border: 0; background: #f6f2ea; color: #1c1a17; box-shadow: none; }
+html[data-theme="bento"] #zmw-view .cbi-button:hover, html[data-theme="bento"] .zmw-icon-btn:hover, html[data-theme="bento"] .zm-dock .cbi-button:hover, html[data-theme="bento"] .zmw-modal .cbi-button:hover { background: #e4ddd0; transform: none; }
+html[data-theme="bento"] #zmw-view .cbi-button-positive, html[data-theme="bento"] #zmw-view .cbi-button-positive:hover, html[data-theme="bento"] .zmw-btn-primary, html[data-theme="bento"] .zm-dock .cbi-button-positive, html[data-theme="bento"] .zm-dock .cbi-button-positive:hover, html[data-theme="bento"] .zmw-modal .cbi-button-positive, html[data-theme="bento"] .zmw-modal .cbi-button-positive:hover { background: #1c1a17; color: #ffffff; border: 0; box-shadow: none; }
+html[data-theme="bento"] #zmw-view .cbi-button-remove, html[data-theme="bento"] #zmw-view .cbi-button-remove:hover, html[data-theme="bento"] .zm-dock .cbi-button-remove, html[data-theme="bento"] .zm-dock .cbi-button-remove:hover, html[data-theme="bento"] .zmw-modal .cbi-button-remove, html[data-theme="bento"] .zmw-modal .cbi-button-remove:hover { background: #ffd9d4; color: #8a1c14; }
 html[data-theme="bento"] #zmw-view .zm-tile { border-radius: 18px; border: 0; background: #f6f2ea; }
 html[data-theme="bento"] #zmw-view .zm-tile.zm-active { background: #1c1a17; color: #ffffff; border: 0; }
-html[data-theme="bento"] #zmw-view .zm-badge, html[data-theme="bento"] .zm-dock .zm-badge { border-radius: 999px; }
+html[data-theme="bento"] #zmw-view .zm-badge, html[data-theme="bento"] .zm-dock .zm-badge, html[data-theme="bento"] .zmw-modal .zm-badge { border-radius: 999px; }
 html[data-theme="bento"] #zmw-view .zm-log, html[data-theme="bento"] #zmw-view .zm-config-editor { border-radius: 24px; }
 html[data-theme="bento"] .zmw-login-card, html[data-theme="bento"] .zmw-modal, html[data-theme="bento"] .zmw-theme-menu { border: 0; border-radius: 28px; background: #ffffff; backdrop-filter: none; }
 
@@ -36945,16 +37229,16 @@ html[data-theme="minimal"] #zmw-view .zm-card { border: 0; border-top: 1px solid
 html[data-theme="minimal"] #zmw-view .zm-card:hover { box-shadow: none; }
 html[data-theme="minimal"] #zmw-view .zm-card h3 { font-weight: 400; font-size: 13px; text-transform: uppercase; letter-spacing: .12em; color: #6b6b6b; }
 html[data-theme="minimal"] #zmw-view .zm-card h3::before { display: none; }
-html[data-theme="minimal"] #zmw-view .cbi-button, html[data-theme="minimal"] .zmw-icon-btn, html[data-theme="minimal"] .zm-dock .cbi-button { border-radius: 0; border: 1px solid #111111; background: #ffffff; color: #111111; box-shadow: none; font-weight: 400; }
-html[data-theme="minimal"] #zmw-view .cbi-button:hover, html[data-theme="minimal"] .zmw-icon-btn:hover, html[data-theme="minimal"] .zm-dock .cbi-button:hover { background: #111111; color: #ffffff; transform: none; }
-html[data-theme="minimal"] #zmw-view .cbi-button-positive, html[data-theme="minimal"] #zmw-view .cbi-button-positive:hover, html[data-theme="minimal"] .zmw-btn-primary, html[data-theme="minimal"] .zm-dock .cbi-button-positive, html[data-theme="minimal"] .zm-dock .cbi-button-positive:hover { background: #111111; color: #ffffff; border: 1px solid #111111; box-shadow: none; }
-html[data-theme="minimal"] #zmw-view .cbi-button-remove, html[data-theme="minimal"] .zm-dock .cbi-button-remove { border-color: #b3261e; color: #b3261e; background: #ffffff; }
-html[data-theme="minimal"] #zmw-view .cbi-button-remove:hover, html[data-theme="minimal"] .zm-dock .cbi-button-remove:hover { background: #b3261e; color: #ffffff; }
+html[data-theme="minimal"] #zmw-view .cbi-button, html[data-theme="minimal"] .zmw-icon-btn, html[data-theme="minimal"] .zm-dock .cbi-button, html[data-theme="minimal"] .zmw-modal .cbi-button { border-radius: 0; border: 1px solid #111111; background: #ffffff; color: #111111; box-shadow: none; font-weight: 400; }
+html[data-theme="minimal"] #zmw-view .cbi-button:hover, html[data-theme="minimal"] .zmw-icon-btn:hover, html[data-theme="minimal"] .zm-dock .cbi-button:hover, html[data-theme="minimal"] .zmw-modal .cbi-button:hover { background: #111111; color: #ffffff; transform: none; }
+html[data-theme="minimal"] #zmw-view .cbi-button-positive, html[data-theme="minimal"] #zmw-view .cbi-button-positive:hover, html[data-theme="minimal"] .zmw-btn-primary, html[data-theme="minimal"] .zm-dock .cbi-button-positive, html[data-theme="minimal"] .zm-dock .cbi-button-positive:hover, html[data-theme="minimal"] .zmw-modal .cbi-button-positive, html[data-theme="minimal"] .zmw-modal .cbi-button-positive:hover { background: #111111; color: #ffffff; border: 1px solid #111111; box-shadow: none; }
+html[data-theme="minimal"] #zmw-view .cbi-button-remove, html[data-theme="minimal"] .zm-dock .cbi-button-remove, html[data-theme="minimal"] .zmw-modal .cbi-button-remove { border-color: #b3261e; color: #b3261e; background: #ffffff; }
+html[data-theme="minimal"] #zmw-view .cbi-button-remove:hover, html[data-theme="minimal"] .zm-dock .cbi-button-remove:hover, html[data-theme="minimal"] .zmw-modal .cbi-button-remove:hover { background: #b3261e; color: #ffffff; }
 html[data-theme="minimal"] #zmw-view .zm-tile { border-radius: 0; border: 1px solid #e0e0e0; background: #ffffff; font-weight: 400; }
 html[data-theme="minimal"] #zmw-view .zm-tile.zm-active { border-color: #111111; background: #ffffff; color: #111111; box-shadow: inset 0 0 0 1px #111111; }
 html[data-theme="minimal"] #zmw-view .zm-tile.zm-active::before { color: #0078e8; }
-html[data-theme="minimal"] #zmw-view .zm-badge, html[data-theme="minimal"] .zm-dock .zm-badge { padding-left: 0; font-weight: 400; }
-html[data-theme="minimal"] #zmw-view .zm-badge .zm-dot, html[data-theme="minimal"] .zm-dock .zm-badge .zm-dot { width: 6px; height: 6px; box-shadow: none; animation: none; }
+html[data-theme="minimal"] #zmw-view .zm-badge, html[data-theme="minimal"] .zm-dock .zm-badge, html[data-theme="minimal"] .zmw-modal .zm-badge { padding-left: 0; font-weight: 400; }
+html[data-theme="minimal"] #zmw-view .zm-badge .zm-dot, html[data-theme="minimal"] .zm-dock .zm-badge .zm-dot, html[data-theme="minimal"] .zmw-modal .zm-badge .zm-dot { width: 6px; height: 6px; box-shadow: none; animation: none; }
 html[data-theme="minimal"] #zmw-view .zm-log, html[data-theme="minimal"] #zmw-view .zm-config-editor { border-radius: 0; }
 html[data-theme="minimal"] .zmw-login-card, html[data-theme="minimal"] .zmw-modal, html[data-theme="minimal"] .zmw-theme-menu { border-radius: 0; border: 1px solid #111111; box-shadow: none; background: #ffffff; backdrop-filter: none; }
 html[data-theme="minimal"] .zmw-theme-opt { border-radius: 0; }
@@ -36998,18 +37282,18 @@ html[data-theme="retro"] #zmw-view .zm-card {
 html[data-theme="retro"] #zmw-view .zm-card { padding: 0 14px 14px; }
 html[data-theme="retro"] #zmw-view .zm-card h3 { margin: 3px -11px 14px; padding: 5px 8px; background: linear-gradient(90deg, #000080, #1084d0); color: #ffffff; font-size: 13px; font-weight: 700; }
 html[data-theme="retro"] #zmw-view .zm-card h3::before { display: none; }
-html[data-theme="retro"] #zmw-view .cbi-button, html[data-theme="retro"] .zmw-icon-btn, html[data-theme="retro"] .zmw-btn-primary, html[data-theme="retro"] .zm-dock .cbi-button {
+html[data-theme="retro"] #zmw-view .cbi-button, html[data-theme="retro"] .zmw-icon-btn, html[data-theme="retro"] .zmw-btn-primary, html[data-theme="retro"] .zm-dock .cbi-button, html[data-theme="retro"] .zmw-modal .cbi-button {
 	border-radius: 0; background: #c0c0c0; color: #000000; box-shadow: inset -1px -1px 0 #808080, inset 1px 1px 0 #dfdfdf;
 	border-top: 2px solid #ffffff; border-left: 2px solid #ffffff; border-right: 2px solid #000000; border-bottom: 2px solid #000000; font-weight: 400;
 }
-html[data-theme="retro"] #zmw-view .cbi-button:hover, html[data-theme="retro"] .zmw-icon-btn:hover, html[data-theme="retro"] .zm-dock .cbi-button:hover { background: #c0c0c0; transform: none; }
-html[data-theme="retro"] #zmw-view .cbi-button:active, html[data-theme="retro"] .zmw-icon-btn:active, html[data-theme="retro"] .zm-dock .cbi-button:active { border-top-color: #000000; border-left-color: #000000; border-right-color: #ffffff; border-bottom-color: #ffffff; }
-html[data-theme="retro"] #zmw-view .cbi-button-positive, html[data-theme="retro"] #zmw-view .cbi-button-positive:hover, html[data-theme="retro"] .zm-dock .cbi-button-positive, html[data-theme="retro"] .zm-dock .cbi-button-positive:hover { background: #c0c0c0; color: #000000; font-weight: 700; outline: 1px dotted #000000; outline-offset: -5px; }
-html[data-theme="retro"] #zmw-view .cbi-button-remove, html[data-theme="retro"] #zmw-view .cbi-button-remove:hover, html[data-theme="retro"] .zm-dock .cbi-button-remove, html[data-theme="retro"] .zm-dock .cbi-button-remove:hover { background: #c0c0c0; color: #a00000; }
+html[data-theme="retro"] #zmw-view .cbi-button:hover, html[data-theme="retro"] .zmw-icon-btn:hover, html[data-theme="retro"] .zm-dock .cbi-button:hover, html[data-theme="retro"] .zmw-modal .cbi-button:hover { background: #c0c0c0; transform: none; }
+html[data-theme="retro"] #zmw-view .cbi-button:active, html[data-theme="retro"] .zmw-icon-btn:active, html[data-theme="retro"] .zm-dock .cbi-button:active, html[data-theme="retro"] .zmw-modal .cbi-button:active { border-top-color: #000000; border-left-color: #000000; border-right-color: #ffffff; border-bottom-color: #ffffff; }
+html[data-theme="retro"] #zmw-view .cbi-button-positive, html[data-theme="retro"] #zmw-view .cbi-button-positive:hover, html[data-theme="retro"] .zm-dock .cbi-button-positive, html[data-theme="retro"] .zm-dock .cbi-button-positive:hover, html[data-theme="retro"] .zmw-modal .cbi-button-positive, html[data-theme="retro"] .zmw-modal .cbi-button-positive:hover { background: #c0c0c0; color: #000000; font-weight: 700; outline: 1px dotted #000000; outline-offset: -5px; }
+html[data-theme="retro"] #zmw-view .cbi-button-remove, html[data-theme="retro"] #zmw-view .cbi-button-remove:hover, html[data-theme="retro"] .zm-dock .cbi-button-remove, html[data-theme="retro"] .zm-dock .cbi-button-remove:hover, html[data-theme="retro"] .zmw-modal .cbi-button-remove, html[data-theme="retro"] .zmw-modal .cbi-button-remove:hover { background: #c0c0c0; color: #a00000; }
 html[data-theme="retro"] #zmw-view .zm-tile { border-radius: 0; background: #ffffff; border-top: 2px solid #808080; border-left: 2px solid #808080; border-right: 2px solid #ffffff; border-bottom: 2px solid #ffffff; }
 html[data-theme="retro"] #zmw-view .zm-tile.zm-active { background: #000080; color: #ffffff; }
-html[data-theme="retro"] #zmw-view .zm-badge, html[data-theme="retro"] .zm-dock .zm-badge { border-radius: 0; padding-left: 0; }
-html[data-theme="retro"] #zmw-view .zm-badge .zm-dot, html[data-theme="retro"] .zm-dock .zm-badge .zm-dot { box-shadow: none; animation: none; }
+html[data-theme="retro"] #zmw-view .zm-badge, html[data-theme="retro"] .zm-dock .zm-badge, html[data-theme="retro"] .zmw-modal .zm-badge { border-radius: 0; padding-left: 0; }
+html[data-theme="retro"] #zmw-view .zm-badge .zm-dot, html[data-theme="retro"] .zm-dock .zm-badge .zm-dot, html[data-theme="retro"] .zmw-modal .zm-badge .zm-dot { box-shadow: none; animation: none; }
 html[data-theme="retro"] #zmw-view input, html[data-theme="retro"] #zmw-view select, html[data-theme="retro"] #zmw-view textarea:not(.zm-config-editor), html[data-theme="retro"] .zmw-input {
 	border-radius: 0; background: #ffffff; border-top: 2px solid #808080; border-left: 2px solid #808080; border-right: 2px solid #ffffff; border-bottom: 2px solid #ffffff;
 }
@@ -37048,14 +37332,14 @@ html[data-theme="depth"] #zmw-view .zm-card {
 	transform: translateZ(0); transition: transform .35s cubic-bezier(.2,.8,.2,1), box-shadow .35s;
 }
 html[data-theme="depth"] #zmw-view .zm-card:hover { transform: rotateX(4deg) translateY(-4px); box-shadow: 0 1px 0 rgba(255,255,255,.1) inset, 0 14px 0 -2px #0c1426, 0 40px 60px -14px rgba(0,0,0,.85), 0 0 40px -10px rgba(0,182,255,.35); border-color: rgba(127,220,255,.4); }
-html[data-theme="depth"] #zmw-view .cbi-button, html[data-theme="depth"] .zmw-icon-btn, html[data-theme="depth"] .zm-dock .cbi-button {
+html[data-theme="depth"] #zmw-view .cbi-button, html[data-theme="depth"] .zmw-icon-btn, html[data-theme="depth"] .zm-dock .cbi-button, html[data-theme="depth"] .zmw-modal .cbi-button {
 	background: #1e2b48; border: 1px solid rgba(127,220,255,.25); color: #e8eefc;
 	box-shadow: 0 4px 0 #0c1426, 0 8px 16px -6px rgba(0,0,0,.7); transition: transform .08s, box-shadow .08s;
 }
-html[data-theme="depth"] #zmw-view .cbi-button:hover, html[data-theme="depth"] .zmw-icon-btn:hover, html[data-theme="depth"] .zm-dock .cbi-button:hover { background: #253559; transform: translateY(-1px); }
-html[data-theme="depth"] #zmw-view .cbi-button:active, html[data-theme="depth"] .zmw-icon-btn:active, html[data-theme="depth"] .zm-dock .cbi-button:active { transform: translateY(4px); box-shadow: 0 0 0 #0c1426; }
-html[data-theme="depth"] #zmw-view .cbi-button-positive, html[data-theme="depth"] #zmw-view .cbi-button-positive:hover, html[data-theme="depth"] .zmw-btn-primary, html[data-theme="depth"] .zm-dock .cbi-button-positive, html[data-theme="depth"] .zm-dock .cbi-button-positive:hover { background: linear-gradient(180deg, #33c6ff, #0090ff); color: #04111f; border-color: #0090ff; box-shadow: 0 4px 0 #005a9e, 0 10px 24px -8px rgba(0,182,255,.8); }
-html[data-theme="depth"] #zmw-view .cbi-button-remove, html[data-theme="depth"] #zmw-view .cbi-button-remove:hover, html[data-theme="depth"] .zm-dock .cbi-button-remove, html[data-theme="depth"] .zm-dock .cbi-button-remove:hover { background: linear-gradient(180deg, #ff8a7a, #e84a3a); color: #1a0503; border-color: #e84a3a; box-shadow: 0 4px 0 #8f2419; }
+html[data-theme="depth"] #zmw-view .cbi-button:hover, html[data-theme="depth"] .zmw-icon-btn:hover, html[data-theme="depth"] .zm-dock .cbi-button:hover, html[data-theme="depth"] .zmw-modal .cbi-button:hover { background: #253559; transform: translateY(-1px); }
+html[data-theme="depth"] #zmw-view .cbi-button:active, html[data-theme="depth"] .zmw-icon-btn:active, html[data-theme="depth"] .zm-dock .cbi-button:active, html[data-theme="depth"] .zmw-modal .cbi-button:active { transform: translateY(4px); box-shadow: 0 0 0 #0c1426; }
+html[data-theme="depth"] #zmw-view .cbi-button-positive, html[data-theme="depth"] #zmw-view .cbi-button-positive:hover, html[data-theme="depth"] .zmw-btn-primary, html[data-theme="depth"] .zm-dock .cbi-button-positive, html[data-theme="depth"] .zm-dock .cbi-button-positive:hover, html[data-theme="depth"] .zmw-modal .cbi-button-positive, html[data-theme="depth"] .zmw-modal .cbi-button-positive:hover { background: linear-gradient(180deg, #33c6ff, #0090ff); color: #04111f; border-color: #0090ff; box-shadow: 0 4px 0 #005a9e, 0 10px 24px -8px rgba(0,182,255,.8); }
+html[data-theme="depth"] #zmw-view .cbi-button-remove, html[data-theme="depth"] #zmw-view .cbi-button-remove:hover, html[data-theme="depth"] .zm-dock .cbi-button-remove, html[data-theme="depth"] .zm-dock .cbi-button-remove:hover, html[data-theme="depth"] .zmw-modal .cbi-button-remove, html[data-theme="depth"] .zmw-modal .cbi-button-remove:hover { background: linear-gradient(180deg, #ff8a7a, #e84a3a); color: #1a0503; border-color: #e84a3a; box-shadow: 0 4px 0 #8f2419; }
 html[data-theme="depth"] #zmw-view .zm-tile { background: #1e2b48; border: 1px solid rgba(127,220,255,.2); box-shadow: 0 4px 0 #0c1426; transition: transform .15s, box-shadow .15s; }
 html[data-theme="depth"] #zmw-view .zm-tile:hover { transform: translateY(-2px); box-shadow: 0 6px 0 #0c1426, 0 14px 24px -10px rgba(0,182,255,.5); }
 html[data-theme="depth"] #zmw-view .zm-tile.zm-active { background: linear-gradient(180deg, #33c6ff, #0090ff); color: #04111f; border-color: #0090ff; box-shadow: 0 4px 0 #005a9e; }
@@ -37120,19 +37404,19 @@ html[data-theme="micro"] .zmw-mem-bar i { background: #2d5bff; border-radius: in
 html[data-theme="micro"] #zmw-view .zm-card { background: #ffffff; border: 1px solid #e3e6ee; border-radius: 20px; box-shadow: 0 1px 2px rgba(0,0,0,.04); backdrop-filter: none; -webkit-backdrop-filter: none; color: #151a26; }
 html[data-theme="micro"] #zmw-view .zm-card:hover { border-color: #e3e6ee; }
 html[data-theme="micro"] #zmw-view .zm-card h3 { color: #151a26; } html[data-theme="micro"] #zmw-view .zm-card h3::before { background: #2d5bff; }
-html[data-theme="micro"] #zmw-view .zm-hint, html[data-theme="micro"] #zmw-view p.zm-hint, html[data-theme="micro"] #zmw-view .zm-label, html[data-theme="micro"] .zm-dock .zm-hint, html[data-theme="micro"] .zm-dock p.zm-hint { color: #5a6377; opacity: 1; }
-html[data-theme="micro"] #zmw-view a:not(.cbi-button), html[data-theme="micro"] .zm-dock a:not(.cbi-button) { color: #2d5bff; }
-html[data-theme="micro"] #zmw-view .cbi-button, html[data-theme="micro"] .zmw-icon-btn, html[data-theme="micro"] .zm-dock .cbi-button { background: #f7f8fb; color: #151a26; border: 1px solid #e3e6ee; border-radius: 14px; box-shadow: 0 1px 2px rgba(0,0,0,.06); }
-html[data-theme="micro"] #zmw-view .cbi-button:hover, html[data-theme="micro"] .zmw-icon-btn:hover, html[data-theme="micro"] .zm-dock .cbi-button:hover { background: #eceff5; color: #151a26; }
-html[data-theme="micro"] #zmw-view .cbi-button-positive, html[data-theme="micro"] #zmw-view .cbi-button-positive:hover, html[data-theme="micro"] .zmw-btn-primary, html[data-theme="micro"] .zm-dock .cbi-button-positive, html[data-theme="micro"] .zm-dock .cbi-button-positive:hover { background: #2d5bff; color: #ffffff; border-color: #2d5bff; }
-html[data-theme="micro"] #zmw-view .cbi-button-remove, html[data-theme="micro"] #zmw-view .cbi-button-remove:hover, html[data-theme="micro"] .zm-dock .cbi-button-remove, html[data-theme="micro"] .zm-dock .cbi-button-remove:hover { background: #ffe1e1; color: #9a1f1f; border-color: #ffe1e1; }
-html[data-theme="micro"] #zmw-view .cbi-button-action, html[data-theme="micro"] #zmw-view .cbi-button-action:hover, html[data-theme="micro"] .zm-dock .cbi-button-action, html[data-theme="micro"] .zm-dock .cbi-button-action:hover { background: #e6ecff; color: #151a26; }
+html[data-theme="micro"] #zmw-view .zm-hint, html[data-theme="micro"] #zmw-view p.zm-hint, html[data-theme="micro"] #zmw-view .zm-label, html[data-theme="micro"] .zm-dock .zm-hint, html[data-theme="micro"] .zm-dock p.zm-hint, html[data-theme="micro"] .zmw-modal .zm-hint, html[data-theme="micro"] .zmw-modal p.zm-hint { color: #5a6377; opacity: 1; }
+html[data-theme="micro"] #zmw-view a:not(.cbi-button), html[data-theme="micro"] .zm-dock a:not(.cbi-button), html[data-theme="micro"] .zmw-modal a:not(.cbi-button) { color: #2d5bff; }
+html[data-theme="micro"] #zmw-view .cbi-button, html[data-theme="micro"] .zmw-icon-btn, html[data-theme="micro"] .zm-dock .cbi-button, html[data-theme="micro"] .zmw-modal .cbi-button { background: #f7f8fb; color: #151a26; border: 1px solid #e3e6ee; border-radius: 14px; box-shadow: 0 1px 2px rgba(0,0,0,.06); }
+html[data-theme="micro"] #zmw-view .cbi-button:hover, html[data-theme="micro"] .zmw-icon-btn:hover, html[data-theme="micro"] .zm-dock .cbi-button:hover, html[data-theme="micro"] .zmw-modal .cbi-button:hover { background: #eceff5; color: #151a26; }
+html[data-theme="micro"] #zmw-view .cbi-button-positive, html[data-theme="micro"] #zmw-view .cbi-button-positive:hover, html[data-theme="micro"] .zmw-btn-primary, html[data-theme="micro"] .zm-dock .cbi-button-positive, html[data-theme="micro"] .zm-dock .cbi-button-positive:hover, html[data-theme="micro"] .zmw-modal .cbi-button-positive, html[data-theme="micro"] .zmw-modal .cbi-button-positive:hover { background: #2d5bff; color: #ffffff; border-color: #2d5bff; }
+html[data-theme="micro"] #zmw-view .cbi-button-remove, html[data-theme="micro"] #zmw-view .cbi-button-remove:hover, html[data-theme="micro"] .zm-dock .cbi-button-remove, html[data-theme="micro"] .zm-dock .cbi-button-remove:hover, html[data-theme="micro"] .zmw-modal .cbi-button-remove, html[data-theme="micro"] .zmw-modal .cbi-button-remove:hover { background: #ffe1e1; color: #9a1f1f; border-color: #ffe1e1; }
+html[data-theme="micro"] #zmw-view .cbi-button-action, html[data-theme="micro"] #zmw-view .cbi-button-action:hover, html[data-theme="micro"] .zm-dock .cbi-button-action, html[data-theme="micro"] .zm-dock .cbi-button-action:hover, html[data-theme="micro"] .zmw-modal .cbi-button-action, html[data-theme="micro"] .zmw-modal .cbi-button-action:hover { background: #e6ecff; color: #151a26; }
 html[data-theme="micro"] #zmw-view .zm-tile:not(.zm-active):not(.zm-tile-off), html[data-theme="micro"] #zmw-view .zm-tile { background: #f7f8fb; color: #151a26; border: 1px solid #e3e6ee; border-radius: 14px; }
 html[data-theme="micro"] #zmw-view .zm-tile.zm-active { background: #2d5bff; color: #ffffff; border-color: #2d5bff; }
 html[data-theme="micro"] #zmw-view .zm-tile.zm-active::before { color: #ffffff; }
 html[data-theme="micro"] #zmw-view .zm-seg-item { color: #151a26; } html[data-theme="micro"] #zmw-view .zm-seg-item.zm-active { background: #2d5bff; color: #ffffff; }
 html[data-theme="micro"] #zmw-view .zm-node.zm-active { background: #e6ecff; border-color: #2d5bff; } html[data-theme="micro"] #zmw-view .zm-node.zm-active .zm-node-name, html[data-theme="micro"] #zmw-view .zm-node.zm-active .zm-node-name::before { color: #151a26; }
-html[data-theme="micro"] #zmw-view .zm-badge, html[data-theme="micro"] .zm-dock .zm-badge { border-radius: 999px; }
+html[data-theme="micro"] #zmw-view .zm-badge, html[data-theme="micro"] .zm-dock .zm-badge, html[data-theme="micro"] .zmw-modal .zm-badge { border-radius: 999px; }
 html[data-theme="micro"] #zmw-view input, html[data-theme="micro"] #zmw-view select, html[data-theme="micro"] #zmw-view textarea:not(.zm-config-editor), html[data-theme="micro"] .zmw-input { background: #f7f8fb; color: #151a26; border: 1px solid #e3e6ee; border-radius: 14px; }
 html[data-theme="micro"] #zmw-view .zm-current-banner, html[data-theme="micro"] #zmw-view .zm-refresh-banner { background: #e6ecff; color: #151a26; border-color: #2d5bff; }
 html[data-theme="micro"] #zmw-view .zm-credit-tile, html.zm-theme-dark[data-theme="micro"] #zmw-view .zm-credit-tile { background: #f7f8fb; border-color: #e3e6ee; color: #151a26; }
@@ -37143,41 +37427,41 @@ html[data-theme="micro"] .zmw-login-card, html[data-theme="micro"] .zmw-modal, h
 html[data-theme="micro"] .zmw-theme-opt { color: #151a26; } html[data-theme="micro"] .zmw-theme-opt:hover { background: #f7f8fb; }
 html[data-theme="micro"] .zmw-theme-opt.zmw-on { background: #2d5bff; color: #ffffff; } html[data-theme="micro"] .zmw-theme-opt.zmw-on .zmw-theme-mark, html[data-theme="micro"] .zmw-theme-opt.zmw-on .zmw-i { color: #ffffff; }
 html[data-theme="micro"] .zmw-theme-group { color: #5a6377; }
-html[data-theme="micro"] #zmw-view .cbi-button, html[data-theme="micro"] .zmw-icon-btn, html[data-theme="micro"] .zmw-btn-primary, html[data-theme="micro"] .zm-dock .cbi-button { transition: transform .12s, box-shadow .12s, background .2s, border-radius .25s; }
-html[data-theme="micro"] #zmw-view .cbi-button:hover, html[data-theme="micro"] .zmw-icon-btn:hover, html[data-theme="micro"] .zm-dock .cbi-button:hover { transform: scale(1.03); }
-html[data-theme="micro"] #zmw-view .cbi-button:active, html[data-theme="micro"] .zmw-icon-btn:active, html[data-theme="micro"] .zmw-btn-primary:active, html[data-theme="micro"] .zm-dock .cbi-button:active { transform: scale(.95); box-shadow: none; }
-html[data-theme="micro"] #zmw-view .cbi-button-positive:hover, html[data-theme="micro"] .zmw-btn-primary:hover, html[data-theme="micro"] .zm-dock .cbi-button-positive:hover { border-radius: 22px; box-shadow: 0 12px 24px -10px rgba(45,91,255,.7); }
+html[data-theme="micro"] #zmw-view .cbi-button, html[data-theme="micro"] .zmw-icon-btn, html[data-theme="micro"] .zmw-btn-primary, html[data-theme="micro"] .zm-dock .cbi-button, html[data-theme="micro"] .zmw-modal .cbi-button { transition: transform .12s, box-shadow .12s, background .2s, border-radius .25s; }
+html[data-theme="micro"] #zmw-view .cbi-button:hover, html[data-theme="micro"] .zmw-icon-btn:hover, html[data-theme="micro"] .zm-dock .cbi-button:hover, html[data-theme="micro"] .zmw-modal .cbi-button:hover { transform: scale(1.03); }
+html[data-theme="micro"] #zmw-view .cbi-button:active, html[data-theme="micro"] .zmw-icon-btn:active, html[data-theme="micro"] .zmw-btn-primary:active, html[data-theme="micro"] .zm-dock .cbi-button:active, html[data-theme="micro"] .zmw-modal .cbi-button:active { transform: scale(.95); box-shadow: none; }
+html[data-theme="micro"] #zmw-view .cbi-button-positive:hover, html[data-theme="micro"] .zmw-btn-primary:hover, html[data-theme="micro"] .zm-dock .cbi-button-positive:hover, html[data-theme="micro"] .zmw-modal .cbi-button-positive:hover { border-radius: 22px; box-shadow: 0 12px 24px -10px rgba(45,91,255,.7); }
 html[data-theme="micro"] #zmw-view .zm-tile { transition: transform .2s cubic-bezier(.2,.8,.2,1), box-shadow .2s; }
 html[data-theme="micro"] #zmw-view .zm-tile:hover { transform: translateY(-2px); box-shadow: 0 10px 18px -12px rgba(45,91,255,.6); }
-html[data-theme="micro"] #zmw-view .zm-badge .zm-dot, html[data-theme="micro"] .zm-dock .zm-badge .zm-dot { animation: zmw-micro-ring 2s infinite; }
+html[data-theme="micro"] #zmw-view .zm-badge .zm-dot, html[data-theme="micro"] .zm-dock .zm-badge .zm-dot, html[data-theme="micro"] .zmw-modal .zm-badge .zm-dot { animation: zmw-micro-ring 2s infinite; }
 @keyframes zmw-micro-ring { 0% { box-shadow: 0 0 0 0 rgba(30,180,110,.45); } 70% { box-shadow: 0 0 0 7px rgba(30,180,110,0); } 100% { box-shadow: 0 0 0 0 rgba(30,180,110,0); } }
 html[data-theme="micro"] .zmw-nav-item { transition: background .2s, transform .15s; }
 html[data-theme="micro"] .zmw-nav-item:active { transform: scale(.97); }
 html[data-theme="ink"] #zmw-view .zm-actions.zmw-tabs { background: #ffffff; border: 2.5px solid #0a0a0a; border-radius: 6px; box-shadow: 4px 4px 0 #0a0a0a; backdrop-filter: none; }
-html[data-theme="ink"] #zmw-view .zmw-tabs .cbi-button, html[data-theme="ink"] .zm-dock .zmw-tabs .cbi-button { background: transparent; border: 2px solid transparent; border-radius: 4px; box-shadow: none; color: #0a0a0a; transform: none; }
-html[data-theme="ink"] #zmw-view .zmw-tabs .cbi-button:hover, html[data-theme="ink"] .zm-dock .zmw-tabs .cbi-button:hover { background: #e8f6ff; border-color: transparent; box-shadow: none; }
-html[data-theme="ink"] #zmw-view .zmw-tabs .cbi-button-positive, html[data-theme="ink"] #zmw-view .zmw-tabs .cbi-button-positive:hover, html[data-theme="ink"] .zm-dock .zmw-tabs .cbi-button-positive, html[data-theme="ink"] .zm-dock .zmw-tabs .cbi-button-positive:hover { background: #0a9cff; border-color: #0a0a0a; color: #0a0a0a; box-shadow: none; }
+html[data-theme="ink"] #zmw-view .zmw-tabs .cbi-button, html[data-theme="ink"] .zm-dock .zmw-tabs .cbi-button, html[data-theme="ink"] .zmw-modal .zmw-tabs .cbi-button { background: transparent; border: 2px solid transparent; border-radius: 4px; box-shadow: none; color: #0a0a0a; transform: none; }
+html[data-theme="ink"] #zmw-view .zmw-tabs .cbi-button:hover, html[data-theme="ink"] .zm-dock .zmw-tabs .cbi-button:hover, html[data-theme="ink"] .zmw-modal .zmw-tabs .cbi-button:hover { background: #e8f6ff; border-color: transparent; box-shadow: none; }
+html[data-theme="ink"] #zmw-view .zmw-tabs .cbi-button-positive, html[data-theme="ink"] #zmw-view .zmw-tabs .cbi-button-positive:hover, html[data-theme="ink"] .zm-dock .zmw-tabs .cbi-button-positive, html[data-theme="ink"] .zm-dock .zmw-tabs .cbi-button-positive:hover, html[data-theme="ink"] .zmw-modal .zmw-tabs .cbi-button-positive, html[data-theme="ink"] .zmw-modal .zmw-tabs .cbi-button-positive:hover { background: #0a9cff; border-color: #0a0a0a; color: #0a0a0a; box-shadow: none; }
 html[data-theme="bento"] #zmw-view .zm-actions.zmw-tabs { background: #ffffff; border: 0; border-radius: 999px; box-shadow: none; backdrop-filter: none; }
-html[data-theme="bento"] #zmw-view .zmw-tabs .cbi-button, html[data-theme="bento"] .zm-dock .zmw-tabs .cbi-button { background: transparent; border: 0; border-radius: 999px; color: #6f685d; box-shadow: none; }
-html[data-theme="bento"] #zmw-view .zmw-tabs .cbi-button:hover, html[data-theme="bento"] .zm-dock .zmw-tabs .cbi-button:hover { background: #f6f2ea; color: #1c1a17; }
-html[data-theme="bento"] #zmw-view .zmw-tabs .cbi-button-positive, html[data-theme="bento"] #zmw-view .zmw-tabs .cbi-button-positive:hover, html[data-theme="bento"] .zm-dock .zmw-tabs .cbi-button-positive, html[data-theme="bento"] .zm-dock .zmw-tabs .cbi-button-positive:hover { background: #1c1a17; color: #ffffff; }
+html[data-theme="bento"] #zmw-view .zmw-tabs .cbi-button, html[data-theme="bento"] .zm-dock .zmw-tabs .cbi-button, html[data-theme="bento"] .zmw-modal .zmw-tabs .cbi-button { background: transparent; border: 0; border-radius: 999px; color: #6f685d; box-shadow: none; }
+html[data-theme="bento"] #zmw-view .zmw-tabs .cbi-button:hover, html[data-theme="bento"] .zm-dock .zmw-tabs .cbi-button:hover, html[data-theme="bento"] .zmw-modal .zmw-tabs .cbi-button:hover { background: #f6f2ea; color: #1c1a17; }
+html[data-theme="bento"] #zmw-view .zmw-tabs .cbi-button-positive, html[data-theme="bento"] #zmw-view .zmw-tabs .cbi-button-positive:hover, html[data-theme="bento"] .zm-dock .zmw-tabs .cbi-button-positive, html[data-theme="bento"] .zm-dock .zmw-tabs .cbi-button-positive:hover, html[data-theme="bento"] .zmw-modal .zmw-tabs .cbi-button-positive, html[data-theme="bento"] .zmw-modal .zmw-tabs .cbi-button-positive:hover { background: #1c1a17; color: #ffffff; }
 html[data-theme="minimal"] #zmw-view .zm-actions.zmw-tabs { background: transparent; border: 0; border-bottom: 1px solid #e0e0e0; border-radius: 0; box-shadow: none; padding: 0; gap: 24px; backdrop-filter: none; }
-html[data-theme="minimal"] #zmw-view .zmw-tabs .cbi-button, html[data-theme="minimal"] .zm-dock .zmw-tabs .cbi-button { background: transparent; border: 0; border-bottom: 2px solid transparent; border-radius: 0; color: #6b6b6b; padding: 10px 0; box-shadow: none; font-weight: 400; }
-html[data-theme="minimal"] #zmw-view .zmw-tabs .cbi-button:hover, html[data-theme="minimal"] .zm-dock .zmw-tabs .cbi-button:hover { background: transparent; color: #111111; }
-html[data-theme="minimal"] #zmw-view .zmw-tabs .cbi-button-positive, html[data-theme="minimal"] #zmw-view .zmw-tabs .cbi-button-positive:hover, html[data-theme="minimal"] .zm-dock .zmw-tabs .cbi-button-positive, html[data-theme="minimal"] .zm-dock .zmw-tabs .cbi-button-positive:hover { background: transparent; color: #111111; border-bottom-color: #111111; font-weight: 500; }
+html[data-theme="minimal"] #zmw-view .zmw-tabs .cbi-button, html[data-theme="minimal"] .zm-dock .zmw-tabs .cbi-button, html[data-theme="minimal"] .zmw-modal .zmw-tabs .cbi-button { background: transparent; border: 0; border-bottom: 2px solid transparent; border-radius: 0; color: #6b6b6b; padding: 10px 0; box-shadow: none; font-weight: 400; }
+html[data-theme="minimal"] #zmw-view .zmw-tabs .cbi-button:hover, html[data-theme="minimal"] .zm-dock .zmw-tabs .cbi-button:hover, html[data-theme="minimal"] .zmw-modal .zmw-tabs .cbi-button:hover { background: transparent; color: #111111; }
+html[data-theme="minimal"] #zmw-view .zmw-tabs .cbi-button-positive, html[data-theme="minimal"] #zmw-view .zmw-tabs .cbi-button-positive:hover, html[data-theme="minimal"] .zm-dock .zmw-tabs .cbi-button-positive, html[data-theme="minimal"] .zm-dock .zmw-tabs .cbi-button-positive:hover, html[data-theme="minimal"] .zmw-modal .zmw-tabs .cbi-button-positive, html[data-theme="minimal"] .zmw-modal .zmw-tabs .cbi-button-positive:hover { background: transparent; color: #111111; border-bottom-color: #111111; font-weight: 500; }
 html[data-theme="retro"] #zmw-view .zm-actions.zmw-tabs { background: transparent; border: 0; border-bottom: 2px solid #ffffff; border-radius: 0; box-shadow: none; padding: 0 0 0 4px; gap: 2px; align-items: flex-end; backdrop-filter: none; }
-html[data-theme="retro"] #zmw-view .zmw-tabs .cbi-button, html[data-theme="retro"] .zm-dock .zmw-tabs .cbi-button { background: #c0c0c0; color: #000000; border-radius: 0; border-top: 2px solid #ffffff; border-left: 2px solid #ffffff; border-right: 2px solid #000000; border-bottom: 0; box-shadow: inset -1px 0 0 #808080; min-height: 30px; padding: 5px 16px; margin: 0; outline: none; font-weight: 400; }
-html[data-theme="retro"] #zmw-view .zmw-tabs .cbi-button:hover, html[data-theme="retro"] .zm-dock .zmw-tabs .cbi-button:hover { background: #c0c0c0; color: #000000; }
-html[data-theme="retro"] #zmw-view .zmw-tabs .cbi-button-positive, html[data-theme="retro"] #zmw-view .zmw-tabs .cbi-button-positive:hover, html[data-theme="retro"] .zm-dock .zmw-tabs .cbi-button-positive, html[data-theme="retro"] .zm-dock .zmw-tabs .cbi-button-positive:hover { background: #c0c0c0; color: #000000; font-weight: 700; min-height: 34px; outline: none; margin-bottom: -2px; padding-bottom: 7px; }
+html[data-theme="retro"] #zmw-view .zmw-tabs .cbi-button, html[data-theme="retro"] .zm-dock .zmw-tabs .cbi-button, html[data-theme="retro"] .zmw-modal .zmw-tabs .cbi-button { background: #c0c0c0; color: #000000; border-radius: 0; border-top: 2px solid #ffffff; border-left: 2px solid #ffffff; border-right: 2px solid #000000; border-bottom: 0; box-shadow: inset -1px 0 0 #808080; min-height: 30px; padding: 5px 16px; margin: 0; outline: none; font-weight: 400; }
+html[data-theme="retro"] #zmw-view .zmw-tabs .cbi-button:hover, html[data-theme="retro"] .zm-dock .zmw-tabs .cbi-button:hover, html[data-theme="retro"] .zmw-modal .zmw-tabs .cbi-button:hover { background: #c0c0c0; color: #000000; }
+html[data-theme="retro"] #zmw-view .zmw-tabs .cbi-button-positive, html[data-theme="retro"] #zmw-view .zmw-tabs .cbi-button-positive:hover, html[data-theme="retro"] .zm-dock .zmw-tabs .cbi-button-positive, html[data-theme="retro"] .zm-dock .zmw-tabs .cbi-button-positive:hover, html[data-theme="retro"] .zmw-modal .zmw-tabs .cbi-button-positive, html[data-theme="retro"] .zmw-modal .zmw-tabs .cbi-button-positive:hover { background: #c0c0c0; color: #000000; font-weight: 700; min-height: 34px; outline: none; margin-bottom: -2px; padding-bottom: 7px; }
 html[data-theme="depth"] #zmw-view .zm-actions.zmw-tabs { background: #16203a; border: 1px solid rgba(127,220,255,.2); box-shadow: 0 6px 0 -2px #0c1426; }
-html[data-theme="depth"] #zmw-view .zmw-tabs .cbi-button, html[data-theme="depth"] .zm-dock .zmw-tabs .cbi-button { background: transparent; border: 0; box-shadow: none; color: #9fb0cc; }
-html[data-theme="depth"] #zmw-view .zmw-tabs .cbi-button:hover, html[data-theme="depth"] .zm-dock .zmw-tabs .cbi-button:hover { background: rgba(127,220,255,.08); color: #e8eefc; transform: none; }
-html[data-theme="depth"] #zmw-view .zmw-tabs .cbi-button-positive, html[data-theme="depth"] #zmw-view .zmw-tabs .cbi-button-positive:hover, html[data-theme="depth"] .zm-dock .zmw-tabs .cbi-button-positive, html[data-theme="depth"] .zm-dock .zmw-tabs .cbi-button-positive:hover { background: linear-gradient(180deg, #33c6ff, #0090ff); color: #04111f; box-shadow: 0 3px 0 #005a9e; }
+html[data-theme="depth"] #zmw-view .zmw-tabs .cbi-button, html[data-theme="depth"] .zm-dock .zmw-tabs .cbi-button, html[data-theme="depth"] .zmw-modal .zmw-tabs .cbi-button { background: transparent; border: 0; box-shadow: none; color: #9fb0cc; }
+html[data-theme="depth"] #zmw-view .zmw-tabs .cbi-button:hover, html[data-theme="depth"] .zm-dock .zmw-tabs .cbi-button:hover, html[data-theme="depth"] .zmw-modal .zmw-tabs .cbi-button:hover { background: rgba(127,220,255,.08); color: #e8eefc; transform: none; }
+html[data-theme="depth"] #zmw-view .zmw-tabs .cbi-button-positive, html[data-theme="depth"] #zmw-view .zmw-tabs .cbi-button-positive:hover, html[data-theme="depth"] .zm-dock .zmw-tabs .cbi-button-positive, html[data-theme="depth"] .zm-dock .zmw-tabs .cbi-button-positive:hover, html[data-theme="depth"] .zmw-modal .zmw-tabs .cbi-button-positive, html[data-theme="depth"] .zmw-modal .zmw-tabs .cbi-button-positive:hover { background: linear-gradient(180deg, #33c6ff, #0090ff); color: #04111f; box-shadow: 0 3px 0 #005a9e; }
 html[data-theme="micro"] #zmw-view .zm-actions.zmw-tabs { background: #ffffff; border: 1px solid #e3e6ee; border-radius: 16px; box-shadow: 0 1px 2px rgba(0,0,0,.04); backdrop-filter: none; }
-html[data-theme="micro"] #zmw-view .zmw-tabs .cbi-button, html[data-theme="micro"] .zm-dock .zmw-tabs .cbi-button { background: transparent; border: 0; border-radius: 11px; color: #5a6377; box-shadow: none; transform: none; }
-html[data-theme="micro"] #zmw-view .zmw-tabs .cbi-button:hover, html[data-theme="micro"] .zm-dock .zmw-tabs .cbi-button:hover { background: #f0f3fa; color: #151a26; transform: none; }
-html[data-theme="micro"] #zmw-view .zmw-tabs .cbi-button-positive, html[data-theme="micro"] #zmw-view .zmw-tabs .cbi-button-positive:hover, html[data-theme="micro"] .zm-dock .zmw-tabs .cbi-button-positive, html[data-theme="micro"] .zm-dock .zmw-tabs .cbi-button-positive:hover { background: #2d5bff; color: #ffffff; box-shadow: 0 6px 14px -8px rgba(45,91,255,.9); border-radius: 11px; }
-html[data-theme="micro"] #zmw-view .zmw-tabs .cbi-button:active, html[data-theme="micro"] .zm-dock .zmw-tabs .cbi-button:active { transform: scale(.96); }
+html[data-theme="micro"] #zmw-view .zmw-tabs .cbi-button, html[data-theme="micro"] .zm-dock .zmw-tabs .cbi-button, html[data-theme="micro"] .zmw-modal .zmw-tabs .cbi-button { background: transparent; border: 0; border-radius: 11px; color: #5a6377; box-shadow: none; transform: none; }
+html[data-theme="micro"] #zmw-view .zmw-tabs .cbi-button:hover, html[data-theme="micro"] .zm-dock .zmw-tabs .cbi-button:hover, html[data-theme="micro"] .zmw-modal .zmw-tabs .cbi-button:hover { background: #f0f3fa; color: #151a26; transform: none; }
+html[data-theme="micro"] #zmw-view .zmw-tabs .cbi-button-positive, html[data-theme="micro"] #zmw-view .zmw-tabs .cbi-button-positive:hover, html[data-theme="micro"] .zm-dock .zmw-tabs .cbi-button-positive, html[data-theme="micro"] .zm-dock .zmw-tabs .cbi-button-positive:hover, html[data-theme="micro"] .zmw-modal .zmw-tabs .cbi-button-positive, html[data-theme="micro"] .zmw-modal .zmw-tabs .cbi-button-positive:hover { background: #2d5bff; color: #ffffff; box-shadow: 0 6px 14px -8px rgba(45,91,255,.9); border-radius: 11px; }
+html[data-theme="micro"] #zmw-view .zmw-tabs .cbi-button:active, html[data-theme="micro"] .zm-dock .zmw-tabs .cbi-button:active, html[data-theme="micro"] .zmw-modal .zmw-tabs .cbi-button:active { transform: scale(.96); }
 html[data-theme="retro"] #zmw-view .zm-current-banner { background: #ffffe1; border: 1px solid #000000; border-radius: 0; color: #000000; }
 html[data-theme="micro"] .zmw-icon-btn.zmw-link-kvn { background: #3C3489; color: #ffffff; border-color: #3C3489; box-shadow: 0 6px 16px -10px rgba(60,52,137,.9); }
 html[data-theme="micro"] .zmw-icon-btn.zmw-link-kvn:hover { background: #463d9c; color: #ffffff; border-color: #463d9c; box-shadow: 0 8px 20px -10px rgba(60,52,137,1); }
@@ -37215,8 +37499,8 @@ html[data-theme="ink"] #zmw-view .zm-svc.zm-svc-on .zm-svc-sub { color: #0a0a0a;
 html[data-theme="retro"] #zmw-view .zm-refresh-banner { background: #ffffe1; border: 1px solid #000000; border-radius: 0; color: #000000; box-shadow: none; }#zmw-view .zm-log-step { color: #a9b4c7; }
 #zmw-view .zm-log-step-ok { color: #4ade80; }
 #zmw-view .zm-log-step-bad { color: #fb7185; }
-#zmw-view .zm-savebar, .zm-dock .zm-savebar { background: var(--surface-solid); border: 1px solid rgba(124,92,255,.45); border-radius: var(--radius-sm); box-shadow: var(--shadow-lg); color: var(--text); }
-#zmw-view .zm-savebar-dot, .zm-dock .zm-savebar-dot { background: var(--warn-dot); box-shadow: 0 0 0 4px var(--warn-bg); }
+#zmw-view .zm-savebar, .zm-dock .zm-savebar, .zmw-modal .zm-savebar { background: var(--surface-solid); border: 1px solid rgba(124,92,255,.45); border-radius: var(--radius-sm); box-shadow: var(--shadow-lg); color: var(--text); }
+#zmw-view .zm-savebar-dot, .zm-dock .zm-savebar-dot, .zmw-modal .zm-savebar-dot { background: var(--warn-dot); box-shadow: 0 0 0 4px var(--warn-bg); }
 .zm-stopbar { font-family: var(--font); }
 html[data-theme="dark"] .zm-stopbar, html[data-theme="depth"] .zm-stopbar { background: #2a1416; color: #fecaca; border-color: rgba(248,113,113,.5); }
 #zmw-view .zm-ri-note { background: var(--grad-soft); border-color: rgba(124,92,255,.3); color: var(--text); }
@@ -37262,12 +37546,12 @@ html.zm-theme-dark .zm-find { background: var(--surface-solid, #1c2128); color: 
 #zmw-view .zm-sb-left { background: var(--bad-bg); border-color: rgba(239,68,68,.3); }
 .zm-stopbar .cbi-button.zm-stopbar-btn { padding: 10px 18px; border-radius: 12px; font-size: 14px; line-height: 1.2; box-shadow: 0 8px 20px -10px rgba(220,38,38,.8); }
 @media (min-width: 961px) {
-	html body.zmw-body .zm-dock { left: calc(var(--side-w) + (100vw - var(--side-w)) / 2); width: min(860px, calc(100vw - var(--side-w) - 48px)); }
+	html body.zmw-body .zm-dock, html body.zmw-body .zmw-modal { left: calc(var(--side-w) + (100vw - var(--side-w)) / 2); width: min(860px, calc(100vw - var(--side-w) - 48px)); }
 }
-.zm-dock .zm-savebar { background: var(--surface-solid); border: 1px solid rgba(124,92,255,.45); border-radius: var(--radius-sm); color: var(--text); box-shadow: var(--shadow-lg); }
-.zmw-body .zm-dock .zm-refresh-banner { margin: 0 !important; background: var(--surface-solid); border: 1px solid rgba(245,158,11,.5); border-radius: var(--radius-sm); color: var(--text); box-shadow: var(--shadow-lg); display: flex; align-items: center; justify-content: space-between; gap: 14px; }
-.zm-dock .zm-savebar-dot { background: var(--warn-dot); box-shadow: 0 0 0 4px var(--warn-bg); }
-.zm-dock .cbi-button { font-family: var(--font); }
+.zm-dock .zm-savebar, .zmw-modal .zm-savebar { background: var(--surface-solid); border: 1px solid rgba(124,92,255,.45); border-radius: var(--radius-sm); color: var(--text); box-shadow: var(--shadow-lg); }
+.zmw-body .zm-dock .zm-refresh-banner, .zmw-body .zmw-modal .zm-refresh-banner { margin: 0 !important; background: var(--surface-solid); border: 1px solid rgba(245,158,11,.5); border-radius: var(--radius-sm); color: var(--text); box-shadow: var(--shadow-lg); display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.zm-dock .zm-savebar-dot, .zmw-modal .zm-savebar-dot { background: var(--warn-dot); box-shadow: 0 0 0 4px var(--warn-bg); }
+.zm-dock .cbi-button, .zmw-modal .cbi-button { font-family: var(--font); }
 #zmw-view .zm-dns-item { background: var(--surface-2); border-color: var(--border); border-radius: var(--radius-sm); }
 #zmw-view .zm-dns-item.zm-dns-active { background: var(--ok-bg); border-color: rgba(16,185,129,.4); }
 #zmw-view .zm-dns-num { background: var(--grad); }
@@ -37294,8 +37578,6 @@ html.zm-theme-dark .zm-find { background: var(--surface-solid, #1c2128); color: 
 #zmw-view .zm-ab-pips > i { background: var(--surface-3); }
 #zmw-view .zm-ab-pips > i.zm-on { background: var(--grad); }
 #zmw-view .zm-ab-warn { color: var(--warn); }
-#zmw-view .zm-ab-meter-top > span:first-child { color: var(--text-2); opacity: 1; }
-#zmw-view .zm-ab-meter-top > span:last-child { color: var(--muted); opacity: 1; }
 
 ZM_INSTALLER_EOF
 cat > '/www/zm-webui.html' << 'ZM_INSTALLER_EOF'
@@ -37330,9 +37612,12 @@ sed -i '/# zm-rpcd-watch$/d' /etc/crontabs/root 2>/dev/null || true
 echo '*/2 * * * * /opt/zapret-manager-luci/backend.sh zm_watch >/dev/null 2>&1 # zm-rpcd-watch' >> /etc/crontabs/root 2>/dev/null || true
 # Сторож панели запускается раз в 2 минуты — без этого cron пишет строку о каждом запуске в системный журнал.
 # Уровень 9 — только ошибки cron. Свой уровень, если его уже выставили, не трогаем.
-if [ -z "$(uci -q get system.@system[0].cronloglevel)" ]; then
-	uci -q set system.@system[0].cronloglevel='9' && uci -q commit system
-fi
+# Пусто, 5 (так в стандартном /etc/config/system OpenWrt) или 8 (умолчание busybox) — это не ваш выбор,
+# а заводское значение: при нём crond пишет «cron.err … USER root pid … cmd …» о каждом успешном запуске.
+case "$(uci -q get system.@system[0].cronloglevel)" in
+	''|5|8)
+	uci -q set system.@system[0].cronloglevel='9' && uci -q commit system ;;
+esac
 if [ -x /etc/init.d/cron ]; then
 	/etc/init.d/cron enable >/dev/null 2>&1 || true
 	/etc/init.d/cron restart >/dev/null 2>&1 || true
