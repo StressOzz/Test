@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 2.95
+# Version: 2.97
 ZM_VERSION_EOF
 set -e
 
@@ -15592,19 +15592,22 @@ _fk_lists_errors() {
 }
 
 # Серверы подписки (и свои ссылки) по секциям: имя, пинг, какой несёт трафик. Берём то же, что показывает панель.
+# sing-box только что перезапущен: API и узлы подписки появляются не сразу — ждём до ~40 с и не молчим, если списка нет.
 _fk_servers_report() {
-	local s j
+	local s j i err
 	command -v ucode >/dev/null 2>&1 || return 0
 	for s in $(_fk_uc secnames 2>/dev/null); do
 		case "$s" in *[!A-Za-z0-9_]*|'') continue ;; esac
 		[ "$(uci -q get netshift."$s".connection_type 2>/dev/null)" = proxy ] || continue
-		j="$(_fk_uc servers "$s" 2>/dev/null)"
-		[ -n "$j" ] || continue
-		printf '%s' "$j" | ucode -e '
+		i=0; err=""
+		while [ "$i" -lt 20 ]; do
+			j="$(_fk_uc servers "$s" 2>/dev/null)"
+			err="$(printf '%s' "$j" | jsonfilter -e '@.error' 2>/dev/null)"
+			if [ -n "$j" ] && printf '%s' "$j" | ucode -e '
 import { stdin } from "fs";
 let sec = "'"$s"'", j = null;
 try { j = json(stdin.read("all")); } catch (e) { j = null; }
-if (type(j) != "object" || j.error || type(j.nodes) != "object" || type(j.list) != "array") exit(0);
+if (type(j) != "object" || j.error || type(j.nodes) != "object" || type(j.list) != "array") exit(1);
 let cur = j.now, seen = {};
 while (j.nodes[cur] && j.nodes[cur].now && !seen[cur]) { seen[cur] = true; cur = j.nodes[cur].now; }
 let q = slice(j.list, 0), done = {}, leaves = [];
@@ -15616,7 +15619,7 @@ for (let i = 0; i < length(q); i++) {
 	if (index([ "direct", "reject", "block", "dns", "selector", "urltest" ], lc(n.type || "")) >= 0) continue;
 	push(leaves, t);
 }
-if (!length(leaves)) exit(0);
+if (!length(leaves)) exit(1);
 print("==> Серверы подписки (", sec, "): ", length(leaves), "\n");
 let shown = 0;
 for (let t in leaves) {
@@ -15625,7 +15628,27 @@ for (let t in leaves) {
 	print("   ", (t == cur ? "▶" : "·"), " ", n.name || t, " — ", d > 0 ? d + " мс" : (d == -2 ? "в очереди на пинг" : "пинг ещё не замерен"), (t == cur ? "  ← сейчас" : ""), "\n");
 	shown++;
 }
-'
+'; then
+				break
+			fi
+			sleep 2
+			i=$((i + 1))
+		done
+		[ "$i" -ge 20 ] && echo "!! Серверы подписки (секция $s): список не получен${err:+ — $err}. Откройте вкладку Forkozz в панели или повторите проверку позже"
+	done
+	return 0
+}
+
+# Наборы правил sing-box лежат в /tmp и появляются после загрузки списков — даём им до 20 с, чтобы в отчёте не было ложных «файла ещё нет»
+_fk_rulesets_wait() {
+	local c=/etc/sing-box/config.json i=0 p miss
+	[ -s "$c" ] || return 0
+	while [ "$i" -lt 20 ]; do
+		miss=0
+		for p in $(jsonfilter -i "$c" -e '@.route.rule_set[@.type="local"].path' 2>/dev/null); do [ -s "$p" ] || miss=1; done
+		[ "$miss" = 0 ] && return 0
+		sleep 2
+		i=$((i + 2))
 	done
 	return 0
 }
@@ -16145,8 +16168,9 @@ do_fk_service() {
 	if _fk_up; then
 		_fk_say "Проверяем, что всё работает"
 		_fk_check_live
-		_fk_servers_report
 		_fk_lists_wait 240 || _rb_warn "Списки ещё скачиваются — числа ниже могут быть неполными. Они догрузятся сами; позже нажмите «Обновить списки сейчас», чтобы увидеть итог"
+		_fk_servers_report
+		_fk_rulesets_wait
 		_fk_lists_report
 		_fk_lists_errors
 		_fk_ext_auto all "$lx"
