@@ -15591,6 +15591,45 @@ _fk_lists_errors() {
 	return 0
 }
 
+# Серверы подписки (и свои ссылки) по секциям: имя, пинг, какой несёт трафик. Берём то же, что показывает панель.
+_fk_servers_report() {
+	local s j
+	command -v ucode >/dev/null 2>&1 || return 0
+	for s in $(_fk_uc secnames 2>/dev/null); do
+		case "$s" in *[!A-Za-z0-9_]*|'') continue ;; esac
+		[ "$(uci -q get netshift."$s".connection_type 2>/dev/null)" = proxy ] || continue
+		j="$(_fk_uc servers "$s" 2>/dev/null)"
+		[ -n "$j" ] || continue
+		printf '%s' "$j" | ucode -e '
+import { stdin } from "fs";
+let sec = "'"$s"'", j = null;
+try { j = json(stdin.read("all")); } catch (e) { j = null; }
+if (type(j) != "object" || j.error || type(j.nodes) != "object" || type(j.list) != "array") exit(0);
+let cur = j.now, seen = {};
+while (j.nodes[cur] && j.nodes[cur].now && !seen[cur]) { seen[cur] = true; cur = j.nodes[cur].now; }
+let q = slice(j.list, 0), done = {}, leaves = [];
+for (let i = 0; i < length(q); i++) {
+	let t = q[i], n = j.nodes[t];
+	if (done[t] || !n) continue;
+	done[t] = true;
+	if (type(n.members) == "array") { for (let m in n.members) push(q, m); continue; }
+	if (index([ "direct", "reject", "block", "dns", "selector", "urltest" ], lc(n.type || "")) >= 0) continue;
+	push(leaves, t);
+}
+if (!length(leaves)) exit(0);
+print("==> Серверы подписки (", sec, "): ", length(leaves), "\n");
+let shown = 0;
+for (let t in leaves) {
+	if (shown >= 40) { print("   … и ещё ", length(leaves) - shown, "\n"); break; }
+	let n = j.nodes[t], d = int(n.delay || 0);
+	print("   ", (t == cur ? "▶" : "·"), " ", n.name || t, " — ", d > 0 ? d + " мс" : (d == -2 ? "в очереди на пинг" : "пинг ещё не замерен"), (t == cur ? "  ← сейчас" : ""), "\n");
+	shown++;
+}
+'
+	done
+	return 0
+}
+
 _fk_check_live() {
 	local j
 	if pidof sing-box >/dev/null 2>&1; then echo "   ✓ sing-box работает"; else echo "   ✗ sing-box не запущен"; fi
@@ -16106,6 +16145,7 @@ do_fk_service() {
 	if _fk_up; then
 		_fk_say "Проверяем, что всё работает"
 		_fk_check_live
+		_fk_servers_report
 		_fk_lists_wait 240 || _rb_warn "Списки ещё скачиваются — числа ниже могут быть неполными. Они догрузятся сами; позже нажмите «Обновить списки сейчас», чтобы увидеть итог"
 		_fk_lists_report
 		_fk_lists_errors
@@ -17177,7 +17217,7 @@ do_ab_apply() {
 	_ab_say "Блокировка рекламы: $(_ab_title "$(_ab_get list pro)")$([ "$(_ab_get tif 0)" = 1 ] && echo ' + защита от фишинга')$([ "$(_ab_get doh 0)" = 1 ] && echo ' + запрет чужих DoH')"
 	avail="$(awk '/^MemAvailable:/ { print $2 }' /proc/meminfo 2>/dev/null)"
 if [ -n "$avail" ] && [ "$avail" -lt 60000 ]; then
-    echo "!! Свободной памяти мало ($((avail / 1024)) МБ), продолжаем на свой риск"
+    echo "!! Свободной памяти $((avail / 1024)) МБ, продолжаем на свой риск"
 fi
 	_ab_say "Скачиваем списки"
 	now="$(date +%s)"
