@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 4.87
+# Version: 4.89
 ZM_VERSION_EOF
 set -e
 
@@ -69,7 +69,12 @@ _zmi_say "Записываем файлы панели"
 mkdir -p /opt/zapret-manager-luci
 chmod 0755 /opt/zapret-manager-luci
 _zm_old_ver="$(sed -n 's/^ZM_VERSION="\([0-9][0-9.]*\)"$/\1/p' /opt/zapret-manager-luci/backend.sh 2>/dev/null | head -n 1)"
-cat > '/opt/zapret-manager-luci/backend.sh.zm-new' << 'ZM_INSTALLER_EOF'
+_zmi_free() { df -kP "$1" 2>/dev/null | awk 'NR == 2 { print $4 + 0; f = 1 } END { if (!f) print 0 }'; }
+_zmi_be=/opt/zapret-manager-luci/backend.sh
+_zmi_stage="$_zmi_be.zm-new"
+rm -f "$_zmi_stage" /tmp/zm-backend.sh.zm-new
+[ "$(_zmi_free /tmp)" -gt 4096 ] && _zmi_stage=/tmp/zm-backend.sh.zm-new
+sed "s/@ZM_VERSION@/$ZM_NEW_VER/" > "$_zmi_stage" << 'ZM_INSTALLER_EOF'
 #!/bin/sh
 umask 022
 if [ "$1" = zm_watch ]; then
@@ -1923,8 +1928,71 @@ ui_flag_set() {
 	printf '{"ok":true}\n'
 }
 
+ZM_PEND_DIR="$JOBS_DIR/pend"
+ZM_PEND_RKN="/opt/zapret/ipset/.zm-pend-rkn"
+_pend_list() {
+	printf '%s\n' "$CONF" "$ZO_RKN_FLAG" "$ZO_USER_FLAG" "$ZO_IPID_FLAG" "$ZO_DOH_FLAG" "$ZC_FILE" "$ZC_BAK" "$ZC_AFTER" \
+		"$YV_OFF_FLAG" "$DV_OFF_FLAG" "$ZP_OWN" "$ZP_MANUAL" "$ZO_SCRIPT"
+}
+_pend_on() { [ -f "$ZM_PEND_DIR/on" ]; }
+_pend_clear() { rm -rf "$ZM_PEND_DIR"; rm -f "$ZM_PEND_RKN"; }
+_pend_begin() {
+	local d="$ZM_PEND_DIR"
+	_pend_on && return 0
+	_pend_clear
+	mkdir -p "$d/f" || return 1
+	_pend_list | awk '{ print NR "\t" $0 }' | while IFS="$(printf '\t')" read -r i f; do
+		[ -e "$f" ] || continue
+		cp -p "$f" "$d/f/$i" || exit 1
+	done || { _pend_clear; return 1; }
+	[ -e "$ZO_RKN_FILE" ] && { ln -f "$ZO_RKN_FILE" "$ZM_PEND_RKN" 2>/dev/null || cp -p "$ZO_RKN_FILE" "$ZM_PEND_RKN" 2>/dev/null; }
+	: > "$d/on"
+}
+_pend_cancel() {
+	local d="$ZM_PEND_DIR"
+	_pend_on || { _pend_clear; return 0; }
+	_pend_list | awk '{ print NR "\t" $0 }' | while IFS="$(printf '\t')" read -r i f; do
+		if [ -e "$d/f/$i" ]; then cp -p "$d/f/$i" "$f"; else rm -f "$f"; fi
+	done
+	if [ -e "$ZM_PEND_RKN" ]; then
+		if [ -e "$ZO_RKN_FILE" ] && [ "$ZM_PEND_RKN" -ef "$ZO_RKN_FILE" ]; then rm -f "$ZM_PEND_RKN"
+		else mv -f "$ZM_PEND_RKN" "$ZO_RKN_FILE"; fi
+	fi
+	_pend_clear
+}
+_pend_same() {
+	local d="$ZM_PEND_DIR"
+	_pend_on || return 1
+	_pend_list | awk '{ print NR "\t" $0 }' | while IFS="$(printf '\t')" read -r i f; do
+		if [ -e "$d/f/$i" ]; then cmp -s "$d/f/$i" "$f" || exit 1
+		elif [ -e "$f" ]; then exit 1; fi
+	done
+}
+_pend_was() {
+	[ -s "$ZM_PEND_DIR/f/1" ] || return 0
+	( CONF="$ZM_PEND_DIR/f/1"; ZM_NFQ_BODY=""; ZM_YS=""; ZM_UDP=""; ZM_DOH=""; ZM_RKN=""; ZM_FITS=""; _strat_label ) 2>/dev/null
+}
+zapret_pending() {
+	[ -f "$CONF" ] || { echo '{"error":"Zapret не установлен"}'; return 1; }
+	case "$1" in
+		apply)
+			if _pend_on; then
+				_pend_clear
+				zapret_restart
+				logger -t zapret-manager "Zapret: применены выбранные изменения стратегии — $(_strat_label)"
+			fi ;;
+		cancel)
+			_pend_on && logger -t zapret-manager "Zapret: выбранные изменения стратегии отменены"
+			_pend_cancel ;;
+		*) echo '{"error":"неизвестное действие"}'; return 1 ;;
+	esac
+	status
+}
+
 zapret_restart() {
 	[ -n "$ZM_NO_RESTART" ] && return 0
+	if [ -n "$ZM_DEFER" ]; then : > "$ZM_PEND_DIR/dirty" 2>/dev/null; return 0; fi
+	_pend_clear
 	[ -s "$ZC_FILE" ] && _zc_drop
 	_zp_sync
 	_yv_ipid_sync
@@ -1956,6 +2024,7 @@ _strat_label() {
 status() {
 	local zr="not_installed" zr_running="false" zr_ver=""
 	_test_recover
+	_pend_on || [ ! -e "$ZM_PEND_RKN" ] || rm -f "$ZM_PEND_RKN"
 	if [ -f /etc/init.d/zapret ]; then
 		zr="installed"
 		zr_ver="$ZAPRET_VER"
@@ -1992,7 +2061,7 @@ status() {
 		fi
 	fi
 
-	printf '{"pkg":"%s","zapret":"%s","zapret_running":%s,"zapret_version":"%s","zapret2":"%s","zapret2_running":%s,"strategy":"%s","flowseal":"%s","yv_off":%s,"quic_yt":%s,"expert":%s,"rkn":%s,"rkn_on":%s,"rkn_fits":%s,"rkn_count":%s,"wssize":%s,"ulist":%s,"ulist_on":%s,"ulist_count":%s,"testing":%s,"test_now":"%s","ipid":%s,"ipid_want":"%s","yt_tcp":%s,"z2_luci":"%s","zdoh":%s,"zdoh_on":%s,"zdoh_doms":"%s","zdoh_own":%s,"s2":%s}\n' \
+	printf '{"pkg":"%s","zapret":"%s","zapret_running":%s,"zapret_version":"%s","zapret2":"%s","zapret2_running":%s,"strategy":"%s","flowseal":"%s","yv_off":%s,"quic_yt":%s,"expert":%s,"rkn":%s,"rkn_on":%s,"rkn_fits":%s,"rkn_count":%s,"wssize":%s,"ulist":%s,"ulist_on":%s,"ulist_count":%s,"testing":%s,"test_now":"%s","ipid":%s,"ipid_want":"%s","yt_tcp":%s,"z2_luci":"%s","zdoh":%s,"zdoh_on":%s,"zdoh_doms":"%s","zdoh_own":%s,"s2":%s,"pending":%s,"pending_was":"%s"}\n' \
 		"$PKG" "$zr" "$zr_running" "$(esc "$zr_ver")" "$zr2" "$zr2_running" "$(esc "$strat")" "$(esc "$fs_marker")" \
 		"$([ -f /opt/zapret-manager-luci/yv_off ] && echo true || echo false)" \
 		"$([ -f "$CONF" ] && _udp443_on && echo true || echo false)" \
@@ -2008,7 +2077,8 @@ status() {
 		"$([ -f "$CONF" ] && _yv_ipid_on && echo true || echo false)" "$(_yv_ipid_want)" \
 		"$([ -f "$CONF" ] && [ "${ZM_YS%% *}" -gt 0 ] 2>/dev/null && echo true || echo false)" "$(esc "$zr2_luci")" \
 		"$([ -f "$ZO_DOH_FLAG" ] && echo true || echo false)" "$([ -f "$CONF" ] && _zo_doh_on && echo true || echo false)" \
-		"$(esc "$zdd")" "$zdo" "$(_zs2_on && echo true || echo false)"
+		"$(esc "$zdd")" "$zdo" "$(_zs2_on && echo true || echo false)" \
+		"$(_pend_on && echo true || echo false)" "$(_pend_on && esc "$(_pend_was)")"
 }
 _z2_luci_path() {
 	grep -ho '"admin/[A-Za-z0-9_/-]*zapret2[A-Za-z0-9_/-]*"' /usr/share/luci/menu.d/*.json 2>/dev/null | tr -d '"' | grep -v 'zapret-manager' |
@@ -6045,6 +6115,24 @@ exclusions_toggle() {
 	printf '{"ok":true,"ip":"%s","excluded":%s}\n' "$(esc "$ip")" "$excluded"
 }
 
+exclusions_set() {
+	local ips="" ip bad=""
+	[ -f /etc/init.d/zapret ] || { echo '{"error":"Zapret не установлен"}'; return 1; }
+	for ip in $(printf '%s' "$1" | tr ',;\r\n\t' '     '); do
+		if _zm_re "$ip" '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$' && printf '%s' "$ip" | awk -F. '$1 < 256 && $2 < 256 && $3 < 256 && $4 < 256 { ok = 1 } END { exit !ok }'; then
+			ips="$ips$ip
+"
+		else bad="$ip"; break; fi
+	done
+	[ -z "$bad" ] || { printf '{"error":"%s"}\n' "$(esc "«$bad» — не IPv4-адрес, например 192.168.1.100")"; return 1; }
+	ips="$(printf '%s' "$ips" | grep -v '^$' | sort -u)"
+	if [ "$ips" = "$(_excl_current)" ]; then printf '{"ok":true,"changed":false}\n'; return 0; fi
+	_excl_write "$ips"
+	zapret_restart
+	logger -t zapret-manager "Zapret: исключения устройств обновлены — устройств: $(printf '%s\n' "$ips" | grep -c .)"
+	printf '{"ok":true,"changed":true}\n'
+}
+
 exclusions_clear() {
 	[ -f /etc/init.d/zapret ] || { echo '{"error":"Zapret не установлен"}'; return 1; }
 	_excl_write ""
@@ -6494,7 +6582,7 @@ _zs2_stage() {
 					ul)
 						_zs2_kset "$D" rkn off
 						[ -f "$ZO_USER_FILE" ] || : > "$ZO_USER_FILE" ;;
-					quic) _add_gp_domains ;;
+					quic) [ -n "$ZS2_DRY" ] || _add_gp_domains ;;
 					xt)
 						_zs2_build "$D" > "$D/cur" || { echo "не удалось собрать стратегию секции"; return 1; }
 						grep -q '^#Gv[0-9]\+\(Xtreme\)\{0,1\}$' "$D/cur" || { rm -f "$D/cur"; echo "игровая стратегия в секции не выбрана — сначала выберите Gv"; return 1; }
@@ -6560,6 +6648,9 @@ zsec2_action() {
 			if [ "$n" = 0 ]; then rm -f "$t" "$ZS2_DEVS"; else mv -f "$t" "$ZS2_DEVS"; fi
 			if _zs2_on && [ -z "$(_zs2_ips)" ]; then rm -f "$ZS2_ON"; logger -t zapret-manager "Zapret: дополнительная секция выключена — все её устройства исключены из Zapret"; fi
 			_zs2_apply ;;
+		preview|batch)
+			_zs2_batch "$a" "$v"
+			return $? ;;
 		preset|opt|yv|dv|gv|dfake|gfake|x)
 			if [ "$a" = opt ]; then n="$(_zs2_opt_check "$v")" || { printf '{"error":"%s"}\n' "$(esc "$n")"; return 1; }; fi
 			t="$(_zs2_stage_dir)" || { echo '{"error":"не удалось записать настройки"}'; return 1; }
@@ -6572,6 +6663,89 @@ zsec2_action() {
 			_zs2_apply ;;
 		*) echo '{"error":"неизвестное действие"}'; return 1 ;;
 	esac
+	zsec2_status
+}
+_zs2_devs_parse() {
+	local ip name n
+	: > "$2"
+	printf '%s\n' "$1" | tr -d '\r' | while IFS='|' read -r ip name; do
+		ip="$(printf '%s' "$ip" | tr -d ' \t')"
+		[ -n "$ip" ] || continue
+		printf '%s' "$ip" | awk -F. 'NF == 4 && $1 ~ /^[0-9]+$/ && $2 ~ /^[0-9]+$/ && $3 ~ /^[0-9]+$/ && $4 ~ /^[0-9]+$/ && $1 < 256 && $2 < 256 && $3 < 256 && $4 < 256 { ok = 1 } END { exit !ok }' || { echo "«$ip» — не IPv4-адрес, например 192.168.1.100" > "$2.err"; continue; }
+		grep -q "^$ip|" "$2" && continue
+		name="$(printf '%s' "$name" | tr -d '|"\\\000-\037' | cut -c1-64)"
+		printf '%s|%s\n' "$ip" "$name" >> "$2"
+	done
+	if [ -s "$2.err" ]; then head -n1 "$2.err"; rm -f "$2.err"; return 1; fi
+	n="$(grep -c . "$2")"
+	[ "$n" -le "$ZS2_MAX" ] || { echo "не больше $ZS2_MAX устройств"; return 1; }
+	return 0
+}
+# Несколько изменений секции за один раз: шаги стратегии, устройства, включение/выключение — и один перезапуск Zapret.
+# Строки: "step<TAB>действие<TAB>значение", "devs<TAB>ip|имя<TAB>ip|имя…", "on", "off".
+# preview — только собрать и вернуть, что получится; batch — записать и применить.
+_zs2_batch() {
+	local mode="$1" text="$2" T t line k rest a v n out steps="" hasdevs="" devs="" want="" err="" nd fw
+	T="$(printf '\t')"
+	t="$(_zs2_stage_dir)" || { echo '{"error":"не удалось записать настройки"}'; return 1; }
+	[ "$mode" = preview ] && ZS2_DRY=1
+	while IFS= read -r line; do
+		line="$(printf '%s' "$line" | tr -d '\r')"
+		[ -n "$line" ] || continue
+		k="${line%%"$T"*}"
+		case "$line" in *"$T"*) rest="${line#*"$T"}" ;; *) rest="" ;; esac
+		case "$k" in
+			step)
+				a="${rest%%"$T"*}"; v="${rest#*"$T"}"
+				case "$a" in preset|yv|dv|gv|dfake|gfake|x) ;; *) err="неизвестное действие"; break ;; esac
+				if ! n="$(_zs2_stage "$t" "$a" "$v")"; then err="$n"; break; fi
+				steps=1 ;;
+			devs) hasdevs=1; devs="$(printf '%s' "$rest" | tr '\t' '\n')" ;;
+			on|off) want="$k" ;;
+			*) err="неизвестное действие"; break ;;
+		esac
+	done <<ZS2_BATCH_EOF
+$text
+ZS2_BATCH_EOF
+	ZS2_DRY=""
+	[ -z "$err" ] || { rm -rf "$t"; printf '{"error":"%s"}\n' "$(esc "$err")"; return 1; }
+	if [ -n "$steps" ]; then
+		if ! out="$(_zs2_build "$t")"; then rm -rf "$t"; echo '{"error":"не удалось собрать стратегию секции"}'; return 1; fi
+		if ! n="$(_zs2_opt_check "$out")"; then rm -rf "$t"; printf '{"error":"%s"}\n' "$(esc "$n")"; return 1; fi
+		printf '%s\n' "$out" > "$t/opt"
+	fi
+	if [ "$mode" = preview ]; then
+		if [ -n "$steps" ]; then ( ZS2_DIR="$t"; ZS2_OPT="$t/opt"; ZS2_SRC="$t/src"; zsec2_status ) | sed 's/}$/,"preview":true}/'
+		else zsec2_status; fi
+		rm -rf "$t"
+		return 0
+	fi
+	nd="$ZS2_DEVS"
+	if [ -n "$hasdevs" ]; then
+		nd="$t/devs.new"
+		if ! n="$(_zs2_devs_parse "$devs" "$nd")"; then rm -rf "$t"; printf '{"error":"%s"}\n' "$(esc "$n")"; return 1; fi
+	fi
+	[ -n "$want" ] || { _zs2_on && want=on || want=off; }
+	if [ "$want" = on ]; then
+		fw="$(_zs2_fw)"
+		[ -z "$fw" ] || [ "$fw" = nftables ] || { rm -rf "$t"; echo '{"error":"дополнительная секция работает только с nftables (FWTYPE=nftables), а в Zapret выбран другой файрвол"}'; return 1; }
+		[ -s "$nd" ] || { rm -rf "$t"; echo '{"error":"сначала выберите устройства для дополнительной секции"}'; return 1; }
+		if [ -n "$steps" ]; then [ -s "$t/opt" ]; else [ -n "$(_zs2_opt)" ]; fi || { rm -rf "$t"; echo '{"error":"сначала выберите стратегию для дополнительной секции"}'; return 1; }
+		[ -n "$( ZS2_DEVS="$nd"; _zs2_ips )" ] || { rm -rf "$t"; echo '{"error":"все выбранные устройства исключены из Zapret — секции некого обслуживать"}'; return 1; }
+	fi
+	if [ -n "$steps" ] && ! _zs2_commit "$t"; then rm -rf "$t"; echo '{"error":"не удалось записать настройки"}'; return 1; fi
+	if [ -n "$hasdevs" ]; then
+		if [ -s "$nd" ]; then mv -f "$nd" "$ZS2_DEVS"; else rm -f "$ZS2_DEVS"; fi
+	fi
+	rm -rf "$t"
+	if [ "$want" = on ]; then
+		_zs2_on || logger -t zapret-manager "Zapret: дополнительная секция включена — устройств: $(_zs2_ips | grep -c .), стратегия $(cat "$ZS2_SRC" 2>/dev/null)"
+		: > "$ZS2_ON"
+	else
+		_zs2_on && logger -t zapret-manager "Zapret: дополнительная секция выключена — все устройства снова на основной стратегии"
+		rm -f "$ZS2_ON"
+	fi
+	_zs2_apply
 	zsec2_status
 }
 zsec2_sync() {
@@ -6729,58 +6903,6 @@ zapret_list_restore() {
 	mv -f "$tmp" "$f"; chmod 644 "$f"
 	zapret_restart
 	zapret_list_get exclude
-}
-
-_cv_ls() {
-	local d="$1" f sep=""
-	[ -d "$d" ] || return 0
-	for f in "$d"/*; do
-		[ -f "$f" ] || continue
-		f="${f##*/}"
-		case "$f" in *[!A-Za-z0-9._+-]*) continue ;; esac
-		printf '%s"%s"' "$sep" "$f"; sep=","
-	done
-}
-conv_env() {
-	local z1=false z2=false opt="" c2=""
-	[ -f /etc/init.d/zapret ] && z1=true
-	[ -f /etc/init.d/zapret2 ] && z2=true
-	[ -f "$CONF" ] && opt=$(sed -n "/^[[:space:]]*option NFQWS_OPT '\$/,/^[[:space:]]*'\$/p" "$CONF" | sed '1d;$d')
-	[ -f /etc/config/zapret2 ] && c2=$(cat /etc/config/zapret2 2>/dev/null)
-	printf '{"z1":{"installed":%s,"opt":"%s","fake":[%s],"ipset":[%s]},"z2":{"installed":%s,"conf":"%s","fake":[%s],"ipset":[%s]}}\n' \
-		"$z1" "$(esc_ml "$opt")" "$(_cv_ls /opt/zapret/files/fake)" "$(_cv_ls /opt/zapret/ipset)" \
-		"$z2" "$(esc_ml "$c2")" "$(_cv_ls /opt/zapret2/files/fake)" "$(_cv_ls /opt/zapret2/ipset)"
-}
-conv_fix() {
-	local a="$1" v="$2" kind dir name sub from to sec file
-	case "$a" in
-		copy)
-			kind="${v%%:*}"; v="${v#*:}"; dir="${v%%:*}"; name="${v#*:}"
-			case "$kind" in fake) sub="files/fake" ;; ipset) sub="ipset" ;; *) echo '{"error":"неизвестный тип файла"}'; return 1 ;; esac
-			case "$dir" in to2) from=/opt/zapret; to=/opt/zapret2 ;; to1) from=/opt/zapret2; to=/opt/zapret ;; *) echo '{"error":"неизвестное направление"}'; return 1 ;; esac
-			_zm_re "$name" '^[A-Za-z0-9._+-]{1,128}$' || { echo '{"error":"недопустимое имя файла"}'; return 1; }
-			case "$name" in .*) echo '{"error":"недопустимое имя файла"}'; return 1 ;; esac
-			[ -d "$to" ] || { echo '{"error":"'"$( [ "$dir" = to2 ] && echo 'Zapret2' || echo 'Zapret')"' не установлен"}'; return 1; }
-			[ -f "$from/$sub/$name" ] || { echo '{"error":"исходного файла нет"}'; return 1; }
-			[ -e "$to/$sub/$name" ] && { echo '{"ok":true,"msg":"файл уже на месте"}'; return 0; }
-			mkdir -p "$to/$sub" && cp -p "$from/$sub/$name" "$to/$sub/$name" || { echo '{"error":"не удалось скопировать файл"}'; return 1; }
-			printf '{"ok":true,"msg":"%s скопирован в %s"}\n' "$(esc "$name")" "$(esc "$to/$sub")"
-			;;
-		blob)
-			sec="${v%%:*}"; file="${v#*:}"
-			_zm_re "$sec" '^blob_[A-Za-z0-9_]{1,120}$' || { echo '{"error":"недопустимое имя blob"}'; return 1; }
-			_zm_re "$file" '^[A-Za-z0-9._+-]{1,128}$' || { echo '{"error":"недопустимое имя файла"}'; return 1; }
-			[ -f /etc/config/zapret2 ] || { echo '{"error":"Zapret2 не установлен"}'; return 1; }
-			if [ ! -f "/opt/zapret2/files/fake/$file" ]; then
-				[ -f "/opt/zapret/files/fake/$file" ] || { echo '{"error":"fake-файла нет ни у Zapret2, ни у Zapret"}'; return 1; }
-				mkdir -p /opt/zapret2/files/fake && cp -p "/opt/zapret/files/fake/$file" "/opt/zapret2/files/fake/$file" || { echo '{"error":"не удалось скопировать файл"}'; return 1; }
-			fi
-			[ "$(uci -q get "zapret2.$sec")" = blob ] || uci -q set "zapret2.$sec=blob" || { echo '{"error":"не удалось изменить настройки Zapret2"}'; return 1; }
-			uci -q set "zapret2.$sec.path=/opt/zapret2/files/fake/$file" && uci -q set "zapret2.$sec.enabled=1" && uci -q commit zapret2 || { echo '{"error":"не удалось изменить настройки Zapret2"}'; return 1; }
-			printf '{"ok":true,"msg":"%s включён в Zapret2 — перезапустите Zapret2"}\n' "$(esc "$sec")"
-			;;
-		*) echo '{"error":"неизвестное действие"}'; return 1 ;;
-	esac
 }
 
 nfqws_opt_get() {
@@ -7117,13 +7239,15 @@ tg_status() {
 
 	local mt_l go_l rs_l
 	mt_l="$(_tg_latest mt)"; mt_l="$(_tg_mt_show "$(_tg_mt_base "${mt_l%% *}")" "${mt_l##* }")"; go_l="$(_ver_norm "$(_tg_latest go)")"; rs_l="$(_ver_norm "$(_tg_latest rs)")"
-	printf '{"mtproto":"%s","mtproto_running":%s,"mtproto_version":"%s","mtproto_latest":"%s","mtproto_newer":%s,"socks5":"%s","socks5_running":%s,"socks5_version":"%s","socks5_latest":"%s","socks5_newer":%s,"rust":"%s","rust_running":%s,"rust_version":"%s","rust_latest":"%s","rust_newer":%s,"rust_uci":%s,"rust_enabled":%s,"rust_port":"%s","rust_host":"%s","lan_ip":"%s","secret_mtproto":"%s","secret_rust":"%s","mtproto_port":"%s","mtproto_host":"%s","link_mtproto":"%s","socks5_port":"%s","rust_key":"%s","auto":%s,"ext":%s}\n' \
+	printf '{"mtproto":"%s","mtproto_running":%s,"mtproto_version":"%s","mtproto_latest":"%s","mtproto_newer":%s,"socks5":"%s","socks5_running":%s,"socks5_version":"%s","socks5_latest":"%s","socks5_newer":%s,"rust":"%s","rust_running":%s,"rust_version":"%s","rust_latest":"%s","rust_newer":%s,"rust_uci":%s,"rust_enabled":%s,"rust_port":"%s","rust_host":"%s","lan_ip":"%s","secret_mtproto":"%s","secret_rust":"%s","mtproto_port":"%s","mtproto_host":"%s","link_mtproto":"%s","socks5_port":"%s","rust_key":"%s","socks5_args":"%s","rust_args":"%s","args_def":{"socks5":"%s","rust":"%s"},"auto":%s,"ext":%s}\n' \
 		"$mt" "$mt_running" "$(esc "$mt_ver")" "$(esc "$mt_l")" "$(_tg_newer "$mt_ver" "$mt_l" && echo true || echo false)" \
 		"$go" "$go_running" "$(esc "$go_ver")" "$(esc "$go_l")" "$(_tg_newer "$go_ver" "$go_l" && echo true || echo false)" \
 		"$rs" "$rs_running" "$(esc "$rs_ver")" "$(esc "$rs_l")" "$(_tg_newer "$rs_ver" "$rs_l" && echo true || echo false)" \
 		"$rs_uci" "$rs_enabled" "$(esc "$rs_port")" "$(esc "$rs_host")" \
 		"$(esc "$lan_ip")" "$(esc "$secret_mt")" "$(esc "$secret_rs")" \
-		"$(esc "$mt_port")" "$(esc "$mt_host")" "$(esc "$mt_link")" "$(esc "$go_port")" "$(_tg_rs_uci || esc "$(_tg_rs_init_secret)")" "$(_tg_auto_json)" "$(_tg_ext_json)"
+		"$(esc "$mt_port")" "$(esc "$mt_host")" "$(esc "$mt_link")" "$(esc "$go_port")" "$(_tg_rs_uci || esc "$(_tg_rs_init_secret)")" \
+		"$(esc "$(_tg_args_of socks5)")" "$(_tg_rs_uci || esc "$(_tg_args_of rust)")" "$(esc "$TG_ARGS_DEF_GO")" "$(esc "$TG_ARGS_DEF_RS")" \
+		"$(_tg_auto_json)" "$(_tg_ext_json)"
 }
 
 TG_CONF_MT="/etc/tg-ws-proxy/config.conf"
@@ -7302,6 +7426,103 @@ tg_conf_set() {
 	_tg_bk restore
 	"$init" restart >/dev/null 2>&1
 	printf '{"error":"С портом %s прокси не запустился — вернули прежние порт и ключ, прокси работает как раньше"}\n' "$port"
+	return 1
+}
+
+TG_ARGS_DEF_GO="--cf-proxy --cf-proxy-first --cf-balance"
+TG_ARGS_DEF_RS="--default-domains --cf-balance --cf-priority"
+_tg_args_def() { case "$1" in socks5) echo "$TG_ARGS_DEF_GO" ;; rust) echo "$TG_ARGS_DEF_RS" ;; esac; }
+# Параметры строки запуска после самой программы — без тех, что задаёт «Порт и ключ» (--host, --port, --secret, --listen-faketls-domain)
+_tg_args_of() {
+	local init
+	init="$(_tg_auto_init "$1")" || return 0
+	[ -f "$init" ] || return 0
+	awk '
+		/procd_set_param[ \t]+command/ && !d {
+			d = 1; o = ""; seen = 0
+			for (i = 1; i <= NF; i++) {
+				t = $i; gsub(/^["\047]|["\047]$/, "", t)
+				if (!seen) { if (t ~ /tg-ws-proxy-(go|rs)$/) seen = 1; continue }
+				if (t ~ /^--?(host|port|secret|listen-faketls-domain)$/) { i++; continue }
+				if (t ~ /^--?(host|port|secret|listen-faketls-domain)=/) continue
+				o = o (o == "" ? "" : " ") t
+			}
+			print o
+		}' "$init"
+}
+_tg_args_write() {
+	local init="$1" t="$1.zm.$$"
+	awk -v A="$2" '
+		/procd_set_param[ \t]+command/ && !d {
+			d = 1; o = ""; seen = 0; ind = $0; sub(/[^ \t].*$/, "", ind)
+			for (i = 1; i <= NF; i++) {
+				t = $i; u = t; gsub(/^["\047]|["\047]$/, "", u)
+				if (!seen) { o = o (o == "" ? "" : " ") t; if (u ~ /tg-ws-proxy-(go|rs)$/) seen = 1; continue }
+				if (u ~ /^--?(host|port|secret|listen-faketls-domain)$/) { o = o " " t; if (i < NF) o = o " " $(i + 1); i++; continue }
+				if (u ~ /^--?(host|port|secret|listen-faketls-domain)=/) o = o " " t
+			}
+			if (A != "") o = o " " A
+			print ind o; next
+		}
+		{ print }' "$init" > "$t" && [ -s "$t" ] && cat "$t" > "$init"
+	rm -f "$t"
+}
+_tg_args_probe() {
+	local init cmd f="$JOBS_DIR/tg_args.probe" p
+	init="$(_tg_auto_init "$1")" || return 0
+	cmd="$(sed -n 's/^[[:space:]]*procd_set_param[[:space:]]\{1,\}command[[:space:]]\{1,\}//p' "$init" | head -n1)"
+	[ -n "$cmd" ] || return 0
+	mkdir -p "$JOBS_DIR"
+	( set -f; exec $cmd ) > "$f" 2>&1 < /dev/null &
+	p=$!
+	sleep 2
+	kill "$p" 2>/dev/null; wait "$p" 2>/dev/null
+	tr -d '\r' < "$f" | grep -v '^[[:space:]]*$' | head -n 4 | cut -c1-200
+	rm -f "$f"
+}
+tg_args_set() {
+	local id="$1" args init was="" port t bad="" out
+	case "$id" in socks5|rust) ;; *) echo '{"error":"параметры запуска меняются только у SOCKS5 (Go) и Rust"}'; return 1 ;; esac
+	init="$(_tg_auto_init "$id")"
+	[ -f "$init" ] || { echo '{"error":"прокси не установлен"}'; return 1; }
+	[ "$id" = rust ] && _tg_rs_uci && { echo '{"error":"Rust установлен пакетом luci-app-tg-ws-proxy-rs — параметры меняются в его настройках"}'; return 1; }
+	_tg_auto_busy "$id" && { echo '{"error":"Идёт установка или удаление этого прокси — дождитесь окончания"}'; return 1; }
+	grep -q 'procd_set_param[[:space:]]\{1,\}command' "$init" || { echo '{"error":"в init-скрипте прокси нет строки запуска — переустановите прокси"}'; return 1; }
+	args="$(printf '%s' "$2" | tr '\t\r\n' '   ' | tr -s ' ' | sed 's/^ //; s/ $//')"
+	[ "${#args}" -le 512 ] || { echo '{"error":"слишком длинно — не больше 512 знаков"}'; return 1; }
+	set -f
+	for t in $args; do
+		case "$t" in
+			*[!A-Za-z0-9._:/,=@+%-]*) bad="«$t» — можно только буквы, цифры и . _ : / , = @ + % -"; break ;;
+			--host|--port|--secret|--listen-faketls-domain|-host|-port|-secret|--host=*|--port=*|--secret=*|--listen-faketls-domain=*|-host=*|-port=*|-secret=*)
+				bad="${t%%=*} задаётся в «Порт и ключ» — уберите его отсюда"; break ;;
+		esac
+	done
+	set +f
+	[ -z "$bad" ] || { printf '{"error":"%s"}\n' "$(esc "$bad")"; return 1; }
+	[ "$args" = "$(_tg_args_of "$id")" ] && { printf '{"ok":true,"same":true}\n'; return 0; }
+	port="$(_tg_port_of "$id")"
+	pidof "$(_tg_bin_of "$id")" >/dev/null 2>&1 && was=1
+	_tg_bk save
+	_tg_args_write "$init" "$args"
+	[ "$(_tg_args_of "$id")" = "$args" ] || { _tg_bk restore; echo '{"error":"не удалось записать параметры в init-скрипт — оставили как было"}'; return 1; }
+	"$init" restart >/dev/null 2>&1
+	if _tg_listening "$id" "$port"; then
+		_tg_bk drop
+		logger -t zapret-manager "TG WS Proxy ($id): параметры запуска — ${args:-без параметров}"
+		printf '{"ok":true,"running":true}\n'
+		return 0
+	fi
+	if [ -z "$was" ]; then
+		_tg_bk drop
+		printf '{"ok":true,"running":false}\n'
+		return 0
+	fi
+	"$init" stop >/dev/null 2>&1
+	out="$(_tg_args_probe "$id")"
+	_tg_bk restore
+	"$init" restart >/dev/null 2>&1
+	printf '{"error":"С новыми параметрами прокси не запустился — вернули прежние, прокси работает как раньше","log":"%s"}\n' "$(esc_ml "$out")"
 	return 1
 }
 
@@ -7863,6 +8084,7 @@ tg_action() {
 		*:auto=*) tg_auto_set "$variant" "${action#auto=}"; return ;;
 		*:port=*) tg_port_check "$variant" "${action#port=}"; return ;;
 		*:conf=*) tg_conf_set "$variant" "${action#conf=}"; return ;;
+		*:args=*) tg_args_set "$variant" "${action#args=}"; return ;;
 		*:ext=*) tg_ext_set "$variant" "${action#ext=}"; return ;;
 		*:chk=*) tg_ext_check "$variant" "${action#chk=}"; return ;;
 		*:site=*) tg_site_check "${action#site=}"; return ;;
@@ -8523,6 +8745,7 @@ test_action() {
 				*) echo '{"error":"неизвестный режим теста"}'; return 1 ;;
 			esac
 			_test_running && { echo '{"error":"тест уже идёт"}'; return 1; }
+			_pend_on && { echo '{"error":"есть выбранные, но не применённые изменения стратегии — сначала примените или отмените их"}'; return 1; }
 			rm -f "$ZA_RUN"
 			job_start strategy_test do_test_run "$mode"
 			;;
@@ -8532,6 +8755,7 @@ test_action() {
 		auto_run)
 			[ -f "$CONF" ] || { echo '{"error":"Zapret не установлен"}'; return 1; }
 			_test_running && { echo '{"error":"тест уже идёт"}'; return 1; }
+			_pend_on && { echo '{"error":"есть выбранные, но не применённые изменения стратегии — сначала примените или отмените их"}'; return 1; }
 			job_start strategy_test do_autobest
 			;;
 		auto_tick) test_auto_tick ;;
@@ -29083,6 +29307,13 @@ case "$cmd" in
 esac
 case "$cmd" in
 	strategy_set_v|strategy_set_flowseal|strategy_set_youtube|youtube_quic_set|discord_set_dv|discord_set_fake|game_set|game_set_fake|game_toggle_xtreme|zapret_opt_set)
+		if [ -n "$ZM_UI_DEFER" ] && [ -f "$CONF" ] && [ ! -s "$TEST_BACKUP" ] && pgrep -f "/opt/zapre[t]/" >/dev/null 2>&1; then
+			_pend_begin && ZM_DEFER=1
+		fi
+		rm -f "$ZM_PEND_DIR/dirty" ;;
+esac
+case "$cmd" in
+	strategy_set_v|strategy_set_flowseal|strategy_set_youtube|youtube_quic_set|discord_set_dv|discord_set_fake|game_set|game_set_fake|game_toggle_xtreme|zapret_opt_set)
 		_zc_lift ;;
 esac
 _zm_run_cmd() {
@@ -29129,10 +29360,10 @@ case "$cmd" in
 	mirror_set)                                          mirror_set "$1" ;;
 	exclusions_status)                                     exclusions_status ;;
 	exclusions_toggle)                                       exclusions_toggle "$1" ;;
+	exclusions_set)                                          exclusions_set "$1" ;;
+	zapret_pending)                                          zapret_pending "$1" ;;
 	exclusions_clear)                                          exclusions_clear ;;
 	nfqws_opt_get)                                   nfqws_opt_get ;;
-	conv_env)                                        conv_env ;;
-	conv_fix)                                        conv_fix "$1" "$2" ;;
 	zapret_lists_status)                             zapret_lists_status ;;
 	zapret_list_get)                                 zapret_list_get "$1" ;;
 	zapret_list_set)                                 zapret_list_set "$1" "$2" ;;
@@ -29255,14 +29486,48 @@ case "$cmd" in
 	*) echo '{"error":"неизвестная команда"}'; exit 1 ;;
 esac
 }
+if [ -n "$ZM_DEFER" ]; then
+	zm_out="$(_zm_run_cmd "$@")"
+	zm_rc=$?
+	[ -n "$ZC_LIFTED" ] && _zc_drop
+	if _pend_same; then
+		_pend_clear
+		printf '%s\n' "$zm_out" | sed '$ s/"pending":true/"pending":false/'
+	elif [ -f "$ZM_PEND_DIR/dirty" ]; then
+		printf '%s\n' "$zm_out" | sed '$ s/}[[:space:]]*$/,"pending":true}/'
+	else
+		printf '%s\n' "$zm_out"
+	fi
+	exit $zm_rc
+fi
 _zm_run_cmd "$@"
 zm_rc=$?
 [ -n "$ZC_LIFTED" ] && _zc_drop
 exit $zm_rc
 ZM_INSTALLER_EOF
-sed -i "s/@ZM_VERSION@/$ZM_NEW_VER/" '/opt/zapret-manager-luci/backend.sh.zm-new'
-chmod 0755 '/opt/zapret-manager-luci/backend.sh.zm-new'
-mv -f '/opt/zapret-manager-luci/backend.sh.zm-new' '/opt/zapret-manager-luci/backend.sh'
+chmod 0755 "$_zmi_stage"
+if [ "$_zmi_stage" = "$_zmi_be.zm-new" ]; then
+	mv -f "$_zmi_stage" "$_zmi_be"
+else
+	_zmi_need=$(( $(wc -c < "$_zmi_stage") / 1024 + 256 ))
+	if [ "$(_zmi_free /opt/zapret-manager-luci)" -ge "$_zmi_need" ] && cp "$_zmi_stage" "$_zmi_be.zm-new" 2>/dev/null && mv -f "$_zmi_be.zm-new" "$_zmi_be"; then
+		:
+	else
+		rm -f "$_zmi_be.zm-new"
+		_zmi_step "На флеше мало места ($(_zmi_free /opt/zapret-manager-luci) КБ) — заменяем основной файл панели на месте"
+		_zm_n=0
+		while pgrep -f '/opt/zapret-manager-luci/backend[.]sh' >/dev/null 2>&1 && [ "$_zm_n" -lt 15 ]; do sleep 1; _zm_n=$((_zm_n + 1)); done
+		rm -f "$_zmi_be"
+		if ! cp "$_zmi_stage" "$_zmi_be" 2>/dev/null; then
+			rm -f "$_zmi_be" "$_zmi_stage"
+			echo -e "${YELLOW}Не хватило места на флеше, чтобы записать панель (свободно $(_zmi_free /opt/zapret-manager-luci) КБ).${NC}"
+			echo -e "${YELLOW}Освободите место — например, удалите ненужные пакеты — и запустите установку ещё раз. Настройки панели сохранены.${NC}"
+			exit 1
+		fi
+		chmod 0755 "$_zmi_be"
+	fi
+	rm -f "$_zmi_stage"
+fi
 cat > '/opt/zapret-manager-luci/netshift.uc' << 'ZM_INSTALLER_EOF'
 let fs = require("fs");
 let uci = require("uci");
@@ -32901,10 +33166,10 @@ list_methods() {
 	json_add_object "mirror_set";                  json_add_string "id" "string"; json_close_object
 	json_add_object "exclusions_status";           json_close_object
 	json_add_object "exclusions_toggle";           json_add_string "ip" "string"; json_close_object
+	json_add_object "exclusions_set";              json_add_string "ips" "string"; json_close_object
+	json_add_object "zapret_pending";              json_add_string "action" "string"; json_close_object
 	json_add_object "exclusions_clear";            json_close_object
 	json_add_object "nfqws_opt_get";               json_close_object
-	json_add_object "conv_env";                    json_close_object
-	json_add_object "conv_fix";                    json_add_string "action" "string"; json_add_string "value" "string"; json_close_object
 	json_add_object "zapret_lists_status";         json_close_object
 	json_add_object "zapret_list_get";             json_add_string "id" "string"; json_close_object
 	json_add_object "zapret_list_set";             json_add_string "id" "string"; json_add_string "content" "string"; json_close_object
@@ -33080,10 +33345,10 @@ call_method() {
 		mirror_set)                    json_get_var id id;           "$BACKEND" mirror_set "$id" ;;
 		exclusions_status)             "$BACKEND" exclusions_status ;;
 		exclusions_toggle)             json_get_var ip ip;          "$BACKEND" exclusions_toggle "$ip" ;;
+		exclusions_set)                json_get_var ips ips;        "$BACKEND" exclusions_set "$ips" ;;
+		zapret_pending)                json_get_var action action;  "$BACKEND" zapret_pending "$action" ;;
 		exclusions_clear)              "$BACKEND" exclusions_clear ;;
 		nfqws_opt_get)                 "$BACKEND" nfqws_opt_get ;;
-		conv_env)                      "$BACKEND" conv_env ;;
-		conv_fix)                      json_get_var action action; json_get_var value value; "$BACKEND" conv_fix "$action" "$value" ;;
 		zapret_lists_status)           "$BACKEND" zapret_lists_status ;;
 		zapret_list_get)               json_get_var id id; "$BACKEND" zapret_list_get "$id" ;;
 		zapret_list_set)               json_get_var id id; json_get_var content content; printf '%s' "$content" | "$BACKEND" zapret_list_set "$id" @stdin ;;
@@ -33227,7 +33492,6 @@ cat > '/usr/share/rpcd/acl.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF'
 					"mirror_status",
 					"exclusions_status",
 					"nfqws_opt_get",
-					"conv_env",
 					"zapret_ports_get",
 					"zapret_lists_status",
 					"zapret_list_get",
@@ -33321,6 +33585,8 @@ cat > '/usr/share/rpcd/acl.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF'
 					"backup_down",
 					"mirror_set",
 					"exclusions_toggle",
+					"exclusions_set",
+					"zapret_pending",
 					"exclusions_clear",
 					"nfqws_opt_set",
 					"zapret_list_set",
@@ -33348,7 +33614,6 @@ cat > '/usr/share/rpcd/acl.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF'
 					"awg_action",
 					"monitor_action",
 					"zsec2_action",
-					"conv_fix",
 					"watch_set",
 					"autoupd",
 					"term_action",
@@ -33618,14 +33883,14 @@ var callMirrorStatus = zmDeclare({ object: 'zapret-manager', method: 'mirror_sta
 var callMirrorSet = zmDeclare({ object: 'zapret-manager', method: 'mirror_set', params: ['id'], expect: {} });
 var callExclusionsStatus = zmDeclare({ object: 'zapret-manager', method: 'exclusions_status', expect: {} });
 var callExclusionsToggle = zmDeclare({ object: 'zapret-manager', method: 'exclusions_toggle', params: ['ip'], expect: {} });
+var callExclusionsSet = zmDeclare({ object: 'zapret-manager', method: 'exclusions_set', params: ['ips'], expect: {} });
+var callZapretPending = zmDeclare({ object: 'zapret-manager', method: 'zapret_pending', params: ['action'], expect: {} });
 var callExclusionsClear = zmDeclare({ object: 'zapret-manager', method: 'exclusions_clear', expect: {} });
 var callZapretListsStatus = zmDeclare({ object: 'zapret-manager', method: 'zapret_lists_status', expect: {} });
 var callZapretListGet = zmDeclare({ object: 'zapret-manager', method: 'zapret_list_get', params: ['id'], expect: {} });
 var callZapretListSet = zmDeclare({ object: 'zapret-manager', method: 'zapret_list_set', params: ['id', 'content'], expect: {} });
 var callZapretListRestore = zmDeclare({ object: 'zapret-manager', method: 'zapret_list_restore', params: ['id'], expect: {} });
 var callNfqwsOptGet = zmDeclare({ object: 'zapret-manager', method: 'nfqws_opt_get', expect: {} });
-var callConvEnv = zmDeclare({ object: 'zapret-manager', method: 'conv_env', expect: {} });
-var callConvFix = zmDeclare({ object: 'zapret-manager', method: 'conv_fix', params: ['action', 'value'], expect: {} });
 var callNfqwsOptSet = zmDeclare({ object: 'zapret-manager', method: 'nfqws_opt_set', params: ['content'], expect: {} });
 var callTgStatus = zmDeclare({ object: 'zapret-manager', method: 'tg_status', expect: {} });
 var callTgAction = zmDeclare({ object: 'zapret-manager', method: 'tg_action', params: ['variant', 'action'], expect: {} });
@@ -34461,7 +34726,7 @@ function notifyStrategyResult(res, okLabel) {
 		toast(res.error, 'error');
 		return false;
 	}
-	toast(okLabel + ' применена', 'info');
+	toast(okLabel + (res.pending ? ' выбрана — когда выберете всё нужное, нажмите «Применить»' : ' применена'), 'info');
 	return true;
 }
 
@@ -35826,10 +36091,10 @@ return baseclass.extend({
 	mirrorSet: callMirrorSet,
 	exclusionsStatus: callExclusionsStatus,
 	exclusionsToggle: callExclusionsToggle,
+	exclusionsSet: callExclusionsSet,
+	zapretPending: callZapretPending,
 	exclusionsClear: callExclusionsClear,
 	nfqwsOptGet: callNfqwsOptGet,
-	convEnv: callConvEnv,
-	convFix: callConvFix,
 	zapretListsStatus: callZapretListsStatus,
 	zapretListGet: callZapretListGet,
 	zapretListSet: bigArg2(callZapretListSet),
@@ -36696,18 +36961,19 @@ return view.extend({
 			return n + netPending();
 		}
 
-		function applyPick() {
+		function applyPick(only) {
 			if (busy) return;
+			if (typeof only !== 'string') only = '';
 			var steps = [];
 			var bw = bootWant();
-			if (bootChanged()) steps.push(function() {
+			if (!only && bootChanged()) steps.push(function() {
 				logLines.push('   → ' + (bw ? 'Ставим Bootstrap DNS: ' + bw.split(',').join(', ') : 'Возвращаем Bootstrap DNS в режим «Авто»'));
 				return zm.dohBootstrapSet(bw).then(function(res) {
 					if (res.error) throw new Error(res.error);
 					logLines.push('   ✓ Bootstrap DNS: ' + (res.bootstrap ? res.bootstrap.split(',').join(', ') : 'авто'));
 				});
 			});
-			if (pickProv && pickProv !== curMain()) steps.push(function() {
+			if ((!only || only === 'prov') && pickProv && pickProv !== curMain()) steps.push(function() {
 				var id = pickProv;
 				if (id === cur() && data.running && (data.failover || {}).mode === 'backup') {
 					logLines.push('   → Делаем ' + label(id) + ' основным — DNS уже идёт через него, перезапуск не нужен');
@@ -36733,7 +36999,7 @@ return view.extend({
 					else logLines.push('   · Bootstrap DNS: ' + (res.bootstrap ? bootFmt(res.bootstrap) : 'не задан — https-dns-proxy использует встроенные'));
 				});
 			});
-			if (foChanged()) steps.push(function() {
+			if (!only && foChanged()) steps.push(function() {
 				var w = foDraft, main = foMain(), ch = w.chain.filter(function(id) { return id !== main; });
 				logLines.push('   → ' + (w.on ? 'Сохраняем цепочку: ' + [ label(main) ].concat(ch.map(label)).join(' → ') + (w.direct ? ' → без DoH' : '') : 'Выключаем автопереключение'));
 				return zm.dohFailoverSet('fo=' + (w.on ? 1 : 0) + ' direct=' + (w.on && w.direct ? 1 : 0) + ' chain=' + ch.join(',')).then(function(r) {
@@ -36742,14 +37008,14 @@ return view.extend({
 					logLines.push('   ✓ ' + (r.fo || r.direct ? 'Автопереключение включено — основной сервер проверяется раз в 2 минуты' : 'Автопереключение выключено'));
 				});
 			});
-			if (pickForce && pickForce !== curForce()) steps.push(function() {
+			if ((!only || only === 'force') && pickForce && pickForce !== curForce()) steps.push(function() {
 				logLines.push('   → ' + (pickForce === 'off' ? 'Выключаем' : 'Включаем') + ' перехват DNS устройств');
 				return zm.dohForceSet(pickForce).then(function(res) {
 					if (res.error) throw new Error(res.error);
 					logLines.push('   ✓ Перехват DNS ' + (pickForce === 'off' ? 'выключен' : 'включён'));
 				});
 			});
-			if (netPending()) steps.push(function() {
+			if ((!only || only === 'net') && netPending()) steps.push(function() {
 				var c = pickCanary !== null ? pickCanary : curCanary(), r = pickRu || curRu();
 				if (c !== curCanary()) logLines.push('   → ' + (c ? 'Включаем' : 'Выключаем') + ' «Не давать браузерам свой DNS»');
 				if (r !== curRu()) logLines.push('   → Российские сайты: ' + RU_TEXT[r]);
@@ -36776,8 +37042,11 @@ return view.extend({
 			}).then(function() {
 				zm.renderLog(logEl, logLines.join('\n'));
 				busy = false;
-				pickProv = null; pickForce = null; foDraft = null; pickCanary = null; pickRu = null;
-				refresh().then(function() { bootReset(); render(); });
+				if (!only) { pickProv = null; pickForce = null; foDraft = null; pickCanary = null; pickRu = null; }
+				else if (only === 'prov') pickProv = null;
+				else if (only === 'force') pickForce = null;
+				else { pickCanary = null; pickRu = null; }
+				refresh().then(function() { if (!only) bootReset(); render(); });
 			});
 		}
 
@@ -36922,6 +37191,7 @@ return view.extend({
 					if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
 					pickProv = id === curMain() ? null : id;
 					render();
+					if (pickProv) applyPick('prov');
 				};
 				var mirror = function(id) {
 					var el = E('span', { 'class': 'zm-lat' });
@@ -37290,6 +37560,7 @@ return view.extend({
 						if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
 						pickForce = f.id === curForce() ? null : f.id;
 						render();
+						if (pickForce) applyPick('force');
 					}
 				}, f.label);
 			})));
@@ -37325,6 +37596,7 @@ return view.extend({
 					var v = !can;
 					pickCanary = v === curCanary() ? null : v;
 					render();
+					if (netPending()) applyPick('net');
 				}, auto || busy));
 			if (can || auto) netCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Подсказку не слушают только браузеры, где свой DNS включили вручную (например, Firefox в режиме «Максимальная защита»).'));
 			if (!(data.installed && !data.forkozz) && curRu() === 'off' && !pickRu) return;
@@ -37336,6 +37608,7 @@ return view.extend({
 				if (v === 'isp' && !isp.length) { zm.toast('Провайдер не выдал роутеру адреса DNS — выберите Яндекс DNS', 'warning'); return; }
 				pickRu = v === curRu() ? null : v;
 				render();
+				if (netPending()) applyPick('net');
 			}, 'zm-seg-stack') ]));
 			netCard.appendChild(E('p', { 'class': 'zm-hint' }, ru === 'yandex'
 				? 'Адреса сайтов в .ru, .su и .рф роутер узнаёт у Яндекс DNS (77.88.8.8, 77.88.8.1) — российские сайты открываются с ближайших к вам серверов. Эти запросы идут без шифрования, остальные — через DoH.'
@@ -40509,9 +40782,8 @@ return view.extend({
 				var pf = list.filter(function(f) { return f.name === extPick; })[0] || {};
 				var same = extOn && extPick === ext;
 				var btns = [ E('button', { 'class': 'cbi-button cbi-button-positive', 'disabled': (busy || same) ? '' : null, 'click': function() {
-					var go = function() { warpExitAfter = isMain() && data.exit === 'vpn'; act('warp_iface', pf.name, 'Подключаем Steer к ' + pf.name); }, wayPrompt = true;
+					var go = function() { warpExitAfter = isMain() && data.exit === 'vpn'; act('warp_iface', pf.name, 'Подключаем Steer к ' + pf.name); };
 					if (pf.route_all) return zm.ask('У ' + pf.name + ' включено «Весь трафик» — через него уже идёт весь интернет роутера, а не только сервисы Steer.\n\nВсё равно подключить? Выключить можно на вкладке AmneziaWG.').then(function(ok) { if (ok) go(); });
-					if (data.warp_on && !same && wayPrompt) return zm.ask('Пустить сервисы Steer через ' + pf.name + '?\n\n' + (extOn ? 'Интерфейс ' + ext + ' останется на вкладке AmneziaWG как был.' : own ? 'Свой туннель выключится, но сохранится — вернуться к нему можно в один клик.' : 'Автоматические туннели WARP выключатся, но сохранятся — вернуться к ним можно в один клик.')).then(function(ok) { if (ok) go(); });
 					go();
 				} }, same ? 'Сейчас через ' + ext : extOn ? 'Переключить на ' + (pf.name || '') : 'Подключить ' + (pf.name || '')) ];
 				if (cancelFn) btns.push(E('button', { 'class': 'cbi-button', 'click': cancelFn }, 'Отмена'));
@@ -42370,6 +42642,7 @@ return view.extend({
 			var c = cur();
 			if (data.on && p.list === c.list && p.tif === c.tif && p.doh === c.doh) pick = null;
 			renderHero(); renderLevel();
+			if (data.on && pick) job('apply', modeStr(pick), 'Применяем новый список — ход работы виден в окне вывода');
 		}
 
 		var bar = zm.saveBar({
@@ -43756,8 +44029,7 @@ var TABS = [
 	{ id: 'discord', label: 'Discord' },
 	{ id: 'lists', label: 'Редактор списков' },
 	{ id: 'exclusions', label: 'Исключение устройств' },
-	{ id: 'section2', label: 'Доп. секция' },
-	{ id: 'converter', label: 'Конвертор' }
+	{ id: 'section2', label: 'Доп. секция' }
 ];
 
 var TEST_MODE_LABELS = {
@@ -43807,6 +44079,7 @@ return view.extend({
 		var zapretInstalled = statusData.zapret === 'installed';
 
 		var tabBar = E('div', { 'class': 'zm-actions', 'style': 'margin:10px 0' });
+		var pendBar = null;
 		var panels = {};
 		var tabHooks = {};
 		var refreshers = {};
@@ -43992,8 +44265,9 @@ return view.extend({
 				currentBanner.className = 'zm-current-banner zm-current-top' + (status.strategy ? '' : ' zm-current-empty');
 				currentBanner.innerHTML = '';
 				if (status.strategy) {
-					currentBanner.appendChild(E('span', {}, 'Сейчас применено: '));
+					currentBanner.appendChild(E('span', {}, status.pending ? 'Выбрано, ещё не применено: ' : 'Сейчас применено: '));
 					currentBanner.appendChild(E('b', {}, [ String(status.strategy) ]));
+					if (status.pending) currentBanner.appendChild(E('span', { 'style': 'opacity:.75' }, [ ' · сейчас работает: ' + String(status.pending_was || '—') ]));
 					if (status.s2) currentBanner.appendChild(E('span', { 'class': 'zm-badge zm-sx-info', 'style': 'margin-left:10px', 'title': 'Часть устройств работает по своей стратегии — вкладка «Доп. секция»' }, [ E('span', { 'class': 'zm-dot' }), 'доп. секция' ]));
 					if (status.testing) currentBanner.appendChild(E('span', { 'class': 'zm-badge zm-warn', 'style': 'margin-left:10px', 'title': 'Пока идёт тест, роутер по очереди пробует стратегии. Потом вернётся ваша' }, [ E('span', { 'class': 'zm-dot' }), 'идёт тест' + (status.test_now ? ': сейчас ' + status.test_now : '') ]));
 					if (status.rkn_on) currentBanner.appendChild(E('span', { 'class': 'zm-badge zm-ok', 'style': 'margin-left:10px', 'title': 'Стратегия работает только для сайтов из списка РКН и вашего списка' }, [ E('span', { 'class': 'zm-dot' }), 'по спискам РКН' ]));
@@ -44003,6 +44277,38 @@ return view.extend({
 				} else {
 					currentBanner.appendChild(E('span', {}, 'Стратегия ещё не выбрана'));
 				}
+				paintPend();
+			}
+
+			var pendBusy = false;
+			pendBar = zm.saveBar({
+				saveLabel: 'Применить',
+				busyText: 'Применяем выбранную стратегию и перезапускаем Zapret…',
+				onCancel: function() { pendAct('cancel'); },
+				onSave: function() { return pendAct('apply'); }
+			});
+			function paintPend() {
+				if (!pendBar) return;
+				pendBar.set(!!status.pending && !status.testing, pendBusy,
+					'Стратегия выбрана, но ещё не применена' + (status.pending_was ? ' (Zapret пока работает по ' + status.pending_was + ')' : '') + '. Выберите всё нужное и нажмите «Применить» — Zapret перезапустится один раз');
+			}
+			function pendAct(a) {
+				if (pendBusy || busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return Promise.resolve(false); }
+				if (a === 'apply') { pendBusy = true; paintPend(); }
+				else zm.toast('Возвращаем прежнюю стратегию', 'warning');
+				busy = true;
+				return zm.zapretPending(a).then(function(r) {
+					pendBusy = false; busy = false;
+					if (!r || r.error) { zm.toast((r && r.error) || 'Роутер не ответил', 'error'); paintPend(); return false; }
+					status = r;
+					zm.toast(a === 'apply' ? 'Стратегия применена: ' + (r.strategy || '—') : 'Выбор отменён — осталась прежняя стратегия', 'info');
+					if (!zBusy) renderZCard(r);
+					renderBanner(); renderV();
+					if (!extraBusy) renderExtra();
+					if (lastFlowseal) renderFlowseal(lastFlowseal);
+					refreshAll();
+					return true;
+				}).catch(function() { pendBusy = false; busy = false; paintPend(); zm.toast('Роутер не ответил', 'error'); return false; });
 			}
 
 			function renderV() {
@@ -44901,11 +45207,13 @@ return view.extend({
 				return tsGate(spec, function() {
 					zm.toast('Применяем ' + name + '…', 'warning');
 					call().then(function(r) {
+						return r && !r.error && r.pending ? zm.zapretPending('apply') : r;
+					}).then(function(r) {
 						if (r && r.error) { zm.toast(r.error, 'error'); return; }
 						zm.toast('Стратегия ' + name + ' применена', 'info');
 						refreshAll();
 					}).catch(function() { zm.toast('Роутер не ответил', 'error'); });
-				}, 'Применить стратегию ' + name + '?');
+				});
 			}
 
 			var WHY_TXT = { ip: 'по IP', dns: 'DNS' };
@@ -45294,7 +45602,7 @@ return view.extend({
 							zm.gameSet(String(n)).then(function(res) {
 								busy = false;
 								if (res.error) { zm.toast(res.error, 'error'); return; }
-								zm.toast(res.game === 'none' ? 'Игровая стратегия снята' : res.game + ' применена', 'info');
+								zm.toast(res.game === 'none' ? 'Игровая стратегия снята' : res.game + (res.pending ? ' выбрана' : ' применена'), 'info');
 								refreshAll();
 							}).catch(function() { busy = false; });
 							});
@@ -45704,32 +46012,81 @@ return view.extend({
 			}
 
 			var grid = E('div', { 'class': 'zm-svc-grid' });
-			var busy = false;
+			var busy = false, devices = data.devices || [], pick = null;
+			function saved() { var m = {}; devices.forEach(function(d) { if (d.excluded) m[d.ip] = true; }); return m; }
+			function sel() { return pick || saved(); }
+			function sig(m) { return Object.keys(m).sort().join(','); }
+			function dirty() { return !!pick && sig(pick) !== sig(saved()); }
+			function edit(fn) {
+				if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+				var m = {}, s = sel();
+				Object.keys(s).forEach(function(k) { m[k] = true; });
+				fn(m);
+				pick = m;
+				renderGrid();
+				if (dirty()) save(); else pick = null;
+			}
+			var bar = zm.saveBar({
+				saveLabel: 'Применить',
+				onCancel: function() { pick = null; renderGrid(); },
+				onSave: function() { return save(); }
+			});
 
-			function renderGrid(devices) {
-				grid.innerHTML = '';
-				(devices || []).forEach(function(d) {
-					grid.appendChild(zm.svcCard({ name: d.name || d.ip, sub: d.name ? d.ip : 'без имени', key: d.ip, on: !!d.excluded,
-						'click': function() {
-							if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
-							busy = true;
-							zm.toast('Переключаем исключение для ' + d.ip + '', 'warning');
-							zm.exclusionsToggle(d.ip).then(function(res) {
-								busy = false;
-								if (res.error) { zm.toast(res.error, 'error'); return; }
-								zm.toast(d.ip + (res.excluded ? ' исключён' : ' больше не исключён'), 'info');
-								zm.exclusionsStatus().then(function(r) { renderGrid(r.devices); });
-							}).catch(function() { busy = false; });
-						}
-					}));
+			function tileFor(ip, name, on) {
+				return zm.svcCard({ name: name || ip, sub: name ? ip : 'без имени', key: ip, on: on,
+					'click': function() { edit(function(m) { if (m[ip]) delete m[ip]; else m[ip] = true; }); }
 				});
-				if (!devices || !devices.length)
-					grid.appendChild(E('p', { 'class': 'zm-hint', 'style': 'grid-column: 1 / -1; margin: 0' }, 'Устройства не найдены — нажмите «Обновить список».'));
 			}
 
-			renderGrid(data.devices);
+			function renderGrid() {
+				grid.innerHTML = '';
+				var s = sel(), sv = saved(), seen = {}, add = 0, del = 0;
+				devices.forEach(function(d) {
+					if (seen[d.ip]) return;
+					seen[d.ip] = true;
+					grid.appendChild(tileFor(d.ip, d.name, !!s[d.ip]));
+				});
+				Object.keys(s).sort().forEach(function(ip) { if (!seen[ip]) { seen[ip] = true; grid.appendChild(tileFor(ip, '', true)); } });
+				if (!Object.keys(seen).length)
+					grid.appendChild(E('p', { 'class': 'zm-hint', 'style': 'grid-column: 1 / -1; margin: 0' }, 'Устройства не найдены — нажмите «Обновить список».'));
+				Object.keys(s).forEach(function(k) { if (!sv[k]) add++; });
+				Object.keys(sv).forEach(function(k) { if (!s[k]) del++; });
+				bar.set(dirty(), busy, 'Исключения изменены: ' + [ add ? 'добавить ' + add : '', del ? 'убрать ' + del : '' ].filter(Boolean).join(', ') + ' — Zapret перезапустится один раз');
+			}
 
-			var manualInput = E('input', { 'type': 'text', 'placeholder': '192.168.1.100', 'class': 'cbi-input-text' });
+			function reload() {
+				return zm.exclusionsStatus().then(function(r) {
+					if (r && !r.error) devices = r.devices || [];
+					renderGrid();
+					return r;
+				});
+			}
+
+			function save() {
+				if (busy) return Promise.resolve(false);
+				var ips = Object.keys(sel()).sort();
+				busy = true; renderGrid();
+				zm.toast('Применяем исключения и перезапускаем Zapret', 'warning');
+				return zm.exclusionsSet(ips.join(' ')).then(function(res) {
+					busy = false;
+					if (!res || res.error) { zm.toast((res && res.error) || 'Роутер не ответил', 'error'); renderGrid(); return false; }
+					pick = null;
+					zm.toast(ips.length ? 'Исключения применены — мимо Zapret ходит устройств: ' + ips.length : 'Исключения очищены', 'info');
+					return reload().then(function() { refreshAll(); return true; }, function() { renderGrid(); return true; });
+				}).catch(function() { busy = false; renderGrid(); zm.toast('Роутер не ответил', 'error'); return false; });
+			}
+
+			var manualInput = E('input', { 'type': 'text', 'placeholder': '192.168.1.100', 'class': 'cbi-input-text', 'inputmode': 'decimal', 'autocomplete': 'off', 'spellcheck': 'false' });
+			function addManual() {
+				var ip = manualInput.value.trim();
+				if (!/^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}$/.test(ip)) { zm.toast('Введите IPv4-адрес, например 192.168.1.100', 'error'); manualInput.focus(); return; }
+				if (sel()[ip]) { zm.toast(ip + ' уже отмечен', 'info'); return; }
+				manualInput.value = '';
+				edit(function(m) { m[ip] = true; });
+			}
+			manualInput.addEventListener('keydown', function(ev) { if (ev.key === 'Enter') { ev.preventDefault(); addManual(); } });
+
+			renderGrid();
 
 			var card = E('div', { 'class': 'zm-card' }, [
 				E('h3', {}, 'Исключение устройств из Zapret'),
@@ -45741,49 +46098,23 @@ return view.extend({
 						'click': function() {
 							if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
 							busy = true;
-							zm.toast('Обновляем список устройств', 'warning');
-							zm.exclusionsStatus().then(function(res) {
-								busy = false;
-								renderGrid(res.devices);
+							reload().then(function() {
+								busy = false; renderGrid();
 								zm.toast('Список устройств обновлён', 'info');
-							}).catch(function() { busy = false; });
+							}).catch(function() { busy = false; renderGrid(); zm.toast('Роутер не ответил', 'error'); });
 						}
 					}, 'Обновить список'),
 					manualInput,
-					E('button', {
-						'class': 'cbi-button',
-						'click': function() {
-							if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
-							var ip = manualInput.value.trim();
-							if (!/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(ip)) {
-								zm.toast('Некорректный IPv4 адрес', 'error');
-								return;
-							}
-							busy = true;
-							zm.toast('Добавляем ' + ip + ' в исключения', 'warning');
-							zm.exclusionsToggle(ip).then(function(res) {
-								busy = false;
-								if (res.error) { zm.toast(res.error, 'error'); return; }
-								manualInput.value = '';
-								zm.toast(ip + (res.excluded ? ' добавлен в исключения' : ' убран из исключений'), 'info');
-								zm.exclusionsStatus().then(function(r) { renderGrid(r.devices); });
-							}).catch(function() { busy = false; });
-						}
-					}, 'Добавить вручную'),
+					E('button', { 'class': 'cbi-button', 'click': addManual }, 'Добавить вручную'),
 					E('button', {
 						'class': 'cbi-button cbi-button-remove',
 						'click': function() {
-							if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
-							busy = true;
-							zm.toast('Очищаем все исключения', 'warning');
-							zm.exclusionsClear().then(function() {
-								busy = false;
-								zm.toast('Все исключения очищены', 'info');
-								zm.exclusionsStatus().then(function(res) { renderGrid(res.devices); });
-							}).catch(function() { busy = false; });
+							if (!Object.keys(sel()).length) { zm.toast('Исключений нет', 'info'); return; }
+							edit(function(m) { Object.keys(m).forEach(function(k) { delete m[k]; }); });
 						}
-					}, 'Очистить все')
-				])
+					}, 'Снять все')
+				]),
+				bar
 			]);
 
 			panels.exclusions.appendChild(card);
@@ -45792,6 +46123,8 @@ return view.extend({
 		(function buildSection2Panel() {
 			var P = panels.section2;
 			var d = null, devList = null, busy = false, loadErr = '', pick = null, fsItems = null, fsBusy = false, ytList = null, ytBusy = false;
+			var q = [], pv = null, pvBusy = false;
+			function V() { return pv || d; }
 			var S2_TABS = [ { id: 'strategy', label: 'Стратегии' }, { id: 'youtube', label: 'YouTube' }, { id: 'game', label: 'Игры' }, { id: 'discord', label: 'Discord' }, { id: 'editor', label: 'Редактор' } ];
 			var s2Tab = 'strategy';
 			try { var s2Saved = localStorage.getItem('zm.s2.tab'); if (S2_TABS.some(function(t) { return t.id === s2Saved; })) s2Tab = s2Saved; } catch (e) {}
@@ -45807,10 +46140,10 @@ return view.extend({
 				}).then(function(ok) { return ok ? act('opt', v, 'Стратегия секции сохранена') : false; });
 			} });
 			var manIn = E('input', { 'type': 'text', 'class': 'cbi-input-text zm-s2-ip', 'placeholder': '192.168.1.100', 'inputmode': 'decimal', 'autocomplete': 'off', 'spellcheck': 'false' });
-			var devBar = zm.saveBar({
-				saveLabel: 'Сохранить устройства',
-				onCancel: function() { pick = null; renderDevs(); },
-				onSave: function() { return saveDevs(); }
+			var s2Bar = zm.saveBar({
+				saveLabel: 'Применить',
+				onCancel: function() { pick = null; q = []; pv = null; if (!optBar.dirty() && d) optBar.reset(String(d.opt || '').replace(/\n+$/, '')); renderAll(); },
+				onSave: function() { return applyAll(''); }
 			});
 			P.appendChild(head); P.appendChild(devCard); P.appendChild(navCard); P.appendChild(subWrap);
 
@@ -45822,7 +46155,7 @@ return view.extend({
 			function mb(kb) { return Math.max(1, Math.round((+kb || 0) / 1024)); }
 
 			function act(a, v, ok) {
-				if (busy) { zm.toast('Дождитесь окончания текущей операции', 'warning'); return Promise.resolve(false); }
+				if (busy || pvBusy) { zm.toast('Дождитесь окончания текущей операции', 'warning'); return Promise.resolve(false); }
 				busy = true; renderAll();
 				var st = a !== 'on' && a !== 'off' && a !== 'devs', live = !!(d && d.on);
 				zm.toast(a === 'on' ? 'Включаем дополнительную секцию и перезапускаем Zapret' : a === 'off' ? 'Выключаем дополнительную секцию и перезапускаем Zapret'
@@ -45833,7 +46166,7 @@ return view.extend({
 					if (!r || r.error) { zm.toast((r && r.error) || 'Роутер не ответил', 'error'); renderAll(); return false; }
 					d = r;
 					if (a === 'devs') pick = null;
-					if (st) optBar.reset(String(r.opt || '').replace(/\n+$/, ''));
+					if (st) { q = []; pv = null; optBar.reset(String(r.opt || '').replace(/\n+$/, '')); }
 					zm.toast(st && !r.on ? ok.replace(/ применена$/, ' выбрана') + ' — заработает, когда вы включите секцию' : ok, 'info');
 					renderAll();
 					if (r.on && r.ready && r.zapret_running && !r.running) setTimeout(load, 3000);
@@ -45868,16 +46201,88 @@ return view.extend({
 
 			function toggle() {
 				if (!d) return;
-				if (busy) { zm.toast('Дождитесь окончания текущей операции', 'warning'); return; }
+				if (busy || pvBusy) { zm.toast('Дождитесь окончания текущей операции', 'warning'); return; }
+				if (optBar.dirty()) { zm.toast('Сначала сохраните или отмените изменения в редакторе стратегии секции', 'warning'); return; }
 				if (d.on) {
-					zm.ask('Выключить дополнительную секцию?\n\nВсе её устройства вернутся на основную стратегию. Список устройств и стратегия секции сохранятся.').then(function(ok) { if (ok) act('off', '', 'Дополнительная секция выключена'); });
+					zm.ask('Выключить дополнительную секцию?\n\nВсе её устройства вернутся на основную стратегию. Список устройств и стратегия секции сохранятся.' + (pending() ? '\n\nВыбранные, но не применённые изменения тоже сохранятся.' : '')).then(function(ok) { if (ok) applyAll('off'); });
 					return;
 				}
-				if (dirty()) { zm.toast('Сначала сохраните или отмените выбор устройств', 'warning'); return; }
-				if (optBar.dirty()) { zm.toast('Сначала сохраните или отмените изменения в стратегии секции', 'warning'); return; }
-				if (!(d.devs || []).length) { zm.toast('Сначала выберите устройства секции', 'warning'); return; }
-				if (!String(d.opt || '').trim()) { zm.toast('Сначала выберите стратегию секции', 'warning'); return; }
-				warn().then(function(ok) { if (ok) act('on', '', 'Дополнительная секция включена'); });
+				var ex = exMap(), live = keys(sel()).filter(function(ip) { return !ex[ip]; });
+				if (!keys(sel()).length) { zm.toast('Сначала отметьте устройства секции', 'warning'); return; }
+				if (!live.length) { zm.toast('Все отмеченные устройства исключены из Zapret — секции некого обслуживать', 'warning'); return; }
+				if (!String(V().opt || '').trim()) { zm.toast('Сначала выберите стратегию секции', 'warning'); return; }
+				warn().then(function(ok) { if (ok) applyAll('on'); });
+			}
+
+			function pending() { return dirty() || q.length > 0; }
+			function stepLabel(st) {
+				var a = st.a, v = String(st.v);
+				if (a === 'preset') return v === 'main' ? 'копия основной' : v.replace(/^fs:/, '');
+				if (a === 'yv') return v === 'off' ? 'без YouTube' : v;
+				if (a === 'dv') return v === 'off' ? 'без Discord' : 'Dv' + v;
+				if (a === 'gv') return v === 'off' ? 'без игр' : 'Gv' + v;
+				if (a === 'dfake' || a === 'gfake') return v;
+				if (a === 'x') { var kv = v.split(':'); return ({ doh: 'DoH', rkn: 'списки РКН', ul: 'свой список', wss: '--wssize', quic: 'QUIC', ipid: '--ip-id', xt: 'Xtreme' }[kv[0]] || kv[0]) + (kv[1] === 'on' ? ' вкл' : ' выкл'); }
+				return a;
+			}
+			function serial(steps, devs, want) {
+				var L = steps.map(function(st) { return 'step\t' + st.a + '\t' + st.v; });
+				if (devs) L.push([ 'devs' ].concat(keys(devs).map(function(ip) { return ip + '|' + String(devs[ip] || '').replace(/[|\t\r\n]/g, ' '); })).join('\t'));
+				if (want) L.push(want);
+				return L.join('\n');
+			}
+			function sameStrat(a, b) {
+				if (!a || !b) return false;
+				return [ 'opt', 'label', 'kind', 'v', 'fs', 'yv', 'yv_cur', 'dv', 'dv_cur', 'gv', 'gv_cur', 'gv_fake', 'dv_fake' ].every(function(k) { return String(a[k] || '') === String(b[k] || ''); })
+					&& JSON.stringify(a.x || {}) === JSON.stringify(b.x || {});
+			}
+			function paintBar() {
+				if (!d || d.installed === false) { s2Bar.set(false, busy); return; }
+				var parts = [], seen = {};
+				if (dirty()) parts.push('устройства');
+				q.forEach(function(st) { var l = stepLabel(st); if (!seen[l]) { seen[l] = true; parts.push(l); } });
+				if (parts.length > 5) parts = parts.slice(0, 5).concat('…');
+				s2Bar.set(pending(), busy, 'Доп. секция, не применено: ' + parts.join(', ') + (d.on ? ' — Zapret перезапустится один раз' : ' — секция выключена, изменения просто сохранятся'), d.on ? 'Применить' : 'Сохранить');
+			}
+			function applyAll(want, stepsOnly) {
+				if (busy || pvBusy) { zm.toast('Дождитесь окончания текущей операции', 'warning'); return Promise.resolve(false); }
+				if (optBar.dirty()) { zm.toast('Сначала сохраните или отмените изменения в редакторе стратегии секции', 'warning'); return Promise.resolve(false); }
+				var devs = !stepsOnly && dirty() ? sel() : null, endOn = want ? want === 'on' : !!(d && d.on);
+				if (devs && !keys(devs).length && endOn) { zm.toast('Во включённой секции должно остаться хотя бы одно устройство — или выключите секцию', 'warning'); return Promise.resolve(false); }
+				var txt = serial(q, devs, want);
+				if (!txt) return Promise.resolve(true);
+				var restart = endOn || !!(d && d.on);
+				busy = true; renderAll();
+				zm.toast(want === 'on' ? 'Включаем дополнительную секцию и перезапускаем Zapret' : want === 'off' ? 'Выключаем дополнительную секцию и перезапускаем Zapret'
+					: restart ? 'Применяем изменения секции и перезапускаем Zapret' : 'Сохраняем изменения секции', 'warning');
+				return zm.zsec2Action('batch', txt).then(function(r) {
+					busy = false;
+					if (!r || r.error) { zm.toast((r && r.error) || 'Роутер не ответил', 'error'); renderAll(); return false; }
+					d = r; q = []; pv = null;
+					if (!stepsOnly) pick = null;
+					if (!optBar.dirty()) optBar.reset(String(r.opt || '').replace(/\n+$/, ''));
+					zm.toast(want === 'on' ? 'Дополнительная секция включена' : want === 'off' ? 'Дополнительная секция выключена'
+						: r.on ? 'Изменения секции применены' : 'Изменения секции сохранены — заработают, когда вы включите секцию', 'info');
+					renderAll();
+					if (r.on && r.ready && r.zapret_running && !r.running) setTimeout(load, 3000);
+					return true;
+				}).catch(function() { busy = false; renderAll(); zm.toast('Роутер не ответил', 'error'); return false; });
+			}
+			function addStep(a, v) {
+				var nq = q.slice(), last = nq[nq.length - 1];
+				var key = function(st) { return st.a === 'x' ? 'x:' + String(st.v).split(':')[0] : st.a === 'dfake' || st.a === 'gfake' || st.a === 'preset' || st.a === 'yv' || st.a === 'dv' || st.a === 'gv' ? st.a : st.a + st.v; };
+				var st = { a: a, v: v };
+				if (last && key(last) === key(st)) nq[nq.length - 1] = st; else nq.push(st);
+				pvBusy = true; renderAll();
+				zm.zsec2Action('preview', serial(nq, null, '')).then(function(r) {
+					pvBusy = false;
+					if (!r || r.error) { zm.toast((r && r.error) || 'Роутер не ответил', 'error'); renderAll(); return; }
+					q = nq; pv = r.preview ? r : null;
+					if (sameStrat(pv, d)) { q = []; pv = null; }
+					if (!optBar.dirty()) optBar.reset(String(V().opt || '').replace(/\n+$/, ''));
+					renderAll();
+					if (q.length) applyAll('', true);
+				}).catch(function() { pvBusy = false; renderAll(); zm.toast('Роутер не ответил', 'error'); });
 			}
 
 			function badge() {
@@ -45898,12 +46303,12 @@ return view.extend({
 				if (!d) { head.appendChild(E('p', { 'class': 'zm-hint' }, loadErr || 'Читаем настройки…')); return; }
 				if (d.installed === false) { head.appendChild(E('p', { 'class': 'zm-hint' }, 'Zapret не установлен.')); return; }
 				if (d.fw && d.fw !== 'nftables') head.appendChild(E('div', { 'class': 'zm-zp-note zm-zp-warn' }, [ E('span', {}, 'Дополнительная секция работает только с файрволом nftables, а в настройках Zapret выбран ' + d.fw + '.') ]));
-				var n = (d.devs || []).length, ex = (d.devs || []).filter(function(x) { return x.ex; }).length;
+				var exm = exMap(), selKeys = keys(sel()), n = selKeys.length, ex = selKeys.filter(function(ip) { return exm[ip]; }).length;
 				head.appendChild(zm.swRow(!!d.on, d.on ? 'Секция включена' : 'Включить секцию',
-					d.on ? '' : 'Выберите устройства и стратегию ниже, затем включите секцию.', toggle, busy || d.fw && d.fw !== 'nftables'));
+					d.on ? '' : 'Выберите устройства и стратегию ниже — они сохранятся, а заработают, когда вы включите секцию.', toggle, busy || pvBusy || d.fw && d.fw !== 'nftables'));
 				var stat = E('div', { 'class': 'zm-s2-stats' });
-				stat.appendChild(E('div', { 'class': 'zm-s2-stat' }, [ E('span', {}, 'Устройства'), E('b', {}, String(n - ex) + (ex ? ' · исключено ' + ex : '')) ]));
-				stat.appendChild(E('div', { 'class': 'zm-s2-stat' }, [ E('span', {}, 'Стратегия'), E('b', {}, [ String(d.label || '—') ]) ]));
+				stat.appendChild(E('div', { 'class': 'zm-s2-stat' }, [ E('span', {}, dirty() ? 'Устройства · не применено' : 'Устройства'), E('b', {}, String(n - ex) + (ex ? ' · исключено ' + ex : '')) ]));
+				stat.appendChild(E('div', { 'class': 'zm-s2-stat' }, [ E('span', {}, pv ? 'Стратегия · не применено' : 'Стратегия'), E('b', {}, [ String(V().label || '—') ]) ]));
 				head.appendChild(stat);
 				if (d.on && !d.ready) head.appendChild(E('div', { 'class': 'zm-zp-note zm-zp-warn' }, [ E('span', {}, 'Все устройства секции исключены из Zapret — секции некого обслуживать. Добавьте устройство или выключите секцию.') ]));
 				else if (d.on && d.zapret_running && !d.running) head.appendChild(E('div', { 'class': 'zm-zp-note zm-zp-warn' }, [ E('span', {}, 'Процесс nfqws секции не запустился — скорее всего, в её стратегии ошибка или не хватило памяти. Проверьте стратегию секции или выключите секцию.') ]));
@@ -45918,6 +46323,7 @@ return view.extend({
 						var m = {}; var s = sel(); Object.keys(s).forEach(function(k) { m[k] = s[k]; });
 						if (m.hasOwnProperty(ip)) delete m[ip]; else m[ip] = name || '';
 						pick = m; renderDevs();
+						if (dirty()) applyAll(''); else pick = null;
 					} });
 			}
 
@@ -45948,22 +46354,17 @@ return view.extend({
 					E('button', { 'class': 'cbi-button', 'disabled': busy ? '' : null, 'click': function() { loadDevs(true); } }, 'Обновить список')
 				]));
 				devCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Устройство узнаётся по IPv4-адресу — закрепите за ним адрес в DHCP, чтобы он не менялся.'));
-				devCard.appendChild(devBar);
-				devBar.set(dirty(), busy, 'Выбор устройств изменён' + (d.on ? ' — при сохранении Zapret перезапустится' : ''));
+				devCard.appendChild(s2Bar);
+				paintBar();
 			}
 
-			function saveDevs() {
-				var s = sel(), ks = keys(s);
-				if (!ks.length && d && d.on) { zm.toast('Во включённой секции должно остаться хотя бы одно устройство — или выключите секцию', 'warning'); return Promise.resolve(false); }
-				return act('devs', ks.map(function(ip) { return ip + '|' + String(s[ip] || '').replace(/[|\n\r]/g, ' '); }).join('\n'), 'Устройства секции сохранены');
-			}
 
 			function hint(t) { return E('p', { 'class': 'zm-hint' }, t); }
 			function tile(label, on, click) { return E('div', { 'class': 'zm-tile' + (on ? ' zm-active' : ''), 'click': click }, [ String(label) ]); }
 			function card(title, body) { return E('div', { 'class': 'zm-card zm-s2' }, [ E('h3', {}, title) ].concat(body)); }
-			function hasOpt() { return !!(d && String(d.opt || '').trim()); }
-			function X(k) { return (d && d.x && d.x[k]) || ''; }
-			function H(k) { return !!(d && d.has && d.has[k]); }
+			function hasOpt() { return !!(V() && String(V().opt || '').trim()); }
+			function X(k) { return (V() && V().x && V().x[k]) || ''; }
+			function H(k) { return !!(V() && V().has && V().has[k]); }
 			function xRow(key, on, label, text, disabled) {
 				return zm.swRow(on, label, text, function() {
 					if (busy || disabled) return;
@@ -45972,8 +46373,8 @@ return view.extend({
 			}
 			function plural(n, a, b, c) { return n % 10 === 1 && n % 100 !== 11 ? a : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) ? b : c; }
 			function subExtras() {
-				var rkn = X('rkn') === 'on' || H('rkn'), ul = X('ul') === 'on', rn = +d.rkn_count || 0, un = +d.ul_count || 0, kids = [];
-				kids.push(xRow('doh', H('doh'), 'Обход блокировки DoH', 'Блок для шифрованного DNS встаёт первым в стратегии секции. Домены — как у основной: ' + (d.doh_doms || '—') + '.'));
+				var rkn = X('rkn') === 'on' || H('rkn'), ul = X('ul') === 'on', rn = +V().rkn_count || 0, un = +V().ul_count || 0, kids = [];
+				kids.push(xRow('doh', H('doh'), 'Обход блокировки DoH', 'Блок для шифрованного DNS встаёт первым в стратегии секции. Домены — как у основной: ' + (V().doh_doms || '—') + '.'));
 				kids.push(xRow('rkn', rkn, 'Обход по спискам РКН', rkn && !H('rkn')
 					? '⚠ Стратегия секции не подходит для списков РКН — они включатся сами, когда вы выберете подходящую.'
 					: 'Стратегия секции будет обходить блокировку только для сайтов из списка РКН' + (rn ? ' (' + rn + ' ' + plural(rn, 'домен', 'домена', 'доменов') + ')' : '') + ' и вашего списка хостов. Список общий с основной.'));
@@ -45981,14 +46382,14 @@ return view.extend({
 					? '⚠ Стратегия секции не подходит для обхода по своему списку — он включится сам, когда вы выберете подходящую.'
 					: 'Стратегия секции будет обходить блокировку только для сайтов из /opt/zapret/ipset/zapret-hosts-user.txt' + (ul ? ' (' + (un ? un + ' ' + plural(un, 'домен', 'домена', 'доменов') : 'список пуст') + ')' : '') + '. Список общий с основной.'));
 				kids.push(xRow('wss', H('wss'), 'Блок --wssize 1:6', 'Отдельный блок в конце стратегии секции: для HTTPS уменьшает окно TCP в начале соединения. Помогает с некоторыми провайдерами.'));
-				if (!d.has || !d.has.fits) kids.push(hint('Списки РКН и свой список работают только со стратегиями, где есть список исключений (--hostlist-exclude).'));
+				if (!V().has || !V().has.fits) kids.push(hint('Списки РКН и свой список работают только со стратегиями, где есть список исключений (--hostlist-exclude).'));
 				subWrap.appendChild(card('Дополнения к стратегии секции', [ hint('Как у основной, но только для устройств секции. Сохраняются при смене стратегии секции. «Скопировать основную» берёт стратегию вместе с её дополнениями.') ].concat(kids)));
 			}
 
 			function pickSt(a, v, ok, spec) {
-				if (busy) { zm.toast('Дождитесь окончания текущей операции', 'warning'); return; }
+				if (busy || pvBusy) { zm.toast('Дождитесь окончания текущей операции', 'warning'); return; }
 				if (optBar.dirty()) { zm.toast('Сначала сохраните или отмените изменения в редакторе стратегии секции', 'warning'); return; }
-				var go = function() { act(a, v, ok); };
+				var go = function() { addStep(a, v); };
 				if (spec) tsGate(spec, go); else go();
 			}
 
@@ -46035,10 +46436,12 @@ return view.extend({
 			function renderNav() {
 				navCard.innerHTML = '';
 				navCard.appendChild(E('h3', {}, 'Стратегия секции'));
-				if (!d || d.installed === false) return;
+				if (!d || V().installed === false) return;
 				navCard.appendChild(E('div', { 'class': 'zm-current-banner zm-s2-now' + (hasOpt() ? '' : ' zm-current-empty') }, hasOpt()
-					? [ E('span', {}, 'Сейчас в секции: '), E('b', {}, [ String(d.label || 'своя') ]) ]
+					? (pv ? [ E('span', {}, 'Выбрано, ещё не применено: '), E('b', {}, [ String(pv.label || 'своя') ]), E('span', { 'style': 'opacity:.7' }, [ ' · сейчас: ' + String(d.label || '—') ]) ]
+						: [ E('span', {}, 'Сейчас в секции: '), E('b', {}, [ String(V().label || 'своя') ]) ])
 					: [ E('span', {}, 'Стратегия секции ещё не выбрана — начните с вкладки «Стратегии» ниже') ]));
+				navCard.appendChild(hint('Стратегия, YouTube, игры, Discord, дополнения и устройства применяются сразу по нажатию.'));
 				navCard.appendChild(hint('Выбор устроен так же, как у основной секции: стратегии v1–v10 и Flowseal, дополнения, YouTube с QUIC, игры с Xtreme и Discord. Всё это действует только на устройства секции — основная стратегия не меняется.'));
 				navCard.appendChild(E('div', { 'class': 'zm-seg zm-seg-wrap zm-s2-nav' }, S2_TABS.map(function(t) {
 					return E('div', { 'class': 'zm-seg-item' + (t.id === s2Tab ? ' zm-active' : ''), 'click': function() {
@@ -46054,13 +46457,13 @@ return view.extend({
 			function subStrategy() {
 				var vg = E('div', { 'class': 'zm-grid zm-vgrid' });
 				for (var i = 1; i <= 10; i++) (function(id) {
-					vg.appendChild(tile(id, d.kind !== 'fs' && d.v === id, function() { pickSt('preset', id, 'Секция: ' + id + ' применена', 'zs2:preset:' + id); }));
+					vg.appendChild(tile(id, V().kind !== 'fs' && V().v === id, function() { pickSt('preset', id, 'Секция: ' + id + ' применена', 'zs2:preset:' + id); }));
 				})('v' + i);
 				subWrap.appendChild(E('div', { 'class': 'zm-card zm-vcard zm-s2' }, [ E('h3', {}, 'Стратегии v1 – v10'), vg,
 					hint('К стратегии v сами добавятся YouTube (Yv08) и Discord (Dv1), как в основной, — их можно сменить или выключить на соседних вкладках.') ]));
 				var fg = E('div', { 'class': 'zm-grid' });
 				(fsItems || []).forEach(function(it) {
-					var on = d.kind === 'fs' && d.fs === it.id;
+					var on = V().kind === 'fs' && V().fs === it.id;
 					fg.appendChild(tile(it.label, on, function() { if (on) return; pickSt('preset', 'fs:' + it.id, 'Секция: ' + it.label + ' применена', 'zs2:preset:fs:' + it.id); }));
 				});
 				if (!fsItems || !fsItems.length) fg.appendChild(hint(fsBusy ? 'Скачиваем список с GitHub… Пока он грузится, можно выбирать другие стратегии.'
@@ -46076,10 +46479,10 @@ return view.extend({
 			}
 
 			function subYoutube() {
-				var g = E('div', { 'class': 'zm-grid' }), off = d.yv === 'off' && !d.yv_cur, items = (ytList && ytList.items) || [];
+				var g = E('div', { 'class': 'zm-grid' }), off = V().yv === 'off' && !V().yv_cur, items = (ytList && ytList.items) || [];
 				g.appendChild(tile(off ? 'Выключена' : 'Выключить', off, function() { if (off) return; pickSt('yv', 'off', 'YouTube-стратегия секции выключена'); }));
 				items.forEach(function(it) {
-					var on = d.yv_cur === it.id;
+					var on = V().yv_cur === it.id;
 					g.appendChild(tile(it.id, on, function() { if (on) return; pickSt('yv', it.id, 'Секция: ' + it.id + ' применена', 'zs2:yv:' + it.id); }));
 				});
 				if (!items.length) g.appendChild(hint(ytBusy ? 'Загружаем список…' : 'Список пуст — нажмите «Обновить список».'));
@@ -46089,7 +46492,7 @@ return view.extend({
 					hint('Меняет только YouTube-часть стратегии секции. «Выключить» убирает её совсем — например, если YouTube у этих устройств идёт через ByeTube или Steer.') ]));
 				var quic = H('quic'), ipid = H('ipid') || X('ipid') === 'on';
 				var qk = [ xRow('quic', quic, 'QUIC для YouTube', 'Браузеры и приложение YouTube часто грузят видео по QUIC (UDP 443), а не по TCP. Этот блок обходит блокировку и для QUIC у устройств секции.') ];
-				if (d.quic_blocked) qk.push(E('p', { 'class': 'zm-hint zm-ab-warn' }, quic
+				if (V().quic_blocked) qk.push(E('p', { 'class': 'zm-hint zm-ab-warn' }, quic
 					? 'QUIC сейчас заблокирован на странице «Система» — блок не работает, пока блокировка включена.'
 					: 'QUIC сейчас заблокирован на странице «Система» — YouTube и так идёт по TCP, блок не нужен.'));
 				qk.push(xRow('ipid', ipid, 'Блок --ip-id=zero', 'Маскировка подменных пакетов: добавляет --ip-id=zero в YouTube-часть стратегии секции. Попробуйте, если YouTube плохо грузится.'));
@@ -46098,34 +46501,34 @@ return view.extend({
 			}
 
 			function subGame() {
-				var g = E('div', { 'class': 'zm-grid' }), fg = E('div', { 'class': 'zm-grid' }), off = !d.gv_active;
+				var g = E('div', { 'class': 'zm-grid' }), fg = E('div', { 'class': 'zm-grid' }), off = !V().gv_active;
 				g.appendChild(tile(off ? 'Выключена' : 'Выключить', off, function() { if (off) return; pickSt('gv', 'off', 'Игровая стратегия секции выключена'); }));
 				[1, 2, 3, 4].forEach(function(n) {
-					var on = !!d.gv_active && d.gv_cur === 'Gv' + n;
+					var on = !!V().gv_active && V().gv_cur === 'Gv' + n;
 					g.appendChild(tile('Gv' + n, on, function() { if (on) return; pickSt('gv', String(n), 'Секция: Gv' + n + ' применена', 'zs2:gv:' + n); }));
 				});
 				GAME_FAKES.forEach(function(f) {
-					var on = d.gv_fake === f;
+					var on = V().gv_fake === f;
 					fg.appendChild(tile(f, on, function() { if (on) return; pickSt('gfake', f, f + ' установлен в секции'); }));
 				});
 				subWrap.appendChild(card('Игровая стратегия', [ g,
 					hint('«Выключить» убирает игровую часть из стратегии секции. Порты игр сами добавятся в общие «Порты для Zapret» (если они не заданы вручную), а обрабатываться игровая часть будет только у устройств секции.') ]));
 				var xt = H('xt');
-				var xk = [ xRow('xt', xt, 'Режим Xtreme', 'Игровая часть секции ловит все порты 80, 88 и 444–65535 — для игр, которым не хватает обычных портов. Эти порты добавятся в общие «Порты для Zapret», поэтому роутер будет обрабатывать больше трафика.', !d.gv_active && !xt) ];
-				if (!d.gv_active && !xt) xk.push(hint(X('xt') === 'on' ? 'Xtreme включится сам, когда вы выберете игровую стратегию.' : 'Сначала выберите игровую стратегию Gv выше.'));
+				var xk = [ xRow('xt', xt, 'Режим Xtreme', 'Игровая часть секции ловит все порты 80, 88 и 444–65535 — для игр, которым не хватает обычных портов. Эти порты добавятся в общие «Порты для Zapret», поэтому роутер будет обрабатывать больше трафика.', !V().gv_active && !xt) ];
+				if (!V().gv_active && !xt) xk.push(hint(X('xt') === 'on' ? 'Xtreme включится сам, когда вы выберете игровую стратегию.' : 'Сначала выберите игровую стратегию Gv выше.'));
 				subWrap.appendChild(card('Xtreme', xk));
 				subWrap.appendChild(card('Fake-файл для игровой стратегии', [ fg, hint('Работает, только когда в секции выбрана игровая стратегия.') ]));
 			}
 
 			function subDiscord() {
-				var g = E('div', { 'class': 'zm-grid' }), fg = E('div', { 'class': 'zm-grid' }), off = !d.dv_active;
+				var g = E('div', { 'class': 'zm-grid' }), fg = E('div', { 'class': 'zm-grid' }), off = !V().dv_active;
 				g.appendChild(tile(off ? 'Выключена' : 'Выключить', off, function() { if (off) return; pickSt('dv', 'off', 'Стратегия Discord в секции выключена'); }));
 				for (var i = 1; i <= 17; i++) (function(n) {
-					var on = !!d.dv_active && d.dv_cur === 'Dv' + n;
+					var on = !!V().dv_active && V().dv_cur === 'Dv' + n;
 					g.appendChild(tile('Dv' + n, on, function() { if (on) return; pickSt('dv', String(n), 'Секция: Dv' + n + ' применена', 'zs2:dv:' + n); }));
 				})(i);
 				GAME_FAKES.forEach(function(f) {
-					var on = !!d.dv_active && d.dv_fake === f;
+					var on = !!V().dv_active && V().dv_fake === f;
 					fg.appendChild(tile(f, on, function() { if (on) return; pickSt('dfake', f, f + ' установлен в секции'); }));
 				});
 				subWrap.appendChild(card('Стратегия для Discord', [ g,
@@ -46143,7 +46546,7 @@ return view.extend({
 
 			function renderSub() {
 				subWrap.innerHTML = '';
-				if (!d || d.installed === false) return;
+				if (!d || V().installed === false) return;
 				if (s2Tab === 'strategy') subStrategy();
 				else if (s2Tab === 'editor') subEditor();
 				else if (!hasOpt()) subWrap.appendChild(card(s2Tab === 'youtube' ? 'Стратегии для YouTube' : s2Tab === 'game' ? 'Игровая стратегия' : 'Стратегия для Discord',
@@ -46160,15 +46563,15 @@ return view.extend({
 				return zm.exclusionsStatus().then(function(r) { devList = r || {}; renderDevs(); if (toast) zm.toast('Список устройств обновлён', 'info'); }, function() {});
 			}
 			function load() {
-				if (busy) return Promise.resolve();
+				if (busy || pvBusy) return Promise.resolve();
 				return Promise.all([ zm.zsec2Status(), zm.exclusionsStatus().catch(function() { return null; }), zm.strategyListFlowseal('cached').catch(function() { return null; }) ]).then(function(rs) {
-					if (busy) return;
+					if (busy || pvBusy) return;
 					var r = rs[0];
 					if (!r || r.error) { loadErr = (r && r.error) || 'Роутер не ответил'; renderAll(); return; }
 					loadErr = ''; d = r;
 					if (rs[1] && !rs[1].error) devList = rs[1];
 					fsItems = rs[2] && rs[2].items ? rs[2].items : fsItems;
-					if (!optBar.dirty()) optBar.reset(String(r.opt || '').replace(/\n+$/, ''));
+					if (!optBar.dirty()) optBar.reset(String(V().opt || '').replace(/\n+$/, ''));
 					renderAll();
 					if (rs[2] && rs[2].running && !fsBusy) fsFollow();
 					if (s2Tab === 'youtube') ytLoad();
@@ -46179,1273 +46582,11 @@ return view.extend({
 			refreshers.section2 = function() { if (activeTab === 'section2') load(); };
 		})();
 
-		(function buildConverterPanel() {
-			var P = panels.converter;
-			var ZMCV = (function() {
-				var Z1D = '/opt/zapret', Z2D = '/opt/zapret2';
-				var MK_TLS = { host: 1, endhost: 1, sld: 1, endsld: 1, midsld: 1, sniext: 1 };
-				var MK_HTTP = { method: 1, host: 1, endhost: 1, sld: 1, endsld: 1, midsld: 1 };
-				var MK_Z1 = { method: 1, host: 1, endhost: 1, sld: 1, endsld: 1, midsld: 1, sniext: 1 };
-				var MK_Z2 = { method: 1, host: 1, endhost: 1, sld: 1, endsld: 1, midsld: 1, sniext: 1, extlen: 1 };
-				var L7_Z1 = { http: 1, tls: 1, quic: 1, wireguard: 1, dht: 1, discord: 1, stun: 1, unknown: 1 };
-				var L7_Z2 = { all: 1, unknown: 1, known: 1, http: 1, tls: 1, dtls: 1, quic: 1, wireguard: 1, dht: 1, discord: 1, stun: 1, xmpp: 1, dns: 1, mtproto: 1, bt: 1, utp_bt: 1 };
-				var PL_Z2 = { all: 1, unknown: 1, empty: 1, known: 1, ipv4: 1, ipv6: 1, icmp: 1, http_req: 1, http_reply: 1, tls_client_hello: 1, tls_server_hello: 1, dtls_client_hello: 1, dtls_server_hello: 1, quic_initial: 1,
-					wireguard_initiation: 1, wireguard_response: 1, wireguard_cookie: 1, wireguard_keepalive: 1, wireguard_data: 1, dht: 1, discord_ip_discovery: 1, stun: 1, xmpp_stream: 1, xmpp_starttls: 1, xmpp_proceed: 1, xmpp_features: 1,
-					dns_query: 1, dns_response: 1, mtproto_initial: 1, bt_handshake: 1, utp_bt_handshake: 1 };
-				var G = {
-					tls: { l4: 'tcp', pl: 'tls_client_hello', l7: 'tls', fake: 'tls', name: 'TLS' },
-					http: { l4: 'tcp', pl: 'http_req', l7: 'http', fake: 'http', name: 'HTTP' },
-					utcp: { l4: 'tcp', pl: 'unknown', l7: 'unknown', fake: 'unknown', name: 'другие TCP' },
-					quic: { l4: 'udp', pl: 'quic_initial', l7: 'quic', fake: 'quic', name: 'QUIC' },
-					wg: { l4: 'udp', pl: 'wireguard_initiation', l7: 'wireguard', fake: 'wireguard', name: 'WireGuard' },
-					dht: { l4: 'udp', pl: 'dht', l7: 'dht', fake: 'dht', name: 'DHT' },
-					discord: { l4: 'udp', pl: 'discord_ip_discovery', l7: 'discord', fake: 'discord', name: 'Discord' },
-					stun: { l4: 'udp', pl: 'stun', l7: 'stun', fake: 'stun', name: 'STUN' },
-					uudp: { l4: 'udp', pl: 'unknown', l7: 'unknown', fake: 'unknown-udp', name: 'другие UDP' }
-				};
-				var GTCP = [ 'tls', 'http', 'utcp' ], GUDP = [ 'quic', 'wg', 'dht', 'discord', 'stun', 'uudp' ];
-				var Z64 = '0x' + new Array(129).join('0');
-				var FAKE_OPT = { tls: 'tls', http: 'http', unknown: 'utcp', quic: 'quic', wireguard: 'wg', dht: 'dht', discord: 'discord', stun: 'stun', 'unknown-udp': 'uudp' };
-
-				function has(o, k) { return Object.prototype.hasOwnProperty.call(o, k); }
-				function uniq(a) { var s = {}, r = []; a.forEach(function(x) { if (!s[x]) { s[x] = 1; r.push(x); } }); return r; }
-				function esc(x) { return String(x).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
-				function base(p) { return String(p).replace(/^.*\//, ''); }
-				function norm(n) { return String(n).toLowerCase().replace(/[-_]/g, ''); }
-				function blobName(file) { return 'blob_' + base(file).replace(/\.bin$/i, '').replace(/[^A-Za-z0-9]/g, '_'); }
-				function shortPorts(v) { var a = String(v).split(','); return a.length > 3 ? a.slice(0, 3).join(',') + ' +' + (a.length - 3) : v; }
-				function isInt(v) { return /^[-+]?\d+$/.test(String(v)); }
-				function isHex(v) { return /^0x[0-9a-fA-F]+$/.test(String(v)); }
-				function isNum(v) { return isInt(v) || isHex(v); }
-
-				function tokenize(text) {
-					var lines = String(text || '').replace(/\r/g, '').split('\n'), toks = [];
-					lines.forEach(function(raw, i) {
-						var s = raw.replace(/^\s+|\s+$/g, ''), ln = i + 1;
-						if (!s) return;
-						s = s.replace(/^option\s+(NFQWS2?_OPT|script)\s+'/, '').replace(/^(NFQWS2?_OPT)="/, '');
-						if (s === "'" || s === '"') return;
-						if (/^#/.test(s)) { toks.push({ c: s.replace(/^#\s*/, ''), line: ln }); return; }
-						var cur = '', q = '', st = -1;
-						for (var k = 0; k <= s.length; k++) {
-							var ch = k < s.length ? s.charAt(k) : ' ';
-							if (q) { cur += ch; if (ch === q) q = ''; continue; }
-							if (ch === "'" || ch === '"') { if (st < 0) st = k; cur += ch; q = ch; continue; }
-							if (/\s/.test(ch)) { if (cur) toks.push({ t: cur, line: ln, col: st }); cur = ''; st = -1; continue; }
-							if (st < 0) st = k;
-							cur += ch;
-						}
-					});
-					toks.forEach(function(t, i) {
-						t.id = i;
-						if (!t.t) return;
-						var m = /^(.*?)['"]$/.exec(t.t);
-						if (m && !/['"]/.test(m[1]) && /^--/.test(m[1])) t.t = m[1];
-						var o = /^--([A-Za-z0-9-]+)(?:=([\s\S]*))?$/.exec(t.t);
-						if (o) { t.k = o[1]; t.v = o[2]; t.hasV = o[2] !== undefined; }
-					});
-					return toks;
-				}
-
-				function profiles(toks) {
-					var ps = [], cur = null, pend = null;
-					function open(line) { cur = { name: pend || '', toks: [], line: line }; pend = null; ps.push(cur); }
-					toks.forEach(function(t) {
-						if (t.c !== undefined) { if (cur && cur.toks.length) pend = t.c; else if (cur) cur.name = cur.name || t.c; else pend = t.c; return; }
-						if (t.k === 'new') { if (!cur) open(t.line); cur.newTok = t; cur = null; if (t.v) pend = t.v; return; }
-						if (!cur) open(t.line);
-						cur.toks.push(t);
-					});
-					return ps.filter(function(p) { return p.toks.length || p.name; });
-				}
-
-				function Out(toks) { this.lines = []; this.issues = []; this.profiles = []; this.toks = toks; }
-				Out.prototype.line = function(text, src, mark, prof, kind) { this.lines.push({ text: text, src: src || [], mark: mark || '', prof: prof, kind: kind || '' }); return this.lines.length; };
-				Out.prototype.issue = function(lvl, title, text, src, extra) {
-					var key = lvl + '|' + title + '|' + text;
-					for (var i = 0; i < this.issues.length; i++) if (this.issues[i].key === key) { this.issues[i].src = uniq(this.issues[i].src.concat(src || [])); return this.issues[i]; }
-					var it = { key: key, lvl: lvl, title: title, text: text, src: src || [], dst: [] };
-					if (extra) for (var k in extra) it[k] = extra[k];
-					this.issues.push(it);
-					return it;
-				};
-
-				function portsOk(v) { return v === '*' || /^~?\d{1,5}(-\d{1,5})?(,~?\d{1,5}(-\d{1,5})?)*$/.test(v); }
-				function portsOnly(v, set) {
-					if (!v || v === '*' || /~/.test(v)) return false;
-					return v.split(',').every(function(p) { return set[p] === 1; });
-				}
-				function markersOk(v, set) {
-					return String(v).split(',').every(function(m) {
-						if (/^-?\d+$/.test(m)) return true;
-						var r = /^([a-z]+)([+-]\d+)?$/.exec(m);
-						return !!(r && set[r[1]]);
-					});
-				}
-				function rangeZ1(v) { return /^[nds]\d+$/.test(v); }
-
-				function envFile(env, ver, kind, name) {
-					if (!env || !env[ver] || !env[ver][kind]) return null;
-					return env[ver][kind].indexOf(name) >= 0;
-				}
-				function envMatch(env, ver, kind, name) {
-					if (!env || !env[ver] || !env[ver][kind]) return null;
-					if (env[ver][kind].indexOf(name) >= 0) return name;
-					var n = norm(name);
-					for (var i = 0; i < env[ver][kind].length; i++) if (norm(env[ver][kind][i]) === n) return env[ver][kind][i];
-					return '';
-				}
-
-				function mapPath(o, env, path, from, to, src, what) {
-					var p = String(path), fromD = from === 'z1' ? Z1D : Z2D, toD = to === 'z1' ? Z1D : Z2D;
-					var m = new RegExp('^' + fromD.replace(/\//g, '\\/') + '\\/(ipset|files\\/fake)\\/([^/]+)$').exec(p);
-					if (!m) {
-						if (p.indexOf(fromD + '/') === 0) {
-							o.issue('warn', 'Путь не перенесён', 'Файл ' + p + ' лежит вне стандартных папок — проверьте, есть ли он у ' + (to === 'z1' ? 'Zapret' : 'Zapret2') + '.', src);
-						}
-						return p;
-					}
-					var kind = m[1] === 'ipset' ? 'ipset' : 'fake', name = m[2];
-					var got = envMatch(env, to, kind, name);
-					if (got === null) return toD + '/' + m[1] + '/' + name;
-					if (got) {
-						if (got !== name) o.issue('info', 'Список назван иначе', name + ' → ' + got + ' — в ' + (to === 'z1' ? 'Zapret' : 'Zapret2') + ' он называется так.', src);
-						return toD + '/' + m[1] + '/' + got;
-					}
-					var inFrom = envFile(env, from, kind, name);
-					o.lastMiss = o.issue('err', (kind === 'fake' ? 'Нет fake-файла ' : 'Нет списка ') + name,
-						'В ' + toD + '/' + m[1] + ' его нет' + (inFrom ? ' — можно скопировать из ' + (from === 'z1' ? 'Zapret' : 'Zapret2') + '.' : ', и в ' + fromD + ' тоже.'), src,
-						inFrom ? { fix: { act: 'copy', kind: kind, name: name, dir: to === 'z1' ? 'to1' : 'to2' }, fixLabel: 'Скопировать' } : null);
-					return toD + '/' + m[1] + '/' + name;
-				}
-
-				function z1attl(v, d0, mn0, mx0) {
-					if (v === '-' || v === '0:0-0') return null;
-					var neg = true, s = String(v === undefined || v === null ? '' : v);
-					if (!s) return { d: d0, mn: mn0, mx: mx0 };
-					if (s.charAt(0) === '+') { neg = false; s = s.slice(1); } else if (s.charAt(0) === '-') s = s.slice(1);
-					var m = /^(\d+)(?::(\d+)(?:-(\d+))?)?$/.exec(s);
-					if (!m) return false;
-					var d = +m[1];
-					return { d: neg ? -d : d, mn: m[2] !== undefined ? +m[2] : mn0, mx: m[3] !== undefined ? +m[3] : mx0 };
-				}
-				function attl2(a) { return a.d + ',' + a.mn + '-' + a.mx; }
-				function attl1(s) {
-					var m = /^([-+]?)(\d+),(\d+)-(\d+)$/.exec(String(s));
-					if (!m) return null;
-					return (m[1] === '-' ? '-' : (+m[2] === 0 && m[1] !== '+' ? '-' : '+')) + m[2] + ':' + m[3] + '-' + m[4];
-				}
-
-				var Z1_PASS = { 'filter-tcp': 1, 'filter-udp': 1, 'filter-l3': 1, 'filter-l7': 1, 'filter-ssid': 1, hostlist: 1, 'hostlist-domains': 1, 'hostlist-exclude': 1, 'hostlist-exclude-domains': 1,
-					'hostlist-auto': 1, 'hostlist-auto-fail-threshold': 1, 'hostlist-auto-fail-time': 1, 'hostlist-auto-retrans-threshold': 1, 'hostlist-auto-debug': 1, ipset: 1, 'ipset-ip': 1, 'ipset-exclude': 1, 'ipset-exclude-ip': 1, skip: 1 };
-				var GLOB_PASS = { 'ctrack-timeouts': 1, 'ctrack-disable': 1, 'ipcache-lifetime': 1, 'ipcache-hostname': 1, debug: 1, 'bind-fix4': 1, 'bind-fix6': 1, comment: 1 };
-				var SERVICE = { qnum: 1, daemon: 1, pidfile: 1, user: 1, uid: 1, version: 1, 'dry-run': 1 };
-				var PATH_OPT = { hostlist: 1, 'hostlist-exclude': 1, 'hostlist-auto': 1, ipset: 1, 'ipset-exclude': 1 };
-				var Z1_MODES = { synack: 0, syndata: 0, fake: 1, fakeknown: 1, rst: 1, rstack: 1, hopbyhop: 1, destopt: 1, ipfrag1: 1,
-					multisplit: 2, split2: 2, multidisorder: 2, disorder2: 2, fakedsplit: 2, split: 2, fakeddisorder: 2, disorder: 2, hostfakesplit: 2, ipfrag2: 2, udplen: 2, tamper: 2 };
-				var Z1_ALIAS = { split2: 'multisplit', disorder2: 'multidisorder', split: 'fakedsplit', disorder: 'fakeddisorder' };
-				var Z1_FOOL = { none: 1, md5sig: 1, badseq: 1, badsum: 1, datanoack: 1, ts: 1, hopbyhop: 1, hopbyhop2: 1 };
-				var Z1_TLSMOD = /^(none|rnd|rndsni|dupsid|padencap|sni=[^,]{1,63})$/;
-
-				function z1Blob(o, env, val, src, used) {
-					var v = String(val);
-					if (isHex(v)) return v;
-					var m = /^(\+(\d+))?@?(.+)$/.exec(v);
-					var ofs = m && m[2] ? m[2] : '', file = m ? m[3] : v;
-					if (file.charAt(0) !== '/') { o.issue('warn', 'Относительный путь к файлу', file + ' — укажите полный путь, иначе Zapret2 может его не найти.', src); }
-					o.lastMiss = null;
-					var p = mapPath(o, env, file, 'z1', 'z2', src);
-					var nm = blobName(p) + (ofs ? '_o' + ofs : '');
-					if (o.lastMiss) o.lastMiss.at = new RegExp(esc(nm) + '|' + esc(base(p)));
-					used[nm] = { name: nm, path: p, ofs: ofs, src: src };
-					return nm;
-				}
-
-				function z1to2(text, env, opts) {
-					opts = opts || {};
-					var toks = tokenize(text), o = new Out(toks), ps = profiles(toks), blobs = {}, globals = [], pIdx = 0;
-					if (!toks.some(function(t) { return t.k; })) { o.empty = true; return o; }
-					var built = [];
-					ps.forEach(function(p) {
-						var P = { name: p.name, filters: [], tcp: null, udp: null, l7: null, l3: null, modes: [], modeSrc: [], fool: [], foolSrc: [], fakes: {}, tlsModLast: null, tlsModSet: false, lastTls: null, src: [], anyProto: false, flt: [], line: p.line, lists: [] };
-						var V = {};
-						p.toks.forEach(function(t) {
-							var src = [ t.id ];
-							P.src.push(t.id);
-							if (!t.k) {
-								if (/^<[A-Z_]+>$/.test(t.t)) { P.filters.push({ text: t.t, src: src }); P.lists.push(t.t); return; }
-								o.issue('err', 'Непонятный фрагмент', '«' + t.t + '» — это не параметр nfqws.', src);
-								return;
-							}
-							var k = t.k, v = t.v;
-							if (Z1_PASS[k]) {
-								if ((k === 'filter-tcp' || k === 'filter-udp') && !portsOk(v)) o.issue('err', 'Неверные порты', k + '=' + v, src);
-								if (k === 'filter-tcp') P.tcp = (P.tcp ? P.tcp + ',' : '') + v;
-								if (k === 'filter-udp') P.udp = (P.udp ? P.udp + ',' : '') + v;
-								if (k === 'filter-l3') P.l3 = v;
-								if (k === 'filter-l7') {
-									var bad = String(v).split(',').filter(function(x) { return !L7_Z1[x]; });
-									if (bad.length) o.issue('err', 'Неизвестный протокол', '--filter-l7: ' + bad.join(', '), src);
-									P.l7 = (P.l7 || []).concat(String(v).split(','));
-								}
-								var val = v;
-								if (PATH_OPT[k] && v) { val = mapPath(o, env, v, 'z1', 'z2', src); P.lists.push(base(val)); }
-								P.filters.push({ text: '--' + k + (t.hasV ? '=' + val : ''), src: src, changed: val !== v });
-								return;
-							}
-							if (GLOB_PASS[k]) { globals.push({ text: t.t, src: src }); return; }
-							if (SERVICE[k]) { o.issue('info', 'Служебный параметр убран', '--' + k + ' служба Zapret2 задаёт сама.', src); return; }
-							if (k === 'dpi-desync-fwmark') { o.issue('info', 'Служебный параметр убран', '--dpi-desync-fwmark в Zapret2 называется --fwmark и задаётся службой.', src); return; }
-							if (k === 'dpi-desync') {
-								String(v || '').split(',').forEach(function(m) {
-									if (!has(Z1_MODES, m)) { o.issue('err', 'Неизвестный режим ' + m, '--dpi-desync=' + m + ' в Zapret нет.', src); return; }
-									if (Z1_ALIAS[m]) o.issue('info', 'Старое имя режима', m + ' — это ' + Z1_ALIAS[m] + ' (так он называется в обеих версиях).', src);
-									P.modes.push(Z1_ALIAS[m] || m); P.modeSrc.push(t.id);
-								});
-								return;
-							}
-							if (k === 'dpi-desync-fooling') {
-								String(v || '').split(',').forEach(function(f) {
-									if (!Z1_FOOL[f]) o.issue('err', 'Неизвестный fooling ' + f, '--dpi-desync-fooling=' + f + ' в Zapret нет.', src);
-									else if (f !== 'none') { P.fool.push(f); P.foolSrc.push(t.id); }
-								});
-								return;
-							}
-							var fm = /^dpi-desync-fake-(tls|http|unknown|syndata|quic|wireguard|dht|discord|stun|unknown-udp)$/.exec(k);
-							if (fm) {
-								var kind = fm[1];
-								if (!v) { o.issue('err', 'Пустой fake', '--' + k + ' без значения.', src); return; }
-								var entry;
-								if (kind === 'tls' && /^!/.test(v)) entry = { def: true, src: src };
-								else entry = { val: v, src: src };
-								if (kind === 'tls') { entry.mod = P.tlsModSet ? P.tlsModLast : null; P.lastTls = entry; }
-								(P.fakes[kind] = P.fakes[kind] || []).push(entry);
-								return;
-							}
-							if (k === 'dpi-desync-fake-tls-mod') {
-								var mods = String(v || '').split(',');
-								if (!mods.every(function(x) { return Z1_TLSMOD.test(x); })) o.issue('err', 'Неверный tls-mod', v, src);
-								P.tlsModLast = mods.filter(function(x) { return x !== 'none'; }).join(','); P.tlsModSet = true;
-								if (P.lastTls) P.lastTls.mod = P.tlsModLast;
-								return;
-							}
-							V[k] = { v: v, src: src, hasV: t.hasV };
-						});
-						built.push({ P: P, V: V, p: p });
-					});
-
-					function vget(V, k) { return V[k] ? V[k].v : undefined; }
-					function vsrc(V, k) { return V[k] ? V[k].src : []; }
-					var KNOWN_REST = { 'dpi-desync-ttl': 1, 'dpi-desync-ttl6': 1, 'dpi-desync-autottl': 1, 'dpi-desync-autottl6': 1, 'dpi-desync-tcp-flags-set': 1, 'dpi-desync-tcp-flags-unset': 1,
-						'dpi-desync-repeats': 1, 'dpi-desync-skip-nosni': 1, 'dpi-desync-split-pos': 1, 'dpi-desync-split-seqovl': 1, 'dpi-desync-split-seqovl-pattern': 1, 'dpi-desync-fakedsplit-pattern': 1,
-						'dpi-desync-fakedsplit-mod': 1, 'dpi-desync-hostfakesplit-midhost': 1, 'dpi-desync-hostfakesplit-mod': 1, 'dpi-desync-ipfrag-pos-tcp': 1, 'dpi-desync-ipfrag-pos-udp': 1,
-						'dpi-desync-ts-increment': 1, 'dpi-desync-badseq-increment': 1, 'dpi-desync-badack-increment': 1, 'dpi-desync-any-protocol': 1, 'dpi-desync-fake-tcp-mod': 1,
-						'dpi-desync-udplen-increment': 1, 'dpi-desync-udplen-pattern': 1, 'dpi-desync-start': 1, 'dpi-desync-cutoff': 1, wsize: 1, wssize: 1, 'wssize-cutoff': 1, 'wssize-forced-cutoff': 1,
-						'synack-split': 1, 'orig-ttl': 1, 'orig-ttl6': 1, 'orig-autottl': 1, 'orig-autottl6': 1, 'orig-tcp-flags-set': 1, 'orig-tcp-flags-unset': 1, 'orig-mod-start': 1, 'orig-mod-cutoff': 1,
-						dup: 1, 'dup-replace': 1, 'dup-ttl': 1, 'dup-ttl6': 1, 'dup-autottl': 1, 'dup-autottl6': 1, 'dup-tcp-flags-set': 1, 'dup-tcp-flags-unset': 1, 'dup-fooling': 1, 'dup-ts-increment': 1,
-						'dup-badseq-increment': 1, 'dup-badack-increment': 1, 'dup-ip-id': 1, 'dup-start': 1, 'dup-cutoff': 1, hostcase: 1, hostnospace: 1, methodeol: 1, hostspell: 1, domcase: 1, 'ip-id': 1 };
-
-					built.forEach(function(b, bi) {
-						var P = b.P, V = b.V, pi = pIdx++, L = [], curPl = 'all';
-						Object.keys(V).forEach(function(k) { if (!KNOWN_REST[k]) o.issue('err', 'Неизвестный параметр', '--' + k + ' — в Zapret такого нет, перевести нельзя.', V[k].src); });
-
-						function num(k, lo, hi) {
-							var x = vget(V, k);
-							if (x === undefined) return undefined;
-							if (!isNum(x) || (lo !== undefined && +x < lo) || (hi !== undefined && +x > hi)) { o.issue('err', 'Неверное значение', '--' + k + '=' + x, vsrc(V, k)); return undefined; }
-							return x;
-						}
-						var ttl = num('dpi-desync-ttl', 0, 255), ttl6 = num('dpi-desync-ttl6', 0, 255);
-						var at = V['dpi-desync-autottl'] ? z1attl(vget(V, 'dpi-desync-autottl'), -1, 3, 20) : null;
-						var at6 = V['dpi-desync-autottl6'] ? z1attl(vget(V, 'dpi-desync-autottl6'), -1, 3, 20) : undefined;
-						if (at === false) { o.issue('err', 'Неверный autottl', String(vget(V, 'dpi-desync-autottl')), vsrc(V, 'dpi-desync-autottl')); at = null; }
-						if (at6 === false) { o.issue('err', 'Неверный autottl6', String(vget(V, 'dpi-desync-autottl6')), vsrc(V, 'dpi-desync-autottl6')); at6 = undefined; }
-						var rep = num('dpi-desync-repeats', 1, 1000);
-						var seqInc = vget(V, 'dpi-desync-badseq-increment'), ackInc = vget(V, 'dpi-desync-badack-increment'), tsInc = vget(V, 'dpi-desync-ts-increment');
-						var fool = uniq(P.fool), foolSrc = uniq(P.foolSrc);
-
-						function foolArgs(l4) {
-							var a = [];
-							if (l4 === 'tcp') {
-								if (fool.indexOf('md5sig') >= 0) a.push('tcp_md5');
-								if (fool.indexOf('badseq') >= 0) {
-									var si = seqInc === undefined ? -10000 : seqInc, ai = ackInc === undefined ? -66000 : ackInc;
-									if (+si !== 0) a.push('tcp_seq=' + si);
-									if (+ai !== 0) a.push('tcp_ack=' + ai);
-									if (+si === 0 && +ai !== 0) a.push('tcp_ts_up');
-								}
-								if (fool.indexOf('ts') >= 0) a.push('tcp_ts=' + (tsInc === undefined ? -600000 : tsInc));
-								if (fool.indexOf('datanoack') >= 0) a.push('tcp_flags_unset=ACK');
-								if (V['dpi-desync-tcp-flags-set']) a.push('tcp_flags_set=' + vget(V, 'dpi-desync-tcp-flags-set'));
-								if (V['dpi-desync-tcp-flags-unset']) a.push('tcp_flags_unset=' + vget(V, 'dpi-desync-tcp-flags-unset'));
-							}
-							if (fool.indexOf('badsum') >= 0) a.push('badsum');
-							if (fool.indexOf('hopbyhop') >= 0) a.push('ip6_hopbyhop');
-							if (fool.indexOf('hopbyhop2') >= 0) a.push('ip6_hopbyhop', 'ip6_hopbyhop2');
-							if (ttl !== undefined && +ttl > 0) a.push('ip_ttl=' + ttl);
-							if (ttl6 !== undefined && +ttl6 > 0) a.push('ip6_ttl=' + ttl6); else if (ttl !== undefined && +ttl > 0) a.push('ip6_ttl=' + ttl);
-							if (at) a.push('ip_autottl=' + attl2(at));
-							if (at6) a.push('ip6_autottl=' + attl2(at6)); else if (at && at6 === undefined) a.push('ip6_autottl=' + attl2(at));
-							return uniq(a);
-						}
-						if (fool.indexOf('badseq') >= 0 && seqInc !== undefined && +seqInc === 0) o.issue('info', 'badseq без сдвига seq', 'Сдвигается только ack, поэтому добавлен tcp_ts_up — так Zapret2 ведёт себя как Zapret.', foolSrc.concat(vsrc(V, 'dpi-desync-badseq-increment')), { at: /tcp_ts_up/ });
-						var ipid = vget(V, 'ip-id');
-						if (ipid === 'seqgroup') { o.issue('warn', 'ip-id=seqgroup', 'В Zapret2 нет seqgroup — поставлен seq.', vsrc(V, 'ip-id')); ipid = 'seq'; }
-						function common(l4, withFool, withRep) {
-							var a = withFool ? foolArgs(l4) : [];
-							if (withRep && rep !== undefined && +rep > 1) a.push('repeats=' + rep);
-							if (ipid) a.push('ip_id=' + ipid);
-							return a;
-						}
-
-						var m0 = [], m1 = [], m2 = [];
-						P.modes.forEach(function(m, i) { (Z1_MODES[m] === 0 ? m0 : Z1_MODES[m] === 1 ? m1 : m2).push(m); });
-						[ [ m0, 'нулевой' ], [ m1, 'первой' ], [ m2, 'второй' ] ].forEach(function(x) {
-							if (x[0].length > 1) o.issue('err', 'Два режима одной фазы', x[0].join(' и ') + ' — в Zapret так нельзя, nfqws не запустится.', P.modeSrc);
-						});
-						var ph1 = m1[0], ph2 = m2[0], ph0 = m0[0];
-						if (!P.modes.length && (P.fool.length || Object.keys(P.fakes).length || V['dpi-desync-split-pos'])) o.issue('warn', 'Нет --dpi-desync', 'Параметры обхода есть, а режим не задан — профиль ничего не делает.', P.src);
-
-						var hasTcp = P.tcp !== null || P.udp === null, hasUdp = P.udp !== null || P.tcp === null;
-						var anyP = vget(V, 'dpi-desync-any-protocol');
-						var anyProto = anyP !== undefined && String(anyP) !== '0';
-						var groups = [];
-						if (hasTcp) {
-							var t = [ 'tls', 'http' ];
-							if (portsOnly(P.tcp, { '443': 1 })) t = [ 'tls' ];
-							else if (portsOnly(P.tcp, { '80': 1 })) t = [ 'http' ];
-							if (anyProto) t.push('utcp');
-							groups = groups.concat(t);
-						}
-						if (hasUdp) {
-							var u = portsOnly(P.udp, { '443': 1 }) ? [ 'quic' ] : [ 'quic', 'wg', 'dht', 'discord', 'stun' ];
-							if (anyProto) u.push('uudp');
-							groups = groups.concat(u);
-						}
-						if (P.l7) {
-							var l7s = {}; P.l7.forEach(function(x) { l7s[x] = 1; });
-							groups = groups.filter(function(g) { return l7s[G[g].l7]; });
-							if (l7s.unknown) { if (hasTcp && groups.indexOf('utcp') < 0) groups.push('utcp'); if (hasUdp && groups.indexOf('uudp') < 0) groups.push('uudp'); }
-						}
-						var tcpG = groups.filter(function(g) { return G[g].l4 === 'tcp'; }), udpG = groups.filter(function(g) { return G[g].l4 === 'udp'; });
-
-						var desc = [];
-						if (P.tcp !== null) desc.push('TCP ' + shortPorts(P.tcp));
-						if (P.udp !== null) desc.push('UDP ' + shortPorts(P.udp));
-						if (P.l7) desc.push(P.l7.join(', ').toUpperCase());
-						else if (groups.length && groups.length <= 2) desc.push(groups.map(function(g) { return G[g].name; }).join(', '));
-						if (P.lists.length) desc.push(P.lists[0] + (P.lists.length > 1 ? ' +' + (P.lists.length - 1) : ''));
-						o.profiles.push({ name: P.name, desc: desc.join(' · '), src: P.line });
-
-						P.filters.forEach(function(f) { L.push({ text: f.text, src: f.src, mark: f.changed ? 'n' : '', kind: 'f' }); });
-
-						var rng = '';
-						var dStart = vget(V, 'dpi-desync-start'), dCut = vget(V, 'dpi-desync-cutoff');
-						if (dStart !== undefined && !rangeZ1(dStart)) { o.issue('err', 'Неверный start', String(dStart), vsrc(V, 'dpi-desync-start')); dStart = undefined; }
-						if (dCut !== undefined && !rangeZ1(dCut)) { o.issue('err', 'Неверный cutoff', String(dCut), vsrc(V, 'dpi-desync-cutoff')); dCut = undefined; }
-						if (dStart || dCut) rng = (dStart || '') + (dCut ? '<' + dCut : '-');
-
-						if (V.wsize) {
-							var ws = String(vget(V, 'wsize')).split(':');
-							L.push({ text: '--in-range=-n1', src: vsrc(V, 'wsize'), mark: 'n', kind: 's' });
-							L.push({ text: '--lua-desync=wsize:wsize=' + ws[0] + (ws[1] !== undefined ? ':scale=' + ws[1] : ''), src: vsrc(V, 'wsize'), mark: 'w', kind: 's' });
-							L.push({ text: '--in-range=x', src: vsrc(V, 'wsize'), mark: 'n', kind: 's' });
-							o.issue('warn', '--wsize устарел', 'Переведён в wsize с перехватом входящего SYN,ACK. Автор советует заменить его нарезкой.', vsrc(V, 'wsize'), { at: /wsize/ });
-						}
-						if (V.wssize) {
-							var wss = String(vget(V, 'wssize')).split(':'), wc = vget(V, 'wssize-cutoff'), wf = vget(V, 'wssize-forced-cutoff');
-							if (wc !== undefined && !rangeZ1(wc)) { o.issue('err', 'Неверный wssize-cutoff', String(wc), vsrc(V, 'wssize-cutoff')); wc = undefined; }
-							if (wc) L.push({ text: '--out-range=<' + wc, src: vsrc(V, 'wssize-cutoff'), mark: '', kind: 's' });
-							L.push({ text: '--lua-desync=wssize:wsize=' + wss[0] + ':scale=' + (wss[1] !== undefined ? wss[1] : '0') + (wf !== undefined && String(wf) === '0' ? ':forced_cutoff=no' : ''), src: vsrc(V, 'wssize'), mark: '', kind: 's' });
-							if (wc) L.push({ text: '--out-range=a', src: vsrc(V, 'wssize-cutoff'), mark: 'n', kind: 's' });
-						}
-						if (V['synack-split']) {
-							var ssm = vget(V, 'synack-split') || 'synack';
-							if (!/^(syn|synack|acksyn)$/.test(ssm)) o.issue('err', 'Неверный synack-split', String(ssm), vsrc(V, 'synack-split'));
-							L.push({ text: '--lua-desync=synack_split' + (ssm !== 'synack' ? ':mode=' + ssm : ''), src: vsrc(V, 'synack-split'), mark: '', kind: 's' });
-						}
-						if (ph0 === 'synack') L.push({ text: [ '--lua-desync=synack' ].concat(common('tcp', true, true)).join(':'), src: P.modeSrc.concat(foolSrc), kind: 's' });
-						if (ph0 === 'syndata') {
-							var sd = P.fakes.syndata && P.fakes.syndata[0];
-							var sa = [ 'syndata' ];
-							if (sd) sa.push('blob=' + z1Blob(o, env, sd.val, sd.src, blobs));
-							sa = sa.concat(common('tcp', false, true));
-							L.push({ text: '--lua-desync=' + sa.join(':'), src: P.modeSrc.concat(sd ? sd.src : []), kind: 's' });
-						}
-						if (V['orig-ttl'] || V['orig-ttl6'] || V['orig-autottl'] || V['orig-autottl6'] || V['orig-tcp-flags-set'] || V['orig-tcp-flags-unset']) {
-							var oa = [];
-							if (V['orig-ttl']) { oa.push('ip_ttl=' + vget(V, 'orig-ttl')); if (!V['orig-ttl6']) oa.push('ip6_ttl=' + vget(V, 'orig-ttl')); }
-							if (V['orig-ttl6']) oa.push('ip6_ttl=' + vget(V, 'orig-ttl6'));
-							if (V['orig-autottl']) { var oat = z1attl(vget(V, 'orig-autottl'), 5, 3, 64); if (oat) { oa.push('ip_autottl=' + attl2(oat)); if (!V['orig-autottl6']) oa.push('ip6_autottl=' + attl2(oat)); } }
-							if (V['orig-autottl6']) { var oat6 = z1attl(vget(V, 'orig-autottl6'), 5, 3, 64); if (oat6) oa.push('ip6_autottl=' + attl2(oat6)); }
-							if (V['orig-tcp-flags-set']) oa.push('tcp_flags_set=' + vget(V, 'orig-tcp-flags-set'));
-							if (V['orig-tcp-flags-unset']) oa.push('tcp_flags_unset=' + vget(V, 'orig-tcp-flags-unset'));
-							var os = vget(V, 'orig-mod-start'), oc = vget(V, 'orig-mod-cutoff'), osrc = [];
-							[ 'orig-ttl', 'orig-ttl6', 'orig-autottl', 'orig-autottl6', 'orig-tcp-flags-set', 'orig-tcp-flags-unset', 'orig-mod-start', 'orig-mod-cutoff' ].forEach(function(k) { osrc = osrc.concat(vsrc(V, k)); });
-							if (os || oc) L.push({ text: '--out-range=' + (os || '') + (oc ? '<' + oc : '-'), src: osrc, kind: 's' });
-							L.push({ text: '--lua-desync=pktmod:' + oa.join(':'), src: osrc, mark: 'w', kind: 's' });
-							if (os || oc) L.push({ text: '--out-range=a', src: osrc, mark: 'n', kind: 's' });
-							o.issue('warn', 'Изменение оригинала (--orig-…)', 'Переведено в pktmod. Проверьте диапазон пакетов — без --orig-mod-cutoff он меняет каждый исходящий пакет.', osrc, { at: /pktmod/ });
-						}
-						if (V.dup) {
-							var dsrc = [];
-							Object.keys(V).forEach(function(k) { if (/^dup/.test(k)) dsrc = dsrc.concat(V[k].src); });
-							var da = [ 'send' ];
-							if (+vget(V, 'dup') > 1) da.push('repeats=' + vget(V, 'dup'));
-							if (V['dup-ttl']) da.push('ip_ttl=' + vget(V, 'dup-ttl'));
-							if (V['dup-ttl6']) da.push('ip6_ttl=' + vget(V, 'dup-ttl6'));
-							var dat = V['dup-autottl'] ? z1attl(vget(V, 'dup-autottl'), -1, 3, 64) : null;
-							if (dat) da.push('ip_autottl=' + attl2(dat));
-							String(vget(V, 'dup-fooling') || '').split(',').forEach(function(f) {
-								if (f === 'md5sig') da.push('tcp_md5'); else if (f === 'badsum') da.push('badsum');
-								else if (f === 'badseq') { da.push('tcp_seq=' + (vget(V, 'dup-badseq-increment') || -10000)); da.push('tcp_ack=' + (vget(V, 'dup-badack-increment') || -66000)); }
-								else if (f === 'ts') da.push('tcp_ts=' + (vget(V, 'dup-ts-increment') || -600000));
-								else if (f === 'datanoack') da.push('tcp_flags_unset=ACK');
-							});
-							if (V['dup-ip-id'] && vget(V, 'dup-ip-id') !== 'same') da.push('ip_id=' + vget(V, 'dup-ip-id'));
-							var ds = vget(V, 'dup-start'), dc = vget(V, 'dup-cutoff');
-							if (ds || dc) L.push({ text: '--out-range=' + (ds || '') + (dc ? '<' + dc : '-'), src: dsrc, kind: 's' });
-							L.push({ text: '--lua-desync=' + da.join(':'), src: dsrc, mark: 'w', kind: 's' });
-							if (V['dup-replace'] !== undefined && String(vget(V, 'dup-replace')) !== '0') L.push({ text: '--lua-desync=drop', src: dsrc, mark: 'w', kind: 's' });
-							if (ds || dc) L.push({ text: '--out-range=a', src: dsrc, mark: 'n', kind: 's' });
-							o.issue('warn', 'Дубликаты (--dup)', 'Переведены в send. Проверьте диапазон пакетов и fooling дубликатов.', dsrc, { at: /send|drop/ });
-						}
-
-						if (rng) L.push({ text: '--out-range=' + rng, src: vsrc(V, 'dpi-desync-start').concat(vsrc(V, 'dpi-desync-cutoff')), kind: 's' });
-
-						var httpMods = [];
-						if (V.hostcase || V.hostspell) httpMods.push({ t: 'http_hostcase' + (V.hostspell ? ':spell=' + vget(V, 'hostspell') : ''), s: vsrc(V, 'hostcase').concat(vsrc(V, 'hostspell')) });
-						if (V.domcase) httpMods.push({ t: 'http_domcase', s: vsrc(V, 'domcase') });
-						if (V.methodeol) httpMods.push({ t: 'http_methodeol', s: vsrc(V, 'methodeol') });
-						if (V.hostnospace) o.issue('err', '--hostnospace', 'В Zapret2 нет такого приёма — параметр убран.', vsrc(V, 'hostnospace'));
-						if (httpMods.length && hasTcp) {
-							L.push({ text: '--payload=http_req', src: httpMods[0].s, mark: 'n', kind: 's' }); curPl = 'http_req';
-							httpMods.forEach(function(h) { L.push({ text: '--lua-desync=' + h.t, src: h.s, kind: 's' }); });
-						}
-
-						function emit(sets, src) {
-							var order = [], byKey = {};
-							sets.forEach(function(s) { if (!s.lines.length) return; var key = s.lines.map(function(l) { return l.text; }).join('\n'); if (!byKey[key]) { byKey[key] = { pls: [], lines: s.lines }; order.push(key); } byKey[key].pls.push(G[s.g].pl); });
-							order.forEach(function(key) {
-								var b = byKey[key], plv = uniq(b.pls).join(',');
-								if (plv !== curPl) { L.push({ text: '--payload=' + plv, src: src, mark: 'n', kind: 's', added: true }); curPl = plv; }
-								var unk = uniq(b.pls).indexOf('unknown') >= 0;
-								b.lines.forEach(function(l) {
-									if (unk && /^--lua-desync=(fake|rst|multisplit|multidisorder|fakedsplit|fakeddisorder|hostfakesplit|udplen):/.test(l.text + ':')) { var c = {}; for (var q in l) c[q] = l[q]; c.text = l.text + ':payload=' + plv; c.unk = true; L.push(c); }
-									else L.push(l);
-								});
-							});
-						}
-
-						if (V['dpi-desync-skip-nosni'] && String(vget(V, 'dpi-desync-skip-nosni')) === '0') o.issue('warn', '--dpi-desync-skip-nosni=0', 'В Zapret2 такого параметра нет — убран.', vsrc(V, 'dpi-desync-skip-nosni'));
-						if (V['dpi-desync-fake-tcp-mod'] && /seq/.test(vget(V, 'dpi-desync-fake-tcp-mod'))) o.issue('warn', '--dpi-desync-fake-tcp-mod=seq', 'В Zapret2 аналога нет — несколько fake пойдут с одним seq.', vsrc(V, 'dpi-desync-fake-tcp-mod'));
-
-						if (ph1 === 'fake' || ph1 === 'fakeknown' || ph1 === 'rst' || ph1 === 'rstack') {
-							var sets1 = [];
-							groups.forEach(function(g) {
-								if (ph1 === 'fakeknown' && (g === 'utcp' || g === 'uudp')) return;
-								var lines = [];
-								if (ph1 === 'rst' || ph1 === 'rstack') {
-									if (G[g].l4 !== 'tcp') return;
-									lines.push({ text: '--lua-desync=' + [ 'rst' ].concat(ph1 === 'rstack' ? [ 'rstack' ] : []).concat(common('tcp', true, true)).join(':'), src: P.modeSrc.concat(foolSrc), kind: 's' });
-								} else {
-									var fk = G[g].fake, list = P.fakes[fk];
-									if (!list || !list.length) {
-										var dv;
-										if (fk === 'tls') dv = { def: true, mod: P.tlsModSet ? P.tlsModLast : 'rnd,rndsni,dupsid' };
-										else if (fk === 'http') dv = { blob: 'fake_default_http' };
-										else if (fk === 'quic') dv = { blob: 'fake_default_quic' };
-										else if (fk === 'unknown') dv = { val: Z1D + '/files/fake/zero_256.bin', src: P.modeSrc, auto: true };
-										else dv = { z64: true };
-										list = [ dv ];
-									}
-									list.forEach(function(f) {
-										var bl;
-										if (f.def) bl = 'fake_default_tls';
-										else if (f.blob) bl = f.blob;
-										else if (f.z64) { bl = 'blob_zero_64'; blobs[bl] = { name: bl, hex: Z64, src: P.modeSrc, z64: true }; }
-										else if (f.auto) { bl = 'blob_zero_256'; blobs[bl] = { name: bl, path: Z2D + '/files/fake/zero_256.bin', ofs: '', src: f.src, auto: true }; }
-										else bl = z1Blob(o, env, f.val, f.src, blobs);
-										var a = [ 'fake', 'blob=' + bl ].concat(common(G[g].l4, true, true));
-										if (fk === 'tls' && f.mod) a.push('tls_mod=' + f.mod);
-										lines.push({ text: '--lua-desync=' + a.join(':'), src: P.modeSrc.concat(foolSrc).concat(f.src || []), kind: 's' });
-									});
-								}
-								sets1.push({ g: g, lines: lines });
-							});
-							emit(sets1, P.modeSrc);
-						} else if (ph1 === 'hopbyhop' || ph1 === 'destopt') {
-							if (!ph2) {
-								var hs = []; groups.forEach(function(g) { hs.push({ g: g, lines: [ { text: '--lua-desync=pktmod:' + (ph1 === 'hopbyhop' ? 'ip6_hopbyhop' : 'ip6_destopt'), src: P.modeSrc, kind: 's' } ] }); });
-								emit(hs, P.modeSrc);
-							}
-							o.issue('info', 'Режим ' + ph1, 'В Zapret2 это заголовок IPv6 ' + (ph1 === 'hopbyhop' ? 'ip6_hopbyhop' : 'ip6_destopt') + ' — работает только для IPv6.', P.modeSrc, { at: /ip6_/ });
-						} else if (ph1 === 'ipfrag1') {
-							o.issue('err', 'Режим ipfrag1', 'В Zapret2 нет аналога (атомарный фрагмент IPv6) — режим убран.', P.modeSrc);
-						}
-
-						var x6 = ph1 === 'hopbyhop' ? [ 'ip6_hopbyhop' ] : ph1 === 'destopt' ? [ 'ip6_destopt' ] : [];
-						var sp = vget(V, 'dpi-desync-split-pos'), so = vget(V, 'dpi-desync-split-seqovl');
-						if (sp !== undefined && !markersOk(sp, MK_Z1)) o.issue('err', 'Неверные позиции split-pos', String(sp), vsrc(V, 'dpi-desync-split-pos'));
-						if (so !== undefined && !markersOk(so, MK_Z1)) o.issue('err', 'Неверный seqovl', String(so), vsrc(V, 'dpi-desync-split-seqovl'));
-						var sopat = V['dpi-desync-split-seqovl-pattern'] ? z1Blob(o, env, vget(V, 'dpi-desync-split-seqovl-pattern'), vsrc(V, 'dpi-desync-split-seqovl-pattern'), blobs) : null;
-						var fpat = V['dpi-desync-fakedsplit-pattern'] ? z1Blob(o, env, vget(V, 'dpi-desync-fakedsplit-pattern'), vsrc(V, 'dpi-desync-fakedsplit-pattern'), blobs) : null;
-						var p2src = P.modeSrc.concat(vsrc(V, 'dpi-desync-split-pos'), vsrc(V, 'dpi-desync-split-seqovl'), vsrc(V, 'dpi-desync-split-seqovl-pattern'));
-						if (ph2 && !ph1 && (P.fakes.tls || P.fakes.http || P.fakes.quic) && ph2 !== 'fakedsplit' && ph2 !== 'fakeddisorder' && ph2 !== 'hostfakesplit') o.issue('warn', 'Fake-файл не используется', 'Режима fake нет, поэтому --dpi-desync-fake-… ни на что не влияет — в перевод не попал.', P.src);
-						if (ph2 === 'multisplit' || ph2 === 'multidisorder') {
-							if (ph2 === 'multisplit' && so !== undefined && !/^\d+$/.test(so)) o.issue('err', 'seqovl для multisplit', 'Для multisplit seqovl может быть только положительным числом.', vsrc(V, 'dpi-desync-split-seqovl'));
-							var a2 = [ ph2 === 'multidisorder' && opts.legacy ? 'multidisorder_legacy' : ph2 ];
-							if (sp !== undefined && String(sp) !== '2') a2.push('pos=' + sp);
-							if (so !== undefined && String(so) !== '0') a2.push('seqovl=' + so);
-							if (sopat && so !== undefined) a2.push('seqovl_pattern=' + sopat);
-							a2 = a2.concat(x6);
-							if (ipid) a2.push('ip_id=' + ipid);
-							var s2 = []; tcpG.forEach(function(g) { s2.push({ g: g, lines: [ { text: '--lua-desync=' + a2.join(':'), src: p2src, mark: '', kind: 's' } ] }); });
-							emit(s2, P.modeSrc);
-							if (ph2 === 'multidisorder' && opts.legacy) o.issue('info', 'multidisorder_legacy', 'Нарезка как в Zapret — по каждому пакету.', P.modeSrc, { at: /multidisorder/ });
-							else if (ph2 === 'multidisorder') o.issue('warn', 'multidisorder режет иначе', 'Zapret2 режет весь собранный запрос, Zapret — каждый пакет отдельно. На длинных TLS Hello (Kyber) порядок частей отличается.', P.modeSrc,
-								{ fix: { act: 'legacy' }, fixLabel: 'Как в Zapret', at: /multidisorder/ });
-							if (sopat && so === undefined) o.issue('warn', 'Шаблон seqovl без seqovl', 'seqovl-pattern задан, а seqovl нет — шаблон не используется.', vsrc(V, 'dpi-desync-split-seqovl-pattern'));
-						} else if (ph2 === 'fakedsplit' || ph2 === 'fakeddisorder') {
-							var markers = sp !== undefined ? String(sp).split(',') : [ '2' ];
-							var am = vget(V, 'dpi-desync-fakedsplit-mod'), alt = 0;
-							if (am !== undefined) {
-								String(am).split(',').forEach(function(x) { var r = /^altorder=(\d+)$/.exec(x); if (r) alt = +r[1]; else if (x !== 'none') o.issue('err', 'Неверный fakedsplit-mod', x, vsrc(V, 'dpi-desync-fakedsplit-mod')); });
-							}
-							var nf = [ [], [ 'nofake1' ], [ 'nofake1', 'nofake2' ], [ 'nofake1', 'nofake2', 'nofake4' ] ][alt & 3];
-							if (alt & 24) o.issue('warn', 'altorder=' + alt, 'Части 8 и 16 (для пакетов без точки разреза) в Zapret2 не настраиваются — убраны.', vsrc(V, 'dpi-desync-fakedsplit-mod'), { at: /faked/ });
-							if (markers.length > 1) o.issue('info', 'Одна точка разреза', ph2 + ' режет в одном месте — для каждого протокола выбрана точка так же, как это делает Zapret.', vsrc(V, 'dpi-desync-split-pos'));
-							var s3 = [];
-							tcpG.forEach(function(g) {
-								var set = g === 'tls' ? MK_TLS : g === 'http' ? MK_HTTP : {}, pick = null;
-								markers.forEach(function(m) { var r = /^([a-z]+)/.exec(m); if (!pick && r && set[r[1]]) pick = m; });
-								if (!pick) markers.forEach(function(m) { if (!pick && /^-?\d+$/.test(m)) pick = m; });
-								if (!pick) pick = '1';
-								var a3 = [ ph2 ];
-								if (pick !== '2') a3.push('pos=' + pick);
-								if (so !== undefined && String(so) !== '0') a3.push('seqovl=' + so);
-								if (sopat && so !== undefined) a3.push('seqovl_pattern=' + sopat);
-								if (fpat) a3.push('pattern=' + fpat);
-								a3 = a3.concat(nf).concat(common('tcp', true, true)).concat(x6);
-								s3.push({ g: g, lines: [ { text: '--lua-desync=' + uniq(a3).join(':'), src: p2src.concat(foolSrc), kind: 's' } ] });
-							});
-							emit(s3, P.modeSrc);
-						} else if (ph2 === 'hostfakesplit') {
-							var hm = vget(V, 'dpi-desync-hostfakesplit-mod'), hh = null, halt = 0;
-							if (hm !== undefined) String(hm).split(',').forEach(function(x) { var r = /^host=(.+)$/.exec(x), r2 = /^altorder=(\d)$/.exec(x); if (r) hh = r[1]; else if (r2) halt = +r2[1]; else if (x !== 'none') o.issue('err', 'Неверный hostfakesplit-mod', x, vsrc(V, 'dpi-desync-hostfakesplit-mod')); });
-							if (halt === 1) o.issue('warn', 'hostfakesplit altorder=1', 'В Zapret2 такого порядка частей нет — оставлен обычный.', vsrc(V, 'dpi-desync-hostfakesplit-mod'), { at: /hostfakesplit/ });
-							var a4 = [ 'hostfakesplit' ];
-							if (hh) a4.push('host=' + hh);
-							if (V['dpi-desync-hostfakesplit-midhost']) a4.push('midhost=' + vget(V, 'dpi-desync-hostfakesplit-midhost'));
-							a4 = a4.concat(common('tcp', true, true)).concat(x6);
-							var s4 = []; tcpG.filter(function(g) { return g !== 'utcp'; }).forEach(function(g) { s4.push({ g: g, lines: [ { text: '--lua-desync=' + a4.join(':'), src: P.modeSrc.concat(foolSrc, vsrc(V, 'dpi-desync-hostfakesplit-mod'), vsrc(V, 'dpi-desync-hostfakesplit-midhost')), kind: 's' } ] }); });
-							emit(s4, P.modeSrc);
-						} else if (ph2 === 'ipfrag2') {
-							var s5 = [];
-							groups.forEach(function(g) {
-								var tcp = G[g].l4 === 'tcp', pos = vget(V, tcp ? 'dpi-desync-ipfrag-pos-tcp' : 'dpi-desync-ipfrag-pos-udp');
-								var a5 = [ 'send', 'ipfrag' ];
-								if (pos !== undefined) a5.push((tcp ? 'ipfrag_pos_tcp=' : 'ipfrag_pos_udp=') + pos);
-								a5 = a5.concat(x6);
-								s5.push({ g: g, lines: [ { text: '--lua-desync=' + a5.join(':'), src: P.modeSrc, mark: 'w', kind: 's' }, { text: '--lua-desync=drop', src: P.modeSrc, mark: 'n', kind: 's' } ] });
-							});
-							emit(s5, P.modeSrc);
-							o.issue('warn', 'IP-фрагментация', 'ipfrag2 переведён в send:ipfrag + drop — проверьте, что сайты открываются.', P.modeSrc, { at: /ipfrag|drop/ });
-						} else if (ph2 === 'udplen') {
-							var inc = vget(V, 'dpi-desync-udplen-increment'), upat = V['dpi-desync-udplen-pattern'] ? z1Blob(o, env, vget(V, 'dpi-desync-udplen-pattern'), vsrc(V, 'dpi-desync-udplen-pattern'), blobs) : null;
-							var a6 = [ 'udplen' ];
-							if (inc !== undefined && String(inc) !== '2') a6.push('increment=' + inc);
-							if (upat) a6.push('pattern=' + upat);
-							var s6 = []; udpG.forEach(function(g) { s6.push({ g: g, lines: [ { text: '--lua-desync=' + a6.join(':'), src: P.modeSrc.concat(vsrc(V, 'dpi-desync-udplen-increment')), kind: 's' } ] }); });
-							emit(s6, P.modeSrc);
-						} else if (ph2 === 'tamper') {
-							if (udpG.indexOf('dht') >= 0) emit([ { g: 'dht', lines: [ { text: '--lua-desync=dht_dn:dn=2', src: P.modeSrc, kind: 's' } ] } ], P.modeSrc);
-							else o.issue('warn', 'tamper без DHT', 'tamper в Zapret работает только с DHT, а он в профиле не ловится.', P.modeSrc);
-						}
-						if ((ph1 || ph2) && !groups.length) o.issue('warn', 'Профиль ничего не ловит', 'По фильтрам профиля нет подходящих пакетов.', P.src);
-
-						L.forEach(function(l) { var n = o.line(l.text, l.src, l.mark, pi, l.kind); o.lines[n - 1].added = !!l.added; o.lines[n - 1].unk = !!l.unk; });
-						if (bi < built.length - 1) o.line('--new', [], '', pi, 'n');
-					});
-
-					var head = [];
-					Object.keys(blobs).sort().forEach(function(n) {
-						var b = blobs[n];
-						if (b.z64) { head.push({ text: '--blob=' + n + ':' + b.hex, src: b.src, mark: 'n', kind: 'b', blob: n }); return; }
-						head.push({ text: '--blob=' + n + ':' + (b.ofs ? '+' + b.ofs : '') + '@' + b.path, src: b.src, mark: 'n', kind: 'b', blob: n });
-						if (env && env.z2 && env.z2.blobs) {
-							var sec = env.z2.blobs[n], file = base(b.path);
-							if (b.auto && envFile(env, 'z2', 'fake', file) === false) o.issue('err', 'Нет fake-файла ' + file, 'Нужен для «других TCP»: в ' + Z2D + '/files/fake его нет.', b.src);
-							if (sec && sec.enabled !== '1') o.issue('warn', n + ' выключен', 'В LuCI Zapret2 этот blob выключен — стратегия из LuCI его не увидит.', b.src, { fix: { act: 'blob', name: n, file: file }, fixLabel: 'Включить' });
-							else if (!sec && !b.ofs && envFile(env, 'z2', 'fake', file) !== false) o.issue('info', n + ' нет в LuCI Zapret2', 'Для стратегии в LuCI Zapret2 добавьте blob — или используйте строку --blob.', b.src, { fix: { act: 'blob', name: n, file: file }, fixLabel: 'Добавить' });
-						}
-					});
-					var all = [];
-					globals.forEach(function(g) { all.push({ text: g.text, src: g.src, mark: '', prof: -1, kind: 'g' }); });
-					head.forEach(function(h) { all.push({ text: h.text, src: h.src, mark: h.mark, prof: -1, kind: 'b', blob: h.blob }); });
-					o.lines = all.concat(o.lines);
-					if (o.lines.some(function(l) { return l.unk; })) o.issue('add', 'Приёмам добавлен payload=…unknown', 'Функции Zapret2 по умолчанию не трогают неизвестные пакеты — для --dpi-desync-any-protocol это указано явно.', o.lines.filter(function(l) { return l.unk; }).reduce(function(a, l) { return a.concat(l.src); }, []), { at: /payload=.*unknown/ });
-					if (o.lines.some(function(l) { return l.added; }) || o.lines.some(function(l) { return /^--payload=/.test(l.text); })) {
-						o.issue('add', 'Добавлены фильтры --payload', 'Zapret сам знал, к каким пакетам применять приёмы, Zapret2 — нет. Без фильтров приёмы трогали бы весь трафик.', o.lines.filter(function(l) { return /^--payload=/.test(l.text); }).reduce(function(a, l) { return a.concat(l.src); }, []));
-					}
-					if (head.length) o.issue('add', 'Fake-файлы стали blob', 'В Zapret2 файлы подключаются через --blob, а в приёмах указывается имя blob.', head.reduce(function(a, h) { return a.concat(h.src); }, []));
-					finish(o);
-					return o;
-				}
-
-				function parseUci(text) {
-					var secs = [], cur = null;
-					var lines = String(text || '').replace(/\r/g, '').split('\n'), i = 0;
-					function val(rest) {
-						rest = rest.replace(/^\s+/, '');
-						if (rest.charAt(0) === "'" || rest.charAt(0) === '"') {
-							var q = rest.charAt(0), s = rest.slice(1), out = '';
-							while (true) {
-								var j = s.indexOf(q);
-								if (j >= 0) { out += s.slice(0, j); var tail = s.slice(j + 1); if (q === "'" && /^\\''/.test(tail)) { out += "'"; s = tail.slice(3); continue; } return out; }
-								out += s + '\n';
-								i++;
-								if (i >= lines.length) return out;
-								s = lines[i];
-							}
-						}
-						return rest.replace(/\s+$/, '');
-					}
-					for (; i < lines.length; i++) {
-						var l = lines[i], m;
-						if ((m = /^\s*config\s+(\S+)(?:\s+['"]?([^'"]+)['"]?)?\s*$/.exec(l))) { cur = { type: m[1], name: m[2] || '', o: {}, l: {} }; secs.push(cur); continue; }
-						if (!cur) continue;
-						if ((m = /^\s*option\s+(\S+)\s+(.*)$/.exec(l))) { cur.o[m[1]] = val(m[2]); continue; }
-						if ((m = /^\s*list\s+(\S+)\s+(.*)$/.exec(l))) { (cur.l[m[1]] = cur.l[m[1]] || []).push(val(m[2])); continue; }
-					}
-					return secs;
-				}
-
-				function z2Current(conf) {
-					var secs = parseUci(conf), lists = {}, out = [];
-					secs.forEach(function(s) { if (s.type === 'list') lists[s.name] = s.o.path; });
-					secs.forEach(function(s) {
-						if (s.type !== 'strategy' || s.o.enabled !== '1') return;
-						var L = [ '#' + s.name ], proto = s.l.protocol || [], port = s.o.port;
-						if (port) {
-							if (!proto.length || proto.indexOf('tcp') >= 0) L.push('--filter-tcp=' + port);
-							if (!proto.length || proto.indexOf('udp') >= 0) L.push('--filter-udp=' + port);
-						}
-						(s.l.filter_l3 || []).length === 1 && L.push('--filter-l3=' + s.l.filter_l3[0]);
-						if ((s.l.filter_l7 || []).length) L.push('--filter-l7=' + s.l.filter_l7.join(','));
-						(s.l.hostlist || []).forEach(function(h) { L.push('--hostlist=' + (lists[h] || h)); });
-						(s.l.hostlist_exclude || []).forEach(function(h) { L.push('--hostlist-exclude=' + (lists[h] || h)); });
-						(s.l.ipset || []).forEach(function(h) { L.push('--ipset=' + (lists[h] || h)); });
-						(s.l.ipset_exclude || []).forEach(function(h) { L.push('--ipset-exclude=' + (lists[h] || h)); });
-						String(s.o.script || '').split('\n').forEach(function(x) { x = x.replace(/^\s+|\s+$/g, ''); if (x) L.push(x); });
-						out.push(L.join('\n'));
-					});
-					return out.join('\n--new\n');
-				}
-
-				function z2Env(env) {
-					if (!env || !env.z2 || !env.z2.conf) return env;
-					var b = {};
-					parseUci(env.z2.conf).forEach(function(s) { if (s.type === 'blob') b[s.name] = { path: s.o.path || '', enabled: s.o.enabled === undefined ? '1' : s.o.enabled }; });
-					env.z2.blobs = b;
-					return env;
-				}
-
-				function parseLua(s) {
-					var parts = String(s).split(':'), f = parts.shift(), a = {}, order = [];
-					parts.forEach(function(x) { var j = x.indexOf('='); var k = j < 0 ? x : x.slice(0, j); a[k] = j < 0 ? '' : x.slice(j + 1); order.push(k); });
-					return { f: f, a: a, order: order };
-				}
-
-				var Z2_PASS = { 'filter-tcp': 1, 'filter-udp': 1, 'filter-l3': 1, 'filter-l7': 1, 'filter-ssid': 1, hostlist: 1, 'hostlist-domains': 1, 'hostlist-exclude': 1, 'hostlist-exclude-domains': 1,
-					'hostlist-auto': 1, 'hostlist-auto-fail-threshold': 1, 'hostlist-auto-fail-time': 1, 'hostlist-auto-retrans-threshold': 1, 'hostlist-auto-debug': 1, ipset: 1, 'ipset-ip': 1, 'ipset-exclude': 1, 'ipset-exclude-ip': 1, skip: 1 };
-				var Z2_ONLY = { 'filter-icmp': 'фильтр ICMP', 'filter-ipp': 'фильтр по номеру IP-протокола', 'filter-mark': 'фильтр по метке пакета', 'filter-ssid-neg': 'инверсия фильтра SSID', template: 'шаблоны профилей', import: 'шаблоны профилей',
-					name: 'имя профиля', cookie: 'cookie профиля', 'hostlist-auto-retrans-reset': 'параметр автосписка', 'hostlist-auto-retrans-maxseq': 'параметр автосписка', 'hostlist-auto-incoming-maxseq': 'параметр автосписка',
-					'hostlist-auto-udp-out': 'параметр автосписка', 'hostlist-auto-udp-in': 'параметр автосписка' };
-				var Z2_GLOB_DROP = { 'lua-init': 'Lua-скрипты', 'lua-gc': 'сборщик мусора Lua', writable: 'папка для Lua', intercept: 'режим перехвата', chdir: 'смена папки', 'payload-disable': 'отключение распознавания', 'reasm-disable': 'отключение сборки пакетов', server: 'режим сервера', fwmark: 'метка пакетов' };
-				var BUILTIN = { fake_default_tls: 'tls', fake_default_http: 'http', fake_default_quic: 'quic' };
-				var CLS = { tls_client_hello: 'tls', http_req: 'http', quic_initial: 'quic', wireguard_initiation: 'wg', dht: 'dht', discord_ip_discovery: 'discord', stun: 'stun' };
-				var Z1_FAKE_OF = { tls: 'tls', http: 'http', utcp: 'unknown', quic: 'quic', wg: 'wireguard', dht: 'dht', discord: 'discord', stun: 'stun', uudp: 'unknown-udp' };
-
-				function plSet(spec, def, l4) {
-					var all = GTCP.concat(GUDP).filter(function(g) { return !l4 || l4[G[g].l4]; });
-					var s = String(spec === undefined || spec === null ? def : spec), neg = s.charAt(0) === '~';
-					if (neg) s = s.slice(1);
-					var items = s.split(','), r = {};
-					all.forEach(function(g) {
-						var pl = G[g].pl, unk = g === 'utcp' || g === 'uudp', m = false;
-						items.forEach(function(x) {
-							if (x === 'all') m = true;
-							else if (x === 'known' && !unk) m = true;
-							else if (x === pl) m = true;
-							else if (x === 'unknown' && unk) m = true;
-						});
-						if (m !== neg) r[g] = 1;
-					});
-					return r;
-				}
-
-				function z2to1(text, env) {
-					var toks = tokenize(text), o = new Out(toks), ps = profiles(toks), blobs = {}, globals = [];
-					if (!toks.some(function(t) { return t.k; })) { o.empty = true; return o; }
-					toks.forEach(function(t) {
-						if (t.k === 'blob' && t.v) {
-							var m = /^([A-Za-z_][A-Za-z0-9_]*):(.*)$/.exec(t.v);
-							if (!m) { o.issue('err', 'Неверный --blob', t.v, [ t.id ]); return; }
-							blobs[m[1]] = { val: m[2], src: [ t.id ] };
-						}
-					});
-					var outProfiles = [];
-					ps.forEach(function(p) {
-						var F = [], tcp = null, udp = null, l7 = null, l7raw = null, pl = null, outR = null, inst = [], src = [], lists = [];
-						p.toks.forEach(function(t) {
-							var s = [ t.id ];
-							src.push(t.id);
-							if (!t.k) {
-								if (/^<[A-Z_]+>$/.test(t.t)) { F.push({ text: t.t, src: s }); lists.push(t.t); return; }
-								o.issue('err', 'Непонятный фрагмент', '«' + t.t + '» — это не параметр nfqws2.', s);
-								return;
-							}
-							var k = t.k, v = t.v;
-							if (k === 'blob') return;
-							if (Z2_PASS[k]) {
-								if (k === 'filter-tcp') tcp = (tcp ? tcp + ',' : '') + v;
-								if (k === 'filter-udp') udp = (udp ? udp + ',' : '') + v;
-								if ((k === 'filter-tcp' || k === 'filter-udp') && !portsOk(v)) o.issue('err', 'Неверные порты', k + '=' + v, s);
-								var val = v;
-								if (k === 'filter-l7') {
-									var vs = String(v).split(','), bad = vs.filter(function(x) { return !L7_Z2[x]; }), no1 = vs.filter(function(x) { return L7_Z2[x] && !L7_Z1[x]; });
-									if (bad.length) o.issue('err', 'Неизвестный протокол', '--filter-l7: ' + bad.join(', '), s);
-									if (no1.length) o.issue('warn', 'Протокол не знаком Zapret', no1.join(', ') + ' — Zapret их не распознаёт, они убраны из фильтра.', s);
-									l7raw = (l7raw || []).concat(vs);
-									var keep = vs.filter(function(x) { return L7_Z1[x]; });
-									l7 = (l7 || []).concat(keep);
-									if (!keep.length) return;
-									val = keep.join(',');
-								}
-								if (PATH_OPT[k] && v) { val = mapPath(o, env, v, 'z2', 'z1', s); lists.push(base(val)); }
-								F.push({ text: '--' + k + (t.hasV ? '=' + val : ''), src: s, changed: val !== v });
-								return;
-							}
-							if (Z2_ONLY[k]) { o.issue('err', 'Нет в Zapret: ' + Z2_ONLY[k], '--' + k + ' — в Zapret такого нет, параметр убран.', s); return; }
-							if (Z2_GLOB_DROP[k]) { o.issue(k === 'lua-init' || k === 'fwmark' ? 'info' : 'warn', 'Параметр Zapret2 убран', '--' + k + ' (' + Z2_GLOB_DROP[k] + ') — в Zapret не нужен или его нет.', s); return; }
-							if (GLOB_PASS[k]) { globals.push({ text: t.t, src: s }); return; }
-							if (SERVICE[k]) { o.issue('info', 'Служебный параметр убран', '--' + k + ' служба Zapret задаёт сама.', s); return; }
-							if (k === 'payload') {
-								var bp = String(v || '').replace(/^~/, '').split(',').filter(function(x) { return !PL_Z2[x]; });
-								if (bp.length) o.issue('err', 'Неизвестный тип пакета', '--payload: ' + bp.join(', '), s);
-								pl = v; return;
-							}
-							if (k === 'out-range') { outR = { v: v, src: s }; return; }
-							if (k === 'in-range') { return; }
-							if (k === 'lua-desync') { var x = parseLua(v || ''); x.pl = pl; x.outR = outR; x.src = s; x.raw = v; inst.push(x); return; }
-							o.issue('err', 'Неизвестный параметр', '--' + k + ' — в Zapret2 такого нет.', s);
-						});
-						outProfiles.push({ name: p.name, F: F, tcp: tcp, udp: udp, l7: l7, l7raw: l7raw, inst: inst, src: src, line: p.line, lists: lists });
-					});
-
-					function resolveBlob(name, s) {
-						if (!name) return null;
-						if (isHex(name)) return { val: name };
-						if (BUILTIN[name]) return { def: BUILTIN[name] };
-						var b = blobs[name], path = null, ofs = '';
-						if (b) {
-							if (isHex(b.val)) return { val: b.val };
-							var m = /^(\+(\d+))?@(.+)$/.exec(b.val);
-							if (!m) { o.issue('err', 'Неверный --blob', name + ':' + b.val, b.src); return null; }
-							ofs = m[2] || ''; path = m[3];
-						} else if (env && env.z2 && env.z2.blobs && env.z2.blobs[name]) {
-							var sec = env.z2.blobs[name]; path = sec.path;
-							if (sec.enabled !== '1') o.issue('warn', name + ' выключен в Zapret2', 'Blob выключен в LuCI Zapret2 — сейчас стратегия его не видит. В Zapret файл подключится напрямую.', s);
-						} else if (/^blob_/.test(name)) {
-							path = Z2D + '/files/fake/' + name.replace(/^blob_/, '') + '.bin';
-							o.issue('warn', 'Blob ' + name + ' не объявлен', 'Его нет ни в --blob, ни в настройках Zapret2 — Zapret2 с ним не запустится. Путь угадан по имени: ' + base(path) + '.', s, { at: new RegExp(esc(base(path))) });
-						} else {
-							o.issue('err', 'Blob ' + name + ' не найден', 'Это не встроенный blob и не --blob из стратегии — Zapret2 с ним не запустится, файл не определить.', s, { at: /--dpi-desync/ });
-							return null;
-						}
-						o.lastMiss = null;
-						var p1 = mapPath(o, env, path, 'z2', 'z1', s);
-						if (o.lastMiss) o.lastMiss.at = new RegExp(esc(base(p1)));
-						return { val: (ofs ? '+' + ofs : '') + p1 };
-					}
-					function foolBack(a, s, l4) {
-						var r = { fool: [], ttl: null, ttl6: null, at: null, at6: null, seq: null, ack: null, ts: null, fs: null, fu: null };
-						Object.keys(a).forEach(function(k) {
-							var v = a[k];
-							if (k === 'tcp_md5') r.fool.push('md5sig');
-							else if (k === 'badsum') r.fool.push('badsum');
-							else if (k === 'tcp_seq') { r.seq = v; }
-							else if (k === 'tcp_ack') { r.ack = v; }
-							else if (k === 'tcp_ts') { r.fool.push('ts'); r.ts = v; }
-							else if (k === 'tcp_flags_unset' && String(v).toUpperCase() === 'ACK') r.fool.push('datanoack');
-							else if (k === 'tcp_flags_unset') r.fu = v;
-							else if (k === 'tcp_flags_set') r.fs = v;
-							else if (k === 'ip_ttl') r.ttl = v;
-							else if (k === 'ip6_ttl') r.ttl6 = v;
-							else if (k === 'ip_autottl') r.at = attl1(v);
-							else if (k === 'ip6_autottl') r.at6 = attl1(v);
-							else if (k === 'ip6_hopbyhop') r.fool.push(a.ip6_hopbyhop2 !== undefined ? 'hopbyhop2' : 'hopbyhop');
-							else if (k === 'ip6_hopbyhop2' || k === 'tcp_ts_up') return;
-							else if (/^(ip6_destopt2?|ip6_routing|ip6_ah|tcp_nop_del|fool)$/.test(k)) o.issue('err', k + ' нет в Zapret', 'Такого fooling в Zapret нет — убран.', s);
-						});
-						if (r.seq !== null || r.ack !== null) r.fool.push('badseq');
-						r.fool = uniq(r.fool);
-						return r;
-					}
-					var FOOL_ARGS = /^(tcp_md5|badsum|tcp_seq|tcp_ack|tcp_ts|tcp_flags_unset|tcp_flags_set|ip_ttl|ip6_ttl|ip_autottl|ip6_autottl|ip6_hopbyhop2?|tcp_ts_up|ip6_destopt2?|ip6_routing|ip6_ah|tcp_nop_del|fool)$/;
-					function foolKey(r) { return JSON.stringify([ r.fool.slice().sort(), r.ttl, r.ttl6, r.at, r.at6, r.seq, r.ack, r.ts, r.fs, r.fu ]); }
-
-					var res = [];
-					outProfiles.forEach(function(P, pi) {
-						var hasTcp = P.tcp !== null || P.udp === null, hasUdp = P.udp !== null || P.tcp === null, l4 = { tcp: hasTcp, udp: hasUdp };
-						var allow = {};
-						GTCP.concat(GUDP).forEach(function(g) { if (l4[G[g].l4]) allow[g] = 1; });
-						if (P.l7raw) {
-							var lr = {}; P.l7raw.forEach(function(x) { lr[x] = 1; });
-							if (!lr.all) Object.keys(allow).forEach(function(g) { var unk = g === 'utcp' || g === 'uudp'; if (!(lr[G[g].l7] || (lr.known && !unk) || (unk && (lr.xmpp || lr.mtproto || lr.bt || lr.dns || lr.dtls || lr.utp_bt)))) delete allow[g]; });
-						} else {
-							if (portsOnly(P.tcp, { '443': 1 })) delete allow.http;
-							if (portsOnly(P.tcp, { '80': 1 })) delete allow.tls;
-							if (portsOnly(P.udp, { '443': 1 })) [ 'wg', 'dht', 'discord', 'stun' ].forEach(function(g) { delete allow[g]; });
-						}
-						var orch = P.inst.filter(function(x) { return /^(circular|repeater|condition|per_instance_condition|stopif)$/.test(x.f); });
-						var list = P.inst;
-						if (orch.length) {
-							list = P.inst.filter(function(x) { return orch.indexOf(x) < 0 && (x.a.strategy === undefined || x.a.strategy === '1'); });
-							var n = {}; P.inst.forEach(function(x) { if (x.a.strategy !== undefined) n[x.a.strategy] = 1; });
-							o.issue('err', 'Перебор стратегий (' + orch[0].f + ')', 'В Zapret его нет. Взята только стратегия 1' + (Object.keys(n).length > 1 ? ' из ' + Object.keys(n).length : '') + ' — остальные убраны.', orch.reduce(function(a, x) { return a.concat(x.src); }, []));
-						}
-						var role = { http: [], s0: [], opts: [], ch: {} };
-						var NOEQ = { luaexec: 1, pass: 1, pktdebug: 1, argdebug: 1, posdebug: 1, detect_payload_str: 1, tcpseg: 1, oob: 1, tls_client_hello_clone: 1, http_unixeol: 1 };
-						for (var ii = 0; ii < list.length; ii++) {
-							var x = list[ii], f = x.f;
-							if (orch.indexOf(x) >= 0) continue;
-							if (NOEQ[f] || !/^[a-z_0-9]+$/.test(f)) { o.issue('err', f + ' нет в Zapret', 'Функции ' + f + ' в Zapret нет — убрана.', x.src); continue; }
-							if (x.a.dir !== undefined && x.a.dir !== 'out') o.issue('warn', 'dir=' + x.a.dir, 'Zapret обрабатывает только исходящие пакеты — направление убрано.', x.src);
-							var defPl = /^(drop|send|pktmod)$/.test(f) ? 'all' : 'known';
-							var sel = plSet(x.pl, 'all', l4), sel2 = plSet(x.a.payload, defPl, l4), eff = {};
-							Object.keys(sel).forEach(function(g) { if (sel2[g] && allow[g]) eff[g] = 1; });
-							if (f === 'http_hostcase' || f === 'http_domcase' || f === 'http_methodeol') { role.http.push(x); continue; }
-							if (f === 'wsize' || f === 'wssize' || f === 'synack_split' || f === 'synack' || f === 'syndata') { role.s0.push(x); continue; }
-							if (f === 'send' && list[ii + 1] && list[ii + 1].f === 'drop' && x.a.ipfrag !== undefined) { Object.keys(eff).forEach(function(g) { (role.ch[g] = role.ch[g] || []).push({ k: 'ipfrag2', x: x }); }); ii++; continue; }
-							if (f === 'send' || f === 'drop' || f === 'pktmod') {
-								if (f === 'pktmod' && Object.keys(x.a).every(function(k) { return k === 'ip6_hopbyhop' || k === 'ip6_destopt' || k === 'dir' || k === 'payload'; }) && (x.a.ip6_hopbyhop !== undefined || x.a.ip6_destopt !== undefined)) {
-									Object.keys(eff).forEach(function(g) { (role.ch[g] = role.ch[g] || []).push({ k: x.a.ip6_hopbyhop !== undefined ? 'hopbyhop' : 'destopt', x: x }); });
-									continue;
-								}
-								role.opts.push(x); continue;
-							}
-							var kind = { fake: 'p1', rst: 'p1', multisplit: 'p2', multidisorder: 'p2', multidisorder_legacy: 'p2', fakedsplit: 'p2', fakeddisorder: 'p2', hostfakesplit: 'p2', udplen: 'p2', dht_dn: 'p2' }[f];
-							if (!kind) { o.issue('err', f + ' нет в Zapret', 'Функции ' + f + ' в Zapret нет — убрана.', x.src); continue; }
-							Object.keys(eff).forEach(function(g) { (role.ch[g] = role.ch[g] || []).push({ k: f, x: x }); });
-						}
-
-						var bucket = {}, order = [];
-						Object.keys(role.ch).forEach(function(g) {
-							var chain = role.ch[g], p1 = chain.filter(function(c) { return c.k === 'fake' || c.k === 'rst' || c.k === 'hopbyhop' || c.k === 'destopt'; }), p2 = chain.filter(function(c) { return !(c.k === 'fake' || c.k === 'rst' || c.k === 'hopbyhop' || c.k === 'destopt'); });
-							var p1k = uniq(p1.map(function(c) { return c.k === 'rst' ? (c.x.a.rstack !== undefined ? 'rstack' : 'rst') : c.k; }));
-							var p2k = uniq(p2.map(function(c) { return c.k; }));
-							if (p1k.length > 1) o.issue('err', 'Два приёма первой фазы', p1k.join(' и ') + ' для ' + G[g].name + ' — в Zapret можно только один.', p1.reduce(function(a, c) { return a.concat(c.x.src); }, []));
-							if (p2k.length > 1) o.issue('err', 'Два приёма нарезки', p2k.join(' и ') + ' для ' + G[g].name + ' — в Zapret можно только один, взят первый.', p2.reduce(function(a, c) { return a.concat(c.x.src); }, []));
-							var c2 = p2[0], f1 = p1.filter(function(c) { return c.k === 'fake' || c.k === 'rst'; });
-							var fr = f1.length ? foolBack(f1[0].x.a, f1[0].x.src, G[g].l4) : (c2 && /^(fakedsplit|fakeddisorder|hostfakesplit)$/.test(c2.k) ? foolBack(c2.x.a, c2.x.src, G[g].l4) : null);
-							f1.slice(1).forEach(function(c) { if (fr && foolKey(foolBack(c.x.a, c.x.src)) !== foolKey(fr)) o.issue('warn', 'Разный fooling у fake', 'В Zapret fooling один на профиль — взят у первого fake.', c.x.src); });
-							var reps = uniq(f1.map(function(c) { return c.x.a.repeats || '1'; }).concat(c2 && /^(fakedsplit|fakeddisorder|hostfakesplit)$/.test(c2.k) ? [ c2.x.a.repeats || '1' ] : []));
-							if (reps.length > 1) o.issue('warn', 'Разный repeats', 'В Zapret repeats один на профиль — взят ' + reps[0] + '.', chain.reduce(function(a, c) { return a.concat(c.x.src); }, []));
-							var sig = JSON.stringify([ p1k[0] || '', fr ? foolKey(fr) : '', reps[0] || '1', c2 ? c2.k : '', c2 ? JSON.stringify(c2.x.a) : '', f1.map(function(c) { return c.x.a.ip_id || ''; })[0] || '' ]);
-							if (!bucket[sig]) { bucket[sig] = { gs: [], p1k: p1k[0], fr: fr, rep: reps[0], c2: c2, fakes: {}, src: [] }; order.push(sig); }
-							var B = bucket[sig];
-							B.gs.push(g);
-							if (p1k[0] === 'fake') B.fakes[g] = f1.map(function(c) { return c.x; });
-							chain.forEach(function(c) { B.src = B.src.concat(c.x.src); });
-						});
-
-						var groupsOut = order.map(function(k) { return bucket[k]; });
-						if (!groupsOut.length && !role.http.length && !role.s0.length) groupsOut = [ { gs: [], p1k: null, fr: null, rep: '1', c2: null, fakes: {}, src: [] } ];
-						if (!groupsOut.length) groupsOut = [ { gs: [], p1k: null, fr: null, rep: '1', c2: null, fakes: {}, src: [] } ];
-						var split = groupsOut.length > 1;
-						if (split) o.issue('info', 'Профиль разделён по протоколам', 'Для разных протоколов разные приёмы — в Zapret это отдельные профили с --filter-l7.', P.src);
-
-						groupsOut.forEach(function(B, bi) {
-							var L = [];
-							var gnames = B.gs.map(function(g) { return G[g].name; });
-							var desc = [];
-							if (P.tcp !== null) desc.push('TCP ' + shortPorts(P.tcp));
-							if (P.udp !== null) desc.push('UDP ' + shortPorts(P.udp));
-							if (split) desc.push(gnames.join(', '));
-							else if (P.l7 && P.l7.length) desc.push(P.l7.join(', ').toUpperCase());
-							if (P.lists.length) desc.push(P.lists[0] + (P.lists.length > 1 ? ' +' + (P.lists.length - 1) : ''));
-							res.push({ name: P.name ? P.name + (split ? ' · ' + gnames.join('+') : '') : '', desc: desc.join(' · '), lines: L, src: P.line });
-							P.F.forEach(function(f) { L.push({ text: f.text, src: f.src, mark: f.changed ? 'n' : '' }); });
-							if (split) {
-								var l7n = uniq(B.gs.map(function(g) { return G[g].l7; }));
-								var tcpOnly = B.gs.every(function(g) { return G[g].l4 === 'tcp'; }), udpOnly = B.gs.every(function(g) { return G[g].l4 === 'udp'; });
-								if (!P.l7) L.push({ text: '--filter-l7=' + l7n.join(','), src: B.src, mark: 'n', added: true });
-								else L = L.map(function(l) { return /^--filter-l7=/.test(l.text) ? { text: '--filter-l7=' + l7n.join(','), src: l.src, mark: 'n' } : l; });
-								if (tcpOnly && P.tcp === null && P.udp === null) L.push({ text: '--filter-tcp=*', src: B.src, mark: 'n' });
-								if (udpOnly && P.tcp === null && P.udp === null) L.push({ text: '--filter-udp=*', src: B.src, mark: 'n' });
-							}
-							var modes = [];
-							var srcAll = B.src.slice();
-							if (bi === 0) role.s0.forEach(function(x) {
-								if (x.f === 'synack') modes.push('synack');
-								else if (x.f === 'syndata') { modes.push('syndata'); var sb = resolveBlob(x.a.blob, x.src); if (sb && !sb.def) L.push({ text: '--dpi-desync-fake-syndata=' + sb.val, src: x.src }); }
-								else if (x.f === 'synack_split') L.push({ text: '--synack-split=' + (x.a.mode || 'synack'), src: x.src });
-								else if (x.f === 'wsize') L.push({ text: '--wsize=' + (x.a.wsize || '0') + (x.a.scale !== undefined ? ':' + x.a.scale : ''), src: x.src, mark: 'w' });
-								else if (x.f === 'wssize') {
-									L.push({ text: '--wssize=' + (x.a.wsize || '0') + (x.a.scale !== undefined ? ':' + x.a.scale : ''), src: x.src });
-									if (x.a.forced_cutoff !== undefined) L.push({ text: '--wssize-forced-cutoff=0', src: x.src, mark: 'w' });
-									var wr = x.outR && /^<([nds]\d+)$/.exec(x.outR.v);
-									if (wr) L.push({ text: '--wssize-cutoff=' + wr[1], src: x.outR.src });
-								}
-							});
-							if (bi === 0) role.http.forEach(function(x) {
-								if (x.f === 'http_hostcase') L.push({ text: x.a.spell ? '--hostspell=' + x.a.spell : '--hostcase', src: x.src });
-								if (x.f === 'http_domcase') L.push({ text: '--domcase', src: x.src });
-								if (x.f === 'http_methodeol') L.push({ text: '--methodeol', src: x.src });
-							});
-							if (bi === 0) role.opts.forEach(function(x) {
-								if (x.f === 'pktmod') {
-									if (x.a.ip_ttl) L.push({ text: '--orig-ttl=' + x.a.ip_ttl, src: x.src, mark: 'w' });
-									if (x.a.ip6_ttl && x.a.ip6_ttl !== x.a.ip_ttl) L.push({ text: '--orig-ttl6=' + x.a.ip6_ttl, src: x.src, mark: 'w' });
-									if (x.a.ip_autottl) L.push({ text: '--orig-autottl=' + attl1(x.a.ip_autottl), src: x.src, mark: 'w' });
-									if (x.a.tcp_flags_set) L.push({ text: '--orig-tcp-flags-set=' + x.a.tcp_flags_set, src: x.src, mark: 'w' });
-									if (x.a.tcp_flags_unset) L.push({ text: '--orig-tcp-flags-unset=' + x.a.tcp_flags_unset, src: x.src, mark: 'w' });
-									o.issue('warn', 'pktmod → --orig-…', 'Изменение оригинала переведено приблизительно — проверьте.', x.src);
-								} else if (x.f === 'send') {
-									L.push({ text: '--dup=' + (x.a.repeats || '1'), src: x.src, mark: 'w' });
-									if (x.a.ip_ttl) L.push({ text: '--dup-ttl=' + x.a.ip_ttl, src: x.src, mark: 'w' });
-									o.issue('warn', 'send → --dup', 'Отправка копии переведена в --dup приблизительно — проверьте.', x.src);
-								} else if (x.f === 'drop') {
-									o.issue('warn', 'drop', 'Отдельного drop в Zapret нет — убран.', x.src);
-								}
-							});
-							if (B.p1k) modes.push(B.p1k === 'fake' ? 'fake' : B.p1k);
-							var c2 = B.c2;
-							if (c2) modes.push(c2.k === 'multidisorder_legacy' ? 'multidisorder' : c2.k === 'dht_dn' ? 'tamper' : c2.k);
-							if (modes.length) L.push({ text: '--dpi-desync=' + modes.join(','), src: srcAll });
-							if (c2) {
-								var a = c2.x.a, k = c2.k;
-								if (c2.k === 'multidisorder') o.issue('warn', 'multidisorder режет иначе', 'В Zapret нарезка идёт по каждому пакету, а не по собранному запросу — на длинных TLS Hello (Kyber) порядок частей отличается.', c2.x.src, { at: /--dpi-desync=/ });
-								if (/^(multisplit|multidisorder|multidisorder_legacy|fakedsplit|fakeddisorder)$/.test(k)) {
-									if (a.pos !== undefined) {
-										if (!markersOk(a.pos, MK_Z2)) o.issue('err', 'Неверные позиции pos', a.pos, c2.x.src);
-										else if (!markersOk(a.pos, MK_Z1)) o.issue('err', 'Маркер extlen', 'В Zapret маркера extlen нет.', c2.x.src);
-										L.push({ text: '--dpi-desync-split-pos=' + a.pos, src: c2.x.src });
-									}
-									if (a.seqovl !== undefined) L.push({ text: '--dpi-desync-split-seqovl=' + a.seqovl, src: c2.x.src });
-									if (a.seqovl_pattern !== undefined) { var sp = resolveBlob(a.seqovl_pattern, c2.x.src); if (sp && sp.def) defBlobErr(sp, c2.x.src); else if (sp) L.push({ text: '--dpi-desync-split-seqovl-pattern=' + sp.val, src: c2.x.src }); }
-									if (a.blob !== undefined || a.nodrop !== undefined) o.issue('err', k + ' с blob/nodrop', 'Отправку чужих данных нарезкой Zapret не умеет — blob и nodrop убраны.', c2.x.src);
-									if (/^(multisplit|multidisorder|multidisorder_legacy)$/.test(k) && Object.keys(a).some(function(x) { return FOOL_ARGS.test(x) && !/^ip6_(hopbyhop2?|destopt)$/.test(x); })) o.issue('warn', 'Fooling у ' + k, 'В Zapret нарезка идёт без fooling — он убран.', c2.x.src, { at: /--dpi-desync=/ });
-									if (/^(multisplit|multidisorder)/.test(k) && a.repeats !== undefined && a.repeats !== '1') o.issue('warn', 'repeats у ' + k, 'Zapret не повторяет части нарезки — repeats убран.', c2.x.src, { at: /--dpi-desync=/ });
-									if (k === 'fakedsplit' || k === 'fakeddisorder') {
-										if (a.pattern !== undefined) { var pp = resolveBlob(a.pattern, c2.x.src); if (pp && pp.def) defBlobErr(pp, c2.x.src); else if (pp) L.push({ text: '--dpi-desync-fakedsplit-pattern=' + pp.val, src: c2.x.src }); }
-										var nf = [ 'nofake1', 'nofake2', 'nofake3', 'nofake4' ].filter(function(x) { return a[x] !== undefined; }).join(',');
-										var alt = { '': 0, nofake1: 1, 'nofake1,nofake2': 2, 'nofake1,nofake2,nofake4': 3 }[nf];
-										if (alt === undefined) o.issue('err', 'Набор ' + nf, 'Такой набор фейков в Zapret не задать — убран.', c2.x.src);
-										else if (alt) L.push({ text: '--dpi-desync-fakedsplit-mod=altorder=' + alt, src: c2.x.src });
-									}
-								} else if (k === 'hostfakesplit') {
-									if (a.host) L.push({ text: '--dpi-desync-hostfakesplit-mod=host=' + a.host, src: c2.x.src });
-									if (a.midhost) L.push({ text: '--dpi-desync-hostfakesplit-midhost=' + a.midhost, src: c2.x.src });
-									if (a.disorder_after !== undefined || a.nofake1 !== undefined || a.nofake2 !== undefined) o.issue('err', 'hostfakesplit: disorder_after/nofake', 'В Zapret этих настроек нет — убраны.', c2.x.src, { at: /hostfakesplit/ });
-								} else if (k === 'udplen') {
-									if (a.increment !== undefined) L.push({ text: '--dpi-desync-udplen-increment=' + a.increment, src: c2.x.src });
-									if (a.pattern !== undefined) { var up = resolveBlob(a.pattern, c2.x.src); if (up && !up.def) L.push({ text: '--dpi-desync-udplen-pattern=' + up.val, src: c2.x.src }); }
-									if (a.min !== undefined || a.max !== undefined) o.issue('warn', 'udplen min/max', 'В Zapret ограничения по длине нет — убрано.', c2.x.src, { at: /udplen|--dpi-desync=/ });
-								} else if (k === 'dht_dn') {
-									if (a.dn !== undefined && a.dn !== '2' || a.dn === undefined) o.issue('warn', 'dht_dn:dn=' + (a.dn || '3'), 'tamper в Zapret всегда делает d2 — значение отличается.', c2.x.src);
-								} else if (k === 'ipfrag2') {
-									if (a.ipfrag_pos_tcp) L.push({ text: '--dpi-desync-ipfrag-pos-tcp=' + a.ipfrag_pos_tcp, src: c2.x.src });
-									if (a.ipfrag_pos_udp) L.push({ text: '--dpi-desync-ipfrag-pos-udp=' + a.ipfrag_pos_udp, src: c2.x.src });
-								}
-							}
-							var fr = B.fr;
-							if (fr) {
-								if (fr.fool.length) L.push({ text: '--dpi-desync-fooling=' + fr.fool.join(','), src: B.src });
-								if (fr.seq !== null || fr.ack !== null) {
-									var si = fr.seq === null ? '0' : fr.seq, ai = fr.ack === null ? '0' : fr.ack;
-									if (String(si) !== '-10000') L.push({ text: '--dpi-desync-badseq-increment=' + si, src: B.src });
-									if (String(ai) !== '-66000') L.push({ text: '--dpi-desync-badack-increment=' + ai, src: B.src });
-								}
-								if (fr.ts !== null && String(fr.ts) !== '-600000') L.push({ text: '--dpi-desync-ts-increment=' + fr.ts, src: B.src });
-								if (fr.ttl) L.push({ text: '--dpi-desync-ttl=' + fr.ttl, src: B.src });
-								if (fr.ttl6 && fr.ttl6 !== fr.ttl) L.push({ text: '--dpi-desync-ttl6=' + fr.ttl6, src: B.src });
-								if (fr.at) L.push({ text: '--dpi-desync-autottl=' + fr.at, src: B.src });
-								if (fr.at6 && fr.at6 !== fr.at) L.push({ text: '--dpi-desync-autottl6=' + fr.at6, src: B.src });
-								if (fr.fs) L.push({ text: '--dpi-desync-tcp-flags-set=' + fr.fs, src: B.src });
-								if (fr.fu) L.push({ text: '--dpi-desync-tcp-flags-unset=' + fr.fu, src: B.src });
-							}
-							if (B.rep && B.rep !== '1') L.push({ text: '--dpi-desync-repeats=' + B.rep, src: B.src });
-							if (B.p1k === 'fake') {
-								B.gs.forEach(function(g) {
-									var fo = Z1_FAKE_OF[g];
-									(B.fakes[g] || []).forEach(function(x) {
-										var r = resolveBlob(x.a.blob, x.src);
-										if (!r) return;
-										if (r.def) {
-											if (r.def !== G[g].fake) { o.issue('warn', x.a.blob + ' для ' + G[g].name, 'Встроенный fake другого протокола — в Zapret так не задать, оставлен стандартный.', x.src); return; }
-											if (g === 'tls') { L.push({ text: '--dpi-desync-fake-tls=!', src: x.src }); L.push({ text: '--dpi-desync-fake-tls-mod=' + (x.a.tls_mod || 'none'), src: x.src }); }
-											return;
-										}
-										if ((g === 'wg' || g === 'dht' || g === 'discord' || g === 'stun' || g === 'uudp') && r.val.toLowerCase() === Z64) return;
-										if (g === 'utcp' && /\/zero_256\.bin$/.test(r.val)) return;
-										L.push({ text: '--dpi-desync-fake-' + fo + '=' + r.val, src: x.src });
-										if (g === 'tls') L.push({ text: '--dpi-desync-fake-tls-mod=' + (x.a.tls_mod || 'none'), src: x.src });
-										else if (x.a.tls_mod) o.issue('warn', 'tls_mod не для TLS', 'tls_mod у fake для ' + G[g].name + ' в Zapret не задать — убран.', x.src);
-									});
-								});
-								if (B.gs.indexOf('utcp') >= 0 || B.gs.indexOf('uudp') >= 0) L.push({ text: '--dpi-desync-any-protocol=1', src: B.src, mark: 'n' });
-							} else if (B.gs.indexOf('utcp') >= 0 || B.gs.indexOf('uudp') >= 0) L.push({ text: '--dpi-desync-any-protocol=1', src: B.src, mark: 'n' });
-							var ids = uniq(B.src.length ? list.filter(function(x) { return x.a.ip_id; }).map(function(x) { return x.a.ip_id; }) : []);
-							if (ids.length) L.push({ text: '--ip-id=' + ids[0], src: B.src });
-							var oR = c2 && c2.x.outR || (B.fakes && Object.keys(B.fakes).length && B.fakes[Object.keys(B.fakes)[0]][0].outR);
-							if (oR && oR.v && oR.v !== 'a') {
-								var rv = String(oR.v), rs = null, rc = null, rok = true, rx;
-								if ((rx = /^<([nds])(\d+)$/.exec(rv))) rc = rx[1] + rx[2];
-								else if ((rx = /^-([nds])(\d+)$/.exec(rv))) rc = rx[1] + (+rx[2] + 1);
-								else if ((rx = /^([nds])(\d+)<([nds])(\d+)$/.exec(rv))) { rs = rx[1] + rx[2]; rc = rx[3] + rx[4]; }
-								else if ((rx = /^([nds])(\d+)-([nds])(\d+)$/.exec(rv))) { rs = rx[1] + rx[2]; rc = rx[3] + (+rx[4] + 1); }
-								else if ((rx = /^([nds])(\d+)-$/.exec(rv))) rs = rx[1] + rx[2];
-								else rok = false;
-								if (!rok) o.issue('warn', '--out-range=' + rv, 'Такой диапазон в Zapret не задать — убран.', oR.src);
-								else {
-									if (rs) L.push({ text: '--dpi-desync-start=' + rs, src: oR.src });
-									if (rc) L.push({ text: '--dpi-desync-cutoff=' + rc, src: oR.src });
-								}
-							}
-						});
-					});
-					function defBlobErr(r, s) { o.issue('warn', 'Встроенный blob как шаблон', 'В Zapret встроенный fake шаблоном не задать — шаблон убран, будут нули.', s, { at: /--dpi-desync=/ }); return null; }
-
-					globals.forEach(function(g) { o.line(g.text, g.src, '', -1, 'g'); });
-					res.forEach(function(R, i) {
-						o.profiles.push({ name: R.name, desc: R.desc, src: R.src });
-						if (R.name) o.line('#' + R.name.replace(/\s+/g, '_'), [], '', i, 'c');
-						R.lines.forEach(function(l) { o.line(l.text, l.src, l.mark, i, 'z1'); });
-						if (i < res.length - 1) o.line('--new', [], '', i, 'n');
-					});
-					finish(o);
-					return o;
-				}
-
-				function finish(o) {
-					o.issues.forEach(function(it) {
-						var d = [];
-						o.lines.forEach(function(l, i) { if (it.src.some(function(s) { return l.src.indexOf(s) >= 0; }) && (!it.at || it.at.test(l.text))) d.push(i + 1); });
-						it.dst = d;
-						it.src = uniq(it.src).sort(function(a, b) { return a - b; });
-						it.lines = uniq(it.src.map(function(id) { return o.toks[id] ? o.toks[id].line : 0; }).filter(function(x) { return x; })).sort(function(a, b) { return a - b; });
-					});
-					var W = { err: 0, warn: 1, add: 2, info: 3 };
-					o.issues.sort(function(a, b) { return W[a.lvl] - W[b.lvl]; });
-					o.lines.forEach(function(l, i) {
-						var lv = '';
-						o.issues.forEach(function(it) { if (it.dst.indexOf(i + 1) >= 0 && (it.lvl === 'err' || it.lvl === 'warn')) { if (it.lvl === 'err') lv = 'b'; else if (lv !== 'b') lv = 'w'; } });
-						if (lv) l.mark = lv;
-					});
-					o.count = { err: 0, warn: 0, add: 0, info: 0 };
-					o.issues.forEach(function(it) { o.count[it.lvl]++; });
-					o.text = o.lines.map(function(l) { return l.text; }).join('\n');
-				}
-
-				return { z1to2: z1to2, z2to1: z2to1, tokenize: tokenize, parseUci: parseUci, z2Current: z2Current, z2Env: z2Env, blobName: blobName };
-			})();
-			var SVG = {
-				x: '<path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/>',
-				alert: '<path d="M12 3.5l9.5 16.5h-19L12 3.5z"/><path d="M12 10v4.5M12 17.3v.2"/>',
-				plus: '<path d="M12 5v14M5 12h14"/>',
-				info: '<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5"/><path d="M12 7.7v.1"/>',
-				check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
-				swap: '<path d="M4 8h13l-3.5-3.5M20 16H7l3.5 3.5"/>'
-			};
-			function ico(n, s) { return E('<svg viewBox="0 0 24 24" width="' + (s || 17) + '" height="' + (s || 17) + '" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + SVG[n] + '</svg>'); }
-			var LV = { err: [ 'b', 'x', 'Ошибки', 'zm-bad' ], warn: [ 'w', 'alert', 'Неточно', 'zm-warn' ], add: [ 'a', 'plus', 'Добавлено', 'zm-cv-tadd' ], info: [ 'i', 'info', 'Заметки', 'zm-off' ] };
-			var NAMES = { '12': [ 'Zapret · nfqws', 'Zapret2 · nfqws2' ], '21': [ 'Zapret2 · nfqws2', 'Zapret · nfqws' ] };
-			var HOLD = { '12': '--filter-tcp=443\n--hostlist=/opt/zapret/ipset/zapret-hosts-user.txt\n--dpi-desync=fake,multisplit\n--dpi-desync-split-pos=1\n--dpi-desync-fooling=md5sig\n--dpi-desync-fake-tls=/opt/zapret/files/fake/tls_clienthello_www_google_com.bin',
-				'21': '--filter-tcp=443\n--payload=tls_client_hello\n--lua-desync=fake:blob=fake_default_tls:tcp_md5\n--lua-desync=multisplit:pos=1' };
-			var env = null, envLoading = null, dir = '12', texts = { '12': '', '21': '' }, legacy = false, res = null, filt = 'all', timer = null, fixBusy = false;
-			var ta = E('textarea', { 'class': 'zm-cv-ta', 'spellcheck': 'false', 'autocomplete': 'off', 'autocapitalize': 'off', 'rows': '16' });
-			var srcName = E('span', {}), dstName = E('span', {}), dstBadge = E('span', {});
-			var outBody = E('div', { 'class': 'zm-cv-out' }), flEl = E('div', { 'class': 'zm-cv-fl' }), listEl = E('div', { 'class': 'zm-cv-list' }), segEl = E('div', { 'class': 'zm-seg' });
-			var curBtn = E('button', { 'class': 'zm-cv-mini', 'type': 'button', 'title': 'Подставить стратегию, которая сейчас стоит на роутере', 'click': loadCurrent }, 'Текущая');
-			var clrBtn = E('button', { 'class': 'zm-cv-mini', 'type': 'button', 'click': function() { ta.value = ''; texts[dir] = ''; legacy = false; run(); ta.focus(); } }, 'Очистить');
-			var cpBtn = E('button', { 'class': 'zm-cv-mini', 'type': 'button', 'click': function() { if (res && !res.empty && res.text) zm.copyText(res.text, 'Перевод скопирован'); } }, 'Копировать');
-			ta.addEventListener('input', function() { texts[dir] = ta.value; clearTimeout(timer); timer = setTimeout(run, 220); });
-
-			P.appendChild(E('div', { 'class': 'zm-card' }, [
-				E('div', { 'class': 'zm-cv-head' }, [ E('h3', {}, 'Конвертор стратегий'), segEl ]),
-				E('p', { 'class': 'zm-hint', 'style': 'margin:6px 0 0' }, 'Вставьте стратегию слева — справа появится перевод. Проблемные строки отмечены точкой: красная — ошибка, жёлтая — неточно, зелёная — добавлено.'),
-				E('div', { 'class': 'zm-cv-2' }, [
-					E('div', { 'class': 'zm-cv-pane' }, [ E('div', { 'class': 'zm-cv-ph' }, [ srcName, E('span', { 'class': 'zm-cv-act' }, [ curBtn, clrBtn ]) ]), ta ]),
-					E('div', { 'class': 'zm-cv-pane' }, [ E('div', { 'class': 'zm-cv-ph' }, [ dstName, dstBadge, E('span', { 'class': 'zm-cv-act' }, [ cpBtn ]) ]), outBody ])
-				]),
-				flEl, listEl
-			]));
-
-			function renderSeg() {
-				segEl.innerHTML = '';
-				[ [ '12', 'Zapret → Zapret2' ], [ '21', 'Zapret2 → Zapret' ] ].forEach(function(x) {
-					segEl.appendChild(E('div', { 'class': 'zm-seg-item' + (dir === x[0] ? ' zm-active' : ''), 'click': function() {
-						if (dir === x[0]) return;
-						texts[dir] = ta.value; dir = x[0]; legacy = false; filt = 'all';
-						ta.value = texts[dir]; renderSeg(); run();
-					} }, x[1]));
-				});
-				srcName.textContent = NAMES[dir][0]; dstName.textContent = NAMES[dir][1];
-				ta.setAttribute('placeholder', HOLD[dir]);
-			}
-
-			function code(t) {
-				var h = function(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); };
-				if (/^#/.test(t)) return '<span class="zm-cv-m">' + h(t) + '</span>';
-				if (/^<[A-Z_]+>$/.test(t)) return '<span class="zm-cv-m">' + h(t) + '</span>';
-				var m = /^(--[A-Za-z0-9-]+)(=?)([\s\S]*)$/.exec(t);
-				if (!m) return h(t);
-				var v = m[3];
-				if (m[1] === '--lua-desync') { var f = /^([a-z_0-9]+)([\s\S]*)$/.exec(v); if (f) v = '<b class="zm-cv-fn">' + h(f[1]) + '</b>' + h(f[2]); else v = h(v); }
-				else v = h(v);
-				return '<span class="zm-cv-k">' + h(m[1]) + '</span>' + h(m[2]) + v;
-			}
-
-			function profScript(pi) {
-				return res.lines.filter(function(l) { return l.prof === pi && l.kind === 's'; }).map(function(l) { return l.text; }).join('\n');
-			}
-
-			function renderOut() {
-				outBody.innerHTML = '';
-				dstBadge.className = ''; dstBadge.textContent = '';
-				cpBtn.disabled = !(res && !res.empty && res.text);
-				if (!res || res.empty) { outBody.appendChild(E('div', { 'class': 'zm-cv-empty' }, [ ico('swap', 22), E('div', {}, 'Здесь появится перевод') ])); return; }
-				var c = res.count;
-				dstBadge.className = 'zm-badge ' + (c.err ? 'zm-bad' : c.warn ? 'zm-warn' : 'zm-ok');
-				dstBadge.appendChild(E('span', { 'class': 'zm-dot' }));
-				dstBadge.appendChild(document.createTextNode(c.err ? plural(c.err, 'ошибка', 'ошибки', 'ошибок') : c.warn ? plural(c.warn, 'неточность', 'неточности', 'неточностей') : 'переведено точно'));
-				var lastP = null, n = 0;
-				res.lines.forEach(function(l, i) {
-					if (l.prof !== lastP) {
-						lastP = l.prof;
-						if (l.prof < 0) { if (l.kind === 'b') outBody.appendChild(E('div', { 'class': 'zm-cv-prow' }, [ E('b', {}, 'Fake-файлы'), E('small', {}, 'общие строки --blob') ])); }
-						else {
-							var pr = res.profiles[l.prof] || {};
-							var row = E('div', { 'class': 'zm-cv-prow' }, [ E('b', {}, 'Профиль ' + (l.prof + 1) + (pr.name ? ' · ' + pr.name : '')), E('small', {}, pr.desc || '') ]);
-							if (dir === '12') (function(pi) {
-								row.appendChild(E('span', { 'class': 'zm-cv-plink', 'title': 'Только действия профиля — для поля «script» стратегии в LuCI Zapret2', 'click': function() { zm.copyText(profScript(pi), 'Скрипт профиля скопирован'); } }, 'скрипт для LuCI'));
-							})(l.prof);
-							outBody.appendChild(row);
-						}
-					}
-					n = i + 1;
-					var cls = 'zm-cv-ln' + (l.mark === 'b' ? ' zm-cv-lb' : l.mark === 'w' ? ' zm-cv-lw' : l.mark === 'n' ? ' zm-cv-ln-n' : '') + (l.text === '--new' ? ' zm-cv-lnew' : '');
-					var sp = E('span', {}); sp.innerHTML = code(l.text);
-					outBody.appendChild(E('div', { 'class': cls, 'data-n': String(n) }, [ E('i', {}, String(n)), sp, E('u', {}) ]));
-				});
-			}
-
-			function plural(n, a, b, c) { var m10 = n % 10, m100 = n % 100; return n + ' ' + (m10 === 1 && m100 !== 11 ? a : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? b : c); }
-
-			function hot(dst, on) {
-				(dst || []).forEach(function(n) { var el = outBody.querySelector('[data-n="' + n + '"]'); if (el) el.classList.toggle('zm-cv-hot', on); });
-				if (on && dst && dst.length) { var f = outBody.querySelector('[data-n="' + dst[0] + '"]'); if (f && f.scrollIntoView && (f.offsetTop < outBody.scrollTop || f.offsetTop > outBody.scrollTop + outBody.clientHeight - 30)) outBody.scrollTop = f.offsetTop - 40; }
-			}
-
-			function selectLine(ln) {
-				var lines = ta.value.split('\n'), pos = 0;
-				for (var i = 0; i < ln - 1 && i < lines.length; i++) pos += lines[i].length + 1;
-				ta.focus();
-				try { ta.setSelectionRange(pos, pos + (lines[ln - 1] || '').length); } catch (e) {}
-				var lh = parseFloat(getComputedStyle(ta).lineHeight) || 20;
-				ta.scrollTop = Math.max(0, (ln - 3) * lh);
-			}
-
-			function doFix(it) {
-				if (fixBusy) return;
-				var f = it.fix;
-				if (f.act === 'legacy') { legacy = true; run(); zm.toast('Поставлен multidisorder_legacy — нарезка как в Zapret', 'info'); return; }
-				fixBusy = true; renderList();
-				var p = f.act === 'copy' ? zm.convFix('copy', f.kind + ':' + f.dir + ':' + f.name) : zm.convFix('blob', f.name + ':' + f.file);
-				p.then(function(r) {
-					fixBusy = false;
-					if (!r || r.error) { zm.toast((r && r.error) || 'Роутер не ответил', 'error'); renderList(); return; }
-					zm.toast(r.msg || 'Готово', 'info');
-					env = null; loadEnv(true);
-				}).catch(function() { fixBusy = false; renderList(); zm.toast('Роутер не ответил', 'error'); });
-			}
-
-			function renderList() {
-				flEl.innerHTML = ''; listEl.innerHTML = '';
-				if (!res || res.empty) return;
-				var c = res.count, total = res.issues.length;
-				if (!total) {
-					listEl.appendChild(E('div', { 'class': 'zm-cv-iss zm-cv-iss-ok' }, [ E('div', { 'class': 'zm-cv-ico zm-cv-io' }, [ ico('check') ]), E('div', {}, [ E('div', { 'class': 'zm-cv-iss-t' }, 'Всё переведено точно'), E('div', { 'class': 'zm-cv-iss-d' }, 'Замечаний нет — стратегию можно копировать.') ]), E('span') ]));
-					return;
-				}
-				if (filt !== 'all' && !c[filt]) filt = 'all';
-				var chip = function(key, label, cls) {
-					return E('span', { 'class': 'zm-badge ' + cls + (filt === key ? ' zm-cv-on' : ''), 'role': 'button', 'tabindex': '0', 'click': function() { filt = filt === key ? 'all' : key; renderList(); } }, key === 'all' ? label : [ E('span', { 'class': 'zm-dot' }), label ]);
-				};
-				flEl.appendChild(chip('all', 'Все · ' + total, 'zm-cv-tall'));
-				[ 'err', 'warn', 'add', 'info' ].forEach(function(k) { if (c[k]) flEl.appendChild(chip(k, LV[k][2] + ' · ' + c[k], LV[k][3])); });
-				res.issues.forEach(function(it) {
-					if (filt !== 'all' && it.lvl !== filt) return;
-					var side = [];
-					if (it.lines && it.lines.length) side.push(E('span', { 'class': 'zm-cv-at', 'title': 'Показать в исходной стратегии', 'click': function() { selectLine(it.lines[0]); } }, it.lines.length > 1 ? 'стр. ' + it.lines[0] + '…' : 'стр. ' + it.lines[0]));
-					if (it.fix) side.push(E('button', { 'class': 'cbi-button zm-cv-fix', 'disabled': fixBusy ? '' : null, 'click': function() { doFix(it); } }, it.fixLabel || 'Исправить'));
-					var row = E('div', { 'class': 'zm-cv-iss' }, [
-						E('div', { 'class': 'zm-cv-ico zm-cv-i' + LV[it.lvl][0] }, [ ico(LV[it.lvl][1]) ]),
-						E('div', {}, [ E('div', { 'class': 'zm-cv-iss-t' }, it.title), E('div', { 'class': 'zm-cv-iss-d' }, it.text) ]),
-						E('div', { 'class': 'zm-cv-iss-side' }, side)
-					]);
-					row.addEventListener('mouseenter', function() { hot(it.dst, true); });
-					row.addEventListener('mouseleave', function() { hot(it.dst, false); });
-					listEl.appendChild(row);
-				});
-			}
-
-			function run() {
-				clearTimeout(timer);
-				var t = ta.value;
-				try { res = dir === '12' ? ZMCV.z1to2(t, env, { legacy: legacy }) : ZMCV.z2to1(t, env); }
-				catch (e) { res = { empty: false, lines: [], issues: [ { lvl: 'err', title: 'Не удалось разобрать стратегию', text: String(e && e.message || e), src: [], dst: [], lines: [] } ], profiles: [], count: { err: 1, warn: 0, add: 0, info: 0 }, text: '' }; }
-				renderOut(); renderList();
-			}
-
-			function loadCurrent() {
-				var go = function() {
-					if (!env) { zm.toast('Роутер не ответил', 'error'); return; }
-					var t = '';
-					if (dir === '12') {
-						if (!env.z1 || !env.z1.installed) { zm.toast('Zapret не установлен', 'warning'); return; }
-						t = String(env.z1.opt || '');
-					} else {
-						if (!env.z2 || !env.z2.installed) { zm.toast('Zapret2 не установлен', 'warning'); return; }
-						t = ZMCV.z2Current(env.z2.conf || '');
-						if (!t) { zm.toast('В Zapret2 нет включённых стратегий', 'warning'); return; }
-					}
-					if (!t.replace(/\s+/g, '')) { zm.toast('Стратегия пустая', 'warning'); return; }
-					ta.value = t; texts[dir] = t; legacy = false; filt = 'all'; run();
-				};
-				if (env) go(); else loadEnv(false).then(go);
-			}
-
-			function loadEnv(rerun) {
-				if (envLoading) return envLoading;
-				envLoading = zm.convEnv().then(function(r) {
-					envLoading = null;
-					if (r && !r.error && r.z1) { env = ZMCV.z2Env(r); if (rerun !== false) run(); }
-				}).catch(function() { envLoading = null; });
-				return envLoading;
-			}
-
-			renderSeg(); run();
-			tabHooks.converter = function() { if (!env) loadEnv(true); };
-		})();
-
 		if (zapretInstalled) {
 			renderTabBar();
 			mainSection.appendChild(tabBar);
 			TABS.forEach(function(t) { mainSection.appendChild(panels[t.id]); });
+			if (pendBar) mainSection.appendChild(pendBar);
 		}
 		wrap.appendChild(mainSection);
 		return wrap;
@@ -48083,6 +47224,11 @@ html.zm-theme-dark .zm-toast-warning .zm-toast-icon { color: #9a6700; }
 .zm-tg-edit-port { width: 120px !important; max-width: 100%; }
 .zm-tg-edit-keyline { display: flex; gap: 8px; flex-wrap: wrap; min-width: 0; }
 .zm-tg-edit-key { flex: 1 1 260px; min-width: 0; width: auto !important; }
+.zm-tg-edit-row.zm-tg-args-row { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+.zm-tg-args-line { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; min-width: 0; }
+.zm-tg-args-pre { font-family: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace; font-size: 12.5px; opacity: .65; white-space: nowrap; }
+.zm-tg-args-in { flex: 1 1 260px; min-width: 0; width: auto !important; }
+.zm-tg-args-hint { margin: 2px 0 0 !important; }
 .zm-tg-edit-msg { min-height: 20px; }
 .zm-tg-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 10px; border-radius: 999px; font-size: 12px; line-height: 1.5; }
 .zm-tg-chip-ok { background: rgba(26,127,55,.12); color: #1a7f37; }
@@ -48106,6 +47252,13 @@ html.zm-theme-dark .zm-tg-chip-ok { color: #3fb950; } html.zm-theme-dark .zm-tg-
 .zm-tg-x-intro { margin: 6px 0 4px; }
 .zm-cards.zm-cards-2 > .zm-card.zm-tg-wide { grid-column: 1 / -1; }
 .zm-cards.zm-cards-2 > .zm-card > .zm-tg-x { margin-top: auto; }
+.zm-tg-board { display: flex; flex-direction: column; gap: 14px; }
+.zm-tg-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: start; }
+.zm-tg-col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.zm-tg-board .zm-card { display: flex; flex-direction: column; }
+.zm-tg-board .zm-card > .zm-actions:last-child { margin-top: auto; padding-top: 6px; margin-bottom: 0; }
+.zm-tg-board .zm-card > .zm-tg-x { margin-top: auto; }
+@media (max-width: 720px) { .zm-tg-cols { display: flex; flex-direction: column; } .zm-tg-col { display: contents; } }
 .zm-tg-x-row { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 6px 14px; align-items: start; padding: 12px 0; border-bottom: 1px dashed rgba(110,118,129,.25); }
 .zm-tg-x-field { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .zm-tg-x-field > .zm-swrow { margin: 0; }
@@ -48258,7 +47411,7 @@ html.zm-theme-dark .zm-sub-note { background: rgba(88,166,255,.1); border-color:
 .zm-quota { width: 100%; max-width: 160px; height: 5px; border-radius: 99px; background: rgba(0,0,0,.1); overflow: hidden; }
 .zm-quota > i { display: block; height: 100%; border-radius: 99px; background: #1a7f37; }
 .zm-quota.zm-quota-high > i { background: #cf222e; }
-.zm-seg { display: inline-flex; padding: 3px; gap: 3px; border-radius: 9px; border: 1px solid rgba(0,0,0,.1); background: var(--background-color-low, #fafafa); }
+.zm-seg { display: inline-flex; flex-wrap: wrap; max-width: 100%; box-sizing: border-box; padding: 3px; gap: 3px; border-radius: 9px; border: 1px solid rgba(0,0,0,.1); background: var(--background-color-low, #fafafa); }
 html.zm-theme-dark .zm-seg { background: #22272e; border-color: rgba(255,255,255,.12); }
 .zm-seg-item { padding: 5px 14px; border-radius: 7px; cursor: pointer; font-size: 13px; font-weight: 600; opacity: .7; transition: background .15s, opacity .15s; }
 .zm-seg-item:hover { opacity: 1; }
@@ -49327,72 +48480,6 @@ html.zm-theme-dark .zm-ev-dot { background: #8b949e; }
 	.zm-ev-time { grid-column: 2; }
 	.zm-ev-msg { grid-column: 2; }
 }
-.zm-cv-head { display: flex; align-items: center; gap: 10px 16px; flex-wrap: wrap; }
-.zm-cv-head h3 { margin: 0 !important; }
-.zm-cv-head .zm-seg { margin-left: auto; }
-.zm-cv-2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; margin-top: 14px; align-items: stretch; }
-.zm-cv-pane { min-width: 0; display: flex; flex-direction: column; border: 1px solid rgba(127,127,127,.24); border-radius: 14px; background: rgba(127,127,127,.04); overflow: hidden; }
-.zm-cv-ph { display: flex; align-items: center; gap: 8px; min-height: 42px; box-sizing: border-box; padding: 6px 8px 6px 14px; border-bottom: 1px solid rgba(127,127,127,.18); font-size: 13px; font-weight: 600; }
-.zm-cv-ph .zm-badge { padding: 2px 9px; font-size: 11.5px; }
-.zm-cv-act { margin-left: auto; display: flex; gap: 6px; }
-.zm-cv-mini { font: inherit; font-size: 12px; font-weight: 600; line-height: 1; padding: 7px 11px; border-radius: 9px; border: 1px solid rgba(127,127,127,.28); background: transparent; color: inherit; cursor: pointer; }
-.zm-cv-mini:hover { border-color: rgba(127,127,127,.5); }
-.zm-cv-mini[disabled] { opacity: .45; cursor: default; }
-textarea.zm-cv-ta { flex: 1; display: block; width: 100%; min-height: 320px; box-sizing: border-box; margin: 0; padding: 10px 14px; border: 0; border-radius: 0; background: transparent; color: inherit; box-shadow: none; outline: none; resize: vertical; font: 12.5px/1.8 ui-monospace, "SF Mono", "Cascadia Code", Consolas, "Liberation Mono", monospace; white-space: pre-wrap; word-break: break-all; }
-.zm-cv-out { flex: 1; min-height: 320px; max-height: 620px; overflow: auto; padding: 6px 0 10px; font: 12.5px/1.8 ui-monospace, "SF Mono", "Cascadia Code", Consolas, "Liberation Mono", monospace; }
-.zm-cv-ln { display: grid; grid-template-columns: 30px minmax(0, 1fr) 12px; gap: 8px; padding: 0 12px 0 2px; transition: background .12s; }
-.zm-cv-ln > i { font-style: normal; text-align: right; opacity: .38; user-select: none; }
-.zm-cv-ln > span { min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
-.zm-cv-ln > u { text-decoration: none; padding-top: 8px; }
-.zm-cv-ln > u::before { content: ""; display: block; width: 7px; height: 7px; border-radius: 50%; }
-.zm-cv-lb { background: rgba(207,34,46,.09); }
-.zm-cv-lb > u::before { background: #cf222e; }
-.zm-cv-lb > span { text-decoration: underline wavy rgba(207,34,46,.75); text-underline-offset: 4px; text-decoration-thickness: 1px; }
-.zm-cv-lw > u::before { background: #d4a72c; }
-.zm-cv-lw > span { text-decoration: underline wavy rgba(212,167,44,.9); text-underline-offset: 4px; text-decoration-thickness: 1px; }
-.zm-cv-ln-n > u::before { background: #2da44e; }
-.zm-cv-lnew { opacity: .55; }
-.zm-cv-ln.zm-cv-hot { background: rgba(26,127,208,.14); }
-.zm-cv-k { color: #0969da; white-space: nowrap; }
-.zm-cv-fn { font-weight: 700; }
-.zm-cv-m { opacity: .55; font-style: italic; }
-.zm-cv-prow { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; margin: 8px 10px 3px; padding: 5px 10px; border-radius: 8px; background: rgba(127,127,127,.09); font-family: inherit; font-size: 12px; line-height: 1.45; }
-.zm-cv-out .zm-cv-prow { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
-.zm-cv-prow b { font-weight: 700; }
-.zm-cv-prow small { font-size: 12px; opacity: .65; }
-.zm-cv-plink { margin-left: auto; font-weight: 600; color: #0969da; cursor: pointer; white-space: nowrap; }
-.zm-cv-plink:hover { text-decoration: underline; }
-.zm-cv-empty { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 70px 16px; opacity: .5; font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
-.zm-cv-fl { display: flex; gap: 6px; flex-wrap: wrap; margin: 16px 0 2px; }
-.zm-cv-fl:empty { display: none; }
-.zm-cv-fl .zm-badge { cursor: pointer; user-select: none; }
-.zm-cv-fl .zm-cv-on { box-shadow: inset 0 0 0 1.5px currentColor; }
-.zm-cv-tall { background: rgba(127,127,127,.1); }
-.zm-cv-tadd { background: rgba(26,127,208,.12); color: #1a6fb8; }
-.zm-cv-tadd .zm-dot { background: currentColor; }
-.zm-cv-list { margin-top: 4px; }
-.zm-cv-iss { display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; gap: 12px; align-items: start; padding: 11px 4px; border-top: 1px solid rgba(127,127,127,.16); border-radius: 0; }
-.zm-cv-iss:first-child { border-top: 0; }
-.zm-cv-iss:hover { background: rgba(127,127,127,.05); }
-.zm-cv-ico { width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center; }
-.zm-cv-ib { background: rgba(207,34,46,.12); color: #cf222e; }
-.zm-cv-iw { background: rgba(191,135,0,.15); color: #9a6700; }
-.zm-cv-ia { background: rgba(26,127,208,.12); color: #1a6fb8; }
-.zm-cv-ii { background: rgba(127,127,127,.12); }
-.zm-cv-io { background: rgba(46,160,67,.13); color: #1a7f37; }
-.zm-cv-iss-t { font-size: 13.5px; font-weight: 600; line-height: 1.45; overflow-wrap: anywhere; }
-.zm-cv-iss-d { margin-top: 2px; font-size: 12.5px; line-height: 1.5; opacity: .75; overflow-wrap: anywhere; }
-.zm-cv-iss-side { display: flex; align-items: center; gap: 10px; padding-top: 4px; }
-.zm-cv-at { font-size: 12px; opacity: .7; cursor: pointer; white-space: nowrap; text-decoration: underline dotted; text-underline-offset: 3px; }
-.zm-cv-at:hover { opacity: 1; }
-.cbi-button.zm-cv-fix { min-height: 0; padding: 5px 12px; font-size: 12.5px; }
-html.zm-theme-dark .zm-cv-k, html.zm-theme-dark .zm-cv-plink { color: #79c0ff; }
-html.zm-theme-dark .zm-cv-ib { color: #ff7b72; }
-html.zm-theme-dark .zm-cv-iw { color: #e3b341; }
-html.zm-theme-dark .zm-cv-ia, html.zm-theme-dark .zm-cv-tadd { color: #79c0ff; }
-html.zm-theme-dark .zm-cv-io { color: #3fb950; }
-@media (max-width: 900px) { .zm-cv-2 { grid-template-columns: minmax(0, 1fr); } textarea.zm-cv-ta, .zm-cv-out { min-height: 200px; } .zm-cv-head .zm-seg { margin-left: 0; } }
-@media (max-width: 600px) { .zm-cv-iss { grid-template-columns: 32px minmax(0, 1fr); } .zm-cv-iss-side { grid-column: 2; padding-top: 0; } }
 ZM_INSTALLER_EOF
 chmod 0644 '/www/luci-static/resources/view/zapret-manager/style.css'
 
@@ -51918,7 +51005,7 @@ return view.extend({
 		var data = all[0];
 		var tgwsData = all[1] || {};
 		var wrap = E('div', { 'class': 'zm-wrap' });
-		var cards = E('div', { 'class': 'zm-cards zm-cards-2' });
+		var cards = E('div', { 'class': 'zm-tg-board' });
 		var linksWrap = E('div', {});
 		var logEl = E('pre', { 'class': 'zm-log' });
 
@@ -51926,9 +51013,9 @@ return view.extend({
 			if (id === 'mtproto') return { installed: d.mtproto === 'installed', running: d.mtproto_running === true, secret: d.link_mtproto || (d.secret_mtproto ? 'dd' + d.secret_mtproto : ''), version: d.mtproto_version, latest: d.mtproto_latest, newer: d.mtproto_newer === true,
 				port: d.mtproto_port, host: d.mtproto_host, key: d.secret_mtproto || '', edit: true, ext: (d.ext || {}).mtproto || null };
 			if (id === 'socks5') return { installed: d.socks5 === 'installed', running: d.socks5_running === true, secret: '', version: d.socks5_version, latest: d.socks5_latest, newer: d.socks5_newer === true,
-				port: d.socks5_port, edit: true };
+				port: d.socks5_port, edit: true, args: d.socks5_args || '', argsDef: (d.args_def || {}).socks5 || '' };
 			return { installed: d.rust === 'installed', running: d.rust_running === true, secret: d.secret_rust, version: d.rust_version, latest: d.rust_latest, newer: d.rust_newer === true,
-				uci: d.rust_uci === true, enabled: d.rust_enabled !== false, port: d.rust_port, host: d.rust_host, key: d.rust_key || '', edit: d.rust_uci !== true, ext: (d.ext || {}).rust || null };
+				uci: d.rust_uci === true, enabled: d.rust_enabled !== false, port: d.rust_port, host: d.rust_host, key: d.rust_key || '', edit: d.rust_uci !== true, ext: (d.ext || {}).rust || null, args: d.rust_args || '', argsDef: (d.args_def || {}).rust || '' };
 		}
 
 		var editOpen = {}, editDraft = {}, portSeq = 0;
@@ -51970,8 +51057,24 @@ return view.extend({
 			return { ok: true, text: String(+p) === String(st.port) ? 'Текущий порт' : '' };
 		}
 		function chip(cls, text) { return E('span', { 'class': 'zm-tg-chip ' + cls }, text); }
+		function hasArgs(v, st) { return (v.id === 'socks5' || v.id === 'rust') && !st.uci; }
+		function argsNorm(s) { return String(s || '').replace(/\s+/g, ' ').trim(); }
+		function argsCheck(s) {
+			var a = argsNorm(s), toks = a ? a.split(' ') : [], i, t;
+			if (a.length > 512) return { ok: false, text: 'Слишком длинно — не больше 512 знаков', args: a };
+			for (i = 0; i < toks.length; i++) {
+				t = toks[i];
+				if (!/^[A-Za-z0-9._:\/,=@+%-]+$/.test(t)) return { ok: false, text: '«' + t + '» — недопустимые символы', args: a };
+				if (/^--?(host|port|secret|listen-faketls-domain)(=|$)/.test(t)) return { ok: false, text: t.split('=')[0] + ' задаётся выше — уберите его', args: a };
+			}
+			var n = toks.length;
+			return { ok: true, args: a, text: n ? n + ' ' + (n % 10 === 1 && n % 100 !== 11 ? 'параметр' : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) ? 'параметра' : 'параметров') : 'без параметров' };
+		}
 		function editPanel(v, st) {
-			var dr = editDraft[v.id] || (editDraft[v.id] = { port: String(st.port || v.port), key: st.key || '', busy: false, net: null });
+			var dr = editDraft[v.id] || (editDraft[v.id] = { port: String(st.port || v.port), key: st.key || '', args: st.args || '', busy: false, net: null });
+			var withArgs = hasArgs(v, st);
+			var argsIn = withArgs ? E('input', { 'type': 'text', 'class': 'cbi-input-text zm-tg-edit-in zm-tg-args-in', 'value': dr.args, 'spellcheck': 'false', 'autocapitalize': 'off', 'autocomplete': 'off', 'aria-label': 'Параметры после порта' }) : null;
+			var argsPre = E('span', { 'class': 'zm-tg-args-pre' }), argsMsg = E('div', { 'class': 'zm-tg-edit-msg' });
 			var portIn = E('input', { 'type': 'text', 'inputmode': 'numeric', 'class': 'cbi-input-text zm-tg-edit-in zm-tg-edit-port', 'value': dr.port, 'maxlength': '5', 'aria-label': 'Порт' });
 			var keyIn = v.kind === 'proto' ? E('input', { 'type': 'text', 'class': 'cbi-input-text zm-tg-edit-in zm-tg-edit-key', 'value': dr.key, 'spellcheck': 'false', 'autocapitalize': 'off', 'autocomplete': 'off', 'aria-label': 'Ключ' }) : null;
 			if (keyIn) zm.secretIn(keyIn);
@@ -52001,8 +51104,16 @@ return view.extend({
 					keyMsg.innerHTML = '';
 					keyMsg.appendChild(chip(kc.ok ? 'zm-tg-chip-ok' : 'zm-tg-chip-bad', (kc.ok ? '✓ ' : '✕ ') + kc.text));
 				}
-				var same = String(+dr.port) === String(st.port) && (!keyIn || (kc.key || '') === (st.key || ''));
-				var ok = pc.ok && kc.ok && !(dr.net && dr.net.free === false) && dr.net !== 'wait';
+				var ac = withArgs ? argsCheck(dr.args) : { ok: true, args: '' };
+				if (withArgs) {
+					argsPre.textContent = '…--port ' + (String(+dr.port || dr.port) || st.port || v.port);
+					argsMsg.innerHTML = '';
+					argsMsg.appendChild(chip(ac.ok ? 'zm-tg-chip-ok' : 'zm-tg-chip-bad', (ac.ok ? '✓ ' : '✕ ') + ac.text));
+				}
+				var confSame = String(+dr.port) === String(st.port) && (!keyIn || (kc.key || '') === (st.key || ''));
+				var argsSame = !withArgs || ac.args === argsNorm(st.args);
+				var same = confSame && argsSame;
+				var ok = pc.ok && kc.ok && ac.ok && !(dr.net && dr.net.free === false) && dr.net !== 'wait';
 				preview.innerHTML = '';
 				preview.appendChild(ok ? zm.secret(linkFor(kc.key)) : document.createTextNode('Ссылка появится, когда порт' + (keyIn ? ' и ключ' : '') + ' будут в порядке'));
 				preview.classList.toggle('zm-tg-edit-preview-off', !ok);
@@ -52026,19 +51137,37 @@ return view.extend({
 			}
 			portIn.addEventListener('input', function() { var c = portIn.value.replace(/\D+/g, ''); if (c !== portIn.value) portIn.value = c; dr.port = c; netCheck(); });
 			if (keyIn) keyIn.addEventListener('input', function() { dr.key = keyIn.value.trim(); paint(); });
+			if (argsIn) argsIn.addEventListener('input', function() { dr.args = argsIn.value; paint(); });
 			saveBtn.addEventListener('click', function() {
 				if (dr.busy) return;
 				if (busyMap[v.id]) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
 				var kc = keyIn ? keyCheck(v, dr.key) : { key: '' };
+				var ac = withArgs ? argsCheck(dr.args) : { args: '' };
+				var confSame = String(+dr.port) === String(st.port) && (!keyIn || (kc.key || '') === (st.key || ''));
+				var argsSame = !withArgs || ac.args === argsNorm(st.args);
 				dr.busy = true; busyMap[v.id] = true; paint();
 				zm.toast('Применяем настройки ' + v.title + ' и перезапускаем его', 'warning');
-				zm.tgAction(v.id, 'conf=' + (+dr.port) + ':' + (kc.key || '')).then(function(r) {
+				var stop = function(msg, log) {
 					dr.busy = false; busyMap[v.id] = false;
-					if (!r || r.error) { zm.toast((r && r.error) || 'Роутер не ответил', 'error', 10000); paint(); return; }
-					zm.toast(r.same ? 'Ничего не изменилось' : r.running === false ? 'Сохранено. ' + v.title + ' сейчас не запущен — ссылка появится, когда он заработает' : v.title + ': порт и ключ применены — обновите прокси в Telegram по новой ссылке', 'info', 8000);
-					editOpen[v.id] = false; delete editDraft[v.id];
-					zm.tgStatus().then(function(d) { data = d; renderCards(d); renderLinks(d); });
-				}, function() { dr.busy = false; busyMap[v.id] = false; zm.toast('Роутер не ответил', 'error'); paint(); });
+					zm.toast(msg + (log ? ' · ' + String(log).split('\n')[0] : ''), 'error', 12000);
+					zm.tgStatus().then(function(d) { data = d; st = statusOf(d, v.id); paint(); });
+				};
+				var step1 = confSame ? Promise.resolve({ ok: true, same: true }) : zm.tgAction(v.id, 'conf=' + (+dr.port) + ':' + (kc.key || ''));
+				step1.then(function(r) {
+					if (!r || r.error) { stop((r && r.error) || 'Роутер не ответил'); return; }
+					var step2 = argsSame ? Promise.resolve({ ok: true, same: true }) : zm.tgAction(v.id, 'args=' + ac.args);
+					return step2.then(function(r2) {
+						if (!r2 || r2.error) { stop((r2 && r2.error) || 'Роутер не ответил', r2 && r2.log); return; }
+						dr.busy = false; busyMap[v.id] = false;
+						var running = !(r.running === false || r2.running === false);
+						zm.toast(confSame && argsSame ? 'Ничего не изменилось'
+							: !running ? 'Сохранено. ' + v.title + ' сейчас не запущен' + (confSame ? '' : ' — ссылка появится, когда он заработает')
+							: confSame ? v.title + ': параметры применены, ссылка прежняя'
+							: v.title + ': ' + (keyIn ? 'порт и ключ' : 'порт') + (argsSame ? '' : ' и параметры') + ' применены — обновите прокси в Telegram по новой ссылке', 'info', 8000);
+						editOpen[v.id] = false; delete editDraft[v.id];
+						zm.tgStatus().then(function(d) { data = d; renderCards(d); renderLinks(d); });
+					});
+				}).catch(function() { dr.busy = false; busyMap[v.id] = false; zm.toast('Роутер не ответил', 'error'); paint(); });
 			});
 			var rows = [
 				E('div', { 'class': 'zm-tg-edit-row' }, [
@@ -52051,6 +51180,15 @@ return view.extend({
 				E('div', { 'class': 'zm-tg-edit-field' }, [
 					E('div', { 'class': 'zm-tg-edit-keyline' }, [ keyIn, E('button', { 'class': 'cbi-button', 'type': 'button', 'title': 'Случайный ключ из 32 знаков', 'click': function() { dr.key = genKey(); keyIn.value = dr.key; paint(); } }, 'Новый ключ') ]),
 					keyMsg
+				])
+			]));
+			if (argsIn) rows.push(E('div', { 'class': 'zm-tg-edit-row zm-tg-args-row' }, [
+				E('label', { 'class': 'zm-tg-edit-label' }, 'Параметры после порта'),
+				E('div', { 'class': 'zm-tg-edit-field' }, [
+					E('div', { 'class': 'zm-tg-args-line' }, [ argsPre, argsIn,
+						E('button', { 'class': 'cbi-button', 'type': 'button', 'title': st.argsDef, 'click': function() { dr.args = st.argsDef || ''; argsIn.value = dr.args; paint(); } }, 'По умолчанию') ]),
+					E('p', { 'class': 'zm-hint zm-tg-args-hint' }, keyIn ? 'Через пробел. Порт и ключ подставятся сами.' : 'Через пробел. Порт подставится сам.'),
+					argsMsg
 				])
 			]));
 			var box = E('div', { 'class': 'zm-tg-edit' }, rows.concat([
@@ -52357,7 +51495,7 @@ return view.extend({
 						'class': 'cbi-button' + (editOpen[v.id] ? ' zm-active' : ''),
 						'aria-expanded': editOpen[v.id] ? 'true' : 'false',
 						'click': function() { editOpen[v.id] = !editOpen[v.id]; if (!editOpen[v.id]) delete editDraft[v.id]; renderCards(data); }
-					}, v.kind === 'socks' ? 'Изменить порт' : 'Порт и ключ'));
+					}, v.kind === 'socks' ? (hasArgs(v, st) ? 'Порт и параметры' : 'Изменить порт') : hasArgs(v, st) ? 'Порт, ключ и параметры' : 'Порт и ключ'));
 					actions.push(E('button', {
 						'class': 'cbi-button cbi-button-remove',
 						'click': function() {
@@ -52386,7 +51524,7 @@ return view.extend({
 						'click': function() { doAction(v.id, 'install'); }
 					}, 'Установить'));
 				}
-				cards.appendChild(E('div', { 'class': 'zm-card' + (extOpen[v.id] && v.kind === 'proto' && st.installed ? ' zm-tg-wide' : '') }, [
+				cards.appendChild(E('div', { 'class': 'zm-card' + (extOpen[v.id] && v.kind === 'proto' && st.installed ? ' zm-tg-wide' : '') + (st.installed && st.edit && editOpen[v.id] ? ' zm-tg-open' : ''), 'data-k': v.id }, [
 					E('h3', {}, v.title),
 					E('div', { 'class': 'zm-row' }, [
 						E('span', { 'class': 'zm-label' }, 'Статус'),
@@ -52396,6 +51534,8 @@ return view.extend({
 						E('span', { 'class': 'zm-label' }, 'Версия'), E('span', {}, [ st.version + (st.newer ? ' · доступна ' + st.latest : st.latest ? ' · последняя' : '') ])
 					]) : E([]),
 					st.installed ? E('div', { 'class': 'zm-row' }, [ E('span', { 'class': 'zm-label' }, 'Порт'), E('span', {}, [ String(st.port || v.port) ]) ]) : E([]),
+					st.installed && hasArgs(v, st) && argsNorm(st.args) !== argsNorm(st.argsDef) ? E('div', { 'class': 'zm-row' }, [ E('span', { 'class': 'zm-label' }, 'Параметры'),
+						E('span', { 'class': 'zm-tg-key', 'title': st.args || 'без параметров' }, [ st.args ? 'свои' : 'без параметров' ]) ]) : E([]),
 					st.installed && st.secret ? E('div', { 'class': 'zm-row' }, [ E('span', { 'class': 'zm-label' }, 'Ключ'),
 						zm.secretBox(E('span', { 'class': 'zm-tg-key' }, [ st.secret.length > 22 ? st.secret.slice(0, 10) + '…' + st.secret.slice(-8) : st.secret ]), st.secret) ]) : E([]),
 					pkgNote || E([]),
@@ -52405,7 +51545,60 @@ return view.extend({
 				]));
 			});
 			if (tgwsCard) cards.appendChild(tgwsCard);
+			layoutCards();
 		}
+
+		// Две независимые колонки: раскрытая панель сдвигает вниз только свою колонку. Закрытые пары — одной высоты, как в сетке;
+		// у раскрытой карточки сосед сохраняет прежнюю высоту. На узком экране — одна колонка в прежнем порядке.
+		var pairH = {}, eqTries = 0;
+		function layoutCards() {
+			var els = [], block = null, col = 0, n = 0;
+			Array.prototype.forEach.call(cards.children, function(ch) {
+				if (!ch.classList.contains('zm-tg-cols')) { els.push(ch); return; }
+				var L = ch.children[0].children, R = ch.children[1].children, i;
+				for (i = 0; i < Math.max(L.length, R.length); i++) { if (L[i]) els.push(L[i]); if (R[i]) els.push(R[i]); }
+			});
+			cards.innerHTML = '';
+			els.forEach(function(el) {
+				el.classList.remove('zm-tg-n1', 'zm-tg-n2', 'zm-tg-n3', 'zm-tg-n4');
+				el.classList.add('zm-tg-n' + (n % 4 + 1));
+				el.style.order = '';
+				n++;
+				if (el.classList.contains('zm-tg-wide')) { cards.appendChild(el); block = null; return; }
+				if (!block) { block = E('div', { 'class': 'zm-tg-cols' }, [ E('div', { 'class': 'zm-tg-col' }), E('div', { 'class': 'zm-tg-col' }) ]); cards.appendChild(block); col = 0; }
+				el.style.order = String(col);
+				block.children[col % 2].appendChild(el);
+				col++;
+			});
+			eqTries = 0;
+			equalize();
+		}
+		function equalize() {
+			if (!cards.isConnected) { if (eqTries++ < 40) requestAnimationFrame(equalize); return; }
+			var two = !window.matchMedia || window.matchMedia('(min-width: 721px)').matches;
+			Array.prototype.forEach.call(cards.querySelectorAll('.zm-tg-cols'), function(block) {
+				var L = block.children[0].children, R = block.children[1].children, i;
+				for (i = 0; i < Math.max(L.length, R.length); i++) {
+					var a = L[i], b = R[i];
+					if (a) a.style.minHeight = '';
+					if (b) b.style.minHeight = '';
+					if (!two || !a || !b) continue;
+					var key = (a.getAttribute('data-k') || '') + '|' + (b.getAttribute('data-k') || '');
+					var oa = a.classList.contains('zm-tg-open'), ob = b.classList.contains('zm-tg-open');
+					if (!oa && !ob) {
+						var h = Math.max(a.offsetHeight, b.offsetHeight);
+						if (!h) continue;
+						pairH[key] = h;
+						a.style.minHeight = b.style.minHeight = h + 'px';
+					} else if (pairH[key]) {
+						if (!oa) a.style.minHeight = pairH[key] + 'px';
+						if (!ob) b.style.minHeight = pairH[key] + 'px';
+					}
+				}
+			});
+		}
+		var eqT = null;
+		window.addEventListener('resize', function() { clearTimeout(eqT); eqT = setTimeout(function() { if (cards.isConnected) equalize(); }, 120); });
 
 		function doAction(variantId, action) {
 			if (busyMap[variantId]) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
@@ -52433,7 +51626,7 @@ return view.extend({
 		wrap.appendChild(cards);
 		wrap.appendChild(logEl);
 
-		var tgwsCard = E('div', { 'class': 'zm-card' });
+		var tgwsCard = E('div', { 'class': 'zm-card', 'data-k': 'tgws' });
 		var tgwsBusy = false;
 
 		function renderTgws(d) {
@@ -52493,6 +51686,7 @@ return view.extend({
 				]));
 			}
 			tgwsCard.appendChild(E('div', { 'class': 'zm-actions' }, actions));
+			if (cards.isConnected) equalize();
 		}
 
 		function doTgwsAction(action) {
@@ -52523,6 +51717,7 @@ return view.extend({
 
 		renderTgws(tgwsData);
 		cards.appendChild(tgwsCard);
+		layoutCards();
 
 		var autoCard = E('div', { 'class': 'zm-card' }), autoBusy = false;
 
@@ -56926,8 +56121,7 @@ function renderInstalled(all) {
 					E('td', { 'class': 'bt-td-c' }, body),
 					E('td', { 'class': 'bt-td-a' }, [
 						isCur ? '' : btn('Применить', 'cbi-button-apply', function() {
-							var q = 'Применить стратегию и перезапустить службу?\n\n' + (p ? p.name + '\n' : '') + r.opts;
-							zm.ask(q, { okText: 'Применить' }).then(function(ok) { if (ok) setStrategy(r.opts, p ? (p.label || p.name) : 'Стратегия'); });
+							setStrategy(r.opts, p ? (p.label || p.name) : 'Стратегия');
 						})
 					])
 				]);
@@ -58289,6 +57483,105 @@ document.addEventListener('click', function (ev) {
 	}); });
 }, true);
 
+(function () {
+	var SEL = '#zmw-view .zm-actions.zmw-tabs';
+	var saved = {}, drag = null, eatClick = false, queued = false;
+	function barKey(bar) {
+		var k = '';
+		for (var i = 0; i < bar.children.length; i++) k += (bar.children[i].textContent || '') + '|';
+		return k;
+	}
+	function edges(bar) {
+		var max = bar.scrollWidth - bar.clientWidth;
+		bar.classList.toggle('zm-hs-on', max > 1);
+	}
+	function showActive(bar, smooth) {
+		var a = bar.querySelector('.cbi-button-positive');
+		if (!a || bar.scrollWidth <= bar.clientWidth + 1) return;
+		var br = bar.getBoundingClientRect(), ar = a.getBoundingClientRect(), pad = 44, d = 0;
+		if (ar.left < br.left + pad) d = ar.left - br.left - pad;
+		else if (ar.right > br.right - pad) d = ar.right - br.right + pad;
+		if (Math.abs(d) > 1) {
+			try { bar.scrollBy({ left: d, behavior: smooth ? 'smooth' : 'auto' }); } catch (e) { bar.scrollLeft += d; }
+		}
+	}
+	function sync() {
+		queued = false;
+		var bars = document.querySelectorAll(SEL);
+		for (var i = 0; i < bars.length; i++) {
+			var bar = bars[i], key = barKey(bar), act = bar.querySelector('.cbi-button-positive');
+			var actTxt = act ? act.textContent : '';
+			if (bar.__zmHsKey !== key || bar.__zmHsAct !== actTxt || bar.__zmHsKids !== bar.firstChild) {
+				var fresh = bar.__zmHsKey === undefined;
+				if (bar.scrollLeft < 1 && saved[key] > 0) bar.scrollLeft = saved[key];
+				bar.__zmHsKey = key; bar.__zmHsAct = actTxt; bar.__zmHsKids = bar.firstChild;
+				showActive(bar, !fresh);
+			}
+			edges(bar);
+		}
+	}
+	function queue() { if (!queued) { queued = true; requestAnimationFrame(sync); } }
+
+	document.addEventListener('scroll', function (ev) {
+		var bar = ev.target;
+		if (!bar || bar.nodeType !== 1 || !bar.matches || !bar.matches(SEL)) return;
+		if (bar.__zmHsKey && bar.__zmHsKids === bar.firstChild) saved[bar.__zmHsKey] = bar.scrollLeft;
+		edges(bar);
+	}, true);
+
+	document.addEventListener('wheel', function (ev) {
+		var bar = ev.target && ev.target.closest ? ev.target.closest(SEL) : null;
+		if (!bar || ev.ctrlKey) return;
+		var max = bar.scrollWidth - bar.clientWidth;
+		if (max <= 1) return;
+		var dx = ev.deltaX, dy = ev.deltaY;
+		if (Math.abs(dx) >= Math.abs(dy) && !ev.shiftKey) return;
+		var d = Math.abs(dx) > Math.abs(dy) ? dx : dy;
+		if (ev.deltaMode === 1) d *= 32; else if (ev.deltaMode === 2) d *= bar.clientWidth;
+		if ((d < 0 && bar.scrollLeft <= 0) || (d > 0 && bar.scrollLeft >= max - 1)) return;
+		ev.preventDefault();
+		bar.scrollLeft += d;
+	}, { passive: false });
+
+	document.addEventListener('pointerdown', function (ev) {
+		if (ev.pointerType !== 'mouse' || ev.button !== 0) return;
+		var bar = ev.target && ev.target.closest ? ev.target.closest(SEL) : null;
+		if (!bar || bar.scrollWidth - bar.clientWidth <= 1) return;
+		drag = { bar: bar, x: ev.clientX, left: bar.scrollLeft, moved: false };
+	});
+	document.addEventListener('pointermove', function (ev) {
+		if (!drag) return;
+		var dx = ev.clientX - drag.x;
+		if (!drag.moved && Math.abs(dx) < 6) return;
+		if (!drag.moved) { drag.moved = true; drag.bar.classList.add('zm-hs-drag'); }
+		drag.bar.scrollLeft = drag.left - dx;
+		ev.preventDefault();
+	});
+	function dragEnd() {
+		if (!drag) return;
+		if (drag.moved) {
+			eatClick = true;
+			drag.bar.classList.remove('zm-hs-drag');
+			setTimeout(function () { eatClick = false; }, 0);
+		}
+		drag = null;
+	}
+	document.addEventListener('pointerup', dragEnd);
+	document.addEventListener('pointercancel', dragEnd);
+	window.addEventListener('click', function (ev) {
+		if (!eatClick) return;
+		eatClick = false;
+		ev.preventDefault(); ev.stopPropagation();
+	}, true);
+	document.addEventListener('dragstart', function (ev) {
+		if (ev.target && ev.target.closest && ev.target.closest(SEL)) ev.preventDefault();
+	});
+
+	window.addEventListener('resize', queue);
+	try { new MutationObserver(queue).observe(document.body, { childList: true, subtree: true }); } catch (e) {}
+	queue();
+})();
+
 function mountAlerts() {
 	if (viewEl && alertsEl.parentNode !== viewEl) viewEl.insertBefore(alertsEl, viewEl.firstChild);
 	else if (viewEl && viewEl.firstChild !== alertsEl) viewEl.insertBefore(alertsEl, viewEl.firstChild);
@@ -59494,6 +58787,8 @@ html[data-theme="light"] .zmw-orbs i { opacity: .28; }
 
 #zmw-view .zm-cards { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; }
 #zmw-view .zm-cards.zm-cards-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+#zmw-view .zm-tg-board, #zmw-view .zm-tg-cols, #zmw-view .zm-tg-col { gap: 18px; }
+#zmw-view .zm-tg-board .zm-card { margin-top: 0; margin-bottom: 0 !important; }
 @media (max-width: 720px) { #zmw-view .zm-cards.zm-cards-2 { grid-template-columns: minmax(0, 1fr); } }
 
 #zmw-view .zm-card {
@@ -59592,6 +58887,17 @@ html[data-theme="dark"] #zmw-view .cbi-button-positive, .zm-dock .cbi-button-pos
 	width: max-content; max-width: 100%;
 }
 #zmw-view .zm-actions.zmw-tabs::-webkit-scrollbar { display: none; }
+#zmw-view .zm-actions.zmw-tabs { overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; }
+#zmw-view .zm-actions.zmw-tabs.zm-hs-drag { cursor: grabbing; user-select: none; -webkit-user-select: none; }
+#zmw-view .zm-actions.zmw-tabs.zm-hs-drag .cbi-button { cursor: grabbing; }
+@media (hover: hover) and (pointer: fine) {
+	#zmw-view .zm-actions.zmw-tabs.zm-hs-on { scrollbar-width: thin; scrollbar-color: rgba(128,128,140,.45) transparent; }
+	#zmw-view .zm-actions.zmw-tabs.zm-hs-on::-webkit-scrollbar { display: block; height: 6px; }
+	#zmw-view .zm-actions.zmw-tabs.zm-hs-on::-webkit-scrollbar-track { background: transparent; margin: 0 14px; }
+	#zmw-view .zm-actions.zmw-tabs.zm-hs-on::-webkit-scrollbar-thumb { background: rgba(128,128,140,.4); border: 0; border-radius: 6px; min-width: 40px; }
+	html.zm-theme-dark #zmw-view .zm-actions.zmw-tabs.zm-hs-on { scrollbar-color: rgba(255,255,255,.22) transparent; }
+	html.zm-theme-dark #zmw-view .zm-actions.zmw-tabs.zm-hs-on::-webkit-scrollbar-thumb { background: rgba(255,255,255,.2); }
+}
 #zmw-view .zmw-tabs .cbi-button, .zm-dock .zmw-tabs .cbi-button, .zmw-modal .zmw-tabs .cbi-button {
 	flex-shrink: 0; white-space: nowrap;
 	border: 0; background: transparent; box-shadow: none; color: var(--muted);
@@ -60125,6 +59431,9 @@ html[data-theme="bento"] #zmw-view .zm-card { background: #ffffff; border: 0; bo
 html[data-theme="bento"] #zmw-view .zm-cards > .zm-card:nth-child(4n+2) { background: #dcecff; }
 html[data-theme="bento"] #zmw-view .zm-cards > .zm-card:nth-child(4n+3) { background: #ffe6c4; }
 html[data-theme="bento"] #zmw-view .zm-cards > .zm-card:nth-child(4n+4) { background: #dff2e2; }
+html[data-theme="bento"] #zmw-view .zm-tg-board .zm-card.zm-tg-n2 { background: #dcecff; }
+html[data-theme="bento"] #zmw-view .zm-tg-board .zm-card.zm-tg-n3 { background: #ffe6c4; }
+html[data-theme="bento"] #zmw-view .zm-tg-board .zm-card.zm-tg-n4 { background: #dff2e2; }
 html[data-theme="bento"] #zmw-view .zm-card h3::before { display: none; }
 html[data-theme="bento"] #zmw-view .zm-card h3 { font-size: 15px; font-weight: 600; color: inherit; opacity: .8; }
 html[data-theme="bento"] #zmw-view .cbi-button, html[data-theme="bento"] .zmw-icon-btn, html[data-theme="bento"] .zm-dock .cbi-button, html[data-theme="bento"] .zmw-modal .cbi-button { border-radius: 14px; border: 0; background: #f6f2ea; color: #1c1a17; box-shadow: none; }
@@ -60787,6 +60096,9 @@ html.zm-dust-on[data-theme] #zmw-view .zm-card, html.zm-dust-on[data-theme] #zmw
 html.zm-dust-on[data-theme="bento"] #zmw-view .zm-cards > .zm-card:nth-child(4n+2) { background-color: color-mix(in srgb, #dcecff var(--zm-glass), transparent); }
 html.zm-dust-on[data-theme="bento"] #zmw-view .zm-cards > .zm-card:nth-child(4n+3) { background-color: color-mix(in srgb, #ffe6c4 var(--zm-glass), transparent); }
 html.zm-dust-on[data-theme="bento"] #zmw-view .zm-cards > .zm-card:nth-child(4n+4) { background-color: color-mix(in srgb, #dff2e2 var(--zm-glass), transparent); }
+html.zm-dust-on[data-theme="bento"] #zmw-view .zm-tg-board .zm-card.zm-tg-n2 { background-color: color-mix(in srgb, #dcecff var(--zm-glass), transparent); }
+html.zm-dust-on[data-theme="bento"] #zmw-view .zm-tg-board .zm-card.zm-tg-n3 { background-color: color-mix(in srgb, #ffe6c4 var(--zm-glass), transparent); }
+html.zm-dust-on[data-theme="bento"] #zmw-view .zm-tg-board .zm-card.zm-tg-n4 { background-color: color-mix(in srgb, #dff2e2 var(--zm-glass), transparent); }
 html.zm-dust-on[data-theme="minimal"] #zmw-view .zm-card { background-color: transparent; }
 html.zm-dust-on[data-theme] .zmw-side { background-color: color-mix(in srgb, var(--surface-solid) var(--zm-glass-side), transparent); background-image: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
 @media (max-width: 960px) { html.zm-dust-on[data-theme] .zmw-side { background-color: var(--surface-solid); } }
@@ -60863,32 +60175,6 @@ html[data-theme="ink"] #zmw-view .zm-zp-own { border-color: #0a0a0a; }
 html[data-theme="micro"] #zmw-view :is(.zm-zp-note, .zm-zp-sum, .zm-zp-legend, .zm-zp-cur summary, .zm-zp-own) { color: #000000; }
 html[data-theme="micro"] #zmw-view .zm-zp-own { border-color: #000000; }
 html[data-theme="matrix"] #zmw-view .zm-zp-note { color: var(--text); }
-#zmw-view .zm-cv-pane { border-color: var(--border-2); background: var(--surface-2); border-radius: var(--radius-sm); }
-#zmw-view .zm-cv-ph { border-bottom-color: var(--border); color: var(--text); }
-#zmw-view .zm-cv-mini { background: var(--surface-solid); border-color: var(--border-2); color: var(--text); font-family: var(--font); }
-#zmw-view .zm-cv-mini:hover { border-color: var(--a1); }
-#zmw-view textarea.zm-cv-ta, html[data-theme] #zmw-view textarea.zm-cv-ta { background: transparent; border: 0; border-radius: 0; box-shadow: none; color: var(--text); font-family: var(--mono); height: auto; padding: 10px 14px; }
-#zmw-view .zm-cv-out { font-family: var(--mono); color: var(--text); }
-#zmw-view .zm-cv-out .zm-cv-prow, #zmw-view .zm-cv-empty { font-family: var(--font); }
-#zmw-view .zm-cv-ln > i { color: var(--muted); }
-#zmw-view .zm-cv-lb { background: var(--bad-bg); }
-#zmw-view .zm-cv-lb > u::before { background: var(--bad-dot); }
-#zmw-view .zm-cv-lb > span { text-decoration-color: var(--bad-dot); }
-#zmw-view .zm-cv-lw > u::before { background: var(--warn-dot); }
-#zmw-view .zm-cv-lw > span { text-decoration-color: var(--warn-dot); }
-#zmw-view .zm-cv-ln-n > u::before { background: var(--ok-dot); }
-#zmw-view .zm-cv-ln.zm-cv-hot { background: var(--grad-soft); }
-#zmw-view .zm-cv-k, #zmw-view .zm-cv-plink { color: var(--a1); }
-#zmw-view .zm-cv-prow { background: var(--surface-3); color: var(--text); }
-#zmw-view .zm-cv-prow small, #zmw-view .zm-cv-iss-d, #zmw-view .zm-cv-at, #zmw-view .zm-cv-empty { color: var(--muted); opacity: 1; }
-#zmw-view .zm-cv-iss { border-top-color: var(--border); }
-#zmw-view .zm-cv-iss:hover { background: var(--surface-2); }
-#zmw-view .zm-cv-iss-t { color: var(--text); }
-#zmw-view .zm-cv-ib { background: var(--bad-bg); color: var(--bad); }
-#zmw-view .zm-cv-iw { background: var(--warn-bg); color: var(--warn); }
-#zmw-view .zm-cv-ia, #zmw-view .zm-cv-tadd { background: var(--grad-soft); color: var(--a1); }
-#zmw-view .zm-cv-ii, #zmw-view .zm-cv-tall { background: var(--off-bg); color: var(--off); }
-#zmw-view .zm-cv-io { background: var(--ok-bg); color: var(--ok); }
 ZM_INSTALLER_EOF
 cat > '/www/zm-webui.html' << 'ZM_INSTALLER_EOF'
 <!doctype html>
