@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 4.90
+# Version: 4.91
 ZM_VERSION_EOF
 set -e
 
@@ -29499,6 +29499,497 @@ ZM_MULTI_EOF
 	rm -rf "$d"
 }
 
+OW_LEASES="${ZM_OW_LEASES:-/tmp/dhcp.leases}"
+OW_V6_BAK="$ZM_STATE_DIR/ipv6.off"
+OW_RB_TAG="# zm-sched-reboot"
+OW_V6_KEYS="network.wan6.disabled network.wan.ipv6 dhcp.lan.ra dhcp.lan.dhcpv6 dhcp.lan.ndp"
+
+_ow_bg() { ( sleep 2; "$@" ) </dev/null >/dev/null 2>&1 & }
+_ow_jstr() { printf '"%s"' "$(esc "$1")"; }
+_ow_int() { case "$1" in ''|*[!0-9]*) return 1 ;; esac; return 0; }
+_ow_ip2n() { printf '%s' "$1" | awk -F. 'NF == 4 && $1 ~ /^[0-9]+$/ && $2 ~ /^[0-9]+$/ && $3 ~ /^[0-9]+$/ && $4 ~ /^[0-9]+$/ && $1 < 256 && $2 < 256 && $3 < 256 && $4 < 256 { printf "%.0f", (($1 * 256 + $2) * 256 + $3) * 256 + $4; ok = 1 } END { exit !ok }'; }
+
+_ow_flow_hw_active() { nft list flowtable inet fw4 ft 2>/dev/null | grep -q 'flags offload'; }
+_ow_flow_json() {
+	printf '"flow":{"mode":"%s","hw_active":%s,"fw4":%s}' "$(_fw4_offload_mode)" \
+		"$(_ow_flow_hw_active && echo true || echo false)" "$([ -f "$FW4_TPL" ] && echo true || echo false)"
+}
+_ow_flow_set() {
+	local m="$1" old o1 o2 note=""
+	case "$m" in off|sw|hw) ;; *) echo '{"error":"неизвестный режим ускорения"}'; return 1 ;; esac
+	uci -q get firewall.@defaults[0] >/dev/null || { echo '{"error":"в настройках файрвола нет общего раздела (defaults) — изменить нельзя"}'; return 1; }
+	old="$(_fw4_offload_mode)"
+	if [ "$m" = "$old" ]; then printf '{"ok":true,"same":true,%s}\n' "$(_ow_flow_json)"; return 0; fi
+	o1="$(uci -q get firewall.@defaults[0].flow_offloading)"; o2="$(uci -q get firewall.@defaults[0].flow_offloading_hw)"
+	case "$m" in
+		off) uci -q delete firewall.@defaults[0].flow_offloading; uci -q delete firewall.@defaults[0].flow_offloading_hw ;;
+		sw) uci -q set firewall.@defaults[0].flow_offloading=1; uci -q delete firewall.@defaults[0].flow_offloading_hw ;;
+		hw) uci -q set firewall.@defaults[0].flow_offloading=1; uci -q set firewall.@defaults[0].flow_offloading_hw=1 ;;
+	esac
+	uci -q commit firewall
+	if [ "$m" != off ] && [ -f "$FW4_TPL" ]; then
+		if { [ -x /etc/init.d/zapret ] || [ -x /etc/init.d/zapret2 ]; } && [ ! -f "$FT_ZAPRET_OFF" ] && [ "$(_flow_offloading_fix_applied)" = false ]; then
+			_fw4_offload_set keep 1 && logger -t zapret-manager "Flow Offloading: поправка для Zapret применена"
+		fi
+		if stl_present && [ ! -f "$FT_STEER_OFF" ] && ! _ft_steer_applied; then
+			_fw4_offload_set 1 keep && logger -t zapret-manager "Flow Offloading: поправка для Steer применена"
+		fi
+	fi
+	/etc/init.d/firewall reload >/dev/null 2>&1
+	if [ -f "$FW4_TPL" ] && command -v nft >/dev/null 2>&1 && ! nft list table inet fw4 >/dev/null 2>&1; then
+		if [ -n "$o1" ]; then uci -q set firewall.@defaults[0].flow_offloading="$o1"; else uci -q delete firewall.@defaults[0].flow_offloading; fi
+		if [ -n "$o2" ]; then uci -q set firewall.@defaults[0].flow_offloading_hw="$o2"; else uci -q delete firewall.@defaults[0].flow_offloading_hw; fi
+		uci -q commit firewall
+		/etc/init.d/firewall reload >/dev/null 2>&1
+		echo '{"error":"файрвол не принял этот режим — возвращён прежний"}'
+		return 1
+	fi
+	if [ "$m" = hw ] && [ -f "$FW4_TPL" ] && command -v nft >/dev/null 2>&1 && ! _ow_flow_hw_active; then
+		uci -q delete firewall.@defaults[0].flow_offloading_hw
+		uci -q commit firewall
+		note="Чип роутера не умеет аппаратное ускорение — включено программное"
+		m=sw
+	fi
+	logger -t zapret-manager "Flow Offloading: $(case "$m" in off) echo выключен ;; sw) echo программный ;; hw) echo аппаратный ;; esac)"
+	printf '{"ok":true,"note":"%s",%s}\n' "$(esc "$note")" "$(_ow_flow_json)"
+}
+
+_ow_wdevs() { uci -q -X show wireless 2>/dev/null | sed -n "s/^wireless\.\([^.=]*\)=wifi-device\$/\1/p"; }
+_ow_wifaces() { uci -q -X show wireless 2>/dev/null | sed -n "s/^wireless\.\([^.=]*\)=wifi-iface\$/\1/p"; }
+_ow_wap() {
+	local i
+	for i in $(_ow_wifaces); do
+		[ "$(uci -q get "wireless.$i.device")" = "$1" ] || continue
+		[ "$(uci -q get "wireless.$i.mode")" = ap ] || continue
+		echo "$i"; return 0
+	done
+	return 1
+}
+_ow_wband() {
+	local b
+	b="$(uci -q get "wireless.$1.band")"
+	case "$b" in 2g|5g|6g|60g) echo "$b"; return 0 ;; esac
+	case "$(uci -q get "wireless.$1.hwmode")" in *a) echo 5g ;; *) echo 2g ;; esac
+}
+_ow_wifname() {
+	local n
+	n="$(ubus -t 5 call network.wireless status 2>/dev/null | jsonfilter -e "@.$1.interfaces[@.section=\"$2\"].ifname" 2>/dev/null | head -n1)"
+	[ -n "$n" ] || n="$(ubus -t 5 call network.wireless status 2>/dev/null | jsonfilter -e "@.$1.interfaces[0].ifname" 2>/dev/null | head -n1)"
+	echo "$n"
+}
+_ow_wchans() {
+	local o="" d
+	command -v iwinfo >/dev/null 2>&1 && for d in $1 $2; do
+		[ -n "$d" ] || continue
+		o="$(iwinfo "$d" freqlist 2>/dev/null | grep -v -i 'restricted\|disabled' | sed -n 's/.*[Cc]hannel \([0-9][0-9]*\).*/\1/p' | awk '!s[$0]++' | tr '\n' ',' | sed 's/,$//')"
+		[ -n "$o" ] && break
+	done
+	if [ -z "$o" ]; then
+		case "$3" in
+			5g) o="36,40,44,48,52,56,60,64,100,104,108,112,116,120,124,128,132,136,140,149,153,157,161,165" ;;
+			6g|60g) o="" ;;
+			*) o="1,2,3,4,5,6,7,8,9,10,11,12,13" ;;
+		esac
+	fi
+	echo "$o"
+}
+_ow_wifi_json() {
+	local r i first=1 band lab ifn on ch cur txp txm enc ssid key chans info
+	printf '"wifi":{"present":%s,"country":"%s","radios":[' "$([ -n "$(_ow_wdevs)" ] && command -v wifi >/dev/null 2>&1 && echo true || echo false)" \
+		"$(esc "$(uci -q get "wireless.$(_ow_wdevs | head -n1).country")")"
+	for r in $(_ow_wdevs); do
+		i="$(_ow_wap "$r")" || i=""
+		band="$(_ow_wband "$r")"
+		case "$band" in 2g) lab="2,4 ГГц" ;; 5g) lab="5 ГГц" ;; 6g) lab="6 ГГц" ;; *) lab="60 ГГц" ;; esac
+		on=true
+		[ "$(uci -q get "wireless.$r.disabled")" = 1 ] && on=false
+		[ -n "$i" ] && [ "$(uci -q get "wireless.$i.disabled")" = 1 ] && on=false
+		ifn=""; cur=""; txm=""; info=""
+		[ -n "$i" ] && [ "$on" = true ] && ifn="$(_ow_wifname "$r" "$i")"
+		if [ -n "$ifn" ] && command -v iwinfo >/dev/null 2>&1; then
+			info="$(iwinfo "$ifn" info 2>/dev/null)"
+			cur="$(printf '%s\n' "$info" | sed -n 's/.*Channel: *\([0-9][0-9]*\).*/\1/p' | head -n1)"
+			txm="$(iwinfo "$ifn" txpowerlist 2>/dev/null | sed -n 's/^[* ]*\([0-9][0-9]*\) dBm.*/\1/p' | sort -n | tail -n1)"
+		fi
+		ch="$(uci -q get "wireless.$r.channel")"; [ -n "$ch" ] || ch=auto
+		txp="$(uci -q get "wireless.$r.txpower")"
+		_ow_int "$txp" || txp=""
+		_ow_int "$txm" || txm=""
+		chans="$(_ow_wchans "$ifn" "$r" "$band")"
+		ssid=""; key=""; enc=""
+		if [ -n "$i" ]; then
+			ssid="$(uci -q get "wireless.$i.ssid")"; key="$(uci -q get "wireless.$i.key")"; enc="$(uci -q get "wireless.$i.encryption")"
+		fi
+		[ "$first" = 1 ] || printf ','; first=0
+		printf '{"id":"%s","iface":"%s","band":"%s","label":"%s","on":%s,"channel":"%s","cur":"%s","chans":[%s],"txp":"%s","txmax":"%s","ssid":"%s","key":"%s","enc":"%s","htmode":"%s"}' \
+			"$(esc "$r")" "$(esc "$i")" "$band" "$lab" "$on" "$(esc "$ch")" "$cur" "$chans" "$txp" "$txm" \
+			"$(esc "$ssid")" "$(esc "$key")" "$(esc "$enc")" "$(esc "$(uci -q get "wireless.$r.htmode")")"
+	done
+	printf ']}'
+}
+_ow_jf() { printf '%s' "$1" | jsonfilter -e "$2" 2>/dev/null; }
+_ow_wifi_set() {
+	local d="$1" c n k r i ssid key ch txp on enc chans w n2 changed
+	command -v jsonfilter >/dev/null 2>&1 || { echo '{"error":"на роутере нет jsonfilter"}'; return 1; }
+	[ -n "$(_ow_wdevs)" ] || { echo '{"error":"на роутере нет Wi-Fi"}'; return 1; }
+	c="$(_ow_jf "$d" '@.country')"
+	if [ -n "$c" ]; then
+		case "$c" in 00|[A-Z][A-Z]) ;; *) echo '{"error":"страна — две латинские буквы, например RU"}'; return 1 ;; esac
+	fi
+	n="$(_ow_jf "$d" '@.radios[*].id' | grep -c .)"
+	k=0
+	while [ "$k" -lt "$n" ]; do
+		r="$(_ow_jf "$d" "@.radios[$k].id")"
+		[ "$(uci -q get "wireless.$r")" = wifi-device ] || { echo '{"error":"такого радио нет — обновите страницу"}'; return 1; }
+		i="$(_ow_wap "$r")" || i=""
+		on="$(_ow_jf "$d" "@.radios[$k].on")"
+		ssid="$(_ow_jf "$d" "@.radios[$k].ssid")"; key="$(_ow_jf "$d" "@.radios[$k].key")"
+		ch="$(_ow_jf "$d" "@.radios[$k].channel")"; txp="$(_ow_jf "$d" "@.radios[$k].txp")"
+		if [ "$on" = true ]; then
+			w="$(printf '%s' "$ssid" | wc -c | tr -d ' ')"
+			[ "$w" -ge 1 ] && [ "$w" -le 32 ] || { printf '{"error":"%s"}\n' "$(esc "Имя сети $(_ow_rlab "$r") — от 1 до 32 символов")"; return 1; }
+			w="$(printf '%s' "$key" | wc -c | tr -d ' ')"
+			if [ "$w" = 64 ]; then
+				case "$key" in *[!0-9A-Fa-f]*) printf '{"error":"%s"}\n' "$(esc "Пароль $(_ow_rlab "$r"): 64 символа можно только шестнадцатеричными цифрами")"; return 1 ;; esac
+			else
+				[ "$w" -ge 8 ] && [ "$w" -le 63 ] || { printf '{"error":"%s"}\n' "$(esc "Пароль $(_ow_rlab "$r") — от 8 до 63 символов")"; return 1; }
+				case "$key" in *[!\ -~]*) printf '{"error":"%s"}\n' "$(esc "Пароль $(_ow_rlab "$r"): только латиница, цифры и знаки, без русских букв")"; return 1 ;; esac
+			fi
+		fi
+		case "$ch" in
+			''|auto) ch=auto ;;
+			*)
+				_ow_int "$ch" || { echo '{"error":"канал — число или «Авто»"}'; return 1; }
+				chans=",$(_ow_wchans "$(_ow_wifname "$r" "$i")" "$r" "$(_ow_wband "$r")"),"
+				case "$chans" in ",,") ;; *",$ch,"*) ;; *) printf '{"error":"%s"}\n' "$(esc "Канал $ch нельзя использовать для $(_ow_rlab "$r") в этой стране")"; return 1 ;; esac ;;
+		esac
+		if [ -n "$txp" ]; then
+			_ow_int "$txp" && [ "$txp" -ge 1 ] && [ "$txp" -le 40 ] || { echo '{"error":"сила сигнала — от 1 до 40 dBm"}'; return 1; }
+		fi
+		k=$((k + 1))
+	done
+	[ -n "$c" ] && for r in $(_ow_wdevs); do uci -q set "wireless.$r.country=$c"; done
+	k=0
+	while [ "$k" -lt "$n" ]; do
+		r="$(_ow_jf "$d" "@.radios[$k].id")"
+		i="$(_ow_wap "$r")" || i=""
+		on="$(_ow_jf "$d" "@.radios[$k].on")"
+		ssid="$(_ow_jf "$d" "@.radios[$k].ssid")"; key="$(_ow_jf "$d" "@.radios[$k].key")"
+		ch="$(_ow_jf "$d" "@.radios[$k].channel")"; txp="$(_ow_jf "$d" "@.radios[$k].txp")"
+		[ -n "$ch" ] || ch=auto
+		if [ -z "$i" ] && [ "$on" = true ]; then
+			i="$(uci -q add wireless wifi-iface)"
+			uci -q set "wireless.$i.device=$r"
+			uci -q set "wireless.$i.mode=ap"
+			uci -q set "wireless.$i.network=lan"
+		fi
+		if [ "$on" = true ]; then
+			uci -q delete "wireless.$r.disabled"
+			uci -q delete "wireless.$i.disabled"
+		else
+			uci -q set "wireless.$r.disabled=1"
+		fi
+		[ "$(uci -q get "wireless.$r.channel")" = "$ch" ] || uci -q set "wireless.$r.channel=$ch"
+		if [ -n "$txp" ]; then uci -q set "wireless.$r.txpower=$txp"; else uci -q delete "wireless.$r.txpower"; fi
+		if [ "$on" = true ] && [ -n "$i" ] && [ -n "$ssid" ]; then
+			[ "$(uci -q get "wireless.$i.ssid")" = "$ssid" ] || uci -q set "wireless.$i.ssid=$ssid"
+			[ "$(uci -q get "wireless.$i.key")" = "$key" ] || uci -q set "wireless.$i.key=$key"
+			enc="$(uci -q get "wireless.$i.encryption")"
+			case "$enc" in psk2|psk2+*|psk-mixed|psk-mixed+*|sae|sae-mixed|sae-mixed+*) ;; *) uci -q set "wireless.$i.encryption=psk2" ;; esac
+		fi
+		k=$((k + 1))
+	done
+	changed="$(uci -q changes wireless)"
+	if [ -z "$changed" ]; then printf '{"ok":true,"same":true}\n'; return 0; fi
+	uci -q commit wireless
+	logger -t zapret-manager "Wi-Fi: настройки изменены в панели"
+	command -v wifi >/dev/null 2>&1 && _ow_bg wifi reload
+	printf '{"ok":true}\n'
+}
+_ow_rlab() { case "$(_ow_wband "$1")" in 2g) echo "2,4 ГГц" ;; 5g) echo "5 ГГц" ;; 6g) echo "6 ГГц" ;; *) echo "$1" ;; esac; }
+
+_ow_host_ok() { printf '%s' "$1" | grep -Eq '^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$'; }
+_ow_hostname_set() {
+	local h="$1"
+	_ow_host_ok "$h" || { echo '{"error":"имя — латиница, цифры и дефис, до 63 символов, без дефиса в начале и в конце"}'; return 1; }
+	uci -q get system.@system[0] >/dev/null || { echo '{"error":"нет раздела system в настройках роутера"}'; return 1; }
+	if [ "$(uci -q get system.@system[0].hostname)" = "$h" ]; then printf '{"ok":true,"same":true,"hostname":"%s"}\n' "$h"; return 0; fi
+	uci -q set system.@system[0].hostname="$h"
+	uci -q commit system
+	echo "$h" > /proc/sys/kernel/hostname 2>/dev/null
+	/etc/init.d/system reload >/dev/null 2>&1
+	logger -t zapret-manager "Имя роутера изменено на $h"
+	printf '{"ok":true,"hostname":"%s"}\n' "$h"
+}
+
+_ow_v6_up() {
+	local a
+	a="$(ifstatus wan6 2>/dev/null | jsonfilter -e "@['ipv6-prefix'][0].address" -e "@['ipv6-address'][0].address" 2>/dev/null | head -n1)"
+	[ -n "$a" ] || a="$(ifstatus wan_6 2>/dev/null | jsonfilter -e "@['ipv6-prefix'][0].address" -e "@['ipv6-address'][0].address" 2>/dev/null | head -n1)"
+	[ -n "$a" ]
+}
+_ow_v6_on() {
+	local ra dv w6
+	[ -f "$OW_V6_BAK" ] && return 1
+	w6=1
+	{ [ -z "$(uci -q get network.wan6)" ] || [ "$(uci -q get network.wan6.disabled)" = 1 ]; } && w6=0
+	ra="$(uci -q get dhcp.lan.ra)"; dv="$(uci -q get dhcp.lan.dhcpv6)"
+	[ "$w6" = 0 ] && { [ -z "$ra" ] || [ "$ra" = disabled ]; } && { [ -z "$dv" ] || [ "$dv" = disabled ]; } && return 1
+	return 0
+}
+_ow_v6_reload() { _ow_bg sh -c '/etc/init.d/network reload; sleep 2; [ -x /etc/init.d/odhcpd ] && /etc/init.d/odhcpd restart'; }
+_ow_v6_set() {
+	local want="$1" k v
+	case "$want" in on|off) ;; *) echo '{"error":"неизвестная команда"}'; return 1 ;; esac
+	if [ "$want" = off ]; then
+		_ow_v6_on || { printf '{"ok":true,"same":true,"on":false}\n'; return 0; }
+		mkdir -p "$ZM_STATE_DIR"
+		: > "$OW_V6_BAK.tmp"
+		for k in $OW_V6_KEYS; do printf '%s=%s\n' "$k" "$(uci -q get "$k")" >> "$OW_V6_BAK.tmp"; done
+		mv -f "$OW_V6_BAK.tmp" "$OW_V6_BAK"
+		[ -n "$(uci -q get network.wan6)" ] && uci -q set network.wan6.disabled=1
+		[ "$(uci -q get network.wan.proto)" = pppoe ] && uci -q set network.wan.ipv6=0
+		if [ -n "$(uci -q get dhcp.lan)" ]; then
+			uci -q set dhcp.lan.ra=disabled
+			uci -q set dhcp.lan.dhcpv6=disabled
+			uci -q set dhcp.lan.ndp=disabled
+		fi
+		logger -t zapret-manager "IPv6 выключен в панели"
+	else
+		_ow_v6_on && { printf '{"ok":true,"same":true,"on":true}\n'; return 0; }
+		if [ -s "$OW_V6_BAK" ]; then
+			while IFS='=' read -r k v; do
+				case " $OW_V6_KEYS " in *" $k "*) ;; *) continue ;; esac
+				case "$k" in network.wan6.*) [ -n "$(uci -q get network.wan6)" ] || continue ;; dhcp.lan.*) [ -n "$(uci -q get dhcp.lan)" ] || continue ;; esac
+				if [ -n "$v" ]; then uci -q set "$k=$v"; else uci -q delete "$k"; fi
+			done < "$OW_V6_BAK"
+		else
+			uci -q delete network.wan6.disabled
+			[ "$(uci -q get network.wan.ipv6)" = 0 ] && uci -q delete network.wan.ipv6
+			if [ -n "$(uci -q get dhcp.lan)" ]; then
+				uci -q set dhcp.lan.ra=server
+				uci -q set dhcp.lan.dhcpv6=server
+				uci -q delete dhcp.lan.ndp
+			fi
+		fi
+		[ "$(uci -q get network.wan6.disabled)" = 1 ] && uci -q delete network.wan6.disabled
+		{ [ "$(uci -q get dhcp.lan.ra)" = disabled ] || [ -z "$(uci -q get dhcp.lan.ra)" ]; } && [ -n "$(uci -q get dhcp.lan)" ] && uci -q set dhcp.lan.ra=server
+		{ [ "$(uci -q get dhcp.lan.dhcpv6)" = disabled ] || [ -z "$(uci -q get dhcp.lan.dhcpv6)" ]; } && [ -n "$(uci -q get dhcp.lan)" ] && uci -q set dhcp.lan.dhcpv6=server
+		[ "$(uci -q get dhcp.lan.ndp)" = disabled ] && uci -q delete dhcp.lan.ndp
+		rm -f "$OW_V6_BAK"
+		logger -t zapret-manager "IPv6 включён в панели"
+	fi
+	uci -q commit network
+	uci -q commit dhcp
+	_ow_v6_reload
+	printf '{"ok":true,"on":%s}\n' "$([ "$want" = on ] && echo true || echo false)"
+}
+
+_ow_upnp_have() { [ -x /usr/sbin/miniupnpd ] && [ -f /etc/init.d/miniupnpd ]; }
+_ow_upnp_on() { [ "$(uci -q get upnpd.config.enabled)" = 1 ]; }
+_ow_upnp_lease() { local f; f="$(uci -q get upnpd.config.upnp_lease_file)"; echo "${f:-/var/run/miniupnpd.leases}"; }
+_ow_upnp_ports() {
+	local f
+	f="$(_ow_upnp_lease)"
+	[ -s "$f" ] || return 0
+	awk -F: 'NF >= 4 && ($1 == "TCP" || $1 == "UDP") && $2 ~ /^[0-9]+$/ && $4 ~ /^[0-9]+$/ {
+		d = ""; for (i = 6; i <= NF; i++) d = d (i > 6 ? ":" : "") $i
+		gsub(/[\\"]/, "", d); gsub(/[\001-\037]/, " ", d)
+		printf "%s{\"proto\":\"%s\",\"port\":%d,\"ip\":\"%s\",\"to\":%d,\"desc\":\"%s\"}", (n++ ? "," : ""), $1, $2, $3, $4, substr(d, 1, 60)
+	}' "$f" | head -c 20000
+}
+_ow_upnp_json() {
+	printf '"upnp":{"installed":%s,"on":%s,"running":%s,"ports":[%s]}' "$(_ow_upnp_have && echo true || echo false)" \
+		"$(_ow_upnp_on && echo true || echo false)" "$(pidof miniupnpd >/dev/null 2>&1 && echo true || echo false)" "$(_ow_upnp_ports)"
+}
+_ow_upnp_cfg() {
+	[ "$(uci -q get upnpd.config)" = upnpd ] || { touch /etc/config/upnpd; uci -q set upnpd.config=upnpd; }
+	uci -q set upnpd.config.enabled="$1"
+	uci -q commit upnpd
+}
+do_ow_upnp_install() {
+	local p=miniupnpd-nftables
+	[ -f "$FW4_TPL" ] || p=miniupnpd-iptables
+	echo "==> Ставим UPnP (пакет $p)"
+	_zm_pkg_update || true
+	_zm_pkg_add "$p" || { echo "ОШИБКА: пакет $p не установился — проверьте интернет на роутере и свободное место"; return 1; }
+	_ow_upnp_have || { echo "ОШИБКА: UPnP не установился — miniupnpd не найден"; return 1; }
+	_ow_upnp_cfg 1
+	/etc/init.d/miniupnpd enable >/dev/null 2>&1
+	/etc/init.d/miniupnpd restart >/dev/null 2>&1
+	sleep 2
+	if pidof miniupnpd >/dev/null 2>&1; then echo "==> Готово: UPnP включён"; else echo "!! UPnP установлен, но служба не запустилась — посмотрите «Система → Журнал»"; return 1; fi
+}
+_ow_upnp_set() {
+	case "$1" in
+		on)
+			if ! _ow_upnp_have; then
+				_job_running owrt && { echo '{"error":"дождитесь окончания текущей операции"}'; return 1; }
+				job_start owrt do_ow_upnp_install; return 0
+			fi
+			_ow_upnp_cfg 1
+			/etc/init.d/miniupnpd enable >/dev/null 2>&1
+			/etc/init.d/miniupnpd restart >/dev/null 2>&1
+			logger -t zapret-manager "UPnP включён в панели" ;;
+		off)
+			_ow_upnp_have && { _ow_upnp_cfg 0; /etc/init.d/miniupnpd stop >/dev/null 2>&1; /etc/init.d/miniupnpd disable >/dev/null 2>&1; }
+			logger -t zapret-manager "UPnP выключен в панели" ;;
+		*) echo '{"error":"неизвестная команда"}'; return 1 ;;
+	esac
+	printf '{"ok":true,%s}\n' "$(_ow_upnp_json)"
+}
+
+_ow_lan() {
+	local a m p n
+	a="$(uci -q get network.lan.ipaddr | awk '{ print $1 }')"; m="$(uci -q get network.lan.netmask)"
+	case "$a" in */*) p="${a#*/}"; a="${a%/*}" ;; esac
+	if [ -z "$p" ]; then
+		p="$(printf '%s' "${m:-255.255.255.0}" | awk -F. '{ n = 0; for (i = 1; i <= 4; i++) { x = $i + 0; while (x > 0) { n += x % 2; x = int(x / 2) } } print n }')"
+	fi
+	_ow_int "$p" && [ "$p" -ge 8 ] && [ "$p" -le 30 ] || p=24
+	echo "$a $p"
+}
+_ow_hosts() {
+	local s
+	for s in $(uci -q -X show dhcp 2>/dev/null | sed -n "s/^dhcp\.\([^.=]*\)=host\$/\1/p"); do
+		printf '%s\t%s\t%s\t%s\n' "$s" "$(uci -q get "dhcp.$s.mac" | tr 'A-F' 'a-f')" "$(uci -q get "dhcp.$s.ip")" "$(uci -q get "dhcp.$s.name")"
+	done
+}
+_ow_devs_json() {
+	local lan h
+	lan="$(_ow_lan)"
+	h="$(_ow_hosts)"
+	printf '"devices":{"lan_ip":"%s","prefix":%s,"list":[' "$(esc "${lan% *}")" "${lan#* }"
+	{ printf '%s\n' "$h" | sed '/^$/d' | sed 's/^/H\t/'; [ -s "$OW_LEASES" ] && awk '{ print "L\t" $2 "\t" $3 "\t" $4 }' "$OW_LEASES"; } | awk -F'\t' '
+		function j(s,    o, i, c, n) { o = ""; n = length(s); for (i = 1; i <= n; i++) { c = substr(s, i, 1); if (c == "\\") o = o "\\\\"; else if (c == "\"") o = o "\\\""; else if (c < " ") o = o " "; else o = o c } return o }
+		$1 == "H" { split($3, ms, " "); for (k in ms) if (ms[k] != "") { hm[ms[k]] = $2; hip[ms[k]] = $4; hn[ms[k]] = $5; if (!(ms[k] in seen)) { seen[ms[k]] = 1; ord[++n] = ms[k] } } next }
+		$1 == "L" { m = tolower($2); if (m !~ /^([0-9a-f][0-9a-f]:){5}[0-9a-f][0-9a-f]$/) next; lip[m] = $3; ln[m] = ($4 == "*" ? "" : $4); if (!(m in seen)) { seen[m] = 1; ord[++n] = m } }
+		END {
+			for (i = 1; i <= n; i++) {
+				m = ord[i]; nm = (m in hn && hn[m] != "") ? hn[m] : ln[m]
+				printf "%s{\"mac\":\"%s\",\"name\":\"%s\",\"ip\":\"%s\",\"pinned\":%s,\"pin_ip\":\"%s\",\"online\":%s}", (i > 1 ? "," : ""), m, j(nm), j(lip[m]), (m in hm ? "true" : "false"), j(hip[m]), (m in lip ? "true" : "false")
+			}
+		}'
+	printf ']}'
+}
+_ow_pin() {
+	local d="$1" op mac ip name lan base pf n nb nl s dup x hit
+	command -v jsonfilter >/dev/null 2>&1 || { echo '{"error":"на роутере нет jsonfilter"}'; return 1; }
+	op="$(_ow_jf "$d" '@.op')"; mac="$(_ow_jf "$d" '@.mac' | tr 'A-F' 'a-f')"; ip="$(_ow_jf "$d" '@.ip')"; name="$(_ow_jf "$d" '@.name')"
+	printf '%s' "$mac" | grep -Eq '^([0-9a-f]{2}:){5}[0-9a-f]{2}$' || { echo '{"error":"неверный MAC-адрес"}'; return 1; }
+	if [ "$op" = unpin ]; then
+		hit=0
+		for s in $(_ow_hosts | awk -F'\t' -v m="$mac" '{ n = split($2, a, " "); for (i = 1; i <= n; i++) if (a[i] == m) { print $1; break } }'); do
+			if [ "$(uci -q get "dhcp.$s.mac" | wc -w)" -gt 1 ]; then
+				for x in $(uci -q get "dhcp.$s.mac"); do [ "$(printf '%s' "$x" | tr 'A-F' 'a-f')" = "$mac" ] && uci -q del_list "dhcp.$s.mac=$x"; done
+			else
+				uci -q delete "dhcp.$s"
+			fi
+			hit=1
+		done
+		[ "$hit" = 1 ] || { printf '{"ok":true,"same":true}\n'; return 0; }
+	elif [ "$op" = pin ]; then
+		lan="$(_ow_lan)"; base="${lan% *}"; pf="${lan#* }"
+		n="$(_ow_ip2n "$ip")" || { echo '{"error":"адрес — четыре числа через точку, например 192.168.1.120"}'; return 1; }
+		nb="$(_ow_ip2n "$base")" || { echo '{"error":"не удалось определить адрес роутера в домашней сети"}'; return 1; }
+		nl="$(awk -v a="$n" -v b="$nb" -v p="$pf" 'BEGIN { s = 2 ^ (32 - p); na = a - a % s; nr = b - b % s; if (na != nr) printf "net %d.%d.%d.%d", int(nr / 16777216), int(nr / 65536) % 256, int(nr / 256) % 256, nr % 256; else if (a == na || a == na + s - 1) print "edge"; else if (a == b) print "router"; else print "ok" }')"
+		case "$nl" in
+			net*) printf '{"error":"%s"}\n' "$(esc "Адрес должен быть из домашней сети ${nl#net }/$pf")"; return 1 ;;
+			edge) echo '{"error":"этот адрес служебный — выберите другой"}'; return 1 ;;
+			router) echo '{"error":"это адрес самого роутера — выберите другой"}'; return 1 ;;
+		esac
+		dup="$(_ow_hosts | awk -F'\t' -v m="$mac" -v ip="$ip" '$3 == ip { n = split($2, a, " "); own = 0; for (i = 1; i <= n; i++) if (a[i] == m) own = 1; if (!own) { print ($4 != "" ? $4 : $2); exit } }')"
+		[ -n "$dup" ] && { printf '{"error":"%s"}\n' "$(esc "Адрес $ip уже закреплён за «$dup»")"; return 1; }
+		if [ -s "$OW_LEASES" ]; then
+			dup="$(awk -v m="$mac" -v ip="$ip" 'tolower($2) != m && $3 == ip { print ($4 != "*" ? $4 : $2); exit }' "$OW_LEASES")"
+			[ -n "$dup" ] && { printf '{"error":"%s"}\n' "$(esc "Адрес $ip сейчас занят устройством «$dup»")"; return 1; }
+		fi
+		name="$(printf '%s' "$name" | tr ' _' '--' | tr -cd 'A-Za-z0-9-' | sed 's/^-*//; s/-*$//' | cut -c1-63)"
+		s="$(_ow_hosts | awk -F'\t' -v m="$mac" '{ n = split($2, a, " "); for (i = 1; i <= n; i++) if (a[i] == m) { print $1; exit } }')"
+		if [ -z "$s" ]; then
+			s="$(uci -q add dhcp host)" || { echo '{"error":"не удалось добавить запись"}'; return 1; }
+			uci -q set "dhcp.$s.mac=$mac"
+		fi
+		uci -q set "dhcp.$s.ip=$ip"
+		if [ -n "$name" ] && [ -z "$(uci -q get "dhcp.$s.name")" ]; then uci -q set "dhcp.$s.name=$name"; fi
+	else
+		echo '{"error":"неизвестная команда"}'; return 1
+	fi
+	uci -q commit dhcp
+	/etc/init.d/dnsmasq reload >/dev/null 2>&1
+	printf '{"ok":true,%s}\n' "$(_ow_devs_json)"
+}
+
+_ow_rb_get() { grep -F "$OW_RB_TAG" "$CRON_FILE" 2>/dev/null | head -n1; }
+_ow_rb_json() {
+	local l m h dw mode=off
+	l="$(_ow_rb_get)"
+	if [ -n "$l" ]; then
+		m="$(printf '%s' "$l" | awk '{ print $1 }')"; h="$(printf '%s' "$l" | awk '{ print $2 }')"; dw="$(printf '%s' "$l" | awk '{ print $5 }')"
+		if _ow_int "$m" && _ow_int "$h"; then
+			if [ "$dw" = '*' ]; then mode=daily; dw=""; else mode=weekly; fi
+			printf '"reboot":{"mode":"%s","time":"%02d:%02d","dow":"%s"}' "$mode" "$h" "$m" "$dw"
+			return 0
+		fi
+	fi
+	printf '"reboot":{"mode":"off","time":"04:30","dow":"1"}'
+}
+_ow_rb_set() {
+	local d="$1" mode t dw h m line
+	mode="$(_ow_jf "$d" '@.mode')"; t="$(_ow_jf "$d" '@.time')"; dw="$(_ow_jf "$d" '@.dow')"
+	case "$mode" in off|daily|weekly) ;; *) echo '{"error":"неизвестный режим"}'; return 1 ;; esac
+	if [ "$mode" != off ]; then
+		case "$t" in [0-2][0-9]:[0-5][0-9]) ;; *) echo '{"error":"время — ЧЧ:ММ, например 04:30"}'; return 1 ;; esac
+		h="${t%:*}"; m="${t#*:}"; h="${h#0}"; m="${m#0}"
+		[ "${h:-0}" -le 23 ] || { echo '{"error":"время — ЧЧ:ММ, например 04:30"}'; return 1; }
+		if [ "$mode" = weekly ]; then case "$dw" in [0-6]) ;; *) echo '{"error":"неверный день недели"}'; return 1 ;; esac; else dw='*'; fi
+		line="${m:-0} ${h:-0} * * $dw /opt/zapret-manager-luci/backend.sh owrt_reboot_run >/dev/null 2>&1 $OW_RB_TAG"
+	fi
+	mkdir -p "$(dirname "$CRON_FILE")"
+	touch "$CRON_FILE"
+	grep -vF "$OW_RB_TAG" "$CRON_FILE" > "$CRON_FILE.zm" 2>/dev/null
+	[ -n "$line" ] && printf '%s\n' "$line" >> "$CRON_FILE.zm"
+	cat "$CRON_FILE.zm" > "$CRON_FILE"; rm -f "$CRON_FILE.zm"
+	if [ -x /etc/init.d/cron ]; then
+		/etc/init.d/cron enable >/dev/null 2>&1
+		/etc/init.d/cron restart >/dev/null 2>&1
+	fi
+	logger -t zapret-manager "Перезагрузка по расписанию: $(case "$mode" in off) echo выключена ;; daily) echo "каждый день в $t" ;; *) echo "раз в неделю в $t" ;; esac)"
+	printf '{"ok":true,%s}\n' "$(_ow_rb_json)"
+}
+owrt_reboot_run() {
+	local up i=0 j
+	up="$(cut -d. -f1 /proc/uptime 2>/dev/null)"
+	_ow_int "$up" && [ "$up" -lt 900 ] && return 0
+	while j="$(_zm_busy_job)" && [ "$i" -lt 30 ]; do
+		[ "$i" = 0 ] && logger -t zapret-manager "Перезагрузка по расписанию ждёт окончания: $j"
+		sleep 60; i=$((i + 1))
+	done
+	logger -t zapret-manager "Перезагрузка по расписанию"
+	sync
+	reboot
+}
+
+owrt_status() {
+	printf '{%s,%s,"router":{"hostname":"%s","ipv6":{"on":%s,"wan6":%s,"pppoe":%s,"up":%s},%s},%s,%s,"job":%s}\n' \
+		"$(_ow_flow_json)" "$(_ow_wifi_json)" "$(esc "$(uci -q get system.@system[0].hostname)")" \
+		"$(_ow_v6_on && echo true || echo false)" "$([ -n "$(uci -q get network.wan6)" ] && echo true || echo false)" \
+		"$([ "$(uci -q get network.wan.proto)" = pppoe ] && echo true || echo false)" "$(_ow_v6_up && echo true || echo false)" \
+		"$(_ow_upnp_json)" "$(_ow_devs_json)" "$(_ow_rb_json)" "$(_job_running owrt && echo true || echo false)"
+}
+owrt_set() {
+	case "$1" in
+		flow)     _ow_flow_set "$2" ;;
+		wifi)     _ow_wifi_set "$2" ;;
+		hostname) _ow_hostname_set "$2" ;;
+		ipv6)     _ow_v6_set "$2" ;;
+		upnp)     _ow_upnp_set "$2" ;;
+		pin)      _ow_pin "$2" ;;
+		reboot)   _ow_rb_set "$2" ;;
+		*) echo '{"error":"неизвестная команда"}'; return 1 ;;
+	esac
+}
+
 cmd="$1"; shift
 _zm_in() {
 	ZM_IN="$(cat; echo .)"
@@ -29682,6 +30173,9 @@ case "$cmd" in
 	mem_heal)                             mem_heal ;;
 	mixomo_secure)                        mixomo_secure ;;
 	zram_status)                          zram_status ;;
+	owrt_status)                          owrt_status ;;
+	owrt_set)                             owrt_set "$1" "$2" ;;
+	owrt_reboot_run)                      owrt_reboot_run ;;
 	zsec2_status)                         zsec2_status ;;
 	zsec2_action)                         zsec2_action "$1" "$2" ;;
 	zsec2_sync)                           zsec2_sync ;;
@@ -33607,6 +34101,8 @@ list_methods() {
 	json_add_object "events";                 json_add_string "limit" "string"; json_close_object
 	json_add_object "events_clear";           json_close_object
 	json_add_object "zram_status";            json_close_object
+	json_add_object "owrt_status";            json_close_object
+	json_add_object "owrt_set";               json_add_string "action" "string"; json_add_string "mode" "string"; json_close_object
 	json_add_object "zram_action";            json_add_string "action" "string"; json_close_object
 	json_dump
 }
@@ -33772,6 +34268,8 @@ call_method() {
 		events)                  json_get_var limit limit; "$BACKEND" events "$limit" ;;
 		events_clear)            "$BACKEND" events_clear ;;
 		zram_status)             "$BACKEND" zram_status ;;
+		owrt_status)             "$BACKEND" owrt_status ;;
+		owrt_set)                json_get_var action action; json_get_var mode mode; printf '%s' "$mode" | "$BACKEND" owrt_set "$action" @stdin ;;
 		zram_action)             json_get_var action action; "$BACKEND" zram_action "$action" ;;
 		adblock_status)          "$BACKEND" adblock_status ;;
 		adblock_action)          json_get_var action action; json_get_var mode mode; printf '%s' "$mode" | "$BACKEND" adblock_action "$action" @stdin ;;
@@ -33870,7 +34368,8 @@ cat > '/usr/share/rpcd/acl.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF'
 					"sysinfo_get",
 					"ui_flags_get",
 					"events",
-					"zram_status"
+					"zram_status",
+					"owrt_status"
 				],
 				"system": [
 					"info"
@@ -33977,7 +34476,8 @@ cat > '/usr/share/rpcd/acl.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF'
 					"system_reboot",
 					"reboot_hint_clear",
 					"events_clear",
-					"zram_action"
+					"zram_action",
+					"owrt_set"
 				]
 			},
 			"uci": [
@@ -34076,6 +34576,11 @@ cat > '/usr/share/luci/menu.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF
 		"title": "Система",
 		"order": 60,
 		"action": { "type": "view", "path": "zapret-manager/system" }
+	},
+	"admin/services/zapret-manager/openwrt": {
+		"title": "Настройки OpenWrt",
+		"order": 61,
+		"action": { "type": "view", "path": "zapret-manager/openwrt" }
 	},
 	"admin/services/zapret-manager/monitor": {
 		"title": "Монитор ресурсов",
@@ -34179,6 +34684,8 @@ var callEvents = zmDeclare({ object: 'zapret-manager', method: 'events', params:
 var callEventsClear = zmDeclare({ object: 'zapret-manager', method: 'events_clear', expect: {} });
 var callZramStatus = zmDeclare({ object: 'zapret-manager', method: 'zram_status', expect: {} });
 var callZramAction = zmDeclare({ object: 'zapret-manager', method: 'zram_action', params: ['action'], expect: {} });
+var callOwrtStatus = zmDeclare({ object: 'zapret-manager', method: 'owrt_status', expect: {} });
+var callOwrtSet = zmDeclare({ object: 'zapret-manager', method: 'owrt_set', params: ['action', 'mode'], expect: {} });
 var callUiFlagsGet = zmDeclare({ object: 'zapret-manager', method: 'ui_flags_get', expect: {} });
 var callUiFlagSet = zmDeclare({ object: 'zapret-manager', method: 'ui_flag_set', params: ['name'], expect: {} });
 var callAdblockStatus = zmDeclare({ object: 'zapret-manager', method: 'adblock_status', expect: {} });
@@ -34786,7 +35293,7 @@ setInterval(dockSync, 600);
 window.addEventListener('hashchange', function() { setTimeout(dockSync, 50); });
 
 var _activePolls = {};
-var JOB_NAMES = { steer: 'Steer', forkop: 'Forkozz', awg: 'AmneziaWG', strategy_test: 'тест стратегий', mirror_set: 'смена зеркала', zm_update: 'обновление панели', htop: 'htop' };
+var JOB_NAMES = { steer: 'Steer', forkop: 'Forkozz', awg: 'AmneziaWG', strategy_test: 'тест стратегий', mirror_set: 'смена зеркала', owrt: 'установка UPnP', zm_update: 'обновление панели', htop: 'htop' };
 var _stuck = {}, _stopEl = null, _stopBusy = false;
 
 function jobName(j) {
@@ -35641,8 +36148,8 @@ function sysFixCard(d, onChange, o) {
 		E('div', { 'class': 'zm-sx-head zm-sx-left' }, [ E('span', { 'class': 'zm-sx-title' }, 'Flow Offloading'),
 			E('span', { 'class': 'zm-badge ' + (fon ? 'zm-sx-info' : 'zm-off') }, [ E('span', { 'class': 'zm-dot' }), FLOW_MODE[mode] ]) ]),
 		E('p', { 'class': 'zm-hint' }, !tpl ? 'На роутере нет firewall4 — поправки для Flow Offloading недоступны.'
-			: (fon ? 'Ускорение маршрутизации/NAT (Сеть → Межсетевой экран): установленные соединения идут быстрым путём, мимо правил роутера. Для Zapret и Steer нужны свои поправки.'
-				: 'Ускорение маршрутизации/NAT сейчас выключено (Сеть → Межсетевой экран) — поправки для Zapret и Steer не нужны.' + (auto
+			: (fon ? 'Ускорение маршрутизации/NAT (переключается в «Настройках OpenWrt»): установленные соединения идут быстрым путём, мимо правил роутера. Для Zapret и Steer нужны свои поправки.'
+				: 'Ускорение маршрутизации/NAT сейчас выключено (включается в «Настройках OpenWrt») — поправки для Zapret и Steer не нужны.' + (auto
 					? ' Если включите его, панель сама поставит нужные поправки.'
 					: ' Если включите его, поставьте поправки здесь: «Фоновые проверки» выключены, и сама панель их не поставит.'))),
 		tpl && fon ? E('div', { 'class': 'zm-sx-two' }, [ zSub, sSub ]) : offList.length ? E('div', { 'class': 'zm-sx-offfix' }, offList) : E([])
@@ -35960,7 +36467,7 @@ function hidePicker(o) {
 		var hc = hiddenCount();
 		if (!selecting) {
 			var acts = [];
-			if (!info.noEdit && (items.length > 1 || hc)) acts.push(E('button', { 'class': 'cbi-button', 'disabled': o.busy && o.busy() ? '' : null, 'click': start }, hc || info.markers ? (W.edit || 'Изменить список скрытых') : wHide + ' ' + noun + '…'));
+			if (!o.inline && !info.noEdit && (items.length > 1 || hc)) acts.push(E('button', { 'class': 'cbi-button', 'disabled': o.busy && o.busy() ? '' : null, 'click': start }, hc || info.markers ? (W.edit || 'Изменить список скрытых') : wHide + ' ' + noun + '…'));
 			if (hc || info.markers) acts.push(E('button', { 'class': 'cbi-button cbi-button-remove', 'disabled': o.busy && o.busy() ? '' : null, 'click': reset }, W.reset || ('Вернуть все ' + noun)));
 			if (!acts.length) return;
 			if (hc || info.markers) {
@@ -36016,6 +36523,12 @@ function hidePicker(o) {
 		render();
 	};
 	el.selecting = function() { return selecting; };
+	el.startButton = function() {
+		var hc = hiddenCount();
+		if (info.noEdit || !(items.length > 1 || hc)) return null;
+		return E('button', { 'type': 'button', 'class': 'cbi-button zm-hide-start', 'disabled': o.busy && o.busy() ? '' : null, 'click': start,
+			'title': hc ? wHidden + ': ' + hc : '' }, [ wHide + ' ' + noun + '…', hc ? E('span', { 'class': 'zm-hide-cnt' }, [ String(hc) ]) : '' ]);
+	};
 	el.appendChild(bar);
 	return el;
 }
@@ -36514,6 +37027,8 @@ return baseclass.extend({
 	eventsClear: callEventsClear,
 	zramStatus: callZramStatus,
 	zramAction: callZramAction,
+	owrtStatus: callOwrtStatus,
+	owrtSet: bigArg2(callOwrtSet),
 	eventsCard: eventsCard,
 	evWhen: evWhen,
 	adblockStatus: callAdblockStatus,
@@ -36623,9 +37138,9 @@ return view.extend({
 		function sysStrip(sys) {
 			var href = document.body.classList.contains('zmw-body') ? '#/system' : L.url('admin/services/zapret-manager/system');
 			var p2 = function(x) { return (x < 10 ? '0' : '') + x; };
-			function chip(tone, text, title) {
-				var go = function() { location.href = href; };
-				return E('span', { 'class': 'zm-badge ' + tone, 'role': 'link', 'tabindex': '0', 'title': title + '\nНажмите — откроется «Система»', 'click': go,
+			function chip(tone, text, title, ow) {
+				var go = function() { location.href = ow ? zm.pageHref('openwrt') : href; };
+				return E('span', { 'class': 'zm-badge ' + tone, 'role': 'link', 'tabindex': '0', 'title': title + '\nНажмите — откроется «' + (ow ? 'Настройки OpenWrt' : 'Система') + '»', 'click': go,
 					'keydown': function(ev) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); go(); } } }, [ E('span', { 'class': 'zm-dot' }), text ]);
 			}
 			var fm = { hw: 'аппаратный', sw: 'программный' }[sys.flow_mode] || '', fon = !!fm;
@@ -36633,7 +37148,7 @@ return view.extend({
 			var c = [];
 			if (sys.quic_blocked) c.push(chip('zm-ok', 'QUIC блокируется', 'Блокировка QUIC (UDP 80 и 443): браузеры переходят на обычный HTTPS, его Zapret обрабатывает надёжнее'));
 			if (sys.ipv6_enabled) c.push(chip('zm-ok', 'IPv6 в Zapret', 'Zapret обрабатывает и трафик IPv6'));
-			if (fon) c.push(chip('zm-sx-info', 'Flow Offloading ' + fm, 'Ускорение маршрутизации/NAT (Сеть → Межсетевой экран)'));
+			if (fon) c.push(chip('zm-sx-info', 'Flow Offloading ' + fm, 'Ускорение маршрутизации/NAT — переключается в «Настройках OpenWrt»', true));
 			var zIn = sys.zapret_installed !== false, idle = ' — пока Flow Offloading выключен, она ни на что не влияет';
 			if ((fon && zIn) || zf) c.push(chip(zf ? (fon ? 'zm-ok' : 'zm-off') : sys.zapret_fix_off ? 'zm-off' : 'zm-bad',
 				zf ? 'поправка для Zapret' : sys.zapret_fix_off ? 'поправка для Zapret отключена' : 'нет поправки для Zapret',
@@ -36647,7 +37162,7 @@ return view.extend({
 				var at = how && +sysInfo.mirror_at > 0 ? new Date(sysInfo.mirror_at * 1000) : null, when = at ? ' ' + p2(at.getDate()) + '.' + p2(at.getMonth() + 1) : '';
 				c.push(chip(def ? 'zm-off' : how === 'auto' ? 'zm-warn' : 'zm-sx-info',
 					def ? 'Зеркало OpenWrt · основное' : 'Зеркало ' + String(sysInfo.mirror || mh) + (how === 'auto' ? ' · автовыбор' + when : how === 'pick' ? ' · подобрано' + when : ''),
-					'Откуда ставятся пакеты OpenWrt: ' + mh + (how === 'auto' ? '\nОсновной репозиторий отвечал с ошибками — панель переключилась сама' : how === 'pick' ? '\nПодобрано кнопкой «Подобрать зеркало»' : how === 'manual' ? '\nВыбрано вручную' : '')));
+					'Откуда ставятся пакеты OpenWrt: ' + mh + (how === 'auto' ? '\nОсновной репозиторий отвечал с ошибками — панель переключилась сама' : how === 'pick' ? '\nПодобрано кнопкой «Подобрать зеркало»' : how === 'manual' ? '\nВыбрано вручную' : ''), true));
 			}
 			if (!c.length) return E([]);
 			return E('div', { 'class': 'zm-sysline' }, [ E('span', { 'class': 'zm-label' }, 'Система') ].concat(c));
@@ -45393,7 +45908,7 @@ return view.extend({
 					autoCard.appendChild(lastEl);
 				}
 				var yr = timeInfo.time ? new Date(timeInfo.time * 1000).getFullYear() : 0;
-				if (on && yr && yr < 2024) autoCard.appendChild(E('p', { 'class': 'zm-hint' }, '⚠ Время на роутере неверное — расписание не сработает. Настройте его на странице «Система».'));
+				if (on && yr && yr < 2024) autoCard.appendChild(E('p', { 'class': 'zm-hint' }, '⚠ Время на роутере неверное — расписание не сработает. Настройте его на странице «Настройки OpenWrt».'));
 				var now = routerNow();
 				autoCard.appendChild(E('div', { 'class': 'zm-actions zm-ab-actions' }, [
 					E('button', { 'class': 'cbi-button cbi-button-positive', 'disabled': busy || !zapretInstalled ? '' : null, 'click': function() {
@@ -45412,7 +45927,7 @@ return view.extend({
 						zm.testAction('auto_clear', '').then(function(r) { if (r && !r.error) { autoInfo = r.auto || {}; timeInfo = r; renderAuto(); } });
 					} }, abLog.length ? 'Очистить журнал' : 'Удалить результат') : E([]),
 					E('span', { 'class': 'zm-hint zm-ab-clock' }, [ 'Время роутера: ' + (now ? p2(now.getUTCHours()) + ':' + p2(now.getUTCMinutes()) : '—') + (timeInfo.zone ? ' · ' + (ZONE_RU[timeInfo.zone] || timeInfo.zone.replace(/^.*\//, '').replace(/_/g, ' ')) : '') + ' · ',
-						E('a', { 'href': document.body.classList.contains('zmw-body') ? '#/system' : L.url('admin/services/zapret-manager/system') }, 'настроить') ])
+						E('a', { 'href': zm.pageHref('openwrt') }, 'настроить') ])
 				]));
 			}
 
@@ -47133,6 +47648,7 @@ html.zm-theme-dark .zm-bad  { background: rgba(248,81,73,.15); color: #ff7b72; }
 html.zm-theme-dark .zm-bad .zm-dot { background: #f85149; }
 html.zm-theme-dark .zm-warn { background: rgba(210,153,34,.16); color: #e3b341; }
 html.zm-theme-dark .zm-warn .zm-dot { background: #d29922; }
+html.zm-theme-dark .zm-hide-cnt { background: rgba(210,153,34,.2); color: #e3b341; }
 html.zm-theme-dark .zm-off  { background: rgba(139,148,158,.16); color: #a3acb7; }
 html.zm-theme-dark .zm-off .zm-dot { background: #8b949e; }
 html.zm-theme-dark .zm-lat-good { color: #3fb950; } html.zm-theme-dark .zm-lat-mid { color: #e3b341; } html.zm-theme-dark .zm-lat-bad { color: #ff7b72; }
@@ -48084,6 +48600,77 @@ html.zm-theme-dark .zm-dock .zm-refresh-banner { background: #2f2a1c; color: #e3
 
 .zm-hide { margin-top: 12px; }
 .zm-hide-bar { display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap; }
+.zm-hide-start { display: inline-flex; align-items: center; gap: 8px; }
+.zm-hide-cnt { display: inline-block; min-width: 18px; padding: 1px 7px; border-radius: 999px; font-size: 12px; font-weight: 700; line-height: 1.5; text-align: center; background: rgba(154,103,0,.16); color: #8a5a00; }
+.zm-ow-jump { display: flex; flex-wrap: wrap; gap: 6px; }
+.zm-ow-chip { appearance: none; border: 1px solid rgba(0,0,0,.12); background: var(--background-color-high, #fff); color: inherit; border-radius: 999px; padding: 5px 12px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; transition: border-color .15s, background .15s; }
+.zm-ow-chip:hover { border-color: #1a7f37; background: rgba(26,127,55,.08); }
+.zm-ow .zm-card { scroll-margin-top: 72px; }
+.zm-ow-modes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.zm-tile.zm-ow-mode:not(.zm-active) { color: inherit; }
+.zm-tile.zm-ow-mode { appearance: none; font: inherit; display: flex; flex-direction: column; align-items: flex-start; gap: 3px; text-align: left; padding: 12px 14px; min-width: 0; }
+.zm-tile.zm-ow-mode b { font-size: 14px; }
+.zm-tile.zm-ow-mode span { font-size: 12px; font-weight: 400; opacity: .72; }
+.zm-tile.zm-ow-mode.zm-active span { color: inherit; }
+.zm-tile.zm-ow-mode[disabled] { cursor: progress; opacity: .7; transform: none; }
+.zm-ow-radios { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 4px; }
+.zm-ow-radio { border: 1px solid rgba(0,0,0,.1); border-radius: 12px; padding: 14px 16px; background: rgba(0,0,0,.02); display: flex; flex-direction: column; gap: 10px; min-width: 0; box-sizing: border-box; }
+.zm-ow-radio.zm-ow-off { opacity: .8; }
+.zm-ow-radio-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.zm-ow-radio-head b { font-size: 15px; }
+.zm-ow-check { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; user-select: none; }
+.zm-ow-check input { margin: 0; width: 16px; height: 16px; accent-color: #1a7f37; }
+.zm-ow-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.zm-ow-field > span:first-child { font-size: 12px; opacity: .65; }
+.zm-ow-field .cbi-input-text, .zm-ow-field .cbi-input-select { width: 100%; max-width: none; min-width: 0; box-sizing: border-box; }
+.zm-ow-pw { display: flex; gap: 8px; align-items: center; min-width: 0; }
+.zm-ow-pw .cbi-input-text { flex: 1 1 auto; width: auto; min-width: 0; }
+.zm-ow-pw .cbi-button { margin: 0; flex: 0 0 auto; }
+.zm-ow-seg4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.zm-ow-seg4 .zm-seg-item { text-align: center; padding: 5px 6px; }
+.zm-ow-acts { align-items: center; margin-top: 14px; }
+.zm-ow-grid3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.zm-ow-grid3 .zm-sx-tile > .zm-ow-pw, .zm-ow-grid3 .zm-sx-tile > .zm-seg { margin-top: 12px; }
+.zm-ow-grid3 .zm-sx-tile > .zm-seg { align-self: flex-start; }
+.zm-ow-link { appearance: none; background: none; border: 0; padding: 0; margin: 8px 0 0; font: inherit; font-size: 13px; color: #2563eb; cursor: pointer; text-align: left; align-self: flex-start; }
+.zm-ow-link:hover { text-decoration: underline; }
+.zm-ow-ports { margin-top: 6px; font-size: 12px; line-height: 1.6; max-height: 140px; overflow: auto; overflow-wrap: anywhere; }
+.zm-ow-tbox { overflow-x: auto; margin: 0 -2px; }
+.zm-ow-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.zm-ow-table th { text-align: left; font-size: 12px; font-weight: 600; opacity: .6; padding: 6px 10px; border-bottom: 1px solid rgba(0,0,0,.1); white-space: nowrap; }
+.zm-ow-table td { padding: 8px 10px; border-bottom: 1px solid rgba(0,0,0,.06); vertical-align: middle; }
+.zm-ow-table tr:last-child td { border-bottom: 0; }
+.zm-ow-table .zm-ow-pw { flex-wrap: nowrap; }
+.zm-ow-ip { width: 140px !important; flex: 0 0 140px !important; font-variant-numeric: tabular-nums; }
+.zm-ow-mac { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; opacity: .7; white-space: nowrap; }
+.zm-ow-tr { text-align: right; white-space: nowrap; }
+.zm-ow-tr .zm-badge { margin-right: 8px; }
+.zm-ow-tr .cbi-button { margin: 0; }
+.zm-ow-muted { font-size: 12px; opacity: .55; }
+.zm-ow-rbrow { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+.zm-ow-inl { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; }
+.zm-ow-inl .cbi-input-select { width: auto; min-width: 150px; }
+.zm-ow-time { width: 110px !important; }
+.zm-ow-moved { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.zm-ow-moved .cbi-button { margin: 0; }
+html.zm-theme-dark .zm-ow-chip { border-color: rgba(255,255,255,.14); background: #22272e; }
+html.zm-theme-dark .zm-ow-chip:hover { border-color: #3fb950; background: rgba(63,185,80,.12); }
+html.zm-theme-dark .zm-ow-radio { border-color: rgba(255,255,255,.12); background: rgba(255,255,255,.03); }
+html.zm-theme-dark .zm-ow-table th { border-color: rgba(255,255,255,.12); }
+html.zm-theme-dark .zm-ow-table td { border-color: rgba(255,255,255,.07); }
+html.zm-theme-dark .zm-ow-link { color: #79c0ff; }
+@media (max-width: 900px) { .zm-ow-grid3 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 720px) {
+	.zm-ow-modes, .zm-ow-radios, .zm-ow-grid3 { grid-template-columns: minmax(0, 1fr); }
+	.zm-ow-table thead { display: none; }
+	.zm-ow-table, .zm-ow-table tbody, .zm-ow-table tr, .zm-ow-table td { display: block; width: 100%; box-sizing: border-box; }
+	.zm-ow-table tr { padding: 10px 0; border-bottom: 1px solid rgba(0,0,0,.08); }
+	.zm-ow-table td { border: 0; padding: 3px 0; }
+	.zm-ow-tr { text-align: left; }
+	.zm-ow-ip { flex: 1 1 auto !important; width: auto !important; }
+	.zm-ow-seg4 .zm-seg-item { padding: 5px 2px; font-size: 12px; }
+}
+@media (max-width: 360px) { .zm-ow-seg4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .zm-hide-grid .zm-node.zm-hide-on { opacity: .62; border-style: dashed; border-color: #cf222e; background: rgba(207,34,46,.07); }
 .zm-hide-grid .zm-node.zm-hide-on .zm-node-name { text-decoration: line-through; }
 .zm-hide-grid .zm-node.zm-hide-lock { opacity: .45; cursor: not-allowed; }
@@ -48835,30 +49422,19 @@ cat > '/www/luci-static/resources/view/zapret-manager/system.js' << 'ZM_INSTALLE
 'require zapret-manager.common as zm';
 var E = (function(raw) { return function() { var a = Array.prototype.slice.call(arguments), i = a.length - 1; if (i >= 1 && (typeof a[i] === 'string' || typeof a[i] === 'number')) a[i] = [ String(a[i]) ]; return raw.apply(null, a); }; })(window.E);
 
-var MIRRORS = [
-	{ id: 'infra', label: 'Infra OpenWrt' },
-	{ id: 'brazil', label: 'Brazil' },
-	{ id: 'china', label: 'China' },
-	{ id: 'france', label: 'France' },
-	{ id: 'italy', label: 'Italy' },
-	{ id: 'morocco', label: 'Morocco' },
-	{ id: 'usa', label: 'USA' },
-	{ id: 'germany_rwth', label: 'Germany' },
-	{ id: 'default', label: 'default / OpenWrt' }
-];
 
 return view.extend({
 	load: function() {
 		var part = this.zmPart || '', si = function() { return zm.sysinfoGet().catch(function() { return {}; }); };
 		zm.injectCss();
 		if (part && part !== 'main') return Promise.all([ {}, {}, part === 'sysinfo' ? si() : {} ]);
-		return Promise.all([ zm.systemStatus(), zm.mirrorStatus(), part ? {} : si() ]);
+		return Promise.all([ zm.systemStatus(), {}, part ? {} : si() ]);
 	},
 
 	render: function(data) {
-		var sysData = data[0], mirrorData = data[1];
+		var sysData = data[0];
 		var wrap = E('div', { 'class': 'zm-wrap' });
-		var part = this.zmPart || '', SYS_MAIN = { status: 1, priv: 1, time: 1, net: 1, zram: 1, ver: 1, mirror: 1, ghmirror: 1, changelog: 1, thanks: 1 };
+		var part = this.zmPart || '', SYS_MAIN = { status: 1, priv: 1, openwrt: 1, net: 1, zram: 1, ver: 1, ghmirror: 1, changelog: 1, thanks: 1 };
 		function on(k) { return !part || (part === 'main' ? !!SYS_MAIN[k] : part === k); }
 		function put(k, el) { if (on(k)) wrap.appendChild(el); }
 		var netEl = E('div', {}, [ E('p', { 'class': 'zm-hint' }, 'Нажмите «Проверить», чтобы протестировать IPv4/IPv6') ]);
@@ -49097,122 +49673,11 @@ return view.extend({
 		siRender();
 		put('sysinfo', siCard);
 
-		var ZONES = [
-			{ id: 'Europe/Kaliningrad', city: 'Калининград', off: 'UTC+2' }, { id: 'Europe/Moscow', city: 'Москва', off: 'UTC+3' },
-			{ id: 'Europe/Samara', city: 'Самара', off: 'UTC+4' }, { id: 'Asia/Yekaterinburg', city: 'Екатеринбург', off: 'UTC+5' },
-			{ id: 'Asia/Omsk', city: 'Омск', off: 'UTC+6' }, { id: 'Asia/Krasnoyarsk', city: 'Красноярск', off: 'UTC+7' },
-			{ id: 'Asia/Irkutsk', city: 'Иркутск', off: 'UTC+8' }, { id: 'Asia/Yakutsk', city: 'Якутск', off: 'UTC+9' },
-			{ id: 'Asia/Vladivostok', city: 'Владивосток', off: 'UTC+10' }, { id: 'Asia/Magadan', city: 'Магадан', off: 'UTC+11' },
-			{ id: 'Asia/Kamchatka', city: 'Камчатка', off: 'UTC+12' }, { id: 'UTC', city: 'UTC', off: '±0' }
-		];
-		var WDAYS = [ 'воскресенье', 'понедельник', 'вторник', 'среда', 'четверг', 'пятница', 'суббота' ];
-		var MONTHS = [ 'января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря' ];
-		var timeCard = E('div', { 'class': 'zm-card' }), timeBusy = '', timeData = sysData, tzOpen = false, autoNote = '';
-		var clockT = E('div', { 'class': 'zm-tz-time' }), clockD = E('div', { 'class': 'zm-tz-date' }), clockBase = 0, clockAt = 0;
-		function offText(o) {
-			o = String(o || '+0000');
-			var h = +o.slice(1, 3), m = +o.slice(3, 5);
-			return 'UTC' + (h || m ? o.charAt(0) + h + (m ? ':' + o.slice(3, 5) : '') : '±0');
-		}
-		function zoneText() {
-			var z = ZONES.filter(function(x) { return x.id === timeData.zone; })[0];
-			if (z) return z.city + ' · ' + offText(timeData.utc_offset);
-			return (timeData.zone ? timeData.zone.replace(/^.*\//, '').replace(/_/g, ' ') + ' · ' : 'Пояс не выбран · ') + offText(timeData.utc_offset);
-		}
-		function nowLocal() {
-			if (!clockBase) return null;
-			var s = clockBase + Math.round((Date.now() - clockAt) / 1000);
-			var off = String(timeData.utc_offset || '+0000'), sg = off.charAt(0) === '-' ? -1 : 1, mins = sg * ((+off.slice(1, 3)) * 60 + (+off.slice(3, 5)));
-			return new Date((s + mins * 60) * 1000);
-		}
-		function paintClock() {
-			var d = nowLocal(), p = function(n) { return (n < 10 ? '0' : '') + n; };
-			if (!d) { clockT.textContent = '—'; clockD.textContent = timeData.time_text || ''; return; }
-			clockT.textContent = p(d.getUTCHours()) + ':' + p(d.getUTCMinutes()) + ':' + p(d.getUTCSeconds());
-			clockD.textContent = WDAYS[d.getUTCDay()] + ', ' + d.getUTCDate() + ' ' + MONTHS[d.getUTCMonth()] + ' ' + d.getUTCFullYear();
-		}
-		function tick() {
-			if (!document.body.contains(clockT)) return;
-			paintClock();
-			setTimeout(tick, 1000);
-		}
-		function timeDo(value, what, text) {
-			if (timeBusy) return;
-			timeBusy = what; renderTime();
-			zm.toast(text, 'warning');
-			zm.systemTimeSet(value).then(function(r) {
-				timeBusy = '';
-				if (r && r.time) { timeData = r; clockBase = r.time; clockAt = Date.now(); }
-				if (!r || r.error) { zm.toast((r && r.error) || 'Роутер не ответил', 'error'); renderTime(); return; }
-				if (value === 'auto' && r.auto) {
-					var a = r.auto, how = a.sync === 'ntp' ? 'время синхронизировано по NTP' : a.sync === 'http' ? 'время взято с сайтов (NTP у провайдера закрыт)' : 'время синхронизировать не удалось';
-					autoNote = 'Определено: ' + a.zone + (a.city ? ' (' + a.city + ')' : '') + ' — так ответили ' + a.votes + ' из ' + a.got + ' сервисов; ' + how + '.';
-					tzOpen = false;
-					zm.toast(a.sync ? 'Часовой пояс определён, время синхронизировано' : 'Часовой пояс определён, но время синхронизировать не удалось', a.sync ? 'info' : 'warning');
-				} else {
-					autoNote = '';
-					if (/^tz:/.test(value)) tzOpen = false;
-					if (/^ntpsrv:/.test(value)) zm.toast((r.ntpsrv === 'ip' ? 'Серверы времени — по IP-адресам' : 'Серверы времени — стандартные') + (r.sync ? ', время синхронизировано' : ', но время пока не синхронизировалось'), r.sync ? 'info' : 'warning');
-					else zm.toast(value === 'ntp' ? (r.sync === 'http' ? 'Время взято с сайтов — NTP у провайдера закрыт' : 'Время синхронизировано') : 'Часовой пояс установлен', 'info');
-				}
-				renderTime();
-			}).catch(function() { timeBusy = ''; zm.toast('Роутер не ответил', 'error'); renderTime(); });
-		}
-		function renderTime() {
-			timeCard.innerHTML = '';
-			timeCard.appendChild(E('h3', {}, 'Время на роутере'));
-			timeCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:-6px' }, 'Нужно для всех расписаний панели: автоподбора стратегии, перезапусков и обновления списков.'));
-			paintClock();
-			timeCard.appendChild(E('div', { 'class': 'zm-tz-clock' }, [
-				E('div', { 'class': 'zm-tz-now' }, [ clockT, clockD, E('div', { 'class': 'zm-tz-zone' }, zoneText()) ]),
-				E('div', { 'class': 'zm-tz-btns' }, [
-					E('button', { 'class': 'cbi-button cbi-button-positive', 'disabled': timeBusy ? '' : null, 'title': 'Роутер сам определит часовой пояс по своему местоположению (сверяя несколько сервисов) и выставит точное время', 'click': function() { timeDo('auto', 'auto', 'Определяем часовой пояс и время'); } }, timeBusy === 'auto' ? 'Определяем…' : 'Определить автоматически'),
-					E('button', { 'class': 'cbi-button', 'disabled': timeBusy ? '' : null, 'click': function() { tzOpen = !tzOpen; renderTime(); } }, tzOpen ? 'Скрыть часовые пояса' : 'Сменить часовой пояс'),
-					E('button', { 'class': 'cbi-button', 'disabled': timeBusy ? '' : null, 'click': function() { timeDo('ntp', 'ntp', 'Синхронизируем время'); } }, timeBusy === 'ntp' ? 'Синхронизируем…' : 'Синхронизировать время')
-				])
-			]));
-			if (autoNote) timeCard.appendChild(E('p', { 'class': 'zm-hint' }, autoNote));
-			renderNtpSrv();
-			if (timeData.time && new Date(timeData.time * 1000).getFullYear() < 2024) timeCard.appendChild(E('p', { 'class': 'zm-hint' }, '⚠ Время на роутере неверное — нажмите «Определить автоматически», иначе расписания не сработают.'));
-			if (tzOpen) {
-				var list = ZONES.slice();
-				if (timeData.zone && !list.some(function(z) { return z.id === timeData.zone; }))
-					list.unshift({ id: timeData.zone, city: timeData.zone.replace(/^.*\//, '').replace(/_/g, ' '), off: offText(timeData.utc_offset), own: true });
-				timeCard.appendChild(E('div', { 'class': 'zm-grid zm-tz-grid' }, list.map(function(z) {
-					var on = z.id === timeData.zone;
-					return E('div', { 'class': 'zm-tile zm-tz-tile' + (on ? ' zm-active' : ''), 'click': function() {
-						if (on || z.own || timeBusy) return;
-						timeDo('tz:' + z.id, 'tz', 'Ставим часовой пояс: ' + z.city);
-					} }, [ E('b', {}, z.city), E('span', {}, z.off + (on ? ' · выбран' : '')) ]);
-				})));
-			}
-		}
-		var NTP_SRV = [ { id: 'std', label: 'Стандартные' }, { id: 'ip', label: 'По IP-адресам' } ];
-		function renderNtpSrv() {
-			var cur = timeData.ntp_preset || 'none', lock = !!timeData.dnsm || !!timeBusy;
-			timeCard.appendChild(E('div', { 'class': 'zm-row', 'style': 'margin-top:12px; flex-wrap:wrap; gap:8px 12px' }, [
-				E('span', { 'class': 'zm-label' }, 'Серверы времени'),
-				E('div', { 'class': 'zm-seg' + (lock ? ' zm-seg-busy' : '') }, NTP_SRV.map(function(it) {
-					return E('div', { 'class': 'zm-seg-item' + (it.id === cur ? ' zm-active' : ''), 'click': function() {
-						if (it.id === cur || lock) return;
-						timeDo('ntpsrv:' + it.id, 'ntpsrv', it.id === 'ip' ? 'Ставим серверы времени по IP-адресам' : 'Ставим стандартные серверы времени');
-					} }, it.label);
-				}))
-			]));
-			timeCard.appendChild(E('p', { 'class': 'zm-hint' }, timeData.dnsm
-				? 'Серверы времени настраивает DNS Manager — меняйте их в нём.'
-				: cur === 'ip'
-				? 'ВНИИФТРИ, Cloudflare и Google по IP-адресам — время синхронизируется, даже если DNS на роутере не отвечает.'
-				: cur === 'std'
-				? 'pool.ntp.org — роутер находит их через DNS. Не отвечает DNS (например, сервер DoH) — время не синхронизируется, а без точного времени не работают DoH и HTTPS. С DNS over HTTPS лучше «По IP-адресам».'
-				: cur === 'own'
-				? 'Сейчас стоят свои серверы: ' + String(timeData.ntp_servers || '').split(' ').join(', ') + '. Выбор заменит их.'
-				: 'Серверы времени не заданы — выберите, какие использовать.'));
-		}
-		if (timeData.time) { clockBase = timeData.time; clockAt = Date.now(); }
-		renderTime();
-		put('time', timeCard);
-		setTimeout(tick, 1000);
+		var owCard = E('div', { 'class': 'zm-card zm-ow-moved' }, [
+			E('div', {}, [ E('b', {}, 'Время, зеркало OpenWrt и Flow Offloading'), E('div', { 'class': 'zm-hint', 'style': 'margin:2px 0 0' }, 'Теперь на отдельной странице — вместе с Wi-Fi, IPv6, UPnP, постоянными адресами устройств и перезагрузкой по расписанию.') ]),
+			E('a', { 'class': 'cbi-button cbi-button-action', 'href': zm.pageHref('openwrt') }, 'Настройки OpenWrt')
+		]);
+		put('openwrt', owCard);
 
 		var netBusy = false;
 		var msFmt = function(v) { var n = parseFloat(v); return isNaN(n) ? String(v || '') : n < 10 ? String(Math.round(n * 10) / 10) : String(Math.round(n)); };
@@ -49296,52 +49761,6 @@ return view.extend({
 		put('zram', zrCard);
 		if (on('zram') && location.hash === '#zm-zram') setTimeout(function() { try { zrCard.scrollIntoView({ block: 'start', behavior: 'smooth' }); } catch (e) {} }, 400);
 
-		var mirrorGrid = E('div', { 'class': 'zm-grid' });
-		var mirrorCurrentEl = E('span', {}, mirrorData.current);
-		var mirrorBusy = false, mirrorHowEl = E('div', {}), mirrorPickBtn;
-		function mirrorHow() {
-			mirrorHowEl.innerHTML = '';
-			if (mirrorData.mirror_how === 'auto') mirrorHowEl.appendChild(E('p', { 'class': 'zm-hint' }, 'Зеркало выбрано автоматически: основной репозиторий OpenWrt отвечал с ошибками. Вернуть его — «default / OpenWrt».'));
-			else if (mirrorData.mirror_how === 'pick') mirrorHowEl.appendChild(E('p', { 'class': 'zm-hint' }, 'Зеркало подобрано кнопкой «Подобрать зеркало»: самое быстрое по пингу, через которое обновились все репозитории.'));
-		}
-		function mirrorRun(id, startText, okText) {
-			if (mirrorBusy) { zm.toast('Дождитесь окончания операции с зеркалом', 'warning'); return; }
-			mirrorBusy = true;
-			if (mirrorPickBtn) { mirrorPickBtn.disabled = true; mirrorPickBtn.textContent = id === 'pick' ? 'Подбираем…' : 'Подобрать зеркало'; }
-			zm.toast(startText, 'warning');
-			mirrorLog.classList.add('zm-show');
-			zm.renderLog(mirrorLog, id === 'pick' ? '==> Подбираем зеркало' : '==> Проверяем и переключаем');
-			var done = function() { mirrorBusy = false; if (mirrorPickBtn) { mirrorPickBtn.disabled = false; mirrorPickBtn.textContent = 'Подобрать зеркало'; } };
-			zm.mirrorSet(id).then(function(res) {
-				if (res.error) { done(); zm.toast(res.error, 'error'); return; }
-				zm.pollJob('mirror_set', mirrorLog, function(ok) {
-					done();
-					zm.mirrorStatus().then(function(res2) {
-						mirrorData = res2 || mirrorData;
-						mirrorCurrentEl.textContent = mirrorData.current;
-						Array.prototype.forEach.call(mirrorGrid.children, function(el, i) {
-							el.classList.toggle('zm-active', MIRRORS[i].label === mirrorData.current);
-						});
-						mirrorHow();
-						zm.toast(ok ? okText(mirrorData.current) : (id === 'pick' ? 'Подходящее зеркало не нашлось — оставлено прежнее' : 'Не удалось переключить зеркало'), ok ? 'info' : 'error');
-					}).catch(function() { zm.toast(ok ? 'Готово' : 'Не удалось', ok ? 'info' : 'error'); });
-				});
-			}).catch(function() { done(); zm.toast('Роутер не ответил', 'error'); });
-		}
-		MIRRORS.forEach(function(m) {
-			mirrorGrid.appendChild(E('div', {
-				'class': 'zm-tile' + (mirrorData.current === m.label ? ' zm-active' : ''),
-				'click': function() {
-					if (mirrorBusy) { zm.toast('Дождитесь окончания операции с зеркалом', 'warning'); return; }
-					if (mirrorData.current === m.label) { zm.toast('Это зеркало уже выбрано', 'info'); return; }
-					mirrorRun(m.id, 'Переключаем зеркало на «' + m.label + '»', function() { return 'Зеркало переключено на «' + m.label + '»'; });
-				}
-			}, m.label));
-		});
-		mirrorHow();
-		mirrorPickBtn = E('button', { 'class': 'cbi-button cbi-button-action', 'click': function() {
-			mirrorRun('pick', 'Подбираем зеркало — это займёт до нескольких минут', function(cur) { return 'Выбрано зеркало «' + cur + '»'; });
-		} }, 'Подобрать зеркало');
 		var verCard = E('div', { 'class': 'zm-card' }), verD = null, verBusy = false, verTimer = null;
 		var auD = null, auBusy = false, auTimer = null;
 		var AU_RES = { ok: [ 'успешно', 'zm-au-ok' ], fail: [ 'ошибка', 'zm-au-bad' ], wait: [ 'ставится', 'zm-au-wait' ] };
@@ -49608,20 +50027,6 @@ return view.extend({
 		if (on('watch')) zm.watchStatus().then(function(r) { watchD = r && !r.error ? r : { on: true, items: [] }; renderWatch(); }).catch(function() { watchD = { on: true, items: [] }; renderWatch(); });
 		put('watch', watchCard);
 
-		var mirrorLog = E('pre', { 'class': 'zm-log' });
-		var mirrorCard = E('div', { 'class': 'zm-card' }, [
-			E('h3', {}, 'Зеркало OpenWrt'),
-			E('div', { 'class': 'zm-row' }, [
-				E('span', { 'class': 'zm-label' }, 'Сейчас'), mirrorCurrentEl
-			]),
-			mirrorHowEl,
-			mirrorGrid,
-			E('div', { 'class': 'zm-actions' }, [ mirrorPickBtn ]),
-			E('p', { 'class': 'zm-hint' }, '«Подобрать зеркало» меряет пинг до всех зеркал и проверяет их по очереди, начиная с самого быстрого: выбирается первое, через которое обновились все репозитории пакетов. Ход проверки виден ниже.'),
-			E('p', { 'class': 'zm-hint' }, 'При ручном выборе панель тоже проверяет, что зеркало отдаёт список пакетов этого роутера и что список обновляется без ошибок; иначе остаётся прежнее. Если основной репозиторий при обновлении пакетов отвечает с ошибками, панель сама переходит на рабочее зеркало.'),
-			mirrorLog
-		]);
-		put('mirror', mirrorCard);
 
 		var ghCard = E('div', { 'class': 'zm-card' }), ghD = null, ghBusy = false;
 		function ghWhen(ts) {
@@ -50321,6 +50726,640 @@ return view.extend({
 });
 ZM_INSTALLER_EOF
 chmod 0644 '/www/luci-static/resources/view/zapret-manager/system.js'
+
+cat > '/www/luci-static/resources/view/zapret-manager/openwrt.js' << 'ZM_INSTALLER_EOF'
+'use strict';
+'require view';
+'require zapret-manager.common as zm';
+var E = (function(raw) { return function() { var a = Array.prototype.slice.call(arguments), i = a.length - 1; if (i >= 1 && (typeof a[i] === 'string' || typeof a[i] === 'number')) a[i] = [ String(a[i]) ]; return raw.apply(null, a); }; })(window.E);
+
+var MIRRORS = [
+	{ id: 'infra', label: 'Infra OpenWrt' },
+	{ id: 'brazil', label: 'Brazil' },
+	{ id: 'china', label: 'China' },
+	{ id: 'france', label: 'France' },
+	{ id: 'italy', label: 'Italy' },
+	{ id: 'morocco', label: 'Morocco' },
+	{ id: 'usa', label: 'USA' },
+	{ id: 'germany_rwth', label: 'Germany' },
+	{ id: 'default', label: 'default / OpenWrt' }
+];
+
+var COUNTRIES = [
+	[ 'RU', 'Россия' ], [ 'BY', 'Беларусь' ], [ 'KZ', 'Казахстан' ], [ 'UA', 'Украина' ], [ 'UZ', 'Узбекистан' ], [ 'KG', 'Киргизия' ],
+	[ 'TJ', 'Таджикистан' ], [ 'TM', 'Туркмения' ], [ 'AM', 'Армения' ], [ 'AZ', 'Азербайджан' ], [ 'GE', 'Грузия' ], [ 'MD', 'Молдова' ],
+	[ 'TR', 'Турция' ], [ 'DE', 'Германия' ], [ 'FI', 'Финляндия' ], [ 'PL', 'Польша' ], [ 'LV', 'Латвия' ], [ 'LT', 'Литва' ], [ 'EE', 'Эстония' ],
+	[ 'IL', 'Израиль' ], [ 'AE', 'ОАЭ' ], [ 'TH', 'Таиланд' ], [ 'VN', 'Вьетнам' ], [ 'CN', 'Китай' ], [ 'US', 'США' ], [ 'GB', 'Великобритания' ],
+	[ '00', 'Без страны (мир)' ]
+];
+var FLOW = [
+	{ id: 'off', label: 'Выключено', sub: 'весь трафик через файрвол' },
+	{ id: 'sw', label: 'Программное', sub: 'быстрее, работает на любом роутере' },
+	{ id: 'hw', label: 'Аппаратное', sub: 'быстрее всего, если чип умеет' }
+];
+var POWER = [ { id: 'low', label: 'Низкая', d: 10 }, { id: 'mid', label: 'Средняя', d: 6 }, { id: 'high', label: 'Высокая', d: 3 }, { id: 'max', label: 'Макс', d: 0 } ];
+var DOWS = [ [ '1', 'понедельник' ], [ '2', 'вторник' ], [ '3', 'среду' ], [ '4', 'четверг' ], [ '5', 'пятницу' ], [ '6', 'субботу' ], [ '0', 'воскресенье' ] ];
+var DOW_SHORT = [ 'вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб' ];
+var MON_GEN = [ 'января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря' ];
+
+function ipNum(ip) {
+	var m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(String(ip || ''));
+	if (!m) return -1;
+	for (var i = 1; i <= 4; i++) if (+m[i] > 255) return -1;
+	return ((+m[1] * 256 + +m[2]) * 256 + +m[3]) * 256 + +m[4];
+}
+function badge(on, okText, offText, tone) {
+	return E('span', { 'class': 'zm-badge ' + (on ? (tone || 'zm-ok') : 'zm-off') }, [ E('span', { 'class': 'zm-dot' }), on ? okText : offText ]);
+}
+
+return view.extend({
+	load: function() {
+		zm.injectCss();
+		return Promise.all([
+			zm.owrtStatus().catch(function() { return { error: 'Роутер не ответил' }; }),
+			zm.systemStatus().catch(function() { return {}; }),
+			zm.mirrorStatus().catch(function() { return {}; })
+		]);
+	},
+
+	render: function(data) {
+		var st = data[0] && !data[0].error ? data[0] : null, sysData = data[1] || {}, mirrorData = data[2] || {};
+		var wrap = E('div', { 'class': 'zm-wrap zm-ow' });
+		function put(k, el) { wrap.appendChild(el); }
+		var busy = '';
+		function call(action, arg, start) {
+			if (busy) { zm.toast('Дождитесь окончания предыдущего действия', 'warning'); return Promise.resolve(null); }
+			busy = action;
+			if (start) zm.toast(start, 'warning');
+			return zm.owrtSet(action, typeof arg === 'string' ? arg : JSON.stringify(arg)).then(function(r) {
+				busy = '';
+				if (!r || r.error) { zm.toast((r && r.error) || 'Роутер не ответил', 'error'); return null; }
+				return r;
+			}, function() { busy = ''; zm.toast('Роутер не ответил', 'error'); return null; });
+		}
+		function reload(after) {
+			return zm.owrtStatus().then(function(r) { if (r && !r.error) { st = r; if (after) after(); } }).catch(function() {});
+		}
+
+		if (!st) {
+			wrap.appendChild(E('div', { 'class': 'zm-card' }, [ E('h3', {}, 'Настройки OpenWrt'),
+				E('p', { 'class': 'zm-hint' }, (data[0] && data[0].error) || 'Роутер не ответил — обновите страницу.') ]));
+			return wrap;
+		}
+
+		var jump = E('div', { 'class': 'zm-ow-jump' });
+		wrap.appendChild(jump);
+		var anchors = [];
+		function anchor(label, el) {
+			anchors.push(E('button', { 'type': 'button', 'class': 'zm-ow-chip', 'click': function() {
+				try { el.scrollIntoView({ block: 'start', behavior: 'smooth' }); } catch (e) { el.scrollIntoView(); }
+			} }, label));
+		}
+
+		/* ---------- Ускорение сети ---------- */
+		var flowCard = E('div', { 'class': 'zm-card' }), flowNote = '';
+		function renderFlow() {
+			var f = st.flow || {}, mode = f.mode || 'off';
+			flowCard.innerHTML = '';
+			flowCard.appendChild(E('h3', {}, [ 'Ускорение сети (Flow Offloading) ',
+				badge(mode !== 'off', mode === 'hw' ? 'аппаратное' : 'программное', 'выключено', 'zm-sx-info') ]));
+			flowCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:-6px' }, 'Пакеты уже установленных соединений идут мимо файрвола — меньше нагрузка на процессор, выше скорость.'));
+			flowCard.appendChild(E('div', { 'class': 'zm-ow-modes' }, FLOW.map(function(it) {
+				var on = it.id === mode;
+				return E('button', { 'type': 'button', 'class': 'zm-tile zm-ow-mode' + (on ? ' zm-active' : ''), 'aria-pressed': on ? 'true' : 'false', 'disabled': busy ? '' : null, 'click': function() {
+					if (on) return;
+					var p = call('flow', it.id, it.id === 'off' ? 'Выключаем ускорение' : 'Включаем ' + it.label.toLowerCase() + ' ускорение');
+					renderFlow();
+					p.then(function(r) {
+						if (!r) { renderFlow(); return; }
+						st.flow = r.flow || st.flow;
+						flowNote = r.note || '';
+						zm.toast(r.note || (it.id === 'off' ? 'Ускорение выключено' : it.label + ' ускорение включено'), r.note ? 'warning' : 'info');
+						try { window.dispatchEvent(new CustomEvent('zm:changed')); } catch (e) {}
+						renderFlow();
+					});
+				} }, [ E('b', {}, it.label), E('span', {}, it.sub) ]);
+			})));
+			if (flowNote) flowCard.appendChild(E('p', { 'class': 'zm-hint zm-ab-warn' }, flowNote));
+			flowCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Zapret и Steer продолжают работать: панель сама ставит для них поправки (подробности — в «Системе»). Аппаратное ускорение есть не на всех роутерах — если чип не умеет, панель включит программное.'));
+		}
+		renderFlow();
+		put('flow', flowCard);
+		anchor('Ускорение сети', flowCard);
+
+		/* ---------- Wi-Fi ---------- */
+		var wifiCard = E('div', { 'class': 'zm-card' }), wd = null, wifiOrig = '', wifiSaving = false, showPw = {};
+		function txLevel(r) {
+			var max = +r.txmax || 20, v = r.txp === '' || r.txp == null ? max : +r.txp;
+			if (v >= max) return 'max';
+			var best = 'max', bd = 1e9;
+			POWER.forEach(function(p) { var d = Math.abs((max - p.d) - v); if (d < bd) { bd = d; best = p.id; } });
+			return best;
+		}
+		function txValue(r, lvl) {
+			var max = +r.txmax || 20, p = POWER.filter(function(x) { return x.id === lvl; })[0];
+			return !p || p.id === 'max' ? '' : String(Math.max(1, max - p.d));
+		}
+		function wifiDraft() {
+			var w = st.wifi || {};
+			wd = { country: w.country || '00', radios: (w.radios || []).map(function(r) {
+				return { id: r.id, on: !!r.on, ssid: r.ssid || '', key: r.key || '', channel: r.channel || 'auto', txp: r.txp || '', lvl: txLevel(r) };
+			}) };
+			wifiOrig = JSON.stringify(wd);
+		}
+		function wifiDirty() { return JSON.stringify(wd) !== wifiOrig; }
+		function wifiSave() {
+			if (wifiSaving || !wifiDirty()) return;
+			var body = { country: wd.country, radios: wd.radios.map(function(d) {
+				var r = (st.wifi.radios || []).filter(function(x) { return x.id === d.id; })[0] || {};
+				return { id: d.id, on: d.on, ssid: d.ssid.trim() ? d.ssid : '', key: d.key, channel: d.channel, txp: txValue(r, d.lvl) };
+			}) };
+			for (var i = 0; i < body.radios.length; i++) {
+				var b = body.radios[i], lab = (st.wifi.radios[i] || {}).label || '';
+				if (!b.on) continue;
+				if (!b.ssid) { zm.toast('Задайте имя сети ' + lab, 'warning'); return; }
+				if (b.key.length < 8) { zm.toast('Пароль ' + lab + ' — не короче 8 символов', 'warning'); return; }
+			}
+			wifiSaving = true; renderWifi();
+			call('wifi', body, 'Сохраняем Wi-Fi').then(function(r) {
+				wifiSaving = false;
+				if (!r) { renderWifi(); return; }
+				if (r.same) { zm.toast('Без изменений', 'info'); wifiDraft(); renderWifi(); return; }
+				zm.toast('Сохранено — Wi-Fi перезапускается, устройства переподключатся за несколько секунд', 'info');
+				wifiOrig = JSON.stringify(wd);
+				renderWifi();
+				setTimeout(function() { reload(function() { if (!wifiDirty()) wifiDraft(); renderWifi(); }); }, 9000);
+			});
+		}
+		function field(label, input) { return E('label', { 'class': 'zm-ow-field' }, [ E('span', {}, label), input ]); }
+		function radioBox(r, d) {
+			var box = E('div', { 'class': 'zm-ow-radio' + (d.on ? '' : ' zm-ow-off') });
+			box.appendChild(E('div', { 'class': 'zm-ow-radio-head' }, [ E('b', {}, r.label || r.id),
+				E('label', { 'class': 'zm-ow-check' }, [ E('input', { 'type': 'checkbox', 'checked': d.on ? '' : null, 'change': function(ev) { d.on = ev.target.checked; renderWifi(); } }), d.on ? 'включена' : 'выключена' ]) ]));
+			if (!d.on) { box.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin:0' }, 'Сеть выключена — включите, чтобы настроить.')); return box; }
+			var ssid = E('input', { 'type': 'text', 'class': 'cbi-input-text', 'maxlength': '32', 'autocomplete': 'off', 'spellcheck': 'false', 'value': d.ssid });
+			ssid.addEventListener('input', function() { d.ssid = ssid.value; syncBar(); });
+			var pw = E('input', { 'type': showPw[r.id] ? 'text' : 'password', 'class': 'cbi-input-text zm-secret-in', 'maxlength': '64', 'autocomplete': 'new-password', 'spellcheck': 'false', 'value': d.key });
+			pw.addEventListener('input', function() { d.key = pw.value; syncBar(); });
+			var eye = E('button', { 'type': 'button', 'class': 'cbi-button', 'click': function() { showPw[r.id] = !showPw[r.id]; pw.type = showPw[r.id] ? 'text' : 'password'; eye.textContent = showPw[r.id] ? 'Скрыть' : 'Показать'; } }, showPw[r.id] ? 'Скрыть' : 'Показать');
+			var chans = (r.chans || []).map(String);
+			if (d.channel !== 'auto' && chans.indexOf(String(d.channel)) < 0) chans.unshift(String(d.channel));
+			var ch = E('select', { 'class': 'cbi-input-select', 'change': function(ev) { d.channel = ev.target.value; syncBar(); } },
+				[ E('option', { 'value': 'auto', 'selected': d.channel === 'auto' ? '' : null }, 'Авто' + (r.cur && r.channel === 'auto' ? ' (сейчас ' + r.cur + ')' : '')) ].concat(chans.map(function(c) {
+					return E('option', { 'value': c, 'selected': String(d.channel) === c ? '' : null }, c);
+				})));
+			box.appendChild(field('Имя сети', ssid));
+			box.appendChild(field(r.enc && /^sae/.test(r.enc) ? 'Пароль · WPA2/WPA3' : 'Пароль · WPA2-PSK', E('span', { 'class': 'zm-ow-pw' }, [ pw, eye ])));
+			box.appendChild(field('Канал', ch));
+			box.appendChild(E('div', { 'class': 'zm-ow-field' }, [ E('span', {}, 'Сила сигнала'),
+				E('div', { 'class': 'zm-seg zm-ow-seg4' }, POWER.map(function(p) {
+					return E('div', { 'class': 'zm-seg-item' + (d.lvl === p.id ? ' zm-active' : ''), 'role': 'button', 'tabindex': '0', 'click': function() { if (d.lvl !== p.id) { d.lvl = p.id; renderWifi(); } } }, p.label);
+				})) ]));
+			return box;
+		}
+		var wifiBtn = null, wifiNote = null;
+		function syncBar() {
+			if (!wifiBtn) return;
+			var dirty = wifiDirty();
+			wifiBtn.disabled = wifiSaving || !dirty;
+			wifiBtn.textContent = wifiSaving ? 'Сохраняем…' : 'Сохранить Wi-Fi';
+			wifiNote.textContent = dirty ? 'Есть несохранённые изменения. После сохранения устройства переподключатся — около 10 секунд.' : 'Устройства переподключатся после сохранения — около 10 секунд.';
+		}
+		function renderWifi() {
+			var w = st.wifi || {};
+			wifiCard.innerHTML = '';
+			var onCnt = wd ? wd.radios.filter(function(x) { return x.on; }).length : 0;
+			wifiCard.appendChild(E('h3', {}, [ 'Wi-Fi ', w.present ? badge(onCnt > 0, onCnt === 1 ? 'одна сеть работает' : 'сети работают', 'выключен') : E([]) ]));
+			if (!w.present || !wd || !wd.radios.length) { wifiCard.appendChild(E('p', { 'class': 'zm-hint' }, 'На этом роутере нет Wi-Fi или он не настроен в OpenWrt.')); wifiBtn = null; return; }
+			var known = COUNTRIES.some(function(c) { return c[0] === wd.country; });
+			var cs = E('select', { 'class': 'cbi-input-select', 'change': function(ev) { wd.country = ev.target.value; syncBar(); } },
+				(known ? [] : [ E('option', { 'value': wd.country, 'selected': '' }, wd.country) ]).concat(COUNTRIES.map(function(c) {
+					return E('option', { 'value': c[0], 'selected': c[0] === wd.country ? '' : null }, c[1] + ' (' + c[0] + ')');
+				})));
+			wifiCard.appendChild(E('div', { 'class': 'zm-row' }, [ E('span', { 'class': 'zm-label' }, 'Страна'), cs ]));
+			wifiCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:0' }, 'От страны зависят разрешённые каналы и мощность. Одна на все диапазоны.'));
+			wifiCard.appendChild(E('div', { 'class': 'zm-ow-radios' }, wd.radios.map(function(d, i) { return radioBox(w.radios[i], d); })));
+			wifiBtn = E('button', { 'class': 'cbi-button cbi-button-positive', 'click': wifiSave }, 'Сохранить Wi-Fi');
+			wifiNote = E('span', { 'class': 'zm-hint', 'style': 'margin:0' }, '');
+			var acts = [ wifiBtn ];
+			if (wifiDirty() && !wifiSaving) acts.push(E('button', { 'class': 'cbi-button', 'click': function() { wifiDraft(); renderWifi(); } }, 'Отменить'));
+			acts.push(wifiNote);
+			wifiCard.appendChild(E('div', { 'class': 'zm-actions zm-ow-acts' }, acts));
+			syncBar();
+		}
+		wifiDraft();
+		renderWifi();
+		put('wifi', wifiCard);
+		anchor('Wi-Fi', wifiCard);
+
+		/* ---------- Роутер: имя, IPv6, UPnP ---------- */
+		var rtCard = E('div', { 'class': 'zm-card' }), upLog = E('pre', { 'class': 'zm-log' }), upOpen = false, hostDraft = null;
+		function renderRouter() {
+			var rt = st.router || {}, v6 = rt.ipv6 || {}, up = rt.upnp || {};
+			rtCard.innerHTML = '';
+			rtCard.appendChild(E('h3', {}, 'Роутер'));
+			if (hostDraft == null) hostDraft = rt.hostname || '';
+			var hin = E('input', { 'type': 'text', 'class': 'cbi-input-text', 'maxlength': '63', 'spellcheck': 'false', 'autocomplete': 'off', 'value': hostDraft });
+			var hbtn = E('button', { 'class': 'cbi-button cbi-button-positive', 'disabled': hostDraft === (rt.hostname || '') || busy ? '' : null, 'click': function() {
+				var v = hin.value.trim();
+				if (!/^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$/.test(v)) { zm.toast('Имя — латиница, цифры и дефис, без дефиса в начале и в конце', 'warning'); return; }
+				call('hostname', v, 'Сохраняем имя роутера').then(function(r) {
+					if (!r) return;
+					rt.hostname = r.hostname; hostDraft = r.hostname;
+					zm.toast('Имя роутера: ' + r.hostname, 'info');
+					renderRouter();
+				});
+			} }, 'Сохранить');
+			hin.addEventListener('input', function() { hostDraft = hin.value; hbtn.disabled = hin.value.trim() === (rt.hostname || '') || !!busy; });
+			hin.addEventListener('keydown', function(ev) { if (ev.key === 'Enter') { ev.preventDefault(); if (!hbtn.disabled) hbtn.click(); } });
+			var tName = E('div', { 'class': 'zm-sx-tile' }, [
+				E('div', { 'class': 'zm-sx-head' }, [ E('span', { 'class': 'zm-sx-title' }, 'Имя роутера') ]),
+				E('p', { 'class': 'zm-hint' }, 'Так роутер виден в списке устройств и в LuCI. Латиница, цифры и дефис.'),
+				E('div', { 'class': 'zm-ow-pw' }, [ hin, hbtn ])
+			]);
+
+			var v6seg = E('div', { 'class': 'zm-seg' + (busy ? ' zm-seg-busy' : '') }, [ [ 'on', 'Включён' ], [ 'off', 'Выключен' ] ].map(function(x) {
+				var on = (x[0] === 'on') === !!v6.on;
+				return E('div', { 'class': 'zm-seg-item' + (on ? ' zm-active' : ''), 'role': 'button', 'tabindex': '0', 'click': function() {
+					if (on || busy) return;
+					var p = call('ipv6', x[0], x[0] === 'off' ? 'Выключаем IPv6 — сеть перезапустится на несколько секунд' : 'Включаем IPv6 — сеть перезапустится на несколько секунд');
+					renderRouter();
+					p.then(function(r) {
+						if (!r) { renderRouter(); return; }
+						v6.on = !!r.on;
+						zm.toast(r.same ? 'Без изменений' : r.on ? 'IPv6 включён' : 'IPv6 выключен', 'info');
+						renderRouter();
+					});
+				} }, x[1]);
+			}));
+			var v6hint = v6.on
+				? 'Устройства получают адреса IPv6. Часть сайтов может идти по IPv6 мимо Zapret и VPN — тогда выключите.' + (v6.wan6 && !v6.up ? ' Провайдер IPv6 сейчас не выдаёт.' : '')
+				: 'Устройства и роутер работают только по IPv4 — сайты не уходят в обход Zapret и VPN по IPv6.';
+			if (v6.pppoe) v6hint += ' Соединение PPPoE при переключении переподключится.';
+			var tV6 = E('div', { 'class': 'zm-sx-tile' }, [
+				E('div', { 'class': 'zm-sx-head' }, [ E('span', { 'class': 'zm-sx-title' }, 'IPv6'), badge(!!v6.on, 'включён', 'выключен') ]),
+				E('p', { 'class': 'zm-hint' }, v6hint),
+				E('div', { 'class': 'zm-sx-fill' }), v6seg
+			]);
+
+			var upOn = !!up.on && !!up.installed, ports = up.ports || [];
+			var upKids = [
+				E('div', { 'class': 'zm-sx-head' }, [ E('span', { 'class': 'zm-sx-title' }, 'UPnP'),
+					badge(upOn, up.running ? 'включён' : 'включён, не запущен', up.installed ? 'выключен' : 'не установлен', up.running ? 'zm-ok' : 'zm-warn') ]),
+				E('p', { 'class': 'zm-hint' }, 'Устройства сами открывают нужные порты: приставкам (PlayStation, Xbox) — меньше проблем с NAT в играх, торрент-клиентам — больше раздающих.'),
+				E('div', { 'class': 'zm-sx-fill' }),
+				E('div', { 'class': 'zm-sx-act' }, [ E('button', { 'class': upOn ? 'cbi-button cbi-button-remove' : 'cbi-button cbi-button-positive', 'disabled': busy ? '' : null, 'click': function() {
+					var want = upOn ? 'off' : 'on';
+					call('upnp', want, want === 'off' ? 'Выключаем UPnP' : up.installed ? 'Включаем UPnP' : 'Ставим UPnP — это займёт до минуты').then(function(r) {
+						if (!r) return;
+						if (r.started) {
+							busy = 'upnp';
+							upLog.classList.add('zm-show');
+							zm.renderLog(upLog, '==> Ставим UPnP');
+							renderRouter();
+							zm.pollJob('owrt', upLog, function(ok) {
+								busy = '';
+								zm.toast(ok ? 'UPnP установлен и включён' : 'UPnP не установился — подробности в окне вывода', ok ? 'info' : 'error');
+								reload(renderRouter);
+							});
+							return;
+						}
+						st.router.upnp = r.upnp || up;
+						zm.toast(want === 'off' ? 'UPnP выключен' : 'UPnP включён', 'info');
+						renderRouter();
+					});
+				} }, upOn ? 'Выключить' : up.installed ? 'Включить' : 'Установить и включить') ])
+			];
+			if (upOn) {
+				upKids.splice(2, 0, E('button', { 'type': 'button', 'class': 'zm-ow-link', 'click': function() { upOpen = !upOpen; renderRouter(); } },
+					ports.length ? (upOpen ? 'Скрыть открытые порты' : 'Открытые порты: ' + ports.length) : 'Открытых портов сейчас нет'));
+				if (upOpen && ports.length) upKids.splice(3, 0, E('div', { 'class': 'zm-ow-ports' }, ports.map(function(p) {
+					return E('div', {}, [ E('b', {}, p.proto + ' ' + p.port), ' → ' + p.ip + (p.to !== p.port ? ':' + p.to : '') + (p.desc ? ' · ' + p.desc : '') ]);
+				})));
+			}
+			var tUp = E('div', { 'class': 'zm-sx-tile' }, upKids);
+			rtCard.appendChild(E('div', { 'class': 'zm-sx-grid zm-ow-grid3' }, [ tName, tV6, tUp ]));
+			rtCard.appendChild(upLog);
+		}
+		renderRouter();
+		put('router', rtCard);
+		anchor('Роутер', rtCard);
+
+		/* ---------- Постоянные адреса ---------- */
+		var devCard = E('div', { 'class': 'zm-card' }), devEdit = {};
+		function devList() {
+			var l = ((st.devices || {}).list || []).slice();
+			l.sort(function(a, b) {
+				if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+				return ipNum(a.pin_ip || a.ip) - ipNum(b.pin_ip || b.ip);
+			});
+			return l;
+		}
+		function pin(d, ip) {
+			return call('pin', { op: 'pin', mac: d.mac, ip: ip, name: d.name || '' }, 'Закрепляем адрес').then(function(r) {
+				if (!r) return;
+				st.devices = r.devices || st.devices;
+				delete devEdit[d.mac];
+				zm.toast((d.name || d.mac) + ': адрес ' + ip + ' закреплён' + (d.ip && d.ip !== ip ? ' — устройство получит его после переподключения' : ''), 'info');
+				renderDevices();
+			});
+		}
+		function renderDevices() {
+			var ds = st.devices || {}, list = devList(), pinned = list.filter(function(d) { return d.pinned; }).length;
+			devCard.innerHTML = '';
+			devCard.appendChild(E('h3', {}, [ 'Постоянные адреса устройств ', pinned ? badge(true, 'закреплено: ' + pinned, '') : E([]) ]));
+			devCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:-6px' }, 'Закреплённое устройство всегда получает один и тот же адрес — правила Forkozz, Steer и «Мимо Forkozz» для него не слетают после перезагрузки.'));
+			if (!list.length) { devCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Устройств в сети пока не видно.')); return; }
+			var rows = list.map(function(d) {
+				var cur = d.pinned ? (devEdit[d.mac] != null ? devEdit[d.mac] : d.pin_ip) : d.ip;
+				var cell, act;
+				if (d.pinned) {
+					var inp = E('input', { 'type': 'text', 'class': 'cbi-input-text zm-ow-ip', 'value': cur, 'inputmode': 'decimal', 'aria-label': 'Адрес: ' + (d.name || d.mac) });
+					var save = E('button', { 'class': 'cbi-button cbi-button-positive', 'disabled': cur === d.pin_ip || busy ? '' : null, 'click': function() {
+						var v = inp.value.trim();
+						if (ipNum(v) < 0) { zm.toast('Адрес — четыре числа через точку, например ' + (ds.lan_ip || '192.168.1.1').replace(/\.\d+$/, '.120'), 'warning'); return; }
+						pin(d, v);
+					} }, 'Сохранить');
+					inp.addEventListener('input', function() { devEdit[d.mac] = inp.value; save.disabled = inp.value.trim() === d.pin_ip || !!busy; });
+					inp.addEventListener('keydown', function(ev) { if (ev.key === 'Enter') { ev.preventDefault(); if (!save.disabled) save.click(); } });
+					cell = E('div', { 'class': 'zm-ow-pw' }, [ inp, save ]);
+					act = E('button', { 'class': 'cbi-button', 'disabled': busy ? '' : null, 'click': function() {
+						call('pin', { op: 'unpin', mac: d.mac }, 'Открепляем адрес').then(function(r) {
+							if (!r) return;
+							st.devices = r.devices || st.devices;
+							delete devEdit[d.mac];
+							zm.toast((d.name || d.mac) + ': адрес больше не закреплён', 'info');
+							renderDevices();
+						});
+					} }, 'Открепить');
+				} else {
+					cell = E('span', {}, d.ip || '—');
+					act = E('button', { 'class': 'cbi-button cbi-button-positive', 'disabled': busy || !d.ip ? '' : null, 'click': function() { pin(d, d.ip); } }, 'Закрепить');
+				}
+				return E('tr', {}, [
+					E('td', {}, [ E('b', {}, d.name || 'Без имени'), d.online ? E([]) : E('span', { 'class': 'zm-ow-muted' }, ' · не в сети') ]),
+					E('td', {}, [ cell ]),
+					E('td', { 'class': 'zm-ow-mac' }, d.mac),
+					E('td', { 'class': 'zm-ow-tr' }, [ d.pinned ? badge(true, 'закреплён', '') : E([]), act ])
+				]);
+			});
+			devCard.appendChild(E('div', { 'class': 'zm-ow-tbox' }, [ E('table', { 'class': 'zm-ow-table' }, [
+				E('thead', {}, [ E('tr', {}, [ E('th', {}, 'Устройство'), E('th', {}, 'Адрес'), E('th', {}, 'MAC'), E('th', { 'class': 'zm-ow-tr' }, 'Закрепление') ]) ]),
+				E('tbody', {}, rows)
+			]) ]));
+			devCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Телефоны с «случайным MAC-адресом» для этой сети нужно переключить на постоянный MAC в настройках Wi-Fi телефона — иначе закрепление не сработает.'));
+		}
+		renderDevices();
+		put('devices', devCard);
+		anchor('Адреса устройств', devCard);
+
+		/* ---------- Перезагрузка по расписанию ---------- */
+		var rbCard = E('div', { 'class': 'zm-card' }), loadedAt = Date.now();
+		function routerNow() {
+			if (!sysData.time) return null;
+			var off = String(sysData.utc_offset || '+0000'), sg = off.charAt(0) === '-' ? -1 : 1, mins = sg * ((+off.slice(1, 3)) * 60 + (+off.slice(3, 5)));
+			return new Date((+sysData.time + Math.round((Date.now() - loadedAt) / 1000) + mins * 60) * 1000);
+		}
+		function nextText(rb) {
+			var n = routerNow();
+			if (!n || rb.mode === 'off') return '';
+			var hm = String(rb.time || '04:30').split(':'), h = +hm[0], m = +hm[1];
+			var t = new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate(), h, m));
+			if (t <= n) t = new Date(t.getTime() + 864e5);
+			if (rb.mode === 'weekly') { var w = +rb.dow; while (t.getUTCDay() !== w) t = new Date(t.getTime() + 864e5); }
+			var days = Math.round((Date.UTC(t.getUTCFullYear(), t.getUTCMonth(), t.getUTCDate()) - Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate())) / 864e5);
+			var when = days === 0 ? 'сегодня' : days === 1 ? 'завтра' : DOW_SHORT[t.getUTCDay()] + ', ' + t.getUTCDate() + ' ' + MON_GEN[t.getUTCMonth()];
+			return 'Следующая перезагрузка — ' + when + ' в ' + rb.time + ' (по времени роутера).';
+		}
+		function rbSet(nrb, text) {
+			var p = call('reboot', nrb, '');
+			renderReboot();
+			p.then(function(r) {
+				if (!r) { renderReboot(); return; }
+				st.reboot = r.reboot || nrb;
+				zm.toast(text, 'info');
+				renderReboot();
+			});
+		}
+		function renderReboot() {
+			var rb = st.reboot || { mode: 'off', time: '04:30', dow: '1' };
+			rbCard.innerHTML = '';
+			rbCard.appendChild(E('h3', {}, [ 'Перезагрузка по расписанию ', badge(rb.mode !== 'off', rb.mode === 'daily' ? 'каждый день' : 'раз в неделю', 'выключена', 'zm-sx-info') ]));
+			rbCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:-6px' }, 'Помогает роутерам, которые со временем начинают тормозить. Если в это время идёт тест стратегий или обновление — роутер дождётся их окончания.'));
+			var seg = E('div', { 'class': 'zm-seg' + (busy ? ' zm-seg-busy' : '') }, [ [ 'off', 'Не перезагружать' ], [ 'daily', 'Каждый день' ], [ 'weekly', 'Раз в неделю' ] ].map(function(x) {
+				return E('div', { 'class': 'zm-seg-item' + (rb.mode === x[0] ? ' zm-active' : ''), 'role': 'button', 'tabindex': '0', 'click': function() {
+					if (rb.mode === x[0] || busy) return;
+					rbSet({ mode: x[0], time: rb.time || '04:30', dow: rb.dow || '1' }, x[0] === 'off' ? 'Перезагрузка по расписанию выключена' : x[0] === 'daily' ? 'Роутер будет перезагружаться каждый день в ' + (rb.time || '04:30') : 'Роутер будет перезагружаться раз в неделю');
+				} }, x[1]);
+			}));
+			var row = [ seg ];
+			if (rb.mode !== 'off') {
+				if (rb.mode === 'weekly') row.push(E('label', { 'class': 'zm-ow-inl' }, [ 'в ', E('select', { 'class': 'cbi-input-select', 'disabled': busy ? '' : null, 'change': function(ev) {
+					rbSet({ mode: 'weekly', time: rb.time, dow: ev.target.value }, 'День перезагрузки сохранён');
+				} }, DOWS.map(function(d) { return E('option', { 'value': d[0], 'selected': String(rb.dow) === d[0] ? '' : null }, d[1]); })) ]));
+				var tin = E('input', { 'type': 'time', 'class': 'cbi-input-text zm-ow-time', 'value': rb.time || '04:30', 'disabled': busy ? '' : null });
+				tin.addEventListener('change', function() {
+					if (!/^\d\d:\d\d$/.test(tin.value) || tin.value === rb.time) return;
+					rbSet({ mode: rb.mode, time: tin.value, dow: rb.dow || '1' }, 'Время перезагрузки: ' + tin.value);
+				});
+				row.push(E('label', { 'class': 'zm-ow-inl' }, [ 'в ', tin ]));
+			}
+			rbCard.appendChild(E('div', { 'class': 'zm-ow-rbrow' }, row));
+			var nt = nextText(rb);
+			if (nt) rbCard.appendChild(E('p', { 'class': 'zm-hint' }, nt));
+		}
+		renderReboot();
+		put('reboot', rbCard);
+		anchor('Перезагрузка', rbCard);
+
+		/* ---------- Время (перенесено из «Системы») ---------- */
+		var ZONES = [
+			{ id: 'Europe/Kaliningrad', city: 'Калининград', off: 'UTC+2' }, { id: 'Europe/Moscow', city: 'Москва', off: 'UTC+3' },
+			{ id: 'Europe/Samara', city: 'Самара', off: 'UTC+4' }, { id: 'Asia/Yekaterinburg', city: 'Екатеринбург', off: 'UTC+5' },
+			{ id: 'Asia/Omsk', city: 'Омск', off: 'UTC+6' }, { id: 'Asia/Krasnoyarsk', city: 'Красноярск', off: 'UTC+7' },
+			{ id: 'Asia/Irkutsk', city: 'Иркутск', off: 'UTC+8' }, { id: 'Asia/Yakutsk', city: 'Якутск', off: 'UTC+9' },
+			{ id: 'Asia/Vladivostok', city: 'Владивосток', off: 'UTC+10' }, { id: 'Asia/Magadan', city: 'Магадан', off: 'UTC+11' },
+			{ id: 'Asia/Kamchatka', city: 'Камчатка', off: 'UTC+12' }, { id: 'UTC', city: 'UTC', off: '±0' }
+		];
+		var WDAYS = [ 'воскресенье', 'понедельник', 'вторник', 'среда', 'четверг', 'пятница', 'суббота' ];
+		var MONTHS = [ 'января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря' ];
+		var timeCard = E('div', { 'class': 'zm-card' }), timeBusy = '', timeData = sysData, tzOpen = false, autoNote = '';
+		var clockT = E('div', { 'class': 'zm-tz-time' }), clockD = E('div', { 'class': 'zm-tz-date' }), clockBase = 0, clockAt = 0;
+		function offText(o) {
+			o = String(o || '+0000');
+			var h = +o.slice(1, 3), m = +o.slice(3, 5);
+			return 'UTC' + (h || m ? o.charAt(0) + h + (m ? ':' + o.slice(3, 5) : '') : '±0');
+		}
+		function zoneText() {
+			var z = ZONES.filter(function(x) { return x.id === timeData.zone; })[0];
+			if (z) return z.city + ' · ' + offText(timeData.utc_offset);
+			return (timeData.zone ? timeData.zone.replace(/^.*\//, '').replace(/_/g, ' ') + ' · ' : 'Пояс не выбран · ') + offText(timeData.utc_offset);
+		}
+		function nowLocal() {
+			if (!clockBase) return null;
+			var s = clockBase + Math.round((Date.now() - clockAt) / 1000);
+			var off = String(timeData.utc_offset || '+0000'), sg = off.charAt(0) === '-' ? -1 : 1, mins = sg * ((+off.slice(1, 3)) * 60 + (+off.slice(3, 5)));
+			return new Date((s + mins * 60) * 1000);
+		}
+		function paintClock() {
+			var d = nowLocal(), p = function(n) { return (n < 10 ? '0' : '') + n; };
+			if (!d) { clockT.textContent = '—'; clockD.textContent = timeData.time_text || ''; return; }
+			clockT.textContent = p(d.getUTCHours()) + ':' + p(d.getUTCMinutes()) + ':' + p(d.getUTCSeconds());
+			clockD.textContent = WDAYS[d.getUTCDay()] + ', ' + d.getUTCDate() + ' ' + MONTHS[d.getUTCMonth()] + ' ' + d.getUTCFullYear();
+		}
+		function tick() {
+			if (!document.body.contains(clockT)) return;
+			paintClock();
+			setTimeout(tick, 1000);
+		}
+		function timeDo(value, what, text) {
+			if (timeBusy) return;
+			timeBusy = what; renderTime();
+			zm.toast(text, 'warning');
+			zm.systemTimeSet(value).then(function(r) {
+				timeBusy = '';
+				if (r && r.time) { timeData = r; clockBase = r.time; clockAt = Date.now(); }
+				if (!r || r.error) { zm.toast((r && r.error) || 'Роутер не ответил', 'error'); renderTime(); return; }
+				if (value === 'auto' && r.auto) {
+					var a = r.auto, how = a.sync === 'ntp' ? 'время синхронизировано по NTP' : a.sync === 'http' ? 'время взято с сайтов (NTP у провайдера закрыт)' : 'время синхронизировать не удалось';
+					autoNote = 'Определено: ' + a.zone + (a.city ? ' (' + a.city + ')' : '') + ' — так ответили ' + a.votes + ' из ' + a.got + ' сервисов; ' + how + '.';
+					tzOpen = false;
+					zm.toast(a.sync ? 'Часовой пояс определён, время синхронизировано' : 'Часовой пояс определён, но время синхронизировать не удалось', a.sync ? 'info' : 'warning');
+				} else {
+					autoNote = '';
+					if (/^tz:/.test(value)) tzOpen = false;
+					if (/^ntpsrv:/.test(value)) zm.toast((r.ntpsrv === 'ip' ? 'Серверы времени — по IP-адресам' : 'Серверы времени — стандартные') + (r.sync ? ', время синхронизировано' : ', но время пока не синхронизировалось'), r.sync ? 'info' : 'warning');
+					else zm.toast(value === 'ntp' ? (r.sync === 'http' ? 'Время взято с сайтов — NTP у провайдера закрыт' : 'Время синхронизировано') : 'Часовой пояс установлен', 'info');
+				}
+				renderTime();
+			}).catch(function() { timeBusy = ''; zm.toast('Роутер не ответил', 'error'); renderTime(); });
+		}
+		function renderTime() {
+			timeCard.innerHTML = '';
+			timeCard.appendChild(E('h3', {}, 'Время на роутере'));
+			timeCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:-6px' }, 'Нужно для всех расписаний панели: автоподбора стратегии, перезапусков и обновления списков.'));
+			paintClock();
+			timeCard.appendChild(E('div', { 'class': 'zm-tz-clock' }, [
+				E('div', { 'class': 'zm-tz-now' }, [ clockT, clockD, E('div', { 'class': 'zm-tz-zone' }, zoneText()) ]),
+				E('div', { 'class': 'zm-tz-btns' }, [
+					E('button', { 'class': 'cbi-button cbi-button-positive', 'disabled': timeBusy ? '' : null, 'title': 'Роутер сам определит часовой пояс по своему местоположению (сверяя несколько сервисов) и выставит точное время', 'click': function() { timeDo('auto', 'auto', 'Определяем часовой пояс и время'); } }, timeBusy === 'auto' ? 'Определяем…' : 'Определить автоматически'),
+					E('button', { 'class': 'cbi-button', 'disabled': timeBusy ? '' : null, 'click': function() { tzOpen = !tzOpen; renderTime(); } }, tzOpen ? 'Скрыть часовые пояса' : 'Сменить часовой пояс'),
+					E('button', { 'class': 'cbi-button', 'disabled': timeBusy ? '' : null, 'click': function() { timeDo('ntp', 'ntp', 'Синхронизируем время'); } }, timeBusy === 'ntp' ? 'Синхронизируем…' : 'Синхронизировать время')
+				])
+			]));
+			if (autoNote) timeCard.appendChild(E('p', { 'class': 'zm-hint' }, autoNote));
+			renderNtpSrv();
+			if (timeData.time && new Date(timeData.time * 1000).getFullYear() < 2024) timeCard.appendChild(E('p', { 'class': 'zm-hint' }, '⚠ Время на роутере неверное — нажмите «Определить автоматически», иначе расписания не сработают.'));
+			if (tzOpen) {
+				var list = ZONES.slice();
+				if (timeData.zone && !list.some(function(z) { return z.id === timeData.zone; }))
+					list.unshift({ id: timeData.zone, city: timeData.zone.replace(/^.*\//, '').replace(/_/g, ' '), off: offText(timeData.utc_offset), own: true });
+				timeCard.appendChild(E('div', { 'class': 'zm-grid zm-tz-grid' }, list.map(function(z) {
+					var on = z.id === timeData.zone;
+					return E('div', { 'class': 'zm-tile zm-tz-tile' + (on ? ' zm-active' : ''), 'click': function() {
+						if (on || z.own || timeBusy) return;
+						timeDo('tz:' + z.id, 'tz', 'Ставим часовой пояс: ' + z.city);
+					} }, [ E('b', {}, z.city), E('span', {}, z.off + (on ? ' · выбран' : '')) ]);
+				})));
+			}
+		}
+		var NTP_SRV = [ { id: 'std', label: 'Стандартные' }, { id: 'ip', label: 'По IP-адресам' } ];
+		function renderNtpSrv() {
+			var cur = timeData.ntp_preset || 'none', lock = !!timeData.dnsm || !!timeBusy;
+			timeCard.appendChild(E('div', { 'class': 'zm-row', 'style': 'margin-top:12px; flex-wrap:wrap; gap:8px 12px' }, [
+				E('span', { 'class': 'zm-label' }, 'Серверы времени'),
+				E('div', { 'class': 'zm-seg' + (lock ? ' zm-seg-busy' : '') }, NTP_SRV.map(function(it) {
+					return E('div', { 'class': 'zm-seg-item' + (it.id === cur ? ' zm-active' : ''), 'click': function() {
+						if (it.id === cur || lock) return;
+						timeDo('ntpsrv:' + it.id, 'ntpsrv', it.id === 'ip' ? 'Ставим серверы времени по IP-адресам' : 'Ставим стандартные серверы времени');
+					} }, it.label);
+				}))
+			]));
+			timeCard.appendChild(E('p', { 'class': 'zm-hint' }, timeData.dnsm
+				? 'Серверы времени настраивает DNS Manager — меняйте их в нём.'
+				: cur === 'ip'
+				? 'ВНИИФТРИ, Cloudflare и Google по IP-адресам — время синхронизируется, даже если DNS на роутере не отвечает.'
+				: cur === 'std'
+				? 'pool.ntp.org — роутер находит их через DNS. Не отвечает DNS (например, сервер DoH) — время не синхронизируется, а без точного времени не работают DoH и HTTPS. С DNS over HTTPS лучше «По IP-адресам».'
+				: cur === 'own'
+				? 'Сейчас стоят свои серверы: ' + String(timeData.ntp_servers || '').split(' ').join(', ') + '. Выбор заменит их.'
+				: 'Серверы времени не заданы — выберите, какие использовать.'));
+		}
+		if (timeData.time) { clockBase = timeData.time; clockAt = Date.now(); }
+		renderTime();
+		put('time', timeCard);
+		setTimeout(tick, 1000);
+		anchor('Время', timeCard);
+
+		/* ---------- Зеркало OpenWrt (перенесено из «Системы») ---------- */
+		var mirrorGrid = E('div', { 'class': 'zm-grid' });
+		var mirrorCurrentEl = E('span', {}, mirrorData.current);
+		var mirrorBusy = false, mirrorHowEl = E('div', {}), mirrorPickBtn;
+		function mirrorHow() {
+			mirrorHowEl.innerHTML = '';
+			if (mirrorData.mirror_how === 'auto') mirrorHowEl.appendChild(E('p', { 'class': 'zm-hint' }, 'Зеркало выбрано автоматически: основной репозиторий OpenWrt отвечал с ошибками. Вернуть его — «default / OpenWrt».'));
+			else if (mirrorData.mirror_how === 'pick') mirrorHowEl.appendChild(E('p', { 'class': 'zm-hint' }, 'Зеркало подобрано кнопкой «Подобрать зеркало»: самое быстрое по пингу, через которое обновились все репозитории.'));
+		}
+		function mirrorRun(id, startText, okText) {
+			if (mirrorBusy) { zm.toast('Дождитесь окончания операции с зеркалом', 'warning'); return; }
+			mirrorBusy = true;
+			if (mirrorPickBtn) { mirrorPickBtn.disabled = true; mirrorPickBtn.textContent = id === 'pick' ? 'Подбираем…' : 'Подобрать зеркало'; }
+			zm.toast(startText, 'warning');
+			mirrorLog.classList.add('zm-show');
+			zm.renderLog(mirrorLog, id === 'pick' ? '==> Подбираем зеркало' : '==> Проверяем и переключаем');
+			var done = function() { mirrorBusy = false; if (mirrorPickBtn) { mirrorPickBtn.disabled = false; mirrorPickBtn.textContent = 'Подобрать зеркало'; } };
+			zm.mirrorSet(id).then(function(res) {
+				if (res.error) { done(); zm.toast(res.error, 'error'); return; }
+				zm.pollJob('mirror_set', mirrorLog, function(ok) {
+					done();
+					zm.mirrorStatus().then(function(res2) {
+						mirrorData = res2 || mirrorData;
+						mirrorCurrentEl.textContent = mirrorData.current;
+						Array.prototype.forEach.call(mirrorGrid.children, function(el, i) {
+							el.classList.toggle('zm-active', MIRRORS[i].label === mirrorData.current);
+						});
+						mirrorHow();
+						zm.toast(ok ? okText(mirrorData.current) : (id === 'pick' ? 'Подходящее зеркало не нашлось — оставлено прежнее' : 'Не удалось переключить зеркало'), ok ? 'info' : 'error');
+					}).catch(function() { zm.toast(ok ? 'Готово' : 'Не удалось', ok ? 'info' : 'error'); });
+				});
+			}).catch(function() { done(); zm.toast('Роутер не ответил', 'error'); });
+		}
+		MIRRORS.forEach(function(m) {
+			mirrorGrid.appendChild(E('div', {
+				'class': 'zm-tile' + (mirrorData.current === m.label ? ' zm-active' : ''),
+				'click': function() {
+					if (mirrorBusy) { zm.toast('Дождитесь окончания операции с зеркалом', 'warning'); return; }
+					if (mirrorData.current === m.label) { zm.toast('Это зеркало уже выбрано', 'info'); return; }
+					mirrorRun(m.id, 'Переключаем зеркало на «' + m.label + '»', function() { return 'Зеркало переключено на «' + m.label + '»'; });
+				}
+			}, m.label));
+		});
+		mirrorHow();
+		mirrorPickBtn = E('button', { 'class': 'cbi-button cbi-button-action', 'click': function() {
+			mirrorRun('pick', 'Подбираем зеркало — это займёт до нескольких минут', function(cur) { return 'Выбрано зеркало «' + cur + '»'; });
+		} }, 'Подобрать зеркало');
+		var mirrorLog = E('pre', { 'class': 'zm-log' });
+		var mirrorCard = E('div', { 'class': 'zm-card' }, [
+			E('h3', {}, 'Зеркало OpenWrt'),
+			E('div', { 'class': 'zm-row' }, [
+				E('span', { 'class': 'zm-label' }, 'Сейчас'), mirrorCurrentEl
+			]),
+			mirrorHowEl,
+			mirrorGrid,
+			E('div', { 'class': 'zm-actions' }, [ mirrorPickBtn ]),
+			E('p', { 'class': 'zm-hint' }, '«Подобрать зеркало» меряет пинг до всех зеркал и проверяет их по очереди, начиная с самого быстрого: выбирается первое, через которое обновились все репозитории пакетов. Ход проверки виден ниже.'),
+			E('p', { 'class': 'zm-hint' }, 'При ручном выборе панель тоже проверяет, что зеркало отдаёт список пакетов этого роутера и что список обновляется без ошибок; иначе остаётся прежнее. Если основной репозиторий при обновлении пакетов отвечает с ошибками, панель сама переходит на рабочее зеркало.'),
+			mirrorLog
+		]);
+		put('mirror', mirrorCard);
+		anchor('Зеркало OpenWrt', mirrorCard);
+
+		anchors.forEach(function(a) { jump.appendChild(a); });
+		return wrap;
+	}
+});
+ZM_INSTALLER_EOF
+chmod 0644 '/www/luci-static/resources/view/zapret-manager/openwrt.js'
 
 cat > '/www/luci-static/resources/view/zapret-manager/monitor.js' << 'ZM_INSTALLER_EOF'
 'use strict';
@@ -52809,7 +53848,7 @@ return view.extend({
 				return true;
 			}, function() { zm.toast('Роутер не ответил', 'error'); return false; });
 		}
-		var hidePick = zm.hidePicker({ noun: 'серверы', nameSub: function() { return !!(servers && servers.sub); }, busy: function() { return busy || saving; },
+		var hidePick = zm.hidePicker({ noun: 'серверы', inline: true, nameSub: function() { return !!(servers && servers.sub); }, busy: function() { return busy || saving; },
 			onMode: function(on) { hideMode = on; renderServers(); },
 			onSave: function(names, markers) { return hideAct(JSON.stringify({ sec: cfg && cfg.sec, names: names, markers: markers })); },
 			onReset: function() { return hideAct(JSON.stringify({ sec: cfg && cfg.sec, reset: true })); } });
@@ -53964,7 +55003,10 @@ return view.extend({
 			var lt = tags.filter(function(t) { return ns[t] && !ns[t].members; }), lw = lt.filter(function(t) { return ns[t].delay !== -2; }).length;
 			var acts = [ E('button', { 'class': 'cbi-button', 'disabled': latBusy ? '' : null, 'click': testLatency }, latBusy ? (lt.length ? 'Проверяем ' + lw + ' из ' + lt.length : 'Проверяем…') : 'Проверить задержку') ];
 			if (cfg.mode === 'sub') acts.push(E('button', { 'class': 'cbi-button', 'click': function() { act('subs'); } }, 'Обновить серверы подписки'));
+			var hideBtn = hidePick.startButton();
+			if (hideBtn) acts.push(hideBtn);
 			srvCard.appendChild(E('div', { 'class': 'zm-actions' }, acts));
+			srvCard.appendChild(hidePick);
 			if (tags.length > 1) srvCard.appendChild(zm.swRow(sortPing, 'Сортировать по пингу', 'Серверы идут от быстрых к медленным, неотвечающие — в конце.', function() {
 				sortPing = !sortPing;
 				try { localStorage.setItem('zm.fk.sort', sortPing ? 'ping' : 'list'); } catch (e) {}
@@ -54004,7 +55046,6 @@ return view.extend({
 			}
 			srvCard.appendChild(E('p', { 'class': 'zm-hint' }, isAuto ? servers.priority ? 'Авто: используется первая доступная подписка в порядке ссылок. После её восстановления Forkozz возвращается к ней, даже если резервная быстрее. Нажатие на сервер включает ручной выбор.' : servers.ping ? 'Авто по пингу: включён самый быстрый сервер. Если он оборвётся, Forkozz за 20–40 секунд перейдёт на самый быстрый из рабочих. Нажмите на сервер, чтобы закрепить его.' : 'Авто: Forkozz сам выбирает лучший из этих серверов. Нажмите на сервер, чтобы закрепить его.' : servers.priority ? 'Нажмите на сервер, чтобы переключиться. Чтобы снова использовать автоматический порядок подписок, выберите «Авто».' : 'Нажмите на сервер, чтобы переключиться. Выбор держится до перезагрузки роутера.'));
 			srvCard.appendChild(rlPanel(ns));
-			srvCard.appendChild(hidePick);
 		}
 
 		function catalogBlock() {
@@ -56652,7 +57693,7 @@ function renderInstalled(all) {
 				kids.push(jl);
 			}
 			var now = routerNow();
-			if (on && now && now.getUTCFullYear() < 2024) kids.push(hint('⚠ Время на роутере неверное — расписание не сработает. Настройте его на странице «Система».'));
+			if (on && now && now.getUTCFullYear() < 2024) kids.push(hint('⚠ Время на роутере неверное — расписание не сработает. Настройте его на странице «Настройки OpenWrt».'));
 			kids.push(E('div', { 'class': 'zm-actions zm-ab-actions' }, [
 				E('button', { 'class': 'cbi-button cbi-button-positive', 'disabled': running || autoBusy ? '' : null, 'click': function() {
 					if (running) { bt.toast('Дождитесь окончания текущего теста', 'warning'); return; }
@@ -57318,6 +58359,7 @@ var ICONS = {
 	phone: '<rect x="6.5" y="2.5" width="11" height="19" rx="2.6"/><path d="M10.5 18.5h3"/><path d="M9.6 9.4a3.4 3.4 0 0 1 4.8 0M8.2 7.6a5.4 5.4 0 0 1 7.6 0"/><circle cx="12" cy="11.8" r=".9" fill="currentColor"/>',
 	activity: '<path d="M3 12.5h3.8l2.4-6.5 4.3 13 2.6-6.5H21"/>',
 	clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+	sliders: '<path d="M4 6.5h9M17 6.5h3M4 12h3M11 12h9M4 17.5h11M19 17.5h1"/><circle cx="15" cy="6.5" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="17.5" r="2"/>',
 	trash: '<path d="M4 7h16"/><path d="M9.5 7V4.5h5V7"/><path d="M6.5 7l1 12.5h9l1-12.5"/><path d="M10 11v5.5M14 11v5.5"/>',
 	info: '<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5"/><path d="M12 7.7v.1"/>',
 	archive: '<rect x="3.5" y="4" width="17" height="4.5" rx="1.5"/><path d="M5.5 8.5v10a1.5 1.5 0 0 0 1.5 1.5h10a1.5 1.5 0 0 0 1.5-1.5v-10"/><path d="M10 12.5h4"/>',
@@ -57705,7 +58747,8 @@ var ROUTES = [
 	{ id: 'awg', title: 'AmneziaWG', sub: 'Туннели AmneziaWG и WARP: установка, ключи, интерфейсы', icon: 'anarchy', group: 'Сеть', dot: 'awg' },
 	{ id: 'tailscale', title: 'Удалённый доступ', sub: '', icon: 'phone', group: 'Сеть', dot: 'ts' },
 	{ id: 'terminal', title: 'Терминал', sub: 'Командная строка роутера в браузере (ttyd)', icon: 'terminal', group: 'Сеть', dot: 'term' },
-	{ id: 'system', title: 'Система', sub: 'Параметры роутера, время, зеркала и обновления', icon: 'cpu', group: 'Сервис', view: 'system', part: 'main' },
+	{ id: 'system', title: 'Система', sub: 'Состояние, поправки, обновления и ZRAM', icon: 'cpu', group: 'Сервис', view: 'system', part: 'main' },
+	{ id: 'openwrt', title: 'Настройки OpenWrt', sub: 'Ускорение, Wi-Fi, адреса, перезагрузка, время и зеркало', icon: 'sliders', group: 'Сервис' },
 	{ id: 'backup', title: 'Резервная копия', sub: 'Сохранение и восстановление настроек', icon: 'archive', group: 'Сервис', view: 'system', part: 'backup' },
 	{ id: 'monitor', title: 'Монитор ресурсов', sub: 'Процессор, память, температура и процессы', icon: 'activity', group: 'Сервис' },
 	{ id: 'watch', title: 'Фоновые проверки', sub: 'Что роутер проверяет сам по расписанию', icon: 'clock', group: 'Сервис', view: 'system', part: 'watch' },
@@ -57722,7 +58765,7 @@ function currentRoute() {
 
 var root, shell = null, viewEl, titleEl, subEl, navLinks = {}, navDots = {}, deviceEl, verEl, updateEl, memEl;
 
-var NAV_LOCK = { dashboard: 1 }, NAV_BUILTIN = { dashboard: 1, system: 1, watch: 1, monitor: 1, cleanup: 1, sysinfo: 1, backup: 1 };
+var NAV_LOCK = { dashboard: 1 }, NAV_BUILTIN = { dashboard: 1, system: 1, openwrt: 1, watch: 1, monitor: 1, cleanup: 1, sysinfo: 1, backup: 1 };
 var navHidden = navParse(sget(K_NAV)), navEdit = null, navSaving = false, navGroups = [], navGear = null, navNav = null, navHealth = null;
 function navParse(v) { var o = {}; String(v || '').split(/[\s,]+/).forEach(function (k) { if (/^[a-z0-9_]{1,32}$/.test(k) && !NAV_LOCK[k]) o[k] = 1; }); return o; }
 function navList(o) { return ROUTES.map(function (r) { return r.id; }).filter(function (k) { return o[k]; }); }
