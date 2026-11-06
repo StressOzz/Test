@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.111
+# Version: 5.114
 ZM_VERSION_EOF
 set -e
 
@@ -29174,7 +29174,7 @@ steer_sub_status() {
 
 _st_hp_build() {
 	local m hp="$ST_SUB_NODES.hp"
-	[ -s "$hp" ] && [ ! "$ST_SUB" -nt "$hp" ] && return 0
+	[ -s "$hp" ] && [ ! "$ST_SUB" -nt "$hp" ] && [ ! "$ST_SUB_NODES" -nt "$hp" ] && return 0
 	mkdir -p "$ST_DIR"
 	{ for m in vless proxy; do
 		[ -x "$STL_SBIN/steer-$m" ] || continue
@@ -29424,10 +29424,8 @@ do_steer_sub_update_all() {
 }
 
 _st_secs_ping_tick() {
-	local s iv
+	local s
 	for s in $(_st_secs_vpn); do
-		iv="$(_st_sec_with "$s" _st_pick_iv)"
-		[ -f "$ST_SEC_DIR/$s/sub.ping" ] && [ -z "$(find "$ST_SEC_DIR/$s/sub.ping" -mmin +$((iv - 1)) 2>/dev/null)" ] && continue
 		_st_sec_with "$s" steer_ping_tick
 	done
 }
@@ -29476,7 +29474,7 @@ _st_ping_cron() {
 }
 
 _st_ping_measure() {
-	local t dir hid i proto pidx fidx name rest p hp k n=0 hy=0 f ms j tab kd ov
+	local t dir hid i proto pidx fidx name rest p hp k n=0 hy=0 f ms j tab kd ov ci
 	[ -s "$ST_SUB" ] && _st_vpn_ok && t="$(_st_nodes)" || return 1
 	_zm_has curl || return 1
 	tab="$(printf '\t')"
@@ -29509,13 +29507,22 @@ _st_ping_measure() {
 	done
 	wait
 	if stl_has hy2 && [ -z "$ov" ]; then
+		ci=""
+		if [ -n "$1" ]; then
+			for f in "$dir"/*.n; do
+				[ -f "$f" ] || continue
+				[ "$(cat "$f")" = "$1" ] && { ci="${f##*/}"; ci="${ci%.n}"; break; }
+			done
+		fi
 		for f in "$dir"/*.k; do
 			[ -f "$f" ] || continue
 			read -r k < "$f"
-			case "$k" in hy*) ;; *) continue ;; esac
-			[ "$hy" -ge 6 ] && break
+			case "$k" in hy*) i="${f##*/}"; echo "${i%.k}" ;; esac
+		done | sort -n | awk -v c="$ci" '$0 == c { print; next } { r[++n] = $0 } END { for (i = 1; i <= n; i++) print r[i] }' > "$dir/hy.list"
+		while read -r i; do
+			[ -n "$i" ] || continue
+			read -r k < "$dir/$i.k"
 			hy=$((hy + 1))
-			i="${f##*/}"; i="${i%.k}"
 			( j="$(stl_probe "$ST_SUB" hysteria2 "${k#hy }")"
 			  if [ "$(printf '%s' "$j" | jsonfilter -e '@.results[0].ok' 2>/dev/null)" = true ]; then
 				ms="$(printf '%s' "$j" | jsonfilter -e '@.results[0].handshake_ms' 2>/dev/null)"
@@ -29524,7 +29531,7 @@ _st_ping_measure() {
 				echo "$ms" > "$dir/$i"
 			  else : > "$dir/$i.dead"; fi ) &
 			[ $((hy % 2)) = 0 ] && wait
-		done
+		done < "$dir/hy.list"
 		wait
 	fi
 	if [ "$(_st_lat_mode)" = real ] && [ -z "$ov" ]; then
@@ -29623,18 +29630,32 @@ _st_ping_ready() {
 		[ ! -f "$ST_OFF" ] && [ -z "$(_st_blocker)" ] && _st_owns "steer-spec" && _st_work_main
 }
 
+_st_ping_due() {
+	local at
+	[ -f "$ST_SUB_PING" ] || return 0
+	at="$(date -r "$ST_SUB_PING" +%s 2>/dev/null)"
+	case "$at" in ''|*[!0-9]*) return 0 ;; esac
+	[ $(($(date +%s) - at)) -ge $(($(_st_pick_iv) * 60 - 240)) ]
+}
+
 steer_ping_tick() {
-	local lk="$ST_RUN/ping.lock" cur="" best
+	local lk="$ST_RUN/ping.lock" cur="" best prev="$ST_SUB_ORDER.prev"
 	_st_ping_ready || return 0
+	_st_ping_due || return 0
 	_st_running && return 0
 	mkdir -p "$ST_RUN"
 	mkdir "$lk" 2>/dev/null || { [ -n "$(find "$lk" -maxdepth 0 -mmin +20 2>/dev/null)" ] && rmdir "$lk" 2>/dev/null; return 0; }
 	stl_running && stl_state vpn >/dev/null 2>&1 && [ "$STL_UP" = true ] && cur="$(_st_active_key)"
+	rm -f "$prev"; [ -s "$ST_SUB_ORDER" ] && cp -f "$ST_SUB_ORDER" "$prev"
 	if _st_ping_measure "$cur" && _st_ping_order "$cur" && ! _st_running && _st_ping_ready; then
 		best="$(head -n1 "$ST_SUB_ORDER")"
 		if _st_spec_quick >/dev/null 2>&1; then logger -t zapret-manager "Steer: по пингу первым стал узел «$best» ($(_st_ping_line "$best") мс)"
-		else logger -t zapret-manager "Steer: узел по пингу «$best» применить не удалось"; fi
+		else
+			if [ -s "$prev" ]; then mv -f "$prev" "$ST_SUB_ORDER"; else rm -f "$ST_SUB_ORDER"; fi
+			logger -t zapret-manager "Steer: узел по пингу «$best» применить не удалось — повторим при следующем замере"
+		fi
 	fi
+	rm -f "$prev"
 	rmdir "$lk" 2>/dev/null
 	return 0
 }
@@ -63756,6 +63777,7 @@ var radio = { idx: 0, vol: 70, show: true, state: 'off', audio: null, el: null, 
 		if (c) radioApplyCfg(c);
 	} catch (e) {}
 })();
+function radioGain(v) { v = Math.max(0, Math.min(100, +v || 0)) / 100; return v * v * v; }
 function radioFind(id) { for (var i = 0; i < RADIO.length; i++) if (RADIO[i][0] === id) return i; return -1; }
 function radioApplyCfg(c) {
 	var i = radioFind(c.station);
@@ -63788,7 +63810,7 @@ function radioSync() {
 		if (radio.idx !== was && radio.state !== 'off' && radio.state !== 'err') radioStart();
 		if (!radio.show && radio.state !== 'off') radioStop();
 		if (typeof lookPageRender === 'function') lookPageRender();
-		if (radio.audio) radio.audio.volume = radio.vol / 100;
+		if (radio.audio) radio.audio.volume = radioGain(radio.vol);
 		radioCache();
 		radioPaint();
 	}).catch(function () {});
@@ -63899,7 +63921,7 @@ function radioStart(plain) {
 	radio.corsTry = cors && !radioIsHls(i);
 	if (plain !== true) radio.ncPend = '';
 	if (cors && !radAud.ac) { try { radAud.ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} }
-	a.volume = radio.vol / 100;
+	a.volume = radioGain(radio.vol);
 	radio.state = 'wait';
 	radioHlsDrop();
 	radioPaint();
@@ -64171,7 +64193,7 @@ function radioMenuToggle() {
 	vol.addEventListener('input', function () {
 		radio.vol = +vol.value;
 		volTxt.textContent = radio.vol + '%';
-		if (radio.audio) radio.audio.volume = radio.vol / 100;
+		if (radio.audio) radio.audio.volume = radioGain(radio.vol);
 		radioSave();
 	});
 	radio.tab = radioIsFav(radio.idx) ? 'f' : radioSetOf(radio.idx);
@@ -64657,7 +64679,7 @@ function dustStart(kind) {
 				if (live) {
 					if (!fdB || fdB.length !== radAud.an.frequencyBinCount) fdB = new Float32Array(radAud.an.frequencyBinCount);
 					radAud.an.getFloatFrequencyData(fdB);
-					var adj = -20 * Math.log(Math.max(radio.vol / 100, 0.02)) / Math.LN10;
+					var adj = -20 * Math.log(Math.max(radioGain(radio.vol), 0.001)) / Math.LN10;
 					top = -200;
 					for (i = 0; i < M; i++) {
 						p = i / (M - 1); dd = Math.abs(p - 0.5) * 2;
@@ -68859,7 +68881,7 @@ html[data-zm-dens="c"] #zmw-view .zm-seg-item { padding-top: 4px !important; pad
 html[data-zm-dens="c"] #zmw-view .zm-tile { padding-top: 8px !important; padding-bottom: 8px !important; min-height: 0 !important; }
 html[data-zm-dens="c"] #zmw-view .zm-row:not(.zm-lk-row) { margin-top: 4px; margin-bottom: 4px; }
 html[data-zm-dens="c"] #zmw-view .zm-card + .zm-card, html[data-zm-dens="c"] #zmw-view .zm-card + .zm-log + .zm-card { margin-top: 10px !important; }
-html[data-zm-dens="c"] .zmw-nav-item { padding-top: 5px !important; padding-bottom: 5px !important; }
+html[data-zm-dens="c"] .zmw-nav-item:not(.zmw-nav-folded) { padding-top: 5px !important; padding-bottom: 5px !important; }
 html[data-zm-rad="sharp"] :is(#zmw-view .zm-card, #zmw-view .cbi-button, #zmw-view .zm-seg-item, #zmw-view .zm-tile, #zmw-view input, #zmw-view select, #zmw-view textarea, #zmw-view .zm-tt-tile, #zmw-view .zm-tt-row, #zmw-view .zm-badge, #zmw-view .zm-chip, #zmw-view .zm-actions.zmw-tabs, #zmw-view .zm-refresh-banner, #zmw-view .zm-log, .zmw-nav-item, .zmw-nav-ico, .zmw-icon-btn, .zmw-theme-menu, .zmw-theme-opt, .zmw-modal, .zm-dock .cbi-button, .zmw-modal .cbi-button, #zmw-view .zm-lk-th, #zmw-view .zm-lk-ft, #zmw-view .zm-lk-pv) { border-radius: 3px !important; }
 html[data-zm-rad="round"] :is(#zmw-view .zm-card, .zmw-modal, .zmw-theme-menu, #zmw-view .zm-log, #zmw-view .zm-refresh-banner) { border-radius: 26px !important; }
 html[data-zm-rad="round"] :is(#zmw-view .cbi-button, #zmw-view .zm-seg-item, #zmw-view .zm-badge, #zmw-view .zm-chip, #zmw-view .zm-actions.zmw-tabs, .zmw-nav-item, .zmw-icon-btn, .zm-dock .cbi-button, .zmw-modal .cbi-button, .zmw-theme-opt) { border-radius: 999px !important; }
