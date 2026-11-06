@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.122
+# Version: 5.123
 ZM_VERSION_EOF
 set -e
 
@@ -1880,7 +1880,8 @@ _zm_rpcd_kick() {
 
 ui_theme_set() {
 	[ "$1" = blocks ] && set -- contrast
-	case "$1" in micro|light|dark|ink|bento|minimal|retro|depth|graphite|oled|matrix|neon|synth|noir|contrast|metro|auto) ;; *) echo '{"error":"неизвестная тема"}'; return 1 ;; esac
+	[ "$1" = minimal ] && set -- micro
+	case "$1" in micro|light|dark|ink|bento|retro|depth|graphite|oled|matrix|neon|synth|noir|contrast|metro|custom|auto) ;; *) echo '{"error":"неизвестная тема"}'; return 1 ;; esac
 	mkdir -p "$ZM_STATE_DIR" /www/zm
 	printf '%s\n' "$1" > "$ZM_STATE_DIR/ui.theme"
 	printf '%s\n' "$1" > /www/zm/theme.txt
@@ -1890,7 +1891,7 @@ ui_theme_set() {
 
 ui_look_set() {
 	local v="$1"
-	[ "${#v}" -le 2000 ] || { echo '{"error":"слишком длинные настройки оформления"}'; return 1; }
+	[ "${#v}" -le 4000 ] || { echo '{"error":"слишком длинные настройки оформления"}'; return 1; }
 	printf '%s' "$v" | grep -qE '^\{[A-Za-z0-9 ":,#._{}-]*\}$' || { echo '{"error":"неверные настройки оформления"}'; return 1; }
 	printf '%s' "$v" | jsonfilter -e '@' >/dev/null 2>&1 || { echo '{"error":"неверные настройки оформления"}'; return 1; }
 	mkdir -p "$ZM_STATE_DIR" /www/zm
@@ -63674,7 +63675,7 @@ var ICONS = {
 	moon: '<path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5a8.5 8.5 0 1 0 10.7 10.7z"/>',
 	ink: '<rect x="3.5" y="3.5" width="13" height="13" rx="1.5"/><path d="M8 20.5h12.5V8"/>',
 	bento: '<rect x="3.5" y="3.5" width="10" height="10" rx="2.5"/><rect x="15.5" y="3.5" width="5" height="10" rx="2"/><rect x="3.5" y="15.5" width="5" height="5" rx="2"/><rect x="10.5" y="15.5" width="10" height="5" rx="2"/>',
-	minimal: '<path d="M4 12h16"/>',
+	brush: '<path d="M18.6 3.4a2.1 2.1 0 0 1 3 3L13 15l-4-4z"/><path d="M8.6 13.5c-2.2 0-4 1.8-4 4 0 1.3-.8 2.3-2.1 3 1.1.4 2.3.6 3.5.6 3.1 0 5.6-2.3 5.6-5z"/>',
 	retro: '<rect x="3" y="4" width="18" height="16"/><path d="M3 8.5h18M16 6.2h3"/>',
 	depth: '<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/>',
 	graphite: '<path d="M4.5 17a8 8 0 1 1 15 0"/><path d="M12 13l3.8-3.8"/><circle cx="12" cy="13" r="1.2"/>',
@@ -64393,7 +64394,6 @@ var THEMES = [
 	{ id: 'dark', name: 'Тёмная', ico: 'moon', dark: true },
 	{ id: 'ink', name: 'Контур', ico: 'ink' },
 	{ id: 'bento', name: 'Бенто', ico: 'bento', fonts: 'Onest:wght@400;500;600;700&family=Unbounded:wght@600;800', color: '#efebe4' },
-	{ id: 'minimal', name: 'Минимал', ico: 'minimal', fonts: 'IBM+Plex+Sans:wght@300;400;500', color: '#ffffff' },
 	{ id: 'retro', name: 'Ретро 98', ico: 'retro', color: '#008080' },
 	{ id: 'depth', name: 'Объём 3D', ico: 'depth', dark: true, fonts: 'Onest:wght@400;500;600;700&family=Unbounded:wght@600;800', color: '#0a0e18' },
 	{ id: 'graphite', name: 'Графит', ico: 'graphite', dark: true, fonts: 'Space+Grotesk:wght@400;500;700', color: '#141416' },
@@ -64403,10 +64403,11 @@ var THEMES = [
 	{ id: 'synth', name: 'Синтвейв', ico: 'synth', dark: true, fx: true, fonts: 'Exo+2:ital,wght@0,400;0,500;0,600;0,700;1,800', color: '#12062b' },
 	{ id: 'noir', name: 'Нуар', ico: 'noir', dark: true, fx: true, fonts: 'Oswald:wght@400;500;600&family=Playfair+Display:wght@600;700', color: '#0b0b0b' },
 	{ id: 'contrast', name: 'Контраст', ico: 'contrast', dark: true, fx: 'warp', fonts: 'Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700', color: '#0a0d13' },
-	{ id: 'metro', name: 'Метро', ico: 'metro', fx: true, fonts: 'Onest:wght@400;500;600;700', color: '#f4f4f2' }
+	{ id: 'metro', name: 'Метро', ico: 'metro', fx: true, fonts: 'Onest:wght@400;500;600;700', color: '#f4f4f2' },
+	{ id: 'custom', name: 'Своя тема', ico: 'brush', custom: true }
 ];
 function themeById(id) { return THEMES.filter(function (x) { return x.id === id; })[0]; }
-function themePref() { var t = sget(K_THEME); if (t === 'blocks') { t = 'contrast'; sset(K_THEME, t, true); } return themeById(t) ? t : 'auto'; }
+function themePref() { var t = sget(K_THEME); if (t === 'blocks' || t === 'minimal') { t = t === 'blocks' ? 'contrast' : 'micro'; sset(K_THEME, t, true); } return themeById(t) ? t : 'auto'; }
 var fontsFailed = false;
 function themeFonts(t) {
 	if (fontsFailed || !t || !t.fonts || document.getElementById('zmw-font-' + t.id)) return;
@@ -64441,7 +64442,9 @@ var LOOK_MONO = [
 ];
 var LOOK_ACC = [ '#2d5bff', '#7c5cff', '#0ea5e9', '#14b8a6', '#16a34a', '#f59e0b', '#f97316', '#ef4444', '#ec4899', '#64748b' ];
 var LOOK_ZOOM = [ [ 0.9, '90%' ], [ 1, '100%' ], [ 1.1, '110%' ], [ 1.2, '120%' ] ];
-var LOOK_DEF = { acc: '', font: 'theme', mono: 'theme', zoom: 1, dens: 'n', rad: 'md', motion: 1, glass: 1, radio: 1, fps: 60, dpr: 2, pause: 1, batt: 0, react: 1 };
+var ANIM_RE = /^(stars|traffic|music|matrix|neon|synth|noir|metro|embers|lava|fire|metal|silk|ink|plasma|warp)$/, ANIM_HEAVY = /^(matrix|neon|synth|noir|metro|embers|lava|fire|metal|silk|ink|plasma|warp)$/, ANIM_DARK = /^(matrix|neon|synth|noir|embers|lava|fire|metal|silk|ink|plasma|warp)$/;
+var LOOK_VIS = [ 'acc', 'tint', 'font', 'mono', 'rad', 'bord', 'shad', 'glass' ];
+var LOOK_DEF = { acc: '', tint: '', font: 'theme', mono: 'theme', zoom: 1, dens: 'n', rad: 'md', bord: 'md', shad: 'md', ctr: 'n', motion: 1, glass: 1, radio: 1, fps: 60, dpr: 2, pause: 1, batt: 0, react: 1, my: null };
 function lookPick(list, v) { return list.filter(function (x) { return x.id === v; })[0]; }
 function lookClean(o) {
 	var r = {}, k;
@@ -64452,10 +64455,23 @@ function lookClean(o) {
 	if (lookPick(LOOK_MONO, o.mono)) r.mono = o.mono;
 	if (LOOK_ZOOM.some(function (z) { return z[0] === +o.zoom; })) r.zoom = +o.zoom;
 	if (o.dens === 'c') r.dens = 'c';
-	if (/^(sharp|md|round)$/.test(o.rad || '')) r.rad = o.rad;
+	if (o.tint === 's' || o.tint === 'm') r.tint = o.tint;
+	if (o.ctr === 'h') r.ctr = 'h';
+	if (/^(sharp|soft|md|round)$/.test(o.rad || '')) r.rad = o.rad;
+	if (/^(none|md|strong|acc)$/.test(o.bord || '')) r.bord = o.bord;
+	if (/^(none|md|soft|deep)$/.test(o.shad || '')) r.shad = o.shad;
 	[ 'motion', 'glass', 'radio', 'pause', 'batt', 'react' ].forEach(function (b) { if (o[b] === 0 || o[b] === 1) r[b] = o[b]; });
 	if ([ 15, 30, 60 ].indexOf(+o.fps) >= 0) r.fps = +o.fps;
 	if (+o.dpr === 1 || +o.dpr === 2) r.dpr = +o.dpr;
+	r.my = myClean(o.my);
+	return r;
+}
+function myClean(o) {
+	var r, v, t = o && typeof o === 'object' && typeof o.b === 'string' ? themeById(o.b) : null;
+	if (!t || t.custom) return null;
+	v = lookClean(o);
+	r = { b: t.id, a: ANIM_RE.test(o.a || '') ? o.a : '' };
+	LOOK_VIS.forEach(function (k) { r[k] = v[k]; });
 	return r;
 }
 var LOOK = (function () { try { return lookClean(JSON.parse(sget(K_LOOK) || 'null')); } catch (e) { return lookClean(null); } })();
@@ -64472,11 +64488,12 @@ function lookPush() {
 		}).catch(function () { lookDirty = true; });
 	}, 500);
 }
+function lookSave() { sset(K_LOOK, lookJson(), true); lookPush(); }
 function lookSet(k, v) {
 	LOOK[k] = v;
+	if (LOOK.my && LOOK_VIS.indexOf(k) >= 0 && themePref() === 'custom') LOOK.my[k] = v;
 	LOOK = lookClean(LOOK);
-	sset(K_LOOK, lookJson(), true);
-	lookPush();
+	lookSave();
 	lookApply();
 	if (k === 'batt' || k === 'fps' || k === 'dpr' || k === 'pause') dustSync();
 	if (k === 'react') radioCorsCheck();
@@ -64491,6 +64508,7 @@ function lookSync() {
 		if (JSON.stringify(o) === JSON.stringify(LOOK)) return;
 		LOOK = o;
 		sset(K_LOOK, lookJson(), true);
+		if (themePref() === 'custom' && LOOK.my) sset(K_ANIM, LOOK.my.a || '0', true);
 		lookApply(); applyTheme(); dustSync();
 		if (lookPageRender) lookPageRender();
 	}).catch(function () {});
@@ -64524,10 +64542,14 @@ function lookApply() {
 	at('data-zm-zoom', L.zoom !== 1 ? String(L.zoom) : null);
 	at('data-zm-dens', L.dens === 'c' ? 'c' : null);
 	at('data-zm-rad', L.rad !== 'md' ? L.rad : null);
+	at('data-zm-bord', L.bord !== 'md' ? L.bord : null);
+	at('data-zm-shad', L.shad !== 'md' ? L.shad : null);
+	at('data-zm-tint', L.tint || null);
 	at('data-zm-motion', L.motion ? null : '0');
 	at('data-zm-glass', L.glass ? null : '0');
 	at('data-zm-radio', L.radio ? null : '0');
 	if (!L.radio && typeof radio !== 'undefined' && radio && radio.state && radio.state !== 'off') radioStop();
+	lookVars();
 	if (typeof dust !== 'undefined' && dust) {
 		if (L.glass && !glass) glassStart();
 		if (!L.glass && glass) glassStop();
@@ -64535,6 +64557,37 @@ function lookApply() {
 		dust.recolor();
 	}
 }
+var LOOK_VARS = [ '--bg', '--surface', '--surface-solid', '--surface-2', '--surface-3', '--side-bg', '--input-bg', '--border', '--border-2', '--radius', '--radius-sm', '--zm-shadow', '--text-2', '--muted' ];
+function lookVars() {
+	var h = document.documentElement, L = LOOK, cs, v = {}, out = {}, tc, tx, sf, p, k, dk;
+	function col(x) { x = String(x || '').trim(); return x && window.CSS && CSS.supports && CSS.supports('color', x) ? x : ''; }
+	function mix(c, pc, x) { x = col(x); return c && x ? 'color-mix(in srgb, ' + c + ' ' + pc + '%, ' + x + ')' : ''; }
+	LOOK_VARS.forEach(function (n) { h.style.removeProperty(n); });
+	if (!L.tint && L.ctr !== 'h' && (L.bord === 'md' || L.bord === 'none') && L.rad === 'md' && (L.shad === 'md' || L.shad === 'none')) return lookGlassKick();
+	cs = getComputedStyle(h);
+	LOOK_VARS.forEach(function (n) { v[n] = cs.getPropertyValue(n).trim(); });
+	tc = col(L.acc) || col(cs.getPropertyValue('--a1'));
+	tx = col(cs.getPropertyValue('--text'));
+	dk = h.classList.contains('zm-theme-dark');
+	if (L.tint && tc) {
+		p = L.tint === 'm' ? [ 16, 8, 13 ] : [ 8, 4, 7 ];
+		out['--bg'] = mix(tc, p[0], v['--bg']);
+		[ '--surface', '--surface-solid', '--surface-2', '--surface-3', '--input-bg' ].forEach(function (n) { out[n] = mix(tc, p[1], v[n]); });
+		out['--side-bg'] = mix(tc, p[2], v['--side-bg']);
+	}
+	sf = out['--surface-solid'] || col(v['--surface-solid']);
+	if (L.bord === 'strong' && tx && sf) { out['--border'] = mix(tx, 26, sf); out['--border-2'] = mix(tx, 38, sf); }
+	if (L.bord === 'acc' && tc) { out['--border'] = mix(tc, 55, v['--border'] || sf); out['--border-2'] = mix(tc, 70, v['--border-2'] || sf); }
+	if (L.ctr === 'h' && tx) { out['--text-2'] = mix(tx, 82, v['--text-2']); out['--muted'] = mix(tx, 62, v['--muted']); }
+	if (L.rad === 'sharp') { out['--radius'] = '4px'; out['--radius-sm'] = '3px'; }
+	if (L.rad === 'soft') { out['--radius'] = '10px'; out['--radius-sm'] = '8px'; }
+	if (L.rad === 'round') { out['--radius'] = '24px'; out['--radius-sm'] = '16px'; }
+	if (L.shad === 'soft') out['--zm-shadow'] = dk ? '0 1px 2px rgba(0,0,0,.35), 0 12px 30px -14px rgba(0,0,0,.65)' : '0 1px 2px rgba(15,23,42,.05), 0 12px 30px -14px rgba(15,23,42,.24)';
+	if (L.shad === 'deep') out['--zm-shadow'] = dk ? '0 2px 6px rgba(0,0,0,.45), 0 26px 56px -20px rgba(0,0,0,.9)' : '0 2px 6px rgba(15,23,42,.08), 0 26px 56px -20px rgba(15,23,42,.45)';
+	for (k in out) if (out[k]) h.style.setProperty(k, out[k], 'important');
+	lookGlassKick();
+}
+function lookGlassKick() { if (typeof glass !== 'undefined' && glass && typeof glassReset === 'function') glassReset(); }
 function lookOnBattery() { return !!(LOOK.batt && lookBatt && !lookBatt.charging); }
 if (navigator.getBattery) {
 	try { navigator.getBattery().then(function (b) { lookBatt = b; b.addEventListener('chargingchange', function () { dustSync(); if (lookPageRender) lookPageRender(); }); dustSync(); }).catch(function () {}); } catch (e) {}
@@ -64542,8 +64595,9 @@ if (navigator.getBattery) {
 var lookPageRender = null;
 lookApply();
 function themeEffective() { var p = themePref(); return p === 'auto' ? 'micro' : p; }
+function themeBase() { var t = themeEffective(); if (t !== 'custom') return t; return LOOK.my && themeById(LOOK.my.b) ? LOOK.my.b : 'micro'; }
 function applyTheme() {
-	var t = themeEffective();
+	var t = themeBase();
 	var h = document.documentElement;
 	var th = themeById(t) || THEMES[0];
 	themeFonts(th);
@@ -64552,9 +64606,11 @@ function applyTheme() {
 	h.setAttribute('data-zm-theme-checked', '1');
 	var mc = document.querySelector('meta[name="theme-color"]');
 	if (mc) mc.setAttribute('content', th.color || (t === 'dark' ? '#0a0c12' : t === 'ink' ? '#ffffff' : '#f3f5fa'));
+	h.classList.toggle('zm-theme-custom', themeEffective() === 'custom');
+	lookVars();
 	if (dust && dust.kind !== animKind()) dustSync();
 	if (dust) { dust.recolor(); glassReset(); }
-	var cur = th;
+	var cur = themeById(themeEffective()) || th;
 	Array.prototype.forEach.call(document.querySelectorAll('.zmw-theme-toggle'), function (b) {
 		b.innerHTML = '';
 		b.appendChild(icon('palette'));
@@ -64583,8 +64639,14 @@ var ANIMS = [
 	{ id: 'plasma', name: 'Плазма', title: 'Плавные переливы неонового цвета' },
 	{ id: 'warp', name: 'Гиперпрыжок', title: 'Полёт сквозь звёзды' }
 ];
-var ANIM_RE = /^(stars|traffic|music|matrix|neon|synth|noir|metro|embers|lava|fire|metal|silk|ink|plasma|warp)$/, ANIM_HEAVY = /^(matrix|neon|synth|noir|metro|embers|lava|fire|metal|silk|ink|plasma|warp)$/, ANIM_DARK = /^(matrix|neon|synth|noir|embers|lava|fire|metal|silk|ink|plasma|warp)$/;
-function themeFx() { var t = themeById(themeEffective()); return t && t.fx ? (typeof t.fx === 'string' ? t.fx : t.id) : ''; }
+function themeFxOf(t) { return t && t.fx ? (typeof t.fx === 'string' ? t.fx : t.id) : ''; }
+function themeFx() { if (themeEffective() === 'custom') return LOOK.my ? LOOK.my.a : ''; return themeFxOf(themeById(themeEffective())); }
+function themeAnimNorm(v) { if (v === '1') return 'stars'; if (v === 'theme') return themeFx(); return ANIM_RE.test(v || '') ? v : ''; }
+function mySnap() {
+	var o = { b: themeBase(), a: themeAnimNorm(sget(K_ANIM)) };
+	LOOK_VIS.forEach(function (k) { o[k] = LOOK[k]; });
+	return myClean(o);
+}
 function animKind() { var v = sget(K_ANIM); if (lookOnBattery()) return ''; if (v === '1') return 'stars'; if (v === 'theme') return themeFx(); return ANIM_RE.test(v || '') ? v : ''; }
 function animReact() { var k = animKind(); return !!k && (k === 'music' || !!LOOK.react); }
 var ZMFX = (function () {
@@ -65729,6 +65791,7 @@ function dustSync() {
 var animMenuEls = null;
 function animSet(id) {
 	sset(K_ANIM, id || '0', true);
+	if (LOOK.my && themePref() === 'custom') { var a = themeAnimNorm(id || ''); if (LOOK.my.a !== a) { LOOK.my.a = a; lookSave(); } }
 	dustSync();
 	animMenuPaint();
 	if (!animKind()) bgoExit();
@@ -65781,25 +65844,40 @@ function themeSync() {
 	fetch('/zm/theme.txt?t=' + Date.now(), { cache: 'no-store', credentials: 'omit' }).then(function (r) { return r.ok ? r.text() : ''; }).then(function (t) {
 		t = String(t || '').trim();
 		if (themeDirty) return;
-		if (t === 'blocks') { t = 'contrast'; themeSave(t); }
+		if (t === 'blocks' || t === 'minimal') { t = t === 'blocks' ? 'contrast' : 'micro'; themeSave(t); }
 		if (!t) { if (sget(K_THEME)) themeSave(sget(K_THEME)); return; }
 		if (t !== 'auto' && !themeById(t)) return;
 		if (t === themePref() || (t === 'auto' && !sget(K_THEME))) return;
 		sset(K_THEME, t === 'auto' ? null : t, true);
+		sset(K_ANIM, themeFx() || '0', true);
 		applyTheme();
+		lookApply();
 		dustSync();
+		if (lookPageRender) lookPageRender();
 	}).catch(function () {});
 }
-function setTheme(id) {
-	var nt = themeById(id), was = sget(K_ANIM) || '', oldFx = themeFx();
-	sset(K_THEME, id, true);
+function setTheme(id, keep) {
+	var nt = id === 'auto' ? null : themeById(id), fresh = false;
+	if (id !== 'auto' && !nt) return;
+	if (id === 'custom' && !LOOK.my) { LOOK.my = mySnap(); fresh = true; }
+	if (id === 'custom') LOOK_VIS.forEach(function (k) { LOOK[k] = LOOK.my[k]; });
+	else if (!keep) LOOK_VIS.forEach(function (k) { LOOK[k] = LOOK_DEF[k]; });
+	LOOK = lookClean(LOOK);
+	lookSave();
+	sset(K_THEME, id === 'auto' ? null : id, true);
 	themeSave(id);
-	if (nt && nt.fx) { if (!was || was === '0' || was === 'theme' || (oldFx && was === oldFx)) sset(K_ANIM, typeof nt.fx === 'string' ? nt.fx : nt.id, true); }
-	else if (was === 'theme' || (oldFx && was === oldFx)) sset(K_ANIM, '0', true);
+	if (!keep) sset(K_ANIM, themeFx() || '0', true);
 	document.documentElement.classList.add('zmw-theme-anim');
 	applyTheme();
+	lookApply();
 	setTimeout(function () { document.documentElement.classList.remove('zmw-theme-anim'); }, 400);
+	if (!keep && dust) dust.stop();
 	dustSync();
+	animMenuPaint();
+	if (!animKind()) bgoExit();
+	radioCorsCheck();
+	if (fresh) toast('«Своя тема» создана из того, что сейчас на экране. Меняйте её в разделе «Оформление» — всё сохранится само.', 'info');
+	if (lookPageRender) lookPageRender();
 }
 if (mqDark && mqDark.addEventListener) mqDark.addEventListener('change', function () { if (themePref() === 'auto') { applyTheme(); dustSync(); } });
 function toggleTheme(ev) {
@@ -65860,7 +65938,7 @@ var ROUTES = [
 
 var LOOK_PV = {
 	micro: [ '#f4f5f8', '#ffffff', '#2d5bff', '#0f172a' ], light: [ '#eef1f8', '#ffffff', '#7c5cff', '#0f172a' ], dark: [ '#0d1017', '#161b26', '#7c5cff', '#e8ebf4' ],
-	ink: [ '#e8f6ff', '#ffffff', '#0a9cff', '#0a0a0a' ], bento: [ '#efebe4', '#ffffff', '#1c1a17', '#1c1a17' ], minimal: [ '#ffffff', '#ffffff', '#111111', '#111111' ],
+	ink: [ '#e8f6ff', '#ffffff', '#0a9cff', '#0a0a0a' ], bento: [ '#efebe4', '#ffffff', '#1c1a17', '#1c1a17' ],
 	retro: [ '#008080', '#c0c0c0', '#000080', '#000000' ], depth: [ '#0a0e18', '#16203a', '#7fdcff', '#e8f4ff' ], graphite: [ '#141416', '#1c1c20', '#ffb020', '#ececf0' ],
 	oled: [ '#000000', '#0a0a0a', '#ffffff', '#f5f5f5' ], matrix: [ '#000000', '#020a04', '#00ff41', '#b8ffc8' ], neon: [ '#07060f', '#0e0b1e', '#fcee0a', '#f3f0ff' ],
 	synth: [ '#12062b', '#1c0a3a', '#ff3caa', '#ffe9f6' ], noir: [ '#0b0b0b', '#141414', '#e9e6df', '#e9e6df' ], contrast: [ '#0a0d13', '#111620', '#3ba7ff', '#e8edf5' ], metro: [ '#f4f4f2', '#ffffff', '#0078c9', '#000000' ]
@@ -65886,35 +65964,99 @@ function lookSw(on, label, hint, click, dis) {
 function lookCard(title, hint, kids) {
 	return E('div', { 'class': 'zm-card' }, [ E('h3', {}, [ title ]) ].concat(hint ? [ E('p', { 'class': 'zm-hint zm-lk-hint' }, [ hint ]) ] : [], kids));
 }
+function lookPvOf(id) {
+	var my = id === 'custom' ? LOOK.my : null, b = id === 'custom' ? (my ? my.b : themeBase()) : id, pv = (LOOK_PV[b] || [ '#eeeeee', '#ffffff', '#2d5bff', '#111111' ]).slice();
+	if (my && my.acc) pv[2] = my.acc;
+	return pv;
+}
+function lookChanged() {
+	var g = [], d = function (ks) { return ks.some(function (k) { return LOOK[k] !== LOOK_DEF[k]; }); };
+	if (d([ 'acc', 'tint' ])) g.push('цвет');
+	if (d([ 'rad', 'bord', 'shad', 'glass' ])) g.push('форма');
+	if (d([ 'font', 'mono' ])) g.push('шрифт');
+	if (themeAnimNorm(sget(K_ANIM)) !== themeFx()) g.push('фон');
+	return g;
+}
+function lookMySave() {
+	LOOK.my = mySnap();
+	setTheme('custom', true);
+	toast('Сохранено в «Свою тему» — она выбрана и хранится на роутере', 'info');
+}
+function lookMyDelete() {
+	var b = LOOK.my && themeById(LOOK.my.b) ? LOOK.my.b : 'micro';
+	LOOK.my = null;
+	setTheme(b);
+	toast('Своя тема удалена — выбрана тема «' + themeById(b).name + '»', 'info');
+}
+function lookMyBase(id) {
+	var t = themeById(id);
+	if (!LOOK.my || !t || t.custom || LOOK.my.b === id) return;
+	LOOK.my.b = id;
+	LOOK = lookClean(LOOK);
+	lookSave();
+	document.documentElement.classList.add('zmw-theme-anim');
+	applyTheme();
+	lookApply();
+	setTimeout(function () { document.documentElement.classList.remove('zmw-theme-anim'); }, 400);
+}
 function lookPage() {
-	var wrap = E('div', { 'class': 'zm-lk' });
+	var wrap = E('div', { 'class': 'zm-lk' }), saveAsk = false, delAsk = false, askT = 0;
 	if (!document.getElementById('zm-css')) {
 		var sc = document.querySelector('script[src*="/zm/app.js"]'), vm = sc && /[?&]v=(\d+)/.exec(sc.getAttribute('src') || '');
 		document.head.appendChild(E('link', { 'id': 'zm-css', 'rel': 'stylesheet', 'href': RES + 'view/zapret-manager/style.css' + (vm ? '?v=' + vm[1] : '') }));
 	}
+	function askLater() {
+		clearTimeout(askT);
+		askT = setTimeout(function () { if (saveAsk || delAsk) { saveAsk = delAsk = false; paint(); } }, 4000);
+	}
 	function paint() {
-		var L = LOOK, cur = themeEffective(), tabs, body, side, fx = themeFx(), kids = [];
+		var L = LOOK, cur = themeEffective(), pref = themePref(), isMy = cur === 'custom', tabs, body, side, kids = [];
 		wrap.innerHTML = '';
-		tabs = E('div', { 'class': 'zm-actions zmw-tabs zm-lk-tabs' }, [ [ 'theme', 'Тема и цвет' ], [ 'text', 'Текст' ], [ 'fx', 'Фон и плавность' ], [ 'ui', 'Интерфейс' ] ].map(function (t) {
+		tabs = E('div', { 'class': 'zm-actions zmw-tabs zm-lk-tabs' }, [ [ 'theme', 'Тема и цвет' ], [ 'form', 'Форма' ], [ 'text', 'Шрифт' ], [ 'fx', 'Фон и плавность' ], [ 'ui', 'Интерфейс' ] ].map(function (t) {
 			return E('button', { 'type': 'button', 'class': 'cbi-button' + (lookTab === t[0] ? ' cbi-button-positive' : ''), 'click': function () { if (lookTab !== t[0]) { lookTab = t[0]; paint(); } } }, [ t[1] ]);
 		}));
+		kids.push((function () {
+			var t = themeById(cur) || THEMES[0], chg = isMy ? [] : lookChanged(), pv = lookPvOf(cur), act = [], st, base;
+			if (!isMy && L.acc) pv[2] = L.acc;
+			if (isMy) {
+				base = themeById(L.my ? L.my.b : '') || THEMES[0];
+				act.push(E('label', { 'class': 'zm-lk-base' }, [ E('span', {}, [ 'Основа' ]), E('select', { 'class': 'cbi-input-select', 'aria-label': 'Основа своей темы', 'change': function () { lookMyBase(this.value); paint(); } },
+					THEMES.filter(function (x) { return !x.custom; }).map(function (x) { return E('option', { 'value': x.id, 'selected': base.id === x.id ? '' : null }, [ x.name ]); })) ]));
+				act.push(E('button', { 'type': 'button', 'class': 'cbi-button' + (delAsk ? ' cbi-button-remove' : ''), 'click': function () {
+					if (!delAsk) { delAsk = true; saveAsk = false; askLater(); paint(); return; }
+					delAsk = false; lookMyDelete();
+				} }, [ delAsk ? 'Нажмите ещё раз — тема удалится' : 'Удалить' ]));
+				st = 'На основе темы «' + base.name + '». Каждое изменение сразу сохраняется на роутере.';
+			} else {
+				if (chg.length) act.push(E('button', { 'type': 'button', 'class': 'cbi-button', 'click': function () { setTheme(pref); toast('Тема «' + t.name + '» снова такая, как задумана', 'info'); } }, [ 'Вернуть как в теме' ]));
+				act.push(E('button', { 'type': 'button', 'class': 'cbi-button' + (saveAsk ? ' cbi-button-remove' : chg.length ? ' cbi-button-positive' : ''), 'click': function () {
+					if (LOOK.my && !saveAsk) { saveAsk = true; delAsk = false; askLater(); paint(); return; }
+					saveAsk = false; lookMySave();
+				} }, [ saveAsk ? 'Нажмите ещё раз — своя тема заменится' : 'Сохранить в свою тему' ]));
+				st = chg.length ? 'Изменено: ' + chg.join(', ') + '. Сохраните, чтобы не потерять при смене темы.' : 'Как задумано автором темы.';
+			}
+			return E('div', { 'class': 'zm-card zm-lk-cur' + (chg.length ? ' zm-lk-cur-chg' : '') }, [
+				E('span', { 'class': 'zm-lk-cur-pv', 'style': 'background:' + pv[0], 'aria-hidden': 'true' }, [ E('i', { 'style': 'background:' + pv[1] }), E('b', { 'style': 'background:' + pv[2] }), E('u', { 'style': 'background:' + pv[3] }) ]),
+				E('div', { 'class': 'zm-lk-cur-t' }, [ E('b', {}, [ isMy ? 'Своя тема' : 'Тема «' + t.name + '»' ]), E('small', {}, [ st ]) ]),
+				E('div', { 'class': 'zm-lk-cur-act' }, act)
+			]);
+		})());
 		if (lookTab === 'theme') {
 			var grid = E('div', { 'class': 'zm-lk-themes', 'role': 'radiogroup', 'aria-label': 'Тема' });
 			THEMES.forEach(function (t) {
-				var pv = LOOK_PV[t.id] || [ '#eee', '#fff', '#2d5bff', '#111' ], on = cur === t.id;
-				grid.appendChild(E('button', { 'type': 'button', 'class': 'zm-lk-th' + (on ? ' zm-active' : ''), 'role': 'radio', 'aria-checked': on ? 'true' : 'false', 'title': t.name,
-					'click': function () {
-						if (cur !== t.id) setTheme(t.id);
-						paint();
-					} }, [
+				var pv = lookPvOf(t.id), on = cur === t.id, my = !!t.custom;
+				grid.appendChild(E('button', { 'type': 'button', 'class': 'zm-lk-th' + (on ? ' zm-active' : '') + (my ? ' zm-lk-th-my' + (L.my ? '' : ' zm-lk-th-new') : ''), 'role': 'radio', 'aria-checked': on ? 'true' : 'false',
+					'title': my ? (L.my ? 'Своя тема — ваши сохранённые настройки' : 'Создать свою тему из того, что сейчас на экране') : on && lookChanged().length ? 'Вернуть тему «' + t.name + '» такой, как задумана' : t.name,
+					'click': function () { if (!on || (!my && lookChanged().length)) setTheme(t.id); } }, [
 					E('span', { 'class': 'zm-lk-pv', 'style': 'background:' + pv[0] }, [
 						E('i', { 'style': 'background:' + pv[1] }),
-						E('em', {}, [ E('u', { 'style': 'background:' + pv[1] + ';width:78%' }), E('u', { 'style': 'background:' + pv[2] + ';width:42%' }), E('u', { 'style': 'background:' + pv[3] + ';opacity:.25;width:64%' }) ])
+						E('em', {}, [ E('u', { 'style': 'background:' + pv[1] + ';width:78%' }), E('u', { 'style': 'background:' + pv[2] + ';width:42%' }), E('u', { 'style': 'background:' + pv[3] + ';opacity:.25;width:64%' }) ]),
+						my ? E('s', { 'class': 'zm-lk-pv-my' }, [ icon('brush') ]) : E([])
 					]),
-					E('span', { 'class': 'zm-lk-thn' }, [ E('b', {}, [ t.name ]), E('small', {}, [ t.fx ? 'живой фон' : (t.dark ? 'тёмная' : 'светлая') ]) ])
+					E('span', { 'class': 'zm-lk-thn' }, [ E('b', {}, [ t.name ]), E('small', {}, [ my ? (L.my ? 'ваши настройки' : 'создать') : t.fx ? 'живой фон' : (t.dark ? 'тёмная' : 'светлая') ]) ])
 				]));
 			});
-			kids.push(lookCard('Тема', THEMES.length + ' тем. У игровых тем свой живой фон — включается на вкладке «Фон и плавность».', [ grid ]));
+			kids.push(lookCard('Тема', 'Тема включается такой, какой её задумал автор: со своими цветами, формой, шрифтом и фоном. Понравилось, что получилось после настройки, — сохраните в «Свою тему».', [ grid ]));
 			var sw = E('div', { 'class': 'zm-lk-acc', 'role': 'radiogroup', 'aria-label': 'Цвет акцента' });
 			sw.appendChild(E('button', { 'type': 'button', 'class': 'zm-lk-sw zm-lk-sw-auto' + (!L.acc ? ' zm-active' : ''), 'title': 'Как в теме', 'aria-label': 'Как в теме', 'click': function () { lookSet('acc', ''); paint(); } }));
 			LOOK_ACC.forEach(function (c) {
@@ -65925,7 +66067,18 @@ function lookPage() {
 				E('input', { 'type': 'color', 'value': L.acc || '#2d5bff', 'change': function () { lookSet('acc', this.value.toLowerCase()); paint(); } }),
 				E('span', {}, [ own ? L.acc : 'Свой' ])
 			]));
-			kids.push(lookCard('Цвет акцента', 'Кнопки, выбранные пункты, переключатели и полоски заголовков. «Как в теме» — родной цвет темы.', [ sw ]));
+			kids.push(lookCard('Цвет', 'Акцент — кнопки, выбранные пункты, переключатели и полоски заголовков. Радуга — родной цвет темы.', [
+				sw,
+				lookRow('Окраска фона', lookSeg([ [ '', 'Нет' ], [ 's', 'Лёгкая' ], [ 'm', 'Заметная' ] ], L.tint, function (v) { lookSet('tint', v); paint(); })),
+				E('p', { 'class': 'zm-hint' }, [ 'Фон, карточки и боковое меню чуть принимают цвет акцента — как цвет элементов в Windows и тонировка окон в macOS.' ])
+			]));
+		} else if (lookTab === 'form') {
+			kids.push(lookCard('Форма', 'Углы, обводка и тени карточек, кнопок и меню. «Как в теме» — так, как задумал автор темы.', [
+				lookRow('Углы', lookSeg([ [ 'md', 'Как в теме' ], [ 'sharp', 'Острые' ], [ 'soft', 'Мягкие' ], [ 'round', 'Круглые' ] ], L.rad, function (v) { lookSet('rad', v); paint(); })),
+				lookRow('Обводка', lookSeg([ [ 'md', 'Как в теме' ], [ 'none', 'Без обводки' ], [ 'strong', 'Чёткая' ], [ 'acc', 'Цветом акцента' ] ], L.bord, function (v) { lookSet('bord', v); paint(); })),
+				lookRow('Тени', lookSeg([ [ 'md', 'Как в теме' ], [ 'none', 'Без теней' ], [ 'soft', 'Мягкие' ], [ 'deep', 'Глубокие' ] ], L.shad, function (v) { lookSet('shad', v); paint(); })),
+				lookSw(!!L.glass, 'Прозрачные карточки при живом фоне', 'Фон просвечивает сквозь карточки. Выключите — карточки станут сплошными, а фон будет виден только между ними.', function () { lookSet('glass', L.glass ? 0 : 1); paint(); })
+			]));
 		} else if (lookTab === 'text') {
 			var fg = E('div', { 'class': 'zm-lk-fonts', 'role': 'radiogroup', 'aria-label': 'Шрифт' });
 			LOOK_FONTS.forEach(function (f) {
@@ -65935,20 +66088,20 @@ function lookPage() {
 					E('b', { 'style': f.css ? 'font-family:' + f.css : '' }, [ 'Аа' ]), E('small', {}, [ f.name ])
 				]));
 			});
-			kids.push(lookCard('Шрифт', 'Ставится поверх любой темы. «Системный» не скачивается и работает без интернета, остальные шрифты подгружаются с Google Fonts, как шрифты тем.', [
+			kids.push(lookCard('Шрифт', '«Как в теме» — шрифт, который выбрал автор темы. «Системный» не скачивается и работает без интернета, остальные подгружаются с Google Fonts.', [
 				fg,
-				lookRow('Масштаб страниц', lookSeg(LOOK_ZOOM, L.zoom, function (v) { lookSet('zoom', +v); paint(); })),
-				lookRow('Журналы и код', E('select', { 'class': 'cbi-input-select', 'change': function () { lookSet('mono', this.value); paint(); } }, LOOK_MONO.map(function (m) { return E('option', { 'value': m.id, 'selected': L.mono === m.id ? '' : null }, [ m.name ]); }))),
-				E('p', { 'class': 'zm-hint' }, [ 'Масштаб меняет страницы целиком — текст, кнопки и отступы, как масштаб в браузере, но меню и заголовок остаются прежними.' ])
+				lookRow('Журналы и код', E('select', { 'class': 'cbi-input-select', 'change': function () { lookSet('mono', this.value); paint(); } }, LOOK_MONO.map(function (m) { return E('option', { 'value': m.id, 'selected': L.mono === m.id ? '' : null }, [ m.name ]); })))
 			]));
 		} else if (lookTab === 'fx') {
 			var ak = animKind();
 			var lvl = !ak ? 0 : (L.fps / 30) * (L.dpr === 2 ? 2.5 : 1) * (ANIM_HEAVY.test(ak) ? 1.6 : 1), bar = Math.min(100, Math.round(lvl * 28)) || 2;
 			var batN = !navigator.getBattery;
 			var lpk = animPicker(function () { paint(); }), lrr = animReactRow(function () { paint(); });
-			kids.push(lookCard('Живой фон', 'Анимация за карточками панели. Фоны тем можно ставить с любой темой.', [
+			kids.push(lookCard('Живой фон', 'Анимация за карточками панели. Фон входит в тему: при выборе темы ставится её родной, а «Своя тема» запоминает ваш.', [
 				E('div', { 'class': 'zm-lk-bgpick' }, [ E('div', { 'class': 'zm-lk-bgname' }, [ ak ? 'Сейчас: ' + ANIMS.filter(function (a) { return a.id === ak; })[0].name : 'Сейчас: фон выключен' ]), lpk.el, lrr.el,
-					E('button', { 'type': 'button', 'class': 'cbi-button', 'disabled': ak ? null : '', 'click': function () { bgoEnter(); } }, [ 'Скрыть панель — оставить только фон' ]) ]),
+					E('button', { 'type': 'button', 'class': 'cbi-button', 'disabled': ak ? null : '', 'click': function () { bgoEnter(); } }, [ 'Скрыть панель — оставить только фон' ]) ])
+			]));
+			kids.push(lookCard('Плавность', 'Эти настройки ваши личные: они не входят в тему и не сбрасываются при её смене.', [
 				lookRow('Кадров в секунду', lookSeg([ [ 15, '15' ], [ 30, '30' ], [ 60, '60' ] ], L.fps, function (v) { lookSet('fps', +v); paint(); })),
 				lookRow('Чёткость фона', lookSeg([ [ 1, 'Обычная' ], [ 2, 'Высокая' ] ], L.dpr, function (v) { lookSet('dpr', +v); paint(); })),
 				E('div', { 'class': 'zm-lk-gpu' }, [ E('span', {}, [ 'Нагрузка на видеокарту' ]), E('span', { 'class': 'zm-lk-bar' }, [ E('i', { 'style': 'width:' + bar + '%;background-size:' + (10000 / Math.max(bar, 1)).toFixed(2) + '% 100%' }) ]), E('b', {}, [ !ak ? (lookOnBattery() ? 'фон выключен — работа от батареи' : 'фон выключен') : lvl < 1.2 ? 'низкая' : lvl < 2.6 ? 'средняя' : 'высокая' ]) ]),
@@ -65957,25 +66110,30 @@ function lookPage() {
 				lookSw(!!L.batt, 'Выключать фон при работе от батареи', batN ? 'Этот браузер не сообщает о батарее — настройка сработает в Chrome, Edge и Opera.' : 'Ноутбук отключили от зарядки — фон выключается, подключили — включается снова.', function () { lookSet('batt', L.batt ? 0 : 1); paint(); })
 			]));
 		} else {
-			kids.push(lookCard('Интерфейс', '', [
+			kids.push(lookCard('Интерфейс', 'Эти настройки ваши личные: они не входят в тему и не сбрасываются при её смене.', [
+				lookRow('Масштаб страниц', lookSeg(LOOK_ZOOM, L.zoom, function (v) { lookSet('zoom', +v); paint(); })),
 				lookRow('Плотность', lookSeg([ [ 'n', 'Обычная' ], [ 'c', 'Компактная' ] ], L.dens, function (v) { lookSet('dens', v); paint(); })),
-				lookRow('Углы', lookSeg([ [ 'sharp', 'Острые' ], [ 'md', 'Как в теме' ], [ 'round', 'Круглые' ] ], L.rad, function (v) { lookSet('rad', v); paint(); })),
+				lookRow('Контраст текста', lookSeg([ [ 'n', 'Обычный' ], [ 'h', 'Повышенный' ] ], L.ctr, function (v) { lookSet('ctr', v); paint(); })),
+				E('p', { 'class': 'zm-hint' }, [ 'Масштаб меняет страницы целиком — текст, кнопки и отступы, как масштаб в браузере, но меню и заголовок остаются прежними. Повышенный контраст делает серые подписи и подсказки темнее на светлых темах и светлее на тёмных.' ]),
 				lookSw(!!L.motion, 'Анимации интерфейса', 'Плавное появление, мигающие точки статуса, переходы. Выключите — панель станет полностью статичной. Индикаторы загрузки крутятся всегда.', function () { lookSet('motion', L.motion ? 0 : 1); paint(); }),
-				lookSw(!!L.glass, 'Прозрачные карточки при живом фоне', 'Фон просвечивает сквозь карточки. Выключите — карточки станут сплошными, а фон будет виден только между ними.', function () { lookSet('glass', L.glass ? 0 : 1); paint(); }),
 				lookSw(window.zmwRadio.shown(), 'Радио в боковом меню', 'Мини-плеер под меню. Выключите — плеер скроется, а играющее радио остановится.', function () { window.zmwRadio.set(!window.zmwRadio.shown()); paint(); })
 			]));
 		}
 		var pasteBox = null;
 		var foot = E('div', { 'class': 'zm-actions zm-lk-foot' }, [
-			E('button', { 'type': 'button', 'class': 'cbi-button' + (lookResetAsk ? ' cbi-button-remove' : ''), 'click': function () {
+			E('button', { 'type': 'button', 'class': 'cbi-button' + (lookResetAsk ? ' cbi-button-remove' : ''), 'title': isMy ? 'Своя тема станет такой, как её основа, а личные настройки вернутся к обычным' : 'Тема станет такой, как задумана, а личные настройки вернутся к обычным', 'click': function () {
 				if (!lookResetAsk) { lookResetAsk = true; paint(); setTimeout(function () { if (lookResetAsk) { lookResetAsk = false; if (lookPageRender) lookPageRender(); } }, 4000); return; }
 				lookResetAsk = false;
-				LOOK = lookClean(null); sset(K_LOOK, lookJson(), true); lookPush(); lookApply(); applyTheme();
-				if (dust) dust.stop();
-				animSet(themeFx() || '0');
+				var my = LOOK.my, b;
+				LOOK = lookClean({ my: my });
+				if (isMy && LOOK.my) {
+					LOOK_VIS.forEach(function (k) { LOOK.my[k] = LOOK_DEF[k]; });
+					LOOK.my.a = themeFxOf(themeById(LOOK.my.b));
+					b = themeById(LOOK.my.b);
+				}
 				if (!radio.show) window.zmwRadio.set(true);
-				toast('Оформление и фон сброшены — как будто тему выбрали заново', 'info');
-				paint();
+				setTheme(pref);
+				toast(b ? 'Своя тема сброшена — теперь она как «' + b.name + '»' : 'Оформление сброшено — тема такая, как задумана', 'info');
 			} }, [ lookResetAsk ? 'Нажмите ещё раз, чтобы сбросить' : 'Сбросить оформление' ]),
 			E('button', { 'type': 'button', 'class': 'cbi-button', 'click': function () {
 				var txt = JSON.stringify({ theme: themePref(), anim: sget(K_ANIM) || '0', look: JSON.parse(lookJson()) });
@@ -65988,27 +66146,28 @@ function lookPage() {
 		]);
 		var ta = E('textarea', { 'class': 'cbi-input-textarea zm-lk-paste', 'rows': '3', 'spellcheck': 'false', 'placeholder': 'Вставьте сюда скопированные настройки оформления' });
 		pasteBox = E('div', { 'class': 'zm-card zm-lk-pastebox', 'hidden': '' }, [ ta, E('div', { 'class': 'zm-actions' }, [ E('button', { 'type': 'button', 'class': 'cbi-button cbi-button-positive', 'click': function () {
-			var o;
+			var o, th;
 			try { o = JSON.parse(ta.value); } catch (e) { toast('Это не похоже на настройки оформления', 'error'); return; }
 			if (!o || typeof o !== 'object' || !o.look) { toast('Это не похоже на настройки оформления', 'error'); return; }
-			LOOK = lookClean(o.look); sset(K_LOOK, lookJson(), true); lookPush(); lookApply();
+			LOOK = lookClean(o.look); lookSave();
 			if (radio.show !== !!LOOK.radio) window.zmwRadio.set(!!LOOK.radio);
-			if (o.theme && (o.theme === 'auto' || themeById(o.theme)) && o.theme !== themePref()) { if (o.theme === 'auto') { sset(K_THEME, null, true); themeSave('auto'); } else setTheme(o.theme); }
-			if (o.anim === '0' || o.anim === 'theme' || ANIM_RE.test(o.anim || '')) animSet(o.anim === '0' ? '' : o.anim);
-			applyTheme(); dustSync();
+			th = o.theme === 'minimal' ? 'micro' : o.theme === 'blocks' ? 'contrast' : o.theme;
+			if (o.anim === '0' || o.anim === 'theme' || o.anim === '1' || ANIM_RE.test(o.anim || '')) sset(K_ANIM, o.anim, true);
+			if (th && (th === 'auto' || themeById(th))) setTheme(th, true);
+			else { lookApply(); applyTheme(); dustSync(); }
 			toast('Настройки оформления применены', 'info');
 			paint();
 		} }, [ 'Применить' ]) ]) ]);
-		var acc = L.acc || '';
 		side = E('div', { 'class': 'zm-lk-side' }, [ E('div', { 'class': 'zm-card zm-lk-prev' }, [
 			E('h3', {}, [ 'Пример' ]),
 			E('p', { 'class': 'zm-hint zm-lk-hint' }, [ 'Так выглядят страницы панели с этими настройками.' ]),
 			E('div', { 'class': 'zm-lk-pvrow' }, [ E('b', {}, [ 'Zapret · стратегия v3' ]), E('span', { 'class': 'zm-badge zm-ok' }, [ E('span', { 'class': 'zm-dot' }), 'запущен' ]) ]),
-			E('p', {}, [ 'Без Zapret открылось 3 из 37 адресов, с gVideo7 — 23 из 25 серверов googlevideo.' ]),
+			E('p', {}, [ 'Без Zapret открылось 3 из 32 адресов, с gVideo7 — 30 из 32.' ]),
 			E('div', { 'class': 'zm-actions' }, [ E('button', { 'type': 'button', 'class': 'cbi-button cbi-button-positive' }, [ 'Применить' ]), E('button', { 'type': 'button', 'class': 'cbi-button' }, [ 'Проверить' ]) ]),
 			lookSeg([ [ 'a', 'gVideo7' ], [ 'b', 'gVideo8' ], [ 'c', 'gVideo9' ] ], 'a', function () {}),
+			E('div', { 'class': 'zm-lk-pvtiles' }, [ E('div', { 'class': 'zm-tile zm-active' }, [ 'YouTube' ]), E('div', { 'class': 'zm-tile' }, [ 'Discord' ]) ]),
 			E('div', { 'class': 'zm-swrow' }, [ E('div', { 'class': 'zm-switch zm-switch-on' }, [ E('span') ]), E('div', { 'class': 'zm-swrow-text' }, [ E('div', { 'class': 'zm-swrow-label' }, [ 'Переключатель' ]) ]) ]),
-			E('pre', { 'class': 'zm-log zm-show zm-lk-log' }, [ '==> [3/11] gVideo3\n   в стратегии: #gvideo3 · #Yv08\n   результат: 21 из 25' ])
+			E('pre', { 'class': 'zm-log zm-show zm-lk-log' }, [ '==> [3/11] gVideo3\n   в стратегии: #gvideo3 · #Yv08\n   результат: 30 из 32' ])
 		]) ]);
 		body = E('div', { 'class': 'zm-lk-main' }, kids.concat([ foot, pasteBox ]));
 		wrap.appendChild(E('div', { 'class': 'zm-lk-grid' }, [ tabs, body, side ]));
@@ -68344,53 +68503,6 @@ html[data-theme="bento"] #zmw-view .zm-badge, html[data-theme="bento"] .zm-dock 
 html[data-theme="bento"] #zmw-view .zm-log, html[data-theme="bento"] #zmw-view .zm-config-editor { border-radius: 24px; }
 html[data-theme="bento"] .zmw-login-card, html[data-theme="bento"] .zmw-modal, html[data-theme="bento"] .zmw-theme-menu { border: 0; border-radius: 28px; background: #ffffff; backdrop-filter: none; }
 
-html[data-theme="minimal"] {
-	--font: "IBM Plex Sans", system-ui, sans-serif;
-	--a1: #0078e8; --a2: #0078e8; --a3: #0078e8;
-	--grad: #0078e8; --grad-soft: transparent; --ring: 0 0 0 2px rgba(0,120,232,.35);
-	--radius: 0px; --radius-sm: 0px;
-	--bg: #ffffff; --bg-glow-1: transparent; --bg-glow-2: transparent;
-	--surface: #ffffff; --surface-solid: #ffffff; --surface-2: #fafafa; --surface-3: #f0f0f0;
-	--side-bg: #ffffff; --border: #ececec; --border-2: #e0e0e0;
-	--text: #111111; --text-2: #333333; --muted: #6b6b6b;
-	--shadow: none; --shadow-lg: 0 20px 60px -30px rgba(0,0,0,.25);
-	--input-bg: #ffffff;
-	--ok: #111111; --ok-bg: transparent; --ok-dot: #0078e8;
-	--bad: #b3261e; --bad-bg: transparent; --bad-dot: #b3261e;
-	--warn: #111111; --warn-bg: transparent; --warn-dot: #c77700;
-	--off: #6b6b6b; --off-bg: transparent;
-	color-scheme: light;
-}
-html[data-theme="minimal"] body.zmw-body { background-image: none; font-weight: 300; }
-html[data-theme="minimal"] .zmw-orbs, html[data-theme="minimal"] .zmw-grid-bg { display: none; }
-html[data-theme="minimal"] .zmw-top { --zmw-top-bg: #ffffff; background: var(--zmw-top-bg); }
-html[data-theme="minimal"] .zmw-title { font-weight: 300; font-size: 34px; letter-spacing: -.03em; }
-html[data-theme="minimal"] .zmw-side { background: #ffffff; border-right: 1px solid #ececec; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
-html[data-theme="minimal"] .zmw-logo svg { filter: grayscale(1) brightness(.2); }
-html[data-theme="minimal"] .zmw-nav-item { border-radius: 0; font-weight: 400; color: #6b6b6b; }
-html[data-theme="minimal"] .zmw-nav-item:hover { background: none; color: #111111; }
-html[data-theme="minimal"] .zmw-nav-item.zmw-active { background: none; color: #111111; font-weight: 500; }
-html[data-theme="minimal"] .zmw-nav-item.zmw-active::before { background: #111111; width: 2px; border-radius: 0; }
-html[data-theme="minimal"] .zmw-nav-ico { opacity: .5; }
-html[data-theme="minimal"] .zmw-mem-bar { height: 2px; background: #ececec; border-radius: 0; }
-html[data-theme="minimal"] .zmw-mem-bar i { background: #111111; border-radius: 0; }
-html[data-theme="minimal"] #zmw-view .zm-card { border: 0; border-top: 1px solid #ececec; border-radius: 0; box-shadow: none; background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; padding: 28px 0; }
-html[data-theme="minimal"] #zmw-view .zm-card:hover { box-shadow: none; }
-html[data-theme="minimal"] #zmw-view .zm-card h3 { font-weight: 400; font-size: 13px; text-transform: uppercase; letter-spacing: .12em; color: #6b6b6b; }
-html[data-theme="minimal"] #zmw-view .zm-card h3::before { display: none; }
-html[data-theme="minimal"] #zmw-view .cbi-button, html[data-theme="minimal"] .zmw-icon-btn, html[data-theme="minimal"] .zm-dock .cbi-button, html[data-theme="minimal"] .zmw-modal .cbi-button { border-radius: 0; border: 1px solid #111111; background: #ffffff; color: #111111; box-shadow: none; font-weight: 400; }
-html[data-theme="minimal"] #zmw-view .cbi-button:hover, html[data-theme="minimal"] .zmw-icon-btn:hover, html[data-theme="minimal"] .zm-dock .cbi-button:hover, html[data-theme="minimal"] .zmw-modal .cbi-button:hover { background: #111111; color: #ffffff; transform: none; }
-html[data-theme="minimal"] #zmw-view .cbi-button-positive, html[data-theme="minimal"] #zmw-view .cbi-button-positive:hover, html[data-theme="minimal"] .zmw-btn-primary, html[data-theme="minimal"] .zm-dock .cbi-button-positive, html[data-theme="minimal"] .zm-dock .cbi-button-positive:hover, html[data-theme="minimal"] .zmw-modal .cbi-button-positive, html[data-theme="minimal"] .zmw-modal .cbi-button-positive:hover { background: #111111; color: #ffffff; border: 1px solid #111111; box-shadow: none; }
-html[data-theme="minimal"] #zmw-view .cbi-button-remove, html[data-theme="minimal"] .zm-dock .cbi-button-remove, html[data-theme="minimal"] .zmw-modal .cbi-button-remove { border-color: #b3261e; color: #b3261e; background: #ffffff; }
-html[data-theme="minimal"] #zmw-view .cbi-button-remove:hover, html[data-theme="minimal"] .zm-dock .cbi-button-remove:hover, html[data-theme="minimal"] .zmw-modal .cbi-button-remove:hover { background: #b3261e; color: #ffffff; }
-html[data-theme="minimal"] #zmw-view .zm-tile { border-radius: 0; border: 1px solid #e0e0e0; background: #ffffff; font-weight: 400; }
-html[data-theme="minimal"] #zmw-view .zm-tile.zm-active { border-color: #111111; background: #ffffff; color: #111111; box-shadow: inset 0 0 0 1px #111111; }
-html[data-theme="minimal"] #zmw-view .zm-tile.zm-active::before { color: #0078e8; }
-html[data-theme="minimal"] #zmw-view .zm-badge, html[data-theme="minimal"] .zm-dock .zm-badge, html[data-theme="minimal"] .zmw-modal .zm-badge { padding-left: 0; font-weight: 400; }
-html[data-theme="minimal"] #zmw-view .zm-badge .zm-dot, html[data-theme="minimal"] .zm-dock .zm-badge .zm-dot, html[data-theme="minimal"] .zmw-modal .zm-badge .zm-dot { width: 6px; height: 6px; box-shadow: none; }
-html[data-theme="minimal"] #zmw-view .zm-log, html[data-theme="minimal"] #zmw-view .zm-config-editor { border-radius: 0; }
-html[data-theme="minimal"] .zmw-login-card, html[data-theme="minimal"] .zmw-modal, html[data-theme="minimal"] .zmw-theme-menu { border-radius: 0; border: 1px solid #111111; box-shadow: none; background: #ffffff; backdrop-filter: none; }
-html[data-theme="minimal"] .zmw-theme-opt { border-radius: 0; }
 
 html[data-theme="retro"] {
 	--font: Tahoma, Verdana, "Segoe UI", sans-serif;
@@ -68512,7 +68624,6 @@ html[data-theme="depth"] .zmw-login-card, html[data-theme="depth"] .zmw-modal, h
 html[data-theme="bento"] #zmw-view .zm-tile.zm-active::before { color: #9fe0b0; }
 html[data-theme="bento"] .zmw-theme-opt.zmw-on { background: #1c1a17; color: #ffffff; }
 html[data-theme="bento"] .zmw-theme-opt.zmw-on .zmw-theme-mark { color: #9fe0b0; }
-html[data-theme="minimal"] .zmw-theme-opt.zmw-on { background: #f3f3f3; }
 html[data-theme="retro"] #zmw-view .zm-tile.zm-active::before { color: #ffff00; }
 html[data-theme="retro"] .zmw-theme-opt:hover .zmw-theme-mark, html[data-theme="retro"] .zmw-theme-opt.zmw-on .zmw-theme-mark { color: #ffff00; }
 html[data-theme="retro"] .zmw-nav-item { padding-left: 12px; }
@@ -68565,10 +68676,10 @@ html.zm-bgo-idle, html.zm-bgo-idle * { cursor: none !important; }
 @media (prefers-reduced-motion: reduce) { .zmw-bgo, .zmw-bgo-hint, html.zm-bg-only body > * { transition: none !important; } }
 html[data-theme="micro"] .zmw-anim-group { border-top-color: #e3e6ee; }
 html[data-theme="micro"] .zmw-anim-seg { background: #f0f3fa; }
-html[data-theme="retro"] .zmw-anim-seg, html[data-theme="minimal"] .zmw-anim-seg, html[data-theme="matrix"] .zmw-anim-seg, html[data-theme="neon"] .zmw-anim-seg, html[data-theme="noir"] .zmw-anim-seg { border-radius: 0; }
+html[data-theme="retro"] .zmw-anim-seg, html[data-theme="matrix"] .zmw-anim-seg, html[data-theme="neon"] .zmw-anim-seg, html[data-theme="noir"] .zmw-anim-seg { border-radius: 0; }
 html[data-theme="micro"] .zmw-bg-head { border-top-color: #e3e6ee; }
 html[data-theme="micro"] .zmw-bg-react { background: #f0f3fa; }
-html[data-theme="retro"] :is(.zmw-bg-tile, .zmw-bg-react, .zmw-bg-hide), html[data-theme="minimal"] :is(.zmw-bg-tile, .zmw-bg-react, .zmw-bg-hide), html[data-theme="matrix"] :is(.zmw-bg-tile, .zmw-bg-react, .zmw-bg-hide), html[data-theme="neon"] :is(.zmw-bg-tile, .zmw-bg-react, .zmw-bg-hide), html[data-theme="noir"] :is(.zmw-bg-tile, .zmw-bg-react, .zmw-bg-hide), html[data-zm-rad="sharp"] :is(.zmw-bg-tile, .zmw-bg-react, .zmw-bg-hide) { border-radius: 0; }
+html[data-theme="retro"] :is(.zmw-bg-tile, .zmw-bg-react, .zmw-bg-hide), html[data-theme="matrix"] :is(.zmw-bg-tile, .zmw-bg-react, .zmw-bg-hide), html[data-theme="neon"] :is(.zmw-bg-tile, .zmw-bg-react, .zmw-bg-hide), html[data-theme="noir"] :is(.zmw-bg-tile, .zmw-bg-react, .zmw-bg-hide), html[data-zm-rad="sharp"] :is(.zmw-bg-tile, .zmw-bg-react, .zmw-bg-hide) { border-radius: 0; }
 
 html[data-theme="micro"] {
 	--font: "Onest", system-ui, sans-serif;
@@ -68648,10 +68759,6 @@ html[data-theme="bento"] #zmw-view .zm-actions.zmw-tabs { background: #ffffff; b
 html[data-theme="bento"] #zmw-view .zmw-tabs .cbi-button, html[data-theme="bento"] .zm-dock .zmw-tabs .cbi-button, html[data-theme="bento"] .zmw-modal .zmw-tabs .cbi-button { background: transparent; border: 0; border-radius: 999px; color: #6f685d; box-shadow: none; }
 html[data-theme="bento"] #zmw-view .zmw-tabs .cbi-button:hover, html[data-theme="bento"] .zm-dock .zmw-tabs .cbi-button:hover, html[data-theme="bento"] .zmw-modal .zmw-tabs .cbi-button:hover { background: #f6f2ea; color: #1c1a17; }
 html[data-theme="bento"] #zmw-view .zmw-tabs .cbi-button-positive, html[data-theme="bento"] #zmw-view .zmw-tabs .cbi-button-positive:hover, html[data-theme="bento"] .zm-dock .zmw-tabs .cbi-button-positive, html[data-theme="bento"] .zm-dock .zmw-tabs .cbi-button-positive:hover, html[data-theme="bento"] .zmw-modal .zmw-tabs .cbi-button-positive, html[data-theme="bento"] .zmw-modal .zmw-tabs .cbi-button-positive:hover { background: #1c1a17; color: #ffffff; }
-html[data-theme="minimal"] #zmw-view .zm-actions.zmw-tabs { background: transparent; border: 0; border-bottom: 1px solid #e0e0e0; border-radius: 0; box-shadow: none; padding: 0; gap: 24px; backdrop-filter: none; }
-html[data-theme="minimal"] #zmw-view .zmw-tabs .cbi-button, html[data-theme="minimal"] .zm-dock .zmw-tabs .cbi-button, html[data-theme="minimal"] .zmw-modal .zmw-tabs .cbi-button { background: transparent; border: 0; border-bottom: 2px solid transparent; border-radius: 0; color: #6b6b6b; padding: 10px 0; box-shadow: none; font-weight: 400; }
-html[data-theme="minimal"] #zmw-view .zmw-tabs .cbi-button:hover, html[data-theme="minimal"] .zm-dock .zmw-tabs .cbi-button:hover, html[data-theme="minimal"] .zmw-modal .zmw-tabs .cbi-button:hover { background: transparent; color: #111111; }
-html[data-theme="minimal"] #zmw-view .zmw-tabs .cbi-button-positive, html[data-theme="minimal"] #zmw-view .zmw-tabs .cbi-button-positive:hover, html[data-theme="minimal"] .zm-dock .zmw-tabs .cbi-button-positive, html[data-theme="minimal"] .zm-dock .zmw-tabs .cbi-button-positive:hover, html[data-theme="minimal"] .zmw-modal .zmw-tabs .cbi-button-positive, html[data-theme="minimal"] .zmw-modal .zmw-tabs .cbi-button-positive:hover { background: transparent; color: #111111; border-bottom-color: #111111; font-weight: 500; }
 html[data-theme="retro"] #zmw-view .zm-actions.zmw-tabs { background: transparent; border: 0; border-bottom: 2px solid #ffffff; border-radius: 0; box-shadow: none; padding: 0 0 0 4px; gap: 2px; align-items: flex-end; backdrop-filter: none; }
 html[data-theme="retro"] #zmw-view .zmw-tabs .cbi-button, html[data-theme="retro"] .zm-dock .zmw-tabs .cbi-button, html[data-theme="retro"] .zmw-modal .zmw-tabs .cbi-button { background: #c0c0c0; color: #000000; border-radius: 0; border-top: 2px solid #ffffff; border-left: 2px solid #ffffff; border-right: 2px solid #000000; border-bottom: 0; box-shadow: inset -1px 0 0 #808080; min-height: 30px; padding: 5px 16px; margin: 0; outline: none; font-weight: 400; }
 html[data-theme="retro"] #zmw-view .zmw-tabs .cbi-button:hover, html[data-theme="retro"] .zm-dock .zmw-tabs .cbi-button:hover, html[data-theme="retro"] .zmw-modal .zmw-tabs .cbi-button:hover { background: #c0c0c0; color: #000000; }
@@ -68673,8 +68780,6 @@ html[data-theme="ink"] .zmw-icon-btn.zmw-link-kvn, html[data-theme="ink"] .zmw-i
 html[data-theme="ink"] .zmw-icon-btn.zmw-link-tg, html[data-theme="ink"] .zmw-icon-btn.zmw-link-tg:hover { background: #d6f0ff; color: #0a0a0a; }
 html[data-theme="bento"] .zmw-icon-btn.zmw-link-kvn, html[data-theme="bento"] .zmw-icon-btn.zmw-link-kvn:hover { background: #1c1a17; color: #ffffff; }
 html[data-theme="bento"] .zmw-icon-btn.zmw-link-tg, html[data-theme="bento"] .zmw-icon-btn.zmw-link-tg:hover { background: #dcecff; color: #1f4f82; }
-html[data-theme="minimal"] .zmw-icon-btn.zmw-link-kvn, html[data-theme="minimal"] .zmw-icon-btn.zmw-link-kvn:hover { background: #111111; color: #ffffff; border-color: #111111; }
-html[data-theme="minimal"] .zmw-icon-btn.zmw-link-tg, html[data-theme="minimal"] .zmw-icon-btn.zmw-link-tg:hover { background: #ffffff; color: #0060bb; border-color: #0060bb; }
 html[data-theme="retro"] .zmw-icon-btn.zmw-link-kvn, html[data-theme="retro"] .zmw-icon-btn.zmw-link-kvn:hover { color: #000080; font-weight: 700; }
 html[data-theme="retro"] .zmw-icon-btn.zmw-link-tg, html[data-theme="retro"] .zmw-icon-btn.zmw-link-tg:hover { color: #000080; }
 html[data-theme="depth"] .zmw-icon-btn.zmw-link-kvn, html[data-theme="depth"] .zmw-icon-btn.zmw-link-kvn:hover { background: linear-gradient(180deg, #33c6ff, #0090ff); color: #04111f; border-color: #0090ff; }
@@ -69337,7 +69442,6 @@ html.zm-dust-on[data-theme="bento"] #zmw-view .zm-cards > .zm-card:nth-child(4n+
 html.zm-dust-on[data-theme="bento"] #zmw-view .zm-tg-board .zm-card.zm-tg-n2 { background-color: color-mix(in srgb, #dcecff var(--zm-glass), transparent); }
 html.zm-dust-on[data-theme="bento"] #zmw-view .zm-tg-board .zm-card.zm-tg-n3 { background-color: color-mix(in srgb, #ffe6c4 var(--zm-glass), transparent); }
 html.zm-dust-on[data-theme="bento"] #zmw-view .zm-tg-board .zm-card.zm-tg-n4 { background-color: color-mix(in srgb, #dff2e2 var(--zm-glass), transparent); }
-html.zm-dust-on[data-theme="minimal"] #zmw-view .zm-card { background-color: transparent; }
 html.zm-dust-on[data-theme] .zmw-side { background-color: color-mix(in srgb, var(--surface-solid) var(--zm-glass-side), transparent); background-image: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
 html.zm-dust-on { --zm-glass-top: 86%; }
 html.zm-dust-on[data-theme] .zmw-top { background: color-mix(in srgb, var(--surface-solid) var(--zm-glass-top), transparent); border-bottom: 1px solid var(--border); backdrop-filter: blur(12px) saturate(1.2); -webkit-backdrop-filter: blur(12px) saturate(1.2); }
@@ -69562,11 +69666,20 @@ html[data-zm-rad="sharp"] :is(#zmw-view .zm-card, #zmw-view .cbi-button, #zmw-vi
 html[data-zm-rad="round"] :is(#zmw-view .zm-card, .zmw-modal, .zmw-theme-menu, #zmw-view .zm-log, #zmw-view .zm-refresh-banner) { border-radius: 26px !important; }
 html[data-zm-rad="round"] :is(#zmw-view .cbi-button, #zmw-view .zm-seg-item, #zmw-view .zm-badge, #zmw-view .zm-chip, #zmw-view .zm-actions.zmw-tabs, .zmw-nav-item, .zmw-icon-btn, .zm-dock .cbi-button, .zmw-modal .cbi-button, .zmw-theme-opt) { border-radius: 999px !important; }
 html[data-zm-rad="round"] :is(#zmw-view .zm-tile, #zmw-view input, #zmw-view select, #zmw-view textarea, #zmw-view .zm-tt-tile, #zmw-view .zm-tt-row, #zmw-view .zm-lk-th, #zmw-view .zm-lk-ft) { border-radius: 18px !important; }
+html[data-zm-rad="soft"] :is(#zmw-view .zm-card, .zmw-modal, .zmw-theme-menu, #zmw-view .zm-log, #zmw-view .zm-refresh-banner) { border-radius: 12px !important; }
+html[data-zm-rad="soft"] :is(#zmw-view .cbi-button, #zmw-view .zm-seg-item, #zmw-view .zm-badge, #zmw-view .zm-chip, #zmw-view .zm-actions.zmw-tabs, .zmw-nav-item, .zmw-icon-btn, .zm-dock .cbi-button, .zmw-modal .cbi-button, .zmw-theme-opt) { border-radius: 8px !important; }
+html[data-zm-rad="soft"] :is(#zmw-view .zm-tile, #zmw-view input, #zmw-view select, #zmw-view textarea, #zmw-view .zm-tt-tile, #zmw-view .zm-tt-row, #zmw-view .zm-lk-th, #zmw-view .zm-lk-ft) { border-radius: 9px !important; }
+html[data-zm-rad="soft"] :is(#zmw-view .zm-lk-pv, .zmw-nav-ico) { border-radius: 6px !important; }
+html[data-zm-bord="none"] :is(#zmw-view .zm-card, .zmw-side, .zmw-top, .zmw-theme-menu, .zmw-modal, #zmw-view .zm-log, #zmw-view .zm-tt-tile, #zmw-view .zm-tile:not(.zm-active), #zmw-view .zm-actions.zmw-tabs) { border-color: transparent !important; }
+html[data-zm-shad="none"] :is(#zmw-view .zm-card, #zmw-view .zm-card:hover, .zmw-theme-menu, .zmw-modal) { box-shadow: none !important; }
+html[data-zm-shad="soft"] :is(#zmw-view .zm-card, .zmw-theme-menu, .zmw-modal), html[data-zm-shad="deep"] :is(#zmw-view .zm-card, .zmw-theme-menu, .zmw-modal) { box-shadow: var(--zm-shadow) !important; }
+html[data-zm-tint] body.zmw-body { background-color: var(--bg); }
+html[data-zm-tint]:not(.zm-dust-on) .zmw-top { --zmw-top-bg: var(--bg) !important; }
+html[data-zm-tint]:not(.zm-dust-on) :is(#zmw-view .zm-card, .zmw-theme-menu, #zmw-view .zm-actions.zmw-tabs) { background-color: var(--surface-solid) !important; }
 html[data-zm-motion="0"] *, html[data-zm-motion="0"] *::before, html[data-zm-motion="0"] *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 html[data-zm-motion="0"] .zm-toast-spin, html[data-zm-motion="0"] .zm-reboot-spin, html[data-zm-motion="0"] .zmw-btn-primary.zmw-loading::after, html[data-zm-motion="0"] .zm-find-spin { animation-duration: 1.2s !important; animation-iteration-count: infinite !important; }
 html.zm-dust-on[data-zm-glass="0"] { --zm-glass: 100% !important; --zm-glass-side: 100% !important; --zm-glass-auto: 100% !important; --zm-glass-on: 100% !important; --zm-glass-in: 100% !important; --zm-glass-in3: 100% !important; }
 html.zm-dust-on[data-zm-glass="0"] .zmw-top { --zmw-top-bg: var(--bg) !important; }
-html.zm-dust-on[data-zm-glass="0"][data-theme="minimal"] #zmw-view .zm-card { background-color: var(--surface-solid); }
 html[data-zm-radio="0"] .zmw-radio, html[data-zm-radio="0"] .zmw-radio-menu { display: none !important; }
 #zmw-view .zm-lk-grid { display: grid; grid-template-columns: minmax(0, 1fr) 330px; grid-template-areas: "tabs ." "main side"; gap: 14px 18px; align-items: start; }
 #zmw-view .zm-lk-grid > .zm-lk-tabs { grid-area: tabs; }
@@ -69631,6 +69744,28 @@ html #zmw-view .zm-lk-own input[type="color"] { -webkit-appearance: none; appear
 #zmw-view .zm-lk-prev p:not(.zm-hint) { margin: 0; font-size: 13px; }
 #zmw-view .zm-lk-prev .zm-swrow { margin-top: 12px; }
 #zmw-view .zm-lk-log { margin: 14px 0 0; display: block; white-space: pre-wrap; font-size: 12px; min-height: 0; max-height: none; height: auto; }
+#zmw-view .zm-lk-cur { display: flex; align-items: center; gap: 12px 16px; flex-wrap: wrap; padding: 14px 16px !important; }
+#zmw-view .zm-lk-main > .zm-lk-cur + .zm-card { margin-top: 14px; }
+#zmw-view .zm-lk-cur-pv { position: relative; display: block; width: 64px; height: 44px; flex-shrink: 0; border-radius: 10px; overflow: hidden; box-shadow: 0 0 0 1px color-mix(in srgb, var(--text) 14%, transparent); }
+#zmw-view .zm-lk-cur-pv i { position: absolute; left: 0; top: 0; bottom: 0; width: 16px; border-right: 1px solid rgba(127,127,127,.2); }
+#zmw-view .zm-lk-cur-pv b { position: absolute; left: 24px; top: 10px; width: 22px; height: 7px; border-radius: 4px; }
+#zmw-view .zm-lk-cur-pv u { position: absolute; left: 24px; top: 23px; width: 32px; height: 5px; border-radius: 3px; opacity: .3; text-decoration: none; }
+#zmw-view .zm-lk-cur-t { flex: 1 1 220px; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+#zmw-view .zm-lk-cur-t b { font-size: 15px; font-weight: 650; line-height: 1.25; }
+#zmw-view .zm-lk-cur-t small { font-size: 12.5px; line-height: 1.4; color: var(--muted); }
+#zmw-view .zm-lk-cur-chg .zm-lk-cur-t small { color: var(--text-2); }
+#zmw-view .zm-lk-cur-chg { box-shadow: inset 3px 0 0 var(--a1); }
+#zmw-view .zm-lk-cur-act { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+#zmw-view .zm-lk-base { display: inline-flex; align-items: center; gap: 8px; margin: 0; font-size: 13px; color: var(--muted); }
+#zmw-view .zm-lk-base select { min-width: 150px; }
+#zmw-view .zm-lk-pv { position: relative; }
+#zmw-view .zm-lk-pv-my { position: absolute; right: 6px; bottom: 6px; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--a1); color: var(--zm-on, #fff); text-decoration: none; box-shadow: 0 2px 6px rgba(0,0,0,.25); }
+#zmw-view .zm-lk-pv-my svg { width: 13px; height: 13px; }
+#zmw-view .zm-lk-th-new:not(.zm-active) { border-style: dashed; }
+#zmw-view .zm-lk-th-new .zm-lk-pv { opacity: .55; }
+#zmw-view .zm-lk-pvtiles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+#zmw-view .zm-lk-pvtiles .zm-tile { min-height: 0; padding: 8px 10px; font-size: 13px; cursor: default; }
+@media (max-width: 700px) { #zmw-view .zm-lk-tabs.zmw-tabs > :last-child:nth-child(odd) { grid-column: 1 / -1; } #zmw-view .zm-lk-cur-act { width: 100%; } #zmw-view .zm-lk-cur-act > * { flex: 1 1 auto; } #zmw-view .zm-lk-base select { min-width: 0; flex: 1; } }
 html[data-theme] { --zm-sel: var(--a1, #2d5bff); --zm-sel-ink: #ffffff; --zm-sel-ring: var(--bg, #ffffff); }
 html[data-theme="retro"] { --zm-sel-ring: #d4d0c8; }
 html[data-theme="oled"], html[data-theme="matrix"], html[data-theme="neon"], html[data-theme="noir"], html[data-theme="graphite"], html[data-theme="depth"], html[data-theme="contrast"], html[data-theme="ink"] { --zm-sel-ink: #06080d; }
@@ -69678,7 +69813,7 @@ cat > '/www/zm-webui.html' << 'ZM_INSTALLER_EOF'
 <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20viewBox=%270%200%201250%201250%27%3E%3Cdefs%3E%3ClinearGradient%20id=%27z%27%20x1=%270%27%20y1=%270%27%20x2=%270%27%20y2=%271%27%3E%3Cstop%20offset=%270%27%20stop-color=%27%2300b6ff%27/%3E%3Cstop%20offset=%271%27%20stop-color=%27%230090ff%27/%3E%3C/linearGradient%3E%3C/defs%3E%3Cg%20fill=%27url%28%23z%29%27%20stroke=%27%230a0a0a%27%20stroke-width=%2722%27%20stroke-linejoin=%27miter%27%3E%3Cpolygon%20points=%27455,170%201072,118%201215,25%20688,615%2025,1235%20735,338%20262,383%27/%3E%3Cpolygon%20points=%271025,462%20722,860%201215,800%201005,1022%20315,1095%27/%3E%3C/g%3E%3C/svg%3E">
 <link rel="stylesheet" href="/zm/app.css?v=__ZMW_BUILD__">
 <script>
-(function(){try{var t=null,re=/^(micro|light|dark|ink|bento|minimal|retro|depth|graphite|oled|matrix|neon|synth|noir|contrast|metro)$/;try{var x=new XMLHttpRequest();x.open('GET','/zm/theme.txt?t='+Date.now(),false);x.send(null);if(x.status===200){var v=String(x.responseText||'').trim();if(v==='blocks')v='contrast';if(re.test(v)){t=v;try{localStorage.setItem('zmw.theme',v);}catch(e){}}}}catch(e){}if(!t)t=localStorage.getItem('zmw.theme')||sessionStorage.getItem('zmw.theme');if(t==='blocks')t='contrast';if(!re.test(t||''))t='micro';document.documentElement.setAttribute('data-theme',t);if(/^(dark|depth|graphite|oled|matrix|neon|synth|noir|contrast)$/.test(t))document.documentElement.classList.add('zm-theme-dark');}catch(e){}})();
+(function(){try{var h=document.documentElement,t=null,b=null,re=/^(micro|light|dark|ink|bento|retro|depth|graphite|oled|matrix|neon|synth|noir|contrast|metro|custom)$/,bre=/^(micro|light|dark|ink|bento|retro|depth|graphite|oled|matrix|neon|synth|noir|contrast|metro)$/;function fix(v){v=String(v||'').trim();return v==='blocks'?'contrast':v==='minimal'?'micro':v;}function get(u){try{var x=new XMLHttpRequest();x.open('GET',u+'?t='+Date.now(),false);x.send(null);return x.status===200?String(x.responseText||''):'';}catch(e){return '';}}var v=fix(get('/zm/theme.txt'));if(re.test(v)){t=v;try{localStorage.setItem('zmw.theme',v);}catch(e){}}if(!t){try{t=fix(localStorage.getItem('zmw.theme')||sessionStorage.getItem('zmw.theme'));}catch(e){}}if(!re.test(t||''))t='micro';if(t==='custom'){var j=null;try{j=JSON.parse(get('/zm/look.json')||'null');}catch(e){}if(!j||!j.my){try{j=JSON.parse(localStorage.getItem('zmw.look')||'null');}catch(e){}}b=j&&j.my&&bre.test(j.my.b||'')?j.my.b:'micro';}else b=t;h.setAttribute('data-theme',b);if(/^(dark|depth|graphite|oled|matrix|neon|synth|noir|contrast)$/.test(b))h.classList.add('zm-theme-dark');}catch(e){}})();
 </script>
 </head>
 <body class="zmw-body">
@@ -69720,6 +69855,7 @@ if [ -x /etc/init.d/cron ]; then
 	/etc/init.d/cron restart >/dev/null 2>&1 || true
 fi
 if [ -s /opt/zapret-manager-luci/state/ui.theme ]; then
+	case "$(cat /opt/zapret-manager-luci/state/ui.theme 2>/dev/null)" in minimal) echo micro > /opt/zapret-manager-luci/state/ui.theme ;; blocks) echo contrast > /opt/zapret-manager-luci/state/ui.theme ;; esac
 	cp -f /opt/zapret-manager-luci/state/ui.theme /www/zm/theme.txt 2>/dev/null || true
 	chmod 0644 /www/zm/theme.txt 2>/dev/null || true
 fi
