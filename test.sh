@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.110
+# Version: 5.111
 ZM_VERSION_EOF
 set -e
 
@@ -49522,7 +49522,7 @@ return view.extend({
 				extraCard.appendChild(zm.swRow(!!status.ulist, extraBusy === 'userlist' ? 'Обход по пользовательским спискам — применяем…' : 'Обход по пользовательским спискам', ulHint, function() { toggleExtra('userlist', !status.ulist); }, !!extraBusy));
 				if (status.ulist_on && !ulN) extraCard.appendChild(E('p', { 'class': 'zm-hint zm-ab-warn', 'style': 'margin:-4px 0 10px 52px' }, 'Список пуст — основная стратегия сейчас не применяется ни к одному сайту. Добавьте домены на вкладке «Редактор списков».'));
 				extraCard.appendChild(zm.swRow(!!status.wssize, extraBusy === 'wssize' ? 'Блок --wssize 1:6 — применяем…' : 'Блок --wssize 1:6', 'Отдельный блок в конце стратегии: для HTTPS уменьшает окно TCP в начале соединения. Помогает с некоторыми блокировками, но может снизить скорость и стабильность. Сохраняется при смене стратегии.', function() { toggleExtra('wssize', !status.wssize); }, !!extraBusy));
-				extraCard.appendChild(zm.swRow(!!status.hdrezka, extraBusy === 'hdrezka' ? 'Исключить домены HDRezka — применяем…' : 'Исключить домены HDRezka', 'Приложение HDRezka может не работать, пока его трафик обрабатывает Zapret. Переключатель добавляет в исключения rezka.ag, hdrezka.ag, hdrezka.ac, hdrezka.la, hdrezka.me, hdrezka.org и flypink.org: Zapret перестанет их обрабатывать, и приложение заработает. Учтите: сайты HDRezka в браузере после этого могут не открываться — обход блокировки для них отключается. Домены сохраняются при обновлении списка исключений.', function() { toggleExtra('hdrezka', !status.hdrezka); }, !!extraBusy));
+				extraCard.appendChild(zm.swRow(!!status.hdrezka, extraBusy === 'hdrezka' ? 'Исключить домены HDRezka — применяем…' : 'Исключить домены HDRezka', 'Приложение HDRezka может не работать, пока его трафик обрабатывает Zapret. Сайты HDRezka в браузере после этого могут не открываться. Домены сохраняются при обновлении списка исключений.', function() { toggleExtra('hdrezka', !status.hdrezka); }, !!extraBusy));
 				if (status.hdrezka && status.hdrezka_used === false) extraCard.appendChild(E('p', { 'class': 'zm-hint zm-ab-warn', 'style': 'margin:-4px 0 10px 52px' }, 'Текущая стратегия не использует список исключений — домены HDRezka в нём есть, но Zapret их пока обрабатывает. Выберите стратегию из списка панели или добавьте в свою --hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt.'));
 			}
 			function toggleExtra(what, on) {
@@ -56740,7 +56740,8 @@ var COMPS = [
 	{ id: 'steer', name: 'Steer', color: '#0ea5e9', rx: /(^|\/)steer/ },
 	{ id: 'mixomo', name: 'Mixomo', color: '#14b8a6', rx: /mihomo|magitrickle|hev-socks5-tunnel/ },
 	{ id: 'bytetube', name: 'ByeTube', color: '#ef4444', rx: /ciadpi|byedpi|bytetube/ },
-	{ id: 'tg', name: 'TG WS Proxy', color: '#38bdf8', rx: /tg-ws-proxy|(^|\/)s?tgws/ },
+	{ id: 'tg', name: 'TG WS Proxy', color: '#fb923c', rx: /tg-ws-proxy|(^|\/)s?tgws/ },
+	{ id: 'ts', name: 'Tailscale', color: '#84cc16', rx: /(^|\/)tailscaled?( |$)/ },
 	{ id: 'doh', name: 'DNS over HTTPS', color: '#22d3ee', rx: /https-dns-proxy/ },
 	{ id: 'dns', name: 'DNS (dnsmasq)', color: '#06b6d4', rx: /(^|\/)dnsmasq/ },
 	{ id: 'term', name: 'Терминал', color: '#f59e0b', rx: /(^|\/)ttyd|(^|\/)htop/ },
@@ -57209,10 +57210,10 @@ return view.extend({
 			procs.forEach(function(p) { if (!p.rss) return; by[p.comp.id] = (by[p.comp.id] || 0) + p.rss; sum += p.rss; });
 			var used = memUsed(m), rest = Math.max(0, used - sum);
 			var parts = Object.keys(by).map(function(id) { return { c: COMP_BY_ID[id], kb: by[id] }; }).sort(function(a, b) { return b.kb - a.kb; });
-			var top = parts.slice(0, 6), other = parts.slice(6).reduce(function(s, x) { return s + x.kb; }, 0);
+			var tiny = m.total * .003, top = parts.filter(function(x) { return x.kb >= tiny; }), other = parts.filter(function(x) { return x.kb < tiny; }).reduce(function(s, x) { return s + x.kb; }, 0);
 			memBar.innerHTML = ''; memLeg.innerHTML = '';
 			function seg(kb, color, text, cls) {
-				var w = 100 * kb / m.total; if (w < .3) return;
+				var w = 100 * kb / m.total; if (w < .3 && cls !== 'zm-mon-seg-free') return;
 				memBar.appendChild(E('div', { 'class': 'zm-mon-stackseg' + (cls ? ' ' + cls : ''), 'style': 'width:' + w.toFixed(2) + '%;' + (color ? 'background:' + color : ''), 'title': text + ' · ' + mb(kb) }));
 				memLeg.appendChild(E('span', { 'class': 'zm-mon-leg' }, [ E('i', { 'class': cls || '', 'style': color ? 'background:' + color : '' }), text + ' · ' + mb(kb) ]));
 			}
