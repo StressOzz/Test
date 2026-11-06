@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.118
+# Version: 5.119
 ZM_VERSION_EOF
 set -e
 
@@ -64581,7 +64581,7 @@ var ANIMS = [
 	{ id: 'plasma', name: 'Плазма', title: 'Плавные переливы неонового цвета' },
 	{ id: 'warp', name: 'Гиперпрыжок', title: 'Полёт сквозь звёзды' }
 ];
-var ANIM_RE = /^(stars|traffic|music|matrix|neon|synth|noir|metro|embers|lava|fire|metal|silk|ink|plasma|warp)$/, ANIM_HEAVY = /^(matrix|neon|synth|noir|metro|embers|lava|fire|metal|silk|ink|plasma|warp)$/;
+var ANIM_RE = /^(stars|traffic|music|matrix|neon|synth|noir|metro|embers|lava|fire|metal|silk|ink|plasma|warp)$/, ANIM_HEAVY = /^(matrix|neon|synth|noir|metro|embers|lava|fire|metal|silk|ink|plasma|warp)$/, ANIM_DARK = /^(matrix|neon|synth|noir|embers|lava|fire|metal|silk|ink|plasma|warp)$/;
 function themeFx() { var t = themeById(themeEffective()); return t && t.fx ? t.id : ''; }
 function animKind() { var v = sget(K_ANIM); if (lookOnBattery()) return ''; if (v === '1') return 'stars'; if (v === 'theme') return themeFx(); return ANIM_RE.test(v || '') ? v : ''; }
 function animReact() { var k = animKind(); return !!k && (k === 'music' || !!LOOK.react); }
@@ -65058,8 +65058,8 @@ function animPicker(onPick) {
 	return { el: grid, paint: paint };
 }
 function animReactRow(onChange) {
-	var inp = E('input', { 'type': 'checkbox', 'class': 'zmw-bg-chk' }), sub = E('span', { 'class': 'zmw-bg-sub' });
-	var row = E('label', { 'class': 'zmw-bg-react' }, [ inp, E('span', { 'class': 'zmw-bg-txt' }, [ E('b', {}, [ 'Реагировать на музыку радио' ]), sub ]) ]);
+	var inp = E('input', { 'type': 'checkbox', 'class': 'zmw-bg-chk' });
+	var row = E('label', { 'class': 'zmw-bg-react' }, [ inp, E('span', { 'class': 'zmw-bg-txt' }, [ E('b', {}, [ 'Реагировать на музыку радио' ]) ]) ]);
 	row.addEventListener('click', function (e) { e.stopPropagation(); });
 	inp.addEventListener('change', function () {
 		if (animKind() !== 'music') { lookSet('react', inp.checked ? 1 : 0); radioCorsCheck(); }
@@ -65070,7 +65070,6 @@ function animReactRow(onChange) {
 		var k = animKind(), lock = k === 'music';
 		inp.checked = lock || !!LOOK.react;
 		inp.disabled = lock || !k;
-		sub.textContent = lock ? 'Фон «Музыка» всегда играет под радио' : !k ? 'Сначала выберите фон' : 'Фон дышит в такт радио панели. Радио молчит — фон спокойный';
 	}
 	paint();
 	return { el: row, paint: paint };
@@ -65627,11 +65626,13 @@ function dustStart(kind) {
 			document.removeEventListener('visibilitychange', vis);
 			if (c.parentNode) c.parentNode.removeChild(c);
 			document.documentElement.classList.remove('zm-dust-on');
+			document.documentElement.classList.remove('zm-dust-dark');
 			glassStop();
 			dust = null;
 		}
 	};
 	document.documentElement.classList.add('zm-dust-on');
+	document.documentElement.classList.toggle('zm-dust-dark', ANIM_DARK.test(kind));
 	if (LOOK.glass) glassStart();
 	dustPlace();
 	size();
@@ -65922,7 +65923,7 @@ function lookPage() {
 			var lvl = !ak ? 0 : (L.fps / 30) * (L.dpr === 2 ? 2.5 : 1) * (ANIM_HEAVY.test(ak) ? 1.6 : 1), bar = Math.min(100, Math.round(lvl * 28)) || 2;
 			var batN = !navigator.getBattery;
 			var lpk = animPicker(function () { paint(); }), lrr = animReactRow(function () { paint(); });
-			kids.push(lookCard('Живой фон', 'Анимация за карточками панели. Фоны тем можно ставить с любой темой. Наведите на плитку — увидите название.', [
+			kids.push(lookCard('Живой фон', 'Анимация за карточками панели. Фоны тем можно ставить с любой темой.', [
 				E('div', { 'class': 'zm-lk-bgpick' }, [ E('div', { 'class': 'zm-lk-bgname' }, [ ak ? 'Сейчас: ' + ANIMS.filter(function (a) { return a.id === ak; })[0].name : 'Сейчас: фон выключен' ]), lpk.el, lrr.el,
 					E('button', { 'type': 'button', 'class': 'cbi-button', 'disabled': ak ? null : '', 'click': function () { bgoEnter(); } }, [ 'Скрыть панель — оставить только фон' ]) ]),
 				lookRow('Кадров в секунду', lookSeg([ [ 15, '15' ], [ 30, '30' ], [ 60, '60' ] ], L.fps, function (v) { lookSet('fps', +v); paint(); })),
@@ -68519,12 +68520,11 @@ html[data-theme="bento"] #zmw-view .zm-seg-item.zm-active, html[data-theme="retr
 .zmw-bg-tile.zmw-on { box-shadow: 0 0 0 2px var(--a1); }
 .zmw-bg-tile:focus-visible { outline: 2px solid var(--a1); outline-offset: 2px; }
 .zmw-bg-cv { position: absolute; inset: 0; width: 100%; height: 100%; display: block; pointer-events: none; }
-.zmw-bg-react { grid-column: 1 / -1; display: flex; align-items: flex-start; gap: 9px; margin: 6px 4px 2px; padding: 9px 10px; border-radius: 10px; background: var(--surface-2); cursor: pointer; }
-.zmw-bg-chk { width: 16px; height: 16px; margin: 1px 0 0; flex: none; accent-color: var(--a1); }
+.zmw-bg-react { grid-column: 1 / -1; display: flex; align-items: center; gap: 9px; margin: 6px 4px 2px; padding: 9px 10px; border-radius: 10px; background: var(--surface-2); cursor: pointer; }
+.zmw-bg-chk { width: 16px; height: 16px; margin: 0; flex: none; accent-color: var(--a1); }
 .zmw-bg-chk:disabled { opacity: .75; }
 .zmw-bg-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .zmw-bg-txt b { font-size: 13px; font-weight: 600; color: var(--text); }
-.zmw-bg-sub { font-size: 11.5px; line-height: 1.35; color: var(--muted); }
 html.zm-bg-only body > :not(.zmw-dust):not(.zmw-bgo):not(.zmw-bgo-hint) { opacity: 0 !important; pointer-events: none !important; transition: opacity .3s ease; }
 html.zm-bgo-idle, html.zm-bgo-idle * { cursor: none !important; }
 .zmw-bgo { position: fixed; top: 14px; right: 14px; z-index: 2000; display: flex; gap: 6px; padding: 5px; border-radius: 14px; background: rgba(10,14,28,.55); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,.14); transition: opacity .35s ease, transform .35s ease; }
@@ -69314,6 +69314,13 @@ html.zm-dust-on[data-theme="bento"] #zmw-view .zm-tg-board .zm-card.zm-tg-n3 { b
 html.zm-dust-on[data-theme="bento"] #zmw-view .zm-tg-board .zm-card.zm-tg-n4 { background-color: color-mix(in srgb, #dff2e2 var(--zm-glass), transparent); }
 html.zm-dust-on[data-theme="minimal"] #zmw-view .zm-card { background-color: transparent; }
 html.zm-dust-on[data-theme] .zmw-side { background-color: color-mix(in srgb, var(--surface-solid) var(--zm-glass-side), transparent); background-image: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
+html.zm-dust-on { --zm-glass-top: 86%; }
+html.zm-dust-on[data-theme] .zmw-top { background: color-mix(in srgb, var(--surface-solid) var(--zm-glass-top), transparent); border-bottom: 1px solid var(--border); backdrop-filter: blur(12px) saturate(1.2); -webkit-backdrop-filter: blur(12px) saturate(1.2); }
+html.zm-dust-on[data-theme] .zmw-top::after { display: none; }
+html.zm-dust-on.zm-dust-dark[data-theme]:not(.zm-theme-dark) { --zm-glass: 88%; --zm-glass-side: 92%; --zm-glass-auto: 88%; --zm-glass-on: 95%; --zm-glass-in: 72%; --zm-glass-in3: 78%; --zm-glass-top: 92%; }
+html.zm-dust-on.zm-dust-dark[data-theme]:not(.zm-theme-dark) #zmw-view .zm-card, html.zm-dust-on.zm-dust-dark[data-theme]:not(.zm-theme-dark) #zmw-view .zm-actions.zmw-tabs { border-color: color-mix(in srgb, var(--border-2) 60%, transparent); box-shadow: 0 18px 40px -24px rgba(0,0,0,.7); }
+html.zm-dust-on.zm-dust-dark[data-theme]:not(.zm-theme-dark) .zmw-side { border-right-color: transparent; }
+@media (prefers-reduced-transparency: reduce) { html.zm-dust-on[data-theme] .zmw-top { backdrop-filter: none; -webkit-backdrop-filter: none; } }
 @media (max-width: 960px) { html.zm-dust-on[data-theme] .zmw-side { background-color: var(--surface-solid); } }
 html.zm-dust-on[data-theme] .zmw-login-card { background-color: color-mix(in srgb, var(--surface-solid) 78%, transparent); background-image: none; }
 html.zm-dust-on[data-theme="matrix"] .zmw-login-card { background-color: rgba(0,10,3,.84); }
