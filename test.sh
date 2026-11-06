@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.121
+# Version: 5.122
 ZM_VERSION_EOF
 set -e
 
@@ -55920,6 +55920,7 @@ var CREDITS = [
 	{ g: 'block', product: 'ByeDPI-OpenWrt', author: 'DPITrickster', url: 'https://github.com/DPITrickster/ByeDPI-OpenWrt' },
 	{ g: 'block', product: 'zapret4rocket (список РКН)', author: 'IndeecFOX', url: 'https://github.com/IndeecFOX/zapret4rocket' },
 	{ g: 'block', product: 'dpi-checkers', author: 'hyperion-cs', url: 'https://github.com/hyperion-cs/dpi-checkers' },
+	{ g: 'block', product: 'список доменов для теста YouTube', author: 'romanvh', url: 'https://github.com/romanvh' },
 	{ g: 'vpn', product: 'sTGWS, Steer, каталог списков', author: 'xyzmean', url: 'https://github.com/xyzmean' },
 	{ g: 'vpn', product: 'NetShift (основа Forkozz)', author: 'yandexru45', url: 'https://github.com/yandexru45/netshift' },
 	{ g: 'vpn', product: 'sing-box', author: 'SagerNet', url: 'https://github.com/SagerNet/sing-box' },
@@ -55965,6 +55966,7 @@ var CREDITS = [
 	{ g: 'dns', product: 'sing-box-supercell-ruleset', author: 'ushan0v', url: 'https://github.com/ushan0v/sing-box-supercell-ruleset' },
 	{ g: 'other', product: 'ttyd (терминал)', author: 'tsl0922', url: 'https://github.com/tsl0922/ttyd' },
 	{ g: 'other', product: 'hls.js (радио в формате HLS)', author: 'video-dev', url: 'https://github.com/video-dev/hls.js' },
+	{ g: 'other', product: 'шрифты тем оформления (Google Fonts)', author: 'Google', url: 'https://fonts.google.com' },
 	{ g: 'other', product: 'флаги стран (country-flag-emoji-polyfill)', author: 'TalkJS', url: 'https://github.com/talkjs/country-flag-emoji-polyfill' },
 	{ g: 'other', product: 'тема «Контраст» (палитра Hi-Contrast из luci-theme-footstrap)', author: 'VizzleTF', url: 'https://github.com/VizzleTF/luci-theme-footstrap' }
 ];
@@ -64400,7 +64402,7 @@ var THEMES = [
 	{ id: 'neon', name: 'Неон', ico: 'neon', dark: true, fx: true, fonts: 'Exo+2:wght@400;500;600;700&family=Russo+One', color: '#07060f' },
 	{ id: 'synth', name: 'Синтвейв', ico: 'synth', dark: true, fx: true, fonts: 'Exo+2:ital,wght@0,400;0,500;0,600;0,700;1,800', color: '#12062b' },
 	{ id: 'noir', name: 'Нуар', ico: 'noir', dark: true, fx: true, fonts: 'Oswald:wght@400;500;600&family=Playfair+Display:wght@600;700', color: '#0b0b0b' },
-	{ id: 'contrast', name: 'Контраст', ico: 'contrast', dark: true, fonts: 'Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700', color: '#0a0d13' },
+	{ id: 'contrast', name: 'Контраст', ico: 'contrast', dark: true, fx: 'warp', fonts: 'Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700', color: '#0a0d13' },
 	{ id: 'metro', name: 'Метро', ico: 'metro', fx: true, fonts: 'Onest:wght@400;500;600;700', color: '#f4f4f2' }
 ];
 function themeById(id) { return THEMES.filter(function (x) { return x.id === id; })[0]; }
@@ -64582,7 +64584,7 @@ var ANIMS = [
 	{ id: 'warp', name: 'Гиперпрыжок', title: 'Полёт сквозь звёзды' }
 ];
 var ANIM_RE = /^(stars|traffic|music|matrix|neon|synth|noir|metro|embers|lava|fire|metal|silk|ink|plasma|warp)$/, ANIM_HEAVY = /^(matrix|neon|synth|noir|metro|embers|lava|fire|metal|silk|ink|plasma|warp)$/, ANIM_DARK = /^(matrix|neon|synth|noir|embers|lava|fire|metal|silk|ink|plasma|warp)$/;
-function themeFx() { var t = themeById(themeEffective()); return t && t.fx ? t.id : ''; }
+function themeFx() { var t = themeById(themeEffective()); return t && t.fx ? (typeof t.fx === 'string' ? t.fx : t.id) : ''; }
 function animKind() { var v = sget(K_ANIM); if (lookOnBattery()) return ''; if (v === '1') return 'stars'; if (v === 'theme') return themeFx(); return ANIM_RE.test(v || '') ? v : ''; }
 function animReact() { var k = animKind(); return !!k && (k === 'music' || !!LOOK.react); }
 var ZMFX = (function () {
@@ -65173,8 +65175,10 @@ function dustStart(kind) {
 			au: true,
 			draw: function (dt, a) {
 				a = a || ZMFX.MUTE;
-				var i, j, d, dx, dy, dist, pull, base = 'rgba(' + P.a.join(',') + ',', la = Math.min(0.9, (dk ? 0.42 : 0.4) * (1 + 1.4 * a.lvl)), da = dk ? 0.8 : 0.78, k = Math.min(3, (dt || 0.016) * 60 * (1 + 1.2 * a.lvl + 1.8 * a.kick)), damp = Math.pow(0.985, k), rs = 1 + 0.9 * a.bass + 0.6 * a.kick, cx = w / 2, cy = h / 2;
-				ctx.lineWidth = 1 + 0.8 * a.kick;
+				var i, j, d, dx, dy, dist, pull, base = 'rgba(' + P.a.join(',') + ',', la = Math.min(0.9, (dk ? 0.42 : 0.4) * (1 + 1.4 * a.lvl)), da = dk ? 0.8 : 0.78, k = Math.min(3, (dt || 0.016) * 60 * (1 + 1.2 * a.lvl + 1.8 * a.kick)), damp = Math.pow(0.985, k), rs = 1 + 0.9 * a.bass + 0.6 * a.kick, zs = 1 + 0.025 * a.bass + 0.035 * a.kick;
+				ctx.save();
+				if (zs > 1.001) { ctx.translate(w / 2, h / 2); ctx.scale(zs, zs); ctx.translate(-w / 2, -h / 2); }
+				ctx.lineWidth = (1 + 0.8 * a.kick) / zs;
 				for (i = 0; i < dots.length; i++) {
 					d = dots[i];
 					dx = mx - d.x; dy = my - d.y;
@@ -65184,7 +65188,6 @@ function dustStart(kind) {
 						d.vx += (dx / dist) * pull * 0.08 * k;
 						d.vy += (dy / dist) * pull * 0.08 * k;
 					}
-					if (a.kick > 0.3) { dx = d.x - cx; dy = d.y - cy; dist = Math.sqrt(dx * dx + dy * dy) || 1; d.vx += dx / dist * a.kick * 0.12 * k; d.vy += dy / dist * a.kick * 0.12 * k; }
 					d.vx *= damp; d.vy *= damp;
 					if (Math.abs(d.vx) < 0.08) d.vx += (Math.random() - 0.5) * 0.04;
 					if (Math.abs(d.vy) < 0.08) d.vy += (Math.random() - 0.5) * 0.04;
@@ -65210,6 +65213,7 @@ function dustStart(kind) {
 						}
 					}
 				}
+				ctx.restore();
 			}
 		};
 	}
@@ -65790,7 +65794,7 @@ function setTheme(id) {
 	var nt = themeById(id), was = sget(K_ANIM) || '', oldFx = themeFx();
 	sset(K_THEME, id, true);
 	themeSave(id);
-	if (nt && nt.fx) { if (!was || was === '0' || was === 'theme' || (oldFx && was === oldFx)) sset(K_ANIM, nt.id, true); }
+	if (nt && nt.fx) { if (!was || was === '0' || was === 'theme' || (oldFx && was === oldFx)) sset(K_ANIM, typeof nt.fx === 'string' ? nt.fx : nt.id, true); }
 	else if (was === 'theme' || (oldFx && was === oldFx)) sset(K_ANIM, '0', true);
 	document.documentElement.classList.add('zmw-theme-anim');
 	applyTheme();
