@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.119
+# Version: 5.121
 ZM_VERSION_EOF
 set -e
 
@@ -4238,7 +4238,7 @@ TEST_BACKUP="$ZM_STATE_DIR/strategy_test.backup"
 TEST_STOP_FLAG="$TEST_DIR/stop"
 TEST_MODE_FILE="$TEST_DIR/mode"
 TEST_DOMAINS_JSON="${GH_RAW}/hyperion-cs/dpi-checkers/refs/heads/main/ru/tcp-16-20/suite.v2.json"
-TEST_YT_DOMAINS="youtu.be youtube.com i.ytimg.com i9.ytimg.com yt3.ggpht.com yt4.ggpht.com googleapis.com jnn-pa.googleapis.com googleusercontent.com signaler-pa.youtube.com youtubei.googleapis.com manifest.googlevideo.com yt3.googleusercontent.com rr4---sn-4g5e6nze.googlevideo.com rr4---sn-5go7yner.googlevideo.com rr4---sn-q4flrnsl.googlevideo.com rr5---sn-n8v7knez.googlevideo.com rr2---sn-q4fl6ndl.googlevideo.com rr1---sn-q4fl6n6y.googlevideo.com rr1---sn-aj5go5-53.googlevideo.com rr1---sn-4axm-n8vs.googlevideo.com rr14---sn-n8v7kn7r.googlevideo.com rr16---sn-axq7sn76.googlevideo.com rr4---sn-jvhnu5g-c35d.googlevideo.com rr1---sn-8ph2xajvh-5xge.googlevideo.com rr1---sn-xguxaxjvh-gufl.googlevideo.com rr1---sn-gvnuxaxjvh-jx3z.googlevideo.com rr1---sn-gvnuxaxjvh-jx3l.googlevideo.com rr1---sn-gvnuxaxjvh-o8ge.googlevideo.com rr5---sn-gvnuxaxjvh-n8vk.googlevideo.com rr10---sn-gvnuxaxjvh-304z.googlevideo.com rr12---sn-gvnuxaxjvh-bvwz.googlevideo.com rr3---sn-ug5onuxaxjvh-n8v6.googlevideo.com rr1---sn-ug5onuxaxjvh-p5ge.googlevideo.com rr1---sn-ug5onuxaxjvh-p3ul.googlevideo.com rr1---sn-ug5onuxaxjvh-n8v6.googlevideo.com rr1---sn-u5uuxaxjvhg0-ocje.googlevideo.com"
+TEST_YT_DOMAINS="youtu.be youtube.com i.ytimg.com i9.ytimg.com yt3.ggpht.com yt4.ggpht.com googleapis.com jnn-pa.googleapis.com googleusercontent.com signaler-pa.youtube.com youtubei.googleapis.com manifest.googlevideo.com yt3.googleusercontent.com rr4---sn-q4flrnsl.googlevideo.com rr5---sn-n8v7knez.googlevideo.com rr2---sn-q4fl6ndl.googlevideo.com rr1---sn-q4fl6n6y.googlevideo.com rr1---sn-4axm-n8vs.googlevideo.com rr2---sn-hgn7ynek.googlevideo.com rr14---sn-n8v7kn7r.googlevideo.com rr16---sn-axq7sn76.googlevideo.com rr4---sn-jvhnu5g-c35d.googlevideo.com rr1---sn-8ph2xajvh-5xge.googlevideo.com rr1---sn-xguxaxjvh-gufl.googlevideo.com rr1---sn-gvnuxaxjvh-5gie.googlevideo.com rr1---sn-gvnuxaxjvh-o8ge.googlevideo.com rr5---sn-gvnuxaxjvh-n8vk.googlevideo.com rr10---sn-gvnuxaxjvh-304z.googlevideo.com rr12---sn-gvnuxaxjvh-bvwz.googlevideo.com rr1---sn-ug5onuxaxjvh-p3ul.googlevideo.com rr1---sn-ug5onuxaxjvh-n8v6.googlevideo.com rr1---sn-u5uuxaxjvhg0-ocje.googlevideo.com"
 TEST_PARALLEL=8
 
 ZO_RKN_URL="${GH_RAW}/IndeecFOX/zapret4rocket/refs/heads/master/extra_strats/TCP/RKN/List.txt"
@@ -65170,9 +65170,11 @@ function dustStart(kind) {
 				while (dots.length < n) dots.push(seed());
 				if (dots.length > n) dots.length = n;
 			},
-			draw: function (dt) {
-				var i, j, d, dx, dy, dist, pull, base = 'rgba(' + P.a.join(',') + ',', la = dk ? 0.42 : 0.4, da = dk ? 0.8 : 0.78, k = Math.min(3, (dt || 0.016) * 60), damp = Math.pow(0.985, k);
-				ctx.lineWidth = 1;
+			au: true,
+			draw: function (dt, a) {
+				a = a || ZMFX.MUTE;
+				var i, j, d, dx, dy, dist, pull, base = 'rgba(' + P.a.join(',') + ',', la = Math.min(0.9, (dk ? 0.42 : 0.4) * (1 + 1.4 * a.lvl)), da = dk ? 0.8 : 0.78, k = Math.min(3, (dt || 0.016) * 60 * (1 + 1.2 * a.lvl + 1.8 * a.kick)), damp = Math.pow(0.985, k), rs = 1 + 0.9 * a.bass + 0.6 * a.kick, cx = w / 2, cy = h / 2;
+				ctx.lineWidth = 1 + 0.8 * a.kick;
 				for (i = 0; i < dots.length; i++) {
 					d = dots[i];
 					dx = mx - d.x; dy = my - d.y;
@@ -65182,6 +65184,7 @@ function dustStart(kind) {
 						d.vx += (dx / dist) * pull * 0.08 * k;
 						d.vy += (dy / dist) * pull * 0.08 * k;
 					}
+					if (a.kick > 0.3) { dx = d.x - cx; dy = d.y - cy; dist = Math.sqrt(dx * dx + dy * dy) || 1; d.vx += dx / dist * a.kick * 0.12 * k; d.vy += dy / dist * a.kick * 0.12 * k; }
 					d.vx *= damp; d.vy *= damp;
 					if (Math.abs(d.vx) < 0.08) d.vx += (Math.random() - 0.5) * 0.04;
 					if (Math.abs(d.vy) < 0.08) d.vy += (Math.random() - 0.5) * 0.04;
@@ -65191,7 +65194,7 @@ function dustStart(kind) {
 					if (d.y < -10) d.y = h + 10;
 					if (d.y > h + 10) d.y = -10;
 					ctx.beginPath();
-					ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
+					ctx.arc(d.x, d.y, d.r * rs, 0, Math.PI * 2);
 					ctx.fillStyle = base + da + ')';
 					ctx.fill();
 					for (j = i + 1; j < dots.length; j++) {
@@ -65228,7 +65231,8 @@ function dustStart(kind) {
 				prev = d;
 			}, function () { busy = false; });
 		}
-		function ly(l, x) { return l.base + l.amp * Math.sin(x * l.k + l.ph + t * l.w) + 9 * Math.sin(x * l.k * 2.3 + t * l.w * 1.6 + l.ph * 2); }
+		var boost = 1, sp = 1;
+		function ly(l, x) { return l.base + l.amp * boost * Math.sin(x * l.k + l.ph + t * l.w) + 9 * Math.sin(x * l.k * 2.3 + t * l.w * 1.6 + l.ph * 2); }
 		function rate(m) { return m <= 0.05 ? 0.25 : 1 + 8.5 * Math.log(1 + m) / Math.LN10; }
 		function speed(m) { return 0.07 + 0.055 * Math.log(1 + m) / Math.LN10; }
 		function spawn(dir, m) {
@@ -65247,9 +65251,11 @@ function dustStart(kind) {
 				for (i = 0; i < n; i++) lanes.push({ base: (i + 0.5) / n * h, amp: old[i] ? old[i].amp : 14 + Math.random() * 36, k: 6.2832 / (w * (0.55 + Math.random() * 0.8)), ph: old[i] ? old[i].ph : Math.random() * 6.28, w: 0.08 + Math.random() * 0.14, load: 0 });
 				pk = pk.filter(function (p) { return p.lane < n; });
 			},
-			draw: function (dt) {
-				var i, j, l, p, x, y, cnt = [], span = w + 100;
-				t += dt;
+			au: true,
+			draw: function (dt, au) {
+				var i, j, l, p, x, y, cnt = [], span = w + 100, a = au || ZMFX.MUTE;
+				boost = 1 + 1.4 * a.bass + 0.8 * a.kick; sp = 1 + 1.5 * a.lvl + 2 * a.kick;
+				t += dt * (1 + 1.2 * a.lvl);
 				rx += (wantRx - rx) * Math.min(1, dt * 1.6);
 				tx += (wantTx - tx) * Math.min(1, dt * 1.6);
 				accRx += rate(rx) * dt; accTx += rate(tx) * dt;
@@ -65263,14 +65269,14 @@ function dustStart(kind) {
 					l.load += (Math.min(1, cnt[i] / 14) - l.load) * Math.min(1, dt * 2);
 					ctx.beginPath();
 					for (x = -40; x <= w + 40; x += 24) { y = ly(l, x); if (x === -40) ctx.moveTo(x, y); else ctx.lineTo(x, y); }
-					ctx.lineWidth = 1 + l.load * 1.5;
-					ctx.strokeStyle = bgRgba(P.a, ((dk ? 0.07 : 0.09) + l.load * (dk ? 0.14 : 0.12)).toFixed(3));
+					ctx.lineWidth = 1 + l.load * 1.5 + a.lvl * 1.5;
+					ctx.strokeStyle = bgRgba(P.a, ((dk ? 0.07 : 0.09) + l.load * (dk ? 0.14 : 0.12) + a.lvl * 0.12).toFixed(3));
 					ctx.stroke();
 				}
 				if (dk) ctx.globalCompositeOperation = 'lighter';
 				for (i = pk.length - 1; i >= 0; i--) {
 					p = pk[i];
-					p.u += p.v * p.dir * dt;
+					p.u += p.v * p.dir * dt * sp;
 					if (p.u > 1.12 || p.u < -0.12) { pk.splice(i, 1); continue; }
 					l = lanes[p.lane];
 					var col = p.dir > 0 ? P.a : P.b, hx = -50 + p.u * span, hy = ly(l, hx), nd = Math.sqrt((hx - mx) * (hx - mx) + (hy - my) * (hy - my)), bo = nd < 140 ? (140 - nd) / 140 : 0, px = hx, py = hy, n = 6;
@@ -65282,7 +65288,7 @@ function dustStart(kind) {
 						ctx.stroke();
 						px = x2; py = y2;
 					}
-					ctx.beginPath(); ctx.arc(hx, hy, p.s * (2.6 + bo * 1.5), 0, 6.2832); ctx.fillStyle = bgRgba(col, (0.12 + bo * 0.12).toFixed(3)); ctx.fill();
+					ctx.beginPath(); ctx.arc(hx, hy, p.s * (2.6 + bo * 1.5) * (1 + 0.8 * a.kick), 0, 6.2832); ctx.fillStyle = bgRgba(col, (0.12 + bo * 0.12).toFixed(3)); ctx.fill();
 					ctx.beginPath(); ctx.arc(hx, hy, p.s * 0.95, 0, 6.2832); ctx.fillStyle = bgRgba(col, 0.95); ctx.fill();
 				}
 				ctx.globalCompositeOperation = 'source-over';
@@ -65414,16 +65420,19 @@ function dustStart(kind) {
 				for (var i = 0; i < Math.ceil(w / fs); i++) drops.push(Math.random() * -h / fs);
 				ctx.fillStyle = '#000000'; ctx.fillRect(0, 0, w, h);
 			},
-			draw: function (dt) {
+			au: true,
+			draw: function (dt, a) {
+				a = a || ZMFX.MUTE;
 				acc += dt;
-				if (acc < 0.05) return;
+				if (acc < 0.05 / (1 + 1.6 * a.lvl + 2.5 * a.kick)) return;
 				acc = 0;
 				ctx.fillStyle = 'rgba(0,0,0,0.08)'; ctx.fillRect(0, 0, w, h);
 				ctx.font = fs + 'px monospace';
-				ctx.globalAlpha = 0.7;
+				ctx.globalAlpha = Math.min(1, 0.7 + 0.3 * a.lvl + 0.2 * a.kick);
+				var hi = 0.975 - 0.2 * a.kick - 0.06 * a.high;
 				for (var i = 0; i < drops.length; i++) {
 					var y = drops[i] * fs;
-					ctx.fillStyle = Math.random() > 0.975 ? '#d8ffe0' : '#00ff41';
+					ctx.fillStyle = Math.random() > hi ? '#d8ffe0' : '#00ff41';
 					ctx.fillText(chars.charAt(Math.floor(Math.random() * chars.length)), i * fs, y);
 					if (y > h && Math.random() > 0.975) drops[i] = 0;
 					drops[i]++;
@@ -65437,26 +65446,29 @@ function dustStart(kind) {
 		function seed(i, any) { return { y: Math.random() * h, x: any ? Math.random() * w * 2 - w : -260 - Math.random() * w, v: 90 + Math.random() * 300, len: 60 + Math.random() * 220, c: C[i % 3] }; }
 		return {
 			resize: function () { var n = Math.max(10, Math.min(28, Math.round(h / 40))); ls = []; for (var i = 0; i < n; i++) ls.push(seed(i, true)); },
-			draw: function (dt) {
-				var gr = ctx.createLinearGradient(0, 0, 0, h), i, l, k;
+			au: true,
+			draw: function (dt, a) {
+				a = a || ZMFX.MUTE;
+				var gr = ctx.createLinearGradient(0, 0, 0, h), i, l, k, vs = 1 + 1.6 * a.lvl + 2.2 * a.kick, gw = 7 * (1 + 1.2 * a.bass + 0.6 * a.kick), ga = Math.min(0.6, 0.22 + 0.3 * a.lvl + 0.15 * a.kick);
 				gr.addColorStop(0, '#07060f'); gr.addColorStop(1, '#170a2a');
 				ctx.fillStyle = gr; ctx.fillRect(0, 0, w, h);
 				ctx.globalCompositeOperation = 'lighter';
 				ctx.lineWidth = 1.5;
 				for (i = 0; i < ls.length; i++) {
 					l = ls[i];
-					l.x += l.v * dt;
+					l.x += l.v * dt * vs;
 					if (l.x > w + 20) { ls[i] = seed(i, false); continue; }
 					var lg = ctx.createLinearGradient(l.x, 0, l.x + l.len, 0);
 					lg.addColorStop(0, 'rgba(0,0,0,0)'); lg.addColorStop(1, l.c);
 					ctx.strokeStyle = lg;
 					ctx.beginPath(); ctx.moveTo(l.x, l.y); ctx.lineTo(l.x + l.len, l.y);
-					ctx.globalAlpha = 0.22; ctx.lineWidth = 7; ctx.stroke();
+					ctx.globalAlpha = ga; ctx.lineWidth = gw; ctx.stroke();
 					ctx.globalAlpha = 1; ctx.lineWidth = 1.5; ctx.stroke();
 				}
 				ctx.globalCompositeOperation = 'source-over';
 				g -= dt;
 				if (g < 0) { g = 2 + Math.random() * 4; gl = 0.16; }
+				if (a.kick > 0.95 && gl <= 0) gl = 0.12;
 				if (gl > 0) {
 					gl -= dt;
 					for (k = 0; k < 4; k++) { ctx.fillStyle = Math.random() < 0.5 ? 'rgba(255,43,214,.18)' : 'rgba(0,240,255,.18)'; ctx.fillRect(Math.random() * 30 - 15, Math.random() * h, w, 2 + Math.random() * 14); }
@@ -65467,9 +65479,11 @@ function dustStart(kind) {
 	function synth() {
 		var t = 0;
 		return {
-			draw: function (dt) {
-				t += dt;
-				var hz = h * 0.6, g = ctx.createLinearGradient(0, 0, 0, hz), cx = w * 0.7, r = Math.min(h * 0.24, w * 0.18), i, yy;
+			au: true,
+			draw: function (dt, a) {
+				a = a || ZMFX.MUTE;
+				t += dt * (1 + 1.8 * a.lvl + 2 * a.kick);
+				var hz = h * 0.6, g = ctx.createLinearGradient(0, 0, 0, hz), cx = w * 0.7, r = Math.min(h * 0.24, w * 0.18) * (1 + 0.14 * a.bass + 0.06 * a.kick), i, yy;
 				g.addColorStop(0, '#12062b'); g.addColorStop(1, '#4a1060');
 				ctx.fillStyle = g; ctx.fillRect(0, 0, w, hz);
 				ctx.fillStyle = '#12062b'; ctx.fillRect(0, hz, w, h - hz);
@@ -65479,7 +65493,7 @@ function dustStart(kind) {
 				ctx.fillStyle = sg; ctx.fillRect(cx - r, hz - r, r * 2, r);
 				for (i = 0; i < 6; i++) { ctx.fillStyle = '#4a1060'; ctx.fillRect(cx - r, hz - r * 0.45 + i * r * 0.1, r * 2, 1.5 + i * 1.3); }
 				ctx.restore();
-				ctx.strokeStyle = 'rgba(255,60,170,.55)'; ctx.lineWidth = 1;
+				ctx.strokeStyle = 'rgba(255,60,170,' + Math.min(1, 0.55 + 0.4 * a.lvl).toFixed(3) + ')'; ctx.lineWidth = 1 + 1.2 * a.kick;
 				var off = (t * 0.35) % 1;
 				for (i = 0; i < 16; i++) { yy = hz + Math.pow((i + off) / 16, 2.2) * (h - hz); ctx.beginPath(); ctx.moveTo(0, yy); ctx.lineTo(w, yy); ctx.stroke(); }
 				for (i = -24; i <= 24; i++) { ctx.beginPath(); ctx.moveTo(cx + i * 10, hz); ctx.lineTo(cx + i * w * 0.09, h); ctx.stroke(); }
@@ -65513,22 +65527,25 @@ function dustStart(kind) {
 				for (i = 0; i < n; i++) drops.push({ x: Math.random() * w, y: Math.random() * h, v: 520 + Math.random() * 380, l: 10 + Math.random() * 18 });
 				mkGrain();
 			},
-			draw: function (dt) {
-				var i, d;
+			au: true,
+			draw: function (dt, a) {
+				a = a || ZMFX.MUTE;
+				var i, d, rv = 1 + 1.2 * a.lvl + 1.5 * a.kick;
 				t += dt;
 				ctx.fillStyle = '#0b0b0b'; ctx.fillRect(0, 0, w, h);
 				ctx.save(); ctx.translate(w * 0.78, -40); ctx.rotate(0.38);
-				for (i = 0; i < 11; i++) { ctx.fillStyle = 'rgba(255,255,255,' + (0.03 + 0.008 * Math.sin(t * 0.6 + i)).toFixed(3) + ')'; ctx.fillRect(-w * 0.25, i * 54, w * 0.95, 24); }
+				for (i = 0; i < 11; i++) { ctx.fillStyle = 'rgba(255,255,255,' + (0.03 + 0.008 * Math.sin(t * 0.6 + i) + 0.06 * a.bass).toFixed(3) + ')'; ctx.fillRect(-w * 0.25, i * 54, w * 0.95, 24); }
 				ctx.restore();
-				ctx.strokeStyle = 'rgba(220,220,220,.14)'; ctx.lineWidth = 1;
+				ctx.strokeStyle = 'rgba(220,220,220,' + Math.min(0.5, 0.14 + 0.18 * a.high + 0.1 * a.kick).toFixed(3) + ')'; ctx.lineWidth = 1;
 				ctx.beginPath();
 				for (i = 0; i < drops.length; i++) {
 					d = drops[i];
-					d.y += d.v * dt; d.x += d.v * 0.12 * dt;
+					d.y += d.v * dt * rv; d.x += d.v * 0.12 * dt * rv;
 					if (d.y > h) { d.y = -d.l; d.x = Math.random() * (w + 80) - 80; }
 					ctx.moveTo(d.x, d.y); ctx.lineTo(d.x + d.l * 0.12, d.y + d.l);
 				}
 				ctx.stroke();
+				if (a.kick > 0.02) { ctx.fillStyle = 'rgba(255,255,255,' + (0.07 * a.kick).toFixed(3) + ')'; ctx.fillRect(0, 0, w, h); }
 				gt += dt;
 				if (gt > 0.08) { gt = 0; gi = (gi + 1) % 3; }
 				if (grain[gi]) ctx.drawImage(grain[gi], 0, 0, w, h);
@@ -65540,20 +65557,22 @@ function dustStart(kind) {
 		L.forEach(function (l, i) { tr.push({ l: i, u: Math.random(), v: (0.03 + Math.random() * 0.03) * (i % 2 ? 1 : -1) }); tr.push({ l: i, u: Math.random(), v: (0.03 + Math.random() * 0.03) * (i % 2 ? -1 : 1) }); });
 		function pt(l, u) { var P = l.p, n = P.length - 1, sg = Math.min(n - 1, Math.floor(u * n)), f = u * n - sg; return [ (P[sg][0] + (P[sg + 1][0] - P[sg][0]) * f) * w, (P[sg][1] + (P[sg + 1][1] - P[sg][1]) * f) * h ]; }
 		return {
-			draw: function (dt) {
-				var i, k, q;
+			au: true,
+			draw: function (dt, a) {
+				a = a || ZMFX.MUTE;
+				var i, k, q, ts = 1 + 2 * a.lvl + 3 * a.kick, sr = 5.5 * (1 + 0.6 * a.bass + 0.4 * a.kick);
 				ctx.fillStyle = '#f4f4f2'; ctx.fillRect(0, 0, w, h);
-				ctx.globalAlpha = 0.38; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+				ctx.globalAlpha = Math.min(0.75, 0.38 + 0.3 * a.lvl); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
 				for (i = 0; i < L.length; i++) {
-					ctx.strokeStyle = L[i].c; ctx.lineWidth = 8; ctx.beginPath();
+					ctx.strokeStyle = L[i].c; ctx.lineWidth = 8 * (1 + 0.5 * a.bass); ctx.beginPath();
 					for (k = 0; k < L[i].p.length; k++) { if (!k) ctx.moveTo(L[i].p[k][0] * w, L[i].p[k][1] * h); else ctx.lineTo(L[i].p[k][0] * w, L[i].p[k][1] * h); }
 					ctx.stroke();
-					for (k = 1; k < 12; k++) { q = pt(L[i], k / 12); ctx.fillStyle = '#ffffff'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(q[0], q[1], 5.5, 0, 6.2832); ctx.fill(); ctx.stroke(); }
+					for (k = 1; k < 12; k++) { q = pt(L[i], k / 12); ctx.fillStyle = '#ffffff'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(q[0], q[1], sr, 0, 6.2832); ctx.fill(); ctx.stroke(); }
 				}
 				ctx.globalAlpha = 0.85;
 				for (i = 0; i < tr.length; i++) {
 					var r = tr[i], a, b;
-					r.u += r.v * dt; if (r.u > 1) r.u -= 1; if (r.u < 0) r.u += 1;
+					r.u += r.v * dt * ts; if (r.u > 1) r.u -= 1; if (r.u < 0) r.u += 1;
 					a = pt(L[r.l], r.u); b = pt(L[r.l], Math.max(0, Math.min(1, r.u - (r.v > 0 ? 0.025 : -0.025))));
 					ctx.strokeStyle = '#1a1a1a'; ctx.lineWidth = 9; ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
 					ctx.strokeStyle = L[r.l].c; ctx.lineWidth = 4; ctx.stroke();
@@ -65947,9 +65966,11 @@ function lookPage() {
 			E('button', { 'type': 'button', 'class': 'cbi-button' + (lookResetAsk ? ' cbi-button-remove' : ''), 'click': function () {
 				if (!lookResetAsk) { lookResetAsk = true; paint(); setTimeout(function () { if (lookResetAsk) { lookResetAsk = false; if (lookPageRender) lookPageRender(); } }, 4000); return; }
 				lookResetAsk = false;
-				LOOK = lookClean(null); sset(K_LOOK, lookJson(), true); lookPush(); lookApply(); applyTheme(); dustSync();
+				LOOK = lookClean(null); sset(K_LOOK, lookJson(), true); lookPush(); lookApply(); applyTheme();
+				if (dust) dust.stop();
+				animSet(themeFx() || '0');
 				if (!radio.show) window.zmwRadio.set(true);
-				toast('Оформление сброшено — тема осталась прежней', 'info');
+				toast('Оформление и фон сброшены — как будто тему выбрали заново', 'info');
 				paint();
 			} }, [ lookResetAsk ? 'Нажмите ещё раз, чтобы сбросить' : 'Сбросить оформление' ]),
 			E('button', { 'type': 'button', 'class': 'cbi-button', 'click': function () {
