@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.110
+# Version: 5.120
 ZM_VERSION_EOF
 set -e
 
@@ -28862,7 +28862,7 @@ _st_autogrp_sync() {
 		return 1
 	fi
 	if ! command -v jq >/dev/null 2>&1; then
-		grep -q '"balancers"' "$t" 2>/dev/null || { rm -f "$t" "$ST_SUB_GRPS"; return 0; }
+		grep -q '"balancers"' "$t" 2>/dev/null || grep -qF '⬇' "$t" 2>/dev/null || { rm -f "$t" "$ST_SUB_GRPS"; return 0; }
 		if [ -z "$quiet" ]; then
 			echo "   → В подписке есть группы АВТО — для них нужен небольшой пакет jq"
 			_zm_pkg_add jq >/dev/null 2>&1
@@ -37984,18 +37984,32 @@ def trimmed:
   | (until(length == 0 or .[0] > 32; .[1:])) | (until(length == 0 or .[-1] > 32; .[:-1])) | implode;
 def in_sel($sel): .tag as $t | ($sel | length) == 0 or any($sel[]; ($t | tostring) | startswith(.));
 
-(if type == "array" then . else [.] end)
-| [ .[] | select(type == "object")
+def hdr: ((.remarks // "") | tostring) as $r | ($r | contains("⬇")) or ($r | contains("⬆"));
+def bal: ((.routing.balancers // []) | if type == "array" then length > 0 else false end);
+def blockdef:
+  ((.routing.rules // []) | if type == "array" and length > 0 then ((.[-1].outboundTag // "") | tostring) else "" end) as $d
+  | $d != "" and ([ (.outbounds // [])[] | select(type == "object" and .tag == $d) | .protocol ] | index("blackhole") != null);
+def mems: [ (.outbounds // [])[] | usable | member ];
+def uniqm: reduce .[] as $x ([]; if any(.[]; . == $x) then . else . + [$x] end);
+
+[ (if type == "array" then .[] else . end) | select(type == "object") ] as $cfgs
+| [ $cfgs[]
     | ((.routing.balancers // []) | if type == "array" then . else [] end) as $bal
     | select(($bal | length) > 0)
     | ([ $bal[] | (.selector // [])[] | tostring ] | unique) as $sel
     | (.remarks // "" | trimmed) as $name
     | ((.burstObservatory.pingConfig.interval // .observatory.probeInterval // null) | secs) as $iv
-    | [ (.outbounds // [])[] | usable | select(in_sel($sel)) | member ] as $m
-    | (reduce $m[] as $x ([]; if any(.[]; . == $x) then . else . + [$x] end)) as $u
+    | ([ (.outbounds // [])[] | usable | select(in_sel($sel)) | member ] | uniqm) as $u
     | select(($u | length) >= 2)
-    | { name: (if $name == "" then "АВТО" else $name end), iv: $iv, m: $u }
-  ]
+    | { name: (if $name == "" then "АВТО" else $name end), iv: $iv, m: $u } ]
+  + ($cfgs | reduce .[] as $c ({ cur: null, out: [] };
+      if ($c | hdr) and (($c | bal) | not) then
+        (if .cur != null then .out += [.cur] else . end)
+        | .cur = { name: ($c.remarks | trimmed), iv: 60, m: ($c | mems) }
+      elif .cur == null or ($c | bal) or ($c | blockdef) then .
+      else .cur.m += ($c | mems) end)
+    | (if .cur != null then .out + [.cur] else .out end)
+    | map(.m |= uniqm) | map(select((.m | length) >= 2)))
 | reduce .[] as $g ({ seen: {}, out: [] };
     ($g.name) as $n
     | (if .seen[$n] then $n + " · " + ((.seen[$n] + 1) | tostring) else $n end) as $nn
