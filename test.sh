@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.160
+# Version: 5.170
 ZM_VERSION_EOF
 set -e
 
@@ -28837,10 +28837,10 @@ _st_grp_ids() {
 		{ r++; id[r] = $1; lk[r] = ($1 in K) ? K[$1] : ""; sk[r] = lk[r] "|" P[$1]; ar[r] = (index($5, "\342\254\207") || index($5, "\342\254\206")) ? 1 : 0; gs[r] = ($5 in GN) ? 1 : 0 }
 		END {
 			for (j = 1; j <= nm; j++) {
-				m = W[j]; x = m; sub(/\|[^|]*$/, "", x); pa = 0; pb = 0; pc = 0
-				if (split(m, z, "|") >= 4 && z[4] != "") for (i = 1; i <= r; i++) if (sk[i] == m) { if (gs[i]) { if (!pc) pc = i; continue } if (!pa && !ar[i]) pa = i; if (!pb) pb = i }
-				if (!pb) for (i = 1; i <= r; i++) if (lk[i] != "" && lk[i] == x) { if (gs[i]) { if (!pc) pc = i; continue } if (!pa && !ar[i]) pa = i; if (!pb) pb = i }
-				if (pa) on[pa] = 1; else if (pb) on[pb] = 1; else if (pc) on[pc] = 1
+				m = W[j]; x = m; sub(/\|[^|]*$/, "", x); pa = 0
+				if (split(m, z, "|") >= 4 && z[4] != "") for (i = 1; i <= r; i++) if (sk[i] == m && !gs[i] && !ar[i]) { pa = i; break }
+				if (!pa) for (i = 1; i <= r; i++) if (lk[i] != "" && lk[i] == x && !gs[i] && !ar[i]) { pa = i; break }
+				if (pa) on[pa] = 1
 			}
 			for (i = 1; i <= r; i++) if (on[i]) print id[i]
 		}' "$2"
@@ -38065,6 +38065,7 @@ chmod 0644 '/opt/zapret-manager-luci/autogrp.jq'
 cat > '/opt/zapret-manager-luci/autogrp-fk.jq' << 'ZM_INSTALLER_EOF'
 def lc: ascii_downcase;
 def cut_q: tostring | (split("?") | .[0]) // "";
+def noarr: (contains("\u2b07") or contains("\u2b06")) | not;
 def gtypes: [ "selector", "urltest", "direct", "block", "dns" ];
 def leafkey($strict):
   [ (.type | tostring), ((.server // "") | tostring | lc), ((.server_port // 0) | tostring),
@@ -38104,9 +38105,8 @@ def ivstr($iv):
           | ([ (($e.value.groups // []) | to_entries[]) as $g
               | ([ $g.value.m[] as $m
                   | ($m | memkey(true)) as $ks | ($m | memkey(false)) as $kl
-                  | ([ $lk[] | select(.s == $ks) | .t ]) as $hit
-                  | (if ($hit | length) > 0 then $hit else [ $lk[] | select(.l == $kl) | .t ] end) as $all
-                  | ([ $all[] | select((contains("\u2b07") or contains("\u2b06")) | not) ] + $all)[0:1][] ]
+                  | ([ $lk[] | select(.s == $ks and (.t | noarr)) | .t ]) as $hit
+                  | (if ($hit | length) > 0 then $hit else [ $lk[] | select(.l == $kl and (.t | noarr)) | .t ] end)[0:1][] ]
                 | reduce .[] as $t ([]; if index([$t]) == null then . + [$t] else . end)) as $mem
               | select(($mem | length) >= 2)
               | ($sec + "-zm-autogrp-" + (($g.key + 1) | tostring) + ": " + ($g.value.name | tostring)) as $tag
@@ -63896,7 +63896,7 @@ cat > '/www/zm/app.js' << 'ZM_INSTALLER_EOF'
 var BUILD = '__ZMW_BUILD__';
 var RES = '/luci-static/resources/';
 var NULL_SID = '00000000000000000000000000000000';
-var K_SID = 'zmw.sid', K_THEME = 'zmw.theme', K_USER = 'zmw.user', K_NOTE = 'zmw.note', K_ANIM = 'zmw.anim', K_NAV = 'zmw.nav', K_LOOK = 'zmw.look';
+var K_SID = 'zmw.sid', K_THEME = 'zmw.theme', K_USER = 'zmw.user', K_NOTE = 'zmw.note', K_ANIM = 'zmw.anim', K_ANIMFOR = 'zmw.animfor', K_NAV = 'zmw.nav', K_LOOK = 'zmw.look';
 
 function store(kind) {
 	try { return kind === 'local' ? window.localStorage : window.sessionStorage; } catch (e) { return null; }
@@ -65213,7 +65213,7 @@ function lookSync() {
 		if (JSON.stringify(o) === JSON.stringify(LOOK)) return;
 		LOOK = o;
 		sset(K_LOOK, lookJson(), true);
-		if (themePref() === 'custom' && LOOK.my) sset(K_ANIM, LOOK.my.a || '0', true);
+		if (themePref() === 'custom' && LOOK.my) { sset(K_ANIM, LOOK.my.a || '0', true); animMark(); }
 		lookApply(); applyTheme(); dustSync();
 		if (lookPageRender) lookPageRender();
 	}).catch(function () {});
@@ -65352,6 +65352,14 @@ function mySnap() {
 	var o = { b: themeBase(), a: themeAnimNorm(sget(K_ANIM)) };
 	LOOK_VIS.forEach(function (k) { o[k] = LOOK[k]; });
 	return myClean(o);
+}
+function animMark() { sset(K_ANIMFOR, themePref() || 'auto', true); }
+function animFix() {
+	var t = themePref() || 'auto', f = sget(K_ANIMFOR), v = sget(K_ANIM);
+	if (f === t && v != null) return;
+	if (f == null && v != null && !(v === '0' && themeFx())) { animMark(); return; }
+	sset(K_ANIM, themeFx() || '0', true);
+	animMark();
 }
 function animKind() { var v = sget(K_ANIM); if (lookOnBattery()) return ''; if (v === '1') return 'stars'; if (v === 'theme') return themeFx(); return ANIM_RE.test(v || '') ? v : ''; }
 function animReact() { var k = animKind(); return !!k && (k === 'music' || !!LOOK.react); }
@@ -66500,6 +66508,7 @@ function dustSync() {
 var animMenuEls = null;
 function animSet(id) {
 	sset(K_ANIM, id || '0', true);
+	animMark();
 	if (LOOK.my && themePref() === 'custom') { var a = themeAnimNorm(id || ''); if (LOOK.my.a !== a) { LOOK.my.a = a; lookSave(); } }
 	dustSync();
 	animMenuPaint();
@@ -66556,9 +66565,10 @@ function themeSync() {
 		if (t === 'blocks' || t === 'minimal') { t = t === 'blocks' ? 'contrast' : 'micro'; themeSave(t); }
 		if (!t) { if (sget(K_THEME)) themeSave(sget(K_THEME)); return; }
 		if (t !== 'auto' && !themeById(t)) return;
-		if (t === themePref() || (t === 'auto' && !sget(K_THEME))) return;
+		if (t === themePref() || (t === 'auto' && !sget(K_THEME))) { if (sget(K_ANIMFOR) !== (themePref() || 'auto')) { animFix(); dustSync(); } return; }
 		sset(K_THEME, t === 'auto' ? null : t, true);
 		sset(K_ANIM, themeFx() || '0', true);
+		animMark();
 		applyTheme();
 		lookApply();
 		dustSync();
@@ -66576,6 +66586,7 @@ function setTheme(id, keep) {
 	sset(K_THEME, id === 'auto' ? null : id, true);
 	themeSave(id);
 	if (!keep) sset(K_ANIM, themeFx() || '0', true);
+	animMark();
 	document.documentElement.classList.add('zmw-theme-anim');
 	applyTheme();
 	lookApply();
@@ -66879,7 +66890,7 @@ function lookPage() {
 			LOOK = lookClean(o.look); lookSave();
 			if (radio.show !== !!LOOK.radio) window.zmwRadio.set(!!LOOK.radio);
 			th = o.theme === 'minimal' ? 'micro' : o.theme === 'blocks' ? 'contrast' : o.theme;
-			if (o.anim === '0' || o.anim === 'theme' || o.anim === '1' || ANIM_RE.test(o.anim || '')) sset(K_ANIM, o.anim, true);
+			if (o.anim === '0' || o.anim === 'theme' || o.anim === '1' || ANIM_RE.test(o.anim || '')) { sset(K_ANIM, o.anim, true); animMark(); }
 			if (th && (th === 'auto' || themeById(th))) setTheme(th, true);
 			else { lookApply(); applyTheme(); dustSync(); }
 			toast('Настройки оформления применены', 'info');
@@ -67840,6 +67851,7 @@ function boot() {
 	root = document.getElementById('zmw-root');
 	document.body.classList.add('zmw-body');
 	applyTheme();
+	animFix();
 	themeSync();
 	lookSync();
 	if (lookDirty) lookPush();
