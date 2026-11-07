@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.130
+# Version: 5.140
 ZM_VERSION_EOF
 set -e
 
@@ -6926,7 +6926,7 @@ steer_action() {
 			printf '{"links":"%s"}\n' "$(esc_ml "$(grep -iE "$STL_LINK_RE" "$ST_SUB")")"
 			;;
 		sub_ping_tick) steer_ping_tick; _st_secs_ping_tick; printf '{"ok":true}\n' ;;
-		sub_set|sub_links|sub_update|sub_remove|sub_exit|sub_node|sub_filter|sub_hide|sub_pick|sub_ping|iface_forget)
+		sub_set|sub_links|sub_update|sub_remove|sub_exit|sub_node|sub_group|sub_filter|sub_hide|sub_pick|sub_ping|iface_forget)
 			_st_running && { echo '{"error":"дождитесь окончания текущей операции"}'; return 1; }
 			[ -z "$(_st_blocker)" ] || { echo '{"error":"ядро steer сейчас настраивает не Zapret Manager — панель его не трогает"}'; return 1; }
 			steer_sub_action "$action" "$mode"
@@ -28817,14 +28817,13 @@ _st_grp_ids() {
 			while ((getline l < M) > 0) { split(l, b, "\t"); K[b[1]] = b[2] "|" tolower(b[3]) "|" b[4] }
 			ln = 0; while ((getline l < S) > 0) { ln++; if (ln in K) { pt = qv(l, "path"); if (pt == "") pt = qv(l, "serviceName"); sub(/\?.*$/, "", pt); P[ln] = pt } }
 		}
-		$5 in GN { next }
-		{ r++; id[r] = $1; lk[r] = ($1 in K) ? K[$1] : ""; sk[r] = lk[r] "|" P[$1]; ar[r] = (index($5, "\342\254\207") || index($5, "\342\254\206")) ? 1 : 0 }
+		{ r++; id[r] = $1; lk[r] = ($1 in K) ? K[$1] : ""; sk[r] = lk[r] "|" P[$1]; ar[r] = (index($5, "\342\254\207") || index($5, "\342\254\206")) ? 1 : 0; gs[r] = ($5 in GN) ? 1 : 0 }
 		END {
 			for (j = 1; j <= nm; j++) {
-				m = W[j]; x = m; sub(/\|[^|]*$/, "", x); pa = 0; pb = 0
-				if (split(m, z, "|") >= 4 && z[4] != "") for (i = 1; i <= r; i++) if (sk[i] == m) { if (!pa && !ar[i]) pa = i; if (!pb) pb = i }
-				if (!pb) for (i = 1; i <= r; i++) if (lk[i] != "" && lk[i] == x) { if (!pa && !ar[i]) pa = i; if (!pb) pb = i }
-				if (pa) on[pa] = 1; else if (pb) on[pb] = 1
+				m = W[j]; x = m; sub(/\|[^|]*$/, "", x); pa = 0; pb = 0; pc = 0
+				if (split(m, z, "|") >= 4 && z[4] != "") for (i = 1; i <= r; i++) if (sk[i] == m) { if (gs[i]) { if (!pc) pc = i; continue } if (!pa && !ar[i]) pa = i; if (!pb) pb = i }
+				if (!pb) for (i = 1; i <= r; i++) if (lk[i] != "" && lk[i] == x) { if (gs[i]) { if (!pc) pc = i; continue } if (!pa && !ar[i]) pa = i; if (!pb) pb = i }
+				if (pa) on[pa] = 1; else if (pb) on[pb] = 1; else if (pc) on[pc] = 1
 			}
 			for (i = 1; i <= r; i++) if (on[i]) print id[i]
 		}' "$2"
@@ -28837,22 +28836,16 @@ _st_stub_ids() {
 			while ((getline l < G) > 0) { split(l, a, "\t"); GN[a[1]] = 1 }
 			while ((getline l < M) > 0) { split(l, b, "\t"); K[b[1]] = b[2] "|" tolower(b[3]) "|" b[4] }
 		}
-		{
-			id[NR] = $1; k = ($1 in K) ? K[$1] : ""; key[NR] = k
-			c = ($5 in GN) ? 1 : 0; cand[NR] = c
-			if (!c && k != "") real[k] = 1
-		}
-		END { for (i = 1; i <= NR; i++) if (cand[i] && key[i] != "" && (key[i] in real)) print id[i] }' "$1"
+		$5 in GN { print $1 }' "$1"
 }
 
 _st_grps_json() {
 	local t="$1" g ids sep="" st
 	[ -s "$ST_SUB_GRPS" ] && [ -n "$t" ] || { printf '[]'; return 0; }
-	st=" $(_st_stub_ids "$t" | tr '\n' ' ') "
 	printf '['
 	while IFS="$(printf '\t')" read -r g _ _ || [ -n "$g" ]; do
 		[ -n "$g" ] || continue
-		ids="$(_st_grp_ids "$g" "$t" | while read -r i; do case "$st" in *" $i "*) ;; *) printf '%s,' "$i" ;; esac; done | sed 's/,$//')"
+		ids="$(_st_grp_ids "$g" "$t" | tr '\n' ',' | sed 's/,$//')"
 		[ -n "$ids" ] || continue
 		printf '%s{"name":"%s","ids":[%s]}' "$sep" "$(esc "$g")" "$ids"
 		sep=","
@@ -28911,7 +28904,7 @@ _st_autogrp_bg() {
 }
 
 _st_sub_filter() {
-	local t want hid all n mk st g gi of r
+	local t want hid all n mk st g gh gi of r
 	mk="$(head -n1 "$ST_SUB_EXCL" 2>/dev/null | tr '\t' ' ')"
 	[ -n "$(printf '%s' "$mk" | tr -d ' |,')" ] || mk=-
 	t="$(_st_nodes)"; all="$(grep -c . "$t" 2>/dev/null)"
@@ -28929,13 +28922,14 @@ _st_sub_filter() {
 			case "$hid" in *" $1 "*) ;; *) printf 'tun\t%s\t%s\t%s\n' "$2" "$3" "$mk"; return 0 ;; esac
 		fi
 	fi
+	g="$(_st_grp_cur)"
+	gh="$hid"
 	st="$(_st_stub_ids "$t" | tr '\n' ' ')"
 	[ -n "$st" ] && [ "$(echo $hid $st | wc -w)" -lt "$all" ] && hid="$hid $st"
-	g="$(_st_grp_cur)"
 	if [ -n "$g" ]; then
 		gi=" $(_st_grp_ids "$g" "$t" | tr '\n' ' ') "
 		of=""; [ "$(_st_pick)" = ping ] && [ -s "$ST_SUB_ORDER" ] && of="$ST_SUB_ORDER"
-		r="$(ZM_MK="$mk" awk -F'\t' -v h="$hid " -v gi="$gi" -v of="$of" '
+		r="$(ZM_MK="$mk" awk -F'\t' -v h="$gh " -v gi="$gi" -v of="$of" '
 			BEGIN { mk = ENVIRON["ZM_MK"]; if (of != "") while ((getline l < of) > 0) if (!(l in rk)) rk[l] = ++r }
 			index(h, " " $1 " ") || !index(gi, " " $1 " ") { next }
 			{ c++; key[c] = ($5 in rk) ? rk[$5] : 100000 + NR; pr[c] = $2; ix[c] = $3; o[c] = c }
