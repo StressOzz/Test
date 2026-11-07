@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.060
+# Version: 5.100
 ZM_VERSION_EOF
 set -e
 
@@ -1268,6 +1268,7 @@ _fk_fast_patch() { _zmL forkozz && _fk_fast_patch "$@"; }
 _fk_b4_watch() { _zmL forkozz && _fk_b4_watch "$@"; }
 _fk_ghdl_patch() { _zmL forkozz && _fk_ghdl_patch "$@"; }
 _fk_subck_patch() { _zmL forkozz && _fk_subck_patch "$@"; }
+_fk_hdr_patch() { _zmL forkozz && _fk_hdr_patch "$@"; }
 _fk_listsvia_patch() { _zmL forkozz && _fk_listsvia_patch "$@"; }
 _fk_subvia_patch() { _zmL forkozz && _fk_subvia_patch "$@"; }
 _fk_reality_patch() { _zmL forkozz && _fk_reality_patch "$@"; }
@@ -6490,10 +6491,14 @@ _st_use_vpn() { [ "$(_st_exit)" = vpn ]; }
 ST_VPN_PROBE="$JOBS_DIR/steer.vpnprobe"
 _st_vpn_probe() {
 	local trace ip="" loc="" r=fail dev
+	ST_VPN_STUCK=""
 	if dev="$(_st_vpn_dev)"; then
 		trace="$(_st_vpn_trace "$dev")"
 		ip="$(echo "$trace" | sed -n 's/^ip=//p')"; loc="$(echo "$trace" | sed -n 's/^loc=//p')"
 		[ -n "$ip" ] && r=ok
+		if [ "$r" = ok ] && stl_running && stl_state vpn >/dev/null 2>&1 && [ -n "$STL_KIND" ] && [ "$STL_UP" != true ]; then
+			r=stuck; ST_VPN_STUCK=1
+		fi
 	fi
 	mkdir -p "$ZM_STATE_DIR"
 	echo "$(date +%s) $r $ip $loc" > "$ST_VPN_PROBE"
@@ -7728,6 +7733,7 @@ _fk_service0() {
 	_fk_fakeip_patch
 	_fk_ghdl_patch
 	_fk_subck_patch
+	_fk_hdr_patch
 	_fk_dnslan_patch noreload
 	mkdir -p /etc/sing-box
 	_fk_log_mark
@@ -12532,6 +12538,28 @@ ZM_FK_SUBCK_EOF
 	return 0
 }
 
+_fk_hdr_patch() {
+	local f=/usr/lib/netshift/helpers.sh b t="/tmp/zm-fkhdr.$$"
+	[ -f "$f" ] || return 0
+	grep -qF '# zm-hdr' "$f" && return 0
+	[ "$(grep -c 'then 1 else 0 end)) as \$prio$' "$f")" = 1 ] || return 0
+	command -v jq >/dev/null 2>&1 || return 0
+	b="$f.zm-hdr"
+	cp -f "$f" "$b" || return 0
+	sed -i 's/then 1 else 0 end)) as \$prio$/then 1 else 0 end) + (if (($cfg_name | contains("⬇")) or ($cfg_name | contains("⬆")) or ($cfg_name | contains("⤵"))) then 1000 else 0 end)) as $prio # zm-hdr/' "$f"
+	awk '/^xray_json_to_uri_lines\(\) \{/ { f = 1 } f && /jq -er .$/ { p = 1; next } p && /^    . "\$src_file"/ { exit } p { print }' "$f" > "$t.jq"
+	printf '%s' '[{"remarks":"⬇️ Игровые ⬇️","outbounds":[{"tag":"proxy","protocol":"trojan","settings":{"servers":[{"address":"a.example","port":443,"password":"p"}]}}]},{"remarks":"Нидерланды","outbounds":[{"tag":"proxy","protocol":"trojan","settings":{"servers":[{"address":"a.example","port":443,"password":"p"}]}}]}]' > "$t.json"
+	if sh -n "$f" 2>/dev/null && [ -s "$t.jq" ] && [ "$(jq -er -f "$t.jq" "$t.json" 2>/dev/null | grep -c .)" = 1 ] &&
+		jq -er -f "$t.jq" "$t.json" 2>/dev/null | grep -q "#$(printf '%s' 'Нидерланды' | jq -sRr @uri)\$"; then
+		rm -f "$b"
+		logger -t zapret-manager "$(_fk_name): серверы подписки больше не берут имя заголовков-разделителей «⬇️ … ⬇️»"
+	else
+		cat "$b" > "$f"; rm -f "$b"
+	fi
+	rm -f "$t.jq" "$t.json"
+	return 0
+}
+
 _fk_listsvia_patch() {
 	local f=/usr/bin/netshift tmp
 	[ -f "$f" ] || return 0
@@ -13672,6 +13700,7 @@ do_fk_install() {
 	_fk_fakeip_patch
 	_fk_ghdl_patch
 	_fk_subck_patch
+	_fk_hdr_patch
 	_fk_dnslan_patch noreload
 	rm -rf "$tmp"
 
@@ -14019,6 +14048,7 @@ do_fk_lists() {
 	_fk_fakeip_patch
 	_fk_ghdl_patch
 	_fk_subck_patch
+	_fk_hdr_patch
 	_fk_dnslan_patch noreload
 	_fk_log_mark
 	/usr/bin/netshift list_update > "$out" 2>&1 &
@@ -14188,6 +14218,7 @@ do_fk_subs() {
 	_fk_fakeip_patch
 	_fk_ghdl_patch
 	_fk_subck_patch
+	_fk_hdr_patch
 	_fk_dnslan_patch noreload
 	_fk_sub_update || { echo "ОШИБКА: подписка не обновилась — проверьте ссылку"; return 1; }
 	_fk_ext_auto all "$lx"
@@ -14939,6 +14970,7 @@ zm_watch() {
 		_fk_fakeip_patch
 		_fk_ghdl_patch
 		_fk_subck_patch
+		_fk_hdr_patch
 		_fk_b4_watch
 		_fk_ru_watch
 		_fk_rs_watch
@@ -24735,14 +24767,15 @@ _stl_tun_json() {
 }
 
 _stl_vpn_outs() {
-	local tab k p b c d n o="" m=""
+	local tab k p b c d n o="" m="" v6=',"ipv6":"off"'
+	[ -n "$ZM_STL_NOV6T" ] && v6=""
 	tab="$(printf '\t')"
 	n="$(grep -c "^tun$tab" "$1")"
 	while IFS="$tab" read -r k p b c; do
 		[ "$k" = tun ] || continue
 		case " $STL_VPN_PROTOS " in *" $p "*) ;; *) continue ;; esac
 		if [ "$n" -le 1 ]; then
-			o="$(_stl_tun_json "$STL_VPN_OUT" "$p" "$2" "$b" "$c" "$STL_VPN_DEV"),\"on_fail\":\"$(_st_onfail)\"}"
+			o="$(_stl_tun_json "$STL_VPN_OUT" "$p" "$2" "$b" "$c" "$STL_VPN_DEV")$v6,\"on_fail\":\"$(_st_onfail)\"}"
 		else
 			d="$(_stl_member "$p")"
 			o="$o,$(_stl_tun_json "$d" "$p" "$2" "$b" "$c" "$d")}"
@@ -24958,7 +24991,7 @@ _stl_upd_hint() {
 }
 
 stl_apply() {
-	local new="$STL_SPEC.zm.$$" prev="$STL_TMP/spec.prev" err w=0 ZM_STL_NOFAM="" nf="$ST_DIR/nofam" cv
+	local new="$STL_SPEC.zm.$$" prev="$STL_TMP/spec.prev" err w=0 ZM_STL_NOFAM="" nf="$ST_DIR/nofam" cv ZM_STL_NOV6T=""
 	mkdir -p "$STL_ETC" "$STL_TMP"
 	cv="$(stl_version)"
 	[ -n "$cv" ] && [ "$(cat "$nf" 2>/dev/null)" = "$cv" ] && ZM_STL_NOFAM=1
@@ -24973,6 +25006,10 @@ stl_apply() {
 			mkdir -p "$ST_DIR"; echo "$cv" > "$nf"
 			echo "   · Ядро steer $cv не умеет ставить «Свой список» секции выше сервисов других секций — правила применены без этого. $(_stl_upd_hint 2.1.0)"
 		fi
+	fi
+	if [ "$ck" = 0 ] && printf '%s' "$err" | grep -qi 'ipv6' && grep -q '"kind":"tunnel"' "$new"; then
+		ZM_STL_NOV6T=1
+		_stl_spec "$1" > "$new" && err="$(_stl_check "$new")" && ck=1
 	fi
 	[ "$ck" = 1 ] && [ -z "$ZM_STL_NOFAM" ] && grep -q '"family":"4"' "$new" && rm -f "$nf"
 	[ "$ck" = 0 ] && grep -q '"cache_ttl"' "$new" && noct=1
@@ -28194,17 +28231,17 @@ _st_srs_dump() {
 }
 
 _st_dom_build() {
-	local id="$1" out="$2" src="$2.src.$$" pfx="$2.pfx.$$" dl=1 sets set f fmt x ok=1
+	local id="$1" out="$2" src="$2.src.$$" pfx="$2.pfx.$$" dep="$2.dep.$$" dl=1 sets set f fmt x ok=1
 	ST_DOM_SRC=""; ST_DOM_MISS=""
 	{ _st_running || [ -n "$ST_DOM_NODL" ]; } && dl=0
 	mkdir -p "${out%/*}" "$ST_DIR/lists" "$ST_RUN/srsdump"
-	: > "$src"; : > "$pfx"
+	: > "$src"; : > "$pfx"; : > "$dep"
 	if [ "$id" = custom ]; then
 		[ -s "$ST_CUSTOM.lst" ] && echo "$ST_CUSTOM.lst" >> "$src"
 		[ -s "$ST_CUSTOM.pfx" ] && echo "$ST_CUSTOM.pfx" >> "$pfx"
 		ST_DOM_SRC="ваши строки"
 	else
-		sets="$(_rb_svc_field "$id" 8 | tr ',' ' ')"
+		sets="$(_st_dom_f 8 | tr ',' ' ')"
 		for set in $sets; do
 			fmt="$(awk -F'|' -v k="$set" '$1 == k { print $2; exit }' "$ST_CAT_IDX" 2>/dev/null)"
 			if [ "$fmt" = lst ]; then
@@ -28216,6 +28253,7 @@ _st_dom_build() {
 			else
 				f="$ST_DIR/lists/$set.srs"
 				[ -s "$f" ] || { [ "$dl" = 1 ] && _st_srs_get "$set" >/dev/null 2>&1; }
+				echo "$f" >> "$dep"
 				[ -s "$f" ] || ST_DOM_MISS="$ST_DOM_MISS $set"
 				[ -s "$f" ] || { ok=0; break; }
 				x="$ST_RUN/srsdump/$(printf '%s' "$f" | tr -c 'A-Za-z0-9_.-' '_')"
@@ -28231,17 +28269,17 @@ _st_dom_build() {
 		if [ -n "$sets" ] && [ "$ok" = 1 ]; then ST_DOM_SRC="каталог списков"
 		else
 			: > "$src"; : > "$pfx"
-			for f in $(_rb_svc_field "$id" 4 | tr ',' ' '); do
+			for f in $(_st_dom_f 4 | tr ',' ' '); do
 				if [ "$dl" = 1 ]; then _rb_list_get "$f" >/dev/null 2>&1; fi
 				[ -s "$ZM_LISTS_DIR/$f" ] && echo "$ZM_LISTS_DIR/$f" >> "$pfx"
 			done
-			for f in $(_rb_svc_field "$id" 3 | tr ',' ' '); do
+			for f in $(_st_dom_f 3 | tr ',' ' '); do
 				if [ "$dl" = 1 ]; then _rb_list_get "$f" >/dev/null 2>&1; fi
 				[ -s "$ZM_LISTS_DIR/$f" ] && echo "$ZM_LISTS_DIR/$f" >> "$src"
 			done
 			if [ -s "$src" ]; then ST_DOM_SRC="списки сервиса"
 			else
-				printf '%s,%s\n' "$(_rb_svc_field "$id" 5)" "$(_rb_svc_field "$id" 6)" | tr ',' '\n' > "$out.base.$$"
+				printf '%s,%s\n' "$(_st_dom_f 5)" "$(_st_dom_f 6)" | tr ',' '\n' > "$out.base.$$"
 				[ -s "$out.base.$$" ] && echo "$out.base.$$" >> "$src"
 				ST_DOM_SRC="основные домены сервиса"
 			fi
@@ -28250,7 +28288,8 @@ _st_dom_build() {
 	while IFS= read -r f; do cat "$f"; echo; done < "$src" | _st_dom_norm | sort -u > "$out.$$"
 	mv -f "$out.$$" "$out"
 	mv -f "$pfx" "$out.pfxsrc"
-	rm -f "$src" "$out.base.$$"
+	grep -v "\.base\.$$\$" "$src" | cat - "$out.pfxsrc" "$dep" > "$out.deps"
+	rm -f "$src" "$dep" "$out.base.$$"
 	printf '%s\n' "$ST_DOM_MISS" > "$out.miss"
 	printf '%s\n' "$ST_DOM_SRC" > "$out.how"
 	if [ -s "$out.pfxsrc" ]; then
@@ -28261,6 +28300,16 @@ _st_dom_build() {
 		: > "$out.ips"
 	fi
 	wc -l < "$out.ips" | tr -d ' ' > "$out.ipn"
+}
+_st_dom_f() { if [ -n "$ST_DOM_ROW" ]; then printf '%s\n' "$ST_DOM_ROW" | cut -d'|' -f"$1"; else _rb_svc_field "$id" "$1"; fi; }
+_st_dom_stale() {
+	local f
+	[ -f "$1.deps" ] || return 0
+	[ -n "$(find "$1" -mmin +720 2>/dev/null)" ] && return 0
+	for f in "$RB_SHARE/services.conf" "$ST_CAT_IDX" "$ST_CAT_SVC" $(cat "$1.deps" 2>/dev/null); do
+		[ "$f" -nt "$1" ] && return 0
+	done
+	return 1
 }
 
 steer_svc_domflags() {
@@ -28293,8 +28342,8 @@ steer_svc_dom() {
 	_rb_routable "$id" || { echo '{"error":"у этого пункта нет списка"}'; return 1; }
 	f="$ST_RUN/dom/$id.txt"
 	[ "$id" = custom ] && [ -n "$ST_SEC" ] && f="$ST_RUN/dom/custom.$ST_SEC.txt"
-	if [ ! -f "$f" ] || [ ! -f "$f.how" ] || [ ! -f "$f.ipn" ] || [ ! -f "$f.ips" ] || [ -n "$(find "$f" -mmin +1 2>/dev/null)" ] || { [ "$o" = 0 ] && [ "$id" = custom ] && [ "$k" != ip ]; }; then
-		_st_dom_build "$id" "$f"
+	if [ ! -f "$f" ] || [ ! -f "$f.how" ] || [ ! -f "$f.ipn" ] || [ ! -f "$f.ips" ] || _st_dom_stale "$f" || { [ "$o" = 0 ] && [ "$id" = custom ] && [ "$k" != ip ]; }; then
+		_st_dom_build "$id" "$f" >/dev/null 2>&1 </dev/null
 	fi
 	n="$(wc -l < "$f" | tr -d ' ')"
 	if [ "$id" != custom ]; then
@@ -28310,7 +28359,7 @@ steer_svc_dom() {
 _st_find_ip() {
 	local a s
 	for s in 127.0.0.1 77.88.8.8 1.1.1.1; do
-		a="$(_stl_t 4 nslookup "$1" "$s" 2>/dev/null | awk '/^Name:/ { f = 1; next } f && /^Address/ { a = $0; sub(/^Address[ 0-9]*:[ \t]*/, "", a); if (a ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/) { print a; exit } }')"
+		a="$(_stl_t 3 nslookup "$1" "$s" 2>/dev/null | awk '/^Name:/ { f = 1; next } f && /^Address/ { a = $0; sub(/^Address[ 0-9]*:[ \t]*/, "", a); if (a ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/) { print a; exit } }')"
 		case "$a" in ''|198.18.*|198.19.*|0.*|127.*) continue ;; esac
 		printf '%s' "$a"
 		return 0
@@ -28339,7 +28388,8 @@ _st_ip_in() {
 
 steer_svc_find() {
 	local q host="" ip="" d="$ST_RUN/dom" suf="$ST_RUN/find.$$.s" res="$ST_RUN/find.$$.r" sel miss nmiss=0 sep=""
-	local id name f3 f4 f5 f6 f7 f8 rest f by line n grp on
+	local id name f3 f4 f5 f6 f7 f8 rest f by line n grp on t0 late="" npend=0
+	t0="$(date +%s)"
 	q="$(_zm_route_target "$1")" || { echo '{"error":"введите сайт или IP, например fast.com или 1.2.3.4"}'; return 1; }
 	if printf '%s' "$q" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$'; then
 		printf '%s' "$q" | awk -F. '$1 < 256 && $2 < 256 && $3 < 256 && $4 < 256 { ok = 1 } END { exit !ok }' || { echo '{"error":"такого IP-адреса не бывает — в каждой части число от 0 до 255"}'; return 1; }
@@ -28355,10 +28405,16 @@ steer_svc_find() {
 		case "$id" in *[!A-Za-z0-9_.-]*) continue ;; esac
 		f="$d/$id.txt"
 		[ "$id" = custom ] && [ -n "$ST_SEC" ] && f="$d/custom.$ST_SEC.txt"
-		if [ "$id" = custom ] || [ ! -f "$f" ] || [ ! -f "$f.pfxsrc" ] || [ -s "$f.miss" ] || [ -n "$(find "$f" -mmin +9 2>/dev/null)" ]; then
-			ST_DOM_NODL=1
-			_st_dom_build "$id" "$f" </dev/null 2>/dev/null
-			ST_DOM_NODL=""
+		if [ "$id" = custom ] || [ ! -f "$f" ] || [ ! -f "$f.pfxsrc" ] || [ -s "$f.miss" ] || _st_dom_stale "$f"; then
+			if [ "$id" = custom ] || { [ -z "$late" ] && [ $(( $(date +%s) - t0 )) -lt 10 ]; }; then
+				ST_DOM_NODL=1; ST_DOM_ROW="$id|$name|$f3|$f4|$f5|$f6|$f7|$f8|$rest"
+				_st_dom_build "$id" "$f" </dev/null >/dev/null 2>&1
+				ST_DOM_NODL=""; ST_DOM_ROW=""
+			else
+				late=1
+				printf '%s\n' "$id" >> "$res.late"
+				[ -f "$f" ] && [ -f "$f.pfxsrc" ] || { npend=$((npend + 1)); continue; }
+			fi
 		fi
 		by=""; line=""
 		if [ -s "$suf" ] && [ -s "$f" ]; then
@@ -28375,6 +28431,19 @@ steer_svc_find() {
 		on=false; case "$sel" in *" $id "*) on=true ;; esac
 		printf '%s|%s|%s|%s|%s|%s|%s\n' "$id" "$name" "$grp" "$on" "$by" "$line" "${n:-0}" >> "$res"
 	done < "$res.svc"
+	if [ -s "$res.late" ]; then
+		[ -d "$ST_RUN/findb.lock" ] && [ -n "$(find "$ST_RUN/findb.lock" -maxdepth 0 -mmin +10 2>/dev/null)" ] && rmdir "$ST_RUN/findb.lock" 2>/dev/null
+		if mkdir "$ST_RUN/findb.lock" 2>/dev/null; then
+			mv -f "$res.late" "$ST_RUN/findb.list"
+			( _rb_svc_src | awk -F'|' -v L="$ST_RUN/findb.list" 'BEGIN { while ((getline l < L) > 0) w[l] = 1 } ($1 in w) && !s[$1]++' |
+				while IFS= read -r ST_DOM_ROW; do
+					id="${ST_DOM_ROW%%|*}"; ST_DOM_NODL=1
+					_st_dom_build "$id" "$d/$id.txt" </dev/null >/dev/null 2>&1
+				done
+				rm -f "$ST_RUN/findb.list"; rmdir "$ST_RUN/findb.lock" ) >/dev/null 2>&1 </dev/null &
+		fi
+		rm -f "$res.late"
+	fi
 	miss="$(cat "$d"/*.txt.miss 2>/dev/null | tr ' ' '\n' | grep . | sort -u)"
 	if [ -n "$miss" ]; then
 		nmiss="$(printf '%s\n' "$miss" | grep -c .)"
@@ -28383,7 +28452,8 @@ steer_svc_find() {
 			( for f in $miss; do _st_srs_get "$f"; done; rmdir "$ST_RUN/find.lock" ) >/dev/null 2>&1 </dev/null &
 		fi
 	fi
-	printf '{"q":"%s","host":"%s","ip":"%s","missing":%s,"hits":[' "$(esc "$q")" "$(esc "$host")" "$(esc "$ip")" "${nmiss:-0}"
+	nmiss=$(( ${nmiss:-0} + npend ))
+	printf '{"q":"%s","host":"%s","ip":"%s","missing":%s,"hits":[' "$(esc "$q")" "$(esc "$host")" "$(esc "$ip")" "$nmiss"
 	while IFS='|' read -r id name grp on by line n; do
 		printf '%s{"id":"%s","name":"%s","group":"%s","on":%s,"by":"%s","line":"%s","size":%s}' "$sep" "$id" "$(esc "$name")" "$(esc "$grp")" "$on" "$by" "$(esc "$line")" "${n:-0}"
 		sep=","
@@ -28912,6 +28982,16 @@ do_steer_home_back() {
 
 _st_vpn_heal() {
 	local pinned
+	if stl_running && _st_vpn_probe >/dev/null 2>&1; then echo "[ OK ] VPN уже работает — чинить нечего"; return 0; fi
+	if [ -n "$ST_VPN_STUCK" ]; then
+		_rb_warn "VPN-туннель отвечает, но Steer после сбоя узла так и не вернул в него трафик выбранных сервисов — перезапускаем Steer"
+		logger -t zapret-manager "Steer: туннель VPN отвечает, но выход остался выключенным после сбоя узла — перезапускаем службу"
+		_zm_run 120 stl_restart >/dev/null 2>&1
+		sleep 3
+		if _st_vpn_check >/dev/null 2>&1 && _st_vpn_probe >/dev/null 2>&1; then echo "[ OK ] VPN снова работает — трафик сервисов идёт через туннель"; return 0; fi
+		echo "[FAIL] После перезапуска Steer трафик в VPN так и не пошёл — панель повторит попытку позже"
+		return 1
+	fi
 	pinned="$(cat "$ST_SUB_NODE" 2>/dev/null)"
 	if [ -n "$pinned" ] && stl_running && stl_state vpn >/dev/null 2>&1 && _st_node_down; then
 		_rb_warn "VPN не отвечает: не отвечает выбранный узел «$pinned»${STL_NWHY:+ ($STL_NWHY)} — ядро steer исправно, перезапускать его незачем"
@@ -28949,7 +29029,7 @@ do_steer_vpn_heal() {
 }
 
 _st_vpn_watch() {
-	local f="$ST_VPN_WATCH" fails=0 heals=0 last=0 now wait
+	local f="$ST_VPN_WATCH" fails=0 heals=0 last=0 now wait kind="" cur=dead
 	_st_installed && _st_use_vpn && [ ! -f "$ST_OFF" ] && [ -s "$ST_SUB" ] && _st_owns "steer-spec" || { rm -f "$f"; return 0; }
 	stl_enabled || { rm -f "$f"; return 0; }
 	_st_work_main || { rm -f "$f"; return 0; }
@@ -28958,7 +29038,7 @@ _st_vpn_watch() {
 	[ -s "$ST_SUB_HOME" ] && _st_home_tick
 	if _st_vpn_probe; then rm -f "$f" "$JOBS_DIR/steer.holdlog${ST_SEC:+.$ST_SEC}"; return 0; fi
 	_zm_inet_ok || return 0
-	if [ -s "$ST_SUB_NODE" ] && [ "$(_st_node_pol)" = hold ] && stl_running && stl_state vpn >/dev/null 2>&1 && _st_node_down; then
+	if [ -z "$ST_VPN_STUCK" ] && [ -s "$ST_SUB_NODE" ] && [ "$(_st_node_pol)" = hold ] && stl_running && stl_state vpn >/dev/null 2>&1 && _st_node_down; then
 		if ! cmp -s "$ST_SUB_NODE" "$JOBS_DIR/steer.holdlog${ST_SEC:+.$ST_SEC}" 2>/dev/null; then
 			cp -f "$ST_SUB_NODE" "$JOBS_DIR/steer.holdlog${ST_SEC:+.$ST_SEC}" 2>/dev/null
 			logger -t zapret-manager "Steer: выбранный узел «$(head -n1 "$ST_SUB_NODE")» не отвечает — держим его, как задано в настройке"
@@ -28966,14 +29046,16 @@ _st_vpn_watch() {
 		rm -f "$f"
 		return 0
 	fi
-	{ read -r fails heals last < "$f"; } 2>/dev/null
+	{ read -r fails heals last kind < "$f"; } 2>/dev/null
 	fails="${fails:-0}"; heals="${heals:-0}"; last="${last:-0}"
+	[ -n "$ST_VPN_STUCK" ] && cur=stuck
+	[ "$kind" = "$cur" ] || { fails=0; heals=0; last=0; }
 	fails=$((fails + 1))
 	now="$(date +%s)"
-	if [ "$fails" -lt 2 ]; then echo "$fails $heals $last" > "$f"; return 0; fi
+	if [ "$fails" -lt 2 ]; then echo "$fails $heals $last $cur" > "$f"; return 0; fi
 	case "$heals" in 0) wait=0 ;; 1) wait=600 ;; 2) wait=1800 ;; *) wait=10800 ;; esac
-	[ $((now - last)) -lt "$wait" ] && { echo "$fails $heals $last" > "$f"; return 0; }
-	echo "$fails $((heals + 1)) $now" > "$f"
+	[ $((now - last)) -lt "$wait" ] && { echo "$fails $heals $last $cur" > "$f"; return 0; }
+	echo "$fails $((heals + 1)) $now $cur" > "$f"
 	job_start steer do_steer_vpn_heal >/dev/null 2>&1
 	return 0
 }
@@ -45032,7 +45114,7 @@ return view.extend({
 				}
 				if ((parseInt(r.missing, 10) || 0) > 0)
 					out.push(E('div', { 'class': 'zm-find-note' }, [ E('span', { 'class': 'zm-find-spin', 'aria-hidden': 'true' }),
-						'Докачиваем ещё ' + r.missing + ' ' + plural(+r.missing, 'список', 'списка', 'списков') + ' — результаты обновятся сами' ]));
+						'Готовим ещё ' + r.missing + ' ' + plural(+r.missing, 'список', 'списка', 'списков') + ' — результаты обновятся сами' ]));
 				if (domSvc('custom')) out.push(E('div', { 'class': 'zm-find-foot' }, [
 					E('button', { 'type': 'button', 'class': 'cbi-button' + (inCustom ? '' : ' cbi-button-action'), 'disabled': inCustom || findAdding || busy ? '' : null,
 						'click': function() { findAddCustom(r.host || r.q || q); } },
@@ -55921,7 +56003,7 @@ var CREDITS = [
 	{ g: 'block', product: 'ByeDPI-OpenWrt', author: 'DPITrickster', url: 'https://github.com/DPITrickster/ByeDPI-OpenWrt' },
 	{ g: 'block', product: 'zapret4rocket (список РКН)', author: 'IndeecFOX', url: 'https://github.com/IndeecFOX/zapret4rocket' },
 	{ g: 'block', product: 'dpi-checkers', author: 'hyperion-cs', url: 'https://github.com/hyperion-cs/dpi-checkers' },
-	{ g: 'block', product: 'список доменов для теста YouTube', author: 'romanvh', url: 'https://github.com/romanvh' },
+	{ g: 'block', product: 'список доменов для теста YouTube', author: 'romanvht', url: 'https://github.com/romanvht' },
 	{ g: 'vpn', product: 'sTGWS, Steer, каталог списков', author: 'xyzmean', url: 'https://github.com/xyzmean' },
 	{ g: 'vpn', product: 'NetShift (основа Forkozz)', author: 'yandexru45', url: 'https://github.com/yandexru45/netshift' },
 	{ g: 'vpn', product: 'sing-box', author: 'SagerNet', url: 'https://github.com/SagerNet/sing-box' },
@@ -60743,7 +60825,7 @@ return view.extend({
 				}
 				if ((parseInt(r.missing, 10) || 0) > 0)
 					out.push(E('div', { 'class': 'zm-find-note' }, [ E('span', { 'class': 'zm-find-spin', 'aria-hidden': 'true' }),
-						'Докачиваем ещё ' + r.missing + ' ' + plural(+r.missing, 'список', 'списка', 'списков') + ' — результаты обновятся сами' ]));
+						'Готовим ещё ' + r.missing + ' ' + plural(+r.missing, 'список', 'списка', 'списков') + ' — результаты обновятся сами' ]));
 				out.push(E('div', { 'class': 'zm-find-foot' }, [
 					E('button', { 'type': 'button', 'class': 'cbi-button' + (inOwn ? '' : ' cbi-button-action'), 'disabled': inOwn || busy || saving ? '' : null,
 						'click': function() { findAddOwn(r); } }, inOwn ? 'Уже в «Своём списке»' : 'Добавить в «Свой список»')
