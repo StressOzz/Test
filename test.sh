@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.230
+# Version: 5.260
 ZM_VERSION_EOF
 set -e
 
@@ -25065,7 +25065,7 @@ _stl_rule() {
 	[ "$(_st_realip)" = on ] && x=',"resolve":"realip"'
 	[ -z "$ZM_STL_NODNS" ] && [ "$(_st_dnsmode)" = tun ] && { x="$x,\"dns\":\"zm_tun$dnt\""; _stl_dns_need "$dnt" "$out"; }
 	local r="" top=""
-	[ -n "$cu" ] && [ -z "$ZM_STL_NOFAM" ] && { top=1; x="$x,\"family\":\"4\""; }
+	[ -n "$cu" ] && top=1
 	if [ -n "$sfm$sfa" ]; then
 		[ -n "$sfm" ] && r="{\"name\":$(_stl_js "$(_stl_ident "${lid}~m")"),\"for\":[$sfm],\"to\":$(_stl_js "$lid"),\"out\":\"$out\"$x}"
 		[ -n "$sfa" ] && r="$r${r:+,}{\"name\":$(_stl_js "$(_stl_ident "${lid}~a")"),\"for\":[$sfa],\"to\":$(_stl_js "$lid"),\"out\":\"$out\"$x}"
@@ -25312,42 +25312,33 @@ _stl_upd_hint() {
 }
 
 stl_apply() {
-	local new="$STL_SPEC.zm.$$" prev="$STL_TMP/spec.prev" err w=0 ZM_STL_NOFAM="" nf="$ST_DIR/nofam" cv ZM_STL_NOV6T=""
+	local new="$STL_SPEC.zm.$$" prev="$STL_TMP/spec.prev" err w=0 i=0 ck=0 fx="" again=""
+	local ZM_STL_NOV6T="" ZM_STL_NOCTTL="" ZM_STL_NODNS=""
 	mkdir -p "$STL_ETC" "$STL_TMP"
-	cv="$(stl_version)"
-	[ -n "$cv" ] && [ "$(cat "$nf" 2>/dev/null)" = "$cv" ] && ZM_STL_NOFAM=1
+	rm -f "$ST_DIR/nofam"
 	_stl_spec "$1" > "$new" || { rm -f "$new"; echo "ОШИБКА: в настройке нет ни одного списка"; return 1; }
 	_stl_say "Проверяем правила: $(grep -o '"out":' "$new" | wc -l | tr -d ' ')"
-	local ck=0 noct=""
 	err="$(_stl_check "$new")" && ck=1
-	if [ "$ck" = 0 ] && grep -q '"family":"4"' "$new" && printf '%s' "$err" | grep -q 'family'; then
-		ZM_STL_NOFAM=1
-		_stl_spec "$1" > "$new" && err="$(_stl_check "$new")" && ck=1
-		if [ "$ck" = 1 ] && [ -n "$cv" ]; then
-			mkdir -p "$ST_DIR"; echo "$cv" > "$nf"
-			echo "   · Ядро steer $cv не умеет ставить «Свой список» секции выше сервисов других секций — правила применены без этого. $(_stl_upd_hint 2.1.0)"
-		fi
-	fi
-	if [ "$ck" = 0 ] && printf '%s' "$err" | grep -qi 'ipv6' && grep -q '"kind":"tunnel"' "$new"; then
-		ZM_STL_NOV6T=1
-		_stl_spec "$1" > "$new" && err="$(_stl_check "$new")" && ck=1
-	fi
-	[ "$ck" = 1 ] && [ -z "$ZM_STL_NOFAM" ] && grep -q '"family":"4"' "$new" && rm -f "$nf"
-	[ "$ck" = 0 ] && grep -q '"cache_ttl"' "$new" && noct=1
-	if [ -n "$noct" ] && ( ZM_STL_NOCTTL=1; _stl_spec "$1" ) > "$new" && err="$(_stl_check "$new")"; then
-		ck=1
-		_stl_say "Ядро steer не знает настройку «Помнить адреса сервисов» — правила применены без неё. $(_stl_upd_hint)"
-	fi
+	while [ "$ck" = 0 ] && [ "$i" -lt 8 ]; do
+		i=$((i + 1))
+		if [ -z "$ZM_STL_NOV6T" ] && grep -q '"kind":"tunnel"' "$new" && printf '%s' "$err" | grep -qi 'ipv6'; then ZM_STL_NOV6T=1
+		elif [ -z "$ZM_STL_NOCTTL" ] && grep -q '"cache_ttl"' "$new" && printf '%s' "$err" | grep -q 'cache_ttl'; then ZM_STL_NOCTTL=1; fx="$fx ct"
+		elif [ -z "$ZM_STL_NODNS" ] && grep -q '"zm_tun' "$new" && printf '%s' "$err" | grep -q 'zm_tun'; then ZM_STL_NODNS=1; fx="$fx dns"
+		elif [ -z "$again" ]; then again=1; sleep 1; err="$(_stl_check "$new")" && ck=1; continue
+		elif [ -z "$ZM_STL_NOCTTL" ] && grep -q '"cache_ttl"' "$new"; then ZM_STL_NOCTTL=1; fx="$fx ct"
+		elif [ -z "$ZM_STL_NODNS" ] && grep -q '"zm_tun' "$new"; then ZM_STL_NODNS=1; fx="$fx dns"
+		else break; fi
+		_stl_spec "$1" > "$new" || break
+		err="$(_stl_check "$new")" && ck=1
+	done
 	if [ "$ck" = 0 ]; then
-		if grep -q '"zm_tun' "$new" && ( ZM_STL_NODNS=1; [ -n "$noct" ] && ZM_STL_NOCTTL=1; _stl_spec "$1" ) > "$new" && err="$(_stl_check "$new")"; then
-			_stl_say "Ядро steer не умеет DNS через туннель — правила применены без него. $(_stl_upd_hint)"
-		else
-			rm -f "$new"
-			echo "ОШИБКА: ядро steer отвергло настройку"
-			printf '%s\n' "$err" | tail -n 5 | _st_outs_text
-			return 1
-		fi
+		rm -f "$new"
+		echo "ОШИБКА: ядро steer отвергло настройку"
+		printf '%s\n' "$err" | tail -n 5 | _st_outs_text
+		return 1
 	fi
+	case "$fx" in *ct*) _stl_say "Ядро steer не знает настройку «Помнить адреса сервисов» — правила применены без неё. $(_stl_upd_hint)" ;; esac
+	case "$fx" in *dns*) _stl_say "Ядро steer не умеет DNS через туннель — правила применены без него. $(_stl_upd_hint)" ;; esac
 	[ "$(stl_spec_whose)" = none ] && [ -s "$STL_SPEC" ] && [ ! -f "$STL_KEEP" ] && cp -f "$STL_SPEC" "$STL_KEEP"
 	rm -f "$prev"; [ -s "$STL_SPEC" ] && cp -f "$STL_SPEC" "$prev"
 	mv -f "$new" "$STL_SPEC"
@@ -53762,7 +53753,13 @@ html.zm-theme-dark .zm-tg-chip-ok { color: #3fb950; } html.zm-theme-dark .zm-tg-
 .zm-tg-socks-line { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .zm-tg-socks-line > .zm-swrow { flex: 1 1 260px; margin: 0; }
 .zm-tg-socks-line > .cbi-button { margin: 0; }
-.zm-tg-socks-strip > .zm-tg-socks-body { margin-top: 6px; }
+.zm-tg-socks-strip > .zm-tg-socks-body { margin: 12px 0 10px; padding: 0 0 0 50px; }
+.zm-tg-socks-port { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
+.zm-tg-socks-port-l { font-size: 13px; opacity: .8; }
+.zm-tg-socks-port .zm-tg-edit-port { width: 96px !important; margin: 0; }
+.zm-tg-socks-body > .zm-tg-x-note { margin: 12px 0 0; }
+.zm-tg-socks-body > .zm-actions { margin-top: 12px; }
+@media (max-width: 480px) { .zm-tg-socks-strip > .zm-tg-socks-body { padding-left: 0; } }
 .zm-tg-socks-strip > .zm-tg-x-note { margin: 8px 0 0; }
 @media (max-width: 600px) { .zm-tg-x-row { grid-template-columns: 1fr; } .zm-tg-x-row > .zm-tg-edit-label { line-height: 1.3; } .zm-tg-x-own, .zm-tg-x-host, .zm-tg-x-site { flex: 1 1 100%; width: 100% !important; } .zm-tg-x-seg { display: flex; width: 100%; box-sizing: border-box; } .zm-tg-x-seg .zm-seg-item { flex: 1; text-align: center; padding: 6px 8px; } }
 
@@ -58820,11 +58817,7 @@ return view.extend({
 		}
 		function socksPanel(v, st, cls) {
 			var s = st.socks || {}, body = E('div', { 'class': 'zm-tg-x-body zm-tg-socks-body ' + (cls || '') });
-			function row(label, kids) {
-				return E('div', { 'class': 'zm-tg-x-row' }, [ E('div', { 'class': 'zm-tg-edit-label' }, label), E('div', { 'class': 'zm-tg-x-field' }, kids) ]);
-			}
 			var dr = socksDraft || (socksDraft = { on: true, port: String(s.port || 1080), lan: true, busy: false, net: null });
-			var host = function() { return dr.lan ? (s.on && s.lan ? socksHost(st, s) : (data.lan_ip || '192.168.1.1')) : '127.0.0.1'; };
 			var netT = null;
 			function netCheck() {
 				clearTimeout(netT);
@@ -58842,8 +58835,14 @@ return view.extend({
 				}, 450);
 			}
 			var portIn = E('input', { 'type': 'text', 'inputmode': 'numeric', 'class': 'cbi-input-text zm-tg-edit-in zm-tg-edit-port', 'value': dr.port, 'maxlength': '5', 'aria-label': 'Порт SOCKS5' });
-			var portMsg = E('div', { 'class': 'zm-tg-chips' }), linkWrap = E('div', {});
+			var portMsg = E('div', { 'class': 'zm-tg-chips' });
 			var applyBtn = E('button', { 'class': 'cbi-button cbi-button-positive' }, 'Применить');
+			var note = E('p', { 'class': 'zm-hint zm-tg-x-note zm-tg-socks-note' }, s.on ? 'После смены порта добавьте в Telegram новую ссылку сверху — старая перестанет работать.' : 'Подключаться смогут только устройства вашей домашней сети — пароля у SOCKS5 нет.');
+			var acts = E('div', { 'class': 'zm-actions' }, [ applyBtn, E('button', { 'class': 'cbi-button', 'click': function() {
+				if (dr.busy) return;
+				if (s.on) { dr.port = String(s.port); portIn.value = dr.port; dr.net = { free: true, self: true }; ++portSeq; clearTimeout(netT); paint(); return; }
+				socksOpen = false; socksDraft = null; renderCards(data);
+			} }, s.on ? 'Вернуть' : 'Отмена') ]);
 			function rebuild() { var nb = socksPanel(v, st, cls); body.parentNode && body.parentNode.replaceChild(nb, body); }
 			function portOk() { var p = +dr.port; return /^\d{2,5}$/.test(dr.port) && p >= 1 && p <= 65535 && String(p) !== String(st.port); }
 			function same() { return !!s.on && String(+dr.port) === String(s.port) && !!s.lan; }
@@ -58854,10 +58853,10 @@ return view.extend({
 				else if (String(p) === String(st.port)) portMsg.appendChild(chip('zm-tg-chip-bad', '✕ это порт MTProto этого прокси — нужен другой'));
 				else if (dr.net === 'wait') portMsg.appendChild(chip('zm-tg-chip-wait', 'проверяем, свободен ли порт…'));
 				else if (dr.net && dr.net.free === false) portMsg.appendChild(chip('zm-tg-chip-bad', '✕ ' + (dr.net.why || 'порт занят')));
-				else if (dr.net && dr.net.free) portMsg.appendChild(chip('zm-tg-chip-ok', '✓ ' + (dr.net.self ? 'сейчас этот порт у SOCKS5' : 'порт свободен')));
-				linkWrap.innerHTML = '';
-				if (dr.lan) linkWrap.appendChild(portOk() ? E('div', { 'class': 'zm-tg-link-box zm-tg-edit-preview' }, [ zm.secret('tg://socks?server=' + host() + '&port=' + p) ])
-					: E('div', { 'class': 'zm-tg-link-box zm-tg-edit-preview zm-tg-edit-preview-off' }, 'Ссылка появится, когда порт будет в порядке'));
+				else if (dr.net && dr.net.free && !same()) portMsg.appendChild(chip('zm-tg-chip-ok', '✓ порт свободен'));
+				var show = !s.on || !same() || dr.busy;
+				acts.style.display = note.style.display = show ? '' : 'none';
+				portMsg.style.display = portMsg.firstChild ? '' : 'none';
 				var bad = !portOk() || dr.net === 'wait' || !dr.net || dr.net.free === false;
 				applyBtn.disabled = bad || same() || dr.busy;
 				applyBtn.textContent = dr.busy ? 'Сохраняем…' : same() ? 'Без изменений' : s.on ? 'Сохранить и перезапустить' : 'Включить';
@@ -58868,11 +58867,10 @@ return view.extend({
 				dr.busy = true; paint();
 				socksApply(st, dr, function() { dr.busy = false; paint(); });
 			});
-			body.appendChild(row('Порт', [ portIn, portMsg ]));
+			body.appendChild(E('div', { 'class': 'zm-tg-socks-port' }, [ E('span', { 'class': 'zm-tg-socks-port-l' }, 'Порт'), portIn, portMsg ]));
 			if (s.on && !s.lan) body.appendChild(E('p', { 'class': 'zm-hint zm-tg-x-note' }, 'Сейчас SOCKS5 доступен только самому роутеру. После сохранения к нему смогут подключаться устройства вашей домашней сети.'));
-			if (dr.lan) body.appendChild(row('Ссылка', [ linkWrap ]));
-			body.appendChild(E('p', { 'class': 'zm-hint zm-tg-x-note zm-tg-socks-note' }, s.on ? 'После смены порта добавьте в Telegram новую ссылку — старая перестанет работать.' : 'Подключаться смогут только устройства вашей домашней сети — пароля у SOCKS5 нет.'));
-			body.appendChild(E('div', { 'class': 'zm-actions' }, [ applyBtn, E('button', { 'class': 'cbi-button', 'click': function() { if (!dr.busy) { socksOpen = false; socksDraft = null; renderCards(data); } } }, 'Отмена') ]));
+			body.appendChild(note);
+			body.appendChild(acts);
 			if (dr.net === null) netCheck(); else paint();
 			return body;
 		}
@@ -58888,7 +58886,7 @@ return view.extend({
 		}
 
 		function socksBlock(v, st) {
-			var s = st.socks || {}, on = !!(s.ok && s.on), open = !!socksOpen && !!s.ok && !st.uci && !socksBusy;
+			var s = st.socks || {}, on = !!(s.ok && s.on), open = !!s.ok && !st.uci && !socksBusy && (on || !!socksOpen);
 			var box = E('div', { 'class': 'zm-tg-socks-strip' + (open ? ' zm-tg-socks-strip-open' : '') });
 			var hint = !s.ok ? 'Есть в Rust с версии 2.6.0 — обновите прокси, чтобы включить.'
 				: socksBusy === 'off' ? 'Выключаем — Rust перезапускается…'
@@ -58901,8 +58899,7 @@ return view.extend({
 					if (st.uci) { zm.toast('Rust установлен пакетом — SOCKS5 включается в его настройках', 'warning'); return; }
 					if (socksBusy || busyMap.rust) return;
 					if (on) socksApply(st, { on: false }); else socksEnable(st);
-				}, !s.ok || !!socksBusy),
-				on && !open && !st.uci && !socksBusy ? E('button', { 'class': 'cbi-button', 'click': function() { socksOpen = true; socksDraft = null; renderCards(data); } }, 'Сменить порт') : E([])
+				}, !s.ok || !!socksBusy)
 			]));
 			if (open) box.appendChild(socksPanel(v, st));
 			if (st.uci && s.ok) box.appendChild(socksUci(st));
@@ -59234,7 +59231,7 @@ return view.extend({
 						'click': function() { doAction(v.id, 'install'); }
 					}, 'Установить'));
 				}
-				cards.appendChild(E('div', { 'class': 'zm-card' + ((extOpen[v.id] && v.kind === 'proto' || socksOpen && v.id === 'rust') && st.installed ? ' zm-tg-wide' : '') + (st.installed && st.edit && editOpen[v.id] ? ' zm-tg-open' : ''), 'data-k': v.id }, [
+				cards.appendChild(E('div', { 'class': 'zm-card' + (extOpen[v.id] && v.kind === 'proto' && st.installed ? ' zm-tg-wide' : '') + (st.installed && st.edit && editOpen[v.id] ? ' zm-tg-open' : ''), 'data-k': v.id }, [
 					E('h3', {}, v.id === 'rust' && st.socks && st.socks.ok && st.socks.on ? 'Rust (MTProto + SOCKS5)' : v.title),
 					E('div', { 'class': 'zm-row' }, [
 						E('span', { 'class': 'zm-label' }, 'Статус'),
