@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.123
+# Version: 5.050
 ZM_VERSION_EOF
 set -e
 
@@ -64391,19 +64391,19 @@ var mqDark = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)
 var THEMES = [
 	{ id: 'micro', name: 'Светлая', ico: 'sun', fonts: 'Onest:wght@400;500;600;700', color: '#f4f5f8' },
 	{ id: 'light', name: 'Лёгкая', ico: 'sun' },
-	{ id: 'dark', name: 'Тёмная', ico: 'moon', dark: true },
 	{ id: 'ink', name: 'Контур', ico: 'ink' },
+	{ id: 'metro', name: 'Метро', ico: 'metro', fx: true, fonts: 'Onest:wght@400;500;600;700', color: '#f4f4f2' },
 	{ id: 'bento', name: 'Бенто', ico: 'bento', fonts: 'Onest:wght@400;500;600;700&family=Unbounded:wght@600;800', color: '#efebe4' },
 	{ id: 'retro', name: 'Ретро 98', ico: 'retro', color: '#008080' },
+	{ id: 'dark', name: 'Тёмная', ico: 'moon', dark: true },
+	{ id: 'contrast', name: 'Контраст', ico: 'contrast', dark: true, fx: 'warp', fonts: 'Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700', color: '#0a0d13' },
 	{ id: 'depth', name: 'Объём 3D', ico: 'depth', dark: true, fonts: 'Onest:wght@400;500;600;700&family=Unbounded:wght@600;800', color: '#0a0e18' },
-	{ id: 'graphite', name: 'Графит', ico: 'graphite', dark: true, fonts: 'Space+Grotesk:wght@400;500;700', color: '#141416' },
 	{ id: 'oled', name: 'OLED', ico: 'oled', dark: true, fonts: 'Inter:wght@400;500;600;700;800', color: '#000000' },
 	{ id: 'matrix', name: 'Матрица', ico: 'matrix', dark: true, fx: true, fonts: 'Share+Tech+Mono', color: '#000000' },
+	{ id: 'graphite', name: 'Графит', ico: 'graphite', dark: true, fonts: 'Space+Grotesk:wght@400;500;700', color: '#141416' },
 	{ id: 'neon', name: 'Неон', ico: 'neon', dark: true, fx: true, fonts: 'Exo+2:wght@400;500;600;700&family=Russo+One', color: '#07060f' },
-	{ id: 'synth', name: 'Синтвейв', ico: 'synth', dark: true, fx: true, fonts: 'Exo+2:ital,wght@0,400;0,500;0,600;0,700;1,800', color: '#12062b' },
 	{ id: 'noir', name: 'Нуар', ico: 'noir', dark: true, fx: true, fonts: 'Oswald:wght@400;500;600&family=Playfair+Display:wght@600;700', color: '#0b0b0b' },
-	{ id: 'contrast', name: 'Контраст', ico: 'contrast', dark: true, fx: 'warp', fonts: 'Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700', color: '#0a0d13' },
-	{ id: 'metro', name: 'Метро', ico: 'metro', fx: true, fonts: 'Onest:wght@400;500;600;700', color: '#f4f4f2' },
+	{ id: 'synth', name: 'Синтвейв', ico: 'synth', dark: true, fx: true, fonts: 'Exo+2:ital,wght@0,400;0,500;0,600;0,700;1,800', color: '#12062b' },
 	{ id: 'custom', name: 'Своя тема', ico: 'brush', custom: true }
 ];
 function themeById(id) { return THEMES.filter(function (x) { return x.id === id; })[0]; }
@@ -64443,8 +64443,8 @@ var LOOK_MONO = [
 var LOOK_ACC = [ '#2d5bff', '#7c5cff', '#0ea5e9', '#14b8a6', '#16a34a', '#f59e0b', '#f97316', '#ef4444', '#ec4899', '#64748b' ];
 var LOOK_ZOOM = [ [ 0.9, '90%' ], [ 1, '100%' ], [ 1.1, '110%' ], [ 1.2, '120%' ] ];
 var ANIM_RE = /^(stars|traffic|music|matrix|neon|synth|noir|metro|embers|lava|fire|metal|silk|ink|plasma|warp)$/, ANIM_HEAVY = /^(matrix|neon|synth|noir|metro|embers|lava|fire|metal|silk|ink|plasma|warp)$/, ANIM_DARK = /^(matrix|neon|synth|noir|embers|lava|fire|metal|silk|ink|plasma|warp)$/;
-var LOOK_VIS = [ 'acc', 'tint', 'font', 'mono', 'rad', 'bord', 'shad', 'glass' ];
-var LOOK_DEF = { acc: '', tint: '', font: 'theme', mono: 'theme', zoom: 1, dens: 'n', rad: 'md', bord: 'md', shad: 'md', ctr: 'n', motion: 1, glass: 1, radio: 1, fps: 60, dpr: 2, pause: 1, batt: 0, react: 1, my: null };
+var LOOK_VIS = [ 'acc', 'tint', 'tcol', 'font', 'mono', 'rad', 'bord', 'shad', 'glass' ];
+var LOOK_DEF = { acc: '', tint: '', tcol: '', font: 'theme', mono: 'theme', zoom: 1, dens: 'n', rad: 'md', bord: 'md', shad: 'md', ctr: 'n', motion: 1, glass: 1, radio: 1, fps: 60, dpr: 2, pause: 1, batt: 0, react: 1, my: null };
 function lookPick(list, v) { return list.filter(function (x) { return x.id === v; })[0]; }
 function lookClean(o) {
 	var r = {}, k;
@@ -64456,6 +64456,7 @@ function lookClean(o) {
 	if (LOOK_ZOOM.some(function (z) { return z[0] === +o.zoom; })) r.zoom = +o.zoom;
 	if (o.dens === 'c') r.dens = 'c';
 	if (o.tint === 's' || o.tint === 'm') r.tint = o.tint;
+	if (/^#[0-9a-f]{6}$/i.test(o.tcol || '')) r.tcol = String(o.tcol).toLowerCase();
 	if (o.ctr === 'h') r.ctr = 'h';
 	if (/^(sharp|soft|md|round)$/.test(o.rad || '')) r.rad = o.rad;
 	if (/^(none|md|strong|acc)$/.test(o.bord || '')) r.bord = o.bord;
@@ -64559,7 +64560,7 @@ function lookApply() {
 }
 var LOOK_VARS = [ '--bg', '--surface', '--surface-solid', '--surface-2', '--surface-3', '--side-bg', '--input-bg', '--border', '--border-2', '--radius', '--radius-sm', '--zm-shadow', '--text-2', '--muted' ];
 function lookVars() {
-	var h = document.documentElement, L = LOOK, cs, v = {}, out = {}, tc, tx, sf, p, k, dk;
+	var h = document.documentElement, L = LOOK, cs, v = {}, out = {}, tc, bc, tx, sf, p, k, dk;
 	function col(x) { x = String(x || '').trim(); return x && window.CSS && CSS.supports && CSS.supports('color', x) ? x : ''; }
 	function mix(c, pc, x) { x = col(x); return c && x ? 'color-mix(in srgb, ' + c + ' ' + pc + '%, ' + x + ')' : ''; }
 	LOOK_VARS.forEach(function (n) { h.style.removeProperty(n); });
@@ -64567,13 +64568,14 @@ function lookVars() {
 	cs = getComputedStyle(h);
 	LOOK_VARS.forEach(function (n) { v[n] = cs.getPropertyValue(n).trim(); });
 	tc = col(L.acc) || col(cs.getPropertyValue('--a1'));
+	bc = col(L.tcol) || tc;
 	tx = col(cs.getPropertyValue('--text'));
 	dk = h.classList.contains('zm-theme-dark');
-	if (L.tint && tc) {
+	if (L.tint && bc) {
 		p = L.tint === 'm' ? [ 16, 8, 13 ] : [ 8, 4, 7 ];
-		out['--bg'] = mix(tc, p[0], v['--bg']);
-		[ '--surface', '--surface-solid', '--surface-2', '--surface-3', '--input-bg' ].forEach(function (n) { out[n] = mix(tc, p[1], v[n]); });
-		out['--side-bg'] = mix(tc, p[2], v['--side-bg']);
+		out['--bg'] = mix(bc, p[0], v['--bg']);
+		[ '--surface', '--surface-solid', '--surface-2', '--surface-3', '--input-bg' ].forEach(function (n) { out[n] = mix(bc, p[1], v[n]); });
+		out['--side-bg'] = mix(bc, p[2], v['--side-bg']);
 	}
 	sf = out['--surface-solid'] || col(v['--surface-solid']);
 	if (L.bord === 'strong' && tx && sf) { out['--border'] = mix(tx, 26, sf); out['--border-2'] = mix(tx, 38, sf); }
@@ -65150,6 +65152,7 @@ function bgoEnter() {
 	document.body.appendChild(pill);
 	document.body.appendChild(hint);
 	document.documentElement.classList.add('zm-bg-only');
+	dustPlace();
 	bgoPaint();
 	bgoWake();
 	bgo.h = setTimeout(function () { if (bgo) bgo.hint.classList.add('zmw-bgo-off'); }, 3200);
@@ -65180,6 +65183,7 @@ function bgoExit() {
 	if (bgo.pill.parentNode) bgo.pill.parentNode.removeChild(bgo.pill);
 	if (bgo.hint.parentNode) bgo.hint.parentNode.removeChild(bgo.hint);
 	bgo = null;
+	dustPlace();
 	document.documentElement.classList.remove('zm-bg-only');
 	document.documentElement.classList.remove('zm-bgo-idle');
 }
@@ -65780,8 +65784,8 @@ function glassStop() {
 }
 function dustPlace() {
 	if (!dust) return;
-	var host = loginEl || document.body;
-	if (dust.el.parentNode !== host) host.insertBefore(dust.el, host.firstChild);
+	var host = loginEl && !bgo ? loginEl : document.body;
+	if (dust.el.parentNode !== host) { host.insertBefore(dust.el, host.firstChild); dust.size(); }
 }
 function dustSync() {
 	var k = animKind();
@@ -65952,6 +65956,23 @@ function lookSeg(list, cur, pick) {
 			'keydown': function (ev) { if ((ev.key === 'Enter' || ev.key === ' ') && !on) { ev.preventDefault(); pick(o[0]); } } }, [ o[1] ]);
 	}));
 }
+function lookTintPick(L, paint) {
+	var acc = L.acc || (getComputedStyle(document.documentElement).getPropertyValue('--a1') || '').trim() || '#2d5bff', idle = !L.tint, own = !!L.tcol && LOOK_ACC.indexOf(L.tcol) < 0;
+	function pick(c) { if (!L.tint && c !== L.tcol) lookSet('tint', 's'); lookSet('tcol', c); paint(); }
+	var wrap = E('div', { 'class': 'zm-lk-acc zm-lk-tcol' + (idle ? ' zm-lk-tcol-idle' : ''), 'role': 'radiogroup', 'aria-label': 'Цвет окраски фона', 'title': idle ? 'Выберите цвет — окраска включится сама' : null });
+	wrap.appendChild(E('button', { 'type': 'button', 'class': 'zm-lk-own zm-lk-tc-auto' + (!L.tcol ? ' zm-active' : ''), 'title': 'Окраска в цвет акцента', 'click': function () { pick(''); } }, [
+		E('i', { 'class': 'zm-lk-tc-dot', 'style': 'background:' + acc }),
+		E('span', {}, [ 'Как акцент' ])
+	]));
+	LOOK_ACC.forEach(function (c) {
+		wrap.appendChild(E('button', { 'type': 'button', 'class': 'zm-lk-sw' + (L.tcol === c ? ' zm-active' : ''), 'style': 'background:' + c, 'title': c, 'aria-label': c, 'click': function () { pick(c); } }));
+	});
+	wrap.appendChild(E('label', { 'class': 'zm-lk-own' + (own ? ' zm-active' : ''), 'title': 'Свой цвет окраски' }, [
+		E('input', { 'type': 'color', 'value': L.tcol || (/^#[0-9a-f]{6}$/i.test(acc) ? acc.toLowerCase() : '#2d5bff'), 'change': function () { pick(this.value.toLowerCase()); } }),
+		E('span', {}, [ own ? L.tcol : 'Свой' ])
+	]));
+	return wrap;
+}
 function lookRow(label, ctl) { return E('div', { 'class': 'zm-row zm-lk-row' }, [ E('span', { 'class': 'zm-label' }, [ label ]), ctl ]); }
 function lookSw(on, label, hint, click, dis) {
 	return E('div', { 'class': 'zm-swrow' + (dis ? ' zm-swrow-off' : ''), 'role': 'switch', 'tabindex': dis ? null : '0', 'aria-checked': on ? 'true' : 'false',
@@ -65971,7 +65992,7 @@ function lookPvOf(id) {
 }
 function lookChanged() {
 	var g = [], d = function (ks) { return ks.some(function (k) { return LOOK[k] !== LOOK_DEF[k]; }); };
-	if (d([ 'acc', 'tint' ])) g.push('цвет');
+	if (d([ 'acc', 'tint', 'tcol' ])) g.push('цвет');
 	if (d([ 'rad', 'bord', 'shad', 'glass' ])) g.push('форма');
 	if (d([ 'font', 'mono' ])) g.push('шрифт');
 	if (themeAnimNorm(sget(K_ANIM)) !== themeFx()) g.push('фон');
@@ -66053,7 +66074,7 @@ function lookPage() {
 						E('em', {}, [ E('u', { 'style': 'background:' + pv[1] + ';width:78%' }), E('u', { 'style': 'background:' + pv[2] + ';width:42%' }), E('u', { 'style': 'background:' + pv[3] + ';opacity:.25;width:64%' }) ]),
 						my ? E('s', { 'class': 'zm-lk-pv-my' }, [ icon('brush') ]) : E([])
 					]),
-					E('span', { 'class': 'zm-lk-thn' }, [ E('b', {}, [ t.name ]), E('small', {}, [ my ? (L.my ? 'ваши настройки' : 'создать') : t.fx ? 'живой фон' : (t.dark ? 'тёмная' : 'светлая') ]) ])
+					E('span', { 'class': 'zm-lk-thn' }, [ E('b', {}, [ t.name ]), E('small', {}, [ my ? (L.my ? 'ваши настройки' : 'создать') : (t.dark ? 'тёмная' : 'светлая') + (t.fx ? ' · живой фон' : '') ]) ])
 				]));
 			});
 			kids.push(lookCard('Тема', 'Тема включается такой, какой её задумал автор: со своими цветами, формой, шрифтом и фоном. Понравилось, что получилось после настройки, — сохраните в «Свою тему».', [ grid ]));
@@ -66070,7 +66091,8 @@ function lookPage() {
 			kids.push(lookCard('Цвет', 'Акцент — кнопки, выбранные пункты, переключатели и полоски заголовков. Радуга — родной цвет темы.', [
 				sw,
 				lookRow('Окраска фона', lookSeg([ [ '', 'Нет' ], [ 's', 'Лёгкая' ], [ 'm', 'Заметная' ] ], L.tint, function (v) { lookSet('tint', v); paint(); })),
-				E('p', { 'class': 'zm-hint' }, [ 'Фон, карточки и боковое меню чуть принимают цвет акцента — как цвет элементов в Windows и тонировка окон в macOS.' ])
+				E('div', { 'class': 'zm-lk-tc-block' }, [ E('span', { 'class': 'zm-label' }, [ 'Цвет окраски' ]), lookTintPick(L, paint) ]),
+				E('p', { 'class': 'zm-hint' }, [ 'Фон, карточки и боковое меню чуть принимают цвет — как цвет элементов в Windows и тонировка окон в macOS. По умолчанию это цвет акцента, но можно выбрать отдельный: например, синие кнопки на тёплом фоне.' ])
 			]));
 		} else if (lookTab === 'form') {
 			kids.push(lookCard('Форма', 'Углы, обводка и тени карточек, кнопок и меню. «Как в теме» — так, как задумал автор темы.', [
@@ -66831,15 +66853,11 @@ function startShellPolling() {
 
 var routeToken = 0;
 
-function skeleton() {
-	return E('div', { 'class': 'zmw-skel-wrap' }, [
-		E('div', { 'class': 'zmw-skel zmw-skel-bar' }),
-		E('div', { 'class': 'zmw-skel-grid' }, [
-			E('div', { 'class': 'zmw-skel zmw-skel-card' }),
-			E('div', { 'class': 'zmw-skel zmw-skel-card' }),
-			E('div', { 'class': 'zmw-skel zmw-skel-card' })
-		]),
-		E('div', { 'class': 'zmw-skel zmw-skel-wide' })
+function pageLoader(r) {
+	return E('div', { 'class': 'zmw-loader', 'role': 'status', 'aria-live': 'polite' }, [
+		E('span', { 'class': 'zmw-loader-ring', 'aria-hidden': 'true' }, [ icon(r.icon || 'dashboard') ]),
+		E('span', { 'class': 'zmw-loader-txt' }, [ 'Открываю «' + r.title + '»' ]),
+		E('span', { 'class': 'zmw-loader-dots', 'aria-hidden': 'true' }, [ E('i'), E('i'), E('i') ])
 	]);
 }
 
@@ -66890,7 +66908,7 @@ function route(force) {
 		viewEl.appendChild(E('div', { 'class': 'zmw-page' }, [ r.local() ]));
 		return;
 	}
-	viewEl.appendChild(skeleton());
+	viewEl.appendChild(pageLoader(r));
 	if (!force) window.scrollTo(0, 0);
 
 	fetchSrc('view.zapret-manager.' + (r.view || id))
@@ -67669,19 +67687,32 @@ html[data-theme="dark"] .zmw-link-tg, html[data-theme="dark"] .zmw-link-tg:hover
 
 .zmw-scrim { display: none; }
 
-.zmw-skel-wrap { display: flex; flex-direction: column; gap: 16px; }
-.zmw-skel-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
-.zmw-skel {
-	border-radius: var(--radius);
-	background: linear-gradient(90deg, var(--surface-2) 0%, var(--surface-3) 40%, var(--surface-2) 80%);
-	background-size: 300% 100%;
-	animation: zmw-shimmer 1.4s infinite linear;
-	border: 1px solid var(--border);
+.zmw-loader {
+	display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+	min-height: min(46vh, 420px); color: var(--muted); text-align: center;
+	animation: zmw-loader-in .32s cubic-bezier(.2,.8,.2,1) .26s both;
 }
-.zmw-skel-bar { height: 64px; }
-.zmw-skel-card { height: 170px; }
-.zmw-skel-wide { height: 240px; }
-@keyframes zmw-shimmer { from { background-position: 100% 0; } to { background-position: -200% 0; } }
+@keyframes zmw-loader-in { from { opacity: 0; transform: translateY(6px) scale(.98); } to { opacity: 1; transform: none; } }
+.zmw-loader-ring {
+	position: relative; width: 58px; height: 58px; border-radius: 50%;
+	display: grid; place-items: center; color: var(--a1);
+	background: color-mix(in srgb, var(--a1) 10%, transparent);
+}
+.zmw-loader-ring::before {
+	content: ""; position: absolute; inset: -4px; border-radius: 50%;
+	background: conic-gradient(from 0deg, transparent 0 62%, var(--a1) 100%);
+	-webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px));
+	mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px));
+	animation: zmw-spin .9s linear infinite;
+}
+.zmw-loader-ring .zmw-i { width: 24px; height: 24px; }
+.zmw-loader-txt { font-size: 14px; font-weight: 600; color: var(--text-2); letter-spacing: .01em; }
+.zmw-loader-dots { display: inline-flex; gap: 5px; margin-top: -6px; }
+.zmw-loader-dots i { width: 5px; height: 5px; border-radius: 50%; background: var(--a1); opacity: .25; animation: zmw-loader-dot 1.2s ease-in-out infinite; }
+.zmw-loader-dots i:nth-child(2) { animation-delay: .15s; }
+.zmw-loader-dots i:nth-child(3) { animation-delay: .3s; }
+@keyframes zmw-loader-dot { 0%, 80%, 100% { opacity: .25; transform: none; } 40% { opacity: 1; transform: translateY(-3px); } }
+@media (prefers-reduced-motion: reduce) { .zmw-loader-ring::before, .zmw-loader-dots i { animation-duration: 2.4s; } }
 
 .zmw-error {
 	display: flex; gap: 16px; align-items: flex-start;
@@ -69708,7 +69739,7 @@ html[data-zm-radio="0"] .zmw-radio, html[data-zm-radio="0"] .zmw-radio-menu { di
 #zmw-view .zm-lk-thn { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; padding: 0 3px 3px; min-width: 0; }
 #zmw-view .zm-lk-thn b { max-width: 100%; }
 #zmw-view .zm-lk-thn b { font-size: 13px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-#zmw-view .zm-lk-thn small { font-size: 10.5px; color: var(--muted); white-space: nowrap; }
+#zmw-view .zm-lk-thn small { font-size: 10.5px; line-height: 1.3; color: var(--muted); max-width: 100%; overflow-wrap: anywhere; }
 #zmw-view .zm-lk-acc { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 #zmw-view .zm-lk-sw { width: 32px; height: 32px; border-radius: 50%; border: 3px solid var(--surface-solid); box-shadow: 0 0 0 1px color-mix(in srgb, var(--text) 18%, transparent); cursor: pointer; padding: 0; transition: transform .12s, box-shadow .12s; }
 #zmw-view .zm-lk-sw:hover { transform: scale(1.08); }
@@ -69716,6 +69747,13 @@ html[data-zm-radio="0"] .zmw-radio, html[data-zm-radio="0"] .zmw-radio-menu { di
 #zmw-view .zm-lk-sw-auto { background: conic-gradient(#2d5bff, #22d3ee, #16a34a, #f59e0b, #ef4444, #a855f7, #2d5bff); }
 #zmw-view .zm-lk-own { display: inline-flex; align-items: center; gap: 8px; padding: 3px 12px 3px 4px; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--text) 16%, transparent); background: var(--surface-2); cursor: pointer; font-size: 13px; font-weight: 600; }
 #zmw-view .zm-lk-own.zm-active { border-color: var(--text); }
+#zmw-view .zm-lk-tc-block { display: flex; flex-direction: column; gap: 10px; margin: 4px 0 14px; }
+#zmw-view .zm-lk-tcol { transition: opacity .2s; }
+#zmw-view .zm-lk-tcol-idle { opacity: .55; }
+#zmw-view .zm-lk-tcol-idle:hover, #zmw-view .zm-lk-tcol-idle:focus-within { opacity: 1; }
+#zmw-view .zm-lk-tc-auto { font: inherit; font-size: 13px; color: var(--text); }
+#zmw-view .zm-lk-tc-dot { position: relative; width: 26px; height: 26px; border-radius: 50%; flex: none; box-shadow: inset 0 0 0 2px var(--surface-solid), 0 0 0 1px color-mix(in srgb, var(--text) 18%, transparent); }
+#zmw-view .zm-lk-tc-dot::after { content: ""; position: absolute; inset: 8px; border-radius: 50%; background: var(--surface-solid); opacity: .9; }
 html #zmw-view .zm-lk-own input[type="color"] { -webkit-appearance: none; appearance: none; width: 28px; height: 28px; min-width: 28px; padding: 0; border: 0; border-radius: 50% !important; background: none; cursor: pointer; overflow: hidden; box-shadow: 0 0 0 1px color-mix(in srgb, var(--text) 18%, transparent); }
 #zmw-view .zm-lk-own input::-webkit-color-swatch-wrapper { padding: 0; }
 #zmw-view .zm-lk-own input::-webkit-color-swatch { border: 0; border-radius: 50%; }
