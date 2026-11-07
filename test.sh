@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.120
+# Version: 5.130
 ZM_VERSION_EOF
 set -e
 
@@ -12549,22 +12549,31 @@ ZM_FK_SUBCK_EOF
 _fk_hdr_patch() {
 	local f=/usr/lib/netshift/helpers.sh b t="/tmp/zm-fkhdr.$$"
 	[ -f "$f" ] || return 0
-	grep -qF '# zm-hdr' "$f" && return 0
-	[ "$(grep -c 'then 1 else 0 end)) as \$prio$' "$f")" = 1 ] || return 0
 	command -v jq >/dev/null 2>&1 || return 0
-	b="$f.zm-hdr"
-	cp -f "$f" "$b" || return 0
-	sed -i 's/then 1 else 0 end)) as \$prio$/then 1 else 0 end) + (if (($cfg_name | contains("⬇")) or ($cfg_name | contains("⬆")) or ($cfg_name | contains("⤵"))) then 1000 else 0 end)) as $prio # zm-hdr/' "$f"
-	awk '/^xray_json_to_uri_lines\(\) \{/ { f = 1 } f && /jq -er .$/ { p = 1; next } p && /^    . "\$src_file"/ { exit } p { print }' "$f" > "$t.jq"
-	printf '%s' '[{"remarks":"⬇️ Игровые ⬇️","outbounds":[{"tag":"proxy","protocol":"trojan","settings":{"servers":[{"address":"a.example","port":443,"password":"p"}]}}]},{"remarks":"Нидерланды","outbounds":[{"tag":"proxy","protocol":"trojan","settings":{"servers":[{"address":"a.example","port":443,"password":"p"}]}}]}]' > "$t.json"
-	if sh -n "$f" 2>/dev/null && [ -s "$t.jq" ] && [ "$(jq -er -f "$t.jq" "$t.json" 2>/dev/null | grep -c .)" = 1 ] &&
-		jq -er -f "$t.jq" "$t.json" 2>/dev/null | grep -q "#$(printf '%s' 'Нидерланды' | jq -sRr @uri)\$"; then
-		rm -f "$b"
-		logger -t zapret-manager "$(_fk_name): серверы подписки больше не берут имя заголовков-разделителей «⬇️ … ⬇️»"
-	else
-		cat "$b" > "$f"; rm -f "$b"
+	if grep -qF '# zm-hdr' "$f" || ! grep -qF '# zm-dup' "$f"; then
+		b="$f.zm-hdr"
+		cp -f "$f" "$b" || return 0
+		sed -i 's/ + (if ((\$cfg_name | contains("⬇")) or (\$cfg_name | contains("⬆")) or (\$cfg_name | contains("⤵"))) then 1000 else 0 end)) as \$prio # zm-hdr$/) as $prio/' "$f"
+		if ! grep -qF '# zm-dup' "$f" &&
+			[ "$(grep -c '^        | reduce \.\[\] as \$e ({ idx: {}, out: \[\] };$' "$f")" = 1 ] &&
+			[ "$(grep -c '^            \.idx\[\$e\.conn\] as \$i$' "$f")" = 1 ] &&
+			[ "$(grep -c '^                \.idx\[\$e\.conn\] = (\.out | length) | \.out += \[\$e\]$' "$f")" = 1 ]; then
+			sed -i -e 's/^        | reduce \.\[\] as \$e ({ idx: {}, out: \[\] };$/        | (reduce .[] as $e ({}; if $e.prio <= 1 then .[$e.conn] = true else . end)) as $zm_pl | map(select(.prio <= 1 or ($zm_pl[.conn] | not))) | reduce .[] as $e ({ idx: {}, out: [] }; # zm-dup/' \
+				-e 's/^            \.idx\[\$e\.conn\] as \$i$/            (if $e.prio <= 1 then $e.conn + "#" + $e.name else $e.conn end) as $zm_k | .idx[$zm_k] as $i/' \
+				-e 's/^                \.idx\[\$e\.conn\] = (\.out | length) | \.out += \[\$e\]$/                .idx[$zm_k] = (.out | length) | .out += [$e]/' "$f"
+		fi
+		awk '/^xray_json_to_uri_lines\(\) \{/ { f = 1 } f && /jq -er .$/ { p = 1; next } p && /^    . "\$src_file"/ { exit } p { print }' "$f" > "$t.jq"
+		printf '%s' '[{"remarks":"⬇️ Игровые ⬇️","outbounds":[{"tag":"proxy","protocol":"trojan","settings":{"servers":[{"address":"a.example","port":443,"password":"p"}]}}]},{"remarks":"Нидерланды","outbounds":[{"tag":"proxy","protocol":"trojan","settings":{"servers":[{"address":"a.example","port":443,"password":"p"}]}}]},{"remarks":"АВТО","routing":{"balancers":[{"tag":"b","selector":["proxy"]}]},"outbounds":[{"tag":"proxy","protocol":"trojan","settings":{"servers":[{"address":"a.example","port":443,"password":"p"}]}},{"tag":"proxy-2","protocol":"trojan","settings":{"servers":[{"address":"b.example","port":443,"password":"p"}]}}]}]' > "$t.json"
+		if sh -n "$f" 2>/dev/null && [ -s "$t.jq" ] && ! grep -qF '# zm-hdr' "$f" && [ "$(jq -er -f "$t.jq" "$t.json" 2>/dev/null | grep -c .)" = 3 ] &&
+			jq -er -f "$t.jq" "$t.json" 2>/dev/null | grep -q "#$(printf '%s' 'Нидерланды' | jq -sRr @uri)\$" &&
+			jq -er -f "$t.jq" "$t.json" 2>/dev/null | grep -q "#$(printf '%s' '⬇️ Игровые ⬇️' | jq -sRr @uri)\$"; then
+			rm -f "$b"
+			logger -t zapret-manager "$(_fk_name): серверы подписки показываются как в приложении — каждый пункт под своим именем"
+		else
+			cat "$b" > "$f"; rm -f "$b"
+		fi
+		rm -f "$t.jq" "$t.json"
 	fi
-	rm -f "$t.jq" "$t.json"
 	_fk_wspath_patch
 	return 0
 }
@@ -28804,16 +28813,18 @@ _st_grp_ids() {
 			return ""
 		}
 		BEGIN {
-			while ((getline l < G) > 0) { split(l, a, "\t"); if (a[1] == ENVIRON["ZM_W"]) { nm = split(a[3], W, " ") } }
+			while ((getline l < G) > 0) { split(l, a, "\t"); GN[a[1]] = 1; if (a[1] == ENVIRON["ZM_W"]) { nm = split(a[3], W, " ") } }
 			while ((getline l < M) > 0) { split(l, b, "\t"); K[b[1]] = b[2] "|" tolower(b[3]) "|" b[4] }
 			ln = 0; while ((getline l < S) > 0) { ln++; if (ln in K) { pt = qv(l, "path"); if (pt == "") pt = qv(l, "serviceName"); sub(/\?.*$/, "", pt); P[ln] = pt } }
 		}
-		{ r++; id[r] = $1; lk[r] = ($1 in K) ? K[$1] : ""; sk[r] = lk[r] "|" P[$1] }
+		$5 in GN { next }
+		{ r++; id[r] = $1; lk[r] = ($1 in K) ? K[$1] : ""; sk[r] = lk[r] "|" P[$1]; ar[r] = (index($5, "\342\254\207") || index($5, "\342\254\206")) ? 1 : 0 }
 		END {
 			for (j = 1; j <= nm; j++) {
-				m = W[j]; x = m; sub(/\|[^|]*$/, "", x); f = 0
-				if (split(m, z, "|") >= 4 && z[4] != "") for (i = 1; i <= r; i++) if (sk[i] == m) { on[i] = 1; f = 1 }
-				if (!f) for (i = 1; i <= r; i++) if (lk[i] != "" && lk[i] == x) on[i] = 1
+				m = W[j]; x = m; sub(/\|[^|]*$/, "", x); pa = 0; pb = 0
+				if (split(m, z, "|") >= 4 && z[4] != "") for (i = 1; i <= r; i++) if (sk[i] == m) { if (!pa && !ar[i]) pa = i; if (!pb) pb = i }
+				if (!pb) for (i = 1; i <= r; i++) if (lk[i] != "" && lk[i] == x) { if (!pa && !ar[i]) pa = i; if (!pb) pb = i }
+				if (pa) on[pa] = 1; else if (pb) on[pb] = 1
 			}
 			for (i = 1; i <= r; i++) if (on[i]) print id[i]
 		}' "$2"
@@ -28828,7 +28839,7 @@ _st_stub_ids() {
 		}
 		{
 			id[NR] = $1; k = ($1 in K) ? K[$1] : ""; key[NR] = k
-			c = (index($5, "\342\254\207") || index($5, "\342\254\206") || ($5 in GN)) ? 1 : 0; cand[NR] = c
+			c = ($5 in GN) ? 1 : 0; cand[NR] = c
 			if (!c && k != "") real[k] = 1
 		}
 		END { for (i = 1; i <= NR; i++) if (cand[i] && key[i] != "" && (key[i] in real)) print id[i] }' "$1"
@@ -28862,7 +28873,7 @@ _st_autogrp_sync() {
 		return 1
 	fi
 	if ! command -v jq >/dev/null 2>&1; then
-		grep -q '"balancers"' "$t" 2>/dev/null || grep -qF '⬇' "$t" 2>/dev/null || { rm -f "$t" "$ST_SUB_GRPS"; return 0; }
+		grep -q '"balancers"' "$t" 2>/dev/null || { rm -f "$t" "$ST_SUB_GRPS"; return 0; }
 		if [ -z "$quiet" ]; then
 			echo "   → В подписке есть группы АВТО — для них нужен небольшой пакет jq"
 			_zm_pkg_add jq >/dev/null 2>&1
@@ -37984,32 +37995,18 @@ def trimmed:
   | (until(length == 0 or .[0] > 32; .[1:])) | (until(length == 0 or .[-1] > 32; .[:-1])) | implode;
 def in_sel($sel): .tag as $t | ($sel | length) == 0 or any($sel[]; ($t | tostring) | startswith(.));
 
-def hdr: ((.remarks // "") | tostring) as $r | ($r | contains("⬇")) or ($r | contains("⬆"));
-def bal: ((.routing.balancers // []) | if type == "array" then length > 0 else false end);
-def blockdef:
-  ((.routing.rules // []) | if type == "array" and length > 0 then ((.[-1].outboundTag // "") | tostring) else "" end) as $d
-  | $d != "" and ([ (.outbounds // [])[] | select(type == "object" and .tag == $d) | .protocol ] | index("blackhole") != null);
-def mems: [ (.outbounds // [])[] | usable | member ];
-def uniqm: reduce .[] as $x ([]; if any(.[]; . == $x) then . else . + [$x] end);
-
-[ (if type == "array" then .[] else . end) | select(type == "object") ] as $cfgs
-| [ $cfgs[]
+(if type == "array" then . else [.] end)
+| [ .[] | select(type == "object")
     | ((.routing.balancers // []) | if type == "array" then . else [] end) as $bal
     | select(($bal | length) > 0)
     | ([ $bal[] | (.selector // [])[] | tostring ] | unique) as $sel
     | (.remarks // "" | trimmed) as $name
     | ((.burstObservatory.pingConfig.interval // .observatory.probeInterval // null) | secs) as $iv
-    | ([ (.outbounds // [])[] | usable | select(in_sel($sel)) | member ] | uniqm) as $u
+    | [ (.outbounds // [])[] | usable | select(in_sel($sel)) | member ] as $m
+    | (reduce $m[] as $x ([]; if any(.[]; . == $x) then . else . + [$x] end)) as $u
     | select(($u | length) >= 2)
-    | { name: (if $name == "" then "АВТО" else $name end), iv: $iv, m: $u } ]
-  + ($cfgs | reduce .[] as $c ({ cur: null, out: [] };
-      if ($c | hdr) and (($c | bal) | not) then
-        (if .cur != null then .out += [.cur] else . end)
-        | .cur = { name: ($c.remarks | trimmed), iv: 60, m: ($c | mems) }
-      elif .cur == null or ($c | bal) or ($c | blockdef) then .
-      else .cur.m += ($c | mems) end)
-    | (if .cur != null then .out + [.cur] else .out end)
-    | map(.m |= uniqm) | map(select((.m | length) >= 2)))
+    | { name: (if $name == "" then "АВТО" else $name end), iv: $iv, m: $u }
+  ]
 | reduce .[] as $g ({ seen: {}, out: [] };
     ($g.name) as $n
     | (if .seen[$n] then $n + " · " + ((.seen[$n] + 1) | tostring) else $n end) as $nn
@@ -38061,7 +38058,8 @@ def ivstr($iv):
               | ([ $g.value.m[] as $m
                   | ($m | memkey(true)) as $ks | ($m | memkey(false)) as $kl
                   | ([ $lk[] | select(.s == $ks) | .t ]) as $hit
-                  | (if ($hit | length) > 0 then $hit else [ $lk[] | select(.l == $kl) | .t ] end)[] ]
+                  | (if ($hit | length) > 0 then $hit else [ $lk[] | select(.l == $kl) | .t ] end) as $all
+                  | ([ $all[] | select((contains("\u2b07") or contains("\u2b06")) | not) ] + $all)[0:1][] ]
                 | reduce .[] as $t ([]; if index([$t]) == null then . + [$t] else . end)) as $mem
               | select(($mem | length) >= 2)
               | ($sec + "-zm-autogrp-" + (($g.key + 1) | tostring) + ": " + ($g.value.name | tostring)) as $tag
