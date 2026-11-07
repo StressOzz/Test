@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.140
+# Version: 5.160
 ZM_VERSION_EOF
 set -e
 
@@ -7465,6 +7465,7 @@ _fk_foreign() {
 _fk_ours() { _fk_installed && ! _fk_foreign; }
 _fk_name() { if _fk_foreign; then echo NetShift; else echo Forkozz; fi; }
 _fk_uc() { command -v ucode >/dev/null 2>&1 && [ -f "$FK_UC" ] || { echo '{"error":"Forkozz не установлен"}'; return 1; }; ucode "$FK_UC" "$@"; }
+_fk_grp_keep() { ls "$ZM_STATE_DIR"/fk.grp.* >/dev/null 2>&1 || return 0; _fk_uc grpkeep >/dev/null 2>&1; return 0; }
 
 _fk_latest() { _zm_cached netshift _fk_latest_fetch; }
 
@@ -7829,6 +7830,7 @@ _fk_service0() {
 			[ "$(uci -q get netshift."$ps".zm_sub_priority)" = 1 ] && _fk_fallback_sec "$ps" >/dev/null 2>&1 &
 		done
 		_fk_fwd_sync
+		_fk_grp_keep
 		_fk_say "Готово: Forkozz работает"
 		_fk_guard
 		grep -q '^Forkozz не запустился' "$ZM_REBOOT_HINT" 2>/dev/null && rm -f "$ZM_REBOOT_HINT"
@@ -11658,6 +11660,7 @@ _fk_watch() {
 	if _fk_up; then
 		rm -f "$f"
 		_job_running forkop || _fk_heal
+		_job_running forkop || _fk_grp_keep
 		_job_running forkop || _fk_zash_ensure quiet
 		_job_running forkop || _fk_dns_watch
 		_fk_guard
@@ -12648,7 +12651,7 @@ _fk_ag_engine() {
 }
 
 _fk_autogrp_sync() {
-	local quiet="$1" how="$2" t="$JOBS_DIR/fk-ag.$$" s u k old_k ok chg=0 n
+	local quiet="$1" how="$2" t="$JOBS_DIR/fk-ag.$$" s u k old_k ok chg=0 n allok=1
 	command -v jq >/dev/null 2>&1 && [ -s "$ZM_AG_JQ" ] && [ -s "$ZM_AG_FK_JQ" ] && _fk_installed || return 0
 	mkdir -p "$JOBS_DIR" "$ZM_STATE_DIR"
 	printf '{}' > "$t.all"
@@ -12673,16 +12676,20 @@ _fk_autogrp_sync() {
 					($x.name) as $n | (if .seen[$n] then $n + " · " + ((.seen[$n] + 1) | tostring) else $n end) as $nn
 					| .seen[$n] = ((.seen[$n] // 0) + 1) | .out += [ $x | .name = $nn ]) | .out) }' "$t.all" > "$t.x" && mv -f "$t.x" "$t.all"
 		elif [ -n "$old_k" ] && [ "$old_k" = "$k" ]; then
+			allok=0
 			jq -c --arg s "$s" --slurpfile o "$FK_AG_FILE" '.[$s] = $o[0][$s]' "$t.all" > "$t.x" && mv -f "$t.x" "$t.all"
 			[ -n "$quiet" ] || echo "   ! Подписку в формате Happ скачать не удалось — группы АВТО остались прежними"
 		else
+			allok=0
 			[ -n "$quiet" ] || echo "   ! Подписку в формате Happ скачать не удалось — группы АВТО появятся при следующем обновлении"
 		fi
 	done
-	jq -c 'with_entries(select((.value.groups // []) | length > 0))' "$t.all" > "$t.x" 2>/dev/null && mv -f "$t.x" "$t.all"
-	if [ "$(jq -cS . "$t.all" 2>/dev/null)" != "$(jq -cS . "$FK_AG_FILE" 2>/dev/null || echo '{}')" ]; then
-		if [ "$(cat "$t.all")" = "{}" ]; then rm -f "$FK_AG_FILE"; else ( umask 077; cp -f "$t.all" "$FK_AG_FILE" ); fi
-		chg=1
+	if [ "$(jq -cS . "$t.all" 2>/dev/null)" != "$(jq -cS . "$FK_AG_FILE" 2>/dev/null)" ]; then
+		u='[to_entries[] | select((.value.groups // []) | length > 0) | { k: .key, g: .value.groups }]'
+		[ "$(jq -cS "$u" "$t.all" 2>/dev/null)" = "$(jq -cS "$u" "$FK_AG_FILE" 2>/dev/null || echo '[]')" ] || chg=1
+		( umask 077; cp -f "$t.all" "$FK_AG_FILE" )
+	elif [ "$allok" = 1 ] && [ "$how" != cached ] && [ -f "$FK_AG_FILE" ]; then
+		touch "$FK_AG_FILE"
 	fi
 	rm -f "$t.all" "$t.sec" "$t.raw" "$t.g" "$t.x"
 	_fk_ag_flags && chg=1
@@ -12700,7 +12707,9 @@ _fk_autogrp_sync() {
 	[ "$how" = noreload ] || [ "$how" = cached ] && return 0
 	_fk_up || return 0
 	[ -n "$quiet" ] || _fk_say "Применяем группы АВТО: Forkozz пересобирает конфиг sing-box"
-	if _zm_run 240 /usr/bin/netshift reload >/dev/null 2>&1; then [ -n "$quiet" ] || echo "   ✓ Готово"
+	if _zm_run 240 /usr/bin/netshift reload >/dev/null 2>&1; then
+		_fk_grp_keep
+		[ -n "$quiet" ] || echo "   ✓ Готово"
 	else [ -n "$quiet" ] || echo "!! Forkozz не применил группы — нажмите «Применить»"; fi
 	return 0
 }
@@ -12710,7 +12719,7 @@ _fk_autogrp_watch() {
 	command -v jq >/dev/null 2>&1 && [ -s "$ZM_AG_JQ" ] && _fk_installed && _fk_enabled && _fk_up || return 0
 	[ -n "$(find "$m" -mmin -30 2>/dev/null)" ] && return 0
 	if [ -z "$(_fk_ag_secs)" ]; then
-		[ -f "$FK_AG_FILE" ] || return 0
+		[ "$(jq '[.[].groups[]?] | length' "$FK_AG_FILE" 2>/dev/null)" -gt 0 ] 2>/dev/null || return 0
 		need=1
 	elif [ ! -f "$FK_AG_FILE" ]; then need=1
 	else
@@ -14055,7 +14064,7 @@ do_fk_remove() {
 		/etc/init.d/cron restart >/dev/null 2>&1
 	fi
 	_zm_wipe $FK_FILES "$JOBS_DIR/netshift-src" $(_fk_naive_own) \
-		"$FK_MARK" "$ZM_STATE_DIR/latest.netshift" "$ZM_STATE_DIR"/fk.sub.* "$ZM_STATE_DIR"/fk.fell* "$ZM_STATE_DIR"/fk.home.* "$ZM_STATE_DIR/fk.dnsfo" "$ZM_STATE_DIR/fk.watch" "$ZM_STATE_DIR/fk.zash.fail" "$FK_EXT_FAIL" "$FK_NAIVE_FAIL" "$JOBS_DIR/netshift.conf.bak" \
+		"$FK_MARK" "$ZM_STATE_DIR/latest.netshift" "$ZM_STATE_DIR"/fk.sub.* "$ZM_STATE_DIR"/fk.fell* "$ZM_STATE_DIR"/fk.home.* "$ZM_STATE_DIR"/fk.grp.* "$FK_AG_FILE" "$JOBS_DIR/fk.ag.try" "$ZM_STATE_DIR/fk.dnsfo" "$ZM_STATE_DIR/fk.watch" "$ZM_STATE_DIR/fk.zash.fail" "$FK_EXT_FAIL" "$FK_NAIVE_FAIL" "$JOBS_DIR/netshift.conf.bak" \
 		"$JOBS_DIR"/fk.heal* "$JOBS_DIR"/fk-* "$JOBS_DIR"/fkdns.* "$JOBS_DIR/forkop-svc.out" "$JOBS_DIR/forkop-sb.json" "$JOBS_DIR/forkop-lists.out" &&
 		echo "   ✓ Файлы, настройки, кэш и задания расписания удалены" || rc=1
 	if [ "$sbmode" = keep ]; then _fk_sb_park; else _fk_sb_purge || rc=1; fi
@@ -27897,6 +27906,10 @@ do_steer_switch() {
 	_st_phase check
 	if _st_vpn_check 30; then _rb_say "Готово"; return 0; fi
 	why="$STL_NWHY"
+	if [ ! -s "$ST_SUB_NODE" ] && [ -n "$(_st_grp_cur)" ]; then
+		_rb_say "Готово, но VPN сейчас не отвечает${why:+ ($why)} — ядро steer само переберёт узлы группы «$(_st_grp_cur)»"
+		return 0
+	fi
 	pol="$(_st_node_pol)"
 	if [ "$pol" = hold ] && [ -s "$ST_SUB_NODE" ]; then
 		_rb_warn "Узел $(_st_node_label) не отвечает${why:+ ($why)} — держим его, как задано в «Если выбранный узел не отвечает»: $(_st_fail_text), пока он не ответит"
@@ -27908,6 +27921,10 @@ do_steer_switch() {
 		auto) [ -s "$ST_SUB_NODE" ] || { _rb_say "Сторож Steer сам переберёт узлы"; return 0; }
 			_rb_warn "Узел $(_st_node_label) не отвечает${why:+ ($why)} — возвращаем автовыбор"
 			mkdir -p "$ST_DIR"; head -n1 "$ST_SUB_NODE" > "$ST_SUB_FELL"; rm -f "$ST_SUB_NODE" ;;
+		@grp:*) [ -s "$ST_SUB_NODE" ] || return 0
+			_rb_warn "Узел $(_st_node_label) не отвечает${why:+ ($why)} — возвращаем группу «${prev#@grp:}»"
+			mkdir -p "$ST_DIR"; head -n1 "$ST_SUB_NODE" > "$ST_SUB_FELL"; rm -f "$ST_SUB_NODE"
+			_st_grp_has "${prev#@grp:}" && printf '%s\n' "${prev#@grp:}" > "$ST_SUB_GRP" ;;
 		*) [ "$prev" = "$(cat "$ST_SUB_NODE" 2>/dev/null)" ] && return 0
 			_rb_warn "Узел $(_st_node_label) не отвечает${why:+ ($why)} — возвращаем прежний «$prev»"
 			mkdir -p "$ST_DIR"; head -n1 "$ST_SUB_NODE" > "$ST_SUB_FELL"
@@ -27915,7 +27932,7 @@ do_steer_switch() {
 	esac
 	_st_spec_quick || return 1
 	if _st_vpn_check 30; then
-		_rb_say "Готово: VPN снова работает через $(_st_node_label)$([ -s "$ST_SUB_HOME" ] && printf ' — на «%s» вернёмся, когда он ответит' "$(head -n1 "$ST_SUB_HOME")")"
+		_rb_say "Готово: VPN снова работает через $(_st_node_label | sed 's/^группа /группу /')$([ -s "$ST_SUB_HOME" ] && printf ' — на «%s» вернёмся, когда он ответит' "$(head -n1 "$ST_SUB_HOME")")"
 		return 0
 	fi
 	_rb_warn "И прежний выбор не отвечает — сторож Steer будет искать рабочий узел сам"
@@ -28854,13 +28871,16 @@ _st_grps_json() {
 }
 
 _st_autogrp_sync() {
-	local quiet="$1" u t="$ST_RUN/ag.$$" n g
+	local quiet="$1" u t="$ST_RUN/ag.$$" n g dv
 	[ -s "$ST_SUB_URL" ] || { rm -f "$ST_SUB_GRPS" "$ST_SUB_GRPS.chk" "$ST_SUB_GRP"; return 0; }
 	[ -s "$ZM_AG_JQ" ] || return 0
 	u="$(head -n1 "$ST_SUB_URL")"
 	mkdir -p "$ST_RUN" "$ST_VDIR"
 	: > "$ST_SUB_GRPS.chk"
-	if ! curl -fsSL --compressed -m 25 --connect-timeout 10 --max-redirs 10 -b "" -A "Happ/1.0.0" -o "$t" "$u" 2>/dev/null || [ ! -s "$t" ]; then
+	dv=""; [ -f "$ST_SUB_VIA" ] && dv="$(_st_sub_via_pick 2>/dev/null)" && dv="${dv%%|*}"
+	rm -f "$t"
+	[ -n "$dv" ] && { curl -fsSL --compressed -m 25 --connect-timeout 10 --max-redirs 10 -b "" -A "Happ/1.0.0" --interface "$dv" -o "$t" "$u" 2>/dev/null || rm -f "$t"; }
+	if [ ! -s "$t" ] && { ! curl -fsSL --compressed -m 25 --connect-timeout 10 --max-redirs 10 -b "" -A "Happ/1.0.0" -o "$t" "$u" 2>/dev/null || [ ! -s "$t" ]; }; then
 		rm -f "$t"
 		[ -n "$quiet" ] || [ ! -s "$ST_SUB_GRPS" ] || echo "   ! Подписку в формате Happ скачать не удалось — группы АВТО остались прежними"
 		return 1
@@ -29168,10 +29188,11 @@ do_steer_sub_set() {
 			rm -f "$ST_SUB.raw"
 			_st_sub_commit
 			rm -f "$ST_SUB_URL" "$ST_SUB_TITLE" "$ST_SUB_INFO"
+			_st_autogrp_sync quiet
 			_rb_say "Ссылки сохранены"
 			;;
 	esac
-	rm -f "$ST_SUB_NODE" "$ST_SUB_HOME"
+	rm -f "$ST_SUB_NODE" "$ST_SUB_HOME" "$ST_SUB_GRP"
 	echo vpn > "$ST_EXIT"
 	_rb_say "Выбранные сервисы теперь идут через подписку"
 	_rb_say "Перезапускаем VPN-туннель с новым списком серверов"
@@ -29534,7 +29555,9 @@ steer_sub_action() {
 			fi
 			mkdir -p "$ST_VDIR"
 			local prev
-			prev="$(cat "$ST_SUB_NODE" 2>/dev/null)"; prev="${prev:-auto}"
+			prev="$(cat "$ST_SUB_NODE" 2>/dev/null)"
+			[ -z "$prev" ] && [ -n "$(_st_grp_cur)" ] && prev="@grp:$(_st_grp_cur)"
+			prev="${prev:-auto}"
 			if [ -n "$mode" ]; then printf '%s\n' "$mode" > "$ST_SUB_NODE"; else rm -f "$ST_SUB_NODE"; fi
 			rm -f "$ST_SUB_FELL" "$ST_SUB_HOME" "$ST_VPN_WATCH" "$ST_SUB_GRP"
 			if _st_use_vpn && _st_installed && [ ! -f "$ST_OFF" ] && [ -z "$(_st_blocker)" ] && _st_work; then
@@ -36610,6 +36633,8 @@ function cmd_latmode(v) {
 const NODE_POL_FILE = STATE + "/fk.nodepol";
 function node_pol() { let v = trim(s(fs.readfile(NODE_POL_FILE))); return v == "switch" || v == "hold" ? v : "back"; }
 function home_path(sec) { return STATE + "/fk.home." + sec; }
+function grp_path(sec) { return STATE + "/fk.grp." + sec; }
+function grp_name(t) { let m = match(s(t), /-zm-autogrp-[0-9]+: (.*)$/); return m ? m[1] : null; }
 function home_read(sec) {
 	let j = null;
 	try { j = json(s(fs.readfile(home_path(sec)))); } catch (e) { j = null; }
@@ -37282,7 +37307,34 @@ function do_select(sec, tag) {
 	if ((priority && tag == priority_tag(sec)) || (pingm && tag == ping_tag(sec))) system("(sh /opt/zapret-manager-luci/backend.sh forkop_priority_watch " + q(sec) + " >/dev/null 2>&1 &)");
 	try { fs.unlink(fell_file(sec)); } catch (e) {}
 	home_drop(sec);
+	let gn = grp_name(tag);
+	if (gn != null) { try { fs.mkdir(STATE); } catch (e) {} try { fs.writefile(grp_path(sec), gn + "\n"); } catch (e) {} }
+	else try { fs.unlink(grp_path(sec)); } catch (e) {}
 	return "";
+}
+
+function cmd_grpkeep() {
+	let c = cursor(), p = pick(c), px = null, done = [];
+	for (let sec in [ p.sec, ...p.conns ]) {
+		let want = "";
+		try { want = trim(s(fs.readfile(grp_path(sec)))); } catch (e) { want = ""; }
+		if (want == "") continue;
+		let m = c.get_all(CFG, sec) || {};
+		if (s(m.connection_type) != "proxy" || flag(m.disabled) || s(m.zm_autogrp) != "1") { try { fs.unlink(grp_path(sec)); } catch (e) {} continue; }
+		if (!px) px = proxies();
+		if (!px) { out({ ok: false }); return; }
+		let g = px[group_tag(sec)];
+		if (!g || type(g.all) != "array" || s(g.now) == "") continue;
+		let ags = filter(g.all, (t) => grp_name(t) != null);
+		let hit = filter(ags, (t) => grp_name(t) == want)[0];
+		if (!hit) { if (length(ags)) try { fs.unlink(grp_path(sec)); } catch (e) {} continue; }
+		if (s(g.now) == hit || s(g.now) != s(auto_tag(sec, px, g))) continue;
+		if (do_select(sec, hit) != "") continue;
+		push(done, { sec, name: want });
+		let label = trim(s(m.zm_label));
+		system("logger -t zapret-manager " + q("Forkozz" + (label != "" ? " («" + label + "»)" : "") + ": после перезапуска вернули группу АВТО «" + want + "»"));
+	}
+	out({ ok: true, restored: done });
 }
 
 function cmd_select(sec, tag) {
@@ -37904,7 +37956,7 @@ if (mode == "rs_cap") cmd_rs_cap(ARGV[1], ARGV[2]);
 if (mode == "rs_plan") cmd_rs_plan();
 if (mode != "route" && sec != "" && (ml(sec) || !match(sec, /^[A-Za-z0-9_]+$/))) fail("неверное имя секции");
 if (mode == "dnslan") { cmd_dns_lan(); exit(0); }
-if (sec == "" && index([ "get", "set", "secdel", "route", "diag", "secnames", "secstate", "secdash", "stats", "conns", "dnsvpn", "fallback_config", "guard", "latmode", "nodepol", "rlinfo", "rllearn" ], mode) < 0) sec = pick(cursor()).sec;
+if (sec == "" && index([ "get", "set", "secdel", "route", "diag", "secnames", "secstate", "secdash", "stats", "conns", "dnsvpn", "fallback_config", "guard", "grpkeep", "latmode", "nodepol", "rlinfo", "rllearn" ], mode) < 0) sec = pick(cursor()).sec;
 
 if (mode == "device_setup") cmd_device_setup();
 else if (mode == "fallback_config") cmd_fallback_config();
@@ -37923,6 +37975,7 @@ else if (mode == "home") cmd_home(sec);
 else if (mode == "select") cmd_select(sec, ARGV[2]);
 else if (mode == "heal") cmd_heal(sec, ARGV[2] || "");
 else if (mode == "guard") cmd_guard();
+else if (mode == "grpkeep") cmd_grpkeep();
 else if (mode == "hide") cmd_hide(sec);
 else if (mode == "rlnode") cmd_rlnode(sec);
 else if (mode == "rlinfo") cmd_rlinfo();
@@ -46677,7 +46730,18 @@ return view.extend({
 				else if (v === 'force') subAct('sub_node', n.name, 'Выбираем узел ' + n.name);
 			});
 		}
-		var picking = false;
+		var picking = false, manualView = false;
+		function grpKeyS() { return 'zm.st.grp.' + (isMain() ? 'main' : secCur); }
+		function grpPickS(grps) {
+			var want = '';
+			try { want = localStorage.getItem(grpKeyS()) || ''; } catch (e) {}
+			return grps.filter(function(g) { return g.name === want; })[0] || grps[0];
+		}
+		function grpSelectS(g) {
+			manualView = false;
+			try { localStorage.setItem(grpKeyS(), g.name); } catch (e) {}
+			subAct('sub_group', g.name, 'Выбираем группу «' + g.name + '»');
+		}
 		function pickNode(n) {
 			if (busy || picking || subData.node === n.name) return;
 			var l = nodeLat(n);
@@ -46809,7 +46873,7 @@ return view.extend({
 			var nodes = allNodes.filter(function(n) { return !hidMap[n.index]; });
 			var grps = (subData.groups || []).map(function(g) {
 				var ids = {}; (g.ids || []).forEach(function(i) { ids[i] = true; });
-				return { name: g.name, nodes: nodes.filter(function(n) { return ids[n.index]; }) };
+				return { name: g.name, nodes: ((subData.list && subData.list.nodes) || []).filter(function(n) { return ids[n.index] && !hidMap[n.index]; }) };
 			}).filter(function(g) { return g.nodes.length > 0; });
 			var curGrp = grps.filter(function(g) { return g.name === subData.group; })[0] || null;
 			subCard.appendChild(zm.subMeta({
@@ -46954,18 +47018,40 @@ return view.extend({
 						: 'Если выбранный вручную узел перестал отвечать, Steer переходит на рабочий, а выбранный проверяет раз в 10 минут и возвращается на него, как только он ответит. Перед выбором узел проверяется.'));
 			}
 			var grid = E('div', { 'class': 'zm-nodes' });
-			grid.appendChild(nodeCard({
-				name: 'Авто', foot: isPing ? 'самый быстрый по пингу' + (subData.order_head && !subData.node && !curGrp ? ' · ' + subData.order_head : '') : 'первый рабочий узел', active: !subData.node && !curGrp,
-				click: function() { if ((subData.node || curGrp) && !busy) subAct('sub_node', '', 'Выбираем узел автоматически'); }
-			}));
-			grps.forEach(function(g) {
-				var on = !subData.node && curGrp === g;
+			if (subData.node) manualView = false;
+			var gmode = subData.node || (manualView && grps.length) ? 'manual' : curGrp ? 'group' : 'auto';
+			var liveName = vpn && subData.vpn && subData.vpn.up ? String(subData.vpn.node || '') : '';
+			var listNodes = gmode === 'group' ? curGrp.nodes : nodes;
+			if (grps.length) {
+				if (!hideMode) {
+					subCard.appendChild(seg('Режим', [
+						[ gmode === 'auto', 'Авто', function() { manualView = false; if (subData.node || curGrp) subAct('sub_node', '', 'Выбираем узел автоматически'); else renderSub(); } ],
+						[ gmode === 'group', 'Группа АВТО', function() { grpSelectS(grpPickS(grps)); } ],
+						[ gmode === 'manual', 'Вручную', function() {
+							var ln = nodes.filter(function(n) { return n.name === liveName; })[0];
+							if (ln) { manualView = false; subAct('sub_node', ln.name, 'Закрепляем узел ' + ln.name); }
+							else { manualView = true; renderSub(); }
+						} ]
+					]));
+					if (gmode === 'group') subCard.appendChild(E('div', { 'class': 'zm-nodes', 'style': 'margin-top:4px' }, grps.map(function(g) {
+						var on = curGrp === g;
+						return nodeCard({
+							name: g.name, foot: g.nodes.length + ' ' + plural(g.nodes.length, 'узел', 'узла', 'узлов') + (isPing ? ' · по пингу' : ' · по порядку'),
+							active: on, grp: true, title: 'Группа АВТО из подписки: ' + g.nodes.map(function(n) { return n.name; }).join(', '),
+							click: function() { if (!on && !busy) grpSelectS(g); }
+						});
+					})));
+					if (liveName) subCard.appendChild(row('Сейчас', E('span', { 'style': 'display:inline-flex; align-items:center; gap:8px; flex-wrap:wrap' }, [
+						E('b', {}, [ liveName ]),
+						gmode === 'auto' && isPing && subData.order_head ? E('span', { 'class': 'zm-hint', 'style': 'margin:0' }, 'первым по пингу — ' + subData.order_head) : E([])
+					])));
+				}
+			} else {
 				grid.appendChild(nodeCard({
-					name: g.name, foot: g.nodes.length + ' ' + plural(g.nodes.length, 'узел', 'узла', 'узлов') + (isPing ? ' · по пингу' : ' · по порядку'),
-					active: on, grp: true, title: 'Группа АВТО из подписки: ' + g.nodes.map(function(n) { return n.name; }).join(', '),
-					click: function() { if (!on && !busy) subAct('sub_group', g.name, 'Выбираем группу «' + g.name + '»'); }
+					name: 'Авто', foot: isPing ? 'самый быстрый по пингу' + (subData.order_head && !subData.node ? ' · ' + subData.order_head : '') : 'первый рабочий узел', active: !subData.node,
+					click: function() { if (subData.node && !busy) subAct('sub_node', '', 'Выбираем узел автоматически'); }
 				}));
-			});
+			}
 			function pingRank(n) {
 				var l = latOf(n);
 				if (!l || l.busy || l.pend) return 1e8;
@@ -46974,7 +47060,7 @@ return view.extend({
 				if (l.tcpOnly && subData.lat_mode !== 'fast') return 5e7 + l.ms;
 				return l.ms > 0 ? l.ms : 1e7;
 			}
-			var shown = nodes.map(function(n, i) { return { n: n, i: i }; });
+			var shown = listNodes.map(function(n, i) { return { n: n, i: i }; });
 			if (sortPing && !probing) shown.sort(function(a, b) { return pingRank(a.n) - pingRank(b.n) || a.i - b.i; });
 			shown.forEach(function(sn) {
 				var n = sn.n, ni = sn.i;
@@ -46996,8 +47082,10 @@ return view.extend({
 				}));
 			});
 			if (!hideMode) subCard.appendChild(grid);
-			if (!hideMode && curGrp && !subData.node) subCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Группа АВТО из подписки — как в Happ: Steer работает только через её ' + curGrp.nodes.length + ' ' + plural(curGrp.nodes.length, 'узел', 'узла', 'узлов') + ' — ' +
-				(isPing ? 'первым стоит самый быстрый по пингу' : 'первый отвечающий по порядку подписки (чтобы первым был самый быстрый, включите «По пингу»)') + '. Узел оборвался — ядро steer само переходит на следующий узел группы. Нажмите на узел, чтобы закрепить его.'));
+			if (!hideMode && gmode === 'group') subCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Группа АВТО из подписки — как в Happ: в списке только её ' + curGrp.nodes.length + ' ' + plural(curGrp.nodes.length, 'узел', 'узла', 'узлов') + ', Steer работает только через них — ' +
+				(isPing ? 'первым стоит самый быстрый по пингу' : 'первый отвечающий по порядку подписки (чтобы первым был самый быстрый, включите «По пингу»)') + '. Узел оборвался — ядро steer само переходит на следующий узел группы. Группа остаётся выбранной и после перезапуска. Нажмите на узел, чтобы закрепить его.'));
+			else if (!hideMode && grps.length && gmode === 'auto') subCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Авто: Steer выбирает из всех узлов подписки. Нажмите на узел, чтобы закрепить его, или включите «Группа АВТО».'));
+			else if (!hideMode && grps.length && gmode === 'manual') subCard.appendChild(E('p', { 'class': 'zm-hint' }, subData.node ? 'Закреплён узел «' + subData.node + '». Чтобы Steer снова выбирал сам, включите «Авто» или «Группа АВТО».' : 'Нажмите на узел, чтобы закрепить его.'));
 			if (!hideMode && subData.grp_nojq) subCard.appendChild(E('p', { 'class': 'zm-hint' }, 'В подписке есть группы АВТО (как в Happ). Нажмите «Обновить» у подписки — панель поставит небольшой пакет jq и покажет их.'));
 			var hn = subData.hide_names || [];
 			hidePick.update(allNodes.filter(function(n) { return !!n.name; }).map(function(n, ni) {
@@ -60989,7 +61077,7 @@ return view.extend({
 						? 'Если выбранный вручную сервер перестал отвечать, Forkozz через 2–4 минуты переходит на рабочий и остаётся на нём.'
 						: 'Если выбранный вручную сервер перестал отвечать, Forkozz через 2–4 минуты переходит на рабочий, а выбранный проверяет раз в 10 минут и возвращается на него, как только он ответит. Перед выбором сервер проверяется.'));
 			}
-			srvCard.appendChild(E('p', { 'class': 'zm-hint' }, grp ? 'Группа АВТО из подписки — как в Happ: Forkozz раз в ' + grpIv(grp) + ' проверяет ' + grp.n + ' ' + plural(grp.n, 'сервер', 'сервера', 'серверов') + ' группы, работает через самый быстрый и сам переходит на другой, если сервер перестал отвечать. Нажмите на сервер, чтобы закрепить его.' : isAuto ? servers.priority ? 'Авто: используется первая доступная подписка в порядке ссылок. После её восстановления Forkozz возвращается к ней, даже если резервная быстрее. Нажатие на сервер включает ручной выбор.' : servers.ping ? 'Авто по пингу: включён самый быстрый сервер. Если он оборвётся, Forkozz за 20–40 секунд перейдёт на самый быстрый из рабочих. Нажмите на сервер, чтобы закрепить его.' : 'Авто: Forkozz сам выбирает лучший из этих серверов. Нажмите на сервер, чтобы закрепить его.' : servers.priority ? 'Нажмите на сервер, чтобы переключиться. Чтобы снова использовать автоматический порядок подписок, выберите «Авто».' : 'Нажмите на сервер, чтобы переключиться. Выбор держится до перезагрузки роутера.'));
+			srvCard.appendChild(E('p', { 'class': 'zm-hint' }, grp ? 'Группа АВТО из подписки — как в Happ: Forkozz раз в ' + grpIv(grp) + ' проверяет ' + grp.n + ' ' + plural(grp.n, 'сервер', 'сервера', 'серверов') + ' группы, работает через самый быстрый и сам переходит на другой, если сервер перестал отвечать. Группа остаётся выбранной и после перезапуска Forkozz. Нажмите на сервер, чтобы закрепить его.' : isAuto ? servers.priority ? 'Авто: используется первая доступная подписка в порядке ссылок. После её восстановления Forkozz возвращается к ней, даже если резервная быстрее. Нажатие на сервер включает ручной выбор.' : servers.ping ? 'Авто по пингу: включён самый быстрый сервер. Если он оборвётся, Forkozz за 20–40 секунд перейдёт на самый быстрый из рабочих. Нажмите на сервер, чтобы закрепить его.' : 'Авто: Forkozz сам выбирает лучший из этих серверов. Нажмите на сервер, чтобы закрепить его.' : servers.priority ? 'Нажмите на сервер, чтобы переключиться. Чтобы снова использовать автоматический порядок подписок, выберите «Авто».' : 'Нажмите на сервер, чтобы переключиться. Выбор держится, пока Forkozz не перезапустится (перезагрузка роутера, «Применить», обновление подписки) — после этого снова работает «Авто».'));
 			srvCard.appendChild(rlPanel(ns));
 		}
 
