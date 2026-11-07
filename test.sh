@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.220
+# Version: 5.230
 ZM_VERSION_EOF
 set -e
 
@@ -4087,7 +4087,7 @@ _tg_port_of() {
 			else v="$(_tg_init_arg "$TG_INIT_RS" --port '[0-9]')"; echo "${v:-2443}"; fi ;;
 	esac
 }
-_tg_title_of() { case "$1" in mtproto) echo "Go (MTProto)" ;; socks5) echo "SOCKS5" ;; rust) echo "Rust (MTProto)" ;; rsocks) echo "SOCKS5-входа Rust" ;; esac; }
+_tg_title_of() { case "$1" in mtproto) echo "Go (MTProto)" ;; socks5) echo "SOCKS5" ;; rust) echo "Rust (MTProto)" ;; rsocks) echo "SOCKS5 в Rust" ;; esac; }
 _tg_rs_socks_cfg() {
 	local on=0 host="" port=""
 	if _tg_rs_uci; then
@@ -8763,7 +8763,7 @@ tg_args_set() {
 			--host|--port|--secret|--listen-faketls-domain|-host|-port|-secret|--host=*|--port=*|--secret=*|--listen-faketls-domain=*|-host=*|-port=*|-secret=*)
 				bad="${t%%=*} задаётся в «Порт и ключ» — уберите его отсюда"; break ;;
 			--socks-enabled|--socks-enabled=*|--socks-host|--socks-host=*|--socks-port|--socks-port=*)
-				[ "$id" = rust ] && { bad="${t%%=*} задаётся переключателем «SOCKS5-вход» — уберите его отсюда"; break; } ;;
+				[ "$id" = rust ] && { bad="${t%%=*} задаётся переключателем «SOCKS5» — уберите его отсюда"; break; } ;;
 		esac
 	done
 	set +f
@@ -8815,21 +8815,21 @@ _tg_socks_write() {
 tg_socks_set() {
 	local v="$1" init="$TG_INIT_RS" mode port host="" st was="" c out want
 	[ -f "$init" ] || { echo '{"error":"Rust не установлен"}'; return 1; }
-	_tg_rs_uci && { echo '{"error":"Rust установлен пакетом luci-app-tg-ws-proxy-rs — SOCKS5-вход включается в его настройках (Enable SOCKS5 input)"}'; return 1; }
+	_tg_rs_uci && { echo '{"error":"Rust установлен пакетом luci-app-tg-ws-proxy-rs — SOCKS5 включается в его настройках (Enable SOCKS5 input)"}'; return 1; }
 	_tg_auto_busy rust && { echo '{"error":"Идёт установка или удаление Rust — дождитесь окончания"}'; return 1; }
-	_tg_rs_socks_ok "$(cat "$TG_VER_RS_FILE" 2>/dev/null)" || { echo '{"error":"SOCKS5-вход есть в Rust начиная с версии 2.6.0 — обновите прокси"}'; return 1; }
+	_tg_rs_socks_ok "$(cat "$TG_VER_RS_FILE" 2>/dev/null)" || { echo '{"error":"SOCKS5 есть в Rust начиная с версии 2.6.0 — обновите прокси"}'; return 1; }
 	grep -q 'procd_set_param[[:space:]]\{1,\}command' "$init" || { echo '{"error":"в init-скрипте Rust нет строки запуска — переустановите прокси"}'; return 1; }
 	case "$v" in
 		off) mode=off ;;
 		lan:*|local:*) mode="${v%%:*}"; port="$(printf '%s' "${v#*:}" | sed 's/^0*//')" ;;
-		*) echo '{"error":"неизвестный режим SOCKS5-входа"}'; return 1 ;;
+		*) echo '{"error":"неизвестный режим SOCKS5"}'; return 1 ;;
 	esac
 	if [ "$mode" != off ]; then
 		st="$(_tg_port_state rust "$port" socks)"
 		case "$st" in
 			free|self) ;;
 			bad) echo '{"error":"Порт — число от 1 до 65535"}'; return 1 ;;
-			"tg rust") printf '{"error":"Порт %s — это порт MTProto-входа Rust, нужен другой"}\n' "$port"; return 1 ;;
+			"tg rust") printf '{"error":"Порт %s уже у MTProto этого прокси — нужен другой"}\n' "$port"; return 1 ;;
 			"tg "*) printf '{"error":"Порт %s уже у %s — выберите другой"}\n' "$port" "$(esc "$(_tg_title_of "${st#tg }")")"; return 1 ;;
 			*) printf '{"error":"Порт %s уже занят программой %s — выберите другой"}\n' "$port" "$(esc "${st#busy }")"; return 1 ;;
 		esac
@@ -8854,8 +8854,8 @@ tg_socks_set() {
 	"$init" restart >/dev/null 2>&1
 	if _tg_listening rust "${port:-$(_tg_port_of rust)}"; then
 		_tg_bk drop
-		if [ "$mode" = off ]; then logger -t zapret-manager "TG WS Proxy (rust): SOCKS5-вход выключен"
-		else logger -t zapret-manager "TG WS Proxy (rust): SOCKS5-вход на $host:$port"; fi
+		if [ "$mode" = off ]; then logger -t zapret-manager "TG WS Proxy (rust): SOCKS5 выключен"
+		else logger -t zapret-manager "TG WS Proxy (rust): SOCKS5 на $host:$port"; fi
 		printf '{"ok":true,"running":true,"host":"%s"}\n' "$(esc "$host")"
 		return 0
 	fi
@@ -8868,7 +8868,7 @@ tg_socks_set() {
 	out="$(_tg_args_probe rust)"
 	_tg_bk restore
 	"$init" restart >/dev/null 2>&1
-	printf '{"error":"С SOCKS5-входом Rust не запустился — вернули как было, прокси работает как раньше","log":"%s"}\n' "$(esc_ml "$out")"
+	printf '{"error":"С включённым SOCKS5 Rust не запустился — вернули как было, прокси работает как раньше","log":"%s"}\n' "$(esc_ml "$out")"
 	return 1
 }
 
@@ -8883,7 +8883,7 @@ _tg_rs_socks_fix() {
 	ip="$(_zm_lan_ip)"
 	_tg_ip4_ok "$ip" && [ "$ip" != "$h" ] || return 0
 	_tg_socks_write "$TG_INIT_RS" "--socks-enabled --socks-host $ip --socks-port $p"
-	logger -t zapret-manager "TG WS Proxy (rust): адрес роутера в домашней сети сменился ($h → $ip) — перенесли на него SOCKS5-вход"
+	logger -t zapret-manager "TG WS Proxy (rust): адрес роутера в домашней сети сменился ($h → $ip) — перенесли на него SOCKS5"
 	"$TG_INIT_RS" enabled >/dev/null 2>&1 && "$TG_INIT_RS" restart >/dev/null 2>&1
 	return 0
 }
@@ -58782,37 +58782,48 @@ return view.extend({
 			return box;
 		}
 
-		var extOpen = {}, extDraft = {}, extPaint = {}, socksOpen = false, socksDraft = null, socksTab = 'mt';
+		var extOpen = {}, extDraft = {}, extPaint = {}, socksOpen = false, socksDraft = null, socksTab = 'mt', socksBusy = null;
 		function socksHost(st, s) { return s && s.lan ? (s.host && s.host !== '0.0.0.0' ? s.host : data.lan_ip || '192.168.1.1') : '127.0.0.1'; }
 		function socksAddr(st, s) { return socksHost(st, s) + ':' + s.port; }
-		function socksOff(st) {
-			zm.dialog({ title: 'Выключить SOCKS5-вход?', okText: 'Выключить', blocks: [ { type: 'list', title: 'Что произойдёт', items: [
-				'Rust перезапустится — на пару секунд Telegram переподключится',
-				'Подключения по SOCKS5 перестанут работать',
-				'MTProto-вход продолжит работать как раньше'
-			] } ] }).then(function(ok) { if (ok) socksApply(st, { on: false }); });
+		function socksFind(st, done) {
+			var list = [], p;
+			for (p = 1080; p <= 1099; p++) if (String(p) !== String(st.port)) list.push(p);
+			(function next(i) {
+				if (i >= list.length) { done(null); return; }
+				zm.tgAction('rust', 'sport=' + list[i]).then(function(r) {
+					if (r && !r.error && r.free) done(list[i]); else next(i + 1);
+				}, function() { done(null); });
+			})(0);
+		}
+		function socksEnable(st) {
+			if (socksBusy || busyMap.rust) return;
+			socksBusy = 'pick'; renderCards(data);
+			socksFind(st, function(port) {
+				if (port) { socksApply(st, { on: true, lan: true, port: String(port) }); return; }
+				socksBusy = null; socksOpen = true; socksDraft = null; renderCards(data);
+				zm.toast('Порты 1080–1099 заняты — укажите свой порт для SOCKS5', 'warning', 8000);
+			});
 		}
 		function socksApply(st, dr, done) {
 			if (busyMap.rust) { zm.toast('Дождитесь завершения текущей операции', 'warning'); if (done) done(false); return; }
-			busyMap.rust = true;
+			busyMap.rust = true; socksBusy = dr.on ? 'on' : 'off'; renderCards(data);
 			var host = dr.lan ? ((st.socks || {}).on && (st.socks || {}).lan ? socksHost(st, st.socks) : (data.lan_ip || '192.168.1.1')) : '127.0.0.1';
-			zm.toast(dr.on ? 'Включаем SOCKS5-вход и перезапускаем Rust' : 'Выключаем SOCKS5-вход и перезапускаем Rust', 'warning');
 			zm.tgAction('rust', 'socks=' + (dr.on ? (dr.lan ? 'lan' : 'local') + ':' + (+dr.port) : 'off')).then(function(r) {
-				busyMap.rust = false;
-				if (!r || r.error) { zm.toast((r && r.error) || 'Роутер не ответил', 'error', 12000); if (done) done(false); return; }
+				busyMap.rust = false; socksBusy = null;
+				if (!r || r.error) { renderCards(data); zm.toast((r && r.error) || 'Роутер не ответил', 'error', 12000); if (done) done(false); return; }
 				if (r.host) host = r.host;
-				zm.toast(!dr.on ? 'SOCKS5-вход выключен' : r.running === false ? 'Сохранено. Rust сейчас не запущен' : dr.lan ? 'SOCKS5-вход работает: ' + host + ':' + (+dr.port) + ' — ссылка для Telegram вверху страницы' : 'SOCKS5-вход работает на 127.0.0.1:' + (+dr.port), 'info', 8000);
+				zm.toast(!dr.on ? 'SOCKS5 выключен' : r.running === false ? 'Сохранено. Rust сейчас не запущен' : dr.lan ? 'SOCKS5 работает: ' + host + ':' + (+dr.port) + ' — ссылка для Telegram вверху страницы' : 'SOCKS5 работает на 127.0.0.1:' + (+dr.port), 'info', 8000);
 				socksOpen = false; socksDraft = null;
 				if (done) done(true);
 				zm.tgStatus().then(function(d) { data = d; renderCards(d); renderLinks(d); });
-			}, function() { busyMap.rust = false; zm.toast('Роутер не ответил', 'error'); if (done) done(false); });
+			}, function() { busyMap.rust = false; socksBusy = null; renderCards(data); zm.toast('Роутер не ответил', 'error'); if (done) done(false); });
 		}
 		function socksPanel(v, st, cls) {
 			var s = st.socks || {}, body = E('div', { 'class': 'zm-tg-x-body zm-tg-socks-body ' + (cls || '') });
 			function row(label, kids) {
 				return E('div', { 'class': 'zm-tg-x-row' }, [ E('div', { 'class': 'zm-tg-edit-label' }, label), E('div', { 'class': 'zm-tg-x-field' }, kids) ]);
 			}
-			var dr = socksDraft || (socksDraft = { on: true, port: String(s.port || 1080), lan: s.on ? !!s.lan : true, busy: false, net: null });
+			var dr = socksDraft || (socksDraft = { on: true, port: String(s.port || 1080), lan: true, busy: false, net: null });
 			var host = function() { return dr.lan ? (s.on && s.lan ? socksHost(st, s) : (data.lan_ip || '192.168.1.1')) : '127.0.0.1'; };
 			var netT = null;
 			function netCheck() {
@@ -58835,21 +58846,21 @@ return view.extend({
 			var applyBtn = E('button', { 'class': 'cbi-button cbi-button-positive' }, 'Применить');
 			function rebuild() { var nb = socksPanel(v, st, cls); body.parentNode && body.parentNode.replaceChild(nb, body); }
 			function portOk() { var p = +dr.port; return /^\d{2,5}$/.test(dr.port) && p >= 1 && p <= 65535 && String(p) !== String(st.port); }
-			function same() { return !!s.on && String(+dr.port) === String(s.port) && dr.lan === !!s.lan; }
+			function same() { return !!s.on && String(+dr.port) === String(s.port) && !!s.lan; }
 			function paint() {
 				portMsg.innerHTML = '';
 				var p = +dr.port;
 				if (!/^\d{2,5}$/.test(dr.port) || p < 1 || p > 65535) portMsg.appendChild(chip('zm-tg-chip-bad', '✕ порт — число от 1 до 65535'));
-				else if (String(p) === String(st.port)) portMsg.appendChild(chip('zm-tg-chip-bad', '✕ это порт MTProto-входа — нужен другой'));
+				else if (String(p) === String(st.port)) portMsg.appendChild(chip('zm-tg-chip-bad', '✕ это порт MTProto этого прокси — нужен другой'));
 				else if (dr.net === 'wait') portMsg.appendChild(chip('zm-tg-chip-wait', 'проверяем, свободен ли порт…'));
 				else if (dr.net && dr.net.free === false) portMsg.appendChild(chip('zm-tg-chip-bad', '✕ ' + (dr.net.why || 'порт занят')));
-				else if (dr.net && dr.net.free) portMsg.appendChild(chip('zm-tg-chip-ok', '✓ ' + (dr.net.self ? 'сейчас этот порт у SOCKS5-входа' : 'порт свободен')));
+				else if (dr.net && dr.net.free) portMsg.appendChild(chip('zm-tg-chip-ok', '✓ ' + (dr.net.self ? 'сейчас этот порт у SOCKS5' : 'порт свободен')));
 				linkWrap.innerHTML = '';
 				if (dr.lan) linkWrap.appendChild(portOk() ? E('div', { 'class': 'zm-tg-link-box zm-tg-edit-preview' }, [ zm.secret('tg://socks?server=' + host() + '&port=' + p) ])
 					: E('div', { 'class': 'zm-tg-link-box zm-tg-edit-preview zm-tg-edit-preview-off' }, 'Ссылка появится, когда порт будет в порядке'));
 				var bad = !portOk() || dr.net === 'wait' || !dr.net || dr.net.free === false;
 				applyBtn.disabled = bad || same() || dr.busy;
-				applyBtn.textContent = dr.busy ? 'Применяем…' : same() ? 'Без изменений' : s.on ? 'Применить и перезапустить' : 'Включить и перезапустить';
+				applyBtn.textContent = dr.busy ? 'Сохраняем…' : same() ? 'Без изменений' : s.on ? 'Сохранить и перезапустить' : 'Включить';
 			}
 			portIn.addEventListener('input', function() { var c = portIn.value.replace(/\D+/g, ''); if (c !== portIn.value) portIn.value = c; dr.port = c; netCheck(); });
 			applyBtn.addEventListener('click', function() {
@@ -58858,18 +58869,9 @@ return view.extend({
 				socksApply(st, dr, function() { dr.busy = false; paint(); });
 			});
 			body.appendChild(row('Порт', [ portIn, portMsg ]));
-			body.appendChild(row('Кто подключается', [
-				E('div', { 'class': 'zm-seg zm-tg-x-seg' }, [ [ true, 'Устройства дома' ], [ false, 'Только этот роутер' ] ].map(function(it) {
-					function go() { if (!dr.busy && dr.lan !== it[0]) { dr.lan = it[0]; rebuild(); } }
-					return E('div', { 'class': 'zm-seg-item' + (dr.lan === it[0] ? ' zm-active' : ''), 'role': 'button', 'tabindex': '0', 'aria-pressed': dr.lan === it[0] ? 'true' : 'false', 'click': go,
-						'keydown': function(ev) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); go(); } } }, it[1]);
-				})),
-				E('p', { 'class': 'zm-hint zm-tg-x-note' }, dr.lan
-					? 'Телефоны и компьютеры в домашней сети подключаются к ' + host() + '. Из интернета этот порт закрыт.'
-					: 'Вход слушает только 127.0.0.1 — для программ на самом роутере. Телефоны и компьютеры к нему не подключатся.')
-			]));
+			if (s.on && !s.lan) body.appendChild(E('p', { 'class': 'zm-hint zm-tg-x-note' }, 'Сейчас SOCKS5 доступен только самому роутеру. После сохранения к нему смогут подключаться устройства вашей домашней сети.'));
 			if (dr.lan) body.appendChild(row('Ссылка', [ linkWrap ]));
-			body.appendChild(E('p', { 'class': 'zm-hint zm-tg-x-note zm-tg-socks-note' }, 'У SOCKS5 нет пароля, поэтому пользоваться им могут только устройства вашей сети — не открывайте этот порт в интернет. Через вход идут сообщения, фото и файлы; звонки и Telegram Web — нет. Вне дома подключайтесь по MTProto-ссылке.'));
+			body.appendChild(E('p', { 'class': 'zm-hint zm-tg-x-note zm-tg-socks-note' }, s.on ? 'После смены порта добавьте в Telegram новую ссылку — старая перестанет работать.' : 'Подключаться смогут только устройства вашей домашней сети — пароля у SOCKS5 нет.'));
 			body.appendChild(E('div', { 'class': 'zm-actions' }, [ applyBtn, E('button', { 'class': 'cbi-button', 'click': function() { if (!dr.busy) { socksOpen = false; socksDraft = null; renderCards(data); } } }, 'Отмена') ]));
 			if (dr.net === null) netCheck(); else paint();
 			return body;
@@ -58877,27 +58879,30 @@ return view.extend({
 		function socksNa(st) {
 			var s = st.socks || {};
 			if (s.ok) return null;
-			return E('p', { 'class': 'zm-hint zm-tg-x-note' }, 'SOCKS5-вход появился в tg-ws-proxy-rs 2.6.0' + (st.version ? ', а сейчас стоит ' + st.version : '') + '. ' +
+			return E('p', { 'class': 'zm-hint zm-tg-x-note' }, 'SOCKS5 появился в tg-ws-proxy-rs 2.6.0' + (st.version ? ', а сейчас стоит ' + st.version : '') + '. ' +
 				(st.uci ? 'Обновите пакет luci-app-tg-ws-proxy-rs через менеджер пакетов.' : st.newer ? 'Нажмите «Обновить до ' + st.latest + '».' : 'Нажмите «Переустановить» — поставится последняя версия.'));
 		}
 		function socksUci(st) {
 			var s = st.socks || {};
-			return E('p', { 'class': 'zm-hint zm-tg-x-note' }, (s.on ? 'SOCKS5-вход включён: ' + socksAddr(st, s) + '. ' : 'SOCKS5-вход выключен. ') + 'Rust установлен пакетом — SOCKS5 включается в его настройках: Enable SOCKS5 input, адрес и порт.');
+			return E('p', { 'class': 'zm-hint zm-tg-x-note' }, (s.on ? 'SOCKS5 включён: ' + socksAddr(st, s) + '. ' : 'SOCKS5 выключен. ') + 'Rust установлен пакетом — SOCKS5 включается в его настройках: Enable SOCKS5 input, адрес и порт.');
 		}
 
 		function socksBlock(v, st) {
-			var s = st.socks || {}, on = !!(s.ok && s.on), open = !!socksOpen && s.ok && !st.uci;
+			var s = st.socks || {}, on = !!(s.ok && s.on), open = !!socksOpen && !!s.ok && !st.uci && !socksBusy;
 			var box = E('div', { 'class': 'zm-tg-socks-strip' + (open ? ' zm-tg-socks-strip-open' : '') });
 			var hint = !s.ok ? 'Есть в Rust с версии 2.6.0 — обновите прокси, чтобы включить.'
-				: on ? [ zm.secret(socksAddr(st, s)), s.lan ? ' · устройства дома' : ' · только этот роутер' ]
-				: 'Второй вход этого прокси: в Telegram добавляется как обычный SOCKS5-прокси, без ключа. MTProto продолжит работать.';
+				: socksBusy === 'off' ? 'Выключаем — Rust перезапускается…'
+				: socksBusy ? 'Включаем — Rust перезапускается…'
+				: on ? [ zm.secret(socksAddr(st, s)), s.lan ? ' · для устройств дома' : ' · только для этого роутера' ]
+				: 'Ещё один способ подключиться к этому прокси: в Telegram добавляется как обычный SOCKS5, без ключа. MTProto продолжит работать.';
 			box.appendChild(E('div', { 'class': 'zm-tg-socks-line' }, [
-				zm.swRow(on || open, 'SOCKS5-вход', hint, function() {
+				zm.swRow(socksBusy ? socksBusy !== 'off' : on, 'SOCKS5', hint, function() {
 					if (!s.ok) { zm.toast('Сначала обновите Rust до 2.6.0 или новее', 'warning'); return; }
 					if (st.uci) { zm.toast('Rust установлен пакетом — SOCKS5 включается в его настройках', 'warning'); return; }
-					if (on) socksOff(st); else { socksOpen = !socksOpen; socksDraft = null; renderCards(data); }
-				}, !s.ok),
-				on && !open && !st.uci ? E('button', { 'class': 'cbi-button', 'click': function() { socksOpen = true; socksDraft = null; renderCards(data); } }, 'Порт и доступ') : E([])
+					if (socksBusy || busyMap.rust) return;
+					if (on) socksApply(st, { on: false }); else socksEnable(st);
+				}, !s.ok || !!socksBusy),
+				on && !open && !st.uci && !socksBusy ? E('button', { 'class': 'cbi-button', 'click': function() { socksOpen = true; socksDraft = null; renderCards(data); } }, 'Сменить порт') : E([])
 			]));
 			if (open) box.appendChild(socksPanel(v, st));
 			if (st.uci && s.ok) box.appendChild(socksUci(st));
@@ -59245,8 +59250,8 @@ return view.extend({
 						zm.secretBox(E('span', { 'class': 'zm-tg-key' }, [ st.secret.length > 22 ? st.secret.slice(0, 10) + '…' + st.secret.slice(-8) : st.secret ]), st.secret) ]) : E([]),
 					pkgNote || E([]),
 					E('div', { 'class': 'zm-actions' }, actions),
-					st.installed && v.id === 'rust' && st.socks ? socksBlock(v, st) : E([]),
 					st.installed && st.edit && editOpen[v.id] ? editPanel(v, st) : E([]),
+					st.installed && v.id === 'rust' && st.socks ? socksBlock(v, st) : E([]),
 					st.installed && v.kind === 'proto' && st.ext ? extFold(v, st) : E([])
 				]));
 			});
@@ -59254,9 +59259,7 @@ return view.extend({
 			layoutCards();
 		}
 
-		// Две независимые колонки: раскрытая панель сдвигает вниз только свою колонку. Закрытые пары — одной высоты, как в сетке;
-		// у раскрытой карточки сосед сохраняет прежнюю высоту. На узком экране — одна колонка в прежнем порядке.
-		var pairH = {}, eqTries = 0;
+		// Две независимые колонки: раскрытая панель сдвигает вниз только свою колонку. На узком экране — одна колонка в прежнем порядке.
 		function layoutCards() {
 			var els = [], block = null, col = 0, n = 0;
 			Array.prototype.forEach.call(cards.children, function(ch) {
@@ -59268,7 +59271,7 @@ return view.extend({
 			els.forEach(function(el) {
 				el.classList.remove('zm-tg-n1', 'zm-tg-n2', 'zm-tg-n3', 'zm-tg-n4');
 				el.classList.add('zm-tg-n' + (n % 4 + 1));
-				el.style.order = '';
+				el.style.order = ''; el.style.minHeight = '';
 				n++;
 				if (el.classList.contains('zm-tg-wide')) { cards.appendChild(el); block = null; return; }
 				if (!block) { block = E('div', { 'class': 'zm-tg-cols' }, [ E('div', { 'class': 'zm-tg-col' }), E('div', { 'class': 'zm-tg-col' }) ]); cards.appendChild(block); col = 0; }
@@ -59276,35 +59279,7 @@ return view.extend({
 				block.children[col % 2].appendChild(el);
 				col++;
 			});
-			eqTries = 0;
-			equalize();
 		}
-		function equalize() {
-			if (!cards.isConnected) { if (eqTries++ < 40) requestAnimationFrame(equalize); return; }
-			var two = !window.matchMedia || window.matchMedia('(min-width: 721px)').matches;
-			Array.prototype.forEach.call(cards.querySelectorAll('.zm-tg-cols'), function(block) {
-				var L = block.children[0].children, R = block.children[1].children, i;
-				for (i = 0; i < Math.max(L.length, R.length); i++) {
-					var a = L[i], b = R[i];
-					if (a) a.style.minHeight = '';
-					if (b) b.style.minHeight = '';
-					if (!two || !a || !b) continue;
-					var key = (a.getAttribute('data-k') || '') + '|' + (b.getAttribute('data-k') || '');
-					var oa = a.classList.contains('zm-tg-open'), ob = b.classList.contains('zm-tg-open');
-					if (!oa && !ob) {
-						var h = Math.max(a.offsetHeight, b.offsetHeight);
-						if (!h) continue;
-						pairH[key] = h;
-						a.style.minHeight = b.style.minHeight = h + 'px';
-					} else if (pairH[key]) {
-						if (!oa) a.style.minHeight = pairH[key] + 'px';
-						if (!ob) b.style.minHeight = pairH[key] + 'px';
-					}
-				}
-			});
-		}
-		var eqT = null;
-		window.addEventListener('resize', function() { clearTimeout(eqT); eqT = setTimeout(function() { if (cards.isConnected) equalize(); }, 120); });
 
 		function doAction(variantId, action) {
 			if (busyMap[variantId]) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
@@ -59392,7 +59367,6 @@ return view.extend({
 				]));
 			}
 			tgwsCard.appendChild(E('div', { 'class': 'zm-actions' }, actions));
-			if (cards.isConnected) equalize();
 		}
 
 		function doTgwsAction(action) {
