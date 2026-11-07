@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.170
+# Version: 5.220
 ZM_VERSION_EOF
 set -e
 
@@ -3825,7 +3825,7 @@ TGWS_VERSION="0.3.1"
 TGWS_BASE_URL="https://gitlab.com/xyzmean/brb/-/raw/main/dist"
 TGWS_VERSION_URL="https://gitlab.com/xyzmean/brb/-/raw/main/VERSION"
 TG_GO_VER="1.4.1"
-TG_RS_VER="2.3.3"
+TG_RS_VER="2.6.1"
 TG_BIN_GO="/usr/bin/tg-ws-proxy-go"
 TG_INIT_GO="/etc/init.d/tg-ws-proxy-go"
 TG_BIN_RS="/usr/bin/tg-ws-proxy-rs"
@@ -4045,9 +4045,16 @@ tg_status() {
 		if [ -n "$v" ]; then mt_link="ee$secret_mt$(_tg_hex "$v")"; else mt_link="dd$secret_mt"; fi
 	fi
 
-	local mt_l go_l rs_l
+	local mt_l go_l rs_l rs_sok=false rs_son=false rs_shost="" rs_sport="" rs_slan=false
+	if [ "$rs" = installed ]; then
+		_tg_rs_socks_ok "$rs_ver" && rs_sok=true
+		set -- $(_tg_rs_socks_cfg)
+		[ "$1" = 1 ] && rs_son=true
+		rs_shost="$2"; rs_sport="$3"
+		case "$rs_shost" in 127.*|::1|localhost) ;; *) rs_slan=true ;; esac
+	fi
 	mt_l="$(_tg_latest mt)"; mt_l="$(_tg_mt_show "$(_tg_mt_base "${mt_l%% *}")" "${mt_l##* }")"; go_l="$(_ver_norm "$(_tg_latest go)")"; rs_l="$(_ver_norm "$(_tg_latest rs)")"
-	printf '{"mtproto":"%s","mtproto_running":%s,"mtproto_version":"%s","mtproto_latest":"%s","mtproto_newer":%s,"socks5":"%s","socks5_running":%s,"socks5_version":"%s","socks5_latest":"%s","socks5_newer":%s,"rust":"%s","rust_running":%s,"rust_version":"%s","rust_latest":"%s","rust_newer":%s,"rust_uci":%s,"rust_enabled":%s,"rust_port":"%s","rust_host":"%s","lan_ip":"%s","secret_mtproto":"%s","secret_rust":"%s","mtproto_port":"%s","mtproto_host":"%s","link_mtproto":"%s","socks5_port":"%s","rust_key":"%s","socks5_args":"%s","rust_args":"%s","args_def":{"socks5":"%s","rust":"%s"},"auto":%s,"ext":%s}\n' \
+	printf '{"mtproto":"%s","mtproto_running":%s,"mtproto_version":"%s","mtproto_latest":"%s","mtproto_newer":%s,"socks5":"%s","socks5_running":%s,"socks5_version":"%s","socks5_latest":"%s","socks5_newer":%s,"rust":"%s","rust_running":%s,"rust_version":"%s","rust_latest":"%s","rust_newer":%s,"rust_uci":%s,"rust_enabled":%s,"rust_port":"%s","rust_host":"%s","lan_ip":"%s","secret_mtproto":"%s","secret_rust":"%s","mtproto_port":"%s","mtproto_host":"%s","link_mtproto":"%s","socks5_port":"%s","rust_key":"%s","socks5_args":"%s","rust_args":"%s","args_def":{"socks5":"%s","rust":"%s"},"rust_socks":{"ok":%s,"on":%s,"host":"%s","port":"%s","lan":%s},"auto":%s,"ext":%s}\n' \
 		"$mt" "$mt_running" "$(esc "$mt_ver")" "$(esc "$mt_l")" "$(_tg_newer "$mt_ver" "$mt_l" && echo true || echo false)" \
 		"$go" "$go_running" "$(esc "$go_ver")" "$(esc "$go_l")" "$(_tg_newer "$go_ver" "$go_l" && echo true || echo false)" \
 		"$rs" "$rs_running" "$(esc "$rs_ver")" "$(esc "$rs_l")" "$(_tg_newer "$rs_ver" "$rs_l" && echo true || echo false)" \
@@ -4055,6 +4062,7 @@ tg_status() {
 		"$(esc "$lan_ip")" "$(esc "$secret_mt")" "$(esc "$secret_rs")" \
 		"$(esc "$mt_port")" "$(esc "$mt_host")" "$(esc "$mt_link")" "$(esc "$go_port")" "$(_tg_rs_uci || esc "$(_tg_rs_init_secret)")" \
 		"$(esc "$(_tg_args_of socks5)")" "$(_tg_rs_uci || esc "$(_tg_args_of rust)")" "$(esc "$TG_ARGS_DEF_GO")" "$(esc "$TG_ARGS_DEF_RS")" \
+		"$rs_sok" "$rs_son" "$(esc "$rs_shost")" "$(esc "$rs_sport")" "$rs_slan" \
 		"$(_tg_auto_json)" "$(_tg_ext_json)"
 }
 
@@ -4079,7 +4087,24 @@ _tg_port_of() {
 			else v="$(_tg_init_arg "$TG_INIT_RS" --port '[0-9]')"; echo "${v:-2443}"; fi ;;
 	esac
 }
-_tg_title_of() { case "$1" in mtproto) echo "Go (MTProto)" ;; socks5) echo "SOCKS5" ;; rust) echo "Rust (MTProto)" ;; esac; }
+_tg_title_of() { case "$1" in mtproto) echo "Go (MTProto)" ;; socks5) echo "SOCKS5" ;; rust) echo "Rust (MTProto)" ;; rsocks) echo "SOCKS5-входа Rust" ;; esac; }
+_tg_rs_socks_cfg() {
+	local on=0 host="" port=""
+	if _tg_rs_uci; then
+		[ "$(uci -q get tg-ws-proxy-rs.main.socks_enabled)" = 1 ] && on=1
+		host="$(uci -q get tg-ws-proxy-rs.main.socks_host)"; port="$(uci -q get tg-ws-proxy-rs.main.socks_port)"
+	elif [ -f "$TG_INIT_RS" ]; then
+		grep -q -- '--socks-enabled' "$TG_INIT_RS" && on=1
+		host="$(_tg_init_arg "$TG_INIT_RS" --socks-host '[0-9a-fA-F.:]')"; port="$(_tg_init_arg "$TG_INIT_RS" --socks-port '[0-9]')"
+	fi
+	echo "$on ${host:-127.0.0.1} ${port:-1080}"
+}
+_tg_rs_socks_ok() {
+	local v="$1"
+	[ -x "$TG_BIN_RS" ] || return 1
+	[ -n "$v" ] && { ! _st_ver_lt "$(_ver_norm "$v")" 2.6.0; return; }
+	"$TG_BIN_RS" --help 2>/dev/null | grep -q -- '--socks-enabled'
+}
 _zm_tcp_listen() {
 	awk -v P="$(printf '%04X' "$1")" '$4 == "0A" { n = split($2, a, ":"); if (toupper(a[n]) == P) { f = 1; exit } } END { exit !f }' /proc/net/tcp /proc/net/tcp6 2>/dev/null
 }
@@ -4108,8 +4133,8 @@ _tg_args_of() {
 			for (i = 1; i <= NF; i++) {
 				t = $i; gsub(/^["\047]|["\047]$/, "", t)
 				if (!seen) { if (t ~ /tg-ws-proxy-(go|rs)$/) seen = 1; continue }
-				if (t ~ /^--?(host|port|secret|listen-faketls-domain)$/) { i++; continue }
-				if (t ~ /^--?(host|port|secret|listen-faketls-domain)=/) continue
+				if (t ~ /^--?(host|port|secret|listen-faketls-domain|socks-host|socks-port)$/) { i++; continue }
+				if (t ~ /^--?(host|port|secret|listen-faketls-domain|socks-host|socks-port)=/ || t == "--socks-enabled") continue
 				o = o (o == "" ? "" : " ") t
 			}
 			print o
@@ -5268,6 +5293,7 @@ _doh_provider_of() {
 		https://dns.zapret.moe/*) echo zapretmoe ;;
 		https://d.webshiftvpn.ru/*) echo webshift ;;
 		https://dns.dagami.ru/*) echo dagami ;;
+		https://api.magicdns.ru/*) echo magicdns ;;
 		https://freedns.controld.com/p0) echo controld ;;
 		https://freedns.controld.com/p1) echo controld_sec ;;
 		https://freedns.controld.com/family) echo controld_fam ;;
@@ -5386,6 +5412,7 @@ _doh_url_of() {
 		zapretmoe)     echo "https://dns.zapret.moe/dns-query" ;;
 		webshift)      echo "https://d.webshiftvpn.ru/dns-query" ;;
 		dagami)        echo "https://dns.dagami.ru/dns-query" ;;
+		magicdns)      echo "https://api.magicdns.ru/sync" ;;
 		controld)      echo "https://freedns.controld.com/p0" ;;
 		controld_sec)  echo "https://freedns.controld.com/p1" ;;
 		controld_fam)  echo "https://freedns.controld.com/family" ;;
@@ -5416,7 +5443,7 @@ _doh_name() {
 		cloudflare_sec) echo "Cloudflare · Защита от угроз" ;; cloudflare_fam) echo "Cloudflare · Семейный фильтр" ;; quad9_open) echo "Quad9 · Без фильтрации" ;;
 		controld_sec) echo "Control D · Защита от угроз" ;; controld_fam) echo "Control D · Семейный фильтр" ;; dns4eu_sec) echo "DNS4EU · Защита от угроз" ;; dns4eu_fam) echo "DNS4EU · Семейный фильтр" ;;
 		yandex) echo "Яндекс" ;; yandex_family) echo "Яндекс · Семейный фильтр" ;; yandex_safe) echo "Яндекс · Защита от угроз" ;; geohide_eu) echo "GeoHide EU" ;;
-		geohide_us) echo "GeoHide US" ;; malw) echo MALW ;; zapretmoe) echo zapret.moe ;; webshift) echo WebShift ;; dagami) echo Dagami ;;
+		geohide_us) echo "GeoHide US" ;; malw) echo MALW ;; zapretmoe) echo zapret.moe ;; webshift) echo WebShift ;; dagami) echo Dagami ;; magicdns) echo MagicDNS ;;
 		controld) echo "Control D" ;; dns4eu) echo DNS4EU ;;
 		https://*) _doh_own_title "$1" | grep . || printf '%s' "$1" | sed 's#^https://\([^/]*\).*#\1#' ;; *) echo "$1" ;;
 	esac
@@ -7465,7 +7492,7 @@ _fk_foreign() {
 _fk_ours() { _fk_installed && ! _fk_foreign; }
 _fk_name() { if _fk_foreign; then echo NetShift; else echo Forkozz; fi; }
 _fk_uc() { command -v ucode >/dev/null 2>&1 && [ -f "$FK_UC" ] || { echo '{"error":"Forkozz не установлен"}'; return 1; }; ucode "$FK_UC" "$@"; }
-_fk_grp_keep() { ls "$ZM_STATE_DIR"/fk.grp.* >/dev/null 2>&1 || return 0; _fk_uc grpkeep >/dev/null 2>&1; return 0; }
+_fk_grp_keep() { ls "$ZM_STATE_DIR"/fk.grp.* "$ZM_STATE_DIR"/fk.pin.* >/dev/null 2>&1 || return 0; _fk_uc grpkeep >/dev/null 2>&1; return 0; }
 
 _fk_latest() { _zm_cached netshift _fk_latest_fetch; }
 
@@ -8534,11 +8561,18 @@ _tg_rs_off() {
 _tg_bin_of() { case "$1" in mtproto) echo tg-ws-proxy ;; socks5) echo tg-ws-proxy-go ;; rust) echo tg-ws-proxy-rs ;; esac; }
 
 _tg_port_state() {
-	local id="$1" p="$2" o x
+	local id="$1" p="$2" sk="$3" o x c
 	case "$p" in ''|*[!0-9]*) echo bad; return ;; esac
 	[ "${#p}" -le 5 ] && [ "$p" -ge 1 ] && [ "$p" -le 65535 ] || { echo bad; return; }
+	if [ -n "$sk" ]; then
+		[ "$p" = "$(_tg_port_of rust)" ] && { echo "tg rust"; return; }
+	else
+		c="$(_tg_rs_socks_cfg)"
+		[ "${c%% *}" = 1 ] && [ "${c##* }" = "$p" ] && { echo "tg rsocks"; return; }
+	fi
 	for x in mtproto socks5 rust; do
-		[ "$x" = "$id" ] && continue
+		[ "$x" = "$id" ] && [ -z "$sk" ] && continue
+		[ "$x" = rust ] && [ -n "$sk" ] && continue
 		[ -x "$(_tg_auto_init "$x")" ] || continue
 		[ "$(_tg_port_of "$x")" = "$p" ] && { echo "tg $x"; return; }
 	done
@@ -8550,7 +8584,7 @@ _tg_port_state() {
 
 tg_port_check() {
 	local st
-	st="$(_tg_port_state "$1" "$2")"
+	st="$(_tg_port_state "$1" "$2" "$3")"
 	case "$st" in
 		free|self) printf '{"ok":true,"free":true,"self":%s}\n' "$([ "$st" = self ] && echo true || echo false)" ;;
 		bad) echo '{"ok":true,"free":false,"why":"порт — число от 1 до 65535"}' ;;
@@ -8688,8 +8722,8 @@ _tg_args_write() {
 			for (i = 1; i <= NF; i++) {
 				t = $i; u = t; gsub(/^["\047]|["\047]$/, "", u)
 				if (!seen) { o = o (o == "" ? "" : " ") t; if (u ~ /tg-ws-proxy-(go|rs)$/) seen = 1; continue }
-				if (u ~ /^--?(host|port|secret|listen-faketls-domain)$/) { o = o " " t; if (i < NF) o = o " " $(i + 1); i++; continue }
-				if (u ~ /^--?(host|port|secret|listen-faketls-domain)=/) o = o " " t
+				if (u ~ /^--?(host|port|secret|listen-faketls-domain|socks-host|socks-port)$/) { o = o " " t; if (i < NF) o = o " " $(i + 1); i++; continue }
+				if (u ~ /^--?(host|port|secret|listen-faketls-domain|socks-host|socks-port)=/ || u == "--socks-enabled") o = o " " t
 			}
 			if (A != "") o = o " " A
 			print ind o; next
@@ -8728,6 +8762,8 @@ tg_args_set() {
 			*[!A-Za-z0-9._:/,=@+%-]*) bad="«$t» — можно только буквы, цифры и . _ : / , = @ + % -"; break ;;
 			--host|--port|--secret|--listen-faketls-domain|-host|-port|-secret|--host=*|--port=*|--secret=*|--listen-faketls-domain=*|-host=*|-port=*|-secret=*)
 				bad="${t%%=*} задаётся в «Порт и ключ» — уберите его отсюда"; break ;;
+			--socks-enabled|--socks-enabled=*|--socks-host|--socks-host=*|--socks-port|--socks-port=*)
+				[ "$id" = rust ] && { bad="${t%%=*} задаётся переключателем «SOCKS5-вход» — уберите его отсюда"; break; } ;;
 		esac
 	done
 	set +f
@@ -8756,6 +8792,100 @@ tg_args_set() {
 	"$init" restart >/dev/null 2>&1
 	printf '{"error":"С новыми параметрами прокси не запустился — вернули прежние, прокси работает как раньше","log":"%s"}\n' "$(esc_ml "$out")"
 	return 1
+}
+
+_tg_socks_write() {
+	local init="$1" t="$1.zm.$$"
+	awk -v S="$2" '
+		/procd_set_param[ \t]+command/ && !d {
+			d = 1; o = ""; ind = $0; sub(/[^ \t].*$/, "", ind)
+			for (i = 1; i <= NF; i++) {
+				u = $i; gsub(/^["\047]|["\047]$/, "", u)
+				if (u ~ /^--socks-(host|port)$/) { i++; continue }
+				if (u ~ /^--socks-(host|port)=/ || u ~ /^--socks-enabled(=.*)?$/) continue
+				o = o (o == "" ? "" : " ") $i
+			}
+			if (S != "") o = o " " S
+			print ind o; next
+		}
+		{ print }' "$init" > "$t" && [ -s "$t" ] && cat "$t" > "$init"
+	rm -f "$t"
+}
+
+tg_socks_set() {
+	local v="$1" init="$TG_INIT_RS" mode port host="" st was="" c out want
+	[ -f "$init" ] || { echo '{"error":"Rust не установлен"}'; return 1; }
+	_tg_rs_uci && { echo '{"error":"Rust установлен пакетом luci-app-tg-ws-proxy-rs — SOCKS5-вход включается в его настройках (Enable SOCKS5 input)"}'; return 1; }
+	_tg_auto_busy rust && { echo '{"error":"Идёт установка или удаление Rust — дождитесь окончания"}'; return 1; }
+	_tg_rs_socks_ok "$(cat "$TG_VER_RS_FILE" 2>/dev/null)" || { echo '{"error":"SOCKS5-вход есть в Rust начиная с версии 2.6.0 — обновите прокси"}'; return 1; }
+	grep -q 'procd_set_param[[:space:]]\{1,\}command' "$init" || { echo '{"error":"в init-скрипте Rust нет строки запуска — переустановите прокси"}'; return 1; }
+	case "$v" in
+		off) mode=off ;;
+		lan:*|local:*) mode="${v%%:*}"; port="$(printf '%s' "${v#*:}" | sed 's/^0*//')" ;;
+		*) echo '{"error":"неизвестный режим SOCKS5-входа"}'; return 1 ;;
+	esac
+	if [ "$mode" != off ]; then
+		st="$(_tg_port_state rust "$port" socks)"
+		case "$st" in
+			free|self) ;;
+			bad) echo '{"error":"Порт — число от 1 до 65535"}'; return 1 ;;
+			"tg rust") printf '{"error":"Порт %s — это порт MTProto-входа Rust, нужен другой"}\n' "$port"; return 1 ;;
+			"tg "*) printf '{"error":"Порт %s уже у %s — выберите другой"}\n' "$port" "$(esc "$(_tg_title_of "${st#tg }")")"; return 1 ;;
+			*) printf '{"error":"Порт %s уже занят программой %s — выберите другой"}\n' "$port" "$(esc "${st#busy }")"; return 1 ;;
+		esac
+		if [ "$mode" = lan ]; then
+			host="$(_zm_lan_ip)"
+			_tg_ip4_ok "$host" || { echo '{"error":"Не удалось узнать адрес роутера в домашней сети — выберите «Только этот роутер» или проверьте интерфейс lan"}'; return 1; }
+		else host=127.0.0.1; fi
+		want="--socks-enabled --socks-host $host --socks-port $port"
+	else want=""; fi
+	c="$(_tg_rs_socks_cfg)"
+	if [ "$mode" = off ]; then [ "${c%% *}" = 0 ] && { printf '{"ok":true,"same":true}\n'; return 0; }
+	else [ "$c" = "1 $host $port" ] && { printf '{"ok":true,"same":true,"host":"%s"}\n' "$(esc "$host")"; return 0; }; fi
+	pidof tg-ws-proxy-rs >/dev/null 2>&1 && was=1
+	_tg_bk save
+	_tg_socks_write "$init" "$want"
+	c="$(_tg_rs_socks_cfg)"
+	if { [ "$mode" = off ] && [ "${c%% *}" != 0 ]; } || { [ "$mode" != off ] && [ "$c" != "1 $host $port" ]; }; then
+		_tg_bk restore
+		echo '{"error":"не удалось записать настройку в init-скрипт Rust — оставили как было"}'
+		return 1
+	fi
+	"$init" restart >/dev/null 2>&1
+	if _tg_listening rust "${port:-$(_tg_port_of rust)}"; then
+		_tg_bk drop
+		if [ "$mode" = off ]; then logger -t zapret-manager "TG WS Proxy (rust): SOCKS5-вход выключен"
+		else logger -t zapret-manager "TG WS Proxy (rust): SOCKS5-вход на $host:$port"; fi
+		printf '{"ok":true,"running":true,"host":"%s"}\n' "$(esc "$host")"
+		return 0
+	fi
+	if [ -z "$was" ]; then
+		_tg_bk drop
+		printf '{"ok":true,"running":false,"host":"%s"}\n' "$(esc "$host")"
+		return 0
+	fi
+	"$init" stop >/dev/null 2>&1
+	out="$(_tg_args_probe rust)"
+	_tg_bk restore
+	"$init" restart >/dev/null 2>&1
+	printf '{"error":"С SOCKS5-входом Rust не запустился — вернули как было, прокси работает как раньше","log":"%s"}\n' "$(esc_ml "$out")"
+	return 1
+}
+
+_tg_rs_socks_fix() {
+	local c h p ip
+	[ -f "$TG_INIT_RS" ] || return 0
+	grep -q -- '--socks-enabled' "$TG_INIT_RS" || return 0
+	_tg_rs_uci && return 0
+	_tg_auto_busy rust && return 0
+	c="$(_tg_rs_socks_cfg)"; set -- $c; h="$2"; p="$3"
+	case "$h" in 127.*|::1|0.0.0.0|'') return 0 ;; esac
+	ip="$(_zm_lan_ip)"
+	_tg_ip4_ok "$ip" && [ "$ip" != "$h" ] || return 0
+	_tg_socks_write "$TG_INIT_RS" "--socks-enabled --socks-host $ip --socks-port $p"
+	logger -t zapret-manager "TG WS Proxy (rust): адрес роутера в домашней сети сменился ($h → $ip) — перенесли на него SOCKS5-вход"
+	"$TG_INIT_RS" enabled >/dev/null 2>&1 && "$TG_INIT_RS" restart >/dev/null 2>&1
+	return 0
 }
 
 _tg_dom_ok() { [ "${#1}" -le 253 ] && printf '%s' "$1" | grep -qE '^([a-z0-9]([a-z0-9-]*[a-z0-9])?\.)+[a-z]([a-z0-9-]*[a-z0-9])?$'; }
@@ -9049,6 +9179,7 @@ tg_auto_tick() {
 
 _tg_watch() {
 	local id init
+	_tg_rs_socks_fix
 	[ -f "$TG_WATCH_FLAG" ] || return 0
 	for id in mtproto socks5 rust tgws; do
 		init="$(_tg_auto_init "$id")"
@@ -9239,6 +9370,8 @@ tg_action() {
 		watch:on|watch:off) tg_watch_set "$action"; return ;;
 		*:auto=*) tg_auto_set "$variant" "${action#auto=}"; return ;;
 		*:port=*) tg_port_check "$variant" "${action#port=}"; return ;;
+		rust:sport=*) tg_port_check rust "${action#sport=}" socks; return ;;
+		rust:socks=*) tg_socks_set "${action#socks=}"; return ;;
 		*:conf=*) tg_conf_set "$variant" "${action#conf=}"; return ;;
 		*:args=*) tg_args_set "$variant" "${action#args=}"; return ;;
 		*:ext=*) tg_ext_set "$variant" "${action#ext=}"; return ;;
@@ -14064,7 +14197,7 @@ do_fk_remove() {
 		/etc/init.d/cron restart >/dev/null 2>&1
 	fi
 	_zm_wipe $FK_FILES "$JOBS_DIR/netshift-src" $(_fk_naive_own) \
-		"$FK_MARK" "$ZM_STATE_DIR/latest.netshift" "$ZM_STATE_DIR"/fk.sub.* "$ZM_STATE_DIR"/fk.fell* "$ZM_STATE_DIR"/fk.home.* "$ZM_STATE_DIR"/fk.grp.* "$FK_AG_FILE" "$JOBS_DIR/fk.ag.try" "$ZM_STATE_DIR/fk.dnsfo" "$ZM_STATE_DIR/fk.watch" "$ZM_STATE_DIR/fk.zash.fail" "$FK_EXT_FAIL" "$FK_NAIVE_FAIL" "$JOBS_DIR/netshift.conf.bak" \
+		"$FK_MARK" "$ZM_STATE_DIR/latest.netshift" "$ZM_STATE_DIR"/fk.sub.* "$ZM_STATE_DIR"/fk.fell* "$ZM_STATE_DIR"/fk.home.* "$ZM_STATE_DIR"/fk.grp.* "$ZM_STATE_DIR"/fk.pin.* "$FK_AG_FILE" "$JOBS_DIR/fk.ag.try" "$ZM_STATE_DIR/fk.dnsfo" "$ZM_STATE_DIR/fk.watch" "$ZM_STATE_DIR/fk.zash.fail" "$FK_EXT_FAIL" "$FK_NAIVE_FAIL" "$JOBS_DIR/netshift.conf.bak" \
 		"$JOBS_DIR"/fk.heal* "$JOBS_DIR"/fk-* "$JOBS_DIR"/fkdns.* "$JOBS_DIR/forkop-svc.out" "$JOBS_DIR/forkop-sb.json" "$JOBS_DIR/forkop-lists.out" &&
 		echo "   ✓ Файлы, настройки, кэш и задания расписания удалены" || rc=1
 	if [ "$sbmode" = keep ]; then _fk_sb_park; else _fk_sb_purge || rc=1; fi
@@ -14718,7 +14851,7 @@ _fk_dns_test_vpn() {
 	local list="$1" v j sep="" n=0 urls="" ms u
 	for v in $list; do
 		case "$v" in *[!A-Za-z0-9.:/_?=%-]*|'') continue ;; esac
-		n=$((n + 1)); [ "$n" -gt 16 ] && break
+		n=$((n + 1)); [ "$n" -gt 32 ] && break
 		urls="$urls$(_fk_doh_url "$v")
 "
 	done
@@ -14727,7 +14860,7 @@ _fk_dns_test_vpn() {
 	n=0
 	for v in $list; do
 		case "$v" in *[!A-Za-z0-9.:/_?=%-]*|'') continue ;; esac
-		n=$((n + 1)); [ "$n" -gt 16 ] && break
+		n=$((n + 1)); [ "$n" -gt 32 ] && break
 		u="$(_fk_doh_url "$v")"
 		ms="$(printf '%s' "$j" | jsonfilter -e "@.results[@.url='$u'].ms" 2>/dev/null | head -n1)"
 		case "$ms" in ''|*[!0-9]*) ms=0 ;; esac
@@ -14738,7 +14871,7 @@ _fk_dns_test_vpn() {
 }
 
 fk_dns_test() {
-	local t="${1%%|*}" list="${1#*|}" d="$JOBS_DIR/fkdns.$$" v i=0 sep="" line ok ms how pids p n left FK_DNS_BOOTS
+	local t="${1%%|*}" list="${1#*|}" d="$JOBS_DIR/fkdns.$$" v i=0 sep="" line ok ms how pids p n left np t0 late="" FK_DNS_BOOTS
 	case "$t" in udp|dot|doh) ;; *) echo '{"error":"неизвестный тип DNS"}'; return 1 ;; esac
 	if [ "$t" = doh ] && [ "$(uci -q get netshift.settings.dns_via_outbound)" = 1 ] && _fk_up; then
 		_fk_dns_test_vpn "$list" && return 0
@@ -14746,26 +14879,34 @@ fk_dns_test() {
 	command -v dig >/dev/null 2>&1 || [ "$t" = doh ] || { echo '{"error":"нет программы dig — нажмите «Переустановить» Forkozz"}'; return 1; }
 	mkdir -p "$d"
 	FK_DNS_BOOTS="$(_fk_dns_boots | tr '\n' ' ')"
-	pids=""
+	pids=""; t0="$(date +%s)"
 	for v in $list; do
 		case "$v" in *[!A-Za-z0-9.:/_?=%-]*|'') continue ;; esac
+		[ "$i" -ge 32 ] && break
+		while [ -z "$late" ]; do
+			left=0; np=""
+			for p in $pids; do kill -0 "$p" 2>/dev/null && { left=$((left + 1)); np="$np $p"; }; done
+			pids="$np"
+			[ "$left" -lt 12 ] && break
+			[ $(( $(date +%s) - t0 )) -ge 9 ] && { late=1; break; }
+			sleep 1
+		done
 		i=$((i + 1))
-		[ "$i" -gt 16 ] && break
 		printf '%s' "$v" > "$d/$i.v"
+		[ -n "$late" ] && continue
 		_fk_dns_probe "$t" "$v" "$d/$i" &
 		pids="$pids $!"
 	done
-	n=0
-	while [ "$n" -lt 12 ]; do
+	while [ $(( $(date +%s) - t0 )) -lt 14 ]; do
 		left=0
 		for p in $pids; do kill -0 "$p" 2>/dev/null && { left=1; break; }; done
 		[ "$left" = 0 ] && break
-		sleep 1; n=$((n + 1))
+		sleep 1
 	done
 	for p in $pids; do kill "$p" 2>/dev/null; done
 	printf '{"type":"%s","via":"%s","results":[' "$t" "$([ "$(uci -q get netshift.settings.dns_via_outbound)" = 1 ] && echo direct_detour || echo direct)"
 	v=0
-	while [ "$v" -lt "$i" ] && [ "$v" -lt 16 ]; do
+	while [ "$v" -lt "$i" ]; do
 		v=$((v + 1))
 		if [ -s "$d/$v" ]; then IFS='|' read -r line ok ms how < "$d/$v"
 		else line="$(cat "$d/$v.v" 2>/dev/null)"; ok=0; ms=0; how=timeout; fi
@@ -29169,8 +29310,9 @@ _st_sub_apply() {
 }
 
 do_steer_sub_set() {
-	local f="$ST_VDIR/sub.pending" in
+	local f="$ST_VDIR/sub.pending" in old keep=""
 	rm -f "$ST_STOP_FLAG"
+	old="$(head -n1 "$ST_SUB_URL" 2>/dev/null)"
 	_st_phase sub
 	[ -s "$f" ] || { echo "ОШИБКА: нет ссылки"; return 1; }
 	in="$(cat "$f")"
@@ -29180,6 +29322,7 @@ do_steer_sub_set() {
 		http://*|https://*)
 			_rb_say "Скачиваем подписку"
 			_st_sub_fetch "$(printf '%s' "$in" | tr -d ' \r\n\t')" || return 1
+			[ -n "$old" ] && [ "$old" = "$(head -n1 "$ST_SUB_URL" 2>/dev/null)" ] && keep=1
 			;;
 		*)
 			printf '%s\n' "$in" | tr ' \t\r' '\n\n\n' | grep -iE "$STL_LINK_RE" | awk '!s[$0]++' > "$ST_SUB.raw"
@@ -29189,10 +29332,16 @@ do_steer_sub_set() {
 			_st_sub_commit
 			rm -f "$ST_SUB_URL" "$ST_SUB_TITLE" "$ST_SUB_INFO"
 			_st_autogrp_sync quiet
+			[ -z "$old" ] && keep=1
 			_rb_say "Ссылки сохранены"
 			;;
 	esac
-	rm -f "$ST_SUB_NODE" "$ST_SUB_HOME" "$ST_SUB_GRP"
+	if [ -n "$keep" ]; then
+		_st_sub_node_gone
+		[ -s "$ST_SUB_NODE" ] || [ -n "$(_st_grp_cur)" ] && _rb_say "Выбор сохранён: $(_st_node_label)"
+	else
+		rm -f "$ST_SUB_NODE" "$ST_SUB_HOME" "$ST_SUB_GRP"
+	fi
 	echo vpn > "$ST_EXIT"
 	_rb_say "Выбранные сервисы теперь идут через подписку"
 	_rb_say "Перезапускаем VPN-туннель с новым списком серверов"
@@ -33092,6 +33241,7 @@ dns.malw.link
 dns.zapret.moe
 d.webshiftvpn.ru
 dns.dagami.ru
+api.magicdns.ru
 freedns.controld.com
 unfiltered.joindns4.eu
 protective.joindns4.eu
@@ -36634,6 +36784,8 @@ const NODE_POL_FILE = STATE + "/fk.nodepol";
 function node_pol() { let v = trim(s(fs.readfile(NODE_POL_FILE))); return v == "switch" || v == "hold" ? v : "back"; }
 function home_path(sec) { return STATE + "/fk.home." + sec; }
 function grp_path(sec) { return STATE + "/fk.grp." + sec; }
+function pin_path(sec) { return STATE + "/fk.pin." + sec; }
+function pin_drop(sec) { try { fs.unlink(pin_path(sec)); } catch (e) {} }
 function grp_name(t) { let m = match(s(t), /-zm-autogrp-[0-9]+: (.*)$/); return m ? m[1] : null; }
 function home_read(sec) {
 	let j = null;
@@ -37195,6 +37347,7 @@ function cmd_heal(sec, act) {
 	let r = jcmd(BIN + " clash_api set_group_proxy " + q(group_tag(sec)) + " " + q(pickt));
 	if (type(r) == "object" && (r.error || r.success === false)) { out({ ok: false, manual: true, dead: true, changed: false, name: nm(now) }); return; }
 	try { fs.writefile(fell_file(sec), nm(now) + "\n"); } catch (e) {}
+	pin_drop(sec);
 	if (node_pol() == "back") { try { fs.mkdir(STATE); } catch (e) {} try { fs.writefile(home_path(sec), sprintf("%J", { tag: now, name: nm(now), next: time() + 600 })); } catch (e) {} }
 	else home_drop(sec);
 	out({ ok: true, manual: true, dead: true, changed: true, back: node_pol() == "back", name: nm(now), to: px[pickt] && lc(s(px[pickt].type)) == "urltest" ? "" : nm(pickt) });
@@ -37307,32 +37460,60 @@ function do_select(sec, tag) {
 	if ((priority && tag == priority_tag(sec)) || (pingm && tag == ping_tag(sec))) system("(sh /opt/zapret-manager-luci/backend.sh forkop_priority_watch " + q(sec) + " >/dev/null 2>&1 &)");
 	try { fs.unlink(fell_file(sec)); } catch (e) {}
 	home_drop(sec);
-	let gn = grp_name(tag);
-	if (gn != null) { try { fs.mkdir(STATE); } catch (e) {} try { fs.writefile(grp_path(sec), gn + "\n"); } catch (e) {} }
+	let gn = grp_name(tag), leaf = gn == null && px && px[tag] && type(px[tag].all) != "array";
+	if (gn != null || leaf) try { fs.mkdir(STATE); } catch (e) {}
+	if (gn != null) { try { fs.writefile(grp_path(sec), gn + "\n"); } catch (e) {} }
 	else try { fs.unlink(grp_path(sec)); } catch (e) {}
+	if (leaf) { try { fs.writefile(pin_path(sec), s(tag) + "\n"); } catch (e) {} }
+	else if (px || gn != null) pin_drop(sec);
 	return "";
 }
 
 function cmd_grpkeep() {
 	let c = cursor(), p = pick(c), px = null, done = [];
 	for (let sec in [ p.sec, ...p.conns ]) {
-		let want = "";
+		let want = "", pin = "";
 		try { want = trim(s(fs.readfile(grp_path(sec)))); } catch (e) { want = ""; }
-		if (want == "") continue;
-		let m = c.get_all(CFG, sec) || {};
-		if (s(m.connection_type) != "proxy" || flag(m.disabled) || s(m.zm_autogrp) != "1") { try { fs.unlink(grp_path(sec)); } catch (e) {} continue; }
+		try { pin = trim(s(fs.readfile(pin_path(sec)))); } catch (e) { pin = ""; }
+		if (want == "" && pin == "") continue;
+		let m = c.get_all(CFG, sec) || {}, label = trim(s(m.zm_label));
+		let say = (t) => system("logger -t zapret-manager " + q("Forkozz" + (label != "" ? " («" + label + "»)" : "") + ": " + t));
+		if (s(m.connection_type) != "proxy" || flag(m.disabled)) { try { fs.unlink(grp_path(sec)); } catch (e) {} pin_drop(sec); continue; }
+		if (want != "" && s(m.zm_autogrp) != "1") { try { fs.unlink(grp_path(sec)); } catch (e) {} want = ""; if (pin == "") continue; }
 		if (!px) px = proxies();
 		if (!px) { out({ ok: false }); return; }
 		let g = px[group_tag(sec)];
 		if (!g || type(g.all) != "array" || s(g.now) == "") continue;
-		let ags = filter(g.all, (t) => grp_name(t) != null);
-		let hit = filter(ags, (t) => grp_name(t) == want)[0];
-		if (!hit) { if (length(ags)) try { fs.unlink(grp_path(sec)); } catch (e) {} continue; }
-		if (s(g.now) == hit || s(g.now) != s(auto_tag(sec, px, g))) continue;
-		if (do_select(sec, hit) != "") continue;
-		push(done, { sec, name: want });
-		let label = trim(s(m.zm_label));
-		system("logger -t zapret-manager " + q("Forkozz" + (label != "" ? " («" + label + "»)" : "") + ": после перезапуска вернули группу АВТО «" + want + "»"));
+		if (want != "") {
+			let ags = filter(g.all, (t) => grp_name(t) != null);
+			let hit = filter(ags, (t) => grp_name(t) == want)[0];
+			if (!hit) { if (length(ags)) try { fs.unlink(grp_path(sec)); } catch (e) {} continue; }
+			if (s(g.now) == hit || s(g.now) != s(auto_tag(sec, px, g))) continue;
+			if (do_select(sec, hit) != "") continue;
+			push(done, { sec, name: want });
+			say("после перезапуска вернули группу АВТО «" + want + "»");
+			continue;
+		}
+		if (index(g.all, pin) < 0 || !px[pin] || type(px[pin].all) == "array") {
+			if (length(filter(g.all, (t) => px[t] && type(px[t].all) != "array" && grp_name(t) == null))) pin_drop(sec);
+			continue;
+		}
+		if (s(g.now) == pin || s(g.now) != s(auto_tag(sec, px, g)) || home_read(sec)) continue;
+		let nm = s(sec_names(c, sec)[pin] || pin), pol = node_pol();
+		let tf = "/tmp/zm-fk-pintry." + sec;
+		if (pol != "hold" && !proxy_alive(pin)) {
+			let n = int(trim(s(fs.readfile(tf)))) || 0;
+			if (n + 1 < 3) { fs.writefile(tf, sprintf("%d\n", n + 1)); continue; }
+			try { fs.unlink(tf); } catch (e) {}
+			pin_drop(sec);
+			if (pol == "back") { try { fs.writefile(home_path(sec), sprintf("%J", { tag: pin, name: nm, next: time() + 600 })); } catch (e) {} }
+			say("после перезапуска выбранный сервер «" + nm + "» не отвечает — работает «Авто»" + (pol == "back" ? ", вернёмся на него, когда он ответит" : ""));
+			continue;
+		}
+		try { fs.unlink(tf); } catch (e) {}
+		if (do_select(sec, pin) != "") continue;
+		push(done, { sec, name: nm });
+		say("после перезапуска вернули выбранный сервер «" + nm + "»");
 	}
 	out({ ok: true, restored: done });
 }
@@ -37853,11 +38034,11 @@ function cmd_dnsvpn() {
 	if (sec == "" || c.get(CFG, sec) != "section" || !is_conn(c.get_all(CFG, sec) || {})) sec = p.sec;
 	if (!sec) { out({ error: "нет секции с подключением" }); return; }
 	let urls = filter(map(split(s(fs.stdin.read("all")), "\n"), (x) => trim(x)), (x) => !!match(x, /^https:\/\/[^ \t'"\\`$]+$/));
-	if (length(urls) > 16) urls = slice(urls, 0, 16);
+	if (length(urls) > 32) urls = slice(urls, 0, 32);
 	let tag = group_tag(sec), dir = "/tmp/zm-fk-dnsvpn." + s(fs.readlink("/proc/self")), cmd = "";
 	if (fs.mkdir(dir) == null) { out({ error: "не удалось создать временную папку" }); return; }
 	for (let k = 0; k < length(urls); k++)
-		cmd += "(" + lat_cmd(ep, tag, urls[k], 5000) + " > " + q(dir + "/" + k) + " 2>/dev/null) & ";
+		cmd += "(" + lat_cmd(ep, tag, urls[k], 5000) + " > " + q(dir + "/" + k) + " 2>/dev/null) & " + ((k + 1) % 12 == 0 ? "wait; " : "");
 	sh(cmd + "wait");
 	let res = [];
 	for (let k = 0; k < length(urls); k++) {
@@ -42029,7 +42210,8 @@ var PROVIDERS = [
 	{ id: 'malw', label: 'MALW', url: 'https://dns.malw.link/dns-query', k: 'geo' },
 	{ id: 'zapretmoe', label: 'zapret.moe', url: 'https://dns.zapret.moe/dns-query', k: 'geo' },
 	{ id: 'webshift', label: 'WebShift', url: 'https://d.webshiftvpn.ru/dns-query', k: 'geo' },
-	{ id: 'dagami', label: 'Dagami', url: 'https://dns.dagami.ru/dns-query', k: 'geo' }
+	{ id: 'dagami', label: 'Dagami', url: 'https://dns.dagami.ru/dns-query', k: 'geo' },
+	{ id: 'magicdns', label: 'MagicDNS', url: 'https://api.magicdns.ru/sync', k: 'geo' }
 ];
 function bootLuci(url) {
 	var out = '';
@@ -42067,7 +42249,7 @@ var VAR_TEXT = { plain: 'только шифрование', safe: 'блокир
 
 var GROUPS = [
 	{ title: 'Без подмены', hint: 'только шифрование; у Cloudflare, Quad9, Control D, DNS4EU и Яндекса есть варианты «Защита от угроз» и «Семейный фильтр»', ids: [ 'google', 'cloudflare', 'quad9', 'controld', 'dns4eu', 'yandex' ] },
-	{ title: 'С обходом геоблокировок', hint: 'открывают сервисы, закрытые для России', ids: [ 'xbox', 'comss', 'dnsai', 'bezmezhau', 'geohide', 'malw', 'zapretmoe', 'webshift', 'dagami' ] }
+	{ title: 'С обходом геоблокировок', hint: 'открывают сервисы, закрытые для России', ids: [ 'xbox', 'comss', 'dnsai', 'bezmezhau', 'geohide', 'malw', 'zapretmoe', 'webshift', 'dagami', 'magicdns' ] }
 ];
 function famIds(key) { return FAMS[key] ? FAMS[key].ids : [ key ]; }
 function groupIds(g) { var out = []; g.ids.forEach(function(t) { out = out.concat(famIds(t)); }); return out; }
@@ -44458,7 +44640,7 @@ function plural(n, one, few, many) {
 	return many;
 }
 
-var DOHN = { cloudflare: 'Cloudflare', google: 'Google', quad9: 'Quad9 · Защита от угроз', xbox: 'XBOX', comss: 'Comss', dnsai: 'DNS-AI', bezmezhau: 'Bezmezhau', yandex: 'Яндекс', yandex_family: 'Яндекс · Семейный фильтр', yandex_safe: 'Яндекс · Защита от угроз', cloudflare_sec: 'Cloudflare · Защита от угроз', cloudflare_fam: 'Cloudflare · Семейный фильтр', quad9_open: 'Quad9 · Без фильтрации', controld_sec: 'Control D · Защита от угроз', controld_fam: 'Control D · Семейный фильтр', dns4eu_sec: 'DNS4EU · Защита от угроз', dns4eu_fam: 'DNS4EU · Семейный фильтр', geohide_eu: 'GeoHide EU', geohide_us: 'GeoHide US', malw: 'MALW', zapretmoe: 'zapret.moe', webshift: 'WebShift', dagami: 'Dagami', controld: 'Control D', dns4eu: 'DNS4EU', multi: 'несколько серверов', other: 'свой сервер' };
+var DOHN = { cloudflare: 'Cloudflare', google: 'Google', quad9: 'Quad9 · Защита от угроз', xbox: 'XBOX', comss: 'Comss', dnsai: 'DNS-AI', bezmezhau: 'Bezmezhau', yandex: 'Яндекс', yandex_family: 'Яндекс · Семейный фильтр', yandex_safe: 'Яндекс · Защита от угроз', cloudflare_sec: 'Cloudflare · Защита от угроз', cloudflare_fam: 'Cloudflare · Семейный фильтр', quad9_open: 'Quad9 · Без фильтрации', controld_sec: 'Control D · Защита от угроз', controld_fam: 'Control D · Семейный фильтр', dns4eu_sec: 'DNS4EU · Защита от угроз', dns4eu_fam: 'DNS4EU · Семейный фильтр', geohide_eu: 'GeoHide EU', geohide_us: 'GeoHide US', malw: 'MALW', zapretmoe: 'zapret.moe', webshift: 'WebShift', dagami: 'Dagami', magicdns: 'MagicDNS', controld: 'Control D', dns4eu: 'DNS4EU', multi: 'несколько серверов', other: 'свой сервер' };
 
 function verLt(a, b) {
 	var x = String(a).split('.'), y = String(b).split('.');
@@ -53172,6 +53354,13 @@ html.zm-theme-dark .zm-tile:not(.zm-active):not(.zm-tile-off) {
 .zm-doh-group { margin-top: 14px; }
 .zm-doh-group-head { display: flex; align-items: baseline; gap: 2px 10px; flex-wrap: wrap; font-size: 13px; }
 .zm-doh-group-head .zm-hint { margin: 0; }
+.zm-fk-dns-group { margin-top: 10px; }
+.zm-fk-dns-group + .zm-fk-dns-group { margin-top: 18px; }
+.zm-fk-dns-group .zm-doh-group-head { margin-bottom: 8px; }
+.zm-fk-dns-group .zm-nodes { margin-top: 0; }
+.zm-fk-geo-note { border-left: 3px solid #9a6700; padding: 6px 0 6px 10px; }
+html.zm-theme-dark .zm-fk-geo-note { border-left-color: #d29922; }
+.zm-dns-item .zm-badge.zm-off { white-space: nowrap; }
 .zm-doh-group .zm-node { min-height: 0; gap: 6px; }
 .zm-doh-group .zm-node.zm-sec-add { min-height: 58px; }
 .zm-doh-grid { grid-auto-flow: row dense; }
@@ -53569,6 +53758,12 @@ html.zm-theme-dark .zm-tg-chip-ok { color: #3fb950; } html.zm-theme-dark .zm-tg-
 .zm-tg-recheck { padding: 2px 10px; font-size: 12px; }
 .zm-tg-x-body > .zm-actions { margin-top: 14px; }
 .zm-tg-x-body .zm-tg-edit-preview { margin: 0; }
+.zm-tg-socks-strip { margin-top: 16px; padding-top: 14px; border-top: 1px solid rgba(110,118,129,.2); }
+.zm-tg-socks-line { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.zm-tg-socks-line > .zm-swrow { flex: 1 1 260px; margin: 0; }
+.zm-tg-socks-line > .cbi-button { margin: 0; }
+.zm-tg-socks-strip > .zm-tg-socks-body { margin-top: 6px; }
+.zm-tg-socks-strip > .zm-tg-x-note { margin: 8px 0 0; }
 @media (max-width: 600px) { .zm-tg-x-row { grid-template-columns: 1fr; } .zm-tg-x-row > .zm-tg-edit-label { line-height: 1.3; } .zm-tg-x-own, .zm-tg-x-host, .zm-tg-x-site { flex: 1 1 100%; width: 100% !important; } .zm-tg-x-seg { display: flex; width: 100%; box-sizing: border-box; } .zm-tg-x-seg .zm-seg-item { flex: 1; text-align: center; padding: 6px 8px; } }
 
 .zm-current-banner {
@@ -56630,6 +56825,7 @@ var CREDITS = [
 	{ g: 'dns', product: 'zapret.moe (DoH)', author: 'zapret.moe', url: 'https://zapret.moe' },
 	{ g: 'dns', product: 'WebShift DNS (DoH)', author: 'WebShift', url: 'https://dns.webshiftvpn.ru' },
 	{ g: 'dns', product: 'Dagami DNS (DoH)', author: 'Dagami', url: 'https://dns.dagami.ru' },
+	{ g: 'dns', product: 'MagicDNS (DoH, DoT)', author: 'MagicDNS', url: 'https://magicdns.ru' },
 	{ g: 'dns', product: 'AstraCat DNS (DoH)', author: 'AstraCat', url: 'https://dns.astrakat.ru' },
 	{ g: 'dns', product: 'Mafioznik DNS (DoH)', author: 'Mafioznik', url: 'https://dns.mafioznik.com' },
 	{ g: 'dns', product: 'dns-blocklists (блокировка рекламы, TIF)', author: 'hagezi', url: 'https://github.com/hagezi/dns-blocklists' },
@@ -58394,7 +58590,7 @@ return view.extend({
 			if (id === 'socks5') return { installed: d.socks5 === 'installed', running: d.socks5_running === true, secret: '', version: d.socks5_version, latest: d.socks5_latest, newer: d.socks5_newer === true,
 				port: d.socks5_port, edit: true, args: d.socks5_args || '', argsDef: (d.args_def || {}).socks5 || '' };
 			return { installed: d.rust === 'installed', running: d.rust_running === true, secret: d.secret_rust, version: d.rust_version, latest: d.rust_latest, newer: d.rust_newer === true,
-				uci: d.rust_uci === true, enabled: d.rust_enabled !== false, port: d.rust_port, host: d.rust_host, key: d.rust_key || '', edit: d.rust_uci !== true, ext: (d.ext || {}).rust || null, args: d.rust_args || '', argsDef: (d.args_def || {}).rust || '' };
+				uci: d.rust_uci === true, enabled: d.rust_enabled !== false, port: d.rust_port, host: d.rust_host, key: d.rust_key || '', edit: d.rust_uci !== true, ext: (d.ext || {}).rust || null, args: d.rust_args || '', argsDef: (d.args_def || {}).rust || '', socks: d.rust_socks || null };
 		}
 
 		var editOpen = {}, editDraft = {}, portSeq = 0;
@@ -58586,7 +58782,127 @@ return view.extend({
 			return box;
 		}
 
-		var extOpen = {}, extDraft = {}, extPaint = {};
+		var extOpen = {}, extDraft = {}, extPaint = {}, socksOpen = false, socksDraft = null, socksTab = 'mt';
+		function socksHost(st, s) { return s && s.lan ? (s.host && s.host !== '0.0.0.0' ? s.host : data.lan_ip || '192.168.1.1') : '127.0.0.1'; }
+		function socksAddr(st, s) { return socksHost(st, s) + ':' + s.port; }
+		function socksOff(st) {
+			zm.dialog({ title: 'Выключить SOCKS5-вход?', okText: 'Выключить', blocks: [ { type: 'list', title: 'Что произойдёт', items: [
+				'Rust перезапустится — на пару секунд Telegram переподключится',
+				'Подключения по SOCKS5 перестанут работать',
+				'MTProto-вход продолжит работать как раньше'
+			] } ] }).then(function(ok) { if (ok) socksApply(st, { on: false }); });
+		}
+		function socksApply(st, dr, done) {
+			if (busyMap.rust) { zm.toast('Дождитесь завершения текущей операции', 'warning'); if (done) done(false); return; }
+			busyMap.rust = true;
+			var host = dr.lan ? ((st.socks || {}).on && (st.socks || {}).lan ? socksHost(st, st.socks) : (data.lan_ip || '192.168.1.1')) : '127.0.0.1';
+			zm.toast(dr.on ? 'Включаем SOCKS5-вход и перезапускаем Rust' : 'Выключаем SOCKS5-вход и перезапускаем Rust', 'warning');
+			zm.tgAction('rust', 'socks=' + (dr.on ? (dr.lan ? 'lan' : 'local') + ':' + (+dr.port) : 'off')).then(function(r) {
+				busyMap.rust = false;
+				if (!r || r.error) { zm.toast((r && r.error) || 'Роутер не ответил', 'error', 12000); if (done) done(false); return; }
+				if (r.host) host = r.host;
+				zm.toast(!dr.on ? 'SOCKS5-вход выключен' : r.running === false ? 'Сохранено. Rust сейчас не запущен' : dr.lan ? 'SOCKS5-вход работает: ' + host + ':' + (+dr.port) + ' — ссылка для Telegram вверху страницы' : 'SOCKS5-вход работает на 127.0.0.1:' + (+dr.port), 'info', 8000);
+				socksOpen = false; socksDraft = null;
+				if (done) done(true);
+				zm.tgStatus().then(function(d) { data = d; renderCards(d); renderLinks(d); });
+			}, function() { busyMap.rust = false; zm.toast('Роутер не ответил', 'error'); if (done) done(false); });
+		}
+		function socksPanel(v, st, cls) {
+			var s = st.socks || {}, body = E('div', { 'class': 'zm-tg-x-body zm-tg-socks-body ' + (cls || '') });
+			function row(label, kids) {
+				return E('div', { 'class': 'zm-tg-x-row' }, [ E('div', { 'class': 'zm-tg-edit-label' }, label), E('div', { 'class': 'zm-tg-x-field' }, kids) ]);
+			}
+			var dr = socksDraft || (socksDraft = { on: true, port: String(s.port || 1080), lan: s.on ? !!s.lan : true, busy: false, net: null });
+			var host = function() { return dr.lan ? (s.on && s.lan ? socksHost(st, s) : (data.lan_ip || '192.168.1.1')) : '127.0.0.1'; };
+			var netT = null;
+			function netCheck() {
+				clearTimeout(netT);
+				var p = +dr.port;
+				if (!/^\d{2,5}$/.test(dr.port) || p < 1 || p > 65535 || String(p) === String(st.port)) { dr.net = null; paint(); return; }
+				if (s.on && String(p) === String(s.port)) { dr.net = { free: true, self: true }; paint(); return; }
+				dr.net = 'wait'; paint();
+				var mine = ++portSeq;
+				netT = setTimeout(function() {
+					zm.tgAction('rust', 'sport=' + p).then(function(r) {
+						if (mine !== portSeq) return;
+						dr.net = r && !r.error ? r : { free: false, why: (r && r.error) || 'роутер не ответил' };
+						paint();
+					}, function() { if (mine === portSeq) { dr.net = { free: false, why: 'роутер не ответил' }; paint(); } });
+				}, 450);
+			}
+			var portIn = E('input', { 'type': 'text', 'inputmode': 'numeric', 'class': 'cbi-input-text zm-tg-edit-in zm-tg-edit-port', 'value': dr.port, 'maxlength': '5', 'aria-label': 'Порт SOCKS5' });
+			var portMsg = E('div', { 'class': 'zm-tg-chips' }), linkWrap = E('div', {});
+			var applyBtn = E('button', { 'class': 'cbi-button cbi-button-positive' }, 'Применить');
+			function rebuild() { var nb = socksPanel(v, st, cls); body.parentNode && body.parentNode.replaceChild(nb, body); }
+			function portOk() { var p = +dr.port; return /^\d{2,5}$/.test(dr.port) && p >= 1 && p <= 65535 && String(p) !== String(st.port); }
+			function same() { return !!s.on && String(+dr.port) === String(s.port) && dr.lan === !!s.lan; }
+			function paint() {
+				portMsg.innerHTML = '';
+				var p = +dr.port;
+				if (!/^\d{2,5}$/.test(dr.port) || p < 1 || p > 65535) portMsg.appendChild(chip('zm-tg-chip-bad', '✕ порт — число от 1 до 65535'));
+				else if (String(p) === String(st.port)) portMsg.appendChild(chip('zm-tg-chip-bad', '✕ это порт MTProto-входа — нужен другой'));
+				else if (dr.net === 'wait') portMsg.appendChild(chip('zm-tg-chip-wait', 'проверяем, свободен ли порт…'));
+				else if (dr.net && dr.net.free === false) portMsg.appendChild(chip('zm-tg-chip-bad', '✕ ' + (dr.net.why || 'порт занят')));
+				else if (dr.net && dr.net.free) portMsg.appendChild(chip('zm-tg-chip-ok', '✓ ' + (dr.net.self ? 'сейчас этот порт у SOCKS5-входа' : 'порт свободен')));
+				linkWrap.innerHTML = '';
+				if (dr.lan) linkWrap.appendChild(portOk() ? E('div', { 'class': 'zm-tg-link-box zm-tg-edit-preview' }, [ zm.secret('tg://socks?server=' + host() + '&port=' + p) ])
+					: E('div', { 'class': 'zm-tg-link-box zm-tg-edit-preview zm-tg-edit-preview-off' }, 'Ссылка появится, когда порт будет в порядке'));
+				var bad = !portOk() || dr.net === 'wait' || !dr.net || dr.net.free === false;
+				applyBtn.disabled = bad || same() || dr.busy;
+				applyBtn.textContent = dr.busy ? 'Применяем…' : same() ? 'Без изменений' : s.on ? 'Применить и перезапустить' : 'Включить и перезапустить';
+			}
+			portIn.addEventListener('input', function() { var c = portIn.value.replace(/\D+/g, ''); if (c !== portIn.value) portIn.value = c; dr.port = c; netCheck(); });
+			applyBtn.addEventListener('click', function() {
+				if (dr.busy || applyBtn.disabled) return;
+				dr.busy = true; paint();
+				socksApply(st, dr, function() { dr.busy = false; paint(); });
+			});
+			body.appendChild(row('Порт', [ portIn, portMsg ]));
+			body.appendChild(row('Кто подключается', [
+				E('div', { 'class': 'zm-seg zm-tg-x-seg' }, [ [ true, 'Устройства дома' ], [ false, 'Только этот роутер' ] ].map(function(it) {
+					function go() { if (!dr.busy && dr.lan !== it[0]) { dr.lan = it[0]; rebuild(); } }
+					return E('div', { 'class': 'zm-seg-item' + (dr.lan === it[0] ? ' zm-active' : ''), 'role': 'button', 'tabindex': '0', 'aria-pressed': dr.lan === it[0] ? 'true' : 'false', 'click': go,
+						'keydown': function(ev) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); go(); } } }, it[1]);
+				})),
+				E('p', { 'class': 'zm-hint zm-tg-x-note' }, dr.lan
+					? 'Телефоны и компьютеры в домашней сети подключаются к ' + host() + '. Из интернета этот порт закрыт.'
+					: 'Вход слушает только 127.0.0.1 — для программ на самом роутере. Телефоны и компьютеры к нему не подключатся.')
+			]));
+			if (dr.lan) body.appendChild(row('Ссылка', [ linkWrap ]));
+			body.appendChild(E('p', { 'class': 'zm-hint zm-tg-x-note zm-tg-socks-note' }, 'У SOCKS5 нет пароля, поэтому пользоваться им могут только устройства вашей сети — не открывайте этот порт в интернет. Через вход идут сообщения, фото и файлы; звонки и Telegram Web — нет. Вне дома подключайтесь по MTProto-ссылке.'));
+			body.appendChild(E('div', { 'class': 'zm-actions' }, [ applyBtn, E('button', { 'class': 'cbi-button', 'click': function() { if (!dr.busy) { socksOpen = false; socksDraft = null; renderCards(data); } } }, 'Отмена') ]));
+			if (dr.net === null) netCheck(); else paint();
+			return body;
+		}
+		function socksNa(st) {
+			var s = st.socks || {};
+			if (s.ok) return null;
+			return E('p', { 'class': 'zm-hint zm-tg-x-note' }, 'SOCKS5-вход появился в tg-ws-proxy-rs 2.6.0' + (st.version ? ', а сейчас стоит ' + st.version : '') + '. ' +
+				(st.uci ? 'Обновите пакет luci-app-tg-ws-proxy-rs через менеджер пакетов.' : st.newer ? 'Нажмите «Обновить до ' + st.latest + '».' : 'Нажмите «Переустановить» — поставится последняя версия.'));
+		}
+		function socksUci(st) {
+			var s = st.socks || {};
+			return E('p', { 'class': 'zm-hint zm-tg-x-note' }, (s.on ? 'SOCKS5-вход включён: ' + socksAddr(st, s) + '. ' : 'SOCKS5-вход выключен. ') + 'Rust установлен пакетом — SOCKS5 включается в его настройках: Enable SOCKS5 input, адрес и порт.');
+		}
+
+		function socksBlock(v, st) {
+			var s = st.socks || {}, on = !!(s.ok && s.on), open = !!socksOpen && s.ok && !st.uci;
+			var box = E('div', { 'class': 'zm-tg-socks-strip' + (open ? ' zm-tg-socks-strip-open' : '') });
+			var hint = !s.ok ? 'Есть в Rust с версии 2.6.0 — обновите прокси, чтобы включить.'
+				: on ? [ zm.secret(socksAddr(st, s)), s.lan ? ' · устройства дома' : ' · только этот роутер' ]
+				: 'Второй вход этого прокси: в Telegram добавляется как обычный SOCKS5-прокси, без ключа. MTProto продолжит работать.';
+			box.appendChild(E('div', { 'class': 'zm-tg-socks-line' }, [
+				zm.swRow(on || open, 'SOCKS5-вход', hint, function() {
+					if (!s.ok) { zm.toast('Сначала обновите Rust до 2.6.0 или новее', 'warning'); return; }
+					if (st.uci) { zm.toast('Rust установлен пакетом — SOCKS5 включается в его настройках', 'warning'); return; }
+					if (on) socksOff(st); else { socksOpen = !socksOpen; socksDraft = null; renderCards(data); }
+				}, !s.ok),
+				on && !open && !st.uci ? E('button', { 'class': 'cbi-button', 'click': function() { socksOpen = true; socksDraft = null; renderCards(data); } }, 'Порт и доступ') : E([])
+			]));
+			if (open) box.appendChild(socksPanel(v, st));
+			if (st.uci && s.ok) box.appendChild(socksUci(st));
+			return box;
+		}
 		function extSummary(st) {
 			var x = st.ext, parts = [];
 			if (x.tls) parts.push('FakeTLS · ' + x.tls);
@@ -58852,6 +59168,16 @@ return view.extend({
 					outLink ? linkBlock(outLink, 'Из интернета') : E([])
 				]));
 			});
+			var rst = statusOf(d, 'rust'), rs = rst.socks;
+			if (rst.installed && rst.running && rs && rs.ok && rs.on && rs.lan) {
+				var sl = 'tg://socks?server=' + socksHost(rst, rs) + '&port=' + rs.port;
+				linksWrap.appendChild(E('div', { 'class': 'zm-tg-link-card' }, [
+					E('h4', {}, 'Rust (SOCKS5)'),
+					E('p', { 'class': 'zm-tg-link-hint' }, 'Откройте ссылку на телефоне или компьютере с Telegram — прокси добавится как SOCKS5. Работает только дома, ключ не нужен.'),
+					linkBlock(sl, ''),
+					E('p', { 'class': 'zm-hint' }, 'SOCKS5-адрес: ' + socksHost(rst, rs) + ':' + rs.port)
+				]));
+			}
 		}
 
 		var busyMap = {};
@@ -58903,8 +59229,8 @@ return view.extend({
 						'click': function() { doAction(v.id, 'install'); }
 					}, 'Установить'));
 				}
-				cards.appendChild(E('div', { 'class': 'zm-card' + (extOpen[v.id] && v.kind === 'proto' && st.installed ? ' zm-tg-wide' : '') + (st.installed && st.edit && editOpen[v.id] ? ' zm-tg-open' : ''), 'data-k': v.id }, [
-					E('h3', {}, v.title),
+				cards.appendChild(E('div', { 'class': 'zm-card' + ((extOpen[v.id] && v.kind === 'proto' || socksOpen && v.id === 'rust') && st.installed ? ' zm-tg-wide' : '') + (st.installed && st.edit && editOpen[v.id] ? ' zm-tg-open' : ''), 'data-k': v.id }, [
+					E('h3', {}, v.id === 'rust' && st.socks && st.socks.ok && st.socks.on ? 'Rust (MTProto + SOCKS5)' : v.title),
 					E('div', { 'class': 'zm-row' }, [
 						E('span', { 'class': 'zm-label' }, 'Статус'),
 						st.installed ? zm.badge(st.running, 'запущен', st.uci && !st.enabled ? 'выключен в пакете' : 'остановлен') : zm.badge(false, '', 'не установлен')
@@ -58919,6 +59245,7 @@ return view.extend({
 						zm.secretBox(E('span', { 'class': 'zm-tg-key' }, [ st.secret.length > 22 ? st.secret.slice(0, 10) + '…' + st.secret.slice(-8) : st.secret ]), st.secret) ]) : E([]),
 					pkgNote || E([]),
 					E('div', { 'class': 'zm-actions' }, actions),
+					st.installed && v.id === 'rust' && st.socks ? socksBlock(v, st) : E([]),
 					st.installed && st.edit && editOpen[v.id] ? editPanel(v, st) : E([]),
 					st.installed && v.kind === 'proto' && st.ext ? extFold(v, st) : E([])
 				]));
@@ -59250,16 +59577,17 @@ var DNS_CAT = {
 		{ id: 'yandex', name: 'Яндекс', value: 'https://common.dot.dns.yandex.net/dns-query', boot: '77.88.8.8' },
 		{ id: 'yandex_safe', name: 'Яндекс · Защита от угроз', value: 'https://safe.dot.dns.yandex.net/dns-query', boot: '77.88.8.88' },
 		{ id: 'yandex_family', name: 'Яндекс · Семейный фильтр', value: 'https://family.dot.dns.yandex.net/dns-query', boot: '77.88.8.7' },
-		{ id: 'comss', name: 'Comss', value: 'https://dns.comss.one/dns-query', boot: '77.88.8.8', alias: [ 'dns.comss.one' ] },
-		{ id: 'xbox', name: 'XBOX', value: 'https://xbox-dns.ru/dns-query', boot: '77.88.8.8' },
-		{ id: 'dnsai', name: 'DNS-AI', value: 'https://dns.dns-ai.ru/dns-query', boot: '77.88.8.8' },
-		{ id: 'bezmezhau', name: 'Bezmezhau', value: 'https://sync.bezmezhau.com/dns-query', boot: '77.88.8.8', alias: [ 'sync.bezmezhau.com' ] },
-		{ id: 'geohide_eu', name: 'GeoHide EU', value: 'https://eu.geohide.ru/dns-query', boot: '77.88.8.8' },
-		{ id: 'geohide_us', name: 'GeoHide US', value: 'https://us.geohide.ru/dns-query', boot: '77.88.8.8' },
-		{ id: 'malw', name: 'MALW', value: 'https://dns.malw.link/dns-query', boot: '77.88.8.8', alias: [ 'dns.malw.link' ] },
-		{ id: 'zapretmoe', name: 'zapret.moe', value: 'https://dns.zapret.moe/dns-query', boot: '77.88.8.8', alias: [ 'dns.zapret.moe' ] },
-		{ id: 'webshift', name: 'WebShift', value: 'https://d.webshiftvpn.ru/dns-query', boot: '77.88.8.8', alias: [ 'd.webshiftvpn.ru' ] },
-		{ id: 'dagami', name: 'Dagami', value: 'https://dns.dagami.ru/dns-query', boot: '77.88.8.8', alias: [ 'dns.dagami.ru' ] },
+		{ id: 'comss', name: 'Comss', value: 'https://dns.comss.one/dns-query', boot: '77.88.8.8', alias: [ 'dns.comss.one' ], geo: true },
+		{ id: 'xbox', name: 'XBOX', value: 'https://xbox-dns.ru/dns-query', boot: '77.88.8.8', geo: true },
+		{ id: 'dnsai', name: 'DNS-AI', value: 'https://dns.dns-ai.ru/dns-query', boot: '77.88.8.8', geo: true },
+		{ id: 'bezmezhau', name: 'Bezmezhau', value: 'https://sync.bezmezhau.com/dns-query', boot: '77.88.8.8', alias: [ 'sync.bezmezhau.com' ], geo: true },
+		{ id: 'geohide_eu', name: 'GeoHide EU', value: 'https://eu.geohide.ru/dns-query', boot: '77.88.8.8', geo: true },
+		{ id: 'geohide_us', name: 'GeoHide US', value: 'https://us.geohide.ru/dns-query', boot: '77.88.8.8', geo: true },
+		{ id: 'malw', name: 'MALW', value: 'https://dns.malw.link/dns-query', boot: '77.88.8.8', alias: [ 'dns.malw.link' ], geo: true },
+		{ id: 'zapretmoe', name: 'zapret.moe', value: 'https://dns.zapret.moe/dns-query', boot: '77.88.8.8', alias: [ 'dns.zapret.moe' ], geo: true },
+		{ id: 'webshift', name: 'WebShift', value: 'https://d.webshiftvpn.ru/dns-query', boot: '77.88.8.8', alias: [ 'd.webshiftvpn.ru' ], geo: true },
+		{ id: 'dagami', name: 'Dagami', value: 'https://dns.dagami.ru/dns-query', boot: '77.88.8.8', alias: [ 'dns.dagami.ru' ], geo: true },
+		{ id: 'magicdns', name: 'MagicDNS', value: 'https://api.magicdns.ru/sync', boot: '77.88.8.8', alias: [ 'api.magicdns.ru' ], geo: true },
 		{ id: 'controld', name: 'Control D', value: 'https://freedns.controld.com/p0', boot: '76.76.2.0', alias: [ 'freedns.controld.com' ] },
 		{ id: 'dns4eu', name: 'DNS4EU', value: 'https://unfiltered.joindns4.eu/dns-query', boot: '86.54.11.100', alias: [ 'unfiltered.joindns4.eu' ] }
 	],
@@ -59270,8 +59598,9 @@ var DNS_CAT = {
 		{ id: 'yandex', name: 'Яндекс', value: 'common.dot.dns.yandex.net', boot: '77.88.8.8' },
 		{ id: 'yandex_safe', name: 'Яндекс · Защита от угроз', value: 'safe.dot.dns.yandex.net', boot: '77.88.8.88' },
 		{ id: 'yandex_family', name: 'Яндекс · Семейный фильтр', value: 'family.dot.dns.yandex.net', boot: '77.88.8.7' },
-		{ id: 'comss', name: 'Comss', value: 'dns.comss.one', boot: '77.88.8.8' },
-		{ id: 'bezmezhau', name: 'Bezmezhau', value: 'sync.bezmezhau.com', boot: '77.88.8.8' }
+		{ id: 'comss', name: 'Comss', value: 'dns.comss.one', boot: '77.88.8.8', geo: true },
+		{ id: 'bezmezhau', name: 'Bezmezhau', value: 'sync.bezmezhau.com', boot: '77.88.8.8', geo: true },
+		{ id: 'magicdns', name: 'MagicDNS', value: 'api.magicdns.ru', boot: '77.88.8.8', geo: true }
 	],
 	udp: [
 		{ id: 'quad9', name: 'Quad9', value: '9.9.9.9', boot: '9.9.9.9' },
@@ -59312,6 +59641,11 @@ function dnsFind(t, v) {
 	for (var i = 0; i < list.length; i++)
 		if (list[i].value === v || (list[i].alias || []).indexOf(v) >= 0) return list[i];
 	return null;
+}
+
+function dnsGeo(t, v) {
+	var p = dnsFind(t, v);
+	return !!(p && p.geo);
 }
 
 function dnsName(t, v) {
@@ -61077,7 +61411,7 @@ return view.extend({
 						? 'Если выбранный вручную сервер перестал отвечать, Forkozz через 2–4 минуты переходит на рабочий и остаётся на нём.'
 						: 'Если выбранный вручную сервер перестал отвечать, Forkozz через 2–4 минуты переходит на рабочий, а выбранный проверяет раз в 10 минут и возвращается на него, как только он ответит. Перед выбором сервер проверяется.'));
 			}
-			srvCard.appendChild(E('p', { 'class': 'zm-hint' }, grp ? 'Группа АВТО из подписки — как в Happ: Forkozz раз в ' + grpIv(grp) + ' проверяет ' + grp.n + ' ' + plural(grp.n, 'сервер', 'сервера', 'серверов') + ' группы, работает через самый быстрый и сам переходит на другой, если сервер перестал отвечать. Группа остаётся выбранной и после перезапуска Forkozz. Нажмите на сервер, чтобы закрепить его.' : isAuto ? servers.priority ? 'Авто: используется первая доступная подписка в порядке ссылок. После её восстановления Forkozz возвращается к ней, даже если резервная быстрее. Нажатие на сервер включает ручной выбор.' : servers.ping ? 'Авто по пингу: включён самый быстрый сервер. Если он оборвётся, Forkozz за 20–40 секунд перейдёт на самый быстрый из рабочих. Нажмите на сервер, чтобы закрепить его.' : 'Авто: Forkozz сам выбирает лучший из этих серверов. Нажмите на сервер, чтобы закрепить его.' : servers.priority ? 'Нажмите на сервер, чтобы переключиться. Чтобы снова использовать автоматический порядок подписок, выберите «Авто».' : 'Нажмите на сервер, чтобы переключиться. Выбор держится, пока Forkozz не перезапустится (перезагрузка роутера, «Применить», обновление подписки) — после этого снова работает «Авто».'));
+			srvCard.appendChild(E('p', { 'class': 'zm-hint' }, grp ? 'Группа АВТО из подписки — как в Happ: Forkozz раз в ' + grpIv(grp) + ' проверяет ' + grp.n + ' ' + plural(grp.n, 'сервер', 'сервера', 'серверов') + ' группы, работает через самый быстрый и сам переходит на другой, если сервер перестал отвечать. Группа остаётся выбранной и после перезапуска Forkozz. Нажмите на сервер, чтобы закрепить его.' : isAuto ? servers.priority ? 'Авто: используется первая доступная подписка в порядке ссылок. После её восстановления Forkozz возвращается к ней, даже если резервная быстрее. Нажатие на сервер включает ручной выбор.' : servers.ping ? 'Авто по пингу: включён самый быстрый сервер. Если он оборвётся, Forkozz за 20–40 секунд перейдёт на самый быстрый из рабочих. Нажмите на сервер, чтобы закрепить его.' : 'Авто: Forkozz сам выбирает лучший из этих серверов. Нажмите на сервер, чтобы закрепить его.' : servers.priority ? 'Нажмите на сервер, чтобы переключиться. Чтобы снова использовать автоматический порядок подписок, выберите «Авто».' : 'Нажмите на сервер, чтобы переключиться. Выбор сохраняется и после перезапуска Forkozz, перезагрузки роутера и обновления подписки. Что делать, если сервер перестал отвечать, — в настройке «Если сервер не отвечает».'));
 			srvCard.appendChild(rlPanel(ns));
 		}
 
@@ -61706,8 +62040,9 @@ return view.extend({
 				(res.results || []).forEach(function(r) { dnsRes[t + '|' + r.server] = r; });
 				var good = (res.results || []).filter(function(r) { return r.ok; }).sort(function(a, b) { return a.ms - b.ms; });
 				if (pick) {
-					if (!good.length) { zm.toast('Ни один сервер ' + DNS_TYPES[t] + ' не ответил — попробуйте другой протокол или включите «DNS через VPN»', 'error'); renderDns(); return; }
-					var chosen = dnsUniq(t, good.map(function(r) { return r.server; })).slice(0, 4);
+					var best = good.filter(function(r) { return !dnsGeo(t, r.server); });
+					if (!best.length) { zm.toast((good.length ? 'Ни один обычный сервер ' + DNS_TYPES[t] + ' не ответил, отвечают только серверы с обходом геоблокировок — их можно выбрать вручную. Или попробуйте' : 'Ни один сервер ' + DNS_TYPES[t] + ' не ответил — попробуйте') + ' другой протокол или включите «DNS через VPN»', 'error'); renderDns(); return; }
+					var chosen = dnsUniq(t, best.map(function(r) { return r.server; })).slice(0, 4);
 					dnsSet(chosen);
 					zm.toast('Подобрано ' + chosen.length + ': ' + chosen.map(function(v) { return dnsName(t, v); }).join(', ') + '. Сохраните, чтобы применить', 'info');
 					return;
@@ -61744,6 +62079,7 @@ return view.extend({
 					E('span', { 'class': 'zm-dns-num' }, String(i + 1)),
 					E('div', { 'class': 'zm-dns-text' }, [ E('b', {}, dnsName(t, v)), E('span', {}, v) ]),
 					i === act ? badge('zm-ok', 'сейчас используется') : E([]),
+					dnsGeo(t, v) ? badge('zm-off', 'обход геоблокировок') : E([]),
 					dnsLat(v),
 					E('div', { 'class': 'zm-dns-btns' }, [
 						E('button', { 'class': 'cbi-button', 'title': 'Выше', 'disabled': i === 0 ? '' : null, 'click': function() { var a = sel.slice(); a.splice(i - 1, 0, a.splice(i, 1)[0]); dnsSet(a, true); } }, '↑'),
@@ -61753,6 +62089,11 @@ return view.extend({
 				]));
 			});
 			dnsCard.appendChild(ol);
+			var geoSel = sel.filter(function(v) { return dnsGeo(t, v); });
+			if (geoSel.length) dnsCard.appendChild(E('p', { 'class': 'zm-hint zm-fk-geo-note' }, [
+				E('b', {}, geoSel.map(function(v) { return dnsName(t, v); }).join(', ')),
+				(geoSel.length > 1 ? ' — серверы' : ' — сервер') + ' с обходом геоблокировок. Сервисам, которые идут через VPN, ' + (geoSel.length > 1 ? 'они не нужны' : 'он не нужен') + ': их адреса узнаёт сервер VPN. Пригодится, только если какой-то закрытый в России сервис идёт напрямую, мимо VPN. Для всего остального надёжнее обычный DNS — Quad9, Cloudflare, Google или Яндекс: без посредника между вами и сайтами.'
+			]));
 			var lanSaved = (cfg && cfg.dns && cfg.dns.lan) || [], lanDns = sel.filter(function(v) { return lanSaved.indexOf(String(v).replace(/^[a-z]+:\/\//i, '').split('/')[0].replace(/:[0-9]+$/, '')) >= 0; });
 			if (lanDns.length) {
 				dnsCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Свой DNS в домашней сети (' + lanDns.join(', ') + ' — например, AdGuard Home): Forkozz ходит к нему напрямую, мимо VPN, а собственные запросы этого устройства не перехватывает. В самом AdGuard Home upstream не должен вести на этот роутер — иначе запросы ходят по кругу и интернет пропадает. Укажите upstream напрямую, например https://dns.quad9.net/dns-query или tls://dns.quad9.net.'));
@@ -61774,20 +62115,33 @@ return view.extend({
 			}
 
 			dnsCard.appendChild(E('h4', { 'style': 'margin:16px 0 4px' }, 'Серверы ' + DNS_TYPES[t]));
-			var g = E('div', { 'class': 'zm-nodes zm-nodes-3' });
-			cat.forEach(function(p) {
-				var on = sel.indexOf(p.value) >= 0 || (p.alias || []).some(function(a) { return sel.indexOf(a) >= 0; });
-				g.appendChild(node(p.name, p.value.replace(/^https:\/\//, ''), on, function() {
-					if (on) {
-						if (sel.length === 1) { zm.toast('Нужен хотя бы один сервер', 'warning'); return; }
-						dnsSet(sel.filter(function(v) { return v !== p.value && (p.alias || []).indexOf(v) < 0; }));
-					} else {
-						if (sel.length >= DNS_MAX) { zm.toast('Не больше ' + DNS_MAX + ' серверов', 'warning'); return; }
-						dnsSet(sel.concat([ p.value ]));
-					}
-				}, dnsLat(p.value)));
+			function dnsTiles(list) {
+				var g = E('div', { 'class': 'zm-nodes zm-nodes-3' });
+				list.forEach(function(p) {
+					var on = sel.indexOf(p.value) >= 0 || (p.alias || []).some(function(a) { return sel.indexOf(a) >= 0; });
+					g.appendChild(node(p.name, p.value.replace(/^https:\/\//, ''), on, function() {
+						if (on) {
+							if (sel.length === 1) { zm.toast('Нужен хотя бы один сервер', 'warning'); return; }
+							dnsSet(sel.filter(function(v) { return v !== p.value && (p.alias || []).indexOf(v) < 0; }));
+						} else {
+							if (sel.length >= DNS_MAX) { zm.toast('Не больше ' + DNS_MAX + ' серверов', 'warning'); return; }
+							dnsSet(sel.concat([ p.value ]));
+						}
+					}, dnsLat(p.value)));
+				});
+				return g;
+			}
+			var catPlain = cat.filter(function(p) { return !p.geo; }), catGeo = cat.filter(function(p) { return p.geo; });
+			if (!catGeo.length) dnsCard.appendChild(dnsTiles(cat));
+			else [
+				{ title: 'Обычные', hint: 'только шифрование: провайдер не видит запросы и не может их подменить. Подходят всем', list: catPlain },
+				{ title: 'С обходом геоблокировок', hint: 'отдают адреса своих прокси для закрытых в России сервисов. Через VPN не нужны — только для сервисов, которые идут напрямую', list: catGeo }
+			].forEach(function(gr) {
+				dnsCard.appendChild(E('div', { 'class': 'zm-fk-dns-group' }, [
+					E('div', { 'class': 'zm-doh-group-head' }, [ E('b', {}, gr.title), E('span', { 'class': 'zm-hint' }, gr.hint) ]),
+					dnsTiles(gr.list)
+				]));
 			});
-			dnsCard.appendChild(g);
 
 			dnsInput = E('input', { 'type': 'text', 'class': 'cbi-input-text', 'autocapitalize': 'off', 'spellcheck': 'false', 'placeholder': 'Свой: ' + DNS_HELP[t].ph, 'style': 'flex:1; min-width:220px' });
 			function addOwn() {
@@ -61806,7 +62160,7 @@ return view.extend({
 				E('button', { 'class': 'cbi-button cbi-button-action', 'disabled': dnsTesting || busy ? '' : null, 'click': function() { dnsTest(true); } }, dnsTesting ? 'Проверяем…' : 'Подобрать лучшие'),
 				E('button', { 'class': 'cbi-button', 'disabled': dnsTesting || busy ? '' : null, 'click': function() { dnsTest(false); } }, 'Только проверить')
 			]));
-			dnsCard.appendChild(E('p', { 'class': 'zm-hint' }, '«Подобрать лучшие» проверит все серверы ' + DNS_TYPES[t] + ' и поставит в список до 4 отвечающих — самые быстрые первыми. ' +
+			dnsCard.appendChild(E('p', { 'class': 'zm-hint' }, '«Подобрать лучшие» проверит все серверы ' + DNS_TYPES[t] + ' и поставит в список до 4 отвечающих — самые быстрые первыми' + (catGeo.length ? ', только из обычных: серверы с обходом геоблокировок выбираются вручную' : '') + '. ' +
 				(d.detour ? (t === 'doh' ? 'Включено «DNS через VPN» — серверы проверяются через VPN, так же, как Forkozz к ним ходит (если Forkozz запущен).' : 'Включено «DNS через VPN», а проверка ' + DNS_TYPES[t] + ' идёт с роутера напрямую: «не отвечает» может значить только, что сервер режет провайдер, — через VPN он может работать.') : 'Проверка идёт с роутера напрямую, как Forkozz и ходит к DNS.')));
 			if (t !== 'udp') {
 				dnsCard.appendChild(E('h4', { 'style': 'margin:16px 0 4px' }, 'Bootstrap DNS'));
